@@ -124,6 +124,7 @@ struct Variant {
   Bitboard wallingRegion[COLOR_NB] = {AllSquares, AllSquares};
   bool wallOrMove = false;
   bool seirawanGating = false;
+  bool commitGates = false;
   bool cambodianMoves = false;
   Bitboard diagonalLines = 0;
   bool pass[COLOR_NB] = {false, false};
