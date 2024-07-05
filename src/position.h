@@ -392,6 +392,7 @@ private:
   int pieceCountInPrison[COLOR_NB][PIECE_TYPE_NB];
   Bitboard pawnCannotCheckZone[COLOR_NB];
   PieceType committedGates[COLOR_NB][FILE_NB];
+  int priorityDropCountInHand[COLOR_NB];
   int virtualPieces;
   Bitboard promotedPieces;
   void add_to_hand(Piece pc);
@@ -1761,6 +1762,7 @@ inline void Position::add_to_hand(Piece pc) {
   if (variant()->freeDrops) return;
   pieceCountInHand[color_of(pc)][type_of(pc)]++;
   pieceCountInHand[color_of(pc)][ALL_PIECES]++;
+  priorityDropCountInHand[color_of(pc)] += var->isPriorityDrop[type_of(pc)];
   psq += PSQT::psq[pc][SQ_NONE];
 }
 
@@ -1768,6 +1770,7 @@ inline void Position::remove_from_hand(Piece pc) {
   if (variant()->freeDrops) return;
   pieceCountInHand[color_of(pc)][type_of(pc)]--;
   pieceCountInHand[color_of(pc)][ALL_PIECES]--;
+  priorityDropCountInHand[color_of(pc)] -= var->isPriorityDrop[type_of(pc)];
   psq -= PSQT::psq[pc][SQ_NONE];
 }
 
