@@ -586,7 +586,7 @@ Move UCI::to_move(const Position& pos, string& str) {
 
   for (const auto& m : MoveList<LEGAL>(pos)) {
       auto move_str = UCI::move(pos, m);
-      
+
       // special processing of optional gating suffix from xboard
       // like "b1c3o" => "b1c3"
       if (CurrentProtocol == XBOARD && str.length() == 5 && move_str.length() == 4) {

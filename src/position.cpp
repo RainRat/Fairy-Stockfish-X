@@ -269,7 +269,7 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
 
   int commitFile = 0;
   int rank = 0;
-  
+
   // 1. Piece placement
   while ((ss >> token) && !isspace(token))
   {
