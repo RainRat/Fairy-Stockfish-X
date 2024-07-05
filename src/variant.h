@@ -35,6 +35,8 @@ namespace Stockfish {
 
 /// Variant struct stores information needed to determine the rules of a variant.
 
+constexpr int START_MULTIMOVES = 16;
+
 struct Variant {
   std::string variantTemplate = "fairy";
   std::string pieceToCharTable = "-";
@@ -130,6 +132,9 @@ struct Variant {
   Bitboard diagonalLines = 0;
   bool pass[COLOR_NB] = {false, false};
   bool passOnStalemate[COLOR_NB] = {false, false};
+  std::vector<int> multimoves = {};
+  bool multimoveCheck = true;
+  bool multimoveCapture = true;
   bool makpongRule = false;
   bool flyingGeneral = false;
   Rank soldierPromotionRank = RANK_1;
@@ -195,6 +200,10 @@ struct Variant {
   bool shogiStylePromotions = false;
   std::vector<Direction> connect_directions;
   PieceSet connectPieceTypesTrimmed = ~NO_PIECE_SET;
+  bool multimovePass[START_MULTIMOVES]; // irregular pattern of multimove passes at game start
+  int multimoveOffset; // end of multimoveStart sequence
+  int multimoveCycle; // length in ply of both players once playing a multimove
+  int multimoveCycleShift; // phase shift in multimove cycle when switching color
 
   void add_piece(PieceType pt, char c, std::string betza = "", char c2 = ' ') {
       // Avoid ambiguous definition by removing existing piece with same letter
@@ -243,6 +252,7 @@ struct Variant {
   }
 
   Variant* conclude();
+
 };
 
 class VariantMap : public std::map<std::string, const Variant*> {

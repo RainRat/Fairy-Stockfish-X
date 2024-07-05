@@ -133,6 +133,25 @@ namespace {
         v->doubleStep = false;
         return v;
     }
+    // Balanced alternation
+    // https://ieee-cog.org/2021/assets/papers/paper_230.pdf
+    Variant* balanced_alternation_variant() {
+        Variant* v = chess_variant()->init();
+        v->multimoves = {1, 2, 2, 1, 1};
+        v->multimoveCheck = false;
+        v->multimoveCapture = false;
+        v->nnueAlias = "nn-";
+        return v;
+    }
+    // Balanced alternation 2
+    Variant* balanced_alternation2_variant() {
+        Variant* v = chess_variant()->init();
+        v->multimoves = {2, 2, 1, 1};
+        v->multimoveCheck = false;
+        v->multimoveCapture = true;
+        v->nnueAlias = "nn-";
+        return v;
+    }
     // Pseudo-variant only used for endgame initialization
     Variant* fairy_variant() {
         Variant* v = chess_variant_base()->init();
@@ -1846,6 +1865,8 @@ void VariantMap::init() {
     add("pawnsideways", pawnsideways_variant());
     add("pawnback", pawnback_variant());
     add("legan", legan_variant());
+    add("balancedalternation", balanced_alternation_variant());
+    add("balancedalternation2", balanced_alternation2_variant());
     add("fairy", fairy_variant()); // fairy variant used for endgame code initialization
     add("makruk", makruk_variant());
     add("makpong", makpong_variant());
@@ -2123,6 +2144,24 @@ Variant* Variant::conclude() {
     {
         connectPieceTypesTrimmed = connectPieceTypes & pieceTypes;
     };
+      // Initialize multimove passing parameters
+      multimoveOffset = 0;
+      for (int j : multimoves)
+      {
+          if (multimoveOffset + 2 * j - 1 >= START_MULTIMOVES)
+              break;
+          // Initialize alternating non-passing/passing moves
+          for (int k = 0; k < 2 * j - 1; k++)
+              multimovePass[multimoveOffset + k] = k % 2;
+          multimoveOffset += 2 * j - 1;
+      }
+      int firstMultimove =  multimoves.size() >= 2 ? multimoves[multimoves.size() - 2]
+                          : multimoves.size() == 1 ? multimoves[multimoves.size() - 1]
+                          : 1;
+      int secondMultimove =  multimoves.size() >= 1 ? multimoves[multimoves.size() - 1]
+                           : 1;
+      multimoveCycle = 2 * firstMultimove - 1 + 2 * secondMultimove - 1;
+      multimoveCycleShift = 2 * firstMultimove - 1;
 
     return this;
 }

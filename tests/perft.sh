@@ -47,6 +47,7 @@ if [[ $1 == "all" || $1 == "variant" ]]; then
   expect perft.exp pawnsideways startpos 3 10022 > /dev/null
   expect perft.exp pawnback startpos 3 9222 > /dev/null
   expect perft.exp legan startpos 4 8138 > /dev/null
+  expect perft.exp balancedalternation startpos 5 195252 > /dev/null
   expect perft.exp makruk startpos 4 273026 > /dev/null
   expect perft.exp cambodian startpos 4 361719 > /dev/null
   expect perft.exp cambodian "fen r1s1ks1r/3nm3/pppNpppp/3n4/5P2/PPPPPNPP/8/R1SKMS1R b DEe 0 0 5" 2 72 > /dev/null

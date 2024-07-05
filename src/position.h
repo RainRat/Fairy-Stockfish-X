@@ -198,6 +198,7 @@ public:
   Bitboard diagonal_lines() const;
   bool pass(Color c) const;
   bool pass_on_stalemate(Color c) const;
+  bool multimove_pass(int ply) const;
   Bitboard promoted_soldiers(Color c) const;
   bool makpong() const;
   EnclosingRule flip_enclosed_pieces() const;
@@ -961,12 +962,19 @@ inline Bitboard Position::diagonal_lines() const {
 
 inline bool Position::pass(Color c) const {
   assert(var != nullptr);
-  return var->pass[c] || var->passOnStalemate[c];
+  return var->pass[c] || var->passOnStalemate[c] || var->multimoveOffset;
 }
 
 inline bool Position::pass_on_stalemate(Color c) const {
   assert(var != nullptr);
   return var->passOnStalemate[c];
+}
+
+// Returns whether current move is a mandatory pass to simulate multimoves
+inline bool Position::multimove_pass(int ply) const {
+  assert(var != nullptr);
+  int phase = (ply - var->multimoveOffset) % var->multimoveCycle;
+  return ply < var->multimoveOffset ? var->multimovePass[ply] : (phase + (phase >= var->multimoveCycleShift)) % 2;
 }
 
 inline Bitboard Position::promoted_soldiers(Color c) const {
@@ -1457,7 +1465,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
   // Add initial moves
   if (double_step_region(c, pt) & s)
       b |= moves_bb<true>(c, movePt, s, byTypeBB[ALL_PIECES]);
-  
+
   // Xiangqi soldier
   if (pt == SOLDIER && !(promoted_soldiers(c) & s))
       b &= file_bb(file_of(s));
@@ -1829,6 +1837,7 @@ inline bool Position::has_exchange() const {
 
 inline PieceSet Position::rescueFor(PieceType pt) const {
   return var->hostageExchange[pt];
+}
 
 //Returns the pieces that are not moved (including newly added pieces during the game, i.e. DROPS) of a side
 inline Bitboard Position::not_moved_pieces(Color c) const {
@@ -1838,6 +1847,7 @@ inline Bitboard Position::not_moved_pieces(Color c) const {
 //Returns the places of wall squares
 inline Bitboard Position::wall_squares() const {
     return this->st->wallSquares;
+}
 
 inline void Position::commit_piece(Piece pc, File fl){
     committedGates[color_of(pc)][fl] = type_of(pc);
