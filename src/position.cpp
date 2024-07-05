@@ -1176,6 +1176,15 @@ bool Position::legal(Move m) const {
               return false;
   }
 
+  // Multimoves
+  if (var->multimoveOffset)
+  {
+      if (is_pass(m) != multimove_pass(gamePly))
+          return false;
+      if (multimove_pass(gamePly + 1) && ((!var->multimoveCapture && capture(m)) || (!var->multimoveCheck && gives_check(m))))
+          return false;
+  }
+
   // Check for attacks to pseudo-royal pieces
   if (var->extinctionPseudoRoyal)
   {
@@ -1625,7 +1634,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   // Increment ply counters. In particular, rule50 will be reset to zero later on
   // in case of a capture or a pawn move.
   ++gamePly;
-  ++st->rule50;
+  if (!(multimove_pass(gamePly) && is_pass(m)))
+      ++st->rule50;
   ++st->pliesFromNull;
   if (st->countingLimit)
       ++st->countingPly;

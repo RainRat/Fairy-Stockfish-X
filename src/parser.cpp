@@ -35,6 +35,16 @@ namespace {
         return !ss.fail();
     }
 
+    template <> bool set(const std::string& value, std::vector<int>& target)
+    {
+        std::stringstream ss(value);
+        int i;
+        target.clear();
+        while (ss >> i)
+            target.push_back(i);
+        return ss.eof();
+    }
+
     template <> bool set(const std::string& value, Rank& target) {
         std::stringstream ss(value);
         int i;
@@ -421,6 +431,7 @@ template <bool Current, class T> bool VariantParser<DoCheck>::parse_attribute(co
                                   : std::is_same<T, PieceTypeBitboardGroup>() ? "PieceTypeBitboardGroup"
                                   : std::is_same<T, CastlingRights>() ? "CastlingRights"
                                   : std::is_same<T, WallingRule>() ? "WallingRule"
+                                  : std::is_same<T, std::vector<int>>() ? "vector<int>"
                                   : typeid(T).name();
             std::cerr << key << " - Invalid value " << it->second << " for type " << typeName << std::endl;
         }
@@ -755,6 +766,9 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("passOnStalemate", v->passOnStalemate[BLACK]);
     parse_attribute("passOnStalemateWhite", v->passOnStalemate[WHITE]);
     parse_attribute("passOnStalemateBlack", v->passOnStalemate[BLACK]);
+    parse_attribute("multimoves", v->multimoves);
+    parse_attribute("multimoveCheck", v->multimoveCheck);
+    parse_attribute("multimoveCapture", v->multimoveCapture);
     parse_attribute("makpongRule", v->makpongRule);
     parse_attribute("flyingGeneral", v->flyingGeneral);
     parse_attribute("soldierPromotionRank", v->soldierPromotionRank);
