@@ -224,7 +224,6 @@ struct Variant {
   int multimoveOffset; // end of multimoveStart sequence
   int multimoveCycle; // length in ply of both players once playing a multimove
   int multimoveCycleShift; // phase shift in multimove cycle when switching color
-
   void add_piece(PieceType pt, char c, std::string betza = "", char c2 = ' ') {
       // Avoid ambiguous definition by removing existing piece with same letter
       size_t idx;
