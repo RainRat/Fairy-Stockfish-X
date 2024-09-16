@@ -249,7 +249,7 @@ namespace {
                 }
                 else if (ch == ',' || ch == ')')
                 {
-                    if (RankNum == 0)  // Here if RankNum==0 then it means either user delcared a 0 as rank, or no rank number delcared at all
+                    if (RankNum == 0)  // Here if RankNum==0 then it means either user declared a 0 as rank, or no rank number declared at all
                     {
                         std::cerr << "At char " << i << " of PieceTypeBitboardGroup declaration: Illegal rank number: " << RankNum << std::endl;
                         return false;
