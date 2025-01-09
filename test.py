@@ -365,7 +365,6 @@ class TestPyffish(unittest.TestCase):
         result = sf.legal_moves("coregaldrop", sf.start_fen("coregaldrop"), [])
         self.assertIn("Q@a3", result)
         self.assertNotIn("Q@a6", result)
-
         # In Cannon Shogi the FGC and FSC can also move one square diagonally and, besides,
         # move or capture two squares diagonally, by leaping an adjacent piece. 
         fen = "lnsg1gsnl/1rc1kuab1/p1+A1p1p1p/3P5/6i2/6P2/P1P1P3P/1B1U1ICR1/LNSGKGSNL[] w - - 1 3"
