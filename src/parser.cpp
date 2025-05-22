@@ -111,7 +111,7 @@ namespace {
                 : value == "cambodian" ? CAMBODIAN_COUNTING
                 : value == "asean" ? ASEAN_COUNTING
                 : NO_COUNTING;
-        return value == "makruk" || value == "asean" || value == "none";
+        return value == "makruk" || value == "cambodian" || value == "asean" || value == "none";
     }
 
     template <> bool set(const std::string& value, ChasingRule& target) {
