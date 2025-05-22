@@ -2184,6 +2184,110 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   if (cambodian_moves() && type_of(pc) == ROOK && (square<KING>(them) & gates(them) & attacks_bb<ROOK>(to)))
       st->gatesBB[them] ^= square<KING>(them);
 
+  //resolve custodial capture
+  if ((surround_capture_opposite() || surround_capture_edge()) && !is_pass(m))
+  {
+
+      Bitboard removal_mask = 0;
+      for (int sign : {-1, 1}) {
+
+          for (const Direction& d : var->connect_directions)
+          //using getConnectDirections to determine whether two pieces are connected
+          //in that they can capture a piece between them. if there was a
+          //variant with connection as a victory condition, and different
+          //directions for surround-capture, yes, we'd have to separate them
+          {
+              Direction mod_d = d * sign;
+              Square s = to + mod_d;
+              if (!is_ok(s)) continue;
+              if (!(s&pieces(~us))) continue;
+              Square oppSquare = s + mod_d;
+
+              if (s & surround_capture_max_region()) {
+                  bool surrounded = true;
+                  Bitboard b = attacks_bb(us, WAZIR, s, pieces(~us));
+                  while(b) {
+                      Square s2 = pop_lsb(b);
+                      if (!((s2 & surround_capture_hostile_region()) || (s2 & pieces(us)))) {
+                          surrounded = false;
+                          break;
+                      };
+                  };
+                  if (surrounded) { removal_mask |= s; } else continue;
+              };
+
+              if (!is_ok(oppSquare)) {
+                  if (surround_capture_edge()) removal_mask |= s;
+              }
+              else {
+                  if (surround_capture_opposite() && ((pieces(us) & oppSquare) || (surround_capture_hostile_region() & oppSquare))) removal_mask |= s;
+              };
+          };
+      };
+      while (removal_mask)
+      {
+          //pretty much blast code
+          //should look into combining
+          //blast and custodial capture are very similar
+          Square bsq = pop_lsb(removal_mask);
+          Piece bpc = piece_on(bsq);
+          Color bc = color_of(bpc);
+          if (type_of(bpc) != PAWN)
+              st->nonPawnMaterial[bc] -= PieceValue[MG][bpc];
+
+          if (Eval::useNNUE)
+          {
+              dp.piece[dp.dirty_num] = bpc;
+              dp.handPiece[dp.dirty_num] = NO_PIECE;
+              dp.from[dp.dirty_num] = bsq;
+              dp.to[dp.dirty_num] = SQ_NONE;
+              dp.dirty_num++;
+          }
+
+          bool capturedPromoted = is_promoted(bsq);
+          Piece unpromotedCaptured = unpromoted_piece_on(bsq);
+
+          st->unpromotedBycatch[bsq] = unpromotedCaptured ? unpromotedCaptured : bpc;
+
+          if (unpromotedCaptured)
+              st->demotedBycatch |= bsq;
+
+          else if (capturedPromoted)
+              st->promotedBycatch |= bsq;
+          remove_piece(bsq);
+          board[bsq] = NO_PIECE;
+
+          if (captures_to_hand())
+          {
+              Piece pieceToHand = !capturedPromoted || drop_loop() ? ~bpc
+                                 : unpromotedCaptured ? ~unpromotedCaptured
+                                                      : make_piece(~color_of(bpc), PAWN);
+              add_to_hand(pieceToHand);
+              k ^=  Zobrist::inHand[pieceToHand][pieceCountInHand[color_of(pieceToHand)][type_of(pieceToHand)] - 1]
+                  ^ Zobrist::inHand[pieceToHand][pieceCountInHand[color_of(pieceToHand)][type_of(pieceToHand)]];
+
+              if (Eval::useNNUE)
+              {
+                  dp.handPiece[dp.dirty_num - 1] = pieceToHand;
+                  dp.handCount[dp.dirty_num - 1] = pieceCountInHand[color_of(pieceToHand)][type_of(pieceToHand)];
+              }
+          }
+
+          // Update material hash key
+          k ^= Zobrist::psq[bpc][bsq];
+          st->materialKey ^= Zobrist::psq[bpc][pieceCount[bpc]];
+          if (type_of(bpc) == PAWN)
+              st->pawnKey ^= Zobrist::psq[bpc][bsq];
+
+          // Update castling rights if needed
+          if (st->castlingRights && castlingRightsMask[bsq])
+          {
+             k ^= Zobrist::castling[st->castlingRights];
+             st->castlingRights &= ~castlingRightsMask[bsq];
+             k ^= Zobrist::castling[st->castlingRights];
+          };
+      };
+  };
 
   // Remove the blast pieces
   if (captured && (blast_on_capture() || var->petrifyOnCaptureTypes))
@@ -2369,8 +2473,11 @@ void Position::undo_move(Move m) {
   byTypeBB[ALL_PIECES] ^= st->wallSquares ^ st->previous->wallSquares;
 
   // Add the blast pieces
-  if (st->capturedPiece && (blast_on_capture() || var->petrifyOnCaptureTypes))
+  if ((st->capturedPiece && (blast_on_capture() || var->petrifyOnCaptureTypes)) || surround_capture_opposite() || surround_capture_edge())
   {
+      //It's ok to just loop through all, not taking into account immunities/pawnness
+      //because we'll just not find the piece in unpromotedBycatch.
+      //Same if surround_capture_opposite is true, king is superset of all directions.
       Bitboard blast = attacks_bb<KING>(to) | to;
       while (blast)
       {
