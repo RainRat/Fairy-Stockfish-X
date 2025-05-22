@@ -445,7 +445,7 @@ inline Bitboard attacks_bb(Square s) {
 
 /// attacks_bb(Square, Bitboard) returns the attacks by the given piece
 /// assuming the board is occupied according to the passed Bitboard.
-/// Sliding piece attacks do not continue passed an occupied square.
+/// Sliding piece attacks do not continue past an occupied square.
 
 template<PieceType Pt>
 inline Bitboard attacks_bb(Square s, Bitboard occupied) {

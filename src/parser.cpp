@@ -661,6 +661,10 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("mutuallyImmuneTypes", v->mutuallyImmuneTypes, v->pieceToChar);
     parse_attribute("petrifyOnCaptureTypes", v->petrifyOnCaptureTypes, v->pieceToChar);
     parse_attribute("petrifyBlastPieces", v->petrifyBlastPieces);
+    parse_attribute("surroundCaptureOpposite", v->surroundCaptureOpposite);
+    parse_attribute("surroundCaptureEdge", v->surroundCaptureEdge);
+    parse_attribute("surroundCaptureMaxRegion", v->surroundCaptureMaxRegion);
+    parse_attribute("surroundCaptureHostileRegion", v->surroundCaptureHostileRegion);
     parse_attribute("doubleStep", v->doubleStep);
     parse_attribute("doubleStepRegionWhite", v->doubleStepRegion[WHITE]);
     parse_attribute("doubleStepRegionBlack", v->doubleStepRegion[BLACK]);
