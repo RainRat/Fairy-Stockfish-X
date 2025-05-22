@@ -1035,7 +1035,7 @@ Value Endgame<RK, EG_EVAL_ANTI>::operator()(const Position& pos) const {
 }
 
 
-/// K vs N. The king usally wins, but there are a few exceptions.
+/// K vs N. The king usually wins, but there are a few exceptions.
 template<>
 Value Endgame<KN, EG_EVAL_ANTI>::operator()(const Position& pos) const {
 
