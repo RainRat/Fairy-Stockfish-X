@@ -154,6 +154,8 @@ public:
   bool blast_diagonals() const;
   bool blast_center() const;
   PieceSet blast_immune_types() const;
+  Bitboard blast_pattern(Square to) const;
+  Bitboard blast_squares(Square to) const;
   PieceSet mutually_immune_types() const;
   int remove_connect_n() const;
   bool remove_connect_n_by_type() const;
@@ -623,7 +625,7 @@ inline Bitboard Position::blast_squares(Square to) const {
     }
     Bitboard blastPattern = blast_pattern(to);
     Bitboard relevantPieces = (pieces(WHITE) | pieces(BLACK)) ^ pieces(PAWN);
-    Bitboard blastArea = (blastPattern & relevantPieces) | (blast_center() ? to : Bitboard(0));
+    Bitboard blastArea = (blastPattern & relevantPieces) | (blast_center() ? to : SQ_NONE);
 
     return blastArea & (pieces() ^ blastImmune);
 }
