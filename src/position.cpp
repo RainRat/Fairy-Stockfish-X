@@ -580,6 +580,15 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
       }
   }
 
+  if (var->pointsCounting)
+  {
+      char brace;
+      ss >> brace;
+      ss >> st->pointsCount[WHITE];
+      ss >> st->pointsCount[BLACK];
+      ss >> brace;  //Probably not needed now, but maybe if another FEN extension.
+  }
+
   chess960 = isChess960 || v->chess960;
   tsumeMode = Options["TsumeMode"];
   thisThread = th;
@@ -974,6 +983,11 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
 
   ss << " " << 1 + (gamePly - (sideToMove == BLACK)) / 2;
 
+  if (variant()->pointsCounting)
+  {
+      ss << " {" << st->pointsCount[WHITE] << " " << st->pointsCount[BLACK] << "}";
+  }
+
   return ss.str();
 }
 
@@ -1154,11 +1168,23 @@ Bitboard Position::checked_pseudo_royals(Color c) const {
   Bitboard checked = 0;
   Bitboard pseudoRoyals = st->pseudoRoyals & pieces(c);
   Bitboard pseudoRoyalsTheirs = st->pseudoRoyals & pieces(~c);
+
+  //If their royal pieces are immune to blasts, then their checks are real threats
+  //even if their royal is in the blast.
+  Bitboard blastImmune = 0;
+  for (PieceSet ps = blast_immune_types(); ps;) {
+      PieceType pt = pop_lsb(ps);
+      blastImmune |= pieces(pt);
+  }
+  pseudoRoyalsTheirs = pseudoRoyalsTheirs &(!blastImmune);
+  //Same as above, if blasts promote.
+  if (blast_promotion()) pseudoRoyalsTheirs = Bitboard(0);
+
   while (pseudoRoyals)
   {
       Square sr = pop_lsb(pseudoRoyals);
       // skip if capturing this piece would blast any of the attacker's pseudo-royal pieces
-      if (!(blast_on_capture() && (pseudoRoyalsTheirs & attacks_bb<KING>(sr)))
+      if (!(blast_on_capture() && (pseudoRoyalsTheirs & blast_pattern(sr)))
           && attackers_to(sr, ~c))
           checked |= sr;
   }
@@ -1170,7 +1196,7 @@ Bitboard Position::checked_pseudo_royals(Color c) const {
       while (pseudoRoyalCandidates)
       {
           Square sr = pop_lsb(pseudoRoyalCandidates);
-          if (!(blast_on_capture() && (pseudoRoyalsTheirs & attacks_bb<KING>(sr)))
+          if (!(blast_on_capture() && (pseudoRoyalsTheirs & blast_pattern(sr)))
               && attackers_to(sr, ~c))
               allAttacked |= sr;
           else
@@ -1291,7 +1317,7 @@ bool Position::legal(Move m) const {
           // Pseudo-royal king
           if (st->pseudoRoyals & from)
               for (Square s = from; s != kto; s += step)
-                  if (  !(blast_on_capture() && (attacks_bb<KING>(s) & st->pseudoRoyals & pieces(~sideToMove)))
+                  if (  !(blast_on_capture() && (blast_pattern(s) & st->pseudoRoyals & pieces(~sideToMove)))
                       && attackers_to(s, occupied, ~us))
                       return false;
           // Move the rook
@@ -1301,7 +1327,7 @@ bool Position::legal(Move m) const {
       if (type_of(m) == EN_PASSANT)
           occupied &= ~square_bb(capture_square(kto));
       if (capture(m) && blast_on_capture())
-          occupied &= ~((attacks_bb<KING>(kto) & ((pieces(WHITE) | pieces(BLACK)) ^ pieces(PAWN))) | kto);
+          occupied &= ~blast_squares(kto);
       // Petrifying a pseudo-royal piece is illegal
       if (capture(m) && (var->petrifyOnCaptureTypes & type_of(moved_piece(m))) && (st->pseudoRoyals & from))
           return false;
@@ -1331,7 +1357,7 @@ bool Position::legal(Move m) const {
           {
               Square sr = pop_lsb(pseudoRoyals);
               // Touching pseudo-royal pieces are immune
-              if (  !(blast_on_capture() && (pseudoRoyalsTheirs & attacks_bb<KING>(sr)))
+              if (  !(blast_on_capture() && (pseudoRoyalsTheirs & blast_pattern(sr)))
                   && (attackers_to(sr, occupied, ~us) & attackerCandidatesTheirs))
                   return false;
           }
@@ -1348,7 +1374,7 @@ bool Position::legal(Move m) const {
           {
               Square sr = pop_lsb(pseudoRoyalCandidates);
               // Touching pseudo-royal pieces are immune
-              if (!(  !(blast_on_capture() && (pseudoRoyalsTheirs & attacks_bb<KING>(sr)))
+              if (!(  !(blast_on_capture() && (pseudoRoyalsTheirs & blast_pattern(sr)))
                     && (attackers_to(sr, occupied, ~us) & attackerCandidatesTheirs)))
                   allCheck = false;
           }
@@ -1833,6 +1859,29 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       else if (Eval::useNNUE)
           dp.handPiece[1] = NO_PIECE;
 
+      // Points assignment logic
+      if (points_counting()) {
+          PointsRule pointsOwner = points_rule_captures();
+          int points = var->piecePoints[type_of(captured)];
+
+          switch (pointsOwner) {
+              case POINTS_US:
+                  st->pointsCount[us] += points;
+                  break;
+              case POINTS_THEM:
+                  st->pointsCount[them] += points;
+                  break;
+              case POINTS_OWNER:
+                  st->pointsCount[color_of(captured)] += points;
+                  break;
+              case POINTS_NON_OWNER:
+                  st->pointsCount[~color_of(captured)] += points;
+                  break;
+              case POINTS_NONE:
+                  break;
+          }
+      }
+
       // Update material hash key and prefetch access to materialTable
       k ^= Zobrist::psq[captured][capsq];
       st->materialKey ^= Zobrist::psq[captured][pieceCount[captured]];
@@ -2257,21 +2306,6 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           remove_piece(bsq);
           board[bsq] = NO_PIECE;
 
-          if (captures_to_hand())
-          {
-              Piece pieceToHand = !capturedPromoted || drop_loop() ? ~bpc
-                                 : unpromotedCaptured ? ~unpromotedCaptured
-                                                      : make_piece(~color_of(bpc), PAWN);
-              add_to_hand(pieceToHand);
-              k ^=  Zobrist::inHand[pieceToHand][pieceCountInHand[color_of(pieceToHand)][type_of(pieceToHand)] - 1]
-                  ^ Zobrist::inHand[pieceToHand][pieceCountInHand[color_of(pieceToHand)][type_of(pieceToHand)]];
-
-              if (Eval::useNNUE)
-              {
-                  dp.handPiece[dp.dirty_num - 1] = pieceToHand;
-                  dp.handCount[dp.dirty_num - 1] = pieceCountInHand[color_of(pieceToHand)][type_of(pieceToHand)];
-              }
-          }
 
           // Update material hash key
           k ^= Zobrist::psq[bpc][bsq];
@@ -2290,7 +2324,9 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   };
 
   // Remove the blast pieces
-  if (captured && (blast_on_capture() || var->petrifyOnCaptureTypes))
+  if ( ( captured && (blast_on_capture() || var->petrifyOnCaptureTypes) ) ||
+       ( blast_on_move() && (type_of(m) == NORMAL) )
+     )
   {
       std::memset(st->unpromotedBycatch, 0, sizeof(st->unpromotedBycatch));
       st->demotedBycatch = st->promotedBycatch = 0;
@@ -2299,11 +2335,187 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           PieceType pt = pop_lsb(ps);
           blastImmune |= pieces(pt);
       };
-      Bitboard blast = blast_on_capture() ? ((attacks_bb<KING>(to) & ((pieces(WHITE) | pieces(BLACK)) ^ pieces(PAWN))) | to)
-                       & (pieces() ^ blastImmune) : var->petrifyOnCaptureTypes & type_of(pc) ? square_bb(to) : Bitboard(0);
+      Bitboard blast = (blast_on_capture() || blast_on_move()) ? blast_squares(to)
+          : var->petrifyOnCaptureTypes & type_of(pc) ? square_bb(to) : Bitboard(0);
       while (blast)
       {
           Square bsq = pop_lsb(blast);
+          Piece bpc = piece_on(bsq);
+          Color bc = color_of(bpc);
+          if (blast_promotion()) {
+
+              Piece promotion = make_piece(us, promoted_piece_type(type_of(bpc)));
+              if (promoted_piece_type(type_of(bpc)) != NO_PIECE_TYPE)
+              {
+                  //Store all the information about previous state so undo_move can demote the piece by recreating the piece.
+                  //Pieces with bits in promotedBycatch will be undone by placing in promoted form.
+                  bool capturedPromoted = is_promoted(bsq);
+                  Piece unpromotedCaptured = unpromoted_piece_on(bsq);
+
+                  //unpromotedBycatch is one piece for each square, in original form
+                  //if there's an unpromoted form, store that in unpromotedBycatch, otherwise as-is
+                  st->unpromotedBycatch[bsq] = unpromotedCaptured ? unpromotedCaptured : bpc;
+
+                  //if the captured piece has an entry on the unpromoted board
+                  if (unpromotedCaptured)
+                      //mark it in demotedBycatch and it will be undone into promoted form
+                      st->demotedBycatch |= bsq;
+
+                  else if (capturedPromoted)
+                      //if it is a promoted piece, mark in promotedBycatch
+                      st->promotedBycatch |= bsq;
+
+                  remove_piece(bsq);
+                  put_piece(promotion, bsq, true, unpromoted_piece_on(bsq) ? unpromoted_piece_on(bsq) : bpc);
+
+                  if (Eval::useNNUE)
+                  {
+                      // Promoting piece to SQ_NONE, promoted piece from SQ_NONE
+                      dp.to[0] = SQ_NONE;
+                      dp.handPiece[0] = NO_PIECE;
+                      dp.piece[dp.dirty_num] = promotion;
+                      dp.handPiece[dp.dirty_num] = NO_PIECE;
+                      dp.from[dp.dirty_num] = SQ_NONE;
+                      dp.to[dp.dirty_num] = bsq;
+                      dp.dirty_num++;
+                  }
+
+                  // Update hash keys
+                  k ^= Zobrist::psq[pc][to] ^ Zobrist::psq[promotion][bpc];
+                  st->materialKey ^=  Zobrist::psq[promotion][pieceCount[promotion]-1]
+                                    ^ Zobrist::psq[pc][pieceCount[pc]];
+
+                  // Update material (add the PieceValue of the new piece and if it's not a pawn, subtract the old piece.
+                  st->nonPawnMaterial[us] += PieceValue[MG][promotion] - (type_of(pc) != PAWN ? PieceValue[MG][pc] : 0);
+              }
+          }
+          else
+          {
+              if (type_of(bpc) != PAWN)
+                  st->nonPawnMaterial[bc] -= PieceValue[MG][bpc];
+
+              if (Eval::useNNUE)
+              {
+                  dp.piece[dp.dirty_num] = bpc;
+                  dp.handPiece[dp.dirty_num] = NO_PIECE;
+                  dp.from[dp.dirty_num] = bsq;
+                  dp.to[dp.dirty_num] = SQ_NONE;
+                  dp.dirty_num++;
+              }
+
+              // Update board and piece lists
+              // In order to not have to store the values of both board and unpromotedBoard,
+              // demote promoted pieces, but keep promoted pawns as promoted,
+              // and store demotion/promotion bitboards to disambiguate the piece state
+
+              //Pieces with bits in promotedBycatch will be undone by placing in promoted form.
+              bool capturedPromoted = is_promoted(bsq);
+              Piece unpromotedCaptured = unpromoted_piece_on(bsq);
+
+              //unpromotedBycatch is one piece for each square, in original form
+              //if there's an unpromoted form, store that in unpromotedBycatch, otherwise as-is
+              st->unpromotedBycatch[bsq] = unpromotedCaptured ? unpromotedCaptured : bpc;
+
+              //if the captured piece has an entry on the unpromoted board
+              if (unpromotedCaptured)
+                  //mark it in demotedBycatch and it will be undone into promoted form
+                  st->demotedBycatch |= bsq;
+
+              else if (capturedPromoted)
+                  //if it is a promoted piece, mark in promotedBycatch
+                  st->promotedBycatch |= bsq;
+              remove_piece(bsq);
+              board[bsq] = NO_PIECE;
+
+              if (captures_to_hand())
+              {
+                  Piece pieceToHand = !capturedPromoted || drop_loop() ? ~bpc
+                                     : unpromotedCaptured ? ~unpromotedCaptured
+                                                          : make_piece(~color_of(bpc), PAWN);
+                  add_to_hand(pieceToHand);
+                  k ^=  Zobrist::inHand[pieceToHand][pieceCountInHand[color_of(pieceToHand)][type_of(pieceToHand)] - 1]
+                      ^ Zobrist::inHand[pieceToHand][pieceCountInHand[color_of(pieceToHand)][type_of(pieceToHand)]];
+
+                  if (Eval::useNNUE)
+                  {
+                      dp.handPiece[dp.dirty_num - 1] = pieceToHand;
+                      dp.handCount[dp.dirty_num - 1] = pieceCountInHand[color_of(pieceToHand)][type_of(pieceToHand)];
+                  }
+              }
+
+              // Update material hash key
+              k ^= Zobrist::psq[bpc][bsq];
+              st->materialKey ^= Zobrist::psq[bpc][pieceCount[bpc]];
+              if (type_of(bpc) == PAWN)
+                  st->pawnKey ^= Zobrist::psq[bpc][bsq];
+          };
+
+          // Points assignment logic
+          if (points_counting()) {
+              PointsRule pointsOwner = points_rule_captures();
+              int points = var->piecePoints[type_of(bpc)];
+
+              switch (pointsOwner) {
+                  case POINTS_US:
+                      st->pointsCount[us] += points;
+                      break;
+                  case POINTS_THEM:
+                      st->pointsCount[them] += points;
+                      break;
+                  case POINTS_OWNER:
+                      st->pointsCount[bc] += points;
+                      break;
+                  case POINTS_NON_OWNER:
+                      st->pointsCount[~bc] += points;
+                      break;
+                  case POINTS_NONE:
+                      break;
+              }
+          }
+
+          // Update castling rights if needed
+          if (st->castlingRights && castlingRightsMask[bsq])
+          {
+             k ^= Zobrist::castling[st->castlingRights];
+             st->castlingRights &= ~castlingRightsMask[bsq];
+             k ^= Zobrist::castling[st->castlingRights];
+          }
+
+          // Make a wall square where the piece was
+          if (bsq == to ? bool(var->petrifyOnCaptureTypes & type_of(bpc)) : var->petrifyBlastPieces)
+          {
+              st->wallSquares |= bsq;
+              byTypeBB[ALL_PIECES] |= bsq;
+              k ^= Zobrist::wall[bsq];
+          }
+      }
+  }
+
+  if (remove_connect_n() > 0)
+  {
+
+    Bitboard removal_mask = 0;
+
+    auto mark_line = [&](Bitboard line) {
+        for (Direction d : var->connect_directions) {
+            Bitboard temp = line;
+            for (int i = 1; i < remove_connect_n(); i++)
+                temp &= shift(d, temp);
+            removal_mask |= temp;
+        }
+    };
+
+    if (remove_connect_n_by_type()) {
+        for (PieceType pt = PAWN; pt <= KING; ++pt) {
+            mark_line(pieces(pt));
+        }
+    } else {
+        mark_line(pieces(WHITE));
+        mark_line(pieces(BLACK));
+    }
+
+    while (removal_mask) {
+          Square bsq = pop_lsb(removal_mask);
           Piece bpc = piece_on(bsq);
           Color bc = color_of(bpc);
           if (type_of(bpc) != PAWN)
@@ -2318,10 +2530,29 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
               dp.dirty_num++;
           }
 
-          // Update board and piece lists
-          // In order to not have to store the values of both board and unpromotedBoard,
-          // demote promoted pieces, but keep promoted pawns as promoted,
-          // and store demotion/promotion bitboards to disambiguate the piece state
+
+          // Points assignment logic
+          if (points_counting()) {
+              PointsRule pointsOwner = points_rule_captures();
+              int points = var->piecePoints[type_of(bpc)];
+
+              switch (pointsOwner) {
+                  case POINTS_US:
+                      st->pointsCount[us] += points;
+                      break;
+                  case POINTS_THEM:
+                      st->pointsCount[them] += points;
+                      break;
+                  case POINTS_OWNER:
+                      st->pointsCount[bc] += points;
+                      break;
+                  case POINTS_NON_OWNER:
+                      st->pointsCount[~bc] += points;
+                      break;
+                  case POINTS_NONE:
+                      break;
+              }
+          }
           bool capturedPromoted = is_promoted(bsq);
           Piece unpromotedCaptured = unpromoted_piece_on(bsq);
           st->unpromotedBycatch[bsq] = unpromotedCaptured ? unpromotedCaptured : bpc;
@@ -2368,13 +2599,6 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
              k ^= Zobrist::castling[st->castlingRights];
           }
 
-          // Make a wall square where the piece was
-          if (bsq == to ? bool(var->petrifyOnCaptureTypes & type_of(bpc)) : var->petrifyBlastPieces)
-          {
-              st->wallSquares |= bsq;
-              byTypeBB[ALL_PIECES] |= bsq;
-              k ^= Zobrist::wall[bsq];
-          }
       }
   }
 
@@ -2473,16 +2697,38 @@ void Position::undo_move(Move m) {
   byTypeBB[ALL_PIECES] ^= st->wallSquares ^ st->previous->wallSquares;
 
   // Add the blast pieces
-  if ((st->capturedPiece && (blast_on_capture() || var->petrifyOnCaptureTypes)) || surround_capture_opposite() || surround_capture_edge())
+  if (((st->capturedPiece && (blast_on_capture() || var->petrifyOnCaptureTypes)) || surround_capture_opposite() || surround_capture_edge()) ||
+       ( blast_on_move() && (type_of(m) == NORMAL) ) || 
+       ( remove_connect_n() > 0 ) 
+     )
   {
       //It's ok to just loop through all, not taking into account immunities/pawnness
       //because we'll just not find the piece in unpromotedBycatch.
-      //Same if surround_capture_opposite is true, king is superset of all directions.
-      Bitboard blast = attacks_bb<KING>(to) | to;
+      //Same if remove_connect_n is true, just loop through all empty squares because there's no other
+      //indication other than unpromotedBycatch of where removed pieces were.
+      Bitboard blast = (blast_pattern(to) | to) || ( remove_connect_n() > 0 ) ? ~pieces() : 0;
       while (blast)
       {
           Square bsq = pop_lsb(blast);
           Piece unpromotedBpc = st->unpromotedBycatch[bsq];
+
+          //To undo:
+          //if in demotedBycatch:
+          //  make the piece from unpromotedBpc in promoted form
+          //else
+          //  make the piece from unpromotedBpc exactly
+          //if in demotedBycatch or promotedBycatch, mark it as promoted
+          //if in demotedBycatch, mark the demoted form as the piece from unpromotedBpc
+
+          //Simplified:
+          //demotedBycatch:
+          //  restore in promoted form, marked as promoted, with a hidden demoted form
+          //promotedBycatch:
+          //  restore as in unpromotedBpc, marked as promoted
+          //neither:
+          //  restore as in unpromotedBpc
+          //both:
+          //  can't happen
           Piece bpc = st->demotedBycatch & bsq ? make_piece(color_of(unpromotedBpc), promoted_piece_type(type_of(unpromotedBpc)))
                                                : unpromotedBpc;
           bool isPromoted = (st->promotedBycatch | st->demotedBycatch) & bsq;
@@ -2761,7 +3007,7 @@ Value Position::blast_see(Move m) const {
   Square to = to_sq(m);
   Color us = color_of(moved_piece(m));
   Bitboard fromto = type_of(m) == DROP ? square_bb(to) : from | to;
-  Bitboard blast = ((attacks_bb<KING>(to) & ~pieces(PAWN)) | fromto) & (pieces(WHITE) | pieces(BLACK));
+  Bitboard blast = blast_squares(to);
 
   Value result = VALUE_ZERO;
 
@@ -3181,6 +3427,35 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
       result = mated_in(ply);
       return true;
   }
+  if (points_counting())
+  {
+      //Handle the case where both players met the goal.
+      if (st->pointsCount[~sideToMove]>=points_goal() && st->pointsCount[sideToMove]>=points_goal())
+      {
+          //If both players are drawn on points, or the rules say it's a draw, then declare draw.
+          if ((st->pointsCount[~sideToMove] == st->pointsCount[sideToMove]) || (var->pointsGoalSimulValue == VALUE_DRAW))
+          {
+              result = convert_mate_value(VALUE_DRAW, ply);
+              return true;
+          };
+          //Otherwise pointsGoalSimulValue rules on ending, from perspective of player with most points.
+          result = convert_mate_value(
+            st->pointsCount[~sideToMove] > st->pointsCount[sideToMove] ?
+            var->pointsGoalSimulValue : -var->pointsGoalSimulValue, ply);
+          return true;
+      };
+      //Finally, rule on the simple cases.
+      if (st->pointsCount[~sideToMove]>=points_goal())
+      {
+          result = convert_mate_value(var->pointsGoalValue, ply);
+          return true;
+      };
+      if (st->pointsCount[sideToMove]>=points_goal())
+      {
+          result = convert_mate_value(-var->pointsGoalValue, ply);
+          return true;
+      };
+  };
 
   //Calculate eligible pieces for connection once.
   Bitboard connectPieces = 0;

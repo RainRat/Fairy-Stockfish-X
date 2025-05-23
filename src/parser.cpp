@@ -141,6 +141,15 @@ namespace {
         return value == "arrow" || value == "duck" || value == "edge" || value =="past" || value == "static" || value == "none";
     }
 
+    template <> bool set(const std::string& value, PointsRule& target) {
+        target =  value == "us" ? POINTS_US
+                : value == "them" ? POINTS_THEM
+                : value == "owner" ? POINTS_OWNER
+                : value == "non-owner" ? POINTS_NON_OWNER
+                : POINTS_NONE;
+        return value == "us" || value == "them" || value =="owner" || value =="non-owner" || value =="none";
+    }
+
     template <> bool set(const std::string& value, Bitboard& target) {
         std::string symbol;
         std::stringstream ss(value);
@@ -547,6 +556,21 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     }
 
     // Parse deprecate values for backwards compatibility
+    // piece points (for games of points, not evaluation)
+    const auto& pv = config.find("piecePoints");
+    if (pv != config.end())
+    {
+        char token;
+        size_t idx = 0;
+        std::stringstream ss(pv->second);
+        while (!ss.eof() && ss >> token && (idx = v->pieceToChar.find(toupper(token))) != std::string::npos
+                         && ss >> token && ss >> v->piecePoints[idx]) {}
+        if (DoCheck && idx == std::string::npos)
+            std::cerr << "piecePoints - Invalid piece type: " << token << std::endl;
+        else if (DoCheck && !ss.eof())
+            std::cerr << "piecePoints - Invalid piece points for type: " << v->pieceToChar[idx] << std::endl;
+    }
+
     Rank promotionRank = RANK_8;
     if (parse_attribute<false>("promotionRank", promotionRank))
     {
@@ -657,10 +681,16 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("mandatoryPiecePromotion", v->mandatoryPiecePromotion);
     parse_attribute("pieceDemotion", v->pieceDemotion);
     parse_attribute("blastOnCapture", v->blastOnCapture);
+    parse_attribute("blastOnMove", v->blastOnMove);
+    parse_attribute("blastPromotion", v->blastPromotion);
+    parse_attribute("blastDiagonals", v->blastDiagonals);
+    parse_attribute("blastCenter", v->blastCenter);
     parse_attribute("blastImmuneTypes", v->blastImmuneTypes, v->pieceToChar);
     parse_attribute("mutuallyImmuneTypes", v->mutuallyImmuneTypes, v->pieceToChar);
     parse_attribute("petrifyOnCaptureTypes", v->petrifyOnCaptureTypes, v->pieceToChar);
     parse_attribute("petrifyBlastPieces", v->petrifyBlastPieces);
+    parse_attribute("removeConnectN", v->removeConnectN);
+    parse_attribute("removeConnectNByType", v->removeConnectNByType);
     parse_attribute("surroundCaptureOpposite", v->surroundCaptureOpposite);
     parse_attribute("surroundCaptureEdge", v->surroundCaptureEdge);
     parse_attribute("surroundCaptureMaxRegion", v->surroundCaptureMaxRegion);
@@ -750,6 +780,7 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("dropPromoted", v->dropPromoted);
     parse_attribute("dropNoDoubled", v->dropNoDoubled, v->pieceToChar);
     parse_attribute("dropNoDoubledCount", v->dropNoDoubledCount);
+    parse_attribute("freeDrops", v->freeDrops);
     parse_attribute("immobilityIllegal", v->immobilityIllegal);
     parse_attribute("gating", v->gating);
     parse_attribute("wallingRule", v->wallingRule);
@@ -837,7 +868,12 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("adjudicateFullBoard", v->adjudicateFullBoard);
     parse_attribute("countingRule", v->countingRule);
     parse_attribute("castlingWins", v->castlingWins);
-    
+    parse_attribute("pointsCounting", v->pointsCounting);
+    parse_attribute("pointsRuleCaptures", v->pointsRuleCaptures);
+    parse_attribute("pointsGoal", v->pointsGoal);
+    parse_attribute("pointsGoalValue", v->pointsGoalValue);
+    parse_attribute("pointsGoalSimulValue", v->pointsGoalSimulValue);
+
     // Report invalid options
     if (DoCheck)
     {
@@ -846,6 +882,7 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
             if (parsedKeys.find(it.first) == parsedKeys.end())
                 std::cerr << "Invalid option: " << it.first << std::endl;
     }
+
     // Check consistency
     if (DoCheck)
     {
@@ -904,6 +941,8 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
                 std::cerr << "Can not use kings with blastOnCapture." << std::endl;
             if (v->flipEnclosedPieces)
                 std::cerr << "Can not use kings with flipEnclosedPieces." << std::endl;
+            if (v->removeConnectN)
+                std::cerr << "Can not use kings with removeConnectN." << std::endl;
             if (v->wallingRule==DUCK)
                 std::cerr << "Can not use kings with wallingRule = duck." << std::endl;
             // We can not fully check support for custom king movements at this point,
@@ -926,7 +965,7 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
         // 3. Moving a (pseudo-)royal mutuallyImmuneType into a square threatened by the same type is legal.
         if ((v->extinctionPseudoRoyal) || (v->pieceTypes & KING))
         {
-            if (v->blastImmuneTypes)
+            if (v->blastImmuneTypes) //I may have this solved now.
                 std::cerr << "Can not use kings or pseudo-royal with blastImmuneTypes." << std::endl;
             if (v->mutuallyImmuneTypes)
                 std::cerr << "Can not use kings or pseudo-royal with mutuallyImmuneTypes." << std::endl;

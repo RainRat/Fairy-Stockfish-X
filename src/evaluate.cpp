@@ -877,7 +877,7 @@ namespace {
                 continue;
             int denom = std::max(pos.count_with_hand(Them, pt) - pos.extinction_piece_count(), 1);
             // Explosion threats
-            if (pos.blast_on_capture())
+            if (pos.blast_on_capture() && !(pos.blast_immune_types() & pt))
             {
                 int evasions = popcount(((attackedBy[Them][pt] & ~pos.pieces(Them)) | pos.pieces(Them, pt)) & ~attackedBy[Us][ALL_PIECES]) * denom;
                 int attacks = popcount((attackedBy[Them][pt] | pos.pieces(Them, pt)) & attackedBy[Us][ALL_PIECES]);
@@ -887,7 +887,7 @@ namespace {
                 while (bExtBlast)
                 {
                     Square s = pop_lsb(bExtBlast);
-                    if (((attacks_bb<KING>(s) | s) & pos.pieces(Them, pt)) && !(attacks_bb<KING>(s) & pos.pieces(Us, pt)))
+                    if (((blast_pattern(s) | s) & pos.pieces(Them, pt)) && !(blast_pattern(s) & pos.pieces(Us, pt)))
                         explosions++;
                 }
                 int danger = 20 * attacks / (evasions + 1) + 40 * explosions;

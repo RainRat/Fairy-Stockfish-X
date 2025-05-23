@@ -51,6 +51,7 @@ struct StateInfo {
   int    pliesFromNull;
   int    countingPly;
   int    countingLimit;
+  int    pointsCount[COLOR_NB];
   CheckCount checksRemaining[COLOR_NB];
   Bitboard epSquares;
   Square castlingKingSquare[COLOR_NB];
@@ -148,8 +149,14 @@ public:
   bool mandatory_piece_promotion() const;
   bool piece_demotion() const;
   bool blast_on_capture() const;
+  bool blast_on_move() const;
+  bool blast_promotion() const;
+  bool blast_diagonals() const;
+  bool blast_center() const;
   PieceSet blast_immune_types() const;
   PieceSet mutually_immune_types() const;
+  int remove_connect_n() const;
+  bool remove_connect_n_by_type() const;
   bool surround_capture_opposite() const;
   bool surround_capture_edge() const;
   Bitboard surround_capture_max_region() const;
@@ -233,6 +240,9 @@ public:
   const std::vector<Direction>& getConnectDirections() const;
   int connect_nxn() const;
   int collinear_n() const;
+  bool points_counting() const;
+  PointsRule points_rule_captures() const;
+  int points_goal() const;
 
   CheckCount checks_remaining(Color c) const;
   MaterialCounting material_counting() const;
@@ -565,6 +575,26 @@ inline bool Position::mandatory_piece_promotion() const {
   return var->mandatoryPiecePromotion;
 }
 
+inline bool Position::blast_on_move() const {
+  assert(var != nullptr);
+  return var->blastOnMove;
+}
+
+inline bool Position::blast_promotion() const {
+  assert(var != nullptr);
+  return var->blastPromotion;
+}
+
+inline bool Position::blast_diagonals() const {
+  assert(var != nullptr);
+  return var->blastDiagonals;
+}
+
+inline bool Position::blast_center() const {
+  assert(var != nullptr);
+  return var->blastCenter;
+}
+
 inline bool Position::piece_demotion() const {
   assert(var != nullptr);
   return var->pieceDemotion;
@@ -578,6 +608,24 @@ inline bool Position::blast_on_capture() const {
 inline PieceSet Position::blast_immune_types() const {
   assert(var != nullptr);
   return var->blastImmuneTypes;
+}
+
+inline Bitboard Position::blast_pattern(Square to) const {
+    Bitboard blastPattern = blast_diagonals() ?  attacks_bb<KING>(to) : attacks_bb<WAZIR>(to);
+    return blastPattern;
+}
+
+inline Bitboard Position::blast_squares(Square to) const {
+    Bitboard blastImmune = 0;
+    for (PieceSet ps = blast_immune_types(); ps;) {
+        PieceType pt = pop_lsb(ps);
+        blastImmune |= pieces(pt);
+    }
+    Bitboard blastPattern = blast_pattern(to);
+    Bitboard relevantPieces = (pieces(WHITE) | pieces(BLACK)) ^ pieces(PAWN);
+    Bitboard blastArea = (blastPattern & relevantPieces) | (blast_center() ? to : Bitboard(0));
+
+    return blastArea & (pieces() ^ blastImmune);
 }
 
 inline PieceSet Position::mutually_immune_types() const {
@@ -603,6 +651,16 @@ inline Bitboard Position::surround_capture_max_region() const {
 inline Bitboard Position::surround_capture_hostile_region() const {
   assert(var != nullptr);
   return var->surroundCaptureHostileRegion;
+}
+
+inline int Position::remove_connect_n() const {
+  assert(var != nullptr);
+  return var->removeConnectN;
+}
+
+inline bool Position::remove_connect_n_by_type() const {
+  assert(var != nullptr);
+  return var->removeConnectNByType;
 }
 
 inline EndgameEval Position::endgame_eval() const {
@@ -1053,7 +1111,7 @@ inline Value Position::stalemate_value(int ply) const {
       while (pseudoRoyals)
       {
           Square sr = pop_lsb(pseudoRoyals);
-          if (  !(blast_on_capture() && (pseudoRoyalsTheirs & attacks_bb<KING>(sr)))
+          if (  !(blast_on_capture() && (pseudoRoyalsTheirs & blast_pattern(sr)))
               && attackers_to(sr, ~sideToMove))
               return convert_mate_value(var->checkmateValue, ply);
       }
@@ -1066,7 +1124,7 @@ inline Value Position::stalemate_value(int ply) const {
           {
               Square sr = pop_lsb(pseudoRoyalCandidates);
               // Touching pseudo-royal pieces are immune
-              if (!(  !(blast_on_capture() && (pseudoRoyalsTheirs & attacks_bb<KING>(sr)))
+              if (!(  !(blast_on_capture() && (pseudoRoyalsTheirs & blast_pattern(sr)))
                     && attackers_to(sr, ~sideToMove)))
                   allCheck = false;
           }
@@ -1271,6 +1329,21 @@ inline MaterialCounting Position::material_counting() const {
 inline CountingRule Position::counting_rule() const {
   assert(var != nullptr);
   return var->countingRule;
+}
+
+inline bool Position::points_counting() const {
+  assert(var != nullptr);
+  return var->pointsCounting;
+}
+
+inline PointsRule Position::points_rule_captures() const {
+  assert(var != nullptr);
+  return var->pointsRuleCaptures;
+}
+
+inline int Position::points_goal() const {
+  assert(var != nullptr);
+  return var->pointsGoal;
 }
 
 inline bool Position::is_immediate_game_end() const {

@@ -69,10 +69,16 @@ struct Variant {
   bool mandatoryPiecePromotion = false;
   bool pieceDemotion = false;
   bool blastOnCapture = false;
+  bool blastOnMove = false;
+  bool blastPromotion = false;
+  bool blastDiagonals = true;
+  bool blastCenter = true;
   PieceSet blastImmuneTypes = NO_PIECE_SET;
   PieceSet mutuallyImmuneTypes = NO_PIECE_SET;
   PieceSet petrifyOnCaptureTypes = NO_PIECE_SET;
   bool petrifyBlastPieces = false;
+  int removeConnectN = 0;
+  bool removeConnectNByType = false;
   bool surroundCaptureOpposite = false;
   bool surroundCaptureEdge = false;
   Bitboard surroundCaptureMaxRegion = 0;
@@ -193,6 +199,12 @@ struct Variant {
   bool adjudicateFullBoard = false;
   CountingRule countingRule = NO_COUNTING;
   CastlingRights castlingWins = NO_CASTLING;
+  bool pointsCounting = false;
+  PointsRule pointsRuleCaptures = POINTS_US;
+  int piecePoints[PIECE_TYPE_NB] = {}; //for games of points, not evaluation
+  Value pointsGoalValue = VALUE_MATE;
+  Value pointsGoalSimulValue = VALUE_MATE;
+  int pointsGoal = 0;
 
   // Derived properties
   bool fastAttacks = true;
