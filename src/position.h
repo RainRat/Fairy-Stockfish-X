@@ -119,8 +119,6 @@ public:
   Position& operator=(const Position&) = delete;
 
   // FEN string input/output
-  Bitboard blast_pattern(Square to) const;
-  Bitboard blast_squares(Square to) const;
   Position& set(const Variant* v, const std::string& fenStr, bool isChess960, StateInfo* si, Thread* th, bool sfen = false);
   Position& set(const std::string& code, Color c, StateInfo* si);
   std::string fen(bool sfen = false, bool showPromoted = false, int countStarted = 0, std::string holdings = "-", Bitboard fogArea = 0) const;
@@ -156,6 +154,8 @@ public:
   bool blast_diagonals() const;
   bool blast_center() const;
   PieceSet blast_immune_types() const;
+  Bitboard blast_pattern(Square to) const;
+  Bitboard blast_squares(Square to) const;
   PieceSet mutually_immune_types() const;
   int remove_connect_n() const;
   bool remove_connect_n_by_type() const;

@@ -2335,8 +2335,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           PieceType pt = pop_lsb(ps);
           blastImmune |= pieces(pt);
       };
-      Bitboard blast = ((blast_on_capture() || blast_on_move()) ? blast_squares(to)
-          : (var->petrifyOnCaptureTypes & type_of(pc) ? square_bb(to) : Bitboard(0)));
+      Bitboard blast = (blast_on_capture() || blast_on_move()) ? blast_squares(to)
+          : (var->petrifyOnCaptureTypes & type_of(pc) ? square_bb(to) : Bitboard(0));
       while (blast)
       {
           Square bsq = pop_lsb(blast);
