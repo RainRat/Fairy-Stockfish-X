@@ -887,7 +887,7 @@ namespace {
                 while (bExtBlast)
                 {
                     Square s = pop_lsb(bExtBlast);
-                    if (((blast_pattern(s) | s) & pos.pieces(Them, pt)) && !(blast_pattern(s) & pos.pieces(Us, pt)))
+                    if (((pos.blast_pattern(s) | s) & pos.pieces(Them, pt)) && !(pos.blast_pattern(s) & pos.pieces(Us, pt)))
                         explosions++;
                 }
                 int danger = 20 * attacks / (evasions + 1) + 40 * explosions;

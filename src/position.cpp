@@ -1176,7 +1176,7 @@ Bitboard Position::checked_pseudo_royals(Color c) const {
       PieceType pt = pop_lsb(ps);
       blastImmune |= pieces(pt);
   }
-  pseudoRoyalsTheirs = pseudoRoyalsTheirs &(!blastImmune);
+  pseudoRoyalsTheirs = pseudoRoyalsTheirs & Bitboard(!blastImmune);
   //Same as above, if blasts promote.
   if (blast_promotion()) pseudoRoyalsTheirs = Bitboard(0);
 
@@ -2335,8 +2335,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           PieceType pt = pop_lsb(ps);
           blastImmune |= pieces(pt);
       };
-      Bitboard blast = (blast_on_capture() || blast_on_move()) ? blast_squares(to)
-          : var->petrifyOnCaptureTypes & type_of(pc) ? square_bb(to) : Bitboard(0);
+      Bitboard blast = ((blast_on_capture() || blast_on_move()) ? blast_squares(to)
+          : (var->petrifyOnCaptureTypes & type_of(pc) ? square_bb(to) : Bitboard(0)));
       while (blast)
       {
           Square bsq = pop_lsb(blast);
@@ -2706,7 +2706,7 @@ void Position::undo_move(Move m) {
       //because we'll just not find the piece in unpromotedBycatch.
       //Same if remove_connect_n is true, just loop through all empty squares because there's no other
       //indication other than unpromotedBycatch of where removed pieces were.
-      Bitboard blast = (blast_pattern(to) | to) || ( remove_connect_n() > 0 ) ? ~pieces() : 0;
+      Bitboard blast = ((blast_pattern(to) | to) || (remove_connect_n() > 0)) ? ~pieces() : Bitboard(0);
       while (blast)
       {
           Square bsq = pop_lsb(blast);
