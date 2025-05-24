@@ -185,7 +185,7 @@ void Position::init() {
       Zobrist::endgame[i] = rng.rand<Key>();
 
   for (Color c : {WHITE, BLACK})
-      for (int i = 0; i < MAX_ZOBRIST_POINTS; ++i)
+      for (int i = 0; i < Stockfish::Zobrist::MAX_ZOBRIST_POINTS; ++i)
           Zobrist::points[c][i] = rng.rand<Key>();
 
   // Prepare the cuckoo tables
@@ -801,10 +801,10 @@ void Position::set_state(StateInfo* si) const {
 
   if (var->pointsCounting) {
       for (Color c : {WHITE, BLACK}) {
-          if (si->pointsCount[c] >= 0 && si->pointsCount[c] < MAX_ZOBRIST_POINTS) {
+          if (si->pointsCount[c] >= 0 && si->pointsCount[c] < Stockfish::Zobrist::MAX_ZOBRIST_POINTS) {
               si->key ^= Zobrist::points[c][si->pointsCount[c]];
-          } else if (si->pointsCount[c] >= MAX_ZOBRIST_POINTS) {
-              si->key ^= Zobrist::points[c][MAX_ZOBRIST_POINTS - 1];
+          } else if (si->pointsCount[c] >= Stockfish::Zobrist::MAX_ZOBRIST_POINTS) {
+              si->key ^= Zobrist::points[c][Stockfish::Zobrist::MAX_ZOBRIST_POINTS - 1];
           }
           // Negative points are less common but could be handled if necessary
           // else if (si->pointsCount[c] < 0) { /* XOR a generic key for negative points or handle as error */ }
@@ -2646,34 +2646,34 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       // WHITE points change handling
       if (st->pointsCount[WHITE] != st->previous->pointsCount[WHITE]) {
           // XOR out the contribution of WHITE's old pointsCount from k
-          if (st->previous->pointsCount[WHITE] >= 0 && st->previous->pointsCount[WHITE] < MAX_ZOBRIST_POINTS) {
+          if (st->previous->pointsCount[WHITE] >= 0 && st->previous->pointsCount[WHITE] < Stockfish::Zobrist::MAX_ZOBRIST_POINTS) {
               k ^= Zobrist::points[WHITE][st->previous->pointsCount[WHITE]];
-          } else if (st->previous->pointsCount[WHITE] >= MAX_ZOBRIST_POINTS) {
-              k ^= Zobrist::points[WHITE][MAX_ZOBRIST_POINTS - 1];
+          } else if (st->previous->pointsCount[WHITE] >= Stockfish::Zobrist::MAX_ZOBRIST_POINTS) {
+              k ^= Zobrist::points[WHITE][Stockfish::Zobrist::MAX_ZOBRIST_POINTS - 1];
           }
 
           // XOR in the contribution of WHITE's new pointsCount to k
-          if (st->pointsCount[WHITE] >= 0 && st->pointsCount[WHITE] < MAX_ZOBRIST_POINTS) {
+          if (st->pointsCount[WHITE] >= 0 && st->pointsCount[WHITE] < Stockfish::Zobrist::MAX_ZOBRIST_POINTS) {
               k ^= Zobrist::points[WHITE][st->pointsCount[WHITE]];
-          } else if (st->pointsCount[WHITE] >= MAX_ZOBRIST_POINTS) {
-              k ^= Zobrist::points[WHITE][MAX_ZOBRIST_POINTS - 1];
+          } else if (st->pointsCount[WHITE] >= Stockfish::Zobrist::MAX_ZOBRIST_POINTS) {
+              k ^= Zobrist::points[WHITE][Stockfish::Zobrist::MAX_ZOBRIST_POINTS - 1];
           }
       }
 
       // BLACK points change handling
       if (st->pointsCount[BLACK] != st->previous->pointsCount[BLACK]) {
           // XOR out the contribution of BLACK's old pointsCount from k
-          if (st->previous->pointsCount[BLACK] >= 0 && st->previous->pointsCount[BLACK] < MAX_ZOBRIST_POINTS) {
+          if (st->previous->pointsCount[BLACK] >= 0 && st->previous->pointsCount[BLACK] < Stockfish::Zobrist::MAX_ZOBRIST_POINTS) {
               k ^= Zobrist::points[BLACK][st->previous->pointsCount[BLACK]];
-          } else if (st->previous->pointsCount[BLACK] >= MAX_ZOBRIST_POINTS) {
-              k ^= Zobrist::points[BLACK][MAX_ZOBRIST_POINTS - 1];
+          } else if (st->previous->pointsCount[BLACK] >= Stockfish::Zobrist::MAX_ZOBRIST_POINTS) {
+              k ^= Zobrist::points[BLACK][Stockfish::Zobrist::MAX_ZOBRIST_POINTS - 1];
           }
 
           // XOR in the contribution of BLACK's new pointsCount to k
-          if (st->pointsCount[BLACK] >= 0 && st->pointsCount[BLACK] < MAX_ZOBRIST_POINTS) {
+          if (st->pointsCount[BLACK] >= 0 && st->pointsCount[BLACK] < Stockfish::Zobrist::MAX_ZOBRIST_POINTS) {
               k ^= Zobrist::points[BLACK][st->pointsCount[BLACK]];
-          } else if (st->pointsCount[BLACK] >= MAX_ZOBRIST_POINTS) {
-              k ^= Zobrist::points[BLACK][MAX_ZOBRIST_POINTS - 1];
+          } else if (st->pointsCount[BLACK] >= Stockfish::Zobrist::MAX_ZOBRIST_POINTS) {
+              k ^= Zobrist::points[BLACK][Stockfish::Zobrist::MAX_ZOBRIST_POINTS - 1];
           }
       }
   }
