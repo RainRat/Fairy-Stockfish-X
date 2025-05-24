@@ -744,6 +744,7 @@ void Position::set_state(StateInfo* si) const {
   si->pawnKey = Zobrist::noPawns;
   si->nonPawnMaterial[WHITE] = si->nonPawnMaterial[BLACK] = VALUE_ZERO;
   si->checkersBB = count<KING>(sideToMove) ? attackers_to(square<KING>(sideToMove), ~sideToMove) : Bitboard(0);
+  si->blastPromotedSquares = 0;
   si->move = MOVE_NONE;
   si->removedGatingType = NO_PIECE_TYPE;
   si->removedCastlingGatingType = NO_PIECE_TYPE;
@@ -1735,6 +1736,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   // ones which are going to be recalculated from scratch anyway and then switch
   // our state pointer to point to the new (ready to be updated) state.
   std::memcpy(static_cast<void*>(&newSt), static_cast<void*>(st), offsetof(StateInfo, key));
+  newSt.blastPromotedSquares = 0;
   newSt.previous = st;
   st = &newSt;
   st->move = m;
@@ -2387,6 +2389,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
 
                   // Update material (add the PieceValue of the new piece and if it's not a pawn, subtract the old piece.
                   st->nonPawnMaterial[us] += PieceValue[MG][promotion] - (type_of(pc) != PAWN ? PieceValue[MG][pc] : 0);
+                  st->blastPromotedSquares |= bsq;
               }
           }
           else
@@ -2731,9 +2734,21 @@ void Position::undo_move(Move m) {
           //  restore as in unpromotedBpc
           //both:
           //  can't happen
-          Piece bpc = st->demotedBycatch & bsq ? make_piece(color_of(unpromotedBpc), promoted_piece_type(type_of(unpromotedBpc)))
-                                               : unpromotedBpc;
-          bool isPromoted = (st->promotedBycatch | st->demotedBycatch) & bsq;
+          bool wasBlastPromoted = st->blastPromotedSquares & bsq;
+          Piece bpc;
+          bool isPromoted;
+
+          if (wasBlastPromoted)
+          {
+              bpc = unpromotedBpc; // Restore to its original unpromoted form
+              isPromoted = false;    // Not marked as promoted on board
+          }
+          else
+          {
+              bpc = st->demotedBycatch & bsq ? make_piece(color_of(unpromotedBpc), promoted_piece_type(type_of(unpromotedBpc)))
+                                             : unpromotedBpc;
+              isPromoted = (st->promotedBycatch | st->demotedBycatch) & bsq;
+          }
 
           // Update board and piece lists
           // The original code had `if (bpc)`, which is equivalent to `if (bpc != NO_PIECE)`
@@ -2746,7 +2761,7 @@ void Position::undo_move(Move m) {
           // The original `if (bpc)` check is preserved.
           if (bpc != NO_PIECE)
           {
-              put_piece(bpc, bsq, isPromoted, st->demotedBycatch & bsq ? unpromotedBpc : NO_PIECE);
+              put_piece(bpc, bsq, isPromoted, st->demotedBycatch & bsq && !wasBlastPromoted ? unpromotedBpc : NO_PIECE);
               if (capture_type() == HAND) {
                   // If the piece restored was a result of demotion (demotedBycatch),
                   // then unpromotedBpc holds its original (promoted) form.
