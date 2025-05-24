@@ -1,7 +1,0 @@
-uci
-setoption name VariantPath value /app/src/variants.ini
-setoption name UCI_Variant value large-pond
-setoption name Hash value 32
-isready
-position fen 5/5/5/5/5[EEEEEEEEEEEEEEeeeeeeeeeeeeee] w - - 0 1 {0 0}
-go depth 10
