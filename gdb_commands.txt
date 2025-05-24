@@ -1,0 +1,61 @@
+set logging file /app/gdb_output.txt
+set logging on
+set pagination off
+set confirm off
+set args
+
+# Focus on Blast effects loop in do_move
+# Original line for assignment: st->unpromotedBycatch[bsq] = unpromotedCaptured ? unpromotedCaptured : bpc; (around 2381)
+# The line before this, after bpc is defined, could be where "bool capturedPromoted = is_promoted(bsq);" (2378) or
+# "Piece unpromotedCaptured = unpromoted_piece_on(bsq);" (2379).
+# Let's try breaking at 2380, assuming it's just before the assignment.
+break position.cpp:2380
+commands 1
+  silent
+  # Ensure bsq is in scope. It's defined at the start of the while(blast) loop.
+  # The condition bsq == 2 should be valid if we are in an iteration for SQ_C1.
+  if bsq == 2
+    echo \n--- Hit: position.cpp:2380 (blast, bsq == SQ_C1, before st->unpromotedBycatch assignment) ---\n
+    print bsq
+    echo "Value of unpromotedCaptured:"
+    print unpromotedCaptured
+    echo "Value of bpc:"
+    print bpc
+    echo "Value of st->unpromotedBycatch[2] (before assignment):"
+    print st->unpromotedBycatch[2]
+    step ; # Execute the assignment line (should be 2381)
+    echo "Value of st->unpromotedBycatch[2] (after assignment):"
+    print st->unpromotedBycatch[2]
+    if st->unpromotedBycatch[2] == 0 || st->unpromotedBycatch[2] == 4294950512
+      echo \n--- Problematic value (blast) written to st->unpromotedBycatch[2]. Quitting. ---\n
+      bt 15
+      quit
+    end
+    # If not problematic, continue this loop iteration and further.
+    continue
+  else
+    # If bsq is not 2, just continue.
+    continue
+  end
+end
+
+# Fallback breakpoint at the original crash site in put_piece
+break position.h:1779
+commands 2
+  silent
+  echo \n--- Fallback: Crashed at position.h:1779 in put_piece ---\n
+  up
+  echo "In undo_move frame:"
+  # These might be optimized out here, but try.
+  print bsq
+  print unpromotedBpc
+  print bpc
+  bt full
+  quit
+end
+
+run < /app/uci_input.txt
+
+echo \n--- GDB Run Finished or Crashed Differently (e.g. normal exit or different crash point) ---\n
+bt full
+quit
