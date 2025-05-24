@@ -68,6 +68,7 @@ struct StateInfo {
   Piece      unpromotedBycatch[SQUARE_NB];
   Bitboard   promotedBycatch;
   Bitboard   demotedBycatch;
+  Bitboard   blastPromotedSquares;
   StateInfo* previous;
   Bitboard   blockersForKing[COLOR_NB];
   Bitboard   pinners[COLOR_NB];
