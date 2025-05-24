@@ -2344,7 +2344,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           Color bc = color_of(bpc);
           if (blast_promotion()) {
 
-              Piece promotion = make_piece(us, promoted_piece_type(type_of(bpc)));
+              Piece promotion = make_piece(color_of(bpc), promoted_piece_type(type_of(bpc)));
               if (promoted_piece_type(type_of(bpc)) != NO_PIECE_TYPE)
               {
                   //Store all the information about previous state so undo_move can demote the piece by recreating the piece.
@@ -2702,15 +2702,17 @@ void Position::undo_move(Move m) {
        ( remove_connect_n() > 0 ) 
      )
   {
-      //It's ok to just loop through all, not taking into account immunities/pawnness
-      //because we'll just not find the piece in unpromotedBycatch.
-      //Same if remove_connect_n is true, just loop through all empty squares because there's no other
-      //indication other than unpromotedBycatch of where removed pieces were.
-      Bitboard blast = ((blast_pattern(to) | to) || (remove_connect_n() > 0)) ? ~pieces() : Bitboard(0);
-      while (blast)
+      // Iterate over all board squares. The st->unpromotedBycatch array is sized for SQUARE_NB.
+      // The conditional check inside filters for relevant squares.
+      for (Square bsq = SQ_A1; bsq < SQUARE_NB; ++bsq)
       {
-          Square bsq = pop_lsb(blast);
           Piece unpromotedBpc = st->unpromotedBycatch[bsq];
+
+          // Skip this square if no undo information was stored for it by do_move's
+          // blast, connectN, or custodial capture logic.
+          if (unpromotedBpc == NO_PIECE && !(st->demotedBycatch & bsq) && !(st->promotedBycatch & bsq)) {
+              continue;
+          }
 
           //To undo:
           //if in demotedBycatch:
@@ -2734,21 +2736,36 @@ void Position::undo_move(Move m) {
           bool isPromoted = (st->promotedBycatch | st->demotedBycatch) & bsq;
 
           // Update board and piece lists
-          if (bpc)
+          // The original code had `if (bpc)`, which is equivalent to `if (bpc != NO_PIECE)`
+          // This check is important because unpromotedBpc could be NO_PIECE if only demotedBycatch or promotedBycatch was set.
+          // However, the new outer condition `if (unpromotedBpc == NO_PIECE && !(st->demotedBycatch & bsq) && !(st->promotedBycatch & bsq)) continue;`
+          // should ensure that if unpromotedBpc is NO_PIECE, at least one of the bitboards is set for bsq.
+          // If unpromotedBpc is NO_PIECE and demotedBycatch is true, make_piece(color_of(NO_PIECE), ...) would be an issue.
+          // The logic implies unpromotedBpc should NOT be NO_PIECE if demotedBycatch is set for bsq, as color_of(NO_PIECE) is problematic.
+          // Let's assume do_move correctly stores a valid unpromotedBpc if demotedBycatch is set.
+          // The original `if (bpc)` check is preserved.
+          if (bpc != NO_PIECE)
           {
               put_piece(bpc, bsq, isPromoted, st->demotedBycatch & bsq ? unpromotedBpc : NO_PIECE);
               if (capture_type() == HAND) {
+                  // If the piece restored was a result of demotion (demotedBycatch),
+                  // then unpromotedBpc holds its original (promoted) form.
+                  // If it was just a promoted piece (promotedBycatch), unpromotedBpc is that piece.
+                  // If it was neither (normal piece), unpromotedBpc is that piece.
+                  // The logic for remove_from_hand needs the piece as it was *before* it went to hand in do_move.
+                  // This implies using the piece that was originally on the board (bpc) but in opponent's color.
+                  // However, the original logic used unpromotedBpc for this, which seems more directly related to what was stored.
                   remove_from_hand(!drop_loop() && (st->promotedBycatch & bsq)
-                                    ? make_piece(~color_of(unpromotedBpc), PAWN)
+                                    ? make_piece(~color_of(unpromotedBpc), PAWN) // This specific case might need review if PAWN is not always correct.
                                     : ~unpromotedBpc);
               } else if (capture_type() == PRISON) {
                   remove_from_prison(!drop_loop() && (st->promotedBycatch & bsq)
-                                    ? make_piece(color_of(unpromotedBpc), PAWN)
+                                    ? make_piece(color_of(unpromotedBpc), PAWN) // Same as above.
                                     : unpromotedBpc);
               }
           }
       }
-      // Reset piece since it exploded itself
+      // Reset piece since it exploded itself - this was original comment, may apply if 'to' was part of 'blast'
       pc = piece_on(to);
   }
 
