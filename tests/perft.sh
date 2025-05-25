@@ -18,7 +18,7 @@ cat << EOF > perft.exp
    send "setoption name UCI_Chess960 value \$chess960\\n"
    send "setoption name UCI_Variant value \$var\\n"
    send "position \$pos\\ngo perft \$depth\\n"
-   expect "Nodes searched? \$result" {} timeout {exit 1}
+   expect "Nodes searched: \$result" {} timeout {exit 1}
    send "quit\\n"
    expect eof
 EOF
