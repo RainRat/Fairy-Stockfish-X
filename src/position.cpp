@@ -2091,7 +2091,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           k ^= Zobrist::psq[pc][to] ^ Zobrist::psq[promotion][to];
           st->pawnKey ^= Zobrist::psq[pc][to];
           st->materialKey ^=  Zobrist::psq[promotion][pieceCount[promotion]-1]
-                            ^ Zobrist::psq[bpc][pieceCount[bpc]];
+                            ^ Zobrist::psq[pc][pieceCount[pc]];
 
           // Update material
           st->nonPawnMaterial[us] += PieceValue[MG][promotion];
