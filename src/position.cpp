@@ -1904,7 +1904,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
 
       // Update material hash key and prefetch access to materialTable
       k ^= Zobrist::psq[captured][capsq];
-      st->materialKey ^= Zobrist::psq[captured][pieceCount[captured]];
+      // (captured piece count was decremented before this line; old count is pieceCount[captured] + 1)
+      st->materialKey ^= Zobrist::psq[captured][pieceCount[captured] + 1] ^ Zobrist::psq[captured][pieceCount[captured]];
 #ifndef NO_THREADS
       prefetch(thisThread->materialTable[material_key(var->endgameEval)]);
 #endif
@@ -2106,7 +2107,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
               && !(walling() && gating_square(m) == to - pawn_push(us)))
           {
               st->epSquares |= to - pawn_push(us);
-              k ^= Zobrist::enpassant[file_of(to)];
+              k ^= Zobrist::enpassant[file_of(to - pawn_push(us))];
           }
           if (   std::abs(int(to) - int(from)) == 3 * NORTH
               && (var->enPassantRegion & (to - 2 * pawn_push(us)))
@@ -2114,7 +2115,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
               && !(walling() && gating_square(m) == to - 2 * pawn_push(us)))
           {
               st->epSquares |= to - 2 * pawn_push(us);
-              k ^= Zobrist::enpassant[file_of(to)];
+              k ^= Zobrist::enpassant[file_of(to - 2 * pawn_push(us))];
           }
       }
 
@@ -2401,7 +2402,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
                   }
 
                   // Update hash keys
-                  k ^= Zobrist::psq[pc][to] ^ Zobrist::psq[promotion][bpc];
+                  k ^= Zobrist::psq[bpc][bsq] ^ Zobrist::psq[promotion][bsq];
                   st->materialKey ^=  Zobrist::psq[promotion][pieceCount[promotion]-1]
                                     ^ Zobrist::psq[pc][pieceCount[pc]];
 
