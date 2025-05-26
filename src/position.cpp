@@ -2345,7 +2345,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
 
   // Remove the blast pieces
   if ( ( captured && (blast_on_capture() || var->petrifyOnCaptureTypes) ) ||
-       ( blast_on_move() && (type_of(m) == NORMAL) )
+       ( blast_on_move() && (type_of(m) == NORMAL || type_of(m) == DROP) )
      )
   {
       std::memset(st->unpromotedBycatch, 0, sizeof(st->unpromotedBycatch));
