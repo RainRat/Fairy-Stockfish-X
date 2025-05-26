@@ -664,6 +664,56 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
         if (DoCheck && (idx == std::string::npos || idx2 == std::string::npos))
             std::cerr << "promotedPieceType - Invalid piece type: " << token << std::endl;
     }
+
+    // Debug logging for Pond promotion rules
+    if (config.name() == "pond") { // Or v->name if available and appropriate
+        PieceType egg_pt = NO_PIECE_TYPE;
+        PieceType tadpole_pt = NO_PIECE_TYPE;
+        PieceType frog_pt = NO_PIECE_TYPE;
+        std::string piece_chars_to_find = "ETF"; // Pond uses e, t, f. Match against uppercase.
+
+        for (PieceSet ps = v->pieceTypes; ps; ) {
+            PieceType current_pt = pop_lsb(ps);
+            if (current_pt == NO_PIECE_TYPE || current_pt >= PIECE_TYPE_NB) continue;
+
+            char piece_char_map_val = v->pieceToChar[make_piece(WHITE, current_pt)];
+            if (piece_char_map_val == ' ') continue; // Skip unassigned piece types
+
+            char upper_char = toupper(piece_char_map_val);
+
+            if (upper_char == 'E') egg_pt = current_pt;
+            else if (upper_char == 'T') tadpole_pt = current_pt;
+            else if (upper_char == 'F') frog_pt = current_pt;
+        }
+
+        // Check if all piece types were found
+        if (egg_pt != NO_PIECE_TYPE && tadpole_pt != NO_PIECE_TYPE && frog_pt != NO_PIECE_TYPE) {
+            std::cout << "Pond debug: Found PieceTypes: Egg=" << int(egg_pt) 
+                      << ", Tadpole=" << int(tadpole_pt) 
+                      << ", Frog=" << int(frog_pt) << std::endl;
+
+            // Log E->T
+            PieceType actual_promo_from_egg = v->promotedPieceType[egg_pt];
+            std::cout << "Pond debug: Egg_PT(" << int(egg_pt) << ") promotes to: Actual_PT(" << int(actual_promo_from_egg)
+                      << ") (Expected_PT: " << int(tadpole_pt) << ")" << std::endl;
+
+            // Log T->F
+            PieceType actual_promo_from_tadpole = v->promotedPieceType[tadpole_pt];
+            std::cout << "Pond debug: Tadpole_PT(" << int(tadpole_pt) << ") promotes to: Actual_PT(" << int(actual_promo_from_tadpole)
+                      << ") (Expected_PT: " << int(frog_pt) << ")" << std::endl;
+
+            // Log F->E
+            PieceType actual_promo_from_frog = v->promotedPieceType[frog_pt];
+            std::cout << "Pond debug: Frog_PT(" << int(frog_pt) << ") promotes to: Actual_PT(" << int(actual_promo_from_frog)
+                      << ") (Expected_PT: " << int(egg_pt) << ")" << std::endl;
+        } else {
+            std::cout << "Pond debug: Could not find all piece types (E, T, F) by their chars in v->pieceToChar." << std::endl;
+            if (egg_pt == NO_PIECE_TYPE) std::cout << "Pond debug: Egg ('E') not found." << std::endl;
+            if (tadpole_pt == NO_PIECE_TYPE) std::cout << "Pond debug: Tadpole ('T') not found." << std::endl;
+            if (frog_pt == NO_PIECE_TYPE) std::cout << "Pond debug: Frog ('F') not found." << std::endl;
+        }
+    }
+
     // priority drops
     const auto& it_pr_drop = config.find("priorityDropTypes");
     if (it_pr_drop != config.end())
