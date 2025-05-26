@@ -2091,7 +2091,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           k ^= Zobrist::psq[pc][to] ^ Zobrist::psq[promotion][to];
           st->pawnKey ^= Zobrist::psq[pc][to];
           st->materialKey ^=  Zobrist::psq[promotion][pieceCount[promotion]-1]
-                            ^ Zobrist::psq[pc][pieceCount[pc]];
+                            ^ Zobrist::psq[bpc][pieceCount[bpc]];
 
           // Update material
           st->nonPawnMaterial[us] += PieceValue[MG][promotion];
@@ -2404,10 +2404,10 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
                   // Update hash keys
                   k ^= Zobrist::psq[bpc][bsq] ^ Zobrist::psq[promotion][bsq];
                   st->materialKey ^=  Zobrist::psq[promotion][pieceCount[promotion]-1]
-                                    ^ Zobrist::psq[pc][pieceCount[pc]];
+                                    ^ Zobrist::psq[bpc][pieceCount[bpc]];
 
                   // Update material (add the PieceValue of the new piece and if it's not a pawn, subtract the old piece.
-                  st->nonPawnMaterial[us] += PieceValue[MG][promotion] - (type_of(pc) != PAWN ? PieceValue[MG][pc] : 0);
+                  st->nonPawnMaterial[color_of(bpc)] += PieceValue[MG][promotion] - (type_of(bpc) != PAWN ? PieceValue[MG][bpc] : 0;
                   st->blastPromotedSquares |= bsq;
               }
           }
