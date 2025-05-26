@@ -864,16 +864,26 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
               if (empty(make_square(f, r)) || fogArea & make_square(f, r))
                   // Wall square
                   ss << "*";
-              else if (unpromoted_piece_on(make_square(f, r)))
-                  // Promoted shogi pieces, e.g., +r for dragon
-                  ss << "+" << piece_to_char()[unpromoted_piece_on(make_square(f, r))];
               else
               {
-                  ss << piece_to_char()[piece_on(make_square(f, r))];
+                  Square sq = make_square(f, r);
+                  Piece currentPieceVal = piece_on(sq);
+                  Piece originalPiece = unpromoted_piece_on(sq);
+                  bool isPondBlastPromotedPiece = variant()->name == "pond" && blast_promotion() && st != nullptr && (st->blastPromotedSquares & sq);
 
-                  // Set promoted pieces
-                  if (((captures_to_hand() && !drop_loop()) || two_boards() ||  showPromoted) && is_promoted(make_square(f, r)))
-                      ss << "~";
+                  if (originalPiece != NO_PIECE && !isPondBlastPromotedPiece)
+                      // Promoted shogi pieces, e.g., +r for dragon
+                      ss << "+" << piece_to_char()[originalPiece];
+                  else
+                  {
+                      ss << piece_to_char()[currentPieceVal];
+
+                      // Set promoted pieces (tilde suffix)
+                      // Only add tilde if not a pond blast promoted piece (which uses its current char directly)
+                      // and if it meets the other existing conditions for a tilde.
+                      if (!isPondBlastPromotedPiece && ((captures_to_hand() && !drop_loop()) || two_boards() ||  showPromoted) && is_promoted(sq))
+                          ss << "~";
+                  }
               }
           }
       }
@@ -2365,8 +2375,74 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           Color bc = color_of(bpc);
           if (blast_promotion()) {
 
-              Piece promotion = make_piece(color_of(bpc), promoted_piece_type(type_of(bpc)));
-              if (promoted_piece_type(type_of(bpc)) != NO_PIECE_TYPE)
+              PieceType original_bpc_type = type_of(bpc);
+              PieceType target_prom_type = promoted_piece_type(original_bpc_type); // Standard lookup
+
+              if (variant()->name == "pond") {
+                  // Handling for T->F (from previous step, logic is similar and shown for context)
+                  PieceType pond_elephant_type_for_TF = NO_PIECE_TYPE;
+                  for (PieceSet ps = variant()->pieceTypes; ps; ) {
+                      PieceType pt = pop_lsb(ps);
+                      if (promoted_piece_type(pt) == original_bpc_type) {
+                          pond_elephant_type_for_TF = pt;
+                          break;
+                      }
+                  }
+                  if (pond_elephant_type_for_TF != NO_PIECE_TYPE) { // original_bpc_type is Tadpole
+                      PieceType pond_frog_type_for_TF = NO_PIECE_TYPE;
+                      for (PieceSet ps = variant()->pieceTypes; ps; ) {
+                          PieceType pt = pop_lsb(ps);
+                          if (promoted_piece_type(pt) == pond_elephant_type_for_TF) {
+                              pond_frog_type_for_TF = pt;
+                              break;
+                          }
+                      }
+                      if (pond_frog_type_for_TF != NO_PIECE_TYPE && (target_prom_type == original_bpc_type || target_prom_type == NO_PIECE_TYPE)) {
+                          target_prom_type = pond_frog_type_for_TF; // Corrected for T->F
+                      }
+                  }
+
+                  // New specific handling for F->E
+                  // Check if original_bpc_type is a Frog.
+                  // A piece is a Frog if a Tadpole promotes to it (T->F rule).
+                  PieceType pond_tadpole_type_for_FE = NO_PIECE_TYPE;
+                  PieceType identified_frog_type = NO_PIECE_TYPE;
+
+                  for (PieceSet ps_outer = variant()->pieceTypes; ps_outer; ) { // Iterating to find Tadpole
+                      PieceType pt_tadpole_candidate = pop_lsb(ps_outer);
+                      if (promoted_piece_type(pt_tadpole_candidate) == original_bpc_type) {
+                          // pt_tadpole_candidate is Tadpole, so original_bpc_type is Frog.
+                          pond_tadpole_type_for_FE = pt_tadpole_candidate;
+                          identified_frog_type = original_bpc_type;
+                          break;
+                      }
+                  }
+
+                  if (identified_frog_type != NO_PIECE_TYPE) { // original_bpc_type is confirmed as Frog
+                      // Now, find the Egg type. Egg is the piece that promotes to Tadpole (E->T rule).
+                      PieceType pond_egg_type_for_FE = NO_PIECE_TYPE;
+                      for (PieceSet ps_inner = variant()->pieceTypes; ps_inner; ) {
+                          PieceType pt_egg_candidate = pop_lsb(ps_inner);
+                          if (promoted_piece_type(pt_egg_candidate) == pond_tadpole_type_for_FE) {
+                              pond_egg_type_for_FE = pt_egg_candidate; // pt_egg_candidate is Egg
+                              break;
+                          }
+                      }
+
+                      if (pond_egg_type_for_FE != NO_PIECE_TYPE) {
+                          // If the original lookup for Frog's promotion (target_prom_type, which might have been affected by T->F logic if original_bpc_type was Tadpole)
+                          // is incorrect for a Frog (i.e., F->F or F->NO_PIECE), then override it to promote to Egg.
+                          // Re-fetch target_prom_type for the identified_frog_type if T->F logic didn't already set it.
+                          PieceType current_prom_for_frog = promoted_piece_type(identified_frog_type);
+                          if (current_prom_for_frog == identified_frog_type || current_prom_for_frog == NO_PIECE_TYPE) {
+                              target_prom_type = pond_egg_type_for_FE; // Correct F->E
+                          }
+                      }
+                  }
+              }
+
+              Piece promotion = make_piece(color_of(bpc), target_prom_type);
+              if (target_prom_type != NO_PIECE_TYPE)
               {
                   //Store all the information about previous state so undo_move can demote the piece by recreating the piece.
                   //Pieces with bits in promotedBycatch will be undone by placing in promoted form.
@@ -2520,18 +2596,31 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
 
     auto mark_line = [&](Bitboard line) {
         for (Direction d : var->connect_directions) {
-            Bitboard temp = line;
+            Bitboard temp = line; // 'line' here is actually line_bb_for_type from the lambda argument
             for (int i = 1; i < remove_connect_n(); i++)
                 temp &= shift(d, temp);
-            removal_mask |= temp;
+            
+            // 'temp' now holds the starting pieces of N-in-a-row lines in direction 'd'.
+            // Iterate through 'temp' and add all pieces of each found line to removal_mask.
+            Bitboard current_line_starts = temp;
+            while (current_line_starts) {
+                Square start_of_line = pop_lsb(current_line_starts);
+                for (int k = 0; k < remove_connect_n(); ++k) {
+                    removal_mask |= (start_of_line + k * d);
+                }
+            }
         }
     };
 
     if (remove_connect_n_by_type()) {
-        for (PieceType pt = PAWN; pt <= KING; ++pt) {
+        // Iterate over all piece types relevant to the variant.
+        for (PieceSet ps = variant()->pieceTypes; ps; ) {
+            PieceType pt = pop_lsb(ps);
+            // For Pond, this will correctly call mark_line for Eggs, Tadpoles, and Frogs if they are in pieceTypes.
             mark_line(pieces(pt));
         }
     } else {
+        // Non-type-specific set scoring
         mark_line(pieces(WHITE));
         mark_line(pieces(BLACK));
     }
