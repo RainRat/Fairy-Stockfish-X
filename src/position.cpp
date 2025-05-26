@@ -2407,7 +2407,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
                                     ^ Zobrist::psq[bpc][pieceCount[bpc]];
 
                   // Update material (add the PieceValue of the new piece and if it's not a pawn, subtract the old piece.
-                  st->nonPawnMaterial[color_of(bpc)] += PieceValue[MG][promotion] - (type_of(bpc) != PAWN ? PieceValue[MG][bpc] : 0;
+                  st->nonPawnMaterial[color_of(bpc)] += PieceValue[MG][promotion] - (type_of(bpc) != PAWN ? PieceValue[MG][bpc] : 0);
                   st->blastPromotedSquares |= bsq;
               }
           }
