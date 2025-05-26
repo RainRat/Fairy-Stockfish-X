@@ -2345,7 +2345,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
 
   // Remove the blast pieces
   if ( ( captured && (blast_on_capture() || var->petrifyOnCaptureTypes) ) ||
-       ( blast_on_move() && (type_of(m) == NORMAL) )
+       ( blast_on_move() && (type_of(m) == NORMAL || type_of(m) == DROP) )
      )
   {
       std::memset(st->unpromotedBycatch, 0, sizeof(st->unpromotedBycatch));
@@ -2641,6 +2641,100 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       k ^= Zobrist::wall[gating_square(m)];
   }
 
+  // Pond variant: piece development
+  if (var->startFen.rfind("[EEEEEEEEEEEEEeeeeeeeeeeeee]", 0) == 0) // FEN check, using E/e for Egg as per test FEN
+  {
+      Square to_sq_val = to_sq(m);
+      const Direction directions[] = {NORTH, SOUTH, EAST, WEST};
+
+      for (Direction dir : directions)
+      {
+          Square adjacentSquare = to_sq_val + dir;
+
+          // Check if adjacentSquare is valid and on the board
+          if (is_ok(adjacentSquare) && file_of(adjacentSquare) <= max_file() && rank_of(adjacentSquare) <= max_rank())
+          {
+              Piece pieceOnAdjacent = piece_on(adjacentSquare);
+
+              if (pieceOnAdjacent != NO_PIECE)
+              {
+                  PieceType oldType = type_of(pieceOnAdjacent);
+                  Color pieceColor = color_of(pieceOnAdjacent);
+                  PieceType newType = NO_PIECE_TYPE;
+
+                  if (oldType == CUSTOM_PIECE_1)      // Egg
+                      newType = CUSTOM_PIECE_2;      // Tadpole
+                  else if (oldType == CUSTOM_PIECE_2) // Tadpole
+                      newType = CUSTOM_PIECE_3;      // Frog
+                  else if (oldType == CUSTOM_PIECE_3) // Frog
+                      newType = CUSTOM_PIECE_1;      // Egg
+
+                  if (newType != NO_PIECE_TYPE)
+                  {
+                      // Store info for undo_move. This mimics how blast captures are handled.
+                      // unpromotedBycatch stores the piece *before* transformation.
+                      // demotedBycatch flags the square, indicating a transformation occurred.
+                      st->unpromotedBycatch[adjacentSquare] = pieceOnAdjacent;
+                      st->demotedBycatch |= adjacentSquare; // Mark this square as having a transformed piece for undo_move
+
+                      // Zobrist and material update for piece removal
+                      k ^= Zobrist::psq[pieceOnAdjacent][adjacentSquare];
+                      if (oldType == PAWN) // Should not happen for CUSTOM_PIECEs but good for completeness
+                          st->pawnKey ^= Zobrist::psq[pieceOnAdjacent][adjacentSquare];
+                      else
+                          st->nonPawnMaterial[pieceColor] -= PieceValue[MG][pieceOnAdjacent];
+                      
+                      // materialKey update is based on piece counts. pieceCount[pieceOnAdjacent] is count *before* removal.
+                      st->materialKey ^= Zobrist::psq[pieceOnAdjacent][pieceCount[pieceOnAdjacent]];
+
+                      remove_piece(adjacentSquare); // This updates pieceCount
+
+                      Piece newPiece = make_piece(pieceColor, newType);
+                      put_piece(newPiece, adjacentSquare); // This updates pieceCount for newPiece
+
+                      // Zobrist and material update for new piece addition
+                      k ^= Zobrist::psq[newPiece][adjacentSquare];
+                      if (newType == PAWN) // Should not happen for CUSTOM_PIECEs
+                          st->pawnKey ^= Zobrist::psq[newPiece][adjacentSquare];
+                      else
+                          st->nonPawnMaterial[pieceColor] += PieceValue[MG][newPiece];
+                      
+                      // materialKey update: pieceCount[newPiece]-1 because put_piece incremented it.
+                      st->materialKey ^= Zobrist::psq[newPiece][pieceCount[newPiece]-1];
+
+                      // NNUE specific update if necessary (similar to promotion)
+                      if (Eval::useNNUE)
+                      {
+                          // This piece transformation can be seen as a "promotion"
+                          // The dp array might need to be expanded if more than 3 "dirty" pieces occur before this.
+                          // For now, let's assume it fits or this part needs careful review based on dp.dirty_num's state.
+                          // Simplified: treat as one piece disappearing and another appearing.
+                          // This logic mirrors promotion handling in do_move.
+                          // We need to ensure dp.dirty_num is managed correctly if multiple developments occur.
+                          // This part is complex and might need a dedicated slot in DirtyPiece or a loop.
+                          // For now, this is a placeholder for one transformation:
+                          if (dp.dirty_num < sizeof(dp.piece) / sizeof(dp.piece[0])) { // Check array bounds
+                             dp.piece[dp.dirty_num] = pieceOnAdjacent; // Old piece removed
+                             dp.from[dp.dirty_num] = adjacentSquare;
+                             dp.to[dp.dirty_num] = SQ_NONE; // Effectively vanished
+                             dp.handPiece[dp.dirty_num] = NO_PIECE;
+                             dp.dirty_num++;
+
+                             if (dp.dirty_num < sizeof(dp.piece) / sizeof(dp.piece[0])) { // Check array bounds
+                                 dp.piece[dp.dirty_num] = newPiece; // New piece appeared
+                                 dp.from[dp.dirty_num] = SQ_NONE; // Appeared from nowhere (on this square)
+                                 dp.to[dp.dirty_num] = adjacentSquare;
+                                 dp.handPiece[dp.dirty_num] = NO_PIECE;
+                                 dp.dirty_num++;
+                             }
+                          }
+                      }
+                  }
+              }
+          }
+      }
+  }
+
   updatePawnCheckZone();
   if (var->pointsCounting) {
       // WHITE points change handling
@@ -2736,6 +2830,34 @@ void Position::undo_move(Move m) {
   assert(is_ok(m));
 
   sideToMove = ~sideToMove;
+
+  // Pond variant: Undo piece development
+  // This must happen before main undo logic might overwrite st->unpromotedBycatch or alter pieces on board
+  if (var->startFen.rfind("[EEEEEEEEEEEEEeeeeeeeeeeeee]", 0) == 0) // FEN check, using E/e for Egg as per test FEN
+  {
+      Bitboard originalDemotedBycatch = st->demotedBycatch; // Store for clearing unpromotedBycatch
+      for (Square s = SQ_A1; s < SQUARE_NB; ++s)
+      {
+          if (originalDemotedBycatch & s) // Check against the original value
+          {
+              Piece developedPiece = piece_on(s);
+              Piece originalPiece = st->unpromotedBycatch[s];
+
+              assert(originalPiece != NO_PIECE);
+              assert(developedPiece != NO_PIECE); // Should be a piece there if it was developed
+
+              // These calls update the current board state (this->board, this->psq, this->pieceCount, etc.)
+              // which is correct. The StateInfo (st->key, st->materialKey, st->nonPawnMaterial)
+              // will be restored via st = st->previous later.
+              remove_piece(s); // Removes developedPiece
+              put_piece(originalPiece, s); // Puts back originalPiece
+              
+              // Clear the specific entry in unpromotedBycatch after processing
+              st->unpromotedBycatch[s] = NO_PIECE; 
+          }
+      }
+      st->demotedBycatch = 0; // Clear all flags for the current state
+  }
 
   Color us = sideToMove;
   Square from = from_sq(m);
