@@ -1,1 +1,0 @@
-Try 'timeout --help' for more information.
