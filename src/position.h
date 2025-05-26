@@ -626,7 +626,7 @@ inline Bitboard Position::blast_squares(Square to) const {
     }
     Bitboard blastPattern = blast_pattern(to);
     Bitboard relevantPieces = (pieces(WHITE) | pieces(BLACK)) ^ pieces(PAWN);
-    Bitboard blastArea = (blastPattern & relevantPieces) | (blast_center() ? to : SQ_NONE);
+    Bitboard blastArea = (blastPattern & relevantPieces) | (blast_center() ? square_bb(to) : Bitboard(0));
 
     return blastArea & (pieces() ^ blastImmune);
 }
