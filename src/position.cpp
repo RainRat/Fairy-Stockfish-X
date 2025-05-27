@@ -38,6 +38,7 @@ namespace Stockfish {
 
 namespace Zobrist {
 
+  constexpr int MAX_ZOBRIST_POINTS = 512;
   Key psq[PIECE_NB][SQUARE_NB];
   Key enpassant[FILE_NB];
   Key castling[CASTLING_RIGHT_NB];
@@ -46,6 +47,7 @@ namespace Zobrist {
   Key checks[COLOR_NB][CHECKS_NB];
   Key wall[SQUARE_NB];
   Key endgame[EG_EVAL_NB];
+  Key points[COLOR_NB][MAX_ZOBRIST_POINTS];
 }
 
 
@@ -181,6 +183,10 @@ void Position::init() {
 
   for (int i = NO_EG_EVAL; i < EG_EVAL_NB; ++i)
       Zobrist::endgame[i] = rng.rand<Key>();
+
+  for (Color c : {WHITE, BLACK})
+      for (int i = 0; i < Stockfish::Zobrist::MAX_ZOBRIST_POINTS; ++i)
+          Zobrist::points[c][i] = rng.rand<Key>();
 
   // Prepare the cuckoo tables
   std::memset(cuckoo, 0, sizeof(cuckoo));
@@ -580,6 +586,15 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
       }
   }
 
+  if (var->pointsCounting)
+  {
+      char brace;
+      ss >> brace;
+      ss >> st->pointsCount[WHITE];
+      ss >> st->pointsCount[BLACK];
+      ss >> brace;  //Probably not needed now, but maybe if another FEN extension.
+  }
+
   chess960 = isChess960 || v->chess960;
   tsumeMode = Options["TsumeMode"];
   thisThread = th;
@@ -782,6 +797,19 @@ void Position::set_state(StateInfo* si) const {
   if (check_counting())
       for (Color c : {WHITE, BLACK})
           si->key ^= Zobrist::checks[c][si->checksRemaining[c]];
+
+  if (var->pointsCounting) {
+      for (Color c : {WHITE, BLACK}) {
+          if (si->pointsCount[c] >= 0 && si->pointsCount[c] < Stockfish::Zobrist::MAX_ZOBRIST_POINTS) {
+              si->key ^= Zobrist::points[c][si->pointsCount[c]];
+          } else if (si->pointsCount[c] >= Stockfish::Zobrist::MAX_ZOBRIST_POINTS) {
+              si->key ^= Zobrist::points[c][Stockfish::Zobrist::MAX_ZOBRIST_POINTS - 1];
+          }
+          // Negative points are less common but could be handled if necessary
+          // else if (si->pointsCount[c] < 0) { /* XOR a generic key for negative points or handle as error */ }
+      }
+  }
+
 }
 
 
@@ -974,6 +1002,11 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
 
   ss << " " << 1 + (gamePly - (sideToMove == BLACK)) / 2;
 
+  if (variant()->pointsCounting)
+  {
+      ss << " {" << st->pointsCount[WHITE] << " " << st->pointsCount[BLACK] << "}";
+  }
+
   return ss.str();
 }
 
@@ -1154,11 +1187,20 @@ Bitboard Position::checked_pseudo_royals(Color c) const {
   Bitboard checked = 0;
   Bitboard pseudoRoyals = st->pseudoRoyals & pieces(c);
   Bitboard pseudoRoyalsTheirs = st->pseudoRoyals & pieces(~c);
+
+  //If their royal pieces are immune to blasts, then their checks are real threats
+  //even if their royal is in the blast.
+  Bitboard blastImmune = 0;
+  for (PieceSet ps = blast_immune_types(); ps;) {
+      PieceType pt = pop_lsb(ps);
+      blastImmune |= pieces(pt);
+  }
+
   while (pseudoRoyals)
   {
       Square sr = pop_lsb(pseudoRoyals);
       // skip if capturing this piece would blast any of the attacker's pseudo-royal pieces
-      if (!(blast_on_capture() && (pseudoRoyalsTheirs & attacks_bb<KING>(sr)))
+      if (!(blast_on_capture() && (pseudoRoyalsTheirs & blast_pattern(sr)))
           && attackers_to(sr, ~c))
           checked |= sr;
   }
@@ -1170,7 +1212,7 @@ Bitboard Position::checked_pseudo_royals(Color c) const {
       while (pseudoRoyalCandidates)
       {
           Square sr = pop_lsb(pseudoRoyalCandidates);
-          if (!(blast_on_capture() && (pseudoRoyalsTheirs & attacks_bb<KING>(sr)))
+          if (!(blast_on_capture() && (pseudoRoyalsTheirs & blast_pattern(sr)))
               && attackers_to(sr, ~c))
               allAttacked |= sr;
           else
@@ -1291,7 +1333,7 @@ bool Position::legal(Move m) const {
           // Pseudo-royal king
           if (st->pseudoRoyals & from)
               for (Square s = from; s != kto; s += step)
-                  if (  !(blast_on_capture() && (attacks_bb<KING>(s) & st->pseudoRoyals & pieces(~sideToMove)))
+                  if (  !(blast_on_capture() && (blast_pattern(s) & st->pseudoRoyals & pieces(~sideToMove)))
                       && attackers_to(s, occupied, ~us))
                       return false;
           // Move the rook
@@ -1301,7 +1343,7 @@ bool Position::legal(Move m) const {
       if (type_of(m) == EN_PASSANT)
           occupied &= ~square_bb(capture_square(kto));
       if (capture(m) && blast_on_capture())
-          occupied &= ~((attacks_bb<KING>(kto) & ((pieces(WHITE) | pieces(BLACK)) ^ pieces(PAWN))) | kto);
+          occupied &= ~blast_squares(kto);
       // Petrifying a pseudo-royal piece is illegal
       if (capture(m) && (var->petrifyOnCaptureTypes & type_of(moved_piece(m))) && (st->pseudoRoyals & from))
           return false;
@@ -1331,7 +1373,7 @@ bool Position::legal(Move m) const {
           {
               Square sr = pop_lsb(pseudoRoyals);
               // Touching pseudo-royal pieces are immune
-              if (  !(blast_on_capture() && (pseudoRoyalsTheirs & attacks_bb<KING>(sr)))
+              if (  !(blast_on_capture() && (pseudoRoyalsTheirs & blast_pattern(sr)))
                   && (attackers_to(sr, occupied, ~us) & attackerCandidatesTheirs))
                   return false;
           }
@@ -1348,7 +1390,7 @@ bool Position::legal(Move m) const {
           {
               Square sr = pop_lsb(pseudoRoyalCandidates);
               // Touching pseudo-royal pieces are immune
-              if (!(  !(blast_on_capture() && (pseudoRoyalsTheirs & attacks_bb<KING>(sr)))
+              if (!(  !(blast_on_capture() && (pseudoRoyalsTheirs & blast_pattern(sr)))
                     && (attackers_to(sr, occupied, ~us) & attackerCandidatesTheirs)))
                   allCheck = false;
           }
@@ -1833,9 +1875,33 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       else if (Eval::useNNUE)
           dp.handPiece[1] = NO_PIECE;
 
+      // Points assignment logic
+      if (points_counting()) {
+          PointsRule pointsOwner = points_rule_captures();
+          int points = var->piecePoints[type_of(captured)];
+
+          switch (pointsOwner) {
+              case POINTS_US:
+                  st->pointsCount[us] += points;
+                  break;
+              case POINTS_THEM:
+                  st->pointsCount[them] += points;
+                  break;
+              case POINTS_OWNER:
+                  st->pointsCount[color_of(captured)] += points;
+                  break;
+              case POINTS_NON_OWNER:
+                  st->pointsCount[~color_of(captured)] += points;
+                  break;
+              case POINTS_NONE:
+                  break;
+          }
+      }
+
       // Update material hash key and prefetch access to materialTable
       k ^= Zobrist::psq[captured][capsq];
-      st->materialKey ^= Zobrist::psq[captured][pieceCount[captured]];
+      // (captured piece count was decremented before this line; old count is pieceCount[captured] + 1)
+      st->materialKey ^= Zobrist::psq[captured][pieceCount[captured] + 1] ^ Zobrist::psq[captured][pieceCount[captured]];
 #ifndef NO_THREADS
       prefetch(thisThread->materialTable[material_key(var->endgameEval)]);
 #endif
@@ -2037,7 +2103,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
               && !(walling() && gating_square(m) == to - pawn_push(us)))
           {
               st->epSquares |= to - pawn_push(us);
-              k ^= Zobrist::enpassant[file_of(to)];
+              k ^= Zobrist::enpassant[file_of(to - pawn_push(us))];
           }
           if (   std::abs(int(to) - int(from)) == 3 * NORTH
               && (var->enPassantRegion & (to - 2 * pawn_push(us)))
@@ -2045,7 +2111,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
               && !(walling() && gating_square(m) == to - 2 * pawn_push(us)))
           {
               st->epSquares |= to - 2 * pawn_push(us);
-              k ^= Zobrist::enpassant[file_of(to)];
+              k ^= Zobrist::enpassant[file_of(to - 2 * pawn_push(us))];
           }
       }
 
@@ -2244,6 +2310,29 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
               dp.dirty_num++;
           }
 
+          // Points assignment logic
+          if (points_counting()) {
+              PointsRule pointsOwner = points_rule_captures();
+              int points = var->piecePoints[type_of(bpc)];
+
+              switch (pointsOwner) {
+                  case POINTS_US:
+                      st->pointsCount[us] += points;
+                      break;
+                  case POINTS_THEM:
+                      st->pointsCount[them] += points;
+                      break;
+                  case POINTS_OWNER:
+                      st->pointsCount[bc] += points;
+                      break;
+                  case POINTS_NON_OWNER:
+                      st->pointsCount[~bc] += points;
+                      break;
+                  case POINTS_NONE:
+                      break;
+              }
+          }
+
           bool capturedPromoted = is_promoted(bsq);
           Piece unpromotedCaptured = unpromoted_piece_on(bsq);
 
@@ -2262,9 +2351,16 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
               Piece pieceToHand = !capturedPromoted || drop_loop() ? ~bpc
                                  : unpromotedCaptured ? ~unpromotedCaptured
                                                       : make_piece(~color_of(bpc), PAWN);
-              add_to_hand(pieceToHand);
-              k ^=  Zobrist::inHand[pieceToHand][pieceCountInHand[color_of(pieceToHand)][type_of(pieceToHand)] - 1]
-                  ^ Zobrist::inHand[pieceToHand][pieceCountInHand[color_of(pieceToHand)][type_of(pieceToHand)]];
+              int n;
+              if (capture_type() == PRISON) {
+                  pieceToHand = ~pieceToHand;
+                  n = add_to_prison(pieceToHand);
+              } else {
+                  add_to_hand(pieceToHand);
+                  n = pieceCountInHand[color_of(pieceToHand)][type_of(pieceToHand)];
+              }
+              k ^=  Zobrist::inHand[pieceToHand][n - 1]
+                  ^ Zobrist::inHand[pieceToHand][n];
 
               if (Eval::useNNUE)
               {
@@ -2290,7 +2386,9 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   };
 
   // Remove the blast pieces
-  if (captured && (blast_on_capture() || var->petrifyOnCaptureTypes))
+  if ( ( captured && (blast_on_capture() || var->petrifyOnCaptureTypes) ) ||
+       ( blast_on_move() && type_of(m) == NORMAL )
+     )
   {
       std::memset(st->unpromotedBycatch, 0, sizeof(st->unpromotedBycatch));
       st->demotedBycatch = st->promotedBycatch = 0;
@@ -2299,8 +2397,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           PieceType pt = pop_lsb(ps);
           blastImmune |= pieces(pt);
       };
-      Bitboard blast = blast_on_capture() ? ((attacks_bb<KING>(to) & ((pieces(WHITE) | pieces(BLACK)) ^ pieces(PAWN))) | to)
-                       & (pieces() ^ blastImmune) : var->petrifyOnCaptureTypes & type_of(pc) ? square_bb(to) : Bitboard(0);
+      Bitboard blast = (blast_on_capture() || blast_on_move()) ? blast_squares(to)
+          : (var->petrifyOnCaptureTypes & type_of(pc) ? square_bb(to) : Bitboard(0)); 
       while (blast)
       {
           Square bsq = pop_lsb(blast);
@@ -2360,6 +2458,29 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           if (type_of(bpc) == PAWN)
               st->pawnKey ^= Zobrist::psq[bpc][bsq];
 
+          // Points assignment logic
+          if (points_counting()) {
+              PointsRule pointsOwner = points_rule_captures();
+              int points = var->piecePoints[type_of(bpc)];
+
+              switch (pointsOwner) {
+                  case POINTS_US:
+                      st->pointsCount[us] += points;
+                      break;
+                  case POINTS_THEM:
+                      st->pointsCount[them] += points;
+                      break;
+                  case POINTS_OWNER:
+                      st->pointsCount[bc] += points;
+                      break;
+                  case POINTS_NON_OWNER:
+                      st->pointsCount[~bc] += points;
+                      break;
+                  case POINTS_NONE:
+                      break;
+              }
+          }
+
           // Update castling rights if needed
           if (st->castlingRights && castlingRightsMask[bsq])
           {
@@ -2397,6 +2518,42 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   }
 
   updatePawnCheckZone();
+  if (var->pointsCounting) {
+      // WHITE points change handling
+      if (st->pointsCount[WHITE] != st->previous->pointsCount[WHITE]) {
+          // XOR out the contribution of WHITE's old pointsCount from k
+          if (st->previous->pointsCount[WHITE] >= 0 && st->previous->pointsCount[WHITE] < Stockfish::Zobrist::MAX_ZOBRIST_POINTS) {
+              k ^= Zobrist::points[WHITE][st->previous->pointsCount[WHITE]];
+          } else if (st->previous->pointsCount[WHITE] >= Stockfish::Zobrist::MAX_ZOBRIST_POINTS) {
+              k ^= Zobrist::points[WHITE][Stockfish::Zobrist::MAX_ZOBRIST_POINTS - 1];
+          }
+
+          // XOR in the contribution of WHITE's new pointsCount to k
+          if (st->pointsCount[WHITE] >= 0 && st->pointsCount[WHITE] < Stockfish::Zobrist::MAX_ZOBRIST_POINTS) {
+              k ^= Zobrist::points[WHITE][st->pointsCount[WHITE]];
+          } else if (st->pointsCount[WHITE] >= Stockfish::Zobrist::MAX_ZOBRIST_POINTS) {
+              k ^= Zobrist::points[WHITE][Stockfish::Zobrist::MAX_ZOBRIST_POINTS - 1];
+          }
+      }
+
+      // BLACK points change handling
+      if (st->pointsCount[BLACK] != st->previous->pointsCount[BLACK]) {
+          // XOR out the contribution of BLACK's old pointsCount from k
+          if (st->previous->pointsCount[BLACK] >= 0 && st->previous->pointsCount[BLACK] < Stockfish::Zobrist::MAX_ZOBRIST_POINTS) {
+              k ^= Zobrist::points[BLACK][st->previous->pointsCount[BLACK]];
+          } else if (st->previous->pointsCount[BLACK] >= Stockfish::Zobrist::MAX_ZOBRIST_POINTS) {
+              k ^= Zobrist::points[BLACK][Stockfish::Zobrist::MAX_ZOBRIST_POINTS - 1];
+          }
+
+          // XOR in the contribution of BLACK's new pointsCount to k
+          if (st->pointsCount[BLACK] >= 0 && st->pointsCount[BLACK] < Stockfish::Zobrist::MAX_ZOBRIST_POINTS) {
+              k ^= Zobrist::points[BLACK][st->pointsCount[BLACK]];
+          } else if (st->pointsCount[BLACK] >= Stockfish::Zobrist::MAX_ZOBRIST_POINTS) {
+              k ^= Zobrist::points[BLACK][Stockfish::Zobrist::MAX_ZOBRIST_POINTS - 1];
+          }
+      }
+  }
+
   // Update the key with the final value
   st->key = k;
   // Calculate checkers bitboard (if move gives check)
@@ -2473,7 +2630,9 @@ void Position::undo_move(Move m) {
   byTypeBB[ALL_PIECES] ^= st->wallSquares ^ st->previous->wallSquares;
 
   // Add the blast pieces
-  if ((st->capturedPiece && (blast_on_capture() || var->petrifyOnCaptureTypes)) || surround_capture_opposite() || surround_capture_edge())
+  if (((st->capturedPiece && (blast_on_capture() || var->petrifyOnCaptureTypes)) || surround_capture_opposite() || surround_capture_edge()) ||
+       ( blast_on_move() && (type_of(m) == NORMAL) )
+     )
   {
       //It's ok to just loop through all, not taking into account immunities/pawnness
       //because we'll just not find the piece in unpromotedBycatch.
@@ -2761,7 +2920,7 @@ Value Position::blast_see(Move m) const {
   Square to = to_sq(m);
   Color us = color_of(moved_piece(m));
   Bitboard fromto = type_of(m) == DROP ? square_bb(to) : from | to;
-  Bitboard blast = ((attacks_bb<KING>(to) & ~pieces(PAWN)) | fromto) & (pieces(WHITE) | pieces(BLACK));
+  Bitboard blast = blast_squares(to);
 
   Value result = VALUE_ZERO;
 
@@ -3181,6 +3340,36 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
       result = mated_in(ply);
       return true;
   }
+
+  if (points_counting())
+  {
+      //Handle the case where both players met the goal.
+      if (st->pointsCount[~sideToMove]>=points_goal() && st->pointsCount[sideToMove]>=points_goal())
+      {
+          //If both players are drawn on points, or the rules say it's a draw, then declare draw.
+          if ((st->pointsCount[~sideToMove] == st->pointsCount[sideToMove]) || (var->pointsGoalSimulValue == VALUE_DRAW))
+          {
+              result = convert_mate_value(VALUE_DRAW, ply);
+              return true;
+          };
+          //Otherwise pointsGoalSimulValue rules on ending, from perspective of player with most points.
+          result = convert_mate_value(
+            st->pointsCount[~sideToMove] > st->pointsCount[sideToMove] ?
+            var->pointsGoalSimulValue : -var->pointsGoalSimulValue, ply);
+          return true;
+      };
+      //Finally, rule on the simple cases.
+      if (st->pointsCount[~sideToMove]>=points_goal())
+      {
+          result = convert_mate_value(var->pointsGoalValue, ply);
+          return true;
+      };
+      if (st->pointsCount[sideToMove]>=points_goal())
+      {
+          result = convert_mate_value(-var->pointsGoalValue, ply);
+          return true;
+      };
+  };
 
   //Calculate eligible pieces for connection once.
   Bitboard connectPieces = 0;

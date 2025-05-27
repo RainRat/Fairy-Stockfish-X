@@ -1180,6 +1180,83 @@ class TestPyffish(unittest.TestCase):
                 fen = sf.start_fen(variant)
                 self.assertEqual(sf.validate_fen(fen, variant), sf.FEN_OK)
 
+    def test_general_point_assignment(self):
+        # 'pointstest' variant: piecePoints = p:1 n:3 b:3 r:5 q:9 k:0 P:1 N:3 B:3 R:5 Q:9 K:0
+        # Default pointsRuleCaptures = POINTS_US (capturing side gets points)
+        
+        # White pawn captures black pawn
+        fen_setup_capture_wp_bp = "8/8/8/3p4/4P3/8/8/4K3 w - - 0 1 {0 0}" # White P at e4, Black p at d5
+        resulting_fen_wp_bp = sf.get_fen("pointstest", fen_setup_capture_wp_bp, ["e4d5"])
+        self.assertIn("{1 0}", resulting_fen_wp_bp) # White captures black pawn (1 point)
+
+        # Black knight captures white rook
+        fen_setup_capture_bn_wr = "4k3/8/8/8/8/5r2/4n3/4K3 b - - 0 1 {5 10}" # Black n at e2, White R at f3. Points: W:5, B:10
+        resulting_fen_bn_wr = sf.get_fen("pointstest", fen_setup_capture_bn_wr, ["e2f3"])
+        self.assertIn("{5 15}", resulting_fen_bn_wr) # Black captures white rook (5 points for black)
+
+        # Test with a different pointsRule (e.g. POINTS_THEM - hypothetical, requires variant change)
+        # For now, assuming POINTS_US as per typical setup.
+
+    def test_blast_variant_point_assignment(self):
+        # 'blastpointstest' variant: piecePoints = p:1 n:3 b:3 r:5 q:9 k:100 P:1 N:3 B:3 R:5 Q:9 K:100
+        # blastOnCapture = true, blastCenter = true
+        # Default pointsRuleCaptures = POINTS_US
+
+        # Scenario 1 & 3: Simple blast, no chain reaction, blast_center = true. Ensure no double counting.
+        fen_blast_center_simple = "4k3/8/8/3pP3/8/8/8/4K3 w - - 0 1 {0 0}" # W P@e4, B p@d5
+        resulting_fen_blast1 = sf.get_fen("blastpointstest", fen_blast_center_simple, ["e4d5"])
+        self.assertIn("{1 0}", resulting_fen_blast1) # White P takes black p (1 pt). Blast on d5 (center) shouldn't double count.
+
+        # Scenario 2: Blast captures an additional piece
+        fen_blast_collateral = "4k3/8/3p4/3pPp2/8/8/8/4K3 w - - 0 1 {0 0}" # W P@e4, B ps@d5,f5,d7.
+        # Make e4d5. d5 captured (1pt). Blast pattern (assuming 3x3 around d5) hits f5 (1pt) and d7 (1pt).
+        # Blast pattern for blastCenter=true includes the capture square itself.
+        # Expected points: 1 (for d5) + 1 (for f5) + 1 (for d7) = 3
+        resulting_fen_blast2 = sf.get_fen("blastpointstest", fen_blast_collateral, ["e4d5"])
+        self.assertIn("{3 0}", resulting_fen_blast2)
+
+        fen_blast_collateral_black = "4k3/8/8/3PpP2/8/8/8/4K3 b - - 0 1 {5 5}" # B p@e4, W Ps@d5,f5. Initial {5 5}
+        # Black p@e4 takes White P@d5. Black gets 1pt for P@d5.
+        # Blast from d5 also removes White P@f5. Black gets 1pt for P@f5.
+        # Total for black: 1+1=2. New points: {5 5+2} = {5 7}
+        resulting_fen_blast3 = sf.get_fen("blastpointstest", fen_blast_collateral_black, ["e4d5"])
+        self.assertIn("{5 7}", resulting_fen_blast3)
+
+        # Scenario 4: (Hypothetical, as blastCenter=false variant not created yet, but logic is for blastpointstest which has blastCenter=true)
+        # If blastCenter were false, and the blast pattern did not include the center square itself,
+        # points for the center square would only come from the direct capture.
+        # With blastCenter = true, the test from Scenario 1 already covers that the center piece is not double counted.
+        # Let's test a case where the blast *doesn't* hit other pieces.
+        fen_blast_center_isolated = "4k3/8/8/8/3pP3/8/8/8 w - - 0 1 {10 10}" # W P@e4, B p@d5. No other pieces nearby.
+        resulting_fen_blast4 = sf.get_fen("blastpointstest", fen_blast_center_isolated, ["e4d5"])
+        self.assertIn("{11 10}", resulting_fen_blast4) # White P takes black p (1 pt). Blast hits nothing else.
+
+    def test_fen_points_count(self):
+        base_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+
+        fen_with_points1 = base_fen + " {15 25}"
+        result_fen1 = sf.get_fen("pointstest", fen_with_points1, [])
+        self.assertIn("{15 25}", result_fen1)
+
+        fen_with_points2 = base_fen + " {0 5}"
+        result_fen2 = sf.get_fen("pointstest", fen_with_points2, [])
+        self.assertIn("{0 5}", result_fen2)
+        
+        # Test FEN without points block - should default to {0 0}
+        result_fen_no_points = sf.get_fen("pointstest", base_fen, [])
+        self.assertIn("{0 0}", result_fen_no_points)
+
+        # Test with a variant that does NOT have pointsCounting enabled,
+        # ensure the points block is NOT added.
+        chess_fen_with_points = base_fen + " {10 20}"
+        result_chess_no_points = sf.get_fen("chess", chess_fen_with_points, [])
+        self.assertNotIn("{10 20}", result_chess_no_points)
+        
+        # Test that setting points on a non-points variant and then getting FEN does not add points
+        result_chess_direct = sf.get_fen("chess", base_fen, []) 
+        self.assertNotIn("{", result_chess_direct)
+
+
     def test_get_fog_fen(self):
         fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"  # startpos
         result = sf.get_fog_fen(fen, "fogofwar")
