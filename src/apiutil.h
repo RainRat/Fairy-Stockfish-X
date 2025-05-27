@@ -420,6 +420,7 @@ inline Bitboard checked(const Position& pos) {
 namespace FEN {
 
 enum FenValidation : int {
+    FEN_INVALID_POINTS_INFO = -15,
     FEN_INVALID_COUNTING_RULE = -14,
     FEN_INVALID_CHECK_COUNT = -13,
     FEN_INVALID_NB_PARTS = -11,
@@ -956,7 +957,18 @@ inline FenValidation validate_fen(const std::string& fen, const Variant* v, bool
         return FEN_EMPTY;
     }
 
-    std::vector<std::string> fenParts = get_fen_parts(fen, ' ');
+    std::size_t pointsStart = fen.find('{');
+    std::size_t pointsEnd = fen.find('}', pointsStart);
+    std::string pointsCount = "";
+    std::string modifiedFen = fen;
+
+    // Extract points data if exists
+    if (pointsStart != std::string::npos && pointsEnd != std::string::npos && pointsEnd > pointsStart) {
+        pointsCount = fen.substr(pointsStart, pointsEnd - pointsStart + 1);
+        modifiedFen.erase(pointsStart, pointsEnd - pointsStart + 1); // Remove points data from FEN
+    }
+
+    std::vector<std::string> fenParts = get_fen_parts(modifiedFen, ' ');
     std::vector<std::string> startFenParts = get_fen_parts(v->startFen, ' ');
 
     // check for number of parts
@@ -1105,6 +1117,18 @@ inline FenValidation validate_fen(const std::string& fen, const Variant* v, bool
     {
         std::cerr << "Invalid move counter: '" << fenParts[fenParts.size()-1] << "'." << std::endl;
         return FEN_INVALID_MOVE_COUNTER;
+    }
+
+    // 8) Check for pointsCount (for games of points)
+    if (!pointsCount.empty()) {
+        if (pointsCount.front() != '{' || pointsCount.back() != '}') {
+            return FEN_INVALID_POINTS_INFO;
+        }
+        std::string content = pointsCount.substr(1, pointsCount.size() - 2); // Remove the braces
+        std::vector<std::string> points = get_fen_parts(content, ' ');
+        if (points.size() != 2 || !check_digit_field(points[0]) || !check_digit_field(points[1])) {
+            return FEN_INVALID_POINTS_INFO;
+        }
     }
 
     return FEN_OK;
