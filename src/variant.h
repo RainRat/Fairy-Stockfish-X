@@ -191,6 +191,7 @@ struct Variant {
   Bitboard connectRegion2[COLOR_NB] = {};
   int connectNxN = 0;
   int collinearN = 0;
+  int connectGroup = 0;
   Value connectValue = VALUE_MATE;
   MaterialCounting materialCounting = NO_MATERIAL_COUNTING;
   bool adjudicateFullBoard = false;

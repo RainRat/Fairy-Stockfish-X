@@ -3388,6 +3388,52 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
       }
   }
 
+  // Connect-Group (ends game if a player has N pieces in any connected group)
+  if (connect_group() != 0 && (popcount(pieces(~sideToMove)) >= std::abs(connect_group()) || connect_group() == -1)) {
+      Bitboard playerPieces = pieces(~sideToMove); // Pieces of the player who just moved
+      Bitboard visited = 0;
+      int targetGroupSize = connect_group();
+      int totalPlayerPieces = popcount(playerPieces);
+
+      if (targetGroupSize == -1) {
+          targetGroupSize = totalPlayerPieces;
+      }
+
+      if (targetGroupSize > 0 && totalPlayerPieces >= targetGroupSize) { // Optimization: no need to check if not enough pieces
+          while (playerPieces & ~visited) {
+              Square start_sq = lsb(playerPieces & ~visited);
+              Bitboard current_group = 0;
+              std::deque<Square> q;
+
+              q.push_back(start_sq);
+              current_group |= start_sq;
+              visited |= start_sq;
+              int group_size = 0;
+
+              while (!q.empty()) {
+                  Square s = q.front();
+                  q.pop_front();
+                  group_size++;
+
+                  for (Direction d : getConnectDirections()) {
+                      Square next_sq = s + d;
+                      // Check bounds and if it's a player piece and not visited
+                      if (is_ok(next_sq) && (square_bb(next_sq) & playerPieces) && !(square_bb(next_sq) & visited)) {
+                          visited |= next_sq;
+                          current_group |= next_sq;
+                          q.push_back(next_sq);
+                      }
+                  }
+              }
+
+              if (group_size >= targetGroupSize) {
+                  result = convert_mate_value(-var->connectValue, ply); // ~sideToMove won
+                  return true;
+              }
+          }
+      }
+  }
+
   // Check for bikjang rule (Janggi), double passing, or board running full
   if (   (st->pliesFromNull > 0 && ((st->bikjang && st->previous->bikjang) || ((st->pass && st->previous->pass)&&!var->wallOrMove)))
       || (var->adjudicateFullBoard && !(~pieces() & board_bb())))

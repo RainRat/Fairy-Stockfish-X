@@ -860,6 +860,7 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("connectRegion2Black", v->connectRegion2[BLACK]);
     parse_attribute("connectNxN", v->connectNxN);
     parse_attribute("collinearN", v->collinearN);
+    parse_attribute("connectGroup", v->connectGroup);
     parse_attribute("connectValue", v->connectValue);
     parse_attribute("materialCounting", v->materialCounting);
     parse_attribute("adjudicateFullBoard", v->adjudicateFullBoard);

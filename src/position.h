@@ -1301,6 +1301,11 @@ inline int Position::collinear_n() const {
   return var->collinearN;
 }
 
+inline int Position::connect_group() const {
+  assert(var != nullptr);
+  return var->connectGroup;
+}
+
 inline CheckCount Position::checks_remaining(Color c) const {
   return st->checksRemaining[c];
 }
