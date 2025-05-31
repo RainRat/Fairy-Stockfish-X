@@ -239,6 +239,7 @@ public:
   const std::vector<Direction>& getConnectDirections() const;
   int connect_nxn() const;
   int collinear_n() const;
+  int connect_group() const;
   bool points_counting() const;
   PointsRule points_rule_captures() const;
   int points_goal() const;
