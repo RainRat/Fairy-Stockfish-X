@@ -239,6 +239,7 @@ public:
   const std::vector<Direction>& getConnectDirections() const;
   int connect_nxn() const;
   int collinear_n() const;
+  int connect_group() const;
   bool points_counting() const;
   PointsRule points_rule_captures() const;
   int points_goal() const;
@@ -1299,6 +1300,11 @@ inline int Position::connect_nxn() const {
 inline int Position::collinear_n() const {
   assert(var != nullptr);
   return var->collinearN;
+}
+
+inline int Position::connect_group() const {
+  assert(var != nullptr);
+  return var->connectGroup;
 }
 
 inline CheckCount Position::checks_remaining(Color c) const {
