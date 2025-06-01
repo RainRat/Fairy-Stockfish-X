@@ -24,6 +24,7 @@
 #include <map>
 #include <vector>
 #include <string>
+#include <utility>
 #include <functional>
 #include <sstream>
 #include <iostream>
@@ -140,6 +141,7 @@ struct Variant {
   bool pass[COLOR_NB] = {false, false};
   bool passOnStalemate[COLOR_NB] = {false, false};
   std::vector<int> multimoves = {};
+  std::vector<std::pair<PieceType, PieceType>> disallowedCaptures = {};
   bool multimoveCheck = true;
   bool multimoveCapture = true;
   bool makpongRule = false;

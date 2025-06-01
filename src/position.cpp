@@ -1249,8 +1249,31 @@ bool Position::legal(Move m) const {
       return false;
 
   // Illegal captures
-  if (capture(m) && type_of(captured_piece(m)) != KING && (sudoku_conflicts(us) || move_adds_sudoku_conflicts(m)))
-      return false;
+  if (capture(m))
+  {
+      // Check for disallowed captures based on piece types
+      const auto& disallowed = disallowed_captures();
+      if (!disallowed.empty())
+      {
+          PieceType attackerType = type_of(moved_piece(m));
+          Piece defenderPieceOnSq = piece_on(to); // piece_on(to_sq(m))
+          if (defenderPieceOnSq != NO_PIECE) // Should always be true for a capture
+          {
+              PieceType defenderType = type_of(defenderPieceOnSq);
+              for (const auto& pair : disallowed)
+              {
+                  if (pair.first == attackerType && pair.second == defenderType)
+                  {
+                      return false; // This capture is disallowed
+                  }
+              }
+          }
+      }
+
+      // Original checks for captures
+      if (type_of(captured_piece(m)) != KING && (sudoku_conflicts(us) || move_adds_sudoku_conflicts(m)))
+          return false;
+  }
 
   // Illegal non-drop moves
   if (must_drop() && count_in_hand(us, var->mustDropType) > 0)

@@ -18,6 +18,8 @@
 
 #include <string>
 #include <sstream>
+#include <vector>
+#include <utility>
 
 #include "apiutil.h"
 #include "parser.h"
@@ -416,6 +418,71 @@ namespace {
 
 } // namespace
 
+// New overload for std::vector<std::pair<PieceType, PieceType>>
+template <bool DoCheck>
+bool VariantParser<DoCheck>::parse_attribute(
+    const std::string& key,
+    std::vector<std::pair<PieceType, PieceType>>& target,
+    const std::string& pieceToChar) // pieceToChar from Variant
+{
+    const auto& it = config.find(key);
+    if (it != config.end() && !it->second.empty() && it->second != "-")
+    {
+        target.clear(); // Clear any existing disallowed captures
+        std::stringstream ss(it->second);
+        std::string pair_str;
+
+        while (ss >> pair_str) // e.g., pair_str is "Q:K" or "p:p"
+        {
+            size_t colon_pos = pair_str.find(':');
+            if (colon_pos == std::string::npos || colon_pos == 0 || colon_pos == pair_str.length() - 1)
+            {
+                if (DoCheck)
+                {
+                    std::cerr << key << " - Invalid pair format: \"" << pair_str << "\". Expected format 'A:B'." << std::endl;
+                }
+                continue; // Skip malformed pair
+            }
+
+            // Extract characters for attacker and defender
+            char attacker_char_orig = pair_str[0];
+            char defender_char_orig = pair_str[colon_pos + 1];
+
+            char attacker_char_upper = toupper(attacker_char_orig);
+            char defender_char_upper = toupper(defender_char_orig);
+
+            size_t attacker_idx = pieceToChar.find(attacker_char_upper);
+            size_t defender_idx = pieceToChar.find(defender_char_upper);
+
+            // Ensure the character found is indeed an uppercase letter (a piece type)
+            // and not some other character in pieceToChar or part of a multi-character piece representation
+            if (attacker_idx == std::string::npos || pieceToChar[attacker_idx] != attacker_char_upper)
+            {
+                if (DoCheck)
+                {
+                    std::cerr << key << " - Invalid attacker piece character: '" << attacker_char_orig << "' in pair \"" << pair_str << "\"" << std::endl;
+                }
+                continue;
+            }
+            // Check for defender similarly
+            if (defender_idx == std::string::npos || pieceToChar[defender_idx] != defender_char_upper)
+            {
+                if (DoCheck)
+                {
+                    std::cerr << key << " - Invalid defender piece character: '" << defender_char_orig << "' in pair \"" << pair_str << "\"" << std::endl;
+                }
+                continue;
+            }
+
+            target.emplace_back(PieceType(attacker_idx), PieceType(defender_idx));
+        }
+        config.consume(key); // Mark key as used
+        return true;
+    }
+    return false;
+}
+
+
 template <bool DoCheck>
 template <bool Current, class T> bool VariantParser<DoCheck>::parse_attribute(const std::string& key, T& target) {
     const auto& it = config.find(key);
@@ -756,6 +823,8 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     if (it_host_p != config.end()) {
         parse_hostage_exchanges(v, it_host_p->second, DoCheck);
     }
+    // disallowed captures
+    parse_attribute("disallowedCaptures", v->disallowedCaptures, v->pieceToChar);
     parse_attribute("prisonPawnPromotion", v->prisonPawnPromotion);
     parse_attribute("firstRankPawnDrops", v->firstRankPawnDrops);
     parse_attribute("promotionZonePawnDrops", v->promotionZonePawnDrops);

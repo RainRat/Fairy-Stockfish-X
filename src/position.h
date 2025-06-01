@@ -628,6 +628,11 @@ inline PieceSet Position::mutually_immune_types() const {
   return var->mutuallyImmuneTypes;
 }
 
+inline const std::vector<std::pair<PieceType, PieceType>>& Position::disallowed_captures() const {
+  assert(var != nullptr);
+  return var->disallowedCaptures;
+}
+
 inline bool Position::surround_capture_opposite() const {
   assert(var != nullptr);
   return var->surroundCaptureOpposite;
