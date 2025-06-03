@@ -28,10 +28,10 @@
     9. See https://github.com/fairy-stockfish/Fairy-Stockfish/wiki/Understanding-the-code for more descriptions.
     10. Do not break backwards compatibility with previous .ini files that people may have. If you are making a more flexible version of a previous configuration option, read the previous option into the new option with defaults that reflect the old behaviour.
     11. Performance and portability are top priorities. Try to avoid excessive dependencies, or unnecessary intensive computation inside main loops. It is ok in the main loop to have code that is a bit harder to read if there is better performance.
-    12. Code is indented 2 spaces for the first function level, then 4 spaces each level after that.
+    12. C++ Code is indented 2 spaces for the first function level, then 4 spaces each level after that.
     13. Don't change variable names. We know that in some cases local variables overshadow global ones; we are ok with that.
     14. You must compile and test that your feature is read all the way from variants.ini (or your test .ini) and used by the engine.
-    15. Don't change copyright year.
+    15. Comments should be appropriate for experienced developers. Don't change copyright year in comments.
 5. Other functions:
     1. “movegen.cpp->generate_all” calls “movegen.cpp->generate_drops”, “movegen.cpp->generate_moves”, and “movegen.cpp->generate_pawn_moves”.
     2. “movegen.cpp->make_move_and_gating” is called by the above to encode and store the moves they generate in moveList
