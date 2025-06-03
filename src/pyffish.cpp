@@ -372,7 +372,7 @@ extern "C" PyObject* pyffish_hasInsufficientMaterial(PyObject* self, PyObject *a
     return Py_BuildValue("(OO)", wInsufficient ? Py_True : Py_False, bInsufficient ? Py_True : Py_False);
 }
 
-// INPUT variant, fen
+// INPUT fen, variant
 extern "C" PyObject* pyffish_validateFen(PyObject* self, PyObject *args) {
     const char *fen, *variant;
     int chess960 = false;
@@ -383,7 +383,7 @@ extern "C" PyObject* pyffish_validateFen(PyObject* self, PyObject *args) {
     return Py_BuildValue("i", FEN::validate_fen(std::string(fen), variants.find(std::string(variant))->second, chess960));
 }
 
-// INPUT variant, fen
+// INPUT fen, variant
 extern "C" PyObject* pyffish_getFogFEN(PyObject* self, PyObject *args) {
     PyObject* moveList = PyList_New(0);
     Position pos;
