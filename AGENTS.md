@@ -37,6 +37,7 @@
     2. “movegen.cpp->make_move_and_gating” is called by the above to encode and store the moves they generate in moveList
     3. “position.cpp->pseudo_legal” checks basic validity “position.cpp->legal” does a more extensive check, like making sure you aren’t hanging your king.
     4. “position.cpp->do_move” performs the actual change of board state, while “position.cpp->undo_move” reverses it.
+    5. Bitwise operators are overloaded between Squares and Bitboards in bitboard.h; you don't have to explicitly convert in most cases.
 6. Testing your variant
     1. Compile using “make”. Type “make help” to see important options. Remember that you need to run "make" from the "src" folder, the executable will be created there, and the default location for "variants.ini" is in there.
         1. A simple compile looks like: "make -j build ARCH=x86-64-modern"
