@@ -29,16 +29,11 @@
     10. Do not break backwards compatibility with previous .ini files that people may have. If you are making a more flexible version of a previous configuration option, read the previous option into the new option with defaults that reflect the old behaviour.
     11. Performance and portability are top priorities. Try to avoid excessive dependencies, or unnecessary intensive computation inside main loops. It is ok in the main loop to have code that is a bit harder to read if there is better performance.
     12. C++ Code is indented 2 spaces for the first function level, then 4 spaces each level after that.
-    13. Don't change variable names. We know that in some cases local variables overshadow global ones; we are ok with that.
+    13. Don't change variable names unless specifically required. We know that in some cases local variables overshadow global ones; we are ok with that.
     14. You must compile and test that your feature is read all the way from variants.ini (or your test .ini) and used by the engine.
     15. Comments should be appropriate for experienced developers. Don't change copyright year in comments.
-5. Other functions:
-    1. “movegen.cpp->generate_all” calls “movegen.cpp->generate_drops”, “movegen.cpp->generate_moves”, and “movegen.cpp->generate_pawn_moves”.
-    2. “movegen.cpp->make_move_and_gating” is called by the above to encode and store the moves they generate in moveList
-    3. “position.cpp->pseudo_legal” checks basic validity “position.cpp->legal” does a more extensive check, like making sure you aren’t hanging your king.
-    4. “position.cpp->do_move” performs the actual change of board state, while “position.cpp->undo_move” reverses it.
-    5. Bitwise operators are overloaded between Squares and Bitboards in bitboard.h; you don't have to explicitly convert in most cases.
-6. Testing your variant
+    16. Bitwise operators are overloaded between Squares and Bitboards in bitboard.h; you don't have to explicitly convert in most cases.
+5. Testing your variant
     1. Compile using “make”. Type “make help” to see important options. Remember that you need to run "make" from the "src" folder, the executable will be created there, and the default location for "variants.ini" is in there.
         1. A simple compile looks like: "make -j build ARCH=x86-64-modern"
         2. “largeboards=yes” if your board is greater than 8x8. Boards greater than 10x12 are not supported.
