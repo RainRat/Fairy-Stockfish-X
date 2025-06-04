@@ -2835,6 +2835,14 @@ Value Position::blast_see(Move m) const {
   Bitboard fromto = type_of(m) == DROP ? square_bb(to) : from | to;
   Bitboard blast = blast_squares(to);
 
+  // If the explosion would capture an opponent royal or pseudo-royal piece,
+  // treat the move as delivering immediate mate. This prevents the static
+  // evaluation from underestimating winning blast captures.
+  Bitboard enemyRoyal = st->pseudoRoyals & pieces(~us);
+  enemyRoyal |= pieces(~us, king_type());
+  if (blast & enemyRoyal)
+      return -checkmate_value();
+
   Value result = VALUE_ZERO;
 
   // Add the least valuable attacker for quiet moves
