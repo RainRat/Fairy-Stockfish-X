@@ -31,6 +31,7 @@
 #include "types.h"
 #include "variant.h"
 #include "movegen.h"
+#include "piece.h"
 
 #include "nnue/nnue_accumulator.h"
 
@@ -1482,12 +1483,62 @@ inline Square Position::castling_rook_square(CastlingRights cr) const {
   return castlingRookSquare[cr];
 }
 
+//---------------------------------------------------------+
+//  LOA-specific helper – completely private to Position  //
+//---------------------------------------------------------+
+namespace {
+
+inline Bitboard dynamic_slider_bb(const std::map<Direction,int>& directions,
+                                  Square  sq,
+                                  Bitboard blocking,      // pieces that stop us
+                                  Bitboard allPieces,     // for distance count
+                                  Color   c)
+{
+    Bitboard out = 0;
+    for (auto const& [d, limit] : directions)
+    {
+        if (limit != DYNAMIC_SLIDER_LIMIT) continue;      // not an “x” slider
+
+        Direction step = c == WHITE ?  d : Direction(-d);
+        Square    nxt  = sq + step;
+        if (!is_ok(nxt) || distance(nxt, nxt - step) > 2) continue;
+
+        Bitboard line = line_bb(sq, nxt);                 // through board edge
+        int dist = popcount(line & allPieces);            // how far to travel
+
+        Square dest = sq;
+        bool   ok   = true;
+        for (int i = 0; i < dist; ++i)
+        {
+            dest += step;
+            if (!is_ok(dest) || distance(dest, dest - step) > 2) { ok = false; break; }
+            if (i < dist - 1 && (blocking & dest))       // hit enemy before end
+            { ok = false; break; }
+        }
+        if (ok) out |= square_bb(dest);
+    }
+    return out;
+}
+
+} // anonymous namespace
+
 inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s) const {
   if (var->fastAttacks || var->fastAttacks2)
       return attacks_bb(c, pt, s, byTypeBB[ALL_PIECES]) & board_bb();
 
   PieceType movePt = pt == KING ? king_type() : pt;
-  Bitboard b = attacks_bb(c, movePt, s, byTypeBB[ALL_PIECES]);
+  Bitboard occupancy = byTypeBB[ALL_PIECES];
+  if (pieceMap.find(movePt)->second->friendlyJump)
+      occupancy &= ~pieces(c);
+  Bitboard b = attacks_bb(c, movePt, s, occupancy);
+
+  // LOA dynamic-distance attacks
+  const auto& dirs = pieceMap.find(movePt)->second->slider[0][MODALITY_CAPTURE];
+  if (!dirs.empty() && dirs.begin()->second == DYNAMIC_SLIDER_LIMIT)
+      b |= dynamic_slider_bb(dirs, s, occupancy, byTypeBB[ALL_PIECES], c);
+
+  if (pieceMap.find(movePt)->second->friendlyJump)
+      b &= ~pieces(c);          // never hit our own men
   // Xiangqi soldier
   if (pt == SOLDIER && !(promoted_soldiers(c) & s))
       b &= file_bb(file_of(s));
@@ -1573,7 +1624,19 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
       return (moves_bb(c, pt, s, byTypeBB[ALL_PIECES]) | extraDestinations) & board_bb();
 
   PieceType movePt = pt == KING ? king_type() : pt;
-  Bitboard b = (moves_bb(c, movePt, s, byTypeBB[ALL_PIECES]) | extraDestinations);
+
+  Bitboard occupancy = byTypeBB[ALL_PIECES];
+  if (pieceMap.find(movePt)->second->friendlyJump)
+      occupancy &= ~pieces(c);
+  Bitboard b = (moves_bb(c, movePt, s, occupancy) | extraDestinations);
+
+  // LOA dynamic-distance quiet moves
+  const auto& dirsQ = pieceMap.find(movePt)->second->slider[0][MODALITY_QUIET];
+  if (!dirsQ.empty() && dirsQ.begin()->second == DYNAMIC_SLIDER_LIMIT)
+      b |= dynamic_slider_bb(dirsQ, s, occupancy, byTypeBB[ALL_PIECES], c);
+
+  if (pieceMap.find(movePt)->second->friendlyJump)
+      b &= ~pieces(c);          // cannot land on own piece
   // Add initial moves
   if (double_step_region(c, pt) & s)
       b |= moves_bb<true>(c, movePt, s, byTypeBB[ALL_PIECES]);

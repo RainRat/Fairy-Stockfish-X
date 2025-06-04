@@ -61,6 +61,7 @@ namespace {
       bool rider = false;
       bool lame = false;
       bool initial = false;
+      bool dynamicDistance = false;
       int distance = 0;
       std::vector<std::string> prelimDirections = {};
       for (std::string::size_type i = 0; i < betza.size(); i++)
@@ -80,9 +81,15 @@ namespace {
           // Lame leaper
           else if (c == 'n')
               lame = true;
+          // Dynamic distance slider
+          else if (c == 'x')
+              dynamicDistance = true;
           // Initial move
           else if (c == 'i')
               initial = true;
+          // Slider ignores friendly pieces
+          else if (c == 'y')
+              p->friendlyJump = true;
           // Directional modifiers
           else if (verticals.find(c) != std::string::npos || horizontals.find(c) != std::string::npos)
           {
@@ -119,6 +126,8 @@ namespace {
               }
               if (!rider && lame)
                   distance = -1;
+              if (dynamicDistance && rider)
+                  distance = DYNAMIC_SLIDER_LIMIT;
               // No modality qualifier means m+c
               if (moveModalities.size() == 0)
               {
@@ -173,6 +182,7 @@ namespace {
               rider = false;
               lame = false;
               initial = false;
+              dynamicDistance = false;
               distance = 0;
           }
       }

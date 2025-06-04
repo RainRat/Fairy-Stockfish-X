@@ -29,6 +29,9 @@ namespace Stockfish {
 
 enum MoveModality {MODALITY_QUIET, MODALITY_CAPTURE, MOVE_MODALITY_NB};
 
+// Special distance value for dynamic slider length (Betza 'x' modifier)
+constexpr int DYNAMIC_SLIDER_LIMIT = -2;
+
 /// PieceInfo struct stores information about the piece movements.
 
 struct PieceInfo {
@@ -37,6 +40,7 @@ struct PieceInfo {
   std::map<Direction, int> steps[2][MOVE_MODALITY_NB] = {};
   std::map<Direction, int> slider[2][MOVE_MODALITY_NB] = {};
   std::map<Direction, int> hopper[2][MOVE_MODALITY_NB] = {};
+  bool friendlyJump = false;
 };
 
 struct PieceMap : public std::map<PieceType, const PieceInfo*> {
