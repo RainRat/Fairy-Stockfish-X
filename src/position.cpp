@@ -791,7 +791,10 @@ void Position::set_state(StateInfo* si) const {
               si->materialKey ^= Zobrist::psq[pc][cnt];
 
           if (piece_drops() || seirawan_gating())
-              si->key ^= Zobrist::inHand[pc][pieceCountInHand[c][pt]];
+          {
+              int n = std::clamp(pieceCountInHand[c][pt], 0, SQUARE_NB - 1);
+              si->key ^= Zobrist::inHand[pc][n];
+          }
       }
 
   if (check_counting())
@@ -1859,8 +1862,12 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
                              : unpromotedCaptured ? ~unpromotedCaptured
                                                   : make_piece(~color_of(captured), promotion_pawn_type(color_of(captured)));
           add_to_hand(pieceToHand);
-          k ^=  Zobrist::inHand[pieceToHand][pieceCountInHand[color_of(pieceToHand)][type_of(pieceToHand)] - 1]
-              ^ Zobrist::inHand[pieceToHand][pieceCountInHand[color_of(pieceToHand)][type_of(pieceToHand)]];
+          {
+              int newN = std::clamp(pieceCountInHand[color_of(pieceToHand)][type_of(pieceToHand)], 0, SQUARE_NB - 1);
+              int oldN = std::clamp(newN - 1, 0, SQUARE_NB - 1);
+              k ^=  Zobrist::inHand[pieceToHand][oldN]
+                  ^ Zobrist::inHand[pieceToHand][newN];
+          }
 
           if (Eval::useNNUE)
           {
@@ -1876,8 +1883,12 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
                       ? unpromotedCaptured
                       : make_piece(color_of(captured), promotion_pawn_type(color_of(captured)));
           int n = add_to_prison(pieceToPrison);
-          k ^=    Zobrist::inHand[pieceToPrison][n - 1]
-                ^ Zobrist::inHand[pieceToPrison][n];
+          {
+              int newN = std::clamp(n, 0, SQUARE_NB - 1);
+              int oldN = std::clamp(newN - 1, 0, SQUARE_NB - 1);
+              k ^=    Zobrist::inHand[pieceToPrison][oldN]
+                    ^ Zobrist::inHand[pieceToPrison][newN];
+          }
       }
       else if (Eval::useNNUE)
           dp.handPiece[1] = NO_PIECE;
@@ -1922,9 +1933,11 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       Piece pc_hand = make_piece(us, in_hand_piece_type(m));
       // exchanging means that drop is not from hand (but from prison)
       int n = pieceCountInHand[color_of(pc_hand)][type_of(pc_hand)] + (exchanged != NO_PIECE_TYPE);
+      int newN = std::clamp(n, 0, SQUARE_NB - 1);
+      int oldN = std::clamp(newN - 1, 0, SQUARE_NB - 1);
       k ^=  Zobrist::psq[pc][to]
-          ^ Zobrist::inHand[pc_hand][n - 1]
-          ^ Zobrist::inHand[pc_hand][n];
+          ^ Zobrist::inHand[pc_hand][oldN]
+          ^ Zobrist::inHand[pc_hand][newN];
 
       // Reset rule 50 counter for irreversible drops
       st->rule50 = 0;
@@ -2376,8 +2389,12 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
                   add_to_hand(pieceToHand);
                   n = pieceCountInHand[color_of(pieceToHand)][type_of(pieceToHand)];
               }
-              k ^=  Zobrist::inHand[pieceToHand][n - 1]
-                  ^ Zobrist::inHand[pieceToHand][n];
+              {
+                  int newN = std::clamp(n, 0, SQUARE_NB - 1);
+                  int oldN = std::clamp(newN - 1, 0, SQUARE_NB - 1);
+                  k ^=  Zobrist::inHand[pieceToHand][oldN]
+                      ^ Zobrist::inHand[pieceToHand][newN];
+              }
 
               if (Eval::useNNUE)
               {
@@ -2808,8 +2825,12 @@ Key Position::key_after(Move m) const {
               n = pieceCountInPrison[color_of(removedPiece)][type_of(removedPiece)];
               removedPiece = ~removedPiece;
           }
-          k ^=  Zobrist::inHand[removedPiece][n + 1]
-              ^ Zobrist::inHand[removedPiece][n];
+          {
+              int newN = std::clamp(n, 0, SQUARE_NB - 1);
+              int oldN = std::clamp(n + 1, 0, SQUARE_NB - 1);
+              k ^=  Zobrist::inHand[removedPiece][oldN]
+                  ^ Zobrist::inHand[removedPiece][newN];
+          }
       }
   }
   if (type_of(m) == DROP)
@@ -2817,9 +2838,11 @@ Key Position::key_after(Move m) const {
       Piece pc_hand = make_piece(sideToMove, in_hand_piece_type(m));
       PieceType exchanged = exchange_piece(m);
       int n = pieceCountInHand[color_of(pc_hand)][type_of(pc_hand)] + (exchanged != NO_PIECE_TYPE);
+      int newN = std::clamp(n, 0, SQUARE_NB - 1);
+      int oldN = std::clamp(newN - 1, 0, SQUARE_NB - 1);
       return k ^ Zobrist::psq[pc][to]
-               ^ Zobrist::inHand[pc_hand][n]
-               ^ Zobrist::inHand[pc_hand][n - 1];
+               ^ Zobrist::inHand[pc_hand][newN]
+               ^ Zobrist::inHand[pc_hand][oldN];
   }
 
   return k ^ Zobrist::psq[pc][to] ^ Zobrist::psq[pc][from];
