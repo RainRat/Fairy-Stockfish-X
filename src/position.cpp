@@ -3487,6 +3487,30 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
       return true;
   }
 
+ // Check for nMoveHardLimitRule
+ if (n_move_hard_limit_rule() > 0 && game_ply() >= n_move_hard_limit_rule()) {
+     Value gameResultValue = n_move_hard_limit_rule_value();
+
+     if (gameResultValue == VALUE_NONE) { // VALUE_NONE signifies using material counting
+         result = material_counting_result(); // This is from the perspective of sideToMove
+         // If material_counting_result() returns MATE or -MATE, it implies a win for sideToMove or ~sideToMove respectively.
+         // These need to be converted to absolute MATE scores for TT.
+         if (result == VALUE_MATE) result = value_to_tt(VALUE_MATE, game_ply() + ply);
+         else if (result == -VALUE_MATE) result = value_to_tt(-VALUE_MATE, game_ply() + ply);
+         // If it's VALUE_DRAW from material_counting_result, it's fine.
+     } else {
+         // For explicit win/loss/draw values
+         if (gameResultValue == VALUE_MATE) { // Absolute win for White
+             result = value_to_tt(VALUE_MATE, game_ply() + ply);
+         } else if (gameResultValue == -VALUE_MATE) { // Absolute loss for White (win for Black)
+             result = value_to_tt(-VALUE_MATE, game_ply() + ply);
+         } else { // VALUE_DRAW or other specific non-mate values
+             result = gameResultValue; // Should be VALUE_DRAW if not win/loss
+         }
+     }
+     return true;
+ }
+
   // Failing to checkmate with virtual pieces is a loss
   if (two_boards() && !checkers())
   {

@@ -156,6 +156,8 @@ struct Variant {
   // game end
   PieceSet nMoveRuleTypes[COLOR_NB] = {piece_set(PAWN), piece_set(PAWN)};
   int nMoveRule = 50;
+  int nMoveHardLimitRule = 0;
+  Value nMoveHardLimitRuleValue = VALUE_DRAW;
   int nFoldRule = 3;
   Value nFoldValue = VALUE_DRAW;
   bool nFoldValueAbsolute = false;

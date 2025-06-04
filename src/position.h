@@ -216,6 +216,8 @@ public:
   EnclosingRule flip_enclosed_pieces() const;
   // winning conditions
   int n_move_rule() const;
+  int n_move_hard_limit_rule() const;
+  Value n_move_hard_limit_rule_value() const;
   int n_fold_rule() const;
   Value stalemate_value(int ply = 0) const;
   Value checkmate_value(int ply = 0) const;
@@ -1069,6 +1071,16 @@ inline bool Position::makpong() const {
 inline int Position::n_move_rule() const {
   assert(var != nullptr);
   return var->nMoveRule;
+}
+
+inline int Position::n_move_hard_limit_rule() const {
+  assert(var != nullptr);
+  return var->nMoveHardLimitRule;
+}
+
+inline Value Position::n_move_hard_limit_rule_value() const {
+  assert(var != nullptr);
+  return var->nMoveHardLimitRuleValue;
 }
 
 inline int Position::n_fold_rule() const {
