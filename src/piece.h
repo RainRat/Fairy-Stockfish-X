@@ -23,11 +23,14 @@
 #include <map>
 
 #include "types.h"
-#include "variant.h"
 
 namespace Stockfish {
+struct Variant;
 
 enum MoveModality {MODALITY_QUIET, MODALITY_CAPTURE, MOVE_MODALITY_NB};
+
+// Special distance value for dynamic slider length (Betza 'x' modifier)
+constexpr int DYNAMIC_SLIDER_LIMIT = -2;
 
 /// PieceInfo struct stores information about the piece movements.
 

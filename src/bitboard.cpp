@@ -139,7 +139,7 @@ namespace {
                 attack |= s;
                 // For hoppers we consider limit == 1 as a grasshopper,
                 // but limit > 1 as a limited distance hopper
-                if (limit && !(MT == HOPPER_RANGE && limit == 1) && ++count >= limit)
+                if (limit > 0 && !(MT == HOPPER_RANGE && limit == 1) && ++count >= limit)
                     break;
             }
 
@@ -247,17 +247,19 @@ void Bitboards::init_pieces() {
               riderTypes = NO_RIDER;
               for (auto const& [d, limit] : pi->steps[initial][modality])
               {
-                  if (limit && LameDabbabaDirections.find(d) != LameDabbabaDirections.end())
+                  if (limit > 0 && LameDabbabaDirections.find(d) != LameDabbabaDirections.end())
                       riderTypes |= RIDER_LAME_DABBABA;
-                  if (limit && HorseDirections.find(d) != HorseDirections.end())
+                  if (limit > 0 && HorseDirections.find(d) != HorseDirections.end())
                       riderTypes |= RIDER_HORSE;
-                  if (limit && ElephantDirections.find(d) != ElephantDirections.end())
+                  if (limit > 0 && ElephantDirections.find(d) != ElephantDirections.end())
                       riderTypes |= RIDER_ELEPHANT;
-                  if (limit && JanggiElephantDirections.find(d) != JanggiElephantDirections.end())
+                  if (limit > 0 && JanggiElephantDirections.find(d) != JanggiElephantDirections.end())
                       riderTypes |= RIDER_JANGGI_ELEPHANT;
               }
               for (auto const& [d, limit] : pi->slider[initial][modality])
               {
+                  if (limit < 0)
+                      continue;
                   if (BishopDirections.find(d) != BishopDirections.end())
                       riderTypes |= RIDER_BISHOP;
                   if (RookDirectionsH.find(d) != RookDirectionsH.end())
