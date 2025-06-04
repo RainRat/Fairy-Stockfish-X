@@ -88,6 +88,9 @@ namespace {
           // Initial move
           else if (c == 'i')
               initial = true;
+          // Slider ignores friendly pieces
+          else if (c == 'y')
+              p->friendlyJump = true;
           // Directional modifiers
           else if (verticals.find(c) != std::string::npos || horizontals.find(c) != std::string::npos)
           {
