@@ -3487,6 +3487,17 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
       return true;
   }
 
+ // Check for nMoveHardLimitRule
+ if (n_move_hard_limit_rule() > 0 && game_ply() >= n_move_hard_limit_rule()) {
+
+     if (material_counting()) { // VALUE_NONE signifies using material counting
+         result = convert_mate_value(material_counting_result(), ply);
+     } else {
+         result = convert_mate_value(n_move_hard_limit_rule_value(), ply);
+     }
+     return true;
+ }
+
   // Failing to checkmate with virtual pieces is a loss
   if (two_boards() && !checkers())
   {
