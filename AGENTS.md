@@ -62,9 +62,6 @@
         Run stockfish:
 
             stockfish < test.txt > output.txt
-    5. Existing tests in test.py and tests/perft.sh; they are also a good place to put new tests.
-        1. test.py does not load variants.ini. Non-standard variants will have to be defined in ini_text variable inside test.py.
-        2. perft.sh does not test external variants. perft.sh is optional (if your environment does not support such scripts). 
-        3. Run "stockfish check variants.ini" if you edited variants.ini
+    5. Run "stockfish check variants.ini" if you edited variants.ini
     6. Common mistakes in testing:
         1. If your variant uses standard kings, make sure your FEN includes both kings, and that they are not already in checkmate or stalemate. Also, if a player is in check, the move sequence may be forcing, rather than allow your intended move.
