@@ -50,45 +50,6 @@ namespace Zobrist {
   Key points[COLOR_NB][MAX_ZOBRIST_POINTS];
 }
 
-//---------------------------------------------------------+
-//  LOA-specific helper – completely private to Position  //
-//---------------------------------------------------------+
-namespace {
-
-inline Bitboard dynamic_slider_bb(const std::map<Direction,int>& directions,
-                                  Square  sq,
-                                  Bitboard blocking,      // pieces that stop us
-                                  Bitboard allPieces,     // for distance count
-                                  Color   c)
-{
-    Bitboard out = 0;
-    for (auto const& [d, limit] : directions)
-    {
-        if (limit != DYNAMIC_SLIDER_LIMIT) continue;      // not an “x” slider
-
-        Direction step = c == WHITE ?  d : Direction(-d);
-        Square    nxt  = sq + step;
-        if (!is_ok(nxt) || distance(nxt, nxt - step) > 2) continue;
-
-        Bitboard line = line_bb(sq, nxt);                 // through board edge
-        int dist = popcount(line & allPieces);            // how far to travel
-
-        Square dest = sq;
-        bool   ok   = true;
-        for (int i = 0; i < dist; ++i)
-        {
-            dest += step;
-            if (!is_ok(dest) || distance(dest, dest - step) > 2) { ok = false; break; }
-            if (i < dist - 1 && (blocking & dest))       // hit enemy before end
-            { ok = false; break; }
-        }
-        if (ok) out |= square_bb(dest);
-    }
-    return out;
-}
-
-} // anonymous namespace
-
 /// operator<<(Position) returns an ASCII representation of the position
 
 std::ostream& operator<<(std::ostream& os, const Position& pos) {
