@@ -1484,13 +1484,13 @@ inline Square Position::castling_rook_square(CastlingRights cr) const {
 
 inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s) const {
   if (var->fastAttacks || var->fastAttacks2)
-      return attacks_bb(c, pt, s, byTypeBB[ALL_PIECES]) & board_bb();
+      return attacks_bb(c, pt, s, byTypeBB[ALL_PIECES], byTypeBB[ALL_PIECES]) & board_bb();
 
   PieceType movePt = pt == KING ? king_type() : pt;
   Bitboard occupancy = byTypeBB[ALL_PIECES];
   if (pieceMap.find(movePt)->second->friendlyJump)
       occupancy &= ~pieces(c);
-  Bitboard b = attacks_bb(c, movePt, s, occupancy);
+  Bitboard b = attacks_bb(c, movePt, s, occupancy, byTypeBB[ALL_PIECES]);
   // Xiangqi soldier
   if (pt == SOLDIER && !(promoted_soldiers(c) & s))
       b &= file_bb(file_of(s));
@@ -1498,14 +1498,14 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s) const {
   if (pt == JANGGI_CANNON)
   {
       b &= ~pieces(pt);
-      b &= attacks_bb(c, pt, s, pieces() ^ pieces(pt));
+      b &= attacks_bb(c, pt, s, pieces() ^ pieces(pt), byTypeBB[ALL_PIECES]);
   }
   // Janggi palace moves
   if (diagonal_lines() & s)
   {
       PieceType diagType = movePt == WAZIR ? FERS : movePt == SOLDIER ? PAWN : movePt == ROOK ? BISHOP : NO_PIECE_TYPE;
       if (diagType)
-          b |= attacks_bb(c, diagType, s, pieces()) & diagonal_lines();
+          b |= attacks_bb(c, diagType, s, pieces(), byTypeBB[ALL_PIECES]) & diagonal_lines();
       else if (movePt == JANGGI_CANNON)
           b |=  rider_attacks_bb<RIDER_CANNON_DIAG>(s, pieces())
               & rider_attacks_bb<RIDER_CANNON_DIAG>(s, pieces() ^ pieces(pt))
@@ -1573,16 +1573,16 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
     }
 
   if (var->fastAttacks || var->fastAttacks2)
-      return (moves_bb(c, pt, s, byTypeBB[ALL_PIECES]) | extraDestinations) & board_bb();
+      return (moves_bb(c, pt, s, byTypeBB[ALL_PIECES], byTypeBB[ALL_PIECES]) | extraDestinations) & board_bb();
 
   PieceType movePt = pt == KING ? king_type() : pt;
   Bitboard occupancy = byTypeBB[ALL_PIECES];
   if (pieceMap.find(movePt)->second->friendlyJump)
       occupancy &= ~pieces(c);
-  Bitboard b = (moves_bb(c, movePt, s, occupancy) | extraDestinations);
+  Bitboard b = (moves_bb(c, movePt, s, occupancy, byTypeBB[ALL_PIECES]) | extraDestinations);
   // Add initial moves
   if (double_step_region(c, pt) & s)
-      b |= moves_bb<true>(c, movePt, s, occupancy);
+      b |= moves_bb<true>(c, movePt, s, occupancy, byTypeBB[ALL_PIECES]);
 
   // Xiangqi soldier
   if (pt == SOLDIER && !(promoted_soldiers(c) & s))
@@ -1591,14 +1591,14 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
   if (pt == JANGGI_CANNON)
   {
       b &= ~pieces(pt);
-      b &= attacks_bb(c, pt, s, pieces() ^ pieces(pt));
+      b &= attacks_bb(c, pt, s, pieces() ^ pieces(pt), byTypeBB[ALL_PIECES]);
   }
   // Janggi palace moves
   if (diagonal_lines() & s)
   {
       PieceType diagType = movePt == WAZIR ? FERS : movePt == SOLDIER ? PAWN : movePt == ROOK ? BISHOP : NO_PIECE_TYPE;
       if (diagType)
-          b |= attacks_bb(c, diagType, s, pieces()) & diagonal_lines();
+          b |= attacks_bb(c, diagType, s, pieces(), byTypeBB[ALL_PIECES]) & diagonal_lines();
       else if (movePt == JANGGI_CANNON)
           b |=  rider_attacks_bb<RIDER_CANNON_DIAG>(s, pieces())
               & rider_attacks_bb<RIDER_CANNON_DIAG>(s, pieces() ^ pieces(pt))

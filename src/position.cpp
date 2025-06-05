@@ -1543,7 +1543,7 @@ bool Position::pseudo_legal(const Move m) const {
       if (!(var->wallingRegion[us] & gating_square(m)) || //putting a wall on disallowed square
           wallsquares & gating_square(m)) //or square already with a wall
           return false;
-      if (walling_rule() == ARROW && !(moves_bb(us, type_of(pc), to, pieces() ^ from) & gating_square(m)))
+      if (walling_rule() == ARROW && !(moves_bb(us, type_of(pc), to, pieces() ^ from, pieces()) & gating_square(m)))
           return false;
       if (walling_rule() == PAST && (from != gating_square(m)))
           return false;
