@@ -1623,11 +1623,11 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
   if (var->fastAttacks || var->fastAttacks2)
       return (moves_bb(c, pt, s, byTypeBB[ALL_PIECES]) | extraDestinations) & board_bb();
 
+  PieceType movePt = pt == KING ? king_type() : pt;
+
   Bitboard occupancy = byTypeBB[ALL_PIECES];
   if (pieceMap.find(movePt)->second->friendlyJump)
       occupancy &= ~pieces(c);
-
-  PieceType movePt = pt == KING ? king_type() : pt;
   Bitboard b = (moves_bb(c, movePt, s, occupancy) | extraDestinations);
 
   // LOA dynamic-distance quiet moves
