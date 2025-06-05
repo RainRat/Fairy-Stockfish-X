@@ -1311,8 +1311,13 @@ namespace {
                 for (int j = 0; j < pos.connect_n(); j++)
                     if (connectPiecesUs & (s - j * d))
                         c++;
-                score += (pos.variant()->connectValue==VALUE_MATE ? 1 : -1) * //At least change the sign for misere variants.
-                             (make_score(200, 200)  * c / (pos.connect_n() - c) / (pos.connect_n() - c));
+
+                int missing = pos.connect_n() - c;
+                if (missing > 0)
+                    score += (pos.variant()->connectValue==VALUE_MATE ? 1 : -1) * // At least change the sign for misere variants.
+                             (make_score(200, 200)  * c / missing / missing);
+                else
+                    score += (pos.variant()->connectValue==VALUE_MATE ? 1 : -1) * make_score(4000, 4000);
             }
         }
     }
