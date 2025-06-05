@@ -1592,7 +1592,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
       b &= ~pieces(c);          // cannot land on own piece
   // Add initial moves
   if (double_step_region(c, pt) & s)
-      b |= moves_bb<true>(c, movePt, s, occupancy, byTypeBB[ALL_PIECES]);
+      b |= moves_bb<true>(c, movePt, s, byTypeBB[ALL_PIECES]);
 
   // Xiangqi soldier
   if (pt == SOLDIER && !(promoted_soldiers(c) & s))
@@ -1601,14 +1601,14 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
   if (pt == JANGGI_CANNON)
   {
       b &= ~pieces(pt);
-      b &= attacks_bb(c, pt, s, pieces() ^ pieces(pt), byTypeBB[ALL_PIECES]);
+      b &= attacks_bb(c, pt, s, pieces() ^ pieces(pt));
   }
   // Janggi palace moves
   if (diagonal_lines() & s)
   {
       PieceType diagType = movePt == WAZIR ? FERS : movePt == SOLDIER ? PAWN : movePt == ROOK ? BISHOP : NO_PIECE_TYPE;
       if (diagType)
-          b |= attacks_bb(c, diagType, s, pieces(), byTypeBB[ALL_PIECES]) & diagonal_lines();
+          b |= attacks_bb(c, diagType, s, pieces()) & diagonal_lines();
       else if (movePt == JANGGI_CANNON)
           b |=  rider_attacks_bb<RIDER_CANNON_DIAG>(s, pieces())
               & rider_attacks_bb<RIDER_CANNON_DIAG>(s, pieces() ^ pieces(pt))
