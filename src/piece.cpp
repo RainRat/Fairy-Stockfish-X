@@ -22,7 +22,6 @@
 
 #include "types.h"
 #include "piece.h"
-#include "variant.h"
 
 namespace Stockfish {
 

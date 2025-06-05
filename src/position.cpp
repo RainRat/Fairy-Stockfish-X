@@ -50,6 +50,44 @@ namespace Zobrist {
   Key points[COLOR_NB][MAX_ZOBRIST_POINTS];
 }
 
+//---------------------------------------------------------+
+//  LOA-specific helper – completely private to Position  //
+//---------------------------------------------------------+
+namespace {
+
+inline Bitboard dynamic_slider_bb(const std::map<Direction,int>& directions,
+                                  Square  sq,
+                                  Bitboard blocking,      // pieces that stop us
+                                  Bitboard allPieces,     // for distance count
+                                  Color   c)
+{
+    Bitboard out = 0;
+    for (auto const& [d, limit] : directions)
+    {
+        if (limit != DYNAMIC_SLIDER_LIMIT) continue;      // not an “x” slider
+
+        Direction step = c == WHITE ?  d : Direction(-d);
+        Square    nxt  = sq + step;
+        if (!is_ok(nxt) || distance(nxt, nxt - step) > 2) continue;
+
+        Bitboard line = line_bb(sq, nxt);                 // through board edge
+        int dist = popcount(line & allPieces);            // how far to travel
+
+        Square dest = sq;
+        bool   ok   = true;
+        for (int i = 0; i < dist; ++i)
+        {
+            dest += step;
+            if (!is_ok(dest) || distance(dest, dest - step) > 2) { ok = false; break; }
+            if (i < dist - 1 && (blocking & dest))       // hit enemy before end
+            { ok = false; break; }
+        }
+        if (ok) out |= square_bb(dest);
+    }
+    return out;
+}
+
+} // anonymous namespace
 
 /// operator<<(Position) returns an ASCII representation of the position
 
@@ -1543,7 +1581,7 @@ bool Position::pseudo_legal(const Move m) const {
       if (!(var->wallingRegion[us] & gating_square(m)) || //putting a wall on disallowed square
           wallsquares & gating_square(m)) //or square already with a wall
           return false;
-      if (walling_rule() == ARROW && !(moves_bb(us, type_of(pc), to, pieces() ^ from, pieces()) & gating_square(m)))
+      if (walling_rule() == ARROW && !(moves_bb(us, type_of(pc), to, pieces() ^ from) & gating_square(m)))
           return false;
       if (walling_rule() == PAST && (from != gating_square(m)))
           return false;
@@ -3490,7 +3528,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
  // Check for nMoveHardLimitRule
  if (n_move_hard_limit_rule() > 0 && game_ply() >= n_move_hard_limit_rule()) {
 
-     if (material_counting()) { // VALUE_NONE signifies using material counting
+     if (material_counting()) {
          result = convert_mate_value(material_counting_result(), ply);
      } else {
          result = convert_mate_value(n_move_hard_limit_rule_value(), ply);

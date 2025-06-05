@@ -23,9 +23,9 @@
 #include <map>
 
 #include "types.h"
+#include "variant.h"
 
 namespace Stockfish {
-struct Variant;
 
 enum MoveModality {MODALITY_QUIET, MODALITY_CAPTURE, MOVE_MODALITY_NB};
 

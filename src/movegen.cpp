@@ -44,7 +44,7 @@ namespace {
             b ^= pos.capture_square(to);
 
         if (pos.walling_rule() == ARROW)
-            b &= moves_bb(us, type_of(pos.piece_on(from)), to, pos.pieces() ^ from, pos.pieces());
+            b &= moves_bb(us, type_of(pos.piece_on(from)), to, pos.pieces() ^ from);
 
         //Any current or future wall variant must follow the walling region rule if set:
         b &= pos.variant()->wallingRegion[us];

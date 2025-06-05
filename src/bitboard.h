@@ -20,10 +20,8 @@
 #define BITBOARD_H_INCLUDED
 
 #include <string>
-#include <map>
 
 #include "types.h"
-#include "piece.h"
 
 namespace Stockfish {
 
@@ -111,12 +109,13 @@ extern Bitboard PseudoAttacks[COLOR_NB][PIECE_TYPE_NB][SQUARE_NB];
 extern Bitboard PseudoMoves[2][COLOR_NB][PIECE_TYPE_NB][SQUARE_NB];
 extern Bitboard LeaperAttacks[COLOR_NB][PIECE_TYPE_NB][SQUARE_NB];
 extern Bitboard LeaperMoves[2][COLOR_NB][PIECE_TYPE_NB][SQUARE_NB];
-extern Bitboard SquareBB[SQUARE_NB];
 extern Bitboard BoardSizeBB[FILE_NB][RANK_NB];
 extern RiderType AttackRiderTypes[PIECE_TYPE_NB];
 extern RiderType MoveRiderTypes[2][PIECE_TYPE_NB];
 
-int popcount(Bitboard b); // declaration
+#ifdef LARGEBOARDS
+int popcount(Bitboard b); // required for 128 bit pext
+#endif
 
 /// Magic holds all magic bitboards relevant data for a single square
 struct Magic {
@@ -430,32 +429,6 @@ inline Bitboard rider_attacks_bb(RiderType R, Square s, Bitboard occupied) {
   return m.attacks[m.index(occupied)];
 }
 
-inline Bitboard dynamic_slider_bb(std::map<Direction, int> directions, Square sq,
-                                  Bitboard blocking, Bitboard allOccupied,
-                                  Color c = WHITE) {
-  Bitboard attack = 0;
-  for (auto const& [d, limit] : directions) {
-      if (limit != DYNAMIC_SLIDER_LIMIT)
-          continue;
-      Direction step = c == WHITE ? d : Direction(-d);
-      Square next = sq + step;
-      if (!is_ok(next) || distance(next, next - step) > 2)
-          continue;
-      Bitboard line = line_bb(sq, next);
-      int cnt = popcount(line & allOccupied);
-      Square dest = sq;
-      bool ok = true;
-      for (int i = 0; i < cnt; ++i) {
-          dest += step;
-          if (!is_ok(dest) || distance(dest, dest - step) > 2) { ok = false; break; }
-          if (i < cnt - 1 && (blocking & dest)) { ok = false; break; }
-      }
-      if (ok)
-          attack |= square_bb(dest);
-  }
-  return attack;
-}
-
 
 /// attacks_bb(Square) returns the pseudo attacks of the give piece type
 /// assuming an empty board.
@@ -496,33 +469,23 @@ inline RiderType pop_rider(RiderType& r) {
   return r2;
 }
 
-inline Bitboard attacks_bb(Color c, PieceType pt, Square s, Bitboard occupied,
-                           Bitboard allOccupied = 0) {
+inline Bitboard attacks_bb(Color c, PieceType pt, Square s, Bitboard occupied) {
   assert(pt != NO_PIECE_TYPE);
-  if (!allOccupied)
-      allOccupied = occupied;
   Bitboard b = LeaperAttacks[c][pt][s];
   RiderType r = AttackRiderTypes[pt];
   while (r)
       b |= rider_attacks_bb(pop_rider(r), s, occupied);
-  b |= dynamic_slider_bb(pieceMap.find(pt)->second->slider[0][MODALITY_CAPTURE],
-                         s, occupied, allOccupied, c);
   return b & PseudoAttacks[c][pt][s];
 }
 
 
 template <bool Initial=false>
-inline Bitboard moves_bb(Color c, PieceType pt, Square s, Bitboard occupied,
-                         Bitboard allOccupied = 0) {
+inline Bitboard moves_bb(Color c, PieceType pt, Square s, Bitboard occupied) {
   assert(pt != NO_PIECE_TYPE);
-  if (!allOccupied)
-      allOccupied = occupied;
   Bitboard b = LeaperMoves[Initial][c][pt][s];
   RiderType r = MoveRiderTypes[Initial][pt];
   while (r)
       b |= rider_attacks_bb(pop_rider(r), s, occupied);
-  b |= dynamic_slider_bb(pieceMap.find(pt)->second->slider[Initial][MODALITY_QUIET],
-                         s, occupied, allOccupied, c);
   return b & PseudoMoves[Initial][c][pt][s];
 }
 
