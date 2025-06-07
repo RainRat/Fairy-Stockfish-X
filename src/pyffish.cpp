@@ -175,7 +175,11 @@ extern "C" PyObject* pyffish_getSANmoves(PyObject* self, PyObject *args) {
     if (notation == NOTATION_DEFAULT)
         notation = default_notation(variants.find(std::string(variant))->second);
     StateListPtr states(new std::deque<StateInfo>(1));
-    buildPosition(pos, states, variant, fen, sanMoves, chess960);
+    // Build the initial position from the provided FEN and movelist
+    // before generating SAN for each move. The previous implementation
+    // incorrectly used the output list (sanMoves) instead of the input
+    // move list which resulted in moves being applied on an empty list.
+    buildPosition(pos, states, variant, fen, moveList, chess960);
 
     int numMoves = PyList_Size(moveList);
     for (int i=0; i<numMoves ; i++) {
