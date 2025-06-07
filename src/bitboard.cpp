@@ -18,6 +18,7 @@
 
 #include <algorithm>
 #include <bitset>
+#include <map>
 
 #include "bitboard.h"
 #include "magic.h"
@@ -303,7 +304,13 @@ void Bitboards::init_pieces() {
                           if (!limit)
                               leaper |= safe_destination(s, c == WHITE ? d : -d);
                       }
-                      pseudo |= sliding_attack<RIDER>(pi->slider[initial][modality], s, 0, c);
+                      {
+                          std::map<Direction, int> dirs;
+                          for (auto const& [d, limit] : pi->slider[initial][modality])
+                              if (limit >= 0)
+                                  dirs[d] = limit;
+                          pseudo |= sliding_attack<RIDER>(dirs, s, 0, c);
+                      }
                       pseudo |= sliding_attack<HOPPER_RANGE>(pi->hopper[initial][modality], s, 0, c);
                   }
               }

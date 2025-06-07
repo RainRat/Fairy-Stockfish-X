@@ -127,7 +127,10 @@ namespace {
               if (!rider && lame)
                   distance = -1;
               if (dynamicDistance && rider)
+              {
                   distance = DYNAMIC_SLIDER_LIMIT;
+                  p->hasDynamicSlider = true;
+              }
               // No modality qualifier means m+c
               if (moveModalities.size() == 0)
               {
