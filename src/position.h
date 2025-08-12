@@ -398,6 +398,9 @@ private:
   void move_piece(Square from, Square to);
   template<bool Do>
   void do_castling(Color us, Square from, Square& to, Square& rfrom, Square& rto);
+  static Bitboard dynamic_slider_bb(const std::map<Direction,int>& directions,
+                                    Square sq, Bitboard blockers,
+                                    Bitboard occupiedAll, Color c);
 
   // Data members
   Piece board[SQUARE_NB];
@@ -1483,16 +1486,12 @@ inline Square Position::castling_rook_square(CastlingRights cr) const {
   return castlingRookSquare[cr];
 }
 
-//---------------------------------------------------------+
-//  LOA-specific helper – completely private to Position  //
-//---------------------------------------------------------+
-namespace {
-
-static inline Bitboard dynamic_slider_bb(const std::map<Direction,int>& directions,
-                                         Square  sq,
-                                         Bitboard blockers,     // pieces that stop us
-                                         Bitboard occupiedAll,  // for distance count
-                                         Color   c)
+// LOA-specific helper – completely private to Position
+inline Bitboard Position::dynamic_slider_bb(const std::map<Direction,int>& directions,
+                                            Square  sq,
+                                            Bitboard blockers,     // pieces that stop us
+                                            Bitboard occupiedAll,  // for distance count
+                                            Color   c)
 {
   Bitboard out = 0;
   for (auto const& [d, limit] : directions)
@@ -1520,8 +1519,6 @@ static inline Bitboard dynamic_slider_bb(const std::map<Direction,int>& directio
   return out;
 }
 
-} // anonymous namespace
-
 inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s) const {
   if (var->fastAttacks || var->fastAttacks2)
       return attacks_bb(c, pt, s, byTypeBB[ALL_PIECES]) & board_bb();
@@ -1536,7 +1533,7 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s) const {
   Bitboard b = attacks_bb(c, movePt, s, occupancy);
 
   if (pi->hasDynamicSlider)
-      b |= dynamic_slider_bb(pi->slider[0][MODALITY_CAPTURE], s, occupancy, byTypeBB[ALL_PIECES], c); // LOA dynamic-distance attacks
+      b |= Position::dynamic_slider_bb(pi->slider[0][MODALITY_CAPTURE], s, occupancy, byTypeBB[ALL_PIECES], c); // LOA dynamic-distance attacks
 
   if (pi->friendlyJump)
       b &= ~pieces(c);          // never hit our own men
@@ -1634,7 +1631,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
   Bitboard b = (moves_bb(c, movePt, s, occupancy) | extraDestinations);
 
   if (pi->hasDynamicSlider)
-      b |= dynamic_slider_bb(pi->slider[0][MODALITY_QUIET], s, occupancy, byTypeBB[ALL_PIECES], c); // LOA dynamic-distance quiet moves
+      b |= Position::dynamic_slider_bb(pi->slider[0][MODALITY_QUIET], s, occupancy, byTypeBB[ALL_PIECES], c); // LOA dynamic-distance quiet moves
 
   if (pi->friendlyJump)
       b &= ~pieces(c);          // cannot land on own piece
