@@ -1488,36 +1488,36 @@ inline Square Position::castling_rook_square(CastlingRights cr) const {
 //---------------------------------------------------------+
 namespace {
 
-inline Bitboard dynamic_slider_bb(const std::map<Direction,int>& directions,
-                                  Square  sq,
-                                  Bitboard blocking,      // pieces that stop us
-                                  Bitboard allPieces,     // for distance count
-                                  Color   c)
+static inline Bitboard dynamic_slider_bb(const std::map<Direction,int>& directions,
+                                         Square  sq,
+                                         Bitboard blockers,     // pieces that stop us
+                                         Bitboard occupiedAll,  // for distance count
+                                         Color   c)
 {
-    Bitboard out = 0;
-    for (auto const& [d, limit] : directions)
+  Bitboard out = 0;
+  for (auto const& [d, limit] : directions)
+  {
+    if (limit != DYNAMIC_SLIDER_LIMIT) continue;      // not an "x" slider
+
+    Direction step = c == WHITE ?  d : Direction(-d);
+    Square    nxt  = sq + step;
+    if (!is_ok(nxt) || distance(nxt, nxt - step) > 2) continue; // only rook/bishop steps
+
+    Bitboard line = line_bb(sq, nxt);                 // through board edge
+    int dist = popcount(line & occupiedAll);          // how far to travel
+
+    Square dest = sq;
+    bool   ok   = true;
+    for (int i = 0; i < dist; ++i)
     {
-        if (limit != DYNAMIC_SLIDER_LIMIT) continue;      // not an “x” slider
-
-        Direction step = c == WHITE ?  d : Direction(-d);
-        Square    nxt  = sq + step;
-        if (!is_ok(nxt) || distance(nxt, nxt - step) > 2) continue;
-
-        Bitboard line = line_bb(sq, nxt);                 // through board edge
-        int dist = popcount(line & allPieces);            // how far to travel
-
-        Square dest = sq;
-        bool   ok   = true;
-        for (int i = 0; i < dist; ++i)
-        {
-            dest += step;
-            if (!is_ok(dest) || distance(dest, dest - step) > 2) { ok = false; break; }
-            if (i < dist - 1 && (blocking & dest))       // hit enemy before end
-            { ok = false; break; }
-        }
-        if (ok) out |= square_bb(dest);
+      dest += step;
+      if (!is_ok(dest) || distance(dest, dest - step) > 2) { ok = false; break; }
+      if (i < dist - 1 && (blockers & dest))       // hit enemy before end
+      { ok = false; break; }
     }
-    return out;
+    if (ok) out |= square_bb(dest);
+  }
+  return out;
 }
 
 } // anonymous namespace
@@ -1527,17 +1527,18 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s) const {
       return attacks_bb(c, pt, s, byTypeBB[ALL_PIECES]) & board_bb();
 
   PieceType movePt = pt == KING ? king_type() : pt;
+  const PieceInfo* pi = pieceMap.find(movePt)->second;
+
   Bitboard occupancy = byTypeBB[ALL_PIECES];
-  if (pieceMap.find(movePt)->second->friendlyJump)
+  if (pi->friendlyJump)
       occupancy &= ~pieces(c);
+
   Bitboard b = attacks_bb(c, movePt, s, occupancy);
 
-  // LOA dynamic-distance attacks
-  const auto& dirs = pieceMap.find(movePt)->second->slider[0][MODALITY_CAPTURE];
-  if (!dirs.empty() && dirs.begin()->second == DYNAMIC_SLIDER_LIMIT)
-      b |= dynamic_slider_bb(dirs, s, occupancy, byTypeBB[ALL_PIECES], c);
+  if (pi->hasDynamicSlider)
+      b |= dynamic_slider_bb(pi->slider[0][MODALITY_CAPTURE], s, occupancy, byTypeBB[ALL_PIECES], c); // LOA dynamic-distance attacks
 
-  if (pieceMap.find(movePt)->second->friendlyJump)
+  if (pi->friendlyJump)
       b &= ~pieces(c);          // never hit our own men
   // Xiangqi soldier
   if (pt == SOLDIER && !(promoted_soldiers(c) & s))
@@ -1624,18 +1625,18 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
       return (moves_bb(c, pt, s, byTypeBB[ALL_PIECES]) | extraDestinations) & board_bb();
 
   PieceType movePt = pt == KING ? king_type() : pt;
+  const PieceInfo* pi = pieceMap.find(movePt)->second;
 
   Bitboard occupancy = byTypeBB[ALL_PIECES];
-  if (pieceMap.find(movePt)->second->friendlyJump)
+  if (pi->friendlyJump)
       occupancy &= ~pieces(c);
+
   Bitboard b = (moves_bb(c, movePt, s, occupancy) | extraDestinations);
 
-  // LOA dynamic-distance quiet moves
-  const auto& dirsQ = pieceMap.find(movePt)->second->slider[0][MODALITY_QUIET];
-  if (!dirsQ.empty() && dirsQ.begin()->second == DYNAMIC_SLIDER_LIMIT)
-      b |= dynamic_slider_bb(dirsQ, s, occupancy, byTypeBB[ALL_PIECES], c);
+  if (pi->hasDynamicSlider)
+      b |= dynamic_slider_bb(pi->slider[0][MODALITY_QUIET], s, occupancy, byTypeBB[ALL_PIECES], c); // LOA dynamic-distance quiet moves
 
-  if (pieceMap.find(movePt)->second->friendlyJump)
+  if (pi->friendlyJump)
       b &= ~pieces(c);          // cannot land on own piece
   // Add initial moves
   if (double_step_region(c, pt) & s)
