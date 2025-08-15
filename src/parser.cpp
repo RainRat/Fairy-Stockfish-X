@@ -590,14 +590,16 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute<false>("blackFlag", v->flagRegion[BLACK]);
     parse_attribute<false>("castlingRookPiece", v->castlingRookPieces[WHITE], v->pieceToChar);
     parse_attribute<false>("castlingRookPiece", v->castlingRookPieces[BLACK], v->pieceToChar);
+    parse_attribute<false>("whiteDropRegion", v->dropRegion[WHITE]);
+    parse_attribute<false>("blackDropRegion", v->dropRegion[BLACK]);
 
     bool dropOnTop = false;
     parse_attribute<false>("dropOnTop", dropOnTop);
     if (dropOnTop) v->enclosingDrop=TOP;
 
     // Parse aliases
-    parse_attribute("pawnTypes", v->promotionPawnType[WHITE], v->pieceToChar);
-    parse_attribute("pawnTypes", v->promotionPawnType[BLACK], v->pieceToChar);
+    parse_attribute("pawnTypes", v->mainPromotionPawnType[WHITE], v->pieceToChar);
+    parse_attribute("pawnTypes", v->mainPromotionPawnType[BLACK], v->pieceToChar);
     parse_attribute("pawnTypes", v->promotionPawnTypes[WHITE], v->pieceToChar);
     parse_attribute("pawnTypes", v->promotionPawnTypes[BLACK], v->pieceToChar);
     parse_attribute("pawnTypes", v->enPassantTypes[WHITE], v->pieceToChar);
@@ -624,12 +626,12 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
         std::cerr << "Syntax error in blackPiecePromotionRegion or missing blackPiecePromotionRegion definition." << std::endl;
     }
     // Take the first promotionPawnTypes as the main promotionPawnType
-    parse_attribute("promotionPawnTypes", v->promotionPawnType[WHITE], v->pieceToChar);
-    parse_attribute("promotionPawnTypes", v->promotionPawnType[BLACK], v->pieceToChar);
+    parse_attribute("promotionPawnTypes", v->mainPromotionPawnType[WHITE], v->pieceToChar);
+    parse_attribute("promotionPawnTypes", v->mainPromotionPawnType[BLACK], v->pieceToChar);
     parse_attribute("promotionPawnTypes", v->promotionPawnTypes[WHITE], v->pieceToChar);
     parse_attribute("promotionPawnTypes", v->promotionPawnTypes[BLACK], v->pieceToChar);
-    parse_attribute("promotionPawnTypesWhite", v->promotionPawnType[WHITE], v->pieceToChar);
-    parse_attribute("promotionPawnTypesBlack", v->promotionPawnType[BLACK], v->pieceToChar);
+    parse_attribute("promotionPawnTypesWhite", v->mainPromotionPawnType[WHITE], v->pieceToChar);
+    parse_attribute("promotionPawnTypesBlack", v->mainPromotionPawnType[BLACK], v->pieceToChar);
     parse_attribute("promotionPawnTypesWhite", v->promotionPawnTypes[WHITE], v->pieceToChar);
     parse_attribute("promotionPawnTypesBlack", v->promotionPawnTypes[BLACK], v->pieceToChar);
     parse_attribute("promotionPieceTypes", v->promotionPieceTypes[WHITE], v->pieceToChar);
@@ -761,8 +763,8 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("promotionZonePawnDrops", v->promotionZonePawnDrops);
     parse_attribute("enclosingDrop", v->enclosingDrop);
     parse_attribute("enclosingDropStart", v->enclosingDropStart);
-    parse_attribute("whiteDropRegion", v->whiteDropRegion);
-    parse_attribute("blackDropRegion", v->blackDropRegion);
+    parse_attribute("dropRegionWhite", v->dropRegion[WHITE]);
+    parse_attribute("dropRegionBlack", v->dropRegion[BLACK]);
     parse_attribute("pieceSpecificDropRegion", v->pieceSpecificDropRegion);
     if (v->pieceSpecificDropRegion && !parse_attribute("whitePieceDropRegion", v->whitePieceDropRegion))
     {
