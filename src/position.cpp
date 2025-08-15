@@ -78,7 +78,7 @@ std::ostream& operator<<(std::ostream& os, const Position& pos) {
               os << " *";
           else
               os << "  ";
-          if (!pos.variant()->freeDrops && (pos.piece_drops() || pos.seirawan_gating()))
+          if (!pos.free_drops() && (pos.piece_drops() || pos.seirawan_gating()))
           {
               os << " [";
               for (PieceType pt = KING; pt >= PAWN; --pt)
@@ -910,7 +910,7 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
   }
 
   // pieces in hand
-  if (!variant()->freeDrops && (piece_drops() || seirawan_gating()) && !commit_gates())
+  if (!free_drops() && (piece_drops() || seirawan_gating()) && !commit_gates())
   {
       ss << '[';
       if (holdings != "-") {
@@ -1860,7 +1860,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       {
           Piece pieceToHand = !capturedPromoted || drop_loop() ? ~captured
                              : unpromotedCaptured ? ~unpromotedCaptured
-                                                  : make_piece(~color_of(captured), promotion_pawn_type(color_of(captured)));
+                                                  : make_piece(~color_of(captured), main_promotion_pawn_type(color_of(captured)));
           add_to_hand(pieceToHand);
           {
               int newN = std::clamp(pieceCountInHand[color_of(pieceToHand)][type_of(pieceToHand)], 0, SQUARE_NB - 1);
@@ -2619,7 +2619,7 @@ void Position::undo_move(Move m) {
       assert((promotion_zone(st->promotionPawn) & to) || sittuyin_promotion());
       assert(type_of(pc) == promotion_type(m));
       assert(type_of(pc) >= KNIGHT && type_of(pc) < KING);
-      assert(type_of(st->promotionPawn) == promotion_pawn_type(us) || !captures_to_hand());
+      assert(type_of(st->promotionPawn) == main_promotion_pawn_type(us) || !captures_to_hand());
 
       if (prison_pawn_promotion() && type_of(st->promotionPawn) == PAWN) {
           remove_from_prison(st->promotionPawn);
@@ -2674,7 +2674,7 @@ void Position::undo_move(Move m) {
               remove_from_hand(!drop_loop() && st->capturedpromoted
                                ? (st->unpromotedCapturedPiece
                                   ? ~st->unpromotedCapturedPiece
-                                  : make_piece(~color_of(st->capturedPiece), promotion_pawn_type(us)))
+                                  : make_piece(~color_of(st->capturedPiece), main_promotion_pawn_type(us)))
                                : ~st->capturedPiece);
           } else if (capture_type() == PRISON) {
               remove_from_prison(!drop_loop() && st->capturedpromoted
@@ -2816,7 +2816,7 @@ Key Position::key_after(Move m) const {
       k ^= Zobrist::psq[captured][to];
       if (captures_to_hand()) {
           Piece removedPiece = !drop_loop() && is_promoted(to)
-                               ? make_piece(~color_of(captured), promotion_pawn_type(color_of(captured)))
+                               ? make_piece(~color_of(captured), main_promotion_pawn_type(color_of(captured)))
                                : ~captured;
           int n;
           if (capture_type() == HAND) {
@@ -3328,7 +3328,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
   {
       Bitboard b;
 
-      for (Direction d : var->connect_directions)
+      for (Direction d : var->connectDirections)
       {
           b = connectPieces;
           for (int i = 1; i < connect_n() && b; i++)
@@ -3348,7 +3348,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
 
       while (true) {
           Bitboard newBitboard = 0;
-          for (Direction d : var->connect_directions) {
+          for (Direction d : var->connectDirections) {
               newBitboard |= shift(d, current | newBitboard) & connectPieces; // the "| newBitboard" here probably saves a few loops
           }
 
@@ -3398,7 +3398,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
           //the piece and the shifted square, then use popcount to count the number
           //of pieces on that line.
           Square s = pop_lsb(pieces);
-          for (Direction d : var->connect_directions) {
+          for (Direction d : var->connectDirections) {
               Square shifted_square = s + d;
 
 

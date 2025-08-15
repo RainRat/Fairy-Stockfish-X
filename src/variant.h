@@ -57,7 +57,7 @@ struct Variant {
   bool pieceSpecificPromotionRegion = false;
   PieceTypeBitboardGroup whitePiecePromotionRegion;
   PieceTypeBitboardGroup blackPiecePromotionRegion;
-  PieceType promotionPawnType[COLOR_NB] = {PAWN, PAWN};
+  PieceType mainPromotionPawnType[COLOR_NB] = {PAWN, PAWN};
   PieceSet promotionPawnTypes[COLOR_NB] = {piece_set(PAWN), piece_set(PAWN)};
   PieceSet promotionPieceTypes[COLOR_NB] = {piece_set(QUEEN) | ROOK | BISHOP | KNIGHT,
                                             piece_set(QUEEN) | ROOK | BISHOP | KNIGHT};
@@ -116,8 +116,7 @@ struct Variant {
   bool promotionZonePawnDrops = false;
   EnclosingRule enclosingDrop = NO_ENCLOSING;
   Bitboard enclosingDropStart = 0;
-  Bitboard whiteDropRegion = AllSquares;
-  Bitboard blackDropRegion = AllSquares;
+  Bitboard dropRegion[COLOR_NB] = {AllSquares, AllSquares};
   bool pieceSpecificDropRegion = false;
   PieceTypeBitboardGroup whitePieceDropRegion;
   PieceTypeBitboardGroup blackPieceDropRegion;
@@ -219,7 +218,7 @@ struct Variant {
   int nnueMaxPieces;
   EndgameEval endgameEval = EG_EVAL_CHESS;
   bool shogiStylePromotions = false;
-  std::vector<Direction> connect_directions;
+  std::vector<Direction> connectDirections;
   PieceSet connectPieceTypesTrimmed = ~NO_PIECE_SET;
   bool multimovePass[START_MULTIMOVES]; // irregular pattern of multimove passes at game start
   int multimoveOffset; // end of multimoveStart sequence
