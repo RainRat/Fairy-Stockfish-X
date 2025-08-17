@@ -89,7 +89,7 @@ struct Variant {
   bool pieceSpecificTripleStepRegion = false;
   PieceTypeBitboardGroup whitePieceTripleStepRegion;
   PieceTypeBitboardGroup blackPieceTripleStepRegion;
-  Bitboard enPassantRegion = AllSquares;
+  Bitboard enPassantRegion[COLOR_NB] = {AllSquares, AllSquares};
   PieceSet enPassantTypes[COLOR_NB] = {piece_set(PAWN), piece_set(PAWN)};
   bool castling = true;
   bool castlingDroppedPiece = false;
