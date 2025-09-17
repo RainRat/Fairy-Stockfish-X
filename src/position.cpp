@@ -1886,7 +1886,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
                   ? captured
                   : unpromotedCaptured
                       ? unpromotedCaptured
-                      : make_piece(color_of(captured), promotion_pawn_type(color_of(captured)));
+                      : make_piece(color_of(captured), main_promotion_pawn_type(color_of(captured)));
           int n = add_to_prison(pieceToPrison);
           {
               int newN = std::clamp(n, 0, SQUARE_NB - 1);
@@ -2303,7 +2303,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       if ( surround_capture_opposite() || surround_capture_edge() ) {
           for (int sign : {-1, 1}) {
 
-              for (const Direction& d : var->connect_directions)
+              for (const Direction& d : var->connectDirections)
               //using getConnectDirections to determine whether two pieces are connected
               //in that they can capture a piece between them. if there was a
               //variant with connection as a victory condition, and different
@@ -2685,7 +2685,7 @@ void Position::undo_move(Move m) {
               remove_from_prison(!drop_loop() && st->capturedpromoted
                                ? (st->unpromotedCapturedPiece
                                   ? st->unpromotedCapturedPiece
-                                  : make_piece(color_of(st->capturedPiece), promotion_pawn_type(us)))
+                                  : make_piece(color_of(st->capturedPiece), main_promotion_pawn_type(us)))
                                : st->capturedPiece);
           }
       }
