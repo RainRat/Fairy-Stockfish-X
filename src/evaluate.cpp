@@ -1210,10 +1210,14 @@ namespace {
         {
             int wins = popcount(ctfTargets & ctfPieces);
             if (wins)
+            {
                 //score went overflow in a test of tafl
                 //original code may not be intended for such a mobile flag piece with so many flag squares
                 //this may need to be rethought
-                score += make_score(4000, 4000) * (wins / (wins + dist * dist));
+                int denom = wins + dist * dist;
+                int ctfBonus = (4000 * wins) / denom;
+                score += make_score(ctfBonus, ctfBonus);
+            }
             Bitboard current = ctfPieces & ~ctfTargets;
             processed |= ctfPieces;
             ctfPieces = onHold & ~processed;
