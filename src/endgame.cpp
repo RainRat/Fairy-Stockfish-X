@@ -52,7 +52,9 @@ namespace {
 
 #ifndef NDEBUG
   bool verify_material(const Position& pos, Color c, Value npm, int pawnsCnt) {
-    return true; // Skip strict material checks in debug mode
+
+    return   pos.non_pawn_material(c) == npm
+          && pos.count<PAWN>(c) == pawnsCnt;
   }
 #endif
 
