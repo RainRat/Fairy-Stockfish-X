@@ -936,6 +936,12 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("dropNoDoubledCount", v->dropNoDoubledCount);
     parse_attribute("freeDrops", v->freeDrops);
     parse_attribute("payPointsToDrop", v->payPointsToDrop);
+    parse_attribute("potions", v->potions);
+    parse_attribute("freezePotion", v->potionPiece[Variant::POTION_FREEZE], v->pieceToChar);
+    parse_attribute("jumpPotion", v->potionPiece[Variant::POTION_JUMP], v->pieceToChar);
+    parse_attribute("freezeCooldown", v->potionCooldown[Variant::POTION_FREEZE]);
+    parse_attribute("jumpCooldown", v->potionCooldown[Variant::POTION_JUMP]);
+    parse_attribute("potionDropOnOccupied", v->potionDropOnOccupied);
     parse_attribute("immobilityIllegal", v->immobilityIllegal);
     parse_attribute("gating", v->gating);
     parse_attribute("wallingRule", v->wallingRule);

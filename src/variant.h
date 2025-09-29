@@ -170,6 +170,17 @@ struct Variant {
   bool sudokuRoyalConflict = false;
 #endif
 
+  enum PotionType : int {
+      POTION_FREEZE,
+      POTION_JUMP,
+      POTION_TYPE_NB
+  };
+
+  bool potions = false;
+  PieceType potionPiece[POTION_TYPE_NB] = {NO_PIECE_TYPE, NO_PIECE_TYPE};
+  int potionCooldown[POTION_TYPE_NB] = {};
+  bool potionDropOnOccupied = false;
+
   // game end
   PieceSet nMoveRuleTypes[COLOR_NB] = {piece_set(PAWN), piece_set(PAWN)};
   int nMoveRule = 50;
