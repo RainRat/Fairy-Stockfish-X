@@ -1153,7 +1153,7 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
   }
 
   // pieces in hand
-  if (!free_drops() && (piece_drops() || seirawan_gating()) && !commit_gates())
+  if (!free_drops() && (piece_drops() || seirawan_gating() || potions_enabled()) && !commit_gates())
   {
       ss << '[';
       if (holdings != "-") {
