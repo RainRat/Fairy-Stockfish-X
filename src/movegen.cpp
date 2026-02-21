@@ -37,7 +37,7 @@ namespace {
         {
             Square kto = make_square(to > from ? pos.castling_kingside_file() : pos.castling_queenside_file(), pos.castling_rank(us));
             Direction step = kto > from ? EAST : WEST;
-            Square rto = kto - step;
+            Square rto = kto - (to > from ? EAST : WEST);
             b ^= square_bb(to) ^ kto ^ rto;
         }
         if (T == EN_PASSANT)
