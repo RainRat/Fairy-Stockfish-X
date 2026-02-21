@@ -1113,7 +1113,7 @@ Bitboard Position::slider_blockers(Bitboard sliders, Square s, Bitboard& pinners
 Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard janggiCannons) const {
 
   // Use a faster version for variants with moderate rule variations
-  if (var->fastAttacks)
+  if (fast_attacks())
   {
       return  (pawn_attacks_bb(~c, s)          & pieces(c, PAWN) & ~pawnCannotCheckZone[c])
             | (attacks_bb<KNIGHT>(s)           & pieces(c, KNIGHT, ARCHBISHOP, CHANCELLOR))
