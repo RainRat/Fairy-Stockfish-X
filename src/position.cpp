@@ -735,6 +735,7 @@ bool Position::move_adds_sudoku_conflicts(Move m) const {
   Square from = from_sq(m);
   Square to = to_sq(m);
   Piece pc = moved_piece(m);
+
   Color c = color_of(pc);
   assert(c == sideToMove);
   PieceType pt = piece_type_for_sudoku(pc);
@@ -776,6 +777,7 @@ void Position::set_state(StateInfo* si) const {
   si->removedGatingType = NO_PIECE_TYPE;
   si->removedCastlingGatingType = NO_PIECE_TYPE;
   si->capturedGatingType = NO_PIECE_TYPE;
+  si->forcedJumpSquare = SQ_NONE;
 
   set_check_info(si);
   set_sudoku_conflicts_info(si);
@@ -1212,6 +1214,29 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied) const {
   return attackers_to(s, occupied, WHITE) | attackers_to(s, occupied, BLACK);
 }
 
+bool Position::has_forced_jump_followup() const {
+
+  if (!forced_jump_continuation() || st->forcedJumpSquare == SQ_NONE)
+      return false;
+
+  Square s = st->forcedJumpSquare;
+  Piece mover = piece_on(s);
+  if (mover == NO_PIECE)
+      return false;
+
+  PieceSet jumpTypes = jump_capture_types();
+  if (!(jumpTypes & ALL_PIECES) && !(jumpTypes & type_of(mover)))
+      return false;
+
+  Color c = color_of(mover);
+  PieceType pt = type_of(mover);
+  Bitboard candidates = (attacks_from(c, pt, s) | moves_from(c, pt, s)) & ~pieces();
+  while (candidates)
+      if (jump_capture_square(s, pop_lsb(candidates)) != SQ_NONE)
+          return true;
+  return false;
+}
+
 /// Position::checked_pseudo_royals computes a bitboard of
 /// all pseudo-royal pieces of a particular color that are in check
 Bitboard Position::checked_pseudo_royals(Color c) const {
@@ -1271,6 +1296,30 @@ bool Position::legal(Move m) const {
   assert(color_of(moved_piece(m)) == us);
   assert(!count<KING>(us) || piece_on(square<KING>(us)) == make_piece(us, KING));
   assert(board_bb() & to);
+
+  if (forced_jump_continuation() && st->forcedJumpSquare != SQ_NONE)
+  {
+      Piece forcedPiece = piece_on(st->forcedJumpSquare);
+      if (forcedPiece != NO_PIECE && has_forced_jump_followup())
+      {
+          if (color_of(forcedPiece) != us)
+              return is_pass(m);
+          if (is_pass(m) || from != st->forcedJumpSquare || !is_jump_capture(m))
+              return false;
+      }
+  }
+  PieceSet jumpTypes = jump_capture_types();
+  bool jumpTypeMover = (jumpTypes & ALL_PIECES) || (jumpTypes & type_of(moved_piece(m)));
+  if (type_of(m) == NORMAL && jumpTypeMover && !empty(to))
+      return false;
+  if (type_of(m) == NORMAL && jumpTypeMover && empty(to))
+  {
+      int df = std::abs(int(file_of(to)) - int(file_of(from)));
+      int dr = std::abs(int(rank_of(to)) - int(rank_of(from)));
+      bool isHop = std::max(df, dr) == 2 && (df == 0 || dr == 0 || df == dr);
+      if (isHop && jump_capture_square(from, to) == SQ_NONE)
+          return false;
+  }
 
   // Illegal checks
   if ((!checking_permitted() || (sittuyin_promotion() && type_of(m) == PROMOTION) || (!drop_checks() && type_of(m) == DROP)) && gives_check(m))
@@ -1535,6 +1584,32 @@ bool Position::pseudo_legal(const Move m) const {
   Square from = from_sq(m);
   Square to = to_sq(m);
   Piece pc = moved_piece(m);
+
+  if (forced_jump_continuation() && st->forcedJumpSquare != SQ_NONE)
+  {
+      Piece forcedPiece = piece_on(st->forcedJumpSquare);
+      if (forcedPiece != NO_PIECE && has_forced_jump_followup())
+      {
+          if (color_of(forcedPiece) != us)
+              return is_pass(m);
+          if (is_pass(m))
+              return false;
+          if (from != st->forcedJumpSquare || !is_jump_capture(m))
+              return false;
+      }
+  }
+  PieceSet jumpTypes = jump_capture_types();
+  bool jumpTypeMover = (jumpTypes & ALL_PIECES) || (jumpTypes & type_of(pc));
+  if (type_of(m) == NORMAL && jumpTypeMover && !empty(to))
+      return false;
+  if (type_of(m) == NORMAL && jumpTypeMover && empty(to))
+  {
+      int df = std::abs(int(file_of(to)) - int(file_of(from)));
+      int dr = std::abs(int(rank_of(to)) - int(rank_of(from)));
+      bool isHop = std::max(df, dr) == 2 && (df == 0 || dr == 0 || df == dr);
+      if (isHop && jump_capture_square(from, to) == SQ_NONE)
+          return false;
+  }
 
   // Illegal moves to squares outside of board or to wall squares
   if (!(board_bb() & to))
@@ -1825,13 +1900,16 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   Piece pc = moved_piece(m);
   Piece captured = captured_piece(m);
   PieceType exchanged = exchange_piece(m);
+  Square jumpCapsq = is_jump_capture(m) ? jump_capture_square(from, to) : SQ_NONE;
   if (to == from)
   {
       assert((type_of(m) == PROMOTION && sittuyin_promotion()) || (is_pass(m) && (pass(us) || wall_or_move())));
       captured = NO_PIECE;
   }
-  st->capturedpromoted = is_promoted(to);
-  st->unpromotedCapturedPiece = captured ? unpromoted_piece_on(to) : NO_PIECE;
+  Square capturedSq = captured ? (jumpCapsq != SQ_NONE ? jumpCapsq : to) : SQ_NONE;
+  st->capturedpromoted = captured ? is_promoted(capturedSq) : false;
+  st->unpromotedCapturedPiece = captured ? unpromoted_piece_on(capturedSq) : NO_PIECE;
+  st->captureSquare = capturedSq;
   st->pass = is_pass(m);
 
   assert(color_of(pc) == us);
@@ -1877,6 +1955,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   if (captured)
   {
       Square capsq = to;
+      if (jumpCapsq != SQ_NONE)
+          capsq = jumpCapsq;
 
       if (type_of(m) == EN_PASSANT)
       {
@@ -2635,6 +2715,27 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       k ^= Zobrist::wall[gating_square(m)];
   }
 
+  if (forced_jump_continuation())
+  {
+      if (is_pass(m))
+      {
+          // Keep pending continuation across the forced opponent pass.
+          st->forcedJumpSquare = st->previous->forcedJumpSquare;
+      }
+      else if (jumpCapsq != SQ_NONE && type_of(m) != PROMOTION && type_of(m) != PIECE_PROMOTION)
+      {
+          st->forcedJumpSquare = to;
+      }
+      else
+      {
+          st->forcedJumpSquare = SQ_NONE;
+      }
+  }
+  else
+  {
+      st->forcedJumpSquare = SQ_NONE;
+  }
+
   updatePawnCheckZone();
   if (var->pointsCounting) {
       for (Color c : {WHITE, BLACK}) {
@@ -2837,6 +2938,8 @@ void Position::undo_move(Move m) {
               assert(var->enPassantRegion[sideToMove] & to);
               assert(piece_on(capsq) == NO_PIECE);
           }
+          else if (is_jump_capture(m))
+              capsq = st->captureSquare;
 
           put_piece(st->capturedPiece, capsq, st->capturedpromoted, st->unpromotedCapturedPiece); // Restore the captured piece
           if (capture_type() == HAND) {

@@ -139,6 +139,8 @@ struct Variant {
   bool wallOrMove = false;
   bool seirawanGating = false;
   bool commitGates = false;
+  PieceSet jumpCaptureTypes = NO_PIECE_SET;
+  bool forcedJumpContinuation = false;
   bool cambodianMoves = false;
   Bitboard diagonalLines = 0;
   bool pass[COLOR_NB] = {false, false};

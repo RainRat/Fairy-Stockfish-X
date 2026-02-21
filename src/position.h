@@ -88,6 +88,7 @@ struct StateInfo {
   bool       bikjang;
   Bitboard   chased;
   bool       pass;
+  Square     forcedJumpSquare;
   Move       move;
   int        repetition;
   PieceType removedGatingType;
@@ -206,6 +207,8 @@ public:
   bool has_exchange() const;
   PieceSet rescueFor(PieceType pt) const;
   CapturingRule capture_type() const;
+  PieceSet jump_capture_types() const;
+  bool forced_jump_continuation() const;
   EnclosingRule enclosing_drop() const;
   Bitboard drop_region(Color c) const;
   Bitboard drop_region(Color c, PieceType pt) const;
@@ -228,6 +231,7 @@ public:
   bool pass(Color c) const;
   bool pass_on_stalemate(Color c) const;
   bool multimove_pass(int ply) const;
+  bool has_forced_jump_followup() const;
   Bitboard promoted_soldiers(Color c) const;
   bool makpong() const;
   EnclosingRule flip_enclosed_pieces() const;
@@ -338,7 +342,9 @@ public:
   bool virtual_drop(Move m) const;
   bool capture(Move m) const;
   bool capture_or_promotion(Move m) const;
+  bool is_jump_capture(Move m) const;
   Square capture_square(Square to) const;
+  Square jump_capture_square(Square from, Square to) const;
   bool gives_check(Move m) const;
   Piece moved_piece(Move m) const;
   Piece captured_piece() const;
@@ -924,6 +930,16 @@ inline CapturingRule Position::capture_type() const {
   return var->captureType;
 }
 
+inline PieceSet Position::jump_capture_types() const {
+  assert(var != nullptr);
+  return var->jumpCaptureTypes;
+}
+
+inline bool Position::forced_jump_continuation() const {
+  assert(var != nullptr);
+  return var->forcedJumpContinuation;
+}
+
 inline bool Position::captures_to_hand() const {
   assert(var != nullptr);
   return var->captureType != MOVE_OUT;
@@ -1139,6 +1155,12 @@ inline Bitboard Position::diagonal_lines() const {
 
 inline bool Position::pass(Color c) const {
   assert(var != nullptr);
+  if (forced_jump_continuation() && has_forced_jump_followup())
+  {
+      Piece fp = piece_on(st->forcedJumpSquare);
+      if (fp != NO_PIECE && color_of(fp) != c)
+          return true;
+  }
   return var->pass[c] || var->passOnStalemate[c] || var->multimoveOffset;
 }
 
@@ -1874,13 +1896,50 @@ inline bool Position::is_chess960() const {
 
 inline bool Position::capture_or_promotion(Move m) const {
   assert(is_ok(m));
-  return type_of(m) == PROMOTION || type_of(m) == EN_PASSANT || (type_of(m) != CASTLING && !empty(to_sq(m)));
+  return type_of(m) == PROMOTION || capture(m);
+}
+
+inline Square Position::jump_capture_square(Square from, Square to) const {
+  assert(is_ok(from));
+  assert(is_ok(to));
+
+  Piece mover = piece_on(from);
+  PieceSet jumpTypes = jump_capture_types();
+  if (mover == NO_PIECE || (!(jumpTypes & ALL_PIECES) && !(jumpTypes & type_of(mover))) || !empty(to))
+      return SQ_NONE;
+
+  int df = std::abs(int(file_of(to)) - int(file_of(from)));
+  int dr = std::abs(int(rank_of(to)) - int(rank_of(from)));
+  if (std::max(df, dr) != 2 || !(df == 0 || dr == 0 || df == dr))
+      return SQ_NONE;
+
+  Square mid = make_square(File((int(file_of(from)) + int(file_of(to))) / 2),
+                           Rank((int(rank_of(from)) + int(rank_of(to))) / 2));
+  Piece jumped = piece_on(mid);
+  if (jumped == NO_PIECE || color_of(jumped) == color_of(mover))
+      return SQ_NONE;
+
+  return mid;
+}
+
+inline bool Position::is_jump_capture(Move m) const {
+  assert(is_ok(m));
+  return (type_of(m) == NORMAL || type_of(m) == PROMOTION) && jump_capture_square(from_sq(m), to_sq(m)) != SQ_NONE;
 }
 
 inline bool Position::capture(Move m) const {
   assert(is_ok(m));
+  if (type_of(m) == NORMAL || type_of(m) == PROMOTION)
+  {
+      Piece mover = moved_piece(m);
+      PieceSet jumpTypes = jump_capture_types();
+      if (mover != NO_PIECE && ((jumpTypes & ALL_PIECES) || (jumpTypes & type_of(mover))))
+          return jump_capture_square(from_sq(m), to_sq(m)) != SQ_NONE;
+  }
   // Castling is encoded as "king captures rook"
-  return (!empty(to_sq(m)) && type_of(m) != CASTLING && from_sq(m) != to_sq(m)) || type_of(m) == EN_PASSANT;
+  return ((!empty(to_sq(m)) && type_of(m) != CASTLING && from_sq(m) != to_sq(m))
+          || type_of(m) == EN_PASSANT
+          || is_jump_capture(m));
 }
 
 inline Square Position::capture_square(Square to) const {
@@ -1925,7 +1984,9 @@ inline Bitboard Position::fog_area() const {
 
 inline Piece Position::captured_piece(Move m) const {
   Square to = to_sq(m);
-  return piece_on(type_of(m) == EN_PASSANT ? capture_square(to) : to);
+  return piece_on(type_of(m) == EN_PASSANT ? capture_square(to)
+                  : is_jump_capture(m) ? jump_capture_square(from_sq(m), to)
+                                       : to);
 }
 
 inline const std::string Position::piece_to_partner() const {

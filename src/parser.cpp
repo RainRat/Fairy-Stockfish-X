@@ -858,6 +858,8 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("wallOrMove", v->wallOrMove);
     parse_attribute("seirawanGating", v->seirawanGating);
     parse_attribute("commitGates", v->commitGates);
+    parse_attribute("jumpCaptureTypes", v->jumpCaptureTypes, v->pieceToChar);
+    parse_attribute("forcedJumpContinuation", v->forcedJumpContinuation);
     parse_attribute("cambodianMoves", v->cambodianMoves);
     parse_attribute("diagonalLines", v->diagonalLines);
     parse_attribute("pass", v->pass[WHITE]);

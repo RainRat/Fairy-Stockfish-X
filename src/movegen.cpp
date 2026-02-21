@@ -357,11 +357,26 @@ namespace {
         Bitboard b3 = pos.piece_demotion() && pos.is_promoted(from) ? b1 : Bitboard(0);
         Bitboard pawnPromotions = (pos.promotion_pawn_types(Us) & Pt) ? (b & (Type == EVASIONS ? target : ~pos.pieces(Us)) & promotion_zone) : Bitboard(0);
         Bitboard epSquares = (pos.en_passant_types(Us) & Pt) ? (attacks & ~quiets & pos.ep_squares() & ~pos.pieces()) : Bitboard(0);
+        Bitboard jumpCaptures = 0;
+        PieceSet jumpTypes = pos.jump_capture_types();
+        if ((jumpTypes & ALL_PIECES) || (jumpTypes & Pt))
+        {
+            Bitboard candidates = (attacks | quiets) & ~pos.pieces();
+            while (candidates)
+            {
+                Square to = pop_lsb(candidates);
+                if (pos.jump_capture_square(from, to) != SQ_NONE)
+                    jumpCaptures |= to;
+            }
+        }
 
 
         // target squares considering pawn promotions
         if (pawnPromotions && pos.mandatory_pawn_promotion())
+        {
             b1 &= ~pawnPromotions;
+            jumpCaptures &= ~pawnPromotions;
+        }
 
         // Restrict target squares considering promotion zone
         if (b2 | b3)
@@ -391,6 +406,10 @@ namespace {
                 b3 &= pos.check_squares(type_of(pos.unpromoted_piece_on(from)));
         }
 
+        // Jump captures are emitted explicitly below in capture-generating modes.
+        // Exclude them from regular NORMAL generation to avoid duplicates.
+        b1 &= ~jumpCaptures;
+
         while (b1)
             moveList = make_move_and_gating<NORMAL>(pos, moveList, Us, from, pop_lsb(b1));
 
@@ -417,8 +436,12 @@ namespace {
 
         // En passant captures
         if (Type == CAPTURES || Type == EVASIONS || Type == NON_EVASIONS)
+        {
+            while (jumpCaptures)
+                moveList = make_move_and_gating<NORMAL>(pos, moveList, Us, from, pop_lsb(jumpCaptures));
             while (epSquares)
                 moveList = make_move_and_gating<EN_PASSANT>(pos, moveList, Us, from, pop_lsb(epSquares));
+        }
     }
 
     return moveList;
