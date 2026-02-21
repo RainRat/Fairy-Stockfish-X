@@ -592,12 +592,12 @@ inline Validation check_promoted_pieces(const std::string& firstFenPart, const V
                     continue; // Character validation will catch this
             }
 
-            // Ensure idx is within valid range for piece types
-            if (idx >= PIECE_TYPE_NB)
+            // Ensure idx is a valid piece index from pieceToChar tables.
+            if (idx >= PIECE_NB)
                 continue;
 
-            // Get the piece type directly from the index
-            PieceType pt = PieceType(idx);
+            // Convert a piece-table index (white/black) to piece type.
+            PieceType pt = type_of(Piece(idx));
 
             // Check if this piece type has a promoted form
             if (pt != NO_PIECE_TYPE && v->promotedPieceType[pt] == NO_PIECE_TYPE) {
@@ -615,7 +615,8 @@ inline std::vector<std::string> get_fen_parts(const std::string& fullFen, char d
     std::string curPart;
     std::stringstream ss(fullFen);
     while (std::getline(ss, curPart, delim))
-        fenParts.emplace_back(curPart);
+        if (!curPart.empty())
+            fenParts.emplace_back(curPart);
     return fenParts;
 }
 
