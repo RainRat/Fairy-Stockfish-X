@@ -155,6 +155,22 @@ Key cuckoo[8192];
 Move cuckooMove[8192];
 #endif
 
+inline int in_hand_zobrist_index(int count) {
+  return std::clamp(count, 0, SQUARE_NB - 1);
+}
+
+inline void xor_in_hand_count(Key& k, Piece pc, int oldCount, int newCount) {
+  k ^= Zobrist::inHand[pc][in_hand_zobrist_index(oldCount)]
+    ^ Zobrist::inHand[pc][in_hand_zobrist_index(newCount)];
+}
+
+inline void xor_points_bucket(Key& k, Color c, int points) {
+  if (points < 0)
+      return;
+  int idx = std::min(points, Stockfish::Zobrist::MAX_ZOBRIST_POINTS - 1);
+  k ^= Zobrist::points[c][idx];
+}
+
 
 /// Position::init() initializes at startup the various arrays used to compute hash keys
 
@@ -810,13 +826,7 @@ void Position::set_state(StateInfo* si) const {
 
   if (var->pointsCounting) {
       for (Color c : {WHITE, BLACK}) {
-          if (si->pointsCount[c] >= 0 && si->pointsCount[c] < Stockfish::Zobrist::MAX_ZOBRIST_POINTS) {
-              si->key ^= Zobrist::points[c][si->pointsCount[c]];
-          } else if (si->pointsCount[c] >= Stockfish::Zobrist::MAX_ZOBRIST_POINTS) {
-              si->key ^= Zobrist::points[c][Stockfish::Zobrist::MAX_ZOBRIST_POINTS - 1];
-          }
-          // Negative points are less common but could be handled if necessary
-          // else if (si->pointsCount[c] < 0) { /* XOR a generic key for negative points or handle as error */ }
+          xor_points_bucket(si->key, c, si->pointsCount[c]);
       }
   }
 
@@ -1869,12 +1879,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
                              : unpromotedCaptured ? ~unpromotedCaptured
                                                   : make_piece(~color_of(captured), main_promotion_pawn_type(color_of(captured)));
           add_to_hand(pieceToHand);
-          {
-              int newN = std::clamp(pieceCountInHand[color_of(pieceToHand)][type_of(pieceToHand)], 0, SQUARE_NB - 1);
-              int oldN = std::clamp(newN - 1, 0, SQUARE_NB - 1);
-              k ^=  Zobrist::inHand[pieceToHand][oldN]
-                  ^ Zobrist::inHand[pieceToHand][newN];
-          }
+          int newN = pieceCountInHand[color_of(pieceToHand)][type_of(pieceToHand)];
+          xor_in_hand_count(k, pieceToHand, newN - 1, newN);
 
           if (Eval::useNNUE)
           {
@@ -1890,12 +1896,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
                       ? unpromotedCaptured
                       : make_piece(color_of(captured), main_promotion_pawn_type(color_of(captured)));
           int n = add_to_prison(pieceToPrison);
-          {
-              int newN = std::clamp(n, 0, SQUARE_NB - 1);
-              int oldN = std::clamp(newN - 1, 0, SQUARE_NB - 1);
-              k ^=    Zobrist::inHand[pieceToPrison][oldN]
-                    ^ Zobrist::inHand[pieceToPrison][newN];
-          }
+          xor_in_hand_count(k, pieceToPrison, n - 1, n);
       }
       else if (Eval::useNNUE)
           dp.handPiece[1] = NO_PIECE;
@@ -1942,9 +1943,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       if (exchanged == NO_PIECE_TYPE)
       {
           int n = pieceCountInHand[color_of(pc_hand)][type_of(pc_hand)];
-          int newN = std::clamp(n, 0, SQUARE_NB - 1);
-          int oldN = std::clamp(newN - 1, 0, SQUARE_NB - 1);
-          k ^= Zobrist::inHand[pc_hand][oldN] ^ Zobrist::inHand[pc_hand][newN];
+          xor_in_hand_count(k, pc_hand, n - 1, n);
       }
       else
       {
@@ -1953,18 +1952,15 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           // Exchange drop mutates one hand bucket and two prison buckets.
           int handOld = pieceCountInHand[them][exchanged];
           int handNew = handOld + 1;
-          k ^= Zobrist::inHand[exchangedPiece][std::clamp(handOld, 0, SQUARE_NB - 1)]
-            ^ Zobrist::inHand[exchangedPiece][std::clamp(handNew, 0, SQUARE_NB - 1)];
+          xor_in_hand_count(k, exchangedPiece, handOld, handNew);
 
           int prisonOldEx = pieceCountInPrison[us][exchanged];
           int prisonNewEx = prisonOldEx - 1;
-          k ^= Zobrist::inHand[exchangedPiece][std::clamp(prisonOldEx, 0, SQUARE_NB - 1)]
-            ^ Zobrist::inHand[exchangedPiece][std::clamp(prisonNewEx, 0, SQUARE_NB - 1)];
+          xor_in_hand_count(k, exchangedPiece, prisonOldEx, prisonNewEx);
 
           int prisonOldDrop = pieceCountInPrison[them][type_of(pc)];
           int prisonNewDrop = prisonOldDrop - 1;
-          k ^= Zobrist::inHand[pc][std::clamp(prisonOldDrop, 0, SQUARE_NB - 1)]
-            ^ Zobrist::inHand[pc][std::clamp(prisonNewDrop, 0, SQUARE_NB - 1)];
+          xor_in_hand_count(k, pc, prisonOldDrop, prisonNewDrop);
       }
 
       // Reset rule 50 counter for irreversible drops
@@ -2118,18 +2114,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
               int addedN = add_to_prison(st->promotionPawn);
               int removedN = remove_from_prison(promotion);
               // Keep prison inventory hash in sync with promotion swap.
-              {
-                  int newN = std::clamp(addedN, 0, SQUARE_NB - 1);
-                  int oldN = std::clamp(newN - 1, 0, SQUARE_NB - 1);
-                  k ^= Zobrist::inHand[st->promotionPawn][oldN]
-                    ^ Zobrist::inHand[st->promotionPawn][newN];
-              }
-              {
-                  int newN = std::clamp(removedN, 0, SQUARE_NB - 1);
-                  int oldN = std::clamp(newN + 1, 0, SQUARE_NB - 1);
-                  k ^= Zobrist::inHand[promotion][oldN]
-                    ^ Zobrist::inHand[promotion][newN];
-              }
+              xor_in_hand_count(k, st->promotionPawn, addedN - 1, addedN);
+              xor_in_hand_count(k, promotion, removedN + 1, removedN);
           }
 
           if (Eval::useNNUE)
@@ -2537,12 +2523,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
                   add_to_hand(pieceToHand);
                   n = pieceCountInHand[color_of(pieceToHand)][type_of(pieceToHand)];
               }
-              {
-                  int newN = std::clamp(n, 0, SQUARE_NB - 1);
-                  int oldN = std::clamp(newN - 1, 0, SQUARE_NB - 1);
-                  k ^=  Zobrist::inHand[pieceToHand][oldN]
-                      ^ Zobrist::inHand[pieceToHand][newN];
-              }
+              xor_in_hand_count(k, pieceToHand, n - 1, n);
 
               if (Eval::useNNUE)
               {
@@ -2595,38 +2576,11 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
 
   updatePawnCheckZone();
   if (var->pointsCounting) {
-      // WHITE points change handling
-      if (st->pointsCount[WHITE] != st->previous->pointsCount[WHITE]) {
-          // XOR out the contribution of WHITE's old pointsCount from k
-          if (st->previous->pointsCount[WHITE] >= 0 && st->previous->pointsCount[WHITE] < Stockfish::Zobrist::MAX_ZOBRIST_POINTS) {
-              k ^= Zobrist::points[WHITE][st->previous->pointsCount[WHITE]];
-          } else if (st->previous->pointsCount[WHITE] >= Stockfish::Zobrist::MAX_ZOBRIST_POINTS) {
-              k ^= Zobrist::points[WHITE][Stockfish::Zobrist::MAX_ZOBRIST_POINTS - 1];
-          }
-
-          // XOR in the contribution of WHITE's new pointsCount to k
-          if (st->pointsCount[WHITE] >= 0 && st->pointsCount[WHITE] < Stockfish::Zobrist::MAX_ZOBRIST_POINTS) {
-              k ^= Zobrist::points[WHITE][st->pointsCount[WHITE]];
-          } else if (st->pointsCount[WHITE] >= Stockfish::Zobrist::MAX_ZOBRIST_POINTS) {
-              k ^= Zobrist::points[WHITE][Stockfish::Zobrist::MAX_ZOBRIST_POINTS - 1];
-          }
-      }
-
-      // BLACK points change handling
-      if (st->pointsCount[BLACK] != st->previous->pointsCount[BLACK]) {
-          // XOR out the contribution of BLACK's old pointsCount from k
-          if (st->previous->pointsCount[BLACK] >= 0 && st->previous->pointsCount[BLACK] < Stockfish::Zobrist::MAX_ZOBRIST_POINTS) {
-              k ^= Zobrist::points[BLACK][st->previous->pointsCount[BLACK]];
-          } else if (st->previous->pointsCount[BLACK] >= Stockfish::Zobrist::MAX_ZOBRIST_POINTS) {
-              k ^= Zobrist::points[BLACK][Stockfish::Zobrist::MAX_ZOBRIST_POINTS - 1];
-          }
-
-          // XOR in the contribution of BLACK's new pointsCount to k
-          if (st->pointsCount[BLACK] >= 0 && st->pointsCount[BLACK] < Stockfish::Zobrist::MAX_ZOBRIST_POINTS) {
-              k ^= Zobrist::points[BLACK][st->pointsCount[BLACK]];
-          } else if (st->pointsCount[BLACK] >= Stockfish::Zobrist::MAX_ZOBRIST_POINTS) {
-              k ^= Zobrist::points[BLACK][Stockfish::Zobrist::MAX_ZOBRIST_POINTS - 1];
-          }
+      for (Color c : {WHITE, BLACK}) {
+          if (st->pointsCount[c] == st->previous->pointsCount[c])
+              continue;
+          xor_points_bucket(k, c, st->previous->pointsCount[c]);
+          xor_points_bucket(k, c, st->pointsCount[c]);
       }
   }
 
@@ -2980,10 +2934,7 @@ Key Position::key_after(Move m) const {
               removedPiece = ~removedPiece;
           }
           {
-              int newN = std::clamp(n, 0, SQUARE_NB - 1);
-              int oldN = std::clamp(n + 1, 0, SQUARE_NB - 1);
-              k ^=  Zobrist::inHand[removedPiece][oldN]
-                  ^ Zobrist::inHand[removedPiece][newN];
+              xor_in_hand_count(k, removedPiece, n + 1, n);
           }
       }
   }
@@ -2996,9 +2947,8 @@ Key Position::key_after(Move m) const {
       if (exchanged == NO_PIECE_TYPE)
       {
           int n = pieceCountInHand[color_of(pc_hand)][type_of(pc_hand)];
-          int newN = std::clamp(n, 0, SQUARE_NB - 1);
-          int oldN = std::clamp(newN - 1, 0, SQUARE_NB - 1);
-          return k ^ Zobrist::inHand[pc_hand][oldN] ^ Zobrist::inHand[pc_hand][newN];
+          xor_in_hand_count(k, pc_hand, n - 1, n);
+          return k;
       }
 
       Color us = sideToMove;
@@ -3007,18 +2957,15 @@ Key Position::key_after(Move m) const {
 
       int handOld = pieceCountInHand[them][exchanged];
       int handNew = handOld + 1;
-      k ^= Zobrist::inHand[exchangedPiece][std::clamp(handOld, 0, SQUARE_NB - 1)]
-        ^ Zobrist::inHand[exchangedPiece][std::clamp(handNew, 0, SQUARE_NB - 1)];
+      xor_in_hand_count(k, exchangedPiece, handOld, handNew);
 
       int prisonOldEx = pieceCountInPrison[us][exchanged];
       int prisonNewEx = prisonOldEx - 1;
-      k ^= Zobrist::inHand[exchangedPiece][std::clamp(prisonOldEx, 0, SQUARE_NB - 1)]
-        ^ Zobrist::inHand[exchangedPiece][std::clamp(prisonNewEx, 0, SQUARE_NB - 1)];
+      xor_in_hand_count(k, exchangedPiece, prisonOldEx, prisonNewEx);
 
       int prisonOldDrop = pieceCountInPrison[them][type_of(pc)];
       int prisonNewDrop = prisonOldDrop - 1;
-      k ^= Zobrist::inHand[pc][std::clamp(prisonOldDrop, 0, SQUARE_NB - 1)]
-        ^ Zobrist::inHand[pc][std::clamp(prisonNewDrop, 0, SQUARE_NB - 1)];
+      xor_in_hand_count(k, pc, prisonOldDrop, prisonNewDrop);
       return k;
   }
 
