@@ -75,6 +75,7 @@ struct Variant {
   bool blastCenter = true;
   PieceSet blastImmuneTypes = NO_PIECE_SET;
   PieceSet mutuallyImmuneTypes = NO_PIECE_SET;
+  PieceSet captureForbidden[PIECE_TYPE_NB] = {};
   PieceSet petrifyOnCaptureTypes = NO_PIECE_SET;
   bool petrifyBlastPieces = false;
   int removeConnectN = 0;

@@ -690,6 +690,73 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("blastCenter", v->blastCenter);
     parse_attribute("blastImmuneTypes", v->blastImmuneTypes, v->pieceToChar);
     parse_attribute("mutuallyImmuneTypes", v->mutuallyImmuneTypes, v->pieceToChar);
+    auto parse_capture_map = [&](const std::string& key, bool allow) {
+        const auto& it = config.find(key);
+        if (it == config.end())
+            return;
+
+        std::string entry;
+        std::stringstream ss(it->second);
+        while (ss >> entry) {
+            size_t sep = entry.find(':');
+            if (sep == std::string::npos || sep == 0 || sep + 1 >= entry.size()) {
+                if (DoCheck)
+                    std::cerr << key << " - Invalid mapping token: " << entry << std::endl;
+                continue;
+            }
+
+            std::string attackers = entry.substr(0, sep);
+            std::string targets = entry.substr(sep + 1);
+
+            PieceSet attackerSet = NO_PIECE_SET;
+            if (attackers == "*") {
+                attackerSet = v->pieceTypes;
+            } else {
+                for (char a : attackers) {
+                    size_t idx = v->pieceToChar.find(toupper(a));
+                    if (idx == std::string::npos || idx >= PIECE_TYPE_NB) {
+                        if (DoCheck)
+                            std::cerr << key << " - Invalid attacker piece type: " << a << std::endl;
+                        continue;
+                    }
+                    attackerSet |= piece_set(PieceType(idx));
+                }
+            }
+
+            PieceSet targetSet = NO_PIECE_SET;
+            if (targets != "-") {
+                if (targets == "*") {
+                    targetSet = v->pieceTypes;
+                } else {
+                    for (char t : targets) {
+                        size_t idx = v->pieceToChar.find(toupper(t));
+                        if (idx == std::string::npos || idx >= PIECE_TYPE_NB) {
+                            if (DoCheck)
+                                std::cerr << key << " - Invalid target piece type: " << t << std::endl;
+                            continue;
+                        }
+                        targetSet |= piece_set(PieceType(idx));
+                    }
+                }
+            }
+
+            for (PieceSet ps = attackerSet; ps; ) {
+                PieceType attacker = pop_lsb(ps);
+                if (allow)
+                    v->captureForbidden[attacker] &= ~targetSet;
+                else
+                    v->captureForbidden[attacker] |= targetSet;
+            }
+        }
+    };
+    parse_capture_map("captureForbidden", false);
+    parse_capture_map("captureAllowed", true);
+
+    // Compatibility shim: legacy mutuallyImmuneTypes means same-type captures are forbidden.
+    for (PieceSet ps = v->mutuallyImmuneTypes; ps; ) {
+        PieceType pt = pop_lsb(ps);
+        v->captureForbidden[pt] |= pt;
+    }
     parse_attribute("petrifyOnCaptureTypes", v->petrifyOnCaptureTypes, v->pieceToChar);
     parse_attribute("petrifyBlastPieces", v->petrifyBlastPieces);
     parse_attribute("removeConnectN", v->removeConnectN);

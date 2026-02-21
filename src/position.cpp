@@ -1424,13 +1424,13 @@ bool Position::legal(Move m) const {
       }
   }
 
-  // mutuallyImmuneTypes (diplomacy in Atomar)-- In no-check Atomic, kings can be beside each other, but in Atomar, this prevents them from actually taking.
-  // Generalized to allow a custom set of pieces that can't capture a piece of the same type.
-  if (capture(m) &&
-      (mutually_immune_types() & type_of(moved_piece(m))) &&
-      (type_of(moved_piece(m)) == type_of(piece_on(to)))
-  )
-  return false;
+  if (capture(m) && type_of(m) != CASTLING)
+  {
+      PieceType attacker = type_of(moved_piece(m));
+      PieceType target = type_of(captured_piece(m));
+      if (attacker < PIECE_TYPE_NB && target < PIECE_TYPE_NB && (var->captureForbidden[attacker] & target))
+          return false;
+  }
 
   // En passant captures are a tricky special case. Because they are rather
   // uncommon, we do it simply by testing whether the king is attacked after
