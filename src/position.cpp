@@ -1123,7 +1123,7 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
   }
 
   // Use a faster version for selected fairy pieces
-  if (var->fastAttacks2)
+  if (fast_attacks2())
   {
       return  (pawn_attacks_bb(~c, s)             & pieces(c, PAWN, BREAKTHROUGH_PIECE, GOLD))
             | (attacks_bb<KNIGHT>(s)              & pieces(c, KNIGHT))
@@ -1544,14 +1544,14 @@ bool Position::pseudo_legal(const Move m) const {
                         : MoveList<NON_EVASIONS>(*this).contains(m);
 
   //if walling, and walling is not optional, or they didn't move, do the checks.
-  if (walling() && (!var->wallOrMove || (from==to)))
+  if (walling() && (!wall_or_move() || (from == to)))
   {
       Bitboard wallsquares = st->wallSquares;
 
       // Illegal wall square placement
       if (!((board_bb() & ~((pieces() ^ from) | to)) & gating_square(m)))
           return false;
-      if (!(var->wallingRegion[us] & gating_square(m)) || //putting a wall on disallowed square
+      if (!(walling_region(us) & gating_square(m)) || //putting a wall on disallowed square
           wallsquares & gating_square(m)) //or square already with a wall
           return false;
       if (walling_rule() == ARROW && !(moves_bb(us, type_of(pc), to, pieces() ^ from) & gating_square(m)))
@@ -1805,7 +1805,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   PieceType exchanged = exchange_piece(m);
   if (to == from)
   {
-      assert((type_of(m) == PROMOTION && sittuyin_promotion()) || (is_pass(m) && (pass(us) || var->wallOrMove )));
+      assert((type_of(m) == PROMOTION && sittuyin_promotion()) || (is_pass(m) && (pass(us) || wall_or_move())));
       captured = NO_PIECE;
   }
   st->capturedpromoted = is_promoted(to);
@@ -1932,7 +1932,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       // (captured piece count was decremented before this line; old count is pieceCount[captured] + 1)
       st->materialKey ^= Zobrist::psq[captured][pieceCount[captured] + 1] ^ Zobrist::psq[captured][pieceCount[captured]];
 #ifndef NO_THREADS
-      prefetch(thisThread->materialTable[material_key(var->endgameEval)]);
+      prefetch(thisThread->materialTable[material_key(endgame_eval())]);
 #endif
       // Reset rule 50 counter
       st->rule50 = 0;
@@ -2440,7 +2440,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
 
   // Add gated wall square
   // if wallOrMove, only actually place the wall if they gave up their move
-  if (walling() && (!var->wallOrMove || (from==to)))
+  if (walling() && (!wall_or_move() || (from == to)))
   {
       // Reset wall squares for duck walling
       if (walling_rule() == DUCK)
@@ -2560,7 +2560,7 @@ void Position::undo_move(Move m) {
 
   assert(type_of(m) == DROP || empty(from) || type_of(m) == CASTLING || is_gating(m)
          || (type_of(m) == PROMOTION && sittuyin_promotion())
-         || (is_pass(m) && (pass(us) || var->wallOrMove))
+         || (is_pass(m) && (pass(us) || wall_or_move()))
          || (commit_gates() && st->removedGatingType > NO_PIECE_TYPE)
   );
   assert(type_of(st->capturedPiece) != KING);
@@ -3509,7 +3509,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
   }
 
   // Check for bikjang rule (Janggi), double passing, or board running full
-  if (   (st->pliesFromNull > 0 && ((st->bikjang && st->previous->bikjang) || ((st->pass && st->previous->pass)&&!var->wallOrMove)))
+  if (   (st->pliesFromNull > 0 && ((st->bikjang && st->previous->bikjang) || ((st->pass && st->previous->pass) && !wall_or_move())))
       || (var->adjudicateFullBoard && !(~pieces() & board_bb())))
   {
       result = var->materialCounting ? convert_mate_value(material_counting_result(), ply) : VALUE_DRAW;
