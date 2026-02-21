@@ -67,6 +67,7 @@ struct StateInfo {
   Bitboard   checkersBB;
   Piece      unpromotedCapturedPiece;
   Piece      unpromotedBycatch[SQUARE_NB];
+  Bitboard   bycatchSquares;
   Bitboard   promotedBycatch;
   Bitboard   demotedBycatch;
   Bitboard   blastPromotedSquares;

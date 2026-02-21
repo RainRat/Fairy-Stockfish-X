@@ -22,7 +22,6 @@
 #include <cstring> // For std::memset, std::memcmp
 #include <iomanip>
 #include <sstream>
-#include <vector>
 
 #include "bitboard.h"
 #include "misc.h"
@@ -1781,6 +1780,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   st = &newSt;
   st->move = m;
   st->blastPromotedSquares = 0;
+  st->bycatchSquares = 0;
 
   if (commit_gates()) {
       st->removedGatingType = NO_PIECE_TYPE;
@@ -2312,6 +2312,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       Bitboard blast_mask = 0;
       Bitboard connect_mask = 0;
       std::memset(st->unpromotedBycatch, 0, sizeof(st->unpromotedBycatch));
+      st->bycatchSquares = 0;
       st->promotedBycatch = st->demotedBycatch = Bitboard(0);
       st->blastPromotedSquares = 0;
 
@@ -2450,6 +2451,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
               if (promoted != NO_PIECE_TYPE) {
                   Piece promotedPiece = make_piece(bc, promoted);
                   st->unpromotedBycatch[bsq] = bpc;
+                  st->bycatchSquares |= bsq;
                   st->blastPromotedSquares |= bsq;
 
                   remove_piece(bsq);
@@ -2491,6 +2493,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           bool capturedPromoted = is_promoted(bsq);
           Piece unpromotedCaptured = unpromoted_piece_on(bsq);
           st->unpromotedBycatch[bsq] = unpromotedCaptured ? unpromotedCaptured : bpc;
+          st->bycatchSquares |= bsq;
           if (unpromotedCaptured)
               st->demotedBycatch |= bsq;
           else if (capturedPromoted)
@@ -2670,7 +2673,7 @@ void Position::undo_move(Move m) {
       //It's ok to just loop through all, not taking into account immunities/pawnness
       //because we'll just not find the piece in unpromotedBycatch.
       //Same if surround_capture_opposite is true, king is superset of all directions.
-      Bitboard restoreMask = remove_connect_n() > 0 ? AllSquares : (attacks_bb<KING>(to) | to);
+      Bitboard restoreMask = st->bycatchSquares;
       while (restoreMask)
       {
           Square bsq = pop_lsb(restoreMask);
@@ -3530,7 +3533,8 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
 
   // Collinear-n
   if ((collinear_n() > 0) && (popcount(connectPieces) >= collinear_n())) {
-      std::vector<Bitboard> checkedLines;
+      Bitboard checkedLines[SQUARE_NB * 8];
+      int checkedLinesCount = 0;
       Bitboard pieces = connectPieces;
       while (pieces) {
 
@@ -3567,9 +3571,17 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
 
 
               Bitboard line = line_bb(s, shifted_square);
-              if (std::find(checkedLines.begin(), checkedLines.end(), line) != checkedLines.end())
+              bool seen = false;
+              for (int i = 0; i < checkedLinesCount; ++i) {
+                  if (checkedLines[i] == line) {
+                      seen = true;
+                      break;
+                  }
+              }
+              if (seen)
                   continue;
-              checkedLines.push_back(line);
+              if (checkedLinesCount < int(sizeof(checkedLines) / sizeof(checkedLines[0])))
+                  checkedLines[checkedLinesCount++] = line;
               int piece_count = popcount(line & connectPieces);
               if (piece_count >= collinear_n()) {
                   result = convert_mate_value(-connect_value(), ply);
