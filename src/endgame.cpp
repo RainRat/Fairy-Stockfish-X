@@ -1044,6 +1044,16 @@ Value Endgame<KN, EG_EVAL_ANTI>::operator()(const Position& pos) const {
 
   Square KSq = pos.square<COMMONER>(strongSide);
   Square NSq = pos.square<KNIGHT>(weakSide);
+#ifdef FSX_F474_EXPERIMENTAL_EG
+  // f474f12a behavior: simpler anti-KN heuristic.
+  if (pos.side_to_move() == strongSide && (attacks_bb<KNIGHT>(NSq) & KSq))
+      return -VALUE_KNOWN_WIN;
+  if (pos.side_to_move() == weakSide && (attacks_bb<KNIGHT>(NSq) & attacks_bb<KING>(KSq)))
+      return VALUE_KNOWN_WIN;
+
+  Value result = VALUE_KNOWN_WIN + push_to_edge(NSq, pos) - push_to_edge(KSq, pos);
+  return strongSide == pos.side_to_move() ? result : -result;
+#else
   Bitboard kingAttacks = attacks_bb<KING>(KSq) & pos.board_bb();
   Bitboard knightAttacks = attacks_bb<KNIGHT>(NSq) & pos.board_bb();
   bool strongSideToMove = pos.side_to_move() == strongSide;
@@ -1064,6 +1074,7 @@ Value Endgame<KN, EG_EVAL_ANTI>::operator()(const Position& pos) const {
       result += VALUE_KNOWN_WIN;
 
   return strongSideToMove ? result : -result;
+#endif
 }
 
 /// N vs N. The side to move always wins/loses if the knights are on
