@@ -2275,7 +2275,6 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
               st->capturedGatingType = uncommit_piece(BLACK, file_of(to));
           }
       }
-      else st->removedGatingType = NO_PIECE_TYPE;
   }
   // Remove gates
   if (gating())
@@ -2630,8 +2629,8 @@ void Position::undo_move(Move m) {
   }
 
   if(commit_gates() && st->removedGatingType > NO_PIECE_TYPE){
-      commit_piece(piece_on(from), file_of(from));
-      remove_piece( from );
+      // Restore the removed committed slot; no board piece should be removed here.
+      commit_piece(make_piece(us, st->removedGatingType), file_of(from));
   }
   if (commit_gates() && st->capturedPiece && st->capturedGatingType > NO_PIECE_TYPE){
       // return musketeer piece fronted by the captured piece
@@ -2764,9 +2763,8 @@ void Position::do_castling(Color us, Square from, Square& to, Square& rfrom, Squ
   put_piece(castlingRookPiece, Do ? rto : rfrom);
 
   if (!Do && commit_gates() && st->removedCastlingGatingType > NO_PIECE_TYPE) {
-      // On undo, only re-commit after the rook has been restored to rfrom.
-      commit_piece(piece_on(rfrom), file_of(rfrom));
-      remove_piece(rfrom);
+      // Restore the removed committed slot for the rook file.
+      commit_piece(make_piece(us, st->removedCastlingGatingType), file_of(rfrom));
   }
 
   if (Do && commit_gates() && has_committed_piece(us, file_of(rfrom))) {
