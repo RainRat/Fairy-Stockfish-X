@@ -248,18 +248,18 @@ void Bitboards::init_pieces() {
               riderTypes = NO_RIDER;
               for (auto const& [d, limit] : pi->steps[initial][modality])
               {
-                  if (limit > 0 && LameDabbabaDirections.find(d) != LameDabbabaDirections.end())
+                  if (limit && LameDabbabaDirections.find(d) != LameDabbabaDirections.end())
                       riderTypes |= RIDER_LAME_DABBABA;
-                  if (limit > 0 && HorseDirections.find(d) != HorseDirections.end())
+                  if (limit && HorseDirections.find(d) != HorseDirections.end())
                       riderTypes |= RIDER_HORSE;
-                  if (limit > 0 && ElephantDirections.find(d) != ElephantDirections.end())
+                  if (limit && ElephantDirections.find(d) != ElephantDirections.end())
                       riderTypes |= RIDER_ELEPHANT;
-                  if (limit > 0 && JanggiElephantDirections.find(d) != JanggiElephantDirections.end())
+                  if (limit && JanggiElephantDirections.find(d) != JanggiElephantDirections.end())
                       riderTypes |= RIDER_JANGGI_ELEPHANT;
               }
               for (auto const& [d, limit] : pi->slider[initial][modality])
               {
-                  if (limit < 0)
+                  if (limit == DYNAMIC_SLIDER_LIMIT)
                       continue;
                   if (BishopDirections.find(d) != BishopDirections.end())
                       riderTypes |= RIDER_BISHOP;
