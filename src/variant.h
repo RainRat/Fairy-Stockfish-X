@@ -70,12 +70,15 @@ struct Variant {
   bool pieceDemotion = false;
   bool blastOnCapture = false;
   bool blastOnMove = false;
+  bool blastPromotion = false;
   bool blastDiagonals = true;
   bool blastCenter = true;
   PieceSet blastImmuneTypes = NO_PIECE_SET;
   PieceSet mutuallyImmuneTypes = NO_PIECE_SET;
   PieceSet petrifyOnCaptureTypes = NO_PIECE_SET;
   bool petrifyBlastPieces = false;
+  int removeConnectN = 0;
+  bool removeConnectNByType = false;
   bool surroundCaptureOpposite = false;
   bool surroundCaptureEdge = false;
   Bitboard surroundCaptureMaxRegion = 0;

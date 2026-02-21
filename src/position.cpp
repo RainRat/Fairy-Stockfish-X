@@ -1202,6 +1202,8 @@ Bitboard Position::checked_pseudo_royals(Color c) const {
   // when the attacker is inside the blast radius. Build a bitboard of such
   // blast-immune pieces.
   Bitboard blastImmune = blast_immune_bb();
+  if (blast_promotion())
+      pseudoRoyalsTheirs = 0;
 
   while (pseudoRoyals)
   {
@@ -1768,6 +1770,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   newSt.previous = st;
   st = &newSt;
   st->move = m;
+  st->blastPromotedSquares = 0;
 
   if (commit_gates()) {
       st->removedGatingType = NO_PIECE_TYPE;
@@ -2312,21 +2315,26 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
        (
          ( surround_capture_opposite() || surround_capture_edge() ) ||
          ( captured && (blast_on_capture() || var->petrifyOnCaptureTypes) ) ||
-         ( blast_on_move() && !captured )
+         ( blast_on_move() && !captured ) ||
+         ( remove_connect_n() > 0 )
        )
        && !is_pass(m)
      )
 
   {
       Bitboard removal_mask = 0;
+      Bitboard blast_mask = 0;
+      Bitboard connect_mask = 0;
       std::memset(st->unpromotedBycatch, 0, sizeof(st->unpromotedBycatch));
       st->promotedBycatch = st->demotedBycatch = Bitboard(0);
+      st->blastPromotedSquares = 0;
 
       if ( ( captured && (blast_on_capture() || var->petrifyOnCaptureTypes) ) ||
            ( blast_on_move() && !captured) ) {
 
-          removal_mask = (blast_on_capture() || blast_on_move()) ? blast_squares(to)
+          blast_mask = (blast_on_capture() || blast_on_move()) ? blast_squares(to)
               : (var->petrifyOnCaptureTypes & type_of(pc) ? square_bb(to) : Bitboard(0));
+          removal_mask |= blast_mask;
       };
 
       //Use the same removal_mask variable; surround_capture only ORs.
@@ -2370,11 +2378,114 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           };
       };
 
+      if (remove_connect_n() > 0) {
+          auto mark_line = [&](Bitboard line) {
+              for (Direction d : var->connectDirections) {
+                  Bitboard temp = line;
+                  for (int i = 1; i < remove_connect_n(); ++i)
+                      temp &= shift(d, temp);
+
+                  Bitboard lineStarts = temp;
+                  while (lineStarts) {
+                      Square start = pop_lsb(lineStarts);
+                      for (int i = 0; i < remove_connect_n(); ++i) {
+                          Square sq = start - i * d;
+                          if (is_ok(sq)) {
+                              removal_mask |= sq;
+                              connect_mask |= sq;
+                          }
+                      }
+                  }
+              }
+          };
+
+          if (remove_connect_n_by_type()) {
+              for (PieceSet ps = variant()->pieceTypes; ps; ) {
+                  PieceType pt = pop_lsb(ps);
+                  Bitboard line = pieces(pt);
+
+                  // removeConnectN is evaluated after move effects. With blastPromotion,
+                  // adjust per-type occupancy to the post-promotion type map.
+                  if (blast_promotion() && blast_mask) {
+                      Bitboard b = blast_mask;
+                      while (b) {
+                          Square sq = pop_lsb(b);
+                          Piece p = piece_on(sq);
+                          if (p == NO_PIECE)
+                              continue;
+
+                          PieceType fromPt = type_of(p);
+                          PieceType toPt = promoted_piece_type(fromPt);
+
+                          if (fromPt == pt)
+                              line &= ~square_bb(sq);
+                          if (toPt == pt)
+                              line |= square_bb(sq);
+                      }
+                  }
+
+                  mark_line(line);
+              }
+          } else {
+              Bitboard whiteLine = pieces(WHITE);
+              Bitboard blackLine = pieces(BLACK);
+
+              // Color ownership is stable under blastPromotion, except when a piece
+              // has no promoted target and is therefore removed.
+              if (blast_promotion() && blast_mask) {
+                  Bitboard b = blast_mask;
+                  while (b) {
+                      Square sq = pop_lsb(b);
+                      Piece p = piece_on(sq);
+                      if (p == NO_PIECE)
+                          continue;
+                      if (promoted_piece_type(type_of(p)) == NO_PIECE_TYPE) {
+                          if (color_of(p) == WHITE)
+                              whiteLine &= ~square_bb(sq);
+                          else
+                              blackLine &= ~square_bb(sq);
+                      }
+                  }
+              }
+
+              mark_line(whiteLine);
+              mark_line(blackLine);
+          }
+      }
+
       while (removal_mask)
       {
           Square bsq = pop_lsb(removal_mask);
           Piece bpc = piece_on(bsq);
           Color bc = color_of(bpc);
+
+          if (blast_promotion() && (blast_mask & bsq) && !(connect_mask & bsq)) {
+              PieceType promoted = promoted_piece_type(type_of(bpc));
+              if (promoted != NO_PIECE_TYPE) {
+                  Piece promotedPiece = make_piece(bc, promoted);
+                  st->unpromotedBycatch[bsq] = bpc;
+                  st->blastPromotedSquares |= bsq;
+
+                  remove_piece(bsq);
+                  put_piece(promotedPiece, bsq);
+
+                  if (Eval::useNNUE) {
+                      dp.piece[dp.dirty_num] = promotedPiece;
+                      dp.handPiece[dp.dirty_num] = NO_PIECE;
+                      dp.from[dp.dirty_num] = SQ_NONE;
+                      dp.to[dp.dirty_num] = bsq;
+                      dp.dirty_num++;
+                  }
+
+                  k ^= Zobrist::psq[bpc][bsq] ^ Zobrist::psq[promotedPiece][bsq];
+                  st->materialKey ^= Zobrist::psq[promotedPiece][pieceCount[promotedPiece] - 1]
+                                  ^ Zobrist::psq[bpc][pieceCount[bpc]];
+                  st->nonPawnMaterial[bc] += PieceValue[MG][promotedPiece]
+                                          - (type_of(bpc) != PAWN ? PieceValue[MG][bpc] : 0);
+                  continue;
+              }
+          }
+
           if (type_of(bpc) != PAWN)
               st->nonPawnMaterial[bc] -= PieceValue[MG][bpc];
 
@@ -2598,30 +2709,36 @@ void Position::undo_move(Move m) {
   if (
        ( surround_capture_opposite() || surround_capture_edge() ) ||
        ( st->capturedPiece && (blast_on_capture() || var->petrifyOnCaptureTypes) ) ||
-       ( blast_on_move() && !st->capturedPiece )
+       ( blast_on_move() && !st->capturedPiece ) ||
+       ( remove_connect_n() > 0 )
      )
   {
       //It's ok to just loop through all, not taking into account immunities/pawnness
       //because we'll just not find the piece in unpromotedBycatch.
       //Same if surround_capture_opposite is true, king is superset of all directions.
-      Bitboard blast = attacks_bb<KING>(to) | to;
-      while (blast)
+      Bitboard restoreMask = remove_connect_n() > 0 ? AllSquares : (attacks_bb<KING>(to) | to);
+      while (restoreMask)
       {
-          Square bsq = pop_lsb(blast);
+          Square bsq = pop_lsb(restoreMask);
           Piece unpromotedBpc = st->unpromotedBycatch[bsq];
           Piece bpc = st->demotedBycatch & bsq ? make_piece(color_of(unpromotedBpc), promoted_piece_type(type_of(unpromotedBpc)))
                                                : unpromotedBpc;
           bool isPromoted = (st->promotedBycatch | st->demotedBycatch) & bsq;
+          bool wasBlastPromoted = bool(st->blastPromotedSquares & bsq);
 
           // Update board and piece lists
-          if (bpc)
+          if (bpc || wasBlastPromoted)
           {
+              if (wasBlastPromoted && piece_on(bsq) != NO_PIECE) {
+                  remove_piece(bsq);
+                  board[bsq] = NO_PIECE;
+              }
               put_piece(bpc, bsq, isPromoted, st->demotedBycatch & bsq ? unpromotedBpc : NO_PIECE);
-              if (capture_type() == HAND) {
+              if (!wasBlastPromoted && capture_type() == HAND) {
                   remove_from_hand(!drop_loop() && (st->promotedBycatch & bsq)
                                     ? make_piece(~color_of(unpromotedBpc), PAWN)
                                     : ~unpromotedBpc);
-              } else if (capture_type() == PRISON) {
+              } else if (!wasBlastPromoted && capture_type() == PRISON) {
                   remove_from_prison(!drop_loop() && (st->promotedBycatch & bsq)
                                     ? make_piece(color_of(unpromotedBpc), PAWN)
                                     : unpromotedBpc);

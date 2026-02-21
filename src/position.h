@@ -69,6 +69,7 @@ struct StateInfo {
   Piece      unpromotedBycatch[SQUARE_NB];
   Bitboard   promotedBycatch;
   Bitboard   demotedBycatch;
+  Bitboard   blastPromotedSquares;
   StateInfo* previous;
   Bitboard   blockersForKing[COLOR_NB];
   Bitboard   pinners[COLOR_NB];
@@ -151,12 +152,15 @@ public:
   bool piece_demotion() const;
   bool blast_on_capture() const;
   bool blast_on_move() const;
+  bool blast_promotion() const;
   bool blast_diagonals() const;
   bool blast_center() const;
   PieceSet blast_immune_types() const;
   Bitboard blast_immune_bb() const;
   Bitboard blast_pattern(Square to) const;
   Bitboard blast_squares(Square to) const;
+  int remove_connect_n() const;
+  bool remove_connect_n_by_type() const;
   PieceSet mutually_immune_types() const;
   bool surround_capture_opposite() const;
   bool surround_capture_edge() const;
@@ -608,6 +612,11 @@ inline bool Position::blast_on_move() const {
   return var->blastOnMove;
 }
 
+inline bool Position::blast_promotion() const {
+  assert(var != nullptr);
+  return var->blastPromotion;
+}
+
 inline bool Position::blast_diagonals() const {
   assert(var != nullptr);
   return var->blastDiagonals;
@@ -644,6 +653,16 @@ inline Bitboard Position::blast_squares(Square to) const {
     Bitboard blastArea = (blastPattern & relevantPieces) | (blast_center() ? square_bb(to) : Bitboard(0));
 
     return blastArea & (pieces() ^ blastImmune);
+}
+
+inline int Position::remove_connect_n() const {
+  assert(var != nullptr);
+  return var->removeConnectN;
+}
+
+inline bool Position::remove_connect_n_by_type() const {
+  assert(var != nullptr);
+  return var->removeConnectNByType;
 }
 
 inline PieceSet Position::mutually_immune_types() const {
