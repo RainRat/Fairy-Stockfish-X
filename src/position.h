@@ -253,6 +253,7 @@ public:
   int connect_nxn() const;
   int collinear_n() const;
   int connect_group() const;
+  Value connect_value() const;
   bool points_counting() const;
   PointsRule points_rule_captures() const;
   int points_goal() const;
@@ -1388,6 +1389,11 @@ inline int Position::collinear_n() const {
 inline int Position::connect_group() const {
   assert(var != nullptr);
   return var->connectGroup;
+}
+
+inline Value Position::connect_value() const {
+  assert(var != nullptr);
+  return var->connectValue;
 }
 
 inline CheckCount Position::checks_remaining(Color c) const {

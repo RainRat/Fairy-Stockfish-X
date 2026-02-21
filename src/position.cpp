@@ -3371,7 +3371,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
               b &= shift(d, b);
           if (b)
           {
-              result = convert_mate_value(-var->connectValue, ply);
+              result = convert_mate_value(-connect_value(), ply);
               return true;
           }
       }
@@ -3390,7 +3390,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
 
           if (newBitboard & target) {
               // A connection has been made
-              result = convert_mate_value(-var->connectValue, ply);
+              result = convert_mate_value(-connect_value(), ply);
               return true;
           }
 
@@ -3410,7 +3410,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
           connectors &= shift<SOUTH>(connectors) & shift<EAST>(connectors) & shift<SOUTH_EAST>(connectors);
       if (connectors)
       {
-          result = convert_mate_value(-var->connectValue, ply);
+          result = convert_mate_value(-connect_value(), ply);
           return true;
       }
   }
@@ -3455,7 +3455,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
               Bitboard line = line_bb(s, shifted_square);
               int piece_count = popcount(line & connectPieces);
               if (piece_count >= collinear_n()) {
-                  result = convert_mate_value(-var->connectValue, ply);
+                  result = convert_mate_value(-connect_value(), ply);
                   return true;
               }
           }
@@ -3501,7 +3501,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
               }
 
               if (group_size >= targetGroupSize) {
-                  result = convert_mate_value(-var->connectValue, ply); // ~sideToMove won
+                  result = convert_mate_value(-connect_value(), ply); // ~sideToMove won
                   return true;
               }
           }

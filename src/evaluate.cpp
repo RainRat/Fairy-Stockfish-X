@@ -1289,7 +1289,7 @@ namespace {
     }
 
     // Connect-n
-    if (pos.connect_n() > 0 && (pos.variant()->connectValue != VALUE_DRAW))
+    if (pos.connect_n() > 0 && (pos.connect_value() != VALUE_DRAW))
     {
         //Calculate eligible pieces for connection once.
         //Still consider all opponent pieces as blocking.
@@ -1315,7 +1315,7 @@ namespace {
                 for (int j = 0; j < pos.connect_n(); j++)
                     if (connectPiecesUs & (s - j * d))
                         c++;
-                score += (pos.variant()->connectValue==VALUE_MATE ? 1 : -1) * //At least change the sign for misere variants.
+                score += (pos.connect_value() == VALUE_MATE ? 1 : -1) * //At least change the sign for misere variants.
                              (make_score(200, 200)  * c / (pos.connect_n() - c) / (pos.connect_n() - c));
             }
         }
