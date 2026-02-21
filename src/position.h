@@ -1593,7 +1593,7 @@ inline Bitboard Position::dynamic_slider_bb(const std::map<Direction,int>& direc
 }
 
 inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s) const {
-  if (var->fastAttacks || var->fastAttacks2)
+  if (fast_attacks() || fast_attacks2())
       return attacks_bb(c, pt, s, byTypeBB[ALL_PIECES]) & board_bb();
 
   PieceType movePt = pt == KING ? king_type() : pt;
@@ -1691,7 +1691,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
         }
     }
 
-  if (var->fastAttacks || var->fastAttacks2)
+  if (fast_attacks() || fast_attacks2())
       return (moves_bb(c, pt, s, byTypeBB[ALL_PIECES]) | extraDestinations) & board_bb();
 
   PieceType movePt = pt == KING ? king_type() : pt;
