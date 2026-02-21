@@ -411,7 +411,8 @@ namespace {
                 mask = mask | PieceType(idx2);
             }
         }
-        v->hostageExchange[idx] = mask;
+        if (!readPiece && idx != std::string::npos)
+            v->hostageExchange[idx] = mask;
     }
 
 } // namespace

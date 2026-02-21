@@ -2098,8 +2098,21 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           remove_piece(to);
           put_piece(promotion, to, true, type_of(m) == PIECE_PROMOTION ? pc : NO_PIECE);
           if (prison_pawn_promotion() && type_of(m) == PROMOTION) {
-              add_to_prison(st->promotionPawn);
-              remove_from_prison(promotion);
+              int addedN = add_to_prison(st->promotionPawn);
+              int removedN = remove_from_prison(promotion);
+              // Keep prison inventory hash in sync with promotion swap.
+              {
+                  int newN = std::clamp(addedN, 0, SQUARE_NB - 1);
+                  int oldN = std::clamp(newN - 1, 0, SQUARE_NB - 1);
+                  k ^= Zobrist::inHand[st->promotionPawn][oldN]
+                    ^ Zobrist::inHand[st->promotionPawn][newN];
+              }
+              {
+                  int newN = std::clamp(removedN, 0, SQUARE_NB - 1);
+                  int oldN = std::clamp(newN + 1, 0, SQUARE_NB - 1);
+                  k ^= Zobrist::inHand[promotion][oldN]
+                    ^ Zobrist::inHand[promotion][newN];
+              }
           }
 
           if (Eval::useNNUE)
@@ -2728,11 +2741,6 @@ void Position::do_castling(Color us, Square from, Square& to, Square& rfrom, Squ
   to = make_square(kingSide ? castling_kingside_file() : castling_queenside_file(), castling_rank(us));
   rto = to + (kingSide ? WEST : EAST);
 
-  if (!Do && commit_gates() && st->removedCastlingGatingType > NO_PIECE_TYPE) {
-      commit_piece(piece_on(rfrom), file_of(rfrom));
-      remove_piece(rfrom);
-  }
-
   Piece castlingKingPiece = piece_on(Do ? from : to);
   Piece castlingRookPiece = piece_on(Do ? rfrom : rto);
 
@@ -2754,6 +2762,12 @@ void Position::do_castling(Color us, Square from, Square& to, Square& rfrom, Squ
   board[Do ? from : to] = board[Do ? rfrom : rto] = NO_PIECE; // Since remove_piece doesn't do it for us
   put_piece(castlingKingPiece, Do ? to : from);
   put_piece(castlingRookPiece, Do ? rto : rfrom);
+
+  if (!Do && commit_gates() && st->removedCastlingGatingType > NO_PIECE_TYPE) {
+      // On undo, only re-commit after the rook has been restored to rfrom.
+      commit_piece(piece_on(rfrom), file_of(rfrom));
+      remove_piece(rfrom);
+  }
 
   if (Do && commit_gates() && has_committed_piece(us, file_of(rfrom))) {
       st->removedCastlingGatingType = drop_committed_piece(us, file_of(rfrom));

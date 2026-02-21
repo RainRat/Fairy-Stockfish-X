@@ -131,6 +131,9 @@ cannon = c
 [multipawn:chess]
 soldier = s
 pawnTypes = ps
+
+[hostageblank:chess]
+hostageExchange =
 """
 
 sf.load_variant_config(ini_text)
@@ -310,6 +313,7 @@ class TestPyffish(unittest.TestCase):
     def test_variants_loaded(self):
         variants = sf.variants()
         self.assertTrue("shogun" in variants)
+        self.assertTrue("hostageblank" in variants)
 
     def test_set_option(self):
         result = sf.set_option("UCI_Variant", "capablanca")
