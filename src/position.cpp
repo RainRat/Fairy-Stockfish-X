@@ -22,6 +22,7 @@
 #include <cstring> // For std::memset, std::memcmp
 #include <iomanip>
 #include <sstream>
+#include <unordered_set>
 
 #include "bitboard.h"
 #include "misc.h"
@@ -1922,7 +1923,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       // Update material hash key and prefetch access to materialTable
       k ^= Zobrist::psq[captured][capsq];
       // (captured piece count was decremented before this line; old count is pieceCount[captured] + 1)
-      st->materialKey ^= Zobrist::psq[captured][pieceCount[captured] + 1] ^ Zobrist::psq[captured][pieceCount[captured]];
+      st->materialKey ^= Zobrist::psq[captured][pieceCount[captured]];
 #ifndef NO_THREADS
       prefetch(thisThread->materialTable[material_key(endgame_eval())]);
 #endif
@@ -3465,6 +3466,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
 
   // Collinear-n
   if ((collinear_n() > 0) && (popcount(connectPieces) >= collinear_n())) {
+      std::unordered_set<Bitboard> checkedLines;
       Bitboard pieces = connectPieces;
       while (pieces) {
 
@@ -3501,6 +3503,8 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
 
 
               Bitboard line = line_bb(s, shifted_square);
+              if (!checkedLines.insert(line).second)
+                  continue;
               int piece_count = popcount(line & connectPieces);
               if (piece_count >= collinear_n()) {
                   result = convert_mate_value(-connect_value(), ply);
