@@ -22,7 +22,7 @@
 #include <cstring> // For std::memset, std::memcmp
 #include <iomanip>
 #include <sstream>
-#include <unordered_set>
+#include <vector>
 
 #include "bitboard.h"
 #include "misc.h"
@@ -3583,7 +3583,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
 
   // Collinear-n
   if ((collinear_n() > 0) && (popcount(connectPieces) >= collinear_n())) {
-      std::unordered_set<Bitboard> checkedLines;
+      std::vector<Bitboard> checkedLines;
       Bitboard pieces = connectPieces;
       while (pieces) {
 
@@ -3620,8 +3620,9 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
 
 
               Bitboard line = line_bb(s, shifted_square);
-              if (!checkedLines.insert(line).second)
+              if (std::find(checkedLines.begin(), checkedLines.end(), line) != checkedLines.end())
                   continue;
+              checkedLines.push_back(line);
               int piece_count = popcount(line & connectPieces);
               if (piece_count >= collinear_n()) {
                   result = convert_mate_value(-connect_value(), ply);
