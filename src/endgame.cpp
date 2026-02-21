@@ -1148,15 +1148,14 @@ Value Endgame<KQK, EG_EVAL_ATOMIC>::operator()(const Position& pos) const {
   Square loserKSq = pos.square<COMMONER>(weakSide);
 
   int dist = distance(winnerKSq, loserKSq);
-  // Draw in case of adjacent kings
-  if (dist ==  1)
-      return VALUE_DRAW;
-  // If the weaker side is to move and there is a way to connect kings, it is a draw
-  if (   pos.side_to_move() == weakSide
-      && (attacks_bb<KING>(winnerKSq) & attacks_bb<KING>(loserKSq) & ~pos.pieces()))
+  // Draw in case of adjacent kings.
+  // For dist == 2, the square adjacent to both kings is guaranteed not to be
+  // occupied by the queen here, because eval is not called while in check.
+  if (dist <= (strongSide == pos.side_to_move() ? 1 : 2))
       return VALUE_DRAW;
 
-  Value result =  Value(push_to_edge(loserKSq, pos))
+  Value result =  pos.non_pawn_material(strongSide)
+                + push_to_edge(loserKSq, pos)
                 + push_away(winnerKSq, loserKSq);
 
   if (dist >= (strongSide == pos.side_to_move() ? 3 : 4))
