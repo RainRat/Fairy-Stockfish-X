@@ -80,6 +80,8 @@ if [[ $1 == "all" || $1 == "variant" ]]; then
   expect perft.exp nightrider startpos 4 419019 > /dev/null
   expect perft.exp grasshopper startpos 4 635298 > /dev/null
   expect perft.exp hoppelpoppel startpos 4 202459 > /dev/null
+  # connect-group edge adjacency: h1 must not wrap-connect to a2
+  expect perft.exp linesofaction "fen 1n6/8/8/8/8/8/N7/7N b - - 0 1" 1 3 > /dev/null
   expect perft.exp newzealand startpos 4 200310 > /dev/null
   # alternative goals
   expect perft.exp racingkings startpos 4 296242 > /dev/null

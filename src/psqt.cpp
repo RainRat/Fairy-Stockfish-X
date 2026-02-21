@@ -157,7 +157,10 @@ constexpr Score PBonus[RANK_NB][FILE_NB] =
 int slider_fraction(std::map<Direction, int> slider) {
     int s = 0;
     for (auto const& [_, limit] : slider) {
-        s += limit == 0 ? 100 : 200 * std::min(limit + 1, 8) / 16;
+        if (limit == 0 || limit == DYNAMIC_SLIDER_LIMIT)
+            s += 100;
+        else
+            s += 200 * std::min(limit + 1, 8) / 16;
     }
     return s;
 }

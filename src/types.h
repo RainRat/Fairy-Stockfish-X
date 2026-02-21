@@ -273,8 +273,12 @@ struct PieceTypeBitboardGroup
     // _end
     Bitboard boardOfPiece(const char ptc) const
     {
-        assert(ptc >= 65 && ptc <= 90);  //ASCII of 'A'=65
-        return this->boardlist[ptc - 65];
+        if (ptc < 'A' || ptc > 'Z')
+        {
+            assert(false);
+            return Bitboard(0);
+        }
+        return this->boardlist[ptc - 'A'];
     }
 
     // Set the bitboard of a piece type.
@@ -282,8 +286,12 @@ struct PieceTypeBitboardGroup
     // board: The bitboard to set
     void set(const char ptc, Bitboard board)
     {
-        assert(ptc >= 65 && ptc <= 90);  //ASCII of 'A'=65
-        this->boardlist[ptc - 65] = board;
+        if (ptc < 'A' || ptc > 'Z')
+        {
+            assert(false);
+            return;
+        }
+        this->boardlist[ptc - 'A'] = board;
     }
 
 private:

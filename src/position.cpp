@@ -3503,8 +3503,11 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
 
                   for (Direction d : getConnectDirections()) {
                       Square next_sq = s + d;
-                      // Check bounds and if it's a player piece and not visited
-                      if (is_ok(next_sq) && (square_bb(next_sq) & playerPieces) && !(square_bb(next_sq) & visited)) {
+                      // Guard against horizontal/diagonal edge wrap when adding raw directions.
+                      if (!is_ok(next_sq) || distance(s, next_sq) != dist(d))
+                          continue;
+                      // Check if it's a player piece and not visited.
+                      if ((square_bb(next_sq) & playerPieces) && !(square_bb(next_sq) & visited)) {
                           visited |= next_sq;
                           current_group |= next_sq;
                           q.push_back(next_sq);
