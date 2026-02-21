@@ -771,7 +771,7 @@ void Position::set_state(StateInfo* si) const {
   si->key = si->materialKey = 0;
   si->pawnKey = Zobrist::noPawns;
   si->nonPawnMaterial[WHITE] = si->nonPawnMaterial[BLACK] = VALUE_ZERO;
-  si->checkersBB = count<KING>(sideToMove) ? attackers_to(square<KING>(sideToMove), ~sideToMove) : Bitboard(0);
+  si->checkersBB = count<KING>(sideToMove) ? attackers_to_king(square<KING>(sideToMove), ~sideToMove) : Bitboard(0);
   si->move = MOVE_NONE;
   si->removedGatingType = NO_PIECE_TYPE;
   si->removedCastlingGatingType = NO_PIECE_TYPE;
@@ -1194,6 +1194,19 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
   return b;
 }
 
+Bitboard Position::attackers_to_king(Square s, Bitboard occupied, Color c, Bitboard janggiCannons) const {
+
+  Bitboard attackers = attackers_to(s, occupied, c, janggiCannons);
+  PieceSet forbiddenToKing = var->captureForbiddenToKing;
+  if (!attackers || !forbiddenToKing)
+      return attackers;
+
+  for (PieceSet ps = forbiddenToKing; ps; )
+      attackers &= ~board_bb(c, pop_lsb(ps));
+
+  return attackers;
+}
+
 
 Bitboard Position::attackers_to(Square s, Bitboard occupied) const {
   return attackers_to(s, occupied, WHITE) | attackers_to(s, occupied, BLACK);
@@ -1444,7 +1457,7 @@ bool Position::legal(Move m) const {
       assert(ep_squares() & to);
       assert(piece_on(to) == NO_PIECE);
 
-      return !(attackers_to(ksq, occupied, ~us) & occupied);
+      return !(attackers_to_king(ksq, occupied, ~us) & occupied);
   }
 
   // Castling moves generation does not check if the castling path is clear of
@@ -1466,13 +1479,13 @@ bool Position::legal(Move m) const {
           return true;
 
       for (Square s = to; s != from; s += step)
-          if (attackers_to(s, ~us)
+          if (attackers_to_king(s, ~us)
               || (var->flyingGeneral && (attacks_bb(~us, ROOK, s, pieces() ^ from) & pieces(~us, KING))))
               return false;
 
       // In case of Chess960, verify if the Rook blocks some checks
       // For instance an enemy queen in SQ_A1 when castling rook is in SQ_B1.
-      return !attackers_to(to, pieces() ^ to_sq(m), ~us);
+      return !attackers_to_king(to, pieces() ^ to_sq(m), ~us);
   }
 
   Bitboard occupied = (type_of(m) != DROP ? pieces() ^ from : pieces()) | to;
@@ -1495,7 +1508,7 @@ bool Position::legal(Move m) const {
   // If the moving piece is a king, check whether the destination square is
   // attacked by the opponent.
   if (type_of(moved_piece(m)) == KING)
-      return !attackers_to(to, occupied, ~us);
+      return !attackers_to_king(to, occupied, ~us);
 
   // Return early when without king
   if (!count<KING>(us))
@@ -1508,7 +1521,7 @@ bool Position::legal(Move m) const {
       janggiCannons ^= to;
 
   // A non-king move is legal if the king is not under attack after the move.
-  return !(attackers_to(square<KING>(us), occupied, ~us, janggiCannons) & ~SquareBB[to]);
+  return !(attackers_to_king(square<KING>(us), occupied, ~us, janggiCannons) & ~SquareBB[to]);
 }
 
 
@@ -1636,7 +1649,7 @@ bool Position::pseudo_legal(const Move m) const {
       }
       // In case of king moves under check we have to remove king so as to catch
       // invalid moves like b1a1 when opposite queen is on c1.
-      else if (attackers_to(to, pieces() ^ from, ~us))
+      else if (attackers_to_king(to, pieces() ^ from, ~us))
           return false;
   }
 
@@ -1670,23 +1683,26 @@ bool Position::gives_check(Move m) const {
       && !((var->petrifyOnCaptureTypes & type_of(moved_piece(m))) && capture(m)))
   {
       PieceType pt = type_of(moved_piece(m));
-      if (pt == JANGGI_CANNON)
+      if (!(var->captureForbidden[pt] & KING))
       {
-          if (attacks_bb(sideToMove, pt, to, occupied) & attacks_bb(sideToMove, pt, to, occupied & ~janggiCannons) & square<KING>(~sideToMove))
+          if (pt == JANGGI_CANNON)
+          {
+              if (attacks_bb(sideToMove, pt, to, occupied) & attacks_bb(sideToMove, pt, to, occupied & ~janggiCannons) & square<KING>(~sideToMove))
+                  return true;
+          }
+          else if (AttackRiderTypes[pt] & (HOPPING_RIDERS | ASYMMETRICAL_RIDERS))
+          {
+              if (attacks_bb(sideToMove, pt, to, occupied) & square<KING>(~sideToMove))
+                  return true;
+          }
+          else if (check_squares(pt) & to)
               return true;
       }
-      else if (AttackRiderTypes[pt] & (HOPPING_RIDERS | ASYMMETRICAL_RIDERS))
-      {
-          if (attacks_bb(sideToMove, pt, to, occupied) & square<KING>(~sideToMove))
-              return true;
-      }
-      else if (check_squares(pt) & to)
-          return true;
   }
 
   // Is there a discovered check?
   if (  ((type_of(m) != DROP && (blockers_for_king(~sideToMove) & from)) || (non_sliding_riders() & pieces(sideToMove)))
-      && attackers_to(square<KING>(~sideToMove), occupied, sideToMove, janggiCannons) & occupied)
+      && attackers_to_king(square<KING>(~sideToMove), occupied, sideToMove, janggiCannons) & occupied)
       return true;
 
   // Is there a check by gated pieces?
@@ -1736,7 +1752,7 @@ bool Position::gives_check(Move m) const {
       Square capsq = capture_square(to);
       Bitboard b = (pieces() ^ from ^ capsq) | to;
 
-      return attackers_to(square<KING>(~sideToMove), b) & pieces(sideToMove) & b;
+      return attackers_to_king(square<KING>(~sideToMove), b, sideToMove) & pieces(sideToMove) & b;
   }
   default: //CASTLING
   {
@@ -1749,7 +1765,7 @@ bool Position::gives_check(Move m) const {
       // Is there a discovered check?
       if (   castling_rank(WHITE) > RANK_1
           && ((blockers_for_king(~sideToMove) & rfrom) || (non_sliding_riders() & pieces(sideToMove)))
-          && attackers_to(square<KING>(~sideToMove), (pieces() ^ kfrom ^ rfrom) | rto | kto, sideToMove))
+          && attackers_to_king(square<KING>(~sideToMove), (pieces() ^ kfrom ^ rfrom) | rto | kto, sideToMove))
           return true;
 
       return   (PseudoAttacks[sideToMove][type_of(piece_on(rfrom))][rto] & square<KING>(~sideToMove))
@@ -2590,7 +2606,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   // Update the key with the final value
   st->key = k;
   // Calculate checkers bitboard (if move gives check)
-  st->checkersBB = givesCheck ? attackers_to(square<KING>(them), us) & pieces(us) : Bitboard(0);
+  st->checkersBB = givesCheck ? attackers_to_king(square<KING>(them), us) & pieces(us) : Bitboard(0);
   assert(givesCheck == bool(st->checkersBB) || (givesCheck && var->prisonPawnPromotion));
 
   sideToMove = ~sideToMove;
@@ -4036,7 +4052,7 @@ bool Position::pos_is_ok() const {
       return true;
 
   if (   pieceCount[make_piece(~sideToMove, KING)]
-      && (attackers_to(square<KING>(~sideToMove)) & pieces(sideToMove)))
+      && (attackers_to_king(square<KING>(~sideToMove), sideToMove) & pieces(sideToMove)))
       assert(0 && "pos_is_ok: Kings");
 
   if (   pieceCount[make_piece(WHITE, PAWN)] > 64

@@ -2025,6 +2025,20 @@ void VariantMap::init() {
 
 // Pre-calculate derived properties
 Variant* Variant::conclude() {
+    // Compatibility shim: legacy mutuallyImmuneTypes means same-type captures are forbidden.
+    for (PieceSet ps = mutuallyImmuneTypes; ps; )
+    {
+        PieceType pt = pop_lsb(ps);
+        captureForbidden[pt] |= pt;
+    }
+    captureForbiddenToKing = NO_PIECE_SET;
+    for (PieceSet ps = pieceTypes; ps; )
+    {
+        PieceType pt = pop_lsb(ps);
+        if (captureForbidden[pt] & KING)
+            captureForbiddenToKing |= pt;
+    }
+
     // Enforce consistency to allow runtime optimizations
     if (!doubleStep)
         doubleStepRegion[WHITE] = doubleStepRegion[BLACK] = 0;

@@ -751,12 +751,6 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     };
     parse_capture_map("captureForbidden", false);
     parse_capture_map("captureAllowed", true);
-
-    // Compatibility shim: legacy mutuallyImmuneTypes means same-type captures are forbidden.
-    for (PieceSet ps = v->mutuallyImmuneTypes; ps; ) {
-        PieceType pt = pop_lsb(ps);
-        v->captureForbidden[pt] |= pt;
-    }
     parse_attribute("petrifyOnCaptureTypes", v->petrifyOnCaptureTypes, v->pieceToChar);
     parse_attribute("petrifyBlastPieces", v->petrifyBlastPieces);
     parse_attribute("removeConnectN", v->removeConnectN);

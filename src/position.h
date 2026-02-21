@@ -325,6 +325,9 @@ public:
   Bitboard attackers_to(Square s, Bitboard occupied) const;
   Bitboard attackers_to(Square s, Bitboard occupied, Color c) const;
   Bitboard attackers_to(Square s, Bitboard occupied, Color c, Bitboard janggiCannons) const;
+  Bitboard attackers_to_king(Square s, Color c) const;
+  Bitboard attackers_to_king(Square s, Bitboard occupied, Color c) const;
+  Bitboard attackers_to_king(Square s, Bitboard occupied, Color c, Bitboard janggiCannons) const;
   Bitboard attacks_from(Color c, PieceType pt, Square s) const;
   Bitboard moves_from(Color c, PieceType pt, Square s) const;
   Bitboard slider_blockers(Bitboard sliders, Square s, Bitboard& pinners, Color c) const;
@@ -1772,6 +1775,14 @@ inline Bitboard Position::attackers_to(Square s, Color c) const {
 
 inline Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c) const {
   return attackers_to(s, occupied, c, byTypeBB[JANGGI_CANNON]);
+}
+
+inline Bitboard Position::attackers_to_king(Square s, Color c) const {
+  return attackers_to_king(s, byTypeBB[ALL_PIECES], c);
+}
+
+inline Bitboard Position::attackers_to_king(Square s, Bitboard occupied, Color c) const {
+  return attackers_to_king(s, occupied, c, byTypeBB[JANGGI_CANNON]);
 }
 
 inline Bitboard Position::checkers() const {
