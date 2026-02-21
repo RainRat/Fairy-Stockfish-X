@@ -1851,6 +1851,27 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
 
       k ^= Zobrist::psq[captured][rfrom] ^ Zobrist::psq[captured][rto];
       captured = NO_PIECE;
+
+      if (commit_gates() && st->removedCastlingGatingType > NO_PIECE_TYPE)
+      {
+          Piece dropped = make_piece(us, st->removedCastlingGatingType);
+          Square gateSq = make_square(file_of(rfrom), us == WHITE ? RANK_1 : max_rank());
+          k ^= Zobrist::psq[dropped][gateSq];
+          st->materialKey ^= Zobrist::psq[dropped][pieceCount[dropped] - 1];
+          if (type_of(dropped) == PAWN)
+              st->pawnKey ^= Zobrist::psq[dropped][gateSq];
+          else
+              st->nonPawnMaterial[us] += PieceValue[MG][dropped];
+
+          if (Eval::useNNUE)
+          {
+              dp.piece[dp.dirty_num] = dropped;
+              dp.handPiece[dp.dirty_num] = NO_PIECE;
+              dp.from[dp.dirty_num] = SQ_NONE;
+              dp.to[dp.dirty_num] = gateSq;
+              dp.dirty_num++;
+          }
+      }
   }
 
   if (captured)
@@ -2294,6 +2315,27 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
               st->capturedGatingType = uncommit_piece(BLACK, file_of(to));
           }
       }
+
+      if (st->removedGatingType > NO_PIECE_TYPE)
+      {
+          Piece dropped = make_piece(us, st->removedGatingType);
+          Square gateSq = make_square(file_of(from), us == WHITE ? RANK_1 : max_rank());
+          k ^= Zobrist::psq[dropped][gateSq];
+          st->materialKey ^= Zobrist::psq[dropped][pieceCount[dropped] - 1];
+          if (type_of(dropped) == PAWN)
+              st->pawnKey ^= Zobrist::psq[dropped][gateSq];
+          else
+              st->nonPawnMaterial[us] += PieceValue[MG][dropped];
+
+          if (Eval::useNNUE)
+          {
+              dp.piece[dp.dirty_num] = dropped;
+              dp.handPiece[dp.dirty_num] = NO_PIECE;
+              dp.from[dp.dirty_num] = SQ_NONE;
+              dp.to[dp.dirty_num] = gateSq;
+              dp.dirty_num++;
+          }
+      }
   }
   // Remove gates
   if (gating())
@@ -2709,11 +2751,11 @@ void Position::undo_move(Move m) {
               put_piece(bpc, bsq, isPromoted, st->demotedBycatch & bsq ? unpromotedBpc : NO_PIECE);
               if (!wasBlastPromoted && capture_type() == HAND) {
                   remove_from_hand(!drop_loop() && (st->promotedBycatch & bsq)
-                                    ? make_piece(~color_of(unpromotedBpc), PAWN)
+                                    ? make_piece(~color_of(unpromotedBpc), main_promotion_pawn_type(color_of(unpromotedBpc)))
                                     : ~unpromotedBpc);
               } else if (!wasBlastPromoted && capture_type() == PRISON) {
                   remove_from_prison(!drop_loop() && (st->promotedBycatch & bsq)
-                                    ? make_piece(color_of(unpromotedBpc), PAWN)
+                                    ? make_piece(color_of(unpromotedBpc), main_promotion_pawn_type(color_of(unpromotedBpc)))
                                     : unpromotedBpc);
               }
           }
@@ -2807,7 +2849,7 @@ void Position::undo_move(Move m) {
               remove_from_prison(!drop_loop() && st->capturedpromoted
                                ? (st->unpromotedCapturedPiece
                                   ? st->unpromotedCapturedPiece
-                                  : make_piece(color_of(st->capturedPiece), main_promotion_pawn_type(us)))
+                                  : make_piece(color_of(st->capturedPiece), main_promotion_pawn_type(color_of(st->capturedPiece))))
                                : st->capturedPiece);
           }
       }
@@ -3012,7 +3054,7 @@ Value Position::blast_see(Move m) const {
   Value result = VALUE_ZERO;
 
   // Add the least valuable attacker for quiet moves
-  if (!capture(m))
+  if (!capture(m) && !blast_on_move())
   {
       Bitboard attackers = attackers_to(to, pieces() ^ fromto, ~us);
       Value minAttacker = VALUE_INFINITE;
@@ -3049,7 +3091,7 @@ Value Position::blast_see(Move m) const {
   }
 
   // Evaluate extinctions
-  if (!capture(m))
+  if (!capture(m) && !blast_on_move())
   {
       // For quiet moves, the opponent can decide whether to capture or not
       // so they can pick the better of the two
@@ -3068,7 +3110,7 @@ Value Position::blast_see(Move m) const {
           return -extinction_value();
   }
 
-  return capture(m) || must_capture() ? result - 1 : std::min(result, VALUE_ZERO);
+  return capture(m) || must_capture() || blast_on_move() ? result - 1 : std::min(result, VALUE_ZERO);
 }
 
 
@@ -3091,7 +3133,7 @@ bool Position::see_ge(Move m, Value threshold) const {
       return true;
 
   // Atomic explosion SEE
-  if (blast_on_capture())
+  if (blast_on_capture() || blast_on_move())
       return blast_see(m) >= threshold;
 
   // Extinction
