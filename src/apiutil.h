@@ -600,7 +600,7 @@ inline Validation check_promoted_pieces(const std::string& firstFenPart, const V
             PieceType pt = PieceType(idx);
 
             // Check if this piece type has a promoted form
-            if (pt != NO_PIECE_TYPE && pt < PIECE_TYPE_NB && v->promotedPieceType[pt] == NO_PIECE_TYPE) {
+            if (pt != NO_PIECE_TYPE && v->promotedPieceType[pt] == NO_PIECE_TYPE) {
                 std::cerr << "Invalid promoted piece: '+' followed by '" << pieceChar
                          << "'. This piece cannot be promoted in variant." << std::endl;
                 return NOK;

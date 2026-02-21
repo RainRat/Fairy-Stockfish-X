@@ -154,7 +154,7 @@ constexpr Score PBonus[RANK_NB][FILE_NB] =
 
 
 // Scale down slider value based on distance
-int slider_fraction(std::map<Direction, int> slider) {
+int slider_fraction(const std::map<Direction, int>& slider) {
     int s = 0;
     for (auto const& [_, limit] : slider) {
         if (limit == 0 || limit == DYNAMIC_SLIDER_LIMIT)

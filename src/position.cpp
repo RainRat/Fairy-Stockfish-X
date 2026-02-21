@@ -1200,11 +1200,7 @@ Bitboard Position::checked_pseudo_royals(Color c) const {
   // If royal pieces are immune to blasts, then their checks remain threats even
   // when the attacker is inside the blast radius. Build a bitboard of such
   // blast-immune pieces.
-  Bitboard blastImmune = 0;
-  for (PieceSet ps = blast_immune_types(); ps;) {
-      PieceType pt = pop_lsb(ps);
-      blastImmune |= pieces(pt);
-  }
+  Bitboard blastImmune = blast_immune_bb();
 
   while (pseudoRoyals)
   {
@@ -1330,11 +1326,7 @@ bool Position::legal(Move m) const {
   {
       Square kto = to;
       Bitboard occupied = (type_of(m) != DROP ? pieces() ^ from : pieces());
-      Bitboard blastImmune = 0;
-      for (PieceSet ps = blast_immune_types(); ps;) {
-          PieceType pt = pop_lsb(ps);
-          blastImmune |= pieces(pt);
-      }
+      Bitboard blastImmune = blast_immune_bb();
       if (walling_rule() == DUCK)
           occupied ^= st->wallSquares;
       if (walling() || is_gating(m))

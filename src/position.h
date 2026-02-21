@@ -154,6 +154,7 @@ public:
   bool blast_diagonals() const;
   bool blast_center() const;
   PieceSet blast_immune_types() const;
+  Bitboard blast_immune_bb() const;
   Bitboard blast_pattern(Square to) const;
   Bitboard blast_squares(Square to) const;
   PieceSet mutually_immune_types() const;
@@ -622,17 +623,22 @@ inline PieceSet Position::blast_immune_types() const {
   return var->blastImmuneTypes;
 }
 
+inline Bitboard Position::blast_immune_bb() const {
+    Bitboard blastImmune = 0;
+    for (PieceSet ps = blast_immune_types(); ps;) {
+        PieceType pt = pop_lsb(ps);
+        blastImmune |= pieces(pt);
+    }
+    return blastImmune;
+}
+
 inline Bitboard Position::blast_pattern(Square to) const {
     Bitboard blastPattern = blast_diagonals() ?  attacks_bb<KING>(to) : attacks_bb<WAZIR>(to);
     return blastPattern;
 }
 
 inline Bitboard Position::blast_squares(Square to) const {
-    Bitboard blastImmune = 0;
-    for (PieceSet ps = blast_immune_types(); ps;) {
-        PieceType pt = pop_lsb(ps);
-        blastImmune |= pieces(pt);
-    }
+    Bitboard blastImmune = blast_immune_bb();
     Bitboard blastPattern = blast_pattern(to);
     Bitboard relevantPieces = (pieces(WHITE) | pieces(BLACK)) ^ pieces(PAWN);
     Bitboard blastArea = (blastPattern & relevantPieces) | (blast_center() ? square_bb(to) : Bitboard(0));

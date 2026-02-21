@@ -235,24 +235,8 @@ constexpr size_t PIECE_TYPE_COUNT = 26;
 //For example, piece A is related to boardlist[0], piece B is related to boardlist[1], etc.
 struct PieceTypeBitboardGroup
 {
-    PieceTypeBitboardGroup()
-    {
-        size_t i;
-        // By default, all bits are ZERO for all pieces.
-        for (i = 0; i < PIECE_TYPE_COUNT; i++)
-        {
-            this->boardlist[i] ^= this->boardlist[i];
-        }
-    }
-
-    PieceTypeBitboardGroup(const PieceTypeBitboardGroup& other)
-    {
-        size_t i;
-        for (i = 0; i < PIECE_TYPE_COUNT; i++)
-        {
-            this->boardlist[i] = other.boardlist[i];
-        }
-    }
+    PieceTypeBitboardGroup() = default;
+    PieceTypeBitboardGroup(const PieceTypeBitboardGroup& other) = default;
 
     // Returns the bitboard reference at the index of idx in boardlist.
     // idx: The index
@@ -295,7 +279,7 @@ struct PieceTypeBitboardGroup
     }
 
 private:
-    Bitboard boardlist[PIECE_TYPE_COUNT];
+    Bitboard boardlist[PIECE_TYPE_COUNT] = {0};
 };
 
 //When defined, move list will be stored in heap. Delete this if you want to use stack to store move list. Using stack can cause overflow (Segmentation Fault) when the search is too deep.
