@@ -40,7 +40,7 @@ namespace Zobrist {
 
   constexpr int MAX_ZOBRIST_POINTS = 512;
   Key psq[PIECE_NB][SQUARE_NB];
-  Key enpassant[FILE_NB];
+  Key enpassant[SQUARE_NB];
   Key castling[CASTLING_RIGHT_NB];
   Key side, noPawns;
   Key inHand[PIECE_NB][SQUARE_NB];
@@ -166,8 +166,8 @@ void Position::init() {
           for (Square s = SQ_A1; s <= SQ_MAX; ++s)
               Zobrist::psq[make_piece(c, pt)][s] = rng.rand<Key>();
 
-  for (File f = FILE_A; f <= FILE_MAX; ++f)
-      Zobrist::enpassant[f] = rng.rand<Key>();
+  for (Square s = SQ_A1; s <= SQ_MAX; ++s)
+      Zobrist::enpassant[s] = rng.rand<Key>();
 
   for (int cr = NO_CASTLING; cr <= ANY_CASTLING; ++cr)
       Zobrist::castling[cr] = rng.rand<Key>();
@@ -781,7 +781,7 @@ void Position::set_state(StateInfo* si) const {
   }
 
   for (Bitboard b = si->epSquares; b; )
-      si->key ^= Zobrist::enpassant[file_of(pop_lsb(b))];
+      si->key ^= Zobrist::enpassant[pop_lsb(b)];
 
   if (sideToMove == BLACK)
       si->key ^= Zobrist::side;
@@ -1934,13 +1934,34 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   if (type_of(m) == DROP)
   {
       Piece pc_hand = make_piece(us, in_hand_piece_type(m));
-      // exchanging means that drop is not from hand (but from prison)
-      int n = pieceCountInHand[color_of(pc_hand)][type_of(pc_hand)] + (exchanged != NO_PIECE_TYPE);
-      int newN = std::clamp(n, 0, SQUARE_NB - 1);
-      int oldN = std::clamp(newN - 1, 0, SQUARE_NB - 1);
-      k ^=  Zobrist::psq[pc][to]
-          ^ Zobrist::inHand[pc_hand][oldN]
-          ^ Zobrist::inHand[pc_hand][newN];
+      k ^= Zobrist::psq[pc][to];
+      if (exchanged == NO_PIECE_TYPE)
+      {
+          int n = pieceCountInHand[color_of(pc_hand)][type_of(pc_hand)];
+          int newN = std::clamp(n, 0, SQUARE_NB - 1);
+          int oldN = std::clamp(newN - 1, 0, SQUARE_NB - 1);
+          k ^= Zobrist::inHand[pc_hand][oldN] ^ Zobrist::inHand[pc_hand][newN];
+      }
+      else
+      {
+          Piece exchangedPiece = make_piece(them, exchanged);
+
+          // Exchange drop mutates one hand bucket and two prison buckets.
+          int handOld = pieceCountInHand[them][exchanged];
+          int handNew = handOld + 1;
+          k ^= Zobrist::inHand[exchangedPiece][std::clamp(handOld, 0, SQUARE_NB - 1)]
+            ^ Zobrist::inHand[exchangedPiece][std::clamp(handNew, 0, SQUARE_NB - 1)];
+
+          int prisonOldEx = pieceCountInPrison[us][exchanged];
+          int prisonNewEx = prisonOldEx - 1;
+          k ^= Zobrist::inHand[exchangedPiece][std::clamp(prisonOldEx, 0, SQUARE_NB - 1)]
+            ^ Zobrist::inHand[exchangedPiece][std::clamp(prisonNewEx, 0, SQUARE_NB - 1)];
+
+          int prisonOldDrop = pieceCountInPrison[them][type_of(pc)];
+          int prisonNewDrop = prisonOldDrop - 1;
+          k ^= Zobrist::inHand[pc][std::clamp(prisonOldDrop, 0, SQUARE_NB - 1)]
+            ^ Zobrist::inHand[pc][std::clamp(prisonNewDrop, 0, SQUARE_NB - 1)];
+      }
 
       // Reset rule 50 counter for irreversible drops
       st->rule50 = 0;
@@ -1961,7 +1982,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
 
   // Reset en passant squares
   while (st->epSquares)
-      k ^= Zobrist::enpassant[file_of(pop_lsb(st->epSquares))];
+      k ^= Zobrist::enpassant[pop_lsb(st->epSquares)];
 
   // Update castling rights if needed
   if (type_of(m) != DROP && !is_pass(m) && st->castlingRights && (castlingRightsMask[from] | castlingRightsMask[to]))
@@ -2139,7 +2160,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
               && !(walling() && gating_square(m) == to - pawn_push(us)))
           {
               st->epSquares |= to - pawn_push(us);
-              k ^= Zobrist::enpassant[file_of(to - pawn_push(us))];
+              k ^= Zobrist::enpassant[to - pawn_push(us)];
           }
           if (   std::abs(int(to) - int(from)) == 3 * NORTH
               && (var->enPassantRegion[them] & (to - 2 * pawn_push(us)))
@@ -2147,7 +2168,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
               && !(walling() && gating_square(m) == to - 2 * pawn_push(us)))
           {
               st->epSquares |= to - 2 * pawn_push(us);
-              k ^= Zobrist::enpassant[file_of(to - 2 * pawn_push(us))];
+              k ^= Zobrist::enpassant[to - 2 * pawn_push(us)];
           }
       }
 
@@ -2216,7 +2237,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       assert(type_of(pc) != PAWN);
       st->epSquares = between_bb(from, to) & var->enPassantRegion[them];
       for (Bitboard b = st->epSquares; b; )
-          k ^= Zobrist::enpassant[file_of(pop_lsb(b))];
+          k ^= Zobrist::enpassant[pop_lsb(b)];
   }
 
   // Set capture piece
@@ -2785,7 +2806,7 @@ void Position::do_null_move(StateInfo& newSt) {
   st->accumulator.computed[BLACK] = false;
 
   while (st->epSquares)
-      st->key ^= Zobrist::enpassant[file_of(pop_lsb(st->epSquares))];
+      st->key ^= Zobrist::enpassant[pop_lsb(st->epSquares)];
 
   st->key ^= Zobrist::side;
   prefetch(TT.first_entry(key()));
@@ -2852,12 +2873,35 @@ Key Position::key_after(Move m) const {
   {
       Piece pc_hand = make_piece(sideToMove, in_hand_piece_type(m));
       PieceType exchanged = exchange_piece(m);
-      int n = pieceCountInHand[color_of(pc_hand)][type_of(pc_hand)] + (exchanged != NO_PIECE_TYPE);
-      int newN = std::clamp(n, 0, SQUARE_NB - 1);
-      int oldN = std::clamp(newN - 1, 0, SQUARE_NB - 1);
-      return k ^ Zobrist::psq[pc][to]
-               ^ Zobrist::inHand[pc_hand][newN]
-               ^ Zobrist::inHand[pc_hand][oldN];
+      k ^= Zobrist::psq[pc][to];
+
+      if (exchanged == NO_PIECE_TYPE)
+      {
+          int n = pieceCountInHand[color_of(pc_hand)][type_of(pc_hand)];
+          int newN = std::clamp(n, 0, SQUARE_NB - 1);
+          int oldN = std::clamp(newN - 1, 0, SQUARE_NB - 1);
+          return k ^ Zobrist::inHand[pc_hand][oldN] ^ Zobrist::inHand[pc_hand][newN];
+      }
+
+      Color us = sideToMove;
+      Color them = ~us;
+      Piece exchangedPiece = make_piece(them, exchanged);
+
+      int handOld = pieceCountInHand[them][exchanged];
+      int handNew = handOld + 1;
+      k ^= Zobrist::inHand[exchangedPiece][std::clamp(handOld, 0, SQUARE_NB - 1)]
+        ^ Zobrist::inHand[exchangedPiece][std::clamp(handNew, 0, SQUARE_NB - 1)];
+
+      int prisonOldEx = pieceCountInPrison[us][exchanged];
+      int prisonNewEx = prisonOldEx - 1;
+      k ^= Zobrist::inHand[exchangedPiece][std::clamp(prisonOldEx, 0, SQUARE_NB - 1)]
+        ^ Zobrist::inHand[exchangedPiece][std::clamp(prisonNewEx, 0, SQUARE_NB - 1)];
+
+      int prisonOldDrop = pieceCountInPrison[them][type_of(pc)];
+      int prisonNewDrop = prisonOldDrop - 1;
+      k ^= Zobrist::inHand[pc][std::clamp(prisonOldDrop, 0, SQUARE_NB - 1)]
+        ^ Zobrist::inHand[pc][std::clamp(prisonNewDrop, 0, SQUARE_NB - 1)];
+      return k;
   }
 
   return k ^ Zobrist::psq[pc][to] ^ Zobrist::psq[pc][from];
