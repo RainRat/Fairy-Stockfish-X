@@ -253,7 +253,7 @@ struct Bitboard {
     constexpr Bitboard operator - (const int x) const { return *this - Bitboard(x); }
 
     inline Bitboard operator * (const Bitboard x) const {
-#if defined(__GNUC__) || defined(__clang__)
+#if (defined(__GNUC__) || defined(__clang__)) && defined(__SIZEOF_INT128__)
         uint64_t r[4] = {0, 0, 0, 0};
         const uint64_t a[4] = { b64[3], b64[2], b64[1], b64[0] };
         const uint64_t b[4] = { x.b64[3], x.b64[2], x.b64[1], x.b64[0] };

@@ -182,12 +182,14 @@ namespace {
     return b;
   }
 
+  #if !defined(VERY_LARGE_BOARDS)
   Bitboard lame_leaper_path(std::map<Direction, int> directions, Square s) {
     Bitboard b = 0;
     for (const auto& i : directions)
         b |= lame_leaper_path(i.first, s);
     return b;
   }
+  #endif
 
   Bitboard lame_leaper_attack(std::map<Direction, int> directions, Square s, Bitboard occupied) {
     Bitboard b = 0;
