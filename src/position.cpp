@@ -1204,7 +1204,7 @@ Bitboard Position::attackers_to_king(Square s, Bitboard occupied, Color c, Bitbo
       return attackers;
 
   for (PieceSet ps = forbiddenToKing; ps; )
-      attackers &= ~board_bb(c, pop_lsb(ps));
+      attackers &= ~pieces(c, pop_lsb(ps));
 
   return attackers;
 }
