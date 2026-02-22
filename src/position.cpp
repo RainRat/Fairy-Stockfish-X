@@ -2691,7 +2691,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
               }
           }
 
-          if (captures_to_hand())
+          bool petrifiedCenter = bsq == to && (var->petrifyOnCaptureTypes & type_of(bpc));
+          if (captures_to_hand() && !petrifiedCenter)
           {
               Piece pieceToHand = !capturedPromoted || drop_loop() ? ~bpc
                                  : unpromotedCaptured ? ~unpromotedCaptured
@@ -2890,11 +2891,12 @@ void Position::undo_move(Move m) {
                   board[bsq] = NO_PIECE;
               }
               put_piece(bpc, bsq, isPromoted, st->demotedBycatch & bsq ? unpromotedBpc : NO_PIECE);
-              if (!wasBlastPromoted && capture_type() == HAND) {
+              bool petrifiedCenter = bsq == to && (var->petrifyOnCaptureTypes & type_of(bpc));
+              if (!wasBlastPromoted && !petrifiedCenter && capture_type() == HAND) {
                   remove_from_hand(!drop_loop() && (st->promotedBycatch & bsq)
                                     ? make_piece(~color_of(unpromotedBpc), main_promotion_pawn_type(color_of(unpromotedBpc)))
                                     : ~unpromotedBpc);
-              } else if (!wasBlastPromoted && capture_type() == PRISON) {
+              } else if (!wasBlastPromoted && !petrifiedCenter && capture_type() == PRISON) {
                   remove_from_prison(!drop_loop() && (st->promotedBycatch & bsq)
                                     ? make_piece(color_of(unpromotedBpc), main_promotion_pawn_type(color_of(unpromotedBpc)))
                                     : unpromotedBpc);

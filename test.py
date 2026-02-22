@@ -526,6 +526,19 @@ class TestPyffish(unittest.TestCase):
         result = sf.get_fen("passchess", fen, ["e1e1", "e8e8"])
         self.assertEqual(result, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 2 2")
 
+        # petrified capturing piece should not be added to hand as bycatch
+        sf.load_variant_config(
+            """[petrihand:chess]
+capturesToHand = true
+pieceDrops = true
+petrifyOnCaptureTypes = q
+startFen = 4k3/3p4/8/8/8/8/8/3QK3 w - - 0 1
+"""
+        )
+        fen = sf.start_fen("petrihand")
+        result = sf.get_fen("petrihand", fen, ["d1d7"])
+        self.assertEqual(result, "4k3/3*4/8/8/8/8/8/4K3[P] b - - 0 1")
+
         # only irreversible moves should reset 50 move rule counter
         fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
         result = sf.get_fen("pawnsideways", fen, ["e2e4", "g8f6", "e4d4"])
