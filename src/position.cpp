@@ -1290,10 +1290,17 @@ bool Position::legal(Move m) const {
   assert(type_of(m) != DROP || piece_drops());
 
   Color us = sideToMove;
+  Color them = ~us;
   Square from = from_sq(m);
   Square to = to_sq(m);
 
   if (is_pass(m) && !(pass(us) || wall_or_move()))
+      return false;
+
+  if (pass_until_setup() && must_drop()
+      && count_in_hand(us, ALL_PIECES) == 0
+      && count_in_hand(them, ALL_PIECES) > 0
+      && !is_pass(m))
       return false;
 
   if (from == to && !(is_pass(m) || (type_of(m) == PROMOTION && sittuyin_promotion())))
@@ -1381,6 +1388,10 @@ bool Position::legal(Move m) const {
               return false;
   }
   if (type_of(m) == DROP && (!var->isPriorityDrop[type_of(moved_piece(m))]) && priorityDropCountInHand[us] > 0)
+      return false;
+
+  if (type_of(m) == DROP && pay_points_to_drop()
+      && st->pointsCount[us] < var->piecePoints[type_of(moved_piece(m))])
       return false;
 
   // No legal moves from target square
@@ -1590,11 +1601,18 @@ bool Position::legal(Move m) const {
 bool Position::pseudo_legal(const Move m) const {
 
   Color us = sideToMove;
+  Color them = ~us;
   Square from = from_sq(m);
   Square to = to_sq(m);
   Piece pc = moved_piece(m);
 
   if (is_pass(m) && !(pass(us) || wall_or_move()))
+      return false;
+
+  if (pass_until_setup() && must_drop()
+      && count_in_hand(us, ALL_PIECES) == 0
+      && count_in_hand(them, ALL_PIECES) > 0
+      && !is_pass(m))
       return false;
 
   if (from == to && !(is_pass(m) || (type_of(m) == PROMOTION && sittuyin_promotion())))
@@ -1638,6 +1656,7 @@ bool Position::pseudo_legal(const Move m) const {
       return   piece_drops()
             && pc != NO_PIECE
             && color_of(pc) == us
+            && (!pay_points_to_drop() || st->pointsCount[us] >= var->piecePoints[type_of(pc)])
             && (can_drop(us, in_hand_piece_type(m))
                 || (two_boards() && allow_virtual_drop(us, type_of(pc)))
                 || (capture_type() == PRISON && exchange_piece(m) != NO_PIECE_TYPE
@@ -2179,6 +2198,9 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   // Move the piece. The tricky Chess960 castling is handled earlier
   if (type_of(m) == DROP)
   {
+      if (pay_points_to_drop())
+          st->pointsCount[us] -= var->piecePoints[type_of(pc)];
+
       if (Eval::useNNUE)
       {
           // Add drop piece
@@ -3617,7 +3639,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
       return true;
   }
 
-  if (points_counting())
+  if (points_counting() && points_goal() > 0)
   {
       //Handle the case where both players met the goal.
       if (st->pointsCount[~sideToMove]>=points_goal() && st->pointsCount[sideToMove]>=points_goal())

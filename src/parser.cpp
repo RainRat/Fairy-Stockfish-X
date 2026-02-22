@@ -854,6 +854,7 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("dropNoDoubled", v->dropNoDoubled, v->pieceToChar);
     parse_attribute("dropNoDoubledCount", v->dropNoDoubledCount);
     parse_attribute("freeDrops", v->freeDrops);
+    parse_attribute("payPointsToDrop", v->payPointsToDrop);
     parse_attribute("immobilityIllegal", v->immobilityIllegal);
     parse_attribute("gating", v->gating);
     parse_attribute("wallingRule", v->wallingRule);
@@ -876,6 +877,7 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("passOnStalemate", v->passOnStalemate[BLACK]);
     parse_attribute("passOnStalemateWhite", v->passOnStalemate[WHITE]);
     parse_attribute("passOnStalemateBlack", v->passOnStalemate[BLACK]);
+    parse_attribute("passUntilSetup", v->passUntilSetup);
     parse_attribute("multimoves", v->multimoves);
     parse_attribute("multimoveCheck", v->multimoveCheck);
     parse_attribute("multimoveCapture", v->multimoveCapture);
@@ -951,6 +953,8 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("pointsGoal", v->pointsGoal);
     parse_attribute("pointsGoalValue", v->pointsGoalValue);
     parse_attribute("pointsGoalSimulValue", v->pointsGoalSimulValue);
+    if (v->payPointsToDrop)
+        v->pointsCounting = true;
 
     // Report invalid options
     if (DoCheck)

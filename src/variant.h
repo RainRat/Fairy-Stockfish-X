@@ -153,6 +153,8 @@ struct Variant {
   Rank soldierPromotionRank = RANK_1;
   EnclosingRule flipEnclosedPieces = NO_ENCLOSING;
   bool freeDrops = false;
+  bool payPointsToDrop = false;
+  bool passUntilSetup = false;
   bool sudoku = false;
   int sudokuBoxWidth = 4;
   int sudokuBoxHeight = 2;

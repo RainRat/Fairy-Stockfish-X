@@ -229,6 +229,7 @@ public:
   bool cambodian_moves() const;
   Bitboard diagonal_lines() const;
   bool pass(Color c) const;
+  bool pass_until_setup() const;
   bool pass_on_stalemate(Color c) const;
   bool multimove_pass(int ply) const;
   bool has_forced_jump_followup() const;
@@ -265,6 +266,7 @@ public:
   int connect_group() const;
   Value connect_value() const;
   bool points_counting() const;
+  bool pay_points_to_drop() const;
   PointsRule points_rule_captures() const;
   int points_goal() const;
 
@@ -1161,7 +1163,16 @@ inline bool Position::pass(Color c) const {
       if (fp != NO_PIECE && color_of(fp) != c)
           return true;
   }
+  if (pass_until_setup() && must_drop()
+      && count_in_hand(c, ALL_PIECES) == 0
+      && count_in_hand(~c, ALL_PIECES) > 0)
+      return true;
   return var->pass[c] || var->passOnStalemate[c] || var->multimoveOffset;
+}
+
+inline bool Position::pass_until_setup() const {
+  assert(var != nullptr);
+  return var->passUntilSetup;
 }
 
 inline bool Position::pass_on_stalemate(Color c) const {
@@ -1464,6 +1475,11 @@ inline CountingRule Position::counting_rule() const {
 inline bool Position::points_counting() const {
   assert(var != nullptr);
   return var->pointsCounting;
+}
+
+inline bool Position::pay_points_to_drop() const {
+  assert(var != nullptr);
+  return var->payPointsToDrop;
 }
 
 inline PointsRule Position::points_rule_captures() const {
