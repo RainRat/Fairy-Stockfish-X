@@ -18,6 +18,7 @@
 
 #include <string>
 #include <sstream>
+#include <limits>
 
 #include "apiutil.h"
 #include "parser.h"
@@ -254,6 +255,11 @@ namespace {
                 }
                 else if (ch >= '0' && ch <= '9' && RankNum >= 0)
                 {
+                    if (RankNum > (std::numeric_limits<int>::max() - (ch - '0')) / 10)
+                    {
+                        std::cerr << "At char " << i << " of PieceTypeBitboardGroup declaration: Rank number overflow." << std::endl;
+                        return false;
+                    }
                     RankNum = RankNum * 10 + (ch - '0');
                 }
                 else if (ch == ',' || ch == ')')
@@ -279,7 +285,7 @@ namespace {
                     }
                     if (RankNum == -1 && FileNum == -1)
                     {
-                        board ^= ~board;
+                        board = Bitboard(-1);
                     }
                     else if (FileNum == -1)
                     {
