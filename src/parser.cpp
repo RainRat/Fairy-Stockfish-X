@@ -488,6 +488,54 @@ Variant* VariantParser<DoCheck>::parse() {
 
 template <bool DoCheck>
 Variant* VariantParser<DoCheck>::parse(Variant* v) {
+    auto parse_rank_value = [](const std::string& value, int& out) {
+        std::stringstream ss(value);
+        int i;
+        ss >> i;
+        if (ss.fail())
+            return false;
+        out = i;
+        return true;
+    };
+    auto parse_file_value = [](const std::string& value, int& out) {
+        std::stringstream ss(value);
+        ss >> std::ws;
+        if (ss.peek() == EOF)
+            return false;
+        if (std::isdigit(ss.peek()))
+        {
+            int i;
+            ss >> i;
+            if (ss.fail())
+                return false;
+            out = i - 1;
+            return true;
+        }
+        char c;
+        ss >> c;
+        if (ss.fail())
+            return false;
+        out = std::tolower(c) - 'a';
+        return true;
+    };
+
+    int cfgMaxRank = -1;
+    int cfgMaxFile = -1;
+    const auto itRank = config.find("maxRank");
+    if (itRank != config.end())
+        parse_rank_value(itRank->second, cfgMaxRank);
+    const auto itFile = config.find("maxFile");
+    if (itFile != config.end())
+        parse_file_value(itFile->second, cfgMaxFile);
+
+    // Fail early when a variant exceeds compile-time board dimensions.
+    if ((cfgMaxRank > 0 && cfgMaxRank - 1 > RANK_MAX) || (cfgMaxFile >= 0 && cfgMaxFile > FILE_MAX))
+    {
+        v->maxRank = static_cast<Rank>(RANK_MAX + 1);
+        v->maxFile = static_cast<File>(FILE_MAX + 1);
+        return v;
+    }
+
     parse_attribute("maxRank", v->maxRank);
     parse_attribute("maxFile", v->maxFile);
     // piece types

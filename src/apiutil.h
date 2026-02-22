@@ -577,6 +577,13 @@ inline bool in_any(const std::vector<std::string>& vec, char c) {
 inline Validation check_for_valid_characters(const std::string& firstFenPart, const std::string& validSpecialCharactersFirstField, const Variant* v) {
     for (char c : firstFenPart)
     {
+        if (c == '+')
+        {
+            if (v && v->shogiStylePromotions)
+                continue;
+            std::cerr << "Invalid piece character: '+'." << std::endl;
+            return NOK;
+        }
         if (!isdigit(c) && !in_any({v->pieceToChar, v->pieceToCharSynonyms, validSpecialCharactersFirstField}, c))
         {
             std::cerr << "Invalid piece character: '" << c << "'." << std::endl;
