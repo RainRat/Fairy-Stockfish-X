@@ -137,7 +137,10 @@ std::ostream& operator<<(std::ostream& os, const Position& pos) {
 // https://marcelk.net/2013-04-06/paper/upcoming-rep-v2.pdf
 
 // First and second hash functions for indexing the cuckoo tables
-#ifdef LARGEBOARDS
+#if defined(VERY_LARGE_BOARDS)
+inline int H1(Key h) { return h & 0xffff; }
+inline int H2(Key h) { return (h >> 16) & 0xffff; }
+#elif defined(LARGEBOARDS)
 inline int H1(Key h) { return h & 0x7fff; }
 inline int H2(Key h) { return (h >> 16) & 0x7fff; }
 #else
@@ -381,7 +384,7 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
       }
 
       // Promoted shogi pieces
-      else if (token == '+' && (idx = piece_to_char().find(ss.peek())) != string::npos && promoted_piece_type(type_of(Piece(idx))))
+      else if (token == '+' && var->shogiStylePromotions && (idx = piece_to_char().find(ss.peek())) != string::npos && promoted_piece_type(type_of(Piece(idx))))
       {
           ss >> token;
           if(v->commitGates && (rank == 0 || rank == max_rank() + 2)){
@@ -503,10 +506,22 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
       // 4. En passant square.
       // Ignore if square is invalid or not on side to move relative rank 6.
       else
-          while (   ((ss >> col) && (col >= 'a' && col <= 'a' + max_file()))
-                 && ((ss >> row) && (row >= '1' && row <= '1' + max_rank())))
+          while ((ss >> col) && (col >= 'a' && col <= 'a' + max_file()))
           {
-              Square epSquare = make_square(File(col - 'a'), Rank(row - '1'));
+              std::string rankDigits;
+              while (std::isdigit(ss.peek()))
+              {
+                  ss >> row;
+                  rankDigits.push_back(row);
+              }
+              if (rankDigits.empty())
+                  break;
+
+              int rankNumber = std::stoi(rankDigits);
+              if (rankNumber < 1 || rankNumber > max_rank() + 1)
+                  continue;
+
+              Square epSquare = make_square(File(col - 'a'), Rank(rankNumber - 1));
 #ifdef LARGEBOARDS
               // Consider different rank numbering in CECP
               if (max_rank() == RANK_10 && CurrentProtocol == XBOARD)

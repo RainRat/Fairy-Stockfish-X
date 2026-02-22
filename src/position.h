@@ -312,6 +312,7 @@ public:
   Bitboard ep_squares() const;
   Square castling_king_square(Color c) const;
   Bitboard gates(Color c) const;
+  Square gate_square(Move m) const;
   bool empty(Square s) const;
   int count(Color c, PieceType pt) const;
   template<PieceType Pt> int count(Color c) const;
@@ -1632,6 +1633,21 @@ inline Square Position::castling_king_square(Color c) const {
 inline Bitboard Position::gates(Color c) const {
   assert(var != nullptr);
   return st->gatesBB[c];
+}
+
+inline Square Position::gate_square(Move m) const {
+  if (seirawan_gating() && is_gating(m))
+  {
+      Square from = from_sq(m);
+      if (type_of(m) != CASTLING)
+          return from;
+      Square to = to_sq(m);
+      Square gate = gating_square(m);
+      if (gate == from || gate == to)
+          return gate;
+      return from;
+  }
+  return gating_square(m);
 }
 
 inline bool Position::is_on_semiopen_file(Color c, Square s) const {
