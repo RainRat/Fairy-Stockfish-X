@@ -132,6 +132,12 @@ cannon = c
 soldier = s
 pawnTypes = ps
 
+[capture-anything:chess]
+selfCapture = true
+
+[selfhouse:crazyhouse]
+selfCapture = true
+
 [hostageblank:chess]
 hostageExchange =
 
@@ -722,6 +728,32 @@ startFen = 4k3/3p4/8/8/8/8/8/3QK3 w - - 0 1
         moves = ["a1a8"]
         result = sf.get_fen("cambodian", fen, moves, False, False, True)
         self.assertEqual(result, "Rnsmksnr/8/1ppppppp/8/8/1PPPPPPP/8/1NSKMSNR b DEd - 0 1")
+
+    def test_capture_anything_knight_self_capture(self):
+        chess_start = sf.start_fen("chess")
+        chess_moves = sf.legal_moves("chess", chess_start, [])
+        self.assertNotIn("g1e2", chess_moves)
+
+        cap_start = sf.start_fen("capture-anything")
+        cap_moves = sf.legal_moves("capture-anything", cap_start, [])
+        self.assertIn("g1e2", cap_moves)
+
+        san = sf.get_san("capture-anything", cap_start, "g1e2")
+        self.assertIn("x", san)
+
+    def test_capture_anything_pawn_self_capture_resets_clock(self):
+        fen = "6k1/8/8/5N2/4P3/8/8/6K1 w - - 17 1"
+        moves = sf.legal_moves("capture-anything", fen, [])
+        self.assertIn("e4f5", moves)
+        self.assertTrue(sf.is_capture("capture-anything", fen, [], "e4f5"))
+
+        new_fen = sf.get_fen("capture-anything", fen, ["e4f5"])
+        self.assertEqual(int(new_fen.split()[4]), 0)
+
+    def test_self_capture_hand_keeps_mover_color(self):
+        fen = sf.start_fen("selfhouse")
+        new_fen = sf.get_fen("selfhouse", fen, ["g1e2"])
+        self.assertIn("[P]", new_fen)
 
     def test_get_san(self):
         fen = "4k3/8/3R4/8/1R3R2/8/3R4/4K3 w - - 0 1"

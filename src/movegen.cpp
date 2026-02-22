@@ -198,7 +198,10 @@ namespace {
 
     const Bitboard pawns      = pos.pieces(Us, PAWN);
     const Bitboard movable    = pos.board_bb(Us, PAWN) & ~pos.pieces();
-    const Bitboard capturable = pos.board_bb(Us, PAWN) &  pos.pieces(Them);
+    const Bitboard friendlyCapturable = pos.pieces(Us) & ~pos.pieces(Us, KING);
+    const Bitboard capturable = pos.board_bb(Us, PAWN)
+                              & (pos.self_capture() ? (pos.pieces(Them) | friendlyCapturable)
+                                                    :  pos.pieces(Them));
 
     target = Type == EVASIONS ? target : AllSquares;
 
@@ -336,7 +339,7 @@ namespace {
 
 
   template<Color Us, GenType Type>
-  ExtMove* generate_moves(const Position& pos, ExtMove* moveList, PieceType Pt, Bitboard target) {
+  ExtMove* generate_moves(const Position& pos, ExtMove* moveList, PieceType Pt, Bitboard target, Bitboard captureTarget) {
 
     assert(Pt != KING && Pt != PAWN);
 
@@ -348,15 +351,18 @@ namespace {
 
         Bitboard attacks = pos.attacks_from(Us, Pt, from);
         Bitboard quiets = pos.moves_from(Us, Pt, from);
-        Bitboard b = (  (attacks & pos.pieces())
-                       | (quiets & ~pos.pieces()));
+        Bitboard captureSquares = (attacks & pos.pieces()) & captureTarget;
+        Bitboard quietSquares   = (quiets & ~pos.pieces()) & target;
+        Bitboard b = captureSquares | quietSquares;
         Bitboard epSquares = (pos.en_passant_types(Us) & Pt) ? (attacks & pos.ep_squares() & ~pos.pieces()) : Bitboard(0);
-        Bitboard b1 = b & target & ~epSquares;
+        Bitboard b1 = b & ~epSquares;
         Bitboard promotion_zone = pos.promotion_zone(Us, Pt);
         PieceType promPt = pos.promoted_piece_type(Pt);
         Bitboard b2 = promPt && (!pos.promotion_limit(promPt) || pos.promotion_limit(promPt) > pos.count(Us, promPt)) ? b1 : Bitboard(0);
         Bitboard b3 = pos.piece_demotion() && pos.is_promoted(from) ? b1 : Bitboard(0);
-        Bitboard pawnPromotions = (pos.promotion_pawn_types(Us) & Pt) ? (b & (Type == EVASIONS ? target : ~pos.pieces(Us)) & promotion_zone) : Bitboard(0);
+        Bitboard pawnPromotions = (pos.promotion_pawn_types(Us) & Pt)
+                                ? (b & (Type == EVASIONS ? target : (~pos.pieces(Us) | (pos.self_capture() ? (pos.pieces(Us) & ~pos.pieces(Us, KING)) : Bitboard(0)))) & promotion_zone)
+                                : Bitboard(0);
         Bitboard jumpCaptures = 0;
         PieceSet jumpTypes = pos.jump_capture_types();
         if ((jumpTypes & ALL_PIECES) || (jumpTypes & Pt))
@@ -456,6 +462,7 @@ namespace {
     constexpr bool Checks = Type == QUIET_CHECKS; // Reduce template instantiations
     const Square ksq = pos.count<KING>(Us) ? pos.square<KING>(Us) : SQ_NONE;
     Bitboard target;
+    Bitboard captureTarget = Type == EVASIONS ? ~pos.pieces(Us) : Bitboard(0);
 
     // Skip generating non-king moves when in double check
     if (Type != EVASIONS || !more_than_one(pos.checkers() & ~pos.non_sliding_riders()))
@@ -478,9 +485,13 @@ namespace {
         // Remove inaccessible squares (outside board + wall squares)
         target &= pos.board_bb();
 
+        captureTarget = target;
+        if (pos.self_capture() && (Type == NON_EVASIONS || Type == CAPTURES || Type == EVASIONS))
+            captureTarget |= pos.pieces(Us) & ~pos.pieces(Us, KING);
+
         moveList = generate_pawn_moves<Us, Type>(pos, moveList, target);
         for (PieceSet ps = pos.piece_types() & ~(piece_set(PAWN) | KING); ps;)
-            moveList = generate_moves<Us, Type>(pos, moveList, pop_lsb(ps), target);
+            moveList = generate_moves<Us, Type>(pos, moveList, pop_lsb(ps), target, captureTarget);
         // generate drops
         if (pos.piece_drops() && Type != CAPTURES && (pos.can_drop(Us, ALL_PIECES) || pos.two_boards()))
             for (PieceSet ps = pos.piece_types(); ps;)
@@ -535,8 +546,13 @@ namespace {
     // King moves
     if (pos.count<KING>(Us) && (!Checks || pos.blockers_for_king(~Us) & ksq))
     {
-        Bitboard b = (  (pos.attacks_from(Us, KING, ksq) & pos.pieces())
-                      | (pos.moves_from(Us, KING, ksq) & ~pos.pieces())) & (Type == EVASIONS ? ~pos.pieces(Us) : target);
+        Bitboard kingAttacks = pos.attacks_from(Us, KING, ksq) & pos.pieces();
+        Bitboard kingMoves   = pos.moves_from(Us, KING, ksq) & ~pos.pieces();
+        Bitboard kingCaptureMask = Type == EVASIONS ? ~pos.pieces(Us) : captureTarget;
+        if (Type == EVASIONS && pos.self_capture())
+            kingCaptureMask |= pos.pieces(Us) & ~pos.pieces(Us, KING);
+        Bitboard kingQuietMask = Type == EVASIONS ? ~pos.pieces(Us) : target;
+        Bitboard b = (kingAttacks & kingCaptureMask) | (kingMoves & kingQuietMask);
         while (b)
             moveList = make_move_and_gating<NORMAL>(pos, moveList, Us, ksq, pop_lsb(b));
 

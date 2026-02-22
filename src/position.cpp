@@ -1720,9 +1720,15 @@ bool Position::pseudo_legal(const Move m) const {
   if (pc == NO_PIECE || color_of(pc) != us)
       return false;
 
-  // The destination square cannot be occupied by a friendly piece
+  // The destination square cannot be occupied by a friendly piece unless
+  // self-capture is enabled. Friendly kings remain uncapturable.
   if (pieces(us) & to)
-      return false;
+  {
+      if (!(self_capture() && capture(m)))
+          return false;
+      if (type_of(piece_on(to)) == KING)
+          return false;
+  }
 
   // Handle the special case of a pawn move
   if (type_of(pc) == PAWN)
@@ -1732,7 +1738,7 @@ bool Position::pseudo_legal(const Move m) const {
       if (mandatory_pawn_promotion() && (promotion_zone(pc) & to) && !sittuyin_promotion())
           return false;
 
-      if (   !(pawn_attacks_bb(us, from) & pieces(~us) & to)     // Not a capture
+      if (   !(pawn_attacks_bb(us, from) & (self_capture() ? pieces() : pieces(~us)) & to) // Not a capture
           && !((from + pawn_push(us) == to) && !(pieces() & to)) // Not a single push
           && !(   (from + 2 * pawn_push(us) == to)               // Not a double push
                && (double_step_region(pc) & from)
@@ -1957,7 +1963,10 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   st->pass = is_pass(m);
 
   assert(color_of(pc) == us);
-  assert(captured == NO_PIECE || color_of(captured) == (type_of(m) != CASTLING ? them : us));
+  assert(captured == NO_PIECE
+         || (type_of(m) == CASTLING ? color_of(captured) == us
+                                    : (color_of(captured) == them
+                                       || (self_capture() && color_of(captured) == us))));
   assert(type_of(captured) != KING);
 
   if (check_counting() && givesCheck)
@@ -2017,7 +2026,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       if (type_of(captured) == PAWN)
           st->pawnKey ^= Zobrist::psq[captured][capsq];
       else
-          st->nonPawnMaterial[them] -= PieceValue[MG][captured];
+          st->nonPawnMaterial[color_of(captured)] -= PieceValue[MG][captured];
 
       if (Eval::useNNUE)
       {
@@ -2036,9 +2045,10 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           board[capsq] = NO_PIECE;
       if (capture_type() == HAND)
       {
-          Piece pieceToHand = !capturedPromoted || drop_loop() ? ~captured
-                             : unpromotedCaptured ? ~unpromotedCaptured
-                                                  : make_piece(~color_of(captured), main_promotion_pawn_type(color_of(captured)));
+          Piece pieceToHand = !capturedPromoted || drop_loop()
+                             ? make_piece(us, type_of(captured))
+                             : unpromotedCaptured ? make_piece(us, type_of(unpromotedCaptured))
+                                                  : make_piece(us, main_promotion_pawn_type(color_of(captured)));
           add_to_hand(pieceToHand);
           int newN = pieceCountInHand[color_of(pieceToHand)][type_of(pieceToHand)];
           xor_in_hand_count(k, pieceToHand, newN - 1, newN);
@@ -2701,9 +2711,10 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           bool petrifiedCenter = bsq == to && (var->petrifyOnCaptureTypes & type_of(bpc));
           if (captures_to_hand() && !petrifiedCenter)
           {
-              Piece pieceToHand = !capturedPromoted || drop_loop() ? ~bpc
-                                 : unpromotedCaptured ? ~unpromotedCaptured
-                                                      : make_piece(~color_of(bpc), PAWN);
+              Piece pieceToHand = !capturedPromoted || drop_loop()
+                                 ? make_piece(us, type_of(bpc))
+                                 : unpromotedCaptured ? make_piece(us, type_of(unpromotedCaptured))
+                                                      : make_piece(us, PAWN);
               int n;
               if (capture_type() == PRISON) {
                   pieceToHand = ~pieceToHand;
@@ -2901,8 +2912,8 @@ void Position::undo_move(Move m) {
               bool petrifiedCenter = bsq == to && (var->petrifyOnCaptureTypes & type_of(bpc));
               if (!wasBlastPromoted && !petrifiedCenter && capture_type() == HAND) {
                   remove_from_hand(!drop_loop() && (st->promotedBycatch & bsq)
-                                    ? make_piece(~color_of(unpromotedBpc), main_promotion_pawn_type(color_of(unpromotedBpc)))
-                                    : ~unpromotedBpc);
+                                    ? make_piece(us, main_promotion_pawn_type(color_of(unpromotedBpc)))
+                                    : make_piece(us, type_of(unpromotedBpc)));
               } else if (!wasBlastPromoted && !petrifiedCenter && capture_type() == PRISON) {
                   remove_from_prison(!drop_loop() && (st->promotedBycatch & bsq)
                                     ? make_piece(color_of(unpromotedBpc), main_promotion_pawn_type(color_of(unpromotedBpc)))
@@ -2994,9 +3005,9 @@ void Position::undo_move(Move m) {
           if (capture_type() == HAND) {
               remove_from_hand(!drop_loop() && st->capturedpromoted
                                ? (st->unpromotedCapturedPiece
-                                  ? ~st->unpromotedCapturedPiece
-                                  : make_piece(~color_of(st->capturedPiece), main_promotion_pawn_type(us)))
-                               : ~st->capturedPiece);
+                                  ? make_piece(us, type_of(st->unpromotedCapturedPiece))
+                                  : make_piece(us, main_promotion_pawn_type(color_of(st->capturedPiece))))
+                               : make_piece(us, type_of(st->capturedPiece)));
           } else if (capture_type() == PRISON) {
               remove_from_prison(!drop_loop() && st->capturedpromoted
                                ? (st->unpromotedCapturedPiece
@@ -3138,8 +3149,8 @@ Key Position::key_after(Move m) const {
       k ^= Zobrist::psq[captured][to];
       if (captures_to_hand()) {
           Piece removedPiece = !drop_loop() && is_promoted(to)
-                               ? make_piece(~color_of(captured), main_promotion_pawn_type(color_of(captured)))
-                               : ~captured;
+                               ? make_piece(sideToMove, main_promotion_pawn_type(color_of(captured)))
+                               : make_piece(sideToMove, type_of(captured));
           int n;
           if (capture_type() == HAND) {
               n = pieceCountInHand[color_of(removedPiece)][type_of(removedPiece)];
@@ -3302,7 +3313,11 @@ bool Position::see_ge(Move m, Value threshold) const {
   if (must_capture() || !checking_permitted() || is_gating(m) || count<CLOBBER_PIECE>() == count<ALL_PIECES>())
       return VALUE_ZERO >= threshold;
 
-  int swap = PieceValue[MG][piece_on(to)] - threshold;
+  Piece victim = piece_on(to);
+  int victimValue = PieceValue[MG][victim];
+  if (victim != NO_PIECE && color_of(victim) == color_of(moved_piece(m)) && self_capture())
+      victimValue = -victimValue;
+  int swap = victimValue - threshold;
   if (swap < 0)
       return false;
 
@@ -3574,7 +3589,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
 
   // Extinction
   // Extinction does not apply for pseudo-royal pieces, because they can not be captured
-  if (extinction_value() != VALUE_NONE)
+  if (extinction_value() != VALUE_NONE && (!pseudo_royal_types() || blast_on_capture()))
   {
       for (Color c : { ~sideToMove, sideToMove })
           for (PieceSet ps = extinction_piece_types(); ps;)

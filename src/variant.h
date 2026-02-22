@@ -111,6 +111,7 @@ struct Variant {
   bool checking = true;
   bool dropChecks = true;
   bool mustCapture = false;
+  bool selfCapture = false;
   bool mustDrop = false;
   PieceType mustDropType = ALL_PIECES;
   bool isPriorityDrop[PIECE_TYPE_NB] = {};
