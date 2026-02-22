@@ -157,10 +157,14 @@ public:
     return true;
   }
 
-  void pop() {
+  bool pop() {
+    if (moveStack.empty() || states->size() <= 1)
+      return false;
+
     pos.undo_move(this->moveStack.back());
     moveStack.pop_back();
     states->pop_back();
+    return true;
   }
 
   void reset() {
@@ -211,16 +215,27 @@ public:
 
   std::string variation_san(std::string uciMoves, Notation notation, bool moveNumbers) {
     std::stringstream ss(uciMoves);
-    StateListPtr tempStates;
     std::vector<Move> moves;
     std::string variationSan = "";
     std::string uciMove;
     bool first = true;
+    std::size_t pushedStates = 0;
+
+    auto rollback = [&]() {
+      for (auto rIt = std::rbegin(moves); rIt != std::rend(moves); ++rIt)
+        pos.undo_move(*rIt);
+      for (std::size_t i = 0; i < pushedStates; ++i)
+        states->pop_back();
+      pushedStates = 0;
+    };
 
     while (std::getline(ss, uciMove, ' ')) {
       const Move move = UCI::to_move(this->pos, uciMove);
       if (is_move_none<true>(move, uciMove, pos))
+      {
+        rollback();
         return "";
+      }
       moves.emplace_back(UCI::to_move(this->pos, uciMove));
       if (first) {
         first = false;
@@ -244,12 +259,11 @@ public:
       }
       states->emplace_back();
       pos.do_move(moves.back(), states->back());
+      ++pushedStates;
     }
 
     // recover initial state
-    for(auto rIt = std::rbegin(moves); rIt != std::rend(moves); ++rIt) {
-      pos.undo_move(*rIt);
-    }
+    rollback();
 
     return variationSan;
   }

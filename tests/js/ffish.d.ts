@@ -44,7 +44,7 @@ export interface Board {
     numberLegalMoves(): number;
     push(uciMove: string): boolean;
     pushSan(sanMove: string, notation?: Notation): boolean;
-    pop(): void;
+    pop(): boolean;
     reset(): void;
     is960(): boolean;
     fen(showPromoted?: boolean, countStarted?: number): string;
