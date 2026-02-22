@@ -181,7 +181,10 @@ struct Variant {
   bool bikjangRule = false;
   Value extinctionValue = VALUE_NONE;
   bool extinctionClaim = false;
+  // Deprecated legacy switch kept for compatibility with existing configs.
   bool extinctionPseudoRoyal = false;
+  PieceSet pseudoRoyalTypes = NO_PIECE_SET;
+  int pseudoRoyalCount = 1;
   bool dupleCheck = false;
   PieceSet extinctionPieceTypes = NO_PIECE_SET;
   int extinctionPieceCount = 0;

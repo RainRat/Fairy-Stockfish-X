@@ -916,6 +916,8 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("shogiPawnDropMateIllegal", v->shogiPawnDropMateIllegal);
     parse_attribute("shatarMateRule", v->shatarMateRule);
     parse_attribute("bikjangRule", v->bikjangRule);
+    parse_attribute("pseudoRoyalTypes", v->pseudoRoyalTypes, v->pieceToChar);
+    parse_attribute("pseudoRoyalCount", v->pseudoRoyalCount);
     parse_attribute("extinctionValue", v->extinctionValue);
     parse_attribute("extinctionClaim", v->extinctionClaim);
     parse_attribute("extinctionPseudoRoyal", v->extinctionPseudoRoyal);
@@ -924,6 +926,13 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("extinctionPieceTypes", v->extinctionPieceTypes, v->pieceToChar);
     parse_attribute("extinctionPieceCount", v->extinctionPieceCount);
     parse_attribute("extinctionOpponentPieceCount", v->extinctionOpponentPieceCount);
+
+    // Backward compatibility for legacy extinctionPseudoRoyal configs.
+    if (v->extinctionPseudoRoyal && !v->pseudoRoyalTypes)
+    {
+        v->pseudoRoyalTypes = v->extinctionPieceTypes;
+        v->pseudoRoyalCount = v->extinctionPieceCount + 1;
+    }
     parse_attribute("flagPiece", v->flagPiece[WHITE], v->pieceToChar);
     parse_attribute("flagPiece", v->flagPiece[BLACK], v->pieceToChar);
     parse_attribute("flagPieceWhite", v->flagPiece[WHITE], v->pieceToChar);
@@ -1050,7 +1059,7 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
         // 1. In blast variants, moving a (pseudo-)royal blastImmuneType into another piece is legal.
         // 2. In blast variants, capturing a piece next to a (pseudo-)royal blastImmuneType is legal.
         // 3. Moving a (pseudo-)royal mutuallyImmuneType into a square threatened by the same type is legal.
-        if ((v->extinctionPseudoRoyal) || (v->pieceTypes & KING))
+        if (v->pseudoRoyalTypes || (v->pieceTypes & KING))
         {
             if (v->blastImmuneTypes) //I may have this solved now.
                 std::cerr << "Can not use kings or pseudo-royal with blastImmuneTypes." << std::endl;

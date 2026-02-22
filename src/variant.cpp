@@ -2025,6 +2025,14 @@ void VariantMap::init() {
 
 // Pre-calculate derived properties
 Variant* Variant::conclude() {
+    // Backward compatibility: legacy extinctionPseudoRoyal used extinction
+    // piece fields to define pseudo-royal behavior.
+    if (extinctionPseudoRoyal && !pseudoRoyalTypes)
+    {
+        pseudoRoyalTypes = extinctionPieceTypes;
+        pseudoRoyalCount = extinctionPieceCount + 1;
+    }
+
     // Compatibility shim: legacy mutuallyImmuneTypes means same-type captures are forbidden.
     for (PieceSet ps = mutuallyImmuneTypes; ps; )
     {

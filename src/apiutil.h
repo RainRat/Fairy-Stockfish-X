@@ -376,7 +376,7 @@ inline bool has_insufficient_material(Color c, const Position& pos) {
     // Other win rules
     if (   pos.captures_to_hand()
         || pos.count_in_hand(c, ALL_PIECES)
-        || (pos.extinction_value() != VALUE_NONE && !pos.extinction_pseudo_royal())
+        || (pos.extinction_value() != VALUE_NONE && (pos.extinction_piece_types() & ~pos.pseudo_royal_types()))
         || (pos.flag_region(c) && pos.count(c, pos.flag_piece(c))))
         return false;
 
@@ -403,7 +403,7 @@ inline bool has_insufficient_material(Color c, const Position& pos) {
         PieceType pt = pop_lsb(ps);
 
         // Constrained pieces
-        if (pt == KING || !(pos.board_bb(c, pt) & pos.board_bb(~c, KING)) || (pos.extinction_pseudo_royal() && pos.blast_on_capture() && (pos.extinction_piece_types() & pt)))
+        if (pt == KING || !(pos.board_bb(c, pt) & pos.board_bb(~c, KING)) || (pos.pseudo_royal_types() & pt))
             restricted |= pos.pieces(c, pt);
 
         // If piece is a major piece or a custom piece we consider it sufficient for mate.
@@ -444,7 +444,7 @@ inline bool has_insufficient_material(Color c, const Position& pos) {
 
 inline Bitboard checked(const Position& pos) {
     return (pos.checkers() ? square_bb(pos.square<KING>(pos.side_to_move())) : Bitboard(0))
-        | (pos.extinction_pseudo_royal() ? pos.checked_pseudo_royals(pos.side_to_move()) : Bitboard(0));
+        | (pos.pseudo_royal_types() ? pos.checked_pseudo_royals(pos.side_to_move()) : Bitboard(0));
 }
 
 namespace FEN {

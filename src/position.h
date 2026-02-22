@@ -249,6 +249,8 @@ public:
   bool extinction_single_piece() const;
   int extinction_piece_count() const;
   int extinction_opponent_piece_count() const;
+  PieceSet pseudo_royal_types() const;
+  int pseudo_royal_count() const;
   bool extinction_pseudo_royal() const;
   PieceType flag_piece(Color c) const;
   Bitboard flag_region(Color c) const;
@@ -1225,7 +1227,7 @@ inline EnclosingRule Position::flip_enclosed_pieces() const {
 inline Value Position::stalemate_value(int ply) const {
   assert(var != nullptr);
   // Check for checkmate of pseudo-royal pieces
-  if (var->extinctionPseudoRoyal)
+  if (pseudo_royal_types())
   {
       Bitboard pseudoRoyals = st->pseudoRoyals & pieces(sideToMove);
       Bitboard pseudoRoyalsTheirs = st->pseudoRoyals & pieces(~sideToMove);
@@ -1347,9 +1349,18 @@ inline int Position::extinction_opponent_piece_count() const {
   return var->extinctionOpponentPieceCount;
 }
 
-inline bool Position::extinction_pseudo_royal() const {
+inline PieceSet Position::pseudo_royal_types() const {
   assert(var != nullptr);
-  return var->extinctionPseudoRoyal;
+  return var->pseudoRoyalTypes;
+}
+
+inline int Position::pseudo_royal_count() const {
+  assert(var != nullptr);
+  return var->pseudoRoyalCount;
+}
+
+inline bool Position::extinction_pseudo_royal() const {
+  return pseudo_royal_types() != NO_PIECE_SET;
 }
 
 inline PieceType Position::flag_piece(Color c) const {
