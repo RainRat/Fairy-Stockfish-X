@@ -21,6 +21,7 @@
 #include <cstddef> // For offsetof()
 #include <cstring> // For std::memset, std::memcmp
 #include <iomanip>
+#include <limits>
 #include <sstream>
 
 #include "bitboard.h"
@@ -517,7 +518,20 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
               if (rankDigits.empty())
                   break;
 
-              int rankNumber = std::stoi(rankDigits);
+              int rankNumber = 0;
+              bool rankOverflow = false;
+              for (char d : rankDigits)
+              {
+                  int digit = d - '0';
+                  if (rankNumber > (std::numeric_limits<int>::max() - digit) / 10)
+                  {
+                      rankOverflow = true;
+                      break;
+                  }
+                  rankNumber = rankNumber * 10 + digit;
+              }
+              if (rankOverflow)
+                  continue;
               if (rankNumber < 1 || rankNumber > max_rank() + 1)
                   continue;
 
@@ -1974,7 +1988,11 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       assert((type_of(m) == PROMOTION && sittuyin_promotion()) || is_pass(m));
       captured = NO_PIECE;
   }
-  Square capturedSq = captured ? (jumpCapsq != SQ_NONE ? jumpCapsq : to) : SQ_NONE;
+  Square capturedSq = SQ_NONE;
+  if (captured)
+      capturedSq = type_of(m) == EN_PASSANT ? capture_square(to)
+                 : jumpCapsq != SQ_NONE      ? jumpCapsq
+                                             : to;
   st->capturedpromoted = captured ? is_promoted(capturedSq) : false;
   st->unpromotedCapturedPiece = captured ? unpromoted_piece_on(capturedSq) : NO_PIECE;
   st->captureSquare = capturedSq;
@@ -3666,11 +3684,16 @@ bool Position::is_optional_game_end(Value& result, int ply, int countStarted) co
 bool Position::is_immediate_game_end(Value& result, int ply) const {
 
   // Extinction
-  // Extinction does not apply for pseudo-royal pieces, because they can not be captured
-  if (extinction_value() != VALUE_NONE && (!pseudo_royal_types() || blast_on_capture()))
+  // Extinction does not apply for pseudo-royal pieces in normal capture rules,
+  // because they cannot be captured directly.
+  if (extinction_value() != VALUE_NONE)
   {
+      PieceSet extinctTargets = extinction_piece_types();
+      if (!blast_on_capture())
+          extinctTargets &= ~pseudo_royal_types();
+
       for (Color c : { ~sideToMove, sideToMove })
-          for (PieceSet ps = extinction_piece_types(); ps;)
+          for (PieceSet ps = extinctTargets; ps;)
           {
               PieceType pt = pop_lsb(ps);
               if (   count_with_hand( c, pt) <= var->extinctionPieceCount
