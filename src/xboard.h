@@ -20,9 +20,13 @@
 #define XBOARD_H_INCLUDED
 
 #include <algorithm>
+#include <atomic>
+#include <memory>
+#include <mutex>
 #include <sstream>
 #include <string>
 
+#include "thread_win32_osx.h"
 #include "types.h"
 
 namespace Stockfish {
@@ -41,15 +45,21 @@ public:
     playColor = COLOR_NB;
     ponderMove = MOVE_NONE;
     ponderHighlight = "";
+    shuttingDown = false;
   }
+  ~StateMachine();
   void go(Search::LimitsType searchLimits, bool ponder = false);
   void ponder();
   void stop(bool abort = true);
+  void shutdown_ponder_worker();
   void setboard(std::string fen = "");
   void do_move(Move m);
   void undo_move();
   std::string highlight(std::string square);
   void process_command(std::string token, std::istringstream& is);
+  void launch_ponder_worker();
+  void join_ponder_worker();
+  void cancel_ponder_worker();
   bool moveAfterSearch;
   Move ponderMove;
 
@@ -60,6 +70,9 @@ private:
   Search::LimitsType limits;
   Color playColor;
   std::string ponderHighlight;
+  std::mutex ponderMutex;
+  std::unique_ptr<NativeThread> ponderWorker;
+  std::atomic<bool> shuttingDown;
 };
 
 extern StateMachine* stateMachine;

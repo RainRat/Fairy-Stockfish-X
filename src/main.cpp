@@ -55,9 +55,16 @@ int main(int argc, char* argv[]) {
 
   UCI::loop(argc, argv);
 
+  if (XBoard::stateMachine)
+      XBoard::stateMachine->shutdown_ponder_worker();
+
   Threads.set(0);
   variants.clear_all();
   pieceMap.clear_all();
-  delete XBoard::stateMachine;
+  if (XBoard::stateMachine)
+  {
+      delete XBoard::stateMachine;
+      XBoard::stateMachine = nullptr;
+  }
   return 0;
 }
