@@ -25,7 +25,6 @@
 #include <sstream>
 #include <cctype>
 #include <iostream>
-#include <math.h>
 
 #include "types.h"
 #include "position.h"
@@ -490,7 +489,9 @@ inline bool operator!=(const CharSquare& s1, const CharSquare& s2) {
 }
 
 inline int non_root_euclidian_distance(const CharSquare& s1, const CharSquare& s2) {
-    return pow(s1.rowIdx - s2.rowIdx, 2) + pow(s1.fileIdx - s2.fileIdx, 2);
+    int rowDelta = s1.rowIdx - s2.rowIdx;
+    int fileDelta = s1.fileIdx - s2.fileIdx;
+    return rowDelta * rowDelta + fileDelta * fileDelta;
 }
 
 class CharBoard {
