@@ -63,6 +63,7 @@ namespace {
       bool initial = false;
       bool dynamicDistance = false;
       int distance = 0;
+      bool standaloneH = false;
       std::vector<std::string> prelimDirections = {};
       for (std::string::size_type i = 0; i < betza.size(); i++)
       {
@@ -106,7 +107,14 @@ namespace {
                       continue;
                   }
               }
-              prelimDirections.push_back(std::string(2, c));
+              if (c == 'h')
+              {
+                  prelimDirections.push_back("hr");
+                  prelimDirections.push_back("hl");
+                  standaloneH = true;
+              }
+              else
+                  prelimDirections.push_back(std::string(2, c));
           }
           // Move atom
           else if (leaperAtoms.find(c) != leaperAtoms.end() || riderAtoms.find(c) != riderAtoms.end())
@@ -144,7 +152,7 @@ namespace {
                   // Split directions for orthogonal pieces
                   // This is required e.g. to correctly interpret fsW for soldiers
                   for (auto s : prelimDirections)
-                      if (atoms.size() == 1 && atom.second == 0 && s[0] != s[1])
+                      if (atoms.size() == 1 && atom.second == 0 && s[0] != s[1] && s != "hr" && s != "hl")
                       {
                           directions.push_back(std::string(2, s[0]));
                           directions.push_back(std::string(2, s[1]));
@@ -160,9 +168,9 @@ namespace {
                       auto has_dir = [&](std::string s) {
                         return std::find(directions.begin(), directions.end(), s) != directions.end();
                       };
-                      if (directions.size() == 0 || has_dir("ff") || has_dir("vv") || has_dir("rf") || has_dir("rv") || has_dir("fh") || has_dir("rh") || has_dir("hr"))
+                      if (directions.size() == 0 || has_dir("ff") || has_dir("vv") || has_dir("rf") || has_dir("rv") || has_dir("fh") || has_dir("rh") || (has_dir("hr") && !standaloneH))
                           v[Direction(atom.first * FILE_NB + atom.second)] = distance;
-                      if (directions.size() == 0 || has_dir("bb") || has_dir("vv") || has_dir("lb") || has_dir("lv") || has_dir("bh") || has_dir("lh") || has_dir("hr"))
+                      if (directions.size() == 0 || has_dir("bb") || has_dir("vv") || has_dir("lb") || has_dir("lv") || has_dir("bh") || has_dir("lh") || (has_dir("hr") && !standaloneH))
                           v[Direction(-atom.first * FILE_NB - atom.second)] = distance;
                       if (directions.size() == 0 || has_dir("rr") || has_dir("ss") || has_dir("br") || has_dir("bs") || has_dir("bh") || has_dir("rh") || has_dir("hr"))
                           v[Direction(-atom.second * FILE_NB + atom.first)] = distance;
@@ -172,9 +180,9 @@ namespace {
                           v[Direction(atom.second * FILE_NB + atom.first)] = distance;
                       if (directions.size() == 0 || has_dir("ll") || has_dir("ss") || has_dir("bl") || has_dir("bs") || has_dir("bh") || has_dir("lh") || has_dir("hl"))
                           v[Direction(-atom.second * FILE_NB - atom.first)] = distance;
-                      if (directions.size() == 0 || has_dir("bb") || has_dir("vv") || has_dir("rb") || has_dir("rv") || has_dir("bh") || has_dir("rh") || has_dir("hl"))
+                      if (directions.size() == 0 || has_dir("bb") || has_dir("vv") || has_dir("rb") || has_dir("rv") || has_dir("bh") || has_dir("rh") || (has_dir("hl") && !standaloneH))
                           v[Direction(-atom.first * FILE_NB + atom.second)] = distance;
-                      if (directions.size() == 0 || has_dir("ff") || has_dir("vv") || has_dir("lf") || has_dir("lv") || has_dir("fh") || has_dir("lh") || has_dir("hl"))
+                      if (directions.size() == 0 || has_dir("ff") || has_dir("vv") || has_dir("lf") || has_dir("lv") || has_dir("fh") || has_dir("lh") || (has_dir("hl") && !standaloneH))
                           v[Direction(atom.first * FILE_NB - atom.second)] = distance;
                   }
               }
@@ -186,6 +194,7 @@ namespace {
               lame = false;
               initial = false;
               dynamicDistance = false;
+              standaloneH = false;
               distance = 0;
           }
       }
