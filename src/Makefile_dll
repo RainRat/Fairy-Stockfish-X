@@ -24,7 +24,15 @@ SRCS = ffishdll.cpp benchmark.cpp bitbase.cpp bitboard.cpp endgame.cpp evaluate.
 
 OBJS := $(SRCS:.cpp=.o)
 
-CXXFLAGS ?= -std=c++17 -O3 -Wall -Wextra -DNDEBUG -DLARGEBOARDS -DPRECOMPUTED_MAGICS -DALLVARS -DNNUE_EMBEDDING_OFF
+verylargeboards ?= no
+largeboards ?= yes
+
+CXXFLAGS ?= -std=c++17 -O3 -Wall -Wextra -DNDEBUG -DPRECOMPUTED_MAGICS -DALLVARS -DNNUE_EMBEDDING_OFF
+ifneq ($(verylargeboards),no)
+  CXXFLAGS += -DVERY_LARGE_BOARDS
+else ifneq ($(largeboards),no)
+  CXXFLAGS += -DLARGEBOARDS
+endif
 LDFLAGS ?= -shared
 ifneq (,$(filter $(OS_NAME),Linux Darwin))
   CXXFLAGS += -fPIC -pthread

@@ -43,6 +43,12 @@ void initialize_stockfish() {
   Bitbases::init();
 }
 
+std::once_flag stockfish_init_flag;
+
+inline void ensure_stockfish_initialized() {
+  std::call_once(stockfish_init_flag, []() { initialize_stockfish(); });
+}
+
 inline void save_pop_back(std::string& s) {
   if (!s.empty())
     s.pop_back();
@@ -154,10 +160,13 @@ public:
     return true;
   }
 
-  void pop() {
+  bool pop() {
+    if (moveStack.empty() || states->size() <= 1)
+      return false;
     pos.undo_move(moveStack.back());
     moveStack.pop_back();
     states->pop_back();
+    return true;
   }
 
   void reset() { set_fen(v->startFen); }
@@ -189,11 +198,24 @@ public:
     std::string variationSan;
     std::string uciMove;
     bool first = true;
+    std::size_t pushedStates = 0;
+
+    auto rollback = [&]() {
+      for (auto rIt = std::rbegin(moves); rIt != std::rend(moves); ++rIt)
+        pos.undo_move(*rIt);
+      for (std::size_t i = 0; i < pushedStates; ++i)
+        states->pop_back();
+      pushedStates = 0;
+    };
 
     while (std::getline(ss, uciMove, ' ')) {
+      if (uciMove.empty())
+        continue;
       const Move move = UCI::to_move(pos, uciMove);
-      if (is_move_none<true>(move, uciMove, pos))
+      if (is_move_none<true>(move, uciMove, pos)) {
+        rollback();
         return "";
+      }
       moves.emplace_back(move);
       if (first) {
         first = false;
@@ -210,10 +232,10 @@ public:
       variationSan += SAN::move_to_san(pos, moves.back(), notation);
       states->emplace_back();
       pos.do_move(moves.back(), states->back());
+      ++pushedStates;
     }
 
-    for (auto rIt = std::rbegin(moves); rIt != std::rend(moves); ++rIt)
-      pos.undo_move(*rIt);
+    rollback();
 
     return variationSan;
   }
@@ -353,10 +375,8 @@ private:
   }
 
   void init(std::string uciVariant, std::string fen, bool is960Flag) {
-    if (!Board::sfInitialized) {
-      initialize_stockfish();
-      Board::sfInitialized = true;
-    }
+    ensure_stockfish_initialized();
+    Board::sfInitialized = true;
     v = get_variant(uciVariant);
     UCI::init_variant(v);
     resetStates();
@@ -391,8 +411,7 @@ std::string available_variants() {
 
 void load_variant_config(std::string variantInitContent) {
   std::stringstream ss(variantInitContent);
-  if (!Board::sfInitialized)
-    initialize_stockfish();
+  ensure_stockfish_initialized();
   variants.parse_istream<false>(ss);
   Options["UCI_Variant"].set_combo(variants.get_keys());
   Board::sfInitialized = true;
@@ -426,11 +445,8 @@ extern "C" {
 typedef void* fsf_board;
 
 FSF_API void fsf_init() {
-  static std::once_flag init_flag;
-  std::call_once(init_flag, []() {
-    initialize_stockfish();
-    Board::sfInitialized = true;
-  });
+  ensure_stockfish_initialized();
+  Board::sfInitialized = true;
 }
 
 FSF_API fsf_board fsf_new_board(const char* variant, const char* fen, bool is960) {
@@ -450,7 +466,7 @@ FSF_API bool fsf_push(fsf_board b, const char* uci) { return static_cast<Board*>
 FSF_API bool fsf_push_san(fsf_board b, const char* san, int notation) {
   return static_cast<Board*>(b)->push_san(san ? san : "", to_notation(notation));
 }
-FSF_API void fsf_pop(fsf_board b) { static_cast<Board*>(b)->pop(); }
+FSF_API void fsf_pop(fsf_board b) { (void)static_cast<Board*>(b)->pop(); }
 FSF_API void fsf_reset(fsf_board b) { static_cast<Board*>(b)->reset(); }
 
 FSF_API const char* fsf_fen(fsf_board b, bool showPromoted, int countStarted) {
