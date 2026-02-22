@@ -302,17 +302,23 @@ struct Bitboard {
     }
 
     constexpr Bitboard operator << (const unsigned int bits) const {
-        return Bitboard(  bits >= 64 ? b64[1] << (bits - 64)
-                        : bits == 0  ? b64[0]
-                        : ((b64[0] << bits) | (b64[1] >> (64 - bits))),
-                        bits >= 64 ? 0 : b64[1] << bits);
+        if (bits == 0)
+            return *this;
+        if (bits >= 128)
+            return Bitboard();
+        if (bits >= 64)
+            return Bitboard(b64[1] << (bits - 64), 0);
+        return Bitboard((b64[0] << bits) | (b64[1] >> (64 - bits)), b64[1] << bits);
     }
 
     constexpr Bitboard operator >> (const unsigned int bits) const {
-        return Bitboard(bits >= 64 ? 0 : b64[0] >> bits,
-                          bits >= 64 ? b64[0] >> (bits - 64)
-                        : bits == 0  ? b64[1]
-                        : ((b64[1] >> bits) | (b64[0] << (64 - bits))));
+        if (bits == 0)
+            return *this;
+        if (bits >= 128)
+            return Bitboard();
+        if (bits >= 64)
+            return Bitboard(0, b64[0] >> (bits - 64));
+        return Bitboard(b64[0] >> bits, (b64[0] << (64 - bits)) | (b64[1] >> bits));
     }
 
     constexpr Bitboard operator << (const int bits) const {
