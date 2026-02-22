@@ -1036,6 +1036,19 @@ class TestPyffish(unittest.TestCase):
         result = sf.is_capture("chess", CHESS, ["e2e4", "g8f6", "e4e5", "d7d5"], "e5d6")
         self.assertTrue(result)
 
+        # En passant for non-pawn piece with identical move/capture squares
+        sf.load_variant_config(
+            """[epsoldier:chess]
+soldier = s
+enPassantTypes = s
+mustCapture = true
+startFen = 4k3/8/2S5/3p4/8/8/8/4K3 w - d6 0 1
+"""
+        )
+        ep_fen = sf.start_fen("epsoldier")
+        self.assertEqual(sf.legal_moves("epsoldier", ep_fen, []), ["c6d6"])
+        self.assertTrue(sf.is_capture("epsoldier", ep_fen, [], "c6d6"))
+
         # 960 castling
         result = sf.is_capture("chess", "bqrbkrnn/pppppppp/8/8/8/8/PPPPPPPP/BQRBKRNN w CFcf - 0 1", ["g1f3", "h8g6"], "e1f1", True)
         self.assertFalse(result)
