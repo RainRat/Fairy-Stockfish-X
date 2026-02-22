@@ -40,22 +40,32 @@ std::string pretty(Bitboard b);
 
 } // namespace Stockfish::Bitboards
 
-#ifdef LARGEBOARDS
-constexpr Bitboard AllSquares = ((~Bitboard(0)) >> 8);
-#else
-constexpr Bitboard AllSquares = ~Bitboard(0);
-#endif
-#ifdef LARGEBOARDS
-constexpr Bitboard DarkSquares = (Bitboard(0xAAA555AAA555AAULL) << 64) ^ Bitboard(0xA555AAA555AAA555ULL);
-#else
-constexpr Bitboard DarkSquares = 0xAA55AA55AA55AA55ULL;
-#endif
+constexpr Bitboard all_squares_bb() {
+  Bitboard b = 0;
+  for (int i = 0; i < SQUARE_NB; ++i)
+      b = b | (Bitboard(1) << i);
+  return b;
+}
 
-#ifdef LARGEBOARDS
-constexpr Bitboard FileABB = (Bitboard(0x00100100100100ULL) << 64) ^ Bitboard(0x1001001001001001ULL);
-#else
-constexpr Bitboard FileABB = 0x0101010101010101ULL;
-#endif
+constexpr Bitboard dark_squares_bb() {
+  Bitboard b = 0;
+  for (int r = 0; r < RANK_NB; ++r)
+      for (int f = 0; f < FILE_NB; ++f)
+          if ((r + f) & 1)
+              b = b | (Bitboard(1) << (r * FILE_NB + f));
+  return b;
+}
+
+constexpr Bitboard file_a_bb() {
+  Bitboard b = 0;
+  for (int r = 0; r < RANK_NB; ++r)
+      b = b | (Bitboard(1) << (r * FILE_NB));
+  return b;
+}
+
+constexpr Bitboard AllSquares = all_squares_bb();
+constexpr Bitboard DarkSquares = dark_squares_bb();
+constexpr Bitboard FileABB = file_a_bb();
 constexpr Bitboard FileBBB = FileABB << 1;
 constexpr Bitboard FileCBB = FileABB << 2;
 constexpr Bitboard FileDBB = FileABB << 3;
@@ -68,14 +78,15 @@ constexpr Bitboard FileIBB = FileABB << 8;
 constexpr Bitboard FileJBB = FileABB << 9;
 constexpr Bitboard FileKBB = FileABB << 10;
 constexpr Bitboard FileLBB = FileABB << 11;
+#ifdef VERY_LARGE_BOARDS
+constexpr Bitboard FileMBB = FileABB << 12;
+constexpr Bitboard FileNBB = FileABB << 13;
+constexpr Bitboard FileOBB = FileABB << 14;
+constexpr Bitboard FilePBB = FileABB << 15;
+#endif
 #endif
 
-
-#ifdef LARGEBOARDS
-constexpr Bitboard Rank1BB = 0xFFF;
-#else
-constexpr Bitboard Rank1BB = 0xFF;
-#endif
+constexpr Bitboard Rank1BB = (Bitboard(1) << FILE_NB) - Bitboard(1);
 constexpr Bitboard Rank2BB = Rank1BB << (FILE_NB * 1);
 constexpr Bitboard Rank3BB = Rank1BB << (FILE_NB * 2);
 constexpr Bitboard Rank4BB = Rank1BB << (FILE_NB * 3);
@@ -86,6 +97,14 @@ constexpr Bitboard Rank8BB = Rank1BB << (FILE_NB * 7);
 #ifdef LARGEBOARDS
 constexpr Bitboard Rank9BB = Rank1BB << (FILE_NB * 8);
 constexpr Bitboard Rank10BB = Rank1BB << (FILE_NB * 9);
+#ifdef VERY_LARGE_BOARDS
+constexpr Bitboard Rank11BB = Rank1BB << (FILE_NB * 10);
+constexpr Bitboard Rank12BB = Rank1BB << (FILE_NB * 11);
+constexpr Bitboard Rank13BB = Rank1BB << (FILE_NB * 12);
+constexpr Bitboard Rank14BB = Rank1BB << (FILE_NB * 13);
+constexpr Bitboard Rank15BB = Rank1BB << (FILE_NB * 14);
+constexpr Bitboard Rank16BB = Rank1BB << (FILE_NB * 15);
+#endif
 #endif
 
 constexpr Bitboard QueenSide   = FileABB | FileBBB | FileCBB | FileDBB;
@@ -399,6 +418,17 @@ inline int edge_distance(File f, File maxFile = FILE_H) { return std::min(f, Fil
 inline int edge_distance(Rank r, Rank maxRank = RANK_8) { return std::min(r, Rank(maxRank - r)); }
 
 
+#ifdef VERY_LARGE_BOARDS
+Bitboard rider_attacks_bb(RiderType R, Square s, Bitboard occupied);
+
+template<RiderType R>
+inline Bitboard rider_attacks_bb(Square s, Bitboard occupied) {
+  static_assert(R != NO_RIDER && !(R & (R - 1))); // exactly one bit
+  return rider_attacks_bb(R, s, occupied);
+}
+
+inline Square lsb(Bitboard b);
+#else
 template<RiderType R>
 inline Bitboard rider_attacks_bb(Square s, Bitboard occupied) {
 
@@ -428,6 +458,7 @@ inline Bitboard rider_attacks_bb(RiderType R, Square s, Bitboard occupied) {
   const Magic& m = magics[lsb(R)][s]; // re-use Bitboard lsb for riders
   return m.attacks[m.index(occupied)];
 }
+#endif
 
 
 /// attacks_bb(Square) returns the pseudo attacks of the give piece type
@@ -496,7 +527,16 @@ inline int popcount(Bitboard b) {
 
 #ifndef USE_POPCNT
 
-#ifdef LARGEBOARDS
+#ifdef VERY_LARGE_BOARDS
+  return  PopCnt16[(b.b64[0] >>  0) & 0xFFFF] + PopCnt16[(b.b64[0] >> 16) & 0xFFFF]
+        + PopCnt16[(b.b64[0] >> 32) & 0xFFFF] + PopCnt16[(b.b64[0] >> 48) & 0xFFFF]
+        + PopCnt16[(b.b64[1] >>  0) & 0xFFFF] + PopCnt16[(b.b64[1] >> 16) & 0xFFFF]
+        + PopCnt16[(b.b64[1] >> 32) & 0xFFFF] + PopCnt16[(b.b64[1] >> 48) & 0xFFFF]
+        + PopCnt16[(b.b64[2] >>  0) & 0xFFFF] + PopCnt16[(b.b64[2] >> 16) & 0xFFFF]
+        + PopCnt16[(b.b64[2] >> 32) & 0xFFFF] + PopCnt16[(b.b64[2] >> 48) & 0xFFFF]
+        + PopCnt16[(b.b64[3] >>  0) & 0xFFFF] + PopCnt16[(b.b64[3] >> 16) & 0xFFFF]
+        + PopCnt16[(b.b64[3] >> 32) & 0xFFFF] + PopCnt16[(b.b64[3] >> 48) & 0xFFFF];
+#elif defined(LARGEBOARDS)
   union { Bitboard bb; uint16_t u[8]; } v = { b };
   return  PopCnt16[v.u[0]] + PopCnt16[v.u[1]] + PopCnt16[v.u[2]] + PopCnt16[v.u[3]]
         + PopCnt16[v.u[4]] + PopCnt16[v.u[5]] + PopCnt16[v.u[6]] + PopCnt16[v.u[7]];
@@ -507,7 +547,10 @@ inline int popcount(Bitboard b) {
 
 #elif defined(_MSC_VER) || defined(__INTEL_COMPILER)
 
-#ifdef LARGEBOARDS
+#ifdef VERY_LARGE_BOARDS
+  return (int)_mm_popcnt_u64(b.b64[0]) + (int)_mm_popcnt_u64(b.b64[1])
+       + (int)_mm_popcnt_u64(b.b64[2]) + (int)_mm_popcnt_u64(b.b64[3]);
+#elif defined(LARGEBOARDS)
   return (int)_mm_popcnt_u64(uint64_t(b >> 64)) + (int)_mm_popcnt_u64(uint64_t(b));
 #else
   return (int)_mm_popcnt_u64(b);
@@ -515,7 +558,10 @@ inline int popcount(Bitboard b) {
 
 #else // Assumed gcc or compatible compiler
 
-#ifdef LARGEBOARDS
+#ifdef VERY_LARGE_BOARDS
+  return __builtin_popcountll(b.b64[0]) + __builtin_popcountll(b.b64[1])
+       + __builtin_popcountll(b.b64[2]) + __builtin_popcountll(b.b64[3]);
+#elif defined(LARGEBOARDS)
   return __builtin_popcountll(b >> 64) + __builtin_popcountll(b);
 #else
   return __builtin_popcountll(b);
@@ -531,7 +577,12 @@ inline int popcount(Bitboard b) {
 
 inline Square lsb(Bitboard b) {
   assert(b);
-#ifdef LARGEBOARDS
+#ifdef VERY_LARGE_BOARDS
+  if (b.b64[3]) return Square(__builtin_ctzll(b.b64[3]));
+  if (b.b64[2]) return Square(__builtin_ctzll(b.b64[2]) + 64);
+  if (b.b64[1]) return Square(__builtin_ctzll(b.b64[1]) + 128);
+  return Square(__builtin_ctzll(b.b64[0]) + 192);
+#elif defined(LARGEBOARDS)
   if (!(b << 64))
       return Square(__builtin_ctzll(b >> 64) + 64);
 #endif
@@ -540,7 +591,12 @@ inline Square lsb(Bitboard b) {
 
 inline Square msb(Bitboard b) {
   assert(b);
-#ifdef LARGEBOARDS
+#ifdef VERY_LARGE_BOARDS
+  if (b.b64[0]) return Square(192 + (63 - __builtin_clzll(b.b64[0])));
+  if (b.b64[1]) return Square(128 + (63 - __builtin_clzll(b.b64[1])));
+  if (b.b64[2]) return Square(64 + (63 - __builtin_clzll(b.b64[2])));
+  return Square(63 - __builtin_clzll(b.b64[3]));
+#elif defined(LARGEBOARDS)
   if (b >> 64)
       return Square(int(SQUARE_BIT_MASK) ^ __builtin_clzll(b >> 64));
   return Square(int(SQUARE_BIT_MASK) ^ (__builtin_clzll(b) + 64));
