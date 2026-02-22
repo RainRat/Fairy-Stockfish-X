@@ -755,6 +755,16 @@ startFen = 4k3/3p4/8/8/8/8/8/3QK3 w - - 0 1
         new_fen = sf.get_fen("selfhouse", fen, ["g1e2"])
         self.assertIn("[P]", new_fen)
 
+    def test_benedict_morph_capture_changes_piece_type(self):
+        fen = "6k1/8/8/3r4/8/2N5/8/6K1 w - - 0 1"
+        new_fen = sf.get_fen("benedictmorph", fen, ["c3d5"])
+        self.assertIn("3R4", new_fen.split()[0])
+
+    def test_benedict_morph_king_stays_king(self):
+        fen = "6k1/8/8/8/8/8/6r1/6K1 w - - 0 1"
+        new_fen = sf.get_fen("benedictmorph", fen, ["g1g2"])
+        self.assertIn("6K1", new_fen.split()[0])
+
     def test_get_san(self):
         fen = "4k3/8/3R4/8/1R3R2/8/3R4/4K3 w - - 0 1"
         result = sf.get_san("chess", fen, "b4d4")

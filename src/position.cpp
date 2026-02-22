@@ -1928,6 +1928,9 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       st->removedCastlingGatingType = NO_PIECE_TYPE;
       st->capturedGatingType = NO_PIECE_TYPE;
   }
+  st->didMorph = false;
+  st->morphedFrom = NO_PIECE;
+  st->morphSquare = SQ_NONE;
   // Increment ply counters. In particular, rule50 will be reset to zero later on
   // in case of a capture or a pawn move.
   ++gamePly;
@@ -2402,6 +2405,59 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       st->epSquares = between_bb(from, to) & var->enPassantRegion[them];
       for (Bitboard b = st->epSquares; b; )
           k ^= Zobrist::enpassant[pop_lsb(b)];
+  }
+
+  // Benedict Morph: capturer changes type to the captured piece type.
+  // Keep promotion moves unchanged to preserve current promotion undo semantics.
+  if (   capture_morph()
+      && captured != NO_PIECE
+      && type_of(m) != DROP
+      && type_of(m) != CASTLING
+      && type_of(m) != PROMOTION
+      && type_of(m) != PIECE_PROMOTION
+      && !is_pass(m))
+  {
+      Piece cur = piece_on(to);
+      if (cur != NO_PIECE && !(rex_exclusive_morph() && type_of(cur) == KING))
+      {
+          Piece morphed = make_piece(color_of(cur), type_of(captured));
+          if (morphed != cur)
+          {
+              st->didMorph = true;
+              st->morphedFrom = cur;
+              st->morphSquare = to;
+
+              remove_piece(to);
+              put_piece(morphed, to);
+
+              k ^= Zobrist::psq[cur][to] ^ Zobrist::psq[morphed][to];
+              st->materialKey ^= Zobrist::psq[cur][pieceCount[cur]]
+                               ^ Zobrist::psq[morphed][pieceCount[morphed] - 1];
+              if (type_of(cur) == PAWN)
+                  st->pawnKey ^= Zobrist::psq[cur][to];
+              if (type_of(morphed) == PAWN)
+                  st->pawnKey ^= Zobrist::psq[morphed][to];
+              if (type_of(cur) != PAWN)
+                  st->nonPawnMaterial[us] -= PieceValue[MG][cur];
+              if (type_of(morphed) != PAWN)
+                  st->nonPawnMaterial[us] += PieceValue[MG][morphed];
+
+              if (Eval::useNNUE)
+              {
+                  dp.piece[dp.dirty_num] = cur;
+                  dp.handPiece[dp.dirty_num] = NO_PIECE;
+                  dp.from[dp.dirty_num] = to;
+                  dp.to[dp.dirty_num] = SQ_NONE;
+                  dp.dirty_num++;
+
+                  dp.piece[dp.dirty_num] = morphed;
+                  dp.handPiece[dp.dirty_num] = NO_PIECE;
+                  dp.from[dp.dirty_num] = SQ_NONE;
+                  dp.to[dp.dirty_num] = to;
+                  dp.dirty_num++;
+              }
+          }
+      }
   }
 
   // Set capture piece
@@ -2923,6 +2979,13 @@ void Position::undo_move(Move m) {
       }
       // Reset piece since it exploded itself
       pc = piece_on(to);
+  }
+
+  if (st->didMorph && st->morphSquare == to)
+  {
+      remove_piece(to);
+      put_piece(st->morphedFrom, to);
+      pc = st->morphedFrom;
   }
 
   // Remove gated piece

@@ -70,6 +70,8 @@ struct Variant {
   bool pieceDemotion = false;
   bool blastOnCapture = false;
   bool blastOnMove = false;
+  bool captureMorph = false;
+  bool rexExclusiveMorph = false;
   bool blastPromotion = false;
   bool blastDiagonals = true;
   bool blastCenter = true;

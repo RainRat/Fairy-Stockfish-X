@@ -1261,6 +1261,14 @@ namespace {
         v->flyingGeneral = true;
         return v;
     }
+    // Benedict Morph
+    // https://greenchess.net/rules.php?v=benedict-chess
+    Variant* benedictmorph_variant() {
+        Variant* v = chess_variant_base()->init();
+        v->captureMorph = true;
+        v->rexExclusiveMorph = true;
+        return v;
+    }
 #ifdef LARGEBOARDS
     // Musketeer Chess
     // https://musketeerchess.net
@@ -1936,6 +1944,7 @@ void VariantMap::init() {
     add("isolation", isolation_variant());
     add("isolation7x7", isolation7x7_variant());
     add("snailtrail", snailtrail_variant());
+    add("benedictmorph", benedictmorph_variant());
     add("fox-and-hounds", fox_and_hounds_variant());
 #ifdef ALLVARS
     add("duck", duck_variant());

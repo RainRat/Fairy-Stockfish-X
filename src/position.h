@@ -94,6 +94,9 @@ struct StateInfo {
   PieceType removedGatingType;
   PieceType removedCastlingGatingType;
   PieceType capturedGatingType;
+  bool didMorph;
+  Piece morphedFrom;
+  Square morphSquare;
 
   // Used by NNUE
   Eval::NNUE::Accumulator accumulator;
@@ -197,6 +200,8 @@ public:
   bool checking_permitted() const;
   bool drop_checks() const;
   bool self_capture() const;
+  bool capture_morph() const;
+  bool rex_exclusive_morph() const;
   bool must_capture() const;
   bool has_capture() const;
   bool must_drop() const;
@@ -887,6 +892,16 @@ inline bool Position::drop_checks() const {
 inline bool Position::self_capture() const {
   assert(var != nullptr);
   return var->selfCapture;
+}
+
+inline bool Position::capture_morph() const {
+  assert(var != nullptr);
+  return var->captureMorph;
+}
+
+inline bool Position::rex_exclusive_morph() const {
+  assert(var != nullptr);
+  return var->rexExclusiveMorph;
 }
 
 inline bool Position::must_capture() const {
