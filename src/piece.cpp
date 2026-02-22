@@ -16,6 +16,9 @@
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <algorithm>
+#include <cctype>
+#include <limits>
 #include <map>
 #include <string>
 #include <utility>
@@ -56,6 +59,84 @@ namespace {
       PieceInfo* p = new PieceInfo();
       p->name = name;
       p->betza = betza;
+
+      // Parser sugar: m(AB) -> mAmB, c(RB) -> cRcB
+      auto expand_group_sugar = [&](const std::string& in) {
+          const std::string prefixChars = "mcpgnxiyfbrlvsh";
+          std::string out;
+          for (std::string::size_type i = 0; i < in.size(); ++i)
+          {
+              if (in[i] != '(')
+              {
+                  out.push_back(in[i]);
+                  continue;
+              }
+              auto close = in.find(')', i + 1);
+              if (close == std::string::npos)
+              {
+                  out.push_back(in[i]);
+                  continue;
+              }
+              std::string content = in.substr(i + 1, close - i - 1);
+              if (content.empty() || content.find(',') != std::string::npos)
+              {
+                  out.append(in, i, close - i + 1);
+                  i = close;
+                  continue;
+              }
+              bool groupAtomsOnly = true;
+              for (char gc : content)
+                  if (leaperAtoms.find(gc) == leaperAtoms.end() && riderAtoms.find(gc) == riderAtoms.end())
+                  {
+                      groupAtomsOnly = false;
+                      break;
+                  }
+              if (!groupAtomsOnly)
+              {
+                  out.append(in, i, close - i + 1);
+                  i = close;
+                  continue;
+              }
+
+              std::string prefix;
+              while (!out.empty() && prefixChars.find(out.back()) != std::string::npos)
+              {
+                  prefix.insert(prefix.begin(), out.back());
+                  out.pop_back();
+              }
+              if (prefix.empty())
+              {
+                  out.append(in, i, close - i + 1);
+                  i = close;
+                  continue;
+              }
+              for (char gc : content)
+              {
+                  out += prefix;
+                  out.push_back(gc);
+              }
+              i = close;
+          }
+          return out;
+      };
+
+      auto parse_positive_int = [](const std::string& s, int& out) {
+          if (s.empty())
+              return false;
+          long long v = 0;
+          for (char ch : s)
+          {
+              if (!std::isdigit(static_cast<unsigned char>(ch)))
+                  return false;
+              v = v * 10 + (ch - '0');
+              if (v > std::numeric_limits<int>::max())
+                  return false;
+          }
+          out = int(v);
+          return true;
+      };
+
+      const std::string expandedBetza = expand_group_sugar(betza);
       std::vector<MoveModality> moveModalities = {};
       bool hopper = false;
       bool rider = false;
@@ -65,17 +146,92 @@ namespace {
       int distance = 0;
       bool standaloneH = false;
       std::vector<std::string> prelimDirections = {};
-      for (std::string::size_type i = 0; i < betza.size(); i++)
+
+      auto commit_atom = [&](const std::vector<std::pair<int, int>>& atoms, bool atomIsRider, std::string::size_type& i, char atomChar) {
+          // Check for rider / limited-distance rider suffix.
+          rider = atomIsRider;
+          if (i + 1 < expandedBetza.size() && (std::isdigit(static_cast<unsigned char>(expandedBetza[i + 1])) || expandedBetza[i + 1] == atomChar))
+          {
+              rider = true;
+              if (std::isdigit(static_cast<unsigned char>(expandedBetza[i + 1])))
+                  distance = expandedBetza[i + 1] - '0';
+              i++;
+          }
+          if (!rider && lame)
+              distance = -1;
+          if (dynamicDistance && rider)
+          {
+              distance = DYNAMIC_SLIDER_LIMIT;
+              p->hasDynamicSlider = true;
+          }
+          if (moveModalities.size() == 0)
+          {
+              moveModalities.push_back(MODALITY_QUIET);
+              moveModalities.push_back(MODALITY_CAPTURE);
+          }
+          // Define moves for each atom and modality.
+          for (const auto& atom : atoms)
+          {
+              std::vector<std::string> directions = {};
+              // Split directions for orthogonal pieces (e.g. fsW for soldier).
+              for (auto s : prelimDirections)
+                  if (atoms.size() == 1 && atom.second == 0 && s[0] != s[1] && s != "hr" && s != "hl")
+                  {
+                      directions.push_back(std::string(2, s[0]));
+                      directions.push_back(std::string(2, s[1]));
+                  }
+                  else
+                      directions.push_back(s);
+
+              // Add moves to steps/slider/hopper tables.
+              for (auto modality : moveModalities)
+              {
+                  auto& v = hopper ? p->hopper[initial][modality]
+                           : rider ? p->slider[initial][modality]
+                                   : p->steps[initial][modality];
+                  auto has_dir = [&](std::string s) {
+                    return std::find(directions.begin(), directions.end(), s) != directions.end();
+                  };
+                  if (directions.size() == 0 || has_dir("ff") || has_dir("vv") || has_dir("rf") || has_dir("rv") || has_dir("fh") || has_dir("rh") || (has_dir("hr") && !standaloneH))
+                      v[Direction(atom.first * FILE_NB + atom.second)] = distance;
+                  if (directions.size() == 0 || has_dir("bb") || has_dir("vv") || has_dir("lb") || has_dir("lv") || has_dir("bh") || has_dir("lh") || (has_dir("hr") && !standaloneH))
+                      v[Direction(-atom.first * FILE_NB - atom.second)] = distance;
+                  if (directions.size() == 0 || has_dir("rr") || has_dir("ss") || has_dir("br") || has_dir("bs") || has_dir("bh") || has_dir("rh") || has_dir("hr"))
+                      v[Direction(-atom.second * FILE_NB + atom.first)] = distance;
+                  if (directions.size() == 0 || has_dir("ll") || has_dir("ss") || has_dir("fl") || has_dir("fs") || has_dir("fh") || has_dir("lh") || has_dir("hr"))
+                      v[Direction(atom.second * FILE_NB - atom.first)] = distance;
+                  if (directions.size() == 0 || has_dir("rr") || has_dir("ss") || has_dir("fr") || has_dir("fs") || has_dir("fh") || has_dir("rh") || has_dir("hl"))
+                      v[Direction(atom.second * FILE_NB + atom.first)] = distance;
+                  if (directions.size() == 0 || has_dir("ll") || has_dir("ss") || has_dir("bl") || has_dir("bs") || has_dir("bh") || has_dir("lh") || has_dir("hl"))
+                      v[Direction(-atom.second * FILE_NB - atom.first)] = distance;
+                  if (directions.size() == 0 || has_dir("bb") || has_dir("vv") || has_dir("rb") || has_dir("rv") || has_dir("bh") || has_dir("rh") || (has_dir("hl") && !standaloneH))
+                      v[Direction(-atom.first * FILE_NB + atom.second)] = distance;
+                  if (directions.size() == 0 || has_dir("ff") || has_dir("vv") || has_dir("lf") || has_dir("lv") || has_dir("fh") || has_dir("lh") || (has_dir("hl") && !standaloneH))
+                      v[Direction(atom.first * FILE_NB - atom.second)] = distance;
+              }
+          }
+          // Reset per-atom parser state.
+          moveModalities.clear();
+          prelimDirections.clear();
+          hopper = false;
+          rider = false;
+          lame = false;
+          initial = false;
+          dynamicDistance = false;
+          standaloneH = false;
+          distance = 0;
+      };
+
+      for (std::string::size_type i = 0; i < expandedBetza.size(); i++)
       {
-          char c = betza[i];
+          char c = expandedBetza[i];
           // Modality
           if (c == 'm' || c == 'c')
               moveModalities.push_back(c == 'c' ? MODALITY_CAPTURE : MODALITY_QUIET);
-          // Hopper
+          // Hopper (grasshopper when g)
           else if (c == 'p' || c == 'g')
           {
               hopper = true;
-              // Grasshopper
               if (c == 'g')
                   distance = 1;
           }
@@ -94,10 +250,9 @@ namespace {
           // Directional modifiers
           else if (verticals.find(c) != std::string::npos || horizontals.find(c) != std::string::npos)
           {
-              if (i + 1 < betza.size())
+              if (i + 1 < expandedBetza.size())
               {
-                  char c2 = betza[i+1];
-                  // Can modifiers be combined?
+                  char c2 = expandedBetza[i + 1];
                   if (   c2 == c
                       || (verticals.find(c) != std::string::npos && horizontals.find(c2) != std::string::npos)
                       || (horizontals.find(c) != std::string::npos && verticals.find(c2) != std::string::npos))
@@ -116,86 +271,41 @@ namespace {
               else
                   prelimDirections.push_back(std::string(2, c));
           }
-          // Move atom
+          // Standard Betza move atom
           else if (leaperAtoms.find(c) != leaperAtoms.end() || riderAtoms.find(c) != riderAtoms.end())
           {
               const auto& atoms = riderAtoms.find(c) != riderAtoms.end() ? riderAtoms.find(c)->second
                                                                          : leaperAtoms.find(c)->second;
-              // Check for rider
-              if (riderAtoms.find(c) != riderAtoms.end())
-                  rider = true;
-              if (i + 1 < betza.size() && (isdigit(betza[i+1]) || betza[i+1] == c))
+              commit_atom(atoms, riderAtoms.find(c) != riderAtoms.end(), i, c);
+          }
+          // Tuple leaper atom: (x,y)
+          else if (c == '(')
+          {
+              auto close = expandedBetza.find(')', i + 1);
+              if (close == std::string::npos)
+                  continue;
+              auto comma = expandedBetza.find(',', i + 1);
+              if (comma == std::string::npos || comma > close)
               {
-                  rider = true;
-                  // limited distance riders
-                  if (isdigit(betza[i+1]))
-                      distance = betza[i+1] - '0';
-                  i++;
+                  i = close;
+                  continue;
               }
-              if (!rider && lame)
-                  distance = -1;
-              if (dynamicDistance && rider)
+              int dx = 0, dy = 0;
+              if (!parse_positive_int(expandedBetza.substr(i + 1, comma - i - 1), dx)
+                  || !parse_positive_int(expandedBetza.substr(comma + 1, close - comma - 1), dy))
               {
-                  distance = DYNAMIC_SLIDER_LIMIT;
-                  p->hasDynamicSlider = true;
+                  i = close;
+                  continue;
               }
-              // No modality qualifier means m+c
-              if (moveModalities.size() == 0)
+              // Reject meaningless/oversized tuples to avoid overflow and wrap artefacts.
+              if ((dx == 0 && dy == 0) || dx > int(FILE_MAX) || dy > int(RANK_MAX))
               {
-                  moveModalities.push_back(MODALITY_QUIET);
-                  moveModalities.push_back(MODALITY_CAPTURE);
+                  i = close;
+                  continue;
               }
-              // Define moves
-              for (const auto& atom : atoms)
-              {
-                  std::vector<std::string> directions = {};
-                  // Split directions for orthogonal pieces
-                  // This is required e.g. to correctly interpret fsW for soldiers
-                  for (auto s : prelimDirections)
-                      if (atoms.size() == 1 && atom.second == 0 && s[0] != s[1] && s != "hr" && s != "hl")
-                      {
-                          directions.push_back(std::string(2, s[0]));
-                          directions.push_back(std::string(2, s[1]));
-                      }
-                      else
-                          directions.push_back(s);
-                  // Add moves
-                  for (auto modality : moveModalities)
-                  {
-                      auto& v = hopper ? p->hopper[initial][modality]
-                               : rider ? p->slider[initial][modality]
-                                       : p->steps[initial][modality];
-                      auto has_dir = [&](std::string s) {
-                        return std::find(directions.begin(), directions.end(), s) != directions.end();
-                      };
-                      if (directions.size() == 0 || has_dir("ff") || has_dir("vv") || has_dir("rf") || has_dir("rv") || has_dir("fh") || has_dir("rh") || (has_dir("hr") && !standaloneH))
-                          v[Direction(atom.first * FILE_NB + atom.second)] = distance;
-                      if (directions.size() == 0 || has_dir("bb") || has_dir("vv") || has_dir("lb") || has_dir("lv") || has_dir("bh") || has_dir("lh") || (has_dir("hr") && !standaloneH))
-                          v[Direction(-atom.first * FILE_NB - atom.second)] = distance;
-                      if (directions.size() == 0 || has_dir("rr") || has_dir("ss") || has_dir("br") || has_dir("bs") || has_dir("bh") || has_dir("rh") || has_dir("hr"))
-                          v[Direction(-atom.second * FILE_NB + atom.first)] = distance;
-                      if (directions.size() == 0 || has_dir("ll") || has_dir("ss") || has_dir("fl") || has_dir("fs") || has_dir("fh") || has_dir("lh") || has_dir("hr"))
-                          v[Direction(atom.second * FILE_NB - atom.first)] = distance;
-                      if (directions.size() == 0 || has_dir("rr") || has_dir("ss") || has_dir("fr") || has_dir("fs") || has_dir("fh") || has_dir("rh") || has_dir("hl"))
-                          v[Direction(atom.second * FILE_NB + atom.first)] = distance;
-                      if (directions.size() == 0 || has_dir("ll") || has_dir("ss") || has_dir("bl") || has_dir("bs") || has_dir("bh") || has_dir("lh") || has_dir("hl"))
-                          v[Direction(-atom.second * FILE_NB - atom.first)] = distance;
-                      if (directions.size() == 0 || has_dir("bb") || has_dir("vv") || has_dir("rb") || has_dir("rv") || has_dir("bh") || has_dir("rh") || (has_dir("hl") && !standaloneH))
-                          v[Direction(-atom.first * FILE_NB + atom.second)] = distance;
-                      if (directions.size() == 0 || has_dir("ff") || has_dir("vv") || has_dir("lf") || has_dir("lv") || has_dir("fh") || has_dir("lh") || (has_dir("hl") && !standaloneH))
-                          v[Direction(atom.first * FILE_NB - atom.second)] = distance;
-                  }
-              }
-              // Reset state
-              moveModalities.clear();
-              prelimDirections.clear();
-              hopper = false;
-              rider = false;
-              lame = false;
-              initial = false;
-              dynamicDistance = false;
-              standaloneH = false;
-              distance = 0;
+              std::vector<std::pair<int, int>> tupleAtom = { std::make_pair(dx, dy) };
+              i = close;
+              commit_atom(tupleAtom, false, i, ')');
           }
       }
       return p;

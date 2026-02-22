@@ -18,7 +18,9 @@
 
 #include <algorithm>
 #include <bitset>
+#include <cstdlib>
 #include <map>
+#include <tuple>
 
 #include "bitboard.h"
 #include "magic.h"
@@ -208,8 +210,32 @@ namespace {
 /// from the given square. If the step is off the board, returns empty bitboard.
 
 inline Bitboard safe_destination(Square s, int step) {
-    Square to = Square(s + step);
-    return is_ok(to) && distance(s, to) <= 3 ? square_bb(to) : Bitboard(0);
+    Square to = Square(int(s) + step);
+    if (!is_ok(to))
+        return Bitboard(0);
+
+    // Prevent horizontal edge wrapping by decoding the linear step into a
+    // canonical (dr, df) pair and matching exact board deltas.
+    const int f = FILE_NB;
+    const int q = step / f;          // trunc toward zero
+    const int r = step - q * f;
+    const int q2 = q + (step >= 0 ? 1 : -1);
+    const int r2 = step - q2 * f;
+
+    auto score = [](int dr, int df) {
+        int maxAbs = std::max(std::abs(dr), std::abs(df));
+        int bothNonZero = (dr != 0 && df != 0) ? 0 : 1; // prefer true
+        int sumAbs = std::abs(dr) + std::abs(df);
+        return std::tuple<int, int, int>(maxAbs, bothNonZero, sumAbs);
+    };
+    const bool pickSecond = score(q2, r2) < score(q, r);
+    const int decodedDr = pickSecond ? q2 : q;
+    const int decodedDf = pickSecond ? r2 : r;
+    int expectedDr = std::abs(decodedDr);
+    int expectedDf = std::abs(decodedDf);
+    int actualDr = std::abs(int(rank_of(to)) - int(rank_of(s)));
+    int actualDf = std::abs(int(file_of(to)) - int(file_of(s)));
+    return (actualDr == expectedDr && actualDf == expectedDf) ? square_bb(to) : Bitboard(0);
 }
 
 #ifdef VERY_LARGE_BOARDS
