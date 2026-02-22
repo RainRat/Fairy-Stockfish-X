@@ -20,6 +20,7 @@
 #include <cassert>
 #include <cstdlib>
 #include <cstring>   // For std::memset
+#include <cstdint>
 #include <fstream>
 #include <iomanip>
 #include <sstream>
@@ -1206,17 +1207,15 @@ namespace {
         // This reflects that likely a move will be needed to block or capture the attack.
         // If all piece types are eligible, use the king path as a proxy for distance.
         PieceType ptCtf = pos.flag_piece(Us) == ALL_PIECES ? KING : pos.flag_piece(Us);
+        int64_t ctfAccum = 0;
         for (int dist = 0; (ctfPieces || onHold || onHold2) && (ctfTargets & ~processed); dist++)
         {
             int wins = popcount(ctfTargets & ctfPieces);
             if (wins)
             {
-                //score went overflow in a test of tafl
-                //original code may not be intended for such a mobile flag piece with so many flag squares
-                //this may need to be rethought
                 int denom = wins + dist * dist;
                 int ctfBonus = (4000 * wins) / denom;
-                score += make_score(ctfBonus, ctfBonus);
+                ctfAccum += ctfBonus;
             }
             Bitboard current = ctfPieces & ~ctfTargets;
             processed |= ctfPieces;
@@ -1233,6 +1232,9 @@ namespace {
                 onHold2 |= attacks & ~inaccessible;
             }
         }
+        // Score lanes are 16-bit; clamp once to avoid cumulative overflow.
+        int ctfBonus = int(std::clamp<int64_t>(ctfAccum, -32000, 32000));
+        score += make_score(ctfBonus, ctfBonus);
     }
 
     // nCheck
