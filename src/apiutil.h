@@ -302,7 +302,7 @@ inline const std::string move_to_san(Position& pos, Move m, Notation n) {
         if (is_gating(m))
         {
             san += std::string("/") + (char)toupper(pos.piece_to_char()[make_piece(us, gating_type(m))]);
-            san += square(pos, gating_square(m), n);
+            san += square(pos, pos.gate_square(m), n);
         }
     }
     else
@@ -355,7 +355,7 @@ inline const std::string move_to_san(Position& pos, Move m, Notation n) {
 
     // Wall square
     if (pos.walling())
-        san += "," + square(pos, gating_square(m), n);
+        san += "," + square(pos, pos.gate_square(m), n);
 
     // Check and checkmate
     if (pos.gives_check(m) && !is_shogi(n) && n != NOTATION_XIANGQI_WXF)
