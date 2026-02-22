@@ -34,6 +34,8 @@
 
 namespace Stockfish::Eval::NNUE {
 
+  constexpr std::uint32_t MaxDescriptionLength = 4096;
+
   // Input feature converter
   LargePagePtr<FeatureTransformer> featureTransformer;
 
@@ -98,19 +100,22 @@ namespace Stockfish::Eval::NNUE {
     version     = read_little_endian<std::uint32_t>(stream);
     *hashValue  = read_little_endian<std::uint32_t>(stream);
     size        = read_little_endian<std::uint32_t>(stream);
-    if (!stream || version != Version) return false;
+    if (!stream || version != Version || size > MaxDescriptionLength) return false;
     desc->resize(size);
-    stream.read(&(*desc)[0], size);
+    if (size)
+      stream.read(desc->data(), size);
     return !stream.fail();
   }
 
   // Write network header
   bool write_header(std::ostream& stream, std::uint32_t hashValue, const std::string& desc)
   {
+    if (desc.size() > MaxDescriptionLength) return false;
     write_little_endian<std::uint32_t>(stream, Version);
     write_little_endian<std::uint32_t>(stream, hashValue);
     write_little_endian<std::uint32_t>(stream, desc.size());
-    stream.write(&desc[0], desc.size());
+    if (!desc.empty())
+      stream.write(desc.data(), desc.size());
     return !stream.fail();
   }
 

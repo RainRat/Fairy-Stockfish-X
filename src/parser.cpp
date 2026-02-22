@@ -347,7 +347,7 @@ namespace {
         char c;
         CastlingRights castlingRight;
         std::stringstream ss(value);
-        target = NO_CASTLING;
+        CastlingRights parsed = NO_CASTLING;
         bool valid = true;
         while (ss >> c && c != '-')
         {
@@ -357,10 +357,15 @@ namespace {
                            : c == 'q' ? BLACK_OOO
                            : NO_CASTLING;
             if (castlingRight)
-                target = CastlingRights(target | castlingRight);
+                parsed = CastlingRights(parsed | castlingRight);
             else
+            {
                 valid = false;
+                break;
+            }
         }
+        if (valid)
+            target = parsed;
         return valid;
     }
 
