@@ -134,6 +134,10 @@ pawnTypes = ps
 
 [hostageblank:chess]
 hostageExchange =
+
+[diagfaceoff:chess]
+diagonalGeneral = true
+startFen = 10/10/10/4k5/3P6/2K7/10/10/10/10 w - - 0 1
 """
 
 sf.load_variant_config(ini_text)
@@ -418,6 +422,11 @@ class TestPyffish(unittest.TestCase):
         self.assertEqual(['d4e2', 'd4b3', 'd4f5', 'd4c6'], result)
         result = sf.legal_moves("betzatest", "7/7/7/3D3/7/7/7 w - - 0 1", [])
         self.assertEqual(['d4c2', 'd4f3', 'd4b5', 'd4e6'], result)
+
+        # diagonalGeneral: moving the blocker off the king diagonal is illegal
+        result = sf.legal_moves("diagfaceoff", sf.start_fen("diagfaceoff"), [])
+        self.assertNotIn("d4d5", result)
+        self.assertIn("c3c4", result)
 
 
     def test_castling(self):

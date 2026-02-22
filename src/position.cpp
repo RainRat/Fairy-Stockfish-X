@@ -1549,7 +1549,8 @@ bool Position::legal(Move m) const {
 
       for (Square s = to; s != from; s += step)
           if (attackers_to_king(s, ~us)
-              || (var->flyingGeneral && (attacks_bb(~us, ROOK, s, pieces() ^ from) & pieces(~us, KING))))
+              || (var->flyingGeneral && (attacks_bb(~us, ROOK, s, pieces() ^ from) & pieces(~us, KING)))
+              || (var->diagonalGeneral && (attacks_bb(~us, BISHOP, s, pieces() ^ from) & pieces(~us, KING))))
               return false;
 
       // In case of Chess960, verify if the Rook blocks some checks
@@ -1567,6 +1568,12 @@ bool Position::legal(Move m) const {
   {
       Square s = type_of(moved_piece(m)) == KING ? to : square<KING>(us);
       if (attacks_bb(~us, ROOK, s, occupied) & pieces(~us, KING) & ~square_bb(to))
+          return false;
+  }
+  if (var->diagonalGeneral && count<KING>(us))
+  {
+      Square s = type_of(moved_piece(m)) == KING ? to : square<KING>(us);
+      if (attacks_bb(~us, BISHOP, s, occupied) & pieces(~us, KING) & ~square_bb(to))
           return false;
   }
 
@@ -3321,6 +3328,13 @@ bool Position::see_ge(Move m, Value threshold) const {
       if (attackers & pieces(~stm, KING))
           attackers |= attacks_bb(~stm, ROOK, to, occupied & ~pieces(ROOK)) & pieces(stm, KING);
   }
+  if (var->diagonalGeneral)
+  {
+      if (attackers & pieces(stm, KING))
+          attackers |= attacks_bb(stm, BISHOP, to, occupied & ~pieces(BISHOP)) & pieces(~stm, KING);
+      if (attackers & pieces(~stm, KING))
+          attackers |= attacks_bb(~stm, BISHOP, to, occupied & ~pieces(BISHOP)) & pieces(stm, KING);
+  }
 
   // Janggi cannons can not capture each other
   if (type_of(moved_piece(m)) == JANGGI_CANNON && !(attackers & pieces(~stm) & ~pieces(JANGGI_CANNON)))
@@ -3908,6 +3922,20 @@ Bitboard Position::chased() const {
       if ((kingFilePieces & pieces(sideToMove, KING)) && !more_than_one(kingFilePieces & ~pieces(KING)))
           pins |= kingFilePieces & ~pieces(KING);
   }
+  if (var->diagonalGeneral)
+  {
+      Square enemyKing = square<KING>(~sideToMove);
+      Square ourKing = square<KING>(sideToMove);
+      int df = int(file_of(enemyKing)) - int(file_of(ourKing));
+      int dr = int(rank_of(enemyKing)) - int(rank_of(ourKing));
+      if (df == dr || df == -dr)
+      {
+          Bitboard kingDiagonalPieces = line_bb(enemyKing, ourKing) & pieces(sideToMove);
+          if ((kingDiagonalPieces & pieces(sideToMove, KING))
+              && !more_than_one(kingDiagonalPieces & ~pieces(KING)))
+              pins |= kingDiagonalPieces & ~pieces(KING);
+      }
+  }
   auto addChased = [&](Square attackerSq, PieceType attackerType, Bitboard attacks) {
       if (attacks & ~b)
       {
@@ -3939,7 +3967,11 @@ Bitboard Position::chased() const {
           {
               Square s = pop_lsb(attacks);
               Bitboard roots = attackers_to(s, pieces() ^ attackerSq, sideToMove) & ~pins;
-              if (!roots || (var->flyingGeneral && roots == pieces(sideToMove, KING) && (attacks_bb(sideToMove, ROOK, square<KING>(~sideToMove), pieces() ^ attackerSq) & s)))
+              if (!roots
+                  || (var->flyingGeneral && roots == pieces(sideToMove, KING)
+                      && (attacks_bb(sideToMove, ROOK, square<KING>(~sideToMove), pieces() ^ attackerSq) & s))
+                  || (var->diagonalGeneral && roots == pieces(sideToMove, KING)
+                      && (attacks_bb(sideToMove, BISHOP, square<KING>(~sideToMove), pieces() ^ attackerSq) & s)))
                   b |= s;
           }
       }

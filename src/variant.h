@@ -150,6 +150,7 @@ struct Variant {
   bool multimoveCapture = true;
   bool makpongRule = false;
   bool flyingGeneral = false;
+  bool diagonalGeneral = false;
   Rank soldierPromotionRank = RANK_1;
   EnclosingRule flipEnclosedPieces = NO_ENCLOSING;
   bool freeDrops = false;
