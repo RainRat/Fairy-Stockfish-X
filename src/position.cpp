@@ -2992,6 +2992,7 @@ void Position::undo_move(Move m) {
   // Finally point our state pointer back to the previous state
   st = st->previous;
   --gamePly;
+  updatePawnCheckZone();
 
   assert(pos_is_ok());
 }
