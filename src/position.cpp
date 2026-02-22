@@ -503,10 +503,22 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
       // 4. En passant square.
       // Ignore if square is invalid or not on side to move relative rank 6.
       else
-          while (   ((ss >> col) && (col >= 'a' && col <= 'a' + max_file()))
-                 && ((ss >> row) && (row >= '1' && row <= '1' + max_rank())))
+          while ((ss >> col) && (col >= 'a' && col <= 'a' + max_file()))
           {
-              Square epSquare = make_square(File(col - 'a'), Rank(row - '1'));
+              std::string rankDigits;
+              while (std::isdigit(ss.peek()))
+              {
+                  ss >> row;
+                  rankDigits.push_back(row);
+              }
+              if (rankDigits.empty())
+                  break;
+
+              int rankNumber = std::stoi(rankDigits);
+              if (rankNumber < 1 || rankNumber > max_rank() + 1)
+                  continue;
+
+              Square epSquare = make_square(File(col - 'a'), Rank(rankNumber - 1));
 #ifdef LARGEBOARDS
               // Consider different rank numbering in CECP
               if (max_rank() == RANK_10 && CurrentProtocol == XBOARD)

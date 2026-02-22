@@ -953,9 +953,9 @@ inline Validation check_number_of_kings(const std::string& fenBoard, const std::
 inline Validation check_en_passant_square(const std::string& enPassantInfo) {
     if (enPassantInfo.size() != 1 || enPassantInfo[0] != '-')
     {
-        if (enPassantInfo.size() != 2)
+        if (enPassantInfo.size() < 2)
         {
-            std::cerr << "Invalid en-passant square '" << enPassantInfo << "'. Expects 2 characters. Actual: " << enPassantInfo.size() << " character(s)." << std::endl;
+            std::cerr << "Invalid en-passant square '" << enPassantInfo << "'. Expects at least 2 characters. Actual: " << enPassantInfo.size() << " character(s)." << std::endl;
             return NOK;
         }
         if (!isalpha(enPassantInfo[0]))
@@ -963,11 +963,12 @@ inline Validation check_en_passant_square(const std::string& enPassantInfo) {
             std::cerr << "Invalid en-passant square '" << enPassantInfo << "'. Expects 1st character to be a letter." << std::endl;
             return NOK;
         }
-        if (!isdigit(enPassantInfo[1]))
-        {
-            std::cerr << "Invalid en-passant square '" << enPassantInfo << "'. Expects 2nd character to be a digit." << std::endl;
-            return NOK;
-        }
+        for (size_t i = 1; i < enPassantInfo.size(); ++i)
+            if (!isdigit(enPassantInfo[i]))
+            {
+                std::cerr << "Invalid en-passant square '" << enPassantInfo << "'. Expects rank digits after file." << std::endl;
+                return NOK;
+            }
     }
     return OK;
 }
