@@ -19,6 +19,7 @@
 #include <string>
 #include <sstream>
 #include <limits>
+#include <algorithm>
 
 #include "apiutil.h"
 #include "parser.h"
@@ -28,6 +29,7 @@
 namespace Stockfish {
 
 namespace {
+    constexpr int MAX_PIECE_POINTS = 20;
 
     template <typename T> bool set(const std::string& value, T& target)
     {
@@ -621,9 +623,24 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     {
         char token;
         size_t idx = 0;
+        int parsedPoints = 0;
         std::stringstream ss(pv->second);
         while (!ss.eof() && ss >> token && (idx = v->pieceToChar.find(toupper(token))) != std::string::npos
-                         && ss >> token && ss >> v->piecePoints[idx]) {}
+                         && ss >> token && ss >> parsedPoints)
+        {
+            if (parsedPoints < 0) {
+                if (DoCheck)
+                    std::cerr << "piecePoints - Negative values are not allowed for type: " << v->pieceToChar[idx] << std::endl;
+                parsedPoints = 0;
+            }
+            if (parsedPoints > MAX_PIECE_POINTS) {
+                if (DoCheck)
+                    std::cerr << "piecePoints - Value exceeds max " << MAX_PIECE_POINTS
+                              << " for type: " << v->pieceToChar[idx] << ". Clamping." << std::endl;
+                parsedPoints = MAX_PIECE_POINTS;
+            }
+            v->piecePoints[idx] = parsedPoints;
+        }
         if (DoCheck && idx == std::string::npos)
             std::cerr << "piecePoints - Invalid piece type: " << token << std::endl;
         else if (DoCheck && !ss.eof())
@@ -813,6 +830,11 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("petrifyOnCaptureTypes", v->petrifyOnCaptureTypes, v->pieceToChar);
     parse_attribute("petrifyBlastPieces", v->petrifyBlastPieces);
     parse_attribute("removeConnectN", v->removeConnectN);
+    if (v->removeConnectN < 0 || v->removeConnectN > 5) {
+        if (DoCheck)
+            std::cerr << "removeConnectN - Value must be in range [0, 5]. Clamping." << std::endl;
+        v->removeConnectN = std::clamp(v->removeConnectN, 0, 5);
+    }
     parse_attribute("removeConnectNByType", v->removeConnectNByType);
     parse_attribute("surroundCaptureOpposite", v->surroundCaptureOpposite);
     parse_attribute("surroundCaptureEdge", v->surroundCaptureEdge);

@@ -97,6 +97,7 @@ struct StateInfo {
   bool didMorph;
   Piece morphedFrom;
   Square morphSquare;
+  bool nnueRefreshNeeded;
 
   // Used by NNUE
   Eval::NNUE::Accumulator accumulator;

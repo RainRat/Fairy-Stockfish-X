@@ -174,6 +174,27 @@ inline void xor_points_bucket(Key& k, Color c, int points) {
   k ^= Zobrist::points[c][idx];
 }
 
+inline int non_negative_points(int points) {
+  return std::max(points, 0);
+}
+
+inline int append_dirty(StateInfo* st, Piece pc, Square from, Square to, Piece handPiece = NO_PIECE, int handCount = 0) {
+  auto& dp = st->dirtyPiece;
+  if (dp.dirty_num >= DIRTY_PIECE_MAX) {
+      assert(false && "DirtyPiece overflow");
+      st->nnueRefreshNeeded = true;
+      return -1;
+  }
+
+  int idx = dp.dirty_num++;
+  dp.piece[idx] = pc;
+  dp.from[idx] = from;
+  dp.to[idx] = to;
+  dp.handPiece[idx] = handPiece;
+  dp.handCount[idx] = handCount;
+  return idx;
+}
+
 
 /// Position::init() initializes at startup the various arrays used to compute hash keys
 
@@ -644,6 +665,8 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
       ss >> st->pointsCount[WHITE];
       ss >> st->pointsCount[BLACK];
       ss >> brace;  //Probably not needed now, but maybe if another FEN extension.
+      st->pointsCount[WHITE] = non_negative_points(st->pointsCount[WHITE]);
+      st->pointsCount[BLACK] = non_negative_points(st->pointsCount[BLACK]);
   }
 
   chess960 = isChess960 || v->chess960;
@@ -1972,6 +1995,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   // Used by NNUE
   st->accumulator.computed[WHITE] = false;
   st->accumulator.computed[BLACK] = false;
+  st->nnueRefreshNeeded = false;
   auto& dp = st->dirtyPiece;
   dp.dirty_num = 1;
 
@@ -2032,11 +2056,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
 
           if (Eval::useNNUE)
           {
-              dp.piece[dp.dirty_num] = dropped;
-              dp.handPiece[dp.dirty_num] = NO_PIECE;
-              dp.from[dp.dirty_num] = SQ_NONE;
-              dp.to[dp.dirty_num] = gateSq;
-              dp.dirty_num++;
+              append_dirty(st, dropped, SQ_NONE, gateSq);
           }
       }
   }
@@ -2252,7 +2272,10 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   if (type_of(m) == DROP)
   {
       if (pay_points_to_drop())
+      {
           st->pointsCount[us] -= var->piecePoints[type_of(pc)];
+          st->pointsCount[us] = non_negative_points(st->pointsCount[us]);
+      }
 
       if (Eval::useNNUE)
       {
@@ -2333,11 +2356,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
               // Promoting pawn to SQ_NONE, promoted piece from SQ_NONE
               dp.to[0] = SQ_NONE;
               dp.handPiece[0] = NO_PIECE;
-              dp.piece[dp.dirty_num] = promotion;
-              dp.handPiece[dp.dirty_num] = NO_PIECE;
-              dp.from[dp.dirty_num] = SQ_NONE;
-              dp.to[dp.dirty_num] = to;
-              dp.dirty_num++;
+              append_dirty(st, promotion, SQ_NONE, to);
           }
 
           // Update hash keys
@@ -2388,11 +2407,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           // Promoting piece to SQ_NONE, promoted piece from SQ_NONE
           dp.to[0] = SQ_NONE;
           dp.handPiece[0] = NO_PIECE;
-          dp.piece[dp.dirty_num] = promotion;
-          dp.handPiece[dp.dirty_num] = NO_PIECE;
-          dp.from[dp.dirty_num] = SQ_NONE;
-          dp.to[dp.dirty_num] = to;
-          dp.dirty_num++;
+          append_dirty(st, promotion, SQ_NONE, to);
       }
 
       // Update hash keys
@@ -2415,11 +2430,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           // Demoting piece to SQ_NONE, demoted piece from SQ_NONE
           dp.to[0] = SQ_NONE;
           dp.handPiece[0] = NO_PIECE;
-          dp.piece[dp.dirty_num] = demotion;
-          dp.handPiece[dp.dirty_num] = NO_PIECE;
-          dp.from[dp.dirty_num] = SQ_NONE;
-          dp.to[dp.dirty_num] = to;
-          dp.dirty_num++;
+          append_dirty(st, demotion, SQ_NONE, to);
       }
 
       // Update hash keys
@@ -2477,17 +2488,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
 
               if (Eval::useNNUE)
               {
-                  dp.piece[dp.dirty_num] = cur;
-                  dp.handPiece[dp.dirty_num] = NO_PIECE;
-                  dp.from[dp.dirty_num] = to;
-                  dp.to[dp.dirty_num] = SQ_NONE;
-                  dp.dirty_num++;
-
-                  dp.piece[dp.dirty_num] = morphed;
-                  dp.handPiece[dp.dirty_num] = NO_PIECE;
-                  dp.from[dp.dirty_num] = SQ_NONE;
-                  dp.to[dp.dirty_num] = to;
-                  dp.dirty_num++;
+                  append_dirty(st, cur, to, SQ_NONE);
+                  append_dirty(st, morphed, SQ_NONE, to);
               }
           }
       }
@@ -2505,12 +2507,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       if (Eval::useNNUE)
       {
           // Add gating piece
-          dp.piece[dp.dirty_num] = gating_piece;
-          dp.handPiece[dp.dirty_num] = gating_piece;
-          dp.handCount[dp.dirty_num] = pieceCountInHand[us][gating_type(m)];
-          dp.from[dp.dirty_num] = SQ_NONE;
-          dp.to[dp.dirty_num] = gate;
-          dp.dirty_num++;
+          append_dirty(st, gating_piece, SQ_NONE, gate, gating_piece, pieceCountInHand[us][gating_type(m)]);
       }
 
       put_piece(gating_piece, gate);
@@ -2555,11 +2552,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
 
           if (Eval::useNNUE)
           {
-              dp.piece[dp.dirty_num] = dropped;
-              dp.handPiece[dp.dirty_num] = NO_PIECE;
-              dp.from[dp.dirty_num] = SQ_NONE;
-              dp.to[dp.dirty_num] = gateSq;
-              dp.dirty_num++;
+              append_dirty(st, dropped, SQ_NONE, gateSq);
           }
       }
   }
@@ -2742,11 +2735,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
                   put_piece(promotedPiece, bsq);
 
                   if (Eval::useNNUE) {
-                      dp.piece[dp.dirty_num] = promotedPiece;
-                      dp.handPiece[dp.dirty_num] = NO_PIECE;
-                      dp.from[dp.dirty_num] = SQ_NONE;
-                      dp.to[dp.dirty_num] = bsq;
-                      dp.dirty_num++;
+                      append_dirty(st, promotedPiece, SQ_NONE, bsq);
                   }
 
                   k ^= Zobrist::psq[bpc][bsq] ^ Zobrist::psq[promotedPiece][bsq];
@@ -2761,14 +2750,9 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           if (type_of(bpc) != PAWN)
               st->nonPawnMaterial[bc] -= PieceValue[MG][bpc];
 
+          int bycatchDirtyIdx = -1;
           if (Eval::useNNUE)
-          {
-              dp.piece[dp.dirty_num] = bpc;
-              dp.handPiece[dp.dirty_num] = NO_PIECE;
-              dp.from[dp.dirty_num] = bsq;
-              dp.to[dp.dirty_num] = SQ_NONE;
-              dp.dirty_num++;
-          }
+              bycatchDirtyIdx = append_dirty(st, bpc, bsq, SQ_NONE);
 
           // Update board and piece lists
           // In order to not have to store the values of both board and unpromotedBoard,
@@ -2814,10 +2798,10 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
               }
               xor_in_hand_count(k, pieceToHand, n - 1, n);
 
-              if (Eval::useNNUE)
+              if (Eval::useNNUE && bycatchDirtyIdx >= 0)
               {
-                  dp.handPiece[dp.dirty_num - 1] = pieceToHand;
-                  dp.handCount[dp.dirty_num - 1] = pieceCountInHand[color_of(pieceToHand)][type_of(pieceToHand)];
+                  dp.handPiece[bycatchDirtyIdx] = pieceToHand;
+                  dp.handCount[bycatchDirtyIdx] = pieceCountInHand[color_of(pieceToHand)][type_of(pieceToHand)];
               }
           }
 
@@ -3197,6 +3181,7 @@ void Position::do_null_move(StateInfo& newSt) {
   st->dirtyPiece.piece[0] = NO_PIECE; // Avoid checks in UpdateAccumulator()
   st->accumulator.computed[WHITE] = false;
   st->accumulator.computed[BLACK] = false;
+  st->nnueRefreshNeeded = false;
 
   while (st->epSquares)
       st->key ^= Zobrist::enpassant[pop_lsb(st->epSquares)];

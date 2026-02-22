@@ -1232,8 +1232,8 @@ namespace {
                 onHold2 |= attacks & ~inaccessible;
             }
         }
-        // Score lanes are 16-bit; clamp once to avoid cumulative overflow.
-        int ctfBonus = int(std::clamp<int64_t>(ctfAccum, -32000, 32000));
+        // Keep CTF bounded with enough headroom for other evaluation terms.
+        int ctfBonus = int(std::clamp<int64_t>(ctfAccum, -12000, 12000));
         score += make_score(ctfBonus, ctfBonus);
     }
 
