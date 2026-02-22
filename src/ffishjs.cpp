@@ -89,6 +89,7 @@ private:
   Position pos;
   Thread* thread;
   std::vector<Move> moveStack;
+  std::vector<std::string> moveStackUCI;
   bool is960;
 
 public:
@@ -139,6 +140,7 @@ public:
     if (is_move_none<true>(move, uciMove, pos))
       return false;
     do_move(move);
+    moveStackUCI.emplace_back(uciMove);
     return true;
   }
 
@@ -158,7 +160,9 @@ public:
     }
     if (is_move_none<false>(foundMove, sanMove, pos))
       return false;
+    std::string uciMove = UCI::move(this->pos, foundMove);
     do_move(foundMove);
+    moveStackUCI.emplace_back(uciMove);
     return true;
   }
 
@@ -168,6 +172,7 @@ public:
 
     pos.undo_move(this->moveStack.back());
     moveStack.pop_back();
+    moveStackUCI.pop_back();
     states->pop_back();
     return true;
   }
@@ -195,6 +200,7 @@ public:
   void set_fen(std::string fen) {
     resetStates();
     moveStack.clear();
+    moveStackUCI.clear();
     pos.set(v, fen, is960, &states->back(), thread);
   }
 
@@ -368,8 +374,8 @@ public:
 
   std::string move_stack() const {
     std::string moves;
-    for(auto it = std::begin(moveStack); it != std::end(moveStack); ++it) {
-      moves += UCI::move(pos, *it);
+    for(auto it = std::begin(moveStackUCI); it != std::end(moveStackUCI); ++it) {
+      moves += *it;
       moves += DELIM;
     }
     save_pop_back(moves);
