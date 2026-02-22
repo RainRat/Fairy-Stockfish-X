@@ -302,7 +302,7 @@ inline const std::string move_to_san(Position& pos, Move m, Notation n) {
         if (is_gating(m))
         {
             san += std::string("/") + (char)toupper(pos.piece_to_char()[make_piece(us, gating_type(m))]);
-            san += square(pos, gating_square(m), n);
+            san += square(pos, pos.gate_square(m), n);
         }
     }
     else
@@ -355,7 +355,7 @@ inline const std::string move_to_san(Position& pos, Move m, Notation n) {
 
     // Wall square
     if (pos.walling())
-        san += "," + square(pos, gating_square(m), n);
+        san += "," + square(pos, pos.gate_square(m), n);
 
     // Check and checkmate
     if (pos.gives_check(m) && !is_shogi(n) && n != NOTATION_XIANGQI_WXF)
@@ -577,6 +577,13 @@ inline bool in_any(const std::vector<std::string>& vec, char c) {
 inline Validation check_for_valid_characters(const std::string& firstFenPart, const std::string& validSpecialCharactersFirstField, const Variant* v) {
     for (char c : firstFenPart)
     {
+        if (c == '+')
+        {
+            if (v && v->shogiStylePromotions)
+                continue;
+            std::cerr << "Invalid piece character: '+'." << std::endl;
+            return NOK;
+        }
         if (!isdigit(c) && !in_any({v->pieceToChar, v->pieceToCharSynonyms, validSpecialCharactersFirstField}, c))
         {
             std::cerr << "Invalid piece character: '" << c << "'." << std::endl;
@@ -953,9 +960,9 @@ inline Validation check_number_of_kings(const std::string& fenBoard, const std::
 inline Validation check_en_passant_square(const std::string& enPassantInfo) {
     if (enPassantInfo.size() != 1 || enPassantInfo[0] != '-')
     {
-        if (enPassantInfo.size() != 2)
+        if (enPassantInfo.size() < 2)
         {
-            std::cerr << "Invalid en-passant square '" << enPassantInfo << "'. Expects 2 characters. Actual: " << enPassantInfo.size() << " character(s)." << std::endl;
+            std::cerr << "Invalid en-passant square '" << enPassantInfo << "'. Expects at least 2 characters. Actual: " << enPassantInfo.size() << " character(s)." << std::endl;
             return NOK;
         }
         if (!isalpha(enPassantInfo[0]))
@@ -963,11 +970,12 @@ inline Validation check_en_passant_square(const std::string& enPassantInfo) {
             std::cerr << "Invalid en-passant square '" << enPassantInfo << "'. Expects 1st character to be a letter." << std::endl;
             return NOK;
         }
-        if (!isdigit(enPassantInfo[1]))
-        {
-            std::cerr << "Invalid en-passant square '" << enPassantInfo << "'. Expects 2nd character to be a digit." << std::endl;
-            return NOK;
-        }
+        for (size_t i = 1; i < enPassantInfo.size(); ++i)
+            if (!isdigit(enPassantInfo[i]))
+            {
+                std::cerr << "Invalid en-passant square '" << enPassantInfo << "'. Expects rank digits after file." << std::endl;
+                return NOK;
+            }
     }
     return OK;
 }

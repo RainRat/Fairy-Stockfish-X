@@ -1675,6 +1675,30 @@ namespace {
         v->doubleStepRegion[BLACK] = Rank8BB;
         return v;
     }
+#ifdef VERY_LARGE_BOARDS
+    // Omega chess on a 12x12 board
+    Variant* omega_variant() {
+        Variant* v = chess_variant_base()->init();
+        v->pieceToCharTable = "PNBRQ..C.W...........Kpnbrq..c.w...........k";
+        v->maxRank = RANK_12;
+        v->maxFile = FILE_L;
+        v->startFen = "w**********w/*crnbqkbnrc*/*pppppppppp*/*10*/*10*/*10*/*10*/*10*/*10*/*PPPPPPPPPP*/*CRNBQKBNRC*/W**********W w KQkq - 0 1";
+        v->add_piece(CUSTOM_PIECE_1, 'c', "DAW"); // Champion
+        v->add_piece(CUSTOM_PIECE_2, 'w', "CF"); // Wizard
+        v->castlingKingsideFile = FILE_I;
+        v->castlingQueensideFile = FILE_E;
+        v->castlingRank = RANK_2;
+        v->promotionRegion[WHITE] = Rank9BB | Rank10BB;
+        v->promotionRegion[BLACK] = Rank2BB | Rank1BB;
+        v->promotionPieceTypes[WHITE] = piece_set(CUSTOM_PIECE_2) | CUSTOM_PIECE_1 | QUEEN | ROOK | BISHOP | KNIGHT;
+        v->promotionPieceTypes[BLACK] = v->promotionPieceTypes[WHITE];
+        v->doubleStepRegion[WHITE] = Rank3BB;
+        v->doubleStepRegion[BLACK] = Rank8BB;
+        v->tripleStepRegion[WHITE] = Rank3BB;
+        v->tripleStepRegion[BLACK] = Rank8BB;
+        return v;
+    }
+#endif
     // Troitzky Chess
     // https://www.chessvariants.com/play/troitzky-chess
     Variant* troitzky_variant() {
@@ -2013,6 +2037,9 @@ void VariantMap::init() {
     add("opulent", opulent_variant());
     add("tencubed", tencubed_variant());
     add("omicron", omicron_variant());
+#ifdef VERY_LARGE_BOARDS
+    add("omega", omega_variant());
+#endif
     add("troitzky", troitzky_variant());
     add("wolf", wolf_variant());
     add("shako", shako_variant());
