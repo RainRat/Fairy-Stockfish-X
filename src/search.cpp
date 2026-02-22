@@ -1013,7 +1013,8 @@ namespace {
                && probCutCount < 2 + 2 * cutNode)
             if (move != excludedMove && pos.legal(move))
             {
-                assert(pos.capture_or_promotion(move));
+                if (!pos.capture_or_promotion(move))
+                    continue;
                 assert(depth >= 5);
 
                 captureOrPromotion = true;

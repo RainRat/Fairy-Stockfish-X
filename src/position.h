@@ -1644,11 +1644,15 @@ inline Bitboard Position::dynamic_slider_bb(const std::map<Direction,int>& direc
 }
 
 inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s) const {
+  assert(pt != NO_PIECE_TYPE);
+
   if (fast_attacks() || fast_attacks2())
       return attacks_bb(c, pt, s, byTypeBB[ALL_PIECES]) & board_bb();
 
   PieceType movePt = pt == KING ? king_type() : pt;
-  const PieceInfo* pi = pieceMap.find(movePt)->second;
+  auto it = pieceMap.find(movePt);
+  assert(it != pieceMap.end());
+  const PieceInfo* pi = it->second;
 
   Bitboard occupancy = byTypeBB[ALL_PIECES];
   if (pi->friendlyJump)
@@ -1686,6 +1690,7 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s) const {
 }
 
 inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
+    assert(pt != NO_PIECE_TYPE);
 
     Bitboard extraDestinations = 0x00;
 
@@ -1746,7 +1751,9 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
       return (moves_bb(c, pt, s, byTypeBB[ALL_PIECES]) | extraDestinations) & board_bb();
 
   PieceType movePt = pt == KING ? king_type() : pt;
-  const PieceInfo* pi = pieceMap.find(movePt)->second;
+  auto it = pieceMap.find(movePt);
+  assert(it != pieceMap.end());
+  const PieceInfo* pi = it->second;
 
   Bitboard occupancy = byTypeBB[ALL_PIECES];
   if (pi->friendlyJump)

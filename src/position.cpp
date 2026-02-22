@@ -1293,6 +1293,12 @@ bool Position::legal(Move m) const {
   Square from = from_sq(m);
   Square to = to_sq(m);
 
+  if (is_pass(m) && !(pass(us) || wall_or_move()))
+      return false;
+
+  if (from == to && !(is_pass(m) || (type_of(m) == PROMOTION && sittuyin_promotion())))
+      return false;
+
   assert(color_of(moved_piece(m)) == us);
   assert(!count<KING>(us) || piece_on(square<KING>(us)) == make_piece(us, KING));
   assert(board_bb() & to);
@@ -1303,16 +1309,19 @@ bool Position::legal(Move m) const {
       if (forcedPiece != NO_PIECE && has_forced_jump_followup())
       {
           if (color_of(forcedPiece) != us)
-              return is_pass(m);
+          {
+              Piece passPiece = moved_piece(m);
+              return is_pass(m) && passPiece != NO_PIECE && color_of(passPiece) == us;
+          }
           if (is_pass(m) || from != st->forcedJumpSquare || !is_jump_capture(m))
               return false;
       }
   }
   PieceSet jumpTypes = jump_capture_types();
   bool jumpTypeMover = (jumpTypes & ALL_PIECES) || (jumpTypes & type_of(moved_piece(m)));
-  if (type_of(m) == NORMAL && jumpTypeMover && !empty(to))
+  if ((type_of(m) == NORMAL || type_of(m) == PROMOTION) && jumpTypeMover && !empty(to))
       return false;
-  if (type_of(m) == NORMAL && jumpTypeMover && empty(to))
+  if ((type_of(m) == NORMAL || type_of(m) == PROMOTION) && jumpTypeMover && empty(to))
   {
       int df = std::abs(int(file_of(to)) - int(file_of(from)));
       int dr = std::abs(int(rank_of(to)) - int(rank_of(from)));
@@ -1585,13 +1594,22 @@ bool Position::pseudo_legal(const Move m) const {
   Square to = to_sq(m);
   Piece pc = moved_piece(m);
 
+  if (is_pass(m) && !(pass(us) || wall_or_move()))
+      return false;
+
+  if (from == to && !(is_pass(m) || (type_of(m) == PROMOTION && sittuyin_promotion())))
+      return false;
+
   if (forced_jump_continuation() && st->forcedJumpSquare != SQ_NONE)
   {
       Piece forcedPiece = piece_on(st->forcedJumpSquare);
       if (forcedPiece != NO_PIECE && has_forced_jump_followup())
       {
           if (color_of(forcedPiece) != us)
-              return is_pass(m);
+          {
+              Piece passPiece = moved_piece(m);
+              return is_pass(m) && passPiece != NO_PIECE && color_of(passPiece) == us;
+          }
           if (is_pass(m))
               return false;
           if (from != st->forcedJumpSquare || !is_jump_capture(m))
@@ -1600,9 +1618,9 @@ bool Position::pseudo_legal(const Move m) const {
   }
   PieceSet jumpTypes = jump_capture_types();
   bool jumpTypeMover = (jumpTypes & ALL_PIECES) || (jumpTypes & type_of(pc));
-  if (type_of(m) == NORMAL && jumpTypeMover && !empty(to))
+  if ((type_of(m) == NORMAL || type_of(m) == PROMOTION) && jumpTypeMover && !empty(to))
       return false;
-  if (type_of(m) == NORMAL && jumpTypeMover && empty(to))
+  if ((type_of(m) == NORMAL || type_of(m) == PROMOTION) && jumpTypeMover && empty(to))
   {
       int df = std::abs(int(file_of(to)) - int(file_of(from)));
       int dr = std::abs(int(rank_of(to)) - int(rank_of(from)));
@@ -1903,7 +1921,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   Square jumpCapsq = is_jump_capture(m) ? jump_capture_square(from, to) : SQ_NONE;
   if (to == from)
   {
-      assert((type_of(m) == PROMOTION && sittuyin_promotion()) || (is_pass(m) && (pass(us) || wall_or_move())));
+      assert((type_of(m) == PROMOTION && sittuyin_promotion()) || is_pass(m));
       captured = NO_PIECE;
   }
   Square capturedSq = captured ? (jumpCapsq != SQ_NONE ? jumpCapsq : to) : SQ_NONE;
@@ -2813,7 +2831,7 @@ void Position::undo_move(Move m) {
 
   assert(type_of(m) == DROP || empty(from) || type_of(m) == CASTLING || is_gating(m)
          || (type_of(m) == PROMOTION && sittuyin_promotion())
-         || (is_pass(m) && (pass(us) || wall_or_move()))
+         || is_pass(m)
          || (commit_gates() && st->removedGatingType > NO_PIECE_TYPE)
   );
   assert(type_of(st->capturedPiece) != KING);
@@ -2938,7 +2956,7 @@ void Position::undo_move(Move m) {
               assert(var->enPassantRegion[sideToMove] & to);
               assert(piece_on(capsq) == NO_PIECE);
           }
-          else if (is_jump_capture(m))
+          else if (st->captureSquare != SQ_NONE)
               capsq = st->captureSquare;
 
           put_piece(st->capturedPiece, capsq, st->capturedpromoted, st->unpromotedCapturedPiece); // Restore the captured piece
@@ -4026,7 +4044,8 @@ bool Position::has_game_cycle(int ply) const {
               // repetition rather than a move to the current position.
               // In the cuckoo table, both moves Rc1c5 and Rc5c1 are stored in
               // the same location, so we have to select which square to check.
-              if (color_of(piece_on(empty(s1) ? s2 : s1)) != side_to_move())
+              Square checkSq = empty(s1) ? s2 : s1;
+              if (empty(checkSq) || color_of(piece_on(checkSq)) != side_to_move())
                   continue;
 
               // For repetitions before or at the root, require one more
