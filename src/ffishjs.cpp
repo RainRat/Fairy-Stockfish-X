@@ -21,7 +21,8 @@
 #include <vector>
 #include <string>
 #include <sstream>
-#include<iostream>
+#include <iostream>
+#include <atomic>
 
 #include "misc.h"
 #include "types.h"
@@ -41,6 +42,10 @@
 using namespace emscripten;
 
 using namespace Stockfish;
+
+namespace {
+std::atomic<bool> logReadGamePgnMoves{false};
+}
 
 void initialize_stockfish() {
   pieceMap.init();
@@ -677,7 +682,8 @@ Game read_game_pgn(std::string pgn) {
           size_t annotationChar2 = sanMove.find('!');
           if (annotationChar1 != std::string::npos || annotationChar2 != std::string::npos)
             sanMove = sanMove.substr(0, std::min(annotationChar1, annotationChar2));
-          std::cout << sanMove << " ";
+          if (logReadGamePgnMoves.load())
+            std::cerr << sanMove << " ";
           game.board->push_san(sanMove);
         }
         curIdx = sanMoveEnd+1;
@@ -768,6 +774,9 @@ EMSCRIPTEN_BINDINGS(ffish_js) {
   function("setOption", &ffish::set_option<std::string>);
   function("setOptionInt", &ffish::set_option<int>);
   function("setOptionBool", &ffish::set_option<bool>);
+  function("setReadGamePGNLoggingEnabled", optional_override([](bool enabled) {
+    logReadGamePgnMoves.store(enabled);
+  }));
   function("readGamePGN", &read_game_pgn);
   function("variants", &ffish::available_variants);
   function("loadVariantConfig", &ffish::load_variant_config);

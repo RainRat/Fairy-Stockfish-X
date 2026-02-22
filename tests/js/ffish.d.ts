@@ -28,6 +28,7 @@ export interface FairyStockfish {
     setOption<T>(name: string, value: T): void;
     setOptionInt(name: string, value: number): void;
     setOptionBool(name: string, value: boolean): void;
+    setReadGamePGNLoggingEnabled(enabled: boolean): void;
     readGamePGN(pgn: string): Game;
     variants(): string;
     loadVariantConfig(variantInitContent: string): void;
