@@ -72,6 +72,7 @@ Run: `./stockfish < test.txt > output.txt`
 * In `src/types.h` (around `piece_set()` and `PieceSet` operators), bitwise operators on `PieceSet` are overloaded as set operations, including mixed `PieceSet`/`PieceType` forms; avoid treating raw `PieceType` values as pre-shifted bit flags.
 * Tuple Betza atoms `(x,y)` are now represented explicitly via `PieceInfo::tupleSteps` (`src/piece.h`) and consumed in `bitboard.cpp`; do not route long tuple leapers through `Direction`/`safe_destination` decoding.
 * Extended gating FEN masks (`...|<white>/<black>`) are parsed in `Position::set`; serialization is intentionally emitted for large-board gating cases where legacy castling/gating letters are ambiguous.
+* `checking = false` disables king-safety enforcement and keeps `checkersBB` empty; if a variant still needs king attacks as legal tactical threats (e.g. capturable kings), use `allowChecks = true` (`src/variant.h`) instead of re-enabling full check legality.
 * Comments target experienced developers; don’t change copyright years.
 
 ## 8) Large/complex variants

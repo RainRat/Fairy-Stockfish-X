@@ -878,7 +878,9 @@ void Position::set_state(StateInfo* si) const {
   si->key = si->materialKey = 0;
   si->pawnKey = Zobrist::noPawns;
   si->nonPawnMaterial[WHITE] = si->nonPawnMaterial[BLACK] = VALUE_ZERO;
-  si->checkersBB = count<KING>(sideToMove) ? attackers_to_king(square<KING>(sideToMove), ~sideToMove) : Bitboard(0);
+  si->checkersBB = checking_permitted() && count<KING>(sideToMove)
+                 ? attackers_to_king(square<KING>(sideToMove), ~sideToMove)
+                 : Bitboard(0);
   si->move = MOVE_NONE;
   si->removedGatingType = NO_PIECE_TYPE;
   si->removedCastlingGatingType = NO_PIECE_TYPE;
@@ -1490,7 +1492,7 @@ bool Position::legal(Move m) const {
   }
 
   // Illegal checks
-  if ((!checking_permitted() || (sittuyin_promotion() && type_of(m) == PROMOTION) || (!drop_checks() && type_of(m) == DROP)) && gives_check(m))
+  if (((!checking_permitted() && !allow_checks()) || (sittuyin_promotion() && type_of(m) == PROMOTION) || (!drop_checks() && type_of(m) == DROP)) && gives_check(m))
       return false;
 
   // Shogi rule: pawn-drop mate is illegal.
@@ -1737,7 +1739,7 @@ bool Position::legal(Move m) const {
   // En passant captures are a tricky special case. Because they are rather
   // uncommon, we do it simply by testing whether the king is attacked after
   // the move is made.
-  if (type_of(m) == EN_PASSANT && count<KING>(us))
+  if (checking_permitted() && type_of(m) == EN_PASSANT && count<KING>(us))
   {
       Square ksq = square<KING>(us);
       Square capsq = capture_square(to);
@@ -1768,14 +1770,14 @@ bool Position::legal(Move m) const {
           return true;
 
       for (Square s = to; s != from; s += step)
-          if (attackers_to_king(s, ~us)
+          if (   (checking_permitted() && attackers_to_king(s, ~us))
               || (var->flyingGeneral && (attacks_bb(~us, ROOK, s, pieces() ^ from) & pieces(~us, KING)))
               || (var->diagonalGeneral && (attacks_bb(~us, BISHOP, s, pieces() ^ from) & pieces(~us, KING))))
               return false;
 
       // In case of Chess960, verify if the Rook blocks some checks
       // For instance an enemy queen in SQ_A1 when castling rook is in SQ_B1.
-      return !attackers_to_king(to, pieces() ^ to_sq(m), ~us);
+      return !checking_permitted() || !attackers_to_king(to, pieces() ^ to_sq(m), ~us);
   }
 
   Bitboard occupied = (type_of(m) != DROP ? pieces() ^ from : pieces()) | to;
@@ -1803,7 +1805,7 @@ bool Position::legal(Move m) const {
 
   // If the moving piece is a king, check whether the destination square is
   // attacked by the opponent.
-  if (type_of(moved_piece(m)) == KING)
+  if (checking_permitted() && type_of(moved_piece(m)) == KING)
       return !attackers_to_king(to, occupied, ~us);
 
   // Return early when without king
@@ -1817,7 +1819,7 @@ bool Position::legal(Move m) const {
       janggiCannons ^= to;
 
   // A non-king move is legal if the king is not under attack after the move.
-  return !(attackers_to_king(square<KING>(us), occupied, ~us, janggiCannons) & ~SquareBB[to]);
+  return !checking_permitted() || !(attackers_to_king(square<KING>(us), occupied, ~us, janggiCannons) & ~SquareBB[to]);
 }
 
 
@@ -1987,7 +1989,7 @@ bool Position::pseudo_legal(const Move m) const {
   // Evasions generator already takes care to avoid some kind of illegal moves
   // and legal() relies on this. We therefore have to take care that the same
   // kind of moves are filtered out here.
-  if (checkers() && !(checkers() & non_sliding_riders()))
+  if (checking_permitted() && checkers() && !(checkers() & non_sliding_riders()))
   {
       if (type_of(pc) != KING)
       {
@@ -3057,8 +3059,10 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   // Update the key with the final value
   st->key = k;
   // Calculate checkers bitboard (if move gives check)
-  st->checkersBB = givesCheck ? attackers_to_king(square<KING>(them), us) & pieces(us) : Bitboard(0);
-  assert(givesCheck == bool(st->checkersBB) || (givesCheck && var->prisonPawnPromotion));
+  st->checkersBB = checking_permitted() && givesCheck
+                 ? attackers_to_king(square<KING>(them), us) & pieces(us)
+                 : Bitboard(0);
+  assert(!checking_permitted() || givesCheck == bool(st->checkersBB) || (givesCheck && var->prisonPawnPromotion));
 
   sideToMove = ~sideToMove;
 
@@ -3870,7 +3874,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
   // A direct flag win is possible if the opponent does not get an extra flag move
   // or we can detect early for kings that they won't be able to reach the flag region
   // Note: This condition has to be after the above, since both might be true e.g. in racing kings.
-  if (   (!flag_move() || flag_piece(sideToMove) == KING) // we can do early win detection only for the king
+  if (   (!flag_move() || (flag_piece(sideToMove) == KING && !allow_checks())) // king-only shortcut is invalid when kings are capturable
        && flag_reached(~sideToMove))
   {
       bool gameEnd = true;
