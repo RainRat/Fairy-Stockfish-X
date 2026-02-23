@@ -2339,7 +2339,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
 
           st->promotionPawn = piece_on(to);
           remove_piece(to);
-          put_piece(promotion, to, true, type_of(m) == PIECE_PROMOTION ? pc : NO_PIECE);
+          // Preserve exact source piece for variants with multiple promotion pawn types.
+          put_piece(promotion, to, true, pc);
           if (prison_pawn_promotion() && type_of(m) == PROMOTION) {
               int addedN = add_to_prison(st->promotionPawn);
               int removedN = remove_from_prison(promotion);
@@ -2397,7 +2398,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
 
       st->promotionPawn = piece_on(to);
       remove_piece(to);
-      put_piece(promotion, to, true, type_of(m) == PIECE_PROMOTION ? pc : NO_PIECE);
+      // Preserve exact source piece for variants with multiple promotion sources.
+      put_piece(promotion, to, true, pc);
 
       if (Eval::useNNUE)
       {
@@ -2784,7 +2786,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
               Piece pieceToHand = !capturedPromoted || drop_loop()
                                  ? make_piece(us, type_of(bpc))
                                  : unpromotedCaptured ? make_piece(us, type_of(unpromotedCaptured))
-                                                      : make_piece(us, PAWN);
+                                                      : make_piece(us, main_promotion_pawn_type(color_of(bpc)));
               int n;
               if (capture_type() == PRISON) {
                   pieceToHand = ~pieceToHand;
