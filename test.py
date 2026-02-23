@@ -152,6 +152,35 @@ gating = true
 seirawanGating = true
 maxFile = 12
 startFen = rnbqkbnr4/pppppppp4/12/12/12/12/PPPPPPPP4/RNBQKBNR3R[Q] w KQkqk|000000000001/000000000000 - 0 1
+
+[blastconnect]
+maxRank = 4
+maxFile = 4
+king = -
+immobile = e
+wazir = t
+customPiece1 = f:mWD
+promotedPieceType = e:t t:f f:e
+startFen = 4/4/4/4[EEEEEEEEEEEEEeeeeeeeeeeeee] w - - 0 1 {0 0}
+stalemateValue = loss
+pieceDrops = true
+pointsCounting = true
+pointsRuleCaptures = owner
+piecePoints = e:1 t:1 f:1
+blastOnMove = true
+blastPromotion = true
+blastDiagonals = false
+blastCenter = false
+removeConnectN = 3
+removeConnectNByType = true
+
+[capmapwild:chess]
+king = -
+customPiece1 = a:W
+customPiece2 = b:W
+captureForbidden = *:*
+captureAllowed = a:b
+startFen = 8/8/8/3b4/3A4/8/8/8 w - - 0 1
 """
 
 sf.load_variant_config(ini_text)
@@ -587,6 +616,18 @@ startFen = 3k4/1B4N1/8/8/8/8/8/4K3 w - - 0 1
         self.assertIn("f2h2", result)
         result = sf.legal_moves("shako", "c8c/ernbqkbnre/pppppppppp/10/10/10/10/PPPPPPPPPP/RR3K4/10 w Qkq - 0 1", [])
         self.assertIn("f2d2", result)
+
+    def test_feature_combo_regressions(self):
+        # blastPromotion + removeConnectNByType: promoted line must still be removed.
+        pond_like = sf.get_fen("blastconnect", sf.start_fen("blastconnect"), ["E@b3", "E@d3", "E@c3", "E@c2"])
+        self.assertTrue(pond_like.startswith("4/4/2e1/4["))
+
+        # captureForbidden + captureAllowed wildcard merge:
+        # all captures are forbidden, then A->b is explicitly re-enabled.
+        white_moves = sf.legal_moves("capmapwild", sf.start_fen("capmapwild"), [])
+        self.assertIn("d4d5", white_moves)
+        black_moves = sf.legal_moves("capmapwild", "8/8/8/3b4/3A4/8/8/8 b - - 0 1", [])
+        self.assertNotIn("d5d4", black_moves)
 
     def test_get_fen(self):
         result = sf.get_fen("chess", CHESS, [])
