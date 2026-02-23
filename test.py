@@ -513,6 +513,17 @@ startFen = 7k/8/8/8/8/8/8/A6K w - - 0 1
         self.assertNotIn("a1h2", tuple_moves)
         self.assertNotIn("a1b8", tuple_moves)
 
+        # Long tuple leaper (0,7) should be legal from a1 to h1 without wrap artifacts.
+        sf.load_variant_config(
+            """[tuple07:chess]
+customPiece1 = a:m(0,7)
+startFen = 7k/8/8/8/8/8/8/A5K1 w - - 0 1
+"""
+        )
+        tuple07_moves = sf.legal_moves("tuple07", sf.start_fen("tuple07"), [])
+        self.assertIn("a1h1", tuple07_moves)
+        self.assertNotIn("a1b2", tuple07_moves)
+
         # Jump captures should honor selfCapture when the jumped piece is friendly.
         sf.load_variant_config(
             """[selfjump:chess]

@@ -52,33 +52,6 @@ namespace {
       {'Q', {std::make_pair(1, 0), std::make_pair(1, 1)}},
   };
 
-  // Keep tuple-leaper parsing aligned with safe_destination() decoding.
-  // Direction is encoded as a single linear step, so some long vectors are
-  // ambiguous (e.g. (0,7) vs. (1,-1) on 8x8). We only accept tuples that
-  // round-trip through the same canonical decomposition.
-  bool is_supported_tuple_vector(int dr, int df) {
-      const int step = dr * FILE_NB + df;
-      const int q1 = step / FILE_NB;
-      const int r1 = step - q1 * FILE_NB;
-      const int q2 = q1 + (step >= 0 ? 1 : -1);
-      const int r2 = step - q2 * FILE_NB;
-
-      const int q1Abs = std::abs(q1), r1Abs = std::abs(r1);
-      const int q2Abs = std::abs(q2), r2Abs = std::abs(r2);
-      const int m1 = std::max(q1Abs, r1Abs);
-      const int m2 = std::max(q2Abs, r2Abs);
-      const int z1 = (q1 != 0 && r1 != 0) ? 0 : 1;
-      const int z2 = (q2 != 0 && r2 != 0) ? 0 : 1;
-      const int s1 = q1Abs + r1Abs;
-      const int s2 = q2Abs + r2Abs;
-
-      const bool pickSecond = (m2 < m1) || (m2 == m1 && (z2 < z1 || (z2 == z1 && s2 < s1)));
-      const int decodedDr = pickSecond ? q2 : q1;
-      const int decodedDf = pickSecond ? r2 : r1;
-
-      return decodedDr == dr && decodedDf == df;
-  }
-
   const std::string verticals = "fbvh";
   const std::string horizontals = "rlsh";
   // from_betza creates a piece by parsing Betza notation
@@ -175,7 +148,7 @@ namespace {
       bool standaloneH = false;
       std::vector<std::string> prelimDirections = {};
 
-      auto commit_atom = [&](const std::vector<std::pair<int, int>>& atoms, bool atomIsRider, std::string::size_type& i, char atomChar) {
+      auto commit_atom = [&](const std::vector<std::pair<int, int>>& atoms, bool atomIsRider, std::string::size_type& i, char atomChar, bool atomIsTuple = false) {
           // Check for rider / limited-distance rider suffix.
           rider = atomIsRider;
           if (i + 1 < expandedBetza.size() && (std::isdigit(static_cast<unsigned char>(expandedBetza[i + 1])) || expandedBetza[i + 1] == atomChar))
@@ -217,25 +190,32 @@ namespace {
                   auto& v = hopper ? p->hopper[initial][modality]
                            : rider ? p->slider[initial][modality]
                                    : p->steps[initial][modality];
+                  auto& tupleV = p->tupleSteps[initial][modality];
                   auto has_dir = [&](std::string s) {
                     return std::find(directions.begin(), directions.end(), s) != directions.end();
                   };
+                  auto add_step = [&](int dr, int df) {
+                      if (atomIsTuple && !hopper && !rider)
+                          tupleV.emplace_back(dr, df);
+                      else
+                          v[Direction(dr * FILE_NB + df)] = distance;
+                  };
                   if (directions.size() == 0 || has_dir("ff") || has_dir("vv") || has_dir("rf") || has_dir("rv") || has_dir("fh") || has_dir("rh") || (has_dir("hr") && !standaloneH))
-                      v[Direction(atom.first * FILE_NB + atom.second)] = distance;
+                      add_step(atom.first, atom.second);
                   if (directions.size() == 0 || has_dir("bb") || has_dir("vv") || has_dir("lb") || has_dir("lv") || has_dir("bh") || has_dir("lh") || (has_dir("hr") && !standaloneH))
-                      v[Direction(-atom.first * FILE_NB - atom.second)] = distance;
+                      add_step(-atom.first, -atom.second);
                   if (directions.size() == 0 || has_dir("rr") || has_dir("ss") || has_dir("br") || has_dir("bs") || has_dir("bh") || has_dir("rh") || has_dir("hr"))
-                      v[Direction(-atom.second * FILE_NB + atom.first)] = distance;
+                      add_step(-atom.second, atom.first);
                   if (directions.size() == 0 || has_dir("ll") || has_dir("ss") || has_dir("fl") || has_dir("fs") || has_dir("fh") || has_dir("lh") || has_dir("hr"))
-                      v[Direction(atom.second * FILE_NB - atom.first)] = distance;
+                      add_step(atom.second, -atom.first);
                   if (directions.size() == 0 || has_dir("rr") || has_dir("ss") || has_dir("fr") || has_dir("fs") || has_dir("fh") || has_dir("rh") || has_dir("hl"))
-                      v[Direction(atom.second * FILE_NB + atom.first)] = distance;
+                      add_step(atom.second, atom.first);
                   if (directions.size() == 0 || has_dir("ll") || has_dir("ss") || has_dir("bl") || has_dir("bs") || has_dir("bh") || has_dir("lh") || has_dir("hl"))
-                      v[Direction(-atom.second * FILE_NB - atom.first)] = distance;
+                      add_step(-atom.second, -atom.first);
                   if (directions.size() == 0 || has_dir("bb") || has_dir("vv") || has_dir("rb") || has_dir("rv") || has_dir("bh") || has_dir("rh") || (has_dir("hl") && !standaloneH))
-                      v[Direction(-atom.first * FILE_NB + atom.second)] = distance;
+                      add_step(-atom.first, atom.second);
                   if (directions.size() == 0 || has_dir("ff") || has_dir("vv") || has_dir("lf") || has_dir("lv") || has_dir("fh") || has_dir("lh") || (has_dir("hl") && !standaloneH))
-                      v[Direction(atom.first * FILE_NB - atom.second)] = distance;
+                      add_step(atom.first, -atom.second);
               }
           }
           // Reset per-atom parser state.
@@ -342,16 +322,9 @@ namespace {
                   i = close;
                   continue;
               }
-              // Reject tuples that cannot be represented unambiguously by our
-              // single-step direction encoding.
-              if (!is_supported_tuple_vector(dx, dy))
-              {
-                  i = close;
-                  continue;
-              }
               std::vector<std::pair<int, int>> tupleAtom = { std::make_pair(dx, dy) };
               i = close;
-              commit_atom(tupleAtom, false, i, ')');
+              commit_atom(tupleAtom, false, i, ')', true);
           }
       }
       return p;

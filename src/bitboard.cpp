@@ -246,6 +246,14 @@ inline Bitboard safe_destination(Square s, int step) {
     return (actualDr == expectedDr && actualDf == expectedDf) ? square_bb(to) : Bitboard(0);
 }
 
+inline Bitboard safe_destination_tuple(Square s, int dr, int df) {
+    int r = int(rank_of(s)) + dr;
+    int f = int(file_of(s)) + df;
+    if (r < 0 || r > int(RANK_MAX) || f < 0 || f > int(FILE_MAX))
+        return Bitboard(0);
+    return square_bb(make_square(File(f), Rank(r)));
+}
+
 #ifdef VERY_LARGE_BOARDS
 Bitboard rider_attacks_bb(RiderType R, Square s, Bitboard occupied) {
   switch (R)
@@ -375,6 +383,14 @@ void Bitboards::init_pieces() {
                           pseudo |= safe_destination(s, c == WHITE ? d : -d);
                           if (!limit)
                               leaper |= safe_destination(s, c == WHITE ? d : -d);
+                      }
+                      for (auto const& [dr, df] : pi->tupleSteps[initial][modality])
+                      {
+                          int tdr = c == WHITE ? dr : -dr;
+                          int tdf = c == WHITE ? df : -df;
+                          Bitboard dst = safe_destination_tuple(s, tdr, tdf);
+                          pseudo |= dst;
+                          leaper |= dst;
                       }
                       {
                           std::map<Direction, int> dirs;

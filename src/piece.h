@@ -21,6 +21,7 @@
 
 #include <string>
 #include <map>
+#include <vector>
 
 #include "types.h"
 #include "variant.h"
@@ -38,6 +39,7 @@ struct PieceInfo {
   std::string name = "";
   std::string betza = "";
   std::map<Direction, int> steps[2][MOVE_MODALITY_NB] = {};
+  std::vector<std::pair<int, int>> tupleSteps[2][MOVE_MODALITY_NB] = {};
   std::map<Direction, int> slider[2][MOVE_MODALITY_NB] = {};
   std::map<Direction, int> hopper[2][MOVE_MODALITY_NB] = {};
   bool hasDynamicSlider = false;
