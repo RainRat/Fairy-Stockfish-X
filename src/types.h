@@ -468,7 +468,9 @@ constexpr int MAX_PLY = 60;
 #endif
 /// endif USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
 #else
-constexpr int MAX_MOVES = 1024;
+// 1024 is too small for some walling variants (e.g. atomicduck), where
+// legal move generation can exceed this in non-ALLVARS builds.
+constexpr int MAX_MOVES = 2048;
 constexpr int MAX_PLY = 246;
 #endif
 /// endif ALLVARS
