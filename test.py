@@ -361,6 +361,9 @@ class TestPyffish(unittest.TestCase):
         result = sf.start_fen("shogun")
         self.assertEqual(result, SHOGUN)
 
+        with self.assertRaisesRegex(ValueError, "No such variant"):
+            sf.start_fen("this_variant_does_not_exist")
+
     def test_legal_moves(self):
         fen = "10/10/10/10/10/k9/10/K9 w - - 0 1"
         result = sf.legal_moves("capablanca", fen, [])
