@@ -1,4 +1,21 @@
 const express = require('express')
+// Node's fetch rejects absolute filesystem paths (e.g. "/.../ffish.wasm").
+// Emscripten loader may pass such paths, so adapt them to in-memory responses.
+if (typeof process !== 'undefined' && process.versions && process.versions.node && typeof fetch === 'function') {
+  const fs = require('fs');
+  const originalFetch = fetch;
+  global.fetch = async (resource, init) => {
+    if (typeof resource === 'string' && resource.startsWith('/')) {
+      try {
+        const bytes = await fs.promises.readFile(resource);
+        return new Response(bytes, { status: 200 });
+      } catch (_) {
+        return new Response(null, { status: 404 });
+      }
+    }
+    return originalFetch(resource, init);
+  };
+}
 const ffish = require('./ffish.js');
 const { PerformanceObserver, performance } = require('perf_hooks');
 const { Chess } = require('chess.js')
