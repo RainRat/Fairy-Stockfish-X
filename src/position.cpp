@@ -313,7 +313,7 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
       incremented after Black's move.
 */
 
-  unsigned char col, row, token;
+  unsigned char col, token;
   size_t idx;
   std::istringstream ss(fenStr);
 
@@ -438,14 +438,17 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
       }
   }
 
+  // Switch back to token-based parsing for the remaining FEN fields.
+  ss >> std::skipws;
+
   // 2. Active color
   ss >> token;
   sideToMove = (token != (sfen ? 'w' : 'b') ? WHITE : BLACK);  // Invert colors for SFEN
-  ss >> token;
 
   // 3-4. Skip parsing castling and en passant flags if not present
   st->epSquares = 0;
   st->castlingKingSquare[WHITE] = st->castlingKingSquare[BLACK] = SQ_NONE;
+  ss >> std::ws;
   if (!isdigit(ss.peek()) && !sfen)
   {
       std::string castlingSpec;
@@ -562,19 +565,29 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
               st->gatesBB[c] = explicitGates[c] & pieces(c);
 
       // counting limit
+      ss >> std::ws;
       if (counting_rule() && isdigit(ss.peek()))
           ss >> st->countingLimit;
 
       // 4. En passant square.
       // Ignore if square is invalid or not on side to move relative rank 6.
       else
-          while ((ss >> col) && (col >= 'a' && col <= 'a' + max_file()))
+      {
+          std::string epSpec;
+          ss >> epSpec;
+          if (epSpec == "-")
+              epSpec.clear();
+
+          for (std::size_t i = 0; i < epSpec.size();)
           {
+              col = epSpec[i++];
+              if (col < 'a' || col > 'a' + max_file())
+                  break;
+
               std::string rankDigits;
-              while (std::isdigit(ss.peek()))
+              while (i < epSpec.size() && std::isdigit(epSpec[i]))
               {
-                  ss >> row;
-                  rankDigits.push_back(row);
+                  rankDigits.push_back(epSpec[i++]);
               }
               if (rankDigits.empty())
                   break;
@@ -620,6 +633,7 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
                           && !((pieces(WHITE) | pieces(BLACK)) & (epSquare | (epSquare + pawn_push(sideToMove)))))))
                   st->epSquares |= epSquare;
           }
+      }
   }
 
   // Check counter for nCheck
