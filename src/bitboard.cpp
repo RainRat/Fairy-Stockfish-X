@@ -569,7 +569,7 @@ namespace {
         // until we find the one that passes the verification test.
         // If a precomputed candidate is available, try it first and fall back
         // to randomized search if it collides for this board size.
-        bool triedProvidedMagic = false;
+        [[maybe_unused]] bool triedProvidedMagic = false;
         for (int i = 0; i < size; )
         {
             bool usedProvidedMagic = false;

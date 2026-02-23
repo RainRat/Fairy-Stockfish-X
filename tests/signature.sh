@@ -13,7 +13,7 @@ trap 'error ${LINENO}' ERR
 
 signature=`./stockfish bench 2>&1 | grep "Nodes searched  : " | awk '{print $4}'`
 
-if [ $# -gt 0 ]; then
+if [ $# -gt 0 ] && [ -n "$1" ]; then
    # compare to given reference
    if [ "$1" != "$signature" ]; then
       if [ -z "$signature" ]; then
