@@ -1393,6 +1393,20 @@ bool Position::legal(Move m) const {
   if ((!checking_permitted() || (sittuyin_promotion() && type_of(m) == PROMOTION) || (!drop_checks() && type_of(m) == DROP)) && gives_check(m))
       return false;
 
+  // Shogi rule: pawn-drop mate is illegal.
+  if (   var->shogiPawnDropMateIllegal
+      && type_of(m) == DROP
+      && type_of(moved_piece(m)) == SHOGI_PAWN
+      && gives_check(m))
+  {
+      StateInfo setupState, nextState;
+      Position p;
+      p.set(variant(), fen(), is_chess960(), &setupState, this_thread());
+      p.do_move(m, nextState, true);
+      if (p.checkers() && MoveList<LEGAL>(p).size() == 0)
+          return false;
+  }
+
   // Illegal quiet moves
   if (must_capture() && !capture(m) && has_capture())
       return false;

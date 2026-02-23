@@ -436,6 +436,11 @@ class TestPyffish(unittest.TestCase):
         self.assertNotIn("d4d5", result)
         self.assertIn("c5c4", result)
 
+        # Shogi pawn-drop mate is illegal.
+        fen = "BRBRSSSGG/nPPPPPPPP/n8/n8/n8/ll7/kl7/9/K8[PPPPPPPPPPggsl] w - - 0 1"
+        result = sf.legal_moves("shogi", fen, [])
+        self.assertNotIn("P@a2", result)
+
 
     def test_castling(self):
         legals = ['f5f4', 'a7a6', 'b7b6', 'c7c6', 'd7d6', 'e7e6', 'i7i6', 'j7j6', 'a7a5', 'b7b5', 'c7c5', 'e7e5', 'i7i5', 'j7j5', 'b8a6', 'b8c6', 'h6g4', 'h6i4', 'h6j5', 'h6f7', 'h6g8', 'h6i8', 'd5a2', 'd5b3', 'd5f3', 'd5c4', 'd5e4', 'd5c6', 'd5e6', 'd5f7', 'd5g8', 'j8g8', 'j8h8', 'j8i8', 'e8f7', 'c8b6', 'c8d6', 'g6g2', 'g6g3', 'g6f4', 'g6g4', 'g6h4', 'g6e5', 'g6g5', 'g6i5', 'g6a6', 'g6b6', 'g6c6', 'g6d6', 'g6e6', 'g6f6', 'g6h8', 'f8f7', 'f8g8', 'f8i8']
@@ -1148,9 +1153,9 @@ startFen = 4k3/8/2S5/3p4/8/8/8/4K3 w - d6 0 1
         result = sf.game_result("chess", CHESS, ["f2f3", "e7e5", "g2g4", "d8h4"])
         self.assertEqual(result, -sf.VALUE_MATE)
 
-        # shogi pawn drop mate
-        result = sf.game_result("shogi", "lnsg3nk/1r2b1gs1/ppppppp1p/7N1/7p1/9/PPPPPPPP1/1B5R1/LNSGKGS1L[P] w 0 1", ["P@i8"])
-        self.assertEqual(result, sf.VALUE_MATE)
+        # shogi pawn-drop mate is illegal and must not be returned as legal move
+        fen = "lnsg3nk/1r2b1gs1/ppppppp1p/7N1/7p1/9/PPPPPPPP1/1B5R1/LNSGKGS1L[P] w 0 1"
+        self.assertNotIn("P@i8", sf.legal_moves("shogi", fen, []))
 
         # losers checkmate
         result = sf.game_result("losers", CHESS, ["f2f3", "e7e5", "g2g4", "d8h4"])
