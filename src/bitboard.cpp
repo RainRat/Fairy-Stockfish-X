@@ -428,37 +428,7 @@ void Bitboards::init() {
               SquareDistance[s1][s2] = std::max(distance<File>(s1, s2), distance<Rank>(s1, s2));
 
 #if !defined(VERY_LARGE_BOARDS)
-#ifdef PRECOMPUTED_MAGICS
-  init_magics<RIDER>(RookTableH, RookMagicsH, RookDirectionsH, RookMagicHInit);
-  init_magics<RIDER>(RookTableV, RookMagicsV, RookDirectionsV, RookMagicVInit);
-  init_magics<RIDER>(BishopTable, BishopMagics, BishopDirections, BishopMagicInit);
-  init_magics<HOPPER>(CannonTableH, CannonMagicsH, RookDirectionsH, CannonMagicHInit);
-  init_magics<HOPPER>(CannonTableV, CannonMagicsV, RookDirectionsV, CannonMagicVInit);
-  init_magics<LAME_LEAPER>(LameDabbabaTable, LameDabbabaMagics, LameDabbabaDirections, LameDabbabaMagicInit);
-  init_magics<LAME_LEAPER>(HorseTable, HorseMagics, HorseDirections, HorseMagicInit);
-  init_magics<LAME_LEAPER>(ElephantTable, ElephantMagics, ElephantDirections, ElephantMagicInit);
-  init_magics<LAME_LEAPER>(JanggiElephantTable, JanggiElephantMagics, JanggiElephantDirections, JanggiElephantMagicInit);
-  init_magics<HOPPER>(CannonDiagTable, CannonDiagMagics, BishopDirections, CannonDiagMagicInit);
-  init_magics<RIDER>(NightriderTable, NightriderMagics, HorseDirections, NightriderMagicInit);
-  init_magics<HOPPER>(GrasshopperTableH, GrasshopperMagicsH, GrasshopperDirectionsH, GrasshopperMagicHInit);
-  init_magics<HOPPER>(GrasshopperTableV, GrasshopperMagicsV, GrasshopperDirectionsV, GrasshopperMagicVInit);
-  init_magics<HOPPER>(GrasshopperTableD, GrasshopperMagicsD, GrasshopperDirectionsD, GrasshopperMagicDInit);
-#else
-  init_magics<RIDER>(RookTableH, RookMagicsH, RookDirectionsH);
-  init_magics<RIDER>(RookTableV, RookMagicsV, RookDirectionsV);
-  init_magics<RIDER>(BishopTable, BishopMagics, BishopDirections);
-  init_magics<HOPPER>(CannonTableH, CannonMagicsH, RookDirectionsH);
-  init_magics<HOPPER>(CannonTableV, CannonMagicsV, RookDirectionsV);
-  init_magics<LAME_LEAPER>(LameDabbabaTable, LameDabbabaMagics, LameDabbabaDirections);
-  init_magics<LAME_LEAPER>(HorseTable, HorseMagics, HorseDirections);
-  init_magics<LAME_LEAPER>(ElephantTable, ElephantMagics, ElephantDirections);
-  init_magics<LAME_LEAPER>(JanggiElephantTable, JanggiElephantMagics, JanggiElephantDirections);
-  init_magics<HOPPER>(CannonDiagTable, CannonDiagMagics, BishopDirections);
-  init_magics<RIDER>(NightriderTable, NightriderMagics, HorseDirections);
-  init_magics<HOPPER>(GrasshopperTableH, GrasshopperMagicsH, GrasshopperDirectionsH);
-  init_magics<HOPPER>(GrasshopperTableV, GrasshopperMagicsV, GrasshopperDirectionsV);
-  init_magics<HOPPER>(GrasshopperTableD, GrasshopperMagicsD, GrasshopperDirectionsD);
-#endif
+  init_magics(FILE_MAX, RANK_MAX);
 #endif
 
   init_pieces();
@@ -482,6 +452,14 @@ namespace {
 
 #if !defined(VERY_LARGE_BOARDS)
 
+  File CurrentMagicMaxFile = FILE_MAX;
+  Rank CurrentMagicMaxRank = RANK_MAX;
+  bool MagicsInitialized = false;
+
+  inline Bitboard active_magic_board() {
+      return BoardSizeBB[CurrentMagicMaxFile][CurrentMagicMaxRank];
+  }
+
   // init_magics() computes all rook and bishop attacks at startup. Magic
   // bitboards are used to look up attacks of sliding pieces. As a reference see
   // www.chessprogramming.org/Magic_Bitboards. In particular, here we use the so
@@ -489,20 +467,18 @@ namespace {
 
   template <MovementType MT>
 #ifdef PRECOMPUTED_MAGICS
-  void init_magics(Bitboard table[], Magic magics[], std::map<Direction, int> directions, const Bitboard magicsInit[]) {
+  void init_magic_table(Bitboard table[], Magic magics[], std::map<Direction, int> directions, const Bitboard* magicsInit) {
 #else
-  void init_magics(Bitboard table[], Magic magics[], std::map<Direction, int> directions) {
+  void init_magic_table(Bitboard table[], Magic magics[], std::map<Direction, int> directions) {
 #endif
 
     // Optimal PRNG seeds to pick the correct magics in the shortest time
-#ifndef PRECOMPUTED_MAGICS
 #ifdef LARGEBOARDS
     int seeds[][RANK_NB] = { { 734, 10316, 55013, 32803, 12281, 15100,  16645, 255, 346, 89123 },
                              { 734, 10316, 55013, 32803, 12281, 15100,  16645, 255, 346, 89123 } };
 #else
     int seeds[][RANK_NB] = { { 8977, 44560, 54343, 38998,  5731, 95205, 104912, 17020 },
                              {  728, 10316, 55013, 32803, 12281, 15100,  16645,   255 } };
-#endif
 #endif
 
     Bitboard* occupancy = new Bitboard[1 << (FILE_NB + RANK_NB - 4)];
@@ -514,7 +490,8 @@ namespace {
     for (Square s = SQ_A1; s <= SQ_MAX; ++s)
     {
         // Board edges are not considered in the relevant occupancies
-        edges = ((Rank1BB | rank_bb(RANK_MAX)) & ~rank_bb(s)) | ((FileABB | file_bb(FILE_MAX)) & ~file_bb(s));
+        edges = ((Rank1BB | rank_bb(CurrentMagicMaxRank)) & ~rank_bb(s))
+              | ((FileABB | file_bb(CurrentMagicMaxFile)) & ~file_bb(s));
 
         // Given a square 's', the mask is the bitboard of sliding attacks from
         // 's' computed on an empty board. The index must be big enough to contain
@@ -523,7 +500,8 @@ namespace {
         // apply to the 64 or 32 bits word to get the index.
         Magic& m = magics[s];
         // The mask for hoppers is unlimited distance, even if the hopper is limited distance (e.g., grasshopper)
-        m.mask  = (MT == LAME_LEAPER ? lame_leaper_path(directions, s) : sliding_attack<MT == HOPPER ? HOPPER_RANGE : MT>(directions, s, 0)) & ~edges;
+        m.mask  = (MT == LAME_LEAPER ? lame_leaper_path(directions, s) : sliding_attack<MT == HOPPER ? HOPPER_RANGE : MT>(directions, s, 0))
+                & active_magic_board() & ~edges;
 #ifdef LARGEBOARDS
         m.shift = 128 - popcount(m.mask);
 #else
@@ -539,7 +517,8 @@ namespace {
         b = size = 0;
         do {
             occupancy[size] = b;
-            reference[size] = MT == LAME_LEAPER ? lame_leaper_attack(directions, s, b) : sliding_attack<MT>(directions, s, b);
+            reference[size] = (MT == LAME_LEAPER ? lame_leaper_attack(directions, s, b) : sliding_attack<MT>(directions, s, b))
+                            & active_magic_board();
 
             if (HasPext)
                 m.attacks[pext(b, m.mask)] = reference[size];
@@ -551,26 +530,31 @@ namespace {
         if (HasPext)
             continue;
 
-#ifndef PRECOMPUTED_MAGICS
         PRNG rng(seeds[Is64Bit][rank_of(s)]);
-#endif
 
         // Find a magic for square 's' picking up an (almost) random number
         // until we find the one that passes the verification test.
+        // If a precomputed candidate is available, try it first and fall back
+        // to randomized search if it collides for this board size.
+        bool triedProvidedMagic = false;
         for (int i = 0; i < size; )
         {
-            for (m.magic = 0; popcount((m.magic * m.mask) >> (SQUARE_NB - FILE_NB)) < FILE_NB - 2; )
-            {
-#ifdef LARGEBOARDS
+            bool usedProvidedMagic = false;
 #ifdef PRECOMPUTED_MAGICS
+            if (magicsInit && !triedProvidedMagic)
+            {
                 m.magic = magicsInit[s];
-#else
-                m.magic = (rng.sparse_rand<Bitboard>() << 64) ^ rng.sparse_rand<Bitboard>();
+                triedProvidedMagic = true;
+                usedProvidedMagic = true;
+            }
 #endif
+
+            if (!usedProvidedMagic)
+#ifdef LARGEBOARDS
+                m.magic = (rng.sparse_rand<Bitboard>() << 64) ^ rng.sparse_rand<Bitboard>();
 #else
                 m.magic = rng.sparse_rand<Bitboard>();
 #endif
-            }
 
             // A good magic must map every possible occupancy to an index that
             // looks up the correct sliding attack in the attacks[s] database.
@@ -590,6 +574,13 @@ namespace {
                 else if (m.attacks[idx] != reference[i])
                     break;
             }
+
+#ifdef PRECOMPUTED_MAGICS
+            // Precomputed candidate failed for this board size, continue with
+            // randomized search to guarantee progress.
+            if (i < size && usedProvidedMagic)
+                continue;
+#endif
         }
     }
 
@@ -597,6 +588,53 @@ namespace {
     delete[] reference;
     delete[] epoch;
   }
+#endif
+}
+
+void Bitboards::init_magics(File maxFile, Rank maxRank) {
+#if !defined(VERY_LARGE_BOARDS)
+  if (MagicsInitialized && maxFile == CurrentMagicMaxFile && maxRank == CurrentMagicMaxRank)
+      return;
+
+  CurrentMagicMaxFile = maxFile;
+  CurrentMagicMaxRank = maxRank;
+
+#ifdef PRECOMPUTED_MAGICS
+  const bool usePrecomputed = true;
+  init_magic_table<RIDER>(RookTableH, RookMagicsH, RookDirectionsH, usePrecomputed ? RookMagicHInit : nullptr);
+  init_magic_table<RIDER>(RookTableV, RookMagicsV, RookDirectionsV, usePrecomputed ? RookMagicVInit : nullptr);
+  init_magic_table<RIDER>(BishopTable, BishopMagics, BishopDirections, usePrecomputed ? BishopMagicInit : nullptr);
+  init_magic_table<HOPPER>(CannonTableH, CannonMagicsH, RookDirectionsH, usePrecomputed ? CannonMagicHInit : nullptr);
+  init_magic_table<HOPPER>(CannonTableV, CannonMagicsV, RookDirectionsV, usePrecomputed ? CannonMagicVInit : nullptr);
+  init_magic_table<LAME_LEAPER>(LameDabbabaTable, LameDabbabaMagics, LameDabbabaDirections, usePrecomputed ? LameDabbabaMagicInit : nullptr);
+  init_magic_table<LAME_LEAPER>(HorseTable, HorseMagics, HorseDirections, usePrecomputed ? HorseMagicInit : nullptr);
+  init_magic_table<LAME_LEAPER>(ElephantTable, ElephantMagics, ElephantDirections, usePrecomputed ? ElephantMagicInit : nullptr);
+  init_magic_table<LAME_LEAPER>(JanggiElephantTable, JanggiElephantMagics, JanggiElephantDirections, usePrecomputed ? JanggiElephantMagicInit : nullptr);
+  init_magic_table<HOPPER>(CannonDiagTable, CannonDiagMagics, BishopDirections, usePrecomputed ? CannonDiagMagicInit : nullptr);
+  init_magic_table<RIDER>(NightriderTable, NightriderMagics, HorseDirections, usePrecomputed ? NightriderMagicInit : nullptr);
+  init_magic_table<HOPPER>(GrasshopperTableH, GrasshopperMagicsH, GrasshopperDirectionsH, usePrecomputed ? GrasshopperMagicHInit : nullptr);
+  init_magic_table<HOPPER>(GrasshopperTableV, GrasshopperMagicsV, GrasshopperDirectionsV, usePrecomputed ? GrasshopperMagicVInit : nullptr);
+  init_magic_table<HOPPER>(GrasshopperTableD, GrasshopperMagicsD, GrasshopperDirectionsD, usePrecomputed ? GrasshopperMagicDInit : nullptr);
+#else
+  init_magic_table<RIDER>(RookTableH, RookMagicsH, RookDirectionsH);
+  init_magic_table<RIDER>(RookTableV, RookMagicsV, RookDirectionsV);
+  init_magic_table<RIDER>(BishopTable, BishopMagics, BishopDirections);
+  init_magic_table<HOPPER>(CannonTableH, CannonMagicsH, RookDirectionsH);
+  init_magic_table<HOPPER>(CannonTableV, CannonMagicsV, RookDirectionsV);
+  init_magic_table<LAME_LEAPER>(LameDabbabaTable, LameDabbabaMagics, LameDabbabaDirections);
+  init_magic_table<LAME_LEAPER>(HorseTable, HorseMagics, HorseDirections);
+  init_magic_table<LAME_LEAPER>(ElephantTable, ElephantMagics, ElephantDirections);
+  init_magic_table<LAME_LEAPER>(JanggiElephantTable, JanggiElephantMagics, JanggiElephantDirections);
+  init_magic_table<HOPPER>(CannonDiagTable, CannonDiagMagics, BishopDirections);
+  init_magic_table<RIDER>(NightriderTable, NightriderMagics, HorseDirections);
+  init_magic_table<HOPPER>(GrasshopperTableH, GrasshopperMagicsH, GrasshopperDirectionsH);
+  init_magic_table<HOPPER>(GrasshopperTableV, GrasshopperMagicsV, GrasshopperDirectionsV);
+  init_magic_table<HOPPER>(GrasshopperTableD, GrasshopperMagicsD, GrasshopperDirectionsD);
+#endif
+  MagicsInitialized = true;
+#else
+  (void) maxFile;
+  (void) maxRank;
 #endif
 }
 

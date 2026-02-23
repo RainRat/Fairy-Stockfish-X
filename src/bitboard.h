@@ -35,6 +35,7 @@ bool probe(Square wksq, Square wpsq, Square bksq, Color us);
 namespace Bitboards {
 
 void init_pieces();
+void init_magics(File maxFile, Rank maxRank);
 void init();
 std::string pretty(Bitboard b);
 

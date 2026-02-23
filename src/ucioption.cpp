@@ -53,6 +53,8 @@ std::set<string> standard_variants = {
 };
 
 void init_variant(const Variant* v) {
+    if (Options.count("DynamicMagicsByBoardSize") && bool(Options["DynamicMagicsByBoardSize"]))
+        Bitboards::init_magics(v->maxFile, v->maxRank);
     pieceMap.init(v);
     Bitboards::init_pieces();
 }
@@ -208,6 +210,7 @@ void init(OptionsMap& o) {
 #endif
   o["TsumeMode"]             << Option(false);
   o["VariantPath"]           << Option("<empty>", on_variant_path);
+  o["DynamicMagicsByBoardSize"] << Option(false);
   o["usemillisec"]           << Option(true); // time unit for UCCI
 }
 
