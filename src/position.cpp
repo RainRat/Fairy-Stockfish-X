@@ -3041,8 +3041,12 @@ void Position::undo_move(Move m) {
   }
   else if (type_of(m) == PIECE_PROMOTION)
   {
-      Piece unpromotedPiece = unpromoted_piece_on(to);
-      remove_piece(to);
+      // The promoted piece on 'to' may have been removed by blast/connect-N side effects.
+      // For undo, rely on the original mover cached at do_move() time.
+      Piece unpromotedPiece = st->promotionPawn;
+      assert(unpromotedPiece != NO_PIECE);
+      if (piece_on(to) != NO_PIECE)
+          remove_piece(to);
       pc = unpromotedPiece;
       put_piece(pc, to);
   }
