@@ -2317,7 +2317,11 @@ void VariantMap::parse_istream(std::istream& file) {
                     varsToErase.push_back(variant);
             }
             else
+            {
+                std::cerr << "Variant '" << variant << "' exceeds build board limits (maxFile=" << int(FILE_MAX) + 1
+                          << ", maxRank=" << int(RANK_MAX) + 1 << "). Skipping." << std::endl;
                 delete v;
+            }
         }
     }
     // Clean up temporary variants
