@@ -2007,7 +2007,7 @@ inline Square Position::jump_capture_square(Square from, Square to) const {
   Square mid = make_square(File((int(file_of(from)) + int(file_of(to))) / 2),
                            Rank((int(rank_of(from)) + int(rank_of(to))) / 2));
   Piece jumped = piece_on(mid);
-  if (jumped == NO_PIECE || color_of(jumped) == color_of(mover))
+  if (jumped == NO_PIECE || (color_of(jumped) == color_of(mover) && !self_capture()))
       return SQ_NONE;
 
   return mid;

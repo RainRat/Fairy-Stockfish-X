@@ -487,7 +487,14 @@ namespace {
 
         captureTarget = target;
         if (pos.self_capture() && (Type == NON_EVASIONS || Type == CAPTURES || Type == EVASIONS))
-            captureTarget |= pos.pieces(Us) & ~pos.pieces(Us, KING);
+        {
+            Bitboard selfCaptureTargets = pos.pieces(Us) & ~pos.pieces(Us, KING);
+            // During check evasions, only consider self-captures that can
+            // actually resolve the check (capture checker or block line).
+            if (Type == EVASIONS)
+                selfCaptureTargets &= target;
+            captureTarget |= selfCaptureTargets;
+        }
 
         moveList = generate_pawn_moves<Us, Type>(pos, moveList, target);
         for (PieceSet ps = pos.piece_types() & ~(piece_set(PAWN) | KING); ps;)

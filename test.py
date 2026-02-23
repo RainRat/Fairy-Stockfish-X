@@ -470,6 +470,19 @@ startFen = 7k/8/8/8/8/8/8/A6K w - - 0 1
         self.assertNotIn("a1h2", tuple_moves)
         self.assertNotIn("a1b8", tuple_moves)
 
+        # Jump captures should honor selfCapture when the jumped piece is friendly.
+        sf.load_variant_config(
+            """[selfjump:chess]
+customPiece1 = a:mD
+jumpCaptureTypes = a
+selfCapture = true
+startFen = 7k/8/8/8/8/8/P7/A6K w - - 0 1
+"""
+        )
+        selfjump_fen = sf.start_fen("selfjump")
+        selfjump_moves = sf.legal_moves("selfjump", selfjump_fen, [])
+        self.assertIn("a1a3", selfjump_moves)
+
         # Anti-royal pieces must remain attacked.
         sf.load_variant_config(
             """[antiroyal:chess]
