@@ -470,6 +470,19 @@ startFen = 7k/8/8/8/8/8/8/A6K w - - 0 1
         self.assertNotIn("a1h2", tuple_moves)
         self.assertNotIn("a1b8", tuple_moves)
 
+        # Anti-royal pieces must remain attacked.
+        sf.load_variant_config(
+            """[antiroyal:chess]
+customPiece1 = a:K
+antiRoyalTypes = a
+startFen = r6k/8/8/8/8/8/8/A6K w - - 0 1
+"""
+        )
+        anti_fen = sf.start_fen("antiroyal")
+        anti_moves = sf.legal_moves("antiroyal", anti_fen, [])
+        self.assertIn("a1a2", anti_moves)
+        self.assertNotIn("a1b1", anti_moves)
+
         # Different source pieces can share one promoted type and still demote
         # back to their own original piece types.
         sf.load_variant_config(

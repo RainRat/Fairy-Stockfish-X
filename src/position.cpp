@@ -1387,6 +1387,28 @@ Bitboard Position::checked_pseudo_royals(Color c) const {
   return checked;
 }
 
+/// Position::checked_anti_royals computes a bitboard of
+/// all anti-royal pieces of a particular color that are NOT attacked
+Bitboard Position::checked_anti_royals(Color c) const {
+  assert(anti_royal_types());
+  Bitboard antiRoyals = 0;
+  for (PieceSet ps = anti_royal_types(); ps; )
+  {
+      PieceType pt = pop_lsb(ps);
+      if (count(c, pt) <= anti_royal_count())
+          antiRoyals |= pieces(c, pt);
+  }
+
+  Bitboard checked = 0;
+  while (antiRoyals)
+  {
+      Square sr = pop_lsb(antiRoyals);
+      if (!attackers_to(sr, ~c))
+          checked |= sr;
+  }
+  return checked;
+}
+
 
 /// Position::legal() tests whether a pseudo-legal move is legal
 
@@ -1632,6 +1654,60 @@ bool Position::legal(Move m) const {
                   allCheck = false;
           }
           if (allCheck)
+              return false;
+      }
+  }
+
+  // Anti-royal pieces must remain under attack.
+  if (anti_royal_types())
+  {
+      Square kto = to;
+      Bitboard occupied = (type_of(m) != DROP ? pieces() ^ from : pieces());
+      if (walling_rule() == DUCK)
+          occupied ^= st->wallSquares;
+      if (walling() || is_gating(m))
+          occupied |= gating_square(m);
+      if (type_of(m) == CASTLING)
+      {
+          kto = make_square(to > from ? castling_kingside_file() : castling_queenside_file(), castling_rank(us));
+          Square rto = kto - (to > from ? EAST : WEST);
+          occupied ^= to | rto;
+      }
+      occupied |= kto;
+      if (type_of(m) == EN_PASSANT)
+          occupied &= ~square_bb(capture_square(kto));
+      if (capture(m) && blast_on_capture())
+          occupied &= ~blast_squares(kto);
+
+      Bitboard antiRoyals = 0;
+      for (PieceSet ps = anti_royal_types(); ps; )
+      {
+          PieceType pt = pop_lsb(ps);
+          if (count(sideToMove, pt) <= anti_royal_count())
+              antiRoyals |= pieces(sideToMove, pt);
+      }
+      if (is_ok(from) && (antiRoyals & from))
+          antiRoyals ^= square_bb(from) ^ kto;
+      if (type_of(m) == DROP && (anti_royal_types() & type_of(moved_piece(m))))
+          antiRoyals |= square_bb(to);
+      if (type_of(m) == PROMOTION)
+      {
+          if (anti_royal_types() & type_of(moved_piece(m)))
+          {
+              if (count(sideToMove, type_of(moved_piece(m))) > anti_royal_count())
+                  antiRoyals &= ~pieces(sideToMove, type_of(moved_piece(m)));
+          }
+          if (anti_royal_types() & promotion_type(m))
+          {
+              if (count(sideToMove, promotion_type(m)) <= anti_royal_count())
+                  antiRoyals |= kto;
+          }
+      }
+
+      while (antiRoyals)
+      {
+          Square sr = pop_lsb(antiRoyals);
+          if (!(occupied & sr) || !attackers_to(sr, occupied, ~us))
               return false;
       }
   }

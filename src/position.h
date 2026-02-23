@@ -258,6 +258,8 @@ public:
   int extinction_opponent_piece_count() const;
   PieceSet pseudo_royal_types() const;
   int pseudo_royal_count() const;
+  PieceSet anti_royal_types() const;
+  int anti_royal_count() const;
   bool extinction_pseudo_royal() const;
   PieceType flag_piece(Color c) const;
   Bitboard flag_region(Color c) const;
@@ -335,6 +337,7 @@ public:
   Bitboard check_squares(PieceType pt) const;
   Bitboard pinners(Color c) const;
   Bitboard checked_pseudo_royals(Color c) const;
+  Bitboard checked_anti_royals(Color c) const;
 
   // Attacks to/from a given square
   Bitboard attackers_to(Square s) const;
@@ -1279,6 +1282,11 @@ inline Value Position::stalemate_value(int ply) const {
               return convert_mate_value(var->checkmateValue, ply);
       }
   }
+  if (anti_royal_types())
+  {
+      if (checked_anti_royals(sideToMove))
+          return convert_mate_value(var->checkmateValue, ply);
+  }
   Value result = var->stalemateValue;
   // Is piece count used to determine stalemate result?
   if (var->stalematePieceCount)
@@ -1381,6 +1389,16 @@ inline PieceSet Position::pseudo_royal_types() const {
 inline int Position::pseudo_royal_count() const {
   assert(var != nullptr);
   return var->pseudoRoyalCount;
+}
+
+inline PieceSet Position::anti_royal_types() const {
+  assert(var != nullptr);
+  return var->antiRoyalTypes;
+}
+
+inline int Position::anti_royal_count() const {
+  assert(var != nullptr);
+  return var->antiRoyalCount;
 }
 
 inline bool Position::extinction_pseudo_royal() const {

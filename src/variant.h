@@ -190,6 +190,8 @@ struct Variant {
   bool extinctionPseudoRoyal = false;
   PieceSet pseudoRoyalTypes = NO_PIECE_SET;
   int pseudoRoyalCount = 1;
+  PieceSet antiRoyalTypes = NO_PIECE_SET;
+  int antiRoyalCount = 1;
   bool dupleCheck = false;
   PieceSet extinctionPieceTypes = NO_PIECE_SET;
   int extinctionPieceCount = 0;
