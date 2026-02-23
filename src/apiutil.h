@@ -172,11 +172,8 @@ inline std::string rank(const Position& pos, Square s, Notation n) {
     {
         int boardHeight = pos.ranks();
         int rawRank = pos.max_rank() - rank_of(s) + 1;
+        // Janggi notation uses 0 for the back rank on 10-rank boards.
         int displayRank = rawRank % boardHeight;
-
-        if (displayRank == 0)
-            displayRank = boardHeight;
-
         return std::to_string(displayRank);
     }
     case NOTATION_XIANGQI_WXF:

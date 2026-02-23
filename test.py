@@ -142,6 +142,8 @@ selfCapture = true
 hostageExchange =
 
 [diagfaceoff:chess]
+maxRank = 10
+maxFile = 10
 diagonalGeneral = true
 startFen = 10/10/10/4k5/3P6/2K7/10/10/10/10 w - - 0 1
 """
