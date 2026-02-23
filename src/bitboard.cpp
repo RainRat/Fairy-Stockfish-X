@@ -216,21 +216,29 @@ inline Bitboard safe_destination(Square s, int step) {
 
     // Prevent horizontal edge wrapping by decoding the linear step into a
     // canonical (dr, df) pair and matching exact board deltas.
+    // For a fixed 'step', two nearby decompositions exist around trunc division:
+    //   step = q * FILE_NB + r
+    // and step = (q +/- 1) * FILE_NB + (r -/+ FILE_NB).
+    // Pick the candidate with smaller Chebyshev distance, then prefer true
+    // diagonal/orthogonal components over degenerate long-file remainders.
     const int f = FILE_NB;
-    const int q = step / f;          // trunc toward zero
-    const int r = step - q * f;
-    const int q2 = q + (step >= 0 ? 1 : -1);
+    const int q1 = step / f; // trunc toward zero
+    const int r1 = step - q1 * f;
+    const int q2 = q1 + (step >= 0 ? 1 : -1);
     const int r2 = step - q2 * f;
 
-    auto score = [](int dr, int df) {
-        int maxAbs = std::max(std::abs(dr), std::abs(df));
-        int bothNonZero = (dr != 0 && df != 0) ? 0 : 1; // prefer true
-        int sumAbs = std::abs(dr) + std::abs(df);
-        return std::tuple<int, int, int>(maxAbs, bothNonZero, sumAbs);
-    };
-    const bool pickSecond = score(q2, r2) < score(q, r);
-    const int decodedDr = pickSecond ? q2 : q;
-    const int decodedDf = pickSecond ? r2 : r;
+    const int q1Abs = std::abs(q1), r1Abs = std::abs(r1);
+    const int q2Abs = std::abs(q2), r2Abs = std::abs(r2);
+    const int m1 = std::max(q1Abs, r1Abs);
+    const int m2 = std::max(q2Abs, r2Abs);
+    const int z1 = (q1 != 0 && r1 != 0) ? 0 : 1;
+    const int z2 = (q2 != 0 && r2 != 0) ? 0 : 1;
+    const int s1 = q1Abs + r1Abs;
+    const int s2 = q2Abs + r2Abs;
+
+    const bool pickSecond = (m2 < m1) || (m2 == m1 && (z2 < z1 || (z2 == z1 && s2 < s1)));
+    const int decodedDr = pickSecond ? q2 : q1;
+    const int decodedDf = pickSecond ? r2 : r1;
     int expectedDr = std::abs(decodedDr);
     int expectedDf = std::abs(decodedDf);
     int actualDr = std::abs(int(rank_of(to)) - int(rank_of(s)));
