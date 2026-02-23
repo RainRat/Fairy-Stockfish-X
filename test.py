@@ -443,6 +443,21 @@ startFen = 4k3/8/8/8/8/c7/c7/C3K3 w - - 0 1
         hopallow_fen = sf.start_fen("hopallow")
         self.assertIn("a1a3", sf.legal_moves("hopallow", hopallow_fen, []))
 
+        # Different source pieces can share one promoted type and still demote
+        # back to their own original piece types.
+        sf.load_variant_config(
+            """[dupdemote:chess]
+pieceDemotion = true
+promotedPieceType = b:q n:q
+startFen = 3k4/1B4N1/8/8/8/8/8/4K3 w - - 0 1
+"""
+        )
+        dup_fen = sf.start_fen("dupdemote")
+        bishop_demoted = sf.get_fen("dupdemote", dup_fen, ["b7a8+", "d8d7", "a8a7-"])
+        knight_demoted = sf.get_fen("dupdemote", dup_fen, ["g7e8+", "d8c7", "e8e7-"])
+        self.assertIn("B2k2N1", bishop_demoted)
+        self.assertIn("1Bk1N3", knight_demoted)
+
         # pawn promotion of dropped pawns beyond promotion rank
         result = sf.legal_moves("makhouse", "rnsmksnr/8/1ppP1ppp/p3p3/8/PPP1PPPP/8/RNSKMSNR[p] w - - 0 4", [])
         self.assertIn("d6d7m", result)
