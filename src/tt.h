@@ -37,13 +37,13 @@ using TTMove = uint32_t;
 /// generation  5 bit
 /// pv node     1 bit
 /// bound type  2 bit
-/// move       32 bit (official SF: 16 bit)
+/// move       32/64 bit (official SF: 16 bit)
 /// value      16 bit
 /// eval value 16 bit
 
 struct TTEntry {
 
-  Move  move()  const { return Move(move32); }
+  Move  move()  const { return Move(storedMove); }
   Value value() const { return (Value)value16; }
   Value eval()  const { return (Value)eval16; }
   Depth depth() const { return (Depth)depth8 + DEPTH_OFFSET; }
@@ -54,7 +54,7 @@ struct TTEntry {
 private:
   friend class TranspositionTable;
 
-  TTMove move32;
+  TTMove storedMove;
   int16_t  value16;
   int16_t  eval16;
   uint16_t key16;

@@ -485,7 +485,13 @@ constexpr int MAX_PLY = 246;
 /// any normal move destination square is always different from origin square
 /// while MOVE_NONE and MOVE_NULL have the same origin and destination square.
 
-enum Move : int {
+enum Move :
+#if defined(VERY_LARGE_BOARDS)
+  uint64_t
+#else
+  int
+#endif
+{
   MOVE_NONE,
   MOVE_NULL = 1 + (1 << SQUARE_BITS)
 };
@@ -669,7 +675,11 @@ static_assert(KING < PIECE_TYPE_NB, "KING exceeds PIECE_TYPE_NB.");
 static_assert(PIECE_TYPE_BITS <= 6, "PIECE_TYPE uses more than 6 bit");
 static_assert(!(PIECE_TYPE_NB & (PIECE_TYPE_NB - 1)), "PIECE_TYPE_NB is not a power of 2");
 
+#if defined(VERY_LARGE_BOARDS)
+static_assert(2 * SQUARE_BITS + MOVE_TYPE_BITS + 2 * PIECE_TYPE_BITS <= 64, "Move encoding uses more than 64 bits");
+#else
 static_assert(2 * SQUARE_BITS + MOVE_TYPE_BITS + 2 * PIECE_TYPE_BITS <= 32, "Move encoding uses more than 32 bits");
+#endif
 
 enum Piece {
   NO_PIECE,
