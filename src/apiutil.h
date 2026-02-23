@@ -737,7 +737,16 @@ inline Validation check_touching_kings(const CharBoard& board, const std::array<
 }
 
 inline Validation fill_castling_info_splitted(const std::string& castlingInfo, std::array<std::string, 2>& castlingInfoSplitted) {
-    for (char c : castlingInfo)
+    // Optional extended syntax:
+    //   <legacy-castling-and-gating>|<white-gating-mask>/<black-gating-mask>
+    // Validation keeps backward compatibility by parsing legacy flags exactly as before
+    // and ignoring the optional mask suffix here.
+    std::string legacyCastlingInfo = castlingInfo;
+    std::size_t sep = castlingInfo.find('|');
+    if (sep != std::string::npos)
+        legacyCastlingInfo = castlingInfo.substr(0, sep);
+
+    for (char c : legacyCastlingInfo)
     {
         if (c != '-')
         {

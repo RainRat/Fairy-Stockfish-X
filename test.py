@@ -146,6 +146,12 @@ maxRank = 10
 maxFile = 10
 diagonalGeneral = true
 startFen = 10/10/10/4k5/3P6/2K7/10/10/10/10 w - - 0 1
+
+[fenmask:chess]
+gating = true
+seirawanGating = true
+maxFile = 12
+startFen = rnbqkbnr4/pppppppp4/12/12/12/12/PPPPPPPP4/RNBQKBNR3R[Q] w KQkqk|000000000001/000000000000 - 0 1
 """
 
 sf.load_variant_config(ini_text)
@@ -435,6 +441,11 @@ class TestPyffish(unittest.TestCase):
         result = sf.legal_moves("diagfaceoff", sf.start_fen("diagfaceoff"), [])
         self.assertNotIn("d4d5", result)
         self.assertIn("c5c4", result)
+
+        # Extended FEN gating mask disambiguates castling rights from gating files.
+        result = sf.legal_moves("fenmask", sf.start_fen("fenmask"), [])
+        self.assertIn("l1k1q", result)
+        self.assertNotIn("e1f1q", result)
 
         # Shogi pawn-drop mate is illegal.
         fen = "BRBRSSSGG/nPPPPPPPP/n8/n8/n8/ll7/kl7/9/K8[PPPPPPPPPPggsl] w - - 0 1"

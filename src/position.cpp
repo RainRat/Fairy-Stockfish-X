@@ -448,13 +448,48 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
   st->castlingKingSquare[WHITE] = st->castlingKingSquare[BLACK] = SQ_NONE;
   if (!isdigit(ss.peek()) && !sfen)
   {
+      std::string castlingSpec;
+      ss >> castlingSpec;
+
+      Bitboard explicitGates[COLOR_NB] = {Bitboard(0), Bitboard(0)};
+      bool hasExplicitGates = false;
+      std::string legacyCastlingSpec = castlingSpec;
+
+      // Optional extended syntax:
+      //   <legacy-castling-and-gating>|<white-gating-mask>/<black-gating-mask>
+      // where each mask has `files()` characters of 0/1.
+      std::size_t sep = castlingSpec.find('|');
+      if (sep != std::string::npos)
+      {
+          legacyCastlingSpec = castlingSpec.substr(0, sep);
+          std::string maskSpec = castlingSpec.substr(sep + 1);
+          std::size_t slash = maskSpec.find('/');
+          if (slash != std::string::npos)
+          {
+              std::string whiteMask = maskSpec.substr(0, slash);
+              std::string blackMask = maskSpec.substr(slash + 1);
+              if (whiteMask.size() == std::size_t(files()) && blackMask.size() == std::size_t(files()))
+              {
+                  for (int i = 0; i < files(); ++i)
+                  {
+                      if (whiteMask[i] == '1')
+                          explicitGates[WHITE] |= file_bb(File(i));
+                      if (blackMask[i] == '1')
+                          explicitGates[BLACK] |= file_bb(File(i));
+                  }
+                  hasExplicitGates = true;
+              }
+          }
+      }
+
       // 3. Castling availability. Compatible with 3 standards: Normal FEN standard,
       // Shredder-FEN that uses the letters of the columns on which the rooks began
       // the game instead of KQkq and also X-FEN standard that, in case of Chess960,
       // if an inner rook is associated with the castling right, the castling tag is
       // replaced by the file letter of the involved rook, as for the Shredder-FEN.
-      while ((ss >> token) && !isspace(token))
+      for (char castlingToken : legacyCastlingSpec)
       {
+          token = castlingToken;
           Square rsq;
           Color c = islower(token) ? BLACK : WHITE;
 
@@ -520,6 +555,11 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
                           set_castling_right(c, s);
                   }
               }
+
+      // Extended FEN gating masks override implicit gate inference when provided.
+      if (hasExplicitGates && gating() && !commit_gates())
+          for (Color c : {WHITE, BLACK})
+              st->gatesBB[c] = explicitGates[c] & pieces(c);
 
       // counting limit
       if (counting_rule() && isdigit(ss.peek()))
