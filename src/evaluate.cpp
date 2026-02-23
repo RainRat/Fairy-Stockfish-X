@@ -1586,6 +1586,10 @@ make_v:
 
   Value fix_FRC(const Position& pos) {
 
+    // This correction is tuned for 8x8 Chess960 corner geometry.
+    if (pos.max_file() != FILE_H || pos.max_rank() != RANK_8)
+        return VALUE_ZERO;
+
     constexpr Bitboard Corners =  Bitboard(1ULL) << SQ_A1 | Bitboard(1ULL) << SQ_H1 | Bitboard(1ULL) << SQ_A8 | Bitboard(1ULL) << SQ_H8;
 
     if (!(pos.pieces(BISHOP) & Corners))
