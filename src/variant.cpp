@@ -1870,6 +1870,7 @@ namespace {
         v->add_piece(WAZIR, 'a');
         v->add_piece(JANGGI_CANNON, 'c');
         v->add_piece(JANGGI_ELEPHANT, 'b', 'e');
+        v->mutuallyHopIllegalTypes = piece_set(JANGGI_CANNON);
         v->startFen = "rnba1abnr/4k4/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/4K4/RNBA1ABNR w - - 0 1";
         v->mobilityRegion[WHITE][WAZIR] = v->mobilityRegion[WHITE][KING];
         v->mobilityRegion[BLACK][WAZIR] = v->mobilityRegion[BLACK][KING];

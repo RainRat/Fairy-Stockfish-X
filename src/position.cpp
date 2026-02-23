@@ -1442,6 +1442,16 @@ bool Position::legal(Move m) const {
       if (isHop && jump_capture_square(from, to) == SQ_NONE)
           return false;
   }
+  PieceType movePt = type_of(moved_piece(m));
+  if (type_of(m) != DROP && (var->mutuallyHopIllegalTypes & movePt) && (AttackRiderTypes[movePt] & HOPPING_RIDERS))
+  {
+      Bitboard between = between_bb(from, to);
+      Bitboard hopIllegalPieces = 0;
+      for (PieceSet ps = var->mutuallyHopIllegalTypes; ps;)
+          hopIllegalPieces |= pieces(pop_lsb(ps));
+      if ((between & pieces()) && ((between | to) & hopIllegalPieces))
+          return false;
+  }
 
   // Illegal checks
   if ((!checking_permitted() || (sittuyin_promotion() && type_of(m) == PROMOTION) || (!drop_checks() && type_of(m) == DROP)) && gives_check(m))
@@ -1871,9 +1881,18 @@ bool Position::pseudo_legal(const Move m) const {
   else if (!((capture(m) ? attacks_from(us, type_of(pc), from) : moves_from(us, type_of(pc), from)) & to))
       return false;
 
-  // Janggi cannon
-  if (type_of(pc) == JANGGI_CANNON && (pieces(JANGGI_CANNON) & (between_bb(from, to) | to)))
-       return false;
+  // Hopper-type pieces can optionally be configured to avoid hopping over
+  // or capturing selected piece types (e.g. Janggi cannons vs cannons).
+  PieceType movePt = type_of(pc);
+  if ((var->mutuallyHopIllegalTypes & movePt) && (AttackRiderTypes[movePt] & HOPPING_RIDERS))
+  {
+      Bitboard between = between_bb(from, to);
+      Bitboard hopIllegalPieces = 0;
+      for (PieceSet ps = var->mutuallyHopIllegalTypes; ps;)
+          hopIllegalPieces |= pieces(pop_lsb(ps));
+      if ((between & pieces()) && ((between | to) & hopIllegalPieces))
+          return false;
+  }
 
   // Evasions generator already takes care to avoid some kind of illegal moves
   // and legal() relies on this. We therefore have to take care that the same

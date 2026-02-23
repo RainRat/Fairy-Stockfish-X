@@ -423,6 +423,26 @@ class TestPyffish(unittest.TestCase):
         result = sf.legal_moves("janggi", fen, [])
         self.assertEqual(result, ["e10e10"])
 
+        # Hoppers can be configured to not hop over/capture selected piece types.
+        sf.load_variant_config(
+            """[hopban:chess]
+customPiece1 = c:pR
+mutuallyHopIllegalTypes = c
+startFen = 4k3/8/8/8/8/c7/c7/C3K3 w - - 0 1
+"""
+        )
+        hopban_fen = sf.start_fen("hopban")
+        self.assertNotIn("a1a3", sf.legal_moves("hopban", hopban_fen, []))
+
+        sf.load_variant_config(
+            """[hopallow:chess]
+customPiece1 = c:pR
+startFen = 4k3/8/8/8/8/c7/c7/C3K3 w - - 0 1
+"""
+        )
+        hopallow_fen = sf.start_fen("hopallow")
+        self.assertIn("a1a3", sf.legal_moves("hopallow", hopallow_fen, []))
+
         # pawn promotion of dropped pawns beyond promotion rank
         result = sf.legal_moves("makhouse", "rnsmksnr/8/1ppP1ppp/p3p3/8/PPP1PPPP/8/RNSKMSNR[p] w - - 0 4", [])
         self.assertIn("d6d7m", result)

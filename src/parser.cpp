@@ -766,6 +766,7 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("blastCenter", v->blastCenter);
     parse_attribute("blastImmuneTypes", v->blastImmuneTypes, v->pieceToChar);
     parse_attribute("mutuallyImmuneTypes", v->mutuallyImmuneTypes, v->pieceToChar);
+    parse_attribute("mutuallyHopIllegalTypes", v->mutuallyHopIllegalTypes, v->pieceToChar);
     auto parse_capture_map = [&](const std::string& key, bool allow) {
         const auto& it = config.find(key);
         if (it == config.end())
