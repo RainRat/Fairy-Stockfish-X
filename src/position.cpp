@@ -1104,6 +1104,20 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
   if (!can_castle(ANY_CASTLING) && !(gating() && !commit_gates() && (gates(WHITE) | gates(BLACK))))
       ss << '-';
 
+  // Preserve exact gating state in extended FEN for reliable roundtrips.
+  // Legacy flags can be ambiguous when castling and gating share files.
+  if (gating() && !commit_gates() && files() > int(FILE_H) + 1)
+  {
+      ss << "|";
+      for (Color c : {WHITE, BLACK})
+      {
+          for (File f = FILE_A; f <= max_file(); ++f)
+              ss << ((gates(c) & file_bb(f)) ? '1' : '0');
+          if (c == WHITE)
+              ss << "/";
+      }
+  }
+
   // Counting limit or ep-square
   if (st->countingLimit)
       ss << " " << counting_limit(countStarted) << " ";

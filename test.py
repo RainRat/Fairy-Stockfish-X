@@ -569,6 +569,9 @@ startFen = 3k4/1B4N1/8/8/8/8/8/4K3 w - - 0 1
         result = sf.legal_moves("fenmask", sf.start_fen("fenmask"), [])
         self.assertIn("l1k1q", result)
         self.assertNotIn("e1f1q", result)
+        normalized = sf.get_fen("fenmask", sf.start_fen("fenmask"), [])
+        self.assertIn("|", normalized)
+        self.assertEqual(sf.get_fen("fenmask", normalized, []), normalized)
 
         # Shogi pawn-drop mate is illegal.
         fen = "BRBRSSSGG/nPPPPPPPP/n8/n8/n8/ll7/kl7/9/K8[PPPPPPPPPPggsl] w - - 0 1"
