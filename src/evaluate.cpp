@@ -1398,8 +1398,11 @@ namespace {
                            && pos.stalemate_value() == VALUE_DRAW
                            && !pawnsOnBothFlanks;
 
-    bool infiltration =   (pos.count<KING>(WHITE) && rank_of(pos.square<KING>(WHITE)) > RANK_4)
-                       || (pos.count<KING>(BLACK) && rank_of(pos.square<KING>(BLACK)) < RANK_5);
+    // Use board-size-relative king infiltration thresholds instead of 8x8 constants.
+    const Rank whiteInfiltrationRank = Rank(pos.max_rank() / 2);
+    const Rank blackInfiltrationRank = Rank(pos.max_rank() - whiteInfiltrationRank);
+    bool infiltration =   (pos.count<KING>(WHITE) && rank_of(pos.square<KING>(WHITE)) > whiteInfiltrationRank)
+                       || (pos.count<KING>(BLACK) && rank_of(pos.square<KING>(BLACK)) < blackInfiltrationRank);
 
     // Compute the initiative bonus for the attacking side
     complexity =       9 * pe->passed_count()
