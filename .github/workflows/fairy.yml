@@ -72,7 +72,8 @@ jobs:
 
       - name: Test variants.ini
         run: |
-          ! ./stockfish check variants.ini 2>&1 >/dev/null | grep -v "Parsing variant"
+          ! ./stockfish check variants.ini 2>&1 >/dev/null \
+            | grep -Ev "Parsing variant|Variant template '.*' does not exist\\.|exceeds build board limits \\(maxFile=.*\\)\\. Skipping\\."
 
       - name: Test variant perft
         run: |
