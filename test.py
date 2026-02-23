@@ -135,6 +135,20 @@ pawnTypes = ps
 [capture-anything:chess]
 selfCapture = true
 
+[checkersmini]
+customPiece1 = m:fFfA
+customPiece2 = k:FA
+startFen = 8/8/8/8/8/8/8/8 w - - 0 1
+promotionPawnTypes = m
+promotionPieceTypes = k
+mustCapture = true
+checking = false
+jumpCaptureTypes = *
+forcedJumpContinuation = true
+stalemateValue = loss
+nMoveRule = 0
+nFoldRule = 3
+
 [selfhouse:crazyhouse]
 selfCapture = true
 
@@ -631,6 +645,26 @@ startFen = 3k4/1B4N1/8/8/8/8/8/4K3 w - - 0 1
         self.assertIn("d4d5", white_moves)
         black_moves = sf.legal_moves("capmapwild", "8/8/8/3b4/3A4/8/8/8 b - - 0 1", [])
         self.assertNotIn("d5d4", black_moves)
+
+    def test_checkers_jump_and_promotion(self):
+        # Jump captures are mandatory and generated correctly.
+        fen = "8/8/5m2/8/3m4/2M5/8/7K w - - 0 1"
+        self.assertEqual(sf.legal_moves("checkersmini", fen, []), ["c3e5"])
+
+        after_first_jump = sf.get_fen("checkersmini", fen, ["c3e5"])
+        self.assertEqual(sf.legal_moves("checkersmini", after_first_jump, []), ["f6d4"])
+
+        # The same piece still has the expected follow-up jump pattern.
+        followup_probe = after_first_jump.replace(" b ", " w ")
+        self.assertEqual(sf.legal_moves("checkersmini", followup_probe, []), ["e5g7"])
+
+        # Promotion by jump should end the turn (no forced continuation through kinging).
+        promo_fen = "8/2m1m3/1M6/8/8/8/8/7K w - - 0 1"
+        self.assertIn("b6d8k", sf.legal_moves("checkersmini", promo_fen, []))
+        after_promo = sf.get_fen("checkersmini", promo_fen, ["b6d8k"])
+        black_after_promo = sf.legal_moves("checkersmini", after_promo, [])
+        self.assertGreater(len(black_after_promo), 0)
+        self.assertEqual(len([m for m in black_after_promo if m[:2] == m[2:4]]), 0)
 
     def test_get_fen(self):
         result = sf.get_fen("chess", CHESS, [])
