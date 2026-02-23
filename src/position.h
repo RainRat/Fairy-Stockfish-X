@@ -290,6 +290,7 @@ public:
   int count_in_prison(Color c, PieceType pt) const;
   bool prison_pawn_promotion() const;
   bool bikjang() const;
+  bool virtual_drops() const;
   bool allow_virtual_drop(Color c, PieceType pt) const;
   bool sudoku_boxes() const;
   int sudoku_box_of(Square s) const;
@@ -2169,12 +2170,18 @@ inline bool Position::bikjang() const {
 
 inline bool Position::allow_virtual_drop(Color c, PieceType pt) const {
   assert(two_boards());
+  if (!virtual_drops())
+      return false;
   // Do we allow a virtual drop?
   return pt != KING && (   count_in_hand(c, PAWN) >= -(pt == PAWN)
                         && count_in_hand(c, KNIGHT) >= -(pt == PAWN)
                         && count_in_hand(c, BISHOP) >= -(pt == PAWN)
                         && count_in_hand(c, ROOK) >= 0
                         && count_in_hand(c, QUEEN) >= 0);
+}
+
+inline bool Position::virtual_drops() const {
+  return var->virtualDrops;
 }
 
 inline bool Position::sudoku_boxes() const {

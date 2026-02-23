@@ -443,6 +443,33 @@ startFen = 4k3/8/8/8/8/c7/c7/C3K3 w - - 0 1
         hopallow_fen = sf.start_fen("hopallow")
         self.assertIn("a1a3", sf.legal_moves("hopallow", hopallow_fen, []))
 
+        # Universal leaper can move to any empty square, controlled by modality.
+        sf.load_variant_config(
+            """[anysq:chess]
+customPiece1 = a:mU
+startFen = 7k/8/8/8/8/8/8/A6K w - - 0 1
+"""
+        )
+        anysq_fen = sf.start_fen("anysq")
+        anysq_moves = sf.legal_moves("anysq", anysq_fen, [])
+        self.assertIn("a1b5", anysq_moves)
+        self.assertIn("a1e2", anysq_moves)
+        self.assertNotIn("a1h8", anysq_moves)  # quiet-only mU cannot capture
+
+        # Tuple-leaper edge wrapping check: (4,1) from a1 only reaches b5 and e2.
+        sf.load_variant_config(
+            """[tuple41:chess]
+customPiece1 = a:m(4,1)
+startFen = 7k/8/8/8/8/8/8/A6K w - - 0 1
+"""
+        )
+        tuple_fen = sf.start_fen("tuple41")
+        tuple_moves = sf.legal_moves("tuple41", tuple_fen, [])
+        self.assertIn("a1b5", tuple_moves)
+        self.assertIn("a1e2", tuple_moves)
+        self.assertNotIn("a1h2", tuple_moves)
+        self.assertNotIn("a1b8", tuple_moves)
+
         # Different source pieces can share one promoted type and still demote
         # back to their own original piece types.
         sf.load_variant_config(

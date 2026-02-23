@@ -86,7 +86,7 @@ namespace {
               }
               bool groupAtomsOnly = true;
               for (char gc : content)
-                  if (leaperAtoms.find(gc) == leaperAtoms.end() && riderAtoms.find(gc) == riderAtoms.end())
+                  if (leaperAtoms.find(gc) == leaperAtoms.end() && riderAtoms.find(gc) == riderAtoms.end() && gc != 'U')
                   {
                       groupAtomsOnly = false;
                       break;
@@ -277,6 +277,17 @@ namespace {
               const auto& atoms = riderAtoms.find(c) != riderAtoms.end() ? riderAtoms.find(c)->second
                                                                          : leaperAtoms.find(c)->second;
               commit_atom(atoms, riderAtoms.find(c) != riderAtoms.end(), i, c);
+          }
+          // Universal leaper: U can target any square on board.
+          else if (c == 'U')
+          {
+              std::vector<std::pair<int, int>> universalAtoms;
+              universalAtoms.reserve((int(RANK_MAX) + 1) * (int(FILE_MAX) + 1) - 1);
+              for (int dr = 0; dr <= int(RANK_MAX); ++dr)
+                  for (int df = 0; df <= int(FILE_MAX); ++df)
+                      if (dr != 0 || df != 0)
+                          universalAtoms.emplace_back(dr, df);
+              commit_atom(universalAtoms, false, i, c);
           }
           // Tuple leaper atom: (x,y)
           else if (c == '(')

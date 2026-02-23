@@ -898,6 +898,7 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("mustDrop", v->mustDrop);
     parse_attribute("mustDropType", v->mustDropType, v->pieceToChar);
     parse_attribute("pieceDrops", v->pieceDrops);
+    parse_attribute("virtualDrops", v->virtualDrops);
     parse_attribute("dropLoop", v->dropLoop);
 
     bool capturesToHand = false;

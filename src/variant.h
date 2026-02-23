@@ -119,6 +119,7 @@ struct Variant {
   PieceType mustDropType = ALL_PIECES;
   bool isPriorityDrop[PIECE_TYPE_NB] = {};
   bool pieceDrops = false;
+  bool virtualDrops = true;
   bool dropLoop = false;
   CapturingRule captureType = MOVE_OUT;
   bool firstRankPawnDrops = false;
