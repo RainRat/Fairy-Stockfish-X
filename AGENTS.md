@@ -69,6 +69,9 @@ Run: `./stockfish < test.txt > output.txt`
 * C++17; 2-space indent at first function level, then +4 per nested level.
 * Don’t rename existing variables unless necessary; some locals shadow globals by design.
 * Bitwise ops between `Square` and `Bitboard` are overloaded in `bitboard.h`; explicit casts usually unnecessary.
+* In `src/types.h` (around `piece_set()` and `PieceSet` operators), bitwise operators on `PieceSet` are overloaded as set operations, including mixed `PieceSet`/`PieceType` forms; avoid treating raw `PieceType` values as pre-shifted bit flags.
+* Tuple Betza atoms `(x,y)` are now represented explicitly via `PieceInfo::tupleSteps` (`src/piece.h`) and consumed in `bitboard.cpp`; do not route long tuple leapers through `Direction`/`safe_destination` decoding.
+* Extended gating FEN masks (`...|<white>/<black>`) are parsed in `Position::set`; serialization is intentionally emitted for large-board gating cases where legacy castling/gating letters are ambiguous.
 * Comments target experienced developers; don’t change copyright years.
 
 ## 8) Large/complex variants
@@ -81,8 +84,13 @@ Run: `./stockfish < test.txt > output.txt`
 * Missing kings in FEN for king-based variants; or starting in (stale)mate.
 * Assuming arbitrary castling encodings: FSX uses “king moves two squares.”
 * Promotions use a trailing letter only (no `=`).
+* Checkers forced jump continuation is enforced through pass semantics at UCI level (`f6f6`-style pass); pyffish convenience calls may hide that multi-ply flow if you only inspect single `legal_moves(...)` snapshots.
 * Forgetting to wire new settings end-to-end: `.ini` → parser → `Variant` → getter → logic.
 * Submitting without running **both** `perft` and `protocol` suites.
+
+## 12) CI gotchas
+
+* `./stockfish check variants.ini` on non-ALLVARS/board-limited builds can print expected warnings (missing templates, variants skipped for board limits). CI filtering should ignore those lines while still failing on real parse/syntax errors.
 
 ## 10) Research links (rules & precedent)
 
