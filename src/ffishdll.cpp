@@ -105,6 +105,7 @@ private:
   Position pos;
   Thread* thread = nullptr;
   std::vector<Move> moveStack;
+  std::vector<std::string> moveStackUCI;
   bool is960;
 
 public:
@@ -141,7 +142,7 @@ public:
     const Move move = UCI::to_move(pos, uciMove);
     if (is_move_none<true>(move, uciMove, pos))
       return false;
-    do_move(move);
+    do_move(move, uciMove);
     return true;
   }
 
@@ -157,7 +158,7 @@ public:
     }
     if (is_move_none<false>(foundMove, sanMove, pos))
       return false;
-    do_move(foundMove);
+    do_move(foundMove, UCI::move(pos, foundMove));
     return true;
   }
 
@@ -166,6 +167,7 @@ public:
       return false;
     pos.undo_move(moveStack.back());
     moveStack.pop_back();
+    moveStackUCI.pop_back();
     states->pop_back();
     return true;
   }
@@ -181,6 +183,7 @@ public:
   void set_fen(std::string fenStr) {
     resetStates();
     moveStack.clear();
+    moveStackUCI.clear();
     pos.set(v, fenStr, is960, &states->back(), thread);
   }
 
@@ -307,8 +310,8 @@ public:
 
   std::string move_stack() const {
     std::string moves;
-    for (auto m : moveStack) {
-      moves += UCI::move(pos, m);
+    for (const auto& uci : moveStackUCI) {
+      moves += uci;
       moves += DELIM;
     }
     save_pop_back(moves);
@@ -369,10 +372,11 @@ public:
 private:
   void resetStates() { states = StateListPtr(new std::deque<StateInfo>(1)); }
 
-  void do_move(Move move) {
+  void do_move(Move move, const std::string& uciMove) {
     states->emplace_back();
     pos.do_move(move, states->back());
     moveStack.emplace_back(move);
+    moveStackUCI.emplace_back(uciMove);
   }
 
   void init(std::string uciVariant, std::string fen, bool is960Flag) {
