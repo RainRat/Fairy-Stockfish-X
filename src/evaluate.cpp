@@ -1317,8 +1317,12 @@ namespace {
                 for (int j = 0; j < pos.connect_n(); j++)
                     if (connectPiecesUs & (s - j * d))
                         c++;
-                score += (pos.connect_value() == VALUE_MATE ? 1 : -1) * //At least change the sign for misere variants.
-                             (make_score(200, 200)  * c / (pos.connect_n() - c) / (pos.connect_n() - c));
+                const int remaining = pos.connect_n() - c;
+                assert(remaining > 0);
+                if (remaining <= 0)
+                    continue;
+                score += (pos.connect_value() == VALUE_MATE ? 1 : -1) * // At least change the sign for misere variants.
+                         (make_score(200, 200) * c / remaining / remaining);
             }
         }
     }
