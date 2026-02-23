@@ -2318,8 +2318,9 @@ void VariantMap::parse_istream(std::istream& file) {
             }
             else
             {
-                std::cerr << "Variant '" << variant << "' exceeds build board limits (maxFile=" << int(FILE_MAX) + 1
-                          << ", maxRank=" << int(RANK_MAX) + 1 << "). Skipping." << std::endl;
+                if constexpr (!DoCheck)
+                    std::cerr << "Variant '" << variant << "' exceeds build board limits (maxFile=" << int(FILE_MAX) + 1
+                              << ", maxRank=" << int(RANK_MAX) + 1 << "). Skipping." << std::endl;
                 delete v;
             }
         }
