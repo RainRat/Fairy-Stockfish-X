@@ -3041,15 +3041,19 @@ void Position::undo_move(Move m) {
   if (type_of(m) == PROMOTION)
   {
       assert((promotion_zone(st->promotionPawn) & to) || sittuyin_promotion());
-      assert(type_of(pc) == promotion_type(m));
-      assert(type_of(pc) >= KNIGHT && type_of(pc) < KING);
+      Piece promotedPiece = piece_on(to);
+      if (promotedPiece == NO_PIECE)
+          promotedPiece = make_piece(us, promotion_type(m));
+      assert(type_of(promotedPiece) == promotion_type(m));
+      assert(type_of(promotedPiece) >= KNIGHT && type_of(promotedPiece) < KING);
       assert(type_of(st->promotionPawn) == main_promotion_pawn_type(us) || !captures_to_hand());
 
       if (prison_pawn_promotion() && type_of(st->promotionPawn) == PAWN) {
           remove_from_prison(st->promotionPawn);
-          add_to_prison(pc);
+          add_to_prison(promotedPiece);
       }
-      remove_piece(to);
+      if (piece_on(to) != NO_PIECE)
+          remove_piece(to);
       pc = st->promotionPawn;
       put_piece(pc, to);
   }
