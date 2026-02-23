@@ -3597,25 +3597,28 @@ bool Position::see_ge(Move m, Value threshold) const {
 
   Bitboard occupied = (type_of(m) != DROP ? pieces() ^ from : pieces()) ^ to;
   Color stm = color_of(moved_piece(m));
-  Bitboard attackers = attackers_to(to, occupied);
+  auto update_attackers = [&](Bitboard occ) {
+      Bitboard a = attackers_to(to, occ);
+      if (var->flyingGeneral)
+      {
+          if (a & pieces(stm, KING))
+              a |= attacks_bb(stm, ROOK, to, occ & ~pieces(ROOK)) & pieces(~stm, KING);
+          if (a & pieces(~stm, KING))
+              a |= attacks_bb(~stm, ROOK, to, occ & ~pieces(ROOK)) & pieces(stm, KING);
+      }
+      if (var->diagonalGeneral)
+      {
+          if (a & pieces(stm, KING))
+              a |= attacks_bb(stm, BISHOP, to, occ & ~pieces(BISHOP)) & pieces(~stm, KING);
+          if (a & pieces(~stm, KING))
+              a |= attacks_bb(~stm, BISHOP, to, occ & ~pieces(BISHOP)) & pieces(stm, KING);
+      }
+      return a;
+  };
+
+  Bitboard attackers = update_attackers(occupied);
   Bitboard stmAttackers, bb;
   int res = 1;
-
-  // Flying general rule
-  if (var->flyingGeneral)
-  {
-      if (attackers & pieces(stm, KING))
-          attackers |= attacks_bb(stm, ROOK, to, occupied & ~pieces(ROOK)) & pieces(~stm, KING);
-      if (attackers & pieces(~stm, KING))
-          attackers |= attacks_bb(~stm, ROOK, to, occupied & ~pieces(ROOK)) & pieces(stm, KING);
-  }
-  if (var->diagonalGeneral)
-  {
-      if (attackers & pieces(stm, KING))
-          attackers |= attacks_bb(stm, BISHOP, to, occupied & ~pieces(BISHOP)) & pieces(~stm, KING);
-      if (attackers & pieces(~stm, KING))
-          attackers |= attacks_bb(~stm, BISHOP, to, occupied & ~pieces(BISHOP)) & pieces(stm, KING);
-  }
 
   // Janggi cannons can not capture each other
   if (type_of(moved_piece(m)) == JANGGI_CANNON && !(attackers & pieces(~stm) & ~pieces(JANGGI_CANNON)))
@@ -3644,61 +3647,28 @@ bool Position::see_ge(Move m, Value threshold) const {
 
       res ^= 1;
 
-      // Locate and remove the next least valuable attacker, and add to
-      // the bitboard 'attackers' any X-ray attackers behind it.
-      if ((bb = stmAttackers & pieces(PAWN)))
+      bb = stmAttackers & ~pieces(stm, KING);
+      if (bb)
       {
-          if ((swap = PawnValueMg - swap) < res)
+          // Pick the least valuable available attacker among all piece types.
+          Square leastSq = lsb(bb);
+          int leastValue = CapturePieceValue[MG][piece_on(leastSq)];
+          for (Bitboard b = bb & ~square_bb(leastSq); b; )
+          {
+              Square s = pop_lsb(b);
+              int v = CapturePieceValue[MG][piece_on(s)];
+              if (v < leastValue)
+              {
+                  leastValue = v;
+                  leastSq = s;
+              }
+          }
+
+          if ((swap = leastValue - swap) < res)
               break;
 
-          occupied ^= least_significant_square_bb(bb);
-          attackers |= attacks_bb<BISHOP>(to, occupied) & pieces(BISHOP, QUEEN);
-      }
-
-      else if ((bb = stmAttackers & pieces(KNIGHT)))
-      {
-          if ((swap = KnightValueMg - swap) < res)
-              break;
-
-          occupied ^= least_significant_square_bb(bb);
-      }
-
-      else if ((bb = stmAttackers & pieces(BISHOP)))
-      {
-          if ((swap = BishopValueMg - swap) < res)
-              break;
-
-          occupied ^= least_significant_square_bb(bb);
-          attackers |= attacks_bb<BISHOP>(to, occupied) & pieces(BISHOP, QUEEN);
-      }
-
-      else if ((bb = stmAttackers & pieces(ROOK)))
-      {
-          if ((swap = RookValueMg - swap) < res)
-              break;
-
-          occupied ^= least_significant_square_bb(bb);
-          attackers |= attacks_bb<ROOK>(to, occupied) & pieces(ROOK, QUEEN);
-      }
-
-      else if ((bb = stmAttackers & pieces(QUEEN)))
-      {
-          if ((swap = QueenValueMg - swap) < res)
-              break;
-
-          occupied ^= least_significant_square_bb(bb);
-          attackers |=  (attacks_bb<BISHOP>(to, occupied) & pieces(BISHOP, QUEEN))
-                      | (attacks_bb<ROOK  >(to, occupied) & pieces(ROOK  , QUEEN));
-      }
-
-      // fairy pieces
-      // pick next piece without considering value
-      else if ((bb = stmAttackers & ~pieces(KING)))
-      {
-          if ((swap = PieceValue[MG][piece_on(lsb(bb))] - swap) < res)
-              break;
-
-          occupied ^= lsb(bb);
+          occupied ^= square_bb(leastSq);
+          attackers = update_attackers(occupied);
       }
 
       else // KING
