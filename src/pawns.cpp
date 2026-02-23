@@ -98,6 +98,7 @@ namespace {
 
     Bitboard neighbours, stoppers, support, phalanx, opposed;
     Bitboard lever, leverPush, blocked;
+    const Bitboard edgeFiles = FileABB | file_bb(pos.max_file());
     Square s;
     bool backward, passed, doubled;
     Score score = SCORE_ZERO;
@@ -192,7 +193,7 @@ namespace {
 
         else if (backward)
             score -=  Backward
-                    + WeakUnopposed * !opposed * bool(~(FileABB | FileHBB) & s);
+                    + WeakUnopposed * !opposed * bool(~edgeFiles & s);
 
         if (!support)
             score -=  Doubled * doubled

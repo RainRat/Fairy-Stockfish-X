@@ -318,6 +318,94 @@ namespace {
 
 #undef S
 
+  // Map promotion distance on arbitrary board heights into the 8x8-tuned
+  // PassedRank buckets, preserving exact mapping on 8x8.
+  inline int scaled_passed_rank_bucket(int distanceToPromo, Rank maxRank) {
+    int maxDistance = int(maxRank);
+    int clamped = std::clamp(distanceToPromo, 0, maxDistance);
+    return maxDistance > 0
+         ? (int(RANK_8) * (maxDistance - clamped) + maxDistance / 2) / maxDistance
+         : 0;
+  }
+
+  inline int passed_rank_bucket(const Position& pos, Color c, Square s) {
+    Square promo = pos.promotion_square(c, s);
+    if (promo == SQ_NONE)
+      return 0;
+
+    int distanceToPromo = relative_rank(c, promo, pos.max_rank()) - relative_rank(c, s, pos.max_rank());
+    return scaled_passed_rank_bucket(distanceToPromo, pos.max_rank());
+  }
+
+  inline Bitboard scaled_center_files(const Position& pos) {
+    int files = int(pos.max_file()) + 1;
+    Bitboard centerFiles = CenterFiles;
+    if (pos.max_file() != FILE_H)
+    {
+      int width = std::clamp(files / 2, 2, files);
+      int f0 = (files - width) / 2;
+      int f1 = f0 + width - 1;
+      centerFiles = 0;
+      for (int f = f0; f <= f1; ++f)
+        centerFiles |= file_bb(File(f));
+    }
+    return centerFiles;
+  }
+
+  // Build a board-height-relative space mask depth from the side's home ranks.
+  // 8x8 keeps the classic rank-2..rank-4 window.
+  inline Bitboard scaled_space_mask(const Position& pos, Color c) {
+    int maxRank = int(pos.max_rank());
+    int target = 1 + maxRank / 2; // roughly half-board from home side
+    int ceiling = std::clamp(target, int(RANK_4), maxRank - 1);
+
+    Bitboard mask = 0;
+    for (int r = int(RANK_2); r <= ceiling; ++r)
+      mask |= rank_bb(relative_rank(c, Rank(r), pos.max_rank()));
+    return scaled_center_files(pos) & mask;
+  }
+
+  inline Bitboard scaled_flank(const Position& pos, bool kingSide) {
+    if (pos.max_file() == FILE_H)
+      return kingSide ? KingSide : QueenSide;
+
+    int files = int(pos.max_file()) + 1;
+    int half = files / 2;
+    int f0 = kingSide ? files - half : 0;
+    int f1 = kingSide ? files - 1 : half - 1;
+
+    Bitboard flank = 0;
+    for (int f = f0; f <= f1; ++f)
+      flank |= file_bb(File(f));
+    return flank;
+  }
+
+  inline bool square_on_king_side(const Position& pos, Square s) {
+    if (pos.max_file() == FILE_H)
+      return bool(KingSide & s);
+
+    int files = int(pos.max_file()) + 1;
+    int half = files / 2;
+    return int(file_of(s)) >= files - half;
+  }
+
+  inline Bitboard scaled_king_flank(const Position& pos, Square ksq) {
+    // Preserve tuned 8x8 behavior.
+    if (pos.max_file() == FILE_H)
+      return KingFlank[file_of(ksq)];
+
+    int files = int(pos.max_file()) + 1;
+    int radius = files >= 10 ? 2 : 1;
+    int kf = int(file_of(ksq));
+    int f0 = std::max(0, kf - radius);
+    int f1 = std::min(int(pos.max_file()), kf + radius);
+
+    Bitboard flank = 0;
+    for (int f = f0; f <= f1; ++f)
+      flank |= file_bb(File(f));
+    return flank;
+  }
+
   // Evaluation class computes and stores attacks tables and other working data
   template<Tracing T>
   class Evaluation {
@@ -451,6 +539,9 @@ namespace {
     Bitboard b1 = pos.pieces(Us, Pt);
     Bitboard b, bb;
     Score score = SCORE_ZERO;
+    const Bitboard centerFiles = scaled_center_files(pos);
+    const Bitboard queenFlank = scaled_flank(pos, false);
+    const Bitboard kingFlank = scaled_flank(pos, true);
 
     attackedBy[Us][Pt] = 0;
 
@@ -530,12 +621,14 @@ namespace {
             bb = OutpostRanks & (attackedBy[Us][PAWN] | shift<Down>(pos.pieces(PAWN)))
                               & ~pe->pawn_attacks_span(Them);
             Bitboard targets = pos.pieces(Them) & ~pos.pieces(PAWN);
+            bool isKingSideOutpost = square_on_king_side(pos, s);
+            Bitboard outpostFlank = isKingSideOutpost ? kingFlank : queenFlank;
 
             if (   Pt == KNIGHT
-                && bb & s & ~CenterFiles // on a side outpost
+                && bb & s & ~centerFiles // on a side outpost
                 && !(b & targets)        // no relevant attacks
-                && (!more_than_one(targets & (s & QueenSide ? QueenSide : KingSide))))
-                score += UncontestedOutpost * popcount(pos.pieces(PAWN) & (s & QueenSide ? QueenSide : KingSide));
+                && (!more_than_one(targets & outpostFlank)))
+                score += UncontestedOutpost * popcount(pos.pieces(PAWN) & outpostFlank);
             else if (bb & s)
                 score += Outpost[Pt == BISHOP];
             else if (Pt == KNIGHT && bb & b & ~pos.pieces(Us))
@@ -557,7 +650,7 @@ namespace {
                 Bitboard blocked = pos.pieces(Us, PAWN) & shift<Down>(pos.pieces());
 
                 score -= BishopPawns[edge_distance(file_of(s), pos.max_file())] * pos.pawns_on_same_color_squares(Us, s)
-                                     * (!(attackedBy[Us][PAWN] & s) + popcount(blocked & CenterFiles));
+                                     * (!(attackedBy[Us][PAWN] & s) + popcount(blocked & centerFiles));
 
                 // Penalty for all enemy pawns x-rayed
                 score -= BishopXRayPawns * popcount(attacks_bb<BISHOP>(s) & pos.pieces(Them, PAWN));
@@ -601,7 +694,8 @@ namespace {
                 if (mob <= 3 && pos.count<KING>(Us))
                 {
                     File kf = file_of(pos.square<KING>(Us));
-                    if ((kf < FILE_E) == (file_of(s) < kf))
+                    File boardMid = File(int(pos.max_file()) / 2);
+                    if ((kf <= boardMid) == (file_of(s) < kf))
                         score -= TrappedRook * (1 + !pos.castling_rights(Us));
                 }
             }
@@ -776,8 +870,7 @@ namespace {
     if (pos.check_counting())
         kingDanger += kingDanger * 7 / (3 + pos.checks_remaining(Them));
 
-    Square s = file_of(ksq) == FILE_A ? ksq + EAST : file_of(ksq) == pos.max_file() ? ksq + WEST : ksq;
-    Bitboard kingFlank = pos.max_file() == FILE_H ? KingFlank[file_of(ksq)] : file_bb(s) | adjacent_files_bb(s);
+    Bitboard kingFlank = scaled_king_flank(pos, ksq);
 
     // Find the squares that opponent attacks in our king flank, the squares
     // which they attack twice in that flank, and the squares that we defend.
@@ -842,7 +935,7 @@ namespace {
 
     constexpr Color     Them     = ~Us;
     constexpr Direction Up       = pawn_push(Us);
-    constexpr Bitboard  TRank3BB = (Us == WHITE ? Rank3BB : Rank6BB);
+    Bitboard TRank3BB = rank_bb(relative_rank(Us, RANK_3, pos.max_rank()));
 
     Bitboard b, weak, defended, nonPawnEnemies, stronglyProtected, safe;
     Score score = SCORE_ZERO;
@@ -1025,7 +1118,7 @@ namespace {
 
         assert(!(pos.pieces(Them, PAWN) & forward_file_bb(Us, s + Up)));
 
-        int r = std::max(RANK_8 - std::max(relative_rank(Us, pos.promotion_square(Us, s), pos.max_rank()) - relative_rank(Us, s, pos.max_rank()), 0), 0);
+        int r = passed_rank_bucket(pos, Us, s);
 
         Score bonus = PassedRank[r];
 
@@ -1038,8 +1131,10 @@ namespace {
             bonus += make_score(0, (  king_proximity(Them, blockSq) * 19 / 4
                                     - king_proximity(Us,   blockSq) *  2) * w);
 
-            // If blockSq is not the queening square then consider also a second push
-            if (r != RANK_7)
+            // If blockSq is not the queening square then consider also a second push.
+            // Using explicit promotion-square geometry avoids bucket edge artifacts
+            // on taller boards where r==RANK_7 does not always mean "one step left".
+            if (blockSq != pos.promotion_square(Us, s))
                 bonus -= make_score(0, king_proximity(Us, blockSq + Up) * w);
 
             // If the pawn is free to advance, then increase the bonus
@@ -1084,7 +1179,7 @@ namespace {
             Square s = pop_lsb(b2);
             if (pos.promotion_square(Us, s) == SQ_NONE || (pos.pieces(Them, pt) & forward_file_bb(Us, s)))
                 continue;
-            int r = std::max(RANK_8 - std::max(relative_rank(Us, pos.promotion_square(Us, s), pos.max_rank()) - relative_rank(Us, s, pos.max_rank()), 0), 0);
+            int r = passed_rank_bucket(pos, Us, s);
             score += PassedRank[r];
         }
     }
@@ -1142,10 +1237,7 @@ namespace {
 
     constexpr Color Them     = ~Us;
     constexpr Direction Down = -pawn_push(Us);
-    Bitboard SpaceMask = CenterFiles
-                       & (  rank_bb(relative_rank(Us, RANK_2, pos.max_rank()))
-                          | rank_bb(relative_rank(Us, RANK_3, pos.max_rank()))
-                          | rank_bb(relative_rank(Us, RANK_4, pos.max_rank())));
+    Bitboard SpaceMask = scaled_space_mask(pos, Us);
 
     // Find the available squares for our pieces inside the area defined by SpaceMask
     Bitboard safe =   SpaceMask
@@ -1269,18 +1361,20 @@ namespace {
             else if (pos.count<PAWN>(Us) == pos.count<ALL_PIECES>(Us))
             {
                 // Pawns easy to stop/capture
+                int files = int(pos.max_file()) + 1;
                 int l = 0, m = 0, r = popcount(pos.pieces(Us, PAWN) & file_bb(FILE_A));
                 for (File f = FILE_A; f <= pos.max_file(); ++f)
                 {
                     l = m; m = r; r = popcount(pos.pieces(Us, PAWN) & shift<EAST>(file_bb(f)));
-                    score -= make_score(80 - 10 * (edge_distance(f, pos.max_file()) % 2),
-                                        80 - 15 * (edge_distance(f, pos.max_file()) % 2)) * m / (1 + l * r);
+                    Score s = make_score(80 - 10 * (edge_distance(f, pos.max_file()) % 2),
+                                         80 - 15 * (edge_distance(f, pos.max_file()) % 2));
+                    score -= s * m * 8 / files / (1 + l * r);
                 }
             }
             else if (pos.count<PAWN>(Them) == pos.count<ALL_PIECES>(Them))
             {
                 // Add a bonus according to how close we are to breaking through the pawn wall
-                int dist = 8;
+                int dist = int(pos.max_rank()) + 1;
                 Bitboard breakthroughs = attackedBy[Us][ALL_PIECES] & rank_bb(relative_rank(Us, pos.max_rank(), pos.max_rank()));
                 if (breakthroughs)
                     dist = attackedBy[Us][QUEEN] & breakthroughs ? 0 : 1;
@@ -1382,6 +1476,8 @@ namespace {
     // This protects them from misidentification as drawish.
     int complexity = 0;
     bool pawnsOnBothFlanks = true;
+    const Bitboard queenFlank = scaled_flank(pos, false);
+    const Bitboard kingFlank = scaled_flank(pos, true);
     if (   pos.extinction_value() == VALUE_NONE
         && !pos.captures_to_hand()
         && !pos.connect_n()
@@ -1392,8 +1488,8 @@ namespace {
                      :  distance<File>(pos.square<KING>(WHITE), pos.square<KING>(BLACK))
                     + int(rank_of(pos.square<KING>(WHITE)) - rank_of(pos.square<KING>(BLACK)));
 
-        pawnsOnBothFlanks =   (pos.pieces(PAWN) & QueenSide)
-                            && (pos.pieces(PAWN) & KingSide);
+        pawnsOnBothFlanks =   (pos.pieces(PAWN) & queenFlank)
+                            && (pos.pieces(PAWN) & kingFlank);
 
     bool almostUnwinnable =   outflanking < 0
                            && pos.stalemate_value() == VALUE_DRAW
@@ -1455,7 +1551,7 @@ namespace {
         else if (  pos.non_pawn_material(WHITE) == RookValueMg
                 && pos.non_pawn_material(BLACK) == RookValueMg
                 && pos.count<PAWN>(strongSide) - pos.count<PAWN>(~strongSide) <= 1
-                && bool(KingSide & pos.pieces(strongSide, PAWN)) != bool(QueenSide & pos.pieces(strongSide, PAWN))
+                && bool(kingFlank & pos.pieces(strongSide, PAWN)) != bool(queenFlank & pos.pieces(strongSide, PAWN))
                 && pos.count<KING>(~strongSide)
                 && (attacks_bb<KING>(pos.square<KING>(~strongSide)) & pos.pieces(~strongSide, PAWN)))
             sf = 36;
