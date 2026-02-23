@@ -1380,7 +1380,7 @@ bool Position::legal(Move m) const {
   bool jumpTypeMover = (jumpTypes & ALL_PIECES) || (jumpTypes & type_of(moved_piece(m)));
   if ((type_of(m) == NORMAL || type_of(m) == PROMOTION) && jumpTypeMover && !empty(to))
       return false;
-  if ((type_of(m) == NORMAL || type_of(m) == PROMOTION) && jumpTypeMover && empty(to))
+  if ((type_of(m) == NORMAL || type_of(m) == PROMOTION) && jumpTypeMover)
   {
       int df = std::abs(int(file_of(to)) - int(file_of(from)));
       int dr = std::abs(int(rank_of(to)) - int(rank_of(from)));
@@ -1697,7 +1697,7 @@ bool Position::pseudo_legal(const Move m) const {
   bool jumpTypeMover = (jumpTypes & ALL_PIECES) || (jumpTypes & type_of(pc));
   if ((type_of(m) == NORMAL || type_of(m) == PROMOTION) && jumpTypeMover && !empty(to))
       return false;
-  if ((type_of(m) == NORMAL || type_of(m) == PROMOTION) && jumpTypeMover && empty(to))
+  if ((type_of(m) == NORMAL || type_of(m) == PROMOTION) && jumpTypeMover)
   {
       int df = std::abs(int(file_of(to)) - int(file_of(from)));
       int dr = std::abs(int(rank_of(to)) - int(rank_of(from)));
@@ -3852,57 +3852,23 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
 
   // Collinear-n
   if ((collinear_n() > 0) && (popcount(connectPieces) >= collinear_n())) {
-      Bitboard checkedLines[SQUARE_NB * 8];
-      int checkedLinesCount = 0;
-      Bitboard pieces = connectPieces;
-      while (pieces) {
+      // Directional line scan from border starts using shift() to avoid wraps.
+      auto next_square = [&](Square sq, Direction d) {
+          Bitboard n = shift(d, square_bb(sq));
+          return n ? Square(lsb(n)) : SQ_NONE;
+      };
 
-
-/*
-          //can't combine this with the (!is_ok(shifted_square)) optimization below
-          //if it relies on there being another piece to count it as part of its line,
-          //can't early out.
-          if (popcount(pieces) < collinear_n()) {
-              break; // Early out to the next section
-          }
-*/
-          //Use pop_lsb to loop through the pieces. Then for each of the directions,
-          //use line_bb to calculate the entire row, column or diagonal that contains
-          //the piece and the shifted square, then use popcount to count the number
-          //of pieces on that line.
-          Square s = pop_lsb(pieces);
-          for (Direction d : var->connectDirections) {
-              Square shifted_square = s + d;
-
-
-              if (!is_ok(shifted_square)) continue; //This is totally fine.
-              //Pieces where the shift is outside the board will not be processed
-              //for that direction, but in order to be collinear with another piece,
-              //there would be another piece that counts it as part of its line.
-              //Even if say, all the pieces were on the EAST edge, it's the NORTH
-              //direction that would count them up.
-              //Only exception is that if collinearN was set to 1, and there was 1
-              //piece on the NORTH_EAST corner, it wouldn't count. Possible solutions:
-              //1. Ignore
-              //2. Tell user that collinearN=1 is silly, use flagPieces or connectN
-              //3. Special case here to check
-              //4. Quietly convert it to connectN=1
-
-
-              Bitboard line = line_bb(s, shifted_square);
-              bool seen = false;
-              for (int i = 0; i < checkedLinesCount; ++i) {
-                  if (checkedLines[i] == line) {
-                      seen = true;
-                      break;
-                  }
-              }
-              if (seen)
+      for (Direction d : var->connectDirections) {
+          for (Square s = SQ_A1; s <= SQ_MAX; ++s) {
+              // Start only once per line: predecessor in -d must be off-board.
+              if (next_square(s, -d) != SQ_NONE)
                   continue;
-              if (checkedLinesCount < int(sizeof(checkedLines) / sizeof(checkedLines[0])))
-                  checkedLines[checkedLinesCount++] = line;
-              int piece_count = popcount(line & connectPieces);
-              if (piece_count >= collinear_n()) {
+
+              int cnt = 0;
+              for (Square cur = s; cur != SQ_NONE; cur = next_square(cur, d))
+                  cnt += int(bool(connectPieces & cur));
+
+              if (cnt >= collinear_n()) {
                   result = convert_mate_value(-connect_value(), ply);
                   return true;
               }
