@@ -66,7 +66,7 @@ std::ostream& operator<<(std::ostream& os, const Position& pos) {
       for (File f = FILE_A; f <= pos.max_file(); ++f)
           if (pos.state()->wallSquares & make_square(f, r))
               os << " | *";
-          else if (pos.unpromoted_piece_on(make_square(f, r)))
+          else if (pos.variant()->shogiStylePromotions && pos.unpromoted_piece_on(make_square(f, r)))
               os << " |+" << pos.piece_to_char()[pos.unpromoted_piece_on(make_square(f, r))];
           else if (((pos.captures_to_hand() && !pos.drop_loop()) || pos.two_boards()) && pos.is_promoted(make_square(f, r)))
               os << " |~" << pos.piece_to_char()[pos.piece_on(make_square(f, r))];
@@ -937,7 +937,7 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
               if (empty(make_square(f, r)) || fogArea & make_square(f, r))
                   // Wall square
                   ss << "*";
-              else if (unpromoted_piece_on(make_square(f, r)))
+              else if (var->shogiStylePromotions && unpromoted_piece_on(make_square(f, r)))
                   // Promoted shogi pieces, e.g., +r for dragon
                   ss << "+" << piece_to_char()[unpromoted_piece_on(make_square(f, r))];
               else
