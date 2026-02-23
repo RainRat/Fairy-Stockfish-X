@@ -434,7 +434,7 @@ class TestPyffish(unittest.TestCase):
         # diagonalGeneral: moving the blocker off the king diagonal is illegal
         result = sf.legal_moves("diagfaceoff", sf.start_fen("diagfaceoff"), [])
         self.assertNotIn("d4d5", result)
-        self.assertIn("c3c4", result)
+        self.assertIn("c5c4", result)
 
 
     def test_castling(self):
