@@ -564,14 +564,9 @@ inline bool contains(const std::string& str, char c) {
     return str.find(c) != std::string::npos;
 }
 
-inline bool in_any(const std::vector<std::string>& vec, char c) {
-    for (std::string str : vec)
-        if (contains(str, c))
-            return true;
-    return false;
-}
-
 inline Validation check_for_valid_characters(const std::string& firstFenPart, const std::string& validSpecialCharactersFirstField, const Variant* v) {
+    const std::string& pieceChars = v->pieceToChar;
+    const std::string& pieceCharSynonyms = v->pieceToCharSynonyms;
     for (char c : firstFenPart)
     {
         if (c == '+')
@@ -581,7 +576,10 @@ inline Validation check_for_valid_characters(const std::string& firstFenPart, co
             std::cerr << "Invalid piece character: '+'." << std::endl;
             return NOK;
         }
-        if (!isdigit(c) && !in_any({v->pieceToChar, v->pieceToCharSynonyms, validSpecialCharactersFirstField}, c))
+        if (!isdigit(c)
+            && !contains(pieceChars, c)
+            && !contains(pieceCharSynonyms, c)
+            && !contains(validSpecialCharactersFirstField, c))
         {
             std::cerr << "Invalid piece character: '" << c << "'." << std::endl;
             return NOK;
@@ -916,7 +914,7 @@ inline Validation check_pocket_info(const std::string& fenBoard, int nbRanks, co
             return OK;
         if (c != '-')
         {
-            if (!in_any({v->pieceToChar, v->pieceToCharSynonyms}, c))
+            if (!contains(v->pieceToChar, c) && !contains(v->pieceToCharSynonyms, c))
             {
                 std::cerr << "Invalid pocket piece: '" << c << "'." << std::endl;
                 return NOK;

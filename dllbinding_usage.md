@@ -74,6 +74,8 @@ This reconfigures the variant list (mirrors the behavior in `ffish.js`).
 ## Threading
 `fsf_init()` is protected with `std::call_once`, but board operations themselves are not internally synchronized. Use separate boards per thread or provide your own locking if sharing.
 
+Variant initialization/configuration touches global engine state. In particular, board creation (`fsf_new_board`) and `fsf_load_variant_config` are serialized internally; do not assume independent per-thread variant state.
+
 ## Complete usage example
 ```cpp
 #include <cstdio>

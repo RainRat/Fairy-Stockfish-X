@@ -45,6 +45,7 @@ void initialize_stockfish() {
 }
 
 std::once_flag stockfish_init_flag;
+std::mutex variant_state_mutex;
 
 inline void ensure_stockfish_initialized() {
   std::call_once(stockfish_init_flag, []() { initialize_stockfish(); });
@@ -62,6 +63,11 @@ const Variant* get_variant(const std::string& uciVariant) {
   if (it != variants.end())
     return it->second;
   return variants.find("chess")->second;
+}
+
+const Variant* get_variant_locked(const std::string& uciVariant) {
+  std::lock_guard<std::mutex> lock(variant_state_mutex);
+  return get_variant(uciVariant);
 }
 
 template <bool isUCI>
@@ -382,6 +388,7 @@ private:
   void init(std::string uciVariant, std::string fen, bool is960Flag) {
     ensure_stockfish_initialized();
     Board::sfInitialized.store(true, std::memory_order_relaxed);
+    std::lock_guard<std::mutex> lock(variant_state_mutex);
     v = get_variant(uciVariant);
     UCI::init_variant(v);
     resetStates();
@@ -417,23 +424,24 @@ std::string available_variants() {
 void load_variant_config(std::string variantInitContent) {
   std::stringstream ss(variantInitContent);
   ensure_stockfish_initialized();
+  std::lock_guard<std::mutex> lock(variant_state_mutex);
   variants.parse_istream<false>(ss);
   Options["UCI_Variant"].set_combo(variants.get_keys());
   Board::sfInitialized.store(true, std::memory_order_relaxed);
 }
 
 bool captures_to_hand(std::string uciVariant) {
-  const Variant* v = get_variant(uciVariant);
+  const Variant* v = get_variant_locked(uciVariant);
   return v->captureType != MOVE_OUT;
 }
 
 std::string starting_fen(std::string uciVariant) {
-  const Variant* v = get_variant(uciVariant);
+  const Variant* v = get_variant_locked(uciVariant);
   return v->startFen;
 }
 
 int validate_fen(std::string fen, std::string uciVariant, bool chess960) {
-  const Variant* v = get_variant(uciVariant);
+  const Variant* v = get_variant_locked(uciVariant);
   return FEN::validate_fen(fen, v, chess960);
 }
 
