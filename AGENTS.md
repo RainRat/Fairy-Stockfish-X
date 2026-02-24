@@ -73,6 +73,7 @@ Run: `./stockfish < test.txt > output.txt`
 * Tuple Betza atoms `(x,y)` are now represented explicitly via `PieceInfo::tupleSteps` (`src/piece.h`) and consumed in `bitboard.cpp`; do not route long tuple leapers through `Direction`/`safe_destination` decoding.
 * Extended gating FEN masks (`...|<white>/<black>`) are parsed in `Position::set`; serialization is intentionally emitted for large-board gating cases where legacy castling/gating letters are ambiguous.
 * `checking = false` disables king-safety enforcement and keeps `checkersBB` empty; if a variant still needs king attacks as legal tactical threats (e.g. capturable kings), use `allowChecks = true` (`src/variant.h`) instead of re-enabling full check legality.
+* `allowChecks` is not equivalent to `checking`: when `allowChecks = false`, keep the no-check king-safety path active in legality and state updates. Gating those paths on `checking_permitted()` can silently change no-check variant perft (Racing Kings is a canary).
 * Comments target experienced developers; don’t change copyright years.
 
 ## 8) Large/complex variants
@@ -92,6 +93,7 @@ Run: `./stockfish < test.txt > output.txt`
 ## 12) CI gotchas
 
 * `./stockfish check variants.ini` on non-ALLVARS/board-limited builds can print expected warnings (missing templates, variants skipped for board limits). CI filtering should ignore those lines while still failing on real parse/syntax errors.
+* `../tests/perft.sh all` includes large-board variants (e.g., shogi). Run it with a `largeboards=yes` build; otherwise it will fail at the large-board section with misleading perft mismatches.
 
 ## 10) Research links (rules & precedent)
 
