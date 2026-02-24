@@ -279,8 +279,16 @@ Bitboard rider_terminal_squares(const std::map<Direction, int>& directions, Squa
     return terminal;
 }
 
+
 #ifdef VERY_LARGE_BOARDS
 Bitboard rider_attacks_bb(RiderType R, Square s, Bitboard occupied) {
+  auto shifted_source = [&](Direction d) -> Square {
+      Bitboard shifted = safe_destination(s, d);
+      if (!shifted || (occupied & shifted))
+          return SQ_NONE;
+      return lsb(shifted);
+  };
+
   switch (R)
   {
   case RIDER_BISHOP: return sliding_attack<RIDER>(BishopDirections, s, occupied);
@@ -297,6 +305,22 @@ Bitboard rider_attacks_bb(RiderType R, Square s, Bitboard occupied) {
   case RIDER_GRASSHOPPER_H: return sliding_attack<HOPPER>(GrasshopperDirectionsH, s, occupied);
   case RIDER_GRASSHOPPER_V: return sliding_attack<HOPPER>(GrasshopperDirectionsV, s, occupied);
   case RIDER_GRASSHOPPER_D: return sliding_attack<HOPPER>(GrasshopperDirectionsD, s, occupied);
+  case RIDER_GRIFFON_NH: {
+      Square src = shifted_source(NORTH);
+      return src == SQ_NONE ? Bitboard(0) : sliding_attack<RIDER>(RookDirectionsH, src, occupied);
+  }
+  case RIDER_GRIFFON_SH: {
+      Square src = shifted_source(SOUTH);
+      return src == SQ_NONE ? Bitboard(0) : sliding_attack<RIDER>(RookDirectionsH, src, occupied);
+  }
+  case RIDER_GRIFFON_EV: {
+      Square src = shifted_source(EAST);
+      return src == SQ_NONE ? Bitboard(0) : sliding_attack<RIDER>(RookDirectionsV, src, occupied);
+  }
+  case RIDER_GRIFFON_WV: {
+      Square src = shifted_source(WEST);
+      return src == SQ_NONE ? Bitboard(0) : sliding_attack<RIDER>(RookDirectionsV, src, occupied);
+  }
   default: return Bitboard(0);
   }
 }
@@ -384,6 +408,8 @@ void Bitboards::init_pieces() {
                   if (BishopDirections.find(d) != BishopDirections.end())
                       riderTypes |= limit == 1 ? RIDER_GRASSHOPPER_D : RIDER_CANNON_DIAG;
               }
+              if (pi->griffon[initial][modality])
+                  riderTypes |= RIDER_GRIFFON_NH | RIDER_GRIFFON_SH | RIDER_GRIFFON_EV | RIDER_GRIFFON_WV;
           }
       }
 
@@ -425,6 +451,11 @@ void Bitboards::init_pieces() {
                           pseudo |= sliding_attack<RIDER>(dirs, s, 0, c);
                       }
                       pseudo |= sliding_attack<HOPPER_RANGE>(pi->hopper[initial][modality], s, 0, c);
+                      if (pi->griffon[initial][modality])
+                          pseudo |= rider_attacks_bb<RIDER_GRIFFON_NH>(s, Bitboard(0))
+                                  | rider_attacks_bb<RIDER_GRIFFON_SH>(s, Bitboard(0))
+                                  | rider_attacks_bb<RIDER_GRIFFON_EV>(s, Bitboard(0))
+                                  | rider_attacks_bb<RIDER_GRIFFON_WV>(s, Bitboard(0));
                   }
               }
           }

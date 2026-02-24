@@ -87,7 +87,7 @@ namespace {
               }
               bool groupAtomsOnly = true;
               for (char gc : content)
-                  if (leaperAtoms.find(gc) == leaperAtoms.end() && riderAtoms.find(gc) == riderAtoms.end() && gc != 'U')
+                  if (leaperAtoms.find(gc) == leaperAtoms.end() && riderAtoms.find(gc) == riderAtoms.end() && gc != 'U' && gc != 'O')
                   {
                       groupAtomsOnly = false;
                       break;
@@ -230,6 +230,39 @@ namespace {
           distance = 0;
       };
 
+      auto commit_griffon = [&]() {
+          // Keep first implementation strict: unqualified O only.
+          if (!prelimDirections.empty() || hopper || lame || dynamicDistance || rider)
+          {
+              moveModalities.clear();
+              prelimDirections.clear();
+              hopper = false;
+              rider = false;
+              lame = false;
+              initial = false;
+              dynamicDistance = false;
+              standaloneH = false;
+              distance = 0;
+              return;
+          }
+          if (moveModalities.size() == 0)
+          {
+              moveModalities.push_back(MODALITY_QUIET);
+              moveModalities.push_back(MODALITY_CAPTURE);
+          }
+          for (auto modality : moveModalities)
+              p->griffon[initial][modality] = true;
+          moveModalities.clear();
+          prelimDirections.clear();
+          hopper = false;
+          rider = false;
+          lame = false;
+          initial = false;
+          dynamicDistance = false;
+          standaloneH = false;
+          distance = 0;
+      };
+
       for (std::string::size_type i = 0; i < expandedBetza.size(); i++)
       {
           char c = expandedBetza[i];
@@ -297,6 +330,9 @@ namespace {
                           universalAtoms.emplace_back(dr, df);
               commit_atom(universalAtoms, false, i, c);
           }
+          // Griffon bent slider (one orthogonal step, then slide perpendicular)
+          else if (c == 'O')
+              commit_griffon();
           // Tuple leaper atom: (x,y)
           else if (c == '(')
           {

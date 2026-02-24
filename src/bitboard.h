@@ -448,6 +448,23 @@ inline Bitboard rider_attacks_bb(Square s, Bitboard occupied) {
                   : R == RIDER_GRASSHOPPER_V ? GrasshopperMagicsV[s]
                   : R == RIDER_GRASSHOPPER_D ? GrasshopperMagicsD[s]
                   : BishopMagics[s];
+  if constexpr (R == RIDER_GRIFFON_NH || R == RIDER_GRIFFON_SH || R == RIDER_GRIFFON_EV || R == RIDER_GRIFFON_WV) {
+      int r = int(rank_of(s));
+      int f = int(file_of(s));
+      if constexpr (R == RIDER_GRIFFON_NH) ++r;
+      if constexpr (R == RIDER_GRIFFON_SH) --r;
+      if constexpr (R == RIDER_GRIFFON_EV) ++f;
+      if constexpr (R == RIDER_GRIFFON_WV) --f;
+      if (r < 0 || r > int(RANK_MAX) || f < 0 || f > int(FILE_MAX))
+          return Bitboard(0);
+      Square src = make_square(File(f), Rank(r));
+      if (occupied & src)
+          return Bitboard(0);
+      if constexpr (R == RIDER_GRIFFON_NH || R == RIDER_GRIFFON_SH)
+          return rider_attacks_bb<RIDER_ROOK_H>(src, occupied);
+      else
+          return rider_attacks_bb<RIDER_ROOK_V>(src, occupied);
+  }
   return m.attacks[m.index(occupied)];
 }
 
@@ -456,6 +473,10 @@ inline Square lsb(Bitboard b);
 inline Bitboard rider_attacks_bb(RiderType R, Square s, Bitboard occupied) {
 
   assert(R != NO_RIDER && !(R & (R - 1))); // exactly one bit
+  if (R == RIDER_GRIFFON_NH) return rider_attacks_bb<RIDER_GRIFFON_NH>(s, occupied);
+  if (R == RIDER_GRIFFON_SH) return rider_attacks_bb<RIDER_GRIFFON_SH>(s, occupied);
+  if (R == RIDER_GRIFFON_EV) return rider_attacks_bb<RIDER_GRIFFON_EV>(s, occupied);
+  if (R == RIDER_GRIFFON_WV) return rider_attacks_bb<RIDER_GRIFFON_WV>(s, occupied);
   const Magic& m = magics[lsb(R)][s]; // re-use Bitboard lsb for riders
   return m.attacks[m.index(occupied)];
 }

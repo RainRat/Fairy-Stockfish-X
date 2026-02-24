@@ -715,6 +715,12 @@ enum RiderType : int {
   RIDER_GRASSHOPPER_H = 1 << 11,
   RIDER_GRASSHOPPER_V = 1 << 12,
   RIDER_GRASSHOPPER_D = 1 << 13,
+  // Bent-slider (Griffon-like) internal rider legs.
+  // These are source-shifted aliases of rook H/V rider lookups.
+  RIDER_GRIFFON_NH = 1 << 14,
+  RIDER_GRIFFON_SH = 1 << 15,
+  RIDER_GRIFFON_EV = 1 << 16,
+  RIDER_GRIFFON_WV = 1 << 17,
   HOPPING_RIDERS =  RIDER_CANNON_H | RIDER_CANNON_V | RIDER_CANNON_DIAG
                   | RIDER_GRASSHOPPER_H | RIDER_GRASSHOPPER_V | RIDER_GRASSHOPPER_D,
   LAME_LEAPERS = RIDER_LAME_DABBABA | RIDER_HORSE | RIDER_ELEPHANT | RIDER_JANGGI_ELEPHANT,
