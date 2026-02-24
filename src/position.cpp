@@ -878,7 +878,7 @@ void Position::set_state(StateInfo* si) const {
   si->key = si->materialKey = 0;
   si->pawnKey = Zobrist::noPawns;
   si->nonPawnMaterial[WHITE] = si->nonPawnMaterial[BLACK] = VALUE_ZERO;
-  si->checkersBB = checking_permitted() && count<KING>(sideToMove)
+  si->checkersBB = !allow_checks() && count<KING>(sideToMove)
                  ? attackers_to_king(square<KING>(sideToMove), ~sideToMove)
                  : Bitboard(0);
   si->move = MOVE_NONE;
@@ -1739,7 +1739,7 @@ bool Position::legal(Move m) const {
   // En passant captures are a tricky special case. Because they are rather
   // uncommon, we do it simply by testing whether the king is attacked after
   // the move is made.
-  if (checking_permitted() && type_of(m) == EN_PASSANT && count<KING>(us))
+  if (!allow_checks() && type_of(m) == EN_PASSANT && count<KING>(us))
   {
       Square ksq = square<KING>(us);
       Square capsq = capture_square(to);
@@ -1770,14 +1770,14 @@ bool Position::legal(Move m) const {
           return true;
 
       for (Square s = to; s != from; s += step)
-          if (   (checking_permitted() && attackers_to_king(s, ~us))
+          if (   (!allow_checks() && attackers_to_king(s, ~us))
               || (var->flyingGeneral && (attacks_bb(~us, ROOK, s, pieces() ^ from) & pieces(~us, KING)))
               || (var->diagonalGeneral && (attacks_bb(~us, BISHOP, s, pieces() ^ from) & pieces(~us, KING))))
               return false;
 
       // In case of Chess960, verify if the Rook blocks some checks
       // For instance an enemy queen in SQ_A1 when castling rook is in SQ_B1.
-      return !checking_permitted() || !attackers_to_king(to, pieces() ^ to_sq(m), ~us);
+      return allow_checks() || !attackers_to_king(to, pieces() ^ to_sq(m), ~us);
   }
 
   Bitboard occupied = (type_of(m) != DROP ? pieces() ^ from : pieces()) | to;
@@ -1805,7 +1805,7 @@ bool Position::legal(Move m) const {
 
   // If the moving piece is a king, check whether the destination square is
   // attacked by the opponent.
-  if (checking_permitted() && type_of(moved_piece(m)) == KING)
+  if (!allow_checks() && type_of(moved_piece(m)) == KING)
       return !attackers_to_king(to, occupied, ~us);
 
   // Return early when without king
@@ -1819,7 +1819,7 @@ bool Position::legal(Move m) const {
       janggiCannons ^= to;
 
   // A non-king move is legal if the king is not under attack after the move.
-  return !checking_permitted() || !(attackers_to_king(square<KING>(us), occupied, ~us, janggiCannons) & ~SquareBB[to]);
+  return allow_checks() || !(attackers_to_king(square<KING>(us), occupied, ~us, janggiCannons) & ~SquareBB[to]);
 }
 
 
@@ -1989,7 +1989,7 @@ bool Position::pseudo_legal(const Move m) const {
   // Evasions generator already takes care to avoid some kind of illegal moves
   // and legal() relies on this. We therefore have to take care that the same
   // kind of moves are filtered out here.
-  if (checking_permitted() && checkers() && !(checkers() & non_sliding_riders()))
+  if (!allow_checks() && checkers() && !(checkers() & non_sliding_riders()))
   {
       if (type_of(pc) != KING)
       {
@@ -2206,7 +2206,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
          || (type_of(m) == CASTLING ? color_of(captured) == us
                                     : (color_of(captured) == them
                                        || (self_capture() && color_of(captured) == us))));
-  assert(type_of(captured) != KING);
+  assert(type_of(captured) != KING || allow_checks());
 
   if (type_of(m) == CASTLING)
   {
@@ -3059,10 +3059,10 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   // Update the key with the final value
   st->key = k;
   // Calculate checkers bitboard (if move gives check)
-  st->checkersBB = checking_permitted() && givesCheck
+  st->checkersBB = !allow_checks() && givesCheck
                  ? attackers_to_king(square<KING>(them), us) & pieces(us)
                  : Bitboard(0);
-  assert(!checking_permitted() || givesCheck == bool(st->checkersBB) || (givesCheck && var->prisonPawnPromotion));
+  assert(allow_checks() || givesCheck == bool(st->checkersBB) || (givesCheck && var->prisonPawnPromotion));
 
   sideToMove = ~sideToMove;
 
@@ -3143,7 +3143,7 @@ void Position::undo_move(Move m) {
          || is_pass(m)
          || (commit_gates() && st->removedGatingType > NO_PIECE_TYPE)
   );
-  assert(type_of(st->capturedPiece) != KING);
+  assert(type_of(st->capturedPiece) != KING || allow_checks());
 
   // Reset wall squares
   byTypeBB[ALL_PIECES] ^= st->wallSquares ^ st->previous->wallSquares;
