@@ -336,6 +336,24 @@ namespace {
           // Tuple leaper atom: (x,y)
           else if (c == '(')
           {
+              // Tuple atoms are only supported as explicit leapers. Reject
+              // tuple+hoppers/riders to avoid Direction-based wrap artifacts.
+              if (hopper || rider || lame || dynamicDistance)
+              {
+                  moveModalities.clear();
+                  prelimDirections.clear();
+                  hopper = false;
+                  rider = false;
+                  lame = false;
+                  initial = false;
+                  dynamicDistance = false;
+                  standaloneH = false;
+                  distance = 0;
+                  auto closeUnsupported = expandedBetza.find(')', i + 1);
+                  if (closeUnsupported != std::string::npos)
+                      i = closeUnsupported;
+                  continue;
+              }
               auto close = expandedBetza.find(')', i + 1);
               if (close == std::string::npos)
                   continue;

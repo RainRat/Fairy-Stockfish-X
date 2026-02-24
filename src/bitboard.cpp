@@ -22,6 +22,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <map>
+#include <mutex>
 #include <tuple>
 #include <unordered_map>
 
@@ -530,6 +531,8 @@ namespace {
   };
 
   std::unordered_map<uint16_t, MagicNumberCache> MagicByBoardSize;
+  std::mutex MagicInitMutex;
+  constexpr size_t MAX_MAGIC_CACHE_ENTRIES = 16;
 
   inline uint16_t magic_board_key(File f, Rank r) {
       return (uint16_t(f) << 8) | uint16_t(r);
@@ -681,6 +684,7 @@ namespace {
 
 void Bitboards::init_magics(File maxFile, Rank maxRank) {
 #if !defined(VERY_LARGE_BOARDS)
+  std::lock_guard<std::mutex> lock(MagicInitMutex);
   if (MagicsInitialized && maxFile == CurrentMagicMaxFile && maxRank == CurrentMagicMaxRank)
       return;
 
@@ -723,6 +727,8 @@ void Bitboards::init_magics(File maxFile, Rank maxRank) {
 #endif
 
   if (!cache) {
+      if (MagicByBoardSize.size() >= MAX_MAGIC_CACHE_ENTRIES)
+          MagicByBoardSize.erase(MagicByBoardSize.begin());
       MagicNumberCache fresh {};
       snapshot_magic_numbers(fresh.rookH, RookMagicsH);
       snapshot_magic_numbers(fresh.rookV, RookMagicsV);
