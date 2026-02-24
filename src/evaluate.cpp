@@ -408,6 +408,23 @@ namespace {
     return flank;
   }
 
+  inline Bitboard scaled_outpost_ranks(const Position& pos, Color c) {
+    if (pos.max_rank() == RANK_8)
+      return c == WHITE ? (Rank4BB | Rank5BB | Rank6BB)
+                        : (Rank5BB | Rank4BB | Rank3BB);
+
+    const int maxR = int(pos.max_rank());
+    const int den = int(RANK_8);
+    auto mapRank = [&](Rank r8) {
+      // Map 8x8-tuned outpost ranks to arbitrary board heights.
+      return Rank((int(r8) * maxR + den / 2) / den);
+    };
+
+    return rank_bb(relative_rank(c, mapRank(RANK_4), pos.max_rank()))
+         | rank_bb(relative_rank(c, mapRank(RANK_5), pos.max_rank()))
+         | rank_bb(relative_rank(c, mapRank(RANK_6), pos.max_rank()));
+  }
+
   // Evaluation class computes and stores attacks tables and other working data
   template<Tracing T>
   class Evaluation {
@@ -536,8 +553,7 @@ namespace {
 
     constexpr Color     Them = ~Us;
     constexpr Direction Down = -pawn_push(Us);
-    constexpr Bitboard OutpostRanks = (Us == WHITE ? Rank4BB | Rank5BB | Rank6BB
-                                                   : Rank5BB | Rank4BB | Rank3BB);
+    const Bitboard OutpostRanks = scaled_outpost_ranks(pos, Us);
     Bitboard b1 = pos.pieces(Us, Pt);
     Bitboard b, bb;
     Score score = SCORE_ZERO;
