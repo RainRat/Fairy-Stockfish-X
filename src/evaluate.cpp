@@ -344,7 +344,7 @@ namespace {
     {
       // Keep the central band mirror-symmetric on odd-width boards (e.g. 9 files)
       // by using an odd center width when possible.
-      int width = std::clamp((files + 1) / 2, 2, files);
+      int width = std::clamp((files + 1) / 2, std::min(2, files), files);
       int f0 = (files - width) / 2;
       int f1 = f0 + width - 1;
       centerFiles = 0;
@@ -359,7 +359,11 @@ namespace {
   inline Bitboard scaled_space_mask(const Position& pos, Color c) {
     int maxRank = int(pos.max_rank());
     int target = 1 + maxRank / 2; // roughly half-board from home side
-    int ceiling = std::clamp(target, int(RANK_4), maxRank - 1);
+    int upper = maxRank - 1;
+    if (upper < int(RANK_2))
+      return Bitboard(0);
+    int lower = std::min(int(RANK_4), upper);
+    int ceiling = std::clamp(target, lower, upper);
 
     Bitboard mask = 0;
     for (int r = int(RANK_2); r <= ceiling; ++r)
@@ -530,8 +534,14 @@ namespace {
         kingRing[Us] = Bitboard(0);
     else
     {
-        Square s = make_square(std::clamp(file_of(ksq), FILE_B, File(pos.max_file() - 1)),
-                               std::clamp(rank_of(ksq), RANK_2, Rank(pos.max_rank() - 1)));
+        File fileLo = FILE_B, fileHi = File(pos.max_file() - 1);
+        Rank rankLo = RANK_2, rankHi = Rank(pos.max_rank() - 1);
+        if (fileHi < fileLo)
+            fileLo = fileHi = pos.max_file();
+        if (rankHi < rankLo)
+            rankLo = rankHi = pos.max_rank();
+        Square s = make_square(std::clamp(file_of(ksq), fileLo, fileHi),
+                               std::clamp(rank_of(ksq), rankLo, rankHi));
         kingRing[Us] = attacks_bb<KING>(s) | s;
     }
 
