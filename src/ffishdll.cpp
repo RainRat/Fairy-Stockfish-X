@@ -369,6 +369,7 @@ public:
   }
 
   std::string variant() {
+    std::lock_guard<std::mutex> lock(variant_state_mutex);
     for (auto it = variants.begin(); it != variants.end(); ++it)
       if (it->second == v)
         return it->first;
@@ -413,7 +414,8 @@ void set_option(std::string name, T value) {
 
 std::string available_variants() {
   std::string available;
-  for (std::string variant : variants.get_keys()) {
+  std::lock_guard<std::mutex> lock(variant_state_mutex);
+  for (const std::string& variant : variants.get_keys()) {
     available += variant;
     available += DELIM;
   }
