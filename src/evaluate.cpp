@@ -342,7 +342,9 @@ namespace {
     Bitboard centerFiles = CenterFiles;
     if (pos.max_file() != FILE_H)
     {
-      int width = std::clamp(files / 2, 2, files);
+      // Keep the central band mirror-symmetric on odd-width boards (e.g. 9 files)
+      // by using an odd center width when possible.
+      int width = std::clamp((files + 1) / 2, 2, files);
       int f0 = (files - width) / 2;
       int f1 = f0 + width - 1;
       centerFiles = 0;
@@ -694,9 +696,18 @@ namespace {
                 if (mob <= 3 && pos.count<KING>(Us))
                 {
                     File kf = file_of(pos.square<KING>(Us));
-                    File boardMid = File(int(pos.max_file()) / 2);
-                    if ((kf <= boardMid) == (file_of(s) < kf))
-                        score -= TrappedRook * (1 + !pos.castling_rights(Us));
+                    int files = int(pos.max_file()) + 1;
+                    int center = files / 2;
+                    // On odd-width boards, don't force the exact center file into a side.
+                    // This avoids arbitrary left/right bias in trapped-rook detection.
+                    if (!(files % 2 == 1 && int(kf) == center))
+                    {
+                        bool kingLeft = int(kf) < center;
+                        bool rookTowardEdge = kingLeft ? int(file_of(s)) < int(kf)
+                                                       : int(file_of(s)) > int(kf);
+                        if (rookTowardEdge)
+                            score -= TrappedRook * (1 + !pos.castling_rights(Us));
+                    }
                 }
             }
         }
