@@ -886,6 +886,7 @@ void Position::set_state(StateInfo* si) const {
   si->removedCastlingGatingType = NO_PIECE_TYPE;
   si->capturedGatingType = NO_PIECE_TYPE;
   si->forcedJumpSquare = SQ_NONE;
+  si->forcedJumpHasFollowup = false;
 
   set_check_info(si);
   set_sudoku_conflicts_info(si);
@@ -1341,7 +1342,11 @@ bool Position::has_forced_jump_followup() const {
   if (!forced_jump_continuation() || st->forcedJumpSquare == SQ_NONE)
       return false;
 
-  Square s = st->forcedJumpSquare;
+  return st->forcedJumpHasFollowup;
+}
+
+bool Position::compute_forced_jump_followup(Square s) const {
+
   Piece mover = piece_on(s);
   if (mover == NO_PIECE)
       return false;
@@ -3031,19 +3036,23 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       {
           // Keep pending continuation across the forced opponent pass.
           st->forcedJumpSquare = st->previous->forcedJumpSquare;
+          st->forcedJumpHasFollowup = st->previous->forcedJumpHasFollowup;
       }
       else if (jumpCapsq != SQ_NONE && type_of(m) != PROMOTION && type_of(m) != PIECE_PROMOTION)
       {
           st->forcedJumpSquare = to;
+          st->forcedJumpHasFollowup = compute_forced_jump_followup(to);
       }
       else
       {
           st->forcedJumpSquare = SQ_NONE;
+          st->forcedJumpHasFollowup = false;
       }
   }
   else
   {
       st->forcedJumpSquare = SQ_NONE;
+      st->forcedJumpHasFollowup = false;
   }
 
   updatePawnCheckZone();

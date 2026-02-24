@@ -89,6 +89,7 @@ struct StateInfo {
   Bitboard   chased;
   bool       pass;
   Square     forcedJumpSquare;
+  bool       forcedJumpHasFollowup;
   Move       move;
   int        repetition;
   PieceType removedGatingType;
@@ -436,6 +437,7 @@ private:
   void set_castling_right(Color c, Square rfrom);
   void set_state(StateInfo* si) const;
   void set_check_info(StateInfo* si) const;
+  bool compute_forced_jump_followup(Square s) const;
   bool is_initial_pawn(Piece pc, Square s) const;
 
   // Other helpers
