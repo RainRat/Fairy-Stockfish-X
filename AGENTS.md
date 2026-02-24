@@ -94,6 +94,7 @@ Run: `./stockfish < test.txt > output.txt`
 
 * `./stockfish check variants.ini` on non-ALLVARS/board-limited builds can print expected warnings (missing templates, variants skipped for board limits). CI filtering should ignore those lines while still failing on real parse/syntax errors.
 * `../tests/perft.sh all` includes large-board variants (e.g., shogi). Run it with a `largeboards=yes` build; otherwise it will fail at the large-board section with misleading perft mismatches.
+* When switching board macro families locally (`verylargeboards=yes` ↔ `largeboards=yes` ↔ default), run `make clean` first. Reusing old objects can produce ODR/link failures and misleading diagnostics unrelated to your code change.
 
 ## 10) Research links (rules & precedent)
 
