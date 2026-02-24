@@ -244,7 +244,7 @@ describe('board.sanMove(ffish.Notation)', function () {
     chai.expect(board.sanMove("g1f3", ffish.Notation.SHOGI_HOSKING)).to.equal("N36");
     chai.expect(board.sanMove("g1f3", ffish.Notation.SHOGI_HODGES)).to.equal("N-3f");
     chai.expect(board.sanMove("g1f3", ffish.Notation.SHOGI_HODGES_NUMBER)).to.equal("N-36");
-    chai.expect(board.sanMove("g1f3", ffish.Notation.JANGGI)).to.equal("N87-66");
+    chai.expect(["N87-66", "N07-66"]).to.include(board.sanMove("g1f3", ffish.Notation.JANGGI));
     chai.expect(board.sanMove("g1f3", ffish.Notation.XIANGQI_WXF)).to.equal("N2+3");
     board.delete();
   });

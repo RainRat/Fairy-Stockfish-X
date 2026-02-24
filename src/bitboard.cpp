@@ -505,7 +505,8 @@ namespace {
 
     Bitboard* occupancy = new Bitboard[1 << (FILE_NB + RANK_NB - 4)];
     Bitboard* reference = new Bitboard[1 << (FILE_NB + RANK_NB - 4)];
-    Bitboard edges, b;
+    [[maybe_unused]] Bitboard edges;
+    Bitboard b;
     int* epoch = new int[1 << (FILE_NB + RANK_NB - 4)]();
     int cnt = 0, size = 0;
 
