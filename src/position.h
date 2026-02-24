@@ -1199,7 +1199,7 @@ inline Bitboard Position::diagonal_lines() const {
 
 inline bool Position::pass(Color c) const {
   assert(var != nullptr);
-  if (forced_jump_continuation() && has_forced_jump_followup())
+  if (forced_jump_continuation() && st->forcedJumpSquare != SQ_NONE && st->forcedJumpHasFollowup)
   {
       Piece fp = piece_on(st->forcedJumpSquare);
       if (fp != NO_PIECE && color_of(fp) != c)

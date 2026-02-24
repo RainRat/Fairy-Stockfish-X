@@ -1462,7 +1462,7 @@ bool Position::legal(Move m) const {
   if (forced_jump_continuation() && st->forcedJumpSquare != SQ_NONE)
   {
       Piece forcedPiece = piece_on(st->forcedJumpSquare);
-      if (forcedPiece != NO_PIECE && has_forced_jump_followup())
+      if (forcedPiece != NO_PIECE && st->forcedJumpHasFollowup)
       {
           if (color_of(forcedPiece) != us)
           {
@@ -1855,7 +1855,7 @@ bool Position::pseudo_legal(const Move m) const {
   if (forced_jump_continuation() && st->forcedJumpSquare != SQ_NONE)
   {
       Piece forcedPiece = piece_on(st->forcedJumpSquare);
-      if (forcedPiece != NO_PIECE && has_forced_jump_followup())
+      if (forcedPiece != NO_PIECE && st->forcedJumpHasFollowup)
       {
           if (color_of(forcedPiece) != us)
           {
