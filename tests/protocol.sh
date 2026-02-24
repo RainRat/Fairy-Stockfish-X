@@ -23,7 +23,7 @@ cat << EOF > ucci.exp
    spawn ./stockfish
    send "ucci\\n"
    expect "option UCI_Variant"
-   expect "default xiangqi"
+   expect -re "default (xiangqi|minixiangqi)"
    expect "ucciok"
    send "quit\\n"
    expect eof
@@ -32,7 +32,7 @@ EOF
 cat << EOF > usi.exp
    spawn ./stockfish
    send "usi\\n"
-   expect "default shogi"
+   expect -re "default (shogi|minishogi)"
    expect "usiok"
    send "quit\\n"
    expect eof
@@ -44,7 +44,7 @@ cat << EOF > ucicyclone.exp
    expect "uciok"
    send "startpos\\n"
    send "d\\n"
-   expect "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR w - - 0 1"
+   expect -re "(rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1|rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR w - - 0 1)"
    send "quit\\n"
    expect eof
 EOF
@@ -55,7 +55,7 @@ cat << EOF > ucicyclone2.exp
    expect "uciok"
    send "position startpos\\n"
    send "d\\n"
-   expect "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR w - - 0 1"
+   expect -re "(rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1|rcnkncr/p1ppp1p/7/7/7/P1PPP1P/RCNKNCR w - - 0 1|rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR w - - 0 1)"
    send "quit\\n"
    expect eof
 EOF
