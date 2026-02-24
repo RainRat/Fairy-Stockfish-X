@@ -178,7 +178,7 @@ namespace {
   }
 
   template<Color Us, GenType Type>
-  ExtMove* generate_pawn_moves(const Position& pos, ExtMove* moveList, Bitboard target) {
+  ExtMove* generate_pawn_moves(const Position& pos, ExtMove* moveList, Bitboard target, Bitboard fromMask = AllSquares) {
 
     if (!pos.pieces(Us, PAWN))
         return moveList;
@@ -196,7 +196,7 @@ namespace {
     /// yjf2002ghty: Since it's generate_pawn_moves, I assume the piece type is PAWN. It can cause problems if the pawn is something else (e.g. Custom pawn piece)
     const Bitboard tripleStepRegion = pos.triple_step_region(Us, PAWN);
 
-    const Bitboard pawns      = pos.pieces(Us, PAWN);
+    const Bitboard pawns      = pos.pieces(Us, PAWN) & fromMask;
     const Bitboard movable    = pos.board_bb(Us, PAWN) & ~pos.pieces();
     const Bitboard friendlyCapturable = pos.pieces(Us) & ~pos.pieces(Us, KING);
     const Bitboard capturable = pos.board_bb(Us, PAWN)
@@ -339,11 +339,11 @@ namespace {
 
 
   template<Color Us, GenType Type>
-  ExtMove* generate_moves(const Position& pos, ExtMove* moveList, PieceType Pt, Bitboard target, Bitboard captureTarget) {
+  ExtMove* generate_moves(const Position& pos, ExtMove* moveList, PieceType Pt, Bitboard target, Bitboard captureTarget, Bitboard fromMask = AllSquares) {
 
     assert(Pt != KING && Pt != PAWN);
 
-    Bitboard bb = pos.pieces(Us, Pt);
+    Bitboard bb = pos.pieces(Us, Pt) & fromMask;
 
     while (bb)
     {
@@ -463,6 +463,19 @@ namespace {
     const Square ksq = pos.count<KING>(Us) ? pos.square<KING>(Us) : SQ_NONE;
     Bitboard target;
     Bitboard captureTarget = Bitboard(0);
+    Bitboard forcedFromMask = AllSquares;
+    bool restrictToForcedJumper = false;
+
+    Square forcedSquare = pos.forced_jump_square();
+    if (forcedSquare != SQ_NONE && pos.forced_jump_continuation() && pos.has_forced_jump_followup())
+    {
+        Piece forcedPiece = pos.piece_on(forcedSquare);
+        if (forcedPiece != NO_PIECE && color_of(forcedPiece) == Us)
+        {
+            restrictToForcedJumper = true;
+            forcedFromMask = square_bb(forcedSquare);
+        }
+    }
 
     // Skip generating non-king moves when in double check
     if (Type != EVASIONS || !more_than_one(pos.checkers() & ~pos.non_sliding_riders()))
@@ -496,20 +509,20 @@ namespace {
             captureTarget |= selfCaptureTargets;
         }
 
-        moveList = generate_pawn_moves<Us, Type>(pos, moveList, target);
+        moveList = generate_pawn_moves<Us, Type>(pos, moveList, target, forcedFromMask);
         for (PieceSet ps = pos.piece_types() & ~(piece_set(PAWN) | KING); ps;)
-            moveList = generate_moves<Us, Type>(pos, moveList, pop_lsb(ps), target, captureTarget);
+            moveList = generate_moves<Us, Type>(pos, moveList, pop_lsb(ps), target, captureTarget, forcedFromMask);
         // generate drops
-        if (pos.piece_drops() && Type != CAPTURES && (pos.can_drop(Us, ALL_PIECES) || pos.two_boards()))
+        if (!restrictToForcedJumper && pos.piece_drops() && Type != CAPTURES && (pos.can_drop(Us, ALL_PIECES) || pos.two_boards()))
             for (PieceSet ps = pos.piece_types(); ps;)
                 moveList = generate_drops<Us, Type>(pos, moveList, pop_lsb(ps), target & ~pos.pieces(~Us));
         // generate exchange
-        if (pos.capture_type() == PRISON && Type != CAPTURES && pos.has_exchange())
+        if (!restrictToForcedJumper && pos.capture_type() == PRISON && Type != CAPTURES && pos.has_exchange())
             for (PieceSet ps = pos.piece_types(); ps;)
                 moveList = generate_exchanges<Us, Type>(pos, moveList, pop_lsb(ps), target & ~pos.pieces(~Us));
 
         // Castling with non-king piece
-        if (!pos.count<KING>(Us) && Type != CAPTURES && pos.can_castle(Us & ANY_CASTLING))
+        if (!restrictToForcedJumper && !pos.count<KING>(Us) && Type != CAPTURES && pos.can_castle(Us & ANY_CASTLING))
         {
             Square from = pos.castling_king_square(Us);
             for(CastlingRights cr : { Us & KING_SIDE, Us & QUEEN_SIDE } )
@@ -518,7 +531,7 @@ namespace {
         }
 
         // Special moves
-        if (pos.cambodian_moves() && pos.gates(Us) && Type != CAPTURES)
+        if (!restrictToForcedJumper && pos.cambodian_moves() && pos.gates(Us) && Type != CAPTURES)
         {
             if (Type != EVASIONS && (pos.pieces(Us, KING) & pos.gates(Us)))
             {
@@ -540,18 +553,18 @@ namespace {
         }
 
         // Workaround for passing: Execute a non-move with any piece
-        if (pos.pass(Us) && !pos.count<KING>(Us) && pos.pieces(Us))
+        if (!restrictToForcedJumper && pos.pass(Us) && !pos.count<KING>(Us) && pos.pieces(Us))
             *moveList++ = make<SPECIAL>(lsb(pos.pieces(Us)), lsb(pos.pieces(Us)));
 
         //if "wall or move", generate walling action with null move
-        if (pos.wall_or_move())
+        if (!restrictToForcedJumper && pos.wall_or_move())
         {
             moveList = make_move_and_gating<SPECIAL>(pos, moveList, Us, lsb(pos.pieces(Us)), lsb(pos.pieces(Us)));
         }
     }
 
     // King moves
-    if (pos.count<KING>(Us) && (!Checks || pos.blockers_for_king(~Us) & ksq))
+    if (pos.count<KING>(Us) && (!restrictToForcedJumper || (forcedFromMask & ksq)) && (!Checks || pos.blockers_for_king(~Us) & ksq))
     {
         Bitboard kingAttacks = pos.attacks_from(Us, KING, ksq) & pos.pieces();
         Bitboard kingMoves   = pos.moves_from(Us, KING, ksq) & ~pos.pieces();

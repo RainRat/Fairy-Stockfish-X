@@ -241,6 +241,7 @@ public:
   bool pass_on_stalemate(Color c) const;
   bool multimove_pass(int ply) const;
   bool has_forced_jump_followup() const;
+  Square forced_jump_square() const;
   Bitboard promoted_soldiers(Color c) const;
   bool makpong() const;
   EnclosingRule flip_enclosed_pieces() const;
@@ -975,6 +976,10 @@ inline PieceSet Position::jump_capture_types() const {
 inline bool Position::forced_jump_continuation() const {
   assert(var != nullptr);
   return var->forcedJumpContinuation;
+}
+
+inline Square Position::forced_jump_square() const {
+  return st->forcedJumpSquare;
 }
 
 inline bool Position::captures_to_hand() const {
