@@ -17,10 +17,13 @@
 */
 
 #include <algorithm>
+#include <array>
 #include <bitset>
+#include <cstdint>
 #include <cstdlib>
 #include <map>
 #include <tuple>
+#include <unordered_map>
 
 #include "bitboard.h"
 #include "magic.h"
@@ -478,6 +481,34 @@ namespace {
   Rank CurrentMagicMaxRank = RANK_MAX;
   bool MagicsInitialized = false;
 
+  struct MagicNumberCache {
+      std::array<Bitboard, SQUARE_NB> rookH {};
+      std::array<Bitboard, SQUARE_NB> rookV {};
+      std::array<Bitboard, SQUARE_NB> bishop {};
+      std::array<Bitboard, SQUARE_NB> cannonH {};
+      std::array<Bitboard, SQUARE_NB> cannonV {};
+      std::array<Bitboard, SQUARE_NB> lameDabbaba {};
+      std::array<Bitboard, SQUARE_NB> horse {};
+      std::array<Bitboard, SQUARE_NB> elephant {};
+      std::array<Bitboard, SQUARE_NB> janggiElephant {};
+      std::array<Bitboard, SQUARE_NB> cannonDiag {};
+      std::array<Bitboard, SQUARE_NB> nightrider {};
+      std::array<Bitboard, SQUARE_NB> grasshopperH {};
+      std::array<Bitboard, SQUARE_NB> grasshopperV {};
+      std::array<Bitboard, SQUARE_NB> grasshopperD {};
+  };
+
+  std::unordered_map<uint16_t, MagicNumberCache> MagicByBoardSize;
+
+  inline uint16_t magic_board_key(File f, Rank r) {
+      return (uint16_t(f) << 8) | uint16_t(r);
+  }
+
+  inline void snapshot_magic_numbers(std::array<Bitboard, SQUARE_NB>& out, const Magic in[]) {
+      for (Square s = SQ_A1; s <= SQ_MAX; ++s)
+          out[s] = in[s].magic;
+  }
+
   inline Bitboard active_magic_board() {
       return BoardSizeBB[CurrentMagicMaxFile][CurrentMagicMaxRank];
   }
@@ -488,11 +519,7 @@ namespace {
   // called "fancy" approach.
 
   template <MovementType MT, bool TrimRiderTerminal = false>
-#ifdef PRECOMPUTED_MAGICS
-  void init_magic_table(Bitboard table[], Magic magics[], const std::map<Direction, int>& directions, const Bitboard* magicsInit) {
-#else
-  void init_magic_table(Bitboard table[], Magic magics[], const std::map<Direction, int>& directions) {
-#endif
+  void init_magic_table(Bitboard table[], Magic magics[], const std::map<Direction, int>& directions, const Bitboard* magicsInit = nullptr) {
 
     // Optimal PRNG seeds to pick the correct magics in the shortest time
 #ifdef LARGEBOARDS
@@ -570,18 +597,16 @@ namespace {
         // until we find the one that passes the verification test.
         // If a precomputed candidate is available, try it first and fall back
         // to randomized search if it collides for this board size.
-        [[maybe_unused]] bool triedProvidedMagic = false;
+        bool triedProvidedMagic = false;
         for (int i = 0; i < size; )
         {
             bool usedProvidedMagic = false;
-#ifdef PRECOMPUTED_MAGICS
             if (magicsInit && !triedProvidedMagic)
             {
                 m.magic = magicsInit[s];
                 triedProvidedMagic = true;
                 usedProvidedMagic = true;
             }
-#endif
 
             if (!usedProvidedMagic)
 #ifdef LARGEBOARDS
@@ -609,12 +634,10 @@ namespace {
                     break;
             }
 
-#ifdef PRECOMPUTED_MAGICS
             // Precomputed candidate failed for this board size, continue with
             // randomized search to guarantee progress.
             if (i < size && usedProvidedMagic)
                 continue;
-#endif
         }
     }
 
@@ -632,39 +655,61 @@ void Bitboards::init_magics(File maxFile, Rank maxRank) {
 
   CurrentMagicMaxFile = maxFile;
   CurrentMagicMaxRank = maxRank;
+  const uint16_t boardKey = magic_board_key(maxFile, maxRank);
+  const auto cacheIt = MagicByBoardSize.find(boardKey);
+  const MagicNumberCache* cache = cacheIt == MagicByBoardSize.end() ? nullptr : &cacheIt->second;
 
 #ifdef PRECOMPUTED_MAGICS
-  const bool usePrecomputed = true;
-  init_magic_table<RIDER>(RookTableH, RookMagicsH, RookDirectionsH, usePrecomputed ? RookMagicHInit : nullptr);
-  init_magic_table<RIDER>(RookTableV, RookMagicsV, RookDirectionsV, usePrecomputed ? RookMagicVInit : nullptr);
-  init_magic_table<RIDER>(BishopTable, BishopMagics, BishopDirections, usePrecomputed ? BishopMagicInit : nullptr);
-  init_magic_table<HOPPER>(CannonTableH, CannonMagicsH, RookDirectionsH, usePrecomputed ? CannonMagicHInit : nullptr);
-  init_magic_table<HOPPER>(CannonTableV, CannonMagicsV, RookDirectionsV, usePrecomputed ? CannonMagicVInit : nullptr);
-  init_magic_table<LAME_LEAPER>(LameDabbabaTable, LameDabbabaMagics, LameDabbabaDirections, usePrecomputed ? LameDabbabaMagicInit : nullptr);
-  init_magic_table<LAME_LEAPER>(HorseTable, HorseMagics, HorseDirections, usePrecomputed ? HorseMagicInit : nullptr);
-  init_magic_table<LAME_LEAPER>(ElephantTable, ElephantMagics, ElephantDirections, usePrecomputed ? ElephantMagicInit : nullptr);
-  init_magic_table<LAME_LEAPER>(JanggiElephantTable, JanggiElephantMagics, JanggiElephantDirections, usePrecomputed ? JanggiElephantMagicInit : nullptr);
-  init_magic_table<HOPPER>(CannonDiagTable, CannonDiagMagics, BishopDirections, usePrecomputed ? CannonDiagMagicInit : nullptr);
-  init_magic_table<RIDER, true>(NightriderTable, NightriderMagics, HorseDirections, usePrecomputed ? NightriderMagicInit : nullptr);
-  init_magic_table<HOPPER>(GrasshopperTableH, GrasshopperMagicsH, GrasshopperDirectionsH, usePrecomputed ? GrasshopperMagicHInit : nullptr);
-  init_magic_table<HOPPER>(GrasshopperTableV, GrasshopperMagicsV, GrasshopperDirectionsV, usePrecomputed ? GrasshopperMagicVInit : nullptr);
-  init_magic_table<HOPPER>(GrasshopperTableD, GrasshopperMagicsD, GrasshopperDirectionsD, usePrecomputed ? GrasshopperMagicDInit : nullptr);
+  init_magic_table<RIDER>(RookTableH, RookMagicsH, RookDirectionsH, cache ? cache->rookH.data() : RookMagicHInit);
+  init_magic_table<RIDER>(RookTableV, RookMagicsV, RookDirectionsV, cache ? cache->rookV.data() : RookMagicVInit);
+  init_magic_table<RIDER>(BishopTable, BishopMagics, BishopDirections, cache ? cache->bishop.data() : BishopMagicInit);
+  init_magic_table<HOPPER>(CannonTableH, CannonMagicsH, RookDirectionsH, cache ? cache->cannonH.data() : CannonMagicHInit);
+  init_magic_table<HOPPER>(CannonTableV, CannonMagicsV, RookDirectionsV, cache ? cache->cannonV.data() : CannonMagicVInit);
+  init_magic_table<LAME_LEAPER>(LameDabbabaTable, LameDabbabaMagics, LameDabbabaDirections, cache ? cache->lameDabbaba.data() : LameDabbabaMagicInit);
+  init_magic_table<LAME_LEAPER>(HorseTable, HorseMagics, HorseDirections, cache ? cache->horse.data() : HorseMagicInit);
+  init_magic_table<LAME_LEAPER>(ElephantTable, ElephantMagics, ElephantDirections, cache ? cache->elephant.data() : ElephantMagicInit);
+  init_magic_table<LAME_LEAPER>(JanggiElephantTable, JanggiElephantMagics, JanggiElephantDirections, cache ? cache->janggiElephant.data() : JanggiElephantMagicInit);
+  init_magic_table<HOPPER>(CannonDiagTable, CannonDiagMagics, BishopDirections, cache ? cache->cannonDiag.data() : CannonDiagMagicInit);
+  init_magic_table<RIDER, true>(NightriderTable, NightriderMagics, HorseDirections, cache ? cache->nightrider.data() : NightriderMagicInit);
+  init_magic_table<HOPPER>(GrasshopperTableH, GrasshopperMagicsH, GrasshopperDirectionsH, cache ? cache->grasshopperH.data() : GrasshopperMagicHInit);
+  init_magic_table<HOPPER>(GrasshopperTableV, GrasshopperMagicsV, GrasshopperDirectionsV, cache ? cache->grasshopperV.data() : GrasshopperMagicVInit);
+  init_magic_table<HOPPER>(GrasshopperTableD, GrasshopperMagicsD, GrasshopperDirectionsD, cache ? cache->grasshopperD.data() : GrasshopperMagicDInit);
 #else
-  init_magic_table<RIDER>(RookTableH, RookMagicsH, RookDirectionsH);
-  init_magic_table<RIDER>(RookTableV, RookMagicsV, RookDirectionsV);
-  init_magic_table<RIDER>(BishopTable, BishopMagics, BishopDirections);
-  init_magic_table<HOPPER>(CannonTableH, CannonMagicsH, RookDirectionsH);
-  init_magic_table<HOPPER>(CannonTableV, CannonMagicsV, RookDirectionsV);
-  init_magic_table<LAME_LEAPER>(LameDabbabaTable, LameDabbabaMagics, LameDabbabaDirections);
-  init_magic_table<LAME_LEAPER>(HorseTable, HorseMagics, HorseDirections);
-  init_magic_table<LAME_LEAPER>(ElephantTable, ElephantMagics, ElephantDirections);
-  init_magic_table<LAME_LEAPER>(JanggiElephantTable, JanggiElephantMagics, JanggiElephantDirections);
-  init_magic_table<HOPPER>(CannonDiagTable, CannonDiagMagics, BishopDirections);
-  init_magic_table<RIDER, true>(NightriderTable, NightriderMagics, HorseDirections);
-  init_magic_table<HOPPER>(GrasshopperTableH, GrasshopperMagicsH, GrasshopperDirectionsH);
-  init_magic_table<HOPPER>(GrasshopperTableV, GrasshopperMagicsV, GrasshopperDirectionsV);
-  init_magic_table<HOPPER>(GrasshopperTableD, GrasshopperMagicsD, GrasshopperDirectionsD);
+  init_magic_table<RIDER>(RookTableH, RookMagicsH, RookDirectionsH, cache ? cache->rookH.data() : nullptr);
+  init_magic_table<RIDER>(RookTableV, RookMagicsV, RookDirectionsV, cache ? cache->rookV.data() : nullptr);
+  init_magic_table<RIDER>(BishopTable, BishopMagics, BishopDirections, cache ? cache->bishop.data() : nullptr);
+  init_magic_table<HOPPER>(CannonTableH, CannonMagicsH, RookDirectionsH, cache ? cache->cannonH.data() : nullptr);
+  init_magic_table<HOPPER>(CannonTableV, CannonMagicsV, RookDirectionsV, cache ? cache->cannonV.data() : nullptr);
+  init_magic_table<LAME_LEAPER>(LameDabbabaTable, LameDabbabaMagics, LameDabbabaDirections, cache ? cache->lameDabbaba.data() : nullptr);
+  init_magic_table<LAME_LEAPER>(HorseTable, HorseMagics, HorseDirections, cache ? cache->horse.data() : nullptr);
+  init_magic_table<LAME_LEAPER>(ElephantTable, ElephantMagics, ElephantDirections, cache ? cache->elephant.data() : nullptr);
+  init_magic_table<LAME_LEAPER>(JanggiElephantTable, JanggiElephantMagics, JanggiElephantDirections, cache ? cache->janggiElephant.data() : nullptr);
+  init_magic_table<HOPPER>(CannonDiagTable, CannonDiagMagics, BishopDirections, cache ? cache->cannonDiag.data() : nullptr);
+  init_magic_table<RIDER, true>(NightriderTable, NightriderMagics, HorseDirections, cache ? cache->nightrider.data() : nullptr);
+  init_magic_table<HOPPER>(GrasshopperTableH, GrasshopperMagicsH, GrasshopperDirectionsH, cache ? cache->grasshopperH.data() : nullptr);
+  init_magic_table<HOPPER>(GrasshopperTableV, GrasshopperMagicsV, GrasshopperDirectionsV, cache ? cache->grasshopperV.data() : nullptr);
+  init_magic_table<HOPPER>(GrasshopperTableD, GrasshopperMagicsD, GrasshopperDirectionsD, cache ? cache->grasshopperD.data() : nullptr);
 #endif
+
+  if (!cache) {
+      MagicNumberCache fresh {};
+      snapshot_magic_numbers(fresh.rookH, RookMagicsH);
+      snapshot_magic_numbers(fresh.rookV, RookMagicsV);
+      snapshot_magic_numbers(fresh.bishop, BishopMagics);
+      snapshot_magic_numbers(fresh.cannonH, CannonMagicsH);
+      snapshot_magic_numbers(fresh.cannonV, CannonMagicsV);
+      snapshot_magic_numbers(fresh.lameDabbaba, LameDabbabaMagics);
+      snapshot_magic_numbers(fresh.horse, HorseMagics);
+      snapshot_magic_numbers(fresh.elephant, ElephantMagics);
+      snapshot_magic_numbers(fresh.janggiElephant, JanggiElephantMagics);
+      snapshot_magic_numbers(fresh.cannonDiag, CannonDiagMagics);
+      snapshot_magic_numbers(fresh.nightrider, NightriderMagics);
+      snapshot_magic_numbers(fresh.grasshopperH, GrasshopperMagicsH);
+      snapshot_magic_numbers(fresh.grasshopperV, GrasshopperMagicsV);
+      snapshot_magic_numbers(fresh.grasshopperD, GrasshopperMagicsD);
+      MagicByBoardSize.emplace(boardKey, std::move(fresh));
+  }
+
   MagicsInitialized = true;
 #else
   (void) maxFile;
