@@ -434,20 +434,6 @@ template<RiderType R>
 inline Bitboard rider_attacks_bb(Square s, Bitboard occupied) {
 
   static_assert(R != NO_RIDER && !(R & (R - 1))); // exactly one bit
-  const Magic& m =  R == RIDER_ROOK_H ? RookMagicsH[s]
-                  : R == RIDER_ROOK_V ? RookMagicsV[s]
-                  : R == RIDER_CANNON_H ? CannonMagicsH[s]
-                  : R == RIDER_CANNON_V ? CannonMagicsV[s]
-                  : R == RIDER_LAME_DABBABA ? LameDabbabaMagics[s]
-                  : R == RIDER_HORSE ? HorseMagics[s]
-                  : R == RIDER_ELEPHANT ? ElephantMagics[s]
-                  : R == RIDER_JANGGI_ELEPHANT ? JanggiElephantMagics[s]
-                  : R == RIDER_CANNON_DIAG ? CannonDiagMagics[s]
-                  : R == RIDER_NIGHTRIDER ? NightriderMagics[s]
-                  : R == RIDER_GRASSHOPPER_H ? GrasshopperMagicsH[s]
-                  : R == RIDER_GRASSHOPPER_V ? GrasshopperMagicsV[s]
-                  : R == RIDER_GRASSHOPPER_D ? GrasshopperMagicsD[s]
-                  : BishopMagics[s];
   if constexpr (R == RIDER_GRIFFON_NH || R == RIDER_GRIFFON_SH || R == RIDER_GRIFFON_EV || R == RIDER_GRIFFON_WV) {
       int r = int(rank_of(s));
       int f = int(file_of(s));
@@ -465,6 +451,21 @@ inline Bitboard rider_attacks_bb(Square s, Bitboard occupied) {
       else
           return rider_attacks_bb<RIDER_ROOK_V>(src, occupied);
   }
+
+  const Magic& m =  R == RIDER_ROOK_H ? RookMagicsH[s]
+                  : R == RIDER_ROOK_V ? RookMagicsV[s]
+                  : R == RIDER_CANNON_H ? CannonMagicsH[s]
+                  : R == RIDER_CANNON_V ? CannonMagicsV[s]
+                  : R == RIDER_LAME_DABBABA ? LameDabbabaMagics[s]
+                  : R == RIDER_HORSE ? HorseMagics[s]
+                  : R == RIDER_ELEPHANT ? ElephantMagics[s]
+                  : R == RIDER_JANGGI_ELEPHANT ? JanggiElephantMagics[s]
+                  : R == RIDER_CANNON_DIAG ? CannonDiagMagics[s]
+                  : R == RIDER_NIGHTRIDER ? NightriderMagics[s]
+                  : R == RIDER_GRASSHOPPER_H ? GrasshopperMagicsH[s]
+                  : R == RIDER_GRASSHOPPER_V ? GrasshopperMagicsV[s]
+                  : R == RIDER_GRASSHOPPER_D ? GrasshopperMagicsD[s]
+                  : BishopMagics[s];
   return m.attacks[m.index(occupied)];
 }
 
