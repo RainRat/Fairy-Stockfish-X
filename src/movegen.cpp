@@ -532,7 +532,8 @@ namespace {
         }
 
         // Special moves
-        if (!restrictToForcedJumper && pos.cambodian_moves() && pos.gates(Us) && Type != CAPTURES)
+        if constexpr (Type != CAPTURES)
+        if (!restrictToForcedJumper && pos.cambodian_moves() && pos.gates(Us))
         {
             if constexpr (Type != EVASIONS)
             if (pos.pieces(Us, KING) & pos.gates(Us))
