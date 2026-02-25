@@ -173,16 +173,21 @@ extern "C" PyObject* pyffish_getSAN(PyObject* self, PyObject *args) {
     int chess960 = false;
     Notation notation = NOTATION_DEFAULT;
     if (!PyArg_ParseTuple(args, "sss|pi", &variant, &fen,  &move, &chess960, &notation)) {
+        Py_XDECREF(moveList);
         return NULL;
     }
     const Variant* v = require_variant(variant);
-    if (!v)
+    if (!v) {
+        Py_XDECREF(moveList);
         return NULL;
+    }
     if (notation == NOTATION_DEFAULT)
         notation = default_notation(v);
     StateListPtr states(new std::deque<StateInfo>(1));
-    if (!buildPosition(pos, states, variant, fen, moveList, chess960))
+    if (!buildPosition(pos, states, variant, fen, moveList, chess960)) {
+        Py_XDECREF(moveList);
         return NULL;
+    }
     std::string moveStr = move;
 
     Py_XDECREF(moveList);
@@ -198,11 +203,14 @@ extern "C" PyObject* pyffish_getSANmoves(PyObject* self, PyObject *args) {
     int chess960 = false;
     Notation notation = NOTATION_DEFAULT;
     if (!PyArg_ParseTuple(args, "ssO!|pi", &variant, &fen, &PyList_Type, &moveList, &chess960, &notation)) {
+        Py_XDECREF(sanMoves);
         return NULL;
     }
     const Variant* v = require_variant(variant);
-    if (!v)
+    if (!v) {
+        Py_XDECREF(sanMoves);
         return NULL;
+    }
     if (notation == NOTATION_DEFAULT)
         notation = default_notation(v);
     StateListPtr states(new std::deque<StateInfo>(1));
@@ -212,6 +220,7 @@ extern "C" PyObject* pyffish_getSANmoves(PyObject* self, PyObject *args) {
     if (!buildPosition(pos, states, variant, fen, emptyMoveList, chess960))
     {
         Py_XDECREF(emptyMoveList);
+        Py_XDECREF(sanMoves);
         return NULL;
     }
     Py_XDECREF(emptyMoveList);
@@ -236,6 +245,7 @@ extern "C" PyObject* pyffish_getSANmoves(PyObject* self, PyObject *args) {
         else
         {
             PyErr_SetString(PyExc_ValueError, (std::string("Invalid move '") + moveStr + "'").c_str());
+            Py_XDECREF(sanMoves);
             return NULL;
         }
     }
@@ -252,12 +262,15 @@ extern "C" PyObject* pyffish_legalMoves(PyObject* self, PyObject *args) {
 
     int chess960 = false;
     if (!PyArg_ParseTuple(args, "ssO!|p", &variant, &fen, &PyList_Type, &moveList, &chess960)) {
+        Py_XDECREF(legalMoves);
         return NULL;
     }
 
     StateListPtr states(new std::deque<StateInfo>(1));
-    if (!buildPosition(pos, states, variant, fen, moveList, chess960))
+    if (!buildPosition(pos, states, variant, fen, moveList, chess960)) {
+        Py_XDECREF(legalMoves);
         return NULL;
+    }
     for (const auto& m : MoveList<LEGAL>(pos))
     {
         PyObject *moveStr;

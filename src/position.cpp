@@ -1684,6 +1684,7 @@ bool Position::legal(Move m) const {
   if (anti_royal_types())
   {
       Square kto = to;
+      Square rfrom = SQ_NONE, rto = SQ_NONE;
       Bitboard occupied = (type_of(m) != DROP ? pieces() ^ from : pieces());
       if (walling_rule() == DUCK)
           occupied ^= st->wallSquares;
@@ -1692,7 +1693,8 @@ bool Position::legal(Move m) const {
       if (type_of(m) == CASTLING)
       {
           kto = make_square(to > from ? castling_kingside_file() : castling_queenside_file(), castling_rank(us));
-          Square rto = kto - (to > from ? EAST : WEST);
+          rfrom = to;
+          rto = kto - (to > from ? EAST : WEST);
           occupied ^= to | rto;
       }
       occupied |= kto;
@@ -1710,6 +1712,8 @@ bool Position::legal(Move m) const {
       }
       if (is_ok(from) && (antiRoyals & from))
           antiRoyals ^= square_bb(from) ^ kto;
+      if (is_ok(rfrom) && (antiRoyals & rfrom))
+          antiRoyals ^= square_bb(rfrom) ^ rto;
       if (type_of(m) == DROP && (anti_royal_types() & type_of(moved_piece(m))))
           antiRoyals |= square_bb(to);
       if (type_of(m) == PROMOTION)
