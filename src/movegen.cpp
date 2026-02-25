@@ -471,10 +471,22 @@ namespace {
     if (forcedSquare != SQ_NONE && pos.forced_jump_continuation() && pos.has_forced_jump_followup())
     {
         Piece forcedPiece = pos.piece_on(forcedSquare);
-        if (forcedPiece != NO_PIECE && color_of(forcedPiece) == Us)
-        {
-            restrictToForcedJumper = true;
-            forcedFromMask = square_bb(forcedSquare);
+        if (forcedPiece != NO_PIECE) {
+            if (color_of(forcedPiece) == Us)
+            {
+                restrictToForcedJumper = true;
+                forcedFromMask = square_bb(forcedSquare);
+            }
+            else
+            {
+                // Opponent must pass while the other side completes a forced jump chain.
+                if (pos.pass(Us) && pos.pieces(Us))
+                {
+                    Square passSq = lsb(pos.pieces(Us));
+                    *moveList++ = make<SPECIAL>(passSq, passSq);
+                }
+                return moveList;
+            }
         }
     }
 
@@ -581,10 +593,10 @@ namespace {
             moveList = make_move_and_gating<NORMAL>(pos, moveList, Us, ksq, pop_lsb(b));
 
         // Passing move by king
-        if (pos.pass(Us))
+        if (!restrictToForcedJumper && pos.pass(Us))
             *moveList++ = make<SPECIAL>(ksq, ksq);
 
-        if ((Type == QUIETS || Type == NON_EVASIONS) && pos.can_castle(Us & ANY_CASTLING))
+        if (!restrictToForcedJumper && (Type == QUIETS || Type == NON_EVASIONS) && pos.can_castle(Us & ANY_CASTLING))
             for (CastlingRights cr : { Us & KING_SIDE, Us & QUEEN_SIDE } )
                 if (!pos.castling_impeded(cr) && pos.can_castle(cr))
                     moveList = make_move_and_gating<CASTLING>(pos, moveList, Us,ksq, pos.castling_rook_square(cr));

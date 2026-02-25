@@ -65,11 +65,6 @@ const Variant* get_variant(const std::string& uciVariant) {
   return variants.find("chess")->second;
 }
 
-const Variant* get_variant_locked(const std::string& uciVariant) {
-  std::lock_guard<std::mutex> lock(variant_state_mutex);
-  return get_variant(uciVariant);
-}
-
 template <bool isUCI>
 inline bool is_move_none(Move move, const std::string& strMove, const Position& pos) {
   if (move == MOVE_NONE) {
@@ -433,17 +428,20 @@ void load_variant_config(std::string variantInitContent) {
 }
 
 bool captures_to_hand(std::string uciVariant) {
-  const Variant* v = get_variant_locked(uciVariant);
+  std::lock_guard<std::mutex> lock(variant_state_mutex);
+  const Variant* v = get_variant(uciVariant);
   return v->captureType != MOVE_OUT;
 }
 
 std::string starting_fen(std::string uciVariant) {
-  const Variant* v = get_variant_locked(uciVariant);
+  std::lock_guard<std::mutex> lock(variant_state_mutex);
+  const Variant* v = get_variant(uciVariant);
   return v->startFen;
 }
 
 int validate_fen(std::string fen, std::string uciVariant, bool chess960) {
-  const Variant* v = get_variant_locked(uciVariant);
+  std::lock_guard<std::mutex> lock(variant_state_mutex);
+  const Variant* v = get_variant(uciVariant);
   return FEN::validate_fen(fen, v, chess960);
 }
 
