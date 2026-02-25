@@ -1375,6 +1375,31 @@ namespace {
         score += make_score(3600, 1000) / (remainingChecks * remainingChecks);
     }
 
+    // Duple-check variants (e.g. Spartan): reward coordinated protection of
+    // the currently critical pseudo-royal set, and penalize exposed pieces.
+    if (pos.variant()->dupleCheck && pos.pseudo_royal_types())
+    {
+        Bitboard critical = 0;
+        for (PieceSet ps = pos.pseudo_royal_types(); ps;)
+        {
+            PieceType pt = pop_lsb(ps);
+            if (pos.count(Us, pt) <= pos.pseudo_royal_count())
+                critical |= pos.pieces(Us, pt);
+        }
+
+        Bitboard attacked = critical & attackedBy[Them][ALL_PIECES];
+        Bitboard defended = critical & attackedBy[Us][ALL_PIECES];
+        int attackedCnt = popcount(attacked);
+        int exposed = popcount(attacked & ~defended);
+        int covered = popcount(defended & ~attacked);
+
+        score += make_score(70, 45) * covered;
+        score -= make_score(140, 90) * exposed;
+        // In duple-check variants, simultaneous pressure on multiple critical
+        // pseudo-royals increases tactical danger even when currently defended.
+        score -= make_score(35, 22) * attackedCnt * attackedCnt;
+    }
+
     // Extinction
     if (pos.extinction_value() != VALUE_NONE)
     {
