@@ -2157,6 +2157,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   newSt.previous = st;
   st = &newSt;
   st->move = m;
+  st->legalCapture = NO_VALUE;
   st->blastPromotedSquares = 0;
   st->bycatchSquares = 0;
 

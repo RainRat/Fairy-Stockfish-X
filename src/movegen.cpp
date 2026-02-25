@@ -428,7 +428,7 @@ namespace {
             *moveList++ = make<PIECE_DEMOTION>(from, pop_lsb(b3));
 
         // Pawn-style promotions
-        if ((Type == CAPTURES || Type == EVASIONS || Type == NON_EVASIONS) && pawnPromotions)
+        if ((Type == CAPTURES || Type == QUIETS || Type == EVASIONS || Type == NON_EVASIONS) && pawnPromotions)
             for (PieceSet ps = pos.promotion_piece_types(Us); ps;)
             {
                 PieceType ptP = pop_msb(ps);
