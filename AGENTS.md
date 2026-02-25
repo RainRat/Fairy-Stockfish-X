@@ -77,6 +77,8 @@ Run: `./stockfish < test.txt > output.txt`
 * Forced-jump continuation followups are cached in `StateInfo::forcedJumpHasFollowup`; in hot legality/movegen paths, prefer the cached state once `forcedJumpSquare`/continuation preconditions are already established.
 * For performance tuning, require swapped-order A/B runs across at least one non-chess variant (prefer `checkers` and `janggi` for jump and fairy coverage). Reject optimizations that improve one variant but regress another.
 * For feature-targeted optimizations (e.g., cambodian specials, non-king castling), benchmark at least one variant that actually uses that feature and run a quick smoke search (`go depth 8`) on that variant before accepting.
+* `bench <variant> ...` does not always accept `checkers` directly in this build path. For checkers performance runs, use UCI setup first (`setoption VariantPath`, `setoption UCI_Variant checkers`) and then run `bench ...` from that session.
+* When benchmark outcomes are unstable, extend validation: use longer depth/time plus more swapped pairs (and optionally `taskset -c 0`) before accepting/rejecting.
 * Comments target experienced developers; don’t change copyright years.
 
 ## 8) Large/complex variants
