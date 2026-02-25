@@ -523,13 +523,14 @@ namespace {
                 moveList = generate_exchanges<Us, Type>(pos, moveList, pop_lsb(ps), target & ~pos.pieces(~Us));
 
         // Castling with non-king piece
-        if (!restrictToForcedJumper && !pos.count<KING>(Us) && Type != CAPTURES && pos.can_castle(Us & ANY_CASTLING))
-        {
-            Square from = pos.castling_king_square(Us);
-            for(CastlingRights cr : { Us & KING_SIDE, Us & QUEEN_SIDE } )
-                if (!pos.castling_impeded(cr) && pos.can_castle(cr))
-                    moveList = make_move_and_gating<CASTLING>(pos, moveList, Us, from, pos.castling_rook_square(cr));
-        }
+        if constexpr (Type != CAPTURES)
+            if (!restrictToForcedJumper && !pos.count<KING>(Us) && pos.can_castle(Us & ANY_CASTLING))
+            {
+                Square from = pos.castling_king_square(Us);
+                for(CastlingRights cr : { Us & KING_SIDE, Us & QUEEN_SIDE } )
+                    if (!pos.castling_impeded(cr) && pos.can_castle(cr))
+                        moveList = make_move_and_gating<CASTLING>(pos, moveList, Us, from, pos.castling_rook_square(cr));
+            }
 
         // Special moves
         if constexpr (Type != CAPTURES)
