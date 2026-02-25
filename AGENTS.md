@@ -74,6 +74,8 @@ Run: `./stockfish < test.txt > output.txt`
 * Extended gating FEN masks (`...|<white>/<black>`) are parsed in `Position::set`; serialization is intentionally emitted for large-board gating cases where legacy castling/gating letters are ambiguous.
 * `checking = false` disables king-safety enforcement and keeps `checkersBB` empty; if a variant still needs king attacks as legal tactical threats (e.g. capturable kings), use `allowChecks = true` (`src/variant.h`) instead of re-enabling full check legality.
 * `allowChecks` is not equivalent to `checking`: when `allowChecks = false`, keep the no-check king-safety path active in legality and state updates. Gating those paths on `checking_permitted()` can silently change no-check variant perft (Racing Kings is a canary).
+* Forced-jump continuation followups are cached in `StateInfo::forcedJumpHasFollowup`; in hot legality/movegen paths, prefer the cached state once `forcedJumpSquare`/continuation preconditions are already established.
+* For performance tuning, require swapped-order A/B runs across at least one non-chess variant (prefer `checkers` and `janggi` for jump and fairy coverage). Reject optimizations that improve one variant but regress another.
 * Comments target experienced developers; don’t change copyright years.
 
 ## 8) Large/complex variants
