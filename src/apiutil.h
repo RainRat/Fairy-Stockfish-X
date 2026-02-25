@@ -565,8 +565,9 @@ inline bool contains(const std::string& str, char c) {
 }
 
 inline Validation check_for_valid_characters(const std::string& firstFenPart, const std::string& validSpecialCharactersFirstField, const Variant* v) {
-    const std::string& pieceChars = v->pieceToChar;
-    const std::string& pieceCharSynonyms = v->pieceToCharSynonyms;
+    const std::string emptyChars;
+    const std::string& pieceChars = v ? v->pieceToChar : emptyChars;
+    const std::string& pieceCharSynonyms = v ? v->pieceToCharSynonyms : emptyChars;
     for (char c : firstFenPart)
     {
         if (c == '+')

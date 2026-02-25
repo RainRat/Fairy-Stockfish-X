@@ -522,6 +522,15 @@ namespace {
             captureTarget |= selfCaptureTargets;
         }
 
+        // During forced jump continuation, only jump captures from the forced
+        // piece are legal. Suppress regular quiet/capture generation here and
+        // let explicit jump-capture emission paths produce candidates.
+        if (restrictToForcedJumper)
+        {
+            target = Bitboard(0);
+            captureTarget = Bitboard(0);
+        }
+
         moveList = generate_pawn_moves<Us, Type>(pos, moveList, target, forcedFromMask);
         for (PieceSet ps = pos.piece_types() & ~(piece_set(PAWN) | KING); ps;)
             moveList = generate_moves<Us, Type>(pos, moveList, pop_lsb(ps), target, captureTarget, forcedFromMask);
