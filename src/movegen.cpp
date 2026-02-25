@@ -461,6 +461,7 @@ namespace {
 
     constexpr bool Checks = Type == QUIET_CHECKS; // Reduce template instantiations
     const Square ksq = pos.count<KING>(Us) ? pos.square<KING>(Us) : SQ_NONE;
+    const Bitboard checkers = pos.checkers();
     Bitboard target;
     Bitboard captureTarget = Bitboard(0);
     Bitboard forcedFromMask = AllSquares;
@@ -478,21 +479,21 @@ namespace {
     }
 
     // Skip generating non-king moves when in double check
-    if (Type != EVASIONS || !more_than_one(pos.checkers() & ~pos.non_sliding_riders()))
+    if (Type != EVASIONS || !more_than_one(checkers & ~pos.non_sliding_riders()))
     {
-        target = Type == EVASIONS     ?  between_bb(ksq, lsb(pos.checkers()))
+        target = Type == EVASIONS     ?  between_bb(ksq, lsb(checkers))
                : Type == NON_EVASIONS ? ~pos.pieces( Us)
                : Type == CAPTURES     ?  pos.pieces(~Us)
                                       : ~pos.pieces(   ); // QUIETS || QUIET_CHECKS
 
         if (Type == EVASIONS)
         {
-            if (pos.checkers() & pos.non_sliding_riders())
+            if (checkers & pos.non_sliding_riders())
                 target = ~pos.pieces(Us);
             // Leaper attacks can not be blocked
-            Square checksq = lsb(pos.checkers());
+            Square checksq = lsb(checkers);
             if (LeaperAttacks[~Us][type_of(pos.piece_on(checksq))][checksq] & pos.square<KING>(Us))
-                target = pos.checkers();
+                target = checkers;
         }
 
         // Remove inaccessible squares (outside board + wall squares)
