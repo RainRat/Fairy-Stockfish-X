@@ -1745,35 +1745,44 @@ make_v:
 
   Value fix_FRC(const Position& pos) {
 
-    // This correction is tuned for 8x8 Chess960 corner geometry.
-    if (pos.max_file() != FILE_H || pos.max_rank() != RANK_8)
+    // Generalize cornered-bishop correction to rectangular boards (e.g. 10x8).
+    if (pos.max_file() < FILE_B || pos.max_rank() < RANK_3)
         return VALUE_ZERO;
 
-    constexpr Bitboard Corners =  Bitboard(1ULL) << SQ_A1 | Bitboard(1ULL) << SQ_H1 | Bitboard(1ULL) << SQ_A8 | Bitboard(1ULL) << SQ_H8;
+    const File maxF = pos.max_file();
+    const Rank maxR = pos.max_rank();
+
+    const Square a1 = make_square(FILE_A, RANK_1);
+    const Square h1 = make_square(maxF, RANK_1);
+    const Square a8 = make_square(FILE_A, maxR);
+    const Square h8 = make_square(maxF, maxR);
+
+    const Bitboard Corners = (Bitboard(1ULL) << a1) | (Bitboard(1ULL) << h1)
+                           | (Bitboard(1ULL) << a8) | (Bitboard(1ULL) << h8);
 
     if (!(pos.pieces(BISHOP) & Corners))
         return VALUE_ZERO;
 
     int correction = 0;
 
-    if (   pos.piece_on(SQ_A1) == W_BISHOP
-        && pos.piece_on(SQ_B2) == W_PAWN)
-        correction += !pos.empty(SQ_B3) ? -CorneredBishop * 4
+    if (   pos.piece_on(a1) == W_BISHOP
+        && pos.piece_on(make_square(FILE_B, RANK_2)) == W_PAWN)
+        correction += !pos.empty(make_square(FILE_B, RANK_3)) ? -CorneredBishop * 4
                                         : -CorneredBishop * 3;
 
-    if (   pos.piece_on(SQ_H1) == W_BISHOP
-        && pos.piece_on(SQ_G2) == W_PAWN)
-        correction += !pos.empty(SQ_G3) ? -CorneredBishop * 4
+    if (   pos.piece_on(h1) == W_BISHOP
+        && pos.piece_on(make_square(File(maxF - 1), RANK_2)) == W_PAWN)
+        correction += !pos.empty(make_square(File(maxF - 1), RANK_3)) ? -CorneredBishop * 4
                                         : -CorneredBishop * 3;
 
-    if (   pos.piece_on(SQ_A8) == B_BISHOP
-        && pos.piece_on(SQ_B7) == B_PAWN)
-        correction += !pos.empty(SQ_B6) ? CorneredBishop * 4
+    if (   pos.piece_on(a8) == B_BISHOP
+        && pos.piece_on(make_square(FILE_B, Rank(maxR - 1))) == B_PAWN)
+        correction += !pos.empty(make_square(FILE_B, Rank(maxR - 2))) ? CorneredBishop * 4
                                         : CorneredBishop * 3;
 
-    if (   pos.piece_on(SQ_H8) == B_BISHOP
-        && pos.piece_on(SQ_G7) == B_PAWN)
-        correction += !pos.empty(SQ_G6) ? CorneredBishop * 4
+    if (   pos.piece_on(h8) == B_BISHOP
+        && pos.piece_on(make_square(File(maxF - 1), Rank(maxR - 1))) == B_PAWN)
+        correction += !pos.empty(make_square(File(maxF - 1), Rank(maxR - 2))) ? CorneredBishop * 4
                                         : CorneredBishop * 3;
 
     return pos.side_to_move() == WHITE ?  Value(correction)
