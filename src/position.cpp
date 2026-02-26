@@ -802,6 +802,7 @@ void Position::set_check_info(StateInfo* si) const {
 /// and sudoku conflicts count for each player
 
 void Position::set_sudoku_conflicts_info(StateInfo* si) const {
+#ifdef SUDOKU_VARIANTS
   if (!var->sudoku) return;
 
   si->sudokuConflictsCount[WHITE] = si->sudokuConflictsCount[BLACK] = 0;
@@ -826,12 +827,16 @@ void Position::set_sudoku_conflicts_info(StateInfo* si) const {
           ++si->sudokuConflictsCount[c];
       }
   }
+#else
+  (void)si;
+#endif
 }
 
 
 /// Position::move_adds_sudoku_conflicts() checks if performing a move leads to a new sudoku conflict
 
 bool Position::move_adds_sudoku_conflicts(Move m) const {
+#ifdef SUDOKU_VARIANTS
   // Note: currently the function is called only for capture moves.
   // That's why it doesn't check for special move types like castling, dropping, etc.
   assert(capture(m));
@@ -865,6 +870,10 @@ bool Position::move_adds_sudoku_conflicts(Move m) const {
   }
 
   return false;
+#else
+  (void)m;
+  return false;
+#endif
 }
 
 

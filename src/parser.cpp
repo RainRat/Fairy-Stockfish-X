@@ -967,11 +967,22 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("diagonalGeneral", v->diagonalGeneral);
     parse_attribute("soldierPromotionRank", v->soldierPromotionRank);
     parse_attribute("flipEnclosedPieces", v->flipEnclosedPieces);
+#ifdef SUDOKU_VARIANTS
     parse_attribute("sudoku", v->sudoku);
     parse_attribute("sudokuBoxWidth", v->sudokuBoxWidth);
     parse_attribute("sudokuBoxHeight", v->sudokuBoxHeight);
     parse_attribute("sudokuAllowedPawns", v->sudokuAllowedPawns);
     parse_attribute("sudokuRoyalConflict", v->sudokuRoyalConflict);
+#else
+    // Consume sudoku keys for compatibility in non-sudoku builds.
+    bool sudoku = false, sudokuRoyalConflict = false;
+    int sudokuBoxWidth = 0, sudokuBoxHeight = 0, sudokuAllowedPawns = 0;
+    parse_attribute("sudoku", sudoku);
+    parse_attribute("sudokuBoxWidth", sudokuBoxWidth);
+    parse_attribute("sudokuBoxHeight", sudokuBoxHeight);
+    parse_attribute("sudokuAllowedPawns", sudokuAllowedPawns);
+    parse_attribute("sudokuRoyalConflict", sudokuRoyalConflict);
+#endif
     // game end
     parse_attribute("nMoveRuleTypes", v->nMoveRuleTypes[WHITE], v->pieceToChar);
     parse_attribute("nMoveRuleTypes", v->nMoveRuleTypes[BLACK], v->pieceToChar);
@@ -1147,6 +1158,7 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
         if (v->flagPieceSafe && v->blastOnCapture)
             std::cerr << "Can not use flagPieceSafe with blastOnCapture (flagPieceSafe uses simple assessment that does not see blast)." << std::endl;
     }
+#ifdef SUDOKU_VARIANTS
     // Check invalid sudoku box sizes
     if (v->sudoku && v->sudokuBoxWidth && v->sudokuBoxHeight)
     {
@@ -1165,6 +1177,7 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
         if (boxesCount > FILE_NB)
             v->sudokuBoxWidth = v->sudokuBoxHeight = 0;
     }
+#endif
     return v;
 }
 

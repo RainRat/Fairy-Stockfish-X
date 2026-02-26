@@ -62,8 +62,10 @@ struct StateInfo {
 
   // Not copied when making a move (will be recomputed anyhow)
   Key        key;
+#ifdef SUDOKU_VARIANTS
   int        sudokuConflictsCount[COLOR_NB];
   int        pieceCountInSudokuHouse[COLOR_NB][PIECE_TYPE_NB][SH_NB][FILE_NB];
+#endif
   Bitboard   checkersBB;
   Piece      unpromotedCapturedPiece;
   Piece      unpromotedBycatch[SQUARE_NB];
@@ -2216,32 +2218,55 @@ inline bool Position::virtual_drops() const {
 }
 
 inline bool Position::sudoku_boxes() const {
+#ifdef SUDOKU_VARIANTS
   assert(var != nullptr);
   return var->sudoku && var->sudokuBoxWidth && var->sudokuBoxHeight;
+#else
+  return false;
+#endif
 }
 
 inline int Position::sudoku_box_of(Square s) const {
+#ifdef SUDOKU_VARIANTS
   assert(var != nullptr);
   assert(sudoku_boxes());
   return rank_of(s) / var->sudokuBoxHeight * (files() / var->sudokuBoxWidth) + file_of(s) / var->sudokuBoxWidth;
+#else
+  (void)s;
+  return 0;
+#endif
 }
 
 inline PieceType Position::piece_type_for_sudoku(Piece pc) const {
+#ifdef SUDOKU_VARIANTS
   assert(var != nullptr);
   PieceType pt = type_of(pc);
   if (var->sudokuRoyalConflict && (pt == KING || pt == COMMONER)) return QUEEN;
   return pt;
+#else
+  return type_of(pc);
+#endif
 }
 
 inline int Position::allowed_sudoku_conflicts(PieceType pt) const {
+#ifdef SUDOKU_VARIANTS
   assert(var != nullptr);
   return pt == PAWN ? var->sudokuAllowedPawns : 1;
+#else
+  (void)pt;
+  return 0;
+#endif
 }
 
 inline int Position::sudoku_conflicts(Color c) const {
+#ifdef SUDOKU_VARIANTS
   assert(var != nullptr);
   assert(st != nullptr);
   return var->sudoku ? st->sudokuConflictsCount[c] : 0;
+#else
+  (void)c;
+  return 0;
+#endif
 }
 
 inline Value Position::material_counting_result() const {
