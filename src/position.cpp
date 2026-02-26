@@ -853,20 +853,39 @@ bool Position::move_adds_sudoku_conflicts(Move m) const {
   int allowed = allowed_sudoku_conflicts(pt);
 
   auto count = st->pieceCountInSudokuHouse[c][pt];
+  int fileRelief = 0, rankRelief = 0, boxRelief = 0;
+
+  // Self-capture of the same sudoku piece type vacates one destination slot.
+  if (self_capture()) {
+      Square capsq = type_of(m) == EN_PASSANT ? capture_square(to)
+                   : is_jump_capture(m)        ? jump_capture_square(from, to)
+                                               : to;
+      if (is_ok(capsq)) {
+          Piece captured = piece_on(capsq);
+          if (captured != NO_PIECE
+              && color_of(captured) == c
+              && piece_type_for_sudoku(captured) == pt)
+          {
+              fileRelief = file_of(capsq) == file_of(to);
+              rankRelief = rank_of(capsq) == rank_of(to);
+              boxRelief = sudoku_boxes() && sudoku_box_of(capsq) == sudoku_box_of(to);
+          }
+      }
+  }
 
   File fromFile = file_of(from);
   File toFile = file_of(to);
-  if (fromFile != toFile && count[SH_FILE][toFile] >= allowed) return true;
+  if (fromFile != toFile && count[SH_FILE][toFile] >= allowed + fileRelief) return true;
 
   Rank fromRank = rank_of(from);
   Rank toRank = rank_of(to);
-  if (fromRank != toRank && count[SH_RANK][toRank] >= allowed) return true;
+  if (fromRank != toRank && count[SH_RANK][toRank] >= allowed + rankRelief) return true;
 
   if (sudoku_boxes())
   {
       int fromBox = sudoku_box_of(from);
       int toBox = sudoku_box_of(to);
-      if (fromBox != toBox && count[SH_BOX][toBox] >= allowed) return true;
+      if (fromBox != toBox && count[SH_BOX][toBox] >= allowed + boxRelief) return true;
   }
 
   return false;
@@ -2721,9 +2740,9 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   if(commit_gates()){
       {
           Rank r = rank_of(from);
-          if(r == RANK_1 && has_committed_piece(WHITE, file_of(from))){
+          if (us == WHITE && r == RANK_1 && has_committed_piece(WHITE, file_of(from))){
               st->removedGatingType = drop_committed_piece(WHITE, file_of(from));
-          } else if(r == max_rank() && has_committed_piece(BLACK, file_of(from))){
+          } else if (us == BLACK && r == max_rank() && has_committed_piece(BLACK, file_of(from))){
               st->removedGatingType = drop_committed_piece(BLACK, file_of(from));
           }
       }
@@ -3235,7 +3254,13 @@ void Position::undo_move(Move m) {
   }
 
   if(commit_gates() && st->removedGatingType > NO_PIECE_TYPE){
-      // Restore the removed committed slot; no board piece should be removed here.
+      Square gateSq = make_square(file_of(from), us == WHITE ? RANK_1 : max_rank());
+      if (piece_on(gateSq) != NO_PIECE)
+      {
+          remove_piece(gateSq);
+          board[gateSq] = NO_PIECE;
+      }
+      // Restore the removed committed slot.
       commit_piece(make_piece(us, st->removedGatingType), file_of(from));
   }
   if (commit_gates() && st->capturedPiece && st->capturedGatingType > NO_PIECE_TYPE){
@@ -3377,6 +3402,11 @@ void Position::do_castling(Color us, Square from, Square& to, Square& rfrom, Squ
   remove_piece(Do ? rfrom : rto);
   board[Do ? from : to] = board[Do ? rfrom : rto] = NO_PIECE; // Since remove_piece doesn't do it for us
   put_piece(castlingKingPiece, Do ? to : from);
+  if (!Do && commit_gates() && st->removedCastlingGatingType > NO_PIECE_TYPE && piece_on(rfrom) != NO_PIECE)
+  {
+      remove_piece(rfrom);
+      board[rfrom] = NO_PIECE;
+  }
   put_piece(castlingRookPiece, Do ? rto : rfrom);
 
   if (!Do && commit_gates() && st->removedCastlingGatingType > NO_PIECE_TYPE) {
