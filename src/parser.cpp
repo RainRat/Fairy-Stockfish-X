@@ -831,10 +831,10 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("petrifyOnCaptureTypes", v->petrifyOnCaptureTypes, v->pieceToChar);
     parse_attribute("petrifyBlastPieces", v->petrifyBlastPieces);
     parse_attribute("removeConnectN", v->removeConnectN);
-    if (v->removeConnectN < 0 || v->removeConnectN > 5) {
+    if (v->removeConnectN < 0 || v->removeConnectN > int(SQUARE_NB)) {
         if (DoCheck)
-            std::cerr << "removeConnectN - Value must be in range [0, 5]. Clamping." << std::endl;
-        v->removeConnectN = std::clamp(v->removeConnectN, 0, 5);
+            std::cerr << "removeConnectN - Value must be in range [0, " << int(SQUARE_NB) << "]. Clamping." << std::endl;
+        v->removeConnectN = std::clamp(v->removeConnectN, 0, int(SQUARE_NB));
     }
     parse_attribute("removeConnectNByType", v->removeConnectNByType);
     parse_attribute("surroundCaptureOpposite", v->surroundCaptureOpposite);
