@@ -37,6 +37,8 @@
 
 namespace Stockfish {
 
+extern Square JumpMidpoint[SQUARE_NB][SQUARE_NB];
+
 /// StateInfo struct stores information needed to restore a Position object to
 /// its previous state when we retract a move. Whenever a move is made on the
 /// board (by calling Position::do_move), a StateInfo object must be passed.
@@ -2014,13 +2016,9 @@ inline Square Position::jump_capture_square(Square from, Square to) const {
   if (mover == NO_PIECE || (!(jumpTypes & ALL_PIECES) && !(jumpTypes & type_of(mover))) || !empty(to))
       return SQ_NONE;
 
-  int df = std::abs(int(file_of(to)) - int(file_of(from)));
-  int dr = std::abs(int(rank_of(to)) - int(rank_of(from)));
-  if (std::max(df, dr) != 2 || !(df == 0 || dr == 0 || df == dr))
+  Square mid = JumpMidpoint[from][to];
+  if (mid == SQ_NONE)
       return SQ_NONE;
-
-  Square mid = make_square(File((int(file_of(from)) + int(file_of(to))) / 2),
-                           Rank((int(rank_of(from)) + int(rank_of(to))) / 2));
   Piece jumped = piece_on(mid);
   if (jumped == NO_PIECE || (color_of(jumped) == color_of(mover) && !self_capture()))
       return SQ_NONE;

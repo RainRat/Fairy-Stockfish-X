@@ -51,6 +51,8 @@ namespace Zobrist {
   Key points[COLOR_NB][MAX_ZOBRIST_POINTS];
 }
 
+Square JumpMidpoint[SQUARE_NB][SQUARE_NB];
+
 
 /// operator<<(Position) returns an ASCII representation of the position
 
@@ -234,6 +236,17 @@ void Position::init() {
   for (Color c : {WHITE, BLACK})
       for (int i = 0; i < Stockfish::Zobrist::MAX_ZOBRIST_POINTS; ++i)
           Zobrist::points[c][i] = rng.rand<Key>();
+
+  for (Square from = SQ_A1; from <= SQ_MAX; ++from)
+      for (Square to = SQ_A1; to <= SQ_MAX; ++to)
+      {
+          int df = std::abs(int(file_of(to)) - int(file_of(from)));
+          int dr = std::abs(int(rank_of(to)) - int(rank_of(from)));
+          JumpMidpoint[from][to] = std::max(df, dr) == 2 && (df == 0 || dr == 0 || df == dr)
+                                 ? make_square(File((int(file_of(from)) + int(file_of(to))) / 2),
+                                               Rank((int(rank_of(from)) + int(rank_of(to))) / 2))
+                                 : SQ_NONE;
+      }
 
   // Prepare the cuckoo tables
   std::memset(cuckoo, 0, sizeof(cuckoo));
