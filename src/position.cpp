@@ -251,7 +251,8 @@ inline int append_dirty(StateInfo* st, Piece pc, Square from, Square to, Piece h
 }
 
 Key Position::reserve_key() const {
-  if (!(piece_drops() || seirawan_gating() || capture_type() == PRISON || two_boards() || prison_pawn_promotion()))
+  if (!(piece_drops() || seirawan_gating() || potions_enabled()
+        || capture_type() == PRISON || two_boards() || prison_pawn_promotion()))
       return 0;
 
   Key k = 0;
@@ -1043,7 +1044,8 @@ void Position::set_state(StateInfo* si) const {
           for (int cnt = 0; cnt < pieceCount[pc]; ++cnt)
               si->materialKey ^= Zobrist::psq[pc][cnt];
 
-          if (piece_drops() || seirawan_gating())
+          if (piece_drops() || seirawan_gating() || potions_enabled()
+              || capture_type() == PRISON || two_boards() || prison_pawn_promotion())
           {
               int n = std::clamp(pieceCountInHand[c][pt], 0, SQUARE_NB - 1);
               si->key ^= Zobrist::inHand[pc][n];
@@ -3264,7 +3266,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
              st->castlingRights &= ~castlingRightsMask[bsq];
              k ^= Zobrist::castling[st->castlingRights];
           }
-          
+
           // Make a wall square where the piece was
           if (bsq == to ? bool(var->petrifyOnCaptureTypes & type_of(bpc)) : var->petrifyBlastPieces)
           {

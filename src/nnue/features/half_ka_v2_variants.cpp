@@ -38,7 +38,7 @@ namespace Stockfish::Eval::NNUE::Features {
 
   // Index of a feature for a given king position and another piece on some square
   inline IndexType HalfKAv2Variants::make_index(Color perspective, Square s, Piece pc, Square ksq, const Position& pos) {
-    return IndexType(orient(perspective, s, pos) + pos.nnue_piece_square_index(perspective, pc) + pos.nnue_king_square_index(ksq));;
+    return IndexType(orient(perspective, s, pos) + pos.nnue_piece_square_index(perspective, pc) + pos.nnue_king_square_index(ksq));
   }
 
   // Index of a feature for a given king position and another piece on some square
