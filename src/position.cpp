@@ -250,6 +250,22 @@ inline int append_dirty(StateInfo* st, Piece pc, Square from, Square to, Piece h
   return idx;
 }
 
+Key Position::reserve_key() const {
+  if (!(piece_drops() || seirawan_gating() || capture_type() == PRISON || two_boards() || prison_pawn_promotion()))
+      return 0;
+
+  Key k = 0;
+  for (Color c : {WHITE, BLACK})
+      for (PieceType pt = PAWN; pt <= KING; ++pt)
+      {
+          Piece pc = make_piece(c, pt);
+          int reserveCount = pieceCountInHand[c][pt] + pieceCountInPrison[~c][pt];
+          k ^= Zobrist::inHand[pc][in_hand_zobrist_index(reserveCount)];
+      }
+
+  return k;
+}
+
 
 /// Position::init() initializes at startup the various arrays used to compute hash keys
 
@@ -1055,6 +1071,10 @@ void Position::set_state(StateInfo* si) const {
           xor_points_bucket(si->key, c, si->pointsCount[c]);
       }
   }
+
+  si->boardKey = si->key ^ reserve_key();
+  si->repetition = 0;
+  si->boardRepetition = 0;
 
 }
 
@@ -3351,6 +3371,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
 
   // Update the key with the final value
   st->key = k;
+  st->boardKey = st->key ^ reserve_key();
   // Calculate checkers bitboard (if move gives check)
   st->checkersBB = !allow_checks() && givesCheck
                  ? attackers_to_king(square<KING>(them), us) & pieces(us)
@@ -3397,6 +3418,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   // occurrence of the same position, negative in the 3-fold case, or zero
   // if the position was not repeated.
   st->repetition = 0;
+  st->boardRepetition = 0;
   int end = captures_to_hand() ? st->pliesFromNull : std::min(st->rule50, st->pliesFromNull);
   if (end >= 4)
   {
@@ -3405,10 +3427,11 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       {
           stp = stp->previous->previous;
           if (stp->key == st->key)
-          {
               st->repetition = stp->repetition ? -i : i;
+          if (stp->boardKey == st->boardKey)
+              st->boardRepetition = stp->boardRepetition ? -i : i;
+          if (st->repetition && st->boardRepetition)
               break;
-          }
       }
   }
 
@@ -4630,14 +4653,15 @@ bool Position::has_game_cycle(int ply) const {
   if (end < 3 || var->nFoldValue != VALUE_DRAW || var->perpetualCheckIllegal || var->materialCounting || var->moveRepetitionIllegal || walling_rule() == DUCK)
     return false;
 
-  Key originalKey = st->key;
+  bool useBoardKey = captures_to_hand();
+  Key originalKey = useBoardKey ? st->boardKey : st->key;
   StateInfo* stp = st->previous;
 
   for (int i = 3; i <= end; i += 2)
   {
       stp = stp->previous->previous;
 
-      Key moveKey = originalKey ^ stp->key;
+      Key moveKey = originalKey ^ (useBoardKey ? stp->boardKey : stp->key);
       if (   (j = H1(moveKey), cuckoo[j] == moveKey)
           || (j = H2(moveKey), cuckoo[j] == moveKey))
       {
@@ -4659,7 +4683,7 @@ bool Position::has_game_cycle(int ply) const {
                   continue;
 
               // For repetitions before or at the root, require one more
-              if (stp->repetition)
+              if (useBoardKey ? stp->boardRepetition : stp->repetition)
                   return true;
           }
       }

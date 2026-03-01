@@ -66,6 +66,7 @@ struct StateInfo {
 
   // Not copied when making a move (will be recomputed anyhow)
   Key        key;
+  Key        boardKey;
 #ifdef SUDOKU_VARIANTS
   int        sudokuConflictsCount[COLOR_NB];
   int        pieceCountInSudokuHouse[COLOR_NB][PIECE_TYPE_NB][SH_NB][FILE_NB];
@@ -98,6 +99,7 @@ struct StateInfo {
   bool       forcedJumpHasFollowup;
   Move       move;
   int        repetition;
+  int        boardRepetition;
   PieceType removedGatingType;
   PieceType removedCastlingGatingType;
   PieceType capturedGatingType;
@@ -458,6 +460,7 @@ private:
   void set_check_info(StateInfo* si) const;
   bool compute_forced_jump_followup(Square s) const;
   bool is_initial_pawn(Piece pc, Square s) const;
+  Key reserve_key() const;
 
   // Other helpers
   void move_piece(Square from, Square to);
