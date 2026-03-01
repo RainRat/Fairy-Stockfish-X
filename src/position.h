@@ -1301,7 +1301,8 @@ inline bool Position::pass(Color c) const {
       && count_in_hand(c, ALL_PIECES) == 0
       && count_in_hand(~c, ALL_PIECES) > 0)
       return true;
-  return var->pass[c] || var->passOnStalemate[c] || var->multimoveOffset;
+  return var->pass[c] || var->passOnStalemate[c]
+      || (var->multimoveOffset && multimove_pass(gamePly));
 }
 
 inline bool Position::pass_until_setup() const {
