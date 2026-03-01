@@ -111,7 +111,7 @@ namespace {
             if (pos.prison_pawn_promotion() && pos.count_in_prison(~c, pt) == 0) {
                 continue;
             }
-            if (!pos.promotion_limit(pt) || pos.promotion_limit(pt) > pos.count(c, pt))
+            if (pos.promotion_allowed(c, pt))
                 moveList = make_move_and_gating<PROMOTION>(pos, moveList, pos.side_to_move(), to - D, to, pt);
         }
         PieceType pt = pos.promoted_piece_type(PAWN);
@@ -305,7 +305,7 @@ namespace {
             for (PieceSet ps = pos.promotion_piece_types(Us); ps;)
             {
                 PieceType pt = pop_msb(ps);
-                if (pos.promotion_limit(pt) && pos.promotion_limit(pt) <= pos.count(Us, pt))
+                if (!pos.promotion_allowed(Us, pt))
                     continue;
                 Bitboard b = ((pos.attacks_from(Us, pt, from) & ~pos.pieces()) | from) & target;
                 while (b)
@@ -379,7 +379,7 @@ namespace {
         Bitboard b1 = b & ~epSquares;
         Bitboard promotion_zone = pos.promotion_zone(Us, Pt);
         PieceType promPt = pos.promoted_piece_type(Pt);
-        Bitboard b2 = promPt && (!pos.promotion_limit(promPt) || pos.promotion_limit(promPt) > pos.count(Us, promPt)) ? b1 : Bitboard(0);
+        Bitboard b2 = promPt && pos.promotion_allowed(Us, promPt) ? b1 : Bitboard(0);
         Bitboard b3 = pos.piece_demotion() && pos.is_promoted(from) ? b1 : Bitboard(0);
         Bitboard pawnPromotions = (pos.promotion_pawn_types(Us) & Pt)
                                 ? (b & (Type == EVASIONS ? target : (~pos.pieces(Us) | (pos.self_capture() ? (pos.pieces(Us) & ~pos.pieces(Us, KING)) : Bitboard(0)))) & promotion_zone)
@@ -456,7 +456,7 @@ namespace {
                 if (pos.prison_pawn_promotion() && pos.count_in_prison(~Us, ptP) == 0) {
                     continue;
                 }
-                if (!pos.promotion_limit(ptP) || pos.promotion_limit(ptP) > pos.count(Us, ptP))
+                if (pos.promotion_allowed(Us, ptP))
                     for (Bitboard promotions = pawnPromotions; promotions; )
                         moveList = make_move_and_gating<PROMOTION>(pos, moveList, pos.side_to_move(), from, pop_lsb(promotions), ptP);
             }

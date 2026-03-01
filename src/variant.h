@@ -63,6 +63,7 @@ struct Variant {
                                             piece_set(QUEEN) | ROOK | BISHOP | KNIGHT};
   bool sittuyinPromotion = false;
   int promotionLimit[PIECE_TYPE_NB] = {}; // 0 means unlimited
+  bool promotionSteal = false;
   PieceType promotedPieceType[PIECE_TYPE_NB] = {};
   bool piecePromotionOnCapture = false;
   bool mandatoryPawnPromotion = true;

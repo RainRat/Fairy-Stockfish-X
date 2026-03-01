@@ -1623,6 +1623,11 @@ bool Position::legal(Move m) const {
   if (from == to && !(is_pass(m) || (type_of(m) == PROMOTION && sittuyin_promotion())))
       return false;
 
+  if (type_of(m) == PROMOTION && !promotion_allowed(us, promotion_type(m)))
+      return false;
+  if (type_of(m) == PIECE_PROMOTION && !promotion_allowed(us, promoted_piece_type(type_of(moved_piece(m)))))
+      return false;
+
   assert(color_of(moved_piece(m)) == us);
   assert(!count<KING>(us) || piece_on(square<KING>(us)) == make_piece(us, KING));
   assert(board_bb() & to);
@@ -2023,6 +2028,11 @@ bool Position::pseudo_legal(const Move m) const {
       return false;
 
   if (from == to && !(is_pass(m) || (type_of(m) == PROMOTION && sittuyin_promotion())))
+      return false;
+
+  if (type_of(m) == PROMOTION && !promotion_allowed(us, promotion_type(m)))
+      return false;
+  if (type_of(m) == PIECE_PROMOTION && !promotion_allowed(us, promoted_piece_type(type_of(pc))))
       return false;
 
   if (forced_jump_continuation() && st->forcedJumpSquare != SQ_NONE)

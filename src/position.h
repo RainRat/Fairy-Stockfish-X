@@ -160,6 +160,7 @@ public:
   PieceSet promotion_piece_types(Color c) const;
   bool sittuyin_promotion() const;
   int promotion_limit(PieceType pt) const;
+  bool promotion_allowed(Color c, PieceType pt) const;
   PieceType promoted_piece_type(PieceType pt) const;
   bool piece_promotion_on_capture() const;
   bool mandatory_pawn_promotion() const;
@@ -631,6 +632,14 @@ inline bool Position::sittuyin_promotion() const {
 inline int Position::promotion_limit(PieceType pt) const {
   assert(var != nullptr);
   return var->promotionLimit[pt];
+}
+
+inline bool Position::promotion_allowed(Color c, PieceType pt) const {
+  if (promotion_limit(pt) && promotion_limit(pt) <= count(c, pt))
+      return false;
+  if (var->promotionSteal && count(~c, pt) == 0)
+      return false;
+  return true;
 }
 
 inline PieceType Position::promoted_piece_type(PieceType pt) const {
