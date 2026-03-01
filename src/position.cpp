@@ -1388,7 +1388,7 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
   // Use a faster version for variants with moderate rule variations
   if (fast_attacks())
   {
-      return  (pawn_attacks_bb(~c, s)          & pieces(c, PAWN) & ~pawnCannotCheckZone[c])
+      return  (pawn_attacks_bb(~c, s)          & pieces(c, PAWN))
             | (attacks_bb<KNIGHT>(s)           & pieces(c, KNIGHT, ARCHBISHOP, CHANCELLOR))
             | (attacks_bb<  ROOK>(s, occupied) & pieces(c, ROOK, QUEEN, CHANCELLOR))
             | (attacks_bb<BISHOP>(s, occupied) & pieces(c, BISHOP, QUEEN, ARCHBISHOP))
@@ -1460,6 +1460,7 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
 Bitboard Position::attackers_to_king(Square s, Bitboard occupied, Color c, Bitboard janggiCannons) const {
 
   Bitboard attackers = attackers_to(s, occupied, c, janggiCannons);
+  attackers &= ~(pieces(c, PAWN) & pawnCannotCheckZone[c]);
   PieceSet forbiddenToKing = var->captureForbiddenToKing;
   if (!attackers || !forbiddenToKing)
       return attackers;
