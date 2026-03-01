@@ -1668,11 +1668,12 @@ bool Position::legal(Move m) const {
   if (((!checking_permitted() && !allow_checks()) || (sittuyin_promotion() && type_of(m) == PROMOTION) || (!drop_checks() && type_of(m) == DROP)) && gives_check(m))
       return false;
 
-  // Shogi rule: pawn-drop mate is illegal.
-  if (   var->shogiPawnDropMateIllegal
-      && type_of(m) == DROP
-      && type_of(moved_piece(m)) == SHOGI_PAWN
-      && gives_check(m))
+  // Optional rule: disallow checkmate by drops.
+  // Shogi pawn-drop mate rule is a stricter piece-specific version.
+  if (   type_of(m) == DROP
+      && gives_check(m)
+      && (   !drop_mates()
+          || (var->shogiPawnDropMateIllegal && type_of(moved_piece(m)) == SHOGI_PAWN)))
   {
       StateInfo setupState, nextState;
       Position p;

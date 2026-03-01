@@ -114,6 +114,7 @@ struct Variant {
   bool checking = true;
   bool allowChecks = false;
   bool dropChecks = true;
+  bool dropMates = true;
   bool mustCapture = false;
   bool selfCapture = false;
   bool mustDrop = false;

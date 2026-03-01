@@ -214,6 +214,7 @@ public:
   bool checking_permitted() const;
   bool allow_checks() const;
   bool drop_checks() const;
+  bool drop_mates() const;
   bool self_capture() const;
   bool capture_morph() const;
   bool rex_exclusive_morph() const;
@@ -947,6 +948,11 @@ inline bool Position::fast_attacks2() const {
 inline bool Position::drop_checks() const {
   assert(var != nullptr);
   return var->dropChecks;
+}
+
+inline bool Position::drop_mates() const {
+  assert(var != nullptr);
+  return var->dropMates;
 }
 
 inline bool Position::self_capture() const {

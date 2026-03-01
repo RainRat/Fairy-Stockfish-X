@@ -892,6 +892,7 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("checking", v->checking);
     parse_attribute("allowChecks", v->allowChecks);
     parse_attribute("dropChecks", v->dropChecks);
+    parse_attribute("dropMates", v->dropMates);
     parse_attribute("mustCapture", v->mustCapture);
     parse_attribute("selfCapture", v->selfCapture);
     parse_attribute("captureMorph", v->captureMorph);
