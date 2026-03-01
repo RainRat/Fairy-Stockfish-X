@@ -953,6 +953,12 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("seirawanGating", v->seirawanGating);
     parse_attribute("commitGates", v->commitGates);
     parse_attribute("jumpCaptureTypes", v->jumpCaptureTypes, v->pieceToChar);
+    if (v->jumpCaptureTypes & PAWN)
+    {
+        if (DoCheck)
+            std::cerr << "jumpCaptureTypes - PAWN is not supported for jump captures and will be ignored." << std::endl;
+        v->jumpCaptureTypes &= ~piece_set(PAWN);
+    }
     parse_attribute("forcedJumpContinuation", v->forcedJumpContinuation);
     parse_attribute("cambodianMoves", v->cambodianMoves);
     parse_attribute("diagonalLines", v->diagonalLines);
