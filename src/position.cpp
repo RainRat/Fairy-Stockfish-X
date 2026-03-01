@@ -493,7 +493,7 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
               ++commitFile;
           }
           else{
-              put_piece(Piece(idx), sq, token == '~');
+              put_piece(Piece(idx), sq, token == '~', NO_PIECE, true);
               ++sq;
           }
       }
@@ -507,7 +507,7 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
             ++commitFile;
           }
           else {
-            put_piece(make_piece(color_of(Piece(idx)), promoted_piece_type(type_of(Piece(idx)))), sq, true, Piece(idx));
+            put_piece(make_piece(color_of(Piece(idx)), promoted_piece_type(type_of(Piece(idx)))), sq, true, Piece(idx), true);
             ++sq;
           }
       }

@@ -450,7 +450,7 @@ public:
   // Used by NNUE
   StateInfo* state() const;
 
-  void put_piece(Piece pc, Square s, bool isPromoted = false, Piece unpromotedPc = NO_PIECE);
+  void put_piece(Piece pc, Square s, bool isPromoted = false, Piece unpromotedPc = NO_PIECE, bool markNotMoved = false);
   void remove_piece(Square s);
 
 private:
@@ -2198,7 +2198,7 @@ inline Thread* Position::this_thread() const {
   return thisThread;
 }
 
-inline void Position::put_piece(Piece pc, Square s, bool isPromoted, Piece unpromotedPc) {
+inline void Position::put_piece(Piece pc, Square s, bool isPromoted, Piece unpromotedPc, bool markNotMoved) {
 
   board[s] = pc;
   byTypeBB[ALL_PIECES] |= byTypeBB[type_of(pc)] |= s;
@@ -2210,8 +2210,8 @@ inline void Position::put_piece(Piece pc, Square s, bool isPromoted, Piece unpro
       promotedPieces |= s;
   unpromotedBoard[s] = unpromotedPc;
 
-  //Adding new pieces will make it as a not-moved-piece
-  this->st->not_moved_pieces[color_of(pc)] |= square_bb(s);
+  if (markNotMoved)
+      this->st->not_moved_pieces[color_of(pc)] |= square_bb(s);
 }
 
 inline void Position::remove_piece(Square s) {
