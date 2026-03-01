@@ -71,6 +71,10 @@ const std::array<std::string, 12> THAI_RANKS = {"๑", "๒", "๓", "๔", "๕
 
 namespace SAN {
 
+inline bool use_extended_janggi_coordinates(const Position& pos) {
+    return pos.files() > 10 || pos.ranks() > 10;
+}
+
 enum Disambiguation {
     NO_DISAMBIGUATION,
     FILE_DISAMBIGUATION,
@@ -149,7 +153,9 @@ inline std::string file(const Position& pos, Square s, Notation n) {
     case NOTATION_SHOGI_HODGES_NUMBER:
         return std::to_string(pos.max_file() - file_of(s) + 1);
     case NOTATION_JANGGI:
-        return std::to_string(file_of(s) + 1);
+        return use_extended_janggi_coordinates(pos)
+            ? std::string(1, char('a' + file_of(s)))
+            : std::to_string(file_of(s) + 1);
     case NOTATION_XIANGQI_WXF:
         return std::to_string((pos.side_to_move() == WHITE ? pos.max_file() - file_of(s) : file_of(s)) + 1);
     case NOTATION_THAI_SAN:
@@ -170,6 +176,9 @@ inline std::string rank(const Position& pos, Square s, Notation n) {
         return std::string(1, char('a' + pos.max_rank() - rank_of(s)));
     case NOTATION_JANGGI:
     {
+        if (use_extended_janggi_coordinates(pos))
+            return std::to_string(rank_of(s) + 1);
+
         int boardHeight = pos.ranks();
         int rawRank = pos.max_rank() - rank_of(s) + 1;
         // Janggi notation uses 0 for the back rank on 10-rank boards.
@@ -198,7 +207,9 @@ inline std::string square(const Position& pos, Square s, Notation n) {
     switch (n)
     {
     case NOTATION_JANGGI:
-        return rank(pos, s, n) + file(pos, s, n);
+        return use_extended_janggi_coordinates(pos)
+            ? file(pos, s, n) + rank(pos, s, n)
+            : rank(pos, s, n) + file(pos, s, n);
     default:
         return file(pos, s, n) + rank(pos, s, n);
     }
