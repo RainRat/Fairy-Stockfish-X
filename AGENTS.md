@@ -79,6 +79,7 @@ Run: `./stockfish < test.txt > output.txt`
 * For feature-targeted optimizations (e.g., cambodian specials, non-king castling), benchmark at least one variant that actually uses that feature and run a quick smoke search (`go depth 8`) on that variant before accepting.
 * `bench <variant> ...` does not always accept `checkers` directly in this build path. For checkers performance runs, use UCI setup first (`setoption VariantPath`, `setoption UCI_Variant checkers`) and then run `bench ...` from that session.
 * When benchmark outcomes are unstable, extend validation: use longer depth/time plus more swapped pairs (and optionally `taskset -c 0`) before accepting/rejecting.
+* When integrating large upstream/fork PRs by cherry-pick, expect conflicts in hot files (`position.*`, `movegen.cpp`, `parser.cpp`, `test.py`). Resolve by preserving local engine invariants first (forced-jump, gating/undo consistency, custom attack paths), then layering the feature logic; run at least one variant-specific smoke test before push.
 * Comments target experienced developers; don’t change copyright years.
 
 ## 8) Large/complex variants
