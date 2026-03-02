@@ -412,47 +412,117 @@ inline Bitboard fixed_step_between_bb(Square s1, Square s2, int stepF, int stepR
   return make_path(stepF, stepR);
 }
 
+inline Bitboard bent_slider_between_bb(Square s1, Square s2, int pivotF, int pivotR, bool allowHorizontal, bool allowVertical) {
+  int f0 = int(file_of(s1));
+  int r0 = int(rank_of(s1));
+  int pf = f0 + pivotF;
+  int pr = r0 + pivotR;
+  if (pf < int(FILE_A) || pf > int(FILE_MAX) || pr < int(RANK_1) || pr > int(RANK_MAX))
+      return Bitboard(0);
+
+  int tf = int(file_of(s2));
+  int tr = int(rank_of(s2));
+  if (tf == pf && tr == pr)
+      return Bitboard(0);
+
+  Bitboard path = square_bb(make_square(File(pf), Rank(pr)));
+
+  if (allowHorizontal && tr == pr)
+  {
+      int step = tf > pf ? 1 : -1;
+      for (int f = pf + step;; f += step)
+      {
+          if (f < int(FILE_A) || f > int(FILE_MAX))
+              return Bitboard(0);
+          path |= square_bb(make_square(File(f), Rank(pr)));
+          if (f == tf)
+              return path;
+      }
+  }
+
+  if (allowVertical && tf == pf)
+  {
+      int step = tr > pr ? 1 : -1;
+      for (int r = pr + step;; r += step)
+      {
+          if (r < int(RANK_1) || r > int(RANK_MAX))
+              return Bitboard(0);
+          path |= square_bb(make_square(File(pf), Rank(r)));
+          if (r == tr)
+              return path;
+      }
+  }
+
+  return Bitboard(0);
+}
+
 inline Bitboard between_bb(Square s1, Square s2, PieceType pt) {
   RiderType r = AttackRiderTypes[pt];
+  Bitboard path = Bitboard(0);
 
-  if (r & RIDER_HORSE)
-      return PseudoAttacks[WHITE][WAZIR][s2] & PseudoAttacks[WHITE][FERS][s1];
-  else if (r & RIDER_ELEPHANT)
+  if ((r & RIDER_HORSE) && (path = PseudoAttacks[WHITE][WAZIR][s2] & PseudoAttacks[WHITE][FERS][s1]))
+      return path;
+
+  if (r & RIDER_ELEPHANT)
   {
       for (auto [sf, sr] : { std::pair<int, int>{ 2, 2}, { 2,-2}, {-2, 2}, {-2,-2} })
       {
-          Bitboard path = fixed_step_between_bb(s1, s2, sf, sr);
-          if (path)
+          if ((path = fixed_step_between_bb(s1, s2, sf, sr)))
               return path;
       }
-      return PseudoAttacks[WHITE][FERS][s2] & PseudoAttacks[WHITE][FERS][s1];
+      if ((path = PseudoAttacks[WHITE][FERS][s2] & PseudoAttacks[WHITE][FERS][s1]))
+          return path;
   }
-  else if (r & RIDER_LAME_DABBABA)
+
+  if (r & RIDER_LAME_DABBABA)
   {
       for (auto [sf, sr] : { std::pair<int, int>{ 2, 0}, {-2, 0}, { 0, 2}, { 0,-2} })
       {
-          Bitboard path = fixed_step_between_bb(s1, s2, sf, sr);
-          if (path)
+          if ((path = fixed_step_between_bb(s1, s2, sf, sr)))
               return path;
       }
-      return PseudoAttacks[WHITE][WAZIR][s2] & PseudoAttacks[WHITE][WAZIR][s1];
+      if ((path = PseudoAttacks[WHITE][WAZIR][s2] & PseudoAttacks[WHITE][WAZIR][s1]))
+          return path;
   }
-  else if (r & RIDER_JANGGI_ELEPHANT)
-      return  (PseudoAttacks[WHITE][WAZIR][s2] & PseudoAttacks[WHITE][ALFIL][s1])
-            | (PseudoAttacks[WHITE][KNIGHT][s2] & PseudoAttacks[WHITE][FERS][s1]);
-  else if (r & (RIDER_SKI_ROOK_H | RIDER_SKI_ROOK_V | RIDER_SKI_BISHOP))
+
+  if ((r & RIDER_JANGGI_ELEPHANT) && (path =  (PseudoAttacks[WHITE][WAZIR][s2] & PseudoAttacks[WHITE][ALFIL][s1])
+                                             | (PseudoAttacks[WHITE][KNIGHT][s2] & PseudoAttacks[WHITE][FERS][s1])))
+      return path;
+
+  if (r & (RIDER_SKI_ROOK_H | RIDER_SKI_ROOK_V | RIDER_SKI_BISHOP))
   {
-      Bitboard path = between_bb(s1, s2);
+      path = between_bb(s1, s2);
       // Ski sliders ignore the first square in front of the attacker.
-      return path & ~PseudoAttacks[WHITE][KING][s2];
+      path &= ~PseudoAttacks[WHITE][KING][s2];
+      if (path)
+          return path;
   }
-  else if (r & RIDER_NIGHTRIDER)
+
+  if (r & RIDER_NIGHTRIDER)
   {
-      Bitboard path = nightrider_between_bb(s1, s2);
-      return path ? path : between_bb(s1, s2);
+      if ((path = nightrider_between_bb(s1, s2)))
+          return path;
   }
-  else
-      return between_bb(s1, s2);
+
+  if ((r & RIDER_GRIFFON_NH) && (path = bent_slider_between_bb(s1, s2, 0, 1, true, false)))
+      return path;
+  if ((r & RIDER_GRIFFON_SH) && (path = bent_slider_between_bb(s1, s2, 0, -1, true, false)))
+      return path;
+  if ((r & RIDER_GRIFFON_EV) && (path = bent_slider_between_bb(s1, s2, 1, 0, false, true)))
+      return path;
+  if ((r & RIDER_GRIFFON_WV) && (path = bent_slider_between_bb(s1, s2, -1, 0, false, true)))
+      return path;
+
+  if ((r & RIDER_MANTICORE_NE) && (path = bent_slider_between_bb(s1, s2, 1, 1, true, true)))
+      return path;
+  if ((r & RIDER_MANTICORE_NW) && (path = bent_slider_between_bb(s1, s2, -1, 1, true, true)))
+      return path;
+  if ((r & RIDER_MANTICORE_SE) && (path = bent_slider_between_bb(s1, s2, 1, -1, true, true)))
+      return path;
+  if ((r & RIDER_MANTICORE_SW) && (path = bent_slider_between_bb(s1, s2, -1, -1, true, true)))
+      return path;
+
+  return between_bb(s1, s2);
 }
 
 

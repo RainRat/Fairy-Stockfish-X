@@ -480,8 +480,6 @@ void Bitboards::init_pieces() {
                           riderTypes |= RIDER_SKI_ROOK_V;
                       continue;
                   }
-                  if (limit == MAX_SLIDER_LIMIT)
-                      continue;
                   if (BishopDirections.find(d) != BishopDirections.end())
                       riderTypes |= RIDER_BISHOP;
                   if (RookDirectionsH.find(d) != RookDirectionsH.end())
