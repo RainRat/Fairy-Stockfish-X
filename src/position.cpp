@@ -4967,7 +4967,7 @@ void Position::updatePawnCheckZone() {
                     break;
                 }
             }
-            Bitboard pz = promotion_zone(color);
+            Bitboard pz = promotion_zone(color, PAWN);
             pawnCannotCheckZone[color] = canPromotion
                     ? Bitboard(0)
                     : color == WHITE ? shift(SOUTH, pz) : shift(NORTH, pz);
