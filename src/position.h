@@ -1923,6 +1923,9 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s) const {
   if (spellContextActive && c == sideToMove)
       occupancy &= ~spellJumpRemoved;
 
+  if ((fast_attacks() || fast_attacks2()) && (pt != KING || king_type() == KING))
+      return attacks_bb(c, pt, s, occupancy) & board_bb();
+
   PieceType movePt = pt == KING ? king_type() : pt;
   auto it = pieceMap.find(movePt);
   assert(it != pieceMap.end());
@@ -2028,6 +2031,9 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
   Bitboard occupancy = byTypeBB[ALL_PIECES];
   if (spellContextActive && c == sideToMove)
       occupancy &= ~spellJumpRemoved;
+
+  if ((fast_attacks() || fast_attacks2()) && (pt != KING || king_type() == KING))
+      return (moves_bb(c, pt, s, occupancy) | extraDestinations) & board_bb();
 
   PieceType movePt = pt == KING ? king_type() : pt;
   auto it = pieceMap.find(movePt);
