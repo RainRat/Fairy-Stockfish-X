@@ -87,7 +87,7 @@ namespace {
               }
               bool groupAtomsOnly = true;
               for (char gc : content)
-                  if (leaperAtoms.find(gc) == leaperAtoms.end() && riderAtoms.find(gc) == riderAtoms.end() && gc != 'U' && gc != 'O')
+                  if (leaperAtoms.find(gc) == leaperAtoms.end() && riderAtoms.find(gc) == riderAtoms.end() && gc != 'U' && gc != 'O' && gc != 'M')
                   {
                       groupAtomsOnly = false;
                       break;
@@ -263,6 +263,39 @@ namespace {
           distance = 0;
       };
 
+      auto commit_manticore = [&]() {
+          // Keep first implementation strict: unqualified M only.
+          if (!prelimDirections.empty() || hopper || lame || dynamicDistance || rider)
+          {
+              moveModalities.clear();
+              prelimDirections.clear();
+              hopper = false;
+              rider = false;
+              lame = false;
+              initial = false;
+              dynamicDistance = false;
+              standaloneH = false;
+              distance = 0;
+              return;
+          }
+          if (moveModalities.size() == 0)
+          {
+              moveModalities.push_back(MODALITY_QUIET);
+              moveModalities.push_back(MODALITY_CAPTURE);
+          }
+          for (auto modality : moveModalities)
+              p->manticore[initial][modality] = true;
+          moveModalities.clear();
+          prelimDirections.clear();
+          hopper = false;
+          rider = false;
+          lame = false;
+          initial = false;
+          dynamicDistance = false;
+          standaloneH = false;
+          distance = 0;
+      };
+
       for (std::string::size_type i = 0; i < expandedBetza.size(); i++)
       {
           char c = expandedBetza[i];
@@ -333,6 +366,9 @@ namespace {
           // Griffon bent slider (one orthogonal step, then slide perpendicular)
           else if (c == 'O')
               commit_griffon();
+          // Manticore bent slider (one diagonal step, then rook-like slide)
+          else if (c == 'M')
+              commit_manticore();
           // Tuple leaper atom: (x,y)
           else if (c == '(')
           {

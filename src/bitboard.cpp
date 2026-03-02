@@ -320,6 +320,26 @@ Bitboard rider_attacks_bb(RiderType R, Square s, Bitboard occupied) {
       Square src = shifted_source(WEST);
       return src == SQ_NONE ? Bitboard(0) : sliding_attack<RIDER>(RookDirectionsV, src, occupied);
   }
+  case RIDER_MANTICORE_NE: {
+      Square src = shifted_source(NORTH_EAST);
+      return src == SQ_NONE ? Bitboard(0)
+                            : sliding_attack<RIDER>(RookDirectionsH, src, occupied) | sliding_attack<RIDER>(RookDirectionsV, src, occupied);
+  }
+  case RIDER_MANTICORE_NW: {
+      Square src = shifted_source(NORTH_WEST);
+      return src == SQ_NONE ? Bitboard(0)
+                            : sliding_attack<RIDER>(RookDirectionsH, src, occupied) | sliding_attack<RIDER>(RookDirectionsV, src, occupied);
+  }
+  case RIDER_MANTICORE_SE: {
+      Square src = shifted_source(SOUTH_EAST);
+      return src == SQ_NONE ? Bitboard(0)
+                            : sliding_attack<RIDER>(RookDirectionsH, src, occupied) | sliding_attack<RIDER>(RookDirectionsV, src, occupied);
+  }
+  case RIDER_MANTICORE_SW: {
+      Square src = shifted_source(SOUTH_WEST);
+      return src == SQ_NONE ? Bitboard(0)
+                            : sliding_attack<RIDER>(RookDirectionsH, src, occupied) | sliding_attack<RIDER>(RookDirectionsV, src, occupied);
+  }
   default: return Bitboard(0);
   }
 }
@@ -423,6 +443,8 @@ void Bitboards::init_pieces() {
               }
               if (pi->griffon[initial][modality])
                   riderTypes |= RIDER_GRIFFON_NH | RIDER_GRIFFON_SH | RIDER_GRIFFON_EV | RIDER_GRIFFON_WV;
+              if (pi->manticore[initial][modality])
+                  riderTypes |= RIDER_MANTICORE_NE | RIDER_MANTICORE_NW | RIDER_MANTICORE_SE | RIDER_MANTICORE_SW;
           }
       }
 
@@ -469,6 +491,11 @@ void Bitboards::init_pieces() {
                                   | rider_attacks_bb<RIDER_GRIFFON_SH>(s, Bitboard(0))
                                   | rider_attacks_bb<RIDER_GRIFFON_EV>(s, Bitboard(0))
                                   | rider_attacks_bb<RIDER_GRIFFON_WV>(s, Bitboard(0));
+                      if (pi->manticore[initial][modality])
+                          pseudo |= rider_attacks_bb<RIDER_MANTICORE_NE>(s, Bitboard(0))
+                                  | rider_attacks_bb<RIDER_MANTICORE_NW>(s, Bitboard(0))
+                                  | rider_attacks_bb<RIDER_MANTICORE_SE>(s, Bitboard(0))
+                                  | rider_attacks_bb<RIDER_MANTICORE_SW>(s, Bitboard(0));
                   }
               }
           }

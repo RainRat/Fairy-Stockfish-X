@@ -722,6 +722,12 @@ enum RiderType : int {
   RIDER_GRIFFON_SH = 1 << 15,
   RIDER_GRIFFON_EV = 1 << 16,
   RIDER_GRIFFON_WV = 1 << 17,
+  // Bent-slider (Manticore-like) internal rider legs.
+  // One diagonal source step, then rook-like slide from that source.
+  RIDER_MANTICORE_NE = 1 << 18,
+  RIDER_MANTICORE_NW = 1 << 19,
+  RIDER_MANTICORE_SE = 1 << 20,
+  RIDER_MANTICORE_SW = 1 << 21,
   HOPPING_RIDERS =  RIDER_CANNON_H | RIDER_CANNON_V | RIDER_CANNON_DIAG
                   | RIDER_GRASSHOPPER_H | RIDER_GRASSHOPPER_V | RIDER_GRASSHOPPER_D,
   LAME_LEAPERS = RIDER_LAME_DABBABA | RIDER_HORSE | RIDER_ELEPHANT | RIDER_JANGGI_ELEPHANT,

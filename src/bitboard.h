@@ -501,6 +501,20 @@ inline Bitboard rider_attacks_bb(Square s, Bitboard occupied) {
       else
           return rider_attacks_bb<RIDER_ROOK_V>(src, occupied);
   }
+  if constexpr (R == RIDER_MANTICORE_NE || R == RIDER_MANTICORE_NW || R == RIDER_MANTICORE_SE || R == RIDER_MANTICORE_SW) {
+      int r = int(rank_of(s));
+      int f = int(file_of(s));
+      if constexpr (R == RIDER_MANTICORE_NE) { ++r; ++f; }
+      if constexpr (R == RIDER_MANTICORE_NW) { ++r; --f; }
+      if constexpr (R == RIDER_MANTICORE_SE) { --r; ++f; }
+      if constexpr (R == RIDER_MANTICORE_SW) { --r; --f; }
+      if (r < 0 || r > int(RANK_MAX) || f < 0 || f > int(FILE_MAX))
+          return Bitboard(0);
+      Square src = make_square(File(f), Rank(r));
+      if (occupied & src)
+          return Bitboard(0);
+      return rider_attacks_bb<RIDER_ROOK_H>(src, occupied) | rider_attacks_bb<RIDER_ROOK_V>(src, occupied);
+  }
   if constexpr (R == RIDER_LAME_DABBABA)
       return rider_attacks_bb<RIDER_ROOK_H>(s, occupied) | rider_attacks_bb<RIDER_ROOK_V>(s, occupied);
   if constexpr (R == RIDER_ELEPHANT)
@@ -536,6 +550,10 @@ inline Bitboard rider_attacks_bb(RiderType R, Square s, Bitboard occupied) {
   if (R == RIDER_GRIFFON_SH) return rider_attacks_bb<RIDER_GRIFFON_SH>(s, occupied);
   if (R == RIDER_GRIFFON_EV) return rider_attacks_bb<RIDER_GRIFFON_EV>(s, occupied);
   if (R == RIDER_GRIFFON_WV) return rider_attacks_bb<RIDER_GRIFFON_WV>(s, occupied);
+  if (R == RIDER_MANTICORE_NE) return rider_attacks_bb<RIDER_MANTICORE_NE>(s, occupied);
+  if (R == RIDER_MANTICORE_NW) return rider_attacks_bb<RIDER_MANTICORE_NW>(s, occupied);
+  if (R == RIDER_MANTICORE_SE) return rider_attacks_bb<RIDER_MANTICORE_SE>(s, occupied);
+  if (R == RIDER_MANTICORE_SW) return rider_attacks_bb<RIDER_MANTICORE_SW>(s, occupied);
   const Magic& m = magics[lsb(R)][s]; // re-use Bitboard lsb for riders
   return m.attacks[m.index(occupied)];
 }
