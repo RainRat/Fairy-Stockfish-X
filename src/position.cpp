@@ -878,7 +878,14 @@ void Position::set_check_info(StateInfo* si) const {
   {
       PieceType pt = pop_lsb(ps);
       PieceType movePt = pt == KING ? king_type() : pt;
-      si->checkSquares[pt] = ksq != SQ_NONE ? attacks_bb(~sideToMove, movePt, ksq, pieces()) : Bitboard(0);
+      if (ksq == SQ_NONE)
+          si->checkSquares[pt] = Bitboard(0);
+      else if (AttackRiderTypes[movePt] & ASYMMETRICAL_RIDERS)
+          // For asymmetrical riders (e.g. horse-like), use occupancy-independent
+          // retro candidates as a cheap prefilter in gives_check().
+          si->checkSquares[pt] = PseudoAttacks[~sideToMove][movePt][ksq];
+      else
+          si->checkSquares[pt] = attacks_bb(~sideToMove, movePt, ksq, pieces());
       // Collect special piece types that require slower check and evasion detection
       if (AttackRiderTypes[movePt] & NON_SLIDING_RIDERS)
           si->nonSlidingRiders |= pieces(pt);
@@ -2307,9 +2314,14 @@ bool Position::gives_check(Move m) const {
               if (attacks_bb(sideToMove, pt, to, occupied) & attacks_bb(sideToMove, pt, to, occupied & ~janggiCannons) & square<KING>(~sideToMove))
                   return true;
           }
-          else if (AttackRiderTypes[pt] & (HOPPING_RIDERS | ASYMMETRICAL_RIDERS))
+          else if (AttackRiderTypes[pt] & HOPPING_RIDERS)
           {
               if (attacks_bb(sideToMove, pt, to, occupied) & square<KING>(~sideToMove))
+                  return true;
+          }
+          else if (AttackRiderTypes[pt] & ASYMMETRICAL_RIDERS)
+          {
+              if ((check_squares(pt) & to) && (attacks_bb(sideToMove, pt, to, occupied) & square<KING>(~sideToMove)))
                   return true;
           }
           else if (check_squares(pt) & to)
