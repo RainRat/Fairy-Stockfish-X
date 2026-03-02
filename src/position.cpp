@@ -77,6 +77,12 @@ namespace {
   };
 
   inline Bitboard retro_asymmetric_check_squares(Color attacker, PieceType pt, Square kingSq, Bitboard occupied) {
+    // Narrow retro handling to horse-family pieces for now; other asymmetrical
+    // rider types keep pseudo-candidate behavior until they have dedicated
+    // retro attack generation.
+    if (pt != HORSE && pt != JANGGI_ELEPHANT)
+        return PseudoAttacks[~attacker][pt][kingSq];
+
     Bitboard checks = 0;
     Bitboard candidates = PseudoAttacks[~attacker][pt][kingSq];
 
