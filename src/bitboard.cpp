@@ -18,6 +18,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <bitset>
 #include <cstdint>
 #include <cstdlib>
@@ -511,7 +512,8 @@ namespace {
 
   File CurrentMagicMaxFile = FILE_MAX;
   Rank CurrentMagicMaxRank = RANK_MAX;
-  bool MagicsInitialized = false;
+  std::atomic<bool> MagicsInitialized { false };
+  std::atomic<uint16_t> CurrentMagicBoardKey { 0 };
 
   struct MagicNumberCache {
       std::array<Bitboard, SQUARE_NB> rookH {};
@@ -684,13 +686,18 @@ namespace {
 
 void Bitboards::init_magics(File maxFile, Rank maxRank) {
 #if !defined(VERY_LARGE_BOARDS)
+  const uint16_t boardKey = magic_board_key(maxFile, maxRank);
+  if (MagicsInitialized.load(std::memory_order_acquire)
+      && boardKey == CurrentMagicBoardKey.load(std::memory_order_relaxed))
+      return;
+
   std::lock_guard<std::mutex> lock(MagicInitMutex);
-  if (MagicsInitialized && maxFile == CurrentMagicMaxFile && maxRank == CurrentMagicMaxRank)
+  if (MagicsInitialized.load(std::memory_order_relaxed)
+      && maxFile == CurrentMagicMaxFile && maxRank == CurrentMagicMaxRank)
       return;
 
   CurrentMagicMaxFile = maxFile;
   CurrentMagicMaxRank = maxRank;
-  const uint16_t boardKey = magic_board_key(maxFile, maxRank);
   const auto cacheIt = MagicByBoardSize.find(boardKey);
   const MagicNumberCache* cache = cacheIt == MagicByBoardSize.end() ? nullptr : &cacheIt->second;
 
@@ -747,7 +754,8 @@ void Bitboards::init_magics(File maxFile, Rank maxRank) {
       MagicByBoardSize.emplace(boardKey, std::move(fresh));
   }
 
-  MagicsInitialized = true;
+  CurrentMagicBoardKey.store(boardKey, std::memory_order_relaxed);
+  MagicsInitialized.store(true, std::memory_order_release);
 #else
   (void) maxFile;
   (void) maxRank;
