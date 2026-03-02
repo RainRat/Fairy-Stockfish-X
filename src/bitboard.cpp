@@ -26,6 +26,7 @@
 #include <mutex>
 #include <tuple>
 #include <unordered_map>
+#include <vector>
 
 #include "bitboard.h"
 #include "magic.h"
@@ -529,6 +530,7 @@ namespace {
   };
 
   std::unordered_map<uint16_t, MagicNumberCache> MagicByBoardSize;
+  std::vector<uint16_t> MagicCacheLru;
   std::mutex MagicInitMutex;
   constexpr size_t MAX_MAGIC_CACHE_ENTRIES = 16;
 
@@ -696,6 +698,15 @@ void Bitboards::init_magics(File maxFile, Rank maxRank) {
   CurrentMagicMaxRank = maxRank;
   const auto cacheIt = MagicByBoardSize.find(boardKey);
   const MagicNumberCache* cache = cacheIt == MagicByBoardSize.end() ? nullptr : &cacheIt->second;
+  if (cache)
+  {
+      auto it = std::find(MagicCacheLru.begin(), MagicCacheLru.end(), boardKey);
+      if (it != MagicCacheLru.end())
+      {
+          MagicCacheLru.erase(it);
+          MagicCacheLru.push_back(boardKey);
+      }
+  }
 
 #ifdef PRECOMPUTED_MAGICS
   init_magic_table<RIDER>(RookTableH, RookMagicsH, RookDirectionsH, cache ? cache->rookH.data() : RookMagicHInit);
@@ -726,8 +737,11 @@ void Bitboards::init_magics(File maxFile, Rank maxRank) {
 #endif
 
   if (!cache) {
-      if (MagicByBoardSize.size() >= MAX_MAGIC_CACHE_ENTRIES)
-          MagicByBoardSize.erase(MagicByBoardSize.begin());
+      if (MagicByBoardSize.size() >= MAX_MAGIC_CACHE_ENTRIES && !MagicCacheLru.empty())
+      {
+          MagicByBoardSize.erase(MagicCacheLru.front());
+          MagicCacheLru.erase(MagicCacheLru.begin());
+      }
       MagicNumberCache fresh {};
       snapshot_magic_numbers(fresh.rookH, RookMagicsH);
       snapshot_magic_numbers(fresh.rookV, RookMagicsV);
@@ -742,6 +756,7 @@ void Bitboards::init_magics(File maxFile, Rank maxRank) {
       snapshot_magic_numbers(fresh.grasshopperV, GrasshopperMagicsV);
       snapshot_magic_numbers(fresh.grasshopperD, GrasshopperMagicsD);
       MagicByBoardSize.emplace(boardKey, std::move(fresh));
+      MagicCacheLru.push_back(boardKey);
   }
 
   CurrentMagicBoardKey.store(boardKey, std::memory_order_relaxed);
