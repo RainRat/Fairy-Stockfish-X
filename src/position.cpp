@@ -3751,6 +3751,7 @@ void Position::do_null_move(StateInfo& newSt) {
       st->key ^= Zobrist::enpassant[pop_lsb(st->epSquares)];
 
   st->key ^= Zobrist::side;
+  st->boardKey = st->key ^ reserve_key();
   prefetch(TT.first_entry(key()));
 
   ++st->rule50;
@@ -3761,6 +3762,7 @@ void Position::do_null_move(StateInfo& newSt) {
   set_check_info(st);
 
   st->repetition = 0;
+  st->boardRepetition = 0;
 
   assert(pos_is_ok());
 }
