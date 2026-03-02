@@ -480,6 +480,8 @@ void Bitboards::init_pieces() {
                           riderTypes |= RIDER_SKI_ROOK_V;
                       continue;
                   }
+                  if (limit == MAX_SLIDER_LIMIT)
+                      continue;
                   if (BishopDirections.find(d) != BishopDirections.end())
                       riderTypes |= RIDER_BISHOP;
                   if (RookDirectionsH.find(d) != RookDirectionsH.end())
@@ -547,6 +549,8 @@ void Bitboards::init_pieces() {
                           for (auto const& [d, limit] : pi->slider[initial][modality])
                               if (limit == SKI_SLIDER_LIMIT)
                                   skiDirs[d] = 0;
+                              else if (limit == MAX_SLIDER_LIMIT)
+                                  continue;
                               else if (limit >= 0)
                                   dirs[d] = limit;
                           pseudo |= sliding_attack<RIDER>(dirs, s, 0, c);

@@ -478,6 +478,10 @@ private:
   static Bitboard dynamic_slider_bb(const std::map<Direction,int>& directions,
                                     Square sq, Bitboard blockers,
                                     Bitboard occupiedAll, Color c);
+  static Bitboard max_slider_bb(const std::map<Direction,int>& directions,
+                                Square sq, Bitboard occupied,
+                                Bitboard ownPieces, Color c,
+                                bool captureMode);
 
   // Data members
   Piece board[SQUARE_NB];
@@ -1879,19 +1883,53 @@ inline Bitboard Position::dynamic_slider_bb(const std::map<Direction,int>& direc
   return out;
 }
 
+inline Bitboard Position::max_slider_bb(const std::map<Direction,int>& directions,
+                                        Square sq,
+                                        Bitboard occupied,
+                                        Bitboard ownPieces,
+                                        Color c,
+                                        bool captureMode)
+{
+  Bitboard out = 0;
+  for (auto const& [d, limit] : directions)
+  {
+    if (limit != MAX_SLIDER_LIMIT)
+      continue;
+
+    Direction step = c == WHITE ? d : Direction(-d);
+    Square dest = SQ_NONE;
+
+    for (Square s2 = sq + step;
+         is_ok(s2) && distance(s2, s2 - step) <= 2;
+         s2 += step)
+    {
+      if (occupied & s2)
+      {
+        if (captureMode && !(ownPieces & s2))
+          dest = s2;
+        break;
+      }
+      dest = s2;
+    }
+    if (dest != SQ_NONE)
+      out |= square_bb(dest);
+  }
+  return out;
+}
+
 inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s) const {
   assert(pt != NO_PIECE_TYPE);
   Bitboard occupancy = byTypeBB[ALL_PIECES];
   if (spellContextActive && c == sideToMove)
       occupancy &= ~spellJumpRemoved;
 
-  if (fast_attacks() || fast_attacks2())
-      return attacks_bb(c, pt, s, occupancy) & board_bb();
-
   PieceType movePt = pt == KING ? king_type() : pt;
   auto it = pieceMap.find(movePt);
   assert(it != pieceMap.end());
   const PieceInfo* pi = it->second;
+
+  if ((fast_attacks() || fast_attacks2()) && !pi->hasDynamicSlider && !pi->hasMaxSlider)
+      return attacks_bb(c, pt, s, occupancy) & board_bb();
 
   if (pi->friendlyJump)
       occupancy &= ~pieces(c);
@@ -1900,6 +1938,8 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s) const {
 
   if (pi->hasDynamicSlider)
       b |= Position::dynamic_slider_bb(pi->slider[0][MODALITY_CAPTURE], s, occupancy, byTypeBB[ALL_PIECES], c); // LOA dynamic-distance attacks
+  if (pi->hasMaxSlider)
+      b |= Position::max_slider_bb(pi->slider[0][MODALITY_CAPTURE], s, occupancy, pieces(c), c, true);
 
   if (pi->friendlyJump)
       b &= ~pieces(c);          // never hit our own men
@@ -1989,13 +2029,13 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
   if (spellContextActive && c == sideToMove)
       occupancy &= ~spellJumpRemoved;
 
-  if (fast_attacks() || fast_attacks2())
-      return (moves_bb(c, pt, s, occupancy) | extraDestinations) & board_bb();
-
   PieceType movePt = pt == KING ? king_type() : pt;
   auto it = pieceMap.find(movePt);
   assert(it != pieceMap.end());
   const PieceInfo* pi = it->second;
+
+  if ((fast_attacks() || fast_attacks2()) && !pi->hasDynamicSlider && !pi->hasMaxSlider)
+      return (moves_bb(c, pt, s, occupancy) | extraDestinations) & board_bb();
 
   if (pi->friendlyJump)
       occupancy &= ~pieces(c);
@@ -2004,6 +2044,8 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
 
   if (pi->hasDynamicSlider)
       b |= Position::dynamic_slider_bb(pi->slider[0][MODALITY_QUIET], s, occupancy, byTypeBB[ALL_PIECES], c); // LOA dynamic-distance quiet moves
+  if (pi->hasMaxSlider)
+      b |= Position::max_slider_bb(pi->slider[0][MODALITY_QUIET], s, occupancy, pieces(c), c, false);
 
   if (pi->friendlyJump)
       b &= ~pieces(c);          // cannot land on own piece

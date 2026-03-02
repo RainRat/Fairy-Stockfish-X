@@ -34,6 +34,8 @@ enum MoveModality {MODALITY_QUIET, MODALITY_CAPTURE, MOVE_MODALITY_NB};
 constexpr int DYNAMIC_SLIDER_LIMIT = -2;
 // Special distance value for ski/slip sliders (Betza 'j' modifier)
 constexpr int SKI_SLIDER_LIMIT = -3;
+// Special distance value for max-distance sliders (Betza 'z' modifier)
+constexpr int MAX_SLIDER_LIMIT = -4;
 
 /// PieceInfo struct stores information about the piece movements.
 
@@ -47,6 +49,7 @@ struct PieceInfo {
   bool griffon[2][MOVE_MODALITY_NB] = {};
   bool manticore[2][MOVE_MODALITY_NB] = {};
   bool hasDynamicSlider = false;
+  bool hasMaxSlider = false;
   bool friendlyJump = false;
 };
 

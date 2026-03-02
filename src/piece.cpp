@@ -145,6 +145,7 @@ namespace {
       bool initial = false;
       bool dynamicDistance = false;
       bool skiSlider = false;
+      bool maxDistance = false;
       int distance = 0;
       bool standaloneH = false;
       std::vector<std::string> prelimDirections = {};
@@ -163,6 +164,11 @@ namespace {
               distance = -1;
           if (rider && skiSlider && !hopper && !lame && !dynamicDistance)
               distance = SKI_SLIDER_LIMIT;
+          if (rider && maxDistance && !hopper && !lame && !dynamicDistance && !skiSlider)
+          {
+              distance = MAX_SLIDER_LIMIT;
+              p->hasMaxSlider = true;
+          }
           if (dynamicDistance && rider)
           {
               distance = DYNAMIC_SLIDER_LIMIT;
@@ -230,6 +236,7 @@ namespace {
           initial = false;
           dynamicDistance = false;
           skiSlider = false;
+          maxDistance = false;
           standaloneH = false;
           distance = 0;
       };
@@ -246,6 +253,7 @@ namespace {
               initial = false;
               dynamicDistance = false;
               skiSlider = false;
+              maxDistance = false;
               standaloneH = false;
               distance = 0;
               return;
@@ -265,6 +273,7 @@ namespace {
           initial = false;
           dynamicDistance = false;
           skiSlider = false;
+          maxDistance = false;
           standaloneH = false;
           distance = 0;
       };
@@ -281,6 +290,7 @@ namespace {
               initial = false;
               dynamicDistance = false;
               skiSlider = false;
+              maxDistance = false;
               standaloneH = false;
               distance = 0;
               return;
@@ -300,6 +310,7 @@ namespace {
           initial = false;
           dynamicDistance = false;
           skiSlider = false;
+          maxDistance = false;
           standaloneH = false;
           distance = 0;
       };
@@ -326,6 +337,9 @@ namespace {
           // Ski/slip slider modifier (e.g. jR, jB, jQ)
           else if (c == 'j')
               skiSlider = true;
+          // Max-distance slider modifier (e.g. zR, zB, zQ)
+          else if (c == 'z')
+              maxDistance = true;
           // Initial move
           else if (c == 'i')
               initial = true;
@@ -395,6 +409,7 @@ namespace {
                   initial = false;
                   dynamicDistance = false;
                   skiSlider = false;
+                  maxDistance = false;
                   standaloneH = false;
                   distance = 0;
                   auto closeUnsupported = expandedBetza.find(')', i + 1);
