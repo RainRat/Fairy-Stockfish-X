@@ -20,6 +20,7 @@
 #include <sstream>
 #include <limits>
 #include <algorithm>
+#include <cctype>
 
 #include "apiutil.h"
 #include "parser.h"
@@ -1053,6 +1054,9 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("checkCounting", v->checkCounting);
     parse_attribute("connectN", v->connectN);
     parse_attribute("connectPieceTypes", v->connectPieceTypes, v->pieceToChar);
+    parse_attribute("connectGoalByType", v->connectGoalByType);
+    parse_attribute("connectPieceGoalWhite", v->connectPieceGoal[WHITE]);
+    parse_attribute("connectPieceGoalBlack", v->connectPieceGoal[BLACK]);
     parse_attribute("connectHorizontal", v->connectHorizontal);
     parse_attribute("connectVertical", v->connectVertical);
     parse_attribute("connectDiagonal", v->connectDiagonal);
@@ -1126,6 +1130,15 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
         // Contradictory options
         if (!v->checking && v->checkCounting)
             std::cerr << "checkCounting=true requires checking=true." << std::endl;
+        for (Color c : {WHITE, BLACK})
+            for (unsigned char ch : v->connectPieceGoal[c])
+                if (!std::isspace(ch))
+                {
+                    size_t idx = v->pieceToChar.find(std::toupper(ch));
+                    if (idx == std::string::npos || idx >= PIECE_TYPE_NB)
+                        std::cerr << "connectPieceGoal" << (c == WHITE ? "White" : "Black")
+                                  << " - Invalid piece type: " << char(ch) << std::endl;
+                }
         if (v->castling && v->castlingRank > v->maxRank)
             std::cerr << "Inconsistent settings: castlingRank > maxRank." << std::endl;
         if (v->castling && v->castlingQueensideFile > v->castlingKingsideFile)

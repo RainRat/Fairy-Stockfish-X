@@ -20,6 +20,7 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
+#include <cctype>
 
 #include "parser.h"
 #include "piece.h"
@@ -2270,6 +2271,23 @@ Variant* Variant::conclude() {
     {
         connectPieceTypesTrimmed = connectPieceTypes & pieceTypes;
     };
+
+    for (Color c : {WHITE, BLACK})
+    {
+        connectPieceGoalTypes[c].clear();
+        for (unsigned char ch : connectPieceGoal[c])
+        {
+            if (std::isspace(ch))
+                continue;
+            size_t idx = pieceToChar.find(std::toupper(ch));
+            if (idx == std::string::npos || idx >= PIECE_TYPE_NB)
+            {
+                connectPieceGoalTypes[c].clear();
+                break;
+            }
+            connectPieceGoalTypes[c].push_back(PieceType(idx));
+        }
+    }
       // Initialize multimove passing parameters
       multimoveOffset = 0;
       for (int j : multimoves)

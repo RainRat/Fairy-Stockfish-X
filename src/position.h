@@ -298,6 +298,8 @@ public:
   bool check_counting() const;
   int connect_n() const;
   PieceSet connect_piece_types() const;
+  bool connect_goal_by_type() const;
+  const std::vector<PieceType>& connect_piece_goal_types(Color c) const;
   bool connect_horizontal() const;
   bool connect_vertical() const;
   bool connect_diagonal() const;
@@ -1611,6 +1613,16 @@ inline int Position::connect_n() const {
 inline PieceSet Position::connect_piece_types() const {
   assert(var != nullptr);
   return var->connectPieceTypesTrimmed;
+}
+
+inline bool Position::connect_goal_by_type() const {
+  assert(var != nullptr);
+  return var->connectGoalByType;
+}
+
+inline const std::vector<PieceType>& Position::connect_piece_goal_types(Color c) const {
+  assert(var != nullptr);
+  return var->connectPieceGoalTypes[c];
 }
 
 inline bool Position::connect_horizontal() const {

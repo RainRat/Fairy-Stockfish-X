@@ -223,6 +223,8 @@ struct Variant {
   bool checkCounting = false;
   int connectN = 0;
   PieceSet connectPieceTypes = ~NO_PIECE_SET;
+  bool connectGoalByType = false;
+  std::string connectPieceGoal[COLOR_NB] = {};
   bool connectHorizontal = true;
   bool connectVertical = true;
   bool connectDiagonal = true;
@@ -258,6 +260,7 @@ struct Variant {
   bool shogiStylePromotions = false;
   std::vector<Direction> connectDirections;
   PieceSet connectPieceTypesTrimmed = ~NO_PIECE_SET;
+  std::vector<PieceType> connectPieceGoalTypes[COLOR_NB];
   bool multimovePass[START_MULTIMOVES]; // irregular pattern of multimove passes at game start
   int multimoveOffset; // end of multimoveStart sequence
   int multimoveCycle; // length in ply of both players once playing a multimove

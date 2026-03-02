@@ -4387,6 +4387,56 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
       };
   };
 
+  if (connect_goal_by_type())
+  {
+      auto has_connect_goal = [&](Color c) {
+          const auto& goal = connect_piece_goal_types(c);
+          if (goal.empty())
+              return false;
+
+          for (Direction d : var->connectDirections)
+          {
+              Bitboard starts = pieces(goal.front());
+              while (starts)
+              {
+                  Square s = pop_lsb(starts);
+                  Bitboard cur = square_bb(s);
+                  bool matched = true;
+                  for (size_t i = 1; i < goal.size(); ++i)
+                  {
+                      cur = shift(d, cur);
+                      if (!cur || type_of(piece_on(lsb(cur))) != goal[i])
+                      {
+                          matched = false;
+                          break;
+                      }
+                  }
+                  if (matched)
+                      return true;
+              }
+          }
+          return false;
+      };
+
+      bool prevMoverGoal = has_connect_goal(~sideToMove);
+      bool stmGoal = has_connect_goal(sideToMove);
+      if (prevMoverGoal && stmGoal)
+      {
+          result = convert_mate_value(VALUE_DRAW, ply);
+          return true;
+      }
+      if (prevMoverGoal)
+      {
+          result = convert_mate_value(-connect_value(), ply);
+          return true;
+      }
+      if (stmGoal)
+      {
+          result = convert_mate_value(connect_value(), ply);
+          return true;
+      }
+  }
+
   //Calculate eligible pieces for connection once.
   Bitboard connectPieces = 0;
   for (PieceSet ps = connect_piece_types(); ps;){
