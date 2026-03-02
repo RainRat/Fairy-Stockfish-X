@@ -379,12 +379,18 @@ inline Bitboard nightrider_between_bb(Square s1, Square s2) {
 }
 
 inline Bitboard between_bb(Square s1, Square s2, PieceType pt) {
-  if (pt == HORSE)
+  RiderType r = AttackRiderTypes[pt];
+
+  if (r & RIDER_HORSE)
       return PseudoAttacks[WHITE][WAZIR][s2] & PseudoAttacks[WHITE][FERS][s1];
-  else if (pt == JANGGI_ELEPHANT)
+  else if (r & RIDER_ELEPHANT)
+      return PseudoAttacks[WHITE][FERS][s2] & PseudoAttacks[WHITE][FERS][s1];
+  else if (r & RIDER_LAME_DABBABA)
+      return PseudoAttacks[WHITE][WAZIR][s2] & PseudoAttacks[WHITE][WAZIR][s1];
+  else if (r & RIDER_JANGGI_ELEPHANT)
       return  (PseudoAttacks[WHITE][WAZIR][s2] & PseudoAttacks[WHITE][ALFIL][s1])
             | (PseudoAttacks[WHITE][KNIGHT][s2] & PseudoAttacks[WHITE][FERS][s1]);
-  else if (AttackRiderTypes[pt] & RIDER_NIGHTRIDER)
+  else if (r & RIDER_NIGHTRIDER)
   {
       Bitboard path = nightrider_between_bb(s1, s2);
       return path ? path : between_bb(s1, s2);
