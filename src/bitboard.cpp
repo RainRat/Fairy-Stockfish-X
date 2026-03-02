@@ -380,7 +380,7 @@ void Bitboards::init_pieces() {
               for (auto const& [d, limit] : pi->steps[initial][modality])
               {
                   if (limit && LameDabbabaDirections.find(d) != LameDabbabaDirections.end())
-                      riderTypes |= RIDER_LAME_DABBABA;
+                      riderTypes |= RIDER_ROOK_H | RIDER_ROOK_V;
                   if (limit && HorseDirections.find(d) != HorseDirections.end())
                       riderTypes |= RIDER_HORSE;
                   if (limit && ElephantDirections.find(d) != ElephantDirections.end())
