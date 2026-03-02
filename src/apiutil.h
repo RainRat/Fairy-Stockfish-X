@@ -695,12 +695,28 @@ inline Validation fill_char_board(CharBoard& board, const std::string& fenBoard,
     int rankIdx = 0;
     int fileIdx = 0;
     bool firstRankSkipped = false;
+    bool expectingTrailingCommitRow = false;
 
     char prevChar = '?';
     for (char c : fenBoard)
     {
         if (c == ' ' || c == '[')
             break;
+        bool inLeadingCommitRow = v->commitGates && rankIdx == 0 && !firstRankSkipped;
+        bool inTrailingCommitRow = v->commitGates && expectingTrailingCommitRow;
+        if ((inLeadingCommitRow || inTrailingCommitRow) && c != '/')
+        {
+            if (isdigit(c))
+            {
+                fileIdx += c - '0';
+                if (isdigit(prevChar))
+                    fileIdx += 9 * (prevChar - '0');
+            }
+            else
+                ++fileIdx;
+            prevChar = c;
+            continue;
+        }
         if (c == '*')
             ++fileIdx;
         else if (isdigit(c))
@@ -722,6 +738,11 @@ inline Validation fill_char_board(CharBoard& board, const std::string& fenBoard,
                 // ignore starting 'xx******/'
             }
             else {
+                if (expectingTrailingCommitRow)
+                {
+                    std::cerr << "Too many rows in committed gates FEN board section." << std::endl;
+                    return NOK;
+                }
                 ++rankIdx;
                 if (fileIdx != board.get_nb_files())
                 {
@@ -729,17 +750,15 @@ inline Validation fill_char_board(CharBoard& board, const std::string& fenBoard,
                     return NOK;
                 }
             }
+            if (v->commitGates && rankIdx == board.get_nb_ranks())
+            {
+                expectingTrailingCommitRow = true;
+                fileIdx = 0;
+                prevChar = '?';
+                continue;
+            }
             if (rankIdx == board.get_nb_ranks())
             {
-                if (v->commitGates)
-                {
-                    if (fileIdx != board.get_nb_files())
-                    {
-                        std::cerr << "Invalid committed gate row width: " << fileIdx << " != " << board.get_nb_files() << std::endl;
-                        return NOK;
-                    }
-                    rankIdx--; // pretend we didn't see the ending '/xx******'
-                }
                 break;
             }
             fileIdx = 0;
@@ -757,6 +776,12 @@ inline Validation fill_char_board(CharBoard& board, const std::string& fenBoard,
             ++fileIdx;
         }
         prevChar = c;
+    }
+
+    if (v->commitGates && expectingTrailingCommitRow && fileIdx != board.get_nb_files())
+    {
+        std::cerr << "Invalid committed gate row width: " << fileIdx << " != " << board.get_nb_files() << std::endl;
+        return NOK;
     }
 
     if (v->pieceDrops)
