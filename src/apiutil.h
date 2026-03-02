@@ -404,6 +404,27 @@ inline bool has_insufficient_material(Color c, const Position& pos) {
     constexpr PieceSet MAJOR_PIECES = piece_set(ROOK) | QUEEN | ARCHBISHOP | CHANCELLOR
                                      | SILVER | GOLD | COMMONER | CENTAUR | AMAZON | BERS;
     constexpr PieceSet COLORBOUND_PIECES = piece_set(BISHOP) | FERS | FERS_ALFIL | ALFIL | ELEPHANT;
+    auto custom_attack_profile = [&](PieceType pt) {
+        bool hasAttack = false;
+        bool changesSquareColor = false;
+        Bitboard fromSquares = pos.board_bb(c, pt) & pos.board_bb();
+        while (fromSquares)
+        {
+            Square from = pop_lsb(fromSquares);
+            Bitboard attacks = PseudoAttacks[c][pt][from] & pos.board_bb();
+            if (!attacks)
+                continue;
+            hasAttack = true;
+            if (((DarkSquares & from) && (attacks & ~DarkSquares))
+             || ((~DarkSquares & from) && (attacks & DarkSquares)))
+            {
+                changesSquareColor = true;
+                break;
+            }
+        }
+        return std::make_pair(hasAttack, changesSquareColor);
+    };
+
     Bitboard restricted = pos.pieces(KING);
     Bitboard colorbound = 0;
     for (PieceSet ps = pos.piece_types(); ps;)
@@ -414,9 +435,8 @@ inline bool has_insufficient_material(Color c, const Position& pos) {
         if (pt == KING || !(pos.board_bb(c, pt) & pos.board_bb(~c, KING)) || (pos.pseudo_royal_types() & pt))
             restricted |= pos.pieces(c, pt);
 
-        // If piece is a major piece or a custom piece we consider it sufficient for mate.
-        // To avoid false positives, we assume any custom piece has mating potential.
-        else if ((MAJOR_PIECES & pt) || is_custom(pt))
+        // Known major pieces are considered to have mating potential.
+        else if (MAJOR_PIECES & pt)
         {
             // Check if piece is already on the board
             if (pos.count(c, pt) > 0)
@@ -425,6 +445,25 @@ inline bool has_insufficient_material(Color c, const Position& pos) {
             // Check if any pawn can promote to this piece type
             if (hasPromotingPawn && (pos.promotion_piece_types(c) & pt))
                 return false;
+        }
+        else if (is_custom(pt))
+        {
+            const auto [hasAttack, changesSquareColor] = custom_attack_profile(pt);
+
+            // Fully immobile custom pieces can never contribute to mating nets.
+            if (!hasAttack)
+                restricted |= pos.pieces(c, pt);
+            // Color-bound custom pieces behave like bishops/fers/alfil for
+            // insufficient-material heuristics.
+            else if (!changesSquareColor)
+                colorbound |= pos.pieces(pt);
+            else
+            {
+                if (pos.count(c, pt) > 0)
+                    return false;
+                if (hasPromotingPawn && (pos.promotion_piece_types(c) & pt))
+                    return false;
+            }
         }
 
         // Collect color-bound pieces
