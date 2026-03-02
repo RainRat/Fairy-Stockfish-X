@@ -701,15 +701,8 @@ inline Validation fill_char_board(CharBoard& board, const std::string& fenBoard,
     {
         if (c == ' ' || c == '[')
             break;
-        if (c == '*') {
-            if (v->commitGates)
-            {
-                // just ignore?
-            }
-            else {
-                ++fileIdx;
-            }
-        }
+        if (c == '*')
+            ++fileIdx;
         else if (isdigit(c))
         {
             fileIdx += c - '0';
@@ -720,6 +713,11 @@ inline Validation fill_char_board(CharBoard& board, const std::string& fenBoard,
         else if (c == '/')
         {
             if (v->commitGates && rankIdx == 0 && !firstRankSkipped) {
+                if (fileIdx != board.get_nb_files())
+                {
+                    std::cerr << "Invalid committed gate row width: " << fileIdx << " != " << board.get_nb_files() << std::endl;
+                    return NOK;
+                }
                 firstRankSkipped = true;
                 // ignore starting 'xx******/'
             }
@@ -735,6 +733,11 @@ inline Validation fill_char_board(CharBoard& board, const std::string& fenBoard,
             {
                 if (v->commitGates)
                 {
+                    if (fileIdx != board.get_nb_files())
+                    {
+                        std::cerr << "Invalid committed gate row width: " << fileIdx << " != " << board.get_nb_files() << std::endl;
+                        return NOK;
+                    }
                     rankIdx--; // pretend we didn't see the ending '/xx******'
                 }
                 break;
