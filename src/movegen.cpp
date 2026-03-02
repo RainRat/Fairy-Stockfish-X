@@ -52,6 +52,14 @@ namespace {
     }
   };
 
+  Bitboard useful_freeze_gates(const Position& pos, Color us) {
+    Bitboard gates = 0;
+    Bitboard enemies = pos.pieces(~us);
+    while (enemies)
+      gates |= pos.freeze_zone_from_square(pop_lsb(enemies));
+    return gates;
+  }
+
   template<MoveType T>
   ExtMove* make_move_and_gating(const Position& pos, ExtMove* moveList, Color us, Square from, Square to, PieceType pt = NO_PIECE_TYPE) {
 
@@ -679,7 +687,9 @@ namespace {
         if (!var->potionDropOnOccupied)
             candidates &= ~pos.pieces();
 
-        if (potion == Variant::POTION_JUMP)
+        if (potion == Variant::POTION_FREEZE)
+            candidates &= useful_freeze_gates(pos, Us);
+        else if (potion == Variant::POTION_JUMP)
             candidates &= pos.pieces();
 
         while (candidates)
