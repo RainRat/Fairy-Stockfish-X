@@ -108,7 +108,7 @@ private:
 #ifdef USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
     ExtMove* moveList = 0;
 #else
-    ExtMove moveList[MAX_MOVES];
+    ExtMove moveList[MOVEGEN_OVERFLOW_CAPACITY];
 #endif
 };
 
