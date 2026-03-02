@@ -76,6 +76,20 @@ namespace {
     }
   };
 
+  inline Bitboard retro_asymmetric_check_squares(Color attacker, PieceType pt, Square kingSq, Bitboard occupied) {
+    Bitboard checks = 0;
+    Bitboard candidates = PseudoAttacks[~attacker][pt][kingSq];
+
+    while (candidates)
+    {
+        Square from = pop_lsb(candidates);
+        if (!(between_bb(kingSq, from, pt) & occupied))
+            checks |= from;
+    }
+
+    return checks;
+  }
+
 } // namespace
 
 namespace Zobrist {
@@ -881,9 +895,8 @@ void Position::set_check_info(StateInfo* si) const {
       if (ksq == SQ_NONE)
           si->checkSquares[pt] = Bitboard(0);
       else if (AttackRiderTypes[movePt] & ASYMMETRICAL_RIDERS)
-          // For asymmetrical riders (e.g. horse-like), use occupancy-independent
-          // retro candidates as a cheap prefilter in gives_check().
-          si->checkSquares[pt] = PseudoAttacks[~sideToMove][movePt][ksq];
+          // For asymmetrical riders, use true retro paths from the king square.
+          si->checkSquares[pt] = retro_asymmetric_check_squares(sideToMove, movePt, ksq, pieces());
       else
           si->checkSquares[pt] = attacks_bb(~sideToMove, movePt, ksq, pieces());
       // Collect special piece types that require slower check and evasion detection
