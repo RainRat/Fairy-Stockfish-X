@@ -696,9 +696,6 @@ namespace {
         {
             Square gate = pop_lsb(candidates);
 
-            if (potion == Variant::POTION_JUMP && !(pos.pieces() & gate))
-                continue;
-
             Bitboard freezeExtra = potion == Variant::POTION_FREEZE ? pos.freeze_zone_from_square(gate) : Bitboard(0);
             Bitboard jumpRemoved = potion == Variant::POTION_JUMP ? square_bb(gate) : Bitboard(0);
 
