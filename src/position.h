@@ -208,6 +208,7 @@ public:
   bool free_drops() const;
   void set_spell_context(Bitboard freezeExtra, Bitboard jumpRemoved) const;
   void clear_spell_context() const;
+  Bitboard spell_freeze_extra() const;
   Bitboard spell_jump_removed() const;
   bool spell_context_active() const;
   bool fast_attacks() const;
@@ -934,6 +935,10 @@ inline void Position::clear_spell_context() const {
   spellExtraFrozen = 0;
   spellJumpRemoved = 0;
   spellContextActive = false;
+}
+
+inline Bitboard Position::spell_freeze_extra() const {
+  return spellContextActive ? spellExtraFrozen : Bitboard(0);
 }
 
 inline Bitboard Position::spell_jump_removed() const {

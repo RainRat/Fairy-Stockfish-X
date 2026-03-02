@@ -28,15 +28,26 @@ namespace {
   struct SpellContextGuard {
     Position& pos;
     bool active;
+    bool hadContext;
+    Bitboard prevFreeze;
+    Bitboard prevJump;
 
     SpellContextGuard(const Position& position, Bitboard freezeExtra, Bitboard jumpRemoved)
-        : pos(const_cast<Position&>(position)), active((freezeExtra | jumpRemoved) != Bitboard(0)) {
+        : pos(const_cast<Position&>(position)),
+          active((freezeExtra | jumpRemoved) != Bitboard(0)),
+          hadContext(pos.spell_context_active()),
+          prevFreeze(pos.spell_freeze_extra()),
+          prevJump(pos.spell_jump_removed()) {
         if (active)
             pos.set_spell_context(freezeExtra, jumpRemoved);
     }
 
     ~SpellContextGuard() {
-        if (active)
+        if (!active)
+            return;
+        if (hadContext)
+            pos.set_spell_context(prevFreeze, prevJump);
+        else
             pos.clear_spell_context();
     }
   };
