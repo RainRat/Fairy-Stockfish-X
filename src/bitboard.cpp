@@ -379,12 +379,16 @@ void Bitboards::init_pieces() {
               riderTypes = NO_RIDER;
               for (auto const& [d, limit] : pi->steps[initial][modality])
               {
-                  if (limit && LameDabbabaDirections.find(d) != LameDabbabaDirections.end())
-                      riderTypes |= RIDER_ROOK_H | RIDER_ROOK_V;
+                  if (limit)
+                  {
+                      const int ad = std::abs(int(d));
+                      if ((ad % FILE_NB) == 0 || ad < FILE_NB)
+                          riderTypes |= RIDER_ROOK_H | RIDER_ROOK_V;
+                      if ((FILE_NB > 1 && (ad % (FILE_NB - 1)) == 0) || (ad % (FILE_NB + 1)) == 0)
+                          riderTypes |= RIDER_BISHOP;
+                  }
                   if (limit && HorseDirections.find(d) != HorseDirections.end())
                       riderTypes |= RIDER_HORSE;
-                  if (limit && ElephantDirections.find(d) != ElephantDirections.end())
-                      riderTypes |= RIDER_BISHOP;
                   if (limit && JanggiElephantDirections.find(d) != JanggiElephantDirections.end())
                       riderTypes |= RIDER_JANGGI_ELEPHANT;
               }
