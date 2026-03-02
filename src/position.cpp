@@ -2768,6 +2768,12 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           dp.handCount[0] = pieceCountInHand[us][in_hand_piece_type(m)];
           dp.from[0] = SQ_NONE;
           dp.to[0] = to;
+
+          // Exchange drops also add a piece to the opponent's hand without any board
+          // move to pair with it. DirtyPiece cannot represent that standalone hand
+          // delta, so force a full NNUE refresh for correctness.
+          if (exchanged != NO_PIECE_TYPE)
+              st->nnueRefreshNeeded = true;
       }
 
       drop_piece(make_piece(us, in_hand_piece_type(m)), pc, to, exchanged);
