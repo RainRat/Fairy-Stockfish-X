@@ -104,9 +104,14 @@ bool MovePicker::is_useless_potion(Move m) const {
 MovePicker::MovePicker(const Position& p, Move ttm, Depth d, const ButterflyHistory* mh, const GateHistory* dh, const LowPlyHistory* lp,
                        const CapturePieceToHistory* cph, const PieceToHistory** ch, Move cm, const Move* killers, int pl)
            : pos(p), mainHistory(mh), gateHistory(dh), lowPlyHistory(lp), captureHistory(cph), continuationHistory(ch),
-             ttMove(ttm), refutations{{killers[0], 0}, {killers[1], 0}, {cm, 0}}, depth(d), ply(pl) {
+             ttMove(ttm), refutations{{killers[0], 0}, {killers[1], 0}, {cm, 0}}, depth(d), ply(pl), moveList(moves) {
 
   assert(d > 0);
+  if (pos.potions_enabled())
+  {
+      overflowMoveList = std::make_unique<ExtMove[]>(MOVE_PICK_OVERFLOW_CAPACITY);
+      moveList = overflowMoveList.get();
+  }
 
   stage = (pos.checkers() ? EVASION_TT : MAIN_TT) +
           !(ttm && pos.pseudo_legal(ttm));
@@ -115,9 +120,14 @@ MovePicker::MovePicker(const Position& p, Move ttm, Depth d, const ButterflyHist
 /// MovePicker constructor for quiescence search
 MovePicker::MovePicker(const Position& p, Move ttm, Depth d, const ButterflyHistory* mh, const GateHistory* dh,
                        const CapturePieceToHistory* cph, const PieceToHistory** ch, Square rs)
-           : pos(p), mainHistory(mh), gateHistory(dh), captureHistory(cph), continuationHistory(ch), ttMove(ttm), recaptureSquare(rs), depth(d) {
+           : pos(p), mainHistory(mh), gateHistory(dh), captureHistory(cph), continuationHistory(ch), ttMove(ttm), recaptureSquare(rs), depth(d), moveList(moves) {
 
   assert(d <= 0);
+  if (pos.potions_enabled())
+  {
+      overflowMoveList = std::make_unique<ExtMove[]>(MOVE_PICK_OVERFLOW_CAPACITY);
+      moveList = overflowMoveList.get();
+  }
 
   stage = (pos.checkers() ? EVASION_TT : QSEARCH_TT) +
           !(   ttm
@@ -128,9 +138,14 @@ MovePicker::MovePicker(const Position& p, Move ttm, Depth d, const ButterflyHist
 /// MovePicker constructor for ProbCut: we generate captures with SEE greater
 /// than or equal to the given threshold.
 MovePicker::MovePicker(const Position& p, Move ttm, Value th, const GateHistory* dh, const CapturePieceToHistory* cph)
-           : pos(p), gateHistory(dh), captureHistory(cph), ttMove(ttm), threshold(th) {
+           : pos(p), gateHistory(dh), captureHistory(cph), ttMove(ttm), threshold(th), moveList(moves) {
 
   assert(!pos.checkers());
+  if (pos.potions_enabled())
+  {
+      overflowMoveList = std::make_unique<ExtMove[]>(MOVE_PICK_OVERFLOW_CAPACITY);
+      moveList = overflowMoveList.get();
+  }
 
   stage = PROBCUT_TT + !(ttm && pos.capture(ttm)
                              && pos.pseudo_legal(ttm)
@@ -216,7 +231,7 @@ top:
   case CAPTURE_INIT:
   case PROBCUT_INIT:
   case QCAPTURE_INIT:
-      cur = endBadCaptures = moves;
+      cur = endBadCaptures = moveList;
       endMoves = generate<CAPTURES>(pos, cur);
 
       score<CAPTURES>();
@@ -271,7 +286,7 @@ top:
           return *(cur - 1);
 
       // Prepare the pointers to loop over the bad captures
-      cur = moves;
+      cur = moveList;
       endMoves = endBadCaptures;
 
       ++stage;
@@ -281,7 +296,7 @@ top:
       return select<Next>([](){ return true; });
 
   case EVASION_INIT:
-      cur = moves;
+      cur = moveList;
       endMoves = generate<EVASIONS>(pos, cur);
 
       score<EVASIONS>();
@@ -307,7 +322,7 @@ top:
       [[fallthrough]];
 
   case QCHECK_INIT:
-      cur = moves;
+      cur = moveList;
       endMoves = generate<QUIET_CHECKS>(pos, cur);
 
       ++stage;

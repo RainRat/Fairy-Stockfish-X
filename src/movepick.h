@@ -21,6 +21,7 @@
 
 #include <array>
 #include <limits>
+#include <memory>
 #include <type_traits>
 
 #include "movegen.h"
@@ -148,6 +149,7 @@ private:
   bool is_useless_potion(Move m) const;
   ExtMove* begin() { return cur; }
   ExtMove* end() { return endMoves; }
+  static constexpr int MOVE_PICK_OVERFLOW_CAPACITY = MAX_MOVES * 2;
 
   const Position& pos;
   const ButterflyHistory* mainHistory;
@@ -162,7 +164,9 @@ private:
   Value threshold;
   Depth depth;
   int ply;
+  ExtMove* moveList;
   ExtMove moves[MAX_MOVES];
+  std::unique_ptr<ExtMove[]> overflowMoveList;
 };
 
 } // namespace Stockfish
