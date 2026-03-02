@@ -205,6 +205,8 @@ void MovePicker::score() {
 template<MovePicker::PickType T, typename Pred>
 Move MovePicker::select(Pred filter) {
 
+  const bool potions = pos.potions_enabled();
+
   while (cur < endMoves)
   {
       if (T == Best)
@@ -212,7 +214,9 @@ Move MovePicker::select(Pred filter) {
 
       Move move = *cur;
 
-      if (move != ttMove && !is_useless_potion(move) && filter())
+      if (move != ttMove
+          && (!potions || !is_gating(move) || !is_useless_potion(move))
+          && filter())
           return *cur++;
 
       cur++;
