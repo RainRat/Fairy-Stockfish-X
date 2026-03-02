@@ -78,6 +78,7 @@ if [[ $1 == "all" || $1 == "variant" ]]; then
   expect perft.exp shatranj startpos 4 68122 > /dev/null
   expect perft.exp amazon startpos 4 318185 > /dev/null
   expect perft.exp nightrider startpos 4 419019 > /dev/null
+  expect perft.exp nightrider "fen 8/8/8/8/8/4K3/8/n1R5 w - - 0 1" 2 52 > /dev/null
   expect perft.exp grasshopper startpos 4 635298 > /dev/null
   expect perft.exp hoppelpoppel startpos 4 202459 > /dev/null
   # connect-group edge adjacency: h1 must not wrap-connect to a2
