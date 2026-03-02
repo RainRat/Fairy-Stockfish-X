@@ -271,8 +271,10 @@ Key Position::reserve_key() const {
       for (PieceType pt = PAWN; pt <= KING; ++pt)
       {
           Piece pc = make_piece(c, pt);
-          int reserveCount = pieceCountInHand[c][pt] + pieceCountInPrison[~c][pt];
-          k ^= Zobrist::inHand[pc][in_hand_zobrist_index(reserveCount)];
+          if (piece_drops() || seirawan_gating() || potions_enabled() || two_boards())
+              k ^= Zobrist::inHand[pc][in_hand_zobrist_index(pieceCountInHand[c][pt])];
+          if (capture_type() == PRISON || prison_pawn_promotion())
+              k ^= Zobrist::inHand[pc][in_hand_zobrist_index(pieceCountInPrison[~c][pt])];
       }
 
   return k;
@@ -1055,10 +1057,15 @@ void Position::set_state(StateInfo* si) const {
           for (int cnt = 0; cnt < pieceCount[pc]; ++cnt)
               si->materialKey ^= Zobrist::psq[pc][cnt];
 
-          if (piece_drops() || seirawan_gating() || potions_enabled()
-              || capture_type() == PRISON || two_boards() || prison_pawn_promotion())
+          if (piece_drops() || seirawan_gating() || potions_enabled() || two_boards())
           {
               int n = std::clamp(pieceCountInHand[c][pt], 0, SQUARE_NB - 1);
+              si->key ^= Zobrist::inHand[pc][n];
+          }
+
+          if (capture_type() == PRISON || prison_pawn_promotion())
+          {
+              int n = std::clamp(pieceCountInPrison[~c][pt], 0, SQUARE_NB - 1);
               si->key ^= Zobrist::inHand[pc][n];
           }
       }
