@@ -144,6 +144,7 @@ namespace {
       bool lame = false;
       bool initial = false;
       bool dynamicDistance = false;
+      bool skiSlider = false;
       int distance = 0;
       bool standaloneH = false;
       std::vector<std::string> prelimDirections = {};
@@ -160,6 +161,8 @@ namespace {
           }
           if (!rider && lame)
               distance = -1;
+          if (rider && skiSlider && !hopper && !lame && !dynamicDistance)
+              distance = SKI_SLIDER_LIMIT;
           if (dynamicDistance && rider)
           {
               distance = DYNAMIC_SLIDER_LIMIT;
@@ -226,6 +229,7 @@ namespace {
           lame = false;
           initial = false;
           dynamicDistance = false;
+          skiSlider = false;
           standaloneH = false;
           distance = 0;
       };
@@ -241,6 +245,7 @@ namespace {
               lame = false;
               initial = false;
               dynamicDistance = false;
+              skiSlider = false;
               standaloneH = false;
               distance = 0;
               return;
@@ -259,6 +264,7 @@ namespace {
           lame = false;
           initial = false;
           dynamicDistance = false;
+          skiSlider = false;
           standaloneH = false;
           distance = 0;
       };
@@ -274,6 +280,7 @@ namespace {
               lame = false;
               initial = false;
               dynamicDistance = false;
+              skiSlider = false;
               standaloneH = false;
               distance = 0;
               return;
@@ -292,6 +299,7 @@ namespace {
           lame = false;
           initial = false;
           dynamicDistance = false;
+          skiSlider = false;
           standaloneH = false;
           distance = 0;
       };
@@ -315,6 +323,9 @@ namespace {
           // Dynamic distance slider
           else if (c == 'x')
               dynamicDistance = true;
+          // Ski/slip slider modifier (e.g. jR, jB, jQ)
+          else if (c == 'j')
+              skiSlider = true;
           // Initial move
           else if (c == 'i')
               initial = true;
@@ -383,6 +394,7 @@ namespace {
                   lame = false;
                   initial = false;
                   dynamicDistance = false;
+                  skiSlider = false;
                   standaloneH = false;
                   distance = 0;
                   auto closeUnsupported = expandedBetza.find(')', i + 1);

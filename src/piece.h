@@ -32,6 +32,8 @@ enum MoveModality {MODALITY_QUIET, MODALITY_CAPTURE, MOVE_MODALITY_NB};
 
 // Special distance value for dynamic slider length (Betza 'x' modifier)
 constexpr int DYNAMIC_SLIDER_LIMIT = -2;
+// Special distance value for ski/slip sliders (Betza 'j' modifier)
+constexpr int SKI_SLIDER_LIMIT = -3;
 
 /// PieceInfo struct stores information about the piece movements.
 

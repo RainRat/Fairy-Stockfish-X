@@ -440,6 +440,12 @@ inline Bitboard between_bb(Square s1, Square s2, PieceType pt) {
   else if (r & RIDER_JANGGI_ELEPHANT)
       return  (PseudoAttacks[WHITE][WAZIR][s2] & PseudoAttacks[WHITE][ALFIL][s1])
             | (PseudoAttacks[WHITE][KNIGHT][s2] & PseudoAttacks[WHITE][FERS][s1]);
+  else if (r & (RIDER_SKI_ROOK_H | RIDER_SKI_ROOK_V | RIDER_SKI_BISHOP))
+  {
+      Bitboard path = between_bb(s1, s2);
+      // Ski sliders ignore the first square in front of the attacker.
+      return path & ~PseudoAttacks[WHITE][KING][s2];
+  }
   else if (r & RIDER_NIGHTRIDER)
   {
       Bitboard path = nightrider_between_bb(s1, s2);
@@ -550,6 +556,27 @@ inline Bitboard fixed_step_rider_attacks(Square s, Bitboard occupied, int stepF,
   return attack;
 }
 
+inline Bitboard ski_slider_attacks(Square s, Bitboard occupied, int stepF, int stepR) {
+  int f = int(file_of(s)) + stepF;
+  int r = int(rank_of(s)) + stepR;
+  if (f < int(FILE_A) || f > int(FILE_MAX) || r < int(RANK_1) || r > int(RANK_MAX))
+      return Bitboard(0);
+
+  Bitboard attack = 0;
+  f += stepF;
+  r += stepR;
+  while (f >= int(FILE_A) && f <= int(FILE_MAX) && r >= int(RANK_1) && r <= int(RANK_MAX))
+  {
+      Square to = make_square(File(f), Rank(r));
+      attack |= to;
+      if (occupied & to)
+          break;
+      f += stepF;
+      r += stepR;
+  }
+  return attack;
+}
+
 template<RiderType R>
 inline Bitboard rider_attacks_bb(Square s, Bitboard occupied) {
 
@@ -595,6 +622,17 @@ inline Bitboard rider_attacks_bb(Square s, Bitboard occupied) {
             | fixed_step_rider_attacks(s, occupied,  2, -2)
             | fixed_step_rider_attacks(s, occupied, -2,  2)
             | fixed_step_rider_attacks(s, occupied, -2, -2);
+  if constexpr (R == RIDER_SKI_ROOK_H)
+      return  ski_slider_attacks(s, occupied,  1, 0)
+            | ski_slider_attacks(s, occupied, -1, 0);
+  if constexpr (R == RIDER_SKI_ROOK_V)
+      return  ski_slider_attacks(s, occupied, 0,  1)
+            | ski_slider_attacks(s, occupied, 0, -1);
+  if constexpr (R == RIDER_SKI_BISHOP)
+      return  ski_slider_attacks(s, occupied,  1,  1)
+            | ski_slider_attacks(s, occupied,  1, -1)
+            | ski_slider_attacks(s, occupied, -1,  1)
+            | ski_slider_attacks(s, occupied, -1, -1);
 
   const Magic& m =  R == RIDER_ROOK_H ? RookMagicsH[s]
                   : R == RIDER_ROOK_V ? RookMagicsV[s]
@@ -628,6 +666,17 @@ inline Bitboard rider_attacks_bb(RiderType R, Square s, Bitboard occupied) {
             | fixed_step_rider_attacks(s, occupied,  2, -2)
             | fixed_step_rider_attacks(s, occupied, -2,  2)
             | fixed_step_rider_attacks(s, occupied, -2, -2);
+  if (R == RIDER_SKI_ROOK_H)
+      return  ski_slider_attacks(s, occupied,  1, 0)
+            | ski_slider_attacks(s, occupied, -1, 0);
+  if (R == RIDER_SKI_ROOK_V)
+      return  ski_slider_attacks(s, occupied, 0,  1)
+            | ski_slider_attacks(s, occupied, 0, -1);
+  if (R == RIDER_SKI_BISHOP)
+      return  ski_slider_attacks(s, occupied,  1,  1)
+            | ski_slider_attacks(s, occupied,  1, -1)
+            | ski_slider_attacks(s, occupied, -1,  1)
+            | ski_slider_attacks(s, occupied, -1, -1);
   if (R == RIDER_GRIFFON_NH) return rider_attacks_bb<RIDER_GRIFFON_NH>(s, occupied);
   if (R == RIDER_GRIFFON_SH) return rider_attacks_bb<RIDER_GRIFFON_SH>(s, occupied);
   if (R == RIDER_GRIFFON_EV) return rider_attacks_bb<RIDER_GRIFFON_EV>(s, occupied);

@@ -163,6 +163,28 @@ namespace {
     return attack;
   }
 
+  Bitboard ski_sliding_attack(const std::map<Direction, int>& directions, Square sq, Bitboard occupied, Color c = WHITE) {
+    Bitboard attack = 0;
+
+    for (auto const& [d, _] : directions)
+    {
+        Square first = sq + (c == WHITE ? d : -d);
+        if (!is_ok(first) || distance(first, sq) > 2)
+            continue;
+
+        for (Square s = first + (c == WHITE ? d : -d);
+             is_ok(s) && distance(s, s - (c == WHITE ? d : -d)) <= 2;
+             s += (c == WHITE ? d : -d))
+        {
+            attack |= s;
+            if (occupied & s)
+                break;
+        }
+    }
+
+    return attack;
+  }
+
   Bitboard lame_leaper_path(Direction d, Square s) {
     Direction dr = d > 0 ? NORTH : SOUTH;
     Direction df = (std::abs(d % NORTH) < NORTH / 2 ? d % NORTH : -(d % NORTH)) < 0 ? WEST : EAST;
@@ -368,6 +390,9 @@ Bitboard rider_attacks_bb(RiderType R, Square s, Bitboard occupied) {
       return src == SQ_NONE ? Bitboard(0)
                             : sliding_attack<RIDER>(RookDirectionsH, src, occupied) | sliding_attack<RIDER>(RookDirectionsV, src, occupied);
   }
+  case RIDER_SKI_ROOK_H: return ski_sliding_attack(RookDirectionsH, s, occupied);
+  case RIDER_SKI_ROOK_V: return ski_sliding_attack(RookDirectionsV, s, occupied);
+  case RIDER_SKI_BISHOP: return ski_sliding_attack(BishopDirections, s, occupied);
   default: return Bitboard(0);
   }
 }
@@ -445,6 +470,16 @@ void Bitboards::init_pieces() {
               {
                   if (limit == DYNAMIC_SLIDER_LIMIT)
                       continue;
+                  if (limit == SKI_SLIDER_LIMIT)
+                  {
+                      if (BishopDirections.find(d) != BishopDirections.end())
+                          riderTypes |= RIDER_SKI_BISHOP;
+                      if (RookDirectionsH.find(d) != RookDirectionsH.end())
+                          riderTypes |= RIDER_SKI_ROOK_H;
+                      if (RookDirectionsV.find(d) != RookDirectionsV.end())
+                          riderTypes |= RIDER_SKI_ROOK_V;
+                      continue;
+                  }
                   if (BishopDirections.find(d) != BishopDirections.end())
                       riderTypes |= RIDER_BISHOP;
                   if (RookDirectionsH.find(d) != RookDirectionsH.end())
@@ -508,10 +543,14 @@ void Bitboards::init_pieces() {
                       }
                       {
                           std::map<Direction, int> dirs;
+                          std::map<Direction, int> skiDirs;
                           for (auto const& [d, limit] : pi->slider[initial][modality])
-                              if (limit >= 0)
+                              if (limit == SKI_SLIDER_LIMIT)
+                                  skiDirs[d] = 0;
+                              else if (limit >= 0)
                                   dirs[d] = limit;
                           pseudo |= sliding_attack<RIDER>(dirs, s, 0, c);
+                          pseudo |= ski_sliding_attack(skiDirs, s, 0, c);
                       }
                       pseudo |= sliding_attack<HOPPER_RANGE>(pi->hopper[initial][modality], s, 0, c);
                       if (pi->griffon[initial][modality])
