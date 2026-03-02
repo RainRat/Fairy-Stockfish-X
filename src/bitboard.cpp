@@ -382,8 +382,12 @@ void Bitboards::init_pieces() {
                       if ((FILE_NB > 1 && (ad % (FILE_NB - 1)) == 0) || (ad % (FILE_NB + 1)) == 0)
                           riderTypes |= RIDER_BISHOP;
                   }
+                  if (limit && LameDabbabaDirections.find(d) != LameDabbabaDirections.end())
+                      riderTypes |= RIDER_LAME_DABBABA;
                   if (limit && HorseDirections.find(d) != HorseDirections.end())
                       riderTypes |= RIDER_HORSE;
+                  if (limit && ElephantDirections.find(d) != ElephantDirections.end())
+                      riderTypes |= RIDER_ELEPHANT;
                   if (limit && JanggiElephantDirections.find(d) != JanggiElephantDirections.end())
                       riderTypes |= RIDER_JANGGI_ELEPHANT;
               }
@@ -397,8 +401,14 @@ void Bitboards::init_pieces() {
                       riderTypes |= RIDER_ROOK_H;
                   if (RookDirectionsV.find(d) != RookDirectionsV.end())
                       riderTypes |= RIDER_ROOK_V;
+                  if (LameDabbabaDirections.find(d) != LameDabbabaDirections.end())
+                      riderTypes |= RIDER_LAME_DABBABA;
                   if (HorseDirections.find(d) != HorseDirections.end())
                       riderTypes |= RIDER_NIGHTRIDER;
+                  if (ElephantDirections.find(d) != ElephantDirections.end())
+                      riderTypes |= RIDER_ELEPHANT;
+                  if (JanggiElephantDirections.find(d) != JanggiElephantDirections.end())
+                      riderTypes |= RIDER_JANGGI_ELEPHANT;
               }
               for (auto const& [d, limit] : pi->hopper[initial][modality])
               {
