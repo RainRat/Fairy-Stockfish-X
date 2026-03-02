@@ -378,15 +378,65 @@ inline Bitboard nightrider_between_bb(Square s1, Square s2) {
   return Bitboard(0);
 }
 
+inline Bitboard fixed_step_between_bb(Square s1, Square s2, int stepF, int stepR) {
+  int df = int(file_of(s2)) - int(file_of(s1));
+  int dr = int(rank_of(s2)) - int(rank_of(s1));
+
+  auto make_path = [&](int sf, int sr) {
+      if (sf == 0 && sr == 0)
+          return Bitboard(0);
+      if ((sf == 0 && df != 0) || (sr == 0 && dr != 0))
+          return Bitboard(0);
+      if ((sf != 0 && df % sf) || (sr != 0 && dr % sr))
+          return Bitboard(0);
+
+      int nF = sf ? df / sf : dr / sr;
+      int nR = sr ? dr / sr : df / sf;
+      if (nF != nR || nF <= 0)
+          return Bitboard(0);
+
+      Bitboard b = 0;
+      int f = int(file_of(s1));
+      int r = int(rank_of(s1));
+      for (int i = 1; i <= nF; ++i)
+      {
+          f += sf;
+          r += sr;
+          if (f < int(FILE_A) || f > int(FILE_MAX) || r < int(RANK_1) || r > int(RANK_MAX))
+              return Bitboard(0);
+          b |= make_square(File(f), Rank(r));
+      }
+      return b;
+  };
+
+  return make_path(stepF, stepR);
+}
+
 inline Bitboard between_bb(Square s1, Square s2, PieceType pt) {
   RiderType r = AttackRiderTypes[pt];
 
   if (r & RIDER_HORSE)
       return PseudoAttacks[WHITE][WAZIR][s2] & PseudoAttacks[WHITE][FERS][s1];
   else if (r & RIDER_ELEPHANT)
+  {
+      for (auto [sf, sr] : { std::pair<int, int>{ 2, 2}, { 2,-2}, {-2, 2}, {-2,-2} })
+      {
+          Bitboard path = fixed_step_between_bb(s1, s2, sf, sr);
+          if (path)
+              return path;
+      }
       return PseudoAttacks[WHITE][FERS][s2] & PseudoAttacks[WHITE][FERS][s1];
+  }
   else if (r & RIDER_LAME_DABBABA)
+  {
+      for (auto [sf, sr] : { std::pair<int, int>{ 2, 0}, {-2, 0}, { 0, 2}, { 0,-2} })
+      {
+          Bitboard path = fixed_step_between_bb(s1, s2, sf, sr);
+          if (path)
+              return path;
+      }
       return PseudoAttacks[WHITE][WAZIR][s2] & PseudoAttacks[WHITE][WAZIR][s1];
+  }
   else if (r & RIDER_JANGGI_ELEPHANT)
       return  (PseudoAttacks[WHITE][WAZIR][s2] & PseudoAttacks[WHITE][ALFIL][s1])
             | (PseudoAttacks[WHITE][KNIGHT][s2] & PseudoAttacks[WHITE][FERS][s1]);
@@ -480,6 +530,26 @@ inline Bitboard rider_attacks_bb(Square s, Bitboard occupied) {
 
 inline Square lsb(Bitboard b);
 #else
+inline Bitboard fixed_step_rider_attacks(Square s, Bitboard occupied, int stepF, int stepR) {
+  Bitboard attack = 0;
+  int f = int(file_of(s));
+  int r = int(rank_of(s));
+
+  while (true)
+  {
+      f += stepF;
+      r += stepR;
+      if (f < int(FILE_A) || f > int(FILE_MAX) || r < int(RANK_1) || r > int(RANK_MAX))
+          break;
+      Square to = make_square(File(f), Rank(r));
+      attack |= to;
+      if (occupied & to)
+          break;
+  }
+
+  return attack;
+}
+
 template<RiderType R>
 inline Bitboard rider_attacks_bb(Square s, Bitboard occupied) {
 
@@ -516,9 +586,15 @@ inline Bitboard rider_attacks_bb(Square s, Bitboard occupied) {
       return rider_attacks_bb<RIDER_ROOK_H>(src, occupied) | rider_attacks_bb<RIDER_ROOK_V>(src, occupied);
   }
   if constexpr (R == RIDER_LAME_DABBABA)
-      return rider_attacks_bb<RIDER_ROOK_H>(s, occupied) | rider_attacks_bb<RIDER_ROOK_V>(s, occupied);
+      return  fixed_step_rider_attacks(s, occupied,  2,  0)
+            | fixed_step_rider_attacks(s, occupied, -2,  0)
+            | fixed_step_rider_attacks(s, occupied,  0,  2)
+            | fixed_step_rider_attacks(s, occupied,  0, -2);
   if constexpr (R == RIDER_ELEPHANT)
-      return rider_attacks_bb<RIDER_BISHOP>(s, occupied);
+      return  fixed_step_rider_attacks(s, occupied,  2,  2)
+            | fixed_step_rider_attacks(s, occupied,  2, -2)
+            | fixed_step_rider_attacks(s, occupied, -2,  2)
+            | fixed_step_rider_attacks(s, occupied, -2, -2);
 
   const Magic& m =  R == RIDER_ROOK_H ? RookMagicsH[s]
                   : R == RIDER_ROOK_V ? RookMagicsV[s]
@@ -543,9 +619,15 @@ inline Bitboard rider_attacks_bb(RiderType R, Square s, Bitboard occupied) {
 
   assert(R != NO_RIDER && !(R & (R - 1))); // exactly one bit
   if (R == RIDER_LAME_DABBABA)
-      return rider_attacks_bb<RIDER_ROOK_H>(s, occupied) | rider_attacks_bb<RIDER_ROOK_V>(s, occupied);
+      return  fixed_step_rider_attacks(s, occupied,  2,  0)
+            | fixed_step_rider_attacks(s, occupied, -2,  0)
+            | fixed_step_rider_attacks(s, occupied,  0,  2)
+            | fixed_step_rider_attacks(s, occupied,  0, -2);
   if (R == RIDER_ELEPHANT)
-      return rider_attacks_bb<RIDER_BISHOP>(s, occupied);
+      return  fixed_step_rider_attacks(s, occupied,  2,  2)
+            | fixed_step_rider_attacks(s, occupied,  2, -2)
+            | fixed_step_rider_attacks(s, occupied, -2,  2)
+            | fixed_step_rider_attacks(s, occupied, -2, -2);
   if (R == RIDER_GRIFFON_NH) return rider_attacks_bb<RIDER_GRIFFON_NH>(s, occupied);
   if (R == RIDER_GRIFFON_SH) return rider_attacks_bb<RIDER_GRIFFON_SH>(s, occupied);
   if (R == RIDER_GRIFFON_EV) return rider_attacks_bb<RIDER_GRIFFON_EV>(s, occupied);
