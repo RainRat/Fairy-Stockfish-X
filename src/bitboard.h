@@ -168,9 +168,7 @@ extern Magic RookMagicsV[SQUARE_NB];
 extern Magic BishopMagics[SQUARE_NB];
 extern Magic CannonMagicsH[SQUARE_NB];
 extern Magic CannonMagicsV[SQUARE_NB];
-extern Magic LameDabbabaMagics[SQUARE_NB];
 extern Magic HorseMagics[SQUARE_NB];
-extern Magic ElephantMagics[SQUARE_NB];
 extern Magic JanggiElephantMagics[SQUARE_NB];
 extern Magic CannonDiagMagics[SQUARE_NB];
 extern Magic NightriderMagics[SQUARE_NB];
@@ -497,14 +495,18 @@ inline Bitboard rider_attacks_bb(Square s, Bitboard occupied) {
       else
           return rider_attacks_bb<RIDER_ROOK_V>(src, occupied);
   }
+  if constexpr (R == RIDER_LAME_DABBABA)
+      return rider_attacks_bb<RIDER_ROOK_H>(s, occupied) | rider_attacks_bb<RIDER_ROOK_V>(s, occupied);
+  if constexpr (R == RIDER_ELEPHANT)
+      return rider_attacks_bb<RIDER_BISHOP>(s, occupied);
 
   const Magic& m =  R == RIDER_ROOK_H ? RookMagicsH[s]
                   : R == RIDER_ROOK_V ? RookMagicsV[s]
                   : R == RIDER_CANNON_H ? CannonMagicsH[s]
                   : R == RIDER_CANNON_V ? CannonMagicsV[s]
-                  : R == RIDER_LAME_DABBABA ? LameDabbabaMagics[s]
+                  : R == RIDER_LAME_DABBABA ? BishopMagics[s]
                   : R == RIDER_HORSE ? HorseMagics[s]
-                  : R == RIDER_ELEPHANT ? ElephantMagics[s]
+                  : R == RIDER_ELEPHANT ? BishopMagics[s]
                   : R == RIDER_JANGGI_ELEPHANT ? JanggiElephantMagics[s]
                   : R == RIDER_CANNON_DIAG ? CannonDiagMagics[s]
                   : R == RIDER_NIGHTRIDER ? NightriderMagics[s]
@@ -520,6 +522,10 @@ inline Square lsb(Bitboard b);
 inline Bitboard rider_attacks_bb(RiderType R, Square s, Bitboard occupied) {
 
   assert(R != NO_RIDER && !(R & (R - 1))); // exactly one bit
+  if (R == RIDER_LAME_DABBABA)
+      return rider_attacks_bb<RIDER_ROOK_H>(s, occupied) | rider_attacks_bb<RIDER_ROOK_V>(s, occupied);
+  if (R == RIDER_ELEPHANT)
+      return rider_attacks_bb<RIDER_BISHOP>(s, occupied);
   if (R == RIDER_GRIFFON_NH) return rider_attacks_bb<RIDER_GRIFFON_NH>(s, occupied);
   if (R == RIDER_GRIFFON_SH) return rider_attacks_bb<RIDER_GRIFFON_SH>(s, occupied);
   if (R == RIDER_GRIFFON_EV) return rider_attacks_bb<RIDER_GRIFFON_EV>(s, occupied);

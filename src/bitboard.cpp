@@ -53,9 +53,7 @@ Magic RookMagicsV[SQUARE_NB];
 Magic BishopMagics[SQUARE_NB];
 Magic CannonMagicsH[SQUARE_NB];
 Magic CannonMagicsV[SQUARE_NB];
-Magic LameDabbabaMagics[SQUARE_NB];
 Magic HorseMagics[SQUARE_NB];
-Magic ElephantMagics[SQUARE_NB];
 Magic JanggiElephantMagics[SQUARE_NB];
 Magic CannonDiagMagics[SQUARE_NB];
 Magic NightriderMagics[SQUARE_NB];
@@ -64,7 +62,7 @@ Magic GrasshopperMagicsV[SQUARE_NB];
 Magic GrasshopperMagicsD[SQUARE_NB];
 
 Magic* magics[] = {BishopMagics, RookMagicsH, RookMagicsV, CannonMagicsH, CannonMagicsV,
-                   LameDabbabaMagics, HorseMagics, ElephantMagics, JanggiElephantMagics, CannonDiagMagics, NightriderMagics,
+                   BishopMagics, HorseMagics, BishopMagics, JanggiElephantMagics, CannonDiagMagics, NightriderMagics,
                    GrasshopperMagicsH, GrasshopperMagicsV, GrasshopperMagicsD};
 
 namespace {
@@ -78,9 +76,7 @@ namespace {
   Bitboard BishopTable[0x33C00]; // To store bishop attacks
   Bitboard CannonTableH[0x11800];  // To store horizontal cannon attacks
   Bitboard CannonTableV[0x4800];  // To store vertical cannon attacks
-  Bitboard LameDabbabaTable[0x500];  // To store lame dabbaba attacks
   Bitboard HorseTable[0x500];  // To store horse attacks
-  Bitboard ElephantTable[0x400];  // To store elephant attacks
   Bitboard JanggiElephantTable[0x1C000];  // To store janggi elephant attacks
   Bitboard CannonDiagTable[0x33C00]; // To store diagonal cannon attacks
   Bitboard NightriderTable[0x70200]; // To store nightrider attacks
@@ -93,9 +89,7 @@ namespace {
   Bitboard BishopTable[0x1480]; // To store bishop attacks
   Bitboard CannonTableH[0xA00];  // To store horizontal cannon attacks
   Bitboard CannonTableV[0xA00];  // To store vertical cannon attacks
-  Bitboard LameDabbabaTable[0x240];  // To store lame dabbaba attacks
   Bitboard HorseTable[0x240];  // To store horse attacks
-  Bitboard ElephantTable[0x1A0];  // To store elephant attacks
   Bitboard JanggiElephantTable[0x5C00];  // To store janggi elephant attacks
   Bitboard CannonDiagTable[0x1480]; // To store diagonal cannon attacks
   Bitboard NightriderTable[0x1840]; // To store nightrider attacks
@@ -525,9 +519,7 @@ namespace {
       std::array<Bitboard, SQUARE_NB> bishop {};
       std::array<Bitboard, SQUARE_NB> cannonH {};
       std::array<Bitboard, SQUARE_NB> cannonV {};
-      std::array<Bitboard, SQUARE_NB> lameDabbaba {};
       std::array<Bitboard, SQUARE_NB> horse {};
-      std::array<Bitboard, SQUARE_NB> elephant {};
       std::array<Bitboard, SQUARE_NB> janggiElephant {};
       std::array<Bitboard, SQUARE_NB> cannonDiag {};
       std::array<Bitboard, SQUARE_NB> nightrider {};
@@ -711,9 +703,7 @@ void Bitboards::init_magics(File maxFile, Rank maxRank) {
   init_magic_table<RIDER>(BishopTable, BishopMagics, BishopDirections, cache ? cache->bishop.data() : BishopMagicInit);
   init_magic_table<HOPPER>(CannonTableH, CannonMagicsH, RookDirectionsH, cache ? cache->cannonH.data() : CannonMagicHInit);
   init_magic_table<HOPPER>(CannonTableV, CannonMagicsV, RookDirectionsV, cache ? cache->cannonV.data() : CannonMagicVInit);
-  init_magic_table<LAME_LEAPER>(LameDabbabaTable, LameDabbabaMagics, LameDabbabaDirections, cache ? cache->lameDabbaba.data() : LameDabbabaMagicInit);
   init_magic_table<LAME_LEAPER>(HorseTable, HorseMagics, HorseDirections, cache ? cache->horse.data() : HorseMagicInit);
-  init_magic_table<LAME_LEAPER>(ElephantTable, ElephantMagics, ElephantDirections, cache ? cache->elephant.data() : ElephantMagicInit);
   init_magic_table<LAME_LEAPER>(JanggiElephantTable, JanggiElephantMagics, JanggiElephantDirections, cache ? cache->janggiElephant.data() : JanggiElephantMagicInit);
   init_magic_table<HOPPER>(CannonDiagTable, CannonDiagMagics, BishopDirections, cache ? cache->cannonDiag.data() : CannonDiagMagicInit);
   init_magic_table<RIDER, true>(NightriderTable, NightriderMagics, HorseDirections, cache ? cache->nightrider.data() : NightriderMagicInit);
@@ -726,9 +716,7 @@ void Bitboards::init_magics(File maxFile, Rank maxRank) {
   init_magic_table<RIDER>(BishopTable, BishopMagics, BishopDirections, cache ? cache->bishop.data() : nullptr);
   init_magic_table<HOPPER>(CannonTableH, CannonMagicsH, RookDirectionsH, cache ? cache->cannonH.data() : nullptr);
   init_magic_table<HOPPER>(CannonTableV, CannonMagicsV, RookDirectionsV, cache ? cache->cannonV.data() : nullptr);
-  init_magic_table<LAME_LEAPER>(LameDabbabaTable, LameDabbabaMagics, LameDabbabaDirections, cache ? cache->lameDabbaba.data() : nullptr);
   init_magic_table<LAME_LEAPER>(HorseTable, HorseMagics, HorseDirections, cache ? cache->horse.data() : nullptr);
-  init_magic_table<LAME_LEAPER>(ElephantTable, ElephantMagics, ElephantDirections, cache ? cache->elephant.data() : nullptr);
   init_magic_table<LAME_LEAPER>(JanggiElephantTable, JanggiElephantMagics, JanggiElephantDirections, cache ? cache->janggiElephant.data() : nullptr);
   init_magic_table<HOPPER>(CannonDiagTable, CannonDiagMagics, BishopDirections, cache ? cache->cannonDiag.data() : nullptr);
   init_magic_table<RIDER, true>(NightriderTable, NightriderMagics, HorseDirections, cache ? cache->nightrider.data() : nullptr);
@@ -746,9 +734,7 @@ void Bitboards::init_magics(File maxFile, Rank maxRank) {
       snapshot_magic_numbers(fresh.bishop, BishopMagics);
       snapshot_magic_numbers(fresh.cannonH, CannonMagicsH);
       snapshot_magic_numbers(fresh.cannonV, CannonMagicsV);
-      snapshot_magic_numbers(fresh.lameDabbaba, LameDabbabaMagics);
       snapshot_magic_numbers(fresh.horse, HorseMagics);
-      snapshot_magic_numbers(fresh.elephant, ElephantMagics);
       snapshot_magic_numbers(fresh.janggiElephant, JanggiElephantMagics);
       snapshot_magic_numbers(fresh.cannonDiag, CannonDiagMagics);
       snapshot_magic_numbers(fresh.nightrider, NightriderMagics);
