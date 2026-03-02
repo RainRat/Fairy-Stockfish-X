@@ -20,6 +20,7 @@
 #define POSITION_H_INCLUDED
 
 #include <cassert>
+#include <cstdint>
 #include <deque>
 #include <memory> // For std::unique_ptr
 #include <string>
@@ -69,7 +70,7 @@ struct StateInfo {
   Key        boardKey;
 #ifdef SUDOKU_VARIANTS
   int        sudokuConflictsCount[COLOR_NB];
-  int        pieceCountInSudokuHouse[COLOR_NB][PIECE_TYPE_NB][SH_NB][FILE_NB];
+  uint8_t    pieceCountInSudokuHouse[COLOR_NB][PIECE_TYPE_NB][SH_NB][FILE_NB];
 #endif
   Bitboard   checkersBB;
   Piece      unpromotedCapturedPiece;

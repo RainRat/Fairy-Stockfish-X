@@ -909,6 +909,7 @@ void Position::set_check_info(StateInfo* si) const {
 
 void Position::set_sudoku_conflicts_info(StateInfo* si) const {
 #ifdef SUDOKU_VARIANTS
+  static_assert(FILE_NB <= 255 && RANK_NB <= 255, "Sudoku house counters require <=255 bins");
   if (!var->sudoku) return;
 
   si->sudokuConflictsCount[WHITE] = si->sudokuConflictsCount[BLACK] = 0;
