@@ -384,7 +384,7 @@ void Bitboards::init_pieces() {
                   if (limit && HorseDirections.find(d) != HorseDirections.end())
                       riderTypes |= RIDER_HORSE;
                   if (limit && ElephantDirections.find(d) != ElephantDirections.end())
-                      riderTypes |= RIDER_ELEPHANT;
+                      riderTypes |= RIDER_BISHOP;
                   if (limit && JanggiElephantDirections.find(d) != JanggiElephantDirections.end())
                       riderTypes |= RIDER_JANGGI_ELEPHANT;
               }
