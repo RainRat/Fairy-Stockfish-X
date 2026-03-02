@@ -273,9 +273,11 @@ public:
   EnclosingRule flip_enclosed_pieces() const;
   // winning conditions
   int n_move_rule() const;
+  int n_move_rule_immediate() const;
   int n_move_hard_limit_rule() const;
   Value n_move_hard_limit_rule_value() const;
   int n_fold_rule() const;
+  int n_fold_rule_immediate() const;
   Value stalemate_value(int ply = 0) const;
   Value checkmate_value(int ply = 0) const;
   Value extinction_value(int ply = 0) const;
@@ -465,6 +467,7 @@ private:
   bool compute_forced_jump_followup(Square s) const;
   bool is_initial_pawn(Piece pc, Square s) const;
   Key reserve_key() const;
+  bool n_fold_game_end(Value& result, int ply, int target) const;
 
   // Other helpers
   void move_piece(Square from, Square to);
@@ -1358,6 +1361,11 @@ inline int Position::n_move_rule() const {
   return var->nMoveRule;
 }
 
+inline int Position::n_move_rule_immediate() const {
+  assert(var != nullptr);
+  return var->nMoveRuleImmediate;
+}
+
 inline int Position::n_move_hard_limit_rule() const {
   assert(var != nullptr);
   return var->nMoveHardLimitRule;
@@ -1371,6 +1379,11 @@ inline Value Position::n_move_hard_limit_rule_value() const {
 inline int Position::n_fold_rule() const {
   assert(var != nullptr);
   return var->nFoldRule;
+}
+
+inline int Position::n_fold_rule_immediate() const {
+  assert(var != nullptr);
+  return var->nFoldRuleImmediate;
 }
 
 inline EnclosingRule Position::flip_enclosed_pieces() const {

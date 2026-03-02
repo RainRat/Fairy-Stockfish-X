@@ -48,6 +48,8 @@ namespace {
     Variant* chess_variant() {
         Variant* v = chess_variant_base()->init();
         v->nnueAlias = "nn-";
+        v->nMoveRuleImmediate = 75;
+        v->nFoldRuleImmediate = 5;
         return v;
     }
     // Chess960 aka Fischer random chess

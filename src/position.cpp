@@ -4072,6 +4072,84 @@ bool Position::see_ge(Move m, Value threshold) const {
 /// Position::is_optional_game_end() tests whether the position may end the game by
 /// 50-move rule, by repetition, or a variant rule that allows a player to claim a game result.
 
+bool Position::n_fold_game_end(Value& result, int ply, int target) const {
+
+  if (target <= 0)
+      return false;
+
+  int end = captures_to_hand() ? st->pliesFromNull : std::min(st->rule50, st->pliesFromNull);
+
+  if (end < 4)
+      return false;
+
+  StateInfo* stp = st->previous->previous;
+  int cnt = 0;
+  bool perpetualThem = var->perpetualCheckIllegal && st->checkersBB && stp->checkersBB;
+  bool perpetualUs = var->perpetualCheckIllegal && st->previous->checkersBB && stp->previous->checkersBB;
+  Bitboard chaseThem = undo_move_board(st->chased, st->previous->move) & stp->chased;
+  Bitboard chaseUs = undo_move_board(st->previous->chased, stp->move) & stp->previous->chased;
+  int moveRepetition = var->moveRepetitionIllegal
+                        && type_of(st->move) == NORMAL
+                        && !st->previous->checkersBB && !stp->previous->checkersBB
+                        && (board_bb(~side_to_move(), type_of(piece_on(to_sq(st->move)))) & board_bb(side_to_move(), KING))
+                        ? (stp->move == reverse_move(st->move) ? 2 : is_pass(stp->move) ? 1 : 0) : 0;
+
+  for (int i = 4; i <= end; i += 2)
+  {
+      // Janggi repetition rule
+      if (moveRepetition > 0)
+      {
+          if (i + 1 <= end && stp->previous->previous->previous->checkersBB)
+              moveRepetition = 0;
+          else if (moveRepetition < 4)
+          {
+              if (stp->previous->previous->move == reverse_move((moveRepetition == 1 ? st : stp)->move))
+                  moveRepetition++;
+              else
+                  moveRepetition = 0;
+          }
+          else
+          {
+              assert(moveRepetition == 4);
+              if (!stp->previous->previous->capturedPiece && from_sq(stp->move) == to_sq(stp->previous->previous->move))
+              {
+                  result = VALUE_MATE;
+                  return true;
+              }
+              else
+                  moveRepetition = 0;
+          }
+      }
+      // Chased pieces are empty when there is no previous move
+      if (i != st->pliesFromNull)
+          chaseThem = undo_move_board(chaseThem, stp->previous->move) & stp->previous->previous->chased;
+      stp = stp->previous->previous;
+      perpetualThem &= bool(stp->checkersBB);
+
+      // Return a draw score if a position repeats once earlier but strictly
+      // after the root, or repeats twice before or at the root.
+      if (   stp->key == st->key
+          && ++cnt + 1 >= (ply > i && !moveRepetition && !chaseUs && !chaseThem && !perpetualUs && !perpetualThem ? 2 : target))
+      {
+          result = convert_mate_value(  (perpetualThem || perpetualUs) ? (!perpetualUs ? VALUE_MATE : !perpetualThem ? -VALUE_MATE : VALUE_DRAW)
+                                      : (chaseThem || chaseUs) ? (!chaseUs ? VALUE_MATE : !chaseThem ? -VALUE_MATE : VALUE_DRAW)
+                                      : var->nFoldValueAbsolute && sideToMove == BLACK ? -var->nFoldValue
+                                      : var->nFoldValue, ply);
+          if (result == VALUE_DRAW && var->materialCounting)
+              result = convert_mate_value(material_counting_result(), ply);
+          return true;
+      }
+
+      if (i + 1 <= end)
+      {
+          perpetualUs &= bool(stp->previous->checkersBB);
+          chaseUs = undo_move_board(chaseUs, stp->move) & stp->previous->chased;
+      }
+  }
+
+  return false;
+}
+
 bool Position::is_optional_game_end(Value& result, int ply, int countStarted) const {
 
   // n-move rule
@@ -4099,79 +4177,8 @@ bool Position::is_optional_game_end(Value& result, int ply, int countStarted) co
       }
   }
 
-  // n-fold repetition
-  if (n_fold_rule())
-  {
-      int end = captures_to_hand() ? st->pliesFromNull : std::min(st->rule50, st->pliesFromNull);
-
-      if (end >= 4)
-      {
-          StateInfo* stp = st->previous->previous;
-          int cnt = 0;
-          bool perpetualThem = var->perpetualCheckIllegal && st->checkersBB && stp->checkersBB;
-          bool perpetualUs = var->perpetualCheckIllegal && st->previous->checkersBB && stp->previous->checkersBB;
-          Bitboard chaseThem = undo_move_board(st->chased, st->previous->move) & stp->chased;
-          Bitboard chaseUs = undo_move_board(st->previous->chased, stp->move) & stp->previous->chased;
-          int moveRepetition = var->moveRepetitionIllegal
-                               && type_of(st->move) == NORMAL
-                               && !st->previous->checkersBB && !stp->previous->checkersBB
-                               && (board_bb(~side_to_move(), type_of(piece_on(to_sq(st->move)))) & board_bb(side_to_move(), KING))
-                               ? (stp->move == reverse_move(st->move) ? 2 : is_pass(stp->move) ? 1 : 0) : 0;
-
-          for (int i = 4; i <= end; i += 2)
-          {
-              // Janggi repetition rule
-              if (moveRepetition > 0)
-              {
-                  if (i + 1 <= end && stp->previous->previous->previous->checkersBB)
-                      moveRepetition = 0;
-                  else if (moveRepetition < 4)
-                  {
-                      if (stp->previous->previous->move == reverse_move((moveRepetition == 1 ? st : stp)->move))
-                          moveRepetition++;
-                      else
-                          moveRepetition = 0;
-                  }
-                  else
-                  {
-                      assert(moveRepetition == 4);
-                      if (!stp->previous->previous->capturedPiece && from_sq(stp->move) == to_sq(stp->previous->previous->move))
-                      {
-                          result = VALUE_MATE;
-                          return true;
-                      }
-                      else
-                          moveRepetition = 0;
-                  }
-              }
-              // Chased pieces are empty when there is no previous move
-              if (i != st->pliesFromNull)
-                  chaseThem = undo_move_board(chaseThem, stp->previous->move) & stp->previous->previous->chased;
-              stp = stp->previous->previous;
-              perpetualThem &= bool(stp->checkersBB);
-
-              // Return a draw score if a position repeats once earlier but strictly
-              // after the root, or repeats twice before or at the root.
-              if (   stp->key == st->key
-                  && ++cnt + 1 >= (ply > i && !moveRepetition && !chaseUs && !chaseThem && !perpetualUs && !perpetualThem ? 2 : n_fold_rule()))
-              {
-                  result = convert_mate_value(  (perpetualThem || perpetualUs) ? (!perpetualUs ? VALUE_MATE : !perpetualThem ? -VALUE_MATE : VALUE_DRAW)
-                                              : (chaseThem || chaseUs) ? (!chaseUs ? VALUE_MATE : !chaseThem ? -VALUE_MATE : VALUE_DRAW)
-                                              : var->nFoldValueAbsolute && sideToMove == BLACK ? -var->nFoldValue
-                                              : var->nFoldValue, ply);
-                  if (result == VALUE_DRAW && var->materialCounting)
-                      result = convert_mate_value(material_counting_result(), ply);
-                  return true;
-              }
-
-              if (i + 1 <= end)
-              {
-                  perpetualUs &= bool(stp->previous->checkersBB);
-                  chaseUs = undo_move_board(chaseUs, stp->move) & stp->previous->chased;
-              }
-          }
-      }
-  }
+  if (n_fold_game_end(result, ply, n_fold_rule()))
+      return true;
 
   // counting rules
   if (   counting_rule()
@@ -4299,6 +4306,19 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
       result = mated_in(ply);
       return true;
   }
+
+  // Immediate n-move adjudication (e.g. FIDE 75-move rule)
+  if (   n_move_rule_immediate()
+      && st->rule50 > (2 * n_move_rule_immediate() - 1)
+      && (!checkers() || MoveList<LEGAL>(*this).size()))
+  {
+      result = var->materialCounting ? convert_mate_value(material_counting_result(), ply) : VALUE_DRAW;
+      return true;
+  }
+
+  // Immediate n-fold adjudication (e.g. FIDE fivefold repetition)
+  if (n_fold_game_end(result, ply, n_fold_rule_immediate()))
+      return true;
 
   if (points_counting() && points_goal() > 0)
   {
