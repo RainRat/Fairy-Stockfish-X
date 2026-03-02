@@ -2225,7 +2225,10 @@ inline bool Position::capture(Move m) const {
       Piece mover = moved_piece(m);
       PieceSet jumpTypes = jump_capture_types();
       if (mover != NO_PIECE && ((jumpTypes & ALL_PIECES) || (jumpTypes & type_of(mover))))
-          return jump_capture_square(from_sq(m), to_sq(m)) != SQ_NONE;
+      {
+          if (jump_capture_square(from_sq(m), to_sq(m)) != SQ_NONE)
+              return true;
+      }
   }
   // Castling is encoded as "king captures rook"
   return ((!empty(to_sq(m)) && type_of(m) != CASTLING && from_sq(m) != to_sq(m))
