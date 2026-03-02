@@ -2408,18 +2408,18 @@ inline Value Position::material_counting_result() const {
                      + weight_count(WAZIR, 3)
                      + weight_count(SOLDIER, 2)
                      - 1;
-      result = materialCount > 0 ? VALUE_MATE : -VALUE_MATE;
+      result = materialCount > 0 ? VALUE_COUNT_WIN : -VALUE_COUNT_WIN;
       break;
   case UNWEIGHTED_MATERIAL:
-      result =  count(WHITE, ALL_PIECES) > count(BLACK, ALL_PIECES) ?  VALUE_MATE
-              : count(WHITE, ALL_PIECES) < count(BLACK, ALL_PIECES) ? -VALUE_MATE
+      result =  count(WHITE, ALL_PIECES) > count(BLACK, ALL_PIECES) ?  VALUE_COUNT_WIN
+              : count(WHITE, ALL_PIECES) < count(BLACK, ALL_PIECES) ? -VALUE_COUNT_WIN
                                                                     :  VALUE_DRAW;
       break;
   case WHITE_DRAW_ODDS:
-      result = VALUE_MATE;
+      result = VALUE_COUNT_WIN;
       break;
   case BLACK_DRAW_ODDS:
-      result = -VALUE_MATE;
+      result = -VALUE_COUNT_WIN;
       break;
   default:
       assert(false);
