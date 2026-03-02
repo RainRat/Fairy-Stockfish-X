@@ -339,12 +339,58 @@ inline Bitboard between_bb(Square s1, Square s2) {
   return BetweenBB[s1][s2];
 }
 
+inline Bitboard nightrider_between_bb(Square s1, Square s2) {
+  int df = int(file_of(s2)) - int(file_of(s1));
+  int dr = int(rank_of(s2)) - int(rank_of(s1));
+
+  auto make_path = [&](int stepF, int stepR) {
+      if ((stepF == 0) || (stepR == 0))
+          return Bitboard(0);
+      if (df % stepF || dr % stepR)
+          return Bitboard(0);
+      int nF = df / stepF;
+      int nR = dr / stepR;
+      if (nF != nR || nF <= 0)
+          return Bitboard(0);
+      int n = nF;
+      Bitboard b = 0;
+      int f = int(file_of(s1));
+      int r = int(rank_of(s1));
+      for (int i = 1; i <= n; ++i)
+      {
+          f += stepF;
+          r += stepR;
+          if (f < int(FILE_A) || f > int(FILE_MAX) || r < int(RANK_1) || r > int(RANK_MAX))
+              return Bitboard(0);
+          b |= make_square(File(f), Rank(r));
+      }
+      return b;
+  };
+
+  // Nightrider rays are repeated knight vectors.
+  static constexpr int StepFile[8] = { 1, 2, 2, 1, -1, -2, -2, -1 };
+  static constexpr int StepRank[8] = { 2, 1, -1, -2, -2, -1, 1, 2 };
+  for (int i = 0; i < 8; ++i)
+  {
+      Bitboard path = make_path(StepFile[i], StepRank[i]);
+      if (path)
+          return path;
+  }
+
+  return Bitboard(0);
+}
+
 inline Bitboard between_bb(Square s1, Square s2, PieceType pt) {
   if (pt == HORSE)
       return PseudoAttacks[WHITE][WAZIR][s2] & PseudoAttacks[WHITE][FERS][s1];
   else if (pt == JANGGI_ELEPHANT)
       return  (PseudoAttacks[WHITE][WAZIR][s2] & PseudoAttacks[WHITE][ALFIL][s1])
             | (PseudoAttacks[WHITE][KNIGHT][s2] & PseudoAttacks[WHITE][FERS][s1]);
+  else if (AttackRiderTypes[pt] & RIDER_NIGHTRIDER)
+  {
+      Bitboard path = nightrider_between_bb(s1, s2);
+      return path ? path : between_bb(s1, s2);
+  }
   else
       return between_bb(s1, s2);
 }

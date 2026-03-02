@@ -533,10 +533,18 @@ namespace {
 
         if (Type == EVASIONS)
         {
-            if (checkers & pos.non_sliding_riders())
+            Square checksq = lsb(checkers);
+            PieceType checkerPt = type_of(pos.piece_on(checksq));
+
+            if (more_than_one(checkers))
+                target = checkers;
+            else
+                target = between_bb(ksq, checksq, checkerPt);
+
+            bool blockableNightrider = (AttackRiderTypes[checkerPt] & RIDER_NIGHTRIDER) && !more_than_one(checkers);
+            if ((checkers & pos.non_sliding_riders()) && !blockableNightrider)
                 target = ~pos.pieces(Us);
             // Leaper attacks can not be blocked
-            Square checksq = lsb(checkers);
             if (LeaperAttacks[~Us][type_of(pos.piece_on(checksq))][checksq] & pos.square<KING>(Us))
                 target = checkers;
         }
