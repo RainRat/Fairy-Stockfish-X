@@ -147,6 +147,7 @@ private:
   template<PickType T, typename Pred> Move select(Pred);
   template<GenType> void score();
   bool is_useless_potion(Move m) const;
+  ExtMove* prune_useless_potions(ExtMove* begin, ExtMove* end) const;
   ExtMove* begin() { return cur; }
   ExtMove* end() { return endMoves; }
   static constexpr int MOVE_PICK_OVERFLOW_CAPACITY = MAX_MOVES * 2;

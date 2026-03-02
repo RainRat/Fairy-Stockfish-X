@@ -93,6 +93,19 @@ bool MovePicker::is_useless_potion(Move m) const {
   return false;
 }
 
+ExtMove* MovePicker::prune_useless_potions(ExtMove* begin, ExtMove* end) const {
+
+  if (!pos.potions_enabled())
+      return end;
+
+  ExtMove* write = begin;
+  for (ExtMove* it = begin; it != end; ++it)
+      if (!is_useless_potion(it->move))
+          *write++ = *it;
+
+  return write;
+}
+
 
 /// Constructors of the MovePicker class. As arguments we pass information
 /// to help it to return the (presumably) good moves first, to decide which
@@ -233,6 +246,7 @@ top:
   case QCAPTURE_INIT:
       cur = endBadCaptures = moveList;
       endMoves = generate<CAPTURES>(pos, cur);
+      endMoves = prune_useless_potions(cur, endMoves);
 
       score<CAPTURES>();
       ++stage;
@@ -270,6 +284,7 @@ top:
       {
           cur = endBadCaptures;
           endMoves = generate<QUIETS>(pos, cur);
+          endMoves = prune_useless_potions(cur, endMoves);
 
           score<QUIETS>();
           partial_insertion_sort(cur, endMoves, -3000 * depth);
@@ -298,6 +313,7 @@ top:
   case EVASION_INIT:
       cur = moveList;
       endMoves = generate<EVASIONS>(pos, cur);
+      endMoves = prune_useless_potions(cur, endMoves);
 
       score<EVASIONS>();
       ++stage;
@@ -324,6 +340,7 @@ top:
   case QCHECK_INIT:
       cur = moveList;
       endMoves = generate<QUIET_CHECKS>(pos, cur);
+      endMoves = prune_useless_potions(cur, endMoves);
 
       ++stage;
       [[fallthrough]];
