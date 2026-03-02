@@ -80,7 +80,8 @@ namespace {
   Bitboard HorseTable[0x500];  // To store horse attacks
   Bitboard JanggiElephantTable[0x1C000];  // To store janggi elephant attacks
   Bitboard CannonDiagTable[0x33C00]; // To store diagonal cannon attacks
-  Bitboard NightriderTable[0x70200]; // To store nightrider attacks
+  // Nightrider masks trim terminal leap squares; 12x10 max needs 0xD200 entries.
+  Bitboard NightriderTable[0xD200]; // To store nightrider attacks
   Bitboard GrasshopperTableH[0x11800];  // To store horizontal grasshopper attacks
   Bitboard GrasshopperTableV[0x4800];  // To store vertical grasshopper attacks
   Bitboard GrasshopperTableD[0x33C00]; // To store diagonal grasshopper attacks
@@ -93,7 +94,8 @@ namespace {
   Bitboard HorseTable[0x240];  // To store horse attacks
   Bitboard JanggiElephantTable[0x5C00];  // To store janggi elephant attacks
   Bitboard CannonDiagTable[0x1480]; // To store diagonal cannon attacks
-  Bitboard NightriderTable[0x1840]; // To store nightrider attacks
+  // Nightrider masks trim terminal leap squares; 8x8 max needs 0x500 entries.
+  Bitboard NightriderTable[0x500]; // To store nightrider attacks
   Bitboard GrasshopperTableH[0xA00];  // To store horizontal grasshopper attacks
   Bitboard GrasshopperTableV[0xA00];  // To store vertical grasshopper attacks
   Bitboard GrasshopperTableD[0x1480]; // To store diagonal grasshopper attacks
