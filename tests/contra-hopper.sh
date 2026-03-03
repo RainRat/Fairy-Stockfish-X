@@ -21,3 +21,17 @@ grep -q "d4d3:" <<<"$out"
 ! grep -q "d4f4:" <<<"$out"
 
 echo "contra-hopper test OK"
+
+cat > "$tmp_ini" <<'INI'
+[contrahopper2:chess]
+customPiece1 = a:oR2
+startFen = 7k/3p4/8/8/3A4/8/3p4/K7 w - - 0 1
+INI
+
+out2=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value contrahopper2\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" | ./stockfish)
+
+# With oR2, only hurdles up to distance 2 count.
+grep -q "d4d3:" <<<"$out2"
+! grep -q "d4d6:" <<<"$out2"
+
+echo "contra-hopper range test OK"
