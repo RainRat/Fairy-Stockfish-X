@@ -1368,13 +1368,15 @@ Bitboard Position::slider_blockers(Bitboard sliders, Square s, Bitboard& pinners
       for (PieceSet ps = piece_types(); ps;)
       {
           PieceType pt = pop_lsb(ps);
-          Bitboard b = sliders & (PseudoAttacks[~c][pt][s] ^ LeaperAttacks[~c][pt][s]) & pieces(c, pt);
+          RiderType riderTypes = AttackRiderTypes[pt];
+          Bitboard ptPieces = pieces(c, pt);
+          Bitboard b = sliders & (PseudoAttacks[~c][pt][s] ^ LeaperAttacks[~c][pt][s]) & ptPieces;
           if (b)
           {
               // Consider asymmetrical moves (e.g., horse)
-              if (AttackRiderTypes[pt] & ASYMMETRICAL_RIDERS)
+              if (riderTypes & ASYMMETRICAL_RIDERS)
               {
-                  Bitboard asymmetricals = PseudoAttacks[~c][pt][s] & pieces(c, pt);
+                  Bitboard asymmetricals = PseudoAttacks[~c][pt][s] & ptPieces;
                   while (asymmetricals)
                   {
                       Square s2 = pop_lsb(asymmetricals);
@@ -1384,8 +1386,8 @@ Bitboard Position::slider_blockers(Bitboard sliders, Square s, Bitboard& pinners
               }
               else
                   snipers |= b & ~attacks_bb(~c, pt, s, pieces());
-              if (AttackRiderTypes[pt] & ~HOPPING_RIDERS)
-                  slidingSnipers |= snipers & pieces(pt);
+              if (riderTypes & ~HOPPING_RIDERS)
+                  slidingSnipers |= snipers & ptPieces;
           }
       }
       // Diagonal rook pins in Janggi palace
