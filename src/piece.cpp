@@ -18,6 +18,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <iostream>
 #include <limits>
 #include <map>
 #include <string>
@@ -63,7 +64,7 @@ namespace {
 
       // Parser sugar: m(AB) -> mAmB, c(RB) -> cRcB
       auto expand_group_sugar = [&](const std::string& in) {
-          const std::string prefixChars = "mcpgnxiyfbrlvsh";
+          const std::string prefixChars = "mcpgnojzxiyfbrlvsh";
           std::string out;
           for (std::string::size_type i = 0; i < in.size(); ++i)
           {
@@ -154,12 +155,26 @@ namespace {
       auto commit_atom = [&](const std::vector<std::pair<int, int>>& atoms, bool atomIsRider, std::string::size_type& i, char atomChar, bool atomIsTuple = false) {
           // Check for rider / limited-distance rider suffix.
           rider = atomIsRider;
-          if (i + 1 < expandedBetza.size() && (std::isdigit(static_cast<unsigned char>(expandedBetza[i + 1])) || expandedBetza[i + 1] == atomChar))
+          if (i + 1 < expandedBetza.size())
           {
-              rider = true;
-              if (std::isdigit(static_cast<unsigned char>(expandedBetza[i + 1])))
-                  distance = expandedBetza[i + 1] - '0';
-              i++;
+              if (expandedBetza[i + 1] == atomChar)
+              {
+                  rider = true;
+                  i++;
+              }
+              else if (std::isdigit(static_cast<unsigned char>(expandedBetza[i + 1])))
+              {
+                  rider = true;
+                  int parsedDistance = 0;
+                  std::string::size_type j = i + 1;
+                  while (j < expandedBetza.size() && std::isdigit(static_cast<unsigned char>(expandedBetza[j])))
+                  {
+                      parsedDistance = std::min(parsedDistance * 10 + (expandedBetza[j] - '0'), 255);
+                      j++;
+                  }
+                  distance = parsedDistance;
+                  i = j - 1;
+              }
           }
           if (!rider && lame)
               distance = -1;
@@ -414,6 +429,8 @@ namespace {
               // tuple+hoppers/riders to avoid Direction-based wrap artifacts.
               if (hopper || contraHopper || rider || lame || dynamicDistance)
               {
+                  std::cerr << "Unsupported Betza tuple modifier combination in '" << betza
+                            << "': tuple atoms only support explicit leapers. Ignoring tuple atom." << std::endl;
                   moveModalities.clear();
                   prelimDirections.clear();
                   hopper = false;

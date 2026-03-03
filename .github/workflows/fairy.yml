@@ -103,6 +103,10 @@ jobs:
         run: |
           ../tests/whaleshogi.sh
 
+      - name: Test Betza modifiers
+        run: |
+          ../tests/betza-modifiers.sh
+
       - name: Test variant bench
         run: |
           ./stockfish bench xiangqi
