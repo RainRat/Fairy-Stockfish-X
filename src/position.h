@@ -487,6 +487,10 @@ private:
   static Bitboard contra_hopper_bb(const std::map<Direction,int>& directions,
                                    Square sq, Bitboard occupied,
                                    Color c);
+  static Bitboard special_rider_bb(const PieceInfo* pi, MoveModality modality,
+                                   Square sq, Bitboard occupied,
+                                   Bitboard occupiedAll, Bitboard ownPieces,
+                                   Color c, bool captureMode);
 
   // Data members
   Piece board[SQUARE_NB];
@@ -1964,6 +1968,21 @@ inline Bitboard Position::contra_hopper_bb(const std::map<Direction,int>& direct
   return out;
 }
 
+inline Bitboard Position::special_rider_bb(const PieceInfo* pi, MoveModality modality,
+                                           Square sq, Bitboard occupied,
+                                           Bitboard occupiedAll, Bitboard ownPieces,
+                                           Color c, bool captureMode)
+{
+  Bitboard b = 0;
+  if (pi->hasDynamicSlider)
+      b |= Position::dynamic_slider_bb(pi->slider[0][modality], sq, occupied, occupiedAll, c);
+  if (pi->hasMaxSlider)
+      b |= Position::max_slider_bb(pi->slider[0][modality], sq, occupied, ownPieces, c, captureMode);
+  if (pi->hasContraHopper)
+      b |= Position::contra_hopper_bb(pi->contraHopper[0][modality], sq, occupied, c);
+  return b;
+}
+
 inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s) const {
   assert(pt != NO_PIECE_TYPE);
   Bitboard occupancy = byTypeBB[ALL_PIECES];
@@ -1986,12 +2005,7 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s) const {
 
   Bitboard b = attacks_bb(c, movePt, s, occupancy);
 
-  if (pi->hasDynamicSlider)
-      b |= Position::dynamic_slider_bb(pi->slider[0][MODALITY_CAPTURE], s, occupancy, byTypeBB[ALL_PIECES], c); // LOA dynamic-distance attacks
-  if (pi->hasMaxSlider)
-      b |= Position::max_slider_bb(pi->slider[0][MODALITY_CAPTURE], s, occupancy, pieces(c), c, true);
-  if (pi->hasContraHopper)
-      b |= Position::contra_hopper_bb(pi->contraHopper[0][MODALITY_CAPTURE], s, occupancy, c);
+  b |= Position::special_rider_bb(pi, MODALITY_CAPTURE, s, occupancy, byTypeBB[ALL_PIECES], pieces(c), c, true);
 
   if (pi->friendlyJump)
       b &= ~pieces(c);          // never hit our own men
@@ -2097,12 +2111,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
 
   Bitboard b = (moves_bb(c, movePt, s, occupancy) | extraDestinations);
 
-  if (pi->hasDynamicSlider)
-      b |= Position::dynamic_slider_bb(pi->slider[0][MODALITY_QUIET], s, occupancy, byTypeBB[ALL_PIECES], c); // LOA dynamic-distance quiet moves
-  if (pi->hasMaxSlider)
-      b |= Position::max_slider_bb(pi->slider[0][MODALITY_QUIET], s, occupancy, pieces(c), c, false);
-  if (pi->hasContraHopper)
-      b |= Position::contra_hopper_bb(pi->contraHopper[0][MODALITY_QUIET], s, occupancy, c);
+  b |= Position::special_rider_bb(pi, MODALITY_QUIET, s, occupancy, byTypeBB[ALL_PIECES], pieces(c), c, false);
 
   if (pi->friendlyJump)
       b &= ~pieces(c);          // cannot land on own piece
