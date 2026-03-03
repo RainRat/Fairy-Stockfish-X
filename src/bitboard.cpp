@@ -555,15 +555,26 @@ void Bitboards::init_pieces() {
       // Initialize move/attack bitboards
       for (Color c : { WHITE, BLACK })
       {
-          for (Square s = SQ_A1; s <= SQ_MAX; ++s)
+          for (auto modality : {MODALITY_QUIET, MODALITY_CAPTURE})
           {
-              for (auto modality : {MODALITY_QUIET, MODALITY_CAPTURE})
+              for (bool initial : {false, true})
               {
-                  for (bool initial : {false, true})
-                  {
-                      // We do not support initial captures
-                      if (modality == MODALITY_CAPTURE && initial)
+                  // We do not support initial captures
+                  if (modality == MODALITY_CAPTURE && initial)
+                      continue;
+
+                  std::map<Direction, int> dirs;
+                  std::map<Direction, int> skiDirs;
+                  for (auto const& [d, limit] : pi->slider[initial][modality])
+                      if (limit == SKI_SLIDER_LIMIT)
+                          skiDirs[d] = 0;
+                      else if (limit == MAX_SLIDER_LIMIT)
                           continue;
+                      else if (limit >= 0)
+                          dirs[d] = limit;
+
+                  for (Square s = SQ_A1; s <= SQ_MAX; ++s)
+                  {
                       auto& pseudo = modality == MODALITY_CAPTURE ? PseudoAttacks[c][pt][s] : PseudoMoves[initial][c][pt][s];
                       auto& leaper = modality == MODALITY_CAPTURE ? LeaperAttacks[c][pt][s] : LeaperMoves[initial][c][pt][s];
                       pseudo = 0;
@@ -582,19 +593,8 @@ void Bitboards::init_pieces() {
                           pseudo |= dst;
                           leaper |= dst;
                       }
-                      {
-                          std::map<Direction, int> dirs;
-                          std::map<Direction, int> skiDirs;
-                          for (auto const& [d, limit] : pi->slider[initial][modality])
-                              if (limit == SKI_SLIDER_LIMIT)
-                                  skiDirs[d] = 0;
-                              else if (limit == MAX_SLIDER_LIMIT)
-                                  continue;
-                              else if (limit >= 0)
-                                  dirs[d] = limit;
-                          pseudo |= sliding_attack<RIDER>(dirs, s, 0, c);
-                          pseudo |= ski_sliding_attack(skiDirs, s, 0, c);
-                      }
+                      pseudo |= sliding_attack<RIDER>(dirs, s, 0, c);
+                      pseudo |= ski_sliding_attack(skiDirs, s, 0, c);
                       pseudo |= sliding_attack<HOPPER_RANGE>(pi->hopper[initial][modality], s, 0, c);
                       pseudo |= contra_hopper_potential(pi->contraHopper[initial][modality], s, c);
                       if (pi->griffon[initial][modality])
