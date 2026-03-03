@@ -263,6 +263,60 @@ namespace {
     return contra_hopper_attack(pi->contraHopper[initial][modality], s, 0, c);
   }
 
+  void add_step_like_rider_types(RiderType& riderTypes, Direction d) {
+    const int ad = std::abs(int(d));
+    if ((ad % FILE_NB) == 0 || ad < FILE_NB)
+        riderTypes |= RIDER_ROOK_H | RIDER_ROOK_V;
+    if ((FILE_NB > 1 && (ad % (FILE_NB - 1)) == 0) || (ad % (FILE_NB + 1)) == 0)
+        riderTypes |= RIDER_BISHOP;
+    if (LameDabbabaDirections.find(d) != LameDabbabaDirections.end())
+        riderTypes |= RIDER_LAME_DABBABA;
+    if (HorseDirections.find(d) != HorseDirections.end())
+        riderTypes |= RIDER_HORSE;
+    if (ElephantDirections.find(d) != ElephantDirections.end())
+        riderTypes |= RIDER_ELEPHANT;
+    if (JanggiElephantDirections.find(d) != JanggiElephantDirections.end())
+        riderTypes |= RIDER_JANGGI_ELEPHANT;
+  }
+
+  void add_slider_rider_types(RiderType& riderTypes, Direction d, int limit) {
+    if (limit == DYNAMIC_SLIDER_LIMIT)
+        return;
+    if (limit == SKI_SLIDER_LIMIT)
+    {
+        if (BishopDirections.find(d) != BishopDirections.end())
+            riderTypes |= RIDER_SKI_BISHOP;
+        if (RookDirectionsH.find(d) != RookDirectionsH.end())
+            riderTypes |= RIDER_SKI_ROOK_H;
+        if (RookDirectionsV.find(d) != RookDirectionsV.end())
+            riderTypes |= RIDER_SKI_ROOK_V;
+        return;
+    }
+    if (BishopDirections.find(d) != BishopDirections.end())
+        riderTypes |= RIDER_BISHOP;
+    if (RookDirectionsH.find(d) != RookDirectionsH.end())
+        riderTypes |= RIDER_ROOK_H;
+    if (RookDirectionsV.find(d) != RookDirectionsV.end())
+        riderTypes |= RIDER_ROOK_V;
+    if (LameDabbabaDirections.find(d) != LameDabbabaDirections.end())
+        riderTypes |= RIDER_LAME_DABBABA;
+    if (HorseDirections.find(d) != HorseDirections.end())
+        riderTypes |= RIDER_NIGHTRIDER;
+    if (ElephantDirections.find(d) != ElephantDirections.end())
+        riderTypes |= RIDER_ELEPHANT;
+    if (JanggiElephantDirections.find(d) != JanggiElephantDirections.end())
+        riderTypes |= RIDER_JANGGI_ELEPHANT;
+  }
+
+  void add_hopper_rider_types(RiderType& riderTypes, Direction d, int limit) {
+    if (RookDirectionsH.find(d) != RookDirectionsH.end())
+        riderTypes |= limit == 1 ? RIDER_GRASSHOPPER_H : RIDER_CANNON_H;
+    if (RookDirectionsV.find(d) != RookDirectionsV.end())
+        riderTypes |= limit == 1 ? RIDER_GRASSHOPPER_V : RIDER_CANNON_V;
+    if (BishopDirections.find(d) != BishopDirections.end())
+        riderTypes |= limit == 1 ? RIDER_GRASSHOPPER_D : RIDER_CANNON_DIAG;
+  }
+
   Bitboard lame_leaper_path(Direction d, Square s) {
     Direction dr = d > 0 ? NORTH : SOUTH;
     Direction df = (std::abs(d % NORTH) < NORTH / 2 ? d % NORTH : -(d % NORTH)) < 0 ? WEST : EAST;
@@ -526,62 +580,12 @@ void Bitboards::init_pieces() {
               auto& riderTypes = modality == MODALITY_CAPTURE ? AttackRiderTypes[pt] : MoveRiderTypes[initial][pt];
               riderTypes = NO_RIDER;
               for (auto const& [d, limit] : pi->steps[initial][modality])
-              {
                   if (limit)
-                  {
-                      const int ad = std::abs(int(d));
-                      if ((ad % FILE_NB) == 0 || ad < FILE_NB)
-                          riderTypes |= RIDER_ROOK_H | RIDER_ROOK_V;
-                      if ((FILE_NB > 1 && (ad % (FILE_NB - 1)) == 0) || (ad % (FILE_NB + 1)) == 0)
-                          riderTypes |= RIDER_BISHOP;
-                  }
-                  if (limit && LameDabbabaDirections.find(d) != LameDabbabaDirections.end())
-                      riderTypes |= RIDER_LAME_DABBABA;
-                  if (limit && HorseDirections.find(d) != HorseDirections.end())
-                      riderTypes |= RIDER_HORSE;
-                  if (limit && ElephantDirections.find(d) != ElephantDirections.end())
-                      riderTypes |= RIDER_ELEPHANT;
-                  if (limit && JanggiElephantDirections.find(d) != JanggiElephantDirections.end())
-                      riderTypes |= RIDER_JANGGI_ELEPHANT;
-              }
+                      add_step_like_rider_types(riderTypes, d);
               for (auto const& [d, limit] : pi->slider[initial][modality])
-              {
-                  if (limit == DYNAMIC_SLIDER_LIMIT)
-                      continue;
-                  if (limit == SKI_SLIDER_LIMIT)
-                  {
-                      if (BishopDirections.find(d) != BishopDirections.end())
-                          riderTypes |= RIDER_SKI_BISHOP;
-                      if (RookDirectionsH.find(d) != RookDirectionsH.end())
-                          riderTypes |= RIDER_SKI_ROOK_H;
-                      if (RookDirectionsV.find(d) != RookDirectionsV.end())
-                          riderTypes |= RIDER_SKI_ROOK_V;
-                      continue;
-                  }
-                  if (BishopDirections.find(d) != BishopDirections.end())
-                      riderTypes |= RIDER_BISHOP;
-                  if (RookDirectionsH.find(d) != RookDirectionsH.end())
-                      riderTypes |= RIDER_ROOK_H;
-                  if (RookDirectionsV.find(d) != RookDirectionsV.end())
-                      riderTypes |= RIDER_ROOK_V;
-                  if (LameDabbabaDirections.find(d) != LameDabbabaDirections.end())
-                      riderTypes |= RIDER_LAME_DABBABA;
-                  if (HorseDirections.find(d) != HorseDirections.end())
-                      riderTypes |= RIDER_NIGHTRIDER;
-                  if (ElephantDirections.find(d) != ElephantDirections.end())
-                      riderTypes |= RIDER_ELEPHANT;
-                  if (JanggiElephantDirections.find(d) != JanggiElephantDirections.end())
-                      riderTypes |= RIDER_JANGGI_ELEPHANT;
-              }
+                  add_slider_rider_types(riderTypes, d, limit);
               for (auto const& [d, limit] : pi->hopper[initial][modality])
-              {
-                  if (RookDirectionsH.find(d) != RookDirectionsH.end())
-                      riderTypes |= limit == 1 ? RIDER_GRASSHOPPER_H : RIDER_CANNON_H;
-                  if (RookDirectionsV.find(d) != RookDirectionsV.end())
-                      riderTypes |= limit == 1 ? RIDER_GRASSHOPPER_V : RIDER_CANNON_V;
-                  if (BishopDirections.find(d) != BishopDirections.end())
-                      riderTypes |= limit == 1 ? RIDER_GRASSHOPPER_D : RIDER_CANNON_DIAG;
-              }
+                  add_hopper_rider_types(riderTypes, d, limit);
               if (pi->griffon[initial][modality])
                   riderTypes |= RIDER_GRIFFON_NH | RIDER_GRIFFON_SH | RIDER_GRIFFON_EV | RIDER_GRIFFON_WV;
               if (pi->manticore[initial][modality])
