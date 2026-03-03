@@ -499,6 +499,17 @@ startFen = 7k/8/8/8/8/8/8/A6K w - - 0 1
         self.assertIn("a1e2", anysq_moves)
         self.assertNotIn("a1h8", anysq_moves)  # quiet-only mU cannot capture
 
+        # Duck-like piece: mU (move to any empty square) + captureForbidden keeps it uncapturable.
+        sf.load_variant_config(
+            """[duckpiece:chess]
+customPiece1 = u:mU
+captureForbidden = *:u
+startFen = 3qk3/8/8/8/3U4/8/8/4K3 b - - 0 1
+"""
+        )
+        duck_moves = sf.legal_moves("duckpiece", sf.start_fen("duckpiece"), [])
+        self.assertNotIn("d8d4", duck_moves)
+
         # Tuple-leaper edge wrapping check: (4,1) from a1 only reaches b5 and e2.
         sf.load_variant_config(
             """[tuple41:chess]
