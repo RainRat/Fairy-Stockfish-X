@@ -185,6 +185,47 @@ namespace {
     return attack;
   }
 
+  Bitboard contra_hopper_attack(const std::map<Direction, int>& directions, Square sq, Bitboard occupied, Color c = WHITE) {
+    Bitboard attack = 0;
+
+    for (auto const& [d, limit] : directions)
+    {
+      int distToHurdle = 0;
+      Square prev = sq;
+      for (Square s = sq + (c == WHITE ? d : -d);
+           is_ok(s) && distance(s, s - (c == WHITE ? d : -d)) <= 2;
+           s += (c == WHITE ? d : -d))
+      {
+        ++distToHurdle;
+        if (occupied & s)
+        {
+          if (prev != sq && (!limit || distToHurdle <= limit))
+            attack |= prev;
+          break;
+        }
+        prev = s;
+      }
+    }
+
+    return attack;
+  }
+
+  Bitboard contra_hopper_potential(const std::map<Direction, int>& directions, Square sq, Color c = WHITE) {
+    Bitboard attack = 0;
+
+    for (auto const& [d, _] : directions)
+      for (Square s = sq + (c == WHITE ? d : -d);
+           is_ok(s) && distance(s, s - (c == WHITE ? d : -d)) <= 2;
+           s += (c == WHITE ? d : -d))
+      {
+        Square next = s + (c == WHITE ? d : -d);
+        if (is_ok(next) && distance(next, s) <= 2)
+            attack |= s;
+      }
+
+    return attack;
+  }
+
   Bitboard lame_leaper_path(Direction d, Square s) {
     Direction dr = d > 0 ? NORTH : SOUTH;
     Direction df = (std::abs(d % NORTH) < NORTH / 2 ? d % NORTH : -(d % NORTH)) < 0 ? WEST : EAST;
@@ -555,6 +596,7 @@ void Bitboards::init_pieces() {
                           pseudo |= ski_sliding_attack(skiDirs, s, 0, c);
                       }
                       pseudo |= sliding_attack<HOPPER_RANGE>(pi->hopper[initial][modality], s, 0, c);
+                      pseudo |= contra_hopper_potential(pi->contraHopper[initial][modality], s, c);
                       if (pi->griffon[initial][modality])
                           pseudo |= rider_attacks_bb<RIDER_GRIFFON_NH>(s, Bitboard(0))
                                   | rider_attacks_bb<RIDER_GRIFFON_SH>(s, Bitboard(0))
@@ -565,6 +607,7 @@ void Bitboards::init_pieces() {
                                   | rider_attacks_bb<RIDER_MANTICORE_NW>(s, Bitboard(0))
                                   | rider_attacks_bb<RIDER_MANTICORE_SE>(s, Bitboard(0))
                                   | rider_attacks_bb<RIDER_MANTICORE_SW>(s, Bitboard(0));
+                      leaper |= contra_hopper_attack(pi->contraHopper[initial][modality], s, 0, c);
                   }
               }
           }

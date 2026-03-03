@@ -140,6 +140,7 @@ namespace {
       const std::string expandedBetza = expand_group_sugar(betza);
       std::vector<MoveModality> moveModalities = {};
       bool hopper = false;
+      bool contraHopper = false;
       bool rider = false;
       bool lame = false;
       bool initial = false;
@@ -197,6 +198,7 @@ namespace {
               for (auto modality : moveModalities)
               {
                   auto& v = hopper ? p->hopper[initial][modality]
+                           : contraHopper ? p->contraHopper[initial][modality]
                            : rider ? p->slider[initial][modality]
                                    : p->steps[initial][modality];
                   auto& tupleV = p->tupleSteps[initial][modality];
@@ -231,6 +233,7 @@ namespace {
           moveModalities.clear();
           prelimDirections.clear();
           hopper = false;
+          contraHopper = false;
           rider = false;
           lame = false;
           initial = false;
@@ -243,11 +246,12 @@ namespace {
 
       auto commit_griffon = [&]() {
           // Keep first implementation strict: unqualified O only.
-          if (!prelimDirections.empty() || hopper || lame || dynamicDistance || rider)
+          if (!prelimDirections.empty() || hopper || contraHopper || lame || dynamicDistance || rider)
           {
               moveModalities.clear();
               prelimDirections.clear();
               hopper = false;
+              contraHopper = false;
               rider = false;
               lame = false;
               initial = false;
@@ -268,6 +272,7 @@ namespace {
           moveModalities.clear();
           prelimDirections.clear();
           hopper = false;
+          contraHopper = false;
           rider = false;
           lame = false;
           initial = false;
@@ -280,11 +285,12 @@ namespace {
 
       auto commit_manticore = [&]() {
           // Keep first implementation strict: unqualified M only.
-          if (!prelimDirections.empty() || hopper || lame || dynamicDistance || rider)
+          if (!prelimDirections.empty() || hopper || contraHopper || lame || dynamicDistance || rider)
           {
               moveModalities.clear();
               prelimDirections.clear();
               hopper = false;
+              contraHopper = false;
               rider = false;
               lame = false;
               initial = false;
@@ -305,6 +311,7 @@ namespace {
           moveModalities.clear();
           prelimDirections.clear();
           hopper = false;
+          contraHopper = false;
           rider = false;
           lame = false;
           initial = false;
@@ -327,6 +334,12 @@ namespace {
               hopper = true;
               if (c == 'g')
                   distance = 1;
+          }
+          // Contra-hopper
+          else if (c == 'o')
+          {
+              contraHopper = true;
+              p->hasContraHopper = true;
           }
           // Lame leaper
           else if (c == 'n')
@@ -399,11 +412,12 @@ namespace {
           {
               // Tuple atoms are only supported as explicit leapers. Reject
               // tuple+hoppers/riders to avoid Direction-based wrap artifacts.
-              if (hopper || rider || lame || dynamicDistance)
+              if (hopper || contraHopper || rider || lame || dynamicDistance)
               {
                   moveModalities.clear();
                   prelimDirections.clear();
                   hopper = false;
+                  contraHopper = false;
                   rider = false;
                   lame = false;
                   initial = false;

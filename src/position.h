@@ -484,6 +484,9 @@ private:
                                 Square sq, Bitboard occupied,
                                 Bitboard ownPieces, Color c,
                                 bool captureMode);
+  static Bitboard contra_hopper_bb(const std::map<Direction,int>& directions,
+                                   Square sq, Bitboard occupied,
+                                   Color c);
 
   // Data members
   Piece board[SQUARE_NB];
@@ -1934,6 +1937,33 @@ inline Bitboard Position::max_slider_bb(const std::map<Direction,int>& direction
   return out;
 }
 
+inline Bitboard Position::contra_hopper_bb(const std::map<Direction,int>& directions,
+                                           Square  sq,
+                                           Bitboard occupied,
+                                           Color   c)
+{
+  Bitboard out = 0;
+  for (auto const& [d, limit] : directions)
+  {
+    int distToHurdle = 0;
+    Square prev = sq;
+    for (Square s2 = sq + (c == WHITE ? d : -d);
+         is_ok(s2) && distance(s2, s2 - (c == WHITE ? d : -d)) <= 2;
+         s2 += (c == WHITE ? d : -d))
+    {
+      ++distToHurdle;
+      if (occupied & s2)
+      {
+        if (prev != sq && (!limit || distToHurdle <= limit))
+          out |= square_bb(prev);
+        break;
+      }
+      prev = s2;
+    }
+  }
+  return out;
+}
+
 inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s) const {
   assert(pt != NO_PIECE_TYPE);
   Bitboard occupancy = byTypeBB[ALL_PIECES];
@@ -1948,7 +1978,7 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s) const {
   assert(it != pieceMap.end());
   const PieceInfo* pi = it->second;
 
-  if ((fast_attacks() || fast_attacks2()) && !pi->hasDynamicSlider && !pi->hasMaxSlider)
+  if ((fast_attacks() || fast_attacks2()) && !pi->hasDynamicSlider && !pi->hasMaxSlider && !pi->hasContraHopper)
       return attacks_bb(c, pt, s, occupancy) & board_bb();
 
   if (pi->friendlyJump)
@@ -1960,6 +1990,8 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s) const {
       b |= Position::dynamic_slider_bb(pi->slider[0][MODALITY_CAPTURE], s, occupancy, byTypeBB[ALL_PIECES], c); // LOA dynamic-distance attacks
   if (pi->hasMaxSlider)
       b |= Position::max_slider_bb(pi->slider[0][MODALITY_CAPTURE], s, occupancy, pieces(c), c, true);
+  if (pi->hasContraHopper)
+      b |= Position::contra_hopper_bb(pi->contraHopper[0][MODALITY_CAPTURE], s, occupancy, c);
 
   if (pi->friendlyJump)
       b &= ~pieces(c);          // never hit our own men
@@ -2057,7 +2089,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
   assert(it != pieceMap.end());
   const PieceInfo* pi = it->second;
 
-  if ((fast_attacks() || fast_attacks2()) && !pi->hasDynamicSlider && !pi->hasMaxSlider)
+  if ((fast_attacks() || fast_attacks2()) && !pi->hasDynamicSlider && !pi->hasMaxSlider && !pi->hasContraHopper)
       return (moves_bb(c, pt, s, occupancy) | extraDestinations) & board_bb();
 
   if (pi->friendlyJump)
@@ -2069,6 +2101,8 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
       b |= Position::dynamic_slider_bb(pi->slider[0][MODALITY_QUIET], s, occupancy, byTypeBB[ALL_PIECES], c); // LOA dynamic-distance quiet moves
   if (pi->hasMaxSlider)
       b |= Position::max_slider_bb(pi->slider[0][MODALITY_QUIET], s, occupancy, pieces(c), c, false);
+  if (pi->hasContraHopper)
+      b |= Position::contra_hopper_bb(pi->contraHopper[0][MODALITY_QUIET], s, occupancy, c);
 
   if (pi->friendlyJump)
       b &= ~pieces(c);          // cannot land on own piece

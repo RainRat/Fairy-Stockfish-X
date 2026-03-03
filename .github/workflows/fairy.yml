@@ -95,6 +95,10 @@ jobs:
         run: |
           ../tests/must-drop-by-color.sh
 
+      - name: Test contra-hopper
+        run: |
+          ../tests/contra-hopper.sh
+
       - name: Test variant bench
         run: |
           ./stockfish bench xiangqi
