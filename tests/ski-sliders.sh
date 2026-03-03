@@ -55,4 +55,38 @@ expect_nodes skibishop "8/8/8/8/3A4/8/8/4K2k w - - 0 1" 14
 expect_nodes skibishop "8/8/8/8/3A4/4p3/8/4K2k w - - 0 1" 12
 expect_nodes skibishop "8/8/8/8/3A4/5p2/8/4K2k w - - 0 1" 13
 
+# Corner behavior: jR from a1 reaches a3..a8 and c1..g1 (11 moves) because h1 is
+# occupied by own king. Combined with 3 king moves => 14 legal moves.
+expect_nodes skirook "7k/8/8/8/8/8/8/S6K w - - 0 1" 14
+# Adjacent occupied squares on a2/b1 are skipped by jR and do not reduce mobility.
+expect_nodes skirook "7k/8/8/8/8/8/p7/Sp5K w - - 0 1" 14
+
+# Evasion behavior: jR on a3 still checks Ka1 even with a2 occupied (adjacent skip).
+check_searchmove() {
+  local variant="$1"
+  local fen="$2"
+  local move="$3"
+  local expected="$4"
+  local out
+  out="$(
+    ./stockfish <<EOF
+uci
+setoption name VariantPath value $tmp_ini
+setoption name UCI_Variant value $variant
+isready
+position fen $fen
+go depth 1 searchmoves $move
+quit
+EOF
+  )"
+  if ! grep -Fq "bestmove $expected" <<<"$out"; then
+    echo "FAIL: $variant fen='$fen' searchmove '$move' expected bestmove '$expected'"
+    echo "$out"
+    exit 1
+  fi
+}
+
+check_searchmove skirook "7k/8/8/8/8/s7/P7/K6R w - - 0 1" "h1h2" "(none)"
+check_searchmove skirook "7k/8/8/8/8/s7/P7/K6R w - - 0 1" "a1b1" "a1b1"
+
 echo "ski-sliders test OK"
