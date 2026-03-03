@@ -916,6 +916,30 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("mustDropType", v->mustDropType, v->pieceToChar);
     parse_attribute("pieceDrops", v->pieceDrops);
     parse_attribute("virtualDrops", v->virtualDrops);
+    const auto& it_virtual_drop_limit = config.find("virtualDropLimit");
+    if (it_virtual_drop_limit != config.end())
+    {
+        char token;
+        size_t idx = 0;
+        int limit = 0;
+        std::stringstream ss(it_virtual_drop_limit->second);
+        while (ss >> token && (idx = v->pieceToChar.find(toupper(token))) != std::string::npos
+              && idx < PIECE_TYPE_NB && ss >> token && token == ':' && ss >> limit)
+        {
+            if (limit < 0)
+            {
+                if (DoCheck)
+                    std::cerr << "virtualDropLimit - Invalid negative value for type: " << v->pieceToChar[idx] << std::endl;
+                return nullptr;
+            }
+            v->virtualDropLimit[PieceType(idx)] = limit;
+            v->virtualDropLimitEnabled = true;
+        }
+        if (DoCheck && idx == std::string::npos)
+            std::cerr << "virtualDropLimit - Invalid piece type: " << token << std::endl;
+        else if (DoCheck && !ss.eof())
+            std::cerr << "virtualDropLimit - Invalid syntax." << std::endl;
+    }
     parse_attribute("dropLoop", v->dropLoop);
 
     bool capturesToHand = false;

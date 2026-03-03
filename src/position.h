@@ -2397,6 +2397,9 @@ inline bool Position::allow_virtual_drop(Color c, PieceType pt) const {
   assert(two_boards());
   if (!virtual_drops())
       return false;
+  if (var->virtualDropLimitEnabled)
+      return pt != KING && var->virtualDropLimit[pt] > 0
+          && count_in_hand(c, pt) >= -var->virtualDropLimit[pt];
   // Do we allow a virtual drop?
   return pt != KING && (   count_in_hand(c, PAWN) >= -(pt == PAWN)
                         && count_in_hand(c, KNIGHT) >= -(pt == PAWN)
