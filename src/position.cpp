@@ -2446,6 +2446,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   st->legalCapture = NO_VALUE;
   st->blastPromotedSquares = 0;
   st->bycatchSquares = 0;
+  st->consumedPromotionHandPiece = NO_PIECE;
 
   if (commit_gates()) {
       st->removedGatingType = NO_PIECE_TYPE;
@@ -2825,6 +2826,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       if (type_of(m) == PROMOTION || type_of(m) == PIECE_PROMOTION)
       {
           Piece promotion = make_piece(us, type_of(m) == PROMOTION ? promotion_type(m) : promoted_piece_type(PAWN));
+          Piece promotedHandPiece = make_piece(us, type_of(promotion));
 
           assert((promotion_zone(pc) & to) || sittuyin_promotion());
           assert(type_of(promotion) >= KNIGHT && type_of(promotion) < KING);
@@ -2841,12 +2843,25 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
               xor_in_hand_count(k, promotion, removedN + 1, removedN);
           }
 
+          int promoDirtyIdx = -1;
           if (Eval::useNNUE)
           {
               // Promoting pawn to SQ_NONE, promoted piece from SQ_NONE
               dp.to[0] = SQ_NONE;
               dp.handPiece[0] = NO_PIECE;
-              append_dirty(st, promotion, SQ_NONE, to);
+              promoDirtyIdx = append_dirty(st, promotion, SQ_NONE, to);
+          }
+          if (var->promotionConsumeInHand)
+          {
+              remove_from_hand(promotedHandPiece);
+              int newN = pieceCountInHand[us][type_of(promotedHandPiece)];
+              xor_in_hand_count(k, promotedHandPiece, newN + 1, newN);
+              st->consumedPromotionHandPiece = promotedHandPiece;
+              if (Eval::useNNUE && promoDirtyIdx >= 0)
+              {
+                  dp.handPiece[promoDirtyIdx] = promotedHandPiece;
+                  dp.handCount[promoDirtyIdx] = newN;
+              }
           }
 
           // Update hash keys
@@ -2887,18 +2902,32 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   else if (type_of(m) == PROMOTION || type_of(m) == PIECE_PROMOTION)
   {
       Piece promotion = make_piece(us, type_of(m) == PROMOTION ? promotion_type(m) : promoted_piece_type(type_of(pc)));
+      Piece promotedHandPiece = make_piece(us, type_of(promotion));
 
       st->promotionPawn = piece_on(to);
       remove_piece(to);
       // Preserve exact source piece for variants with multiple promotion sources.
       put_piece(promotion, to, true, pc);
 
+      int promoDirtyIdx = -1;
       if (Eval::useNNUE)
       {
           // Promoting piece to SQ_NONE, promoted piece from SQ_NONE
           dp.to[0] = SQ_NONE;
           dp.handPiece[0] = NO_PIECE;
-          append_dirty(st, promotion, SQ_NONE, to);
+          promoDirtyIdx = append_dirty(st, promotion, SQ_NONE, to);
+      }
+      if (var->promotionConsumeInHand)
+      {
+          remove_from_hand(promotedHandPiece);
+          int newN = pieceCountInHand[us][type_of(promotedHandPiece)];
+          xor_in_hand_count(k, promotedHandPiece, newN + 1, newN);
+          st->consumedPromotionHandPiece = promotedHandPiece;
+          if (Eval::useNNUE && promoDirtyIdx >= 0)
+          {
+              dp.handPiece[promoDirtyIdx] = promotedHandPiece;
+              dp.handCount[promoDirtyIdx] = newN;
+          }
       }
 
       // Update hash keys
@@ -3638,6 +3667,8 @@ void Position::undo_move(Move m) {
           remove_piece(to);
       pc = st->promotionPawn;
       put_piece(pc, to);
+      if (st->consumedPromotionHandPiece != NO_PIECE)
+          add_to_hand(st->consumedPromotionHandPiece);
   }
   else if (type_of(m) == PIECE_PROMOTION)
   {
@@ -3649,6 +3680,8 @@ void Position::undo_move(Move m) {
           remove_piece(to);
       pc = unpromotedPiece;
       put_piece(pc, to);
+      if (st->consumedPromotionHandPiece != NO_PIECE)
+          add_to_hand(st->consumedPromotionHandPiece);
   }
   else if (type_of(m) == PIECE_DEMOTION)
   {

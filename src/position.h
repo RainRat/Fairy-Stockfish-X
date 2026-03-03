@@ -86,6 +86,7 @@ struct StateInfo {
   Piece      capturedPiece;
   Square     captureSquare; // when != to_sq, e.g., en passant
   Piece      promotionPawn;
+  Piece      consumedPromotionHandPiece;
   Bitboard   nonSlidingRiders;
   Bitboard   flippedPieces;
   Bitboard   pseudoRoyalCandidates;
@@ -652,7 +653,7 @@ inline bool Position::promotion_allowed(Color c, PieceType pt) const {
       return false;
   if (var->promotionSteal && count(~c, pt) == 0)
       return false;
-  if (var->promotionRequireInHand && count_in_hand(c, pt) <= 0)
+  if ((var->promotionRequireInHand || var->promotionConsumeInHand) && count_in_hand(c, pt) <= 0)
       return false;
   return true;
 }

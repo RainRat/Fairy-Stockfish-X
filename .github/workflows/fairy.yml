@@ -83,6 +83,10 @@ jobs:
         run: |
           ../tests/promotion-require-in-hand.sh
 
+      - name: Test promotion-consume-in-hand
+        run: |
+          ../tests/promotion-consume-in-hand.sh
+
       - name: Test variant bench
         run: |
           ./stockfish bench xiangqi
