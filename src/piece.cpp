@@ -62,6 +62,34 @@ namespace {
       p->name = name;
       p->betza = betza;
 
+      // Convenience aliases for common fairy pieces in customPiece Betza fields.
+      auto alias_to_betza = [](const std::string& in) {
+          std::string key;
+          key.reserve(in.size());
+          for (char ch : in)
+          {
+              if (std::isalnum(static_cast<unsigned char>(ch)))
+                  key.push_back(std::tolower(static_cast<unsigned char>(ch)));
+          }
+          static const std::map<std::string, std::string> aliasMap = {
+              {"wazir", "W"},
+              {"fers", "F"},
+              {"ferz", "F"},
+              {"alfil", "A"},
+              {"dabbaba", "D"},
+              {"camel", "L"},
+              {"zebra", "J"},
+              {"nightrider", "NN"},
+              {"grasshopper", "gQ"},
+              {"mann", "K"},
+              {"amazon", "QN"},
+              {"chancellor", "RN"},
+              {"archbishop", "BN"}
+          };
+          auto it = aliasMap.find(key);
+          return it == aliasMap.end() ? in : it->second;
+      };
+
       // Parser sugar: m(AB) -> mAmB, c(RB) -> cRcB
       auto expand_group_sugar = [&](const std::string& in) {
           const std::string prefixChars = "mcpgnojzxiyfbrlvsh";
@@ -138,7 +166,7 @@ namespace {
           return true;
       };
 
-      const std::string expandedBetza = expand_group_sugar(betza);
+      const std::string expandedBetza = expand_group_sugar(alias_to_betza(betza));
       std::vector<MoveModality> moveModalities = {};
       bool hopper = false;
       bool contraHopper = false;

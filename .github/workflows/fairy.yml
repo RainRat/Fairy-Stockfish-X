@@ -107,6 +107,14 @@ jobs:
         run: |
           ../tests/betza-modifiers.sh
 
+      - name: Test bent riders
+        run: |
+          ../tests/bent-riders.sh
+
+      - name: Test common fairy aliases
+        run: |
+          ../tests/common-fairy-aliases.sh
+
       - name: Test variant bench
         run: |
           ./stockfish bench xiangqi
