@@ -688,6 +688,49 @@ startFen = 3k4/1B4N1/8/8/8/8/8/4K3 w - - 0 1
         self.assertGreater(len(black_after_promo), 0)
         self.assertEqual(len([m for m in black_after_promo if m[:2] == m[2:4]]), 0)
 
+    def test_standard_fairy_riders_and_ski_sliders(self):
+        sf.load_variant_config(
+            """[fairyriders:chess]
+maxRank = 7
+maxFile = 7
+customPiece1 = a:AA
+customPiece2 = b:DD
+customPiece3 = c:jR
+customPiece4 = d:jB
+customPiece5 = e:jQ
+startFen = 7/7/7/3A3/7/7/7 w - - 0 1
+"""
+        )
+
+        # Alfil-rider: repeats (2,2) leaps.
+        ar_moves = sf.legal_moves("fairyriders", "7/7/7/3A3/7/7/7 w - - 0 1", [])
+        self.assertCountEqual(["d4b2", "d4f2", "d4b6", "d4f6"], ar_moves)
+
+        # Dabbaba-rider: repeats (2,0) leaps.
+        dr_moves = sf.legal_moves("fairyriders", "7/7/7/3B3/7/7/7 w - - 0 1", [])
+        self.assertCountEqual(["d4d2", "d4d6", "d4b4", "d4f4"], dr_moves)
+
+        # Ski rook: adjacent orthogonals are skipped.
+        sr_moves = sf.legal_moves("fairyriders", "7/7/7/3C3/7/7/7 w - - 0 1", [])
+        self.assertIn("d4d6", sr_moves)
+        self.assertNotIn("d4d5", sr_moves)
+        self.assertIn("d4b4", sr_moves)
+        self.assertNotIn("d4c4", sr_moves)
+
+        # Ski bishop: adjacent diagonals are skipped.
+        sb_moves = sf.legal_moves("fairyriders", "7/7/7/3D3/7/7/7 w - - 0 1", [])
+        self.assertIn("d4f6", sb_moves)
+        self.assertNotIn("d4e5", sb_moves)
+        self.assertIn("d4b2", sb_moves)
+        self.assertNotIn("d4c3", sb_moves)
+
+        # Ski queen combines ski-rook and ski-bishop effects.
+        sq_moves = sf.legal_moves("fairyriders", "7/7/7/3E3/7/7/7 w - - 0 1", [])
+        self.assertIn("d4d6", sq_moves)
+        self.assertIn("d4f6", sq_moves)
+        self.assertNotIn("d4d5", sq_moves)
+        self.assertNotIn("d4e5", sq_moves)
+
     def test_get_fen(self):
         result = sf.get_fen("chess", CHESS, [])
         self.assertEqual(result, CHESS)
