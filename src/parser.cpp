@@ -697,11 +697,15 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("pieceSpecificPromotionRegion", v->pieceSpecificPromotionRegion);
     if (v->pieceSpecificPromotionRegion && !parse_attribute("whitePiecePromotionRegion", v->whitePiecePromotionRegion))
     {
-        std::cerr << "Syntax error in whitePiecePromotionRegion or missing whitePiecePromotionRegion definition." << std::endl;
+        if (DoCheck)
+            std::cerr << "Syntax error in whitePiecePromotionRegion or missing whitePiecePromotionRegion definition." << std::endl;
+        return nullptr;
     }
     if (v->pieceSpecificPromotionRegion && !parse_attribute("blackPiecePromotionRegion", v->blackPiecePromotionRegion))
     {
-        std::cerr << "Syntax error in blackPiecePromotionRegion or missing blackPiecePromotionRegion definition." << std::endl;
+        if (DoCheck)
+            std::cerr << "Syntax error in blackPiecePromotionRegion or missing blackPiecePromotionRegion definition." << std::endl;
+        return nullptr;
     }
     // Take the first promotionPawnTypes as the main promotionPawnType
     parse_attribute("promotionPawnTypes", v->mainPromotionPawnType[WHITE], v->pieceToChar);
@@ -849,20 +853,28 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("pieceSpecificDoubleStepRegion", v->pieceSpecificDoubleStepRegion);
     if (v->pieceSpecificDoubleStepRegion && !parse_attribute("whitePieceDoubleStepRegion", v->whitePieceDoubleStepRegion))
     {
-        std::cerr << "Syntax error in whitePieceDoubleStepRegion or missing whitePieceDoubleStepRegion definition." << std::endl;
+        if (DoCheck)
+            std::cerr << "Syntax error in whitePieceDoubleStepRegion or missing whitePieceDoubleStepRegion definition." << std::endl;
+        return nullptr;
     }
     if (v->pieceSpecificDoubleStepRegion && !parse_attribute("blackPieceDoubleStepRegion", v->blackPieceDoubleStepRegion))
     {
-        std::cerr << "Syntax error in blackPieceDoubleStepRegion or missing blackPieceDoubleStepRegion definition." << std::endl;
+        if (DoCheck)
+            std::cerr << "Syntax error in blackPieceDoubleStepRegion or missing blackPieceDoubleStepRegion definition." << std::endl;
+        return nullptr;
     }
     parse_attribute("pieceSpecificTripleStepRegion", v->pieceSpecificTripleStepRegion);
     if (v->pieceSpecificTripleStepRegion && !parse_attribute("whitePieceTripleStepRegion", v->whitePieceTripleStepRegion))
     {
-        std::cerr << "Syntax error in whitePieceTripleStepRegion or missing whitePieceTripleStepRegion definition." << std::endl;
+        if (DoCheck)
+            std::cerr << "Syntax error in whitePieceTripleStepRegion or missing whitePieceTripleStepRegion definition." << std::endl;
+        return nullptr;
     }
     if (v->pieceSpecificTripleStepRegion && !parse_attribute("blackPieceTripleStepRegion", v->blackPieceTripleStepRegion))
     {
-        std::cerr << "Syntax error in blackPieceTripleStepRegion or missing blackPieceTripleStepRegion definition." << std::endl;
+        if (DoCheck)
+            std::cerr << "Syntax error in blackPieceTripleStepRegion or missing blackPieceTripleStepRegion definition." << std::endl;
+        return nullptr;
     }
     parse_attribute("tripleStepRegionWhite", v->tripleStepRegion[WHITE]);
     parse_attribute("tripleStepRegionBlack", v->tripleStepRegion[BLACK]);

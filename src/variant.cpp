@@ -2352,6 +2352,12 @@ void VariantMap::parse_istream(std::istream& file) {
                 std::cerr << "Parsing variant: " << variant << std::endl;
             Variant* v = !variant_template.empty() ? VariantParser<DoCheck>(attribs).parse((new Variant(*variants.find(variant_template)->second))->init())
                                                    : VariantParser<DoCheck>(attribs).parse();
+            if (!v)
+            {
+                if (DoCheck)
+                    std::cerr << "Variant '" << variant << "' has invalid configuration. Skipping." << std::endl;
+                continue;
+            }
             if (v->maxFile <= FILE_MAX && v->maxRank <= RANK_MAX)
             {
                 add(variant, v);
