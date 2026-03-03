@@ -1291,8 +1291,8 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
       ss << '-';
 
   // Preserve exact gating state in extended FEN for reliable roundtrips.
-  // Legacy flags can be ambiguous when castling and gating share files.
-  if (gating() && !commit_gates())
+  // Keep 8x8 output backward-compatible for existing GUIs and tooling.
+  if (gating() && !commit_gates() && files() > 8)
   {
       ss << "|";
       for (Color c : {WHITE, BLACK})

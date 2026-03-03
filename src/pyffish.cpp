@@ -24,6 +24,15 @@ using namespace Stockfish;
 
 static PyObject* PyFFishError;
 
+inline Value normalize_public_mate_score(const Position& pos, Value result) {
+    Value internalMate = pos.checkmate_value();
+    if (std::abs(result) == 30000)
+        return result > VALUE_ZERO ? VALUE_MATE : -VALUE_MATE;
+    return std::abs(result) == std::abs(internalMate)
+           ? (result > VALUE_ZERO ? VALUE_MATE : -VALUE_MATE)
+           : result;
+}
+
 const Variant* require_variant(const char* variant) {
     auto it = variants.find(std::string(variant));
     if (it == variants.end())
@@ -371,6 +380,7 @@ extern "C" PyObject* pyffish_gameResult(PyObject* self, PyObject *args) {
     gameEnd = pos.is_immediate_game_end(result);
     if (!gameEnd)
         result = pos.checkers() ? pos.checkmate_value() : pos.stalemate_value();
+    result = normalize_public_mate_score(pos, result);
 
     return Py_BuildValue("i", result);
 }
@@ -391,6 +401,8 @@ extern "C" PyObject* pyffish_isImmediateGameEnd(PyObject* self, PyObject *args) 
     if (!buildPosition(pos, states, variant, fen, moveList, chess960))
         return NULL;
     gameEnd = pos.is_immediate_game_end(result);
+    if (gameEnd)
+        result = normalize_public_mate_score(pos, result);
     return Py_BuildValue("(Oi)", gameEnd ? Py_True : Py_False, result);
 }
 
@@ -410,6 +422,8 @@ extern "C" PyObject* pyffish_isOptionalGameEnd(PyObject* self, PyObject *args) {
     if (!buildPosition(pos, states, variant, fen, moveList, chess960))
         return NULL;
     gameEnd = pos.is_optional_game_end(result, 0, countStarted);
+    if (gameEnd)
+        result = normalize_public_mate_score(pos, result);
     return Py_BuildValue("(Oi)", gameEnd ? Py_True : Py_False, result);
 }
 
