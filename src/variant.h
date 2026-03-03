@@ -122,7 +122,9 @@ struct Variant {
   bool mustCaptureByColor[COLOR_NB] = {false, false};
   bool selfCapture = false;
   bool mustDrop = false;
+  bool mustDropByColor[COLOR_NB] = {false, false};
   PieceType mustDropType = ALL_PIECES;
+  PieceType mustDropTypeByColor[COLOR_NB] = {ALL_PIECES, ALL_PIECES};
   bool isPriorityDrop[PIECE_TYPE_NB] = {};
   bool pieceDrops = false;
   bool virtualDrops = true;

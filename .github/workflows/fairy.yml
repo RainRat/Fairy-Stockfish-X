@@ -91,6 +91,10 @@ jobs:
         run: |
           ../tests/must-capture-by-color.sh
 
+      - name: Test must-drop-by-color
+        run: |
+          ../tests/must-drop-by-color.sh
+
       - name: Test variant bench
         run: |
           ./stockfish bench xiangqi

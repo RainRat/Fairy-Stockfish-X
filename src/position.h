@@ -225,6 +225,7 @@ public:
   bool must_capture() const;
   bool has_capture() const;
   bool must_drop() const;
+  PieceType must_drop_type() const;
   bool piece_drops() const;
   bool drop_loop() const;
   bool captures_to_hand() const;
@@ -1034,7 +1035,16 @@ inline bool Position::has_capture() const {
 
 inline bool Position::must_drop() const {
   assert(var != nullptr);
+  if (var->mustDropByColor[WHITE] || var->mustDropByColor[BLACK])
+      return var->mustDropByColor[side_to_move()];
   return var->mustDrop;
+}
+
+inline PieceType Position::must_drop_type() const {
+  assert(var != nullptr);
+  if (var->mustDropTypeByColor[WHITE] != ALL_PIECES || var->mustDropTypeByColor[BLACK] != ALL_PIECES)
+      return var->mustDropTypeByColor[side_to_move()];
+  return var->mustDropType;
 }
 
 inline bool Position::piece_drops() const {

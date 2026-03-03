@@ -1742,11 +1742,12 @@ bool Position::legal(Move m) const {
       return false;
 
   // Illegal non-drop moves
-  if (must_drop() && count_in_hand(us, var->mustDropType) > 0)
+  PieceType requiredDropType = must_drop_type();
+  if (must_drop() && count_in_hand(us, requiredDropType) > 0)
   {
       if (type_of(m) == DROP)
       {
-          if (var->mustDropType != ALL_PIECES && var->mustDropType != in_hand_piece_type(m))
+          if (requiredDropType != ALL_PIECES && requiredDropType != in_hand_piece_type(m))
               return false;
       }
       else if (checkers())

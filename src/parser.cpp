@@ -916,7 +916,11 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("captureMorph", v->captureMorph);
     parse_attribute("rexExclusiveMorph", v->rexExclusiveMorph);
     parse_attribute("mustDrop", v->mustDrop);
+    parse_attribute("mustDropWhite", v->mustDropByColor[WHITE]);
+    parse_attribute("mustDropBlack", v->mustDropByColor[BLACK]);
     parse_attribute("mustDropType", v->mustDropType, v->pieceToChar);
+    parse_attribute("mustDropTypeWhite", v->mustDropTypeByColor[WHITE], v->pieceToChar);
+    parse_attribute("mustDropTypeBlack", v->mustDropTypeByColor[BLACK], v->pieceToChar);
     parse_attribute("pieceDrops", v->pieceDrops);
     parse_attribute("virtualDrops", v->virtualDrops);
     const auto& it_virtual_drop_limit = config.find("virtualDropLimit");
