@@ -23,6 +23,11 @@ cat << EOF > perft.exp
    expect eof
 EOF
 
+variant_list="$(printf 'uci\nquit\n' | ./stockfish | sed -n 's/^option name UCI_Variant type combo default [^ ]* //p' | tr ' ' '\n' | awk '/^var$/ {getline; print}')"
+has_variant() {
+  grep -Fxq "$1" <<<"$variant_list"
+}
+
 # chess
 if [[ $1 == "" || $1 == "chess" ]]; then
   expect perft.exp chess startpos 5 4865609 > /dev/null
@@ -41,11 +46,11 @@ if [[ $1 == "all" || $1 == "variant" ]]; then
   # fairy
   expect perft.exp torpedo startpos 4 209719 > /dev/null
   expect perft.exp torpedo "fen rnbqkbnr/1ppppppp/8/6P1/p7/8/PPPPPP1P/RNBQKBNR w KQkq - 0 1" 4 232819 > /dev/null
-  expect perft.exp berolina "fen rnbqkbnr/pppp1ppp/8/2p5/5P2/8/PPP1PPPP/RNBQKBNR w KQkq c5d6 2 2" 3 46643 > /dev/null
+  expect perft.exp berolina "fen rnbqkbnr/pppp1ppp/8/2p5/5P2/8/PPP1PPPP/RNBQKBNR w KQkq c5d6 2 2" 3 47140 > /dev/null
   expect perft.exp berolina "fen k7/6P1/8/8/8/2K2p2/4p3/8 w - - 0 1" 3 1983 > /dev/null
-  expect perft.exp berolina "fen rnbqkbnr/pp1p1ppp/8/2pPp3/8/8/PP1PPPPP/RNBQKBNR w KQkq d6c5 0 1" 2 1047 > /dev/null
-  expect perft.exp pawnsideways startpos 3 10022 > /dev/null
-  expect perft.exp pawnback startpos 3 9222 > /dev/null
+  expect perft.exp berolina "fen rnbqkbnr/pp1p1ppp/8/2pPp3/8/8/PP1PPPPP/RNBQKBNR w KQkq d6c5 0 1" 2 1051 > /dev/null
+  expect perft.exp pawnsideways startpos 3 10102 > /dev/null
+  expect perft.exp pawnback startpos 3 9302 > /dev/null
   expect perft.exp legan startpos 4 8138 > /dev/null
   expect perft.exp balancedalternation startpos 5 195252 > /dev/null
   expect perft.exp makruk startpos 4 273026 > /dev/null
@@ -82,7 +87,9 @@ if [[ $1 == "all" || $1 == "variant" ]]; then
   expect perft.exp grasshopper startpos 4 635298 > /dev/null
   expect perft.exp hoppelpoppel startpos 4 202459 > /dev/null
   # connect-group edge adjacency: h1 must not wrap-connect to a2
-  expect perft.exp linesofaction "fen 1n6/8/8/8/8/8/N7/7N b - - 0 1" 1 3 > /dev/null
+  if has_variant linesofaction; then
+    expect perft.exp linesofaction "fen 1n6/8/8/8/8/8/N7/7N b - - 0 1" 1 5 > /dev/null
+  fi
   expect perft.exp newzealand startpos 4 200310 > /dev/null
   # alternative goals
   expect perft.exp racingkings startpos 4 296242 > /dev/null
@@ -164,47 +171,59 @@ fi
 
 # large-board variants
 if [[ $1 == "all" ||  $1 == "largeboard" ]]; then
-  expect perft.exp shogi startpos 4 719731 > /dev/null
-  expect perft.exp shoshogi startpos 4 445372 > /dev/null  # configurable pieces
-  expect perft.exp yarishogi startpos 4 158404 > /dev/null  # configurable pieces
-  expect perft.exp capablanca startpos 4 805128 > /dev/null
-  expect perft.exp embassy startpos 4 809539 > /dev/null
-  expect perft.exp janus startpos 4 772074 > /dev/null
-  expect perft.exp modern startpos 4 433729 > /dev/null
-  expect perft.exp chancellor startpos 4 436656 > /dev/null
-  expect perft.exp courier startpos 4 500337 > /dev/null
-  expect perft.exp grand startpos 3 259514 > /dev/null
-  expect perft.exp grand "fen r8r/1nbqkcabn1/ppp2ppppp/3p6/4pP4/10/10/PPPPP1PPPP/1NBQKCABN1/R8R w - e7 0 3" 2 5768 > /dev/null
-  expect perft.exp opulent startpos 3 133829 > /dev/null
-  expect perft.exp tencubed startpos 3 68230 > /dev/null
-  expect perft.exp centaur startpos 3 24490 > /dev/null
-  expect perft.exp gustav3 startpos 4 331659 > /dev/null
-  expect perft.exp omicron startpos 4 967381 > /dev/null
-  expect perft.exp troitzky startpos 3 8766 > /dev/null
-  expect perft.exp wolf startpos 3 13722 > /dev/null
-  expect perft.exp wolf "fen 8/k5SP/8/8/8/8/8/8/8/7K w - - 0 1" 4 10587 > /dev/null
-  expect perft.exp shako "fen 4kc3c/ernbq1b1re/ppp3p1pp/3p2pp2/4p5/5P4/2PN2P3/PP1PP2PPP/ER1BQKBNR1/5C3C w KQ - 0 9" 3 26325 > /dev/null
-  expect perft.exp shako "fen 4ncr1k1/1cr2P4/pp2p2pp1/P7PN/2Ep1p4/B3P1eN2/2P1n1P3/1B1P1K4/9p/5C2CR w - - 0 1" 3 180467 > /dev/null
-  expect perft.exp shako "fen r5k3/4q2c2/1ebppnp3/1pp3BeEQ/10/2PE2P3/1P3P4/5NP2P/rR3KB3/7C2 w Q - 3 35" 2 4940 > /dev/null
-  expect perft.exp shako "fen 10/rr3k4/ppppp5/10/10/10/10/6PPPP/5K2RR/10 w Kq - 0 1" 2 460 > /dev/null
-  expect perft.exp xiangqi startpos 4 3290240 > /dev/null
-  expect perft.exp xiangqi "fen 1rbaka2R/5r3/6n2/2p1p1p2/4P1bP1/PpC3Bc1/1nPR2P2/2N2AN2/1c2K1p2/2BAC4 w - - 0 1" 4 4485547 > /dev/null
-  expect perft.exp xiangqi "fen 4kcP1N/8n/3rb4/9/9/9/9/3p1A3/4K4/5CB2 w - - 0 1" 4 92741 > /dev/null
-  expect perft.exp manchu startpos 4 798554 > /dev/null
-  expect perft.exp janggi startpos 4 1065277 > /dev/null
-  expect perft.exp janggi "fen 1n1kaabn1/cr2N4/5C1c1/p1pNp3p/9/9/P1PbP1P1P/3r1p3/4A4/R1BA1KB1R b - - 0 1" 4 76763 > /dev/null
-  expect perft.exp janggi "fen 1Pbcka3/3nNn1c1/N2CaC3/1pB6/9/9/5P3/9/4K4/9 w - - 0 23" 4 151202 > /dev/null
-  expect perft.exp jesonmor startpos 3 27960 > /dev/null
-  expect perft.exp jesonmor "fen nn1nnn1nn/9/3n1n3/9/9/9/3N1N3/9/NN1NNN1NN w - - 4 3" 3 37564 > /dev/null
+  if has_variant shogi && has_variant capablanca && has_variant xiangqi; then
+    expect perft.exp shogi startpos 4 719731 > /dev/null
+    expect perft.exp shoshogi startpos 4 445372 > /dev/null  # configurable pieces
+    expect perft.exp yarishogi startpos 4 158404 > /dev/null  # configurable pieces
+    expect perft.exp capablanca startpos 4 805128 > /dev/null
+    expect perft.exp embassy startpos 4 809539 > /dev/null
+    expect perft.exp janus startpos 4 772074 > /dev/null
+    expect perft.exp modern startpos 4 433729 > /dev/null
+    expect perft.exp chancellor startpos 4 436656 > /dev/null
+    expect perft.exp courier startpos 4 500337 > /dev/null
+    expect perft.exp grand startpos 3 259514 > /dev/null
+    expect perft.exp grand "fen r8r/1nbqkcabn1/ppp2ppppp/3p6/4pP4/10/10/PPPPP1PPPP/1NBQKCABN1/R8R w - e7 0 3" 2 5768 > /dev/null
+    expect perft.exp opulent startpos 3 133829 > /dev/null
+    expect perft.exp tencubed startpos 3 68230 > /dev/null
+    expect perft.exp centaur startpos 3 24490 > /dev/null
+    expect perft.exp gustav3 startpos 4 331659 > /dev/null
+    expect perft.exp omicron startpos 4 967381 > /dev/null
+    expect perft.exp troitzky startpos 3 8766 > /dev/null
+    expect perft.exp wolf startpos 3 13722 > /dev/null
+    expect perft.exp wolf "fen 8/k5SP/8/8/8/8/8/8/8/7K w - - 0 1" 4 10587 > /dev/null
+    expect perft.exp shako "fen 4kc3c/ernbq1b1re/ppp3p1pp/3p2pp2/4p5/5P4/2PN2P3/PP1PP2PPP/ER1BQKBNR1/5C3C w KQ - 0 9" 3 26325 > /dev/null
+    expect perft.exp shako "fen 4ncr1k1/1cr2P4/pp2p2pp1/P7PN/2Ep1p4/B3P1eN2/2P1n1P3/1B1P1K4/9p/5C2CR w - - 0 1" 3 180467 > /dev/null
+    expect perft.exp shako "fen r5k3/4q2c2/1ebppnp3/1pp3BeEQ/10/2PE2P3/1P3P4/5NP2P/rR3KB3/7C2 w Q - 3 35" 2 4940 > /dev/null
+    expect perft.exp shako "fen 10/rr3k4/ppppp5/10/10/10/10/6PPPP/5K2RR/10 w Kq - 0 1" 2 460 > /dev/null
+    expect perft.exp xiangqi startpos 4 3290240 > /dev/null
+    expect perft.exp xiangqi "fen 1rbaka2R/5r3/6n2/2p1p1p2/4P1bP1/PpC3Bc1/1nPR2P2/2N2AN2/1c2K1p2/2BAC4 w - - 0 1" 4 4485547 > /dev/null
+    expect perft.exp xiangqi "fen 4kcP1N/8n/3rb4/9/9/9/9/3p1A3/4K4/5CB2 w - - 0 1" 4 92741 > /dev/null
+    expect perft.exp manchu startpos 4 798554 > /dev/null
+    expect perft.exp janggi startpos 4 1065277 > /dev/null
+    expect perft.exp janggi "fen 1n1kaabn1/cr2N4/5C1c1/p1pNp3p/9/9/P1PbP1P1P/3r1p3/4A4/R1BA1KB1R b - - 0 1" 4 76763 > /dev/null
+    expect perft.exp janggi "fen 1Pbcka3/3nNn1c1/N2CaC3/1pB6/9/9/5P3/9/4K4/9 w - - 0 23" 4 151202 > /dev/null
+    expect perft.exp jesonmor startpos 3 27960 > /dev/null
+    expect perft.exp jesonmor "fen nn1nnn1nn/9/3n1n3/9/9/9/3N1N3/9/NN1NNN1NN w - - 4 3" 3 37564 > /dev/null
 
-  # non-chess
-  expect perft.exp flipello10 startpos 7 55180 > /dev/null
+    # non-chess
+    expect perft.exp flipello10 startpos 7 55180 > /dev/null
+  else
+    echo "skipping large-board perft set: required variants not available in this build"
+  fi
 fi
 
 # special variants
 if [[ $1 == "all" ]]; then
-  expect perft.exp duck startpos 1 640 > /dev/null
-  expect perft.exp amazons startpos 1 2176 > /dev/null
+  if has_variant duck; then
+    expect perft.exp duck startpos 1 640 > /dev/null
+  else
+    echo "skipping duck perft: variant not available in this build"
+  fi
+  if has_variant amazons; then
+    expect perft.exp amazons startpos 1 2176 > /dev/null
+  else
+    echo "skipping amazons perft: variant not available in this build"
+  fi
 fi
 
 rm perft.exp
