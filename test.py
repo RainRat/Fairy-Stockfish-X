@@ -731,6 +731,54 @@ startFen = 7/7/7/3A3/7/7/7 w - - 0 1
         self.assertNotIn("d4d5", sq_moves)
         self.assertNotIn("d4e5", sq_moves)
 
+    def test_whaleshogi_dolphin_promotion_cycle(self):
+        sf.load_variant_config(
+            """[whaleshogi_proto:minishogi]
+pieceToCharTable = -
+maxRank = 6
+maxFile = 6
+king = w
+customPiece1 = g:fRbB
+customPiece2 = p:rlW
+customPiece3 = k:FR
+customPiece4 = n:fDrlbW
+customPiece5 = h:FbW
+customPiece6 = b:fbWfF
+customPiece7 = d:fW
+customPiece8 = e:bB
+startFen = bnpwgh/ddddd1/6/6/DDDDD1/HGWPNB[] w - 0 1
+promotionRegionWhite = *6
+promotionRegionBlack = *1
+promotedPieceType = d:e p:k
+mandatoryPiecePromotion = true
+pieceDemotion = true
+dropPromoted = true
+promotionPawnTypes = d
+dropNoDoubled = d
+dropNoDoubledCount = 2
+"""
+        )
+
+        # Start position loads and has expected opening mobility.
+        start = sf.start_fen("whaleshogi_proto")
+        start_moves = sf.legal_moves("whaleshogi_proto", start, [])
+        self.assertIn("e1e3", start_moves)
+        self.assertIn("a2a3", start_moves)
+
+        # Dolphin promotion on back rank is mandatory.
+        promo_src = "5w/4D1/6/6/6/W5 w - - 0 1"
+        promo_moves = sf.legal_moves("whaleshogi_proto", promo_src, [])
+        self.assertIn("e5e6+", promo_moves)
+        self.assertNotIn("e5e6", promo_moves)
+
+        # Promoted dolphin (+D) uses promoted movement and demotes when leaving.
+        promoted = "4+Dw/6/6/6/6/W5 w - - 0 1"
+        promoted_moves = sf.legal_moves("whaleshogi_proto", promoted, [])
+        self.assertIn("e6d5-", promoted_moves)
+        self.assertIn("e6f5-", promoted_moves)
+        self.assertNotIn("e6d5", promoted_moves)
+        self.assertEqual(sf.get_fen("whaleshogi_proto", promoted, ["e6d5-"]), "5w/3D2/6/6/6/W5[] b - - 1 1")
+
     def test_get_fen(self):
         result = sf.get_fen("chess", CHESS, [])
         self.assertEqual(result, CHESS)
