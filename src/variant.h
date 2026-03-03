@@ -64,6 +64,7 @@ struct Variant {
   bool sittuyinPromotion = false;
   int promotionLimit[PIECE_TYPE_NB] = {}; // 0 means unlimited
   bool promotionSteal = false;
+  bool promotionRequireInHand = false;
   PieceType promotedPieceType[PIECE_TYPE_NB] = {};
   bool piecePromotionOnCapture = false;
   bool mandatoryPawnPromotion = true;

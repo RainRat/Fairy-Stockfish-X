@@ -652,6 +652,8 @@ inline bool Position::promotion_allowed(Color c, PieceType pt) const {
       return false;
   if (var->promotionSteal && count(~c, pt) == 0)
       return false;
+  if (var->promotionRequireInHand && count_in_hand(c, pt) <= 0)
+      return false;
   return true;
 }
 

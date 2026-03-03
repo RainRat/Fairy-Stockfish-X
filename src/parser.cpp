@@ -722,6 +722,7 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("promotionPieceTypesBlack", v->promotionPieceTypes[BLACK], v->pieceToChar);
     parse_attribute("sittuyinPromotion", v->sittuyinPromotion);
     parse_attribute("promotionSteal", v->promotionSteal);
+    parse_attribute("promotionRequireInHand", v->promotionRequireInHand);
     // promotion limit
     const auto& it_prom_limit = config.find("promotionLimit");
     if (it_prom_limit != config.end())

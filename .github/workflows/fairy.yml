@@ -79,6 +79,10 @@ jobs:
         run: |
           ../tests/perft.sh all
 
+      - name: Test promotion-require-in-hand
+        run: |
+          ../tests/promotion-require-in-hand.sh
+
       - name: Test variant bench
         run: |
           ./stockfish bench xiangqi
