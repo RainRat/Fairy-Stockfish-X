@@ -168,14 +168,12 @@ namespace {
           if (rider && maxDistance && !hopper && !lame && !dynamicDistance && !skiSlider)
           {
               distance = MAX_SLIDER_LIMIT;
-              p->hasMaxSlider = true;
-              p->hasRuntimeRiderAugment = true;
+              p->add_rider_augment(PieceInfo::AUGMENT_MAX);
           }
           if (dynamicDistance && rider)
           {
               distance = DYNAMIC_SLIDER_LIMIT;
-              p->hasDynamicSlider = true;
-              p->hasRuntimeRiderAugment = true;
+              p->add_rider_augment(PieceInfo::AUGMENT_DYNAMIC);
           }
           if (moveModalities.size() == 0)
           {
@@ -341,8 +339,7 @@ namespace {
           else if (c == 'o')
           {
               contraHopper = true;
-              p->hasContraHopper = true;
-              p->hasRuntimeRiderAugment = true;
+              p->add_rider_augment(PieceInfo::AUGMENT_CONTRA);
           }
           // Lame leaper
           else if (c == 'n')

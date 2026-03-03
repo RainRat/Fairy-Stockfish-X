@@ -40,6 +40,13 @@ constexpr int MAX_SLIDER_LIMIT = -4;
 /// PieceInfo struct stores information about the piece movements.
 
 struct PieceInfo {
+  enum RiderAugment : uint8_t {
+    AUGMENT_NONE = 0,
+    AUGMENT_DYNAMIC = 1 << 0,
+    AUGMENT_MAX = 1 << 1,
+    AUGMENT_CONTRA = 1 << 2
+  };
+
   std::string name = "";
   std::string betza = "";
   std::map<Direction, int> steps[2][MOVE_MODALITY_NB] = {};
@@ -49,11 +56,14 @@ struct PieceInfo {
   std::map<Direction, int> contraHopper[2][MOVE_MODALITY_NB] = {};
   bool griffon[2][MOVE_MODALITY_NB] = {};
   bool manticore[2][MOVE_MODALITY_NB] = {};
-  bool hasRuntimeRiderAugment = false;
-  bool hasDynamicSlider = false;
-  bool hasMaxSlider = false;
-  bool hasContraHopper = false;
+  uint8_t riderAugmentMask = AUGMENT_NONE;
   bool friendlyJump = false;
+
+  inline void add_rider_augment(RiderAugment augment) { riderAugmentMask |= augment; }
+  inline bool has_runtime_rider_augment() const { return riderAugmentMask != AUGMENT_NONE; }
+  inline bool has_dynamic_slider() const { return riderAugmentMask & AUGMENT_DYNAMIC; }
+  inline bool has_max_slider() const { return riderAugmentMask & AUGMENT_MAX; }
+  inline bool has_contra_hopper() const { return riderAugmentMask & AUGMENT_CONTRA; }
 };
 
 struct PieceMap : public std::map<PieceType, const PieceInfo*> {
