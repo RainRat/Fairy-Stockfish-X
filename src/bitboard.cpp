@@ -226,20 +226,12 @@ namespace {
     return attack;
   }
 
-  Bitboard special_pseudo_bb(const PieceInfo* pi, bool initial, MoveModality modality, Square s, Color c) {
+  Bitboard special_pseudo_bb(const PieceInfo* pi, bool initial, MoveModality modality, Square s, Color c,
+                             const std::map<Direction, int>& riderDirs,
+                             const std::map<Direction, int>& skiDirs) {
     Bitboard pseudo = 0;
 
-    std::map<Direction, int> dirs;
-    std::map<Direction, int> skiDirs;
-    for (auto const& [d, limit] : pi->slider[initial][modality])
-      if (limit == SKI_SLIDER_LIMIT)
-          skiDirs[d] = 0;
-      else if (limit == MAX_SLIDER_LIMIT)
-          continue;
-      else if (limit >= 0)
-          dirs[d] = limit;
-
-    pseudo |= sliding_attack<RIDER>(dirs, s, 0, c);
+    pseudo |= sliding_attack<RIDER>(riderDirs, s, 0, c);
     pseudo |= ski_sliding_attack(skiDirs, s, 0, c);
     pseudo |= sliding_attack<HOPPER_RANGE>(pi->hopper[initial][modality], s, 0, c);
     pseudo |= contra_hopper_potential(pi->contraHopper[initial][modality], s, c);
@@ -604,6 +596,16 @@ void Bitboards::init_pieces() {
                   if (modality == MODALITY_CAPTURE && initial)
                       continue;
 
+                  std::map<Direction, int> riderDirs;
+                  std::map<Direction, int> skiDirs;
+                  for (auto const& [d, limit] : pi->slider[initial][modality])
+                      if (limit == SKI_SLIDER_LIMIT)
+                          skiDirs[d] = 0;
+                      else if (limit == MAX_SLIDER_LIMIT)
+                          continue;
+                      else if (limit >= 0)
+                          riderDirs[d] = limit;
+
                   for (Square s = SQ_A1; s <= SQ_MAX; ++s)
                   {
                       auto& pseudo = modality == MODALITY_CAPTURE ? PseudoAttacks[c][pt][s] : PseudoMoves[initial][c][pt][s];
@@ -624,7 +626,7 @@ void Bitboards::init_pieces() {
                           pseudo |= dst;
                           leaper |= dst;
                       }
-                      pseudo |= special_pseudo_bb(pi, initial, modality, s, c);
+                      pseudo |= special_pseudo_bb(pi, initial, modality, s, c, riderDirs, skiDirs);
                       leaper |= special_leaper_bb(pi, initial, modality, s, c);
                   }
               }
