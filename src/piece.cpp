@@ -169,11 +169,13 @@ namespace {
           {
               distance = MAX_SLIDER_LIMIT;
               p->hasMaxSlider = true;
+              p->hasRuntimeRiderAugment = true;
           }
           if (dynamicDistance && rider)
           {
               distance = DYNAMIC_SLIDER_LIMIT;
               p->hasDynamicSlider = true;
+              p->hasRuntimeRiderAugment = true;
           }
           if (moveModalities.size() == 0)
           {
@@ -340,6 +342,7 @@ namespace {
           {
               contraHopper = true;
               p->hasContraHopper = true;
+              p->hasRuntimeRiderAugment = true;
           }
           // Lame leaper
           else if (c == 'n')

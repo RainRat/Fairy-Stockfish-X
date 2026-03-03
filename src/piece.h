@@ -49,6 +49,7 @@ struct PieceInfo {
   std::map<Direction, int> contraHopper[2][MOVE_MODALITY_NB] = {};
   bool griffon[2][MOVE_MODALITY_NB] = {};
   bool manticore[2][MOVE_MODALITY_NB] = {};
+  bool hasRuntimeRiderAugment = false;
   bool hasDynamicSlider = false;
   bool hasMaxSlider = false;
   bool hasContraHopper = false;
