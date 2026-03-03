@@ -1973,14 +1973,15 @@ inline Bitboard Position::special_rider_bb(const PieceInfo* pi, MoveModality mod
                                            Bitboard occupiedAll, Bitboard ownPieces,
                                            Color c, bool captureMode)
 {
-  if (!pi->has_runtime_rider_augment())
+  const uint8_t augment = pi->riderAugmentMask;
+  if (augment == PieceInfo::AUGMENT_NONE)
       return Bitboard(0);
   Bitboard b = 0;
-  if (pi->has_dynamic_slider())
+  if (augment & PieceInfo::AUGMENT_DYNAMIC)
       b |= Position::dynamic_slider_bb(pi->slider[0][modality], sq, occupied, occupiedAll, c);
-  if (pi->has_max_slider())
+  if (augment & PieceInfo::AUGMENT_MAX)
       b |= Position::max_slider_bb(pi->slider[0][modality], sq, occupied, ownPieces, c, captureMode);
-  if (pi->has_contra_hopper())
+  if (augment & PieceInfo::AUGMENT_CONTRA)
       b |= Position::contra_hopper_bb(pi->contraHopper[0][modality], sq, occupied, c);
   return b;
 }
@@ -1999,7 +2000,7 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s) const {
   assert(it != pieceMap.end());
   const PieceInfo* pi = it->second;
 
-  if ((fast_attacks() || fast_attacks2()) && !pi->has_runtime_rider_augment())
+  if ((fast_attacks() || fast_attacks2()) && pi->riderAugmentMask == PieceInfo::AUGMENT_NONE)
       return attacks_bb(c, pt, s, occupancy) & board_bb();
 
   if (pi->friendlyJump)
@@ -2105,7 +2106,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
   assert(it != pieceMap.end());
   const PieceInfo* pi = it->second;
 
-  if ((fast_attacks() || fast_attacks2()) && !pi->has_runtime_rider_augment())
+  if ((fast_attacks() || fast_attacks2()) && pi->riderAugmentMask == PieceInfo::AUGMENT_NONE)
       return (moves_bb(c, pt, s, occupancy) | extraDestinations) & board_bb();
 
   if (pi->friendlyJump)
