@@ -910,6 +910,8 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("dropChecks", v->dropChecks);
     parse_attribute("dropMates", v->dropMates);
     parse_attribute("mustCapture", v->mustCapture);
+    parse_attribute("mustCaptureWhite", v->mustCaptureByColor[WHITE]);
+    parse_attribute("mustCaptureBlack", v->mustCaptureByColor[BLACK]);
     parse_attribute("selfCapture", v->selfCapture);
     parse_attribute("captureMorph", v->captureMorph);
     parse_attribute("rexExclusiveMorph", v->rexExclusiveMorph);

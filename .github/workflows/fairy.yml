@@ -87,6 +87,10 @@ jobs:
         run: |
           ../tests/promotion-consume-in-hand.sh
 
+      - name: Test must-capture-by-color
+        run: |
+          ../tests/must-capture-by-color.sh
+
       - name: Test variant bench
         run: |
           ./stockfish bench xiangqi

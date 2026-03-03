@@ -1001,6 +1001,8 @@ inline bool Position::rex_exclusive_morph() const {
 
 inline bool Position::must_capture() const {
   assert(var != nullptr);
+  if (var->mustCaptureByColor[WHITE] || var->mustCaptureByColor[BLACK])
+      return var->mustCaptureByColor[side_to_move()];
   return var->mustCapture;
 }
 
