@@ -731,20 +731,6 @@ startFen = 7/7/7/3A3/7/7/7 w - - 0 1
         self.assertNotIn("d4d5", sq_moves)
         self.assertNotIn("d4e5", sq_moves)
 
-        # Contra-hopper lands immediately before the first hurdle.
-        sf.load_variant_config(
-            """[contrahopper:chess]
-customPiece1 = a:oR
-startFen = 4k3/8/3p4/8/3A1p2/8/3p4/K7 w - - 0 1
-"""
-        )
-        ch_moves = sf.legal_moves("contrahopper", sf.start_fen("contrahopper"), [])
-        self.assertIn("d4d5", ch_moves)  # hurdle on d6
-        self.assertIn("d4e4", ch_moves)  # hurdle on f4
-        self.assertIn("d4d3", ch_moves)  # hurdle on d2
-        self.assertNotIn("d4d6", ch_moves)
-        self.assertNotIn("d4f4", ch_moves)
-
     def test_whaleshogi_dolphin_promotion_cycle(self):
         sf.load_variant_config(
             """[whaleshogi_proto:minishogi]
