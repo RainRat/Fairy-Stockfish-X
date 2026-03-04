@@ -460,16 +460,20 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
   // 1. Piece placement
   while ((ss >> token) && !isspace(token))
   {
-      if (isdigit(token) && (!commit_gates() || (rank != 0 && rank != max_rank() + 2)))
+      if (isdigit(token))
       {
+          int steps = token - '0';
 #ifdef LARGEBOARDS
           if (isdigit(ss.peek()))
           {
-              sq += 10 * (token - '0') * EAST;
               ss >> token;
+              steps = 10 * steps + (token - '0');
           }
 #endif
-          sq += (token - '0') * EAST; // Advance the given number of files
+          if (commit_gates() && (rank == 0 || rank == max_rank() + 2))
+              commitFile += steps;
+          else
+              sq += steps * EAST; // Advance the given number of files
       }
 
       else if (token == '/')
