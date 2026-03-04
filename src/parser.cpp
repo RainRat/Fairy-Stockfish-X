@@ -1027,6 +1027,22 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("passOnStalemateBlack", v->passOnStalemate[BLACK]);
     parse_attribute("passUntilSetup", v->passUntilSetup);
     parse_attribute("multimoves", v->multimoves);
+    if (DoCheck)
+    {
+        int usedPly = 0;
+        size_t usedEntries = 0;
+        for (int n : v->multimoves)
+        {
+            int segment = 2 * n - 1;
+            if (segment <= 0 || usedPly + segment >= START_MULTIMOVES)
+                break;
+            usedPly += segment;
+            ++usedEntries;
+        }
+        if (usedEntries < v->multimoves.size())
+            std::cerr << "multimoves - start pattern exceeds START_MULTIMOVES (" << START_MULTIMOVES
+                      << "), tail entries will be ignored." << std::endl;
+    }
     parse_attribute("multimoveCheck", v->multimoveCheck);
     parse_attribute("multimoveCapture", v->multimoveCapture);
     parse_attribute("makpongRule", v->makpongRule);
