@@ -66,6 +66,11 @@ jobs:
           make clean
           make -j2 ARCH=x86-64 largeboards=yes all=yes debug=yes build
 
+      - name: Build extra-large move lists
+        run: |
+          make clean
+          make -j2 ARCH=x86-64 all=yes extra_large_movelists=yes build
+
       - name: Test protocols
         run: |
           ../tests/protocol.sh
