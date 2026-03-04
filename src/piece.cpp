@@ -84,7 +84,11 @@ namespace {
               {"mann", "K"},
               {"amazon", "QN"},
               {"chancellor", "RN"},
-              {"archbishop", "BN"}
+              {"archbishop", "BN"},
+              {"marshall", "RN"},
+              {"empress", "RN"},
+              {"cardinal", "BN"},
+              {"princess", "BN"}
           };
           auto it = aliasMap.find(key);
           return it == aliasMap.end() ? in : it->second;

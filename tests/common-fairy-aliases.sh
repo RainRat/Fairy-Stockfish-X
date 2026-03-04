@@ -36,6 +36,26 @@ startFen = 7k/8/8/8/3A4/8/8/K7 w - - 0 1
 customPiece1 = a:gQ
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 startFen = 7k/8/8/8/3A4/8/8/K7 w - - 0 1
+
+[alias-marshall:chess]
+customPiece1 = a:marshall
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+startFen = 7k/8/8/8/3A4/8/8/K7 w - - 0 1
+
+[alias-marshall-ref:chess]
+customPiece1 = a:RN
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+startFen = 7k/8/8/8/3A4/8/8/K7 w - - 0 1
+
+[alias-cardinal:chess]
+customPiece1 = a:cardinal
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+startFen = 7k/8/8/8/3A4/8/8/K7 w - - 0 1
+
+[alias-cardinal-ref:chess]
+customPiece1 = a:BN
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+startFen = 7k/8/8/8/3A4/8/8/K7 w - - 0 1
 INI
 
 perft_moves() {
@@ -48,5 +68,7 @@ perft_moves() {
 cmp <(perft_moves alias-wazir) <(perft_moves alias-wazir-ref)
 cmp <(perft_moves alias-nightrider) <(perft_moves alias-nightrider-ref)
 cmp <(perft_moves alias-grasshopper) <(perft_moves alias-grasshopper-ref)
+cmp <(perft_moves alias-marshall) <(perft_moves alias-marshall-ref)
+cmp <(perft_moves alias-cardinal) <(perft_moves alias-cardinal-ref)
 
 echo "common-fairy-aliases test OK"
