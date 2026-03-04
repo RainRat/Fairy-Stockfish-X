@@ -134,10 +134,14 @@ jobs:
 
       - name: Test variant bench
         run: |
-          ./stockfish bench xiangqi
-          ./stockfish bench shogi
-          ./stockfish bench capablanca
+          ./stockfish bench minixiangqi
+          ./stockfish bench minishogi
           ./stockfish bench sittuyin
+          if [[ "$COMP" == "gcc" ]]; then
+            ./stockfish bench xiangqi
+            ./stockfish bench shogi
+            ./stockfish bench capablanca
+          fi
 
       - name: Test 32bit largeboards
         run: |

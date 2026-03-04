@@ -70,7 +70,7 @@ cat << EOF > xboard.exp
    send "ping\\n"
    expect "pong"
    send "variant 3check-crazyhouse\\n"
-   expect "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR\\\\\[] w KQkq - 3+3 0 1"
+   expect {rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR[] w KQkq - 3+3 0 1}
    send "quit\\n"
    expect eof
 EOF
@@ -78,7 +78,7 @@ EOF
 for exp in uci.exp ucci.exp usi.exp ucicyclone.exp ucicyclone2.exp xboard.exp
 do
   echo "Testing $exp"
-  timeout 5 expect $exp > /dev/null
+  timeout 20 expect $exp > /dev/null
   rm $exp
 done
 

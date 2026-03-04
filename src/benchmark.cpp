@@ -20,6 +20,7 @@
 #include <iostream>
 #include <istream>
 #include <vector>
+#include <cctype>
 
 #include "position.h"
 #include "uci.h"
@@ -134,6 +135,14 @@ vector<string> setup_bench(const Position& current, istream& is) {
   string fenFile   = (is >> token) ? token : "default";
   string limitType = (is >> token) ? token : "depth";
   string evalType  = (is >> token) ? token : "mixed";
+
+  auto is_uint = [](const string& s) {
+      return !s.empty() && std::all_of(s.begin(), s.end(), [](unsigned char ch) { return std::isdigit(ch) != 0; });
+  };
+  if (!is_uint(ttSize))
+      ttSize = "16";
+  if (!is_uint(threads))
+      threads = "1";
 
   go = limitType == "eval" ? "eval" : "go " + limitType + " " + limit;
 
