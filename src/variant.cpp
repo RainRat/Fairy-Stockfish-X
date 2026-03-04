@@ -2315,6 +2315,49 @@ Variant* Variant::conclude() {
 
 template <bool DoCheck>
 void VariantMap::parse_istream(std::istream& file) {
+    auto parse_rank_value = [](const std::string& raw, int& out) {
+        std::stringstream ss(raw);
+        ss >> std::ws;
+        if (ss.peek() == EOF)
+            return false;
+        if (std::isdigit(ss.peek()))
+        {
+            int i;
+            ss >> i;
+            if (ss.fail())
+                return false;
+            out = i - 1;
+            return true;
+        }
+        char c;
+        ss >> c;
+        if (ss.fail())
+            return false;
+        out = std::tolower(c) - '1';
+        return true;
+    };
+    auto parse_file_value = [](const std::string& raw, int& out) {
+        std::stringstream ss(raw);
+        ss >> std::ws;
+        if (ss.peek() == EOF)
+            return false;
+        if (std::isdigit(ss.peek()))
+        {
+            int i;
+            ss >> i;
+            if (ss.fail())
+                return false;
+            out = i - 1;
+            return true;
+        }
+        char c;
+        ss >> c;
+        if (ss.fail())
+            return false;
+        out = std::tolower(c) - 'a';
+        return true;
+    };
+
     std::string variant, variant_template, key, value, input;
     while (file.peek() != '[' && std::getline(file, input)) {}
 
@@ -2348,6 +2391,20 @@ void VariantMap::parse_istream(std::istream& file) {
             std::cerr << "Variant template '" << variant_template << "' does not exist." << std::endl;
         else
         {
+            int cfgMaxRank = -1;
+            int cfgMaxFile = -1;
+            if (attribs.count("maxRank"))
+                parse_rank_value(attribs["maxRank"], cfgMaxRank);
+            if (attribs.count("maxFile"))
+                parse_file_value(attribs["maxFile"], cfgMaxFile);
+            if ((cfgMaxRank > 0 && cfgMaxRank > RANK_MAX) || (cfgMaxFile >= 0 && cfgMaxFile > FILE_MAX))
+            {
+                if constexpr (!DoCheck)
+                    std::cerr << "Variant '" << variant << "' exceeds build board limits (maxFile=" << int(FILE_MAX) + 1
+                              << ", maxRank=" << int(RANK_MAX) + 1 << "). Skipping." << std::endl;
+                continue;
+            }
+
             if (DoCheck)
                 std::cerr << "Parsing variant: " << variant << std::endl;
             Variant* v = !variant_template.empty() ? VariantParser<DoCheck>(attribs).parse((new Variant(*variants.find(variant_template)->second))->init())

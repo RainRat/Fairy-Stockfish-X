@@ -533,11 +533,7 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
 
     // Fail early when a variant exceeds compile-time board dimensions.
     if ((cfgMaxRank > 0 && cfgMaxRank - 1 > RANK_MAX) || (cfgMaxFile >= 0 && cfgMaxFile > FILE_MAX))
-    {
-        v->maxRank = static_cast<Rank>(RANK_MAX + 1);
-        v->maxFile = static_cast<File>(FILE_MAX + 1);
-        return v;
-    }
+        return nullptr;
 
     parse_attribute("maxRank", v->maxRank);
     parse_attribute("maxFile", v->maxFile);
