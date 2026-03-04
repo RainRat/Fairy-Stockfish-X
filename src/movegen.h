@@ -20,6 +20,7 @@
 #define MOVEGEN_H_INCLUDED
 
 #include <algorithm>
+#include <cassert>
 
 #include "types.h"
 
@@ -85,6 +86,7 @@ struct MoveList {
             exit(1);
         }
         this->last = generate<T>(pos, this->moveList);
+        assert(this->last - this->moveList <= MOVEGEN_OVERFLOW_CAPACITY);
     }
 
     ~MoveList()
@@ -94,7 +96,7 @@ struct MoveList {
 #else
     explicit MoveList(const Position& pos) : last(generate<T>(pos, moveList))
     {
-        ;
+        assert(last - moveList <= MOVEGEN_OVERFLOW_CAPACITY);
     }
 #endif
   

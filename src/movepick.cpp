@@ -247,6 +247,12 @@ Move MovePicker::select(Pred filter) {
 /// moves left, picking the move with the highest score from a list of generated moves.
 Move MovePicker::next_move(bool skipQuiets) {
 
+  auto assert_move_list_bounds = [&]() {
+      assert(endMoves >= moveList);
+      assert(endMoves - moveList <= MOVE_PICK_OVERFLOW_CAPACITY);
+      assert(cur >= moveList && cur <= endMoves);
+  };
+
 top:
   switch (stage) {
 
@@ -269,6 +275,7 @@ top:
       cur = endBadCaptures = moveList;
       endMoves = generate<CAPTURES>(pos, cur);
       endMoves = prune_useless_potions(cur, endMoves);
+      assert_move_list_bounds();
 
       score<CAPTURES>();
       ++stage;
@@ -307,6 +314,7 @@ top:
           cur = endBadCaptures;
           endMoves = generate<QUIETS>(pos, cur);
           endMoves = prune_useless_potions(cur, endMoves);
+          assert_move_list_bounds();
 
           score<QUIETS>();
           partial_insertion_sort(cur, endMoves, -3000 * depth);
@@ -336,6 +344,7 @@ top:
       cur = moveList;
       endMoves = generate<EVASIONS>(pos, cur);
       endMoves = prune_useless_potions(cur, endMoves);
+      assert_move_list_bounds();
 
       score<EVASIONS>();
       ++stage;
@@ -363,6 +372,7 @@ top:
       cur = moveList;
       endMoves = generate<QUIET_CHECKS>(pos, cur);
       endMoves = prune_useless_potions(cur, endMoves);
+      assert_move_list_bounds();
 
       ++stage;
       [[fallthrough]];
