@@ -460,7 +460,11 @@ private:
 #define USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
 
 #ifdef ALLVARS
-constexpr int MAX_MOVES = 8192;
+#if defined(VERY_LARGE_BOARDS)
+constexpr int MAX_MOVES = 65536;
+#else
+constexpr int MAX_MOVES = 16384;
+#endif
 #ifdef USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
 constexpr int MAX_PLY = 246;
 #else

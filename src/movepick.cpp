@@ -117,9 +117,15 @@ ExtMove* MovePicker::prune_useless_potions(ExtMove* begin, ExtMove* end) const {
 MovePicker::MovePicker(const Position& p, Move ttm, Depth d, const ButterflyHistory* mh, const GateHistory* dh, const LowPlyHistory* lp,
                        const CapturePieceToHistory* cph, const PieceToHistory** ch, Move cm, const Move* killers, int pl)
            : pos(p), mainHistory(mh), gateHistory(dh), lowPlyHistory(lp), captureHistory(cph), continuationHistory(ch),
-             ttMove(ttm), refutations{{killers[0], 0}, {killers[1], 0}, {cm, 0}}, depth(d), ply(pl), moveList(moves) {
+             ttMove(ttm), refutations{{killers[0], 0}, {killers[1], 0}, {cm, 0}}, depth(d), ply(pl) {
 
   assert(d > 0);
+#ifdef USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
+  baseMoveList = std::make_unique<ExtMove[]>(MAX_MOVES);
+  moveList = baseMoveList.get();
+#else
+  moveList = moves;
+#endif
   if (pos.potions_enabled() || pos.capture_type() == PRISON)
   {
       overflowMoveList = std::make_unique<ExtMove[]>(MOVE_PICK_OVERFLOW_CAPACITY);
@@ -133,9 +139,15 @@ MovePicker::MovePicker(const Position& p, Move ttm, Depth d, const ButterflyHist
 /// MovePicker constructor for quiescence search
 MovePicker::MovePicker(const Position& p, Move ttm, Depth d, const ButterflyHistory* mh, const GateHistory* dh,
                        const CapturePieceToHistory* cph, const PieceToHistory** ch, Square rs)
-           : pos(p), mainHistory(mh), gateHistory(dh), captureHistory(cph), continuationHistory(ch), ttMove(ttm), recaptureSquare(rs), depth(d), moveList(moves) {
+           : pos(p), mainHistory(mh), gateHistory(dh), captureHistory(cph), continuationHistory(ch), ttMove(ttm), recaptureSquare(rs), depth(d) {
 
   assert(d <= 0);
+#ifdef USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
+  baseMoveList = std::make_unique<ExtMove[]>(MAX_MOVES);
+  moveList = baseMoveList.get();
+#else
+  moveList = moves;
+#endif
   if (pos.potions_enabled() || pos.capture_type() == PRISON)
   {
       overflowMoveList = std::make_unique<ExtMove[]>(MOVE_PICK_OVERFLOW_CAPACITY);
@@ -151,9 +163,15 @@ MovePicker::MovePicker(const Position& p, Move ttm, Depth d, const ButterflyHist
 /// MovePicker constructor for ProbCut: we generate captures with SEE greater
 /// than or equal to the given threshold.
 MovePicker::MovePicker(const Position& p, Move ttm, Value th, const GateHistory* dh, const CapturePieceToHistory* cph)
-           : pos(p), gateHistory(dh), captureHistory(cph), ttMove(ttm), threshold(th), moveList(moves) {
+           : pos(p), gateHistory(dh), captureHistory(cph), ttMove(ttm), threshold(th) {
 
   assert(!pos.checkers());
+#ifdef USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
+  baseMoveList = std::make_unique<ExtMove[]>(MAX_MOVES);
+  moveList = baseMoveList.get();
+#else
+  moveList = moves;
+#endif
   if (pos.potions_enabled() || pos.capture_type() == PRISON)
   {
       overflowMoveList = std::make_unique<ExtMove[]>(MOVE_PICK_OVERFLOW_CAPACITY);
