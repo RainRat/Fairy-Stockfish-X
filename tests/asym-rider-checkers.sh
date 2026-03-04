@@ -14,6 +14,10 @@ pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 [asymcheck-griffon:chess]
 customPiece1 = a:O
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+
+[asymcheck-manticore:chess]
+customPiece1 = a:M
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 INI
 
 diag() {
@@ -38,5 +42,13 @@ grep -q '^Checkers:[[:space:]]*$' <<<"$gb"
 # Griffon open pivot/ray: checker on f6.
 gu=$(diag asymcheck-griffon '8/7k/5A2/8/8/8/8/4K3 b - - 0 1')
 grep -q '^Checkers: f6 ' <<<"$gu"
+
+# Manticore blocked pivot: no check.
+mb=$(diag asymcheck-manticore '6k1/6N1/5A2/8/8/8/8/4K3 b - - 0 1')
+grep -q '^Checkers:[[:space:]]*$' <<<"$mb"
+
+# Manticore open pivot/ray: checker on f6.
+mu=$(diag asymcheck-manticore '6k1/8/5A2/8/8/8/8/4K3 b - - 0 1')
+grep -q '^Checkers: f6 ' <<<"$mu"
 
 echo "asym-rider-checkers test OK"
