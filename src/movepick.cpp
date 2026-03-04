@@ -120,7 +120,7 @@ MovePicker::MovePicker(const Position& p, Move ttm, Depth d, const ButterflyHist
              ttMove(ttm), refutations{{killers[0], 0}, {killers[1], 0}, {cm, 0}}, depth(d), ply(pl), moveList(moves) {
 
   assert(d > 0);
-  if (pos.potions_enabled())
+  if (pos.potions_enabled() || pos.capture_type() == PRISON)
   {
       overflowMoveList = std::make_unique<ExtMove[]>(MOVE_PICK_OVERFLOW_CAPACITY);
       moveList = overflowMoveList.get();
@@ -136,7 +136,7 @@ MovePicker::MovePicker(const Position& p, Move ttm, Depth d, const ButterflyHist
            : pos(p), mainHistory(mh), gateHistory(dh), captureHistory(cph), continuationHistory(ch), ttMove(ttm), recaptureSquare(rs), depth(d), moveList(moves) {
 
   assert(d <= 0);
-  if (pos.potions_enabled())
+  if (pos.potions_enabled() || pos.capture_type() == PRISON)
   {
       overflowMoveList = std::make_unique<ExtMove[]>(MOVE_PICK_OVERFLOW_CAPACITY);
       moveList = overflowMoveList.get();
@@ -154,7 +154,7 @@ MovePicker::MovePicker(const Position& p, Move ttm, Value th, const GateHistory*
            : pos(p), gateHistory(dh), captureHistory(cph), ttMove(ttm), threshold(th), moveList(moves) {
 
   assert(!pos.checkers());
-  if (pos.potions_enabled())
+  if (pos.potions_enabled() || pos.capture_type() == PRISON)
   {
       overflowMoveList = std::make_unique<ExtMove[]>(MOVE_PICK_OVERFLOW_CAPACITY);
       moveList = overflowMoveList.get();

@@ -150,7 +150,7 @@ private:
   ExtMove* prune_useless_potions(ExtMove* begin, ExtMove* end) const;
   ExtMove* begin() { return cur; }
   ExtMove* end() { return endMoves; }
-  static constexpr int MOVE_PICK_OVERFLOW_CAPACITY = MAX_MOVES * 2;
+  static constexpr int MOVE_PICK_OVERFLOW_CAPACITY = MAX_MOVES * 4;
 
   const Position& pos;
   const ButterflyHistory* mainHistory;

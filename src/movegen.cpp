@@ -666,13 +666,14 @@ namespace {
   }
 
   template<Color Us, GenType Type>
-  ExtMove* generate_potion_moves(const Position& pos, ExtMove* baseEnd) {
+  ExtMove* generate_potion_moves(const Position& pos, ExtMove* listBegin, ExtMove* baseEnd) {
 
     if (!pos.potions_enabled())
         return baseEnd;
 
     const Variant* var = pos.variant();
     ExtMove* cur = baseEnd;
+    ExtMove* maxEnd = listBegin + MOVEGEN_OVERFLOW_CAPACITY;
 
     for (int pt = 0; pt < Variant::POTION_TYPE_NB; ++pt)
     {
@@ -694,6 +695,9 @@ namespace {
 
         while (candidates)
         {
+            if (cur >= maxEnd)
+                return maxEnd;
+
             Square gate = pop_lsb(candidates);
 
             Bitboard freezeExtra = potion == Variant::POTION_FREEZE ? pos.freeze_zone_from_square(gate) : Bitboard(0);
@@ -707,6 +711,9 @@ namespace {
             ExtMove* write = potionStart;
             for (ExtMove* it = potionStart; it != cur; ++it)
             {
+                if (write >= maxEnd)
+                    return maxEnd;
+
                 Move base = it->move;
                 if (is_gating(base))
                     continue;
@@ -735,7 +742,7 @@ namespace {
   ExtMove* generate_all(const Position& pos, ExtMove* moveList) {
 
     ExtMove* baseEnd = generate_all_impl<Us, Type>(pos, moveList);
-    return generate_potion_moves<Us, Type>(pos, baseEnd);
+    return generate_potion_moves<Us, Type>(pos, moveList, baseEnd);
   }
 
 } // namespace
