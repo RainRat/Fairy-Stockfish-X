@@ -358,7 +358,7 @@ namespace {
   // 8x8 keeps the classic rank-2..rank-4 window.
   inline Bitboard scaled_space_mask(const Position& pos, Color c) {
     int maxRank = int(pos.max_rank());
-    int target = 1 + maxRank / 2; // roughly half-board from home side
+    int target = maxRank / 2;
     int upper = maxRank - 1;
     if (upper < int(RANK_2))
       return Bitboard(0);
