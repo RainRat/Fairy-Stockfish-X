@@ -98,6 +98,7 @@ largeboards = no
 verylargeboards = no
 all = no
 sudoku = no
+extra_large_movelists = no
 precomputedmagics = yes
 nnue = no
 load_net = $(if $(filter $(nnue),yes),net)
@@ -358,6 +359,11 @@ endif
 # Enable all variants, even heavyweight ones like duck and amazons
 ifneq ($(all),no)
 	CXXFLAGS += -DALLVARS
+endif
+
+# Increase move list capacity for very high-branching variants.
+ifneq ($(extra_large_movelists),no)
+	CXXFLAGS += -DEXTRA_LARGE_MOVELISTS
 endif
 
 # Enable sudoku-specific rules and state tracking
@@ -800,6 +806,10 @@ else
 	@echo "make build ARCH=x86-64 largeboards=yes all=yes"
 	@echo "make build ARCH=x86-64 verylargeboards=yes all=yes"
 	@echo ""
+	@echo "Enable extra-large move lists for high branching variants:"
+	@echo ""
+	@echo "make build ARCH=x86-64 all=yes extra_large_movelists=yes"
+	@echo ""
 	@echo "Enable Sudoku feature code:"
 	@echo ""
 	@echo "make build ARCH=x86-64 sudoku=yes"
@@ -925,6 +935,7 @@ config-sanity: $(load_net)
 	@echo "largeboards: '$(largeboards)'"
 	@echo "verylargeboards: '$(verylargeboards)'"
 	@echo "all: '$(all)'"
+	@echo "extra_large_movelists: '$(extra_large_movelists)'"
 	@echo "sudoku: '$(sudoku)'"
 	@echo "precomputedmagics: '$(precomputedmagics)'"
 	@echo "nnue: '$(nnue)'"

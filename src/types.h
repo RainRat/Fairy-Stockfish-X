@@ -459,7 +459,7 @@ private:
 //When defined, move list will be stored in heap. Delete this if you want to use stack to store move list. Using stack can cause overflow (Segmentation Fault) when the search is too deep.
 #define USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
 
-#ifdef ALLVARS
+#if defined(EXTRA_LARGE_MOVELISTS) || defined(ALLVARS)
 #if defined(VERY_LARGE_BOARDS)
 constexpr int MAX_MOVES = 65536;
 #else
