@@ -1557,6 +1557,8 @@ bool Position::compute_forced_jump_followup(Square s) const {
   Piece mover = piece_on(s);
   if (mover == NO_PIECE)
       return false;
+  if (freeze_squares() & s)
+      return false;
 
   PieceSet jumpTypes = jump_capture_types();
   if (!(jumpTypes & ALL_PIECES) && !(jumpTypes & type_of(mover)))
@@ -3421,7 +3423,9 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       {
           // Keep pending continuation across the forced opponent pass.
           st->forcedJumpSquare = st->previous->forcedJumpSquare;
-          st->forcedJumpHasFollowup = st->previous->forcedJumpHasFollowup;
+          st->forcedJumpHasFollowup = st->forcedJumpSquare != SQ_NONE
+                                    ? compute_forced_jump_followup(st->forcedJumpSquare)
+                                    : false;
       }
       else if (jumpCapsq != SQ_NONE && type_of(m) != PROMOTION && type_of(m) != PIECE_PROMOTION)
       {
