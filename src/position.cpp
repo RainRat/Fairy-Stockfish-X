@@ -983,6 +983,19 @@ bool Position::move_adds_sudoku_conflicts(Move m) const {
 
   if (!var->sudoku) return false;
 
+  // Blast-promotion can change piece types in the blast mask after move effects.
+  // For those variants, use an exact temporary make-move check to keep legality
+  // in sync with post-move sudoku counting.
+  if (blast_promotion()) {
+      StateInfo setupState, nextState;
+      Position p;
+      p.set(variant(), fen(), is_chess960(), &setupState, this_thread());
+      Color us = sideToMove;
+      int before = sudoku_conflicts(us);
+      p.do_move(m, nextState, false);
+      return p.sudoku_conflicts(us) > before;
+  }
+
   Square from = from_sq(m);
   Square to = to_sq(m);
   Piece pc = moved_piece(m);
