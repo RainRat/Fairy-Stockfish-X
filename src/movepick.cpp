@@ -252,6 +252,7 @@ Move MovePicker::next_move(bool skipQuiets) {
       assert(endMoves - moveList <= MOVE_PICK_OVERFLOW_CAPACITY);
       assert(cur >= moveList && cur <= endMoves);
   };
+  const bool potions = pos.potions_enabled();
 
 top:
   switch (stage) {
@@ -274,7 +275,8 @@ top:
   case QCAPTURE_INIT:
       cur = endBadCaptures = moveList;
       endMoves = generate<CAPTURES>(pos, cur);
-      endMoves = prune_useless_potions(cur, endMoves);
+      if (potions)
+          endMoves = prune_useless_potions(cur, endMoves);
       assert_move_list_bounds();
 
       score<CAPTURES>();
@@ -313,7 +315,8 @@ top:
       {
           cur = endBadCaptures;
           endMoves = generate<QUIETS>(pos, cur);
-          endMoves = prune_useless_potions(cur, endMoves);
+          if (potions)
+              endMoves = prune_useless_potions(cur, endMoves);
           assert_move_list_bounds();
 
           score<QUIETS>();
@@ -343,7 +346,8 @@ top:
   case EVASION_INIT:
       cur = moveList;
       endMoves = generate<EVASIONS>(pos, cur);
-      endMoves = prune_useless_potions(cur, endMoves);
+      if (potions)
+          endMoves = prune_useless_potions(cur, endMoves);
       assert_move_list_bounds();
 
       score<EVASIONS>();
@@ -371,7 +375,8 @@ top:
   case QCHECK_INIT:
       cur = moveList;
       endMoves = generate<QUIET_CHECKS>(pos, cur);
-      endMoves = prune_useless_potions(cur, endMoves);
+      if (potions)
+          endMoves = prune_useless_potions(cur, endMoves);
       assert_move_list_bounds();
 
       ++stage;
