@@ -622,13 +622,21 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     const auto& pv = config.find("piecePoints");
     if (pv != config.end())
     {
-        char token;
+        char token, sep = 0;
         size_t idx = 0;
         int parsedPoints = 0;
+        bool parseError = false;
         std::stringstream ss(pv->second);
-        while (!ss.eof() && ss >> token && (idx = v->pieceToChar.find(toupper(token))) != std::string::npos
-                         && ss >> token && ss >> parsedPoints)
+        while (ss >> token)
         {
+            idx = v->pieceToChar.find(toupper(token));
+            if (idx == std::string::npos)
+                break;
+            if (!(ss >> sep) || sep != ':' || !(ss >> parsedPoints))
+            {
+                parseError = true;
+                break;
+            }
             if (parsedPoints < 0) {
                 if (DoCheck)
                     std::cerr << "piecePoints - Negative values are not allowed for type: " << v->pieceToChar[idx] << std::endl;
@@ -644,7 +652,7 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
         }
         if (DoCheck && idx == std::string::npos)
             std::cerr << "piecePoints - Invalid piece type: " << token << std::endl;
-        else if (DoCheck && !ss.eof())
+        else if (DoCheck && (parseError || !ss.eof()))
             std::cerr << "piecePoints - Invalid piece points for type: " << v->pieceToChar[idx] << std::endl;
     }
 
