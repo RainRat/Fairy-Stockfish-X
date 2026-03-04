@@ -838,15 +838,22 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
       }
   }
 
+  st->pointsCount[WHITE] = 0;
+  st->pointsCount[BLACK] = 0;
   if (var->pointsCounting)
   {
-      char brace;
-      ss >> brace;
-      ss >> st->pointsCount[WHITE];
-      ss >> st->pointsCount[BLACK];
-      ss >> brace;  //Probably not needed now, but maybe if another FEN extension.
-      st->pointsCount[WHITE] = non_negative_points(st->pointsCount[WHITE]);
-      st->pointsCount[BLACK] = non_negative_points(st->pointsCount[BLACK]);
+      ss >> std::ws;
+      if (ss.peek() == '{')
+      {
+          char openBrace = 0, closeBrace = 0;
+          int whitePoints = 0, blackPoints = 0;
+          if (ss >> openBrace >> whitePoints >> blackPoints >> closeBrace
+              && openBrace == '{' && closeBrace == '}')
+          {
+              st->pointsCount[WHITE] = non_negative_points(whitePoints);
+              st->pointsCount[BLACK] = non_negative_points(blackPoints);
+          }
+      }
   }
 
   chess960 = isChess960 || v->chess960;
