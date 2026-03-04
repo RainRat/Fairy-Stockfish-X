@@ -116,6 +116,10 @@ jobs:
         run: |
           ../tests/bent-riders.sh
 
+      - name: Test asym rider checkers
+        run: |
+          ../tests/asym-rider-checkers.sh
+
       - name: Test common fairy aliases
         run: |
           ../tests/common-fairy-aliases.sh

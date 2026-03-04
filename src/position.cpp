@@ -77,10 +77,9 @@ namespace {
   };
 
   inline Bitboard retro_asymmetric_check_squares(Color attacker, PieceType pt, Square kingSq, Bitboard occupied) {
-    // Narrow retro handling to horse-family pieces for now; other asymmetrical
-    // rider types keep pseudo-candidate behavior until they have dedicated
-    // retro attack generation.
-    if (pt != HORSE && pt != JANGGI_ELEPHANT)
+    // Hopper families need hurdle-aware retro logic. Keep pseudo candidates for
+    // those, and use path-based retro filtering for other asymmetrical riders.
+    if (AttackRiderTypes[pt] & HOPPING_RIDERS)
         return PseudoAttacks[~attacker][pt][kingSq];
 
     Bitboard checks = 0;
@@ -89,7 +88,8 @@ namespace {
     while (candidates)
     {
         Square from = pop_lsb(candidates);
-        if (!(between_bb(kingSq, from, pt) & occupied))
+        Bitboard blockers = between_bb(kingSq, from, pt) & ~square_bb(from);
+        if (!(blockers & occupied))
             checks |= from;
     }
 
