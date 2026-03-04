@@ -459,6 +459,9 @@ inline Bitboard bent_slider_between_bb(Square s1, Square s2, int pivotF, int piv
 inline Bitboard between_bb(Square s1, Square s2, PieceType pt) {
   RiderType r = AttackRiderTypes[pt];
   Bitboard path = Bitboard(0);
+  auto remap_reverse_path = [&](Bitboard reversePath) {
+      return (reversePath & ~square_bb(s1)) | square_bb(s2);
+  };
 
   if ((r & RIDER_HORSE) && (path = PseudoAttacks[WHITE][WAZIR][s2] & PseudoAttacks[WHITE][FERS][s1]))
       return path;
@@ -504,23 +507,63 @@ inline Bitboard between_bb(Square s1, Square s2, PieceType pt) {
           return path;
   }
 
-  if ((r & RIDER_GRIFFON_NH) && (path = bent_slider_between_bb(s1, s2, 0, 1, true, false)))
-      return path;
-  if ((r & RIDER_GRIFFON_SH) && (path = bent_slider_between_bb(s1, s2, 0, -1, true, false)))
-      return path;
-  if ((r & RIDER_GRIFFON_EV) && (path = bent_slider_between_bb(s1, s2, 1, 0, false, true)))
-      return path;
-  if ((r & RIDER_GRIFFON_WV) && (path = bent_slider_between_bb(s1, s2, -1, 0, false, true)))
-      return path;
+  if (r & RIDER_GRIFFON_NH)
+  {
+      if ((path = bent_slider_between_bb(s1, s2, 0, 1, true, false)))
+          return path;
+      if ((path = bent_slider_between_bb(s2, s1, 0, 1, true, false)))
+          return remap_reverse_path(path);
+  }
+  if (r & RIDER_GRIFFON_SH)
+  {
+      if ((path = bent_slider_between_bb(s1, s2, 0, -1, true, false)))
+          return path;
+      if ((path = bent_slider_between_bb(s2, s1, 0, -1, true, false)))
+          return remap_reverse_path(path);
+  }
+  if (r & RIDER_GRIFFON_EV)
+  {
+      if ((path = bent_slider_between_bb(s1, s2, 1, 0, false, true)))
+          return path;
+      if ((path = bent_slider_between_bb(s2, s1, 1, 0, false, true)))
+          return remap_reverse_path(path);
+  }
+  if (r & RIDER_GRIFFON_WV)
+  {
+      if ((path = bent_slider_between_bb(s1, s2, -1, 0, false, true)))
+          return path;
+      if ((path = bent_slider_between_bb(s2, s1, -1, 0, false, true)))
+          return remap_reverse_path(path);
+  }
 
-  if ((r & RIDER_MANTICORE_NE) && (path = bent_slider_between_bb(s1, s2, 1, 1, true, true)))
-      return path;
-  if ((r & RIDER_MANTICORE_NW) && (path = bent_slider_between_bb(s1, s2, -1, 1, true, true)))
-      return path;
-  if ((r & RIDER_MANTICORE_SE) && (path = bent_slider_between_bb(s1, s2, 1, -1, true, true)))
-      return path;
-  if ((r & RIDER_MANTICORE_SW) && (path = bent_slider_between_bb(s1, s2, -1, -1, true, true)))
-      return path;
+  if (r & RIDER_MANTICORE_NE)
+  {
+      if ((path = bent_slider_between_bb(s1, s2, 1, 1, true, true)))
+          return path;
+      if ((path = bent_slider_between_bb(s2, s1, 1, 1, true, true)))
+          return remap_reverse_path(path);
+  }
+  if (r & RIDER_MANTICORE_NW)
+  {
+      if ((path = bent_slider_between_bb(s1, s2, -1, 1, true, true)))
+          return path;
+      if ((path = bent_slider_between_bb(s2, s1, -1, 1, true, true)))
+          return remap_reverse_path(path);
+  }
+  if (r & RIDER_MANTICORE_SE)
+  {
+      if ((path = bent_slider_between_bb(s1, s2, 1, -1, true, true)))
+          return path;
+      if ((path = bent_slider_between_bb(s2, s1, 1, -1, true, true)))
+          return remap_reverse_path(path);
+  }
+  if (r & RIDER_MANTICORE_SW)
+  {
+      if ((path = bent_slider_between_bb(s1, s2, -1, -1, true, true)))
+          return path;
+      if ((path = bent_slider_between_bb(s2, s1, -1, -1, true, true)))
+          return remap_reverse_path(path);
+  }
 
   return between_bb(s1, s2);
 }

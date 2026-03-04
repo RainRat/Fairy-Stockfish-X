@@ -116,6 +116,10 @@ jobs:
         run: |
           ../tests/bent-riders.sh
 
+      - name: Test bent rider evasions
+        run: |
+          ../tests/bent-rider-evasion.sh
+
       - name: Test asym rider checkers
         run: |
           ../tests/asym-rider-checkers.sh
