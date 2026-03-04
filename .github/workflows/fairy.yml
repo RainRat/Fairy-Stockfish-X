@@ -120,6 +120,10 @@ jobs:
         run: |
           ../tests/common-fairy-aliases.sh
 
+      - name: Test alfil/dabbaba riders
+        run: |
+          ../tests/alfil-dabbaba-riders.sh
+
       - name: Test variant bench
         run: |
           ./stockfish bench xiangqi
