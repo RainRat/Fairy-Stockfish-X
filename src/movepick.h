@@ -167,10 +167,11 @@ private:
   int ply;
   ExtMove* moveList;
 #ifdef USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
-  std::unique_ptr<ExtMove[]> moveListStorage;
+  std::unique_ptr<ExtMove[]> baseMoveList;
 #else
-  ExtMove moves[MOVE_PICK_OVERFLOW_CAPACITY];
+  ExtMove moves[MAX_MOVES];
 #endif
+  std::unique_ptr<ExtMove[]> overflowMoveList;
 };
 
 } // namespace Stockfish
