@@ -121,16 +121,11 @@ MovePicker::MovePicker(const Position& p, Move ttm, Depth d, const ButterflyHist
 
   assert(d > 0);
 #ifdef USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
-  baseMoveList = std::make_unique<ExtMove[]>(MAX_MOVES);
-  moveList = baseMoveList.get();
+  moveListStorage = std::make_unique<ExtMove[]>(MOVE_PICK_OVERFLOW_CAPACITY);
+  moveList = moveListStorage.get();
 #else
   moveList = moves;
 #endif
-  if (pos.potions_enabled() || pos.capture_type() == PRISON)
-  {
-      overflowMoveList = std::make_unique<ExtMove[]>(MOVE_PICK_OVERFLOW_CAPACITY);
-      moveList = overflowMoveList.get();
-  }
 
   stage = (pos.checkers() ? EVASION_TT : MAIN_TT) +
           !(ttm && pos.pseudo_legal(ttm));
@@ -143,16 +138,11 @@ MovePicker::MovePicker(const Position& p, Move ttm, Depth d, const ButterflyHist
 
   assert(d <= 0);
 #ifdef USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
-  baseMoveList = std::make_unique<ExtMove[]>(MAX_MOVES);
-  moveList = baseMoveList.get();
+  moveListStorage = std::make_unique<ExtMove[]>(MOVE_PICK_OVERFLOW_CAPACITY);
+  moveList = moveListStorage.get();
 #else
   moveList = moves;
 #endif
-  if (pos.potions_enabled() || pos.capture_type() == PRISON)
-  {
-      overflowMoveList = std::make_unique<ExtMove[]>(MOVE_PICK_OVERFLOW_CAPACITY);
-      moveList = overflowMoveList.get();
-  }
 
   stage = (pos.checkers() ? EVASION_TT : QSEARCH_TT) +
           !(   ttm
@@ -167,16 +157,11 @@ MovePicker::MovePicker(const Position& p, Move ttm, Value th, const GateHistory*
 
   assert(!pos.checkers());
 #ifdef USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
-  baseMoveList = std::make_unique<ExtMove[]>(MAX_MOVES);
-  moveList = baseMoveList.get();
+  moveListStorage = std::make_unique<ExtMove[]>(MOVE_PICK_OVERFLOW_CAPACITY);
+  moveList = moveListStorage.get();
 #else
   moveList = moves;
 #endif
-  if (pos.potions_enabled() || pos.capture_type() == PRISON)
-  {
-      overflowMoveList = std::make_unique<ExtMove[]>(MOVE_PICK_OVERFLOW_CAPACITY);
-      moveList = overflowMoveList.get();
-  }
 
   stage = PROBCUT_TT + !(ttm && pos.capture(ttm)
                              && pos.pseudo_legal(ttm)
