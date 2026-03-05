@@ -81,8 +81,18 @@ cat > "$tmp_ini" <<'INI'
 pieceDrops = true
 captureType = prison
 castling = false
+
+[exsync:chess]
+pieceDrops = true
+captureType = prison
+hostageExchange = p:p
+castling = false
+startFen = 8/8/8/3p1p2/2P1P3/8/8/4K2k w - - 0 1
 INI
 assert_reload_key_match "$tmp_ini" "prsync" "position startpos moves e2e4 d7d5 e4d5"
+
+# 3) Prison exchange drops mutate both prison/hand counts; key must match after FEN reload.
+assert_reload_key_match "$tmp_ini" "exsync" "position startpos moves c4d5 f5e4 P#P@a2"
 rm -f "$tmp_ini"
 
 echo "state-sync key tests OK"
