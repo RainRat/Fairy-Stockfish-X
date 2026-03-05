@@ -1170,7 +1170,7 @@ moves_loop: // When in check, search starts from here
                   continue;
 
               // SEE based pruning
-              if (!pos.points_counting()
+              if (!pos.see_pruning_unreliable()
                   && !pos.see_ge(move, Value(-218 - 120 * pos.captures_to_hand()) * depth)) // (~25 Elo)
                   continue;
           }
@@ -1195,7 +1195,7 @@ moves_loop: // When in check, search starts from here
 
               // Prune moves with negative SEE (~20 Elo)
               if (!(pos.walling_rule() == DUCK)
-                  && !pos.points_counting()
+                  && !pos.see_pruning_unreliable()
                   && !pos.see_ge(move, Value(-(30 - std::min(lmrDepth, 18) + 10 * !!pos.flag_region(pos.side_to_move())) * lmrDepth * lmrDepth)))
                   continue;
           }
@@ -1679,7 +1679,7 @@ moves_loop: // When in check, search starts from here
           }
 
           if (futilityBase <= alpha
-              && !pos.points_counting()
+              && !pos.see_pruning_unreliable()
               && !pos.see_ge(move, VALUE_ZERO + 1))
           {
               bestValue = std::max(bestValue, futilityBase);
@@ -1689,7 +1689,7 @@ moves_loop: // When in check, search starts from here
 
       // Do not search moves with negative SEE values
       if (    bestValue > VALUE_TB_LOSS_IN_MAX_PLY
-          && !pos.points_counting()
+          && !pos.see_pruning_unreliable()
           && !pos.see_ge(move))
           continue;
 

@@ -4936,6 +4936,16 @@ bool Position::has_game_cycle(int ply) const {
   return false;
 }
 
+bool Position::see_pruning_unreliable() const {
+
+  return points_counting()
+      || flag_region(WHITE) || flag_region(BLACK)
+      || var->castlingWins
+      || connect_n() > 0
+      || connect_nxn() > 0
+      || connect_group() != 0;
+}
+
 
 /// Position::count_limit() returns the counting limit in full moves.
 
