@@ -246,11 +246,17 @@ void MovePicker::score() {
       }
       return 20 * signedPts;
   };
+  auto capture_victim_value = [&](Move mv) {
+      Piece captured = pos.captured_piece(mv);
+      if (captured == NO_PIECE)
+          captured = pos.piece_on(to_sq(mv));
+      return int(PieceValue[MG][captured]);
+  };
 
   for (auto& m : *this)
       if constexpr (Type == CAPTURES)
       {
-          m.value =  int(PieceValue[MG][pos.piece_on(to_sq(m))]) * 6
+          m.value =  capture_victim_value(m) * 6
                    + points_capture_bonus(m)
                    + flag_goal_bonus(m)
                    + king_goal_progress_bonus(m)
@@ -278,7 +284,7 @@ void MovePicker::score() {
       else // Type == EVASIONS
       {
           if (pos.capture(m))
-              m.value =  PieceValue[MG][pos.piece_on(to_sq(m))]
+              m.value =  capture_victim_value(m)
                        + points_capture_bonus(m)
                        + flag_goal_bonus(m)
                        + king_goal_progress_bonus(m)
