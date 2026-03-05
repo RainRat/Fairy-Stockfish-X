@@ -193,12 +193,17 @@ void MovePicker::score() {
   const Color us = pos.side_to_move();
   const PieceType myFlag = pos.flag_piece(us);
   const Bitboard myGoal = pos.flag_region(us);
-  auto min_goal_distance = [&](Square s) {
-      int best = 64;
-      for (Bitboard goals = myGoal; goals;)
-          best = std::min(best, distance(s, pop_lsb(goals)));
-      return best;
-  };
+  int goalDist[SQUARE_NB];
+  if (myGoal && myFlag == KING)
+  {
+      for (int s = 0; s < SQUARE_NB; ++s)
+      {
+          int best = 64;
+          for (Bitboard goals = myGoal; goals;)
+              best = std::min(best, distance(Square(s), pop_lsb(goals)));
+          goalDist[s] = best;
+      }
+  }
   auto flag_goal_bonus = [&](Move mv) {
       Piece mp = pos.moved_piece(mv);
       return (myGoal && mp != NO_PIECE && type_of(mp) == myFlag && (myGoal & square_bb(to_sq(mv)))) ? 30000 : 0;
@@ -213,7 +218,7 @@ void MovePicker::score() {
       Square to = to_sq(mv);
       if (!is_ok(from) || !is_ok(to))
           return 0;
-      int delta = min_goal_distance(from) - min_goal_distance(to);
+      int delta = goalDist[from] - goalDist[to];
       return delta > 0 ? 900 * delta : 0;
   };
 
