@@ -4083,6 +4083,27 @@ bool Position::see_ge(Move m, Value threshold) const {
   int victimValue = PieceValue[MG][victim];
   if (victim != NO_PIECE && color_of(victim) == color_of(moved_piece(m)) && self_capture())
       victimValue = -victimValue;
+  if (points_counting() && victim != NO_PIECE)
+  {
+      int signedPts = 0;
+      int pts = variant()->piecePoints[type_of(victim)];
+      switch (points_rule_captures())
+      {
+          case POINTS_US:        signedPts =  pts; break;
+          case POINTS_THEM:      signedPts = -pts; break;
+          case POINTS_OWNER:     signedPts = color_of(victim) == sideToMove ? pts : -pts; break;
+          case POINTS_NON_OWNER: signedPts = color_of(victim) == sideToMove ? -pts : pts; break;
+          case POINTS_NONE:      signedPts = 0; break;
+      }
+      if (points_goal() > 0)
+      {
+          if (points_goal_value() < VALUE_ZERO)
+              signedPts = -signedPts;
+          else if (points_goal_value() == VALUE_ZERO)
+              signedPts = 0;
+      }
+      victimValue += 20 * signedPts;
+  }
   int swap = victimValue - threshold;
   if (swap < 0)
       return false;
