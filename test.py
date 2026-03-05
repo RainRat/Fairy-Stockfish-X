@@ -609,6 +609,28 @@ startFen = 3k4/1B4N1/8/8/8/8/8/4K3 w - - 0 1
         self.assertIn("|", normalized)
         self.assertEqual(sf.get_fen("fenmask", normalized, []), normalized)
 
+        # commitGates FEN parsing/validation: compressed commit rows should
+        # round-trip, malformed commit-row widths should be rejected.
+        sf.load_variant_config(
+            """[commitcheck:chess]
+gating = true
+commitGates = true
+castling = false
+startFen = ********/4k3/8/8/8/8/8/8/4K3/******** w - - 0 1
+"""
+        )
+        commit_start = sf.start_fen("commitcheck")
+        self.assertEqual(sf.validate_fen(commit_start, "commitcheck"), sf.FEN_OK)
+
+        commit_compressed = "8/4k3/8/8/8/8/8/8/4K3/8 w - - 0 1"
+        self.assertEqual(sf.validate_fen(commit_compressed, "commitcheck"), sf.FEN_OK)
+        self.assertEqual(sf.get_fen("commitcheck", commit_compressed, []), commit_start)
+
+        bad_commit_lead = "7/4k3/8/8/8/8/8/8/4K3/8 w - - 0 1"
+        bad_commit_tail = "8/4k3/8/8/8/8/8/8/4K3/7 w - - 0 1"
+        self.assertNotEqual(sf.validate_fen(bad_commit_lead, "commitcheck"), sf.FEN_OK)
+        self.assertNotEqual(sf.validate_fen(bad_commit_tail, "commitcheck"), sf.FEN_OK)
+
         # Shogi pawn-drop mate is illegal.
         fen = "BRBRSSSGG/nPPPPPPPP/n8/n8/n8/ll7/kl7/9/K8[PPPPPPPPPPggsl] w - - 0 1"
         result = sf.legal_moves("shogi", fen, [])

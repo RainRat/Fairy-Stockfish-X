@@ -3067,8 +3067,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       {
           int oldCount = pieceCountInHand[us][gating_type(m)];
           remove_from_hand(gating_piece);
-          k ^= Zobrist::inHand[gating_piece][oldCount];
-          k ^= Zobrist::inHand[gating_piece][oldCount - 1];
+          int newCount = pieceCountInHand[us][gating_type(m)];
+          xor_in_hand_count(k, gating_piece, oldCount, newCount);
 
           if (Eval::useNNUE)
           {
@@ -3094,7 +3094,10 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           }
 
           put_piece(gating_piece, gate);
+          int oldCount = pieceCountInHand[us][gating_type(m)];
           remove_from_hand(gating_piece);
+          int newCount = pieceCountInHand[us][gating_type(m)];
+          xor_in_hand_count(k, gating_piece, oldCount, newCount);
 
           st->gatesBB[us] ^= gate;
           k ^= Zobrist::psq[gating_piece][gate];
