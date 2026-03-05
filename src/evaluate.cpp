@@ -760,6 +760,20 @@ namespace {
 
     Score score = SCORE_ZERO;
 
+    // In prison-exchange variants, reward practical exchange availability:
+    // owning rescue material that can swap for opponent-held prisoners.
+    if (pos.has_exchange() && pt != KING && pos.count_in_prison(Them, pt) > 0)
+    {
+        int leverage = 0;
+        for (PieceSet rescue = pos.rescueFor(pt); rescue;)
+        {
+            PieceType ex = pop_lsb(rescue);
+            leverage += std::min(pos.count_in_prison(Us, ex), pos.count_in_prison(Them, pt));
+        }
+        leverage = std::min(leverage, 6);
+        score += make_score(20, 8) * leverage;
+    }
+
     if (pos.count_in_hand(Us, pt) > 0 && pt != KING)
     {
         Bitboard b = pos.drop_region(Us, pt) & ~pos.pieces() & (~attackedBy2[Them] | attackedBy[Us][ALL_PIECES]);
