@@ -261,7 +261,12 @@ void MovePicker::score() {
       }
 
       else if constexpr (Type == QUIETS)
+      {
+          int exchangeBonus = exchange_piece(m) != NO_PIECE_TYPE
+                            ? 3 * int(PieceValue[MG][make_piece(pos.side_to_move(), exchange_piece(m))])
+                            : 0;
           m.value =      (*mainHistory)[pos.side_to_move()][from_to(m)]
+                   +     exchangeBonus
                    +     flag_goal_bonus(m)
                    +     king_goal_progress_bonus(m)
                    +     (*gateHistory)[pos.side_to_move()][gating_square(m)]
@@ -270,6 +275,7 @@ void MovePicker::score() {
                    +     (*continuationHistory[3])[history_slot(pos.moved_piece(m))][to_sq(m)]
                    +     (*continuationHistory[5])[history_slot(pos.moved_piece(m))][to_sq(m)]
                    + (ply < MAX_LPH ? std::min(4, depth / 3) * (*lowPlyHistory)[ply][from_to(m)] : 0);
+      }
 
       else // Type == EVASIONS
       {
