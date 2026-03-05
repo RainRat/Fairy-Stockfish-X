@@ -87,6 +87,7 @@ namespace {
         Variant* v = chess_variant()->init();
         v->variantTemplate = "spell-chess";
         v->potions = true;
+        v->checking = false;
         v->potionPiece[Variant::POTION_FREEZE] = CUSTOM_PIECE_1;
         v->potionPiece[Variant::POTION_JUMP] = CUSTOM_PIECE_2;
         v->potionCooldown[Variant::POTION_FREEZE] = 3;
