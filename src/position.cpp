@@ -4943,6 +4943,11 @@ bool Position::see_pruning_unreliable() const {
       || var->castlingWins
       || connect_n() > 0
       || connect_nxn() > 0
+      || collinear_n() > 0
+      || var->connectRegion1[WHITE] || var->connectRegion2[WHITE]
+      || var->connectRegion1[BLACK] || var->connectRegion2[BLACK]
+      || !connect_piece_goal_types(WHITE).empty()
+      || !connect_piece_goal_types(BLACK).empty()
       || connect_group() != 0;
 }
 
