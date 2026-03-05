@@ -4087,7 +4087,14 @@ bool Position::see_ge(Move m, Value threshold) const {
   if (swap < 0)
       return false;
 
-  swap = PieceValue[MG][moved_piece(m)] - swap;
+  // In morph-capture variants, the capturing piece on 'to' may immediately
+  // change type, so the first recapture loses the morphed piece value.
+  Piece seeMover = moved_piece(m);
+  if (capture_morph() && capture(m) && victim != NO_PIECE)
+      if (!(rex_exclusive_morph() && type_of(seeMover) == KING))
+          seeMover = make_piece(color_of(seeMover), type_of(victim));
+
+  swap = PieceValue[MG][seeMover] - swap;
   if (swap <= 0)
       return true;
 
