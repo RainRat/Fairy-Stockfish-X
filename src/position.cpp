@@ -1662,8 +1662,8 @@ bool Position::legal(Move m) const {
       return false;
 
   if (pass_until_setup() && must_drop()
-      && count_in_hand(us, ALL_PIECES) == 0
-      && count_in_hand(them, ALL_PIECES) > 0
+      && !has_setup_drop(us)
+      && has_setup_drop(them)
       && !is_pass(m))
       return false;
 
@@ -2105,8 +2105,8 @@ bool Position::pseudo_legal(const Move m) const {
       return false;
 
   if (pass_until_setup() && must_drop()
-      && count_in_hand(us, ALL_PIECES) == 0
-      && count_in_hand(them, ALL_PIECES) > 0
+      && !has_setup_drop(us)
+      && has_setup_drop(them)
       && !is_pass(m))
       return false;
 

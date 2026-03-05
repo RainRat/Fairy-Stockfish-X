@@ -265,6 +265,7 @@ public:
   bool cambodian_moves() const;
   Bitboard diagonal_lines() const;
   bool pass(Color c) const;
+  bool has_setup_drop(Color c) const;
   bool pass_until_setup() const;
   bool pass_on_stalemate(Color c) const;
   bool multimove_pass(int ply) const;
@@ -1360,11 +1361,34 @@ inline bool Position::pass(Color c) const {
           return true;
   }
   if (pass_until_setup() && must_drop()
-      && count_in_hand(c, ALL_PIECES) == 0
-      && count_in_hand(~c, ALL_PIECES) > 0)
+      && !has_setup_drop(c)
+      && has_setup_drop(~c))
       return true;
   return var->pass[c] || var->passOnStalemate[c]
       || (var->multimoveOffset && multimove_pass(gamePly));
+}
+
+inline bool Position::has_setup_drop(Color c) const {
+  assert(var != nullptr);
+
+  PieceType requiredDropType =
+      (var->mustDropTypeByColor[WHITE] != ALL_PIECES || var->mustDropTypeByColor[BLACK] != ALL_PIECES)
+          ? var->mustDropTypeByColor[c]
+          : var->mustDropType;
+
+  auto canDropNow = [&](PieceType pt) {
+      return can_drop(c, pt)
+          && (!pay_points_to_drop() || st->pointsCount[c] >= var->piecePoints[pt]);
+  };
+
+  if (requiredDropType != ALL_PIECES)
+      return canDropNow(requiredDropType);
+
+  for (PieceSet ps = var->pieceTypes; ps;)
+      if (canDropNow(pop_lsb(ps)))
+          return true;
+
+  return false;
 }
 
 inline bool Position::pass_until_setup() const {
