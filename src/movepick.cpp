@@ -193,9 +193,28 @@ void MovePicker::score() {
   const Color us = pos.side_to_move();
   const PieceType myFlag = pos.flag_piece(us);
   const Bitboard myGoal = pos.flag_region(us);
+  auto min_goal_distance = [&](Square s) {
+      int best = 64;
+      for (Bitboard goals = myGoal; goals;)
+          best = std::min(best, distance(s, pop_lsb(goals)));
+      return best;
+  };
   auto flag_goal_bonus = [&](Move mv) {
       Piece mp = pos.moved_piece(mv);
       return (myGoal && mp != NO_PIECE && type_of(mp) == myFlag && (myGoal & square_bb(to_sq(mv)))) ? 30000 : 0;
+  };
+  auto king_goal_progress_bonus = [&](Move mv) {
+      if (!myGoal || myFlag != KING)
+          return 0;
+      Piece mp = pos.moved_piece(mv);
+      if (mp == NO_PIECE || type_of(mp) != KING)
+          return 0;
+      Square from = from_sq(mv);
+      Square to = to_sq(mv);
+      if (!is_ok(from) || !is_ok(to))
+          return 0;
+      int delta = min_goal_distance(from) - min_goal_distance(to);
+      return delta > 0 ? 900 * delta : 0;
   };
 
   for (auto& m : *this)
@@ -231,6 +250,7 @@ void MovePicker::score() {
           m.value =  int(PieceValue[MG][pos.piece_on(to_sq(m))]) * 6
                    + pointsBonus
                    + flag_goal_bonus(m)
+                   + king_goal_progress_bonus(m)
                    + (*gateHistory)[pos.side_to_move()][gating_square(m)]
                    + (*captureHistory)[pos.moved_piece(m)][to_sq(m)][type_of(pos.piece_on(to_sq(m)))];
       }
@@ -238,6 +258,7 @@ void MovePicker::score() {
       else if constexpr (Type == QUIETS)
           m.value =      (*mainHistory)[pos.side_to_move()][from_to(m)]
                    +     flag_goal_bonus(m)
+                   +     king_goal_progress_bonus(m)
                    +     (*gateHistory)[pos.side_to_move()][gating_square(m)]
                    + 2 * (*continuationHistory[0])[history_slot(pos.moved_piece(m))][to_sq(m)]
                    +     (*continuationHistory[1])[history_slot(pos.moved_piece(m))][to_sq(m)]
@@ -250,10 +271,12 @@ void MovePicker::score() {
           if (pos.capture(m))
               m.value =  PieceValue[MG][pos.piece_on(to_sq(m))]
                        + flag_goal_bonus(m)
+                       + king_goal_progress_bonus(m)
                        - Value(type_of(pos.moved_piece(m)));
           else
               m.value =      (*mainHistory)[pos.side_to_move()][from_to(m)]
                        +     flag_goal_bonus(m)
+                       +     king_goal_progress_bonus(m)
                        + 2 * (*continuationHistory[0])[history_slot(pos.moved_piece(m))][to_sq(m)]
                        - (1 << 28);
       }
