@@ -221,39 +221,37 @@ void MovePicker::score() {
       int delta = goalDist[from] - goalDist[to];
       return delta > 0 ? 900 * delta : 0;
   };
+  auto points_capture_bonus = [&](Move mv) {
+      if (!pos.points_counting())
+          return 0;
+      Piece captured = pos.captured_piece(mv);
+      if (captured == NO_PIECE)
+          return 0;
+      int pts = pos.variant()->piecePoints[type_of(captured)];
+      int signedPts = 0;
+      switch (pos.points_rule_captures())
+      {
+          case POINTS_US:        signedPts =  pts; break;
+          case POINTS_THEM:      signedPts = -pts; break;
+          case POINTS_OWNER:     signedPts =  color_of(captured) == pos.side_to_move() ? pts : -pts; break;
+          case POINTS_NON_OWNER: signedPts =  color_of(captured) == pos.side_to_move() ? -pts : pts; break;
+          case POINTS_NONE:      signedPts = 0; break;
+      }
+      if (pos.points_goal() > 0)
+      {
+          if (pos.points_goal_value() < VALUE_ZERO)
+              signedPts = -signedPts;
+          else if (pos.points_goal_value() == VALUE_ZERO)
+              signedPts = 0;
+      }
+      return 20 * signedPts;
+  };
 
   for (auto& m : *this)
       if constexpr (Type == CAPTURES)
       {
-          int pointsBonus = 0;
-          if (pos.points_counting())
-          {
-              Piece captured = pos.captured_piece(m);
-              if (captured != NO_PIECE)
-              {
-                  int pts = pos.variant()->piecePoints[type_of(captured)];
-                  int signedPts = 0;
-                  switch (pos.points_rule_captures())
-                  {
-                      case POINTS_US:        signedPts =  pts; break;
-                      case POINTS_THEM:      signedPts = -pts; break;
-                      case POINTS_OWNER:     signedPts =  color_of(captured) == pos.side_to_move() ? pts : -pts; break;
-                      case POINTS_NON_OWNER: signedPts =  color_of(captured) == pos.side_to_move() ? -pts : pts; break;
-                      case POINTS_NONE:      signedPts = 0; break;
-                  }
-                  if (pos.points_goal() > 0)
-                  {
-                      if (pos.points_goal_value() < VALUE_ZERO)
-                          signedPts = -signedPts;
-                      else if (pos.points_goal_value() == VALUE_ZERO)
-                          signedPts = 0;
-                  }
-                  pointsBonus = 20 * signedPts;
-              }
-          }
-
           m.value =  int(PieceValue[MG][pos.piece_on(to_sq(m))]) * 6
-                   + pointsBonus
+                   + points_capture_bonus(m)
                    + flag_goal_bonus(m)
                    + king_goal_progress_bonus(m)
                    + (*gateHistory)[pos.side_to_move()][gating_square(m)]
@@ -281,6 +279,7 @@ void MovePicker::score() {
       {
           if (pos.capture(m))
               m.value =  PieceValue[MG][pos.piece_on(to_sq(m))]
+                       + points_capture_bonus(m)
                        + flag_goal_bonus(m)
                        + king_goal_progress_bonus(m)
                        - Value(type_of(pos.moved_piece(m)));
