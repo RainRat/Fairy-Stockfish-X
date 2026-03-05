@@ -193,9 +193,39 @@ void MovePicker::score() {
 
   for (auto& m : *this)
       if constexpr (Type == CAPTURES)
+      {
+          int pointsBonus = 0;
+          if (pos.points_counting())
+          {
+              Piece captured = pos.captured_piece(m);
+              if (captured != NO_PIECE)
+              {
+                  int pts = pos.variant()->piecePoints[type_of(captured)];
+                  int signedPts = 0;
+                  switch (pos.points_rule_captures())
+                  {
+                      case POINTS_US:        signedPts =  pts; break;
+                      case POINTS_THEM:      signedPts = -pts; break;
+                      case POINTS_OWNER:     signedPts =  color_of(captured) == pos.side_to_move() ? pts : -pts; break;
+                      case POINTS_NON_OWNER: signedPts =  color_of(captured) == pos.side_to_move() ? -pts : pts; break;
+                      case POINTS_NONE:      signedPts = 0; break;
+                  }
+                  if (pos.points_goal() > 0)
+                  {
+                      if (pos.points_goal_value() < VALUE_ZERO)
+                          signedPts = -signedPts;
+                      else if (pos.points_goal_value() == VALUE_ZERO)
+                          signedPts = 0;
+                  }
+                  pointsBonus = 20 * signedPts;
+              }
+          }
+
           m.value =  int(PieceValue[MG][pos.piece_on(to_sq(m))]) * 6
+                   + pointsBonus
                    + (*gateHistory)[pos.side_to_move()][gating_square(m)]
                    + (*captureHistory)[pos.moved_piece(m)][to_sq(m)][type_of(pos.piece_on(to_sq(m)))];
+      }
 
       else if constexpr (Type == QUIETS)
           m.value =      (*mainHistory)[pos.side_to_move()][from_to(m)]

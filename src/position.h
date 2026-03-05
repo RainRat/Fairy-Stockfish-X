@@ -315,6 +315,8 @@ public:
   PointsRule points_rule_captures() const;
   int points_goal() const;
   int points_count(Color c) const;
+  Value points_goal_value() const;
+  Value points_goal_simul_value() const;
 
   CheckCount checks_remaining(Color c) const;
   MaterialCounting material_counting() const;
@@ -1732,6 +1734,16 @@ inline int Position::points_goal() const {
 
 inline int Position::points_count(Color c) const {
   return st->pointsCount[c];
+}
+
+inline Value Position::points_goal_value() const {
+  assert(var != nullptr);
+  return var->pointsGoalValue;
+}
+
+inline Value Position::points_goal_simul_value() const {
+  assert(var != nullptr);
+  return var->pointsGoalSimulValue;
 }
 
 

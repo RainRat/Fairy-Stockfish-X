@@ -1384,10 +1384,13 @@ namespace {
         int goal = pos.points_goal();
         int usToGoal = std::max(goal - usPoints, 0);
         int themToGoal = std::max(goal - themPoints, 0);
+        int goalSign = pos.points_goal_value() > VALUE_ZERO ? 1
+                    : pos.points_goal_value() < VALUE_ZERO ? -1
+                    : 0;
 
         // Lead in current points and proximity to goal.
-        score += make_score(28, 20) * std::clamp(usPoints - themPoints, -100, 100);
-        score += make_score(60, 44) * std::clamp(themToGoal - usToGoal, -100, 100);
+        score += make_score(28, 20) * goalSign * std::clamp(usPoints - themPoints, -100, 100);
+        score += make_score(60, 44) * goalSign * std::clamp(themToGoal - usToGoal, -100, 100);
     }
 
     // Duple-check variants (e.g. Spartan): reward coordinated protection of
