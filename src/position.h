@@ -314,6 +314,7 @@ public:
   bool pay_points_to_drop() const;
   PointsRule points_rule_captures() const;
   int points_goal() const;
+  int points_count(Color c) const;
 
   CheckCount checks_remaining(Color c) const;
   MaterialCounting material_counting() const;
@@ -1727,6 +1728,10 @@ inline PointsRule Position::points_rule_captures() const {
 inline int Position::points_goal() const {
   assert(var != nullptr);
   return var->pointsGoal;
+}
+
+inline int Position::points_count(Color c) const {
+  return st->pointsCount[c];
 }
 
 

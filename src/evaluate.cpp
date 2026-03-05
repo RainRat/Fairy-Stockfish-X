@@ -1375,6 +1375,21 @@ namespace {
         score += make_score(3600, 1000) / (remainingChecks * remainingChecks);
     }
 
+    // Points-goal variants: push search toward scoring progress rather than
+    // waiting for immediate_end detection to trigger only at terminal nodes.
+    if (pos.points_counting() && pos.points_goal() > 0)
+    {
+        int usPoints = pos.points_count(Us);
+        int themPoints = pos.points_count(Them);
+        int goal = pos.points_goal();
+        int usToGoal = std::max(goal - usPoints, 0);
+        int themToGoal = std::max(goal - themPoints, 0);
+
+        // Lead in current points and proximity to goal.
+        score += make_score(28, 20) * std::clamp(usPoints - themPoints, -100, 100);
+        score += make_score(60, 44) * std::clamp(themToGoal - usToGoal, -100, 100);
+    }
+
     // Duple-check variants (e.g. Spartan): reward coordinated protection of
     // the currently critical pseudo-royal set, and penalize exposed pieces.
     if (pos.variant()->dupleCheck && pos.pseudo_royal_types())
