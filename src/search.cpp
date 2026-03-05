@@ -1163,10 +1163,11 @@ moves_loop: // When in check, search starts from here
           if (   captureOrPromotion
               || givesCheck)
           {
+              Piece captureVictim = pos.captured_piece(move);
               // Capture history based pruning when the move doesn't give check
               if (   !givesCheck
                   && lmrDepth < 1
-                  && captureHistory[movedPiece][to_sq(move)][type_of(pos.piece_on(to_sq(move)))] < 0)
+                  && captureHistory[movedPiece][to_sq(move)][type_of(captureVictim ? captureVictim : pos.piece_on(to_sq(move)))] < 0)
                   continue;
 
               // SEE based pruning
@@ -1829,7 +1830,8 @@ moves_loop: // When in check, search starts from here
     Thread* thisThread = pos.this_thread();
     CapturePieceToHistory& captureHistory = thisThread->captureHistory;
     Piece moved_piece = pos.moved_piece(bestMove);
-    PieceType captured = type_of(pos.piece_on(to_sq(bestMove)));
+    Piece bestCaptured = pos.captured_piece(bestMove);
+    PieceType captured = type_of(bestCaptured ? bestCaptured : pos.piece_on(to_sq(bestMove)));
 
     bonus1 = stat_bonus(depth + 1);
     bonus2 = bestValue > beta + PawnValueMg ? bonus1                                 // larger bonus
@@ -1868,7 +1870,8 @@ moves_loop: // When in check, search starts from here
     for (int i = 0; i < captureCount; ++i)
     {
         moved_piece = pos.moved_piece(capturesSearched[i]);
-        captured = type_of(pos.piece_on(to_sq(capturesSearched[i])));
+        Piece cap = pos.captured_piece(capturesSearched[i]);
+        captured = type_of(cap ? cap : pos.piece_on(to_sq(capturesSearched[i])));
         if (!(pos.walling() && from_to(capturesSearched[i]) == from_to(bestMove)))
             captureHistory[moved_piece][to_sq(capturesSearched[i])][captured] << -bonus1;
         if (pos.walling())

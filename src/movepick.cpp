@@ -252,6 +252,12 @@ void MovePicker::score() {
           captured = pos.piece_on(to_sq(mv));
       return int(PieceValue[MG][captured]);
   };
+  auto capture_victim_type = [&](Move mv) {
+      Piece captured = pos.captured_piece(mv);
+      if (captured == NO_PIECE)
+          captured = pos.piece_on(to_sq(mv));
+      return type_of(captured);
+  };
 
   for (auto& m : *this)
       if constexpr (Type == CAPTURES)
@@ -261,7 +267,7 @@ void MovePicker::score() {
                    + flag_goal_bonus(m)
                    + king_goal_progress_bonus(m)
                    + (*gateHistory)[pos.side_to_move()][gating_square(m)]
-                   + (*captureHistory)[pos.moved_piece(m)][to_sq(m)][type_of(pos.piece_on(to_sq(m)))];
+                   + (*captureHistory)[pos.moved_piece(m)][to_sq(m)][capture_victim_type(m)];
       }
 
       else if constexpr (Type == QUIETS)
