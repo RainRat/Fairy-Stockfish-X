@@ -1277,6 +1277,8 @@ inline bool Position::can_cast_potion(Color c, Variant::PotionType type) const {
 }
 
 inline Bitboard Position::freeze_squares(Color c) const {
+  if (!potions_enabled())
+      return Bitboard(0);
   Bitboard mask = st->potionZones[c][Variant::POTION_FREEZE];
   if (spellContextActive)
       mask |= spellExtraFrozen;
@@ -1288,6 +1290,8 @@ inline Bitboard Position::freeze_squares() const {
 }
 
 inline Bitboard Position::jump_squares(Color c) const {
+  if (!potions_enabled())
+      return Bitboard(0);
   Bitboard mask = st->potionZones[c][Variant::POTION_JUMP];
   if (spellContextActive && c == sideToMove)
       mask |= spellJumpRemoved;

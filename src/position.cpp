@@ -2027,8 +2027,12 @@ bool Position::legal(Move m) const {
       if (is_gating(m) && (gating_square(m) == to || gating_square(m) == rto))
           return false;
 
-      // Non-castling-king pieces can not be impeded from castling
-      if (type_of(piece_on(from)) != castling_king_piece(us))
+      // Non-royal castlers are not impeded by attacked transit squares.
+      // Spell Chess uses a COMMONER as castling king while still requiring
+      // king-like castling safety checks.
+      bool royalLikeCastler = type_of(piece_on(from)) == KING
+                           || (potions_enabled() && type_of(piece_on(from)) == castling_king_piece(us));
+      if (!royalLikeCastler)
           return true;
 
       for (Square s = to; s != from; s += step)
@@ -2293,7 +2297,8 @@ bool Position::pseudo_legal(const Move m) const {
 
           // Our move must be a blocking evasion or a capture of the checking piece
           Square checksq = lsb(checkers());
-          if (  !(between_bb(square<KING>(us), lsb(checkers())) & to)
+          Bitboard blockSquares = between_bb(square<KING>(us), checksq, type_of(piece_on(checksq)));
+          if (  !(blockSquares & to)
               || ((LeaperAttacks[~us][type_of(piece_on(checksq))][checksq] & square<KING>(us)) && !(checkers() & to)))
               return false;
       }
