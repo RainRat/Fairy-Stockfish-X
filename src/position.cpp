@@ -1531,6 +1531,8 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
 Bitboard Position::attackers_to_king(Square s, Bitboard occupied, Color c, Bitboard janggiCannons) const {
 
   Bitboard attackers = attackers_to(s, occupied, c, janggiCannons);
+  // Frozen pieces cannot give check (relevant for spell-chess freeze effects).
+  attackers &= ~freeze_squares(c);
   attackers &= ~(pieces(c, PAWN) & pawnCannotCheckZone[c]);
   PieceSet forbiddenToKing = var->captureForbiddenToKing;
   if (!attackers || !forbiddenToKing)
@@ -1689,6 +1691,9 @@ bool Position::legal(Move m) const {
   SpellContextScope spellScope(*this, freezeExtra, jumpRemoved);
 
   if (type_of(m) != DROP && (freeze_squares() & from))
+      return false;
+  // Castling is also blocked if the participating rook is frozen.
+  if (type_of(m) == CASTLING && (freeze_squares() & to))
       return false;
   if (jumpRemoved && (square_bb(to) & jumpRemoved))
       return false;
@@ -2022,8 +2027,8 @@ bool Position::legal(Move m) const {
       if (is_gating(m) && (gating_square(m) == to || gating_square(m) == rto))
           return false;
 
-      // Non-royal pieces can not be impeded from castling
-      if (type_of(piece_on(from)) != KING)
+      // Non-castling-king pieces can not be impeded from castling
+      if (type_of(piece_on(from)) != castling_king_piece(us))
           return true;
 
       for (Square s = to; s != from; s += step)
