@@ -144,4 +144,23 @@ position startpos moves e2e4 e7e5 e1e1
 go perft 1")
 echo "${out}" | grep -q "Nodes searched: 29"
 
+# 18) Hindustani baseline: no pawn double-step.
+out=$(run_cmds "setoption name UCI_Variant value hindustani
+position startpos
+go perft 1")
+! echo "${out}" | grep -q "^e2e4:"
+
+# 19) Hindustani baseline: if all promotion targets are at cap, promotion is forbidden.
+out=$(run_cmds "setoption name UCI_Variant value hindustani
+position fen 4k3/3P4/8/8/8/8/RNBQKBNR/R6R w - - 0 1
+go perft 1")
+! echo "${out}" | grep -q "^d7d8"
+
+# 20) Hindustani baseline: if queen is below cap, central-file promotion to queen is legal.
+out=$(run_cmds "setoption name UCI_Variant value hindustani
+position fen 4k3/3P4/8/8/8/8/RNB1KBNR/R6R w - - 0 1
+go perft 1")
+echo "${out}" | grep -q "^d7d8q: 1$"
+! echo "${out}" | grep -q "^d7d8r:"
+
 echo "new variants smoke testing OK"
