@@ -115,8 +115,8 @@ position fen 4k3/8/8/3p4/4P3/8/8/8 w - - 0 1 moves e4d5
 d")
 echo "${out}" | grep -q "Fen: 4k3/8/8/3P4/8/8/8/8 b - - 0 1"
 
-# 14) Dead piece (all): any capturer is removed after capture.
-out=$(run_cmds "setoption name UCI_Variant value dead-piece-all
+# 14) Kamikaze giveaway: any capturer is removed after capture.
+out=$(run_cmds "setoption name UCI_Variant value kamikaze-giveaway
 position fen 4k3/8/8/3p4/4P3/8/8/8 w - - 0 1 moves e4d5
 d")
 echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/8 b - - 0 1"
