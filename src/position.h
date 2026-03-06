@@ -60,6 +60,7 @@ struct StateInfo {
   Bitboard epSquares;
   Square castlingKingSquare[COLOR_NB];
   Bitboard wallSquares;
+  Bitboard deadSquares;
   Bitboard gatesBB[COLOR_NB];
   Bitboard not_moved_pieces[COLOR_NB];
   Bitboard potionZones[COLOR_NB][Variant::POTION_TYPE_NB];
@@ -85,6 +86,9 @@ struct StateInfo {
   Bitboard   checkSquares[PIECE_TYPE_NB];
   Piece      capturedPiece;
   Square     captureSquare; // when != to_sq, e.g., en passant
+  Piece      deadPiece;
+  Piece      deadUnpromotedPiece;
+  bool       deadPiecePromoted;
   Piece      deadCapturerPiece;
   Piece      deadCapturerUnpromotedPiece;
   bool       deadCapturerPromoted;
@@ -155,6 +159,7 @@ public:
   int files() const;
   bool two_boards() const;
   Bitboard board_bb() const;
+  Bitboard dead_squares() const;
   Bitboard board_bb(Color c, PieceType pt) const;
   PieceSet piece_types() const;
   const std::string& piece_to_char() const;
@@ -182,6 +187,7 @@ public:
   bool blast_diagonals() const;
   bool blast_center() const;
   PieceSet blast_immune_types() const;
+  PieceSet death_on_capture_types() const;
   Bitboard blast_immune_bb() const;
   Bitboard blast_pattern(Square to) const;
   Bitboard blast_squares(Square to) const;
@@ -588,6 +594,10 @@ inline Bitboard Position::board_bb() const {
   return board_size_bb(var->maxFile, var->maxRank) & ~st->wallSquares;
 }
 
+inline Bitboard Position::dead_squares() const {
+  return st->deadSquares;
+}
+
 inline Bitboard Position::board_bb(Color c, PieceType pt) const {
   assert(var != nullptr);
   return var->mobilityRegion[c][pt] ? var->mobilityRegion[c][pt] & board_bb() : board_bb();
@@ -750,6 +760,11 @@ inline bool Position::blast_center() const {
 inline PieceSet Position::blast_immune_types() const {
   assert(var != nullptr);
   return var->blastImmuneTypes;
+}
+
+inline PieceSet Position::death_on_capture_types() const {
+  assert(var != nullptr);
+  return var->deathOnCaptureTypes;
 }
 
 inline Bitboard Position::blast_immune_bb() const {
@@ -2385,6 +2400,11 @@ inline bool Position::is_jump_capture(Move m) const {
 
 inline bool Position::capture(Move m) const {
   assert(is_ok(m));
+  if (type_of(m) == EN_PASSANT)
+      return true;
+  if (type_of(m) == CASTLING || from_sq(m) == to_sq(m))
+      return false;
+
   if (type_of(m) == NORMAL || type_of(m) == PROMOTION)
   {
       Piece mover = moved_piece(m);
@@ -2395,10 +2415,9 @@ inline bool Position::capture(Move m) const {
               return true;
       }
   }
-  // Castling is encoded as "king captures rook"
-  return ((!empty(to_sq(m)) && type_of(m) != CASTLING && from_sq(m) != to_sq(m))
-          || type_of(m) == EN_PASSANT
-          || is_jump_capture(m));
+
+  Square to = to_sq(m);
+  return !empty(to) || bool(st->deadSquares & to);
 }
 
 inline Square Position::capture_square(Square to) const {

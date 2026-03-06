@@ -110,6 +110,7 @@ namespace Zobrist {
   Key potionZone[COLOR_NB][Variant::POTION_TYPE_NB][SQUARE_NB];
   Key potionCooldown[COLOR_NB][Variant::POTION_TYPE_NB][POTION_COOLDOWN_BITS];
   Key wall[SQUARE_NB];
+  Key dead[SQUARE_NB];
   Key endgame[EG_EVAL_NB];
   Key points[COLOR_NB][MAX_ZOBRIST_POINTS];
 }
@@ -150,14 +151,19 @@ std::ostream& operator<<(std::ostream& os, const Position& pos) {
   for (Rank r = pos.max_rank(); r >= RANK_1; --r)
   {
       for (File f = FILE_A; f <= pos.max_file(); ++f)
-          if (pos.state()->wallSquares & make_square(f, r))
+      {
+          Square sq = make_square(f, r);
+          if (pos.state()->deadSquares & sq)
+              os << " | ^";
+          else if (pos.state()->wallSquares & sq)
               os << " | *";
-          else if (pos.variant()->shogiStylePromotions && pos.unpromoted_piece_on(make_square(f, r)))
-              os << " |+" << pos.piece_to_char()[pos.unpromoted_piece_on(make_square(f, r))];
-          else if (((pos.captures_to_hand() && !pos.drop_loop()) || pos.two_boards()) && pos.is_promoted(make_square(f, r)))
-              os << " |~" << pos.piece_to_char()[pos.piece_on(make_square(f, r))];
+          else if (pos.variant()->shogiStylePromotions && pos.unpromoted_piece_on(sq))
+              os << " |+" << pos.piece_to_char()[pos.unpromoted_piece_on(sq)];
+          else if (((pos.captures_to_hand() && !pos.drop_loop()) || pos.two_boards()) && pos.is_promoted(sq))
+              os << " |~" << pos.piece_to_char()[pos.piece_on(sq)];
           else
-              os << " | " << pos.piece_to_char()[pos.piece_on(make_square(f, r))];
+              os << " | " << pos.piece_to_char()[pos.piece_on(sq)];
+      }
 
 #ifdef LARGEBOARDS
       os << " |" << (pos.max_rank() == RANK_10 && CurrentProtocol != UCI_GENERAL ? r : 1 + r);
@@ -341,7 +347,10 @@ void Position::init() {
       }
 
   for (Square s = SQ_A1; s <= SQ_MAX; ++s)
+  {
       Zobrist::wall[s] = rng.rand<Key>();
+      Zobrist::dead[s] = rng.rand<Key>();
+  }
 
   for (int i = NO_EG_EVAL; i < EG_EVAL_NB; ++i)
       Zobrist::endgame[i] = rng.rand<Key>();
@@ -517,6 +526,13 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
               byTypeBB[ALL_PIECES] |= sq;
               ++sq;
           }
+      }
+      else if (token == '^')
+      {
+          // Dead square (neutral capturable blocker)
+          st->deadSquares |= sq;
+          byTypeBB[ALL_PIECES] |= sq;
+          ++sq;
       }
 
       else if ((idx = piece_to_char().find(token)) != string::npos || (idx = piece_to_char_synonyms().find(token)) != string::npos)
@@ -1071,6 +1087,9 @@ void Position::set_state(StateInfo* si) const {
   si->removedGatingType = NO_PIECE_TYPE;
   si->removedCastlingGatingType = NO_PIECE_TYPE;
   si->capturedGatingType = NO_PIECE_TYPE;
+  si->deadPiece = NO_PIECE;
+  si->deadUnpromotedPiece = NO_PIECE;
+  si->deadPiecePromoted = false;
   si->forcedJumpSquare = SQ_NONE;
   si->forcedJumpHasFollowup = false;
 
@@ -1084,7 +1103,7 @@ void Position::set_state(StateInfo* si) const {
       si->key ^= Zobrist::psq[pc][s];
 
       if (!pc)
-          si->key ^= Zobrist::wall[s];
+          si->key ^= (st->deadSquares & s) ? Zobrist::dead[s] : Zobrist::wall[s];
 
       else if (type_of(pc) == PAWN)
           si->pawnKey ^= Zobrist::psq[pc][s];
@@ -1200,8 +1219,10 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
           if (f <= max_file())
           {
               if (empty(make_square(f, r)) || fogArea & make_square(f, r))
-                  // Wall square
-                  ss << "*";
+              {
+                  Square s = make_square(f, r);
+                  ss << ((st->deadSquares & s) ? "^" : "*");
+              }
               else if (var->shogiStylePromotions && unpromoted_piece_on(make_square(f, r)))
                   // Promoted shogi pieces, e.g., +r for dragon
                   ss << "+" << piece_to_char()[unpromoted_piece_on(make_square(f, r))];
@@ -2511,6 +2532,9 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   st->blastPromotedSquares = 0;
   st->bycatchSquares = 0;
   st->consumedPromotionHandPiece = NO_PIECE;
+  st->deadPiece = NO_PIECE;
+  st->deadUnpromotedPiece = NO_PIECE;
+  st->deadPiecePromoted = false;
   st->deadCapturer = false;
   st->deadCapturerPiece = NO_PIECE;
   st->deadCapturerUnpromotedPiece = NO_PIECE;
@@ -2547,6 +2571,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   Piece pc = moved_piece(m);
   PieceType movedType = type_of(pc);
   Piece captured = captured_piece(m);
+  bool capturedDeadSquare = type_of(m) != DROP && from != to && bool(st->deadSquares & to);
   PieceType exchanged = exchange_piece(m);
   Square jumpCapsq = is_jump_capture(m) ? jump_capture_square(from, to) : SQ_NONE;
   if (to == from)
@@ -2712,6 +2737,14 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       prefetch(thisThread->materialTable[material_key(endgame_eval())]);
 #endif
       // Reset rule 50 counter
+      st->rule50 = 0;
+  }
+
+  if (capturedDeadSquare)
+  {
+      st->deadSquares ^= to;
+      byTypeBB[ALL_PIECES] ^= to;
+      k ^= Zobrist::dead[to];
       st->rule50 = 0;
   }
 
@@ -3464,6 +3497,32 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       k ^= Zobrist::wall[gating_square(m)];
   }
 
+  if (!capturedDeadSquare && captured != NO_PIECE && type_of(m) != DROP
+      && (death_on_capture_types() & piece_set(movedType)) && piece_on(to) != NO_PIECE)
+  {
+      Piece deadPiece = piece_on(to);
+      st->deadPiece = deadPiece;
+      st->deadPiecePromoted = is_promoted(to);
+      st->deadUnpromotedPiece = st->deadPiecePromoted ? unpromoted_piece_on(to) : NO_PIECE;
+
+      if (Eval::useNNUE)
+          append_dirty(st, deadPiece, to, SQ_NONE);
+
+      remove_piece(to);
+      board[to] = NO_PIECE;
+
+      k ^= Zobrist::psq[deadPiece][to];
+      st->materialKey ^= Zobrist::psq[deadPiece][pieceCount[deadPiece]];
+      if (type_of(deadPiece) == PAWN)
+          st->pawnKey ^= Zobrist::psq[deadPiece][to];
+      else
+          st->nonPawnMaterial[us] -= PieceValue[MG][deadPiece];
+
+      st->deadSquares |= to;
+      byTypeBB[ALL_PIECES] |= to;
+      k ^= Zobrist::dead[to];
+  }
+
   if (var->capturerDiesOnCapture && captured != NO_PIECE && piece_on(to) != NO_PIECE)
   {
       bool exemptPawnCapturer = var->capturerDiesExemptPawns && movedType == PAWN;
@@ -3669,6 +3728,7 @@ void Position::undo_move(Move m) {
 
   // Reset wall squares
   byTypeBB[ALL_PIECES] ^= st->wallSquares ^ st->previous->wallSquares;
+  byTypeBB[ALL_PIECES] ^= st->deadSquares ^ st->previous->deadSquares;
 
   // Add the blast pieces
   if (
@@ -3814,7 +3874,14 @@ void Position::undo_move(Move m) {
       if (type_of(m) == DROP)
           undrop_piece(make_piece(us, in_hand_piece_type(m)), to, exchange); // Remove the dropped piece
       else
+      {
+          if (st->deadPiece)
+          {
+              st->deadSquares ^= to;
+              put_piece(st->deadPiece, to, st->deadPiecePromoted, st->deadUnpromotedPiece);
+          }
           move_piece(to, from); // Put the piece back at the source square
+      }
 
       if (st->capturedPiece)
       {

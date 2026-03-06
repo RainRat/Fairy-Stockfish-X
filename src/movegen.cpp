@@ -233,11 +233,12 @@ namespace {
 
     const Bitboard frozen     = pos.freeze_squares();
     const Bitboard pawns      = pos.pieces(Us, PAWN) & fromMask & ~frozen;
+    const Bitboard neutral    = pos.dead_squares();
     const Bitboard movable    = pos.board_bb(Us, PAWN) & ~pos.pieces();
     const Bitboard friendlyCapturable = pos.pieces(Us) & ~pos.pieces(Us, KING);
     const Bitboard capturable = pos.board_bb(Us, PAWN)
-                              & (pos.self_capture() ? (pos.pieces(Them) | friendlyCapturable)
-                                                    :  pos.pieces(Them));
+                              & (pos.self_capture() ? (pos.pieces(Them) | friendlyCapturable | neutral)
+                                                    :  (pos.pieces(Them) | neutral));
 
     target = Type == EVASIONS ? target : AllSquares;
 
@@ -345,7 +346,7 @@ namespace {
                 PieceType pt = pop_msb(ps);
                 if (!pos.promotion_allowed(Us, pt))
                     continue;
-                Bitboard b = ((pos.attacks_from(Us, pt, from) & ~pos.pieces()) | from) & target;
+                Bitboard b = ((pos.attacks_from(Us, pt, from) & ~(pos.pieces() | pos.dead_squares())) | from) & target;
                 while (b)
                 {
                     Square to = pop_lsb(b);
@@ -371,7 +372,7 @@ namespace {
             moveList = make_move_and_gating<NORMAL>(pos, moveList, Us, to - UpLeft, to);
         }
 
-        for (Bitboard epSquares = pos.ep_squares() & ~pos.pieces(); epSquares; )
+        for (Bitboard epSquares = pos.ep_squares() & ~(pos.pieces() | pos.dead_squares()); epSquares; )
         {
             Square epSquare = pop_lsb(epSquares);
 
@@ -561,7 +562,7 @@ namespace {
     {
         target = Type == EVASIONS     ?  between_bb(ksq, lsb(checkers))
                : Type == NON_EVASIONS ? ~pos.pieces( Us)
-               : Type == CAPTURES     ?  pos.pieces(~Us)
+               : Type == CAPTURES     ? (pos.pieces(~Us) | pos.dead_squares())
                                       : ~pos.pieces(   ); // QUIETS || QUIET_CHECKS
 
         if (Type == EVASIONS)

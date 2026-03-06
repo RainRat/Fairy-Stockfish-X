@@ -81,6 +81,7 @@ struct Variant {
   bool blastCenter = true;
   PieceSet blastImmuneTypes = NO_PIECE_SET;
   PieceSet mutuallyImmuneTypes = NO_PIECE_SET;
+  PieceSet deathOnCaptureTypes = NO_PIECE_SET;
   PieceSet mutuallyHopIllegalTypes = NO_PIECE_SET;
   PieceSet captureForbidden[PIECE_TYPE_NB] = {};
   PieceSet captureForbiddenToKing = NO_PIECE_SET;
