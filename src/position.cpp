@@ -2535,10 +2535,6 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   st->deadPiece = NO_PIECE;
   st->deadUnpromotedPiece = NO_PIECE;
   st->deadPiecePromoted = false;
-  st->deadCapturer = false;
-  st->deadCapturerPiece = NO_PIECE;
-  st->deadCapturerUnpromotedPiece = NO_PIECE;
-  st->deadCapturerPromoted = false;
 
   if (commit_gates()) {
       st->removedGatingType = NO_PIECE_TYPE;
@@ -3528,27 +3524,26 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       bool exemptPawnCapturer = var->capturerDiesExemptPawns && movedType == PAWN;
       if (!exemptPawnCapturer)
       {
-          Piece deadCapturer = piece_on(to);
-          Color dc = color_of(deadCapturer);
+          Piece deadPiece = piece_on(to);
+          Color dc = color_of(deadPiece);
 
-          st->deadCapturer = true;
-          st->deadCapturerPiece = deadCapturer;
-          st->deadCapturerPromoted = is_promoted(to);
-          st->deadCapturerUnpromotedPiece = unpromoted_piece_on(to);
+          st->deadPiece = deadPiece;
+          st->deadPiecePromoted = is_promoted(to);
+          st->deadUnpromotedPiece = st->deadPiecePromoted ? unpromoted_piece_on(to) : NO_PIECE;
 
-          if (type_of(deadCapturer) != PAWN)
-              st->nonPawnMaterial[dc] -= PieceValue[MG][deadCapturer];
+          if (type_of(deadPiece) != PAWN)
+              st->nonPawnMaterial[dc] -= PieceValue[MG][deadPiece];
 
           if (Eval::useNNUE)
-              append_dirty(st, deadCapturer, to, SQ_NONE);
+              append_dirty(st, deadPiece, to, SQ_NONE);
 
           remove_piece(to);
           board[to] = NO_PIECE;
 
-          k ^= Zobrist::psq[deadCapturer][to];
-          st->materialKey ^= Zobrist::psq[deadCapturer][pieceCount[deadCapturer]];
-          if (type_of(deadCapturer) == PAWN)
-              st->pawnKey ^= Zobrist::psq[deadCapturer][to];
+          k ^= Zobrist::psq[deadPiece][to];
+          st->materialKey ^= Zobrist::psq[deadPiece][pieceCount[deadPiece]];
+          if (type_of(deadPiece) == PAWN)
+              st->pawnKey ^= Zobrist::psq[deadPiece][to];
 
           if (!allow_checks() && givesCheck && count<KING>(them))
               givesCheck = bool(attackers_to_king(square<KING>(them), us) & pieces(us));
@@ -3782,12 +3777,6 @@ void Position::undo_move(Move m) {
       pc = st->morphedFrom;
   }
 
-  if (st->deadCapturer && piece_on(to) == NO_PIECE)
-  {
-      put_piece(st->deadCapturerPiece, to, st->deadCapturerPromoted, st->deadCapturerUnpromotedPiece);
-      pc = st->deadCapturerPiece;
-  }
-
   // Remove gated piece or restore potion
   if (is_gating(m))
   {
@@ -3877,8 +3866,10 @@ void Position::undo_move(Move m) {
       {
           if (st->deadPiece)
           {
-              st->deadSquares ^= to;
+              if (st->deadSquares & to)
+                  st->deadSquares ^= to;
               put_piece(st->deadPiece, to, st->deadPiecePromoted, st->deadUnpromotedPiece);
+              pc = piece_on(to);
           }
           move_piece(to, from); // Put the piece back at the source square
       }

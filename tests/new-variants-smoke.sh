@@ -121,7 +121,13 @@ position fen 4k3/8/8/3p4/4P3/8/8/8 w - - 0 1 moves e4d5
 d")
 echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/8 b - - 0 1"
 
-# 15) Fatal giveaway: dead squares can be captured as neutral blockers.
+# 15) Kamikaze: plain chess family, capturer is removed.
+out=$(run_cmds "setoption name UCI_Variant value kamikaze
+position fen 4k3/8/8/3p4/4P3/8/8/8 w - - 0 1 moves e4d5
+d")
+echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/8 b - - 0 1"
+
+# 16) Fatal giveaway: dead squares can be captured as neutral blockers.
 out=$(run_cmds "setoption name UCI_Variant value fatal-giveaway
 position fen 4k3/8/8/4\\^3/8/8/8/4Q3 w - - 0 1 moves e1e5
 d")

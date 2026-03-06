@@ -89,10 +89,6 @@ struct StateInfo {
   Piece      deadPiece;
   Piece      deadUnpromotedPiece;
   bool       deadPiecePromoted;
-  Piece      deadCapturerPiece;
-  Piece      deadCapturerUnpromotedPiece;
-  bool       deadCapturerPromoted;
-  bool       deadCapturer;
   Piece      promotionPawn;
   Piece      consumedPromotionHandPiece;
   Bitboard   nonSlidingRiders;
