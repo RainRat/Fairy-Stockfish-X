@@ -74,4 +74,10 @@ position fen 9/9/9/9/3K5/2r6/9/9/9 b - - 0 1 moves c4c5
 go perft 1")
 echo "${out}" | grep -q "Nodes searched: 12"
 
+# 8) Neutreeko: max-distance move completes a line and ends the game.
+out=$(run_cmds "setoption name UCI_Variant value neutreeko
+position fen 5/3N1/5/1N3/N4 w - - 0 1 moves d4c3
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 0"
+
 echo "new variants smoke testing OK"
