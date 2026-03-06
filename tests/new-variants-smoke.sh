@@ -175,4 +175,24 @@ position fen 5/5/1D1dD/5/5 w - - 0 1 moves b3c3
 d")
 echo "${out}" | grep -q "Fen: 5/5/2D1D/5/5 b - - 1 1"
 
+# 23) iChess baseline: opening drops restricted to own half.
+out=$(run_cmds "setoption name UCI_Variant value ichess
+position startpos
+go perft 1")
+! echo "${out}" | grep -q "@a8"
+echo "${out}" | grep -q "^Q@a1: 1$"
+
+# 24) iChess baseline: pawn is shogi-like (one-step forward only, no initial double-step).
+out=$(run_cmds "setoption name UCI_Variant value ichess
+position fen 4k3/8/8/8/8/8/4P3/4K3 w - - 0 1
+go perft 1")
+echo "${out}" | grep -q "^e2e3: 1$"
+! echo "${out}" | grep -q "^e2e4:"
+
+# 25) iChess baseline: promotion rank is constrained (no unpromoted advance to rank 8).
+out=$(run_cmds "setoption name UCI_Variant value ichess
+position fen k7/4P3/8/8/8/8/8/4K3 w - - 0 1
+go perft 1")
+! echo "${out}" | grep -q "^e7e8"
+
 echo "new variants smoke testing OK"
