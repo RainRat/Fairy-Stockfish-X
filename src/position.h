@@ -85,6 +85,10 @@ struct StateInfo {
   Bitboard   checkSquares[PIECE_TYPE_NB];
   Piece      capturedPiece;
   Square     captureSquare; // when != to_sq, e.g., en passant
+  Piece      deadCapturerPiece;
+  Piece      deadCapturerUnpromotedPiece;
+  bool       deadCapturerPromoted;
+  bool       deadCapturer;
   Piece      promotionPawn;
   Piece      consumedPromotionHandPiece;
   Bitboard   nonSlidingRiders;

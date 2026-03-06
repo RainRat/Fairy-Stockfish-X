@@ -2511,6 +2511,10 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   st->blastPromotedSquares = 0;
   st->bycatchSquares = 0;
   st->consumedPromotionHandPiece = NO_PIECE;
+  st->deadCapturer = false;
+  st->deadCapturerPiece = NO_PIECE;
+  st->deadCapturerUnpromotedPiece = NO_PIECE;
+  st->deadCapturerPromoted = false;
 
   if (commit_gates()) {
       st->removedGatingType = NO_PIECE_TYPE;
@@ -2541,6 +2545,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   Square from = from_sq(m);
   Square to = to_sq(m);
   Piece pc = moved_piece(m);
+  PieceType movedType = type_of(pc);
   Piece captured = captured_piece(m);
   PieceType exchanged = exchange_piece(m);
   Square jumpCapsq = is_jump_capture(m) ? jump_capture_square(from, to) : SQ_NONE;
@@ -3459,6 +3464,38 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       k ^= Zobrist::wall[gating_square(m)];
   }
 
+  if (var->capturerDiesOnCapture && captured != NO_PIECE && piece_on(to) != NO_PIECE)
+  {
+      bool exemptPawnCapturer = var->capturerDiesExemptPawns && movedType == PAWN;
+      if (!exemptPawnCapturer)
+      {
+          Piece deadCapturer = piece_on(to);
+          Color dc = color_of(deadCapturer);
+
+          st->deadCapturer = true;
+          st->deadCapturerPiece = deadCapturer;
+          st->deadCapturerPromoted = is_promoted(to);
+          st->deadCapturerUnpromotedPiece = unpromoted_piece_on(to);
+
+          if (type_of(deadCapturer) != PAWN)
+              st->nonPawnMaterial[dc] -= PieceValue[MG][deadCapturer];
+
+          if (Eval::useNNUE)
+              append_dirty(st, deadCapturer, to, SQ_NONE);
+
+          remove_piece(to);
+          board[to] = NO_PIECE;
+
+          k ^= Zobrist::psq[deadCapturer][to];
+          st->materialKey ^= Zobrist::psq[deadCapturer][pieceCount[deadCapturer]];
+          if (type_of(deadCapturer) == PAWN)
+              st->pawnKey ^= Zobrist::psq[deadCapturer][to];
+
+          if (!allow_checks() && givesCheck && count<KING>(them))
+              givesCheck = bool(attackers_to_king(square<KING>(them), us) & pieces(us));
+      }
+  }
+
   if (forced_jump_continuation())
   {
       if (is_pass(m))
@@ -3469,7 +3506,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
                                     ? compute_forced_jump_followup(st->forcedJumpSquare)
                                     : false;
       }
-      else if (jumpCapsq != SQ_NONE && type_of(m) != PROMOTION && type_of(m) != PIECE_PROMOTION)
+      else if (jumpCapsq != SQ_NONE && type_of(m) != PROMOTION && type_of(m) != PIECE_PROMOTION
+            && piece_on(to) != NO_PIECE)
       {
           st->forcedJumpSquare = to;
           st->forcedJumpHasFollowup = compute_forced_jump_followup(to);
@@ -3682,6 +3720,12 @@ void Position::undo_move(Move m) {
       remove_piece(to);
       put_piece(st->morphedFrom, to);
       pc = st->morphedFrom;
+  }
+
+  if (st->deadCapturer && piece_on(to) == NO_PIECE)
+  {
+      put_piece(st->deadCapturerPiece, to, st->deadCapturerPromoted, st->deadCapturerUnpromotedPiece);
+      pc = st->deadCapturerPiece;
   }
 
   // Remove gated piece or restore potion

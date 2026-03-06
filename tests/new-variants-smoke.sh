@@ -105,4 +105,20 @@ position fen 4k5/P9/10/10/10/10/10/10/10/5K4[Q] w - - 0 1
 go perft 1")
 echo "${out}" | grep -q "^a9a10q: 1$"
 
+# 13) Fatal giveaway: non-pawn capturer dies, pawns survive captures.
+out=$(run_cmds "setoption name UCI_Variant value fatal-giveaway
+position fen 4k3/8/8/4p3/4R3/8/8/8 w - - 0 1 moves e4e5
+d")
+echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/8 b - - 0 1"
+out=$(run_cmds "setoption name UCI_Variant value fatal-giveaway
+position fen 4k3/8/8/3p4/4P3/8/8/8 w - - 0 1 moves e4d5
+d")
+echo "${out}" | grep -q "Fen: 4k3/8/8/3P4/8/8/8/8 b - - 0 1"
+
+# 14) Dead piece (all): any capturer is removed after capture.
+out=$(run_cmds "setoption name UCI_Variant value dead-piece-all
+position fen 4k3/8/8/3p4/4P3/8/8/8 w - - 0 1 moves e4d5
+d")
+echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/8 b - - 0 1"
+
 echo "new variants smoke testing OK"
