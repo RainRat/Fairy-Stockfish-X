@@ -28,13 +28,25 @@ position fen 9/9/9/9/9/9/9/R1rR5/9 w - - 0 1 moves a2b2
 d")
 echo "${out}" | grep -q "Fen: 9/9/9/9/9/9/9/1R1R5/9 b - - 1 1"
 
-# 2) Achi: pre-connected line is immediate game end (no legal moves).
+# 2) Hasami: edge alone is not hostile; moving away must not capture.
+out=$(run_cmds "setoption name UCI_Variant value hasami
+position fen 9/9/9/9/9/9/9/Rr7/9 w - - 0 1 moves a2a1
+d")
+echo "${out}" | grep -q "Fen: 9/9/9/9/9/9/9/1r7/R8 b - - 1 1"
+
+# 3) Achi: pre-connected line is immediate game end (no legal moves).
 out=$(run_cmds "setoption name UCI_Variant value achi
 position fen PPP/3/3[PPPPpppp] b - - 0 1
 go perft 1")
 echo "${out}" | grep -q "Nodes searched: 0"
 
-# 3) Checkless: king capture is legal (checks are disabled by variant).
+# 4) Achi: non-terminal filled setup still yields legal drops.
+out=$(run_cmds "setoption name UCI_Variant value achi
+position fen PpP/pPp/3[PpppPPPP] w - - 0 1
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 3"
+
+# 5) Checkless: king capture is legal (checks are disabled by variant).
 out=$(run_cmds "setoption name UCI_Variant value checkless
 position fen 4k3/8/8/8/8/8/4Q3/4K3 w - - 0 1
 go perft 1")
