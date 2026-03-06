@@ -722,6 +722,18 @@ namespace {
                 if (mt != NORMAL && mt != CASTLING)
                     continue;
 
+                if (potion == Variant::POTION_JUMP)
+                {
+                    Piece mover = pos.piece_on(from_sq(base));
+                    if (mover == NO_PIECE)
+                        continue;
+
+                    Bitboard path = between_bb(from_sq(base), to_sq(base), type_of(mover));
+                    path &= ~square_bb(to_sq(base));
+                    if (!(path & square_bb(gate)))
+                        continue;
+                }
+
                 Move gatingMove = mt == NORMAL
                                   ? make_gating<NORMAL>(from_sq(base), to_sq(base), potionPiece, gate)
                                   : make_gating<CASTLING>(from_sq(base), to_sq(base), potionPiece, gate);
