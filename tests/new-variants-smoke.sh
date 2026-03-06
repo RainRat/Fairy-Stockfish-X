@@ -202,4 +202,15 @@ d")
 echo "${out}" | grep -q "Fen: bnrqkrnb/pppppppp/8/8/8/8/PPPPPPPP/BNRQKRNB w - - 0 1"
 ! echo "${out}" | grep -q " KQkq "
 
+# 27) Asymmetrical chess baseline: custom start position, no castling, no pawn double-step.
+out=$(run_cmds "setoption name UCI_Variant value asymmetrical
+position startpos
+d")
+echo "${out}" | grep -q "Fen: 3prnbk/4ppqn/5ppb/6pr/7p/Bpp5/NQpp4/KBNRP3 w - - 0 1"
+! echo "${out}" | grep -q " KQkq "
+out=$(run_cmds "setoption name UCI_Variant value asymmetrical
+position startpos
+go perft 1")
+! echo "${out}" | grep -q "d1d3"
+
 echo "new variants smoke testing OK"
