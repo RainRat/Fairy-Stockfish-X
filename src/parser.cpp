@@ -901,6 +901,7 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("enPassantTypesBlack", v->enPassantTypes[BLACK], v->pieceToChar);
     parse_attribute("castling", v->castling);
     parse_attribute("castlingDroppedPiece", v->castlingDroppedPiece);
+    parse_attribute("castlingForbiddenPlies", v->castlingForbiddenPlies);
     parse_attribute("castlingKingsideFile", v->castlingKingsideFile);
     parse_attribute("castlingQueensideFile", v->castlingQueensideFile);
     parse_attribute("castlingRank", v->castlingRank);

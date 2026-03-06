@@ -106,6 +106,7 @@ struct Variant {
   PieceSet enPassantTypes[COLOR_NB] = {piece_set(PAWN), piece_set(PAWN)};
   bool castling = true;
   bool castlingDroppedPiece = false;
+  int castlingForbiddenPlies = 0;
   File castlingKingsideFile = FILE_G;
   File castlingQueensideFile = FILE_C;
   Rank castlingRank = RANK_1;

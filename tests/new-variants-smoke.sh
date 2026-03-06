@@ -273,4 +273,16 @@ position fen k7/8/8/8/8/4p3/8/7K b - - 0 1
 go perft 1")
 echo "${out}" | grep -q "^e3e1q: 1$"
 
+# 34) No-castle-10: castling blocked before ply 20, allowed afterwards.
+out=$(run_cmds "setoption name UCI_Variant value no-castle-10
+position fen r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1
+go perft 1")
+! echo "${out}" | grep -q "^e1g1:"
+! echo "${out}" | grep -q "^e1c1:"
+out=$(run_cmds "setoption name UCI_Variant value no-castle-10
+position fen r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 11
+go perft 1")
+echo "${out}" | grep -q "^e1g1: 1$"
+echo "${out}" | grep -q "^e1c1: 1$"
+
 echo "new variants smoke testing OK"

@@ -1725,6 +1725,8 @@ bool Position::legal(Move m) const {
   // Castling is also blocked if the participating rook is frozen.
   if (type_of(m) == CASTLING && (freeze_squares() & to))
       return false;
+  if (type_of(m) == CASTLING && gamePly < var->castlingForbiddenPlies)
+      return false;
   if (jumpRemoved && (square_bb(to) & jumpRemoved))
       return false;
 
@@ -2236,6 +2238,8 @@ bool Position::pseudo_legal(const Move m) const {
   SpellContextScope spellScope(*this, freezeExtra, jumpRemoved);
 
   if (type_of(m) != DROP && (freeze_squares() & from))
+      return false;
+  if (type_of(m) == CASTLING && gamePly < var->castlingForbiddenPlies)
       return false;
   if (jumpRemoved && (square_bb(to) & jumpRemoved))
       return false;
