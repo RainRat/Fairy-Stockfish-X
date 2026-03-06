@@ -254,14 +254,33 @@ namespace {
     Bitboard brcp = brc & standardPromotionZone;
     Bitboard blcp = blc & standardPromotionZone;
 
-    // Restrict regions based on rules and move generation type
+    Bitboard mandatoryPromotionZone = pos.mandatory_promotion_zone(Us, PAWN);
     if (pos.mandatory_pawn_promotion())
+        mandatoryPromotionZone |= standardPromotionZone;
+
+    bool pawnPromotionAvailable = false;
+    for (PieceSet ps = pos.promotion_piece_types(Us); ps;)
+        if (pos.promotion_allowed(Us, pop_lsb(ps)))
+        {
+            pawnPromotionAvailable = true;
+            break;
+        }
+
+    if (mandatoryPromotionZone)
     {
-        b1 &= ~standardPromotionZone;
-        b2 &= ~standardPromotionZone;
-        b3 &= ~standardPromotionZone;
-        brc &= ~standardPromotionZone;
-        blc &= ~standardPromotionZone;
+        b1 &= ~mandatoryPromotionZone;
+        b2 &= ~mandatoryPromotionZone;
+        b3 &= ~mandatoryPromotionZone;
+        brc &= ~mandatoryPromotionZone;
+        blc &= ~mandatoryPromotionZone;
+        if (!pawnPromotionAvailable)
+        {
+            b1p &= ~mandatoryPromotionZone;
+            b2p &= ~mandatoryPromotionZone;
+            b3p &= ~mandatoryPromotionZone;
+            brcp &= ~mandatoryPromotionZone;
+            blcp &= ~mandatoryPromotionZone;
+        }
     }
 
     if (Type == QUIET_CHECKS && pos.count<KING>(Them))
@@ -397,6 +416,7 @@ namespace {
         Bitboard epSquares = (pos.en_passant_types(Us) & Pt) ? (attacks & pos.ep_squares() & ~pos.pieces()) : Bitboard(0);
         Bitboard b1 = b & ~epSquares;
         Bitboard promotion_zone = pos.promotion_zone(Us, Pt);
+        Bitboard mandatoryPromotionZone = pos.mandatory_promotion_zone(Us, Pt);
         PieceType promPt = pos.promoted_piece_type(Pt);
         Bitboard b2 = promPt && pos.promotion_allowed(Us, promPt) ? b1 : Bitboard(0);
         Bitboard b3 = pos.piece_demotion() && pos.is_promoted(from) ? b1 : Bitboard(0);
@@ -416,6 +436,11 @@ namespace {
             }
         }
 
+        if (mandatoryPromotionZone)
+        {
+            b1 &= ~mandatoryPromotionZone;
+            jumpCaptures &= ~mandatoryPromotionZone;
+        }
 
         // target squares considering pawn promotions
         if (pawnPromotions && pos.mandatory_pawn_promotion())

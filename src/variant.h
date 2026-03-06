@@ -54,6 +54,7 @@ struct Variant {
   std::string startFen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
   Bitboard mobilityRegion[COLOR_NB][PIECE_TYPE_NB] = {};
   Bitboard promotionRegion[COLOR_NB] = {Rank8BB, Rank1BB};
+  Bitboard mandatoryPromotionRegion[COLOR_NB] = {};
   bool pieceSpecificPromotionRegion = false;
   PieceTypeBitboardGroup whitePiecePromotionRegion;
   PieceTypeBitboardGroup blackPiecePromotionRegion;

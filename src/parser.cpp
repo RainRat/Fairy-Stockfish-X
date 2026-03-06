@@ -698,6 +698,12 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("startFen", v->startFen);
     parse_attribute("promotionRegionWhite", v->promotionRegion[WHITE]);
     parse_attribute("promotionRegionBlack", v->promotionRegion[BLACK]);
+    parse_attribute("promotionRegion", v->promotionRegion[WHITE]);
+    parse_attribute("promotionRegion", v->promotionRegion[BLACK]);
+    parse_attribute("mandatoryPromotionRegionWhite", v->mandatoryPromotionRegion[WHITE]);
+    parse_attribute("mandatoryPromotionRegionBlack", v->mandatoryPromotionRegion[BLACK]);
+    parse_attribute("mandatoryPromotionRegion", v->mandatoryPromotionRegion[WHITE]);
+    parse_attribute("mandatoryPromotionRegion", v->mandatoryPromotionRegion[BLACK]);
     parse_attribute("pieceSpecificPromotionRegion", v->pieceSpecificPromotionRegion);
     if (v->pieceSpecificPromotionRegion && !parse_attribute("whitePiecePromotionRegion", v->whitePiecePromotionRegion))
     {

@@ -158,6 +158,9 @@ public:
   Bitboard promotion_zone(Color c) const;
   Bitboard promotion_zone(Color c, PieceType pt) const;
   Bitboard promotion_zone(Piece p) const;
+  Bitboard mandatory_promotion_zone(Color c) const;
+  Bitboard mandatory_promotion_zone(Color c, PieceType pt) const;
+  Bitboard mandatory_promotion_zone(Piece p) const;
   Square promotion_square(Color c, Square s) const;
   PieceType main_promotion_pawn_type(Color c) const;
   PieceSet promotion_piece_types(Color c) const;
@@ -632,6 +635,22 @@ inline Bitboard Position::promotion_zone(Piece p) const {
     assert(var != nullptr);
     assert(p != NO_PIECE);
     return promotion_zone(color_of(p), type_of(p));
+}
+
+inline Bitboard Position::mandatory_promotion_zone(Color c) const {
+  assert(var != nullptr);
+  return var->mandatoryPromotionRegion[c];
+}
+
+inline Bitboard Position::mandatory_promotion_zone(Color c, PieceType pt) const {
+  assert(var != nullptr);
+  return mandatory_promotion_zone(c) & promotion_zone(c, pt);
+}
+
+inline Bitboard Position::mandatory_promotion_zone(Piece p) const {
+  assert(var != nullptr);
+  assert(p != NO_PIECE);
+  return mandatory_promotion_zone(color_of(p), type_of(p));
 }
 
 inline Square Position::promotion_square(Color c, Square s) const {

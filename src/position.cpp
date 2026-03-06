@@ -1245,7 +1245,15 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
   }
 
   // pieces in hand
-  if (!free_drops() && (piece_drops() || seirawan_gating() || potions_enabled()) && !commit_gates())
+  // Keep reserve state in FEN whenever it affects legality/search state, even
+  // if literal drop moves are disabled (e.g. reserve-backed promotions).
+  if (   !free_drops()
+      && (   piece_drops()
+          || seirawan_gating()
+          || potions_enabled()
+          || var->promotionRequireInHand
+          || var->promotionConsumeInHand)
+      && !commit_gates())
   {
       ss << '[';
       if (holdings != "-") {
@@ -1706,6 +1714,13 @@ bool Position::legal(Move m) const {
       return false;
   if (type_of(m) == PIECE_PROMOTION && !promotion_allowed(us, promoted_piece_type(type_of(moved_piece(m)))))
       return false;
+  if (type_of(m) != DROP && type_of(m) != PROMOTION && type_of(m) != PIECE_PROMOTION)
+  {
+      Piece mover = moved_piece(m);
+      Bitboard mandatoryZone = mover == NO_PIECE ? Bitboard(0) : mandatory_promotion_zone(mover);
+      if ((mandatoryZone & to) && !(mandatoryZone & from))
+          return false;
+  }
 
   assert(color_of(moved_piece(m)) == us);
   assert(!count<KING>(us) || piece_on(square<KING>(us)) == make_piece(us, KING));
@@ -2120,6 +2135,12 @@ bool Position::pseudo_legal(const Move m) const {
       return false;
   if (type_of(m) == PIECE_PROMOTION && !promotion_allowed(us, promoted_piece_type(type_of(pc))))
       return false;
+  if (type_of(m) != DROP && type_of(m) != PROMOTION && type_of(m) != PIECE_PROMOTION)
+  {
+      Bitboard mandatoryZone = pc == NO_PIECE ? Bitboard(0) : mandatory_promotion_zone(pc);
+      if ((mandatoryZone & to) && !(mandatoryZone & from))
+          return false;
+  }
 
   if (forced_jump_continuation() && st->forcedJumpSquare != SQ_NONE)
   {

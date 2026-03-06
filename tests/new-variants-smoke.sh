@@ -87,4 +87,22 @@ go perft 1")
 echo "${out}" | grep -q "^e5d6: 1$"
 echo "${out}" | grep -q "Nodes searched: 1"
 
+# 10) Eurasian: entering the optional promotion band without reserve is still legal.
+out=$(run_cmds "setoption name UCI_Variant value eurasian
+position fen 4k5/10/P9/10/10/10/10/10/10/5K4 w - - 0 1
+go perft 1")
+echo "${out}" | grep -q "^a8a9: 1$"
+
+# 11) Eurasian: entering the last rank without a reserve promotion is forbidden.
+out=$(run_cmds "setoption name UCI_Variant value eurasian
+position fen 4k5/P9/10/10/10/10/10/10/10/5K4 w - - 0 1
+go perft 1")
+! echo "${out}" | grep -q "^a9a10"
+
+# 12) Eurasian: a matching reserve piece enables the last-rank promotion.
+out=$(run_cmds "setoption name UCI_Variant value eurasian
+position fen 4k5/P9/10/10/10/10/10/10/10/5K4[Q] w - - 0 1
+go perft 1")
+echo "${out}" | grep -q "^a9a10q: 1$"
+
 echo "new variants smoke testing OK"
