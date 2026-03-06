@@ -232,4 +232,14 @@ go perft 1")
 echo "${out}" | grep -q "^e4e5: 1$"
 ! echo "${out}" | grep -q "^e7e5:"
 
+# 30) Antimatter baseline: same-type captures annihilate the capturer.
+out=$(run_cmds "setoption name UCI_Variant value antimatter
+position fen 4k3/8/8/3p4/4P3/8/8/4K3 w - - 0 1 moves e4d5
+d")
+echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/4K3 b - - 0 1"
+out=$(run_cmds "setoption name UCI_Variant value antimatter
+position fen 4k3/8/8/3n4/4P3/8/8/4K3 w - - 0 1 moves e4d5
+d")
+echo "${out}" | grep -q "Fen: 4k3/8/8/3P4/8/8/8/4K3 b - - 0 1"
+
 echo "new variants smoke testing OK"

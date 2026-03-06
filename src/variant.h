@@ -125,6 +125,7 @@ struct Variant {
   bool mustCaptureByColor[COLOR_NB] = {false, false};
   bool selfCapture = false;
   bool capturerDiesOnCapture = false;
+  bool capturerDiesOnSameTypeCapture = false;
   bool capturerDiesExemptPawns = false;
   bool mustDrop = false;
   bool mustDropByColor[COLOR_NB] = {false, false};
