@@ -163,4 +163,16 @@ go perft 1")
 echo "${out}" | grep -q "^d7d8q: 1$"
 ! echo "${out}" | grep -q "^d7d8r:"
 
+# 21) Gala: opening drop phase starts from pockets on own half (white has 10 choices).
+out=$(run_cmds "setoption name UCI_Variant value gala
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 10"
+
+# 22) Gala: custodial capture by orthogonal sandwich.
+out=$(run_cmds "setoption name UCI_Variant value gala
+position fen 5/5/1D1dD/5/5 w - - 0 1 moves b3c3
+d")
+echo "${out}" | grep -q "Fen: 5/5/2D1D/5/5 b - - 1 1"
+
 echo "new variants smoke testing OK"
