@@ -52,4 +52,26 @@ position fen 4k3/8/8/8/8/8/4Q3/4K3 w - - 0 1
 go perft 1")
 echo "${out}" | grep -q "^e2e8: 1$"
 
+# 6) Tablut split: edge-escape should end immediately, corner-escape should not.
+out=$(run_cmds "setoption name UCI_Variant value tablut
+position fen 4K4/9/9/9/4r4/9/9/9/9 b - - 0 1
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 0"
+
+out=$(run_cmds "setoption name UCI_Variant value tablut-corner-escape
+position fen 4K4/9/9/9/4r4/9/9/9/9 b - - 0 1
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 15"
+
+# 7) Tablut split: throne-adjacent king strength changes capture outcome.
+out=$(run_cmds "setoption name UCI_Variant value tablut
+position fen 9/9/9/9/3K5/2r6/9/9/9 b - - 0 1 moves c4c5
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 0"
+
+out=$(run_cmds "setoption name UCI_Variant value tablut-throne-adjacent-strong
+position fen 9/9/9/9/3K5/2r6/9/9/9 b - - 0 1 moves c4c5
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 12"
+
 echo "new variants smoke testing OK"
