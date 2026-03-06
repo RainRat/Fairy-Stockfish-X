@@ -242,4 +242,14 @@ position fen 4k3/8/8/3n4/4P3/8/8/4K3 w - - 0 1 moves e4d5
 d")
 echo "${out}" | grep -q "Fen: 4k3/8/8/3P4/8/8/8/4K3 b - - 0 1"
 
+# 31) Pawns baseline: pawn-only start and promotion race objective.
+out=$(run_cmds "setoption name UCI_Variant value pawns
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 8"
+out=$(run_cmds "setoption name UCI_Variant value pawns
+position fen 8/P7/8/8/8/8/8/8 w - - 0 1
+go perft 1")
+echo "${out}" | grep -q "^a7a8p: 1$"
+
 echo "new variants smoke testing OK"
