@@ -252,4 +252,15 @@ position fen 8/P7/8/8/8/8/8/8 w - - 0 1
 go perft 1")
 echo "${out}" | grep -q "^a7a8p: 1$"
 
+# 32) Rugby baseline: king-like pawn movement without orthogonal captures.
+out=$(run_cmds "setoption name UCI_Variant value rugby
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 22"
+out=$(run_cmds "setoption name UCI_Variant value rugby
+position fen 8/8/8/8/8/4P3/4p3/8 w - - 0 1
+go perft 1")
+! echo "${out}" | grep -q "^e3e2:"
+echo "${out}" | grep -q "^e3d2: 1$"
+
 echo "new variants smoke testing OK"
