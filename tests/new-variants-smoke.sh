@@ -195,4 +195,11 @@ position fen k7/4P3/8/8/8/8/8/4K3 w - - 0 1
 go perft 1")
 ! echo "${out}" | grep -q "^e7e8"
 
+# 26) Fianchetto chess: bishops and rooks are swapped in initial setup, castling disabled.
+out=$(run_cmds "setoption name UCI_Variant value fianchetto
+position startpos
+d")
+echo "${out}" | grep -q "Fen: bnrqkrnb/pppppppp/8/8/8/8/PPPPPPPP/BNRQKRNB w - - 0 1"
+! echo "${out}" | grep -q " KQkq "
+
 echo "new variants smoke testing OK"
