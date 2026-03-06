@@ -3493,10 +3493,16 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       k ^= Zobrist::wall[gating_square(m)];
   }
 
-  if (!capturedDeadSquare && captured != NO_PIECE && type_of(m) != DROP
-      && (death_on_capture_types() & piece_set(movedType)) && piece_on(to) != NO_PIECE)
+  bool diesOnCapture = (death_on_capture_types() & piece_set(movedType))
+                    || (var->capturerDiesOnCapture
+                        && !(var->capturerDiesExemptPawns && movedType == PAWN));
+  if (!capturedDeadSquare && captured != NO_PIECE && type_of(m) != DROP && diesOnCapture
+      && piece_on(to) != NO_PIECE)
   {
       Piece deadPiece = piece_on(to);
+      Color dc = color_of(deadPiece);
+      bool makeDeadSquare = bool(death_on_capture_types() & piece_set(movedType));
+
       st->deadPiece = deadPiece;
       st->deadPiecePromoted = is_promoted(to);
       st->deadUnpromotedPiece = st->deadPiecePromoted ? unpromoted_piece_on(to) : NO_PIECE;
@@ -3512,42 +3518,17 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       if (type_of(deadPiece) == PAWN)
           st->pawnKey ^= Zobrist::psq[deadPiece][to];
       else
-          st->nonPawnMaterial[us] -= PieceValue[MG][deadPiece];
+          st->nonPawnMaterial[dc] -= PieceValue[MG][deadPiece];
 
-      st->deadSquares |= to;
-      byTypeBB[ALL_PIECES] |= to;
-      k ^= Zobrist::dead[to];
-  }
-
-  if (var->capturerDiesOnCapture && captured != NO_PIECE && piece_on(to) != NO_PIECE)
-  {
-      bool exemptPawnCapturer = var->capturerDiesExemptPawns && movedType == PAWN;
-      if (!exemptPawnCapturer)
+      if (makeDeadSquare)
       {
-          Piece deadPiece = piece_on(to);
-          Color dc = color_of(deadPiece);
-
-          st->deadPiece = deadPiece;
-          st->deadPiecePromoted = is_promoted(to);
-          st->deadUnpromotedPiece = st->deadPiecePromoted ? unpromoted_piece_on(to) : NO_PIECE;
-
-          if (type_of(deadPiece) != PAWN)
-              st->nonPawnMaterial[dc] -= PieceValue[MG][deadPiece];
-
-          if (Eval::useNNUE)
-              append_dirty(st, deadPiece, to, SQ_NONE);
-
-          remove_piece(to);
-          board[to] = NO_PIECE;
-
-          k ^= Zobrist::psq[deadPiece][to];
-          st->materialKey ^= Zobrist::psq[deadPiece][pieceCount[deadPiece]];
-          if (type_of(deadPiece) == PAWN)
-              st->pawnKey ^= Zobrist::psq[deadPiece][to];
-
-          if (!allow_checks() && givesCheck && count<KING>(them))
-              givesCheck = bool(attackers_to_king(square<KING>(them), us) & pieces(us));
+          st->deadSquares |= to;
+          byTypeBB[ALL_PIECES] |= to;
+          k ^= Zobrist::dead[to];
       }
+
+      if (!allow_checks() && givesCheck && count<KING>(them))
+          givesCheck = bool(attackers_to_king(square<KING>(them), us) & pieces(us));
   }
 
   if (forced_jump_continuation())
