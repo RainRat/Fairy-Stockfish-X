@@ -213,4 +213,11 @@ position startpos
 go perft 1")
 ! echo "${out}" | grep -q "d1d3"
 
+# 28) Brotherhood baseline: same-type captures are forbidden.
+out=$(run_cmds "setoption name UCI_Variant value brotherhood
+position fen 4k3/8/8/3p4/4P3/8/8/4K3 w - - 0 1
+go perft 1")
+! echo "${out}" | grep -q "^e4d5:"
+echo "${out}" | grep -q "^e4e5: 1$"
+
 echo "new variants smoke testing OK"
