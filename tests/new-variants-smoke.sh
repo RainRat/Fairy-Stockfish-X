@@ -220,4 +220,16 @@ go perft 1")
 ! echo "${out}" | grep -q "^e4d5:"
 echo "${out}" | grep -q "^e4e5: 1$"
 
+# 29) Marseillais baseline: each side gets two moves per turn (with pass separator).
+out=$(run_cmds "setoption name UCI_Variant value marseillais
+position startpos moves e2e4
+go perft 1")
+echo "${out}" | grep -q "^e8e8: 1$"
+! echo "${out}" | grep -q "^e7e5:"
+out=$(run_cmds "setoption name UCI_Variant value marseillais
+position startpos moves e2e4 e8e8
+go perft 1")
+echo "${out}" | grep -q "^e4e5: 1$"
+! echo "${out}" | grep -q "^e7e5:"
+
 echo "new variants smoke testing OK"
