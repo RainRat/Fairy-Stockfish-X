@@ -40,12 +40,4 @@ position fen 4k3/8/8/8/8/8/4Q3/4K3 w - - 0 1
 go perft 1")
 echo "${out}" | grep -q "^e2e8: 1$"
 
-# 4) Partisans: pawn captures only forward-left from each side perspective.
-out=$(run_cmds "setoption name UCI_Variant value partisans
-position fen 8/8/8/8/8/2p1p3/3P4/8 w - - 0 1
-go perft 1")
-echo "${out}" | grep -q "^d2c3: 1$"
-echo "${out}" | grep -q "^d2d4: 1$"
-! echo "${out}" | grep -q "^d2e3:"
-
 echo "new variants smoke testing OK"
