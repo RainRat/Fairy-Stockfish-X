@@ -80,4 +80,11 @@ position fen 5/3N1/5/1N3/N4 w - - 0 1 moves d4c3
 go perft 1")
 echo "${out}" | grep -q "Nodes searched: 0"
 
+# 9) Forced en passant: when EP is legal, ordinary king moves are forbidden.
+out=$(run_cmds "setoption name UCI_Variant value forced-en-passant
+position fen 4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1
+go perft 1")
+echo "${out}" | grep -q "^e5d6: 1$"
+echo "${out}" | grep -q "Nodes searched: 1"
+
 echo "new variants smoke testing OK"

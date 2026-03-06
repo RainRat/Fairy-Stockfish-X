@@ -92,6 +92,7 @@ struct StateInfo {
   Bitboard   pseudoRoyalCandidates;
   Bitboard   pseudoRoyals;
   OptBool    legalCapture;
+  OptBool    legalEnPassant;
   bool       capturedpromoted;
   bool       shak;
   bool       bikjang;
@@ -223,7 +224,9 @@ public:
   bool capture_morph() const;
   bool rex_exclusive_morph() const;
   bool must_capture() const;
+  bool must_capture_en_passant() const;
   bool has_capture() const;
+  bool has_en_passant_capture() const;
   bool must_drop() const;
   PieceType must_drop_type() const;
   bool piece_drops() const;
@@ -1019,6 +1022,11 @@ inline bool Position::must_capture() const {
   return var->mustCapture;
 }
 
+inline bool Position::must_capture_en_passant() const {
+  assert(var != nullptr);
+  return var->mustCaptureEnPassant;
+}
+
 inline bool Position::has_capture() const {
   // Check for cached value
   if (st->legalCapture != NO_VALUE)
@@ -1042,6 +1050,31 @@ inline bool Position::has_capture() const {
           }
   }
   st->legalCapture = VALUE_FALSE;
+  return false;
+}
+
+inline bool Position::has_en_passant_capture() const {
+  if (st->legalEnPassant != NO_VALUE)
+      return st->legalEnPassant == VALUE_TRUE;
+  if (checkers())
+  {
+      for (const auto& mevasion : MoveList<EVASIONS>(*this))
+          if (type_of(mevasion) == EN_PASSANT && legal(mevasion))
+          {
+              st->legalEnPassant = VALUE_TRUE;
+              return true;
+          }
+  }
+  else
+  {
+      for (const auto& mcap : MoveList<CAPTURES>(*this))
+          if (type_of(mcap) == EN_PASSANT && legal(mcap))
+          {
+              st->legalEnPassant = VALUE_TRUE;
+              return true;
+          }
+  }
+  st->legalEnPassant = VALUE_FALSE;
   return false;
 }
 

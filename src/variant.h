@@ -119,6 +119,7 @@ struct Variant {
   bool dropChecks = true;
   bool dropMates = true;
   bool mustCapture = false;
+  bool mustCaptureEnPassant = false;
   bool mustCaptureByColor[COLOR_NB] = {false, false};
   bool selfCapture = false;
   bool mustDrop = false;

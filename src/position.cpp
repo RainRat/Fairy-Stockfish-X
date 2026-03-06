@@ -924,6 +924,7 @@ void Position::set_check_info(StateInfo* si) const {
   si->bikjang = var->bikjangRule && ksq != SQ_NONE ? bool(attacks_bb(sideToMove, ROOK, ksq, pieces()) & pieces(sideToMove, KING)) : false;
   si->chased = var->chasingRule ? chased() : Bitboard(0);
   si->legalCapture = NO_VALUE;
+  si->legalEnPassant = NO_VALUE;
   if (pseudo_royal_types())
   {
       si->pseudoRoyalCandidates = 0;
@@ -1769,6 +1770,8 @@ bool Position::legal(Move m) const {
   // Illegal quiet moves
   if (must_capture() && !capture(m) && has_capture())
       return false;
+  if (must_capture_en_passant() && type_of(m) != EN_PASSANT && has_en_passant_capture())
+      return false;
 
   // Illegal captures
   if (capture(m) && type_of(captured_piece(m)) != KING && (sudoku_conflicts(us) || move_adds_sudoku_conflicts(m)))
@@ -2483,6 +2486,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   st = &newSt;
   st->move = m;
   st->legalCapture = NO_VALUE;
+  st->legalEnPassant = NO_VALUE;
   st->blastPromotedSquares = 0;
   st->bycatchSquares = 0;
   st->consumedPromotionHandPiece = NO_PIECE;
