@@ -263,4 +263,14 @@ go perft 1")
 ! echo "${out}" | grep -q "^e3e2:"
 echo "${out}" | grep -q "^e3d2: 1$"
 
+# 33) Capped pawns: extra two-step window from rank 6/3 into promotion.
+out=$(run_cmds "setoption name UCI_Variant value capped-pawns
+position fen k7/8/4P3/8/8/8/8/4K3 w - - 0 1
+go perft 1")
+echo "${out}" | grep -q "^e6e8q: 1$"
+out=$(run_cmds "setoption name UCI_Variant value capped-pawns
+position fen k7/8/8/8/8/4p3/8/7K b - - 0 1
+go perft 1")
+echo "${out}" | grep -q "^e3e1q: 1$"
+
 echo "new variants smoke testing OK"
