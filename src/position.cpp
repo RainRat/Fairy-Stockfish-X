@@ -1872,7 +1872,7 @@ bool Position::legal(Move m) const {
   }
 
   // Multimoves
-  if (var->multimoveOffset)
+  if (var->multimoveOffset || var->progressiveMultimove)
   {
       if (is_pass(m) != multimove_pass(gamePly))
           return false;

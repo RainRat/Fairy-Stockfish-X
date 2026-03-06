@@ -133,4 +133,15 @@ position fen 4k3/8/8/4\\^3/8/8/8/4Q3 w - - 0 1 moves e1e5
 d")
 echo "${out}" | grep -q "Fen: 4k3/8/8/4Q3/8/8/8/8 b - - 0 1"
 
+# 17) Progressive: after Black's first move, White must pass before Black's second move.
+out=$(run_cmds "setoption name UCI_Variant value progressive
+position startpos moves e2e4 e7e5
+go perft 1")
+echo "${out}" | grep -q "^e1e1: 1$"
+
+out=$(run_cmds "setoption name UCI_Variant value progressive
+position startpos moves e2e4 e7e5 e1e1
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 29"
+
 echo "new variants smoke testing OK"

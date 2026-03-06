@@ -1037,6 +1037,7 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("passOnStalemateBlack", v->passOnStalemate[BLACK]);
     parse_attribute("passUntilSetup", v->passUntilSetup);
     parse_attribute("multimoves", v->multimoves);
+    parse_attribute("progressiveMultimove", v->progressiveMultimove);
     if (DoCheck)
     {
         int usedPly = 0;
@@ -1208,6 +1209,8 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
         // Contradictory options
         if (!v->checking && v->checkCounting)
             std::cerr << "checkCounting=true requires checking=true." << std::endl;
+        if (v->progressiveMultimove && !v->multimoves.empty())
+            std::cerr << "progressiveMultimove ignores multimoves sequence." << std::endl;
         for (Color c : {WHITE, BLACK})
             for (unsigned char ch : v->connectPieceGoal[c])
                 if (!std::isspace(ch))

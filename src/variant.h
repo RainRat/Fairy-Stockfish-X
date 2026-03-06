@@ -166,6 +166,7 @@ struct Variant {
   bool pass[COLOR_NB] = {false, false};
   bool passOnStalemate[COLOR_NB] = {false, false};
   std::vector<int> multimoves = {};
+  bool progressiveMultimove = false;
   bool multimoveCheck = true;
   bool multimoveCapture = true;
   bool makpongRule = false;

@@ -20,6 +20,7 @@
 #define POSITION_H_INCLUDED
 
 #include <cassert>
+#include <cmath>
 #include <cstdint>
 #include <deque>
 #include <memory> // For std::unique_ptr
@@ -1432,7 +1433,7 @@ inline bool Position::pass(Color c) const {
       && has_setup_drop(~c))
       return true;
   return var->pass[c] || var->passOnStalemate[c]
-      || (var->multimoveOffset && multimove_pass(gamePly));
+      || ((var->multimoveOffset || var->progressiveMultimove) && multimove_pass(gamePly));
 }
 
 inline bool Position::has_setup_drop(Color c) const {
@@ -1471,6 +1472,15 @@ inline bool Position::pass_on_stalemate(Color c) const {
 // Returns whether current move is a mandatory pass to simulate multimoves
 inline bool Position::multimove_pass(int ply) const {
   assert(var != nullptr);
+  if (var->progressiveMultimove)
+  {
+      // Progressive chess turn lengths are 1,2,3,... plies per turn.
+      // With mandatory pass plies this maps to odd/even offsets inside
+      // segments [n^2, (n+1)^2), n starting at 0.
+      int turn = int(std::sqrt(double(ply))) + 1;
+      int start = (turn - 1) * (turn - 1);
+      return (ply - start) & 1;
+  }
   int phase = (ply - var->multimoveOffset) % var->multimoveCycle;
   return ply < var->multimoveOffset ? var->multimovePass[ply] : (phase + (phase >= var->multimoveCycleShift)) % 2;
 }
