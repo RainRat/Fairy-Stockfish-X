@@ -151,4 +151,8 @@ rm -f "$tmp_ini"
 assert_reload_key_match "${DEFAULT_VARIANT_PATH}" "ataxx" "position startpos moves g1f2"
 assert_reload_key_match "${DEFAULT_VARIANT_PATH}" "flipello" "position startpos moves P@e3"
 
+# 6) Spell-chess potion state should round-trip through FEN key-equivalently.
+assert_reload_key_match "${DEFAULT_VARIANT_PATH}" "spell-chess" "position startpos moves f@a6 e2e4 d7d6"
+assert_progressive_reload_keys "${DEFAULT_VARIANT_PATH}" "spell-chess" "position startpos" 6
+
 echo "state-sync key tests OK"

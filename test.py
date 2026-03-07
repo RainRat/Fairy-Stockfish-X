@@ -1117,6 +1117,20 @@ startFen = 4k3/3p4/8/8/8/8/8/3QK3 w - - 0 1
         moves = sf.legal_moves("spell-chess", fen, ["f@e5,d7d5"])
         self.assertNotIn("e5d6", moves)
 
+    def test_spell_chess_potion_fen_extension_roundtrip(self):
+        fen = sf.get_fen("spell-chess", sf.start_fen("spell-chess"), ["f@a6,e2e4"])
+        self.assertIn("f:a6", fen)
+        self.assertIn("<", fen)
+        self.assertEqual(sf.validate_fen(fen, "spell-chess"), sf.FEN_OK)
+        self.assertEqual(sf.get_fen("spell-chess", fen, []), fen)
+
+    def test_spell_chess_potion_fen_extension_parse(self):
+        fen = "4k3/8/8/8/8/8/8/4K3[] w - - 0 1 f:e4 <1 2 3 4>"
+        self.assertEqual(sf.validate_fen(fen, "spell-chess"), sf.FEN_OK)
+        normalized = sf.get_fen("spell-chess", fen, [])
+        self.assertIn("f:e4", normalized)
+        self.assertIn("<1 2 3 4>", normalized)
+
     def test_get_san(self):
         fen = "4k3/8/3R4/8/1R3R2/8/3R4/4K3 w - - 0 1"
         result = sf.get_san("chess", fen, "b4d4")

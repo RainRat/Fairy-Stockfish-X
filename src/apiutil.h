@@ -24,6 +24,7 @@
 #include <string>
 #include <sstream>
 #include <cctype>
+#include <limits>
 #include <iostream>
 
 #include "types.h"
@@ -1140,12 +1141,46 @@ inline FenValidation validate_fen(const std::string& fen, const Variant* v, bool
     std::size_t pointsStart = fen.find('{');
     std::size_t pointsEnd = fen.find('}', pointsStart);
     std::string pointsCount = "";
+    std::string potionInfo = "";
+    std::string potionCooldownInfo = "";
     std::string modifiedFen = fen;
 
     // Extract points data if exists
     if (pointsStart != std::string::npos && pointsEnd != std::string::npos && pointsEnd > pointsStart) {
         pointsCount = fen.substr(pointsStart, pointsEnd - pointsStart + 1);
         modifiedFen.erase(pointsStart, pointsEnd - pointsStart + 1); // Remove points data from FEN
+    }
+
+    // Optional potion extension syntax (spell-chess testing):
+    //   ... [points] [f:e4|j:e4|-] <wf wj bf bj>
+    // where <w b> is accepted as compact form.
+    auto rtrim = [](std::string& s) {
+        while (!s.empty() && std::isspace(static_cast<unsigned char>(s.back())))
+            s.pop_back();
+    };
+    rtrim(modifiedFen);
+    if (!modifiedFen.empty() && modifiedFen.back() == '>')
+    {
+        size_t open = modifiedFen.find_last_of('<');
+        if (open != std::string::npos)
+        {
+            potionCooldownInfo = modifiedFen.substr(open);
+            modifiedFen.erase(open);
+            rtrim(modifiedFen);
+        }
+    }
+    if (!modifiedFen.empty())
+    {
+        size_t lastSpace = modifiedFen.find_last_of(' ');
+        std::string lastToken = lastSpace == std::string::npos ? modifiedFen : modifiedFen.substr(lastSpace + 1);
+        if (lastToken == "-" || (lastToken.size() > 3 && lastToken[1] == ':' && (lastToken[0] == 'f' || lastToken[0] == 'j')))
+        {
+            potionInfo = lastToken;
+            if (lastSpace == std::string::npos)
+                modifiedFen.clear();
+            else
+                modifiedFen.erase(lastSpace);
+        }
     }
 
     std::vector<std::string> fenParts = get_fen_parts(modifiedFen, ' ');
@@ -1313,6 +1348,47 @@ inline FenValidation validate_fen(const std::string& fen, const Variant* v, bool
         if (points.size() != 2 || !check_digit_field(points[0]) || !check_digit_field(points[1])) {
             return FEN_INVALID_POINTS_INFO;
         }
+    }
+
+    // 9) Check optional potion extension fields.
+    if (!potionInfo.empty())
+    {
+        if (potionInfo != "-")
+        {
+            if (!(potionInfo.size() > 3 && potionInfo[1] == ':' && (potionInfo[0] == 'f' || potionInfo[0] == 'j')))
+                return FEN_INVALID_CHAR;
+            std::string sq = potionInfo.substr(2);
+            if (sq.size() < 2 || sq[0] < 'a' || sq[0] > 'a' + v->maxFile)
+                return FEN_INVALID_CHAR;
+            if (!std::all_of(sq.begin() + 1, sq.end(), [](unsigned char ch){ return std::isdigit(ch); }))
+                return FEN_INVALID_CHAR;
+            int rank = 0;
+            for (size_t i = 1; i < sq.size(); ++i)
+            {
+                int digit = sq[i] - '0';
+                if (rank > (std::numeric_limits<int>::max() - digit) / 10)
+                    return FEN_INVALID_CHAR;
+                rank = rank * 10 + digit;
+            }
+            if (rank < 1 || rank > v->maxRank + 1)
+                return FEN_INVALID_CHAR;
+        }
+    }
+
+    if (!potionCooldownInfo.empty())
+    {
+        if (potionCooldownInfo.front() != '<' || potionCooldownInfo.back() != '>')
+            return FEN_INVALID_CHAR;
+        std::string content = potionCooldownInfo.substr(1, potionCooldownInfo.size() - 2);
+        for (char& c : content)
+            if (!(std::isdigit(static_cast<unsigned char>(c)) || c == ' '))
+                c = ' ';
+        std::vector<std::string> vals = get_fen_parts(content, ' ');
+        if (!(vals.size() == 2 || vals.size() == 4))
+            return FEN_INVALID_CHAR;
+        for (const auto& v : vals)
+            if (!check_digit_field(v))
+                return FEN_INVALID_CHAR;
     }
 
     return FEN_OK;
