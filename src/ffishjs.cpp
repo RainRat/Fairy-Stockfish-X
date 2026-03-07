@@ -583,7 +583,11 @@ bool skip_comment(const std::string& pgn, size_t& curIdx, size_t& lineEnd) {
     return false;
   }
   if (curIdx > lineEnd)
+  {
     lineEnd = pgn.find('\n', curIdx);
+    if (lineEnd == std::string::npos)
+      lineEnd = pgn.size();
+  }
   return true;
 }
 
@@ -593,6 +597,9 @@ Game read_game_pgn(std::string pgn) {
   bool headersParsed = false;
 
   while(true) {
+    if (lineStart >= pgn.size())
+      return game;
+
     size_t lineEnd = pgn.find('\n', lineStart);
 
     if (lineEnd == std::string::npos)
@@ -634,7 +641,10 @@ Game read_game_pgn(std::string pgn) {
 
       // game line
       size_t curIdx = lineStart;
-      while (curIdx <= lineEnd) {
+      while (curIdx < lineEnd) {
+        if (curIdx >= pgn.size())
+          return game;
+
         if (pgn[curIdx] == '*')
           return game;
 
@@ -651,6 +661,9 @@ Game read_game_pgn(std::string pgn) {
           ++curIdx;
         }
         while (openedRAV != 0) {
+          if (curIdx >= pgn.size())
+            return game;
+
           switch (pgn[curIdx]) {
             case '(':
               ++openedRAV;
@@ -664,13 +677,22 @@ Game read_game_pgn(std::string pgn) {
             default: ;  // pass
           }
           ++curIdx;
-          if (curIdx > lineEnd)
+          if (curIdx >= lineEnd)
+          {
             lineEnd = pgn.find('\n', curIdx);
+            if (lineEnd == std::string::npos)
+              lineEnd = pgn.size();
+          }
         }
+
+        if (curIdx >= lineEnd || curIdx >= pgn.size())
+          break;
 
         if (pgn[curIdx] == '$') {
           // we are at a glyph
           curIdx = pgn.find(' ', curIdx);
+          if (curIdx == std::string::npos || curIdx >= lineEnd)
+            break;
         }
 
         if (pgn[curIdx] >= '0' && pgn[curIdx] <= '9') {
@@ -685,6 +707,8 @@ Game read_game_pgn(std::string pgn) {
           // increment if we're at a point
           while (curIdx < pgn.size() && pgn[curIdx] == '.')
             ++curIdx;
+          if (curIdx >= lineEnd)
+            break;
         }
         // extract sanMove
         size_t sanMoveEnd = std::min(pgn.find(' ', curIdx), lineEnd);

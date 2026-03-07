@@ -382,6 +382,25 @@ inline const std::string move_to_san(Position& pos, Move m, Notation n) {
 
 inline bool has_insufficient_material(Color c, const Position& pos) {
 
+    auto is_dark_square = [](Square s) {
+        return ((int(file_of(s)) + int(rank_of(s))) & 1) != 0;
+    };
+    auto has_both_square_colors = [&](Bitboard bb) {
+        bool hasDark = false;
+        bool hasLight = false;
+        while (bb)
+        {
+            Square s = pop_lsb(bb);
+            if (is_dark_square(s))
+                hasDark = true;
+            else
+                hasLight = true;
+            if (hasDark && hasLight)
+                return true;
+        }
+        return false;
+    };
+
     // Other win rules
     if (   pos.captures_to_hand()
         || pos.count_in_hand(c, ALL_PIECES)
@@ -416,12 +435,19 @@ inline bool has_insufficient_material(Color c, const Position& pos) {
             if (!attacks)
                 continue;
             hasAttack = true;
-            if (((DarkSquares & from) && (attacks & ~DarkSquares))
-             || ((~DarkSquares & from) && (attacks & DarkSquares)))
+            const bool fromDark = is_dark_square(from);
+            Bitboard atk = attacks;
+            while (atk)
             {
-                changesSquareColor = true;
-                break;
+                const Square to = pop_lsb(atk);
+                if (fromDark != is_dark_square(to))
+                {
+                    changesSquareColor = true;
+                    break;
+                }
             }
+            if (changesSquareColor)
+                break;
         }
         return std::make_pair(hasAttack, changesSquareColor);
     };
@@ -475,7 +501,7 @@ inline bool has_insufficient_material(Color c, const Position& pos) {
     Bitboard unbound = pos.pieces() ^ restricted ^ colorbound;
 
     // Color-bound pieces
-    if ((colorbound & pos.pieces(c)) && (((DarkSquares & colorbound) && (~DarkSquares & colorbound)) || unbound || pos.stalemate_value() != VALUE_DRAW || pos.check_counting() || pos.makpong()))
+    if ((colorbound & pos.pieces(c)) && (has_both_square_colors(colorbound) || unbound || pos.stalemate_value() != VALUE_DRAW || pos.check_counting() || pos.makpong()))
         return false;
 
     // Unbound pieces require one helper piece of either color

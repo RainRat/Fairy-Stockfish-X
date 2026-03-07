@@ -18,6 +18,8 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cerrno>
+#include <cstdlib>
 #include <ostream>
 #include <sstream>
 #include <iostream>
@@ -43,6 +45,20 @@ namespace PSQT {
 }
 
 namespace UCI {
+
+namespace {
+
+bool parse_double_noexcept(const std::string& text, double& out) {
+    errno = 0;
+    char* end = nullptr;
+    const double parsed = std::strtod(text.c_str(), &end);
+    if (end == text.c_str() || *end != '\0' || errno == ERANGE)
+        return false;
+    out = parsed;
+    return true;
+}
+
+}
 
 // standard variants of XBoard/WinBoard
 std::set<string> standard_variants = {
@@ -304,7 +320,11 @@ Option::Option(double v, int minv, int maxv, OnChange f) : type("spin"), min(min
 
 Option::operator double() const {
   assert(type == "check" || type == "spin");
-  return (type == "spin" ? stof(currentValue) : currentValue == "true");
+  if (type != "spin")
+      return currentValue == "true";
+
+  double parsed = 0.0;
+  return parse_double_noexcept(currentValue, parsed) ? parsed : 0.0;
 }
 
 Option::operator std::string() const {
@@ -343,10 +363,13 @@ Option& Option::operator=(const string& v) {
 
   assert(!type.empty());
 
+  double parsedSpin = 0.0;
+  const bool invalidSpin = type == "spin" && (!parse_double_noexcept(v, parsedSpin) || parsedSpin < min || parsedSpin > max);
+
   if (   (type != "button" && v.empty())
       || (type == "check" && v != "true" && v != "false")
       || (type == "combo" && (std::find(comboValues.begin(), comboValues.end(), v) == comboValues.end()))
-      || (type == "spin" && (stof(v) < min || stof(v) > max)))
+      || invalidSpin)
       return *this;
 
   if (type == "combo")
