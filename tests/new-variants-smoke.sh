@@ -325,4 +325,23 @@ position fen 3K3/7/7/7/7/7/7/7/3k3 b - - 0 1
 go perft 1")
 echo "${out}" | grep -q "Nodes searched: 0"
 
+# 39) Spell chess: frozen castling rook blocks castling.
+out=$(run_cmds "setoption name UCI_Variant value spell-chess
+position fen 4k3/8/8/8/8/8/8/4K2R[f] b K - 0 1 moves f@h1 e8e7
+go perft 1")
+! echo "${out}" | grep -q "^e1g1:"
+
+# 40) Spell chess: castling through attack is illegal, but legal if attacker is frozen first.
+out=$(run_cmds "setoption name UCI_Variant value spell-chess
+position fen 4kr2/8/8/8/8/8/8/4K2R[F] w K - 0 1
+go perft 1")
+! echo "${out}" | grep -q "^e1g1:"
+echo "${out}" | grep -q "^f@f8,e1g1: 1$"
+
+# 41) Spell chess: frozen pawn cannot capture en passant.
+out=$(run_cmds "setoption name UCI_Variant value spell-chess
+position fen 4k3/3p4/8/4P3/8/8/8/4K3[f] b - - 0 1 moves f@e5 d7d5
+go perft 1")
+! echo "${out}" | grep -q "^e5d6:"
+
 echo "new variants smoke testing OK"
