@@ -1158,7 +1158,7 @@ inline std::string get_valid_special_chars(const Variant* v) {
         validSpecialCharactersFirstField += '+';
     if (v->promotionPieceTypes[WHITE] || v->promotionPieceTypes[BLACK])
         validSpecialCharactersFirstField += '~';
-    if (!v->freeDrops && (v->pieceDrops || v->seirawanGating || v->potions))
+    if (v->pieceDrops || v->seirawanGating || v->potions)
         validSpecialCharactersFirstField += "[-]";
     return validSpecialCharactersFirstField;
 }
