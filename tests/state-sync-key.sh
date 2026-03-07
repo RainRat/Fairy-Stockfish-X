@@ -40,6 +40,21 @@ quit
 CMDS
 }
 
+bestmove_for_position() {
+  local variant_path="$1"
+  local variant="$2"
+  local pos_cmd="$3"
+  cat <<CMDS | "$ENGINE" | sed -n 's/^bestmove //p' | awk '{print $1}' | tail -n1
+uci
+setoption name VariantPath value ${variant_path}
+setoption name UCI_Variant value ${variant}
+setoption name Threads value 1
+${pos_cmd}
+go depth 1
+quit
+CMDS
+}
+
 assert_reload_key_match() {
   local variant_path="$1"
   local variant="$2"
@@ -69,10 +84,37 @@ assert_reload_key_match() {
   fi
 }
 
+assert_progressive_reload_keys() {
+  local variant_path="$1"
+  local variant="$2"
+  local base_pos_cmd="$3"
+  local plies="$4"
+
+  local moves=""
+  local pos_cmd="${base_pos_cmd}"
+  for ((i=1; i<=plies; i++)); do
+      assert_reload_key_match "${variant_path}" "${variant}" "${pos_cmd}"
+
+      local bm
+      bm=$(bestmove_for_position "${variant_path}" "${variant}" "${pos_cmd}")
+      if [[ -z "${bm}" || "${bm}" == "(none)" ]]; then
+          break
+      fi
+
+      if [[ -z "${moves}" ]]; then
+          moves="${bm}"
+      else
+          moves="${moves} ${bm}"
+      fi
+      pos_cmd="${base_pos_cmd} moves ${moves}"
+  done
+}
+
 echo "state-sync key tests started"
 
 # 1) Seirawan gating consumes a hand piece; key must match after FEN reload.
 assert_reload_key_match "${DEFAULT_VARIANT_PATH}" "seirawan" "position startpos moves b1a3h a7a6"
+assert_progressive_reload_keys "${DEFAULT_VARIANT_PATH}" "seirawan" "position startpos" 8
 
 # 2) Prison capture updates reserve state; key must match after FEN reload.
 tmp_ini=$(mktemp)
@@ -93,6 +135,7 @@ assert_reload_key_match "$tmp_ini" "prsync" "position startpos moves e2e4 d7d5 e
 
 # 3) Prison exchange drops mutate both prison/hand counts; key must match after FEN reload.
 assert_reload_key_match "$tmp_ini" "exsync" "position startpos moves c4d5 f5e4 P#P@a2"
+assert_progressive_reload_keys "$tmp_ini" "exsync" "position startpos" 10
 rm -f "$tmp_ini"
 
 # 4) Flip-enclosed games: color-flip captures must keep incremental key in sync.
