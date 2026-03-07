@@ -352,4 +352,12 @@ position fen 4k3/3p4/8/4P3/8/8/8/4K3[f] b - - 0 1 moves f@e5 d7d5
 go perft 1")
 ! echo "${out}" | grep -q "^e5d6:"
 
+# 42) Monad baseline (large-board): custom 10x10 setup is loaded.
+if variant_available "monad"; then
+  out=$(run_cmds "setoption name UCI_Variant value monad
+position startpos
+go perft 1")
+  echo "${out}" | grep -q "Nodes searched: 27"
+fi
+
 echo "new variants smoke testing OK"
