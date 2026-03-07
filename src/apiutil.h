@@ -134,16 +134,16 @@ inline std::string piece(const Position& pos, Move m, Notation n) {
         return std::to_string(popcount(forward_file_bb(us, from) & pos.pieces(us, pt)) + 1);
     // Moves of promoted pieces
     else if (is_shogi(n) && type_of(m) != DROP && pos.unpromoted_piece_on(from))
-        return "+" + std::string(1, toupper(pos.piece_to_char()[pos.unpromoted_piece_on(from)]));
+        return "+" + std::string(1, std::toupper(static_cast<unsigned char>(pos.piece_to_char()[pos.unpromoted_piece_on(from)])));
     // Promoted drops
     else if (is_shogi(n) && type_of(m) == DROP && dropped_piece_type(m) != in_hand_piece_type(m))
-        return "+" + std::string(1, toupper(pos.piece_to_char()[in_hand_piece_type(m)]));
+        return "+" + std::string(1, std::toupper(static_cast<unsigned char>(pos.piece_to_char()[in_hand_piece_type(m)])));
     else if (is_thai(n))
         return piece_to_thai_char(pc, pos.is_promoted(from));
     else if (pos.piece_to_char_synonyms()[pc] != ' ')
-        return std::string(1, toupper(pos.piece_to_char_synonyms()[pc]));
+        return std::string(1, std::toupper(static_cast<unsigned char>(pos.piece_to_char_synonyms()[pc])));
     else
-        return std::string(1, toupper(pos.piece_to_char()[pc]));
+        return std::string(1, std::toupper(static_cast<unsigned char>(pos.piece_to_char()[pc])));
 }
 
 inline std::string file(const Position& pos, Square s, Notation n) {
@@ -310,7 +310,7 @@ inline const std::string move_to_san(Position& pos, Move m, Notation n) {
 
         if (is_gating(m))
         {
-            san += std::string("/") + (char)toupper(pos.piece_to_char()[make_piece(us, gating_type(m))]);
+            san += std::string("/") + char(std::toupper(static_cast<unsigned char>(pos.piece_to_char()[make_piece(us, gating_type(m))])));
             san += square(pos, pos.gate_square(m), n);
         }
     }
@@ -351,15 +351,15 @@ inline const std::string move_to_san(Position& pos, Move m, Notation n) {
 
         // Suffix
         if (type_of(m) == PROMOTION)
-            san += std::string("=") + (char)toupper(pos.piece_to_char()[make_piece(us, promotion_type(m))]);
+            san += std::string("=") + char(std::toupper(static_cast<unsigned char>(pos.piece_to_char()[make_piece(us, promotion_type(m))])));
         else if (type_of(m) == PIECE_PROMOTION)
-            san += is_shogi(n) ? std::string("+") : std::string("=") + (char)toupper(pos.piece_to_char()[make_piece(us, pos.promoted_piece_type(type_of(pos.moved_piece(m))))]);
+            san += is_shogi(n) ? std::string("+") : std::string("=") + char(std::toupper(static_cast<unsigned char>(pos.piece_to_char()[make_piece(us, pos.promoted_piece_type(type_of(pos.moved_piece(m))))])));
         else if (type_of(m) == PIECE_DEMOTION)
-            san += is_shogi(n) ? std::string("-") : std::string("=") + std::string(1, toupper(pos.piece_to_char()[pos.unpromoted_piece_on(from)]));
+            san += is_shogi(n) ? std::string("-") : std::string("=") + std::string(1, std::toupper(static_cast<unsigned char>(pos.piece_to_char()[pos.unpromoted_piece_on(from)])));
         else if (type_of(m) == NORMAL && is_shogi(n) && pos.pseudo_legal(make<PIECE_PROMOTION>(from, to)))
             san += std::string("=");
         if (is_gating(m))
-            san += std::string("/") + (char)toupper(pos.piece_to_char()[make_piece(us, gating_type(m))]);
+            san += std::string("/") + char(std::toupper(static_cast<unsigned char>(pos.piece_to_char()[make_piece(us, gating_type(m))])));
     }
 
     // Wall square
@@ -655,7 +655,7 @@ inline Validation check_for_valid_characters(const std::string& firstFenPart, co
             std::cerr << "Invalid piece character: '+'." << std::endl;
             return NOK;
         }
-        if (!isdigit(c)
+        if (!std::isdigit(static_cast<unsigned char>(c))
             && !contains(pieceChars, c)
             && !contains(pieceCharSynonyms, c)
             && !contains(validSpecialCharactersFirstField, c))
@@ -678,7 +678,7 @@ inline Validation check_promoted_pieces(const std::string& firstFenPart, const V
             char pieceChar = firstFenPart[i + 1];
 
             // Skip if next character is not a piece character or is a special character
-            if (isdigit(pieceChar) || pieceChar == '/' || pieceChar == ' ' || pieceChar == '[')
+            if (std::isdigit(static_cast<unsigned char>(pieceChar)) || pieceChar == '/' || pieceChar == ' ' || pieceChar == '[')
                 continue;
 
             // Find the piece type corresponding to this character
@@ -734,10 +734,10 @@ inline Validation fill_char_board(CharBoard& board, const std::string& fenBoard,
         bool inTrailingCommitRow = v->commitGates && expectingTrailingCommitRow;
         if ((inLeadingCommitRow || inTrailingCommitRow) && c != '/')
         {
-            if (isdigit(c))
+            if (std::isdigit(static_cast<unsigned char>(c)))
             {
                 fileIdx += c - '0';
-                if (isdigit(prevChar))
+                if (std::isdigit(static_cast<unsigned char>(prevChar)))
                     fileIdx += 9 * (prevChar - '0');
             }
             else
@@ -747,11 +747,11 @@ inline Validation fill_char_board(CharBoard& board, const std::string& fenBoard,
         }
         if (c == '*' || c == '^')
             ++fileIdx;
-        else if (isdigit(c))
+        else if (std::isdigit(static_cast<unsigned char>(c)))
         {
             fileIdx += c - '0';
             // if we have multiple digits attached we can add multiples of 9 to compute the resulting number (e.g. -> 21 = 2 + 2 * 9 + 1)
-            if (isdigit(prevChar))
+            if (std::isdigit(static_cast<unsigned char>(prevChar)))
                 fileIdx += 9 * (prevChar - '0');
         }
         else if (c == '/')
@@ -859,13 +859,13 @@ inline Validation fill_castling_info_splitted(const std::string& castlingInfo, s
     {
         if (c != '-')
         {
-            if (!isalpha(c))
+            if (!std::isalpha(static_cast<unsigned char>(c)))
             {
                 std::cerr << "Invalid castling specification: '" << c << "'." << std::endl;
                 return NOK;
             }
-            else if (isupper(c))
-                castlingInfoSplitted[WHITE] += tolower(c);
+            else if (std::isupper(static_cast<unsigned char>(c)))
+                castlingInfoSplitted[WHITE] += std::tolower(static_cast<unsigned char>(c));
             else
                 castlingInfoSplitted[BLACK] += c;
         }
@@ -923,14 +923,15 @@ inline Validation check_castling_rank(const std::array<std::string, 2>& castling
         const Rank castlingRank = relative_rank(c, v->castlingRank, v->maxRank);
         for (char castlingFlag : castlingInfoSplitted[c])
         {
-            if (tolower(castlingFlag) == 'k' || tolower(castlingFlag) == 'q')
+            if (std::tolower(static_cast<unsigned char>(castlingFlag)) == 'k'
+                || std::tolower(static_cast<unsigned char>(castlingFlag)) == 'q')
             {
                 if (kingPositions[c].rowIdx != castlingRank)
                 {
                     std::cerr << "The " << color_to_string(c) << " king must be on rank " << castlingRank << " if castling is enabled for " << color_to_string(c) << "." << std::endl;
                     return NOK;
                 }
-                bool kingside = tolower(castlingFlag) == 'k';
+                bool kingside = std::tolower(static_cast<unsigned char>(castlingFlag)) == 'k';
                 bool castlingRook = false;
                 size_t pcIdx;
                 for (int f = kingside ? board.get_nb_files() - 1 : 0; f != kingPositions[c].fileIdx; kingside ? f-- : f++)
@@ -1089,13 +1090,13 @@ inline Validation check_en_passant_square(const std::string& enPassantInfo) {
             std::cerr << "Invalid en-passant square '" << enPassantInfo << "'. Expects at least 2 characters. Actual: " << enPassantInfo.size() << " character(s)." << std::endl;
             return NOK;
         }
-        if (!isalpha(enPassantInfo[0]))
+        if (!std::isalpha(static_cast<unsigned char>(enPassantInfo[0])))
         {
             std::cerr << "Invalid en-passant square '" << enPassantInfo << "'. Expects 1st character to be a letter." << std::endl;
             return NOK;
         }
         for (size_t i = 1; i < enPassantInfo.size(); ++i)
-            if (!isdigit(enPassantInfo[i]))
+            if (!std::isdigit(static_cast<unsigned char>(enPassantInfo[i])))
             {
                 std::cerr << "Invalid en-passant square '" << enPassantInfo << "'. Expects rank digits after file." << std::endl;
                 return NOK;
@@ -1111,12 +1112,12 @@ inline Validation check_check_count(const std::string& checkCountInfo) {
         std::cerr << "Invalid check count '" << checkCountInfo << "'. Expects 3 characters. Actual: " << checkCountInfo.size() << " character(s)." << std::endl;
         return NOK;
     }
-    if (!isdigit(checkCountInfo[0]))
+    if (!std::isdigit(static_cast<unsigned char>(checkCountInfo[0])))
     {
         std::cerr << "Invalid check count '" << checkCountInfo << "'. Expects 1st character to be a digit." << std::endl;
         return NOK;
     }
-    if (!isdigit(checkCountInfo[2])) {
+    if (!std::isdigit(static_cast<unsigned char>(checkCountInfo[2]))) {
         std::cerr << "Invalid check count '" << checkCountInfo << "'. Expects 3rd character to be a digit." << std::endl;
         return NOK;
     }
@@ -1129,12 +1130,12 @@ inline Validation check_lichess_check_count(const std::string& checkCountInfo) {
         std::cerr << "Invalid check count '" << checkCountInfo << "'. Expects 4 characters. Actual: " << checkCountInfo.size() << " character(s)." << std::endl;
         return NOK;
     }
-    if (!isdigit(checkCountInfo[1]) || checkCountInfo[1] - '0' > 3)
+    if (!std::isdigit(static_cast<unsigned char>(checkCountInfo[1])) || checkCountInfo[1] - '0' > 3)
     {
         std::cerr << "Invalid check count '" << checkCountInfo << "'. Expects 2nd character to be a digit up to 3." << std::endl;
         return NOK;
     }
-    if (!isdigit(checkCountInfo[3]) || checkCountInfo[3] - '0' > 3) {
+    if (!std::isdigit(static_cast<unsigned char>(checkCountInfo[3])) || checkCountInfo[3] - '0' > 3) {
         std::cerr << "Invalid check count '" << checkCountInfo << "'. Expects 4th character to be a digit up to 3." << std::endl;
         return NOK;
     }
@@ -1145,7 +1146,7 @@ inline Validation check_digit_field(const std::string& field) {
     if (field.size() == 1 && field[0] == '-')
         return OK;
     for (char c : field)
-        if (!isdigit(c))
+        if (!std::isdigit(static_cast<unsigned char>(c)))
             return NOK;
     return OK;
 }
@@ -1287,7 +1288,7 @@ inline FenValidation validate_fen(const std::string& fen, const Variant* v, bool
     }
 
     // Castling and en passant can be skipped
-    bool skipCastlingAndEp = fenParts.size() >= 4 && fenParts.size() <= 5 && isdigit(fenParts[2][0]);
+    bool skipCastlingAndEp = fenParts.size() >= 4 && fenParts.size() <= 5 && std::isdigit(static_cast<unsigned char>(fenParts[2][0]));
 
     // 3) Part
     // check castling rights
@@ -1300,8 +1301,8 @@ inline FenValidation validate_fen(const std::string& fen, const Variant* v, bool
         if (castlingInfoSplitted[WHITE].size() != 0 || castlingInfoSplitted[BLACK].size() != 0)
         {
             std::array<CharSquare, 2> kingPositions;
-            kingPositions[WHITE] = board.get_square_for_piece(toupper(v->pieceToChar[v->castlingKingPiece[WHITE]]));
-            kingPositions[BLACK] = board.get_square_for_piece(tolower(v->pieceToChar[v->castlingKingPiece[BLACK]]));
+            kingPositions[WHITE] = board.get_square_for_piece(std::toupper(static_cast<unsigned char>(v->pieceToChar[v->castlingKingPiece[WHITE]])));
+            kingPositions[BLACK] = board.get_square_for_piece(std::tolower(static_cast<unsigned char>(v->pieceToChar[v->castlingKingPiece[BLACK]])));
 
             CharBoard startBoard(board.get_nb_ranks(), board.get_nb_files());
             fill_char_board(startBoard, v->startFen, validSpecialCharactersFirstField, v);

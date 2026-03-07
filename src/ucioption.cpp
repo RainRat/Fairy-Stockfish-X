@@ -18,6 +18,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cctype>
 #include <cerrno>
 #include <cstdlib>
 #include <ostream>
@@ -188,7 +189,10 @@ void on_variant_change(const Option &o) {
 bool CaseInsensitiveLess::operator() (const string& s1, const string& s2) const {
 
   return std::lexicographical_compare(s1.begin(), s1.end(), s2.begin(), s2.end(),
-         [](char c1, char c2) { return tolower(c1) < tolower(c2); });
+         [](char c1, char c2) {
+             return std::tolower(static_cast<unsigned char>(c1))
+                  < std::tolower(static_cast<unsigned char>(c2));
+         });
 }
 
 
