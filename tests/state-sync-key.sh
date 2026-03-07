@@ -95,4 +95,8 @@ assert_reload_key_match "$tmp_ini" "prsync" "position startpos moves e2e4 d7d5 e
 assert_reload_key_match "$tmp_ini" "exsync" "position startpos moves c4d5 f5e4 P#P@a2"
 rm -f "$tmp_ini"
 
+# 4) Flip-enclosed games: color-flip captures must keep incremental key in sync.
+assert_reload_key_match "${DEFAULT_VARIANT_PATH}" "ataxx" "position startpos moves g1f2"
+assert_reload_key_match "${DEFAULT_VARIANT_PATH}" "flipello" "position startpos moves P@e3"
+
 echo "state-sync key tests OK"
