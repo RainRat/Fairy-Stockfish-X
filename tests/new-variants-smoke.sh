@@ -20,7 +20,22 @@ quit
 EOF
 }
 
+variant_available() {
+  local v="$1"
+  local out
+  out=$(run_cmds "setoption name UCI_Variant value ${v}
+d")
+  echo "${out}" | grep -q "info string variant ${v} "
+}
+
 echo "new variants smoke testing started"
+
+# This smoke suite contains >8x8 and template-dependent variants.
+# On constrained builds (e.g. max 8x8), skip gracefully.
+if ! variant_available "hasami"; then
+  echo "new variants smoke skipped: required variants are unavailable in this build"
+  exit 0
+fi
 
 # 1) Hasami: orthogonal sandwich should capture the middle piece.
 out=$(run_cmds "setoption name UCI_Variant value hasami

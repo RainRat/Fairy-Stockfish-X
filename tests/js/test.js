@@ -785,7 +785,7 @@ describe('ffish.validateFen(fen, uciVariant)', function () {
         chai.expect(ffish.validateFen(startFen, variant)).to.equal(1, "Invalid start FEN for " + variant);
         // check if the FEN is still valid if board.fen() is returned
         const board = new ffish.Board(variant);
-        chai.expect(ffish.validateFen(board.fen(), variant)).to.equal(1);
+        chai.expect(ffish.validateFen(board.fen(), variant)).to.equal(1, "Invalid board.fen() for " + variant + ": " + board.fen());
         board.delete();
       }
       // alternative or skipped pocket formulation
