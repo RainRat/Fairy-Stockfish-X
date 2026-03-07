@@ -360,4 +360,12 @@ go perft 1")
   echo "${out}" | grep -q "Nodes searched: 27"
 fi
 
+# 43) Camel-rhino baseline (large-board): setup loads and generates legal moves.
+if variant_available "camel-rhino"; then
+  out=$(run_cmds "setoption name UCI_Variant value camel-rhino
+position startpos
+go perft 1")
+  echo "${out}" | grep -q "Nodes searched: 68"
+fi
+
 echo "new variants smoke testing OK"
