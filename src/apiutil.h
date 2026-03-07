@@ -1386,8 +1386,8 @@ inline FenValidation validate_fen(const std::string& fen, const Variant* v, bool
         std::vector<std::string> vals = get_fen_parts(content, ' ');
         if (!(vals.size() == 2 || vals.size() == 4))
             return FEN_INVALID_CHAR;
-        for (const auto& v : vals)
-            if (!check_digit_field(v))
+        for (const auto& value : vals)
+            if (!check_digit_field(value))
                 return FEN_INVALID_CHAR;
     }
 
