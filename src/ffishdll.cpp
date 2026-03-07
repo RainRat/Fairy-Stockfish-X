@@ -340,7 +340,7 @@ public:
     std::string pocketStr;
     for (PieceType pt = KING; pt >= PAWN; --pt)
       for (int i = 0; i < pos.count_in_hand(c, pt); ++i)
-        pocketStr += std::string(1, pos.piece_to_char()[make_piece(BLACK, pt)]);
+        pocketStr += pos.piece_to_char()[make_piece(BLACK, pt)];
     return pocketStr;
   }
 
