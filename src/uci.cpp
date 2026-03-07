@@ -603,7 +603,7 @@ Move UCI::to_move(const Position& pos, string& str) {
           str.pop_back();
       else
           // Junior could send promotion piece in uppercase
-          str[4] = char(tolower(str[4]));
+          str[4] = char(std::tolower(static_cast<unsigned char>(str[4])));
   }
 
   for (const auto& m : MoveList<LEGAL>(pos)) {

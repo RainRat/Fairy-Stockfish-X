@@ -526,11 +526,11 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
   // 1. Piece placement
   while ((ss >> token) && !isspace(token))
   {
-      if (isdigit(token))
+      if (std::isdigit(static_cast<unsigned char>(token)))
       {
           int steps = token - '0';
 #ifdef LARGEBOARDS
-          if (isdigit(ss.peek()))
+          if (std::isdigit(ss.peek()))
           {
               ss >> token;
               steps = 10 * steps + (token - '0');
@@ -652,7 +652,7 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
   st->epSquares = 0;
   st->castlingKingSquare[WHITE] = st->castlingKingSquare[BLACK] = SQ_NONE;
   ss >> std::ws;
-  if (!isdigit(ss.peek()) && !sfen)
+  if (!std::isdigit(ss.peek()) && !sfen)
   {
       std::string castlingSpec;
       ss >> castlingSpec;
@@ -697,9 +697,9 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
       {
           token = castlingToken;
           Square rsq;
-          Color c = islower(token) ? BLACK : WHITE;
+          Color c = std::islower(static_cast<unsigned char>(token)) ? BLACK : WHITE;
 
-          token = char(toupper(token));
+          token = char(std::toupper(static_cast<unsigned char>(token)));
 
           if (castling_enabled() && token == 'K')
               for (rsq = make_square(var->castlingRookKingsideFile, castling_rank(c)); (!(castling_rook_pieces(c) & type_of(piece_on(rsq))) || color_of(piece_on(rsq)) != c) && file_of(rsq) > FILE_A; --rsq) {}
@@ -769,7 +769,7 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
 
       // counting limit
       ss >> std::ws;
-      if (counting_rule() && isdigit(ss.peek()))
+      if (counting_rule() && std::isdigit(ss.peek()))
           ss >> st->countingLimit;
 
       // 4. En passant square.
@@ -788,7 +788,7 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
                   break;
 
               std::string rankDigits;
-              while (i < epSpec.size() && std::isdigit(epSpec[i]))
+              while (i < epSpec.size() && std::isdigit(static_cast<unsigned char>(epSpec[i])))
               {
                   rankDigits.push_back(epSpec[i++]);
               }
@@ -870,10 +870,10 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
       {
           if (token == '-')
               continue;
-          else if (isdigit(token))
+          else if (std::isdigit(static_cast<unsigned char>(token)))
           {
               handCount = token - '0';
-              while (isdigit(ss.peek()) && ss >> token)
+              while (std::isdigit(ss.peek()) && ss >> token)
                   handCount = 10 * handCount + (token - '0');
           }
           else if ((idx = piece_to_char().find(token)) != string::npos)
@@ -5330,7 +5330,10 @@ void Position::flip() {
   f += token + " ";
 
   std::transform(f.begin(), f.end(), f.begin(),
-                 [](char c) { return char(islower(c) ? toupper(c) : tolower(c)); });
+                 [](char c) {
+                     unsigned char uc = static_cast<unsigned char>(c);
+                     return char(std::islower(uc) ? std::toupper(uc) : std::tolower(uc));
+                 });
 
   ss >> token; // En passant square
   f += (token == "-" ? token : token.replace(1, 1, token[1] == '3' ? "6" : "3"));
