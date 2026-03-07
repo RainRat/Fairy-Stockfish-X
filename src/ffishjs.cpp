@@ -216,7 +216,7 @@ public:
     const Move move = UCI::to_move(this->pos, uciMove);
     if (is_move_none<true>(move, uciMove, pos))
       return "";
-    return SAN::move_to_san(this->pos, UCI::to_move(this->pos, uciMove), notation);
+    return SAN::move_to_san(this->pos, move, notation);
   }
 
   std::string variation_san(std::string uciMoves) {

@@ -108,7 +108,13 @@ extern "C" PyObject* pyffish_setOption(PyObject* self, PyObject *args) {
 
     if (Options.count(name))
     {
-        PyObject *Value = PyUnicode_AsEncodedString( PyObject_Str(valueObj), "UTF-8", "strict");
+        PyObject* valueStr = PyObject_Str(valueObj);
+        if (!valueStr)
+            return NULL;
+        PyObject *Value = PyUnicode_AsEncodedString(valueStr, "UTF-8", "strict");
+        Py_XDECREF(valueStr);
+        if (!Value)
+            return NULL;
         Options[name] = std::string(PyBytes_AS_STRING(Value));
         Py_XDECREF(Value);
     }
