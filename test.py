@@ -690,6 +690,41 @@ startFen = ********/4k3/8/8/8/8/8/8/4K3/******** w - - 0 1
         black_moves = sf.legal_moves("capmapwild", "8/8/8/3b4/3A4/8/8/8 b - - 0 1", [])
         self.assertNotIn("d5d4", black_moves)
 
+    def test_strong_pawn_basics(self):
+        sf.load_variant_config(
+            """[strongpawnproto:chess]
+customPiece1 = t:W
+customPiece2 = s:ffN
+customPiece3 = c:F
+customPiece4 = u:K
+startFen = rnbqkbnr/tscuucst/8/8/8/8/TSCUUCST/RNBQKBNR w - - 0 1
+promotedPieceType = t:r s:n c:b u:q
+mandatoryPiecePromotion = true
+doubleStep = false
+castling = false
+enPassantTypes = -
+"""
+        )
+
+        # Squires leap (forward knight only), towers step orthogonally, and castling is disabled.
+        start = sf.start_fen("strongpawnproto")
+        start_moves = sf.legal_moves("strongpawnproto", start, [])
+        self.assertNotIn("e1g1", start_moves)
+        self.assertNotIn("e1c1", start_moves)
+        self.assertIn("b2a4", start_moves)
+        self.assertIn("g2h4", start_moves)
+        self.assertIn("a2a3", start_moves)
+
+        tower_fen = "4k3/8/8/8/8/8/4T3/4K3 w - - 0 1"
+        tower_moves = sf.legal_moves("strongpawnproto", tower_fen, [])
+        self.assertIn("e2d2", tower_moves)
+        self.assertIn("e2f2", tower_moves)
+
+        # Princess promotes to queen on last rank.
+        promo_fen = "4k3/3U4/8/8/8/8/8/4K3 w - - 0 1"
+        promo_moves = sf.legal_moves("strongpawnproto", promo_fen, [])
+        self.assertIn("d7d8+", promo_moves)
+
     def test_checkers_jump_and_promotion(self):
         # Jump captures are mandatory and generated correctly.
         fen = "8/8/5m2/8/3m4/2M5/8/7K w - - 0 1"
