@@ -130,15 +130,24 @@ captureType = prison
 hostageExchange = p:p
 castling = false
 startFen = 8/8/8/3p1p2/2P1P3/8/8/4K2k w - - 0 1
+
+[commitkeys:chess]
+commitGates = true
+castling = false
+startFen = 4q3/4k3/8/8/8/8/8/8/4K3/4Q3 w - - 0 1
 INI
 assert_reload_key_match "$tmp_ini" "prsync" "position startpos moves e2e4 d7d5 e4d5"
 
 # 3) Prison exchange drops mutate both prison/hand counts; key must match after FEN reload.
 assert_reload_key_match "$tmp_ini" "exsync" "position startpos moves c4d5 f5e4 P#P@a2"
 assert_progressive_reload_keys "$tmp_ini" "exsync" "position startpos" 10
+
+# 4) Commit-gates drops should preserve key consistency through FEN reload.
+assert_reload_key_match "$tmp_ini" "commitkeys" "position startpos moves e1d1 e8d8"
+assert_progressive_reload_keys "$tmp_ini" "commitkeys" "position startpos" 8
 rm -f "$tmp_ini"
 
-# 4) Flip-enclosed games: color-flip captures must keep incremental key in sync.
+# 5) Flip-enclosed games: color-flip captures must keep incremental key in sync.
 assert_reload_key_match "${DEFAULT_VARIANT_PATH}" "ataxx" "position startpos moves g1f2"
 assert_reload_key_match "${DEFAULT_VARIANT_PATH}" "flipello" "position startpos moves P@e3"
 
