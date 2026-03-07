@@ -90,7 +90,7 @@ private:
   const Variant* v;
   StateListPtr states;
   Position pos;
-  Thread* thread;
+  Thread* thread = nullptr;
   std::vector<Move> moveStack;
   std::vector<std::string> moveStackUCI;
   bool is960;
@@ -341,8 +341,12 @@ public:
 
     if (!gameEnd)
       return "*";
-    if (result == 0)
-      return "1/2-1/2";
+    if (result == 0) {
+      if (pos.material_counting())
+        result = pos.material_counting_result();
+      if (result == 0)
+        return "1/2-1/2";
+    }
     if (pos.side_to_move() == BLACK)
       result = -result;
     if (result > 0)

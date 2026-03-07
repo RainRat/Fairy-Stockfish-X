@@ -921,10 +921,19 @@ inline Validation check_castling_rank(const std::array<std::string, 2>& castling
                     return NOK;
                 }
             }
-            else if (board.get_piece(castlingRank, tolower(castlingFlag) - 'a') == ' ')
+            else
             {
-                std::cerr << "No gating piece for flag " << castlingFlag << std::endl;
-                return NOK;
+                const int fileIdx = std::tolower(static_cast<unsigned char>(castlingFlag)) - 'a';
+                if (fileIdx < 0 || fileIdx >= board.get_nb_files())
+                {
+                    std::cerr << "Invalid castling/gating flag: " << castlingFlag << std::endl;
+                    return NOK;
+                }
+                if (board.get_piece(castlingRank, fileIdx) == ' ')
+                {
+                    std::cerr << "No gating piece for flag " << castlingFlag << std::endl;
+                    return NOK;
+                }
             }
         }
     }

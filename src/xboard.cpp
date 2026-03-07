@@ -440,7 +440,7 @@ void StateMachine::process_command(std::string token, std::istringstream& is) {
   else if (token == "remove")
   {
       stop();
-      if (moveList.size())
+      if (moveList.size() >= 2)
       {
           undo_move();
           undo_move();

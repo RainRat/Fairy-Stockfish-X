@@ -199,8 +199,16 @@ extern "C" PyObject* pyffish_getSAN(PyObject* self, PyObject *args) {
     }
     std::string moveStr = move;
 
+    Move m = UCI::to_move(pos, moveStr);
+    if (m == MOVE_NONE)
+    {
+        Py_XDECREF(moveList);
+        PyErr_SetString(PyExc_ValueError, (std::string("Invalid move '") + moveStr + "'").c_str());
+        return NULL;
+    }
+
     Py_XDECREF(moveList);
-    return Py_BuildValue("s", SAN::move_to_san(pos, UCI::to_move(pos, moveStr), notation).c_str());
+    return Py_BuildValue("s", SAN::move_to_san(pos, m, notation).c_str());
 }
 
 // INPUT variant, fen, movelist
@@ -438,7 +446,8 @@ extern "C" PyObject* pyffish_hasInsufficientMaterial(PyObject* self, PyObject *a
     }
 
     StateListPtr states(new std::deque<StateInfo>(1));
-    buildPosition(pos, states, variant, fen, moveList, chess960);
+    if (!buildPosition(pos, states, variant, fen, moveList, chess960))
+        return NULL;
 
     bool wInsufficient = has_insufficient_material(WHITE, pos);
     bool bInsufficient = has_insufficient_material(BLACK, pos);

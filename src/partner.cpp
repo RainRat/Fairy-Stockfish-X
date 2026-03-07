@@ -29,6 +29,8 @@ namespace Stockfish {
 PartnerHandler Partner; // Global object
 
 void PartnerHandler::reset() {
+    isFairy = false;
+    moveRequested = MOVE_NONE;
     fast = sitRequested = partnerDead = weDead = weWin = weVirtualWin = weVirtualLoss = false;
     time = opptime = 0;
 }
