@@ -5079,6 +5079,7 @@ bool Position::has_game_cycle(int ply) const {
 bool Position::see_pruning_unreliable() const {
 
   return points_counting()
+      || points_goal() > 0
       || extinction_value() != VALUE_NONE
       || flag_region(WHITE) || flag_region(BLACK)
       || var->castlingWins
