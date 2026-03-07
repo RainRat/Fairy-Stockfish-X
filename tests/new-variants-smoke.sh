@@ -188,7 +188,7 @@ echo "${out}" | grep -q "Nodes searched: 10"
 out=$(run_cmds "setoption name UCI_Variant value gala
 position fen 5/5/1D1dD/5/5 w - - 0 1 moves b3c3
 d")
-echo "${out}" | grep -q "Fen: 5/5/2D1D/5/5 b - - 1 1"
+echo "${out}" | grep -Eq "Fen: 5/5/2D1D/5/5(\\[\\])? b - - 1 1"
 
 # 23) iChess baseline: opening drops restricted to own half.
 out=$(run_cmds "setoption name UCI_Variant value ichess
@@ -312,5 +312,17 @@ out=$(run_cmds "setoption name UCI_Variant value dueling-archbishops
 position fen 4k3/8/8/8/8/8/8/4K3[P] w - - 0 1
 go perft 1")
 echo "${out}" | grep -q "^P@a2: 1$"
+
+# 37) Royal race baseline: expected opening move count with custom movers.
+out=$(run_cmds "setoption name UCI_Variant value royal-race
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 29"
+
+# 38) Royal race baseline: king on goal rank is an immediate game end.
+out=$(run_cmds "setoption name UCI_Variant value royal-race
+position fen 3K3/7/7/7/7/7/7/7/3k3 b - - 0 1
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 0"
 
 echo "new variants smoke testing OK"
