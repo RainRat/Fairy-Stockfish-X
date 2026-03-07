@@ -31,6 +31,11 @@ extract_perft1_nodes() {
   echo "$output" | sed -n 's/^Nodes searched: //p' | tail -n1
 }
 
+extract_final_eval() {
+  local output="$1"
+  echo "$output" | sed -n 's/^Final evaluation[[:space:]]*//p' | tail -n1
+}
+
 position_dump() {
   local variant_path="$1"
   local variant="$2"
@@ -115,6 +120,32 @@ go perft 1")
   fi
 }
 
+assert_reload_eval_match() {
+  local variant_path="$1"
+  local variant="$2"
+  local pos_cmd="$3"
+
+  local out fen out_reload eval eval_reload
+  out=$(position_dump "${variant_path}" "${variant}" "${pos_cmd}
+eval")
+  readarray -t parsed < <(extract_fen_and_key "$out")
+  fen="${parsed[0]}"
+  eval=$(extract_final_eval "$out")
+
+  out_reload=$(position_dump "${variant_path}" "${variant}" "position fen ${fen}
+eval")
+  eval_reload=$(extract_final_eval "$out_reload")
+
+  if [[ -z "${eval}" || -z "${eval_reload}" || "${eval}" != "${eval_reload}" ]]; then
+      echo "Eval mismatch for ${variant}"
+      echo "position: ${pos_cmd}"
+      echo "fen: ${fen}"
+      echo "eval: ${eval}"
+      echo "reload eval: ${eval_reload}"
+      return 1
+  fi
+}
+
 assert_progressive_reload_keys() {
   local variant_path="$1"
   local variant="$2"
@@ -185,10 +216,13 @@ rm -f "$tmp_ini"
 assert_reload_key_match "${DEFAULT_VARIANT_PATH}" "ataxx" "position startpos moves g1f2"
 assert_reload_key_match "${DEFAULT_VARIANT_PATH}" "flipello" "position startpos moves P@e3"
 assert_reload_perft1_match "${DEFAULT_VARIANT_PATH}" "ataxx" "position startpos moves g1f2"
+assert_reload_eval_match "${DEFAULT_VARIANT_PATH}" "ataxx" "position startpos moves g1f2"
+assert_reload_eval_match "${DEFAULT_VARIANT_PATH}" "flipello" "position startpos moves P@e3"
 
 # 6) Spell-chess potion state should round-trip through FEN key-equivalently.
 assert_reload_key_match "${DEFAULT_VARIANT_PATH}" "spell-chess" "position startpos moves f@a6 e2e4 d7d6"
 assert_progressive_reload_keys "${DEFAULT_VARIANT_PATH}" "spell-chess" "position startpos" 6
 assert_reload_perft1_match "${DEFAULT_VARIANT_PATH}" "spell-chess" "position startpos moves f@a6 e2e4 d7d6"
+assert_reload_eval_match "${DEFAULT_VARIANT_PATH}" "spell-chess" "position startpos moves f@a6 e2e4 d7d6"
 
 echo "state-sync key tests OK"
