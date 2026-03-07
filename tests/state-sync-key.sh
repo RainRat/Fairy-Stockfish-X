@@ -26,6 +26,11 @@ extract_fen_and_key() {
   echo "${fen}"$'\n'"${key}"
 }
 
+extract_perft1_nodes() {
+  local output="$1"
+  echo "$output" | sed -n 's/^Nodes searched: //p' | tail -n1
+}
+
 position_dump() {
   local variant_path="$1"
   local variant="$2"
@@ -84,6 +89,32 @@ assert_reload_key_match() {
   fi
 }
 
+assert_reload_perft1_match() {
+  local variant_path="$1"
+  local variant="$2"
+  local pos_cmd="$3"
+
+  local out fen out_reload nodes nodes_reload
+  out=$(position_dump "${variant_path}" "${variant}" "${pos_cmd}
+go perft 1")
+  readarray -t parsed < <(extract_fen_and_key "$out")
+  fen="${parsed[0]}"
+  nodes=$(extract_perft1_nodes "$out")
+
+  out_reload=$(position_dump "${variant_path}" "${variant}" "position fen ${fen}
+go perft 1")
+  nodes_reload=$(extract_perft1_nodes "$out_reload")
+
+  if [[ -z "${nodes}" || -z "${nodes_reload}" || "${nodes}" != "${nodes_reload}" ]]; then
+      echo "Perft1 mismatch for ${variant}"
+      echo "position: ${pos_cmd}"
+      echo "fen: ${fen}"
+      echo "nodes: ${nodes}"
+      echo "reload nodes: ${nodes_reload}"
+      return 1
+  fi
+}
+
 assert_progressive_reload_keys() {
   local variant_path="$1"
   local variant="$2"
@@ -115,6 +146,7 @@ echo "state-sync key tests started"
 # 1) Seirawan gating consumes a hand piece; key must match after FEN reload.
 assert_reload_key_match "${DEFAULT_VARIANT_PATH}" "seirawan" "position startpos moves b1a3h a7a6"
 assert_progressive_reload_keys "${DEFAULT_VARIANT_PATH}" "seirawan" "position startpos" 8
+assert_reload_perft1_match "${DEFAULT_VARIANT_PATH}" "seirawan" "position startpos moves b1a3h a7a6"
 
 # 2) Prison capture updates reserve state; key must match after FEN reload.
 tmp_ini=$(mktemp)
@@ -141,18 +173,22 @@ assert_reload_key_match "$tmp_ini" "prsync" "position startpos moves e2e4 d7d5 e
 # 3) Prison exchange drops mutate both prison/hand counts; key must match after FEN reload.
 assert_reload_key_match "$tmp_ini" "exsync" "position startpos moves c4d5 f5e4 P#P@a2"
 assert_progressive_reload_keys "$tmp_ini" "exsync" "position startpos" 10
+assert_reload_perft1_match "$tmp_ini" "exsync" "position startpos moves c4d5 f5e4 P#P@a2"
 
 # 4) Commit-gates drops should preserve key consistency through FEN reload.
 assert_reload_key_match "$tmp_ini" "commitkeys" "position startpos moves e1d1 e8d8"
 assert_progressive_reload_keys "$tmp_ini" "commitkeys" "position startpos" 8
+assert_reload_perft1_match "$tmp_ini" "commitkeys" "position startpos moves e1d1 e8d8"
 rm -f "$tmp_ini"
 
 # 5) Flip-enclosed games: color-flip captures must keep incremental key in sync.
 assert_reload_key_match "${DEFAULT_VARIANT_PATH}" "ataxx" "position startpos moves g1f2"
 assert_reload_key_match "${DEFAULT_VARIANT_PATH}" "flipello" "position startpos moves P@e3"
+assert_reload_perft1_match "${DEFAULT_VARIANT_PATH}" "ataxx" "position startpos moves g1f2"
 
 # 6) Spell-chess potion state should round-trip through FEN key-equivalently.
 assert_reload_key_match "${DEFAULT_VARIANT_PATH}" "spell-chess" "position startpos moves f@a6 e2e4 d7d6"
 assert_progressive_reload_keys "${DEFAULT_VARIANT_PATH}" "spell-chess" "position startpos" 6
+assert_reload_perft1_match "${DEFAULT_VARIANT_PATH}" "spell-chess" "position startpos moves f@a6 e2e4 d7d6"
 
 echo "state-sync key tests OK"
