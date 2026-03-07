@@ -40,9 +40,13 @@ position_dump() {
   local variant_path="$1"
   local variant="$2"
   local pos_cmd="$3"
+  local variant_path_cmd=""
+  if [[ -n "${variant_path}" ]]; then
+    variant_path_cmd="setoption name VariantPath value ${variant_path}"
+  fi
   cat <<CMDS | "$ENGINE"
 uci
-setoption name VariantPath value ${variant_path}
+${variant_path_cmd}
 setoption name UCI_Variant value ${variant}
 ${pos_cmd}
 d
@@ -54,9 +58,13 @@ bestmove_for_position() {
   local variant_path="$1"
   local variant="$2"
   local pos_cmd="$3"
+  local variant_path_cmd=""
+  if [[ -n "${variant_path}" ]]; then
+    variant_path_cmd="setoption name VariantPath value ${variant_path}"
+  fi
   cat <<CMDS | "$ENGINE" | sed -n 's/^bestmove //p' | awk '{print $1}' | tail -n1
 uci
-setoption name VariantPath value ${variant_path}
+${variant_path_cmd}
 setoption name UCI_Variant value ${variant}
 setoption name Threads value 1
 ${pos_cmd}
@@ -175,9 +183,9 @@ assert_progressive_reload_keys() {
 echo "state-sync key tests started"
 
 # 1) Seirawan gating consumes a hand piece; key must match after FEN reload.
-assert_reload_key_match "${DEFAULT_VARIANT_PATH}" "seirawan" "position startpos moves b1a3h a7a6"
-assert_progressive_reload_keys "${DEFAULT_VARIANT_PATH}" "seirawan" "position startpos" 8
-assert_reload_perft1_match "${DEFAULT_VARIANT_PATH}" "seirawan" "position startpos moves b1a3h a7a6"
+assert_reload_key_match "" "seirawan" "position startpos moves b1a3h a7a6"
+assert_progressive_reload_keys "" "seirawan" "position startpos" 8
+assert_reload_perft1_match "" "seirawan" "position startpos moves b1a3h a7a6"
 
 # 2) Prison capture updates reserve state; key must match after FEN reload.
 tmp_ini=$(mktemp)
@@ -213,16 +221,16 @@ assert_reload_perft1_match "$tmp_ini" "commitkeys" "position startpos moves e1d1
 rm -f "$tmp_ini"
 
 # 5) Flip-enclosed games: color-flip captures must keep incremental key in sync.
-assert_reload_key_match "${DEFAULT_VARIANT_PATH}" "ataxx" "position startpos moves g1f2"
-assert_reload_key_match "${DEFAULT_VARIANT_PATH}" "flipello" "position startpos moves P@e3"
-assert_reload_perft1_match "${DEFAULT_VARIANT_PATH}" "ataxx" "position startpos moves g1f2"
-assert_reload_eval_match "${DEFAULT_VARIANT_PATH}" "ataxx" "position startpos moves g1f2"
-assert_reload_eval_match "${DEFAULT_VARIANT_PATH}" "flipello" "position startpos moves P@e3"
+assert_reload_key_match "" "ataxx" "position startpos moves g1f2"
+assert_reload_key_match "" "flipello" "position startpos moves P@e3"
+assert_reload_perft1_match "" "ataxx" "position startpos moves g1f2"
+assert_reload_eval_match "" "ataxx" "position startpos moves g1f2"
+assert_reload_eval_match "" "flipello" "position startpos moves P@e3"
 
 # 6) Spell-chess potion state should round-trip through FEN key-equivalently.
-assert_reload_key_match "${DEFAULT_VARIANT_PATH}" "spell-chess" "position startpos moves f@a6 e2e4 d7d6"
-assert_progressive_reload_keys "${DEFAULT_VARIANT_PATH}" "spell-chess" "position startpos" 6
-assert_reload_perft1_match "${DEFAULT_VARIANT_PATH}" "spell-chess" "position startpos moves f@a6 e2e4 d7d6"
-assert_reload_eval_match "${DEFAULT_VARIANT_PATH}" "spell-chess" "position startpos moves f@a6 e2e4 d7d6"
+assert_reload_key_match "" "spell-chess" "position startpos moves f@a6 e2e4 d7d6"
+assert_progressive_reload_keys "" "spell-chess" "position startpos" 6
+assert_reload_perft1_match "" "spell-chess" "position startpos moves f@a6 e2e4 d7d6"
+assert_reload_eval_match "" "spell-chess" "position startpos moves f@a6 e2e4 d7d6"
 
 echo "state-sync key tests OK"
