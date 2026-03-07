@@ -265,6 +265,12 @@ position fen 4k3/8/8/3n4/4P3/8/8/4K3 w - - 0 1 moves e4d5
 d")
 echo "${out}" | grep -q "Fen: 4k3/8/8/3P4/8/8/8/4K3 b - - 0 1"
 
+# 30b) Benedict (capture morph): capturer adopts captured piece type.
+out=$(run_cmds "setoption name UCI_Variant value benedict
+position fen 4k3/8/8/3n4/4B3/8/8/4K3 w - - 0 1 moves e4d5
+d")
+echo "${out}" | grep -q "Fen: 4k3/8/8/3N4/8/8/8/4K3 b - - 0 1"
+
 # 31) Pawns baseline: pawn-only start and promotion race objective.
 out=$(run_cmds "setoption name UCI_Variant value pawns
 position startpos
