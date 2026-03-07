@@ -386,4 +386,10 @@ position fen 5/5/1D1dD/5/5 w - - 0 1 moves b3c3
 d")
 echo "${out}" | grep -Eq "Fen: 5/5/2D1D/5/5(\\[\\])? b - - 1 1"
 
+# 46) Ko-app-paw-na baseline: hunter can hop-capture over one adjacent rabbit.
+out=$(run_cmds "setoption name UCI_Variant value ko-app-paw-na
+position fen 5/2R2/2h2/5/5 b - - 0 1 moves c3c5
+d")
+echo "${out}" | grep -q "Fen: 2h2/5/5/5/5 w - - 0 2"
+
 echo "new variants smoke testing OK"
