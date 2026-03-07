@@ -398,7 +398,7 @@ namespace {
   inline Bitboard scaled_king_flank(const Position& pos, Square ksq) {
     // Preserve tuned 8x8 behavior.
     if (pos.max_file() == FILE_H)
-      return KingFlank[file_of(ksq)];
+      return king_flank(file_of(ksq));
 
     int files = int(pos.max_file()) + 1;
     int radius = files >= 10 ? 2 : 1;

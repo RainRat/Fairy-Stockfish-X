@@ -112,12 +112,7 @@ constexpr Bitboard QueenSide   = FileABB | FileBBB | FileCBB | FileDBB;
 constexpr Bitboard CenterFiles = FileCBB | FileDBB | FileEBB | FileFBB;
 constexpr Bitboard KingSide    = FileEBB | FileFBB | FileGBB | FileHBB;
 constexpr Bitboard Center      = (FileDBB | FileEBB) & (Rank4BB | Rank5BB);
-
-constexpr Bitboard KingFlank[FILE_NB] = {
-  QueenSide ^ FileDBB, QueenSide, QueenSide,
-  CenterFiles, CenterFiles,
-  KingSide, KingSide, KingSide ^ FileEBB
-};
+constexpr Bitboard king_flank(File f);
 
 extern uint8_t PopCnt16[1 << 16];
 extern uint8_t SquareDistance[SQUARE_NB][SQUARE_NB];
@@ -247,6 +242,34 @@ constexpr Bitboard file_bb(File f) {
 
 constexpr Bitboard file_bb(Square s) {
   return file_bb(file_of(s));
+}
+
+constexpr Bitboard king_flank(File f) {
+  const int fi = int(f);
+  const int maxFi = FILE_NB - 1;
+  const int midL = maxFi / 2;
+  const int midR = (maxFi + 1) / 2;
+  Bitboard queenSide = 0;
+  Bitboard kingSide = 0;
+  Bitboard centerFiles = 0;
+  for (int i = 0; i <= midL; ++i)
+      queenSide |= file_bb(File(i));
+  for (int i = midR; i <= maxFi; ++i)
+      kingSide |= file_bb(File(i));
+  const int centerStart = midL > 0 ? midL - 1 : 0;
+  const int centerEnd = midR + 1 < maxFi ? midR + 1 : maxFi;
+  for (int i = centerStart; i <= centerEnd; ++i)
+      centerFiles |= file_bb(File(i));
+
+  if (fi == 0)
+      return queenSide & ~file_bb(File(midL));
+  if (fi < midL)
+      return queenSide;
+  if (fi <= midR)
+      return centerFiles;
+  if (fi < maxFi)
+      return kingSide;
+  return kingSide & ~file_bb(File(midR));
 }
 
 
@@ -496,7 +519,7 @@ inline Bitboard between_bb(Square s1, Square s2, PieceType pt) {
   {
       path = between_bb(s1, s2);
       // Ski sliders ignore the first square in front of the attacker.
-      path &= ~PseudoAttacks[WHITE][KING][s2];
+      path &= ~PseudoAttacks[WHITE][KING][s1];
       if (path)
           return path;
   }

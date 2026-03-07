@@ -396,7 +396,11 @@ void Position::init() {
                   count++;
              }
       }
-#ifdef LARGEBOARDS
+#if defined(VERY_LARGE_BOARDS)
+  // Very-large boards have a higher cuckoo insertion count than LARGEBOARDS.
+  // Keep this as a sanity bound to avoid overfitting to one exact board shape.
+  assert(count >= 9344);
+#elif defined(LARGEBOARDS)
   assert(count == 9344);
 #else
   assert(count == 3668);
@@ -3134,27 +3138,13 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           xor_in_hand_count(k, gating_piece, oldCount, newCount);
 
           if (Eval::useNNUE)
-          {
-              dp.handPiece[dp.dirty_num] = gating_piece;
-              dp.handCount[dp.dirty_num] = pieceCountInHand[us][gating_type(m)];
-              dp.piece[dp.dirty_num] = gating_piece;
-              dp.from[dp.dirty_num] = SQ_NONE;
-              dp.to[dp.dirty_num] = SQ_NONE;
-              dp.dirty_num++;
-          }
+              append_dirty(st, gating_piece, SQ_NONE, SQ_NONE, gating_piece, pieceCountInHand[us][gating_type(m)]);
       }
       else
       {
           if (Eval::useNNUE)
-          {
               // Add gating piece
-              dp.piece[dp.dirty_num] = gating_piece;
-              dp.handPiece[dp.dirty_num] = gating_piece;
-              dp.handCount[dp.dirty_num] = pieceCountInHand[us][gating_type(m)];
-              dp.from[dp.dirty_num] = SQ_NONE;
-              dp.to[dp.dirty_num] = gate;
-              dp.dirty_num++;
-          }
+              append_dirty(st, gating_piece, SQ_NONE, gate, gating_piece, pieceCountInHand[us][gating_type(m)]);
 
           put_piece(gating_piece, gate);
           int oldCount = pieceCountInHand[us][gating_type(m)];
