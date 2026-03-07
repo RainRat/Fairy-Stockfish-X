@@ -285,4 +285,17 @@ go perft 1")
 echo "${out}" | grep -q "^e1g1: 1$"
 echo "${out}" | grep -q "^e1c1: 1$"
 
+# 35) Dueling archbishops baseline: bishops gain knight movement.
+out=$(run_cmds "setoption name UCI_Variant value dueling-archbishops
+position startpos
+go perft 1")
+echo "${out}" | grep -q "^c1b3: 1$"
+echo "${out}" | grep -q "^f1g3: 1$"
+
+# 36) Dueling archbishops baseline: hand pieces can be dropped.
+out=$(run_cmds "setoption name UCI_Variant value dueling-archbishops
+position fen 4k3/8/8/8/8/8/8/4K3[P] w - - 0 1
+go perft 1")
+echo "${out}" | grep -q "^P@a2: 1$"
+
 echo "new variants smoke testing OK"
