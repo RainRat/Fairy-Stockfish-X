@@ -725,6 +725,32 @@ enPassantTypes = -
         promo_moves = sf.legal_moves("strongpawnproto", promo_fen, [])
         self.assertIn("d7d8+", promo_moves)
 
+    def test_alterga_basics(self):
+        sf.load_variant_config(
+            """[altergaproto:chess]
+customPiece1 = n:mNcB
+customPiece2 = b:mFfWcB
+customPiece3 = r:mWcRfF
+customPiece4 = q:BmRcN
+customPiece5 = k:FmWcNisO2
+"""
+        )
+
+        # Knight moves by leap, captures by bishop lines.
+        knight_fen = "4k3/8/5p2/3p4/4N3/8/8/4K3 w - - 0 1"
+        knight_moves = sf.legal_moves("altergaproto", knight_fen, [])
+        self.assertIn("e4d5", knight_moves)      # bishop-style capture
+        self.assertNotIn("e4f6", knight_moves)   # no knight-style capture
+        self.assertIn("e4c5", knight_moves)      # knight-style non-capture move
+
+        # Rook moves one step (plus forward diagonal), but captures long rook lines.
+        rook_move_fen = "4k3/8/8/8/4R3/8/8/4K3 w - - 0 1"
+        rook_moves = sf.legal_moves("altergaproto", rook_move_fen, [])
+        self.assertIn("e4e5", rook_moves)        # one-step move
+        self.assertNotIn("e4e6", rook_moves)     # no long non-capture move
+        rook_capture_moves = sf.legal_moves("altergaproto", "4k3/8/4p3/8/4R3/8/8/4K3 w - - 0 1", [])
+        self.assertIn("e4e6", rook_capture_moves)  # rook-style capture
+
     def test_checkers_jump_and_promotion(self):
         # Jump captures are mandatory and generated correctly.
         fen = "8/8/5m2/8/3m4/2M5/8/7K w - - 0 1"
