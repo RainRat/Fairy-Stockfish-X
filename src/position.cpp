@@ -1727,8 +1727,16 @@ bool Position::legal(Move m) const {
   if (type_of(m) != DROP && (freeze_squares() & from))
       return false;
   // Castling is also blocked if the participating rook is frozen.
-  if (type_of(m) == CASTLING && (freeze_squares() & to))
-      return false;
+  if (type_of(m) == CASTLING)
+  {
+      Square rookFrom = to;
+      if (piece_on(rookFrom) == NO_PIECE
+          || color_of(piece_on(rookFrom)) != us
+          || !(castling_rook_pieces(us) & type_of(piece_on(rookFrom))))
+          rookFrom = castling_rook_square(us & (to > from ? KING_SIDE : QUEEN_SIDE));
+      if (freeze_squares() & rookFrom)
+          return false;
+  }
   if (type_of(m) == CASTLING && gamePly < var->castlingForbiddenPlies)
       return false;
   if (jumpRemoved && (square_bb(to) & jumpRemoved))
@@ -2062,6 +2070,11 @@ bool Position::legal(Move m) const {
   // enemy attacks, it is delayed at a later time: now!
   if (type_of(m) == CASTLING)
   {
+      Square rookFrom = to;
+      if (piece_on(rookFrom) == NO_PIECE
+          || color_of(piece_on(rookFrom)) != us
+          || !(castling_rook_pieces(us) & type_of(piece_on(rookFrom))))
+          rookFrom = castling_rook_square(us & (to > from ? KING_SIDE : QUEEN_SIDE));
       // After castling, the rook and king final positions are the same in
       // Chess960 as they would be in standard chess.
       to = make_square(to > from ? castling_kingside_file() : castling_queenside_file(), castling_rank(us));
@@ -2080,15 +2093,27 @@ bool Position::legal(Move m) const {
       if (!royalLikeCastler)
           return true;
 
+      // Spell-chess uses COMMONER as castling king and still requires
+      // "cannot castle through attack", with frozen attackers ignored.
+      bool spellLikeCastler = type_of(piece_on(from)) != KING && potions_enabled();
+      auto attackers_for_castling = [&](Square s, Bitboard occ) {
+          Bitboard att = spellLikeCastler ? attackers_to(s, occ, ~us)
+                                          : attackers_to_king(s, occ, ~us);
+          if (spellLikeCastler)
+              att &= ~freeze_squares(~us);
+          return att;
+      };
+
       for (Square s = to; s != from; s += step)
-          if (   (!allow_checks() && attackers_to_king(s, ~us))
+          if (   (((!allow_checks()) || spellLikeCastler) && attackers_for_castling(s, pieces()))
               || (var->flyingGeneral && (attacks_bb(~us, ROOK, s, pieces() ^ from) & pieces(~us, KING)))
               || (var->diagonalGeneral && (attacks_bb(~us, BISHOP, s, pieces() ^ from) & pieces(~us, KING))))
               return false;
 
       // In case of Chess960, verify if the Rook blocks some checks
       // For instance an enemy queen in SQ_A1 when castling rook is in SQ_B1.
-      return allow_checks() || !attackers_to_king(to, pieces() ^ to_sq(m), ~us);
+      return (allow_checks() && !spellLikeCastler)
+          || !attackers_for_castling(to, pieces() ^ rookFrom);
   }
 
   Bitboard occupied = (type_of(m) != DROP ? pieces() ^ from : pieces()) | to;

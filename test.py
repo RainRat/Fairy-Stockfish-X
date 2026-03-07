@@ -1101,6 +1101,22 @@ startFen = 4k3/3p4/8/8/8/8/8/3QK3 w - - 0 1
         self.assertNotEqual(result, sf.VALUE_MATE)
         self.assertNotEqual(result, -sf.VALUE_MATE)
 
+    def test_spell_chess_frozen_rook_blocks_castling(self):
+        fen = "4k3/8/8/8/8/8/8/4K2R[f] b K - 0 1"
+        moves = sf.legal_moves("spell-chess", fen, ["f@h1,e8e7"])
+        self.assertNotIn("e1g1", moves)
+
+    def test_spell_chess_castling_through_attack_requires_freeze(self):
+        fen = "4kr2/8/8/8/8/8/8/4K2R[F] w K - 0 1"
+        moves = sf.legal_moves("spell-chess", fen, [])
+        self.assertNotIn("e1g1", moves)
+        self.assertIn("f@f8,e1g1", moves)
+
+    def test_spell_chess_frozen_pawn_cannot_capture_en_passant(self):
+        fen = "4k3/3p4/8/4P3/8/8/8/4K3[f] b - - 0 1"
+        moves = sf.legal_moves("spell-chess", fen, ["f@e5,d7d5"])
+        self.assertNotIn("e5d6", moves)
+
     def test_get_san(self):
         fen = "4k3/8/3R4/8/1R3R2/8/3R4/4K3 w - - 0 1"
         result = sf.get_san("chess", fen, "b4d4")
