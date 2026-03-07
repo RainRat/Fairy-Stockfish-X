@@ -393,7 +393,8 @@ public:
     std::stringstream ss(uciMoves);
     std::string uciMove;
     while (std::getline(ss, uciMove, ' ')) {
-      push(uciMove);
+      if (!push(uciMove))
+        break;
     }
   }
 
@@ -405,7 +406,8 @@ public:
     std::stringstream ss(sanMoves);
     std::string sanMove;
     while (std::getline(ss, sanMove, ' '))
-      push_san(sanMove, notation);
+      if (!push_san(sanMove, notation))
+        break;
   }
 
   std::string pocket(bool color) {
@@ -721,7 +723,11 @@ Game read_game_pgn(std::string pgn) {
             sanMove = sanMove.substr(0, std::min(annotationChar1, annotationChar2));
           if (logReadGamePgnMoves.load())
             std::cerr << sanMove << " ";
-          game.board->push_san(sanMove);
+          if (!game.board->push_san(sanMove))
+          {
+            game.parsedGame = false;
+            return game;
+          }
         }
         curIdx = sanMoveEnd+1;
       }
