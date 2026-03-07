@@ -751,6 +751,25 @@ customPiece5 = k:FmWcNisO2
         rook_capture_moves = sf.legal_moves("altergaproto", "4k3/8/4p3/8/4R3/8/8/4K3 w - - 0 1", [])
         self.assertIn("e4e6", rook_capture_moves)  # rook-style capture
 
+    def test_chesscom_custom_setups_basics(self):
+        # Trapped Queens / Infiltration Danger / Stone Gravitation are orthodox 8x8
+        # positions imported from chess.com Fen4 setups.
+        sf.set_option("VariantPath", "src/variants.ini")
+        trapped = sf.start_fen("trapped-queens")
+        trapped_moves = sf.legal_moves("trapped-queens", trapped, [])
+        self.assertIn("e8d8", trapped_moves)
+        self.assertIn("a6a7", trapped_moves)
+
+        infiltration = sf.start_fen("infiltration-danger")
+        infiltration_moves = sf.legal_moves("infiltration-danger", infiltration, [])
+        self.assertIn("c8b6", infiltration_moves)
+        self.assertIn("d6e6", infiltration_moves)
+
+        stone = sf.start_fen("stone-gravitation")
+        stone_moves = sf.legal_moves("stone-gravitation", stone, [])
+        self.assertIn("g8f6", stone_moves)
+        self.assertIn("d7d8q", stone_moves)
+
     def test_checkers_jump_and_promotion(self):
         # Jump captures are mandatory and generated correctly.
         fen = "8/8/5m2/8/3m4/2M5/8/7K w - - 0 1"
