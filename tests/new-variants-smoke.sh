@@ -392,4 +392,16 @@ position fen 5/2R2/2h2/5/5 b - - 0 1 moves c3c5
 d")
 echo "${out}" | grep -q "Fen: 2h2/5/5/5/5 w - - 0 2"
 
+# 47) Null baseline: move strings include mandatory wall placement on vacated square.
+out=$(run_cmds "setoption name UCI_Variant value null
+position startpos
+go perft 1")
+echo "${out}" | grep -q "^e2e4,e4e2: 1$"
+
+# 48) Null baseline: after move+wall, vacated square is petrified.
+out=$(run_cmds "setoption name UCI_Variant value null
+position startpos moves e2e4,e4e2
+d")
+echo "${out}" | grep -q "Fen: rnbqkbnr/pppppppp/8/8/4P3/8/PPPP\\*PPP/RNBQKBNR b KQkq - 0 1"
+
 echo "new variants smoke testing OK"
