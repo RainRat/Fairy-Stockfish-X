@@ -783,6 +783,15 @@ namespace {
                     if (mover == NO_PIECE)
                         continue;
 
+                    PieceType moverType = type_of(mover);
+                    // Pure leapers cannot have an intermediate path square.
+                    if (mt == NORMAL
+                        && AttackRiderTypes[moverType] == NO_RIDER
+                        && moverType != PAWN
+                        && moverType != SHOGI_PAWN
+                        && moverType != SOLDIER)
+                        continue;
+
                     Bitboard path = between_bb(from_sq(base), to_sq(base), type_of(mover));
                     path &= ~square_bb(to_sq(base));
                     if (!(path & square_bb(gate)))
