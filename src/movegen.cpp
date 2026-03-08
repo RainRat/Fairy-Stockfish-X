@@ -761,10 +761,7 @@ namespace {
                 continue;
             }
 
-            Bitboard freezeExtra = potion == Variant::POTION_FREEZE ? pos.freeze_zone_from_square(gate) : Bitboard(0);
-            Bitboard jumpRemoved = potion == Variant::POTION_JUMP ? square_bb(gate) : Bitboard(0);
-
-            SpellContextGuard guard(pos, freezeExtra, jumpRemoved);
+            SpellContextGuard guard(pos, Bitboard(0), square_bb(gate));
 
             ExtMove* potionStart = cur;
             cur = generate_all_impl<Us, Type>(pos, cur);
@@ -788,7 +785,7 @@ namespace {
                 {
                     Square from = from_sq(base);
                     Square to = to_sq(base);
-                    Piece mover = pos.piece_on(from_sq(base));
+                    Piece mover = pos.piece_on(from);
                     if (mover == NO_PIECE)
                         continue;
 
