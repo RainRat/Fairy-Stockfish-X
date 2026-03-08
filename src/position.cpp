@@ -3837,8 +3837,10 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
 
       if (givesCountingCheck)
       {
-          st->key ^= Zobrist::checks[us][st->checksRemaining[us]]
+          Key diff = Zobrist::checks[us][st->checksRemaining[us]]
                   ^  Zobrist::checks[us][st->checksRemaining[us] - 1];
+          st->key ^= diff;
+          st->boardKey ^= diff;
           --st->checksRemaining[us];
       }
   }
