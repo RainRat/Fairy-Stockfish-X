@@ -810,9 +810,7 @@ namespace {
                     if (to == gate)
                         continue;
 
-                    int df = std::abs(int(file_of(to)) - int(file_of(from)));
-                    int dr = std::abs(int(rank_of(to)) - int(rank_of(from)));
-                    if (std::max(df, dr) <= 1)
+                    if (distance(from, to) <= 1)
                         continue;
 
                     Bitboard path = between_bb(from, to, moverType);
