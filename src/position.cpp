@@ -4341,11 +4341,13 @@ bool Position::see_ge(Move m, Value threshold) const {
   if (blast_on_capture() || blast_on_move())
       return blast_see(m) >= threshold;
 
+  Piece victim = captured_piece(m);
+
   // Extinction
   if (   extinction_value() != VALUE_NONE
-      && piece_on(to)
-      && (   (   (extinction_piece_types() & type_of(piece_on(to)))
-              && pieceCount[piece_on(to)] == extinction_piece_count() + 1)
+      && victim != NO_PIECE
+      && (   (   (extinction_piece_types() & type_of(victim))
+              && pieceCount[victim] == extinction_piece_count() + 1)
           || (   (extinction_piece_types() & ALL_PIECES)
               && count<ALL_PIECES>(~sideToMove) == extinction_piece_count() + 1)))
       return extinction_value() < VALUE_ZERO;
@@ -4354,7 +4356,6 @@ bool Position::see_ge(Move m, Value threshold) const {
   if (must_capture() || !checking_permitted() || is_gating(m) || count<CLOBBER_PIECE>() == count<ALL_PIECES>())
       return VALUE_ZERO >= threshold;
 
-  Piece victim = piece_on(to);
   int victimValue = PieceValue[MG][victim];
   if (victim != NO_PIECE && color_of(victim) == color_of(moved_piece(m)) && self_capture())
       victimValue = -victimValue;

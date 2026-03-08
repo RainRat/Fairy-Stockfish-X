@@ -1336,7 +1336,7 @@ inline FenValidation validate_fen(const std::string& fen, const Variant* v, bool
             if (check_en_passant_square(fenParts[3]) == NOK)
                 return FEN_INVALID_EN_PASSANT_SQ;
         }
-        else if (v->countingRule && !check_digit_field(fenParts[3]))
+        else if (v->countingRule && check_digit_field(fenParts[3]) == NOK)
             return FEN_INVALID_COUNTING_RULE;
     }
 
@@ -1360,7 +1360,7 @@ inline FenValidation validate_fen(const std::string& fen, const Variant* v, bool
 
     // 6) Part
     // check half move counter
-    if (fenParts.size() >= 3 + optionalInbetweenFields && !check_digit_field(fenParts[fenParts.size() - 2 - optionalTrailingFields]))
+    if (fenParts.size() >= 3 + optionalInbetweenFields && check_digit_field(fenParts[fenParts.size() - 2 - optionalTrailingFields]) == NOK)
     {
         std::cerr << "Invalid half move counter: '" << fenParts[fenParts.size()-2] << "'." << std::endl;
         return FEN_INVALID_HALF_MOVE_COUNTER;
@@ -1368,7 +1368,7 @@ inline FenValidation validate_fen(const std::string& fen, const Variant* v, bool
 
     // 7) Part
     // check move counter
-    if (fenParts.size() >= 4 + optionalInbetweenFields && !check_digit_field(fenParts[fenParts.size() - 1 - optionalTrailingFields]))
+    if (fenParts.size() >= 4 + optionalInbetweenFields && check_digit_field(fenParts[fenParts.size() - 1 - optionalTrailingFields]) == NOK)
     {
         std::cerr << "Invalid move counter: '" << fenParts[fenParts.size()-1] << "'." << std::endl;
         return FEN_INVALID_MOVE_COUNTER;
@@ -1381,7 +1381,10 @@ inline FenValidation validate_fen(const std::string& fen, const Variant* v, bool
         }
         std::string content = pointsCount.substr(1, pointsCount.size() - 2); // Remove the braces
         std::vector<std::string> points = get_fen_parts(content, ' ');
-        if (points.size() != 2 || !check_digit_field(points[0]) || !check_digit_field(points[1])) {
+        if (   points.size() != 2
+            || check_digit_field(points[0]) == NOK
+            || check_digit_field(points[1]) == NOK)
+        {
             return FEN_INVALID_POINTS_INFO;
         }
     }
@@ -1423,7 +1426,7 @@ inline FenValidation validate_fen(const std::string& fen, const Variant* v, bool
         if (!(vals.size() == 2 || vals.size() == 4))
             return FEN_INVALID_CHAR;
         for (const auto& value : vals)
-            if (!check_digit_field(value))
+            if (check_digit_field(value) == NOK)
                 return FEN_INVALID_CHAR;
     }
 
