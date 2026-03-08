@@ -1769,6 +1769,7 @@ bool Position::compute_forced_jump_followup(Square s) const {
 /// all pseudo-royal pieces of a particular color that are in check
 Bitboard Position::checked_pseudo_royals(Color c) const {
   assert(pseudo_royal_types());
+  const bool blastOnCapture = blast_on_capture();
   Bitboard checked = 0;
   Bitboard pseudoRoyals = st->pseudoRoyals & pieces(c);
   Bitboard pseudoRoyalsTheirs = st->pseudoRoyals & pieces(~c);
@@ -1776,7 +1777,7 @@ Bitboard Position::checked_pseudo_royals(Color c) const {
   // If royal pieces are immune to blasts, then their checks remain threats even
   // when the attacker is inside the blast radius. Build a bitboard of such
   // blast-immune pieces.
-  Bitboard blastImmune = blast_immune_bb();
+  Bitboard blastImmune = blastOnCapture ? blast_immune_bb() : Bitboard(0);
   if (blast_promotion())
       pseudoRoyalsTheirs = 0;
 
@@ -1785,7 +1786,7 @@ Bitboard Position::checked_pseudo_royals(Color c) const {
       Square sr = pop_lsb(pseudoRoyals);
       // Skip if capturing this piece would blast any non-immune enemy
       // pseudo-royal pieces
-      if (!(blast_on_capture() && (pseudoRoyalsTheirs & blast_pattern(sr) & ~blastImmune))
+      if (!(blastOnCapture && (pseudoRoyalsTheirs & blast_pattern(sr) & ~blastImmune))
           && attackers_to(sr, ~c))
           checked |= sr;
   }
@@ -1797,7 +1798,7 @@ Bitboard Position::checked_pseudo_royals(Color c) const {
       while (pseudoRoyalCandidates)
       {
           Square sr = pop_lsb(pseudoRoyalCandidates);
-          if (!(blast_on_capture() && (pseudoRoyalsTheirs & blast_pattern(sr) & ~blastImmune))
+          if (!(blastOnCapture && (pseudoRoyalsTheirs & blast_pattern(sr) & ~blastImmune))
               && attackers_to(sr, ~c))
               allAttacked |= sr;
           else
