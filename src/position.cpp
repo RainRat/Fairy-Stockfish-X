@@ -1772,6 +1772,8 @@ Bitboard Position::checked_pseudo_royals(Color c) const {
   const bool blastOnCapture = blast_on_capture();
   Bitboard checked = 0;
   Bitboard pseudoRoyals = st->pseudoRoyals & pieces(c);
+  if (!pseudoRoyals && !var->dupleCheck)
+      return checked;
   Bitboard pseudoRoyalsTheirs = (blastOnCapture && !blast_promotion())
                               ? st->pseudoRoyals & pieces(~c)
                               : Bitboard(0);
