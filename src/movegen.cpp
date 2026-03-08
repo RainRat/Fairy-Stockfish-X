@@ -719,6 +719,9 @@ namespace {
                     continue;
                 *freezeBaseEnd++ = *it;
             }
+
+            if (freezeBaseEnd == listBegin)
+                continue;
         }
 
         Bitboard candidates = pos.board_bb();
