@@ -835,6 +835,9 @@ namespace {
     ExtMove* baseEnd = generate_all_impl<Us, Type>(pos, moveList);
     if (!pos.potions_enabled())
         return baseEnd;
+    if (!pos.can_cast_potion(Us, Variant::POTION_FREEZE)
+        && !pos.can_cast_potion(Us, Variant::POTION_JUMP))
+        return baseEnd;
     return generate_potion_moves<Us, Type>(pos, moveList, baseEnd);
   }
 
