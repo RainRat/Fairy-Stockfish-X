@@ -188,6 +188,24 @@ describe('board.pop()', function () {
   });
 });
 
+describe('board.pop() with promotion + capturer-dies', function () {
+  it("it restores state after a promotion capture where capturer dies", () => {
+    const custom = `
+[promokami:chess]
+capturerDiesOnCapture = true
+capturerDiesExemptPawns = false
+`;
+    ffish.loadVariantConfig(custom);
+
+    const startFen = "4kr2/4P3/8/8/8/8/8/4K3 w - - 0 1";
+    const board = new ffish.Board("promokami", startFen);
+    chai.expect(board.push("e7f8q")).to.equal(true);
+    board.pop();
+    chai.expect(board.fen()).to.equal(startFen);
+    board.delete();
+  });
+});
+
 describe('board.reset()', function () {
   it("it resets the board to its starting position", () => {
     let board = new ffish.Board();
