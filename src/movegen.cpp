@@ -769,6 +769,7 @@ namespace {
                 return maxEnd;
 
             Square gate = pop_lsb(candidates);
+            assert(potion == Variant::POTION_JUMP);
 
             Bitboard gateMask = square_bb(gate);
             SpellContextGuard guard(pos, Bitboard(0), gateMask);
@@ -792,31 +793,28 @@ namespace {
                 Square from = from_sq(base);
                 Square to = to_sq(base);
 
-                if (potion == Variant::POTION_JUMP)
-                {
-                    Piece mover = pos.piece_on(from);
-                    if (mover == NO_PIECE)
-                        continue;
+                Piece mover = pos.piece_on(from);
+                if (mover == NO_PIECE)
+                    continue;
 
-                    PieceType moverType = type_of(mover);
-                    // Pure leapers cannot have an intermediate path square.
-                    if (mt == NORMAL
-                        && AttackRiderTypes[moverType] == NO_RIDER
-                        && moverType != PAWN
-                        && moverType != SHOGI_PAWN
-                        && moverType != SOLDIER)
-                        continue;
+                PieceType moverType = type_of(mover);
+                // Pure leapers cannot have an intermediate path square.
+                if (mt == NORMAL
+                    && AttackRiderTypes[moverType] == NO_RIDER
+                    && moverType != PAWN
+                    && moverType != SHOGI_PAWN
+                    && moverType != SOLDIER)
+                    continue;
 
-                    if (to == gate)
-                        continue;
+                if (to == gate)
+                    continue;
 
-                    if (distance(from, to) <= 1)
-                        continue;
+                if (distance(from, to) <= 1)
+                    continue;
 
-                    Bitboard path = between_bb(from, to, moverType);
-                    if (!(path & gateMask))
-                        continue;
-                }
+                Bitboard path = between_bb(from, to, moverType);
+                if (!(path & gateMask))
+                    continue;
 
                 Move gatingMove = mt == NORMAL
                                   ? make_gating<NORMAL>(from, to, potionPiece, gate)
