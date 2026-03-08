@@ -748,10 +748,12 @@ namespace {
 
                     Move base = it->move;
                     MoveType mt = type_of(base);
+                    Square from = from_sq(base);
+                    Square to = to_sq(base);
 
                     Move gatingMove = mt == NORMAL
-                                      ? make_gating<NORMAL>(from_sq(base), to_sq(base), potionPiece, gate)
-                                      : make_gating<CASTLING>(from_sq(base), to_sq(base), potionPiece, gate);
+                                      ? make_gating<NORMAL>(from, to, potionPiece, gate)
+                                      : make_gating<CASTLING>(from, to, potionPiece, gate);
 
                     cur->move = gatingMove;
                     cur->value = it->value;
