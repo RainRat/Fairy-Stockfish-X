@@ -609,9 +609,20 @@ namespace {
             captureTarget = Bitboard(0);
         }
 
-        moveList = generate_pawn_moves<Us, Type>(pos, moveList, target, forcedFromMask);
-        for (PieceSet ps = pos.piece_types() & ~(piece_set(PAWN) | KING); ps;)
-            moveList = generate_moves<Us, Type>(pos, moveList, pop_lsb(ps), target, captureTarget, forcedFromMask);
+        if (restrictToForcedJumper)
+        {
+            PieceType forcedPt = type_of(pos.piece_on(forcedSquare));
+            if (forcedPt == PAWN)
+                moveList = generate_pawn_moves<Us, Type>(pos, moveList, target, forcedFromMask);
+            else if (forcedPt != KING)
+                moveList = generate_moves<Us, Type>(pos, moveList, forcedPt, target, captureTarget, forcedFromMask);
+        }
+        else
+        {
+            moveList = generate_pawn_moves<Us, Type>(pos, moveList, target, forcedFromMask);
+            for (PieceSet ps = pos.piece_types() & ~(piece_set(PAWN) | KING); ps;)
+                moveList = generate_moves<Us, Type>(pos, moveList, pop_lsb(ps), target, captureTarget, forcedFromMask);
+        }
         // generate drops
         if (!restrictToForcedJumper && pos.piece_drops() && Type != CAPTURES && (pos.can_drop(Us, ALL_PIECES) || pos.two_boards()))
             for (PieceSet ps = pos.piece_types(); ps;)
