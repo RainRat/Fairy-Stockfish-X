@@ -806,7 +806,7 @@ namespace {
                     if (to_sq(base) == gate)
                         continue;
 
-                    Bitboard path = between_bb(from_sq(base), to_sq(base), type_of(mover));
+                    Bitboard path = between_bb(from_sq(base), to_sq(base), moverType);
                     if (!(path & gateMask))
                         continue;
                 }
