@@ -733,17 +733,14 @@ namespace {
         else if (potion == Variant::POTION_JUMP)
             candidates &= pos.pieces();
 
-        while (candidates)
+        if (potion == Variant::POTION_FREEZE)
         {
-            if (cur >= maxEnd)
-                return maxEnd;
-
-            Square gate = pop_lsb(candidates);
-
-            // Freeze potions only affect legality/check semantics, not pseudo-legal
-            // move construction, so we can reuse the already-generated base list.
-            if (potion == Variant::POTION_FREEZE)
+            while (candidates)
             {
+                if (cur >= maxEnd)
+                    return maxEnd;
+
+                Square gate = pop_lsb(candidates);
                 for (ExtMove* it = listBegin; it != freezeBaseEnd; ++it)
                 {
                     if (cur >= maxEnd)
@@ -762,9 +759,16 @@ namespace {
                     cur->value = it->value;
                     ++cur;
                 }
-
-                continue;
             }
+            continue;
+        }
+
+        while (candidates)
+        {
+            if (cur >= maxEnd)
+                return maxEnd;
+
+            Square gate = pop_lsb(candidates);
 
             Bitboard gateMask = square_bb(gate);
             SpellContextGuard guard(pos, Bitboard(0), gateMask);
