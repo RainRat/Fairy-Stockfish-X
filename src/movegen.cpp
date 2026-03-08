@@ -532,6 +532,7 @@ namespace {
     Bitboard captureTarget = Bitboard(0);
     Bitboard forcedFromMask = AllSquares;
     bool restrictToForcedJumper = false;
+    PieceType forcedJumpPt = NO_PIECE_TYPE;
     Bitboard jumpForbidden = pos.spell_jump_removed();
 
     Square forcedSquare = pos.forced_jump_square();
@@ -542,6 +543,7 @@ namespace {
             if (color_of(forcedPiece) == Us)
             {
                 restrictToForcedJumper = true;
+                forcedJumpPt = type_of(forcedPiece);
                 forcedFromMask = square_bb(forcedSquare);
             }
             else
@@ -610,11 +612,10 @@ namespace {
 
         if (restrictToForcedJumper)
         {
-            PieceType forcedPt = type_of(pos.piece_on(forcedSquare));
-            if (forcedPt == PAWN)
+            if (forcedJumpPt == PAWN)
                 moveList = generate_pawn_moves<Us, Type>(pos, moveList, target, forcedFromMask);
-            else if (forcedPt != KING)
-                moveList = generate_moves<Us, Type>(pos, moveList, forcedPt, target, captureTarget, forcedFromMask);
+            else if (forcedJumpPt != KING)
+                moveList = generate_moves<Us, Type>(pos, moveList, forcedJumpPt, target, captureTarget, forcedFromMask);
         }
         else
         {
