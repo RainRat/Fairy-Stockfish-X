@@ -2049,9 +2049,10 @@ bool Position::legal(Move m) const {
   // Check for attacks to pseudo-royal pieces
   if (pseudo_royal_types())
   {
+      const bool blastOnCapture = blast_on_capture();
       Square kto = to;
       Bitboard occupied = (type_of(m) != DROP ? pieces() ^ from : pieces());
-      Bitboard blastImmune = blast_immune_bb();
+      Bitboard blastImmune = blastOnCapture ? blast_immune_bb() : Bitboard(0);
       if (walling_rule() == DUCK)
           occupied ^= st->wallSquares;
       if (walling() || is_gating(m))
@@ -2068,7 +2069,7 @@ bool Position::legal(Move m) const {
               // Loop over squares between the king and its final position
               // Ensure to include the initial square if from == kto
               for (Square s = from; from != kto ? s != kto : s == from; s += step)
-                  if (  !(blast_on_capture() && (blast_pattern(s) & st->pseudoRoyals & pieces(~sideToMove) & ~blastImmune))
+                  if (  !(blastOnCapture && (blast_pattern(s) & st->pseudoRoyals & pieces(~sideToMove) & ~blastImmune))
                       && attackers_to(s, occupied, ~us))
                       return false;
           // Move the rook
@@ -2077,7 +2078,7 @@ bool Position::legal(Move m) const {
       occupied |= kto;
       if (type_of(m) == EN_PASSANT)
           occupied &= ~square_bb(capture_square(kto));
-      if (capture(m) && blast_on_capture())
+      if (capture(m) && blastOnCapture)
           occupied &= ~blast_squares(kto);
       // Petrifying a pseudo-royal piece is illegal
       if (capture(m) && (var->petrifyOnCaptureTypes & type_of(moved_piece(m))) && (st->pseudoRoyals & from))
@@ -2111,7 +2112,7 @@ bool Position::legal(Move m) const {
           {
               Square sr = pop_lsb(pseudoRoyals);
               // Touching pseudo-royal pieces are immune
-              if (  !(blast_on_capture() && (pseudoRoyalsTheirs & blast_pattern(sr) & ~blastImmune))
+              if (  !(blastOnCapture && (pseudoRoyalsTheirs & blast_pattern(sr) & ~blastImmune))
                   && (attackers_to(sr, occupied, ~us) & attackerCandidatesTheirs))
                   return false;
           }
@@ -2128,7 +2129,7 @@ bool Position::legal(Move m) const {
           {
               Square sr = pop_lsb(pseudoRoyalCandidates);
               // Touching pseudo-royal pieces are immune
-              if (!(  !(blast_on_capture() && (pseudoRoyalsTheirs & blast_pattern(sr) & ~blastImmune))
+              if (!(  !(blastOnCapture && (pseudoRoyalsTheirs & blast_pattern(sr) & ~blastImmune))
                     && (attackers_to(sr, occupied, ~us) & attackerCandidatesTheirs)))
                   allCheck = false;
           }
