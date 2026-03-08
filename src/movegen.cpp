@@ -563,37 +563,6 @@ namespace {
     // Skip generating non-king moves when in double check
     if (Type != EVASIONS || !more_than_one(checkers & ~pos.non_sliding_riders()))
     {
-        target = Type == EVASIONS     ?  between_bb(ksq, lsb(checkers))
-               : Type == NON_EVASIONS ? ~pos.pieces( Us)
-               : Type == CAPTURES     ? (pos.pieces(~Us) | pos.dead_squares())
-                                      : ~pos.pieces(   ); // QUIETS || QUIET_CHECKS
-
-        if (Type == EVASIONS)
-        {
-            const bool multipleCheckers = more_than_one(checkers);
-            if (multipleCheckers)
-                target = checkers;
-            else
-            {
-                Square checksq = lsb(checkers);
-                PieceType checkerPt = type_of(pos.piece_on(checksq));
-                target = between_bb(ksq, checksq, checkerPt);
-
-                bool blockableNightrider = AttackRiderTypes[checkerPt] & RIDER_NIGHTRIDER;
-                if ((checkers & pos.non_sliding_riders()) && !blockableNightrider)
-                    target = ~pos.pieces(Us);
-                // Leaper attacks can not be blocked
-                if (LeaperAttacks[~Us][checkerPt][checksq] & ksq)
-                    target = checkers;
-            }
-        }
-
-        // Remove inaccessible squares (outside board + wall squares)
-        target &= pos.board_bb() & ~jumpForbidden;
-
-        // During forced jump continuation, only jump captures from the forced
-        // piece are legal. Suppress regular quiet/capture generation here and
-        // let explicit jump-capture emission paths produce candidates.
         if (restrictToForcedJumper)
         {
             target = Bitboard(0);
@@ -601,6 +570,34 @@ namespace {
         }
         else
         {
+            target = Type == EVASIONS     ?  between_bb(ksq, lsb(checkers))
+                   : Type == NON_EVASIONS ? ~pos.pieces( Us)
+                   : Type == CAPTURES     ? (pos.pieces(~Us) | pos.dead_squares())
+                                          : ~pos.pieces(   ); // QUIETS || QUIET_CHECKS
+
+            if (Type == EVASIONS)
+            {
+                const bool multipleCheckers = more_than_one(checkers);
+                if (multipleCheckers)
+                    target = checkers;
+                else
+                {
+                    Square checksq = lsb(checkers);
+                    PieceType checkerPt = type_of(pos.piece_on(checksq));
+                    target = between_bb(ksq, checksq, checkerPt);
+
+                    bool blockableNightrider = AttackRiderTypes[checkerPt] & RIDER_NIGHTRIDER;
+                    if ((checkers & pos.non_sliding_riders()) && !blockableNightrider)
+                        target = ~pos.pieces(Us);
+                    // Leaper attacks can not be blocked
+                    if (LeaperAttacks[~Us][checkerPt][checksq] & ksq)
+                        target = checkers;
+                }
+            }
+
+            // Remove inaccessible squares (outside board + wall squares)
+            target &= pos.board_bb() & ~jumpForbidden;
+
             captureTarget = target;
             if (pos.self_capture() && (Type == NON_EVASIONS || Type == CAPTURES || Type == EVASIONS))
             {
