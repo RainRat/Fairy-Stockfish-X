@@ -36,6 +36,30 @@ d")
 
 echo "new variants smoke testing started"
 
+# 0) PieceTypeBitboardGroup repeated piece clauses are additive, not overwrite.
+tmp_ini=$(mktemp)
+cat > "${tmp_ini}" <<'INI'
+[ptgroup-merge:chess]
+pieceSpecificPromotionRegion = true
+whitePiecePromotionRegion = P(a8);P(h8);
+blackPiecePromotionRegion = P(a1);P(h1);
+promotionPieceTypes = q
+promotionPieceTypesWhite = q
+promotionPieceTypesBlack = q
+INI
+out=$(cat <<EOF | "${ENGINE}"
+uci
+setoption name VariantPath value ${tmp_ini}
+setoption name UCI_Variant value ptgroup-merge
+position fen 4k3/P6P/8/8/8/8/8/4K3 w - - 0 1
+go perft 1
+quit
+EOF
+)
+echo "${out}" | grep -q "^a7a8q: 1$"
+echo "${out}" | grep -q "^h7h8q: 1$"
+rm -f "${tmp_ini}"
+
 # This smoke suite contains >8x8 and template-dependent variants.
 # On constrained builds, skip gracefully if any required variant is unavailable.
 for required in hasami eurasian hindustani gala ichess; do

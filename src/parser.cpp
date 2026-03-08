@@ -304,7 +304,8 @@ namespace {
                     }
                     if (ch == ')')
                     {
-                        target.set(PieceChar, board);
+                        // Repeated piece clauses (e.g. "P(a8);P(h8)") are additive.
+                        target.set(PieceChar, target.boardOfPiece(PieceChar) | board);
                         ParserState = 4;
                     }
                     else
