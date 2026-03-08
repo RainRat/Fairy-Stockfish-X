@@ -764,6 +764,7 @@ namespace {
             cur = generate_all_impl<Us, Type>(pos, cur);
 
             ExtMove* write = potionStart;
+            Bitboard gateMask = square_bb(gate);
             for (ExtMove* it = potionStart; it != cur; ++it)
             {
                 if (write >= maxEnd)
@@ -794,7 +795,7 @@ namespace {
 
                     Bitboard path = between_bb(from_sq(base), to_sq(base), type_of(mover));
                     path &= ~square_bb(to_sq(base));
-                    if (!(path & square_bb(gate)))
+                    if (!(path & gateMask))
                         continue;
                 }
 
