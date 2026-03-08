@@ -583,7 +583,7 @@ namespace {
                 if ((checkers & pos.non_sliding_riders()) && !blockableNightrider)
                     target = ~pos.pieces(Us);
                 // Leaper attacks can not be blocked
-                if (LeaperAttacks[~Us][checkerPt][checksq] & pos.square<KING>(Us))
+                if (LeaperAttacks[~Us][checkerPt][checksq] & ksq)
                     target = checkers;
             }
         }
