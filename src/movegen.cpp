@@ -782,11 +782,11 @@ namespace {
                 MoveType mt = type_of(base);
                 if (mt != NORMAL && mt != CASTLING)
                     continue;
+                Square from = from_sq(base);
+                Square to = to_sq(base);
 
                 if (potion == Variant::POTION_JUMP)
                 {
-                    Square from = from_sq(base);
-                    Square to = to_sq(base);
                     Piece mover = pos.piece_on(from);
                     if (mover == NO_PIECE)
                         continue;
@@ -814,8 +814,8 @@ namespace {
                 }
 
                 Move gatingMove = mt == NORMAL
-                                  ? make_gating<NORMAL>(from_sq(base), to_sq(base), potionPiece, gate)
-                                  : make_gating<CASTLING>(from_sq(base), to_sq(base), potionPiece, gate);
+                                  ? make_gating<NORMAL>(from, to, potionPiece, gate)
+                                  : make_gating<CASTLING>(from, to, potionPiece, gate);
 
                 write->move = gatingMove;
                 write->value = it->value;
