@@ -1033,19 +1033,22 @@ void Position::set_check_info(StateInfo* si) const {
       for (PieceSet ps = piece_types(); ps;)
           si->checkSquares[pop_lsb(ps)] = Bitboard(0);
   else
+  {
+      Bitboard occupied = pieces();
       for (PieceSet ps = piece_types(); ps;)
       {
           PieceType pt = pop_lsb(ps);
           PieceType movePt = pt == KING ? king_type() : pt;
           if (AttackRiderTypes[movePt] & ASYMMETRICAL_RIDERS)
               // For asymmetrical riders, use true retro paths from the king square.
-              si->checkSquares[pt] = retro_asymmetric_check_squares(sideToMove, movePt, ksq, pieces());
+              si->checkSquares[pt] = retro_asymmetric_check_squares(sideToMove, movePt, ksq, occupied);
           else
-              si->checkSquares[pt] = attacks_bb(~sideToMove, movePt, ksq, pieces());
+              si->checkSquares[pt] = attacks_bb(~sideToMove, movePt, ksq, occupied);
           // Collect special piece types that require slower check and evasion detection
           if (AttackRiderTypes[movePt] & NON_SLIDING_RIDERS)
               si->nonSlidingRiders |= pieces(pt);
       }
+  }
   si->shak = si->checkersBB & (byTypeBB[KNIGHT] | byTypeBB[ROOK] | byTypeBB[BERS]);
   si->bikjang = var->bikjangRule && ksq != SQ_NONE ? bool(attacks_bb(sideToMove, ROOK, ksq, pieces()) & pieces(sideToMove, KING)) : false;
   si->chased = var->chasingRule ? chased() : Bitboard(0);
