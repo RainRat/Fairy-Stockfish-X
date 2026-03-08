@@ -790,6 +790,8 @@ namespace {
 
                 if (potion == Variant::POTION_JUMP)
                 {
+                    Square from = from_sq(base);
+                    Square to = to_sq(base);
                     Piece mover = pos.piece_on(from_sq(base));
                     if (mover == NO_PIECE)
                         continue;
@@ -803,10 +805,15 @@ namespace {
                         && moverType != SOLDIER)
                         continue;
 
-                    if (to_sq(base) == gate)
+                    if (to == gate)
                         continue;
 
-                    Bitboard path = between_bb(from_sq(base), to_sq(base), moverType);
+                    int df = std::abs(int(file_of(to)) - int(file_of(from)));
+                    int dr = std::abs(int(rank_of(to)) - int(rank_of(from)));
+                    if (std::max(df, dr) <= 1)
+                        continue;
+
+                    Bitboard path = between_bb(from, to, moverType);
                     if (!(path & gateMask))
                         continue;
                 }
