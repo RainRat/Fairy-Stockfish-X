@@ -793,8 +793,10 @@ namespace {
                         && moverType != SOLDIER)
                         continue;
 
+                    if (to_sq(base) == gate)
+                        continue;
+
                     Bitboard path = between_bb(from_sq(base), to_sq(base), type_of(mover));
-                    path &= ~square_bb(to_sq(base));
                     if (!(path & gateMask))
                         continue;
                 }
