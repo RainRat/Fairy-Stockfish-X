@@ -549,7 +549,8 @@ namespace {
                 // Opponent must pass while the other side completes a forced jump chain.
                 if (pos.pass(Us) && pos.pieces(Us))
                 {
-                    Square passSq = lsb(pos.pieces(Us));
+                    Bitboard usPieces = pos.pieces(Us);
+                    Square passSq = lsb(usPieces);
                     *moveList++ = make<SPECIAL>(passSq, passSq);
                 }
                 return moveList;
@@ -668,7 +669,11 @@ namespace {
 
         // Workaround for passing: Execute a non-move with any piece
         if (!restrictToForcedJumper && pos.pass(Us) && !pos.count<KING>(Us) && pos.pieces(Us))
-            *moveList++ = make<SPECIAL>(lsb(pos.pieces(Us)), lsb(pos.pieces(Us)));
+        {
+            Bitboard usPieces = pos.pieces(Us);
+            Square passSq = lsb(usPieces);
+            *moveList++ = make<SPECIAL>(passSq, passSq);
+        }
 
         //if "wall or move", generate walling action with null move
         if (!restrictToForcedJumper && pos.wall_or_move())
