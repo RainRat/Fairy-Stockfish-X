@@ -154,6 +154,28 @@ eval")
   fi
 }
 
+assert_distinct_position_keys() {
+  local variant_path="$1"
+  local variant="$2"
+  local fen_a="$3"
+  local fen_b="$4"
+
+  local out_a out_b key_a key_b
+  out_a=$(position_dump "${variant_path}" "${variant}" "position fen ${fen_a}")
+  out_b=$(position_dump "${variant_path}" "${variant}" "position fen ${fen_b}")
+  key_a=$(echo "$out_a" | sed -n 's/^Key: //p' | tail -n1)
+  key_b=$(echo "$out_b" | sed -n 's/^Key: //p' | tail -n1)
+
+  if [[ -z "${key_a}" || -z "${key_b}" || "${key_a}" == "${key_b}" ]]; then
+    echo "Distinct-position key collision for ${variant}"
+    echo "fen A: ${fen_a}"
+    echo "key A: ${key_a}"
+    echo "fen B: ${fen_b}"
+    echo "key B: ${key_b}"
+    return 1
+  fi
+}
+
 assert_progressive_reload_keys() {
   local variant_path="$1"
   local variant="$2"
@@ -218,6 +240,10 @@ assert_reload_perft1_match "$tmp_ini" "exsync" "position startpos moves c4d5 f5e
 assert_reload_key_match "$tmp_ini" "commitkeys" "position startpos moves e1d1 e8d8"
 assert_progressive_reload_keys "$tmp_ini" "commitkeys" "position startpos" 8
 assert_reload_perft1_match "$tmp_ini" "commitkeys" "position startpos moves e1d1 e8d8"
+# 4b) Commit-gate reserve rows must affect key identity even when board occupancy is identical.
+assert_distinct_position_keys "$tmp_ini" "commitkeys" \
+  "4q3/4k3/8/8/8/8/8/8/4K3/4Q3 w - - 0 1" \
+  "8/4k3/8/8/8/8/8/8/4K3/8 w - - 0 1"
 rm -f "$tmp_ini"
 
 # 5) Flip-enclosed games: color-flip captures must keep incremental key in sync.

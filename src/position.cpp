@@ -110,6 +110,7 @@ namespace Zobrist {
   Key side, noPawns;
   Key inHand[PIECE_NB][SQUARE_NB];
   Key checks[COLOR_NB][CHECKS_NB];
+  Key committed[COLOR_NB][FILE_NB][PIECE_TYPE_NB];
   Key potionZone[COLOR_NB][Variant::POTION_TYPE_NB][SQUARE_NB];
   Key potionCooldown[COLOR_NB][Variant::POTION_TYPE_NB][POTION_COOLDOWN_BITS];
   Key wall[SQUARE_NB];
@@ -137,6 +138,12 @@ namespace {
       for (int bit = 0; bit < POTION_COOLDOWN_BITS; ++bit)
           if (value & (1u << bit))
               key ^= Zobrist::potionCooldown[c][potion][bit];
+  }
+
+  inline void xor_committed_gate(Key& key, Color c, File f, PieceType pt) {
+      assert(pt >= NO_PIECE_TYPE && pt < PIECE_TYPE_NB);
+      if (pt != NO_PIECE_TYPE)
+          key ^= Zobrist::committed[c][f][pt];
   }
 
   inline Square parse_fen_square(const Position& pos, const std::string& spec) {
@@ -388,6 +395,11 @@ void Position::init() {
       for (PieceType pt = PAWN; pt <= KING; ++pt)
           for (int n = 0; n < SQUARE_NB; ++n)
               Zobrist::inHand[make_piece(c, pt)][n] = rng.rand<Key>();
+
+  for (Color c : {WHITE, BLACK})
+      for (File f = FILE_A; f <= FILE_MAX; ++f)
+          for (int pt = 0; pt < PIECE_TYPE_NB; ++pt)
+              Zobrist::committed[c][f][pt] = rng.rand<Key>();
 
   for (Color c : {WHITE, BLACK})
       for (int pt = 0; pt < Variant::POTION_TYPE_NB; ++pt)
@@ -1248,6 +1260,11 @@ void Position::set_state(StateInfo* si) const {
               xor_potion_zone(si->key, c, potion, si->potionZones[c][pt]);
               xor_potion_cooldown(si->key, c, potion, si->potionCooldown[c][pt]);
           }
+
+  if (commit_gates())
+      for (Color c : {WHITE, BLACK})
+          for (File f = FILE_A; f <= max_file(); ++f)
+              xor_committed_gate(si->key, c, f, committed_piece_type(c, f));
 
   if (check_counting())
       for (Color c : {WHITE, BLACK})
@@ -2787,6 +2804,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
 
       if (commit_gates() && st->removedCastlingGatingType > NO_PIECE_TYPE)
       {
+          xor_committed_gate(k, us, file_of(rfrom), st->removedCastlingGatingType);
           Piece dropped = make_piece(us, st->removedCastlingGatingType);
           Square gateSq = make_square(file_of(rfrom), us == WHITE ? RANK_1 : max_rank());
           k ^= Zobrist::psq[dropped][gateSq];
@@ -3325,8 +3343,10 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           Rank r = rank_of(from);
           if (us == WHITE && r == RANK_1 && has_committed_piece(WHITE, file_of(from))){
               st->removedGatingType = drop_committed_piece(WHITE, file_of(from));
+              xor_committed_gate(k, WHITE, file_of(from), st->removedGatingType);
           } else if (us == BLACK && r == max_rank() && has_committed_piece(BLACK, file_of(from))){
               st->removedGatingType = drop_committed_piece(BLACK, file_of(from));
+              xor_committed_gate(k, BLACK, file_of(from), st->removedGatingType);
           }
       }
       if (captured) {
@@ -3334,8 +3354,10 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           Rank r = rank_of(to);
           if (r == RANK_1 && color_of(captured) == WHITE){
               st->capturedGatingType = uncommit_piece(WHITE, file_of(to));
+              xor_committed_gate(k, WHITE, file_of(to), st->capturedGatingType);
           } else if (r == max_rank() && color_of(captured) == BLACK) {
               st->capturedGatingType = uncommit_piece(BLACK, file_of(to));
+              xor_committed_gate(k, BLACK, file_of(to), st->capturedGatingType);
           }
       }
 
