@@ -1777,6 +1777,7 @@ Bitboard Position::checked_pseudo_royals(Color c) const {
   assert(pseudo_royal_types());
   const bool blastOnCapture = blast_on_capture();
   Bitboard checked = 0;
+  Bitboard occupied = pieces();
   Bitboard pseudoRoyals = st->pseudoRoyals & pieces(c);
   Bitboard pseudoRoyalCandidates = var->dupleCheck ? st->pseudoRoyalCandidates & pieces(c) : Bitboard(0);
   if (!pseudoRoyals && !pseudoRoyalCandidates)
@@ -1799,14 +1800,14 @@ Bitboard Position::checked_pseudo_royals(Color c) const {
           // Skip if capturing this piece would blast any non-immune enemy
           // pseudo-royal pieces
           if (!(vulnerablePseudoRoyalsTheirs & blast_pattern(sr))
-              && attackers_to(sr, ~c))
+              && attackers_to(sr, occupied, ~c))
               checked |= sr;
       }
   else
       while (pseudoRoyals)
       {
           Square sr = pop_lsb(pseudoRoyals);
-          if (attackers_to(sr, ~c))
+          if (attackers_to(sr, occupied, ~c))
               checked |= sr;
       }
   // Look for duple check
@@ -1818,7 +1819,7 @@ Bitboard Position::checked_pseudo_royals(Color c) const {
           {
               Square sr = pop_lsb(pseudoRoyalCandidates);
               if (!(vulnerablePseudoRoyalsTheirs & blast_pattern(sr))
-                  && attackers_to(sr, ~c))
+                  && attackers_to(sr, occupied, ~c))
                   allAttacked |= sr;
               else
                   // If at least one isn't attacked, it is not a duple check
@@ -1828,7 +1829,7 @@ Bitboard Position::checked_pseudo_royals(Color c) const {
           while (pseudoRoyalCandidates)
           {
               Square sr = pop_lsb(pseudoRoyalCandidates);
-              if (attackers_to(sr, ~c))
+              if (attackers_to(sr, occupied, ~c))
                   allAttacked |= sr;
               else
                   // If at least one isn't attacked, it is not a duple check
