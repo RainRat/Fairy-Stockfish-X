@@ -590,17 +590,6 @@ namespace {
         // Remove inaccessible squares (outside board + wall squares)
         target &= pos.board_bb() & ~jumpForbidden;
 
-        captureTarget = target;
-        if (pos.self_capture() && (Type == NON_EVASIONS || Type == CAPTURES || Type == EVASIONS))
-        {
-            Bitboard selfCaptureTargets = pos.pieces(Us) & ~pos.pieces(Us, KING);
-            // During check evasions, only consider self-captures that can
-            // actually resolve the check (capture checker or block line).
-            if (Type == EVASIONS)
-                selfCaptureTargets &= target;
-            captureTarget |= selfCaptureTargets;
-        }
-
         // During forced jump continuation, only jump captures from the forced
         // piece are legal. Suppress regular quiet/capture generation here and
         // let explicit jump-capture emission paths produce candidates.
@@ -608,6 +597,19 @@ namespace {
         {
             target = Bitboard(0);
             captureTarget = Bitboard(0);
+        }
+        else
+        {
+            captureTarget = target;
+            if (pos.self_capture() && (Type == NON_EVASIONS || Type == CAPTURES || Type == EVASIONS))
+            {
+                Bitboard selfCaptureTargets = pos.pieces(Us) & ~pos.pieces(Us, KING);
+                // During check evasions, only consider self-captures that can
+                // actually resolve the check (capture checker or block line).
+                if (Type == EVASIONS)
+                    selfCaptureTargets &= target;
+                captureTarget |= selfCaptureTargets;
+            }
         }
 
         if (restrictToForcedJumper)
