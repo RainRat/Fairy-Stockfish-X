@@ -1733,11 +1733,10 @@ Bitboard Position::attackers_to_king(Square s, Bitboard occupied, Color c, Bitbo
   if (!attackers || !forbiddenToKing)
       return attackers;
 
-  Bitboard forbiddenAttackers = 0;
   for (PieceSet ps = forbiddenToKing; ps; )
-      forbiddenAttackers |= pieces(c, pop_lsb(ps));
+      attackers &= ~pieces(c, pop_lsb(ps));
 
-  return attackers & ~forbiddenAttackers;
+  return attackers;
 }
 
 
