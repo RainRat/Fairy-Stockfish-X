@@ -1623,6 +1623,7 @@ Bitboard Position::slider_blockers(Bitboard sliders, Square s, Bitboard& pinners
   Bitboard allPieces = pieces();
   Bitboard occupancy = allPieces ^ slidingSnipers;
   Bitboard pinnedColorPieces = pieces(color_of(piece_on(s)));
+  Bitboard janggiCannons = pieces(JANGGI_CANNON);
 
   while (snipers)
   {
@@ -1635,8 +1636,8 @@ Bitboard Position::slider_blockers(Bitboard sliders, Square s, Bitboard& pinners
     if (b && (!more_than_one(b) || (isHopper && popcount(b) == 2)))
     {
         // Janggi cannons block each other
-        if ((pieces(JANGGI_CANNON) & sniperSq) && (pieces(JANGGI_CANNON) & b))
-            b &= pieces(JANGGI_CANNON);
+        if ((janggiCannons & sniperSq) && (janggiCannons & b))
+            b &= janggiCannons;
         blockers |= b;
         if (b & pinnedColorPieces)
             pinners |= sniperSq;
