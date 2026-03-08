@@ -726,6 +726,35 @@ namespace {
 
             Square gate = pop_lsb(candidates);
 
+            // Freeze potions only affect legality/check semantics, not pseudo-legal
+            // move construction, so we can reuse the already-generated base list.
+            if (potion == Variant::POTION_FREEZE)
+            {
+                for (ExtMove* it = listBegin; it != baseEnd; ++it)
+                {
+                    if (cur >= maxEnd)
+                        return maxEnd;
+
+                    Move base = it->move;
+                    if (is_gating(base))
+                        continue;
+
+                    MoveType mt = type_of(base);
+                    if (mt != NORMAL && mt != CASTLING)
+                        continue;
+
+                    Move gatingMove = mt == NORMAL
+                                      ? make_gating<NORMAL>(from_sq(base), to_sq(base), potionPiece, gate)
+                                      : make_gating<CASTLING>(from_sq(base), to_sq(base), potionPiece, gate);
+
+                    cur->move = gatingMove;
+                    cur->value = it->value;
+                    ++cur;
+                }
+
+                continue;
+            }
+
             Bitboard freezeExtra = potion == Variant::POTION_FREEZE ? pos.freeze_zone_from_square(gate) : Bitboard(0);
             Bitboard jumpRemoved = potion == Variant::POTION_JUMP ? square_bb(gate) : Bitboard(0);
 
