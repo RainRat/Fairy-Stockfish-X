@@ -1728,8 +1728,7 @@ Bitboard Position::attackers_to_king(Square s, Bitboard occupied, Color c, Bitbo
 
   Bitboard attackers = attackers_to(s, occupied, c, janggiCannons);
   // Frozen pieces cannot give check (relevant for spell-chess freeze effects).
-  attackers &= ~freeze_squares(c);
-  attackers &= ~(pieces(c, PAWN) & pawnCannotCheckZone[c]);
+  attackers &= ~(freeze_squares(c) | (pieces(c, PAWN) & pawnCannotCheckZone[c]));
   PieceSet forbiddenToKing = var->captureForbiddenToKing;
   if (!attackers || !forbiddenToKing)
       return attackers;
