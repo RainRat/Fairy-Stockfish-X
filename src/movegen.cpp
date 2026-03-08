@@ -586,9 +586,7 @@ namespace {
         }
 
         // Remove inaccessible squares (outside board + wall squares)
-        target &= pos.board_bb();
-        if (jumpForbidden)
-            target &= ~jumpForbidden;
+        target &= pos.board_bb() & ~jumpForbidden;
 
         captureTarget = target;
         if (pos.self_capture() && (Type == NON_EVASIONS || Type == CAPTURES || Type == EVASIONS))
