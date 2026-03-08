@@ -763,13 +763,13 @@ namespace {
                 continue;
             }
 
-            SpellContextGuard guard(pos, Bitboard(0), square_bb(gate));
+            Bitboard gateMask = square_bb(gate);
+            SpellContextGuard guard(pos, Bitboard(0), gateMask);
 
             ExtMove* potionStart = cur;
             cur = generate_all_impl<Us, Type>(pos, cur);
 
             ExtMove* write = potionStart;
-            Bitboard gateMask = square_bb(gate);
             for (ExtMove* it = potionStart; it != cur; ++it)
             {
                 if (write >= maxEnd)
