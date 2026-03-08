@@ -167,6 +167,12 @@ position startpos moves e2e4 e7e5 e1e1
 go perft 1")
 echo "${out}" | grep -q "Nodes searched: 29"
 
+# 17b) Progressive: forced pass plies must not increment halfmove clock.
+out=$(run_cmds "setoption name UCI_Variant value progressive
+position startpos moves e2e4 e7e5 0000
+d")
+echo "${out}" | grep -q "Fen: rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2"
+
 # 18) Hindustani baseline: no pawn double-step.
 out=$(run_cmds "setoption name UCI_Variant value hindustani
 position startpos
