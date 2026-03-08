@@ -693,10 +693,6 @@ namespace {
 
   template<Color Us, GenType Type>
   ExtMove* generate_potion_moves(const Position& pos, ExtMove* listBegin, ExtMove* baseEnd) {
-
-    if (!pos.potions_enabled())
-        return baseEnd;
-
     const Variant* var = pos.variant();
     ExtMove* cur = baseEnd;
     ExtMove* maxEnd = listBegin + MOVEGEN_OVERFLOW_CAPACITY;
@@ -838,6 +834,8 @@ namespace {
   ExtMove* generate_all(const Position& pos, ExtMove* moveList) {
 
     ExtMove* baseEnd = generate_all_impl<Us, Type>(pos, moveList);
+    if (!pos.potions_enabled())
+        return baseEnd;
     return generate_potion_moves<Us, Type>(pos, moveList, baseEnd);
   }
 
