@@ -710,6 +710,21 @@ namespace {
         if (!pos.can_cast_potion(Us, potion))
             continue;
 
+        ExtMove* freezeBaseEnd = baseEnd;
+        if (potion == Variant::POTION_FREEZE)
+        {
+            // Build a compact source list once; reused for each freeze gate.
+            freezeBaseEnd = listBegin;
+            for (ExtMove* it = listBegin; it != baseEnd; ++it)
+            {
+                Move base = it->move;
+                MoveType mt = type_of(base);
+                if (is_gating(base) || (mt != NORMAL && mt != CASTLING))
+                    continue;
+                *freezeBaseEnd++ = *it;
+            }
+        }
+
         Bitboard candidates = pos.board_bb();
         if (!var->potionDropOnOccupied)
             candidates &= ~pos.pieces();
@@ -730,18 +745,13 @@ namespace {
             // move construction, so we can reuse the already-generated base list.
             if (potion == Variant::POTION_FREEZE)
             {
-                for (ExtMove* it = listBegin; it != baseEnd; ++it)
+                for (ExtMove* it = listBegin; it != freezeBaseEnd; ++it)
                 {
                     if (cur >= maxEnd)
                         return maxEnd;
 
                     Move base = it->move;
-                    if (is_gating(base))
-                        continue;
-
                     MoveType mt = type_of(base);
-                    if (mt != NORMAL && mt != CASTLING)
-                        continue;
 
                     Move gatingMove = mt == NORMAL
                                       ? make_gating<NORMAL>(from_sq(base), to_sq(base), potionPiece, gate)
