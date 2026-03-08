@@ -1617,7 +1617,8 @@ Bitboard Position::slider_blockers(Bitboard sliders, Square s, Bitboard& pinners
           }
       }
   }
-  Bitboard occupancy = pieces() ^ slidingSnipers;
+  Bitboard allPieces = pieces();
+  Bitboard occupancy = allPieces ^ slidingSnipers;
   Bitboard pinnedColorPieces = pieces(color_of(piece_on(s)));
 
   while (snipers)
@@ -1626,7 +1627,7 @@ Bitboard Position::slider_blockers(Bitboard sliders, Square s, Bitboard& pinners
     Piece sniper = piece_on(sniperSq);
     PieceType sniperType = type_of(sniper);
     bool isHopper = AttackRiderTypes[sniperType] & HOPPING_RIDERS;
-    Bitboard b = between_bb(s, sniperSq, sniperType) & (isHopper ? (pieces() ^ sniperSq) : occupancy);
+    Bitboard b = between_bb(s, sniperSq, sniperType) & (isHopper ? (allPieces ^ sniperSq) : occupancy);
 
     if (b && (!more_than_one(b) || (isHopper && popcount(b) == 2)))
     {
