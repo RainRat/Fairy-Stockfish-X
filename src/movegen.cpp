@@ -535,7 +535,7 @@ namespace {
     Bitboard jumpForbidden = pos.spell_jump_removed();
 
     Square forcedSquare = pos.forced_jump_square();
-    if (forcedSquare != SQ_NONE && pos.forced_jump_continuation() && pos.has_forced_jump_followup())
+    if (forcedSquare != SQ_NONE && pos.has_forced_jump_followup())
     {
         Piece forcedPiece = pos.piece_on(forcedSquare);
         if (forcedPiece != NO_PIECE) {
