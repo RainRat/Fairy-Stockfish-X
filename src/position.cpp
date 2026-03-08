@@ -1772,14 +1772,14 @@ Bitboard Position::checked_pseudo_royals(Color c) const {
   const bool blastOnCapture = blast_on_capture();
   Bitboard checked = 0;
   Bitboard pseudoRoyals = st->pseudoRoyals & pieces(c);
-  Bitboard pseudoRoyalsTheirs = st->pseudoRoyals & pieces(~c);
+  Bitboard pseudoRoyalsTheirs = (blastOnCapture && !blast_promotion())
+                              ? st->pseudoRoyals & pieces(~c)
+                              : Bitboard(0);
 
   // If royal pieces are immune to blasts, then their checks remain threats even
   // when the attacker is inside the blast radius. Build a bitboard of such
   // blast-immune pieces.
   Bitboard blastImmune = blastOnCapture ? blast_immune_bb() : Bitboard(0);
-  if (blast_promotion())
-      pseudoRoyalsTheirs = 0;
 
   while (pseudoRoyals)
   {
