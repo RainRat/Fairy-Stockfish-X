@@ -167,9 +167,11 @@ private:
   int ply;
   ExtMove* moveList;
   ExtMove* quietListBegin = nullptr;
+  ExtMove* captureBaseEnd = nullptr;
   ExtMove* quietBaseEnd = nullptr;
   ExtMove* evasionBaseEnd = nullptr;
   ExtMove* qcheckBaseEnd = nullptr;
+  bool capturePotionsDeferred = false;
   bool quietPotionsDeferred = false;
   bool evasionPotionsDeferred = false;
   bool qcheckPotionsDeferred = false;

@@ -360,9 +360,11 @@ top:
   case PROBCUT_INIT:
   case QCAPTURE_INIT:
       cur = endBadCaptures = moveList;
-      endMoves = generate<CAPTURES>(pos, cur);
-      if (potions)
-          endMoves = prune_useless_potions(cur, endMoves);
+      endMoves = generate_without_potions<CAPTURES>(pos, cur);
+      captureBaseEnd = endMoves;
+      capturePotionsDeferred = potions
+          && (pos.can_cast_potion(pos.side_to_move(), Variant::POTION_FREEZE)
+              || pos.can_cast_potion(pos.side_to_move(), Variant::POTION_JUMP));
       assert_move_list_bounds();
 
       score<CAPTURES>();
@@ -375,6 +377,16 @@ top:
                               // Move losing capture to endBadCaptures to be tried later
                               true : (*endBadCaptures++ = *cur, false); }))
           return *(cur - 1);
+
+      if (capturePotionsDeferred)
+      {
+          endMoves = append_potions<CAPTURES>(pos, moveList, captureBaseEnd);
+          endMoves = prune_useless_potions(captureBaseEnd, endMoves);
+          cur = captureBaseEnd;
+          score<CAPTURES>();
+          capturePotionsDeferred = false;
+          goto top;
+      }
 
       // Prepare the pointers to loop over the refutations array
       cur = std::begin(refutations);
