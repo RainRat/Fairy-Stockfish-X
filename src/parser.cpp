@@ -21,6 +21,7 @@
 #include <limits>
 #include <algorithm>
 #include <cctype>
+#include <charconv>
 
 #include "apiutil.h"
 #include "parser.h"
@@ -30,6 +31,16 @@
 namespace Stockfish {
 
 namespace {
+    bool parse_positive_int(const std::string& value, int& out) {
+        if (value.empty())
+            return false;
+
+        const char* first = value.data();
+        const char* last  = first + value.size();
+        auto [ptr, ec] = std::from_chars(first, last, out);
+        return ec == std::errc() && ptr == last && out >= 1;
+    }
+
     constexpr int MAX_PIECE_POINTS = 20;
 
     template <typename T> bool set(const std::string& value, T& target)
@@ -169,13 +180,17 @@ namespace {
                     return false;
                 }
             } else if (symbol[0] == '*') {
-                int rank = std::stoi(symbol.substr(1));
-                if (Rank(rank - 1) > RANK_MAX) return false;
+                int rank = 0;
+                if (!parse_positive_int(symbol.substr(1), rank) || Rank(rank - 1) > RANK_MAX)
+                    return false;
                 target |= rank_bb(Rank(rank - 1));
             } else if (std::isalpha(static_cast<unsigned char>(symbol[0])) && symbol.length() > 1) {
                 char file = std::tolower(static_cast<unsigned char>(symbol[0]));
-                int rank = std::stoi(symbol.substr(1));
-                if (Rank(rank - 1) > RANK_MAX || File(file - 'a') > FILE_MAX) return false;
+                int rank = 0;
+                if (!parse_positive_int(symbol.substr(1), rank)
+                    || Rank(rank - 1) > RANK_MAX
+                    || File(file - 'a') > FILE_MAX)
+                    return false;
                 target |= square_bb(make_square(File(file - 'a'), Rank(rank - 1)));
             } else {
                 return false;
@@ -466,7 +481,7 @@ template <bool Current, class T> bool VariantParser<DoCheck>::parse_attribute(co
 }
 
 template <bool DoCheck>
-template <bool Current, class T> bool VariantParser<DoCheck>::parse_attribute(const std::string& key, T& target, std::string pieceToChar) {
+template <bool Current, class T> bool VariantParser<DoCheck>::parse_attribute(const std::string& key, T& target, const std::string& pieceToChar) {
     const auto& it = config.find(key);
     if (it != config.end())
     {
@@ -487,7 +502,10 @@ template <bool DoCheck>
 Variant* VariantParser<DoCheck>::parse() {
     Variant* v = new Variant();
     v->reset_pieces();
-    return parse(v);
+    Variant* parsed = parse(v);
+    if (!parsed)
+        delete v;
+    return parsed;
 }
 
 template <bool DoCheck>

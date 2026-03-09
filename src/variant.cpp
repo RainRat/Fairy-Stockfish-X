@@ -2407,8 +2407,16 @@ void VariantMap::parse_istream(std::istream& file) {
 
             if (DoCheck)
                 std::cerr << "Parsing variant: " << variant << std::endl;
-            Variant* v = !variant_template.empty() ? VariantParser<DoCheck>(attribs).parse((new Variant(*variants.find(variant_template)->second))->init())
-                                                   : VariantParser<DoCheck>(attribs).parse();
+            Variant* v = nullptr;
+            if (!variant_template.empty())
+            {
+                Variant* inherited = (new Variant(*variants.find(variant_template)->second))->init();
+                v = VariantParser<DoCheck>(attribs).parse(inherited);
+                if (!v)
+                    delete inherited;
+            }
+            else
+                v = VariantParser<DoCheck>(attribs).parse();
             if (!v)
             {
                 if (DoCheck)

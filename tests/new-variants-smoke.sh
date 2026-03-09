@@ -8,7 +8,14 @@ error() {
 }
 trap 'error ${LINENO}' ERR
 
-ENGINE=${1:-./stockfish}
+ENGINE=${1:-}
+if [[ -z "${ENGINE}" ]]; then
+  if [[ -x "src/stockfish" ]]; then
+    ENGINE="src/stockfish"
+  else
+    ENGINE="./stockfish"
+  fi
+fi
 VARIANT_PATH=${2:-variants.ini}
 if [[ ! -f "${VARIANT_PATH}" && -f "src/variants.ini" ]]; then
   VARIANT_PATH="src/variants.ini"
