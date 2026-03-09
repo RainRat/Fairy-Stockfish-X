@@ -166,6 +166,13 @@ private:
   Depth depth;
   int ply;
   ExtMove* moveList;
+  ExtMove* quietListBegin = nullptr;
+  ExtMove* quietBaseEnd = nullptr;
+  ExtMove* evasionBaseEnd = nullptr;
+  ExtMove* qcheckBaseEnd = nullptr;
+  bool quietPotionsDeferred = false;
+  bool evasionPotionsDeferred = false;
+  bool qcheckPotionsDeferred = false;
 #ifdef USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
   std::unique_ptr<ExtMove[]> baseMoveList;
 #else

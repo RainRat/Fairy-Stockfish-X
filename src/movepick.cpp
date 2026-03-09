@@ -399,10 +399,13 @@ top:
   case QUIET_INIT:
       if (!skipQuiets && !(pos.must_capture() && pos.has_capture()))
       {
-          cur = endBadCaptures;
-          endMoves = generate<QUIETS>(pos, cur);
-          if (potions)
-              endMoves = prune_useless_potions(cur, endMoves);
+          quietListBegin = endBadCaptures;
+          cur = quietListBegin;
+          endMoves = generate_without_potions<QUIETS>(pos, cur);
+          quietBaseEnd = endMoves;
+          quietPotionsDeferred = potions
+              && (pos.can_cast_potion(pos.side_to_move(), Variant::POTION_FREEZE)
+                  || pos.can_cast_potion(pos.side_to_move(), Variant::POTION_JUMP));
           assert_move_list_bounds();
 
           score<QUIETS>();
@@ -419,6 +422,15 @@ top:
                                       && *cur != refutations[2].move;}))
           return *(cur - 1);
 
+      if (!skipQuiets && quietPotionsDeferred)
+      {
+          endMoves = append_potions<QUIETS>(pos, quietListBegin, quietBaseEnd);
+          endMoves = prune_useless_potions(quietBaseEnd, endMoves);
+          cur = quietBaseEnd;
+          quietPotionsDeferred = false;
+          goto top;
+      }
+
       // Prepare the pointers to loop over the bad captures
       cur = moveList;
       endMoves = endBadCaptures;
@@ -431,9 +443,11 @@ top:
 
   case EVASION_INIT:
       cur = moveList;
-      endMoves = generate<EVASIONS>(pos, cur);
-      if (potions)
-          endMoves = prune_useless_potions(cur, endMoves);
+      endMoves = generate_without_potions<EVASIONS>(pos, cur);
+      evasionBaseEnd = endMoves;
+      evasionPotionsDeferred = potions
+          && (pos.can_cast_potion(pos.side_to_move(), Variant::POTION_FREEZE)
+              || pos.can_cast_potion(pos.side_to_move(), Variant::POTION_JUMP));
       assert_move_list_bounds();
 
       score<EVASIONS>();
@@ -441,7 +455,20 @@ top:
       [[fallthrough]];
 
   case EVASION:
-      return select<Best>([](){ return true; });
+      if (Move m = select<Best>([](){ return true; }))
+          return m;
+
+      if (evasionPotionsDeferred)
+      {
+          endMoves = append_potions<EVASIONS>(pos, moveList, evasionBaseEnd);
+          endMoves = prune_useless_potions(evasionBaseEnd, endMoves);
+          cur = evasionBaseEnd;
+          score<EVASIONS>();
+          evasionPotionsDeferred = false;
+          goto top;
+      }
+
+      return MOVE_NONE;
 
   case PROBCUT:
       return select<Best>([&](){ return pos.see_pruning_unreliable() || pos.see_ge(*cur, threshold); });
@@ -460,16 +487,30 @@ top:
 
   case QCHECK_INIT:
       cur = moveList;
-      endMoves = generate<QUIET_CHECKS>(pos, cur);
-      if (potions)
-          endMoves = prune_useless_potions(cur, endMoves);
+      endMoves = generate_without_potions<QUIET_CHECKS>(pos, cur);
+      qcheckBaseEnd = endMoves;
+      qcheckPotionsDeferred = potions
+          && (pos.can_cast_potion(pos.side_to_move(), Variant::POTION_FREEZE)
+              || pos.can_cast_potion(pos.side_to_move(), Variant::POTION_JUMP));
       assert_move_list_bounds();
 
       ++stage;
       [[fallthrough]];
 
   case QCHECK:
-      return select<Next>([](){ return true; });
+      if (Move m = select<Next>([](){ return true; }))
+          return m;
+
+      if (qcheckPotionsDeferred)
+      {
+          endMoves = append_potions<QUIET_CHECKS>(pos, moveList, qcheckBaseEnd);
+          endMoves = prune_useless_potions(qcheckBaseEnd, endMoves);
+          cur = qcheckBaseEnd;
+          qcheckPotionsDeferred = false;
+          goto top;
+      }
+
+      return MOVE_NONE;
   }
 
   assert(false);

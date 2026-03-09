@@ -887,12 +887,48 @@ ExtMove* generate(const Position& pos, ExtMove* moveList) {
                      : generate_all<BLACK, Type>(pos, moveList);
 }
 
+template<GenType Type>
+ExtMove* generate_without_potions(const Position& pos, ExtMove* moveList) {
+
+  static_assert(Type != LEGAL, "Unsupported type in generate_without_potions()");
+  assert((Type == EVASIONS) == (bool)pos.checkers());
+  Color us = pos.side_to_move();
+  return us == WHITE ? generate_all_impl<WHITE, Type>(pos, moveList)
+                     : generate_all_impl<BLACK, Type>(pos, moveList);
+}
+
+template<GenType Type>
+ExtMove* append_potions(const Position& pos, ExtMove* listBegin, ExtMove* baseEnd) {
+
+  static_assert(Type != LEGAL, "Unsupported type in append_potions()");
+  assert((Type == EVASIONS) == (bool)pos.checkers());
+  if (!pos.potions_enabled())
+      return baseEnd;
+  Color us = pos.side_to_move();
+  if (!pos.can_cast_potion(us, Variant::POTION_FREEZE)
+      && !pos.can_cast_potion(us, Variant::POTION_JUMP))
+      return baseEnd;
+
+  return us == WHITE ? generate_potion_moves<WHITE, Type>(pos, listBegin, baseEnd)
+                     : generate_potion_moves<BLACK, Type>(pos, listBegin, baseEnd);
+}
+
 // Explicit template instantiations
 template ExtMove* generate<CAPTURES>(const Position&, ExtMove*);
 template ExtMove* generate<QUIETS>(const Position&, ExtMove*);
 template ExtMove* generate<EVASIONS>(const Position&, ExtMove*);
 template ExtMove* generate<QUIET_CHECKS>(const Position&, ExtMove*);
 template ExtMove* generate<NON_EVASIONS>(const Position&, ExtMove*);
+template ExtMove* generate_without_potions<CAPTURES>(const Position&, ExtMove*);
+template ExtMove* generate_without_potions<QUIETS>(const Position&, ExtMove*);
+template ExtMove* generate_without_potions<EVASIONS>(const Position&, ExtMove*);
+template ExtMove* generate_without_potions<QUIET_CHECKS>(const Position&, ExtMove*);
+template ExtMove* generate_without_potions<NON_EVASIONS>(const Position&, ExtMove*);
+template ExtMove* append_potions<CAPTURES>(const Position&, ExtMove*, ExtMove*);
+template ExtMove* append_potions<QUIETS>(const Position&, ExtMove*, ExtMove*);
+template ExtMove* append_potions<EVASIONS>(const Position&, ExtMove*, ExtMove*);
+template ExtMove* append_potions<QUIET_CHECKS>(const Position&, ExtMove*, ExtMove*);
+template ExtMove* append_potions<NON_EVASIONS>(const Position&, ExtMove*, ExtMove*);
 
 
 /// generate<LEGAL> generates all the legal moves in the given position
