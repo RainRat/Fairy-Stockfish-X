@@ -113,7 +113,10 @@ namespace {
     while (is >> token)
         value += (value.empty() ? "" : " ") + token;
 
-    if (Options.count(name))
+    if (name == "UCI_Variant" && !value.empty() && !variants.count(value))
+        sync_cout << "info string unknown variant '" << value
+                  << "'; keeping '" << std::string(Options["UCI_Variant"]) << "'" << sync_endl;
+    else if (Options.count(name))
         Options[name] = value;
     // Deal with option name aliases in UCI dialects
     else if (is_valid_option(Options, name))
