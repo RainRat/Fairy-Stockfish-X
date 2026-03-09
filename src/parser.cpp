@@ -31,6 +31,11 @@
 namespace Stockfish {
 
 namespace {
+    bool only_trailing_space(std::stringstream& ss) {
+        ss >> std::ws;
+        return ss.eof();
+    }
+
     bool parse_positive_int(const std::string& value, int& out) {
         if (value.empty())
             return false;
@@ -46,43 +51,58 @@ namespace {
     template <typename T> bool set(const std::string& value, T& target)
     {
         std::stringstream ss(value);
-        ss >> target;
-        return !ss.fail();
+        T parsed{};
+        ss >> parsed;
+        if (ss.fail() || !only_trailing_space(ss))
+            return false;
+        target = parsed;
+        return true;
     }
 
     template <> bool set(const std::string& value, std::vector<int>& target)
     {
         std::stringstream ss(value);
         int i;
-        target.clear();
+        std::vector<int> parsed;
         while (ss >> i)
-            target.push_back(i);
-        return ss.eof();
+            parsed.push_back(i);
+        if (!ss.eof())
+            return false;
+        target = std::move(parsed);
+        return true;
     }
 
     template <> bool set(const std::string& value, Rank& target) {
         std::stringstream ss(value);
         int i;
         ss >> i;
-        target = Rank(i - 1);
-        return !ss.fail() && target >= RANK_1 && target <= RANK_MAX;
+        Rank parsed = Rank(i - 1);
+        if (ss.fail() || !only_trailing_space(ss) || parsed < RANK_1 || parsed > RANK_MAX)
+            return false;
+        target = parsed;
+        return true;
     }
 
     template <> bool set(const std::string& value, File& target) {
         std::stringstream ss(value);
+        ss >> std::ws;
+        File parsed;
         if (std::isdigit(ss.peek()))
         {
             int i;
             ss >> i;
-            target = File(i - 1);
+            parsed = File(i - 1);
         }
         else
         {
             char c;
             ss >> c;
-            target = File(c - 'a');
+            parsed = File(c - 'a');
         }
-        return !ss.fail() && target >= FILE_A && target <= FILE_MAX;
+        if (ss.fail() || !only_trailing_space(ss) || parsed < FILE_A || parsed > FILE_MAX)
+            return false;
+        target = parsed;
+        return true;
     }
 
     template <> bool set(const std::string& value, std::string& target) {
@@ -168,14 +188,14 @@ namespace {
     template <> bool set(const std::string& value, Bitboard& target) {
         std::string symbol;
         std::stringstream ss(value);
-        target = 0;
+        Bitboard parsed = 0;
         while (!ss.eof() && ss >> symbol && symbol != "-")
         {
             if (symbol.back() == '*') {
                 if (std::isalpha(static_cast<unsigned char>(symbol[0])) && symbol.length() == 2) {
                     char file = std::tolower(static_cast<unsigned char>(symbol[0]));
                     if (File(file - 'a') > FILE_MAX) return false;
-                    target |= file_bb(File(file - 'a'));
+                    parsed |= file_bb(File(file - 'a'));
                 } else {
                     return false;
                 }
@@ -183,7 +203,7 @@ namespace {
                 int rank = 0;
                 if (!parse_positive_int(symbol.substr(1), rank) || Rank(rank - 1) > RANK_MAX)
                     return false;
-                target |= rank_bb(Rank(rank - 1));
+                parsed |= rank_bb(Rank(rank - 1));
             } else if (std::isalpha(static_cast<unsigned char>(symbol[0])) && symbol.length() > 1) {
                 char file = std::tolower(static_cast<unsigned char>(symbol[0]));
                 int rank = 0;
@@ -191,12 +211,15 @@ namespace {
                     || Rank(rank - 1) > RANK_MAX
                     || File(file - 'a') > FILE_MAX)
                     return false;
-                target |= square_bb(make_square(File(file - 'a'), Rank(rank - 1)));
+                parsed |= square_bb(make_square(File(file - 'a'), Rank(rank - 1)));
             } else {
                 return false;
             }
         }
-        return !ss.fail();
+        if (ss.fail())
+            return false;
+        target = parsed;
+        return true;
     }
 
     template <> bool set(const std::string& value, PieceTypeBitboardGroup& target) {
@@ -512,13 +535,7 @@ Variant* VariantParser<DoCheck>::parse() {
 template <bool DoCheck>
 Variant* VariantParser<DoCheck>::parse(Variant* v) {
     auto parse_rank_value = [](const std::string& value, int& out) {
-        std::stringstream ss(value);
-        int i;
-        ss >> i;
-        if (ss.fail())
-            return false;
-        out = i;
-        return true;
+        return parse_positive_int(value, out);
     };
     auto parse_file_value = [](const std::string& value, int& out) {
         std::stringstream ss(value);
@@ -532,14 +549,14 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
             if (ss.fail())
                 return false;
             out = i - 1;
-            return true;
+            return i >= 1 && only_trailing_space(ss);
         }
         char c;
         ss >> c;
         if (ss.fail())
             return false;
         out = std::tolower(static_cast<unsigned char>(c)) - 'a';
-        return true;
+        return only_trailing_space(ss);
     };
 
     int cfgMaxRank = -1;
