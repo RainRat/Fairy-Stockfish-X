@@ -1432,6 +1432,23 @@ namespace {
         score -= make_score(35, 22) * attackedCnt * attackedCnt;
     }
 
+    // Spell-chess: when opponent has castable potions, penalize clumping of
+    // our valuable pieces so search prefers less blast/freeze-vulnerable shapes.
+    if (pos.potions_enabled() && pos.variant()->variantTemplate == "spell-chess")
+    {
+        int threat = int(pos.can_cast_potion(Them, Variant::POTION_FREEZE))
+                   + int(pos.can_cast_potion(Them, Variant::POTION_JUMP));
+        if (threat > 0)
+        {
+            Bitboard majors = pos.pieces(Us) & ~pos.pieces(Us, PAWN) & ~pos.pieces(Us, KING) & ~pos.pieces(Us, COMMONER);
+            int adjacency = popcount(majors & shift<NORTH>(majors))
+                          + popcount(majors & shift<EAST>(majors))
+                          + popcount(majors & shift<NORTH_EAST>(majors))
+                          + popcount(majors & shift<NORTH_WEST>(majors));
+            score -= make_score(20, 14) * threat * adjacency;
+        }
+    }
+
     // Extinction
     if (pos.extinction_value() != VALUE_NONE)
     {
