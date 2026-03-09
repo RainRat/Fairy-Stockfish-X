@@ -1432,12 +1432,11 @@ namespace {
         score -= make_score(35, 22) * attackedCnt * attackedCnt;
     }
 
-    // Spell-chess: when opponent has castable potions, penalize clumping of
-    // our valuable pieces so search prefers less blast/freeze-vulnerable shapes.
-    if (pos.potions_enabled() && pos.variant()->variantTemplate == "spell-chess")
+    // Freeze-potion variants: when opponent can currently cast a freeze potion,
+    // penalize clumping of our valuable pieces to avoid freeze-vulnerable shapes.
+    if (pos.potions_enabled() && pos.potion_piece(Variant::POTION_FREEZE) != NO_PIECE_TYPE)
     {
-        int threat = int(pos.can_cast_potion(Them, Variant::POTION_FREEZE))
-                   + int(pos.can_cast_potion(Them, Variant::POTION_JUMP));
+        int threat = int(pos.can_cast_potion(Them, Variant::POTION_FREEZE));
         if (threat > 0)
         {
             Bitboard majors = pos.pieces(Us) & ~pos.pieces(Us, PAWN) & ~pos.pieces(Us, KING) & ~pos.pieces(Us, COMMONER);
