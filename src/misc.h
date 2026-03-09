@@ -23,6 +23,7 @@
 #include <chrono>
 #include <ostream>
 #include <string>
+#include <utility>
 #include <vector>
 #include <cstdint>
 
@@ -116,10 +117,19 @@ public:
   operator ValueListInserter<T>() { return ValueListInserter(values_, size_); }
 
   void swap(ValueList& other) {
-    const std::size_t maxSize = std::max(size_, other.size_);
-    for (std::size_t i = 0; i < maxSize; ++i) {
+    const std::size_t minSize = std::min(size_, other.size_);
+    for (std::size_t i = 0; i < minSize; ++i) {
       std::swap(values_[i], other.values_[i]);
     }
+
+    if (size_ < other.size_) {
+      for (std::size_t i = minSize; i < other.size_; ++i)
+        values_[i] = std::move(other.values_[i]);
+    } else {
+      for (std::size_t i = minSize; i < size_; ++i)
+        other.values_[i] = std::move(values_[i]);
+    }
+
     std::swap(size_, other.size_);
   }
 
