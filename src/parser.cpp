@@ -218,6 +218,7 @@ namespace {
             {
                 if (ch == '-')
                 {
+                    target = PieceTypeBitboardGroup();
                     return true;
                 }
                 ParserState = 0;

@@ -32,10 +32,10 @@
 // the calls at compile time), try to load them at runtime. To do this we need
 // first to define the corresponding function pointers.
 extern "C" {
-typedef bool(*fun1_t)(LOGICAL_PROCESSOR_RELATIONSHIP,
-                      PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX, PDWORD);
-typedef bool(*fun2_t)(USHORT, PGROUP_AFFINITY);
-typedef bool(*fun3_t)(HANDLE, CONST GROUP_AFFINITY*, PGROUP_AFFINITY);
+typedef BOOL (WINAPI *fun1_t)(LOGICAL_PROCESSOR_RELATIONSHIP,
+                              PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX, PDWORD);
+typedef BOOL (WINAPI *fun2_t)(USHORT, PGROUP_AFFINITY);
+typedef BOOL (WINAPI *fun3_t)(HANDLE, CONST GROUP_AFFINITY*, PGROUP_AFFINITY);
 }
 #endif
 
@@ -77,12 +77,21 @@ const string Version = "";
 
 struct Tie: public streambuf { // MSVC requires split streambuf for cin and cout
 
+  using traits_type = std::streambuf::traits_type;
+
   Tie(streambuf* b, streambuf* l) : buf(b), logBuf(l) {}
 
   int sync() override { return logBuf->pubsync(), buf->pubsync(); }
-  int overflow(int c) override { return log(buf->sputc((char)c), "<< "); }
+  int overflow(int c) override {
+    if (traits_type::eq_int_type(c, traits_type::eof()))
+        return traits_type::not_eof(c);
+    return log(buf->sputc(traits_type::to_char_type(c)), "<< ");
+  }
   int underflow() override { return buf->sgetc(); }
-  int uflow() override { return log(buf->sbumpc(), ">> "); }
+  int uflow() override {
+    int c = buf->sbumpc();
+    return traits_type::eq_int_type(c, traits_type::eof()) ? c : log(c, ">> ");
+  }
 
   streambuf *buf, *logBuf;
 
@@ -93,7 +102,7 @@ struct Tie: public streambuf { // MSVC requires split streambuf for cin and cout
     if (last == '\n')
         logBuf->sputn(prefix, 3);
 
-    return last = logBuf->sputc((char)c);
+    return last = logBuf->sputc(traits_type::to_char_type(c));
   }
 };
 
@@ -512,7 +521,7 @@ int best_group(size_t idx) {
 
   // Early exit if the needed API is not available at runtime
   HMODULE k32 = GetModuleHandle("Kernel32.dll");
-  auto fun1 = (fun1_t)(void(*)())GetProcAddress(k32, "GetLogicalProcessorInformationEx");
+  auto fun1 = reinterpret_cast<fun1_t>(GetProcAddress(k32, "GetLogicalProcessorInformationEx"));
   if (!fun1)
       return -1;
 
@@ -523,6 +532,8 @@ int best_group(size_t idx) {
   // Once we know returnLength, allocate the buffer
   SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX *buffer, *ptr;
   ptr = buffer = (SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX*)malloc(returnLength);
+  if (!buffer)
+      return -1;
 
   // Second call, now we expect to succeed
   if (!fun1(RelationAll, buffer, &returnLength))
@@ -581,8 +592,8 @@ void bindThisThread(size_t idx) {
 
   // Early exit if the needed API are not available at runtime
   HMODULE k32 = GetModuleHandle("Kernel32.dll");
-  auto fun2 = (fun2_t)(void(*)())GetProcAddress(k32, "GetNumaNodeProcessorMaskEx");
-  auto fun3 = (fun3_t)(void(*)())GetProcAddress(k32, "SetThreadGroupAffinity");
+  auto fun2 = reinterpret_cast<fun2_t>(GetProcAddress(k32, "GetNumaNodeProcessorMaskEx"));
+  auto fun3 = reinterpret_cast<fun3_t>(GetProcAddress(k32, "SetThreadGroupAffinity"));
 
   if (!fun2 || !fun3)
       return;
