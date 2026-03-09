@@ -77,6 +77,15 @@ namespace {
         if (T == EN_PASSANT)
             b ^= pos.capture_square(to);
 
+        // Duck is by far the hottest walling mode: avoid extra rule checks.
+        if (pos.walling_rule() == DUCK)
+        {
+            b &= pos.walling_region(us);
+            while (b)
+                *moveList++ = make_gating<T>(from, to, pt, pop_lsb(b));
+            return moveList;
+        }
+
         if (pos.walling_rule() == ARROW)
             b &= moves_bb(us, type_of(pos.piece_on(from)), to, pos.pieces() ^ from);
 
