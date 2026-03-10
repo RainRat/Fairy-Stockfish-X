@@ -27,6 +27,8 @@ namespace Stockfish {
 
 class Config : public std::map<std::string, std::string> {
 public:
+    using std::map<std::string, std::string>::find;
+
     Config::iterator find (const std::string& s) {
         constexpr bool PrintOptions = false; // print config options?
         if (PrintOptions)
@@ -34,7 +36,7 @@ public:
         consumedKeys.insert(s);
         return std::map<std::string, std::string>::find(s);
     }
-    const std::set<std::string>& get_consumed_keys() {
+    const std::set<std::string>& get_consumed_keys() const {
         return consumedKeys;
     }
 private:
