@@ -1124,6 +1124,13 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("jumpPotion", v->potionPiece[Variant::POTION_JUMP], v->pieceToChar);
     parse_attribute("freezeCooldown", v->potionCooldown[Variant::POTION_FREEZE]);
     parse_attribute("jumpCooldown", v->potionCooldown[Variant::POTION_JUMP]);
+    if (v->potionPiece[Variant::POTION_FREEZE] != NO_PIECE_TYPE
+        && v->potionPiece[Variant::POTION_FREEZE] == v->potionPiece[Variant::POTION_JUMP])
+    {
+        if (DoCheck)
+            std::cerr << "freezePotion and jumpPotion must use different piece types." << std::endl;
+        return nullptr;
+    }
     parse_attribute("potionDropOnOccupied", v->potionDropOnOccupied);
     parse_attribute("immobilityIllegal", v->immobilityIllegal);
     parse_attribute("gating", v->gating);
