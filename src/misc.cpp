@@ -151,7 +151,10 @@ public:
 
 string engine_info(bool to_uci, bool to_xboard) {
 
-  const string months("Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec");
+  static constexpr const char* MonthNames[] = {
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+  };
   string month, day, year;
   stringstream ss, date(__DATE__); // From compiler, format is "Sep 21 2008"
 
@@ -160,7 +163,14 @@ string engine_info(bool to_uci, bool to_xboard) {
   if (Version.empty())
   {
       date >> month >> day >> year;
-      ss << setw(2) << day << setw(2) << (1 + months.find(month) / 4) << year.substr(2);
+      int monthNumber = 0;
+      for (int i = 0; i < 12; ++i)
+          if (month == MonthNames[i])
+          {
+              monthNumber = i + 1;
+              break;
+          }
+      ss << setw(2) << day << setw(2) << monthNumber << year.substr(2);
   }
 
 #ifdef LARGEBOARDS
