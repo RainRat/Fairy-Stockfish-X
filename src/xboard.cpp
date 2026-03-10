@@ -138,11 +138,11 @@ namespace XBoard {
   void StateMachine::setboard(std::string fen) {
 
     if (fen.empty())
-        fen = variants.find(Options["UCI_Variant"])->second->startFen;
+        fen = variants.get(Options["UCI_Variant"])->startFen;
 
     states = StateListPtr(new std::deque<StateInfo>(1)); // Drop old and create a new one
     moveList.clear();
-    pos.set(variants.find(Options["UCI_Variant"])->second, fen, Options["UCI_Chess960"], &states->back(), Threads.main());
+    pos.set(variants.get(Options["UCI_Variant"]), fen, Options["UCI_Chess960"], &states->back(), Threads.main());
   }
 
   // do_move() is called when engine needs to apply a move when using XBoard protocol.

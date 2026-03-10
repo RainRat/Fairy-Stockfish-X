@@ -34,6 +34,12 @@ namespace Stockfish {
 VariantMap variants; // Global object
 
 namespace {
+    std::string lower_ascii(std::string s) {
+        for (char& c : s)
+            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        return s;
+    }
+
     bool parse_positive_int(const std::string& raw, int& out) {
         std::string value = raw;
         const auto first = value.find_first_not_of(" \t");
@@ -2385,9 +2391,9 @@ void VariantMap::parse_istream(std::istream& file) {
         }
 
         // Create variant
-        if (variants.find(variant) != variants.end())
+        if (variants.has(variant))
             std::cerr << "Variant '" << variant << "' already exists." << std::endl;
-        else if (!variant_template.empty() && variants.find(variant_template) == variants.end())
+        else if (!variant_template.empty() && !variants.has(variant_template))
             std::cerr << "Variant template '" << variant_template << "' does not exist." << std::endl;
         else
         {
@@ -2414,7 +2420,7 @@ void VariantMap::parse_istream(std::istream& file) {
             Variant* v = nullptr;
             if (!variant_template.empty())
             {
-                Variant* inherited = (new Variant(*variants.find(variant_template)->second))->init();
+                Variant* inherited = (new Variant(*variants.get(variant_template)))->init();
                 v = VariantParser<DoCheck>(attribs).parse(inherited);
                 if (!v)
                     delete inherited;
@@ -2486,6 +2492,30 @@ std::vector<std::string> VariantMap::get_keys() {
   for (auto const& element : *this)
       keys.push_back(element.first);
   return keys;
+}
+
+const Variant* VariantMap::get(const std::string& name) const {
+  auto it = find(name);
+  if (it != end())
+      return it->second;
+
+  std::string folded = lower_ascii(name);
+  if (folded != name)
+  {
+      it = find(folded);
+      if (it != end())
+          return it->second;
+  }
+
+  for (auto const& element : *this)
+      if (lower_ascii(element.first) == folded)
+          return element.second;
+
+  return nullptr;
+}
+
+bool VariantMap::has(const std::string& name) const {
+  return get(name) != nullptr;
 }
 
 } // namespace Stockfish

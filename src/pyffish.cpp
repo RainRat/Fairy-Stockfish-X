@@ -34,13 +34,13 @@ inline Value normalize_public_mate_score(const Position& pos, Value result) {
 }
 
 const Variant* require_variant(const char* variant) {
-    auto it = variants.find(std::string(variant));
-    if (it == variants.end())
+    const Variant* v = variants.get(std::string(variant));
+    if (!v)
     {
         PyErr_SetString(PyExc_ValueError, (std::string("No such variant '") + variant + "'").c_str());
         return nullptr;
     }
-    return it->second;
+    return v;
 }
 
 bool buildPosition(Position& pos, StateListPtr& states, const char *variant, const char *fen, PyObject *moveList, const bool chess960) {
@@ -564,7 +564,7 @@ PyMODINIT_FUNC PyInit_pyffish() {
     pieceMap.init();
     variants.init();
     UCI::init(Options);
-    PSQT::init(variants.find(Options["UCI_Variant"])->second);
+    PSQT::init(variants.get(Options["UCI_Variant"]));
     Bitboards::init();
     Position::init();
     Bitbases::init();

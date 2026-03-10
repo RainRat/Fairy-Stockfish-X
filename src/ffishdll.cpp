@@ -58,11 +58,10 @@ inline void save_pop_back(std::string& s) {
 
 const Variant* get_variant(const std::string& uciVariant) {
   if (uciVariant.empty() || uciVariant == "Standard" || uciVariant == "standard")
-    return variants.find("chess")->second;
-  auto it = variants.find(uciVariant);
-  if (it != variants.end())
-    return it->second;
-  return variants.find("chess")->second;
+    return variants.get("chess");
+  if (const Variant* v = variants.get(uciVariant))
+    return v;
+  return variants.get("chess");
 }
 
 template <bool isUCI>

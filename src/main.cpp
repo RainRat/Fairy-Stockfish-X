@@ -44,7 +44,7 @@ int main(int argc, char* argv[]) {
   CommandLine::init(argc, argv);
   UCI::init(Options);
   Tune::init();
-  PSQT::init(variants.find(Options["UCI_Variant"])->second);
+  PSQT::init(variants.get(Options["UCI_Variant"]));
   Bitboards::init();
   Position::init();
   Bitbases::init();

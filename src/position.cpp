@@ -1305,7 +1305,7 @@ Position& Position::set(const string& code, Color c, StateInfo* si) {
   string n = std::to_string(8);
   string fenStr =  sides[0] + "///////" + sides[1] + " w - - 0 10";
 
-  return set(variants.find("fairy")->second, fenStr, false, si, nullptr);
+  return set(variants.get("fairy"), fenStr, false, si, nullptr);
 }
 
 

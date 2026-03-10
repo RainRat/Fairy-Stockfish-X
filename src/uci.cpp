@@ -58,7 +58,7 @@ namespace {
 
     if (token == "startpos")
     {
-        fen = variants.find(Options["UCI_Variant"])->second->startFen;
+        fen = variants.get(Options["UCI_Variant"])->startFen;
         is >> token; // Consume "moves" token if any
     }
     else if (token == "fen" || token == "sfen")
@@ -68,7 +68,7 @@ namespace {
         return;
 
     states = StateListPtr(new std::deque<StateInfo>(1)); // Drop old and create a new one
-    pos.set(variants.find(Options["UCI_Variant"])->second, fen, Options["UCI_Chess960"], &states->back(), Threads.main(), sfen);
+    pos.set(variants.get(Options["UCI_Variant"]), fen, Options["UCI_Chess960"], &states->back(), Threads.main(), sfen);
 
     // Parse move list (if any)
     while (is >> token && (m = UCI::to_move(pos, token)) != MOVE_NONE)
@@ -113,7 +113,7 @@ namespace {
     while (is >> token)
         value += (value.empty() ? "" : " ") + token;
 
-    if (name == "UCI_Variant" && !value.empty() && !variants.count(value))
+    if (name == "UCI_Variant" && !value.empty() && !variants.has(value))
         sync_cout << "info string unknown variant '" << value
                   << "'; keeping '" << std::string(Options["UCI_Variant"]) << "'" << sync_endl;
     else if (Options.count(name))
@@ -302,8 +302,8 @@ void UCI::loop(int argc, char* argv[]) {
   string token, cmd;
   StateListPtr states(new std::deque<StateInfo>(1));
 
-  assert(variants.find(Options["UCI_Variant"])->second != nullptr);
-  pos.set(variants.find(Options["UCI_Variant"])->second, variants.find(Options["UCI_Variant"])->second->startFen, false, &states->back(), Threads.main());
+  assert(variants.get(Options["UCI_Variant"]) != nullptr);
+  pos.set(variants.get(Options["UCI_Variant"]), variants.get(Options["UCI_Variant"])->startFen, false, &states->back(), Threads.main());
 
   for (int i = 1; i < argc; ++i)
       cmd += std::string(argv[i]) + " ";

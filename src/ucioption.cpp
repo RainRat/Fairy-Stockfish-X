@@ -62,7 +62,7 @@ bool parse_double_noexcept(const std::string& text, double& out) {
 }
 
 // standard variants of XBoard/WinBoard
-std::set<string> standard_variants = {
+std::set<string, UCI::CaseInsensitiveLess> standard_variants = {
     "normal", "nocastle", "fischerandom", "knightmate", "3check", "makruk", "shatranj",
     "asean", "seirawan", "crazyhouse", "bughouse", "suicide", "giveaway", "losers", "atomic",
     "capablanca", "gothic", "janus", "caparandom", "grand", "shogi", "xiangqi", "duck",
@@ -99,7 +99,7 @@ void on_variant_set(const Option &o) {
     // Re-initialize NNUE
     Eval::NNUE::init();
 
-    const Variant* v = variants.find(o)->second;
+    const Variant* v = variants.get(o);
     init_variant(v);
     PSQT::init(v);
 }
@@ -107,7 +107,7 @@ void on_variant_change(const Option &o) {
     // Variant initialization
     on_variant_set(o);
 
-    const Variant* v = variants.find(o)->second;
+    const Variant* v = variants.get(o);
     // Do not send setup command for known variants
     if (standard_variants.find(o) != standard_variants.end())
         return;
