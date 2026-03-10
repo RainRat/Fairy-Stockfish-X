@@ -411,6 +411,7 @@ struct PieceTypeBitboardGroup
 {
     PieceTypeBitboardGroup() = default;
     PieceTypeBitboardGroup(const PieceTypeBitboardGroup& other) = default;
+    PieceTypeBitboardGroup& operator=(const PieceTypeBitboardGroup& other) = default;
 
     // Returns the bitboard reference at the index of idx in boardlist.
     // idx: The index
