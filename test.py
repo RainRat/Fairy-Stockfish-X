@@ -1194,6 +1194,27 @@ startFen = 4k3/3p4/8/8/8/8/8/3QK3 w - - 0 1
         self.assertNotIn("e1g1", moves)
         self.assertIn("f@f8,e1g1", moves)
 
+    def test_spell_chess_cannot_castle_out_of_check_without_freeze(self):
+        fen = "4r1k1/8/8/8/8/8/8/4K2R[F] w K - 0 1"
+        moves = sf.legal_moves("spell-chess", fen, [])
+        self.assertNotIn("e1g1", moves)
+        self.assertIn("f@e8,e1g1", moves)
+
+    def test_spell_chess_jump_potion_does_not_bypass_castling_blockers(self):
+        clear_fen = "6k1/8/8/8/8/8/8/R3K3[J] w Q - 0 1"
+        d1_blocked = "6k1/8/8/8/8/8/8/R2nK3[J] w Q - 0 1"
+        b1_blocked = "6k1/8/8/8/8/8/8/Rn2K3[J] w Q - 0 1"
+
+        self.assertIn("e1c1", sf.legal_moves("spell-chess", clear_fen, []))
+
+        blocked_d1_moves = sf.legal_moves("spell-chess", d1_blocked, [])
+        self.assertNotIn("e1c1", blocked_d1_moves)
+        self.assertNotIn("j@d1,e1c1", blocked_d1_moves)
+
+        blocked_b1_moves = sf.legal_moves("spell-chess", b1_blocked, [])
+        self.assertNotIn("e1c1", blocked_b1_moves)
+        self.assertNotIn("j@b1,e1c1", blocked_b1_moves)
+
     def test_spell_chess_frozen_pawn_cannot_capture_en_passant(self):
         fen = "4k3/3p4/8/4P3/8/8/8/4K3[f] b - - 0 1"
         moves = sf.legal_moves("spell-chess", fen, ["f@e5,d7d5"])

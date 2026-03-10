@@ -2290,6 +2290,9 @@ bool Position::legal(Move m) const {
           return att;
       };
 
+      if (((!allow_checks()) || spellLikeCastler) && attackers_for_castling(from, pieces()))
+          return false;
+
       for (Square s = to; s != from; s += step)
           if (   (((!allow_checks()) || spellLikeCastler) && attackers_for_castling(s, pieces()))
               || (var->flyingGeneral && (attacks_bb(~us, ROOK, s, pieces() ^ from) & pieces(~us, KING)))

@@ -389,13 +389,33 @@ go perft 1")
 ! echo "${out}" | grep -q "^e1g1:"
 echo "${out}" | grep -q "^f@f8,e1g1: 1$"
 
-# 41) Spell chess: frozen pawn cannot capture en passant.
+# 41) Spell chess: castling out of check is illegal, but legal if attacker is frozen first.
+out=$(run_cmds "setoption name UCI_Variant value spell-chess
+position fen 4r1k1/8/8/8/8/8/8/4K2R[F] w K - 0 1
+go perft 1")
+! echo "${out}" | grep -q "^e1g1:"
+echo "${out}" | grep -q "^f@e8,e1g1: 1$"
+
+# 42) Spell chess: jump potion does not let castling pass through occupied blockers.
+out=$(run_cmds "setoption name UCI_Variant value spell-chess
+position fen 6k1/8/8/8/8/8/8/R2nK3[J] w Q - 0 1
+go perft 1")
+! echo "${out}" | grep -q "^e1c1:"
+! echo "${out}" | grep -q "^j@d1,e1c1:"
+
+out=$(run_cmds "setoption name UCI_Variant value spell-chess
+position fen 6k1/8/8/8/8/8/8/Rn2K3[J] w Q - 0 1
+go perft 1")
+! echo "${out}" | grep -q "^e1c1:"
+! echo "${out}" | grep -q "^j@b1,e1c1:"
+
+# 43) Spell chess: frozen pawn cannot capture en passant.
 out=$(run_cmds "setoption name UCI_Variant value spell-chess
 position fen 4k3/3p4/8/4P3/8/8/8/4K3[f] b - - 0 1 moves f@e5 d7d5
 go perft 1")
 ! echo "${out}" | grep -q "^e5d6:"
 
-# 42) Monad baseline (large-board): custom 10x10 setup is loaded.
+# 44) Monad baseline (large-board): custom 10x10 setup is loaded.
 if variant_available "monad"; then
   out=$(run_cmds "setoption name UCI_Variant value monad
 position startpos
