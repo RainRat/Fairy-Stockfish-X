@@ -254,9 +254,10 @@ assert_reload_eval_match "" "ataxx" "position startpos moves g1f2"
 assert_reload_eval_match "" "flipello" "position startpos moves P@e3"
 
 # 6) Spell-chess potion state should round-trip through FEN key-equivalently.
-assert_reload_key_match "" "spell-chess" "position startpos moves f@a6 e2e4 d7d6"
+# Use combined potion+move UCI tokens so the test actually exercises potion state.
+assert_reload_key_match "" "spell-chess" "position startpos moves f@a6,e2e4 j@a7,a8a2"
 assert_progressive_reload_keys "" "spell-chess" "position startpos" 6
-assert_reload_perft1_match "" "spell-chess" "position startpos moves f@a6 e2e4 d7d6"
-assert_reload_eval_match "" "spell-chess" "position startpos moves f@a6 e2e4 d7d6"
+assert_reload_perft1_match "" "spell-chess" "position startpos moves f@a6,e2e4 j@a7,a8a2"
+assert_reload_eval_match "" "spell-chess" "position startpos moves f@a6,e2e4 j@a7,a8a2"
 
 echo "state-sync key tests OK"
