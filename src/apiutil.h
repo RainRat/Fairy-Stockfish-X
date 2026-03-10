@@ -724,6 +724,8 @@ inline Validation fill_char_board(CharBoard& board, const std::string& fenBoard,
     int fileIdx = 0;
     bool firstRankSkipped = false;
     bool expectingTrailingCommitRow = false;
+    bool sawLeadingCommitRow = false;
+    bool sawTrailingCommitRow = false;
 
     char prevChar = '?';
     for (char c : fenBoard)
@@ -762,6 +764,7 @@ inline Validation fill_char_board(CharBoard& board, const std::string& fenBoard,
                     std::cerr << "Invalid committed gate row width: " << fileIdx << " != " << board.get_nb_files() << std::endl;
                     return NOK;
                 }
+                sawLeadingCommitRow = true;
                 firstRankSkipped = true;
                 // ignore starting 'xx******/'
             }
@@ -809,6 +812,13 @@ inline Validation fill_char_board(CharBoard& board, const std::string& fenBoard,
     if (v->commitGates && expectingTrailingCommitRow && fileIdx != board.get_nb_files())
     {
         std::cerr << "Invalid committed gate row width: " << fileIdx << " != " << board.get_nb_files() << std::endl;
+        return NOK;
+    }
+    if (v->commitGates && expectingTrailingCommitRow)
+        sawTrailingCommitRow = true;
+    if (v->commitGates && (!sawLeadingCommitRow || !sawTrailingCommitRow))
+    {
+        std::cerr << "Committed-gates FEN must include both leading and trailing gate rows." << std::endl;
         return NOK;
     }
 
