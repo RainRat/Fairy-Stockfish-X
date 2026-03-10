@@ -2414,7 +2414,7 @@ void VariantMap::parse_istream(std::istream& file) {
             Variant* v = nullptr;
             if (!variant_template.empty())
             {
-                Variant* inherited = (new Variant(*variants.find(variant_template)->second))->init();
+                Variant* inherited = (new Variant(*variants.get(variant_template)))->init();
                 v = VariantParser<DoCheck>(attribs).parse(inherited);
                 if (!v)
                     delete inherited;
@@ -2486,6 +2486,65 @@ std::vector<std::string> VariantMap::get_keys() {
   for (auto const& element : *this)
       keys.push_back(element.first);
   return keys;
+}
+
+const Variant* VariantMap::get(std::string name) const {
+  auto it = find(name);
+  if (it != end())
+      return it->second;
+
+  // Case-insensitive fallback
+  std::string lowerName = name;
+  for (char& c : lowerName)
+      c = (char)tolower(c);
+  it = find(lowerName);
+  if (it != end())
+      return it->second;
+
+  for (auto const& element : *this)
+  {
+      std::string key = element.first;
+      for (char& c : key)
+          c = (char)tolower(c);
+      if (key == lowerName)
+          return element.second;
+  }
+
+  // Fallback to chess
+  it = find("chess");
+  if (it != end())
+      return it->second;
+
+  // Last resort: first available variant
+  if (!empty())
+      return begin()->second;
+
+  return nullptr;
+}
+
+bool VariantMap::has(std::string name) const {
+  auto it = find(name);
+  if (it != end())
+      return true;
+
+  // Case-insensitive fallback
+  std::string lowerName = name;
+  for (char& c : lowerName)
+      c = (char)tolower(c);
+  it = find(lowerName);
+  if (it != end())
+      return true;
+
+  for (auto const& element : *this)
+  {
+      std::string key = element.first;
+      for (char& c : key)
+          c = (char)tolower(c);
+      if (key == lowerName)
+          return true;
+  }
+
+  return false;
 }
 
 } // namespace Stockfish

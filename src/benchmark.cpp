@@ -116,7 +116,7 @@ vector<string> setup_bench(const Position& current, istream& is) {
 
   streampos args = is.tellg();
   // Check whether the next token is a variant name
-  if ((is >> token) && variants.find(token) != variants.end())
+  if ((is >> token) && variants.has(token))
   {
       args = is.tellg();
       varname = token;
@@ -126,13 +126,12 @@ vector<string> setup_bench(const Position& current, istream& is) {
       is.seekg(args);
       varname = string(Options["UCI_Variant"]);
   }
-  auto variantIt = variants.find(varname);
-  if (variantIt == variants.end())
+  const Variant* variant = variants.get(varname);
+  if (!variant)
   {
       std::cerr << "Unknown variant " << varname << std::endl;
       exit(EXIT_FAILURE);
   }
-  const Variant* variant = variantIt->second;
 
   // Assign default values to missing arguments
   string ttSize    = (is >> token) ? token : "16";

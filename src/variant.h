@@ -338,6 +338,8 @@ public:
   template <bool DoCheck> void parse_istream(std::istream& file);
   void clear_all();
   std::vector<std::string> get_keys();
+  const Variant* get(std::string name) const;
+  bool has(std::string name) const;
 
 private:
   void add(std::string s, Variant* v);
