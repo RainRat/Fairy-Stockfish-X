@@ -4070,7 +4070,7 @@ void Position::undo_move(Move m) {
           undrop_piece(make_piece(us, in_hand_piece_type(m)), to, exchange); // Remove the dropped piece
       else
       {
-          if (st->deadPiece)
+          if (st->deadPiece && type_of(m) != PROMOTION && type_of(m) != PIECE_PROMOTION)
           {
               if (st->deadSquares & to)
                   st->deadSquares ^= to;
