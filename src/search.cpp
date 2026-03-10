@@ -274,7 +274,7 @@ void MainThread::search() {
           {}
           Partner.ptell("x");
           // Find best real move
-          for (const auto& m : this->rootMoves)
+          for (const auto& m : bestThread->rootMoves)
               if (!rootPos.virtual_drop(m.pv[0]))
               {
                   bestMove = m.pv[0];

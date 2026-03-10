@@ -152,7 +152,8 @@ TTEntry* TranspositionTable::probe(const Key key, bool& found) const {
 int TranspositionTable::hashfull() const {
 
   int cnt = 0;
-  for (int i = 0; i < 1000; ++i)
+  const size_t sampleCount = std::min(clusterCount, size_t(1000));
+  for (size_t i = 0; i < sampleCount; ++i)
       for (int j = 0; j < ClusterSize; ++j)
           cnt += table[i].entry[j].depth8 && (table[i].entry[j].genBound8 & GENERATION_MASK) == generation8;
 

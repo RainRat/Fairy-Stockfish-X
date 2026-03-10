@@ -126,7 +126,13 @@ vector<string> setup_bench(const Position& current, istream& is) {
       is.seekg(args);
       varname = string(Options["UCI_Variant"]);
   }
-  const Variant* variant = variants.find(varname)->second;
+  auto variantIt = variants.find(varname);
+  if (variantIt == variants.end())
+  {
+      std::cerr << "Unknown variant " << varname << std::endl;
+      exit(EXIT_FAILURE);
+  }
+  const Variant* variant = variantIt->second;
 
   // Assign default values to missing arguments
   string ttSize    = (is >> token) ? token : "16";
@@ -143,6 +149,8 @@ vector<string> setup_bench(const Position& current, istream& is) {
       ttSize = "16";
   if (!is_uint(threads))
       threads = "1";
+  if (evalType != "mixed" && evalType != "classical" && evalType != "NNUE")
+      evalType = "mixed";
 
   go = limitType == "eval" ? "eval" : "go " + limitType + " " + limit;
 
