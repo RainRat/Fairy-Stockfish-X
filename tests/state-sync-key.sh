@@ -228,6 +228,17 @@ startFen = 8/8/8/3p1p2/2P1P3/8/8/4K2k w - - 0 1
 commitGates = true
 castling = false
 startFen = 4q3/4k3/8/8/8/8/8/8/4K3/4Q3 w - - 0 1
+
+[spellprisonex:chess]
+potions = true
+freezePotion = q
+jumpPotion = r
+potionCooldown = 3
+pieceDrops = true
+captureType = prison
+hostageExchange = p:p
+castling = false
+startFen = 8/8/8/3p1p2/2P1P3/8/8/4K2k[Qq] w - - 0 1
 INI
 assert_reload_key_match "$tmp_ini" "prsync" "position startpos moves e2e4 d7d5 e4d5"
 
@@ -244,6 +255,15 @@ assert_reload_perft1_match "$tmp_ini" "commitkeys" "position startpos moves e1d1
 assert_distinct_position_keys "$tmp_ini" "commitkeys" \
   "4q3/4k3/8/8/8/8/8/8/4K3/4Q3 w - - 0 1" \
   "8/4k3/8/8/8/8/8/8/4K3/8 w - - 0 1"
+
+# 4c) Potion + prison + exchange transitions must keep incremental state in sync.
+assert_reload_key_match "$tmp_ini" "spellprisonex" "position startpos moves q@c6,c4d5"
+assert_reload_key_match "$tmp_ini" "spellprisonex" "position startpos moves q@c6,c4d5 f5e4 P#P@a2"
+assert_reload_perft1_match "$tmp_ini" "spellprisonex" "position startpos moves q@c6,c4d5 f5e4 P#P@a2"
+assert_reload_eval_match "$tmp_ini" "spellprisonex" "position startpos moves q@c6,c4d5 f5e4 P#P@a2"
+assert_distinct_position_keys "$tmp_ini" "spellprisonex" \
+  "8/8/8/3P1p2/4P3/8/8/4K2k[q#p] b - - 0 1" \
+  "8/8/8/3P1p2/4P3/8/8/4K2k[q#p] b - - 0 1 f:c6 <0 0 0 0>"
 rm -f "$tmp_ini"
 
 # 5) Flip-enclosed games: color-flip captures must keep incremental key in sync.
