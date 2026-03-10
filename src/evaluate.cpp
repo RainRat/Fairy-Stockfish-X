@@ -88,10 +88,16 @@ namespace Eval {
     stringstream ss(eval_file);
     string variant = string(Options["UCI_Variant"]);
     useNNUE = false;
+    const auto variantIt = variants.find(variant);
+    if (variantIt == variants.end())
+        return;
+
+    const Variant* selectedVariant = variantIt->second;
+
     while (getline(ss, eval_file, UCI::SepChar))
     {
         string basename = eval_file.substr(eval_file.find_last_of("\\/") + 1);
-        string nnueAlias = variants.find(variant)->second->nnueAlias;
+        string nnueAlias = selectedVariant->nnueAlias;
         if (basename.rfind(variant, 0) != string::npos || (!nnueAlias.empty() && basename.rfind(nnueAlias, 0) != string::npos))
         {
             useNNUE = true;
@@ -101,7 +107,7 @@ namespace Eval {
     if (!useNNUE)
         return;
 
-    currentNnueVariant = variants.find(variant)->second;
+    currentNnueVariant = selectedVariant;
 
     #if defined(DEFAULT_NNUE_DIRECTORY)
     #define stringify2(x) #x
