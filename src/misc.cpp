@@ -121,7 +121,7 @@ public:
 
     if (!fname.empty() && !l.file.is_open())
     {
-        l.file.open(fname, ifstream::out);
+        l.file.open(fname, ofstream::out);
 
         if (!l.file.is_open())
         {
