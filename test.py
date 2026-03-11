@@ -819,11 +819,13 @@ checking = false
         self.assertTrue(all("," not in m for m in black_moves))
 
     def test_witch_hunting_basics(self):
-        sf.load_variant_config(open("src/variants.ini").read())
+        with open("src/variants.ini") as f:
+            sf.load_variant_config(f.read())
         fen = sf.start_fen("witch-hunting")
         white_moves = sf.legal_moves("witch-hunting", fen, [])
         self.assertTrue(white_moves)
         self.assertTrue(all("," in m for m in white_moves))
+        self.assertIn("i1a1,b1", white_moves)
 
         after_white = sf.get_fen("witch-hunting", fen, [white_moves[0]])
         black_moves = sf.legal_moves("witch-hunting", after_white, [])

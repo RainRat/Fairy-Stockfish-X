@@ -568,7 +568,7 @@ string UCI::move(const Position& pos, Move m) {
 
   // Wall square
   if (pos.walling(pos.side_to_move()) && CurrentProtocol == XBOARD)
-      move += "," + UCI::square(pos, to) + UCI::square(pos, gating_square(m));
+      move += "," + UCI::square(pos, gating_square(m));
 
   if (type_of(m) == PROMOTION)
       move += pos.piece_to_char()[make_piece(BLACK, promotion_type(m))];
@@ -576,7 +576,7 @@ string UCI::move(const Position& pos, Move m) {
       move += '+';
   else if (type_of(m) == PIECE_DEMOTION)
       move += '-';
-  else if (is_gating(m) && !potionMove)
+  else if (is_gating(m) && !potionMove && !pos.walling(pos.side_to_move()))
   {
       move += pos.piece_to_char()[make_piece(BLACK, gating_type(m))];
       if (gating_square(m) != from)
@@ -585,7 +585,7 @@ string UCI::move(const Position& pos, Move m) {
 
   // Wall square
   if (pos.walling(pos.side_to_move()) && CurrentProtocol != XBOARD)
-      move += "," + UCI::square(pos, to) + UCI::square(pos, gating_square(m));
+      move += "," + UCI::square(pos, gating_square(m));
 
   if (potionMove)
       move = potionPrefix + "," + move;
