@@ -69,7 +69,7 @@ rm -f "${tmp_ini}"
 
 # This smoke suite contains >8x8 and template-dependent variants.
 # On constrained builds, skip gracefully if any required variant is unavailable.
-for required in hasami eurasian hindustani gala ichess british-chess half-chess dris-at-talata tawlbwrdd kharebga maak-yek troll tictactoe-misere; do
+for required in hasami eurasian hindustani gala ichess british-chess half-chess dris-at-talata shatranj-al-jawarhiya tawlbwrdd kharebga maak-yek troll tictactoe-misere; do
   if ! variant_available "${required}"; then
     echo "new variants smoke skipped: required variant '${required}' is unavailable in this build"
     exit 0
@@ -234,6 +234,12 @@ position startpos moves M@a1 M@a3 M@b2 M@b1 M@c1 M@c3
 go perft 1")
 echo "${out}" | grep -q "^a1a2: 1$"
 echo "${out}" | grep -q "^a1b3: 1$"
+
+# 19d) Shatranj al-Jawarhiya: source-backed 7x8 setup should load as documented.
+out=$(run_cmds "setoption name UCI_Variant value shatranj-al-jawarhiya
+position startpos
+d")
+echo "${out}" | grep -q "Fen: rafkanr/ppppppp/7/7/7/7/PPPPPPP/RNAFKAR w - - 0 1"
 
 
 # 20) Kharebga: setup is two drops per turn with the centre excluded.
