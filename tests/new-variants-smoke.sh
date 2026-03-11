@@ -69,7 +69,7 @@ rm -f "${tmp_ini}"
 
 # This smoke suite contains >8x8 and template-dependent variants.
 # On constrained builds, skip gracefully if any required variant is unavailable.
-for required in hasami eurasian hindustani gala ichess british-chess; do
+for required in hasami eurasian hindustani gala ichess british-chess tawlbwrdd; do
   if ! variant_available "${required}"; then
     echo "new variants smoke skipped: required variant '${required}' is unavailable in this build"
     exit 0
@@ -116,6 +116,12 @@ out=$(run_cmds "setoption name UCI_Variant value tablut-corner-escape
 position fen 4K4/9/9/9/4r4/9/9/9/9 b - - 0 1
 go perft 1")
 echo "${out}" | grep -q "Nodes searched: 15"
+
+# 7b) Tawlbwrdd: edge escape should end immediately on 11x11, unlike corner-escape Hnefatafl.
+out=$(run_cmds "setoption name UCI_Variant value tawlbwrdd
+position fen 5K5/11/11/11/11/5r5/11/11/11/11/11 b - - 0 1
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 0"
 
 # 7) Tablut split: throne-adjacent king strength changes capture outcome.
 out=$(run_cmds "setoption name UCI_Variant value tablut
