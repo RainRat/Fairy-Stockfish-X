@@ -977,10 +977,11 @@ ScaleFactor Endgame<KBPKN>::operator()(const Position& pos) const {
   Square strongBishop = pos.square<BISHOP>(strongSide);
   Square weakKing = pos.square<KING>(weakSide);
 
+  const int knightBlockRank = std::max(int(RANK_1), int(pos.max_rank()) - 2);
   if (   file_of(weakKing) == file_of(strongPawn)
       && relative_rank(strongSide, strongPawn, pos.max_rank()) < relative_rank(strongSide, weakKing, pos.max_rank())
       && (   opposite_colors(weakKing, strongBishop)
-          || relative_rank(strongSide, weakKing, pos.max_rank()) <= RANK_6))
+          || int(relative_rank(strongSide, weakKing, pos.max_rank())) <= knightBlockRank))
       return SCALE_FACTOR_DRAW;
 
   return SCALE_FACTOR_NONE;
