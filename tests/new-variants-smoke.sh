@@ -304,6 +304,14 @@ position startpos
 d")
 echo "${out}" | grep -q "Fen: rafkanr/ppppppp/7/7/7/7/PPPPPPP/RNAFKAR w - - 0 1"
 
+# 19daa) Shatranj (14x14): source-backed setup should load if the build supports it.
+if variant_available "shatranj-14x14"; then
+out=$(run_cmds "setoption name UCI_Variant value shatranj-14x14
+position startpos
+d")
+echo "${out}" | grep -q "Fen: rndwbmkqsbwdnr/pppppppppppppp/14/14/14/14/14/14/14/14/14/14/PPPPPPPPPPPPPP/RNDWBSQKMBWDNR w - - 0 1"
+fi
+
 # 19da) Shatranj: source-backed setup should load as documented.
 out=$(run_cmds "setoption name UCI_Variant value shatranj
 position startpos
