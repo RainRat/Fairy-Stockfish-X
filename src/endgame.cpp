@@ -774,8 +774,8 @@ ScaleFactor Endgame<KRPKB>::operator()(const Position& pos) const {
   assert(verify_material(pos, strongSide, RookValueMg, 1));
   assert(verify_material(pos, weakSide, BishopValueMg, 0));
 
-  // Test for a rook pawn
-  if (pos.pieces(PAWN) & (FileABB | FileHBB))
+  // Test for a rook pawn on either edge file of the active board.
+  if (pos.pieces(PAWN) & (FileABB | file_bb(pos.max_file())))
   {
       Square weakKing = pos.square<KING>(weakSide);
       Square weakBishop = pos.square<BISHOP>(weakSide);
