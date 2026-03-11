@@ -101,6 +101,7 @@ struct StateInfo {
   bool       pass;
   Square     forcedJumpSquare;
   bool       forcedJumpHasFollowup;
+  int        forcedJumpStep;
   Move       move;
   int        repetition;
   int        boardRepetition;
@@ -236,6 +237,10 @@ public:
   bool has_en_passant_capture() const;
   bool must_drop() const;
   PieceType must_drop_type() const;
+  bool opening_self_removal() const;
+  bool in_opening_self_removal_phase() const;
+  Bitboard opening_self_removal_targets(Color c) const;
+  bool is_opening_self_removal_move(Move m) const;
   bool piece_drops() const;
   bool drop_loop() const;
   bool captures_to_hand() const;
@@ -246,6 +251,7 @@ public:
   CapturingRule capture_type() const;
   PieceSet jump_capture_types() const;
   bool forced_jump_continuation() const;
+  bool forced_jump_same_direction() const;
   EnclosingRule enclosing_drop() const;
   Bitboard drop_region(Color c) const;
   Bitboard drop_region(Color c, PieceType pt) const;
@@ -477,7 +483,7 @@ private:
   void set_castling_right(Color c, Square rfrom);
   void set_state(StateInfo* si) const;
   void set_check_info(StateInfo* si) const;
-  bool compute_forced_jump_followup(Square s) const;
+  bool compute_forced_jump_followup(Square s, int step = 0) const;
   bool is_initial_pawn(Piece pc, Square s) const;
   Key reserve_key() const;
   bool n_fold_game_end(Value& result, int ply, int target) const;
@@ -1123,6 +1129,37 @@ inline PieceType Position::must_drop_type() const {
   return var->mustDropType;
 }
 
+inline bool Position::opening_self_removal() const {
+  assert(var != nullptr);
+  return var->openingSelfRemoval;
+}
+
+inline bool Position::in_opening_self_removal_phase() const {
+  return opening_self_removal() && gamePly < 2;
+}
+
+inline Bitboard Position::opening_self_removal_targets(Color c) const {
+  if (!opening_self_removal() || gamePly >= 2)
+      return Bitboard(0);
+
+  Bitboard targets = pieces(c) & var->openingSelfRemovalRegion[c];
+  if (gamePly == 1 && var->openingSelfRemovalAdjacentToLast)
+  {
+      Move lastMove = st->move;
+      Square lastSq = is_ok(lastMove) ? from_sq(lastMove) : SQ_NONE;
+      if (lastSq == SQ_NONE)
+          return Bitboard(0);
+      targets &= PseudoAttacks[WHITE][WAZIR][lastSq];
+  }
+  return targets;
+}
+
+inline bool Position::is_opening_self_removal_move(Move m) const {
+  return type_of(m) == SPECIAL
+      && from_sq(m) == to_sq(m)
+      && (opening_self_removal_targets(side_to_move()) & from_sq(m));
+}
+
 inline bool Position::piece_drops() const {
   assert(var != nullptr);
   return var->pieceDrops;
@@ -1146,6 +1183,11 @@ inline PieceSet Position::jump_capture_types() const {
 inline bool Position::forced_jump_continuation() const {
   assert(var != nullptr);
   return var->forcedJumpContinuation;
+}
+
+inline bool Position::forced_jump_same_direction() const {
+  assert(var != nullptr);
+  return var->forcedJumpSameDirection;
 }
 
 inline Square Position::forced_jump_square() const {

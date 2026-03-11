@@ -1043,6 +1043,12 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("mustDropTypeWhite", v->mustDropTypeByColor[WHITE], v->pieceToChar);
     parse_attribute("mustDropTypeBlack", v->mustDropTypeByColor[BLACK], v->pieceToChar);
     parse_attribute("dropKingLast", v->dropKingLast);
+    parse_attribute("openingSelfRemoval", v->openingSelfRemoval);
+    parse_attribute("openingSelfRemovalAdjacentToLast", v->openingSelfRemovalAdjacentToLast);
+    parse_attribute("openingSelfRemovalRegion", v->openingSelfRemovalRegion[WHITE]);
+    parse_attribute("openingSelfRemovalRegion", v->openingSelfRemovalRegion[BLACK]);
+    parse_attribute("openingSelfRemovalRegionWhite", v->openingSelfRemovalRegion[WHITE]);
+    parse_attribute("openingSelfRemovalRegionBlack", v->openingSelfRemovalRegion[BLACK]);
     parse_attribute("pieceDrops", v->pieceDrops);
     parse_attribute("virtualDrops", v->virtualDrops);
     const auto& it_virtual_drop_limit = config.find("virtualDropLimit");
@@ -1158,6 +1164,7 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
         v->jumpCaptureTypes &= ~piece_set(PAWN);
     }
     parse_attribute("forcedJumpContinuation", v->forcedJumpContinuation);
+    parse_attribute("forcedJumpSameDirection", v->forcedJumpSameDirection);
     parse_attribute("cambodianMoves", v->cambodianMoves);
     parse_attribute("diagonalLines", v->diagonalLines);
     parse_attribute("pass", v->pass[WHITE]);

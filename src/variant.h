@@ -136,6 +136,9 @@ struct Variant {
   PieceType mustDropType = ALL_PIECES;
   PieceType mustDropTypeByColor[COLOR_NB] = {ALL_PIECES, ALL_PIECES};
   bool dropKingLast = false;
+  bool openingSelfRemoval = false;
+  bool openingSelfRemovalAdjacentToLast = false;
+  Bitboard openingSelfRemovalRegion[COLOR_NB] = {AllSquares, AllSquares};
   bool isPriorityDrop[PIECE_TYPE_NB] = {};
   bool pieceDrops = false;
   bool virtualDrops = true;
@@ -168,6 +171,7 @@ struct Variant {
   bool commitGates = false;
   PieceSet jumpCaptureTypes = NO_PIECE_SET;
   bool forcedJumpContinuation = false;
+  bool forcedJumpSameDirection = false;
   bool cambodianMoves = false;
   Bitboard diagonalLines = 0;
   bool pass[COLOR_NB] = {false, false};

@@ -544,6 +544,17 @@ namespace {
     PieceType forcedJumpPt = NO_PIECE_TYPE;
     Bitboard jumpForbidden = pos.spell_jump_removed();
 
+    if (pos.in_opening_self_removal_phase())
+    {
+        Bitboard removals = pos.opening_self_removal_targets(Us);
+        while (removals)
+        {
+            Square sq = pop_lsb(removals);
+            *moveList++ = make<SPECIAL>(sq, sq);
+        }
+        return moveList;
+    }
+
     Square forcedSquare = pos.forced_jump_square();
     if (forcedSquare != SQ_NONE && pos.has_forced_jump_followup())
     {

@@ -1093,6 +1093,7 @@ void Position::set_state(StateInfo* si) const {
   si->deadPiecePromoted = false;
   si->forcedJumpSquare = SQ_NONE;
   si->forcedJumpHasFollowup = false;
+  si->forcedJumpStep = 0;
 
   set_check_info(si);
 
@@ -1639,7 +1640,7 @@ bool Position::has_forced_jump_followup() const {
   return st->forcedJumpHasFollowup;
 }
 
-bool Position::compute_forced_jump_followup(Square s) const {
+bool Position::compute_forced_jump_followup(Square s, int step) const {
 
   Piece mover = piece_on(s);
   if (mover == NO_PIECE)
@@ -1655,8 +1656,13 @@ bool Position::compute_forced_jump_followup(Square s) const {
   PieceType pt = type_of(mover);
   Bitboard candidates = (attacks_from(c, pt, s) | moves_from(c, pt, s)) & ~pieces();
   while (candidates)
-      if (jump_capture_square(s, pop_lsb(candidates)) != SQ_NONE)
+  {
+      Square to = pop_lsb(candidates);
+      if (step && int(to) - int(s) != step)
+          continue;
+      if (jump_capture_square(s, to) != SQ_NONE)
           return true;
+  }
   return false;
 }
 
@@ -1764,6 +1770,9 @@ bool Position::legal(Move m) const {
   Square from = from_sq(m);
   Square to = to_sq(m);
 
+  if (in_opening_self_removal_phase())
+      return is_opening_self_removal_move(m);
+
   if (is_pass(m) && !(pass(us) || wall_or_move()))
       return false;
 
@@ -1844,6 +1853,8 @@ bool Position::legal(Move m) const {
               return is_pass(m) && passPiece != NO_PIECE && color_of(passPiece) == us;
           }
           if (is_pass(m) || from != st->forcedJumpSquare || !is_jump_capture(m))
+              return false;
+          if (forced_jump_same_direction() && st->forcedJumpStep && int(to) - int(from) != st->forcedJumpStep)
               return false;
       }
   }
@@ -2257,6 +2268,9 @@ bool Position::pseudo_legal(const Move m) const {
   Square to = to_sq(m);
   Piece pc = moved_piece(m);
 
+  if (in_opening_self_removal_phase())
+      return is_opening_self_removal_move(m);
+
   if (is_pass(m) && !(pass(us) || wall_or_move()))
       return false;
 
@@ -2293,6 +2307,8 @@ bool Position::pseudo_legal(const Move m) const {
           if (is_pass(m))
               return false;
           if (from != st->forcedJumpSquare || !is_jump_capture(m))
+              return false;
+          if (forced_jump_same_direction() && st->forcedJumpStep && int(to) - int(from) != st->forcedJumpStep)
               return false;
       }
   }
@@ -2699,9 +2715,10 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   bool capturedDeadSquare = type_of(m) != DROP && from != to && bool(st->deadSquares & to);
   PieceType exchanged = exchange_piece(m);
   Square jumpCapsq = is_jump_capture(m) ? jump_capture_square(from, to) : SQ_NONE;
+  bool openingSelfRemoval = in_opening_self_removal_phase() && is_opening_self_removal_move(m);
   if (to == from)
   {
-      assert((type_of(m) == PROMOTION && sittuyin_promotion()) || is_pass(m));
+      assert((type_of(m) == PROMOTION && sittuyin_promotion()) || is_pass(m) || openingSelfRemoval);
       captured = NO_PIECE;
   }
   Square capturedSq = SQ_NONE;
@@ -2712,7 +2729,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   st->capturedpromoted = captured ? is_promoted(capturedSq) : false;
   st->unpromotedCapturedPiece = captured ? unpromoted_piece_on(capturedSq) : NO_PIECE;
   st->captureSquare = capturedSq;
-  st->pass = is_pass(m);
+  st->pass = is_pass(m) && !openingSelfRemoval;
 
   Variant::PotionType gatingPotion = Variant::POTION_TYPE_NB;
   Bitboard freezeExtra = 0;
@@ -3035,6 +3052,29 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
               }
           }
       }
+  }
+  else if (openingSelfRemoval)
+  {
+      st->deadPiece = pc;
+      st->deadPiecePromoted = is_promoted(from);
+      st->deadUnpromotedPiece = st->deadPiecePromoted ? unpromoted_piece_on(from) : NO_PIECE;
+
+      if (Eval::useNNUE)
+      {
+          dp.piece[0] = pc;
+          dp.from[0] = from;
+          dp.to[0] = SQ_NONE;
+      }
+
+      remove_piece(from);
+      board[from] = NO_PIECE;
+      k ^= Zobrist::psq[pc][from];
+      st->materialKey ^= Zobrist::psq[pc][pieceCount[pc]];
+      if (type_of(pc) == PAWN)
+          st->pawnKey ^= Zobrist::psq[pc][from];
+      else
+          st->nonPawnMaterial[us] -= PieceValue[MG][pc];
+      st->rule50 = 0;
   }
   else if (type_of(m) != CASTLING)
   {
@@ -3681,25 +3721,29 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           // Keep pending continuation across the forced opponent pass.
           st->forcedJumpSquare = st->previous->forcedJumpSquare;
           st->forcedJumpHasFollowup = st->forcedJumpSquare != SQ_NONE
-                                    ? compute_forced_jump_followup(st->forcedJumpSquare)
+                                    ? compute_forced_jump_followup(st->forcedJumpSquare, st->previous->forcedJumpStep)
                                     : false;
+          st->forcedJumpStep = st->previous->forcedJumpStep;
       }
       else if (jumpCapsq != SQ_NONE && type_of(m) != PROMOTION && type_of(m) != PIECE_PROMOTION
             && piece_on(to) != NO_PIECE)
       {
           st->forcedJumpSquare = to;
-          st->forcedJumpHasFollowup = compute_forced_jump_followup(to);
+          st->forcedJumpStep = forced_jump_same_direction() ? int(to) - int(from) : 0;
+          st->forcedJumpHasFollowup = compute_forced_jump_followup(to, st->forcedJumpStep);
       }
       else
       {
           st->forcedJumpSquare = SQ_NONE;
           st->forcedJumpHasFollowup = false;
+          st->forcedJumpStep = 0;
       }
   }
   else
   {
       st->forcedJumpSquare = SQ_NONE;
       st->forcedJumpHasFollowup = false;
+      st->forcedJumpStep = 0;
   }
 
   if (potions_enabled())
@@ -3838,10 +3882,16 @@ void Position::undo_move(Move m) {
   Square to = to_sq(m);
   Piece pc = piece_on(to);
   PieceType exchange = exchange_piece(m);
+  bool wasOpeningSelfRemoval = opening_self_removal()
+                            && gamePly <= 2
+                            && type_of(m) == SPECIAL
+                            && from == to
+                            && !st->pass;
 
   assert(type_of(m) == DROP || empty(from) || type_of(m) == CASTLING || is_gating(m)
          || (type_of(m) == PROMOTION && sittuyin_promotion())
          || is_pass(m)
+         || wasOpeningSelfRemoval
          || (commit_gates() && st->removedGatingType > NO_PIECE_TYPE)
   );
   assert(type_of(st->capturedPiece) != KING || allow_checks());
@@ -3987,6 +4037,8 @@ void Position::undo_move(Move m) {
   {
       if (type_of(m) == DROP)
           undrop_piece(make_piece(us, in_hand_piece_type(m)), to, exchange); // Remove the dropped piece
+      else if (wasOpeningSelfRemoval)
+          put_piece(st->deadPiece, from, st->deadPiecePromoted, st->deadUnpromotedPiece);
       else
       {
           if (st->deadPiece && type_of(m) != PROMOTION && type_of(m) != PIECE_PROMOTION)
