@@ -69,7 +69,7 @@ rm -f "${tmp_ini}"
 
 # This smoke suite contains >8x8 and template-dependent variants.
 # On constrained builds, skip gracefully if any required variant is unavailable.
-for required in hasami eurasian hindustani gala ichess british-chess crown-prince-chess half-chess dris-at-talata shatranj-al-jawarhiya chess-siberia konane tawlbwrdd kharebga maak-yek apit-sodok apit troll tictactoe-misere; do
+for required in hasami eurasian hindustani gala ichess british-chess crown-prince-chess compound-chess half-chess dris-at-talata shatranj-al-jawarhiya chess-siberia konane tawlbwrdd kharebga maak-yek apit-sodok apit troll tictactoe-misere; do
   if ! variant_available "${required}"; then
     echo "new variants smoke skipped: required variant '${required}' is unavailable in this build"
     exit 0
@@ -223,6 +223,16 @@ out=$(run_cmds "setoption name UCI_Variant value half-chess
 position startpos
 d")
 echo "${out}" | grep -q "Fen: rnbq/kbbq/4/4/4/4/KBBQ/RNBQ w - - 0 1"
+
+# 19bb) Compound Chess: setup and dragon-specific en passant capture.
+out=$(run_cmds "setoption name UCI_Variant value compound-chess
+position startpos
+d")
+echo "${out}" | grep -q "Fen: rdcbqkbcdr/ssssssssss/10/10/10/10/SSSSSSSSSS/RDCBQKBCDR w KQkq - 0 1"
+out=$(run_cmds "setoption name UCI_Variant value compound-chess
+position fen 10/10/10/3sD5/10/10/10/5k4 w - d6 0 1
+go perft 1")
+echo "${out}" | grep -q "^e5d6: 1$"
 
 # 19ba) Crown Prince Chess: crown prince cannot capture and wins by reaching the back rank.
 out=$(run_cmds "setoption name UCI_Variant value crown-prince-chess
