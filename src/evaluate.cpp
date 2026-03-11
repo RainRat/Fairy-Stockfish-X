@@ -1450,7 +1450,7 @@ namespace {
                           + popcount(majors & shift<EAST>(majors))
                           + popcount(majors & shift<NORTH_EAST>(majors))
                           + popcount(majors & shift<NORTH_WEST>(majors));
-            score -= make_score(20, 14) * threat * adjacency;
+            score -= make_score(22, 16) * threat * adjacency;
         }
     }
 
