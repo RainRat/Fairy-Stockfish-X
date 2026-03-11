@@ -883,9 +883,10 @@ ScaleFactor Endgame<KBPKB>::operator()(const Position& pos) const {
   Square weakKing = pos.square<KING>(weakSide);
 
   // Case 1: Defending king blocks the pawn, and cannot be driven away
+  const int bishopBlockRank = std::max(int(RANK_1), int(pos.max_rank()) - 2);
   if (   (forward_file_bb(strongSide, strongPawn) & weakKing)
       && (   opposite_colors(weakKing, strongBishop)
-          || relative_rank(strongSide, weakKing, pos.max_rank()) <= RANK_6))
+          || int(relative_rank(strongSide, weakKing, pos.max_rank())) <= bishopBlockRank))
       return SCALE_FACTOR_DRAW;
 
   // Case 2: Opposite colored bishops
