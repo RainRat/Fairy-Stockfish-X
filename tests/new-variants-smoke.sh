@@ -69,7 +69,7 @@ rm -f "${tmp_ini}"
 
 # This smoke suite contains >8x8 and template-dependent variants.
 # On constrained builds, skip gracefully if any required variant is unavailable.
-for required in hasami eurasian hindustani gala ichess british-chess half-chess dris-at-talata shatranj-al-jawarhiya chess-siberia tawlbwrdd kharebga maak-yek troll tictactoe-misere; do
+for required in hasami eurasian hindustani gala ichess british-chess half-chess dris-at-talata shatranj-al-jawarhiya chess-siberia tawlbwrdd kharebga maak-yek apit-sodok troll tictactoe-misere; do
   if ! variant_available "${required}"; then
     echo "new variants smoke skipped: required variant '${required}' is unavailable in this build"
     exit 0
@@ -246,6 +246,12 @@ out=$(run_cmds "setoption name UCI_Variant value chess-siberia
 position startpos
 d")
 echo "${out}" | grep -q "Fen: rnbqk1bnr/ppppppppp/9/9/9/9/9/PPPPPPPPP/RNBQK1BNR w - - 0 1"
+
+# 19f) Apit-Sodok: same reverse/intervention capture as Maak Yek.
+out=$(run_cmds "setoption name UCI_Variant value apit-sodok
+position fen 8/8/8/2r1r3/3R4/8/8/8 w - - 0 1 moves d4d5
+d")
+echo "${out}" | grep -q "Fen: 8/8/8/3R4/8/8/8/8 b - - 1 1"
 
 
 # 20) Kharebga: setup is two drops per turn with the centre excluded.
