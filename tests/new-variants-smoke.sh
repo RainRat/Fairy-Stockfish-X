@@ -69,7 +69,7 @@ rm -f "${tmp_ini}"
 
 # This smoke suite contains >8x8 and template-dependent variants.
 # On constrained builds, skip gracefully if any required variant is unavailable.
-for required in hasami eurasian hindustani gala ichess british-chess crown-prince-chess compound-chess half-chess dris-at-talata shatranj-al-jawarhiya chaturanga-payagunda chess-siberia konane tawlbwrdd kharebga maak-yek apit-sodok apit troll tictactoe-misere; do
+for required in hasami eurasian hindustani gala ichess british-chess crown-prince-chess compound-chess half-chess dris-at-talata shatranj shatranj-al-jawarhiya chaturanga chaturanga-payagunda chess-siberia konane tawlbwrdd kharebga maak-yek apit-sodok apit troll tictactoe-misere; do
   if ! variant_available "${required}"; then
     echo "new variants smoke skipped: required variant '${required}' is unavailable in this build"
     exit 0
@@ -261,7 +261,19 @@ position startpos
 d")
 echo "${out}" | grep -q "Fen: rafkanr/ppppppp/7/7/7/7/PPPPPPP/RNAFKAR w - - 0 1"
 
-# 19da) Chaturanga (Payagunda): source-backed setup should load as documented.
+# 19da) Shatranj: source-backed setup should load as documented.
+out=$(run_cmds "setoption name UCI_Variant value shatranj
+position startpos
+d")
+echo "${out}" | grep -q "Fen: rnafkanr/pppppppp/8/8/8/8/PPPPPPPP/RNAFKANR w - - 0 1"
+
+# 19db) Chaturanga: source-backed setup should load as documented.
+out=$(run_cmds "setoption name UCI_Variant value chaturanga
+position startpos
+d")
+echo "${out}" | grep -q "Fen: rnbkfbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBFKBNR w - - 0 1"
+
+# 19dc) Chaturanga (Payagunda): source-backed setup should load as documented.
 out=$(run_cmds "setoption name UCI_Variant value chaturanga-payagunda
 position startpos
 d")
