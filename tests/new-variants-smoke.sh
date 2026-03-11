@@ -69,7 +69,7 @@ rm -f "${tmp_ini}"
 
 # This smoke suite contains >8x8 and template-dependent variants.
 # On constrained builds, skip gracefully if any required variant is unavailable.
-for required in hasami eurasian hindustani gala ichess; do
+for required in hasami eurasian hindustani gala ichess british-chess; do
   if ! variant_available "${required}"; then
     echo "new variants smoke skipped: required variant '${required}' is unavailable in this build"
     exit 0
@@ -198,6 +198,13 @@ out=$(run_cmds "setoption name UCI_Variant value progressive
 position startpos moves e2e4 e7e5
 go perft 1")
 echo "${out}" | grep -q "^e1e1: 1$"
+
+# 18) British chess: the royal queen may not move through check.
+out=$(run_cmds "setoption name UCI_Variant value british-chess
+position fen 9q/10/10/10/10/10/10/10/1r8/4Q5 w - - 0 1
+go perft 1")
+! echo "${out}" | grep -q "^e1e3: 1$"
+echo "${out}" | grep -q "^e1f1: 1$"
 
 out=$(run_cmds "setoption name UCI_Variant value progressive
 position startpos moves e2e4 e7e5 e1e1

@@ -2215,7 +2215,7 @@ bool Position::legal(Move m) const {
 
   if (var->royalPieceNoThroughCheck && type_of(moved_piece(m)) == KING)
   {
-      Bitboard traversed = between_bb(from, to, king_type()) & ~square_bb(to);
+      Bitboard traversed = between_bb(from, to) & ~square_bb(to);
       while (traversed)
       {
           Square s = pop_lsb(traversed);
