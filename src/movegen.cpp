@@ -586,22 +586,29 @@ namespace {
 
             if (Type == EVASIONS)
             {
-                const bool multipleCheckers = more_than_one(checkers);
-                if (multipleCheckers)
-                    target = checkers;
-                else
-                {
-                    Square checksq = lsb(checkers);
+                auto checker_targets = [&](Square checksq) {
                     PieceType checkerPt = type_of(pos.piece_on(checksq));
-                    target = between_bb(ksq, checksq, checkerPt);
+                    Bitboard checkerMask = square_bb(checksq);
+                    Bitboard t = between_bb(ksq, checksq, checkerPt);
 
                     bool blockableNightrider = AttackRiderTypes[checkerPt] & RIDER_NIGHTRIDER;
-                    if ((checkers & pos.non_sliding_riders()) && !blockableNightrider)
-                        target = ~pos.pieces(Us);
-                    // Leaper attacks can not be blocked
+                    if ((checkerMask & pos.non_sliding_riders()) && !blockableNightrider)
+                        t = ~pos.pieces(Us);
                     if (LeaperAttacks[~Us][checkerPt][checksq] & ksq)
-                        target = checkers;
+                        t = checkerMask;
+                    return t;
+                };
+
+                const bool multipleCheckers = more_than_one(checkers);
+                if (multipleCheckers)
+                {
+                    target = AllSquares;
+                    Bitboard remaining = checkers;
+                    while (remaining)
+                        target &= checker_targets(pop_lsb(remaining));
                 }
+                else
+                    target = checker_targets(lsb(checkers));
             }
 
             // Remove inaccessible squares (outside board + wall squares)

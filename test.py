@@ -424,6 +424,12 @@ class TestPyffish(unittest.TestCase):
         result = sf.legal_moves("xiangqi", XIANGQI, ["h3h10"])
         self.assertIn("i10h10", result)
 
+        # Double-check can still be blockable in xiangqi if one checker is a cannon
+        # and the interposition adds a second hurdle on the cannon line.
+        fen = "9/4c4/3k5/4r4/9/9/3C5/9/4K4/3R5 w - - 2 2"
+        result = sf.legal_moves("xiangqi", fen, [])
+        self.assertIn("d4e4", result)
+
         result = sf.legal_moves("shogun", SHOGUN, ["c2c4", "b8c6", "b2b4", "b7b5", "c4b5", "c6b8"])
         self.assertIn("b5b6+", result)
 

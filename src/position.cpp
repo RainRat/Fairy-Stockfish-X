@@ -2443,15 +2443,25 @@ bool Position::pseudo_legal(const Move m) const {
   {
       if (type_of(pc) != KING)
       {
-          // Double check? In this case a king move is required
-          if (more_than_one(checkers()))
-              return false;
+          auto checker_targets = [&](Square checksq) {
+              PieceType checkerPt = type_of(piece_on(checksq));
+              Bitboard checkerMask = square_bb(checksq);
+              Bitboard t = between_bb(square<KING>(us), checksq, checkerPt);
 
-          // Our move must be a blocking evasion or a capture of the checking piece
-          Square checksq = lsb(checkers());
-          Bitboard blockSquares = between_bb(square<KING>(us), checksq, type_of(piece_on(checksq)));
-          if (  !(blockSquares & to)
-              || ((LeaperAttacks[~us][type_of(piece_on(checksq))][checksq] & square<KING>(us)) && !(checkers() & to)))
+              bool blockableNightrider = AttackRiderTypes[checkerPt] & RIDER_NIGHTRIDER;
+              if ((checkerMask & non_sliding_riders()) && !blockableNightrider)
+                  t = ~pieces(us);
+              if (LeaperAttacks[~us][checkerPt][checksq] & square<KING>(us))
+                  t = checkerMask;
+              return t;
+          };
+
+          Bitboard evasionTargets = AllSquares;
+          Bitboard remaining = checkers();
+          while (remaining)
+              evasionTargets &= checker_targets(pop_lsb(remaining));
+
+          if (!(evasionTargets & to))
               return false;
       }
       // In case of king moves under check we have to remove king so as to catch
