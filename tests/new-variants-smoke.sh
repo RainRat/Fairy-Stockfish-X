@@ -69,7 +69,7 @@ rm -f "${tmp_ini}"
 
 # This smoke suite contains >8x8 and template-dependent variants.
 # On constrained builds, skip gracefully if any required variant is unavailable.
-for required in hasami eurasian hindustani gala ichess british-chess half-chess dris-at-talata shatranj-al-jawarhiya chess-siberia konane tawlbwrdd kharebga maak-yek apit-sodok apit troll tictactoe-misere; do
+for required in hasami eurasian hindustani gala ichess british-chess crown-prince-chess half-chess dris-at-talata shatranj-al-jawarhiya chess-siberia konane tawlbwrdd kharebga maak-yek apit-sodok apit troll tictactoe-misere; do
   if ! variant_available "${required}"; then
     echo "new variants smoke skipped: required variant '${required}' is unavailable in this build"
     exit 0
@@ -223,6 +223,16 @@ out=$(run_cmds "setoption name UCI_Variant value half-chess
 position startpos
 d")
 echo "${out}" | grep -q "Fen: rnbq/kbbq/4/4/4/4/KBBQ/RNBQ w - - 0 1"
+
+# 19ba) Crown Prince Chess: crown prince cannot capture and wins by reaching the back rank.
+out=$(run_cmds "setoption name UCI_Variant value crown-prince-chess
+position fen 4k3/8/8/8/8/8/4p3/4C3 w - - 0 1
+go perft 1")
+! echo "${out}" | grep -q "^e1e2"
+out=$(run_cmds "setoption name UCI_Variant value crown-prince-chess
+position fen 4C3/8/8/8/8/8/8/4k3 b - - 0 1
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 0"
 
 # 19c) Dris at-Talata: setup by drops, then pieces move to any empty square.
 out=$(run_cmds "setoption name UCI_Variant value dris-at-talata
