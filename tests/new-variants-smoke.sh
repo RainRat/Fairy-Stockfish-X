@@ -69,7 +69,7 @@ rm -f "${tmp_ini}"
 
 # This smoke suite contains >8x8 and template-dependent variants.
 # On constrained builds, skip gracefully if any required variant is unavailable.
-for required in hasami eurasian hindustani gala ichess british-chess tawlbwrdd kharebga maak-yek troll tictactoe-misere; do
+for required in hasami eurasian hindustani gala ichess british-chess half-chess tawlbwrdd kharebga maak-yek troll tictactoe-misere; do
   if ! variant_available "${required}"; then
     echo "new variants smoke skipped: required variant '${required}' is unavailable in this build"
     exit 0
@@ -218,6 +218,12 @@ position startpos
 go perft 1")
 ! echo "${out}" | grep -q "^K@"
 echo "${out}" | grep -q "^Q@"
+# 19b) Half Chess: 4x8 orthodox setup with no pawns.
+out=$(run_cmds "setoption name UCI_Variant value half-chess
+position startpos
+d")
+echo "${out}" | grep -q "Fen: rnbq/kbbq/4/4/4/4/KBBQ/RNBQ w - - 0 1"
+
 
 # 20) Kharebga: setup is two drops per turn with the centre excluded.
 out=$(run_cmds "setoption name UCI_Variant value kharebga
