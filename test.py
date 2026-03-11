@@ -830,6 +830,45 @@ checking = false
         self.assertTrue(black_moves)
         self.assertTrue(all("," not in m for m in black_moves))
 
+    def test_drop_king_last(self):
+        sf.load_variant_config(
+            """[droplast:chess]
+startFen = 8/8/8/8/8/8/8/8[KNkn] w - - 0 1
+pieceDrops = true
+mustDrop = true
+passUntilSetup = true
+dropKingLast = true
+castling = false
+checking = false
+"""
+        )
+
+        start = sf.start_fen("droplast")
+        white_moves = sf.legal_moves("droplast", start, [])
+        self.assertTrue(white_moves)
+        self.assertTrue(all(m.startswith("N@") for m in white_moves))
+
+        after_white = sf.get_fen("droplast", start, [white_moves[0]])
+        black_moves = sf.legal_moves("droplast", after_white, [])
+        self.assertTrue(black_moves)
+        self.assertTrue(all(m.startswith("N@") for m in black_moves))
+
+        after_black = sf.get_fen("droplast", after_white, [black_moves[0]])
+        white_king_moves = sf.legal_moves("droplast", after_black, [])
+        self.assertTrue(white_king_moves)
+        self.assertTrue(all(m.startswith("K@") for m in white_king_moves))
+
+    def test_ichess_setup_basics(self):
+        with open("src/variants.ini") as f:
+            sf.load_variant_config(f.read())
+        fen = sf.start_fen("ichess")
+        self.assertEqual(fen.split()[0], "8/pppppppp/8/8/8/8/PPPPPPPP/8[KQRRBBNNkqrrbbnn]")
+
+        moves = sf.legal_moves("ichess", fen, [])
+        self.assertTrue(moves)
+        self.assertTrue(all("@" in m for m in moves))
+        self.assertTrue(all(not m.startswith("K@") for m in moves))
+
     def test_chesscom_custom_setups_basics(self):
         # Trapped Queens / Infiltration Danger / Stone Gravitation are orthodox 8x8
         # positions imported from chess.com Fen4 setups.

@@ -206,6 +206,13 @@ go perft 1")
 ! echo "${out}" | grep -q "^e1e3: 1$"
 echo "${out}" | grep -q "^e1f1: 1$"
 
+# 19) iChess: setup starts with non-king drops only.
+out=$(run_cmds "setoption name UCI_Variant value ichess
+position startpos
+go perft 1")
+! echo "${out}" | grep -q "^K@"
+echo "${out}" | grep -q "^Q@"
+
 out=$(run_cmds "setoption name UCI_Variant value progressive
 position startpos moves e2e4 e7e5 e1e1
 go perft 1")

@@ -2689,7 +2689,19 @@ inline void Position::undrop_piece(Piece pc_hand, Square s, PieceType exchange) 
 }
 
 inline bool Position::can_drop(Color c, PieceType pt) const {
-  return variant()->freeDrops || count_in_hand(c, pt) > 0;
+  if (variant()->freeDrops)
+      return true;
+
+  if (pt == ALL_PIECES)
+      return count_in_hand(c, pt) > 0;
+
+  if (count_in_hand(c, pt) <= 0)
+      return false;
+
+  if (variant()->dropKingLast && pt == king_type())
+      return count_in_hand(c, ALL_PIECES) <= count_in_hand(c, pt);
+
+  return true;
 }
 
 inline bool Position::has_exchange() const {

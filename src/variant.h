@@ -134,6 +134,7 @@ struct Variant {
   bool mustDropByColor[COLOR_NB] = {false, false};
   PieceType mustDropType = ALL_PIECES;
   PieceType mustDropTypeByColor[COLOR_NB] = {ALL_PIECES, ALL_PIECES};
+  bool dropKingLast = false;
   bool isPriorityDrop[PIECE_TYPE_NB] = {};
   bool pieceDrops = false;
   bool virtualDrops = true;
