@@ -35,7 +35,7 @@ namespace Stockfish {
 
 /// Variant struct stores information needed to determine the rules of a variant.
 
-constexpr int START_MULTIMOVES = 16;
+constexpr int START_MULTIMOVES = 128;
 
 struct Variant {
   std::string variantTemplate = "fairy";

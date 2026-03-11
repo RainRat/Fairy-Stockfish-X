@@ -69,7 +69,7 @@ rm -f "${tmp_ini}"
 
 # This smoke suite contains >8x8 and template-dependent variants.
 # On constrained builds, skip gracefully if any required variant is unavailable.
-for required in hasami eurasian hindustani gala ichess british-chess tawlbwrdd; do
+for required in hasami eurasian hindustani gala ichess british-chess tawlbwrdd kharebga; do
   if ! variant_available "${required}"; then
     echo "new variants smoke skipped: required variant '${required}' is unavailable in this build"
     exit 0
@@ -218,6 +218,17 @@ position startpos
 go perft 1")
 ! echo "${out}" | grep -q "^K@"
 echo "${out}" | grep -q "^Q@"
+
+# 20) Kharebga: setup is two drops per turn with the centre excluded.
+out=$(run_cmds "setoption name UCI_Variant value kharebga
+position startpos moves R@a1
+go perft 1")
+echo "${out}" | grep -q "^a1a1: 1$"
+out=$(run_cmds "setoption name UCI_Variant value kharebga
+position startpos moves R@a1 a1a1
+go perft 1")
+! echo "${out}" | grep -q "^R@c3"
+echo "${out}" | grep -q "^R@b1: 1$"
 
 out=$(run_cmds "setoption name UCI_Variant value progressive
 position startpos moves e2e4 e7e5 e1e1

@@ -559,9 +559,9 @@ namespace {
             {
                 // Opponent must pass while the other side completes a forced jump chain.
                 Bitboard usPieces = pos.pieces(Us);
-                if (pos.pass(Us) && usPieces)
+                if (pos.pass(Us))
                 {
-                    Square passSq = lsb(usPieces);
+                    Square passSq = usPieces ? lsb(usPieces) : lsb(pos.board_bb());
                     *moveList++ = make<SPECIAL>(passSq, passSq);
                 }
                 return moveList;
@@ -686,11 +686,8 @@ namespace {
         if (!restrictToForcedJumper && pos.pass(Us) && !pos.count<KING>(Us))
         {
             Bitboard usPieces = pos.pieces(Us);
-            if (usPieces)
-            {
-                Square passSq = lsb(usPieces);
-                *moveList++ = make<SPECIAL>(passSq, passSq);
-            }
+            Square passSq = usPieces ? lsb(usPieces) : lsb(pos.board_bb());
+            *moveList++ = make<SPECIAL>(passSq, passSq);
         }
 
         //if "wall or move", generate walling action with null move
@@ -716,7 +713,8 @@ namespace {
 
         // Passing move by king
         if (!restrictToForcedJumper && pos.pass(Us))
-            *moveList++ = make<SPECIAL>(ksq, ksq);
+            *moveList++ = make<SPECIAL>(ksq != SQ_NONE ? ksq : lsb(pos.board_bb()),
+                                        ksq != SQ_NONE ? ksq : lsb(pos.board_bb()));
 
         if (!restrictToForcedJumper && (Type == QUIETS || Type == NON_EVASIONS) && pos.can_castle(Us & ANY_CASTLING))
             for (CastlingRights cr : { Us & KING_SIDE, Us & QUEEN_SIDE } )
