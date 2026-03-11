@@ -959,6 +959,7 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     }
     parse_attribute("removeConnectNByType", v->removeConnectNByType);
     parse_attribute("surroundCaptureOpposite", v->surroundCaptureOpposite);
+    parse_attribute("surroundCaptureIntervene", v->surroundCaptureIntervene);
     parse_attribute("surroundCaptureEdge", v->surroundCaptureEdge);
     parse_attribute("surroundCaptureMaxRegion", v->surroundCaptureMaxRegion);
     parse_attribute("surroundCaptureHostileRegion", v->surroundCaptureHostileRegion);

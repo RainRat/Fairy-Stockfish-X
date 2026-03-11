@@ -3342,7 +3342,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   //resolve blast and custodial capture. custodial capture is essentially blast with extra restrictions
   if (
        (
-         ( surround_capture_opposite() || surround_capture_edge() ) ||
+         ( surround_capture_opposite() || surround_capture_intervene() || surround_capture_edge() ) ||
          ( captured && (blast_on_capture() || var->petrifyOnCaptureTypes) ) ||
          ( blast_on_move() && !captured ) ||
          ( remove_connect_n() > 0 )
@@ -3370,7 +3370,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       //Use the same removal_mask variable; surround_capture only ORs.
       //A piece could be immune to blast but not immune to custodial.
 
-      if ( surround_capture_opposite() || surround_capture_edge() ) {
+      if ( surround_capture_opposite() || surround_capture_intervene() || surround_capture_edge() ) {
           for (int sign : {-1, 1}) {
 
               for (const Direction& d : var->connectDirections)
@@ -3407,6 +3407,18 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
               };
           };
       };
+
+      if (surround_capture_intervene()) {
+          for (const Direction& d : var->connectDirections)
+          {
+              Square s1 = to + d;
+              Square s2 = to - d;
+              if (!is_ok(s1) || !is_ok(s2))
+                  continue;
+              if ((s1 & pieces(~us)) && (s2 & pieces(~us)))
+                  removal_mask |= s1 | s2;
+          }
+      }
 
       if (remove_connect_n() > 0) {
           auto mark_line = [&](Bitboard line) {
@@ -3840,7 +3852,7 @@ void Position::undo_move(Move m) {
 
   // Add the blast pieces
   if (
-       ( surround_capture_opposite() || surround_capture_edge() ) ||
+       ( surround_capture_opposite() || surround_capture_intervene() || surround_capture_edge() ) ||
        ( st->capturedPiece && (blast_on_capture() || var->petrifyOnCaptureTypes) ) ||
        ( blast_on_move() && !st->capturedPiece ) ||
        ( remove_connect_n() > 0 )

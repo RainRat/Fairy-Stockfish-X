@@ -188,6 +188,7 @@ public:
   bool remove_connect_n_by_type() const;
   PieceSet mutually_immune_types() const;
   bool surround_capture_opposite() const;
+  bool surround_capture_intervene() const;
   bool surround_capture_edge() const;
   Bitboard surround_capture_max_region() const;
   Bitboard surround_capture_hostile_region() const;
@@ -795,6 +796,11 @@ inline PieceSet Position::mutually_immune_types() const {
 inline bool Position::surround_capture_opposite() const {
   assert(var != nullptr);
   return var->surroundCaptureOpposite;
+}
+
+inline bool Position::surround_capture_intervene() const {
+  assert(var != nullptr);
+  return var->surroundCaptureIntervene;
 }
 
 inline bool Position::surround_capture_edge() const {

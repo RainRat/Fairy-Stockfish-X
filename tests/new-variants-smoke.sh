@@ -69,7 +69,7 @@ rm -f "${tmp_ini}"
 
 # This smoke suite contains >8x8 and template-dependent variants.
 # On constrained builds, skip gracefully if any required variant is unavailable.
-for required in hasami eurasian hindustani gala ichess british-chess tawlbwrdd kharebga; do
+for required in hasami eurasian hindustani gala ichess british-chess tawlbwrdd kharebga maak-yek; do
   if ! variant_available "${required}"; then
     echo "new variants smoke skipped: required variant '${required}' is unavailable in this build"
     exit 0
@@ -229,6 +229,12 @@ position startpos moves R@a1 a1a1
 go perft 1")
 ! echo "${out}" | grep -q "^R@c3"
 echo "${out}" | grep -q "^R@b1: 1$"
+
+# 21) Maak Yek: moving between two enemy pieces captures both of them.
+out=$(run_cmds "setoption name UCI_Variant value maak-yek
+position fen 8/8/8/8/2r1r3/8/8/3R4 w - - 0 1 moves d1d4
+d")
+echo "${out}" | grep -q "Fen: 8/8/8/8/3R4/8/8/8 b - - 1 1"
 
 out=$(run_cmds "setoption name UCI_Variant value progressive
 position startpos moves e2e4 e7e5 e1e1
