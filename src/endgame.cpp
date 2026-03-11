@@ -594,7 +594,7 @@ ScaleFactor Endgame<KBPsK>::operator()(const Position& pos) const {
   Square strongKing = pos.square<KING>(strongSide);
 
   // All strongSide pawns are on a single rook file?
-  if (!(strongPawns & ~FileABB) || !(strongPawns & ~FileHBB))
+  if (!(strongPawns & ~FileABB) || !(strongPawns & ~file_bb(pos.max_file())))
   {
       Square queeningSquare = relative_square(strongSide, make_square(file_of(lsb(strongPawns)), pos.max_rank()), pos.max_rank());
 
@@ -603,8 +603,8 @@ ScaleFactor Endgame<KBPsK>::operator()(const Position& pos) const {
           return SCALE_FACTOR_DRAW;
   }
 
-  // If all the pawns are on the same B or G file, then it's potentially a draw
-  if ((!(allPawns & ~FileBBB) || !(allPawns & ~FileGBB))
+  // If all the pawns are on the same second file from either edge, then it's potentially a draw
+  if ((!(allPawns & ~FileBBB) || !(allPawns & ~file_bb(File(int(pos.max_file()) - 1))))
       && pos.non_pawn_material(weakSide) == 0
       && pos.count<PAWN>(weakSide) >= 1)
   {
