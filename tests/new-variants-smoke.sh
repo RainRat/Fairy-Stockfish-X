@@ -69,7 +69,7 @@ rm -f "${tmp_ini}"
 
 # This smoke suite contains >8x8 and template-dependent variants.
 # On constrained builds, skip gracefully if any required variant is unavailable.
-for required in hasami eurasian hindustani gala ichess british-chess crown-prince-chess compound-chess half-chess losalamos dris-at-talata shatranj shatranj-al-jawarhiya chaturanga chaturanga-payagunda chaturanga-al-adli chess-siberia konane tawlbwrdd kharebga maak-yek apit-sodok apit troll tictactoe-misere; do
+for required in hasami eurasian hindustani gala ichess british-chess crown-prince-chess compound-chess half-chess losalamos promotion-chess dris-at-talata shatranj shatranj-al-jawarhiya chaturanga chaturanga-payagunda chaturanga-al-adli chess-siberia konane tawlbwrdd kharebga maak-yek apit-sodok apit troll tictactoe-misere; do
   if ! variant_available "${required}"; then
     echo "new variants smoke skipped: required variant '${required}' is unavailable in this build"
     exit 0
@@ -229,6 +229,12 @@ out=$(run_cmds "setoption name UCI_Variant value losalamos
 position startpos
 d")
 echo "${out}" | grep -q "Fen: rnqknr/pppppp/6/6/PPPPPP/RNQKNR w - - 0 1"
+
+# 19bab) Promotion Chess: pawn-only setup with kings in opposite corners.
+out=$(run_cmds "setoption name UCI_Variant value promotion-chess
+position startpos
+d")
+echo "${out}" | grep -q "Fen: 7k/pppppppp/8/pppppppp/PPPPPPPP/8/PPPPPPPP/K7 w - - 0 1"
 
 # 19bb) Compound Chess: setup and dragon-specific en passant capture.
 out=$(run_cmds "setoption name UCI_Variant value compound-chess
