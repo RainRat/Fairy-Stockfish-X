@@ -759,18 +759,18 @@ startFen = rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w - - 0 1
         sf.set_option("VariantPath", "src/variants.ini")
         trapped = sf.start_fen("trapped-queens")
         trapped_moves = sf.legal_moves("trapped-queens", trapped, [])
-        self.assertIn("e8d8", trapped_moves)
-        self.assertIn("a6a7", trapped_moves)
+        self.assertIn("e1d1", trapped_moves)
+        self.assertIn("a3a4", trapped_moves)
 
         infiltration = sf.start_fen("infiltration-danger")
         infiltration_moves = sf.legal_moves("infiltration-danger", infiltration, [])
-        self.assertIn("c8b6", infiltration_moves)
-        self.assertIn("d6e6", infiltration_moves)
+        self.assertIn("e5d4", infiltration_moves)
+        self.assertIn("e5f4", infiltration_moves)
 
         stone = sf.start_fen("stone-gravitation")
         stone_moves = sf.legal_moves("stone-gravitation", stone, [])
-        self.assertIn("g8f6", stone_moves)
-        self.assertIn("d7d8q", stone_moves)
+        self.assertIn("b1c3", stone_moves)
+        self.assertIn("a2b4", stone_moves)
 
     def test_checkers_jump_and_promotion(self):
         # Jump captures are mandatory and generated correctly.
