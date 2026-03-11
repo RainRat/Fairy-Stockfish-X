@@ -805,8 +805,6 @@ else
 	@echo ""
 	@echo "make build ARCH=x86-64 all=yes extra_large_movelists=yes"
 	@echo ""
-	@echo "Enable Sudoku feature code:"
-	@echo ""
 	@echo ""
 endif
 
