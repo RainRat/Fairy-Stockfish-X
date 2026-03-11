@@ -836,7 +836,10 @@ ScaleFactor Endgame<KRPPKRP>::operator()(const Position& pos) const {
       && distance<File>(weakKing, strongPawn2) <= 1
       && relative_rank(strongSide, weakKing, pos.max_rank()) > pawnRank)
   {
-      assert(pawnRank > RANK_1 && pawnRank < RANK_7);
+      // This rule is only intended for non-trivial pawns that are not already
+      // on the penultimate rank.
+      if (pawnRank <= RANK_1 || int(pawnRank) >= int(pos.max_rank()) - 1)
+          return SCALE_FACTOR_NONE;
       return ScaleFactor(7 * pawnRank);
   }
   return SCALE_FACTOR_NONE;
