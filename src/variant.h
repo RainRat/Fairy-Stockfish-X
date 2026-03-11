@@ -179,13 +179,6 @@ struct Variant {
   bool freeDrops = false;
   bool payPointsToDrop = false;
   bool passUntilSetup = false;
-#ifdef SUDOKU_VARIANTS
-  bool sudoku = false;
-  int sudokuBoxWidth = 4;
-  int sudokuBoxHeight = 2;
-  int sudokuAllowedPawns = FILE_NB;
-  bool sudokuRoyalConflict = false;
-#endif
 
   enum PotionType : int {
       POTION_FREEZE,

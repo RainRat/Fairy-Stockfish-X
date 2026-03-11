@@ -97,7 +97,6 @@ endif
 largeboards = no
 verylargeboards = no
 all = no
-sudoku = no
 extra_large_movelists = no
 precomputedmagics = yes
 nnue = no
@@ -366,10 +365,6 @@ ifneq ($(extra_large_movelists),no)
 	CXXFLAGS += -DEXTRA_LARGE_MOVELISTS
 endif
 
-# Enable sudoku-specific rules and state tracking
-ifneq ($(sudoku),no)
-	CXXFLAGS += -DSUDOKU_VARIANTS
-endif
 
 ifeq ($(COMP),)
 	COMP=gcc
@@ -812,7 +807,6 @@ else
 	@echo ""
 	@echo "Enable Sudoku feature code:"
 	@echo ""
-	@echo "make build ARCH=x86-64 sudoku=yes"
 	@echo ""
 endif
 
@@ -936,7 +930,6 @@ config-sanity: $(load_net)
 	@echo "verylargeboards: '$(verylargeboards)'"
 	@echo "all: '$(all)'"
 	@echo "extra_large_movelists: '$(extra_large_movelists)'"
-	@echo "sudoku: '$(sudoku)'"
 	@echo "precomputedmagics: '$(precomputedmagics)'"
 	@echo "nnue: '$(nnue)'"
 	@echo ""
@@ -949,7 +942,6 @@ config-sanity: $(load_net)
 	@echo ""
 	@test "$(debug)" = "yes" || test "$(debug)" = "no"
 	@test "$(optimize)" = "yes" || test "$(optimize)" = "no"
-	@test "$(sudoku)" = "yes" || test "$(sudoku)" = "no"
 	@test "$(SUPPORTED_ARCH)" = "true"
 	@test "$(arch)" = "any" || test "$(arch)" = "x86_64" || test "$(arch)" = "i386" || \
 	 test "$(arch)" = "ppc64" || test "$(arch)" = "ppc" || test "$(arch)" = "e2k" || \

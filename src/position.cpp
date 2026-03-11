@@ -1071,118 +1071,6 @@ void Position::set_check_info(StateInfo* si) const {
 }
 
 
-/// Position::set_sudoku_conflicts_info() sets piece count for each sudoku house
-/// and sudoku conflicts count for each player
-
-void Position::set_sudoku_conflicts_info(StateInfo* si) const {
-#ifdef SUDOKU_VARIANTS
-  static_assert(FILE_NB <= 255 && RANK_NB <= 255, "Sudoku house counters require <=255 bins");
-  if (!var->sudoku) return;
-
-  si->sudokuConflictsCount[WHITE] = si->sudokuConflictsCount[BLACK] = 0;
-  memset(si->pieceCountInSudokuHouse, 0, sizeof si->pieceCountInSudokuHouse);
-
-  for (Bitboard b = pieces(); b; )
-  {
-      Square s = pop_lsb(b);
-      Piece pc = piece_on(s);
-
-      Color c = color_of(pc);
-      PieceType pt = piece_type_for_sudoku(pc);
-
-      if (is_initial_pawn(pc, s)) continue;
-      int allowed = allowed_sudoku_conflicts(pt);
-
-      auto count = si->pieceCountInSudokuHouse[c][pt];
-      int newFileCount = ++count[SH_FILE][file_of(s)];
-      int newRankCount = ++count[SH_RANK][rank_of(s)];
-      int newBoxCount = sudoku_boxes() ? ++count[SH_BOX][sudoku_box_of(s)] : 0;
-      if (newFileCount > allowed || newRankCount > allowed || newBoxCount > allowed) {
-          ++si->sudokuConflictsCount[c];
-      }
-  }
-#else
-  (void)si;
-#endif
-}
-
-
-/// Position::move_adds_sudoku_conflicts() checks if performing a move leads to a new sudoku conflict
-
-bool Position::move_adds_sudoku_conflicts(Move m) const {
-#ifdef SUDOKU_VARIANTS
-  // Note: currently the function is called only for capture moves.
-  // That's why it doesn't check for special move types like castling, dropping, etc.
-  assert(capture(m));
-
-  if (!var->sudoku) return false;
-
-  // Blast-promotion can change piece types in the blast mask after move effects.
-  // For those variants, use an exact temporary make-move check to keep legality
-  // in sync with post-move sudoku counting.
-  if (blast_promotion()) {
-      StateInfo setupState, nextState;
-      Position p;
-      p.set(variant(), fen(), is_chess960(), &setupState, this_thread());
-      Color us = sideToMove;
-      int before = sudoku_conflicts(us);
-      p.do_move(m, nextState, false);
-      return p.sudoku_conflicts(us) > before;
-  }
-
-  Square from = from_sq(m);
-  Square to = to_sq(m);
-  Piece pc = moved_piece(m);
-
-  Color c = color_of(pc);
-  assert(c == sideToMove);
-  PieceType pt = piece_type_for_sudoku(pc);
-  int allowed = allowed_sudoku_conflicts(pt);
-
-  auto count = st->pieceCountInSudokuHouse[c][pt];
-  int fileRelief = 0, rankRelief = 0, boxRelief = 0;
-
-  // Self-capture of the same sudoku piece type vacates one destination slot.
-  if (self_capture()) {
-      Square capsq = type_of(m) == EN_PASSANT ? capture_square(to)
-                   : is_jump_capture(m)        ? jump_capture_square(from, to)
-                                               : to;
-      if (is_ok(capsq)) {
-          Piece captured = piece_on(capsq);
-          if (captured != NO_PIECE
-              && color_of(captured) == c
-              && piece_type_for_sudoku(captured) == pt)
-          {
-              fileRelief = file_of(capsq) == file_of(to);
-              rankRelief = rank_of(capsq) == rank_of(to);
-              boxRelief = sudoku_boxes() && sudoku_box_of(capsq) == sudoku_box_of(to);
-          }
-      }
-  }
-
-  File fromFile = file_of(from);
-  File toFile = file_of(to);
-  if (fromFile != toFile && count[SH_FILE][toFile] >= allowed + fileRelief) return true;
-
-  Rank fromRank = rank_of(from);
-  Rank toRank = rank_of(to);
-  if (fromRank != toRank && count[SH_RANK][toRank] >= allowed + rankRelief) return true;
-
-  if (sudoku_boxes())
-  {
-      int fromBox = sudoku_box_of(from);
-      int toBox = sudoku_box_of(to);
-      if (fromBox != toBox && count[SH_BOX][toBox] >= allowed + boxRelief) return true;
-  }
-
-  return false;
-#else
-  (void)m;
-  return false;
-#endif
-}
-
-
 /// Position::set_state() computes the hash keys of the position, and other
 /// data that once computed is updated incrementally as moves are made.
 /// The function is only used when a new position is set up, and to verify
@@ -1207,7 +1095,6 @@ void Position::set_state(StateInfo* si) const {
   si->forcedJumpHasFollowup = false;
 
   set_check_info(si);
-  set_sudoku_conflicts_info(si);
 
   for (Bitboard b = pieces(); b; )
   {
@@ -2009,8 +1896,6 @@ bool Position::legal(Move m) const {
       return false;
 
   // Illegal captures
-  if (capture(m) && type_of(captured_piece(m)) != KING && (sudoku_conflicts(us) || move_adds_sudoku_conflicts(m)))
-      return false;
 
   // Illegal non-drop moves
   PieceType requiredDropType = must_drop_type();
@@ -3861,7 +3746,6 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
 
   // Update king attacks used for fast check detection
   set_check_info(st);
-  set_sudoku_conflicts_info(st);
 
   // n-check accounting must include pseudo-royal checks (legacy extinctionPseudoRoyal path).
   if (check_counting() && st->checksRemaining[us] > 0)
