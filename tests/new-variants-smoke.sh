@@ -69,7 +69,7 @@ rm -f "${tmp_ini}"
 
 # This smoke suite contains >8x8 and template-dependent variants.
 # On constrained builds, skip gracefully if any required variant is unavailable.
-for required in hasami eurasian hindustani gala ichess british-chess crown-prince-chess compound-chess half-chess los-alamos-chess dris-at-talata shatranj shatranj-al-jawarhiya chaturanga chaturanga-payagunda chaturanga-al-adli chess-siberia konane tawlbwrdd kharebga maak-yek apit-sodok apit troll tictactoe-misere; do
+for required in hasami eurasian hindustani gala ichess british-chess crown-prince-chess compound-chess half-chess losalamos dris-at-talata shatranj shatranj-al-jawarhiya chaturanga chaturanga-payagunda chaturanga-al-adli chess-siberia konane tawlbwrdd kharebga maak-yek apit-sodok apit troll tictactoe-misere; do
   if ! variant_available "${required}"; then
     echo "new variants smoke skipped: required variant '${required}' is unavailable in this build"
     exit 0
@@ -225,7 +225,7 @@ d")
 echo "${out}" | grep -q "Fen: rnbq/kbbq/4/4/4/4/KBBQ/RNBQ w - - 0 1"
 
 # 19baa) Los Alamos Chess: 6x6 chess without bishops.
-out=$(run_cmds "setoption name UCI_Variant value los-alamos-chess
+out=$(run_cmds "setoption name UCI_Variant value losalamos
 position startpos
 d")
 echo "${out}" | grep -q "Fen: rnqknr/pppppp/6/6/PPPPPP/RNQKNR w - - 0 1"
