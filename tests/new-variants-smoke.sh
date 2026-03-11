@@ -69,7 +69,7 @@ rm -f "${tmp_ini}"
 
 # This smoke suite contains >8x8 and template-dependent variants.
 # On constrained builds, skip gracefully if any required variant is unavailable.
-for required in hasami eurasian hindustani gala ichess british-chess crown-prince-chess compound-chess half-chess losalamos promotion-chess reach-chess dris-at-talata shatranj shatranj-al-jawarhiya chaturanga chaturanga-payagunda chaturanga-al-adli chess-siberia konane tawlbwrdd kharebga maak-yek apit-sodok apit troll tictactoe-misere all-queens-chess; do
+for required in hasami eurasian hindustani gala ichess british-chess crown-prince-chess compound-chess half-chess losalamos promotion-chess reach-chess dris-at-talata tic-tac-chess shatranj shatranj-al-jawarhiya chaturanga chaturanga-payagunda chaturanga-al-adli chess-siberia konane tawlbwrdd kharebga maak-yek apit-sodok apit troll tictactoe-misere all-queens-chess; do
   if ! variant_available "${required}"; then
     echo "new variants smoke skipped: required variant '${required}' is unavailable in this build"
     exit 0
@@ -286,6 +286,17 @@ position startpos moves M@a1 M@a3 M@b2 M@b1 M@c1 M@c3
 go perft 1")
 echo "${out}" | grep -q "^a1a2: 1$"
 echo "${out}" | grep -q "^a1b3: 1$"
+
+# 19ca) Tic-Tac-Chess: setup by drops, then chess-style motion plus hop-without-capture.
+out=$(run_cmds "setoption name UCI_Variant value tic-tac-chess
+position startpos
+go perft 1")
+echo "${out}" | grep -q "^Q@a1: 1$"
+out=$(run_cmds "setoption name UCI_Variant value tic-tac-chess
+position startpos moves Q@a1 Q@b2 R@a2 R@c2 K@b1 K@c1
+go perft 1")
+echo "${out}" | grep -q "^b1b3: 1$"
+echo "${out}" | grep -q "^a2a3: 1$"
 
 # 19d) Shatranj al-Jawarhiya: source-backed 7x8 setup should load as documented.
 out=$(run_cmds "setoption name UCI_Variant value shatranj-al-jawarhiya
