@@ -69,7 +69,7 @@ rm -f "${tmp_ini}"
 
 # This smoke suite contains >8x8 and template-dependent variants.
 # On constrained builds, skip gracefully if any required variant is unavailable.
-for required in hasami eurasian hindustani gala ichess british-chess tawlbwrdd kharebga maak-yek troll; do
+for required in hasami eurasian hindustani gala ichess british-chess tawlbwrdd kharebga maak-yek troll tictactoe-misere; do
   if ! variant_available "${required}"; then
     echo "new variants smoke skipped: required variant '${required}' is unavailable in this build"
     exit 0
@@ -241,6 +241,12 @@ out=$(run_cmds "setoption name UCI_Variant value troll
 position fen 8/8/8/8/8/8/3p4/3P4[PPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPpppppppppppppppppppppppppppppppp] w - - 0 1 moves P@d3
 d")
 echo "${out}" | grep -q "Fen: 8/8/8/8/8/3P4/3P4/3P4 b - - 0 1"
+
+# 23) Tic-Tac-Toe misere: completing your own line loses immediately.
+out=$(run_cmds "setoption name UCI_Variant value tictactoe-misere
+position fen PPP/3/3[pppp] b - - 0 1
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 0"
 
 out=$(run_cmds "setoption name UCI_Variant value progressive
 position startpos moves e2e4 e7e5 e1e1
