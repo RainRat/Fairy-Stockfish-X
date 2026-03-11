@@ -69,7 +69,7 @@ rm -f "${tmp_ini}"
 
 # This smoke suite contains >8x8 and template-dependent variants.
 # On constrained builds, skip gracefully if any required variant is unavailable.
-for required in hasami eurasian hindustani gala ichess british-chess crown-prince-chess compound-chess half-chess losalamos promotion-chess reach-chess dris-at-talata shatranj shatranj-al-jawarhiya chaturanga chaturanga-payagunda chaturanga-al-adli chess-siberia konane tawlbwrdd kharebga maak-yek apit-sodok apit troll tictactoe-misere; do
+for required in hasami eurasian hindustani gala ichess british-chess crown-prince-chess compound-chess half-chess losalamos promotion-chess reach-chess dris-at-talata shatranj shatranj-al-jawarhiya chaturanga chaturanga-payagunda chaturanga-al-adli chess-siberia konane tawlbwrdd kharebga maak-yek apit-sodok apit troll tictactoe-misere all-queens-chess; do
   if ! variant_available "${required}"; then
     echo "new variants smoke skipped: required variant '${required}' is unavailable in this build"
     exit 0
@@ -245,6 +245,16 @@ out=$(run_cmds "setoption name UCI_Variant value reach-chess
 position fen 7k/6Q1/5K2/8/8/8/8/8 b - - 0 1
 go perft 1")
 echo "${out}" | grep -q "^h8h8: 1$"
+
+# 19bad) All Queens Chess: source-backed setup and line-of-four win.
+out=$(run_cmds "setoption name UCI_Variant value all-queens-chess
+position startpos
+d")
+echo "${out}" | grep -q "Fen: qQqQq/5/Q3q/5/QqQqQ w - - 0 1"
+out=$(run_cmds "setoption name UCI_Variant value all-queens-chess
+position fen 5/QQQQ1/5/5/5 b - - 0 1
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 0"
 
 # 19bb) Compound Chess: setup and dragon-specific en passant capture.
 out=$(run_cmds "setoption name UCI_Variant value compound-chess
