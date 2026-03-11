@@ -674,6 +674,12 @@ ScaleFactor Endgame<KRPKR>::operator()(const Position& pos) const {
   assert(verify_material(pos, strongSide, RookValueMg, 1));
   assert(verify_material(pos, weakSide,   RookValueMg, 0));
 
+  // This evaluator is copied from classic 8x8 rook endgame knowledge and
+  // relies on literal board geometry (a-file rook pawns, 8th-rank promotion,
+  // specific fortress squares). Do not apply it to non-8x8 boards.
+  if (pos.max_file() != FILE_H || pos.max_rank() != RANK_8)
+      return SCALE_FACTOR_NONE;
+
   // Assume strongSide is white and the pawn is on files A-D
   Square strongKing = normalize(pos, strongSide, pos.square<KING>(strongSide));
   Square strongRook = normalize(pos, strongSide, pos.square<ROOK>(strongSide));
