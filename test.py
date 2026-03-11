@@ -637,6 +637,18 @@ startFen = ********/4k3/8/8/8/8/8/8/4K3/******** w - - 0 1
         self.assertNotEqual(sf.validate_fen(bad_commit_lead, "commitcheck"), sf.FEN_OK)
         self.assertNotEqual(sf.validate_fen(bad_commit_tail, "commitcheck"), sf.FEN_OK)
 
+        sf.load_variant_config(
+            """[commitround:chess]
+gating = true
+commitGates = true
+castling = false
+startFen = q******r/4k3/8/8/8/8/8/8/R3K2R/Q******R w - - 0 1
+"""
+        )
+        after_commit = sf.get_fen("commitround", sf.start_fen("commitround"), ["a1a2"])
+        self.assertEqual(sf.validate_fen(after_commit, "commitround"), sf.FEN_OK)
+        self.assertEqual(sf.get_fen("commitround", after_commit, []), after_commit)
+
         # Shogi pawn-drop mate is illegal.
         fen = "BRBRSSSGG/nPPPPPPPP/n8/n8/n8/ll7/kl7/9/K8[PPPPPPPPPPggsl] w - - 0 1"
         result = sf.legal_moves("shogi", fen, [])
