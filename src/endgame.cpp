@@ -859,7 +859,7 @@ ScaleFactor Endgame<KPsK>::operator()(const Position& pos) const {
   Bitboard strongPawns = pos.pieces(strongSide, PAWN);
 
   // If all pawns are ahead of the king on a single rook file, it's a draw.
-  if (   !(strongPawns & ~(FileABB | FileHBB))
+  if (   !(strongPawns & ~(FileABB | file_bb(pos.max_file())))
       && !(strongPawns & ~passed_pawn_span(weakSide, weakKing)))
       return SCALE_FACTOR_DRAW;
 
