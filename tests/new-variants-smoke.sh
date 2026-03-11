@@ -69,7 +69,7 @@ rm -f "${tmp_ini}"
 
 # This smoke suite contains >8x8 and template-dependent variants.
 # On constrained builds, skip gracefully if any required variant is unavailable.
-for required in hasami eurasian hindustani gala ichess british-chess crown-prince-chess compound-chess half-chess losalamos promotion-chess dris-at-talata shatranj shatranj-al-jawarhiya chaturanga chaturanga-payagunda chaturanga-al-adli chess-siberia konane tawlbwrdd kharebga maak-yek apit-sodok apit troll tictactoe-misere; do
+for required in hasami eurasian hindustani gala ichess british-chess crown-prince-chess compound-chess half-chess losalamos promotion-chess reach-chess dris-at-talata shatranj shatranj-al-jawarhiya chaturanga chaturanga-payagunda chaturanga-al-adli chess-siberia konane tawlbwrdd kharebga maak-yek apit-sodok apit troll tictactoe-misere; do
   if ! variant_available "${required}"; then
     echo "new variants smoke skipped: required variant '${required}' is unavailable in this build"
     exit 0
@@ -235,6 +235,16 @@ out=$(run_cmds "setoption name UCI_Variant value promotion-chess
 position startpos
 d")
 echo "${out}" | grep -q "Fen: 7k/pppppppp/8/pppppppp/PPPPPPPP/8/PPPPPPPP/K7 w - - 0 1"
+
+# 19bac) Reach Chess: reaching the back rank wins, and checkmate only forces a pass.
+out=$(run_cmds "setoption name UCI_Variant value reach-chess
+position fen 4P3/8/8/8/8/8/8/4k3 b - - 0 1
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 0"
+out=$(run_cmds "setoption name UCI_Variant value reach-chess
+position fen 7k/6Q1/5K2/8/8/8/8/8 b - - 0 1
+go perft 1")
+echo "${out}" | grep -q "^h8h8: 1$"
 
 # 19bb) Compound Chess: setup and dragon-specific en passant capture.
 out=$(run_cmds "setoption name UCI_Variant value compound-chess
