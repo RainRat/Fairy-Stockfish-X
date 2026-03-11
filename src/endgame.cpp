@@ -613,7 +613,8 @@ ScaleFactor Endgame<KBPsK>::operator()(const Position& pos) const {
 
       // There's potential for a draw if our pawn is blocked on the 7th rank,
       // the bishop cannot attack it or they only have one pawn left.
-      if (   relative_rank(strongSide, weakPawn, pos.max_rank()) == RANK_7
+      const Rank penultimateRank = Rank(int(pos.max_rank()) - 1);
+      if (   relative_rank(strongSide, weakPawn, pos.max_rank()) == penultimateRank
           && (strongPawns & (weakPawn + pawn_push(weakSide)))
           && (opposite_colors(strongBishop, weakPawn) || !more_than_one(strongPawns)))
       {
@@ -626,7 +627,7 @@ ScaleFactor Endgame<KBPsK>::operator()(const Position& pos) const {
           // unreachable positions such as 5k1K/6p1/6P1/8/8/3B4/8/8 w
           // and positions where qsearch will immediately correct the
           // problem such as 8/4k1p1/6P1/1K6/3B4/8/8/8 w).
-          if (   relative_rank(strongSide, weakKing, pos.max_rank()) >= RANK_7
+          if (   relative_rank(strongSide, weakKing, pos.max_rank()) >= penultimateRank
               && weakKingDist <= 2
               && weakKingDist <= strongKingDist)
               return SCALE_FACTOR_DRAW;
