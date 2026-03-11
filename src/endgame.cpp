@@ -309,6 +309,11 @@ Value Endgame<KQKP>::operator()(const Position& pos) const {
   assert(verify_material(pos, strongSide, QueenValueMg, 0));
   assert(verify_material(pos, weakSide, VALUE_ZERO, 1));
 
+  // This draw exception is based on classic 8x8 fortress cases for pawns on
+  // files A/C/F/H and does not generalize cleanly to other board widths.
+  if (pos.max_file() != FILE_H || pos.max_rank() != RANK_8)
+      return VALUE_NONE;
+
   Square strongKing = pos.square<KING>(strongSide);
   Square weakKing   = pos.square<KING>(weakSide);
   Square weakPawn   = pos.square<PAWN>(weakSide);
