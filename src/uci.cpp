@@ -567,7 +567,7 @@ string UCI::move(const Position& pos, Move m) {
                   + UCI::square(pos, to);
 
   // Wall square
-  if (pos.walling() && CurrentProtocol == XBOARD)
+  if (pos.walling(pos.side_to_move()) && CurrentProtocol == XBOARD)
       move += "," + UCI::square(pos, to) + UCI::square(pos, gating_square(m));
 
   if (type_of(m) == PROMOTION)
@@ -584,7 +584,7 @@ string UCI::move(const Position& pos, Move m) {
   }
 
   // Wall square
-  if (pos.walling() && CurrentProtocol != XBOARD)
+  if (pos.walling(pos.side_to_move()) && CurrentProtocol != XBOARD)
       move += "," + UCI::square(pos, to) + UCI::square(pos, gating_square(m));
 
   if (potionMove)

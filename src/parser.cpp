@@ -1139,6 +1139,8 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("immobilityIllegal", v->immobilityIllegal);
     parse_attribute("gating", v->gating);
     parse_attribute("wallingRule", v->wallingRule);
+    parse_attribute("wallingWhite", v->wallingSide[WHITE]);
+    parse_attribute("wallingBlack", v->wallingSide[BLACK]);
     parse_attribute("wallingRegionWhite", v->wallingRegion[WHITE]);
     parse_attribute("wallingRegionBlack", v->wallingRegion[BLACK]);
     parse_attribute("wallingRegion", v->wallingRegion[WHITE]);

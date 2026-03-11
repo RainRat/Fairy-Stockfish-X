@@ -65,7 +65,7 @@ namespace {
 
     // Wall placing moves
     //if it's "wall or move", and they chose non-null move, skip even generating wall move
-    if (pos.walling() && !(pos.wall_or_move() && (from!=to)))
+    if (pos.walling(us) && !(pos.wall_or_move() && (from!=to)))
     {
         Bitboard b = pos.board_bb() & ~((pos.pieces() ^ from) | to);
         if (T == CASTLING)

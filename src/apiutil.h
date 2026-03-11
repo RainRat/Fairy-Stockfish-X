@@ -363,7 +363,7 @@ inline const std::string move_to_san(Position& pos, Move m, Notation n) {
     }
 
     // Wall square
-    if (pos.walling())
+    if (pos.walling(us))
         san += "," + square(pos, pos.gate_square(m), n);
 
     // Check and checkmate

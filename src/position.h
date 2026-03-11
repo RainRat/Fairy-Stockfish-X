@@ -266,6 +266,7 @@ public:
   Bitboard freeze_zone_from_square(Square s) const;
   bool gating() const;
   bool walling() const;
+  bool walling(Color c) const;
   WallingRule walling_rule() const;
   bool wall_or_move() const;
   Bitboard walling_region(Color c) const;
@@ -1371,7 +1372,12 @@ inline bool Position::gating() const {
 
 inline bool Position::walling() const {
   assert(var != nullptr);
-  return var->wallingRule != NO_WALLING;
+  return var->wallingRule != NO_WALLING && (var->wallingSide[WHITE] || var->wallingSide[BLACK]);
+}
+
+inline bool Position::walling(Color c) const {
+  assert(var != nullptr);
+  return var->wallingRule != NO_WALLING && var->wallingSide[c];
 }
 
 inline WallingRule Position::walling_rule() const {

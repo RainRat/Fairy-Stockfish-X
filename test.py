@@ -778,6 +778,46 @@ royalPieceNoThroughCheck = true
         self.assertNotIn("e1e3", restricted_moves)
         self.assertIn("e1f1", restricted_moves)
 
+    def test_asymmetric_walling_turns(self):
+        sf.load_variant_config(
+            """[whitewalls:chess]
+maxRank = 4
+maxFile = 4
+pieceToCharTable = -
+king = -
+queen = -
+customPiece1 = q:mQ
+startFen = 4/1q2/4/2Q1 w - - 0 1
+wallingRule = arrow
+wallingWhite = true
+wallingBlack = false
+captureForbidden = *:*
+checking = false
+"""
+        )
+
+        start = sf.start_fen("whitewalls")
+        white_moves = sf.legal_moves("whitewalls", start, [])
+        self.assertTrue(white_moves)
+        self.assertTrue(all("," in m for m in white_moves))
+
+        after_white = sf.get_fen("whitewalls", start, [white_moves[0]])
+        black_moves = sf.legal_moves("whitewalls", after_white, [])
+        self.assertTrue(black_moves)
+        self.assertTrue(all("," not in m for m in black_moves))
+
+    def test_witch_hunting_basics(self):
+        sf.load_variant_config(open("src/variants.ini").read())
+        fen = sf.start_fen("witch-hunting")
+        white_moves = sf.legal_moves("witch-hunting", fen, [])
+        self.assertTrue(white_moves)
+        self.assertTrue(all("," in m for m in white_moves))
+
+        after_white = sf.get_fen("witch-hunting", fen, [white_moves[0]])
+        black_moves = sf.legal_moves("witch-hunting", after_white, [])
+        self.assertTrue(black_moves)
+        self.assertTrue(all("," not in m for m in black_moves))
+
     def test_chesscom_custom_setups_basics(self):
         # Trapped Queens / Infiltration Danger / Stone Gravitation are orthodox 8x8
         # positions imported from chess.com Fen4 setups.

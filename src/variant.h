@@ -159,6 +159,7 @@ struct Variant {
   bool immobilityIllegal = false;
   bool gating = false;
   WallingRule wallingRule = NO_WALLING;
+  bool wallingSide[COLOR_NB] = {true, true};
   Bitboard wallingRegion[COLOR_NB] = {AllSquares, AllSquares};
   bool wallOrMove = false;
   bool seirawanGating = false;

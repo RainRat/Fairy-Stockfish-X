@@ -1973,7 +1973,7 @@ bool Position::legal(Move m) const {
       Bitboard blastImmune = blastOnCapture ? blast_immune_bb() : Bitboard(0);
       if (walling_rule() == DUCK)
           occupied ^= st->wallSquares;
-      if (walling() || is_gating(m))
+      if (walling(us) || is_gating(m))
           occupied |= gating_square(m);
       if (type_of(m) == CASTLING)
       {
@@ -2064,7 +2064,7 @@ bool Position::legal(Move m) const {
       Bitboard occupied = (type_of(m) != DROP ? pieces() ^ from : pieces());
       if (walling_rule() == DUCK)
           occupied ^= st->wallSquares;
-      if (walling() || is_gating(m))
+      if (walling(us) || is_gating(m))
           occupied |= gating_square(m);
       if (type_of(m) == CASTLING)
       {
@@ -2364,7 +2364,7 @@ bool Position::pseudo_legal(const Move m) const {
                         : MoveList<NON_EVASIONS>(*this).contains(m);
 
   //if walling, and walling is not optional, or they didn't move, do the checks.
-  if (walling() && (!wall_or_move() || (from == to)))
+  if (walling(us) && (!wall_or_move() || (from == to)))
   {
       Bitboard wallsquares = st->wallSquares;
 
@@ -3109,7 +3109,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       {
           if (   (var->enPassantRegion[them] & (to - pawn_push(us)))
               && ((pawn_attacks_bb(us, to - pawn_push(us)) & pieces(them, PAWN)) || (var->enPassantTypes[them] & ~piece_set(PAWN)))
-              && !(walling() && gating_square(m) == to - pawn_push(us)))
+              && !(walling(us) && gating_square(m) == to - pawn_push(us)))
           {
               st->epSquares |= to - pawn_push(us);
               k ^= Zobrist::enpassant[to - pawn_push(us)];
@@ -3117,7 +3117,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           if (   std::abs(int(to) - int(from)) == 3 * NORTH
               && (var->enPassantRegion[them] & (to - 2 * pawn_push(us)))
               && ((pawn_attacks_bb(us, to - 2 * pawn_push(us)) & pieces(them, PAWN)) || (var->enPassantTypes[them] & ~piece_set(PAWN)))
-              && !(walling() && gating_square(m) == to - 2 * pawn_push(us)))
+              && !(walling(us) && gating_square(m) == to - 2 * pawn_push(us)))
           {
               st->epSquares |= to - 2 * pawn_push(us);
               k ^= Zobrist::enpassant[to - 2 * pawn_push(us)];
@@ -3597,7 +3597,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
 
   // Add gated wall square
   // if wallOrMove, only actually place the wall if they gave up their move
-  if (walling() && (!wall_or_move() || (from == to)))
+  if (walling(us) && (!wall_or_move() || (from == to)))
   {
       // Reset wall squares for duck walling
       if (walling_rule() == DUCK)
