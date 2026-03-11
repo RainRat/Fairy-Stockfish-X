@@ -1019,6 +1019,7 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("oppositeCastling", v->oppositeCastling);
     parse_attribute("checking", v->checking);
     parse_attribute("allowChecks", v->allowChecks);
+    parse_attribute("royalPieceNoThroughCheck", v->royalPieceNoThroughCheck);
     parse_attribute("dropChecks", v->dropChecks);
     parse_attribute("dropMates", v->dropMates);
     parse_attribute("mustCapture", v->mustCapture);

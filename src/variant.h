@@ -119,6 +119,7 @@ struct Variant {
   PieceType kingType = KING;
   bool checking = true;
   bool allowChecks = false;
+  bool royalPieceNoThroughCheck = false;
   bool dropChecks = true;
   bool dropMates = true;
   bool mustCapture = false;

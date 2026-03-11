@@ -759,6 +759,25 @@ startFen = rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w - - 0 1
         rook_capture_moves = sf.legal_moves("altergaproto", "4k3/8/4p3/8/4R3/8/8/4K3 w - - 0 1", [])
         self.assertIn("e4e6", rook_capture_moves)  # rook-style capture
 
+    def test_royal_piece_no_through_check(self):
+        sf.load_variant_config(
+            """[caissapathoff:chess]
+king = q:Q
+castling = false
+startFen = 4k3/8/8/8/8/8/1r6/4Q3 w - - 0 1
+
+[caissapathon:caissapathoff]
+royalPieceNoThroughCheck = true
+"""
+        )
+
+        baseline_moves = sf.legal_moves("caissapathoff", sf.start_fen("caissapathoff"), [])
+        restricted_moves = sf.legal_moves("caissapathon", sf.start_fen("caissapathon"), [])
+
+        self.assertIn("e1e3", baseline_moves)
+        self.assertNotIn("e1e3", restricted_moves)
+        self.assertIn("e1f1", restricted_moves)
+
     def test_chesscom_custom_setups_basics(self):
         # Trapped Queens / Infiltration Danger / Stone Gravitation are orthodox 8x8
         # positions imported from chess.com Fen4 setups.

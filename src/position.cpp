@@ -2213,6 +2213,18 @@ bool Position::legal(Move m) const {
   if (var->makpongRule && checkers() && type_of(moved_piece(m)) == KING && (checkers() ^ to))
       return false;
 
+  if (var->royalPieceNoThroughCheck && type_of(moved_piece(m)) == KING)
+  {
+      Bitboard traversed = between_bb(from, to, king_type()) & ~square_bb(to);
+      while (traversed)
+      {
+          Square s = pop_lsb(traversed);
+          Bitboard pathOccupied = (pieces() ^ from) | s;
+          if (attackers_to_king(s, pathOccupied, ~us))
+              return false;
+      }
+  }
+
   // If the moving piece is a king, check whether the destination square is
   // attacked by the opponent.
   if (!allow_checks() && type_of(moved_piece(m)) == KING)
