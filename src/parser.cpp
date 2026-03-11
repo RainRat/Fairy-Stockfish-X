@@ -628,8 +628,10 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
                 if (keyValue->second.size() > 1)
                 {
                     // custom royal piece
+                    v->add_piece(CUSTOM_PIECES_ROYAL, keyValue->second.at(0));
                     v->customPiece[CUSTOM_PIECES_ROYAL - CUSTOM_PIECES] = keyValue->second.substr(2);
                     v->kingType = CUSTOM_PIECES_ROYAL;
+                    v->castlingKingPiece[WHITE] = v->castlingKingPiece[BLACK] = CUSTOM_PIECES_ROYAL;
                 }
                 else
                     v->kingType = KING;

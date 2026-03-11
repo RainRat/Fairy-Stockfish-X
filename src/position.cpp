@@ -2213,7 +2213,7 @@ bool Position::legal(Move m) const {
   if (var->makpongRule && checkers() && type_of(moved_piece(m)) == KING && (checkers() ^ to))
       return false;
 
-  if (var->royalPieceNoThroughCheck && type_of(moved_piece(m)) == KING)
+  if (var->royalPieceNoThroughCheck && type_of(moved_piece(m)) == king_type())
   {
       Bitboard traversed = between_bb(from, to) & ~square_bb(to);
       while (traversed)

@@ -764,7 +764,8 @@ startFen = rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w - - 0 1
             """[caissapathoff:chess]
 king = q:Q
 castling = false
-startFen = 4k3/8/8/8/8/8/1r6/4Q3 w - - 0 1
+startFen = 4q3/8/8/8/8/8/1r6/4Q3 w - - 0 1
+
 
 [caissapathon:caissapathoff]
 royalPieceNoThroughCheck = true
