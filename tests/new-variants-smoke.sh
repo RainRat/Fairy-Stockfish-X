@@ -181,6 +181,12 @@ position fen 4k3/8/8/3p4/4P3/8/8/8 w - - 0 1 moves e4d5
 d")
 echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/8 b - - 0 1"
 
+# 15b) Kamikaze: kings are exempt from self-destruction on capture.
+out=$(run_cmds "setoption name UCI_Variant value kamikaze
+position fen 8/8/8/3P4/4k3/8/8/4K3 b - - 0 1 moves e4d5
+d")
+echo "${out}" | grep -q "Fen: 8/8/8/3k4/8/8/8/4K3 w - - 0 2"
+
 # 16) Fatal giveaway: dead squares can be captured as neutral blockers.
 out=$(run_cmds "setoption name UCI_Variant value fatal-giveaway
 position fen 4k3/8/8/4\\^3/8/8/8/4Q3 w - - 0 1 moves e1e5

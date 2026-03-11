@@ -3635,9 +3635,10 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   bool diesOnSameTypeCapture = var->capturerDiesOnSameTypeCapture
                             && captured != NO_PIECE
                             && type_of(captured) == movedType;
+  bool exemptFromCapturerDeath = (var->capturerDiesExemptTypes & piece_set(movedType))
+                              || (var->capturerDiesExemptPawns && movedType == PAWN);
   bool diesOnCapture = (death_on_capture_types() & piece_set(movedType))
-                    || (var->capturerDiesOnCapture
-                        && !(var->capturerDiesExemptPawns && movedType == PAWN))
+                    || (var->capturerDiesOnCapture && !exemptFromCapturerDeath)
                     || diesOnSameTypeCapture;
   if (!capturedDeadSquare && captured != NO_PIECE && type_of(m) != DROP && diesOnCapture
       && piece_on(to) != NO_PIECE)

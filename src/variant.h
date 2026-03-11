@@ -128,6 +128,7 @@ struct Variant {
   bool capturerDiesOnCapture = false;
   bool capturerDiesOnSameTypeCapture = false;
   bool capturerDiesExemptPawns = false;
+  PieceSet capturerDiesExemptTypes = NO_PIECE_SET;
   bool mustDrop = false;
   bool mustDropByColor[COLOR_NB] = {false, false};
   PieceType mustDropType = ALL_PIECES;

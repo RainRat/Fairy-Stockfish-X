@@ -1028,6 +1028,7 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("selfCapture", v->selfCapture);
     parse_attribute("capturerDiesOnCapture", v->capturerDiesOnCapture);
     parse_attribute("capturerDiesOnSameTypeCapture", v->capturerDiesOnSameTypeCapture);
+    parse_attribute("capturerDiesExemptTypes", v->capturerDiesExemptTypes, v->pieceToChar);
     parse_attribute("capturerDiesExemptPawns", v->capturerDiesExemptPawns);
     parse_attribute("captureMorph", v->captureMorph);
     parse_attribute("rexExclusiveMorph", v->rexExclusiveMorph);
