@@ -2243,6 +2243,31 @@ bool Position::legal(Move m) const {
 
   Bitboard occupied = (type_of(m) != DROP ? pieces() ^ from : pieces()) | to;
 
+  // Gated kings and pseudo-royals must not be introduced onto attacked squares.
+  // If the move captures an attacker on its way, ignore that disappearing attack.
+  if (is_gating(m) && gating_type(m) != NO_PIECE_TYPE)
+  {
+      PieceType gateType = gating_type(m);
+      if (gateType == KING || (pseudo_royal_types() & piece_set(gateType)))
+      {
+          Square gate = gating_square(m);
+          Bitboard occ = occupied | gate;
+          if (type_of(m) == EN_PASSANT)
+              occ ^= capture_square(to);
+
+          Bitboard attackers = gateType == KING ? attackers_to_king(gate, occ, ~us)
+                                                : attackers_to(gate, occ, ~us);
+
+          if (capture(m) && piece_on(to) != NO_PIECE)
+              attackers &= ~square_bb(to);
+          if (type_of(m) == EN_PASSANT)
+              attackers &= ~square_bb(capture_square(to));
+
+          if (attackers)
+              return false;
+      }
+  }
+
   // Flying general rule and bikjang
   // In case of bikjang passing is always allowed, even when in check
   if (st->bikjang && is_pass(m))
