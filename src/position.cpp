@@ -521,8 +521,8 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
   size_t idx;
   std::istringstream ss(fenStr);
 
-  std::memset(this, 0, sizeof(Position));
-  std::memset(si, 0, sizeof(StateInfo));
+  std::memset(static_cast<void*>(this), 0, sizeof(Position));
+  std::memset(static_cast<void*>(si), 0, sizeof(StateInfo));
   st = si;
 
   var = v;
@@ -4179,7 +4179,7 @@ void Position::do_null_move(StateInfo& newSt) {
   assert(!checkers());
   assert(&newSt != st);
 
-  std::memcpy(&newSt, st, offsetof(StateInfo, accumulator));
+  std::memcpy(static_cast<void*>(&newSt), static_cast<const void*>(st), offsetof(StateInfo, accumulator));
 
   newSt.previous = st;
   st = &newSt;
