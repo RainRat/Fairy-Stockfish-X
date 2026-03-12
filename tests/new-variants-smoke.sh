@@ -69,7 +69,7 @@ rm -f "${tmp_ini}"
 
 # This smoke suite contains >8x8 and template-dependent variants.
 # On constrained builds, skip gracefully if any required variant is unavailable.
-for required in hasami eurasian hindustani gala ichess british-chess crown-prince-chess compound-chess half-chess losalamos promotion-chess reach-chess dris-at-talata tictacchess shatranj shatranj-al-jawarhiya chaturanga chaturanga-payagunda chaturanga-al-adli shatranj-turkey chess-siberia hp-minichess konane tawlbwrdd kharebga maak-yek apit-sodok apit troll tictactoe-misere all-queens-chess; do
+for required in hasami eurasian hindustani gala ichess british-chess crown-prince-chess compound-chess half-chess losalamos promotion-chess reach-chess dris-at-talata tictacchess shatranj shatranj-al-jawarhiya chaturanga chaturanga-payagunda chaturanga-al-adli shatranj-turkey tsatsarandi chess-siberia hp-minichess konane tawlbwrdd kharebga maak-yek apit-sodok apit troll tictactoe-misere all-queens-chess; do
   if ! variant_available "${required}"; then
     echo "new variants smoke skipped: required variant '${required}' is unavailable in this build"
     exit 0
@@ -347,6 +347,12 @@ go perft 1")
 echo "${out}" | grep -q "^d1d3: 1$"
 echo "${out}" | grep -q "^d1b3: 1$"
 echo "${out}" | grep -q "^d1f3: 1$"
+
+# 19df) Tsatsarandi: documented title currently maps to orthodox shatranj rules.
+out=$(run_cmds "setoption name UCI_Variant value tsatsarandi
+position startpos
+d")
+echo "${out}" | grep -q "Fen: rnafkanr/pppppppp/8/8/8/8/PPPPPPPP/RNAFKANR w - - 0 1"
 
 # 19e) Chess (Siberia): source-backed 9x9 setup should load as documented.
 out=$(run_cmds "setoption name UCI_Variant value chess-siberia
