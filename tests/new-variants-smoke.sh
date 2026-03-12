@@ -69,7 +69,7 @@ rm -f "${tmp_ini}"
 
 # This smoke suite contains >8x8 and template-dependent variants.
 # On constrained builds, skip gracefully if any required variant is unavailable.
-for required in hasami eurasian hindustani gala ichess british-chess crown-prince-chess compound-chess half-chess losalamos promotion-chess reach-chess dris-at-talata tictacchess shatranj shatranj-al-jawarhiya chaturanga chaturanga-payagunda chaturanga-al-adli shatranj-turkey tsatsarandi chess-siberia hp-minichess dodgem konane tawlbwrdd kharebga maak-yek apit-sodok apit troll tictactoe-misere all-queens-chess gale-5; do
+for required in hasami eurasian hindustani gala ichess british-chess crown-prince-chess compound-chess half-chess losalamos promotion-chess reach-chess dris-at-talata tictacchess shatranj shatranj-al-jawarhiya chaturanga chaturanga-payagunda chaturanga-al-adli shatranj-turkey tsatsarandi chess-siberia hp-minichess dodgem konane tawlbwrdd kharebga maak-yek apit-sodok apit troll tictactoe-misere all-queens-chess gale-5 battery-chess; do
   if ! variant_available "${required}"; then
     echo "new variants smoke skipped: required variant '${required}' is unavailable in this build"
     exit 0
@@ -164,6 +164,16 @@ out=$(run_cmds "setoption name UCI_Variant value eurasian
 position fen 4k5/P9/10/10/10/10/10/10/10/5K4[Q] w - - 0 1
 go perft 1")
 echo "${out}" | grep -q "^a9a10q: 1$"
+
+# 12b) Battery Chess: promotion requires a captured reserve piece and consumes it.
+out=$(run_cmds "setoption name UCI_Variant value battery-chess
+position fen 4k3/P7/8/8/8/8/8/4K3 w - - 0 1
+go perft 1")
+! echo "${out}" | grep -q "^a7a8"
+out=$(run_cmds "setoption name UCI_Variant value battery-chess
+position fen 4k3/P7/8/8/8/8/8/4K3[Q] w - - 0 1 moves a7a8q
+d")
+echo "${out}" | grep -q "Fen: Q~3k3/8/8/8/8/8/8/4K3\\[\\] b - - 0 1"
 
 # 13) Fatal giveaway: non-pawn capturer dies, pawns survive captures.
 out=$(run_cmds "setoption name UCI_Variant value fatal-giveaway
