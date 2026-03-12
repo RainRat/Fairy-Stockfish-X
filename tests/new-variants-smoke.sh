@@ -69,7 +69,7 @@ rm -f "${tmp_ini}"
 
 # This smoke suite contains >8x8 and template-dependent variants.
 # On constrained builds, skip gracefully if any required variant is unavailable.
-for required in hasami eurasian hindustani gala ichess british-chess crown-prince-chess compound-chess half-chess losalamos promotion-chess reach-chess dris-at-talata tictacchess shatranj shatranj-al-jawarhiya chaturanga chaturanga-payagunda chaturanga-al-adli shatranj-turkey tsatsarandi chess-siberia hp-minichess dodgem konane tawlbwrdd kharebga maak-yek apit-sodok apit troll tictactoe-misere all-queens-chess; do
+for required in hasami eurasian hindustani gala ichess british-chess crown-prince-chess compound-chess half-chess losalamos promotion-chess reach-chess dris-at-talata tictacchess shatranj shatranj-al-jawarhiya chaturanga chaturanga-payagunda chaturanga-al-adli shatranj-turkey tsatsarandi chess-siberia hp-minichess dodgem konane tawlbwrdd kharebga maak-yek apit-sodok apit troll tictactoe-misere all-queens-chess gale-5; do
   if ! variant_available "${required}"; then
     echo "new variants smoke skipped: required variant '${required}' is unavailable in this build"
     exit 0
@@ -449,6 +449,20 @@ out=$(run_cmds "setoption name UCI_Variant value gale-misere
 position fen 1P5/P1P5/2P5/9/9/9/9/9/9 w - - 0 1
 go depth 1")
 echo "${out}" | grep -q "Nodes searched: 0"
+
+# 19fzzz) Gale 5x5: connecting left to right is an immediate win.
+out=$(run_cmds "setoption name UCI_Variant value gale-5
+position fen 1P3/P4/P4/P4/1P3 w - - 0 1
+go depth 1")
+echo "${out}" | grep -q "Nodes searched: 0"
+
+# 19fzzzz) Gale 15x15: only available on VERY_LARGE_BOARDS builds.
+if variant_available "gale-15"; then
+  out=$(run_cmds "setoption name UCI_Variant value gale-15
+position fen 1P13/P14/P14/P14/P14/P14/P14/P14/P14/P14/P14/P14/P14/P14/1P13 w - - 0 1
+go depth 1")
+  echo "${out}" | grep -q "Nodes searched: 0"
+fi
 
 # 19g) Apit-Sodok: same reverse/intervention capture as Maak Yek.
 out=$(run_cmds "setoption name UCI_Variant value apit-sodok
