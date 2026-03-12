@@ -1026,27 +1026,53 @@ void Position::set_check_info(StateInfo* si) const {
   si->blockersForKing[BLACK] = slider_blockers(pieces(WHITE), count<KING>(BLACK) ? square<KING>(BLACK) : SQ_NONE, si->pinners[WHITE], WHITE);
 
   Square ksq = count<KING>(~sideToMove) ? square<KING>(~sideToMove) : SQ_NONE;
+  Bitboard occupied = pieces();
 
   // For unused piece types, the check squares are left uninitialized
-  si->nonSlidingRiders = 0;
-  if (ksq == SQ_NONE)
-      for (PieceSet ps = piece_types(); ps;)
-          si->checkSquares[pop_lsb(ps)] = Bitboard(0);
+  if (fast_attacks())
+  {
+      const bool hasKing = ksq != SQ_NONE;
+      const Bitboard pawnAttacks = hasKing ? pawn_attacks_bb(~sideToMove, ksq) : Bitboard(0);
+      const Bitboard knightAttacks = hasKing ? attacks_bb<KNIGHT>(ksq) : Bitboard(0);
+      const Bitboard bishopAttacks = hasKing ? attacks_bb<BISHOP>(ksq, occupied) : Bitboard(0);
+      const Bitboard rookAttacks = hasKing ? attacks_bb<ROOK>(ksq, occupied) : Bitboard(0);
+      const Bitboard kingAttacks = hasKing ? attacks_bb<KING>(ksq) : Bitboard(0);
+      const Bitboard queenAttacks = bishopAttacks | rookAttacks;
+
+      si->checkSquares[PAWN] = pawnAttacks;
+      si->checkSquares[KNIGHT] = knightAttacks;
+      si->checkSquares[BISHOP] = bishopAttacks;
+      si->checkSquares[ROOK] = rookAttacks;
+      si->checkSquares[QUEEN] = queenAttacks;
+      si->checkSquares[KING] = kingAttacks;
+      si->checkSquares[COMMONER] = kingAttacks;
+      si->checkSquares[ARCHBISHOP] = bishopAttacks | knightAttacks;
+      si->checkSquares[CHANCELLOR] = rookAttacks | knightAttacks;
+      si->checkSquares[IMMOBILE_PIECE] = Bitboard(0);
+
+      si->nonSlidingRiders = 0;
+  }
   else
   {
-      Bitboard occupied = pieces();
-      for (PieceSet ps = piece_types(); ps;)
+      si->nonSlidingRiders = 0;
+      if (ksq == SQ_NONE)
+          for (PieceSet ps = piece_types(); ps;)
+              si->checkSquares[pop_lsb(ps)] = Bitboard(0);
+      else
       {
-          PieceType pt = pop_lsb(ps);
-          PieceType movePt = pt == KING ? king_type() : pt;
-          if (AttackRiderTypes[movePt] & ASYMMETRICAL_RIDERS)
-              // For asymmetrical riders, use true retro paths from the king square.
-              si->checkSquares[pt] = retro_asymmetric_check_squares(sideToMove, movePt, ksq, occupied);
-          else
-              si->checkSquares[pt] = attacks_bb(~sideToMove, movePt, ksq, occupied);
-          // Collect special piece types that require slower check and evasion detection
-          if (AttackRiderTypes[movePt] & NON_SLIDING_RIDERS)
-              si->nonSlidingRiders |= pieces(pt);
+          for (PieceSet ps = piece_types(); ps;)
+          {
+              PieceType pt = pop_lsb(ps);
+              PieceType movePt = pt == KING ? king_type() : pt;
+              if (AttackRiderTypes[movePt] & ASYMMETRICAL_RIDERS)
+                  // For asymmetrical riders, use true retro paths from the king square.
+                  si->checkSquares[pt] = retro_asymmetric_check_squares(sideToMove, movePt, ksq, occupied);
+              else
+                  si->checkSquares[pt] = attacks_bb(~sideToMove, movePt, ksq, occupied);
+              // Collect special piece types that require slower check and evasion detection
+              if (AttackRiderTypes[movePt] & NON_SLIDING_RIDERS)
+                  si->nonSlidingRiders |= pieces(pt);
+          }
       }
   }
   si->shak = si->checkersBB & (byTypeBB[KNIGHT] | byTypeBB[ROOK] | byTypeBB[BERS]);

@@ -2164,7 +2164,47 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s) const {
   if (spellContextActive && c == sideToMove)
       occupancy &= ~spellJumpRemoved;
 
-  if ((fast_attacks() || fast_attacks2()) && (pt != KING || king_type() == KING))
+  if (fast_attacks() && (pt != KING || king_type() == KING))
+  {
+      Bitboard b = 0;
+      switch (pt)
+      {
+      case PAWN:
+          b = pawn_attacks_bb(c, s);
+          break;
+      case KNIGHT:
+          b = attacks_bb<KNIGHT>(s);
+          break;
+      case BISHOP:
+          b = attacks_bb<BISHOP>(s, occupancy);
+          break;
+      case ROOK:
+          b = attacks_bb<ROOK>(s, occupancy);
+          break;
+      case QUEEN:
+          b = attacks_bb<BISHOP>(s, occupancy) | attacks_bb<ROOK>(s, occupancy);
+          break;
+      case KING:
+      case COMMONER:
+          b = attacks_bb<KING>(s);
+          break;
+      case ARCHBISHOP:
+          b = attacks_bb<BISHOP>(s, occupancy) | attacks_bb<KNIGHT>(s);
+          break;
+      case CHANCELLOR:
+          b = attacks_bb<ROOK>(s, occupancy) | attacks_bb<KNIGHT>(s);
+          break;
+      case IMMOBILE_PIECE:
+          b = Bitboard(0);
+          break;
+      default:
+          b = attacks_bb(c, pt, s, occupancy);
+          break;
+      }
+      return b & board_bb();
+  }
+
+  if (fast_attacks2() && (pt != KING || king_type() == KING))
       return attacks_bb(c, pt, s, occupancy) & board_bb();
 
   PieceType movePt = pt == KING ? king_type() : pt;
