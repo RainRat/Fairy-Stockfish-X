@@ -377,7 +377,7 @@ namespace {
                 }
             }
         }
-        if (ParserState != 0)
+        if (ParserState != 0 && ParserState != 4)
         {
             std::cerr << "At char " << i << " of PieceTypeBitboardGroup declaration: Unterminated expression." << std::endl;
             return false;

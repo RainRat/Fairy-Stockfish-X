@@ -496,8 +496,8 @@ namespace {
                   i = close;
                   continue;
               }
-              // Reject meaningless/oversized tuples to avoid overflow and wrap artefacts.
-              if ((dx == 0 && dy == 0) || dx > int(FILE_MAX) || dy > int(RANK_MAX))
+              // Tuple atoms are stored as (rankDelta, fileDelta).
+              if ((dx == 0 && dy == 0) || dx > int(RANK_MAX) || dy > int(FILE_MAX))
               {
                   i = close;
                   continue;

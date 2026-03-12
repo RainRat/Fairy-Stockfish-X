@@ -211,9 +211,9 @@ void ThreadPool::start_thinking(Position& pos, StateListPtr& states,
   if (!rootMoves.empty())
       Tablebases::rank_root_moves(pos, rootMoves);
 
-  // After ownership transfer 'states' becomes empty, so if we stop the search
-  // and call 'go' again without setting a new position states.get() == NULL.
-  assert(states.get() || setupStates.get());
+  // Search code assumes a root move entry exists even for terminal positions.
+  if (rootMoves.empty())
+      rootMoves.emplace_back(MOVE_NONE);
 
   if (states.get())
       setupStates = std::move(states); // Ownership transfer, states is now empty
@@ -229,7 +229,8 @@ void ThreadPool::start_thinking(Position& pos, StateListPtr& states,
       th->rootDepth = th->completedDepth = 0;
       th->rootMoves = rootMoves;
       th->rootPos.set(pos.variant(), pos.fen(), pos.is_chess960(), &th->rootState, th);
-      th->rootState = setupStates->back();
+      if (setupStates && !setupStates->empty())
+          th->rootState = setupStates->back();
   }
 
   main()->start_searching();
@@ -238,16 +239,25 @@ void ThreadPool::start_thinking(Position& pos, StateListPtr& states,
 Thread* ThreadPool::get_best_thread() const {
 
     Thread* bestThread = front();
+    if (bestThread->rootMoves.empty())
+        return bestThread;
+
     std::map<Move, int64_t> votes;
     Value minScore = VALUE_NONE;
 
     // Find minimum score of all threads
     for (Thread* th: *this)
+    {
+        if (th->rootMoves.empty())
+            continue;
         minScore = std::min(minScore, th->rootMoves[0].score);
+    }
 
     // Vote according to score and depth, and select the best thread
     for (Thread* th : *this)
     {
+        if (th->rootMoves.empty())
+            continue;
         votes[th->rootMoves[0].pv[0]] +=
             (th->rootMoves[0].score - minScore + 14) * int(th->completedDepth);
 
