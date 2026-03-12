@@ -69,7 +69,7 @@ rm -f "${tmp_ini}"
 
 # This smoke suite contains >8x8 and template-dependent variants.
 # On constrained builds, skip gracefully if any required variant is unavailable.
-for required in hasami eurasian hindustani gala ichess british-chess crown-prince-chess compound-chess half-chess losalamos promotion-chess reach-chess dris-at-talata tictacchess shatranj shatranj-al-jawarhiya chaturanga chaturanga-payagunda chaturanga-al-adli chess-siberia konane tawlbwrdd kharebga maak-yek apit-sodok apit troll tictactoe-misere all-queens-chess; do
+for required in hasami eurasian hindustani gala ichess british-chess crown-prince-chess compound-chess half-chess losalamos promotion-chess reach-chess dris-at-talata tictacchess shatranj shatranj-al-jawarhiya chaturanga chaturanga-payagunda chaturanga-al-adli shatranj-turkey chess-siberia hp-minichess konane tawlbwrdd kharebga maak-yek apit-sodok apit troll tictactoe-misere all-queens-chess; do
   if ! variant_available "${required}"; then
     echo "new variants smoke skipped: required variant '${required}' is unavailable in this build"
     exit 0
@@ -353,6 +353,12 @@ out=$(run_cmds "setoption name UCI_Variant value chess-siberia
 position startpos
 d")
 echo "${out}" | grep -q "Fen: rnbqk1bnr/ppppppppp/9/9/9/9/9/PPPPPPPPP/RNBQK1BNR w - - 0 1"
+
+# 19ea) HP-minichess: 5x5 orthodox setup with kings on the a-file.
+out=$(run_cmds "setoption name UCI_Variant value hp-minichess
+position startpos
+d")
+echo "${out}" | grep -q "Fen: kqbnr/ppppp/5/PPPPP/KQBNR w - - 0 1"
 
 # 19f) Konane: opening self-removals and orthogonal jump capture sequence.
 out=$(run_cmds "setoption name UCI_Variant value konane
