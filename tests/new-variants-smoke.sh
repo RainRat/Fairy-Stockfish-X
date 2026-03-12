@@ -69,7 +69,7 @@ rm -f "${tmp_ini}"
 
 # This smoke suite contains >8x8 and template-dependent variants.
 # On constrained builds, skip gracefully if any required variant is unavailable.
-for required in hasami eurasian hindustani gala ichess british-chess crown-prince-chess compound-chess half-chess losalamos promotion-chess reach-chess dris-at-talata tictacchess shatranj shatranj-al-jawarhiya chaturanga chaturanga-payagunda chaturanga-al-adli shatranj-turkey tsatsarandi chess-siberia hp-minichess konane tawlbwrdd kharebga maak-yek apit-sodok apit troll tictactoe-misere all-queens-chess; do
+for required in hasami eurasian hindustani gala ichess british-chess crown-prince-chess compound-chess half-chess losalamos promotion-chess reach-chess dris-at-talata tictacchess shatranj shatranj-al-jawarhiya chaturanga chaturanga-payagunda chaturanga-al-adli shatranj-turkey tsatsarandi chess-siberia hp-minichess dodgem konane tawlbwrdd kharebga maak-yek apit-sodok apit troll tictactoe-misere all-queens-chess; do
   if ! variant_available "${required}"; then
     echo "new variants smoke skipped: required variant '${required}' is unavailable in this build"
     exit 0
@@ -365,6 +365,22 @@ out=$(run_cmds "setoption name UCI_Variant value hp-minichess
 position startpos
 d")
 echo "${out}" | grep -q "Fen: kqbnr/ppppp/5/PPPPP/KQBNR w - - 0 1"
+
+# 19eb) Dodgem: classic 3x3 rules on an internal 5x4 board with escape lanes.
+out=$(run_cmds "setoption name UCI_Variant value dodgem
+position startpos
+go perft 1")
+echo "${out}" | grep -q "^a2a1: 1$"
+echo "${out}" | grep -q "^a2b2: 1$"
+echo "${out}" | grep -q "^a3b3: 1$"
+out=$(run_cmds "setoption name UCI_Variant value dodgem
+position fen 4k/5/2X2/4K w - - 0 1
+go perft 1")
+echo "${out}" | grep -q "^c2d2: 1$"
+out=$(run_cmds "setoption name UCI_Variant value dodgem
+position fen 4k/5/3U1/3UK b - - 0 1
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 0"
 
 # 19f) Konane: opening self-removals and orthogonal jump capture sequence.
 out=$(run_cmds "setoption name UCI_Variant value konane
