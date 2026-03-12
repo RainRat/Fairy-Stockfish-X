@@ -2367,13 +2367,13 @@ Variant* Variant::conclude() {
     }
 
     connectLines3.clear();
-    if (connectN == 3 && connect3D && maxFile == FILE_C && maxRank == RANK_9)
+    if (connectN == 3 && connect3D && (int(maxFile) + 1) == 3 && (int(maxRank) + 1) == 9)
     {
         connectLines3 = generate_nd_ttt_lines({3, 3, 3}, [&](const std::vector<int>& p) {
             return make_square(File(p[0]), Rank(p[1] + 3 * p[2]));
         });
     }
-    else if (connectN == 3 && connect4D && maxFile == FILE_I && maxRank == RANK_9)
+    else if (connectN == 3 && connect4D && (int(maxFile) + 1) == 9 && (int(maxRank) + 1) == 9)
     {
         connectLines3 = generate_nd_ttt_lines({3, 3, 3, 3}, [&](const std::vector<int>& p) {
             return make_square(File(p[0] + 3 * p[1]), Rank(p[2] + 3 * p[3]));

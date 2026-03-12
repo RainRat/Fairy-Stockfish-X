@@ -1333,9 +1333,9 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
             std::cerr << "Inconsistent settings: castlingQueensideFile > castlingKingsideFile." << std::endl;
         if (v->connect3D && v->connect4D)
             std::cerr << "connect3D and connect4D are mutually exclusive." << std::endl;
-        if (v->connect3D && !(v->maxFile == FILE_C && v->maxRank == RANK_9))
+        if (v->connect3D && !((int(v->maxFile) + 1) == 3 && (int(v->maxRank) + 1) == 9))
             std::cerr << "connect3D currently requires a 3x9 board." << std::endl;
-        if (v->connect4D && !(v->maxFile == FILE_I && v->maxRank == RANK_9))
+        if (v->connect4D && !((int(v->maxFile) + 1) == 9 && (int(v->maxRank) + 1) == 9))
             std::cerr << "connect4D currently requires a 9x9 board." << std::endl;
         if ((v->connect3D || v->connect4D) && v->connectN != 3)
             std::cerr << "connect3D/connect4D currently require connectN = 3." << std::endl;
