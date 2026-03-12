@@ -148,6 +148,12 @@ vector<string> setup_bench(const Position& current, istream& is) {
       ttSize = "16";
   if (!is_uint(threads))
       threads = "1";
+  if (   limitType != "depth"
+      && limitType != "perft"
+      && limitType != "nodes"
+      && limitType != "movetime"
+      && limitType != "eval")
+      limitType = "depth";
   if (evalType != "mixed" && evalType != "classical" && evalType != "NNUE")
       evalType = "mixed";
 

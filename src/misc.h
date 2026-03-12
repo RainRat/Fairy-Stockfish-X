@@ -54,6 +54,7 @@ inline TimePoint now() {
 
 template<class Entry, int Size>
 struct HashTable {
+  static_assert(Size > 0 && (Size & (Size - 1)) == 0, "HashTable size must be a power of two");
   Entry* operator[](Key key) { return &table[(uint32_t)key & (Size - 1)]; }
 
 private:
@@ -171,7 +172,12 @@ public:
   /// Special generator used to fast init magic numbers.
   /// Output values only have 1/8th of their bits set on average.
   template<typename T> T sparse_rand()
-  { return T(rand64() & rand64() & rand64()); }
+  {
+    uint64_t a = rand64();
+    uint64_t b = rand64();
+    uint64_t c = rand64();
+    return T(a & b & c);
+  }
 };
 
 inline uint64_t mul_hi64(uint64_t a, uint64_t b) {

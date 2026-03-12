@@ -681,13 +681,15 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     const auto& pv = config.find("piecePoints");
     if (pv != config.end())
     {
-        char token, sep = 0;
-        size_t idx = 0;
+        char token = '\0', sep = 0;
+        size_t idx = std::string::npos;
         int parsedPoints = 0;
         bool parseError = false;
+        bool sawToken = false;
         std::stringstream ss(pv->second);
         while (ss >> token)
         {
+            sawToken = true;
             idx = v->pieceToChar.find(std::toupper(static_cast<unsigned char>(token)));
             if (idx == std::string::npos)
                 break;
@@ -709,9 +711,9 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
             }
             v->piecePoints[idx] = parsedPoints;
         }
-        if (DoCheck && idx == std::string::npos)
+        if (DoCheck && sawToken && idx == std::string::npos)
             std::cerr << "piecePoints - Invalid piece type: " << token << std::endl;
-        else if (DoCheck && (parseError || !(ss >> std::ws).eof()))
+        else if (DoCheck && sawToken && idx != std::string::npos && (parseError || !(ss >> std::ws).eof()))
             std::cerr << "piecePoints - Invalid piece points for type: " << v->pieceToChar[idx] << std::endl;
     }
 
@@ -801,13 +803,15 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     const auto& it_prom_limit = config.find("promotionLimit");
     if (it_prom_limit != config.end())
     {
-        char token, sep = 0;
+        char token = '\0', sep = 0;
         size_t idx = std::string::npos;
         bool parseError = false;
         int parsedLimit = 0;
+        bool sawToken = false;
         std::stringstream ss(it_prom_limit->second);
         while (ss >> token)
         {
+            sawToken = true;
             idx = v->pieceToChar.find(std::toupper(static_cast<unsigned char>(token)));
             if (idx == std::string::npos)
                 break;
@@ -818,9 +822,9 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
             }
             v->promotionLimit[idx] = parsedLimit;
         }
-        if (DoCheck && idx == std::string::npos)
+        if (DoCheck && sawToken && idx == std::string::npos)
             std::cerr << "promotionLimit - Invalid piece type: " << token << std::endl;
-        else if (DoCheck && (parseError || !(ss >> std::ws).eof()))
+        else if (DoCheck && sawToken && idx != std::string::npos && (parseError || !(ss >> std::ws).eof()))
             std::cerr << "promotionLimit - Invalid piece count for type: " << v->pieceToChar[idx] << std::endl;
     }
     // promoted piece types
@@ -855,21 +859,30 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     const auto& it_pr_drop = config.find("priorityDropTypes");
     if (it_pr_drop != config.end())
     {
-        char token;
+        char token = '\0';
         size_t idx = std::string::npos;
         bool parsedPriorityDrops[PIECE_TYPE_NB];
+        bool sawToken = false;
         std::copy(std::begin(v->isPriorityDrop), std::end(v->isPriorityDrop), std::begin(parsedPriorityDrops));
         std::stringstream ss(it_pr_drop->second);
-        while (ss >> token && token != '-' && ((idx = v->pieceToChar.find(std::toupper(static_cast<unsigned char>(token)))) != std::string::npos))
+        while (ss >> token)
+        {
+            sawToken = true;
+            if (token == '-')
+                break;
+            idx = v->pieceToChar.find(std::toupper(static_cast<unsigned char>(token)));
+            if (idx == std::string::npos)
+                break;
             parsedPriorityDrops[PieceType(idx)] = true;
-        if (DoCheck && idx == std::string::npos && token != '-')
+        }
+        if (DoCheck && sawToken && idx == std::string::npos && token != '-')
             std::cerr << "priorityDropTypes - Invalid piece type: " << token << std::endl;
-        else if ((idx != std::string::npos || token == '-') && !only_trailing_space(ss))
+        else if (sawToken && (idx != std::string::npos || token == '-') && !only_trailing_space(ss))
         {
             if (DoCheck)
                 std::cerr << "priorityDropTypes - Invalid trailing characters." << std::endl;
         }
-        else if (idx != std::string::npos || token == '-')
+        else if (sawToken && (idx != std::string::npos || token == '-'))
             std::copy(std::begin(parsedPriorityDrops), std::end(parsedPriorityDrops), std::begin(v->isPriorityDrop));
     }
     parse_attribute("piecePromotionOnCapture", v->piecePromotionOnCapture);
@@ -1054,16 +1067,18 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     const auto& it_virtual_drop_limit = config.find("virtualDropLimit");
     if (it_virtual_drop_limit != config.end())
     {
-        char token, sep = 0;
+        char token = '\0', sep = 0;
         size_t idx = std::string::npos;
         int limit = 0;
         int parsedLimits[PIECE_TYPE_NB];
         std::copy(std::begin(v->virtualDropLimit), std::end(v->virtualDropLimit), std::begin(parsedLimits));
         bool parsedEnabled = v->virtualDropLimitEnabled;
         bool parseError = false;
+        bool sawToken = false;
         std::stringstream ss(it_virtual_drop_limit->second);
         while (ss >> token)
         {
+            sawToken = true;
             idx = v->pieceToChar.find(std::toupper(static_cast<unsigned char>(token)));
             if (idx == std::string::npos)
                 break;
@@ -1081,11 +1096,11 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
             parsedLimits[PieceType(idx)] = limit;
             parsedEnabled = true;
         }
-        if (DoCheck && idx == std::string::npos)
+        if (DoCheck && sawToken && idx == std::string::npos)
             std::cerr << "virtualDropLimit - Invalid piece type: " << token << std::endl;
-        else if (DoCheck && (parseError || !(ss >> std::ws).eof()))
+        else if (DoCheck && sawToken && idx != std::string::npos && (parseError || !(ss >> std::ws).eof()))
             std::cerr << "virtualDropLimit - Invalid syntax." << std::endl;
-        else if (idx != std::string::npos)
+        else if (sawToken && idx != std::string::npos)
         {
             std::copy(std::begin(parsedLimits), std::end(parsedLimits), std::begin(v->virtualDropLimit));
             v->virtualDropLimitEnabled = parsedEnabled;

@@ -25,12 +25,23 @@ castling = false
 doubleStep = false
 customPiece1 = a:m(7,0)
 startFen = 5/5/5/5/5/5/5/A4 w - - 0 1
+
+[parse-error-empty-fields:chess]
+piecePoints =
+promotionLimit =
+priorityDropTypes =
+virtualDropLimit =
 INI
 
 echo "parser regression tests started"
 
 check_output=$("${ENGINE}" check "${tmp_ini}" 2>&1 || true)
 if echo "${check_output}" | grep -Eq "PieceTypeBitboardGroup declaration|Invalid value.*whitePieceDropRegion|Error parsing|unterminated"; then
+  echo "${check_output}"
+  exit 1
+fi
+
+if printf '%s\n' "${check_output}" | grep -Eq "piecePoints - Invalid piece type: $|promotionLimit - Invalid piece type: $|priorityDropTypes - Invalid piece type: $|virtualDropLimit - Invalid piece type: $"; then
   echo "${check_output}"
   exit 1
 fi
@@ -60,6 +71,12 @@ CMDS
 
 if ! echo "${terminal_output}" | grep -q "bestmove (none)"; then
   echo "${terminal_output}"
+  exit 1
+fi
+
+bench_output=$("${ENGINE}" bench 16 1 1 default nonsense 2>&1 || true)
+if ! echo "${bench_output}" | grep -q "Nodes searched  : "; then
+  echo "${bench_output}"
   exit 1
 fi
 
