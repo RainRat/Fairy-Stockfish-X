@@ -4821,6 +4821,22 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
           if (goal.empty())
               return false;
 
+          if (!getConnectLines3().empty() && goal.size() == 3)
+          {
+              for (const auto& line : getConnectLines3())
+              {
+                  if (   type_of(piece_on(line[0])) == goal[0] && color_of(piece_on(line[0])) == c
+                      && type_of(piece_on(line[1])) == goal[1] && color_of(piece_on(line[1])) == c
+                      && type_of(piece_on(line[2])) == goal[2] && color_of(piece_on(line[2])) == c)
+                      return true;
+                  if (   type_of(piece_on(line[2])) == goal[0] && color_of(piece_on(line[2])) == c
+                      && type_of(piece_on(line[1])) == goal[1] && color_of(piece_on(line[1])) == c
+                      && type_of(piece_on(line[0])) == goal[2] && color_of(piece_on(line[0])) == c)
+                      return true;
+              }
+              return false;
+          }
+
           for (Direction d : var->connectDirections)
           {
               Bitboard starts = pieces(goal.front());
@@ -4875,17 +4891,33 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
   // Connect-n
   if ((connect_n() > 0) && (popcount(connectPieces) >= connect_n()))
   {
-      Bitboard b;
-
-      for (Direction d : var->connectDirections)
+      if (!getConnectLines3().empty() && connect_n() == 3)
       {
-          b = connectPieces;
-          for (int i = 1; i < connect_n() && b; i++)
-              b &= shift(d, b);
-          if (b)
+          for (const auto& line : getConnectLines3())
           {
-              result = convert_mate_value(-connect_value(), ply);
-              return true;
+              if (   (connectPieces & square_bb(line[0]))
+                  && (connectPieces & square_bb(line[1]))
+                  && (connectPieces & square_bb(line[2])))
+              {
+                  result = convert_mate_value(-connect_value(), ply);
+                  return true;
+              }
+          }
+      }
+      else
+      {
+          Bitboard b;
+
+          for (Direction d : var->connectDirections)
+          {
+              b = connectPieces;
+              for (int i = 1; i < connect_n() && b; i++)
+                  b &= shift(d, b);
+              if (b)
+              {
+                  result = convert_mate_value(-connect_value(), ply);
+                  return true;
+              }
           }
       }
   }

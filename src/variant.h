@@ -20,6 +20,7 @@
 #define VARIANT_H_INCLUDED
 
 #include <bitset>
+#include <array>
 #include <set>
 #include <map>
 #include <vector>
@@ -245,6 +246,8 @@ struct Variant {
   bool connectHorizontal = true;
   bool connectVertical = true;
   bool connectDiagonal = true;
+  bool connect3D = false;
+  bool connect4D = false;
   Bitboard connectRegion1[COLOR_NB] = {};
   Bitboard connectRegion2[COLOR_NB] = {};
   int connectNxN = 0;
@@ -276,6 +279,7 @@ struct Variant {
   EndgameEval endgameEval = EG_EVAL_CHESS;
   bool shogiStylePromotions = false;
   std::vector<Direction> connectDirections;
+  std::vector<std::array<Square, 3>> connectLines3;
   PieceSet connectPieceTypesTrimmed = ~NO_PIECE_SET;
   std::vector<PieceType> connectPieceGoalTypes[COLOR_NB];
   bool multimovePass[START_MULTIMOVES]; // irregular pattern of multimove passes at game start

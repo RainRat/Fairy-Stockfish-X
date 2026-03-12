@@ -76,6 +76,69 @@ namespace {
         return true;
     }
 
+    template <typename CoordToSquare>
+    std::vector<std::array<Square, 3>> generate_nd_ttt_lines(const std::vector<int>& dims, CoordToSquare coord_to_square) {
+        std::vector<std::array<Square, 3>> lines;
+        const int n = int(dims.size());
+        std::vector<int> dir(n);
+        std::vector<int> start(n);
+
+        auto in_bounds = [&](const std::vector<int>& p) {
+            for (int i = 0; i < n; ++i)
+                if (p[i] < 0 || p[i] >= dims[i])
+                    return false;
+            return true;
+        };
+
+        auto canonical_dir = [&](const std::vector<int>& d) {
+            for (int v : d)
+                if (v != 0)
+                    return v > 0;
+            return false;
+        };
+
+        std::function<void(int)> walk_dirs = [&](int idx) {
+            if (idx == n)
+            {
+                bool zero = true;
+                for (int v : dir)
+                    zero &= v == 0;
+                if (zero || !canonical_dir(dir))
+                    return;
+
+                std::function<void(int)> walk_starts = [&](int sidx) {
+                    if (sidx == n)
+                    {
+                        std::vector<int> prev(n), p1(n), p2(n);
+                        for (int i = 0; i < n; ++i)
+                        {
+                            prev[i] = start[i] - dir[i];
+                            p1[i] = start[i] + dir[i];
+                            p2[i] = start[i] + 2 * dir[i];
+                        }
+                        if (in_bounds(prev) || !in_bounds(p1) || !in_bounds(p2))
+                            return;
+
+                        lines.push_back({coord_to_square(start), coord_to_square(p1), coord_to_square(p2)});
+                        return;
+                    }
+
+                    for (start[sidx] = 0; start[sidx] < dims[sidx]; ++start[sidx])
+                        walk_starts(sidx + 1);
+                };
+
+                walk_starts(0);
+                return;
+            }
+
+            for (dir[idx] = -1; dir[idx] <= 1; ++dir[idx])
+                walk_dirs(idx + 1);
+        };
+
+        walk_dirs(0);
+        return lines;
+    }
+
     // Base variant
     Variant* variant_base() {
         Variant* v = new Variant();
@@ -2301,6 +2364,20 @@ Variant* Variant::conclude() {
     {
         connectDirections.push_back(NORTH_EAST);
         connectDirections.push_back(SOUTH_EAST);
+    }
+
+    connectLines3.clear();
+    if (connectN == 3 && connect3D && maxFile == FILE_C && maxRank == RANK_9)
+    {
+        connectLines3 = generate_nd_ttt_lines({3, 3, 3}, [&](const std::vector<int>& p) {
+            return make_square(File(p[0]), Rank(p[1] + 3 * p[2]));
+        });
+    }
+    else if (connectN == 3 && connect4D && maxFile == FILE_I && maxRank == RANK_9)
+    {
+        connectLines3 = generate_nd_ttt_lines({3, 3, 3, 3}, [&](const std::vector<int>& p) {
+            return make_square(File(p[0] + 3 * p[1]), Rank(p[2] + 3 * p[3]));
+        });
     }
 
     // If not a connect variant, set connectPieceTypesTrimmed to no pieces.

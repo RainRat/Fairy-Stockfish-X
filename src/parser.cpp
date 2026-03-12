@@ -1243,6 +1243,8 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("connectHorizontal", v->connectHorizontal);
     parse_attribute("connectVertical", v->connectVertical);
     parse_attribute("connectDiagonal", v->connectDiagonal);
+    parse_attribute("connect3D", v->connect3D);
+    parse_attribute("connect4D", v->connect4D);
     parse_attribute("connectRegion1White", v->connectRegion1[WHITE]);
     parse_attribute("connectRegion2White", v->connectRegion2[WHITE]);
     parse_attribute("connectRegion1Black", v->connectRegion1[BLACK]);
@@ -1329,6 +1331,14 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
             std::cerr << "Inconsistent settings: castlingRank > maxRank." << std::endl;
         if (v->castling && v->castlingQueensideFile > v->castlingKingsideFile)
             std::cerr << "Inconsistent settings: castlingQueensideFile > castlingKingsideFile." << std::endl;
+        if (v->connect3D && v->connect4D)
+            std::cerr << "connect3D and connect4D are mutually exclusive." << std::endl;
+        if (v->connect3D && !(v->maxFile == FILE_C && v->maxRank == RANK_9))
+            std::cerr << "connect3D currently requires a 3x9 board." << std::endl;
+        if (v->connect4D && !(v->maxFile == FILE_I && v->maxRank == RANK_9))
+            std::cerr << "connect4D currently requires a 9x9 board." << std::endl;
+        if ((v->connect3D || v->connect4D) && v->connectN != 3)
+            std::cerr << "connect3D/connect4D currently require connectN = 3." << std::endl;
 
         // Check for limitations
         if (v->pieceDrops && v->wallingRule)
