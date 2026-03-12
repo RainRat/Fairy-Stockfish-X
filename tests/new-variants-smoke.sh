@@ -379,6 +379,16 @@ position startpos
 d")
 echo "${out}" | grep -q "Fen: kqbnr/ppppp/5/PPPPP/KQBNR w - - 0 1"
 
+# 19eaa) Jeson Mor: center reach by a knight is an immediate win.
+out=$(run_cmds "setoption name UCI_Variant value jeson-mor
+position startpos
+d")
+echo "${out}" | grep -q "Fen: nnnnnnnnn/9/9/9/9/9/9/9/NNNNNNNNN w - - 0 1"
+out=$(run_cmds "setoption name UCI_Variant value jeson-mor
+position fen 9/9/9/9/4N4/9/9/9/9 b - - 0 1
+go depth 1")
+echo "${out}" | grep -q "Nodes searched: 0"
+
 # 19eb) Dodgem: classic 3x3 rules on an internal 5x4 board with escape lanes.
 out=$(run_cmds "setoption name UCI_Variant value dodgem
 position startpos
