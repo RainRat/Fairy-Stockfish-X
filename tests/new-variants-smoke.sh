@@ -336,6 +336,19 @@ position startpos
 d")
 echo "${out}" | grep -q "Fen: brnfknrb/pppppppp/8/8/8/8/PPPPPPPP/BRNFKNRB w - - 0 1"
 
+# 19de) Shatranj (Iraq): source-backed setup and elephant immunity.
+out=$(run_cmds "setoption name UCI_Variant value shatranj-iraq
+position startpos
+d")
+echo "${out}" | grep -q "Fen: rnefkenr/pppppppp/8/8/8/8/PPPPPPPP/RNEFKENR w - - 0 1"
+out=$(run_cmds "setoption name UCI_Variant value shatranj-iraq
+position fen 8/8/8/3e4/4E3/8/8/4K3 w - - 0 1
+go perft 1")
+echo "${out}" | grep -q "^e4d5: 1$"
+! echo "${out}" | grep -q "^e4d3: 1$"
+! echo "${out}" | grep -q "^e4f5: 1$"
+! echo "${out}" | grep -q "^e4f3: 1$"
+
 # 19de) Shatranj (Turkey): source-backed setup and first-move Fers leap.
 out=$(run_cmds "setoption name UCI_Variant value shatranj-turkey
 position startpos
