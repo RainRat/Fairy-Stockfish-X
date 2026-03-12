@@ -374,13 +374,20 @@ void prefetch(void* addr) {
 
 void* std_aligned_alloc(size_t alignment, size_t size) {
 
+  if (alignment == 0 || (alignment & (alignment - 1)) != 0)
+      return nullptr;
+
+  size_t roundedSize = size;
+  if (roundedSize % alignment)
+      roundedSize += alignment - (roundedSize % alignment);
+
 #if defined(POSIXALIGNEDALLOC)
   void *mem;
-  return posix_memalign(&mem, alignment, size) ? nullptr : mem;
+  return posix_memalign(&mem, alignment, roundedSize) ? nullptr : mem;
 #elif defined(_WIN32)
-  return _mm_malloc(size, alignment);
+  return _mm_malloc(roundedSize, alignment);
 #else
-  return aligned_alloc(alignment, size);
+  return aligned_alloc(alignment, roundedSize);
 #endif
 }
 
