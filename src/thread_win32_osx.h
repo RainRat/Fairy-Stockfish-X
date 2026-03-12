@@ -30,6 +30,9 @@
 #if defined(__APPLE__) || defined(__MINGW32__) || defined(__MINGW64__) || defined(USE_PTHREADS)
 
 #include <pthread.h>
+#include <cstdlib>
+#include <cstring>
+#include <iostream>
 
 namespace Stockfish {
 
@@ -54,7 +57,15 @@ public:
     pthread_attr_t attr_storage, *attr = &attr_storage;
     pthread_attr_init(attr);
     pthread_attr_setstacksize(attr, TH_STACK_SIZE);
-    pthread_create(&thread, attr, start_routine<T>, new P(obj, fun));
+    P* trampoline = new P(obj, fun);
+    int err = pthread_create(&thread, attr, start_routine<T>, trampoline);
+    pthread_attr_destroy(attr);
+    if (err)
+    {
+        delete trampoline;
+        std::cerr << "pthread_create failed: " << std::strerror(err) << std::endl;
+        std::exit(EXIT_FAILURE);
+    }
   }
   void join() { pthread_join(thread, NULL); }
   void detach() { pthread_detach(thread); }

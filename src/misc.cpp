@@ -476,7 +476,8 @@ void* aligned_large_pages_alloc(size_t allocSize) {
   size_t size = ((allocSize + alignment - 1) / alignment) * alignment;
   void *mem = std_aligned_alloc(alignment, size);
 #if defined(MADV_HUGEPAGE)
-  madvise(mem, size, MADV_HUGEPAGE);
+  if (mem)
+      madvise(mem, size, MADV_HUGEPAGE);
 #endif
   return mem;
 }
@@ -569,6 +570,9 @@ int best_group(size_t idx) {
   }
 
   free(buffer);
+
+  if (nodes <= 0)
+      return -1;
 
   std::vector<int> groups;
 
