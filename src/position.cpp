@@ -1757,8 +1757,8 @@ Bitboard Position::checked_anti_royals(Color c) const {
   while (antiRoyals)
   {
       Square sr = pop_lsb(antiRoyals);
-      if (!(blastOnCapture && (vulnerableEnemyRoyals & blast_pattern(sr)))
-          && attackers_to(sr, occupied, ~c))
+      if (!(attackers_to(sr, occupied, ~c))
+          || (blastOnCapture && (vulnerableEnemyRoyals & blast_pattern(sr))))
           checked |= sr;
   }
   return checked;

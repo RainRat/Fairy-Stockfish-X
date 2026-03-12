@@ -10,8 +10,9 @@ error()
 trap 'error ${LINENO}' ERR
 
 # obtain
+ENGINE=${ENGINE:-./stockfish}
 
-signature=`./stockfish bench 2>&1 | grep "Nodes searched  : " | awk '{print $4}'`
+signature=`${ENGINE} bench 2>&1 | grep "Nodes searched  : " | awk '{print $4}'`
 
 if [ $# -gt 0 ] && [ -n "$1" ]; then
    # compare to given reference
