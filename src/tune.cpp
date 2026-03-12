@@ -37,10 +37,11 @@ string Tune::next(string& names, bool pop) {
   string name;
 
   do {
-      string token = names.substr(0, names.find(','));
+      size_t comma = names.find(',');
+      string token = names.substr(0, comma);
 
       if (pop)
-          names.erase(0, token.size() + 1);
+          names.erase(0, comma == string::npos ? names.size() : comma + 1);
 
       std::stringstream ws(token);
       name += (ws >> token, token); // Remove trailing whitespace

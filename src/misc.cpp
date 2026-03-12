@@ -664,8 +664,8 @@ void init(int argc, char* argv[]) {
 
     // extract the working directory
     workingDirectory = "";
-    char buff[40000];
-    char* cwd = GETCWD(buff, 40000);
+    std::vector<char> buff(40000);
+    char* cwd = GETCWD(buff.data(), buff.size());
     if (cwd)
         workingDirectory = cwd;
 
