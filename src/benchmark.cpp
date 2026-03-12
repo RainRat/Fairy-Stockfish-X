@@ -113,19 +113,24 @@ vector<string> setup_bench(const Position& current, istream& is) {
 
   vector<string> fens, list;
   string go, token, varname;
+  std::vector<std::string> args;
 
-  streampos args = is.tellg();
-  // Check whether the next token is a variant name
-  if ((is >> token) && variants.has(token))
+  while (is >> token)
+      args.push_back(token);
+
+  auto next_arg = [&args](size_t& idx, const std::string& fallback) {
+      return idx < args.size() ? args[idx++] : fallback;
+  };
+
+  size_t idx = 0;
+  if (!args.empty() && variants.has(args[0]))
   {
-      args = is.tellg();
-      varname = token;
+      varname = args[0];
+      idx = 1;
   }
   else
-  {
-      is.seekg(args);
       varname = string(Options["UCI_Variant"]);
-  }
+
   const Variant* variant = variants.get(varname);
   if (!variant)
   {
@@ -134,12 +139,12 @@ vector<string> setup_bench(const Position& current, istream& is) {
   }
 
   // Assign default values to missing arguments
-  string ttSize    = (is >> token) ? token : "16";
-  string threads   = (is >> token) ? token : "1";
-  string limit     = (is >> token) ? token : "13";
-  string fenFile   = (is >> token) ? token : "default";
-  string limitType = (is >> token) ? token : "depth";
-  string evalType  = (is >> token) ? token : "mixed";
+  string ttSize    = next_arg(idx, "16");
+  string threads   = next_arg(idx, "1");
+  string limit     = next_arg(idx, "13");
+  string fenFile   = next_arg(idx, "default");
+  string limitType = next_arg(idx, "depth");
+  string evalType  = next_arg(idx, "mixed");
 
   auto is_uint = [](const string& s) {
       return !s.empty() && std::all_of(s.begin(), s.end(), [](unsigned char ch) { return std::isdigit(ch) != 0; });
