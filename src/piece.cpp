@@ -21,6 +21,7 @@
 #include <iostream>
 #include <limits>
 #include <map>
+#include <memory>
 #include <string>
 #include <utility>
 
@@ -58,7 +59,7 @@ namespace {
   // from_betza creates a piece by parsing Betza notation
   // https://en.wikipedia.org/wiki/Betza%27s_funny_notation
   PieceInfo* from_betza(const std::string& betza, const std::string& name) {
-      PieceInfo* p = new PieceInfo();
+      std::unique_ptr<PieceInfo> p = std::make_unique<PieceInfo>();
       p->name = name;
       p->betza = betza;
 
@@ -439,7 +440,7 @@ namespace {
               commit_atom(tupleAtom, false, i, ')', true);
           }
       }
-      return p;
+      return p.release();
   }
   // Special multi-leg betza description for Janggi elephant
   PieceInfo* janggi_elephant_piece() {
