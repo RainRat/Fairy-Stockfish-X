@@ -380,11 +380,11 @@ d")
 echo "${out}" | grep -q "Fen: kqbnr/ppppp/5/PPPPP/KQBNR w - - 0 1"
 
 # 19eaa) Jeson Mor: center reach by a knight is an immediate win.
-out=$(run_cmds "setoption name UCI_Variant value jeson-mor
+out=$(run_cmds "setoption name UCI_Variant value jesonmor
 position startpos
 d")
 echo "${out}" | grep -q "Fen: nnnnnnnnn/9/9/9/9/9/9/9/NNNNNNNNN w - - 0 1"
-out=$(run_cmds "setoption name UCI_Variant value jeson-mor
+out=$(run_cmds "setoption name UCI_Variant value jesonmor
 position fen 9/9/9/9/4N4/9/9/9/9 b - - 0 1
 go depth 1")
 echo "${out}" | grep -q "Nodes searched: 0"
