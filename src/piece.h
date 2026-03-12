@@ -19,6 +19,7 @@
 #ifndef PIECE_H_INCLUDED
 #define PIECE_H_INCLUDED
 
+#include <array>
 #include <string>
 #include <map>
 #include <vector>
@@ -67,9 +68,18 @@ struct PieceInfo {
 };
 
 struct PieceMap : public std::map<PieceType, const PieceInfo*> {
+  PieceMap() { direct.fill(nullptr); }
   void init(const Variant* v = nullptr);
   void add(PieceType pt, const PieceInfo* v);
   void clear_all();
+  const PieceInfo* get(PieceType pt) const {
+    assert(pt < PIECE_TYPE_NB);
+    assert(direct[pt] != nullptr);
+    return direct[pt];
+  }
+
+private:
+  std::array<const PieceInfo*, PIECE_TYPE_NB> direct;
 };
 
 extern PieceMap pieceMap;

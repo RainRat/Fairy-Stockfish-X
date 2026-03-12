@@ -562,6 +562,7 @@ void PieceMap::init(const Variant* v) {
 }
 
 void PieceMap::add(PieceType pt, const PieceInfo* p) {
+  direct[pt] = p;
   insert(std::pair<PieceType, const PieceInfo*>(pt, p));
 }
 
@@ -569,6 +570,7 @@ void PieceMap::clear_all() {
   for (auto const& element : *this)
       delete element.second;
   clear();
+  direct.fill(nullptr);
 }
 
 } // namespace Stockfish

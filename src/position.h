@@ -2162,9 +2162,7 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s) const {
       return attacks_bb(c, pt, s, occupancy) & board_bb();
 
   PieceType movePt = pt == KING ? king_type() : pt;
-  auto it = pieceMap.find(movePt);
-  assert(it != pieceMap.end());
-  const PieceInfo* pi = it->second;
+  const PieceInfo* pi = pieceMap.get(movePt);
 
   if ((fast_attacks() || fast_attacks2()) && pi->riderAugmentMask == PieceInfo::AUGMENT_NONE)
       return attacks_bb(c, pt, s, occupancy) & board_bb();
@@ -2268,9 +2266,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
       return (moves_bb(c, pt, s, occupancy) | extraDestinations) & board_bb();
 
   PieceType movePt = pt == KING ? king_type() : pt;
-  auto it = pieceMap.find(movePt);
-  assert(it != pieceMap.end());
-  const PieceInfo* pi = it->second;
+  const PieceInfo* pi = pieceMap.get(movePt);
 
   if ((fast_attacks() || fast_attacks2()) && pi->riderAugmentMask == PieceInfo::AUGMENT_NONE)
       return (moves_bb(c, pt, s, occupancy) | extraDestinations) & board_bb();
