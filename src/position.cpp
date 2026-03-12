@@ -1739,6 +1739,7 @@ Bitboard Position::checked_pseudo_royals(Color c) const {
 /// all anti-royal pieces of a particular color that are NOT attacked
 Bitboard Position::checked_anti_royals(Color c) const {
   assert(anti_royal_types());
+  const bool blastOnCapture = blast_on_capture();
   Bitboard antiRoyals = 0;
   for (PieceSet ps = anti_royal_types(); ps; )
   {
@@ -1747,11 +1748,17 @@ Bitboard Position::checked_anti_royals(Color c) const {
           antiRoyals |= pieces(c, pt);
   }
 
+  Bitboard occupied = pieces();
+  Bitboard vulnerableEnemyRoyals = 0;
+  if (blastOnCapture)
+      vulnerableEnemyRoyals = ((st->pseudoRoyals | pieces(king_type())) & pieces(~c) & occupied) & ~blast_immune_bb();
+
   Bitboard checked = 0;
   while (antiRoyals)
   {
       Square sr = pop_lsb(antiRoyals);
-      if (!attackers_to(sr, ~c))
+      if (!(blastOnCapture && (vulnerableEnemyRoyals & blast_pattern(sr)))
+          && attackers_to(sr, occupied, ~c))
           checked |= sr;
   }
   return checked;
@@ -2070,9 +2077,11 @@ bool Position::legal(Move m) const {
   // Anti-royal pieces must remain under attack.
   if (anti_royal_types())
   {
+      const bool blastOnCapture = blast_on_capture();
       Square kto = to;
       Square rfrom = SQ_NONE, rto = SQ_NONE;
       Bitboard occupied = (type_of(m) != DROP ? pieces() ^ from : pieces());
+      Bitboard blastImmune = blastOnCapture ? blast_immune_bb() : Bitboard(0);
       if (walling_rule() == DUCK)
           occupied ^= st->wallSquares;
       if (walling(us) || is_gating(m))
@@ -2087,7 +2096,7 @@ bool Position::legal(Move m) const {
       occupied |= kto;
       if (type_of(m) == EN_PASSANT)
           occupied &= ~square_bb(capture_square(kto));
-      if (capture(m) && blast_on_capture())
+      if (capture(m) && blastOnCapture)
           occupied &= ~blast_squares(kto);
 
       Bitboard antiRoyals = 0;
@@ -2117,10 +2126,15 @@ bool Position::legal(Move m) const {
           }
       }
 
+      Bitboard vulnerableEnemyRoyals = blastOnCapture
+                                     ? ((st->pseudoRoyals | pieces(king_type())) & pieces(~us) & occupied) & ~blastImmune
+                                     : Bitboard(0);
       while (antiRoyals)
       {
           Square sr = pop_lsb(antiRoyals);
-          if (!(occupied & sr) || !attackers_to(sr, occupied, ~us))
+          if (!(occupied & sr)
+              || (blastOnCapture && (vulnerableEnemyRoyals & blast_pattern(sr)))
+              || !attackers_to(sr, occupied, ~us))
               return false;
       }
   }
