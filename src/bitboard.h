@@ -978,7 +978,28 @@ inline Square msb(Bitboard b) {
 inline Square lsb(Bitboard b) {
   assert(b);
   unsigned long idx;
-#ifdef LARGEBOARDS
+#ifdef VERY_LARGE_BOARDS
+  if (b.b64[3])
+  {
+      _BitScanForward64(&idx, b.b64[3]);
+      return Square(idx);
+  }
+  else if (b.b64[2])
+  {
+      _BitScanForward64(&idx, b.b64[2]);
+      return Square(idx + 64);
+  }
+  else if (b.b64[1])
+  {
+      _BitScanForward64(&idx, b.b64[1]);
+      return Square(idx + 128);
+  }
+  else
+  {
+      _BitScanForward64(&idx, b.b64[0]);
+      return Square(idx + 192);
+  }
+#elif defined(LARGEBOARDS)
   if (uint64_t(b))
   {
       _BitScanForward64(&idx, uint64_t(b));
@@ -998,7 +1019,28 @@ inline Square lsb(Bitboard b) {
 inline Square msb(Bitboard b) {
   assert(b);
   unsigned long idx;
-#ifdef LARGEBOARDS
+#ifdef VERY_LARGE_BOARDS
+  if (b.b64[0])
+  {
+      _BitScanReverse64(&idx, b.b64[0]);
+      return Square(idx + 192);
+  }
+  else if (b.b64[1])
+  {
+      _BitScanReverse64(&idx, b.b64[1]);
+      return Square(idx + 128);
+  }
+  else if (b.b64[2])
+  {
+      _BitScanReverse64(&idx, b.b64[2]);
+      return Square(idx + 64);
+  }
+  else
+  {
+      _BitScanReverse64(&idx, b.b64[3]);
+      return Square(idx);
+  }
+#elif defined(LARGEBOARDS)
   if (b >> 64)
   {
       _BitScanReverse64(&idx, uint64_t(b >> 64));
@@ -1021,7 +1063,36 @@ inline Square lsb(Bitboard b) {
   assert(b);
   unsigned long idx;
 
-#ifdef LARGEBOARDS
+#ifdef VERY_LARGE_BOARDS
+  if (b.b64[3]) {
+      if (uint32_t(b.b64[3])) {
+          _BitScanForward(&idx, uint32_t(b.b64[3]));
+          return Square(idx);
+      }
+      _BitScanForward(&idx, uint32_t(b.b64[3] >> 32));
+      return Square(idx + 32);
+  } else if (b.b64[2]) {
+      if (uint32_t(b.b64[2])) {
+          _BitScanForward(&idx, uint32_t(b.b64[2]));
+          return Square(idx + 64);
+      }
+      _BitScanForward(&idx, uint32_t(b.b64[2] >> 32));
+      return Square(idx + 96);
+  } else if (b.b64[1]) {
+      if (uint32_t(b.b64[1])) {
+          _BitScanForward(&idx, uint32_t(b.b64[1]));
+          return Square(idx + 128);
+      }
+      _BitScanForward(&idx, uint32_t(b.b64[1] >> 32));
+      return Square(idx + 160);
+  } else if (uint32_t(b.b64[0])) {
+      _BitScanForward(&idx, uint32_t(b.b64[0]));
+      return Square(idx + 192);
+  } else {
+      _BitScanForward(&idx, uint32_t(b.b64[0] >> 32));
+      return Square(idx + 224);
+  }
+#elif defined(LARGEBOARDS)
   if (b << 96) {
       _BitScanForward(&idx, uint32_t(b));
       return Square(idx);
@@ -1050,7 +1121,33 @@ inline Square msb(Bitboard b) {
   assert(b);
   unsigned long idx;
 
-#ifdef LARGEBOARDS
+#ifdef VERY_LARGE_BOARDS
+  if (b.b64[0] >> 32) {
+      _BitScanReverse(&idx, uint32_t(b.b64[0] >> 32));
+      return Square(idx + 224);
+  } else if (uint32_t(b.b64[0])) {
+      _BitScanReverse(&idx, uint32_t(b.b64[0]));
+      return Square(idx + 192);
+  } else if (b.b64[1] >> 32) {
+      _BitScanReverse(&idx, uint32_t(b.b64[1] >> 32));
+      return Square(idx + 160);
+  } else if (uint32_t(b.b64[1])) {
+      _BitScanReverse(&idx, uint32_t(b.b64[1]));
+      return Square(idx + 128);
+  } else if (b.b64[2] >> 32) {
+      _BitScanReverse(&idx, uint32_t(b.b64[2] >> 32));
+      return Square(idx + 96);
+  } else if (uint32_t(b.b64[2])) {
+      _BitScanReverse(&idx, uint32_t(b.b64[2]));
+      return Square(idx + 64);
+  } else if (b.b64[3] >> 32) {
+      _BitScanReverse(&idx, uint32_t(b.b64[3] >> 32));
+      return Square(idx + 32);
+  } else {
+      _BitScanReverse(&idx, uint32_t(b.b64[3]));
+      return Square(idx);
+  }
+#elif defined(LARGEBOARDS)
   if (b >> 96) {
       _BitScanReverse(&idx, uint32_t(b >> 96));
       return Square(idx + 96);
