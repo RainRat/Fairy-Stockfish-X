@@ -373,6 +373,23 @@ position startpos
 d")
 echo "${out}" | grep -q "Fen: rnbqk1bnr/ppppppppp/9/9/9/9/9/PPPPPPPPP/RNBQK1BNR w - - 0 1"
 
+# 19dzz) Fart (5x5): two placements per turn, centre excluded, then orthogonal sliding with line-5 win.
+out=$(run_cmds "setoption name UCI_Variant value fart-5x5
+position startpos
+go perft 1")
+echo "${out}" | grep -q "^M@a1: 1$"
+echo "${out}" | grep -vq "^M@c3: 1$"
+out=$(run_cmds "setoption name UCI_Variant value fart-5x5
+position startpos moves M@a1 M@a2
+go perft 1")
+echo "${out}" | grep -q "^m@a3: 1$"
+
+a='M@a1 M@a2 m@e5 m@e4 M@b1 M@b2 m@d5 m@d4 M@d1 M@e1 m@b5 m@a5 M@d2 M@e2 m@b4 m@a4 M@d3 M@e3 m@b3 m@a3 M@c1 M@c2 m@c5 m@c4'
+out=$(run_cmds "setoption name UCI_Variant value fart-5x5
+position startpos moves ${a}
+go depth 1")
+echo "${out}" | grep -q "Nodes searched: 0"
+
 # 19e0) English Draughts: documented title matches the supported checkers ruleset.
 out=$(run_cmds "setoption name UCI_Variant value english-draughts
 position startpos
