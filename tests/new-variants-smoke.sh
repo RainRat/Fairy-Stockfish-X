@@ -444,6 +444,12 @@ position startpos moves a10a10 a9a9
 go perft 1")
 echo "${out}" | grep -q "^c10a10: 1$"
 
+# 19fzz) Gale Misere: connecting your own sides loses instead of wins.
+out=$(run_cmds "setoption name UCI_Variant value gale-misere
+position fen 1P5/P1P5/2P5/9/9/9/9/9/9 w - - 0 1
+go depth 1")
+echo "${out}" | grep -q "Nodes searched: 0"
+
 # 19g) Apit-Sodok: same reverse/intervention capture as Maak Yek.
 out=$(run_cmds "setoption name UCI_Variant value apit-sodok
 position fen 8/8/8/2r1r3/3R4/8/8/8 w - - 0 1 moves d4d5
