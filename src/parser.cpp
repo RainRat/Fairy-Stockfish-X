@@ -571,6 +571,24 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
         return only_trailing_space(ss);
     };
 
+    auto require_attribute = [&](bool enabled, const std::string& key, auto& target) {
+        if (!enabled)
+            return true;
+        if (parse_attribute(key, target))
+            return true;
+        if (DoCheck)
+            std::cerr << "Syntax error in " << key << " or missing " << key << " definition." << std::endl;
+        return false;
+    };
+    auto parse_both_colors = [&](const std::string& key, auto& target) {
+        parse_attribute(key, target[WHITE]);
+        parse_attribute(key, target[BLACK]);
+    };
+    auto parse_both_colors_piece = [&](const std::string& key, auto& target) {
+        parse_attribute(key, target[WHITE], v->pieceToChar);
+        parse_attribute(key, target[BLACK], v->pieceToChar);
+    };
+
     int cfgMaxRank = -1;
     int cfgMaxFile = -1;
     const auto itRank = config.find("maxRank");
@@ -745,14 +763,10 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     if (dropOnTop) v->enclosingDrop=TOP;
 
     // Parse aliases
-    parse_attribute("pawnTypes", v->mainPromotionPawnType[WHITE], v->pieceToChar);
-    parse_attribute("pawnTypes", v->mainPromotionPawnType[BLACK], v->pieceToChar);
-    parse_attribute("pawnTypes", v->promotionPawnTypes[WHITE], v->pieceToChar);
-    parse_attribute("pawnTypes", v->promotionPawnTypes[BLACK], v->pieceToChar);
-    parse_attribute("pawnTypes", v->enPassantTypes[WHITE], v->pieceToChar);
-    parse_attribute("pawnTypes", v->enPassantTypes[BLACK], v->pieceToChar);
-    parse_attribute("pawnTypes", v->nMoveRuleTypes[WHITE], v->pieceToChar);
-    parse_attribute("pawnTypes", v->nMoveRuleTypes[BLACK], v->pieceToChar);
+    parse_both_colors_piece("pawnTypes", v->mainPromotionPawnType);
+    parse_both_colors_piece("pawnTypes", v->promotionPawnTypes);
+    parse_both_colors_piece("pawnTypes", v->enPassantTypes);
+    parse_both_colors_piece("pawnTypes", v->nMoveRuleTypes);
 
     // Parse the official config options
     parse_attribute("variantTemplate", v->variantTemplate);
@@ -770,29 +784,17 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("mandatoryPromotionRegion", v->mandatoryPromotionRegion[WHITE]);
     parse_attribute("mandatoryPromotionRegion", v->mandatoryPromotionRegion[BLACK]);
     parse_attribute("pieceSpecificPromotionRegion", v->pieceSpecificPromotionRegion);
-    if (v->pieceSpecificPromotionRegion && !parse_attribute("whitePiecePromotionRegion", v->whitePiecePromotionRegion))
-    {
-        if (DoCheck)
-            std::cerr << "Syntax error in whitePiecePromotionRegion or missing whitePiecePromotionRegion definition." << std::endl;
+    if (!require_attribute(v->pieceSpecificPromotionRegion, "whitePiecePromotionRegion", v->whitePiecePromotionRegion)
+        || !require_attribute(v->pieceSpecificPromotionRegion, "blackPiecePromotionRegion", v->blackPiecePromotionRegion))
         return nullptr;
-    }
-    if (v->pieceSpecificPromotionRegion && !parse_attribute("blackPiecePromotionRegion", v->blackPiecePromotionRegion))
-    {
-        if (DoCheck)
-            std::cerr << "Syntax error in blackPiecePromotionRegion or missing blackPiecePromotionRegion definition." << std::endl;
-        return nullptr;
-    }
     // Take the first promotionPawnTypes as the main promotionPawnType
-    parse_attribute("promotionPawnTypes", v->mainPromotionPawnType[WHITE], v->pieceToChar);
-    parse_attribute("promotionPawnTypes", v->mainPromotionPawnType[BLACK], v->pieceToChar);
-    parse_attribute("promotionPawnTypes", v->promotionPawnTypes[WHITE], v->pieceToChar);
-    parse_attribute("promotionPawnTypes", v->promotionPawnTypes[BLACK], v->pieceToChar);
+    parse_both_colors_piece("promotionPawnTypes", v->mainPromotionPawnType);
+    parse_both_colors_piece("promotionPawnTypes", v->promotionPawnTypes);
     parse_attribute("promotionPawnTypesWhite", v->mainPromotionPawnType[WHITE], v->pieceToChar);
     parse_attribute("promotionPawnTypesBlack", v->mainPromotionPawnType[BLACK], v->pieceToChar);
     parse_attribute("promotionPawnTypesWhite", v->promotionPawnTypes[WHITE], v->pieceToChar);
     parse_attribute("promotionPawnTypesBlack", v->promotionPawnTypes[BLACK], v->pieceToChar);
-    parse_attribute("promotionPieceTypes", v->promotionPieceTypes[WHITE], v->pieceToChar);
-    parse_attribute("promotionPieceTypes", v->promotionPieceTypes[BLACK], v->pieceToChar);
+    parse_both_colors_piece("promotionPieceTypes", v->promotionPieceTypes);
     parse_attribute("promotionPieceTypesWhite", v->promotionPieceTypes[WHITE], v->pieceToChar);
     parse_attribute("promotionPieceTypesBlack", v->promotionPieceTypes[BLACK], v->pieceToChar);
     parse_attribute("sittuyinPromotion", v->sittuyinPromotion);
@@ -980,39 +982,19 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("doubleStepRegionWhite", v->doubleStepRegion[WHITE]);
     parse_attribute("doubleStepRegionBlack", v->doubleStepRegion[BLACK]);
     parse_attribute("pieceSpecificDoubleStepRegion", v->pieceSpecificDoubleStepRegion);
-    if (v->pieceSpecificDoubleStepRegion && !parse_attribute("whitePieceDoubleStepRegion", v->whitePieceDoubleStepRegion))
-    {
-        if (DoCheck)
-            std::cerr << "Syntax error in whitePieceDoubleStepRegion or missing whitePieceDoubleStepRegion definition." << std::endl;
+    if (!require_attribute(v->pieceSpecificDoubleStepRegion, "whitePieceDoubleStepRegion", v->whitePieceDoubleStepRegion)
+        || !require_attribute(v->pieceSpecificDoubleStepRegion, "blackPieceDoubleStepRegion", v->blackPieceDoubleStepRegion))
         return nullptr;
-    }
-    if (v->pieceSpecificDoubleStepRegion && !parse_attribute("blackPieceDoubleStepRegion", v->blackPieceDoubleStepRegion))
-    {
-        if (DoCheck)
-            std::cerr << "Syntax error in blackPieceDoubleStepRegion or missing blackPieceDoubleStepRegion definition." << std::endl;
-        return nullptr;
-    }
     parse_attribute("pieceSpecificTripleStepRegion", v->pieceSpecificTripleStepRegion);
-    if (v->pieceSpecificTripleStepRegion && !parse_attribute("whitePieceTripleStepRegion", v->whitePieceTripleStepRegion))
-    {
-        if (DoCheck)
-            std::cerr << "Syntax error in whitePieceTripleStepRegion or missing whitePieceTripleStepRegion definition." << std::endl;
+    if (!require_attribute(v->pieceSpecificTripleStepRegion, "whitePieceTripleStepRegion", v->whitePieceTripleStepRegion)
+        || !require_attribute(v->pieceSpecificTripleStepRegion, "blackPieceTripleStepRegion", v->blackPieceTripleStepRegion))
         return nullptr;
-    }
-    if (v->pieceSpecificTripleStepRegion && !parse_attribute("blackPieceTripleStepRegion", v->blackPieceTripleStepRegion))
-    {
-        if (DoCheck)
-            std::cerr << "Syntax error in blackPieceTripleStepRegion or missing blackPieceTripleStepRegion definition." << std::endl;
-        return nullptr;
-    }
     parse_attribute("tripleStepRegionWhite", v->tripleStepRegion[WHITE]);
     parse_attribute("tripleStepRegionBlack", v->tripleStepRegion[BLACK]);
-    parse_attribute("enPassantRegion", v->enPassantRegion[WHITE]);
-    parse_attribute("enPassantRegion", v->enPassantRegion[BLACK]);
+    parse_both_colors("enPassantRegion", v->enPassantRegion);
     parse_attribute("enPassantRegionWhite", v->enPassantRegion[WHITE]);
     parse_attribute("enPassantRegionBlack", v->enPassantRegion[BLACK]);
-    parse_attribute("enPassantTypes", v->enPassantTypes[WHITE], v->pieceToChar);
-    parse_attribute("enPassantTypes", v->enPassantTypes[BLACK], v->pieceToChar);
+    parse_both_colors_piece("enPassantTypes", v->enPassantTypes);
     parse_attribute("enPassantTypesWhite", v->enPassantTypes[WHITE], v->pieceToChar);
     parse_attribute("enPassantTypesBlack", v->enPassantTypes[BLACK], v->pieceToChar);
     parse_attribute("castling", v->castling);
@@ -1022,14 +1004,12 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("castlingQueensideFile", v->castlingQueensideFile);
     parse_attribute("castlingRank", v->castlingRank);
     parse_attribute("castlingKingFile", v->castlingKingFile);
-    parse_attribute("castlingKingPiece", v->castlingKingPiece[WHITE], v->pieceToChar);
-    parse_attribute("castlingKingPiece", v->castlingKingPiece[BLACK], v->pieceToChar);
+    parse_both_colors_piece("castlingKingPiece", v->castlingKingPiece);
     parse_attribute("castlingKingPieceWhite", v->castlingKingPiece[WHITE], v->pieceToChar);
     parse_attribute("castlingKingPieceBlack", v->castlingKingPiece[BLACK], v->pieceToChar);
     parse_attribute("castlingRookKingsideFile", v->castlingRookKingsideFile);
     parse_attribute("castlingRookQueensideFile", v->castlingRookQueensideFile);
-    parse_attribute("castlingRookPieces", v->castlingRookPieces[WHITE], v->pieceToChar);
-    parse_attribute("castlingRookPieces", v->castlingRookPieces[BLACK], v->pieceToChar);
+    parse_both_colors_piece("castlingRookPieces", v->castlingRookPieces);
     parse_attribute("castlingRookPiecesWhite", v->castlingRookPieces[WHITE], v->pieceToChar);
     parse_attribute("castlingRookPiecesBlack", v->castlingRookPieces[BLACK], v->pieceToChar);
     parse_attribute("oppositeCastling", v->oppositeCastling);
@@ -1058,8 +1038,7 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("dropKingLast", v->dropKingLast);
     parse_attribute("openingSelfRemoval", v->openingSelfRemoval);
     parse_attribute("openingSelfRemovalAdjacentToLast", v->openingSelfRemovalAdjacentToLast);
-    parse_attribute("openingSelfRemovalRegion", v->openingSelfRemovalRegion[WHITE]);
-    parse_attribute("openingSelfRemovalRegion", v->openingSelfRemovalRegion[BLACK]);
+    parse_both_colors("openingSelfRemovalRegion", v->openingSelfRemovalRegion);
     parse_attribute("openingSelfRemovalRegionWhite", v->openingSelfRemovalRegion[WHITE]);
     parse_attribute("openingSelfRemovalRegionBlack", v->openingSelfRemovalRegion[BLACK]);
     parse_attribute("pieceDrops", v->pieceDrops);
@@ -1127,18 +1106,9 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("dropRegionWhite", v->dropRegion[WHITE]);
     parse_attribute("dropRegionBlack", v->dropRegion[BLACK]);
     parse_attribute("pieceSpecificDropRegion", v->pieceSpecificDropRegion);
-    if (v->pieceSpecificDropRegion && !parse_attribute("whitePieceDropRegion", v->whitePieceDropRegion))
-    {
-        if (DoCheck)
-            std::cerr << "Syntax error in whitePieceDropRegion or missing whitePieceDropRegion definition." << std::endl;
+    if (!require_attribute(v->pieceSpecificDropRegion, "whitePieceDropRegion", v->whitePieceDropRegion)
+        || !require_attribute(v->pieceSpecificDropRegion, "blackPieceDropRegion", v->blackPieceDropRegion))
         return nullptr;
-    }
-    if (v->pieceSpecificDropRegion && !parse_attribute("blackPieceDropRegion", v->blackPieceDropRegion))
-    {
-        if (DoCheck)
-            std::cerr << "Syntax error in blackPieceDropRegion or missing blackPieceDropRegion definition." << std::endl;
-        return nullptr;
-    }
     parse_attribute("sittuyinRookDrop", v->sittuyinRookDrop);
     parse_attribute("dropOppositeColoredBishop", v->dropOppositeColoredBishop);
     parse_attribute("dropPromoted", v->dropPromoted);
@@ -1182,12 +1152,10 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("forcedJumpSameDirection", v->forcedJumpSameDirection);
     parse_attribute("cambodianMoves", v->cambodianMoves);
     parse_attribute("diagonalLines", v->diagonalLines);
-    parse_attribute("pass", v->pass[WHITE]);
-    parse_attribute("pass", v->pass[BLACK]);
+    parse_both_colors("pass", v->pass);
     parse_attribute("passWhite", v->pass[WHITE]);
     parse_attribute("passBlack", v->pass[BLACK]);
-    parse_attribute("passOnStalemate", v->passOnStalemate[WHITE]);
-    parse_attribute("passOnStalemate", v->passOnStalemate[BLACK]);
+    parse_both_colors("passOnStalemate", v->passOnStalemate);
     parse_attribute("passOnStalemateWhite", v->passOnStalemate[WHITE]);
     parse_attribute("passOnStalemateBlack", v->passOnStalemate[BLACK]);
     parse_attribute("passUntilSetup", v->passUntilSetup);
@@ -1217,8 +1185,7 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("soldierPromotionRank", v->soldierPromotionRank);
     parse_attribute("flipEnclosedPieces", v->flipEnclosedPieces);
     // game end
-    parse_attribute("nMoveRuleTypes", v->nMoveRuleTypes[WHITE], v->pieceToChar);
-    parse_attribute("nMoveRuleTypes", v->nMoveRuleTypes[BLACK], v->pieceToChar);
+    parse_both_colors_piece("nMoveRuleTypes", v->nMoveRuleTypes);
     parse_attribute("nMoveRuleTypesWhite", v->nMoveRuleTypes[WHITE], v->pieceToChar);
     parse_attribute("nMoveRuleTypesBlack", v->nMoveRuleTypes[BLACK], v->pieceToChar);
     parse_attribute("nMoveRule", v->nMoveRule);
@@ -1257,12 +1224,10 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
         v->pseudoRoyalTypes = v->extinctionPieceTypes;
         v->pseudoRoyalCount = v->extinctionPieceCount + 1;
     }
-    parse_attribute("flagPiece", v->flagPiece[WHITE], v->pieceToChar);
-    parse_attribute("flagPiece", v->flagPiece[BLACK], v->pieceToChar);
+    parse_both_colors_piece("flagPiece", v->flagPiece);
     parse_attribute("flagPieceWhite", v->flagPiece[WHITE], v->pieceToChar);
     parse_attribute("flagPieceBlack", v->flagPiece[BLACK], v->pieceToChar);
-    parse_attribute("flagRegion", v->flagRegion[WHITE]);
-    parse_attribute("flagRegion", v->flagRegion[BLACK]);
+    parse_both_colors("flagRegion", v->flagRegion);
     parse_attribute("flagRegionWhite", v->flagRegion[WHITE]);
     parse_attribute("flagRegionBlack", v->flagRegion[BLACK]);
     parse_attribute("flagPieceCount", v->flagPieceCount);

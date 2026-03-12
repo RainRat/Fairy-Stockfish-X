@@ -184,6 +184,21 @@ namespace {
       bool standaloneH = false;
       std::vector<std::string> prelimDirections = {};
 
+      auto reset_parser_state = [&]() {
+          moveModalities.clear();
+          prelimDirections.clear();
+          hopper = false;
+          contraHopper = false;
+          rider = false;
+          lame = false;
+          initial = false;
+          dynamicDistance = false;
+          skiSlider = false;
+          maxDistance = false;
+          standaloneH = false;
+          distance = 0;
+      };
+
       auto commit_atom = [&](const std::vector<std::pair<int, int>>& atoms, bool atomIsRider, std::string::size_type& i, char atomChar, bool atomIsTuple = false) {
           // Check for rider / limited-distance rider suffix.
           rider = atomIsRider;
@@ -277,36 +292,14 @@ namespace {
               }
           }
           // Reset per-atom parser state.
-          moveModalities.clear();
-          prelimDirections.clear();
-          hopper = false;
-          contraHopper = false;
-          rider = false;
-          lame = false;
-          initial = false;
-          dynamicDistance = false;
-          skiSlider = false;
-          maxDistance = false;
-          standaloneH = false;
-          distance = 0;
+          reset_parser_state();
       };
 
-      auto commit_griffon = [&]() {
+      auto commit_bent_slider = [&](bool (PieceInfo::*flag)[2][2]) {
           // Keep first implementation strict: unqualified O only.
           if (!prelimDirections.empty() || hopper || contraHopper || lame || dynamicDistance || rider)
           {
-              moveModalities.clear();
-              prelimDirections.clear();
-              hopper = false;
-              contraHopper = false;
-              rider = false;
-              lame = false;
-              initial = false;
-              dynamicDistance = false;
-              skiSlider = false;
-              maxDistance = false;
-              standaloneH = false;
-              distance = 0;
+              reset_parser_state();
               return;
           }
           if (moveModalities.size() == 0)
@@ -315,58 +308,8 @@ namespace {
               moveModalities.push_back(MODALITY_CAPTURE);
           }
           for (auto modality : moveModalities)
-              p->griffon[initial][modality] = true;
-          moveModalities.clear();
-          prelimDirections.clear();
-          hopper = false;
-          contraHopper = false;
-          rider = false;
-          lame = false;
-          initial = false;
-          dynamicDistance = false;
-          skiSlider = false;
-          maxDistance = false;
-          standaloneH = false;
-          distance = 0;
-      };
-
-      auto commit_manticore = [&]() {
-          // Keep first implementation strict: unqualified M only.
-          if (!prelimDirections.empty() || hopper || contraHopper || lame || dynamicDistance || rider)
-          {
-              moveModalities.clear();
-              prelimDirections.clear();
-              hopper = false;
-              contraHopper = false;
-              rider = false;
-              lame = false;
-              initial = false;
-              dynamicDistance = false;
-              skiSlider = false;
-              maxDistance = false;
-              standaloneH = false;
-              distance = 0;
-              return;
-          }
-          if (moveModalities.size() == 0)
-          {
-              moveModalities.push_back(MODALITY_QUIET);
-              moveModalities.push_back(MODALITY_CAPTURE);
-          }
-          for (auto modality : moveModalities)
-              p->manticore[initial][modality] = true;
-          moveModalities.clear();
-          prelimDirections.clear();
-          hopper = false;
-          contraHopper = false;
-          rider = false;
-          lame = false;
-          initial = false;
-          dynamicDistance = false;
-          skiSlider = false;
-          maxDistance = false;
-          standaloneH = false;
-          distance = 0;
+              ((*p).*flag)[initial][modality] = true;
+          reset_parser_state();
       };
 
       for (std::string::size_type i = 0; i < expandedBetza.size(); i++)
@@ -450,10 +393,10 @@ namespace {
           }
           // Griffon bent slider (one orthogonal step, then slide perpendicular)
           else if (c == 'O')
-              commit_griffon();
+              commit_bent_slider(&PieceInfo::griffon);
           // Manticore bent slider (one diagonal step, then rook-like slide)
           else if (c == 'M')
-              commit_manticore();
+              commit_bent_slider(&PieceInfo::manticore);
           // Tuple leaper atom: (x,y)
           else if (c == '(')
           {
@@ -463,18 +406,7 @@ namespace {
               {
                   std::cerr << "Unsupported Betza tuple modifier combination in '" << betza
                             << "': tuple atoms only support explicit leapers. Ignoring tuple atom." << std::endl;
-                  moveModalities.clear();
-                  prelimDirections.clear();
-                  hopper = false;
-                  contraHopper = false;
-                  rider = false;
-                  lame = false;
-                  initial = false;
-                  dynamicDistance = false;
-                  skiSlider = false;
-                  maxDistance = false;
-                  standaloneH = false;
-                  distance = 0;
+                  reset_parser_state();
                   auto closeUnsupported = expandedBetza.find(')', i + 1);
                   if (closeUnsupported != std::string::npos)
                       i = closeUnsupported;
