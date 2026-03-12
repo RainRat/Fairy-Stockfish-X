@@ -383,6 +383,20 @@ namespace {
     return centerFiles;
   }
 
+  inline Bitboard scaled_center_squares(const Position& pos) {
+    if (pos.max_file() == FILE_H && pos.max_rank() == RANK_8)
+      return Center;
+
+    int maxR = int(pos.max_rank());
+    const int den = int(RANK_8);
+    auto mapRank = [&](Rank r8) {
+      return Rank((int(r8) * maxR + den / 2) / den);
+    };
+
+    Bitboard centerRanks = rank_bb(mapRank(RANK_4)) | rank_bb(mapRank(RANK_5));
+    return scaled_center_files(pos) & centerRanks;
+  }
+
   // Build a board-height-relative space mask depth from the side's home ranks.
   // 8x8 keeps the classic rank-2..rank-4 window.
   inline Bitboard scaled_space_mask(const Position& pos, Color c) {
@@ -715,7 +729,7 @@ namespace {
                 score -= BishopXRayPawns * popcount(attacks_bb<BISHOP>(s) & pos.pieces(Them, PAWN));
 
                 // Bonus for bishop on a long diagonal which can "see" both center squares
-                if (more_than_one(attacks_bb<BISHOP>(s, pos.pieces(PAWN)) & Center))
+                if (more_than_one(attacks_bb<BISHOP>(s, pos.pieces(PAWN)) & scaled_center_squares(pos)))
                     score += LongDiagonalBishop;
 
                 // An important Chess960 pattern: a cornered bishop blocked by a friendly

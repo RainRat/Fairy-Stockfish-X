@@ -45,6 +45,13 @@ castling = false
 customPiece1 = m:N
 promotionPieceTypes = -
 startFen = 4k3/8/8/8/8/8/4M3/4K3 w - - 0 1
+
+[mini-bishop:chess]
+maxFile = 5
+maxRank = 5
+castling = false
+promotionPieceTypes = -
+startFen = 5/5/5/5/5 w - - 0 1
 INI
 
 # Narrow boards should evaluate without tripping invalid shelter clamping.
@@ -54,5 +61,17 @@ narrow_eval=$(run_eval "${tmp_ini}" "narrow-shelter" "3/3/3/3/3/3/PPP/K1k w - - 
 # Fairy-piece threat/mobility paths should evaluate successfully too.
 fairy_eval=$(run_eval "${tmp_ini}" "fairy-eval" "4k3/8/8/8/4r3/8/4M3/4K3 w - - 0 1")
 [[ -n "${fairy_eval}" ]]
+
+# Non-8x8 long-diagonal bishop bonus should use the runtime board center, not literal 8x8 center squares.
+bishop_mg=$(cat <<CMDS | "${ENGINE}" | awk '/^\|    Bishops \|/ { print $4 }' | tail -n1
+uci
+setoption name VariantPath value ${tmp_ini}
+setoption name UCI_Variant value mini-bishop
+position fen 5/5/2B2/5/4k w - - 0 1
+eval
+quit
+CMDS
+)
+[[ "${bishop_mg}" == "0.00" ]]
 
 echo "eval geometry regression tests passed"
