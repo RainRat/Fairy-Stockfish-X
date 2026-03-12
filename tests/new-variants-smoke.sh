@@ -336,6 +336,18 @@ position startpos
 d")
 echo "${out}" | grep -q "Fen: brnfknrb/pppppppp/8/8/8/8/PPPPPPPP/BRNFKNRB w - - 0 1"
 
+# 19de) Shatranj (Turkey): source-backed setup and first-move Fers leap.
+out=$(run_cmds "setoption name UCI_Variant value shatranj-turkey
+position startpos
+d")
+echo "${out}" | grep -q "Fen: rnafkanr/pppppppp/8/8/8/8/PPPPPPPP/RNAFKANR w - - 0 1"
+out=$(run_cmds "setoption name UCI_Variant value shatranj-turkey
+position startpos
+go perft 1")
+echo "${out}" | grep -q "^d1d3: 1$"
+echo "${out}" | grep -q "^d1b3: 1$"
+echo "${out}" | grep -q "^d1f3: 1$"
+
 # 19e) Chess (Siberia): source-backed 9x9 setup should load as documented.
 out=$(run_cmds "setoption name UCI_Variant value chess-siberia
 position startpos
