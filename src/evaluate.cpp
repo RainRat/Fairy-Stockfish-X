@@ -343,6 +343,29 @@ namespace {
     return scaled_passed_rank_bucket(distanceToPromo, pos.max_rank());
   }
 
+  inline Score mobility_bonus(PieceType pt, int mobility) {
+    static constexpr int MobilityBonusSize[] = {
+      int(sizeof(MobilityBonus[0]) / sizeof(MobilityBonus[0][0])),
+      int(sizeof(MobilityBonus[1]) / sizeof(MobilityBonus[1][0])),
+      int(sizeof(MobilityBonus[2]) / sizeof(MobilityBonus[2][0])),
+      int(sizeof(MobilityBonus[3]) / sizeof(MobilityBonus[3][0]))
+    };
+    int idx = std::clamp(mobility, 0, MobilityBonusSize[pt - 2] - 1);
+    return MobilityBonus[pt - 2][idx];
+  }
+
+  inline Score threat_by_minor_bonus(PieceType pt) {
+    if (pt <= QUEEN)
+      return ThreatByMinor[pt];
+    return pt == KING ? SCORE_ZERO : ThreatByMinor[QUEEN];
+  }
+
+  inline Score threat_by_rook_bonus(PieceType pt) {
+    if (pt <= QUEEN)
+      return ThreatByRook[pt];
+    return pt == KING ? SCORE_ZERO : ThreatByRook[QUEEN];
+  }
+
   inline Bitboard scaled_center_files(const Position& pos) {
     int files = int(pos.max_file()) + 1;
     Bitboard centerFiles = CenterFiles;
@@ -616,7 +639,7 @@ namespace {
 
         int mob = popcount(b & mobilityArea[Us]);
         if (Pt <= QUEEN)
-            mobility[Us] += MobilityBonus[Pt - 2][mob];
+            mobility[Us] += mobility_bonus(Pt, mob);
         else
             mobility[Us] += MaxMobility * (mob - 2) / (8 + mob);
 
@@ -683,7 +706,9 @@ namespace {
                 // when the bishop is outside the pawn chain.
                 Bitboard blocked = pos.pieces(Us, PAWN) & shift<Down>(pos.pieces());
 
-                score -= BishopPawns[edge_distance(file_of(s), pos.max_file())] * pos.pawns_on_same_color_squares(Us, s)
+                int bishopPawnFile = std::min<int>(edge_distance(file_of(s), pos.max_file()),
+                                                   int(sizeof(BishopPawns) / sizeof(BishopPawns[0])) - 1);
+                score -= BishopPawns[bishopPawnFile] * pos.pawns_on_same_color_squares(Us, s)
                                      * (!(attackedBy[Us][PAWN] & s) + popcount(blocked & centerFiles));
 
                 // Penalty for all enemy pawns x-rayed
@@ -1069,11 +1094,11 @@ namespace {
     {
         b = (defended | weak) & (attackedBy[Us][KNIGHT] | attackedBy[Us][BISHOP]);
         while (b)
-            score += ThreatByMinor[type_of(pos.piece_on(pop_lsb(b)))];
+            score += threat_by_minor_bonus(type_of(pos.piece_on(pop_lsb(b))));
 
         b = weak & attackedBy[Us][ROOK];
         while (b)
-            score += ThreatByRook[type_of(pos.piece_on(pop_lsb(b)))];
+            score += threat_by_rook_bonus(type_of(pos.piece_on(pop_lsb(b))));
 
         if (weak & attackedBy[Us][KING])
             score += ThreatByKing;
