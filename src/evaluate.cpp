@@ -1850,8 +1850,8 @@ make_v:
     const Square a8 = make_square(FILE_A, maxR);
     const Square h8 = make_square(maxF, maxR);
 
-    const Bitboard Corners = (Bitboard(1ULL) << a1) | (Bitboard(1ULL) << h1)
-                           | (Bitboard(1ULL) << a8) | (Bitboard(1ULL) << h8);
+    const Bitboard Corners = square_bb(a1) | square_bb(h1)
+                           | square_bb(a8) | square_bb(h8);
 
     if (!(pos.pieces(BISHOP) & Corners))
         return VALUE_ZERO;
