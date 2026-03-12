@@ -50,6 +50,14 @@ namespace {
   inline int push_close(Square s1, Square s2) { return 140 - 20 * distance(s1, s2); }
   inline int push_away(Square s1, Square s2) { return 120 - push_close(s1, s2); }
 
+  inline Bitboard board_edges(const Position& pos) {
+      return FileABB | file_bb(pos.max_file()) | Rank1BB | rank_bb(pos.max_rank());
+  }
+
+  inline Rank penultimate_rank(const Position& pos) {
+      return Rank(std::max(int(RANK_1), int(pos.max_rank()) - 1));
+  }
+
 #ifndef NDEBUG
   bool verify_material(const Position& pos, Color c, Value npm, int pawnsCnt) {
     return   pos.non_pawn_material(c) == npm
@@ -1079,7 +1087,7 @@ Value Endgame<KN, EG_EVAL_ANTI>::operator()(const Position& pos) const {
 
   Value result = Value(push_to_edge(NSq, pos)) - push_to_edge(KSq, pos);
   // The king usually wins, but scenarios with king on the edge are more complicated
-  if (!(KSq & (FileABB | FileHBB | Rank1BB | Rank8BB)))
+  if (!(square_bb(KSq) & board_edges(pos)))
       result += VALUE_KNOWN_WIN;
 
   return strongSideToMove ? result : -result;
@@ -1296,10 +1304,12 @@ Value Endgame<KQK, EG_EVAL_RK>::operator()(const Position& pos) const {
   Square strongQueen = pos.square<QUEEN>(strongSide);
 
   Value result;
+  Bitboard goalRank = rank_bb(pos.max_rank());
+  Rank penultimate = penultimate_rank(pos);
 
   if (   rank_of(weakKing) < rank_of(strongQueen)
-      || rank_of(weakKing) + (weakSide == pos.side_to_move()) < RANK_7
-      || (Rank8BB & attacks_bb<QUEEN>(strongQueen, pos.pieces()) & ~(attacks_bb<QUEEN>(weakKing) | attacks_bb<SHOGI_KNIGHT>(weakKing))))
+      || rank_of(weakKing) + (weakSide == pos.side_to_move()) < penultimate
+      || (goalRank & attacks_bb<QUEEN>(strongQueen, pos.pieces()) & ~(attacks_bb<QUEEN>(weakKing) | attacks_bb<SHOGI_KNIGHT>(weakKing))))
       result = VALUE_KNOWN_WIN + 100 * rank_of(strongKing);
   else
       result = -VALUE_KNOWN_WIN;
@@ -1316,10 +1326,12 @@ Value Endgame<KRK, EG_EVAL_RK>::operator()(const Position& pos) const {
   Square strongRook = pos.square<ROOK>(strongSide);
 
   Value result;
+  Bitboard goalRank = rank_bb(pos.max_rank());
+  Rank penultimate = penultimate_rank(pos);
 
   if (   rank_of(weakKing) < rank_of(strongRook)
-      || rank_of(weakKing) + (weakSide == pos.side_to_move()) < RANK_7
-      || (Rank8BB & attacks_bb<ROOK>(strongRook, pos.pieces()) & ~(attacks_bb<QUEEN>(weakKing) | attacks_bb<SHOGI_KNIGHT>(weakKing))))
+      || rank_of(weakKing) + (weakSide == pos.side_to_move()) < penultimate
+      || (goalRank & attacks_bb<ROOK>(strongRook, pos.pieces()) & ~(attacks_bb<QUEEN>(weakKing) | attacks_bb<SHOGI_KNIGHT>(weakKing))))
       result = VALUE_KNOWN_WIN + 100 * rank_of(strongKing);
   else
       result = -VALUE_KNOWN_WIN;
