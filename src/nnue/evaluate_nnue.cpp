@@ -302,6 +302,9 @@ namespace Stockfish::Eval::NNUE {
   std::string trace(Position& pos) {
 
     std::stringstream ss;
+    auto* st = pos.state();
+    const bool savedRefreshNeeded = st->nnueRefreshNeeded;
+    st->nnueRefreshNeeded = true;
 
     char board[3*RANK_NB+1][8*FILE_NB+2];
     std::memset(board, ' ', sizeof(board));
@@ -340,8 +343,6 @@ namespace Stockfish::Eval::NNUE {
 
         if (pc != NO_PIECE && type_of(pc) != pos.nnue_king())
         {
-          auto st = pos.state();
-
           pos.remove_piece(sq);
           st->accumulator.computed[WHITE] = false;
           st->accumulator.computed[BLACK] = false;
@@ -364,6 +365,9 @@ namespace Stockfish::Eval::NNUE {
     ss << '\n';
 
     auto t = trace_evaluate(pos);
+    st->nnueRefreshNeeded = savedRefreshNeeded;
+    st->accumulator.computed[WHITE] = false;
+    st->accumulator.computed[BLACK] = false;
 
     ss << " NNUE network contributions "
        << (pos.side_to_move() == WHITE ? "(White to move)" : "(Black to move)") << std::endl
@@ -401,8 +405,11 @@ namespace Stockfish::Eval::NNUE {
   bool load_eval(std::string name, std::istream& stream) {
 
     initialize();
-    fileName = name;
-    return read_parameters(stream);
+    bool loaded = read_parameters(stream);
+    fileName = loaded ? name : std::string();
+    if (!loaded)
+        netDescription.clear();
+    return loaded;
   }
 
   // Save eval, to a file stream or a memory stream
@@ -419,6 +426,12 @@ namespace Stockfish::Eval::NNUE {
 
     std::string actualFilename;
     std::string msg;
+
+    if (fileName.empty())
+    {
+        sync_cout << "Failed to export a net" << sync_endl;
+        return false;
+    }
 
     if (filename.has_value())
         actualFilename = filename.value();
