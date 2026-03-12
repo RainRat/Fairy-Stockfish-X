@@ -31,6 +31,11 @@ extract_perft1_nodes() {
   echo "$output" | sed -n 's/^Nodes searched: //p' | tail -n1
 }
 
+extract_perft1_moves() {
+  local output="$1"
+  echo "$output" | awk -F: '/^[a-zA-Z0-9@#,+=-]+: /{print $1}' | sort
+}
+
 extract_final_eval() {
   local output="$1"
   echo "$output" | sed -n 's/^Final evaluation[[:space:]]*//p' | tail -n1
@@ -124,6 +129,35 @@ go perft 1")
       echo "fen: ${fen}"
       echo "nodes: ${nodes}"
       echo "reload nodes: ${nodes_reload}"
+      return 1
+  fi
+}
+
+assert_reload_perft1_moves_match() {
+  local variant_path="$1"
+  local variant="$2"
+  local pos_cmd="$3"
+
+  local out fen out_reload
+  local moves moves_reload
+  out=$(position_dump "${variant_path}" "${variant}" "${pos_cmd}
+go perft 1")
+  readarray -t parsed < <(extract_fen_and_key "$out")
+  fen="${parsed[0]}"
+  moves=$(extract_perft1_moves "$out")
+
+  out_reload=$(position_dump "${variant_path}" "${variant}" "position fen ${fen}
+go perft 1")
+  moves_reload=$(extract_perft1_moves "$out_reload")
+
+  if [[ -z "${moves}" || -z "${moves_reload}" || "${moves}" != "${moves_reload}" ]]; then
+      echo "Perft1 move-set mismatch for ${variant}"
+      echo "position: ${pos_cmd}"
+      echo "fen: ${fen}"
+      echo "moves:"
+      printf '%s\n' "${moves}"
+      echo "reload moves:"
+      printf '%s\n' "${moves_reload}"
       return 1
   fi
 }
@@ -260,6 +294,8 @@ assert_distinct_position_keys "$tmp_ini" "commitkeys" \
 assert_reload_key_match "$tmp_ini" "spellprisonex" "position startpos moves q@c6,c4d5"
 assert_reload_key_match "$tmp_ini" "spellprisonex" "position startpos moves q@c6,c4d5 f5e4 P#P@a2"
 assert_reload_perft1_match "$tmp_ini" "spellprisonex" "position startpos moves q@c6,c4d5 f5e4 P#P@a2"
+assert_reload_perft1_moves_match "$tmp_ini" "spellprisonex" "position startpos moves q@c6,c4d5"
+assert_reload_perft1_moves_match "$tmp_ini" "spellprisonex" "position startpos moves q@c6,c4d5 f5e4 P#P@a2"
 assert_reload_eval_match "$tmp_ini" "spellprisonex" "position startpos moves q@c6,c4d5 f5e4 P#P@a2"
 assert_distinct_position_keys "$tmp_ini" "spellprisonex" \
   "8/8/8/3P1p2/4P3/8/8/4K2k[q#p] b - - 0 1" \
@@ -278,6 +314,7 @@ assert_reload_eval_match "" "flipello" "position startpos moves P@e3"
 assert_reload_key_match "" "spell-chess" "position startpos moves f@a6,e2e4 j@a7,a8a2"
 assert_progressive_reload_keys "" "spell-chess" "position startpos" 6
 assert_reload_perft1_match "" "spell-chess" "position startpos moves f@a6,e2e4 j@a7,a8a2"
+assert_reload_perft1_moves_match "" "spell-chess" "position startpos moves f@a6,e2e4 j@a7,a8a2"
 assert_reload_eval_match "" "spell-chess" "position startpos moves f@a6,e2e4 j@a7,a8a2"
 
 echo "state-sync key tests OK"
