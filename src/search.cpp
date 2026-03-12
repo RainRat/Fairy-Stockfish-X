@@ -18,10 +18,12 @@
 
 #include <algorithm>
 #include <cassert>
+#include <chrono>
 #include <cmath>
 #include <cstring>   // For std::memset
 #include <iostream>
 #include <sstream>
+#include <thread>
 
 #include "evaluate.h"
 #include "misc.h"
@@ -119,6 +121,9 @@ namespace {
   void update_quiet_stats(const Position& pos, Stack* ss, Move move, int bonus, int depth);
   void update_all_stats(const Position& pos, Stack* ss, Move bestMove, Value bestValue, Value beta, Square prevSq,
                         Move* quietsSearched, int quietCount, Move* capturesSearched, int captureCount, Depth depth);
+  void idle_wait() {
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
 
   // perft() is our utility to verify move generation. All the leaf nodes up
   // to the given depth are generated and counted, and the sum is returned.
@@ -225,7 +230,7 @@ void MainThread::search() {
   if (rootPos.two_boards() && !Threads.abort && CurrentProtocol == XBOARD)
   {
       while (!Threads.stop && (Partner.sitRequested || (Partner.weDead && !Partner.partnerDead)) && Time.elapsed() < Limits.time[us] - 1000)
-      {}
+          idle_wait();
   }
 
   // When we reach the maximum depth, we can arrive here without a raise of
@@ -235,7 +240,7 @@ void MainThread::search() {
   // until the GUI sends one of those commands.
 
   while (!Threads.stop && (ponder || Limits.infinite))
-  {} // Busy wait for a stop or a ponder reset
+      idle_wait();
 
   // Stop the threads if not already stopped (also raise the stop if
   // "ponderhit" just reset Threads.ponder).
@@ -271,7 +276,7 @@ void MainThread::search() {
       {
           Partner.ptell("fast");
           while (!Threads.abort && !Partner.partnerDead && !Partner.fast && Limits.time[us] - Time.elapsed() > Partner.opptime)
-          {}
+              idle_wait();
           Partner.ptell("x");
           // Find best real move
           for (const auto& m : bestThread->rootMoves)
