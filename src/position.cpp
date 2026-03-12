@@ -2689,10 +2689,13 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   st->didMorph = false;
   st->morphedFrom = NO_PIECE;
   st->morphSquare = SQ_NONE;
+  // Mandatory multimove pass plies should not advance the halfmove clock.
+  const bool currentMultimovePass = is_pass(m) && multimove_pass(gamePly);
+
   // Increment ply counters. In particular, rule50 will be reset to zero later on
   // in case of a capture or a pawn move.
   ++gamePly;
-  if (!(multimove_pass(gamePly) && is_pass(m)))
+  if (!currentMultimovePass)
       ++st->rule50;
   ++st->pliesFromNull;
   if (st->countingLimit)
