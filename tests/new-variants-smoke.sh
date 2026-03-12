@@ -373,6 +373,12 @@ position startpos
 d")
 echo "${out}" | grep -q "Fen: rnbqk1bnr/ppppppppp/9/9/9/9/9/PPPPPPPPP/RNBQK1BNR w - - 0 1"
 
+# 19e0) English Draughts: documented title matches the supported checkers ruleset.
+out=$(run_cmds "setoption name UCI_Variant value english-draughts
+position startpos
+d")
+echo "${out}" | grep -q "Fen: 1m1m1m1m/m1m1m1m1/1m1m1m1m/8/8/M1M1M1M1/1M1M1M1M/M1M1M1M1 w - - 0 1"
+
 # 19ea) HP-minichess: 5x5 orthodox setup with kings on the a-file.
 out=$(run_cmds "setoption name UCI_Variant value hp-minichess
 position startpos
