@@ -31,6 +31,22 @@ piecePoints =
 promotionLimit =
 priorityDropTypes =
 virtualDropLimit =
+
+[walling-seirawan:chess]
+wallingRule = duck
+seirawanGating = true
+
+[walling-potions:chess]
+wallingRule = duck
+potions = true
+
+[duck-petrify:chess]
+wallingRule = duck
+petrifyOnCaptureTypes = p
+
+[walling-freedrops:chess]
+wallingRule = duck
+freeDrops = true
 INI
 
 echo "parser regression tests started"
@@ -45,6 +61,22 @@ if printf '%s\n' "${check_output}" | grep -Eq "piecePoints - Invalid piece type:
   echo "${check_output}"
   exit 1
 fi
+
+verify_warning() {
+  local pattern="$1"
+  local label="$2"
+  if ! printf '%s\n' "${check_output}" | grep -qF "${pattern}"; then
+    echo "Failed: ${label}"
+    echo "Expected warning not found: ${pattern}"
+    printf '%s\n' "${check_output}"
+    exit 1
+  fi
+}
+
+verify_warning "wallingRule and seirawanGating are incompatible." "seirawanGating check"
+verify_warning "wallingRule and potions are incompatible." "potions check"
+verify_warning "wallingRule=duck and petrifyOnCaptureTypes are incompatible." "petrify check"
+verify_warning "pieceDrops and any walling are incompatible." "freeDrops check"
 
 tuple_output=$(cat <<CMDS | "${ENGINE}" 2>&1
 uci
