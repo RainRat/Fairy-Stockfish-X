@@ -102,10 +102,10 @@ namespace {
     Square s;
     bool backward, passed, doubled;
     Score score = SCORE_ZERO;
-    Bitboard b = pos.pieces(Us, PAWN);
+    Bitboard b = pos.pieces(Us, PAWN, SHOGI_PAWN, SOLDIER);
 
-    Bitboard ourPawns   = pos.pieces(  Us, PAWN);
-    Bitboard theirPawns = pos.pieces(Them, PAWN);
+    Bitboard ourPawns   = pos.pieces(  Us, PAWN, SHOGI_PAWN, SOLDIER);
+    Bitboard theirPawns = pos.pieces(Them, PAWN, SHOGI_PAWN, SOLDIER);
 
     Bitboard doubleAttackThem = pawn_double_attacks_bb<Them>(theirPawns);
 
@@ -119,7 +119,7 @@ namespace {
     {
         s = pop_lsb(b);
 
-        assert(pos.piece_on(s) == make_piece(Us, PAWN));
+        assert(type_of(pos.piece_on(s)) == PAWN || type_of(pos.piece_on(s)) == SHOGI_PAWN || type_of(pos.piece_on(s)) == SOLDIER);
 
         Rank r = relative_rank(Us, s, pos.max_rank());
 
@@ -174,7 +174,7 @@ namespace {
         {
             int v =  Connected[r] * (2 + bool(phalanx) - bool(opposed)) * (r == RANK_2 && pos.captures_to_hand() ? 3 : 1)
                    + 22 * popcount(support);
-            if (pos.count<PAWN>(Us) > popcount(pos.board_bb()) / 4)
+            if (popcount(ourPawns) > popcount(pos.board_bb()) / 4)
                 v = popcount(support | phalanx) * HordeConnected[bool(opposed)][r];
 
             score += make_score(v, v * (r - 2) / 4);

@@ -679,6 +679,44 @@ enum PieceType {
   FAIRY_PIECES_END = CUSTOM_PIECES - 1,
   ALL_PIECES = 0,
 };
+
+inline PieceType basic_type(PieceType pt) {
+    if (pt <= QUEEN || pt == KING) return pt;
+    switch (pt) {
+        case ARCHBISHOP:
+        case BISKNI:
+        case DRAGON_HORSE:
+        case FERS:
+        case ALFIL:
+        case FERS_ALFIL:
+        case ELEPHANT:
+        case JANGGI_ELEPHANT:
+            return BISHOP;
+        case CHANCELLOR:
+        case ROOKNI:
+        case LANCE:
+        case CANNON:
+        case JANGGI_CANNON:
+        case DRAGON:
+            return ROOK;
+        case AMAZON:
+            return QUEEN;
+        case KNIBIS:
+        case KNIROO:
+        case SHOGI_KNIGHT:
+        case SILVER:
+        case GOLD:
+        case CENTAUR:
+        case WAZIR:
+        case COMMONER:
+            return KNIGHT;
+        case SHOGI_PAWN:
+        case SOLDIER:
+            return PAWN;
+        default:
+            return pt > QUEEN && pt < KING ? QUEEN : pt;
+    }
+}
 static_assert(KING < PIECE_TYPE_NB, "KING exceeds PIECE_TYPE_NB.");
 static_assert(PIECE_TYPE_BITS <= 6, "PIECE_TYPE uses more than 6 bit");
 static_assert(!(PIECE_TYPE_NB & (PIECE_TYPE_NB - 1)), "PIECE_TYPE_NB is not a power of 2");

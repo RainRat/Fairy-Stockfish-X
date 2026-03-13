@@ -355,15 +355,11 @@ namespace {
   }
 
   inline Score threat_by_minor_bonus(PieceType pt) {
-    if (pt <= QUEEN)
-      return ThreatByMinor[pt];
-    return pt == KING ? SCORE_ZERO : ThreatByMinor[QUEEN];
+    return pt == KING ? SCORE_ZERO : ThreatByMinor[basic_type(pt)];
   }
 
   inline Score threat_by_rook_bonus(PieceType pt) {
-    if (pt <= QUEEN)
-      return ThreatByRook[pt];
-    return pt == KING ? SCORE_ZERO : ThreatByRook[QUEEN];
+    return pt == KING ? SCORE_ZERO : ThreatByRook[basic_type(pt)];
   }
 
   inline Bitboard scaled_center_files(const Position& pos) {
@@ -546,10 +542,10 @@ namespace {
 
     const Square ksq = pos.count<KING>(Us) ? pos.square<KING>(Us) : SQ_NONE;
 
-    Bitboard dblAttackByPawn = pawn_double_attacks_bb<Us>(pos.pieces(Us, PAWN));
+    Bitboard dblAttackByPawn = pawn_double_attacks_bb<Us>(pos.pieces(Us, PAWN, SHOGI_PAWN, SOLDIER));
 
     // Find our pawns that are blocked or on the first two ranks
-    Bitboard b = pos.pieces(Us, PAWN) & (shift<Down>(pos.pieces()) | LowRanks);
+    Bitboard b = pos.pieces(Us, PAWN, SHOGI_PAWN, SOLDIER) & (shift<Down>(pos.pieces()) | LowRanks);
 
     // Squares occupied by those pawns, by our king or queen, by blockers to attacks on our king
     // or controlled by enemy pawns are excluded from the mobility area.
@@ -638,7 +634,7 @@ namespace {
         if (b & kingRing[Them])
         {
             kingAttackersCount[Us]++;
-            kingAttackersWeight[Us] += KingAttackWeights[std::min(Pt, FAIRY_PIECES)];
+            kingAttackersWeight[Us] += KingAttackWeights[basic_type(Pt)];
             kingAttacksCount[Us] += popcount(b & attackedBy[Them][KING]);
         }
 
@@ -652,10 +648,7 @@ namespace {
              b = (b & pos.pieces()) | (pos.moves_from(Us, Pt, s) & ~pos.pieces() & pos.board_bb());
 
         int mob = popcount(b & mobilityArea[Us]);
-        if (Pt <= QUEEN)
-            mobility[Us] += mobility_bonus(Pt, mob);
-        else
-            mobility[Us] += MaxMobility * (mob - 2) / (8 + mob);
+        mobility[Us] += mobility_bonus(basic_type(Pt), mob);
 
         // Piece promotion bonus
         if (pos.promoted_piece_type(Pt) != NO_PIECE_TYPE)
@@ -718,7 +711,7 @@ namespace {
                 // Penalty according to the number of our pawns on the same color square as the
                 // bishop, bigger when the center files are blocked with pawns and smaller
                 // when the bishop is outside the pawn chain.
-                Bitboard blocked = pos.pieces(Us, PAWN) & shift<Down>(pos.pieces());
+                Bitboard blocked = pos.pieces(Us, PAWN, SHOGI_PAWN, SOLDIER) & shift<Down>(pos.pieces());
 
                 int bishopPawnFile = std::min<int>(edge_distance(file_of(s), pos.max_file()),
                                                    int(sizeof(BishopPawns) / sizeof(BishopPawns[0])) - 1);
@@ -726,7 +719,7 @@ namespace {
                                      * (!(attackedBy[Us][PAWN] & s) + popcount(blocked & centerFiles));
 
                 // Penalty for all enemy pawns x-rayed
-                score -= BishopXRayPawns * popcount(attacks_bb<BISHOP>(s) & pos.pieces(Them, PAWN));
+                score -= BishopXRayPawns * popcount(attacks_bb<BISHOP>(s) & pos.pieces(Them, PAWN, SHOGI_PAWN, SOLDIER));
 
                 // Bonus for bishop on a long diagonal which can "see" both center squares
                 if (more_than_one(attacks_bb<BISHOP>(s, pos.pieces(PAWN)) & scaled_center_squares(pos)))
@@ -756,7 +749,7 @@ namespace {
             else
             {
                 // If our pawn on this file is blocked, increase penalty
-                if ( pos.pieces(Us, PAWN)
+                if ( pos.pieces(Us, PAWN, SHOGI_PAWN, SOLDIER)
                    & shift<Down>(pos.pieces())
                    & file_bb(s))
                 {
@@ -825,7 +818,7 @@ namespace {
         if ((b & kingRing[Them]) && pt != SHOGI_PAWN)
         {
             kingAttackersCountInHand[Us] += pos.count_in_hand(Us, pt);
-            kingAttackersWeightInHand[Us] += KingAttackWeights[std::min(pt, FAIRY_PIECES)] * pos.count_in_hand(Us, pt);
+            kingAttackersWeightInHand[Us] += KingAttackWeights[basic_type(pt)] * pos.count_in_hand(Us, pt);
             kingAttacksCount[Us] += popcount(b & attackedBy[Them][KING]);
         }
         Bitboard theirHalf = pos.board_bb() & ~forward_ranks_bb(Them, relative_rank(Them, Rank((pos.max_rank() - 1) / 2), pos.max_rank()));
@@ -1135,12 +1128,12 @@ namespace {
     safe = ~attackedBy[Them][ALL_PIECES] | attackedBy[Us][ALL_PIECES];
 
     // Bonus for attacking enemy pieces with our relatively safe pawns
-    b = pos.pieces(Us, PAWN) & safe;
+    b = pos.pieces(Us, PAWN, SHOGI_PAWN, SOLDIER) & safe;
     b = pawn_attacks_bb<Us>(b) & nonPawnEnemies;
     score += ThreatBySafePawn * popcount(b);
 
     // Find squares where our pawns can push on the next move
-    b  = shift<Up>(pos.pieces(Us, PAWN)) & ~pos.pieces();
+    b  = shift<Up>(pos.pieces(Us, PAWN, SHOGI_PAWN, SOLDIER)) & ~pos.pieces();
     b |= shift<Up>(b & TRank3BB) & ~pos.pieces();
 
     // Keep only the squares which are relatively safe
@@ -1157,7 +1150,7 @@ namespace {
 
         Square s = pos.square<QUEEN>(Them);
         safe =   mobilityArea[Us]
-              & ~pos.pieces(Us, PAWN)
+              & ~pos.pieces(Us, PAWN, SHOGI_PAWN, SOLDIER)
               & ~stronglyProtected;
 
         b = attackedBy[Us][KNIGHT] & attacks_bb<KNIGHT>(s);
@@ -1195,10 +1188,10 @@ namespace {
 
     b = pe->passed_pawns(Us);
 
-    blockedPassers = b & shift<Down>(pos.pieces(Them, PAWN));
+    blockedPassers = b & shift<Down>(pos.pieces(Them, PAWN, SHOGI_PAWN, SOLDIER));
     if (blockedPassers)
     {
-        helpers =  shift<Up>(pos.pieces(Us, PAWN))
+        helpers =  shift<Up>(pos.pieces(Us, PAWN, SHOGI_PAWN, SOLDIER))
                  & ~pos.pieces(Them)
                  & (~attackedBy2[Them] | attackedBy[Us][ALL_PIECES]);
 
@@ -1212,7 +1205,7 @@ namespace {
     {
         Square s = pop_lsb(b);
 
-        assert(!(pos.pieces(Them, PAWN) & forward_file_bb(Us, s + Up)));
+        assert(!(pos.pieces(Them, PAWN, SHOGI_PAWN, SOLDIER) & forward_file_bb(Us, s + Up)));
 
         int r = passed_rank_bucket(pos, Us, s);
 
@@ -1324,7 +1317,7 @@ namespace {
   template<Tracing T> template<Color Us>
   Score Evaluation<T>::space() const {
 
-    bool pawnsOnly = !(pos.pieces(Us) ^ pos.pieces(Us, PAWN));
+    bool pawnsOnly = !(pos.pieces(Us) ^ pos.pieces(Us, PAWN, SHOGI_PAWN, SOLDIER));
 
     // Early exit if, for example, both queens or 6 minor pieces have been exchanged
     /// yjf2002ghty: By default double step is used for pawns in enhancing opening evaluation, so I assume the piece type is PAWN. It can cause problems if the pawn is something else (e.g. Custom pawn piece)
@@ -1337,17 +1330,17 @@ namespace {
 
     // Find the available squares for our pieces inside the area defined by SpaceMask
     Bitboard safe =   SpaceMask
-                   & ~pos.pieces(Us, PAWN)
+                   & ~pos.pieces(Us, PAWN, SHOGI_PAWN, SOLDIER)
                    & ~attackedBy[Them][PAWN];
 
     // Find all squares which are at most three squares behind some friendly pawn
-    Bitboard behind = pos.pieces(Us, PAWN);
+    Bitboard behind = pos.pieces(Us, PAWN, SHOGI_PAWN, SOLDIER);
     behind |= shift<Down>(behind);
     behind |= shift<Down+Down>(behind);
 
     if (pawnsOnly)
     {
-        safe = pos.board_bb() & ((attackedBy2[Us] & ~attackedBy2[Them]) | (attackedBy[Us][PAWN] & ~pos.pieces(Us, PAWN)));
+        safe = pos.board_bb() & ((attackedBy2[Us] & ~attackedBy2[Them]) | (attackedBy[Us][PAWN] & ~pos.pieces(Us, PAWN, SHOGI_PAWN, SOLDIER)));
         behind = 0;
     }
 
@@ -1385,12 +1378,12 @@ namespace {
         Bitboard onHold = 0;
         Bitboard onHold2 = 0;
         Bitboard processed = 0;
-        Bitboard blocked = pos.pieces(Us, PAWN) | attackedBy[Them][ALL_PIECES];
+        Bitboard blocked = pos.pieces(Us, PAWN, SHOGI_PAWN, SOLDIER) | attackedBy[Them][ALL_PIECES];
         Bitboard doubleBlocked =  attackedBy2[Them]
-                                | (pos.pieces(Us, PAWN) & (shift<Down>(pos.pieces()) | attackedBy[Them][ALL_PIECES]))
+                                | (pos.pieces(Us, PAWN, SHOGI_PAWN, SOLDIER) & (shift<Down>(pos.pieces()) | attackedBy[Them][ALL_PIECES]))
                                 | (pos.pieces(Them) & pe->pawn_attacks(Them))
-                                | (pawn_attacks_bb<Them>(pos.pieces(Them, PAWN) & pe->pawn_attacks(Them)));
-        Bitboard inaccessible = pos.pieces(Us, PAWN) & shift<Down>(pos.pieces(Them, PAWN));
+                                | (pawn_attacks_bb<Them>(pos.pieces(Them, PAWN, SHOGI_PAWN, SOLDIER) & pe->pawn_attacks(Them)));
+        Bitboard inaccessible = pos.pieces(Us, PAWN, SHOGI_PAWN, SOLDIER) & shift<Down>(pos.pieces(Them, PAWN, SHOGI_PAWN, SOLDIER));
         // Traverse all paths of the CTF pieces to the CTF targets.
         // Put squares that are attacked or occupied on hold for one iteration.
         // This reflects that likely a move will be needed to block or capture the attack.
@@ -1484,7 +1477,7 @@ namespace {
         int threat = int(pos.can_cast_potion(Them, Variant::POTION_FREEZE));
         if (threat > 0)
         {
-            Bitboard majors = pos.pieces(Us) & ~pos.pieces(Us, PAWN) & ~pos.pieces(Us, KING) & ~pos.pieces(Us, COMMONER);
+            Bitboard majors = pos.pieces(Us) & ~pos.pieces(Us, PAWN, SHOGI_PAWN, SOLDIER) & ~pos.pieces(Us, KING) & ~pos.pieces(Us, COMMONER);
             int adjacency = popcount(majors & shift<NORTH>(majors))
                           + popcount(majors & shift<EAST>(majors))
                           + popcount(majors & shift<NORTH_EAST>(majors))
@@ -1517,10 +1510,10 @@ namespace {
             {
                 // Pawns easy to stop/capture
                 int files = int(pos.max_file()) + 1;
-                int l = 0, m = 0, r = popcount(pos.pieces(Us, PAWN) & file_bb(FILE_A));
+                int l = 0, m = 0, r = popcount(pos.pieces(Us, PAWN, SHOGI_PAWN, SOLDIER) & file_bb(FILE_A));
                 for (File f = FILE_A; f <= pos.max_file(); ++f)
                 {
-                    l = m; m = r; r = popcount(pos.pieces(Us, PAWN) & shift<EAST>(file_bb(f)));
+                    l = m; m = r; r = popcount(pos.pieces(Us, PAWN, SHOGI_PAWN, SOLDIER) & shift<EAST>(file_bb(f)));
                     Score s = make_score(80 - 10 * (edge_distance(f, pos.max_file()) % 2),
                                          80 - 15 * (edge_distance(f, pos.max_file()) % 2));
                     score -= s * m * 8 / files / (1 + l * r);
