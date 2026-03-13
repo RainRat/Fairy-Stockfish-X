@@ -245,6 +245,13 @@ out=$(run_cmds "setoption name UCI_Variant value promotion-chess
 position startpos
 d")
 echo "${out}" | grep -q "Fen: 7k/pppppppp/8/pppppppp/PPPPPPPP/8/PPPPPPPP/K7 w - - 0 1"
+out=$(run_cmds "setoption name UCI_Variant value promotion-chess
+position fen 7k/P7/8/8/8/8/8/K7 w - - 0 1
+go perft 1")
+echo "${out}" | grep -q "a7a8q: 1"
+echo "${out}" | grep -q "a7a8r: 1"
+echo "${out}" | grep -q "a7a8b: 1"
+echo "${out}" | grep -q "a7a8n: 1"
 
 # 19bac) Reach Chess: reaching the back rank wins, and checkmate only forces a pass.
 out=$(run_cmds "setoption name UCI_Variant value reach-chess
