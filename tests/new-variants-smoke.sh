@@ -69,7 +69,7 @@ rm -f "${tmp_ini}"
 
 # This smoke suite contains >8x8 and template-dependent variants.
 # On constrained builds, skip gracefully if any required variant is unavailable.
-for required in hasami eurasian hindustani gala ichess british-chess crown-prince-chess compound-chess half-chess losalamos promotion-chess reach-chess dris-at-talata tictacchess shatranj shatranj-al-jawarhiya chaturanga chaturanga-payagunda chaturanga-al-adli shatranj-turkey tsatsarandi chess-siberia hp-minichess dodgem konane tawlbwrdd kharebga maak-yek apit-sodok apit troll tictactoe-misere all-queens-chess gale-5 battery-chess; do
+for required in hasami eurasian hindustani gala ichess british-chess crown-prince-chess compound-chess half-chess losalamos promotion-chess reach-chess dris-at-talata tictacchess shatranj shatranj-al-jawarhiya chaturanga chaturanga-payagunda chaturanga-al-adli shatranj-turkey tsatsarandi chess-siberia hp-minichess dodgem konane tawlbwrdd kharebga maak-yek apit-sodok apit troll tictactoe-misere all-queens-chess gale-5 battery-chess beast-chess; do
   if ! variant_available "${required}"; then
     echo "new variants smoke skipped: required variant '${required}' is unavailable in this build"
     exit 0
@@ -174,6 +174,12 @@ out=$(run_cmds "setoption name UCI_Variant value battery-chess
 position fen 4k3/P7/8/8/8/8/8/4K3[Q] w - - 0 1 moves a7a8q
 d")
 echo "${out}" | grep -q "Fen: Q~3k3/8/8/8/8/8/8/4K3\\[\\] b - - 0 1"
+
+# 12c) Beast Chess: documented replacement back rank loads.
+out=$(run_cmds "setoption name UCI_Variant value beast-chess
+position startpos
+d")
+echo "${out}" | grep -q "Fen: eghqkhge/pppppppp/8/8/8/8/PPPPPPPP/EGHQKHGE w KQkq - 0 1"
 
 # 13) Fatal giveaway: non-pawn capturer dies, pawns survive captures.
 out=$(run_cmds "setoption name UCI_Variant value fatal-giveaway
