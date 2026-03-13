@@ -22,6 +22,7 @@
 #include <algorithm>
 #include <cctype>
 #include <charconv>
+#include <memory>
 
 #include "apiutil.h"
 #include "parser.h"
@@ -57,6 +58,19 @@ namespace {
             return false;
         target = parsed;
         return true;
+    }
+
+    template <> bool set(const std::string& value, int& target)
+    {
+        if (value.empty())
+            return false;
+
+        const char* first = value.data();
+        const char* last  = first + value.size();
+        auto [ptr, ec] = std::from_chars(first, last, target);
+        while (ptr != last && std::isspace(static_cast<unsigned char>(*ptr)))
+            ptr++;
+        return ec == std::errc() && ptr == last;
     }
 
     template <> bool set(const std::string& value, std::vector<int>& target)
@@ -535,76 +549,33 @@ template <bool Current, class T> bool VariantParser<DoCheck>::parse_attribute(co
 }
 
 template <bool DoCheck>
-Variant* VariantParser<DoCheck>::parse() {
-    Variant* v = new Variant();
-    v->reset_pieces();
-    Variant* parsed = parse(v);
-    if (!parsed)
-        delete v;
-    return parsed;
+template <typename T>
+bool VariantParser<DoCheck>::require_attribute(bool enabled, const std::string& key, T& target) {
+    if (!enabled)
+        return true;
+    if (parse_attribute(key, target))
+        return true;
+    if (DoCheck)
+        std::cerr << "Syntax error in " << key << " or missing " << key << " definition." << std::endl;
+    return false;
 }
 
 template <bool DoCheck>
-Variant* VariantParser<DoCheck>::parse(Variant* v) {
-    auto parse_rank_value = [](const std::string& value, int& out) {
-        return parse_positive_int(value, out);
-    };
-    auto parse_file_value = [](const std::string& value, int& out) {
-        std::stringstream ss(value);
-        ss >> std::ws;
-        if (ss.peek() == EOF)
-            return false;
-        if (std::isdigit(ss.peek()))
-        {
-            int i;
-            ss >> i;
-            if (ss.fail())
-                return false;
-            out = i - 1;
-            return i >= 1 && only_trailing_space(ss);
-        }
-        char c;
-        ss >> c;
-        if (ss.fail())
-            return false;
-        out = std::tolower(static_cast<unsigned char>(c)) - 'a';
-        return only_trailing_space(ss);
-    };
+template <typename T>
+void VariantParser<DoCheck>::parse_both_colors(const std::string& key, T& target) {
+    parse_attribute(key, target[WHITE]);
+    parse_attribute(key, target[BLACK]);
+}
 
-    auto require_attribute = [&](bool enabled, const std::string& key, auto& target) {
-        if (!enabled)
-            return true;
-        if (parse_attribute(key, target))
-            return true;
-        if (DoCheck)
-            std::cerr << "Syntax error in " << key << " or missing " << key << " definition." << std::endl;
-        return false;
-    };
-    auto parse_both_colors = [&](const std::string& key, auto& target) {
-        parse_attribute(key, target[WHITE]);
-        parse_attribute(key, target[BLACK]);
-    };
-    auto parse_both_colors_piece = [&](const std::string& key, auto& target) {
-        parse_attribute(key, target[WHITE], v->pieceToChar);
-        parse_attribute(key, target[BLACK], v->pieceToChar);
-    };
+template <bool DoCheck>
+template <typename T>
+void VariantParser<DoCheck>::parse_both_colors_piece(const std::string& key, T& target, const std::string& pieceToChar) {
+    parse_attribute(key, target[WHITE], pieceToChar);
+    parse_attribute(key, target[BLACK], pieceToChar);
+}
 
-    int cfgMaxRank = -1;
-    int cfgMaxFile = -1;
-    const auto itRank = config.find("maxRank");
-    if (itRank != config.end())
-        parse_rank_value(itRank->second, cfgMaxRank);
-    const auto itFile = config.find("maxFile");
-    if (itFile != config.end())
-        parse_file_value(itFile->second, cfgMaxFile);
-
-    // Fail early when a variant exceeds compile-time board dimensions.
-    if ((cfgMaxRank > 0 && cfgMaxRank - 1 > RANK_MAX) || (cfgMaxFile >= 0 && cfgMaxFile > FILE_MAX))
-        return nullptr;
-
-    parse_attribute("maxRank", v->maxRank);
-    parse_attribute("maxFile", v->maxFile);
-    // piece types
+template <bool DoCheck>
+bool VariantParser<DoCheck>::parse_piece_types(Variant* v) {
     for (PieceType pt = PAWN; pt <= KING; ++pt)
     {
         if (pt == CUSTOM_PIECES_ROYAL)
@@ -664,7 +635,11 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
             parse_attribute("mobilityRegion" + color + capitalizedPiece, v->mobilityRegion[c][pt]);
         }
     }
-    // piece values
+    return true;
+}
+
+template <bool DoCheck>
+bool VariantParser<DoCheck>::parse_piece_values(Variant* v) {
     for (Phase phase : {MG, EG})
     {
         const std::string optionName = phase == MG ? "pieceValueMg" : "pieceValueEg";
@@ -734,7 +709,11 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
         else if (DoCheck && sawToken && idx != std::string::npos && (parseError || !(ss >> std::ws).eof()))
             std::cerr << "piecePoints - Invalid piece points for type: " << v->pieceToChar[idx] << std::endl;
     }
+    return true;
+}
 
+template <bool DoCheck>
+bool VariantParser<DoCheck>::parse_legacy_attributes(Variant* v) {
     // Parse deprecated values for backwards compatibility
     Rank promotionRank = RANK_8;
     if (parse_attribute<false>("promotionRank", promotionRank))
@@ -763,11 +742,15 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     if (dropOnTop) v->enclosingDrop=TOP;
 
     // Parse aliases
-    parse_both_colors_piece("pawnTypes", v->mainPromotionPawnType);
-    parse_both_colors_piece("pawnTypes", v->promotionPawnTypes);
-    parse_both_colors_piece("pawnTypes", v->enPassantTypes);
-    parse_both_colors_piece("pawnTypes", v->nMoveRuleTypes);
+    parse_both_colors_piece("pawnTypes", v->mainPromotionPawnType, v->pieceToChar);
+    parse_both_colors_piece("pawnTypes", v->promotionPawnTypes, v->pieceToChar);
+    parse_both_colors_piece("pawnTypes", v->enPassantTypes, v->pieceToChar);
+    parse_both_colors_piece("pawnTypes", v->nMoveRuleTypes, v->pieceToChar);
+    return true;
+}
 
+template <bool DoCheck>
+bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     // Parse the official config options
     parse_attribute("variantTemplate", v->variantTemplate);
     parse_attribute("pieceToCharTable", v->pieceToCharTable);
@@ -786,15 +769,15 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("pieceSpecificPromotionRegion", v->pieceSpecificPromotionRegion);
     if (!require_attribute(v->pieceSpecificPromotionRegion, "whitePiecePromotionRegion", v->whitePiecePromotionRegion)
         || !require_attribute(v->pieceSpecificPromotionRegion, "blackPiecePromotionRegion", v->blackPiecePromotionRegion))
-        return nullptr;
+        return false;
     // Take the first promotionPawnTypes as the main promotionPawnType
-    parse_both_colors_piece("promotionPawnTypes", v->mainPromotionPawnType);
-    parse_both_colors_piece("promotionPawnTypes", v->promotionPawnTypes);
+    parse_both_colors_piece("promotionPawnTypes", v->mainPromotionPawnType, v->pieceToChar);
+    parse_both_colors_piece("promotionPawnTypes", v->promotionPawnTypes, v->pieceToChar);
     parse_attribute("promotionPawnTypesWhite", v->mainPromotionPawnType[WHITE], v->pieceToChar);
     parse_attribute("promotionPawnTypesBlack", v->mainPromotionPawnType[BLACK], v->pieceToChar);
     parse_attribute("promotionPawnTypesWhite", v->promotionPawnTypes[WHITE], v->pieceToChar);
     parse_attribute("promotionPawnTypesBlack", v->promotionPawnTypes[BLACK], v->pieceToChar);
-    parse_both_colors_piece("promotionPieceTypes", v->promotionPieceTypes);
+    parse_both_colors_piece("promotionPieceTypes", v->promotionPieceTypes, v->pieceToChar);
     parse_attribute("promotionPieceTypesWhite", v->promotionPieceTypes[WHITE], v->pieceToChar);
     parse_attribute("promotionPieceTypesBlack", v->promotionPieceTypes[BLACK], v->pieceToChar);
     parse_attribute("sittuyinPromotion", v->sittuyinPromotion);
@@ -984,17 +967,17 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("pieceSpecificDoubleStepRegion", v->pieceSpecificDoubleStepRegion);
     if (!require_attribute(v->pieceSpecificDoubleStepRegion, "whitePieceDoubleStepRegion", v->whitePieceDoubleStepRegion)
         || !require_attribute(v->pieceSpecificDoubleStepRegion, "blackPieceDoubleStepRegion", v->blackPieceDoubleStepRegion))
-        return nullptr;
+        return false;
     parse_attribute("pieceSpecificTripleStepRegion", v->pieceSpecificTripleStepRegion);
     if (!require_attribute(v->pieceSpecificTripleStepRegion, "whitePieceTripleStepRegion", v->whitePieceTripleStepRegion)
         || !require_attribute(v->pieceSpecificTripleStepRegion, "blackPieceTripleStepRegion", v->blackPieceTripleStepRegion))
-        return nullptr;
+        return false;
     parse_attribute("tripleStepRegionWhite", v->tripleStepRegion[WHITE]);
     parse_attribute("tripleStepRegionBlack", v->tripleStepRegion[BLACK]);
     parse_both_colors("enPassantRegion", v->enPassantRegion);
     parse_attribute("enPassantRegionWhite", v->enPassantRegion[WHITE]);
     parse_attribute("enPassantRegionBlack", v->enPassantRegion[BLACK]);
-    parse_both_colors_piece("enPassantTypes", v->enPassantTypes);
+    parse_both_colors_piece("enPassantTypes", v->enPassantTypes, v->pieceToChar);
     parse_attribute("enPassantTypesWhite", v->enPassantTypes[WHITE], v->pieceToChar);
     parse_attribute("enPassantTypesBlack", v->enPassantTypes[BLACK], v->pieceToChar);
     parse_attribute("castling", v->castling);
@@ -1004,12 +987,12 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("castlingQueensideFile", v->castlingQueensideFile);
     parse_attribute("castlingRank", v->castlingRank);
     parse_attribute("castlingKingFile", v->castlingKingFile);
-    parse_both_colors_piece("castlingKingPiece", v->castlingKingPiece);
+    parse_both_colors_piece("castlingKingPiece", v->castlingKingPiece, v->pieceToChar);
     parse_attribute("castlingKingPieceWhite", v->castlingKingPiece[WHITE], v->pieceToChar);
     parse_attribute("castlingKingPieceBlack", v->castlingKingPiece[BLACK], v->pieceToChar);
     parse_attribute("castlingRookKingsideFile", v->castlingRookKingsideFile);
     parse_attribute("castlingRookQueensideFile", v->castlingRookQueensideFile);
-    parse_both_colors_piece("castlingRookPieces", v->castlingRookPieces);
+    parse_both_colors_piece("castlingRookPieces", v->castlingRookPieces, v->pieceToChar);
     parse_attribute("castlingRookPiecesWhite", v->castlingRookPieces[WHITE], v->pieceToChar);
     parse_attribute("castlingRookPiecesBlack", v->castlingRookPieces[BLACK], v->pieceToChar);
     parse_attribute("oppositeCastling", v->oppositeCastling);
@@ -1070,7 +1053,7 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
             {
                 if (DoCheck)
                     std::cerr << "virtualDropLimit - Invalid negative value for type: " << v->pieceToChar[idx] << std::endl;
-                return nullptr;
+                return false;
             }
             parsedLimits[PieceType(idx)] = limit;
             parsedEnabled = true;
@@ -1108,7 +1091,7 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("pieceSpecificDropRegion", v->pieceSpecificDropRegion);
     if (!require_attribute(v->pieceSpecificDropRegion, "whitePieceDropRegion", v->whitePieceDropRegion)
         || !require_attribute(v->pieceSpecificDropRegion, "blackPieceDropRegion", v->blackPieceDropRegion))
-        return nullptr;
+        return false;
     parse_attribute("sittuyinRookDrop", v->sittuyinRookDrop);
     parse_attribute("dropOppositeColoredBishop", v->dropOppositeColoredBishop);
     parse_attribute("dropPromoted", v->dropPromoted);
@@ -1126,7 +1109,7 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     {
         if (DoCheck)
             std::cerr << "freezePotion and jumpPotion must use different piece types." << std::endl;
-        return nullptr;
+        return false;
     }
     parse_attribute("potionDropOnOccupied", v->potionDropOnOccupied);
     parse_attribute("immobilityIllegal", v->immobilityIllegal);
@@ -1185,7 +1168,7 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parse_attribute("soldierPromotionRank", v->soldierPromotionRank);
     parse_attribute("flipEnclosedPieces", v->flipEnclosedPieces);
     // game end
-    parse_both_colors_piece("nMoveRuleTypes", v->nMoveRuleTypes);
+    parse_both_colors_piece("nMoveRuleTypes", v->nMoveRuleTypes, v->pieceToChar);
     parse_attribute("nMoveRuleTypesWhite", v->nMoveRuleTypes[WHITE], v->pieceToChar);
     parse_attribute("nMoveRuleTypesBlack", v->nMoveRuleTypes[BLACK], v->pieceToChar);
     parse_attribute("nMoveRule", v->nMoveRule);
@@ -1224,7 +1207,7 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
         v->pseudoRoyalTypes = v->extinctionPieceTypes;
         v->pseudoRoyalCount = v->extinctionPieceCount + 1;
     }
-    parse_both_colors_piece("flagPiece", v->flagPiece);
+    parse_both_colors_piece("flagPiece", v->flagPiece, v->pieceToChar);
     parse_attribute("flagPieceWhite", v->flagPiece[WHITE], v->pieceToChar);
     parse_attribute("flagPieceBlack", v->flagPiece[BLACK], v->pieceToChar);
     parse_both_colors("flagRegion", v->flagRegion);
@@ -1273,116 +1256,181 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
             if (parsedKeys.find(it.first) == parsedKeys.end())
                 std::cerr << "Invalid option: " << it.first << std::endl;
     }
-    // Check consistency
-    if (DoCheck)
+    return true;
+}
+
+template <bool DoCheck>
+void VariantParser<DoCheck>::check_consistency(Variant* v) {
+    if (!DoCheck)
+        return;
+
+    // pieces
+    for (PieceSet ps = v->pieceTypes; ps;)
     {
-        // pieces
+        PieceType pt = pop_lsb(ps);
+        for (Color c : {WHITE, BLACK})
+            if (std::count(v->pieceToChar.begin(), v->pieceToChar.end(), v->pieceToChar[make_piece(c, pt)]) != 1)
+                std::cerr << piece_name(pt) << " - Ambiguous piece character: " << v->pieceToChar[make_piece(c, pt)] << std::endl;
+    }
+
+    v->conclude(); // In preparation for the consistency checks below
+
+    // startFen
+    if (FEN::validate_fen(v->startFen, v, v->chess960) != FEN::FEN_OK)
+        std::cerr << "startFen - Invalid starting position: " << v->startFen << std::endl;
+
+    // pieceToCharTable
+    if (v->pieceToCharTable != "-")
+    {
+        const std::string fenBoard = v->startFen.substr(0, v->startFen.find(' '));
+        std::stringstream ss(v->pieceToCharTable);
+        char token;
+        while (ss >> token)
+            if (std::isalpha(static_cast<unsigned char>(token))
+                && v->pieceToChar.find(std::toupper(static_cast<unsigned char>(token))) == std::string::npos)
+                std::cerr << "pieceToCharTable - Invalid piece type: " << token << std::endl;
         for (PieceSet ps = v->pieceTypes; ps;)
         {
             PieceType pt = pop_lsb(ps);
-            for (Color c : {WHITE, BLACK})
-                if (std::count(v->pieceToChar.begin(), v->pieceToChar.end(), v->pieceToChar[make_piece(c, pt)]) != 1)
-                    std::cerr << piece_name(pt) << " - Ambiguous piece character: " << v->pieceToChar[make_piece(c, pt)] << std::endl;
+            char ptl = std::tolower(static_cast<unsigned char>(v->pieceToChar[pt]));
+            if (v->pieceToCharTable.find(ptl) == std::string::npos && fenBoard.find(ptl) != std::string::npos)
+                std::cerr << "pieceToCharTable - Missing piece type: " << ptl << std::endl;
+            char ptu = std::toupper(static_cast<unsigned char>(v->pieceToChar[pt]));
+            if (v->pieceToCharTable.find(ptu) == std::string::npos && fenBoard.find(ptu) != std::string::npos)
+                std::cerr << "pieceToCharTable - Missing piece type: " << ptu << std::endl;
         }
-
-        v->conclude(); // In preparation for the consistency checks below
-
-        // startFen
-        if (FEN::validate_fen(v->startFen, v, v->chess960) != FEN::FEN_OK)
-            std::cerr << "startFen - Invalid starting position: " << v->startFen << std::endl;
-
-        // pieceToCharTable
-        if (v->pieceToCharTable != "-")
-        {
-            const std::string fenBoard = v->startFen.substr(0, v->startFen.find(' '));
-            std::stringstream ss(v->pieceToCharTable);
-            char token;
-            while (ss >> token)
-                if (std::isalpha(static_cast<unsigned char>(token))
-                    && v->pieceToChar.find(std::toupper(static_cast<unsigned char>(token))) == std::string::npos)
-                    std::cerr << "pieceToCharTable - Invalid piece type: " << token << std::endl;
-            for (PieceSet ps = v->pieceTypes; ps;)
-            {
-                PieceType pt = pop_lsb(ps);
-                char ptl = std::tolower(static_cast<unsigned char>(v->pieceToChar[pt]));
-                if (v->pieceToCharTable.find(ptl) == std::string::npos && fenBoard.find(ptl) != std::string::npos)
-                    std::cerr << "pieceToCharTable - Missing piece type: " << ptl << std::endl;
-                char ptu = std::toupper(static_cast<unsigned char>(v->pieceToChar[pt]));
-                if (v->pieceToCharTable.find(ptu) == std::string::npos && fenBoard.find(ptu) != std::string::npos)
-                    std::cerr << "pieceToCharTable - Missing piece type: " << ptu << std::endl;
-            }
-        }
-
-        // Contradictory options
-        if (!v->checking && v->checkCounting)
-            std::cerr << "checkCounting=true requires checking=true." << std::endl;
-        if (v->progressiveMultimove && !v->multimoves.empty())
-            std::cerr << "progressiveMultimove ignores multimoves sequence." << std::endl;
-        for (Color c : {WHITE, BLACK})
-            for (unsigned char ch : v->connectPieceGoal[c])
-                if (!std::isspace(ch))
-                {
-                    size_t idx = v->pieceToChar.find(std::toupper(ch));
-                    if (idx == std::string::npos || idx >= PIECE_TYPE_NB)
-                        std::cerr << "connectPieceGoal" << (c == WHITE ? "White" : "Black")
-                                  << " - Invalid piece type: " << char(ch) << std::endl;
-                }
-        if (v->castling && v->castlingRank > v->maxRank)
-            std::cerr << "Inconsistent settings: castlingRank > maxRank." << std::endl;
-        if (v->castling && v->castlingQueensideFile > v->castlingKingsideFile)
-            std::cerr << "Inconsistent settings: castlingQueensideFile > castlingKingsideFile." << std::endl;
-        if (v->connect3D && v->connect4D)
-            std::cerr << "connect3D and connect4D are mutually exclusive." << std::endl;
-        if (v->connect3D && !((int(v->maxFile) + 1) == 3 && (int(v->maxRank) + 1) == 9))
-            std::cerr << "connect3D currently requires a 3x9 board." << std::endl;
-        if (v->connect4D && !((int(v->maxFile) + 1) == 9 && (int(v->maxRank) + 1) == 9))
-            std::cerr << "connect4D currently requires a 9x9 board." << std::endl;
-        if ((v->connect3D || v->connect4D) && v->connectN != 3)
-            std::cerr << "connect3D/connect4D currently require connectN = 3." << std::endl;
-
-        // Check for limitations
-        if (v->pieceDrops && v->wallingRule)
-            std::cerr << "pieceDrops and any walling are incompatible." << std::endl;
-
-        // Options incompatible with royal kings
-        if (v->pieceTypes & KING)
-        {
-            if (v->blastOnCapture)
-                std::cerr << "Can not use kings with blastOnCapture." << std::endl;
-            if (v->flipEnclosedPieces)
-                std::cerr << "Can not use kings with flipEnclosedPieces." << std::endl;
-            if (v->removeConnectN)
-                std::cerr << "Can not use kings with removeConnectN." << std::endl;
-            if (v->wallingRule==DUCK)
-                std::cerr << "Can not use kings with wallingRule = duck." << std::endl;
-            // We can not fully check support for custom king movements at this point,
-            // since custom pieces are only initialized on loading of the variant.
-            // We will assume this is valid, but it might cause problems later if it's not.
-            if (!is_custom(v->kingType))
-            {
-                const PieceInfo* pi = pieceMap.find(v->kingType)->second;
-                if (   pi->hopper[0][MODALITY_QUIET].size()
-                    || pi->hopper[0][MODALITY_CAPTURE].size()
-                    || std::any_of(pi->steps[0][MODALITY_CAPTURE].begin(),
-                                   pi->steps[0][MODALITY_CAPTURE].end(),
-                                   [](const std::pair<const Direction, int>& d) { return d.second; }))
-                    std::cerr << piece_name(v->kingType) << " is not supported as kingType." << std::endl;
-            }
-        }
-        // Options incompatible with royal kings OR pseudo-royal kings. Possible in theory though:
-        // 1. In blast variants, moving a (pseudo-)royal blastImmuneType into another piece is legal.
-        // 2. In blast variants, capturing a piece next to a (pseudo-)royal blastImmuneType is legal.
-        // 3. Moving a (pseudo-)royal mutuallyImmuneType into a square threatened by the same type is legal.
-        if (v->pseudoRoyalTypes || v->antiRoyalTypes || (v->pieceTypes & KING))
-        {
-            if (v->blastImmuneTypes) //I may have this solved now.
-                std::cerr << "Can not use kings, pseudo-royal, or anti-royal with blastImmuneTypes." << std::endl;
-            if (v->mutuallyImmuneTypes)
-                std::cerr << "Can not use kings, pseudo-royal, or anti-royal with mutuallyImmuneTypes." << std::endl;
-        }
-        if (v->flagPieceSafe && v->blastOnCapture)
-            std::cerr << "Can not use flagPieceSafe with blastOnCapture (flagPieceSafe uses simple assessment that does not see blast)." << std::endl;
     }
+
+    // Contradictory options
+    if (!v->checking && v->checkCounting)
+        std::cerr << "checkCounting=true requires checking=true." << std::endl;
+    if (v->progressiveMultimove && !v->multimoves.empty())
+        std::cerr << "progressiveMultimove ignores multimoves sequence." << std::endl;
+    for (Color c : {WHITE, BLACK})
+        for (unsigned char ch : v->connectPieceGoal[c])
+            if (!std::isspace(ch))
+            {
+                size_t idx = v->pieceToChar.find(std::toupper(ch));
+                if (idx == std::string::npos || idx >= PIECE_TYPE_NB)
+                    std::cerr << "connectPieceGoal" << (c == WHITE ? "White" : "Black")
+                                  << " - Invalid piece type: " << char(ch) << std::endl;
+            }
+    if (v->castling && v->castlingRank > v->maxRank)
+        std::cerr << "Inconsistent settings: castlingRank > maxRank." << std::endl;
+    if (v->castling && v->castlingQueensideFile > v->castlingKingsideFile)
+        std::cerr << "Inconsistent settings: castlingQueensideFile > castlingKingsideFile." << std::endl;
+    if (v->connect3D && v->connect4D)
+        std::cerr << "connect3D and connect4D are mutually exclusive." << std::endl;
+    if (v->connect3D && !((int(v->maxFile) + 1) == 3 && (int(v->maxRank) + 1) == 9))
+        std::cerr << "connect3D currently requires a 3x9 board." << std::endl;
+    if (v->connect4D && !((int(v->maxFile) + 1) == 9 && (int(v->maxRank) + 1) == 9))
+        std::cerr << "connect4D currently requires a 9x9 board." << std::endl;
+    if ((v->connect3D || v->connect4D) && v->connectN != 3)
+        std::cerr << "connect3D/connect4D currently require connectN = 3." << std::endl;
+
+    // Check for limitations
+    if (v->pieceDrops && v->wallingRule)
+        std::cerr << "pieceDrops and any walling are incompatible." << std::endl;
+
+    // Options incompatible with royal kings
+    if (v->pieceTypes & KING)
+    {
+        if (v->blastOnCapture)
+            std::cerr << "Can not use kings with blastOnCapture." << std::endl;
+        if (v->flipEnclosedPieces)
+            std::cerr << "Can not use kings with flipEnclosedPieces." << std::endl;
+        if (v->removeConnectN)
+            std::cerr << "Can not use kings with removeConnectN." << std::endl;
+        if (v->wallingRule==DUCK)
+            std::cerr << "Can not use kings with wallingRule = duck." << std::endl;
+        // We can not fully check support for custom king movements at this point,
+        // since custom pieces are only initialized on loading of the variant.
+        // We will assume this is valid, but it might cause problems later if it's not.
+        if (!is_custom(v->kingType))
+        {
+            const PieceInfo* pi = pieceMap.find(v->kingType)->second;
+            if (   pi->hopper[0][MODALITY_QUIET].size()
+                || pi->hopper[0][MODALITY_CAPTURE].size()
+                || std::any_of(pi->steps[0][MODALITY_CAPTURE].begin(),
+                               pi->steps[0][MODALITY_CAPTURE].end(),
+                               [](const std::pair<const Direction, int>& d) { return d.second; }))
+                std::cerr << piece_name(v->kingType) << " is not supported as kingType." << std::endl;
+        }
+    }
+    // Options incompatible with royal kings OR pseudo-royal kings. Possible in theory though:
+    // 1. In blast variants, moving a (pseudo-)royal blastImmuneType into another piece is legal.
+    // 2. In blast variants, capturing a piece next to a (pseudo-)royal blastImmuneType is legal.
+    // 3. Moving a (pseudo-)royal mutuallyImmuneType into a square threatened by the same type is legal.
+    if (v->pseudoRoyalTypes || v->antiRoyalTypes || (v->pieceTypes & KING))
+    {
+        if (v->blastImmuneTypes) //I may have this solved now.
+            std::cerr << "Can not use kings, pseudo-royal, or anti-royal with blastImmuneTypes." << std::endl;
+        if (v->mutuallyImmuneTypes)
+            std::cerr << "Can not use kings, pseudo-royal, or anti-royal with mutuallyImmuneTypes." << std::endl;
+    }
+    if (v->flagPieceSafe && v->blastOnCapture)
+        std::cerr << "Can not use flagPieceSafe with blastOnCapture (flagPieceSafe uses simple assessment that does not see blast)." << std::endl;
+}
+
+template <bool DoCheck>
+Variant* VariantParser<DoCheck>::parse() {
+    auto v = std::make_unique<Variant>();
+    v->reset_pieces();
+    Variant* parsed = parse(v.get());
+    return parsed ? v.release() : nullptr;
+}
+
+template <bool DoCheck>
+Variant* VariantParser<DoCheck>::parse(Variant* v) {
+    auto parse_rank_value = [](const std::string& value, int& out) {
+        return parse_positive_int(value, out);
+    };
+    auto parse_file_value = [](const std::string& value, int& out) {
+        std::stringstream ss(value);
+        ss >> std::ws;
+        if (ss.peek() == EOF)
+            return false;
+        if (std::isdigit(ss.peek()))
+        {
+            int i;
+            ss >> i;
+            if (ss.fail())
+                return false;
+            out = i - 1;
+            return i >= 1 && only_trailing_space(ss);
+        }
+        char c;
+        ss >> c;
+        if (ss.fail())
+            return false;
+        out = std::tolower(static_cast<unsigned char>(c)) - 'a';
+        return only_trailing_space(ss);
+    };
+
+    int cfgMaxRank = -1;
+    int cfgMaxFile = -1;
+    const auto itRank = config.find("maxRank");
+    if (itRank != config.end())
+        parse_rank_value(itRank->second, cfgMaxRank);
+    const auto itFile = config.find("maxFile");
+    if (itFile != config.end())
+        parse_file_value(itFile->second, cfgMaxFile);
+
+    // Fail early when a variant exceeds compile-time board dimensions.
+    if ((cfgMaxRank > 0 && cfgMaxRank - 1 > RANK_MAX) || (cfgMaxFile >= 0 && cfgMaxFile > FILE_MAX))
+        return nullptr;
+
+    parse_attribute("maxRank", v->maxRank);
+    parse_attribute("maxFile", v->maxFile);
+
+    if (!parse_piece_types(v) ||
+        !parse_piece_values(v) ||
+        !parse_legacy_attributes(v) ||
+        !parse_official_options(v))
+        return nullptr;
+
+    check_consistency(v);
+
     return v;
 }
 

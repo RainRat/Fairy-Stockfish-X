@@ -25,22 +25,39 @@
 
 namespace Stockfish {
 
-class Config : public std::map<std::string, std::string> {
+class Config {
 public:
-    using std::map<std::string, std::string>::find;
+    using MapType = std::map<std::string, std::string>;
+    using iterator = MapType::const_iterator;
+    using const_iterator = MapType::const_iterator;
 
-    Config::iterator find (const std::string& s) {
+    Config() = default;
+
+    std::string& operator[](const std::string& key) {
+        return data[key];
+    }
+
+    size_t count(const std::string& key) const {
+        return data.count(key);
+    }
+
+    const_iterator find (const std::string& s) const {
         constexpr bool PrintOptions = false; // print config options?
         if (PrintOptions)
             std::cout << s << std::endl;
         consumedKeys.insert(s);
-        return std::map<std::string, std::string>::find(s);
+        return data.find(s);
     }
+
+    const_iterator begin() const { return data.begin(); }
+    const_iterator end() const { return data.end(); }
+
     const std::set<std::string>& get_consumed_keys() const {
         return consumedKeys;
     }
 private:
-    std::set<std::string> consumedKeys = {};
+    MapType data;
+    mutable std::set<std::string> consumedKeys = {};
 };
 
 template <bool DoCheck>
@@ -54,6 +71,16 @@ private:
     Config config;
     template <bool Current = true, class T> bool parse_attribute(const std::string& key, T& target);
     template <bool Current = true, class T> bool parse_attribute(const std::string& key, T& target, const std::string& pieceToChar);
+
+    bool parse_piece_types(Variant* v);
+    bool parse_piece_values(Variant* v);
+    bool parse_legacy_attributes(Variant* v);
+    bool parse_official_options(Variant* v);
+    void check_consistency(Variant* v);
+
+    template <typename T> bool require_attribute(bool enabled, const std::string& key, T& target);
+    template <typename T> void parse_both_colors(const std::string& key, T& target);
+    template <typename T> void parse_both_colors_piece(const std::string& key, T& target, const std::string& pieceToChar);
 };
 
 } // namespace Stockfish
