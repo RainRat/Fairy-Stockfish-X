@@ -321,17 +321,23 @@ public:
   void push_moves(std::string uciMoves) {
     std::stringstream ss(uciMoves);
     std::string uciMove;
-    while (std::getline(ss, uciMove, ' '))
+    while (std::getline(ss, uciMove, ' ')) {
+      if (uciMove.empty())
+        continue;
       if (!push(uciMove))
         break;
+    }
   }
 
   void push_san_moves(std::string sanMoves, Notation notation = NOTATION_SAN) {
     std::stringstream ss(sanMoves);
     std::string sanMove;
-    while (std::getline(ss, sanMove, ' '))
+    while (std::getline(ss, sanMove, ' ')) {
+      if (sanMove.empty())
+        continue;
       if (!push_san(sanMove, notation))
         break;
+    }
   }
 
   std::string pocket(bool color) {

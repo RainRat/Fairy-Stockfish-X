@@ -243,13 +243,15 @@ public:
     };
 
     while (std::getline(ss, uciMove, ' ')) {
+      if (uciMove.empty())
+        continue;
       const Move move = UCI::to_move(this->pos, uciMove);
       if (is_move_none<true>(move, uciMove, pos))
       {
         rollback();
         return "";
       }
-      moves.emplace_back(UCI::to_move(this->pos, uciMove));
+      moves.emplace_back(move);
       if (first) {
         first = false;
         if (moveNumbers) {
@@ -392,6 +394,8 @@ public:
     std::stringstream ss(uciMoves);
     std::string uciMove;
     while (std::getline(ss, uciMove, ' ')) {
+      if (uciMove.empty())
+        continue;
       if (!push(uciMove))
         break;
     }
@@ -404,9 +408,12 @@ public:
   void push_san_moves(std::string sanMoves, Notation notation) {
     std::stringstream ss(sanMoves);
     std::string sanMove;
-    while (std::getline(ss, sanMove, ' '))
+    while (std::getline(ss, sanMove, ' ')) {
+      if (sanMove.empty())
+        continue;
       if (!push_san(sanMove, notation))
         break;
+    }
   }
 
   std::string pocket(bool color) {
@@ -606,23 +613,34 @@ Game read_game_pgn(std::string pgn) {
     if (lineEnd == std::string::npos)
       lineEnd = pgn.size();
 
-    if (!headersParsed && pgn[lineStart] == '[') {
+    size_t currentLineStart = lineStart;
+    while (currentLineStart < lineEnd && std::isspace(static_cast<unsigned char>(pgn[currentLineStart])))
+      ++currentLineStart;
+
+    if (currentLineStart < lineEnd && !headersParsed && pgn[currentLineStart] == '[') {
       // parse header
       // look for item
-      size_t headerKeyStart = lineStart+1;
-      size_t headerKeyEnd = pgn.find(' ', lineStart);
-      size_t headerItemStart = pgn.find('"', headerKeyEnd)+1;
-      size_t headerItemEnd = pgn.find('"', headerItemStart);
+      size_t firstQuote = pgn.find('"', currentLineStart);
+      if (firstQuote != std::string::npos && firstQuote < lineEnd) {
+        size_t headerKeyStart = currentLineStart + 1;
+        size_t headerKeyEnd = pgn.find(' ', headerKeyStart);
+        if (headerKeyEnd == std::string::npos || headerKeyEnd > firstQuote)
+          headerKeyEnd = firstQuote;
 
-      // put item into list
-      game.header[pgn.substr(headerKeyStart, headerKeyEnd-headerKeyStart)] = pgn.substr(headerItemStart, headerItemEnd-headerItemStart);
+        std::string key = pgn.substr(headerKeyStart, headerKeyEnd - headerKeyStart);
+        size_t headerItemStart = firstQuote + 1;
+        size_t headerItemEnd = pgn.find('"', headerItemStart);
+        if (headerItemEnd != std::string::npos && headerItemEnd < lineEnd) {
+          game.header[key] = pgn.substr(headerItemStart, headerItemEnd - headerItemStart);
+        }
+      }
     }
     else {
       if (!headersParsed) {
         headersParsed = true;
         auto it = game.header.find("Variant");
         if (it != game.header.end()) {
-          game.is960 = it->second.find("960", it->second.size() - 3) != std::string::npos;
+          game.is960 = it->second.size() >= 3 && it->second.find("960", it->second.size() - 3) != std::string::npos;
           if (game.is960) {
             game.variant = it->second.substr(0, it->second.size() - 3);
           } else {
@@ -643,8 +661,11 @@ Game read_game_pgn(std::string pgn) {
       // game line
       size_t curIdx = lineStart;
       while (curIdx < lineEnd) {
-        if (curIdx >= pgn.size())
-          return game;
+        while (curIdx < lineEnd && std::isspace(static_cast<unsigned char>(pgn[curIdx])))
+          ++curIdx;
+
+        if (curIdx >= lineEnd || curIdx >= pgn.size())
+          break;
 
         if (pgn[curIdx] == '*')
           return game;
@@ -653,6 +674,7 @@ Game read_game_pgn(std::string pgn) {
           if (!skip_comment(pgn, curIdx, lineEnd))
             return game;
           ++curIdx;
+          continue;
         }
 
         // Movetext RAV (Recursive Annotation Variation)
@@ -675,6 +697,7 @@ Game read_game_pgn(std::string pgn) {
             case '{':
               if (!skip_comment(pgn, curIdx, lineEnd))
                 return game;
+              break;
             default: ;  // pass
           }
           ++curIdx;
@@ -691,22 +714,24 @@ Game read_game_pgn(std::string pgn) {
 
         if (pgn[curIdx] == '$') {
           // we are at a glyph
-          curIdx = pgn.find(' ', curIdx);
-          if (curIdx == std::string::npos || curIdx >= lineEnd)
+          size_t nextSpace = pgn.find(' ', curIdx);
+          if (nextSpace == std::string::npos || nextSpace >= lineEnd)
             break;
+          curIdx = nextSpace;
+          continue;
         }
 
         if (pgn[curIdx] >= '0' && pgn[curIdx] <= '9') {
           // we are at a move number -> look for next point
-          curIdx = pgn.find('.', curIdx);
-          if (curIdx == std::string::npos)
+          size_t dotPos = pgn.find('.', curIdx);
+          if (dotPos == std::string::npos || dotPos >= lineEnd)
             break;
-          ++curIdx;
+          curIdx = dotPos + 1;
           // increment if we're at a space
-          while (curIdx < pgn.size() && pgn[curIdx] == ' ')
+          while (curIdx < lineEnd && pgn[curIdx] == ' ')
             ++curIdx;
           // increment if we're at a point
-          while (curIdx < pgn.size() && pgn[curIdx] == '.')
+          while (curIdx < lineEnd && pgn[curIdx] == '.')
             ++curIdx;
           if (curIdx >= lineEnd)
             break;
@@ -728,7 +753,7 @@ Game read_game_pgn(std::string pgn) {
             return game;
           }
         }
-        curIdx = sanMoveEnd+1;
+        curIdx = sanMoveEnd;
       }
     }
     lineStart = lineEnd+1;
