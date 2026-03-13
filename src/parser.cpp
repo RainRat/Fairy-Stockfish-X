@@ -1329,11 +1329,11 @@ void VariantParser<DoCheck>::check_consistency(Variant* v) {
         std::cerr << "connect3D/connect4D currently require connectN = 3." << std::endl;
 
     // Check for limitations
-    if ((v->pieceDrops || v->freeDrops) && v->wallingRule)
+    if ((v->pieceDrops || v->freeDrops) && v->wallingRule != NO_WALLING)
         std::cerr << "pieceDrops and any walling are incompatible." << std::endl;
-    if (v->wallingRule && v->seirawanGating)
+    if (v->wallingRule != NO_WALLING && v->seirawanGating)
         std::cerr << "wallingRule and seirawanGating are incompatible." << std::endl;
-    if (v->wallingRule && v->potions)
+    if (v->wallingRule != NO_WALLING && v->potions)
         std::cerr << "wallingRule and potions are incompatible." << std::endl;
     if (v->wallingRule == DUCK && v->petrifyOnCaptureTypes)
         std::cerr << "wallingRule=duck and petrifyOnCaptureTypes are incompatible." << std::endl;
