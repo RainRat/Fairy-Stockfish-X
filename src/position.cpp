@@ -473,7 +473,7 @@ void Position::init() {
 }
 
 Key Position::material_key(EndgameEval e) const {
-  return st->materialKey ^ Zobrist::endgame[e];
+  return st->materialKey ^ reserve_key() ^ Zobrist::endgame[e];
 }
 
 
