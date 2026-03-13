@@ -162,6 +162,13 @@ Value Endgame<KXK>::operator()(const Position& pos) const {
 
   if (   pos.count<QUEEN>(strongSide)
       || pos.count<ROOK>(strongSide)
+      || pos.count<AMAZON>(strongSide)
+      || pos.count<CHANCELLOR>(strongSide)
+      || pos.count<ARCHBISHOP>(strongSide)
+      || pos.count<CENTAUR>(strongSide)
+      || pos.count<DRAGON_HORSE>(strongSide)
+      || pos.count<BERS>(strongSide)
+      || pos.count<AIWOK>(strongSide)
       ||(pos.count<BISHOP>(strongSide) && pos.count<KNIGHT>(strongSide))
       || (   (pos.pieces(strongSide, BISHOP) & ~DarkSquares)
           && (pos.pieces(strongSide, BISHOP) &  DarkSquares))

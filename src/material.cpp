@@ -116,16 +116,27 @@ namespace {
     Score bonus = SCORE_ZERO;
 
     // Second-degree polynomial material imbalance, by Tord Romstad
-    for (int pt1 = NO_PIECE_TYPE; pt1 <= QUEEN; ++pt1)
+    for (int pt1 = NO_PIECE_TYPE; pt1 < PIECE_TYPE_NB; ++pt1)
     {
-        if (!pieceCount[Us][pt1])
+        if (pt1 == KING || !pieceCount[Us][pt1])
             continue;
 
-        int v = QuadraticOurs[pt1][pt1] * pieceCount[Us][pt1];
+        int idx1 = basic_type(PieceType(pt1));
+        if (idx1 > QUEEN) idx1 = QUEEN; // safety
+
+        int v = QuadraticOurs[idx1][idx1] * pieceCount[Us][pt1];
 
         for (int pt2 = NO_PIECE_TYPE; pt2 < pt1; ++pt2)
-            v +=  QuadraticOurs[pt1][pt2] * pieceCount[Us][pt2]
-                + QuadraticTheirs[pt1][pt2] * pieceCount[Them][pt2];
+        {
+            if (pt2 == KING || !pieceCount[Us][pt2])
+                continue;
+
+            int idx2 = basic_type(PieceType(pt2));
+            if (idx2 > QUEEN) idx2 = QUEEN; // safety
+
+            v +=  QuadraticOurs[idx1][idx2] * pieceCount[Us][pt2]
+                + QuadraticTheirs[idx1][idx2] * pieceCount[Them][pt2];
+        }
 
         bonus += pieceCount[Us][pt1] * v;
     }
@@ -304,11 +315,17 @@ Entry* probe(const Position& pos) {
   // Evaluate the material imbalance. We use PIECE_TYPE_NONE as a place holder
   // for the bishop pair "extended piece", which allows us to be more flexible
   // in defining bishop pair bonuses.
-  const int pieceCount[COLOR_NB][PIECE_TYPE_NB] = {
-  { pos.count<BISHOP>(WHITE) > 1, pos.count<PAWN>(WHITE), pos.count<KNIGHT>(WHITE),
-    pos.count<BISHOP>(WHITE)    , pos.count<ROOK>(WHITE), pos.count<QUEEN >(WHITE) },
-  { pos.count<BISHOP>(BLACK) > 1, pos.count<PAWN>(BLACK), pos.count<KNIGHT>(BLACK),
-    pos.count<BISHOP>(BLACK)    , pos.count<ROOK>(BLACK), pos.count<QUEEN >(BLACK) } };
+  int pieceCount[COLOR_NB][PIECE_TYPE_NB];
+  std::memset(pieceCount, 0, sizeof(pieceCount));
+
+  for (Color c : { WHITE, BLACK })
+  {
+      for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
+          if (pt != KING)
+              pieceCount[c][pt] = pos.count(c, pt);
+
+      pieceCount[c][NO_PIECE_TYPE] = pos.count<BISHOP>(c) >= 2;
+  }
 
   e->score = (imbalance<WHITE>(pos, pieceCount) - imbalance<BLACK>(pos, pieceCount)) / 16;
   return e;
