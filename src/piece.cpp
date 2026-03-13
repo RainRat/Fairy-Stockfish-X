@@ -392,7 +392,7 @@ namespace {
                           universalAtoms.emplace_back(dr, df);
               commit_atom(universalAtoms, false, i, c);
           }
-          // Griffon bent slider (one orthogonal step, then slide perpendicular)
+          // Griffon bent slider (one diagonal step, then outward rook slide)
           else if (c == 'O')
               commit_bent_slider(&PieceInfo::griffon);
           // Manticore bent slider (one orthogonal step, then outward bishop slide)

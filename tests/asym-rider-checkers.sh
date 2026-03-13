@@ -36,12 +36,16 @@ hu=$(diag asymcheck-horse '4k3/8/3A4/8/8/8/8/4K3 b - - 0 1')
 grep -q '^Checkers: d6 ' <<<"$hu"
 
 # Griffon blocked pivot: no check.
-gb=$(diag asymcheck-griffon '8/5P1k/5A2/8/8/8/8/4K3 b - - 0 1')
+gb=$(diag asymcheck-griffon '8/6Pk/5A2/8/8/8/8/4K3 b - - 0 1')
 grep -q '^Checkers:[[:space:]]*$' <<<"$gb"
 
 # Griffon open pivot/ray: checker on f6.
 gu=$(diag asymcheck-griffon '8/7k/5A2/8/8/8/8/4K3 b - - 0 1')
 grep -q '^Checkers: f6 ' <<<"$gu"
+
+# Non-pivot orthogonal blocker must not suppress the same griffon check.
+gx=$(diag asymcheck-griffon '8/5P1k/5A2/8/8/8/8/4K3 b - - 0 1')
+grep -q '^Checkers: f6 ' <<<"$gx"
 
 # Manticore blocked pivot: no check.
 mb=$(diag asymcheck-manticore '6k1/5N2/5A2/8/8/8/8/4K3 b - - 0 1')

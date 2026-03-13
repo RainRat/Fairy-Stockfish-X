@@ -23,7 +23,7 @@ perft_out() {
     | ./stockfish
 }
 
-# Griffon check line: f6 -> h7 (pivot f7, then horizontal).
+# Griffon check line: f6 -> h7 (pivot g7, then outward horizontal).
 # g8g7 must be legal (interposition), while g8g6 must remain illegal.
 g=$(perft_out griffon-evasion '6r1/7k/5A2/8/8/8/8/K7 b - - 0 1')
 grep -q "g8g7:" <<<"$g"
