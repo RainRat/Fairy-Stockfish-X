@@ -353,16 +353,16 @@ namespace {
   }
 
 #ifdef VERY_LARGE_BOARDS
-  Bitboard fixed_step_rider_attack(Square s, Bitboard occupied, int stepR, int stepF) {
+  Bitboard fixed_step_rider_attacks(Square s, Bitboard occupied, int stepF, int stepR) {
     Bitboard attack = 0;
-    int r = int(rank_of(s));
     int f = int(file_of(s));
+    int r = int(rank_of(s));
 
     while (true)
     {
-        r += stepR;
         f += stepF;
-        if (r < int(RANK_1) || r > int(RANK_MAX) || f < int(FILE_A) || f > int(FILE_MAX))
+        r += stepR;
+        if (f < int(FILE_A) || f > int(FILE_MAX) || r < int(RANK_1) || r > int(RANK_MAX))
             break;
         Square to = make_square(File(f), Rank(r));
         attack |= to;
@@ -463,15 +463,15 @@ Bitboard rider_attacks_bb(RiderType R, Square s, Bitboard occupied) {
   case RIDER_ROOK_V: return sliding_attack<RIDER>(RookDirectionsV, s, occupied);
   case RIDER_CANNON_H: return sliding_attack<HOPPER>(RookDirectionsH, s, occupied);
   case RIDER_CANNON_V: return sliding_attack<HOPPER>(RookDirectionsV, s, occupied);
-  case RIDER_LAME_DABBABA: return  fixed_step_rider_attack(s, occupied,  2,  0)
-                                 | fixed_step_rider_attack(s, occupied, -2,  0)
-                                 | fixed_step_rider_attack(s, occupied,  0,  2)
-                                 | fixed_step_rider_attack(s, occupied,  0, -2);
+  case RIDER_LAME_DABBABA: return  fixed_step_rider_attacks(s, occupied,  0,  2)
+                                 | fixed_step_rider_attacks(s, occupied,  0, -2)
+                                 | fixed_step_rider_attacks(s, occupied,  2,  0)
+                                 | fixed_step_rider_attacks(s, occupied, -2,  0);
   case RIDER_HORSE: return lame_leaper_attack(HorseDirections, s, occupied);
-  case RIDER_ELEPHANT: return  fixed_step_rider_attack(s, occupied,  2,  2)
-                              | fixed_step_rider_attack(s, occupied,  2, -2)
-                              | fixed_step_rider_attack(s, occupied, -2,  2)
-                              | fixed_step_rider_attack(s, occupied, -2, -2);
+  case RIDER_ELEPHANT: return  fixed_step_rider_attacks(s, occupied,  2,  2)
+                              | fixed_step_rider_attacks(s, occupied, -2,  2)
+                              | fixed_step_rider_attacks(s, occupied,  2, -2)
+                              | fixed_step_rider_attacks(s, occupied, -2, -2);
   case RIDER_JANGGI_ELEPHANT: return lame_leaper_attack(JanggiElephantDirections, s, occupied);
   case RIDER_CANNON_DIAG: return sliding_attack<HOPPER>(BishopDirections, s, occupied);
   case RIDER_NIGHTRIDER: return sliding_attack<RIDER>(HorseDirections, s, occupied);
