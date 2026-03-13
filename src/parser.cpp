@@ -438,7 +438,7 @@ namespace {
         target |= pt;
     }
 
-    void parse_hostage_exchanges(Variant *v, std::string &map, bool DoCheck) {
+    void parse_hostage_exchanges(Variant *v, const std::string &map, bool DoCheck) {
         bool readPiece = true;
         size_t idx = -1;
         PieceSet mask = NO_PIECE_SET;
