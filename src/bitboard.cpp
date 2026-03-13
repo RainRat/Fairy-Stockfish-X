@@ -495,24 +495,24 @@ Bitboard rider_attacks_bb(RiderType R, Square s, Bitboard occupied) {
       return src == SQ_NONE ? Bitboard(0) : sliding_attack<RIDER>(RookDirectionsV, src, occupied);
   }
   case RIDER_MANTICORE_NE: {
-      Square src = shifted_source(NORTH_EAST);
+      Square src = shifted_source(NORTH);
       return src == SQ_NONE ? Bitboard(0)
-                            : sliding_attack<RIDER>(RookDirectionsH, src, occupied) | sliding_attack<RIDER>(RookDirectionsV, src, occupied);
+                            : sliding_attack<RIDER>(std::map<Direction, int>{{NORTH_EAST, 0}, {NORTH_WEST, 0}}, src, occupied);
   }
   case RIDER_MANTICORE_NW: {
-      Square src = shifted_source(NORTH_WEST);
+      Square src = shifted_source(WEST);
       return src == SQ_NONE ? Bitboard(0)
-                            : sliding_attack<RIDER>(RookDirectionsH, src, occupied) | sliding_attack<RIDER>(RookDirectionsV, src, occupied);
+                            : sliding_attack<RIDER>(std::map<Direction, int>{{NORTH_WEST, 0}, {SOUTH_WEST, 0}}, src, occupied);
   }
   case RIDER_MANTICORE_SE: {
-      Square src = shifted_source(SOUTH_EAST);
+      Square src = shifted_source(EAST);
       return src == SQ_NONE ? Bitboard(0)
-                            : sliding_attack<RIDER>(RookDirectionsH, src, occupied) | sliding_attack<RIDER>(RookDirectionsV, src, occupied);
+                            : sliding_attack<RIDER>(std::map<Direction, int>{{NORTH_EAST, 0}, {SOUTH_EAST, 0}}, src, occupied);
   }
   case RIDER_MANTICORE_SW: {
-      Square src = shifted_source(SOUTH_WEST);
+      Square src = shifted_source(SOUTH);
       return src == SQ_NONE ? Bitboard(0)
-                            : sliding_attack<RIDER>(RookDirectionsH, src, occupied) | sliding_attack<RIDER>(RookDirectionsV, src, occupied);
+                            : sliding_attack<RIDER>(std::map<Direction, int>{{SOUTH_EAST, 0}, {SOUTH_WEST, 0}}, src, occupied);
   }
   case RIDER_SKI_ROOK_H: return ski_sliding_attack(RookDirectionsH, s, occupied);
   case RIDER_SKI_ROOK_V: return ski_sliding_attack(RookDirectionsV, s, occupied);

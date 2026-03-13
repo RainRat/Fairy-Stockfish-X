@@ -89,7 +89,7 @@ expect_illegal alfil-edge "4K/5/5/2R2/a4 w - - 0 1" "c2b2"
 expect_legal griffon-edge "2K2/a4/5/1R3/5 w - - 0 1" "b2b5"
 expect_illegal griffon-edge "2K2/a4/5/1R3/5 w - - 0 1" "b2b4"
 
-expect_legal manticore-edge "1K3/2R2/a4/5/5 w - - 0 1" "c4b4"
-expect_illegal manticore-edge "1K3/2R2/a4/5/5 w - - 0 1" "c4c5"
+expect_legal manticore-edge "1K3/2A2/a4/5/5 w - - 0 1" "c4a3"
+expect_illegal manticore-edge "1K3/2A2/a4/5/5 w - - 0 1" "c4b4"
 
 echo "rider-edge-consistency test OK"

@@ -395,7 +395,7 @@ namespace {
           // Griffon bent slider (one orthogonal step, then slide perpendicular)
           else if (c == 'O')
               commit_bent_slider(&PieceInfo::griffon);
-          // Manticore bent slider (one diagonal step, then rook-like slide)
+          // Manticore bent slider (one orthogonal step, then outward bishop slide)
           else if (c == 'M')
               commit_bent_slider(&PieceInfo::manticore);
           // Tuple leaper atom: (x,y)

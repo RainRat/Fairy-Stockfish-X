@@ -44,7 +44,7 @@ gu=$(diag asymcheck-griffon '8/7k/5A2/8/8/8/8/4K3 b - - 0 1')
 grep -q '^Checkers: f6 ' <<<"$gu"
 
 # Manticore blocked pivot: no check.
-mb=$(diag asymcheck-manticore '6k1/6N1/5A2/8/8/8/8/4K3 b - - 0 1')
+mb=$(diag asymcheck-manticore '6k1/5N2/5A2/8/8/8/8/4K3 b - - 0 1')
 grep -q '^Checkers:[[:space:]]*$' <<<"$mb"
 
 # Manticore open pivot/ray: checker on f6.

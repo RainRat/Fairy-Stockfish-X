@@ -737,16 +737,26 @@ inline Bitboard rider_attacks_bb(Square s, Bitboard occupied) {
   if constexpr (R == RIDER_MANTICORE_NE || R == RIDER_MANTICORE_NW || R == RIDER_MANTICORE_SE || R == RIDER_MANTICORE_SW) {
       int r = int(rank_of(s));
       int f = int(file_of(s));
-      if constexpr (R == RIDER_MANTICORE_NE) { ++r; ++f; }
-      if constexpr (R == RIDER_MANTICORE_NW) { ++r; --f; }
-      if constexpr (R == RIDER_MANTICORE_SE) { --r; ++f; }
-      if constexpr (R == RIDER_MANTICORE_SW) { --r; --f; }
+      if constexpr (R == RIDER_MANTICORE_NE) ++r;
+      if constexpr (R == RIDER_MANTICORE_NW) --f;
+      if constexpr (R == RIDER_MANTICORE_SE) ++f;
+      if constexpr (R == RIDER_MANTICORE_SW) --r;
       if (r < 0 || r > int(RANK_MAX) || f < 0 || f > int(FILE_MAX))
           return Bitboard(0);
       Square src = make_square(File(f), Rank(r));
       if (occupied & src)
           return Bitboard(0);
-      return rider_attacks_bb<RIDER_ROOK_H>(src, occupied) | rider_attacks_bb<RIDER_ROOK_V>(src, occupied);
+      if constexpr (R == RIDER_MANTICORE_NE)
+          return fixed_step_rider_attacks(src, occupied, 1, 1)
+               | fixed_step_rider_attacks(src, occupied, -1, 1);
+      if constexpr (R == RIDER_MANTICORE_NW)
+          return fixed_step_rider_attacks(src, occupied, -1, 1)
+               | fixed_step_rider_attacks(src, occupied, -1, -1);
+      if constexpr (R == RIDER_MANTICORE_SE)
+          return fixed_step_rider_attacks(src, occupied, 1, 1)
+               | fixed_step_rider_attacks(src, occupied, 1, -1);
+      return fixed_step_rider_attacks(src, occupied, 1, -1)
+           | fixed_step_rider_attacks(src, occupied, -1, -1);
   }
   if constexpr (R == RIDER_LAME_DABBABA)
       return  fixed_step_rider_attacks(s, occupied,  2,  0)

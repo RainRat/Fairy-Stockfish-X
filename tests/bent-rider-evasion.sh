@@ -29,10 +29,10 @@ g=$(perft_out griffon-evasion '6r1/7k/5A2/8/8/8/8/K7 b - - 0 1')
 grep -q "g8g7:" <<<"$g"
 ! grep -q "g8g6:" <<<"$g"
 
-# Manticore check line: f6 -> g8 (pivot g7, then vertical).
-# h7g7 must be legal (interposition), while h7h6 must remain illegal.
+# Manticore check line: f6 -> g8 (pivot f7, then outward diagonal).
+# e8f7 must be legal (interposition), while h7h6 must remain illegal.
 m=$(perft_out manticore-evasion '6k1/7r/5A2/8/8/8/8/K7 b - - 0 1')
-grep -q "h7g7:" <<<"$m"
+grep -q "g8f7:" <<<"$m"
 ! grep -q "h7h6:" <<<"$m"
 
 echo "bent-rider-evasion test OK"

@@ -33,11 +33,11 @@ grep -q "d4c1:" <<<"$g"
 ! grep -q "d4e4:" <<<"$g"
 
 m=$(perft_out manticore-test)
-grep -q "d4h5:" <<<"$m"
-grep -q "d4a5:" <<<"$m"
-grep -q "d4e8:" <<<"$m"
-grep -q "d4c1:" <<<"$m"
-! grep -q "d4e5:" <<<"$m"
-! grep -q "d4c3:" <<<"$m"
+grep -q "d4g8:" <<<"$m"
+grep -q "d4a6:" <<<"$m"
+grep -q "d4h1:" <<<"$m"
+grep -q "d4b1:" <<<"$m"
+! grep -q "d4h5:" <<<"$m"
+! grep -q "d4e8:" <<<"$m"
 
 echo "bent-riders test OK"
