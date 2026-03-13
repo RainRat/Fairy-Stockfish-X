@@ -28,6 +28,20 @@ pieceToCharTable = PNBRQ..........M....Kpnbrq..........m....k
 startFen = 4k3/8/8/8/8/8/8/4K2M w - - 0 1
 castling = false
 doubleStep = false
+
+[kxk-bers:chess]
+bers = b
+pieceToCharTable = PNBRQ.....B..........Kpnbrq.....b..........k
+startFen = 4k3/8/8/8/8/8/8/4K2B w - - 0 1
+castling = false
+doubleStep = false
+
+[kxk-aiwok:chess]
+aiwok = i
+pieceToCharTable = PNBRQ....I...........Kpnbrq....i...........k
+startFen = 4k3/8/8/8/8/8/8/4K2I w - - 0 1
+castling = false
+doubleStep = false
 INI
 
 check_eval() {
@@ -62,3 +76,5 @@ PY
 check_eval kxk-arch
 check_eval kxk-chanc
 check_eval kxk-amazon
+check_eval kxk-bers
+check_eval kxk-aiwok

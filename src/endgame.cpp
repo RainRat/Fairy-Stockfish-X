@@ -165,6 +165,8 @@ Value Endgame<KXK>::operator()(const Position& pos) const {
       || pos.count<AMAZON>(strongSide)
       || pos.count<CHANCELLOR>(strongSide)
       || pos.count<ARCHBISHOP>(strongSide)
+      || pos.count<AIWOK>(strongSide)
+      || pos.count<BERS>(strongSide)
       ||(pos.count<BISHOP>(strongSide) && pos.count<KNIGHT>(strongSide))
       || (   (pos.pieces(strongSide, BISHOP) & ~DarkSquares)
           && (pos.pieces(strongSide, BISHOP) &  DarkSquares))
