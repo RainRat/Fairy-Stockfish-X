@@ -58,7 +58,15 @@ bool buildPosition(Position& pos, StateListPtr& states, const char *variant, con
     int numMoves = PyList_Size(moveList);
     for (int i = 0; i < numMoves ; i++)
     {
-        PyObject *MoveStr = PyUnicode_AsEncodedString( PyList_GetItem(moveList, i), "UTF-8", "strict");
+        PyObject *item = PyList_GetItem(moveList, i);
+        if (!PyUnicode_Check(item))
+        {
+            PyErr_SetString(PyExc_TypeError, "Move list must contain strings");
+            return false;
+        }
+        PyObject *MoveStr = PyUnicode_AsEncodedString(item, "UTF-8", "strict");
+        if (!MoveStr)
+            return false;
         std::string moveStr(PyBytes_AS_STRING(MoveStr));
         Py_XDECREF(MoveStr);
         Move m;
@@ -181,23 +189,21 @@ extern "C" PyObject* pyffish_capturesToHand(PyObject* self, PyObject *args) {
 
 // INPUT variant, fen, move
 extern "C" PyObject* pyffish_getSAN(PyObject* self, PyObject *args) {
-    PyObject* moveList = PyList_New(0);
     Position pos;
     const char *fen, *variant, *move;
 
     int chess960 = false;
     Notation notation = NOTATION_DEFAULT;
     if (!PyArg_ParseTuple(args, "sss|pi", &variant, &fen,  &move, &chess960, &notation)) {
-        Py_XDECREF(moveList);
         return NULL;
     }
     const Variant* v = require_variant(variant);
     if (!v) {
-        Py_XDECREF(moveList);
         return NULL;
     }
     if (notation == NOTATION_DEFAULT)
         notation = default_notation(v);
+    PyObject* moveList = PyList_New(0);
     StateListPtr states(new std::deque<StateInfo>(1));
     if (!buildPosition(pos, states, variant, fen, moveList, chess960)) {
         Py_XDECREF(moveList);
@@ -250,7 +256,19 @@ extern "C" PyObject* pyffish_getSANmoves(PyObject* self, PyObject *args) {
 
     int numMoves = PyList_Size(moveList);
     for (int i=0; i<numMoves ; i++) {
-        PyObject *MoveStr = PyUnicode_AsEncodedString( PyList_GetItem(moveList, i), "UTF-8", "strict");
+        PyObject *item = PyList_GetItem(moveList, i);
+        if (!PyUnicode_Check(item))
+        {
+            PyErr_SetString(PyExc_TypeError, "Move list must contain strings");
+            Py_XDECREF(sanMoves);
+            return NULL;
+        }
+        PyObject *MoveStr = PyUnicode_AsEncodedString(item, "UTF-8", "strict");
+        if (!MoveStr)
+        {
+            Py_XDECREF(sanMoves);
+            return NULL;
+        }
         std::string moveStr(PyBytes_AS_STRING(MoveStr));
         Py_XDECREF(MoveStr);
         Move m;
@@ -477,7 +495,6 @@ extern "C" PyObject* pyffish_validateFen(PyObject* self, PyObject *args) {
 
 // INPUT fen, variant
 extern "C" PyObject* pyffish_getFogFEN(PyObject* self, PyObject *args) {
-    PyObject* moveList = PyList_New(0);
     Position pos;
     const char *fen, *variant;
 
@@ -485,6 +502,7 @@ extern "C" PyObject* pyffish_getFogFEN(PyObject* self, PyObject *args) {
     if (!PyArg_ParseTuple(args, "ss|p", &fen, &variant, &chess960)) {
         return NULL;
     }
+    PyObject* moveList = PyList_New(0);
     StateListPtr states(new std::deque<StateInfo>(1));
     if (!buildPosition(pos, states, variant, fen, moveList, chess960))
     {
