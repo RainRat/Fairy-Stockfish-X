@@ -751,24 +751,6 @@ namespace {
         if (!pos.can_cast_potion(Us, potion))
             continue;
 
-        ExtMove* freezeBaseEnd = baseEnd;
-        if (potion == Variant::POTION_FREEZE)
-        {
-            // Build a compact source list once; reused for each freeze gate.
-            freezeBaseEnd = listBegin;
-            for (ExtMove* it = listBegin; it != baseEnd; ++it)
-            {
-                Move base = it->move;
-                MoveType mt = type_of(base);
-                if (is_gating(base) || (mt != NORMAL && mt != CASTLING))
-                    continue;
-                *freezeBaseEnd++ = *it;
-            }
-
-            if (freezeBaseEnd == listBegin)
-                continue;
-        }
-
         Bitboard candidates = pos.board_bb();
         if (!var->potionDropOnOccupied)
             candidates &= ~pos.pieces();
@@ -786,13 +768,15 @@ namespace {
                     return maxEnd;
 
                 Square gate = pop_lsb(candidates);
-                for (ExtMove* it = listBegin; it != freezeBaseEnd; ++it)
+                for (ExtMove* it = listBegin; it != baseEnd; ++it)
                 {
                     if (cur >= maxEnd)
                         return maxEnd;
 
                     Move base = it->move;
                     MoveType mt = type_of(base);
+                    if (is_gating(base) || (mt != NORMAL && mt != CASTLING))
+                        continue;
                     Square from = from_sq(base);
                     Square to = to_sq(base);
 
@@ -819,13 +803,13 @@ namespace {
             Bitboard gateMask = square_bb(gate);
             SpellContextGuard guard(pos, Bitboard(0), gateMask);
 
-            ExtMove* potionStart = cur;
-            cur = generate_all_impl<Us, Type>(pos, cur);
+            ExtMove jumpMoves[MAX_MOVES];
+            ExtMove* jumpEnd = generate_all_impl<Us, Type>(pos, jumpMoves);
+            assert(jumpEnd - jumpMoves <= MAX_MOVES);
 
-            ExtMove* write = potionStart;
-            for (ExtMove* it = potionStart; it != cur; ++it)
+            for (ExtMove* it = jumpMoves; it != jumpEnd; ++it)
             {
-                if (write >= maxEnd)
+                if (cur >= maxEnd)
                     return maxEnd;
 
                 Move base = it->move;
@@ -865,12 +849,10 @@ namespace {
                                   ? make_gating<NORMAL>(from, to, potionPiece, gate)
                                   : make_gating<CASTLING>(from, to, potionPiece, gate);
 
-                write->move = gatingMove;
-                write->value = it->value;
-                ++write;
+                cur->move = gatingMove;
+                cur->value = it->value;
+                ++cur;
             }
-
-            cur = write;
         }
     }
 
