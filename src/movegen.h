@@ -81,7 +81,11 @@ constexpr size_t moveListSizeOverflow = sizeof(ExtMove) * MOVEGEN_OVERFLOW_CAPAC
 template<GenType T>
 struct MoveList {
 
-  
+  MoveList(const MoveList&) = delete;
+  MoveList& operator=(const MoveList&) = delete;
+  MoveList(MoveList&&) = delete;
+  MoveList& operator=(MoveList&&) = delete;
+
 #ifdef USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
     explicit MoveList(const Position& pos)
     {

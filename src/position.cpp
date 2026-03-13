@@ -541,13 +541,16 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
       if (std::isdigit(static_cast<unsigned char>(token)))
       {
           int steps = token - '0';
-#ifdef LARGEBOARDS
-          if (std::isdigit(ss.peek()))
+          while (true)
           {
+              int next = ss.peek();
+              if (next == std::char_traits<char>::eof()
+                  || !std::isdigit(static_cast<unsigned char>(next)))
+                  break;
+
               ss >> token;
               steps = 10 * steps + (token - '0');
           }
-#endif
           if (commit_gates() && (rank == 0 || rank == max_rank() + 2))
               commitFile += steps;
           else
