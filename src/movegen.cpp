@@ -825,9 +825,9 @@ namespace {
             Bitboard gateMask = square_bb(gate);
             SpellContextGuard guard(pos, Bitboard(0), gateMask);
 
-            ExtMove jumpMoves[MAX_MOVES];
+            ExtMove jumpMoves[MOVEGEN_OVERFLOW_CAPACITY];
             ExtMove* jumpEnd = generate_all_impl<Us, Type>(pos, jumpMoves);
-            assert(jumpEnd - jumpMoves <= MAX_MOVES);
+            assert(jumpEnd - jumpMoves <= MOVEGEN_OVERFLOW_CAPACITY);
 
             for (ExtMove* it = jumpMoves; it != jumpEnd; ++it)
             {
@@ -974,7 +974,7 @@ ExtMove* generate<LEGAL>(const Position& pos, ExtMove* moveList) {
                             : generate<NON_EVASIONS>(pos, moveList);
   while (cur != moveList)
       if (!pos.legal(*cur) || pos.virtual_drop(*cur))
-          *cur = (--moveList)->move;
+          *cur = *--moveList;
       else
           ++cur;
 

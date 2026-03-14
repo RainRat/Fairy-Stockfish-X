@@ -5516,7 +5516,16 @@ void Position::flip() {
                  });
 
   ss >> token; // En passant square
-  f += (token == "-" ? token : token.replace(1, 1, token[1] == '3' ? "6" : "3"));
+  if (token == "-")
+      f += token;
+  else
+  {
+      File epFile = File(token[0] - 'a');
+      Rank epRank = Rank(std::stoi(token.substr(1)) - 1);
+      Square ep = make_square(epFile, epRank);
+      f += char('a' + file_of(ep));
+      f += std::to_string(relative_rank(~side_to_move(), ep, max_rank()) + 1);
+  }
 
   std::getline(ss, token); // Half and full moves
   f += token;
