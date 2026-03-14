@@ -2601,16 +2601,17 @@ bool Position::gives_check(Move m) const {
 
   Bitboard freezeExtra = 0;
   Bitboard jumpRemoved = 0;
+  Variant::PotionType gatingPotion = Variant::POTION_TYPE_NB;
   if (is_gating(m))
   {
-      Variant::PotionType potion = potion_type_from_piece(var, gating_type(m));
-      if (potion != Variant::POTION_TYPE_NB)
+      gatingPotion = potion_type_from_piece(var, gating_type(m));
+      if (gatingPotion != Variant::POTION_TYPE_NB)
       {
-          if (!can_cast_potion(sideToMove, potion))
+          if (!can_cast_potion(sideToMove, gatingPotion))
               return false;
-          if (potion == Variant::POTION_FREEZE)
+          if (gatingPotion == Variant::POTION_FREEZE)
               freezeExtra = freeze_zone_from_square(gating_square(m));
-          else if (potion == Variant::POTION_JUMP)
+          else if (gatingPotion == Variant::POTION_JUMP)
           {
               jumpRemoved = square_bb(gating_square(m));
               if (!piece_on(gating_square(m)))
@@ -2677,6 +2678,7 @@ bool Position::gives_check(Move m) const {
 
   // Is there a check by gated pieces?
   if (    is_gating(m)
+      && gatingPotion == Variant::POTION_TYPE_NB
       && attacks_bb(sideToMove, gating_type(m), gating_square(m), (pieces() ^ from) | to) & square<KING>(~sideToMove))
       return true;
 
