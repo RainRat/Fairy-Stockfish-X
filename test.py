@@ -1779,6 +1779,24 @@ startFen = 4k3/8/2S5/3p4/8/8/8/4K3 w - d6 0 1
         result = sf.game_result("royalduck", "rnbqk1nr/pppp1ppp/4p3/8/7P/5Pb1/PPPPP*P1/RNBQKBNR w KQkq - 1 4", [])
         self.assertEqual(result, sf.VALUE_MATE)
 
+    def test_pseudoroyal_drop_cannot_land_in_check(self):
+        sf.load_variant_config(
+            """[droppr:chess]
+king = -
+customPiece1 = a:W
+pieceDrops = true
+captureType = hand
+firstRankPawnDrops = true
+checking = true
+pseudoRoyalTypes = a
+startFen = 4r3/8/8/8/8/8/8/8[A] w - - 0 1
+"""
+        )
+
+        legal = sf.legal_moves("droppr", "4r3/8/8/8/8/8/8/8[A] w - - 0 1", [])
+        self.assertIn("A@d1", legal)
+        self.assertNotIn("A@e1", legal)
+
     def _check_immediate_game_end(self, variant, fen, moves, game_end, game_result=None):
         with self.subTest(variant=variant, fen=fen, game_end=game_end, game_result=game_result):
             result = sf.is_immediate_game_end(variant, fen, moves)

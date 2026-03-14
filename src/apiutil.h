@@ -985,7 +985,9 @@ inline Validation check_standard_castling(std::array<std::string, 2>& castlingIn
     {
         if (castlingInfoSplitted[c].size() == 0)
             continue;
-        if (kingPositions[c] != kingPositionsStart[c])
+        const bool hasCastlingRight = castlingInfoSplitted[c].find('k') != std::string::npos
+                                   || castlingInfoSplitted[c].find('q') != std::string::npos;
+        if (hasCastlingRight && kingPositions[c] != kingPositionsStart[c])
         {
             std::cerr << "The " << color_to_string(c) << " KING has moved. Castling is no longer valid for " << color_to_string(c) << "." << std::endl;
             return NOK;

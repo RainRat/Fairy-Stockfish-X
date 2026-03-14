@@ -844,6 +844,13 @@ describe('ffish.validateFen(fen, uciVariant)', function () {
       chai.expect(ffish.validateFen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR[] w KQkq - 3+3 x 1", "3check-crazyhouse")).to.equal(-2);
       chai.expect(ffish.validateFen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR[] w KQkq - 3+3 0 -13", "3check-crazyhouse")).to.equal(-1);
       chai.expect(ffish.validateFen("", "chess")).to.equal(0);
+      chai.expect(
+        ffish.validateFen(
+          "rnbqhb1r/ppppk1pp/5p2/4N2Q/4n3/8/PPPP1PPP/RNBEKB1R[He] w BCFabcdfh - 2 6",
+          "seirawan",
+          false
+        )
+      ).to.equal(1);
     });
 });
 

@@ -31,6 +31,7 @@
 
 * Standard build: `make -j build ARCH=x86-64-modern`
 * Large boards (>8×8, up to 10×12): `make -j build ARCH=x86-64-modern largeboards=yes`
+* Very large boards / flattened ND experiments beyond the large-board matrix: `make -j build ARCH=x86-64-modern verylargeboards=yes`
 * Heavy branching (e.g., Duck, Amazons): add `all=yes`
 * Debugging: `make -j build ARCH=x86-64-modern debug=yes optimize=no`
 * Launch and select variant:
@@ -42,6 +43,10 @@
   * `position startpos moves e2e4 e7e5`
   * `position fen 4k3/8/8/8/8/8/p7/4K2R w K - 0 1 moves e1g1 a2a1q`
   * Drops use `@` (e.g., `position startpos moves P@b2 P@a1 P@c1`)
+  * `setoption name Verbosity value <0|1|2>` for search logging control:
+    * `0` suppresses most non-essential search chatter
+    * `1` is the current default behavior
+    * `2` adds explicit terminal-root adjudication/debug lines
   * `go movetime 1000` | `go depth 20` | `d` | `quit`
 
 ## 5) Quick test automation
@@ -83,12 +88,16 @@ Run: `./stockfish < test.txt > output.txt`
 * Spell-chess potion movegen is expensive by construction; any optimization there must be A/B-tested on `spell-chess` plus baseline chess to ensure no cross-variant regression.
 * `bench <variant> ...` does not always accept `checkers` directly in this build path. For checkers performance runs, use UCI setup first (`setoption VariantPath`, `setoption UCI_Variant checkers`) and then run `bench ...` from that session.
 * When benchmark outcomes are unstable, extend validation: use longer depth/time plus more swapped pairs (and optionally `taskset -c 0`) before accepting/rejecting.
+* Local A/B harness note: `.local/abmatch.py` uses `pexpect`; unattended long runs are reliable in detached `tmux` sessions, but plain `nohup`/simple backgrounding can stall or appear dead.
+* Local A/B harness note: `.local/abmatch.py` and `.local/overnight_ab_runner.py` are already wired for unbuffered progress output; if a run looks hung, check for `Variant ...` progress first before assuming the engines are stuck.
 * When integrating large upstream/fork PRs by cherry-pick, expect conflicts in hot files (`position.*`, `movegen.cpp`, `parser.cpp`, `test.py`). Resolve by preserving local engine invariants first (forced-jump, gating/undo consistency, custom attack paths), then layering the feature logic; run at least one variant-specific smoke test before push.
 * Comments target experienced developers; don’t change copyright years.
 
 ## 8) Large/complex variants
 
-* Use `largeboards=yes` for >8×8; boards beyond **10×12 are not supported**.
+* Use `largeboards=yes` for the normal large-board matrix (for example 10×8, 10×10, 10×12).
+* Use `verylargeboards=yes` for experimental wider/taller flattened boards and special cases that exceed the normal large-board limits.
+* Do not assume a hard global “boards beyond 10×12 are not supported” rule in this fork; support depends on which board macro family the build was compiled with.
 * If branching explodes, add `all=yes` to enable broader code paths and tests.
 
 ## 9) Common pitfalls
