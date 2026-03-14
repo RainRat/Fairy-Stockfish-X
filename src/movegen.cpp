@@ -263,6 +263,13 @@ namespace {
     Bitboard b3p = b3 & standardPromotionZone;
     Bitboard brcp = brc & standardPromotionZone;
     Bitboard blcp = blc & standardPromotionZone;
+    Bitboard rifleBrcp = pos.rifle_capture() ? brcp : Bitboard(0);
+    Bitboard rifleBlcp = pos.rifle_capture() ? blcp : Bitboard(0);
+    if (pos.rifle_capture())
+    {
+        brcp = 0;
+        blcp = 0;
+    }
 
     Bitboard mandatoryPromotionZone = pos.mandatory_promotion_zone(Us, PAWN);
     if (pos.mandatory_pawn_promotion())
@@ -341,6 +348,21 @@ namespace {
 
     while (b3p)
         moveList = make_promotions<Us, Type, Up+Up+Up>(pos, moveList, pop_lsb(b3p));
+
+    if (Type == CAPTURES || Type == EVASIONS || Type == NON_EVASIONS)
+    {
+        while (rifleBrcp)
+        {
+            Square to = pop_lsb(rifleBrcp);
+            moveList = make_move_and_gating<NORMAL>(pos, moveList, Us, to - UpRight, to);
+        }
+
+        while (rifleBlcp)
+        {
+            Square to = pop_lsb(rifleBlcp);
+            moveList = make_move_and_gating<NORMAL>(pos, moveList, Us, to - UpLeft, to);
+        }
+    }
 
     // Sittuyin promotions
     if (pos.sittuyin_promotion() && (Type == CAPTURES || Type == EVASIONS || Type == NON_EVASIONS))

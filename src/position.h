@@ -229,6 +229,7 @@ public:
   bool drop_checks() const;
   bool drop_mates() const;
   bool self_capture() const;
+  bool rifle_capture() const;
   bool capture_morph() const;
   bool rex_exclusive_morph() const;
   bool must_capture() const;
@@ -1041,6 +1042,11 @@ inline bool Position::drop_mates() const {
 inline bool Position::self_capture() const {
   assert(var != nullptr);
   return var->selfCapture;
+}
+
+inline bool Position::rifle_capture() const {
+  assert(var != nullptr);
+  return var->rifleCapture;
 }
 
 inline bool Position::capture_morph() const {

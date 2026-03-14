@@ -1005,6 +1005,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("mustCaptureEnPassant", v->mustCaptureEnPassant);
     parse_attribute("mustCaptureWhite", v->mustCaptureByColor[WHITE]);
     parse_attribute("mustCaptureBlack", v->mustCaptureByColor[BLACK]);
+    parse_attribute("rifleCapture", v->rifleCapture);
     parse_attribute("selfCapture", v->selfCapture);
     parse_attribute("capturerDiesOnCapture", v->capturerDiesOnCapture);
     parse_attribute("capturerDiesOnSameTypeCapture", v->capturerDiesOnSameTypeCapture);

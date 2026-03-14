@@ -1862,15 +1862,22 @@ bool Position::legal(Move m) const {
   if (from == to && !(is_pass(m) || (type_of(m) == PROMOTION && sittuyin_promotion())))
       return false;
 
+  bool rifleShot = rifle_capture() && capture(m) && type_of(m) != CASTLING;
+  Square shotSq = type_of(m) == EN_PASSANT ? capture_square(to) : to;
+  Bitboard removedAttackers = rifleShot ? square_bb(shotSq) : Bitboard(0);
+  Square effectiveTo = rifleShot ? from : to;
+
   if (type_of(m) == PROMOTION && !promotion_allowed(us, promotion_type(m)))
       return false;
   if (type_of(m) == PIECE_PROMOTION && !promotion_allowed(us, promoted_piece_type(type_of(moved_piece(m)))))
+      return false;
+  if (rifleShot && (type_of(m) == PROMOTION || type_of(m) == PIECE_PROMOTION))
       return false;
   if (type_of(m) != DROP && type_of(m) != PROMOTION && type_of(m) != PIECE_PROMOTION)
   {
       Piece mover = moved_piece(m);
       Bitboard mandatoryZone = mover == NO_PIECE ? Bitboard(0) : mandatory_promotion_zone(mover);
-      if ((mandatoryZone & to) && !(mandatoryZone & from))
+      if ((mandatoryZone & effectiveTo) && !(mandatoryZone & from))
           return false;
   }
 
@@ -2015,8 +2022,8 @@ bool Position::legal(Move m) const {
   if (pseudo_royal_types())
   {
       const bool blastOnCapture = blast_on_capture();
-      Square kto = to;
-      Bitboard occupied = (type_of(m) != DROP ? pieces() ^ from : pieces());
+      Square kto = rifleShot ? from : to;
+      Bitboard occupied = rifleShot ? pieces() : (type_of(m) != DROP ? pieces() ^ from : pieces());
       Bitboard blastImmune = blastOnCapture ? blast_immune_bb() : Bitboard(0);
       if (walling_rule() == DUCK)
           occupied ^= st->wallSquares;
@@ -2035,25 +2042,28 @@ bool Position::legal(Move m) const {
               // Ensure to include the initial square if from == kto
               for (Square s = from; from != kto ? s != kto : s == from; s += step)
                   if (  !(blastOnCapture && (blast_pattern(s) & st->pseudoRoyals & pieces(~sideToMove) & ~blastImmune))
-                      && attackers_to(s, occupied, ~us))
+                      && (attackers_to(s, occupied, ~us) & ~removedAttackers))
                       return false;
           // Move the rook
           occupied ^= to | rto;
       }
-      occupied |= kto;
+      if (!rifleShot)
+          occupied |= kto;
       if (type_of(m) == EN_PASSANT)
-          occupied &= ~square_bb(capture_square(kto));
+          occupied &= ~square_bb(capture_square(to));
+      else if (rifleShot)
+          occupied &= ~square_bb(shotSq);
       if (capture(m) && blastOnCapture)
-          occupied &= ~blast_squares(kto);
+          occupied &= ~blast_squares(rifleShot ? shotSq : kto);
       // Petrifying a pseudo-royal piece is illegal
       if (capture(m) && (var->petrifyOnCaptureTypes & type_of(moved_piece(m))) && (st->pseudoRoyals & from))
           return false;
       Bitboard pseudoRoyals = st->pseudoRoyals & pieces(sideToMove);
       // Add dropped pseudo-royal
-      if (type_of(m) == DROP && (extinction_piece_types() & type_of(moved_piece(m))))
+      if (type_of(m) == DROP && (pseudo_royal_types() & piece_set(type_of(moved_piece(m)))))
           pseudoRoyals |= square_bb(to);
       Bitboard pseudoRoyalsTheirs = st->pseudoRoyals & pieces(~sideToMove);
-      if (is_ok(from) && (pseudoRoyals & from))
+      if (!rifleShot && is_ok(from) && (pseudoRoyals & from))
           pseudoRoyals ^= square_bb(from) ^ kto;
       if (type_of(m) == PROMOTION && (pseudo_royal_types() & promotion_type(m)))
       {
@@ -2078,14 +2088,14 @@ bool Position::legal(Move m) const {
               Square sr = pop_lsb(pseudoRoyals);
               // Touching pseudo-royal pieces are immune
               if (  !(blastOnCapture && (pseudoRoyalsTheirs & blast_pattern(sr) & ~blastImmune))
-                  && (attackers_to(sr, occupied, ~us) & attackerCandidatesTheirs))
+                  && (attackers_to(sr, occupied, ~us) & ~removedAttackers & attackerCandidatesTheirs))
                   return false;
           }
       // Look for duple check
       if (var->dupleCheck)
       {
           Bitboard pseudoRoyalCandidates = st->pseudoRoyalCandidates & pieces(sideToMove);
-          if (is_ok(from) && (pseudoRoyalCandidates & from))
+          if (!rifleShot && is_ok(from) && (pseudoRoyalCandidates & from))
               pseudoRoyalCandidates ^= square_bb(from) ^ kto;
           if (type_of(m) == PROMOTION && (pseudo_royal_types() & promotion_type(m)))
               pseudoRoyalCandidates |= kto;
@@ -2095,7 +2105,7 @@ bool Position::legal(Move m) const {
               Square sr = pop_lsb(pseudoRoyalCandidates);
               // Touching pseudo-royal pieces are immune
               if (!(  !(blastOnCapture && (pseudoRoyalsTheirs & blast_pattern(sr) & ~blastImmune))
-                    && (attackers_to(sr, occupied, ~us) & attackerCandidatesTheirs)))
+                    && (attackers_to(sr, occupied, ~us) & ~removedAttackers & attackerCandidatesTheirs)))
                   allCheck = false;
           }
           if (allCheck)
@@ -2107,9 +2117,9 @@ bool Position::legal(Move m) const {
   if (anti_royal_types())
   {
       const bool blastOnCapture = blast_on_capture();
-      Square kto = to;
+      Square kto = rifleShot ? from : to;
       Square rfrom = SQ_NONE, rto = SQ_NONE;
-      Bitboard occupied = (type_of(m) != DROP ? pieces() ^ from : pieces());
+      Bitboard occupied = rifleShot ? pieces() : (type_of(m) != DROP ? pieces() ^ from : pieces());
       Bitboard blastImmune = blastOnCapture ? blast_immune_bb() : Bitboard(0);
       if (walling_rule() == DUCK)
           occupied ^= st->wallSquares;
@@ -2122,11 +2132,12 @@ bool Position::legal(Move m) const {
           rto = kto - (to > from ? EAST : WEST);
           occupied ^= to | rto;
       }
-      occupied |= kto;
+      if (!rifleShot)
+          occupied |= kto;
       if (type_of(m) == EN_PASSANT)
-          occupied &= ~square_bb(capture_square(kto));
+          occupied &= ~square_bb(capture_square(to));
       if (capture(m) && blastOnCapture)
-          occupied &= ~blast_squares(kto);
+          occupied &= ~blast_squares(rifleShot ? shotSq : kto);
 
       Bitboard antiRoyals = 0;
       for (PieceSet ps = anti_royal_types(); ps; )
@@ -2135,7 +2146,7 @@ bool Position::legal(Move m) const {
           if (count(sideToMove, pt) <= anti_royal_count())
               antiRoyals |= pieces(sideToMove, pt);
       }
-      if (is_ok(from) && (antiRoyals & from))
+      if (!rifleShot && is_ok(from) && (antiRoyals & from))
           antiRoyals ^= square_bb(from) ^ kto;
       if (is_ok(rfrom) && (antiRoyals & rfrom))
           antiRoyals ^= square_bb(rfrom) ^ rto;
@@ -2163,7 +2174,7 @@ bool Position::legal(Move m) const {
           Square sr = pop_lsb(antiRoyals);
           if (!(occupied & sr)
               || (blastOnCapture && (vulnerableEnemyRoyals & blast_pattern(sr)))
-              || !attackers_to(sr, occupied, ~us))
+              || !(attackers_to(sr, occupied, ~us) & ~removedAttackers))
               return false;
       }
   }
@@ -2183,12 +2194,12 @@ bool Position::legal(Move m) const {
   {
       Square ksq = square<KING>(us);
       Square capsq = capture_square(to);
-      Bitboard occupied = (pieces() ^ from ^ capsq) | to;
+      Bitboard occupied = rifleShot ? (pieces() ^ capsq) : ((pieces() ^ from ^ capsq) | to);
 
       assert(ep_squares() & to);
       assert(piece_on(to) == NO_PIECE);
 
-      return !(attackers_to_king(ksq, occupied, ~us) & occupied);
+      return !((attackers_to_king(ksq, occupied, ~us) & ~removedAttackers) & occupied);
   }
 
   // Castling moves generation does not check if the castling path is clear of
@@ -2224,6 +2235,7 @@ bool Position::legal(Move m) const {
       auto attackers_for_castling = [&](Square s, Bitboard occ) {
           Bitboard att = spellLikeCastler ? attackers_to(s, occ, ~us)
                                           : attackers_to_king(s, occ, ~us);
+          att &= ~removedAttackers;
           if (spellLikeCastler)
               att &= ~freeze_squares(~us);
           return att;
@@ -2244,7 +2256,8 @@ bool Position::legal(Move m) const {
           || !attackers_for_castling(to, pieces() ^ rookFrom);
   }
 
-  Bitboard occupied = (type_of(m) != DROP ? pieces() ^ from : pieces()) | to;
+  Bitboard occupied = rifleShot ? (pieces() ^ square_bb(shotSq))
+                                : ((type_of(m) != DROP ? pieces() ^ from : pieces()) | to);
 
   // Gated kings and pseudo-royals must not be introduced onto attacked squares.
   // If the move captures an attacker on its way, ignore that disappearing attack.
@@ -2260,6 +2273,7 @@ bool Position::legal(Move m) const {
 
           Bitboard attackers = gateType == KING ? attackers_to_king(gate, occ, ~us)
                                                 : attackers_to(gate, occ, ~us);
+          attackers &= ~removedAttackers;
 
           if (capture(m) && piece_on(to) != NO_PIECE)
               attackers &= ~square_bb(to);
@@ -2277,13 +2291,13 @@ bool Position::legal(Move m) const {
       return true;
   if ((var->flyingGeneral && count<KING>(us)) || st->bikjang)
   {
-      Square s = type_of(moved_piece(m)) == KING ? to : square<KING>(us);
+      Square s = type_of(moved_piece(m)) == KING ? (rifleShot ? from : to) : square<KING>(us);
       if (attacks_bb(~us, ROOK, s, occupied) & pieces(~us, KING) & ~square_bb(to))
           return false;
   }
   if (var->diagonalGeneral && count<KING>(us))
   {
-      Square s = type_of(moved_piece(m)) == KING ? to : square<KING>(us);
+      Square s = type_of(moved_piece(m)) == KING ? (rifleShot ? from : to) : square<KING>(us);
       if (attacks_bb(~us, BISHOP, s, occupied) & pieces(~us, KING) & ~square_bb(to))
           return false;
   }
@@ -2299,7 +2313,7 @@ bool Position::legal(Move m) const {
       {
           Square s = pop_lsb(traversed);
           Bitboard pathOccupied = (pieces() ^ from) | s;
-          if (attackers_to_king(s, pathOccupied, ~us))
+          if (attackers_to_king(s, pathOccupied, ~us) & ~removedAttackers)
               return false;
       }
   }
@@ -2307,7 +2321,7 @@ bool Position::legal(Move m) const {
   // If the moving piece is a king, check whether the destination square is
   // attacked by the opponent.
   if (!allow_checks() && type_of(moved_piece(m)) == KING)
-      return !attackers_to_king(to, occupied, ~us);
+      return !(attackers_to_king(rifleShot ? from : to, occupied, ~us) & ~removedAttackers);
 
   // Return early when without king
   if (!count<KING>(us))
@@ -2315,12 +2329,15 @@ bool Position::legal(Move m) const {
 
   Bitboard janggiCannons = pieces(JANGGI_CANNON);
   if (type_of(moved_piece(m)) == JANGGI_CANNON)
-      janggiCannons = (type_of(m) == DROP ? janggiCannons : janggiCannons ^ from) | to;
+      janggiCannons = rifleShot ? (janggiCannons & ~square_bb(shotSq))
+                                : ((type_of(m) == DROP ? janggiCannons : janggiCannons ^ from) | to);
   else if (janggiCannons & to)
       janggiCannons ^= to;
 
   // A non-king move is legal if the king is not under attack after the move.
-  return allow_checks() || !(attackers_to_king(square<KING>(us), occupied, ~us, janggiCannons) & ~SquareBB[to]);
+  return allow_checks() || !(attackers_to_king(square<KING>(us), occupied, ~us, janggiCannons)
+                             & ~removedAttackers
+                             & ~(rifleShot ? Bitboard(0) : SquareBB[to]));
 }
 
 
@@ -2335,6 +2352,8 @@ bool Position::pseudo_legal(const Move m) const {
   Square from = from_sq(m);
   Square to = to_sq(m);
   Piece pc = moved_piece(m);
+  bool rifleShot = rifle_capture() && capture(m) && type_of(m) != CASTLING;
+  Square effectiveTo = rifleShot ? from : to;
 
   if (in_opening_self_removal_phase())
       return is_opening_self_removal_move(m);
@@ -2358,7 +2377,7 @@ bool Position::pseudo_legal(const Move m) const {
   if (type_of(m) != DROP && type_of(m) != PROMOTION && type_of(m) != PIECE_PROMOTION)
   {
       Bitboard mandatoryZone = pc == NO_PIECE ? Bitboard(0) : mandatory_promotion_zone(pc);
-      if ((mandatoryZone & to) && !(mandatoryZone & from))
+      if ((mandatoryZone & effectiveTo) && !(mandatoryZone & from))
           return false;
   }
 
@@ -2475,7 +2494,7 @@ bool Position::pseudo_legal(const Move m) const {
   // Handle the case where a mandatory piece promotion/demotion is not taken
   if (    mandatory_piece_promotion()
       && (is_promoted(from) ? piece_demotion() : promoted_piece_type(type_of(pc)) != NO_PIECE_TYPE)
-      && (promotion_zone(pc) & (SquareBB[from] | to))
+      && (promotion_zone(pc) & (SquareBB[from] | effectiveTo))
       && (!piece_promotion_on_capture() || capture(m)))
       return false;
 
@@ -2503,7 +2522,7 @@ bool Position::pseudo_legal(const Move m) const {
   {
       // We have already handled promotion moves, so destination
       // cannot be on the 8th/1st rank.
-      if (mandatory_pawn_promotion() && (promotion_zone(pc) & to) && !sittuyin_promotion())
+      if (mandatory_pawn_promotion() && (promotion_zone(pc) & effectiveTo) && !sittuyin_promotion())
           return false;
 
       if (   !(pawn_attacks_bb(us, from) & (self_capture() ? pieces() : pieces(~us)) & to) // Not a capture
@@ -2607,14 +2626,20 @@ bool Position::gives_check(Move m) const {
   if (jumpRemoved && (square_bb(to) & jumpRemoved))
       return false;
 
+  bool rifleShot = rifle_capture() && capture(m) && type_of(m) != CASTLING;
+  Square shotSq = type_of(m) == EN_PASSANT ? capture_square(to) : to;
+  Square attackFrom = rifleShot ? from : to;
+
   // No check possible without king
   if (!count<KING>(~sideToMove))
       return false;
 
-  Bitboard occupied = (type_of(m) != DROP ? pieces() ^ from : pieces()) | to;
+  Bitboard occupied = rifleShot ? (pieces() ^ square_bb(shotSq))
+                                : ((type_of(m) != DROP ? pieces() ^ from : pieces()) | to);
   Bitboard janggiCannons = pieces(JANGGI_CANNON);
   if (type_of(moved_piece(m)) == JANGGI_CANNON)
-      janggiCannons = (type_of(m) == DROP ? janggiCannons : janggiCannons ^ from) | to;
+      janggiCannons = rifleShot ? (janggiCannons & ~square_bb(shotSq))
+                                : ((type_of(m) == DROP ? janggiCannons : janggiCannons ^ from) | to);
   else if (janggiCannons & to)
       janggiCannons ^= to;
 
@@ -2627,26 +2652,26 @@ bool Position::gives_check(Move m) const {
       {
           if (pt == JANGGI_CANNON)
           {
-              if (attacks_bb(sideToMove, pt, to, occupied) & attacks_bb(sideToMove, pt, to, occupied & ~janggiCannons) & square<KING>(~sideToMove))
+              if (attacks_bb(sideToMove, pt, attackFrom, occupied) & attacks_bb(sideToMove, pt, attackFrom, occupied & ~janggiCannons) & square<KING>(~sideToMove))
                   return true;
           }
           else if (AttackRiderTypes[pt] & HOPPING_RIDERS)
           {
-              if (attacks_bb(sideToMove, pt, to, occupied) & square<KING>(~sideToMove))
+              if (attacks_bb(sideToMove, pt, attackFrom, occupied) & square<KING>(~sideToMove))
                   return true;
           }
           else if (AttackRiderTypes[pt] & ASYMMETRICAL_RIDERS)
           {
-              if ((check_squares(pt) & to) && (attacks_bb(sideToMove, pt, to, occupied) & square<KING>(~sideToMove)))
+              if ((check_squares(pt) & attackFrom) && (attacks_bb(sideToMove, pt, attackFrom, occupied) & square<KING>(~sideToMove)))
                   return true;
           }
-          else if (check_squares(pt) & to)
+          else if (check_squares(pt) & attackFrom)
               return true;
       }
   }
 
   // Is there a discovered check?
-  if (  ((type_of(m) != DROP && (blockers_for_king(~sideToMove) & from)) || (non_sliding_riders() & pieces(sideToMove)))
+  if (  ((type_of(m) != DROP && (blockers_for_king(~sideToMove) & (rifleShot ? square_bb(to) : square_bb(from)))) || (non_sliding_riders() & pieces(sideToMove)))
       && attackers_to_king(square<KING>(~sideToMove), occupied, sideToMove, janggiCannons) & occupied)
       return true;
 
@@ -2664,10 +2689,10 @@ bool Position::gives_check(Move m) const {
   {
       PieceType pt = type_of(moved_piece(m));
       PieceType diagType = pt == WAZIR ? FERS : pt == SOLDIER ? PAWN : pt == ROOK ? BISHOP : NO_PIECE_TYPE;
-      if (diagType && (attacks_bb(sideToMove, diagType, to, occupied) & square<KING>(~sideToMove)))
+      if (diagType && (attacks_bb(sideToMove, diagType, attackFrom, occupied) & square<KING>(~sideToMove)))
           return true;
-      else if (pt == JANGGI_CANNON && (  rider_attacks_bb<RIDER_CANNON_DIAG>(to, occupied)
-                                       & rider_attacks_bb<RIDER_CANNON_DIAG>(to, occupied & ~janggiCannons)
+      else if (pt == JANGGI_CANNON && (  rider_attacks_bb<RIDER_CANNON_DIAG>(attackFrom, occupied)
+                                       & rider_attacks_bb<RIDER_CANNON_DIAG>(attackFrom, occupied & ~janggiCannons)
                                        & square<KING>(~sideToMove)))
           return true;
   }
@@ -2695,7 +2720,7 @@ bool Position::gives_check(Move m) const {
   case EN_PASSANT:
   {
       Square capsq = capture_square(to);
-      Bitboard b = (pieces() ^ from ^ capsq) | to;
+      Bitboard b = rifleShot ? (pieces() ^ capsq) : ((pieces() ^ from ^ capsq) | to);
 
       return attackers_to_king(square<KING>(~sideToMove), b, sideToMove) & pieces(sideToMove) & b;
   }
@@ -2783,6 +2808,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   Piece pc = moved_piece(m);
   PieceType movedType = type_of(pc);
   Piece captured = captured_piece(m);
+  bool rifleShot = rifle_capture() && captured != NO_PIECE && type_of(m) != CASTLING;
   bool capturedDeadSquare = type_of(m) != DROP && from != to && bool(st->deadSquares & to);
   PieceType exchanged = exchange_piece(m);
   Square jumpCapsq = is_jump_capture(m) ? jump_capture_square(from, to) : SQ_NONE;
@@ -2878,10 +2904,20 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
 
       if (Eval::useNNUE)
       {
-          dp.dirty_num = 2;  // 1 piece moved, 1 piece captured
-          dp.piece[1] = captured;
-          dp.from[1] = capsq;
-          dp.to[1] = SQ_NONE;
+          if (rifleShot)
+          {
+              dp.dirty_num = 1;
+              dp.piece[0] = captured;
+              dp.from[0] = capsq;
+              dp.to[0] = SQ_NONE;
+          }
+          else
+          {
+              dp.dirty_num = 2;  // 1 piece moved, 1 piece captured
+              dp.piece[1] = captured;
+              dp.from[1] = capsq;
+              dp.to[1] = SQ_NONE;
+          }
       }
 
       // Update board and piece lists
@@ -3151,12 +3187,18 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   {
       if (Eval::useNNUE)
       {
-          dp.piece[0] = pc;
-          dp.from[0] = from;
-          dp.to[0] = to;
+          if (rifleShot)
+              dp.dirty_num = std::min(dp.dirty_num, 1);
+          else
+          {
+              dp.piece[0] = pc;
+              dp.from[0] = from;
+              dp.to[0] = to;
+          }
       }
 
-      move_piece(from, to);
+      if (!rifleShot)
+          move_piece(from, to);
   }
 
   // If the moving piece is a pawn do some special extra work
@@ -3952,6 +3994,7 @@ void Position::undo_move(Move m) {
   Square from = from_sq(m);
   Square to = to_sq(m);
   Piece pc = piece_on(to);
+  bool rifleShot = rifle_capture() && st->capturedPiece != NO_PIECE && type_of(m) != CASTLING;
   PieceType exchange = exchange_piece(m);
   bool wasOpeningSelfRemoval = opening_self_removal()
                             && gamePly <= 2
@@ -4119,7 +4162,8 @@ void Position::undo_move(Move m) {
               put_piece(st->deadPiece, to, st->deadPiecePromoted, st->deadUnpromotedPiece);
               pc = piece_on(to);
           }
-          move_piece(to, from); // Put the piece back at the source square
+          if (!rifleShot)
+              move_piece(to, from); // Put the piece back at the source square
       }
 
       if (st->capturedPiece)

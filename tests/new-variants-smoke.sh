@@ -797,4 +797,10 @@ position startpos moves e2e4,e4e2
 d")
 echo "${out}" | grep -q "Fen: rnbqkbnr/pppppppp/8/8/4P3/8/PPPP\\*PPP/RNBQKBNR b KQkq - 0 1"
 
+# 49) Rifle chess baseline: start position behaves like orthodox chess before captures appear.
+out=$(run_cmds "setoption name UCI_Variant value rifle-chess
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 20"
+
 echo "new variants smoke testing OK"
