@@ -18,11 +18,13 @@
 
 // Code for calculating NNUE evaluation function
 
+#include <fstream>
+#include <iomanip>
 #include <iostream>
+#include <new>
 #include <set>
 #include <sstream>
-#include <iomanip>
-#include <fstream>
+#include <vector>
 
 #include "../evaluate.h"
 #include "../position.h"
@@ -52,16 +54,26 @@ namespace Stockfish::Eval::NNUE {
   template <typename T>
   void initialize(AlignedPtr<T>& pointer) {
 
-    pointer.reset(reinterpret_cast<T*>(std_aligned_alloc(alignof(T), sizeof(T))));
-    std::memset(pointer.get(), 0, sizeof(T));
+    void* memory = std_aligned_alloc(alignof(T), sizeof(T));
+    if (!memory)
+    {
+      pointer.reset();
+      return;
+    }
+    pointer.reset(new (memory) T{});
   }
 
   template <typename T>
   void initialize(LargePagePtr<T>& pointer) {
 
     static_assert(alignof(T) <= 4096, "aligned_large_pages_alloc() may fail for such a big alignment requirement of T");
-    pointer.reset(reinterpret_cast<T*>(aligned_large_pages_alloc(sizeof(T))));
-    std::memset(pointer.get(), 0, sizeof(T));
+    void* memory = aligned_large_pages_alloc(sizeof(T));
+    if (!memory)
+    {
+      pointer.reset();
+      return;
+    }
+    pointer.reset(new (memory) T{});
   }
 
   // Read evaluation function parameters
@@ -125,15 +137,26 @@ namespace Stockfish::Eval::NNUE {
     std::uint32_t hashValue;
     if (!read_header(stream, &hashValue, &netDescription)) return false;
     if (hashValue != HashValue) return false;
+    if (!featureTransformer)
+        return false;
     if (!Detail::read_parameters(stream, *featureTransformer)) return false;
     for (std::size_t i = 0; i < LayerStacks; ++i)
+    {
+      if (!network[i])
+          return false;
       if (!Detail::read_parameters(stream, *(network[i]))) return false;
+    }
     return stream && stream.peek() == std::ios::traits_type::eof();
   }
 
   // Write network parameters
   bool write_parameters(std::ostream& stream) {
 
+    if (!featureTransformer)
+        return false;
+    for (std::size_t i = 0; i < LayerStacks; ++i)
+        if (!network[i])
+            return false;
     if (!write_header(stream, HashValue, netDescription)) return false;
     if (!Detail::write_parameters(stream, *featureTransformer)) return false;
     for (std::size_t i = 0; i < LayerStacks; ++i)
@@ -306,10 +329,11 @@ namespace Stockfish::Eval::NNUE {
     const bool savedRefreshNeeded = st->nnueRefreshNeeded;
     st->nnueRefreshNeeded = true;
 
-    char board[3*RANK_NB+1][8*FILE_NB+2];
-    std::memset(board, ' ', sizeof(board));
-    for (int row = 0; row < 3*pos.ranks()+1; ++row)
-      board[row][8*FILE_NB+1] = '\0';
+    const int boardRows = 3 * pos.ranks() + 1;
+    const int boardCols = 8 * pos.files() + 2;
+    std::vector<std::string> board(boardRows, std::string(boardCols - 1, ' '));
+    for (auto& row : board)
+      row.push_back('\0');
 
     // A lambda to output one box of the board
     auto writeSquare = [&board, &pos](File file, Rank rank, Piece pc, Value value) {
@@ -324,7 +348,7 @@ namespace Stockfish::Eval::NNUE {
       if (pc != NO_PIECE)
         board[y+1][x+4] = pos.piece_to_char()[pc];
       if (value != VALUE_NONE)
-        format_cp_compact(value, &board[y+2][x+2]);
+        format_cp_compact(value, board[y+2].data() + x + 2);
     };
 
     // We estimate the value of each piece by doing a differential evaluation from
@@ -361,7 +385,7 @@ namespace Stockfish::Eval::NNUE {
 
     ss << " NNUE derived piece values:\n";
     for (int row = 0; row < 3*pos.ranks()+1; ++row)
-        ss << board[row] << '\n';
+        ss << board[row].c_str() << '\n';
     ss << '\n';
 
     auto t = trace_evaluate(pos);

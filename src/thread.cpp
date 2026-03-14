@@ -217,6 +217,8 @@ void ThreadPool::start_thinking(Position& pos, StateListPtr& states,
 
   if (states.get())
       setupStates = std::move(states); // Ownership transfer, states is now empty
+  else
+      setupStates.reset();
 
   // We use Position::set() to set root position across threads. But there are
   // some StateInfo fields (previous, pliesFromNull, capturedPiece) that cannot

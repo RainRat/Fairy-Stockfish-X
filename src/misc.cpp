@@ -97,7 +97,9 @@ struct Tie: public streambuf { // MSVC requires split streambuf for cin and cout
 
   int log(int c, const char* prefix) {
 
+    static std::mutex logMutex;
     static int last = '\n'; // Single log file
+    std::lock_guard<std::mutex> lock(logMutex);
 
     if (last == '\n')
         logBuf->sputn(prefix, 3);

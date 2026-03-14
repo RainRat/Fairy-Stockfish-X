@@ -165,7 +165,7 @@ class PRNG {
   }
 
 public:
-  PRNG(uint64_t seed) : s(seed) { assert(seed); }
+  PRNG(uint64_t seed) : s(seed ? seed : 0x9E3779B97F4A7C15ULL) { assert(seed); }
 
   template<typename T> T rand() { return T(rand64()); }
 
