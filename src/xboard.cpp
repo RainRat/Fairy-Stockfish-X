@@ -18,6 +18,7 @@
 
 #include <iostream>
 #include <string>
+#include <cstdlib>
 
 #include "evaluate.h"
 #include "misc.h"
@@ -315,47 +316,63 @@ void StateMachine::process_command(std::string token, std::istringstream& is) {
   }
   else if (token == "level" || token == "st" || token == "sd" || token == "time" || token == "otim")
   {
-      int num;
+      int num = 0;
       if (token == "level")
       {
           // moves to go
-          is >> limits.movestogo;
-          // base time
-          is >> token;
-          size_t idx = token.find(":");
-          if (idx != std::string::npos)
-              num = std::stoi(token.substr(0, idx)) * 60 + std::stoi(token.substr(idx + 1));
-          else
-              num = std::stoi(token) * 60;
-          limits.time[WHITE] = num * 1000;
-          limits.time[BLACK] = num * 1000;
-          // increment
-          is >> num;
-          limits.inc[WHITE] = num * 1000;
-          limits.inc[BLACK] = num * 1000;
+          if (is >> limits.movestogo)
+          {
+              // base time
+              if (is >> token)
+              {
+                  size_t idx = token.find(":");
+                  if (idx != std::string::npos)
+                  {
+                      std::string m_str = token.substr(0, idx);
+                      std::string s_str = token.substr(idx + 1);
+                      int m = m_str.empty() ? 0 : std::atoi(m_str.c_str());
+                      int s = s_str.empty() ? 0 : std::atoi(s_str.c_str());
+                      num = m * 60 + s;
+                  }
+                  else
+                      num = std::atoi(token.c_str()) * 60;
+                  limits.time[WHITE] = num * 1000;
+                  limits.time[BLACK] = num * 1000;
+              }
+              // increment
+              if (is >> num)
+              {
+                  limits.inc[WHITE] = num * 1000;
+                  limits.inc[BLACK] = num * 1000;
+              }
+          }
       }
       else if (token == "sd")
           is >> limits.depth;
       else if (token == "st")
       {
-          is >> num;
-          limits.movetime = num * 1000;
-          limits.time[WHITE] = limits.time[BLACK] = 0;
+          if (is >> num)
+          {
+              limits.movetime = num * 1000;
+              limits.time[WHITE] = limits.time[BLACK] = 0;
+          }
       }
       // Note: time/otim are in centi-, not milliseconds
       else if (token == "time")
       {
-          is >> num;
-          Color us = playColor != COLOR_NB ? playColor : pos.side_to_move();
-          if (limits.time[us])
+          if (is >> num)
+          {
+              Color us = playColor != COLOR_NB ? playColor : pos.side_to_move();
               limits.time[us] = num * 10;
+          }
       }
       else if (token == "otim")
       {
-          is >> num;
-          Color them = playColor != COLOR_NB ? ~playColor : ~pos.side_to_move();
-          if (limits.time[them])
+          if (is >> num)
+          {
+              Color them = playColor != COLOR_NB ? ~playColor : ~pos.side_to_move();
               limits.time[them] = num * 10;
+          }
       }
   }
   else if (token == "setboard")
@@ -406,7 +423,7 @@ void StateMachine::process_command(std::string token, std::istringstream& is) {
   else if (token == "option")
   {
       std::string name, value;
-      is.get();
+      is >> std::ws;
       std::getline(is, name, '=');
       std::getline(is, value);
       if (Options.count(name))

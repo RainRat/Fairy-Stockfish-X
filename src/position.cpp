@@ -26,6 +26,7 @@
 #include <limits>
 #include <sstream>
 #include <vector>
+#include <cstdlib>
 
 #include "bitboard.h"
 #include "misc.h"
@@ -5523,7 +5524,7 @@ void Position::flip() {
   else
   {
       File epFile = File(token[0] - 'a');
-      Rank epRank = Rank(std::stoi(token.substr(1)) - 1);
+      Rank epRank = Rank(std::atoi(token.substr(1).c_str()) - 1);
       Square ep = make_square(epFile, epRank);
       f += char('a' + file_of(ep));
       f += std::to_string(relative_rank(~side_to_move(), ep, max_rank()) + 1);
