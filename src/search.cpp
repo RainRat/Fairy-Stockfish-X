@@ -97,6 +97,24 @@ namespace {
     return VALUE_DRAW + Value(2 * (thisThread->nodes & 1) - 1);
   }
 
+  bool show_search_output() {
+    return int(Options["Verbosity"]) >= 1;
+  }
+
+  bool show_debug_adjudication() {
+    return int(Options["Verbosity"]) >= 2;
+  }
+
+  void print_root_adjudication(const Position& pos, Value result, const char* reason) {
+    if (!show_debug_adjudication() || !is_uci_dialect(CurrentProtocol))
+        return;
+
+    sync_cout << "info string adjudication reason " << reason
+              << " result " << UCI::value(result)
+              << " side_to_move " << (pos.side_to_move() == WHITE ? "white" : "black")
+              << sync_endl;
+  }
+
   // Skill structure is used to implement strength limit
   struct Skill {
     explicit Skill(int l) : level(l) {}
@@ -201,9 +219,11 @@ void MainThread::search() {
   {
       rootMoves.emplace_back(MOVE_NONE);
       Value variantResult;
-      Value result =  rootPos.is_game_end(variantResult) ? variantResult
-                    : rootPos.checkers()                 ? rootPos.checkmate_value()
-                                                         : rootPos.stalemate_value();
+      bool variantGameEnd = rootPos.is_game_end(variantResult);
+      bool inCheck = rootPos.checkers();
+      Value result = variantGameEnd ? variantResult
+                    : inCheck       ? rootPos.checkmate_value()
+                                    : rootPos.stalemate_value();
       if (CurrentProtocol == XBOARD)
       {
           // rotate MOVE_NONE to front (for optional game end)
@@ -215,10 +235,15 @@ void MainThread::search() {
                               : "0-1 {Black wins}")
                           << sync_endl;
       }
-      else
-      sync_cout << "info depth 0 score "
-                << UCI::value(result)
-                << sync_endl;
+      else if (show_search_output())
+          sync_cout << "info depth 0 score "
+                    << UCI::value(result)
+                    << sync_endl;
+
+      print_root_adjudication(rootPos, result,
+                              variantGameEnd ? "game_end"
+                              : inCheck      ? "checkmate"
+                                             : "stalemate");
   }
   else
   {
@@ -264,8 +289,22 @@ void MainThread::search() {
 
   bestPreviousScore = bestThread->rootMoves[0].score;
 
+  if (bestThread->rootMoves[0].pv[0] == MOVE_NONE)
+  {
+      Value variantResult;
+      bool variantGameEnd = rootPos.is_game_end(variantResult);
+      bool inCheck = rootPos.checkers();
+      Value result = variantGameEnd ? variantResult
+                    : inCheck       ? rootPos.checkmate_value()
+                                    : rootPos.stalemate_value();
+      print_root_adjudication(rootPos, result,
+                              variantGameEnd ? "game_end"
+                              : inCheck      ? "checkmate"
+                                             : "stalemate");
+  }
+
   // Send again PV info if we have a new best thread
-  if (bestThread != this)
+  if (bestThread != this && show_search_output())
       sync_cout << UCI::pv(bestThread->rootPos, bestThread->completedDepth, -VALUE_INFINITE, VALUE_INFINITE) << sync_endl;
 
   if (CurrentProtocol == XBOARD)
@@ -471,7 +510,8 @@ void Thread::search() {
                   && multiPV == 1
                   && (bestValue <= alpha || bestValue >= beta)
                   && Time.elapsed() > 3000)
-                  sync_cout << UCI::pv(rootPos, rootDepth, alpha, beta) << sync_endl;
+                  if (show_search_output())
+                      sync_cout << UCI::pv(rootPos, rootDepth, alpha, beta) << sync_endl;
 
               // In case of failing low/high increase aspiration window and
               // re-search, otherwise exit the loop.
@@ -502,7 +542,8 @@ void Thread::search() {
 
           if (    mainThread
               && (Threads.stop || pvIdx + 1 == multiPV || Time.elapsed() > 3000))
-              sync_cout << UCI::pv(rootPos, rootDepth, alpha, beta) << sync_endl;
+              if (show_search_output())
+                  sync_cout << UCI::pv(rootPos, rootDepth, alpha, beta) << sync_endl;
       }
 
       if (!Threads.stop)
@@ -1136,7 +1177,7 @@ moves_loop: // When in check, search starts from here
 
       ss->moveCount = ++moveCount;
 
-      if (rootNode && thisThread == Threads.main() && Time.elapsed() > 3000 && is_uci_dialect(CurrentProtocol))
+      if (rootNode && thisThread == Threads.main() && Time.elapsed() > 3000 && is_uci_dialect(CurrentProtocol) && show_search_output())
           sync_cout << "info depth " << depth
                     << " currmove " << UCI::move(pos, move)
                     << " currmovenumber " << moveCount + thisThread->pvIdx << sync_endl;
