@@ -1324,11 +1324,10 @@ namespace {
   template<Tracing T> template<Color Us>
   Score Evaluation<T>::space() const {
 
-    bool pawnsOnly = !(pos.pieces(Us) ^ pos.pieces(Us, PAWN));
+    bool pawnsOnly = !pos.non_pawn_material(Us);
 
     // Early exit if, for example, both queens or 6 minor pieces have been exchanged
-    /// yjf2002ghty: By default double step is used for pawns in enhancing opening evaluation, so I assume the piece type is PAWN. It can cause problems if the pawn is something else (e.g. Custom pawn piece)
-    if (pos.non_pawn_material() < SpaceThreshold && !pawnsOnly && pos.double_step_region(Us, PAWN))
+    if (pos.non_pawn_material() < SpaceThreshold && !pawnsOnly && pos.double_step_region(Us))
         return SCORE_ZERO;
 
     constexpr Color Them     = ~Us;

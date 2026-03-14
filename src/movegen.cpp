@@ -222,9 +222,9 @@ namespace {
   }
 
   template<Color Us, GenType Type>
-  ExtMove* generate_pawn_moves(const Position& pos, ExtMove* moveList, Bitboard target, Bitboard fromMask = AllSquares) {
+  ExtMove* generate_pawn_moves(const Position& pos, ExtMove* moveList, PieceType Pt, Bitboard target, Bitboard fromMask = AllSquares) {
 
-    if (!pos.pieces(Us, PAWN))
+    if (!pos.pieces(Us, Pt))
         return moveList;
 
     constexpr Color     Them     = ~Us;
@@ -232,20 +232,17 @@ namespace {
     constexpr Direction UpRight  = (Us == WHITE ? NORTH_EAST : SOUTH_WEST);
     constexpr Direction UpLeft   = (Us == WHITE ? NORTH_WEST : SOUTH_EAST);
 
-    /// yjf2002ghty: Since it's generate_pawn_moves, I assume the piece type is PAWN. It can cause problems if the pawn is something else (e.g. Custom pawn piece)
-    const Bitboard promotionZone = pos.promotion_zone(Us, PAWN);
+    const Bitboard promotionZone = pos.promotion_zone(Us, Pt);
     const Bitboard standardPromotionZone = pos.sittuyin_promotion() ? Bitboard(0) : promotionZone;
-    /// yjf2002ghty: Since it's generate_pawn_moves, I assume the piece type is PAWN. It can cause problems if the pawn is something else (e.g. Custom pawn piece)
-    const Bitboard doubleStepRegion = pos.double_step_region(Us, PAWN);
-    /// yjf2002ghty: Since it's generate_pawn_moves, I assume the piece type is PAWN. It can cause problems if the pawn is something else (e.g. Custom pawn piece)
-    const Bitboard tripleStepRegion = pos.triple_step_region(Us, PAWN);
+    const Bitboard doubleStepRegion = pos.double_step_region(Us, Pt);
+    const Bitboard tripleStepRegion = pos.triple_step_region(Us, Pt);
 
     const Bitboard frozen     = pos.freeze_squares();
-    const Bitboard pawns      = pos.pieces(Us, PAWN) & fromMask & ~frozen;
+    const Bitboard pawns      = pos.pieces(Us, Pt) & fromMask & ~frozen;
     const Bitboard neutral    = pos.dead_squares();
-    const Bitboard movable    = pos.board_bb(Us, PAWN) & ~pos.pieces();
+    const Bitboard movable    = pos.board_bb(Us, Pt) & ~pos.pieces();
     const Bitboard friendlyCapturable = pos.pieces(Us) & ~pos.pieces(Us, KING);
-    const Bitboard capturable = pos.board_bb(Us, PAWN)
+    const Bitboard capturable = pos.board_bb(Us, Pt)
                               & (pos.self_capture() ? (pos.pieces(Them) | friendlyCapturable | neutral)
                                                     :  (pos.pieces(Them) | neutral));
 
@@ -264,7 +261,7 @@ namespace {
     Bitboard brcp = brc & standardPromotionZone;
     Bitboard blcp = blc & standardPromotionZone;
 
-    Bitboard mandatoryPromotionZone = pos.mandatory_promotion_zone(Us, PAWN);
+    Bitboard mandatoryPromotionZone = pos.mandatory_promotion_zone(Us, Pt);
     if (pos.mandatory_pawn_promotion())
         mandatoryPromotionZone |= standardPromotionZone;
 
@@ -300,8 +297,9 @@ namespace {
         // Discovered check promotion has been already generated amongst the captures.
         Square ksq = pos.square<KING>(Them);
         Bitboard dcCandidatePawns = pos.blockers_for_king(Them) & ~file_bb(ksq);
-        b1 &= pawn_attacks_bb(Them, ksq) | shift<   Up>(dcCandidatePawns);
-        b2 &= pawn_attacks_bb(Them, ksq) | shift<Up+Up>(dcCandidatePawns);
+        const Bitboard ksqPawnAttacks = pos.attacks_from(Them, Pt, ksq);
+        b1 &= ksqPawnAttacks | shift<   Up>(dcCandidatePawns);
+        b2 &= ksqPawnAttacks | shift<Up+Up>(dcCandidatePawns);
     }
 
     // Single and double pawn pushes, no promotions
@@ -346,7 +344,7 @@ namespace {
     if (pos.sittuyin_promotion() && (Type == CAPTURES || Type == EVASIONS || Type == NON_EVASIONS))
     {
         // Pawns need to be in promotion zone if there is more than one pawn
-        Bitboard promotionPawns = pos.count<PAWN>(Us) > 1 ? pawns & promotionZone : pawns;
+        Bitboard promotionPawns = pos.count<Pt>(Us) > 1 ? pawns & promotionZone : pawns;
         while (promotionPawns)
         {
             Square from = pop_lsb(promotionPawns);
@@ -387,9 +385,9 @@ namespace {
 
             // An en passant capture cannot resolve a discovered check (unless there non-sliding riders)
             if (Type == EVASIONS && (target & (epSquare + Up)) && !pos.non_sliding_riders())
-                return moveList;
+                continue;
 
-            Bitboard b = pawns & pawn_attacks_bb(Them, epSquare);
+            Bitboard b = pawns & pos.attacks_from(Them, Pt, epSquare);
 
             // En passant square is already disabled for non-fairy variants if there is no attacker
             assert(b || !pos.fast_attacks());
@@ -640,13 +638,13 @@ namespace {
         if (restrictToForcedJumper)
         {
             if (forcedJumpPt == PAWN)
-                moveList = generate_pawn_moves<Us, Type>(pos, moveList, target, forcedFromMask);
+                moveList = generate_pawn_moves<Us, Type>(pos, moveList, PAWN, target, forcedFromMask);
             else if (forcedJumpPt != KING)
                 moveList = generate_moves<Us, Type>(pos, moveList, forcedJumpPt, target, captureTarget, forcedFromMask);
         }
         else
         {
-            moveList = generate_pawn_moves<Us, Type>(pos, moveList, target, forcedFromMask);
+            moveList = generate_pawn_moves<Us, Type>(pos, moveList, PAWN, target, forcedFromMask);
             for (PieceSet ps = pos.piece_types() & ~(piece_set(PAWN) | KING); ps;)
                 moveList = generate_moves<Us, Type>(pos, moveList, pop_lsb(ps), target, captureTarget, forcedFromMask);
         }
