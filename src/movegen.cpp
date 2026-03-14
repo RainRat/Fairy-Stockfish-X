@@ -518,11 +518,11 @@ namespace {
 
         // Shogi-style piece promotions
         while (b2)
-            *moveList++ = make<PIECE_PROMOTION>(from, pop_lsb(b2));
+            moveList = make_move_and_gating<PIECE_PROMOTION>(pos, moveList, Us, from, pop_lsb(b2));
 
         // Piece demotions
         while (b3)
-            *moveList++ = make<PIECE_DEMOTION>(from, pop_lsb(b3));
+            moveList = make_move_and_gating<PIECE_DEMOTION>(pos, moveList, Us, from, pop_lsb(b3));
 
         // Pawn-style promotions
         if ((Type == CAPTURES || Type == QUIETS || Type == EVASIONS || Type == NON_EVASIONS) && pawnPromotions)
