@@ -2212,17 +2212,17 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s) const {
           b = attacks_bb(c, pt, s, occupancy);
           break;
       }
-      return b & board_bb();
+      return b & board_bb(c, pt);
   }
 
   if (fast_attacks2() && (pt != KING || king_type() == KING))
-      return attacks_bb(c, pt, s, occupancy) & board_bb();
+      return attacks_bb(c, pt, s, occupancy) & board_bb(c, pt);
 
   PieceType movePt = pt == KING ? king_type() : pt;
   const PieceInfo* pi = pieceMap.get(movePt);
 
   if ((fast_attacks() || fast_attacks2()) && pi->riderAugmentMask == PieceInfo::AUGMENT_NONE)
-      return attacks_bb(c, pt, s, occupancy) & board_bb();
+      return attacks_bb(c, pt, s, occupancy) & board_bb(c, pt);
 
   if (pi->friendlyJump)
       occupancy &= ~pieces(c);
@@ -2320,13 +2320,13 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
       occupancy &= ~spellJumpRemoved;
 
   if ((fast_attacks() || fast_attacks2()) && (pt != KING || king_type() == KING))
-      return (moves_bb(c, pt, s, occupancy) | extraDestinations) & board_bb();
+      return (moves_bb(c, pt, s, occupancy) | extraDestinations) & board_bb(c, pt);
 
   PieceType movePt = pt == KING ? king_type() : pt;
   const PieceInfo* pi = pieceMap.get(movePt);
 
   if ((fast_attacks() || fast_attacks2()) && pi->riderAugmentMask == PieceInfo::AUGMENT_NONE)
-      return (moves_bb(c, pt, s, occupancy) | extraDestinations) & board_bb();
+      return (moves_bb(c, pt, s, occupancy) | extraDestinations) & board_bb(c, pt);
 
   if (pi->friendlyJump)
       occupancy &= ~pieces(c);

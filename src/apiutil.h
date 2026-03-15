@@ -995,6 +995,9 @@ inline Validation check_standard_castling(std::array<std::string, 2>& castlingIn
 
         for (CastlingRights castling: {KING_SIDE, QUEEN_SIDE})
         {
+            if (rookPositionsStart[c].size() < 2)
+                return NOK;
+
             CharSquare rookStartingSquare = castling == QUEEN_SIDE ? rookPositionsStart[c][0] : rookPositionsStart[c][1];
             char targetChar = castling == QUEEN_SIDE ? 'q' : 'k';
             size_t pcIdx;

@@ -241,7 +241,7 @@ namespace {
     const Bitboard tripleStepRegion = pos.triple_step_region(Us, PAWN);
 
     const Bitboard frozen     = pos.freeze_squares();
-    const Bitboard pawns      = pos.pieces(Us, PAWN) & fromMask & ~frozen;
+    const Bitboard pawns      = pos.pieces(Us, PAWN) & fromMask & ~frozen & pos.board_bb(Us, PAWN);
     const Bitboard neutral    = pos.dead_squares();
     const Bitboard movable    = pos.board_bb(Us, PAWN) & ~pos.pieces();
     const Bitboard friendlyCapturable = pos.pieces(Us) & ~pos.pieces(Us, KING);
@@ -403,7 +403,7 @@ namespace {
             moveList = make_move_and_gating<NORMAL>(pos, moveList, Us, to - UpLeft, to);
         }
 
-        for (Bitboard epSquares = pos.ep_squares() & ~(pos.pieces() | pos.dead_squares()); epSquares; )
+        for (Bitboard epSquares = pos.ep_squares() & ~(pos.pieces() | pos.dead_squares()) & pos.board_bb(Us, PAWN); epSquares; )
         {
             Square epSquare = pop_lsb(epSquares);
 
