@@ -2815,6 +2815,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   bool capturedDeadSquare = type_of(m) != DROP && from != to && bool(st->deadSquares & to);
   PieceType exchanged = exchange_piece(m);
   Square jumpCapsq = is_jump_capture(m) ? jump_capture_square(from, to) : SQ_NONE;
+  Square moverSq = rifleShot ? from : to;
   bool openingSelfRemoval = in_opening_self_removal_phase() && is_opening_self_removal_move(m);
   if (to == from)
   {
@@ -3365,7 +3366,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       && type_of(m) != PIECE_PROMOTION
       && !is_pass(m))
   {
-      Piece cur = piece_on(to);
+      Piece cur = piece_on(moverSq);
       if (cur != NO_PIECE && !(rex_exclusive_morph() && type_of(cur) == KING))
       {
           Piece morphed = make_piece(color_of(cur), type_of(captured));
@@ -3373,18 +3374,18 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           {
               st->didMorph = true;
               st->morphedFrom = cur;
-              st->morphSquare = to;
+              st->morphSquare = moverSq;
 
-              remove_piece(to);
-              put_piece(morphed, to);
+              remove_piece(moverSq);
+              put_piece(morphed, moverSq);
 
-              k ^= Zobrist::psq[cur][to] ^ Zobrist::psq[morphed][to];
+              k ^= Zobrist::psq[cur][moverSq] ^ Zobrist::psq[morphed][moverSq];
               st->materialKey ^= Zobrist::psq[cur][pieceCount[cur]]
                                ^ Zobrist::psq[morphed][pieceCount[morphed] - 1];
               if (type_of(cur) == PAWN)
-                  st->pawnKey ^= Zobrist::psq[cur][to];
+                  st->pawnKey ^= Zobrist::psq[cur][moverSq];
               if (type_of(morphed) == PAWN)
-                  st->pawnKey ^= Zobrist::psq[morphed][to];
+                  st->pawnKey ^= Zobrist::psq[morphed][moverSq];
               if (type_of(cur) != PAWN)
                   st->nonPawnMaterial[us] -= PieceValue[MG][cur];
               if (type_of(morphed) != PAWN)
@@ -3392,8 +3393,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
 
               if (Eval::useNNUE)
               {
-                  append_dirty(st, cur, to, SQ_NONE);
-                  append_dirty(st, morphed, SQ_NONE, to);
+                  append_dirty(st, cur, moverSq, SQ_NONE);
+                  append_dirty(st, morphed, SQ_NONE, moverSq);
               }
           }
       }
@@ -3519,7 +3520,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
            ( blast_on_move() && !captured) ) {
 
           blast_mask = (blast_on_capture() || blast_on_move()) ? blast_squares(to)
-              : (var->petrifyOnCaptureTypes & type_of(pc) ? square_bb(to) : Bitboard(0));
+              : (var->petrifyOnCaptureTypes & type_of(pc) ? square_bb(moverSq) : Bitboard(0));
           removal_mask |= blast_mask;
       };
 
@@ -3536,7 +3537,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
               //directions for surround-capture, yes, we'd have to separate them
               {
                   Direction mod_d = d * sign;
-                  Square s = to + mod_d;
+                  Square s = moverSq + mod_d;
                   if (!is_ok(s)) continue;
                   if (!(s&pieces(~us))) continue;
                   Square oppSquare = s + mod_d;
@@ -3567,8 +3568,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       if (surround_capture_intervene()) {
           for (const Direction& d : var->connectDirections)
           {
-              Square s1 = to + d;
-              Square s2 = to - d;
+              Square s1 = moverSq + d;
+              Square s2 = moverSq - d;
               if (!is_ok(s1) || !is_ok(s2))
                   continue;
               if ((s1 & pieces(~us)) && (s2 & pieces(~us)))
@@ -3655,6 +3656,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       {
           Square bsq = pop_lsb(removal_mask);
           Piece bpc = piece_on(bsq);
+          if (bpc == NO_PIECE) continue;
           Color bc = color_of(bpc);
 
           if (blast_promotion() && (blast_mask & bsq) && !(connect_mask & bsq)) {
@@ -3715,7 +3717,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
               }
           }
 
-          bool petrifiedCenter = bsq == to && (var->petrifyOnCaptureTypes & type_of(bpc));
+          bool petrifiedCenter = bsq == moverSq && (var->petrifyOnCaptureTypes & type_of(bpc));
           if (captures_to_hand() && !petrifiedCenter)
           {
               Piece pieceToHand = !capturedPromoted || drop_loop()
@@ -3821,10 +3823,10 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
                     || (var->capturerDiesOnCapture && !exemptFromCapturerDeath)
                     || diesOnSameTypeCapture;
   if (!capturedDeadSquare && captured != NO_PIECE && type_of(m) != DROP && diesOnCapture
-      && piece_on(to) != NO_PIECE)
+      && piece_on(moverSq) != NO_PIECE)
   {
       bool makeDeadSquare = bool(death_on_capture_types() & piece_set(movedType));
-      remove_destination_piece_no_capture_effects(to, makeDeadSquare);
+      remove_destination_piece_no_capture_effects(moverSq, makeDeadSquare);
 
       if (!allow_checks() && givesCheck && count<KING>(them))
           givesCheck = bool(attackers_to_king(square<KING>(them), us) & pieces(us));
@@ -3842,11 +3844,11 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           st->forcedJumpStep = st->previous->forcedJumpStep;
       }
       else if (jumpCapsq != SQ_NONE && type_of(m) != PROMOTION && type_of(m) != PIECE_PROMOTION
-            && piece_on(to) != NO_PIECE)
+            && piece_on(moverSq) != NO_PIECE)
       {
-          st->forcedJumpSquare = to;
+          st->forcedJumpSquare = moverSq;
           st->forcedJumpStep = forced_jump_same_direction() ? int(to) - int(from) : 0;
-          st->forcedJumpHasFollowup = compute_forced_jump_followup(to, st->forcedJumpStep);
+          st->forcedJumpHasFollowup = compute_forced_jump_followup(moverSq, st->forcedJumpStep);
       }
       else
       {
@@ -3996,8 +3998,9 @@ void Position::undo_move(Move m) {
   Color us = sideToMove;
   Square from = from_sq(m);
   Square to = to_sq(m);
-  Piece pc = piece_on(to);
   bool rifleShot = rifle_capture() && st->capturedPiece != NO_PIECE && type_of(m) != CASTLING;
+  Square moverSq = rifleShot ? from : to;
+  Piece pc = piece_on(moverSq);
   PieceType exchange = exchange_piece(m);
   bool wasOpeningSelfRemoval = opening_self_removal()
                             && gamePly <= 2
@@ -4046,7 +4049,7 @@ void Position::undo_move(Move m) {
                   board[bsq] = NO_PIECE;
               }
               put_piece(bpc, bsq, isPromoted, st->demotedBycatch & bsq ? unpromotedBpc : NO_PIECE);
-              bool petrifiedCenter = bsq == to && (var->petrifyOnCaptureTypes & type_of(bpc));
+              bool petrifiedCenter = bsq == moverSq && (var->petrifyOnCaptureTypes & type_of(bpc));
               if (!wasBlastPromoted && !petrifiedCenter && capture_type() == HAND) {
                   remove_from_hand(!drop_loop() && (st->promotedBycatch & bsq)
                                     ? make_piece(us, main_promotion_pawn_type(color_of(unpromotedBpc)))
@@ -4059,13 +4062,13 @@ void Position::undo_move(Move m) {
           }
       }
       // Reset piece since it exploded itself
-      pc = piece_on(to);
+      pc = piece_on(moverSq);
   }
 
-  if (st->didMorph && st->morphSquare == to)
+  if (st->didMorph && st->morphSquare == moverSq)
   {
-      remove_piece(to);
-      put_piece(st->morphedFrom, to);
+      remove_piece(moverSq);
+      put_piece(st->morphedFrom, moverSq);
       pc = st->morphedFrom;
   }
 
@@ -4106,7 +4109,7 @@ void Position::undo_move(Move m) {
   if (type_of(m) == PROMOTION)
   {
       assert((promotion_zone(st->promotionPawn) & to) || sittuyin_promotion());
-      Piece promotedPiece = piece_on(to);
+      Piece promotedPiece = piece_on(moverSq);
       if (promotedPiece == NO_PIECE)
           promotedPiece = make_piece(us, promotion_type(m));
       assert(type_of(promotedPiece) == promotion_type(m));
@@ -4117,32 +4120,32 @@ void Position::undo_move(Move m) {
           remove_from_prison(st->promotionPawn);
           add_to_prison(promotedPiece);
       }
-      if (piece_on(to) != NO_PIECE)
-          remove_piece(to);
+      if (piece_on(moverSq) != NO_PIECE)
+          remove_piece(moverSq);
       pc = st->promotionPawn;
-      put_piece(pc, to);
+      put_piece(pc, moverSq);
       if (st->consumedPromotionHandPiece != NO_PIECE)
           add_to_hand(st->consumedPromotionHandPiece);
   }
   else if (type_of(m) == PIECE_PROMOTION)
   {
-      // The promoted piece on 'to' may have been removed by blast/connect-N side effects.
+      // The promoted piece on 'moverSq' may have been removed by blast/connect-N side effects.
       // For undo, rely on the original mover cached at do_move() time.
       Piece unpromotedPiece = st->promotionPawn;
       assert(unpromotedPiece != NO_PIECE);
-      if (piece_on(to) != NO_PIECE)
-          remove_piece(to);
+      if (piece_on(moverSq) != NO_PIECE)
+          remove_piece(moverSq);
       pc = unpromotedPiece;
-      put_piece(pc, to);
+      put_piece(pc, moverSq);
       if (st->consumedPromotionHandPiece != NO_PIECE)
           add_to_hand(st->consumedPromotionHandPiece);
   }
   else if (type_of(m) == PIECE_DEMOTION)
   {
-      remove_piece(to);
+      remove_piece(moverSq);
       Piece unpromotedPc = pc;
       pc = make_piece(us, promoted_piece_type(type_of(pc)));
-      put_piece(pc, to, true, unpromotedPc);
+      put_piece(pc, moverSq, true, unpromotedPc);
   }
 
   if (type_of(m) == CASTLING)
@@ -4160,10 +4163,10 @@ void Position::undo_move(Move m) {
       {
           if (st->deadPiece && type_of(m) != PROMOTION && type_of(m) != PIECE_PROMOTION)
           {
-              if (st->deadSquares & to)
-                  st->deadSquares ^= to;
-              put_piece(st->deadPiece, to, st->deadPiecePromoted, st->deadUnpromotedPiece);
-              pc = piece_on(to);
+              if (st->deadSquares & moverSq)
+                  st->deadSquares ^= moverSq;
+              put_piece(st->deadPiece, moverSq, st->deadPiecePromoted, st->deadUnpromotedPiece);
+              pc = piece_on(moverSq);
           }
           if (!rifleShot)
               move_piece(to, from); // Put the piece back at the source square
