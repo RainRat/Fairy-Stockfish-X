@@ -36,12 +36,19 @@ namespace {
 constexpr const char* DELIM = " ";
 
 void initialize_stockfish() {
+  std::cerr << "initialize_stockfish: pieceMap.init()..." << std::endl;
   pieceMap.init();
+  std::cerr << "initialize_stockfish: variants.init()..." << std::endl;
   variants.init();
+  std::cerr << "initialize_stockfish: UCI::init(Options)..." << std::endl;
   UCI::init(Options);
+  std::cerr << "initialize_stockfish: Bitboards::init()..." << std::endl;
   Bitboards::init();
+  std::cerr << "initialize_stockfish: Position::init()..." << std::endl;
   Position::init();
+  std::cerr << "initialize_stockfish: Bitbases::init()..." << std::endl;
   Bitbases::init();
+  std::cerr << "initialize_stockfish: done." << std::endl;
 }
 
 std::once_flag stockfish_init_flag;

@@ -37,8 +37,6 @@ ThreadPool Threads; // Global object
 /// in idle_loop(). Note that 'searching' and 'exit' should be already set.
 
 Thread::Thread(size_t n) : idx(n), stdThread(&Thread::idle_loop, this) {
-
-  wait_for_search_finished();
 }
 
 
@@ -151,7 +149,9 @@ void ThreadPool::set(size_t requested) {
       clear();
 
       // Reallocate the hash with the new threadpool size
+      std::cerr << "Resizing TT..." << std::endl;
       TT.resize(size_t(Options["Hash"]));
+      std::cerr << "TT resized." << std::endl;
 
       // Init thread number dependent search params.
       Search::init();

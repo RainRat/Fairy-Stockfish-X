@@ -655,7 +655,11 @@ namespace {
         if (Pt <= QUEEN)
             mobility[Us] += mobility_bonus(Pt, mob);
         else
-            mobility[Us] += MaxMobility * (mob - 2) / (8 + mob);
+        {
+            const PieceInfo* pi = pieceMap.get(Pt);
+            int scaled_mob = mob * 100 / (pi->mobilityScaling ? pi->mobilityScaling : 100);
+            mobility[Us] += MaxMobility * (scaled_mob - 2) / (8 + scaled_mob);
+        }
 
         // Piece promotion bonus
         if (pos.promoted_piece_type(Pt) != NO_PIECE_TYPE)
