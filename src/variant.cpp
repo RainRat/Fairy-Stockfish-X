@@ -1400,6 +1400,35 @@ namespace {
         v->rexExclusiveMorph = true;
         return v;
     }
+    // Recycle Chess
+    // https://brainking.com/en/GameRules?tp=9
+    Variant* recycle_variant() {
+        Variant* v = crazyhouse_variant()->init();
+        v->selfCapture = true;
+        return v;
+    }
+    // Anti-Andernach Chess
+    // https://en.wikipedia.org/wiki/Andernach_chess
+    Variant* antiandernach_variant() {
+        Variant* v = chess_variant()->init();
+        v->changingColorTrigger = ColorChangeTrigger::ON_NON_CAPTURE;
+        v->changingColorPieceTypes = ~piece_set(KING);
+        return v;
+    }
+    // Andernach Chess
+    Variant* andernach_variant() {
+        Variant* v = chess_variant()->init();
+        v->changingColorTrigger = ColorChangeTrigger::ON_CAPTURE;
+        v->changingColorPieceTypes = ~piece_set(KING);
+        return v;
+    }
+    // Super-Andernach Chess
+    Variant* superandernach_variant() {
+        Variant* v = chess_variant()->init();
+        v->changingColorTrigger = ColorChangeTrigger::ALWAYS;
+        v->changingColorPieceTypes = ~piece_set(KING);
+        return v;
+    }
 #ifdef LARGEBOARDS
     // Musketeer Chess
     // https://musketeerchess.net
@@ -2102,6 +2131,10 @@ void VariantMap::init() {
     add("isolation7x7", isolation7x7_variant());
     add("snailtrail", snailtrail_variant());
     add("benedictmorph", benedictmorph_variant());
+    add("recycle", recycle_variant());
+    add("antiandernach", antiandernach_variant());
+    add("andernach", andernach_variant());
+    add("superandernach", superandernach_variant());
     add("fox-and-hounds", fox_and_hounds_variant());
 #ifdef ALLVARS
     add("duck", duck_variant());

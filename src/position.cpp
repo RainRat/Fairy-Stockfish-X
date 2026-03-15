@@ -1121,6 +1121,11 @@ void Position::set_state(StateInfo* si) const {
   si->deadPiece = NO_PIECE;
   si->deadUnpromotedPiece = NO_PIECE;
   si->deadPiecePromoted = false;
+  si->didColorChange = false;
+  si->colorChangedFrom = NO_PIECE;
+  si->colorChangeSquare = SQ_NONE;
+  si->colorChangedPromoted = false;
+  si->colorChangedUnpromoted = NO_PIECE;
   si->forcedJumpSquare = SQ_NONE;
   si->forcedJumpHasFollowup = false;
   si->forcedJumpStep = 0;
@@ -2809,6 +2814,11 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   st->didMorph = false;
   st->morphedFrom = NO_PIECE;
   st->morphSquare = SQ_NONE;
+  st->didColorChange = false;
+  st->colorChangedFrom = NO_PIECE;
+  st->colorChangeSquare = SQ_NONE;
+  st->colorChangedPromoted = false;
+  st->colorChangedUnpromoted = NO_PIECE;
   // Mandatory multimove pass plies should not advance the halfmove clock.
   const bool currentMultimovePass = is_pass(m) && multimove_pass(gamePly);
 
@@ -2876,6 +2886,21 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
                                     : (color_of(captured) == them
                                        || (self_capture() && color_of(captured) == us))));
   assert(type_of(captured) != KING || allow_checks());
+
+  auto trigger_matches = [](ColorChangeTrigger trigger, bool isCapture) {
+      switch (trigger)
+      {
+      case ColorChangeTrigger::NEVER:
+          return false;
+      case ColorChangeTrigger::ON_CAPTURE:
+          return isCapture;
+      case ColorChangeTrigger::ON_NON_CAPTURE:
+          return !isCapture;
+      case ColorChangeTrigger::ALWAYS:
+          return true;
+      }
+      return false;
+  };
 
   if (type_of(m) == CASTLING)
   {
@@ -3856,6 +3881,42 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           givesCheck = bool(attackers_to_king(square<KING>(them), us) & pieces(us));
   }
 
+  if (trigger_matches(var->changingColorTrigger, captured != NO_PIECE)
+      && !is_pass(m)
+      && type_of(m) != DROP
+      && piece_on(moverSq) != NO_PIECE
+      && color_of(piece_on(moverSq)) == us
+      && (var->changingColorPieceTypes & type_of(piece_on(moverSq))))
+  {
+      Piece cur = piece_on(moverSq);
+      Piece changed = make_piece(them, type_of(cur));
+      st->didColorChange = true;
+      st->colorChangedFrom = cur;
+      st->colorChangeSquare = moverSq;
+      st->colorChangedPromoted = is_promoted(moverSq);
+      st->colorChangedUnpromoted = st->colorChangedPromoted ? unpromoted_piece_on(moverSq) : NO_PIECE;
+
+      remove_piece(moverSq);
+      put_piece(changed, moverSq, st->colorChangedPromoted, st->colorChangedUnpromoted);
+
+      k ^= Zobrist::psq[cur][moverSq] ^ Zobrist::psq[changed][moverSq];
+      st->materialKey ^= Zobrist::psq[cur][pieceCount[cur]]
+                       ^ Zobrist::psq[changed][pieceCount[changed] - 1];
+      if (type_of(cur) == PAWN)
+          st->pawnKey ^= Zobrist::psq[cur][moverSq] ^ Zobrist::psq[changed][moverSq];
+      else
+      {
+          st->nonPawnMaterial[us] -= PieceValue[MG][cur];
+          st->nonPawnMaterial[them] += PieceValue[MG][changed];
+      }
+
+      if (Eval::useNNUE)
+      {
+          append_dirty(st, cur, moverSq, SQ_NONE);
+          append_dirty(st, changed, SQ_NONE, moverSq);
+      }
+  }
+
   if (forced_jump_continuation())
   {
       if (is_pass(m))
@@ -3868,7 +3929,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           st->forcedJumpStep = st->previous->forcedJumpStep;
       }
       else if (jumpCapsq != SQ_NONE && type_of(m) != PROMOTION && type_of(m) != PIECE_PROMOTION
-            && piece_on(moverSq) != NO_PIECE)
+            && piece_on(moverSq) != NO_PIECE
+            && color_of(piece_on(moverSq)) == us)
       {
           st->forcedJumpSquare = moverSq;
           st->forcedJumpStep = forced_jump_same_direction() ? int(to) - int(from) : 0;
@@ -3942,6 +4004,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   // Update the key with the final value
   st->key = k;
   st->boardKey = st->key ^ reserve_key();
+  if (var->changingColorTrigger != ColorChangeTrigger::NEVER && !allow_checks() && count<KING>(them))
+      givesCheck = bool(attackers_to_king(square<KING>(them), us) & pieces(us));
   // Calculate checkers bitboard (if move gives check)
   st->checkersBB = !allow_checks() && givesCheck
                  ? attackers_to_king(square<KING>(them), us) & pieces(us)
@@ -4094,6 +4158,13 @@ void Position::undo_move(Move m) {
       remove_piece(moverSq);
       put_piece(st->morphedFrom, moverSq);
       pc = st->morphedFrom;
+  }
+
+  if (st->didColorChange && st->colorChangeSquare == moverSq)
+  {
+      remove_piece(moverSq);
+      put_piece(st->colorChangedFrom, moverSq, st->colorChangedPromoted, st->colorChangedUnpromoted);
+      pc = st->colorChangedFrom;
   }
 
   // Remove gated piece or restore potion

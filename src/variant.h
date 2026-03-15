@@ -38,6 +38,13 @@ namespace Stockfish {
 
 constexpr int START_MULTIMOVES = 128;
 
+enum class ColorChangeTrigger {
+  NEVER,
+  ON_CAPTURE,
+  ON_NON_CAPTURE,
+  ALWAYS
+};
+
 struct Variant {
   std::string variantTemplate = "fairy";
   std::string pieceToCharTable = "-";
@@ -77,6 +84,8 @@ struct Variant {
   bool blastOnMove = false;
   bool captureMorph = false;
   bool rexExclusiveMorph = false;
+  ColorChangeTrigger changingColorTrigger = ColorChangeTrigger::NEVER;
+  PieceSet changingColorPieceTypes = NO_PIECE_SET;
   bool blastPromotion = false;
   bool blastDiagonals = true;
   bool blastCenter = true;

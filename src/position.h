@@ -111,6 +111,11 @@ struct StateInfo {
   bool didMorph;
   Piece morphedFrom;
   Square morphSquare;
+  bool didColorChange;
+  Piece colorChangedFrom;
+  Square colorChangeSquare;
+  bool colorChangedPromoted;
+  Piece colorChangedUnpromoted;
   bool nnueRefreshNeeded;
 
   // Used by NNUE
