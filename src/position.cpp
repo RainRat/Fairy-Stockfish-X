@@ -2260,6 +2260,22 @@ bool Position::legal(Move m) const {
   Bitboard occupied = rifleShot ? (pieces() ^ square_bb(shotSq))
                                 : ((type_of(m) != DROP ? pieces() ^ from : pieces()) | to);
 
+  Bitboard removedByEffects = 0;
+  if (!is_pass(m))
+  {
+      if (((capture(m) || rifleShot) && blast_on_capture()) || (blast_on_move() && !capture(m)))
+      {
+          Square blastCenter = (capture(m) || rifleShot) ? shotSq : effectiveTo;
+          Bitboard blastRelevant = occupied & ~blast_immune_bb();
+          removedByEffects |= blast_pattern(blastCenter) & blastRelevant;
+          if (blast_center())
+              removedByEffects |= square_bb(blastCenter) & blastRelevant;
+      }
+
+      if ((capture(m) || rifleShot) && (var->petrifyOnCaptureTypes & movePt))
+          removedByEffects |= square_bb(effectiveTo);
+  }
+
   // Gated kings and pseudo-royals must not be introduced onto attacked squares.
   // If the move captures an attacker on its way, ignore that disappearing attack.
   if (is_gating(m) && gating_type(m) != NO_PIECE_TYPE)
@@ -2317,6 +2333,14 @@ bool Position::legal(Move m) const {
           if (attackers_to_king(s, pathOccupied, ~us) & ~removedAttackers)
               return false;
       }
+  }
+
+  if (count<KING>(us))
+  {
+      Square kingSquareAfterMove = type_of(moved_piece(m)) == KING ? (rifleShot ? from : to)
+                                                                   : square<KING>(us);
+      if (removedByEffects & square_bb(kingSquareAfterMove))
+          return false;
   }
 
   // If the moving piece is a king, check whether the destination square is
