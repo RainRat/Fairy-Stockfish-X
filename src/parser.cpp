@@ -1364,6 +1364,13 @@ void VariantParser<DoCheck>::check_consistency(Variant* v) {
                 std::cerr << piece_name(v->kingType) << " is not supported as kingType." << std::endl;
         }
     }
+    if (v->antiRoyalTypes)
+    {
+        if (v->removeConnectN)
+            std::cerr << "Can not use anti-royal pieces with removeConnectN." << std::endl;
+        if (v->wallingRule==DUCK)
+            std::cerr << "Can not use anti-royal pieces with wallingRule = duck." << std::endl;
+    }
     // Options incompatible with royal kings OR pseudo-royal kings. Possible in theory though:
     // 1. In blast variants, moving a (pseudo-)royal blastImmuneType into another piece is legal.
     // 2. In blast variants, capturing a piece next to a (pseudo-)royal blastImmuneType is legal.
