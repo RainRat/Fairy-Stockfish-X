@@ -1869,7 +1869,7 @@ bool Position::legal(Move m) const {
       return false;
 
   bool rifleShot = rifle_capture() && capture(m) && type_of(m) != CASTLING;
-  Square shotSq = type_of(m) == EN_PASSANT ? capture_square(to) : to;
+  Square shotSq = capture(m) ? capture_square(m) : to;
   Bitboard removedAttackers = rifleShot ? square_bb(shotSq) : Bitboard(0);
   Square effectiveTo = rifleShot ? from : to;
 
@@ -2263,7 +2263,7 @@ bool Position::legal(Move m) const {
   }
 
   Bitboard occupied = rifleShot ? (pieces() ^ square_bb(shotSq))
-                                : ((type_of(m) != DROP ? pieces() ^ from : pieces()) | to);
+                                : (((type_of(m) != DROP ? pieces() ^ from : pieces()) ^ square_bb(shotSq)) | to);
 
   Bitboard removedByEffects = 0;
   if (!is_pass(m))
@@ -2290,17 +2290,10 @@ bool Position::legal(Move m) const {
       {
           Square gate = gating_square(m);
           Bitboard occ = occupied | gate;
-          if (type_of(m) == EN_PASSANT)
-              occ ^= capture_square(to);
 
           Bitboard attackers = gateType == KING ? attackers_to_king(gate, occ, ~us)
                                                 : attackers_to(gate, occ, ~us);
           attackers &= ~removedAttackers;
-
-          if (capture(m) && piece_on(to) != NO_PIECE)
-              attackers &= ~square_bb(to);
-          if (type_of(m) == EN_PASSANT)
-              attackers &= ~square_bb(capture_square(to));
 
           if (attackers)
               return false;
@@ -2500,9 +2493,10 @@ bool Position::pseudo_legal(const Move m) const {
   if (walling(us) && (!wall_or_move() || (from == to)))
   {
       Bitboard wallsquares = st->wallSquares;
+      Square capSq = capture(m) ? capture_square(m) : to;
 
       // Illegal wall square placement
-      if (!((board_bb() & ~((pieces() ^ from) | to)) & gating_square(m)))
+      if (!((board_bb() & ~(((pieces() ^ from) ^ capSq) | to)) & gating_square(m)))
           return false;
       if (!(walling_region(us) & gating_square(m)) || //putting a wall on disallowed square
           wallsquares & gating_square(m)) //or square already with a wall
@@ -2658,7 +2652,7 @@ bool Position::gives_check(Move m) const {
       return false;
 
   bool rifleShot = rifle_capture() && capture(m) && type_of(m) != CASTLING;
-  Square shotSq = type_of(m) == EN_PASSANT ? capture_square(to) : to;
+  Square shotSq = capture(m) ? capture_square(m) : to;
   Square attackFrom = rifleShot ? from : to;
 
   // No check possible without king
@@ -2666,7 +2660,7 @@ bool Position::gives_check(Move m) const {
       return false;
 
   Bitboard occupied = rifleShot ? (pieces() ^ square_bb(shotSq))
-                                : ((type_of(m) != DROP ? pieces() ^ from : pieces()) | to);
+                                : (((type_of(m) != DROP ? pieces() ^ from : pieces()) ^ square_bb(shotSq)) | to);
   Bitboard janggiCannons = pieces(JANGGI_CANNON);
   if (type_of(moved_piece(m)) == JANGGI_CANNON)
       janggiCannons = rifleShot ? (janggiCannons & ~square_bb(shotSq))
@@ -2856,11 +2850,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       assert((type_of(m) == PROMOTION && sittuyin_promotion()) || is_pass(m) || openingSelfRemoval);
       captured = NO_PIECE;
   }
-  Square capturedSq = SQ_NONE;
-  if (captured)
-      capturedSq = type_of(m) == EN_PASSANT ? capture_square(to)
-                 : jumpCapsq != SQ_NONE      ? jumpCapsq
-                                             : to;
+  Square capturedSq = captured ? capture_square(m) : SQ_NONE;
   st->capturedpromoted = captured ? is_promoted(capturedSq) : false;
   st->unpromotedCapturedPiece = captured ? unpromoted_piece_on(capturedSq) : NO_PIECE;
   st->captureSquare = capturedSq;
@@ -3568,7 +3558,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       if ( ( captured && (blast_on_capture() || var->petrifyOnCaptureTypes) ) ||
            ( blast_on_move() && !captured) ) {
 
-          blast_mask = (blast_on_capture() || blast_on_move()) ? blast_squares(to)
+          blast_mask = (blast_on_capture() || blast_on_move()) ? blast_squares(captured ? st->captureSquare : to)
               : (var->petrifyOnCaptureTypes & type_of(pc) ? square_bb(moverSq) : Bitboard(0));
           removal_mask |= blast_mask;
       };
@@ -4494,7 +4484,7 @@ Value Position::blast_see(Move m) const {
   Square to = to_sq(m);
   Color us = color_of(moved_piece(m));
   Bitboard fromto = type_of(m) == DROP ? square_bb(to) : from | to;
-  Bitboard blast = blast_squares(to);
+  Bitboard blast = blast_squares(capture(m) ? capture_square(m) : to);
 
   // If the explosion would capture an opponent royal or pseudo-royal piece,
   // treat the move as delivering immediate mate. This prevents the static
