@@ -2292,17 +2292,10 @@ bool Position::legal(Move m) const {
       {
           Square gate = gating_square(m);
           Bitboard occ = occupied | gate;
-          if (type_of(m) == EN_PASSANT)
-              occ ^= capture_square(to);
 
           Bitboard attackers = gateType == KING ? attackers_to_king(gate, occ, ~us)
                                                 : attackers_to(gate, occ, ~us);
           attackers &= ~removedAttackers;
-
-          if (capture(m) && piece_on(to) != NO_PIECE)
-              attackers &= ~square_bb(to);
-          if (type_of(m) == EN_PASSANT)
-              attackers &= ~square_bb(capture_square(to));
 
           if (attackers)
               return false;
@@ -2502,9 +2495,9 @@ bool Position::pseudo_legal(const Move m) const {
   if (walling(us) && (!wall_or_move() || (from == to)))
   {
       Bitboard wallsquares = st->wallSquares;
+      Square capSq = capture(m) ? capture_square(m) : to;
 
       // Illegal wall square placement
-      Square capSq = capture(m) ? capture_square(m) : to;
       if (!((board_bb() & ~(((pieces() ^ from) ^ capSq) | to)) & gating_square(m)))
           return false;
       if (!(walling_region(us) & gating_square(m)) || //putting a wall on disallowed square
