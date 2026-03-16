@@ -74,8 +74,10 @@ namespace {
             Square rto = kto - (to > from ? EAST : WEST);
             b ^= square_bb(to) ^ kto ^ rto;
         }
-        if (T == EN_PASSANT)
-            b ^= pos.capture_square(to);
+        Square capsq = T == EN_PASSANT ? pos.capture_square(to)
+                     : pos.jump_capture_square(from, to);
+        if (capsq != SQ_NONE && capsq != to)
+            b ^= capsq;
 
         // Duck is by far the hottest walling mode: avoid extra rule checks.
         if (pos.walling_rule() == DUCK)

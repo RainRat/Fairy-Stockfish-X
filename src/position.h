@@ -415,6 +415,7 @@ public:
   bool capture_or_promotion(Move m) const;
   bool is_jump_capture(Move m) const;
   Square capture_square(Square to) const;
+  Square capture_square(Move m) const;
   Square jump_capture_square(Square from, Square to) const;
   bool gives_check(Move m) const;
   Piece moved_piece(Move m) const;
@@ -2539,6 +2540,13 @@ inline Square Position::capture_square(Square to) const {
   }
 }
 
+inline Square Position::capture_square(Move m) const {
+  Square to = to_sq(m);
+  return type_of(m) == EN_PASSANT ? capture_square(to)
+       : is_jump_capture(m)      ? jump_capture_square(from_sq(m), to)
+                                 : to;
+}
+
 inline bool Position::virtual_drop(Move m) const {
   assert(is_ok(m));
   return type_of(m) == DROP && !can_drop(side_to_move(), in_hand_piece_type(m)) && exchange_piece(m) == NO_PIECE_TYPE;
@@ -2563,10 +2571,7 @@ inline Bitboard Position::fog_area() const {
 }
 
 inline Piece Position::captured_piece(Move m) const {
-  Square to = to_sq(m);
-  return piece_on(type_of(m) == EN_PASSANT ? capture_square(to)
-                  : is_jump_capture(m) ? jump_capture_square(from_sq(m), to)
-                                       : to);
+  return piece_on(capture_square(m));
 }
 
 inline const std::string Position::piece_to_partner() const {
