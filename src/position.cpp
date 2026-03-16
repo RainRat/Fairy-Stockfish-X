@@ -2029,6 +2029,7 @@ bool Position::legal(Move m) const {
   {
       const bool blastOnCapture = blast_on_capture();
       Square kto = rifleShot ? from : to;
+      Square blastCenter = (type_of(m) == EN_PASSANT || rifleShot) ? shotSq : kto;
       Bitboard occupied = rifleShot ? pieces() : (type_of(m) != DROP ? pieces() ^ from : pieces());
       Bitboard blastImmune = blastOnCapture ? blast_immune_bb() : Bitboard(0);
       if (walling_rule() == DUCK)
@@ -2060,7 +2061,7 @@ bool Position::legal(Move m) const {
       else if (rifleShot)
           occupied &= ~square_bb(shotSq);
       if (capture(m) && blastOnCapture)
-          occupied &= ~blast_squares(rifleShot ? shotSq : kto);
+          occupied &= ~blast_squares(blastCenter);
       // Petrifying a pseudo-royal piece is illegal
       if (capture(m) && (var->petrifyOnCaptureTypes & type_of(moved_piece(m))) && (st->pseudoRoyals & from))
           return false;
@@ -2124,6 +2125,7 @@ bool Position::legal(Move m) const {
   {
       const bool blastOnCapture = blast_on_capture();
       Square kto = rifleShot ? from : to;
+      Square blastCenter = (type_of(m) == EN_PASSANT || rifleShot) ? shotSq : kto;
       Square rfrom = SQ_NONE, rto = SQ_NONE;
       Bitboard occupied = rifleShot ? pieces() : (type_of(m) != DROP ? pieces() ^ from : pieces());
       Bitboard blastImmune = blastOnCapture ? blast_immune_bb() : Bitboard(0);
@@ -2143,7 +2145,7 @@ bool Position::legal(Move m) const {
       if (type_of(m) == EN_PASSANT)
           occupied &= ~square_bb(capture_square(to));
       if (capture(m) && blastOnCapture)
-          occupied &= ~blast_squares(rifleShot ? shotSq : kto);
+          occupied &= ~blast_squares(blastCenter);
 
       Bitboard antiRoyals = 0;
       for (PieceSet ps = anti_royal_types(); ps; )
