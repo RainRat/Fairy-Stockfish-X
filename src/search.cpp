@@ -74,7 +74,7 @@ namespace {
   }
 
   // Reductions lookup table, initialized at startup
-  int Reductions[MAX_MOVES]; // [depth or moveNumber]
+  int Reductions[MOVEGEN_OVERFLOW_CAPACITY]; // [depth or moveNumber]
 
   Depth reduction(bool i, Depth d, int mn) {
     int r = Reductions[d] * Reductions[mn];
@@ -179,7 +179,7 @@ namespace {
 
 void Search::init() {
 
-  for (int i = 1; i < MAX_MOVES; ++i)
+  for (int i = 1; i < MOVEGEN_OVERFLOW_CAPACITY; ++i)
       Reductions[i] = int(21.9 * std::log(i));
 }
 

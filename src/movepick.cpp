@@ -121,7 +121,7 @@ MovePicker::MovePicker(const Position& p, Move ttm, Depth d, const ButterflyHist
 
   assert(d > 0);
 #ifdef USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
-  baseMoveList = std::make_unique<ExtMove[]>(MAX_MOVES);
+  baseMoveList = std::make_unique<ExtMove[]>(MOVE_PICK_OVERFLOW_CAPACITY);
   moveList = baseMoveList.get();
 #else
   moveList = moves;
@@ -143,7 +143,7 @@ MovePicker::MovePicker(const Position& p, Move ttm, Depth d, const ButterflyHist
 
   assert(d <= 0);
 #ifdef USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
-  baseMoveList = std::make_unique<ExtMove[]>(MAX_MOVES);
+  baseMoveList = std::make_unique<ExtMove[]>(MOVE_PICK_OVERFLOW_CAPACITY);
   moveList = baseMoveList.get();
 #else
   moveList = moves;
@@ -167,7 +167,7 @@ MovePicker::MovePicker(const Position& p, Move ttm, Value th, const GateHistory*
 
   assert(!pos.checkers());
 #ifdef USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
-  baseMoveList = std::make_unique<ExtMove[]>(MAX_MOVES);
+  baseMoveList = std::make_unique<ExtMove[]>(MOVE_PICK_OVERFLOW_CAPACITY);
   moveList = baseMoveList.get();
 #else
   moveList = moves;

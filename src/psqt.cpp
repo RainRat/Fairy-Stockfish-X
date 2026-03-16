@@ -233,14 +233,26 @@ void init(const Variant* v) {
       bool isPawn = !isSlider && pi->steps[0][MODALITY_QUIET].size() && !std::any_of(pi->steps[0][MODALITY_QUIET].begin(), pi->steps[0][MODALITY_QUIET].end(), [](const std::pair<const Direction, int>& d) { return d.first < SOUTH / 2; });
       bool isSlowLeaper = !isSlider && !std::any_of(pi->steps[0][MODALITY_QUIET].begin(), pi->steps[0][MODALITY_QUIET].end(), [](const std::pair<const Direction, int>& d) { return dist(d.first) > 1; });
 
-      // Scale slider piece values with board size
+      // Scale slider piece values with board size and range
       if (isSlider)
       {
           constexpr int lc = 5;
           constexpr int rm = 5;
           constexpr int r0 = rm + RANK_8;
           int r1 = rm + (v->maxRank + v->maxFile - 2 * (v->captureType != MOVE_OUT)) / 2;
+
           int leaper = pi->steps[0][MODALITY_QUIET].size() + pi->steps[0][MODALITY_CAPTURE].size();
+          int currentFraction = slider_fraction(pi->slider[0][MODALITY_QUIET]) + slider_fraction(pi->slider[0][MODALITY_CAPTURE]);
+          int standardFraction = (pi->slider[0][MODALITY_QUIET].size() + pi->slider[0][MODALITY_CAPTURE].size()) * 100;
+
+          // Scale base value by range factor
+          if (standardFraction > 0 && currentFraction < standardFraction)
+          {
+              // Using a conservative scaling factor to avoid underestimating range-limited pieces
+              int rangeFactor = (200 + currentFraction) * 100 / (200 + standardFraction);
+              score = make_score(mg_value(score) * rangeFactor / 100, eg_value(score) * rangeFactor / 100);
+          }
+
           int slider = pi->slider[0][MODALITY_QUIET].size() + pi->slider[0][MODALITY_CAPTURE].size() + pi->hopper[0][MODALITY_QUIET].size() + pi->hopper[0][MODALITY_CAPTURE].size();
           score = make_score(mg_value(score) * (lc * leaper + r1 * slider) / (lc * leaper + r0 * slider),
                              eg_value(score) * (lc * leaper + r1 * slider) / (lc * leaper + r0 * slider));

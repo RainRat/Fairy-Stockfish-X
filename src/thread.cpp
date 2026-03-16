@@ -37,8 +37,6 @@ ThreadPool Threads; // Global object
 /// in idle_loop(). Note that 'searching' and 'exit' should be already set.
 
 Thread::Thread(size_t n) : idx(n), stdThread(&Thread::idle_loop, this) {
-
-  wait_for_search_finished();
 }
 
 
