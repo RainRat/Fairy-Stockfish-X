@@ -1261,9 +1261,36 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
 }
 
 template <bool DoCheck>
-void VariantParser<DoCheck>::check_consistency(Variant* v) {
+bool VariantParser<DoCheck>::check_consistency(Variant* v) {
+    // Check for limitations that would cause undefined behavior or crashes
+    if ((v->pieceDrops || v->freeDrops) && v->wallingRule != NO_WALLING)
+    {
+        std::cerr << "pieceDrops and any walling are incompatible." << std::endl;
+        return false;
+    }
+    if (v->wallingRule != NO_WALLING && v->seirawanGating)
+    {
+        std::cerr << "wallingRule and seirawanGating are incompatible." << std::endl;
+        return false;
+    }
+    if (v->wallingRule != NO_WALLING && v->potions)
+    {
+        std::cerr << "wallingRule and potions are incompatible." << std::endl;
+        return false;
+    }
+    if (v->wallingRule == DUCK && v->petrifyOnCaptureTypes)
+    {
+        std::cerr << "wallingRule=duck and petrifyOnCaptureTypes are incompatible." << std::endl;
+        return false;
+    }
+    if ((v->pieceTypes & KING) && v->wallingRule == DUCK)
+    {
+        std::cerr << "Can not use kings with wallingRule = duck." << std::endl;
+        return false;
+    }
+
     if (!DoCheck)
-        return;
+        return true;
 
     // pieces
     for (PieceSet ps = v->pieceTypes; ps;)
@@ -1329,16 +1356,6 @@ void VariantParser<DoCheck>::check_consistency(Variant* v) {
     if ((v->connect3D || v->connect4D) && v->connectN != 3)
         std::cerr << "connect3D/connect4D currently require connectN = 3." << std::endl;
 
-    // Check for limitations
-    if ((v->pieceDrops || v->freeDrops) && v->wallingRule != NO_WALLING)
-        std::cerr << "pieceDrops and any walling are incompatible." << std::endl;
-    if (v->wallingRule != NO_WALLING && v->seirawanGating)
-        std::cerr << "wallingRule and seirawanGating are incompatible." << std::endl;
-    if (v->wallingRule != NO_WALLING && v->potions)
-        std::cerr << "wallingRule and potions are incompatible." << std::endl;
-    if (v->wallingRule == DUCK && v->petrifyOnCaptureTypes)
-        std::cerr << "wallingRule=duck and petrifyOnCaptureTypes are incompatible." << std::endl;
-
     // Options incompatible with royal kings
     if (v->pieceTypes & KING)
     {
@@ -1348,8 +1365,6 @@ void VariantParser<DoCheck>::check_consistency(Variant* v) {
             std::cerr << "Can not use kings with flipEnclosedPieces." << std::endl;
         if (v->removeConnectN)
             std::cerr << "Can not use kings with removeConnectN." << std::endl;
-        if (v->wallingRule==DUCK)
-            std::cerr << "Can not use kings with wallingRule = duck." << std::endl;
         // We can not fully check support for custom king movements at this point,
         // since custom pieces are only initialized on loading of the variant.
         // We will assume this is valid, but it might cause problems later if it's not.
@@ -1376,7 +1391,12 @@ void VariantParser<DoCheck>::check_consistency(Variant* v) {
             std::cerr << "Can not use kings, pseudo-royal, or anti-royal with mutuallyImmuneTypes." << std::endl;
     }
     if (v->flagPieceSafe && v->blastOnCapture)
+    {
         std::cerr << "Can not use flagPieceSafe with blastOnCapture (flagPieceSafe uses simple assessment that does not see blast)." << std::endl;
+        return false;
+    }
+
+    return true;
 }
 
 template <bool DoCheck>
@@ -1436,7 +1456,8 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
         !parse_official_options(v))
         return nullptr;
 
-    check_consistency(v);
+    if (!check_consistency(v))
+        return nullptr;
 
     return v;
 }
