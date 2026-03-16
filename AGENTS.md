@@ -30,6 +30,7 @@
 ## 4) Build & run (from `src/`)
 
 * Standard build: `make -j build ARCH=x86-64-modern`
+* Windows cross-build (MinGW): `make -j build COMP=mingw`
 * Large boards (>8×8, up to 10×12): `make -j build ARCH=x86-64-modern largeboards=yes`
 * Very large boards / flattened ND experiments beyond the large-board matrix: `make -j build ARCH=x86-64-modern verylargeboards=yes`
 * Heavy branching (e.g., Duck, Amazons): add `all=yes`
