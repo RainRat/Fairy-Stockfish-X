@@ -190,6 +190,14 @@ namespace {
         return value == "arrow" || value == "duck" || value == "edge" || value =="past" || value == "static" || value == "none";
     }
 
+    template <> bool set(const std::string& value, ColorChangeTrigger& target) {
+        target =  value == "capture"      ? ColorChangeTrigger::ON_CAPTURE
+                : value == "non-capture"  ? ColorChangeTrigger::ON_NON_CAPTURE
+                : value == "always"       ? ColorChangeTrigger::ALWAYS
+                : ColorChangeTrigger::NEVER;
+        return value == "capture" || value == "non-capture" || value == "always" || value == "never" || value == "none";
+    }
+
     template <> bool set(const std::string& value, PointsRule& target) {
         target =  value == "us" ? POINTS_US
                 : value == "them" ? POINTS_THEM
@@ -508,6 +516,7 @@ template <bool Current, class T> bool VariantParser<DoCheck>::parse_attribute(co
                                   : std::is_same<T, Bitboard>() ? "Bitboard"
                                   : std::is_same<T, PieceTypeBitboardGroup>() ? "PieceTypeBitboardGroup"
                                   : std::is_same<T, CastlingRights>() ? "CastlingRights"
+                                  : std::is_same<T, ColorChangeTrigger>() ? "ColorChangeTrigger"
                                   : std::is_same<T, WallingRule>() ? "WallingRule"
                                   : std::is_same<T, std::vector<int>>() ? "vector<int>"
                                   : typeid(T).name();
@@ -1006,6 +1015,8 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("mustCaptureWhite", v->mustCaptureByColor[WHITE]);
     parse_attribute("mustCaptureBlack", v->mustCaptureByColor[BLACK]);
     parse_attribute("rifleCapture", v->rifleCapture);
+    parse_attribute("changingColorTrigger", v->changingColorTrigger);
+    parse_attribute("changingColorPieceTypes", v->changingColorPieceTypes, v->pieceToChar);
     parse_attribute("selfCapture", v->selfCapture);
     parse_attribute("capturerDiesOnCapture", v->capturerDiesOnCapture);
     parse_attribute("capturerDiesOnSameTypeCapture", v->capturerDiesOnSameTypeCapture);

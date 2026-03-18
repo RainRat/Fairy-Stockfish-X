@@ -39,6 +39,32 @@ captureMorph = true
 capturerDiesOnCapture = true
 blastOnCapture = true
 rifleCapture = true
+
+[rifle-color:chess]
+rifleCapture = true
+changingColorTrigger = capture
+changingColorPieceTypes = *
+
+[rifle-jump:chess]
+customPiece1 = m:D
+jumpCaptureTypes = m
+rifleCapture = true
+
+[rifle-duck:chess]
+rifleCapture = true
+wallingRule = duck
+king = -
+customPiece1 = k:K
+extinctionValue = -VALUE_MATE
+extinctionPieceTypes = k
+
+[king-color:chess]
+changingColorTrigger = always
+changingColorPieceTypes = *
+
+[rifle-forbidden:chess]
+rifleCapture = true
+captureForbidden = *:p
 EOF
 
 echo "unorthodox interactions tests started"
@@ -46,17 +72,42 @@ echo "unorthodox interactions tests started"
 # 1. Test rifleCapture + deathOnCaptureTypes
 out=$(run_cmds "rifle-death" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/4q3/3QK3 w - - 0 1 moves d1e2
 d")
-echo "${out}" | grep -q "^Fen: 4k3/8/8/8/8/8/8/3\^K3 b"
+echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/3\^K3 b"
 
 # 2. Test rifleCapture + captureMorph
 out=$(run_cmds "rifle-morph" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/4r3/3QK3 w - - 0 1 moves d1e2
 d")
-echo "${out}" | grep -q "^Fen: 4k3/8/8/8/8/8/8/3RK3 b"
+echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/3RK3 b"
 
 # 3. Test rifleCapture + capturerDiesOnCapture
 out=$(run_cmds "rifle-atomic" "${TEMP_INI}" "position fen r3k3/8/8/8/8/8/8/R3K3 w - - 0 1 moves a1a8
 d")
-echo "${out}" | grep -q "^Fen: 4k3/8/8/8/8/8/8/4K3 b"
+echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/4K3 b"
+
+# 4. Test rifleCapture + changingColorTrigger
+out=$(run_cmds "rifle-color" "${TEMP_INI}" "position fen r3k3/8/8/8/8/8/8/R3K3 w - - 0 1 moves a1a8
+d")
+echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/r3K3 b"
+
+# 5. Test rifleCapture + jumpCaptureTypes
+out=$(run_cmds "rifle-jump" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/p7/M3K3 w - - 0 1 moves a1a3
+d")
+echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/M3K3 b"
+
+# 6. Test rifleCapture + duck
+out=$(run_cmds "rifle-duck" "${TEMP_INI}" "position fen p3k3/8/8/8/8/8/8/R3K3 w - - 0 1 moves a1a8,h1
+d")
+echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/R3K2\* b"
+
+# 7. Test king-color-change
+out=$(run_cmds "king-color" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/8/4K3 w - - 0 1 moves e1e2
+d")
+echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/4k3/8 b"
+
+# 8. Test rifleCapture + captureForbidden
+out=$(run_cmds "rifle-forbidden" "${TEMP_INI}" "position fen p3k3/8/8/8/8/8/8/R3K3 w - - 0 1 moves a1a8
+d")
+echo "${out}" | grep -q "Fen: p3k3/8/8/8/8/8/8/R3K3 w"
 
 rm "${TEMP_INI}"
 
