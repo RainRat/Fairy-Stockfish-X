@@ -37,6 +37,7 @@
 #include "timeman.h"
 #include "uci.h"
 #include "incbin/incbin.h"
+#include "nnue/evaluate_nnue.h"
 
 
 // Macro to embed the default efficiently updatable neural network (NNUE) file
@@ -106,6 +107,17 @@ namespace Eval {
     }
     if (!useNNUE)
         return;
+
+    if (selectedVariant->nnueDimensions > int(NNUE::FeatureTransformer::InputDimensions))
+    {
+        useNNUE = false;
+        if (CurrentProtocol != XBOARD)
+            sync_cout << "info string NNUE disabled for variant " << variant
+                      << ": derived input dimensions " << selectedVariant->nnueDimensions
+                      << " exceed compiled limit " << NNUE::FeatureTransformer::InputDimensions
+                      << sync_endl;
+        return;
+    }
 
     currentNnueVariant = selectedVariant;
 
