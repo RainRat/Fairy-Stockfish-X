@@ -495,6 +495,44 @@ void PieceMap::init(const Variant* v) {
 }
 
 void PieceMap::add(PieceType pt, const PieceInfo* p) {
+  if (p)
+  {
+      auto slider_fraction = [](const std::map<Direction, int>& sliderMap) {
+          int s = 0;
+          for (auto const& [_, limit] : sliderMap) {
+              if (limit == 0 || limit == DYNAMIC_SLIDER_LIMIT || limit == SKI_SLIDER_LIMIT || limit == MAX_SLIDER_LIMIT)
+                  s += 100;
+              else
+                  s += 200 * std::min(limit + 1, 8) / 16;
+          }
+          return s;
+      };
+      auto is_diagonal_only_slider = [](const std::map<Direction, int>& sliderMap) {
+          if (sliderMap.empty())
+              return false;
+          for (auto const& [dir, _] : sliderMap)
+              if (dir != NORTH_EAST && dir != NORTH_WEST && dir != SOUTH_EAST && dir != SOUTH_WEST)
+                  return false;
+          return true;
+      };
+
+      bool diagonalOnly = is_diagonal_only_slider(p->slider[0][MODALITY_QUIET])
+                       || is_diagonal_only_slider(p->slider[0][MODALITY_CAPTURE]);
+      diagonalOnly = diagonalOnly
+                  && p->slider[0][MODALITY_QUIET].size() + p->slider[0][MODALITY_CAPTURE].size() > 0;
+
+      int currentFrac = slider_fraction(p->slider[0][MODALITY_QUIET]) + slider_fraction(p->slider[0][MODALITY_CAPTURE])
+                      + (p->steps[0][MODALITY_QUIET].size() + p->steps[0][MODALITY_CAPTURE].size()) * 100;
+      int standardFrac = (p->slider[0][MODALITY_QUIET].size() + p->slider[0][MODALITY_CAPTURE].size()) * 100
+                       + (p->steps[0][MODALITY_QUIET].size() + p->steps[0][MODALITY_CAPTURE].size()) * 100;
+
+      if (diagonalOnly && standardFrac > 0 && currentFrac < standardFrac)
+      {
+          const_cast<PieceInfo*>(p)->mobilityScaling = std::max(1, currentFrac * 100 / standardFrac);
+          const_cast<PieceInfo*>(p)->diagonalLimitedSlider = true;
+      }
+  }
+
   direct[pt] = p;
   insert(std::pair<PieceType, const PieceInfo*>(pt, p));
 }

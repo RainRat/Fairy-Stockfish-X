@@ -655,7 +655,20 @@ namespace {
         if (Pt <= QUEEN)
             mobility[Us] += mobility_bonus(Pt, mob);
         else
-            mobility[Us] += MaxMobility * (mob - 2) / (8 + mob);
+        {
+            const PieceInfo* pi = pieceMap.get(Pt);
+            int scaled_mob = mob;
+            if (pi->diagonalLimitedSlider)
+            {
+                int files = int(pos.max_file()) + 1;
+                int ranks = int(pos.max_rank()) + 1;
+                int area = files * ranks;
+                int areaFactor = area > 0 ? std::min(100, (64 * 100) / area) : 100;
+                int effectiveScaling = 100 - ((100 - (pi->mobilityScaling ? pi->mobilityScaling : 100)) * areaFactor) / 100;
+                scaled_mob = mob * 100 / std::max(1, effectiveScaling);
+            }
+            mobility[Us] += MaxMobility * (scaled_mob - 2) / (8 + scaled_mob);
+        }
 
         // Piece promotion bonus
         if (pos.promoted_piece_type(Pt) != NO_PIECE_TYPE)
