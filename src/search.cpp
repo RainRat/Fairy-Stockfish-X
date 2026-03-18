@@ -348,12 +348,13 @@ void MainThread::search() {
       return;
   }
 
-  sync_cout << "bestmove " << UCI::move(rootPos, bestThread->rootMoves[0].pv[0]);
+  SyncCout out;
+  out << "bestmove " << UCI::move(rootPos, bestThread->rootMoves[0].pv[0]);
 
   if (bestThread->rootMoves[0].pv.size() > 1 || bestThread->rootMoves[0].extract_ponder_from_tt(rootPos))
-      std::cout << " ponder " << UCI::move(rootPos, bestThread->rootMoves[0].pv[1]);
+      out << " ponder " << UCI::move(rootPos, bestThread->rootMoves[0].pv[1]);
 
-  std::cout << sync_endl;
+  out << sync_endl;
 }
 
 

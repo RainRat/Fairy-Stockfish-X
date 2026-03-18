@@ -21,6 +21,8 @@
 
 #include <cassert>
 #include <chrono>
+#include <iostream>
+#include <mutex>
 #include <ostream>
 #include <string>
 #include <utility>
@@ -62,11 +64,41 @@ private:
 };
 
 
-enum SyncCout { IO_LOCK, IO_UNLOCK };
-std::ostream& operator<<(std::ostream&, SyncCout);
+class SyncCout {
+public:
+  SyncCout();
+  ~SyncCout();
 
-#define sync_cout std::cout << IO_LOCK
-#define sync_endl std::endl << IO_UNLOCK
+  SyncCout(const SyncCout&) = delete;
+  SyncCout& operator=(const SyncCout&) = delete;
+
+  template <typename T>
+  SyncCout& operator<<(const T& value) {
+    std::cout << value;
+    return *this;
+  }
+
+  SyncCout& operator<<(std::ostream& (*manip)(std::ostream&)) {
+    manip(std::cout);
+    return *this;
+  }
+
+  SyncCout& operator<<(std::ios& (*manip)(std::ios&)) {
+    manip(std::cout);
+    return *this;
+  }
+
+  SyncCout& operator<<(std::ios_base& (*manip)(std::ios_base&)) {
+    manip(std::cout);
+    return *this;
+  }
+
+private:
+  static std::mutex& mutex();
+};
+
+#define sync_cout SyncCout()
+#define sync_endl std::endl
 
 
 // align_ptr_up() : get the first aligned element of an array.

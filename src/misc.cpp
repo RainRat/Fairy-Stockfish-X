@@ -325,17 +325,17 @@ void dbg_print() {
 /// Used to serialize access to std::cout to avoid multiple threads writing at
 /// the same time.
 
-std::ostream& operator<<(std::ostream& os, SyncCout sc) {
+SyncCout::SyncCout() {
+  mutex().lock();
+}
 
+SyncCout::~SyncCout() {
+  mutex().unlock();
+}
+
+std::mutex& SyncCout::mutex() {
   static std::mutex m;
-
-  if (sc == IO_LOCK)
-      m.lock();
-
-  if (sc == IO_UNLOCK)
-      m.unlock();
-
-  return os;
+  return m;
 }
 
 
