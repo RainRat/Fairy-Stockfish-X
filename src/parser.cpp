@@ -1385,9 +1385,18 @@ void VariantParser<DoCheck>::check_consistency(Variant* v) {
             std::cerr << "Can not use kings, pseudo-royal, or anti-royal with blastImmuneTypes." << std::endl;
         if (v->mutuallyImmuneTypes)
             std::cerr << "Can not use kings, pseudo-royal, or anti-royal with mutuallyImmuneTypes." << std::endl;
+        if (v->antiRoyalTypes & v->pseudoRoyalTypes)
+            std::cerr << "Piece can not be both pseudo-royal and anti-royal." << std::endl;
+        if (v->antiRoyalTypes & KING)
+            std::cerr << "Piece can not be both royal king and anti-royal." << std::endl;
     }
-    if (v->flagPieceSafe && v->blastOnCapture)
-        std::cerr << "Can not use flagPieceSafe with blastOnCapture (flagPieceSafe uses simple assessment that does not see blast)." << std::endl;
+    if (v->flagPieceSafe)
+    {
+        if (v->blastOnCapture)
+            std::cerr << "Can not use flagPieceSafe with blastOnCapture (flagPieceSafe uses simple assessment that does not see blast)." << std::endl;
+        if ((v->antiRoyalTypes & v->flagPiece[WHITE]) || (v->antiRoyalTypes & v->flagPiece[BLACK]))
+            std::cerr << "Flag piece can not be anti-royal when flagPieceSafe is enabled." << std::endl;
+    }
 }
 
 template <bool DoCheck>

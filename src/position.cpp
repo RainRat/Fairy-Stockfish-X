@@ -1114,6 +1114,14 @@ void Position::set_state(StateInfo* si) const {
   si->checkersBB = !allow_checks() && count<KING>(sideToMove)
                  ? attackers_to_king(square<KING>(sideToMove), ~sideToMove)
                  : Bitboard(0);
+
+  if (!allow_checks())
+  {
+      if (pseudo_royal_types())
+          si->checkersBB |= checked_pseudo_royals(sideToMove);
+      if (anti_royal_types())
+          si->checkersBB |= checked_anti_royals(sideToMove);
+  }
   si->move = MOVE_NONE;
   si->removedGatingType = NO_PIECE_TYPE;
   si->removedCastlingGatingType = NO_PIECE_TYPE;
@@ -1775,13 +1783,6 @@ Bitboard Position::checked_pseudo_royals(Color c) const {
 Bitboard Position::checked_anti_royals(Color c) const {
   assert(anti_royal_types());
   const bool blastOnCapture = blast_on_capture();
-  Bitboard antiRoyals = 0;
-  for (PieceSet ps = anti_royal_types(); ps; )
-  {
-      PieceType pt = pop_lsb(ps);
-      if (count(c, pt) <= anti_royal_count())
-          antiRoyals |= pieces(c, pt);
-  }
 
   Bitboard occupied = pieces();
   Bitboard vulnerableEnemyRoyals = 0;
@@ -1789,12 +1790,25 @@ Bitboard Position::checked_anti_royals(Color c) const {
       vulnerableEnemyRoyals = ((st->pseudoRoyals | pieces(king_type())) & pieces(~c) & occupied) & ~blast_immune_bb();
 
   Bitboard checked = 0;
-  while (antiRoyals)
+  for (PieceSet ps = anti_royal_types(); ps; )
   {
-      Square sr = pop_lsb(antiRoyals);
-      if (!(attackers_to(sr, occupied, ~c))
-          || (blastOnCapture && (vulnerableEnemyRoyals & blast_pattern(sr))))
-          checked |= sr;
+      PieceType pt = pop_lsb(ps);
+      if (count(c, pt) <= anti_royal_count())
+      {
+          if (count(c, pt) > 0)
+          {
+              Bitboard antiRoyals = pieces(c, pt);
+              while (antiRoyals)
+              {
+                  Square sr = pop_lsb(antiRoyals);
+                  if (!(attackers_to(sr, occupied, ~c))
+                      || (blastOnCapture && (vulnerableEnemyRoyals & blast_pattern(sr))))
+                      checked |= sr;
+              }
+          }
+          else
+              checked = board_bb(); // Check can't be resolved if piece is gone
+      }
   }
   return checked;
 }
@@ -2004,8 +2018,13 @@ bool Position::legal(Move m) const {
       return false;
 
   // No legal moves from target square
-  if (immobility_illegal() && (type_of(m) == DROP || type_of(m) == NORMAL) && !(PseudoMoves[0][us][type_of(moved_piece(m))][to] & board_bb()))
-      return false;
+  if (immobility_illegal() && (type_of(m) == DROP || type_of(m) == NORMAL))
+  {
+      PieceType pt = type_of(moved_piece(m));
+      if (   !(PseudoMoves[0][us][pt][to] & board_bb())
+          && !(jump_capture_types() & ALL_PIECES) && !(jump_capture_types() & pt))
+          return false;
+  }
 
   // Illegal king passing move
   if (pass_on_stalemate(us) && is_pass(m) && !checkers())
@@ -2152,7 +2171,12 @@ bool Position::legal(Move m) const {
       {
           PieceType pt = pop_lsb(ps);
           if (count(sideToMove, pt) <= anti_royal_count())
-              antiRoyals |= pieces(sideToMove, pt);
+          {
+              if (count(sideToMove, pt) > 0)
+                  antiRoyals |= pieces(sideToMove, pt);
+              else if (type_of(m) != DROP || type_of(moved_piece(m)) != pt)
+                  return false; // Anti-royal piece is missing and not replaced
+          }
       }
       if (!rifleShot && is_ok(from) && (antiRoyals & from))
           antiRoyals ^= square_bb(from) ^ kto;
@@ -4002,7 +4026,15 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   st->checkersBB = !allow_checks() && givesCheck
                  ? attackers_to_king(square<KING>(them), us) & pieces(us)
                  : Bitboard(0);
-  assert(allow_checks() || givesCheck == bool(st->checkersBB) || (givesCheck && var->prisonPawnPromotion));
+
+  if (!allow_checks())
+  {
+      if (pseudo_royal_types())
+          st->checkersBB |= checked_pseudo_royals(them);
+      if (anti_royal_types())
+          st->checkersBB |= checked_anti_royals(them);
+  }
+  assert(allow_checks() || givesCheck == bool(st->checkersBB) || (givesCheck && var->prisonPawnPromotion) || pseudo_royal_types() || anti_royal_types());
 
   sideToMove = ~sideToMove;
 
