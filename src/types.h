@@ -966,7 +966,9 @@ constexpr PieceSet operator~ (PieceSet ps) { return (PieceSet)~(uint64_t)ps; }
 constexpr PieceSet operator| (PieceSet ps1, PieceSet ps2) { return (PieceSet)((uint64_t)ps1 | (uint64_t)ps2); }
 constexpr PieceSet operator| (PieceSet ps, PieceType pt) { return ps | piece_set(pt); }
 constexpr PieceSet operator& (PieceSet ps1, PieceSet ps2) { return (PieceSet)((uint64_t)ps1 & (uint64_t)ps2); }
-constexpr PieceSet operator& (PieceSet ps, PieceType pt) { return ps & piece_set(pt); }
+constexpr PieceSet operator& (PieceSet ps, PieceType pt) {
+  return (uint64_t(ps) & (1ULL << ALL_PIECES)) ? piece_set(pt) : PieceSet(uint64_t(ps) & (1ULL << pt));
+}
 constexpr PieceSet operator^ (PieceSet ps1, PieceSet ps2) { return (PieceSet)((uint64_t)ps1 ^ (uint64_t)ps2); }
 constexpr PieceSet operator^ (PieceSet ps, PieceType pt) { return ps ^ piece_set(pt); }
 inline PieceSet& operator|= (PieceSet& ps1, PieceSet ps2) { return (PieceSet&)((uint64_t&)ps1 |= (uint64_t)ps2); }
