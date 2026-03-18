@@ -180,6 +180,8 @@ Value piece_value(Phase phase, PieceType pt)
             // Rook sliding directions are more valuable, especially in endgame
             + (phase == MG ?  15 :  15) * std::count_if(pi->slider[0][MODALITY_CAPTURE].begin(), pi->slider[0][MODALITY_CAPTURE].end(), [](const std::pair<const Direction, int>& d) { return std::abs(d.first) == NORTH || std::abs(d.first) == 1; })
             + (phase == MG ?  30 :  50) * std::count_if(pi->slider[0][MODALITY_QUIET].begin(), pi->slider[0][MODALITY_QUIET].end(), [](const std::pair<const Direction, int>& d) { return std::abs(d.first) == NORTH || std::abs(d.first) == 1; });
+    if (pi->diagonalLimitedSlider)
+        v0 += 40;
     return Value(v0 * exp(double(v0) / 10000));
 }
 
