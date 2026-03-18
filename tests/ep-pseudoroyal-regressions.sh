@@ -15,6 +15,16 @@ blastOnCapture = true
 blastCenter = true
 blastDiagonals = false
 checking = false
+
+[epext:chess]
+customPiece1 = a:W
+blastOnCapture = true
+blastCenter = true
+blastDiagonals = false
+checking = false
+extinctionValue = loss
+extinctionPieceTypes = a
+extinctionOpponentPieceCount = 1
 EOF
 
 echo "ep pseudo-royal regression tests started"
@@ -42,5 +52,38 @@ quit
 EOF
 )"
 ! echo "${out}" | grep -q "^e5d6: 1$"
+
+echo "ep extinction regression tests started"
+
+# Extinction adjudication must use the captured pawn square as the EP blast
+# center. A surviving adjacent-only-to-landing-square extinction target should
+# leave the resulting position playable.
+out="$("$ENGINE" <<EOF
+uci
+setoption name VariantPath value $tmp_ini
+setoption name UCI_Variant value epext
+setoption name Verbosity value 2
+position fen 4k1a1/8/2A5/3pP3/8/8/8/4K3 w - d6 0 1 moves e5d6
+go depth 1
+quit
+EOF
+)"
+echo "${out}" | grep -q "^bestmove g8g7$"
+! echo "${out}" | grep -q "adjudication reason game_end"
+
+# Control: an extinction target adjacent to the captured pawn square must still
+# be removed by the EP blast, producing the immediate extinction result.
+out="$("$ENGINE" <<EOF
+uci
+setoption name VariantPath value $tmp_ini
+setoption name UCI_Variant value epext
+setoption name Verbosity value 2
+position fen 4k1a1/8/8/2ApP3/8/8/8/4K3 w - d6 0 1 moves e5d6
+go depth 1
+quit
+EOF
+)"
+echo "${out}" | grep -q "adjudication reason game_end"
+echo "${out}" | grep -q "^bestmove (none)$"
 
 echo "ep pseudo-royal regression tests passed"
