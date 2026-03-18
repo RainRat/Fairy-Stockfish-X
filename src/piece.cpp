@@ -350,6 +350,9 @@ namespace {
           // Slider ignores friendly pieces
           else if (c == 'y')
               p->friendlyJump = true;
+          // Rifle-capture syntax marker for per-piece shot captures.
+          else if (c == '^')
+              p->rifleCapture = true;
           // Directional modifiers
           else if (verticals.find(c) != std::string::npos || horizontals.find(c) != std::string::npos)
           {

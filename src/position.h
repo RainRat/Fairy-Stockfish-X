@@ -235,6 +235,8 @@ public:
   bool drop_mates() const;
   bool self_capture() const;
   bool rifle_capture() const;
+  bool rifle_capture(Piece pc) const;
+  bool rifle_capture(Move m) const;
   bool capture_morph() const;
   bool rex_exclusive_morph() const;
   bool must_capture() const;
@@ -1053,6 +1055,14 @@ inline bool Position::self_capture() const {
 inline bool Position::rifle_capture() const {
   assert(var != nullptr);
   return var->rifleCapture;
+}
+
+inline bool Position::rifle_capture(Piece pc) const {
+  return pc != NO_PIECE && (rifle_capture() || pieceMap.get(type_of(pc))->rifleCapture);
+}
+
+inline bool Position::rifle_capture(Move m) const {
+  return rifle_capture(moved_piece(m));
 }
 
 inline bool Position::capture_morph() const {

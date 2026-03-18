@@ -1882,7 +1882,7 @@ bool Position::legal(Move m) const {
   if (from == to && !(is_pass(m) || (type_of(m) == PROMOTION && sittuyin_promotion())))
       return false;
 
-  bool rifleShot = rifle_capture() && capture(m) && type_of(m) != CASTLING;
+  bool rifleShot = rifle_capture(m) && capture(m) && type_of(m) != CASTLING;
   Square shotSq = capture(m) ? capture_square(m) : to;
   Bitboard removedAttackers = rifleShot ? square_bb(shotSq) : Bitboard(0);
   Square effectiveTo = rifleShot ? from : to;
@@ -2401,7 +2401,7 @@ bool Position::pseudo_legal(const Move m) const {
   Square from = from_sq(m);
   Square to = to_sq(m);
   Piece pc = moved_piece(m);
-  bool rifleShot = rifle_capture() && capture(m) && type_of(m) != CASTLING;
+  bool rifleShot = rifle_capture(m) && capture(m) && type_of(m) != CASTLING;
   Square effectiveTo = rifleShot ? from : to;
 
   if (in_opening_self_removal_phase())
@@ -2677,7 +2677,7 @@ bool Position::gives_check(Move m) const {
   if (jumpRemoved && (square_bb(to) & jumpRemoved))
       return false;
 
-  bool rifleShot = rifle_capture() && capture(m) && type_of(m) != CASTLING;
+  bool rifleShot = rifle_capture(m) && capture(m) && type_of(m) != CASTLING;
   Square shotSq = capture(m) ? capture_square(m) : to;
   Square attackFrom = rifleShot ? from : to;
 
@@ -2865,7 +2865,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   Piece pc = moved_piece(m);
   PieceType movedType = type_of(pc);
   Piece captured = captured_piece(m);
-  bool rifleShot = rifle_capture() && captured != NO_PIECE && type_of(m) != CASTLING;
+  bool rifleShot = rifle_capture(m) && captured != NO_PIECE && type_of(m) != CASTLING;
   bool capturedDeadSquare = type_of(m) != DROP && from != to && bool(st->deadSquares & to);
   PieceType exchanged = exchange_piece(m);
   Square jumpCapsq = is_jump_capture(m) ? jump_capture_square(from, to) : SQ_NONE;
@@ -4110,7 +4110,7 @@ void Position::undo_move(Move m) {
   Color us = sideToMove;
   Square from = from_sq(m);
   Square to = to_sq(m);
-  bool rifleShot = rifle_capture() && st->capturedPiece != NO_PIECE && type_of(m) != CASTLING;
+  bool rifleShot = rifle_capture(m) && st->capturedPiece != NO_PIECE && type_of(m) != CASTLING;
   Square moverSq = rifleShot ? from : to;
   Piece pc = piece_on(moverSq);
   PieceType exchange = exchange_piece(m);

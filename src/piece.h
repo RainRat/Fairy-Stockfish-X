@@ -59,6 +59,7 @@ struct PieceInfo {
   bool manticore[2][MOVE_MODALITY_NB] = {};
   uint8_t riderAugmentMask = AUGMENT_NONE;
   bool friendlyJump = false;
+  bool rifleCapture = false;
   int mobilityScaling = 100;
   bool diagonalLimitedSlider = false;
 

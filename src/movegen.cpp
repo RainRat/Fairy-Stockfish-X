@@ -265,9 +265,9 @@ namespace {
     Bitboard b3p = b3 & standardPromotionZone;
     Bitboard brcp = brc & standardPromotionZone;
     Bitboard blcp = blc & standardPromotionZone;
-    Bitboard rifleBrcp = pos.rifle_capture() ? brcp : Bitboard(0);
-    Bitboard rifleBlcp = pos.rifle_capture() ? blcp : Bitboard(0);
-    if (pos.rifle_capture())
+    Bitboard rifleBrcp = pos.rifle_capture(make_piece(Us, PAWN)) ? brcp : Bitboard(0);
+    Bitboard rifleBlcp = pos.rifle_capture(make_piece(Us, PAWN)) ? blcp : Bitboard(0);
+    if (pos.rifle_capture(make_piece(Us, PAWN)))
     {
         brcp = 0;
         blcp = 0;
