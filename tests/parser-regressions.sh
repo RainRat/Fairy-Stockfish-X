@@ -32,6 +32,9 @@ promotionLimit =
 priorityDropTypes =
 virtualDropLimit =
 
+[named-custom-piece-hint:chess]
+falcon = a:W
+
 [walling-seirawan:chess]
 wallingRule = duck
 seirawanGating = true
@@ -77,6 +80,7 @@ verify_warning "wallingRule and seirawanGating are incompatible." "seirawanGatin
 verify_warning "wallingRule and potions are incompatible." "potions check"
 verify_warning "wallingRule=duck and petrifyOnCaptureTypes are incompatible." "petrify check"
 verify_warning "pieceDrops and any walling are incompatible." "freeDrops check"
+verify_warning "falcon looks like a custom piece definition. Use customPieceN = a:W for new custom pieces." "named custom piece hint"
 
 tuple_output=$(cat <<CMDS | "${ENGINE}" 2>&1
 uci

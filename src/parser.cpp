@@ -37,6 +37,12 @@ namespace {
         return ss.eof();
     }
 
+    bool looks_like_piece_definition_value(const std::string& value) {
+        return value.size() >= 2
+            && std::isalpha(static_cast<unsigned char>(value[0]))
+            && value[1] == ':';
+    }
+
     bool parse_positive_int(const std::string& value, int& out) {
         if (value.empty())
             return false;
@@ -1266,7 +1272,12 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
         const std::set<std::string>& parsedKeys = config.get_consumed_keys();
         for (const auto& it : config)
             if (parsedKeys.find(it.first) == parsedKeys.end())
+            {
                 std::cerr << "Invalid option: " << it.first << std::endl;
+                if (looks_like_piece_definition_value(it.second))
+                    std::cerr << it.first << " looks like a custom piece definition. Use customPieceN = "
+                              << it.second << " for new custom pieces." << std::endl;
+            }
     }
     return true;
 }
