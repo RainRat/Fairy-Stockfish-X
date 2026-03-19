@@ -65,6 +65,19 @@ changingColorPieceTypes = *
 [rifle-forbidden:chess]
 rifleCapture = true
 captureForbidden = *:p
+
+[forbidden-king-check:chess]
+customPiece1 = d:Q
+pieceToCharTable = PNBRQ............D...Kpnbrq............d...k
+captureForbidden = d:k
+startFen = 4k3/4D3/8/8/8/8/8/4K3 b - - 0 1
+
+[forbidden-king-capture:chess]
+customPiece1 = d:Q
+pieceToCharTable = PNBRQ............D...Kpnbrq............d...k
+captureForbidden = d:k
+startFen = k7/8/8/8/8/8/8/D3K3 w - - 0 1
+checking = false
 EOF
 
 echo "unorthodox interactions tests started"
@@ -108,6 +121,22 @@ echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/4k3/8 b"
 out=$(run_cmds "rifle-forbidden" "${TEMP_INI}" "position fen p3k3/8/8/8/8/8/8/R3K3 w - - 0 1 moves a1a8
 d")
 echo "${out}" | grep -q "Fen: p3k3/8/8/8/8/8/8/R3K3 w"
+
+# 9. Test captureForbidden to king suppresses checks
+out=$(run_cmds "forbidden-king-check" "${TEMP_INI}" "position startpos
+d")
+if echo "${out}" | grep -q "^Checkers: [^ ]"; then
+  echo "captureForbidden king-check suppression failed"
+  exit 1
+fi
+
+# 10. Test captureForbidden to king suppresses king captures in no-check variants
+out=$(run_cmds "forbidden-king-capture" "${TEMP_INI}" "position startpos
+go perft 1")
+if echo "${out}" | grep -q "^a1a8: 1$"; then
+  echo "captureForbidden king-capture suppression failed"
+  exit 1
+fi
 
 rm "${TEMP_INI}"
 
