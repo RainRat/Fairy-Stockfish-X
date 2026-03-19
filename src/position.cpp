@@ -1996,7 +1996,7 @@ bool Position::legal(Move m) const {
   if (   type_of(m) == DROP
       && gives_check(m)
       && (   !drop_mates()
-          || (var->shogiPawnDropMateIllegal && type_of(moved_piece(m)) == SHOGI_PAWN)))
+          || (shogi_pawn_drop_mate_illegal() && type_of(moved_piece(m)) == SHOGI_PAWN)))
   {
       StateInfo setupState, nextState;
       Position p;

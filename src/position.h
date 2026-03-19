@@ -233,6 +233,8 @@ public:
   bool allow_checks() const;
   bool drop_checks() const;
   bool drop_mates() const;
+  bool shogi_pawn_drop_mate_illegal() const;
+  bool shogi_pawn_drop_mate_illegal(Color c) const;
   bool self_capture() const;
   bool rifle_capture() const;
   bool rifle_capture(Piece pc) const;
@@ -1055,6 +1057,17 @@ inline bool Position::drop_mates() const {
   return var->dropMates;
 }
 
+inline bool Position::shogi_pawn_drop_mate_illegal() const {
+  return shogi_pawn_drop_mate_illegal(side_to_move());
+}
+
+inline bool Position::shogi_pawn_drop_mate_illegal(Color c) const {
+  assert(var != nullptr);
+  if (var->shogiPawnDropMateIllegalByColorSet[WHITE] || var->shogiPawnDropMateIllegalByColorSet[BLACK])
+      return var->shogiPawnDropMateIllegalByColor[c];
+  return var->shogiPawnDropMateIllegal;
+}
+
 inline bool Position::self_capture() const {
   assert(var != nullptr);
   return var->selfCapture;
@@ -1656,7 +1669,7 @@ inline Value Position::stalemate_value(int ply) const {
 inline Value Position::checkmate_value(int ply) const {
   assert(var != nullptr);
   // Check for illegal mate by shogi pawn drop
-  if (    var->shogiPawnDropMateIllegal
+  if (    shogi_pawn_drop_mate_illegal(~side_to_move())
       && !(checkers() & ~pieces(SHOGI_PAWN))
       && !st->capturedPiece
       &&  st->pliesFromNull > 0

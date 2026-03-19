@@ -1298,7 +1298,24 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("stalemateValue", v->stalemateValue);
     parse_attribute("stalematePieceCount", v->stalematePieceCount);
     parse_attribute("checkmateValue", v->checkmateValue);
-    parse_attribute("shogiPawnDropMateIllegal", v->shogiPawnDropMateIllegal);
+    if (config.find("shogiPawnDropMateIllegal") != config.end())
+    {
+        parse_attribute("shogiPawnDropMateIllegal", v->shogiPawnDropMateIllegal);
+        v->shogiPawnDropMateIllegalByColor[WHITE] = v->shogiPawnDropMateIllegal;
+        v->shogiPawnDropMateIllegalByColor[BLACK] = v->shogiPawnDropMateIllegal;
+        v->shogiPawnDropMateIllegalByColorSet[WHITE] = true;
+        v->shogiPawnDropMateIllegalByColorSet[BLACK] = true;
+    }
+    if (config.find("shogiPawnDropMateIllegalWhite") != config.end())
+    {
+        parse_attribute("shogiPawnDropMateIllegalWhite", v->shogiPawnDropMateIllegalByColor[WHITE]);
+        v->shogiPawnDropMateIllegalByColorSet[WHITE] = true;
+    }
+    if (config.find("shogiPawnDropMateIllegalBlack") != config.end())
+    {
+        parse_attribute("shogiPawnDropMateIllegalBlack", v->shogiPawnDropMateIllegalByColor[BLACK]);
+        v->shogiPawnDropMateIllegalByColorSet[BLACK] = true;
+    }
     parse_attribute("shatarMateRule", v->shatarMateRule);
     parse_attribute("bikjangRule", v->bikjangRule);
     parse_attribute("pseudoRoyalTypes", v->pseudoRoyalTypes, v->pieceToChar);

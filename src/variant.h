@@ -236,6 +236,8 @@ struct Variant {
   bool stalematePieceCount = false; // multiply stalemate value by sign(count(~stm) - count(stm))
   Value checkmateValue = -VALUE_MATE;
   bool shogiPawnDropMateIllegal = false;
+  bool shogiPawnDropMateIllegalByColor[COLOR_NB] = {false, false};
+  bool shogiPawnDropMateIllegalByColorSet[COLOR_NB] = {false, false};
   bool shatarMateRule = false;
   bool bikjangRule = false;
   Value extinctionValue = VALUE_NONE;
