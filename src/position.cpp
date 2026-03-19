@@ -4953,6 +4953,18 @@ bool Position::is_optional_game_end(Value& result, int ply, int countStarted) co
 
 bool Position::is_immediate_game_end(Value& result, int ply) const {
 
+  // Pseudo-royal loss
+  // Some variants transfer royal status across a family of piece types.
+  // If a special capture removes the current pseudo-royal, the game ends
+  // immediately even though the family may include other off-board types.
+  if (pseudo_royal_value() != VALUE_NONE)
+      for (Color c : { ~sideToMove, sideToMove })
+          if (!(st->pseudoRoyals & pieces(c)))
+          {
+              result = c == sideToMove ? pseudo_royal_value(ply) : -pseudo_royal_value(ply);
+              return true;
+          }
+
   // Extinction
   // Extinction does not apply for pseudo-royal pieces in normal capture rules,
   // because they cannot be captured directly.

@@ -270,6 +270,7 @@ public:
   bool drop_promoted() const;
   PieceType drop_no_doubled() const;
   PieceSet promotion_pawn_types(Color c) const;
+  PieceSet pawn_like_types(Color c) const;
   PieceSet en_passant_types(Color c) const;
   bool immobility_illegal() const;
   bool potions_enabled() const;
@@ -318,6 +319,7 @@ public:
   int extinction_opponent_piece_count() const;
   PieceSet pseudo_royal_types() const;
   int pseudo_royal_count() const;
+  Value pseudo_royal_value(int ply = 0) const;
   PieceSet anti_royal_types() const;
   int anti_royal_count() const;
   bool extinction_pseudo_royal() const;
@@ -1396,6 +1398,14 @@ inline PieceSet Position::promotion_pawn_types(Color c) const {
   return var->promotionPawnTypes[c];
 }
 
+inline PieceSet Position::pawn_like_types(Color c) const {
+  assert(var != nullptr);
+  return var->promotionPawnTypes[c]
+       | var->enPassantTypes[c]
+       | var->nMoveRuleTypes[c]
+       | piece_set(var->mainPromotionPawnType[c]);
+}
+
 inline PieceSet Position::en_passant_types(Color c) const {
   assert(var != nullptr);
   return var->enPassantTypes[c];
@@ -1755,6 +1765,11 @@ inline PieceSet Position::pseudo_royal_types() const {
 inline int Position::pseudo_royal_count() const {
   assert(var != nullptr);
   return var->pseudoRoyalCount;
+}
+
+inline Value Position::pseudo_royal_value(int ply) const {
+  assert(var != nullptr);
+  return convert_mate_value(var->pseudoRoyalValue, ply);
 }
 
 inline PieceSet Position::anti_royal_types() const {

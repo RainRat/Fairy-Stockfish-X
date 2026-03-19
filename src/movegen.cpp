@@ -432,6 +432,7 @@ namespace {
 
     assert(Pt != KING && Pt != PAWN);
 
+    constexpr Direction Up = pawn_push(Us);
     Bitboard bb = pos.pieces(Us, Pt) & fromMask;
     Bitboard frozen = pos.freeze_squares();
 
@@ -449,6 +450,8 @@ namespace {
         Bitboard b = captureSquares | quietSquares;
         Bitboard epSquares = (pos.en_passant_types(Us) & Pt) ? (attacks & pos.ep_squares() & ~pos.pieces()) : Bitboard(0);
         Bitboard b1 = b & ~epSquares;
+        Bitboard pawnLikeDoubleSteps = 0;
+        Bitboard pawnLikeTripleSteps = 0;
         Bitboard promotion_zone = pos.promotion_zone(Us, Pt);
         Bitboard mandatoryPromotionZone = pos.mandatory_promotion_zone(Us, Pt);
         PieceType promPt = pos.promoted_piece_type(Pt);
@@ -511,12 +514,46 @@ namespace {
                 b3 &= pos.check_squares(type_of(pos.unpromoted_piece_on(from)));
         }
 
+        if (Type != CAPTURES && (pos.pawn_like_types(Us) & Pt))
+        {
+            Square oneAhead = from + Up;
+            if (is_ok(oneAhead) && (quiets & oneAhead))
+            {
+                Square twoAhead = oneAhead + Up;
+                if (   (pos.double_step_region(Us, Pt) & from)
+                    && is_ok(twoAhead)
+                    && !(b1 & twoAhead)
+                    && !(pos.pieces() & twoAhead)
+                    && (pos.board_bb(Us, Pt) & twoAhead)
+                    && (target & twoAhead))
+                    pawnLikeDoubleSteps |= twoAhead;
+
+                Square threeAhead = twoAhead + Up;
+                if (   (pos.triple_step_region(Us, Pt) & from)
+                    && is_ok(twoAhead)
+                    && is_ok(threeAhead)
+                    && !(b1 & twoAhead)
+                    && !(b1 & threeAhead)
+                    && !(pawnLikeDoubleSteps & twoAhead)
+                    && !(pos.pieces() & (twoAhead | threeAhead))
+                    && (pos.board_bb(Us, Pt) & threeAhead)
+                    && (target & threeAhead))
+                    pawnLikeTripleSteps |= threeAhead;
+            }
+        }
+
         // Jump captures are emitted explicitly below in capture-generating modes.
         // Exclude them from regular NORMAL generation to avoid duplicates.
         b1 &= ~jumpCaptures;
 
         while (b1)
             moveList = make_move_and_gating<NORMAL>(pos, moveList, Us, from, pop_lsb(b1));
+
+        while (pawnLikeDoubleSteps)
+            moveList = make_move_and_gating<NORMAL>(pos, moveList, Us, from, pop_lsb(pawnLikeDoubleSteps));
+
+        while (pawnLikeTripleSteps)
+            moveList = make_move_and_gating<NORMAL>(pos, moveList, Us, from, pop_lsb(pawnLikeTripleSteps));
 
         // Shogi-style piece promotions
         while (b2)
