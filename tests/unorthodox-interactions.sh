@@ -78,6 +78,9 @@ pieceToCharTable = PNBRQ............D...Kpnbrq............d...k
 captureForbidden = d:k
 startFen = k7/8/8/8/8/8/8/D3K3 w - - 0 1
 checking = false
+
+[dead-fen:chess]
+startFen = 4k3/8/8/8/8/8/8/8 w - - 0 1
 EOF
 
 echo "unorthodox interactions tests started"
@@ -137,6 +140,19 @@ if echo "${out}" | grep -q "^a1a8: 1$"; then
   echo "captureForbidden king-capture suppression failed"
   exit 1
 fi
+
+# 11. Test ^ dead squares round-trip through FEN input/display
+out=$(run_cmds "dead-fen" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/8/3^K3 w - - 0 1
+d")
+echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/3\^K3 w"
+
+# 12. Test dead squares are capturable by either side
+out=$(run_cmds "dead-fen" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/8/3^R2K w - - 0 1
+go perft 1")
+echo "${out}" | grep -q "^e1d1: 1$"
+out=$(run_cmds "dead-fen" "${TEMP_INI}" "position fen r3k3/8/8/8/8/8/8/3^3K b - - 0 1
+go perft 1")
+echo "${out}" | grep -q "^a8d8: 1$"
 
 rm "${TEMP_INI}"
 
