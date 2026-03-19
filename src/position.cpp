@@ -100,6 +100,49 @@ namespace {
     return checks;
   }
 
+  bool is_pure_hopper_like(const PieceInfo* pi) {
+    bool hasHopper = false;
+
+    for (MoveModality modality : {MODALITY_QUIET, MODALITY_CAPTURE})
+    {
+        if (!pi->steps[0][modality].empty()
+            || !pi->tupleSteps[0][modality].empty()
+            || !pi->slider[0][modality].empty()
+            || pi->griffon[0][modality]
+            || pi->manticore[0][modality])
+            return false;
+
+        hasHopper = hasHopper
+                 || !pi->hopper[0][modality].empty()
+                 || !pi->contraHopper[0][modality].empty();
+    }
+
+    return hasHopper;
+  }
+
+  bool has_hopper_potential_from_square(const PieceInfo* pi, Color c, Square sq) {
+    auto has_two_step_lane = [&](const std::map<Direction, int>& directions) {
+        for (auto const& [d, _] : directions)
+        {
+            Direction step = c == WHITE ? d : -d;
+            Square hurdle = sq + step;
+            if (!is_ok(hurdle) || distance(hurdle, sq) > 2)
+                continue;
+
+            Square landing = hurdle + step;
+            if (is_ok(landing) && distance(landing, hurdle) <= 2)
+                return true;
+        }
+        return false;
+    };
+
+    for (MoveModality modality : {MODALITY_QUIET, MODALITY_CAPTURE})
+        if (has_two_step_lane(pi->hopper[0][modality]) || has_two_step_lane(pi->contraHopper[0][modality]))
+            return true;
+
+    return false;
+  }
+
 } // namespace
 
 namespace Zobrist {
@@ -2021,7 +2064,11 @@ bool Position::legal(Move m) const {
   if (immobility_illegal() && (type_of(m) == DROP || type_of(m) == NORMAL))
   {
       PieceType pt = type_of(moved_piece(m));
-      if (   !(PseudoMoves[0][us][pt][to] & board_bb())
+      const PieceInfo* pi = pieceMap.get(pt);
+      bool hasPotentialMove = PseudoMoves[0][us][pt][to] & board_bb();
+      if (is_pure_hopper_like(pi))
+          hasPotentialMove = has_hopper_potential_from_square(pi, us, to);
+      if (   !hasPotentialMove
           && !(jump_capture_types() & ALL_PIECES) && !(jump_capture_types() & pt))
           return false;
   }
