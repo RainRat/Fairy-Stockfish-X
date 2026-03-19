@@ -53,6 +53,37 @@ namespace {
         return ec == std::errc() && ptr == last && out >= 1;
     }
 
+    bool parse_rank_index(const std::string& value, int& out) {
+        int rank = 0;
+        if (!parse_positive_int(value, rank))
+            return false;
+        out = rank - 1;
+        return true;
+    }
+
+    bool parse_file_index(const std::string& value, int& out) {
+        std::stringstream ss(value);
+        ss >> std::ws;
+        if (ss.peek() == EOF)
+            return false;
+        if (std::isdigit(ss.peek()))
+        {
+            int file = 0;
+            ss >> file;
+            if (ss.fail() || file < 1 || !only_trailing_space(ss))
+                return false;
+            out = file - 1;
+            return true;
+        }
+
+        char c;
+        ss >> c;
+        if (ss.fail() || !only_trailing_space(ss))
+            return false;
+        out = std::tolower(static_cast<unsigned char>(c)) - 'a';
+        return true;
+    }
+
     constexpr int MAX_PIECE_POINTS = 20;
 
     template <typename T> bool set(const std::string& value, T& target)
@@ -93,33 +124,22 @@ namespace {
     }
 
     template <> bool set(const std::string& value, Rank& target) {
-        std::stringstream ss(value);
-        int i;
-        ss >> i;
-        Rank parsed = Rank(i - 1);
-        if (ss.fail() || !only_trailing_space(ss) || parsed < RANK_1 || parsed > RANK_MAX)
+        int rank = 0;
+        if (!parse_rank_index(value, rank))
+            return false;
+        Rank parsed = Rank(rank);
+        if (parsed < RANK_1 || parsed > RANK_MAX)
             return false;
         target = parsed;
         return true;
     }
 
     template <> bool set(const std::string& value, File& target) {
-        std::stringstream ss(value);
-        ss >> std::ws;
-        File parsed;
-        if (std::isdigit(ss.peek()))
-        {
-            int i;
-            ss >> i;
-            parsed = File(i - 1);
-        }
-        else
-        {
-            char c;
-            ss >> c;
-            parsed = File(c - 'a');
-        }
-        if (ss.fail() || !only_trailing_space(ss) || parsed < FILE_A || parsed > FILE_MAX)
+        int file = 0;
+        if (!parse_file_index(value, file))
+            return false;
+        File parsed = File(file);
+        if (parsed < FILE_A || parsed > FILE_MAX)
             return false;
         target = parsed;
         return true;
@@ -1420,39 +1440,14 @@ Variant* VariantParser<DoCheck>::parse() {
 
 template <bool DoCheck>
 Variant* VariantParser<DoCheck>::parse(Variant* v) {
-    auto parse_rank_value = [](const std::string& value, int& out) {
-        return parse_positive_int(value, out);
-    };
-    auto parse_file_value = [](const std::string& value, int& out) {
-        std::stringstream ss(value);
-        ss >> std::ws;
-        if (ss.peek() == EOF)
-            return false;
-        if (std::isdigit(ss.peek()))
-        {
-            int i;
-            ss >> i;
-            if (ss.fail())
-                return false;
-            out = i - 1;
-            return i >= 1 && only_trailing_space(ss);
-        }
-        char c;
-        ss >> c;
-        if (ss.fail())
-            return false;
-        out = std::tolower(static_cast<unsigned char>(c)) - 'a';
-        return only_trailing_space(ss);
-    };
-
     int cfgMaxRank = -1;
     int cfgMaxFile = -1;
     const auto itRank = config.find("maxRank");
     if (itRank != config.end())
-        parse_rank_value(itRank->second, cfgMaxRank);
+        parse_rank_index(itRank->second, cfgMaxRank);
     const auto itFile = config.find("maxFile");
     if (itFile != config.end())
-        parse_file_value(itFile->second, cfgMaxFile);
+        parse_file_index(itFile->second, cfgMaxFile);
 
     // Fail early when a variant exceeds compile-time board dimensions.
     if ((cfgMaxRank > 0 && cfgMaxRank - 1 > RANK_MAX) || (cfgMaxFile >= 0 && cfgMaxFile > FILE_MAX))
