@@ -1452,12 +1452,15 @@ void VariantParser<DoCheck>::check_consistency(Variant* v) {
         std::cerr << "Inconsistent settings: castlingQueensideFile > castlingKingsideFile." << std::endl;
     if (v->connect3D && v->connect4D)
         std::cerr << "connect3D and connect4D are mutually exclusive." << std::endl;
-    if (v->connect3D && !((int(v->maxFile) + 1) == 3 && (int(v->maxRank) + 1) == 9))
-        std::cerr << "connect3D currently requires a 3x9 board." << std::endl;
-    if (v->connect4D && !((int(v->maxFile) + 1) == 9 && (int(v->maxRank) + 1) == 9))
-        std::cerr << "connect4D currently requires a 9x9 board." << std::endl;
-    if ((v->connect3D || v->connect4D) && v->connectN != 3)
-        std::cerr << "connect3D/connect4D currently require connectN = 3." << std::endl;
+    if (v->connect3D
+        && !((v->connectN == 3 && (int(v->maxFile) + 1) == 3 && (int(v->maxRank) + 1) == 9)
+          || (v->connectN == 4 && (int(v->maxFile) + 1) == 8 && (int(v->maxRank) + 1) == 8)))
+        std::cerr << "connect3D currently requires either connectN = 3 on a 3x9 board or connectN = 4 on an 8x8 board." << std::endl;
+    if (v->connect4D
+        && !(v->connectN >= 3
+          && (int(v->maxFile) + 1) == v->connectN * v->connectN
+          && (int(v->maxRank) + 1) == v->connectN * v->connectN))
+        std::cerr << "connect4D currently requires a square board of size connectN^2 with connectN >= 3." << std::endl;
 
     // Check for limitations
     if ((v->pieceDrops || v->freeDrops) && v->wallingRule != NO_WALLING)
