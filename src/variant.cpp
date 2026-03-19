@@ -77,8 +77,8 @@ namespace {
     }
 
     template <typename CoordToSquare>
-    std::vector<std::array<Square, 3>> generate_nd_ttt_lines(const std::vector<int>& dims, CoordToSquare coord_to_square) {
-        std::vector<std::array<Square, 3>> lines;
+    std::vector<std::vector<Square>> generate_nd_ttt_lines(const std::vector<int>& dims, int lineLen, CoordToSquare coord_to_square) {
+        std::vector<std::vector<Square>> lines;
         const int n = int(dims.size());
         std::vector<int> dir(n);
         std::vector<int> start(n);
@@ -109,17 +109,25 @@ namespace {
                 std::function<void(int)> walk_starts = [&](int sidx) {
                     if (sidx == n)
                     {
-                        std::vector<int> prev(n), p1(n), p2(n);
+                        std::vector<int> prev(n);
                         for (int i = 0; i < n; ++i)
-                        {
                             prev[i] = start[i] - dir[i];
-                            p1[i] = start[i] + dir[i];
-                            p2[i] = start[i] + 2 * dir[i];
-                        }
-                        if (in_bounds(prev) || !in_bounds(p1) || !in_bounds(p2))
+                        if (in_bounds(prev))
                             return;
 
-                        lines.push_back({coord_to_square(start), coord_to_square(p1), coord_to_square(p2)});
+                        std::vector<Square> line;
+                        line.reserve(lineLen);
+                        for (int step = 0; step < lineLen; ++step)
+                        {
+                            std::vector<int> p(n);
+                            for (int i = 0; i < n; ++i)
+                                p[i] = start[i] + step * dir[i];
+                            if (!in_bounds(p))
+                                return;
+                            line.push_back(coord_to_square(p));
+                        }
+
+                        lines.push_back(std::move(line));
                         return;
                     }
 
@@ -2402,17 +2410,23 @@ Variant* Variant::conclude() {
         connectDirections.push_back(SOUTH_EAST);
     }
 
-    connectLines3.clear();
-    if (connectN == 3 && connect3D && (int(maxFile) + 1) == 3 && (int(maxRank) + 1) == 9)
+    connectLines.clear();
+    if (connect3D && connectN == 3 && (int(maxFile) + 1) == 3 && (int(maxRank) + 1) == 9)
     {
-        connectLines3 = generate_nd_ttt_lines({3, 3, 3}, [&](const std::vector<int>& p) {
+        connectLines = generate_nd_ttt_lines({3, 3, 3}, 3, [&](const std::vector<int>& p) {
             return make_square(File(p[0]), Rank(p[1] + 3 * p[2]));
         });
     }
-    else if (connectN == 3 && connect4D && (int(maxFile) + 1) == 9 && (int(maxRank) + 1) == 9)
+    else if (connect3D && connectN == 4 && (int(maxFile) + 1) == 8 && (int(maxRank) + 1) == 8)
     {
-        connectLines3 = generate_nd_ttt_lines({3, 3, 3, 3}, [&](const std::vector<int>& p) {
-            return make_square(File(p[0] + 3 * p[1]), Rank(p[2] + 3 * p[3]));
+        connectLines = generate_nd_ttt_lines({4, 4, 4}, 4, [&](const std::vector<int>& p) {
+            return make_square(File(p[0] + 4 * (p[2] % 2)), Rank(p[1] + 4 * (p[2] / 2)));
+        });
+    }
+    else if (connect4D && connectN >= 3 && (int(maxFile) + 1) == connectN * connectN && (int(maxRank) + 1) == connectN * connectN)
+    {
+        connectLines = generate_nd_ttt_lines({connectN, connectN, connectN, connectN}, connectN, [&](const std::vector<int>& p) {
+            return make_square(File(p[0] + connectN * p[1]), Rank(p[2] + connectN * p[3]));
         });
     }
 

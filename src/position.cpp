@@ -5091,17 +5091,18 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
           if (goal.empty())
               return false;
 
-          if (!getConnectLines3().empty() && goal.size() == 3)
+          if (!var->connectLines.empty() && goal.size() == var->connectLines.front().size())
           {
-              for (const auto& line : getConnectLines3())
+              for (const auto& line : var->connectLines)
               {
-                  if (   type_of(piece_on(line[0])) == goal[0] && color_of(piece_on(line[0])) == c
-                      && type_of(piece_on(line[1])) == goal[1] && color_of(piece_on(line[1])) == c
-                      && type_of(piece_on(line[2])) == goal[2] && color_of(piece_on(line[2])) == c)
-                      return true;
-                  if (   type_of(piece_on(line[2])) == goal[0] && color_of(piece_on(line[2])) == c
-                      && type_of(piece_on(line[1])) == goal[1] && color_of(piece_on(line[1])) == c
-                      && type_of(piece_on(line[0])) == goal[2] && color_of(piece_on(line[0])) == c)
+                  bool forward = true;
+                  bool reverse = true;
+                  for (size_t i = 0; i < goal.size(); ++i)
+                  {
+                      forward &= type_of(piece_on(line[i])) == goal[i] && color_of(piece_on(line[i])) == c;
+                      reverse &= type_of(piece_on(line[goal.size() - 1 - i])) == goal[i] && color_of(piece_on(line[goal.size() - 1 - i])) == c;
+                  }
+                  if (forward || reverse)
                       return true;
               }
               return false;
@@ -5161,13 +5162,14 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
   // Connect-n
   if ((connect_n() > 0) && (popcount(connectPieces) >= connect_n()))
   {
-      if (!getConnectLines3().empty() && connect_n() == 3)
+      if (!var->connectLines.empty() && connect_n() == int(var->connectLines.front().size()))
       {
-          for (const auto& line : getConnectLines3())
+          for (const auto& line : var->connectLines)
           {
-              if (   (connectPieces & square_bb(line[0]))
-                  && (connectPieces & square_bb(line[1]))
-                  && (connectPieces & square_bb(line[2])))
+              bool complete = true;
+              for (Square s : line)
+                  complete &= bool(connectPieces & square_bb(s));
+              if (complete)
               {
                   result = convert_mate_value(-connect_value(), ply);
                   return true;

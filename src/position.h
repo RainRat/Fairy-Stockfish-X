@@ -334,7 +334,7 @@ public:
   bool connect_vertical() const;
   bool connect_diagonal() const;
   const std::vector<Direction>& getConnectDirections() const;
-  const std::vector<std::array<Square, 3>>& getConnectLines3() const;
+  const std::vector<std::vector<Square>>& getConnectLines() const;
   int connect_nxn() const;
   int collinear_n() const;
   int connect_group() const;
@@ -1867,9 +1867,9 @@ inline const std::vector<Direction>& Position::getConnectDirections() const {
     return var->connectDirections;
 }
 
-inline const std::vector<std::array<Square, 3>>& Position::getConnectLines3() const {
+inline const std::vector<std::vector<Square>>& Position::getConnectLines() const {
     assert(var != nullptr);
-    return var->connectLines3;
+    return var->connectLines;
 }
 
 inline int Position::connect_nxn() const {

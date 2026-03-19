@@ -299,7 +299,7 @@ struct Variant {
   EndgameEval endgameEval = EG_EVAL_CHESS;
   bool shogiStylePromotions = false;
   std::vector<Direction> connectDirections;
-  std::vector<std::array<Square, 3>> connectLines3;
+  std::vector<std::vector<Square>> connectLines;
   PieceSet connectPieceTypesTrimmed = ~NO_PIECE_SET;
   std::vector<PieceType> connectPieceGoalTypes[COLOR_NB];
   bool multimovePass[START_MULTIMOVES]; // irregular pattern of multimove passes at game start
