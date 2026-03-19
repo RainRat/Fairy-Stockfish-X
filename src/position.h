@@ -723,11 +723,15 @@ inline bool Position::piece_promotion_on_capture() const {
 
 inline bool Position::mandatory_pawn_promotion() const {
   assert(var != nullptr);
+  if (var->mandatoryPawnPromotionByColorSet[WHITE] || var->mandatoryPawnPromotionByColorSet[BLACK])
+      return var->mandatoryPawnPromotionByColor[side_to_move()];
   return var->mandatoryPawnPromotion;
 }
 
 inline bool Position::mandatory_piece_promotion() const {
   assert(var != nullptr);
+  if (var->mandatoryPiecePromotionByColorSet[WHITE] || var->mandatoryPiecePromotionByColorSet[BLACK])
+      return var->mandatoryPiecePromotionByColor[side_to_move()];
   return var->mandatoryPiecePromotion;
 }
 

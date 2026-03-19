@@ -926,8 +926,42 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
             std::copy(std::begin(parsedPriorityDrops), std::end(parsedPriorityDrops), std::begin(v->isPriorityDrop));
     }
     parse_attribute("piecePromotionOnCapture", v->piecePromotionOnCapture);
-    parse_attribute("mandatoryPawnPromotion", v->mandatoryPawnPromotion);
-    parse_attribute("mandatoryPiecePromotion", v->mandatoryPiecePromotion);
+    if (config.find("mandatoryPawnPromotion") != config.end())
+    {
+        parse_attribute("mandatoryPawnPromotion", v->mandatoryPawnPromotion);
+        v->mandatoryPawnPromotionByColor[WHITE] = v->mandatoryPawnPromotion;
+        v->mandatoryPawnPromotionByColor[BLACK] = v->mandatoryPawnPromotion;
+        v->mandatoryPawnPromotionByColorSet[WHITE] = true;
+        v->mandatoryPawnPromotionByColorSet[BLACK] = true;
+    }
+    if (config.find("mandatoryPawnPromotionWhite") != config.end())
+    {
+        parse_attribute("mandatoryPawnPromotionWhite", v->mandatoryPawnPromotionByColor[WHITE]);
+        v->mandatoryPawnPromotionByColorSet[WHITE] = true;
+    }
+    if (config.find("mandatoryPawnPromotionBlack") != config.end())
+    {
+        parse_attribute("mandatoryPawnPromotionBlack", v->mandatoryPawnPromotionByColor[BLACK]);
+        v->mandatoryPawnPromotionByColorSet[BLACK] = true;
+    }
+    if (config.find("mandatoryPiecePromotion") != config.end())
+    {
+        parse_attribute("mandatoryPiecePromotion", v->mandatoryPiecePromotion);
+        v->mandatoryPiecePromotionByColor[WHITE] = v->mandatoryPiecePromotion;
+        v->mandatoryPiecePromotionByColor[BLACK] = v->mandatoryPiecePromotion;
+        v->mandatoryPiecePromotionByColorSet[WHITE] = true;
+        v->mandatoryPiecePromotionByColorSet[BLACK] = true;
+    }
+    if (config.find("mandatoryPiecePromotionWhite") != config.end())
+    {
+        parse_attribute("mandatoryPiecePromotionWhite", v->mandatoryPiecePromotionByColor[WHITE]);
+        v->mandatoryPiecePromotionByColorSet[WHITE] = true;
+    }
+    if (config.find("mandatoryPiecePromotionBlack") != config.end())
+    {
+        parse_attribute("mandatoryPiecePromotionBlack", v->mandatoryPiecePromotionByColor[BLACK]);
+        v->mandatoryPiecePromotionByColorSet[BLACK] = true;
+    }
     parse_attribute("pieceDemotion", v->pieceDemotion);
     parse_attribute("blastOnCapture", v->blastOnCapture);
     parse_attribute("blastOnMove", v->blastOnMove);

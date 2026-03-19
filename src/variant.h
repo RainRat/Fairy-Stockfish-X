@@ -79,6 +79,10 @@ struct Variant {
   bool piecePromotionOnCapture = false;
   bool mandatoryPawnPromotion = true;
   bool mandatoryPiecePromotion = false;
+  bool mandatoryPawnPromotionByColor[COLOR_NB] = {false, false};
+  bool mandatoryPiecePromotionByColor[COLOR_NB] = {false, false};
+  bool mandatoryPawnPromotionByColorSet[COLOR_NB] = {false, false};
+  bool mandatoryPiecePromotionByColorSet[COLOR_NB] = {false, false};
   bool pieceDemotion = false;
   bool blastOnCapture = false;
   bool blastOnMove = false;
