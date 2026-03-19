@@ -66,7 +66,7 @@ quit
 CMDS
 )
 
-echo "$output" | grep -Fq "bestmove e1e1"
+echo "$output" | grep -Fq "bestmove 0000"
 
 # 4) Captures in the regular play phase must not refund setup points and unlock drops.
 output=$(run_uci <<'CMDS'

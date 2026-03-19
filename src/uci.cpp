@@ -534,6 +534,8 @@ string UCI::move(const Position& pos, Move m) {
 
   if (is_pass(m) && CurrentProtocol == XBOARD)
       return "@@@@";
+  if (is_pass(m))
+      return "0000";
 
   bool potionMove = false;
   std::string potionPrefix;

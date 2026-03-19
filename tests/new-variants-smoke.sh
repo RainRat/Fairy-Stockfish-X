@@ -219,7 +219,7 @@ echo "${out}" | grep -q "Fen: 4k3/8/8/4Q3/8/8/8/8 b - - 0 1"
 out=$(run_cmds "setoption name UCI_Variant value progressive
 position startpos moves e2e4 e7e5
 go perft 1")
-echo "${out}" | grep -q "^e1e1: 1$"
+echo "${out}" | grep -q "^0000: 1$"
 
 # 18) British chess: the royal queen may not move through check.
 out=$(run_cmds "setoption name UCI_Variant value british-chess
