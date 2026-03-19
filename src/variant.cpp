@@ -2244,6 +2244,11 @@ Variant* Variant::conclude() {
         PieceType pt = pop_lsb(ps);
         captureForbidden[pt] |= pt;
     }
+    for (PieceType pt = CUSTOM_PIECES; pt <= CUSTOM_PIECES_END; ++pt)
+    {
+        if ((pieceTypes & pt) && customPiece[pt - CUSTOM_PIECES].find('t') != std::string::npos)
+            captureForbidden[pt] |= KING;
+    }
     captureForbiddenToKing = NO_PIECE_SET;
     for (PieceSet ps = pieceTypes; ps; )
     {
