@@ -109,6 +109,20 @@ constexpr bool Is64Bit = true;
 constexpr bool Is64Bit = false;
 #endif
 
+#if defined(VERY_LARGE_BOARDS)
+constexpr int MaxBoardFiles = 16;
+constexpr int MaxBoardRanks = 16;
+constexpr int SquareBitMaskValue = 255;
+#elif defined(LARGEBOARDS)
+constexpr int MaxBoardFiles = 12;
+constexpr int MaxBoardRanks = 10;
+constexpr int SquareBitMaskValue = 127;
+#else
+constexpr int MaxBoardFiles = 8;
+constexpr int MaxBoardRanks = 8;
+constexpr int SquareBitMaskValue = 63;
+#endif
+
 typedef uint64_t Key;
 #if defined(VERY_LARGE_BOARDS) && !defined(LARGEBOARDS)
 #  define LARGEBOARDS
@@ -807,16 +821,8 @@ enum Square : int {
   SQ_NONE,
 
   SQUARE_ZERO = 0,
-#if defined(VERY_LARGE_BOARDS)
-  SQUARE_NB = 256,
-  SQUARE_BIT_MASK = 255,
-#elif defined(LARGEBOARDS)
-  SQUARE_NB = 120,
-  SQUARE_BIT_MASK = 127,
-#else
-  SQUARE_NB = 64,
-  SQUARE_BIT_MASK = 63,
-#endif
+  SQUARE_NB = MaxBoardFiles * MaxBoardRanks,
+  SQUARE_BIT_MASK = SquareBitMaskValue,
   SQ_MAX = SQUARE_NB - 1,
   SQUARE_NB_CHESS = 64,
   SQUARE_NB_SHOGI = 81,
