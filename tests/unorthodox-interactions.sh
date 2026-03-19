@@ -81,6 +81,15 @@ checking = false
 
 [dead-fen:chess]
 startFen = 4k3/8/8/8/8/8/8/8 w - - 0 1
+
+[iron-extinction:chess]
+customPiece1 = s:W
+pieceToCharTable = PNBRQ............S...Kpnbrq............s...k
+captureForbidden = *:s
+extinctionValue = win
+extinctionPieceTypes = q
+checking = false
+startFen = 4k3/8/8/8/8/8/3Qq3/4S2K w - - 0 1
 EOF
 
 echo "unorthodox interactions tests started"
@@ -153,6 +162,23 @@ echo "${out}" | grep -q "^e1d1: 1$"
 out=$(run_cmds "dead-fen" "${TEMP_INI}" "position fen r3k3/8/8/8/8/8/8/3^3K b - - 0 1
 go perft 1")
 echo "${out}" | grep -q "^a8d8: 1$"
+
+# 13. Test iron-like uncapturable pieces via captureForbidden alongside extinction targets
+out=$(run_cmds "iron-extinction" "${TEMP_INI}" "position startpos
+go perft 1")
+echo "${out}" | grep -q "^e1e2: 1$"
+if echo "${out}" | grep -q "^e2e1:"; then
+  echo "captureForbidden iron-piece suppression failed"
+  exit 1
+fi
+
+# 14. Test the same setup from black's side: enemy queen still cannot capture the iron piece
+out=$(run_cmds "iron-extinction" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/3Qq3/4S2K b - - 0 1
+go perft 1")
+if echo "${out}" | grep -q "^e2e1:"; then
+  echo "captureForbidden iron-piece suppression for black failed"
+  exit 1
+fi
 
 rm "${TEMP_INI}"
 
