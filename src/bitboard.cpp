@@ -210,6 +210,8 @@ namespace {
     return attack;
   }
 
+  Bitboard leap_rider_attacks(const std::map<Direction, int>& directions, Square s, Bitboard occupied, Color c);
+
   Bitboard contra_hopper_potential(const std::map<Direction, int>& directions, Square sq, Color c = WHITE) {
     Bitboard attack = 0;
 
@@ -232,6 +234,7 @@ namespace {
     Bitboard pseudo = 0;
 
     pseudo |= sliding_attack<RIDER>(riderDirs, s, 0, c);
+    pseudo |= leap_rider_attacks(pi->leapRider[initial][modality], s, 0, c);
     pseudo |= ski_sliding_attack(skiDirs, s, 0, c);
     pseudo |= sliding_attack<HOPPER_RANGE>(pi->hopper[initial][modality], s, 0, c);
     pseudo |= contra_hopper_potential(pi->contraHopper[initial][modality], s, c);
@@ -373,6 +376,86 @@ namespace {
     return attack;
   }
 #endif
+
+  Bitboard limited_step_rider_attacks(Square s, Bitboard occupied, int stepF, int stepR, int limit) {
+    Bitboard attack = 0;
+    int f = int(file_of(s));
+    int r = int(rank_of(s));
+    int count = 0;
+
+    while (true)
+    {
+        f += stepF;
+        r += stepR;
+        if (f < int(FILE_A) || f > int(FILE_MAX) || r < int(RANK_1) || r > int(RANK_MAX))
+            break;
+        Square to = make_square(File(f), Rank(r));
+        attack |= to;
+        if (limit > 0 && ++count >= limit)
+            break;
+        if (occupied & to)
+            break;
+    }
+
+    return attack;
+  }
+
+  bool decode_direction(Direction d, int& stepF, int& stepR) {
+    const int raw = int(d);
+    int bestDr = 0;
+    int bestDf = 0;
+    int bestMax = std::numeric_limits<int>::max();
+    int bestSum = std::numeric_limits<int>::max();
+    int bestZeroPenalty = std::numeric_limits<int>::max();
+    bool found = false;
+
+    for (int dr = -int(RANK_MAX); dr <= int(RANK_MAX); ++dr)
+    {
+        int df = raw - dr * FILE_NB;
+        if (df < -int(FILE_MAX) || df > int(FILE_MAX))
+            continue;
+        if (dr == 0 && df == 0)
+            continue;
+        int maxDelta = std::max(std::abs(dr), std::abs(df));
+        int sumDelta = std::abs(dr) + std::abs(df);
+        int zeroPenalty = (dr == 0 || df == 0) ? 1 : 0;
+
+        if (!found
+            || maxDelta < bestMax
+            || (maxDelta == bestMax && (zeroPenalty < bestZeroPenalty
+                || (zeroPenalty == bestZeroPenalty && sumDelta < bestSum))))
+        {
+            bestDr = dr;
+            bestDf = df;
+            bestMax = maxDelta;
+            bestSum = sumDelta;
+            bestZeroPenalty = zeroPenalty;
+            found = true;
+        }
+    }
+
+    if (!found)
+        return false;
+
+    stepR = bestDr;
+    stepF = bestDf;
+    return true;
+  }
+
+  Bitboard leap_rider_attacks(const std::map<Direction, int>& directions, Square s, Bitboard occupied, Color c) {
+    Bitboard attack = 0;
+
+    for (auto const& [d, limit] : directions)
+    {
+        int stepF = 0;
+        int stepR = 0;
+        if (!decode_direction(c == WHITE ? d : Direction(-d), stepF, stepR))
+            continue;
+        attack |= limited_step_rider_attacks(s, occupied, stepF, stepR, limit);
+    }
+
+    return attack;
+  }
 
 }
 
@@ -525,6 +608,14 @@ Bitboard rider_attacks_bb(RiderType R, Square s, Bitboard occupied) {
   }
 }
 #endif
+
+Bitboard leap_rider_attacks_bb(PieceType pt, Color c, Square s, Bitboard occupied) {
+  return leap_rider_attacks(pieceMap.get(pt)->leapRider[0][MODALITY_CAPTURE], s, occupied, c);
+}
+
+Bitboard leap_rider_moves_bb(PieceType pt, bool initial, Color c, Square s, Bitboard occupied) {
+  return leap_rider_attacks(pieceMap.get(pt)->leapRider[initial][MODALITY_QUIET], s, occupied, c);
+}
 
 
 /// Bitboards::pretty() returns an ASCII representation of a bitboard suitable

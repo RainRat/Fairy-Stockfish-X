@@ -127,6 +127,8 @@ extern Bitboard LeaperMoves[2][COLOR_NB][PIECE_TYPE_NB][SQUARE_NB];
 extern Bitboard BoardSizeBB[FILE_NB][RANK_NB];
 extern RiderType AttackRiderTypes[PIECE_TYPE_NB];
 extern RiderType MoveRiderTypes[2][PIECE_TYPE_NB];
+Bitboard leap_rider_attacks_bb(PieceType pt, Color c, Square s, Bitboard occupied);
+Bitboard leap_rider_moves_bb(PieceType pt, bool initial, Color c, Square s, Bitboard occupied);
 
 #ifdef LARGEBOARDS
 int popcount(Bitboard b); // required for 128 bit pext
@@ -889,6 +891,7 @@ inline Bitboard attacks_bb(Color c, PieceType pt, Square s, Bitboard occupied) {
   RiderType r = AttackRiderTypes[pt];
   while (r)
       b |= rider_attacks_bb(pop_rider(r), s, occupied);
+  b |= leap_rider_attacks_bb(pt, c, s, occupied);
   return b & PseudoAttacks[c][pt][s];
 }
 
@@ -900,6 +903,7 @@ inline Bitboard moves_bb(Color c, PieceType pt, Square s, Bitboard occupied) {
   RiderType r = MoveRiderTypes[Initial][pt];
   while (r)
       b |= rider_attacks_bb(pop_rider(r), s, occupied);
+  b |= leap_rider_moves_bb(pt, Initial, c, s, occupied);
   return b & PseudoMoves[Initial][c][pt][s];
 }
 

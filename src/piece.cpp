@@ -267,6 +267,7 @@ namespace {
                            : contraHopper ? p->contraHopper[initial][modality]
                            : rider ? p->slider[initial][modality]
                                    : p->steps[initial][modality];
+                  auto& leapRiderV = p->leapRider[initial][modality];
                   auto& tupleV = p->tupleSteps[initial][modality];
                   auto has_dir = [&](std::string s) {
                     return std::find(directions.begin(), directions.end(), s) != directions.end();
@@ -275,7 +276,12 @@ namespace {
                       if (atomIsTuple && !hopper && !rider)
                           tupleV.emplace_back(dr, df);
                       else
+                      {
                           v[Direction(dr * FILE_NB + df)] = distance;
+                          if (rider && !atomIsRider && !hopper && !contraHopper
+                              && !lame && !dynamicDistance && !skiSlider && !maxDistance)
+                              leapRiderV[Direction(dr * FILE_NB + df)] = distance;
+                      }
                   };
                   if (directions.size() == 0 || has_dir("ff") || has_dir("vv") || has_dir("rf") || has_dir("rv") || has_dir("fh") || has_dir("rh") || (has_dir("hr") && !standaloneH))
                       add_step(atom.first, atom.second);
