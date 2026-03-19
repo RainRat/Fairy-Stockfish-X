@@ -596,6 +596,15 @@ bool VariantParser<DoCheck>::require_attribute(bool enabled, const std::string& 
 }
 
 template <bool DoCheck>
+template <typename T, typename U>
+bool VariantParser<DoCheck>::require_attributes(bool enabled,
+                                                const std::string& key1, T& target1,
+                                                const std::string& key2, U& target2) {
+    return require_attribute(enabled, key1, target1)
+        && require_attribute(enabled, key2, target2);
+}
+
+template <bool DoCheck>
 template <typename T>
 void VariantParser<DoCheck>::parse_both_colors(const std::string& key, T& target) {
     parse_attribute(key, target[WHITE]);
@@ -607,6 +616,22 @@ template <typename T>
 void VariantParser<DoCheck>::parse_both_colors_piece(const std::string& key, T& target, const std::string& pieceToChar) {
     parse_attribute(key, target[WHITE], pieceToChar);
     parse_attribute(key, target[BLACK], pieceToChar);
+}
+
+template <bool DoCheck>
+template <typename T>
+void VariantParser<DoCheck>::parse_both_colors_with_overrides(const std::string& key, T& target) {
+    parse_both_colors(key, target);
+    parse_attribute(key + "White", target[WHITE]);
+    parse_attribute(key + "Black", target[BLACK]);
+}
+
+template <bool DoCheck>
+template <typename T>
+void VariantParser<DoCheck>::parse_both_colors_with_overrides_piece(const std::string& key, T& target, const std::string& pieceToChar) {
+    parse_both_colors_piece(key, target, pieceToChar);
+    parse_attribute(key + "White", target[WHITE], pieceToChar);
+    parse_attribute(key + "Black", target[BLACK], pieceToChar);
 }
 
 template <bool DoCheck>
@@ -802,19 +827,14 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("mandatoryPromotionRegion", v->mandatoryPromotionRegion[WHITE]);
     parse_attribute("mandatoryPromotionRegion", v->mandatoryPromotionRegion[BLACK]);
     parse_attribute("pieceSpecificPromotionRegion", v->pieceSpecificPromotionRegion);
-    if (!require_attribute(v->pieceSpecificPromotionRegion, "whitePiecePromotionRegion", v->whitePiecePromotionRegion)
-        || !require_attribute(v->pieceSpecificPromotionRegion, "blackPiecePromotionRegion", v->blackPiecePromotionRegion))
+    if (!require_attributes(v->pieceSpecificPromotionRegion,
+                            "whitePiecePromotionRegion", v->whitePiecePromotionRegion,
+                            "blackPiecePromotionRegion", v->blackPiecePromotionRegion))
         return false;
     // Take the first promotionPawnTypes as the main promotionPawnType
-    parse_both_colors_piece("promotionPawnTypes", v->mainPromotionPawnType, v->pieceToChar);
-    parse_both_colors_piece("promotionPawnTypes", v->promotionPawnTypes, v->pieceToChar);
-    parse_attribute("promotionPawnTypesWhite", v->mainPromotionPawnType[WHITE], v->pieceToChar);
-    parse_attribute("promotionPawnTypesBlack", v->mainPromotionPawnType[BLACK], v->pieceToChar);
-    parse_attribute("promotionPawnTypesWhite", v->promotionPawnTypes[WHITE], v->pieceToChar);
-    parse_attribute("promotionPawnTypesBlack", v->promotionPawnTypes[BLACK], v->pieceToChar);
-    parse_both_colors_piece("promotionPieceTypes", v->promotionPieceTypes, v->pieceToChar);
-    parse_attribute("promotionPieceTypesWhite", v->promotionPieceTypes[WHITE], v->pieceToChar);
-    parse_attribute("promotionPieceTypesBlack", v->promotionPieceTypes[BLACK], v->pieceToChar);
+    parse_both_colors_with_overrides_piece("promotionPawnTypes", v->mainPromotionPawnType, v->pieceToChar);
+    parse_both_colors_with_overrides_piece("promotionPawnTypes", v->promotionPawnTypes, v->pieceToChar);
+    parse_both_colors_with_overrides_piece("promotionPieceTypes", v->promotionPieceTypes, v->pieceToChar);
     parse_attribute("sittuyinPromotion", v->sittuyinPromotion);
     parse_attribute("promotionSteal", v->promotionSteal);
     parse_attribute("promotionRequireInHand", v->promotionRequireInHand);
@@ -1000,21 +1020,19 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("doubleStepRegionWhite", v->doubleStepRegion[WHITE]);
     parse_attribute("doubleStepRegionBlack", v->doubleStepRegion[BLACK]);
     parse_attribute("pieceSpecificDoubleStepRegion", v->pieceSpecificDoubleStepRegion);
-    if (!require_attribute(v->pieceSpecificDoubleStepRegion, "whitePieceDoubleStepRegion", v->whitePieceDoubleStepRegion)
-        || !require_attribute(v->pieceSpecificDoubleStepRegion, "blackPieceDoubleStepRegion", v->blackPieceDoubleStepRegion))
+    if (!require_attributes(v->pieceSpecificDoubleStepRegion,
+                            "whitePieceDoubleStepRegion", v->whitePieceDoubleStepRegion,
+                            "blackPieceDoubleStepRegion", v->blackPieceDoubleStepRegion))
         return false;
     parse_attribute("pieceSpecificTripleStepRegion", v->pieceSpecificTripleStepRegion);
-    if (!require_attribute(v->pieceSpecificTripleStepRegion, "whitePieceTripleStepRegion", v->whitePieceTripleStepRegion)
-        || !require_attribute(v->pieceSpecificTripleStepRegion, "blackPieceTripleStepRegion", v->blackPieceTripleStepRegion))
+    if (!require_attributes(v->pieceSpecificTripleStepRegion,
+                            "whitePieceTripleStepRegion", v->whitePieceTripleStepRegion,
+                            "blackPieceTripleStepRegion", v->blackPieceTripleStepRegion))
         return false;
     parse_attribute("tripleStepRegionWhite", v->tripleStepRegion[WHITE]);
     parse_attribute("tripleStepRegionBlack", v->tripleStepRegion[BLACK]);
-    parse_both_colors("enPassantRegion", v->enPassantRegion);
-    parse_attribute("enPassantRegionWhite", v->enPassantRegion[WHITE]);
-    parse_attribute("enPassantRegionBlack", v->enPassantRegion[BLACK]);
-    parse_both_colors_piece("enPassantTypes", v->enPassantTypes, v->pieceToChar);
-    parse_attribute("enPassantTypesWhite", v->enPassantTypes[WHITE], v->pieceToChar);
-    parse_attribute("enPassantTypesBlack", v->enPassantTypes[BLACK], v->pieceToChar);
+    parse_both_colors_with_overrides("enPassantRegion", v->enPassantRegion);
+    parse_both_colors_with_overrides_piece("enPassantTypes", v->enPassantTypes, v->pieceToChar);
     parse_attribute("castling", v->castling);
     parse_attribute("castlingDroppedPiece", v->castlingDroppedPiece);
     parse_attribute("castlingForbiddenPlies", v->castlingForbiddenPlies);
@@ -1022,14 +1040,10 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("castlingQueensideFile", v->castlingQueensideFile);
     parse_attribute("castlingRank", v->castlingRank);
     parse_attribute("castlingKingFile", v->castlingKingFile);
-    parse_both_colors_piece("castlingKingPiece", v->castlingKingPiece, v->pieceToChar);
-    parse_attribute("castlingKingPieceWhite", v->castlingKingPiece[WHITE], v->pieceToChar);
-    parse_attribute("castlingKingPieceBlack", v->castlingKingPiece[BLACK], v->pieceToChar);
+    parse_both_colors_with_overrides_piece("castlingKingPiece", v->castlingKingPiece, v->pieceToChar);
     parse_attribute("castlingRookKingsideFile", v->castlingRookKingsideFile);
     parse_attribute("castlingRookQueensideFile", v->castlingRookQueensideFile);
-    parse_both_colors_piece("castlingRookPieces", v->castlingRookPieces, v->pieceToChar);
-    parse_attribute("castlingRookPiecesWhite", v->castlingRookPieces[WHITE], v->pieceToChar);
-    parse_attribute("castlingRookPiecesBlack", v->castlingRookPieces[BLACK], v->pieceToChar);
+    parse_both_colors_with_overrides_piece("castlingRookPieces", v->castlingRookPieces, v->pieceToChar);
     parse_attribute("oppositeCastling", v->oppositeCastling);
     parse_attribute("checking", v->checking);
     parse_attribute("allowChecks", v->allowChecks);
@@ -1059,9 +1073,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("dropKingLast", v->dropKingLast);
     parse_attribute("openingSelfRemoval", v->openingSelfRemoval);
     parse_attribute("openingSelfRemovalAdjacentToLast", v->openingSelfRemovalAdjacentToLast);
-    parse_both_colors("openingSelfRemovalRegion", v->openingSelfRemovalRegion);
-    parse_attribute("openingSelfRemovalRegionWhite", v->openingSelfRemovalRegion[WHITE]);
-    parse_attribute("openingSelfRemovalRegionBlack", v->openingSelfRemovalRegion[BLACK]);
+    parse_both_colors_with_overrides("openingSelfRemovalRegion", v->openingSelfRemovalRegion);
     parse_attribute("pieceDrops", v->pieceDrops);
     parse_attribute("virtualDrops", v->virtualDrops);
     const auto& it_virtual_drop_limit = config.find("virtualDropLimit");
@@ -1127,8 +1139,9 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("dropRegionWhite", v->dropRegion[WHITE]);
     parse_attribute("dropRegionBlack", v->dropRegion[BLACK]);
     parse_attribute("pieceSpecificDropRegion", v->pieceSpecificDropRegion);
-    if (!require_attribute(v->pieceSpecificDropRegion, "whitePieceDropRegion", v->whitePieceDropRegion)
-        || !require_attribute(v->pieceSpecificDropRegion, "blackPieceDropRegion", v->blackPieceDropRegion))
+    if (!require_attributes(v->pieceSpecificDropRegion,
+                            "whitePieceDropRegion", v->whitePieceDropRegion,
+                            "blackPieceDropRegion", v->blackPieceDropRegion))
         return false;
     parse_attribute("sittuyinRookDrop", v->sittuyinRookDrop);
     parse_attribute("dropOppositeColoredBishop", v->dropOppositeColoredBishop);
@@ -1173,12 +1186,8 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("forcedJumpSameDirection", v->forcedJumpSameDirection);
     parse_attribute("cambodianMoves", v->cambodianMoves);
     parse_attribute("diagonalLines", v->diagonalLines);
-    parse_both_colors("pass", v->pass);
-    parse_attribute("passWhite", v->pass[WHITE]);
-    parse_attribute("passBlack", v->pass[BLACK]);
-    parse_both_colors("passOnStalemate", v->passOnStalemate);
-    parse_attribute("passOnStalemateWhite", v->passOnStalemate[WHITE]);
-    parse_attribute("passOnStalemateBlack", v->passOnStalemate[BLACK]);
+    parse_both_colors_with_overrides("pass", v->pass);
+    parse_both_colors_with_overrides("passOnStalemate", v->passOnStalemate);
     parse_attribute("passUntilSetup", v->passUntilSetup);
     parse_attribute("multimoves", v->multimoves);
     parse_attribute("progressiveMultimove", v->progressiveMultimove);
@@ -1206,9 +1215,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("soldierPromotionRank", v->soldierPromotionRank);
     parse_attribute("flipEnclosedPieces", v->flipEnclosedPieces);
     // game end
-    parse_both_colors_piece("nMoveRuleTypes", v->nMoveRuleTypes, v->pieceToChar);
-    parse_attribute("nMoveRuleTypesWhite", v->nMoveRuleTypes[WHITE], v->pieceToChar);
-    parse_attribute("nMoveRuleTypesBlack", v->nMoveRuleTypes[BLACK], v->pieceToChar);
+    parse_both_colors_with_overrides_piece("nMoveRuleTypes", v->nMoveRuleTypes, v->pieceToChar);
     parse_attribute("nMoveRule", v->nMoveRule);
     parse_attribute("nMoveRuleImmediate", v->nMoveRuleImmediate);
     parse_attribute("nMoveHardLimitRule", v->nMoveHardLimitRule);
@@ -1245,12 +1252,8 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
         v->pseudoRoyalTypes = v->extinctionPieceTypes;
         v->pseudoRoyalCount = v->extinctionPieceCount + 1;
     }
-    parse_both_colors_piece("flagPiece", v->flagPiece, v->pieceToChar);
-    parse_attribute("flagPieceWhite", v->flagPiece[WHITE], v->pieceToChar);
-    parse_attribute("flagPieceBlack", v->flagPiece[BLACK], v->pieceToChar);
-    parse_both_colors("flagRegion", v->flagRegion);
-    parse_attribute("flagRegionWhite", v->flagRegion[WHITE]);
-    parse_attribute("flagRegionBlack", v->flagRegion[BLACK]);
+    parse_both_colors_with_overrides_piece("flagPiece", v->flagPiece, v->pieceToChar);
+    parse_both_colors_with_overrides("flagRegion", v->flagRegion);
     parse_attribute("flagPieceCount", v->flagPieceCount);
     parse_attribute("flagPieceBlockedWin", v->flagPieceBlockedWin);
     parse_attribute("flagMove", v->flagMove);
