@@ -34,6 +34,9 @@ PieceMap pieceMap; // Global object
 
 
 namespace {
+  // Keep legacy/variant-facing aliases here:
+  // L/C both mean camel (3,1), and J/Z both mean zebra (3,2).
+  // In particular, built-in Janggi elephant notation still uses nZ.
   const std::map<char, std::vector<std::pair<int, int>>> leaperAtoms = {
       {'W', {std::make_pair(1, 0)}},
       {'F', {std::make_pair(1, 1)}},
