@@ -1043,11 +1043,15 @@ inline bool Position::fast_attacks2() const {
 
 inline bool Position::drop_checks() const {
   assert(var != nullptr);
+  if (var->dropChecksByColorSet[WHITE] || var->dropChecksByColorSet[BLACK])
+      return var->dropChecksByColor[side_to_move()];
   return var->dropChecks;
 }
 
 inline bool Position::drop_mates() const {
   assert(var != nullptr);
+  if (var->dropMatesByColorSet[WHITE] || var->dropMatesByColorSet[BLACK])
+      return var->dropMatesByColor[side_to_move()];
   return var->dropMates;
 }
 

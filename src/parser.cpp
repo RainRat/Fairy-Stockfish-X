@@ -1082,8 +1082,42 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("checking", v->checking);
     parse_attribute("allowChecks", v->allowChecks);
     parse_attribute("royalPieceNoThroughCheck", v->royalPieceNoThroughCheck);
-    parse_attribute("dropChecks", v->dropChecks);
-    parse_attribute("dropMates", v->dropMates);
+    if (config.find("dropChecks") != config.end())
+    {
+        parse_attribute("dropChecks", v->dropChecks);
+        v->dropChecksByColor[WHITE] = v->dropChecks;
+        v->dropChecksByColor[BLACK] = v->dropChecks;
+        v->dropChecksByColorSet[WHITE] = true;
+        v->dropChecksByColorSet[BLACK] = true;
+    }
+    if (config.find("dropChecksWhite") != config.end())
+    {
+        parse_attribute("dropChecksWhite", v->dropChecksByColor[WHITE]);
+        v->dropChecksByColorSet[WHITE] = true;
+    }
+    if (config.find("dropChecksBlack") != config.end())
+    {
+        parse_attribute("dropChecksBlack", v->dropChecksByColor[BLACK]);
+        v->dropChecksByColorSet[BLACK] = true;
+    }
+    if (config.find("dropMates") != config.end())
+    {
+        parse_attribute("dropMates", v->dropMates);
+        v->dropMatesByColor[WHITE] = v->dropMates;
+        v->dropMatesByColor[BLACK] = v->dropMates;
+        v->dropMatesByColorSet[WHITE] = true;
+        v->dropMatesByColorSet[BLACK] = true;
+    }
+    if (config.find("dropMatesWhite") != config.end())
+    {
+        parse_attribute("dropMatesWhite", v->dropMatesByColor[WHITE]);
+        v->dropMatesByColorSet[WHITE] = true;
+    }
+    if (config.find("dropMatesBlack") != config.end())
+    {
+        parse_attribute("dropMatesBlack", v->dropMatesByColor[BLACK]);
+        v->dropMatesByColorSet[BLACK] = true;
+    }
     parse_attribute("mustCapture", v->mustCapture);
     parse_attribute("mustCaptureEnPassant", v->mustCaptureEnPassant);
     parse_attribute("mustCaptureWhite", v->mustCaptureByColor[WHITE]);

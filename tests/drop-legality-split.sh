@@ -1,0 +1,72 @@
+#!/bin/bash
+
+set -euo pipefail
+
+error() {
+  echo "drop legality split regression failed on line $1"
+  [[ -n "${TMP_VARIANT_PATH:-}" ]] && rm -f "${TMP_VARIANT_PATH}"
+  exit 1
+}
+trap 'error ${LINENO}' ERR
+
+ENGINE=${1:-./stockfish}
+
+TMP_VARIANT_PATH=$(mktemp /tmp/fsx-drop-split-XXXXXX.ini)
+cat >"${TMP_VARIANT_PATH}" <<'INI'
+[dropcheck-split-white:chess]
+pieceDrops = true
+dropChecksWhite = false
+dropChecksBlack = true
+startFen = 4k3/8/8/8/8/8/8/4K3[R] w - - 0 1
+
+[dropcheck-split-black:chess]
+pieceDrops = true
+dropChecksWhite = false
+dropChecksBlack = true
+startFen = 4k3/8/8/8/8/8/8/4K3[r] b - - 0 1
+
+[dropmate-split-white:chess]
+pieceDrops = true
+dropChecks = true
+dropMatesWhite = false
+dropMatesBlack = true
+startFen = 4k3/8/4K3/8/8/8/8/8[Q] w - - 0 1
+
+[dropmate-split-black:chess]
+pieceDrops = true
+dropChecks = true
+dropMatesWhite = false
+dropMatesBlack = true
+startFen = 8/8/8/8/8/4k3/8/4K3[q] b - - 0 1
+INI
+
+run_perft() {
+  local variant="$1"
+  cat <<CMDS | "${ENGINE}"
+uci
+setoption name VariantPath value ${TMP_VARIANT_PATH}
+setoption name UCI_Variant value ${variant}
+position startpos
+go perft 1
+quit
+CMDS
+}
+
+echo "drop legality split regression tests started"
+
+out=$(run_perft "dropcheck-split-white")
+! echo "${out}" | grep -q "^R@e7: 1$"
+
+out=$(run_perft "dropcheck-split-black")
+echo "${out}" | grep -q "^R@e2: 1$"
+
+out=$(run_perft "dropmate-split-white")
+! echo "${out}" | grep -q "^Q@e7: 1$"
+
+out=$(run_perft "dropmate-split-black")
+echo "${out}" | grep -q "^Q@e2: 1$"
+
+rm -f "${TMP_VARIANT_PATH}"
+unset TMP_VARIANT_PATH
+
+echo "drop legality split regression tests passed"

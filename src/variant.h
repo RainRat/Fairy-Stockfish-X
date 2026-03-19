@@ -137,6 +137,10 @@ struct Variant {
   bool royalPieceNoThroughCheck = false;
   bool dropChecks = true;
   bool dropMates = true;
+  bool dropChecksByColor[COLOR_NB] = {true, true};
+  bool dropMatesByColor[COLOR_NB] = {true, true};
+  bool dropChecksByColorSet[COLOR_NB] = {false, false};
+  bool dropMatesByColorSet[COLOR_NB] = {false, false};
   bool mustCapture = false;
   bool mustCaptureEnPassant = false;
   bool mustCaptureByColor[COLOR_NB] = {false, false};
