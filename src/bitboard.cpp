@@ -121,13 +121,6 @@ namespace {
   enum MovementType { RIDER, HOPPER, LAME_LEAPER, HOPPER_RANGE };
 
   template <MovementType MT>
-#ifdef PRECOMPUTED_MAGICS
-  void init_magics(Bitboard table[], Magic magics[], const std::map<Direction, int>& directions, const Bitboard magicsInit[]);
-#else
-  void init_magics(Bitboard table[], Magic magics[], const std::map<Direction, int>& directions);
-#endif
-
-  template <MovementType MT>
   Bitboard sliding_attack(const std::map<Direction, int>& directions, Square sq, Bitboard occupied, Color c = WHITE) {
     assert(MT != LAME_LEAPER);
 
