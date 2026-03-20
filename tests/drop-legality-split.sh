@@ -48,6 +48,18 @@ startFen = 4k3/8/8/8/8/8/4P3/4K3[P] w - - 0 1
 pieceDrops = true
 dropNoDoubledWhite = p
 startFen = 4k3/4p3/8/8/8/8/8/4K3[p] b - - 0 1
+
+[dropnodoubledcount-split-white:chess]
+pieceDrops = true
+dropNoDoubled = p
+dropNoDoubledCountWhite = 2
+startFen = 4k3/8/8/8/8/8/4P3/4K3[P] w - - 0 1
+
+[dropnodoubledcount-split-black:chess]
+pieceDrops = true
+dropNoDoubled = p
+dropNoDoubledCountWhite = 2
+startFen = 4k3/4p3/8/8/8/8/8/4K3[p] b - - 0 1
 INI
 
 run_perft() {
@@ -81,6 +93,12 @@ out=$(run_perft "dropnodoubled-split-white")
 
 out=$(run_perft "dropnodoubled-split-black")
 echo "${out}" | grep -q "^P@e5: 1$"
+
+out=$(run_perft "dropnodoubledcount-split-white")
+echo "${out}" | grep -q "^P@e4: 1$"
+
+out=$(run_perft "dropnodoubledcount-split-black")
+! echo "${out}" | grep -q "^P@e5: 1$"
 
 rm -f "${TMP_VARIANT_PATH}"
 unset TMP_VARIANT_PATH

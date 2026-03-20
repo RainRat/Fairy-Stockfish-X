@@ -179,6 +179,7 @@ struct Variant {
   PieceType dropNoDoubled = NO_PIECE_TYPE;
   PieceType dropNoDoubledByColor[COLOR_NB] = {NO_PIECE_TYPE, NO_PIECE_TYPE};
   int dropNoDoubledCount = 1;
+  int dropNoDoubledCountByColor[COLOR_NB] = {1, 1};
   PieceSet hostageExchange[PIECE_TYPE_NB] = {};
   bool prisonPawnPromotion = false;
   bool immobilityIllegal = false;

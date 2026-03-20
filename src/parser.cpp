@@ -1222,6 +1222,12 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     if (config.find("dropNoDoubledBlack") != config.end())
         parse_attribute("dropNoDoubledBlack", v->dropNoDoubledByColor[BLACK], v->pieceToChar);
     parse_attribute("dropNoDoubledCount", v->dropNoDoubledCount);
+    v->dropNoDoubledCountByColor[WHITE] = v->dropNoDoubledCount;
+    v->dropNoDoubledCountByColor[BLACK] = v->dropNoDoubledCount;
+    if (config.find("dropNoDoubledCountWhite") != config.end())
+        parse_attribute("dropNoDoubledCountWhite", v->dropNoDoubledCountByColor[WHITE]);
+    if (config.find("dropNoDoubledCountBlack") != config.end())
+        parse_attribute("dropNoDoubledCountBlack", v->dropNoDoubledCountByColor[BLACK]);
     parse_attribute("freeDrops", v->freeDrops);
     parse_attribute("payPointsToDrop", v->payPointsToDrop);
     parse_attribute("potions", v->potions);
