@@ -418,19 +418,22 @@ class TBTables {
     };
 
     static constexpr int Size = 1 << 12; // 4K table, indexed by key's 12 lsb
-    static constexpr int Overflow = 1;  // Number of elements allowed to map to the last bucket
 
-    Entry hashTable[Size + Overflow];
+    Entry hashTable[Size];
 
     std::deque<TBTable<WDL>> wdlTable;
     std::deque<TBTable<DTZ>> dtzTable;
+
+    static uint32_t probe_distance(uint32_t homeBucket, uint32_t bucket) {
+        return (bucket - homeBucket) & (Size - 1);
+    }
 
     void insert(Key key, TBTable<WDL>* wdl, TBTable<DTZ>* dtz) {
         uint32_t homeBucket = (uint32_t)key & (Size - 1);
         Entry entry{ key, wdl, dtz };
 
-        // Ensure last element is empty to avoid overflow when looking up
-        for (uint32_t bucket = homeBucket; bucket < Size + Overflow - 1; ++bucket) {
+        for (uint32_t dist = 0; dist < Size; ++dist) {
+            uint32_t bucket = (homeBucket + dist) & (Size - 1);
             Key otherKey = hashTable[bucket].key;
             if (otherKey == key || !hashTable[bucket].get<WDL>()) {
                 hashTable[bucket] = entry;
@@ -440,10 +443,11 @@ class TBTables {
             // Robin Hood hashing: If we've probed for longer than this element,
             // insert here and search for a new spot for the other element instead.
             uint32_t otherHomeBucket = (uint32_t)otherKey & (Size - 1);
-            if (otherHomeBucket > homeBucket) {
+            if (probe_distance(otherHomeBucket, bucket) < dist) {
                 std::swap(entry, hashTable[bucket]);
                 key = otherKey;
                 homeBucket = otherHomeBucket;
+                dist = probe_distance(homeBucket, bucket);
             }
         }
         std::cerr << "TB hash table size too low!" << std::endl;
@@ -453,10 +457,13 @@ class TBTables {
 public:
     template<TBType Type>
     TBTable<Type>* get(Key key) {
-        for (const Entry* entry = &hashTable[(uint32_t)key & (Size - 1)]; ; ++entry) {
+        uint32_t homeBucket = (uint32_t)key & (Size - 1);
+        for (uint32_t dist = 0; dist < Size; ++dist) {
+            const Entry* entry = &hashTable[(homeBucket + dist) & (Size - 1)];
             if (entry->key == key || !entry->get<Type>())
                 return entry->get<Type>();
         }
+        return nullptr;
     }
 
     void clear() {
