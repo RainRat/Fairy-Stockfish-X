@@ -1161,7 +1161,20 @@ void* mapped(TBTable<Type>& e, const Position& pos) {
     fname =  (e.key == pos.material_key() ? w + 'v' + b : b + 'v' + w)
            + (Type == WDL ? ".rtbw" : ".rtbz");
 
-    uint8_t* data = TBFile(fname).map(&e.baseAddress, &e.mapping, Type);
+    TBFile file(fname);
+
+    // WDL presence is checked at table-registration time, but DTZ files are
+    // optional. Treat a missing file as an unmapped table instead of asserting
+    // in TBFile::map() on debug builds.
+    if (!file.is_open())
+    {
+        e.baseAddress = nullptr;
+        e.mapping = 0;
+        e.ready.store(true, std::memory_order_release);
+        return nullptr;
+    }
+
+    uint8_t* data = file.map(&e.baseAddress, &e.mapping, Type);
 
     if (data)
         set(e, data);
