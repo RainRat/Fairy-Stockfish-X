@@ -41,6 +41,11 @@ startFen = 5/5/5/5/K3n w - - 0 1
 maxFile = 5
 maxRank = 5
 startFen = 5/5/5/5/K3k w - - 0 1
+
+[mini-10x8:chess]
+maxFile = 10
+maxRank = 8
+castling = false
 INI
 
 # Non-8x8 anti endgames should remain horizontally symmetric.
@@ -60,5 +65,9 @@ rk_queen_right=$(run_eval "${tmp_ini}" "mini-rk" "2k2/3Q1/5/5/4K w - - 0 1")
 rk_rook_left=$(run_eval "${tmp_ini}" "mini-rk" "2k2/1R3/5/5/K4 w - - 0 1")
 rk_rook_right=$(run_eval "${tmp_ini}" "mini-rk" "2k2/3R1/5/5/4K w - - 0 1")
 [[ "${rk_rook_left}" == "${rk_rook_right}" ]]
+
+# Non-8x8 KQKP should not leak VALUE_NONE from the specialized evaluator.
+kqkp_10x8=$(run_eval "${tmp_ini}" "mini-10x8" "10/10/10/4k5/10/10/10/4KQp3 w - - 0 1")
+[[ -n "${kqkp_10x8}" ]]
 
 echo "non8x8 endgame test OK"

@@ -78,6 +78,7 @@ namespace Eval {
 
   void NNUE::init() {
 
+    currentNnueVariant = nullptr;
     useNNUE = Options["Use NNUE"];
     if (!useNNUE)
         return;
@@ -160,8 +161,18 @@ namespace Eval {
   void NNUE::verify() {
 
     string eval_file = string(Options["EvalFile"]);
+    bool loadedTokenPresent = false;
 
-    if (useNNUE && eval_file.find(eval_file_loaded) == string::npos)
+    stringstream ss(eval_file);
+    string token;
+    while (getline(ss, token, UCI::SepChar))
+        if (token == eval_file_loaded)
+        {
+            loadedTokenPresent = true;
+            break;
+        }
+
+    if (useNNUE && !loadedTokenPresent)
     {
         UCI::OptionsMap defaults;
         UCI::init(defaults);

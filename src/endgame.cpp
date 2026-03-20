@@ -254,7 +254,7 @@ Value Endgame<KRKP>::operator()(const Position& pos) const {
   Square weakKing   = pos.square<KING>(weakSide);
   Square strongRook = pos.square<ROOK>(strongSide);
   Square weakPawn   = pos.square<PAWN>(weakSide);
-  Square queeningSquare = make_square(file_of(weakPawn), pos.max_rank());
+  Square queeningSquare = make_square(file_of(weakPawn), relative_rank(weakSide, RANK_8, pos.max_rank()));
   Value result;
 
   // If the stronger side's king is in front of the pawn, it's a win
@@ -322,18 +322,17 @@ Value Endgame<KQKP>::operator()(const Position& pos) const {
   assert(verify_material(pos, strongSide, QueenValueMg, 0));
   assert(verify_material(pos, weakSide, VALUE_ZERO, 1));
 
-  // This draw exception is based on classic 8x8 fortress cases for pawns on
-  // files A/C/F/H and does not generalize cleanly to other board widths.
-  if (pos.max_file() != FILE_H || pos.max_rank() != RANK_8)
-      return VALUE_NONE;
-
   Square strongKing = pos.square<KING>(strongSide);
   Square weakKing   = pos.square<KING>(weakSide);
   Square weakPawn   = pos.square<PAWN>(weakSide);
 
   Value result = Value(push_close(strongKing, weakKing));
 
-  if (   relative_rank(weakSide, weakPawn, pos.max_rank()) != RANK_7
+  // The classic 8x8 fortress exception for pawns on A/C/F/H does not
+  // generalize cleanly to other board widths, so only apply it on 8x8.
+  if (   pos.max_file() != FILE_H
+      || pos.max_rank() != RANK_8
+      || relative_rank(weakSide, weakPawn, pos.max_rank()) != RANK_7
       || distance(weakKing, weakPawn) != 1
       || ((FileBBB | FileDBB | FileEBB | FileGBB) & weakPawn))
       result += QueenValueEg - PawnValueEg;
