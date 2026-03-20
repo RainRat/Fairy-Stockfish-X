@@ -1215,6 +1215,12 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("dropOppositeColoredBishop", v->dropOppositeColoredBishop);
     parse_attribute("dropPromoted", v->dropPromoted);
     parse_attribute("dropNoDoubled", v->dropNoDoubled, v->pieceToChar);
+    v->dropNoDoubledByColor[WHITE] = v->dropNoDoubled;
+    v->dropNoDoubledByColor[BLACK] = v->dropNoDoubled;
+    if (config.find("dropNoDoubledWhite") != config.end())
+        parse_attribute("dropNoDoubledWhite", v->dropNoDoubledByColor[WHITE], v->pieceToChar);
+    if (config.find("dropNoDoubledBlack") != config.end())
+        parse_attribute("dropNoDoubledBlack", v->dropNoDoubledByColor[BLACK], v->pieceToChar);
     parse_attribute("dropNoDoubledCount", v->dropNoDoubledCount);
     parse_attribute("freeDrops", v->freeDrops);
     parse_attribute("payPointsToDrop", v->payPointsToDrop);

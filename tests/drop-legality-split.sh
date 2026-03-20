@@ -38,6 +38,16 @@ dropChecks = true
 dropMatesWhite = false
 dropMatesBlack = true
 startFen = 8/8/8/8/8/4k3/8/4K3[q] b - - 0 1
+
+[dropnodoubled-split-white:chess]
+pieceDrops = true
+dropNoDoubledWhite = p
+startFen = 4k3/8/8/8/8/8/4P3/4K3[P] w - - 0 1
+
+[dropnodoubled-split-black:chess]
+pieceDrops = true
+dropNoDoubledWhite = p
+startFen = 4k3/4p3/8/8/8/8/8/4K3[p] b - - 0 1
 INI
 
 run_perft() {
@@ -65,6 +75,12 @@ out=$(run_perft "dropmate-split-white")
 
 out=$(run_perft "dropmate-split-black")
 echo "${out}" | grep -q "^Q@e2: 1$"
+
+out=$(run_perft "dropnodoubled-split-white")
+! echo "${out}" | grep -q "^P@e4: 1$"
+
+out=$(run_perft "dropnodoubled-split-black")
+echo "${out}" | grep -q "^P@e5: 1$"
 
 rm -f "${TMP_VARIANT_PATH}"
 unset TMP_VARIANT_PATH

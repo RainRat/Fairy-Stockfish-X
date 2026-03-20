@@ -1390,7 +1390,7 @@ inline bool Position::drop_promoted() const {
 
 inline PieceType Position::drop_no_doubled() const {
   assert(var != nullptr);
-  return var->dropNoDoubled;
+  return var->dropNoDoubledByColor[side_to_move()];
 }
 
 inline PieceSet Position::promotion_pawn_types(Color c) const {

@@ -177,6 +177,7 @@ struct Variant {
   bool dropOppositeColoredBishop = false;
   bool dropPromoted = false;
   PieceType dropNoDoubled = NO_PIECE_TYPE;
+  PieceType dropNoDoubledByColor[COLOR_NB] = {NO_PIECE_TYPE, NO_PIECE_TYPE};
   int dropNoDoubledCount = 1;
   PieceSet hostageExchange[PIECE_TYPE_NB] = {};
   bool prisonPawnPromotion = false;
