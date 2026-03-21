@@ -1342,6 +1342,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("dupleCheck", v->dupleCheck);
     // extinction piece types
     parse_attribute("extinctionPieceTypes", v->extinctionPieceTypes, v->pieceToChar);
+    parse_attribute("extinctionAllPieceTypes", v->extinctionAllPieceTypes);
     parse_attribute("extinctionPieceCount", v->extinctionPieceCount);
     parse_attribute("extinctionOpponentPieceCount", v->extinctionOpponentPieceCount);
 

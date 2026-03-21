@@ -4608,7 +4608,7 @@ Value Position::blast_see(Move m) const {
   while (blast)
   {
       Piece bpc = piece_on(pop_lsb(blast));
-      if (extinction_piece_types() & type_of(bpc))
+      if (!var->extinctionAllPieceTypes && (extinction_piece_types() & type_of(bpc)))
       {
           if (color_of(bpc) == us)
               extinctsUs = true;
@@ -4669,6 +4669,7 @@ bool Position::see_ge(Move m, Value threshold) const {
   // Extinction
   if (   extinction_value() != VALUE_NONE
       && victim != NO_PIECE
+      && !var->extinctionAllPieceTypes
       && (   (   (extinction_piece_types() & type_of(victim))
               && pieceCount[victim] == extinction_piece_count() + 1)
           || (   (extinction_piece_types() & ALL_PIECES)
@@ -4979,16 +4980,24 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
           extinctTargets &= ~pseudo_royal_types();
 
       for (Color c : { ~sideToMove, sideToMove })
+      {
+          bool allTypesExtinct = true;
+          bool anyTypeExtinct = false;
           for (PieceSet ps = extinctTargets; ps;)
           {
               PieceType pt = pop_lsb(ps);
-              if (   count_with_hand( c, pt) <= var->extinctionPieceCount
-                  && count_with_hand(~c, pt) >= var->extinctionOpponentPieceCount + (extinction_claim() && c == sideToMove))
-              {
-                  result = c == sideToMove ? extinction_value(ply) : -extinction_value(ply);
-                  return true;
-              }
+              bool extinct = count_with_hand(c, pt) <= var->extinctionPieceCount
+                          && count_with_hand(~c, pt) >= var->extinctionOpponentPieceCount + (extinction_claim() && c == sideToMove);
+              anyTypeExtinct |= extinct;
+              allTypesExtinct &= extinct;
           }
+
+          if ((var->extinctionAllPieceTypes ? allTypesExtinct : anyTypeExtinct) && extinctTargets)
+          {
+              result = c == sideToMove ? extinction_value(ply) : -extinction_value(ply);
+              return true;
+          }
+      }
   }
   // capture the flag
   // A flag win by the side to move is only possible if flagMove is enabled
