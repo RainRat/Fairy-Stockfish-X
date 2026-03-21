@@ -38,7 +38,8 @@ case $1 in
     postfix='2>&1 | grep -A50 "WARNING: ThreadSanitizer:"'
     threads="2"
 
-cat << EOF > tsan.supp
+    tsan_supp=$(mktemp)
+cat << EOF > "$tsan_supp"
 race:Stockfish::TTEntry::move
 race:Stockfish::TTEntry::depth
 race:Stockfish::TTEntry::bound
@@ -52,7 +53,7 @@ race:Stockfish::TranspositionTable::hashfull
 
 EOF
 
-    export TSAN_OPTIONS="suppressions=./tsan.supp"
+    export TSAN_OPTIONS="suppressions=$tsan_supp"
 
   ;;
   *)
@@ -79,7 +80,8 @@ do
 done
 
 # more general testing, following an uci protocol exchange
-cat << EOF > game.exp
+game_exp=$(mktemp)
+cat << EOF > "$game_exp"
  set timeout 240
  spawn $exeprefix ./stockfish
 
@@ -115,7 +117,8 @@ if [ ! -d ../tests/syzygy ]; then
    mv niklasf-python-chess-9b9aa13 ../tests/syzygy
 fi
 
-cat << EOF > syzygy.exp
+syzygy_exp=$(mktemp)
+cat << EOF > "$syzygy_exp"
  set timeout 600
  spawn $exeprefix ./stockfish
  send "uci\n"
@@ -130,16 +133,18 @@ cat << EOF > syzygy.exp
  exit \$value
 EOF
 
-for exp in game.exp syzygy.exp
+for exp in "$game_exp" "$syzygy_exp"
 do
 
   echo "$prefix expect $exp $postfix"
   eval "$prefix expect $exp $postfix"
 
-  rm $exp
+  rm "$exp"
 
 done
 
-rm -f tsan.supp
+if [ -n "${tsan_supp:-}" ]; then
+  rm -f "$tsan_supp"
+fi
 
 echo "instrumented testing OK"
