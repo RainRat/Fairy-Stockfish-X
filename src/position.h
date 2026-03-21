@@ -95,6 +95,7 @@ struct StateInfo {
   OptBool    legalCapture;
   OptBool    legalEnPassant;
   bool       capturedpromoted;
+  bool       suppressedCaptureTransfer;
   bool       shak;
   bool       bikjang;
   Bitboard   chased;

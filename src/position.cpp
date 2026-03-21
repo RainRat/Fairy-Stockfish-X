@@ -2928,6 +2928,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   st->unpromotedCapturedPiece = captured ? unpromoted_piece_on(capturedSq) : NO_PIECE;
   st->captureSquare = capturedSq;
   st->pass = is_pass(m) && !openingSelfRemoval;
+  st->suppressedCaptureTransfer = false;
 
   Variant::PotionType gatingPotion = Variant::POTION_TYPE_NB;
   Bitboard freezeExtra = 0;
@@ -2997,6 +2998,9 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
 
   if (captured)
   {
+      st->suppressedCaptureTransfer = var->petrifyOnCaptureSuppressTransfer
+                                   && bool(var->petrifyOnCaptureTypes & type_of(pc));
+
       Square capsq = to;
       if (jumpCapsq != SQ_NONE)
           capsq = jumpCapsq;
@@ -3043,7 +3047,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
 
       if (type_of(m) == EN_PASSANT)
           board[capsq] = NO_PIECE;
-      if (capture_type() == HAND)
+      if (capture_type() == HAND && !st->suppressedCaptureTransfer)
       {
           Piece pieceToHand = !capturedPromoted || drop_loop()
                              ? make_piece(us, type_of(captured))
@@ -3059,7 +3063,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
               dp.handCount[1] = pieceCountInHand[color_of(pieceToHand)][type_of(pieceToHand)];
           }
       }
-      else if (capture_type() == PRISON)
+      else if (capture_type() == PRISON && !st->suppressedCaptureTransfer)
       {
           Piece pieceToPrison = !capturedPromoted || drop_loop()
                   ? captured
@@ -3830,7 +3834,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           }
 
           bool petrifiedCenter = bsq == moverSq && (var->petrifyOnCaptureTypes & type_of(bpc));
-          if (captures_to_hand() && !petrifiedCenter)
+          if (captures_to_hand() && !petrifiedCenter && !st->suppressedCaptureTransfer)
           {
               Piece pieceToHand = !capturedPromoted || drop_loop()
                                  ? make_piece(us, type_of(bpc))
@@ -4209,11 +4213,11 @@ void Position::undo_move(Move m) {
               }
               put_piece(bpc, bsq, isPromoted, st->demotedBycatch & bsq ? unpromotedBpc : NO_PIECE);
               bool petrifiedCenter = bsq == moverSq && (var->petrifyOnCaptureTypes & type_of(bpc));
-              if (!wasBlastPromoted && !petrifiedCenter && capture_type() == HAND) {
+              if (!wasBlastPromoted && !petrifiedCenter && !st->suppressedCaptureTransfer && capture_type() == HAND) {
                   remove_from_hand(!drop_loop() && (st->promotedBycatch & bsq)
                                     ? make_piece(us, main_promotion_pawn_type(color_of(unpromotedBpc)))
                                     : make_piece(us, type_of(unpromotedBpc)));
-              } else if (!wasBlastPromoted && !petrifiedCenter && capture_type() == PRISON) {
+              } else if (!wasBlastPromoted && !petrifiedCenter && !st->suppressedCaptureTransfer && capture_type() == PRISON) {
                   remove_from_prison(!drop_loop() && (st->promotedBycatch & bsq)
                                     ? make_piece(color_of(unpromotedBpc), main_promotion_pawn_type(color_of(unpromotedBpc)))
                                     : unpromotedBpc);
@@ -4354,13 +4358,13 @@ void Position::undo_move(Move m) {
               capsq = st->captureSquare;
 
           put_piece(st->capturedPiece, capsq, st->capturedpromoted, st->unpromotedCapturedPiece); // Restore the captured piece
-          if (capture_type() == HAND) {
+          if (!st->suppressedCaptureTransfer && capture_type() == HAND) {
               remove_from_hand(!drop_loop() && st->capturedpromoted
                                ? (st->unpromotedCapturedPiece
                                   ? make_piece(us, type_of(st->unpromotedCapturedPiece))
                                   : make_piece(us, main_promotion_pawn_type(color_of(st->capturedPiece))))
                                : make_piece(us, type_of(st->capturedPiece)));
-          } else if (capture_type() == PRISON) {
+          } else if (!st->suppressedCaptureTransfer && capture_type() == PRISON) {
               remove_from_prison(!drop_loop() && st->capturedpromoted
                                ? (st->unpromotedCapturedPiece
                                   ? st->unpromotedCapturedPiece

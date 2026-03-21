@@ -1037,6 +1037,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_capture_map("captureForbidden", false);
     parse_capture_map("captureAllowed", true);
     parse_attribute("petrifyOnCaptureTypes", v->petrifyOnCaptureTypes, v->pieceToChar);
+    parse_attribute("petrifyOnCaptureSuppressTransfer", v->petrifyOnCaptureSuppressTransfer);
     parse_attribute("petrifyBlastPieces", v->petrifyBlastPieces);
     parse_attribute("removeConnectN", v->removeConnectN);
     if (v->removeConnectN < 0 || v->removeConnectN > int(SQUARE_NB)) {

@@ -100,6 +100,7 @@ struct Variant {
   PieceSet captureForbidden[PIECE_TYPE_NB] = {};
   PieceSet captureForbiddenToKing = NO_PIECE_SET;
   PieceSet petrifyOnCaptureTypes = NO_PIECE_SET;
+  bool petrifyOnCaptureSuppressTransfer = false;
   bool petrifyBlastPieces = false;
   int removeConnectN = 0;
   bool removeConnectNByType = false;
