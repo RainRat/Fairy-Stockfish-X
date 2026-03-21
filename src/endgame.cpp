@@ -224,6 +224,8 @@ Value Endgame<KPK>::operator()(const Position& pos) const {
   // KPK is registered only for literal PAWN material signatures.
   // For non-standard promotion rules, skip bitbase probing and use fallback eval.
   if (   pos.promotion_zone(us, PAWN) != rank_bb(relative_rank(us, RANK_8, pos.max_rank()))
+      || pos.max_file() != FILE_H
+      || pos.max_rank() != RANK_8
       || RANK_MAX != RANK_8
       || !(pos.promotion_piece_types(us) & QUEEN))
   {
@@ -1033,6 +1035,8 @@ ScaleFactor Endgame<KPKP>::operator()(const Position& pos) const {
   // it's probably at least a draw even with the pawn.
   // KPKP is registered only for literal PAWN material signatures.
   if (   pos.promotion_zone(us, PAWN) != rank_bb(relative_rank(us, RANK_8, pos.max_rank()))
+      || pos.max_file() != FILE_H
+      || pos.max_rank() != RANK_8
       || RANK_MAX != RANK_8
       || !(pos.promotion_piece_types(us) & QUEEN))
       return SCALE_FACTOR_NONE;

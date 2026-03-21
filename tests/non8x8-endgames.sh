@@ -70,4 +70,11 @@ rk_rook_right=$(run_eval "${tmp_ini}" "mini-rk" "2k2/3R1/5/5/4K w - - 0 1")
 kqkp_10x8=$(run_eval "${tmp_ini}" "mini-10x8" "10/10/10/4k5/10/10/10/4KQp3 w - - 0 1")
 [[ -n "${kqkp_10x8}" ]]
 
+# Non-8x8 KPK / KPKP should also skip 8x8 bitbase assumptions cleanly.
+kpk_10x8=$(run_eval "${tmp_ini}" "mini-10x8" "9k/10/10/10/10/10/4P5/4K5 w - - 0 1")
+[[ -n "${kpk_10x8}" ]]
+
+kpkp_10x8=$(run_eval "${tmp_ini}" "mini-10x8" "9k/10/10/10/10/10/4P4p/4K5 w - - 0 1")
+[[ -n "${kpkp_10x8}" ]]
+
 echo "non8x8 endgame test OK"
