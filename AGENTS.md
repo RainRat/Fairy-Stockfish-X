@@ -68,7 +68,15 @@ Run: `./stockfish < test.txt > output.txt`
 * Config sanity: `./stockfish check variants.ini`
 * Move-gen correctness: `../tests/perft.sh all` (or `chess`, `largeboard`)
 * Protocol suite: `../tests/protocol.sh`
+* Smoke tests for experimental variants: `../tests/new-variants-smoke.sh`
+* Python bindings unit tests: `python3 ../test.py` (requires `pyffish` to be built/installed)
 * Optional: `../tests/regression.sh`, `../tests/reprosearch.sh`, `./stockfish bench [variant]`
+
+### Test Build Requirements
+
+Some tests require specific build flags to pass for all variants:
+* `../tests/perft.sh all` and `../tests/new-variants-smoke.sh` should be run with a `largeboards=yes` build to cover all included variants.
+* To build `pyffish` for `test.py`, use `python3 setup.py build_ext --inplace` from the root directory.
 
 ## 7) Coding style & engine notes
 
