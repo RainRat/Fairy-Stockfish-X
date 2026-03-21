@@ -10,7 +10,8 @@ trap 'error ${LINENO}' ERR
 
 echo "protocol testing started"
 
-cat << EOF > uci.exp
+uci_exp=$(mktemp)
+cat << EOF > "$uci_exp"
    spawn ./stockfish
    send "uci\\n"
    expect "default chess"
@@ -19,7 +20,8 @@ cat << EOF > uci.exp
    expect eof
 EOF
 
-cat << EOF > ucci.exp
+ucci_exp=$(mktemp)
+cat << EOF > "$ucci_exp"
    spawn ./stockfish
    send "ucci\\n"
    expect "option UCI_Variant"
@@ -29,7 +31,8 @@ cat << EOF > ucci.exp
    expect eof
 EOF
 
-cat << EOF > usi.exp
+usi_exp=$(mktemp)
+cat << EOF > "$usi_exp"
    spawn ./stockfish
    send "usi\\n"
    expect -re "default (shogi|minishogi)"
@@ -38,7 +41,8 @@ cat << EOF > usi.exp
    expect eof
 EOF
 
-cat << EOF > ucicyclone.exp
+ucicyclone_exp=$(mktemp)
+cat << EOF > "$ucicyclone_exp"
    spawn ./stockfish
    send "uci\\n"
    expect "uciok"
@@ -49,7 +53,8 @@ cat << EOF > ucicyclone.exp
    expect eof
 EOF
 
-cat << EOF > ucicyclone2.exp
+ucicyclone2_exp=$(mktemp)
+cat << EOF > "$ucicyclone2_exp"
    spawn ./stockfish ucicyclone
    send "uci\\n"
    expect "uciok"
@@ -60,7 +65,8 @@ cat << EOF > ucicyclone2.exp
    expect eof
 EOF
 
-cat << EOF > xboard.exp
+xboard_exp=$(mktemp)
+cat << EOF > "$xboard_exp"
    spawn ./stockfish load variants.ini
    send "xboard\\n"
    send "protover 2\\n"
@@ -75,11 +81,11 @@ cat << EOF > xboard.exp
    expect eof
 EOF
 
-for exp in uci.exp ucci.exp usi.exp ucicyclone.exp ucicyclone2.exp xboard.exp
+for exp in "$uci_exp" "$ucci_exp" "$usi_exp" "$ucicyclone_exp" "$ucicyclone2_exp" "$xboard_exp"
 do
   echo "Testing $exp"
-  timeout 20 expect $exp > /dev/null
-  rm $exp
+  timeout 20 expect "$exp" > /dev/null
+  rm "$exp"
 done
 
 echo "protocol testing OK"
