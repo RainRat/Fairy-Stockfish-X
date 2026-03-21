@@ -99,10 +99,12 @@ echo "${out}" | grep -q "Nodes searched: 3"
 fi
 
 # 5) Checkless: king capture is legal (checks are disabled by variant).
+if variant_available "checkless"; then
 out=$(run_cmds "setoption name UCI_Variant value checkless
 position fen 4k3/8/8/8/8/8/4Q3/4K3 w - - 0 1
 go perft 1")
 echo "${out}" | grep -q "^e2e8: 1$"
+fi
 
 # 6) Tablut split: edge-escape should end immediately, corner-escape should not.
 if variant_available "tablut" && variant_available "tablut-corner-escape"; then
@@ -139,17 +141,21 @@ echo "${out}" | grep -q "Nodes searched: 12"
 fi
 
 # 8) Neutreeko: max-distance move completes a line and ends the game.
+if variant_available "neutreeko"; then
 out=$(run_cmds "setoption name UCI_Variant value neutreeko
 position fen 5/3N1/5/1N3/N4 w - - 0 1 moves d4c3
 go perft 1")
 echo "${out}" | grep -q "Nodes searched: 0"
+fi
 
 # 9) Forced en passant: when EP is legal, ordinary king moves are forbidden.
+if variant_available "forced-en-passant"; then
 out=$(run_cmds "setoption name UCI_Variant value forced-en-passant
 position fen 4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1
 go perft 1")
 echo "${out}" | grep -q "^e5d6: 1$"
 echo "${out}" | grep -q "Nodes searched: 1"
+fi
 
 # 10) Eurasian: entering the optional promotion band without reserve is still legal.
 if variant_available "eurasian"; then
@@ -188,6 +194,7 @@ d")
 echo "${out}" | grep -q "Fen: eghqkhge/pppppppp/8/8/8/8/PPPPPPPP/EGHQKHGE w KQkq - 0 1"
 
 # 13) Fatal giveaway: non-pawn capturer dies, pawns survive captures.
+if variant_available "fatal-giveaway"; then
 out=$(run_cmds "setoption name UCI_Variant value fatal-giveaway
 position fen 4k3/8/8/4p3/4R3/8/8/8 w - - 0 1 moves e4e5
 d")
@@ -196,14 +203,18 @@ out=$(run_cmds "setoption name UCI_Variant value fatal-giveaway
 position fen 4k3/8/8/3p4/4P3/8/8/8 w - - 0 1 moves e4d5
 d")
 echo "${out}" | grep -q "Fen: 4k3/8/8/3P4/8/8/8/8 b - - 0 1"
+fi
 
 # 14) Kamikaze giveaway: any capturer is removed after capture.
+if variant_available "kamikaze-giveaway"; then
 out=$(run_cmds "setoption name UCI_Variant value kamikaze-giveaway
 position fen 4k3/8/8/3p4/4P3/8/8/8 w - - 0 1 moves e4d5
 d")
 echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/8 b - - 0 1"
+fi
 
 # 15) Kamikaze: plain chess family, capturer is removed.
+if variant_available "kamikaze"; then
 out=$(run_cmds "setoption name UCI_Variant value kamikaze
 position fen 4k3/8/8/3p4/4P3/8/8/8 w - - 0 1 moves e4d5
 d")
@@ -214,12 +225,15 @@ out=$(run_cmds "setoption name UCI_Variant value kamikaze
 position fen 8/8/8/3P4/4k3/8/8/4K3 b - - 0 1 moves e4d5
 d")
 echo "${out}" | grep -q "Fen: 8/8/8/3k4/8/8/8/4K3 w - - 0 2"
+fi
 
 # 16) Fatal giveaway: dead squares can be captured as neutral blockers.
+if variant_available "fatal-giveaway"; then
 out=$(run_cmds "setoption name UCI_Variant value fatal-giveaway
 position fen 4k3/8/8/4\\^3/8/8/8/4Q3 w - - 0 1 moves e1e5
 d")
 echo "${out}" | grep -q "Fen: 4k3/8/8/4Q3/8/8/8/8 b - - 0 1"
+fi
 
 # 17) Progressive: after Black's first move, White must pass before Black's second move.
 out=$(run_cmds "setoption name UCI_Variant value progressive

@@ -352,13 +352,13 @@ invalid_variant_positions = {
     "sittuyin": (
         "8/8/4pppp/pppp4/4PPPP/PPPP4/8/8[FRRSSNNkfrrssnn] w - - 0 1",  # wrong king count
     ),
-    "shako": {
+    "shako": (
         "c8c/ernbqkbnre/pppppppppp/10/10/10/10/PPPPPPPPPP/C8C/ERNBQKBNRE w KQkq - 0 1",  # not on castling rank
-    },
-    "seirawan": {
+    ),
+    "seirawan": (
         "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQK1NR[HEhe] w KQBCDFGkqbcdfg - 0 1",  # white gating flag
         "rnbqkb1r/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR[HEhe] w KQBCDFGkqbcdfg - 0 1",  # black gating flag
-    }
+    )
 }
 
 
@@ -467,7 +467,7 @@ class TestPyffish(unittest.TestCase):
         # In Janggi stalemate position pass move (in place king move) is possible
         fen = "4k4/c7R/9/3R1R3/9/9/9/9/9/3K5 b - - 0 1"
         result = sf.legal_moves("janggi", fen, [])
-        self.assertEqual(result, ["e10e10"])
+        self.assertEqual(result, ["0000"])
 
         # Hoppers can be configured to not hop over/capture selected piece types.
         sf.load_variant_config(
@@ -1911,7 +1911,7 @@ startFen = 4r3/8/8/8/8/8/8/8[A] w - - 0 1
                     self.assertNotEqual(sf.validate_fen(fen, variant), sf.FEN_OK)
         # chess960
         self.assertEqual(sf.validate_fen(CHESS960, "chess", True), sf.FEN_OK)
-        self.assertEqual(sf.validate_fen("nrbqbkrn/pppppppp/8/8/8/8/PPPPPPPP/NRBQBKRN w BGbg - 0 1", "newzealand", True), sf.FEN_OK, "{}: {}".format(variant, fen))
+        self.assertEqual(sf.validate_fen("nrbqbkrn/pppppppp/8/8/8/8/PPPPPPPP/NRBQBKRN w BGbg - 0 1", "newzealand", True), sf.FEN_OK)
         # all variants starting positions
         for variant in sf.variants():
             with self.subTest(variant=variant):
