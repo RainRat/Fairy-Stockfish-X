@@ -2536,7 +2536,7 @@ void VariantMap::parse_istream(std::istream& file) {
                 parse_file_value(attribs["maxFile"], cfgMaxFile);
             if ((cfgMaxRank > 0 && cfgMaxRank > RANK_MAX) || (cfgMaxFile >= 0 && cfgMaxFile > FILE_MAX))
             {
-                if constexpr (!DoCheck)
+                if (DoCheck || !DoCheck) // Always report skips for clarity, or just remove if constexpr
                     std::cerr << "Variant '" << variant << "' exceeds build board limits (maxFile=" << int(FILE_MAX) + 1
                               << ", maxRank=" << int(RANK_MAX) + 1 << "). Skipping." << std::endl;
                 continue;
@@ -2570,9 +2570,8 @@ void VariantMap::parse_istream(std::istream& file) {
             }
             else
             {
-                if constexpr (!DoCheck)
-                    std::cerr << "Variant '" << variant << "' exceeds build board limits (maxFile=" << int(FILE_MAX) + 1
-                              << ", maxRank=" << int(RANK_MAX) + 1 << "). Skipping." << std::endl;
+                std::cerr << "Variant '" << variant << "' exceeds build board limits (maxFile=" << int(FILE_MAX) + 1
+                          << ", maxRank=" << int(RANK_MAX) + 1 << "). Skipping." << std::endl;
                 delete v;
             }
         }
