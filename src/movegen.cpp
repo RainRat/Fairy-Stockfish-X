@@ -794,6 +794,14 @@ namespace {
             for (CastlingRights cr : { Us & KING_SIDE, Us & QUEEN_SIDE } )
                 if (!pos.castling_impeded(cr) && pos.can_castle(cr))
                     moveList = make_move_and_gating<CASTLING>(pos, moveList, Us,ksq, pos.castling_rook_square(cr));
+
+        // Hindustani king leap
+        if (!restrictToForcedJumper && (Type == QUIETS || Type == NON_EVASIONS) && pos.can_hindustani_leap(Us) && !pos.checkers())
+        {
+            Bitboard b = attacks_bb<KNIGHT>(ksq) & ~pos.pieces();
+            while (b)
+                moveList = make_move_and_gating<NORMAL>(pos, moveList, Us, ksq, pop_lsb(b));
+        }
     }
 
     return moveList;
@@ -819,12 +827,8 @@ namespace {
             candidates &= ~pos.pieces();
 
         if (potion == Variant::POTION_FREEZE)
-            candidates &= useful_freeze_gates(pos, Us);
-        else if (potion == Variant::POTION_JUMP)
-            candidates &= pos.pieces();
-
-        if (potion == Variant::POTION_FREEZE)
         {
+            candidates &= useful_freeze_gates(pos, Us);
             while (candidates)
             {
                 if (cur >= maxEnd)
@@ -837,9 +841,13 @@ namespace {
                         return maxEnd;
 
                     Move base = it->move;
-                    MoveType mt = type_of(base);
-                    if (is_gating(base) || (mt != NORMAL && mt != CASTLING))
+                    if (is_gating(base))
                         continue;
+
+                    MoveType mt = type_of(base);
+                    if (mt != NORMAL && mt != CASTLING)
+                        continue;
+
                     Square from = from_sq(base);
                     Square to = to_sq(base);
 
@@ -852,69 +860,71 @@ namespace {
                     ++cur;
                 }
             }
-            continue;
         }
-
-        while (candidates)
+        else if (potion == Variant::POTION_JUMP)
         {
-            if (cur >= maxEnd)
-                return maxEnd;
-
-            Square gate = pop_lsb(candidates);
-            assert(potion == Variant::POTION_JUMP);
-
-            Bitboard gateMask = square_bb(gate);
-            SpellContextGuard guard(pos, Bitboard(0), gateMask);
-
-            ExtMove jumpMoves[MOVEGEN_OVERFLOW_CAPACITY];
-            ExtMove* jumpEnd = generate_all_impl<Us, Type>(pos, jumpMoves);
-            assert(jumpEnd - jumpMoves <= MOVEGEN_OVERFLOW_CAPACITY);
-
-            for (ExtMove* it = jumpMoves; it != jumpEnd; ++it)
+            candidates &= pos.pieces();
+            while (candidates)
             {
                 if (cur >= maxEnd)
                     return maxEnd;
 
-                Move base = it->move;
-                if (is_gating(base))
-                    continue;
+                Square gate = pop_lsb(candidates);
+                assert(potion == Variant::POTION_JUMP);
 
-                MoveType mt = type_of(base);
-                if (mt != NORMAL && mt != CASTLING)
-                    continue;
-                Square from = from_sq(base);
-                Square to = to_sq(base);
+                Bitboard gateMask = square_bb(gate);
+                SpellContextGuard guard(pos, Bitboard(0), gateMask);
 
-                Piece mover = pos.piece_on(from);
-                if (mover == NO_PIECE)
-                    continue;
+                ExtMove jumpMoves[MOVEGEN_OVERFLOW_CAPACITY];
+                ExtMove* jumpEnd = generate_all_impl<Us, Type>(pos, jumpMoves);
+                assert(jumpEnd - jumpMoves <= MOVEGEN_OVERFLOW_CAPACITY);
 
-                PieceType moverType = type_of(mover);
-                // Pure leapers cannot have an intermediate path square.
-                if (mt == NORMAL
-                    && AttackRiderTypes[moverType] == NO_RIDER
-                    && moverType != PAWN
-                    && moverType != SHOGI_PAWN
-                    && moverType != SOLDIER)
-                    continue;
+                for (ExtMove* it = jumpMoves; it != jumpEnd; ++it)
+                {
+                    if (cur >= maxEnd)
+                        return maxEnd;
 
-                if (to == gate)
-                    continue;
+                    Move base = it->move;
+                    if (is_gating(base))
+                        continue;
 
-                if (distance(from, to) <= 1)
-                    continue;
+                    MoveType mt = type_of(base);
+                    if (mt != NORMAL && mt != CASTLING)
+                        continue;
+                    Square from = from_sq(base);
+                    Square to = to_sq(base);
 
-                Bitboard path = between_bb(from, to, moverType);
-                if (!(path & gateMask))
-                    continue;
+                    Piece mover = pos.piece_on(from);
+                    if (mover == NO_PIECE)
+                        continue;
 
-                Move gatingMove = mt == NORMAL
-                                  ? make_gating<NORMAL>(from, to, potionPiece, gate)
-                                  : make_gating<CASTLING>(from, to, potionPiece, gate);
+                    PieceType moverType = type_of(mover);
+                    // Pure leapers cannot have an intermediate path square.
+                    if (mt == NORMAL
+                        && AttackRiderTypes[moverType] == NO_RIDER
+                        && moverType != PAWN
+                        && moverType != SHOGI_PAWN
+                        && moverType != SOLDIER)
+                        continue;
 
-                cur->move = gatingMove;
-                cur->value = it->value;
-                ++cur;
+                    if (to == gate)
+                        continue;
+
+                    if (distance(from, to) <= 1)
+                        continue;
+
+                    Bitboard path = between_bb(from, to, moverType);
+                    if (!(path & gateMask))
+                        continue;
+
+                    Move gatingMove = mt == NORMAL
+                                      ? make_gating<NORMAL>(from, to, potionPiece, gate)
+                                      : make_gating<CASTLING>(from, to, potionPiece, gate);
+
+                    cur->move = gatingMove;
+                    cur->value = it->value;
+                    ++cur;
+                }
             }
         }
     }

@@ -66,6 +66,7 @@ struct StateInfo {
   Bitboard not_moved_pieces[COLOR_NB];
   Bitboard potionZones[COLOR_NB][Variant::POTION_TYPE_NB];
   int potionCooldown[COLOR_NB][Variant::POTION_TYPE_NB];
+  bool hindustaniLeapUsed[COLOR_NB];
 
   // Not copied when making a move (will be recomputed anyhow)
   Key        key;
@@ -292,6 +293,7 @@ public:
   bool seirawan_gating() const;
   bool commit_gates() const;
   bool cambodian_moves() const;
+  bool hindustani_leap() const;
   Bitboard diagonal_lines() const;
   bool pass(Color c) const;
   bool has_setup_drop(Color c) const;
@@ -390,6 +392,7 @@ public:
   // Castling
   CastlingRights castling_rights(Color c) const;
   bool can_castle(CastlingRights cr) const;
+  bool can_hindustani_leap(Color c) const;
   bool castling_impeded(CastlingRights cr) const;
   Square castling_rook_square(CastlingRights cr) const;
 
@@ -2864,6 +2867,15 @@ inline bool Position::can_drop(Color c, PieceType pt) const {
       return count_in_hand(c, ALL_PIECES) <= count_in_hand(c, pt);
 
   return true;
+}
+
+inline bool Position::hindustani_leap() const {
+  assert(var != nullptr);
+  return var->hindustaniLeap;
+}
+
+inline bool Position::can_hindustani_leap(Color c) const {
+  return hindustani_leap() && !st->hindustaniLeapUsed[c];
 }
 
 inline bool Position::has_exchange() const {

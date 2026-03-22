@@ -1046,6 +1046,22 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
       }
   }
 
+  if (hindustani_leap())
+  {
+      ss >> std::ws;
+      if (ss.peek() == '(')
+      {
+          std::string leapSpec;
+          std::getline(ss, leapSpec, ')');
+          // expected format: (L:W B) where W and B are 0 or 1
+          if (leapSpec.size() >= 5 && leapSpec.substr(0, 3) == "(L:")
+          {
+              st->hindustaniLeapUsed[WHITE] = leapSpec[3] == '1';
+              st->hindustaniLeapUsed[BLACK] = leapSpec[5] == '1';
+          }
+      }
+  }
+
   chess960 = isChess960 || v->chess960;
   tsumeMode = Options["TsumeMode"];
   thisThread = th;
@@ -1196,6 +1212,7 @@ void Position::set_state(StateInfo* si) const {
   si->forcedJumpSquare = SQ_NONE;
   si->forcedJumpHasFollowup = false;
   si->forcedJumpStep = 0;
+  si->hindustaniLeapUsed[WHITE] = si->hindustaniLeapUsed[BLACK] = false;
 
   set_check_info(si);
 
@@ -1537,6 +1554,12 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
               ss << "-";
           ss << " <" << wf << " " << wj << " " << bf << " " << bj << ">";
       }
+  }
+
+  if (hindustani_leap())
+  {
+      ss << " (L:" << (st->hindustaniLeapUsed[WHITE] ? "1" : "0")
+         << " " << (st->hindustaniLeapUsed[BLACK] ? "1" : "0") << ")";
   }
 
   return ss.str();
@@ -2938,6 +2961,12 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   Piece pc = moved_piece(m);
   PieceType movedType = type_of(pc);
   Piece captured = captured_piece(m);
+
+  if (hindustani_leap()) {
+      if (movedType == KING && distance(from, to) > 1 && type_of(m) != CASTLING && !is_gating(m))
+          st->hindustaniLeapUsed[us] = true;
+  }
+
   bool rifleShot = rifle_capture(m) && captured != NO_PIECE && type_of(m) != CASTLING;
   bool capturedDeadSquare = type_of(m) != DROP && from != to && bool(st->deadSquares & to);
   PieceType exchanged = exchange_piece(m);

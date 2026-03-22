@@ -1275,6 +1275,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("forcedJumpContinuation", v->forcedJumpContinuation);
     parse_attribute("forcedJumpSameDirection", v->forcedJumpSameDirection);
     parse_attribute("cambodianMoves", v->cambodianMoves);
+    parse_attribute("hindustaniLeap", v->hindustaniLeap);
     parse_attribute("diagonalLines", v->diagonalLines);
     parse_both_colors_with_overrides("pass", v->pass);
     parse_both_colors_with_overrides("passOnStalemate", v->passOnStalemate);

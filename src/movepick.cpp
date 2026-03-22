@@ -79,11 +79,11 @@ bool MovePicker::is_useless_potion(Move m) const {
       if (potion == Variant::POTION_JUMP)
       {
           Square gate = pos.gate_square(m);
+          // If the gate square is empty, it can't be used to jump over anything.
           if (pos.piece_on(gate) == NO_PIECE)
               return true;
 
           Bitboard path = between_bb(from_sq(m), to_sq(m), type_of(pos.moved_piece(m)));
-          path &= ~square_bb(to_sq(m));
           return !(path & square_bb(gate));
       }
 
