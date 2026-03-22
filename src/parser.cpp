@@ -224,6 +224,13 @@ namespace {
         return value == "capture" || value == "non-capture" || value == "always" || value == "never" || value == "none";
     }
 
+    template <> bool set(const std::string& value, EnPassantPassedSquares& target) {
+        target =  value == "first" ? EnPassantPassedSquares::FIRST
+                : value == "last"  ? EnPassantPassedSquares::LAST
+                : EnPassantPassedSquares::ALL;
+        return value == "all" || value == "first" || value == "last";
+    }
+
     template <> bool set(const std::string& value, PointsRule& target) {
         target =  value == "us" ? POINTS_US
                 : value == "them" ? POINTS_THEM
@@ -543,6 +550,7 @@ template <bool Current, class T> bool VariantParser<DoCheck>::parse_attribute(co
                                   : std::is_same<T, PieceTypeBitboardGroup>() ? "PieceTypeBitboardGroup"
                                   : std::is_same<T, CastlingRights>() ? "CastlingRights"
                                   : std::is_same<T, ColorChangeTrigger>() ? "ColorChangeTrigger"
+                                  : std::is_same<T, EnPassantPassedSquares>() ? "EnPassantPassedSquares"
                                   : std::is_same<T, WallingRule>() ? "WallingRule"
                                   : std::is_same<T, std::vector<int>>() ? "vector<int>"
                                   : typeid(T).name();
@@ -1068,6 +1076,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("tripleStepRegionBlack", v->tripleStepRegion[BLACK]);
     parse_both_colors_with_overrides("enPassantRegion", v->enPassantRegion);
     parse_both_colors_with_overrides_piece("enPassantTypes", v->enPassantTypes, v->pieceToChar);
+    parse_attribute("enPassantPassedSquares", v->enPassantPassedSquares);
     parse_attribute("castling", v->castling);
     parse_attribute("castlingDroppedPiece", v->castlingDroppedPiece);
     parse_attribute("castlingForbiddenPlies", v->castlingForbiddenPlies);

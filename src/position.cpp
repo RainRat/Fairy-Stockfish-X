@@ -3468,6 +3468,20 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   {
       assert(type_of(pc) != PAWN);
       st->epSquares = between_bb(from, to) & var->enPassantRegion[them];
+      if (st->epSquares)
+      {
+          switch (var->enPassantPassedSquares)
+          {
+          case EnPassantPassedSquares::ALL:
+              break;
+          case EnPassantPassedSquares::FIRST:
+              st->epSquares = square_bb(us == WHITE ? lsb(st->epSquares) : msb(st->epSquares));
+              break;
+          case EnPassantPassedSquares::LAST:
+              st->epSquares = square_bb(us == WHITE ? msb(st->epSquares) : lsb(st->epSquares));
+              break;
+          }
+      }
       for (Bitboard b = st->epSquares; b; )
           k ^= Zobrist::enpassant[pop_lsb(b)];
   }

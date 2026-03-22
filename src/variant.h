@@ -45,6 +45,12 @@ enum class ColorChangeTrigger {
   ALWAYS
 };
 
+enum class EnPassantPassedSquares {
+  ALL,
+  FIRST,
+  LAST
+};
+
 struct Variant {
   std::string variantTemplate = "fairy";
   std::string pieceToCharTable = "-";
@@ -120,6 +126,7 @@ struct Variant {
   PieceTypeBitboardGroup blackPieceTripleStepRegion;
   Bitboard enPassantRegion[COLOR_NB] = {AllSquares, AllSquares};
   PieceSet enPassantTypes[COLOR_NB] = {piece_set(PAWN), piece_set(PAWN)};
+  EnPassantPassedSquares enPassantPassedSquares = EnPassantPassedSquares::ALL;
   bool castling = true;
   bool castlingDroppedPiece = false;
   int castlingForbiddenPlies = 0;
