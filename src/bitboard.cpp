@@ -128,6 +128,8 @@ namespace {
 
     for (auto const& [d, limit] : directions)
     {
+        int minDistance = slider_min_distance(limit);
+        int maxDistance = slider_max_distance(limit);
         int count = 0;
         bool hurdle = false;
         for (Square s = sq + (c == WHITE ? d : -d);
@@ -136,10 +138,12 @@ namespace {
         {
             if (MT != HOPPER || hurdle)
             {
-                attack |= s;
+                ++count;
+                if (count >= minDistance)
+                    attack |= s;
                 // For hoppers we consider limit == 1 as a grasshopper,
                 // but limit > 1 as a limited distance hopper
-                if (limit > 0 && !(MT == HOPPER_RANGE && limit == 1) && ++count >= limit)
+                if (maxDistance > 0 && !(MT == HOPPER_RANGE && maxDistance == 1) && count >= maxDistance)
                     break;
             }
 
@@ -691,7 +695,7 @@ void Bitboards::init_pieces() {
                           skiDirs[d] = 0;
                       else if (limit == MAX_SLIDER_LIMIT)
                           continue;
-                      else if (limit >= 0)
+                      else if (limit >= 0 || is_slider_range(limit))
                           riderDirs[d] = limit;
 
                   for (Square s = SQ_A1; s <= SQ_MAX; ++s)

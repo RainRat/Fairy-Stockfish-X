@@ -37,6 +37,27 @@ constexpr int DYNAMIC_SLIDER_LIMIT = -2;
 constexpr int SKI_SLIDER_LIMIT = -3;
 // Special distance value for max-distance sliders (Betza 'z' modifier)
 constexpr int MAX_SLIDER_LIMIT = -4;
+// Encoded bounded/open-ended slider range for bracketed Betza syntax.
+constexpr int SLIDER_RANGE_FLAG = 1 << 29;
+
+inline bool is_slider_range(int limit) {
+  return limit > 0 && (limit & SLIDER_RANGE_FLAG);
+}
+
+inline int encode_slider_range(int minDistance, int maxDistance) {
+  assert(minDistance > 0);
+  assert(maxDistance >= 0 && maxDistance <= 255);
+  assert(minDistance <= 255);
+  return SLIDER_RANGE_FLAG | (minDistance << 8) | maxDistance;
+}
+
+inline int slider_min_distance(int limit) {
+  return is_slider_range(limit) ? ((limit >> 8) & 0xFF) : 1;
+}
+
+inline int slider_max_distance(int limit) {
+  return is_slider_range(limit) ? (limit & 0xFF) : (limit > 0 ? limit : 0);
+}
 
 /// PieceInfo struct stores information about the piece movements.
 

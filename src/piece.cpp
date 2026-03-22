@@ -226,6 +226,59 @@ namespace {
                   distance = parsedDistance;
                   i = j - 1;
               }
+              else if (expandedBetza[i + 1] == '[')
+              {
+                  auto close = expandedBetza.find(']', i + 2);
+                  if (close == std::string::npos)
+                  {
+                      std::cerr << "Invalid Betza rider range in '" << betza
+                                << "': missing closing ']'." << std::endl;
+                      reset_parser_state();
+                      return;
+                  }
+                  std::string rangeSpec = expandedBetza.substr(i + 2, close - i - 2);
+                  std::size_t dash = rangeSpec.find('-');
+                  bool unsupportedCombo = !atomIsRider || hopper || contraHopper || lame || dynamicDistance || skiSlider || maxDistance;
+                  bool malformedRange = dash == std::string::npos
+                                     || rangeSpec.find('-', dash + 1) != std::string::npos
+                                     || dash == 0;
+                  if (unsupportedCombo)
+                  {
+                      std::cerr << "Unsupported Betza rider range in '" << betza
+                                << "': bracketed ranges currently support plain rider atoms such as R[3-5] or R[3-]." << std::endl;
+                      reset_parser_state();
+                      i = close;
+                      return;
+                  }
+                  if (malformedRange)
+                  {
+                      std::cerr << "Invalid Betza rider range in '" << betza
+                                << "': use [n-m] or [n-], and keep existing Rn syntax for max-only ranges." << std::endl;
+                      reset_parser_state();
+                      i = close;
+                      return;
+                  }
+                  int minDistance = 0;
+                  int parsedMaxDistance = 0;
+                  std::string minPart = rangeSpec.substr(0, dash);
+                  std::string maxPart = rangeSpec.substr(dash + 1);
+                  if (!parse_positive_int(minPart, minDistance)
+                      || minDistance <= 0
+                      || (!maxPart.empty() && (!parse_positive_int(maxPart, parsedMaxDistance) || parsedMaxDistance < minDistance))
+                      || (maxPart.empty() && rangeSpec.back() != '-'))
+                  {
+                      std::cerr << "Invalid Betza rider range in '" << betza
+                                << "': use [n-m] or [n-], and keep existing Rn syntax for max-only ranges." << std::endl;
+                      reset_parser_state();
+                      i = close;
+                      return;
+                  }
+                  if (maxPart.empty())
+                      parsedMaxDistance = 0;
+                  rider = true;
+                  distance = encode_slider_range(minDistance, parsedMaxDistance);
+                  i = close;
+              }
           }
           if (!rider && lame)
               distance = -1;
@@ -514,6 +567,13 @@ void PieceMap::add(PieceType pt, const PieceInfo* p) {
           for (auto const& [_, limit] : sliderMap) {
               if (limit == 0 || limit == DYNAMIC_SLIDER_LIMIT || limit == SKI_SLIDER_LIMIT || limit == MAX_SLIDER_LIMIT)
                   s += 100;
+              else if (is_slider_range(limit))
+              {
+                  int minDistance = slider_min_distance(limit);
+                  int maxDistance = slider_max_distance(limit);
+                  int reach = (maxDistance ? maxDistance : 8) - minDistance + 1;
+                  s += 200 * std::max(0, std::min(reach, 8)) / 16;
+              }
               else
                   s += 200 * std::min(limit + 1, 8) / 16;
           }

@@ -159,6 +159,13 @@ int slider_fraction(const std::map<Direction, int>& slider) {
     for (auto const& [_, limit] : slider) {
         if (limit == 0 || limit == DYNAMIC_SLIDER_LIMIT || limit == SKI_SLIDER_LIMIT || limit == MAX_SLIDER_LIMIT)
             s += 100;
+        else if (is_slider_range(limit))
+        {
+            int minDistance = slider_min_distance(limit);
+            int maxDistance = slider_max_distance(limit);
+            int reach = (maxDistance ? maxDistance : 8) - minDistance + 1;
+            s += 200 * std::max(0, std::min(reach, 8)) / 16;
+        }
         else
             s += 200 * std::min(limit + 1, 8) / 16;
     }
