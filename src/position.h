@@ -858,18 +858,21 @@ inline Bitboard Position::double_step_region(Color c, PieceType pt) const {
     assert(pt != NO_PIECE_TYPE);
     Bitboard b = var->doubleStepRegion[c];
 
-    // Piece specific multi-step region (currently double & triple steps)
-    // Only filter moves based on var->doubleStepRegion[] which is a restriction that applies to all pieces
-    // Set whiteDoubleStepRegion/blackDoubleStepRegion to AllSquares to remove the restriction
+    // Piece-specific multi-step regions override the global region for that
+    // piece type when an explicit per-piece region is configured.
     if (var->pieceSpecificDoubleStepRegion)
     {
         if (c == WHITE)
         {
-            b &= var->whitePieceDoubleStepRegion.boardOfPiece(toupper(piece_to_char()[(c << PIECE_TYPE_BITS) | pt]));
+            Bitboard pieceSpecific = var->whitePieceDoubleStepRegion.boardOfPiece(toupper(piece_to_char()[(c << PIECE_TYPE_BITS) | pt]));
+            if (pieceSpecific)
+                b = pieceSpecific;
         }
         else if (c == BLACK)
         {
-            b &= var->blackPieceDoubleStepRegion.boardOfPiece(toupper(piece_to_char()[(c << PIECE_TYPE_BITS) | pt]));
+            Bitboard pieceSpecific = var->blackPieceDoubleStepRegion.boardOfPiece(toupper(piece_to_char()[(c << PIECE_TYPE_BITS) | pt]));
+            if (pieceSpecific)
+                b = pieceSpecific;
         }
     }
 
@@ -892,18 +895,21 @@ inline Bitboard Position::triple_step_region(Color c, PieceType pt) const {
     assert(pt != NO_PIECE_TYPE);
     Bitboard b = var->tripleStepRegion[c];
 
-    // Piece specific multi-step region (currently double & triple steps)
-    // Only filter moves based on var->tripleStepRegion[] which is a restriction that applies to all pieces
-    // Set whiteTripleStepRegion/blackTripleStepRegion to AllSquares to remove the restriction
+    // Piece-specific multi-step regions override the global region for that
+    // piece type when an explicit per-piece region is configured.
     if (var->pieceSpecificTripleStepRegion)
     {
         if (c == WHITE)
         {
-            b &= var->whitePieceTripleStepRegion.boardOfPiece(toupper(piece_to_char()[(c << PIECE_TYPE_BITS) | pt]));
+            Bitboard pieceSpecific = var->whitePieceTripleStepRegion.boardOfPiece(toupper(piece_to_char()[(c << PIECE_TYPE_BITS) | pt]));
+            if (pieceSpecific)
+                b = pieceSpecific;
         }
         else if (c == BLACK)
         {
-            b &= var->blackPieceTripleStepRegion.boardOfPiece(toupper(piece_to_char()[(c << PIECE_TYPE_BITS) | pt]));
+            Bitboard pieceSpecific = var->blackPieceTripleStepRegion.boardOfPiece(toupper(piece_to_char()[(c << PIECE_TYPE_BITS) | pt]));
+            if (pieceSpecific)
+                b = pieceSpecific;
         }
     }
 
@@ -2387,7 +2393,10 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
       b &= ~pieces(c);          // cannot land on own piece
   // Add initial moves
   if (double_step_region(c, pt) & s)
+  {
       b |= moves_bb<true>(c, movePt, s, occupancy);
+      b |= Position::special_rider_bb(pi, MODALITY_QUIET, s, occupancy, byTypeBB[ALL_PIECES], pieces(c), c, true);
+  }
   // Xiangqi soldier
   if (pt == SOLDIER && !(promoted_soldiers(c) & s))
       b &= file_bb(file_of(s));
