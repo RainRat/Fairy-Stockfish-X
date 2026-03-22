@@ -661,7 +661,9 @@ namespace {
                 auto checker_targets = [&](Square checksq) {
                     PieceType checkerPt = type_of(pos.piece_on(checksq));
                     Bitboard checkerMask = square_bb(checksq);
-                    Bitboard t = between_bb(ksq, checksq, checkerPt);
+                    Bitboard t = (AttackRiderTypes[checkerPt] & RIDER_ROSE)
+                               ? rose_between_intersection_bb(ksq, checksq, pos.pieces())
+                               : between_bb(ksq, checksq, checkerPt);
 
                     bool blockableNightrider = AttackRiderTypes[checkerPt] & RIDER_NIGHTRIDER;
                     if ((checkerMask & pos.non_sliding_riders()) && !blockableNightrider)

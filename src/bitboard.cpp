@@ -248,6 +248,9 @@ namespace {
                 | rider_attacks_bb<RIDER_MANTICORE_SE>(s, Bitboard(0))
                 | rider_attacks_bb<RIDER_MANTICORE_SW>(s, Bitboard(0));
 
+    if (pi->rose[initial][modality])
+        pseudo |= rider_attacks_bb<RIDER_ROSE>(s, Bitboard(0));
+
     return pseudo;
   }
 
@@ -674,6 +677,8 @@ void Bitboards::init_pieces() {
                   riderTypes |= RIDER_GRIFFON_NH | RIDER_GRIFFON_SH | RIDER_GRIFFON_EV | RIDER_GRIFFON_WV;
               if (pi->manticore[initial][modality])
                   riderTypes |= RIDER_MANTICORE_NE | RIDER_MANTICORE_NW | RIDER_MANTICORE_SE | RIDER_MANTICORE_SW;
+              if (pi->rose[initial][modality])
+                  riderTypes |= RIDER_ROSE;
           }
       }
 

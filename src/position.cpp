@@ -109,7 +109,8 @@ namespace {
             || !pi->tupleSteps[0][modality].empty()
             || !pi->slider[0][modality].empty()
             || pi->griffon[0][modality]
-            || pi->manticore[0][modality])
+            || pi->manticore[0][modality]
+            || pi->rose[0][modality])
             return false;
 
         hasHopper = hasHopper
@@ -141,6 +142,20 @@ namespace {
             return true;
 
     return false;
+  }
+
+  Bitboard rose_revealed_blockers(Square target, Square attackerSq, Bitboard occupied) {
+    Bitboard blockers = 0;
+    Bitboard candidates = rose_between_union_bb(target, attackerSq, Bitboard(0)) & occupied & ~square_bb(attackerSq);
+
+    while (candidates)
+    {
+        Square blocker = pop_lsb(candidates);
+        if (rose_attacks_bb(attackerSq, occupied ^ square_bb(blocker)) & target)
+            blockers |= blocker;
+    }
+
+    return blockers;
   }
 
 } // namespace
@@ -1141,6 +1156,7 @@ void Position::set_check_info(StateInfo* si) const {
               si->pseudoRoyals |= pieces(~sideToMove, pt);
       }
   }
+
 }
 
 
@@ -1604,6 +1620,14 @@ Bitboard Position::slider_blockers(Bitboard sliders, Square s, Bitboard& pinners
     Square sniperSq = pop_lsb(snipers);
     Piece sniper = piece_on(sniperSq);
     PieceType sniperType = type_of(sniper);
+    if (AttackRiderTypes[sniperType] & RIDER_ROSE)
+    {
+        Bitboard b = rose_revealed_blockers(s, sniperSq, occupancy);
+        if (b && !more_than_one(b))
+            pinners |= pieces(c) & sniperSq;
+        blockers |= b;
+        continue;
+    }
     bool isHopper = AttackRiderTypes[sniperType] & HOPPING_RIDERS;
     Bitboard b = between_bb(s, sniperSq, sniperType) & (isHopper ? (allPieces ^ sniperSq) : occupancy);
 
@@ -2658,7 +2682,9 @@ bool Position::pseudo_legal(const Move m) const {
           auto checker_targets = [&](Square checksq) {
               PieceType checkerPt = type_of(piece_on(checksq));
               Bitboard checkerMask = square_bb(checksq);
-              Bitboard t = between_bb(square<KING>(us), checksq, checkerPt);
+              Bitboard t = (AttackRiderTypes[checkerPt] & RIDER_ROSE)
+                         ? rose_between_intersection_bb(square<KING>(us), checksq, pieces())
+                         : between_bb(square<KING>(us), checksq, checkerPt);
 
               bool blockableNightrider = AttackRiderTypes[checkerPt] & RIDER_NIGHTRIDER;
               if ((checkerMask & non_sliding_riders()) && !blockableNightrider)

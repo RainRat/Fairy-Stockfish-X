@@ -85,6 +85,8 @@ namespace {
               {"zebra", "J"},
               {"nightrider", "NN"},
               {"grasshopper", "gQ"},
+              {"rose", "@"},
+              {"circularknight", "@"},
               {"mann", "K"},
               {"amazon", "QN"},
               {"chancellor", "RN"},
@@ -375,6 +377,22 @@ namespace {
           reset_parser_state();
       };
 
+      auto commit_rose = [&]() {
+          if (!prelimDirections.empty() || hopper || contraHopper || lame || dynamicDistance || rider || skiSlider || maxDistance)
+          {
+              reset_parser_state();
+              return;
+          }
+          if (moveModalities.size() == 0)
+          {
+              moveModalities.push_back(MODALITY_QUIET);
+              moveModalities.push_back(MODALITY_CAPTURE);
+          }
+          for (auto modality : moveModalities)
+              p->rose[initial][modality] = true;
+          reset_parser_state();
+      };
+
       for (std::string::size_type i = 0; i < expandedBetza.size(); i++)
       {
           char c = expandedBetza[i];
@@ -463,6 +481,9 @@ namespace {
           // Manticore bent slider (one orthogonal step, then outward bishop slide)
           else if (c == 'M')
               commit_bent_slider(&PieceInfo::manticore);
+          // Standard rose/circular knight rider.
+          else if (c == '@')
+              commit_rose();
           // Tuple leaper atom: (x,y)
           else if (c == '(')
           {

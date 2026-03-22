@@ -19,6 +19,8 @@
 #ifndef BITBOARD_H_INCLUDED
 #define BITBOARD_H_INCLUDED
 
+#include <array>
+#include <utility>
 #include <string>
 
 #include "types.h"
@@ -129,6 +131,12 @@ extern RiderType AttackRiderTypes[PIECE_TYPE_NB];
 extern RiderType MoveRiderTypes[2][PIECE_TYPE_NB];
 Bitboard leap_rider_attacks_bb(PieceType pt, Color c, Square s, Bitboard occupied);
 Bitboard leap_rider_moves_bb(PieceType pt, bool initial, Color c, Square s, Bitboard occupied);
+inline Square lsb(Bitboard b);
+
+constexpr std::array<std::pair<int, int>, 8> RoseSteps = {{
+    { 2,  1}, { 1,  2}, {-1,  2}, {-2,  1},
+    {-2, -1}, {-1, -2}, { 1, -2}, { 2, -1}
+}};
 
 #ifdef LARGEBOARDS
 int popcount(Bitboard b); // required for 128 bit pext
@@ -185,6 +193,103 @@ constexpr Bitboard make_bitboard(Square s, Squares... squares) {
 inline Bitboard square_bb(Square s) {
   assert(is_ok(s));
   return SquareBB[s];
+}
+
+inline Bitboard safe_destination_tuple_bb(Square s, int dr, int df) {
+  int r = int(rank_of(s)) + dr;
+  int f = int(file_of(s)) + df;
+  if (r < 0 || r > int(RANK_MAX) || f < 0 || f > int(FILE_MAX))
+      return Bitboard(0);
+  return square_bb(make_square(File(f), Rank(r)));
+}
+
+inline Bitboard rose_attacks_bb(Square from, Bitboard occupied) {
+  Bitboard attack = 0;
+
+  for (int start = 0; start < 8; ++start)
+      for (int turn : {-1, 1})
+      {
+          Square current = from;
+          int index = start;
+          for (int leg = 0; leg < 7; ++leg)
+          {
+              Bitboard dst = safe_destination_tuple_bb(current, RoseSteps[index].first, RoseSteps[index].second);
+              if (!dst)
+                  break;
+              Square to = lsb(dst);
+              attack |= dst;
+              if (occupied & to)
+                  break;
+              current = to;
+              index = (index + turn + 8) % 8;
+          }
+      }
+
+  return attack;
+}
+
+inline Bitboard rose_between_union_bb(Square from, Square to, Bitboard occupied) {
+  Bitboard pathUnion = 0;
+
+  for (int start = 0; start < 8; ++start)
+      for (int turn : {-1, 1})
+      {
+          Square current = from;
+          int index = start;
+          Bitboard path = 0;
+          for (int leg = 0; leg < 7; ++leg)
+          {
+              Bitboard dst = safe_destination_tuple_bb(current, RoseSteps[index].first, RoseSteps[index].second);
+              if (!dst)
+                  break;
+              Square next = lsb(dst);
+              path |= dst;
+              if (next == to)
+              {
+                  pathUnion |= path;
+                  break;
+              }
+              if (occupied & next)
+                  break;
+              current = next;
+              index = (index + turn + 8) % 8;
+          }
+      }
+
+  return pathUnion;
+}
+
+inline Bitboard rose_between_intersection_bb(Square from, Square to, Bitboard occupied) {
+  Bitboard pathIntersection = 0;
+  bool found = false;
+
+  for (int start = 0; start < 8; ++start)
+      for (int turn : {-1, 1})
+      {
+          Square current = from;
+          int index = start;
+          Bitboard path = 0;
+          for (int leg = 0; leg < 7; ++leg)
+          {
+              Bitboard dst = safe_destination_tuple_bb(current, RoseSteps[index].first, RoseSteps[index].second);
+              if (!dst)
+                  break;
+              Square next = lsb(dst);
+              path |= dst;
+              if (next == to)
+              {
+                  pathIntersection = found ? (pathIntersection & path) : path;
+                  found = true;
+                  break;
+              }
+              if (occupied & next)
+                  break;
+              current = next;
+              index = (index + turn + 8) % 8;
+          }
+      }
+
+  return found ? pathIntersection : square_bb(to);
 }
 
 
@@ -526,6 +631,12 @@ inline Bitboard between_bb(Square s1, Square s2, PieceType pt) {
           return path;
   }
 
+  if (r & RIDER_ROSE)
+  {
+      if ((path = rose_between_union_bb(s1, s2, Bitboard(0))))
+          return path;
+  }
+
   if (r & RIDER_NIGHTRIDER)
   {
       if ((path = nightrider_between_bb(s1, s2)))
@@ -788,6 +899,8 @@ inline Bitboard rider_attacks_bb(Square s, Bitboard occupied) {
             | ski_slider_attacks(s, occupied,  1, -1)
             | ski_slider_attacks(s, occupied, -1,  1)
             | ski_slider_attacks(s, occupied, -1, -1);
+  if constexpr (R == RIDER_ROSE)
+      return rose_attacks_bb(s, occupied);
 
   const Magic& m =  R == RIDER_ROOK_H ? RookMagicsH[s]
                   : R == RIDER_ROOK_V ? RookMagicsV[s]
@@ -832,6 +945,8 @@ inline Bitboard rider_attacks_bb(RiderType R, Square s, Bitboard occupied) {
             | ski_slider_attacks(s, occupied,  1, -1)
             | ski_slider_attacks(s, occupied, -1,  1)
             | ski_slider_attacks(s, occupied, -1, -1);
+  if (R == RIDER_ROSE)
+      return rose_attacks_bb(s, occupied);
   if (R == RIDER_GRIFFON_NH) return rider_attacks_bb<RIDER_GRIFFON_NH>(s, occupied);
   if (R == RIDER_GRIFFON_SH) return rider_attacks_bb<RIDER_GRIFFON_SH>(s, occupied);
   if (R == RIDER_GRIFFON_EV) return rider_attacks_bb<RIDER_GRIFFON_EV>(s, occupied);
