@@ -116,4 +116,46 @@ if ! echo "${bench_output}" | grep -q "Nodes searched  : "; then
   exit 1
 fi
 
+castling_diag_output=$(python3 - <<'PY' 2>&1
+import pyffish
+
+pyffish.load_variant_config(
+    """
+[castdiag-empty:chess]
+maxFile = j
+castling = true
+castlingKingFile = f
+castlingKingsideFile = i
+castlingQueensideFile = c
+castlingRookKingsideFile = j
+castlingRookQueensideFile = b
+startFen = 10/10/10/10/10/10/10/1R3K2R1 w JQ - 0 1
+
+[castdiag-wrongpiece:chess]
+maxFile = j
+castling = true
+castlingKingFile = f
+castlingKingsideFile = i
+castlingQueensideFile = c
+castlingRookKingsideFile = j
+castlingRookQueensideFile = b
+startFen = 10/10/10/10/10/10/10/1R3K3N w JQ - 0 1
+"""
+)
+
+pyffish.validate_fen("10/10/10/10/10/10/10/1R3K2R1 w JQ - 0 1", "castdiag-empty", False)
+pyffish.validate_fen("10/10/10/10/10/10/10/1R3K3N w JQ - 0 1", "castdiag-wrongpiece", False)
+PY
+)
+
+if ! echo "${castling_diag_output}" | grep -q "No castling rook on file J for flag J."; then
+  echo "${castling_diag_output}"
+  exit 1
+fi
+
+if ! echo "${castling_diag_output}" | grep -q "Flag J refers to file J, but that square does not contain a WHITE castling rook."; then
+  echo "${castling_diag_output}"
+  exit 1
+fi
+
 echo "parser regression tests passed"

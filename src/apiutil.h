@@ -933,6 +933,9 @@ inline Validation check_castling_rank(const std::array<std::string, 2>& castling
         const Rank castlingRank = relative_rank(c, v->castlingRank, v->maxRank);
         for (char castlingFlag : castlingInfoSplitted[c])
         {
+            char displayFlag = c == WHITE
+                             ? std::toupper(static_cast<unsigned char>(castlingFlag))
+                             : std::tolower(static_cast<unsigned char>(castlingFlag));
             if (std::tolower(static_cast<unsigned char>(castlingFlag)) == 'k'
                 || std::tolower(static_cast<unsigned char>(castlingFlag)) == 'q')
             {
@@ -951,10 +954,11 @@ inline Validation check_castling_rank(const std::array<std::string, 2>& castling
                     {
                         castlingRook = true;
                         break;
-                    }
+                }
                 if (!castlingRook)
                 {
-                    std::cerr << "No castling rook for flag " << castlingFlag << std::endl;
+                    std::cerr << "No castling rook for flag " << displayFlag
+                              << " on castling rank " << castlingRank + 1 << "." << std::endl;
                     return NOK;
                 }
             }
@@ -963,12 +967,32 @@ inline Validation check_castling_rank(const std::array<std::string, 2>& castling
                 const int fileIdx = std::tolower(static_cast<unsigned char>(castlingFlag)) - 'a';
                 if (fileIdx < 0 || fileIdx >= board.get_nb_files())
                 {
-                    std::cerr << "Invalid castling/gating flag: " << castlingFlag << std::endl;
+                    std::cerr << "Invalid castling/gating flag: " << displayFlag << std::endl;
                     return NOK;
                 }
-                if (board.get_piece(castlingRank, fileIdx) == ' ')
+                char boardPiece = board.get_piece(castlingRank, fileIdx);
+                if (boardPiece == ' ')
                 {
-                    std::cerr << "No gating piece for flag " << castlingFlag << std::endl;
+                    if (v->castling && v->gating)
+                        std::cerr << "No castling rook or gating piece on file "
+                                  << char('A' + fileIdx) << " for flag " << displayFlag << "." << std::endl;
+                    else if (v->castling)
+                        std::cerr << "No castling rook on file "
+                                  << char('A' + fileIdx) << " for flag " << displayFlag << "." << std::endl;
+                    else
+                        std::cerr << "No gating piece on file "
+                                  << char('A' + fileIdx) << " for flag " << displayFlag << "." << std::endl;
+                    return NOK;
+                }
+                size_t pcIdx = v->pieceToChar.find(boardPiece);
+                if (v->castling && !v->gating
+                    && (pcIdx == std::string::npos
+                        || !(v->castlingRookPieces[c] & type_of(Piece(pcIdx)))
+                        || color_of(Piece(pcIdx)) != c))
+                {
+                    std::cerr << "Flag " << displayFlag << " refers to file "
+                              << char('A' + fileIdx) << ", but that square does not contain a "
+                              << color_to_string(c) << " castling rook." << std::endl;
                     return NOK;
                 }
             }
