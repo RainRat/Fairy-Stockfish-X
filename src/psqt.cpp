@@ -189,6 +189,8 @@ Value piece_value(Phase phase, PieceType pt)
             + (phase == MG ?  30 :  50) * std::count_if(pi->slider[0][MODALITY_QUIET].begin(), pi->slider[0][MODALITY_QUIET].end(), [](const std::pair<const Direction, int>& d) { return std::abs(d.first) == NORTH || std::abs(d.first) == 1; });
     if (pi->diagonalLimitedSlider)
         v0 += 40;
+    if (pi->rose[0][MODALITY_QUIET] || pi->rose[0][MODALITY_CAPTURE])
+        v0 += 1300;
     return Value(v0 * exp(double(v0) / 10000));
 }
 
