@@ -33,5 +33,9 @@ assert sorted(edge) == sorted(['b1a1', 'b1c1', 'b1b2']), edge
 corner = sf.legal_moves('achi', '3/3/P2 w - - 0 1', [])
 assert sorted(corner) == sorted(['a1b1', 'a1a2', 'a1b2']), corner
 
+blocked_by_enemy = sf.legal_moves('achi', '3/1Pp/3 w - - 0 1', [])
+assert 'b2c2' not in blocked_by_enemy, blocked_by_enemy
+assert sorted(blocked_by_enemy) == sorted(['b2a1', 'b2b1', 'b2c1', 'b2a2', 'b2a3', 'b2b3', 'b2c3']), blocked_by_enemy
+
 print('achi regression tests passed')
 PY
