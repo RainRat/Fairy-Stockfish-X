@@ -34,6 +34,58 @@ PieceMap pieceMap; // Global object
 
 
 namespace {
+  const char* default_betza(PieceType pt) {
+      switch (pt) {
+      case PAWN: return "fmWfceF";
+      case KNIGHT: return "N";
+      case BISHOP: return "B";
+      case ROOK: return "R";
+      case QUEEN: return "Q";
+      case FERS: return "F";
+      case ALFIL: return "A";
+      case FERS_ALFIL: return "FA";
+      case SILVER: return "FfW";
+      case AIWOK: return "RNF";
+      case BERS: return "RF";
+      case ARCHBISHOP: return "BN";
+      case CHANCELLOR: return "RN";
+      case AMAZON: return "QN";
+      case KNIBIS: return "mNcB";
+      case BISKNI: return "mBcN";
+      case KNIROO: return "mNcR";
+      case ROOKNI: return "mRcN";
+      case SHOGI_PAWN: return "fW";
+      case LANCE: return "fR";
+      case SHOGI_KNIGHT: return "fN";
+      case GOLD: return "WfF";
+      case DRAGON_HORSE: return "BW";
+      case CLOBBER_PIECE: return "cW";
+      case BREAKTHROUGH_PIECE: return "fmWfF";
+      case IMMOBILE_PIECE: return "";
+      case CANNON: return "mRcpR";
+      case JANGGI_CANNON: return "pR";
+      case SOLDIER: return "fsW";
+      case HORSE: return "nN";
+      case ELEPHANT: return "nA";
+      case BANNER: return "RcpRnN";
+      case WAZIR: return "W";
+      case COMMONER: return "K";
+      case CENTAUR: return "KN";
+      case KING: return "K";
+      default: return "";
+      }
+  }
+
+  const std::string& variant_betza(const Variant* v, PieceType pt, const char* fallback) {
+      if (v != nullptr && !v->pieceBetza[pt].empty())
+          return v->pieceBetza[pt];
+      static const std::string empty;
+      if (fallback[0] == '\0')
+          return empty;
+      static std::map<std::string, std::string> cache;
+      return cache.emplace(fallback, fallback).first->second;
+  }
+
   // Keep legacy/variant-facing aliases here:
   // L/C both mean camel (3,1), and J/Z both mean zebra (3,2).
   // In particular, built-in Janggi elephant notation still uses nZ.
@@ -538,43 +590,43 @@ namespace {
 
 void PieceMap::init(const Variant* v) {
   clear_all();
-  add(PAWN, from_betza("fmWfceF", "pawn"));
-  add(KNIGHT, from_betza("N", "knight"));
-  add(BISHOP, from_betza("B", "bishop"));
-  add(ROOK, from_betza("R", "rook"));
-  add(QUEEN, from_betza("Q", "queen"));
-  add(FERS, from_betza("F", "fers"));
-  add(ALFIL, from_betza("A", "alfil"));
-  add(FERS_ALFIL, from_betza("FA", "fersAlfil"));
-  add(SILVER, from_betza("FfW", "silver"));
-  add(AIWOK, from_betza("RNF", "aiwok"));
-  add(BERS, from_betza("RF", "bers"));
-  add(ARCHBISHOP, from_betza("BN", "archbishop"));
-  add(CHANCELLOR, from_betza("RN", "chancellor"));
-  add(AMAZON, from_betza("QN", "amazon"));
-  add(KNIBIS, from_betza("mNcB", "knibis"));
-  add(BISKNI, from_betza("mBcN", "biskni"));
-  add(KNIROO, from_betza("mNcR", "kniroo"));
-  add(ROOKNI, from_betza("mRcN", "rookni"));
-  add(SHOGI_PAWN, from_betza("fW", "shogiPawn"));
-  add(LANCE, from_betza("fR", "lance"));
-  add(SHOGI_KNIGHT, from_betza("fN", "shogiKnight"));
-  add(GOLD, from_betza("WfF", "gold"));
-  add(DRAGON_HORSE, from_betza("BW", "dragonHorse"));
-  add(CLOBBER_PIECE, from_betza("cW", "clobber"));
-  add(BREAKTHROUGH_PIECE, from_betza("fmWfF", "breakthrough"));
-  add(IMMOBILE_PIECE, from_betza("", "immobile"));
-  add(CANNON, from_betza("mRcpR", "cannon"));
-  add(JANGGI_CANNON, from_betza("pR", "janggiCannon"));
-  add(SOLDIER, from_betza("fsW", "soldier"));
-  add(HORSE, from_betza("nN", "horse"));
-  add(ELEPHANT, from_betza("nA", "elephant"));
+  add(PAWN, from_betza(variant_betza(v, PAWN, default_betza(PAWN)), "pawn"));
+  add(KNIGHT, from_betza(variant_betza(v, KNIGHT, default_betza(KNIGHT)), "knight"));
+  add(BISHOP, from_betza(variant_betza(v, BISHOP, default_betza(BISHOP)), "bishop"));
+  add(ROOK, from_betza(variant_betza(v, ROOK, default_betza(ROOK)), "rook"));
+  add(QUEEN, from_betza(variant_betza(v, QUEEN, default_betza(QUEEN)), "queen"));
+  add(FERS, from_betza(variant_betza(v, FERS, default_betza(FERS)), "fers"));
+  add(ALFIL, from_betza(variant_betza(v, ALFIL, default_betza(ALFIL)), "alfil"));
+  add(FERS_ALFIL, from_betza(variant_betza(v, FERS_ALFIL, default_betza(FERS_ALFIL)), "fersAlfil"));
+  add(SILVER, from_betza(variant_betza(v, SILVER, default_betza(SILVER)), "silver"));
+  add(AIWOK, from_betza(variant_betza(v, AIWOK, default_betza(AIWOK)), "aiwok"));
+  add(BERS, from_betza(variant_betza(v, BERS, default_betza(BERS)), "bers"));
+  add(ARCHBISHOP, from_betza(variant_betza(v, ARCHBISHOP, default_betza(ARCHBISHOP)), "archbishop"));
+  add(CHANCELLOR, from_betza(variant_betza(v, CHANCELLOR, default_betza(CHANCELLOR)), "chancellor"));
+  add(AMAZON, from_betza(variant_betza(v, AMAZON, default_betza(AMAZON)), "amazon"));
+  add(KNIBIS, from_betza(variant_betza(v, KNIBIS, default_betza(KNIBIS)), "knibis"));
+  add(BISKNI, from_betza(variant_betza(v, BISKNI, default_betza(BISKNI)), "biskni"));
+  add(KNIROO, from_betza(variant_betza(v, KNIROO, default_betza(KNIROO)), "kniroo"));
+  add(ROOKNI, from_betza(variant_betza(v, ROOKNI, default_betza(ROOKNI)), "rookni"));
+  add(SHOGI_PAWN, from_betza(variant_betza(v, SHOGI_PAWN, default_betza(SHOGI_PAWN)), "shogiPawn"));
+  add(LANCE, from_betza(variant_betza(v, LANCE, default_betza(LANCE)), "lance"));
+  add(SHOGI_KNIGHT, from_betza(variant_betza(v, SHOGI_KNIGHT, default_betza(SHOGI_KNIGHT)), "shogiKnight"));
+  add(GOLD, from_betza(variant_betza(v, GOLD, default_betza(GOLD)), "gold"));
+  add(DRAGON_HORSE, from_betza(variant_betza(v, DRAGON_HORSE, default_betza(DRAGON_HORSE)), "dragonHorse"));
+  add(CLOBBER_PIECE, from_betza(variant_betza(v, CLOBBER_PIECE, default_betza(CLOBBER_PIECE)), "clobber"));
+  add(BREAKTHROUGH_PIECE, from_betza(variant_betza(v, BREAKTHROUGH_PIECE, default_betza(BREAKTHROUGH_PIECE)), "breakthrough"));
+  add(IMMOBILE_PIECE, from_betza(variant_betza(v, IMMOBILE_PIECE, default_betza(IMMOBILE_PIECE)), "immobile"));
+  add(CANNON, from_betza(variant_betza(v, CANNON, default_betza(CANNON)), "cannon"));
+  add(JANGGI_CANNON, from_betza(variant_betza(v, JANGGI_CANNON, default_betza(JANGGI_CANNON)), "janggiCannon"));
+  add(SOLDIER, from_betza(variant_betza(v, SOLDIER, default_betza(SOLDIER)), "soldier"));
+  add(HORSE, from_betza(variant_betza(v, HORSE, default_betza(HORSE)), "horse"));
+  add(ELEPHANT, from_betza(variant_betza(v, ELEPHANT, default_betza(ELEPHANT)), "elephant"));
   add(JANGGI_ELEPHANT, janggi_elephant_piece());
-  add(BANNER, from_betza("RcpRnN", "banner"));
-  add(WAZIR, from_betza("W", "wazir"));
-  add(COMMONER, from_betza("K", "commoner"));
-  add(CENTAUR, from_betza("KN", "centaur"));
-  add(KING, from_betza("K", "king"));
+  add(BANNER, from_betza(variant_betza(v, BANNER, default_betza(BANNER)), "banner"));
+  add(WAZIR, from_betza(variant_betza(v, WAZIR, default_betza(WAZIR)), "wazir"));
+  add(COMMONER, from_betza(variant_betza(v, COMMONER, default_betza(COMMONER)), "commoner"));
+  add(CENTAUR, from_betza(variant_betza(v, CENTAUR, default_betza(CENTAUR)), "centaur"));
+  add(KING, from_betza(variant_betza(v, KING, default_betza(KING)), "king"));
   // Add custom pieces
   for (PieceType pt = CUSTOM_PIECES; pt <= CUSTOM_PIECES_END; ++pt)
       add(pt, from_betza(v != nullptr ? v->customPiece[pt - CUSTOM_PIECES] : "", ""));

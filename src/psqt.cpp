@@ -211,7 +211,7 @@ void init(const Variant* v) {
   for (PieceSet ps = v->pieceTypes; ps;)
   {
       PieceType pt = pop_lsb(ps);
-      if (is_custom(pt))
+      if (is_custom(pt) || !v->pieceBetza[pt].empty())
       {
           PieceValue[MG][make_piece(WHITE, pt)] = PieceValue[MG][make_piece(BLACK, pt)] = piece_value(MG, pt);
           PieceValue[EG][make_piece(WHITE, pt)] = PieceValue[EG][make_piece(BLACK, pt)] = piece_value(EG, pt);

@@ -680,6 +680,20 @@ bool VariantParser<DoCheck>::parse_piece_types(Variant* v) {
                 else if (DoCheck)
                     std::cerr << name << " - Missing Betza move notation" << std::endl;
             }
+            else if (pt != KING)
+            {
+                if (keyValue->second.size() > 1)
+                {
+                    v->pieceBetza[pt] = keyValue->second.substr(2);
+                    if (v->pieceBetza[pt].find('e') != std::string::npos)
+                    {
+                        v->enPassantTypes[WHITE] |= piece_set(pt);
+                        v->enPassantTypes[BLACK] |= piece_set(pt);
+                    }
+                }
+                else
+                    v->pieceBetza[pt].clear();
+            }
             else if (pt == KING)
             {
                 if (keyValue->second.size() > 1)
