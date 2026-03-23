@@ -82,6 +82,20 @@ verify_warning "wallingRule=duck and petrifyOnCaptureTypes are incompatible." "p
 verify_warning "pieceDrops and any walling are incompatible." "freeDrops check"
 verify_warning "falcon looks like a custom piece definition. Use customPieceN = a:W for new custom pieces." "named custom piece hint"
 
+nonking_ini=$(mktemp)
+trap 'rm -f "${tmp_ini}" "${nonking_ini}"' EXIT
+cat > "${nonking_ini}" <<'INI'
+[nonking-inline-betza:chess]
+rook = r:R3
+INI
+
+nonking_output=$("${ENGINE}" check "${nonking_ini}" 2>&1 || true)
+if ! printf '%s\n' "${nonking_output}" | grep -qF "rook only supports a piece letter here. Use customPieceN = r:R3 and remap rook to that letter instead."; then
+  echo "Failed: non-king inline Betza rejection"
+  printf '%s\n' "${nonking_output}"
+  exit 1
+fi
+
 tuple_output=$(cat <<CMDS | "${ENGINE}" 2>&1
 uci
 setoption name VariantPath value ${tmp_ini}
