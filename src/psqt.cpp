@@ -306,6 +306,9 @@ void init(const Variant* v) {
       if (v->pieceValue[EG][pt])
           score = make_score(mg_value(score), v->pieceValue[EG][pt]);
 
+      PieceValue[MG][pc] = PieceValue[MG][~pc] = mg_value(score);
+      PieceValue[EG][pc] = PieceValue[EG][~pc] = eg_value(score);
+
       CapturePieceValue[MG][pc] = CapturePieceValue[MG][~pc] = mg_value(score);
       CapturePieceValue[EG][pc] = CapturePieceValue[EG][~pc] = eg_value(score);
 
