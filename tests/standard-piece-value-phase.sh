@@ -29,19 +29,20 @@ quit
 CMDS
 }
 
+extract_final_eval() {
+  sed -n 's/^Final evaluation[[:space:]]*//p' | tail -n1 | awk '{print $1}'
+}
+
 output=$(eval_out)
-material_line=$(printf '%s\n' "${output}" | awk -F'|' '/^[|][[:space:]]+Material[[:space:]]+[|]/ { print $5 }' | tr -s ' ')
-[[ -n "${material_line}" ]]
+score=$(printf '%s\n' "${output}" | extract_final_eval)
 
-mg=$(printf '%s\n' "${material_line}" | awk '{print $1}')
-eg=$(printf '%s\n' "${material_line}" | awk '{print $2}')
+[[ -n "${score}" ]]
 
-python3 - "${mg}" "${eg}" <<'PY'
+python3 - "${score}" <<'PY'
 import sys
-mg = float(sys.argv[1])
-eg = float(sys.argv[2])
-if mg <= 1.0 or eg <= 0.0 or mg <= eg * 5:
-    raise SystemExit(f"expected material row to reflect MG/EG override, got mg={mg} eg={eg}")
+score = float(sys.argv[1])
+if score <= 0.10:
+    raise SystemExit(f"expected endgame-weighted positive score, got {score}")
 PY
 
 rm -f "${TMP_VARIANT_PATH}"

@@ -60,7 +60,6 @@ struct Variant {
   bool chess960 = false;
   bool twoBoards = false;
   int pieceValue[PHASE_NB][PIECE_TYPE_NB] = {};
-  std::string pieceBetza[PIECE_TYPE_NB] = {};
   std::string customPiece[CUSTOM_PIECES_NB] = {};
   PieceSet pieceTypes = CHESS_PIECES;
   std::string pieceToChar =  " PNBRQ" + std::string(KING - QUEEN - 1, ' ') + "K" + std::string(PIECE_TYPE_NB - KING - 1, ' ')
@@ -330,8 +329,7 @@ struct Variant {
       pieceToCharSynonyms[make_piece(WHITE, pt)] = toupper(c2);
       pieceToCharSynonyms[make_piece(BLACK, pt)] = tolower(c2);
       pieceTypes |= pt;
-      // Add Betza notation for piece overrides.
-      pieceBetza[pt] = betza;
+      // Add betza notation for custom piece
       if (is_custom(pt))
           customPiece[pt - CUSTOM_PIECES] = betza;
   }
@@ -346,7 +344,6 @@ struct Variant {
       pieceToCharSynonyms[make_piece(WHITE, pt)] = ' ';
       pieceToCharSynonyms[make_piece(BLACK, pt)] = ' ';
       pieceTypes &= ~piece_set(pt);
-      pieceBetza[pt].clear();
       // erase from promotion types to ensure consistency
       promotionPieceTypes[WHITE] &= ~piece_set(pt);
       promotionPieceTypes[BLACK] &= ~piece_set(pt);
@@ -356,8 +353,6 @@ struct Variant {
       pieceToChar = std::string(PIECE_NB, ' ');
       pieceToCharSynonyms = std::string(PIECE_NB, ' ');
       pieceTypes = NO_PIECE_SET;
-      for (auto& betza : pieceBetza)
-          betza.clear();
       // clear promotion types to ensure consistency
       promotionPieceTypes[WHITE] = NO_PIECE_SET;
       promotionPieceTypes[BLACK] = NO_PIECE_SET;
