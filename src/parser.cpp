@@ -680,6 +680,13 @@ bool VariantParser<DoCheck>::parse_piece_types(Variant* v) {
                 else if (DoCheck)
                     std::cerr << name << " - Missing Betza move notation" << std::endl;
             }
+            else if (pt != KING && keyValue->second.size() > 1)
+            {
+                if (DoCheck)
+                    std::cerr << name << " only supports a piece letter here. Use customPieceN = "
+                              << keyValue->second << " and remap " << name << " to that letter instead." << std::endl;
+                return false;
+            }
             else if (pt == KING)
             {
                 if (keyValue->second.size() > 1)
