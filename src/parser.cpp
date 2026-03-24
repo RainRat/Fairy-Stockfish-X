@@ -832,6 +832,8 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("pocketSize", v->pocketSize);
     parse_attribute("chess960", v->chess960);
     parse_attribute("twoBoards", v->twoBoards);
+    parse_attribute("cylindrical", v->cylindrical);
+    parse_attribute("toroidal", v->toroidal);
     parse_attribute("startFen", v->startFen);
     parse_attribute("promotionRegionWhite", v->promotionRegion[WHITE]);
     parse_attribute("promotionRegionBlack", v->promotionRegion[BLACK]);
@@ -1426,6 +1428,8 @@ void VariantParser<DoCheck>::check_consistency(Variant* v) {
     if (!DoCheck)
         return;
 
+    const bool wrapsTopology = v->cylindrical || v->toroidal;
+
     // pieces
     for (PieceSet ps = v->pieceTypes; ps;)
     {
@@ -1492,6 +1496,17 @@ void VariantParser<DoCheck>::check_consistency(Variant* v) {
           && (int(v->maxFile) + 1) == v->connectN * v->connectN
           && (int(v->maxRank) + 1) == v->connectN * v->connectN))
         std::cerr << "connect4D currently requires a square board of size connectN^2 with connectN >= 3." << std::endl;
+    if (wrapsTopology && (v->connectN || v->connect3D || v->connect4D || v->connectNxN || v->collinearN || v->connectGroup || v->removeConnectN))
+        std::cerr << "Wrapped boards do not support connect/collinear win conditions." << std::endl;
+
+    if (v->toroidal)
+        for (int i = 0; i < CUSTOM_PIECES_NB; ++i)
+            if (!v->customPiece[i].empty() && (v->customPiece[i].find('x') != std::string::npos || v->customPiece[i].find('z') != std::string::npos))
+            {
+                std::cerr << "Toroidal boards do not support x/z rider modifiers in customPiece"
+                          << (i + 1) << "." << std::endl;
+                break;
+            }
 
     // Check for limitations
     if ((v->pieceDrops || v->freeDrops) && v->wallingRule != NO_WALLING)

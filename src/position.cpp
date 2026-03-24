@@ -1084,6 +1084,57 @@ void Position::set_castling_right(Color c, Square rfrom) {
 
 void Position::set_check_info(StateInfo* si) const {
 
+  if (topology_wraps())
+  {
+      si->blockersForKing[WHITE] = si->blockersForKing[BLACK] = 0;
+      si->pinners[WHITE] = si->pinners[BLACK] = 0;
+
+      Square ksq = count<KING>(~sideToMove) ? square<KING>(~sideToMove) : SQ_NONE;
+      si->nonSlidingRiders = 0;
+
+      for (PieceSet ps = piece_types(); ps;)
+      {
+          PieceType pt = pop_lsb(ps);
+          PieceType movePt = pt == KING ? king_type() : pt;
+          si->checkSquares[pt] = 0;
+
+          if (ksq != SQ_NONE)
+          {
+              Bitboard candidates = board_bb();
+              while (candidates)
+              {
+                  Square s = pop_lsb(candidates);
+                  if (attacks_from(sideToMove, pt, s) & ksq)
+                      si->checkSquares[pt] |= s;
+              }
+          }
+
+          if (AttackRiderTypes[movePt] & NON_SLIDING_RIDERS)
+              si->nonSlidingRiders |= pieces(pt);
+      }
+
+      si->shak = si->checkersBB & (byTypeBB[KNIGHT] | byTypeBB[ROOK] | byTypeBB[BERS]);
+      si->bikjang = false;
+      si->chased = Bitboard(0);
+      si->legalCapture = NO_VALUE;
+      si->legalEnPassant = NO_VALUE;
+      if (pseudo_royal_types())
+      {
+          si->pseudoRoyalCandidates = 0;
+          si->pseudoRoyals = 0;
+          for (PieceSet ps = pseudo_royal_types(); ps;)
+          {
+              PieceType pt = pop_lsb(ps);
+              si->pseudoRoyalCandidates |= pieces(pt);
+              if (count(sideToMove, pt) <= pseudo_royal_count())
+                  si->pseudoRoyals |= pieces(sideToMove, pt);
+              if (count(~sideToMove, pt) <= pseudo_royal_count())
+                  si->pseudoRoyals |= pieces(~sideToMove, pt);
+          }
+      }
+      return;
+  }
+
   si->blockersForKing[WHITE] = slider_blockers(pieces(BLACK), count<KING>(WHITE) ? square<KING>(WHITE) : SQ_NONE, si->pinners[BLACK], BLACK);
   si->blockersForKing[BLACK] = slider_blockers(pieces(WHITE), count<KING>(BLACK) ? square<KING>(BLACK) : SQ_NONE, si->pinners[WHITE], WHITE);
 
@@ -1649,6 +1700,23 @@ Bitboard Position::slider_blockers(Bitboard sliders, Square s, Bitboard& pinners
 /// given square. Slider attacks use the occupied bitboard to indicate occupancy.
 
 Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard janggiCannons) const {
+
+  if (topology_wraps())
+  {
+      Bitboard b = 0;
+      for (PieceSet ps = piece_types(); ps;)
+      {
+          PieceType pt = pop_lsb(ps);
+          Bitboard candidates = pieces(c, pt);
+          while (candidates)
+          {
+              Square from = pop_lsb(candidates);
+              if (attacks_from(c, pt, from) & s)
+                  b |= from;
+          }
+      }
+      return b;
+  }
 
   // Use a faster version for variants with moderate rule variations
   if (fast_attacks())
@@ -2639,7 +2707,7 @@ bool Position::pseudo_legal(const Move m) const {
   }
 
   // Handle the special case of a pawn move
-  if (type_of(pc) == PAWN)
+  if (type_of(pc) == PAWN && !topology_wraps())
   {
       // We have already handled promotion moves, so destination
       // cannot be on the 8th/1st rank.
@@ -2679,6 +2747,14 @@ bool Position::pseudo_legal(const Move m) const {
   {
       if (type_of(pc) != KING)
       {
+          if (topology_wraps())
+          {
+              Bitboard occupied = (pieces() ^ from) | to;
+              if (attackers_to_king(square<KING>(us), occupied, ~us))
+                  return false;
+          }
+          else
+          {
           auto checker_targets = [&](Square checksq) {
               PieceType checkerPt = type_of(piece_on(checksq));
               Bitboard checkerMask = square_bb(checksq);
@@ -2701,6 +2777,7 @@ bool Position::pseudo_legal(const Move m) const {
 
           if (!(evasionTargets & to))
               return false;
+          }
       }
       // In case of king moves under check we have to remove king so as to catch
       // invalid moves like b1a1 when opposite queen is on c1.
@@ -2766,6 +2843,17 @@ bool Position::gives_check(Move m) const {
                                 : ((type_of(m) == DROP ? janggiCannons : janggiCannons ^ from) | to);
   else if (janggiCannons & to)
       janggiCannons ^= to;
+
+  if (topology_wraps())
+  {
+      Position* pos = const_cast<Position*>(this);
+      StateInfo nextState;
+      pos->do_move(m, nextState, false);
+      bool givesCheck = pos->count<KING>(pos->side_to_move())
+                     && bool(pos->attackers_to_king(pos->square<KING>(pos->side_to_move()), ~pos->side_to_move()));
+      pos->undo_move(m);
+      return givesCheck;
+  }
 
   // Is there a direct check?
   if (type_of(m) != PROMOTION && type_of(m) != PIECE_PROMOTION && type_of(m) != PIECE_DEMOTION && type_of(m) != CASTLING
@@ -3402,7 +3490,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       }
 
       // Set en passant square(s) if the moved pawn can be captured
-      else if (   type_of(m) != DROP
+      else if (   !topology_wraps()
+          && type_of(m) != DROP
           && (   std::abs(int(to) - int(from)) == 2 * NORTH
               || std::abs(int(to) - int(from)) == 3 * NORTH))
       {
@@ -3420,6 +3509,44 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           {
               st->epSquares |= to - 2 * pawn_push(us);
               k ^= Zobrist::enpassant[to - 2 * pawn_push(us)];
+          }
+      }
+      else if (type_of(m) != DROP && topology_wraps())
+      {
+          auto stepped = [&](Square start, int count) {
+              Square s = start;
+              int forwardDr = us == WHITE ? 1 : -1;
+              for (int i = 0; i < count; ++i)
+              {
+                  Square next;
+                  if (!wrapped_destination_square(s, 0, forwardDr, max_file(), max_rank(), wraps_files(), wraps_ranks(), next))
+                      break;
+                  s = next;
+              }
+              return s;
+          };
+
+          auto maybe_add_ep = [&](Square epSq) {
+              if (   epSq != SQ_NONE
+                  && (var->enPassantRegion[them] & epSq)
+                  && ((attacks_from(us, PAWN, epSq) & pieces(them, PAWN)) || (var->enPassantTypes[them] & ~piece_set(PAWN)))
+                  && !(walling(us) && gating_square(m) == epSq))
+              {
+                  st->epSquares |= epSq;
+                  k ^= Zobrist::enpassant[epSq];
+              }
+          };
+
+          Square step1 = stepped(from, 1);
+          Square step2 = stepped(from, 2);
+          Square step3 = stepped(from, 3);
+
+          if (to == step2)
+              maybe_add_ep(step1);
+          else if (to == step3)
+          {
+              maybe_add_ep(step1);
+              maybe_add_ep(step2);
           }
       }
 
@@ -4718,6 +4845,11 @@ bool Position::see_ge(Move m, Value threshold) const {
 
   // Do not evaluate SEE if value would be unreliable
   if (must_capture() || !checking_permitted() || is_gating(m) || count<CLOBBER_PIECE>() == count<ALL_PIECES>())
+      return VALUE_ZERO >= threshold;
+
+  // Wrapped topology invalidates the ordinary ray/pin exchange model.
+  // Use a neutral fallback until SEE is made topology-aware.
+  if (topology_wraps())
       return VALUE_ZERO >= threshold;
 
   int victimValue = PieceValue[MG][victim];

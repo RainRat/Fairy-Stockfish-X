@@ -195,6 +195,69 @@ inline Bitboard square_bb(Square s) {
   return SquareBB[s];
 }
 
+inline int wrap_coord(int val, int limit) {
+  assert(limit > 0);
+  return ((val % limit) + limit) % limit;
+}
+
+inline bool wrapped_destination_square(Square from, int df, int dr,
+                                       File maxFile, Rank maxRank,
+                                       bool wrapFile, bool wrapRank,
+                                       Square& out) {
+  const int numFiles = int(maxFile) + 1;
+  const int numRanks = int(maxRank) + 1;
+  int f = int(file_of(from)) + df;
+  int r = int(rank_of(from)) + dr;
+
+  if (!wrapFile && (f < 0 || f >= numFiles))
+      return false;
+  if (!wrapRank && (r < 0 || r >= numRanks))
+      return false;
+
+  if (wrapFile)
+      f = wrap_coord(f, numFiles);
+  if (wrapRank)
+      r = wrap_coord(r, numRanks);
+
+  out = make_square(File(f), Rank(r));
+  return true;
+}
+
+inline Bitboard wrapping_slider_attacks(Square s, Bitboard occ, File maxFile, Rank maxRank,
+                                        bool wrapFile, bool wrapRank,
+                                        bool orthogonal, bool diagonal) {
+  Bitboard result = 0;
+
+  constexpr std::array<std::pair<int, int>, 8> dirs = {{
+      { 1,  0}, {-1,  0}, { 0,  1}, { 0, -1},
+      { 1,  1}, { 1, -1}, {-1,  1}, {-1, -1}
+  }};
+
+  for (size_t i = 0; i < dirs.size(); ++i)
+  {
+      const auto [df, dr] = dirs[i];
+      const bool isDiag = df && dr;
+      if ((isDiag && !diagonal) || (!isDiag && !orthogonal))
+          continue;
+
+      Square current = s;
+      for (;;)
+      {
+          Square next = SQ_NONE;
+          if (!wrapped_destination_square(current, df, dr, maxFile, maxRank, wrapFile, wrapRank, next))
+              break;
+          if (next == s)
+              break;
+          result |= next;
+          if (occ & next)
+              break;
+          current = next;
+      }
+  }
+
+  return result;
+}
+
 inline Bitboard safe_destination_tuple_bb(Square s, int dr, int df) {
   int r = int(rank_of(s)) + dr;
   int f = int(file_of(s)) + df;
