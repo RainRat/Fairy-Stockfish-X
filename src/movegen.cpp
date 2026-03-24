@@ -253,6 +253,72 @@ namespace {
 
     target = Type == EVASIONS ? target : AllSquares;
 
+    if (pos.topology_wraps())
+    {
+        Bitboard mandatoryPromotionZone = pos.mandatory_promotion_zone(Us, PAWN);
+        if (pos.mandatory_pawn_promotion())
+            mandatoryPromotionZone |= standardPromotionZone;
+
+        bool pawnPromotionAvailable = false;
+        for (PieceSet ps = pos.promotion_piece_types(Us); ps;)
+            if (pos.promotion_allowed(Us, pop_lsb(ps)))
+            {
+                pawnPromotionAvailable = true;
+                break;
+            }
+
+        auto emit_promotions = [&](Square from, Square to) {
+            for (PieceSet promotions = pos.promotion_piece_types(Us); promotions;)
+            {
+                PieceType pt = pop_msb(promotions);
+                if (pos.promotion_allowed(Us, pt))
+                    moveList = make_move_and_gating<PROMOTION>(pos, moveList, Us, from, to, pt);
+            }
+        };
+
+        Bitboard remaining = pawns;
+        while (remaining)
+        {
+            Square from = pop_lsb(remaining);
+            Bitboard quiets = pos.moves_from(Us, PAWN, from) & target;
+            Bitboard attacks = pos.attacks_from(Us, PAWN, from) & capturable & target;
+            Bitboard epSquares = pos.attacks_from(Us, PAWN, from) & pos.ep_squares() & ~pos.pieces() & target;
+
+            if (mandatoryPromotionZone && !pawnPromotionAvailable)
+            {
+                quiets &= ~mandatoryPromotionZone;
+                attacks &= ~mandatoryPromotionZone;
+            }
+
+            if (mandatoryPromotionZone)
+            {
+                Bitboard quietPromotions = quiets & mandatoryPromotionZone;
+                Bitboard capturePromotions = attacks & mandatoryPromotionZone;
+                quiets &= ~mandatoryPromotionZone;
+                attacks &= ~mandatoryPromotionZone;
+
+                while (quietPromotions)
+                    emit_promotions(from, pop_lsb(quietPromotions));
+                while (capturePromotions)
+                    emit_promotions(from, pop_lsb(capturePromotions));
+            }
+
+            if (Type != CAPTURES)
+                while (quiets)
+                    moveList = make_move_and_gating<NORMAL>(pos, moveList, Us, from, pop_lsb(quiets));
+
+            if (Type == CAPTURES || Type == EVASIONS || Type == NON_EVASIONS)
+            {
+                while (attacks)
+                    moveList = make_move_and_gating<NORMAL>(pos, moveList, Us, from, pop_lsb(attacks));
+                while (epSquares)
+                    moveList = make_move_and_gating<EN_PASSANT>(pos, moveList, Us, from, pop_lsb(epSquares));
+            }
+        }
+
+        return moveList;
+    }
+
     // Define single and double push, left and right capture, as well as respective promotion moves
     Bitboard b1 = shift<Up>(pawns) & movable & target;
     Bitboard b2 = shift<Up>(shift<Up>(pawns & doubleStepRegion) & movable) & movable & target;
@@ -773,7 +839,8 @@ namespace {
     }
 
     // King moves
-    if (pos.count<KING>(Us) && (!restrictToForcedJumper || (forcedFromMask & ksq)) && (!Checks || pos.blockers_for_king(~Us) & ksq))
+    if (pos.count<KING>(Us) && (!restrictToForcedJumper || (forcedFromMask & ksq))
+        && (!Checks || pos.topology_wraps() || pos.blockers_for_king(~Us) & ksq))
     {
         Bitboard kingAttacks = pos.attacks_from(Us, KING, ksq) & pos.pieces();
         Bitboard kingMoves   = pos.moves_from(Us, KING, ksq) & ~pos.pieces();
@@ -1011,8 +1078,9 @@ ExtMove* generate<LEGAL>(const Position& pos, ExtMove* moveList) {
 
   ExtMove* cur = moveList;
 
-  moveList = pos.checkers() ? generate<EVASIONS    >(pos, moveList)
-                            : generate<NON_EVASIONS>(pos, moveList);
+  const bool useWrappedFallback = pos.topology_wraps() && pos.checkers();
+  moveList = (pos.checkers() && !useWrappedFallback) ? generate<EVASIONS    >(pos, moveList)
+                                                     : generate<NON_EVASIONS>(pos, moveList);
   while (cur != moveList)
       if (!pos.legal(*cur) || pos.virtual_drop(*cur))
           *cur = *--moveList;

@@ -57,6 +57,8 @@ struct Variant {
   int pocketSize = 0;
   Rank maxRank = RANK_8;
   File maxFile = FILE_H;
+  bool cylindrical = false;
+  bool toroidal = false;
   bool chess960 = false;
   bool twoBoards = false;
   int pieceValue[PHASE_NB][PIECE_TYPE_NB] = {};

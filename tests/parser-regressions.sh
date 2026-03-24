@@ -50,6 +50,18 @@ petrifyOnCaptureTypes = p
 [walling-freedrops:chess]
 wallingRule = duck
 freeDrops = true
+
+[toroidal-connect:chess]
+toroidal = true
+connectN = 4
+
+[toroidal-maxrider:chess]
+toroidal = true
+customPiece1 = a:mzQ
+
+[cylindrical-collinear:chess]
+cylindrical = true
+collinearN = 3
 INI
 
 echo "parser regression tests started"
@@ -81,6 +93,8 @@ verify_warning "wallingRule and potions are incompatible." "potions check"
 verify_warning "wallingRule=duck and petrifyOnCaptureTypes are incompatible." "petrify check"
 verify_warning "pieceDrops and any walling are incompatible." "freeDrops check"
 verify_warning "falcon looks like a custom piece definition. Use customPieceN = a:W for new custom pieces." "named custom piece hint"
+verify_warning "Wrapped boards do not support connect/collinear win conditions." "wrapped connect rejection"
+verify_warning "Toroidal boards do not support x/z rider modifiers in customPiece1." "toroidal x/z rejection"
 
 nonking_ini=$(mktemp)
 trap 'rm -f "${tmp_ini}" "${nonking_ini}"' EXIT
