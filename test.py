@@ -3,8 +3,24 @@
 import faulthandler
 import unittest
 import pyffish as sf
+import os
+import re
 
 faulthandler.enable()
+
+def sf_load_variant_config(config):
+    variants = re.findall(r'^\[([^:\]\s]+)', config, re.MULTILINE)
+    if variants:
+        current = sf.variants()
+        if all(v in current for v in variants):
+            return
+    sf.load_variant_config(config)
+
+
+def load_variants_ini():
+    variants_ini_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "src", "variants.ini")
+    with open(variants_ini_path, "r") as f:
+        sf_load_variant_config(f.read())
 
 CHESS = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 CHESS960 = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w HAha - 0 1"
@@ -197,7 +213,7 @@ captureAllowed = a:b
 startFen = 8/8/8/3b4/3A4/8/8/8 w - - 0 1
 """
 
-sf.load_variant_config(ini_text)
+sf_load_variant_config(ini_text)
 
 
 variant_positions = {
@@ -470,7 +486,7 @@ class TestPyffish(unittest.TestCase):
         self.assertEqual(result, ["0000"])
 
         # Hoppers can be configured to not hop over/capture selected piece types.
-        sf.load_variant_config(
+        sf_load_variant_config(
             """[hopban:chess]
 customPiece1 = c:pR
 mutuallyHopIllegalTypes = c
@@ -480,7 +496,7 @@ startFen = 4k3/8/8/8/8/c7/c7/C3K3 w - - 0 1
         hopban_fen = sf.start_fen("hopban")
         self.assertNotIn("a1a3", sf.legal_moves("hopban", hopban_fen, []))
 
-        sf.load_variant_config(
+        sf_load_variant_config(
             """[hopallow:chess]
 customPiece1 = c:pR
 startFen = 4k3/8/8/8/8/c7/c7/C3K3 w - - 0 1
@@ -490,7 +506,7 @@ startFen = 4k3/8/8/8/8/c7/c7/C3K3 w - - 0 1
         self.assertIn("a1a3", sf.legal_moves("hopallow", hopallow_fen, []))
 
         # Universal leaper can move to any empty square, controlled by modality.
-        sf.load_variant_config(
+        sf_load_variant_config(
             """[anysq:chess]
 customPiece1 = a:mU
 startFen = 7k/8/8/8/8/8/8/A6K w - - 0 1
@@ -503,7 +519,7 @@ startFen = 7k/8/8/8/8/8/8/A6K w - - 0 1
         self.assertNotIn("a1h8", anysq_moves)  # quiet-only mU cannot capture
 
         # Duck-like piece: mU (move to any empty square) + captureForbidden keeps it uncapturable.
-        sf.load_variant_config(
+        sf_load_variant_config(
             """[duckpiece:chess]
 customPiece1 = u:mU
 captureForbidden = *:u
@@ -514,7 +530,7 @@ startFen = 3qk3/8/8/8/3U4/8/8/4K3 b - - 0 1
         self.assertNotIn("d8d4", duck_moves)
 
         # Tuple-leaper edge wrapping check: (4,1) from a1 only reaches b5 and e2.
-        sf.load_variant_config(
+        sf_load_variant_config(
             """[tuple41:chess]
 customPiece1 = a:m(4,1)
 startFen = 7k/8/8/8/8/8/8/A6K w - - 0 1
@@ -528,7 +544,7 @@ startFen = 7k/8/8/8/8/8/8/A6K w - - 0 1
         self.assertNotIn("a1b8", tuple_moves)
 
         # Long tuple leaper (0,7) should be legal from a1 to h1 without wrap artifacts.
-        sf.load_variant_config(
+        sf_load_variant_config(
             """[tuple07:chess]
 customPiece1 = a:m(0,7)
 startFen = 7k/8/8/8/8/8/8/A5K1 w - - 0 1
@@ -539,7 +555,7 @@ startFen = 7k/8/8/8/8/8/8/A5K1 w - - 0 1
         self.assertNotIn("a1b2", tuple07_moves)
 
         # Jump captures should honor selfCapture when the jumped piece is friendly.
-        sf.load_variant_config(
+        sf_load_variant_config(
             """[selfjump:chess]
 customPiece1 = a:mD
 jumpCaptureTypes = a
@@ -552,7 +568,7 @@ startFen = 7k/8/8/8/8/8/P7/A6K w - - 0 1
         self.assertIn("a1a3", selfjump_moves)
 
         # Anti-royal pieces must remain attacked.
-        sf.load_variant_config(
+        sf_load_variant_config(
             """[antiroyal:chess]
 customPiece1 = a:K
 antiRoyalTypes = a
@@ -566,7 +582,7 @@ startFen = r6k/8/8/8/8/8/8/A6K w - - 0 1
 
         # Different source pieces can share one promoted type and still demote
         # back to their own original piece types.
-        sf.load_variant_config(
+        sf_load_variant_config(
             """[dupdemote:chess]
 pieceDemotion = true
 promotedPieceType = b:q n:q
@@ -614,7 +630,7 @@ startFen = 3k4/1B4N1/8/8/8/8/8/4K3 w - - 0 1
 
         # commitGates FEN parsing/validation: compressed commit rows should
         # round-trip, malformed commit-row widths should be rejected.
-        sf.load_variant_config(
+        sf_load_variant_config(
             """[commitcheck:chess]
 gating = true
 commitGates = true
@@ -634,7 +650,7 @@ startFen = ********/4k3/8/8/8/8/8/8/4K3/******** w - - 0 1
         self.assertNotEqual(sf.validate_fen(bad_commit_lead, "commitcheck"), sf.FEN_OK)
         self.assertNotEqual(sf.validate_fen(bad_commit_tail, "commitcheck"), sf.FEN_OK)
 
-        sf.load_variant_config(
+        sf_load_variant_config(
             """[commitround:chess]
 gating = true
 commitGates = true
@@ -706,7 +722,7 @@ startFen = q******r/4k3/8/8/8/8/8/8/R3K2R/Q******R w - - 0 1
         self.assertNotIn("d5d4", black_moves)
 
     def test_strong_pawn_basics(self):
-        sf.load_variant_config(
+        sf_load_variant_config(
             """[strongpawnproto:chess]
 customPiece1 = t:W
 customPiece2 = s:ffN
@@ -741,7 +757,7 @@ enPassantTypes = -
         self.assertIn("d7d8+", promo_moves)
 
     def test_alterga_basics(self):
-        sf.load_variant_config(
+        sf_load_variant_config(
             """[altergaproto:chess]
 customPiece1 = n:mNcB
 customPiece2 = b:mFfWcB
@@ -769,7 +785,7 @@ startFen = rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w - - 0 1
         self.assertIn("e4e6", rook_capture_moves)  # rook-style capture
 
     def test_royal_piece_no_through_check(self):
-        sf.load_variant_config(
+        sf_load_variant_config(
             """[caissapathoff:chess]
 king = q:Q
 castling = false
@@ -788,7 +804,7 @@ royalPieceNoThroughCheck = true
         self.assertIn("e1f1", restricted_moves)
 
     def test_asymmetric_walling_turns(self):
-        sf.load_variant_config(
+        sf_load_variant_config(
             """[whitewalls:chess]
 maxRank = 4
 maxFile = 4
@@ -816,8 +832,7 @@ checking = false
         self.assertTrue(all("," not in m for m in black_moves))
 
     def test_witch_hunting_basics(self):
-        with open("src/variants.ini") as f:
-            sf.load_variant_config(f.read())
+        load_variants_ini()
         fen = sf.start_fen("witch-hunting")
         white_moves = sf.legal_moves("witch-hunting", fen, [])
         self.assertTrue(white_moves)
@@ -830,7 +845,7 @@ checking = false
         self.assertTrue(all("," not in m for m in black_moves))
 
     def test_drop_king_last(self):
-        sf.load_variant_config(
+        sf_load_variant_config(
             """[droplast:chess]
 startFen = 8/8/8/8/8/8/8/8[KNkn] w - - 0 1
 pieceDrops = true
@@ -858,8 +873,7 @@ checking = false
         self.assertTrue(all(m.startswith("K@") for m in white_king_moves))
 
     def test_ichess_setup_basics(self):
-        with open("src/variants.ini") as f:
-            sf.load_variant_config(f.read())
+        load_variants_ini()
         fen = sf.start_fen("ichess")
         self.assertEqual(fen.split()[0], "8/pppppppp/8/8/8/8/PPPPPPPP/8[KQRRBBNNkqrrbbnn]")
 
@@ -871,7 +885,8 @@ checking = false
     def test_chesscom_custom_setups_basics(self):
         # Trapped Queens / Infiltration Danger / Stone Gravitation are orthodox 8x8
         # positions imported from chess.com Fen4 setups.
-        sf.set_option("VariantPath", "src/variants.ini")
+        variants_ini_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "src", "variants.ini")
+        sf.set_option("VariantPath", variants_ini_path)
         trapped = sf.start_fen("trapped-queens")
         trapped_moves = sf.legal_moves("trapped-queens", trapped, [])
         self.assertIn("e1d1", trapped_moves)
@@ -908,50 +923,50 @@ checking = false
         self.assertEqual(len([m for m in black_after_promo if m[:2] == m[2:4]]), 0)
 
     def test_standard_fairy_riders_and_ski_sliders(self):
-        sf.load_variant_config(
+        sf_load_variant_config(
             """[fairyriders:chess]
-maxRank = 7
-maxFile = 7
+maxRank = 8
+maxFile = 8
 customPiece1 = a:AA
 customPiece2 = b:DD
 customPiece3 = c:jR
 customPiece4 = d:jB
 customPiece5 = e:jQ
-startFen = 7/7/7/3A3/7/7/7 w - - 0 1
+startFen = 8/8/8/8/3A4/8/8/8 w - - 0 1
 """
         )
 
         # Alfil-rider: repeats (2,2) leaps.
-        ar_moves = sf.legal_moves("fairyriders", "7/7/7/3A3/7/7/7 w - - 0 1", [])
-        self.assertCountEqual(["d4b2", "d4f2", "d4b6", "d4f6"], ar_moves)
+        ar_moves = sf.legal_moves("fairyriders", "8/8/8/8/3A4/8/8/8 w - - 0 1", [])
+        self.assertCountEqual(["d4b2", "d4f2", "d4b6", "d4f6", "d4h8"], ar_moves)
 
         # Dabbaba-rider: repeats (2,0) leaps.
-        dr_moves = sf.legal_moves("fairyriders", "7/7/7/3B3/7/7/7 w - - 0 1", [])
-        self.assertCountEqual(["d4d2", "d4d6", "d4b4", "d4f4"], dr_moves)
+        dr_moves = sf.legal_moves("fairyriders", "8/8/8/8/3B4/8/8/8 w - - 0 1", [])
+        self.assertCountEqual(["d4d2", "d4d6", "d4d8", "d4b4", "d4f4", "d4h4"], dr_moves)
 
         # Ski rook: adjacent orthogonals are skipped.
-        sr_moves = sf.legal_moves("fairyriders", "7/7/7/3C3/7/7/7 w - - 0 1", [])
+        sr_moves = sf.legal_moves("fairyriders", "8/8/8/8/3C4/8/8/8 w - - 0 1", [])
         self.assertIn("d4d6", sr_moves)
         self.assertNotIn("d4d5", sr_moves)
         self.assertIn("d4b4", sr_moves)
         self.assertNotIn("d4c4", sr_moves)
 
         # Ski bishop: adjacent diagonals are skipped.
-        sb_moves = sf.legal_moves("fairyriders", "7/7/7/3D3/7/7/7 w - - 0 1", [])
+        sb_moves = sf.legal_moves("fairyriders", "8/8/8/8/3D4/8/8/8 w - - 0 1", [])
         self.assertIn("d4f6", sb_moves)
         self.assertNotIn("d4e5", sb_moves)
         self.assertIn("d4b2", sb_moves)
         self.assertNotIn("d4c3", sb_moves)
 
         # Ski queen combines ski-rook and ski-bishop effects.
-        sq_moves = sf.legal_moves("fairyriders", "7/7/7/3E3/7/7/7 w - - 0 1", [])
+        sq_moves = sf.legal_moves("fairyriders", "8/8/8/8/3E4/8/8/8 w - - 0 1", [])
         self.assertIn("d4d6", sq_moves)
         self.assertIn("d4f6", sq_moves)
         self.assertNotIn("d4d5", sq_moves)
         self.assertNotIn("d4e5", sq_moves)
 
     def test_whaleshogi_dolphin_promotion_cycle(self):
-        sf.load_variant_config(
+        sf_load_variant_config(
             """[whaleshogi_proto:minishogi]
 pieceToCharTable = -
 maxRank = 6
@@ -965,7 +980,7 @@ customPiece5 = h:FbW
 customPiece6 = b:fbWfF
 customPiece7 = d:fW
 customPiece8 = e:bB
-startFen = bnpwgh/ddddd1/6/6/DDDDD1/HGWPNB[] w - 0 1
+startFen = bnpwgh/dddddd/6/6/DDDDDD/HGWPNB[] w - 0 1
 promotionRegionWhite = *6
 promotionRegionBlack = *1
 promotedPieceType = d:e p:k
@@ -1064,7 +1079,7 @@ dropNoDoubledCount = 2
         self.assertEqual(result, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 2 2")
 
         # petrified capturing piece should not be added to hand as bycatch
-        sf.load_variant_config(
+        sf_load_variant_config(
             """[petrihand:chess]
 capturesToHand = true
 pieceDrops = true
@@ -1690,7 +1705,7 @@ startFen = 4k3/3p4/8/8/8/8/8/3QK3 w - - 0 1
         self.assertTrue(result)
 
         # En passant for non-pawn piece with identical move/capture squares
-        sf.load_variant_config(
+        sf_load_variant_config(
             """[epsoldier:chess]
 soldier = s
 enPassantTypes = s
