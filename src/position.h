@@ -414,6 +414,7 @@ public:
   Bitboard attackers_to_king(Square s, Bitboard occupied, Color c) const;
   Bitboard attackers_to_king(Square s, Bitboard occupied, Color c, Bitboard janggiCannons) const;
   Bitboard attacks_from(Color c, PieceType pt, Square s) const;
+  Bitboard attacks_from(Color c, PieceType pt, Square s, Bitboard occupancy) const;
   Bitboard moves_from(Color c, PieceType pt, Square s) const;
   Bitboard slider_blockers(Bitboard sliders, Square s, Bitboard& pinners, Color c) const;
 
@@ -2582,6 +2583,11 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s) const {
   Bitboard occupancy = byTypeBB[ALL_PIECES];
   if (spellContextActive && c == sideToMove)
       occupancy &= ~spellJumpRemoved;
+  return attacks_from(c, pt, s, occupancy);
+}
+
+inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard occupancy) const {
+  assert(pt != NO_PIECE_TYPE);
 
   if (topology_wraps())
   {
