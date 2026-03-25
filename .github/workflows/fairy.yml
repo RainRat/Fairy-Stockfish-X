@@ -116,6 +116,12 @@ jobs:
         run: |
           ../tests/whaleshogi.sh
 
+      - name: Run Python unit tests
+        run: |
+          export FSX_REPO_ROOT=$(pwd)/..
+          python3 ../test.py
+          python3 ../tests/test_variant_features.py
+
       - name: Test Betza modifiers
         run: |
           ../tests/betza-modifiers.sh

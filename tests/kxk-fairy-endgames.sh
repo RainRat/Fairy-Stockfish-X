@@ -1,13 +1,10 @@
 #!/bin/bash
 
-set -euo pipefail
+source "$(dirname "$0")/common.sh"
 
-ENGINE=${1:-./stockfish}
+echo "kxk-fairy-endgames test started"
 
-tmp_ini=$(mktemp)
-trap 'rm -f "${tmp_ini}"' EXIT
-
-cat > "${tmp_ini}" <<'INI'
+tmp_ini=$(create_tmp_ini <<'INI'
 [kxk-arch:chess]
 archbishop = a
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
@@ -43,21 +40,14 @@ startFen = 4k3/8/8/8/8/8/8/4K2I w - - 0 1
 castling = false
 doubleStep = false
 INI
+)
 
 check_eval() {
   local variant=$1
   local output
   local score
 
-  output=$(cat <<CMDS | "${ENGINE}" 2>&1
-uci
-setoption name VariantPath value ${tmp_ini}
-setoption name UCI_Variant value ${variant}
-position startpos
-eval
-quit
-CMDS
-)
+  output=$(run_uci "setoption name UCI_Variant value ${variant}\nposition startpos\neval" "${tmp_ini}")
 
   score=$(printf '%s\n' "${output}" | awk '/Final evaluation/ {print $(NF-2)}' | tail -n1)
   if [ -z "${score}" ]; then
@@ -66,11 +56,8 @@ CMDS
     exit 1
   fi
 
-  python3 - <<PY
-score = float("${score}")
-if score < 50.0:
-    raise SystemExit(1)
-PY
+  # Simple score check using python3 (bc is missing in this environment)
+  python3 -c "if float('${score}') < 50.0: exit(1)"
 }
 
 check_eval kxk-arch
@@ -78,3 +65,5 @@ check_eval kxk-chanc
 check_eval kxk-amazon
 check_eval kxk-bers
 check_eval kxk-aiwok
+
+echo "kxk-fairy-endgames test OK"
