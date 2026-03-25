@@ -1694,6 +1694,7 @@ Bitboard Position::slider_blockers(Bitboard sliders, Square s, Bitboard& pinners
         blockers |= b;
         continue;
     }
+
     bool isHopper = AttackRiderTypes[sniperType] & HOPPING_RIDERS;
     Bitboard b = between_bb(s, sniperSq, sniperType) & (isHopper ? (allPieces ^ sniperSq) : occupancy);
 

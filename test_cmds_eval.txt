@@ -1,0 +1,6 @@
+uci
+setoption name VariantPath value /tmp/fsx-rose-toroidal-1YK4cb.ini
+setoption name UCI_Variant value rose-toroidal-8x8
+position startpos
+eval
+quit
