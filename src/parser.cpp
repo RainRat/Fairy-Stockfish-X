@@ -1233,6 +1233,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("sittuyinRookDrop", v->sittuyinRookDrop);
     parse_attribute("dropOppositeColoredBishop", v->dropOppositeColoredBishop);
     parse_attribute("dropPromoted", v->dropPromoted);
+    parse_attribute("captureDrops", v->captureDrops, v->pieceToChar);
     parse_attribute("dropNoDoubled", v->dropNoDoubled, v->pieceToChar);
     v->dropNoDoubledByColor[WHITE] = v->dropNoDoubled;
     v->dropNoDoubledByColor[BLACK] = v->dropNoDoubled;

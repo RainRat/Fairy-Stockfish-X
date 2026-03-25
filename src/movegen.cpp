@@ -154,12 +154,11 @@ namespace {
 
   template<Color Us, GenType Type>
   ExtMove* generate_drops(const Position& pos, ExtMove* moveList, PieceType pt, Bitboard b) {
-    assert(Type != CAPTURES);
     // Do not generate virtual drops for perft and at root
     if (pos.can_drop(Us, pt) || (Type != NON_EVASIONS && pos.two_boards() && pos.virtual_drops() && pos.allow_virtual_drop(Us, pt)))
     {
         // Restrict to valid target
-        b &= pos.drop_region(Us, pt);
+        b &= pos.drop_region(Us, pt) & ~pos.pieces();
 
         // Add to move list
         if (pos.drop_promoted() && pos.promoted_piece_type(pt))
@@ -175,6 +174,31 @@ namespace {
         while (b)
             *moveList++ = make_drop(pop_lsb(b), pt, pt);
     }
+
+    return moveList;
+  }
+
+  template<Color Us, GenType Type>
+  ExtMove* generate_capture_drops(const Position& pos, ExtMove* moveList, PieceType pt, Bitboard b) {
+    if (!(pos.capture_drop_types() & pt))
+        return moveList;
+
+    if (!(pos.can_drop(Us, pt) || (Type != NON_EVASIONS && pos.two_boards() && pos.virtual_drops() && pos.allow_virtual_drop(Us, pt))))
+        return moveList;
+
+    Bitboard capturable = pos.pieces(~Us);
+    if (pos.self_capture())
+        capturable |= pos.pieces(Us) & ~pos.pieces(Us, KING);
+    b &= pos.drop_region(Us, pt) & capturable;
+
+    if (pos.drop_promoted() && pos.promoted_piece_type(pt))
+    {
+        Bitboard b2 = b;
+        while (b2)
+            *moveList++ = make_drop(pop_lsb(b2), pt, pos.promoted_piece_type(pt));
+    }
+    while (b)
+        *moveList++ = make_drop(pop_lsb(b), pt, pt);
 
     return moveList;
   }
@@ -782,7 +806,10 @@ namespace {
         // generate drops
         if (!restrictToForcedJumper && pos.piece_drops() && Type != CAPTURES && (pos.can_drop(Us, ALL_PIECES) || pos.two_boards()))
             for (PieceSet ps = pos.piece_types(); ps;)
-                moveList = generate_drops<Us, Type>(pos, moveList, pop_lsb(ps), target & ~pos.pieces(~Us));
+                moveList = generate_drops<Us, Type>(pos, moveList, pop_lsb(ps), target);
+        if (!restrictToForcedJumper && pos.piece_drops() && (pos.can_drop(Us, ALL_PIECES) || pos.two_boards()))
+            for (PieceSet ps = pos.piece_types(); ps;)
+                moveList = generate_capture_drops<Us, Type>(pos, moveList, pop_lsb(ps), captureTarget);
         // generate exchange
         if (!restrictToForcedJumper && pos.capture_type() == PRISON && Type != CAPTURES && pos.has_exchange())
             for (PieceSet ps = pos.piece_types(); ps;)

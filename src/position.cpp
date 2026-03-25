@@ -2610,6 +2610,15 @@ bool Position::pseudo_legal(const Move m) const {
 
   // Use a fast check for piece drops
   if (type_of(m) == DROP)
+  {
+      Bitboard legalDropTargets = ~pieces();
+      if (capture_drop_types() & in_hand_piece_type(m))
+      {
+          legalDropTargets |= pieces(them);
+          if (self_capture())
+              legalDropTargets |= pieces(us) & ~pieces(us, KING);
+      }
+
       return   piece_drops()
             && pc != NO_PIECE
             && color_of(pc) == us
@@ -2619,9 +2628,10 @@ bool Position::pseudo_legal(const Move m) const {
                 || (capture_type() == PRISON && exchange_piece(m) != NO_PIECE_TYPE
                         && count_in_prison(us, exchange_piece(m)) > 0
                         && count_in_prison(~us, in_hand_piece_type(m)) > 0))
-            && (drop_region(us, type_of(pc)) & ~pieces() & to)
+            && (drop_region(us, type_of(pc)) & legalDropTargets & to)
             && (   type_of(pc) == in_hand_piece_type(m)
                 || (drop_promoted() && type_of(pc) == promoted_piece_type(in_hand_piece_type(m))));
+  }
 
   // Use a slower but simpler function for uncommon cases
   // yet we skip the legality check of MoveList<LEGAL>().
