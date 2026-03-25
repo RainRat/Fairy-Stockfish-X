@@ -3691,7 +3691,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   st->capturedPiece = captured;
 
   // Add gating piece
-  if (is_gating(m))
+  if (is_gating(m) && !rifleShot)
   {
       Square gate = gating_square(m);
       Piece gating_piece = make_piece(us, gating_type(m));
@@ -3726,7 +3726,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   }
 
   // Musketeer gating
-  if(commit_gates()){
+  if(commit_gates() && !rifleShot){
       {
           Rank r = rank_of(from);
           if (us == WHITE && r == RANK_1 && has_committed_piece(WHITE, file_of(from))){
@@ -4119,7 +4119,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           givesCheck = bool(attackers_to_king(square<KING>(them), us) & pieces(us));
   }
 
-  if (trigger_matches(var->changingColorTrigger, captured != NO_PIECE)
+  if (trigger_matches(var->changingColorTrigger, captured != NO_PIECE || st->bycatchSquares != 0)
       && !is_pass(m)
       && type_of(m) != DROP
       && piece_on(moverSq) != NO_PIECE

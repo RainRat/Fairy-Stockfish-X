@@ -112,14 +112,14 @@ namespace {
     *moveList++ = make<T>(from, to, pt);
 
     // Gating moves
-    if (pos.seirawan_gating() && (pos.gates(us) & from))
+    if (pos.seirawan_gating() && (pos.gates(us) & from) && !pos.rifle_capture(make<T>(from, to, pt)))
         for (PieceSet ps = pos.piece_types(); ps;)
         {
             PieceType pt_gating = pop_lsb(ps);
             if (pos.can_drop(us, pt_gating) && (pos.drop_region(us, pt_gating) & from))
                 *moveList++ = make_gating<T>(from, to, pt_gating, from);
         }
-    if (pos.seirawan_gating() && T == CASTLING && (pos.gates(us) & to))
+    if (pos.seirawan_gating() && T == CASTLING && (pos.gates(us) & to) && !pos.rifle_capture(make<T>(from, to, pt)))
         for (PieceSet ps = pos.piece_types(); ps;)
         {
             PieceType pt_gating = pop_lsb(ps);

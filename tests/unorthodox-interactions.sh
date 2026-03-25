@@ -90,6 +90,16 @@ extinctionValue = win
 extinctionPieceTypes = q
 checking = false
 startFen = 4k3/8/8/8/8/8/3Qq3/4S2K w - - 0 1
+
+[rifle-gating:chess]
+rifleCapture = true
+gating = true
+seirawanGating = true
+
+[surround-color:chess]
+surroundCaptureIntervene = true
+changingColorTrigger = capture
+changingColorPieceTypes = *
 EOF
 
 echo "unorthodox interactions tests started"
@@ -177,6 +187,24 @@ out=$(run_cmds "iron-extinction" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/3Qq3/
 go perft 1")
 if echo "${out}" | grep -q "^e2e1:"; then
   echo "captureForbidden iron-piece suppression for black failed"
+  exit 1
+fi
+
+# 15. Test rifleCapture + gating (ensure piece is NOT overwritten)
+# Move White King from e1 to e2 (rifle capture). It should NOT gate on e1.
+out=$(run_cmds "rifle-gating" "${TEMP_INI}" "position fen r3k2r/8/8/8/8/8/4q3/4K3[B] w KQkq - 0 1
+go perft 1")
+if echo "${out}" | grep -q "e1e2b:"; then
+  echo "rifleCapture + gating bug: gating move was generated"
+  exit 1
+fi
+
+# 16. Test surroundCapture + changingColor (ensure color change triggers on bycatch)
+# White King moves from e2 to e3, between black pawns on d3 and f3.
+out=$(run_cmds "surround-color" "${TEMP_INI}" "position fen 4k3/8/8/8/8/3p1p2/4K3/8 w - - 0 1 moves e2e3
+d")
+if ! echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/4k3/8/8 b"; then
+  echo "surroundCapture + changingColor bug: color change did not trigger"
   exit 1
 fi
 
