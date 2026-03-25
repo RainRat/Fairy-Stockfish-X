@@ -100,6 +100,10 @@ namespace {
 
     string token, name, value;
 
+    Threads.stop = true;
+    Threads.main()->wait_for_search_finished();
+    Threads.wait_for_search_finished();
+
     is >> token; // Consume "name" token
 
     if (CurrentProtocol == UCCI)
