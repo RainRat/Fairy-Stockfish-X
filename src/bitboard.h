@@ -249,7 +249,7 @@ inline Bitboard wrapping_slider_attacks(Square s, Bitboard occ, File maxFile, Ra
           if (next == s)
               break;
           result |= next;
-          if (occ & next)
+          if (occ & square_bb(next))
               break;
           current = next;
       }
@@ -281,7 +281,7 @@ inline Bitboard rose_attacks_bb(Square from, Bitboard occupied) {
                   break;
               Square to = lsb(dst);
               attack |= dst;
-              if (occupied & to)
+              if (occupied & square_bb(to))
                   break;
               current = to;
               index = (index + turn + 8) % 8;
@@ -312,7 +312,7 @@ inline Bitboard rose_between_union_bb(Square from, Square to, Bitboard occupied)
                   pathUnion |= path;
                   break;
               }
-              if (occupied & next)
+              if (occupied & square_bb(next))
                   break;
               current = next;
               index = (index + turn + 8) % 8;
@@ -345,7 +345,7 @@ inline Bitboard rose_between_intersection_bb(Square from, Square to, Bitboard oc
                   found = true;
                   break;
               }
-              if (occupied & next)
+              if (occupied & square_bb(next))
                   break;
               current = next;
               index = (index + turn + 8) % 8;
