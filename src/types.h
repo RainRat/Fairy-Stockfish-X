@@ -524,6 +524,7 @@ enum MoveType : int {
   PIECE_PROMOTION    = 5 << (2 * SQUARE_BITS),
   PIECE_DEMOTION     = 6 << (2 * SQUARE_BITS),
   SPECIAL            = 7 << (2 * SQUARE_BITS),
+  DROP2              = 8 << (2 * SQUARE_BITS),
 };
 
 constexpr int MOVE_TYPE_BITS = 4;
@@ -1132,6 +1133,10 @@ inline bool is_gating(Move m) {
   return gating_type(m) && (type_of(m) == NORMAL || type_of(m) == CASTLING);
 }
 
+inline bool is_drop_move(Move m) {
+  return type_of(m) == DROP || type_of(m) == DROP2;
+}
+
 inline bool is_pass(Move m) {
   return type_of(m) == SPECIAL && from_sq(m) == to_sq(m);
 }
@@ -1153,6 +1158,14 @@ constexpr Move make_drop(Square to, PieceType pt_in_hand, PieceType pt_dropped) 
             + (static_cast<uint64_t>(pt_dropped) << (2 * SQUARE_BITS + MOVE_TYPE_BITS))
             + static_cast<uint64_t>(DROP)
             + static_cast<uint64_t>(to));
+}
+
+constexpr Move make_drop_pair(Square to1, Square to2, PieceType pt_in_hand, PieceType pt_dropped) {
+  return Move((static_cast<uint64_t>(pt_in_hand) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS))
+            + (static_cast<uint64_t>(pt_dropped) << (2 * SQUARE_BITS + MOVE_TYPE_BITS))
+            + static_cast<uint64_t>(DROP2)
+            + (static_cast<uint64_t>(to2) << SQUARE_BITS)
+            + static_cast<uint64_t>(to1));
 }
 
 constexpr PieceType exchange_piece(Move m) {

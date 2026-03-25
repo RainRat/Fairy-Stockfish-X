@@ -160,6 +160,21 @@ namespace {
         // Restrict to valid target
         b &= pos.drop_region(Us, pt) & ~pos.pieces();
 
+        if ((pos.symmetric_drop_types() & pt) && pos.count_in_hand(Us, pt) >= 2)
+        {
+            while (b)
+            {
+                Square to = pop_lsb(b);
+                Square to2 = pos.mirrored_pair_drop_square(to);
+                if (to2 == to || !(pos.drop_region(Us, pt) & to2) || (pos.pieces() & to2))
+                    continue;
+                if (to > to2)
+                    continue;
+                *moveList++ = make_drop_pair(to, to2, pt, pt);
+            }
+            return moveList;
+        }
+
         // Add to move list
         if (pos.drop_promoted() && pos.promoted_piece_type(pt))
         {

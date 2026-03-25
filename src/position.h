@@ -274,6 +274,7 @@ public:
   bool sittuyin_rook_drop() const;
   bool drop_opposite_colored_bishop() const;
   bool drop_promoted() const;
+  PieceSet symmetric_drop_types() const;
   PieceSet capture_drop_types() const;
   PieceType drop_no_doubled() const;
   PieceSet promotion_pawn_types(Color c) const;
@@ -425,11 +426,14 @@ public:
   bool legal(Move m) const;
   bool pseudo_legal(const Move m) const;
   bool virtual_drop(Move m) const;
+  bool paired_drop(Move m) const;
   bool capture(Move m) const;
   bool capture_or_promotion(Move m) const;
   bool is_jump_capture(Move m) const;
   Square capture_square(Square to) const;
   Square capture_square(Move m) const;
+  Square secondary_drop_square(Move m) const;
+  Square mirrored_pair_drop_square(Square s) const;
   Square jump_capture_square(Square from, Square to) const;
   bool gives_check(Move m) const;
   Piece moved_piece(Move m) const;
@@ -1467,6 +1471,11 @@ inline bool Position::drop_promoted() const {
   return var->dropPromoted;
 }
 
+inline PieceSet Position::symmetric_drop_types() const {
+  assert(var != nullptr);
+  return var->symmetricDropTypes;
+}
+
 inline PieceSet Position::capture_drop_types() const {
   assert(var != nullptr);
   return var->captureDrops;
@@ -2077,7 +2086,7 @@ inline Piece Position::unpromoted_piece_on(Square s) const {
 }
 
 inline Piece Position::moved_piece(Move m) const {
-  if (type_of(m) == DROP)
+  if (is_drop_move(m))
       return make_piece(sideToMove, dropped_piece_type(m));
   return piece_on(from_sq(m));
 }
@@ -3124,6 +3133,25 @@ inline Square Position::capture_square(Move m) const {
   return type_of(m) == EN_PASSANT ? capture_square(to)
        : is_jump_capture(m)      ? jump_capture_square(from_sq(m), to)
                                  : to;
+}
+
+inline bool Position::paired_drop(Move m) const {
+  return type_of(m) == DROP2;
+}
+
+inline Square Position::secondary_drop_square(Move m) const {
+  return paired_drop(m) ? from_sq(m) : SQ_NONE;
+}
+
+inline Square Position::mirrored_pair_drop_square(Square s) const {
+  int f = int(file_of(s));
+  int files = int(max_file()) + 1;
+  int mirrored = files - 1 - f;
+
+  if ((files & 1) && mirrored == f)
+      mirrored = std::min(files - 1, f + 1);
+
+  return make_square(File(mirrored), rank_of(s));
 }
 
 inline bool Position::virtual_drop(Move m) const {

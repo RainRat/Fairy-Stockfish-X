@@ -503,7 +503,7 @@ std::string UCI::square(const Position& pos, Square s) {
 /// UCI::dropped_piece() generates a piece label string from a Move.
 
 string UCI::dropped_piece(const Position& pos, Move m) {
-  assert(type_of(m) == DROP);
+  assert(is_drop_move(m));
   if (dropped_piece_type(m) == pos.promoted_piece_type(in_hand_piece_type(m)))
       // Dropping as promoted piece
       return std::string{'+', pos.piece_to_char()[in_hand_piece_type(m)]};
@@ -512,7 +512,9 @@ string UCI::dropped_piece(const Position& pos, Move m) {
 }
 
 string UCI::exchange(const Position &pos, Move m) {
-  assert(type_of(m) == DROP);
+  assert(is_drop_move(m));
+  if (type_of(m) != DROP)
+      return std::string{};
   if (exchange_piece(m) == NO_PIECE_TYPE) {
       return std::string{};
   }
@@ -568,10 +570,13 @@ string UCI::move(const Position& pos, Move m) {
           to = to_sq(m);
   }
 
-  string move = (type_of(m) == DROP
+  string move = (is_drop_move(m)
           ? UCI::dropped_piece(pos, m) + UCI::exchange(pos, m) + (CurrentProtocol == USI ? '*' : '@')
           : UCI::square(pos, from))
                   + UCI::square(pos, to);
+
+  if (pos.paired_drop(m))
+      move += "," + UCI::square(pos, pos.secondary_drop_square(m));
 
   if (pos.igui_capture(m))
       move += 'i';
@@ -621,6 +626,19 @@ Move UCI::to_move(const Position& pos, string& str) {
 
   for (const auto& m : MoveList<LEGAL>(pos)) {
       auto move_str = UCI::move(pos, m);
+      string move_str_alt;
+
+      if (pos.paired_drop(m))
+      {
+          size_t sep = move_str.find(CurrentProtocol == USI ? '*' : '@');
+          size_t comma = move_str.find(',');
+          if (sep != string::npos && comma != string::npos)
+          {
+              string first = move_str.substr(sep + 1, comma - sep - 1);
+              string second = move_str.substr(comma + 1);
+              move_str_alt = move_str.substr(0, sep + 1) + second + "," + first;
+          }
+      }
 
       // special processing of optional gating suffix from xboard
       // like "b1c3o" => "b1c3"
@@ -646,7 +664,9 @@ Move UCI::to_move(const Position& pos, string& str) {
           }
       }
 
-      if (str == move_str || (is_pass(m) && str == UCI::square(pos, from_sq(m)) + UCI::square(pos, to_sq(m))))
+      if (   str == move_str
+          || (!move_str_alt.empty() && str == move_str_alt)
+          || (is_pass(m) && str == UCI::square(pos, from_sq(m)) + UCI::square(pos, to_sq(m))))
           return m;
   }
 

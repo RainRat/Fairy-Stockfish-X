@@ -191,6 +191,7 @@ struct Variant {
   bool sittuyinRookDrop = false;
   bool dropOppositeColoredBishop = false;
   bool dropPromoted = false;
+  PieceSet symmetricDropTypes = NO_PIECE_SET;
   PieceSet captureDrops = NO_PIECE_SET;
   PieceType dropNoDoubled = NO_PIECE_TYPE;
   PieceType dropNoDoubledByColor[COLOR_NB] = {NO_PIECE_TYPE, NO_PIECE_TYPE};

@@ -2008,10 +2008,11 @@ Bitboard Position::checked_anti_royals(Color c) const {
 bool Position::legal(Move m) const {
 
   assert(is_ok(m));
-  assert(type_of(m) != DROP || piece_drops());
+  assert(!is_drop_move(m) || piece_drops());
 
   Color us = sideToMove;
   Color them = ~us;
+  bool dropMove = is_drop_move(m);
   Square from = from_sq(m);
   Square to = to_sq(m);
 
@@ -2050,7 +2051,7 @@ bool Position::legal(Move m) const {
 
   SpellContextScope spellScope(*this, freezeExtra, jumpRemoved);
 
-  if (type_of(m) != DROP && (freeze_squares() & from))
+  if (!dropMove && (freeze_squares() & from))
       return false;
   // Castling is also blocked if the participating rook is frozen.
   if (type_of(m) == CASTLING)
@@ -2083,7 +2084,7 @@ bool Position::legal(Move m) const {
       return false;
   if (rifleShot && (type_of(m) == PROMOTION || type_of(m) == PIECE_PROMOTION))
       return false;
-  if (type_of(m) != DROP && type_of(m) != PROMOTION && type_of(m) != PIECE_PROMOTION)
+  if (!dropMove && type_of(m) != PROMOTION && type_of(m) != PIECE_PROMOTION)
   {
       Piece mover = moved_piece(m);
       Bitboard mandatoryZone = mover == NO_PIECE ? Bitboard(0) : mandatory_promotion_zone(mover);
@@ -2133,7 +2134,7 @@ bool Position::legal(Move m) const {
       if (!(attacks_from(us, KING, from) & square_bb(to)))
           return false;
   }
-  if (type_of(m) != DROP && (var->mutuallyHopIllegalTypes & movePt) && (AttackRiderTypes[movePt] & HOPPING_RIDERS))
+  if (!dropMove && (var->mutuallyHopIllegalTypes & movePt) && (AttackRiderTypes[movePt] & HOPPING_RIDERS))
   {
       Bitboard between = between_bb(from, to);
       Bitboard hopIllegalPieces = 0;
@@ -2144,12 +2145,12 @@ bool Position::legal(Move m) const {
   }
 
   // Illegal checks
-  if (((!checking_permitted() && !allow_checks()) || (sittuyin_promotion() && type_of(m) == PROMOTION) || (!drop_checks() && type_of(m) == DROP)) && gives_check(m))
+  if (((!checking_permitted() && !allow_checks()) || (sittuyin_promotion() && type_of(m) == PROMOTION) || (!drop_checks() && dropMove)) && gives_check(m))
       return false;
 
   // Optional rule: disallow checkmate by drops.
   // Shogi pawn-drop mate rule is a stricter piece-specific version.
-  if (   type_of(m) == DROP
+  if (   dropMove
       && gives_check(m)
       && (   !drop_mates()
           || (shogi_pawn_drop_mate_illegal() && type_of(moved_piece(m)) == SHOGI_PAWN)))
@@ -2176,7 +2177,7 @@ bool Position::legal(Move m) const {
   PieceType requiredDropType = must_drop_type();
   if (must_drop() && count_in_hand(us, requiredDropType) > 0)
   {
-      if (type_of(m) == DROP)
+      if (dropMove)
       {
           if (requiredDropType != ALL_PIECES && requiredDropType != in_hand_piece_type(m))
               return false;
@@ -2184,19 +2185,19 @@ bool Position::legal(Move m) const {
       else if (checkers())
       {
           for (const auto& mevasion : MoveList<EVASIONS>(*this))
-              if (type_of(mevasion) == DROP && legal(mevasion))
+              if (is_drop_move(mevasion) && legal(mevasion))
                   return false;
       }
       else
       {
           for (const auto& mquiet : MoveList<QUIETS>(*this))
-              if (type_of(mquiet) == DROP && legal(mquiet))
+              if (is_drop_move(mquiet) && legal(mquiet))
                   return false;
       }
   }
 
   // Illegal drop move
-  if (drop_opposite_colored_bishop() && type_of(m) == DROP)
+  if (drop_opposite_colored_bishop() && dropMove)
   {
       if (type_of(moved_piece(m)) != BISHOP)
       {
@@ -2211,15 +2212,15 @@ bool Position::legal(Move m) const {
           if (popcount((DarkSquares & to ? DarkSquares : ~DarkSquares) & pieces(us, BISHOP)) + 1 > (count_with_hand(us, BISHOP) + 1) / 2)
               return false;
   }
-  if (type_of(m) == DROP && (!var->isPriorityDrop[type_of(moved_piece(m))]) && priorityDropCountInHand[us] > 0)
+  if (dropMove && (!var->isPriorityDrop[type_of(moved_piece(m))]) && priorityDropCountInHand[us] > 0)
       return false;
 
-  if (type_of(m) == DROP && pay_points_to_drop()
+  if (dropMove && pay_points_to_drop()
       && st->pointsCount[us] < var->piecePoints[type_of(moved_piece(m))])
       return false;
 
   // No legal moves from target square
-  if (immobility_illegal() && (type_of(m) == DROP || type_of(m) == NORMAL))
+  if (immobility_illegal() && (dropMove || type_of(m) == NORMAL))
   {
       PieceType pt = type_of(moved_piece(m));
       const PieceInfo* pi = pieceMap.get(pt);
@@ -2254,7 +2255,7 @@ bool Position::legal(Move m) const {
       const bool blastOnCapture = blast_on_capture();
       Square kto = rifleShot ? from : to;
       Square blastCenter = (type_of(m) == EN_PASSANT || rifleShot) ? shotSq : kto;
-      Bitboard occupied = rifleShot ? pieces() : (type_of(m) != DROP ? pieces() ^ from : pieces());
+      Bitboard occupied = rifleShot ? pieces() : (!dropMove ? pieces() ^ from : pieces());
       Bitboard blastImmune = blastOnCapture ? blast_immune_bb() : Bitboard(0);
       if (walling_rule() == DUCK)
           occupied ^= st->wallSquares;
@@ -2291,8 +2292,12 @@ bool Position::legal(Move m) const {
           return false;
       Bitboard pseudoRoyals = st->pseudoRoyals & pieces(sideToMove);
       // Add dropped pseudo-royal
-      if (type_of(m) == DROP && (pseudo_royal_types() & piece_set(type_of(moved_piece(m)))))
+      if (dropMove && (pseudo_royal_types() & piece_set(type_of(moved_piece(m)))))
+      {
           pseudoRoyals |= square_bb(to);
+          if (paired_drop(m))
+              pseudoRoyals |= square_bb(secondary_drop_square(m));
+      }
       Bitboard pseudoRoyalsTheirs = st->pseudoRoyals & pieces(~sideToMove);
       if (!rifleShot && is_ok(from) && (pseudoRoyals & from))
           pseudoRoyals ^= square_bb(from) ^ kto;
@@ -2351,7 +2356,7 @@ bool Position::legal(Move m) const {
       Square kto = rifleShot ? from : to;
       Square blastCenter = (type_of(m) == EN_PASSANT || rifleShot) ? shotSq : kto;
       Square rfrom = SQ_NONE, rto = SQ_NONE;
-      Bitboard occupied = rifleShot ? pieces() : (type_of(m) != DROP ? pieces() ^ from : pieces());
+      Bitboard occupied = rifleShot ? pieces() : (!dropMove ? pieces() ^ from : pieces());
       Bitboard blastImmune = blastOnCapture ? blast_immune_bb() : Bitboard(0);
       if (walling_rule() == DUCK)
           occupied ^= st->wallSquares;
@@ -2379,7 +2384,7 @@ bool Position::legal(Move m) const {
           {
               if (count(sideToMove, pt) > 0)
                   antiRoyals |= pieces(sideToMove, pt);
-              else if (type_of(m) != DROP || type_of(moved_piece(m)) != pt)
+              else if (!dropMove || type_of(moved_piece(m)) != pt)
                   return false; // Anti-royal piece is missing and not replaced
           }
       }
@@ -2387,8 +2392,12 @@ bool Position::legal(Move m) const {
           antiRoyals ^= square_bb(from) ^ kto;
       if (is_ok(rfrom) && (antiRoyals & rfrom))
           antiRoyals ^= square_bb(rfrom) ^ rto;
-      if (type_of(m) == DROP && (anti_royal_types() & type_of(moved_piece(m))))
+      if (dropMove && (anti_royal_types() & type_of(moved_piece(m))))
+      {
           antiRoyals |= square_bb(to);
+          if (paired_drop(m))
+              antiRoyals |= square_bb(secondary_drop_square(m));
+      }
       if (type_of(m) == PROMOTION)
       {
           if (anti_royal_types() & type_of(moved_piece(m)))
@@ -2496,7 +2505,9 @@ bool Position::legal(Move m) const {
   }
 
   Bitboard occupied = rifleShot ? (pieces() ^ square_bb(shotSq))
-                                : (((type_of(m) != DROP ? pieces() ^ from : pieces()) ^ square_bb(shotSq)) | to);
+                                : (((!dropMove ? pieces() ^ from : pieces()) ^ square_bb(shotSq)) | to);
+  if (paired_drop(m))
+      occupied |= square_bb(secondary_drop_square(m));
 
   Bitboard removedByEffects = 0;
   if (!is_pass(m))
@@ -2528,7 +2539,7 @@ bool Position::legal(Move m) const {
           passiveBurners[BLACK] |= pieces(BLACK, pt) & occupiedAfterEffects;
       }
 
-      if (type_of(m) != DROP)
+      if (!dropMove)
           passiveBurners[us] &= ~square_bb(from);
 
       if (type_of(m) == CASTLING)
@@ -2542,10 +2553,14 @@ bool Position::legal(Move m) const {
           if (rook != NO_PIECE && (var->blastPassiveTypes & piece_set(type_of(rook))))
               passiveBurners[us] |= square_bb(rto);
       }
-      else if (type_of(m) == DROP)
+      else if (dropMove)
       {
           if (var->blastPassiveTypes & piece_set(type_of(moved_piece(m))))
+          {
               passiveBurners[us] |= square_bb(to);
+              if (paired_drop(m))
+                  passiveBurners[us] |= square_bb(secondary_drop_square(m));
+          }
       }
       else if (!rifleShot)
       {
@@ -2650,7 +2665,7 @@ bool Position::legal(Move m) const {
   Bitboard janggiCannons = pieces(JANGGI_CANNON);
   if (type_of(moved_piece(m)) == JANGGI_CANNON)
       janggiCannons = rifleShot ? (janggiCannons & ~square_bb(shotSq))
-                                : ((type_of(m) == DROP ? janggiCannons : janggiCannons ^ from) | to);
+                                : ((!dropMove ? janggiCannons ^ from : janggiCannons) | to);
   else if (janggiCannons & to)
       janggiCannons ^= to;
 
@@ -2670,6 +2685,7 @@ bool Position::pseudo_legal(const Move m) const {
 
   Color us = sideToMove;
   Color them = ~us;
+  bool dropMove = is_drop_move(m);
   Square from = from_sq(m);
   Square to = to_sq(m);
   Piece pc = moved_piece(m);
@@ -2696,7 +2712,7 @@ bool Position::pseudo_legal(const Move m) const {
       return false;
   if (type_of(m) == PIECE_PROMOTION && (is_promoted(from) || !promotion_allowed(us, promoted_piece_type(type_of(pc)))))
       return false;
-  if (type_of(m) != DROP && type_of(m) != PROMOTION && type_of(m) != PIECE_PROMOTION)
+  if (!dropMove && type_of(m) != PROMOTION && type_of(m) != PIECE_PROMOTION)
   {
       Bitboard mandatoryZone = pc == NO_PIECE ? Bitboard(0) : mandatory_promotion_zone(pc);
       if ((mandatoryZone & effectiveTo) && !(mandatoryZone & from))
@@ -2739,14 +2755,30 @@ bool Position::pseudo_legal(const Move m) const {
       return false;
 
   // Use a fast check for piece drops
-  if (type_of(m) == DROP)
+  if (dropMove)
   {
       Bitboard legalDropTargets = ~pieces();
-      if (capture_drop_types() & in_hand_piece_type(m))
+      if (!paired_drop(m) && (capture_drop_types() & in_hand_piece_type(m)))
       {
           legalDropTargets |= pieces(them);
           if (self_capture())
               legalDropTargets |= pieces(us) & ~pieces(us, KING);
+      }
+      if (paired_drop(m))
+      {
+          Square to2 = secondary_drop_square(m);
+          return   piece_drops()
+                && pc != NO_PIECE
+                && color_of(pc) == us
+                && count_in_hand(us, in_hand_piece_type(m)) >= 2
+                && (symmetric_drop_types() & in_hand_piece_type(m))
+                && (!pay_points_to_drop() || st->pointsCount[us] >= 2 * var->piecePoints[type_of(pc)])
+                && !(pieces() & to2)
+                && to != to2
+                && mirrored_pair_drop_square(to) == to2
+                && (drop_region(us, type_of(pc)) & legalDropTargets & to)
+                && (drop_region(us, type_of(pc)) & legalDropTargets & to2)
+                && type_of(pc) == in_hand_piece_type(m);
       }
 
       return   piece_drops()
@@ -2787,7 +2819,7 @@ bool Position::pseudo_legal(const Move m) const {
 
   SpellContextScope spellScope(*this, freezeExtra, jumpRemoved);
 
-  if (type_of(m) != DROP && (freeze_squares() & from))
+  if (!dropMove && (freeze_squares() & from))
       return false;
   if (type_of(m) == CASTLING && gamePly < var->castlingForbiddenPlies)
       return false;
@@ -2901,6 +2933,8 @@ bool Position::pseudo_legal(const Move m) const {
           if (topology_wraps())
           {
               Bitboard occupied = (pieces() ^ from) | to;
+              if (paired_drop(m))
+                  occupied |= square_bb(secondary_drop_square(m));
               if (attackers_to_king(square<KING>(us), occupied, ~us) & ~removedAttackers)
                   return false;
           }
@@ -2949,6 +2983,7 @@ bool Position::gives_check(Move m) const {
 
   Square from = from_sq(m);
   Square to = to_sq(m);
+  bool dropMove = is_drop_move(m);
 
   Bitboard freezeExtra = 0;
   Bitboard jumpRemoved = 0;
@@ -2973,7 +3008,7 @@ bool Position::gives_check(Move m) const {
 
   SpellContextScope spellScope(*this, freezeExtra, jumpRemoved);
 
-  if (type_of(m) != DROP && (freeze_squares() & from))
+  if (!dropMove && (freeze_squares() & from))
       return false;
   if (jumpRemoved && (square_bb(to) & jumpRemoved))
       return false;
@@ -2988,11 +3023,13 @@ bool Position::gives_check(Move m) const {
       return false;
 
   Bitboard occupied = (rifleShot || iguiShot) ? (pieces() ^ square_bb(shotSq))
-                                : (((type_of(m) != DROP ? pieces() ^ from : pieces()) ^ square_bb(shotSq)) | to);
+                                : (((!dropMove ? pieces() ^ from : pieces()) ^ square_bb(shotSq)) | to);
+  if (paired_drop(m))
+      occupied |= square_bb(secondary_drop_square(m));
   Bitboard janggiCannons = pieces(JANGGI_CANNON);
   if (type_of(moved_piece(m)) == JANGGI_CANNON)
       janggiCannons = rifleShot ? (janggiCannons & ~square_bb(shotSq))
-                                : ((type_of(m) == DROP ? janggiCannons : janggiCannons ^ from) | to);
+                                : ((!dropMove ? janggiCannons ^ from : janggiCannons) | to);
   else if (janggiCannons & to)
       janggiCannons ^= to;
 
@@ -3034,7 +3071,7 @@ bool Position::gives_check(Move m) const {
   }
 
   // Is there a discovered check?
-  if (  ((type_of(m) != DROP && (blockers_for_king(~sideToMove) & (rifleShot ? square_bb(to) : square_bb(from)))) || (non_sliding_riders() & pieces(sideToMove)))
+  if (  ((!dropMove && (blockers_for_king(~sideToMove) & (rifleShot ? square_bb(to) : square_bb(from)))) || (non_sliding_riders() & pieces(sideToMove)))
       && attackers_to_king(square<KING>(~sideToMove), occupied, sideToMove, janggiCannons) & occupied)
       return true;
 
@@ -3172,6 +3209,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
 
   Color us = sideToMove;
   Color them = ~us;
+  bool dropMove = is_drop_move(m);
   Square from = from_sq(m);
   Square to = to_sq(m);
   Piece pc = moved_piece(m);
@@ -3179,7 +3217,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   Piece captured = captured_piece(m);
   bool iguiShot = igui_capture(m) && captured != NO_PIECE;
   bool rifleShot = rifle_capture(m) && captured != NO_PIECE && type_of(m) != CASTLING;
-  bool capturedDeadSquare = type_of(m) != DROP && from != to && bool(st->deadSquares & to);
+  bool capturedDeadSquare = !dropMove && from != to && bool(st->deadSquares & to);
   PieceType exchanged = exchange_piece(m);
   Square jumpCapsq = is_jump_capture(m) ? jump_capture_square(from, to) : SQ_NONE;
   Square moverSq = (rifleShot || iguiShot) ? from : to;
@@ -3385,11 +3423,18 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   }
 
   // Update hash key
-  if (type_of(m) == DROP)
+  if (dropMove)
   {
       Piece pc_hand = make_piece(us, in_hand_piece_type(m));
       k ^= Zobrist::psq[pc][to];
-      if (exchanged == NO_PIECE_TYPE)
+      if (paired_drop(m))
+      {
+          Square to2 = secondary_drop_square(m);
+          k ^= Zobrist::psq[pc][to2];
+          int n = pieceCountInHand[color_of(pc_hand)][type_of(pc_hand)];
+          xor_in_hand_count(k, pc_hand, n - 2, n);
+      }
+      else if (exchanged == NO_PIECE_TYPE)
       {
           int n = pieceCountInHand[color_of(pc_hand)][type_of(pc_hand)];
           xor_in_hand_count(k, pc_hand, n - 1, n);
@@ -3434,7 +3479,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       k ^= Zobrist::enpassant[pop_lsb(st->epSquares)];
 
   // Update castling rights if needed
-  if (type_of(m) != DROP && !is_pass(m) && st->castlingRights && (castlingRightsMask[from] | castlingRightsMask[to]))
+  if (!dropMove && !is_pass(m) && st->castlingRights && (castlingRightsMask[from] | castlingRightsMask[to]))
   {
       k ^= Zobrist::castling[st->castlingRights];
       st->castlingRights &= ~(castlingRightsMask[from] | castlingRightsMask[to]);
@@ -3491,11 +3536,11 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   }
 
   // Move the piece. The tricky Chess960 castling is handled earlier
-  if (type_of(m) == DROP)
+  if (dropMove)
   {
       if (pay_points_to_drop())
       {
-          st->pointsCount[us] -= var->piecePoints[type_of(pc)];
+          st->pointsCount[us] -= var->piecePoints[type_of(pc)] * (paired_drop(m) ? 2 : 1);
           st->pointsCount[us] = non_negative_points(st->pointsCount[us]);
       }
 
@@ -3507,6 +3552,15 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           dp.handCount[0] = pieceCountInHand[us][in_hand_piece_type(m)];
           dp.from[0] = SQ_NONE;
           dp.to[0] = to;
+          if (paired_drop(m))
+          {
+              dp.dirty_num = 2;
+              dp.piece[1] = pc;
+              dp.handPiece[1] = make_piece(us, in_hand_piece_type(m));
+              dp.handCount[1] = pieceCountInHand[us][in_hand_piece_type(m)] - 1;
+              dp.from[1] = SQ_NONE;
+              dp.to[1] = secondary_drop_square(m);
+          }
 
           // Exchange drops also add a piece to the opponent's hand without any board
           // move to pair with it. DirtyPiece cannot represent that standalone hand
@@ -3516,9 +3570,13 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       }
 
       drop_piece(make_piece(us, in_hand_piece_type(m)), pc, to, exchanged);
+      if (paired_drop(m))
+          drop_piece(make_piece(us, in_hand_piece_type(m)), pc, secondary_drop_square(m), NO_PIECE_TYPE);
       st->materialKey ^= Zobrist::psq[pc][pieceCount[pc]-1];
+      if (paired_drop(m))
+          st->materialKey ^= Zobrist::psq[pc][pieceCount[pc]-2];
       if (type_of(pc) != PAWN)
-          st->nonPawnMaterial[us] += PieceValue[MG][pc];
+          st->nonPawnMaterial[us] += PieceValue[MG][pc] * (paired_drop(m) ? 2 : 1);
       // Set castling rights for dropped king or rook
       if (castling_dropped_piece() && rank_of(to) == castling_rank(us))
       {
@@ -3542,6 +3600,19 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
               {
                   st->castlingKingSquare[us] = make_square(castling_king_file(), castling_rank(us));
                   set_castling_right(us, to);
+              }
+          }
+      }
+      if (paired_drop(m))
+      {
+          Square to2 = secondary_drop_square(m);
+          if (castling_dropped_piece() && rank_of(to2) == castling_rank(us) && (castling_rook_pieces(us) & type_of(pc)))
+          {
+              if (   (file_of(to2) == FILE_A || file_of(to2) == max_file())
+                  && piece_on(make_square(castling_king_file(), castling_rank(us))) == make_piece(us, castling_king_piece(us)))
+              {
+                  st->castlingKingSquare[us] = make_square(castling_king_file(), castling_rank(us));
+                  set_castling_right(us, to2);
               }
           }
       }
@@ -3643,7 +3714,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
 
       // Set en passant square(s) if the moved pawn can be captured
       else if (   !topology_wraps()
-          && type_of(m) != DROP
+          && !dropMove
           && (   std::abs(int(to) - int(from)) == 2 * NORTH
               || std::abs(int(to) - int(from)) == 3 * NORTH))
       {
@@ -3663,7 +3734,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
               k ^= Zobrist::enpassant[to - 2 * pawn_push(us)];
           }
       }
-      else if (type_of(m) != DROP && topology_wraps())
+      else if (!dropMove && topology_wraps())
       {
           auto stepped = [&](Square start, int count) {
               Square s = start;
@@ -3703,7 +3774,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       }
 
       // Update pawn hash key
-      st->pawnKey ^= (type_of(m) != DROP ? Zobrist::psq[pc][from] : 0) ^ Zobrist::psq[pc][to];
+      st->pawnKey ^= (!dropMove ? Zobrist::psq[pc][from] : 0) ^ Zobrist::psq[pc][to];
   }
   else if (type_of(m) == PROMOTION || type_of(m) == PIECE_PROMOTION)
   {
@@ -3768,7 +3839,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       st->nonPawnMaterial[us] += PieceValue[MG][demotion] - PieceValue[MG][pc];
   }
   // Set en passant square(s) if the moved piece can be captured
-  else if (   type_of(m) != DROP
+  else if (   !dropMove
            && ((PseudoMoves[1][us][type_of(pc)][from] & ~PseudoMoves[0][us][type_of(pc)][from]) & to))
   {
       assert(type_of(pc) != PAWN);
@@ -3830,7 +3901,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
 
   if (   capture_morph()
       && captured != NO_PIECE
-      && type_of(m) != DROP
+      && !dropMove
       && type_of(m) != CASTLING
       && type_of(m) != PROMOTION
       && type_of(m) != PIECE_PROMOTION
@@ -3843,7 +3914,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       }
   }
 
-  if (   type_of(m) != DROP
+  if (   !dropMove
       && type_of(m) != CASTLING
       && type_of(m) != PROMOTION
       && type_of(m) != PIECE_PROMOTION
@@ -4295,7 +4366,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   bool diesOnCapture = (death_on_capture_types() & piece_set(movedType))
                     || (var->capturerDiesOnCapture && !exemptFromCapturerDeath)
                     || diesOnSameTypeCapture;
-  if (!capturedDeadSquare && captured != NO_PIECE && type_of(m) != DROP && diesOnCapture
+  if (!capturedDeadSquare && captured != NO_PIECE && !dropMove && diesOnCapture
       && piece_on(moverSq) != NO_PIECE)
   {
       bool makeDeadSquare = bool(death_on_capture_types() & piece_set(movedType));
@@ -4307,7 +4378,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
 
   if (trigger_matches(var->changingColorTrigger, captured != NO_PIECE || st->bycatchSquares != 0)
       && !is_pass(m)
-      && type_of(m) != DROP
+      && !dropMove
       && piece_on(moverSq) != NO_PIECE
       && color_of(piece_on(moverSq)) == us
       && (var->changingColorPieceTypes & type_of(piece_on(moverSq))))
@@ -4533,7 +4604,7 @@ void Position::undo_move(Move m) {
                             && from == to
                             && !st->pass;
 
-  assert(type_of(m) == DROP || empty(from) || type_of(m) == CASTLING || is_gating(m)
+  assert(is_drop_move(m) || empty(from) || type_of(m) == CASTLING || is_gating(m)
          || (type_of(m) == PROMOTION && sittuyin_promotion())
          || is_pass(m)
          || wasOpeningSelfRemoval
@@ -4687,8 +4758,12 @@ void Position::undo_move(Move m) {
   }
   else
   {
-      if (type_of(m) == DROP)
+      if (is_drop_move(m))
+      {
+          if (paired_drop(m))
+              undrop_piece(make_piece(us, in_hand_piece_type(m)), secondary_drop_square(m), NO_PIECE_TYPE);
           undrop_piece(make_piece(us, in_hand_piece_type(m)), to, exchange); // Remove the dropped piece
+      }
       else if (wasOpeningSelfRemoval)
           put_piece(st->deadPiece, from, st->deadPiecePromoted, st->deadUnpromotedPiece);
       else
@@ -4889,11 +4964,19 @@ Key Position::key_after(Move m) const {
           }
       }
   }
-  if (type_of(m) == DROP)
+  if (is_drop_move(m))
   {
       Piece pc_hand = make_piece(sideToMove, in_hand_piece_type(m));
       PieceType exchanged = exchange_piece(m);
       k ^= Zobrist::psq[pc][to];
+      if (paired_drop(m))
+      {
+          Square to2 = secondary_drop_square(m);
+          k ^= Zobrist::psq[pc][to2];
+          int n = pieceCountInHand[color_of(pc_hand)][type_of(pc_hand)];
+          xor_in_hand_count(k, pc_hand, n - 2, n);
+          return k;
+      }
 
       if (exchanged == NO_PIECE_TYPE)
       {
@@ -4930,7 +5013,7 @@ Value Position::blast_see(Move m) const {
   Square from = from_sq(m);
   Square to = to_sq(m);
   Color us = color_of(moved_piece(m));
-  Bitboard fromto = type_of(m) == DROP ? square_bb(to) : from | to;
+  Bitboard fromto = is_drop_move(m) ? square_bb(to) | (paired_drop(m) ? square_bb(secondary_drop_square(m)) : Bitboard(0)) : from | to;
   Bitboard blast = blast_squares(capture(m) ? capture_square(m) : to);
 
   // If the explosion would capture an opponent royal or pseudo-royal piece,
@@ -4960,7 +5043,7 @@ Value Position::blast_see(Move m) const {
           return VALUE_ZERO;
 
       result += minAttacker;
-      if (type_of(m) == DROP)
+      if (is_drop_move(m))
           result -= CapturePieceValue[MG][dropped_piece_type(m)];
   }
 
@@ -5013,7 +5096,7 @@ bool Position::see_ge(Move m, Value threshold) const {
   assert(is_ok(m));
 
   // Only deal with normal moves, assume others pass a simple SEE
-  if (type_of(m) != NORMAL && type_of(m) != DROP && type_of(m) != PIECE_PROMOTION)
+  if (type_of(m) != NORMAL && !is_drop_move(m) && type_of(m) != PIECE_PROMOTION)
       return VALUE_ZERO >= threshold;
 
   Square from = from_sq(m), to = to_sq(m);
@@ -5090,7 +5173,9 @@ bool Position::see_ge(Move m, Value threshold) const {
   if (var->petrifyOnCaptureTypes & type_of(moved_piece(m)) && capture(m))
       return false;
 
-  Bitboard occupied = (type_of(m) != DROP ? pieces() ^ from : pieces()) ^ to;
+  Bitboard occupied = (!is_drop_move(m) ? pieces() ^ from : pieces()) ^ to;
+  if (paired_drop(m))
+      occupied ^= secondary_drop_square(m);
   Color stm = color_of(moved_piece(m));
   auto update_attackers = [&](Bitboard occ) {
       Bitboard a = attackers_to(to, occ);
