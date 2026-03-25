@@ -452,6 +452,19 @@ int validate_fen(std::string fen, std::string uciVariant, bool chess960) {
   return FEN::validate_fen(fen, v, chess960);
 }
 
+int validate_position(std::string fen, std::string uciVariant, std::string uciMoves, bool chess960) {
+  std::lock_guard<std::mutex> lock(variant_state_mutex);
+  const Variant* v = get_variant(uciVariant);
+  std::stringstream ss(uciMoves);
+  std::string token;
+  std::vector<std::string> moves;
+  while (std::getline(ss, token, ' ')) {
+    if (!token.empty())
+      moves.push_back(token);
+  }
+  return FEN::validate_position(fen, v, moves, chess960);
+}
+
 }  // namespace ffish
 
 #if defined(_WIN32)
@@ -540,6 +553,9 @@ FSF_API void fsf_load_variant_config(const char* content) {
 }
 FSF_API int fsf_validate_fen(const char* fen, const char* variant, bool is960) {
   return ffish::validate_fen(fen ? fen : "", variant ? variant : "chess", is960);
+}
+FSF_API int fsf_validate_position(const char* fen, const char* variant, bool is960, const char* uciMoves) {
+  return ffish::validate_position(fen ? fen : "", variant ? variant : "chess", uciMoves ? uciMoves : "", is960);
 }
 FSF_API const char* fsf_starting_fen(const char* variant) {
   return to_cstr(ffish::starting_fen(variant ? variant : "chess"));

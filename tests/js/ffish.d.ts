@@ -35,6 +35,7 @@ export interface FairyStockfish {
     capturesToHand(uciVariant: string): boolean;
     startingFen(uciVariant: string): string;
     validateFen(fen: string, uciVariant?: string, chess960?: boolean): number;
+    validatePosition(fen: string, uciVariant: string, uciMoves: string, chess960: boolean): number;
 }
 
 export interface Board {

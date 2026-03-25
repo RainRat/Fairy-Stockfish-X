@@ -539,6 +539,18 @@ namespace ffish {
     return FEN::validate_fen(fen, v, chess960);
   }
 
+  int validate_position(std::string fen, std::string uciVariant, std::string uciMoves, bool chess960) {
+    const Variant* v = get_variant(uciVariant);
+    std::stringstream ss(uciMoves);
+    std::string token;
+    std::vector<std::string> moves;
+    while (std::getline(ss, token, ' ')) {
+      if (!token.empty())
+        moves.push_back(token);
+    }
+    return FEN::validate_position(fen, v, moves, chess960);
+  }
+
   int validate_fen(std::string fen, std::string uciVariant) {
     return validate_fen(fen, uciVariant, false);
   }
@@ -852,6 +864,7 @@ EMSCRIPTEN_BINDINGS(ffish_js) {
   function("validateFen", select_overload<int(std::string)>(&ffish::validate_fen));
   function("validateFen", select_overload<int(std::string, std::string)>(&ffish::validate_fen));
   function("validateFen", select_overload<int(std::string, std::string, bool)>(&ffish::validate_fen));
+  function("validatePosition", select_overload<int(std::string, std::string, std::string, bool)>(&ffish::validate_position));
   // TODO: enable to string conversion method
   // .class_function("getStringFromInstance", &Board::get_string_from_instance);
 }

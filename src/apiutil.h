@@ -29,6 +29,8 @@
 
 #include "types.h"
 #include "position.h"
+#include "thread.h"
+#include "uci.h"
 #include "variant.h"
 
 namespace Stockfish {
@@ -525,6 +527,7 @@ inline Bitboard checked(const Position& pos) {
 namespace FEN {
 
 enum FenValidation : int {
+    FEN_INVALID_MOVE = -16,
     FEN_INVALID_POINTS_INFO = -15,
     FEN_INVALID_COUNTING_RULE = -14,
     FEN_INVALID_CHECK_COUNT = -13,
@@ -1464,6 +1467,35 @@ inline FenValidation validate_fen(const std::string& fen, const Variant* v, bool
         for (const auto& value : vals)
             if (check_digit_field(value) == NOK)
                 return FEN_INVALID_CHAR;
+    }
+
+    return FEN_OK;
+}
+
+inline FenValidation validate_position(const std::string& fen, const Variant* v,
+                                      const std::vector<std::string>& moves,
+                                      bool chess960 = false) {
+    const std::string& validatedFen = fen == "startpos" ? v->startFen : fen;
+    FenValidation status = validate_fen(validatedFen, v, chess960);
+    if (status != FEN_OK)
+        return status;
+
+    StateListPtr states(new std::deque<StateInfo>(1));
+    Position pos;
+    UCI::init_variant(v);
+    pos.set(v, validatedFen, chess960, &states->back(), Threads.main());
+
+    for (const std::string& moveToken : moves)
+    {
+        std::string moveStr = moveToken;
+        Move m = UCI::to_move(pos, moveStr);
+        if (m == MOVE_NONE)
+        {
+            std::cerr << "Invalid move '" << moveToken << "'." << std::endl;
+            return FEN_INVALID_MOVE;
+        }
+        states->emplace_back();
+        pos.do_move(m, states->back());
     }
 
     return FEN_OK;

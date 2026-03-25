@@ -85,6 +85,25 @@ bool buildPosition(Position& pos, StateListPtr& states, const char *variant, con
     return true;
 }
 
+bool py_move_list_to_vector(PyObject* moveList, std::vector<std::string>& moves) {
+    int numMoves = PyList_Size(moveList);
+    for (int i = 0; i < numMoves; i++)
+    {
+        PyObject *item = PyList_GetItem(moveList, i);
+        if (!PyUnicode_Check(item))
+        {
+            PyErr_SetString(PyExc_TypeError, "Move list must contain strings");
+            return false;
+        }
+        PyObject *moveStr = PyUnicode_AsEncodedString(item, "UTF-8", "strict");
+        if (!moveStr)
+            return false;
+        moves.emplace_back(PyBytes_AS_STRING(moveStr));
+        Py_XDECREF(moveStr);
+    }
+    return true;
+}
+
 extern "C" PyObject* pyffish_version(PyObject* self) {
     return Py_BuildValue("(iii)", 0, 0, 88);
 }
@@ -493,6 +512,26 @@ extern "C" PyObject* pyffish_validateFen(PyObject* self, PyObject *args) {
     return Py_BuildValue("i", FEN::validate_fen(std::string(fen), v, chess960));
 }
 
+// INPUT variant, fen, move list
+extern "C" PyObject* pyffish_validatePosition(PyObject* self, PyObject *args) {
+    PyObject *moveList;
+    const char *fen, *variant;
+    int chess960 = false;
+    if (!PyArg_ParseTuple(args, "ssO!|p", &variant, &fen, &PyList_Type, &moveList, &chess960)) {
+        return NULL;
+    }
+
+    const Variant* v = require_variant(variant);
+    if (!v)
+        return NULL;
+
+    std::vector<std::string> moves;
+    if (!py_move_list_to_vector(moveList, moves))
+        return NULL;
+
+    return Py_BuildValue("i", FEN::validate_position(std::string(fen), v, moves, chess960));
+}
+
 // INPUT fen, variant
 extern "C" PyObject* pyffish_getFogFEN(PyObject* self, PyObject *args) {
     Position pos;
@@ -535,6 +574,7 @@ static PyMethodDef PyFFishMethods[] = {
     {"is_optional_game_end", (PyCFunction)pyffish_isOptionalGameEnd, METH_VARARGS, "Get result from given FEN it rules enable game end by player."},
     {"has_insufficient_material", (PyCFunction)pyffish_hasInsufficientMaterial, METH_VARARGS, "Checks for insufficient material."},
     {"validate_fen", (PyCFunction)pyffish_validateFen, METH_VARARGS, "Validate an input FEN."},
+    {"validate_position", (PyCFunction)pyffish_validatePosition, METH_VARARGS, "Validate an input FEN together with a move list."},
     {"get_fog_fen", (PyCFunction)pyffish_getFogFEN, METH_VARARGS, "Get Fog of War FEN from given FEN."},
     {NULL, NULL, 0, NULL},  // sentinel
 };
@@ -575,6 +615,7 @@ PyMODINIT_FUNC PyInit_pyffish() {
     PyModule_AddObject(module, "NOTATION_THAI_LAN", PyLong_FromLong(NOTATION_THAI_LAN));
 
     // validation
+    PyModule_AddObject(module, "FEN_INVALID_MOVE", PyLong_FromLong(FEN::FEN_INVALID_MOVE));
     PyModule_AddObject(module, "FEN_OK", PyLong_FromLong(FEN::FEN_OK));
     PyModule_AddObject(module, "FEN_INVALID_PROMOTED_PIECE", PyLong_FromLong(FEN::FEN_INVALID_PROMOTED_PIECE));
 

@@ -861,6 +861,25 @@ describe('ffish.validateFen(fen, uciVariant, chess960)', function () {
   });
 });
 
+describe('ffish.validatePosition(fen, uciVariant, uciMoves, chess960)', function () {
+  it("it validates a FEN together with a UCI move list.", () => {
+    chai.expect(ffish.validatePosition(
+      "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+      "chess",
+      "e2e4 e7e5 g1f3",
+      false
+    )).to.equal(1);
+    chai.expect(ffish.validatePosition("startpos", "chess", "e2e4 e7e5 g1f3", false)).to.equal(1);
+    chai.expect(ffish.validatePosition(
+      "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+      "chess",
+      "e2e5",
+      false
+    )).to.equal(-16);
+    chai.expect(ffish.validatePosition("8/8/8/8/8/8/8/8 w - - 0 1", "chess", "", false)).to.not.equal(1);
+  });
+});
+
 describe('ffish.readGamePGN(pgn)', function () {
   it("it reads a pgn string and returns a game object", () => {
      fs = require('fs');

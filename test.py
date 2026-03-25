@@ -1918,6 +1918,24 @@ startFen = 4r3/8/8/8/8/8/8/8[A] w - - 0 1
                 fen = sf.start_fen(variant)
                 self.assertEqual(sf.validate_fen(fen, variant), sf.FEN_OK)
 
+    def test_validate_position(self):
+        self.assertEqual(
+            sf.validate_position("chess", CHESS, ["e2e4", "e7e5", "g1f3"]),
+            sf.FEN_OK,
+        )
+        self.assertEqual(
+            sf.validate_position("chess", "startpos", ["e2e4", "e7e5", "g1f3"]),
+            sf.FEN_OK,
+        )
+        self.assertEqual(
+            sf.validate_position("chess", CHESS, ["e2e5"]),
+            sf.FEN_INVALID_MOVE,
+        )
+        self.assertNotEqual(
+            sf.validate_position("chess", "8/8/8/8/8/8/8/8 w - - 0 1", []),
+            sf.FEN_OK,
+        )
+
     def test_validate_fen_promoted_pieces(self):
         # Test promoted piece validation specifically
 
