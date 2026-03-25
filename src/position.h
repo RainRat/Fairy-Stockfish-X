@@ -557,11 +557,13 @@ private:
                                              bool wrapFile, bool wrapRank,
                                              bool quietMode);
   static Bitboard wrapped_rose_targets(Square sq, Bitboard occupied,
-                                       File maxFile, Rank maxRank,
-                                       bool wrapFile, bool wrapRank,
-                                       bool quietMode);
-  static Bitboard special_rider_bb(const PieceInfo* pi, MoveModality modality,
-                                   Square sq, Bitboard occupied,
+                                        File maxFile, Rank maxRank,
+                                        bool wrapFile, bool wrapRank,
+                                        bool quietMode);
+  static Bitboard wrapped_rose_between_union_bb(Square from, Square to, Bitboard occupied,
+                                                 File maxFile, Rank maxRank,
+                                                 bool wrapFile, bool wrapRank);
+  static Bitboard special_rider_bb(const PieceInfo* pi, MoveModality modality,                                   Square sq, Bitboard occupied,
                                    Bitboard occupiedAll, Bitboard ownPieces,
                                    Color c, bool captureMode);
 
@@ -2564,6 +2566,43 @@ inline Bitboard Position::wrapped_rose_targets(Square from, Bitboard occupied,
       }
 
   return attack;
+}
+
+inline Bitboard Position::wrapped_rose_between_union_bb(Square from, Square to, Bitboard occupied,
+                                                        File maxFile, Rank maxRank,
+                                                        bool wrapFile, bool wrapRank) {
+  Bitboard pathUnion = 0;
+
+  for (int start = 0; start < 8; ++start)
+      for (int turn : {-1, 1})
+      {
+          Square current = from;
+          int index = start;
+          Bitboard path = 0;
+          for (int leg = 0; leg < 7; ++leg)
+          {
+              Square next = SQ_NONE;
+              if (!wrapped_destination_square(current,
+                                              RoseSteps[index].second,
+                                              RoseSteps[index].first,
+                                              maxFile, maxRank, wrapFile, wrapRank, next))
+                  break;
+              if (next == from)
+                  break;
+              path |= next;
+              if (next == to)
+              {
+                  pathUnion |= path;
+                  break;
+              }
+              if (occupied & next)
+                  break;
+              current = next;
+              index = (index + turn + 8) % 8;
+          }
+      }
+
+  return pathUnion;
 }
 
 inline Bitboard Position::special_rider_bb(const PieceInfo* pi, MoveModality modality,
