@@ -425,6 +425,53 @@ Key Position::reserve_key() const {
   return k;
 }
 
+Key Position::layout_key() const {
+  Key k = 0;
+
+  for (Bitboard b = pieces(); b; )
+  {
+      Square s = pop_lsb(b);
+      k ^= Zobrist::psq[piece_on(s)][s];
+  }
+
+  for (Bitboard b = st->wallSquares; b; )
+      k ^= Zobrist::wall[pop_lsb(b)];
+
+  for (Bitboard b = st->deadSquares; b; )
+      k ^= Zobrist::dead[pop_lsb(b)];
+
+  return k;
+}
+
+bool Position::violates_same_player_board_repetition(Move m) const {
+
+  if (!var->samePlayerBoardRepetitionIllegal)
+      return false;
+
+  Position* pos = const_cast<Position*>(this);
+  StateInfo nextState;
+  pos->do_move(m, nextState, false);
+
+  bool repeated = false;
+  int end = pos->captures_to_hand() ? pos->st->pliesFromNull : std::min(pos->st->rule50, pos->st->pliesFromNull);
+  if (end >= 4)
+  {
+      StateInfo* stp = pos->st->previous->previous;
+      for (int i = 4; i <= end; i += 2)
+      {
+          stp = stp->previous->previous;
+          if (stp->move != MOVE_NONE && stp->layoutKey == pos->st->layoutKey)
+          {
+              repeated = true;
+              break;
+          }
+      }
+  }
+
+  pos->undo_move(m);
+  return repeated;
+}
+
 
 /// Position::init() initializes at startup the various arrays used to compute hash keys
 
@@ -1323,6 +1370,7 @@ void Position::set_state(StateInfo* si) const {
   }
 
   si->boardKey = si->key ^ reserve_key();
+  si->layoutKey = layout_key();
   si->repetition = 0;
   si->boardRepetition = 0;
 
@@ -2378,7 +2426,8 @@ bool Position::legal(Move m) const {
       assert(ep_squares() & to);
       assert(piece_on(to) == NO_PIECE);
 
-      return !((attackers_to_king(ksq, occupied, ~us) & ~removedAttackers) & occupied);
+      return !((attackers_to_king(ksq, occupied, ~us) & ~removedAttackers) & occupied)
+          && !violates_same_player_board_repetition(m);
   }
 
   // Castling moves generation does not check if the castling path is clear of
@@ -2406,7 +2455,7 @@ bool Position::legal(Move m) const {
       bool royalLikeCastler = type_of(piece_on(from)) == KING
                            || (potions_enabled() && type_of(piece_on(from)) == castling_king_piece(us));
       if (!royalLikeCastler)
-          return true;
+          return !violates_same_player_board_repetition(m);
 
       // Spell-chess uses COMMONER as castling king and still requires
       // "cannot castle through attack", with frozen attackers ignored.
@@ -2431,8 +2480,9 @@ bool Position::legal(Move m) const {
 
       // In case of Chess960, verify if the Rook blocks some checks
       // For instance an enemy queen in SQ_A1 when castling rook is in SQ_B1.
-      return (allow_checks() && !spellLikeCastler)
-          || !attackers_for_castling(to, pieces() ^ rookFrom);
+      return ((allow_checks() && !spellLikeCastler)
+          || !attackers_for_castling(to, pieces() ^ rookFrom))
+          && !violates_same_player_board_repetition(m);
   }
 
   Bitboard occupied = rifleShot ? (pieces() ^ square_bb(shotSq))
@@ -2476,7 +2526,7 @@ bool Position::legal(Move m) const {
   // Flying general rule and bikjang
   // In case of bikjang passing is always allowed, even when in check
   if (st->bikjang && is_pass(m))
-      return true;
+      return !violates_same_player_board_repetition(m);
   if ((var->flyingGeneral && count<KING>(us)) || st->bikjang)
   {
       Square s = type_of(moved_piece(m)) == KING ? (rifleShot ? from : to) : square<KING>(us);
@@ -2517,11 +2567,12 @@ bool Position::legal(Move m) const {
   // If the moving piece is a king, check whether the destination square is
   // attacked by the opponent.
   if (!allow_checks() && type_of(moved_piece(m)) == KING)
-      return !(attackers_to_king(rifleShot ? from : to, occupied, ~us) & ~removedAttackers);
+      return !(attackers_to_king(rifleShot ? from : to, occupied, ~us) & ~removedAttackers)
+          && !violates_same_player_board_repetition(m);
 
   // Return early when without king
   if (!count<KING>(us))
-      return true;
+      return !violates_same_player_board_repetition(m);
 
   Bitboard janggiCannons = pieces(JANGGI_CANNON);
   if (type_of(moved_piece(m)) == JANGGI_CANNON)
@@ -2531,9 +2582,10 @@ bool Position::legal(Move m) const {
       janggiCannons ^= to;
 
   // A non-king move is legal if the king is not under attack after the move.
-  return allow_checks() || !(attackers_to_king(square<KING>(us), occupied, ~us, janggiCannons)
-                             & ~removedAttackers
-                             & ~(rifleShot ? Bitboard(0) : SquareBB[to]));
+  return (allow_checks() || !(attackers_to_king(square<KING>(us), occupied, ~us, janggiCannons)
+                              & ~removedAttackers
+                              & ~(rifleShot ? Bitboard(0) : SquareBB[to])))
+      && !violates_same_player_board_repetition(m);
 }
 
 
@@ -2672,8 +2724,9 @@ bool Position::pseudo_legal(const Move m) const {
   if (type_of(m) != NORMAL || is_gating(m))
   {
       const bool useWrappedFallback = topology_wraps() && checkers();
-      return (checkers() && !useWrappedFallback) ? MoveList<    EVASIONS>(*this).contains(m)
-                                                 : MoveList<NON_EVASIONS>(*this).contains(m);
+      return ((checkers() && !useWrappedFallback) ? MoveList<    EVASIONS>(*this).contains(m)
+                                                  : MoveList<NON_EVASIONS>(*this).contains(m))
+          && !violates_same_player_board_repetition(m);
   }
 
   //if walling, and walling is not optional, or they didn't move, do the checks.
@@ -2810,7 +2863,7 @@ bool Position::pseudo_legal(const Move m) const {
           return false;
   }
 
-  return true;
+  return !violates_same_player_board_repetition(m);
 }
 
 
@@ -4263,6 +4316,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   // Update the key with the final value
   st->key = k;
   st->boardKey = st->key ^ reserve_key();
+  if (var->samePlayerBoardRepetitionIllegal)
+      st->layoutKey = layout_key();
   if (var->changingColorTrigger != ColorChangeTrigger::NEVER && !allow_checks() && count<KING>(them))
       givesCheck = bool(attackers_to_king(square<KING>(them), us) & pieces(us));
   // Calculate checkers bitboard (if move gives check)

@@ -1326,6 +1326,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("nFoldValueAbsolute", v->nFoldValueAbsolute);
     parse_attribute("perpetualCheckIllegal", v->perpetualCheckIllegal);
     parse_attribute("moveRepetitionIllegal", v->moveRepetitionIllegal);
+    parse_attribute("samePlayerBoardRepetitionIllegal", v->samePlayerBoardRepetitionIllegal);
     parse_attribute("chasingRule", v->chasingRule);
     parse_attribute("stalemateValue", v->stalemateValue);
     parse_attribute("stalematePieceCount", v->stalematePieceCount);

@@ -66,6 +66,7 @@ struct StateInfo {
   Bitboard not_moved_pieces[COLOR_NB];
   Bitboard potionZones[COLOR_NB][Variant::POTION_TYPE_NB];
   int potionCooldown[COLOR_NB][Variant::POTION_TYPE_NB];
+  Key layoutKey;
 
   // Not copied when making a move (will be recomputed anyhow)
   Key        key;
@@ -505,6 +506,8 @@ private:
   void set_check_info(StateInfo* si) const;
   bool compute_forced_jump_followup(Square s, int step = 0) const;
   bool is_initial_pawn(Piece pc, Square s) const;
+  Key layout_key() const;
+  bool violates_same_player_board_repetition(Move m) const;
   Key reserve_key() const;
   bool n_fold_game_end(Value& result, int ply, int target) const;
 
