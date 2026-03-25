@@ -112,6 +112,7 @@ jobs:
           make clean
           make -j2 ARCH=x86-64-modern optimize=no debug=yes build
           ../tests/signature.sh $benchref
+          ../tests/wrapping-topology.sh ./stockfish
 
       - name: Test debug x86-64-modern profile build (Optimization on, All features)
         run: |

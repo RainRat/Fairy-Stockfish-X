@@ -2072,6 +2072,8 @@ bool Position::legal(Move m) const {
       if (isHop && jump_capture_square(from, to) == SQ_NONE)
           return false;
   }
+  if (!allow_checks() && (pieces(them) & to) && type_of(piece_on(to)) == KING)
+      return false;
   PieceType movePt = type_of(moved_piece(m));
   if (type_of(m) != DROP && (var->mutuallyHopIllegalTypes & movePt) && (AttackRiderTypes[movePt] & HOPPING_RIDERS))
   {
@@ -2109,6 +2111,8 @@ bool Position::legal(Move m) const {
       return false;
 
   // Illegal captures
+  if (!allow_checks() && (pieces(them) & to) && type_of(piece_on(to)) == KING)
+      return false;
 
   // Illegal non-drop moves
   PieceType requiredDropType = must_drop_type();
@@ -2546,6 +2550,7 @@ bool Position::pseudo_legal(const Move m) const {
   Piece pc = moved_piece(m);
   bool rifleShot = rifle_capture(m) && capture(m) && type_of(m) != CASTLING;
   Square effectiveTo = rifleShot ? from : to;
+  Bitboard removedAttackers = capture(m) ? square_bb(capture_square(m)) : Bitboard(0);
 
   if (in_opening_self_removal_phase())
       return is_opening_self_removal_move(m);
@@ -2665,8 +2670,11 @@ bool Position::pseudo_legal(const Move m) const {
       return false;
 
   if (type_of(m) != NORMAL || is_gating(m))
-      return checkers() ? MoveList<    EVASIONS>(*this).contains(m)
-                        : MoveList<NON_EVASIONS>(*this).contains(m);
+  {
+      const bool useWrappedFallback = topology_wraps() && checkers();
+      return (checkers() && !useWrappedFallback) ? MoveList<    EVASIONS>(*this).contains(m)
+                                                 : MoveList<NON_EVASIONS>(*this).contains(m);
+  }
 
   //if walling, and walling is not optional, or they didn't move, do the checks.
   if (walling(us) && (!wall_or_move() || (from == to)))
@@ -2720,6 +2728,9 @@ bool Position::pseudo_legal(const Move m) const {
           return false;
   }
 
+  if (!allow_checks() && (pieces(them) & to) && type_of(piece_on(to)) == KING)
+      return false;
+
   // Handle the special case of a pawn move
   if (type_of(pc) == PAWN && !topology_wraps())
   {
@@ -2764,7 +2775,7 @@ bool Position::pseudo_legal(const Move m) const {
           if (topology_wraps())
           {
               Bitboard occupied = (pieces() ^ from) | to;
-              if (attackers_to_king(square<KING>(us), occupied, ~us))
+              if (attackers_to_king(square<KING>(us), occupied, ~us) & ~removedAttackers)
                   return false;
           }
           else

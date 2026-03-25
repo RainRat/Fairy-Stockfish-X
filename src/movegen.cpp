@@ -1043,7 +1043,8 @@ template<GenType Type>
 ExtMove* generate(const Position& pos, ExtMove* moveList) {
 
   static_assert(Type != LEGAL, "Unsupported type in generate()");
-  assert((Type == EVASIONS) == (bool)pos.checkers());
+  assert((Type == EVASIONS) == (bool)pos.checkers()
+         || (pos.topology_wraps() && Type == NON_EVASIONS && pos.checkers()));
 
   Color us = pos.side_to_move();
 
@@ -1055,7 +1056,8 @@ template<GenType Type>
 ExtMove* generate_without_potions(const Position& pos, ExtMove* moveList) {
 
   static_assert(Type != LEGAL, "Unsupported type in generate_without_potions()");
-  assert((Type == EVASIONS) == (bool)pos.checkers());
+  assert((Type == EVASIONS) == (bool)pos.checkers()
+         || (pos.topology_wraps() && Type == NON_EVASIONS && pos.checkers()));
   Color us = pos.side_to_move();
   return us == WHITE ? generate_all_impl<WHITE, Type>(pos, moveList)
                      : generate_all_impl<BLACK, Type>(pos, moveList);
