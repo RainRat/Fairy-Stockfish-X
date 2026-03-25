@@ -1278,6 +1278,8 @@ void Position::set_state(StateInfo* si) const {
           si->checkersBB |= checked_pseudo_royals(sideToMove);
       if (anti_royal_types())
           si->checkersBB |= checked_anti_royals(sideToMove);
+      if (var->blastPassiveTypes)
+          si->checkersBB |= passive_blast_checkers(sideToMove, pieces());
   }
   si->move = MOVE_NONE;
   si->removedGatingType = NO_PIECE_TYPE;
@@ -2504,6 +2506,69 @@ bool Position::legal(Move m) const {
           removedByEffects |= square_bb(effectiveTo);
   }
 
+  if (var->blastPassiveTypes && !is_pass(m))
+  {
+      Bitboard occupiedAfterEffects = occupied & ~removedByEffects;
+      Bitboard burnImmune = blast_immune_bb();
+      Bitboard passiveBurners[COLOR_NB] = { Bitboard(0), Bitboard(0) };
+      PieceSet passiveTypes = var->blastPassiveTypes;
+
+      while (passiveTypes)
+      {
+          PieceType pt = pop_lsb(passiveTypes);
+          passiveBurners[WHITE] |= pieces(WHITE, pt) & occupiedAfterEffects;
+          passiveBurners[BLACK] |= pieces(BLACK, pt) & occupiedAfterEffects;
+      }
+
+      if (type_of(m) != DROP)
+          passiveBurners[us] &= ~square_bb(from);
+
+      if (type_of(m) == CASTLING)
+      {
+          Square kto = make_square(to > from ? castling_kingside_file() : castling_queenside_file(), castling_rank(us));
+          Square rfrom = to;
+          Square rto = kto - (to > from ? EAST : WEST);
+          Piece rook = piece_on(rfrom);
+          if (var->blastPassiveTypes & piece_set(type_of(moved_piece(m))))
+              passiveBurners[us] |= square_bb(kto);
+          if (rook != NO_PIECE && (var->blastPassiveTypes & piece_set(type_of(rook))))
+              passiveBurners[us] |= square_bb(rto);
+      }
+      else if (type_of(m) == DROP)
+      {
+          if (var->blastPassiveTypes & piece_set(type_of(moved_piece(m))))
+              passiveBurners[us] |= square_bb(to);
+      }
+      else if (!rifleShot)
+      {
+          PieceType finalPt = movePt;
+          if (type_of(m) == PROMOTION)
+              finalPt = promotion_type(m);
+          else if (type_of(m) == PIECE_PROMOTION)
+              finalPt = promoted_piece_type(movePt);
+          else if (type_of(m) == PIECE_DEMOTION)
+              finalPt = type_of(unpromoted_piece_on(from));
+
+          if (var->blastPassiveTypes & piece_set(finalPt))
+              passiveBurners[us] |= square_bb(effectiveTo);
+      }
+      else if (var->blastPassiveTypes & piece_set(movePt))
+          passiveBurners[us] |= square_bb(from);
+
+      if (is_gating(m) && gating_type(m) != NO_PIECE_TYPE && (var->blastPassiveTypes & piece_set(gating_type(m))))
+          passiveBurners[us] |= gating_square(m);
+
+      for (Color c : {WHITE, BLACK})
+      {
+          Bitboard burners = passiveBurners[c];
+          while (burners)
+          {
+              Square sq = pop_lsb(burners);
+              removedByEffects |= blast_pattern(sq) & occupiedAfterEffects & pieces(~c) & ~burnImmune;
+          }
+      }
+  }
+
   // Gated kings and pseudo-royals must not be introduced onto attacked squares.
   // If the move captures an attacker on its way, ignore that disappearing attack.
   if (is_gating(m) && gating_type(m) != NO_PIECE_TYPE)
@@ -2922,13 +2987,12 @@ bool Position::gives_check(Move m) const {
   else if (janggiCannons & to)
       janggiCannons ^= to;
 
-  if (topology_wraps())
+  if (topology_wraps() || var->blastPassiveTypes)
   {
       Position* pos = const_cast<Position*>(this);
       StateInfo nextState;
       pos->do_move(m, nextState, false);
-      bool givesCheck = pos->count<KING>(pos->side_to_move())
-                     && bool(pos->attackers_to_king(pos->square<KING>(pos->side_to_move()), ~pos->side_to_move()));
+      bool givesCheck = bool(pos->checkers());
       pos->undo_move(m);
       return givesCheck;
   }
@@ -3863,6 +3927,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
          ( surround_capture_opposite() || surround_capture_intervene() || surround_capture_edge() ) ||
          ( captured && (blast_on_capture() || var->petrifyOnCaptureTypes) ) ||
          ( blast_on_move() && !captured ) ||
+         var->blastPassiveTypes ||
          ( remove_connect_n() > 0 )
        )
        && !is_pass(m)
@@ -3884,6 +3949,23 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
               : (var->petrifyOnCaptureTypes & type_of(pc) ? square_bb(moverSq) : Bitboard(0));
           removal_mask |= blast_mask;
       };
+
+      if (var->blastPassiveTypes) {
+          Bitboard activeOccupied = pieces() & ~removal_mask;
+          Bitboard burnImmune = blast_immune_bb();
+          PieceSet passiveTypes = var->blastPassiveTypes;
+
+          while (passiveTypes) {
+              PieceType pt = pop_lsb(passiveTypes);
+              for (Color c : {WHITE, BLACK}) {
+                  Bitboard burners = pieces(c, pt) & activeOccupied;
+                  while (burners) {
+                      Square sq = pop_lsb(burners);
+                      removal_mask |= blast_pattern(sq) & activeOccupied & pieces(~c) & ~burnImmune;
+                  }
+              }
+          }
+      }
 
       //Use the same removal_mask variable; surround_capture only ORs.
       //A piece could be immune to blast but not immune to custodial.
@@ -4331,8 +4413,10 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           st->checkersBB |= checked_pseudo_royals(them);
       if (anti_royal_types())
           st->checkersBB |= checked_anti_royals(them);
+      if (var->blastPassiveTypes)
+          st->checkersBB |= passive_blast_checkers(them, pieces());
   }
-  assert(allow_checks() || givesCheck == bool(st->checkersBB) || (givesCheck && var->prisonPawnPromotion) || pseudo_royal_types() || anti_royal_types());
+  assert(allow_checks() || givesCheck == bool(st->checkersBB) || (givesCheck && var->prisonPawnPromotion) || pseudo_royal_types() || anti_royal_types() || var->blastPassiveTypes);
 
   sideToMove = ~sideToMove;
 

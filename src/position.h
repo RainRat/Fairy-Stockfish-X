@@ -510,6 +510,7 @@ private:
   bool violates_same_player_board_repetition(Move m) const;
   Key reserve_key() const;
   bool n_fold_game_end(Value& result, int ply, int target) const;
+  Bitboard passive_blast_checkers(Color victim, Bitboard occupied) const;
 
   // Other helpers
   void move_piece(Square from, Square to);
@@ -2922,6 +2923,22 @@ inline Bitboard Position::attackers_to_king(Square s, Bitboard occupied, Color c
 
 inline Bitboard Position::checkers() const {
   return st->checkersBB;
+}
+
+inline Bitboard Position::passive_blast_checkers(Color victim, Bitboard occupied) const {
+  if (!var->blastPassiveTypes || !count<KING>(victim))
+      return Bitboard(0);
+
+  Square ksq = square<KING>(victim);
+  if (blast_immune_bb() & square_bb(ksq))
+      return Bitboard(0);
+
+  Bitboard burners = Bitboard(0);
+  for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
+      if (var->blastPassiveTypes & pt)
+          burners |= pieces(~victim, pt);
+
+  return blast_pattern(ksq) & burners & occupied;
 }
 
 inline Bitboard Position::blockers_for_king(Color c) const {
