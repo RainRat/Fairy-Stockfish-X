@@ -197,6 +197,9 @@ inline Bitboard square_bb(Square s) {
 
 inline int wrap_coord(int val, int limit) {
   assert(limit > 0);
+  if (val >= 0 && val < limit) return val;
+  if (val >= limit && val < 2 * limit) return val - limit;
+  if (val < 0 && val >= -limit) return val + limit;
   return ((val % limit) + limit) % limit;
 }
 
@@ -248,8 +251,8 @@ inline Bitboard wrapping_slider_attacks(Square s, Bitboard occ, File maxFile, Ra
               break;
           if (next == s)
               break;
-          result |= next;
-          if (occ & next)
+          result |= square_bb(next);
+          if (occ & square_bb(next))
               break;
           current = next;
       }
@@ -281,7 +284,7 @@ inline Bitboard rose_attacks_bb(Square from, Bitboard occupied) {
                   break;
               Square to = lsb(dst);
               attack |= dst;
-              if (occupied & to)
+              if (occupied & square_bb(to))
                   break;
               current = to;
               index = (index + turn + 8) % 8;
@@ -312,7 +315,7 @@ inline Bitboard rose_between_union_bb(Square from, Square to, Bitboard occupied)
                   pathUnion |= path;
                   break;
               }
-              if (occupied & next)
+              if (occupied & square_bb(next))
                   break;
               current = next;
               index = (index + turn + 8) % 8;
@@ -345,7 +348,7 @@ inline Bitboard rose_between_intersection_bb(Square from, Square to, Bitboard oc
                   found = true;
                   break;
               }
-              if (occupied & next)
+              if (occupied & square_bb(next))
                   break;
               current = next;
               index = (index + turn + 8) % 8;

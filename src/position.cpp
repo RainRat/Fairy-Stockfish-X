@@ -1707,12 +1707,13 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
       for (PieceSet ps = piece_types(); ps;)
       {
           PieceType pt = pop_lsb(ps);
-          Bitboard candidates = pieces(c, pt);
-          while (candidates)
+          if (pieces(c, pt))
           {
-              Square from = pop_lsb(candidates);
-              if (attacks_from(c, pt, from) & s)
-                  b |= from;
+              PieceType move_pt = pt == KING ? king_type() : pt;
+              if (pt == JANGGI_CANNON)
+                  b |= attacks_from(~c, move_pt, s, occupied) & attacks_from(~c, move_pt, s, occupied & ~janggiCannons) & pieces(c, pt);
+              else
+                  b |= attacks_from(~c, move_pt, s, occupied) & pieces(c, pt);
           }
       }
       return b;
