@@ -2071,10 +2071,11 @@ bool Position::legal(Move m) const {
   if (from == to && !(is_pass(m) || (type_of(m) == PROMOTION && sittuyin_promotion())))
       return false;
 
+  bool iguiShot = igui_capture(m);
   bool rifleShot = rifle_capture(m) && capture(m) && type_of(m) != CASTLING;
   Square shotSq = capture(m) ? capture_square(m) : to;
   Bitboard removedAttackers = rifleShot ? square_bb(shotSq) : Bitboard(0);
-  Square effectiveTo = rifleShot ? from : to;
+  Square effectiveTo = (rifleShot || iguiShot) ? from : to;
 
   if (type_of(m) == PROMOTION && !promotion_allowed(us, promotion_type(m)))
       return false;
@@ -2125,6 +2126,13 @@ bool Position::legal(Move m) const {
   if (topology_wraps() && !allow_checks() && (pieces(them) & to) && type_of(piece_on(to)) == KING)
       return false;
   PieceType movePt = type_of(moved_piece(m));
+  if (iguiShot)
+  {
+      if (!capture(m))
+          return false;
+      if (!(attacks_from(us, KING, from) & square_bb(to)))
+          return false;
+  }
   if (type_of(m) != DROP && (var->mutuallyHopIllegalTypes & movePt) && (AttackRiderTypes[movePt] & HOPPING_RIDERS))
   {
       Bitboard between = between_bb(from, to);
@@ -2970,15 +2978,16 @@ bool Position::gives_check(Move m) const {
   if (jumpRemoved && (square_bb(to) & jumpRemoved))
       return false;
 
+  bool iguiShot = igui_capture(m);
   bool rifleShot = rifle_capture(m) && capture(m) && type_of(m) != CASTLING;
   Square shotSq = capture(m) ? capture_square(m) : to;
-  Square attackFrom = rifleShot ? from : to;
+  Square attackFrom = (rifleShot || iguiShot) ? from : to;
 
   // No check possible without king
   if (!count<KING>(~sideToMove))
       return false;
 
-  Bitboard occupied = rifleShot ? (pieces() ^ square_bb(shotSq))
+  Bitboard occupied = (rifleShot || iguiShot) ? (pieces() ^ square_bb(shotSq))
                                 : (((type_of(m) != DROP ? pieces() ^ from : pieces()) ^ square_bb(shotSq)) | to);
   Bitboard janggiCannons = pieces(JANGGI_CANNON);
   if (type_of(moved_piece(m)) == JANGGI_CANNON)
@@ -3168,11 +3177,12 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   Piece pc = moved_piece(m);
   PieceType movedType = type_of(pc);
   Piece captured = captured_piece(m);
+  bool iguiShot = igui_capture(m) && captured != NO_PIECE;
   bool rifleShot = rifle_capture(m) && captured != NO_PIECE && type_of(m) != CASTLING;
   bool capturedDeadSquare = type_of(m) != DROP && from != to && bool(st->deadSquares & to);
   PieceType exchanged = exchange_piece(m);
   Square jumpCapsq = is_jump_capture(m) ? jump_capture_square(from, to) : SQ_NONE;
-  Square moverSq = rifleShot ? from : to;
+  Square moverSq = (rifleShot || iguiShot) ? from : to;
   bool openingSelfRemoval = in_opening_self_removal_phase() && is_opening_self_removal_move(m);
   if (to == from)
   {
@@ -3573,7 +3583,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           }
       }
 
-      if (!rifleShot)
+      if (!(rifleShot || iguiShot))
           move_piece(from, to);
   }
 
@@ -4512,8 +4522,9 @@ void Position::undo_move(Move m) {
   Color us = sideToMove;
   Square from = from_sq(m);
   Square to = to_sq(m);
+  bool iguiShot = igui_capture(m) && st->capturedPiece != NO_PIECE;
   bool rifleShot = rifle_capture(m) && st->capturedPiece != NO_PIECE && type_of(m) != CASTLING;
-  Square moverSq = rifleShot ? from : to;
+  Square moverSq = (rifleShot || iguiShot) ? from : to;
   Piece pc = piece_on(moverSq);
   PieceType exchange = exchange_piece(m);
   bool wasOpeningSelfRemoval = opening_self_removal()
@@ -4689,7 +4700,7 @@ void Position::undo_move(Move m) {
               put_piece(st->deadPiece, moverSq, st->deadPiecePromoted, st->deadUnpromotedPiece);
               pc = piece_on(moverSq);
           }
-          if (!rifleShot)
+          if (!(rifleShot || iguiShot))
               move_piece(to, from); // Put the piece back at the source square
       }
 

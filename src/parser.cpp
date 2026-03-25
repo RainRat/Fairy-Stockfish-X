@@ -1014,6 +1014,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("blastCenter", v->blastCenter);
     parse_attribute("blastPassiveTypes", v->blastPassiveTypes, v->pieceToChar);
     parse_attribute("blastImmuneTypes", v->blastImmuneTypes, v->pieceToChar);
+    parse_attribute("iguiTypes", v->iguiTypes, v->pieceToChar);
     parse_attribute("mutuallyImmuneTypes", v->mutuallyImmuneTypes, v->pieceToChar);
     parse_attribute("deathOnCaptureTypes", v->deathOnCaptureTypes, v->pieceToChar);
     parse_attribute("mutuallyHopIllegalTypes", v->mutuallyHopIllegalTypes, v->pieceToChar);

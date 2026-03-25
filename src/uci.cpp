@@ -573,6 +573,9 @@ string UCI::move(const Position& pos, Move m) {
           : UCI::square(pos, from))
                   + UCI::square(pos, to);
 
+  if (pos.igui_capture(m))
+      move += 'i';
+
   // Wall square
   if (wallMove && CurrentProtocol == XBOARD)
       move += "," + UCI::square(pos, gating_square(m));

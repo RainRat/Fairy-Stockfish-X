@@ -104,6 +104,7 @@ struct Variant {
   bool blastCenter = true;
   PieceSet blastPassiveTypes = NO_PIECE_SET;
   PieceSet blastImmuneTypes = NO_PIECE_SET;
+  PieceSet iguiTypes = NO_PIECE_SET;
   PieceSet mutuallyImmuneTypes = NO_PIECE_SET;
   PieceSet deathOnCaptureTypes = NO_PIECE_SET;
   PieceSet mutuallyHopIllegalTypes = NO_PIECE_SET;

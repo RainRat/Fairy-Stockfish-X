@@ -863,6 +863,22 @@ namespace {
             Square wallSq = lsb(pos.pieces(Us));
             moveList = make_move_and_gating<SPECIAL>(pos, moveList, Us, wallSq, wallSq);
         }
+
+        if (!restrictToForcedJumper && Type != QUIETS)
+        {
+            for (PieceSet ps = pos.variant()->iguiTypes & pos.piece_types(); ps; )
+            {
+                PieceType pt = pop_lsb(ps);
+                Bitboard movers = pos.pieces(Us, pt) & forcedFromMask;
+                while (movers)
+                {
+                    Square from = pop_lsb(movers);
+                    Bitboard adjacent = pos.attacks_from(Us, KING, from) & captureTarget;
+                    while (adjacent)
+                        *moveList++ = make<SPECIAL>(from, pop_lsb(adjacent));
+                }
+            }
+        }
     }
 
     // King moves
