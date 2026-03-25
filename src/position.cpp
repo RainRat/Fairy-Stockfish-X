@@ -3222,6 +3222,33 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   Square jumpCapsq = is_jump_capture(m) ? jump_capture_square(from, to) : SQ_NONE;
   Square moverSq = (rifleShot || iguiShot) ? from : to;
   bool openingSelfRemoval = in_opening_self_removal_phase() && is_opening_self_removal_move(m);
+  auto grant_promoted_castling_rights = [&](Piece promotion, Square sq) {
+      if (!var->castlingPromotedPiece || rank_of(sq) != castling_rank(us))
+          return;
+
+      if (type_of(promotion) == castling_king_piece(us) && file_of(sq) == castling_king_file())
+      {
+          st->castlingKingSquare[us] = sq;
+          Bitboard castlingRooks =   pieces(us)
+                                   & rank_bb(castling_rank(us))
+                                   & (file_bb(FILE_A) | file_bb(max_file()));
+          while (castlingRooks)
+          {
+              Square s = pop_lsb(castlingRooks);
+              if (castling_rook_pieces(us) & type_of(piece_on(s)))
+                  set_castling_right(us, s);
+          }
+      }
+      else if (castling_rook_pieces(us) & type_of(promotion))
+      {
+          if (   (file_of(sq) == FILE_A || file_of(sq) == max_file())
+              && piece_on(make_square(castling_king_file(), castling_rank(us))) == make_piece(us, castling_king_piece(us)))
+          {
+              st->castlingKingSquare[us] = make_square(castling_king_file(), castling_rank(us));
+              set_castling_right(us, sq);
+          }
+      }
+  };
   if (to == from)
   {
       assert((type_of(m) == PROMOTION && sittuyin_promotion()) || is_pass(m) || openingSelfRemoval);
@@ -3708,9 +3735,11 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           st->materialKey ^=  Zobrist::psq[promotion][pieceCount[promotion]-1]
                             ^ Zobrist::psq[pc][pieceCount[pc]];
 
-          // Update material
-          st->nonPawnMaterial[us] += PieceValue[MG][promotion];
-      }
+      // Update material
+      st->nonPawnMaterial[us] += PieceValue[MG][promotion];
+
+      grant_promoted_castling_rights(promotion, to);
+  }
 
       // Set en passant square(s) if the moved pawn can be captured
       else if (   !topology_wraps()
@@ -3814,6 +3843,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
 
       // Update material
       st->nonPawnMaterial[us] += PieceValue[MG][promotion] - PieceValue[MG][pc];
+
+      grant_promoted_castling_rights(promotion, to);
   }
   else if (type_of(m) == PIECE_DEMOTION)
   {

@@ -1117,6 +1117,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("enPassantPassedSquares", v->enPassantPassedSquares);
     parse_attribute("castling", v->castling);
     parse_attribute("castlingDroppedPiece", v->castlingDroppedPiece);
+    parse_attribute("castlingPromotedPiece", v->castlingPromotedPiece);
     parse_attribute("castlingForbiddenPlies", v->castlingForbiddenPlies);
     parse_attribute("castlingKingsideFile", v->castlingKingsideFile);
     parse_attribute("castlingQueensideFile", v->castlingQueensideFile);

@@ -134,6 +134,7 @@ struct Variant {
   EnPassantPassedSquares enPassantPassedSquares = EnPassantPassedSquares::ALL;
   bool castling = true;
   bool castlingDroppedPiece = false;
+  bool castlingPromotedPiece = false;
   int castlingForbiddenPlies = 0;
   File castlingKingsideFile = FILE_G;
   File castlingQueensideFile = FILE_C;
