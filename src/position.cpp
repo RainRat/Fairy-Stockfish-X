@@ -2072,7 +2072,7 @@ bool Position::legal(Move m) const {
       if (isHop && jump_capture_square(from, to) == SQ_NONE)
           return false;
   }
-  if (!allow_checks() && (pieces(them) & to) && type_of(piece_on(to)) == KING)
+  if (topology_wraps() && !allow_checks() && (pieces(them) & to) && type_of(piece_on(to)) == KING)
       return false;
   PieceType movePt = type_of(moved_piece(m));
   if (type_of(m) != DROP && (var->mutuallyHopIllegalTypes & movePt) && (AttackRiderTypes[movePt] & HOPPING_RIDERS))
@@ -2111,7 +2111,7 @@ bool Position::legal(Move m) const {
       return false;
 
   // Illegal captures
-  if (!allow_checks() && (pieces(them) & to) && type_of(piece_on(to)) == KING)
+  if (topology_wraps() && !allow_checks() && (pieces(them) & to) && type_of(piece_on(to)) == KING)
       return false;
 
   // Illegal non-drop moves
@@ -2728,7 +2728,7 @@ bool Position::pseudo_legal(const Move m) const {
           return false;
   }
 
-  if (!allow_checks() && (pieces(them) & to) && type_of(piece_on(to)) == KING)
+  if (topology_wraps() && !allow_checks() && (pieces(them) & to) && type_of(piece_on(to)) == KING)
       return false;
 
   // Handle the special case of a pawn move
