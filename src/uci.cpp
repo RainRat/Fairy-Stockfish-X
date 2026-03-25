@@ -529,16 +529,17 @@ string UCI::move(const Position& pos, Move m) {
 
   Square from = from_sq(m);
   Square to = to_sq(m);
+  bool wallMove = pos.walling(pos.side_to_move()) && is_gating(m);
 
   if (m == MOVE_NONE)
       return CurrentProtocol == USI ? "resign" : "(none)";
 
-  if (m == MOVE_NULL)
-      return "0000";
-
   if (is_pass(m) && CurrentProtocol == XBOARD)
-      return "@@@@";
+      return pos.walling(pos.side_to_move()) ? "@@@@," + UCI::square(pos, gating_square(m)) : "@@@@";
   if (is_pass(m))
+      return pos.walling(pos.side_to_move()) ? "0000," + UCI::square(pos, gating_square(m)) : "0000";
+
+  if (m == MOVE_NULL)
       return "0000";
 
   bool potionMove = false;
@@ -573,7 +574,7 @@ string UCI::move(const Position& pos, Move m) {
                   + UCI::square(pos, to);
 
   // Wall square
-  if (pos.walling(pos.side_to_move()) && CurrentProtocol == XBOARD)
+  if (wallMove && CurrentProtocol == XBOARD)
       move += "," + UCI::square(pos, gating_square(m));
 
   if (type_of(m) == PROMOTION)
@@ -590,7 +591,7 @@ string UCI::move(const Position& pos, Move m) {
   }
 
   // Wall square
-  if (pos.walling(pos.side_to_move()) && CurrentProtocol != XBOARD)
+  if (wallMove && CurrentProtocol != XBOARD)
       move += "," + UCI::square(pos, gating_square(m));
 
   if (potionMove)
