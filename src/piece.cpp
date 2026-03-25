@@ -589,7 +589,7 @@ void PieceMap::add(PieceType pt, const PieceInfo* p) {
               if (limit == 0 || limit == MAX_SLIDER_LIMIT)
                   s += 100;
               else if (limit == DYNAMIC_SLIDER_LIMIT)
-                  s += 80;
+                  s += 75;
               else if (limit == SKI_SLIDER_LIMIT)
                   s += 97;
               else if (is_slider_range(limit))
