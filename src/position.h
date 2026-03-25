@@ -414,6 +414,7 @@ public:
   Bitboard attackers_to_king(Square s, Bitboard occupied, Color c) const;
   Bitboard attackers_to_king(Square s, Bitboard occupied, Color c, Bitboard janggiCannons) const;
   Bitboard attacks_from(Color c, PieceType pt, Square s) const;
+  Bitboard attacks_from(Color c, PieceType pt, Square s, Bitboard occupancy) const;
   Bitboard moves_from(Color c, PieceType pt, Square s) const;
   Bitboard slider_blockers(Bitboard sliders, Square s, Bitboard& pinners, Color c) const;
 
@@ -2341,17 +2342,17 @@ inline Bitboard Position::wrapped_slider_targets(const std::map<Direction, int>&
           ++steps;
           const bool beyondMin = steps >= minDistance;
           const bool beyondMax = maxDistance > 0 && steps >= maxDistance;
-          const bool blocked = bool(occupied & next);
+          const bool blocked = bool(occupied & square_bb(next));
 
           if (beyondMin)
           {
               if (quietMode)
               {
                   if (!blocked)
-                      out |= next;
+                      out |= square_bb(next);
               }
               else
-                  out |= next;
+                  out |= square_bb(next);
           }
 
           if (blocked || beyondMax)
@@ -2387,14 +2388,14 @@ inline Bitboard Position::wrapped_hopper_targets(const std::map<Direction, int>&
           if (next == sq)
               break;
 
-          const bool blocked = bool(occupied & next);
+          const bool blocked = bool(occupied & square_bb(next));
           if (hurdle)
           {
               ++count;
               if (count >= minDistance)
               {
                   if (!quietMode || !blocked)
-                      out |= next;
+                      out |= square_bb(next);
               }
               if (maxDistance > 0 && count >= maxDistance)
                   break;
@@ -2436,13 +2437,12 @@ inline Bitboard Position::wrapped_contra_hopper_targets(const std::map<Direction
               break;
 
           ++distToHurdle;
-          if (occupied & next)
+          if (occupied & square_bb(next))
           {
               if (prev != sq && (!limit || distToHurdle <= limit))
-                  out |= square_bb(prev);
+                out |= square_bb(prev);
               break;
-          }
-          prev = next;
+          }          prev = next;
           current = next;
       }
   }
@@ -2512,9 +2512,9 @@ inline Bitboard Position::wrapped_leap_rider_targets(const std::map<Direction, i
           if (next == sq)
               break;
 
-          const bool blocked = bool(occupied & next);
+          const bool blocked = bool(occupied & square_bb(next));
           if (!quietMode || !blocked)
-              out |= next;
+              out |= square_bb(next);
 
           if (limit > 0 && ++count >= limit)
               break;
@@ -2547,9 +2547,9 @@ inline Bitboard Position::wrapped_rose_targets(Square from, Bitboard occupied,
                   break;
               if (to == from)
                   break;
-              if (!quietMode || !(occupied & to))
-                  attack |= to;
-              if (occupied & to)
+              if (!quietMode || !(occupied & square_bb(to)))
+                  attack |= square_bb(to);
+              if (occupied & square_bb(to))
                   break;
               current = to;
               index = (index + turn + 8) % 8;
@@ -2582,6 +2582,11 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s) const {
   Bitboard occupancy = byTypeBB[ALL_PIECES];
   if (spellContextActive && c == sideToMove)
       occupancy &= ~spellJumpRemoved;
+  return attacks_from(c, pt, s, occupancy);
+}
+
+inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard occupancy) const {
+  assert(pt != NO_PIECE_TYPE);
 
   if (topology_wraps())
   {
