@@ -2076,7 +2076,7 @@ bool Position::legal(Move m) const {
 
   if (type_of(m) == PROMOTION && !promotion_allowed(us, promotion_type(m)))
       return false;
-  if (type_of(m) == PIECE_PROMOTION && !promotion_allowed(us, promoted_piece_type(type_of(moved_piece(m)))))
+  if (type_of(m) == PIECE_PROMOTION && (is_promoted(from) || !promotion_allowed(us, promoted_piece_type(type_of(moved_piece(m))))))
       return false;
   if (rifleShot && (type_of(m) == PROMOTION || type_of(m) == PIECE_PROMOTION))
       return false;
@@ -2621,7 +2621,7 @@ bool Position::pseudo_legal(const Move m) const {
 
   if (type_of(m) == PROMOTION && !promotion_allowed(us, promotion_type(m)))
       return false;
-  if (type_of(m) == PIECE_PROMOTION && !promotion_allowed(us, promoted_piece_type(type_of(pc))))
+  if (type_of(m) == PIECE_PROMOTION && (is_promoted(from) || !promotion_allowed(us, promoted_piece_type(type_of(pc)))))
       return false;
   if (type_of(m) != DROP && type_of(m) != PROMOTION && type_of(m) != PIECE_PROMOTION)
   {
