@@ -912,6 +912,33 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
         else if (DoCheck && (parseError || !(ss >> std::ws).eof()))
             std::cerr << "promotedPieceType - Invalid syntax." << std::endl;
     }
+    const auto& it_move_morph_pt = config.find("moveMorphPieceType");
+    if (it_move_morph_pt != config.end())
+    {
+        char token, sep = 0;
+        size_t idx = std::string::npos, idx2 = std::string::npos;
+        bool parseError = false;
+        std::stringstream ss(it_move_morph_pt->second);
+        while (ss >> token)
+        {
+            idx = v->pieceToChar.find(std::toupper(static_cast<unsigned char>(token)));
+            if (idx == std::string::npos)
+                break;
+            if (!(ss >> sep) || sep != ':' || !(ss >> token))
+            {
+                parseError = true;
+                break;
+            }
+            idx2 = (token == '-' ? 0 : v->pieceToChar.find(std::toupper(static_cast<unsigned char>(token))));
+            if (idx2 == std::string::npos)
+                break;
+            v->moveMorphPieceType[idx] = PieceType(idx2);
+        }
+        if (DoCheck && (idx == std::string::npos || idx2 == std::string::npos))
+            std::cerr << "moveMorphPieceType - Invalid piece type: " << token << std::endl;
+        else if (DoCheck && (parseError || !(ss >> std::ws).eof()))
+            std::cerr << "moveMorphPieceType - Invalid syntax." << std::endl;
+    }
     // priority drops
     const auto& it_pr_drop = config.find("priorityDropTypes");
     if (it_pr_drop != config.end())

@@ -3783,6 +3783,41 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
 
   // Benedict Morph: capturer changes type to the captured piece type.
   // Keep promotion moves unchanged to preserve current promotion undo semantics.
+  auto apply_morph = [&](Square sq, PieceType targetType) {
+      Piece cur = piece_on(sq);
+      if (cur == NO_PIECE || type_of(cur) == targetType)
+          return;
+
+      Piece morphed = make_piece(color_of(cur), targetType);
+      if (!st->didMorph)
+      {
+          st->didMorph = true;
+          st->morphedFrom = cur;
+          st->morphSquare = sq;
+      }
+
+      remove_piece(sq);
+      put_piece(morphed, sq);
+
+      k ^= Zobrist::psq[cur][sq] ^ Zobrist::psq[morphed][sq];
+      st->materialKey ^= Zobrist::psq[cur][pieceCount[cur]]
+                       ^ Zobrist::psq[morphed][pieceCount[morphed] - 1];
+      if (type_of(cur) == PAWN)
+          st->pawnKey ^= Zobrist::psq[cur][sq];
+      if (type_of(morphed) == PAWN)
+          st->pawnKey ^= Zobrist::psq[morphed][sq];
+      if (type_of(cur) != PAWN)
+          st->nonPawnMaterial[us] -= PieceValue[MG][cur];
+      if (type_of(morphed) != PAWN)
+          st->nonPawnMaterial[us] += PieceValue[MG][morphed];
+
+      if (Eval::useNNUE)
+      {
+          append_dirty(st, cur, sq, SQ_NONE);
+          append_dirty(st, morphed, SQ_NONE, sq);
+      }
+  };
+
   if (   capture_morph()
       && captured != NO_PIECE
       && type_of(m) != DROP
@@ -3794,35 +3829,20 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       Piece cur = piece_on(moverSq);
       if (cur != NO_PIECE && !(rex_exclusive_morph() && type_of(cur) == KING))
       {
-          Piece morphed = make_piece(color_of(cur), type_of(captured));
-          if (morphed != cur)
-          {
-              st->didMorph = true;
-              st->morphedFrom = cur;
-              st->morphSquare = moverSq;
-
-              remove_piece(moverSq);
-              put_piece(morphed, moverSq);
-
-              k ^= Zobrist::psq[cur][moverSq] ^ Zobrist::psq[morphed][moverSq];
-              st->materialKey ^= Zobrist::psq[cur][pieceCount[cur]]
-                               ^ Zobrist::psq[morphed][pieceCount[morphed] - 1];
-              if (type_of(cur) == PAWN)
-                  st->pawnKey ^= Zobrist::psq[cur][moverSq];
-              if (type_of(morphed) == PAWN)
-                  st->pawnKey ^= Zobrist::psq[morphed][moverSq];
-              if (type_of(cur) != PAWN)
-                  st->nonPawnMaterial[us] -= PieceValue[MG][cur];
-              if (type_of(morphed) != PAWN)
-                  st->nonPawnMaterial[us] += PieceValue[MG][morphed];
-
-              if (Eval::useNNUE)
-              {
-                  append_dirty(st, cur, moverSq, SQ_NONE);
-                  append_dirty(st, morphed, SQ_NONE, moverSq);
-              }
-          }
+          apply_morph(moverSq, type_of(captured));
       }
+  }
+
+  if (   type_of(m) != DROP
+      && type_of(m) != CASTLING
+      && type_of(m) != PROMOTION
+      && type_of(m) != PIECE_PROMOTION
+      && !is_pass(m))
+  {
+      Piece cur = piece_on(moverSq);
+      PieceType moveMorphType = cur == NO_PIECE ? NO_PIECE_TYPE : var->moveMorphPieceType[type_of(cur)];
+      if (moveMorphType != NO_PIECE_TYPE)
+          apply_morph(moverSq, moveMorphType);
   }
 
   // Set capture piece

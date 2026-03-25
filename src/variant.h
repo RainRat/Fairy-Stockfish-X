@@ -84,6 +84,7 @@ struct Variant {
   bool promotionRequireInHand = false;
   bool promotionConsumeInHand = false;
   PieceType promotedPieceType[PIECE_TYPE_NB] = {};
+  PieceType moveMorphPieceType[PIECE_TYPE_NB] = {};
   bool piecePromotionOnCapture = false;
   bool mandatoryPawnPromotion = true;
   bool mandatoryPiecePromotion = false;
