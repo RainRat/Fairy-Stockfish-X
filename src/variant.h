@@ -142,8 +142,8 @@ struct Variant {
   PieceSet castlingRookPieces[COLOR_NB] = {piece_set(ROOK), piece_set(ROOK)};
   bool oppositeCastling = false;
   PieceType kingType = KING;
-  bool checking = true;
-  bool allowChecks = false;
+  bool checking = true;   // if false, kings do not provide checks and may move into attack
+  bool allowChecks = false; // if true, king can remain in check (e.g., Racing Kings)
   bool royalPieceNoThroughCheck = false;
   bool dropChecks = true;
   bool dropMates = true;
