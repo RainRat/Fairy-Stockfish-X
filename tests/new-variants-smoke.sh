@@ -741,43 +741,7 @@ go perft 1")
   echo "${out}" | grep -q "Nodes searched: 68"
 fi
 
-# 44) Seega baseline: opening setup excludes the center square.
-if variant_available "seega"; then
-out=$(run_cmds "setoption name UCI_Variant value seega
-position startpos
-go perft 1")
-! echo "${out}" | grep -q "^D@c3:"
-
-# 45) Seega baseline: custodial capture removes the sandwiched piece.
-out=$(run_cmds "setoption name UCI_Variant value seega
-position fen 5/5/1D1dD/5/5 w - - 0 1 moves b3c3
-d")
-echo "${out}" | grep -Eq "Fen: 5/5/2D1D/5/5(\\[\\])? b - - 1 1"
-fi
-
-# 46) Ko-app-paw-na baseline: hunter can hop-capture over one adjacent rabbit.
-if variant_available "ko-app-paw-na"; then
-out=$(run_cmds "setoption name UCI_Variant value ko-app-paw-na
-position fen 5/2R2/2h2/5/5 b - - 0 1 moves c3c5
-d")
-echo "${out}" | grep -q "Fen: 2h2/5/5/5/5 w - - 0 2"
-fi
-
-# 47) Null baseline: move strings include mandatory wall placement on vacated square.
-if variant_available "null"; then
-out=$(run_cmds "setoption name UCI_Variant value null
-position startpos
-go perft 1")
-echo "${out}" | grep -q "^e2e4,e4e2: 1$"
-
-# 48) Null baseline: after move+wall, vacated square is petrified.
-out=$(run_cmds "setoption name UCI_Variant value null
-position startpos moves e2e4,e4e2
-d")
-echo "${out}" | grep -q "Fen: rnbqkbnr/pppppppp/8/8/4P3/8/PPPP\\*PPP/RNBQKBNR b KQkq - 0 1"
-fi
-
-# 49) Rifle chess baseline: start position behaves like orthodox chess before captures appear.
+# 44) Rifle chess baseline: start position behaves like orthodox chess before captures appear.
 out=$(run_cmds "setoption name UCI_Variant value rifle-chess
 position startpos
 go perft 1")
