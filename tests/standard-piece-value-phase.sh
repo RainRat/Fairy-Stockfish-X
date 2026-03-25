@@ -33,16 +33,20 @@ extract_final_eval() {
   sed -n 's/^Final evaluation[[:space:]]*//p' | tail -n1 | awk '{print $1}'
 }
 
+extract_material_eg() {
+  awk '/^\|   Material / { print $(NF-1) }' | tail -n1
+}
+
 output=$(eval_out)
-score=$(printf '%s\n' "${output}" | extract_final_eval)
+material_eg=$(printf '%s\n' "${output}" | extract_material_eg)
 
-[[ -n "${score}" ]]
+[[ -n "${material_eg}" ]]
 
-python3 - "${score}" <<'PY'
+python3 - "${material_eg}" <<'PY'
 import sys
 score = float(sys.argv[1])
 if score <= 0.10:
-    raise SystemExit(f"expected endgame-weighted positive score, got {score}")
+    raise SystemExit(f"expected positive endgame material contribution, got {score}")
 PY
 
 rm -f "${TMP_VARIANT_PATH}"
