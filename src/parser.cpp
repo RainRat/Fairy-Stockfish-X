@@ -1172,7 +1172,24 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("rifleCapture", v->rifleCapture);
     parse_attribute("changingColorTrigger", v->changingColorTrigger);
     parse_attribute("changingColorPieceTypes", v->changingColorPieceTypes, v->pieceToChar);
-    parse_attribute("selfCapture", v->selfCapture);
+    if (config.find("selfCapture") != config.end())
+    {
+        parse_attribute("selfCapture", v->selfCapture);
+        v->selfCaptureByColor[WHITE] = v->selfCapture;
+        v->selfCaptureByColor[BLACK] = v->selfCapture;
+        v->selfCaptureByColorSet[WHITE] = true;
+        v->selfCaptureByColorSet[BLACK] = true;
+    }
+    if (config.find("selfCaptureWhite") != config.end())
+    {
+        parse_attribute("selfCaptureWhite", v->selfCaptureByColor[WHITE]);
+        v->selfCaptureByColorSet[WHITE] = true;
+    }
+    if (config.find("selfCaptureBlack") != config.end())
+    {
+        parse_attribute("selfCaptureBlack", v->selfCaptureByColor[BLACK]);
+        v->selfCaptureByColorSet[BLACK] = true;
+    }
     parse_attribute("capturerDiesOnCapture", v->capturerDiesOnCapture);
     parse_attribute("capturerDiesOnSameTypeCapture", v->capturerDiesOnSameTypeCapture);
     parse_attribute("capturerDiesExemptTypes", v->capturerDiesExemptTypes, v->pieceToChar);

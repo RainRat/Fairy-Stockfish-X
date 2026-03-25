@@ -1140,6 +1140,8 @@ inline bool Position::shogi_pawn_drop_mate_illegal(Color c) const {
 
 inline bool Position::self_capture() const {
   assert(var != nullptr);
+  if (var->selfCaptureByColorSet[WHITE] || var->selfCaptureByColorSet[BLACK])
+      return var->selfCaptureByColor[side_to_move()];
   return var->selfCapture;
 }
 

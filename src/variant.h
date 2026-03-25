@@ -158,6 +158,8 @@ struct Variant {
   bool mustCaptureByColor[COLOR_NB] = {false, false};
   bool rifleCapture = false;
   bool selfCapture = false;
+  bool selfCaptureByColor[COLOR_NB] = {false, false};
+  bool selfCaptureByColorSet[COLOR_NB] = {false, false};
   bool capturerDiesOnCapture = false;
   bool capturerDiesOnSameTypeCapture = false;
   bool capturerDiesExemptPawns = false;
