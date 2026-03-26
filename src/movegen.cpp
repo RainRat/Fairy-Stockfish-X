@@ -172,13 +172,13 @@ namespace {
 
     if (Type == CAPTURES || Type == EVASIONS || Type == NON_EVASIONS)
     {
-        for (PieceSet promotions = pos.promotion_piece_types(c); promotions;)
+        for (PieceSet promotions = pos.promotion_piece_types(c, to); promotions;)
         {
             PieceType pt = pop_msb(promotions);
             if (pos.prison_pawn_promotion() && pos.count_in_prison(~c, pt) == 0) {
                 continue;
             }
-            if (pos.promotion_allowed(c, pt))
+            if (pos.promotion_allowed(c, pt, to))
                 moveList = make_move_and_gating<PROMOTION>(pos, moveList, pos.side_to_move(), to - D, to, pt);
         }
         PieceType pt = pos.promoted_piece_type(PAWN);
@@ -332,19 +332,18 @@ namespace {
         if (pos.mandatory_pawn_promotion())
             mandatoryPromotionZone |= standardPromotionZone;
 
-        bool pawnPromotionAvailable = false;
-        for (PieceSet ps = pos.promotion_piece_types(Us); ps;)
-            if (pos.promotion_allowed(Us, pop_lsb(ps)))
-            {
-                pawnPromotionAvailable = true;
-                break;
-            }
+        auto has_promotion_for = [&](Square to) {
+            for (PieceSet ps = pos.promotion_piece_types(Us, to); ps;)
+                if (pos.promotion_allowed(Us, pop_lsb(ps), to))
+                    return true;
+            return false;
+        };
 
         auto emit_promotions = [&](Square from, Square to) {
-            for (PieceSet promotions = pos.promotion_piece_types(Us); promotions;)
+            for (PieceSet promotions = pos.promotion_piece_types(Us, to); promotions;)
             {
                 PieceType pt = pop_msb(promotions);
-                if (pos.promotion_allowed(Us, pt))
+                if (pos.promotion_allowed(Us, pt, to))
                     moveList = make_move_and_gating<PROMOTION>(pos, moveList, Us, from, to, pt);
             }
         };
@@ -357,10 +356,17 @@ namespace {
             Bitboard attacks = pos.attacks_from(Us, PAWN, from) & capturable & target;
             Bitboard epSquares = pos.attacks_from(Us, PAWN, from) & pos.ep_squares() & ~pos.pieces() & target;
 
-            if (mandatoryPromotionZone && !pawnPromotionAvailable)
+            if (mandatoryPromotionZone)
             {
-                quiets &= ~mandatoryPromotionZone;
-                attacks &= ~mandatoryPromotionZone;
+                Bitboard blocked = 0;
+                for (Bitboard candidates = (quiets | attacks) & mandatoryPromotionZone; candidates; )
+                {
+                    Square to = pop_lsb(candidates);
+                    if (!has_promotion_for(to))
+                        blocked |= to;
+                }
+                quiets &= ~blocked;
+                attacks &= ~blocked;
             }
 
             if (mandatoryPromotionZone)
@@ -416,13 +422,23 @@ namespace {
     if (pos.mandatory_pawn_promotion())
         mandatoryPromotionZone |= standardPromotionZone;
 
-    bool pawnPromotionAvailable = false;
-    for (PieceSet ps = pos.promotion_piece_types(Us); ps;)
-        if (pos.promotion_allowed(Us, pop_lsb(ps)))
+    auto has_promotion_for = [&](Square to) {
+        for (PieceSet ps = pos.promotion_piece_types(Us, to); ps;)
+            if (pos.promotion_allowed(Us, pop_lsb(ps), to))
+                return true;
+        return false;
+    };
+
+    auto filter_promotion_targets = [&](Bitboard bb) {
+        Bitboard filtered = 0;
+        while (bb)
         {
-            pawnPromotionAvailable = true;
-            break;
+            Square to = pop_lsb(bb);
+            if (has_promotion_for(to))
+                filtered |= to;
         }
+        return filtered;
+    };
 
     if (mandatoryPromotionZone)
     {
@@ -431,14 +447,11 @@ namespace {
         b3 &= ~mandatoryPromotionZone;
         brc &= ~mandatoryPromotionZone;
         blc &= ~mandatoryPromotionZone;
-        if (!pawnPromotionAvailable)
-        {
-            b1p &= ~mandatoryPromotionZone;
-            b2p &= ~mandatoryPromotionZone;
-            b3p &= ~mandatoryPromotionZone;
-            brcp &= ~mandatoryPromotionZone;
-            blcp &= ~mandatoryPromotionZone;
-        }
+        b1p = filter_promotion_targets(b1p);
+        b2p = filter_promotion_targets(b2p);
+        b3p = filter_promotion_targets(b3p);
+        brcp = filter_promotion_targets(brcp);
+        blcp = filter_promotion_targets(blcp);
     }
 
     if (Type == QUIET_CHECKS && pos.count<KING>(Them))
@@ -695,6 +708,17 @@ namespace {
             moveList = make_move_and_gating<NORMAL>(pos, moveList, Us, from, pop_lsb(pawnLikeTripleSteps));
 
         // Shogi-style piece promotions
+        if (promPt)
+        {
+            Bitboard filtered = 0;
+            for (Bitboard candidates = b2; candidates; )
+            {
+                Square to = pop_lsb(candidates);
+                if (pos.promotion_allowed(Us, promPt, to))
+                    filtered |= to;
+            }
+            b2 = filtered;
+        }
         while (b2)
             moveList = make_move_and_gating<PIECE_PROMOTION>(pos, moveList, Us, from, pop_lsb(b2));
 
@@ -704,15 +728,18 @@ namespace {
 
         // Pawn-style promotions
         if ((Type == CAPTURES || Type == QUIETS || Type == EVASIONS || Type == NON_EVASIONS) && pawnPromotions)
-            for (PieceSet ps = pos.promotion_piece_types(Us); ps;)
+            for (Bitboard promotions = pawnPromotions; promotions; )
             {
-                PieceType ptP = pop_msb(ps);
-                if (pos.prison_pawn_promotion() && pos.count_in_prison(~Us, ptP) == 0) {
-                    continue;
+                Square to = pop_lsb(promotions);
+                for (PieceSet ps = pos.promotion_piece_types(Us, to); ps;)
+                {
+                    PieceType ptP = pop_msb(ps);
+                    if (pos.prison_pawn_promotion() && pos.count_in_prison(~Us, ptP) == 0) {
+                        continue;
+                    }
+                    if (pos.promotion_allowed(Us, ptP, to))
+                        moveList = make_move_and_gating<PROMOTION>(pos, moveList, pos.side_to_move(), from, to, ptP);
                 }
-                if (pos.promotion_allowed(Us, ptP))
-                    for (Bitboard promotions = pawnPromotions; promotions; )
-                        moveList = make_move_and_gating<PROMOTION>(pos, moveList, pos.side_to_move(), from, pop_lsb(promotions), ptP);
             }
 
         // En passant captures

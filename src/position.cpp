@@ -2089,9 +2089,9 @@ bool Position::legal(Move m) const {
   Bitboard removedAttackers = rifleShot ? square_bb(shotSq) : Bitboard(0);
   Square effectiveTo = rifleShot ? from : to;
 
-  if (type_of(m) == PROMOTION && !promotion_allowed(us, promotion_type(m)))
+  if (type_of(m) == PROMOTION && !promotion_allowed(us, promotion_type(m), to))
       return false;
-  if (type_of(m) == PIECE_PROMOTION && (is_promoted(from) || !promotion_allowed(us, promoted_piece_type(type_of(moved_piece(m))))))
+  if (type_of(m) == PIECE_PROMOTION && (is_promoted(from) || !promotion_allowed(us, promoted_piece_type(type_of(moved_piece(m))), to)))
       return false;
   if (rifleShot && (type_of(m) == PROMOTION || type_of(m) == PIECE_PROMOTION))
       return false;
@@ -2723,9 +2723,9 @@ bool Position::pseudo_legal(const Move m) const {
   if (from == to && !(is_pass(m) || (type_of(m) == PROMOTION && sittuyin_promotion())))
       return false;
 
-  if (type_of(m) == PROMOTION && !promotion_allowed(us, promotion_type(m)))
+  if (type_of(m) == PROMOTION && !promotion_allowed(us, promotion_type(m), to))
       return false;
-  if (type_of(m) == PIECE_PROMOTION && (is_promoted(from) || !promotion_allowed(us, promoted_piece_type(type_of(pc)))))
+  if (type_of(m) == PIECE_PROMOTION && (is_promoted(from) || !promotion_allowed(us, promoted_piece_type(type_of(pc)), to)))
       return false;
   if (!dropMove && type_of(m) != PROMOTION && type_of(m) != PIECE_PROMOTION)
   {

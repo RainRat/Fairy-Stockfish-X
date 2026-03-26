@@ -524,6 +524,86 @@ namespace {
             v->hostageExchange[idx] = mask;
     }
 
+    bool parse_file_piece_set_map(const std::string& value,
+                                  const std::string& pieceToChar,
+                                  File maxFile,
+                                  std::array<PieceSet, FILE_NB>& target,
+                                  bool doCheck,
+                                  const std::string& key) {
+        std::stringstream ss(value);
+        std::array<PieceSet, FILE_NB> parsed = {};
+        bool sawToken = false;
+
+        while (true) {
+            ss >> std::ws;
+            if (ss.eof())
+                break;
+
+            std::string token;
+            if (!(ss >> token))
+                break;
+            sawToken = true;
+
+            std::string fileToken = token;
+            std::string pieceToken;
+            size_t colon = token.find(':');
+            if (colon != std::string::npos) {
+                fileToken = token.substr(0, colon);
+                pieceToken = token.substr(colon + 1);
+            }
+
+            int fileIdx = -1;
+            if (!parse_file_index(fileToken, fileIdx)
+                || fileIdx < int(FILE_A)
+                || fileIdx > int(maxFile)) {
+                if (doCheck)
+                    std::cerr << key << " - Invalid file: " << fileToken << std::endl;
+                return false;
+            }
+
+            if (colon == std::string::npos) {
+                char sep = '\0';
+                if (!(ss >> sep) || sep != ':') {
+                    if (doCheck)
+                        std::cerr << key << " - Expected ':' after file " << fileToken << std::endl;
+                    return false;
+                }
+
+                if (!(ss >> pieceToken)) {
+                    if (doCheck)
+                        std::cerr << key << " - Missing piece set for file " << fileToken << std::endl;
+                    return false;
+                }
+            }
+
+            PieceSet pieces = NO_PIECE_SET;
+            if (pieceToken != "-") {
+                for (char ch : pieceToken) {
+                    size_t idx = ch == '*'
+                        ? size_t(ALL_PIECES)
+                        : pieceToChar.find(std::toupper(static_cast<unsigned char>(ch)));
+                    if (idx == std::string::npos) {
+                        if (doCheck)
+                            std::cerr << key << " - Invalid piece type: " << ch << std::endl;
+                        return false;
+                    }
+                    pieces |= PieceType(idx);
+                }
+            }
+
+            parsed[fileIdx] = pieces;
+        }
+
+        if (!sawToken) {
+            if (doCheck)
+                std::cerr << key << " - Invalid value " << value << std::endl;
+            return false;
+        }
+
+        target = parsed;
+        return true;
+    }
+
 } // namespace
 
 template <bool DoCheck>
@@ -852,6 +932,32 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_both_colors_with_overrides_piece("promotionPawnTypes", v->mainPromotionPawnType, v->pieceToChar);
     parse_both_colors_with_overrides_piece("promotionPawnTypes", v->promotionPawnTypes, v->pieceToChar);
     parse_both_colors_with_overrides_piece("promotionPieceTypes", v->promotionPieceTypes, v->pieceToChar);
+    const auto& it_prom_file = config.find("promotionPieceTypesByFile");
+    if (it_prom_file != config.end())
+    {
+        if (!parse_file_piece_set_map(it_prom_file->second, v->pieceToChar, v->maxFile,
+                                      v->promotionPieceTypesByFile[WHITE], DoCheck, "promotionPieceTypesByFile"))
+            return false;
+        v->promotionPieceTypesByFile[BLACK] = v->promotionPieceTypesByFile[WHITE];
+        v->promotionPieceTypesByFileEnabled[WHITE] = true;
+        v->promotionPieceTypesByFileEnabled[BLACK] = true;
+    }
+    const auto& it_prom_file_w = config.find("promotionPieceTypesByFileWhite");
+    if (it_prom_file_w != config.end())
+    {
+        if (!parse_file_piece_set_map(it_prom_file_w->second, v->pieceToChar, v->maxFile,
+                                      v->promotionPieceTypesByFile[WHITE], DoCheck, "promotionPieceTypesByFileWhite"))
+            return false;
+        v->promotionPieceTypesByFileEnabled[WHITE] = true;
+    }
+    const auto& it_prom_file_b = config.find("promotionPieceTypesByFileBlack");
+    if (it_prom_file_b != config.end())
+    {
+        if (!parse_file_piece_set_map(it_prom_file_b->second, v->pieceToChar, v->maxFile,
+                                      v->promotionPieceTypesByFile[BLACK], DoCheck, "promotionPieceTypesByFileBlack"))
+            return false;
+        v->promotionPieceTypesByFileEnabled[BLACK] = true;
+    }
     parse_attribute("sittuyinPromotion", v->sittuyinPromotion);
     parse_attribute("promotionSteal", v->promotionSteal);
     parse_attribute("promotionRequireInHand", v->promotionRequireInHand);

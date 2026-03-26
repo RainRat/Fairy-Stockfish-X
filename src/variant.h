@@ -78,6 +78,8 @@ struct Variant {
   PieceSet promotionPawnTypes[COLOR_NB] = {piece_set(PAWN), piece_set(PAWN)};
   PieceSet promotionPieceTypes[COLOR_NB] = {piece_set(QUEEN) | ROOK | BISHOP | KNIGHT,
                                             piece_set(QUEEN) | ROOK | BISHOP | KNIGHT};
+  bool promotionPieceTypesByFileEnabled[COLOR_NB] = {false, false};
+  std::array<PieceSet, FILE_NB> promotionPieceTypesByFile[COLOR_NB] = {};
   bool sittuyinPromotion = false;
   int promotionLimit[PIECE_TYPE_NB] = {}; // 0 means unlimited
   bool promotionSteal = false;
