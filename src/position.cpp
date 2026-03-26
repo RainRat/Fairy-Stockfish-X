@@ -4407,9 +4407,9 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           givesCheck = bool(attackers_to_king(square<KING>(them), us) & pieces(us));
   }
 
-  if (trigger_matches(var->changingColorTrigger, captured != NO_PIECE || st->bycatchSquares != 0)
+  bool captureHappened = captured != NO_PIECE || (st->bycatchSquares & blast_pattern(moverSq));
+  if (trigger_matches(var->changingColorTrigger, captureHappened)
       && !is_pass(m)
-      && !dropMove
       && piece_on(moverSq) != NO_PIECE
       && color_of(piece_on(moverSq)) == us
       && (var->changingColorPieceTypes & type_of(piece_on(moverSq))))

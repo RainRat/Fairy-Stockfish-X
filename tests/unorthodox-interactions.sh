@@ -100,6 +100,17 @@ seirawanGating = true
 surroundCaptureIntervene = true
 changingColorTrigger = capture
 changingColorPieceTypes = *
+
+[drop-color:chess]
+captureDrops = p
+pieceDrops = true
+changingColorTrigger = capture
+changingColorPieceTypes = p
+
+[remote-burner-color:chess]
+changingColorTrigger = capture
+changingColorPieceTypes = n
+blastPassiveTypes = r
 EOF
 
 echo "unorthodox interactions tests started"
@@ -203,8 +214,27 @@ fi
 # White King moves from e2 to e3, between black pawns on d3 and f3.
 out=$(run_cmds "surround-color" "${TEMP_INI}" "position fen 4k3/8/8/8/8/3p1p2/4K3/8 w - - 0 1 moves e2e3
 d")
-if ! echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/4k3/8/8 b"; then
+if ! echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/3p1p2/4K3/8 b"; then
   echo "surroundCapture + changingColor bug: color change did not trigger"
+  exit 1
+fi
+
+# 17. Test captureDrops + changingColor (ensure color change triggers on drop capture)
+# White Pawn drops on e5, capturing black pawn.
+out=$(run_cmds "drop-color" "${TEMP_INI}" "position fen 4k3/8/8/4p3/8/8/8/4K3[P] w - - 0 1 moves P@e5
+d")
+if ! echo "${out}" | grep -q "Fen: 4k3/8/8/4p3/8/8/8/4K3\[P\] b"; then
+  echo "captureDrops + changingColor bug: color change did not trigger for drop"
+  exit 1
+fi
+
+# 18. Test remote burner + changingColor (ensure color change ONLY triggers on local capture)
+# White Knight moves e1-g2 (no capture). Remote White Rook at a1 blasts black pawn at b2.
+# Knight should NOT change color.
+out=$(run_cmds "remote-burner-color" "${TEMP_INI}" "position fen 8/8/8/8/8/8/1p6/R3N3 w - - 0 1 moves e1g2
+d")
+if echo "${out}" | grep -q "Fen: 8/8/8/8/8/8/6n1/R7 b"; then
+  echo "remote burner + changingColor bug: color change triggered erroneously for remote capture"
   exit 1
 fi
 
