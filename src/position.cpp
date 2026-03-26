@@ -2837,15 +2837,18 @@ bool Position::pseudo_legal(const Move m) const {
   if (walling(us) && (!wall_or_move() || (from == to)))
   {
       Bitboard wallsquares = st->wallSquares;
-      Square capSq = capture(m) ? capture_square(m) : to;
+      Square capSq = capture(m) ? capture_square(m) : SQ_NONE;
+      Bitboard occupancyAfter = pieces();
+      if (from != effectiveTo) occupancyAfter ^= square_bb(from) ^ square_bb(effectiveTo);
+      if (capSq != SQ_NONE) occupancyAfter ^= square_bb(capSq);
 
       // Illegal wall square placement
-      if (!((board_bb() & ~(((pieces() ^ from) ^ capSq) | to)) & gating_square(m)))
+      if (!((board_bb() & ~occupancyAfter) & gating_square(m)))
           return false;
       if (!(walling_region(us) & gating_square(m)) || //putting a wall on disallowed square
           wallsquares & gating_square(m)) //or square already with a wall
           return false;
-      if (walling_rule() == ARROW && !(moves_bb(us, type_of(pc), to, pieces() ^ from) & gating_square(m)))
+      if (walling_rule() == ARROW && !(moves_bb(us, type_of(pc), effectiveTo, occupancyAfter ^ square_bb(effectiveTo)) & gating_square(m)))
           return false;
       if (walling_rule() == PAST && (from != gating_square(m)))
           return false;

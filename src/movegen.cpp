@@ -67,17 +67,25 @@ namespace {
     //if it's "wall or move", and they chose non-null move, skip even generating wall move
     if (pos.walling(us) && !(pos.wall_or_move() && (from!=to)))
     {
-        Bitboard b = pos.board_bb() & ~((pos.pieces() ^ from) | to);
+        bool iguiShot = T == SPECIAL && from != to;
+        bool rifleShot = pos.rifle_capture(make<T>(from, to, pt)) && (T == NORMAL || T == PROMOTION);
+        Square effectiveTo = (rifleShot || iguiShot) ? from : to;
+        Square capSq = T == EN_PASSANT ? pos.capture_square(to)
+                     : pos.is_jump_capture(make<T>(from, to, pt)) ? pos.jump_capture_square(from, to)
+                     : pos.capture(make<T>(from, to, pt)) ? to
+                     : SQ_NONE;
+
+        Bitboard occupancyAfter = pos.pieces();
+        if (from != effectiveTo) occupancyAfter ^= square_bb(from) ^ square_bb(effectiveTo);
+        if (capSq != SQ_NONE) occupancyAfter ^= square_bb(capSq);
+
+        Bitboard b = pos.board_bb() & ~occupancyAfter & ~square_bb(to);
         if (T == CASTLING)
         {
             Square kto = make_square(to > from ? pos.castling_kingside_file() : pos.castling_queenside_file(), pos.castling_rank(us));
             Square rto = kto - (to > from ? EAST : WEST);
-            b ^= square_bb(to) ^ kto ^ rto;
+            b ^= square_bb(to) ^ square_bb(kto) ^ square_bb(rto);
         }
-        Square capsq = T == EN_PASSANT ? pos.capture_square(to)
-                     : pos.jump_capture_square(from, to);
-        if (capsq != SQ_NONE && capsq != to)
-            b ^= capsq;
 
         // Duck is by far the hottest walling mode: avoid extra rule checks.
         if (pos.walling_rule() == DUCK)
@@ -89,7 +97,7 @@ namespace {
         }
 
         if (pos.walling_rule() == ARROW)
-            b &= moves_bb(us, type_of(pos.piece_on(from)), to, pos.pieces() ^ from);
+            b &= moves_bb(us, type_of(pos.piece_on(from)), effectiveTo, occupancyAfter ^ square_bb(effectiveTo));
 
         //Any current or future wall variant must follow the walling region rule if set:
         b &= pos.walling_region(us);
@@ -887,7 +895,7 @@ namespace {
                     Square from = pop_lsb(movers);
                     Bitboard adjacent = pos.attacks_from(Us, KING, from) & captureTarget;
                     while (adjacent)
-                        *moveList++ = make<SPECIAL>(from, pop_lsb(adjacent));
+                        moveList = make_move_and_gating<SPECIAL>(pos, moveList, Us, from, pop_lsb(adjacent));
                 }
             }
         }
