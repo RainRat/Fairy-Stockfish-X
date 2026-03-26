@@ -97,8 +97,6 @@ Some tests require specific build flags to pass for all variants:
 * Spell-chess potion movegen is expensive by construction; any optimization there must be A/B-tested on `spell-chess` plus baseline chess to ensure no cross-variant regression.
 * `bench <variant> ...` does not always accept `checkers` directly in this build path. For checkers performance runs, use UCI setup first (`setoption VariantPath`, `setoption UCI_Variant checkers`) and then run `bench ...` from that session.
 * When benchmark outcomes are unstable, extend validation: use longer depth/time plus more swapped pairs (and optionally `taskset -c 0`) before accepting/rejecting.
-* Local A/B harness note: `.local/abmatch.py` uses `pexpect`; unattended long runs are reliable in detached `tmux` sessions, but plain `nohup`/simple backgrounding can stall or appear dead.
-* Local A/B harness note: `.local/abmatch.py` and `.local/overnight_ab_runner.py` are already wired for unbuffered progress output; if a run looks hung, check for `Variant ...` progress first before assuming the engines are stuck.
 * When integrating large upstream/fork PRs by cherry-pick, expect conflicts in hot files (`position.*`, `movegen.cpp`, `parser.cpp`, `test.py`). Resolve by preserving local engine invariants first (forced-jump, gating/undo consistency, custom attack paths), then layering the feature logic; run at least one variant-specific smoke test before push.
 * Comments target experienced developers; don’t change copyright years.
 

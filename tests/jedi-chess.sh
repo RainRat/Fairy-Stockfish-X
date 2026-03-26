@@ -9,7 +9,7 @@ error() {
 trap 'error ${LINENO}' ERR
 
 ENGINE=${1:-./stockfish}
-VARIANTS=${2:-/home/chris/Fairy-Stockfish-X/src/variants.ini}
+VARIANTS=${2:-src/variants.ini}
 
 run_cmds() {
   cat <<EOF | "${ENGINE}" 2>/dev/null

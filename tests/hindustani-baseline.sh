@@ -4,10 +4,11 @@ set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 
-python3 - <<'PY'
+ROOT="$ROOT" python3 - <<'PY'
+import os
 import pyffish as sf
 
-cfg = open('/home/chris/Fairy-Stockfish-X/src/variants-incomplete.ini', encoding='utf-8').read()
+cfg = open(os.path.join(os.environ["ROOT"], "src", "variants-incomplete.ini"), encoding='utf-8').read()
 sf.load_variant_config(cfg)
 
 cases = [
