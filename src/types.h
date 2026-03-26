@@ -1126,11 +1126,12 @@ inline PieceType gating_type(Move m) {
 
 inline Square gating_square(Move m) {
   const uint64_t raw = static_cast<uint64_t>(m);
-  return Square((raw >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & SQUARE_BIT_MASK);
+  return Square(((raw >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & SQUARE_BIT_MASK) - 1);
 }
 
 inline bool is_gating(Move m) {
-  return gating_type(m) && (type_of(m) == NORMAL || type_of(m) == CASTLING);
+  const MoveType mt = type_of(m);
+  return (mt != DROP && mt != DROP2) && ((m >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & SQUARE_BIT_MASK);
 }
 
 inline bool is_drop_move(Move m) {
@@ -1186,7 +1187,7 @@ constexpr Move reverse_move(Move m) {
 
 template<MoveType T>
 constexpr Move make_gating(Square from, Square to, PieceType pt, Square gate) {
-  return Move((static_cast<uint64_t>(gate) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS))
+  return Move((static_cast<uint64_t>(gate + 1) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS))
             + (static_cast<uint64_t>(pt) << (2 * SQUARE_BITS + MOVE_TYPE_BITS))
             + static_cast<uint64_t>(T)
             + (static_cast<uint64_t>(from) << SQUARE_BITS)
