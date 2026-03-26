@@ -933,6 +933,18 @@ namespace {
             *moveList++ = make<SPECIAL>(passSq, passSq);
         }
 
+        if (!restrictToForcedJumper && Type != CAPTURES && pos.self_destruct_types())
+        {
+            Bitboard b = pos.pieces(Us);
+            while (b)
+            {
+                Square sq = pop_lsb(b);
+                Piece mover = pos.piece_on(sq);
+                if (mover != NO_PIECE && (pos.self_destruct_types() & piece_set(type_of(mover))))
+                    *moveList++ = make<SPECIAL>(sq, sq, type_of(mover));
+            }
+        }
+
         //if "wall or move", generate walling action with null move
         if (!restrictToForcedJumper && pos.wall_or_move())
         {

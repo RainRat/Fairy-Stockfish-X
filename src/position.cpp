@@ -2081,8 +2081,17 @@ bool Position::legal(Move m) const {
   if (jumpRemoved && (square_bb(to) & jumpRemoved))
       return false;
 
-  if (from == to && !(is_pass(m) || (type_of(m) == PROMOTION && sittuyin_promotion())))
+  if (from == to && !(is_pass(m) || is_self_destruct(m) || (type_of(m) == PROMOTION && sittuyin_promotion())))
       return false;
+
+  if (is_self_destruct(m))
+  {
+      Piece mover = moved_piece(m);
+      if (dropMove || mover == NO_PIECE || color_of(mover) != us)
+          return false;
+      if (!(self_destruct_types() & piece_set(type_of(mover))))
+          return false;
+  }
 
   bool rifleShot = rifle_capture(m) && capture(m) && type_of(m) != CASTLING;
   Square shotSq = capture(m) ? capture_square(m) : to;
@@ -2720,8 +2729,16 @@ bool Position::pseudo_legal(const Move m) const {
       && !is_pass(m))
       return false;
 
-  if (from == to && !(is_pass(m) || (type_of(m) == PROMOTION && sittuyin_promotion())))
+  if (from == to && !(is_pass(m) || is_self_destruct(m) || (type_of(m) == PROMOTION && sittuyin_promotion())))
       return false;
+
+  if (is_self_destruct(m))
+  {
+      if (dropMove || pc == NO_PIECE || color_of(pc) != us)
+          return false;
+      if (!(self_destruct_types() & piece_set(type_of(pc))))
+          return false;
+  }
 
   if (type_of(m) == PROMOTION && !promotion_allowed(us, promotion_type(m), to))
       return false;
@@ -2849,7 +2866,7 @@ bool Position::pseudo_legal(const Move m) const {
   }
 
   //if walling, and walling is not optional, or they didn't move, do the checks.
-  if (walling(us) && (!wall_or_move() || (from == to)))
+  if (walling(us) && is_gating(m) && (!wall_or_move() || (from == to)))
   {
       Bitboard wallsquares = st->wallSquares;
       Square capSq = capture(m) ? capture_square(m) : SQ_NONE;
@@ -2885,7 +2902,7 @@ bool Position::pseudo_legal(const Move m) const {
       return false;
 
   // Is not a promotion, so promotion piece must be empty
-  if (promotion_type(m) != NO_PIECE_TYPE)
+  if (promotion_type(m) != NO_PIECE_TYPE && !is_self_destruct(m))
       return false;
 
   // If the 'from' square is not occupied by a piece belonging to the side to
@@ -2895,7 +2912,7 @@ bool Position::pseudo_legal(const Move m) const {
 
   // The destination square cannot be occupied by a friendly piece unless
   // self-capture is enabled. Friendly kings remain uncapturable.
-  if (pieces(us) & to)
+  if ((pieces(us) & to) && !is_self_destruct(m))
   {
       if (!(self_capture() && capture(m)))
           return false;
@@ -2924,7 +2941,8 @@ bool Position::pseudo_legal(const Move m) const {
                && !(pieces() & (to | (to - pawn_push(us)) | (to - 2 * pawn_push(us))))))
           return false;
   }
-  else if (!((capture(m) ? attacks_from(us, type_of(pc), from) : moves_from(us, type_of(pc), from)) & to))
+  else if (!is_self_destruct(m)
+        && !((capture(m) ? attacks_from(us, type_of(pc), from) : moves_from(us, type_of(pc), from)) & to))
       return false;
 
   // Hopper-type pieces can optionally be configured to avoid hopping over
@@ -3518,6 +3536,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           || (    (var->nMoveRuleTypes[us] & type_of(pc))
               && !(PseudoMoves[0][us][type_of(pc)][to] & from)))
           st->rule50 = 0;
+      if (is_self_destruct(m))
+          st->rule50 = 0;
   }
 
   // Reset en passant squares
@@ -3700,7 +3720,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           }
       }
 
-      if (!rifleShot)
+      if (!rifleShot && !is_self_destruct(m))
           move_piece(from, to);
   }
 
@@ -4377,7 +4397,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
 
   // Add gated wall square
   // if wallOrMove, only actually place the wall if they gave up their move
-  if (walling(us) && (!wall_or_move() || (from == to)))
+  if (walling(us) && is_gating(m) && (!wall_or_move() || (from == to)))
   {
       // Reset wall squares for duck walling
       if (walling_rule() == DUCK)

@@ -262,6 +262,7 @@ public:
   bool drop_loop() const;
   bool captures_to_hand() const;
   PieceSet capture_to_hand_types() const;
+  PieceSet self_destruct_types() const;
   bool first_rank_pawn_drops() const;
   bool can_drop(Color c, PieceType pt) const;
   bool has_exchange() const;
@@ -1348,6 +1349,11 @@ inline bool Position::captures_to_hand() const {
 inline PieceSet Position::capture_to_hand_types() const {
   assert(var != nullptr);
   return var->captureToHandTypes;
+}
+
+inline PieceSet Position::self_destruct_types() const {
+  assert(var != nullptr);
+  return var->selfDestructTypes;
 }
 
 inline bool Position::first_rank_pawn_drops() const {

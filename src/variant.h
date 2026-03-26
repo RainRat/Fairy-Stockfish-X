@@ -101,6 +101,7 @@ struct Variant {
   bool rexExclusiveMorph = false;
   ColorChangeTrigger changingColorTrigger = ColorChangeTrigger::NEVER;
   PieceSet changingColorPieceTypes = NO_PIECE_SET;
+  PieceSet selfDestructTypes = NO_PIECE_SET;
   bool blastPromotion = false;
   bool blastDiagonals = true;
   bool blastCenter = true;

@@ -114,6 +114,16 @@ go perft 1")
 echo "${out}" | grep -q "^f1f6: 1$"
 fi
 
+# 5c) Bombardment: front-rank missiles move forward quietly and can self-destruct.
+if variant_available "bombardment"; then
+out=$(run_cmds "setoption name UCI_Variant value bombardment
+position startpos
+go perft 1")
+echo "${out}" | grep -q "^a2a3: 1$"
+echo "${out}" | grep -q "^a2b3: 1$"
+echo "${out}" | grep -q "^a2a2x: 1$"
+fi
+
 # 6) Tablut split: edge-escape should end immediately, corner-escape should not.
 if variant_available "tablut" && variant_available "tablut-corner-escape"; then
 out=$(run_cmds "setoption name UCI_Variant value tablut
