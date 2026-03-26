@@ -3080,6 +3080,7 @@ bool Position::gives_check(Move m) const {
   // Is there a check by gated pieces?
   if (    is_gating(m)
       && gatingPotion == Variant::POTION_TYPE_NB
+      && gating_type(m) != NO_PIECE_TYPE
       && attacks_bb(sideToMove, gating_type(m), gating_square(m), (pieces() ^ from) | to) & square<KING>(~sideToMove))
       return true;
 
