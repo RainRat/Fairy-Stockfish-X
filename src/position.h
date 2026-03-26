@@ -274,6 +274,7 @@ public:
   bool sittuyin_rook_drop() const;
   bool drop_opposite_colored_bishop() const;
   bool drop_promoted() const;
+  PieceSet drop_piece_types(PieceType pt) const;
   PieceSet symmetric_drop_types() const;
   PieceSet capture_drop_types() const;
   PieceType drop_no_doubled() const;
@@ -1469,6 +1470,17 @@ inline bool Position::drop_opposite_colored_bishop() const {
 inline bool Position::drop_promoted() const {
   assert(var != nullptr);
   return var->dropPromoted;
+}
+
+inline PieceSet Position::drop_piece_types(PieceType pt) const {
+  assert(var != nullptr);
+  PieceSet forms = var->dropPieceTypes[pt];
+  if (forms)
+      return forms;
+  forms = piece_set(pt);
+  if (drop_promoted() && promoted_piece_type(pt))
+      forms |= promoted_piece_type(pt);
+  return forms;
 }
 
 inline PieceSet Position::symmetric_drop_types() const {

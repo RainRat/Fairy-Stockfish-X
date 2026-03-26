@@ -939,6 +939,53 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
         else if (DoCheck && (parseError || !(ss >> std::ws).eof()))
             std::cerr << "moveMorphPieceType - Invalid syntax." << std::endl;
     }
+    const auto& it_drop_piece_types = config.find("dropPieceTypes");
+    if (it_drop_piece_types != config.end())
+    {
+        char token = '\0', sep = 0;
+        size_t idx = std::string::npos;
+        bool parseError = false;
+        bool sawToken = false;
+        std::stringstream ss(it_drop_piece_types->second);
+        while (ss >> token)
+        {
+            sawToken = true;
+            idx = v->pieceToChar.find(std::toupper(static_cast<unsigned char>(token)));
+            if (idx == std::string::npos)
+                break;
+            if (!(ss >> sep) || sep != ':')
+            {
+                parseError = true;
+                break;
+            }
+            PieceSet mask = NO_PIECE_SET;
+            while (ss >> token)
+            {
+                if (std::isspace(static_cast<unsigned char>(token)))
+                    continue;
+                if (token == '-')
+                    break;
+                size_t idx2 = v->pieceToChar.find(std::toupper(static_cast<unsigned char>(token)));
+                if (idx2 == std::string::npos)
+                {
+                    idx = std::string::npos;
+                    break;
+                }
+                mask |= PieceType(idx2);
+                if (ss.peek() == ';')
+                    break;
+            }
+            if (idx == std::string::npos)
+                break;
+            v->dropPieceTypes[idx] = mask;
+            if (ss.peek() == ';')
+                ss.get();
+        }
+        if (DoCheck && sawToken && idx == std::string::npos)
+            std::cerr << "dropPieceTypes - Invalid piece type: " << token << std::endl;
+        else if (DoCheck && sawToken && idx != std::string::npos && (parseError || !(ss >> std::ws).eof()))
+            std::cerr << "dropPieceTypes - Invalid syntax." << std::endl;
+    }
     // priority drops
     const auto& it_pr_drop = config.find("priorityDropTypes");
     if (it_pr_drop != config.end())

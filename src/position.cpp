@@ -2791,8 +2791,7 @@ bool Position::pseudo_legal(const Move m) const {
                         && count_in_prison(us, exchange_piece(m)) > 0
                         && count_in_prison(~us, in_hand_piece_type(m)) > 0))
             && (drop_region(us, type_of(pc)) & legalDropTargets & to)
-            && (   type_of(pc) == in_hand_piece_type(m)
-                || (drop_promoted() && type_of(pc) == promoted_piece_type(in_hand_piece_type(m))));
+            && (drop_piece_types(in_hand_piece_type(m)) & type_of(pc));
   }
 
   // Use a slower but simpler function for uncommon cases

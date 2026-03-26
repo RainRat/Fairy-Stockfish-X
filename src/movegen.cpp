@@ -175,19 +175,16 @@ namespace {
             return moveList;
         }
 
-        // Add to move list
-        if (pos.drop_promoted() && pos.promoted_piece_type(pt))
+        PieceSet dropForms = pos.drop_piece_types(pt);
+        while (dropForms)
         {
+            PieceType dropped = pop_lsb(dropForms);
             Bitboard b2 = b;
-            if (Type == QUIET_CHECKS)
-                b2 &= pos.check_squares(pos.promoted_piece_type(pt));
+            if (Type == QUIET_CHECKS || !pos.can_drop(Us, pt))
+                b2 &= pos.check_squares(dropped);
             while (b2)
-                *moveList++ = make_drop(pop_lsb(b2), pt, pos.promoted_piece_type(pt));
+                *moveList++ = make_drop(pop_lsb(b2), pt, dropped);
         }
-        if (Type == QUIET_CHECKS || !pos.can_drop(Us, pt))
-            b &= pos.check_squares(pt);
-        while (b)
-            *moveList++ = make_drop(pop_lsb(b), pt, pt);
     }
 
     return moveList;
@@ -206,14 +203,14 @@ namespace {
         capturable |= pos.pieces(Us) & ~pos.pieces(Us, KING);
     b &= pos.drop_region(Us, pt) & capturable;
 
-    if (pos.drop_promoted() && pos.promoted_piece_type(pt))
+    PieceSet dropForms = pos.drop_piece_types(pt);
+    while (dropForms)
     {
+        PieceType dropped = pop_lsb(dropForms);
         Bitboard b2 = b;
         while (b2)
-            *moveList++ = make_drop(pop_lsb(b2), pt, pos.promoted_piece_type(pt));
+            *moveList++ = make_drop(pop_lsb(b2), pt, dropped);
     }
-    while (b)
-        *moveList++ = make_drop(pop_lsb(b), pt, pt);
 
     return moveList;
   }
