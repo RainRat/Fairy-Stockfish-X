@@ -3137,11 +3137,11 @@ inline Square Position::capture_square(Move m) const {
 }
 
 inline bool Position::paired_drop(Move m) const {
-  return type_of(m) == DROP2;
+  return type_of(m) == DROP2 || (is_gating(m) && (symmetric_drop_types() & dropped_piece_type(m)));
 }
 
 inline Square Position::secondary_drop_square(Move m) const {
-  return paired_drop(m) ? from_sq(m) : SQ_NONE;
+  return paired_drop(m) ? (type_of(m) == DROP2 ? from_sq(m) : mirrored_pair_drop_square(gating_square(m))) : SQ_NONE;
 }
 
 inline Square Position::mirrored_pair_drop_square(Square s) const {
