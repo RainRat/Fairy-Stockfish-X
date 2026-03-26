@@ -259,6 +259,7 @@ public:
   bool piece_drops() const;
   bool drop_loop() const;
   bool captures_to_hand() const;
+  PieceSet capture_to_hand_types() const;
   bool first_rank_pawn_drops() const;
   bool can_drop(Color c, PieceType pt) const;
   bool has_exchange() const;
@@ -1318,6 +1319,11 @@ inline Square Position::forced_jump_square() const {
 inline bool Position::captures_to_hand() const {
   assert(var != nullptr);
   return var->captureType != MOVE_OUT;
+}
+
+inline PieceSet Position::capture_to_hand_types() const {
+  assert(var != nullptr);
+  return var->captureToHandTypes;
 }
 
 inline bool Position::first_rank_pawn_drops() const {

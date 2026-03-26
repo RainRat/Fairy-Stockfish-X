@@ -106,6 +106,14 @@ go perft 1")
 echo "${out}" | grep -q "^e2e8: 1$"
 fi
 
+# 5b) Little Trio: the opening cannon capture over the pawn screen is available.
+if variant_available "little-trio"; then
+out=$(run_cmds "setoption name UCI_Variant value little-trio
+position startpos
+go perft 1")
+echo "${out}" | grep -q "^f1f6: 1$"
+fi
+
 # 6) Tablut split: edge-escape should end immediately, corner-escape should not.
 if variant_available "tablut" && variant_available "tablut-corner-escape"; then
 out=$(run_cmds "setoption name UCI_Variant value tablut

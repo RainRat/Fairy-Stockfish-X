@@ -1306,6 +1306,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     }
 
     parse_attribute("captureType", v->captureType);
+    parse_attribute("captureToHandTypes", v->captureToHandTypes, v->pieceToChar);
     // hostage price
     const auto& it_host_p = config.find("hostageExchange");
     if (it_host_p != config.end()) {
