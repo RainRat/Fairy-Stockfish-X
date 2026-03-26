@@ -244,7 +244,6 @@ public:
   bool rifle_capture() const;
   bool rifle_capture(Piece pc) const;
   bool rifle_capture(Move m) const;
-  bool igui_capture(Move m) const;
   bool capture_morph() const;
   bool rex_exclusive_morph() const;
   bool must_capture() const;
@@ -1162,14 +1161,6 @@ inline bool Position::rifle_capture(Piece pc) const {
 
 inline bool Position::rifle_capture(Move m) const {
   return rifle_capture(moved_piece(m));
-}
-
-inline bool Position::igui_capture(Move m) const {
-  Piece mover = moved_piece(m);
-  return type_of(m) == SPECIAL
-      && from_sq(m) != to_sq(m)
-      && mover != NO_PIECE
-      && bool(var->iguiTypes & type_of(mover));
 }
 
 inline bool Position::capture_morph() const {
@@ -3089,8 +3080,6 @@ inline bool Position::capture(Move m) const {
   assert(is_ok(m));
   if (type_of(m) == EN_PASSANT)
       return true;
-  if (igui_capture(m))
-      return !empty(to_sq(m)) || bool(st->deadSquares & to_sq(m));
   if (type_of(m) == CASTLING || from_sq(m) == to_sq(m))
       return false;
 
