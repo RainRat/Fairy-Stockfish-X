@@ -3027,10 +3027,31 @@ bool Position::gives_check(Move m) const {
   if (!count<KING>(~sideToMove))
       return false;
 
-  Bitboard occupied = rifleShot ? (pieces() ^ square_bb(shotSq))
-                                : (((!dropMove ? pieces() ^ from : pieces()) ^ square_bb(shotSq)) | to);
+  Bitboard occupied;
+  if (type_of(m) == CASTLING)
+  {
+      Square kfrom = from;
+      Square rfrom = to;
+      Square kto = make_square(rfrom > kfrom ? castling_kingside_file() : castling_queenside_file(), castling_rank(sideToMove));
+      Square rto = kto + (rfrom > kfrom ? WEST : EAST);
+      occupied = (pieces() ^ kfrom ^ rfrom) | kto | rto;
+  }
+  else
+  {
+      occupied = rifleShot ? (pieces() ^ square_bb(shotSq))
+                           : (((!dropMove ? pieces() ^ from : pieces()) ^ square_bb(shotSq)) | to);
+  }
+
   if (paired_drop(m))
       occupied |= square_bb(secondary_drop_square(m));
+
+  if (is_gating(m))
+  {
+      occupied |= square_bb(gating_square(m));
+      if (paired_drop(m))
+          occupied |= square_bb(secondary_drop_square(m));
+  }
+
   Bitboard janggiCannons = pieces(JANGGI_CANNON);
   if (type_of(moved_piece(m)) == JANGGI_CANNON)
       janggiCannons = rifleShot ? (janggiCannons & ~square_bb(shotSq))
@@ -3083,9 +3104,13 @@ bool Position::gives_check(Move m) const {
   // Is there a check by gated pieces?
   if (    is_gating(m)
       && gatingPotion == Variant::POTION_TYPE_NB
-      && gating_type(m) != NO_PIECE_TYPE
-      && attacks_bb(sideToMove, gating_type(m), gating_square(m), (pieces() ^ from) | to) & square<KING>(~sideToMove))
-      return true;
+      && gating_type(m) != NO_PIECE_TYPE)
+  {
+      if (attacks_bb(sideToMove, gating_type(m), gating_square(m), occupied ^ square_bb(gating_square(m))) & square<KING>(~sideToMove))
+          return true;
+      if (paired_drop(m) && (attacks_bb(sideToMove, gating_type(m), secondary_drop_square(m), occupied ^ square_bb(secondary_drop_square(m))) & square<KING>(~sideToMove)))
+          return true;
+  }
 
   // Petrified piece can't give check
   if ((var->petrifyOnCaptureTypes & type_of(moved_piece(m))) && capture(m))
@@ -3996,6 +4021,23 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           k ^= Zobrist::psq[gating_piece][gate];
           st->materialKey ^= Zobrist::psq[gating_piece][pieceCount[gating_piece]];
           st->nonPawnMaterial[us] += PieceValue[MG][gating_piece];
+
+          if (paired_drop(m))
+          {
+              Square gate2 = secondary_drop_square(m);
+              if (Eval::useNNUE)
+                  append_dirty(st, gating_piece, SQ_NONE, gate2, gating_piece, pieceCountInHand[us][gating_type(m)]);
+
+              put_piece(gating_piece, gate2);
+              int oldCount2 = pieceCountInHand[us][gating_type(m)];
+              remove_from_hand(gating_piece);
+              int newCount2 = pieceCountInHand[us][gating_type(m)];
+              xor_in_hand_count(k, gating_piece, oldCount2, newCount2);
+
+              k ^= Zobrist::psq[gating_piece][gate2];
+              st->materialKey ^= Zobrist::psq[gating_piece][pieceCount[gating_piece]];
+              st->nonPawnMaterial[us] += PieceValue[MG][gating_piece];
+          }
       }
   }
 
