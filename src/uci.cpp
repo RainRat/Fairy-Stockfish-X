@@ -575,9 +575,6 @@ string UCI::move(const Position& pos, Move m) {
           : UCI::square(pos, from))
                   + UCI::square(pos, to);
 
-  if (pos.paired_drop(m))
-      move += "," + UCI::square(pos, pos.secondary_drop_square(m));
-
   // Wall square
   if (wallMove && CurrentProtocol == XBOARD)
       move += "," + UCI::square(pos, gating_square(m));
@@ -594,6 +591,9 @@ string UCI::move(const Position& pos, Move m) {
       if (gating_square(m) != from)
           move += UCI::square(pos, gating_square(m));
   }
+
+  if (pos.paired_drop(m))
+      move += "," + UCI::square(pos, pos.secondary_drop_square(m));
 
   // Wall square
   if (wallMove && CurrentProtocol != XBOARD)

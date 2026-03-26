@@ -63,22 +63,27 @@ namespace {
   template<MoveType T>
   ExtMove* make_move_and_gating(const Position& pos, ExtMove* moveList, Color us, Square from, Square to, PieceType pt = NO_PIECE_TYPE) {
 
+    bool iguiShot = T == SPECIAL && from != to;
+    bool rifleShot = pos.rifle_capture(make<T>(from, to, pt)) && (T == NORMAL || T == PROMOTION);
+    Square effectiveTo = (rifleShot || iguiShot) ? from : to;
+    Square capSq = T == EN_PASSANT ? pos.capture_square(to)
+                 : pos.is_jump_capture(make<T>(from, to, pt)) ? pos.jump_capture_square(from, to)
+                 : pos.capture(make<T>(from, to, pt)) ? to
+                 : SQ_NONE;
+    Bitboard occupancyAfter = pos.pieces();
+    if (from != effectiveTo) occupancyAfter ^= square_bb(from) ^ square_bb(effectiveTo);
+    if (capSq != SQ_NONE) occupancyAfter ^= square_bb(capSq);
+    if (T == CASTLING)
+    {
+        Square kto = make_square(to > from ? pos.castling_kingside_file() : pos.castling_queenside_file(), pos.castling_rank(us));
+        Square rto = kto - (to > from ? EAST : WEST);
+        occupancyAfter = (pos.pieces() ^ square_bb(from) ^ square_bb(to)) | kto | rto;
+    }
+
     // Wall placing moves
     //if it's "wall or move", and they chose non-null move, skip even generating wall move
     if (pos.walling(us) && !(pos.wall_or_move() && (from!=to)))
     {
-        bool iguiShot = T == SPECIAL && from != to;
-        bool rifleShot = pos.rifle_capture(make<T>(from, to, pt)) && (T == NORMAL || T == PROMOTION);
-        Square effectiveTo = (rifleShot || iguiShot) ? from : to;
-        Square capSq = T == EN_PASSANT ? pos.capture_square(to)
-                     : pos.is_jump_capture(make<T>(from, to, pt)) ? pos.jump_capture_square(from, to)
-                     : pos.capture(make<T>(from, to, pt)) ? to
-                     : SQ_NONE;
-
-        Bitboard occupancyAfter = pos.pieces();
-        if (from != effectiveTo) occupancyAfter ^= square_bb(from) ^ square_bb(effectiveTo);
-        if (capSq != SQ_NONE) occupancyAfter ^= square_bb(capSq);
-
         Bitboard b = pos.board_bb() & ~occupancyAfter & ~square_bb(to);
         if (T == CASTLING)
         {
@@ -125,14 +130,38 @@ namespace {
         {
             PieceType pt_gating = pop_lsb(ps);
             if (pos.can_drop(us, pt_gating) && (pos.drop_region(us, pt_gating) & from))
-                *moveList++ = make_gating<T>(from, to, pt_gating, from);
+            {
+                if (pos.symmetric_drop_types() & pt_gating)
+                {
+                    Square gate2 = pos.mirrored_pair_drop_square(from);
+                    if (gate2 != from
+                        && (pos.drop_region(us, pt_gating) & gate2)
+                        && !(occupancyAfter & gate2)
+                        && pos.count_in_hand(us, pt_gating) >= 2)
+                        *moveList++ = make_gating<T>(from, to, pt_gating, from);
+                }
+                else
+                    *moveList++ = make_gating<T>(from, to, pt_gating, from);
+            }
         }
     if (pos.seirawan_gating() && T == CASTLING && (pos.gates(us) & to) && !pos.rifle_capture(make<T>(from, to, pt)))
         for (PieceSet ps = pos.piece_types(); ps;)
         {
             PieceType pt_gating = pop_lsb(ps);
             if (pos.can_drop(us, pt_gating) && (pos.drop_region(us, pt_gating) & to))
-                *moveList++ = make_gating<T>(from, to, pt_gating, to);
+            {
+                if (pos.symmetric_drop_types() & pt_gating)
+                {
+                    Square gate2 = pos.mirrored_pair_drop_square(to);
+                    if (gate2 != to
+                        && (pos.drop_region(us, pt_gating) & gate2)
+                        && !(occupancyAfter & gate2)
+                        && pos.count_in_hand(us, pt_gating) >= 2)
+                        *moveList++ = make_gating<T>(from, to, pt_gating, to);
+                }
+                else
+                    *moveList++ = make_gating<T>(from, to, pt_gating, to);
+            }
         }
 
     return moveList;
