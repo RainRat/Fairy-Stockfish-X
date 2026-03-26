@@ -108,6 +108,10 @@ jobs:
         run: |
           ../tests/new-variants-smoke.sh
 
+      - name: Test incomplete baselines
+        run: |
+          ../tests/incomplete-baselines.sh ./stockfish variants-incomplete.ini
+
       - name: Test contra-hopper
         run: |
           ../tests/contra-hopper.sh
