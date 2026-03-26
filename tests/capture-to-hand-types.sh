@@ -20,9 +20,12 @@ maxRank = 7
 king = k
 rook = r
 knight = n
+lance = l
+gold = g
+promotedPieceType = l:g
 pieceDrops = true
 captureType = hand
-captureToHandTypes = r
+captureToHandTypes = rl
 promotionPieceTypes = -
 doubleStep = false
 castling = false
@@ -48,3 +51,9 @@ echo "${out}" | grep -q "Fen: R3k2/7/7/7/7/7/4K2\\[R\\] b - - 0 1"
 out=$(run_cmds "position fen n3k2/7/7/7/7/7/R3K2 w - - 0 1 moves a1a7
 d")
 echo "${out}" | grep -q "Fen: R3k2/7/7/7/7/7/4K2\\[\\] b - - 0 1"
+
+# Capturing a promoted lance should still add a lance to hand because the filter
+# applies to the transferred unpromoted piece type, not the promoted gold surface.
+out=$(run_cmds "position fen +l3k2/7/7/7/7/7/R3K2 w - - 0 1 moves a1a7
+d")
+echo "${out}" | grep -q "Fen: R3k2/7/7/7/7/7/4K2\\[L\\] b - - 0 1"
