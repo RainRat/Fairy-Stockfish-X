@@ -1139,7 +1139,17 @@ inline bool is_drop_move(Move m) {
 }
 
 inline bool is_pass(Move m) {
-  return type_of(m) == SPECIAL && from_sq(m) == to_sq(m);
+  return type_of(m) == SPECIAL
+      && from_sq(m) == to_sq(m)
+      && !is_gating(m)
+      && gating_type(m) == NO_PIECE_TYPE;
+}
+
+inline bool is_self_destruct(Move m) {
+  return type_of(m) == SPECIAL
+      && from_sq(m) == to_sq(m)
+      && !is_gating(m)
+      && gating_type(m) != NO_PIECE_TYPE;
 }
 
 constexpr Move make_move(Square from, Square to) {
