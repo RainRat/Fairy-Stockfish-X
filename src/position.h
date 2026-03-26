@@ -174,9 +174,11 @@ public:
   Square promotion_square(Color c, Square s) const;
   PieceType main_promotion_pawn_type(Color c) const;
   PieceSet promotion_piece_types(Color c) const;
+  PieceSet promotion_piece_types(Color c, Square s) const;
   bool sittuyin_promotion() const;
   int promotion_limit(PieceType pt) const;
   bool promotion_allowed(Color c, PieceType pt) const;
+  bool promotion_allowed(Color c, PieceType pt, Square s) const;
   PieceType promoted_piece_type(PieceType pt) const;
   bool piece_promotion_on_capture() const;
   bool mandatory_pawn_promotion() const;
@@ -746,7 +748,25 @@ inline PieceType Position::main_promotion_pawn_type(Color c) const {
 
 inline PieceSet Position::promotion_piece_types(Color c) const {
   assert(var != nullptr);
+  if (var->promotionPieceTypesByFileEnabled[c])
+  {
+      PieceSet unionSet = NO_PIECE_SET;
+      for (int f = FILE_A; f <= int(var->maxFile); ++f)
+          unionSet |= var->promotionPieceTypesByFile[c][f];
+      return unionSet;
+  }
   return var->promotionPieceTypes[c];
+}
+
+inline PieceSet Position::promotion_piece_types(Color c, Square s) const {
+  assert(var != nullptr);
+  if (var->promotionPieceTypesByFileEnabled[c] && s != SQ_NONE)
+  {
+      File f = file_of(s);
+      if (f >= FILE_A && f <= var->maxFile)
+          return var->promotionPieceTypesByFile[c][f];
+  }
+  return promotion_piece_types(c);
 }
 
 inline bool Position::sittuyin_promotion() const {
@@ -767,6 +787,10 @@ inline bool Position::promotion_allowed(Color c, PieceType pt) const {
   if ((var->promotionRequireInHand || var->promotionConsumeInHand) && count_in_hand(c, pt) <= 0)
       return false;
   return true;
+}
+
+inline bool Position::promotion_allowed(Color c, PieceType pt, Square s) const {
+  return bool(promotion_piece_types(c, s) & pt) && promotion_allowed(c, pt);
 }
 
 inline PieceType Position::promoted_piece_type(PieceType pt) const {

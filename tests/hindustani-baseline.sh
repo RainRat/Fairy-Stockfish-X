@@ -2,7 +2,15 @@
 
 set -euo pipefail
 
+error() {
+  echo "hindustani baseline test failed on line $1" >&2
+  exit 1
+}
+trap 'error ${LINENO}' ERR
+
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
+ENGINE=${1:-"${ROOT}/src/stockfish"}
+VARIANT_PATH=${2:-"${ROOT}/src/variants-incomplete.ini"}
 
 ROOT="$ROOT" python3 - <<'PY'
 import os
@@ -21,3 +29,31 @@ for fen, expected in cases:
     if result != expected:
         raise SystemExit(f"unexpected Hindustani result for {fen}: got {result}, expected {expected}")
 PY
+
+run_cmds() {
+  cat <<EOF | "${ENGINE}" 2>/dev/null
+uci
+setoption name VariantPath value ${VARIANT_PATH}
+setoption name UCI_Variant value hindustani
+$1
+quit
+EOF
+}
+
+out=$(run_cmds "position fen 4k3/P7/8/8/8/8/8/4K3 w - - 0 1
+go perft 1")
+echo "${out}" | grep -q "^a7a8r: 1$"
+! echo "${out}" | grep -q "^a7a8q: 1$"
+
+out=$(run_cmds "position fen 4k3/2P5/8/8/8/8/8/4K3 w - - 0 1
+go perft 1")
+echo "${out}" | grep -q "^c7c8x: 1$"
+! echo "${out}" | grep -q "^c7c8b: 1$"
+
+out=$(run_cmds "position fen 4k3/4P3/8/8/8/8/8/4K3 w - - 0 1
+go perft 1")
+! echo "${out}" | grep -q "^e7e8"
+
+out=$(run_cmds "position fen 4k3/2P5/8/8/8/8/8/2X1K3 w - - 0 1
+go perft 1")
+! echo "${out}" | grep -q "^c7c8x: 1$"
