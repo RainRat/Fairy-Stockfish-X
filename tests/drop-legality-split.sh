@@ -60,6 +60,20 @@ pieceDrops = true
 dropNoDoubled = p
 dropNoDoubledCountWhite = 2
 startFen = 4k3/4p3/8/8/8/8/8/4K3[p] b - - 0 1
+
+[pathway-drop-rule]
+maxRank = 6
+maxFile = 6
+immobile = p
+pieceDrops = true
+mustDrop = true
+checking = false
+doubleStep = false
+castling = false
+nMoveRule = 0
+stalemateValue = win
+pathwayDropRule = true
+startFen = 6/6/6/6/6/6[Pp] w - - 0 1
 INI
 
 run_perft() {
@@ -99,6 +113,28 @@ echo "${out}" | grep -q "^P@e4: 1$"
 
 out=$(run_perft "dropnodoubledcount-split-black")
 ! echo "${out}" | grep -q "^P@e5: 1$"
+
+out=$(cat <<CMDS | "${ENGINE}"
+uci
+setoption name VariantPath value ${TMP_VARIANT_PATH}
+setoption name UCI_Variant value pathway-drop-rule
+position fen 6/6/6/6/3p2/6[Pp] w - - 0 1
+go perft 1
+quit
+CMDS
+)
+! echo "${out}" | grep -q "^P@c2: 1$"
+
+out=$(cat <<CMDS | "${ENGINE}"
+uci
+setoption name VariantPath value ${TMP_VARIANT_PATH}
+setoption name UCI_Variant value pathway-drop-rule
+position fen 6/6/6/2P3/3p2/6[Pp] w - - 0 1
+go perft 1
+quit
+CMDS
+)
+echo "${out}" | grep -q "^P@c2: 1$"
 
 rm -f "${TMP_VARIANT_PATH}"
 unset TMP_VARIANT_PATH

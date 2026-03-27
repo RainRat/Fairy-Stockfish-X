@@ -2455,6 +2455,40 @@ bool Position::legal(Move m) const {
           }
   }
 
+  // Pathway-style placement legality:
+  // either no orthogonal adjacencies, or exactly one friendly orthogonal adjacency.
+  if (var->pathwayDropRule && type_of(m) == DROP)
+  {
+      int friendly = 0;
+      int enemy = 0;
+
+      int tf = int(file_of(to));
+      int tr = int(rank_of(to));
+
+      auto count_adjacent = [&](int f, int r) {
+          if (f < int(FILE_A) || r < int(RANK_1))
+              return;
+          if (f > int(max_file()) || r > int(max_rank()))
+              return;
+
+          Piece p = piece_on(make_square(File(f), Rank(r)));
+          if (p == NO_PIECE)
+              return;
+          if (color_of(p) == us)
+              ++friendly;
+          else
+              ++enemy;
+      };
+
+      count_adjacent(tf, tr + 1);
+      count_adjacent(tf, tr - 1);
+      count_adjacent(tf + 1, tr);
+      count_adjacent(tf - 1, tr);
+
+      if (friendly != 1 && friendly + enemy != 0)
+          return false;
+  }
+
   if (dropMove && pay_points_to_drop()
       && st->pointsCount[us] < var->piecePoints[type_of(moved_piece(m))])
       return false;

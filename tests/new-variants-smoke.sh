@@ -240,6 +240,24 @@ go perft 1")
 echo "${out}" | grep -q "Nodes searched: 0"
 fi
 
+# 7b) Pathway: enemy-only adjacency drops are illegal, one-friendly drops are legal, and no-placement wins.
+if variant_available "pathway"; then
+out=$(run_cmds "setoption name UCI_Variant value pathway
+position fen 6/6/6/6/3p2/6[Pp] w - - 0 1
+go perft 1")
+! echo "${out}" | grep -q "^P@c2: 1$"
+
+out=$(run_cmds "setoption name UCI_Variant value pathway
+position fen 6/6/6/2P3/3p2/6[Pp] w - - 0 1
+go perft 1")
+echo "${out}" | grep -q "^P@c2: 1$"
+
+out=$(run_cmds "setoption name UCI_Variant value pathway
+position fen PPPPPP/PPPPPP/PPPPPP/pppppp/pppppp/pppppp[Pp] w - - 0 1
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 0"
+fi
+
 # 8) Neutreeko: max-distance move completes a line and ends the game.
 if variant_available "neutreeko"; then
 out=$(run_cmds "setoption name UCI_Variant value neutreeko

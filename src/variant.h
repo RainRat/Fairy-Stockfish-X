@@ -269,6 +269,7 @@ struct Variant {
   bool moveRepetitionIllegal = false;
   bool samePlayerBoardRepetitionIllegal = false;
   bool alternating2x2DropIllegal = false;
+  bool pathwayDropRule = false;
   ChasingRule chasingRule = NO_CHASING;
   Value stalemateValue = VALUE_DRAW;
   bool stalematePieceCount = false; // multiply stalemate value by sign(count(~stm) - count(stm))
