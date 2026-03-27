@@ -5933,21 +5933,32 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
       //Handle the case where both players met the goal.
       if (st->pointsCount[~sideToMove]>=points_goal() && st->pointsCount[sideToMove]>=points_goal())
       {
+          if (st->pointsCount[~sideToMove] != st->pointsCount[sideToMove])
+          {
+              if (var->pointsGoalSimulValueByMostPoints == VALUE_DRAW)
+              {
+                  result = convert_mate_value(VALUE_DRAW, ply);
+                  return true;
+              }
+              // Otherwise the most-points policy rules on ending, from perspective of the player with most points.
+              result = convert_mate_value(
+                st->pointsCount[~sideToMove] > st->pointsCount[sideToMove] ?
+                var->pointsGoalSimulValueByMostPoints : -var->pointsGoalSimulValueByMostPoints, ply);
+              return true;
+          }
+          // If the points are tied, use the mover policy when provided, otherwise draw.
           if (var->pointsGoalSimulValueByMover != VALUE_NONE)
           {
               result = convert_mate_value(-var->pointsGoalSimulValueByMover, ply);
               return true;
           }
-          //If both players are drawn on points, or the rules say it's a draw, then declare draw.
-          if ((st->pointsCount[~sideToMove] == st->pointsCount[sideToMove]) || (var->pointsGoalSimulValueByMostPoints == VALUE_DRAW))
+          // If both players are tied on points, or the rules say it's a draw, then declare draw.
+          if (var->pointsGoalSimulValueByMostPoints == VALUE_DRAW)
           {
               result = convert_mate_value(VALUE_DRAW, ply);
               return true;
           };
-          //Otherwise the most-points policy rules on ending, from perspective of the player with most points.
-          result = convert_mate_value(
-            st->pointsCount[~sideToMove] > st->pointsCount[sideToMove] ?
-            var->pointsGoalSimulValueByMostPoints : -var->pointsGoalSimulValueByMostPoints, ply);
+          result = convert_mate_value(VALUE_DRAW, ply);
           return true;
       };
       //Finally, rule on the simple cases.
