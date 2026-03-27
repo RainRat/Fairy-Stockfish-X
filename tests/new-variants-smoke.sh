@@ -148,6 +148,22 @@ go depth 3")
 ! echo "${out}" | grep -q "^bestmove h1h2$"
 fi
 
+# 5f) Ko-app-paw-na: hunter capture and rabbit-pattern goal both end the game.
+if variant_available "ko-app-paw-na"; then
+out=$(run_cmds "setoption name UCI_Variant value ko-app-paw-na
+position fen 5/2R2/2h2/5/5 b - - 0 1 moves c3c5
+d")
+echo "${out}" | grep -q "Fen: 2h2/5/5/5/5 w - - 0 2 {0 1}"
+out=$(run_cmds "setoption name UCI_Variant value ko-app-paw-na
+position fen 5/2R2/2h2/5/5 w - - 0 2 {0 1}
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 0"
+out=$(run_cmds "setoption name UCI_Variant value ko-app-paw-na
+position fen RRRRR/5/R1h1R/5/5 b - - 0 1
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 0"
+fi
+
 # 6) Tablut split: edge-escape should end immediately, corner-escape should not.
 if variant_available "tablut" && variant_available "tablut-corner-escape"; then
 out=$(run_cmds "setoption name UCI_Variant value tablut
