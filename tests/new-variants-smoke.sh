@@ -124,6 +124,18 @@ echo "${out}" | grep -q "^a2b3: 1$"
 echo "${out}" | grep -q "^a2a2x: 1$"
 fi
 
+# 5d) Ko-Oshi: opening setup loads and immediate push-back is illegal.
+if variant_available "ko-oshi"; then
+out=$(run_cmds "setoption name UCI_Variant value ko-oshi
+position startpos
+d")
+echo "${out}" | grep -q "Fen: b3b/1aaa1/5/1AAA1/B3B w - - 0 1 {0 0}"
+out=$(run_cmds "setoption name UCI_Variant value ko-oshi
+position fen 5/5/5/1a3/1A3 w - - 0 1 {0 0} moves b1b2
+go perft 1")
+! echo "${out}" | grep -q "b3b2: 1"
+fi
+
 # 6) Tablut split: edge-escape should end immediately, corner-escape should not.
 if variant_available "tablut" && variant_available "tablut-corner-escape"; then
 out=$(run_cmds "setoption name UCI_Variant value tablut

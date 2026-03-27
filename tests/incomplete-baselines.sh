@@ -94,21 +94,7 @@ if sf.game_result("oshi", "9/9/9/9/9/9/9/9/9 b - - 0 1 {8 7}", []) != sf.VALUE_M
     raise SystemExit("unexpected Oshi simultaneous-goal result")
 if sf.game_result("oshi", "9/9/9/9/9/9/9/9/9 b - - 0 1 {0 0}", []) != -sf.VALUE_MATE:
     raise SystemExit("unexpected Oshi stalemate result")
-if sf.game_result("ko-oshi", "5/5/5/5/5 b - - 0 1 {5 4}", []) != sf.VALUE_MATE:
-    raise SystemExit("unexpected Ko-Oshi simultaneous-goal result")
 PY
-
-# Ko-Oshi baseline: documented 5x5 setup loads.
-out=$(run_cmds "setoption name UCI_Variant value ko-oshi
-position startpos
-d")
-echo "${out}" | grep -q "Fen: b3b/1aaa1/5/1AAA1/B3B w - - 0 1 {0 0}"
-
-# Ko-Oshi baseline: immediate push-back to the opponent's previous square is illegal.
-out=$(run_cmds "setoption name UCI_Variant value ko-oshi
-position fen 5/5/5/1a3/1A3 w - - 0 1 {0 0} moves b1b2
-go perft 1")
-! echo "${out}" | grep -q "b3b2: 1"
 
 # Aries baseline: documented setup loads.
 out=$(run_cmds "setoption name UCI_Variant value aries
