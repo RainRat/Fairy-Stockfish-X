@@ -584,6 +584,10 @@ enum CapturingRule {
   MOVE_OUT, HAND, PRISON
 };
 
+enum TransferSide {
+  TRANSFER_US, TRANSFER_THEM, TRANSFER_OWNER, TRANSFER_NON_OWNER
+};
+
 enum PushFirstColor {
   PUSH_US, PUSH_THEM, PUSH_EITHER
 };

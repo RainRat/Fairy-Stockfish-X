@@ -254,6 +254,14 @@ namespace {
         return value == "us" || value == "them" || value =="owner" || value =="non-owner" || value =="none";
     }
 
+    template <> bool set(const std::string& value, TransferSide& target) {
+        target =  value == "us" ? TRANSFER_US
+                : value == "them" ? TRANSFER_THEM
+                : value == "owner" ? TRANSFER_OWNER
+                : TRANSFER_NON_OWNER;
+        return value == "us" || value == "them" || value == "owner" || value == "non-owner";
+    }
+
     template <> bool set(const std::string& value, Bitboard& target) {
         std::string symbol;
         std::stringstream ss(value);
@@ -1476,6 +1484,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     }
 
     parse_attribute("captureType", v->captureType);
+    parse_attribute("captureToHandSide", v->captureToHandSide);
     parse_attribute("captureToHandTypes", v->captureToHandTypes, v->pieceToChar);
     // hostage price
     const auto& it_host_p = config.find("hostageExchange");

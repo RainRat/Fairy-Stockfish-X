@@ -54,15 +54,19 @@ namespace {
   }
 
   inline Piece reserve_transfer_piece(Color capturer, Piece captured, bool capturedPromoted,
-                                      Piece unpromotedCaptured, bool dropLoop,
+                                      Piece unpromotedCaptured, bool dropLoop, TransferSide transferSide,
                                       PieceType mainPromotionPawnType) {
+    Color receiver = transferSide == TRANSFER_US        ? capturer
+                   : transferSide == TRANSFER_THEM      ? ~capturer
+                   : transferSide == TRANSFER_OWNER     ? color_of(captured)
+                                                        : ~color_of(captured);
     if (!capturedPromoted || dropLoop)
-        return make_piece(capturer, type_of(captured));
+        return make_piece(receiver, type_of(captured));
 
     if (unpromotedCaptured != NO_PIECE)
-        return make_piece(capturer, type_of(unpromotedCaptured));
+        return make_piece(receiver, type_of(unpromotedCaptured));
 
-    return make_piece(capturer, mainPromotionPawnType);
+    return make_piece(receiver, mainPromotionPawnType);
   }
 
   struct SpellContextScope {
@@ -3774,7 +3778,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       if (type_of(m) == EN_PASSANT)
           board[capsq] = NO_PIECE;
       Piece transferPiece = reserve_transfer_piece(us, captured, capturedPromoted, unpromotedCaptured,
-                                                   drop_loop(), main_promotion_pawn_type(color_of(captured)));
+                                                   drop_loop(), var->captureToHandSide,
+                                                   main_promotion_pawn_type(color_of(captured)));
       if (capture_type() == HAND && !st->suppressedCaptureTransfer && (capture_to_hand_types() & type_of(transferPiece)))
       {
           Piece pieceToHand = transferPiece;
@@ -4759,7 +4764,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
 
           bool petrifiedCenter = bsq == moverSq && (var->petrifyOnCaptureTypes & type_of(bpc));
           Piece transferPiece = reserve_transfer_piece(us, bpc, capturedPromoted, unpromotedCaptured,
-                                                       drop_loop(), main_promotion_pawn_type(color_of(bpc)));
+                                                       drop_loop(), var->captureToHandSide,
+                                                       main_promotion_pawn_type(color_of(bpc)));
           if (captures_to_hand() && !petrifiedCenter && !st->suppressedCaptureTransfer && (capture_to_hand_types() & type_of(transferPiece)))
           {
               Piece pieceToHand = transferPiece;
@@ -5143,11 +5149,10 @@ void Position::undo_move(Move m) {
               put_piece(bpc, bsq, isPromoted, st->demotedBycatch & bsq ? unpromotedBpc : NO_PIECE);
               bool petrifiedCenter = bsq == moverSq && (var->petrifyOnCaptureTypes & type_of(bpc));
               Piece transferPiece = reserve_transfer_piece(us, bpc, bool((st->promotedBycatch | st->demotedBycatch) & bsq), unpromotedBpc,
-                                                           drop_loop(), main_promotion_pawn_type(color_of(unpromotedBpc)));
+                                                           drop_loop(), var->captureToHandSide,
+                                                           main_promotion_pawn_type(color_of(unpromotedBpc)));
               if (!wasBlastPromoted && !petrifiedCenter && !st->suppressedCaptureTransfer && capture_type() == HAND && (capture_to_hand_types() & type_of(transferPiece))) {
-                  remove_from_hand(!drop_loop() && (st->promotedBycatch & bsq)
-                                    ? make_piece(us, main_promotion_pawn_type(color_of(unpromotedBpc)))
-                                    : make_piece(us, type_of(unpromotedBpc)));
+                  remove_from_hand(transferPiece);
               } else if (!wasBlastPromoted && !petrifiedCenter && !st->suppressedCaptureTransfer && capture_type() == PRISON) {
                   remove_from_prison(!drop_loop() && (st->promotedBycatch & bsq)
                                     ? make_piece(color_of(unpromotedBpc), main_promotion_pawn_type(color_of(unpromotedBpc)))
@@ -5332,13 +5337,10 @@ void Position::undo_move(Move m) {
 
           put_piece(st->capturedPiece, capsq, st->capturedpromoted, st->unpromotedCapturedPiece); // Restore the captured piece
           Piece transferPiece = reserve_transfer_piece(us, st->capturedPiece, st->capturedpromoted, st->unpromotedCapturedPiece,
-                                                       drop_loop(), main_promotion_pawn_type(color_of(st->capturedPiece)));
+                                                       drop_loop(), var->captureToHandSide,
+                                                       main_promotion_pawn_type(color_of(st->capturedPiece)));
           if (!st->suppressedCaptureTransfer && capture_type() == HAND && (capture_to_hand_types() & type_of(transferPiece))) {
-              remove_from_hand(!drop_loop() && st->capturedpromoted
-                               ? (st->unpromotedCapturedPiece
-                                  ? make_piece(us, type_of(st->unpromotedCapturedPiece))
-                                  : make_piece(us, main_promotion_pawn_type(color_of(st->capturedPiece))))
-                               : make_piece(us, type_of(st->capturedPiece)));
+              remove_from_hand(transferPiece);
           } else if (!st->suppressedCaptureTransfer && capture_type() == PRISON) {
               remove_from_prison(!drop_loop() && st->capturedpromoted
                                ? (st->unpromotedCapturedPiece
@@ -5487,7 +5489,8 @@ Key Position::key_after(Move m) const {
   {
       k ^= Zobrist::psq[captured][to];
       Piece removedPiece = reserve_transfer_piece(sideToMove, captured, is_promoted(to), unpromoted_piece_on(to),
-                                                  drop_loop(), main_promotion_pawn_type(color_of(captured)));
+                                                  drop_loop(), var->captureToHandSide,
+                                                  main_promotion_pawn_type(color_of(captured)));
       if (captures_to_hand() && (capture_to_hand_types() & type_of(removedPiece))) {
           int n;
           if (capture_type() == HAND) {

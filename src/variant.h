@@ -196,6 +196,7 @@ struct Variant {
   int virtualDropLimit[PIECE_TYPE_NB] = {};
   bool dropLoop = false;
   CapturingRule captureType = MOVE_OUT;
+  TransferSide captureToHandSide = TRANSFER_US;
   PieceSet captureToHandTypes = piece_set(ALL_PIECES);
   bool firstRankPawnDrops = false;
   bool promotionZonePawnDrops = false;
