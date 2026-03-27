@@ -171,6 +171,20 @@ namespace {
         return value == "out" || value == "hand" || value == "prison";
     }
 
+    template <> bool set(const std::string& value, PushFirstColor& target) {
+        target = value == "us" ? PUSH_US
+                : value == "them" ? PUSH_THEM
+                : value == "either" ? PUSH_EITHER
+                : PUSH_THEM;
+        return value == "us" || value == "them" || value == "either";
+    }
+
+    template <> bool set(const std::string& value, PushRemoval& target) {
+        target = value == "shove" ? PUSH_REMOVE_SHOVE
+                : PUSH_REMOVE_NONE;
+        return value == "none" || value == "shove";
+    }
+
     template <> bool set(const std::string& value, MaterialCounting& target) {
         target =  value == "janggi"  ? JANGGI_MATERIAL
                 : value == "unweighted" ? UNWEIGHTED_MATERIAL
@@ -1325,6 +1339,48 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("mustCaptureWhite", v->mustCaptureByColor[WHITE]);
     parse_attribute("mustCaptureBlack", v->mustCaptureByColor[BLACK]);
     parse_attribute("rifleCapture", v->rifleCapture);
+    const auto& it_push_strength = config.find("pushingStrength");
+    if (it_push_strength != config.end())
+    {
+        char token = '\0', sep = 0;
+        size_t idx = std::string::npos;
+        int strength = 0;
+        int parsedStrengths[PIECE_TYPE_NB];
+        std::copy(std::begin(v->pushingStrength), std::end(v->pushingStrength), std::begin(parsedStrengths));
+        bool parseError = false;
+        bool sawToken = false;
+        std::stringstream ss(it_push_strength->second);
+        while (ss >> token)
+        {
+            sawToken = true;
+            idx = v->pieceToChar.find(std::toupper(static_cast<unsigned char>(token)));
+            if (idx == std::string::npos)
+                break;
+            if (idx >= PIECE_TYPE_NB || !(ss >> sep) || sep != ':' || !(ss >> strength))
+            {
+                parseError = true;
+                break;
+            }
+            if (strength < 0)
+            {
+                if (DoCheck)
+                    std::cerr << "pushingStrength - Invalid negative value for type: " << v->pieceToChar[idx] << std::endl;
+                return false;
+            }
+            parsedStrengths[PieceType(idx)] = strength;
+        }
+        if (DoCheck && sawToken && idx == std::string::npos)
+            std::cerr << "pushingStrength - Invalid piece type: " << token << std::endl;
+        else if (DoCheck && sawToken && idx != std::string::npos && (parseError || !(ss >> std::ws).eof()))
+            std::cerr << "pushingStrength - Invalid syntax." << std::endl;
+        else if (sawToken && idx != std::string::npos)
+            std::copy(std::begin(parsedStrengths), std::end(parsedStrengths), std::begin(v->pushingStrength));
+    }
+    parse_attribute("pushFirstColor", v->pushFirstColor);
+    parse_attribute("pushingRemoves", v->pushingRemoves);
+    parse_attribute("pushChainEnemyOnly", v->pushChainEnemyOnly);
+    parse_attribute("pushCaptureAgainstFriendlyBlocker", v->pushCaptureAgainstFriendlyBlocker);
+    parse_attribute("pushNoImmediateReturn", v->pushNoImmediateReturn);
     parse_attribute("changingColorTrigger", v->changingColorTrigger);
     parse_attribute("changingColorPieceTypes", v->changingColorPieceTypes, v->pieceToChar);
     if (config.find("selfCapture") != config.end())
@@ -1607,7 +1663,9 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("pointsRuleCaptures", v->pointsRuleCaptures);
     parse_attribute("pointsGoal", v->pointsGoal);
     parse_attribute("pointsGoalValue", v->pointsGoalValue);
-    parse_attribute("pointsGoalSimulValue", v->pointsGoalSimulValue);
+    parse_attribute("pointsGoalSimulValueByMover", v->pointsGoalSimulValueByMover);
+    parse_attribute("pointsGoalSimulValueByMostPoints", v->pointsGoalSimulValueByMostPoints);
+    parse_attribute("pointsGoalSimulValue", v->pointsGoalSimulValueByMostPoints);
     if (v->payPointsToDrop)
         v->pointsCounting = true;
 

@@ -61,3 +61,83 @@ out=$(run_cmds "setoption name UCI_Variant value ko-app-paw-na
 position fen 5/2R2/2h2/5/5 b - - 0 1 moves c3c5
 d")
 echo "${out}" | grep -q "Fen: 2h2/5/5/5/5 w - - 0 2"
+
+# Oshi baseline: documented 9x9 setup loads with black to move first.
+out=$(run_cmds "setoption name UCI_Variant value oshi
+position startpos
+d")
+echo "${out}" | grep -q "Fen: cb1aaa1bc/4a4/9/9/9/9/9/4A4/CB1AAA1BC b - - 0 1 {0 0}"
+
+# Oshi baseline: shoving an enemy height-3 tower off the board gives 3 points to the shover.
+out=$(run_cmds "setoption name UCI_Variant value oshi
+position fen 9/9/9/9/9/9/9/C8/c8 w - - 0 1 {0 0} moves a2a1
+d")
+echo "${out}" | grep -q "Fen: 9/9/9/9/9/9/9/9/C8 b - - 0 1 {3 0}"
+
+# Oshi baseline: shoving your own height-3 tower off the board gives 3 points to the opponent.
+out=$(run_cmds "setoption name UCI_Variant value oshi
+position fen 9/9/9/9/9/9/9/C8/C8 w - - 0 1 {0 0} moves a2a1
+d")
+echo "${out}" | grep -q "Fen: 9/9/9/9/9/9/9/9/C8 b - - 0 1 {0 3}"
+
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+ROOT="$ROOT" python3 - <<'PY'
+import os
+import pyffish as sf
+
+cfg = open(os.path.join(os.environ["ROOT"], "src", "variants-incomplete.ini"), encoding="utf-8").read()
+sf.load_variant_config(cfg)
+
+if sf.game_result("oshi", "C8/9/9/9/9/9/9/9/9 b - - 0 1 {7 0}", []) != sf.VALUE_MATE:
+    raise SystemExit("unexpected Oshi points-goal result")
+if sf.game_result("oshi", "9/9/9/9/9/9/9/9/9 b - - 0 1 {8 7}", []) != sf.VALUE_MATE:
+    raise SystemExit("unexpected Oshi simultaneous-goal result")
+if sf.game_result("oshi", "9/9/9/9/9/9/9/9/9 b - - 0 1 {0 0}", []) != -sf.VALUE_MATE:
+    raise SystemExit("unexpected Oshi stalemate result")
+if sf.game_result("ko-oshi", "5/5/5/5/5 b - - 0 1 {5 4}", []) != sf.VALUE_MATE:
+    raise SystemExit("unexpected Ko-Oshi simultaneous-goal result")
+PY
+
+# Ko-Oshi baseline: documented 5x5 setup loads.
+out=$(run_cmds "setoption name UCI_Variant value ko-oshi
+position startpos
+d")
+echo "${out}" | grep -q "Fen: b3b/1aaa1/5/1AAA1/B3B w - - 0 1 {0 0}"
+
+# Ko-Oshi baseline: immediate push-back to the opponent's previous square is illegal.
+out=$(run_cmds "setoption name UCI_Variant value ko-oshi
+position fen 5/5/5/1a3/1A3 w - - 0 1 {0 0} moves b1b2
+go perft 1")
+! echo "${out}" | grep -q "b3b2: 1"
+
+# Aries baseline: documented setup loads.
+out=$(run_cmds "setoption name UCI_Variant value aries
+position startpos
+d")
+echo "${out}" | grep -q "Fen: 4rrrr/4rrrr/4rrrr/4rrrr/RRRR4/RRRR4/RRRR4/RRRR4 w - - 0 1"
+
+# Aries baseline: pushing an enemy into a friendly blocker captures only the enemy.
+out=$(run_cmds "setoption name UCI_Variant value aries
+position fen 8/8/8/8/8/8/8/RrR5 w - - 0 1 moves a1b1
+d")
+echo "${out}" | grep -q "Fen: 8/8/8/8/8/8/8/1RR5 b - - 0 1"
+
+# Aries baseline: edge shove captures the last enemy piece.
+out=$(run_cmds "setoption name UCI_Variant value aries
+position fen 8/8/8/8/8/8/8/6Rr w - - 0 1 moves g1h1
+d")
+echo "${out}" | grep -q "Fen: 8/8/8/8/8/8/8/7R b - - 0 1"
+
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+ROOT="$ROOT" python3 - <<'PY'
+import os
+import pyffish as sf
+
+cfg = open(os.path.join(os.environ["ROOT"], "src", "variants-incomplete.ini"), encoding="utf-8").read()
+sf.load_variant_config(cfg)
+
+if sf.game_result("aries", "7R/8/8/8/8/8/8/8 w - - 0 1", []) != sf.VALUE_MATE:
+    raise SystemExit("unexpected Aries flag result")
+if sf.game_result("aries", "8/8/8/8/8/8/8/7r w - - 0 1", []) != -sf.VALUE_MATE:
+    raise SystemExit("unexpected Aries extinction result")
+PY

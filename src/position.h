@@ -118,6 +118,13 @@ struct StateInfo {
   Square colorChangeSquare;
   bool colorChangedPromoted;
   Piece colorChangedUnpromoted;
+  bool didPush;
+  Square pushTailSquare;
+  int pushStepF;
+  int pushStepR;
+  int pushCount;
+  bool pushEjected;
+  bool pushBlockedCapture;
   bool nnueRefreshNeeded;
 
   // Used by NNUE
@@ -246,6 +253,13 @@ public:
   bool rifle_capture() const;
   bool rifle_capture(Piece pc) const;
   bool rifle_capture(Move m) const;
+  int pushing_strength(PieceType pt) const;
+  bool has_pushing() const;
+  PushFirstColor push_first_color() const;
+  PushRemoval pushing_removes() const;
+  bool push_chain_enemy_only() const;
+  bool push_capture_against_friendly_blocker() const;
+  bool push_no_immediate_return() const;
   bool capture_morph() const;
   bool rex_exclusive_morph() const;
   bool must_capture() const;
@@ -359,7 +373,8 @@ public:
   int points_goal() const;
   int points_count(Color c) const;
   Value points_goal_value() const;
-  Value points_goal_simul_value() const;
+  Value points_goal_simul_value_by_most_points() const;
+  Value points_goal_simul_value_by_mover() const;
 
   CheckCount checks_remaining(Color c) const;
   MaterialCounting material_counting() const;
@@ -431,6 +446,10 @@ public:
   bool pseudo_legal(const Move m) const;
   bool virtual_drop(Move m) const;
   bool paired_drop(Move m) const;
+  bool push_move(Move m) const;
+  bool push_captures(Move m) const;
+  bool push_ejects(Move m) const;
+  Square push_capture_square(Move m) const;
   bool capture(Move m) const;
   bool capture_or_promotion(Move m) const;
   bool is_jump_capture(Move m) const;
@@ -1187,6 +1206,44 @@ inline bool Position::rifle_capture(Piece pc) const {
 
 inline bool Position::rifle_capture(Move m) const {
   return rifle_capture(moved_piece(m));
+}
+
+inline int Position::pushing_strength(PieceType pt) const {
+  assert(var != nullptr);
+  return var->pushingStrength[pt];
+}
+
+inline bool Position::has_pushing() const {
+  assert(var != nullptr);
+  for (PieceSet ps = piece_types(); ps; )
+      if (pushing_strength(pop_lsb(ps)) > 0)
+          return true;
+  return false;
+}
+
+inline PushFirstColor Position::push_first_color() const {
+  assert(var != nullptr);
+  return var->pushFirstColor;
+}
+
+inline PushRemoval Position::pushing_removes() const {
+  assert(var != nullptr);
+  return var->pushingRemoves;
+}
+
+inline bool Position::push_chain_enemy_only() const {
+  assert(var != nullptr);
+  return var->pushChainEnemyOnly;
+}
+
+inline bool Position::push_capture_against_friendly_blocker() const {
+  assert(var != nullptr);
+  return var->pushCaptureAgainstFriendlyBlocker;
+}
+
+inline bool Position::push_no_immediate_return() const {
+  assert(var != nullptr);
+  return var->pushNoImmediateReturn;
 }
 
 inline bool Position::capture_morph() const {
@@ -2082,9 +2139,14 @@ inline Value Position::points_goal_value() const {
   return var->pointsGoalValue;
 }
 
-inline Value Position::points_goal_simul_value() const {
+inline Value Position::points_goal_simul_value_by_most_points() const {
   assert(var != nullptr);
-  return var->pointsGoalSimulValue;
+  return var->pointsGoalSimulValueByMostPoints;
+}
+
+inline Value Position::points_goal_simul_value_by_mover() const {
+  assert(var != nullptr);
+  return var->pointsGoalSimulValueByMover;
 }
 
 
@@ -3118,6 +3180,8 @@ inline bool Position::capture(Move m) const {
       return true;
   if (type_of(m) == CASTLING || from_sq(m) == to_sq(m))
       return false;
+  if (push_move(m))
+      return push_captures(m);
 
   if (type_of(m) == NORMAL || type_of(m) == PROMOTION)
   {
@@ -3169,6 +3233,7 @@ inline Square Position::capture_square(Move m) const {
   Square to = to_sq(m);
   return type_of(m) == EN_PASSANT ? capture_square(to)
        : is_jump_capture(m)      ? jump_capture_square(from_sq(m), to)
+       : push_move(m)            ? push_capture_square(m)
                                  : to;
 }
 
@@ -3215,7 +3280,7 @@ inline Bitboard Position::fog_area() const {
 }
 
 inline Piece Position::captured_piece(Move m) const {
-  return piece_on(capture_square(m));
+  return capture(m) ? piece_on(capture_square(m)) : NO_PIECE;
 }
 
 inline const std::string Position::piece_to_partner() const {

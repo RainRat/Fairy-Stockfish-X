@@ -624,6 +624,25 @@ namespace {
                     jumpCaptures |= to;
             }
         }
+        Bitboard pushMoves = 0;
+        if (pos.pushing_strength(Pt) > 0)
+        {
+            Bitboard candidates = (attacks | quiets) & pos.pieces();
+            while (candidates)
+            {
+                Square to = pop_lsb(candidates);
+                Move pm = make<NORMAL>(from, to);
+                if (!pos.push_move(pm))
+                    continue;
+                if (pos.push_captures(pm))
+                {
+                    if (Type == CAPTURES || Type == EVASIONS || Type == NON_EVASIONS)
+                        pushMoves |= to;
+                }
+                else if (Type != CAPTURES)
+                    pushMoves |= to;
+            }
+        }
 
         if (mandatoryPromotionZone)
         {
@@ -700,6 +719,9 @@ namespace {
 
         while (b1)
             moveList = make_move_and_gating<NORMAL>(pos, moveList, Us, from, pop_lsb(b1));
+
+        while (pushMoves)
+            moveList = make_move_and_gating<NORMAL>(pos, moveList, Us, from, pop_lsb(pushMoves));
 
         while (pawnLikeDoubleSteps)
             moveList = make_move_and_gating<NORMAL>(pos, moveList, Us, from, pop_lsb(pawnLikeDoubleSteps));

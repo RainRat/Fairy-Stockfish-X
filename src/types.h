@@ -583,6 +583,14 @@ enum CapturingRule {
   MOVE_OUT, HAND, PRISON
 };
 
+enum PushFirstColor {
+  PUSH_US, PUSH_THEM, PUSH_EITHER
+};
+
+enum PushRemoval {
+  PUSH_REMOVE_NONE, PUSH_REMOVE_SHOVE
+};
+
 enum EndgameEval {
   NO_EG_EVAL, EG_EVAL_CHESS, EG_EVAL_ANTI, EG_EVAL_ATOMIC, EG_EVAL_DUCK, EG_EVAL_MISERE, EG_EVAL_RK, EG_EVAL_NB
 };
