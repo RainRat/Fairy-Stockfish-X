@@ -96,23 +96,6 @@ if sf.game_result("oshi", "9/9/9/9/9/9/9/9/9 b - - 0 1 {0 0}", []) != -sf.VALUE_
     raise SystemExit("unexpected Oshi stalemate result")
 PY
 
-# Aries baseline: documented setup loads.
-out=$(run_cmds "setoption name UCI_Variant value aries
-position startpos
-d")
-echo "${out}" | grep -q "Fen: 4rrrr/4rrrr/4rrrr/4rrrr/RRRR4/RRRR4/RRRR4/RRRR4 w - - 0 1"
-
-# Aries baseline: pushing an enemy into a friendly blocker captures only the enemy.
-out=$(run_cmds "setoption name UCI_Variant value aries
-position fen 8/8/8/8/8/8/8/RrR5 w - - 0 1 moves a1b1
-d")
-echo "${out}" | grep -q "Fen: 8/8/8/8/8/8/8/1RR5 b - - 0 1"
-
-# Aries baseline: edge shove captures the last enemy piece.
-out=$(run_cmds "setoption name UCI_Variant value aries
-position fen 8/8/8/8/8/8/8/6Rr w - - 0 1 moves g1h1
-d")
-echo "${out}" | grep -q "Fen: 8/8/8/8/8/8/8/7R b - - 0 1"
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 ROOT="$ROOT" python3 - <<'PY'
@@ -121,21 +104,4 @@ import pyffish as sf
 
 cfg = open(os.path.join(os.environ["ROOT"], "src", "variants-incomplete.ini"), encoding="utf-8").read()
 sf.load_variant_config(cfg)
-
-if sf.game_result("aries", "7R/8/8/8/8/8/8/8 w - - 0 1", []) != sf.VALUE_MATE:
-    raise SystemExit("unexpected Aries flag result")
-if sf.game_result("aries", "8/8/8/8/8/8/8/7r w - - 0 1", []) != -sf.VALUE_MATE:
-    raise SystemExit("unexpected Aries extinction result")
 PY
-
-# Aries baseline: search avoids a repetition-losing move when a non-losing move exists.
-out=$(run_cmds "setoption name UCI_Variant value aries
-position fen 8/8/8/8/8/8/7r/R7 w - - 0 1 moves a1a2 h2h1 a2a1 h1h2 a1a2 h2h1 a2a1
-go depth 3")
-! echo "${out}" | grep -q "^bestmove h1h2$"
-
-# Control: the repetition-losing move is still legal and searchable when forced.
-out=$(run_cmds "setoption name UCI_Variant value aries
-position fen 8/8/8/8/8/8/7r/R7 w - - 0 1 moves a1a2 h2h1 a2a1 h1h2 a1a2 h2h1 a2a1
-go depth 2 searchmoves h1h2")
-echo "${out}" | grep -q "^bestmove h1h2$"

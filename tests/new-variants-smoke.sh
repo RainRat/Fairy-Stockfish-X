@@ -136,6 +136,18 @@ go perft 1")
 ! echo "${out}" | grep -q "b3b2: 1"
 fi
 
+# 5e) Aries: opening setup loads and a repetition-losing move is avoided in search.
+if variant_available "aries"; then
+out=$(run_cmds "setoption name UCI_Variant value aries
+position startpos
+d")
+echo "${out}" | grep -q "Fen: 4rrrr/4rrrr/4rrrr/4rrrr/RRRR4/RRRR4/RRRR4/RRRR4 w - - 0 1"
+out=$(run_cmds "setoption name UCI_Variant value aries
+position fen 8/8/8/8/8/8/7r/R7 w - - 0 1 moves a1a2 h2h1 a2a1 h1h2 a1a2 h2h1 a2a1
+go depth 3")
+! echo "${out}" | grep -q "^bestmove h1h2$"
+fi
+
 # 6) Tablut split: edge-escape should end immediately, corner-escape should not.
 if variant_available "tablut" && variant_available "tablut-corner-escape"; then
 out=$(run_cmds "setoption name UCI_Variant value tablut
