@@ -6185,7 +6185,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
   connectPieces &= pieces(~sideToMove);
 
   // Connect-n
-  if ((connect_n() > 0) && (popcount(connectPieces) >= connect_n()))
+  if (var->materialCounting != CONNECT_N_COUNT && (connect_n() > 0) && (popcount(connectPieces) >= connect_n()))
   {
       if (!var->connectLines.empty() && connect_n() == int(var->connectLines.front().size()))
       {

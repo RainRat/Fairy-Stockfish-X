@@ -506,6 +506,7 @@ public:
   bool is_optional_game_end(Value& result, int ply = 0, int countStarted = 0) const;
   bool is_game_end(Value& result, int ply = 0) const;
   Value material_counting_result() const;
+  int connect_line_count(Color c) const;
   bool is_draw(int ply) const;
   bool has_game_cycle(int ply) const;
   bool has_repeated() const;
@@ -3477,11 +3478,53 @@ inline Value Position::material_counting_result() const {
   case BLACK_DRAW_ODDS:
       result = -VALUE_COUNT_WIN;
       break;
+  case CONNECT_N_COUNT:
+      materialCount = connect_line_count(WHITE) - connect_line_count(BLACK);
+      result = materialCount > 0 ? VALUE_COUNT_WIN
+             : materialCount < 0 ? -VALUE_COUNT_WIN
+                                 : VALUE_DRAW;
+      break;
   default:
       assert(false);
       result = VALUE_DRAW;
   }
   return sideToMove == WHITE ? result : -result;
+}
+
+inline int Position::connect_line_count(Color c) const {
+  if (connect_n() <= 0)
+      return 0;
+
+  Bitboard connectPieces = 0;
+  for (PieceSet ps = connect_piece_types(); ps;) {
+      PieceType pt = pop_lsb(ps);
+      connectPieces |= pieces(c, pt);
+  }
+
+  if (popcount(connectPieces) < connect_n())
+      return 0;
+
+  int countLines = 0;
+  if (!var->connectLines.empty() && connect_n() == int(var->connectLines.front().size()))
+  {
+      for (const auto& line : var->connectLines)
+      {
+          bool complete = true;
+          for (Square s : line)
+              complete &= bool(connectPieces & square_bb(s));
+          countLines += complete;
+      }
+      return countLines;
+  }
+
+  for (Direction d : var->connectDirections)
+  {
+      Bitboard b = connectPieces;
+      for (int i = 1; i < connect_n() && b; i++)
+          b &= shift(d, b);
+      countLines += popcount(b);
+  }
+  return countLines;
 }
 
 inline void Position::add_to_hand(Piece pc) {
