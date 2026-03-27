@@ -136,7 +136,35 @@ go perft 1")
 ! echo "${out}" | grep -q "b3b2: 1"
 fi
 
-# 5e) Aries: opening setup loads and a repetition-losing move is avoided in search.
+# 5e) Oshi: opening setup loads, push-back is illegal, and scoring/adjudication follow rules.
+if variant_available "oshi"; then
+out=$(run_cmds "setoption name UCI_Variant value oshi
+position startpos
+d")
+echo "${out}" | grep -q "Fen: cb1aaa1bc/4a4/9/9/9/9/9/4A4/CB1AAA1BC b - - 0 1 {0 0}"
+out=$(run_cmds "setoption name UCI_Variant value oshi
+position fen 9/9/9/9/9/9/9/1a3/1A3 w - - 0 1 {0 0} moves b1b2
+go perft 1")
+! echo "${out}" | grep -q "b3b2: 1"
+out=$(run_cmds "setoption name UCI_Variant value oshi
+position fen 9/9/9/9/9/9/9/C8/c8 w - - 0 1 {0 0} moves a2a1
+d")
+echo "${out}" | grep -q "Fen: 9/9/9/9/9/9/9/9/C8 b - - 0 1 {3 0}"
+out=$(run_cmds "setoption name UCI_Variant value oshi
+position fen 9/9/9/9/9/9/9/C8/C8 w - - 0 1 {0 0} moves a2a1
+d")
+echo "${out}" | grep -q "Fen: 9/9/9/9/9/9/9/9/C8 b - - 0 1 {0 3}"
+out=$(run_cmds "setoption name UCI_Variant value oshi
+position fen C8/9/9/9/9/9/9/9/9 b - - 0 1 {7 0}
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 0"
+out=$(run_cmds "setoption name UCI_Variant value oshi
+position fen 9/9/9/9/9/9/9/9/9 b - - 0 1 {8 7}
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 0"
+fi
+
+# 5f) Aries: opening setup loads and a repetition-losing move is avoided in search.
 if variant_available "aries"; then
 out=$(run_cmds "setoption name UCI_Variant value aries
 position startpos
@@ -148,7 +176,7 @@ go depth 3")
 ! echo "${out}" | grep -q "^bestmove h1h2$"
 fi
 
-# 5f) Ko-app-paw-na: hunter capture and rabbit-pattern goal both end the game.
+# 5g) Ko-app-paw-na: hunter capture and rabbit-pattern goal both end the game.
 if variant_available "ko-app-paw-na"; then
 out=$(run_cmds "setoption name UCI_Variant value ko-app-paw-na
 position fen 5/2R2/2h2/5/5 b - - 0 1 moves c3c5

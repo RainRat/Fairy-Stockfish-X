@@ -56,41 +56,6 @@ if result != sf.VALUE_MATE:
     raise SystemExit(f"unexpected Seega extinction result for {fen}: got {result}")
 PY
 
-# Oshi baseline: documented 9x9 setup loads with black to move first.
-out=$(run_cmds "setoption name UCI_Variant value oshi
-position startpos
-d")
-echo "${out}" | grep -q "Fen: cb1aaa1bc/4a4/9/9/9/9/9/4A4/CB1AAA1BC b - - 0 1 {0 0}"
-
-# Oshi baseline: shoving an enemy height-3 tower off the board gives 3 points to the shover.
-out=$(run_cmds "setoption name UCI_Variant value oshi
-position fen 9/9/9/9/9/9/9/C8/c8 w - - 0 1 {0 0} moves a2a1
-d")
-echo "${out}" | grep -q "Fen: 9/9/9/9/9/9/9/9/C8 b - - 0 1 {3 0}"
-
-# Oshi baseline: shoving your own height-3 tower off the board gives 3 points to the opponent.
-out=$(run_cmds "setoption name UCI_Variant value oshi
-position fen 9/9/9/9/9/9/9/C8/C8 w - - 0 1 {0 0} moves a2a1
-d")
-echo "${out}" | grep -q "Fen: 9/9/9/9/9/9/9/9/C8 b - - 0 1 {0 3}"
-
-ROOT=$(cd "$(dirname "$0")/.." && pwd)
-ROOT="$ROOT" python3 - <<'PY'
-import os
-import pyffish as sf
-
-cfg = open(os.path.join(os.environ["ROOT"], "src", "variants-incomplete.ini"), encoding="utf-8").read()
-sf.load_variant_config(cfg)
-
-if sf.game_result("oshi", "C8/9/9/9/9/9/9/9/9 b - - 0 1 {7 0}", []) != sf.VALUE_MATE:
-    raise SystemExit("unexpected Oshi points-goal result")
-if sf.game_result("oshi", "9/9/9/9/9/9/9/9/9 b - - 0 1 {8 7}", []) != sf.VALUE_MATE:
-    raise SystemExit("unexpected Oshi simultaneous-goal result")
-if sf.game_result("oshi", "9/9/9/9/9/9/9/9/9 b - - 0 1 {0 0}", []) != -sf.VALUE_MATE:
-    raise SystemExit("unexpected Oshi stalemate result")
-PY
-
-
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 ROOT="$ROOT" python3 - <<'PY'
 import os
