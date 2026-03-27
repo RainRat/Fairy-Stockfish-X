@@ -25,6 +25,7 @@ checking = false
 pushingStrength = a:5
 pushFirstColor = either
 pushingRemoves = shove
+edgeInsertOnly = true
 edgeInsertTypes = a
 edgeInsertRegionWhite = a5 b5 c5 d5 e5 a1 a2 a3 a4 a5
 edgeInsertFromTopWhite = true
@@ -59,6 +60,12 @@ out=$(run_cmds "setoption name UCI_Variant value edge-insert-demo
 position fen A4/5/5/5/5[AAAAAAAAA] w - - 0 1 moves A@a5,b5
 d")
 echo "${out}" | grep -q "Fen: AA3/5/5/5/5\\[AAAAAAAA\\] b - - 0 1"
+
+# Plain drops must be rejected when edgeInsertOnly is enabled.
+out=$(run_cmds "setoption name UCI_Variant value edge-insert-demo
+position startpos moves A@a1
+d")
+echo "${out}" | grep -q "Fen: 5/5/5/5/5\\[AAAAAAAAAA\\] w - - 0 1"
 
 rm -f "${tmp_ini}"
 echo "edge-insert tests passed"

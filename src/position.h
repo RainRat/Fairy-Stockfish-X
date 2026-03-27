@@ -261,6 +261,7 @@ public:
   bool push_capture_against_friendly_blocker() const;
   bool push_no_immediate_return() const;
   PieceSet edge_insert_types() const;
+  bool edge_insert_only() const;
   Bitboard edge_insert_region(Color c) const;
   bool edge_insert_from_top(Color c) const;
   bool edge_insert_from_bottom(Color c) const;
@@ -1255,6 +1256,11 @@ inline bool Position::push_no_immediate_return() const {
 inline PieceSet Position::edge_insert_types() const {
   assert(var != nullptr);
   return var->edgeInsertTypes;
+}
+
+inline bool Position::edge_insert_only() const {
+  assert(var != nullptr);
+  return var->edgeInsertOnly;
 }
 
 inline Bitboard Position::edge_insert_region(Color c) const {

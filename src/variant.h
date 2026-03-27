@@ -169,6 +169,7 @@ struct Variant {
   bool pushNoImmediateReturn = false;
   PieceSet edgeInsertTypes = NO_PIECE_SET;
   Bitboard edgeInsertRegion[COLOR_NB] = {};
+  bool edgeInsertOnly = false;
   bool edgeInsertFromTop[COLOR_NB] = {false, false};
   bool edgeInsertFromBottom[COLOR_NB] = {false, false};
   bool edgeInsertFromLeft[COLOR_NB] = {false, false};

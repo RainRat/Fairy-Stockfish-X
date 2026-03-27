@@ -2225,6 +2225,8 @@ bool Position::legal(Move m) const {
       if (!empty(to) && !push_move(m))
           return false;
   }
+  else if (dropMove && edge_insert_only() && (edge_insert_types() & in_hand_piece_type(m)))
+      return false;
 
   if (pass_until_setup() && must_drop()
       && !has_setup_drop(us)
@@ -3080,6 +3082,9 @@ bool Position::pseudo_legal(const Move m) const {
                 && (drop_region(us, type_of(pc)) & to)
                 && (empty(to) || push_move(m));
       }
+
+      if (edge_insert_only() && (edge_insert_types() & in_hand_piece_type(m)))
+          return false;
 
       Bitboard legalDropTargets = ~pieces();
       if (!paired_drop(m) && (capture_drop_types() & in_hand_piece_type(m)))
@@ -5270,41 +5275,42 @@ void Position::undo_move(Move m) {
           }
           if (!rifleShot)
               move_piece(to, from); // Put the piece back at the source square
-          if (st->didPush)
-          {
-              Square source = SQ_NONE;
-              Square finalSource = SQ_NONE;
-              if (st->pushBlockedCapture)
-              {
-                  if (st->pushCount > 1)
-                  {
-                      source = st->pushTailSquare;
-                      finalSource = make_square(File(int(file_of(to)) + st->pushStepF),
-                                                Rank(int(rank_of(to)) + st->pushStepR));
-                  }
-              }
-              else if (advance_square(*this, to, st->pushStepF, st->pushStepR, source))
-              {
-                  finalSource = st->pushTailSquare;
-                  if (!st->pushEjected)
-                  {
-                      if (!advance_square(*this, st->pushTailSquare, st->pushStepF, st->pushStepR, finalSource))
-                          assert(false && "stored push state missing tail destination");
-                  }
-              }
+      }
 
-              if (source != SQ_NONE)
+      if (st->didPush)
+      {
+          Square source = SQ_NONE;
+          Square finalSource = SQ_NONE;
+          if (st->pushBlockedCapture)
+          {
+              if (st->pushCount > 1)
               {
-                  while (true)
-                  {
-                      Square dest = make_square(File(int(file_of(source)) - st->pushStepF),
-                                                Rank(int(rank_of(source)) - st->pushStepR));
-                      move_piece(source, dest);
-                      if (source == finalSource)
-                          break;
-                      if (!advance_square(*this, source, st->pushStepF, st->pushStepR, source))
-                          break;
-                  }
+                  source = st->pushTailSquare;
+                  finalSource = make_square(File(int(file_of(to)) + st->pushStepF),
+                                            Rank(int(rank_of(to)) + st->pushStepR));
+              }
+          }
+          else if (advance_square(*this, to, st->pushStepF, st->pushStepR, source))
+          {
+              finalSource = st->pushTailSquare;
+              if (!st->pushEjected)
+              {
+                  if (!advance_square(*this, st->pushTailSquare, st->pushStepF, st->pushStepR, finalSource))
+                      assert(false && "stored push state missing tail destination");
+              }
+          }
+
+          if (source != SQ_NONE)
+          {
+              while (true)
+              {
+                  Square dest = make_square(File(int(file_of(source)) - st->pushStepF),
+                                            Rank(int(rank_of(source)) - st->pushStepR));
+                  move_piece(source, dest);
+                  if (source == finalSource)
+                      break;
+                  if (!advance_square(*this, source, st->pushStepF, st->pushStepR, source))
+                      break;
               }
           }
       }

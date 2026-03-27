@@ -1382,6 +1382,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("pushCaptureAgainstFriendlyBlocker", v->pushCaptureAgainstFriendlyBlocker);
     parse_attribute("pushNoImmediateReturn", v->pushNoImmediateReturn);
     parse_attribute("edgeInsertTypes", v->edgeInsertTypes, v->pieceToChar);
+    parse_attribute("edgeInsertOnly", v->edgeInsertOnly);
     parse_both_colors_with_overrides("edgeInsertRegion", v->edgeInsertRegion);
     parse_both_colors_with_overrides("edgeInsertFromTop", v->edgeInsertFromTop);
     parse_both_colors_with_overrides("edgeInsertFromBottom", v->edgeInsertFromBottom);
@@ -1673,7 +1674,8 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("pointsGoalValue", v->pointsGoalValue);
     parse_attribute("pointsGoalSimulValueByMover", v->pointsGoalSimulValueByMover);
     parse_attribute("pointsGoalSimulValueByMostPoints", v->pointsGoalSimulValueByMostPoints);
-    parse_attribute("pointsGoalSimulValue", v->pointsGoalSimulValueByMostPoints);
+    if (config.find("pointsGoalSimulValueByMostPoints") == config.end())
+        parse_attribute("pointsGoalSimulValue", v->pointsGoalSimulValueByMostPoints);
     if (v->payPointsToDrop)
         v->pointsCounting = true;
 

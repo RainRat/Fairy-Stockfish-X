@@ -191,6 +191,9 @@ namespace {
 
   template<Color Us, GenType Type>
   ExtMove* generate_drops(const Position& pos, ExtMove* moveList, PieceType pt, Bitboard b) {
+    if (pos.edge_insert_only() && (pos.edge_insert_types() & pt))
+        return moveList;
+
     // Do not generate virtual drops for perft and at root
     if (pos.can_drop(Us, pt) || (Type != NON_EVASIONS && pos.two_boards() && pos.virtual_drops() && pos.allow_virtual_drop(Us, pt)))
     {
@@ -229,6 +232,9 @@ namespace {
 
   template<Color Us, GenType Type>
   ExtMove* generate_capture_drops(const Position& pos, ExtMove* moveList, PieceType pt, Bitboard b) {
+    if (pos.edge_insert_only() && (pos.edge_insert_types() & pt))
+        return moveList;
+
     if (!(pos.capture_drop_types() & pt))
         return moveList;
 
@@ -274,7 +280,9 @@ namespace {
         for (PieceSet ps = insertTypes; ps; )
         {
             PieceType pt = pop_lsb(ps);
-            if (!pos.can_drop(Us, pt) || !(pos.drop_region(Us, pt) & to))
+            if (!(pos.can_drop(Us, pt)
+                  || (Type != NON_EVASIONS && pos.two_boards() && pos.virtual_drops() && pos.allow_virtual_drop(Us, pt)))
+                || !(pos.drop_region(Us, pt) & to))
                 continue;
 
             if (pos.edge_insert_from_top(Us) && rank_of(to) == pos.max_rank() && rank_of(to) > RANK_1)
