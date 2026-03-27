@@ -141,3 +141,15 @@ if sf.game_result("aries", "7R/8/8/8/8/8/8/8 w - - 0 1", []) != sf.VALUE_MATE:
 if sf.game_result("aries", "8/8/8/8/8/8/8/7r w - - 0 1", []) != -sf.VALUE_MATE:
     raise SystemExit("unexpected Aries extinction result")
 PY
+
+# Aries baseline: search avoids a repetition-losing move when a non-losing move exists.
+out=$(run_cmds "setoption name UCI_Variant value aries
+position fen 8/8/8/8/8/8/7r/R7 w - - 0 1 moves a1a2 h2h1 a2a1 h1h2 a1a2 h2h1 a2a1
+go depth 3")
+! echo "${out}" | grep -q "^bestmove h1h2$"
+
+# Control: the repetition-losing move is still legal and searchable when forced.
+out=$(run_cmds "setoption name UCI_Variant value aries
+position fen 8/8/8/8/8/8/7r/R7 w - - 0 1 moves a1a2 h2h1 a2a1 h1h2 a1a2 h2h1 a2a1
+go depth 2 searchmoves h1h2")
+echo "${out}" | grep -q "^bestmove h1h2$"
