@@ -253,6 +253,85 @@ namespace {
   }
 
   template<Color Us, GenType Type>
+  ExtMove* generate_edge_insertions(const Position& pos, ExtMove* moveList) {
+    if (Type == QUIET_CHECKS)
+        return moveList;
+
+    PieceSet insertTypes = pos.edge_insert_types();
+    if (!insertTypes)
+        return moveList;
+
+    Bitboard entries = pos.edge_insert_region(Us) & pos.board_bb();
+    if (!entries)
+        return moveList;
+
+    if (insertTypes & ALL_PIECES)
+        insertTypes = pos.piece_types();
+
+    while (entries)
+    {
+        Square to = pop_lsb(entries);
+        for (PieceSet ps = insertTypes; ps; )
+        {
+            PieceType pt = pop_lsb(ps);
+            if (!pos.can_drop(Us, pt) || !(pos.drop_region(Us, pt) & to))
+                continue;
+
+            if (pos.edge_insert_from_top(Us) && rank_of(to) == pos.max_rank() && rank_of(to) > RANK_1)
+            {
+                Move m = make_insert(to + SOUTH, to, pt, pt);
+                bool push = pos.push_move(m);
+                if (!pos.empty(to) && !push)
+                    continue;
+                bool cap = push && pos.push_captures(m);
+                if ((Type == CAPTURES && cap)
+                    || (Type == QUIETS && !cap)
+                    || (Type != CAPTURES && Type != QUIETS))
+                    *moveList++ = m;
+            }
+            if (pos.edge_insert_from_bottom(Us) && rank_of(to) == RANK_1 && rank_of(to) < pos.max_rank())
+            {
+                Move m = make_insert(to + NORTH, to, pt, pt);
+                bool push = pos.push_move(m);
+                if (!pos.empty(to) && !push)
+                    continue;
+                bool cap = push && pos.push_captures(m);
+                if ((Type == CAPTURES && cap)
+                    || (Type == QUIETS && !cap)
+                    || (Type != CAPTURES && Type != QUIETS))
+                    *moveList++ = m;
+            }
+            if (pos.edge_insert_from_left(Us) && file_of(to) == FILE_A && file_of(to) < pos.max_file())
+            {
+                Move m = make_insert(to + EAST, to, pt, pt);
+                bool push = pos.push_move(m);
+                if (!pos.empty(to) && !push)
+                    continue;
+                bool cap = push && pos.push_captures(m);
+                if ((Type == CAPTURES && cap)
+                    || (Type == QUIETS && !cap)
+                    || (Type != CAPTURES && Type != QUIETS))
+                    *moveList++ = m;
+            }
+            if (pos.edge_insert_from_right(Us) && file_of(to) == pos.max_file() && file_of(to) > FILE_A)
+            {
+                Move m = make_insert(to + WEST, to, pt, pt);
+                bool push = pos.push_move(m);
+                if (!pos.empty(to) && !push)
+                    continue;
+                bool cap = push && pos.push_captures(m);
+                if ((Type == CAPTURES && cap)
+                    || (Type == QUIETS && !cap)
+                    || (Type != CAPTURES && Type != QUIETS))
+                    *moveList++ = m;
+            }
+        }
+    }
+
+    return moveList;
+  }
+
+  template<Color Us, GenType Type>
   ExtMove* generate_exchanges(const Position& pos, ExtMove* moveList, PieceType pt, Bitboard b) {
       assert(Type != CAPTURES);
       static_assert(SQUARE_BITS >= PIECE_TYPE_BITS, "not enough bits for exchange move");
@@ -908,6 +987,8 @@ namespace {
         if (!restrictToForcedJumper && pos.piece_drops() && (pos.can_drop(Us, ALL_PIECES) || pos.two_boards()))
             for (PieceSet ps = pos.piece_types(); ps;)
                 moveList = generate_capture_drops<Us, Type>(pos, moveList, pop_lsb(ps), captureTarget);
+        if (!restrictToForcedJumper && pos.piece_drops() && (pos.can_drop(Us, ALL_PIECES) || pos.two_boards()))
+            moveList = generate_edge_insertions<Us, Type>(pos, moveList);
         // generate exchange
         if (!restrictToForcedJumper && pos.capture_type() == PRISON && Type != CAPTURES && pos.has_exchange())
             for (PieceSet ps = pos.piece_types(); ps;)

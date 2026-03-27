@@ -260,6 +260,12 @@ public:
   bool push_chain_enemy_only() const;
   bool push_capture_against_friendly_blocker() const;
   bool push_no_immediate_return() const;
+  PieceSet edge_insert_types() const;
+  Bitboard edge_insert_region(Color c) const;
+  bool edge_insert_from_top(Color c) const;
+  bool edge_insert_from_bottom(Color c) const;
+  bool edge_insert_from_left(Color c) const;
+  bool edge_insert_from_right(Color c) const;
   bool capture_morph() const;
   bool rex_exclusive_morph() const;
   bool must_capture() const;
@@ -1244,6 +1250,36 @@ inline bool Position::push_capture_against_friendly_blocker() const {
 inline bool Position::push_no_immediate_return() const {
   assert(var != nullptr);
   return var->pushNoImmediateReturn;
+}
+
+inline PieceSet Position::edge_insert_types() const {
+  assert(var != nullptr);
+  return var->edgeInsertTypes;
+}
+
+inline Bitboard Position::edge_insert_region(Color c) const {
+  assert(var != nullptr);
+  return var->edgeInsertRegion[c];
+}
+
+inline bool Position::edge_insert_from_top(Color c) const {
+  assert(var != nullptr);
+  return var->edgeInsertFromTop[c];
+}
+
+inline bool Position::edge_insert_from_bottom(Color c) const {
+  assert(var != nullptr);
+  return var->edgeInsertFromBottom[c];
+}
+
+inline bool Position::edge_insert_from_left(Color c) const {
+  assert(var != nullptr);
+  return var->edgeInsertFromLeft[c];
+}
+
+inline bool Position::edge_insert_from_right(Color c) const {
+  assert(var != nullptr);
+  return var->edgeInsertFromRight[c];
 }
 
 inline bool Position::capture_morph() const {
