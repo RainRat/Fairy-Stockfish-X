@@ -2295,6 +2295,38 @@ bool Position::legal(Move m) const {
   Square shotSq = capture(m) ? capture_square(m) : to;
   Bitboard removedAttackers = rifleShot ? square_bb(shotSq) : Bitboard(0);
   Square effectiveTo = rifleShot ? from : to;
+  Piece moverPiece = moved_piece(m);
+  PieceType movePt = type_of(moverPiece);
+  PieceType finalMovePt = movePt;
+
+  if (type_of(m) == PROMOTION)
+      finalMovePt = promotion_type(m);
+  else if (type_of(m) == PIECE_PROMOTION)
+      finalMovePt = promoted_piece_type(movePt);
+  else if (type_of(m) == PIECE_DEMOTION)
+  {
+      Piece unpromoted = unpromoted_piece_on(from);
+      if (unpromoted != NO_PIECE)
+          finalMovePt = type_of(unpromoted);
+  }
+
+  if (   !dropMove
+      && type_of(m) != CASTLING
+      && type_of(m) != PROMOTION
+      && type_of(m) != PIECE_PROMOTION
+      && !is_pass(m))
+  {
+      if (capture_morph() && capture(m))
+      {
+          Piece captured = piece_on(shotSq);
+          if (captured != NO_PIECE)
+              finalMovePt = type_of(captured);
+      }
+
+      PieceType moveMorphType = var->moveMorphPieceType[finalMovePt];
+      if (moveMorphType != NO_PIECE_TYPE)
+          finalMovePt = moveMorphType;
+  }
 
   if (type_of(m) == PROMOTION && !promotion_allowed(us, promotion_type(m), to))
       return false;
@@ -2344,7 +2376,6 @@ bool Position::legal(Move m) const {
   }
   if (topology_wraps() && !allow_checks() && (pieces(them) & to) && type_of(piece_on(to)) == KING)
       return false;
-  PieceType movePt = type_of(moved_piece(m));
   if (!dropMove && (var->mutuallyHopIllegalTypes & movePt) && (AttackRiderTypes[movePt] & HOPPING_RIDERS))
   {
       Bitboard between = between_bb(from, to);
@@ -2660,37 +2691,35 @@ bool Position::legal(Move m) const {
       for (PieceSet ps = anti_royal_types(); ps; )
       {
           PieceType pt = pop_lsb(ps);
-          if (count(sideToMove, pt) <= anti_royal_count())
+          int countAfter = count(sideToMove, pt);
+          if (!dropMove && movePt == pt)
+              --countAfter;
+          if (finalMovePt == pt)
           {
-              if (count(sideToMove, pt) > 0)
-                  antiRoyals |= pieces(sideToMove, pt);
-              else if (!dropMove || type_of(moved_piece(m)) != pt)
+              ++countAfter;
+              if (dropMove && paired_drop(m))
+                  ++countAfter;
+          }
+
+          if (countAfter <= anti_royal_count())
+          {
+              if (countAfter <= 0)
                   return false; // Anti-royal piece is missing and not replaced
+
+              Bitboard antiRoyalsByType = pieces(sideToMove, pt);
+              if (movePt == pt)
+                  antiRoyalsByType &= ~square_bb(from);
+              antiRoyals |= antiRoyalsByType;
+              if (finalMovePt == pt)
+              {
+                  antiRoyals |= square_bb(kto);
+                  if (dropMove && paired_drop(m))
+                      antiRoyals |= square_bb(secondary_drop_square(m));
+              }
           }
       }
-      if (!rifleShot && is_ok(from) && (antiRoyals & from))
-          antiRoyals ^= square_bb(from) ^ kto;
       if (is_ok(rfrom) && (antiRoyals & rfrom))
           antiRoyals ^= square_bb(rfrom) ^ rto;
-      if (dropMove && (anti_royal_types() & type_of(moved_piece(m))))
-      {
-          antiRoyals |= square_bb(to);
-          if (paired_drop(m))
-              antiRoyals |= square_bb(secondary_drop_square(m));
-      }
-      if (type_of(m) == PROMOTION)
-      {
-          if (anti_royal_types() & type_of(moved_piece(m)))
-          {
-              if (count(sideToMove, type_of(moved_piece(m))) > anti_royal_count())
-                  antiRoyals &= ~pieces(sideToMove, type_of(moved_piece(m)));
-          }
-          if (anti_royal_types() & promotion_type(m))
-          {
-              if (count(sideToMove, promotion_type(m)) <= anti_royal_count())
-                  antiRoyals |= kto;
-          }
-      }
 
       Bitboard vulnerableEnemyRoyals = blastOnCapture
                                      ? ((st->pseudoRoyals | pieces(king_type())) & pieces(~us) & occupied) & ~blastImmune
