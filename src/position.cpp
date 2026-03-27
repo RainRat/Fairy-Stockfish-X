@@ -5935,29 +5935,21 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
       {
           if (st->pointsCount[~sideToMove] != st->pointsCount[sideToMove])
           {
-              if (var->pointsGoalSimulValueByMostPoints == VALUE_DRAW)
+              if (var->pointsGoalSimulValueByMostPoints != VALUE_DRAW)
               {
-                  result = convert_mate_value(VALUE_DRAW, ply);
+                  // The most-points policy rules on ending, from the perspective of the player with most points.
+                  result = convert_mate_value(
+                    st->pointsCount[~sideToMove] > st->pointsCount[sideToMove] ?
+                    var->pointsGoalSimulValueByMostPoints : -var->pointsGoalSimulValueByMostPoints, ply);
                   return true;
               }
-              // Otherwise the most-points policy rules on ending, from perspective of the player with most points.
-              result = convert_mate_value(
-                st->pointsCount[~sideToMove] > st->pointsCount[sideToMove] ?
-                var->pointsGoalSimulValueByMostPoints : -var->pointsGoalSimulValueByMostPoints, ply);
-              return true;
           }
-          // If the points are tied, use the mover policy when provided, otherwise draw.
+          // If the points are tied, or the most-points policy would draw, use the mover policy when provided.
           if (var->pointsGoalSimulValueByMover != VALUE_NONE)
           {
               result = convert_mate_value(-var->pointsGoalSimulValueByMover, ply);
               return true;
           }
-          // If both players are tied on points, or the rules say it's a draw, then declare draw.
-          if (var->pointsGoalSimulValueByMostPoints == VALUE_DRAW)
-          {
-              result = convert_mate_value(VALUE_DRAW, ply);
-              return true;
-          };
           result = convert_mate_value(VALUE_DRAW, ply);
           return true;
       };
