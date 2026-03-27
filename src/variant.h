@@ -161,6 +161,12 @@ struct Variant {
   bool mustCaptureEnPassant = false;
   bool mustCaptureByColor[COLOR_NB] = {false, false};
   bool rifleCapture = false;
+  int pushingStrength[PIECE_TYPE_NB] = {};
+  PushFirstColor pushFirstColor = PUSH_THEM;
+  PushRemoval pushingRemoves = PUSH_REMOVE_NONE;
+  bool pushChainEnemyOnly = false;
+  bool pushCaptureAgainstFriendlyBlocker = false;
+  bool pushNoImmediateReturn = false;
   bool selfCapture = false;
   bool selfCaptureByColor[COLOR_NB] = {false, false};
   bool selfCaptureByColorSet[COLOR_NB] = {false, false};
@@ -309,7 +315,8 @@ struct Variant {
   PointsRule pointsRuleCaptures = POINTS_US;
   int piecePoints[PIECE_TYPE_NB] = {}; //for games of points, not evaluation
   Value pointsGoalValue = VALUE_MATE;
-  Value pointsGoalSimulValue = VALUE_MATE;
+  Value pointsGoalSimulValueByMostPoints = VALUE_MATE;
+  Value pointsGoalSimulValueByMover = VALUE_NONE;
   int pointsGoal = 0;
 
   // Derived properties

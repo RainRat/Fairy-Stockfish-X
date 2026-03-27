@@ -124,6 +124,30 @@ echo "${out}" | grep -q "^a2b3: 1$"
 echo "${out}" | grep -q "^a2a2x: 1$"
 fi
 
+# 5d) Ko-Oshi: opening setup loads and immediate push-back is illegal.
+if variant_available "ko-oshi"; then
+out=$(run_cmds "setoption name UCI_Variant value ko-oshi
+position startpos
+d")
+echo "${out}" | grep -q "Fen: b3b/1aaa1/5/1AAA1/B3B w - - 0 1 {0 0}"
+out=$(run_cmds "setoption name UCI_Variant value ko-oshi
+position fen 5/5/5/1a3/1A3 w - - 0 1 {0 0} moves b1b2
+go perft 1")
+! echo "${out}" | grep -q "b3b2: 1"
+fi
+
+# 5e) Aries: opening setup loads and a repetition-losing move is avoided in search.
+if variant_available "aries"; then
+out=$(run_cmds "setoption name UCI_Variant value aries
+position startpos
+d")
+echo "${out}" | grep -q "Fen: 4rrrr/4rrrr/4rrrr/4rrrr/RRRR4/RRRR4/RRRR4/RRRR4 w - - 0 1"
+out=$(run_cmds "setoption name UCI_Variant value aries
+position fen 8/8/8/8/8/8/7r/R7 w - - 0 1 moves a1a2 h2h1 a2a1 h1h2 a1a2 h2h1 a2a1
+go depth 3")
+! echo "${out}" | grep -q "^bestmove h1h2$"
+fi
+
 # 6) Tablut split: edge-escape should end immediately, corner-escape should not.
 if variant_available "tablut" && variant_available "tablut-corner-escape"; then
 out=$(run_cmds "setoption name UCI_Variant value tablut
