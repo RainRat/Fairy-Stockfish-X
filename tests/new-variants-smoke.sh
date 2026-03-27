@@ -226,6 +226,20 @@ go perft 1")
 echo "${out}" | grep -q "Nodes searched: 12"
 fi
 
+# 7a) Crossway: alternating 2x2 checker-pattern placements are illegal.
+if variant_available "crossway"; then
+out=$(run_cmds "setoption name UCI_Variant value crossway
+position fen 8/8/8/8/8/8/S7/sS6[99S99s] b - - 0 1
+go perft 1")
+! echo "${out}" | grep -q "@b2: 1"
+
+# Existing edge-to-edge connection should end the game immediately.
+out=$(run_cmds "setoption name UCI_Variant value crossway
+position fen 8/8/8/SSSSSSSS/8/8/8/8[99S99s] b - - 0 1
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 0"
+fi
+
 # 8) Neutreeko: max-distance move completes a line and ends the game.
 if variant_available "neutreeko"; then
 out=$(run_cmds "setoption name UCI_Variant value neutreeko
