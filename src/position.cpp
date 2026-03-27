@@ -162,7 +162,8 @@ namespace {
   }
 
   bool analyze_push(const Position& pos, Move m, PushInfo& info) {
-    if (type_of(m) != NORMAL || is_drop_move(m) || is_gating(m))
+    const MoveType mt = type_of(m);
+    if ((mt != NORMAL && mt != INSERT) || is_gating(m))
         return false;
     if (pos.topology_wraps())
         return false;
@@ -172,7 +173,7 @@ namespace {
     if (from == to || !is_ok(from) || !is_ok(to))
         return false;
 
-    Piece mover = pos.piece_on(from);
+    Piece mover = pos.moved_piece(m);
     if (mover == NO_PIECE)
         return false;
 
@@ -189,8 +190,10 @@ namespace {
         || (pos.push_first_color() == PUSH_THEM && firstUs))
         return false;
 
-    int df = int(file_of(to)) - int(file_of(from));
-    int dr = int(rank_of(to)) - int(rank_of(from));
+    int df = mt == INSERT ? int(file_of(from)) - int(file_of(to))
+                          : int(file_of(to)) - int(file_of(from));
+    int dr = mt == INSERT ? int(rank_of(from)) - int(rank_of(to))
+                          : int(rank_of(to)) - int(rank_of(from));
     int stepF = (df > 0) - (df < 0);
     int stepR = (dr > 0) - (dr < 0);
     if ((df != 0 && dr != 0 && std::abs(df) != std::abs(dr)) || (df == 0 && dr == 0))
@@ -2184,6 +2187,7 @@ bool Position::legal(Move m) const {
   Color us = sideToMove;
   Color them = ~us;
   bool dropMove = is_drop_move(m);
+  bool insertMove = is_insert_move(m);
   Square from = from_sq(m);
   Square to = to_sq(m);
 
@@ -2192,6 +2196,35 @@ bool Position::legal(Move m) const {
 
   if (is_pass(m) && !(pass(us) || wall_or_move()))
       return false;
+
+  if (insertMove)
+  {
+      if (!(edge_insert_types() & type_of(moved_piece(m))))
+          return false;
+      if (!(edge_insert_region(us) & to))
+          return false;
+
+      int df = int(file_of(from)) - int(file_of(to));
+      int dr = int(rank_of(from)) - int(rank_of(to));
+      if (std::abs(df) + std::abs(dr) != 1)
+          return false;
+
+      bool dirOk = false;
+      if (df == 0 && dr == -1)
+          dirOk = edge_insert_from_top(us) && rank_of(to) == max_rank();
+      else if (df == 0 && dr == 1)
+          dirOk = edge_insert_from_bottom(us) && rank_of(to) == RANK_1;
+      else if (df == 1 && dr == 0)
+          dirOk = edge_insert_from_left(us) && file_of(to) == FILE_A;
+      else if (df == -1 && dr == 0)
+          dirOk = edge_insert_from_right(us) && file_of(to) == max_file();
+
+      if (!dirOk)
+          return false;
+
+      if (!empty(to) && !push_move(m))
+          return false;
+  }
 
   if (pass_until_setup() && must_drop()
       && !has_setup_drop(us)
@@ -2869,6 +2902,7 @@ bool Position::pseudo_legal(const Move m) const {
   Color us = sideToMove;
   Color them = ~us;
   bool dropMove = is_drop_move(m);
+  bool insertMove = is_insert_move(m);
   Square from = from_sq(m);
   Square to = to_sq(m);
   Piece pc = moved_piece(m);
@@ -2948,6 +2982,36 @@ bool Position::pseudo_legal(const Move m) const {
   // Use a fast check for piece drops
   if (dropMove)
   {
+      if (insertMove)
+      {
+          int df = int(file_of(from)) - int(file_of(to));
+          int dr = int(rank_of(from)) - int(rank_of(to));
+          if (std::abs(df) + std::abs(dr) != 1)
+              return false;
+
+          bool dirOk = false;
+          if (df == 0 && dr == -1)
+              dirOk = edge_insert_from_top(us) && rank_of(to) == max_rank();
+          else if (df == 0 && dr == 1)
+              dirOk = edge_insert_from_bottom(us) && rank_of(to) == RANK_1;
+          else if (df == 1 && dr == 0)
+              dirOk = edge_insert_from_left(us) && file_of(to) == FILE_A;
+          else if (df == -1 && dr == 0)
+              dirOk = edge_insert_from_right(us) && file_of(to) == max_file();
+
+          return   piece_drops()
+                && pc != NO_PIECE
+                && color_of(pc) == us
+                && (edge_insert_types() & type_of(pc))
+                && (edge_insert_region(us) & to)
+                && dirOk
+                && (!pay_points_to_drop() || st->pointsCount[us] >= var->piecePoints[type_of(pc)])
+                && (can_drop(us, in_hand_piece_type(m))
+                    || (two_boards() && allow_virtual_drop(us, type_of(pc))))
+                && (drop_region(us, type_of(pc)) & to)
+                && (empty(to) || push_move(m));
+      }
+
       Bitboard legalDropTargets = ~pieces();
       if (!paired_drop(m) && (capture_drop_types() & in_hand_piece_type(m)))
       {
@@ -3342,6 +3406,7 @@ bool Position::gives_check(Move m) const {
   {
   case NORMAL:
   case DROP:
+  case INSERT:
   case SPECIAL:
       return false;
 

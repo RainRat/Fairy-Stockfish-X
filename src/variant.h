@@ -167,6 +167,12 @@ struct Variant {
   bool pushChainEnemyOnly = false;
   bool pushCaptureAgainstFriendlyBlocker = false;
   bool pushNoImmediateReturn = false;
+  PieceSet edgeInsertTypes = NO_PIECE_SET;
+  Bitboard edgeInsertRegion[COLOR_NB] = {};
+  bool edgeInsertFromTop[COLOR_NB] = {false, false};
+  bool edgeInsertFromBottom[COLOR_NB] = {false, false};
+  bool edgeInsertFromLeft[COLOR_NB] = {false, false};
+  bool edgeInsertFromRight[COLOR_NB] = {false, false};
   bool selfCapture = false;
   bool selfCaptureByColor[COLOR_NB] = {false, false};
   bool selfCaptureByColorSet[COLOR_NB] = {false, false};

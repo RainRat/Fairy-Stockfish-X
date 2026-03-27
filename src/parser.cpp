@@ -1381,6 +1381,12 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("pushChainEnemyOnly", v->pushChainEnemyOnly);
     parse_attribute("pushCaptureAgainstFriendlyBlocker", v->pushCaptureAgainstFriendlyBlocker);
     parse_attribute("pushNoImmediateReturn", v->pushNoImmediateReturn);
+    parse_attribute("edgeInsertTypes", v->edgeInsertTypes, v->pieceToChar);
+    parse_both_colors_with_overrides("edgeInsertRegion", v->edgeInsertRegion);
+    parse_both_colors_with_overrides("edgeInsertFromTop", v->edgeInsertFromTop);
+    parse_both_colors_with_overrides("edgeInsertFromBottom", v->edgeInsertFromBottom);
+    parse_both_colors_with_overrides("edgeInsertFromLeft", v->edgeInsertFromLeft);
+    parse_both_colors_with_overrides("edgeInsertFromRight", v->edgeInsertFromRight);
     parse_attribute("changingColorTrigger", v->changingColorTrigger);
     parse_attribute("changingColorPieceTypes", v->changingColorPieceTypes, v->pieceToChar);
     if (config.find("selfCapture") != config.end())
@@ -1773,6 +1779,8 @@ void VariantParser<DoCheck>::check_consistency(Variant* v) {
     // Check for limitations
     if ((v->pieceDrops || v->freeDrops) && v->wallingRule != NO_WALLING)
         std::cerr << "pieceDrops and any walling are incompatible." << std::endl;
+    if (v->edgeInsertTypes && !v->pieceDrops)
+        std::cerr << "edgeInsertTypes requires pieceDrops=true." << std::endl;
     if (v->wallingRule != NO_WALLING && v->seirawanGating)
         std::cerr << "wallingRule and seirawanGating are incompatible." << std::endl;
     if (v->wallingRule != NO_WALLING && v->potions)
