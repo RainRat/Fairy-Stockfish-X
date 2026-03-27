@@ -2420,6 +2420,41 @@ bool Position::legal(Move m) const {
   if (dropMove && (!var->isPriorityDrop[type_of(moved_piece(m))]) && priorityDropCountInHand[us] > 0)
       return false;
 
+  // Illegal placement creating an alternating 2x2 checker pattern (Crossway-style).
+  if (var->alternating2x2DropIllegal && type_of(m) == DROP)
+  {
+      int tf = int(file_of(to));
+      int tr = int(rank_of(to));
+      for (int f = tf - 1; f <= tf; ++f)
+          for (int r = tr - 1; r <= tr; ++r)
+          {
+              if (f < int(FILE_A) || r < int(RANK_1))
+                  continue;
+              if (f + 1 > int(max_file()) || r + 1 > int(max_rank()))
+                  continue;
+
+              Square s00 = make_square(File(f), Rank(r));
+              Square s10 = make_square(File(f + 1), Rank(r));
+              Square s01 = make_square(File(f), Rank(r + 1));
+              Square s11 = make_square(File(f + 1), Rank(r + 1));
+
+              Piece p00 = (s00 == to) ? moved_piece(m) : piece_on(s00);
+              Piece p10 = (s10 == to) ? moved_piece(m) : piece_on(s10);
+              Piece p01 = (s01 == to) ? moved_piece(m) : piece_on(s01);
+              Piece p11 = (s11 == to) ? moved_piece(m) : piece_on(s11);
+
+              if (p00 == NO_PIECE || p10 == NO_PIECE || p01 == NO_PIECE || p11 == NO_PIECE)
+                  continue;
+
+              Color c00 = color_of(p00);
+              Color c10 = color_of(p10);
+              Color c01 = color_of(p01);
+              Color c11 = color_of(p11);
+              if (c00 == c11 && c10 == c01 && c00 != c10)
+                  return false;
+          }
+  }
+
   if (dropMove && pay_points_to_drop()
       && st->pointsCount[us] < var->piecePoints[type_of(moved_piece(m))])
       return false;
