@@ -1300,8 +1300,9 @@ ExtMove* generate<LEGAL>(const Position& pos, ExtMove* moveList) {
   ExtMove* cur = moveList;
 
   const bool useWrappedFallback = pos.topology_wraps() && pos.checkers();
-  moveList = (pos.checkers() && !useWrappedFallback) ? generate<EVASIONS    >(pos, moveList)
-                                                     : generate<NON_EVASIONS>(pos, moveList);
+  const bool useNonEvasions = pos.anti_royal_types() || useWrappedFallback;
+  moveList = (pos.checkers() && !useNonEvasions) ? generate<EVASIONS    >(pos, moveList)
+                                                 : generate<NON_EVASIONS>(pos, moveList);
   while (cur != moveList)
       if (!pos.legal(*cur) || pos.virtual_drop(*cur))
           *cur = *--moveList;

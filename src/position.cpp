@@ -2616,41 +2616,63 @@ bool Position::legal(Move m) const {
       if (capture(m) && blastOnCapture)
           occupied &= ~blast_squares(blastCenter);
 
+      PieceType finalPt = movePt;
+      if (type_of(m) == PROMOTION)
+          finalPt = promotion_type(m);
+      else if (type_of(m) == PIECE_PROMOTION)
+          finalPt = promoted_piece_type(movePt);
+      else if (type_of(m) == PIECE_DEMOTION)
+          finalPt = type_of(unpromoted_piece_on(from));
+
+      if (   capture_morph()
+          && capture(m)
+          && !dropMove
+          && type_of(m) != CASTLING
+          && type_of(m) != PROMOTION
+          && type_of(m) != PIECE_PROMOTION
+          && !is_pass(m))
+      {
+          Piece captured = captured_piece(m);
+          if (captured != NO_PIECE && !(rex_exclusive_morph() && finalPt == KING))
+              finalPt = type_of(captured);
+      }
+
+      if (   !dropMove
+          && type_of(m) != CASTLING
+          && type_of(m) != PROMOTION
+          && type_of(m) != PIECE_PROMOTION
+          && type_of(m) != PIECE_DEMOTION
+          && !is_pass(m))
+      {
+          PieceType moveMorphType = var->moveMorphPieceType[finalPt];
+          if (moveMorphType != NO_PIECE_TYPE)
+              finalPt = moveMorphType;
+      }
+
       Bitboard antiRoyals = 0;
       for (PieceSet ps = anti_royal_types(); ps; )
       {
           PieceType pt = pop_lsb(ps);
-          if (count(sideToMove, pt) <= anti_royal_count())
+          int c = count(sideToMove, pt);
+          if (!dropMove && movePt == pt)
+              c--;
+          if (finalPt == pt)
+              c++;
+
+          if (c > 0 && c <= anti_royal_count())
           {
-              if (count(sideToMove, pt) > 0)
-                  antiRoyals |= pieces(sideToMove, pt);
-              else if (!dropMove || type_of(moved_piece(m)) != pt)
-                  return false; // Anti-royal piece is missing and not replaced
+              Bitboard b = pieces(sideToMove, pt);
+              if (!dropMove && movePt == pt)
+                  b &= ~square_bb(from);
+              if (finalPt == pt)
+                  b |= square_bb(kto);
+              antiRoyals |= b;
           }
+          else if (c == 0)
+              return false; // Anti-royal type missing
       }
-      if (!rifleShot && is_ok(from) && (antiRoyals & from))
-          antiRoyals ^= square_bb(from) ^ kto;
       if (is_ok(rfrom) && (antiRoyals & rfrom))
           antiRoyals ^= square_bb(rfrom) ^ rto;
-      if (dropMove && (anti_royal_types() & type_of(moved_piece(m))))
-      {
-          antiRoyals |= square_bb(to);
-          if (paired_drop(m))
-              antiRoyals |= square_bb(secondary_drop_square(m));
-      }
-      if (type_of(m) == PROMOTION)
-      {
-          if (anti_royal_types() & type_of(moved_piece(m)))
-          {
-              if (count(sideToMove, type_of(moved_piece(m))) > anti_royal_count())
-                  antiRoyals &= ~pieces(sideToMove, type_of(moved_piece(m)));
-          }
-          if (anti_royal_types() & promotion_type(m))
-          {
-              if (count(sideToMove, promotion_type(m)) <= anti_royal_count())
-                  antiRoyals |= kto;
-          }
-      }
 
       Bitboard vulnerableEnemyRoyals = blastOnCapture
                                      ? ((st->pseudoRoyals | pieces(king_type())) & pieces(~us) & occupied) & ~blastImmune
