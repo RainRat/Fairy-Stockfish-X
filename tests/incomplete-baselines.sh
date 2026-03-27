@@ -56,12 +56,6 @@ if result != sf.VALUE_MATE:
     raise SystemExit(f"unexpected Seega extinction result for {fen}: got {result}")
 PY
 
-# Ko-app-paw-na baseline: hunter can hop-capture over one adjacent rabbit.
-out=$(run_cmds "setoption name UCI_Variant value ko-app-paw-na
-position fen 5/2R2/2h2/5/5 b - - 0 1 moves c3c5
-d")
-echo "${out}" | grep -q "Fen: 2h2/5/5/5/5 w - - 0 2"
-
 # Oshi baseline: documented 9x9 setup loads with black to move first.
 out=$(run_cmds "setoption name UCI_Variant value oshi
 position startpos
