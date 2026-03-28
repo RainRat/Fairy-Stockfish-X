@@ -1,0 +1,28 @@
+#!/usr/bin/expect -f
+
+set timeout 2
+
+set engine [lindex $argv 0]
+if {$engine eq ""} {
+    set engine "./src/stockfish"
+}
+
+spawn $engine
+send "setoption name VariantPath value /home/chris/Fairy-Stockfish-X/src/variants.ini\r"
+expect {
+    -re {info string variant hippolyta} {}
+    timeout {}
+}
+send "setoption name UCI_Variant value hippolyta\r"
+expect {
+    -re {info string variant hippolyta} {}
+    timeout {send_user "hippolyta variant load timed out\n"; exit 1}
+}
+send "position startpos\r"
+send "go movetime 10\r"
+
+expect {
+    -re {bestmove } { send "quit\r"; exit 0 }
+    -re {currmove } { send_user "unexpected slow currmove output during movetime search\n"; send "quit\r"; exit 1 }
+    timeout { send_user "hippolyta movetime search did not finish promptly\n"; send "quit\r"; exit 1 }
+}

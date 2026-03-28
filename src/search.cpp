@@ -755,7 +755,12 @@ namespace {
 
     // Check for the available remaining time
     if (thisThread == Threads.main())
-        static_cast<MainThread*>(thisThread)->check_time();
+    {
+        if (Limits.movetime && Time.elapsed() >= Limits.movetime)
+            Threads.stop = true;
+        else
+            static_cast<MainThread*>(thisThread)->check_time();
+    }
 
     // Used to send selDepth info to GUI (selDepth counts from 1, ply from 0)
     if (PvNode && thisThread->selDepth < ss->ply + 1)
@@ -1604,6 +1609,9 @@ moves_loop: // When in check, search starts from here
     ss->inCheck = pos.checkers();
     moveCount = 0;
 
+    if (thisThread == Threads.main())
+        static_cast<MainThread*>(thisThread)->check_time();
+
     Value gameResult;
     if (pos.is_game_end(gameResult, ss->ply))
         return gameResult;
@@ -1699,6 +1707,16 @@ moves_loop: // When in check, search starts from here
     while ((move = mp.next_move()) != MOVE_NONE)
     {
       assert(is_ok(move));
+
+      if (thisThread == Threads.main())
+      {
+          if (Limits.movetime && Time.elapsed() >= Limits.movetime)
+              Threads.stop = true;
+          else
+              static_cast<MainThread*>(thisThread)->check_time();
+      }
+      if (Threads.stop.load(std::memory_order_relaxed))
+          break;
 
       givesCheck = pos.gives_check(move);
       captureOrPromotion = pos.capture_or_promotion(move);
