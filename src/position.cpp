@@ -5604,7 +5604,7 @@ Value Position::blast_see(Move m) const {
       while (attackers)
       {
           Square s = pop_lsb(attackers);
-          if (!(extinction_piece_types() & type_of(piece_on(s))))
+          if (!(extinction_piece_types(color_of(piece_on(s))) & type_of(piece_on(s))))
               minAttacker = std::min(minAttacker, blast & s ? VALUE_ZERO : CapturePieceValue[MG][piece_on(s)]);
       }
 
@@ -5622,7 +5622,7 @@ Value Position::blast_see(Move m) const {
   while (blast)
   {
       Piece bpc = piece_on(pop_lsb(blast));
-      if (!var->extinctionAllPieceTypes && (extinction_piece_types() & type_of(bpc)))
+      if (!extinction_all_piece_types(color_of(bpc)) && (extinction_piece_types(color_of(bpc)) & type_of(bpc)))
       {
           if (color_of(bpc) == us)
               extinctsUs = true;
@@ -5683,11 +5683,11 @@ bool Position::see_ge(Move m, Value threshold) const {
   // Extinction
   if (   extinction_value() != VALUE_NONE
       && victim != NO_PIECE
-      && !var->extinctionAllPieceTypes
-      && (   (   (extinction_piece_types() & type_of(victim))
-              && pieceCount[victim] == extinction_piece_count() + 1)
-          || (   (extinction_piece_types() & ALL_PIECES)
-              && count<ALL_PIECES>(~sideToMove) == extinction_piece_count() + 1)))
+      && !extinction_all_piece_types(~sideToMove)
+      && (   (   (extinction_piece_types(~sideToMove) & type_of(victim))
+              && pieceCount[victim] == extinction_piece_count(~sideToMove) + 1)
+          || (   (extinction_piece_types(~sideToMove) & ALL_PIECES)
+              && count<ALL_PIECES>(~sideToMove) == extinction_piece_count(~sideToMove) + 1)))
       return extinction_value() < VALUE_ZERO;
 
   // Do not evaluate SEE if value would be unreliable
@@ -5996,24 +5996,24 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
   // because they cannot be captured directly.
   if (extinction_value() != VALUE_NONE)
   {
-      PieceSet extinctTargets = extinction_piece_types();
-      if (!blast_on_capture())
-          extinctTargets &= ~pseudo_royal_types();
-
       for (Color c : { ~sideToMove, sideToMove })
       {
+          PieceSet extinctTargets = extinction_piece_types(c);
+          if (!blast_on_capture())
+              extinctTargets &= ~pseudo_royal_types();
+
           bool allTypesExtinct = true;
           bool anyTypeExtinct = false;
           for (PieceSet ps = extinctTargets; ps;)
           {
               PieceType pt = pop_lsb(ps);
-              bool extinct = count_with_hand(c, pt) <= var->extinctionPieceCount
-                          && count_with_hand(~c, pt) >= var->extinctionOpponentPieceCount + (extinction_claim() && c == sideToMove);
+              bool extinct = count_with_hand(c, pt) <= extinction_piece_count(c)
+                          && count_with_hand(~c, pt) >= extinction_opponent_piece_count(c) + (extinction_claim() && c == sideToMove);
               anyTypeExtinct |= extinct;
               allTypesExtinct &= extinct;
           }
 
-          if ((var->extinctionAllPieceTypes ? allTypesExtinct : anyTypeExtinct) && extinctTargets)
+          if ((extinction_all_piece_types(c) ? allTypesExtinct : anyTypeExtinct) && extinctTargets)
           {
               result = c == sideToMove ? extinction_value(ply) : -extinction_value(ply);
               return true;

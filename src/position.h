@@ -347,9 +347,13 @@ public:
   Value extinction_value(int ply = 0) const;
   bool extinction_claim() const;
   PieceSet extinction_piece_types() const;
+  PieceSet extinction_piece_types(Color c) const;
+  bool extinction_all_piece_types(Color c) const;
   bool extinction_single_piece() const;
   int extinction_piece_count() const;
+  int extinction_piece_count(Color c) const;
   int extinction_opponent_piece_count() const;
+  int extinction_opponent_piece_count(Color c) const;
   PieceSet pseudo_royal_types() const;
   int pseudo_royal_count() const;
   Value pseudo_royal_value(int ply = 0) const;
@@ -1973,6 +1977,16 @@ inline PieceSet Position::extinction_piece_types() const {
   return var->extinctionPieceTypes;
 }
 
+inline PieceSet Position::extinction_piece_types(Color c) const {
+  assert(var != nullptr);
+  return var->extinctionPieceTypesByColor[c];
+}
+
+inline bool Position::extinction_all_piece_types(Color c) const {
+  assert(var != nullptr);
+  return var->extinctionAllPieceTypesByColor[c];
+}
+
 inline bool Position::extinction_single_piece() const {
   assert(var != nullptr);
   return   var->extinctionValue == -VALUE_MATE
@@ -1984,9 +1998,19 @@ inline int Position::extinction_piece_count() const {
   return var->extinctionPieceCount;
 }
 
+inline int Position::extinction_piece_count(Color c) const {
+  assert(var != nullptr);
+  return var->extinctionPieceCountByColor[c];
+}
+
 inline int Position::extinction_opponent_piece_count() const {
   assert(var != nullptr);
   return var->extinctionOpponentPieceCount;
+}
+
+inline int Position::extinction_opponent_piece_count(Color c) const {
+  assert(var != nullptr);
+  return var->extinctionOpponentPieceCountByColor[c];
 }
 
 inline PieceSet Position::pseudo_royal_types() const {

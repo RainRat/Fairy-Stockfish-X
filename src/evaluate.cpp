@@ -1096,12 +1096,12 @@ namespace {
     if (pos.extinction_value() == -VALUE_MATE)
     {
         Bitboard bExt = attackedBy[Us][ALL_PIECES] & pos.pieces(Them);
-        for (PieceSet ps = pos.extinction_piece_types(); ps;)
+        for (PieceSet ps = pos.extinction_piece_types(Them); ps;)
         {
             PieceType pt = pop_lsb(ps);
             if (pt == ALL_PIECES)
                 continue;
-            int denom = std::max(pos.count_with_hand(Them, pt) - pos.extinction_piece_count(), 1);
+            int denom = std::max(pos.count_with_hand(Them, pt) - pos.extinction_piece_count(Them), 1);
             // Explosion threats
             if (pos.blast_on_capture() && !(pos.blast_immune_types() & pt))
             {
@@ -1532,14 +1532,14 @@ namespace {
     // Extinction
     if (pos.extinction_value() != VALUE_NONE)
     {
-        for (PieceSet ps = pos.extinction_piece_types(); ps;)
+        for (PieceSet ps = pos.extinction_piece_types(Us); ps;)
         {
             PieceType pt = pop_lsb(ps);
             if (pt != ALL_PIECES)
             {
                 // Single piece type extinction bonus
-                int denom = std::max(pos.count(Us, pt) - pos.extinction_piece_count(), 1);
-                if (pos.count(Them, pt) >= pos.extinction_opponent_piece_count() || pos.two_boards())
+                int denom = std::max(pos.count(Us, pt) - pos.extinction_piece_count(Us), 1);
+                if (pos.count(Them, pt) >= pos.extinction_opponent_piece_count(Us) || pos.two_boards())
                     score += make_score(1000000 / (500 + EvalPieceValue[MG][pt]),
                                         1000000 / (500 + EvalPieceValue[EG][pt])) / (denom * denom)
                             * (pos.extinction_value() / VALUE_MATE);

@@ -295,6 +295,14 @@ struct Variant {
   bool extinctionAllPieceTypes = false;
   int extinctionPieceCount = 0;
   int extinctionOpponentPieceCount = 0;
+  PieceSet extinctionPieceTypesByColor[COLOR_NB] = {NO_PIECE_SET, NO_PIECE_SET};
+  bool extinctionPieceTypesByColorSet[COLOR_NB] = {false, false};
+  bool extinctionAllPieceTypesByColor[COLOR_NB] = {false, false};
+  bool extinctionAllPieceTypesByColorSet[COLOR_NB] = {false, false};
+  int extinctionPieceCountByColor[COLOR_NB] = {0, 0};
+  bool extinctionPieceCountByColorSet[COLOR_NB] = {false, false};
+  int extinctionOpponentPieceCountByColor[COLOR_NB] = {0, 0};
+  bool extinctionOpponentPieceCountByColorSet[COLOR_NB] = {false, false};
   PieceType flagPiece[COLOR_NB] = {ALL_PIECES, ALL_PIECES};
   Bitboard flagRegion[COLOR_NB] = {};
   int flagPieceCount = 1;

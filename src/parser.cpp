@@ -1642,6 +1642,54 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("extinctionAllPieceTypes", v->extinctionAllPieceTypes);
     parse_attribute("extinctionPieceCount", v->extinctionPieceCount);
     parse_attribute("extinctionOpponentPieceCount", v->extinctionOpponentPieceCount);
+    v->extinctionPieceTypesByColor[WHITE] = v->extinctionPieceTypes;
+    v->extinctionPieceTypesByColor[BLACK] = v->extinctionPieceTypes;
+    v->extinctionAllPieceTypesByColor[WHITE] = v->extinctionAllPieceTypes;
+    v->extinctionAllPieceTypesByColor[BLACK] = v->extinctionAllPieceTypes;
+    v->extinctionPieceCountByColor[WHITE] = v->extinctionPieceCount;
+    v->extinctionPieceCountByColor[BLACK] = v->extinctionPieceCount;
+    v->extinctionOpponentPieceCountByColor[WHITE] = v->extinctionOpponentPieceCount;
+    v->extinctionOpponentPieceCountByColor[BLACK] = v->extinctionOpponentPieceCount;
+    if (config.find("extinctionPieceTypesWhite") != config.end())
+    {
+        parse_attribute("extinctionPieceTypesWhite", v->extinctionPieceTypesByColor[WHITE], v->pieceToChar);
+        v->extinctionPieceTypesByColorSet[WHITE] = true;
+    }
+    if (config.find("extinctionPieceTypesBlack") != config.end())
+    {
+        parse_attribute("extinctionPieceTypesBlack", v->extinctionPieceTypesByColor[BLACK], v->pieceToChar);
+        v->extinctionPieceTypesByColorSet[BLACK] = true;
+    }
+    if (config.find("extinctionAllPieceTypesWhite") != config.end())
+    {
+        parse_attribute("extinctionAllPieceTypesWhite", v->extinctionAllPieceTypesByColor[WHITE]);
+        v->extinctionAllPieceTypesByColorSet[WHITE] = true;
+    }
+    if (config.find("extinctionAllPieceTypesBlack") != config.end())
+    {
+        parse_attribute("extinctionAllPieceTypesBlack", v->extinctionAllPieceTypesByColor[BLACK]);
+        v->extinctionAllPieceTypesByColorSet[BLACK] = true;
+    }
+    if (config.find("extinctionPieceCountWhite") != config.end())
+    {
+        parse_attribute("extinctionPieceCountWhite", v->extinctionPieceCountByColor[WHITE]);
+        v->extinctionPieceCountByColorSet[WHITE] = true;
+    }
+    if (config.find("extinctionPieceCountBlack") != config.end())
+    {
+        parse_attribute("extinctionPieceCountBlack", v->extinctionPieceCountByColor[BLACK]);
+        v->extinctionPieceCountByColorSet[BLACK] = true;
+    }
+    if (config.find("extinctionOpponentPieceCountWhite") != config.end())
+    {
+        parse_attribute("extinctionOpponentPieceCountWhite", v->extinctionOpponentPieceCountByColor[WHITE]);
+        v->extinctionOpponentPieceCountByColorSet[WHITE] = true;
+    }
+    if (config.find("extinctionOpponentPieceCountBlack") != config.end())
+    {
+        parse_attribute("extinctionOpponentPieceCountBlack", v->extinctionOpponentPieceCountByColor[BLACK]);
+        v->extinctionOpponentPieceCountByColorSet[BLACK] = true;
+    }
 
     // Backward compatibility for legacy extinctionPseudoRoyal configs.
     if (v->extinctionPseudoRoyal && !v->pseudoRoyalTypes)
