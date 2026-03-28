@@ -1631,6 +1631,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("pseudoRoyalTypes", v->pseudoRoyalTypes, v->pieceToChar);
     parse_attribute("pseudoRoyalCount", v->pseudoRoyalCount);
     parse_attribute("pseudoRoyalValue", v->pseudoRoyalValue);
+    parse_attribute("pseudoRoyalCaptureIllegal", v->pseudoRoyalCaptureIllegal);
     parse_attribute("antiRoyalTypes", v->antiRoyalTypes, v->pieceToChar);
     parse_attribute("antiRoyalCount", v->antiRoyalCount);
     parse_attribute("extinctionValue", v->extinctionValue);

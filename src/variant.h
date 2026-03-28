@@ -288,6 +288,7 @@ struct Variant {
   PieceSet pseudoRoyalTypes = NO_PIECE_SET;
   int pseudoRoyalCount = 1;
   Value pseudoRoyalValue = VALUE_NONE;
+  bool pseudoRoyalCaptureIllegal = false;
   PieceSet antiRoyalTypes = NO_PIECE_SET;
   int antiRoyalCount = 1;
   bool dupleCheck = false;

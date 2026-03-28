@@ -2912,6 +2912,17 @@ bool Position::legal(Move m) const {
       }
   }
 
+  if (var->pseudoRoyalCaptureIllegal && pseudo_royal_types())
+  {
+      Bitboard protectedPseudoRoyals = st->pseudoRoyals;
+
+      if ((capture(m) || rifleShot) && (protectedPseudoRoyals & square_bb(shotSq)))
+          return false;
+
+      if (removedByEffects & protectedPseudoRoyals)
+          return false;
+  }
+
   // Gated kings and pseudo-royals must not be introduced onto attacked squares.
   // If the move captures an attacker on its way, ignore that disappearing attack.
   if (is_gating(m) && gating_type(m) != NO_PIECE_TYPE)
