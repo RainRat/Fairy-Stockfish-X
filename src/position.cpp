@@ -3654,6 +3654,12 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   Square jumpCapsq = is_jump_capture(m) ? jump_capture_square(from, to) : SQ_NONE;
   Square moverSq = rifleShot ? from : to;
   bool openingSelfRemoval = in_opening_self_removal_phase() && is_opening_self_removal_move(m);
+  auto set_castling_right_hashed = [&](Color c, Square sq) {
+      int oldRights = st->castlingRights;
+      set_castling_right(c, sq);
+      if (st->castlingRights != oldRights)
+          k ^= Zobrist::castling[oldRights] ^ Zobrist::castling[st->castlingRights];
+  };
   auto grant_promoted_castling_rights = [&](Piece promotion, Square sq) {
       if (!var->castlingPromotedPiece || rank_of(sq) != castling_rank(us))
           return;
@@ -3668,7 +3674,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           {
               Square s = pop_lsb(castlingRooks);
               if (castling_rook_pieces(us) & type_of(piece_on(s)))
-                  set_castling_right(us, s);
+                  set_castling_right_hashed(us, s);
           }
       }
       else if (castling_rook_pieces(us) & type_of(promotion))
@@ -3677,7 +3683,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
               && piece_on(make_square(castling_king_file(), castling_rank(us))) == make_piece(us, castling_king_piece(us)))
           {
               st->castlingKingSquare[us] = make_square(castling_king_file(), castling_rank(us));
-              set_castling_right(us, sq);
+              set_castling_right_hashed(us, sq);
           }
       }
   };
@@ -4110,7 +4116,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
               {
                   Square s = pop_lsb(castling_rooks);
                   if (castling_rook_pieces(us) & type_of(piece_on(s)))
-                      set_castling_right(us, s);
+                      set_castling_right_hashed(us, s);
               }
           }
           else if (castling_rook_pieces(us) & type_of(pc))
@@ -4119,7 +4125,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
                   && piece_on(make_square(castling_king_file(), castling_rank(us))) == make_piece(us, castling_king_piece(us)))
               {
                   st->castlingKingSquare[us] = make_square(castling_king_file(), castling_rank(us));
-                  set_castling_right(us, to);
+                  set_castling_right_hashed(us, to);
               }
           }
       }
@@ -4132,7 +4138,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
                   && piece_on(make_square(castling_king_file(), castling_rank(us))) == make_piece(us, castling_king_piece(us)))
               {
                   st->castlingKingSquare[us] = make_square(castling_king_file(), castling_rank(us));
-                  set_castling_right(us, to2);
+                  set_castling_right_hashed(us, to2);
               }
           }
       }
@@ -4174,7 +4180,21 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           }
       }
 
-      if (!rifleShot && !is_self_destruct(m))
+      if (is_self_destruct(m))
+      {
+          if (Eval::useNNUE)
+              dp.to[0] = SQ_NONE;
+
+          remove_piece(from);
+          board[from] = NO_PIECE;
+          k ^= Zobrist::psq[pc][from];
+          st->materialKey ^= Zobrist::psq[pc][pieceCount[pc]];
+          if (type_of(pc) == PAWN)
+              st->pawnKey ^= Zobrist::psq[pc][from];
+          else
+              st->nonPawnMaterial[us] -= PieceValue[MG][pc];
+      }
+      else if (!rifleShot)
           move_piece(from, to);
   }
 

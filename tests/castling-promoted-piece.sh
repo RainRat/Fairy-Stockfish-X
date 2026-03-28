@@ -39,6 +39,27 @@ grep -F "Fen: $POST_FEN" <<<"$WITH_RIGHTS" >/dev/null || {
     exit 1
 }
 
+INCREMENTAL_KEY="$(grep '^Key:' <<<"$WITH_RIGHTS" | awk '{print $2}')"
+
+FRESH="$(
+cat <<EOF | "$ENGINE"
+setoption name VariantPath value $TMP_VARIANTS
+setoption name UCI_Variant value castle-promo-on
+position fen $POST_FEN
+d
+quit
+EOF
+)"
+
+FRESH_KEY="$(grep '^Key:' <<<"$FRESH" | awk '{print $2}')"
+
+[[ "$INCREMENTAL_KEY" == "$FRESH_KEY" ]] || {
+    echo "expected promoted-castling position key to match fresh load"
+    echo "incremental key: $INCREMENTAL_KEY"
+    echo "fresh key: $FRESH_KEY"
+    exit 1
+}
+
 WITH_CASTLE="$(
 cat <<EOF | "$ENGINE"
 setoption name VariantPath value $TMP_VARIANTS
