@@ -4185,6 +4185,10 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           if (Eval::useNNUE)
               dp.to[0] = SQ_NONE;
 
+          st->deadPiece = pc;
+          st->deadPiecePromoted = is_promoted(from);
+          st->deadUnpromotedPiece = st->deadPiecePromoted ? unpromoted_piece_on(from) : NO_PIECE;
+
           remove_piece(from);
           board[from] = NO_PIECE;
           k ^= Zobrist::psq[pc][from];
@@ -5331,7 +5335,12 @@ void Position::undo_move(Move m) {
           put_piece(st->deadPiece, from, st->deadPiecePromoted, st->deadUnpromotedPiece);
       else
       {
-          if (st->deadPiece && type_of(m) != PROMOTION && type_of(m) != PIECE_PROMOTION)
+          if (is_self_destruct(m))
+          {
+              put_piece(st->deadPiece, from, st->deadPiecePromoted, st->deadUnpromotedPiece);
+              pc = piece_on(from);
+          }
+          else if (st->deadPiece && type_of(m) != PROMOTION && type_of(m) != PIECE_PROMOTION)
           {
               if (st->deadSquares & moverSq)
                   st->deadSquares ^= moverSq;

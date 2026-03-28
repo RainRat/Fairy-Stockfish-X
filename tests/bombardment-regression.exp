@@ -1,0 +1,26 @@
+#!/usr/bin/expect -f
+
+set timeout 3
+
+set engine [lindex $argv 0]
+if {$engine eq ""} {
+    set engine "./src/stockfish"
+}
+
+spawn $engine
+send "uci\r"
+expect "uciok"
+send "setoption name VariantPath value /home/chris/Fairy-Stockfish-X/src/variants.ini\r"
+send "setoption name UCI_Variant value bombardment\r"
+expect {
+    -re {info string variant bombardment} {}
+    timeout { send_user "bombardment variant load timed out\n"; exit 1 }
+}
+send "position startpos\r"
+send "go movetime 500\r"
+
+expect {
+    -re {score mate} { send_user "unexpected mate score from bombardment start position\n"; send "quit\r"; exit 1 }
+    -re {bestmove } { send "quit\r"; exit 0 }
+    timeout { send_user "bombardment search did not finish promptly\n"; send "quit\r"; exit 1 }
+}
