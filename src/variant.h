@@ -97,6 +97,7 @@ struct Variant {
   bool pieceDemotion = false;
   bool blastOnCapture = false;
   bool blastOnMove = false;
+  bool blastOnSelfDestruct = false;
   bool captureMorph = false;
   bool rexExclusiveMorph = false;
   ColorChangeTrigger changingColorTrigger = ColorChangeTrigger::NEVER;

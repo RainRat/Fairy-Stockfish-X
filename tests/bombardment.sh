@@ -39,6 +39,11 @@ echo "${out}" | grep -q "^a2a2x: 1$"
 ! echo "${out}" | grep -q "^a2b2:"
 
 out=$(run_cmds "setoption name UCI_Variant value bombardment
+position startpos moves a2a3
+d")
+echo "${out}" | grep -q "Fen: mmmmmmmm/mmmmmmmm/8/8/8/M7/1MMMMMMM/MMMMMMMM b - - 1 1"
+
+out=$(run_cmds "setoption name UCI_Variant value bombardment
 position fen 8/8/2mmm3/2mMm3/2mmm3/8/8/M7 w - - 0 1 moves d5d5x
 d")
 echo "${out}" | grep -q "Fen: 8/8/8/8/8/8/8/M7 b - - 0 1"

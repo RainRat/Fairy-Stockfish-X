@@ -193,6 +193,7 @@ public:
   bool piece_demotion() const;
   bool blast_on_capture() const;
   bool blast_on_move() const;
+  bool blast_on_self_destruct() const;
   bool blast_promotion() const;
   bool blast_diagonals() const;
   bool blast_center() const;
@@ -862,6 +863,11 @@ inline bool Position::blast_on_capture() const {
 inline bool Position::blast_on_move() const {
   assert(var != nullptr);
   return var->blastOnMove;
+}
+
+inline bool Position::blast_on_self_destruct() const {
+  assert(var != nullptr);
+  return var->blastOnSelfDestruct;
 }
 
 inline bool Position::blast_promotion() const {

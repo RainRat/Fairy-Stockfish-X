@@ -2832,7 +2832,9 @@ bool Position::legal(Move m) const {
   Bitboard removedByEffects = 0;
   if (!is_pass(m))
   {
-      if (((capture(m) || rifleShot) && blast_on_capture()) || (blast_on_move() && !capture(m)))
+      if (((capture(m) || rifleShot) && blast_on_capture())
+          || (blast_on_move() && !capture(m) && !is_self_destruct(m))
+          || (blast_on_self_destruct() && is_self_destruct(m)))
       {
           Square blastCenter = (capture(m) || rifleShot) ? shotSq : effectiveTo;
           Bitboard blastRelevant = occupied & ~blast_immune_bb();
@@ -4592,7 +4594,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
        (
          ( surround_capture_opposite() || surround_capture_intervene() || surround_capture_edge() ) ||
          ( captured && (blast_on_capture() || var->petrifyOnCaptureTypes) ) ||
-         ( blast_on_move() && !captured ) ||
+         ( blast_on_move() && !captured && !is_self_destruct(m) ) ||
+         ( blast_on_self_destruct() && is_self_destruct(m) ) ||
          var->blastPassiveTypes ||
          ( remove_connect_n() > 0 )
        )
@@ -4609,9 +4612,10 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       st->blastPromotedSquares = 0;
 
       if ( ( captured && (blast_on_capture() || var->petrifyOnCaptureTypes) ) ||
-           ( blast_on_move() && !captured) ) {
+           ( blast_on_move() && !captured && !is_self_destruct(m) ) ||
+           ( blast_on_self_destruct() && is_self_destruct(m) ) ) {
 
-          blast_mask = (blast_on_capture() || blast_on_move()) ? blast_squares(captured ? st->captureSquare : to)
+          blast_mask = (blast_on_capture() || blast_on_move() || blast_on_self_destruct()) ? blast_squares(captured ? st->captureSquare : to)
               : (var->petrifyOnCaptureTypes & type_of(pc) ? square_bb(moverSq) : Bitboard(0));
           removal_mask |= blast_mask;
       };
@@ -5186,7 +5190,8 @@ void Position::undo_move(Move m) {
   if (
        ( surround_capture_opposite() || surround_capture_intervene() || surround_capture_edge() ) ||
        ( st->capturedPiece && (blast_on_capture() || var->petrifyOnCaptureTypes) ) ||
-       ( blast_on_move() && !st->capturedPiece ) ||
+       ( blast_on_move() && !st->capturedPiece && !is_self_destruct(st->move) ) ||
+       ( blast_on_self_destruct() && is_self_destruct(st->move) ) ||
        ( remove_connect_n() > 0 )
      )
   {
@@ -5636,7 +5641,7 @@ Value Position::blast_see(Move m) const {
   Value result = VALUE_ZERO;
 
   // Add the least valuable attacker for quiet moves
-  if (!capture(m) && !blast_on_move())
+  if (!capture(m) && !(blast_on_move() || (blast_on_self_destruct() && is_self_destruct(m))))
   {
       Bitboard attackers = attackers_to(to, pieces() ^ fromto, ~us);
       Value minAttacker = VALUE_INFINITE;
@@ -5673,7 +5678,7 @@ Value Position::blast_see(Move m) const {
   }
 
   // Evaluate extinctions
-  if (!capture(m) && !blast_on_move())
+  if (!capture(m) && !(blast_on_move() || (blast_on_self_destruct() && is_self_destruct(m))))
   {
       // For quiet moves, the opponent can decide whether to capture or not
       // so they can pick the better of the two
@@ -5692,7 +5697,8 @@ Value Position::blast_see(Move m) const {
           return -extinction_value();
   }
 
-  return capture(m) || must_capture() || blast_on_move() ? result - 1 : std::min(result, VALUE_ZERO);
+  return capture(m) || must_capture() || blast_on_move() || (blast_on_self_destruct() && is_self_destruct(m))
+      ? result - 1 : std::min(result, VALUE_ZERO);
 }
 
 
@@ -5715,7 +5721,7 @@ bool Position::see_ge(Move m, Value threshold) const {
       return true;
 
   // Atomic explosion SEE
-  if (blast_on_capture() || blast_on_move())
+  if (blast_on_capture() || blast_on_move() || (blast_on_self_destruct() && is_self_destruct(m)))
       return blast_see(m) >= threshold;
 
   Piece victim = captured_piece(m);

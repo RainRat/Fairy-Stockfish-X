@@ -1185,6 +1185,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("pieceDemotion", v->pieceDemotion);
     parse_attribute("blastOnCapture", v->blastOnCapture);
     parse_attribute("blastOnMove", v->blastOnMove);
+    parse_attribute("blastOnSelfDestruct", v->blastOnSelfDestruct);
     parse_attribute("selfDestructTypes", v->selfDestructTypes, v->pieceToChar);
     parse_attribute("blastPromotion", v->blastPromotion);
     parse_attribute("blastDiagonals", v->blastDiagonals);
