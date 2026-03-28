@@ -6143,7 +6143,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
                   // The most-points policy rules on ending, from the perspective of the player with most points.
                   result = convert_mate_value(
                     st->pointsCount[~sideToMove] > st->pointsCount[sideToMove] ?
-                    var->pointsGoalSimulValueByMostPoints : -var->pointsGoalSimulValueByMostPoints, ply);
+                    -var->pointsGoalSimulValueByMostPoints : var->pointsGoalSimulValueByMostPoints, ply);
                   return true;
               }
           }
@@ -6159,12 +6159,12 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
       //Finally, rule on the simple cases.
       if (st->pointsCount[~sideToMove]>=points_goal())
       {
-          result = convert_mate_value(var->pointsGoalValue, ply);
+          result = convert_mate_value(-var->pointsGoalValue, ply);
           return true;
       };
       if (st->pointsCount[sideToMove]>=points_goal())
       {
-          result = convert_mate_value(-var->pointsGoalValue, ply);
+          result = convert_mate_value(var->pointsGoalValue, ply);
           return true;
       };
   };
