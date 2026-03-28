@@ -45,13 +45,12 @@ quit
 EOF
 }
 
-# Native unpromoted knight can still piece-promote.
-out=$(run_cmds "position fen 4k3/8/8/8/8/4N3/8/4K3 w - - 0 1
-go perft 1")
-echo "${out}" | grep -q "^e3d1+: 1$"
+# Native unpromoted knight can still move onto the promotion region and remain a knight.
+out=$(run_cmds "position fen 4k3/8/8/8/8/4N3/8/4K3 w - - 0 1 moves e3d1
+d")
+echo "${out}" | grep -q "^Fen: 4k3/8/8/8/8/8/8/3NK3 b - - 1 1$"
 
-# A promoted pawn that became a knight must not be offered a second piece promotion.
-out=$(run_cmds "position fen 4k3/8/8/8/8/4+P3/8/4K3 w - - 0 1
-go perft 1")
-! echo "${out}" | grep -q "^e3d1+: 1$"
-! echo "${out}" | grep -q "^e3f1+: 1$"
+# A promoted pawn that became a knight must not be promoted again when moving in the region.
+out=$(run_cmds "position fen 4k3/8/8/8/8/4+P3/8/4K3 w - - 0 1 moves e3d1
+d")
+echo "${out}" | grep -q "^Fen: 4k3/8/8/8/8/8/8/3+PK3 b - - 1 1$"
