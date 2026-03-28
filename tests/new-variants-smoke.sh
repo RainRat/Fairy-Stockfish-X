@@ -250,6 +250,15 @@ go perft 1")
 echo "${out}" | grep -q "^e1f1: 1$"
 fi
 
+# 18b) Hippolyta: captures are stationary, mandatory, and pieces do not move.
+if variant_available "hippolyta"; then
+out=$(run_cmds "setoption name UCI_Variant value hippolyta
+position startpos
+go perft 1")
+echo "${out}" | grep -q "^a1b2: 1$"
+! echo "${out}" | grep -q "^a1a2:"
+fi
+
 # 19) iChess: setup starts with non-king drops only.
 out=$(run_cmds "setoption name UCI_Variant value ichess
 position startpos
