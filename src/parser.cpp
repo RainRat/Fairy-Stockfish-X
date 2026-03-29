@@ -1784,14 +1784,22 @@ void VariantParser<DoCheck>::check_consistency(Variant* v) {
         return;
 
     const bool wrapsTopology = v->cylindrical || v->toroidal;
+    v->rebuild_piece_symbol_maps();
 
     // pieces
     for (PieceSet ps = v->pieceTypes; ps;)
     {
         PieceType pt = pop_lsb(ps);
         for (Color c : {WHITE, BLACK})
-            if (std::count(v->pieceToChar.begin(), v->pieceToChar.end(), v->pieceToChar[make_piece(c, pt)]) != 1)
-                std::cerr << piece_name(pt) << " - Ambiguous piece character: " << v->pieceToChar[make_piece(c, pt)] << std::endl;
+        {
+            Piece pc = make_piece(c, pt);
+            const std::string& symbol = v->piece_symbol(pc);
+            if (symbol.empty())
+                continue;
+            auto exact = v->symbolToPiece.find(symbol);
+            if (exact == v->symbolToPiece.end() || exact->second != pc)
+                std::cerr << piece_name(pt) << " - Ambiguous piece symbol: " << symbol << std::endl;
+        }
     }
 
     v->conclude(); // In preparation for the consistency checks below
