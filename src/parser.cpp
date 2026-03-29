@@ -67,6 +67,109 @@ namespace {
         return {token, s.substr(token.size() + 1)};
     }
 
+    PieceType parse_piece_type_token(const Variant* v, const std::string& token) {
+        if (token.empty())
+            return NO_PIECE_TYPE;
+        std::string normalized = token;
+        normalized[0] = char(std::toupper(static_cast<unsigned char>(normalized[0])));
+        for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
+        {
+            Piece white = make_piece(WHITE, pt);
+            if (v->pieceToSymbol[white] == normalized || v->pieceToSymbolSynonyms[white] == normalized)
+                return pt;
+        }
+        return NO_PIECE_TYPE;
+    }
+
+    bool parse_piece_int_map(const std::string& value, const Variant* v, int target[PIECE_TYPE_NB], bool allowZero = true) {
+        std::string entry;
+        int parsedValue = 0;
+        std::stringstream ss(value);
+        while (ss >> entry)
+        {
+            auto [token, rawValue] = split_piece_entry(entry);
+            PieceType pt = parse_piece_type_token(v, token);
+            if (pt == NO_PIECE_TYPE || rawValue.empty())
+                return false;
+            const char* first = rawValue.data();
+            const char* last  = first + rawValue.size();
+            auto [ptr, ec] = std::from_chars(first, last, parsedValue);
+            while (ptr != last && std::isspace(static_cast<unsigned char>(*ptr)))
+                ptr++;
+            if (ec != std::errc() || ptr != last)
+                return false;
+            if (!allowZero && parsedValue < 1)
+                return false;
+            target[pt] = parsedValue;
+        }
+        return only_trailing_space(ss);
+    }
+
+    bool parse_piece_type_map(const std::string& value, const Variant* v, PieceType target[PIECE_TYPE_NB], bool allowNone = false) {
+        std::string entry;
+        std::stringstream ss(value);
+        while (ss >> entry)
+        {
+            auto [fromToken, rawTo] = split_piece_entry(entry);
+            PieceType from = parse_piece_type_token(v, fromToken);
+            if (from == NO_PIECE_TYPE || rawTo.empty())
+                return false;
+            PieceType to = rawTo == "-" && allowNone ? NO_PIECE_TYPE : parse_piece_type_token(v, rawTo);
+            if (to == NO_PIECE_TYPE && !(allowNone && rawTo == "-"))
+                return false;
+            target[from] = to;
+        }
+        return only_trailing_space(ss);
+    }
+
+    bool parse_drop_piece_type_map(const std::string& value, const Variant* v, PieceSet target[PIECE_TYPE_NB]) {
+        std::stringstream groups(value);
+        std::string group;
+        while (std::getline(groups, group, ';'))
+        {
+            group = trim(group);
+            if (group.empty())
+                continue;
+
+            std::stringstream ss(group);
+            std::string head;
+            if (!(ss >> head))
+                return false;
+
+            auto [fromToken, rest] = split_piece_entry(head);
+            PieceType from = parse_piece_type_token(v, fromToken);
+            if (from == NO_PIECE_TYPE)
+                return false;
+
+            PieceSet mask = NO_PIECE_SET;
+            std::string rhs = trim(rest);
+            if (!rhs.empty() && rhs != "-")
+            {
+                PieceType pt = parse_piece_type_token(v, rhs);
+                if (pt == NO_PIECE_TYPE)
+                    return false;
+                mask |= pt;
+            }
+
+            std::string token;
+            while (ss >> token)
+            {
+                if (token == "-")
+                {
+                    mask = NO_PIECE_SET;
+                    continue;
+                }
+                PieceType pt = parse_piece_type_token(v, token);
+                if (pt == NO_PIECE_TYPE)
+                    return false;
+                mask |= pt;
+            }
+
+            target[from] = mask;
+        }
+        return true;
+    }
+
     bool looks_like_piece_definition_value(const std::string& value) {
         return value.size() >= 2
             && std::isalpha(static_cast<unsigned char>(value[0]))
@@ -863,7 +966,7 @@ bool VariantParser<DoCheck>::parse_piece_values(Variant* v) {
             while (ss >> entry)
             {
                 auto [token, rawValue] = split_piece_entry(entry);
-                pt = v->piece_type_from_symbol(token);
+                pt = parse_piece_type_token(v, token);
                 if (pt == NO_PIECE_TYPE || rawValue.empty())
                 {
                     parseError = true;
@@ -885,40 +988,23 @@ bool VariantParser<DoCheck>::parse_piece_values(Variant* v) {
     const auto& pv = config.find("piecePoints");
     if (pv != config.end())
     {
-        char token = '\0', sep = 0;
-        size_t idx = std::string::npos;
-        int parsedPoints = 0;
-        bool parseError = false;
-        bool sawToken = false;
-        std::stringstream ss(pv->second);
-        while (ss >> token)
+        int parsed[PIECE_TYPE_NB];
+        std::copy(std::begin(v->piecePoints), std::end(v->piecePoints), std::begin(parsed));
+        if (!parse_piece_int_map(pv->second, v, parsed, true))
         {
-            sawToken = true;
-            idx = v->pieceToChar.find(std::toupper(static_cast<unsigned char>(token)));
-            if (idx == std::string::npos)
-                break;
-            if (!(ss >> sep) || sep != ':' || !(ss >> parsedPoints))
-            {
-                parseError = true;
-                break;
-            }
-            if (parsedPoints < 0) {
-                if (DoCheck)
-                    std::cerr << "piecePoints - Negative values are not allowed for type: " << v->pieceToChar[idx] << std::endl;
-                parsedPoints = 0;
-            }
-            if (parsedPoints > MAX_PIECE_POINTS) {
-                if (DoCheck)
-                    std::cerr << "piecePoints - Value exceeds max " << MAX_PIECE_POINTS
-                              << " for type: " << v->pieceToChar[idx] << ". Clamping." << std::endl;
-                parsedPoints = MAX_PIECE_POINTS;
-            }
-            v->piecePoints[idx] = parsedPoints;
+            if (DoCheck)
+                std::cerr << "piecePoints - Invalid syntax." << std::endl;
+            return false;
         }
-        if (DoCheck && sawToken && idx == std::string::npos)
-            std::cerr << "piecePoints - Invalid piece type: " << token << std::endl;
-        else if (DoCheck && sawToken && idx != std::string::npos && (parseError || !(ss >> std::ws).eof()))
-            std::cerr << "piecePoints - Invalid piece points for type: " << v->pieceToChar[idx] << std::endl;
+        for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
+        {
+            int points = parsed[pt];
+            if (points < 0)
+                points = 0;
+            if (points > MAX_PIECE_POINTS)
+                points = MAX_PIECE_POINTS;
+            v->piecePoints[pt] = points;
+        }
     }
     return true;
 }
@@ -1022,160 +1108,74 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     const auto& it_prom_limit = config.find("promotionLimit");
     if (it_prom_limit != config.end())
     {
-        char token = '\0', sep = 0;
-        size_t idx = std::string::npos;
-        bool parseError = false;
-        int parsedLimit = 0;
-        bool sawToken = false;
-        std::stringstream ss(it_prom_limit->second);
-        while (ss >> token)
+        if (!parse_piece_int_map(it_prom_limit->second, v, v->promotionLimit, true))
         {
-            sawToken = true;
-            idx = v->pieceToChar.find(std::toupper(static_cast<unsigned char>(token)));
-            if (idx == std::string::npos)
-                break;
-            if (!(ss >> sep) || sep != ':' || !(ss >> parsedLimit))
-            {
-                parseError = true;
-                break;
-            }
-            v->promotionLimit[idx] = parsedLimit;
+            if (DoCheck)
+                std::cerr << "promotionLimit - Invalid syntax." << std::endl;
+            return false;
         }
-        if (DoCheck && sawToken && idx == std::string::npos)
-            std::cerr << "promotionLimit - Invalid piece type: " << token << std::endl;
-        else if (DoCheck && sawToken && idx != std::string::npos && (parseError || !(ss >> std::ws).eof()))
-            std::cerr << "promotionLimit - Invalid piece count for type: " << v->pieceToChar[idx] << std::endl;
     }
     // promoted piece types
     const auto& it_prom_pt = config.find("promotedPieceType");
     if (it_prom_pt != config.end())
     {
-        char token, sep = 0;
-        size_t idx = std::string::npos, idx2 = std::string::npos;
-        bool parseError = false;
-        std::stringstream ss(it_prom_pt->second);
-        while (ss >> token)
+        if (!parse_piece_type_map(it_prom_pt->second, v, v->promotedPieceType, true))
         {
-            idx = v->pieceToChar.find(std::toupper(static_cast<unsigned char>(token)));
-            if (idx == std::string::npos)
-                break;
-            if (!(ss >> sep) || sep != ':' || !(ss >> token))
-            {
-                parseError = true;
-                break;
-            }
-            idx2 = (token == '-' ? 0 : v->pieceToChar.find(std::toupper(static_cast<unsigned char>(token))));
-            if (idx2 == std::string::npos)
-                break;
-            v->promotedPieceType[idx] = PieceType(idx2);
+            if (DoCheck)
+                std::cerr << "promotedPieceType - Invalid syntax." << std::endl;
+            return false;
         }
-        if (DoCheck && (idx == std::string::npos || idx2 == std::string::npos))
-            std::cerr << "promotedPieceType - Invalid piece type: " << token << std::endl;
-        else if (DoCheck && (parseError || !(ss >> std::ws).eof()))
-            std::cerr << "promotedPieceType - Invalid syntax." << std::endl;
     }
     const auto& it_move_morph_pt = config.find("moveMorphPieceType");
     if (it_move_morph_pt != config.end())
     {
-        char token, sep = 0;
-        size_t idx = std::string::npos, idx2 = std::string::npos;
-        bool parseError = false;
-        std::stringstream ss(it_move_morph_pt->second);
-        while (ss >> token)
+        if (!parse_piece_type_map(it_move_morph_pt->second, v, v->moveMorphPieceType, true))
         {
-            idx = v->pieceToChar.find(std::toupper(static_cast<unsigned char>(token)));
-            if (idx == std::string::npos)
-                break;
-            if (!(ss >> sep) || sep != ':' || !(ss >> token))
-            {
-                parseError = true;
-                break;
-            }
-            idx2 = (token == '-' ? 0 : v->pieceToChar.find(std::toupper(static_cast<unsigned char>(token))));
-            if (idx2 == std::string::npos)
-                break;
-            v->moveMorphPieceType[idx] = PieceType(idx2);
+            if (DoCheck)
+                std::cerr << "moveMorphPieceType - Invalid syntax." << std::endl;
+            return false;
         }
-        if (DoCheck && (idx == std::string::npos || idx2 == std::string::npos))
-            std::cerr << "moveMorphPieceType - Invalid piece type: " << token << std::endl;
-        else if (DoCheck && (parseError || !(ss >> std::ws).eof()))
-            std::cerr << "moveMorphPieceType - Invalid syntax." << std::endl;
     }
     const auto& it_drop_piece_types = config.find("dropPieceTypes");
     if (it_drop_piece_types != config.end())
     {
-        char token = '\0', sep = 0;
-        size_t idx = std::string::npos;
-        bool parseError = false;
-        bool sawToken = false;
-        std::stringstream ss(it_drop_piece_types->second);
-        while (ss >> token)
+        if (!parse_drop_piece_type_map(it_drop_piece_types->second, v, v->dropPieceTypes))
         {
-            sawToken = true;
-            idx = v->pieceToChar.find(std::toupper(static_cast<unsigned char>(token)));
-            if (idx == std::string::npos)
-                break;
-            if (!(ss >> sep) || sep != ':')
-            {
-                parseError = true;
-                break;
-            }
-            PieceSet mask = NO_PIECE_SET;
-            while (ss >> token)
-            {
-                if (std::isspace(static_cast<unsigned char>(token)))
-                    continue;
-                if (token == '-')
-                    break;
-                size_t idx2 = v->pieceToChar.find(std::toupper(static_cast<unsigned char>(token)));
-                if (idx2 == std::string::npos)
-                {
-                    idx = std::string::npos;
-                    break;
-                }
-                mask |= PieceType(idx2);
-                if (ss.peek() == ';')
-                    break;
-            }
-            if (idx == std::string::npos)
-                break;
-            v->dropPieceTypes[idx] = mask;
-            if (ss.peek() == ';')
-                ss.get();
+            if (DoCheck)
+                std::cerr << "dropPieceTypes - Invalid syntax." << std::endl;
+            return false;
         }
-        if (DoCheck && sawToken && idx == std::string::npos)
-            std::cerr << "dropPieceTypes - Invalid piece type: " << token << std::endl;
-        else if (DoCheck && sawToken && idx != std::string::npos && (parseError || !(ss >> std::ws).eof()))
-            std::cerr << "dropPieceTypes - Invalid syntax." << std::endl;
     }
     // priority drops
     const auto& it_pr_drop = config.find("priorityDropTypes");
     if (it_pr_drop != config.end())
     {
-        char token = '\0';
-        size_t idx = std::string::npos;
         bool parsedPriorityDrops[PIECE_TYPE_NB];
         bool sawToken = false;
         std::copy(std::begin(v->isPriorityDrop), std::end(v->isPriorityDrop), std::begin(parsedPriorityDrops));
         std::stringstream ss(it_pr_drop->second);
+        std::string token;
         while (ss >> token)
         {
             sawToken = true;
-            if (token == '-')
+            if (token == "-")
                 break;
-            idx = v->pieceToChar.find(std::toupper(static_cast<unsigned char>(token)));
-            if (idx == std::string::npos)
-                break;
-            parsedPriorityDrops[PieceType(idx)] = true;
+            PieceType pt = parse_piece_type_token(v, token);
+            if (pt == NO_PIECE_TYPE)
+            {
+                if (DoCheck)
+                    std::cerr << "priorityDropTypes - Invalid piece type: " << token << std::endl;
+                return false;
+            }
+            parsedPriorityDrops[pt] = true;
         }
-        if (DoCheck && sawToken && idx == std::string::npos && token != '-')
-            std::cerr << "priorityDropTypes - Invalid piece type: " << token << std::endl;
-        else if (sawToken && (idx != std::string::npos || token == '-') && !only_trailing_space(ss))
+        if (sawToken && token != "-" && !only_trailing_space(ss))
         {
             if (DoCheck)
                 std::cerr << "priorityDropTypes - Invalid trailing characters." << std::endl;
+            return false;
         }
-        else if (sawToken && (idx != std::string::npos || token == '-'))
+        else if (sawToken)
             std::copy(std::begin(parsedPriorityDrops), std::end(parsedPriorityDrops), std::begin(v->isPriorityDrop));
     }
     parse_attribute("piecePromotionOnCapture", v->piecePromotionOnCapture);
@@ -1385,39 +1385,24 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     const auto& it_push_strength = config.find("pushingStrength");
     if (it_push_strength != config.end())
     {
-        char token = '\0', sep = 0;
-        size_t idx = std::string::npos;
-        int strength = 0;
         int parsedStrengths[PIECE_TYPE_NB];
         std::copy(std::begin(v->pushingStrength), std::end(v->pushingStrength), std::begin(parsedStrengths));
-        bool parseError = false;
-        bool sawToken = false;
-        std::stringstream ss(it_push_strength->second);
-        while (ss >> token)
+        if (!parse_piece_int_map(it_push_strength->second, v, parsedStrengths, true))
         {
-            sawToken = true;
-            idx = v->pieceToChar.find(std::toupper(static_cast<unsigned char>(token)));
-            if (idx == std::string::npos)
-                break;
-            if (idx >= PIECE_TYPE_NB || !(ss >> sep) || sep != ':' || !(ss >> strength))
-            {
-                parseError = true;
-                break;
-            }
-            if (strength < 0)
+            if (DoCheck)
+                std::cerr << "pushingStrength - Invalid syntax." << std::endl;
+            return false;
+        }
+        for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
+        {
+            if (parsedStrengths[pt] < 0)
             {
                 if (DoCheck)
-                    std::cerr << "pushingStrength - Invalid negative value for type: " << v->pieceToChar[idx] << std::endl;
+                    std::cerr << "pushingStrength - Invalid negative value." << std::endl;
                 return false;
             }
-            parsedStrengths[PieceType(idx)] = strength;
         }
-        if (DoCheck && sawToken && idx == std::string::npos)
-            std::cerr << "pushingStrength - Invalid piece type: " << token << std::endl;
-        else if (DoCheck && sawToken && idx != std::string::npos && (parseError || !(ss >> std::ws).eof()))
-            std::cerr << "pushingStrength - Invalid syntax." << std::endl;
-        else if (sawToken && idx != std::string::npos)
-            std::copy(std::begin(parsedStrengths), std::end(parsedStrengths), std::begin(v->pushingStrength));
+        std::copy(std::begin(parsedStrengths), std::end(parsedStrengths), std::begin(v->pushingStrength));
     }
     parse_attribute("pushFirstColor", v->pushFirstColor);
     parse_attribute("pushingRemoves", v->pushingRemoves);
@@ -1472,44 +1457,23 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     const auto& it_virtual_drop_limit = config.find("virtualDropLimit");
     if (it_virtual_drop_limit != config.end())
     {
-        char token = '\0', sep = 0;
-        size_t idx = std::string::npos;
-        int limit = 0;
         int parsedLimits[PIECE_TYPE_NB];
         std::copy(std::begin(v->virtualDropLimit), std::end(v->virtualDropLimit), std::begin(parsedLimits));
-        bool parsedEnabled = v->virtualDropLimitEnabled;
-        bool parseError = false;
-        bool sawToken = false;
-        std::stringstream ss(it_virtual_drop_limit->second);
-        while (ss >> token)
+        if (!parse_piece_int_map(it_virtual_drop_limit->second, v, parsedLimits, true))
         {
-            sawToken = true;
-            idx = v->pieceToChar.find(std::toupper(static_cast<unsigned char>(token)));
-            if (idx == std::string::npos)
-                break;
-            if (idx >= PIECE_TYPE_NB || !(ss >> sep) || sep != ':' || !(ss >> limit))
-            {
-                parseError = true;
-                break;
-            }
-            if (limit < 0)
+            if (DoCheck)
+                std::cerr << "virtualDropLimit - Invalid syntax." << std::endl;
+            return false;
+        }
+        for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
+            if (parsedLimits[pt] < 0)
             {
                 if (DoCheck)
-                    std::cerr << "virtualDropLimit - Invalid negative value for type: " << v->pieceToChar[idx] << std::endl;
+                    std::cerr << "virtualDropLimit - Invalid negative value." << std::endl;
                 return false;
             }
-            parsedLimits[PieceType(idx)] = limit;
-            parsedEnabled = true;
-        }
-        if (DoCheck && sawToken && idx == std::string::npos)
-            std::cerr << "virtualDropLimit - Invalid piece type: " << token << std::endl;
-        else if (DoCheck && sawToken && idx != std::string::npos && (parseError || !(ss >> std::ws).eof()))
-            std::cerr << "virtualDropLimit - Invalid syntax." << std::endl;
-        else if (sawToken && idx != std::string::npos)
-        {
-            std::copy(std::begin(parsedLimits), std::end(parsedLimits), std::begin(v->virtualDropLimit));
-            v->virtualDropLimitEnabled = parsedEnabled;
-        }
+        std::copy(std::begin(parsedLimits), std::end(parsedLimits), std::begin(v->virtualDropLimit));
+        v->virtualDropLimitEnabled = true;
     }
     parse_attribute("dropLoop", v->dropLoop);
 
