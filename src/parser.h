@@ -70,7 +70,7 @@ public:
 private:
     Config config;
     template <bool Current = true, class T> bool parse_attribute(const std::string& key, T& target);
-    template <bool Current = true, class T> bool parse_attribute(const std::string& key, T& target, const std::string& pieceToChar);
+    template <bool Current = true, class T> bool parse_attribute(const std::string& key, T& target, const Variant* v);
 
     bool parse_piece_types(Variant* v);
     bool parse_piece_values(Variant* v);
@@ -83,9 +83,9 @@ private:
                                                               const std::string& key1, T& target1,
                                                               const std::string& key2, U& target2);
     template <typename T> void parse_both_colors(const std::string& key, T& target);
-    template <typename T> void parse_both_colors_piece(const std::string& key, T& target, const std::string& pieceToChar);
+    template <typename T> void parse_both_colors_piece(const std::string& key, T& target, const Variant* v);
     template <typename T> void parse_both_colors_with_overrides(const std::string& key, T& target);
-    template <typename T> void parse_both_colors_with_overrides_piece(const std::string& key, T& target, const std::string& pieceToChar);
+    template <typename T> void parse_both_colors_with_overrides_piece(const std::string& key, T& target, const Variant* v);
 };
 
 } // namespace Stockfish
