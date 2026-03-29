@@ -37,6 +37,36 @@ namespace {
         return ss.eof();
     }
 
+    std::string trim(const std::string& s) {
+        const auto first = s.find_first_not_of(" \t");
+        if (first == std::string::npos)
+            return "";
+        const auto last = s.find_last_not_of(" \t");
+        return s.substr(first, last - first + 1);
+    }
+
+    std::string read_piece_token(const std::string& value) {
+        std::string s = trim(value);
+        if (s.empty() || !Variant::is_piece_id_start(s[0]))
+            return "";
+        std::string token(1, s[0]);
+        if (s.size() >= 2 && Variant::is_piece_id_suffix(s[1]))
+            token.push_back(s[1]);
+        return token;
+    }
+
+    std::pair<std::string, std::string> split_piece_entry(const std::string& value) {
+        std::string s = trim(value);
+        std::string token = read_piece_token(s);
+        if (token.empty())
+            return {"", ""};
+        if (s.size() == token.size())
+            return {token, ""};
+        if (s[token.size()] != ':')
+            return {token, ""};
+        return {token, s.substr(token.size() + 1)};
+    }
+
     bool looks_like_piece_definition_value(const std::string& value) {
         return value.size() >= 2
             && std::isalpha(static_cast<unsigned char>(value[0]))
@@ -759,8 +789,9 @@ bool VariantParser<DoCheck>::parse_piece_types(Variant* v) {
         const auto& keyValue = config.find(name);
         if (keyValue != config.end() && !keyValue->second.empty())
         {
-            if (std::isalpha(static_cast<unsigned char>(keyValue->second.at(0))))
-                v->add_piece(pt, keyValue->second.at(0));
+            auto [token, rest] = split_piece_entry(keyValue->second);
+            if (!token.empty())
+                v->add_piece(pt, token);
             else
             {
                 if (DoCheck && keyValue->second.at(0) != '-')
@@ -770,9 +801,9 @@ bool VariantParser<DoCheck>::parse_piece_types(Variant* v) {
             // betza
             if (is_custom(pt))
             {
-                if (keyValue->second.size() > 1)
+                if (!rest.empty())
                 {
-                    v->customPiece[pt - CUSTOM_PIECES] = keyValue->second.substr(2);
+                    v->customPiece[pt - CUSTOM_PIECES] = rest;
                     // Is there an en passant flag in the Betza notation?
                     if (v->customPiece[pt - CUSTOM_PIECES].find('e') != std::string::npos)
                     {
@@ -783,7 +814,7 @@ bool VariantParser<DoCheck>::parse_piece_types(Variant* v) {
                 else if (DoCheck)
                     std::cerr << name << " - Missing Betza move notation" << std::endl;
             }
-            else if (pt != KING && keyValue->second.size() > 1)
+            else if (pt != KING && !rest.empty())
             {
                 if (DoCheck)
                     std::cerr << name << " only supports a piece letter here. Use customPieceN = "
@@ -792,11 +823,11 @@ bool VariantParser<DoCheck>::parse_piece_types(Variant* v) {
             }
             else if (pt == KING)
             {
-                if (keyValue->second.size() > 1)
+                if (!rest.empty())
                 {
                     // custom royal piece
-                    v->add_piece(CUSTOM_PIECES_ROYAL, keyValue->second.at(0));
-                    v->customPiece[CUSTOM_PIECES_ROYAL - CUSTOM_PIECES] = keyValue->second.substr(2);
+                    v->add_piece(CUSTOM_PIECES_ROYAL, token);
+                    v->customPiece[CUSTOM_PIECES_ROYAL - CUSTOM_PIECES] = rest;
                     v->kingType = CUSTOM_PIECES_ROYAL;
                     v->castlingKingPiece[WHITE] = v->castlingKingPiece[BLACK] = CUSTOM_PIECES_ROYAL;
                 }
@@ -824,27 +855,29 @@ bool VariantParser<DoCheck>::parse_piece_values(Variant* v) {
         const auto& pv = config.find(optionName);
         if (pv != config.end())
         {
-            char token, sep = 0;
-            size_t idx = std::string::npos;
+            std::string entry;
+            PieceType pt = NO_PIECE_TYPE;
             bool parseError = false;
             int parsedValue = 0;
             std::stringstream ss(pv->second);
-            while (ss >> token)
+            while (ss >> entry)
             {
-                idx = v->pieceToChar.find(std::toupper(static_cast<unsigned char>(token)));
-                if (idx == std::string::npos)
-                    break;
-                if (!(ss >> sep) || sep != ':' || !(ss >> parsedValue))
+                auto [token, rawValue] = split_piece_entry(entry);
+                pt = v->piece_type_from_symbol(token);
+                if (pt == NO_PIECE_TYPE || rawValue.empty())
                 {
                     parseError = true;
                     break;
                 }
-                v->pieceValue[phase][idx] = parsedValue;
+                if (!set(rawValue, parsedValue))
+                {
+                    parseError = true;
+                    break;
+                }
+                v->pieceValue[phase][pt] = parsedValue;
             }
-            if (DoCheck && idx == std::string::npos)
-                std::cerr << optionName << " - Invalid piece type: " << token << std::endl;
-            else if (DoCheck && (parseError || !(ss >> std::ws).eof()))
-                std::cerr << optionName << " - Invalid piece value for type: " << v->pieceToChar[idx] << std::endl;
+            if (DoCheck && parseError)
+                std::cerr << optionName << " - Invalid syntax." << std::endl;
         }
     }
 

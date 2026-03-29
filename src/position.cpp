@@ -455,11 +455,14 @@ std::ostream& operator<<(std::ostream& os, const Position& pos) {
           else if (pos.state()->wallSquares & sq)
               os << " | *";
           else if (pos.variant()->shogiStylePromotions && pos.unpromoted_piece_on(sq))
-              os << " |+" << pos.piece_to_char()[pos.unpromoted_piece_on(sq)];
+              os << " |+" << pos.piece_symbol(pos.unpromoted_piece_on(sq));
           else if (((pos.captures_to_hand() && !pos.drop_loop()) || pos.two_boards()) && pos.is_promoted(sq))
-              os << " |~" << pos.piece_to_char()[pos.piece_on(sq)];
+              os << " |~" << pos.piece_symbol(pos.piece_on(sq));
           else
-              os << " | " << pos.piece_to_char()[pos.piece_on(sq)];
+          {
+              const std::string& symbol = pos.piece_symbol(pos.piece_on(sq));
+              os << " | " << (symbol.empty() ? " " : symbol);
+          }
       }
 
 #ifdef LARGEBOARDS
@@ -478,7 +481,8 @@ std::ostream& operator<<(std::ostream& os, const Position& pos) {
           {
               os << " [";
               for (PieceType pt = KING; pt >= PAWN; --pt)
-                  os << std::string(pos.count_in_hand(c, pt), pos.piece_to_char()[make_piece(c, pt)]);
+                  for (int i = 0; i < pos.count_in_hand(c, pt); ++i)
+                      os << pos.piece_symbol(make_piece(c, pt));
               os << "]";
           }
       }
@@ -802,7 +806,6 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
 */
 
   unsigned char col, token;
-  size_t idx;
   std::istringstream ss(fenStr);
 
   std::memset(static_cast<void*>(this), 0, sizeof(Position));
@@ -815,6 +818,16 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
 
   Rank r = max_rank();
   Square sq = SQ_A1 + r * NORTH;
+  auto read_symbol = [&](char first) {
+      std::string symbol(1, first);
+      if (Variant::is_piece_id_suffix(ss.peek()))
+      {
+          char suffix;
+          ss >> suffix;
+          symbol.push_back(suffix);
+      }
+      return symbol;
+  };
 
   int commitFile = 0;
   int rank = 0;
@@ -891,32 +904,40 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
           ++sq;
       }
 
-      else if ((idx = piece_to_char().find(token)) != string::npos || (idx = piece_to_char_synonyms().find(token)) != string::npos)
+      else if (Variant::is_piece_id_start(token))
       {
+          std::string symbol = read_symbol(token);
+          Piece pc = piece_from_symbol(symbol);
+          if (pc == NO_PIECE)
+              continue;
           if (ss.peek() == '~')
               ss >> token;
 
           if(v->commitGates && (rank == 0 || rank == max_rank() + 2))
           {
-              commit_piece(Piece(idx), File(commitFile));
+              commit_piece(pc, File(commitFile));
               ++commitFile;
           }
           else{
-              put_piece(Piece(idx), sq, token == '~', NO_PIECE, true);
+              put_piece(pc, sq, token == '~', NO_PIECE, true);
               ++sq;
           }
       }
 
       // Promoted shogi pieces
-      else if (token == '+' && var->shogiStylePromotions && (idx = piece_to_char().find(ss.peek())) != string::npos && promoted_piece_type(type_of(Piece(idx))))
+      else if (token == '+' && var->shogiStylePromotions && Variant::is_piece_id_start(ss.peek()))
       {
           ss >> token;
+          std::string symbol = read_symbol(token);
+          Piece promoted = piece_from_symbol(symbol);
+          if (promoted == NO_PIECE || !promoted_piece_type(type_of(promoted)))
+              continue;
           if(v->commitGates && (rank == 0 || rank == max_rank() + 2)){
-            commit_piece(Piece(idx), File(commitFile));
+            commit_piece(promoted, File(commitFile));
             ++commitFile;
           }
           else {
-            put_piece(make_piece(color_of(Piece(idx)), promoted_piece_type(type_of(Piece(idx)))), sq, true, Piece(idx), true);
+            put_piece(make_piece(color_of(promoted), promoted_piece_type(type_of(promoted))), sq, true, promoted, true);
             ++sq;
           }
       }
@@ -930,12 +951,15 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
           } else if (token == '#') {
               prison = true;
               continue;
-          } else if ((idx = piece_to_char().find(token)) != string::npos) {
-              if (prison) {
-                  add_to_prison(Piece(idx));
-              } else {
-                  add_to_hand(Piece(idx));
-              }
+          } else if (Variant::is_piece_id_start(token)) {
+              std::string symbol = read_symbol(token);
+              Piece pc = piece_from_symbol(symbol);
+              if (pc == NO_PIECE)
+                  continue;
+              if (prison)
+                  add_to_prison(pc);
+              else
+                  add_to_hand(pc);
           }
       }
   }
@@ -1175,10 +1199,14 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
               while (std::isdigit(ss.peek()) && ss >> token)
                   handCount = 10 * handCount + (token - '0');
           }
-          else if ((idx = piece_to_char().find(token)) != string::npos)
+          else if (Variant::is_piece_id_start(token))
           {
+              std::string symbol = read_symbol(token);
+              Piece pc = piece_from_symbol(symbol);
+              if (pc == NO_PIECE)
+                  continue;
               for (int i = 0; i < handCount; i++)
-                  add_to_hand(Piece(idx));
+                  add_to_hand(pc);
               handCount = 1;
           }
       }
@@ -1585,9 +1613,14 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
 
   int emptyCnt;
   std::ostringstream ss;
+  auto append_piece_symbols = [&](Piece piece, int count) {
+      const std::string& symbol = piece_symbol(piece);
+      for (int i = 0; i < count; ++i)
+          ss << symbol;
+  };
   if(commit_gates()){
       for(File f = FILE_A; f <= max_file(); ++f){
-          if(has_committed_piece(BLACK, f)) ss << piece_to_char()[make_piece(BLACK, committedGates[BLACK][f])];
+          if(has_committed_piece(BLACK, f)) ss << piece_symbol(make_piece(BLACK, committedGates[BLACK][f]));
           else ss << "*";
       }
       ss << "/";
@@ -1612,10 +1645,10 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
               }
               else if (var->shogiStylePromotions && unpromoted_piece_on(make_square(f, r)))
                   // Promoted shogi pieces, e.g., +r for dragon
-                  ss << "+" << piece_to_char()[unpromoted_piece_on(make_square(f, r))];
+                  ss << "+" << piece_symbol(unpromoted_piece_on(make_square(f, r)));
               else
               {
-                  ss << piece_to_char()[piece_on(make_square(f, r))];
+                  ss << piece_symbol(piece_on(make_square(f, r)));
 
                   // Set promoted pieces
                   if (((captures_to_hand() && !drop_loop()) || two_boards() ||  showPromoted) && is_promoted(make_square(f, r)))
@@ -1630,7 +1663,7 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
   if(commit_gates()){
       ss << "/";
       for(File f = FILE_A; f <= max_file(); ++f){
-          if(has_committed_piece(WHITE, f)) ss << piece_to_char()[make_piece(WHITE, committedGates[WHITE][f])];
+          if(has_committed_piece(WHITE, f)) ss << piece_symbol(make_piece(WHITE, committedGates[WHITE][f]));
           else ss << "*";
       }
   }
@@ -1644,7 +1677,7 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
               {
                   if (pieceCountInHand[c][pt] > 1)
                       ss << pieceCountInHand[c][pt];
-                  ss << piece_to_char()[make_piece(c, pt)];
+                  ss << piece_symbol(make_piece(c, pt));
               }
       if (count_in_hand(ALL_PIECES) == 0)
           ss << '-';
@@ -1670,7 +1703,7 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
           for (Color c: {WHITE, BLACK})
               for (PieceType pt = KING; pt >= PAWN; --pt) {
                   assert(pieceCountInHand[c][pt] >= 0);
-                  ss << std::string(pieceCountInHand[c][pt], piece_to_char()[make_piece(c, pt)]);
+                  append_piece_symbols(make_piece(c, pt), pieceCountInHand[c][pt]);
               }
           if (capture_type() == PRISON &&
               (count_in_prison(WHITE, ALL_PIECES) > 0 || count_in_prison(BLACK, ALL_PIECES) > 0)) {
@@ -1679,9 +1712,8 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
                   for (PieceType pt = KING; pt >= PAWN; --pt) {
                       assert(pieceCountInPrison[c][pt] >= 0);
                       int n = pieceCountInPrison[c][pt];
-                      if (n > 0) {
-                          ss << std::string(n, piece_to_char()[make_piece(~c, pt)]);
-                      }
+                      if (n > 0)
+                          append_piece_symbols(make_piece(~c, pt), n);
                   }
           }
       }
