@@ -71,6 +71,26 @@ namespace Stockfish::Eval::NNUE::Layers {
           transformedFeatures, buffer + SelfBufferSize);
       const auto output = reinterpret_cast<OutputType*>(buffer);
 
+  #if defined(USE_AVX512)
+      if constexpr (InputDimensions % SimdWidth == 0) {
+        constexpr IndexType NumChunks = InputDimensions / SimdWidth;
+        const __m512i Zero = _mm512_setzero_si512();
+        const __m512i Control = _mm512_setr_epi32(
+             0,  4,  8, 12,  1,  5,  9, 13,  2,  6, 10, 14,  3,  7, 11, 15);
+        const auto in = reinterpret_cast<const __m512i*>(input);
+        const auto out = reinterpret_cast<__m512i*>(output);
+        for (IndexType i = 0; i < NumChunks; ++i) {
+          const __m512i words0 = _mm512_srai_epi16(_mm512_packs_epi32(
+              _mm512_load_si512(&in[i * 4 + 0]),
+              _mm512_load_si512(&in[i * 4 + 1])), WeightScaleBits);
+          const __m512i words1 = _mm512_srai_epi16(_mm512_packs_epi32(
+              _mm512_load_si512(&in[i * 4 + 2]),
+              _mm512_load_si512(&in[i * 4 + 3])), WeightScaleBits);
+          _mm512_store_si512(&out[i], _mm512_permutexvar_epi32(
+              Control, _mm512_max_epi8(_mm512_packs_epi16(words0, words1), Zero)));
+        }
+      } else
+  #endif
   #if defined(USE_AVX2)
       if constexpr (InputDimensions % SimdWidth == 0) {
         constexpr IndexType NumChunks = InputDimensions / SimdWidth;
