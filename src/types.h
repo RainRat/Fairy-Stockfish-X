@@ -396,17 +396,15 @@ struct Bitboard {
     }
 
     inline Bitboard operator * (const Bitboard x) const {
-        uint64_t a_lo = (uint32_t)b64[1];
-        uint64_t a_hi = b64[1] >> 32;
-        uint64_t b_lo = (uint32_t)x.b64[1];
-        uint64_t b_hi = x.b64[1] >> 32;
-
-        uint64_t t1 = (a_hi * b_lo) + ((a_lo * b_lo) >> 32);
-        uint64_t t2 = (a_lo * b_hi) + (t1 & 0xFFFFFFFF);
-
-        return Bitboard(b64[0] * x.b64[1] + b64[1] * x.b64[0] + (a_hi * b_hi) + (t1 >> 32) + (t2 >> 32),
-                        (t2 << 32) + (a_lo * b_lo & 0xFFFFFFFF));
-   }
+        unsigned __int128 lo = (unsigned __int128)b64[1] * x.b64[1];
+        unsigned __int128 cross1 = (unsigned __int128)b64[1] * x.b64[0];
+        unsigned __int128 cross2 = (unsigned __int128)b64[0] * x.b64[1];
+        uint64_t r1 = uint64_t(lo);
+        uint64_t r0 = uint64_t(lo >> 64);
+        r0 += uint64_t(cross1);
+        r0 += uint64_t(cross2);
+        return Bitboard(r0, r1);
+    }
 };
 #endif
 constexpr int SQUARE_BITS = 7;
@@ -553,6 +551,11 @@ enum CastlingRights {
 enum CheckCount : int {
   CHECKS_0 = 0, CHECKS_NB = 11
 };
+
+constexpr int CHECKS_BITS = 4;
+constexpr int CHECKS_MAX = (1 << CHECKS_BITS) - 1;
+constexpr int POINTS_SCORE_BITS = 8;
+constexpr int POINTS_SCORE_MAX = (1 << POINTS_SCORE_BITS) - 1;
 
 constexpr int POTION_COOLDOWN_BITS = 16;
 

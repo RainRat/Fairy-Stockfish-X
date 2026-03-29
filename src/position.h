@@ -172,6 +172,10 @@ public:
   PieceSet piece_types() const;
   const std::string& piece_to_char() const;
   const std::string& piece_to_char_synonyms() const;
+  const std::string& piece_symbol(Piece pc) const;
+  const std::string& piece_symbol_synonym(Piece pc) const;
+  Piece piece_from_symbol(const std::string& token) const;
+  PieceType piece_type_from_symbol(const std::string& token) const;
   Bitboard promotion_zone(Color c) const;
   Bitboard promotion_zone(Color c, PieceType pt) const;
   Bitboard promotion_zone(Piece p) const;
@@ -233,6 +237,12 @@ public:
   int nnue_piece_square_index(Color perspective, Piece pc) const;
   int nnue_piece_hand_index(Color perspective, Piece pc) const;
   int nnue_king_square_index(Square ksq) const;
+  int nnue_wall_index_base() const;
+  int nnue_points_index_base() const;
+  int nnue_points_score_planes() const;
+  int nnue_points_check_planes() const;
+  int nnue_potion_zone_index_base() const;
+  int nnue_potion_cooldown_index_base() const;
   bool free_drops() const;
   void set_spell_context(Bitboard freezeExtra, Bitboard jumpRemoved) const;
   void clear_spell_context() const;
@@ -384,6 +394,8 @@ public:
   PointsRule points_rule_captures() const;
   int points_goal() const;
   int points_count(Color c) const;
+  int points_score(Color c) const;
+  int points_score_clamped(Color c) const;
   Value points_goal_value() const;
   Value points_goal_simul_value_by_most_points() const;
   Value points_goal_simul_value_by_mover() const;
@@ -713,6 +725,26 @@ inline const std::string& Position::piece_to_char() const {
 inline const std::string& Position::piece_to_char_synonyms() const {
   assert(var != nullptr);
   return var->pieceToCharSynonyms;
+}
+
+inline const std::string& Position::piece_symbol(Piece pc) const {
+  assert(var != nullptr);
+  return var->piece_symbol(pc);
+}
+
+inline const std::string& Position::piece_symbol_synonym(Piece pc) const {
+  assert(var != nullptr);
+  return var->piece_symbol_synonym(pc);
+}
+
+inline Piece Position::piece_from_symbol(const std::string& token) const {
+  assert(var != nullptr);
+  return var->piece_from_symbol(token);
+}
+
+inline PieceType Position::piece_type_from_symbol(const std::string& token) const {
+  assert(var != nullptr);
+  return var->piece_type_from_symbol(token);
 }
 
 inline Bitboard Position::promotion_zone(Color c) const {
@@ -1116,6 +1148,36 @@ inline int Position::nnue_piece_hand_index(Color perspective, Piece pc) const {
 inline int Position::nnue_king_square_index(Square ksq) const {
   assert(var != nullptr);
   return var->kingSquareIndex[ksq];
+}
+
+inline int Position::nnue_wall_index_base() const {
+  assert(var != nullptr);
+  return var->nnueWallIndexBase;
+}
+
+inline int Position::nnue_points_index_base() const {
+  assert(var != nullptr);
+  return var->nnuePointsIndexBase;
+}
+
+inline int Position::nnue_points_score_planes() const {
+  assert(var != nullptr);
+  return var->nnuePointsScorePlanes;
+}
+
+inline int Position::nnue_points_check_planes() const {
+  assert(var != nullptr);
+  return var->nnuePointsCheckPlanes;
+}
+
+inline int Position::nnue_potion_zone_index_base() const {
+  assert(var != nullptr);
+  return var->nnuePotionZoneIndexBase;
+}
+
+inline int Position::nnue_potion_cooldown_index_base() const {
+  assert(var != nullptr);
+  return var->nnuePotionCooldownIndexBase;
 }
 
 inline bool Position::checking_permitted() const {
@@ -2205,6 +2267,14 @@ inline int Position::points_goal() const {
 
 inline int Position::points_count(Color c) const {
   return st->pointsCount[c];
+}
+
+inline int Position::points_score(Color c) const {
+  return st->pointsCount[c];
+}
+
+inline int Position::points_score_clamped(Color c) const {
+  return std::max(0, std::min(points_score(c), POINTS_SCORE_MAX));
 }
 
 inline Value Position::points_goal_value() const {
@@ -3362,7 +3432,7 @@ inline const std::string Position::piece_to_partner() const {
   Piece piece = st->capturedpromoted ?
       (st->unpromotedCapturedPiece ? st->unpromotedCapturedPiece : make_piece(color, main_promotion_pawn_type(color))) :
       st->capturedPiece;
-  return std::string(1, piece_to_char()[piece]);
+  return piece_symbol(piece);
 }
 
 inline Thread* Position::this_thread() const {

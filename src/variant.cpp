@@ -2238,6 +2238,8 @@ void VariantMap::init() {
 
 // Pre-calculate derived properties
 Variant* Variant::conclude() {
+    rebuild_piece_symbol_maps();
+
     // Backward compatibility: legacy extinctionPseudoRoyal used extinction
     // piece fields to define pseudo-royal behavior.
     if (extinctionPseudoRoyal && !pseudoRoyalTypes)
@@ -2312,6 +2314,22 @@ Variant* Variant::conclude() {
     int nnuePockets = nnueUsePockets ? 2 * int(maxFile + 1) : 0;
     int nnueNonDropPieceIndices = (2 * std::bitset<64>(pieceTypes).count() - (nnueKing != NO_PIECE_TYPE)) * nnueSquares;
     int nnuePieceIndices = nnueNonDropPieceIndices + 2 * (std::bitset<64>(pieceTypes).count() - (nnueKing != NO_PIECE_TYPE)) * nnuePockets;
+    bool nnueHasWalls = wallingRule != NO_WALLING
+                     || petrifyOnCaptureTypes != NO_PIECE_SET
+                     || startFen.find('*') != std::string::npos;
+    nnueWallIndexBase = nnueHasWalls ? nnuePieceIndices : -1;
+    if (nnueHasWalls)
+        nnuePieceIndices += nnueSquares;
+    nnuePointsScorePlanes = pointsCounting ? 2 * POINTS_SCORE_BITS : 0;
+    nnuePointsCheckPlanes = checkCounting ? 2 * CHECKS_BITS : 0;
+    nnuePointsIndexBase = (nnuePointsScorePlanes || nnuePointsCheckPlanes) ? nnuePieceIndices : -1;
+    nnuePieceIndices += nnuePointsScorePlanes + nnuePointsCheckPlanes;
+    nnuePotionZoneIndexBase = potions ? nnuePieceIndices : -1;
+    if (potions)
+        nnuePieceIndices += COLOR_NB * POTION_TYPE_NB * nnueSquares;
+    nnuePotionCooldownIndexBase = potions ? nnuePieceIndices : -1;
+    if (potions)
+        nnuePieceIndices += COLOR_NB * POTION_TYPE_NB * POTION_COOLDOWN_BITS;
     int i = 0;
     for (PieceSet ps = pieceTypes; ps;)
     {
@@ -2445,17 +2463,17 @@ Variant* Variant::conclude() {
     for (Color c : {WHITE, BLACK})
     {
         connectPieceGoalTypes[c].clear();
-        for (unsigned char ch : connectPieceGoal[c])
+        std::stringstream goalStream(connectPieceGoal[c]);
+        std::string goalToken;
+        while (goalStream >> goalToken)
         {
-            if (std::isspace(ch))
-                continue;
-            size_t idx = pieceToChar.find(std::toupper(ch));
-            if (idx == std::string::npos || idx >= PIECE_TYPE_NB)
+            PieceType pt = piece_type_from_symbol(goalToken);
+            if (pt == NO_PIECE_TYPE)
             {
                 connectPieceGoalTypes[c].clear();
                 break;
             }
-            connectPieceGoalTypes[c].push_back(PieceType(idx));
+            connectPieceGoalTypes[c].push_back(pt);
         }
     }
       // Initialize multimove passing parameters
