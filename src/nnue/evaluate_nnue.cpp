@@ -136,7 +136,7 @@ namespace Stockfish::Eval::NNUE {
 
     std::uint32_t hashValue;
     if (!read_header(stream, &hashValue, &netDescription)) return false;
-    if (hashValue != HashValue) return false;
+    if (hashValue != hash_value()) return false;
     if (!featureTransformer)
         return false;
     if (!Detail::read_parameters(stream, *featureTransformer)) return false;
@@ -157,7 +157,7 @@ namespace Stockfish::Eval::NNUE {
     for (std::size_t i = 0; i < LayerStacks; ++i)
         if (!network[i])
             return false;
-    if (!write_header(stream, HashValue, netDescription)) return false;
+    if (!write_header(stream, hash_value(), netDescription)) return false;
     if (!Detail::write_parameters(stream, *featureTransformer)) return false;
     for (std::size_t i = 0; i < LayerStacks; ++i)
       if (!Detail::write_parameters(stream, *(network[i]))) return false;

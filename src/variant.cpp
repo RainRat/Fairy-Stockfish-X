@@ -2312,6 +2312,12 @@ Variant* Variant::conclude() {
     int nnuePockets = nnueUsePockets ? 2 * int(maxFile + 1) : 0;
     int nnueNonDropPieceIndices = (2 * std::bitset<64>(pieceTypes).count() - (nnueKing != NO_PIECE_TYPE)) * nnueSquares;
     int nnuePieceIndices = nnueNonDropPieceIndices + 2 * (std::bitset<64>(pieceTypes).count() - (nnueKing != NO_PIECE_TYPE)) * nnuePockets;
+    bool nnueHasWalls = wallingRule != NO_WALLING
+                     || petrifyOnCaptureTypes != NO_PIECE_SET
+                     || startFen.find('*') != std::string::npos;
+    nnueWallIndexBase = nnueHasWalls ? nnuePieceIndices : -1;
+    if (nnueHasWalls)
+        nnuePieceIndices += nnueSquares;
     int i = 0;
     for (PieceSet ps = pieceTypes; ps;)
     {

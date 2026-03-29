@@ -233,6 +233,7 @@ public:
   int nnue_piece_square_index(Color perspective, Piece pc) const;
   int nnue_piece_hand_index(Color perspective, Piece pc) const;
   int nnue_king_square_index(Square ksq) const;
+  int nnue_wall_index_base() const;
   bool free_drops() const;
   void set_spell_context(Bitboard freezeExtra, Bitboard jumpRemoved) const;
   void clear_spell_context() const;
@@ -1116,6 +1117,11 @@ inline int Position::nnue_piece_hand_index(Color perspective, Piece pc) const {
 inline int Position::nnue_king_square_index(Square ksq) const {
   assert(var != nullptr);
   return var->kingSquareIndex[ksq];
+}
+
+inline int Position::nnue_wall_index_base() const {
+  assert(var != nullptr);
+  return var->nnueWallIndexBase;
 }
 
 inline bool Position::checking_permitted() const {
