@@ -3432,7 +3432,7 @@ inline const std::string Position::piece_to_partner() const {
   Piece piece = st->capturedpromoted ?
       (st->unpromotedCapturedPiece ? st->unpromotedCapturedPiece : make_piece(color, main_promotion_pawn_type(color))) :
       st->capturedPiece;
-  return std::string(1, piece_to_char()[piece]);
+  return piece_symbol(piece);
 }
 
 inline Thread* Position::this_thread() const {

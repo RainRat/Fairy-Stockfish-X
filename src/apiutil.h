@@ -123,6 +123,12 @@ inline std::string piece_to_thai_char(Piece pc, bool promoted) {
     }
 }
 
+inline std::string display_symbol(std::string symbol) {
+    if (!symbol.empty())
+        symbol[0] = char(std::toupper(static_cast<unsigned char>(symbol[0])));
+    return symbol;
+}
+
 inline std::string piece(const Position& pos, Move m, Notation n) {
     Color us = pos.side_to_move();
     Square from = from_sq(m);
@@ -136,16 +142,16 @@ inline std::string piece(const Position& pos, Move m, Notation n) {
         return std::to_string(popcount(forward_file_bb(us, from) & pos.pieces(us, pt)) + 1);
     // Moves of promoted pieces
     else if (is_shogi(n) && type_of(m) != DROP && pos.unpromoted_piece_on(from))
-        return "+" + std::string(1, std::toupper(static_cast<unsigned char>(pos.piece_to_char()[pos.unpromoted_piece_on(from)])));
+        return "+" + display_symbol(pos.piece_symbol(pos.unpromoted_piece_on(from)));
     // Promoted drops
     else if (is_shogi(n) && type_of(m) == DROP && dropped_piece_type(m) != in_hand_piece_type(m))
-        return "+" + std::string(1, std::toupper(static_cast<unsigned char>(pos.piece_to_char()[in_hand_piece_type(m)])));
+        return "+" + display_symbol(pos.piece_symbol(make_piece(us, in_hand_piece_type(m))));
     else if (is_thai(n))
         return piece_to_thai_char(pc, pos.is_promoted(from));
-    else if (pos.piece_to_char_synonyms()[pc] != ' ')
-        return std::string(1, std::toupper(static_cast<unsigned char>(pos.piece_to_char_synonyms()[pc])));
+    else if (!pos.piece_symbol_synonym(pc).empty())
+        return display_symbol(pos.piece_symbol_synonym(pc));
     else
-        return std::string(1, std::toupper(static_cast<unsigned char>(pos.piece_to_char()[pc])));
+        return display_symbol(pos.piece_symbol(pc));
 }
 
 inline std::string file(const Position& pos, Square s, Notation n) {
@@ -312,7 +318,7 @@ inline const std::string move_to_san(Position& pos, Move m, Notation n) {
 
         if (is_gating(m))
         {
-            san += std::string("/") + char(std::toupper(static_cast<unsigned char>(pos.piece_to_char()[make_piece(us, gating_type(m))])));
+            san += std::string("/") + display_symbol(pos.piece_symbol(make_piece(us, gating_type(m))));
             san += square(pos, pos.gate_square(m), n);
         }
     }
@@ -353,15 +359,15 @@ inline const std::string move_to_san(Position& pos, Move m, Notation n) {
 
         // Suffix
         if (type_of(m) == PROMOTION)
-            san += std::string("=") + char(std::toupper(static_cast<unsigned char>(pos.piece_to_char()[make_piece(us, promotion_type(m))])));
+            san += std::string("=") + display_symbol(pos.piece_symbol(make_piece(us, promotion_type(m))));
         else if (type_of(m) == PIECE_PROMOTION)
-            san += is_shogi(n) ? std::string("+") : std::string("=") + char(std::toupper(static_cast<unsigned char>(pos.piece_to_char()[make_piece(us, pos.promoted_piece_type(type_of(pos.moved_piece(m))))])));
+            san += is_shogi(n) ? std::string("+") : std::string("=") + display_symbol(pos.piece_symbol(make_piece(us, pos.promoted_piece_type(type_of(pos.moved_piece(m))))));
         else if (type_of(m) == PIECE_DEMOTION)
-            san += is_shogi(n) ? std::string("-") : std::string("=") + std::string(1, std::toupper(static_cast<unsigned char>(pos.piece_to_char()[pos.unpromoted_piece_on(from)])));
+            san += is_shogi(n) ? std::string("-") : std::string("=") + display_symbol(pos.piece_symbol(pos.unpromoted_piece_on(from)));
         else if (type_of(m) == NORMAL && is_shogi(n) && pos.pseudo_legal(make<PIECE_PROMOTION>(from, to)))
             san += std::string("=");
         if (is_gating(m))
-            san += std::string("/") + char(std::toupper(static_cast<unsigned char>(pos.piece_to_char()[make_piece(us, gating_type(m))])));
+            san += std::string("/") + display_symbol(pos.piece_symbol(make_piece(us, gating_type(m))));
     }
 
     // Wall square
