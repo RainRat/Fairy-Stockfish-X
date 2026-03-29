@@ -2463,17 +2463,17 @@ Variant* Variant::conclude() {
     for (Color c : {WHITE, BLACK})
     {
         connectPieceGoalTypes[c].clear();
-        for (unsigned char ch : connectPieceGoal[c])
+        std::stringstream goalStream(connectPieceGoal[c]);
+        std::string goalToken;
+        while (goalStream >> goalToken)
         {
-            if (std::isspace(ch))
-                continue;
-            size_t idx = pieceToChar.find(std::toupper(ch));
-            if (idx == std::string::npos || idx >= PIECE_TYPE_NB)
+            PieceType pt = piece_type_from_symbol(goalToken);
+            if (pt == NO_PIECE_TYPE)
             {
                 connectPieceGoalTypes[c].clear();
                 break;
             }
-            connectPieceGoalTypes[c].push_back(PieceType(idx));
+            connectPieceGoalTypes[c].push_back(pt);
         }
     }
       // Initialize multimove passing parameters

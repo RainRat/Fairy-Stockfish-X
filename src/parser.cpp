@@ -170,6 +170,35 @@ namespace {
         return true;
     }
 
+    bool parse_piece_set_token_string(const std::string& text, const Variant* v, PieceSet& target, bool allowAll = true, bool allowNone = true) {
+        std::string remaining = trim(text);
+        PieceSet parsed = NO_PIECE_SET;
+        if (remaining.empty())
+            return false;
+        if (allowAll && remaining == "*") {
+            target = v->pieceTypes;
+            return true;
+        }
+        if (allowNone && remaining == "-") {
+            target = NO_PIECE_SET;
+            return true;
+        }
+        while (!remaining.empty())
+        {
+            std::string token = read_piece_token(remaining);
+            if (token.empty())
+                return false;
+            PieceType pt = parse_piece_type_token(v, token);
+            if (pt == NO_PIECE_TYPE)
+                return false;
+            parsed |= pt;
+            remaining.erase(0, token.size());
+            remaining = trim(remaining);
+        }
+        target = parsed;
+        return true;
+    }
+
     bool looks_like_piece_definition_value(const std::string& value) {
         return value.size() >= 2
             && std::isalpha(static_cast<unsigned char>(value[0]))
@@ -1260,35 +1289,19 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
             std::string targets = entry.substr(sep + 1);
 
             PieceSet attackerSet = NO_PIECE_SET;
-            if (attackers == "*") {
-                attackerSet = v->pieceTypes;
-            } else {
-                for (char a : attackers) {
-                    size_t idx = v->pieceToChar.find(std::toupper(static_cast<unsigned char>(a)));
-                    if (idx == std::string::npos || idx >= PIECE_TYPE_NB) {
-                        if (DoCheck)
-                            std::cerr << key << " - Invalid attacker piece type: " << a << std::endl;
-                        continue;
-                    }
-                    attackerSet |= piece_set(PieceType(idx));
-                }
+            if (!parse_piece_set_token_string(attackers, v, attackerSet, true, false))
+            {
+                if (DoCheck)
+                    std::cerr << key << " - Invalid attacker piece type list: " << attackers << std::endl;
+                continue;
             }
 
             PieceSet targetSet = NO_PIECE_SET;
-            if (targets != "-") {
-                if (targets == "*") {
-                    targetSet = v->pieceTypes;
-                } else {
-                    for (char t : targets) {
-                        size_t idx = v->pieceToChar.find(std::toupper(static_cast<unsigned char>(t)));
-                        if (idx == std::string::npos || idx >= PIECE_TYPE_NB) {
-                            if (DoCheck)
-                                std::cerr << key << " - Invalid target piece type: " << t << std::endl;
-                            continue;
-                        }
-                        targetSet |= piece_set(PieceType(idx));
-                    }
-                }
+            if (!parse_piece_set_token_string(targets, v, targetSet, true, true))
+            {
+                if (DoCheck)
+                    std::cerr << key << " - Invalid target piece type list: " << targets << std::endl;
+                continue;
             }
 
             if (!attackerSet || !targetSet)
@@ -1815,14 +1828,14 @@ void VariantParser<DoCheck>::check_consistency(Variant* v) {
     if (v->progressiveMultimove && !v->multimoves.empty())
         std::cerr << "progressiveMultimove ignores multimoves sequence." << std::endl;
     for (Color c : {WHITE, BLACK})
-        for (unsigned char ch : v->connectPieceGoal[c])
-            if (!std::isspace(ch))
-            {
-                size_t idx = v->pieceToChar.find(std::toupper(ch));
-                if (idx == std::string::npos || idx >= PIECE_TYPE_NB)
-                    std::cerr << "connectPieceGoal" << (c == WHITE ? "White" : "Black")
-                                  << " - Invalid piece type: " << char(ch) << std::endl;
-            }
+    {
+        std::stringstream ss(v->connectPieceGoal[c]);
+        std::string token;
+        while (ss >> token)
+            if (parse_piece_type_token(v, token) == NO_PIECE_TYPE)
+                std::cerr << "connectPieceGoal" << (c == WHITE ? "White" : "Black")
+                          << " - Invalid piece type: " << token << std::endl;
+    }
     if (v->castling && v->castlingRank > v->maxRank)
         std::cerr << "Inconsistent settings: castlingRank > maxRank." << std::endl;
     if (v->castling && v->castlingQueensideFile > v->castlingKingsideFile)

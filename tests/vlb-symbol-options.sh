@@ -24,6 +24,12 @@ dropPieceTypes = k:z' y'; z':-; y':z'
 priorityDropTypes = z' y'
 pushingStrength = z':2 y':3
 virtualDropLimit = z':2 y':1
+captureForbidden = z':y'
+connectN = 3
+connectPieceTypes = z' y'
+connectGoalByType = true
+connectPieceGoalWhite = z' y'
+connectPieceGoalBlack = y' z'
 startFen = 4k/5/5/5/Z'NY'1K[Z'Y'] w - - 0 1
 VAR
 
