@@ -187,11 +187,12 @@ namespace Stockfish::Eval::NNUE::Layers {
         __m256i product1 = _mm256_maddubs_epi16(a1, b1);
         __m256i product2 = _mm256_maddubs_epi16(a2, b2);
         __m256i product3 = _mm256_maddubs_epi16(a3, b3);
-        product0 = _mm256_adds_epi16(product0, product1);
         product0 = _mm256_madd_epi16(product0, Ones256);
-        product2 = _mm256_adds_epi16(product2, product3);
+        product1 = _mm256_madd_epi16(product1, Ones256);
         product2 = _mm256_madd_epi16(product2, Ones256);
-        acc = _mm256_add_epi32(acc, _mm256_add_epi32(product0, product2));
+        product3 = _mm256_madd_epi16(product3, Ones256);
+        acc = _mm256_add_epi32(acc, _mm256_add_epi32(_mm256_add_epi32(product0, product1),
+                                                    _mm256_add_epi32(product2, product3)));
 #endif
       };
 
@@ -218,11 +219,12 @@ namespace Stockfish::Eval::NNUE::Layers {
         __m128i product1 = _mm_maddubs_epi16(a1, b1);
         __m128i product2 = _mm_maddubs_epi16(a2, b2);
         __m128i product3 = _mm_maddubs_epi16(a3, b3);
-        product0 = _mm_adds_epi16(product0, product1);
         product0 = _mm_madd_epi16(product0, Ones128);
-        product2 = _mm_adds_epi16(product2, product3);
+        product1 = _mm_madd_epi16(product1, Ones128);
         product2 = _mm_madd_epi16(product2, Ones128);
-        acc = _mm_add_epi32(acc, _mm_add_epi32(product0, product2));
+        product3 = _mm_madd_epi16(product3, Ones128);
+        acc = _mm_add_epi32(acc, _mm_add_epi32(_mm_add_epi32(product0, product1),
+                                              _mm_add_epi32(product2, product3)));
       };
 
 #endif
@@ -281,6 +283,14 @@ namespace Stockfish::Eval::NNUE::Layers {
               const auto col3 = reinterpret_cast<const vec_t*>(&weights[(i + 3) * OutputDimensions * 4]);
               for (int j = 0; j * OutputSimdWidth < OutputDimensions; ++j)
                   vec_add_dpbusd_32x4(outptr[j], in0, col0[j], in1, col1[j], in2, col2[j], in3, col3[j]);
+          }
+
+          for (int i = (NumChunks / 4) * 4; i < (int)NumChunks; ++i)
+          {
+              const vec_t in = vec_set_32(input32[i]);
+              const auto col = reinterpret_cast<const vec_t*>(&weights[i * OutputDimensions * 4]);
+              for (int j = 0; j * OutputSimdWidth < OutputDimensions; ++j)
+                  vec_add_dpbusd_32(outptr[j], in, col[j]);
           }
       }
       else if constexpr (OutputDimensions == 1)
