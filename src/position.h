@@ -234,6 +234,9 @@ public:
   int nnue_piece_hand_index(Color perspective, Piece pc) const;
   int nnue_king_square_index(Square ksq) const;
   int nnue_wall_index_base() const;
+  int nnue_points_index_base() const;
+  int nnue_points_score_planes() const;
+  int nnue_points_check_planes() const;
   bool free_drops() const;
   void set_spell_context(Bitboard freezeExtra, Bitboard jumpRemoved) const;
   void clear_spell_context() const;
@@ -385,6 +388,8 @@ public:
   PointsRule points_rule_captures() const;
   int points_goal() const;
   int points_count(Color c) const;
+  int points_score(Color c) const;
+  int points_score_clamped(Color c) const;
   Value points_goal_value() const;
   Value points_goal_simul_value_by_most_points() const;
   Value points_goal_simul_value_by_mover() const;
@@ -1122,6 +1127,21 @@ inline int Position::nnue_king_square_index(Square ksq) const {
 inline int Position::nnue_wall_index_base() const {
   assert(var != nullptr);
   return var->nnueWallIndexBase;
+}
+
+inline int Position::nnue_points_index_base() const {
+  assert(var != nullptr);
+  return var->nnuePointsIndexBase;
+}
+
+inline int Position::nnue_points_score_planes() const {
+  assert(var != nullptr);
+  return var->nnuePointsScorePlanes;
+}
+
+inline int Position::nnue_points_check_planes() const {
+  assert(var != nullptr);
+  return var->nnuePointsCheckPlanes;
 }
 
 inline bool Position::checking_permitted() const {
@@ -2211,6 +2231,14 @@ inline int Position::points_goal() const {
 
 inline int Position::points_count(Color c) const {
   return st->pointsCount[c];
+}
+
+inline int Position::points_score(Color c) const {
+  return st->pointsCount[c];
+}
+
+inline int Position::points_score_clamped(Color c) const {
+  return std::max(0, std::min(points_score(c), POINTS_SCORE_MAX));
 }
 
 inline Value Position::points_goal_value() const {

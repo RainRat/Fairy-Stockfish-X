@@ -2318,6 +2318,10 @@ Variant* Variant::conclude() {
     nnueWallIndexBase = nnueHasWalls ? nnuePieceIndices : -1;
     if (nnueHasWalls)
         nnuePieceIndices += nnueSquares;
+    nnuePointsScorePlanes = pointsCounting ? 2 * POINTS_SCORE_BITS : 0;
+    nnuePointsCheckPlanes = checkCounting ? 2 * CHECKS_BITS : 0;
+    nnuePointsIndexBase = (nnuePointsScorePlanes || nnuePointsCheckPlanes) ? nnuePieceIndices : -1;
+    nnuePieceIndices += nnuePointsScorePlanes + nnuePointsCheckPlanes;
     int i = 0;
     for (PieceSet ps = pieceTypes; ps;)
     {

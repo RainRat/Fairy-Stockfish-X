@@ -346,6 +346,9 @@ struct Variant {
   PieceType nnueKing = KING;
   int nnueDimensions = 0;
   int nnueWallIndexBase = -1;
+  int nnuePointsIndexBase = -1;
+  int nnuePointsScorePlanes = 0;
+  int nnuePointsCheckPlanes = 0;
   bool nnueUsePockets = false;
   int pieceSquareIndex[COLOR_NB][PIECE_NB];
   int pieceHandIndex[COLOR_NB][PIECE_NB];
