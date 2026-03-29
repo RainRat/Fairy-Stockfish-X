@@ -237,6 +237,8 @@ public:
   int nnue_points_index_base() const;
   int nnue_points_score_planes() const;
   int nnue_points_check_planes() const;
+  int nnue_potion_zone_index_base() const;
+  int nnue_potion_cooldown_index_base() const;
   bool free_drops() const;
   void set_spell_context(Bitboard freezeExtra, Bitboard jumpRemoved) const;
   void clear_spell_context() const;
@@ -1142,6 +1144,16 @@ inline int Position::nnue_points_score_planes() const {
 inline int Position::nnue_points_check_planes() const {
   assert(var != nullptr);
   return var->nnuePointsCheckPlanes;
+}
+
+inline int Position::nnue_potion_zone_index_base() const {
+  assert(var != nullptr);
+  return var->nnuePotionZoneIndexBase;
+}
+
+inline int Position::nnue_potion_cooldown_index_base() const {
+  assert(var != nullptr);
+  return var->nnuePotionCooldownIndexBase;
 }
 
 inline bool Position::checking_permitted() const {

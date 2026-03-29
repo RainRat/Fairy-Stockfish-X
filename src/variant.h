@@ -349,6 +349,8 @@ struct Variant {
   int nnuePointsIndexBase = -1;
   int nnuePointsScorePlanes = 0;
   int nnuePointsCheckPlanes = 0;
+  int nnuePotionZoneIndexBase = -1;
+  int nnuePotionCooldownIndexBase = -1;
   bool nnueUsePockets = false;
   int pieceSquareIndex[COLOR_NB][PIECE_NB];
   int pieceHandIndex[COLOR_NB][PIECE_NB];

@@ -2322,6 +2322,12 @@ Variant* Variant::conclude() {
     nnuePointsCheckPlanes = checkCounting ? 2 * CHECKS_BITS : 0;
     nnuePointsIndexBase = (nnuePointsScorePlanes || nnuePointsCheckPlanes) ? nnuePieceIndices : -1;
     nnuePieceIndices += nnuePointsScorePlanes + nnuePointsCheckPlanes;
+    nnuePotionZoneIndexBase = potions ? nnuePieceIndices : -1;
+    if (potions)
+        nnuePieceIndices += COLOR_NB * POTION_TYPE_NB * nnueSquares;
+    nnuePotionCooldownIndexBase = potions ? nnuePieceIndices : -1;
+    if (potions)
+        nnuePieceIndices += COLOR_NB * POTION_TYPE_NB * POTION_COOLDOWN_BITS;
     int i = 0;
     for (PieceSet ps = pieceTypes; ps;)
     {

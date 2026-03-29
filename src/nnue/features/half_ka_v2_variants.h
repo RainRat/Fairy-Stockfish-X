@@ -53,6 +53,16 @@ namespace Stockfish::Eval::NNUE::Features {
     // Index of a feature for a given king position and a points/check plane
     static IndexType make_points_index(Color perspective, int plane, Square ksq, const Position& pos);
 
+    // Index of a feature for a given king position and potion zone square
+    static IndexType make_potion_zone_index(Color perspective, Color potionColor,
+                                            Variant::PotionType potion, Square s,
+                                            Square ksq, const Position& pos);
+
+    // Index of a feature for a given king position and potion cooldown bit
+    static IndexType make_potion_cooldown_index(Color perspective, Color potionColor,
+                                                Variant::PotionType potion, int bit,
+                                                Square ksq, const Position& pos);
+
    public:
     // Feature name
     static constexpr const char* Name = "HalfKAv2(Friend)";
@@ -62,23 +72,38 @@ namespace Stockfish::Eval::NNUE::Features {
     static constexpr std::uint32_t HashValueWithWalls = 0x9e5a2c13u;
     static constexpr std::uint32_t HashValueWithPoints = 0x8f3f9d5au;
     static constexpr std::uint32_t HashValueWithWallsAndPoints = 0x4e7f2a61u;
+    static constexpr std::uint32_t HashValueWithPotions = 0x7c2d4f9eu;
+    static constexpr std::uint32_t HashValueWithWallsAndPotions = 0xa1b2846fu;
+    static constexpr std::uint32_t HashValueWithPointsAndPotions = 0xd4c39b17u;
+    static constexpr std::uint32_t HashValueWithWallsPointsAndPotions = 0xe85f2c41u;
 
     static std::uint32_t get_hash_value() {
       bool hasWalls = currentNnueVariant && currentNnueVariant->nnueWallIndexBase >= 0;
       bool hasPoints = currentNnueVariant && currentNnueVariant->nnuePointsIndexBase >= 0;
+      bool hasPotions = currentNnueVariant && currentNnueVariant->nnuePotionZoneIndexBase >= 0;
+      if (hasWalls && hasPoints && hasPotions)
+        return HashValueWithWallsPointsAndPotions;
       if (hasWalls && hasPoints)
         return HashValueWithWallsAndPoints;
+      if (hasWalls && hasPotions)
+        return HashValueWithWallsAndPotions;
+      if (hasPoints && hasPotions)
+        return HashValueWithPointsAndPotions;
       if (hasWalls)
         return HashValueWithWalls;
       if (hasPoints)
         return HashValueWithPoints;
+      if (hasPotions)
+        return HashValueWithPotions;
       return HashValueNoExtras;
     }
 
     // Number of feature dimensions
     static constexpr IndexType Dimensions =
       static_cast<IndexType>(SQUARE_NB)
-      * (static_cast<IndexType>(SQUARE_NB) * 20 + 2 * POINTS_SCORE_BITS + 2 * CHECKS_BITS);
+      * (static_cast<IndexType>(SQUARE_NB) * 20 + 2 * POINTS_SCORE_BITS + 2 * CHECKS_BITS)
+      + static_cast<IndexType>(COLOR_NB) * Variant::POTION_TYPE_NB * static_cast<IndexType>(SQUARE_NB)
+      + static_cast<IndexType>(COLOR_NB) * Variant::POTION_TYPE_NB * POTION_COOLDOWN_BITS;
 
     static IndexType get_dimensions() {
       return currentNnueVariant->nnueDimensions;
@@ -86,7 +111,8 @@ namespace Stockfish::Eval::NNUE::Features {
 
     // Maximum number of simultaneously active features.
     static constexpr IndexType MaxActiveDimensions =
-      2 * static_cast<IndexType>(SQUARE_NB) + 2 * POINTS_SCORE_BITS + 2 * CHECKS_BITS;
+      2 * static_cast<IndexType>(SQUARE_NB) + 2 * POINTS_SCORE_BITS + 2 * CHECKS_BITS
+      + static_cast<IndexType>(COLOR_NB) * Variant::POTION_TYPE_NB * (static_cast<IndexType>(SQUARE_NB) + POTION_COOLDOWN_BITS);
 
     // Get a list of indices for active features
     static void append_active_indices(
