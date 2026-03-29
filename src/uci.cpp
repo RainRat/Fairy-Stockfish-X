@@ -506,9 +506,9 @@ string UCI::dropped_piece(const Position& pos, Move m) {
   assert(is_drop_move(m));
   if (dropped_piece_type(m) == pos.promoted_piece_type(in_hand_piece_type(m)))
       // Dropping as promoted piece
-      return std::string{'+', pos.piece_to_char()[in_hand_piece_type(m)]};
+      return std::string("+") + pos.piece_symbol(make_piece(WHITE, in_hand_piece_type(m)));
   else
-      return std::string{pos.piece_to_char()[dropped_piece_type(m)]};
+      return pos.piece_symbol(make_piece(WHITE, dropped_piece_type(m)));
 }
 
 string UCI::exchange(const Position &pos, Move m) {
@@ -557,7 +557,7 @@ string UCI::move(const Position& pos, Move m) {
               && gating_type(m) == potionPiece)
           {
               potionMove = true;
-              potionPrefix = std::string(1, pos.piece_to_char()[make_piece(BLACK, gating_type(m))])
+              potionPrefix = pos.piece_symbol(make_piece(BLACK, gating_type(m)))
                              + "@" + UCI::square(pos, gating_square(m));
           }
       }
@@ -582,14 +582,14 @@ string UCI::move(const Position& pos, Move m) {
       move += "," + UCI::square(pos, gating_square(m));
 
   if (type_of(m) == PROMOTION)
-      move += pos.piece_to_char()[make_piece(BLACK, promotion_type(m))];
+      move += pos.piece_symbol(make_piece(BLACK, promotion_type(m)));
   else if (type_of(m) == PIECE_PROMOTION)
       move += '+';
   else if (type_of(m) == PIECE_DEMOTION)
       move += '-';
   else if (is_gating(m) && !potionMove && !pos.walling(pos.side_to_move()))
   {
-      move += pos.piece_to_char()[make_piece(BLACK, gating_type(m))];
+      move += pos.piece_symbol(make_piece(BLACK, gating_type(m)));
       if (gating_square(m) != from)
           move += UCI::square(pos, gating_square(m));
   }
@@ -615,14 +615,23 @@ string UCI::move(const Position& pos, Move m) {
 
 Move UCI::to_move(const Position& pos, string& str) {
 
-  if (str.length() == 5)
+  if (!str.empty())
   {
-      if (str[4] == '=')
-          // shogi moves refraining from promotion might use equals sign
-          str.pop_back();
-      else
-          // Junior could send promotion piece in uppercase
-          str[4] = char(std::tolower(static_cast<unsigned char>(str[4])));
+      // shogi moves refraining from promotion might use equals sign
+      str.erase(std::remove(str.begin(), str.end(), '='), str.end());
+
+      // Junior could send promotion/gating piece in uppercase
+      if (str.size() >= 5)
+      {
+          size_t last = str.size() - 1;
+          if (Variant::is_piece_id_suffix(str[last]))
+          {
+              if (last >= 1 && std::isalpha(static_cast<unsigned char>(str[last - 1])))
+                  str[last - 1] = char(std::tolower(static_cast<unsigned char>(str[last - 1])));
+          }
+          else if (std::isalpha(static_cast<unsigned char>(str[last])))
+              str[last] = char(std::tolower(static_cast<unsigned char>(str[last])));
+      }
   }
 
   for (const auto& m : MoveList<LEGAL>(pos)) {

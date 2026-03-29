@@ -2238,6 +2238,8 @@ void VariantMap::init() {
 
 // Pre-calculate derived properties
 Variant* Variant::conclude() {
+    rebuild_piece_symbol_maps();
+
     // Backward compatibility: legacy extinctionPseudoRoyal used extinction
     // piece fields to define pseudo-royal behavior.
     if (extinctionPseudoRoyal && !pseudoRoyalTypes)
