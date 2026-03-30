@@ -1281,7 +1281,11 @@ inline bool Position::rifle_capture() const {
 }
 
 inline bool Position::rifle_capture(Piece pc) const {
-  return pc != NO_PIECE && (rifle_capture() || pieceMap.get(type_of(pc))->rifleCapture);
+  if (pc == NO_PIECE)
+      return false;
+
+  const PieceInfo* info = pieceMap.get(type_of(pc));
+  return rifle_capture() || (info && info->rifleCapture);
 }
 
 inline bool Position::rifle_capture(Move m) const {
