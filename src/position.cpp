@@ -2349,6 +2349,25 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
   if (b & pieces(SOLDIER) && relative_rank(c, s, max_rank()) < var->soldierPromotionRank)
       b ^= b & pieces(SOLDIER) & ~PseudoAttacks[~c][SHOGI_PAWN][s];
 
+  if (anti_royal_types())
+  {
+      Bitboard akPieces = 0;
+      for (PieceSet ps = anti_royal_types(); ps; )
+          akPieces |= pieces(c, pop_lsb(ps));
+
+      // 1. Anti-King of side c only attacks friendly pieces of side c.
+      if (is_ok(s) && !(pieces(c) & s))
+          b &= ~akPieces;
+
+      Bitboard enemyAkPieces = 0;
+      for (PieceSet ps = anti_royal_types(); ps; )
+          enemyAkPieces |= pieces(~c, pop_lsb(ps));
+
+      // 2. King of side c doesn't attack enemy side ~c's Anti-King at square s.
+      if (is_ok(s) && (enemyAkPieces & s))
+          b &= ~pieces(c, king_type());
+  }
+
   return b;
 }
 
@@ -2498,7 +2517,8 @@ Bitboard Position::checked_anti_royals(Color c) const {
               while (antiRoyals)
               {
                   Square sr = pop_lsb(antiRoyals);
-                  if (!(attackers_to(sr, occupied, ~c))
+                  Bitboard attackers = attackers_to(sr, occupied, ~c);
+                  if (!(attackers & ~pieces(~c, king_type()))
                       || (blastOnCapture && (vulnerableEnemyRoyals & blast_pattern(sr))))
                       checked |= sr;
               }
@@ -3057,9 +3077,10 @@ bool Position::legal(Move m) const {
       while (antiRoyals)
       {
           Square sr = pop_lsb(antiRoyals);
+          Bitboard attackers = attackers_to(sr, occupied, ~us);
           if (!(occupied & sr)
               || (blastOnCapture && (vulnerableEnemyRoyals & blast_pattern(sr)))
-              || !(attackers_to(sr, occupied, ~us) & ~removedAttackers))
+              || !((attackers & ~pieces(~us, king_type())) & ~removedAttackers))
               return false;
       }
   }
@@ -3589,13 +3610,17 @@ bool Position::pseudo_legal(const Move m) const {
   // self-capture is enabled. Friendly kings remain uncapturable.
   if ((pieces(us) & to) && !is_self_destruct(m))
   {
-      if (!pushMove && !(self_capture() && capture(m)))
+      if (!pushMove && !((self_capture() || (anti_royal_types() & type_of(pc))) && capture(m)))
           return false;
-      if (type_of(piece_on(to)) == KING)
+      if (type_of(piece_on(to)) == KING || (anti_royal_types() & type_of(piece_on(to))))
           return false;
   }
 
-  if ((topology_wraps() || pushMove) && !allow_checks() && (pieces(them) & to) && type_of(piece_on(to)) == KING)
+  // Anti-King cannot capture enemy pieces.
+  if ((anti_royal_types() & type_of(pc)) && (pieces(them) & to) && !is_self_destruct(m))
+      return false;
+
+  if ((topology_wraps() || pushMove) && !allow_checks() && (pieces(them) & to) && (type_of(piece_on(to)) == KING || (anti_royal_types() & type_of(piece_on(to)))))
       return false;
 
   // Handle the special case of a pawn move
@@ -4078,8 +4103,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   assert(captured == NO_PIECE
          || (type_of(m) == CASTLING ? color_of(captured) == us
                                     : (color_of(captured) == them
-                                       || (self_capture() && color_of(captured) == us))));
-  assert(type_of(captured) != KING || allow_checks());
+                                       || ((self_capture() || (anti_royal_types() & type_of(pc))) && color_of(captured) == us))));  assert(type_of(captured) != KING || allow_checks());
 
   auto trigger_matches = [](ColorChangeTrigger trigger, bool isCapture) {
       switch (trigger)

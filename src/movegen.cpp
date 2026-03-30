@@ -684,8 +684,17 @@ namespace {
 
         Bitboard attacks = pos.attacks_from(Us, Pt, from);
         Bitboard quiets = pos.moves_from(Us, Pt, from);
-        Bitboard captureSquares = (attacks & pos.pieces()) & captureTarget;
+        Bitboard ptCaptureTarget = captureTarget;
+        if (pos.anti_royal_types() & Pt)
+        {
+            ptCaptureTarget = pos.pieces(Us) & ~pos.pieces(Us, pos.king_type());
+            // Also ensure we don't try to move to empty squares using the capture logic
+            // (though attacks & pos.pieces() already handles this).
+        }
+        Bitboard captureSquares = (attacks & pos.pieces()) & ptCaptureTarget;
         Bitboard quietSquares   = (quiets & ~pos.pieces()) & target;
+        if (pos.anti_royal_types() & Pt)
+            quietSquares &= ~pos.pieces(~Us); // Cannot move to enemy occupied squares
         Bitboard b = captureSquares | quietSquares;
         Bitboard epSquares = (pos.en_passant_types(Us) & Pt) ? (attacks & pos.ep_squares() & ~pos.pieces()) : Bitboard(0);
         Bitboard b1 = b & ~epSquares;
