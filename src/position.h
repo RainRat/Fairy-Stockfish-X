@@ -380,6 +380,8 @@ public:
   Value pseudo_royal_value(int ply = 0) const;
   PieceSet anti_royal_types() const;
   int anti_royal_count() const;
+  bool anti_royal_self_capture_only() const;
+  bool anti_royal_king_mutually_immune() const;
   bool extinction_pseudo_royal() const;
   PieceType flag_piece(Color c) const;
   Bitboard flag_region(Color c) const;
@@ -2120,6 +2122,16 @@ inline PieceSet Position::anti_royal_types() const {
 inline int Position::anti_royal_count() const {
   assert(var != nullptr);
   return var->antiRoyalCount;
+}
+
+inline bool Position::anti_royal_self_capture_only() const {
+  assert(var != nullptr);
+  return var->antiRoyalSelfCaptureOnly;
+}
+
+inline bool Position::anti_royal_king_mutually_immune() const {
+  assert(var != nullptr);
+  return var->antiRoyalKingMutuallyImmune;
 }
 
 inline bool Position::extinction_pseudo_royal() const {

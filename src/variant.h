@@ -296,6 +296,8 @@ struct Variant {
   bool pseudoRoyalCaptureIllegal = false;
   PieceSet antiRoyalTypes = NO_PIECE_SET;
   int antiRoyalCount = 1;
+  bool antiRoyalSelfCaptureOnly = false;
+  bool antiRoyalKingMutuallyImmune = false;
   bool dupleCheck = false;
   PieceSet extinctionPieceTypes = NO_PIECE_SET;
   bool extinctionAllPieceTypes = false;

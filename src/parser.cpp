@@ -1658,6 +1658,8 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("pseudoRoyalCaptureIllegal", v->pseudoRoyalCaptureIllegal);
     parse_attribute("antiRoyalTypes", v->antiRoyalTypes, v);
     parse_attribute("antiRoyalCount", v->antiRoyalCount);
+    parse_attribute("antiRoyalSelfCaptureOnly", v->antiRoyalSelfCaptureOnly);
+    parse_attribute("antiRoyalKingMutuallyImmune", v->antiRoyalKingMutuallyImmune);
     parse_attribute("extinctionValue", v->extinctionValue);
     parse_attribute("extinctionClaim", v->extinctionClaim);
     parse_attribute("extinctionPseudoRoyal", v->extinctionPseudoRoyal);
