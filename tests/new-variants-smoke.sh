@@ -141,7 +141,7 @@ if variant_available "oshi"; then
 out=$(run_cmds "setoption name UCI_Variant value oshi
 position startpos
 d")
-echo "${out}" | grep -q "Fen: cb1aaa1bc/4a4/9/9/9/9/9/4A4/CB1AAA1BC b - - 0 1 {0 0}"
+echo "${out}" | grep -q "Fen: c7c/2baaab2/4a4/9/9/9/4A4/2BAAAB2/C7C w - - 0 1 {0 0}"
 out=$(run_cmds "setoption name UCI_Variant value oshi
 position fen 9/9/9/9/9/9/9/1a3/1A3 w - - 0 1 {0 0} moves b1b2
 go perft 1")
