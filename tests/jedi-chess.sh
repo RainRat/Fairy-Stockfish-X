@@ -21,6 +21,11 @@ quit
 EOF
 }
 
+# Start position must be playable.
+out=$(run_cmds "position startpos
+go perft 1")
+echo "${out}" | grep -q "^Nodes searched: 20$"
+
 # Black Sith Master may capture its own Apprentice.
 out=$(run_cmds "position fen 4s3/4q3/8/8/8/8/8/4K3 b - - 0 1
 go perft 1")
