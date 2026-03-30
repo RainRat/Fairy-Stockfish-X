@@ -143,9 +143,17 @@ position startpos
 d")
 echo "${out}" | grep -q "Fen: c7c/2baaab2/4a4/9/9/9/4A4/2BAAAB2/C7C w - - 0 1 {0 0}"
 out=$(run_cmds "setoption name UCI_Variant value oshi
+position startpos moves i1f1 i9f9
+go perft 1")
+echo "${out}" | grep -q "^f1f4: 1$"
+out=$(run_cmds "setoption name UCI_Variant value oshi
 position fen 9/9/9/9/9/9/9/1a3/1A3 w - - 0 1 {0 0} moves b1b2
 go perft 1")
 ! echo "${out}" | grep -q "b3b2: 1"
+out=$(run_cmds "setoption name UCI_Variant value oshi
+position startpos moves i1f1 i9f9 f1f4
+d")
+echo "${out}" | grep -q "Fen: c4c3/2baaab2/4a4/9/5A3/5C3/4A4/2BAA1B2/C8 b - - 3 2 {0 0}"
 out=$(run_cmds "setoption name UCI_Variant value oshi
 position fen 9/9/9/9/9/9/9/C8/c8 w - - 0 1 {0 0} moves a2a1
 d")

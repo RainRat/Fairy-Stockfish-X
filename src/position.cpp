@@ -101,10 +101,21 @@ namespace {
     bool captures = false;
     bool ejects = false;
     Square tail = SQ_NONE;
+    Square first = SQ_NONE;
     int stepF = 0;
     int stepR = 0;
     int count = 0;
+    int distance = 0;
   };
+
+  struct PushTempPiece {
+    Piece piece = NO_PIECE;
+    Square origin = SQ_NONE;
+    bool promoted = false;
+    Piece unpromoted = NO_PIECE;
+  };
+
+  constexpr int MAX_PUSH_SNAPSHOT = 32;
 
   inline bool advance_square(const Position& pos, Square from, int stepF, int stepR, Square& out) {
     int f = int(file_of(from)) + stepF;
@@ -165,7 +176,202 @@ namespace {
     return false;
   }
 
-  bool analyze_push(const Position& pos, Move m, PushInfo& info) {
+  int collect_push_line(const Position& pos, Square from, int stepF, int stepR, Square squares[MAX_PUSH_SNAPSHOT]) {
+    int count = 0;
+    Square cur = from;
+    while (count < MAX_PUSH_SNAPSHOT)
+    {
+      Square next = SQ_NONE;
+      if (!advance_square(pos, cur, stepF, stepR, next))
+          break;
+      squares[count++] = next;
+      cur = next;
+    }
+    return count;
+  }
+
+  bool violates_push_no_immediate_return_stepwise(
+      const Position& pos,
+      Square lastFrom,
+      Square lastTo,
+      const Square squares[MAX_PUSH_SNAPSHOT],
+      const PushTempPiece line[MAX_PUSH_SNAPSHOT],
+      int lineCount) {
+
+    if (!pos.push_no_immediate_return() || !is_ok(lastFrom) || !is_ok(lastTo))
+        return false;
+
+    for (int i = 0; i < lineCount; ++i)
+      if (line[i].origin == lastTo)
+          return squares[i] == lastFrom;
+
+    return false;
+  }
+
+  bool analyze_push_stepwise(const Position& pos,
+                             Move m,
+                             PushInfo& info,
+                             Square* outSquares = nullptr,
+                             int* outLineCount = nullptr,
+                             PushTempPiece* outLine = nullptr,
+                             PushTempPiece* outTransfers = nullptr,
+                             int* outTransferCount = nullptr) {
+    const MoveType mt = type_of(m);
+    if (mt != NORMAL || is_gating(m) || pos.topology_wraps())
+        return false;
+
+    Square from = from_sq(m);
+    Square to = to_sq(m);
+    if (from == to || !is_ok(from) || !is_ok(to))
+        return false;
+
+    Piece mover = pos.moved_piece(m);
+    if (mover == NO_PIECE)
+        return false;
+
+    PieceType moverType = type_of(mover);
+    int strength = pos.pushing_strength(moverType);
+    if (strength <= 0)
+        return false;
+
+    if (!(pos.push_targets_from(color_of(mover), moverType, from) & to))
+        return false;
+
+    int df = int(file_of(to)) - int(file_of(from));
+    int dr = int(rank_of(to)) - int(rank_of(from));
+    int stepF = (df > 0) - (df < 0);
+    int stepR = (dr > 0) - (dr < 0);
+    if ((df != 0 && dr != 0 && std::abs(df) != std::abs(dr)) || (df == 0 && dr == 0))
+        return false;
+
+    int distance = std::max(std::abs(df), std::abs(dr));
+    Square squares[MAX_PUSH_SNAPSHOT];
+    int lineCount = collect_push_line(pos, from, stepF, stepR, squares);
+    if (lineCount < distance)
+        return false;
+
+    PushTempPiece line[MAX_PUSH_SNAPSHOT];
+    for (int i = 0; i < lineCount; ++i)
+    {
+      Square sq = squares[i];
+      line[i].piece = pos.piece_on(sq);
+      line[i].origin = line[i].piece == NO_PIECE ? SQ_NONE : sq;
+      line[i].promoted = line[i].piece != NO_PIECE && pos.is_promoted(sq);
+      line[i].unpromoted = line[i].promoted ? pos.unpromoted_piece_on(sq) : NO_PIECE;
+    }
+
+    PushTempPiece transfers[MAX_PUSH_SNAPSHOT];
+    int transferCount = 0;
+    int moverIndex = -1;
+    bool anyPush = false;
+    bool firstContactChecked = false;
+    int maxChainCount = 0;
+    Square lastTail = SQ_NONE;
+
+    for (int step = 0; step < distance; ++step)
+    {
+      int nextIndex = moverIndex + 1;
+      if (nextIndex < 0 || nextIndex >= lineCount)
+          return false;
+
+      Square nextSq = squares[nextIndex];
+      if ((pos.wall_squares() | pos.dead_squares()) & nextSq)
+          return false;
+
+      if (line[nextIndex].piece == NO_PIECE)
+      {
+          moverIndex = nextIndex;
+          continue;
+      }
+
+      Piece first = line[nextIndex].piece;
+      if (type_of(first) == KING)
+          return false;
+
+      if (!firstContactChecked)
+      {
+          bool firstUs = color_of(first) == color_of(mover);
+          if ((pos.push_first_color() == PUSH_US && !firstUs)
+              || (pos.push_first_color() == PUSH_THEM && firstUs))
+              return false;
+          firstContactChecked = true;
+      }
+
+      anyPush = true;
+      if (info.first == SQ_NONE)
+          info.first = nextSq;
+
+      int tailIndex = nextIndex;
+      while (tailIndex + 1 < lineCount && line[tailIndex + 1].piece != NO_PIECE)
+          ++tailIndex;
+
+      int chainCount = tailIndex - nextIndex + 1;
+      if (chainCount > strength)
+          return false;
+      maxChainCount = std::max(maxChainCount, chainCount);
+      lastTail = squares[tailIndex];
+
+      if (tailIndex + 1 >= lineCount)
+      {
+          if (pos.pushing_removes() != PUSH_REMOVE_SHOVE)
+              return false;
+          transfers[transferCount++] = line[tailIndex];
+          for (int i = tailIndex; i > nextIndex; --i)
+              line[i] = line[i - 1];
+          line[nextIndex] = PushTempPiece{};
+          info.captures = true;
+          info.ejects = true;
+      }
+      else
+      {
+          Square beyond = squares[tailIndex + 1];
+          if ((pos.wall_squares() | pos.dead_squares()) & beyond)
+              return false;
+          if (line[tailIndex + 1].piece != NO_PIECE)
+              return false;
+          for (int i = tailIndex + 1; i > nextIndex; --i)
+              line[i] = line[i - 1];
+          line[nextIndex] = PushTempPiece{};
+      }
+
+      moverIndex = nextIndex;
+    }
+
+    if (!anyPush)
+        return false;
+
+    Move lastMove = pos.state()->move;
+    if (is_ok(lastMove))
+    {
+      Square lastFrom = from_sq(lastMove);
+      Square lastTo = to_sq(lastMove);
+      Piece lastPiece = is_ok(lastTo) ? pos.piece_on(lastTo) : NO_PIECE;
+      if (lastPiece != NO_PIECE && color_of(lastPiece) == ~pos.side_to_move()
+          && violates_push_no_immediate_return_stepwise(pos, lastFrom, lastTo, squares, line, lineCount))
+          return false;
+    }
+
+    info.valid = true;
+    info.tail = lastTail;
+    info.stepF = stepF;
+    info.stepR = stepR;
+    info.count = maxChainCount;
+    info.distance = distance;
+
+    if (outSquares)
+        std::copy(squares, squares + lineCount, outSquares);
+    if (outLineCount)
+        *outLineCount = lineCount;
+    if (outLine)
+        std::copy(line, line + lineCount, outLine);
+    if (outTransfers)
+        std::copy(transfers, transfers + transferCount, outTransfers);
+    if (outTransferCount)
+        *outTransferCount = transferCount;
+    return true;
+  }
+
+  bool analyze_push_direct(const Position& pos, Move m, PushInfo& info) {
     const MoveType mt = type_of(m);
     if ((mt != NORMAL && mt != INSERT) || is_gating(m))
         return false;
@@ -216,6 +422,7 @@ namespace {
             return false;
         ++info.count;
         info.tail = cur;
+        info.first = to;
         if (info.count > strength)
             return false;
 
@@ -227,6 +434,7 @@ namespace {
             info.ejects = info.valid;
             info.stepF = stepF;
             info.stepR = stepR;
+            info.distance = 1;
             return info.valid && !violates_push_no_immediate_return(pos, m, info);
         }
 
@@ -236,6 +444,7 @@ namespace {
             info.ejects = false;
             info.stepF = stepF;
             info.stepR = stepR;
+            info.distance = 1;
             return !violates_push_no_immediate_return(pos, m, info);
         }
 
@@ -251,11 +460,17 @@ namespace {
             info.ejects = false;
             info.stepF = stepF;
             info.stepR = stepR;
+            info.distance = 1;
             return !violates_push_no_immediate_return(pos, m, info);
         }
 
         cur = next;
     }
+  }
+
+  bool analyze_push(const Position& pos, Move m, PushInfo& info) {
+    return type_of(m) == INSERT ? analyze_push_direct(pos, m, info)
+                                : analyze_push_stepwise(pos, m, info);
   }
 
   inline Bitboard retro_asymmetric_check_squares(Color attacker, PieceType pt, Square kingSq, Bitboard occupied) {
@@ -1582,6 +1797,89 @@ void Position::set_state(StateInfo* si) const {
   si->repetition = 0;
   si->boardRepetition = 0;
 
+}
+
+void Position::refresh_state_derived(StateInfo* si) const {
+
+  si->key = si->materialKey = 0;
+  si->pawnKey = Zobrist::noPawns;
+  si->nonPawnMaterial[WHITE] = si->nonPawnMaterial[BLACK] = VALUE_ZERO;
+  si->checkersBB = !allow_checks() && count<KING>(sideToMove)
+                 ? attackers_to_king(square<KING>(sideToMove), ~sideToMove)
+                 : Bitboard(0);
+
+  set_check_info(si);
+
+  for (Bitboard b = pieces(); b; )
+  {
+      Square s = pop_lsb(b);
+      Piece pc = piece_on(s);
+      si->key ^= Zobrist::psq[pc][s];
+
+      if (!pc)
+          si->key ^= (st->deadSquares & s) ? Zobrist::dead[s] : Zobrist::wall[s];
+      else if (type_of(pc) == PAWN)
+          si->pawnKey ^= Zobrist::psq[pc][s];
+      else if (type_of(pc) != KING)
+          si->nonPawnMaterial[color_of(pc)] += PieceValue[MG][pc];
+  }
+
+  for (Bitboard b = si->epSquares; b; )
+      si->key ^= Zobrist::enpassant[pop_lsb(b)];
+
+  if (sideToMove == BLACK)
+      si->key ^= Zobrist::side;
+
+  si->key ^= Zobrist::castling[si->castlingRights];
+
+  for (Color c : {WHITE, BLACK})
+      for (PieceType pt = PAWN; pt <= KING; ++pt)
+      {
+          Piece pc = make_piece(c, pt);
+
+          for (int cnt = 0; cnt < pieceCount[pc]; ++cnt)
+              si->materialKey ^= Zobrist::psq[pc][cnt];
+
+          if (piece_drops() || seirawan_gating() || potions_enabled() || two_boards())
+          {
+              int n = std::clamp(pieceCountInHand[c][pt], 0, SQUARE_NB - 1);
+              si->key ^= Zobrist::inHand[pc][n];
+          }
+
+          if (capture_type() == PRISON || prison_pawn_promotion())
+          {
+              int n = std::clamp(pieceCountInPrison[~c][pt], 0, SQUARE_NB - 1);
+              si->key ^= Zobrist::inHand[pc][n];
+          }
+      }
+
+  if (potions_enabled())
+      for (Color c : {WHITE, BLACK})
+          for (int pt = 0; pt < Variant::POTION_TYPE_NB; ++pt)
+          {
+              Variant::PotionType potion = static_cast<Variant::PotionType>(pt);
+              if (potion_piece(potion) == NO_PIECE_TYPE)
+                  continue;
+
+              xor_potion_zone(si->key, c, potion, si->potionZones[c][pt]);
+              xor_potion_cooldown(si->key, c, potion, si->potionCooldown[c][pt]);
+          }
+
+  if (commit_gates())
+      for (Color c : {WHITE, BLACK})
+          for (File f = FILE_A; f <= max_file(); ++f)
+              xor_committed_gate(si->key, c, f, committed_piece_type(c, f));
+
+  if (check_counting())
+      for (Color c : {WHITE, BLACK})
+          si->key ^= Zobrist::checks[c][si->checksRemaining[c]];
+
+  if (var->pointsCounting)
+      for (Color c : {WHITE, BLACK})
+          xor_points_bucket(si->key, c, si->pointsCount[c]);
+
+  si->boardKey = si->key ^ reserve_key();
+  si->layoutKey = layout_key();
 }
 
 
@@ -3319,7 +3617,7 @@ bool Position::pseudo_legal(const Move m) const {
           return false;
   }
   else if (!is_self_destruct(m)
-        && !(pushMove ? ((attacks_from(us, type_of(pc), from) | moves_from(us, type_of(pc), from)) & to)
+        && !(pushMove ? (push_targets_from(us, type_of(pc), from) & to)
                       : ((capture(m) ? attacks_from(us, type_of(pc), from) : moves_from(us, type_of(pc), from)) & to)))
       return false;
 
@@ -3646,12 +3944,15 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   st->colorChangedPromoted = false;
   st->colorChangedUnpromoted = NO_PIECE;
   st->didPush = false;
+  st->pushStepwise = false;
   st->pushTailSquare = SQ_NONE;
   st->pushStepF = 0;
   st->pushStepR = 0;
   st->pushCount = 0;
   st->pushEjected = false;
   st->pushBlockedCapture = false;
+  st->pushSnapshotCount = 0;
+  st->pushTransferCount = 0;
   // Mandatory multimove pass plies should not advance the halfmove clock.
   const bool currentMultimovePass = is_pass(m) && multimove_pass(gamePly);
 
@@ -3681,6 +3982,21 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   Piece captured = captured_piece(m);
   PushInfo pushInfo;
   bool pushMove = analyze_push(*this, m, pushInfo);
+  bool stepwisePush = pushMove && type_of(m) == NORMAL && pushInfo.distance > 1;
+  Square pushSquares[MAX_PUSH_SNAPSHOT];
+  PushTempPiece pushFinalLine[MAX_PUSH_SNAPSHOT];
+  PushTempPiece pushTransfers[MAX_PUSH_SNAPSHOT];
+  int pushLineCount = 0;
+  int pushTransferCount = 0;
+  bool recomputeDerivedState = false;
+  if (stepwisePush)
+  {
+      PushInfo resolved;
+      if (!analyze_push_stepwise(*this, m, resolved, pushSquares, &pushLineCount, pushFinalLine, pushTransfers, &pushTransferCount))
+          stepwisePush = false;
+      else
+          pushInfo = resolved;
+  }
   int pushRightsMask = 0;
   bool rifleShot = rifle_capture(m) && captured != NO_PIECE && type_of(m) != CASTLING;
   bool capturedDeadSquare = !dropMove && from != to && bool(st->deadSquares & to);
@@ -3731,6 +4047,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   st->unpromotedCapturedPiece = captured ? unpromoted_piece_on(capturedSq) : NO_PIECE;
   st->captureSquare = capturedSq;
   st->didPush = pushMove;
+  st->pushStepwise = stepwisePush;
   st->pushTailSquare = pushMove ? pushInfo.tail : SQ_NONE;
   st->pushStepF = pushMove ? pushInfo.stepF : 0;
   st->pushStepR = pushMove ? pushInfo.stepR : 0;
@@ -3739,6 +4056,9 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   st->pushBlockedCapture = pushMove && pushInfo.captures && !pushInfo.ejects;
   st->pass = is_pass(m) && !openingSelfRemoval;
   st->suppressedCaptureTransfer = false;
+
+  if (stepwisePush)
+      captured = NO_PIECE;
 
   Variant::PotionType gatingPotion = Variant::POTION_TYPE_NB;
   Bitboard freezeExtra = 0;
@@ -3931,51 +4251,135 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   if (pushMove)
   {
       st->nnueRefreshNeeded = true;
-      Square cur = pushInfo.tail;
-      while (true)
+      if (stepwisePush)
       {
-          pushRightsMask |= castlingRightsMask[cur];
-          if (cur == to)
-              break;
-          cur = make_square(File(int(file_of(cur)) - pushInfo.stepF), Rank(int(rank_of(cur)) - pushInfo.stepR));
-      }
-
-      Square dest = pushInfo.tail;
-      if (!pushInfo.ejects && !pushInfo.captures
-          && !advance_square(*this, pushInfo.tail, pushInfo.stepF, pushInfo.stepR, dest))
-          assert(false && "validated push missing destination");
-
-      if (!(pushInfo.ejects && pushInfo.tail == to))
-      {
-          if (pushInfo.captures && !pushInfo.ejects)
+          recomputeDerivedState = true;
+          st->pushSnapshotCount = pushLineCount;
+          st->pushTransferCount = pushTransferCount;
+          for (int i = 0; i < pushLineCount; ++i)
           {
-              if (pushInfo.count > 1)
+              Square sq = pushSquares[i];
+              st->pushSnapshotSquares[i] = sq;
+              st->pushSnapshotPieces[i] = piece_on(sq);
+              st->pushSnapshotPromoted[i] = st->pushSnapshotPieces[i] != NO_PIECE && is_promoted(sq);
+              st->pushSnapshotUnpromoted[i] = st->pushSnapshotPromoted[i] ? unpromoted_piece_on(sq) : NO_PIECE;
+              pushRightsMask |= castlingRightsMask[sq];
+          }
+          for (int i = 0; i < pushTransferCount; ++i)
+          {
+              st->pushTransferPieces[i] = pushTransfers[i].piece;
+              st->pushTransferPromoted[i] = pushTransfers[i].promoted;
+              st->pushTransferUnpromoted[i] = pushTransfers[i].unpromoted;
+          }
+
+          for (int i = pushLineCount - 1; i >= 0; --i)
+          {
+              Piece original = st->pushSnapshotPieces[i];
+              if (original == NO_PIECE)
+                  continue;
+
+              Square finalSq = SQ_NONE;
+              for (int j = 0; j < pushLineCount; ++j)
+                  if (pushFinalLine[j].origin == pushSquares[i])
+                  {
+                      finalSq = pushSquares[j];
+                      break;
+                  }
+
+              if (finalSq == SQ_NONE)
               {
-                  cur = make_square(File(int(file_of(pushInfo.tail)) - pushInfo.stepF),
-                                    Rank(int(rank_of(pushInfo.tail)) - pushInfo.stepR));
-                  dest = pushInfo.tail;
+                  remove_piece(pushSquares[i]);
+                  board[pushSquares[i]] = NO_PIECE;
               }
-              else
-                  cur = SQ_NONE;
-          }
-          else
-          {
-              cur = pushInfo.ejects
-                  ? make_square(File(int(file_of(pushInfo.tail)) - pushInfo.stepF), Rank(int(rank_of(pushInfo.tail)) - pushInfo.stepR))
-                  : pushInfo.tail;
+              else if (finalSq != pushSquares[i])
+                  move_piece(pushSquares[i], finalSq);
           }
 
-          while (cur != SQ_NONE)
+          for (int i = 0; i < pushTransferCount; ++i)
           {
-              Piece pushed = piece_on(cur);
-              if (type_of(pushed) == PAWN)
-                  st->pawnKey ^= Zobrist::psq[pushed][cur] ^ Zobrist::psq[pushed][dest];
-              k ^= Zobrist::psq[pushed][cur] ^ Zobrist::psq[pushed][dest];
-              move_piece(cur, dest);
+              Piece transferred = st->pushTransferPieces[i];
+              Piece transferPiece = reserve_transfer_piece(us, transferred,
+                                                           st->pushTransferPromoted[i],
+                                                           st->pushTransferUnpromoted[i],
+                                                           drop_loop(), var->captureToHandSide,
+                                                           main_promotion_pawn_type(color_of(transferred)));
+              if (capture_type() == HAND && (capture_to_hand_types() & type_of(transferPiece)))
+                  add_to_hand(transferPiece);
+              else if (capture_type() == PRISON)
+              {
+                  Piece prisonPiece = !drop_loop() && st->pushTransferPromoted[i]
+                        ? (st->pushTransferUnpromoted[i]
+                           ? st->pushTransferUnpromoted[i]
+                           : make_piece(color_of(transferred), main_promotion_pawn_type(color_of(transferred))))
+                        : transferred;
+                  add_to_prison(prisonPiece);
+              }
+
+              if (points_counting())
+              {
+                  PointsRule pointsOwner = points_rule_captures();
+                  int points = var->piecePoints[type_of(transferred)];
+                  switch (pointsOwner) {
+                      case POINTS_US:        st->pointsCount[us] += points; break;
+                      case POINTS_THEM:      st->pointsCount[them] += points; break;
+                      case POINTS_OWNER:     st->pointsCount[color_of(transferred)] += points; break;
+                      case POINTS_NON_OWNER: st->pointsCount[~color_of(transferred)] += points; break;
+                      case POINTS_NONE:      break;
+                  }
+              }
+          }
+
+          if (pushTransferCount)
+              st->rule50 = 0;
+      }
+      else
+      {
+          Square cur = pushInfo.tail;
+          while (true)
+          {
+              pushRightsMask |= castlingRightsMask[cur];
               if (cur == to)
                   break;
-              dest = cur;
               cur = make_square(File(int(file_of(cur)) - pushInfo.stepF), Rank(int(rank_of(cur)) - pushInfo.stepR));
+          }
+
+          Square dest = pushInfo.tail;
+          if (!pushInfo.ejects && !pushInfo.captures
+              && !advance_square(*this, pushInfo.tail, pushInfo.stepF, pushInfo.stepR, dest))
+              assert(false && "validated push missing destination");
+
+          if (!(pushInfo.ejects && pushInfo.tail == to))
+          {
+              if (pushInfo.captures && !pushInfo.ejects)
+              {
+                  if (pushInfo.count > 1)
+                  {
+                      cur = make_square(File(int(file_of(pushInfo.tail)) - pushInfo.stepF),
+                                        Rank(int(rank_of(pushInfo.tail)) - pushInfo.stepR));
+                      dest = pushInfo.tail;
+                  }
+                  else
+                      cur = SQ_NONE;
+              }
+              else
+              {
+                  cur = pushInfo.ejects
+                      ? make_square(File(int(file_of(pushInfo.tail)) - pushInfo.stepF), Rank(int(rank_of(pushInfo.tail)) - pushInfo.stepR))
+                      : pushInfo.tail;
+              }
+
+              while (cur != SQ_NONE)
+              {
+                  Piece pushed = piece_on(cur);
+                  if (type_of(pushed) == PAWN)
+                      st->pawnKey ^= Zobrist::psq[pushed][cur] ^ Zobrist::psq[pushed][dest];
+                  k ^= Zobrist::psq[pushed][cur] ^ Zobrist::psq[pushed][dest];
+                  move_piece(cur, dest);
+                  if (cur == to)
+                      break;
+                  dest = cur;
+                  cur = make_square(File(int(file_of(cur)) - pushInfo.stepF), Rank(int(rank_of(cur)) - pushInfo.stepR));
+              }
           }
       }
   }
@@ -5142,6 +5546,12 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   // Update king attacks used for fast check detection
   set_check_info(st);
 
+  if (recomputeDerivedState)
+  {
+      refresh_state_derived(st);
+      st->move = m;
+  }
+
   // n-check accounting must include pseudo-royal checks (legacy extinctionPseudoRoyal path).
   if (check_counting() && st->checksRemaining[us] > 0)
   {
@@ -5388,7 +5798,45 @@ void Position::undo_move(Move m) {
               move_piece(to, from); // Put the piece back at the source square
       }
 
-      if (st->didPush)
+      if (st->didPush && st->pushStepwise)
+      {
+          for (int i = 0; i < st->pushTransferCount; ++i)
+          {
+              Piece transferred = st->pushTransferPieces[i];
+              Piece transferPiece = reserve_transfer_piece(us, transferred,
+                                                           st->pushTransferPromoted[i],
+                                                           st->pushTransferUnpromoted[i],
+                                                           drop_loop(), var->captureToHandSide,
+                                                           main_promotion_pawn_type(color_of(transferred)));
+              if (capture_type() == HAND && (capture_to_hand_types() & type_of(transferPiece)))
+                  remove_from_hand(transferPiece);
+              else if (capture_type() == PRISON)
+              {
+                  Piece prisonPiece = !drop_loop() && st->pushTransferPromoted[i]
+                        ? (st->pushTransferUnpromoted[i]
+                           ? st->pushTransferUnpromoted[i]
+                           : make_piece(color_of(transferred), main_promotion_pawn_type(color_of(transferred))))
+                        : transferred;
+                  remove_from_prison(prisonPiece);
+              }
+          }
+
+          for (int i = 0; i < st->pushSnapshotCount; ++i)
+              if (piece_on(st->pushSnapshotSquares[i]) != NO_PIECE)
+                  remove_piece(st->pushSnapshotSquares[i]);
+
+          for (int i = 0; i < st->pushSnapshotCount; ++i)
+          {
+              if (st->pushSnapshotPieces[i] == NO_PIECE)
+              {
+                  board[st->pushSnapshotSquares[i]] = NO_PIECE;
+                  continue;
+              }
+              put_piece(st->pushSnapshotPieces[i], st->pushSnapshotSquares[i],
+                        st->pushSnapshotPromoted[i], st->pushSnapshotUnpromoted[i]);
+          }
+      }
+      else if (st->didPush)
       {
           Square source = SQ_NONE;
           Square finalSource = SQ_NONE;

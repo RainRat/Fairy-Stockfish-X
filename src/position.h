@@ -119,12 +119,22 @@ struct StateInfo {
   bool colorChangedPromoted;
   Piece colorChangedUnpromoted;
   bool didPush;
+  bool pushStepwise;
   Square pushTailSquare;
   int pushStepF;
   int pushStepR;
   int pushCount;
   bool pushEjected;
   bool pushBlockedCapture;
+  int pushSnapshotCount;
+  Square pushSnapshotSquares[32];
+  Piece pushSnapshotPieces[32];
+  Piece pushSnapshotUnpromoted[32];
+  bool pushSnapshotPromoted[32];
+  int pushTransferCount;
+  Piece pushTransferPieces[32];
+  Piece pushTransferUnpromoted[32];
+  bool pushTransferPromoted[32];
   bool nnueRefreshNeeded;
 
   // Used by NNUE
@@ -463,6 +473,7 @@ public:
   Bitboard attacks_from(Color c, PieceType pt, Square s) const;
   Bitboard attacks_from(Color c, PieceType pt, Square s, Bitboard occupancy) const;
   Bitboard moves_from(Color c, PieceType pt, Square s) const;
+  Bitboard push_targets_from(Color c, PieceType pt, Square s) const;
   Bitboard slider_blockers(Bitboard sliders, Square s, Bitboard& pinners, Color c) const;
 
   // Properties of moves
@@ -544,6 +555,7 @@ public:
 
   // Position consistency check, for debugging
   bool pos_is_ok() const;
+  void refresh_state_derived(StateInfo* si) const;
   void flip();
 
   // Used by NNUE
@@ -3167,6 +3179,10 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
               & diagonal_lines();
   }
   return b & board_bb(c, pt);
+}
+
+inline Bitboard Position::push_targets_from(Color c, PieceType pt, Square s) const {
+  return (PseudoAttacks[c][pt][s] | PseudoMoves[0][c][pt][s]) & board_bb(c, pt);
 }
 
 inline Bitboard Position::attackers_to(Square s) const {

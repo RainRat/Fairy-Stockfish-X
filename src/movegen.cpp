@@ -714,7 +714,7 @@ namespace {
         Bitboard pushMoves = 0;
         if (pos.pushing_strength(Pt) > 0)
         {
-            Bitboard candidates = (attacks | quiets) & pos.pieces();
+            Bitboard candidates = pos.push_targets_from(Us, Pt, from);
             while (candidates)
             {
                 Square to = pop_lsb(candidates);
