@@ -834,6 +834,19 @@ template <bool Current, class T> bool VariantParser<DoCheck>::parse_attribute(co
     const auto& it = config.find(key);
     if (it != config.end())
     {
+        if constexpr (std::is_same_v<T, PieceSet>)
+        {
+            PieceSet parsedTarget = NO_PIECE_SET;
+            if (parse_piece_set_token_string(it->second, v, parsedTarget))
+            {
+                target = parsedTarget;
+                return true;
+            }
+            if (DoCheck)
+                std::cerr << key << " - Invalid piece type: " << it->second << std::endl;
+            return false;
+        }
+
         T parsedTarget = T();
         std::string token;
         std::stringstream ss(it->second);
