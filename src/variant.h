@@ -182,10 +182,8 @@ struct Variant {
   bool selfCapture = false;
   bool selfCaptureByColor[COLOR_NB] = {false, false};
   bool selfCaptureByColorSet[COLOR_NB] = {false, false};
-  bool capturerDiesOnCapture = false;
-  bool capturerDiesOnSameTypeCapture = false;
-  bool capturerDiesExemptPawns = false;
-  PieceSet capturerDiesExemptTypes = NO_PIECE_SET;
+  bool blastOnSameTypeCapture = false;
+  bool blastOrthogonals = true;
   bool mustDrop = false;
   bool mustDropByColor[COLOR_NB] = {false, false};
   PieceType mustDropType = ALL_PIECES;

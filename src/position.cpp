@@ -2899,7 +2899,7 @@ bool Position::legal(Move m) const {
   // Check for attacks to pseudo-royal pieces
   if (pseudo_royal_types())
   {
-      const bool blastOnCapture = blast_on_capture();
+      const bool blastOnCapture = blast_on_capture(m);
       Square kto = rifleShot ? from : to;
       Square blastCenter = (type_of(m) == EN_PASSANT || rifleShot) ? shotSq : kto;
       Bitboard occupied = rifleShot ? pieces() : (!dropMove ? pieces() ^ from : pieces());
@@ -2999,7 +2999,7 @@ bool Position::legal(Move m) const {
   // Anti-royal pieces must remain under attack.
   if (anti_royal_types())
   {
-      const bool blastOnCapture = blast_on_capture();
+      const bool blastOnCapture = blast_on_capture(m);
       Square kto = rifleShot ? from : to;
       Square blastCenter = (type_of(m) == EN_PASSANT || rifleShot) ? shotSq : kto;
       Square rfrom = SQ_NONE, rto = SQ_NONE;
@@ -3171,7 +3171,7 @@ bool Position::legal(Move m) const {
   Bitboard removedByEffects = 0;
   if (!is_pass(m))
   {
-      if (((capture(m) || rifleShot) && blast_on_capture())
+      if (((capture(m) || rifleShot) && blast_on_capture(m))
           || (blast_on_move() && !capture(m) && !is_self_destruct(m))
           || (blast_on_self_destruct() && is_self_destruct(m)))
       {
@@ -3991,7 +3991,6 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   Square from = from_sq(m);
   Square to = to_sq(m);
   Piece pc = moved_piece(m);
-  PieceType movedType = type_of(pc);
   Piece captured = captured_piece(m);
   PushInfo pushInfo;
   bool pushMove = analyze_push(*this, m, pushInfo);
@@ -5043,7 +5042,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   if (
        (
          ( surround_capture_opposite() || surround_capture_intervene() || surround_capture_edge() ) ||
-         ( captured && (blast_on_capture() || var->petrifyOnCaptureTypes) ) ||
+         ( captured && (blast_on_capture() || var->petrifyOnCaptureTypes || var->deathOnCaptureTypes) ) ||
          ( blast_on_move() && !captured && !is_self_destruct(m) ) ||
          ( blast_on_self_destruct() && is_self_destruct(m) ) ||
          var->blastPassiveTypes ||
@@ -5061,12 +5060,12 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       st->promotedBycatch = st->demotedBycatch = Bitboard(0);
       st->blastPromotedSquares = 0;
 
-      if ( ( captured && (blast_on_capture() || var->petrifyOnCaptureTypes) ) ||
+      if ( ( captured && (blast_on_capture(m) || var->petrifyOnCaptureTypes || var->deathOnCaptureTypes) ) ||
            ( blast_on_move() && !captured && !is_self_destruct(m) ) ||
            ( blast_on_self_destruct() && is_self_destruct(m) ) ) {
 
-          blast_mask = (blast_on_capture() || blast_on_move() || blast_on_self_destruct()) ? blast_squares(captured ? st->captureSquare : to)
-              : (var->petrifyOnCaptureTypes & type_of(pc) ? square_bb(moverSq) : Bitboard(0));
+          blast_mask = (blast_on_capture(m) || blast_on_move() || blast_on_self_destruct()) ? blast_squares(captured ? st->captureSquare : to)
+              : ((var->petrifyOnCaptureTypes | var->deathOnCaptureTypes) & type_of(pc) ? square_bb(moverSq) : Bitboard(0));
           removal_mask |= blast_mask;
       };
 
@@ -5325,6 +5324,13 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
               byTypeBB[ALL_PIECES] |= bsq;
               k ^= Zobrist::wall[bsq];
           }
+
+          if (bsq == to && bool(var->deathOnCaptureTypes & type_of(bpc)))
+          {
+              st->deadSquares |= bsq;
+              byTypeBB[ALL_PIECES] |= bsq;
+              k ^= Zobrist::dead[bsq];
+          }
       };
   };
 
@@ -5344,55 +5350,6 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       st->wallSquares |= gating_square(m);
       byTypeBB[ALL_PIECES] |= gating_square(m);
       k ^= Zobrist::wall[gating_square(m)];
-  }
-
-  // Shared helper for "piece removed from its destination square" effects that
-  // are not normal captures (e.g. capturer-dies or death-on-capture).
-  auto remove_destination_piece_no_capture_effects = [&](Square sq, bool makeDeadSquare) {
-      Piece deadPiece = piece_on(sq);
-      Color dc = color_of(deadPiece);
-
-      st->deadPiece = deadPiece;
-      st->deadPiecePromoted = is_promoted(sq);
-      st->deadUnpromotedPiece = st->deadPiecePromoted ? unpromoted_piece_on(sq) : NO_PIECE;
-
-      if (Eval::useNNUE)
-          append_dirty(st, deadPiece, sq, SQ_NONE);
-
-      remove_piece(sq);
-      board[sq] = NO_PIECE;
-
-      k ^= Zobrist::psq[deadPiece][sq];
-      st->materialKey ^= Zobrist::psq[deadPiece][pieceCount[deadPiece]];
-      if (type_of(deadPiece) == PAWN)
-          st->pawnKey ^= Zobrist::psq[deadPiece][sq];
-      else
-          st->nonPawnMaterial[dc] -= PieceValue[MG][deadPiece];
-
-      if (makeDeadSquare)
-      {
-          st->deadSquares |= sq;
-          byTypeBB[ALL_PIECES] |= sq;
-          k ^= Zobrist::dead[sq];
-      }
-  };
-
-  bool diesOnSameTypeCapture = var->capturerDiesOnSameTypeCapture
-                            && captured != NO_PIECE
-                            && type_of(captured) == movedType;
-  bool exemptFromCapturerDeath = (var->capturerDiesExemptTypes & piece_set(movedType))
-                              || (var->capturerDiesExemptPawns && movedType == PAWN);
-  bool diesOnCapture = (death_on_capture_types() & piece_set(movedType))
-                    || (var->capturerDiesOnCapture && !exemptFromCapturerDeath)
-                    || diesOnSameTypeCapture;
-  if (!capturedDeadSquare && captured != NO_PIECE && !dropMove && diesOnCapture
-      && piece_on(moverSq) != NO_PIECE)
-  {
-      bool makeDeadSquare = bool(death_on_capture_types() & piece_set(movedType));
-      remove_destination_piece_no_capture_effects(moverSq, makeDeadSquare);
-
-      if (!allow_checks() && givesCheck && count<KING>(them))
-          givesCheck = bool(attackers_to_king(square<KING>(them), us) & pieces(us));
   }
 
   Bitboard localBycatch = st->bycatchSquares & (blast_pattern(moverSq) | square_bb(moverSq));
@@ -5645,7 +5602,7 @@ void Position::undo_move(Move m) {
   // Add the blast pieces
   if (
        ( surround_capture_opposite() || surround_capture_intervene() || surround_capture_edge() ) ||
-       ( st->capturedPiece && (blast_on_capture() || var->petrifyOnCaptureTypes) ) ||
+       ( st->capturedPiece && (blast_on_capture(st->move) || var->petrifyOnCaptureTypes || var->deathOnCaptureTypes) ) ||
        ( blast_on_move() && !st->capturedPiece && !is_self_destruct(st->move) ) ||
        ( blast_on_self_destruct() && is_self_destruct(st->move) ) ||
        ( remove_connect_n() > 0 )
@@ -6215,7 +6172,7 @@ bool Position::see_ge(Move m, Value threshold) const {
       return true;
 
   // Atomic explosion SEE
-  if (blast_on_capture() || blast_on_move() || (blast_on_self_destruct() && is_self_destruct(m)))
+  if (blast_on_capture(m) || blast_on_move() || (blast_on_self_destruct() && is_self_destruct(m)))
       return blast_see(m) >= threshold;
 
   Piece victim = captured_piece(m);
