@@ -657,7 +657,7 @@ enum Value : int {
   BersValueMg              = 1800,  BersValueEg              = 1900,
   ArchbishopValueMg        = 2200,  ArchbishopValueEg        = 2200,
   ChancellorValueMg        = 2300,  ChancellorValueEg        = 2600,
-  AmazonValueMg            = 2700,  AmazonValueEg            = 2850,
+  AmazonValueMg            = 2825,  AmazonValueEg            = 2975,
   KnibisValueMg            = 1100,  KnibisValueEg            = 1200,
   BiskniValueMg            = 750,   BiskniValueEg            = 700,
   KnirooValueMg            = 1050,  KnirooValueEg            = 1250,
