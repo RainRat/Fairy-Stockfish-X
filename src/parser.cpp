@@ -223,6 +223,33 @@ namespace {
         return true;
     }
 
+    bool apply_edge_insert_from_alias(const std::string& value, bool& top, bool& bottom, bool& left, bool& right) {
+        std::stringstream ss(value);
+        std::string token;
+        bool any = false;
+        while (ss >> token)
+        {
+            if (token == "all")
+                top = bottom = left = right = true;
+            else if (token == "vertical")
+                top = bottom = true;
+            else if (token == "horizontal")
+                left = right = true;
+            else if (token == "top")
+                top = true;
+            else if (token == "bottom")
+                bottom = true;
+            else if (token == "left")
+                left = true;
+            else if (token == "right")
+                right = true;
+            else
+                return false;
+            any = true;
+        }
+        return any && only_trailing_space(ss);
+    }
+
     bool parse_file_index(const std::string& value, int& out) {
         std::stringstream ss(value);
         ss >> std::ws;
@@ -1455,6 +1482,21 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_both_colors_with_overrides("edgeInsertFromBottom", v->edgeInsertFromBottom);
     parse_both_colors_with_overrides("edgeInsertFromLeft", v->edgeInsertFromLeft);
     parse_both_colors_with_overrides("edgeInsertFromRight", v->edgeInsertFromRight);
+    const auto& it_edge_insert_from = config.find("edgeInsertFrom");
+    if (it_edge_insert_from != config.end())
+    {
+        bool top = false, bottom = false, left = false, right = false;
+        if (!apply_edge_insert_from_alias(it_edge_insert_from->second, top, bottom, left, right))
+        {
+            if (DoCheck)
+                std::cerr << "edgeInsertFrom - Invalid syntax." << std::endl;
+            return false;
+        }
+        v->edgeInsertFromTop[WHITE] = v->edgeInsertFromTop[BLACK] = top;
+        v->edgeInsertFromBottom[WHITE] = v->edgeInsertFromBottom[BLACK] = bottom;
+        v->edgeInsertFromLeft[WHITE] = v->edgeInsertFromLeft[BLACK] = left;
+        v->edgeInsertFromRight[WHITE] = v->edgeInsertFromRight[BLACK] = right;
+    }
     parse_attribute("changingColorTrigger", v->changingColorTrigger);
     parse_attribute("changingColorPieceTypes", v->changingColorPieceTypes, v);
     if (config.find("selfCapture") != config.end())
