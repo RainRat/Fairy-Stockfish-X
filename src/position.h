@@ -603,6 +603,7 @@ private:
   // Initialization helpers (used while setting up a position)
   void set_castling_right(Color c, Square rfrom);
   void set_state(StateInfo* si) const;
+  void recompute_state_hashes_and_material(StateInfo* si) const;
   void set_check_info(StateInfo* si) const;
   bool compute_forced_jump_followup(Square s, int step = 0) const;
   bool is_initial_pawn(Piece pc, Square s) const;

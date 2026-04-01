@@ -81,6 +81,7 @@ namespace {
     return make_piece(receiver, mainPromotionPawnType);
   }
 
+  
   struct PushInfo {
     bool valid = false;
     bool captures = false;
@@ -1670,39 +1671,11 @@ void Position::set_check_info(StateInfo* si) const {
 /// The function is only used when a new position is set up, and to verify
 /// the correctness of the StateInfo data when running in debug mode.
 
-void Position::set_state(StateInfo* si) const {
+void Position::recompute_state_hashes_and_material(StateInfo* si) const {
 
   si->key = si->materialKey = 0;
   si->pawnKey = Zobrist::noPawns;
   si->nonPawnMaterial[WHITE] = si->nonPawnMaterial[BLACK] = VALUE_ZERO;
-  si->checkersBB = !allow_checks() && count<KING>(sideToMove)
-                 ? attackers_to_king(square<KING>(sideToMove), ~sideToMove)
-                 : Bitboard(0);
-
-  if (!allow_checks())
-  {
-      if (pseudo_royal_types())
-          si->checkersBB |= checked_pseudo_royals(sideToMove);
-      if (anti_royal_types())
-          si->checkersBB |= checked_anti_royals(sideToMove);
-      if (var->blastPassiveTypes)
-          si->checkersBB |= passive_blast_checkers(sideToMove, pieces());
-  }
-  si->move = MOVE_NONE;
-  si->removedGatingType = NO_PIECE_TYPE;
-  si->removedCastlingGatingType = NO_PIECE_TYPE;
-  si->capturedGatingType = NO_PIECE_TYPE;
-  si->deadPiece = NO_PIECE;
-  si->deadUnpromotedPiece = NO_PIECE;
-  si->deadPiecePromoted = false;
-  si->didColorChange = false;
-  si->colorChangedFrom = NO_PIECE;
-  si->colorChangeSquare = SQ_NONE;
-  si->colorChangedPromoted = false;
-  si->colorChangedUnpromoted = NO_PIECE;
-  si->forcedJumpSquare = SQ_NONE;
-  si->forcedJumpHasFollowup = false;
-  si->forcedJumpStep = 0;
 
   set_check_info(si);
 
@@ -1718,94 +1691,6 @@ void Position::set_state(StateInfo* si) const {
       else if (type_of(pc) == PAWN)
           si->pawnKey ^= Zobrist::psq[pc][s];
 
-      else if (type_of(pc) != KING)
-          si->nonPawnMaterial[color_of(pc)] += PieceValue[MG][pc];
-  }
-
-  for (Bitboard b = si->epSquares; b; )
-      si->key ^= Zobrist::enpassant[pop_lsb(b)];
-
-  if (sideToMove == BLACK)
-      si->key ^= Zobrist::side;
-
-  si->key ^= Zobrist::castling[si->castlingRights];
-
-  for (Color c : {WHITE, BLACK})
-      for (PieceType pt = PAWN; pt <= KING; ++pt)
-      {
-          Piece pc = make_piece(c, pt);
-
-          for (int cnt = 0; cnt < pieceCount[pc]; ++cnt)
-              si->materialKey ^= Zobrist::psq[pc][cnt];
-
-          if (piece_drops() || seirawan_gating() || potions_enabled() || two_boards())
-          {
-              int n = std::clamp(pieceCountInHand[c][pt], 0, SQUARE_NB - 1);
-              si->key ^= Zobrist::inHand[pc][n];
-          }
-
-          if (capture_type() == PRISON || prison_pawn_promotion())
-          {
-              int n = std::clamp(pieceCountInPrison[~c][pt], 0, SQUARE_NB - 1);
-              si->key ^= Zobrist::inHand[pc][n];
-          }
-      }
-
-  if (potions_enabled())
-      for (Color c : {WHITE, BLACK})
-          for (int pt = 0; pt < Variant::POTION_TYPE_NB; ++pt)
-          {
-              Variant::PotionType potion = static_cast<Variant::PotionType>(pt);
-              if (potion_piece(potion) == NO_PIECE_TYPE)
-                  continue;
-
-              xor_potion_zone(si->key, c, potion, si->potionZones[c][pt]);
-              xor_potion_cooldown(si->key, c, potion, si->potionCooldown[c][pt]);
-          }
-
-  if (commit_gates())
-      for (Color c : {WHITE, BLACK})
-          for (File f = FILE_A; f <= max_file(); ++f)
-              xor_committed_gate(si->key, c, f, committed_piece_type(c, f));
-
-  if (check_counting())
-      for (Color c : {WHITE, BLACK})
-          si->key ^= Zobrist::checks[c][si->checksRemaining[c]];
-
-  if (var->pointsCounting) {
-      for (Color c : {WHITE, BLACK}) {
-          xor_points_bucket(si->key, c, si->pointsCount[c]);
-      }
-  }
-
-  si->boardKey = si->key ^ reserve_key();
-  si->layoutKey = layout_key();
-  si->repetition = 0;
-  si->boardRepetition = 0;
-
-}
-
-void Position::refresh_state_derived(StateInfo* si) const {
-
-  si->key = si->materialKey = 0;
-  si->pawnKey = Zobrist::noPawns;
-  si->nonPawnMaterial[WHITE] = si->nonPawnMaterial[BLACK] = VALUE_ZERO;
-  si->checkersBB = !allow_checks() && count<KING>(sideToMove)
-                 ? attackers_to_king(square<KING>(sideToMove), ~sideToMove)
-                 : Bitboard(0);
-
-  set_check_info(si);
-
-  for (Bitboard b = pieces(); b; )
-  {
-      Square s = pop_lsb(b);
-      Piece pc = piece_on(s);
-      si->key ^= Zobrist::psq[pc][s];
-
-      if (!pc)
-          si->key ^= (st->deadSquares & s) ? Zobrist::dead[s] : Zobrist::wall[s];
-      else if (type_of(pc) == PAWN)
-          si->pawnKey ^= Zobrist::psq[pc][s];
       else if (type_of(pc) != KING)
           si->nonPawnMaterial[color_of(pc)] += PieceValue[MG][pc];
   }
@@ -1866,6 +1751,51 @@ void Position::refresh_state_derived(StateInfo* si) const {
 
   si->boardKey = si->key ^ reserve_key();
   si->layoutKey = layout_key();
+}
+
+void Position::set_state(StateInfo* si) const {
+
+  si->checkersBB = !allow_checks() && count<KING>(sideToMove)
+                 ? attackers_to_king(square<KING>(sideToMove), ~sideToMove)
+                 : Bitboard(0);
+
+  if (!allow_checks())
+  {
+      if (pseudo_royal_types())
+          si->checkersBB |= checked_pseudo_royals(sideToMove);
+      if (anti_royal_types())
+          si->checkersBB |= checked_anti_royals(sideToMove);
+      if (var->blastPassiveTypes)
+          si->checkersBB |= passive_blast_checkers(sideToMove, pieces());
+  }
+  si->move = MOVE_NONE;
+  si->removedGatingType = NO_PIECE_TYPE;
+  si->removedCastlingGatingType = NO_PIECE_TYPE;
+  si->capturedGatingType = NO_PIECE_TYPE;
+  si->deadPiece = NO_PIECE;
+  si->deadUnpromotedPiece = NO_PIECE;
+  si->deadPiecePromoted = false;
+  si->didColorChange = false;
+  si->colorChangedFrom = NO_PIECE;
+  si->colorChangeSquare = SQ_NONE;
+  si->colorChangedPromoted = false;
+  si->colorChangedUnpromoted = NO_PIECE;
+  si->forcedJumpSquare = SQ_NONE;
+  si->forcedJumpHasFollowup = false;
+  si->forcedJumpStep = 0;
+
+  recompute_state_hashes_and_material(si);
+  si->repetition = 0;
+  si->boardRepetition = 0;
+
+}
+
+void Position::refresh_state_derived(StateInfo* si) const {
+
+  si->checkersBB = !allow_checks() && count<KING>(sideToMove)
+                 ? attackers_to_king(square<KING>(sideToMove), ~sideToMove)
+                 : Bitboard(0);
+  recompute_state_hashes_and_material(si);
 }
 
 
