@@ -188,12 +188,13 @@ describe('board.pop()', function () {
   });
 });
 
-describe('board.pop() with promotion + capturer-dies', function () {
-  it("it restores state after a promotion capture where capturer dies", () => {
+describe('board.pop() with promotion + zero-range blast', function () {
+  it("it restores state after a promotion capture where the capturer self-destructs", () => {
     const custom = `
 [promokami:chess]
-capturerDiesOnCapture = true
-capturerDiesExemptPawns = false
+blastOnCapture = true
+blastOrthogonals = false
+blastDiagonals = false
 `;
     ffish.loadVariantConfig(custom);
 

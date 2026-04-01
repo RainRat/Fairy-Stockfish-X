@@ -36,8 +36,9 @@ rifleCapture = true
 captureMorph = true
 
 [rifle-atomic:chess]
-capturerDiesOnCapture = true
 blastOnCapture = true
+blastOrthogonals = false
+blastDiagonals = false
 rifleCapture = true
 
 [rifle-color:chess]
@@ -118,7 +119,7 @@ out=$(run_cmds "rifle-morph" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/4r3/3QK3 
 d")
 echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/3RK3 b"
 
-# 3. Test rifleCapture + capturerDiesOnCapture
+# 3. Test rifleCapture + zero-range blast-on-capture
 out=$(run_cmds "rifle-atomic" "${TEMP_INI}" "position fen r3k3/8/8/8/8/8/8/R3K3 w - - 0 1 moves a1a8
 d")
 echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/4K3 b"

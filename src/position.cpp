@@ -2899,7 +2899,8 @@ bool Position::legal(Move m) const {
   // Check for attacks to pseudo-royal pieces
   if (pseudo_royal_types())
   {
-      const bool blastOnCapture = blast_on_capture();
+      const bool blastOnCapture = blast_on_capture(m);
+      const bool zeroRangeBlastOnCapture = zero_range_blast_on_capture(m);
       Square kto = rifleShot ? from : to;
       Square blastCenter = (type_of(m) == EN_PASSANT || rifleShot) ? shotSq : kto;
       Bitboard occupied = rifleShot ? pieces() : (!dropMove ? pieces() ^ from : pieces());
@@ -2933,7 +2934,13 @@ bool Position::legal(Move m) const {
       else if (rifleShot)
           occupied &= ~square_bb(shotSq);
       if (capture(m) && blastOnCapture)
+      {
           occupied &= ~blast_squares(blastCenter);
+          if (blast_immune_types() & movePt)
+              occupied |= square_bb(kto);
+          else if (zeroRangeBlastOnCapture)
+              occupied &= ~square_bb(kto);
+      }
       // Petrifying a pseudo-royal piece is illegal
       if (capture(m) && (var->petrifyOnCaptureTypes & type_of(moved_piece(m))) && (st->pseudoRoyals & from))
           return false;
@@ -2999,7 +3006,8 @@ bool Position::legal(Move m) const {
   // Anti-royal pieces must remain under attack.
   if (anti_royal_types())
   {
-      const bool blastOnCapture = blast_on_capture();
+      const bool blastOnCapture = blast_on_capture(m);
+      const bool zeroRangeBlastOnCapture = zero_range_blast_on_capture(m);
       Square kto = rifleShot ? from : to;
       Square blastCenter = (type_of(m) == EN_PASSANT || rifleShot) ? shotSq : kto;
       Square rfrom = SQ_NONE, rto = SQ_NONE;
@@ -3021,7 +3029,13 @@ bool Position::legal(Move m) const {
       if (type_of(m) == EN_PASSANT)
           occupied &= ~square_bb(capture_square(to));
       if (capture(m) && blastOnCapture)
+      {
           occupied &= ~blast_squares(blastCenter);
+          if (blast_immune_types() & movePt)
+              occupied |= square_bb(kto);
+          else if (zeroRangeBlastOnCapture)
+              occupied &= ~square_bb(kto);
+      }
 
       Bitboard antiRoyals = 0;
       for (PieceSet ps = anti_royal_types(); ps; )
@@ -3171,7 +3185,7 @@ bool Position::legal(Move m) const {
   Bitboard removedByEffects = 0;
   if (!is_pass(m))
   {
-      if (((capture(m) || rifleShot) && blast_on_capture())
+      if (((capture(m) || rifleShot) && blast_on_capture(m))
           || (blast_on_move() && !capture(m) && !is_self_destruct(m))
           || (blast_on_self_destruct() && is_self_destruct(m)))
       {
@@ -3180,6 +3194,10 @@ bool Position::legal(Move m) const {
           removedByEffects |= blast_pattern(blastCenter) & blastRelevant;
           if (blast_center())
               removedByEffects |= square_bb(blastCenter) & blastRelevant;
+          if (blast_on_capture(m) && (blast_immune_types() & movePt))
+              removedByEffects &= ~square_bb(effectiveTo);
+          else if (zero_range_blast_on_capture(m))
+              removedByEffects |= square_bb(effectiveTo);
       }
 
       if ((capture(m) || rifleShot) && (var->petrifyOnCaptureTypes & movePt))
@@ -3598,14 +3616,14 @@ bool Position::pseudo_legal(const Move m) const {
   // self-capture is enabled. Friendly kings remain uncapturable.
   if ((pieces(us) & to) && !is_self_destruct(m))
   {
-      bool antiRoyalSelfCapture = anti_royal_self_capture_only() && (anti_royal_types() & type_of(pc));
+      bool antiRoyalSelfCapture = anti_royal_self_capture_only() && (anti_royal_types() & piece_set(type_of(pc)));
       if (!pushMove && !((self_capture() || antiRoyalSelfCapture) && capture(m)))
           return false;
       if (type_of(piece_on(to)) == KING)
           return false;
   }
 
-  if ((anti_royal_self_capture_only() && (anti_royal_types() & type_of(pc))) && (pieces(them) & to) && !is_self_destruct(m))
+  if ((anti_royal_self_capture_only() && (anti_royal_types() & piece_set(type_of(pc)))) && (pieces(them) & to) && !is_self_destruct(m))
       return false;
 
   if ((topology_wraps() || pushMove) && !allow_checks() && (pieces(them) & to) && type_of(piece_on(to)) == KING)
@@ -3993,6 +4011,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   Piece pc = moved_piece(m);
   PieceType movedType = type_of(pc);
   Piece captured = captured_piece(m);
+  const bool blastOnCaptureMove = blast_on_capture(pc, captured);
+  const bool zeroRangeBlastOnCaptureMove = zero_range_blast_on_capture(pc, captured);
   PushInfo pushInfo;
   bool pushMove = analyze_push(*this, m, pushInfo);
   bool stepwisePush = pushMove && type_of(m) == NORMAL && pushInfo.distance > 1;
@@ -4091,8 +4111,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   assert(captured == NO_PIECE
          || (type_of(m) == CASTLING ? color_of(captured) == us
                                     : (color_of(captured) == them
-                                       || (((self_capture() || (anti_royal_self_capture_only() && (anti_royal_types() & type_of(pc)))))
-                                           && color_of(captured) == us))));
+                                       || (((self_capture() || (anti_royal_self_capture_only() && (anti_royal_types() & piece_set(type_of(pc)))))
+                                           && color_of(captured) == us)))));
   assert(type_of(captured) != KING || allow_checks());
 
   auto trigger_matches = [](ColorChangeTrigger trigger, bool isCapture) {
@@ -5043,7 +5063,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   if (
        (
          ( surround_capture_opposite() || surround_capture_intervene() || surround_capture_edge() ) ||
-         ( captured && (blast_on_capture() || var->petrifyOnCaptureTypes) ) ||
+         ( captured && (blastOnCaptureMove || var->petrifyOnCaptureTypes) ) ||
          ( blast_on_move() && !captured && !is_self_destruct(m) ) ||
          ( blast_on_self_destruct() && is_self_destruct(m) ) ||
          var->blastPassiveTypes ||
@@ -5061,12 +5081,14 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       st->promotedBycatch = st->demotedBycatch = Bitboard(0);
       st->blastPromotedSquares = 0;
 
-      if ( ( captured && (blast_on_capture() || var->petrifyOnCaptureTypes) ) ||
+      if ( ( captured && (blastOnCaptureMove || var->petrifyOnCaptureTypes) ) ||
            ( blast_on_move() && !captured && !is_self_destruct(m) ) ||
            ( blast_on_self_destruct() && is_self_destruct(m) ) ) {
 
-          blast_mask = (blast_on_capture() || blast_on_move() || blast_on_self_destruct()) ? blast_squares(captured ? st->captureSquare : to)
+          blast_mask = (blastOnCaptureMove || blast_on_move() || blast_on_self_destruct()) ? blast_squares(captured ? st->captureSquare : to)
               : (var->petrifyOnCaptureTypes & type_of(pc) ? square_bb(moverSq) : Bitboard(0));
+          if (captured && blastOnCaptureMove && (blast_immune_types() & movedType))
+              blast_mask &= ~square_bb(moverSq);
           removal_mask |= blast_mask;
       };
 
@@ -5377,14 +5399,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       }
   };
 
-  bool diesOnSameTypeCapture = var->capturerDiesOnSameTypeCapture
-                            && captured != NO_PIECE
-                            && type_of(captured) == movedType;
-  bool exemptFromCapturerDeath = (var->capturerDiesExemptTypes & piece_set(movedType))
-                              || (var->capturerDiesExemptPawns && movedType == PAWN);
   bool diesOnCapture = (death_on_capture_types() & piece_set(movedType))
-                    || (var->capturerDiesOnCapture && !exemptFromCapturerDeath)
-                    || diesOnSameTypeCapture;
+                    || (captured != NO_PIECE && zeroRangeBlastOnCaptureMove && !(blast_immune_types() & movedType));
   if (!capturedDeadSquare && captured != NO_PIECE && !dropMove && diesOnCapture
       && piece_on(moverSq) != NO_PIECE)
   {
@@ -5645,7 +5661,7 @@ void Position::undo_move(Move m) {
   // Add the blast pieces
   if (
        ( surround_capture_opposite() || surround_capture_intervene() || surround_capture_edge() ) ||
-       ( st->capturedPiece && (blast_on_capture() || var->petrifyOnCaptureTypes) ) ||
+       ( st->capturedPiece && (blast_on_capture(pc, st->capturedPiece) || var->petrifyOnCaptureTypes) ) ||
        ( blast_on_move() && !st->capturedPiece && !is_self_destruct(st->move) ) ||
        ( blast_on_self_destruct() && is_self_destruct(st->move) ) ||
        ( remove_connect_n() > 0 )
@@ -6120,9 +6136,13 @@ Value Position::blast_see(Move m) const {
 
   Square from = from_sq(m);
   Square to = to_sq(m);
-  Color us = color_of(moved_piece(m));
+  Piece mover = moved_piece(m);
+  Piece victim = captured_piece(m);
+  Color us = color_of(mover);
   Bitboard fromto = is_drop_move(m) ? square_bb(to) | (paired_drop(m) ? square_bb(secondary_drop_square(m)) : Bitboard(0)) : from | to;
   Bitboard blast = blast_squares(capture(m) ? capture_square(m) : to);
+  if (capture(m) && zero_range_blast_on_capture(mover, victim) && !(blast_immune_types() & type_of(mover)))
+      blast |= square_bb(is_drop_move(m) ? to : from);
 
   // If the explosion would capture an opponent royal or pseudo-royal piece,
   // treat the move as delivering immediate mate. This prevents the static
@@ -6215,7 +6235,7 @@ bool Position::see_ge(Move m, Value threshold) const {
       return true;
 
   // Atomic explosion SEE
-  if (blast_on_capture() || blast_on_move() || (blast_on_self_destruct() && is_self_destruct(m)))
+  if (blast_on_capture(moved_piece(m), captured_piece(m)) || blast_on_move() || (blast_on_self_destruct() && is_self_destruct(m)))
       return blast_see(m) >= threshold;
 
   Piece victim = captured_piece(m);

@@ -206,11 +206,16 @@ public:
   bool mandatory_piece_promotion() const;
   bool piece_demotion() const;
   bool blast_on_capture() const;
+  bool blast_on_capture(Piece mover, Piece captured) const;
+  bool blast_on_capture(Move m) const;
   bool blast_on_move() const;
   bool blast_on_self_destruct() const;
   bool blast_promotion() const;
   bool blast_diagonals() const;
+  bool blast_orthogonals() const;
   bool blast_center() const;
+  bool zero_range_blast_on_capture(Piece mover, Piece captured) const;
+  bool zero_range_blast_on_capture(Move m) const;
   PieceSet blast_immune_types() const;
   PieceSet death_on_capture_types() const;
   Bitboard blast_immune_bb() const;
@@ -906,6 +911,19 @@ inline bool Position::blast_on_capture() const {
   return var->blastOnCapture;
 }
 
+inline bool Position::blast_on_capture(Move m) const {
+  return blast_on_capture(moved_piece(m), captured_piece(m));
+}
+
+inline bool Position::blast_on_capture(Piece mover, Piece captured) const {
+  assert(var != nullptr);
+  if (var->blastOnCapture)
+      return true;
+  if (!var->blastOnSameTypeCapture || mover == NO_PIECE || captured == NO_PIECE)
+      return false;
+  return type_of(captured) == type_of(mover);
+}
+
 inline bool Position::blast_on_move() const {
   assert(var != nullptr);
   return var->blastOnMove;
@@ -926,9 +944,23 @@ inline bool Position::blast_diagonals() const {
   return var->blastDiagonals;
 }
 
+inline bool Position::blast_orthogonals() const {
+  assert(var != nullptr);
+  return var->blastOrthogonals;
+}
+
 inline bool Position::blast_center() const {
   assert(var != nullptr);
   return var->blastCenter;
+}
+
+inline bool Position::zero_range_blast_on_capture(Move m) const {
+  return zero_range_blast_on_capture(moved_piece(m), captured_piece(m));
+}
+
+inline bool Position::zero_range_blast_on_capture(Piece mover, Piece captured) const {
+  assert(var != nullptr);
+  return blast_on_capture(mover, captured) && blast_center() && !blast_orthogonals() && !blast_diagonals();
 }
 
 inline PieceSet Position::blast_immune_types() const {
@@ -951,7 +983,11 @@ inline Bitboard Position::blast_immune_bb() const {
 }
 
 inline Bitboard Position::blast_pattern(Square to) const {
-    Bitboard blastPattern = blast_diagonals() ?  attacks_bb<KING>(to) : attacks_bb<WAZIR>(to);
+    Bitboard blastPattern = 0;
+    if (blast_orthogonals())
+        blastPattern |= attacks_bb<WAZIR>(to);
+    if (blast_diagonals())
+        blastPattern |= attacks_bb<KING>(to) & ~attacks_bb<WAZIR>(to);
     return blastPattern;
 }
 

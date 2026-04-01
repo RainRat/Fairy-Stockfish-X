@@ -685,7 +685,7 @@ namespace {
         Bitboard attacks = pos.attacks_from(Us, Pt, from);
         Bitboard quiets = pos.moves_from(Us, Pt, from);
         Bitboard captureSquares;
-        if (pos.anti_royal_self_capture_only() && (pos.anti_royal_types() & Pt))
+        if (pos.anti_royal_self_capture_only() && (pos.anti_royal_types() & piece_set(Pt)))
             captureSquares = (attacks & pos.pieces(Us) & ~pos.pieces(Us, KING));
         else
             captureSquares = (attacks & pos.pieces()) & captureTarget;

@@ -1475,10 +1475,8 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
         parse_attribute("selfCaptureBlack", v->selfCaptureByColor[BLACK]);
         v->selfCaptureByColorSet[BLACK] = true;
     }
-    parse_attribute("capturerDiesOnCapture", v->capturerDiesOnCapture);
-    parse_attribute("capturerDiesOnSameTypeCapture", v->capturerDiesOnSameTypeCapture);
-    parse_attribute("capturerDiesExemptTypes", v->capturerDiesExemptTypes, v);
-    parse_attribute("capturerDiesExemptPawns", v->capturerDiesExemptPawns);
+    parse_attribute("blastOrthogonals", v->blastOrthogonals);
+    parse_attribute("blastOnSameTypeCapture", v->blastOnSameTypeCapture);
     parse_attribute("captureMorph", v->captureMorph);
     parse_attribute("rexExclusiveMorph", v->rexExclusiveMorph);
     parse_attribute("mustDrop", v->mustDrop);
