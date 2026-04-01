@@ -21,10 +21,10 @@ configuration:
   - Release
 
 matrix:
-  # The build fail immediately once one of the job fails
+  # The build fails immediately once one of the jobs fails
   fast_finish: true
 
-# Scripts that are called at very beginning, before repo cloning
+# Scripts that are called at the very beginning, before repo cloning
 init:
   - cmake --version
   - msbuild /version
