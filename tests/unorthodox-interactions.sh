@@ -46,6 +46,18 @@ rifleCapture = true
 changingColorTrigger = capture
 changingColorPieceTypes = *
 
+[jump-blast:chess]
+customPiece1 = m:D
+jumpCaptureTypes = m
+blastOnSameTypeCapture = true
+blastCenter = true
+blastOrthogonals = false
+blastDiagonals = false
+
+[jump-blast-color:jump-blast]
+changingColorTrigger = capture
+changingColorPieceTypes = *
+
 [rifle-jump:chess]
 customPiece1 = m:D
 jumpCaptureTypes = m
@@ -119,10 +131,10 @@ out=$(run_cmds "rifle-morph" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/4r3/3QK3 
 d")
 echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/3RK3 b"
 
-# 3. Test rifleCapture + zero-range blast-on-capture
+# 3. Test rifleCapture + zero-range blast-on-capture (shooter should survive)
 out=$(run_cmds "rifle-atomic" "${TEMP_INI}" "position fen r3k3/8/8/8/8/8/8/R3K3 w - - 0 1 moves a1a8
 d")
-echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/4K3 b"
+echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/R3K3 b"
 
 # 4. Test rifleCapture + changingColorTrigger
 out=$(run_cmds "rifle-color" "${TEMP_INI}" "position fen r3k3/8/8/8/8/8/8/R3K3 w - - 0 1 moves a1a8
@@ -223,6 +235,16 @@ if echo "${out}" | grep -q "e1e2,h5"; then
   echo "rifleCapture + arrow walling bug: arrow shot from victim square"
   exit 1
 fi
+
+# 18. Test jumpCapture + zero-range blast-on-capture (survives)
+out=$(run_cmds "jump-blast" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/m7/M3K3 w - - 0 1 moves a1a3
+d")
+echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/M7/8/4K3 b"
+
+# 19. Test jumpCapture + blast + changingColor (survives and changes color)
+out=$(run_cmds "jump-blast-color" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/m7/M3K3 w - - 0 1 moves a1a3
+d")
+echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/m7/8/4K3 b"
 
 rm "${TEMP_INI}"
 
