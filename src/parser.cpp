@@ -1532,6 +1532,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("promotionZonePawnDrops", v->promotionZonePawnDrops);
     parse_attribute("enclosingDrop", v->enclosingDrop);
     parse_attribute("enclosingDropStart", v->enclosingDropStart);
+    parse_both_colors_with_overrides("dropRegion", v->dropRegion);
     parse_attribute("dropRegionWhite", v->dropRegion[WHITE]);
     parse_attribute("dropRegionBlack", v->dropRegion[BLACK]);
     parse_attribute("pieceSpecificDropRegion", v->pieceSpecificDropRegion);
