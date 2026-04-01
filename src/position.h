@@ -55,6 +55,25 @@ struct SpellContext {
 const SpellContext* current_spell_context() noexcept;
 void set_current_spell_context(const SpellContext* ctx) noexcept;
 
+struct ScopedSpellContext {
+  const SpellContext* prev;
+  SpellContext ctx;
+  bool active;
+
+  ScopedSpellContext(Bitboard freezeExtra, Bitboard jumpRemoved)
+      : prev(current_spell_context()),
+        ctx(freezeExtra, jumpRemoved),
+        active(ctx.active()) {
+    if (active)
+      set_current_spell_context(&ctx);
+  }
+
+  ~ScopedSpellContext() {
+    if (active)
+      set_current_spell_context(prev);
+  }
+};
+
 /// StateInfo struct stores information needed to restore a Position object to
 /// its previous state when we retract a move. Whenever a move is made on the
 /// board (by calling Position::do_move), a StateInfo object must be passed.

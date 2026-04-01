@@ -81,27 +81,6 @@ namespace {
     return make_piece(receiver, mainPromotionPawnType);
   }
 
-  struct SpellContextScope {
-    const SpellContext* prev;
-    SpellContext ctx;
-    bool active;
-
-    SpellContextScope(const Position& position, Bitboard freezeExtra, Bitboard jumpRemoved)
-        : prev(current_spell_context()),
-          ctx(freezeExtra, jumpRemoved),
-          active(ctx.active()) {
-        (void)position;
-        if (active)
-            set_current_spell_context(&ctx);
-    }
-
-    ~SpellContextScope() {
-        if (!active)
-            return;
-        set_current_spell_context(prev);
-    }
-  };
-
   struct PushInfo {
     bool valid = false;
     bool captures = false;
@@ -2602,7 +2581,7 @@ bool Position::legal(Move m) const {
       }
   }
 
-  SpellContextScope spellScope(*this, freezeExtra, jumpRemoved);
+  ScopedSpellContext spellScope(freezeExtra, jumpRemoved);
 
   if (!dropMove && (freeze_squares() & from))
       return false;
@@ -3555,7 +3534,7 @@ bool Position::pseudo_legal(const Move m) const {
       }
   }
 
-  SpellContextScope spellScope(*this, freezeExtra, jumpRemoved);
+  ScopedSpellContext spellScope(freezeExtra, jumpRemoved);
 
   if (!dropMove && (freeze_squares() & from))
       return false;
@@ -3794,7 +3773,7 @@ bool Position::gives_check(Move m) const {
       }
   }
 
-  SpellContextScope spellScope(*this, freezeExtra, jumpRemoved);
+  ScopedSpellContext spellScope(freezeExtra, jumpRemoved);
 
   if (!dropMove && (freeze_squares() & from))
       return false;
@@ -4112,7 +4091,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           jumpRemoved = square_bb(gating_square(m));
   }
 
-  SpellContextScope spellScope(*this, freezeExtra, jumpRemoved);
+  ScopedSpellContext spellScope(freezeExtra, jumpRemoved);
 
   assert(color_of(pc) == us);
   assert(captured == NO_PIECE

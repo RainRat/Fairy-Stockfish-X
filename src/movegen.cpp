@@ -25,27 +25,6 @@ namespace Stockfish {
 
 namespace {
 
-  struct SpellContextGuard {
-    const SpellContext* prev;
-    SpellContext ctx;
-    bool active;
-
-    SpellContextGuard(const Position& position, Bitboard freezeExtra, Bitboard jumpRemoved)
-        : prev(current_spell_context()),
-          ctx(freezeExtra, jumpRemoved),
-          active(ctx.active()) {
-        (void)position;
-        if (active)
-            set_current_spell_context(&ctx);
-    }
-
-    ~SpellContextGuard() {
-        if (!active)
-            return;
-        set_current_spell_context(prev);
-    }
-  };
-
   Bitboard useful_freeze_gates(const Position& pos, Color us) {
     Bitboard gates = 0;
     Bitboard enemies = pos.pieces(~us);
@@ -1163,7 +1142,7 @@ namespace {
             assert(potion == Variant::POTION_JUMP);
 
             Bitboard gateMask = square_bb(gate);
-            SpellContextGuard guard(pos, Bitboard(0), gateMask);
+            ScopedSpellContext guard(Bitboard(0), gateMask);
 
             ExtMove jumpMoves[MOVEGEN_OVERFLOW_CAPACITY];
             ExtMove* jumpEnd = generate_all_impl<Us, Type>(pos, jumpMoves);
