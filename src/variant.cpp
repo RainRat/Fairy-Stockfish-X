@@ -2240,6 +2240,21 @@ void VariantMap::init() {
 Variant* Variant::conclude() {
     rebuild_piece_symbol_maps();
 
+    // Apply global extinction defaults to the color-specific storage used at
+    // runtime. Parser-loaded variants do this during parsing, but built-ins
+    // that set the aggregate fields directly still need the same propagation.
+    for (Color c : {WHITE, BLACK})
+    {
+        if (!extinctionPieceTypesByColorSet[c])
+            extinctionPieceTypesByColor[c] = extinctionPieceTypes;
+        if (!extinctionAllPieceTypesByColorSet[c])
+            extinctionAllPieceTypesByColor[c] = extinctionAllPieceTypes;
+        if (!extinctionPieceCountByColorSet[c])
+            extinctionPieceCountByColor[c] = extinctionPieceCount;
+        if (!extinctionOpponentPieceCountByColorSet[c])
+            extinctionOpponentPieceCountByColor[c] = extinctionOpponentPieceCount;
+    }
+
     // Backward compatibility: legacy extinctionPseudoRoyal used extinction
     // piece fields to define pseudo-royal behavior.
     if (extinctionPseudoRoyal && !pseudoRoyalTypes)

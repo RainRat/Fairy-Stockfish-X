@@ -821,17 +821,8 @@ namespace {
             moveList = make_move_and_gating<NORMAL>(pos, moveList, Us, from, pop_lsb(pawnLikeTripleSteps));
 
         // Shogi-style piece promotions
-        if (promPt)
-        {
-            Bitboard filtered = 0;
-            for (Bitboard candidates = b2; candidates; )
-            {
-                Square to = pop_lsb(candidates);
-                if (pos.promotion_allowed(Us, promPt, to))
-                    filtered |= to;
-            }
-            b2 = filtered;
-        }
+        if (promPt && !pos.promotion_allowed(Us, promPt))
+            b2 = 0;
         while (b2)
             moveList = make_move_and_gating<PIECE_PROMOTION>(pos, moveList, Us, from, pop_lsb(b2));
 
