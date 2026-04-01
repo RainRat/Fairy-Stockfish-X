@@ -1478,10 +1478,14 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("edgeInsertTypes", v->edgeInsertTypes, v);
     parse_attribute("edgeInsertOnly", v->edgeInsertOnly);
     parse_both_colors_with_overrides("edgeInsertRegion", v->edgeInsertRegion);
-    parse_both_colors_with_overrides("edgeInsertFromTop", v->edgeInsertFromTop);
-    parse_both_colors_with_overrides("edgeInsertFromBottom", v->edgeInsertFromBottom);
-    parse_both_colors_with_overrides("edgeInsertFromLeft", v->edgeInsertFromLeft);
-    parse_both_colors_with_overrides("edgeInsertFromRight", v->edgeInsertFromRight);
+    parse_attribute("edgeInsertFromTopWhite", v->edgeInsertFromTop[WHITE]);
+    parse_attribute("edgeInsertFromTopBlack", v->edgeInsertFromTop[BLACK]);
+    parse_attribute("edgeInsertFromBottomWhite", v->edgeInsertFromBottom[WHITE]);
+    parse_attribute("edgeInsertFromBottomBlack", v->edgeInsertFromBottom[BLACK]);
+    parse_attribute("edgeInsertFromLeftWhite", v->edgeInsertFromLeft[WHITE]);
+    parse_attribute("edgeInsertFromLeftBlack", v->edgeInsertFromLeft[BLACK]);
+    parse_attribute("edgeInsertFromRightWhite", v->edgeInsertFromRight[WHITE]);
+    parse_attribute("edgeInsertFromRightBlack", v->edgeInsertFromRight[BLACK]);
     const auto& it_edge_insert_from = config.find("edgeInsertFrom");
     if (it_edge_insert_from != config.end())
     {
