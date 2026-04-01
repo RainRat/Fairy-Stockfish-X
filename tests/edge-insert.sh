@@ -28,8 +28,7 @@ pushingRemoves = shove
 edgeInsertOnly = true
 edgeInsertTypes = a
 edgeInsertRegionWhite = a5 b5 c5 d5 e5 a1 a2 a3 a4 a5
-edgeInsertFromTopWhite = true
-edgeInsertFromLeftWhite = true
+edgeInsertFromWhite = top left
 dropRegionWhite = a5 b5 c5 d5 e5 a1 a2 a3 a4 a5
 INI
 

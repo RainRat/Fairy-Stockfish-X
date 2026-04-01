@@ -1478,14 +1478,6 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("edgeInsertTypes", v->edgeInsertTypes, v);
     parse_attribute("edgeInsertOnly", v->edgeInsertOnly);
     parse_both_colors_with_overrides("edgeInsertRegion", v->edgeInsertRegion);
-    parse_attribute("edgeInsertFromTopWhite", v->edgeInsertFromTop[WHITE]);
-    parse_attribute("edgeInsertFromTopBlack", v->edgeInsertFromTop[BLACK]);
-    parse_attribute("edgeInsertFromBottomWhite", v->edgeInsertFromBottom[WHITE]);
-    parse_attribute("edgeInsertFromBottomBlack", v->edgeInsertFromBottom[BLACK]);
-    parse_attribute("edgeInsertFromLeftWhite", v->edgeInsertFromLeft[WHITE]);
-    parse_attribute("edgeInsertFromLeftBlack", v->edgeInsertFromLeft[BLACK]);
-    parse_attribute("edgeInsertFromRightWhite", v->edgeInsertFromRight[WHITE]);
-    parse_attribute("edgeInsertFromRightBlack", v->edgeInsertFromRight[BLACK]);
     const auto& it_edge_insert_from = config.find("edgeInsertFrom");
     if (it_edge_insert_from != config.end())
     {
@@ -1500,6 +1492,36 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
         v->edgeInsertFromBottom[WHITE] = v->edgeInsertFromBottom[BLACK] = bottom;
         v->edgeInsertFromLeft[WHITE] = v->edgeInsertFromLeft[BLACK] = left;
         v->edgeInsertFromRight[WHITE] = v->edgeInsertFromRight[BLACK] = right;
+    }
+    const auto& it_edge_insert_from_white = config.find("edgeInsertFromWhite");
+    if (it_edge_insert_from_white != config.end())
+    {
+        bool top = false, bottom = false, left = false, right = false;
+        if (!apply_edge_insert_from_alias(it_edge_insert_from_white->second, top, bottom, left, right))
+        {
+            if (DoCheck)
+                std::cerr << "edgeInsertFromWhite - Invalid syntax." << std::endl;
+            return false;
+        }
+        v->edgeInsertFromTop[WHITE] = top;
+        v->edgeInsertFromBottom[WHITE] = bottom;
+        v->edgeInsertFromLeft[WHITE] = left;
+        v->edgeInsertFromRight[WHITE] = right;
+    }
+    const auto& it_edge_insert_from_black = config.find("edgeInsertFromBlack");
+    if (it_edge_insert_from_black != config.end())
+    {
+        bool top = false, bottom = false, left = false, right = false;
+        if (!apply_edge_insert_from_alias(it_edge_insert_from_black->second, top, bottom, left, right))
+        {
+            if (DoCheck)
+                std::cerr << "edgeInsertFromBlack - Invalid syntax." << std::endl;
+            return false;
+        }
+        v->edgeInsertFromTop[BLACK] = top;
+        v->edgeInsertFromBottom[BLACK] = bottom;
+        v->edgeInsertFromLeft[BLACK] = left;
+        v->edgeInsertFromRight[BLACK] = right;
     }
     parse_attribute("changingColorTrigger", v->changingColorTrigger);
     parse_attribute("changingColorPieceTypes", v->changingColorPieceTypes, v);
