@@ -26,29 +26,23 @@ namespace Stockfish {
 namespace {
 
   struct SpellContextGuard {
-    Position& pos;
+    const SpellContext* prev;
+    SpellContext ctx;
     bool active;
-    bool hadContext;
-    Bitboard prevFreeze;
-    Bitboard prevJump;
 
     SpellContextGuard(const Position& position, Bitboard freezeExtra, Bitboard jumpRemoved)
-        : pos(const_cast<Position&>(position)),
-          active((freezeExtra | jumpRemoved) != Bitboard(0)),
-          hadContext(pos.spell_context_active()),
-          prevFreeze(pos.spell_freeze_extra()),
-          prevJump(pos.spell_jump_removed()) {
+        : prev(current_spell_context()),
+          ctx(freezeExtra, jumpRemoved),
+          active(ctx.active()) {
+        (void)position;
         if (active)
-            pos.set_spell_context(freezeExtra, jumpRemoved);
+            set_current_spell_context(&ctx);
     }
 
     ~SpellContextGuard() {
         if (!active)
             return;
-        if (hadContext)
-            pos.set_spell_context(prevFreeze, prevJump);
-        else
-            pos.clear_spell_context();
+        set_current_spell_context(prev);
     }
   };
 
@@ -874,7 +868,7 @@ namespace {
     Bitboard forcedFromMask = AllSquares;
     bool restrictToForcedJumper = false;
     PieceType forcedJumpPt = NO_PIECE_TYPE;
-    Bitboard jumpForbidden = pos.spell_jump_removed();
+    Bitboard jumpForbidden = current_spell_context() ? current_spell_context()->jumpRemoved : Bitboard(0);
 
     if (pos.in_opening_self_removal_phase())
     {

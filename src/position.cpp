@@ -42,6 +42,18 @@ using std::string;
 namespace Stockfish {
 
 namespace {
+  thread_local const SpellContext* g_spellContext = nullptr;
+}
+
+const SpellContext* current_spell_context() noexcept {
+  return g_spellContext;
+}
+
+void set_current_spell_context(const SpellContext* ctx) noexcept {
+  g_spellContext = ctx;
+}
+
+namespace {
 
   inline Variant::PotionType potion_type_from_piece(const Variant* var, PieceType pt) {
     if (!var || !var->potions)
@@ -70,29 +82,23 @@ namespace {
   }
 
   struct SpellContextScope {
-    Position& pos;
+    const SpellContext* prev;
+    SpellContext ctx;
     bool active;
-    bool hadContext;
-    Bitboard prevFreeze;
-    Bitboard prevJump;
 
     SpellContextScope(const Position& position, Bitboard freezeExtra, Bitboard jumpRemoved)
-        : pos(const_cast<Position&>(position)),
-          active((freezeExtra | jumpRemoved) != Bitboard(0)),
-          hadContext(pos.spell_context_active()),
-          prevFreeze(pos.spell_freeze_extra()),
-          prevJump(pos.spell_jump_removed()) {
+        : prev(current_spell_context()),
+          ctx(freezeExtra, jumpRemoved),
+          active(ctx.active()) {
+        (void)position;
         if (active)
-            pos.set_spell_context(freezeExtra, jumpRemoved);
+            set_current_spell_context(&ctx);
     }
 
     ~SpellContextScope() {
         if (!active)
             return;
-        if (hadContext)
-            pos.set_spell_context(prevFreeze, prevJump);
-        else
-            pos.clear_spell_context();
+        set_current_spell_context(prev);
     }
   };
 
@@ -845,19 +851,21 @@ bool Position::violates_same_player_board_repetition(Move m) const {
   if (!var->samePlayerBoardRepetitionIllegal)
       return false;
 
-  Position* pos = const_cast<Position*>(this);
-  StateInfo nextState;
-  pos->do_move(m, nextState, false);
+  Position probe;
+  StateInfo probeState, nextState;
+  probe.set(variant(), fen(), is_chess960(), &probeState, this_thread());
+  probe.do_move(m, nextState, false);
 
   bool repeated = false;
-  int end = pos->captures_to_hand() ? pos->st->pliesFromNull : std::min(pos->st->rule50, pos->st->pliesFromNull);
+  int end = probe.captures_to_hand() ? probe.st->pliesFromNull
+                                     : std::min(probe.st->rule50, probe.st->pliesFromNull);
   if (end >= 4)
   {
-      StateInfo* stp = pos->st->previous->previous;
+      StateInfo* stp = st;
       for (int i = 4; i <= end; i += 2)
       {
           stp = stp->previous->previous;
-          if (stp->move != MOVE_NONE && stp->layoutKey == pos->st->layoutKey)
+          if (stp->move != MOVE_NONE && stp->layoutKey == probe.st->layoutKey)
           {
               repeated = true;
               break;
@@ -865,7 +873,6 @@ bool Position::violates_same_player_board_repetition(Move m) const {
       }
   }
 
-  pos->undo_move(m);
   return repeated;
 }
 

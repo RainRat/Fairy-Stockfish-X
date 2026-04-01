@@ -41,6 +41,20 @@ namespace Stockfish {
 
 extern Square JumpMidpoint[SQUARE_NB][SQUARE_NB];
 
+struct SpellContext {
+  Bitboard freezeExtra = Bitboard(0);
+  Bitboard jumpRemoved = Bitboard(0);
+
+  SpellContext() = default;
+  SpellContext(Bitboard freezeExtra_, Bitboard jumpRemoved_)
+      : freezeExtra(freezeExtra_), jumpRemoved(jumpRemoved_) {}
+
+  bool active() const { return bool(freezeExtra | jumpRemoved); }
+};
+
+const SpellContext* current_spell_context() noexcept;
+void set_current_spell_context(const SpellContext* ctx) noexcept;
+
 /// StateInfo struct stores information needed to restore a Position object to
 /// its previous state when we retract a move. Whenever a move is made on the
 /// board (by calling Position::do_move), a StateInfo object must be passed.
@@ -259,11 +273,6 @@ public:
   int nnue_potion_zone_index_base() const;
   int nnue_potion_cooldown_index_base() const;
   bool free_drops() const;
-  void set_spell_context(Bitboard freezeExtra, Bitboard jumpRemoved) const;
-  void clear_spell_context() const;
-  Bitboard spell_freeze_extra() const;
-  Bitboard spell_jump_removed() const;
-  bool spell_context_active() const;
   bool fast_attacks() const;
   bool fast_attacks2() const;
   bool wraps_files() const;
@@ -667,9 +676,6 @@ private:
   int priorityDropCountInHand[COLOR_NB];
   int virtualPieces;
   Bitboard promotedPieces;
-  mutable Bitboard spellExtraFrozen;
-  mutable Bitboard spellJumpRemoved;
-  mutable bool spellContextActive;
   void add_to_hand(Piece pc);
   void remove_from_hand(Piece pc);
   int add_to_prison(Piece pc);
@@ -1245,30 +1251,6 @@ inline bool Position::free_drops() const {
   return var->freeDrops;
 }
 
-inline void Position::set_spell_context(Bitboard freezeExtra, Bitboard jumpRemoved) const {
-  spellExtraFrozen = freezeExtra;
-  spellJumpRemoved = jumpRemoved;
-  spellContextActive = (freezeExtra | jumpRemoved);
-}
-
-inline void Position::clear_spell_context() const {
-  spellExtraFrozen = 0;
-  spellJumpRemoved = 0;
-  spellContextActive = false;
-}
-
-inline Bitboard Position::spell_freeze_extra() const {
-  return spellContextActive ? spellExtraFrozen : Bitboard(0);
-}
-
-inline Bitboard Position::spell_jump_removed() const {
-  return spellContextActive ? spellJumpRemoved : Bitboard(0);
-}
-
-inline bool Position::spell_context_active() const {
-  return spellContextActive;
-}
-
 inline bool Position::fast_attacks() const {
   assert(var != nullptr);
   return var->fastAttacks && !topology_wraps();
@@ -1803,8 +1785,8 @@ inline Bitboard Position::freeze_squares(Color c) const {
   if (!potions_enabled())
       return Bitboard(0);
   Bitboard mask = st->potionZones[c][Variant::POTION_FREEZE];
-  if (spellContextActive)
-      mask |= spellExtraFrozen;
+  if (const SpellContext* spellCtx = current_spell_context())
+      mask |= spellCtx->freezeExtra;
   return mask;
 }
 
@@ -1816,8 +1798,8 @@ inline Bitboard Position::jump_squares(Color c) const {
   if (!potions_enabled())
       return Bitboard(0);
   Bitboard mask = st->potionZones[c][Variant::POTION_JUMP];
-  if (spellContextActive && c == sideToMove)
-      mask |= spellJumpRemoved;
+  if (const SpellContext* spellCtx = current_spell_context(); spellCtx && c == sideToMove)
+      mask |= spellCtx->jumpRemoved;
   return mask;
 }
 
@@ -2919,8 +2901,8 @@ inline Bitboard Position::special_rider_bb(const PieceInfo* pi, MoveModality mod
 inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s) const {
   assert(pt != NO_PIECE_TYPE);
   Bitboard occupancy = byTypeBB[ALL_PIECES];
-  if (spellContextActive && c == sideToMove)
-      occupancy &= ~spellJumpRemoved;
+  if (const SpellContext* spellCtx = current_spell_context(); spellCtx && c == sideToMove)
+      occupancy &= ~spellCtx->jumpRemoved;
   return attacks_from(c, pt, s, occupancy);
 }
 
@@ -3054,8 +3036,8 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
     if (topology_wraps())
     {
         Bitboard occupancy = byTypeBB[ALL_PIECES];
-        if (spellContextActive && c == sideToMove)
-            occupancy &= ~spellJumpRemoved;
+        if (const SpellContext* spellCtx = current_spell_context(); spellCtx && c == sideToMove)
+            occupancy &= ~spellCtx->jumpRemoved;
 
         PieceType movePt = pt == KING ? king_type() : pt;
         const PieceInfo* pi = pieceMap.get(movePt);
@@ -3178,8 +3160,8 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
     }
 
   Bitboard occupancy = byTypeBB[ALL_PIECES];
-  if (spellContextActive && c == sideToMove)
-      occupancy &= ~spellJumpRemoved;
+  if (const SpellContext* spellCtx = current_spell_context(); spellCtx && c == sideToMove)
+      occupancy &= ~spellCtx->jumpRemoved;
 
   if ((fast_attacks() || fast_attacks2()) && (pt != KING || king_type() == KING))
       return (moves_bb(c, pt, s, occupancy) | extraDestinations) & board_bb();
