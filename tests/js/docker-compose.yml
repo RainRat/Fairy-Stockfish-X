@@ -1,5 +1,3 @@
-version: "3.7"
-
 services:
   # https://github.com/emscripten-core/emsdk/blob/main/docker/README.md
   emscripten:

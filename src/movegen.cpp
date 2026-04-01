@@ -85,12 +85,6 @@ namespace {
     if (pos.walling(us) && !(pos.wall_or_move() && (from!=to)))
     {
         Bitboard b = pos.board_bb() & ~occupancyAfter & ~square_bb(to);
-        if (T == CASTLING)
-        {
-            Square kto = make_square(to > from ? pos.castling_kingside_file() : pos.castling_queenside_file(), pos.castling_rank(us));
-            Square rto = kto - (to > from ? EAST : WEST);
-            b ^= square_bb(to) ^ square_bb(kto) ^ square_bb(rto);
-        }
 
         // Duck is by far the hottest walling mode: avoid extra rule checks.
         if (pos.walling_rule() == DUCK)
@@ -170,7 +164,7 @@ namespace {
   template<Color c, GenType Type, Direction D>
   ExtMove* make_promotions(const Position& pos, ExtMove* moveList, Square to) {
 
-    if (Type == CAPTURES || Type == EVASIONS || Type == NON_EVASIONS)
+    if (Type == CAPTURES || Type == QUIETS || Type == EVASIONS || Type == NON_EVASIONS)
     {
         for (PieceSet promotions = pos.promotion_piece_types(c, to); promotions;)
         {
@@ -430,6 +424,8 @@ namespace {
             for (PieceSet promotions = pos.promotion_piece_types(Us, to); promotions;)
             {
                 PieceType pt = pop_msb(promotions);
+                if (pos.prison_pawn_promotion() && pos.count_in_prison(~Us, pt) == 0)
+                    continue;
                 if (pos.promotion_allowed(Us, pt, to))
                     moveList = make_move_and_gating<PROMOTION>(pos, moveList, Us, from, to, pt);
             }
@@ -478,7 +474,12 @@ namespace {
                 while (attacks)
                     moveList = make_move_and_gating<NORMAL>(pos, moveList, Us, from, pop_lsb(attacks));
                 while (epSquares)
-                    moveList = make_move_and_gating<EN_PASSANT>(pos, moveList, Us, from, pop_lsb(epSquares));
+                {
+                    Square epSquare = pop_lsb(epSquares);
+                    if (Type == EVASIONS && (target & (epSquare + Up)) && !pos.non_sliding_riders())
+                        continue;
+                    moveList = make_move_and_gating<EN_PASSANT>(pos, moveList, Us, from, epSquare);
+                }
             }
         }
 
@@ -1054,7 +1055,8 @@ namespace {
         //if "wall or move", generate walling action with null move
         if (!restrictToForcedJumper && pos.wall_or_move())
         {
-            Square wallSq = lsb(pos.pieces(Us));
+            Bitboard usPieces = pos.pieces(Us);
+            Square wallSq = usPieces ? lsb(usPieces) : lsb(pos.board_bb());
             moveList = make_move_and_gating<SPECIAL>(pos, moveList, Us, wallSq, wallSq);
         }
 
@@ -1064,13 +1066,27 @@ namespace {
     if (pos.count<KING>(Us) && (!restrictToForcedJumper || (forcedFromMask & ksq))
         && (!Checks || pos.topology_wraps() || pos.blockers_for_king(~Us) & ksq))
     {
-        Bitboard kingAttacks = pos.attacks_from(Us, KING, ksq) & pos.pieces();
-        Bitboard kingMoves   = pos.moves_from(Us, KING, ksq) & ~pos.pieces();
-        Bitboard kingCaptureMask = Type == EVASIONS ? ~pos.pieces(Us) : captureTarget;
-        if (Type == EVASIONS && pos.self_capture())
-            kingCaptureMask |= pos.pieces(Us) & ~pos.pieces(Us, KING);
-        Bitboard kingQuietMask = Type == EVASIONS ? ~pos.pieces(Us) : target;
-        Bitboard b = (kingAttacks & kingCaptureMask) | (kingMoves & kingQuietMask);
+        Bitboard b = 0;
+        if (restrictToForcedJumper)
+        {
+            Bitboard candidates = (pos.attacks_from(Us, KING, ksq) | pos.moves_from(Us, KING, ksq)) & ~pos.pieces();
+            while (candidates)
+            {
+                Square to = pop_lsb(candidates);
+                if (pos.jump_capture_square(ksq, to) != SQ_NONE)
+                    b |= to;
+            }
+        }
+        else
+        {
+            Bitboard kingAttacks = pos.attacks_from(Us, KING, ksq) & pos.pieces();
+            Bitboard kingMoves   = pos.moves_from(Us, KING, ksq) & ~pos.pieces();
+            Bitboard kingCaptureMask = Type == EVASIONS ? ~pos.pieces(Us) : captureTarget;
+            if (Type == EVASIONS && pos.self_capture())
+                kingCaptureMask |= pos.pieces(Us) & ~pos.pieces(Us, KING);
+            Bitboard kingQuietMask = Type == EVASIONS ? ~pos.pieces(Us) : target;
+            b = (kingAttacks & kingCaptureMask) | (kingMoves & kingQuietMask);
+        }
         while (b)
             moveList = make_move_and_gating<NORMAL>(pos, moveList, Us, ksq, pop_lsb(b));
 
@@ -1262,7 +1278,8 @@ template<GenType Type>
 ExtMove* append_potions(const Position& pos, ExtMove* listBegin, ExtMove* baseEnd) {
 
   static_assert(Type != LEGAL, "Unsupported type in append_potions()");
-  assert((Type == EVASIONS) == (bool)pos.checkers());
+  assert((Type == EVASIONS) == (bool)pos.checkers()
+         || (pos.topology_wraps() && Type == NON_EVASIONS && pos.checkers()));
   if (!pos.potions_enabled())
       return baseEnd;
   Color us = pos.side_to_move();
