@@ -1218,6 +1218,37 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
             return false;
         }
     }
+    const auto& it_gate_after = config.find("gatingPieceAfter");
+    if (it_gate_after != config.end())
+    {
+        if (!parse_piece_type_map(it_gate_after->second, v, v->gatingPieceAfter[WHITE], true))
+        {
+            if (DoCheck)
+                std::cerr << "gatingPieceAfter - Invalid syntax." << std::endl;
+            return false;
+        }
+        std::copy(std::begin(v->gatingPieceAfter[WHITE]), std::end(v->gatingPieceAfter[WHITE]), std::begin(v->gatingPieceAfter[BLACK]));
+    }
+    const auto& it_gate_after_w = config.find("gatingPieceAfterWhite");
+    if (it_gate_after_w != config.end())
+    {
+        if (!parse_piece_type_map(it_gate_after_w->second, v, v->gatingPieceAfter[WHITE], true))
+        {
+            if (DoCheck)
+                std::cerr << "gatingPieceAfterWhite - Invalid syntax." << std::endl;
+            return false;
+        }
+    }
+    const auto& it_gate_after_b = config.find("gatingPieceAfterBlack");
+    if (it_gate_after_b != config.end())
+    {
+        if (!parse_piece_type_map(it_gate_after_b->second, v, v->gatingPieceAfter[BLACK], true))
+        {
+            if (DoCheck)
+                std::cerr << "gatingPieceAfterBlack - Invalid syntax." << std::endl;
+            return false;
+        }
+    }
     const auto& it_drop_piece_types = config.find("dropPieceTypes");
     if (it_drop_piece_types != config.end())
     {
@@ -1655,6 +1686,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("surroundClaimRegion", v->surroundClaimRegion);
     parse_attribute("surroundClaimPiece", v->surroundClaimPiece, v);
     parse_attribute("surroundClaimExtraTurn", v->surroundClaimExtraTurn);
+    parse_attribute("gatingFromHand", v->gatingFromHand);
     parse_attribute("seirawanGating", v->seirawanGating);
     parse_attribute("commitGates", v->commitGates);
     parse_attribute("jumpCaptureTypes", v->jumpCaptureTypes, v);
@@ -1749,6 +1781,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("dupleCheck", v->dupleCheck);
     // extinction piece types
     parse_attribute("extinctionPieceTypes", v->extinctionPieceTypes, v);
+    parse_attribute("extinctionMustAppear", v->extinctionMustAppear, v);
     parse_attribute("extinctionAllPieceTypes", v->extinctionAllPieceTypes);
     parse_attribute("extinctionPieceCount", v->extinctionPieceCount);
     parse_attribute("extinctionOpponentPieceCount", v->extinctionOpponentPieceCount);
