@@ -5350,7 +5350,9 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
               append_dirty(st, claimed, SQ_NONE, sq);
       }
 
-      st->pendingClaimPass = var->surroundClaimExtraTurn && bool(st->claimedSquares);
+      st->pendingClaimPass = var->surroundClaimExtraTurn
+                          && bool(st->claimedSquares)
+                          && bool(~occupied & board_bb());
   }
 
   // Shared helper for "piece removed from its destination square" effects that

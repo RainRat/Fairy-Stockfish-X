@@ -39,10 +39,11 @@ from pathlib import Path
 
 sf.load_variant_config(Path("/home/chris/Fairy-Stockfish-X/src/variants-incomplete.ini").read_text())
 
-assert sf.game_result("dots-boxes-2x2", "****/*BB*/*****/*BB*/**** w - - 12 7", []) > 0
-assert sf.game_result("dots-boxes-2x2", "****/*BB*/*****/*Bb*/**** w - - 12 7", []) > 0
-assert sf.game_result("dots-boxes-2x2", "****/*BB*/*****/*bb*/**** w - - 12 7", []) == sf.VALUE_DRAW
-assert sf.game_result("dots-boxes-2x2", "****/*Bb*/*****/*bb*/**** w - - 12 7", []) < 0
+assert sf.game_result("dots-boxes-2x2", "*****/*B*B*/*****/*B*B*/***** w - - 12 7", []) > 0
+assert sf.game_result("dots-boxes-2x2", "*****/*B*B*/*****/*B*b*/***** w - - 12 7", []) > 0
+assert sf.game_result("dots-boxes-2x2", "*****/*B*B*/*****/*b*b*/***** w - - 12 7", []) == sf.VALUE_DRAW
+assert sf.game_result("dots-boxes-2x2", "*****/*B*b*/*****/*b*b*/***** w - - 12 7", []) < 0
+assert sf.legal_moves("dots-boxes-2x2", "*****/*B*B*/*****/*B*B*/***** w - - 12 7", []) == []
 PY
 
 echo "dots and boxes prototype passed"
