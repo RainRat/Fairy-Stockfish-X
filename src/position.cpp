@@ -1829,6 +1829,7 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
 
   int emptyCnt;
   std::ostringstream ss;
+  Color fenSideToMove = st->pendingClaimPass ? ~sideToMove : sideToMove;
   auto append_piece_symbols = [&](Piece piece, int count) {
       const std::string& symbol = piece_symbol(piece);
       for (int i = 0; i < count; ++i)
@@ -1896,7 +1897,7 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
   // SFEN
   if (sfen)
   {
-      ss << (sideToMove == WHITE ? " b " : " w ");
+      ss << (fenSideToMove == WHITE ? " b " : " w ");
       for (Color c : {WHITE, BLACK})
           for (PieceType pt = KING; pt >= PAWN; --pt)
               if (pieceCountInHand[c][pt] > 0)
@@ -1946,7 +1947,7 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
       ss << ']';
   }
 
-  ss << (sideToMove == WHITE ? " w " : " b ");
+  ss << (fenSideToMove == WHITE ? " w " : " b ");
 
   // Disambiguation for chess960 "king" square
   if (chess960 && can_castle(WHITE_CASTLING) && popcount(pieces(WHITE, castling_king_piece(WHITE)) & rank_bb(castling_rank(WHITE))) > 1)

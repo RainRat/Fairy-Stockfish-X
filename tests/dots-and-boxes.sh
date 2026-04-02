@@ -22,7 +22,7 @@ out=$(run_cmds dots-boxes-2x2 \
   "position startpos moves a1a1,b5 a1a1,a4 a1a1,b3 a1a1,c4
 d
 go perft 1")
-echo "$out" | grep -Fq "Fen: ***1*/*b*2/***1*/5/*1*1* w - - 4 3"
+echo "$out" | grep -Fq "Fen: ***1*/*b*2/***1*/5/*1*1* b - - 4 3"
 echo "$out" | grep -q "0000: 1"
 echo "$out" | grep -q "Nodes searched: 1"
 
@@ -44,6 +44,9 @@ assert sf.game_result("dots-boxes-2x2", "*****/*B*B*/*****/*B*b*/***** w - - 12 
 assert sf.game_result("dots-boxes-2x2", "*****/*B*B*/*****/*b*b*/***** w - - 12 7", []) == sf.VALUE_DRAW
 assert sf.game_result("dots-boxes-2x2", "*****/*B*b*/*****/*b*b*/***** w - - 12 7", []) < 0
 assert sf.legal_moves("dots-boxes-2x2", "*****/*B*B*/*****/*B*B*/***** w - - 12 7", []) == []
+assert sorted(sf.legal_moves("dots-boxes-2x2", "***1*/*b*2/***1*/5/*1*1* b - - 4 3", [])) == sorted([
+    "a1a1,b1", "a1a1,d1", "a1a1,a2", "a1a1,c2", "a1a1,e2", "a1a1,d3", "a1a1,e4", "a1a1,d5"
+])
 PY
 
 echo "dots and boxes prototype passed"
