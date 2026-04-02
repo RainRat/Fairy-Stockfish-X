@@ -1865,37 +1865,40 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
 }
 
 template <bool DoCheck>
-void VariantParser<DoCheck>::check_consistency(Variant* v) {
-    if (!DoCheck)
-        return;
+bool VariantParser<DoCheck>::check_consistency(Variant* v) {
+    bool valid = true;
 
     const bool wrapsTopology = v->cylindrical || v->toroidal;
     v->rebuild_piece_symbol_maps();
+    const bool hasRoyalKing = v->checking
+                           && v->kingType != NO_PIECE_TYPE
+                           && bool(v->pieceTypes & piece_set(v->kingType));
 
     // pieces
-    for (PieceSet ps = v->pieceTypes; ps;)
-    {
-        PieceType pt = pop_lsb(ps);
-        for (Color c : {WHITE, BLACK})
+    if (DoCheck)
+        for (PieceSet ps = v->pieceTypes; ps;)
         {
-            Piece pc = make_piece(c, pt);
-            const std::string& symbol = v->piece_symbol(pc);
-            if (symbol.empty())
-                continue;
-            auto exact = v->symbolToPiece.find(symbol);
-            if (exact == v->symbolToPiece.end() || exact->second != pc)
-                std::cerr << piece_name(pt) << " - Ambiguous piece symbol: " << symbol << std::endl;
+            PieceType pt = pop_lsb(ps);
+            for (Color c : {WHITE, BLACK})
+            {
+                Piece pc = make_piece(c, pt);
+                const std::string& symbol = v->piece_symbol(pc);
+                if (symbol.empty())
+                    continue;
+                auto exact = v->symbolToPiece.find(symbol);
+                if (exact == v->symbolToPiece.end() || exact->second != pc)
+                    std::cerr << piece_name(pt) << " - Ambiguous piece symbol: " << symbol << std::endl;
+            }
         }
-    }
 
     v->conclude(); // In preparation for the consistency checks below
 
     // startFen
-    if (FEN::validate_fen(v->startFen, v, v->chess960) != FEN::FEN_OK)
+    if (DoCheck && FEN::validate_fen(v->startFen, v, v->chess960) != FEN::FEN_OK)
         std::cerr << "startFen - Invalid starting position: " << v->startFen << std::endl;
 
     // pieceToCharTable
-    if (v->pieceToCharTable != "-")
+    if (DoCheck && v->pieceToCharTable != "-")
     {
         const std::string fenBoard = v->startFen.substr(0, v->startFen.find(' '));
         std::stringstream ss(v->pieceToCharTable);
@@ -1917,38 +1920,39 @@ void VariantParser<DoCheck>::check_consistency(Variant* v) {
     }
 
     // Contradictory options
-    if (!v->checking && v->checkCounting)
+    if (DoCheck && !v->checking && v->checkCounting)
         std::cerr << "checkCounting=true requires checking=true." << std::endl;
-    if (v->progressiveMultimove && !v->multimoves.empty())
+    if (DoCheck && v->progressiveMultimove && !v->multimoves.empty())
         std::cerr << "progressiveMultimove ignores multimoves sequence." << std::endl;
-    for (Color c : {WHITE, BLACK})
-    {
-        std::stringstream ss(v->connectPieceGoal[c]);
-        std::string token;
-        while (ss >> token)
-            if (parse_piece_type_token(v, token) == NO_PIECE_TYPE)
-                std::cerr << "connectPieceGoal" << (c == WHITE ? "White" : "Black")
-                          << " - Invalid piece type: " << token << std::endl;
-    }
-    if (v->castling && v->castlingRank > v->maxRank)
+    if (DoCheck)
+        for (Color c : {WHITE, BLACK})
+        {
+            std::stringstream ss(v->connectPieceGoal[c]);
+            std::string token;
+            while (ss >> token)
+                if (parse_piece_type_token(v, token) == NO_PIECE_TYPE)
+                    std::cerr << "connectPieceGoal" << (c == WHITE ? "White" : "Black")
+                              << " - Invalid piece type: " << token << std::endl;
+        }
+    if (DoCheck && v->castling && v->castlingRank > v->maxRank)
         std::cerr << "Inconsistent settings: castlingRank > maxRank." << std::endl;
-    if (v->castling && v->castlingQueensideFile > v->castlingKingsideFile)
+    if (DoCheck && v->castling && v->castlingQueensideFile > v->castlingKingsideFile)
         std::cerr << "Inconsistent settings: castlingQueensideFile > castlingKingsideFile." << std::endl;
-    if (v->connect3D && v->connect4D)
+    if (DoCheck && v->connect3D && v->connect4D)
         std::cerr << "connect3D and connect4D are mutually exclusive." << std::endl;
-    if (v->connect3D
+    if (DoCheck && v->connect3D
         && !((v->connectN == 3 && (int(v->maxFile) + 1) == 3 && (int(v->maxRank) + 1) == 9)
           || (v->connectN == 4 && (int(v->maxFile) + 1) == 8 && (int(v->maxRank) + 1) == 8)))
         std::cerr << "connect3D currently requires either connectN = 3 on a 3x9 board or connectN = 4 on an 8x8 board." << std::endl;
-    if (v->connect4D
+    if (DoCheck && v->connect4D
         && !(v->connectN >= 3
           && (int(v->maxFile) + 1) == v->connectN * v->connectN
           && (int(v->maxRank) + 1) == v->connectN * v->connectN))
         std::cerr << "connect4D currently requires a square board of size connectN^2 with connectN >= 3." << std::endl;
-    if (wrapsTopology && (v->connectN || v->connect3D || v->connect4D || v->connectNxN || v->collinearN || v->connectGroup || v->removeConnectN))
+    if (DoCheck && wrapsTopology && (v->connectN || v->connect3D || v->connect4D || v->connectNxN || v->collinearN || v->connectGroup || v->removeConnectN))
         std::cerr << "Wrapped boards do not support connect/collinear win conditions." << std::endl;
 
-    if (v->toroidal)
+    if (DoCheck && v->toroidal)
         for (int i = 0; i < CUSTOM_PIECES_NB; ++i)
             if (!v->customPiece[i].empty() && (v->customPiece[i].find('x') != std::string::npos || v->customPiece[i].find('z') != std::string::npos))
             {
@@ -1958,28 +1962,45 @@ void VariantParser<DoCheck>::check_consistency(Variant* v) {
             }
 
     // Check for limitations
-    if ((v->pieceDrops || v->freeDrops) && v->wallingRule != NO_WALLING)
+    if (DoCheck && (v->pieceDrops || v->freeDrops) && v->wallingRule != NO_WALLING)
         std::cerr << "pieceDrops and any walling are incompatible." << std::endl;
-    if (v->edgeInsertTypes && !v->pieceDrops)
+    if (DoCheck && v->edgeInsertTypes && !v->pieceDrops)
         std::cerr << "edgeInsertTypes requires pieceDrops=true." << std::endl;
-    if (v->wallingRule != NO_WALLING && v->seirawanGating)
+    if (DoCheck && v->wallingRule != NO_WALLING && v->seirawanGating)
         std::cerr << "wallingRule and seirawanGating are incompatible." << std::endl;
-    if (v->wallingRule != NO_WALLING && v->potions)
+    if (DoCheck && v->wallingRule != NO_WALLING && v->potions)
         std::cerr << "wallingRule and potions are incompatible." << std::endl;
-    if (v->wallingRule == DUCK && v->petrifyOnCaptureTypes)
+    if (DoCheck && v->wallingRule == DUCK && v->petrifyOnCaptureTypes)
         std::cerr << "wallingRule=duck and petrifyOnCaptureTypes are incompatible." << std::endl;
 
     // Options incompatible with royal kings
-    if (v->pieceTypes & KING)
+    if (hasRoyalKing)
     {
         if (v->blastOnCapture)
+        {
             std::cerr << "Can not use kings with blastOnCapture." << std::endl;
+            valid = false;
+        }
+        if (v->blastPassiveTypes)
+        {
+            std::cerr << "Can not use kings with blastPassiveTypes." << std::endl;
+            valid = false;
+        }
         if (v->flipEnclosedPieces)
+        {
             std::cerr << "Can not use kings with flipEnclosedPieces." << std::endl;
+            valid = false;
+        }
         if (v->removeConnectN)
+        {
             std::cerr << "Can not use kings with removeConnectN." << std::endl;
+            valid = false;
+        }
         if (v->wallingRule==DUCK)
+        {
             std::cerr << "Can not use kings with wallingRule = duck." << std::endl;
+            valid = false;
+        }
         // We can not fully check support for custom king movements at this point,
         // since custom pieces are only initialized on loading of the variant.
         // We will assume this is valid, but it might cause problems later if it's not.
@@ -1991,14 +2012,17 @@ void VariantParser<DoCheck>::check_consistency(Variant* v) {
                 || std::any_of(pi->steps[0][MODALITY_CAPTURE].begin(),
                                pi->steps[0][MODALITY_CAPTURE].end(),
                                [](const std::pair<const Direction, int>& d) { return d.second; }))
+            {
                 std::cerr << piece_name(v->kingType) << " is not supported as kingType." << std::endl;
+                valid = false;
+            }
         }
     }
     // Options incompatible with royal kings OR pseudo-royal kings. Possible in theory though:
     // 1. In blast variants, moving a (pseudo-)royal blastImmuneType into another piece is legal.
     // 2. In blast variants, capturing a piece next to a (pseudo-)royal blastImmuneType is legal.
     // 3. Moving a (pseudo-)royal mutuallyImmuneType into a square threatened by the same type is legal.
-    if (v->pseudoRoyalTypes || v->antiRoyalTypes || (v->pieceTypes & KING))
+    if (DoCheck && (v->pseudoRoyalTypes || v->antiRoyalTypes || hasRoyalKing))
     {
         if (v->blastImmuneTypes) //I may have this solved now.
             std::cerr << "Can not use kings, pseudo-royal, or anti-royal with blastImmuneTypes." << std::endl;
@@ -2016,6 +2040,7 @@ void VariantParser<DoCheck>::check_consistency(Variant* v) {
         if ((v->antiRoyalTypes & v->flagPiece[WHITE]) || (v->antiRoyalTypes & v->flagPiece[BLACK]))
             std::cerr << "Flag piece can not be anti-royal when flagPieceSafe is enabled." << std::endl;
     }
+    return valid;
 }
 
 template <bool DoCheck>
@@ -2050,7 +2075,8 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
         !parse_official_options(v))
         return nullptr;
 
-    check_consistency(v);
+    if (!check_consistency(v))
+        return nullptr;
 
     return v;
 }

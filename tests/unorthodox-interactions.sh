@@ -15,7 +15,7 @@ run_cmds() {
   local variant="$1"
   local vpath="$2"
   local cmds="$3"
-  cat <<CMDS | "${ENGINE}"
+  cat <<CMDS | "${ENGINE}" 2>&1
 uci
 setoption name VariantPath value ${vpath}
 setoption name UCI_Variant value ${variant}
@@ -40,6 +40,10 @@ blastOnCapture = true
 blastOrthogonals = false
 blastDiagonals = false
 rifleCapture = true
+king = -
+customPiece1 = k:K
+extinctionValue = -VALUE_MATE
+extinctionPieceTypes = k
 
 [rifle-color:chess]
 rifleCapture = true
@@ -105,6 +109,19 @@ changingColorPieceTypes = *
 [rifle-amazon:chess]
 rifleCapture = true
 wallingRule = arrow
+
+[passive-king-repro:chess]
+blastPassiveTypes = n
+
+[remove-king-repro:chess]
+removeConnectN = 3
+
+[passive-nonroyal-repro:chess]
+king = -
+customPiece1 = k:K
+extinctionValue = -VALUE_MATE
+extinctionPieceTypes = k
+blastPassiveTypes = n
 EOF
 
 echo "unorthodox interactions tests started"
@@ -221,6 +238,29 @@ out=$(run_cmds "rifle-amazon" "${TEMP_INI}" "position fen 4k3/8/8/7p/8/8/4p3/4Q1
 go perft 1")
 if echo "${out}" | grep -q "e1e2,h5"; then
   echo "rifleCapture + arrow walling bug: arrow shot from victim square"
+  exit 1
+fi
+
+# 18. Test blastPassiveTypes + royal kings rejects the variant
+out=$(run_cmds "passive-king-repro" "${TEMP_INI}" "d")
+echo "${out}" | grep -q "Can not use kings with blastPassiveTypes."
+if echo "${out}" | grep -q "info string variant passive-king-repro"; then
+  echo "blastPassiveTypes + royal kings variant should have been rejected"
+  exit 1
+fi
+
+# 19. Test removeConnectN + royal kings rejects the variant
+out=$(run_cmds "remove-king-repro" "${TEMP_INI}" "d")
+echo "${out}" | grep -q "Can not use kings with removeConnectN."
+if echo "${out}" | grep -q "info string variant remove-king-repro"; then
+  echo "removeConnectN + royal kings variant should have been rejected"
+  exit 1
+fi
+
+# 20. Test non-royal custom extinction setup still loads with blastPassiveTypes
+out=$(run_cmds "passive-nonroyal-repro" "${TEMP_INI}" "d")
+if ! echo "${out}" | grep -q "info string variant passive-nonroyal-repro"; then
+  echo "non-royal blastPassiveTypes setup should remain loadable"
   exit 1
 fi
 
