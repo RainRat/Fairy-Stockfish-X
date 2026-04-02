@@ -1068,7 +1068,9 @@ constexpr Value mated_in(int ply) {
 constexpr Value convert_mate_value(Value v, int ply) {
   return  v ==  VALUE_MATE ? mate_in(ply)
         : v == -VALUE_MATE ? mated_in(ply)
-        : v;
+        : v ==  VALUE_COUNT_WIN ? mate_in(ply)
+        : v == -VALUE_COUNT_WIN ? mated_in(ply)
+                           : v;
 }
 
 constexpr Square make_square(File f, Rank r) {

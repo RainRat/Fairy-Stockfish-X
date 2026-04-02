@@ -22,7 +22,7 @@ out=$(run_cmds dots-boxes-2x2 \
   "position startpos moves a1a1,b5 a1a1,a4 a1a1,b3 a1a1,c4
 d
 go perft 1")
-echo "$out" | grep -Fq "Fen: ***1*/b2/***1*/5/*1*1* w - - 4 3"
+echo "$out" | grep -Fq "Fen: ***1*/*b*2/***1*/5/*1*1* w - - 4 3"
 echo "$out" | grep -q "0000: 1"
 echo "$out" | grep -q "Nodes searched: 1"
 
@@ -30,7 +30,7 @@ out=$(run_cmds dots-boxes-2x2 \
   "position startpos moves a1a1,b5 a1a1,a4 a1a1,b3 a1a1,c4 0000
 d
 go perft 1")
-echo "$out" | grep -Fq "Fen: ***1*/b2/***1*/5/*1*1* b - - 5 3"
+echo "$out" | grep -Fq "Fen: ***1*/*b*2/***1*/5/*1*1* b - - 5 3"
 echo "$out" | grep -q "Nodes searched: 8"
 
 python3 - <<'PY'
