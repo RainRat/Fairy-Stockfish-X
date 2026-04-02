@@ -115,9 +115,13 @@ echo "${out}" | grep -q "^f1f6: 1$"
 fi
 
 # 5ba) Former built-ins moved to variants.ini still load and preserve core behavior.
-for v in raazuvaa paradigm joust fox-and-hounds; do
+for v in balancedalternation2 raazuvaa paradigm joust fox-and-hounds; do
   variant_available "${v}"
 done
+out=$(run_cmds "setoption name UCI_Variant value balancedalternation2
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 20"
 out=$(run_cmds "setoption name UCI_Variant value raazuvaa
 position startpos
 d")
@@ -134,6 +138,24 @@ out=$(run_cmds "setoption name UCI_Variant value fox-and-hounds
 position startpos
 go perft 1")
 echo "${out}" | grep -q "^e1d2: 1$"
+
+# 5bb) Simplified inheritance stanzas still preserve start positions.
+out=$(run_cmds "setoption name UCI_Variant value maharajah
+position startpos
+d")
+echo "${out}" | grep -q "Fen: rnbqkbnr/pppppppp/8/8/8/8/8/4M3 w kq - 0 1"
+out=$(run_cmds "setoption name UCI_Variant value pawnsonly
+position startpos
+d")
+echo "${out}" | grep -q "Fen: 8/pppppppp/8/8/8/8/PPPPPPPP/8 w - - 0 1"
+out=$(run_cmds "setoption name UCI_Variant value pawns
+position startpos
+d")
+echo "${out}" | grep -q "Fen: pppppppp/8/8/8/8/8/8/PPPPPPPP w - - 0 1"
+out=$(run_cmds "setoption name UCI_Variant value rugby
+position startpos
+d")
+echo "${out}" | grep -q "Fen: pppppppp/8/8/8/8/8/8/PPPPPPPP w - - 0 1"
 
 # 5c) Bombardment: front-rank missiles move forward quietly and can self-destruct.
 if variant_available "bombardment"; then
