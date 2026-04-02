@@ -1844,34 +1844,44 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
 
   for (Rank r = max_rank(); r >= RANK_1; --r)
   {
+      emptyCnt = 0;
       for (File f = FILE_A; f <= max_file(); ++f)
       {
-          for (emptyCnt = 0; f <= max_file() && !(pieces() & make_square(f, r)) && !(fogArea & make_square(f, r)); ++f)
+          Square s = make_square(f, r);
+          bool hasPiece = bool(pieces() & s);
+          bool hasWall = bool(st->wallSquares & s);
+          bool hasDead = bool(st->deadSquares & s);
+          bool hidden = bool(fogArea & s);
+
+          if (!hasPiece && !hasWall && !hasDead && !hidden)
+          {
               ++emptyCnt;
+              continue;
+          }
 
           if (emptyCnt)
-              ss << emptyCnt;
-
-          if (f <= max_file())
           {
-              if (empty(make_square(f, r)) || fogArea & make_square(f, r))
-              {
-                  Square s = make_square(f, r);
-                  ss << ((st->deadSquares & s) ? "^" : "*");
-              }
-              else if (var->shogiStylePromotions && unpromoted_piece_on(make_square(f, r)))
-                  // Promoted shogi pieces, e.g., +r for dragon
-                  ss << "+" << piece_symbol(unpromoted_piece_on(make_square(f, r)));
-              else
-              {
-                  ss << piece_symbol(piece_on(make_square(f, r)));
+              ss << emptyCnt;
+              emptyCnt = 0;
+          }
 
-                  // Set promoted pieces
-                  if (((captures_to_hand() && !drop_loop()) || two_boards() ||  showPromoted) && is_promoted(make_square(f, r)))
-                      ss << "~";
-              }
+          if (hasDead || hasWall || hidden)
+              ss << (hasDead ? "^" : "*");
+          else if (var->shogiStylePromotions && unpromoted_piece_on(s))
+              // Promoted shogi pieces, e.g., +r for dragon
+              ss << "+" << piece_symbol(unpromoted_piece_on(s));
+          else
+          {
+              ss << piece_symbol(piece_on(s));
+
+              // Set promoted pieces
+              if (((captures_to_hand() && !drop_loop()) || two_boards() || showPromoted) && is_promoted(s))
+                  ss << "~";
           }
       }
+
+      if (emptyCnt)
+          ss << emptyCnt;
 
       if (r > RANK_1)
           ss << '/';
@@ -2452,7 +2462,7 @@ bool Position::legal(Move m) const {
   if (in_opening_self_removal_phase())
       return is_opening_self_removal_move(m);
 
-  if (is_pass(m) && !(pass(us) || wall_or_move()))
+  if (is_pass(m) && !pass(us))
       return false;
 
   if (insertMove)
@@ -3315,7 +3325,7 @@ bool Position::pseudo_legal(const Move m) const {
   if (in_opening_self_removal_phase())
       return is_opening_self_removal_move(m);
 
-  if (is_pass(m) && !(pass(us) || wall_or_move()))
+  if (is_pass(m) && !pass(us))
       return false;
 
   if (pass_until_setup() && must_drop()
