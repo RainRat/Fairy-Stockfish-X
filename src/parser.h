@@ -76,7 +76,7 @@ private:
     bool parse_piece_values(Variant* v);
     bool parse_legacy_attributes(Variant* v);
     bool parse_official_options(Variant* v);
-    void check_consistency(Variant* v);
+    bool check_consistency(Variant* v);
 
     template <typename T> bool require_attribute(bool enabled, const std::string& key, T& target);
     template <typename T, typename U> bool require_attributes(bool enabled,
