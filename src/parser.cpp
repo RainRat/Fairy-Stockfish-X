@@ -1792,9 +1792,50 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
 }
 
 template <bool DoCheck>
-void VariantParser<DoCheck>::check_consistency(Variant* v) {
+bool VariantParser<DoCheck>::check_consistency(Variant* v) {
+    bool valid = true;
+    // Options incompatible with royal kings
+    if (v->pieceTypes & KING)
+    {
+        if (v->blastOnCapture) {
+            std::cerr << "Can not use kings with blastOnCapture." << std::endl;
+            valid = false;
+        }
+        if (v->blastPassiveTypes) {
+            std::cerr << "Can not use kings with blastPassiveTypes." << std::endl;
+            valid = false;
+        }
+        if (v->flipEnclosedPieces) {
+            std::cerr << "Can not use kings with flipEnclosedPieces." << std::endl;
+            valid = false;
+        }
+        if (v->removeConnectN) {
+            std::cerr << "Can not use kings with removeConnectN." << std::endl;
+            valid = false;
+        }
+        if (v->wallingRule==DUCK) {
+            std::cerr << "Can not use kings with wallingRule = duck." << std::endl;
+            valid = false;
+        }
+        // We can not fully check support for custom king movements at this point,
+        // since custom pieces are only initialized on loading of the variant.
+        // We will assume this is valid, but it might cause problems later if it's not.
+        if (!is_custom(v->kingType))
+        {
+            const PieceInfo* pi = pieceMap.find(v->kingType)->second;
+            if (   pi->hopper[0][MODALITY_QUIET].size()
+                || pi->hopper[0][MODALITY_CAPTURE].size()
+                || std::any_of(pi->steps[0][MODALITY_CAPTURE].begin(),
+                               pi->steps[0][MODALITY_CAPTURE].end(),
+                               [](const std::pair<const Direction, int>& d) { return d.second; })) {
+                std::cerr << piece_name(v->kingType) << " is not supported as kingType." << std::endl;
+                valid = false;
+            }
+        }
+    }
+
     if (!DoCheck)
-        return;
+        return valid;
 
     const bool wrapsTopology = v->cylindrical || v->toroidal;
     v->rebuild_piece_symbol_maps();
@@ -1896,31 +1937,6 @@ void VariantParser<DoCheck>::check_consistency(Variant* v) {
     if (v->wallingRule == DUCK && v->petrifyOnCaptureTypes)
         std::cerr << "wallingRule=duck and petrifyOnCaptureTypes are incompatible." << std::endl;
 
-    // Options incompatible with royal kings
-    if (v->pieceTypes & KING)
-    {
-        if (v->blastOnCapture)
-            std::cerr << "Can not use kings with blastOnCapture." << std::endl;
-        if (v->flipEnclosedPieces)
-            std::cerr << "Can not use kings with flipEnclosedPieces." << std::endl;
-        if (v->removeConnectN)
-            std::cerr << "Can not use kings with removeConnectN." << std::endl;
-        if (v->wallingRule==DUCK)
-            std::cerr << "Can not use kings with wallingRule = duck." << std::endl;
-        // We can not fully check support for custom king movements at this point,
-        // since custom pieces are only initialized on loading of the variant.
-        // We will assume this is valid, but it might cause problems later if it's not.
-        if (!is_custom(v->kingType))
-        {
-            const PieceInfo* pi = pieceMap.find(v->kingType)->second;
-            if (   pi->hopper[0][MODALITY_QUIET].size()
-                || pi->hopper[0][MODALITY_CAPTURE].size()
-                || std::any_of(pi->steps[0][MODALITY_CAPTURE].begin(),
-                               pi->steps[0][MODALITY_CAPTURE].end(),
-                               [](const std::pair<const Direction, int>& d) { return d.second; }))
-                std::cerr << piece_name(v->kingType) << " is not supported as kingType." << std::endl;
-        }
-    }
     // Options incompatible with royal kings OR pseudo-royal kings. Possible in theory though:
     // 1. In blast variants, moving a (pseudo-)royal blastImmuneType into another piece is legal.
     // 2. In blast variants, capturing a piece next to a (pseudo-)royal blastImmuneType is legal.
@@ -1943,6 +1959,7 @@ void VariantParser<DoCheck>::check_consistency(Variant* v) {
         if ((v->antiRoyalTypes & v->flagPiece[WHITE]) || (v->antiRoyalTypes & v->flagPiece[BLACK]))
             std::cerr << "Flag piece can not be anti-royal when flagPieceSafe is enabled." << std::endl;
     }
+    return valid;
 }
 
 template <bool DoCheck>
@@ -1977,7 +1994,8 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
         !parse_official_options(v))
         return nullptr;
 
-    check_consistency(v);
+    if (!check_consistency(v))
+        return nullptr;
 
     return v;
 }
