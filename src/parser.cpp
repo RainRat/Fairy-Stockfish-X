@@ -1955,6 +1955,8 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
     // Contradictory options
     if (DoCheck && !v->checking && v->checkCounting)
         std::cerr << "checkCounting=true requires checking=true." << std::endl;
+    if (DoCheck && !v->checking && v->allowChecks)
+        std::cerr << "checking=false with allowChecks=true is unusual: king safety is disabled, so the no-check rule will not constrain legality." << std::endl;
     if (DoCheck && v->progressiveMultimove && !v->multimoves.empty())
         std::cerr << "progressiveMultimove ignores multimoves sequence." << std::endl;
     if (DoCheck)

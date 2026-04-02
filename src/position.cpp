@@ -1775,19 +1775,7 @@ void Position::recompute_state_hashes_and_material(StateInfo* si) const {
 
 void Position::set_state(StateInfo* si) const {
 
-  si->checkersBB = !allow_checks() && count<KING>(sideToMove)
-                 ? attackers_to_king(square<KING>(sideToMove), ~sideToMove)
-                 : Bitboard(0);
-
-  if (!allow_checks())
-  {
-      if (pseudo_royal_types())
-          si->checkersBB |= checked_pseudo_royals(sideToMove);
-      if (anti_royal_types())
-          si->checkersBB |= checked_anti_royals(sideToMove);
-      if (var->blastPassiveTypes)
-          si->checkersBB |= passive_blast_checkers(sideToMove, pieces());
-  }
+  si->checkersBB = compute_checkers_bb(sideToMove);
   si->move = MOVE_NONE;
   si->removedGatingType = NO_PIECE_TYPE;
   si->removedCastlingGatingType = NO_PIECE_TYPE;
@@ -1814,10 +1802,27 @@ void Position::set_state(StateInfo* si) const {
 
 void Position::refresh_state_derived(StateInfo* si) const {
 
-  si->checkersBB = !allow_checks() && count<KING>(sideToMove)
-                 ? attackers_to_king(square<KING>(sideToMove), ~sideToMove)
-                 : Bitboard(0);
+  si->checkersBB = compute_checkers_bb(sideToMove);
   recompute_state_hashes_and_material(si);
+}
+
+Bitboard Position::compute_checkers_bb(Color side) const {
+
+  Bitboard checkers = !allow_checks() && count<KING>(side)
+                    ? attackers_to_king(square<KING>(side), ~side)
+                    : Bitboard(0);
+
+  if (!allow_checks())
+  {
+      if (pseudo_royal_types())
+          checkers |= checked_pseudo_royals(side);
+      if (anti_royal_types())
+          checkers |= checked_anti_royals(side);
+      if (var->blastPassiveTypes)
+          checkers |= passive_blast_checkers(side, pieces());
+  }
+
+  return checkers;
 }
 
 
@@ -5566,19 +5571,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       st->layoutKey = layout_key();
   sideToMove = them;
 
-  st->checkersBB = !allow_checks() && count<KING>(sideToMove)
-                 ? attackers_to_king(square<KING>(sideToMove), ~sideToMove)
-                 : Bitboard(0);
-
-  if (!allow_checks())
-  {
-      if (pseudo_royal_types())
-          st->checkersBB |= checked_pseudo_royals(sideToMove);
-      if (anti_royal_types())
-          st->checkersBB |= checked_anti_royals(sideToMove);
-      if (var->blastPassiveTypes)
-          st->checkersBB |= passive_blast_checkers(sideToMove, pieces());
-  }
+  st->checkersBB = compute_checkers_bb(sideToMove);
 
   if (counting_rule())
   {
