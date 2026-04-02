@@ -1029,7 +1029,10 @@ namespace {
         if (!restrictToForcedJumper && pos.wall_or_move())
         {
             Bitboard usPieces = pos.pieces(Us);
-            Square wallSq = usPieces ? lsb(usPieces) : lsb(pos.board_bb());
+            Bitboard wallAnchors = pos.wall_squares();
+            Square wallSq = wallAnchors ? lsb(wallAnchors)
+                          : usPieces ? lsb(usPieces)
+                          : lsb(pos.board_bb());
             moveList = make_move_and_gating<SPECIAL>(pos, moveList, Us, wallSq, wallSq);
         }
 

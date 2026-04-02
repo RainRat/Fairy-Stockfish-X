@@ -1652,6 +1652,9 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("wallingRegion", v->wallingRegion[WHITE]);
     parse_attribute("wallingRegion", v->wallingRegion[BLACK]);
     parse_attribute("wallOrMove", v->wallOrMove);
+    parse_attribute("surroundClaimRegion", v->surroundClaimRegion);
+    parse_attribute("surroundClaimPiece", v->surroundClaimPiece, v);
+    parse_attribute("surroundClaimExtraTurn", v->surroundClaimExtraTurn);
     parse_attribute("seirawanGating", v->seirawanGating);
     parse_attribute("commitGates", v->commitGates);
     parse_attribute("jumpCaptureTypes", v->jumpCaptureTypes, v);

@@ -134,6 +134,8 @@ struct StateInfo {
   bool       bikjang;
   Bitboard   chased;
   bool       pass;
+  Bitboard   claimedSquares;
+  bool       retainedTurn;
   Square     forcedJumpSquare;
   bool       forcedJumpHasFollowup;
   int        forcedJumpStep;

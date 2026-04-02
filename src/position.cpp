@@ -1780,6 +1780,8 @@ void Position::set_state(StateInfo* si) const {
   si->colorChangeSquare = SQ_NONE;
   si->colorChangedPromoted = false;
   si->colorChangedUnpromoted = NO_PIECE;
+  si->claimedSquares = 0;
+  si->retainedTurn = false;
   si->forcedJumpSquare = SQ_NONE;
   si->forcedJumpHasFollowup = false;
   si->forcedJumpStep = 0;
@@ -2512,6 +2514,8 @@ bool Position::legal(Move m) const {
   }
 
   ScopedSpellContext spellScope(freezeExtra, jumpRemoved);
+  bool pureWallMove = is_gating(m) && gatingPotion == Variant::POTION_TYPE_NB
+                   && walling(us) && wall_or_move() && from == to;
 
   if (!dropMove && (freeze_squares() & from))
       return false;
@@ -2531,7 +2535,7 @@ bool Position::legal(Move m) const {
   if (jumpRemoved && (square_bb(to) & jumpRemoved))
       return false;
 
-  if (from == to && !(is_pass(m) || is_self_destruct(m) || (type_of(m) == PROMOTION && sittuyin_promotion())))
+  if (from == to && !(is_pass(m) || is_self_destruct(m) || (type_of(m) == PROMOTION && sittuyin_promotion()) || pureWallMove))
       return false;
 
   if (is_self_destruct(m))
@@ -3299,6 +3303,11 @@ bool Position::pseudo_legal(const Move m) const {
   bool rifleShot = rifle_capture(m) && capture(m) && type_of(m) != CASTLING;
   Square effectiveTo = rifleShot ? from : to;
   Bitboard removedAttackers = capture(m) ? square_bb(capture_square(m)) : Bitboard(0);
+  Variant::PotionType pseudoPotion = Variant::POTION_TYPE_NB;
+  if (is_gating(m))
+      pseudoPotion = potion_type_from_piece(var, gating_type(m));
+  bool pureWallMove = is_gating(m) && pseudoPotion == Variant::POTION_TYPE_NB
+                   && walling(us) && wall_or_move() && from == to;
 
   if (in_opening_self_removal_phase())
       return is_opening_self_removal_move(m);
@@ -3312,7 +3321,7 @@ bool Position::pseudo_legal(const Move m) const {
       && !is_pass(m))
       return false;
 
-  if (from == to && !(is_pass(m) || is_self_destruct(m) || (type_of(m) == PROMOTION && sittuyin_promotion())))
+  if (from == to && !(is_pass(m) || is_self_destruct(m) || (type_of(m) == PROMOTION && sittuyin_promotion()) || pureWallMove))
       return false;
 
   if (is_self_destruct(m))
@@ -3986,11 +3995,6 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           }
       }
   };
-  if (to == from)
-  {
-      assert((type_of(m) == PROMOTION && sittuyin_promotion()) || is_pass(m) || openingSelfRemoval);
-      captured = NO_PIECE;
-  }
   Square capturedSq = captured ? capture_square(m) : SQ_NONE;
   st->capturedpromoted = captured ? is_promoted(capturedSq) : false;
   st->unpromotedCapturedPiece = captured ? unpromoted_piece_on(capturedSq) : NO_PIECE;
@@ -4004,6 +4008,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   st->pushEjected = pushMove && pushInfo.ejects;
   st->pushBlockedCapture = pushMove && pushInfo.captures && !pushInfo.ejects;
   st->pass = is_pass(m) && !openingSelfRemoval;
+  st->claimedSquares = 0;
+  st->retainedTurn = false;
   st->suppressedCaptureTransfer = false;
 
   if (stepwisePush)
@@ -4020,10 +4026,18 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       else if (gatingPotion == Variant::POTION_JUMP)
           jumpRemoved = square_bb(gating_square(m));
   }
+  bool pureWallMove = is_gating(m) && gatingPotion == Variant::POTION_TYPE_NB
+                   && walling(us) && wall_or_move() && from == to;
+
+  if (to == from)
+  {
+      assert((type_of(m) == PROMOTION && sittuyin_promotion()) || is_pass(m) || openingSelfRemoval || pureWallMove);
+      captured = NO_PIECE;
+  }
 
   ScopedSpellContext spellScope(freezeExtra, jumpRemoved);
 
-  assert(color_of(pc) == us);
+  assert(pureWallMove || color_of(pc) == us);
   assert(captured == NO_PIECE
          || (type_of(m) == CASTLING ? color_of(captured) == us
                                     : (color_of(captured) == them
@@ -4374,15 +4388,17 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   }
   else
   {
-      k ^= Zobrist::psq[pc][from] ^ Zobrist::psq[pc][to];
+      if (!pureWallMove)
+          k ^= Zobrist::psq[pc][from] ^ Zobrist::psq[pc][to];
 
       // Reset rule 50 draw counter for irreversible moves
       // - irreversible pawn/piece promotions
       // - irreversible pawn moves
-      if (    type_of(m) == PROMOTION
+      if (   !pureWallMove
+          && (   type_of(m) == PROMOTION
           || (type_of(m) == PIECE_PROMOTION && !piece_demotion())
           || (    (var->nMoveRuleTypes[us] & type_of(pc))
-              && !(PseudoMoves[0][us][type_of(pc)][to] & from)))
+              && !(PseudoMoves[0][us][type_of(pc)][to] & from))))
           st->rule50 = 0;
       if (is_self_destruct(m))
           st->rule50 = 0;
@@ -4393,7 +4409,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       k ^= Zobrist::enpassant[pop_lsb(st->epSquares)];
 
   // Update castling rights if needed
-  if (!dropMove && !is_pass(m) && st->castlingRights && (castlingRightsMask[from] | castlingRightsMask[to] | pushRightsMask))
+  if (!dropMove && !is_pass(m) && !pureWallMove && st->castlingRights && (castlingRightsMask[from] | castlingRightsMask[to] | pushRightsMask))
   {
       k ^= Zobrist::castling[st->castlingRights];
       st->castlingRights &= ~(castlingRightsMask[from] | castlingRightsMask[to] | pushRightsMask);
@@ -4558,7 +4574,12 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   {
       if (Eval::useNNUE)
       {
-          if (rifleShot)
+          if (pureWallMove)
+          {
+              dp.dirty_num = 0;
+              dp.piece[0] = NO_PIECE;
+          }
+          else if (rifleShot)
               dp.dirty_num = std::min(dp.dirty_num, 1);
           else
           {
@@ -4585,6 +4606,10 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
               st->pawnKey ^= Zobrist::psq[pc][from];
           else
               st->nonPawnMaterial[us] -= PieceValue[MG][pc];
+      }
+      else if (pureWallMove)
+      {
+          // Wall-only move: no mover piece is touched.
       }
       else if (!rifleShot)
           move_piece(from, to);
@@ -5284,6 +5309,43 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       k ^= Zobrist::wall[gating_square(m)];
   }
 
+  if (var->surroundClaimPiece != NO_PIECE_TYPE && var->surroundClaimRegion)
+  {
+      Bitboard occupied = pieces();
+      Bitboard claimable = var->surroundClaimRegion & ~occupied;
+      while (claimable)
+      {
+          Square sq = pop_lsb(claimable);
+          if (file_of(sq) == FILE_A || file_of(sq) == max_file()
+              || rank_of(sq) == RANK_1 || rank_of(sq) == max_rank())
+              continue;
+
+          Square north = sq + NORTH;
+          Square south = sq + SOUTH;
+          Square east = sq + EAST;
+          Square west = sq + WEST;
+
+          if (!(occupied & north) || !(occupied & south) || !(occupied & east) || !(occupied & west))
+              continue;
+
+          Piece claimed = make_piece(us, var->surroundClaimPiece);
+          put_piece(claimed, sq);
+          st->claimedSquares |= sq;
+          occupied |= sq;
+          k ^= Zobrist::psq[claimed][sq];
+          st->materialKey ^= Zobrist::psq[claimed][pieceCount[claimed] - 1];
+          if (type_of(claimed) == PAWN)
+              st->pawnKey ^= Zobrist::psq[claimed][sq];
+          else
+              st->nonPawnMaterial[us] += PieceValue[MG][claimed];
+
+          if (Eval::useNNUE)
+              append_dirty(st, claimed, SQ_NONE, sq);
+      }
+
+      st->retainedTurn = var->surroundClaimExtraTurn && bool(st->claimedSquares);
+  }
+
   // Shared helper for "piece removed from its destination square" effects that
   // are not normal captures (e.g. capturer-dies or death-on-capture).
   auto remove_destination_piece_no_capture_effects = [&](Square sq, bool makeDeadSquare) {
@@ -5449,30 +5511,29 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       }
   }
 
+  if (st->retainedTurn)
+      k ^= Zobrist::side;
+
   // Update the key with the final value
   st->key = k;
   st->boardKey = st->key ^ reserve_key();
   if (var->samePlayerBoardRepetitionIllegal)
       st->layoutKey = layout_key();
-  if (var->changingColorTrigger != ColorChangeTrigger::NEVER && !allow_checks() && count<KING>(them))
-      givesCheck = bool(attackers_to_king(square<KING>(them), us) & pieces(us));
-  // Calculate checkers bitboard (if move gives check)
-  st->checkersBB = !allow_checks() && givesCheck
-                 ? attackers_to_king(square<KING>(them), us) & pieces(us)
+  sideToMove = st->retainedTurn ? us : them;
+
+  st->checkersBB = !allow_checks() && count<KING>(sideToMove)
+                 ? attackers_to_king(square<KING>(sideToMove), ~sideToMove)
                  : Bitboard(0);
 
   if (!allow_checks())
   {
       if (pseudo_royal_types())
-          st->checkersBB |= checked_pseudo_royals(them);
+          st->checkersBB |= checked_pseudo_royals(sideToMove);
       if (anti_royal_types())
-          st->checkersBB |= checked_anti_royals(them);
+          st->checkersBB |= checked_anti_royals(sideToMove);
       if (var->blastPassiveTypes)
-          st->checkersBB |= passive_blast_checkers(them, pieces());
+          st->checkersBB |= passive_blast_checkers(sideToMove, pieces());
   }
-  assert(allow_checks() || givesCheck == bool(st->checkersBB) || (givesCheck && var->prisonPawnPromotion) || pseudo_royal_types() || anti_royal_types() || var->blastPassiveTypes);
-
-  sideToMove = ~sideToMove;
 
   if (counting_rule())
   {
@@ -5547,7 +5608,8 @@ void Position::undo_move(Move m) {
 
   assert(is_ok(m));
 
-  sideToMove = ~sideToMove;
+  if (!st->retainedTurn)
+      sideToMove = ~sideToMove;
 
   Color us = sideToMove;
   Square from = from_sq(m);
@@ -5651,6 +5713,20 @@ void Position::undo_move(Move m) {
           board[gating_square(m)] = NO_PIECE;
           add_to_hand(gating_piece);
           st->gatesBB[us] |= gating_square(m);
+      }
+  }
+
+  if (st->claimedSquares)
+  {
+      Bitboard claimed = st->claimedSquares;
+      while (claimed)
+      {
+          Square sq = pop_lsb(claimed);
+          if (piece_on(sq) != NO_PIECE)
+          {
+              remove_piece(sq);
+              board[sq] = NO_PIECE;
+          }
       }
   }
 

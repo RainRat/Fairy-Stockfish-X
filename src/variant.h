@@ -227,6 +227,9 @@ struct Variant {
   bool wallingSide[COLOR_NB] = {true, true};
   Bitboard wallingRegion[COLOR_NB] = {AllSquares, AllSquares};
   bool wallOrMove = false;
+  Bitboard surroundClaimRegion = 0;
+  PieceType surroundClaimPiece = NO_PIECE_TYPE;
+  bool surroundClaimExtraTurn = false;
   bool seirawanGating = false;
   bool commitGates = false;
   PieceSet jumpCaptureTypes = NO_PIECE_SET;
