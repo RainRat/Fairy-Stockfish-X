@@ -25,4 +25,16 @@ go perft 1")
 echo "$out" | grep -Fq "Fen: ***1*/b2/***1*/5/*1*1* b - - 4 2"
 echo "$out" | grep -q "Nodes searched: 8"
 
+python3 - <<'PY'
+import pyffish as sf
+from pathlib import Path
+
+sf.load_variant_config(Path("/home/chris/Fairy-Stockfish-X/src/variants-incomplete.ini").read_text())
+
+assert sf.game_result("dots-boxes-2x2", "****/*BB*/*****/*BB*/**** w - - 12 7", []) > 0
+assert sf.game_result("dots-boxes-2x2", "****/*BB*/*****/*Bb*/**** w - - 12 7", []) > 0
+assert sf.game_result("dots-boxes-2x2", "****/*BB*/*****/*bb*/**** w - - 12 7", []) == sf.VALUE_DRAW
+assert sf.game_result("dots-boxes-2x2", "****/*Bb*/*****/*bb*/**** w - - 12 7", []) < 0
+PY
+
 echo "dots and boxes prototype passed"

@@ -3640,9 +3640,22 @@ inline Value Position::material_counting_result() const {
       result = materialCount > 0 ? VALUE_COUNT_WIN : -VALUE_COUNT_WIN;
       break;
   case UNWEIGHTED_MATERIAL:
-      result =  count(WHITE, ALL_PIECES) > count(BLACK, ALL_PIECES) ?  VALUE_COUNT_WIN
-              : count(WHITE, ALL_PIECES) < count(BLACK, ALL_PIECES) ? -VALUE_COUNT_WIN
-                                                                    :  VALUE_DRAW;
+      if (var->materialCountingPieceTypes == NO_PIECE_SET || (var->materialCountingPieceTypes & ALL_PIECES))
+          result =  count(WHITE, ALL_PIECES) > count(BLACK, ALL_PIECES) ?  VALUE_COUNT_WIN
+                  : count(WHITE, ALL_PIECES) < count(BLACK, ALL_PIECES) ? -VALUE_COUNT_WIN
+                                                                        :  VALUE_DRAW;
+      else
+      {
+          int subsetCount = 0;
+          for (PieceSet ps = var->materialCountingPieceTypes; ps; )
+          {
+              PieceType pt = pop_lsb(ps);
+              subsetCount += count(WHITE, pt) - count(BLACK, pt);
+          }
+          result = subsetCount > 0 ? VALUE_COUNT_WIN
+                 : subsetCount < 0 ? -VALUE_COUNT_WIN
+                                   : VALUE_DRAW;
+      }
       break;
   case WHITE_DRAW_ODDS:
       result = VALUE_COUNT_WIN;

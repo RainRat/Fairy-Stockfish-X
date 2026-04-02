@@ -335,6 +335,7 @@ struct Variant {
   int connectGroup = 0;
   Value connectValue = VALUE_MATE;
   MaterialCounting materialCounting = NO_MATERIAL_COUNTING;
+  PieceSet materialCountingPieceTypes = NO_PIECE_SET;
   bool adjudicateFullBoard = false;
   CountingRule countingRule = NO_COUNTING;
   CastlingRights castlingWins = NO_CASTLING;

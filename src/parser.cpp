@@ -1833,6 +1833,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("connectGroup", v->connectGroup);
     parse_attribute("connectValue", v->connectValue);
     parse_attribute("materialCounting", v->materialCounting);
+    parse_attribute("materialCountingPieceTypes", v->materialCountingPieceTypes, v);
     parse_attribute("adjudicateFullBoard", v->adjudicateFullBoard);
     parse_attribute("countingRule", v->countingRule);
     parse_attribute("castlingWins", v->castlingWins);
