@@ -740,7 +740,7 @@ namespace {
                                   bool doCheck,
                                   const std::string& key) {
         std::stringstream ss(value);
-        std::array<PieceSet, FILE_NB> parsed = {};
+        std::array<PieceSet, FILE_NB> parsed = target;
         bool sawToken = false;
 
         while (true) {

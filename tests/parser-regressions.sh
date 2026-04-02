@@ -62,6 +62,11 @@ customPiece1 = a:mzQ
 [cylindrical-collinear:chess]
 cylindrical = true
 collinearN = 3
+
+[promotion-by-file-inherit:chess]
+promotionPieceTypesByFile = a:q b:r
+promotionPieceTypesByFileWhite = a:n
+startFen = 8/1P6/8/8/8/8/8/4k2K w - - 0 1
 INI
 
 echo "parser regression tests started"
@@ -122,6 +127,31 @@ CMDS
 
 if echo "${tuple_output}" | grep -q "No piece char found for custom piece"; then
   echo "${tuple_output}"
+  exit 1
+fi
+
+promotion_file_output=$(cat <<CMDS | "${ENGINE}" 2>&1
+uci
+setoption name VariantPath value ${tmp_ini}
+setoption name UCI_Variant value promotion-by-file-inherit
+position startpos
+go perft 1
+quit
+CMDS
+)
+
+if ! echo "${promotion_file_output}" | grep -q "b7b8r:"; then
+  echo "${promotion_file_output}"
+  exit 1
+fi
+
+if echo "${promotion_file_output}" | grep -q "b7b8q:"; then
+  echo "${promotion_file_output}"
+  exit 1
+fi
+
+if echo "${promotion_file_output}" | grep -q "b7b8n:"; then
+  echo "${promotion_file_output}"
   exit 1
 fi
 
