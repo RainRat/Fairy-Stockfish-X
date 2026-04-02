@@ -537,9 +537,9 @@ string UCI::move(const Position& pos, Move m) {
       return CurrentProtocol == USI ? "resign" : "(none)";
 
   if (is_pass(m) && CurrentProtocol == XBOARD)
-      return pos.walling(pos.side_to_move()) ? "@@@@," + UCI::square(pos, gating_square(m)) : "@@@@";
+      return "@@@@";
   if (is_pass(m))
-      return pos.walling(pos.side_to_move()) ? "0000," + UCI::square(pos, gating_square(m)) : "0000";
+      return "0000";
   if (is_self_destruct(m))
       return UCI::square(pos, from) + UCI::square(pos, to) + "x";
 

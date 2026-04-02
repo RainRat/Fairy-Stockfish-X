@@ -1781,7 +1781,7 @@ void Position::set_state(StateInfo* si) const {
   si->colorChangedPromoted = false;
   si->colorChangedUnpromoted = NO_PIECE;
   si->claimedSquares = 0;
-  si->retainedTurn = false;
+  si->pendingClaimPass = false;
   si->forcedJumpSquare = SQ_NONE;
   si->forcedJumpHasFollowup = false;
   si->forcedJumpStep = 0;
@@ -2538,6 +2538,9 @@ bool Position::legal(Move m) const {
   if (from == to && !(is_pass(m) || is_self_destruct(m) || (type_of(m) == PROMOTION && sittuyin_promotion()) || pureWallMove))
       return false;
 
+  if (st->pendingClaimPass)
+      return is_pass(m);
+
   if (is_self_destruct(m))
   {
       Piece mover = moved_piece(m);
@@ -2598,7 +2601,7 @@ bool Position::legal(Move m) const {
           return false;
   }
 
-  assert(color_of(moved_piece(m)) == us);
+  assert(is_pass(m) || color_of(moved_piece(m)) == us);
   assert(!count<KING>(us) || piece_on(square<KING>(us)) == make_piece(us, KING));
   assert(board_bb() & to);
 
@@ -3324,6 +3327,9 @@ bool Position::pseudo_legal(const Move m) const {
   if (from == to && !(is_pass(m) || is_self_destruct(m) || (type_of(m) == PROMOTION && sittuyin_promotion()) || pureWallMove))
       return false;
 
+  if (st->pendingClaimPass)
+      return is_pass(m);
+
   if (is_self_destruct(m))
   {
       if (dropMove || pc == NO_PIECE || color_of(pc) != us)
@@ -3911,11 +3917,12 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   st->pushTransferCount = 0;
   // Mandatory multimove pass plies should not advance the halfmove clock.
   const bool currentMultimovePass = is_pass(m) && multimove_pass(gamePly);
+  const bool currentClaimPass = is_pass(m) && st->pendingClaimPass;
 
   // Increment ply counters. In particular, rule50 will be reset to zero later on
   // in case of a capture or a pawn move.
   ++gamePly;
-  if (!currentMultimovePass)
+  if (!currentMultimovePass && !currentClaimPass)
       ++st->rule50;
   ++st->pliesFromNull;
   if (st->countingLimit)
@@ -4009,7 +4016,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   st->pushBlockedCapture = pushMove && pushInfo.captures && !pushInfo.ejects;
   st->pass = is_pass(m) && !openingSelfRemoval;
   st->claimedSquares = 0;
-  st->retainedTurn = false;
+  st->pendingClaimPass = false;
   st->suppressedCaptureTransfer = false;
 
   if (stepwisePush)
@@ -5343,7 +5350,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
               append_dirty(st, claimed, SQ_NONE, sq);
       }
 
-      st->retainedTurn = var->surroundClaimExtraTurn && bool(st->claimedSquares);
+      st->pendingClaimPass = var->surroundClaimExtraTurn && bool(st->claimedSquares);
   }
 
   // Shared helper for "piece removed from its destination square" effects that
@@ -5511,15 +5518,12 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       }
   }
 
-  if (st->retainedTurn)
-      k ^= Zobrist::side;
-
   // Update the key with the final value
   st->key = k;
   st->boardKey = st->key ^ reserve_key();
   if (var->samePlayerBoardRepetitionIllegal)
       st->layoutKey = layout_key();
-  sideToMove = st->retainedTurn ? us : them;
+  sideToMove = them;
 
   st->checkersBB = !allow_checks() && count<KING>(sideToMove)
                  ? attackers_to_king(square<KING>(sideToMove), ~sideToMove)
@@ -5608,8 +5612,7 @@ void Position::undo_move(Move m) {
 
   assert(is_ok(m));
 
-  if (!st->retainedTurn)
-      sideToMove = ~sideToMove;
+  sideToMove = ~sideToMove;
 
   Color us = sideToMove;
   Square from = from_sq(m);

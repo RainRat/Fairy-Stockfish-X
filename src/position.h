@@ -135,7 +135,7 @@ struct StateInfo {
   Bitboard   chased;
   bool       pass;
   Bitboard   claimedSquares;
-  bool       retainedTurn;
+  bool       pendingClaimPass;
   Square     forcedJumpSquare;
   bool       forcedJumpHasFollowup;
   int        forcedJumpStep;
@@ -1881,6 +1881,8 @@ inline Bitboard Position::diagonal_lines() const {
 
 inline bool Position::pass(Color c) const {
   assert(var != nullptr);
+  if (st->pendingClaimPass && c == sideToMove)
+      return true;
   if (forced_jump_continuation() && st->forcedJumpSquare != SQ_NONE && st->forcedJumpHasFollowup)
   {
       Piece fp = piece_on(st->forcedJumpSquare);
