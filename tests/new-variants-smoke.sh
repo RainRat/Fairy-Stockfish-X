@@ -114,6 +114,27 @@ go perft 1")
 echo "${out}" | grep -q "^f1f6: 1$"
 fi
 
+# 5ba) Former built-ins moved to variants.ini still load and preserve core behavior.
+for v in raazuvaa paradigm joust fox-and-hounds; do
+  variant_available "${v}"
+done
+out=$(run_cmds "setoption name UCI_Variant value raazuvaa
+position startpos
+d")
+echo "${out}" | grep -q "Fen: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w - - 0 1"
+out=$(run_cmds "setoption name UCI_Variant value paradigm
+position fen 4k3/1P6/8/8/8/8/8/4K3 w - - 0 1
+go perft 1")
+echo "${out}" | grep -q "^b7b8b: 1$"
+out=$(run_cmds "setoption name UCI_Variant value joust
+position startpos
+go perft 1")
+echo "${out}" | grep -q "^d4b5,d4: 1$"
+out=$(run_cmds "setoption name UCI_Variant value fox-and-hounds
+position startpos
+go perft 1")
+echo "${out}" | grep -q "^e1d2: 1$"
+
 # 5c) Bombardment: front-rank missiles move forward quietly and can self-destruct.
 if variant_available "bombardment"; then
 out=$(run_cmds "setoption name UCI_Variant value bombardment

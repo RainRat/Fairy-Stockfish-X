@@ -282,15 +282,6 @@ namespace {
         v->nnueAlias = "nn-";
         return v;
     }
-    // Balanced alternation 2
-    Variant* balanced_alternation2_variant() {
-        Variant* v = chess_variant()->init();
-        v->multimoves = {2, 2, 1, 1};
-        v->multimoveCheck = false;
-        v->multimoveCapture = true;
-        v->nnueAlias = "nn-";
-        return v;
-    }
     // Pseudo-variant only used for endgame initialization
     Variant* fairy_variant() {
         Variant* v = chess_variant_base()->init();
@@ -299,14 +290,6 @@ namespace {
         v->add_piece(ARCHBISHOP, 'a');
         v->add_piece(CHANCELLOR, 'c');
         v->add_piece(COMMONER, 'm');
-        return v;
-    }
-      // Raazuva (Maldivian Chess)
-    Variant* raazuvaa_variant() {
-        Variant* v = chess_variant_base()->init();
-        v->startFen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w - - 0 1";
-        v->castling = false;
-        v->doubleStep = false;
         return v;
     }
     // Makruk (Thai Chess)
@@ -732,29 +715,6 @@ namespace {
         return v;
     }
 
-    Variant* joust_variant() { //https://www.chessvariants.com/programs.dir/joust.html
-        //This page mainly describes a variant where position on home row is randomized, but also a variant where they start in the centre(implemented here)
-        Variant* v = chess_variant_base()->init();
-        v->reset_pieces();
-        v->add_piece(CUSTOM_PIECE_1, 'n', "mN"); //move as a Knight, but can't capture
-        v->startFen = "8/8/8/4n3/3N4/8/8/8 w - - 0 1";
-        v->stalemateValue = -VALUE_MATE;
-        v->wallingRule = PAST;
-        return v;
-    }
-
-    Variant* fox_and_hounds_variant() { //https://boardgamegeek.com/boardgame/148180/fox-and-hounds
-        Variant* v = chess_variant_base()->init();
-        v->reset_pieces();
-        v->add_piece(CUSTOM_PIECE_1, 'h', "mfF"); //Hound
-        v->add_piece(CUSTOM_PIECE_2, 'f', "mF"); //Fox
-        v->startFen = "1h1h1h1h/8/8/8/8/8/8/4F3 w - - 0 1";
-        v->stalemateValue = -VALUE_MATE;
-        v->flagPiece[WHITE] = CUSTOM_PIECE_2;
-        v->flagRegion[WHITE] = Rank8BB;
-        return v;
-    }
-
     // Three-check chess
     // Check the king three times to win
     // https://lichess.org/variant/threeCheck
@@ -937,17 +897,6 @@ namespace {
         v->dropRegion[BLACK] = Rank8BB;
         v->promotionPieceTypes[WHITE] = piece_set(ARCHBISHOP) | QUEEN | ROOK | BISHOP | KNIGHT;
         v->promotionPieceTypes[BLACK] = piece_set(ARCHBISHOP) | QUEEN | ROOK | BISHOP | KNIGHT;
-        return v;
-    }
-    // Paradigm chess30
-    // 8x8 variant with a bishop+horse hybrid piece replacing bishops
-    // https://www.chessvariants.com/rules/paradigm-chess30
-    Variant* paradigm_variant() {
-        Variant *v = chess_variant_base()->init();
-        v->remove_piece(BISHOP);
-        v->add_piece(CUSTOM_PIECE_1, 'b', "BnN");
-        v->promotionPieceTypes[WHITE] = piece_set(QUEEN) | CUSTOM_PIECE_1 | ROOK | KNIGHT;
-        v->promotionPieceTypes[BLACK] = piece_set(QUEEN) | CUSTOM_PIECE_1 | ROOK | KNIGHT;
         return v;
     }
     // Base used for most shogi variants
@@ -2106,7 +2055,6 @@ void VariantMap::init() {
     add("pawnback", pawnback_variant());
     add("legan", legan_variant());
     add("balancedalternation", balanced_alternation_variant());
-    add("balancedalternation2", balanced_alternation2_variant());
     add("fairy", fairy_variant()); // fairy variant used for endgame code initialization
     add("makruk", makruk_variant());
     add("makpong", makpong_variant());
@@ -2146,11 +2094,9 @@ void VariantMap::init() {
     add("antiandernach", antiandernach_variant());
     add("andernach", andernach_variant());
     add("superandernach", superandernach_variant());
-    add("fox-and-hounds", fox_and_hounds_variant());
 #ifdef ALLVARS
     add("duck", duck_variant());
 #endif
-    add("joust", joust_variant());
     add("3check", threecheck_variant());
     add("5check", fivecheck_variant());
     add("crazyhouse", crazyhouse_variant());
@@ -2165,7 +2111,6 @@ void VariantMap::init() {
     add("seirawan", seirawan_variant());
     add("shouse", shouse_variant());
     add("dragon", dragon_variant());
-    add("paradigm", paradigm_variant());
     add("minishogi", minishogi_variant());
     add("mini", minishogi_variant());
     add("kyotoshogi", kyotoshogi_variant());
@@ -2190,7 +2135,6 @@ void VariantMap::init() {
     add("flipersi", flipersi_variant());
     add("flipello", flipello_variant());
     add("minixiangqi", minixiangqi_variant());
-    add("raazuvaa", raazuvaa_variant());
 #ifdef LARGEBOARDS
     add("musketeer", musketeer_variant());
     add("shogi", shogi_variant());
