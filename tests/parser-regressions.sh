@@ -63,6 +63,15 @@ customPiece1 = a:mzQ
 cylindrical = true
 collinearN = 3
 
+[adjacent-castling-warning:chess]
+maxRank = 6
+maxFile = f
+castling = true
+castlingKingFile = d
+castlingKingsideFile = e
+castlingQueensideFile = b
+startFen = rbnkbr/pppppp/6/6/PPPPPP/RBNKBR w KQkq - 0 1
+
 [promotion-by-file-inherit:chess]
 promotionPieceTypesByFile = a:q b:r
 promotionPieceTypesByFileWhite = a:n
@@ -100,6 +109,7 @@ verify_warning "pieceDrops and any walling are incompatible." "freeDrops check"
 verify_warning "falcon looks like a custom piece definition. Use customPieceN = a:W for new custom pieces." "named custom piece hint"
 verify_warning "Wrapped boards do not support connect/collinear win conditions." "wrapped connect rejection"
 verify_warning "Toroidal boards do not support x/z rider modifiers in customPiece1." "toroidal x/z rejection"
+verify_warning "Castling destination is adjacent to castlingKingFile; some GUIs/protocols may not distinguish castling from a normal king move." "adjacent castling warning"
 
 nonking_ini=$(mktemp)
 trap 'rm -f "${tmp_ini}" "${nonking_ini}"' EXIT

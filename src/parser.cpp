@@ -1938,6 +1938,14 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
         std::cerr << "Inconsistent settings: castlingRank > maxRank." << std::endl;
     if (DoCheck && v->castling && v->castlingQueensideFile > v->castlingKingsideFile)
         std::cerr << "Inconsistent settings: castlingQueensideFile > castlingKingsideFile." << std::endl;
+    if (DoCheck && v->castling)
+    {
+        int kingFile = int(v->castlingKingFile);
+        int kingSide = int(v->castlingKingsideFile);
+        int queenSide = int(v->castlingQueensideFile);
+        if (std::abs(kingSide - kingFile) <= 1 || std::abs(queenSide - kingFile) <= 1)
+            std::cerr << "Castling destination is adjacent to castlingKingFile; some GUIs/protocols may not distinguish castling from a normal king move." << std::endl;
+    }
     if (DoCheck && v->connect3D && v->connect4D)
         std::cerr << "connect3D and connect4D are mutually exclusive." << std::endl;
     if (DoCheck && v->connect3D
