@@ -1573,6 +1573,16 @@ void Position::set_check_info(StateInfo* si) const {
       si->chased = Bitboard(0);
       si->legalCapture = NO_VALUE;
       si->legalEnPassant = NO_VALUE;
+      si->extinctionSeen[WHITE] = NO_PIECE_SET;
+      si->extinctionSeen[BLACK] = NO_PIECE_SET;
+      for (PieceSet ps = extinction_must_appear(); ps;)
+      {
+          PieceType pt = pop_lsb(ps);
+          if (count(WHITE, pt))
+              si->extinctionSeen[WHITE] |= piece_set(pt);
+          if (count(BLACK, pt))
+              si->extinctionSeen[BLACK] |= piece_set(pt);
+      }
       if (pseudo_royal_types())
       {
           si->pseudoRoyalCandidates = 0;
@@ -1648,6 +1658,16 @@ void Position::set_check_info(StateInfo* si) const {
   si->chased = var->chasingRule ? chased() : Bitboard(0);
   si->legalCapture = NO_VALUE;
   si->legalEnPassant = NO_VALUE;
+  si->extinctionSeen[WHITE] = NO_PIECE_SET;
+  si->extinctionSeen[BLACK] = NO_PIECE_SET;
+  for (PieceSet ps = extinction_must_appear(); ps;)
+  {
+      PieceType pt = pop_lsb(ps);
+      if (count(WHITE, pt))
+          si->extinctionSeen[WHITE] |= piece_set(pt);
+      if (count(BLACK, pt))
+          si->extinctionSeen[BLACK] |= piece_set(pt);
+  }
   if (pseudo_royal_types())
   {
       si->pseudoRoyalCandidates = 0;
@@ -3893,6 +3913,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   std::memcpy(static_cast<void*>(&newSt), static_cast<void*>(st), offsetof(StateInfo, key));
   newSt.previous = st;
   st = &newSt;
+  st->extinctionSeen[WHITE] = newSt.previous->extinctionSeen[WHITE];
+  st->extinctionSeen[BLACK] = newSt.previous->extinctionSeen[BLACK];
   st->move = m;
   st->legalCapture = NO_VALUE;
   st->legalEnPassant = NO_VALUE;
@@ -4931,10 +4953,13 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
               append_dirty(st, gating_piece, SQ_NONE, gate, gating_piece, pieceCountInHand[us][gating_type(m)]);
 
           put_piece(gating_piece, gate);
-          int oldCount = pieceCountInHand[us][gating_type(m)];
-          remove_from_hand(gating_piece);
-          int newCount = pieceCountInHand[us][gating_type(m)];
-          xor_in_hand_count(k, gating_piece, oldCount, newCount);
+          if (gating_from_hand())
+          {
+              int oldCount = pieceCountInHand[us][gating_type(m)];
+              remove_from_hand(gating_piece);
+              int newCount = pieceCountInHand[us][gating_type(m)];
+              xor_in_hand_count(k, gating_piece, oldCount, newCount);
+          }
 
           st->gatesBB[us] ^= gate;
           k ^= Zobrist::psq[gating_piece][gate];
@@ -4948,10 +4973,13 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
                   append_dirty(st, gating_piece, SQ_NONE, gate2, gating_piece, pieceCountInHand[us][gating_type(m)]);
 
               put_piece(gating_piece, gate2);
-              int oldCount2 = pieceCountInHand[us][gating_type(m)];
-              remove_from_hand(gating_piece);
-              int newCount2 = pieceCountInHand[us][gating_type(m)];
-              xor_in_hand_count(k, gating_piece, oldCount2, newCount2);
+              if (gating_from_hand())
+              {
+                  int oldCount2 = pieceCountInHand[us][gating_type(m)];
+                  remove_from_hand(gating_piece);
+                  int newCount2 = pieceCountInHand[us][gating_type(m)];
+                  xor_in_hand_count(k, gating_piece, oldCount2, newCount2);
+              }
 
               k ^= Zobrist::psq[gating_piece][gate2];
               st->materialKey ^= Zobrist::psq[gating_piece][pieceCount[gating_piece]];
@@ -5727,7 +5755,8 @@ void Position::undo_move(Move m) {
       {
           remove_piece(gating_square(m));
           board[gating_square(m)] = NO_PIECE;
-          add_to_hand(gating_piece);
+          if (gating_from_hand())
+              add_to_hand(gating_piece);
           st->gatesBB[us] |= gating_square(m);
       }
   }
@@ -6572,16 +6601,20 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
 
           bool allTypesExtinct = true;
           bool anyTypeExtinct = false;
+          bool sawEligibleType = false;
           for (PieceSet ps = extinctTargets; ps;)
           {
               PieceType pt = pop_lsb(ps);
+              if ((extinction_must_appear() & piece_set(pt)) && !(st->extinctionSeen[c] & piece_set(pt)))
+                  continue;
+              sawEligibleType = true;
               bool extinct = count_with_hand(c, pt) <= extinction_piece_count(c)
                           && count_with_hand(~c, pt) >= extinction_opponent_piece_count(c) + (extinction_claim() && c == sideToMove);
               anyTypeExtinct |= extinct;
               allTypesExtinct &= extinct;
           }
 
-          if ((extinction_all_piece_types(c) ? allTypesExtinct : anyTypeExtinct) && extinctTargets)
+          if (sawEligibleType && (extinction_all_piece_types(c) ? allTypesExtinct : anyTypeExtinct))
           {
               result = c == sideToMove ? extinction_value(ply) : -extinction_value(ply);
               return true;

@@ -247,6 +247,7 @@ void MainThread::search() {
   }
   else
   {
+      Threads.stop = false;
       Threads.start_searching(); // start non-main threads
       Thread::search();          // main thread start searching
   }
@@ -363,7 +364,6 @@ void MainThread::search() {
 /// consumed, the user stops the search, or the maximum search depth is reached.
 
 void Thread::search() {
-
   // To allow access to (ss-7) up to (ss+2), the stack must be oversized.
   // The former is needed to allow update_continuation_histories(ss-1, ...),
   // which accesses its argument at ss-6, also near the root.
@@ -1484,6 +1484,7 @@ moves_loop: // When in check, search starts from here
               // is not a problem when sorting because the sort is stable and the
               // move position in the list is preserved - just the PV is pushed up.
               rm.score = -VALUE_INFINITE;
+
       }
 
       if (value > bestValue)
@@ -1810,13 +1811,21 @@ moves_loop: // When in check, search starts from here
        }
     }
 
-    // All legal moves have been searched. A special case: if we're in check
-    // and no legal moves were found, it is checkmate.
-    if (ss->inCheck && bestValue == -VALUE_INFINITE)
+    // If qsearch found no tactical moves, the position may still be terminal
+    // because there are no legal moves at all. That matters in variants where
+    // stalemate or no-move outcomes are decisive even outside check.
+    if (bestMove == MOVE_NONE)
     {
-        assert(!MoveList<LEGAL>(pos).size());
+        bool hasLegalMove = false;
+        for (auto it = MoveList<LEGAL>(pos).begin(); it != MoveList<LEGAL>(pos).end(); ++it)
+        {
+            hasLegalMove = true;
+            break;
+        }
 
-        return pos.checkmate_value(ss->ply); // Plies to mate from the root
+        if (!hasLegalMove)
+            return ss->inCheck ? pos.checkmate_value(ss->ply)
+                               : pos.stalemate_value(ss->ply);
     }
 
     // Save gathered info in transposition table

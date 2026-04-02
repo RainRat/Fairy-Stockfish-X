@@ -126,6 +126,7 @@ struct StateInfo {
   Bitboard   flippedPieces;
   Bitboard   pseudoRoyalCandidates;
   Bitboard   pseudoRoyals;
+  PieceSet   extinctionSeen[COLOR_NB];
   OptBool    legalCapture;
   OptBool    legalEnPassant;
   bool       capturedpromoted;
@@ -372,6 +373,9 @@ public:
   Bitboard jump_squares(Color c) const;
   Bitboard freeze_zone_from_square(Square s) const;
   bool gating() const;
+  bool gating_from_hand() const;
+  PieceType gating_piece_after(Color c, PieceType pt) const;
+  PieceType forced_gating_type(Color c, PieceType pt) const;
   bool walling() const;
   bool walling(Color c) const;
   WallingRule walling_rule() const;
@@ -404,6 +408,7 @@ public:
   bool extinction_claim() const;
   PieceSet extinction_piece_types() const;
   PieceSet extinction_piece_types(Color c) const;
+  PieceSet extinction_must_appear() const;
   bool extinction_all_piece_types(Color c) const;
   bool extinction_single_piece() const;
   int extinction_piece_count() const;
@@ -1834,6 +1839,25 @@ inline bool Position::gating() const {
   return var->gating;
 }
 
+inline bool Position::gating_from_hand() const {
+  assert(var != nullptr);
+  return var->gatingFromHand;
+}
+
+inline PieceType Position::gating_piece_after(Color c, PieceType pt) const {
+  assert(var != nullptr);
+  return var->gatingPieceAfter[c][pt];
+}
+
+inline PieceType Position::forced_gating_type(Color c, PieceType pt) const {
+  PieceType next = gating_piece_after(c, pt);
+  if (next == NO_PIECE_TYPE)
+      return NO_PIECE_TYPE;
+  if (next == KING && count<KING>(c))
+      return NO_PIECE_TYPE;
+  return next;
+}
+
 inline bool Position::walling() const {
   assert(var != nullptr);
   return var->wallingRule != NO_WALLING && (var->wallingSide[WHITE] || var->wallingSide[BLACK]);
@@ -2108,6 +2132,11 @@ inline PieceSet Position::extinction_piece_types() const {
 inline PieceSet Position::extinction_piece_types(Color c) const {
   assert(var != nullptr);
   return var->extinctionPieceTypesByColor[c];
+}
+
+inline PieceSet Position::extinction_must_appear() const {
+  assert(var != nullptr);
+  return var->extinctionMustAppear;
 }
 
 inline bool Position::extinction_all_piece_types(Color c) const {
@@ -3524,6 +3553,8 @@ inline void Position::put_piece(Piece pc, Square s, bool isPromoted, Piece unpro
   if (isPromoted)
       promotedPieces |= s;
   unpromotedBoard[s] = unpromotedPc;
+  if (extinction_must_appear() & piece_set(type_of(pc)))
+      st->extinctionSeen[color_of(pc)] |= piece_set(type_of(pc));
 
   if (markNotMoved)
       this->st->not_moved_pieces[color_of(pc)] |= square_bb(s);

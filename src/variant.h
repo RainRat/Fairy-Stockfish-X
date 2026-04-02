@@ -223,6 +223,8 @@ struct Variant {
   bool prisonPawnPromotion = false;
   bool immobilityIllegal = false;
   bool gating = false;
+  bool gatingFromHand = true;
+  PieceType gatingPieceAfter[COLOR_NB][PIECE_TYPE_NB] = {};
   WallingRule wallingRule = NO_WALLING;
   bool wallingSide[COLOR_NB] = {true, true};
   Bitboard wallingRegion[COLOR_NB] = {AllSquares, AllSquares};
@@ -301,6 +303,7 @@ struct Variant {
   bool antiRoyalKingMutuallyImmune = false;
   bool dupleCheck = false;
   PieceSet extinctionPieceTypes = NO_PIECE_SET;
+  PieceSet extinctionMustAppear = NO_PIECE_SET;
   bool extinctionAllPieceTypes = false;
   int extinctionPieceCount = 0;
   int extinctionOpponentPieceCount = 0;
@@ -529,6 +532,10 @@ struct Variant {
   Variant* init() {
       nnueAlias = "";
       endgameEval = EG_EVAL_CHESS;
+      gatingFromHand = true;
+      extinctionMustAppear = NO_PIECE_SET;
+      for (Color c : {WHITE, BLACK})
+          std::fill(std::begin(gatingPieceAfter[c]), std::end(gatingPieceAfter[c]), NO_PIECE_TYPE);
       return this;
   }
 
