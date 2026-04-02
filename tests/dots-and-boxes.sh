@@ -18,6 +18,11 @@ out=$(run_cmds dots-boxes-2x2 \
 go perft 1")
 echo "$out" | grep -q "Nodes searched: 12"
 
+out=$(run_cmds dots-boxes-7x7 \
+  "position startpos
+go perft 1")
+echo "$out" | grep -q "Nodes searched: 24"
+
 out=$(run_cmds dots-boxes-2x2 \
   "position startpos moves a1a1,b5 a1a1,a4 a1a1,b3 a1a1,c4
 d
