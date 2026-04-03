@@ -163,6 +163,9 @@ void ThreadPool::set(size_t requested) {
 
 void ThreadPool::clear() {
 
+  if (empty())
+      return;
+
   for (Thread* th : *this)
       th->clear();
 

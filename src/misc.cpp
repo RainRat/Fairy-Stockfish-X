@@ -81,7 +81,11 @@ struct Tie: public streambuf { // MSVC requires split streambuf for cin and cout
 
   Tie(streambuf* b, streambuf* l) : buf(b), logBuf(l) {}
 
-  int sync() override { return logBuf->pubsync(), buf->pubsync(); }
+  int sync() override {
+    const int logResult = logBuf->pubsync();
+    const int bufResult = buf->pubsync();
+    return logResult == 0 && bufResult == 0 ? 0 : -1;
+  }
   int overflow(int c) override {
     if (traits_type::eq_int_type(c, traits_type::eof()))
         return traits_type::not_eof(c);
