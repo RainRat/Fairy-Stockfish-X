@@ -187,20 +187,20 @@ namespace {
 
     for (auto const& [d, limit] : directions)
     {
-      int distToHurdle = 0;
-      Square prev = sq;
-      for (Square s = sq + (c == WHITE ? d : -d);
+      Square hurdle = sq + (c == WHITE ? d : -d);
+      if (!(is_ok(hurdle) && distance(hurdle, sq) <= 2 && (occupied & hurdle)))
+          continue;
+
+      int landingDist = 0;
+      for (Square s = hurdle + (c == WHITE ? d : -d);
            is_ok(s) && distance(s, s - (c == WHITE ? d : -d)) <= 2;
            s += (c == WHITE ? d : -d))
       {
-        ++distToHurdle;
+        ++landingDist;
+        if (!limit || landingDist <= limit)
+            attack |= s;
         if (occupied & s)
-        {
-          if (prev != sq && (!limit || distToHurdle <= limit))
-            attack |= prev;
-          break;
-        }
-        prev = s;
+            break;
       }
     }
 
@@ -213,14 +213,10 @@ namespace {
     Bitboard attack = 0;
 
     for (auto const& [d, _] : directions)
-      for (Square s = sq + (c == WHITE ? d : -d);
+      for (Square s = sq + 2 * (c == WHITE ? d : -d);
            is_ok(s) && distance(s, s - (c == WHITE ? d : -d)) <= 2;
            s += (c == WHITE ? d : -d))
-      {
-        Square next = s + (c == WHITE ? d : -d);
-        if (is_ok(next) && distance(next, s) <= 2)
-            attack |= s;
-      }
+          attack |= s;
 
     return attack;
   }
