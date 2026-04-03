@@ -6,6 +6,7 @@ error() {
   echo "blast legal regression failed on line $1"
   [[ -n "${TMP1:-}" ]] && rm -f "${TMP1}"
   [[ -n "${TMP2:-}" ]] && rm -f "${TMP2}"
+  [[ -n "${TMP3:-}" ]] && rm -f "${TMP3}"
   exit 1
 }
 trap 'error ${LINENO}' ERR
@@ -55,5 +56,24 @@ go perft 1")
 
 rm -f "${TMP1}" "${TMP2}"
 unset TMP1 TMP2
+
+TMP3=$(mktemp /tmp/fsx-immobilityblast-XXXXXX.ini)
+cat >"${TMP3}" <<'INI'
+[immobilityblast:chess]
+king = -
+commoner = k
+immobilityIllegal = true
+blastOnSameTypeCapture = true
+selfCapture = true
+mandatoryPawnPromotion = false
+startFen = 1P6/P7/8/8/8/8/8/K7 w - - 0 1
+INI
+
+out=$(run_cmds "${TMP3}" "immobilityblast" "position startpos
+go perft 1")
+echo "${out}" | grep -q "^a7b8: 1$"
+
+rm -f "${TMP3}"
+unset TMP3
 
 echo "blast legal regressions passed"
