@@ -1390,6 +1390,12 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_capture_map("captureForbidden", false);
     parse_capture_map("captureAllowed", true);
     parse_attribute("petrifyOnCaptureTypes", v->petrifyOnCaptureTypes, v);
+    if (v->deathOnCaptureTypes & v->petrifyOnCaptureTypes)
+    {
+        if (DoCheck)
+            std::cerr << "deathOnCaptureTypes and petrifyOnCaptureTypes cannot overlap." << std::endl;
+        return false;
+    }
     parse_attribute("petrifyOnCaptureSuppressTransfer", v->petrifyOnCaptureSuppressTransfer);
     parse_attribute("petrifyBlastPieces", v->petrifyBlastPieces);
     parse_attribute("removeConnectN", v->removeConnectN);

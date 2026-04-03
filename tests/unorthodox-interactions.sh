@@ -122,6 +122,10 @@ customPiece1 = k:K
 extinctionValue = -VALUE_MATE
 extinctionPieceTypes = k
 blastPassiveTypes = n
+
+[death-petrify-repro:chess]
+deathOnCaptureTypes = k
+petrifyOnCaptureTypes = k
 EOF
 
 echo "unorthodox interactions tests started"
@@ -261,6 +265,17 @@ fi
 out=$(run_cmds "passive-nonroyal-repro" "${TEMP_INI}" "d")
 if ! echo "${out}" | grep -q "info string variant passive-nonroyal-repro"; then
   echo "non-royal blastPassiveTypes setup should remain loadable"
+  exit 1
+fi
+
+# 21. Test deathOnCaptureTypes + petrifyOnCaptureTypes rejects the variant
+out=$(run_cmds "death-petrify-repro" "${TEMP_INI}" "d")
+if ! echo "${out}" | grep -q "info string unknown variant 'death-petrify-repro'"; then
+  echo "deathOnCaptureTypes + petrifyOnCaptureTypes variant should have been rejected"
+  exit 1
+fi
+if echo "${out}" | grep -q "info string variant death-petrify-repro"; then
+  echo "deathOnCaptureTypes + petrifyOnCaptureTypes variant should have been rejected"
   exit 1
 fi
 
