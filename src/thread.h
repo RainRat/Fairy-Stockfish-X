@@ -108,7 +108,10 @@ struct ThreadPool : public std::vector<Thread*> {
   void clear();
   void set(size_t);
 
-  MainThread* main()        const { return static_cast<MainThread*>(front()); }
+  MainThread* main() const {
+    assert(!empty());
+    return static_cast<MainThread*>(front());
+  }
   uint64_t nodes_searched() const { return accumulate(&Thread::nodes); }
   uint64_t tb_hits()        const { return accumulate(&Thread::tbHits); }
   Thread* get_best_thread() const;
