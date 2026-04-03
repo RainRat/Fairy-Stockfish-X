@@ -3,7 +3,7 @@
 
 set -euo pipefail
 
-cd "$(dirname "$0")/../src"
+# cd "$(dirname "$0")/../src" # removed for absolute paths
 
 error() {
   echo "setup-chess testing failed on line $1"
@@ -11,7 +11,9 @@ error() {
 }
 trap 'error ${LINENO}' ERR
 
-ENGINE=${1:-./stockfish}
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
+ENGINE="${1:-${REPO_ROOT}/src/stockfish}"
 
 echo "setup-chess testing started"
 
@@ -30,7 +32,7 @@ run_uci() {
 # 1) White can drop a second queen later in setup, as long as points remain.
 output=$(run_uci <<'CMDS'
 uci
-setoption name VariantPath value variants.ini
+setoption name VariantPath value ${REPO_ROOT}/src/variants.ini
 setoption name UCI_Variant value setup-chess
 position startpos moves Q@a1 Q@a8 Q@b1
 d
@@ -43,7 +45,7 @@ echo "$output" | grep -Fq "Fen: q7/8/8/8/8/8/8/QQ6"
 # 2) Points are still enforced (after four white queen drops, another is illegal).
 output=$(run_uci <<'CMDS'
 uci
-setoption name VariantPath value variants.ini
+setoption name VariantPath value ${REPO_ROOT}/src/variants.ini
 setoption name UCI_Variant value setup-chess
 position startpos moves Q@a1 Q@a8 Q@b1 Q@b8 Q@c1 Q@c8 Q@d1 Q@d8
 go depth 1
@@ -58,7 +60,7 @@ CMDS
 # still can set up, only pass is legal.
 output=$(run_uci <<'CMDS'
 uci
-setoption name VariantPath value variants.ini
+setoption name VariantPath value ${REPO_ROOT}/src/variants.ini
 setoption name UCI_Variant value setup-chess
 position fen 8/8/8/8/8/8/8/4K3[QQQQRRRRRRRBBBBBBBBBBBBBNNNNNNNNNNNNNPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPkqqqqrrrrrrrbbbbbbbbbbbbbnnnnnnnnnnnnnppppppppppppppppppppppppppppppppppppppp] w - - 0 1 {0 39}
 go depth 1
@@ -71,7 +73,7 @@ echo "$output" | grep -Fq "bestmove 0000"
 # 4) Captures in the regular play phase must not refund setup points and unlock drops.
 output=$(run_uci <<'CMDS'
 uci
-setoption name VariantPath value variants.ini
+setoption name VariantPath value ${REPO_ROOT}/src/variants.ini
 setoption name UCI_Variant value setup-chess
 position fen 4k3/8/8/8/8/8/4p3/4K3[P] w - - 0 1 {0 0} moves e1e2 e8e7
 go depth 1

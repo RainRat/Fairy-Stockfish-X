@@ -8,17 +8,19 @@ error() {
 }
 trap 'error ${LINENO}' ERR
 
-ENGINE=${1:-}
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
+ENGINE="${1:-${REPO_ROOT}/src/stockfish}"
 if [[ -z "${ENGINE}" ]]; then
   if [[ -x "src/stockfish" ]]; then
     ENGINE="src/stockfish"
   else
-    ENGINE="./stockfish"
+    ENGINE=""$ENGINE""
   fi
 fi
-VARIANT_PATH=${2:-variants.ini}
-if [[ ! -f "${VARIANT_PATH}" && -f "src/variants.ini" ]]; then
-  VARIANT_PATH="src/variants.ini"
+VARIANT_PATH=${2:-${REPO_ROOT}/src/variants.ini}
+if [[ ! -f "${VARIANT_PATH}" && -f "src/${REPO_ROOT}/src/variants.ini" ]]; then
+  VARIANT_PATH="src/${REPO_ROOT}/src/variants.ini"
 fi
 
 run_cmds() {

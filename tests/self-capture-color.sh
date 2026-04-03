@@ -8,7 +8,9 @@ error() {
 }
 trap 'error ${LINENO}' ERR
 
-ENGINE=${1:-./stockfish}
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
+ENGINE="${1:-${REPO_ROOT}/src/stockfish}"
 
 TMP_VARIANT_PATH=$(mktemp /tmp/fsx-selfcapture-color-XXXXXX.ini)
 trap 'rm -f "${TMP_VARIANT_PATH}"' EXIT

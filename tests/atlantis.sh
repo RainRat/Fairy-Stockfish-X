@@ -8,7 +8,7 @@ error() {
 }
 trap 'error ${LINENO}' ERR
 
-ENGINE=${1:-./stockfish}
+ENGINE=${1:-"$ENGINE"}
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
 VARIANTS=${2:-${REPO_ROOT}/src/variants.ini}

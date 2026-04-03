@@ -1,7 +1,10 @@
 #!/bin/bash
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
+ENGINE="${1:-${REPO_ROOT}/src/stockfish}"
 set -euo pipefail
 
-cd "$(dirname "$0")/../src"
+# cd "$(dirname "$0")/../src" # removed for absolute paths
 
 tmp_ini=$(mktemp)
 trap 'rm -f "$tmp_ini"' EXIT
@@ -26,7 +29,7 @@ INI
 
 run_perft() {
   local variant=$1
-  printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value %s\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" "$variant" | ./stockfish
+  printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value %s\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" "$variant" | "$ENGINE"
 }
 
 out_gate=$(run_perft promhandgate)

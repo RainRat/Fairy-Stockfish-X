@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
+ENGINE="${1:-${REPO_ROOT}/src/stockfish}"
 set -euo pipefail
 
-cd "$(dirname "$0")/../src"
+# cd "$(dirname "$0")/../src" # removed for absolute paths
 
 tmp_ini="$(mktemp)"
 trap 'rm -f "$tmp_ini"' EXIT
@@ -21,7 +24,7 @@ EOF
 perft_nodes() {
   local variant="$1"
   local fen="$2"
-  ./stockfish <<EOF | awk '/Nodes searched:/{print $3}'
+  "$ENGINE" <<EOF | awk '/Nodes searched:/{print $3}'
 uci
 setoption name VariantPath value $tmp_ini
 setoption name UCI_Variant value $variant
@@ -69,7 +72,7 @@ check_searchmove() {
   local expected="$4"
   local out
   out="$(
-    ./stockfish <<EOF
+    "$ENGINE" <<EOF
 uci
 setoption name VariantPath value $tmp_ini
 setoption name UCI_Variant value $variant

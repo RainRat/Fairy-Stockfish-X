@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ENGINE="${1:-/home/chris/Fairy-Stockfish-X/src/stockfish}"
-VARIANTS="${2:-/home/chris/Fairy-Stockfish-X/src/variants.ini}"
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
+ENGINE="${1:-${REPO_ROOT}/src/stockfish}"
+VARIANTS="${2:-${REPO_ROOT}/src/variants.ini}"
 
 tmp_exp="$(mktemp)"
 trap 'rm -f "$tmp_exp"' EXIT

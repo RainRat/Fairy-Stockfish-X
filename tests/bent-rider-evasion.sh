@@ -1,7 +1,10 @@
 #!/bin/bash
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
+ENGINE="${1:-${REPO_ROOT}/src/stockfish}"
 set -euo pipefail
 
-cd "$(dirname "$0")/../src"
+# cd "$(dirname "$0")/../src" # removed for absolute paths
 
 tmp_ini=$(mktemp)
 trap 'rm -f "$tmp_ini"' EXIT
@@ -20,7 +23,7 @@ perft_out() {
   local variant="$1"
   local fen="$2"
   printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value %s\nposition fen %s\ngo perft 1\nquit\n' "$tmp_ini" "$variant" "$fen" \
-    | ./stockfish
+    | "$ENGINE"
 }
 
 # Griffon check line: f6 -> h7 (pivot g7, then outward horizontal).

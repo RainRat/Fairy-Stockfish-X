@@ -1,6 +1,9 @@
 #!/bin/bash
 # verify nMoveHardLimitRule semantics (full-move based)
 
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
+ENGINE="${1:-${REPO_ROOT}/src/stockfish}"
 set -euo pipefail
 
 tmp_ini="$(mktemp)"
@@ -15,7 +18,7 @@ EOF
 run() {
   local fen="$1"
   printf "uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value hardlimit-test\nposition fen %s\ngo depth 1\nquit\n" "$tmp_ini" "$fen" \
-    | ./stockfish
+    | "$ENGINE"
 }
 
 # At fullmove 200 the game is not over yet.

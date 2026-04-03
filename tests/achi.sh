@@ -1,5 +1,8 @@
 #!/bin/bash
 
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
+ENGINE="${1:-${REPO_ROOT}/src/stockfish}"
 set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -20,7 +23,7 @@ repo_root = os.environ['FSX_REPO_ROOT']
 sys.path.insert(0, repo_root)
 import pyffish as sf
 
-with open(os.path.join(repo_root, 'src', 'variants.ini'), 'r', encoding='utf-8') as f:
+with open(os.path.join(repo_root, 'src', '${REPO_ROOT}/src/variants.ini'), 'r', encoding='utf-8') as f:
     cfg = f.read()
 sf.load_variant_config(cfg)
 

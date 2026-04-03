@@ -8,12 +8,14 @@ error() {
 }
 trap 'error ${LINENO}' ERR
 
-ENGINE=${1:-}
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
+ENGINE="${1:-${REPO_ROOT}/src/stockfish}"
 if [[ -z "${ENGINE}" ]]; then
   if [[ -x "src/stockfish" ]]; then
     ENGINE="src/stockfish"
   else
-    ENGINE="./stockfish"
+    ENGINE=""$ENGINE""
   fi
 fi
 

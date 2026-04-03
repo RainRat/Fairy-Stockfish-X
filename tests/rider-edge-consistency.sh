@@ -1,7 +1,10 @@
 #!/bin/bash
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
+ENGINE="${1:-${REPO_ROOT}/src/stockfish}"
 set -euo pipefail
 
-cd "$(dirname "$0")/../src"
+# cd "$(dirname "$0")/../src" # removed for absolute paths
 
 tmp_ini=$(mktemp)
 trap 'rm -f "$tmp_ini"' EXIT
@@ -53,7 +56,7 @@ run_searchmove() {
   local fen="$2"
   local move="$3"
   printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value %s\nposition fen %s\ngo depth 1 searchmoves %s\nquit\n' \
-    "$tmp_ini" "$variant" "$fen" "$move" | ./stockfish
+    "$tmp_ini" "$variant" "$fen" "$move" | "$ENGINE"
 }
 
 expect_legal() {
