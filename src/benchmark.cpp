@@ -16,9 +16,11 @@
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <algorithm>
 #include <fstream>
 #include <iostream>
 #include <istream>
+#include <sstream>
 #include <vector>
 #include <cctype>
 
@@ -153,6 +155,8 @@ vector<string> setup_bench(const Position& current, istream& is) {
       ttSize = "16";
   if (!is_uint(threads))
       threads = "1";
+  if (limitType != "eval" && !is_uint(limit))
+      limit = "13";
   if (   limitType != "depth"
       && limitType != "perft"
       && limitType != "nodes"
@@ -201,7 +205,12 @@ vector<string> setup_bench(const Position& current, istream& is) {
   size_t posCounter = 0;
 
   for (const string& fen : fens)
-      if (fen.find("setoption") != string::npos)
+  {
+      std::istringstream line(fen);
+      std::string command;
+      line >> command;
+
+      if (command == "setoption")
           list.emplace_back(fen);
       else
       {
@@ -213,6 +222,7 @@ vector<string> setup_bench(const Position& current, istream& is) {
           list.emplace_back(go);
           ++posCounter;
       }
+  }
 
   list.emplace_back("setoption name Use NNUE value true");
 
