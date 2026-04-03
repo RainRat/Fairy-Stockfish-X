@@ -255,7 +255,14 @@ namespace {
   }
 
   Bitboard special_leaper_bb(const PieceInfo* pi, bool initial, MoveModality modality, Square s, Color c) {
-    return contra_hopper_attack(pi->contraHopper[initial][modality], s, 0, c);
+    Bitboard leaper = contra_hopper_attack(pi->contraHopper[initial][modality], s, 0, c);
+
+    if (pi->griffon[initial][modality])
+        leaper |= PseudoAttacks[WHITE][FERS][s];
+    if (pi->manticore[initial][modality])
+        leaper |= PseudoAttacks[WHITE][WAZIR][s];
+
+    return leaper;
   }
 
   void add_step_like_rider_types(RiderType& riderTypes, Direction d) {
