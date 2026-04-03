@@ -705,6 +705,18 @@ startFen = q******r/4k3/8/8/8/8/8/8/R3K2R/Q******R w - - 0 1
         black_moves = sf.legal_moves("capmapwild", "8/8/8/3b4/3A4/8/8/8 b - - 0 1", [])
         self.assertNotIn("d5d4", black_moves)
 
+        # immobilityIllegal + blastOnSameTypeCapture: moving to an immobile square is legal if the piece is destroyed by a blast on arrival.
+        sf.load_variant_config(
+            """[immobilityblast:chess]
+immobilityIllegal = true
+blastOnSameTypeCapture = true
+selfCapture = true
+mandatoryPawnPromotion = false
+"""
+        )
+        immobility_blast_fen = "1P6/P7/8/8/8/8/8/K7 w - - 0 1"
+        self.assertIn("a7b8", sf.legal_moves("immobilityblast", immobility_blast_fen, []))
+
     def test_strong_pawn_basics(self):
         sf.load_variant_config(
             """[strongpawnproto:chess]
