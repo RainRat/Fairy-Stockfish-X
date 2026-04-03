@@ -21,6 +21,7 @@
 
 #include <cassert>
 #include <chrono>
+#include <cstdlib>
 #include <iostream>
 #include <mutex>
 #include <ostream>
@@ -122,16 +123,28 @@ static inline const bool IsLittleEndian = (Le.c[0] == 4);
 template <typename T>
 class ValueListInserter {
 public:
-  ValueListInserter(T* v, std::size_t& s) :
+  ValueListInserter(T* v, std::size_t& s, std::size_t c) :
     values(v),
-    size(&s)
+    size(&s),
+    capacity(c)
   {
   }
 
-  void push_back(const T& value) { values[(*size)++] = value; }
+  void push_back(const T& value) {
+    if (*size >= capacity)
+      overflow();
+
+    values[(*size)++] = value;
+  }
 private:
+  [[noreturn]] static void overflow() {
+    assert(false && "ValueList capacity exceeded");
+    std::abort();
+  }
+
   T* values;
   std::size_t* size;
+  std::size_t capacity;
 };
 
 template <typename T, std::size_t MaxSize>
@@ -139,15 +152,26 @@ class ValueList {
 
 public:
   std::size_t size() const { return size_; }
-  void resize(std::size_t newSize) { size_ = newSize; }
-  void push_back(const T& value) { values_[size_++] = value; }
+  static constexpr std::size_t capacity() { return MaxSize; }
+  void resize(std::size_t newSize) {
+    if (newSize > MaxSize)
+      overflow();
+
+    size_ = newSize;
+  }
+  void push_back(const T& value) {
+    if (size_ >= MaxSize)
+      overflow();
+
+    values_[size_++] = value;
+  }
   T& operator[](std::size_t index) { return values_[index]; }
   T* begin() { return values_; }
   T* end() { return values_ + size_; }
   const T& operator[](std::size_t index) const { return values_[index]; }
   const T* begin() const { return values_; }
   const T* end() const { return values_ + size_; }
-  operator ValueListInserter<T>() { return ValueListInserter(values_, size_); }
+  operator ValueListInserter<T>() { return ValueListInserter<T>(values_, size_, MaxSize); }
 
   void swap(ValueList& other) {
     const std::size_t minSize = std::min(size_, other.size_);
@@ -167,6 +191,11 @@ public:
   }
 
 private:
+  [[noreturn]] static void overflow() {
+    assert(false && "ValueList capacity exceeded");
+    std::abort();
+  }
+
   T values_[MaxSize];
   std::size_t size_ = 0;
 };
