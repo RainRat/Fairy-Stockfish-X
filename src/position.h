@@ -2840,26 +2840,66 @@ inline Bitboard Position::wrapped_bent_rider_targets(bool griffon, Square sq, Bi
   if (griffon)
   {
       Square ne = SQ_NONE, nw = SQ_NONE, se = SQ_NONE, sw = SQ_NONE;
-      if (wrapped_destination_square(sq, 1, 1, maxFile, maxRank, wrapFile, wrapRank, ne) && ne != sq && !(occupied & ne))
-          add_from_pivot(ne, {EAST, NORTH});
-      if (wrapped_destination_square(sq, -1, 1, maxFile, maxRank, wrapFile, wrapRank, nw) && nw != sq && !(occupied & nw))
-          add_from_pivot(nw, {WEST, NORTH});
-      if (wrapped_destination_square(sq, 1, -1, maxFile, maxRank, wrapFile, wrapRank, se) && se != sq && !(occupied & se))
-          add_from_pivot(se, {EAST, SOUTH});
-      if (wrapped_destination_square(sq, -1, -1, maxFile, maxRank, wrapFile, wrapRank, sw) && sw != sq && !(occupied & sw))
-          add_from_pivot(sw, {WEST, SOUTH});
+      if (wrapped_destination_square(sq, 1, 1, maxFile, maxRank, wrapFile, wrapRank, ne) && ne != sq)
+      {
+          if (!quietMode || !(occupied & ne))
+              out |= ne;
+          if (!(occupied & ne))
+              add_from_pivot(ne, {EAST, NORTH});
+      }
+      if (wrapped_destination_square(sq, -1, 1, maxFile, maxRank, wrapFile, wrapRank, nw) && nw != sq)
+      {
+          if (!quietMode || !(occupied & nw))
+              out |= nw;
+          if (!(occupied & nw))
+              add_from_pivot(nw, {WEST, NORTH});
+      }
+      if (wrapped_destination_square(sq, 1, -1, maxFile, maxRank, wrapFile, wrapRank, se) && se != sq)
+      {
+          if (!quietMode || !(occupied & se))
+              out |= se;
+          if (!(occupied & se))
+              add_from_pivot(se, {EAST, SOUTH});
+      }
+      if (wrapped_destination_square(sq, -1, -1, maxFile, maxRank, wrapFile, wrapRank, sw) && sw != sq)
+      {
+          if (!quietMode || !(occupied & sw))
+              out |= sw;
+          if (!(occupied & sw))
+              add_from_pivot(sw, {WEST, SOUTH});
+      }
   }
   else
   {
       Square n = SQ_NONE, w = SQ_NONE, e = SQ_NONE, s = SQ_NONE;
-      if (wrapped_destination_square(sq, 0, 1, maxFile, maxRank, wrapFile, wrapRank, n) && n != sq && !(occupied & n))
-          add_from_pivot(n, {NORTH_EAST, NORTH_WEST});
-      if (wrapped_destination_square(sq, -1, 0, maxFile, maxRank, wrapFile, wrapRank, w) && w != sq && !(occupied & w))
-          add_from_pivot(w, {NORTH_WEST, SOUTH_WEST});
-      if (wrapped_destination_square(sq, 1, 0, maxFile, maxRank, wrapFile, wrapRank, e) && e != sq && !(occupied & e))
-          add_from_pivot(e, {NORTH_EAST, SOUTH_EAST});
-      if (wrapped_destination_square(sq, 0, -1, maxFile, maxRank, wrapFile, wrapRank, s) && s != sq && !(occupied & s))
-          add_from_pivot(s, {SOUTH_EAST, SOUTH_WEST});
+      if (wrapped_destination_square(sq, 0, 1, maxFile, maxRank, wrapFile, wrapRank, n) && n != sq)
+      {
+          if (!quietMode || !(occupied & n))
+              out |= n;
+          if (!(occupied & n))
+              add_from_pivot(n, {NORTH_EAST, NORTH_WEST});
+      }
+      if (wrapped_destination_square(sq, -1, 0, maxFile, maxRank, wrapFile, wrapRank, w) && w != sq)
+      {
+          if (!quietMode || !(occupied & w))
+              out |= w;
+          if (!(occupied & w))
+              add_from_pivot(w, {NORTH_WEST, SOUTH_WEST});
+      }
+      if (wrapped_destination_square(sq, 1, 0, maxFile, maxRank, wrapFile, wrapRank, e) && e != sq)
+      {
+          if (!quietMode || !(occupied & e))
+              out |= e;
+          if (!(occupied & e))
+              add_from_pivot(e, {NORTH_EAST, SOUTH_EAST});
+      }
+      if (wrapped_destination_square(sq, 0, -1, maxFile, maxRank, wrapFile, wrapRank, s) && s != sq)
+      {
+          if (!quietMode || !(occupied & s))
+              out |= s;
+          if (!(occupied & s))
+              add_from_pivot(s, {SOUTH_EAST, SOUTH_WEST});
+      }
   }
 
   return out;
