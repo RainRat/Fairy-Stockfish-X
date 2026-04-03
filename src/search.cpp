@@ -215,9 +215,9 @@ void MainThread::search() {
 
   Eval::NNUE::verify();
 
-  if (rootMoves.empty() || (CurrentProtocol == XBOARD && rootPos.is_optional_game_end()))
+  if ((rootMoves.size() == 1 && rootMoves[0].pv[0] == MOVE_NONE)
+      || (CurrentProtocol == XBOARD && rootPos.is_optional_game_end()))
   {
-      rootMoves.emplace_back(MOVE_NONE);
       Value variantResult;
       bool variantGameEnd = rootPos.is_game_end(variantResult);
       bool inCheck = rootPos.checkers();
@@ -1824,8 +1824,13 @@ moves_loop: // When in check, search starts from here
         }
 
         if (!hasLegalMove)
+        {
+            Value result;
+            if (pos.is_game_end(result, ss->ply))
+                return result;
             return ss->inCheck ? pos.checkmate_value(ss->ply)
                                : pos.stalemate_value(ss->ply);
+        }
     }
 
     // Save gathered info in transposition table
