@@ -10,12 +10,16 @@ trap 'error ${LINENO}' ERR
 
 echo "reprosearch testing started"
 
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
+ENGINE="${1:-${REPO_ROOT}/src/stockfish}"
+
 # repeat two short games, separated by ucinewgame.
 # with go nodes $nodes they should result in exactly
 # the same node count for each iteration.
 cat << EOF > repeat.exp
  set timeout 10
- spawn ./stockfish
+ spawn $ENGINE
  lassign \$argv nodes
 
  send "uci\n"

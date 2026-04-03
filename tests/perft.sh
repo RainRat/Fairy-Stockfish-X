@@ -1,6 +1,14 @@
 #!/bin/bash
 # verify perft numbers (positions from www.chessprogramming.org/Perft_Results)
 
+VARIANT=${1:-}
+ENGINE=${2:-}
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
+if [[ -z "${ENGINE}" ]]; then
+  ENGINE="${REPO_ROOT}/src/stockfish"
+fi
+
 error()
 {
   echo "perft testing failed on line $1"
@@ -15,7 +23,7 @@ cat << EOF > "$perft_exp"
    set timeout 60
    lassign \$argv var pos depth result chess960
    if {\$chess960 eq ""} {set chess960 false}
-   spawn ./stockfish
+   spawn "$ENGINE"
    send "setoption name UCI_Chess960 value \$chess960\\n"
    send "setoption name UCI_Variant value \$var\\n"
    send "position \$pos\\ngo perft \$depth\\n"
@@ -24,13 +32,13 @@ cat << EOF > "$perft_exp"
    expect eof
 EOF
 
-variant_list="$(printf 'uci\nquit\n' | ./stockfish | sed -n 's/^option name UCI_Variant type combo default [^ ]* //p' | tr ' ' '\n' | awk '/^var$/ {getline; print}')"
+variant_list="$(printf 'uci\nquit\n' | "$ENGINE" | sed -n 's/^option name UCI_Variant type combo default [^ ]* //p' | tr ' ' '\n' | awk '/^var$/ {getline; print}')"
 has_variant() {
   grep -Fxq "$1" <<<"$variant_list"
 }
 
 # chess
-if [[ $1 == "" || $1 == "chess" ]]; then
+if [[ $VARIANT == "" || $VARIANT == "chess" ]]; then
   expect "$perft_exp" chess startpos 5 4865609 > /dev/null
   expect "$perft_exp" chess "fen r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -" 5 193690690 > /dev/null
   expect "$perft_exp" chess "fen 8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - -" 6 11030083 > /dev/null
@@ -40,7 +48,7 @@ if [[ $1 == "" || $1 == "chess" ]]; then
 fi
 
 # variants
-if [[ $1 == "all" || $1 == "variant" ]]; then
+if [[ $VARIANT == "all" || $VARIANT == "variant" ]]; then
   # small board
   expect "$perft_exp" losalamos startpos 5 191846 > /dev/null
   expect "$perft_exp" losalamos "fen 6/2P3/6/1K1k2/6/6 w - - 0 1" 6 187431 > /dev/null
@@ -172,7 +180,7 @@ if [[ $1 == "all" || $1 == "variant" ]]; then
 fi
 
 # large-board variants
-if [[ $1 == "all" ||  $1 == "largeboard" ]]; then
+if [[ $VARIANT == "all" ||  $VARIANT == "largeboard" ]]; then
   if has_variant shogi && has_variant capablanca && has_variant xiangqi; then
     expect "$perft_exp" shogi startpos 4 719731 > /dev/null
     expect "$perft_exp" shoshogi startpos 4 445372 > /dev/null  # configurable pieces
@@ -222,7 +230,7 @@ if [[ $1 == "all" ||  $1 == "largeboard" ]]; then
 fi
 
 # special variants
-if [[ $1 == "all" ]]; then
+if [[ $VARIANT == "all" ]]; then
   if has_variant duck; then
     expect "$perft_exp" duck startpos 1 640 > /dev/null
   else

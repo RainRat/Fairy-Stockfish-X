@@ -8,6 +8,10 @@ error()
 }
 trap 'error ${LINENO}' ERR
 
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
+ENGINE="${2:-${REPO_ROOT}/src/stockfish}"
+
 # define suitable post and prefixes for testing options
 case $1 in
   --valgrind)
@@ -74,8 +78,8 @@ for args in "eval" \
             "bench 128 $threads 8 default depth"
 do
 
-   echo "$prefix $exeprefix ./stockfish $args $postfix"
-   eval "$prefix $exeprefix ./stockfish $args $postfix"
+   echo "$prefix $exeprefix $ENGINE $args $postfix"
+   eval "$prefix $exeprefix $ENGINE $args $postfix"
 
 done
 
@@ -83,7 +87,7 @@ done
 game_exp=$(mktemp)
 cat << EOF > "$game_exp"
  set timeout 240
- spawn $exeprefix ./stockfish
+ spawn $exeprefix $ENGINE
 
  send "uci\n"
  expect "uciok"
@@ -120,7 +124,7 @@ fi
 syzygy_exp=$(mktemp)
 cat << EOF > "$syzygy_exp"
  set timeout 600
- spawn $exeprefix ./stockfish
+ spawn $exeprefix $ENGINE
  send "uci\n"
  send "setoption name SyzygyPath value ../tests/syzygy/\n"
  expect "info string Found 35 tablebases" {} timeout {exit 1}

@@ -8,8 +8,10 @@ error() {
 }
 trap 'error ${LINENO}' ERR
 
-ENGINE=${1:-./src/stockfish}
-VARIANTS=${2:-/home/chris/Fairy-Stockfish-X/src/variants.ini}
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
+ENGINE="${1:-${REPO_ROOT}/src/stockfish}"
+VARIANTS="${2:-${REPO_ROOT}/src/variants.ini}"
 
 run_engine() {
   local variant="$1"

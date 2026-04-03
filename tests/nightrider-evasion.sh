@@ -1,13 +1,16 @@
 #!/bin/bash
 # verify piece-aware between_bb check evasion handling for nightriders
 
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
+ENGINE="${1:-${REPO_ROOT}/src/stockfish}"
 set -euo pipefail
 
 run() {
   local fen="$1"
   local searchmove="$2"
-  printf "uci\nsetoption name VariantPath value variants.ini\nsetoption name UCI_Variant value nightrider\nposition fen %s\ngo depth 1 searchmoves %s\nquit\n" "$fen" "$searchmove" \
-    | ./stockfish
+  printf "uci\nsetoption name VariantPath value ${REPO_ROOT}/src/variants.ini\nsetoption name UCI_Variant value nightrider\nposition fen %s\ngo depth 1 searchmoves %s\nquit\n" "$fen" "$searchmove" \
+    | "$ENGINE"
 }
 
 # Nightrider check from a1 to e3 must allow interposition on c2.

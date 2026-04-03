@@ -8,7 +8,9 @@ error() {
 }
 trap 'error ${LINENO}' ERR
 
-ENGINE=${1:-./stockfish}
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
+ENGINE="${1:-${REPO_ROOT}/src/stockfish}"
 
 tmp_ini=$(mktemp)
 trap 'rm -f "${tmp_ini}"' EXIT

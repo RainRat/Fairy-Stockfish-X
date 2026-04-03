@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BIN=${1:-/home/chris/Fairy-Stockfish-X/src/stockfish}
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
+BIN=${1:-${REPO_ROOT}/src/stockfish}
 
 TMPDIR=$(mktemp -d)
 trap 'rm -rf "$TMPDIR"' EXIT

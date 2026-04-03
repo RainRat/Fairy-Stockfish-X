@@ -2,8 +2,10 @@
 
 set -euo pipefail
 
-ENGINE=${1:-src/stockfish}
-VARIANT_PATH=${2:-src/variants.ini}
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
+ENGINE="${1:-${REPO_ROOT}/src/stockfish}"
+VARIANT_PATH=${2:-src/${REPO_ROOT}/src/variants.ini}
 
 run_cmds() {
   cat <<EOF | "${ENGINE}"

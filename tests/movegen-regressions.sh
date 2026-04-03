@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ENGINE="${1:-/home/chris/Fairy-Stockfish-X/src/stockfish-large}"
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
+ENGINE="${1:-${REPO_ROOT}/src/stockfish}"
+VARIANTS="${2:-${REPO_ROOT}/src/variants.ini}"
 
 TMP_INI="$(mktemp)"
 cleanup() {
@@ -29,7 +32,7 @@ run_cmds() {
 echo "movegen regressions started"
 
 # Quiet pawn promotions must be generated in quiet move generation.
-out=$(run_cmds "/home/chris/Fairy-Stockfish-X/src/variants.ini" chess \
+out=$(run_cmds "$VARIANTS" chess \
   "position fen 7k/4P3/8/8/8/8/8/4K3 w - - 0 1
 go perft 1")
 echo "$out" | grep -q "e7e8q: 1"

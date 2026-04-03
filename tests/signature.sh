@@ -10,7 +10,9 @@ error()
 trap 'error ${LINENO}' ERR
 
 # obtain
-ENGINE=${ENGINE:-./stockfish}
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
+ENGINE="${2:-${ENGINE:-${REPO_ROOT}/src/stockfish}}"
 
 signature=`${ENGINE} bench 2>&1 | grep "Nodes searched  : " | awk '{print $4}'`
 

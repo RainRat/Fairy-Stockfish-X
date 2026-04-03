@@ -1,7 +1,10 @@
 #!/bin/bash
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
+ENGINE="${1:-${REPO_ROOT}/src/stockfish}"
 set -euo pipefail
 
-cd "$(dirname "$0")/../src"
+# cd "$(dirname "$0")/../src" # removed for absolute paths
 
 tmp_ini=$(mktemp)
 expected_leaper=$(mktemp)
@@ -31,7 +34,7 @@ INI
 piece_moves() {
   local variant=$1
   printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value %s\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" "$variant" \
-    | ./stockfish \
+    | "$ENGINE" \
     | awk -F: '/^e4/{print $1}' \
     | sort
 }

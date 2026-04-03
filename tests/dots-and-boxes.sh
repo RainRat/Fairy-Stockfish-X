@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ENGINE="${1:-/home/chris/Fairy-Stockfish-X/src/stockfish}"
-VARIANTS="${2:-/home/chris/Fairy-Stockfish-X/src/variants-incomplete.ini}"
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
+ENGINE="${1:-${REPO_ROOT}/src/stockfish}"
+VARIANTS="${2:-${REPO_ROOT}/src/variants-incomplete.ini}"
 
 run_cmds() {
   local variant="$1"
@@ -38,11 +40,13 @@ go perft 1")
 echo "$out" | grep -Fq "Fen: ***1*/*b*2/***1*/5/*1*1* b - - 5 3"
 echo "$out" | grep -q "Nodes searched: 8"
 
+export VARIANTS
 python3 - <<'PY'
 import pyffish as sf
+import os
 from pathlib import Path
 
-sf.load_variant_config(Path("/home/chris/Fairy-Stockfish-X/src/variants-incomplete.ini").read_text())
+sf.load_variant_config(Path(os.environ["VARIANTS"]).read_text())
 
 assert sf.game_result("dots-boxes-2x2", "*****/*B*B*/*****/*B*B*/***** w - - 12 7", []) > 0
 assert sf.game_result("dots-boxes-2x2", "*****/*B*B*/*****/*B*b*/***** w - - 12 7", []) > 0
