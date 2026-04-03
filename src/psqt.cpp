@@ -194,7 +194,7 @@ Value piece_value(Phase phase, PieceType pt)
     if (pi->diagonalLimitedSlider)
         v0 += 40;
     if (pi->has_contra_hopper())
-        v0 += 40;
+        v0 += 160;
     if (pi->rose[0][MODALITY_QUIET] || pi->rose[0][MODALITY_CAPTURE])
         v0 += 1300;
     return Value(v0 * exp(double(v0) / 10000));
