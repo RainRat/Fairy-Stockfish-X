@@ -2829,13 +2829,25 @@ bool Position::legal(Move m) const {
   if (immobility_illegal() && (dropMove || type_of(m) == NORMAL))
   {
       PieceType pt = type_of(moved_piece(m));
-      const PieceInfo* pi = pieceMap.get(pt);
-      bool hasPotentialMove = PseudoMoves[0][us][pt][to] & board_bb();
-      if (is_pure_hopper_like(pi))
-          hasPotentialMove = has_hopper_potential_from_square(pi, us, to);
-      if (   !hasPotentialMove
-          && !(jump_capture_types() & ALL_PIECES) && !(jump_capture_types() & pt))
-          return false;
+      bool willBeBlasted = false;
+      if (!(blast_immune_types() & pt))
+      {
+          if ((capture(m) && blast_on_capture(m)) || (!capture(m) && blast_on_move()))
+          {
+              if (blast_center() || zero_range_blast_on_capture(m))
+                  willBeBlasted = true;
+          }
+      }
+      if (!willBeBlasted)
+      {
+          const PieceInfo* pi = pieceMap.get(pt);
+          bool hasPotentialMove = PseudoMoves[0][us][pt][to] & board_bb();
+          if (is_pure_hopper_like(pi))
+              hasPotentialMove = has_hopper_potential_from_square(pi, us, to);
+          if (   !hasPotentialMove
+              && !(jump_capture_types() & ALL_PIECES) && !(jump_capture_types() & pt))
+              return false;
+      }
   }
 
   // Illegal king passing move
