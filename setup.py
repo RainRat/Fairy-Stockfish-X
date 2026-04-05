@@ -29,11 +29,11 @@ with io.open("README.md", "r", encoding="utf8") as fh:
 
 sources = glob("src/*.cpp") + glob("src/syzygy/*.cpp") + glob("src/nnue/*.cpp") + glob("src/nnue/features/*.cpp")
 headers = glob("src/*.h") + glob("src/syzygy/*.h") + glob("src/nnue/*.h") + glob("src/nnue/features/*.h")
-ffish_source_file = os.path.normcase("src/ffishjs.cpp")
-try:
-    sources.remove(ffish_source_file)
-except ValueError:
-    print(f"ffish_source_file {ffish_source_file} was not found in sources {sources}.")
+for f in ["src/ffishjs.cpp", "src/main.cpp", "src/ffishdll.cpp"]:
+    try:
+        sources.remove(os.path.normcase(f))
+    except ValueError:
+        pass
 
 pyffish_module = Extension(
     "pyffish",

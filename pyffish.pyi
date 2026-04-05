@@ -13,6 +13,7 @@ NOTATION_THAI_SAN: int
 NOTATION_XIANGQI_WXF: int
 VALUE_DRAW: int
 VALUE_MATE: int
+VALUE_NONE: int
 
 class error(Exception): ...
 
