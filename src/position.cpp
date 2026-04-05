@@ -1568,7 +1568,7 @@ void Position::set_check_info(StateInfo* si) const {
               si->nonSlidingRiders |= pieces(pt);
       }
 
-      si->shak = si->checkersBB & (byTypeBB[KNIGHT] | byTypeBB[ROOK] | byTypeBB[BERS]);
+      si->shak = si->evasionCheckersBB & (byTypeBB[KNIGHT] | byTypeBB[ROOK] | byTypeBB[BERS]);
       si->bikjang = false;
       si->chased = Bitboard(0);
       si->legalCapture = NO_VALUE;
@@ -1653,7 +1653,7 @@ void Position::set_check_info(StateInfo* si) const {
           }
       }
   }
-  si->shak = si->checkersBB & (byTypeBB[KNIGHT] | byTypeBB[ROOK] | byTypeBB[BERS]);
+  si->shak = si->evasionCheckersBB & (byTypeBB[KNIGHT] | byTypeBB[ROOK] | byTypeBB[BERS]);
   si->bikjang = var->bikjangRule && ksq != SQ_NONE ? bool(attacks_bb(sideToMove, ROOK, ksq, pieces()) & pieces(sideToMove, KING)) : false;
   si->chased = var->chasingRule ? chased() : Bitboard(0);
   si->legalCapture = NO_VALUE;
@@ -6102,6 +6102,8 @@ void Position::do_null_move(StateInfo& newSt) {
   st->pliesFromNull = 0;
 
   sideToMove = ~sideToMove;
+  st->checkersBB = compute_checkers_bb(sideToMove);
+  st->evasionCheckersBB = compute_evasion_checkers_bb(sideToMove);
 
   set_check_info(st);
 
