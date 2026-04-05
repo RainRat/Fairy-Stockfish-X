@@ -525,7 +525,7 @@ inline bool has_insufficient_material(Color c, const Position& pos) {
 }
 
 inline Bitboard checked(const Position& pos) {
-    return (pos.checkers() ? square_bb(pos.square<KING>(pos.side_to_move())) : Bitboard(0))
+    return (pos.evasion_checkers() ? square_bb(pos.square<KING>(pos.side_to_move())) : Bitboard(0))
         | (pos.pseudo_royal_types() ? pos.checked_pseudo_royals(pos.side_to_move()) : Bitboard(0))
         | (pos.anti_royal_types() ? pos.checked_anti_royals(pos.side_to_move()) : Bitboard(0));
 }

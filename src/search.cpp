@@ -220,7 +220,7 @@ void MainThread::search() {
   {
       Value variantResult;
       bool variantGameEnd = rootPos.is_game_end(variantResult);
-      bool inCheck = rootPos.checkers();
+      bool inCheck = rootPos.evasion_checkers();
       Value result = variantGameEnd ? variantResult
                     : inCheck       ? rootPos.checkmate_value()
                                     : rootPos.stalemate_value();
@@ -294,7 +294,7 @@ void MainThread::search() {
   {
       Value variantResult;
       bool variantGameEnd = rootPos.is_game_end(variantResult);
-      bool inCheck = rootPos.checkers();
+      bool inCheck = rootPos.evasion_checkers();
       Value result = variantGameEnd ? variantResult
                     : inCheck       ? rootPos.checkmate_value()
                                     : rootPos.stalemate_value();
@@ -746,7 +746,7 @@ namespace {
 
     // Step 1. Initialize node
     Thread* thisThread = pos.this_thread();
-    ss->inCheck        = pos.checkers();
+    ss->inCheck        = pos.evasion_checkers();
     priorCapture       = pos.captured_piece();
     Color us           = pos.side_to_move();
     moveCount          = captureCount = quietCount = ss->moveCount = 0;
@@ -1607,7 +1607,7 @@ moves_loop: // When in check, search starts from here
 
     Thread* thisThread = pos.this_thread();
     bestMove = MOVE_NONE;
-    ss->inCheck = pos.checkers();
+    ss->inCheck = pos.evasion_checkers();
     moveCount = 0;
 
     if (thisThread == Threads.main())

@@ -1568,7 +1568,7 @@ void Position::set_check_info(StateInfo* si) const {
               si->nonSlidingRiders |= pieces(pt);
       }
 
-      si->shak = si->checkersBB & (byTypeBB[KNIGHT] | byTypeBB[ROOK] | byTypeBB[BERS]);
+      si->shak = si->evasionCheckersBB & (byTypeBB[KNIGHT] | byTypeBB[ROOK] | byTypeBB[BERS]);
       si->bikjang = false;
       si->chased = Bitboard(0);
       si->legalCapture = NO_VALUE;
@@ -1653,7 +1653,7 @@ void Position::set_check_info(StateInfo* si) const {
           }
       }
   }
-  si->shak = si->checkersBB & (byTypeBB[KNIGHT] | byTypeBB[ROOK] | byTypeBB[BERS]);
+  si->shak = si->evasionCheckersBB & (byTypeBB[KNIGHT] | byTypeBB[ROOK] | byTypeBB[BERS]);
   si->bikjang = var->bikjangRule && ksq != SQ_NONE ? bool(attacks_bb(sideToMove, ROOK, ksq, pieces()) & pieces(sideToMove, KING)) : false;
   si->chased = var->chasingRule ? chased() : Bitboard(0);
   si->legalCapture = NO_VALUE;
@@ -1776,6 +1776,7 @@ void Position::recompute_state_hashes_and_material(StateInfo* si) const {
 void Position::set_state(StateInfo* si) const {
 
   si->checkersBB = compute_checkers_bb(sideToMove);
+  si->evasionCheckersBB = compute_evasion_checkers_bb(sideToMove);
   si->move = MOVE_NONE;
   si->removedGatingType = NO_PIECE_TYPE;
   si->removedCastlingGatingType = NO_PIECE_TYPE;
@@ -1803,6 +1804,7 @@ void Position::set_state(StateInfo* si) const {
 void Position::refresh_state_derived(StateInfo* si) const {
 
   si->checkersBB = compute_checkers_bb(sideToMove);
+  si->evasionCheckersBB = compute_evasion_checkers_bb(sideToMove);
   recompute_state_hashes_and_material(si);
 }
 
@@ -1821,6 +1823,21 @@ Bitboard Position::compute_checkers_bb(Color side) const {
       if (var->blastPassiveTypes)
           checkers |= passive_blast_checkers(side, pieces());
   }
+
+  return checkers;
+}
+
+Bitboard Position::compute_evasion_checkers_bb(Color side) const {
+
+  // Fairy-Stockfish-X split from upstream-style broad checkersBB:
+  // this tracks only king-evasion state that should drive EVASIONS, mate/stalemate,
+  // null-move, and perpetual-check semantics.
+  Bitboard checkers = !allow_checks() && count<KING>(side)
+                    ? attackers_to_king(square<KING>(side), ~side)
+                    : Bitboard(0);
+
+  if (!allow_checks() && var->blastPassiveTypes)
+      checkers |= passive_blast_checkers(side, pieces());
 
   return checkers;
 }
@@ -2696,7 +2713,7 @@ bool Position::legal(Move m) const {
       Position p;
       p.set(variant(), fen(), is_chess960(), &setupState, this_thread());
       p.do_move(m, nextState, true);
-      if (p.checkers() && MoveList<LEGAL>(p).size() == 0)
+      if (p.evasion_checkers() && MoveList<LEGAL>(p).size() == 0)
           return false;
   }
 
@@ -2719,7 +2736,7 @@ bool Position::legal(Move m) const {
           if (requiredDropType != ALL_PIECES && requiredDropType != in_hand_piece_type(m))
               return false;
       }
-      else if (checkers())
+      else if (evasion_checkers())
       {
           for (const auto& mevasion : MoveList<EVASIONS>(*this))
               if (is_drop_move(mevasion) && legal(mevasion))
@@ -2857,7 +2874,7 @@ bool Position::legal(Move m) const {
   }
 
   // Illegal king passing move
-  if (pass_on_stalemate(us) && is_pass(m) && !checkers())
+  if (pass_on_stalemate(us) && is_pass(m) && !evasion_checkers())
   {
       for (const auto& move : MoveList<NON_EVASIONS>(*this))
           if (!is_pass(move) && legal(move))
@@ -3296,7 +3313,7 @@ bool Position::legal(Move m) const {
   }
 
   // Makpong rule
-  if (var->makpongRule && checkers() && type_of(moved_piece(m)) == KING && (checkers() ^ to))
+  if (var->makpongRule && evasion_checkers() && type_of(moved_piece(m)) == KING && (evasion_checkers() ^ to))
       return false;
 
   if (var->royalPieceNoThroughCheck && type_of(moved_piece(m)) == king_type())
@@ -3544,9 +3561,9 @@ bool Position::pseudo_legal(const Move m) const {
 
   if (type_of(m) != NORMAL || is_gating(m))
   {
-      const bool useWrappedFallback = topology_wraps() && checkers();
-      return ((checkers() && !useWrappedFallback) ? MoveList<    EVASIONS>(*this).contains(m)
-                                                  : MoveList<NON_EVASIONS>(*this).contains(m))
+      const bool useWrappedFallback = topology_wraps() && evasion_checkers();
+      return ((evasion_checkers() && !useWrappedFallback) ? MoveList<    EVASIONS>(*this).contains(m)
+                                                          : MoveList<NON_EVASIONS>(*this).contains(m))
           && !violates_same_player_board_repetition(m);
   }
 
@@ -3653,7 +3670,7 @@ bool Position::pseudo_legal(const Move m) const {
   // Evasions generator already takes care to avoid some kind of illegal moves
   // and legal() relies on this. We therefore have to take care that the same
   // kind of moves are filtered out here.
-  if (!allow_checks() && checkers() && !(checkers() & non_sliding_riders()))
+  if (!allow_checks() && evasion_checkers() && !(evasion_checkers() & non_sliding_riders()))
   {
       if (type_of(pc) != KING)
       {
@@ -3702,7 +3719,7 @@ bool Position::pseudo_legal(const Move m) const {
           };
 
           Bitboard evasionTargets = AllSquares;
-          Bitboard remaining = checkers();
+          Bitboard remaining = evasion_checkers();
           while (remaining)
               evasionTargets &= checker_targets(pop_lsb(remaining));
 
@@ -3803,7 +3820,7 @@ bool Position::gives_check(Move m) const {
       Position* pos = const_cast<Position*>(this);
       StateInfo nextState;
       pos->do_move(m, nextState, false);
-      bool givesCheck = bool(pos->checkers());
+      bool givesCheck = bool(pos->evasion_checkers());
       pos->undo_move(m);
       return givesCheck;
   }
@@ -5590,6 +5607,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   sideToMove = them;
 
   st->checkersBB = compute_checkers_bb(sideToMove);
+  st->evasionCheckersBB = compute_evasion_checkers_bb(sideToMove);
 
   if (counting_rule())
   {
@@ -6059,7 +6077,7 @@ void Position::do_castling(Color us, Square from, Square& to, Square& rfrom, Squ
 
 void Position::do_null_move(StateInfo& newSt) {
 
-  assert(!checkers());
+  assert(!evasion_checkers());
   assert(&newSt != st);
 
   std::memcpy(static_cast<void*>(&newSt), static_cast<const void*>(st), offsetof(StateInfo, accumulator));
@@ -6084,6 +6102,8 @@ void Position::do_null_move(StateInfo& newSt) {
   st->pliesFromNull = 0;
 
   sideToMove = ~sideToMove;
+  st->checkersBB = compute_checkers_bb(sideToMove);
+  st->evasionCheckersBB = compute_evasion_checkers_bb(sideToMove);
 
   set_check_info(st);
 
@@ -6098,7 +6118,7 @@ void Position::do_null_move(StateInfo& newSt) {
 
 void Position::undo_null_move() {
 
-  assert(!checkers());
+  assert(!evasion_checkers());
 
   st = st->previous;
   sideToMove = ~sideToMove;
@@ -6452,13 +6472,15 @@ bool Position::n_fold_game_end(Value& result, int ply, int target) const {
 
   StateInfo* stp = st->previous->previous;
   int cnt = 0;
-  bool perpetualThem = var->perpetualCheckIllegal && st->checkersBB && stp->checkersBB;
-  bool perpetualUs = var->perpetualCheckIllegal && st->previous->checkersBB && stp->previous->checkersBB;
+  // Per documented rule intent, perpetual-check style repetition tracks only actual
+  // evasion-required checks, not broader pseudo-royal or anti-royal danger bookkeeping.
+  bool perpetualThem = var->perpetualCheckIllegal && st->evasionCheckersBB && stp->evasionCheckersBB;
+  bool perpetualUs = var->perpetualCheckIllegal && st->previous->evasionCheckersBB && stp->previous->evasionCheckersBB;
   Bitboard chaseThem = undo_move_board(st->chased, st->previous->move) & stp->chased;
   Bitboard chaseUs = undo_move_board(st->previous->chased, stp->move) & stp->previous->chased;
   int moveRepetition = var->moveRepetitionIllegal
                         && type_of(st->move) == NORMAL
-                        && !st->previous->checkersBB && !stp->previous->checkersBB
+                        && !st->previous->evasionCheckersBB && !stp->previous->evasionCheckersBB
                         && (board_bb(~side_to_move(), type_of(piece_on(to_sq(st->move)))) & board_bb(side_to_move(), KING))
                         ? (stp->move == reverse_move(st->move) ? 2 : is_pass(stp->move) ? 1 : 0) : 0;
 
@@ -6467,7 +6489,7 @@ bool Position::n_fold_game_end(Value& result, int ply, int target) const {
       // Janggi repetition rule
       if (moveRepetition > 0)
       {
-          if (i + 1 <= end && stp->previous->previous->previous->checkersBB)
+          if (i + 1 <= end && stp->previous->previous->previous->evasionCheckersBB)
               moveRepetition = 0;
           else if (moveRepetition < 4)
           {
@@ -6492,7 +6514,7 @@ bool Position::n_fold_game_end(Value& result, int ply, int target) const {
       if (i != st->pliesFromNull)
           chaseThem = undo_move_board(chaseThem, stp->previous->move) & stp->previous->previous->chased;
       stp = stp->previous->previous;
-      perpetualThem &= bool(stp->checkersBB);
+      perpetualThem &= bool(stp->evasionCheckersBB);
 
       // Return a draw score if a position repeats once earlier but strictly
       // after the root, or repeats twice before or at the root.
@@ -6510,7 +6532,7 @@ bool Position::n_fold_game_end(Value& result, int ply, int target) const {
 
       if (i + 1 <= end)
       {
-          perpetualUs &= bool(stp->previous->checkersBB);
+          perpetualUs &= bool(stp->previous->evasionCheckersBB);
           chaseUs = undo_move_board(chaseUs, stp->move) & stp->previous->chased;
       }
   }
@@ -6521,20 +6543,20 @@ bool Position::n_fold_game_end(Value& result, int ply, int target) const {
 bool Position::is_optional_game_end(Value& result, int ply, int countStarted) const {
 
   // n-move rule
-  if (n_move_rule() && st->rule50 > (2 * n_move_rule() - 1) && (!checkers() || MoveList<LEGAL>(*this).size()))
+  if (n_move_rule() && st->rule50 > (2 * n_move_rule() - 1) && (!evasion_checkers() || MoveList<LEGAL>(*this).size()))
   {
       int offset = 0;
       if (var->chasingRule == AXF_CHASING && st->pliesFromNull >= 20)
       {
           int end = std::min(st->rule50, st->pliesFromNull);
           StateInfo* stp = st;
-          int checkThem = bool(stp->checkersBB);
-          int checkUs = bool(stp->previous->checkersBB);
+          int checkThem = bool(stp->evasionCheckersBB);
+          int checkUs = bool(stp->previous->evasionCheckersBB);
           for (int i = 2; i < end; i += 2)
           {
               stp = stp->previous->previous;
-              checkThem += bool(stp->checkersBB);
-              checkUs += bool(stp->previous->checkersBB);
+              checkThem += bool(stp->evasionCheckersBB);
+              checkUs += bool(stp->previous->evasionCheckersBB);
           }
           offset = 2 * std::max(std::max(checkThem, checkUs) - 10, 0) + 20 * (CurrentProtocol == UCCI || CurrentProtocol == UCI_CYCLONE);
       }
@@ -6552,7 +6574,7 @@ bool Position::is_optional_game_end(Value& result, int ply, int countStarted) co
   if (   counting_rule()
       && st->countingLimit
       && counting_ply(countStarted) > counting_limit(countStarted)
-      && (!checkers() || MoveList<LEGAL>(*this).size()))
+      && (!evasion_checkers() || MoveList<LEGAL>(*this).size()))
   {
       result = VALUE_DRAW;
       return true;
@@ -6562,7 +6584,7 @@ bool Position::is_optional_game_end(Value& result, int ply, int countStarted) co
   if (   sittuyin_promotion()
       && count<ALL_PIECES>(sideToMove) == 2
       && count<PAWN>(sideToMove) == 1
-      && !checkers())
+      && !evasion_checkers())
   {
       bool promotionsOnly = true;
       for (const auto& m : MoveList<LEGAL>(*this))
@@ -6649,7 +6671,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
   {
       bool gameEnd = true;
       // Check whether king can move to CTF zone (racing kings) to draw
-      if (   flag_move() && sideToMove == BLACK && !checkers() && count<KING>(sideToMove)
+      if (   flag_move() && sideToMove == BLACK && !evasion_checkers() && count<KING>(sideToMove)
           && (flag_region(sideToMove) & attacks_from(sideToMove, KING, square<KING>(sideToMove))))
       {
           assert(flag_piece(sideToMove) == KING);
@@ -6702,7 +6724,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
   // Immediate n-move adjudication (e.g. FIDE 75-move rule)
   if (   n_move_rule_immediate()
       && st->rule50 > (2 * n_move_rule_immediate() - 1)
-      && (!checkers() || MoveList<LEGAL>(*this).size()))
+      && (!evasion_checkers() || MoveList<LEGAL>(*this).size()))
   {
       result = var->materialCounting ? convert_mate_value(material_counting_result(), ply) : VALUE_DRAW;
       return true;
@@ -6982,7 +7004,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
   }
 
   // Tsume mode: Assume that side with king wins when not in check
-  if (tsumeMode && !count<KING>(~sideToMove) && count<KING>(sideToMove) && !checkers())
+  if (tsumeMode && !count<KING>(~sideToMove) && count<KING>(sideToMove) && !evasion_checkers())
   {
       result = mate_in(ply);
       return true;
@@ -7001,7 +7023,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
  }
 
   // Failing to checkmate with virtual pieces is a loss
-  if (two_boards() && !checkers())
+  if (two_boards() && !evasion_checkers())
   {
       int virtualCount = 0;
       for (PieceSet ps = piece_types(); ps;)

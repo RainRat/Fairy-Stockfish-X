@@ -1782,7 +1782,7 @@ namespace {
   template<Tracing T>
   Value Evaluation<T>::value() {
 
-    assert(!pos.checkers());
+    assert(!pos.evasion_checkers());
     assert(!pos.is_immediate_game_end());
 
     // Probe the material hash table
@@ -1990,7 +1990,7 @@ Value Eval::evaluate(const Position& pos) {
 
 std::string Eval::trace(Position& pos) {
 
-  if (pos.checkers())
+  if (pos.evasion_checkers())
       return "Final evaluation: none (in check)";
 
   std::stringstream ss;

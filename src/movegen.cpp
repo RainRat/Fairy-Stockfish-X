@@ -857,7 +857,7 @@ namespace {
 
     constexpr bool Checks = Type == QUIET_CHECKS; // Reduce template instantiations
     const Square ksq = pos.count<KING>(Us) ? pos.square<KING>(Us) : SQ_NONE;
-    const Bitboard checkers = pos.checkers();
+    const Bitboard checkers = pos.evasion_checkers();
     Bitboard target;
     Bitboard captureTarget = Bitboard(0);
     Bitboard forcedFromMask = AllSquares;
@@ -1246,8 +1246,8 @@ template<GenType Type>
 ExtMove* generate(const Position& pos, ExtMove* moveList) {
 
   static_assert(Type != LEGAL, "Unsupported type in generate()");
-  assert((Type == EVASIONS) == (bool)pos.checkers()
-         || (pos.topology_wraps() && Type == NON_EVASIONS && pos.checkers()));
+  assert((Type == EVASIONS) == (bool)pos.evasion_checkers()
+         || (pos.topology_wraps() && Type == NON_EVASIONS && pos.evasion_checkers()));
 
   Color us = pos.side_to_move();
 
@@ -1259,8 +1259,8 @@ template<GenType Type>
 ExtMove* generate_without_potions(const Position& pos, ExtMove* moveList) {
 
   static_assert(Type != LEGAL, "Unsupported type in generate_without_potions()");
-  assert((Type == EVASIONS) == (bool)pos.checkers()
-         || (pos.topology_wraps() && Type == NON_EVASIONS && pos.checkers()));
+  assert((Type == EVASIONS) == (bool)pos.evasion_checkers()
+         || (pos.topology_wraps() && Type == NON_EVASIONS && pos.evasion_checkers()));
   Color us = pos.side_to_move();
   return us == WHITE ? generate_all_impl<WHITE, Type>(pos, moveList)
                      : generate_all_impl<BLACK, Type>(pos, moveList);
@@ -1270,8 +1270,8 @@ template<GenType Type>
 ExtMove* append_potions(const Position& pos, ExtMove* listBegin, ExtMove* baseEnd) {
 
   static_assert(Type != LEGAL, "Unsupported type in append_potions()");
-  assert((Type == EVASIONS) == (bool)pos.checkers()
-         || (pos.topology_wraps() && Type == NON_EVASIONS && pos.checkers()));
+  assert((Type == EVASIONS) == (bool)pos.evasion_checkers()
+         || (pos.topology_wraps() && Type == NON_EVASIONS && pos.evasion_checkers()));
   if (!pos.potions_enabled())
       return baseEnd;
   Color us = pos.side_to_move();
@@ -1311,10 +1311,10 @@ ExtMove* generate<LEGAL>(const Position& pos, ExtMove* moveList) {
 
   ExtMove* cur = moveList;
 
-  const bool useWrappedFallback = pos.topology_wraps() && pos.checkers();
+  const bool useWrappedFallback = pos.topology_wraps() && pos.evasion_checkers();
   const bool useNonEvasions = pos.anti_royal_types() || useWrappedFallback;
-  moveList = (pos.checkers() && !useNonEvasions) ? generate<EVASIONS    >(pos, moveList)
-                                                 : generate<NON_EVASIONS>(pos, moveList);
+  moveList = (pos.evasion_checkers() && !useNonEvasions) ? generate<EVASIONS    >(pos, moveList)
+                                                         : generate<NON_EVASIONS>(pos, moveList);
   while (cur != moveList)
       if (!pos.legal(*cur) || pos.virtual_drop(*cur))
           *cur = *--moveList;
