@@ -1814,10 +1814,6 @@ Bitboard Position::compute_checkers_bb(Color side) const {
 
   if (!allow_checks())
   {
-      if (pseudo_royal_types())
-          checkers |= checked_pseudo_royals(side);
-      if (anti_royal_types())
-          checkers |= checked_anti_royals(side);
       if (var->blastPassiveTypes)
           checkers |= passive_blast_checkers(side, pieces());
   }
