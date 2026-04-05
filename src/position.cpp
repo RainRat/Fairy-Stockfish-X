@@ -5604,6 +5604,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   sideToMove = them;
 
   st->checkersBB = compute_checkers_bb(sideToMove);
+  st->evasionCheckersBB = compute_evasion_checkers_bb(sideToMove);
 
   if (counting_rule())
   {
