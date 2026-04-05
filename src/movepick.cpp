@@ -132,7 +132,7 @@ MovePicker::MovePicker(const Position& p, Move ttm, Depth d, const ButterflyHist
       moveList = overflowMoveList.get();
   }
 
-  stage = (pos.checkers() ? EVASION_TT : MAIN_TT) +
+  stage = (pos.evasion_checkers() ? EVASION_TT : MAIN_TT) +
           !(ttm && pos.pseudo_legal(ttm));
 }
 
@@ -154,9 +154,9 @@ MovePicker::MovePicker(const Position& p, Move ttm, Depth d, const ButterflyHist
       moveList = overflowMoveList.get();
   }
 
-  stage = (pos.checkers() ? EVASION_TT : QSEARCH_TT) +
+  stage = (pos.evasion_checkers() ? EVASION_TT : QSEARCH_TT) +
           !(   ttm
-            && (pos.checkers() || depth > DEPTH_QS_RECAPTURES || to_sq(ttm) == recaptureSquare)
+            && (pos.evasion_checkers() || depth > DEPTH_QS_RECAPTURES || to_sq(ttm) == recaptureSquare)
             && pos.pseudo_legal(ttm));
 }
 
@@ -165,7 +165,7 @@ MovePicker::MovePicker(const Position& p, Move ttm, Depth d, const ButterflyHist
 MovePicker::MovePicker(const Position& p, Move ttm, Value th, const GateHistory* dh, const CapturePieceToHistory* cph)
            : pos(p), gateHistory(dh), captureHistory(cph), ttMove(ttm), threshold(th) {
 
-  assert(!pos.checkers());
+  assert(!pos.evasion_checkers());
 #ifdef USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
   baseMoveList = std::make_unique<ExtMove[]>(MAX_MOVES);
   moveList = baseMoveList.get();

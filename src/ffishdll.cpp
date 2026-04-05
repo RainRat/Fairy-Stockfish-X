@@ -274,7 +274,7 @@ public:
     }
     if (!gameEnd && MoveList<LEGAL>(pos).size() == 0) {
       gameEnd = true;
-      res = pos.checkers() ? pos.checkmate_value() : pos.stalemate_value();
+      res = pos.evasion_checkers() ? pos.checkmate_value() : pos.stalemate_value();
     }
     if (!gameEnd && claim_draw)
       gameEnd = pos.is_optional_game_end(res);

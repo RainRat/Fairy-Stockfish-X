@@ -197,7 +197,7 @@ void ThreadPool::start_thinking(Position& pos, StateListPtr& states,
   // Add virtual drops
   if (pos.two_boards() && pos.virtual_drops() && Partner.opptime && limits.time[pos.side_to_move()] > Partner.opptime + 1000)
   {
-      if (pos.checkers())
+      if (pos.evasion_checkers())
       {
           for (const auto& m : MoveList<EVASIONS>(pos))
               if (pos.virtual_drop(m) && pos.legal(m))

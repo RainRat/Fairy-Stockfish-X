@@ -1776,6 +1776,7 @@ void Position::recompute_state_hashes_and_material(StateInfo* si) const {
 void Position::set_state(StateInfo* si) const {
 
   si->checkersBB = compute_checkers_bb(sideToMove);
+  si->evasionCheckersBB = compute_evasion_checkers_bb(sideToMove);
   si->move = MOVE_NONE;
   si->removedGatingType = NO_PIECE_TYPE;
   si->removedCastlingGatingType = NO_PIECE_TYPE;
@@ -1803,6 +1804,7 @@ void Position::set_state(StateInfo* si) const {
 void Position::refresh_state_derived(StateInfo* si) const {
 
   si->checkersBB = compute_checkers_bb(sideToMove);
+  si->evasionCheckersBB = compute_evasion_checkers_bb(sideToMove);
   recompute_state_hashes_and_material(si);
 }
 
@@ -1821,6 +1823,18 @@ Bitboard Position::compute_checkers_bb(Color side) const {
       if (var->blastPassiveTypes)
           checkers |= passive_blast_checkers(side, pieces());
   }
+
+  return checkers;
+}
+
+Bitboard Position::compute_evasion_checkers_bb(Color side) const {
+
+  Bitboard checkers = !allow_checks() && count<KING>(side)
+                    ? attackers_to_king(square<KING>(side), ~side)
+                    : Bitboard(0);
+
+  if (!allow_checks() && var->blastPassiveTypes)
+      checkers |= passive_blast_checkers(side, pieces());
 
   return checkers;
 }
@@ -2696,7 +2710,7 @@ bool Position::legal(Move m) const {
       Position p;
       p.set(variant(), fen(), is_chess960(), &setupState, this_thread());
       p.do_move(m, nextState, true);
-      if (p.checkers() && MoveList<LEGAL>(p).size() == 0)
+      if (p.evasion_checkers() && MoveList<LEGAL>(p).size() == 0)
           return false;
   }
 
@@ -2719,7 +2733,7 @@ bool Position::legal(Move m) const {
           if (requiredDropType != ALL_PIECES && requiredDropType != in_hand_piece_type(m))
               return false;
       }
-      else if (checkers())
+      else if (evasion_checkers())
       {
           for (const auto& mevasion : MoveList<EVASIONS>(*this))
               if (is_drop_move(mevasion) && legal(mevasion))
@@ -2857,7 +2871,7 @@ bool Position::legal(Move m) const {
   }
 
   // Illegal king passing move
-  if (pass_on_stalemate(us) && is_pass(m) && !checkers())
+  if (pass_on_stalemate(us) && is_pass(m) && !evasion_checkers())
   {
       for (const auto& move : MoveList<NON_EVASIONS>(*this))
           if (!is_pass(move) && legal(move))
@@ -3296,7 +3310,7 @@ bool Position::legal(Move m) const {
   }
 
   // Makpong rule
-  if (var->makpongRule && checkers() && type_of(moved_piece(m)) == KING && (checkers() ^ to))
+  if (var->makpongRule && evasion_checkers() && type_of(moved_piece(m)) == KING && (evasion_checkers() ^ to))
       return false;
 
   if (var->royalPieceNoThroughCheck && type_of(moved_piece(m)) == king_type())
@@ -3544,9 +3558,9 @@ bool Position::pseudo_legal(const Move m) const {
 
   if (type_of(m) != NORMAL || is_gating(m))
   {
-      const bool useWrappedFallback = topology_wraps() && checkers();
-      return ((checkers() && !useWrappedFallback) ? MoveList<    EVASIONS>(*this).contains(m)
-                                                  : MoveList<NON_EVASIONS>(*this).contains(m))
+      const bool useWrappedFallback = topology_wraps() && evasion_checkers();
+      return ((evasion_checkers() && !useWrappedFallback) ? MoveList<    EVASIONS>(*this).contains(m)
+                                                          : MoveList<NON_EVASIONS>(*this).contains(m))
           && !violates_same_player_board_repetition(m);
   }
 
@@ -3653,7 +3667,7 @@ bool Position::pseudo_legal(const Move m) const {
   // Evasions generator already takes care to avoid some kind of illegal moves
   // and legal() relies on this. We therefore have to take care that the same
   // kind of moves are filtered out here.
-  if (!allow_checks() && checkers() && !(checkers() & non_sliding_riders()))
+  if (!allow_checks() && evasion_checkers() && !(evasion_checkers() & non_sliding_riders()))
   {
       if (type_of(pc) != KING)
       {
@@ -3702,7 +3716,7 @@ bool Position::pseudo_legal(const Move m) const {
           };
 
           Bitboard evasionTargets = AllSquares;
-          Bitboard remaining = checkers();
+          Bitboard remaining = evasion_checkers();
           while (remaining)
               evasionTargets &= checker_targets(pop_lsb(remaining));
 
@@ -3803,7 +3817,7 @@ bool Position::gives_check(Move m) const {
       Position* pos = const_cast<Position*>(this);
       StateInfo nextState;
       pos->do_move(m, nextState, false);
-      bool givesCheck = bool(pos->checkers());
+      bool givesCheck = bool(pos->evasion_checkers());
       pos->undo_move(m);
       return givesCheck;
   }
@@ -6059,7 +6073,7 @@ void Position::do_castling(Color us, Square from, Square& to, Square& rfrom, Squ
 
 void Position::do_null_move(StateInfo& newSt) {
 
-  assert(!checkers());
+  assert(!evasion_checkers());
   assert(&newSt != st);
 
   std::memcpy(static_cast<void*>(&newSt), static_cast<const void*>(st), offsetof(StateInfo, accumulator));
@@ -6098,7 +6112,7 @@ void Position::do_null_move(StateInfo& newSt) {
 
 void Position::undo_null_move() {
 
-  assert(!checkers());
+  assert(!evasion_checkers());
 
   st = st->previous;
   sideToMove = ~sideToMove;
@@ -6521,7 +6535,7 @@ bool Position::n_fold_game_end(Value& result, int ply, int target) const {
 bool Position::is_optional_game_end(Value& result, int ply, int countStarted) const {
 
   // n-move rule
-  if (n_move_rule() && st->rule50 > (2 * n_move_rule() - 1) && (!checkers() || MoveList<LEGAL>(*this).size()))
+  if (n_move_rule() && st->rule50 > (2 * n_move_rule() - 1) && (!evasion_checkers() || MoveList<LEGAL>(*this).size()))
   {
       int offset = 0;
       if (var->chasingRule == AXF_CHASING && st->pliesFromNull >= 20)
@@ -6552,7 +6566,7 @@ bool Position::is_optional_game_end(Value& result, int ply, int countStarted) co
   if (   counting_rule()
       && st->countingLimit
       && counting_ply(countStarted) > counting_limit(countStarted)
-      && (!checkers() || MoveList<LEGAL>(*this).size()))
+      && (!evasion_checkers() || MoveList<LEGAL>(*this).size()))
   {
       result = VALUE_DRAW;
       return true;
@@ -6562,7 +6576,7 @@ bool Position::is_optional_game_end(Value& result, int ply, int countStarted) co
   if (   sittuyin_promotion()
       && count<ALL_PIECES>(sideToMove) == 2
       && count<PAWN>(sideToMove) == 1
-      && !checkers())
+      && !evasion_checkers())
   {
       bool promotionsOnly = true;
       for (const auto& m : MoveList<LEGAL>(*this))
@@ -6649,7 +6663,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
   {
       bool gameEnd = true;
       // Check whether king can move to CTF zone (racing kings) to draw
-      if (   flag_move() && sideToMove == BLACK && !checkers() && count<KING>(sideToMove)
+      if (   flag_move() && sideToMove == BLACK && !evasion_checkers() && count<KING>(sideToMove)
           && (flag_region(sideToMove) & attacks_from(sideToMove, KING, square<KING>(sideToMove))))
       {
           assert(flag_piece(sideToMove) == KING);
@@ -6702,7 +6716,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
   // Immediate n-move adjudication (e.g. FIDE 75-move rule)
   if (   n_move_rule_immediate()
       && st->rule50 > (2 * n_move_rule_immediate() - 1)
-      && (!checkers() || MoveList<LEGAL>(*this).size()))
+      && (!evasion_checkers() || MoveList<LEGAL>(*this).size()))
   {
       result = var->materialCounting ? convert_mate_value(material_counting_result(), ply) : VALUE_DRAW;
       return true;
@@ -6982,7 +6996,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
   }
 
   // Tsume mode: Assume that side with king wins when not in check
-  if (tsumeMode && !count<KING>(~sideToMove) && count<KING>(sideToMove) && !checkers())
+  if (tsumeMode && !count<KING>(~sideToMove) && count<KING>(sideToMove) && !evasion_checkers())
   {
       result = mate_in(ply);
       return true;
@@ -7001,7 +7015,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
  }
 
   // Failing to checkmate with virtual pieces is a loss
-  if (two_boards() && !checkers())
+  if (two_boards() && !evasion_checkers())
   {
       int virtualCount = 0;
       for (PieceSet ps = piece_types(); ps;)

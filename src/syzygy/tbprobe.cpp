@@ -1514,7 +1514,7 @@ int Tablebases::probe_dtz(Position& pos, ProbeState* result) {
                       : -probe_dtz(pos, result);
 
         // If the move mates, force minDTZ to 1
-        if (dtz == 1 && pos.checkers() && MoveList<LEGAL>(pos).size() == 0)
+        if (dtz == 1 && pos.evasion_checkers() && MoveList<LEGAL>(pos).size() == 0)
             minDTZ = 1;
 
         // Convert result from 1-ply search. Zeroing moves are already accounted
@@ -1582,7 +1582,7 @@ bool Tablebases::root_probe(Position& pos, Search::RootMoves& rootMoves) {
         }
 
         // Make sure that a mating move is assigned a dtz value of 1
-        if (   pos.checkers()
+        if (   pos.evasion_checkers()
             && dtz == 2
             && MoveList<LEGAL>(pos).size() == 0)
             dtz = 1;

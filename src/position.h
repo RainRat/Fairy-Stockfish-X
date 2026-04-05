@@ -105,6 +105,7 @@ struct StateInfo {
   Key        key;
   Key        boardKey;
   Bitboard   checkersBB;
+  Bitboard   evasionCheckersBB;
   Piece      unpromotedCapturedPiece;
   Piece      unpromotedBycatch[SQUARE_NB];
   Bitboard   bycatchSquares;
@@ -497,6 +498,7 @@ public:
 
   // Checking
   Bitboard checkers() const;
+  Bitboard evasion_checkers() const;
   Bitboard blockers_for_king(Color c) const;
   Bitboard check_squares(PieceType pt) const;
   Bitboard pinners(Color c) const;
@@ -612,6 +614,7 @@ private:
   void set_state(StateInfo* si) const;
   void recompute_state_hashes_and_material(StateInfo* si) const;
   Bitboard compute_checkers_bb(Color side) const;
+  Bitboard compute_evasion_checkers_bb(Color side) const;
   void set_check_info(StateInfo* si) const;
   bool compute_forced_jump_followup(Square s, int step = 0) const;
   bool is_initial_pawn(Piece pc, Square s) const;
@@ -1453,7 +1456,7 @@ inline bool Position::has_capture() const {
   // Check for cached value
   if (st->legalCapture != NO_VALUE)
       return st->legalCapture == VALUE_TRUE;
-  if (checkers())
+  if (evasion_checkers())
   {
       for (const auto& mevasion : MoveList<EVASIONS>(*this))
           if (capture(mevasion) && legal(mevasion))
@@ -1478,7 +1481,7 @@ inline bool Position::has_capture() const {
 inline bool Position::has_en_passant_capture() const {
   if (st->legalEnPassant != NO_VALUE)
       return st->legalEnPassant == VALUE_TRUE;
-  if (checkers())
+  if (evasion_checkers())
   {
       for (const auto& mevasion : MoveList<EVASIONS>(*this))
           if (type_of(mevasion) == EN_PASSANT && legal(mevasion))
@@ -2071,7 +2074,7 @@ inline Value Position::checkmate_value(int ply) const {
   assert(var != nullptr);
   // Check for illegal mate by shogi pawn drop
   if (    shogi_pawn_drop_mate_illegal(~side_to_move())
-      && !(checkers() & ~pieces(SHOGI_PAWN))
+      && !(evasion_checkers() & ~pieces(SHOGI_PAWN))
       && !st->capturedPiece
       &&  st->pliesFromNull > 0
       && (st->materialKey != st->previous->materialKey))
@@ -2082,11 +2085,11 @@ inline Value Position::checkmate_value(int ply) const {
   if (var->shatarMateRule)
   {
       // Mate by knight is illegal
-      if (!(checkers() & ~pieces(KNIGHT)))
+      if (!(evasion_checkers() & ~pieces(KNIGHT)))
           return mate_in(ply);
 
       StateInfo* stp = st;
-      while (stp->checkersBB)
+      while (stp->evasionCheckersBB)
       {
           // Return mate score if there is at least one shak in series of checks
           if (stp->shak)
@@ -3376,6 +3379,10 @@ inline Bitboard Position::attackers_to_king(Square s, Bitboard occupied, Color c
 
 inline Bitboard Position::checkers() const {
   return st->checkersBB;
+}
+
+inline Bitboard Position::evasion_checkers() const {
+  return st->evasionCheckersBB;
 }
 
 inline Bitboard Position::passive_blast_checkers(Color victim, Bitboard occupied) const {
