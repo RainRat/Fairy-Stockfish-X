@@ -1829,6 +1829,9 @@ Bitboard Position::compute_checkers_bb(Color side) const {
 
 Bitboard Position::compute_evasion_checkers_bb(Color side) const {
 
+  // Fairy-Stockfish-X split from upstream-style broad checkersBB:
+  // this tracks only king-evasion state that should drive EVASIONS, mate/stalemate,
+  // null-move, and perpetual-check semantics.
   Bitboard checkers = !allow_checks() && count<KING>(side)
                     ? attackers_to_king(square<KING>(side), ~side)
                     : Bitboard(0);
@@ -6467,6 +6470,8 @@ bool Position::n_fold_game_end(Value& result, int ply, int target) const {
 
   StateInfo* stp = st->previous->previous;
   int cnt = 0;
+  // Per documented rule intent, perpetual-check style repetition tracks only actual
+  // evasion-required checks, not broader pseudo-royal or anti-royal danger bookkeeping.
   bool perpetualThem = var->perpetualCheckIllegal && st->evasionCheckersBB && stp->evasionCheckersBB;
   bool perpetualUs = var->perpetualCheckIllegal && st->previous->evasionCheckersBB && stp->previous->evasionCheckersBB;
   Bitboard chaseThem = undo_move_board(st->chased, st->previous->move) & stp->chased;

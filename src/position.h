@@ -105,6 +105,8 @@ struct StateInfo {
   Key        key;
   Key        boardKey;
   Bitboard   checkersBB;
+  // Fairy-Stockfish-X split: broad royal-danger state, including pseudo-/anti-royal
+  // bookkeeping, must not be conflated with actual "must evade now" check state.
   Bitboard   evasionCheckersBB;
   Piece      unpromotedCapturedPiece;
   Piece      unpromotedBycatch[SQUARE_NB];
