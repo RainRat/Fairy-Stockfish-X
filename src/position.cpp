@@ -6467,13 +6467,13 @@ bool Position::n_fold_game_end(Value& result, int ply, int target) const {
 
   StateInfo* stp = st->previous->previous;
   int cnt = 0;
-  bool perpetualThem = var->perpetualCheckIllegal && st->checkersBB && stp->checkersBB;
-  bool perpetualUs = var->perpetualCheckIllegal && st->previous->checkersBB && stp->previous->checkersBB;
+  bool perpetualThem = var->perpetualCheckIllegal && st->evasionCheckersBB && stp->evasionCheckersBB;
+  bool perpetualUs = var->perpetualCheckIllegal && st->previous->evasionCheckersBB && stp->previous->evasionCheckersBB;
   Bitboard chaseThem = undo_move_board(st->chased, st->previous->move) & stp->chased;
   Bitboard chaseUs = undo_move_board(st->previous->chased, stp->move) & stp->previous->chased;
   int moveRepetition = var->moveRepetitionIllegal
                         && type_of(st->move) == NORMAL
-                        && !st->previous->checkersBB && !stp->previous->checkersBB
+                        && !st->previous->evasionCheckersBB && !stp->previous->evasionCheckersBB
                         && (board_bb(~side_to_move(), type_of(piece_on(to_sq(st->move)))) & board_bb(side_to_move(), KING))
                         ? (stp->move == reverse_move(st->move) ? 2 : is_pass(stp->move) ? 1 : 0) : 0;
 
@@ -6482,7 +6482,7 @@ bool Position::n_fold_game_end(Value& result, int ply, int target) const {
       // Janggi repetition rule
       if (moveRepetition > 0)
       {
-          if (i + 1 <= end && stp->previous->previous->previous->checkersBB)
+          if (i + 1 <= end && stp->previous->previous->previous->evasionCheckersBB)
               moveRepetition = 0;
           else if (moveRepetition < 4)
           {
@@ -6507,7 +6507,7 @@ bool Position::n_fold_game_end(Value& result, int ply, int target) const {
       if (i != st->pliesFromNull)
           chaseThem = undo_move_board(chaseThem, stp->previous->move) & stp->previous->previous->chased;
       stp = stp->previous->previous;
-      perpetualThem &= bool(stp->checkersBB);
+      perpetualThem &= bool(stp->evasionCheckersBB);
 
       // Return a draw score if a position repeats once earlier but strictly
       // after the root, or repeats twice before or at the root.
@@ -6525,7 +6525,7 @@ bool Position::n_fold_game_end(Value& result, int ply, int target) const {
 
       if (i + 1 <= end)
       {
-          perpetualUs &= bool(stp->previous->checkersBB);
+          perpetualUs &= bool(stp->previous->evasionCheckersBB);
           chaseUs = undo_move_board(chaseUs, stp->move) & stp->previous->chased;
       }
   }
@@ -6543,13 +6543,13 @@ bool Position::is_optional_game_end(Value& result, int ply, int countStarted) co
       {
           int end = std::min(st->rule50, st->pliesFromNull);
           StateInfo* stp = st;
-          int checkThem = bool(stp->checkersBB);
-          int checkUs = bool(stp->previous->checkersBB);
+          int checkThem = bool(stp->evasionCheckersBB);
+          int checkUs = bool(stp->previous->evasionCheckersBB);
           for (int i = 2; i < end; i += 2)
           {
               stp = stp->previous->previous;
-              checkThem += bool(stp->checkersBB);
-              checkUs += bool(stp->previous->checkersBB);
+              checkThem += bool(stp->evasionCheckersBB);
+              checkUs += bool(stp->previous->evasionCheckersBB);
           }
           offset = 2 * std::max(std::max(checkThem, checkUs) - 10, 0) + 20 * (CurrentProtocol == UCCI || CurrentProtocol == UCI_CYCLONE);
       }
