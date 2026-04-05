@@ -289,6 +289,16 @@ out=$(run_cmds "setoption name UCI_Variant value crossway
 position fen 8/8/8/SSSSSSSS/8/8/8/8[Ss] b - - 0 1
 go perft 1")
 echo "${out}" | grep -q "Nodes searched: 0"
+
+out=$(run_cmds "setoption name UCI_Variant value crossway
+position startpos moves S@d4
+go perft 1")
+echo "${out}" | grep -q "^S@d4: 1$"
+
+out=$(run_cmds "setoption name UCI_Variant value crossway
+position startpos moves S@d4 S@d4
+go perft 1")
+! echo "${out}" | grep -q "^S@d4: 1$"
 fi
 
 # 7b) Pathway: enemy-only adjacency drops are illegal, one-friendly drops are legal, and no-placement wins.

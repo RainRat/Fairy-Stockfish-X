@@ -2751,6 +2751,21 @@ bool Position::legal(Move m) const {
   }
 
   // Illegal drop move
+  if (dropMove)
+  {
+      Bitboard legalDropTargets = ~pieces();
+      legalDropTargets |= opening_swap_drop_targets(us, in_hand_piece_type(m));
+      if (!paired_drop(m) && (capture_drop_types() & in_hand_piece_type(m)))
+      {
+          legalDropTargets |= pieces(them);
+          if (self_capture())
+              legalDropTargets |= pieces(us) & ~pieces(us, KING);
+      }
+
+      if (!(drop_region(us, type_of(moved_piece(m))) & legalDropTargets & to))
+          return false;
+  }
+
   if (drop_opposite_colored_bishop() && dropMove)
   {
       if (type_of(moved_piece(m)) != BISHOP)
@@ -3492,6 +3507,7 @@ bool Position::pseudo_legal(const Move m) const {
           return false;
 
       Bitboard legalDropTargets = ~pieces();
+      legalDropTargets |= opening_swap_drop_targets(us, in_hand_piece_type(m));
       if (!paired_drop(m) && (capture_drop_types() & in_hand_piece_type(m)))
       {
           legalDropTargets |= pieces(them);

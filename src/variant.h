@@ -192,6 +192,7 @@ struct Variant {
   bool openingSelfRemoval = false;
   bool openingSelfRemovalAdjacentToLast = false;
   Bitboard openingSelfRemovalRegion[COLOR_NB] = {AllSquares, AllSquares};
+  bool openingSwapDrop = false;
   bool isPriorityDrop[PIECE_TYPE_NB] = {};
   bool pieceDrops = false;
   bool virtualDrops = true;

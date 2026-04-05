@@ -338,6 +338,8 @@ public:
   bool opening_self_removal() const;
   bool in_opening_self_removal_phase() const;
   Bitboard opening_self_removal_targets(Color c) const;
+  bool opening_swap_drop() const;
+  Bitboard opening_swap_drop_targets(Color c, PieceType pt) const;
   bool is_opening_self_removal_move(Move m) const;
   bool piece_drops() const;
   bool drop_loop() const;
@@ -1546,6 +1548,40 @@ inline Bitboard Position::opening_self_removal_targets(Color c) const {
       targets &= PseudoAttacks[WHITE][WAZIR][lastSq];
   }
   return targets;
+}
+
+inline bool Position::opening_swap_drop() const {
+  assert(var != nullptr);
+  return var->openingSwapDrop;
+}
+
+inline Bitboard Position::opening_swap_drop_targets(Color c, PieceType pt) const {
+  if (!opening_swap_drop()
+      || !st
+      || !st->previous
+      || st->previous->previous
+      || !piece_drops()
+      || !must_drop()
+      || capture_type() != MOVE_OUT
+      || self_capture()
+      || capture_drop_types()
+      || symmetric_drop_types()
+      || free_drops()
+      || two_boards()
+      || edge_insert_types())
+      return Bitboard(0);
+
+  if (pieces(c))
+      return Bitboard(0);
+
+  Bitboard enemy = pieces(~c);
+  if (popcount(enemy) != 1)
+      return Bitboard(0);
+
+  if (!(drop_piece_types(pt) & pt))
+      return Bitboard(0);
+
+  return drop_region(c, pt) & enemy;
 }
 
 inline bool Position::is_opening_self_removal_move(Move m) const {

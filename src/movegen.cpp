@@ -181,7 +181,7 @@ namespace {
     if (pos.can_drop(Us, pt) || (Type != NON_EVASIONS && pos.two_boards() && pos.virtual_drops() && pos.allow_virtual_drop(Us, pt)))
     {
         // Restrict to valid target
-        b &= pos.drop_region(Us, pt) & ~pos.pieces();
+        b &= pos.drop_region(Us, pt) & (~pos.pieces() | pos.opening_swap_drop_targets(Us, pt));
 
         if ((pos.symmetric_drop_types() & pt) && pos.count_in_hand(Us, pt) >= 2)
         {
