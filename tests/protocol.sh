@@ -10,9 +10,13 @@ trap 'error ${LINENO}' ERR
 
 echo "protocol testing started"
 
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
+ENGINE="${1:-${REPO_ROOT}/src/stockfish}"
+
 uci_exp=$(mktemp)
 cat << EOF > "$uci_exp"
-   spawn ./stockfish
+   spawn $ENGINE
    send "uci\\n"
    expect "default chess"
    expect "uciok"
@@ -22,7 +26,7 @@ EOF
 
 ucci_exp=$(mktemp)
 cat << EOF > "$ucci_exp"
-   spawn ./stockfish
+   spawn $ENGINE
    send "ucci\\n"
    expect "option UCI_Variant"
    expect -re "default (xiangqi|minixiangqi)"
@@ -33,7 +37,7 @@ EOF
 
 usi_exp=$(mktemp)
 cat << EOF > "$usi_exp"
-   spawn ./stockfish
+   spawn $ENGINE
    send "usi\\n"
    expect -re "default (shogi|minishogi)"
    expect "usiok"
@@ -43,7 +47,7 @@ EOF
 
 ucicyclone_exp=$(mktemp)
 cat << EOF > "$ucicyclone_exp"
-   spawn ./stockfish
+   spawn $ENGINE
    send "uci\\n"
    expect "uciok"
    send "startpos\\n"
@@ -55,7 +59,7 @@ EOF
 
 ucicyclone2_exp=$(mktemp)
 cat << EOF > "$ucicyclone2_exp"
-   spawn ./stockfish ucicyclone
+   spawn $ENGINE ucicyclone
    send "uci\\n"
    expect "uciok"
    send "position startpos\\n"
@@ -67,7 +71,7 @@ EOF
 
 xboard_exp=$(mktemp)
 cat << EOF > "$xboard_exp"
-   spawn ./stockfish load variants.ini
+   spawn $ENGINE load ${REPO_ROOT}/src/variants.ini
    send "xboard\\n"
    send "protover 2\\n"
    expect "feature done=1"
