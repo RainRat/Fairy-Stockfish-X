@@ -126,6 +126,15 @@ blastPassiveTypes = n
 [death-petrify-repro:chess]
 deathOnCaptureTypes = k
 petrifyOnCaptureTypes = k
+
+[push-gating:chess]
+pushingStrength = R:8
+gating = true
+seirawanGating = true
+
+[petrify-push:chess]
+pushingStrength = R:8
+petrifyOnCaptureTypes = R
 EOF
 
 echo "unorthodox interactions tests started"
@@ -276,6 +285,22 @@ if ! echo "${out}" | grep -q "info string unknown variant 'death-petrify-repro'"
 fi
 if echo "${out}" | grep -q "info string variant death-petrify-repro"; then
   echo "deathOnCaptureTypes + petrifyOnCaptureTypes variant should have been rejected"
+  exit 1
+fi
+
+# 22. Test pushingStrength + gating (ensure gating correctly pushes)
+out=$(run_cmds "push-gating" "${TEMP_INI}" "position fen n3k2n/8/8/8/8/8/8/R2p3K[N] w Qkq - 0 1 moves a1e1n
+d")
+if ! echo "${out}" | grep -q "Fen: n3k2n/8/8/8/8/8/8/N3Rp1K"; then
+  echo "pushingStrength + gating bug: piece was not correctly pushed"
+  exit 1
+fi
+
+# 23. Test pushingStrength + petrifyOnCaptureTypes
+out=$(run_cmds "petrify-push" "${TEMP_INI}" "position fen K3k3/8/8/8/8/8/8/R6p w - - 0 1 moves a1h1
+d")
+if ! echo "${out}" | grep -q "Fen: K3k3/8/8/8/8/8/8/7\\* b"; then
+  echo "pushingStrength + petrifyOnCapture bug: pushed offboard piece did not petrify"
   exit 1
 fi
 
