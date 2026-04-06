@@ -329,7 +329,7 @@ fi
 # 22. Test pushingStrength + gating (ensure gating correctly pushes)
 out=$(run_cmds "push-gating" "${TEMP_INI}" "position fen n3k2n/8/8/8/8/8/8/R2p3K[N] w Qkq - 0 1 moves a1e1n
 d")
-if ! echo "${out}" | grep -q "Fen: n3k2n/8/8/8/8/8/8/N2pR2K"; then
+if ! echo "${out}" | grep -q "Fen: n3k2n/8/8/8/8/8/8/N3Rp1K"; then
   echo "pushingStrength + gating bug: piece was not correctly pushed"
   exit 1
 fi

@@ -211,7 +211,7 @@ namespace {
                              PushTempPiece* outTransfers = nullptr,
                              int* outTransferCount = nullptr) {
     const MoveType mt = type_of(m);
-    if (mt != NORMAL || is_gating(m) || pos.topology_wraps())
+    if (mt != NORMAL || pos.topology_wraps())
         return false;
 
     Square from = from_sq(m);
@@ -367,7 +367,7 @@ namespace {
 
   bool analyze_push_direct(const Position& pos, Move m, PushInfo& info) {
     const MoveType mt = type_of(m);
-    if ((mt != NORMAL && mt != INSERT) || is_gating(m))
+    if ((mt != NORMAL && mt != INSERT))
         return false;
     if (pos.topology_wraps())
         return false;
