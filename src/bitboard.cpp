@@ -702,7 +702,7 @@ void Bitboards::init_pieces() {
                       if (limit == SKI_SLIDER_LIMIT)
                           skiDirs[d] = 0;
                       else if (limit == MAX_SLIDER_LIMIT)
-                          continue;
+                          riderDirs[d] = 0;
                       else if (limit >= 0 || is_slider_range(limit))
                           riderDirs[d] = limit;
 

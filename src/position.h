@@ -3188,7 +3188,7 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
 
   Bitboard b = attacks_bb(c, movePt, s, occupancy);
 
-  b |= Position::special_rider_bb(pi, MODALITY_CAPTURE, s, occupancy, byTypeBB[ALL_PIECES], pieces(c), c, true, true);
+  b |= Position::special_rider_bb(pi, MODALITY_CAPTURE, s, occupancy, occupancy, pieces(c), c, true, true);
 
   if (pi->friendlyJump)
       b &= ~pieces(c);          // never hit our own men

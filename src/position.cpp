@@ -2290,14 +2290,14 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
               while (asymmetricals)
               {
                   Square s2 = pop_lsb(asymmetricals);
-                  if (attacks_bb(c, move_pt, s2, occupied) & s)
+                  if (attacks_from(c, move_pt, s2, occupied) & s)
                       b |= s2;
               }
           }
           else if (pt == JANGGI_CANNON)
-              b |= attacks_bb(~c, move_pt, s, occupied) & attacks_bb(~c, move_pt, s, occupied & ~janggiCannons) & pieces(c, JANGGI_CANNON);
+              b |= attacks_from(~c, move_pt, s, occupied) & attacks_from(~c, move_pt, s, occupied & ~janggiCannons) & pieces(c, JANGGI_CANNON);
           else
-              b |= attacks_bb(~c, move_pt, s, occupied) & pieces(c, pt);
+              b |= attacks_from(~c, move_pt, s, occupied) & pieces(c, pt);
       }
   }
 
