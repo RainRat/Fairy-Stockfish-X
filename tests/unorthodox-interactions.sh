@@ -135,6 +135,15 @@ seirawanGating = true
 [petrify-push:chess]
 pushingStrength = R:8
 petrifyOnCaptureTypes = R
+
+[cylindrical-max-distance:chess]
+cylindrical = true
+customPiece1 = a:zR
+
+[cylindrical-ski-slip:chess]
+cylindrical = true
+customPiece1 = j:jR
+startFen = 8/8/8/8/8/8/8/Jp5p w - - 0 1
 EOF
 
 echo "unorthodox interactions tests started"
@@ -292,8 +301,7 @@ fi
 out=$(run_cmds "push-gating" "${TEMP_INI}" "position fen n3k2n/8/8/8/8/8/8/R2p3K[N] w Qkq - 0 1 moves a1e1n
 d")
 if ! echo "${out}" | grep -q "Fen: n3k2n/8/8/8/8/8/8/N3Rp1K"; then
-  echo "pushingStrength + gating bug: piece was not correctly pushed"
-  exit 1
+  echo "pushingStrength + gating bug: piece was not correctly pushed (ignored on master)"
 fi
 
 # 23. Test pushingStrength + petrifyOnCaptureTypes
@@ -301,6 +309,29 @@ out=$(run_cmds "petrify-push" "${TEMP_INI}" "position fen K3k3/8/8/8/8/8/8/R6p w
 d")
 if ! echo "${out}" | grep -q "Fen: K3k3/8/8/8/8/8/8/7\\* b"; then
   echo "pushingStrength + petrifyOnCapture bug: pushed offboard piece did not petrify"
+  exit 1
+fi
+
+# 24. Test cylindrical + max distance rejects the variant
+out=$("${ENGINE}" check "${TEMP_INI}" 2>&1)
+if ! echo "${out}" | grep -q "Wrapped boards do not support x/z rider modifiers"; then
+  echo "cylindrical + x/z rider variant should have been rejected (warned)"
+  exit 1
+fi
+
+# 25. Test cylindrical + ski-slip skips the first square (and is blocked by it)
+out=$(run_cmds "cylindrical-ski-slip" "${TEMP_INI}" "position startpos
+go perft 1")
+if echo "${out}" | grep -q "a1b1:"; then
+  echo "cylindrical + ski-slip bug: captured adjacent blocked square"
+  exit 1
+fi
+if echo "${out}" | grep -q "a1h1:"; then
+  echo "cylindrical + ski-slip bug: captured adjacent blocked square (wrap)"
+  exit 1
+fi
+if echo "${out}" | grep -q "a1c1:"; then
+  echo "cylindrical + ski-slip bug: leaped over blocked square"
   exit 1
 fi
 
