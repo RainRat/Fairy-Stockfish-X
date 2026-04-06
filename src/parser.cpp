@@ -2011,11 +2011,16 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
                 break;
             }
 
-    // Check for limitations
     if (DoCheck && (v->pieceDrops || v->freeDrops) && v->wallingRule != NO_WALLING)
+    {
         std::cerr << "pieceDrops and any walling are incompatible." << std::endl;
+        valid = false;
+    }
     if (DoCheck && v->edgeInsertTypes && !v->pieceDrops)
+    {
         std::cerr << "edgeInsertTypes requires pieceDrops=true." << std::endl;
+        valid = false;
+    }
     if (DoCheck && v->openingSwapDrop
         && (!v->pieceDrops
             || !v->mustDrop
@@ -2026,13 +2031,43 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
             || v->twoBoards
             || v->freeDrops
             || v->edgeInsertTypes))
+    {
         std::cerr << "openingSwapDrop is only supported for simple move-out mandatory drop variants without capture drops, paired drops, self capture, free drops, edge inserts, or two-board reserves." << std::endl;
-    if (DoCheck && v->wallingRule != NO_WALLING && v->seirawanGating)
-        std::cerr << "wallingRule and seirawanGating are incompatible." << std::endl;
-    if (DoCheck && v->wallingRule != NO_WALLING && v->potions)
-        std::cerr << "wallingRule and potions are incompatible." << std::endl;
+        valid = false;
+    }
+
+    bool hasGatingPieceAfter = false;
+    for (Color c : {WHITE, BLACK})
+        for (int i = 0; i < PIECE_TYPE_NB; ++i)
+            if (v->gatingPieceAfter[c][i] != NO_PIECE_TYPE)
+                hasGatingPieceAfter = true;
+
+    if (DoCheck && v->wallingRule != NO_WALLING && (v->seirawanGating || v->potions || v->gating || hasGatingPieceAfter))
+    {
+        std::cerr << "wallingRule and gating features (seirawanGating, potions, gating, gatingPieceAfter) are incompatible." << std::endl;
+        valid = false;
+    }
     if (DoCheck && v->wallingRule == DUCK && v->petrifyOnCaptureTypes)
+    {
         std::cerr << "wallingRule=duck and petrifyOnCaptureTypes are incompatible." << std::endl;
+        valid = false;
+    }
+
+    if (DoCheck && hasGatingPieceAfter && (v->seirawanGating || v->potions || v->gating))
+    {
+        std::cerr << "gatingPieceAfter and other gating features (seirawanGating, potions, gating) are incompatible." << std::endl;
+        valid = false;
+    }
+    if (DoCheck && v->seirawanGating && (v->potions || v->gating))
+    {
+        std::cerr << "seirawanGating and other gating features (potions, gating) are incompatible." << std::endl;
+        valid = false;
+    }
+    if (DoCheck && v->potions && v->gating)
+    {
+        std::cerr << "potions and gating are incompatible." << std::endl;
+        valid = false;
+    }
 
     // Options incompatible with royal kings
     if (hasRoyalKing)
@@ -2086,13 +2121,25 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
     if (DoCheck && (v->pseudoRoyalTypes || v->antiRoyalTypes || hasRoyalKing))
     {
         if (v->blastImmuneTypes) //I may have this solved now.
+        {
             std::cerr << "Can not use kings, pseudo-royal, or anti-royal with blastImmuneTypes." << std::endl;
+            valid = false;
+        }
         if (v->mutuallyImmuneTypes)
+        {
             std::cerr << "Can not use kings, pseudo-royal, or anti-royal with mutuallyImmuneTypes." << std::endl;
+            valid = false;
+        }
         if (v->antiRoyalTypes & v->pseudoRoyalTypes)
+        {
             std::cerr << "Piece can not be both pseudo-royal and anti-royal." << std::endl;
+            valid = false;
+        }
         if (v->antiRoyalTypes & KING)
+        {
             std::cerr << "Piece can not be both royal king and anti-royal." << std::endl;
+            valid = false;
+        }
     }
     if (v->flagPieceSafe)
     {
