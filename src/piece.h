@@ -52,7 +52,7 @@ inline int encode_slider_range(int minDistance, int maxDistance) {
 }
 
 inline int slider_min_distance(int limit) {
-  return is_slider_range(limit) ? ((limit >> 8) & 0xFF) : 1;
+  return is_slider_range(limit) ? ((limit >> 8) & 0xFF) : (limit == SKI_SLIDER_LIMIT ? 2 : 1);
 }
 
 inline int slider_max_distance(int limit) {

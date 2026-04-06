@@ -2002,11 +2002,11 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
     if (DoCheck && wrapsTopology && (v->connectN || v->connect3D || v->connect4D || v->connectNxN || v->collinearN || v->connectGroup || v->removeConnectN))
         std::cerr << "Wrapped boards do not support connect/collinear win conditions." << std::endl;
 
-    if (DoCheck && v->toroidal)
+    if (DoCheck && wrapsTopology)
         for (int i = 0; i < CUSTOM_PIECES_NB; ++i)
             if (!v->customPiece[i].empty() && (v->customPiece[i].find('x') != std::string::npos || v->customPiece[i].find('z') != std::string::npos))
             {
-                std::cerr << "Toroidal boards do not support x/z rider modifiers in customPiece"
+                std::cerr << "Wrapped boards do not support x/z rider modifiers in customPiece"
                           << (i + 1) << "." << std::endl;
                 break;
             }
