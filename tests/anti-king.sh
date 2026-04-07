@@ -28,7 +28,7 @@ echo "anti-king tests started"
 
 out=$(run_engine anti-king-1 "position startpos")
 echo "${out}" | grep -q "^info string variant anti-king-1 "
-echo "${out}" | grep -q "^Nodes searched: 12$"
+echo "${out}" | grep -q "^Nodes searched: 20$"
 
 out=$(run_engine anti-king-2 "position startpos")
 echo "${out}" | grep -q "^info string variant anti-king-2 "
