@@ -1553,6 +1553,9 @@ inline FenValidation validate_position(const std::string& fen, const Variant* v,
     if (status != FEN_OK)
         return status;
 
+    if (Threads.empty())
+        Threads.set(1);
+
     StateListPtr states(new std::deque<StateInfo>(1));
     Position pos;
     UCI::init_variant(v);
