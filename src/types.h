@@ -293,7 +293,7 @@ struct Bitboard {
 };
 constexpr int SQUARE_BITS = 8;
 #elif defined(LARGEBOARDS)
-#if defined(__GNUC__) && defined(IS_64BIT)
+#if (defined(__GNUC__) || defined(__clang__)) && defined(__SIZEOF_INT128__) && defined(IS_64BIT)
 typedef unsigned __int128 Bitboard;
 #else
 struct Bitboard {
@@ -396,6 +396,7 @@ struct Bitboard {
     }
 
     inline Bitboard operator * (const Bitboard x) const {
+#if (defined(__GNUC__) || defined(__clang__)) && defined(__SIZEOF_INT128__)
         unsigned __int128 lo = (unsigned __int128)b64[1] * x.b64[1];
         unsigned __int128 cross1 = (unsigned __int128)b64[1] * x.b64[0];
         unsigned __int128 cross2 = (unsigned __int128)b64[0] * x.b64[1];
@@ -404,6 +405,13 @@ struct Bitboard {
         r0 += uint64_t(cross1);
         r0 += uint64_t(cross2);
         return Bitboard(r0, r1);
+#else
+        Bitboard result;
+        for (int i = 0; i < 128; ++i)
+            if (((*this >> i) & Bitboard(1)))
+                result |= x << i;
+        return result;
+#endif
     }
 };
 #endif

@@ -258,6 +258,9 @@ void MovePicker::score() {
           captured = pos.piece_on(to_sq(mv));
       return type_of(captured);
   };
+  auto gate_history_bonus = [&](Move mv) {
+      return is_gating(mv) ? (*gateHistory)[pos.side_to_move()][gating_square(mv)] : 0;
+  };
 
   for (auto& m : *this)
       if constexpr (Type == CAPTURES)
@@ -266,7 +269,7 @@ void MovePicker::score() {
                    + points_capture_bonus(m)
                    + flag_goal_bonus(m)
                    + king_goal_progress_bonus(m)
-                   + (*gateHistory)[pos.side_to_move()][gating_square(m)]
+                   + gate_history_bonus(m)
                    + (*captureHistory)[pos.moved_piece(m)][to_sq(m)][capture_victim_type(m)];
       }
 
@@ -279,7 +282,7 @@ void MovePicker::score() {
                    +     exchangeBonus
                    +     flag_goal_bonus(m)
                    +     king_goal_progress_bonus(m)
-                   +     (*gateHistory)[pos.side_to_move()][gating_square(m)]
+                   +     gate_history_bonus(m)
                    + 2 * (*continuationHistory[0])[history_slot(pos.moved_piece(m))][to_sq(m)]
                    +     (*continuationHistory[1])[history_slot(pos.moved_piece(m))][to_sq(m)]
                    +     (*continuationHistory[3])[history_slot(pos.moved_piece(m))][to_sq(m)]
