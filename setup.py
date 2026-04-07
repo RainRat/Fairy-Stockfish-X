@@ -14,7 +14,7 @@ else:
 
 args.extend(["-DLARGEBOARDS", "-DALLVARS", "-DPRECOMPUTED_MAGICS", "-DNNUE_EMBEDDING_OFF"])
 
-if "64bit" in platform.architecture():
+if "64bit" in platform.architecture() and not platform.python_compiler().startswith("MSC"):
     args.append("-DIS_64BIT")
 
 CLASSIFIERS = [
