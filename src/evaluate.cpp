@@ -1613,6 +1613,60 @@ namespace {
         }
     }
 
+    // Connect-group variants (e.g. Lines of Action): reward larger connected
+    // components and fewer fragments, since the win condition depends on
+    // merging the entire army into one group.
+    if (pos.connect_group() != 0)
+    {
+        auto group_stats = [&](Color c) {
+            Bitboard remaining = pos.pieces(c);
+            int largest = 0;
+            int components = 0;
+
+            while (remaining)
+            {
+                components++;
+                Bitboard frontier = square_bb(pop_lsb(remaining));
+                Bitboard group = frontier;
+
+                while (frontier)
+                {
+                    Bitboard next = 0;
+                    Bitboard tmp = frontier;
+                    while (tmp)
+                    {
+                        Square s = pop_lsb(tmp);
+                        for (Direction d : pos.getConnectDirections())
+                        {
+                            Square n = s + d;
+                            if (!is_ok(n) || distance(s, n) != dist(d))
+                                continue;
+
+                            Bitboard nbb = square_bb(n);
+                            if (nbb & remaining)
+                                next |= nbb;
+                        }
+                    }
+
+                    remaining &= ~next;
+                    group |= next;
+                    frontier = next;
+                }
+
+                largest = std::max(largest, popcount(group));
+            }
+
+            return std::pair<int, int>{largest, components};
+        };
+
+        auto [usLargest, usComponents] = group_stats(Us);
+        auto [themLargest, themComponents] = group_stats(Them);
+        int sign = pos.connect_value() == VALUE_MATE ? 1 : -1;
+
+        score += sign * make_score(120, 80) * (usLargest - themLargest);
+        score += sign * make_score(45, 30) * (themComponents - usComponents);
+    }
+
     // Potential piece flips (Reversi)
     if (pos.flip_enclosed_pieces())
     {
