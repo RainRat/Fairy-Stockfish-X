@@ -26,13 +26,15 @@ namespace Stockfish {
 
 #if defined(VERY_LARGE_BOARDS)
 using TTMove = uint64_t;
+using TTKey = uint16_t;
 #else
 using TTMove = uint32_t;
+using TTKey = uint32_t;
 #endif
 
 /// TTEntry struct is the 12 bytes transposition table entry, defined as below:
 ///
-/// key        16 bit
+/// key       16/32 bit
 /// depth       8 bit
 /// generation  5 bit
 /// pv node     1 bit
@@ -57,7 +59,7 @@ private:
   TTMove storedMove;
   int16_t  value16;
   int16_t  eval16;
-  uint16_t key16;
+  TTKey    keyTag;
   uint8_t  depth8;
   uint8_t  genBound8;
 };
@@ -71,17 +73,13 @@ private:
 
 class TranspositionTable {
 
-#if defined(VERY_LARGE_BOARDS)
+  // Keep clusters cache-line sized. Wider TT keys on standard boards reduce
+  // false hits in search-sensitive variants like antichess, so we use 4
+  // entries per 64-byte cluster instead of Stockfish's 5-entry layout.
   static constexpr int ClusterSize = 4;
-#else
-  static constexpr int ClusterSize = 5;
-#endif
 
   struct Cluster {
     TTEntry entry[ClusterSize];
-#if !defined(VERY_LARGE_BOARDS)
-    char padding[4]; // Pad to 64 bytes
-#endif
   };
 
   static_assert(sizeof(Cluster) == 64, "Unexpected Cluster size");
