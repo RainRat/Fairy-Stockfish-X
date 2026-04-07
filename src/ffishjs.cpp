@@ -856,7 +856,9 @@ EMSCRIPTEN_BINDINGS(ffish_js) {
   function("setReadGamePGNLoggingEnabled", optional_override([](bool enabled) {
     logReadGamePgnMoves.store(enabled);
   }));
-  function("readGamePGN", &read_game_pgn);
+  function("readGamePGN", optional_override([](std::string pgn) {
+    return new Game(read_game_pgn(std::move(pgn)));
+  }), allow_raw_pointers());
   function("variants", &ffish::available_variants);
   function("loadVariantConfig", &ffish::load_variant_config);
   function("capturesToHand", &ffish::captures_to_hand);
