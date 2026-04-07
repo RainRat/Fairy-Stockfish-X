@@ -4039,6 +4039,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   Piece pc = moved_piece(m);
   PieceType movedType = type_of(pc);
   Piece captured = captured_piece(m);
+  if (type_of(m) == CASTLING && captured == NO_PIECE)
+      captured = piece_on(to);
   const bool blastOnCaptureMove = blast_on_capture(pc, captured);
   const bool zeroRangeBlastOnCaptureMove = zero_range_blast_on_capture(pc, captured);
   PushInfo pushInfo;
