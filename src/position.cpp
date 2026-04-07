@@ -1359,13 +1359,23 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
               // a) side to move have a pawn threatening epSquare
               // b) there is an enemy pawn one or two (for triple steps) squares in front of epSquare
               // c) there is no (non-wall) piece on epSquare or behind epSquare
+              Square gateBehind = epSquare + pawn_push(sideToMove);
+              bool behindSquareAllowed = !((pieces(WHITE) | pieces(BLACK)) & gateBehind);
+              if (!behindSquareAllowed)
+              {
+                  PieceType forcedGate = forced_gating_type(~sideToMove, PAWN);
+                  behindSquareAllowed = forcedGate != NO_PIECE_TYPE
+                                     && piece_on(gateBehind) == make_piece(~sideToMove, forcedGate);
+              }
+
               if (   (var->enPassantRegion[sideToMove] & epSquare)
                   && (   !var->fastAttacks
                       || (var->enPassantTypes[sideToMove] & ~piece_set(PAWN))
                       || (   pawn_attacks_bb(~sideToMove, epSquare) & pieces(sideToMove, PAWN)
                           && (   (pieces(~sideToMove, PAWN) & (epSquare + pawn_push(~sideToMove)))
                               || (pieces(~sideToMove, PAWN) & (epSquare + 2 * pawn_push(~sideToMove))))
-                          && !((pieces(WHITE) | pieces(BLACK)) & (epSquare | (epSquare + pawn_push(sideToMove)))))))
+                          && !((pieces(WHITE) | pieces(BLACK)) & epSquare)
+                          && behindSquareAllowed)))
                   st->epSquares |= epSquare;
           }
       }

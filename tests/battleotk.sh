@@ -23,7 +23,15 @@ echo "$out" | grep -Fq "Fen: 8/pppppppp/8/8/4P3/8/PPPPNPPP/8 b - - 0 1"
 
 out=$(run_cmds "position fen 8/6P1/8/8/8/8/8/8 w - - 0 1 moves g7g8n
 d")
-echo "$out" | grep -Fq "Fen: 6N1/6N1/8/8/8/8/8/8 b - - 0 1"
+echo "$out" | grep -Fq "Fen: 6N1/8/8/8/8/8/8/8 b - - 0 1"
+
+out=$(run_cmds "position fen 8/ppnppppp/8/2n5/2pP4/4PP2/PPPNNNPP/8 b - d3 0 3
+go perft 1")
+echo "$out" | grep -q "^c4d3: 1$"
+
+out=$(run_cmds "position fen 8/ppnppppp/8/2n5/2pP4/4PP2/PPPNNNPP/8 b - d3 0 3 moves c4d3
+d")
+echo "$out" | grep -Fq "Fen: 8/ppnppppp/8/2n5/8/3pPP2/PPPNNNPP/8 w - - 0 4"
 
 out=$(run_cmds "position startpos
 go depth 1")
