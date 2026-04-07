@@ -3785,7 +3785,10 @@ Square Position::push_capture_square(Move m) const {
 bool Position::gives_check(Move m) const {
 
   assert(is_ok(m));
-  assert(color_of(moved_piece(m)) == sideToMove);
+  Piece mover = moved_piece(m);
+  if (mover == NO_PIECE)
+      return false;
+  assert(color_of(mover) == sideToMove);
 
   Square from = from_sq(m);
   Square to = to_sq(m);
@@ -3832,7 +3835,7 @@ bool Position::gives_check(Move m) const {
   if (paired_drop(m))
       occupied |= square_bb(secondary_drop_square(m));
   Bitboard janggiCannons = pieces(JANGGI_CANNON);
-  if (type_of(moved_piece(m)) == JANGGI_CANNON)
+  if (type_of(mover) == JANGGI_CANNON)
       janggiCannons = rifleShot ? (janggiCannons & ~square_bb(shotSq))
                                 : ((!dropMove ? janggiCannons ^ from : janggiCannons) | to);
   else if (janggiCannons & to)
@@ -3850,9 +3853,9 @@ bool Position::gives_check(Move m) const {
 
   // Is there a direct check?
   if (type_of(m) != PROMOTION && type_of(m) != PIECE_PROMOTION && type_of(m) != PIECE_DEMOTION && type_of(m) != CASTLING
-      && !((var->petrifyOnCaptureTypes & type_of(moved_piece(m))) && capture(m)))
+      && !((var->petrifyOnCaptureTypes & type_of(mover)) && capture(m)))
   {
-      PieceType pt = type_of(moved_piece(m));
+      PieceType pt = type_of(mover);
       if (!(var->captureForbidden[pt] & KING))
       {
           if (pt == JANGGI_CANNON)
@@ -3892,13 +3895,13 @@ bool Position::gives_check(Move m) const {
   }
 
   // Petrified piece can't give check
-  if ((var->petrifyOnCaptureTypes & type_of(moved_piece(m))) && capture(m))
+  if ((var->petrifyOnCaptureTypes & type_of(mover)) && capture(m))
       return false;
 
   // Is there a check by special diagonal moves?
   if (more_than_one(diagonal_lines() & (to | square<KING>(~sideToMove))))
   {
-      PieceType pt = type_of(moved_piece(m));
+      PieceType pt = type_of(mover);
       PieceType diagType = pt == WAZIR ? FERS : pt == SOLDIER ? PAWN : pt == ROOK ? BISHOP : NO_PIECE_TYPE;
       if (diagType && (attacks_bb(sideToMove, diagType, attackFrom, occupied) & square<KING>(~sideToMove)))
           return true;
@@ -3920,7 +3923,7 @@ bool Position::gives_check(Move m) const {
       return attacks_bb(sideToMove, promotion_type(m), to, pieces() ^ from) & square<KING>(~sideToMove);
 
   case PIECE_PROMOTION:
-      return attacks_bb(sideToMove, promoted_piece_type(type_of(moved_piece(m))), to, pieces() ^ from) & square<KING>(~sideToMove);
+      return attacks_bb(sideToMove, promoted_piece_type(type_of(mover)), to, pieces() ^ from) & square<KING>(~sideToMove);
 
   case PIECE_DEMOTION:
       return attacks_bb(sideToMove, type_of(unpromoted_piece_on(from)), to, pieces() ^ from) & square<KING>(~sideToMove);

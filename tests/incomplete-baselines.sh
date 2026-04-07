@@ -42,25 +42,9 @@ position fen 5/2D2/1DdD1/D1D2/dD3 b - - 0 1
 go perft 1")
 echo "${out}" | grep -q "^0000: 1$"
 
-ROOT=$(cd "$(dirname "$0")/.." && pwd)
-ROOT="$ROOT" python3 - <<'PY'
-import os
-import pyffish as sf
-
-cfg = open(os.path.join(os.environ["ROOT"], "src", "variants-incomplete.ini"), encoding="utf-8").read()
-sf.load_variant_config(cfg)
-
-fen = "5/5/5/5/1D3[] b - - 0 1"
-result = sf.game_result("seega", fen, [])
-if result != sf.VALUE_MATE:
-    raise SystemExit(f"unexpected Seega extinction result for {fen}: got {result}")
-PY
-
-ROOT=$(cd "$(dirname "$0")/.." && pwd)
-ROOT="$ROOT" python3 - <<'PY'
-import os
-import pyffish as sf
-
-cfg = open(os.path.join(os.environ["ROOT"], "src", "variants-incomplete.ini"), encoding="utf-8").read()
-sf.load_variant_config(cfg)
-PY
+# Seega baseline: extinction is surfaced as an immediate terminal loss.
+out=$(run_cmds "setoption name UCI_Variant value seega
+position fen 5/5/5/5/1D3[] b - - 0 1
+go movetime 20")
+echo "${out}" | grep -q "^info depth 0 score mate 0$"
+echo "${out}" | grep -q "^bestmove (none)$"
