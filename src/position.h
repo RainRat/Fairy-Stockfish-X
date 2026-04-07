@@ -366,6 +366,7 @@ public:
   PieceSet symmetric_drop_types() const;
   PieceSet capture_drop_types() const;
   PieceType drop_no_doubled() const;
+  PieceType drop_no_doubled(Color c) const;
   PieceSet promotion_pawn_types(Color c) const;
   PieceSet pawn_like_types(Color c) const;
   PieceSet en_passant_types(Color c) const;
@@ -1683,7 +1684,7 @@ inline Bitboard Position::drop_region(Color c, PieceType pt) const {
           b &= ~rank_bb(relative_rank(c, RANK_1, max_rank()));
   }
   // Doubled shogi pawns
-  if (pt == drop_no_doubled())
+  if (pt == drop_no_doubled(c))
       for (File f = FILE_A; f <= max_file(); ++f)
           if (popcount(file_bb(f) & pieces(c, pt)) >= var->dropNoDoubledCountByColor[c])
               b &= ~file_bb(f);
@@ -1808,6 +1809,11 @@ inline PieceSet Position::capture_drop_types() const {
 inline PieceType Position::drop_no_doubled() const {
   assert(var != nullptr);
   return var->dropNoDoubledByColor[side_to_move()];
+}
+
+inline PieceType Position::drop_no_doubled(Color c) const {
+  assert(var != nullptr);
+  return var->dropNoDoubledByColor[c];
 }
 
 inline PieceSet Position::promotion_pawn_types(Color c) const {
