@@ -3966,7 +3966,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   assert(&newSt != st);
 
 #ifndef NO_THREADS
-  thisThread->nodes.fetch_add(1, std::memory_order_relaxed);
+  if (thisThread)
+      thisThread->nodes.fetch_add(1, std::memory_order_relaxed);
 #endif
   Key k = st->key ^ Zobrist::side;
 
@@ -4303,7 +4304,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       // (captured piece count was decremented before this line; old count is pieceCount[captured] + 1)
       st->materialKey ^= Zobrist::psq[captured][pieceCount[captured]];
 #ifndef NO_THREADS
-      prefetch(thisThread->materialTable[material_key(endgame_eval())]);
+      if (thisThread)
+          prefetch(thisThread->materialTable[material_key(endgame_eval())]);
 #endif
       // Reset rule 50 counter
       st->rule50 = 0;

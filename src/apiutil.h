@@ -1064,7 +1064,14 @@ inline Validation check_standard_castling(std::array<std::string, 2>& castlingIn
 
         for (CastlingRights castling: {KING_SIDE, QUEEN_SIDE})
         {
-            CharSquare rookStartingSquare = castling == QUEEN_SIDE ? rookPositionsStart[c][0] : rookPositionsStart[c][1];
+            if (rookPositionsStart[c].empty())
+                continue;
+
+            size_t rookIndex = castling == QUEEN_SIDE ? 0 : rookPositionsStart[c].size() - 1;
+            if (rookIndex >= rookPositionsStart[c].size())
+                continue;
+
+            CharSquare rookStartingSquare = rookPositionsStart[c][rookIndex];
             char targetChar = castling == QUEEN_SIDE ? 'q' : 'k';
             if (castlingInfoSplitted[c].find(targetChar) != std::string::npos)
             {
@@ -1553,13 +1560,10 @@ inline FenValidation validate_position(const std::string& fen, const Variant* v,
     if (status != FEN_OK)
         return status;
 
-    if (Threads.empty())
-        Threads.set(1);
-
     StateListPtr states(new std::deque<StateInfo>(1));
     Position pos;
     UCI::init_variant(v);
-    pos.set(v, validatedFen, chess960, &states->back(), Threads.main());
+    pos.set(v, validatedFen, chess960, &states->back(), Threads.empty() ? nullptr : Threads.main());
 
     for (const std::string& moveToken : moves)
     {
