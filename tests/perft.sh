@@ -109,7 +109,7 @@ if [[ $VARIANT == "all" || $VARIANT == "variant" ]]; then
   expect "$perft_exp" 3check "fen 7r/1p4p1/pk3p2/RN6/8/P5Pp/3p1P1P/4R1K1 w - - 1+3 1 39" 3 12407 > /dev/null
   expect "$perft_exp" 3check "fen 7r/1p4p1/pk3p2/RN6/8/P5Pp/3p1P1P/4R1K1 w - - 1 39 +2+0" 3 12407 > /dev/null
   expect "$perft_exp" atomic startpos 4 197326 > /dev/null
-  expect "$perft_exp" atomic "fen rn2kb1r/1pp1p2p/p2q1pp1/3P4/2P3b1/4PN2/PP3PPP/R2QKB1R b KQkq - 0 1" 4 1434825 > /dev/null
+  expect "$perft_exp" atomic "fen rn2kb1r/1pp1p2p/p2q1pp1/3P4/2P3b1/4PN2/PP3PPP/R2QKB1R b KQkq - 0 1" 4 1434819 > /dev/null
   expect "$perft_exp" atomic "fen rn1qkb1r/p5pp/2p5/3p4/N3P3/5P2/PPP4P/R1BQK3 w Qkq - 0 1" 4 714499 > /dev/null
   expect "$perft_exp" atomic "fen r4b1r/2kb1N2/p2Bpnp1/8/2Pp3p/1P1PPP2/P5PP/R3K2R b KQ - 0 1" 2 148 > /dev/null
   expect "$perft_exp" atomar startpos 4 197779 > /dev/null

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import faulthandler
+from pathlib import Path
 import unittest
 import pyffish as sf
 
@@ -198,6 +199,19 @@ startFen = 8/8/8/3b4/3A4/8/8/8 w - - 0 1
 """
 
 sf.load_variant_config(ini_text)
+
+
+def repo_variants_ini():
+    path = Path(__file__).resolve().parent / "src" / "variants.ini"
+    return path if path.exists() else None
+
+
+def load_repo_variants_or_skip():
+    path = repo_variants_ini()
+    if path is None:
+        raise unittest.SkipTest("repo variants.ini is not available in this test environment")
+    sf.load_variant_config(path.read_text())
+    return path
 
 
 variant_positions = {
@@ -816,8 +830,7 @@ checking = false
         self.assertTrue(all("," not in m for m in black_moves))
 
     def test_witch_hunting_basics(self):
-        with open("src/variants.ini") as f:
-            sf.load_variant_config(f.read())
+        load_repo_variants_or_skip()
         fen = sf.start_fen("witch-hunting")
         white_moves = sf.legal_moves("witch-hunting", fen, [])
         self.assertTrue(white_moves)
@@ -858,8 +871,7 @@ checking = false
         self.assertTrue(all(m.startswith("K@") for m in white_king_moves))
 
     def test_ichess_setup_basics(self):
-        with open("src/variants.ini") as f:
-            sf.load_variant_config(f.read())
+        load_repo_variants_or_skip()
         fen = sf.start_fen("ichess")
         self.assertEqual(fen.split()[0], "8/pppppppp/8/8/8/8/PPPPPPPP/8[KQRRBBNNkqrrbbnn]")
 
@@ -871,7 +883,10 @@ checking = false
     def test_chesscom_custom_setups_basics(self):
         # Trapped Queens / Infiltration Danger / Stone Gravitation are orthodox 8x8
         # positions imported from chess.com Fen4 setups.
-        sf.set_option("VariantPath", "src/variants.ini")
+        path = repo_variants_ini()
+        if path is None:
+            raise unittest.SkipTest("repo variants.ini is not available in this test environment")
+        sf.set_option("VariantPath", str(path))
         trapped = sf.start_fen("trapped-queens")
         trapped_moves = sf.legal_moves("trapped-queens", trapped, [])
         self.assertIn("e1d1", trapped_moves)
