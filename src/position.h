@@ -56,12 +56,14 @@ const SpellContext* current_spell_context() noexcept;
 void set_current_spell_context(const SpellContext* ctx) noexcept;
 
 struct ScopedSpellContext {
-  const SpellContext* prev;
+  SpellContext prev;
+  bool prevActive;
   SpellContext ctx;
   bool active;
 
   ScopedSpellContext(Bitboard freezeExtra, Bitboard jumpRemoved)
-      : prev(current_spell_context()),
+      : prev(current_spell_context() ? *current_spell_context() : SpellContext()),
+        prevActive(current_spell_context() && current_spell_context()->active()),
         ctx(freezeExtra, jumpRemoved),
         active(ctx.active()) {
     if (active)
@@ -70,7 +72,7 @@ struct ScopedSpellContext {
 
   ~ScopedSpellContext() {
     if (active)
-      set_current_spell_context(prev);
+      set_current_spell_context(prevActive ? &prev : nullptr);
   }
 };
 

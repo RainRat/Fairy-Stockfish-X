@@ -42,15 +42,22 @@ using std::string;
 namespace Stockfish {
 
 namespace {
-  thread_local const SpellContext* g_spellContext = nullptr;
+  thread_local SpellContext g_spellContext;
+  thread_local bool g_hasSpellContext = false;
 }
 
 const SpellContext* current_spell_context() noexcept {
-  return g_spellContext;
+  return g_hasSpellContext ? &g_spellContext : nullptr;
 }
 
 void set_current_spell_context(const SpellContext* ctx) noexcept {
-  g_spellContext = ctx;
+  if (ctx && ctx->active())
+  {
+      g_spellContext = *ctx;
+      g_hasSpellContext = true;
+  }
+  else
+      g_hasSpellContext = false;
 }
 
 namespace {
