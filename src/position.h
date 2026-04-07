@@ -1887,6 +1887,8 @@ inline Bitboard Position::jump_squares(Color c) const {
 }
 
 inline Bitboard Position::freeze_zone_from_square(Square s) const {
+  if (s == SQ_NONE)
+      return Bitboard(0);
   return (PseudoAttacks[WHITE][KING][s] | square_bb(s)) & board_bb();
 }
 
