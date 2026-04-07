@@ -3786,6 +3786,7 @@ bool Position::gives_check(Move m) const {
 
   assert(is_ok(m));
   Piece mover = moved_piece(m);
+  // Setup/pass-style pseudo-legal moves can exist without a board mover.
   if (mover == NO_PIECE)
       return false;
   assert(color_of(mover) == sideToMove);

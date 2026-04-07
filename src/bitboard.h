@@ -605,6 +605,8 @@ inline Bitboard fixed_step_between_bb(Square s1, Square s2, int stepF, int stepR
   return make_path(stepF, stepR);
 }
 
+// Reconstruct the unique blocker/interposition path for bent riders by
+// materializing the mandatory pivot square and then the allowed second leg.
 inline Bitboard bent_slider_between_bb(Square s1, Square s2, int pivotF, int pivotR,
                                        bool allowHorizontal, bool allowVertical, bool allowDiagonal = false) {
   int f0 = int(file_of(s1));
