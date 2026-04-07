@@ -501,6 +501,14 @@ describe('board.result()', function () {
     chai.expect(board.result()).to.equal("*");
     board.push("d1d8");
     chai.expect(board.result()).to.equal("1-0");
+
+    // Enclosing-drop placement games must not be drawn just because no mating material exists.
+    fs = require('fs');
+    ffish.loadVariantConfig(fs.readFileSync(srcDir + 'variants.ini', 'utf8'));
+    board.delete();
+    board = new ffish.Board("snort");
+    chai.expect(board.numberLegalMoves()).to.be.greaterThan(0);
+    chai.expect(board.result()).to.equal("*");
     board.delete();
   })
 })

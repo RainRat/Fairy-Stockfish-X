@@ -11,5 +11,13 @@ class TestBindings(unittest.TestCase):
         res = sf.game_result("chess", "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", [])
         self.assertEqual(res, sf.VALUE_NONE)
 
+    def test_enclosing_drop_startpos_not_drawn_by_insufficient_material(self):
+        with open("/home/chris/Fairy-Stockfish-X/src/variants.ini", "r", encoding="utf-8") as f:
+            sf.load_variant_config(f.read())
+        fen = sf.start_fen("snort")
+        self.assertTrue(sf.legal_moves("snort", fen, []))
+        self.assertEqual(sf.game_result("snort", fen, []), sf.VALUE_NONE)
+        self.assertEqual(sf.has_insufficient_material("snort", fen, []), (False, False))
+
 if __name__ == "__main__":
     unittest.main()
