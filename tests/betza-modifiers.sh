@@ -37,6 +37,11 @@ customPiece1 = a:zRzB
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 startFen = 4k3/8/8/8/3A4/8/8/4K3 w - - 0 1
 
+[ski_autocheck:chess]
+customPiece1 = s:jR
+pieceToCharTable = -
+startFen = 4k3/4S3/8/8/8/8/8/4K3 w - - 0 1
+
 [dist10:chess]
 customPiece1 = a:R10
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
@@ -65,5 +70,8 @@ grep -q 'e5h5:' <<<"$dist_out"
 
 check_out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value tuplewarn\nquit\n' "$tmp_ini" | ./stockfish 2>&1)
 grep -q "Unsupported Betza tuple modifier combination" <<<"$check_out"
+
+ski_out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value ski_autocheck\nposition startpos moves e7e5\nd\nquit\n' "$tmp_ini" | ./stockfish)
+grep -q 'Checkers: e5 ' <<<"$ski_out"
 
 echo "betza-modifiers test OK"
