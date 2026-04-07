@@ -1146,6 +1146,11 @@ inline Validation check_pocket_info(const std::string& fenBoard, int nbRanks, co
         std::cerr << "Invalid pocket piece: '" << c << "'." << std::endl;
         return NOK;
     }
+    if (handCount > 0)
+    {
+        std::cerr << "Pocket piece count is missing a following piece symbol." << std::endl;
+        return NOK;
+    }
     return OK;
 }
 
