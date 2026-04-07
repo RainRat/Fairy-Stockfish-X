@@ -1152,13 +1152,23 @@ inline PieceType gating_type(Move m) {
 
 inline Square gating_square(Move m) {
   const uint64_t raw = static_cast<uint64_t>(m);
-  return Square(((raw >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & SQUARE_BIT_MASK) - 1);
+  const uint64_t gate = (raw >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & SQUARE_BIT_MASK;
+  if (gate)
+      return Square(gate - 1);
+  if (type_of(m) == CASTLING && gating_type(m) != NO_PIECE_TYPE)
+      return to_sq(m);
+  if ((type_of(m) == NORMAL || type_of(m) == CASTLING) && gating_type(m) != NO_PIECE_TYPE)
+      return from_sq(m);
+  return SQ_NONE;
 }
 
 inline bool is_gating(Move m) {
   const MoveType mt = type_of(m);
-  return (mt != DROP && mt != DROP2 && mt != INSERT)
-      && ((m >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & SQUARE_BIT_MASK);
+  if (mt == SPECIAL)
+      return ((m >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & SQUARE_BIT_MASK) != 0;
+  return (mt == NORMAL || mt == CASTLING)
+      && (gating_type(m) != NO_PIECE_TYPE
+          || ((m >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & SQUARE_BIT_MASK));
 }
 
 inline bool is_drop_move(Move m) {
