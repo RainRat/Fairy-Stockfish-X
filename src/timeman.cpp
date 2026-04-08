@@ -104,9 +104,12 @@ void TimeManagement::init(const Position& pos, Search::LimitsType& limits, Color
       maxScale = std::min(6.3, 1.5 + 0.11 * mtg);
   }
 
-  // Never use more than 80% of the available time for this move
-  optimumTime = TimePoint(optScale * timeLeft);
-  maximumTime = TimePoint(std::min(0.8 * limits.time[us] - moveOverhead, maxScale * optimumTime));
+  // Avoid zero-time iterations and keep the hard limit above the optimum even
+  // at very low time controls or with large move overhead settings.
+  optimumTime = TimePoint(std::max(1.0, optScale * timeLeft));
+  maximumTime = TimePoint(std::max(double(optimumTime),
+                                   std::min(0.8 * limits.time[us] - moveOverhead,
+                                            maxScale * optimumTime)));
 
   if (Options["Ponder"])
       optimumTime += optimumTime / 4;
