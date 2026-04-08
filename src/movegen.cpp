@@ -225,9 +225,14 @@ namespace {
         return moveList;
 
     Bitboard capturable = pos.pieces(~Us);
-    if (pos.self_capture())
-        capturable |= pos.pieces(Us) & ~pos.pieces(Us, KING);
-    b &= pos.drop_region(Us, pt) & capturable;
+    Bitboard dropTargets = b;
+    if (pos.self_capture(pt))
+    {
+        Bitboard friendlyCapturable = pos.pieces(Us) & ~pos.pieces(Us, KING);
+        capturable |= friendlyCapturable;
+        dropTargets |= friendlyCapturable;
+    }
+    b = dropTargets & pos.drop_region(Us, pt) & capturable;
 
     PieceSet dropForms = pos.drop_piece_types(pt);
     while (dropForms)
@@ -391,7 +396,7 @@ namespace {
     const Bitboard movable    = pos.board_bb(Us, PAWN) & ~pos.pieces();
     const Bitboard friendlyCapturable = pos.pieces(Us) & ~pos.pieces(Us, KING);
     const Bitboard capturable = pos.board_bb(Us, PAWN)
-                              & (pos.self_capture() ? (pos.pieces(Them) | friendlyCapturable | neutral)
+                              & (pos.self_capture(PAWN) ? (pos.pieces(Them) | friendlyCapturable | neutral)
                                                     :  (pos.pieces(Them) | neutral));
 
     target = Type == EVASIONS ? target : AllSquares;
@@ -675,10 +680,18 @@ namespace {
         Bitboard attacks = pos.attacks_from(Us, Pt, from);
         Bitboard quiets = pos.moves_from(Us, Pt, from);
         Bitboard captureSquares;
+        Bitboard localCaptureTarget = captureTarget;
+        if (pos.self_capture(Pt))
+            localCaptureTarget |= pos.pieces(Us) & ~pos.pieces(Us, KING) & (Type == EVASIONS ? target : AllSquares);
         if (pos.anti_royal_self_capture_only() && (pos.anti_royal_types() & piece_set(Pt)))
-            captureSquares = (attacks & pos.pieces(Us) & ~pos.pieces(Us, KING));
+            captureSquares = attacks & pos.pieces(Us) & ~pos.pieces(Us, KING);
         else
-            captureSquares = (attacks & pos.pieces()) & captureTarget;
+        {
+            Bitboard capturable = (pos.pieces() & ~pos.pieces(Us)) | pos.dead_squares();
+            if (pos.self_capture(Pt))
+                capturable |= pos.pieces(Us) & ~pos.pieces(Us, KING);
+            captureSquares = (attacks & capturable) & localCaptureTarget;
+        }
         Bitboard quietSquares   = (quiets & ~pos.pieces()) & target;
         Bitboard b = captureSquares | quietSquares;
         Bitboard epSquares = (pos.en_passant_types(Us) & Pt) ? (attacks & pos.ep_squares() & ~pos.pieces()) : Bitboard(0);
@@ -691,7 +704,7 @@ namespace {
         Bitboard b2 = promPt && pos.promotion_allowed(Us, promPt) ? b1 : Bitboard(0);
         Bitboard b3 = pos.piece_demotion() && pos.is_promoted(from) ? b1 : Bitboard(0);
         Bitboard pawnPromotions = (pos.promotion_pawn_types(Us) & Pt)
-                                ? (b & (Type == EVASIONS ? target : (~pos.pieces(Us) | (pos.self_capture() ? (pos.pieces(Us) & ~pos.pieces(Us, KING)) : Bitboard(0)))) & promotion_zone)
+                                ? (b & (Type == EVASIONS ? target : (~pos.pieces(Us) | (pos.self_capture(Pt) ? (pos.pieces(Us) & ~pos.pieces(Us, KING)) : Bitboard(0)))) & promotion_zone)
                                 : Bitboard(0);
         Bitboard jumpCaptures = 0;
         PieceSet jumpTypes = pos.jump_capture_types();
@@ -949,15 +962,6 @@ namespace {
             target &= pos.board_bb() & ~jumpForbidden;
 
             captureTarget = target;
-            if (pos.self_capture() && (Type == NON_EVASIONS || Type == CAPTURES || Type == EVASIONS))
-            {
-                Bitboard selfCaptureTargets = pos.pieces(Us) & ~pos.pieces(Us, KING);
-                // During check evasions, only consider self-captures that can
-                // actually resolve the check (capture checker or block line).
-                if (Type == EVASIONS)
-                    selfCaptureTargets &= target;
-                captureTarget |= selfCaptureTargets;
-            }
         }
 
         if (restrictToForcedJumper)
@@ -1074,7 +1078,7 @@ namespace {
             Bitboard kingAttacks = pos.attacks_from(Us, KING, ksq) & pos.pieces();
             Bitboard kingMoves   = pos.moves_from(Us, KING, ksq) & ~pos.pieces();
             Bitboard kingCaptureMask = Type == EVASIONS ? ~pos.pieces(Us) : captureTarget;
-            if (Type == EVASIONS && pos.self_capture())
+            if (Type == EVASIONS && pos.self_capture(KING))
                 kingCaptureMask |= pos.pieces(Us) & ~pos.pieces(Us, KING);
             Bitboard kingQuietMask = Type == EVASIONS ? ~pos.pieces(Us) : target;
             b = (kingAttacks & kingCaptureMask) | (kingMoves & kingQuietMask);

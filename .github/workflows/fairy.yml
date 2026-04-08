@@ -140,6 +140,10 @@ jobs:
         run: |
           ../tests/immobility-illegal-hoppers.sh
 
+      - name: Test self-capture types
+        run: |
+          ../tests/self-capture-types.sh
+
       - name: Test asym rider checkers
         run: |
           ../tests/asym-rider-checkers.sh

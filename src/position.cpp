@@ -2762,7 +2762,7 @@ bool Position::legal(Move m) const {
       if (!paired_drop(m) && (capture_drop_types() & in_hand_piece_type(m)))
       {
           legalDropTargets |= pieces(them);
-          if (self_capture())
+          if (self_capture(in_hand_piece_type(m)))
               legalDropTargets |= pieces(us) & ~pieces(us, KING);
       }
 
@@ -3515,7 +3515,7 @@ bool Position::pseudo_legal(const Move m) const {
       if (!paired_drop(m) && (capture_drop_types() & in_hand_piece_type(m)))
       {
           legalDropTargets |= pieces(them);
-          if (self_capture())
+          if (self_capture(in_hand_piece_type(m)))
               legalDropTargets |= pieces(us) & ~pieces(us, KING);
       }
       if (paired_drop(m))
@@ -3639,7 +3639,7 @@ bool Position::pseudo_legal(const Move m) const {
   if ((pieces(us) & to) && !is_self_destruct(m))
   {
       bool antiRoyalSelfCapture = anti_royal_self_capture_only() && (anti_royal_types() & piece_set(type_of(pc)));
-      if (!pushMove && !((self_capture() || antiRoyalSelfCapture) && capture(m)))
+      if (!pushMove && !((self_capture(type_of(pc)) || antiRoyalSelfCapture) && capture(m)))
           return false;
       if (type_of(piece_on(to)) == KING)
           return false;
@@ -3659,7 +3659,7 @@ bool Position::pseudo_legal(const Move m) const {
       if (mandatory_pawn_promotion() && (promotion_zone(pc) & effectiveTo) && !sittuyin_promotion())
           return false;
 
-      if (   !(pawn_attacks_bb(us, from) & (self_capture() ? pieces() : pieces(~us)) & to) // Not a capture
+      if (   !(pawn_attacks_bb(us, from) & (self_capture(PAWN) ? pieces() : pieces(~us)) & to) // Not a capture
           && !((from + pawn_push(us) == to) && !(pieces() & to)) // Not a single push
           && !(   (from + 2 * pawn_push(us) == to)               // Not a double push
                && (double_step_region(pc) & from)
@@ -4148,7 +4148,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   assert(captured == NO_PIECE
          || (type_of(m) == CASTLING ? color_of(captured) == us
                                     : (color_of(captured) == them
-                                       || (((self_capture() || (anti_royal_self_capture_only() && (anti_royal_types() & piece_set(type_of(pc)))))
+                                       || (((self_capture(type_of(pc)) || (anti_royal_self_capture_only() && (anti_royal_types() & piece_set(type_of(pc)))))
                                            && color_of(captured) == us)))));
   assert(type_of(captured) != KING || allow_checks());
 
@@ -6356,7 +6356,7 @@ bool Position::see_ge(Move m, Value threshold) const {
       return VALUE_ZERO >= threshold;
 
   int victimValue = PieceValue[MG][victim];
-  if (victim != NO_PIECE && color_of(victim) == color_of(moved_piece(m)) && self_capture())
+  if (victim != NO_PIECE && color_of(victim) == color_of(moved_piece(m)) && self_capture(type_of(moved_piece(m))))
       victimValue = -victimValue;
   if (points_counting() && victim != NO_PIECE)
   {

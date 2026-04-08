@@ -312,6 +312,7 @@ public:
   bool shogi_pawn_drop_mate_illegal() const;
   bool shogi_pawn_drop_mate_illegal(Color c) const;
   bool self_capture() const;
+  bool self_capture(PieceType pt) const;
   bool rifle_capture() const;
   bool rifle_capture(Piece pc) const;
   bool rifle_capture(Move m) const;
@@ -1346,9 +1347,22 @@ inline bool Position::shogi_pawn_drop_mate_illegal(Color c) const {
 
 inline bool Position::self_capture() const {
   assert(var != nullptr);
-  if (var->selfCaptureByColorSet[WHITE] || var->selfCaptureByColorSet[BLACK])
-      return var->selfCaptureByColor[side_to_move()];
+  Color us = side_to_move();
+  if (var->selfCaptureTypesByColorSet[us])
+      return var->selfCaptureTypesByColor[us] != NO_PIECE_SET;
+  if (var->selfCaptureByColorSet[us])
+      return var->selfCaptureByColor[us];
+  if (var->selfCaptureTypes != NO_PIECE_SET)
+      return var->selfCaptureTypesByColor[side_to_move()] != NO_PIECE_SET;
   return var->selfCapture;
+}
+
+inline bool Position::self_capture(PieceType pt) const {
+  assert(var != nullptr);
+  Color us = side_to_move();
+  if (var->selfCaptureTypesByColorSet[us])
+      return bool(var->selfCaptureTypesByColor[us] & piece_set(pt));
+  return self_capture();
 }
 
 inline bool Position::rifle_capture() const {
@@ -3559,7 +3573,7 @@ inline Square Position::jump_capture_square(Square from, Square to) const {
   if (mid == SQ_NONE)
       return SQ_NONE;
   Piece jumped = piece_on(mid);
-  if (jumped == NO_PIECE || (color_of(jumped) == color_of(mover) && !self_capture()))
+  if (jumped == NO_PIECE || (color_of(jumped) == color_of(mover) && !self_capture(type_of(mover))))
       return SQ_NONE;
 
   return mid;

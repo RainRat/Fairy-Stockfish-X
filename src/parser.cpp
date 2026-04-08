@@ -1576,6 +1576,16 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
         v->selfCaptureByColorSet[WHITE] = true;
         v->selfCaptureByColorSet[BLACK] = true;
     }
+    v->selfCaptureTypesByColor[WHITE] = v->selfCaptureTypes;
+    v->selfCaptureTypesByColor[BLACK] = v->selfCaptureTypes;
+    if (config.find("selfCaptureTypes") != config.end())
+    {
+        parse_attribute("selfCaptureTypes", v->selfCaptureTypes, v);
+        v->selfCaptureTypesByColor[WHITE] = v->selfCaptureTypes;
+        v->selfCaptureTypesByColor[BLACK] = v->selfCaptureTypes;
+        v->selfCaptureTypesByColorSet[WHITE] = true;
+        v->selfCaptureTypesByColorSet[BLACK] = true;
+    }
     if (config.find("selfCaptureWhite") != config.end())
     {
         parse_attribute("selfCaptureWhite", v->selfCaptureByColor[WHITE]);
@@ -1585,6 +1595,16 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     {
         parse_attribute("selfCaptureBlack", v->selfCaptureByColor[BLACK]);
         v->selfCaptureByColorSet[BLACK] = true;
+    }
+    if (config.find("selfCaptureTypesWhite") != config.end())
+    {
+        parse_attribute("selfCaptureTypesWhite", v->selfCaptureTypesByColor[WHITE], v);
+        v->selfCaptureTypesByColorSet[WHITE] = true;
+    }
+    if (config.find("selfCaptureTypesBlack") != config.end())
+    {
+        parse_attribute("selfCaptureTypesBlack", v->selfCaptureTypesByColor[BLACK], v);
+        v->selfCaptureTypesByColorSet[BLACK] = true;
     }
     parse_attribute("blastOrthogonals", v->blastOrthogonals);
     parse_attribute("blastOnSameTypeCapture", v->blastOnSameTypeCapture);
@@ -2027,6 +2047,11 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
             || !v->mustDrop
             || v->captureType != MOVE_OUT
             || v->selfCapture
+            || v->selfCaptureTypes != NO_PIECE_SET
+            || v->selfCaptureByColor[WHITE]
+            || v->selfCaptureByColor[BLACK]
+            || v->selfCaptureTypesByColor[WHITE] != NO_PIECE_SET
+            || v->selfCaptureTypesByColor[BLACK] != NO_PIECE_SET
             || v->captureDrops
             || v->symmetricDropTypes
             || v->twoBoards

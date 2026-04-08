@@ -182,6 +182,9 @@ struct Variant {
   bool selfCapture = false;
   bool selfCaptureByColor[COLOR_NB] = {false, false};
   bool selfCaptureByColorSet[COLOR_NB] = {false, false};
+  PieceSet selfCaptureTypes = NO_PIECE_SET;
+  PieceSet selfCaptureTypesByColor[COLOR_NB] = {NO_PIECE_SET, NO_PIECE_SET};
+  bool selfCaptureTypesByColorSet[COLOR_NB] = {false, false};
   bool blastOnSameTypeCapture = false;
   bool blastOrthogonals = true;
   bool mustDrop = false;
