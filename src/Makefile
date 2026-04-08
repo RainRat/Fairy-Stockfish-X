@@ -373,7 +373,7 @@ endif
 ifeq ($(COMP),gcc)
 	comp=gcc
 	CXX=g++
-	CXXFLAGS += -Wextra -Wshadow
+	CXXFLAGS += -Wextra -Wshadow -fno-ipa-cp-clone
 	ifeq ($(largeboards),no)
 		CXXFLAGS += -pedantic
 	endif
