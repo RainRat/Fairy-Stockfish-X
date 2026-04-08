@@ -284,6 +284,7 @@ void MainThread::search() {
 
   if (   int(Options["MultiPV"]) == 1
       && !Limits.depth
+      && !Limits.mate
       && !(Skill(Options["Skill Level"]).enabled() || int(Options["UCI_LimitStrength"]))
       && rootMoves[0].pv[0] != MOVE_NONE)
       bestThread = Threads.get_best_thread();
