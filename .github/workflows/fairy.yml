@@ -144,6 +144,10 @@ jobs:
         run: |
           ../tests/self-capture-types.sh
 
+      - name: Test sacrifice chess
+        run: |
+          ../tests/sacrifice.sh
+
       - name: Test asym rider checkers
         run: |
           ../tests/asym-rider-checkers.sh
