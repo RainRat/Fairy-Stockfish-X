@@ -196,6 +196,7 @@ struct Variant {
   bool openingSelfRemovalAdjacentToLast = false;
   Bitboard openingSelfRemovalRegion[COLOR_NB] = {AllSquares, AllSquares};
   bool openingSwapDrop = false;
+  bool openingSwapMirrorMainDiagonal = false;
   bool isPriorityDrop[PIECE_TYPE_NB] = {};
   bool pieceDrops = false;
   bool borrowOpponentDropsWhenEmpty = false;
@@ -285,6 +286,9 @@ struct Variant {
   bool samePlayerBoardRepetitionIllegal = false;
   bool alternating2x2DropIllegal = false;
   bool pathwayDropRule = false;
+  bool weakDiagonalConnect = false;
+  bool reciprocalWeakConnectionDrop = false;
+  bool weakCrosscutDropIllegal = false;
   ChasingRule chasingRule = NO_CHASING;
   Value stalemateValue = VALUE_DRAW;
   bool stalematePieceCount = false; // multiply stalemate value by sign(count(~stm) - count(stm))
