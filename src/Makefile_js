@@ -56,7 +56,7 @@ endif
 
 ### Compile as ES6/ES2015 module
 ifeq ($(es6),yes)
-	CXXFLAGS += -s ENVIRONMENT='web,worker' -s EXPORT_ES6=1 -s MODULARIZE=1
+	CXXFLAGS += -s ENVIRONMENT='web,worker,node' -s EXPORT_ES6=1 -s MODULARIZE=1
 endif
 
 .PHONY: help objclean clean build deps test serve
