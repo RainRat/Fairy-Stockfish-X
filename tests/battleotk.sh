@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ENGINE="${1:-/home/chris/Fairy-Stockfish-X/src/stockfish}"
-VARIANTS="${2:-/home/chris/Fairy-Stockfish-X/src/variants-incomplete.ini}"
+VARIANTS="${2:-/home/chris/Fairy-Stockfish-X/src/variants.ini}"
 
 run_cmds() {
   local cmds="$1"
@@ -10,7 +10,7 @@ run_cmds() {
     "$VARIANTS" "$cmds" | "$ENGINE"
 }
 
-echo "battleotk prototype started"
+echo "battleotk regression started"
 
 out=$(run_cmds "position startpos
 go perft 1")
@@ -55,4 +55,4 @@ go depth 1")
 echo "$out" | grep -q "^bestmove "
 ! echo "$out" | grep -q "^bestmove (none)$"
 
-echo "battleotk prototype passed"
+echo "battleotk regression passed"
