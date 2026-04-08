@@ -41,24 +41,24 @@ quit
 EOF
 }
 
-# Corner insertion must be disambiguated by marker square.
+# Corner insertion uses drop-style notation with an explicit insertion lane.
 out=$(run_cmds "setoption name UCI_Variant value edge-insert-demo
 position fen A4/5/5/5/5[AAAAAAAAA] w - - 0 1
 go perft 1")
-echo "${out}" | grep -q "^a5a4: 1$"
-echo "${out}" | grep -q "^a5b5: 1$"
+echo "${out}" | grep -q "^A@a4,b4: 1$"
+echo "${out}" | grep -q "^A@b5,b4: 1$"
 
-# Top-edge insertion at a5 pushes down the file.
+# Top-edge insertion on the a-file pushes down the file.
 out=$(run_cmds "setoption name UCI_Variant value edge-insert-demo
-position fen A4/5/5/5/5[AAAAAAAAA] w - - 0 1 moves a5a4
+position fen A4/5/5/5/5[AAAAAAAAA] w - - 0 1 moves A@a4,b4
 d")
-echo "${out}" | grep -q "Fen: 5/A4/5/5/5\\[AAAAAAAAA\\] b - - 1 1"
+echo "${out}" | grep -q "Fen: A4/A4/5/5/5\\[AAAAAAAA\\] b - - 0 1"
 
-# Left-edge insertion at a5 pushes across the rank.
+# Top-edge insertion on the b-file pushes across the top rank.
 out=$(run_cmds "setoption name UCI_Variant value edge-insert-demo
-position fen A4/5/5/5/5[AAAAAAAAA] w - - 0 1 moves a5b5
+position fen A4/5/5/5/5[AAAAAAAAA] w - - 0 1 moves A@b5,b4
 d")
-echo "${out}" | grep -q "Fen: 1A3/5/5/5/5\\[AAAAAAAAA\\] b - - 1 1"
+echo "${out}" | grep -q "Fen: AA3/5/5/5/5\\[AAAAAAAA\\] b - - 0 1"
 
 # Plain drops must be rejected when edgeInsertOnly is enabled.
 out=$(run_cmds "setoption name UCI_Variant value edge-insert-demo

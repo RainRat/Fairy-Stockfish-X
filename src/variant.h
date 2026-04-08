@@ -198,6 +198,7 @@ struct Variant {
   bool openingSwapDrop = false;
   bool isPriorityDrop[PIECE_TYPE_NB] = {};
   bool pieceDrops = false;
+  bool borrowOpponentDropsWhenEmpty = false;
   bool virtualDrops = true;
   bool virtualDropLimitEnabled = false;
   int virtualDropLimit[PIECE_TYPE_NB] = {};

@@ -142,6 +142,7 @@ struct StateInfo {
   bool       pass;
   Bitboard   claimedSquares;
   bool       pendingClaimPass;
+  Color      dropHandColor;
   Square     forcedJumpSquare;
   bool       forcedJumpHasFollowup;
   int        forcedJumpStep;
@@ -345,6 +346,7 @@ public:
   Bitboard opening_swap_drop_targets(Color c, PieceType pt) const;
   bool is_opening_self_removal_move(Move m) const;
   bool piece_drops() const;
+  Color drop_hand_color(Color c, PieceType pt) const;
   bool drop_loop() const;
   bool captures_to_hand() const;
   PieceSet capture_to_hand_types() const;
@@ -1612,6 +1614,17 @@ inline bool Position::piece_drops() const {
   return var->pieceDrops;
 }
 
+inline Color Position::drop_hand_color(Color c, PieceType pt) const {
+  assert(var != nullptr);
+  if (   var->borrowOpponentDropsWhenEmpty
+      && !var->freeDrops
+      && pt != ALL_PIECES
+      && count_in_hand(c, ALL_PIECES) == 0
+      && count_in_hand(~c, pt) > 0)
+      return ~c;
+  return c;
+}
+
 inline bool Position::drop_loop() const {
   assert(var != nullptr);
   return var->dropLoop;
@@ -2503,7 +2516,7 @@ inline Piece Position::unpromoted_piece_on(Square s) const {
 
 inline Piece Position::moved_piece(Move m) const {
   if (is_drop_move(m))
-      return make_piece(sideToMove, dropped_piece_type(m));
+      return make_piece(drop_hand_color(sideToMove, in_hand_piece_type(m)), dropped_piece_type(m));
   return piece_on(from_sq(m));
 }
 
@@ -3975,13 +3988,18 @@ inline bool Position::can_drop(Color c, PieceType pt) const {
       return true;
 
   if (pt == ALL_PIECES)
-      return count_in_hand(c, pt) > 0;
+      return count_in_hand(c, pt) > 0
+          || (variant()->borrowOpponentDropsWhenEmpty
+              && count_in_hand(c, ALL_PIECES) == 0
+              && count_in_hand(~c, ALL_PIECES) > 0);
 
-  if (count_in_hand(c, pt) <= 0)
+  Color handColor = drop_hand_color(c, pt);
+
+  if (count_in_hand(handColor, pt) <= 0)
       return false;
 
   if (variant()->dropKingLast && pt == king_type())
-      return count_in_hand(c, ALL_PIECES) <= count_in_hand(c, pt);
+      return count_in_hand(handColor, ALL_PIECES) <= count_in_hand(handColor, pt);
 
   return true;
 }

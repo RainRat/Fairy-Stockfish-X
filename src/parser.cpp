@@ -1622,6 +1622,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("openingSelfRemovalAdjacentToLast", v->openingSelfRemovalAdjacentToLast);
     parse_both_colors_with_overrides("openingSelfRemovalRegion", v->openingSelfRemovalRegion);
     parse_attribute("pieceDrops", v->pieceDrops);
+    parse_attribute("borrowOpponentDropsWhenEmpty", v->borrowOpponentDropsWhenEmpty);
     parse_attribute("virtualDrops", v->virtualDrops);
     const auto& it_virtual_drop_limit = config.find("virtualDropLimit");
     if (it_virtual_drop_limit != config.end())

@@ -1795,6 +1795,7 @@ void Position::set_state(StateInfo* si) const {
   si->colorChangedUnpromoted = NO_PIECE;
   si->claimedSquares = 0;
   si->pendingClaimPass = false;
+  si->dropHandColor = COLOR_NB;
   si->forcedJumpSquare = SQ_NONE;
   si->forcedJumpHasFollowup = false;
   si->forcedJumpStep = 0;
@@ -3393,6 +3394,7 @@ bool Position::pseudo_legal(const Move m) const {
   Square from = from_sq(m);
   Square to = to_sq(m);
   Piece pc = moved_piece(m);
+  Color dropColor = dropMove ? drop_hand_color(us, in_hand_piece_type(m)) : us;
   bool rifleShot = rifle_capture(m) && capture(m) && type_of(m) != CASTLING;
   Square effectiveTo = rifleShot ? from : to;
   Bitboard removedAttackers = capture(m) ? square_bb(capture_square(m)) : Bitboard(0);
@@ -3496,7 +3498,7 @@ bool Position::pseudo_legal(const Move m) const {
 
           return   piece_drops()
                 && pc != NO_PIECE
-                && color_of(pc) == us
+                && color_of(pc) == dropColor
                 && (edge_insert_types() & type_of(pc))
                 && (edge_insert_region(us) & to)
                 && dirOk
@@ -3521,10 +3523,11 @@ bool Position::pseudo_legal(const Move m) const {
       if (paired_drop(m))
       {
           Square to2 = secondary_drop_square(m);
+          Color handColor = drop_hand_color(us, in_hand_piece_type(m));
           return   piece_drops()
                 && pc != NO_PIECE
-                && color_of(pc) == us
-                && count_in_hand(us, in_hand_piece_type(m)) >= 2
+                && color_of(pc) == handColor
+                && count_in_hand(handColor, in_hand_piece_type(m)) >= 2
                 && (symmetric_drop_types() & in_hand_piece_type(m))
                 && (!pay_points_to_drop() || st->pointsCount[us] >= 2 * var->piecePoints[type_of(pc)])
                 && !(pieces() & to2)
@@ -3537,7 +3540,7 @@ bool Position::pseudo_legal(const Move m) const {
 
       return   piece_drops()
             && pc != NO_PIECE
-            && color_of(pc) == us
+            && color_of(pc) == dropColor
             && (!pay_points_to_drop() || st->pointsCount[us] >= var->piecePoints[type_of(pc)])
             && (can_drop(us, in_hand_piece_type(m))
                 || (two_boards() && allow_virtual_drop(us, type_of(pc)))
@@ -4039,6 +4042,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   Square from = from_sq(m);
   Square to = to_sq(m);
   Piece pc = moved_piece(m);
+  Color dropColor = dropMove ? drop_hand_color(us, in_hand_piece_type(m)) : us;
   PieceType movedType = type_of(pc);
   Piece captured = captured_piece(m);
   if (type_of(m) == CASTLING && captured == NO_PIECE)
@@ -4117,6 +4121,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   st->pass = is_pass(m) && !openingSelfRemoval;
   st->claimedSquares = 0;
   st->pendingClaimPass = false;
+  st->dropHandColor = COLOR_NB;
   st->suppressedCaptureTransfer = false;
 
   if (stepwisePush)
@@ -4144,7 +4149,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
 
   ScopedSpellContext spellScope(freezeExtra, jumpRemoved);
 
-  assert(pureWallMove || color_of(pc) == us);
+  assert(pureWallMove || color_of(pc) == dropColor);
   assert(captured == NO_PIECE
          || (type_of(m) == CASTLING ? color_of(captured) == us
                                     : (color_of(captured) == them
@@ -4459,7 +4464,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   // Update hash key
   if (dropMove)
   {
-      Piece pc_hand = make_piece(us, in_hand_piece_type(m));
+      st->dropHandColor = dropColor;
+      Piece pc_hand = make_piece(dropColor, in_hand_piece_type(m));
       k ^= Zobrist::psq[pc][to];
       if (paired_drop(m))
       {
@@ -4586,16 +4592,16 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       {
           // Add drop piece
           dp.piece[0] = pc;
-          dp.handPiece[0] = make_piece(us, in_hand_piece_type(m));
-          dp.handCount[0] = pieceCountInHand[us][in_hand_piece_type(m)];
+          dp.handPiece[0] = make_piece(dropColor, in_hand_piece_type(m));
+          dp.handCount[0] = pieceCountInHand[dropColor][in_hand_piece_type(m)];
           dp.from[0] = SQ_NONE;
           dp.to[0] = to;
           if (paired_drop(m))
           {
               dp.dirty_num = 2;
               dp.piece[1] = pc;
-              dp.handPiece[1] = make_piece(us, in_hand_piece_type(m));
-              dp.handCount[1] = pieceCountInHand[us][in_hand_piece_type(m)] - 1;
+              dp.handPiece[1] = make_piece(dropColor, in_hand_piece_type(m));
+              dp.handCount[1] = pieceCountInHand[dropColor][in_hand_piece_type(m)] - 1;
               dp.from[1] = SQ_NONE;
               dp.to[1] = secondary_drop_square(m);
           }
@@ -4607,9 +4613,9 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
               st->nnueRefreshNeeded = true;
       }
 
-      drop_piece(make_piece(us, in_hand_piece_type(m)), pc, to, exchanged);
+      drop_piece(make_piece(dropColor, in_hand_piece_type(m)), pc, to, exchanged);
       if (paired_drop(m))
-          drop_piece(make_piece(us, in_hand_piece_type(m)), pc, secondary_drop_square(m), NO_PIECE_TYPE);
+          drop_piece(make_piece(dropColor, in_hand_piece_type(m)), pc, secondary_drop_square(m), NO_PIECE_TYPE);
       st->materialKey ^= Zobrist::psq[pc][pieceCount[pc]-1];
       if (paired_drop(m))
           st->materialKey ^= Zobrist::psq[pc][pieceCount[pc]-2];
@@ -5898,9 +5904,10 @@ void Position::undo_move(Move m) {
   {
       if (is_drop_move(m))
       {
+          Color dropColor = st->dropHandColor != COLOR_NB ? st->dropHandColor : us;
           if (paired_drop(m))
-              undrop_piece(make_piece(us, in_hand_piece_type(m)), secondary_drop_square(m), NO_PIECE_TYPE);
-          undrop_piece(make_piece(us, in_hand_piece_type(m)), to, exchange); // Remove the dropped piece
+              undrop_piece(make_piece(dropColor, in_hand_piece_type(m)), secondary_drop_square(m), NO_PIECE_TYPE);
+          undrop_piece(make_piece(dropColor, in_hand_piece_type(m)), to, exchange); // Remove the dropped piece
       }
       else if (wasOpeningSelfRemoval)
           put_piece(st->deadPiece, from, st->deadPiecePromoted, st->deadUnpromotedPiece);
