@@ -2181,13 +2181,17 @@ bool RootMove::extract_ponder_from_tt(Position& pos) {
         return false;
 
     pos.do_move(pv[0], st);
-    TTEntry* tte = TT.probe(pos.key(), ttHit);
 
-    if (ttHit)
+    if (!pos.is_draw(1))
     {
-        Move m = tte->move(); // Local copy to be SMP safe
-        if (MoveList<LEGAL>(pos).contains(m))
-            pv.push_back(m);
+        TTEntry* tte = TT.probe(pos.key(), ttHit);
+
+        if (ttHit)
+        {
+            Move m = tte->move(); // Local copy to be SMP safe
+            if (MoveList<LEGAL>(pos).contains(m))
+                pv.push_back(m);
+        }
     }
 
     pos.undo_move(pv[0]);
