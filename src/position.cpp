@@ -6936,30 +6936,36 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
       }
   }
 
-  if ((var->connectRegion1[~sideToMove] & connectPieces) && (var->connectRegion2[~sideToMove] & connectPieces))
-  {
-      Bitboard target = var->connectRegion2[~sideToMove];
-      Bitboard current = var->connectRegion1[~sideToMove] & connectPieces;
+  auto connected_regions = [&](Bitboard region1, Bitboard region2, Bitboard region3 = 0) {
+      if (!(region1 & connectPieces) || !(region2 & connectPieces) || (region3 && !(region3 & connectPieces)))
+          return false;
+
+      Bitboard current = region1 & connectPieces;
+      bool hitsRegion2 = bool(current & region2);
+      bool hitsRegion3 = !region3 || bool(current & region3);
 
       while (true) {
           Bitboard newBitboard = 0;
-          for (Direction d : var->connectDirections) {
-              newBitboard |= shift(d, current | newBitboard) & connectPieces; // the "| newBitboard" here probably saves a few loops
-          }
+          for (Direction d : var->connectDirections)
+              newBitboard |= shift(d, current | newBitboard) & connectPieces;
 
-          if (newBitboard & target) {
-              // A connection has been made
-              result = convert_mate_value(-connect_value(), ply);
+          hitsRegion2 |= bool(newBitboard & region2);
+          hitsRegion3 |= !region3 || bool(newBitboard & region3);
+          if (hitsRegion2 && hitsRegion3)
               return true;
-          }
 
-          if (!(newBitboard & ~current)) {
-              // The expansion got stuck; no further squares to explore
-              break;
-          }
+          if (!(newBitboard & ~current))
+              return false;
 
           current |= newBitboard;
       }
+  };
+
+  if (connected_regions(var->connectRegion1[~sideToMove], var->connectRegion2[~sideToMove],
+                        var->connectRegion3[~sideToMove]))
+  {
+      result = convert_mate_value(-connect_value(), ply);
+      return true;
   }
 
   if ((connect_nxn()) && (popcount(connectPieces) >= connect_nxn() * connect_nxn()))
@@ -7317,8 +7323,8 @@ bool Position::see_pruning_unreliable() const {
       || connect_n() > 0
       || connect_nxn() > 0
       || collinear_n() > 0
-      || var->connectRegion1[WHITE] || var->connectRegion2[WHITE]
-      || var->connectRegion1[BLACK] || var->connectRegion2[BLACK]
+      || var->connectRegion1[WHITE] || var->connectRegion2[WHITE] || var->connectRegion3[WHITE]
+      || var->connectRegion1[BLACK] || var->connectRegion2[BLACK] || var->connectRegion3[BLACK]
       || !connect_piece_goal_types(WHITE).empty()
       || !connect_piece_goal_types(BLACK).empty()
       || connect_group() != 0;

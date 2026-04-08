@@ -2395,8 +2395,10 @@ Variant* Variant::conclude() {
     }
     if (connectDiagonal)
     {
-        connectDirections.push_back(NORTH_EAST);
-        connectDirections.push_back(SOUTH_EAST);
+        if (connectNorthEast)
+            connectDirections.push_back(NORTH_EAST);
+        if (connectSouthEast)
+            connectDirections.push_back(SOUTH_EAST);
     }
 
     connectLines.clear();
@@ -2421,7 +2423,8 @@ Variant* Variant::conclude() {
 
     // If not a connect variant, set connectPieceTypesTrimmed to no pieces.
     // connectPieceTypesTrimmed is separated so that connectPieceTypes is left unchanged for inheritance.
-    if ( !(connectRegion1[WHITE] || connectRegion1[BLACK] || connectN || connectNxN || collinearN || connectGroup) )
+    if ( !(connectRegion1[WHITE] || connectRegion1[BLACK] || connectRegion3[WHITE] || connectRegion3[BLACK]
+        || connectN || connectNxN || collinearN || connectGroup) )
     {
           connectPieceTypesTrimmed = NO_PIECE_SET;
     }
