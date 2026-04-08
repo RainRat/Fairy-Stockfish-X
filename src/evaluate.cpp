@@ -772,7 +772,8 @@ namespace {
                 // pawn diagonally in front of it is a very serious problem, especially
                 // when that pawn is also blocked.
                 if (   pos.is_chess960()
-                    && (s == relative_square(Us, SQ_A1) || s == relative_square(Us, SQ_H1)))
+                    && (   s == relative_square(Us, make_square(FILE_A, RANK_1), pos.max_rank())
+                        || s == relative_square(Us, make_square(pos.max_file(), RANK_1), pos.max_rank())))
                 {
                     Direction d = pawn_push(Us) + (file_of(s) == FILE_A ? EAST : WEST);
                     if (pos.piece_on(s + d) == make_piece(Us, PAWN))
