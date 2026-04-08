@@ -531,6 +531,50 @@ namespace {
     return blockers;
   }
 
+  inline bool weak_diagonal_link(const Position& pos, Color c, Square a, Square b) {
+    if (!is_ok(a) || !is_ok(b))
+        return false;
+    if (!(pos.pieces(c) & a) || !(pos.pieces(c) & b))
+        return false;
+
+    int df = int(file_of(b)) - int(file_of(a));
+    int dr = int(rank_of(b)) - int(rank_of(a));
+    if (std::abs(df) != 1 || std::abs(dr) != 1)
+        return false;
+
+    Square bridge1 = make_square(file_of(a), rank_of(b));
+    Square bridge2 = make_square(file_of(b), rank_of(a));
+    return !(pos.pieces(c) & bridge1) && !(pos.pieces(c) & bridge2);
+  }
+
+  Bitboard weak_connection_expansion(const Position& pos, Bitboard frontier, Bitboard connectPieces, Color c) {
+    Bitboard expanded = 0;
+
+    while (frontier)
+    {
+        Square from = pop_lsb(frontier);
+        Bitboard fromBb = square_bb(from);
+        for (Direction d : pos.getConnectDirections())
+            expanded |= shift(d, fromBb) & connectPieces;
+
+        if (!pos.weak_diagonal_connect())
+            continue;
+
+        static constexpr Direction diagonals[] = {NORTH_EAST, NORTH_WEST, SOUTH_EAST, SOUTH_WEST};
+        for (Direction d : diagonals)
+        {
+            Bitboard toBb = shift(d, fromBb) & connectPieces;
+            if (!toBb)
+                continue;
+            Square to = lsb(toBb);
+            if (weak_diagonal_link(pos, c, from, to))
+                expanded |= toBb;
+        }
+    }
+
+    return expanded;
+  }
+
 } // namespace
 
 namespace Zobrist {
@@ -2875,6 +2919,79 @@ bool Position::legal(Move m) const {
 
       if (friendly != 1 && friendly + enemy != 0)
           return false;
+  }
+
+  if (type_of(m) == DROP && (var->reciprocalWeakConnectionDrop || var->weakCrosscutDropIllegal))
+  {
+      auto has_color_at = [&](Color c, Square sq, Color placedColor) {
+          return sq == to ? c == placedColor : bool(pieces(c) & sq);
+      };
+
+      auto creates_hypothetical_weak_link = [&](Color c, Color placedColor) {
+          static constexpr int dfile[4] = {1, -1, 1, -1};
+          static constexpr int drank[4] = {1, 1, -1, -1};
+          for (int i = 0; i < 4; ++i)
+          {
+              int nf = int(file_of(to)) + dfile[i];
+              int nr = int(rank_of(to)) + drank[i];
+              if (nf < int(FILE_A) || nf > int(max_file()) || nr < int(RANK_1) || nr > int(max_rank()))
+                  continue;
+
+              Square diag = make_square(File(nf), Rank(nr));
+              if (!has_color_at(c, diag, placedColor))
+                  continue;
+
+              Square bridge1 = make_square(file_of(to), rank_of(diag));
+              Square bridge2 = make_square(file_of(diag), rank_of(to));
+              if (!has_color_at(c, bridge1, placedColor) && !has_color_at(c, bridge2, placedColor))
+                  return true;
+          }
+          return false;
+      };
+
+      bool weakFriendly = creates_hypothetical_weak_link(us, us);
+      if (weakFriendly)
+      {
+          if (var->reciprocalWeakConnectionDrop && !creates_hypothetical_weak_link(~us, ~us))
+              return false;
+
+          if (var->weakCrosscutDropIllegal)
+          {
+              auto enemy_at = [&](Square sq) { return sq != to && bool(pieces(~us) & sq); };
+              auto friendly_at = [&](Square sq) { return sq == to || bool(pieces(us) & sq); };
+
+              const struct {
+                  int of1, or1, of2, or2, dff, drr;
+              } patterns[] = {
+                  {0, 1, 1, 0, 1, 1},
+                  {0, 1, -1, 0, -1, 1},
+                  {0, -1, 1, 0, 1, -1},
+                  {0, -1, -1, 0, -1, -1},
+              };
+
+              for (const auto& p : patterns)
+              {
+                  int f1 = int(file_of(to)) + p.of1;
+                  int r1 = int(rank_of(to)) + p.or1;
+                  int f2 = int(file_of(to)) + p.of2;
+                  int r2 = int(rank_of(to)) + p.or2;
+                  int fd = int(file_of(to)) + p.dff;
+                  int rd = int(rank_of(to)) + p.drr;
+                  if (f1 < int(FILE_A) || f1 > int(max_file()) || r1 < int(RANK_1) || r1 > int(max_rank()))
+                      continue;
+                  if (f2 < int(FILE_A) || f2 > int(max_file()) || r2 < int(RANK_1) || r2 > int(max_rank()))
+                      continue;
+                  if (fd < int(FILE_A) || fd > int(max_file()) || rd < int(RANK_1) || rd > int(max_rank()))
+                      continue;
+
+                  Square orth1 = make_square(File(f1), Rank(r1));
+                  Square orth2 = make_square(File(f2), Rank(r2));
+                  Square diag = make_square(File(fd), Rank(rd));
+                  if (enemy_at(orth1) && enemy_at(orth2) && friendly_at(diag))
+                      return false;
+              }
+          }
+      }
   }
 
   if (dropMove && pay_points_to_drop()
@@ -6945,9 +7062,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
       bool hitsRegion3 = !region3 || bool(current & region3);
 
       while (true) {
-          Bitboard newBitboard = 0;
-          for (Direction d : var->connectDirections)
-              newBitboard |= shift(d, current | newBitboard) & connectPieces;
+          Bitboard newBitboard = weak_connection_expansion(*this, current, connectPieces, ~sideToMove);
 
           hitsRegion2 |= bool(newBitboard & region2);
           hitsRegion3 |= !region3 || bool(newBitboard & region3);

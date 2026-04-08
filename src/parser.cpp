@@ -1617,6 +1617,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("mustDropTypeWhite", v->mustDropTypeByColor[WHITE], v);
     parse_attribute("mustDropTypeBlack", v->mustDropTypeByColor[BLACK], v);
     parse_attribute("openingSwapDrop", v->openingSwapDrop);
+    parse_attribute("openingSwapMirrorMainDiagonal", v->openingSwapMirrorMainDiagonal);
     parse_attribute("dropKingLast", v->dropKingLast);
     parse_attribute("openingSelfRemoval", v->openingSelfRemoval);
     parse_attribute("openingSelfRemovalAdjacentToLast", v->openingSelfRemovalAdjacentToLast);
@@ -1777,6 +1778,9 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("samePlayerBoardRepetitionIllegal", v->samePlayerBoardRepetitionIllegal);
     parse_attribute("alternating2x2DropIllegal", v->alternating2x2DropIllegal);
     parse_attribute("pathwayDropRule", v->pathwayDropRule);
+    parse_attribute("weakDiagonalConnect", v->weakDiagonalConnect);
+    parse_attribute("reciprocalWeakConnectionDrop", v->reciprocalWeakConnectionDrop);
+    parse_attribute("weakCrosscutDropIllegal", v->weakCrosscutDropIllegal);
     parse_attribute("chasingRule", v->chasingRule);
     parse_attribute("stalemateValue", v->stalemateValue);
     parse_attribute("stalematePieceCount", v->stalematePieceCount);
@@ -2063,6 +2067,10 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
             || v->freeDrops
             || v->edgeInsertTypes))
         std::cerr << "openingSwapDrop is only supported for simple move-out mandatory drop variants without capture drops, paired drops, self capture, free drops, edge inserts, or two-board reserves." << std::endl;
+    if (DoCheck && v->openingSwapMirrorMainDiagonal
+        && (!v->openingSwapDrop
+            || int(v->maxFile) != int(v->maxRank)))
+        std::cerr << "openingSwapMirrorMainDiagonal requires openingSwapDrop on a square board." << std::endl;
     if (DoCheck && v->wallingRule != NO_WALLING && v->seirawanGating)
         std::cerr << "wallingRule and seirawanGating are incompatible." << std::endl;
     if (DoCheck && v->wallingRule != NO_WALLING && v->potions)

@@ -446,6 +446,7 @@ public:
   bool connect_horizontal() const;
   bool connect_vertical() const;
   bool connect_diagonal() const;
+  bool weak_diagonal_connect() const;
   const std::vector<Direction>& getConnectDirections() const;
   const std::vector<std::vector<Square>>& getConnectLines() const;
   int connect_nxn() const;
@@ -1602,7 +1603,12 @@ inline Bitboard Position::opening_swap_drop_targets(Color c, PieceType pt) const
   if (!(drop_piece_types(pt) & pt))
       return Bitboard(0);
 
-  return drop_region(c, pt) & enemy;
+  if (!var->openingSwapMirrorMainDiagonal)
+      return drop_region(c, pt) & enemy;
+
+  Square enemySq = lsb(enemy);
+  Square mirrorSq = make_square(File(int(rank_of(enemySq))), Rank(int(file_of(enemySq))));
+  return drop_region(c, pt) & square_bb(mirrorSq);
 }
 
 inline bool Position::is_opening_self_removal_move(Move m) const {
@@ -2386,6 +2392,10 @@ inline bool Position::connect_vertical() const {
 inline bool Position::connect_diagonal() const {
   assert(var != nullptr);
   return var->connectDiagonal;
+}
+inline bool Position::weak_diagonal_connect() const {
+  assert(var != nullptr);
+  return var->weakDiagonalConnect;
 }
 
 inline const std::vector<Direction>& Position::getConnectDirections() const {

@@ -340,6 +340,40 @@ go perft 1")
 echo "${out}" | grep -q "Nodes searched: 0"
 fi
 
+# 7c) Kopano: mirrored opening swap, reciprocal weak links, crosscut blocks, and no-placement wins.
+if variant_available "kopano"; then
+out=$(run_cmds "setoption name UCI_Variant value kopano
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 64"
+
+out=$(run_cmds "setoption name UCI_Variant value kopano
+position startpos moves P@b1
+go perft 1")
+echo "${out}" | grep -q "^P@a2: 1$"
+! echo "${out}" | grep -q "^P@b1: 1$"
+
+out=$(run_cmds "setoption name UCI_Variant value kopano
+position fen 8/8/8/8/8/8/1P6/8[Pp] w - - 0 1
+go perft 1")
+! echo "${out}" | grep -q "^P@c3: 1$"
+
+out=$(run_cmds "setoption name UCI_Variant value kopano
+position fen 8/8/8/8/3p4/8/1P6/8[Pp] w - - 0 1
+go perft 1")
+echo "${out}" | grep -q "^P@c3: 1$"
+
+out=$(run_cmds "setoption name UCI_Variant value kopano
+position fen 8/8/8/8/2pP4/3p4/8/8[Pp] w - - 0 1
+go perft 1")
+! echo "${out}" | grep -q "^P@c3: 1$"
+
+out=$(run_cmds "setoption name UCI_Variant value kopano
+position fen 7p/6p1/5p2/4p3/3p4/2p5/1p6/p7 w - - 0 1
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 0"
+fi
+
 # 8) Neutreeko: max-distance move completes a line and ends the game.
 if variant_available "neutreeko"; then
 out=$(run_cmds "setoption name UCI_Variant value neutreeko
