@@ -132,6 +132,10 @@ jobs:
         run: |
           ../tests/bent-rider-evasion.sh
 
+      - name: Test stationary castling
+        run: |
+          ../tests/stationary-castling.sh
+
       - name: Test immobility-illegal hoppers
         run: |
           ../tests/immobility-illegal-hoppers.sh
