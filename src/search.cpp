@@ -376,7 +376,9 @@ void Thread::search() {
   Move  pv[MAX_PLY+1];
   Value bestValue, alpha, beta, delta;
   Move  lastBestMove = MOVE_NONE;
+  Value lastBestScore = -VALUE_INFINITE;
   Depth lastBestMoveDepth = 0;
+  std::vector<Move> lastBestPV;
   MainThread* mainThread = (this == Threads.main() ? Threads.main() : nullptr);
   double timeReduction = 1, totBestMoveChanges = 0;
   Color us = rootPos.side_to_move();
@@ -547,8 +549,29 @@ void Thread::search() {
 
           if (    mainThread
               && (Threads.stop || pvIdx + 1 == multiPV || Time.elapsed() > 3000))
-              if (show_search_output())
-                  sync_cout << UCI::pv(rootPos, rootDepth, alpha, beta) << sync_endl;
+              // If search stopped mid-iteration, an exact mated-in / TB-loss score
+              // at the front can be unproven for this thread. Suppress that PV here
+              // and below roll back to the last completed best line.
+              if (!(Threads.stop && completedDepth != rootDepth
+                    && rootMoves[0].score <= VALUE_TB_LOSS_IN_MAX_PLY))
+                  if (show_search_output())
+                      sync_cout << UCI::pv(rootPos, rootDepth, alpha, beta) << sync_endl;
+      }
+
+      if (   completedDepth != rootDepth
+          && rootMoves[0].score != -VALUE_INFINITE
+          && rootMoves[0].score <= VALUE_TB_LOSS_IN_MAX_PLY)
+      {
+          if (!lastBestPV.empty())
+          {
+              auto it = std::find_if(rootMoves.begin(), rootMoves.end(), [&lastBestPV](const RootMove& rm) {
+                  return rm == lastBestPV[0];
+              });
+              if (it != rootMoves.end())
+                  std::rotate(rootMoves.begin(), it, it + 1);
+              rootMoves[0].pv = lastBestPV;
+              rootMoves[0].score = lastBestScore;
+          }
       }
 
       if (!Threads.stop)
@@ -556,6 +579,8 @@ void Thread::search() {
 
       if (rootMoves[0].pv[0] != lastBestMove) {
          lastBestMove = rootMoves[0].pv[0];
+         lastBestScore = rootMoves[0].score;
+         lastBestPV = rootMoves[0].pv;
          lastBestMoveDepth = rootDepth;
       }
 
