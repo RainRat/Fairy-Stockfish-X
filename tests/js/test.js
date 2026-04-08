@@ -558,6 +558,21 @@ describe('board.checkedPieces()', function () {
   })
 })
 
+describe('board.evasionCheckedPieces() / board.isRealCheck()', function () {
+  it("they expose strict king-evasion check state", () => {
+    let fs = require('fs');
+    ffish.loadVariantConfig(fs.readFileSync(srcDir + 'variants.ini', 'utf8'));
+
+    let board = new ffish.Board("anti-king-2");
+    board.setFen("7a/8/8/3Ak3/8/8/8/K6R w - - 0 1");
+    chai.expect(board.checkedPieces()).to.equal("d5");
+    chai.expect(board.isCheck()).to.equal(true);
+    chai.expect(board.evasionCheckedPieces()).to.equal("");
+    chai.expect(board.isRealCheck()).to.equal(false);
+    board.delete();
+  })
+})
+
 describe('board.isCheck()', function () {
   it("it checks if a player is in check", () => {
     let board = new ffish.Board();

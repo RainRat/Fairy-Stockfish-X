@@ -531,6 +531,10 @@ inline Bitboard checked(const Position& pos) {
         | (pos.anti_royal_types() ? pos.checked_anti_royals(pos.side_to_move()) : Bitboard(0));
 }
 
+inline Bitboard evasion_checked(const Position& pos) {
+    return pos.evasion_checkers() ? square_bb(pos.square<KING>(pos.side_to_move())) : Bitboard(0);
+}
+
 namespace FEN {
 
 enum FenValidation : int {

@@ -62,7 +62,9 @@ export interface Board {
     isGameOver(claimDraw?: boolean): boolean;
     result(claimDraw?: boolean): string;
     checkedPieces(): string;
+    evasionCheckedPieces(): string;
     isCheck(): boolean;
+    isRealCheck(): boolean;
     isBikjang(): boolean;
     isCapture(uciMove: string): boolean;
     moveStack(): string;

@@ -368,8 +368,24 @@ public:
     return squares;
   }
 
+  std::string evasion_checked_pieces() const {
+    Bitboard checked = Stockfish::evasion_checked(pos);
+    std::string squares;
+    while (checked) {
+      Square sr = pop_lsb(checked);
+      squares += UCI::square(pos, sr);
+      squares += DELIM;
+    }
+    save_pop_back(squares);
+    return squares;
+  }
+
   bool is_check() const {
     return Stockfish::checked(pos);
+  }
+
+  bool is_real_check() const {
+    return pos.evasion_checkers();
   }
 
   bool is_bikjang() const {
@@ -813,7 +829,9 @@ EMSCRIPTEN_BINDINGS(ffish_js) {
     .function("result", select_overload<std::string() const>(&Board::result))
     .function("result", select_overload<std::string(bool) const>(&Board::result))
     .function("checkedPieces", &Board::checked_pieces)
+    .function("evasionCheckedPieces", &Board::evasion_checked_pieces)
     .function("isCheck", &Board::is_check)
+    .function("isRealCheck", &Board::is_real_check)
     .function("isBikjang", &Board::is_bikjang)
     .function("isCapture", &Board::is_capture)
     .function("moveStack", &Board::move_stack)

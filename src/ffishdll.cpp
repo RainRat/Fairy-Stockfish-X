@@ -304,7 +304,20 @@ public:
     return squares;
   }
 
+  std::string evasion_checked_pieces() const {
+    Bitboard checked = Stockfish::evasion_checked(pos);
+    std::string squares;
+    while (checked) {
+      Square sr = pop_lsb(checked);
+      squares += UCI::square(pos, sr);
+      squares += DELIM;
+    }
+    save_pop_back(squares);
+    return squares;
+  }
+
   bool is_check() const { return Stockfish::checked(pos); }
+  bool is_real_check() const { return pos.evasion_checkers(); }
   bool is_bikjang() const { return pos.bikjang(); }
   bool is_capture(std::string uciMove) const { return pos.capture(UCI::to_move(pos, uciMove)); }
 
@@ -530,7 +543,9 @@ FSF_API bool fsf_is_game_over(fsf_board b, bool claim_draw) { return static_cast
 FSF_API const char* fsf_result(fsf_board b, bool claim_draw) { return to_cstr(static_cast<Board*>(b)->result(claim_draw)); }
 
 FSF_API const char* fsf_checked_pieces(fsf_board b) { return to_cstr(static_cast<Board*>(b)->checked_pieces()); }
+FSF_API const char* fsf_evasion_checked_pieces(fsf_board b) { return to_cstr(static_cast<Board*>(b)->evasion_checked_pieces()); }
 FSF_API bool fsf_is_check(fsf_board b) { return static_cast<Board*>(b)->is_check(); }
+FSF_API bool fsf_is_real_check(fsf_board b) { return static_cast<Board*>(b)->is_real_check(); }
 FSF_API bool fsf_is_bikjang(fsf_board b) { return static_cast<Board*>(b)->is_bikjang(); }
 FSF_API bool fsf_is_capture(fsf_board b, const char* uciMove) {
   return static_cast<Board*>(b)->is_capture(uciMove ? uciMove : "");
