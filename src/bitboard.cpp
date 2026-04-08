@@ -263,8 +263,10 @@ namespace {
 
   void add_step_like_rider_types(RiderType& riderTypes, Direction d) {
     const int ad = std::abs(int(d));
-    if ((ad % FILE_NB) == 0 || ad < FILE_NB)
-        riderTypes |= RIDER_ROOK_H | RIDER_ROOK_V;
+    if ((ad % FILE_NB) == 0)
+        riderTypes |= RIDER_ROOK_V;
+    if (ad < FILE_NB)
+        riderTypes |= RIDER_ROOK_H;
     if ((FILE_NB > 1 && (ad % (FILE_NB - 1)) == 0) || (ad % (FILE_NB + 1)) == 0)
         riderTypes |= RIDER_BISHOP;
     if (LameDabbabaDirections.find(d) != LameDabbabaDirections.end())
