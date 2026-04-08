@@ -334,10 +334,13 @@ struct Variant {
   bool connectHorizontal = true;
   bool connectVertical = true;
   bool connectDiagonal = true;
+  bool connectNorthEast = true;
+  bool connectSouthEast = true;
   bool connect3D = false;
   bool connect4D = false;
   Bitboard connectRegion1[COLOR_NB] = {};
   Bitboard connectRegion2[COLOR_NB] = {};
+  Bitboard connectRegion3[COLOR_NB] = {};
   int connectNxN = 0;
   int collinearN = 0;
   int connectGroup = 0;

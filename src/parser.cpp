@@ -1889,12 +1889,16 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("connectHorizontal", v->connectHorizontal);
     parse_attribute("connectVertical", v->connectVertical);
     parse_attribute("connectDiagonal", v->connectDiagonal);
+    parse_attribute("connectNorthEast", v->connectNorthEast);
+    parse_attribute("connectSouthEast", v->connectSouthEast);
     parse_attribute("connect3D", v->connect3D);
     parse_attribute("connect4D", v->connect4D);
     parse_attribute("connectRegion1White", v->connectRegion1[WHITE]);
     parse_attribute("connectRegion2White", v->connectRegion2[WHITE]);
+    parse_attribute("connectRegion3White", v->connectRegion3[WHITE]);
     parse_attribute("connectRegion1Black", v->connectRegion1[BLACK]);
     parse_attribute("connectRegion2Black", v->connectRegion2[BLACK]);
+    parse_attribute("connectRegion3Black", v->connectRegion3[BLACK]);
     parse_attribute("connectNxN", v->connectNxN);
     parse_attribute("collinearN", v->collinearN);
     parse_attribute("connectGroup", v->connectGroup);

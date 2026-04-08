@@ -108,6 +108,10 @@ jobs:
         run: |
           ../tests/new-variants-smoke.sh
 
+      - name: Test connect region 3
+        run: |
+          ../tests/connect-region3.sh
+
       - name: Test incomplete baselines
         run: |
           ../tests/incomplete-baselines.sh ./stockfish variants-incomplete.ini
