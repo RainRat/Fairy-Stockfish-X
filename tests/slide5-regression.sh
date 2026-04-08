@@ -9,7 +9,7 @@ error() {
 trap 'error ${LINENO}' ERR
 
 ENGINE=${1:-./src/stockfish}
-VARIANT_PATH=${2:-./src/variants-incomplete.ini}
+VARIANT_PATH=${2:-./src/variants.ini}
 
 perft_out=$(cat <<EOF | "${ENGINE}" 2>/dev/null
 uci

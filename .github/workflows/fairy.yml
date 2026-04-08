@@ -148,6 +148,10 @@ jobs:
         run: |
           ../tests/sacrifice.sh
 
+      - name: Test borrowed opponent drops
+        run: |
+          ../tests/borrow-opponent-drops.sh
+
       - name: Test asym rider checkers
         run: |
           ../tests/asym-rider-checkers.sh

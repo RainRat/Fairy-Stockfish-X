@@ -183,7 +183,7 @@ namespace {
         // Restrict to valid target
         b &= pos.drop_region(Us, pt) & (~pos.pieces() | pos.opening_swap_drop_targets(Us, pt));
 
-        if ((pos.symmetric_drop_types() & pt) && pos.count_in_hand(Us, pt) >= 2)
+        if ((pos.symmetric_drop_types() & pt) && pos.count_in_hand(pos.drop_hand_color(Us, pt), pt) >= 2)
         {
             while (b)
             {
