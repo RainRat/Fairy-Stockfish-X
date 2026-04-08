@@ -1196,6 +1196,8 @@ Ret probe_table(const Position& pos, ProbeState* result, WDLScore wdl = WDLDraw)
     if (pos.count<ALL_PIECES>() == 2) // KvK
         return Ret(WDLDraw);
 
+    assert(pos.material_key_is_ok());
+
     TBTable<Type>* entry = TBTables.get<Type>(pos.material_key());
 
     if (!entry || !mapped(*entry, pos))

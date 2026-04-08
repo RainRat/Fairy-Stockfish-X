@@ -960,6 +960,25 @@ Key Position::material_key(EndgameEval e) const {
   return st->materialKey ^ reserve_key() ^ Zobrist::endgame[e];
 }
 
+Key Position::compute_material_key() const {
+
+  Key key = 0;
+
+  for (Color c : {WHITE, BLACK})
+      for (PieceType pt = PAWN; pt <= KING; ++pt)
+      {
+          Piece pc = make_piece(c, pt);
+          for (int cnt = 0; cnt < pieceCount[pc]; ++cnt)
+              key ^= Zobrist::psq[pc][cnt];
+      }
+
+  return key;
+}
+
+bool Position::material_key_is_ok() const {
+  return compute_material_key() == st->materialKey;
+}
+
 
 /// Position::set() initializes the position object with the given FEN string.
 /// This function is not very robust - make sure that input FENs are correct,
@@ -7521,6 +7540,9 @@ bool Position::pos_is_ok() const {
               || (count<KING>(c) && (castlingRightsMask[square<KING>(c)] & cr) != cr))
               assert(0 && "pos_is_ok: Castling");
       }
+
+  if (!material_key_is_ok())
+      assert(0 && "pos_is_ok: materialKey");
 
   return true;
 }

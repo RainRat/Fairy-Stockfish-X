@@ -609,6 +609,7 @@ public:
 
   // Position consistency check, for debugging
   bool pos_is_ok() const;
+  bool material_key_is_ok() const;
   void refresh_state_derived(StateInfo* si) const;
   void flip();
 
@@ -623,6 +624,7 @@ private:
   void set_castling_right(Color c, Square rfrom);
   void set_state(StateInfo* si) const;
   void recompute_state_hashes_and_material(StateInfo* si) const;
+  Key compute_material_key() const;
   Bitboard compute_checkers_bb(Color side) const;
   Bitboard compute_evasion_checkers_bb(Color side) const;
   void set_check_info(StateInfo* si) const;
