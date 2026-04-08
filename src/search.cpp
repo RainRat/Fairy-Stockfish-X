@@ -304,8 +304,13 @@ void MainThread::search() {
                                              : "stalemate");
   }
 
-  // Send again PV info if we have a new best thread
-  if (bestThread != this && show_search_output())
+  bool extractedPonder = false;
+
+  if (bestThread->rootMoves[0].pv.size() == 1)
+      extractedPonder = bestThread->rootMoves[0].extract_ponder_from_tt(rootPos);
+
+  // Send again PV info if we have a new best thread or extracted a ponder move.
+  if ((bestThread != this || extractedPonder) && show_search_output())
       sync_cout << UCI::pv(bestThread->rootPos, bestThread->completedDepth, -VALUE_INFINITE, VALUE_INFINITE) << sync_endl;
 
   if (CurrentProtocol == XBOARD)
@@ -341,8 +346,7 @@ void MainThread::search() {
           {
               XBoard::stateMachine->do_move(bestMove);
               XBoard::stateMachine->moveAfterSearch = false;
-              if (Options["Ponder"] && (   bestThread->rootMoves[0].pv.size() > 1
-                                        || bestThread->rootMoves[0].extract_ponder_from_tt(rootPos)))
+              if (Options["Ponder"] && bestThread->rootMoves[0].pv.size() > 1)
                   XBoard::stateMachine->ponderMove = bestThread->rootMoves[0].pv[1];
           }
       }
@@ -352,7 +356,7 @@ void MainThread::search() {
   SyncCout out;
   out << "bestmove " << UCI::move(rootPos, bestThread->rootMoves[0].pv[0]);
 
-  if (bestThread->rootMoves[0].pv.size() > 1 || bestThread->rootMoves[0].extract_ponder_from_tt(rootPos))
+  if (bestThread->rootMoves[0].pv.size() > 1)
       out << " ponder " << UCI::move(rootPos, bestThread->rootMoves[0].pv[1]);
 
   out << sync_endl;
