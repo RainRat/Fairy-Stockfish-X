@@ -584,10 +584,13 @@ void Thread::search() {
          lastBestMoveDepth = rootDepth;
       }
 
-      // Have we found a "mate in x"?
+      // Have we found a "mate in x" after a completed iteration?
       if (   Limits.mate
-          && bestValue >= VALUE_MATE_IN_MAX_PLY
-          && VALUE_MATE - bestValue <= 2 * Limits.mate)
+          && !Threads.stop
+          && (   (rootMoves[0].score >= VALUE_MATE_IN_MAX_PLY
+                && VALUE_MATE - rootMoves[0].score <= 2 * Limits.mate)
+              || (rootMoves[0].score <= VALUE_MATED_IN_MAX_PLY
+                && VALUE_MATE + rootMoves[0].score <= 2 * Limits.mate)))
           Threads.stop = true;
 
       if (!mainThread)
