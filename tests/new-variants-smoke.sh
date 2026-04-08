@@ -139,7 +139,28 @@ position startpos
 go perft 1")
 echo "${out}" | grep -q "^e1d2: 1$"
 
-# 5bb) Simplified inheritance stanzas still preserve start positions.
+# 5bb) Additional Groups variants load and expose the expected setup-phase drops.
+for v in groups groups-fixed groups-setup groups-jump-setup groups-queen-fixed groups-queen-jump-fixed groups-queen-setup groups-queen-jump-setup; do
+  variant_available "${v}"
+done
+out=$(run_cmds "setoption name UCI_Variant value groups-setup
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 8"
+out=$(run_cmds "setoption name UCI_Variant value groups-jump-setup
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 8"
+out=$(run_cmds "setoption name UCI_Variant value groups-queen-setup
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 8"
+out=$(run_cmds "setoption name UCI_Variant value groups-queen-jump-setup
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 8"
+
+# 5bc) Simplified inheritance stanzas still preserve start positions.
 out=$(run_cmds "setoption name UCI_Variant value maharajah
 position startpos
 d")
