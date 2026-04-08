@@ -507,27 +507,14 @@ namespace {
     return hasHopper;
   }
 
-  bool has_hopper_potential_from_square(const PieceInfo* pi, Color c, Square sq) {
-    auto has_two_step_lane = [&](const std::map<Direction, int>& directions) {
-        for (auto const& [d, _] : directions)
-        {
-            Direction step = c == WHITE ? d : -d;
-            Square hurdle = sq + step;
-            if (!is_ok(hurdle) || distance(hurdle, sq) > 2)
-                continue;
-
-            Square landing = hurdle + step;
-            if (is_ok(landing) && distance(landing, hurdle) <= 2)
-                return true;
-        }
-        return false;
-    };
-
-    for (MoveModality modality : {MODALITY_QUIET, MODALITY_CAPTURE})
-        if (has_two_step_lane(pi->hopper[0][modality]) || has_two_step_lane(pi->contraHopper[0][modality]))
-            return true;
-
-    return false;
+  bool has_hopper_potential_from_square(const Position& pos, Color c, PieceType pt, Square sq) {
+    // PseudoMoves deliberately treats hopper families too optimistically on an
+    // empty board. For immobility checks, ask the real attack generator with a
+    // maximally helpful occupancy instead: every other square is occupied, so
+    // any genuine adjacent-hurdle lane remains available while edge-trapped
+    // hoppers still report no future move.
+    Bitboard syntheticOccupancy = pos.board_bb() & ~square_bb(sq);
+    return pos.attacks_from(c, pt, sq, syntheticOccupancy);
   }
 
   Bitboard rose_revealed_blockers(Square target, Square attackerSq, Bitboard occupied) {
@@ -2898,7 +2885,7 @@ bool Position::legal(Move m) const {
           const PieceInfo* pi = pieceMap.get(pt);
           bool hasPotentialMove = PseudoMoves[0][us][pt][to] & board_bb();
           if (is_pure_hopper_like(pi))
-              hasPotentialMove = has_hopper_potential_from_square(pi, us, to);
+              hasPotentialMove = has_hopper_potential_from_square(*this, us, pt, to);
           if (   !hasPotentialMove
               && !(jump_capture_types() & ALL_PIECES) && !(jump_capture_types() & pt))
               return false;

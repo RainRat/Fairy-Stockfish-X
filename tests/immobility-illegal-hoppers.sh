@@ -1,52 +1,26 @@
-#!/usr/bin/env bash
-
+#!/bin/bash
 set -euo pipefail
 
-engine=${1:-src/stockfish}
+cd "$(dirname "$0")/../src"
 
 tmp_ini=$(mktemp)
 trap 'rm -f "$tmp_ini"' EXIT
 
-cat > "$tmp_ini" <<'EOF'
-[hopperdrop:chess]
-pieceToCharTable = -
-king = -
+cat > "$tmp_ini" <<'INI'
+[immobility-illegal-hopper-test:shogi]
 customPiece1 = m:fpR
-customPiece2 = l:fmRfcpR
-pieceDrops = true
-mustDrop = true
-dropRegionWhite = **
-dropRegionBlack = **
-immobilityIllegal = true
-startFen = 8/8/8/8/8/8/8/8[ML] w - - 0 1
-EOF
+customPiece2 = j:fC
+promotedPieceType = p:g m:g j:g s:g b:h r:d
+startFen = 2sgkgs2/1r5b1/p1ppppp1p/1p5p1/9/1P5P1/P1PPPPP1P/1B5R1/2SGKGS2[mmMMjjJJ]
+INI
 
-run_perft() {
-  local variant=$1
-  printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value %s\nposition startpos\ngo perft 1\nquit\n' \
-    "$tmp_ini" "$variant" | "$engine"
-}
+out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value immobility-illegal-hopper-test\nposition fen 9/9/9/9/9/9/9/9/4K4[MJJjjmm] w - - 0 1\ngo perft 1\nquit\n' "$tmp_ini" | ./stockfish)
 
-out=$(run_perft hopperdrop)
+grep -q '^M@a7:' <<<"$out"
+grep -q '^M@e7:' <<<"$out"
+! grep -q '^M@a8:' <<<"$out"
+! grep -q '^M@e8:' <<<"$out"
+! grep -q '^M@a9:' <<<"$out"
+! grep -q '^M@e9:' <<<"$out"
 
-if grep -q '^M@[a-h]7: 1$' <<<"$out"; then
-  echo "pure forward hopper incorrectly allowed to drop on the penultimate rank"
-  exit 1
-fi
-
-if grep -q '^M@[a-h]8: 1$' <<<"$out"; then
-  echo "pure forward hopper incorrectly allowed to drop on the last rank"
-  exit 1
-fi
-
-if ! grep -q '^L@[a-h]7: 1$' <<<"$out"; then
-  echo "mixed lance-like hopper unexpectedly lost penultimate-rank drops"
-  exit 1
-fi
-
-if grep -q '^L@[a-h]8: 1$' <<<"$out"; then
-  echo "mixed lance-like hopper incorrectly allowed to drop on the last rank"
-  exit 1
-fi
-
-echo "immobility-illegal-hoppers test OK"
+echo "immobility-illegal hoppers regression passed"

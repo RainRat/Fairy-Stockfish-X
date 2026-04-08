@@ -132,6 +132,10 @@ jobs:
         run: |
           ../tests/bent-rider-evasion.sh
 
+      - name: Test immobility-illegal hoppers
+        run: |
+          ../tests/immobility-illegal-hoppers.sh
+
       - name: Test asym rider checkers
         run: |
           ../tests/asym-rider-checkers.sh
