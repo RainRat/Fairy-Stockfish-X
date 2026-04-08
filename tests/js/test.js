@@ -1003,6 +1003,7 @@ describe('ffish.variants()', function () {
   it("it returns all currently available variants", () => {
     chai.expect(ffish.variants().includes("chess")).to.equal(true);
     chai.expect(ffish.variants().includes("crazyhouse")).to.equal(true);
+    chai.expect(ffish.variants().includes("dragon")).to.equal(true);
     chai.expect(ffish.variants().includes("janggi")).to.equal(true);
   });
 });

@@ -522,6 +522,10 @@ namespace ffish {
   }
 
   std::string available_variants() {
+    if (!Board::sfInitialized) {
+      initialize_stockfish();
+      Board::sfInitialized = true;
+    }
     std::string availableVariants;
     for (std::string variant : variants.get_keys()) {
       availableVariants += variant;
