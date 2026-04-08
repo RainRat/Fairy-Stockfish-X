@@ -783,6 +783,12 @@ namespace {
                         std::cerr << key << " - Missing piece set for file " << fileToken << std::endl;
                     return false;
                 }
+            } else if (pieceToken.empty()) {
+                if (!(ss >> pieceToken)) {
+                    if (doCheck)
+                        std::cerr << key << " - Missing piece set for file " << fileToken << std::endl;
+                    return false;
+                }
             }
 
             PieceSet pieces = NO_PIECE_SET;

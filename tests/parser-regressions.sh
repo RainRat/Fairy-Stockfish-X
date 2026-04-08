@@ -76,6 +76,10 @@ startFen = rbnkbr/pppppp/6/6/PPPPPP/RBNKBR w KQkq - 0 1
 promotionPieceTypesByFile = a:q b:r
 promotionPieceTypesByFileWhite = a:n
 startFen = 8/1P6/8/8/8/8/8/4k2K w - - 0 1
+
+[promotion-by-file-spaces:chess]
+promotionPieceTypesByFile = a: q b: r c : b d :n e:- f: -
+startFen = 8/1P6/8/8/8/8/8/4k2K w - - 0 1
 INI
 
 echo "parser regression tests started"
@@ -108,7 +112,7 @@ verify_warning "wallingRule=duck and petrifyOnCaptureTypes are incompatible." "p
 verify_warning "pieceDrops and any walling are incompatible." "freeDrops check"
 verify_warning "falcon looks like a custom piece definition. Use customPieceN = a:W for new custom pieces." "named custom piece hint"
 verify_warning "Wrapped boards do not support connect/collinear win conditions." "wrapped connect rejection"
-verify_warning "Toroidal boards do not support x/z rider modifiers in customPiece1." "toroidal x/z rejection"
+verify_warning "Wrapped boards do not support x/z rider modifiers in customPiece1." "toroidal x/z rejection"
 verify_warning "Castling destination is adjacent to castlingKingFile; some GUIs/protocols may not distinguish castling from a normal king move." "adjacent castling warning"
 
 nonking_ini=$(mktemp)
@@ -162,6 +166,21 @@ fi
 
 if echo "${promotion_file_output}" | grep -q "b7b8n:"; then
   echo "${promotion_file_output}"
+  exit 1
+fi
+
+promotion_spaces_output=$(cat <<CMDS | "${ENGINE}" 2>&1
+uci
+setoption name VariantPath value ${tmp_ini}
+setoption name UCI_Variant value promotion-by-file-spaces
+position startpos
+go perft 1
+quit
+CMDS
+)
+
+if ! echo "${promotion_spaces_output}" | grep -q "b7b8r:"; then
+  echo "${promotion_spaces_output}"
   exit 1
 fi
 
