@@ -28,9 +28,12 @@ d")
   echo "${out}" | grep -q "info string variant ${v} "
 }
 
-variant_available "minihexchess"
-variant_available "glinski-chess"
-variant_available "mccooey-chess"
+if ! variant_available "minihexchess" \
+  || ! variant_available "glinski-chess" \
+  || ! variant_available "mccooey-chess"; then
+  echo "Requires a very-large-board capable engine. Skipping."
+  exit 0
+fi
 
 out=$(run_cmds "setoption name UCI_Variant value minihexchess
 position startpos
