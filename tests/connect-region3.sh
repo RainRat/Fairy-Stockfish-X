@@ -7,7 +7,8 @@ error() {
 }
 trap 'error ${LINENO}' ERR
 
-ENGINE="${1:-./src/stockfish}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ENGINE="${1:-${SCRIPT_DIR}/../src/stockfish}"
 
 TMP_VARIANT_PATH=$(mktemp /tmp/fsx-connect-region3-XXXXXX.ini)
 trap 'rm -f "${TMP_VARIANT_PATH}"' EXIT

@@ -108,6 +108,14 @@ jobs:
         run: |
           ../tests/new-variants-smoke.sh
 
+      - name: Test hex board display
+        run: |
+          ../tests/hex-board-display.sh
+
+      - name: Test hex piece movement
+        run: |
+          ../tests/hex-piece-movement.sh
+
       - name: Test connect region 3
         run: |
           ../tests/connect-region3.sh
