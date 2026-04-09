@@ -232,6 +232,8 @@ struct Variant {
   bool gating = false;
   bool gatingFromHand = true;
   PieceType gatingPieceAfter[COLOR_NB][PIECE_TYPE_NB] = {};
+  PieceType firstMovePieceType[PIECE_TYPE_NB] = {};
+  bool firstMoveLoseOnCheck = false;
   WallingRule wallingRule = NO_WALLING;
   bool wallingSide[COLOR_NB] = {true, true};
   Bitboard wallingRegion[COLOR_NB] = {AllSquares, AllSquares};
