@@ -2869,7 +2869,7 @@ bool Position::legal(Move m) const {
       StateInfo setupState, nextState;
       probe.set(variant(), fen(), is_chess960(), &setupState, this_thread());
       probe.do_move(m, nextState, false);
-      if (probe.count<KING>(us) && probe.attackers_to_king(probe.square<KING>(us), them))
+      if (!allow_checks() && probe.count<KING>(us) && probe.attackers_to_king(probe.square<KING>(us), them))
           return false;
       return true;
   }
@@ -3746,15 +3746,6 @@ bool Position::pseudo_legal(const Move m) const {
           return false;
   }
 
-  if (is_pull_move(m))
-  {
-      if (pc == NO_PIECE || color_of(pc) != us)
-          return false;
-      if (!(board_bb() & to) || !(board_bb() & pullFrom))
-          return false;
-      return bool(pull_targets_from(us, from, pullFrom) & to);
-  }
-
   if (type_of(m) == PROMOTION && !promotion_allowed(us, promotion_type(m), to))
       return false;
   if (type_of(m) == PIECE_PROMOTION && (is_promoted(from) || !promotion_allowed(us, promoted_piece_type(type_of(pc)))))
@@ -3764,6 +3755,15 @@ bool Position::pseudo_legal(const Move m) const {
       Bitboard mandatoryZone = pc == NO_PIECE ? Bitboard(0) : mandatory_promotion_zone(pc);
       if ((mandatoryZone & effectiveTo) && !(mandatoryZone & from))
           return false;
+  }
+
+  if (is_pull_move(m))
+  {
+      if (pc == NO_PIECE || color_of(pc) != us)
+          return false;
+      if (!(board_bb() & to) || !(board_bb() & pullFrom))
+          return false;
+      return bool(pull_targets_from(us, from, pullFrom) & to);
   }
 
   if (forced_jump_continuation() && st->forcedJumpSquare != SQ_NONE)
@@ -7328,23 +7328,24 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
       if (!(region1 & connectPieces) || !(region2 & connectPieces) || (region3 && !(region3 & connectPieces)))
           return false;
 
-      Bitboard current = region1 & connectPieces;
+      Bitboard frontier = region1 & connectPieces;
+      Bitboard current = frontier;
       bool hitsRegion2 = bool(current & region2);
       bool hitsRegion3 = !region3 || bool(current & region3);
 
-      while (true) {
-          Bitboard newBitboard = weak_connection_expansion(*this, current, connectPieces, ~sideToMove);
+      while (frontier) {
+          Bitboard newBitboard = weak_connection_expansion(*this, frontier, connectPieces, ~sideToMove) & ~current;
 
           hitsRegion2 |= bool(newBitboard & region2);
           hitsRegion3 |= !region3 || bool(newBitboard & region3);
           if (hitsRegion2 && hitsRegion3)
               return true;
 
-          if (!(newBitboard & ~current))
-              return false;
-
+          frontier = newBitboard;
           current |= newBitboard;
       }
+
+      return false;
   };
 
   if (connected_regions(var->connectRegion1[~sideToMove], var->connectRegion2[~sideToMove],

@@ -661,7 +661,15 @@ Bitboard tuple_rider_moves_bb(PieceType pt, bool initial, Color c, Square s, Bit
 Bitboard tuple_rider_between_bb(PieceType pt, Square s1, Square s2) {
   for (const auto& ray : pieceMap.get(pt)->tupleSlider[0][MODALITY_CAPTURE])
       if (Bitboard path = fixed_step_between_bb(s1, s2, ray.df, ray.dr))
+      {
+          int steps = popcount(path);
+          if (steps < slider_min_distance(ray.limit))
+              continue;
+          int maxDistance = slider_max_distance(ray.limit);
+          if (maxDistance && steps > maxDistance)
+              continue;
           return path;
+      }
   return Bitboard(0);
 }
 
