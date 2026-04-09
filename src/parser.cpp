@@ -1524,6 +1524,28 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
         }
         std::copy(std::begin(parsedStrengths), std::end(parsedStrengths), std::begin(v->pushingStrength));
     }
+    const auto& it_pull_strength = config.find("pullingStrength");
+    if (it_pull_strength != config.end())
+    {
+        int parsedStrengths[PIECE_TYPE_NB];
+        std::copy(std::begin(v->pullingStrength), std::end(v->pullingStrength), std::begin(parsedStrengths));
+        if (!parse_piece_int_map(it_pull_strength->second, v, parsedStrengths, true))
+        {
+            if (DoCheck)
+                std::cerr << "pullingStrength - Invalid syntax." << std::endl;
+            return false;
+        }
+        for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
+        {
+            if (parsedStrengths[pt] < 0)
+            {
+                if (DoCheck)
+                    std::cerr << "pullingStrength - Invalid negative value." << std::endl;
+                return false;
+            }
+        }
+        std::copy(std::begin(parsedStrengths), std::end(parsedStrengths), std::begin(v->pullingStrength));
+    }
     parse_attribute("pushFirstColor", v->pushFirstColor);
     parse_attribute("pushingRemoves", v->pushingRemoves);
     parse_attribute("pushChainEnemyOnly", v->pushChainEnemyOnly);

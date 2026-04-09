@@ -1066,6 +1066,33 @@ namespace {
             }
         }
 
+        if (!restrictToForcedJumper && pos.has_pulling()
+            && Type != CAPTURES)
+        {
+            for (PieceSet ps = pos.piece_types(); ps;)
+            {
+                PieceType pt = pop_lsb(ps);
+                if (pos.pulling_strength(pt) <= 0)
+                    continue;
+
+                Bitboard froms = pos.pieces(Us, pt);
+                while (froms)
+                {
+                    Square from = pop_lsb(froms);
+                    Bitboard pullSources = pos.pull_sources_from(Us, from);
+                    while (pullSources)
+                    {
+                        Square pullFrom = pop_lsb(pullSources);
+                        Bitboard b = pos.pull_targets_from(Us, from, pullFrom);
+                        if (Type == QUIET_CHECKS)
+                            b &= target;
+                        while (b)
+                            *moveList++ = make_pull(from, pop_lsb(b), pullFrom);
+                    }
+                }
+            }
+        }
+
         // Workaround for passing: Execute a non-move with any piece
         if (!restrictToForcedJumper && pos.pass(Us) && !pos.count<KING>(Us))
         {

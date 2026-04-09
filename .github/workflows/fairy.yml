@@ -176,6 +176,10 @@ jobs:
         run: |
           ../tests/hindustani.sh
 
+      - name: Test pulling
+        run: |
+          ../tests/pulling.sh
+
       - name: Test borrowed opponent drops
         run: |
           ../tests/borrow-opponent-drops.sh
