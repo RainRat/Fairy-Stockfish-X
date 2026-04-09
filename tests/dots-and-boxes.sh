@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ENGINE="${1:-/home/chris/Fairy-Stockfish-X/src/stockfish}"
-VARIANTS_MAIN="${2:-/home/chris/Fairy-Stockfish-X/src/variants.ini}"
-VARIANTS_INCOMPLETE="${3:-/home/chris/Fairy-Stockfish-X/src/variants-incomplete.ini}"
-ENGINE_LARGE="${4:-/home/chris/Fairy-Stockfish-X/src/stockfish-large}"
-ENGINE_VLB="${5:-/home/chris/Fairy-Stockfish-X/src/stockfish-vlb}"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ENGINE="${1:-$ROOT_DIR/src/stockfish}"
+VARIANTS_MAIN="${2:-$ROOT_DIR/src/variants.ini}"
+VARIANTS_INCOMPLETE="${3:-$ROOT_DIR/src/variants-incomplete.ini}"
+ENGINE_LARGE="${4:-$ROOT_DIR/src/stockfish-large}"
+ENGINE_VLB="${5:-$ROOT_DIR/src/stockfish-vlb}"
 
 run_cmds() {
   local variants="$1"

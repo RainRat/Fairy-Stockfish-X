@@ -241,6 +241,7 @@ struct Variant {
   bool surroundClaimExtraTurn = false;
   bool seirawanGating = false;
   bool commitGates = false;
+  PieceSet cloneMoveTypes = NO_PIECE_SET;
   PieceSet jumpCaptureTypes = NO_PIECE_SET;
   bool forcedJumpContinuation = false;
   bool forcedJumpSameDirection = false;
