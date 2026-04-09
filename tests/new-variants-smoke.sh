@@ -241,6 +241,14 @@ echo "${out}" | grep -q "Nodes searched: 19"
 echo "${out}" | grep -q "^b5b6: 1$"
 fi
 
+if variant_available "van-gennip-hexchess"; then
+out=$(run_cmds "setoption name UCI_Variant value van-gennip-hexchess
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 16"
+echo "${out}" | grep -q "^c3c4: 1$"
+fi
+
 if variant_available "mccooey-chess"; then
 out=$(run_cmds "setoption name UCI_Variant value mccooey-chess
 position startpos
