@@ -9,8 +9,9 @@ error() {
 }
 trap 'error ${LINENO}' ERR
 
-ENGINE=${1:-./stockfish}
-VARIANTS=${2:-./src/variants.ini}
+SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+ENGINE="${1:-${SCRIPT_DIR}/../src/stockfish}"
+VARIANTS="${2:-${SCRIPT_DIR}/../src/variants.ini}"
 
 echo "pond testing started"
 

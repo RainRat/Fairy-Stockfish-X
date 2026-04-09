@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ENGINE="${1:-./src/stockfish}"
+SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+ENGINE="${1:-${SCRIPT_DIR}/../src/stockfish}"
 
 TMP_VARIANTS="$(mktemp /tmp/self-destruct-special.XXXXXX.ini)"
 trap 'rm -f "$TMP_VARIANTS"' EXIT

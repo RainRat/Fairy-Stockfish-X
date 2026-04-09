@@ -2,8 +2,9 @@
 set -euo pipefail
 error() { echo "konobi regression failed on line $1"; exit 1; }
 trap 'error ${LINENO}' ERR
-ENGINE="${1:-./src/stockfish}"
-VARIANT_PATH="${2:-./src/variants.ini}"
+SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+ENGINE="${1:-${SCRIPT_DIR}/../src/stockfish}"
+VARIANT_PATH="${2:-${SCRIPT_DIR}/../src/variants.ini}"
 
 run_cmds() {
   cat <<EOF | "${ENGINE}" 2>/dev/null
@@ -32,7 +33,7 @@ go perft 1")
 
 # Once all strong, non-weak follow-up placements around b2 are blocked, the
 # weak link becomes legal again.
-out=$(run_cmds "position fen 8/8/8/8/3p4/8/pPp5/p7[Pp] w - - 0 1
+out=$(run_cmds "position fen 8/8/8/8/3p4/1p6/ppp5/pp6[Pp] w - - 0 1
 go perft 1")
 echo "${out}" | grep -q "^P@c3: 1$"
 

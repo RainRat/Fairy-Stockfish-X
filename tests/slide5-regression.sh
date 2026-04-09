@@ -8,8 +8,9 @@ error() {
 }
 trap 'error ${LINENO}' ERR
 
-ENGINE=${1:-./src/stockfish}
-VARIANT_PATH=${2:-./src/variants.ini}
+SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+ENGINE="${1:-${SCRIPT_DIR}/../src/stockfish}"
+VARIANT_PATH="${2:-${SCRIPT_DIR}/../src/variants.ini}"
 
 perft_out=$(cat <<EOF | "${ENGINE}" 2>/dev/null
 uci

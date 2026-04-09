@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ENGINE="${1:-./src/stockfish}"
-VARIANT_PATH="${2:-/home/chris/Fairy-Stockfish-X/src/variants.ini}"
+SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+ENGINE="${1:-${SCRIPT_DIR}/../src/stockfish}"
+VARIANT_PATH="${2:-${SCRIPT_DIR}/../src/variants.ini}"
 
 output="$(
   printf 'setoption name VariantPath value %s\nsetoption name UCI_Variant value gale\nposition startpos\ngo perft 1\nquit\n' "$VARIANT_PATH" \
@@ -21,4 +22,3 @@ fi
 
 grep -q "info string variant gale " <<<"$output"
 grep -q "Nodes searched: 41" <<<"$output"
-
