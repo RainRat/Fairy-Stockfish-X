@@ -1280,9 +1280,8 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     const auto& it_pr_drop = config.find("priorityDropTypes");
     if (it_pr_drop != config.end())
     {
-        bool parsedPriorityDrops[PIECE_TYPE_NB];
+        PieceSet parsedPriorityDrops = v->isPriorityDrop;
         bool sawToken = false;
-        std::copy(std::begin(v->isPriorityDrop), std::end(v->isPriorityDrop), std::begin(parsedPriorityDrops));
         std::stringstream ss(it_pr_drop->second);
         std::string token;
         while (ss >> token)
@@ -1294,10 +1293,10 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
             if (pt == NO_PIECE_TYPE)
             {
                 if (DoCheck)
-                    std::cerr << "priorityDropTypes - Invalid piece type: " << token << std::endl;
+                std::cerr << "priorityDropTypes - Invalid piece type: " << token << std::endl;
                 return false;
             }
-            parsedPriorityDrops[pt] = true;
+            parsedPriorityDrops |= piece_set(pt);
         }
         if (sawToken && token != "-" && !only_trailing_space(ss))
         {
@@ -1306,7 +1305,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
             return false;
         }
         else if (sawToken)
-            std::copy(std::begin(parsedPriorityDrops), std::end(parsedPriorityDrops), std::begin(v->isPriorityDrop));
+            v->isPriorityDrop = parsedPriorityDrops;
     }
     parse_attribute("piecePromotionOnCapture", v->piecePromotionOnCapture);
     if (config.find("mandatoryPawnPromotion") != config.end())

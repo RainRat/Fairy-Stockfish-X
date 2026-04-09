@@ -76,6 +76,26 @@ struct ScopedSpellContext {
   }
 };
 
+struct ReversiblePieceState {
+  Piece piece = NO_PIECE;
+  Piece unpromoted = NO_PIECE;
+  bool promoted = false;
+
+  void clear() {
+    piece = NO_PIECE;
+    unpromoted = NO_PIECE;
+    promoted = false;
+  }
+
+  void set(Piece pc, bool isPromoted, Piece unpromotedPc = NO_PIECE) {
+    piece = pc;
+    promoted = isPromoted;
+    unpromoted = isPromoted ? unpromotedPc : NO_PIECE;
+  }
+
+  explicit operator bool() const { return piece != NO_PIECE; }
+};
+
 /// StateInfo struct stores information needed to restore a Position object to
 /// its previous state when we retract a move. Whenever a move is made on the
 /// board (by calling Position::do_move), a StateInfo object must be passed.
@@ -110,7 +130,6 @@ struct StateInfo {
   // Fairy-Stockfish-X split: broad royal-danger state, including pseudo-/anti-royal
   // bookkeeping, must not be conflated with actual "must evade now" check state.
   Bitboard   evasionCheckersBB;
-  Piece      unpromotedCapturedPiece;
   Piece      unpromotedBycatch[SQUARE_NB];
   Bitboard   bycatchSquares;
   Bitboard   promotedBycatch;
@@ -120,11 +139,9 @@ struct StateInfo {
   Bitboard   blockersForKing[COLOR_NB];
   Bitboard   pinners[COLOR_NB];
   Bitboard   checkSquares[PIECE_TYPE_NB];
-  Piece      capturedPiece;
+  ReversiblePieceState captured;
   Square     captureSquare; // when != to_sq, e.g., en passant
-  Piece      deadPiece;
-  Piece      deadUnpromotedPiece;
-  bool       deadPiecePromoted;
+  ReversiblePieceState dead;
   Piece      promotionPawn;
   Piece      consumedPromotionHandPiece;
   Bitboard   nonSlidingRiders;
@@ -134,54 +151,49 @@ struct StateInfo {
   PieceSet   extinctionSeen[COLOR_NB];
   OptBool    legalCapture;
   OptBool    legalEnPassant;
-  bool       capturedpromoted;
-  bool       suppressedCaptureTransfer;
-  bool       shak;
-  bool       bikjang;
   Bitboard   chased;
-  bool       pass;
   Bitboard   claimedSquares;
-  bool       pendingClaimPass;
-  Color      dropHandColor;
   Square     forcedJumpSquare;
-  bool       forcedJumpHasFollowup;
-  int        forcedJumpStep;
   Move       move;
+  Color      dropHandColor;
+  int        forcedJumpStep;
   int        repetition;
   int        boardRepetition;
   PieceType removedGatingType;
   PieceType removedCastlingGatingType;
   PieceType capturedGatingType;
-  bool didMorph;
   Piece morphedFrom;
   Square morphSquare;
-  bool didColorChange;
-  Piece colorChangedFrom;
+  ReversiblePieceState colorChanged;
   Square colorChangeSquare;
-  bool colorChangedPromoted;
-  Piece colorChangedUnpromoted;
-  bool didPush;
-  bool didPull;
-  bool pushStepwise;
   Square pushTailSquare;
   int pushStepF;
   int pushStepR;
   int pushCount;
-  bool pushEjected;
-  bool pushBlockedCapture;
   int pushSnapshotCount;
   Square pushSnapshotSquares[32];
   Piece pushSnapshotPieces[32];
   Piece pushSnapshotUnpromoted[32];
-  bool pushSnapshotPromoted[32];
+  uint32_t pushSnapshotPromoted;
   int pushTransferCount;
   Piece pushTransferPieces[32];
   Piece pushTransferUnpromoted[32];
-  bool pushTransferPromoted[32];
+  uint32_t pushTransferPromoted;
   Square pullFromSquare;
-  Piece pullPiece;
-  Piece pullUnpromotedPiece;
-  bool pullPromoted;
+  ReversiblePieceState pulled;
+  bool       suppressedCaptureTransfer;
+  bool       shak;
+  bool       bikjang;
+  bool       pass;
+  bool       pendingClaimPass;
+  bool       forcedJumpHasFollowup;
+  bool       didMorph;
+  bool       didColorChange;
+  bool       didPush;
+  bool       didPull;
+  bool       pushStepwise;
+  bool       pushEjected;
+  bool       pushBlockedCapture;
   bool nnueRefreshNeeded;
 
   // Used by NNUE
@@ -2111,7 +2123,7 @@ inline bool Position::multimove_pass(int ply) const {
       return (ply - start) & 1;
   }
   int phase = (ply - var->multimoveOffset) % var->multimoveCycle;
-  return ply < var->multimoveOffset ? var->multimovePass[ply] : (phase + (phase >= var->multimoveCycleShift)) % 2;
+  return ply < var->multimoveOffset ? var->multimovePass.test(ply) : (phase + (phase >= var->multimoveCycleShift)) % 2;
 }
 
 inline Bitboard Position::promoted_soldiers(Color c) const {
@@ -2213,7 +2225,7 @@ inline Value Position::checkmate_value(int ply) const {
   // Check for illegal mate by shogi pawn drop
   if (    shogi_pawn_drop_mate_illegal(~side_to_move())
       && !(evasion_checkers() & ~pieces(SHOGI_PAWN))
-      && !st->capturedPiece
+      && !st->captured.piece
       &&  st->pliesFromNull > 0
       && (st->materialKey != st->previous->materialKey))
   {
@@ -3864,7 +3876,7 @@ inline bool Position::virtual_drop(Move m) const {
 }
 
 inline Piece Position::captured_piece() const {
-  return st->capturedPiece;
+  return st->captured.piece;
 }
 
 inline Bitboard Position::fog_area() const {
@@ -3886,11 +3898,11 @@ inline Piece Position::captured_piece(Move m) const {
 }
 
 inline const std::string Position::piece_to_partner() const {
-  if (!st->capturedPiece) return std::string();
-  Color color = color_of(st->capturedPiece);
-  Piece piece = st->capturedpromoted ?
-      (st->unpromotedCapturedPiece ? st->unpromotedCapturedPiece : make_piece(color, main_promotion_pawn_type(color))) :
-      st->capturedPiece;
+  if (!st->captured.piece) return std::string();
+  Color color = color_of(st->captured.piece);
+  Piece piece = st->captured.promoted ?
+      (st->captured.unpromoted ? st->captured.unpromoted : make_piece(color, main_promotion_pawn_type(color))) :
+      st->captured.piece;
   return piece_symbol(piece);
 }
 
@@ -4105,7 +4117,7 @@ inline void Position::add_to_hand(Piece pc) {
   if (variant()->freeDrops) return;
   pieceCountInHand[color_of(pc)][type_of(pc)]++;
   pieceCountInHand[color_of(pc)][ALL_PIECES]++;
-  priorityDropCountInHand[color_of(pc)] += var->isPriorityDrop[type_of(pc)];
+  priorityDropCountInHand[color_of(pc)] += bool(var->isPriorityDrop & piece_set(type_of(pc)));
   psq += PSQT::psq[pc][SQ_NONE];
 }
 
@@ -4113,7 +4125,7 @@ inline void Position::remove_from_hand(Piece pc) {
   if (variant()->freeDrops) return;
   pieceCountInHand[color_of(pc)][type_of(pc)]--;
   pieceCountInHand[color_of(pc)][ALL_PIECES]--;
-  priorityDropCountInHand[color_of(pc)] -= var->isPriorityDrop[type_of(pc)];
+  priorityDropCountInHand[color_of(pc)] -= bool(var->isPriorityDrop & piece_set(type_of(pc)));
   psq -= PSQT::psq[pc][SQ_NONE];
 }
 
