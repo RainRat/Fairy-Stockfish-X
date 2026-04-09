@@ -5965,6 +5965,14 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   st->checkersBB = compute_checkers_bb(sideToMove);
   st->evasionCheckersBB = compute_evasion_checkers_bb(sideToMove);
 
+  if (first_move_lose_on_check() && st->checkersBB)
+      for (PieceSet ps = piece_types(); ps;)
+      {
+          PieceType pt = pop_lsb(ps);
+          if (first_move_piece_type(pt) != NO_PIECE_TYPE)
+              st->gatesBB[sideToMove] &= ~pieces(sideToMove, pt);
+      }
+
   if (counting_rule())
   {
       if (counting_rule() != ASEAN_COUNTING && type_of(captured) == PAWN && count<ALL_PIECES>(~sideToMove) == 1 && !count<PAWN>() && count_limit(~sideToMove))
