@@ -1039,9 +1039,7 @@ namespace {
                 while (froms)
                 {
                     Square from = pop_lsb(froms);
-                    Bitboard b = ((pos.moves_from(Us, pt, from) & ~pos.pieces())
-                                | (pos.attacks_from(Us, pt, from) & pos.pieces(~Us)))
-                               & cloneTargets;
+                    Bitboard b = pos.clone_targets_from(Us, from) & cloneTargets;
                     while (b)
                         *moveList++ = make<SPECIAL>(from, pop_lsb(b));
                 }

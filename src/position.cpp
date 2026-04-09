@@ -2740,6 +2740,8 @@ bool Position::legal(Move m) const {
 
   bool rifleShot = rifle_capture(m) && capture(m) && type_of(m) != CASTLING;
   bool cloneMove = is_clone_move(m);
+  if (cloneMove && !(clone_targets_from(us, from) & to))
+      return false;
   Square shotSq = capture(m) ? capture_square(m) : to;
   Bitboard removedAttackers = rifleShot ? square_bb(shotSq) : Bitboard(0);
   Square effectiveTo = rifleShot ? from : to;

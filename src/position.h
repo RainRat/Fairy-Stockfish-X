@@ -353,6 +353,8 @@ public:
   PieceSet capture_to_hand_types() const;
   PieceSet self_destruct_types() const;
   PieceSet clone_move_types() const;
+  bool can_clone(Piece p) const;
+  Bitboard clone_targets_from(Color c, Square from) const;
   bool first_rank_pawn_drops() const;
   bool can_drop(Color c, PieceType pt) const;
   bool has_exchange() const;
@@ -1695,6 +1697,10 @@ inline PieceSet Position::clone_move_types() const {
   return var->cloneMoveTypes;
 }
 
+inline bool Position::can_clone(Piece p) const {
+  return p != NO_PIECE && (clone_move_types() & piece_set(type_of(p)));
+}
+
 inline bool Position::first_rank_pawn_drops() const {
   assert(var != nullptr);
   return var->firstRankPawnDrops;
@@ -2554,8 +2560,16 @@ inline bool Position::is_clone_move(Move m) const {
   if (type_of(m) != SPECIAL || is_gating(m) || from_sq(m) == to_sq(m))
       return false;
 
-  Piece mover = moved_piece(m);
-  return mover != NO_PIECE && (clone_move_types() & piece_set(type_of(mover)));
+  return can_clone(moved_piece(m));
+}
+
+inline Bitboard Position::clone_targets_from(Color c, Square from) const {
+  Piece mover = piece_on(from);
+  if (color_of(mover) != c || !can_clone(mover))
+      return 0;
+
+  PieceType pt = type_of(mover);
+  return (moves_from(c, pt, from) & ~pieces()) | (attacks_from(c, pt, from) & pieces(~c));
 }
 
 inline Bitboard Position::pieces(PieceType pt) const {
