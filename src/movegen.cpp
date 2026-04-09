@@ -1093,6 +1093,25 @@ namespace {
             }
         }
 
+        if (!restrictToForcedJumper && pos.has_adjacent_swapping()
+            && Type != CAPTURES)
+        {
+            for (PieceSet ps = pos.adjacent_swap_move_types(); ps;)
+            {
+                PieceType pt = pop_lsb(ps);
+                Bitboard froms = pos.pieces(Us, pt);
+                while (froms)
+                {
+                    Square from = pop_lsb(froms);
+                    Bitboard b = pos.adjacent_swap_targets_from(Us, from);
+                    if (Type == QUIET_CHECKS)
+                        b &= target;
+                    while (b)
+                        *moveList++ = make<SWAP>(from, pop_lsb(b));
+                }
+            }
+        }
+
         // Workaround for passing: Execute a non-move with any piece
         if (!restrictToForcedJumper && pos.pass(Us) && !pos.count<KING>(Us))
         {

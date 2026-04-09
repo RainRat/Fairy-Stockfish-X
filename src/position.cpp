@@ -2630,6 +2630,7 @@ bool Position::legal(Move m) const {
   Color us = sideToMove;
   Color them = ~us;
   bool dropMove = is_drop_move(m);
+  bool swapMove = is_swap_move(m);
   bool insertMove = is_insert_move(m);
   Square from = from_sq(m);
   Square to = to_sq(m);
@@ -2743,6 +2744,21 @@ bool Position::legal(Move m) const {
       return false;
   if (pullMove && !(pull_targets_from(us, from, pullFrom) & to))
       return false;
+  if (swapMove && !(adjacent_swap_targets_from(us, from) & to))
+      return false;
+  if (swapMove && gamePly < swap_forbidden_plies())
+      return false;
+  if (swapMove && swap_no_immediate_return())
+  {
+      Move prev = st->move;
+      if (is_ok(prev) && is_swap_move(prev))
+      {
+          Square prevFrom = from_sq(prev);
+          Square prevTo = to_sq(prev);
+          if ((from == prevFrom && to == prevTo) || (from == prevTo && to == prevFrom))
+              return false;
+      }
+  }
   Square shotSq = capture(m) ? capture_square(m) : to;
   Bitboard removedAttackers = rifleShot ? square_bb(shotSq) : Bitboard(0);
   Square effectiveTo = rifleShot ? from : to;
@@ -2859,6 +2875,20 @@ bool Position::legal(Move m) const {
   // Illegal quiet moves
   if (must_capture() && !capture(m) && has_capture())
       return false;
+
+  if (swapMove)
+  {
+      if (violates_same_player_board_repetition(m))
+          return false;
+
+      Position probe;
+      StateInfo setupState, nextState;
+      probe.set(variant(), fen(), is_chess960(), &setupState, this_thread());
+      probe.do_move(m, nextState, false);
+      if (!allow_checks() && probe.count<KING>(us) && probe.attackers_to_king(probe.square<KING>(us), them))
+          return false;
+      return true;
+  }
 
   if (pullMove)
   {
@@ -3766,6 +3796,28 @@ bool Position::pseudo_legal(const Move m) const {
       return bool(pull_targets_from(us, from, pullFrom) & to);
   }
 
+  if (is_swap_move(m))
+  {
+      if (pc == NO_PIECE || color_of(pc) != us)
+          return false;
+      if (!(board_bb() & to))
+          return false;
+      if (gamePly < swap_forbidden_plies())
+          return false;
+      if (swap_no_immediate_return())
+      {
+          Move prev = st->move;
+          if (is_ok(prev) && is_swap_move(prev))
+          {
+              Square prevFrom = from_sq(prev);
+              Square prevTo = to_sq(prev);
+              if ((from == prevFrom && to == prevTo) || (from == prevTo && to == prevFrom))
+                  return false;
+          }
+      }
+      return bool(adjacent_swap_targets_from(us, from) & to);
+  }
+
   if (forced_jump_continuation() && st->forcedJumpSquare != SQ_NONE)
   {
       Piece forcedPiece = piece_on(st->forcedJumpSquare);
@@ -4119,6 +4171,7 @@ bool Position::gives_check(Move m) const {
   Square from = from_sq(m);
   Square to = to_sq(m);
   bool dropMove = is_drop_move(m);
+  bool swapMove = is_swap_move(m);
 
   Bitboard freezeExtra = 0;
   Bitboard jumpRemoved = 0;
@@ -4167,7 +4220,7 @@ bool Position::gives_check(Move m) const {
   else if (janggiCannons & to)
       janggiCannons ^= to;
 
-  if (topology_wraps() || var->blastPassiveTypes || has_pushing() || has_pulling() || type_of(m) == PULL)
+  if (topology_wraps() || var->blastPassiveTypes || has_pushing() || has_pulling() || has_adjacent_swapping() || type_of(m) == PULL || swapMove)
   {
       Position* pos = const_cast<Position*>(this);
       StateInfo nextState;
@@ -4244,6 +4297,7 @@ bool Position::gives_check(Move m) const {
   case INSERT:
   case SPECIAL:
   case PULL:
+  case SWAP:
       return false;
 
   case PROMOTION:
@@ -4397,6 +4451,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   bool rifleShot = rifle_capture(m) && captured != NO_PIECE && type_of(m) != CASTLING;
   bool cloneMove = is_clone_move(m);
   bool pullMove = is_pull_move(m);
+  bool swapMove = is_swap_move(m);
   bool capturedDeadSquare = !dropMove && from != to && bool(st->deadSquares & to);
   PieceType exchanged = exchange_piece(m);
   Square jumpCapsq = is_jump_capture(m) ? jump_capture_square(from, to) : SQ_NONE;
@@ -5117,6 +5172,21 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           move_piece(from, to);
           if (pulled != NO_PIECE)
               move_piece(pullFrom, from);
+      }
+      else if (swapMove)
+      {
+          if (Eval::useNNUE)
+          {
+              dp.dirty_num = 2;
+              dp.piece[0] = pc;
+              dp.from[0] = from;
+              dp.to[0] = to;
+              dp.piece[1] = piece_on(to);
+              dp.from[1] = to;
+              dp.to[1] = from;
+          }
+
+          swap_piece(from, to);
       }
       else if (!rifleShot)
           move_piece(from, to);
@@ -6117,6 +6187,7 @@ void Position::undo_move(Move m) {
   bool rifleShot = rifle_capture(m) && st->captured.piece != NO_PIECE && type_of(m) != CASTLING;
   bool cloneMove = is_clone_move(m);
   bool pullMove = is_pull_move(m);
+  bool swapMove = is_swap_move(m);
   Square moverSq = rifleShot ? from : to;
   Piece pc = piece_on(moverSq);
   PieceType exchange = exchange_piece(m);
@@ -6130,6 +6201,7 @@ void Position::undo_move(Move m) {
          || (type_of(m) == PROMOTION && sittuyin_promotion())
          || is_pass(m)
          || pullMove
+         || swapMove
          || wasOpeningSelfRemoval
          || (commit_gates() && st->removedGatingType > NO_PIECE_TYPE)
   );
@@ -6332,6 +6404,8 @@ void Position::undo_move(Move m) {
                   move_piece(from, st->pullFromSquare);
               move_piece(to, from);
           }
+          else if (swapMove)
+              swap_piece(from, to);
           else if (!rifleShot)
               move_piece(to, from); // Put the piece back at the source square
       }
