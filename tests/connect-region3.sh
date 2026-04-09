@@ -37,7 +37,7 @@ connectRegion1Black = a1 b1 c1 d1 e1
 connectRegion2Black = a1 b2 c3 d4 e5
 connectRegion3Black = e1 e2 e3 e4 e5
 nMoveRule = 0
-startFen = ^^^^1/^^^2/^^3/^4/5[SSSSSSSSSSSSSSSsssssssssssssss] b - - 0 1
+startFen = ****1/***2/**3/*4/5[SSSSSSSSSSSSSSSsssssssssssssss] b - - 0 1
 INI
 
 run_cmds() {
