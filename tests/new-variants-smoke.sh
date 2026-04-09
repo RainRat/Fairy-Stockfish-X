@@ -175,6 +175,24 @@ go perft 1")
 echo "${out}" | grep -q "Nodes searched: 100"
 fi
 
+if variant_available "hex-16x16"; then
+out=$(run_cmds "setoption name UCI_Variant value hex-16x16
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 256"
+fi
+
+if variant_available "esa-hex"; then
+out=$(run_cmds "setoption name UCI_Variant value esa-hex
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 100"
+out=$(run_cmds "setoption name UCI_Variant value esa-hex
+position startpos moves P@a1
+go perft 1")
+echo "${out}" | grep -q "^0000: 1$"
+fi
+
 if variant_available "misere-hex"; then
 out=$(run_cmds "setoption name UCI_Variant value misere-hex
 position fen 11/11/11/11/11/11/11/11/11/11/PPPPPPPPPPP[P] b - - 0 1

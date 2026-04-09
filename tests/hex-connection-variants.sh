@@ -53,6 +53,23 @@ out=$(run_cmds "hex-10x10" "position startpos
 go perft 1")
 echo "${out}" | grep -q "Nodes searched: 100"
 
+out=$(run_cmds "hex-16x16" "position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 256"
+
+out=$(run_cmds "esa-hex" "position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 100"
+
+out=$(run_cmds "esa-hex" "position startpos moves P@a1
+go perft 1")
+echo "${out}" | grep -q "^0000: 1$"
+echo "${out}" | grep -q "Nodes searched: 1"
+
+out=$(run_cmds "esa-hex" "position startpos moves P@a1 0000 p@b1 0000
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 99"
+
 out=$(run_cmds "hex" "position fen 11/11/11/11/11/11/11/11/11/11/PPPPPPPPPPP b - - 0 1
 go perft 1")
 echo "${out}" | grep -q "Nodes searched: 0"
