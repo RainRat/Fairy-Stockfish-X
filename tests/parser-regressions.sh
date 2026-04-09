@@ -100,6 +100,18 @@ pieceToCharTable = -
 king = -
 pseudoRoyalTypes = p
 startFen = 3/3/P2 w - - 0 1
+
+[hex-weak-crosscut:fairy]
+maxRank = 5
+maxFile = 5
+hexBoard = true
+pieceToCharTable = -
+king = -
+pieceDrops = true
+mustDrop = true
+customPiece1 = s:m
+weakCrosscutDropIllegal = true
+startFen = ****1/***2/**3/*4/5[SSSSSSSSSSSSSSSsssssssssssssss] b - - 0 1
 INI
 
 echo "parser regression tests started"
@@ -136,6 +148,7 @@ verify_warning "Wrapped boards do not support x/z rider modifiers in customPiece
 verify_warning "Castling destination is adjacent to castlingKingFile; some GUIs/protocols may not distinguish castling from a normal king move." "adjacent castling warning"
 verify_warning "removeConnectN is incompatible with connection win conditions." "removeConnectN connect rejection"
 verify_warning "removeConnectN is incompatible with (pseudo/anti-)royal pieces." "removeConnectN royal rejection"
+verify_warning "Hex boards do not support square weak-connection drop rules." "hex weak-link rejection"
 
 nonking_ini=$(mktemp)
 trap 'rm -f "${tmp_ini}" "${nonking_ini}"' EXIT

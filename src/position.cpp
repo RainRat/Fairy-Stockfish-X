@@ -550,16 +550,16 @@ namespace {
   Bitboard weak_connection_expansion(const Position& pos, Bitboard frontier, Bitboard connectPieces, Color c) {
     Bitboard expanded = 0;
 
+    for (Direction d : pos.getConnectDirections())
+        expanded |= shift(d, frontier) & connectPieces;
+
     while (frontier)
     {
         Square from = pop_lsb(frontier);
-        Bitboard fromBb = square_bb(from);
-        for (Direction d : pos.getConnectDirections())
-            expanded |= shift(d, fromBb) & connectPieces;
-
         if (!pos.weak_diagonal_connect())
             continue;
 
+        Bitboard fromBb = square_bb(from);
         static constexpr Direction diagonals[] = {NORTH_EAST, NORTH_WEST, SOUTH_EAST, SOUTH_WEST};
         for (Direction d : diagonals)
         {
