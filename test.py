@@ -390,6 +390,24 @@ class TestPyffish(unittest.TestCase):
         self.assertTrue("shogun" in variants)
         self.assertTrue("hostageblank" in variants)
 
+    def test_remove_connect_n_rejections(self):
+        # removeConnectN should be rejected when combined with connection win conditions.
+        variant_config = """
+[test-connect-remove]
+maxRank = 3
+maxFile = 3
+connectN = 3
+removeConnectN = 3
+pieceToCharTable = -
+king = -
+immobile = p
+startFen = 3/3/3[PPPPPpppp] w - - 0 1
+pieceDrops = true
+"""
+        sf.load_variant_config(variant_config)
+        with self.assertRaises(Exception):
+             sf.start_fen("test-connect-remove")
+
     def test_set_option(self):
         result = sf.set_option("UCI_Variant", "capablanca")
         self.assertIsNone(result)
