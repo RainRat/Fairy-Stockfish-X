@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ENGINE="${1:-./src/stockfish}"
-VARIANTS="${2:-./src/variants.ini}"
+SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+ENGINE="${1:-${SCRIPT_DIR}/../src/stockfish}"
+VARIANTS="${2:-${SCRIPT_DIR}/../src/variants.ini}"
 
 die() {
   echo "rebel-chess regression failed on line $1" >&2

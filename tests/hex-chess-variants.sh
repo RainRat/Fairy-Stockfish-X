@@ -44,6 +44,9 @@ out=$(run_cmds "setoption name UCI_Variant value minihexchess
 position startpos
 go perft 1")
 echo "${out}" | grep -q "Nodes searched: 6"
+dump_out=$(run_cmds "setoption name UCI_Variant value minihexchess
+d")
+echo "${dump_out}" | grep -q "startpos \\*\\*\\*1prb/\\*\\*2pkn/\\*3ppp/7/PPP3\\*/NKP2\\*\\*/BRP1\\*\\*\\* w - - 0 1"
 echo "${out}" | grep -q "^a2b4: 1$"
 echo "${out}" | grep -q "^a3a4: 1$"
 echo "${out}" | grep -q "^b3b4: 1$"

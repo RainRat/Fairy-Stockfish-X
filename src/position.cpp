@@ -726,6 +726,17 @@ std::ostream& operator<<(std::ostream& os, const Position& pos) {
 
   if (pos.is_hex_board())
   {
+      auto emit_hex_file_labels = [&](int stagger) {
+          os << "\n " << std::string(stagger, ' ') << "  ";
+          for (File f = FILE_A; f <= pos.max_file(); ++f)
+          {
+              if (f != FILE_A)
+                  os << "    ";
+              os << char('a' + f);
+          }
+      };
+
+      emit_hex_file_labels(0);
       for (Rank r = pos.max_rank(); r >= RANK_1; --r)
       {
           os << "\n " << std::string(int(pos.max_rank() - r) * 2, ' ');
@@ -758,13 +769,7 @@ std::ostream& operator<<(std::ostream& os, const Position& pos) {
           }
       }
 
-      os << "\n ";
-      for (File f = FILE_A; f <= pos.max_file(); ++f)
-      {
-          if (f)
-              os << "   ";
-          os << char('a' + f);
-      }
+      emit_hex_file_labels(int(pos.max_rank()) * 2);
       os << "\n";
       append_debug_footer();
       return os;

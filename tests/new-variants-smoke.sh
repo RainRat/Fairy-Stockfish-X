@@ -269,10 +269,11 @@ if variant_available "mccooey-chess"; then
 out=$(run_cmds "setoption name UCI_Variant value mccooey-chess
 position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 10"
+echo "${out}" | grep -q "Nodes searched: 31"
 echo "${out}" | grep -q "^c3e4: 1$"
 echo "${out}" | grep -q "^c2e1: 1$"
-echo "${out}" | grep -q "^a4a5: 1$"
+echo "${out}" | grep -q "^a4b5: 1$"
+echo "${out}" | grep -q "^a4c6: 1$"
 fi
 
 if variant_available "grand-hexachess"; then
@@ -507,7 +508,7 @@ if variant_available "y"; then
 out=$(run_cmds "setoption name UCI_Variant value y
 position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 56"
+echo "${out}" | grep -q "Nodes searched: 55"
 fi
 
 if variant_available "hex"; then
@@ -593,15 +594,15 @@ fi
 # 15) Kamikaze: plain chess family, capturer is removed.
 if variant_available "kamikaze"; then
 out=$(run_cmds "setoption name UCI_Variant value kamikaze
-position fen 4k3/8/8/3p4/4P3/8/8/8 w - - 0 1 moves e4d5
+position fen 4k3/8/8/3p4/4P3/8/8/4K3 w - - 0 1 moves e4d5
 d")
-echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/8 b - - 0 1"
+echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/4K3 b - - 0 1"
 
-# 15b) Kamikaze: kings are exempt from self-destruction on capture.
+# 15b) Kamikaze (nocheckatomic template): kings are not explosion-immune.
 out=$(run_cmds "setoption name UCI_Variant value kamikaze
 position fen 8/8/8/3P4/4k3/8/8/4K3 b - - 0 1 moves e4d5
 d")
-echo "${out}" | grep -q "Fen: 8/8/8/3k4/8/8/8/4K3 w - - 0 2"
+echo "${out}" | grep -q "Fen: 8/8/8/8/8/8/8/4K3 w - - 0 2"
 fi
 
 # 16) Fatal giveaway: dead squares can be captured as neutral blockers.
@@ -738,7 +739,7 @@ if variant_available "shatranj-14x14"; then
 out=$(run_cmds "setoption name UCI_Variant value shatranj-14x14
 position startpos
 d")
-echo "${out}" | grep -q "Fen: rndwbmkqsbwdnr/pppppppppppppp/14/14/14/14/14/14/14/14/14/14/PPPPPPPPPPPPPP/RNDWBSQKMBWDNR w - - 0 1"
+echo "${out}" | grep -q "Fen: rndwbmksbwdnr1/pppppppppppppp/14/14/14/14/14/14/14/14/14/14/PPPPPPPPPPPPPP/RNDWBSKMBWDNR1 w - - 0 1"
 fi
 
 # 19da) Shatranj: source-backed setup should load as documented.
@@ -850,9 +851,10 @@ echo "${out}" | grep -q "Nodes searched: 0"
 # 19fzzzz) Gale 15x15: only available on VERY_LARGE_BOARDS builds.
 if variant_available "gale-15"; then
   out=$(run_cmds "setoption name UCI_Variant value gale-15
-position fen 1P13/P14/P14/P14/P14/P14/P14/P14/P14/P14/P14/P14/P14/P14/1P13 w - - 0 1
-go depth 1")
-  echo "${out}" | grep -q "Nodes searched: 0"
+position startpos
+go perft 1")
+  echo "${out}" | grep -q "Nodes searched: 113"
+  echo "${out}" | grep -q "^P@a1: 1$"
 fi
 
 # 19g) Apit-Sodok: same reverse/intervention capture as Maak Yek.

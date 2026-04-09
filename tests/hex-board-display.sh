@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ENGINE="${1:-/home/chris/Fairy-Stockfish-X/src/stockfish}"
+SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+ENGINE="${1:-${SCRIPT_DIR}/../src/stockfish}"
 
 error() {
   echo "hex-board display regression failed on line $1" >&2
@@ -31,9 +32,10 @@ quit
 EOF
 )
 
+echo "${out}" | grep -Fq "   a    b    c    d    e"
 echo "${out}" | grep -Fq " [  ] [  ] [  ] [  ] [  ] 5"
 echo "${out}" | grep -Fq "         [  ] [  ] [  ] [  ] [  ] 1 *"
-echo "${out}" | grep -Fq " a   b   c   d   e"
+echo "${out}" | grep -Fq "           a    b    c    d    e"
 echo "${out}" | grep -Fq "Fen: 5/5/5/5/5 w - - 0 1"
 
 bad_ini=$(mktemp)

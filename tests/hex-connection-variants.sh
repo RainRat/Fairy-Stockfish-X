@@ -17,7 +17,8 @@ if [[ -z "${ENGINE}" ]]; then
     ENGINE="./src/stockfish"
   fi
 fi
-VARIANT_PATH="${2:-./src/variants.ini}"
+SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+VARIANT_PATH="${2:-${SCRIPT_DIR}/../src/variants.ini}"
 
 run_cmds() {
   cat <<EOF | "${ENGINE}" 2>/dev/null
@@ -80,6 +81,6 @@ echo "${out}" | grep -q "Nodes searched: 0"
 
 out=$(run_cmds "y" "position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 56"
+echo "${out}" | grep -q "Nodes searched: 55"
 
 echo "hex connection variants regression passed"

@@ -8,7 +8,8 @@ error() {
 }
 trap 'error ${LINENO}' ERR
 
-ENGINE=${1:-./src/stockfish-large}
+SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+ENGINE="${1:-${SCRIPT_DIR}/../src/stockfish-large}"
 
 tmp_ini=$(mktemp)
 cat > "${tmp_ini}" <<'INI'
