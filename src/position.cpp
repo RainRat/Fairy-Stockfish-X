@@ -5026,6 +5026,9 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       }
       else if (cloneMove)
       {
+          bool clonedPromoted = is_promoted(from);
+          Piece clonedUnpromoted = clonedPromoted ? unpromoted_piece_on(from) : NO_PIECE;
+
           if (Eval::useNNUE)
           {
               dp.dirty_num = 1;
@@ -5034,7 +5037,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
               dp.to[0] = to;
           }
 
-          put_piece(pc, to);
+          put_piece(pc, to, clonedPromoted, clonedUnpromoted);
           k ^= Zobrist::psq[pc][to];
           st->materialKey ^= Zobrist::psq[pc][pieceCount[pc] - 1];
           if (type_of(pc) == PAWN)

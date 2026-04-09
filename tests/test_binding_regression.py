@@ -1,6 +1,9 @@
 
 import pyffish as sf
 import unittest
+from pathlib import Path
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
 
 class TestBindings(unittest.TestCase):
     def test_is_capture_invalid_move(self):
@@ -12,7 +15,7 @@ class TestBindings(unittest.TestCase):
         self.assertEqual(res, sf.VALUE_NONE)
 
     def test_enclosing_drop_startpos_not_drawn_by_insufficient_material(self):
-        with open("/home/chris/Fairy-Stockfish-X/src/variants.ini", "r", encoding="utf-8") as f:
+        with open(ROOT_DIR / "src" / "variants.ini", "r", encoding="utf-8") as f:
             sf.load_variant_config(f.read())
         fen = sf.start_fen("snort")
         self.assertTrue(sf.legal_moves("snort", fen, []))
