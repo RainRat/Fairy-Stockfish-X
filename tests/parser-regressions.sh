@@ -80,6 +80,26 @@ startFen = 8/1P6/8/8/8/8/8/4k2K w - - 0 1
 [promotion-by-file-spaces:chess]
 promotionPieceTypesByFile = a: q b: r c : b d :n e:- f: -
 startFen = 8/1P6/8/8/8/8/8/4k2K w - - 0 1
+
+[remove-connect-conn:fairy]
+maxRank = 3
+maxFile = 3
+connectN = 3
+removeConnectN = 3
+pieceToCharTable = -
+king = -
+immobile = p
+startFen = 3/3/3[PPPPPpppp] w - - 0 1
+pieceDrops = true
+
+[remove-connect-pseudoroyal:fairy]
+maxRank = 3
+maxFile = 3
+removeConnectN = 3
+pieceToCharTable = -
+king = -
+pseudoRoyalTypes = p
+startFen = 3/3/P2 w - - 0 1
 INI
 
 echo "parser regression tests started"
@@ -114,6 +134,8 @@ verify_warning "falcon looks like a custom piece definition. Use customPieceN = 
 verify_warning "Wrapped boards do not support connect/collinear win conditions." "wrapped connect rejection"
 verify_warning "Wrapped boards do not support x/z rider modifiers in customPiece1." "toroidal x/z rejection"
 verify_warning "Castling destination is adjacent to castlingKingFile; some GUIs/protocols may not distinguish castling from a normal king move." "adjacent castling warning"
+verify_warning "removeConnectN is incompatible with connection win conditions." "removeConnectN connect rejection"
+verify_warning "removeConnectN is incompatible with (pseudo/anti-)royal pieces." "removeConnectN royal rejection"
 
 nonking_ini=$(mktemp)
 trap 'rm -f "${tmp_ini}" "${nonking_ini}"' EXIT
