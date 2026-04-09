@@ -169,6 +169,10 @@ struct Variant {
   bool rifleCapture = false;
   int pushingStrength[PIECE_TYPE_NB] = {};
   int pullingStrength[PIECE_TYPE_NB] = {};
+  PieceSet adjacentSwapMoveTypes = NO_PIECE_SET;
+  bool adjacentSwapRequiresEmptyNeighbor = false;
+  bool swapNoImmediateReturn = false;
+  int swapForbiddenPlies = 0;
   PushFirstColor pushFirstColor = PUSH_THEM;
   PushRemoval pushingRemoves = PUSH_REMOVE_NONE;
   bool pushChainEnemyOnly = false;

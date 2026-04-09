@@ -180,6 +180,10 @@ jobs:
         run: |
           ../tests/pulling.sh
 
+      - name: Test swapping
+        run: |
+          ../tests/swapping.sh
+
       - name: Test borrowed opponent drops
         run: |
           ../tests/borrow-opponent-drops.sh

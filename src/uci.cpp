@@ -534,6 +534,7 @@ string UCI::move(const Position& pos, Move m) {
   bool wallMove = pos.walling(pos.side_to_move()) && is_gating(m);
   bool cloneMove = pos.is_clone_move(m);
   bool pullMove = pos.is_pull_move(m);
+  bool swapMove = pos.is_swap_move(m);
 
   if (m == MOVE_NONE)
       return CurrentProtocol == USI ? "resign" : "(none)";
@@ -597,6 +598,8 @@ string UCI::move(const Position& pos, Move m) {
   }
   else if (cloneMove)
       move += "c";
+  else if (swapMove)
+      move += "s";
 
   if (pos.paired_drop(m))
       move += "," + UCI::square(pos, pos.secondary_drop_square(m));

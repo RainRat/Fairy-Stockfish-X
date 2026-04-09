@@ -533,6 +533,7 @@ enum MoveType : int {
   DROP2              = 8 << (2 * SQUARE_BITS),
   INSERT             = 9 << (2 * SQUARE_BITS),
   PULL               = 10 << (2 * SQUARE_BITS),
+  SWAP               = 11 << (2 * SQUARE_BITS),
 };
 
 constexpr int MOVE_TYPE_BITS = 4;
@@ -1169,6 +1170,10 @@ inline Square pull_square(Move m) {
   const uint64_t raw = static_cast<uint64_t>(m);
   const uint64_t sq = (raw >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & SQUARE_BIT_MASK;
   return sq ? Square(sq - 1) : SQ_NONE;
+}
+
+inline Square swap_square(Move m) {
+  return type_of(m) == SWAP ? to_sq(m) : SQ_NONE;
 }
 
 inline bool is_gating(Move m) {

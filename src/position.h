@@ -339,6 +339,11 @@ public:
   bool has_pushing() const;
   int pulling_strength(PieceType pt) const;
   bool has_pulling() const;
+  PieceSet adjacent_swap_move_types() const;
+  bool has_adjacent_swapping() const;
+  bool adjacent_swap_requires_empty_neighbor() const;
+  bool swap_no_immediate_return() const;
+  int swap_forbidden_plies() const;
   PushFirstColor push_first_color() const;
   PushRemoval pushing_removes() const;
   bool push_chain_enemy_only() const;
@@ -376,6 +381,7 @@ public:
   Bitboard clone_targets_from(Color c, Square from) const;
   Bitboard pull_sources_from(Color c, Square from) const;
   Bitboard pull_targets_from(Color c, Square from, Square pullFrom) const;
+  Bitboard adjacent_swap_targets_from(Color c, Square from) const;
   PieceType first_move_piece_type(PieceType pt) const;
   bool first_move_lose_on_check() const;
   bool first_rank_pawn_drops() const;
@@ -579,6 +585,7 @@ public:
   Piece moved_piece(Move m) const;
   bool is_clone_move(Move m) const;
   bool is_pull_move(Move m) const;
+  bool is_swap_move(Move m) const;
   bool is_first_move_special(Move m) const;
   Piece captured_piece() const;
   Piece captured_piece(Move m) const;
@@ -774,6 +781,7 @@ private:
   bool has_committed_piece(Color cl, File fl) const;
   PieceType drop_committed_piece(Color cl, File fl);
   Bitboard find_drop_region(Direction dir, Square s, Bitboard occupied) const;
+  void swap_piece(Square from, Square to);
 };
 
 extern std::ostream& operator<<(std::ostream& os, const Position& pos);
@@ -1451,6 +1459,30 @@ inline bool Position::has_pulling() const {
       if (pulling_strength(pop_lsb(ps)) > 0)
           return true;
   return false;
+}
+
+inline PieceSet Position::adjacent_swap_move_types() const {
+  assert(var != nullptr);
+  return var->adjacentSwapMoveTypes;
+}
+
+inline bool Position::has_adjacent_swapping() const {
+  return adjacent_swap_move_types() != NO_PIECE_SET;
+}
+
+inline bool Position::adjacent_swap_requires_empty_neighbor() const {
+  assert(var != nullptr);
+  return var->adjacentSwapRequiresEmptyNeighbor;
+}
+
+inline bool Position::swap_no_immediate_return() const {
+  assert(var != nullptr);
+  return var->swapNoImmediateReturn;
+}
+
+inline int Position::swap_forbidden_plies() const {
+  assert(var != nullptr);
+  return var->swapForbiddenPlies;
 }
 
 inline PushFirstColor Position::push_first_color() const {
@@ -2605,6 +2637,10 @@ inline bool Position::is_pull_move(Move m) const {
   return type_of(m) == PULL && pull_square(m) != SQ_NONE;
 }
 
+inline bool Position::is_swap_move(Move m) const {
+  return type_of(m) == SWAP && from_sq(m) != to_sq(m);
+}
+
 inline PieceType Position::first_move_piece_type(PieceType pt) const {
   assert(var != nullptr);
   return var->firstMovePieceType[pt];
@@ -2670,6 +2706,17 @@ inline Bitboard Position::pull_targets_from(Color c, Square from, Square pullFro
   Piece mover = piece_on(from);
   PieceType pt = type_of(mover);
   return moves_from(c, pt, from) & ~pieces();
+}
+
+inline Bitboard Position::adjacent_swap_targets_from(Color c, Square from) const {
+  Piece mover = piece_on(from);
+  if (mover == NO_PIECE || color_of(mover) != c)
+      return 0;
+  if (!(adjacent_swap_move_types() & piece_set(type_of(mover))))
+      return 0;
+  if (adjacent_swap_requires_empty_neighbor() && !(PseudoAttacks[WHITE][WAZIR][from] & ~pieces()))
+      return 0;
+  return PseudoAttacks[WHITE][WAZIR][from] & pieces(~c);
 }
 
 inline Bitboard Position::pieces(PieceType pt) const {
@@ -3790,7 +3837,7 @@ inline bool Position::capture(Move m) const {
   assert(is_ok(m));
   if (type_of(m) == EN_PASSANT)
       return true;
-  if (type_of(m) == PULL)
+  if (type_of(m) == PULL || type_of(m) == SWAP)
       return false;
   if (type_of(m) == CASTLING || from_sq(m) == to_sq(m))
       return false;
@@ -3968,6 +4015,20 @@ inline void Position::move_piece(Square from, Square to) {
   //Once moved, no matter whether the piece is on original square or on destination square (including captures) or the color of the piece, it is no longer not-moved-piece
   this->st->not_moved_pieces[WHITE] &= (~(square_bb(from) | square_bb(to)));
   this->st->not_moved_pieces[BLACK] &= (~(square_bb(from) | square_bb(to)));
+}
+
+inline void Position::swap_piece(Square from, Square to) {
+  Piece fromPc = piece_on(from);
+  Piece toPc = piece_on(to);
+  bool fromPromoted = is_promoted(from);
+  bool toPromoted = is_promoted(to);
+  Piece fromUnpromoted = fromPromoted ? unpromoted_piece_on(from) : NO_PIECE;
+  Piece toUnpromoted = toPromoted ? unpromoted_piece_on(to) : NO_PIECE;
+
+  remove_piece(from);
+  remove_piece(to);
+  put_piece(toPc, from, toPromoted, toUnpromoted);
+  put_piece(fromPc, to, fromPromoted, fromUnpromoted);
 }
 
 inline void Position::do_move(Move m, StateInfo& newSt) {
