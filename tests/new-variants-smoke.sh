@@ -225,6 +225,22 @@ echo "${out}" | grep -q "^a5a6: 1$"
 echo "${out}" | grep -q "^b1d2: 1$"
 fi
 
+if variant_available "glinski-chess-3shift"; then
+out=$(run_cmds "setoption name UCI_Variant value glinski-chess-3shift
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 26"
+echo "${out}" | grep -q "^c5c6: 1$"
+fi
+
+if variant_available "glinski-chess-5shift"; then
+out=$(run_cmds "setoption name UCI_Variant value glinski-chess-5shift
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 19"
+echo "${out}" | grep -q "^b5b6: 1$"
+fi
+
 if variant_available "mccooey-chess"; then
 out=$(run_cmds "setoption name UCI_Variant value mccooey-chess
 position startpos

@@ -30,6 +30,8 @@ d")
 
 if ! variant_available "minihexchess" \
   || ! variant_available "glinski-chess" \
+  || ! variant_available "glinski-chess-3shift" \
+  || ! variant_available "glinski-chess-5shift" \
   || ! variant_available "mccooey-chess"; then
   echo "Requires a very-large-board capable engine. Skipping."
   exit 0
@@ -55,6 +57,26 @@ echo "${out}" | grep -q "^a4b4: 1$"
 echo "${out}" | grep -q "^a1c2: 1$"
 echo "${out}" | grep -q "^a5a6: 1$"
 echo "${out}" | grep -q "^b1d2: 1$"
+
+out=$(run_cmds "setoption name UCI_Variant value glinski-chess-3shift
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 26"
+echo "${out}" | grep -q "^a2b3: 1$"
+echo "${out}" | grep -q "^a2b4: 1$"
+echo "${out}" | grep -q "^b1c2: 1$"
+echo "${out}" | grep -q "^b1d2: 1$"
+echo "${out}" | grep -q "^c5c6: 1$"
+
+out=$(run_cmds "setoption name UCI_Variant value glinski-chess-5shift
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 19"
+echo "${out}" | grep -q "^a2b3: 1$"
+echo "${out}" | grep -q "^b1c2: 1$"
+echo "${out}" | grep -q "^a5a6: 1$"
+echo "${out}" | grep -q "^b5b6: 1$"
+echo "${out}" | grep -q "^b5c5: 1$"
 
 out=$(run_cmds "setoption name UCI_Variant value mccooey-chess
 position startpos
