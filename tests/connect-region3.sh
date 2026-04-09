@@ -16,6 +16,7 @@ cat >"${TMP_VARIANT_PATH}" <<'INI'
 [mini-y:fairy]
 maxRank = 5
 maxFile = 5
+hexBoard = true
 pieceToCharTable = -
 king = -
 customPiece1 = s:m
@@ -26,8 +27,8 @@ connectPieceTypes = s
 connectHorizontal = true
 connectVertical = true
 connectDiagonal = true
-connectNorthEast = true
-connectSouthEast = false
+connectNorthEast = false
+connectSouthEast = true
 connectRegion1White = a1 b1 c1 d1 e1
 connectRegion2White = a1 b2 c3 d4 e5
 connectRegion3White = e1 e2 e3 e4 e5
