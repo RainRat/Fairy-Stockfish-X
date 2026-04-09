@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ENGINE="${1:-/home/chris/Fairy-Stockfish-X/src/stockfish}"
+SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+ENGINE="${1:-${SCRIPT_DIR}/../src/stockfish}"
 
 error() {
   echo "hex-board display regression failed on line $1" >&2
