@@ -306,6 +306,7 @@ public:
   bool wraps_files() const;
   bool wraps_ranks() const;
   bool topology_wraps() const;
+  bool is_hex_board() const;
   bool checking_permitted() const;
   bool allow_checks() const;
   bool drop_checks() const;
@@ -1323,6 +1324,11 @@ inline bool Position::wraps_ranks() const {
 
 inline bool Position::topology_wraps() const {
   return wraps_files() || wraps_ranks();
+}
+
+inline bool Position::is_hex_board() const {
+  assert(var != nullptr);
+  return var->hexBoard;
 }
 
 inline bool Position::drop_checks() const {

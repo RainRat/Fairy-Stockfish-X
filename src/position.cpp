@@ -679,6 +679,97 @@ namespace {
 
 std::ostream& operator<<(std::ostream& os, const Position& pos) {
 
+  auto append_debug_footer = [&]() {
+      os << "\nFen: " << pos.fen() << "\nSfen: " << pos.fen(true) << "\nKey: " << std::hex << std::uppercase
+         << std::setfill('0') << std::setw(16) << pos.key()
+         << std::setfill(' ') << std::dec << "\nCheckers: ";
+
+      for (Bitboard b = pos.checkers(); b; )
+          os << UCI::square(pos, pop_lsb(b)) << " ";
+
+      os << "\nChased: ";
+      for (Bitboard b = pos.state()->chased; b; )
+          os << UCI::square(pos, pop_lsb(b)) << " ";
+
+      if (    int(Tablebases::MaxCardinality) >= popcount(pos.pieces())
+          && Options["UCI_Variant"] == "chess"
+          && !pos.can_castle(ANY_CASTLING))
+      {
+          StateInfo st;
+          ASSERT_ALIGNED(&st, Eval::NNUE::CacheLineSize);
+
+          Position p;
+          p.set(pos.variant(), pos.fen(), pos.is_chess960(), &st, pos.this_thread());
+          Tablebases::ProbeState s1, s2;
+          Tablebases::WDLScore wdl = Tablebases::probe_wdl(p, &s1);
+          int dtz = Tablebases::probe_dtz(p, &s2);
+          os << "\nTablebases WDL: " << std::setw(4) << wdl << " (" << s1 << ")"
+             << "\nTablebases DTZ: " << std::setw(4) << dtz << " (" << s2 << ")";
+      }
+  };
+
+  auto emit_debug_square = [&](Square sq) {
+      if (pos.state()->deadSquares & sq)
+          os << " ^";
+      else if (pos.state()->wallSquares & sq)
+          os << " *";
+      else if (pos.variant()->shogiStylePromotions && pos.unpromoted_piece_on(sq))
+          os << "+" << pos.piece_symbol(pos.unpromoted_piece_on(sq));
+      else if (((pos.captures_to_hand() && !pos.drop_loop()) || pos.two_boards()) && pos.is_promoted(sq))
+          os << "~" << pos.piece_symbol(pos.piece_on(sq));
+      else
+      {
+          const std::string& symbol = pos.piece_symbol(pos.piece_on(sq));
+          os << " " << (symbol.empty() ? " " : symbol);
+      }
+  };
+
+  if (pos.is_hex_board())
+  {
+      for (Rank r = pos.max_rank(); r >= RANK_1; --r)
+      {
+          os << "\n " << std::string(int(pos.max_rank() - r) * 2, ' ');
+          for (File f = FILE_A; f <= pos.max_file(); ++f)
+          {
+              Square sq = make_square(f, r);
+              os << "[";
+              emit_debug_square(sq);
+              os << "]";
+              if (f != pos.max_file())
+                  os << " ";
+          }
+#ifdef LARGEBOARDS
+          os << " " << (pos.max_rank() == RANK_10 && CurrentProtocol != UCI_GENERAL ? r : 1 + r);
+#else
+          os << " " << (1 + r);
+#endif
+          if (r == pos.max_rank() || r == RANK_1)
+          {
+              Color c = r == RANK_1 ? WHITE : BLACK;
+              os << (c == pos.side_to_move() ? " *" : "  ");
+              if (!pos.free_drops() && (pos.piece_drops() || pos.seirawan_gating()))
+              {
+                  os << " [";
+                  for (PieceType pt = KING; pt >= PAWN; --pt)
+                      for (int i = 0; i < pos.count_in_hand(c, pt); ++i)
+                          os << pos.piece_symbol(make_piece(c, pt));
+                  os << "]";
+              }
+          }
+      }
+
+      os << "\n ";
+      for (File f = FILE_A; f <= pos.max_file(); ++f)
+      {
+          if (f)
+              os << "   ";
+          os << char('a' + f);
+      }
+      os << "\n";
+      append_debug_footer();
+      return os;
+  }
+
   os << "\n ";
   for (File f = FILE_A; f <= pos.max_file(); ++f)
       os << "+---";
@@ -734,32 +825,7 @@ std::ostream& operator<<(std::ostream& os, const Position& pos) {
   for (File f = FILE_A; f <= pos.max_file(); ++f)
       os << "   " << char('a' + f);
   os << "\n";
-  os << "\nFen: " << pos.fen() << "\nSfen: " << pos.fen(true) << "\nKey: " << std::hex << std::uppercase
-     << std::setfill('0') << std::setw(16) << pos.key()
-     << std::setfill(' ') << std::dec << "\nCheckers: ";
-
-  for (Bitboard b = pos.checkers(); b; )
-      os << UCI::square(pos, pop_lsb(b)) << " ";
-
-  os << "\nChased: ";
-  for (Bitboard b = pos.state()->chased; b; )
-      os << UCI::square(pos, pop_lsb(b)) << " ";
-
-  if (    int(Tablebases::MaxCardinality) >= popcount(pos.pieces())
-      && Options["UCI_Variant"] == "chess"
-      && !pos.can_castle(ANY_CASTLING))
-  {
-      StateInfo st;
-      ASSERT_ALIGNED(&st, Eval::NNUE::CacheLineSize);
-
-      Position p;
-      p.set(pos.variant(), pos.fen(), pos.is_chess960(), &st, pos.this_thread());
-      Tablebases::ProbeState s1, s2;
-      Tablebases::WDLScore wdl = Tablebases::probe_wdl(p, &s1);
-      int dtz = Tablebases::probe_dtz(p, &s2);
-      os << "\nTablebases WDL: " << std::setw(4) << wdl << " (" << s1 << ")"
-         << "\nTablebases DTZ: " << std::setw(4) << dtz << " (" << s2 << ")";
-  }
+  append_debug_footer();
 
   return os;
 }
