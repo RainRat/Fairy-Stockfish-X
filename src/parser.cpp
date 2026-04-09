@@ -1142,6 +1142,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("pocketSize", v->pocketSize);
     parse_attribute("chess960", v->chess960);
     parse_attribute("twoBoards", v->twoBoards);
+    parse_attribute("hexBoard", v->hexBoard);
     parse_attribute("cylindrical", v->cylindrical);
     parse_attribute("toroidal", v->toroidal);
     parse_attribute("startFen", v->startFen);
@@ -1972,6 +1973,13 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
     // startFen
     if (DoCheck && FEN::validate_fen(v->startFen, v, v->chess960) != FEN::FEN_OK)
         std::cerr << "startFen - Invalid starting position: " << v->startFen << std::endl;
+
+    if (v->hexBoard && wrapsTopology)
+    {
+        if (DoCheck)
+            std::cerr << "hexBoard is not supported together with cylindrical or toroidal topology." << std::endl;
+        valid = false;
+    }
 
     // pieceToCharTable
     if (DoCheck && v->pieceToCharTable != "-")

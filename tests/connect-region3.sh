@@ -7,7 +7,8 @@ error() {
 }
 trap 'error ${LINENO}' ERR
 
-ENGINE="${1:-./src/stockfish}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ENGINE="${1:-${SCRIPT_DIR}/../src/stockfish}"
 
 TMP_VARIANT_PATH=$(mktemp /tmp/fsx-connect-region3-XXXXXX.ini)
 trap 'rm -f "${TMP_VARIANT_PATH}"' EXIT
@@ -16,6 +17,7 @@ cat >"${TMP_VARIANT_PATH}" <<'INI'
 [mini-y:fairy]
 maxRank = 5
 maxFile = 5
+hexBoard = true
 pieceToCharTable = -
 king = -
 customPiece1 = s:m
@@ -26,8 +28,8 @@ connectPieceTypes = s
 connectHorizontal = true
 connectVertical = true
 connectDiagonal = true
-connectNorthEast = true
-connectSouthEast = false
+connectNorthEast = false
+connectSouthEast = true
 connectRegion1White = a1 b1 c1 d1 e1
 connectRegion2White = a1 b2 c3 d4 e5
 connectRegion3White = e1 e2 e3 e4 e5
@@ -35,7 +37,7 @@ connectRegion1Black = a1 b1 c1 d1 e1
 connectRegion2Black = a1 b2 c3 d4 e5
 connectRegion3Black = e1 e2 e3 e4 e5
 nMoveRule = 0
-startFen = ^^^^1/^^^2/^^3/^4/5[SSSSSSSSSSSSSSSsssssssssssssss] b - - 0 1
+startFen = ****1/***2/**3/*4/5[SSSSSSSSSSSSSSSsssssssssssssss] b - - 0 1
 INI
 
 run_cmds() {

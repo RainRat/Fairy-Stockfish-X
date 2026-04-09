@@ -160,6 +160,63 @@ position startpos
 go perft 1")
 echo "${out}" | grep -q "Nodes searched: 8"
 
+# 5bb1) Mini Hexchess loads on the masked 37-cell hex board and exposes the expected opening moves.
+if variant_available "hex-7x7"; then
+out=$(run_cmds "setoption name UCI_Variant value hex-7x7
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 49"
+fi
+
+if variant_available "hex-10x10"; then
+out=$(run_cmds "setoption name UCI_Variant value hex-10x10
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 100"
+fi
+
+if variant_available "misere-hex"; then
+out=$(run_cmds "setoption name UCI_Variant value misere-hex
+position fen 11/11/11/11/11/11/11/11/11/11/PPPPPPPPPPP[P] b - - 0 1
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 0"
+fi
+
+if variant_available "minihexchess"; then
+out=$(run_cmds "setoption name UCI_Variant value minihexchess
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 6"
+echo "${out}" | grep -q "^a2b4: 1$"
+echo "${out}" | grep -q "^a3a4: 1$"
+echo "${out}" | grep -q "^b3b4: 1$"
+echo "${out}" | grep -q "^c3c4: 1$"
+echo "${out}" | grep -q "^b2d3: 1$"
+echo "${out}" | grep -q "^b2c4: 1$"
+fi
+
+if variant_available "glinski-chess"; then
+out=$(run_cmds "setoption name UCI_Variant value glinski-chess
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 34"
+echo "${out}" | grep -q "^d1d2: 1$"
+echo "${out}" | grep -q "^a4b4: 1$"
+echo "${out}" | grep -q "^a1c2: 1$"
+echo "${out}" | grep -q "^a5a6: 1$"
+echo "${out}" | grep -q "^b1d2: 1$"
+fi
+
+if variant_available "mccooey-chess"; then
+out=$(run_cmds "setoption name UCI_Variant value mccooey-chess
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 10"
+echo "${out}" | grep -q "^c3e4: 1$"
+echo "${out}" | grep -q "^c2e1: 1$"
+echo "${out}" | grep -q "^a4a5: 1$"
+fi
+
 # 5bc) Simplified inheritance stanzas still preserve start positions.
 out=$(run_cmds "setoption name UCI_Variant value maharajah
 position startpos
@@ -372,6 +429,21 @@ out=$(run_cmds "setoption name UCI_Variant value kopano
 position fen 7p/6p1/5p2/4p3/3p4/2p5/1p6/p7 w - - 0 1
 go perft 1")
 echo "${out}" | grep -q "Nodes searched: 0"
+fi
+
+# 7d) Hex-family connection variants: Y and Hex load on the expected build sizes.
+if variant_available "y"; then
+out=$(run_cmds "setoption name UCI_Variant value y
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 56"
+fi
+
+if variant_available "hex"; then
+out=$(run_cmds "setoption name UCI_Variant value hex
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 121"
 fi
 
 # 8) Neutreeko: max-distance move completes a line and ends the game.
