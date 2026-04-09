@@ -168,6 +168,7 @@ struct Variant {
   bool mustCaptureByColor[COLOR_NB] = {false, false};
   bool rifleCapture = false;
   int pushingStrength[PIECE_TYPE_NB] = {};
+  int pullingStrength[PIECE_TYPE_NB] = {};
   PushFirstColor pushFirstColor = PUSH_THEM;
   PushRemoval pushingRemoves = PUSH_REMOVE_NONE;
   bool pushChainEnemyOnly = false;

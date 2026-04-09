@@ -533,6 +533,7 @@ string UCI::move(const Position& pos, Move m) {
   Square to = to_sq(m);
   bool wallMove = pos.walling(pos.side_to_move()) && is_gating(m);
   bool cloneMove = pos.is_clone_move(m);
+  bool pullMove = pos.is_pull_move(m);
 
   if (m == MOVE_NONE)
       return CurrentProtocol == USI ? "resign" : "(none)";
@@ -601,6 +602,8 @@ string UCI::move(const Position& pos, Move m) {
       move += "," + UCI::square(pos, pos.secondary_drop_square(m));
   else if (is_insert_move(m))
       move += "," + UCI::square(pos, from_sq(m));
+  else if (pullMove)
+      move += "," + UCI::square(pos, pull_square(m));
 
   // Wall square
   if (wallMove && CurrentProtocol != XBOARD)
