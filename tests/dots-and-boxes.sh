@@ -4,6 +4,7 @@ set -euo pipefail
 ENGINE="${1:-/home/chris/Fairy-Stockfish-X/src/stockfish}"
 VARIANTS_MAIN="${2:-/home/chris/Fairy-Stockfish-X/src/variants.ini}"
 VARIANTS_INCOMPLETE="${3:-/home/chris/Fairy-Stockfish-X/src/variants-incomplete.ini}"
+ENGINE_LARGE="${4:-/home/chris/Fairy-Stockfish-X/src/stockfish-large}"
 
 run_cmds() {
   local variants="$1"
@@ -24,6 +25,13 @@ out=$(run_cmds "$VARIANTS_MAIN" dots-boxes-7x7 \
   "position startpos
 go perft 1")
 echo "$out" | grep -q "Nodes searched: 24"
+
+if [[ -x "${ENGINE_LARGE}" ]]; then
+  out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value %s\nposition startpos\ngo perft 1\nquit\n' \
+    "$VARIANTS_MAIN" "dots-boxes-9x9" | "$ENGINE_LARGE")
+  echo "$out" | grep -q "info string variant dots-boxes-9x9 "
+  echo "$out" | grep -q "Nodes searched: 40"
+fi
 
 out=$(run_cmds "$VARIANTS_INCOMPLETE" dots-boxes-2x2 \
   "position startpos moves a1a1,b5 a1a1,a4 a1a1,b3 a1a1,c4
