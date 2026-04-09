@@ -175,6 +175,24 @@ go perft 1")
 echo "${out}" | grep -q "Nodes searched: 100"
 fi
 
+if variant_available "hex-16x16"; then
+out=$(run_cmds "setoption name UCI_Variant value hex-16x16
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 256"
+fi
+
+if variant_available "esa-hex"; then
+out=$(run_cmds "setoption name UCI_Variant value esa-hex
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 100"
+out=$(run_cmds "setoption name UCI_Variant value esa-hex
+position startpos moves P@a1
+go perft 1")
+echo "${out}" | grep -q "^0000: 1$"
+fi
+
 if variant_available "misere-hex"; then
 out=$(run_cmds "setoption name UCI_Variant value misere-hex
 position fen 11/11/11/11/11/11/11/11/11/11/PPPPPPPPPPP[P] b - - 0 1
@@ -205,6 +223,30 @@ echo "${out}" | grep -q "^a4b4: 1$"
 echo "${out}" | grep -q "^a1c2: 1$"
 echo "${out}" | grep -q "^a5a6: 1$"
 echo "${out}" | grep -q "^b1d2: 1$"
+fi
+
+if variant_available "glinski-chess-3shift"; then
+out=$(run_cmds "setoption name UCI_Variant value glinski-chess-3shift
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 26"
+echo "${out}" | grep -q "^c5c6: 1$"
+fi
+
+if variant_available "glinski-chess-5shift"; then
+out=$(run_cmds "setoption name UCI_Variant value glinski-chess-5shift
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 19"
+echo "${out}" | grep -q "^b5b6: 1$"
+fi
+
+if variant_available "van-gennip-hexchess"; then
+out=$(run_cmds "setoption name UCI_Variant value van-gennip-hexchess
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 16"
+echo "${out}" | grep -q "^c3c4: 1$"
 fi
 
 if variant_available "mccooey-chess"; then
