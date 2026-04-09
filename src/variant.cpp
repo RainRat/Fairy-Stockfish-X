@@ -2458,7 +2458,7 @@ Variant* Variant::conclude() {
               break;
           // Initialize alternating non-passing/passing moves
           for (int k = 0; k < 2 * j - 1; k++)
-              multimovePass[multimoveOffset + k] = k % 2;
+              multimovePass.set(multimoveOffset + k, k % 2);
           multimoveOffset += 2 * j - 1;
       }
       int firstMultimove =  multimoves.size() >= 2 ? multimoves[multimoves.size() - 2]

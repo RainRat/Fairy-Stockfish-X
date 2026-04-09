@@ -199,7 +199,7 @@ struct Variant {
   Bitboard openingSelfRemovalRegion[COLOR_NB] = {AllSquares, AllSquares};
   bool openingSwapDrop = false;
   bool openingSwapMirrorMainDiagonal = false;
-  bool isPriorityDrop[PIECE_TYPE_NB] = {};
+  PieceSet isPriorityDrop = NO_PIECE_SET;
   bool pieceDrops = false;
   bool borrowOpponentDropsWhenEmpty = false;
   bool virtualDrops = true;
@@ -391,7 +391,7 @@ struct Variant {
   std::vector<std::vector<Square>> connectLines;
   PieceSet connectPieceTypesTrimmed = ~NO_PIECE_SET;
   std::vector<PieceType> connectPieceGoalTypes[COLOR_NB];
-  bool multimovePass[START_MULTIMOVES]; // irregular pattern of multimove passes at game start
+  std::bitset<START_MULTIMOVES> multimovePass; // irregular pattern of multimove passes at game start
   int multimoveOffset; // end of multimoveStart sequence
   int multimoveCycle; // length in ply of both players once playing a multimove
   int multimoveCycleShift; // phase shift in multimove cycle when switching color
