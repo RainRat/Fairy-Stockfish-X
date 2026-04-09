@@ -33,7 +33,9 @@ if ! variant_available "minihexchess" \
   || ! variant_available "glinski-chess-3shift" \
   || ! variant_available "glinski-chess-5shift" \
   || ! variant_available "van-gennip-hexchess" \
-  || ! variant_available "mccooey-chess"; then
+  || ! variant_available "van-gennip-small-hexchess" \
+  || ! variant_available "mccooey-chess" \
+  || ! variant_available "grand-hexachess"; then
   echo "Requires a very-large-board capable engine. Skipping."
   exit 0
 fi
@@ -91,6 +93,16 @@ echo "${out}" | grep -q "^c3c4: 1$"
 echo "${out}" | grep -q "^c2b3: 1$"
 echo "${out}" | grep -q "^e2g3: 1$"
 
+out=$(run_cmds "setoption name UCI_Variant value van-gennip-small-hexchess
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 16"
+echo "${out}" | grep -q "^c2b3: 1$"
+echo "${out}" | grep -q "^a2a3: 1$"
+echo "${out}" | grep -q "^g2g3: 1$"
+echo "${out}" | grep -q "^c3c4: 1$"
+echo "${out}" | grep -q "^f3g3: 1$"
+
 out=$(run_cmds "setoption name UCI_Variant value mccooey-chess
 position startpos
 go perft 1")
@@ -98,5 +110,16 @@ echo "${out}" | grep -q "Nodes searched: 10"
 echo "${out}" | grep -q "^c3e4: 1$"
 echo "${out}" | grep -q "^c2e1: 1$"
 echo "${out}" | grep -q "^a4a5: 1$"
+
+out=$(run_cmds "setoption name UCI_Variant value grand-hexachess
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 125"
+echo "${out}" | grep -q "^i13g12: 1$"
+echo "${out}" | grep -q "^a5a6: 1$"
+echo "${out}" | grep -q "^k5k6: 1$"
+echo "${out}" | grep -q "^c3d4: 1$"
+echo "${out}" | grep -q "^e11f10: 1$"
+echo "${out}" | grep -q "^j13k12: 1$"
 
 echo "hex chess variants regression passed"
