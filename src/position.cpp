@@ -2739,6 +2739,7 @@ bool Position::legal(Move m) const {
   }
 
   bool rifleShot = rifle_capture(m) && capture(m) && type_of(m) != CASTLING;
+  bool cloneMove = is_clone_move(m);
   Square shotSq = capture(m) ? capture_square(m) : to;
   Bitboard removedAttackers = rifleShot ? square_bb(shotSq) : Bitboard(0);
   Square effectiveTo = rifleShot ? from : to;
@@ -3210,7 +3211,7 @@ bool Position::legal(Move m) const {
       const bool zeroRangeBlastOnCapture = zero_range_blast_on_capture(m);
       Square kto = rifleShot ? from : to;
       Square blastCenter = (type_of(m) == EN_PASSANT || rifleShot) ? shotSq : kto;
-      Bitboard occupied = rifleShot ? pieces() : (!dropMove ? pieces() ^ from : pieces());
+      Bitboard occupied = rifleShot ? pieces() : (!dropMove && !cloneMove ? pieces() ^ from : pieces());
       Bitboard blastImmune = blastOnCapture ? blast_immune_bb() : Bitboard(0);
       if (walling_rule() == DUCK)
           occupied ^= st->wallSquares;
@@ -3260,7 +3261,9 @@ bool Position::legal(Move m) const {
               pseudoRoyals |= square_bb(secondary_drop_square(m));
       }
       Bitboard pseudoRoyalsTheirs = st->pseudoRoyals & pieces(~sideToMove);
-      if (!rifleShot && is_ok(from) && (pseudoRoyals & from))
+      if (cloneMove && (pseudo_royal_types() & piece_set(movePt)))
+          pseudoRoyals |= kto;
+      else if (!rifleShot && is_ok(from) && (pseudoRoyals & from))
           pseudoRoyals ^= square_bb(from) ^ kto;
       if (type_of(m) == PROMOTION && (pseudo_royal_types() & promotion_type(m)))
       {
@@ -3292,7 +3295,9 @@ bool Position::legal(Move m) const {
       if (var->dupleCheck)
       {
           Bitboard pseudoRoyalCandidates = st->pseudoRoyalCandidates & pieces(sideToMove);
-          if (!rifleShot && is_ok(from) && (pseudoRoyalCandidates & from))
+          if (cloneMove && (pseudo_royal_types() & piece_set(movePt)))
+              pseudoRoyalCandidates |= kto;
+          else if (!rifleShot && is_ok(from) && (pseudoRoyalCandidates & from))
               pseudoRoyalCandidates ^= square_bb(from) ^ kto;
           if (type_of(m) == PROMOTION && (pseudo_royal_types() & promotion_type(m)))
               pseudoRoyalCandidates |= kto;
@@ -4361,6 +4366,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   }
   int pushRightsMask = 0;
   bool rifleShot = rifle_capture(m) && captured != NO_PIECE && type_of(m) != CASTLING;
+  bool cloneMove = is_clone_move(m);
   bool capturedDeadSquare = !dropMove && from != to && bool(st->deadSquares & to);
   PieceType exchanged = exchange_piece(m);
   Square jumpCapsq = is_jump_capture(m) ? jump_capture_square(from, to) : SQ_NONE;
@@ -4795,7 +4801,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   }
   else
   {
-      if (!pureWallMove)
+      if (!pureWallMove && !cloneMove)
           k ^= Zobrist::psq[pc][from] ^ Zobrist::psq[pc][to];
 
       // Reset rule 50 draw counter for irreversible moves
@@ -5017,6 +5023,24 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       else if (pureWallMove)
       {
           // Wall-only move: no mover piece is touched.
+      }
+      else if (cloneMove)
+      {
+          if (Eval::useNNUE)
+          {
+              dp.dirty_num = 1;
+              dp.piece[0] = pc;
+              dp.from[0] = SQ_NONE;
+              dp.to[0] = to;
+          }
+
+          put_piece(pc, to);
+          k ^= Zobrist::psq[pc][to];
+          st->materialKey ^= Zobrist::psq[pc][pieceCount[pc] - 1];
+          if (type_of(pc) == PAWN)
+              st->pawnKey ^= Zobrist::psq[pc][to];
+          else
+              st->nonPawnMaterial[us] += PieceValue[MG][pc];
       }
       else if (!rifleShot)
           move_piece(from, to);
@@ -6015,6 +6039,7 @@ void Position::undo_move(Move m) {
   Square from = from_sq(m);
   Square to = to_sq(m);
   bool rifleShot = rifle_capture(m) && st->capturedPiece != NO_PIECE && type_of(m) != CASTLING;
+  bool cloneMove = is_clone_move(m);
   Square moverSq = rifleShot ? from : to;
   Piece pc = piece_on(moverSq);
   PieceType exchange = exchange_piece(m);
@@ -6218,7 +6243,12 @@ void Position::undo_move(Move m) {
               put_piece(st->deadPiece, moverSq, st->deadPiecePromoted, st->deadUnpromotedPiece);
               pc = piece_on(moverSq);
           }
-          if (!rifleShot)
+          if (cloneMove)
+          {
+              remove_piece(to);
+              board[to] = NO_PIECE;
+          }
+          else if (!rifleShot)
               move_piece(to, from); // Put the piece back at the source square
       }
 

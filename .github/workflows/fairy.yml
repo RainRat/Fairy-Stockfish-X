@@ -168,6 +168,10 @@ jobs:
         run: |
           ../tests/sacrifice.sh
 
+      - name: Test Kings or Lemmings
+        run: |
+          ../tests/kings-or-lemmings.sh
+
       - name: Test borrowed opponent drops
         run: |
           ../tests/borrow-opponent-drops.sh

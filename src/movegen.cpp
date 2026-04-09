@@ -1025,6 +1025,29 @@ namespace {
             }
         }
 
+        if (!restrictToForcedJumper && pos.clone_move_types())
+        {
+            Bitboard cloneTargets = Type == CAPTURES   ? captureTarget & pos.pieces(~Us)
+                                 : Type == QUIETS     ? target & ~pos.pieces()
+                                 : Type == QUIET_CHECKS ? target & ~pos.pieces()
+                                 : target & ~pos.pieces(Us);
+
+            for (PieceSet ps = pos.clone_move_types(); ps;)
+            {
+                PieceType pt = pop_lsb(ps);
+                Bitboard froms = pos.pieces(Us, pt);
+                while (froms)
+                {
+                    Square from = pop_lsb(froms);
+                    Bitboard b = ((pos.moves_from(Us, pt, from) & ~pos.pieces())
+                                | (pos.attacks_from(Us, pt, from) & pos.pieces(~Us)))
+                               & cloneTargets;
+                    while (b)
+                        *moveList++ = make<SPECIAL>(from, pop_lsb(b));
+                }
+            }
+        }
+
         // Workaround for passing: Execute a non-move with any piece
         if (!restrictToForcedJumper && pos.pass(Us) && !pos.count<KING>(Us))
         {

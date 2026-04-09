@@ -352,6 +352,7 @@ public:
   bool captures_to_hand() const;
   PieceSet capture_to_hand_types() const;
   PieceSet self_destruct_types() const;
+  PieceSet clone_move_types() const;
   bool first_rank_pawn_drops() const;
   bool can_drop(Color c, PieceType pt) const;
   bool has_exchange() const;
@@ -551,6 +552,7 @@ public:
   Square jump_capture_square(Square from, Square to) const;
   bool gives_check(Move m) const;
   Piece moved_piece(Move m) const;
+  bool is_clone_move(Move m) const;
   Piece captured_piece() const;
   Piece captured_piece(Move m) const;
   const std::string piece_to_partner() const;
@@ -1688,6 +1690,11 @@ inline PieceSet Position::self_destruct_types() const {
   return var->selfDestructTypes;
 }
 
+inline PieceSet Position::clone_move_types() const {
+  assert(var != nullptr);
+  return var->cloneMoveTypes;
+}
+
 inline bool Position::first_rank_pawn_drops() const {
   assert(var != nullptr);
   return var->firstRankPawnDrops;
@@ -2541,6 +2548,14 @@ inline Piece Position::moved_piece(Move m) const {
   if (is_drop_move(m))
       return make_piece(drop_hand_color(sideToMove, in_hand_piece_type(m)), dropped_piece_type(m));
   return piece_on(from_sq(m));
+}
+
+inline bool Position::is_clone_move(Move m) const {
+  if (type_of(m) != SPECIAL || is_gating(m) || from_sq(m) == to_sq(m))
+      return false;
+
+  Piece mover = moved_piece(m);
+  return mover != NO_PIECE && (clone_move_types() & piece_set(type_of(mover)));
 }
 
 inline Bitboard Position::pieces(PieceType pt) const {
