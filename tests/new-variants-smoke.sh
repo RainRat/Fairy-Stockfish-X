@@ -174,6 +174,28 @@ echo "${out}" | grep -q "^b2d3: 1$"
 echo "${out}" | grep -q "^b2c4: 1$"
 fi
 
+if variant_available "glinski-chess"; then
+out=$(run_cmds "setoption name UCI_Variant value glinski-chess
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 34"
+echo "${out}" | grep -q "^d1d2: 1$"
+echo "${out}" | grep -q "^a4b4: 1$"
+echo "${out}" | grep -q "^a1c2: 1$"
+echo "${out}" | grep -q "^a5a6: 1$"
+echo "${out}" | grep -q "^b1d2: 1$"
+fi
+
+if variant_available "mccooey-chess"; then
+out=$(run_cmds "setoption name UCI_Variant value mccooey-chess
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 10"
+echo "${out}" | grep -q "^c3e4: 1$"
+echo "${out}" | grep -q "^c2e1: 1$"
+echo "${out}" | grep -q "^a4a5: 1$"
+fi
+
 # 5bc) Simplified inheritance stanzas still preserve start positions.
 out=$(run_cmds "setoption name UCI_Variant value maharajah
 position startpos
