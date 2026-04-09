@@ -2921,13 +2921,32 @@ bool Position::legal(Move m) const {
           return false;
   }
 
-  if (type_of(m) == DROP && (var->reciprocalWeakConnectionDrop || var->weakCrosscutDropIllegal))
+  if (type_of(m) == DROP
+      && (var->reciprocalWeakConnectionDrop
+          || var->weakCrosscutDropIllegal
+          || var->weakConnectionNobiImpossible))
   {
       auto has_color_at = [&](Color c, Square sq, Color placedColor) {
           return sq == to ? c == placedColor : bool(pieces(c) & sq);
       };
 
-      auto creates_hypothetical_weak_link = [&](Color c, Color placedColor) {
+      auto weak_link_between = [&](Color c, Color placedColor, Square a, Square b) {
+          if (!is_ok(a) || !is_ok(b))
+              return false;
+          if (!has_color_at(c, a, placedColor) || !has_color_at(c, b, placedColor))
+              return false;
+          int df = std::abs(int(file_of(a)) - int(file_of(b)));
+          int dr = std::abs(int(rank_of(a)) - int(rank_of(b)));
+          if (df != 1 || dr != 1)
+              return false;
+
+          Square bridge1 = make_square(file_of(a), rank_of(b));
+          Square bridge2 = make_square(file_of(b), rank_of(a));
+          return !has_color_at(c, bridge1, placedColor) && !has_color_at(c, bridge2, placedColor);
+      };
+
+      auto created_weak_link_anchors = [&](Color c, Color placedColor) {
+          std::vector<Square> anchors;
           static constexpr int dfile[4] = {1, -1, 1, -1};
           static constexpr int drank[4] = {1, 1, -1, -1};
           for (int i = 0; i < 4; ++i)
@@ -2938,22 +2957,93 @@ bool Position::legal(Move m) const {
                   continue;
 
               Square diag = make_square(File(nf), Rank(nr));
-              if (!has_color_at(c, diag, placedColor))
-                  continue;
+              if (weak_link_between(c, placedColor, to, diag))
+                  anchors.push_back(diag);
+          }
+          return anchors;
+      };
 
-              Square bridge1 = make_square(file_of(to), rank_of(diag));
-              Square bridge2 = make_square(file_of(diag), rank_of(to));
-              if (!has_color_at(c, bridge1, placedColor) && !has_color_at(c, bridge2, placedColor))
+      auto creates_hypothetical_weak_link = [&](Color c, Color placedColor) {
+          return !created_weak_link_anchors(c, placedColor).empty();
+      };
+
+      auto strong_nonweak_followup_exists = [&](Square anchor) {
+          auto occupied_any = [&](Square sq) {
+              return sq == to || bool(pieces() & sq);
+          };
+          auto friend_at = [&](Square sq) {
+              return has_color_at(us, sq, us);
+          };
+          auto enemy_at = [&](Square sq) {
+              return sq != to && bool(pieces(~us) & sq);
+          };
+          auto not_friend_at = [&](Square sq) {
+              return !friend_at(sq);
+          };
+
+          auto pattern_blocked = [&](Square q) {
+              if (q == anchor + NORTH) {
+                  Square nn = q + NORTH;
+                  Square nne = q + NORTH_EAST;
+                  Square nnw = q + NORTH_WEST;
+                  return (is_ok(nne) && friend_at(nne) && is_ok(nn) && not_friend_at(nn) && is_ok(anchor + NORTH_EAST) && not_friend_at(anchor + NORTH_EAST))
+                      || (is_ok(nnw) && friend_at(nnw) && is_ok(nn) && not_friend_at(nn) && is_ok(anchor + NORTH_WEST) && not_friend_at(anchor + NORTH_WEST))
+                      || (is_ok(nn) && friend_at(nn) && is_ok(nne) && enemy_at(nne) && is_ok(anchor + NORTH_EAST) && enemy_at(anchor + NORTH_EAST))
+                      || (is_ok(nn) && friend_at(nn) && is_ok(nnw) && enemy_at(nnw) && is_ok(anchor + NORTH_WEST) && enemy_at(anchor + NORTH_WEST));
+              }
+              if (q == anchor + SOUTH) {
+                  Square ss = q + SOUTH;
+                  Square sse = q + SOUTH_EAST;
+                  Square ssw = q + SOUTH_WEST;
+                  return (is_ok(sse) && friend_at(sse) && is_ok(ss) && not_friend_at(ss) && is_ok(anchor + SOUTH_EAST) && not_friend_at(anchor + SOUTH_EAST))
+                      || (is_ok(ssw) && friend_at(ssw) && is_ok(ss) && not_friend_at(ss) && is_ok(anchor + SOUTH_WEST) && not_friend_at(anchor + SOUTH_WEST))
+                      || (is_ok(ss) && friend_at(ss) && is_ok(sse) && enemy_at(sse) && is_ok(anchor + SOUTH_EAST) && enemy_at(anchor + SOUTH_EAST))
+                      || (is_ok(ss) && friend_at(ss) && is_ok(ssw) && enemy_at(ssw) && is_ok(anchor + SOUTH_WEST) && enemy_at(anchor + SOUTH_WEST));
+              }
+              if (q == anchor + EAST) {
+                  Square ee = q + EAST;
+                  Square nee = q + NORTH_EAST;
+                  Square see = q + SOUTH_EAST;
+                  return (is_ok(nee) && friend_at(nee) && is_ok(ee) && not_friend_at(ee) && is_ok(anchor + NORTH_EAST) && not_friend_at(anchor + NORTH_EAST))
+                      || (is_ok(see) && friend_at(see) && is_ok(ee) && not_friend_at(ee) && is_ok(anchor + SOUTH_EAST) && not_friend_at(anchor + SOUTH_EAST))
+                      || (is_ok(ee) && friend_at(ee) && is_ok(nee) && enemy_at(nee) && is_ok(anchor + NORTH_EAST) && enemy_at(anchor + NORTH_EAST))
+                      || (is_ok(ee) && friend_at(ee) && is_ok(see) && enemy_at(see) && is_ok(anchor + SOUTH_EAST) && enemy_at(anchor + SOUTH_EAST));
+              }
+              if (q == anchor + WEST) {
+                  Square ww = q + WEST;
+                  Square nww = q + NORTH_WEST;
+                  Square sww = q + SOUTH_WEST;
+                  return (is_ok(nww) && friend_at(nww) && is_ok(ww) && not_friend_at(ww) && is_ok(anchor + NORTH_WEST) && not_friend_at(anchor + NORTH_WEST))
+                      || (is_ok(sww) && friend_at(sww) && is_ok(ww) && not_friend_at(ww) && is_ok(anchor + SOUTH_WEST) && not_friend_at(anchor + SOUTH_WEST))
+                      || (is_ok(ww) && friend_at(ww) && is_ok(nww) && enemy_at(nww) && is_ok(anchor + NORTH_WEST) && enemy_at(anchor + NORTH_WEST))
+                      || (is_ok(ww) && friend_at(ww) && is_ok(sww) && enemy_at(sww) && is_ok(anchor + SOUTH_WEST) && enemy_at(anchor + SOUTH_WEST));
+              }
+              return true;
+          };
+
+          static constexpr Direction orth[] = {NORTH, SOUTH, EAST, WEST};
+          for (Direction d : orth)
+          {
+              Square q = anchor + d;
+              if (!is_ok(q) || occupied_any(q))
+                  continue;
+              if (!pattern_blocked(q))
                   return true;
           }
           return false;
       };
 
-      bool weakFriendly = creates_hypothetical_weak_link(us, us);
+      std::vector<Square> weakFriendlyAnchors = created_weak_link_anchors(us, us);
+      bool weakFriendly = !weakFriendlyAnchors.empty();
       if (weakFriendly)
       {
           if (var->reciprocalWeakConnectionDrop && !creates_hypothetical_weak_link(~us, ~us))
               return false;
+
+          if (var->weakConnectionNobiImpossible)
+              for (Square anchor : weakFriendlyAnchors)
+                  if (strong_nonweak_followup_exists(anchor))
+                      return false;
 
           if (var->weakCrosscutDropIllegal)
           {

@@ -289,6 +289,7 @@ struct Variant {
   bool weakDiagonalConnect = false;
   bool reciprocalWeakConnectionDrop = false;
   bool weakCrosscutDropIllegal = false;
+  bool weakConnectionNobiImpossible = false;
   ChasingRule chasingRule = NO_CHASING;
   Value stalemateValue = VALUE_DRAW;
   bool stalematePieceCount = false; // multiply stalemate value by sign(count(~stm) - count(stm))

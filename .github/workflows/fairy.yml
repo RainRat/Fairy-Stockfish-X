@@ -116,6 +116,10 @@ jobs:
         run: |
           ../tests/kopano.sh
 
+      - name: Test konobi
+        run: |
+          ../tests/konobi.sh
+
       - name: Test incomplete baselines
         run: |
           ../tests/incomplete-baselines.sh ./stockfish variants-incomplete.ini
