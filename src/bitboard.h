@@ -131,6 +131,9 @@ extern RiderType AttackRiderTypes[PIECE_TYPE_NB];
 extern RiderType MoveRiderTypes[2][PIECE_TYPE_NB];
 Bitboard leap_rider_attacks_bb(PieceType pt, Color c, Square s, Bitboard occupied);
 Bitboard leap_rider_moves_bb(PieceType pt, bool initial, Color c, Square s, Bitboard occupied);
+Bitboard tuple_rider_attacks_bb(PieceType pt, Color c, Square s, Bitboard occupied);
+Bitboard tuple_rider_moves_bb(PieceType pt, bool initial, Color c, Square s, Bitboard occupied);
+Bitboard tuple_rider_between_bb(PieceType pt, Square s1, Square s2);
 inline Square lsb(Bitboard b);
 
 constexpr std::array<std::pair<int, int>, 8> RoseSteps = {{
@@ -672,6 +675,8 @@ inline Bitboard between_bb(Square s1, Square s2, PieceType pt) {
   auto remap_reverse_path = [&](Bitboard reversePath) {
       return (reversePath & ~square_bb(s1)) | square_bb(s2);
   };
+  if ((path = tuple_rider_between_bb(pt, s1, s2)))
+      return path;
 
   if ((r & RIDER_HORSE) && (path = PseudoAttacks[WHITE][WAZIR][s2] & PseudoAttacks[WHITE][FERS][s1]))
       return path;
@@ -1095,6 +1100,7 @@ inline Bitboard attacks_bb(Color c, PieceType pt, Square s, Bitboard occupied) {
   while (r)
       b |= rider_attacks_bb(pop_rider(r), s, occupied);
   b |= leap_rider_attacks_bb(pt, c, s, occupied);
+  b |= tuple_rider_attacks_bb(pt, c, s, occupied);
   return b & PseudoAttacks[c][pt][s];
 }
 
@@ -1107,6 +1113,7 @@ inline Bitboard moves_bb(Color c, PieceType pt, Square s, Bitboard occupied) {
   while (r)
       b |= rider_attacks_bb(pop_rider(r), s, occupied);
   b |= leap_rider_moves_bb(pt, Initial, c, s, occupied);
+  b |= tuple_rider_moves_bb(pt, Initial, c, s, occupied);
   return b & PseudoMoves[Initial][c][pt][s];
 }
 
