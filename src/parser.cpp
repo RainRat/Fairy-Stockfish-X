@@ -1781,6 +1781,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("weakDiagonalConnect", v->weakDiagonalConnect);
     parse_attribute("reciprocalWeakConnectionDrop", v->reciprocalWeakConnectionDrop);
     parse_attribute("weakCrosscutDropIllegal", v->weakCrosscutDropIllegal);
+    parse_attribute("weakConnectionNobiImpossible", v->weakConnectionNobiImpossible);
     parse_attribute("chasingRule", v->chasingRule);
     parse_attribute("stalemateValue", v->stalemateValue);
     parse_attribute("stalematePieceCount", v->stalematePieceCount);
