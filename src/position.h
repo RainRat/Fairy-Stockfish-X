@@ -161,6 +161,7 @@ struct StateInfo {
   bool colorChangedPromoted;
   Piece colorChangedUnpromoted;
   bool didPush;
+  bool didPull;
   bool pushStepwise;
   Square pushTailSquare;
   int pushStepF;
@@ -177,6 +178,10 @@ struct StateInfo {
   Piece pushTransferPieces[32];
   Piece pushTransferUnpromoted[32];
   bool pushTransferPromoted[32];
+  Square pullFromSquare;
+  Piece pullPiece;
+  Piece pullUnpromotedPiece;
+  bool pullPromoted;
   bool nnueRefreshNeeded;
 
   // Used by NNUE
@@ -320,6 +325,8 @@ public:
   bool rifle_capture(Move m) const;
   int pushing_strength(PieceType pt) const;
   bool has_pushing() const;
+  int pulling_strength(PieceType pt) const;
+  bool has_pulling() const;
   PushFirstColor push_first_color() const;
   PushRemoval pushing_removes() const;
   bool push_chain_enemy_only() const;
@@ -355,6 +362,8 @@ public:
   PieceSet clone_move_types() const;
   bool can_clone(Piece p) const;
   Bitboard clone_targets_from(Color c, Square from) const;
+  Bitboard pull_sources_from(Color c, Square from) const;
+  Bitboard pull_targets_from(Color c, Square from, Square pullFrom) const;
   PieceType first_move_piece_type(PieceType pt) const;
   bool first_move_lose_on_check() const;
   bool first_rank_pawn_drops() const;
@@ -557,6 +566,7 @@ public:
   bool gives_check(Move m) const;
   Piece moved_piece(Move m) const;
   bool is_clone_move(Move m) const;
+  bool is_pull_move(Move m) const;
   bool is_first_move_special(Move m) const;
   Piece captured_piece() const;
   Piece captured_piece(Move m) const;
@@ -1414,6 +1424,19 @@ inline bool Position::has_pushing() const {
   assert(var != nullptr);
   for (PieceSet ps = piece_types(); ps; )
       if (pushing_strength(pop_lsb(ps)) > 0)
+          return true;
+  return false;
+}
+
+inline int Position::pulling_strength(PieceType pt) const {
+  assert(var != nullptr);
+  return var->pullingStrength[pt];
+}
+
+inline bool Position::has_pulling() const {
+  assert(var != nullptr);
+  for (PieceSet ps = piece_types(); ps; )
+      if (pulling_strength(pop_lsb(ps)) > 0)
           return true;
   return false;
 }
@@ -2566,6 +2589,10 @@ inline bool Position::is_clone_move(Move m) const {
   return can_clone(moved_piece(m));
 }
 
+inline bool Position::is_pull_move(Move m) const {
+  return type_of(m) == PULL && pull_square(m) != SQ_NONE;
+}
+
 inline PieceType Position::first_move_piece_type(PieceType pt) const {
   assert(var != nullptr);
   return var->firstMovePieceType[pt];
@@ -2601,6 +2628,36 @@ inline Bitboard Position::clone_targets_from(Color c, Square from) const {
 
   PieceType pt = type_of(mover);
   return (moves_from(c, pt, from) & ~pieces()) | (attacks_from(c, pt, from) & pieces(~c));
+}
+
+inline Bitboard Position::pull_sources_from(Color c, Square from) const {
+  Piece mover = piece_on(from);
+  if (mover == NO_PIECE || color_of(mover) != c)
+      return 0;
+
+  int moverStrength = pulling_strength(type_of(mover));
+  if (moverStrength <= 0)
+      return 0;
+
+  Bitboard sources = PseudoAttacks[WHITE][WAZIR][from] & pieces(~c);
+  Bitboard valid = 0;
+  while (sources)
+  {
+      Square sq = pop_lsb(sources);
+      Piece pulled = piece_on(sq);
+      if (pulled != NO_PIECE && moverStrength > pulling_strength(type_of(pulled)))
+          valid |= sq;
+  }
+  return valid;
+}
+
+inline Bitboard Position::pull_targets_from(Color c, Square from, Square pullFrom) const {
+  if (!(pull_sources_from(c, from) & pullFrom))
+      return 0;
+
+  Piece mover = piece_on(from);
+  PieceType pt = type_of(mover);
+  return moves_from(c, pt, from) & ~pieces();
 }
 
 inline Bitboard Position::pieces(PieceType pt) const {
@@ -3721,6 +3778,8 @@ inline bool Position::capture(Move m) const {
   assert(is_ok(m));
   if (type_of(m) == EN_PASSANT)
       return true;
+  if (type_of(m) == PULL)
+      return false;
   if (type_of(m) == CASTLING || from_sq(m) == to_sq(m))
       return false;
   if (push_move(m))

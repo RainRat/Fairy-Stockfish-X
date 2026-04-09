@@ -532,6 +532,7 @@ enum MoveType : int {
   SPECIAL            = 7 << (2 * SQUARE_BITS),
   DROP2              = 8 << (2 * SQUARE_BITS),
   INSERT             = 9 << (2 * SQUARE_BITS),
+  PULL               = 10 << (2 * SQUARE_BITS),
 };
 
 constexpr int MOVE_TYPE_BITS = 4;
@@ -1162,6 +1163,14 @@ inline Square gating_square(Move m) {
   return SQ_NONE;
 }
 
+inline Square pull_square(Move m) {
+  if (type_of(m) != PULL)
+      return SQ_NONE;
+  const uint64_t raw = static_cast<uint64_t>(m);
+  const uint64_t sq = (raw >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & SQUARE_BIT_MASK;
+  return sq ? Square(sq - 1) : SQ_NONE;
+}
+
 inline bool is_gating(Move m) {
   const MoveType mt = type_of(m);
   if (mt == SPECIAL)
@@ -1249,6 +1258,13 @@ constexpr Move make_gating(Square from, Square to, PieceType pt, Square gate) {
   return Move((static_cast<uint64_t>(gate + 1) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS))
             + (static_cast<uint64_t>(pt) << (2 * SQUARE_BITS + MOVE_TYPE_BITS))
             + static_cast<uint64_t>(T)
+            + (static_cast<uint64_t>(from) << SQUARE_BITS)
+            + static_cast<uint64_t>(to));
+}
+
+constexpr Move make_pull(Square from, Square to, Square pullFrom) {
+  return Move((static_cast<uint64_t>(pullFrom + 1) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS))
+            + static_cast<uint64_t>(PULL)
             + (static_cast<uint64_t>(from) << SQUARE_BITS)
             + static_cast<uint64_t>(to));
 }

@@ -2636,6 +2636,7 @@ bool Position::legal(Move m) const {
   bool insertMove = is_insert_move(m);
   Square from = from_sq(m);
   Square to = to_sq(m);
+  Square pullFrom = pull_square(m);
 
   if (in_opening_self_removal_phase())
       return is_opening_self_removal_move(m);
@@ -2740,7 +2741,10 @@ bool Position::legal(Move m) const {
 
   bool rifleShot = rifle_capture(m) && capture(m) && type_of(m) != CASTLING;
   bool cloneMove = is_clone_move(m);
+  bool pullMove = is_pull_move(m);
   if (cloneMove && !(clone_targets_from(us, from) & to))
+      return false;
+  if (pullMove && !(pull_targets_from(us, from, pullFrom) & to))
       return false;
   Square shotSq = capture(m) ? capture_square(m) : to;
   Bitboard removedAttackers = rifleShot ? square_bb(shotSq) : Bitboard(0);
@@ -2858,6 +2862,20 @@ bool Position::legal(Move m) const {
   // Illegal quiet moves
   if (must_capture() && !capture(m) && has_capture())
       return false;
+
+  if (pullMove)
+  {
+      if (violates_same_player_board_repetition(m))
+          return false;
+
+      Position probe;
+      StateInfo setupState, nextState;
+      probe.set(variant(), fen(), is_chess960(), &setupState, this_thread());
+      probe.do_move(m, nextState, false);
+      if (probe.count<KING>(us) && probe.attackers_to_king(probe.square<KING>(us), them))
+          return false;
+      return true;
+  }
   if (must_capture_en_passant() && type_of(m) != EN_PASSANT && has_en_passant_capture())
       return false;
 
@@ -3693,6 +3711,7 @@ bool Position::pseudo_legal(const Move m) const {
   bool insertMove = is_insert_move(m);
   Square from = from_sq(m);
   Square to = to_sq(m);
+  Square pullFrom = pull_square(m);
   Piece pc = moved_piece(m);
   Color dropColor = dropMove ? drop_hand_color(us, in_hand_piece_type(m)) : us;
   bool rifleShot = rifle_capture(m) && capture(m) && type_of(m) != CASTLING;
@@ -3728,6 +3747,15 @@ bool Position::pseudo_legal(const Move m) const {
           return false;
       if (!(self_destruct_types() & piece_set(type_of(pc))))
           return false;
+  }
+
+  if (is_pull_move(m))
+  {
+      if (pc == NO_PIECE || color_of(pc) != us)
+          return false;
+      if (!(board_bb() & to) || !(board_bb() & pullFrom))
+          return false;
+      return bool(pull_targets_from(us, from, pullFrom) & to);
   }
 
   if (type_of(m) == PROMOTION && !promotion_allowed(us, promotion_type(m), to))
@@ -4142,7 +4170,7 @@ bool Position::gives_check(Move m) const {
   else if (janggiCannons & to)
       janggiCannons ^= to;
 
-  if (topology_wraps() || var->blastPassiveTypes || has_pushing())
+  if (topology_wraps() || var->blastPassiveTypes || has_pushing() || has_pulling() || type_of(m) == PULL)
   {
       Position* pos = const_cast<Position*>(this);
       StateInfo nextState;
@@ -4218,6 +4246,7 @@ bool Position::gives_check(Move m) const {
   case DROP:
   case INSERT:
   case SPECIAL:
+  case PULL:
       return false;
 
   case PROMOTION:
@@ -4307,6 +4336,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   st->colorChangedPromoted = false;
   st->colorChangedUnpromoted = NO_PIECE;
   st->didPush = false;
+  st->didPull = false;
   st->pushStepwise = false;
   st->pushTailSquare = SQ_NONE;
   st->pushStepF = 0;
@@ -4316,6 +4346,10 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   st->pushBlockedCapture = false;
   st->pushSnapshotCount = 0;
   st->pushTransferCount = 0;
+  st->pullFromSquare = SQ_NONE;
+  st->pullPiece = NO_PIECE;
+  st->pullUnpromotedPiece = NO_PIECE;
+  st->pullPromoted = false;
   // Mandatory multimove pass plies should not advance the halfmove clock.
   const bool currentMultimovePass = is_pass(m) && multimove_pass(gamePly);
   const bool currentClaimPass = is_pass(m) && st->pendingClaimPass;
@@ -4367,8 +4401,10 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           pushInfo = resolved;
   }
   int pushRightsMask = 0;
+  int pullRightsMask = 0;
   bool rifleShot = rifle_capture(m) && captured != NO_PIECE && type_of(m) != CASTLING;
   bool cloneMove = is_clone_move(m);
+  bool pullMove = is_pull_move(m);
   bool capturedDeadSquare = !dropMove && from != to && bool(st->deadSquares & to);
   PieceType exchanged = exchange_piece(m);
   Square jumpCapsq = is_jump_capture(m) ? jump_capture_square(from, to) : SQ_NONE;
@@ -4412,6 +4448,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   st->unpromotedCapturedPiece = captured ? unpromoted_piece_on(capturedSq) : NO_PIECE;
   st->captureSquare = capturedSq;
   st->didPush = pushMove;
+  st->didPull = pullMove;
   st->pushStepwise = stepwisePush;
   st->pushTailSquare = pushMove ? pushInfo.tail : SQ_NONE;
   st->pushStepF = pushMove ? pushInfo.stepF : 0;
@@ -4427,6 +4464,15 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
 
   if (stepwisePush)
       captured = NO_PIECE;
+
+  if (pullMove)
+  {
+      Square pullFrom = pull_square(m);
+      st->pullFromSquare = pullFrom;
+      st->pullPiece = piece_on(pullFrom);
+      st->pullPromoted = st->pullPiece != NO_PIECE && is_promoted(pullFrom);
+      st->pullUnpromotedPiece = st->pullPromoted ? unpromoted_piece_on(pullFrom) : NO_PIECE;
+  }
 
   Variant::PotionType gatingPotion = Variant::POTION_TYPE_NB;
   Bitboard freezeExtra = 0;
@@ -4803,8 +4849,21 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   }
   else
   {
-      if (!pureWallMove && !cloneMove)
+      if (!pureWallMove && !cloneMove && !pullMove)
           k ^= Zobrist::psq[pc][from] ^ Zobrist::psq[pc][to];
+      else if (pullMove)
+      {
+          Piece pulled = st->pullPiece;
+          Square pullFrom = st->pullFromSquare;
+          k ^= Zobrist::psq[pc][from] ^ Zobrist::psq[pc][to];
+          if (pulled != NO_PIECE)
+              k ^= Zobrist::psq[pulled][pullFrom] ^ Zobrist::psq[pulled][from];
+          if (type_of(pc) == PAWN)
+              st->pawnKey ^= Zobrist::psq[pc][from] ^ Zobrist::psq[pc][to];
+          if (pulled != NO_PIECE && type_of(pulled) == PAWN)
+              st->pawnKey ^= Zobrist::psq[pulled][pullFrom] ^ Zobrist::psq[pulled][from];
+          pullRightsMask = castlingRightsMask[from] | castlingRightsMask[pullFrom];
+      }
 
       // Reset rule 50 draw counter for irreversible moves
       // - irreversible pawn/piece promotions
@@ -4824,10 +4883,10 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       k ^= Zobrist::enpassant[pop_lsb(st->epSquares)];
 
   // Update castling rights if needed
-  if (!dropMove && !is_pass(m) && !pureWallMove && st->castlingRights && (castlingRightsMask[from] | castlingRightsMask[to] | pushRightsMask))
+  if (!dropMove && !is_pass(m) && !pureWallMove && st->castlingRights && (castlingRightsMask[from] | castlingRightsMask[to] | pushRightsMask | pullRightsMask))
   {
       k ^= Zobrist::castling[st->castlingRights];
-      st->castlingRights &= ~(castlingRightsMask[from] | castlingRightsMask[to] | pushRightsMask);
+      st->castlingRights &= ~(castlingRightsMask[from] | castlingRightsMask[to] | pushRightsMask | pullRightsMask);
 
       // Remove castling rights from opponent on the same side if oppositeCastling
       if ((var->oppositeCastling) && (type_of(m) == CASTLING))
@@ -5046,6 +5105,26 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
               st->pawnKey ^= Zobrist::psq[pc][to];
           else
               st->nonPawnMaterial[us] += PieceValue[MG][pc];
+      }
+      else if (pullMove)
+      {
+          Piece pulled = st->pullPiece;
+          Square pullFrom = st->pullFromSquare;
+
+          if (Eval::useNNUE)
+          {
+              dp.dirty_num = 2;
+              dp.piece[0] = pc;
+              dp.from[0] = from;
+              dp.to[0] = to;
+              dp.piece[1] = pulled;
+              dp.from[1] = pullFrom;
+              dp.to[1] = from;
+          }
+
+          move_piece(from, to);
+          if (pulled != NO_PIECE)
+              move_piece(pullFrom, from);
       }
       else if (!rifleShot)
           move_piece(from, to);
@@ -6053,6 +6132,7 @@ void Position::undo_move(Move m) {
   Square to = to_sq(m);
   bool rifleShot = rifle_capture(m) && st->capturedPiece != NO_PIECE && type_of(m) != CASTLING;
   bool cloneMove = is_clone_move(m);
+  bool pullMove = is_pull_move(m);
   Square moverSq = rifleShot ? from : to;
   Piece pc = piece_on(moverSq);
   PieceType exchange = exchange_piece(m);
@@ -6065,6 +6145,7 @@ void Position::undo_move(Move m) {
   assert(is_drop_move(m) || empty(from) || type_of(m) == CASTLING || is_gating(m)
          || (type_of(m) == PROMOTION && sittuyin_promotion())
          || is_pass(m)
+         || pullMove
          || wasOpeningSelfRemoval
          || (commit_gates() && st->removedGatingType > NO_PIECE_TYPE)
   );
@@ -6260,6 +6341,12 @@ void Position::undo_move(Move m) {
           {
               remove_piece(to);
               board[to] = NO_PIECE;
+          }
+          else if (pullMove)
+          {
+              if (piece_on(from) != NO_PIECE)
+                  move_piece(from, st->pullFromSquare);
+              move_piece(to, from);
           }
           else if (!rifleShot)
               move_piece(to, from); // Put the piece back at the source square
