@@ -873,6 +873,8 @@ out=$(run_cmds "setoption name UCI_Variant value hindustani
 position startpos
 go perft 1")
 ! echo "${out}" | grep -q "^e2e4:"
+echo "${out}" | grep -q "^e1d3: 1$"
+echo "${out}" | grep -q "^e1f3: 1$"
 
 # 19) Hindustani baseline: if all promotion targets are at cap, promotion is forbidden.
 out=$(run_cmds "setoption name UCI_Variant value hindustani

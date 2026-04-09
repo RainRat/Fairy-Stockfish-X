@@ -1256,6 +1256,16 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
             return false;
         }
     }
+    const auto& it_first_move_pt = config.find("firstMovePieceTypes");
+    if (it_first_move_pt != config.end())
+    {
+        if (!parse_piece_type_map(it_first_move_pt->second, v, v->firstMovePieceType, true))
+        {
+            if (DoCheck)
+                std::cerr << "firstMovePieceTypes - Invalid syntax." << std::endl;
+            return false;
+        }
+    }
     const auto& it_drop_piece_types = config.find("dropPieceTypes");
     if (it_drop_piece_types != config.end())
     {
@@ -1742,6 +1752,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("forcedJumpContinuation", v->forcedJumpContinuation);
     parse_attribute("forcedJumpSameDirection", v->forcedJumpSameDirection);
     parse_attribute("cambodianMoves", v->cambodianMoves);
+    parse_attribute("firstMoveLoseOnCheck", v->firstMoveLoseOnCheck);
     parse_attribute("diagonalLines", v->diagonalLines);
     parse_both_colors_with_overrides("pass", v->pass);
     parse_both_colors_with_overrides("passOnStalemate", v->passOnStalemate);

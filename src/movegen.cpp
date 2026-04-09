@@ -1025,6 +1025,26 @@ namespace {
             }
         }
 
+        if (!restrictToForcedJumper && pos.gates(Us))
+        {
+            for (PieceSet ps = pos.piece_types(); ps;)
+            {
+                PieceType pt = pop_lsb(ps);
+                PieceType extraPt = pos.first_move_piece_type(pt);
+                if (extraPt == NO_PIECE_TYPE)
+                    continue;
+
+                Bitboard froms = pos.pieces(Us, pt) & pos.gates(Us);
+                while (froms)
+                {
+                    Square from = pop_lsb(froms);
+                    Bitboard b = (pos.moves_from(Us, extraPt, from) | pos.attacks_from(Us, extraPt, from)) & target & ~pos.pieces(Us);
+                    while (b)
+                        *moveList++ = make<SPECIAL>(from, pop_lsb(b));
+                }
+            }
+        }
+
         if (!restrictToForcedJumper && pos.clone_move_types())
         {
             Bitboard cloneTargets = Type == CAPTURES   ? captureTarget & pos.pieces(~Us)
