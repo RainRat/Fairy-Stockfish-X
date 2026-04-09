@@ -161,6 +161,27 @@ go perft 1")
 echo "${out}" | grep -q "Nodes searched: 8"
 
 # 5bb1) Mini Hexchess loads on the masked 37-cell hex board and exposes the expected opening moves.
+if variant_available "hex-7x7"; then
+out=$(run_cmds "setoption name UCI_Variant value hex-7x7
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 49"
+fi
+
+if variant_available "hex-10x10"; then
+out=$(run_cmds "setoption name UCI_Variant value hex-10x10
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 100"
+fi
+
+if variant_available "misere-hex"; then
+out=$(run_cmds "setoption name UCI_Variant value misere-hex
+position fen 11/11/11/11/11/11/11/11/11/11/PPPPPPPPPPP[P] b - - 0 1
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 0"
+fi
+
 if variant_available "minihexchess"; then
 out=$(run_cmds "setoption name UCI_Variant value minihexchess
 position startpos
@@ -415,7 +436,7 @@ if variant_available "y"; then
 out=$(run_cmds "setoption name UCI_Variant value y
 position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 55"
+echo "${out}" | grep -q "Nodes searched: 56"
 fi
 
 if variant_available "hex"; then

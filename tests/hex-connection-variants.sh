@@ -45,12 +45,24 @@ out=$(run_cmds "hex" "position startpos
 go perft 1")
 echo "${out}" | grep -q "Nodes searched: 121"
 
+out=$(run_cmds "hex-7x7" "position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 49"
+
+out=$(run_cmds "hex-10x10" "position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 100"
+
 out=$(run_cmds "hex" "position fen 11/11/11/11/11/11/11/11/11/11/PPPPPPPPPPP b - - 0 1
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 0"
+
+out=$(run_cmds "misere-hex" "position fen 11/11/11/11/11/11/11/11/11/11/PPPPPPPPPPP[P] b - - 0 1
 go perft 1")
 echo "${out}" | grep -q "Nodes searched: 0"
 
 out=$(run_cmds "y" "position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 55"
+echo "${out}" | grep -q "Nodes searched: 56"
 
 echo "hex connection variants regression passed"
