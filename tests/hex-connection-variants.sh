@@ -17,7 +17,8 @@ if [[ -z "${ENGINE}" ]]; then
     ENGINE="./src/stockfish"
   fi
 fi
-VARIANT_PATH="${2:-./src/variants.ini}"
+SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+VARIANT_PATH="${2:-${SCRIPT_DIR}/../src/variants.ini}"
 
 run_cmds() {
   cat <<EOF | "${ENGINE}" 2>/dev/null
