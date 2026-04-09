@@ -4680,19 +4680,23 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           recomputeDerivedState = true;
           st->pushSnapshotCount = pushLineCount;
           st->pushTransferCount = pushTransferCount;
+          st->pushSnapshotPromoted = 0;
           for (int i = 0; i < pushLineCount; ++i)
           {
               Square sq = pushSquares[i];
               st->pushSnapshotSquares[i] = sq;
               st->pushSnapshotPieces[i] = piece_on(sq);
-              st->pushSnapshotPromoted[i] = st->pushSnapshotPieces[i] != NO_PIECE && is_promoted(sq);
-              st->pushSnapshotUnpromoted[i] = st->pushSnapshotPromoted[i] ? unpromoted_piece_on(sq) : NO_PIECE;
+              if (st->pushSnapshotPieces[i] != NO_PIECE && is_promoted(sq))
+                  st->pushSnapshotPromoted |= (1U << i);
+              st->pushSnapshotUnpromoted[i] = (st->pushSnapshotPromoted & (1U << i)) ? unpromoted_piece_on(sq) : NO_PIECE;
               pushRightsMask |= castlingRightsMask[sq];
           }
+          st->pushTransferPromoted = 0;
           for (int i = 0; i < pushTransferCount; ++i)
           {
               st->pushTransferPieces[i] = pushTransfers[i].piece;
-              st->pushTransferPromoted[i] = pushTransfers[i].promoted;
+              if (pushTransfers[i].promoted)
+                  st->pushTransferPromoted |= (1U << i);
               st->pushTransferUnpromoted[i] = pushTransfers[i].unpromoted;
           }
 
@@ -4723,7 +4727,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           {
               Piece transferred = st->pushTransferPieces[i];
               Piece transferPiece = reserve_transfer_piece(us, transferred,
-                                                           st->pushTransferPromoted[i],
+                                                           (st->pushTransferPromoted & (1U << i)),
                                                            st->pushTransferUnpromoted[i],
                                                            drop_loop(), var->captureToHandSide,
                                                            main_promotion_pawn_type(color_of(transferred)));
@@ -4731,7 +4735,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
                   add_to_hand(transferPiece);
               else if (capture_type() == PRISON)
               {
-                  Piece prisonPiece = !drop_loop() && st->pushTransferPromoted[i]
+                  Piece prisonPiece = !drop_loop() && (st->pushTransferPromoted & (1U << i))
                         ? (st->pushTransferUnpromoted[i]
                            ? st->pushTransferUnpromoted[i]
                            : make_piece(color_of(transferred), main_promotion_pawn_type(color_of(transferred))))
@@ -6358,7 +6362,7 @@ void Position::undo_move(Move m) {
           {
               Piece transferred = st->pushTransferPieces[i];
               Piece transferPiece = reserve_transfer_piece(us, transferred,
-                                                           st->pushTransferPromoted[i],
+                                                           (st->pushTransferPromoted & (1U << i)),
                                                            st->pushTransferUnpromoted[i],
                                                            drop_loop(), var->captureToHandSide,
                                                            main_promotion_pawn_type(color_of(transferred)));
@@ -6366,7 +6370,7 @@ void Position::undo_move(Move m) {
                   remove_from_hand(transferPiece);
               else if (capture_type() == PRISON)
               {
-                  Piece prisonPiece = !drop_loop() && st->pushTransferPromoted[i]
+                  Piece prisonPiece = !drop_loop() && (st->pushTransferPromoted & (1U << i))
                         ? (st->pushTransferUnpromoted[i]
                            ? st->pushTransferUnpromoted[i]
                            : make_piece(color_of(transferred), main_promotion_pawn_type(color_of(transferred))))
@@ -6387,7 +6391,7 @@ void Position::undo_move(Move m) {
                   continue;
               }
               put_piece(st->pushSnapshotPieces[i], st->pushSnapshotSquares[i],
-                        st->pushSnapshotPromoted[i], st->pushSnapshotUnpromoted[i]);
+                        (st->pushSnapshotPromoted & (1U << i)), st->pushSnapshotUnpromoted[i]);
           }
       }
       else if (st->didPush)

@@ -173,11 +173,11 @@ struct StateInfo {
   Square pushSnapshotSquares[32];
   Piece pushSnapshotPieces[32];
   Piece pushSnapshotUnpromoted[32];
-  bool pushSnapshotPromoted[32];
+  uint32_t pushSnapshotPromoted;
   int pushTransferCount;
   Piece pushTransferPieces[32];
   Piece pushTransferUnpromoted[32];
-  bool pushTransferPromoted[32];
+  uint32_t pushTransferPromoted;
   Square pullFromSquare;
   Piece pullPiece;
   Piece pullUnpromotedPiece;
