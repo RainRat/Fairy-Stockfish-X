@@ -2112,11 +2112,6 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
             std::cerr << "Can not use kings with flipEnclosedPieces." << std::endl;
             valid = false;
         }
-        if (v->removeConnectN)
-        {
-            std::cerr << "Can not use kings with removeConnectN." << std::endl;
-            valid = false;
-        }
         if (v->wallingRule==DUCK)
         {
             std::cerr << "Can not use kings with wallingRule = duck." << std::endl;
@@ -2139,6 +2134,25 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
             }
         }
     }
+
+    if (v->removeConnectN)
+    {
+        if (hasRoyalKing || v->pseudoRoyalTypes || v->antiRoyalTypes)
+        {
+            if (DoCheck)
+                std::cerr << "removeConnectN is incompatible with (pseudo/anti-)royal pieces." << std::endl;
+            valid = false;
+        }
+        if (v->connectN || v->connect3D || v->connect4D || v->connectNxN || v->collinearN || v->connectGroup
+            || v->connectRegion1[WHITE] || v->connectRegion1[BLACK]
+            || !v->connectPieceGoal[WHITE].empty() || !v->connectPieceGoal[BLACK].empty())
+        {
+            if (DoCheck)
+                std::cerr << "removeConnectN is incompatible with connection win conditions." << std::endl;
+            valid = false;
+        }
+    }
+
     // Options incompatible with royal kings OR pseudo-royal kings. Possible in theory though:
     // 1. In blast variants, moving a (pseudo-)royal blastImmuneType into another piece is legal.
     // 2. In blast variants, capturing a piece next to a (pseudo-)royal blastImmuneType is legal.
