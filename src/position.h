@@ -3277,7 +3277,7 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
   const PieceInfo* pi = pieceMap.get(movePt);
 
   if ((fast_attacks() || fast_attacks2()) && pi->riderAugmentMask == PieceInfo::AUGMENT_NONE)
-      return attacks_bb(c, pt, s, occupancy) & board_bb();
+      return attacks_bb(c, movePt, s, occupancy) & board_bb();
 
   if (pi->friendlyJump)
       occupancy &= ~pieces(c);
@@ -3456,7 +3456,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
   const PieceInfo* pi = pieceMap.get(movePt);
 
   if ((fast_attacks() || fast_attacks2()) && pi->riderAugmentMask == PieceInfo::AUGMENT_NONE)
-      return (moves_bb(c, pt, s, occupancy) | extraDestinations) & board_bb();
+      return (moves_bb(c, movePt, s, occupancy) | extraDestinations) & board_bb();
 
   if (pi->friendlyJump)
       occupancy &= ~pieces(c);

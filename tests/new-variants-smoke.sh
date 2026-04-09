@@ -160,6 +160,20 @@ position startpos
 go perft 1")
 echo "${out}" | grep -q "Nodes searched: 8"
 
+# 5bb1) Mini Hexchess loads on the masked 37-cell hex board and exposes the expected opening moves.
+if variant_available "minihexchess"; then
+out=$(run_cmds "setoption name UCI_Variant value minihexchess
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 6"
+echo "${out}" | grep -q "^a2b4: 1$"
+echo "${out}" | grep -q "^a3a4: 1$"
+echo "${out}" | grep -q "^b3b4: 1$"
+echo "${out}" | grep -q "^c3c4: 1$"
+echo "${out}" | grep -q "^b2d3: 1$"
+echo "${out}" | grep -q "^b2c4: 1$"
+fi
+
 # 5bc) Simplified inheritance stanzas still preserve start positions.
 out=$(run_cmds "setoption name UCI_Variant value maharajah
 position startpos

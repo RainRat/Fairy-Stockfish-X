@@ -47,6 +47,12 @@ startFen = 7/7/7/3N3/7/7/7 w - - 0 1
 maxRank = 7
 maxFile = g
 startFen = 7/7/7/3P3/2x1x2/7/7 w - - 0 1
+
+[hex-royal-king-test:hex-rook-test]
+maxRank = 7
+maxFile = g
+king = k:WrfFlbFflFrbFrf(2,1)lb(2,1)fr(2,1)bl(2,1)
+startFen = 6k/7/7/3K3/7/7/7 w - - 0 1
 INI
 
 run_cmds() {
@@ -125,5 +131,21 @@ echo "${out}" | grep -q "Nodes searched: 3"
 echo "${out}" | grep -q "^d4c3: 1$"
 echo "${out}" | grep -q "^d4d5: 1$"
 echo "${out}" | grep -q "^d4e3: 1$"
+
+out=$(run_cmds "hex-royal-king-test" "position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 12"
+echo "${out}" | grep -q "^d4c2: 1$"
+echo "${out}" | grep -q "^d4b3: 1$"
+echo "${out}" | grep -q "^d4c3: 1$"
+echo "${out}" | grep -q "^d4d3: 1$"
+echo "${out}" | grep -q "^d4e3: 1$"
+echo "${out}" | grep -q "^d4c4: 1$"
+echo "${out}" | grep -q "^d4e4: 1$"
+echo "${out}" | grep -q "^d4c5: 1$"
+echo "${out}" | grep -q "^d4d5: 1$"
+echo "${out}" | grep -q "^d4e5: 1$"
+echo "${out}" | grep -q "^d4f5: 1$"
+echo "${out}" | grep -q "^d4e6: 1$"
 
 echo "hex piece movement regression passed"
