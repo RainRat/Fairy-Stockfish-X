@@ -2185,6 +2185,13 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
         }
     }
 
+    if (v->hexBoard && (v->reciprocalWeakConnectionDrop || v->weakCrosscutDropIllegal || v->weakConnectionNobiImpossible))
+    {
+        if (DoCheck)
+            std::cerr << "Hex boards do not support square weak-connection drop rules." << std::endl;
+        valid = false;
+    }
+
     // Options incompatible with royal kings OR pseudo-royal kings. Possible in theory though:
     // 1. In blast variants, moving a (pseudo-)royal blastImmuneType into another piece is legal.
     // 2. In blast variants, capturing a piece next to a (pseudo-)royal blastImmuneType is legal.
