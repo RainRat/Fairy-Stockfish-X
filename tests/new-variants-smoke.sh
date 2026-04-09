@@ -374,6 +374,21 @@ go perft 1")
 echo "${out}" | grep -q "Nodes searched: 0"
 fi
 
+# 7d) Hex-family connection variants: Y and Hex load on the expected build sizes.
+if variant_available "y"; then
+out=$(run_cmds "setoption name UCI_Variant value y
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 55"
+fi
+
+if variant_available "hex"; then
+out=$(run_cmds "setoption name UCI_Variant value hex
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 121"
+fi
+
 # 8) Neutreeko: max-distance move completes a line and ends the game.
 if variant_available "neutreeko"; then
 out=$(run_cmds "setoption name UCI_Variant value neutreeko
