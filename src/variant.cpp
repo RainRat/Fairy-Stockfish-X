@@ -2201,22 +2201,22 @@ Variant* Variant::conclude() {
     // that set the aggregate fields directly still need the same propagation.
     for (Color c : {WHITE, BLACK})
     {
-        if (!extinctionPieceTypesByColorSet[c])
-            extinctionPieceTypesByColor[c] = extinctionPieceTypes;
-        if (!extinctionAllPieceTypesByColorSet[c])
-            extinctionAllPieceTypesByColor[c] = extinctionAllPieceTypes;
-        if (!extinctionPieceCountByColorSet[c])
-            extinctionPieceCountByColor[c] = extinctionPieceCount;
-        if (!extinctionOpponentPieceCountByColorSet[c])
-            extinctionOpponentPieceCountByColor[c] = extinctionOpponentPieceCount;
+        if (!extinctionPieceTypes.byColorSet[c])
+            extinctionPieceTypes.byColor[c] = extinctionPieceTypes.globalValue;
+        if (!extinctionAllPieceTypes.byColorSet[c])
+            extinctionAllPieceTypes.byColor[c] = extinctionAllPieceTypes.globalValue;
+        if (!extinctionPieceCount.byColorSet[c])
+            extinctionPieceCount.byColor[c] = extinctionPieceCount.globalValue;
+        if (!extinctionOpponentPieceCount.byColorSet[c])
+            extinctionOpponentPieceCount.byColor[c] = extinctionOpponentPieceCount.globalValue;
     }
 
     // Backward compatibility: legacy extinctionPseudoRoyal used extinction
     // piece fields to define pseudo-royal behavior.
     if (extinctionPseudoRoyal && !pseudoRoyalTypes)
     {
-        pseudoRoyalTypes = extinctionPieceTypes;
-        pseudoRoyalCount = extinctionPieceCount + 1;
+        pseudoRoyalTypes = extinctionPieceTypes.globalValue;
+        pseudoRoyalCount = extinctionPieceCount.globalValue + 1;
     }
 
     // Compatibility shim: legacy mutuallyImmuneTypes means same-type captures are forbidden.
@@ -2260,7 +2260,7 @@ Variant* Variant::conclude() {
 
     // Initialize calculated NNUE properties
     nnueKing =  pieceTypes & KING ? KING
-              : extinctionPieceCount == 0 && (extinctionPieceTypes & COMMONER) ? COMMONER
+              : extinctionPieceCount.globalValue == 0 && (extinctionPieceTypes.globalValue & COMMONER) ? COMMONER
               : NO_PIECE_TYPE;
     // The nnueKing has to present exactly once and must not change in count
     if (nnueKing != NO_PIECE_TYPE)

@@ -988,16 +988,12 @@ inline bool Position::piece_promotion_on_capture() const {
 
 inline bool Position::mandatory_pawn_promotion() const {
   assert(var != nullptr);
-  if (var->mandatoryPawnPromotionByColorSet[WHITE] || var->mandatoryPawnPromotionByColorSet[BLACK])
-      return var->mandatoryPawnPromotionByColor[side_to_move()];
-  return var->mandatoryPawnPromotion;
+  return var->mandatoryPawnPromotion.get(side_to_move());
 }
 
 inline bool Position::mandatory_piece_promotion() const {
   assert(var != nullptr);
-  if (var->mandatoryPiecePromotionByColorSet[WHITE] || var->mandatoryPiecePromotionByColorSet[BLACK])
-      return var->mandatoryPiecePromotionByColor[side_to_move()];
-  return var->mandatoryPiecePromotion;
+  return var->mandatoryPiecePromotion.get(side_to_move());
 }
 
 inline bool Position::piece_demotion() const {
@@ -1375,16 +1371,12 @@ inline bool Position::is_hex_board() const {
 
 inline bool Position::drop_checks() const {
   assert(var != nullptr);
-  if (var->dropChecksByColorSet[WHITE] || var->dropChecksByColorSet[BLACK])
-      return var->dropChecksByColor[side_to_move()];
-  return var->dropChecks;
+  return var->dropChecks.get(side_to_move());
 }
 
 inline bool Position::drop_mates() const {
   assert(var != nullptr);
-  if (var->dropMatesByColorSet[WHITE] || var->dropMatesByColorSet[BLACK])
-      return var->dropMatesByColor[side_to_move()];
-  return var->dropMates;
+  return var->dropMates.get(side_to_move());
 }
 
 inline bool Position::shogi_pawn_drop_mate_illegal() const {
@@ -1393,28 +1385,26 @@ inline bool Position::shogi_pawn_drop_mate_illegal() const {
 
 inline bool Position::shogi_pawn_drop_mate_illegal(Color c) const {
   assert(var != nullptr);
-  if (var->shogiPawnDropMateIllegalByColorSet[WHITE] || var->shogiPawnDropMateIllegalByColorSet[BLACK])
-      return var->shogiPawnDropMateIllegalByColor[c];
-  return var->shogiPawnDropMateIllegal;
+  return var->shogiPawnDropMateIllegal.get(c);
 }
 
 inline bool Position::self_capture() const {
   assert(var != nullptr);
   Color us = side_to_move();
-  if (var->selfCaptureTypesByColorSet[us])
-      return var->selfCaptureTypesByColor[us] != NO_PIECE_SET;
-  if (var->selfCaptureByColorSet[us])
-      return var->selfCaptureByColor[us];
-  if (var->selfCaptureTypes != NO_PIECE_SET)
-      return var->selfCaptureTypesByColor[side_to_move()] != NO_PIECE_SET;
-  return var->selfCapture;
+  if (var->selfCaptureTypes.byColorSet[us])
+      return var->selfCaptureTypes.byColor[us] != NO_PIECE_SET;
+  if (var->selfCapture.byColorSet[us])
+      return var->selfCapture.byColor[us];
+  if (var->selfCaptureTypes.globalValue != NO_PIECE_SET)
+      return var->selfCaptureTypes.byColor[side_to_move()] != NO_PIECE_SET;
+  return var->selfCapture.globalValue;
 }
 
 inline bool Position::self_capture(PieceType pt) const {
   assert(var != nullptr);
   Color us = side_to_move();
-  if (var->selfCaptureTypesByColorSet[us])
-      return bool(var->selfCaptureTypesByColor[us] & piece_set(pt));
+  if (var->selfCaptureTypes.byColorSet[us])
+      return bool(var->selfCaptureTypes.byColor[us] & piece_set(pt));
   return self_capture();
 }
 
@@ -2314,12 +2304,12 @@ inline bool Position::extinction_claim() const {
 
 inline PieceSet Position::extinction_piece_types() const {
   assert(var != nullptr);
-  return var->extinctionPieceTypes;
+  return var->extinctionPieceTypes.globalValue;
 }
 
 inline PieceSet Position::extinction_piece_types(Color c) const {
   assert(var != nullptr);
-  return var->extinctionPieceTypesByColor[c];
+  return var->extinctionPieceTypes.get(c);
 }
 
 inline PieceSet Position::extinction_must_appear() const {
@@ -2329,33 +2319,33 @@ inline PieceSet Position::extinction_must_appear() const {
 
 inline bool Position::extinction_all_piece_types(Color c) const {
   assert(var != nullptr);
-  return var->extinctionAllPieceTypesByColor[c];
+  return var->extinctionAllPieceTypes.get(c);
 }
 
 inline bool Position::extinction_single_piece() const {
   assert(var != nullptr);
   return   var->extinctionValue == -VALUE_MATE
-        && (var->extinctionPieceTypes & ~piece_set(ALL_PIECES));
+        && (var->extinctionPieceTypes.globalValue & ~piece_set(ALL_PIECES));
 }
 
 inline int Position::extinction_piece_count() const {
   assert(var != nullptr);
-  return var->extinctionPieceCount;
+  return var->extinctionPieceCount.globalValue;
 }
 
 inline int Position::extinction_piece_count(Color c) const {
   assert(var != nullptr);
-  return var->extinctionPieceCountByColor[c];
+  return var->extinctionPieceCount.get(c);
 }
 
 inline int Position::extinction_opponent_piece_count() const {
   assert(var != nullptr);
-  return var->extinctionOpponentPieceCount;
+  return var->extinctionOpponentPieceCount.globalValue;
 }
 
 inline int Position::extinction_opponent_piece_count(Color c) const {
   assert(var != nullptr);
-  return var->extinctionOpponentPieceCountByColor[c];
+  return var->extinctionOpponentPieceCount.get(c);
 }
 
 inline PieceSet Position::pseudo_royal_types() const {

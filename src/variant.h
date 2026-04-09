@@ -51,6 +51,33 @@ enum class EnPassantPassedSquares {
   LAST
 };
 
+template <typename T>
+struct ColorSetting {
+  T globalValue;
+  T byColor[COLOR_NB];
+  bool byColorSet[COLOR_NB] = {false, false};
+
+  ColorSetting(T defaultValue) : globalValue(defaultValue) {
+    byColor[WHITE] = defaultValue;
+    byColor[BLACK] = defaultValue;
+  }
+
+  inline T get(Color c) const {
+    return byColorSet[c] ? byColor[c] : globalValue;
+  }
+
+  inline void setForColor(Color c, T value) {
+    byColor[c] = value;
+    byColorSet[c] = true;
+  }
+
+  inline void setGlobal(T value) {
+    globalValue = value;
+    if (!byColorSet[WHITE]) byColor[WHITE] = value;
+    if (!byColorSet[BLACK]) byColor[BLACK] = value;
+  }
+};
+
 struct Variant {
   std::string variantTemplate = "fairy";
   std::string pieceToCharTable = "-";
@@ -93,12 +120,8 @@ struct Variant {
   PieceType promotedPieceType[PIECE_TYPE_NB] = {};
   PieceType moveMorphPieceType[PIECE_TYPE_NB] = {};
   bool piecePromotionOnCapture = false;
-  bool mandatoryPawnPromotion = true;
-  bool mandatoryPiecePromotion = false;
-  bool mandatoryPawnPromotionByColor[COLOR_NB] = {false, false};
-  bool mandatoryPiecePromotionByColor[COLOR_NB] = {false, false};
-  bool mandatoryPawnPromotionByColorSet[COLOR_NB] = {false, false};
-  bool mandatoryPiecePromotionByColorSet[COLOR_NB] = {false, false};
+  ColorSetting<bool> mandatoryPawnPromotion{true};
+  ColorSetting<bool> mandatoryPiecePromotion{false};
   bool pieceDemotion = false;
   bool blastOnCapture = false;
   bool blastOnMove = false;
@@ -157,12 +180,8 @@ struct Variant {
   bool checking = true;
   bool allowChecks = false;
   bool royalPieceNoThroughCheck = false;
-  bool dropChecks = true;
-  bool dropMates = true;
-  bool dropChecksByColor[COLOR_NB] = {true, true};
-  bool dropMatesByColor[COLOR_NB] = {true, true};
-  bool dropChecksByColorSet[COLOR_NB] = {false, false};
-  bool dropMatesByColorSet[COLOR_NB] = {false, false};
+  ColorSetting<bool> dropChecks{true};
+  ColorSetting<bool> dropMates{true};
   bool mustCapture = false;
   bool mustCaptureEnPassant = false;
   bool mustCaptureByColor[COLOR_NB] = {false, false};
@@ -185,12 +204,8 @@ struct Variant {
   bool edgeInsertFromBottom[COLOR_NB] = {false, false};
   bool edgeInsertFromLeft[COLOR_NB] = {false, false};
   bool edgeInsertFromRight[COLOR_NB] = {false, false};
-  bool selfCapture = false;
-  bool selfCaptureByColor[COLOR_NB] = {false, false};
-  bool selfCaptureByColorSet[COLOR_NB] = {false, false};
-  PieceSet selfCaptureTypes = NO_PIECE_SET;
-  PieceSet selfCaptureTypesByColor[COLOR_NB] = {NO_PIECE_SET, NO_PIECE_SET};
-  bool selfCaptureTypesByColorSet[COLOR_NB] = {false, false};
+  ColorSetting<bool> selfCapture{false};
+  ColorSetting<PieceSet> selfCaptureTypes{NO_PIECE_SET};
   bool blastOnSameTypeCapture = false;
   bool blastOrthogonals = true;
   bool mustDrop = false;
@@ -303,9 +318,7 @@ struct Variant {
   Value stalemateValue = VALUE_DRAW;
   bool stalematePieceCount = false; // multiply stalemate value by sign(count(~stm) - count(stm))
   Value checkmateValue = -VALUE_MATE;
-  bool shogiPawnDropMateIllegal = false;
-  bool shogiPawnDropMateIllegalByColor[COLOR_NB] = {false, false};
-  bool shogiPawnDropMateIllegalByColorSet[COLOR_NB] = {false, false};
+  ColorSetting<bool> shogiPawnDropMateIllegal{false};
   bool shatarMateRule = false;
   bool bikjangRule = false;
   Value extinctionValue = VALUE_NONE;
@@ -321,19 +334,11 @@ struct Variant {
   bool antiRoyalSelfCaptureOnly = false;
   bool antiRoyalKingMutuallyImmune = false;
   bool dupleCheck = false;
-  PieceSet extinctionPieceTypes = NO_PIECE_SET;
+  ColorSetting<PieceSet> extinctionPieceTypes{NO_PIECE_SET};
   PieceSet extinctionMustAppear = NO_PIECE_SET;
-  bool extinctionAllPieceTypes = false;
-  int extinctionPieceCount = 0;
-  int extinctionOpponentPieceCount = 0;
-  PieceSet extinctionPieceTypesByColor[COLOR_NB] = {NO_PIECE_SET, NO_PIECE_SET};
-  bool extinctionPieceTypesByColorSet[COLOR_NB] = {false, false};
-  bool extinctionAllPieceTypesByColor[COLOR_NB] = {false, false};
-  bool extinctionAllPieceTypesByColorSet[COLOR_NB] = {false, false};
-  int extinctionPieceCountByColor[COLOR_NB] = {0, 0};
-  bool extinctionPieceCountByColorSet[COLOR_NB] = {false, false};
-  int extinctionOpponentPieceCountByColor[COLOR_NB] = {0, 0};
-  bool extinctionOpponentPieceCountByColorSet[COLOR_NB] = {false, false};
+  ColorSetting<bool> extinctionAllPieceTypes{false};
+  ColorSetting<int> extinctionPieceCount{0};
+  ColorSetting<int> extinctionOpponentPieceCount{0};
   PieceType flagPiece[COLOR_NB] = {ALL_PIECES, ALL_PIECES};
   Bitboard flagRegion[COLOR_NB] = {};
   int flagPieceCount = 1;
