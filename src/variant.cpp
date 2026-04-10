@@ -227,8 +227,8 @@ namespace {
         v->add_piece(CUSTOM_PIECE_1, 'p', "mfFcfeWimfnA");
         v->mainPromotionPawnType[WHITE] = v->mainPromotionPawnType[BLACK] = CUSTOM_PIECE_1;
         v->promotionPawnTypes[WHITE] = v->promotionPawnTypes[BLACK] = piece_set(CUSTOM_PIECE_1);
-        v->enPassantTypes[WHITE] = v->enPassantTypes[BLACK] = piece_set(CUSTOM_PIECE_1);
-        v->nMoveRuleTypes[WHITE] = v->nMoveRuleTypes[BLACK] = piece_set(CUSTOM_PIECE_1);
+        v->enPassantTypes = piece_set(CUSTOM_PIECE_1);
+        v->nMoveRuleTypes = piece_set(CUSTOM_PIECE_1);
         return v;
     }
     // Pawnsideways
@@ -239,8 +239,8 @@ namespace {
         v->add_piece(CUSTOM_PIECE_1, 'p', "fsmWfceFifmnD");
         v->mainPromotionPawnType[WHITE] = v->mainPromotionPawnType[BLACK] = CUSTOM_PIECE_1;
         v->promotionPawnTypes[WHITE] = v->promotionPawnTypes[BLACK] = piece_set(CUSTOM_PIECE_1);
-        v->enPassantTypes[WHITE] = v->enPassantTypes[BLACK] = piece_set(CUSTOM_PIECE_1);
-        v->nMoveRuleTypes[WHITE] = v->nMoveRuleTypes[BLACK] = piece_set(CUSTOM_PIECE_1);
+        v->enPassantTypes = piece_set(CUSTOM_PIECE_1);
+        v->nMoveRuleTypes = piece_set(CUSTOM_PIECE_1);
         return v;
     }
     // Pawnback
@@ -253,8 +253,8 @@ namespace {
         v->mobilityRegion[BLACK][CUSTOM_PIECE_1] = (Rank7BB | Rank6BB | Rank5BB | Rank4BB | Rank3BB | Rank2BB | Rank1BB);
         v->mainPromotionPawnType[WHITE] = v->mainPromotionPawnType[BLACK] = CUSTOM_PIECE_1;
         v->promotionPawnTypes[WHITE] = v->promotionPawnTypes[BLACK] = piece_set(CUSTOM_PIECE_1);
-        v->enPassantTypes[WHITE] = v->enPassantTypes[BLACK] = piece_set(CUSTOM_PIECE_1);
-        v->nMoveRuleTypes[WHITE] = v->nMoveRuleTypes[BLACK] = NO_PIECE_SET; // backwards pawn moves are reversible
+        v->enPassantTypes = piece_set(CUSTOM_PIECE_1);
+        v->nMoveRuleTypes = NO_PIECE_SET; // backwards pawn moves are reversible
         return v;
     }
     // Legan Chess
@@ -266,8 +266,8 @@ namespace {
         v->promotionRegion[WHITE] = make_bitboard(SQ_A8, SQ_B8, SQ_C8, SQ_D8, SQ_A7, SQ_A6, SQ_A5);
         v->promotionRegion[BLACK] = make_bitboard(SQ_E1, SQ_F1, SQ_G1, SQ_H1, SQ_H2, SQ_H3, SQ_H4);
         v->mainPromotionPawnType[WHITE] = v->mainPromotionPawnType[BLACK] = CUSTOM_PIECE_1;
-        v->promotionPawnTypes[WHITE] = v->promotionPawnTypes[BLACK] = piece_set(CUSTOM_PIECE_1);
-        v->nMoveRuleTypes[WHITE] = v->nMoveRuleTypes[BLACK] = piece_set(CUSTOM_PIECE_1);
+        v->enPassantTypes = piece_set(CUSTOM_PIECE_1);
+        v->nMoveRuleTypes = piece_set(CUSTOM_PIECE_1);
         v->startFen = "knbrp3/bqpp4/npp5/rp1p3P/p3P1PR/5PPN/4PPQB/3PRBNK w - - 0 1";
         v->doubleStep = false;
         return v;
@@ -469,9 +469,8 @@ namespace {
     // https://lichess.org/variant/kingOfTheHill
     Variant* kingofthehill_variant() {
         Variant* v = chess_variant_base()->init();
-        v->flagPiece[WHITE] = v->flagPiece[BLACK] = KING;
-        v->flagRegion[WHITE] = (Rank4BB | Rank5BB) & (FileDBB | FileEBB);
-        v->flagRegion[BLACK] = (Rank4BB | Rank5BB) & (FileDBB | FileEBB);
+        v->flagPiece = KING;
+        v->flagRegion = (Rank4BB | Rank5BB) & (FileDBB | FileEBB);
         v->flagMove = false;
         return v;
     }
@@ -480,9 +479,8 @@ namespace {
     Variant* racingkings_variant() {
         Variant* v = chess_variant_base()->init();
         v->startFen = "8/8/8/8/8/8/krbnNBRK/qrbnNBRQ w - - 0 1";
-        v->flagPiece[WHITE] = v->flagPiece[BLACK] = KING;
-        v->flagRegion[WHITE] = Rank8BB;
-        v->flagRegion[BLACK] = Rank8BB;
+        v->flagPiece = KING;
+        v->flagRegion = Rank8BB;
         v->flagMove = true;
         v->castling = false;
         v->checking = false;
@@ -1013,7 +1011,7 @@ namespace {
         v->shogiPawnDropMateIllegal = false;
         v->extinctionValue = -VALUE_MATE;
         v->extinctionPieceTypes = piece_set(COMMONER);
-        v->flagPiece[WHITE] = v->flagPiece[BLACK] = COMMONER;
+        v->flagPiece = COMMONER;
         v->flagRegion[WHITE] = Rank4BB;
         v->flagRegion[BLACK] = Rank1BB;
         v->flagPieceSafe = true;
@@ -1195,7 +1193,7 @@ namespace {
         v->startFen = "lgkcckwl/hhhhhhhh/8/8/8/8/PPPPPPPP/RNBQKBNR w KQ - 0 1";
         v->mainPromotionPawnType[BLACK] = CUSTOM_PIECE_1;
         v->promotionPawnTypes[BLACK] = piece_set(CUSTOM_PIECE_1);
-        v->nMoveRuleTypes[BLACK] = piece_set(CUSTOM_PIECE_1);
+        v->nMoveRuleTypes.set_color(BLACK, piece_set(CUSTOM_PIECE_1));
         v->promotionPieceTypes[BLACK] = piece_set(COMMONER) | DRAGON | ARCHBISHOP | CUSTOM_PIECE_2 | CUSTOM_PIECE_3;
         v->promotionLimit[COMMONER] = 2;
         v->enPassantRegion[WHITE] = 0;
@@ -1261,7 +1259,7 @@ namespace {
         v->doubleStep = false;
         v->castling = false;
         v->stalemateValue = -VALUE_MATE;
-        v->flagPiece[WHITE] = v->flagPiece[BLACK] = BREAKTHROUGH_PIECE;
+        v->flagPiece = BREAKTHROUGH_PIECE;
         v->flagRegion[WHITE] = Rank8BB;
         v->flagRegion[BLACK] = Rank1BB;
         return v;
@@ -1668,9 +1666,8 @@ namespace {
         v->doubleStep = false;
         v->castling = false;
         v->stalemateValue = -VALUE_MATE;
-        v->flagPiece[WHITE] = v->flagPiece[BLACK] = KNIGHT;
-        v->flagRegion[WHITE] = make_bitboard(SQ_E5);
-        v->flagRegion[BLACK] = make_bitboard(SQ_E5);
+        v->flagPiece = KNIGHT;
+        v->flagRegion = make_bitboard(SQ_E5);
         v->flagMove = true;
         return v;
     }
@@ -1851,8 +1848,8 @@ namespace {
         v->promotionRegion[BLACK] = Rank1BB;
         v->doubleStepRegion[WHITE] = Rank2BB | make_bitboard(SQ_B3, SQ_C3, SQ_F3, SQ_G3);
         v->doubleStepRegion[BLACK] = Rank9BB | make_bitboard(SQ_B8, SQ_C8, SQ_F8, SQ_G8);
-        v->enPassantTypes[WHITE] = v->enPassantTypes[BLACK] = piece_set(PAWN);
-        v->nMoveRuleTypes[WHITE] = v->nMoveRuleTypes[BLACK] = piece_set(PAWN) | piece_set(CUSTOM_PIECE_1);
+        v->enPassantTypes = piece_set(PAWN);
+        v->nMoveRuleTypes = piece_set(PAWN) | piece_set(CUSTOM_PIECE_1);
         v->castling = false;
         return v;
     }

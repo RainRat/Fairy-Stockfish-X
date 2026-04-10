@@ -1551,7 +1551,7 @@ inline bool Position::must_capture() const {
 
 inline bool Position::must_capture_en_passant() const {
   assert(var != nullptr);
-  return var->mustCaptureEnPassant;
+  return var->mustCaptureEnPassant.get(side_to_move());
 }
 
 inline bool Position::has_capture() const {
@@ -1936,14 +1936,14 @@ inline PieceSet Position::promotion_pawn_types(Color c) const {
 inline PieceSet Position::pawn_like_types(Color c) const {
   assert(var != nullptr);
   return var->promotionPawnTypes[c]
-       | var->enPassantTypes[c]
-       | var->nMoveRuleTypes[c]
+       | var->enPassantTypes.get(c)
+       | var->nMoveRuleTypes.get(c)
        | piece_set(var->mainPromotionPawnType[c]);
 }
 
 inline PieceSet Position::en_passant_types(Color c) const {
   assert(var != nullptr);
-  return var->enPassantTypes[c];
+  return var->enPassantTypes.get(c);
 }
 
 inline bool Position::immobility_illegal() const {
@@ -2379,12 +2379,12 @@ inline bool Position::extinction_pseudo_royal() const {
 
 inline PieceType Position::flag_piece(Color c) const {
   assert(var != nullptr);
-  return var->flagPiece[c];
+  return var->flagPiece.get(c);
 }
 
 inline Bitboard Position::flag_region(Color c) const {
   assert(var != nullptr);
-  return var->flagRegion[c];
+  return var->flagRegion.get(c);
 }
 
 inline bool Position::flag_move() const {

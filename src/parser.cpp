@@ -1446,7 +1446,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("tripleStepRegionWhite", v->tripleStepRegion[WHITE]);
     parse_attribute("tripleStepRegionBlack", v->tripleStepRegion[BLACK]);
     parse_both_colors_with_overrides("enPassantRegion", v->enPassantRegion);
-    parse_both_colors_with_overrides_piece("enPassantTypes", v->enPassantTypes, v);
+    parse_color_setting_piece("enPassantTypes", v->enPassantTypes);
     parse_attribute("enPassantPassedSquares", v->enPassantPassedSquares);
     parse_attribute("castling", v->castling);
     parse_attribute("castlingDroppedPiece", v->castlingDroppedPiece);
@@ -1467,7 +1467,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_color_setting("dropChecks", v->dropChecks);
     parse_color_setting("dropMates", v->dropMates);
     parse_color_setting("mustCapture", v->mustCapture);
-    parse_attribute("mustCaptureEnPassant", v->mustCaptureEnPassant);
+    parse_color_setting("mustCaptureEnPassant", v->mustCaptureEnPassant);
     parse_attribute("rifleCapture", v->rifleCapture);
     const auto& it_push_strength = config.find("pushingStrength");
     if (it_push_strength != config.end())
@@ -1724,7 +1724,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("soldierPromotionRank", v->soldierPromotionRank);
     parse_attribute("flipEnclosedPieces", v->flipEnclosedPieces);
     // game end
-    parse_both_colors_with_overrides_piece("nMoveRuleTypes", v->nMoveRuleTypes, v);
+    parse_color_setting_piece("nMoveRuleTypes", v->nMoveRuleTypes);
     parse_attribute("nMoveRule", v->nMoveRule);
     parse_attribute("nMoveRuleImmediate", v->nMoveRuleImmediate);
     parse_attribute("nMoveHardLimitRule", v->nMoveHardLimitRule);
@@ -1780,8 +1780,8 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
         v->pseudoRoyalTypes = v->extinctionPieceTypes;
         v->pseudoRoyalCount = v->extinctionPieceCount + 1;
     }
-    parse_both_colors_with_overrides_piece("flagPiece", v->flagPiece, v);
-    parse_both_colors_with_overrides("flagRegion", v->flagRegion);
+    parse_color_setting_piece("flagPiece", v->flagPiece);
+    parse_color_setting("flagRegion", v->flagRegion);
     parse_attribute("flagPieceCount", v->flagPieceCount);
     parse_attribute("flagPieceBlockedWin", v->flagPieceBlockedWin);
     parse_attribute("flagMove", v->flagMove);
@@ -2072,7 +2072,7 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
     {
         if (v->blastOnCapture)
             std::cerr << "Can not use flagPieceSafe with blastOnCapture (flagPieceSafe uses simple assessment that does not see blast)." << std::endl;
-        if ((v->antiRoyalTypes & v->flagPiece[WHITE]) || (v->antiRoyalTypes & v->flagPiece[BLACK]))
+        if ((v->antiRoyalTypes & v->flagPiece.get(WHITE)) || (v->antiRoyalTypes & v->flagPiece.get(BLACK)))
             std::cerr << "Flag piece can not be anti-royal when flagPieceSafe is enabled." << std::endl;
     }
     return valid;

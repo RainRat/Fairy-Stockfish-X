@@ -186,7 +186,7 @@ struct Variant {
   PieceTypeBitboardGroup whitePieceTripleStepRegion;
   PieceTypeBitboardGroup blackPieceTripleStepRegion;
   Bitboard enPassantRegion[COLOR_NB] = {AllSquares, AllSquares};
-  PieceSet enPassantTypes[COLOR_NB] = {piece_set(PAWN), piece_set(PAWN)};
+  ColorSetting<PieceSet> enPassantTypes = ColorSetting<PieceSet>(piece_set(PAWN));
   EnPassantPassedSquares enPassantPassedSquares = EnPassantPassedSquares::ALL;
   bool castling = true;
   bool castlingDroppedPiece = false;
@@ -208,7 +208,7 @@ struct Variant {
   ColorSetting<bool> dropChecks = ColorSetting<bool>(true);
   ColorSetting<bool> dropMates = ColorSetting<bool>(true);
   ColorSetting<bool> mustCapture = ColorSetting<bool>(false);
-  bool mustCaptureEnPassant = false;
+  ColorSetting<bool> mustCaptureEnPassant = ColorSetting<bool>(false);
   bool rifleCapture = false;
   int pushingStrength[PIECE_TYPE_NB] = {};
   int pullingStrength[PIECE_TYPE_NB] = {};
@@ -316,7 +316,7 @@ struct Variant {
   bool potionDropOnOccupied = false;
 
   // game end
-  PieceSet nMoveRuleTypes[COLOR_NB] = {piece_set(PAWN), piece_set(PAWN)};
+  ColorSetting<PieceSet> nMoveRuleTypes = ColorSetting<PieceSet>(piece_set(PAWN));
   int nMoveRule = 50;
   int nMoveRuleImmediate = 0;
   int nMoveHardLimitRule = 0;
@@ -359,8 +359,8 @@ struct Variant {
   ColorSetting<bool> extinctionAllPieceTypes = ColorSetting<bool>(false);
   ColorSetting<int> extinctionPieceCount = ColorSetting<int>(0);
   ColorSetting<int> extinctionOpponentPieceCount = ColorSetting<int>(0);
-  PieceType flagPiece[COLOR_NB] = {ALL_PIECES, ALL_PIECES};
-  Bitboard flagRegion[COLOR_NB] = {};
+  ColorSetting<PieceType> flagPiece = ColorSetting<PieceType>(ALL_PIECES);
+  ColorSetting<Bitboard> flagRegion = ColorSetting<Bitboard>(Bitboard(0));
   int flagPieceCount = 1;
   bool flagPieceBlockedWin = false;
   bool flagMove = false;
