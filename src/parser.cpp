@@ -1466,10 +1466,8 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("royalPieceNoThroughCheck", v->royalPieceNoThroughCheck);
     parse_color_setting("dropChecks", v->dropChecks);
     parse_color_setting("dropMates", v->dropMates);
-    parse_attribute("mustCapture", v->mustCapture);
+    parse_color_setting("mustCapture", v->mustCapture);
     parse_attribute("mustCaptureEnPassant", v->mustCaptureEnPassant);
-    parse_attribute("mustCaptureWhite", v->mustCaptureByColor[WHITE]);
-    parse_attribute("mustCaptureBlack", v->mustCaptureByColor[BLACK]);
     parse_attribute("rifleCapture", v->rifleCapture);
     const auto& it_push_strength = config.find("pushingStrength");
     if (it_push_strength != config.end())
@@ -1580,9 +1578,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("blastOnSameTypeCapture", v->blastOnSameTypeCapture);
     parse_attribute("captureMorph", v->captureMorph);
     parse_attribute("rexExclusiveMorph", v->rexExclusiveMorph);
-    parse_attribute("mustDrop", v->mustDrop);
-    parse_attribute("mustDropWhite", v->mustDropByColor[WHITE]);
-    parse_attribute("mustDropBlack", v->mustDropByColor[BLACK]);
+    parse_color_setting("mustDrop", v->mustDrop);
     parse_color_setting_piece("mustDropType", v->mustDropType);
     parse_attribute("openingSwapDrop", v->openingSwapDrop);
     parse_attribute("openingSwapMirrorMainDiagonal", v->openingSwapMirrorMainDiagonal);
@@ -1647,20 +1643,8 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("dropPromoted", v->dropPromoted);
     parse_attribute("symmetricDropTypes", v->symmetricDropTypes, v);
     parse_attribute("captureDrops", v->captureDrops, v);
-    parse_attribute("dropNoDoubled", v->dropNoDoubled, v);
-    v->dropNoDoubledByColor[WHITE] = v->dropNoDoubled;
-    v->dropNoDoubledByColor[BLACK] = v->dropNoDoubled;
-    if (config.find("dropNoDoubledWhite") != config.end())
-        parse_attribute("dropNoDoubledWhite", v->dropNoDoubledByColor[WHITE], v);
-    if (config.find("dropNoDoubledBlack") != config.end())
-        parse_attribute("dropNoDoubledBlack", v->dropNoDoubledByColor[BLACK], v);
-    parse_attribute("dropNoDoubledCount", v->dropNoDoubledCount);
-    v->dropNoDoubledCountByColor[WHITE] = v->dropNoDoubledCount;
-    v->dropNoDoubledCountByColor[BLACK] = v->dropNoDoubledCount;
-    if (config.find("dropNoDoubledCountWhite") != config.end())
-        parse_attribute("dropNoDoubledCountWhite", v->dropNoDoubledCountByColor[WHITE]);
-    if (config.find("dropNoDoubledCountBlack") != config.end())
-        parse_attribute("dropNoDoubledCountBlack", v->dropNoDoubledCountByColor[BLACK]);
+    parse_color_setting_piece("dropNoDoubled", v->dropNoDoubled);
+    parse_color_setting("dropNoDoubledCount", v->dropNoDoubledCount);
     parse_attribute("freeDrops", v->freeDrops);
     parse_attribute("payPointsToDrop", v->payPointsToDrop);
     parse_attribute("potions", v->potions);

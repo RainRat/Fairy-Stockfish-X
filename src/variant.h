@@ -197,9 +197,8 @@ struct Variant {
   bool royalPieceNoThroughCheck = false;
   ColorSetting<bool> dropChecks = ColorSetting<bool>(true);
   ColorSetting<bool> dropMates = ColorSetting<bool>(true);
-  bool mustCapture = false;
+  ColorSetting<bool> mustCapture = ColorSetting<bool>(false);
   bool mustCaptureEnPassant = false;
-  bool mustCaptureByColor[COLOR_NB] = {false, false};
   bool rifleCapture = false;
   int pushingStrength[PIECE_TYPE_NB] = {};
   int pullingStrength[PIECE_TYPE_NB] = {};
@@ -223,8 +222,7 @@ struct Variant {
   ColorSetting<PieceSet> selfCaptureTypes = ColorSetting<PieceSet>(NO_PIECE_SET);
   bool blastOnSameTypeCapture = false;
   bool blastOrthogonals = true;
-  bool mustDrop = false;
-  bool mustDropByColor[COLOR_NB] = {false, false};
+  ColorSetting<bool> mustDrop = ColorSetting<bool>(false);
   ColorSetting<PieceType> mustDropType = ColorSetting<PieceType>(ALL_PIECES);
   bool dropKingLast = false;
   bool openingSelfRemoval = false;
@@ -256,10 +254,8 @@ struct Variant {
   PieceSet dropPieceTypes[PIECE_TYPE_NB] = {};
   PieceSet symmetricDropTypes = NO_PIECE_SET;
   PieceSet captureDrops = NO_PIECE_SET;
-  PieceType dropNoDoubled = NO_PIECE_TYPE;
-  PieceType dropNoDoubledByColor[COLOR_NB] = {NO_PIECE_TYPE, NO_PIECE_TYPE};
-  int dropNoDoubledCount = 1;
-  int dropNoDoubledCountByColor[COLOR_NB] = {1, 1};
+  ColorSetting<PieceSet> dropNoDoubled = ColorSetting<PieceSet>(NO_PIECE_SET);
+  ColorSetting<int> dropNoDoubledCount = ColorSetting<int>(1);
   PieceSet hostageExchange[PIECE_TYPE_NB] = {};
   bool prisonPawnPromotion = false;
   bool immobilityIllegal = false;

@@ -925,9 +925,7 @@ namespace {
         v->promotedPieceType[SILVER]     = GOLD;
         v->promotedPieceType[BISHOP]     = DRAGON_HORSE;
         v->promotedPieceType[ROOK]       = DRAGON;
-        v->dropNoDoubled = SHOGI_PAWN;
-        v->dropNoDoubledByColor[WHITE] = SHOGI_PAWN;
-        v->dropNoDoubledByColor[BLACK] = SHOGI_PAWN;
+        v->dropNoDoubled = piece_set(SHOGI_PAWN);
         v->immobilityIllegal = true;
         v->shogiPawnDropMateIllegal = true;
         v->stalemateValue = -VALUE_MATE;
@@ -970,9 +968,7 @@ namespace {
         v->promotedPieceType[ROOK]         = NO_PIECE_TYPE;
         v->immobilityIllegal = false;
         v->shogiPawnDropMateIllegal = false;
-        v->dropNoDoubled = NO_PIECE_TYPE;
-        v->dropNoDoubledByColor[WHITE] = NO_PIECE_TYPE;
-        v->dropNoDoubledByColor[BLACK] = NO_PIECE_TYPE;
+        v->dropNoDoubled = NO_PIECE_SET;
         return v;
     }
     // Micro shogi
@@ -1021,9 +1017,7 @@ namespace {
         v->flagRegion[WHITE] = Rank4BB;
         v->flagRegion[BLACK] = Rank1BB;
         v->flagPieceSafe = true;
-        v->dropNoDoubled = NO_PIECE_TYPE;
-        v->dropNoDoubledByColor[WHITE] = NO_PIECE_TYPE;
-        v->dropNoDoubledByColor[BLACK] = NO_PIECE_TYPE;
+        v->dropNoDoubled = NO_PIECE_SET;
         v->nFoldValue = VALUE_DRAW;
         v->perpetualCheckIllegal = false;
         return v;
@@ -1083,12 +1077,8 @@ namespace {
         v->promotedPieceType[SHOGI_PAWN]    = CUSTOM_PIECE_6; // swallow promotes to goose
         v->promotedPieceType[CUSTOM_PIECE_1] = CUSTOM_PIECE_7; // falcon promotes to eagle
         v->mandatoryPiecePromotion = true;
-        v->dropNoDoubled = SHOGI_PAWN;
-        v->dropNoDoubledByColor[WHITE] = SHOGI_PAWN;
-        v->dropNoDoubledByColor[BLACK] = SHOGI_PAWN;
+        v->dropNoDoubled = piece_set(SHOGI_PAWN);
         v->dropNoDoubledCount = 2;
-        v->dropNoDoubledCountByColor[WHITE] = 2;
-        v->dropNoDoubledCountByColor[BLACK] = 2;
         v->immobilityIllegal = true;
         v->shogiPawnDropMateIllegal = true;
         v->stalemateValue = -VALUE_MATE;
@@ -1500,9 +1490,7 @@ namespace {
         v->captureType = HAND;
         v->doubleStep = false;
         v->castling = false;
-        v->dropNoDoubled = SHOGI_PAWN;
-        v->dropNoDoubledByColor[WHITE] = SHOGI_PAWN;
-        v->dropNoDoubledByColor[BLACK] = SHOGI_PAWN;
+        v->dropNoDoubled = piece_set(SHOGI_PAWN);
         v->immobilityIllegal = true;
         v->shogiPawnDropMateIllegal = false;
         v->stalemateValue = -VALUE_MATE;
