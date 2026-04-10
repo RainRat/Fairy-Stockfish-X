@@ -525,7 +525,9 @@ string UCI::exchange(const Position &pos, Move m) {
 /// UCI::move() converts a Move to a string in coordinate notation (g1f3, a7a8q).
 /// The only special case is castling, where we print in the e1g1 notation in
 /// normal chess mode, and in e1h1 notation in chess960 mode. Internally all
-/// castling moves are always encoded as 'king captures rook'.
+/// castling moves are always encoded as 'king captures rook'. Some fairy
+/// special moves use suffixes: clone moves append 'c', swap moves append 's',
+/// self-destruct moves append 'x', and pulls append ",<pulled-square>".
 
 string UCI::move(const Position& pos, Move m) {
 

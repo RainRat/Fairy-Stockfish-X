@@ -586,7 +586,6 @@ public:
   bool is_clone_move(Move m) const;
   bool is_pull_move(Move m) const;
   bool is_swap_move(Move m) const;
-  bool is_first_move_special(Move m) const;
   Piece captured_piece() const;
   Piece captured_piece(Move m) const;
   const std::string piece_to_partner() const;
@@ -2649,24 +2648,6 @@ inline PieceType Position::first_move_piece_type(PieceType pt) const {
 inline bool Position::first_move_lose_on_check() const {
   assert(var != nullptr);
   return var->firstMoveLoseOnCheck;
-}
-
-inline bool Position::is_first_move_special(Move m) const {
-  if (type_of(m) != SPECIAL || is_gating(m) || from_sq(m) == to_sq(m))
-      return false;
-
-  Piece mover = moved_piece(m);
-  if (mover == NO_PIECE)
-      return false;
-
-  PieceType pt = type_of(mover);
-  PieceType extra = first_move_piece_type(pt);
-  if (extra == NO_PIECE_TYPE)
-      return false;
-
-  Square from = from_sq(m);
-  return (gates(side_to_move()) & from)
-      && ((moves_from(side_to_move(), extra, from) | attacks_from(side_to_move(), extra, from)) & to_sq(m));
 }
 
 inline Bitboard Position::clone_targets_from(Color c, Square from) const {
