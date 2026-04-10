@@ -3065,8 +3065,8 @@ bool Position::legal(Move m) const {
           return !has_color_at(c, bridge1, placedColor) && !has_color_at(c, bridge2, placedColor);
       };
 
-      auto created_weak_link_anchors = [&](Color c, Color placedColor) {
-          std::vector<Square> anchors;
+      auto created_weak_link_anchor_count = [&](Color c, Color placedColor, std::array<Square, 4>& anchors) {
+          int anchorCount = 0;
           static constexpr int dfile[4] = {1, -1, 1, -1};
           static constexpr int drank[4] = {1, 1, -1, -1};
           for (int i = 0; i < 4; ++i)
@@ -3078,13 +3078,14 @@ bool Position::legal(Move m) const {
 
               Square diag = make_square(File(nf), Rank(nr));
               if (weak_link_between(c, placedColor, to, diag))
-                  anchors.push_back(diag);
+                  anchors[anchorCount++] = diag;
           }
-          return anchors;
+          return anchorCount;
       };
 
       auto creates_hypothetical_weak_link = [&](Color c, Color placedColor) {
-          return !created_weak_link_anchors(c, placedColor).empty();
+          std::array<Square, 4> anchors{};
+          return created_weak_link_anchor_count(c, placedColor, anchors) != 0;
       };
 
       auto strong_nonweak_followup_exists = [&](Square anchor) {
@@ -3153,17 +3154,21 @@ bool Position::legal(Move m) const {
           return false;
       };
 
-      std::vector<Square> weakFriendlyAnchors = created_weak_link_anchors(us, us);
-      bool weakFriendly = !weakFriendlyAnchors.empty();
+      std::array<Square, 4> weakFriendlyAnchors{};
+      int weakFriendlyAnchorCount = created_weak_link_anchor_count(us, us, weakFriendlyAnchors);
+      bool weakFriendly = weakFriendlyAnchorCount != 0;
       if (weakFriendly)
       {
           if (var->reciprocalWeakConnectionDrop && !creates_hypothetical_weak_link(~us, ~us))
               return false;
 
           if (var->weakConnectionNobiImpossible)
-              for (Square anchor : weakFriendlyAnchors)
+              for (int idx = 0; idx < weakFriendlyAnchorCount; ++idx)
+              {
+                  Square anchor = weakFriendlyAnchors[idx];
                   if (strong_nonweak_followup_exists(anchor))
                       return false;
+              }
 
           if (var->weakCrosscutDropIllegal)
           {

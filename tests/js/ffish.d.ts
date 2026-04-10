@@ -29,6 +29,10 @@ export interface FairyStockfish {
     setOptionInt(name: string, value: number): void;
     setOptionBool(name: string, value: boolean): void;
     setReadGamePGNLoggingEnabled(enabled: boolean): void;
+    /**
+     * Parse a single PGN game and return a WASM-backed Game object.
+     * Call `game.delete()` after use to release heap memory.
+     */
     readGamePGN(pgn: string): Game;
     variants(): string;
     loadVariantConfig(variantInitContent: string): void;
@@ -44,6 +48,9 @@ export interface Board {
     legalMoves(): string;
     legalMovesSan(): string;
     numberLegalMoves(): number;
+    /**
+     * Push a coordinate move string such as `e2e4`, `a7a8q`, `e2e4c`, or `d4e4s`.
+     */
     push(uciMove: string): boolean;
     pushSan(sanMove: string, notation?: Notation): boolean;
     pop(): boolean;

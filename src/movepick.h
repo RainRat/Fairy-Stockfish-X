@@ -177,10 +177,10 @@ private:
   bool qcheckPotionsDeferred = false;
 #ifdef USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
   std::unique_ptr<ExtMove[]> baseMoveList;
+  std::unique_ptr<ExtMove[]> overflowMoveList;
 #else
   ExtMove moves[MOVE_PICK_OVERFLOW_CAPACITY];
 #endif
-  std::unique_ptr<ExtMove[]> overflowMoveList;
 };
 
 } // namespace Stockfish
