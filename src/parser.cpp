@@ -1749,8 +1749,14 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("nMoveHardLimitRuleValue", v->nMoveHardLimitRuleValue);
     parse_attribute("nFoldRule", v->nFoldRule);
     parse_attribute("nFoldRuleImmediate", v->nFoldRuleImmediate);
-    parse_attribute("nFoldValue", v->nFoldValue);
+    parse_color_setting("nFoldValue", v->nFoldValue);
     parse_attribute("nFoldValueAbsolute", v->nFoldValueAbsolute);
+    if (v->nFoldValueAbsolute) {
+        v->nFoldValue.byColor[WHITE] = v->nFoldValue.global;
+        v->nFoldValue.byColor[BLACK] = -v->nFoldValue.global;
+        v->nFoldValue.byColorSet[WHITE] = true;
+        v->nFoldValue.byColorSet[BLACK] = true;
+    }
     parse_attribute("perpetualCheckIllegal", v->perpetualCheckIllegal);
     parse_attribute("moveRepetitionIllegal", v->moveRepetitionIllegal);
     parse_attribute("samePlayerBoardRepetitionIllegal", v->samePlayerBoardRepetitionIllegal);
@@ -1761,9 +1767,9 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("weakCrosscutDropIllegal", v->weakCrosscutDropIllegal);
     parse_attribute("weakConnectionNobiImpossible", v->weakConnectionNobiImpossible);
     parse_attribute("chasingRule", v->chasingRule);
-    parse_attribute("stalemateValue", v->stalemateValue);
+    parse_color_setting("stalemateValue", v->stalemateValue);
     parse_attribute("stalematePieceCount", v->stalematePieceCount);
-    parse_attribute("checkmateValue", v->checkmateValue);
+    parse_color_setting("checkmateValue", v->checkmateValue);
     parse_color_setting("shogiPawnDropMateIllegal", v->shogiPawnDropMateIllegal);
     parse_attribute("shatarMateRule", v->shatarMateRule);
     parse_attribute("bikjangRule", v->bikjangRule);
@@ -1775,7 +1781,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("antiRoyalCount", v->antiRoyalCount);
     parse_attribute("antiRoyalSelfCaptureOnly", v->antiRoyalSelfCaptureOnly);
     parse_attribute("antiRoyalKingMutuallyImmune", v->antiRoyalKingMutuallyImmune);
-    parse_attribute("extinctionValue", v->extinctionValue);
+    parse_color_setting("extinctionValue", v->extinctionValue);
     parse_attribute("extinctionClaim", v->extinctionClaim);
     parse_attribute("extinctionPseudoRoyal", v->extinctionPseudoRoyal);
     parse_attribute("dupleCheck", v->dupleCheck);

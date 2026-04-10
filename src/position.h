@@ -2204,7 +2204,7 @@ inline Value Position::stalemate_value(int ply) const {
           Square sr = pop_lsb(pseudoRoyals);
           if (  !(blast_on_capture() && (pseudoRoyalsTheirs & blast_pattern(sr)))
               && attackers_to(sr, ~sideToMove))
-              return convert_mate_value(var->checkmateValue, ply);
+              return convert_mate_value(var->checkmateValue.get(sideToMove), ply);
       }
       // Look for duple check
       if (var->dupleCheck)
@@ -2220,20 +2220,20 @@ inline Value Position::stalemate_value(int ply) const {
                   allCheck = false;
           }
           if (allCheck)
-              return convert_mate_value(var->checkmateValue, ply);
+              return convert_mate_value(var->checkmateValue.get(sideToMove), ply);
       }
   }
   if (anti_royal_types())
   {
       if (checked_anti_royals(sideToMove))
-          return convert_mate_value(var->checkmateValue, ply);
+          return convert_mate_value(var->checkmateValue.get(sideToMove), ply);
   }
-  Value result = var->stalemateValue;
+  Value result = var->stalemateValue.get(sideToMove);
   // Is piece count used to determine stalemate result?
   if (var->stalematePieceCount)
   {
       int c = count<ALL_PIECES>(sideToMove) - count<ALL_PIECES>(~sideToMove);
-      result = c == 0 ? VALUE_DRAW : c < 0 ? var->stalemateValue : -var->stalemateValue;
+      result = c == 0 ? VALUE_DRAW : c < 0 ? var->stalemateValue.get(sideToMove) : -var->stalemateValue.get(~sideToMove);
   }
   // Apply material counting
   if (result == VALUE_DRAW && var->materialCounting)
@@ -2264,7 +2264,7 @@ inline Value Position::checkmate_value(int ply) const {
       {
           // Return mate score if there is at least one shak in series of checks
           if (stp->shak)
-              return convert_mate_value(var->checkmateValue, ply);
+              return convert_mate_value(var->checkmateValue.get(sideToMove), ply);
 
           if (stp->pliesFromNull < 2)
               break;
@@ -2275,7 +2275,7 @@ inline Value Position::checkmate_value(int ply) const {
       return VALUE_DRAW;
   }
   // Checkmate using virtual pieces
-  if (two_boards() && var->checkmateValue < VALUE_ZERO)
+  if (two_boards() && var->checkmateValue.get(sideToMove) < VALUE_ZERO)
   {
       Value virtualMaterial = VALUE_ZERO;
       for (PieceSet ps = piece_types(); ps;)
@@ -2288,12 +2288,12 @@ inline Value Position::checkmate_value(int ply) const {
           return -VALUE_VIRTUAL_MATE + virtualMaterial / 20 + ply;
   }
   // Return mate value
-  return convert_mate_value(var->checkmateValue, ply);
+  return convert_mate_value(var->checkmateValue.get(sideToMove), ply);
 }
 
 inline Value Position::extinction_value(int ply) const {
   assert(var != nullptr);
-  return convert_mate_value(var->extinctionValue, ply);
+  return convert_mate_value(var->extinctionValue.get(sideToMove), ply);
 }
 
 inline bool Position::extinction_claim() const {
@@ -2323,7 +2323,7 @@ inline bool Position::extinction_all_piece_types(Color c) const {
 
 inline bool Position::extinction_single_piece() const {
   assert(var != nullptr);
-  return   var->extinctionValue == -VALUE_MATE
+  return   var->extinctionValue.get(sideToMove) == -VALUE_MATE
         && (var->extinctionPieceTypes & ~piece_set(ALL_PIECES));
 }
 

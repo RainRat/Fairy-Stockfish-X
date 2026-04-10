@@ -318,7 +318,7 @@ struct Variant {
   Value nMoveHardLimitRuleValue = VALUE_DRAW;
   int nFoldRule = 3;
   int nFoldRuleImmediate = 0;
-  Value nFoldValue = VALUE_DRAW;
+  ColorSetting<Value> nFoldValue = ColorSetting<Value>(VALUE_DRAW);
   bool nFoldValueAbsolute = false;
   bool perpetualCheckIllegal = false;
   bool moveRepetitionIllegal = false;
@@ -330,13 +330,13 @@ struct Variant {
   bool weakCrosscutDropIllegal = false;
   bool weakConnectionNobiImpossible = false;
   ChasingRule chasingRule = NO_CHASING;
-  Value stalemateValue = VALUE_DRAW;
+  ColorSetting<Value> stalemateValue = ColorSetting<Value>(VALUE_DRAW);
   bool stalematePieceCount = false; // multiply stalemate value by sign(count(~stm) - count(stm))
-  Value checkmateValue = -VALUE_MATE;
+  ColorSetting<Value> checkmateValue = ColorSetting<Value>(-VALUE_MATE);
   ColorSetting<bool> shogiPawnDropMateIllegal = ColorSetting<bool>(false);
   bool shatarMateRule = false;
   bool bikjangRule = false;
-  Value extinctionValue = VALUE_NONE;
+  ColorSetting<Value> extinctionValue = ColorSetting<Value>(VALUE_NONE);
   bool extinctionClaim = false;
   // Deprecated legacy switch kept for compatibility with existing configs.
   bool extinctionPseudoRoyal = false;
