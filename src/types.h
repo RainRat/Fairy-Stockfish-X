@@ -1207,6 +1207,13 @@ inline bool is_self_destruct(Move m) {
       && gating_type(m) != NO_PIECE_TYPE;
 }
 
+inline bool is_first_move_special(Move m) {
+  return type_of(m) == SPECIAL
+      && from_sq(m) != to_sq(m)
+      && !is_gating(m)
+      && gating_type(m) != NO_PIECE_TYPE;
+}
+
 constexpr Move make_move(Square from, Square to) {
   return Move((static_cast<uint64_t>(from) << SQUARE_BITS) + static_cast<uint64_t>(to));
 }

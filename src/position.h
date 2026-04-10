@@ -2616,7 +2616,7 @@ inline Piece Position::moved_piece(Move m) const {
 }
 
 inline bool Position::is_clone_move(Move m) const {
-  if (type_of(m) != SPECIAL || is_gating(m) || from_sq(m) == to_sq(m))
+  if (type_of(m) != SPECIAL || is_gating(m) || from_sq(m) == to_sq(m) || is_first_move_special(m))
       return false;
 
   return can_clone(moved_piece(m));

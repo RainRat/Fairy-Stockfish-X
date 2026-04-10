@@ -1040,7 +1040,7 @@ namespace {
                     Square from = pop_lsb(froms);
                     Bitboard b = (pos.moves_from(Us, extraPt, from) | pos.attacks_from(Us, extraPt, from)) & target & ~pos.pieces(Us);
                     while (b)
-                        *moveList++ = make<SPECIAL>(from, pop_lsb(b));
+                        *moveList++ = make<SPECIAL>(from, pop_lsb(b), extraPt);
                 }
             }
         }

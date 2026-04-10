@@ -109,6 +109,7 @@ namespace {
   };
 
   constexpr int MAX_PUSH_SNAPSHOT = 32;
+  static_assert(MAX_PUSH_SNAPSHOT <= 32, "push snapshot promotion bitmask must fit in uint32_t");
 
   inline bool advance_square(const Position& pos, Square from, int stepF, int stepR, Square& out) {
     int f = int(file_of(from)) + stepF;
@@ -4014,7 +4015,7 @@ bool Position::pseudo_legal(const Move m) const {
       return false;
 
   // Is not a promotion, so promotion piece must be empty
-  if (promotion_type(m) != NO_PIECE_TYPE && !is_self_destruct(m))
+  if (promotion_type(m) != NO_PIECE_TYPE && !is_self_destruct(m) && !is_first_move_special(m))
       return false;
 
   // If the 'from' square is not occupied by a piece belonging to the side to
