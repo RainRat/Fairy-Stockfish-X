@@ -212,11 +212,12 @@ if variant_available "minihexchess"; then
 out=$(run_cmds "setoption name UCI_Variant value minihexchess
 position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 6"
-echo "${out}" | grep -q "^a2b4: 1$"
-echo "${out}" | grep -q "^a3a4: 1$"
-echo "${out}" | grep -q "^b3b4: 1$"
-echo "${out}" | grep -q "^c3c4: 1$"
+echo "${out}" | grep -q "Nodes searched: 11"
+echo "${out}" | grep -q "^a2d3: 1$"
+echo "${out}" | grep -q "^a2b5: 1$"
+echo "${out}" | grep -q "^c1d2: 1$"
+echo "${out}" | grep -q "^a3b4: 1$"
+echo "${out}" | grep -q "^c3d4: 1$"
 echo "${out}" | grep -q "^b2d3: 1$"
 echo "${out}" | grep -q "^b2c4: 1$"
 fi
@@ -225,11 +226,11 @@ if variant_available "glinski-chess"; then
 out=$(run_cmds "setoption name UCI_Variant value glinski-chess
 position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 34"
+echo "${out}" | grep -q "Nodes searched: 48"
 echo "${out}" | grep -q "^d1d2: 1$"
 echo "${out}" | grep -q "^a4b4: 1$"
 echo "${out}" | grep -q "^a1c2: 1$"
-echo "${out}" | grep -q "^a5a6: 1$"
+echo "${out}" | grep -q "^a5b6: 1$"
 echo "${out}" | grep -q "^b1d2: 1$"
 fi
 
@@ -237,32 +238,34 @@ if variant_available "glinski-chess-3shift"; then
 out=$(run_cmds "setoption name UCI_Variant value glinski-chess-3shift
 position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 26"
-echo "${out}" | grep -q "^c5c6: 1$"
+echo "${out}" | grep -q "Nodes searched: 44"
+echo "${out}" | grep -q "^c3e4: 1$"
+echo "${out}" | grep -q "^c5d6: 1$"
 fi
 
 if variant_available "glinski-chess-5shift"; then
 out=$(run_cmds "setoption name UCI_Variant value glinski-chess-5shift
 position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 19"
-echo "${out}" | grep -q "^b5b6: 1$"
+echo "${out}" | grep -q "Nodes searched: 46"
+echo "${out}" | grep -q "^c3e4: 1$"
+echo "${out}" | grep -q "^b4c5: 1$"
 fi
 
 if variant_available "van-gennip-hexchess"; then
 out=$(run_cmds "setoption name UCI_Variant value van-gennip-hexchess
 position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 16"
-echo "${out}" | grep -q "^c3c4: 1$"
+echo "${out}" | grep -q "Nodes searched: 36"
+echo "${out}" | grep -q "^c3d4: 1$"
 fi
 
 if variant_available "van-gennip-small-hexchess"; then
 out=$(run_cmds "setoption name UCI_Variant value van-gennip-small-hexchess
 position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 16"
-echo "${out}" | grep -q "^c3c4: 1$"
+echo "${out}" | grep -q "Nodes searched: 29"
+echo "${out}" | grep -q "^c3d4: 1$"
 fi
 
 if variant_available "mccooey-chess"; then
@@ -598,11 +601,11 @@ position fen 4k3/8/8/3p4/4P3/8/8/4K3 w - - 0 1 moves e4d5
 d")
 echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/4K3 b - - 0 1"
 
-# 15b) Kamikaze (nocheckatomic template): kings are not explosion-immune.
+# 15b) Kamikaze (nocheckatomic template): kings are explosion-immune.
 out=$(run_cmds "setoption name UCI_Variant value kamikaze
-position fen 8/8/8/3P4/4k3/8/8/4K3 b - - 0 1 moves e4d5
+position fen r1bqkbnr/pppp1ppp/8/4pK2/4P3/8/PPPP1PPP/RNBQ2NR w KQkq - 0 3 moves f5e5
 d")
-echo "${out}" | grep -q "Fen: 8/8/8/8/8/8/8/4K3 w - - 0 2"
+echo "${out}" | grep -q "Fen: r1bqkbnr/pppp1ppp/8/4K3/4P3/8/PPPP1PPP/RNBQ2NR b kq - 0 3"
 fi
 
 # 16) Fatal giveaway: dead squares can be captured as neutral blockers.

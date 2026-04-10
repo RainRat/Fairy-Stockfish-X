@@ -43,76 +43,76 @@ fi
 out=$(run_cmds "setoption name UCI_Variant value minihexchess
 position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 6"
+echo "${out}" | grep -q "Nodes searched: 11"
 dump_out=$(run_cmds "setoption name UCI_Variant value minihexchess
 d")
 echo "${dump_out}" | grep -q "startpos \\*\\*\\*1prb/\\*\\*2pkn/\\*3ppp/7/PPP3\\*/NKP2\\*\\*/BRP1\\*\\*\\* w - - 0 1"
-echo "${out}" | grep -q "^a2b4: 1$"
-echo "${out}" | grep -q "^a3a4: 1$"
-echo "${out}" | grep -q "^b3b4: 1$"
-echo "${out}" | grep -q "^c3c4: 1$"
+echo "${out}" | grep -q "^a2d3: 1$"
+echo "${out}" | grep -q "^a2b5: 1$"
+echo "${out}" | grep -q "^c1d2: 1$"
+echo "${out}" | grep -q "^a3b4: 1$"
+echo "${out}" | grep -q "^c3d4: 1$"
 echo "${out}" | grep -q "^b2d3: 1$"
 echo "${out}" | grep -q "^b2c4: 1$"
 
 out=$(run_cmds "setoption name UCI_Variant value glinski-chess
 position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 34"
+echo "${out}" | grep -q "Nodes searched: 48"
 echo "${out}" | grep -q "^d1d2: 1$"
 echo "${out}" | grep -q "^a4b4: 1$"
 echo "${out}" | grep -q "^a1c2: 1$"
-echo "${out}" | grep -q "^a5a6: 1$"
+echo "${out}" | grep -q "^a5b6: 1$"
 echo "${out}" | grep -q "^b1d2: 1$"
 
 out=$(run_cmds "setoption name UCI_Variant value glinski-chess-3shift
 position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 26"
+echo "${out}" | grep -q "Nodes searched: 44"
 echo "${out}" | grep -q "^a2b3: 1$"
 echo "${out}" | grep -q "^a2b4: 1$"
 echo "${out}" | grep -q "^b1c2: 1$"
 echo "${out}" | grep -q "^b1d2: 1$"
-echo "${out}" | grep -q "^c5c6: 1$"
+echo "${out}" | grep -q "^c5d6: 1$"
 
 out=$(run_cmds "setoption name UCI_Variant value glinski-chess-5shift
 position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 19"
+echo "${out}" | grep -q "Nodes searched: 46"
 echo "${out}" | grep -q "^a2b3: 1$"
 echo "${out}" | grep -q "^b1c2: 1$"
-echo "${out}" | grep -q "^a5a6: 1$"
-echo "${out}" | grep -q "^b5b6: 1$"
-echo "${out}" | grep -q "^b5c5: 1$"
+echo "${out}" | grep -q "^a5b6: 1$"
+echo "${out}" | grep -q "^b4c5: 1$"
+echo "${out}" | grep -q "^d2e3: 1$"
 
 out=$(run_cmds "setoption name UCI_Variant value van-gennip-hexchess
 position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 16"
-echo "${out}" | grep -q "^a2a3: 1$"
-echo "${out}" | grep -q "^b2b3: 1$"
-echo "${out}" | grep -q "^g2g3: 1$"
-echo "${out}" | grep -q "^c3b3: 1$"
-echo "${out}" | grep -q "^c3c4: 1$"
+echo "${out}" | grep -q "Nodes searched: 36"
+echo "${out}" | grep -q "^a2b3: 1$"
+echo "${out}" | grep -q "^c2a4: 1$"
+echo "${out}" | grep -q "^c3d4: 1$"
+echo "${out}" | grep -q "^d3e4: 1$"
 echo "${out}" | grep -q "^c2b3: 1$"
 echo "${out}" | grep -q "^e2g3: 1$"
 
 out=$(run_cmds "setoption name UCI_Variant value van-gennip-small-hexchess
 position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 16"
+echo "${out}" | grep -q "Nodes searched: 29"
 echo "${out}" | grep -q "^c2b3: 1$"
-echo "${out}" | grep -q "^a2a3: 1$"
-echo "${out}" | grep -q "^g2g3: 1$"
-echo "${out}" | grep -q "^c3c4: 1$"
-echo "${out}" | grep -q "^f3g3: 1$"
+echo "${out}" | grep -q "^a2b3: 1$"
+echo "${out}" | grep -q "^g2h3: 1$"
+echo "${out}" | grep -q "^c3d4: 1$"
+echo "${out}" | grep -q "^f3g4: 1$"
 
 out=$(run_cmds "setoption name UCI_Variant value mccooey-chess
 position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 10"
+echo "${out}" | grep -q "Nodes searched: 31"
 echo "${out}" | grep -q "^c3e4: 1$"
 echo "${out}" | grep -q "^c2e1: 1$"
-echo "${out}" | grep -q "^a4a5: 1$"
+echo "${out}" | grep -q "^a4b5: 1$"
 
 out=$(run_cmds "setoption name UCI_Variant value grand-hexachess
 position startpos

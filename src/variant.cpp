@@ -1932,6 +1932,20 @@ namespace {
         v->wallingRule = ARROW;
         return v;
     }
+    // Cowboys
+    // https://www.zillions-of-games.com/cgi-bin/zilligames/submissions.cgi?do=show;id=237
+    Variant* cowboys_variant() {
+        Variant* v = chess_variant_base()->init();
+        v->pieceToCharTable = ".N.....................n....................";
+        v->maxRank = RANK_7;
+        v->maxFile = FILE_G;
+        v->reset_pieces();
+        v->add_piece(CUSTOM_PIECE_1, 'n', "mN");
+        v->startFen = "2n1n2/7/n5n/7/N5N/7/2N1N2 w - - 0 1";
+        v->stalemateValue = -VALUE_MATE;
+        v->wallingRule = ARROW;
+        return v;
+    }
 #endif
     // Xiangqi (Chinese chess)
     // https://en.wikipedia.org/wiki/Xiangqi
@@ -2179,6 +2193,7 @@ void VariantMap::init() {
     add("clobber10", clobber10_variant());
     add("flipello10", flipello10_variant());
 #ifdef ALLVARS
+    add("cowboys", cowboys_variant());
     add("amazons", amazons_variant());
 #endif
     add("xiangqi", xiangqi_variant());
