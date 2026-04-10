@@ -262,11 +262,16 @@ castlingQueensideFile = c
 castlingRookKingsideFile = j
 castlingRookQueensideFile = b
 startFen = 10/10/10/10/10/10/10/1R3K3N w JQ - 0 1
+
+[castdiag-single-rook:chess]
+castling = true
+startFen = 8/8/8/8/8/8/8/R3K3 w KQ - 0 1
 """
 )
 
 pyffish.validate_fen("10/10/10/10/10/10/10/1R3K2R1 w JQ - 0 1", "castdiag-empty", False)
 pyffish.validate_fen("10/10/10/10/10/10/10/1R3K3N w JQ - 0 1", "castdiag-wrongpiece", False)
+pyffish.validate_fen("8/8/8/8/8/8/8/R3K3 w KQ - 0 1", "castdiag-single-rook", False)
 PY
 )
 
@@ -276,6 +281,11 @@ if ! echo "${castling_diag_output}" | grep -q "No castling rook on file J for fl
 fi
 
 if ! echo "${castling_diag_output}" | grep -q "Flag J refers to file J, but that square does not contain a WHITE castling rook."; then
+  echo "${castling_diag_output}"
+  exit 1
+fi
+
+if ! echo "${castling_diag_output}" | grep -q "WHITE side has only one rook start square, so both standard castling rights cannot be valid."; then
   echo "${castling_diag_output}"
   exit 1
 fi
