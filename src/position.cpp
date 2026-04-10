@@ -5144,7 +5144,6 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
 
           if (Eval::useNNUE)
           {
-              dp.dirty_num = 1;
               dp.piece[0] = pc;
               dp.from[0] = SQ_NONE;
               dp.to[0] = to;
