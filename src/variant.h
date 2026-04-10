@@ -225,8 +225,7 @@ struct Variant {
   bool blastOrthogonals = true;
   bool mustDrop = false;
   bool mustDropByColor[COLOR_NB] = {false, false};
-  PieceType mustDropType = ALL_PIECES;
-  PieceType mustDropTypeByColor[COLOR_NB] = {ALL_PIECES, ALL_PIECES};
+  ColorSetting<PieceType> mustDropType = ColorSetting<PieceType>(ALL_PIECES);
   bool dropKingLast = false;
   bool openingSelfRemoval = false;
   bool openingSelfRemovalAdjacentToLast = false;

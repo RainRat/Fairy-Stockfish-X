@@ -1616,9 +1616,7 @@ inline bool Position::must_drop() const {
 
 inline PieceType Position::must_drop_type() const {
   assert(var != nullptr);
-  if (var->mustDropTypeByColor[WHITE] != ALL_PIECES || var->mustDropTypeByColor[BLACK] != ALL_PIECES)
-      return var->mustDropTypeByColor[side_to_move()];
-  return var->mustDropType;
+  return var->mustDropType.get(side_to_move());
 }
 
 inline bool Position::opening_self_removal() const {
@@ -2101,10 +2099,7 @@ inline bool Position::pass(Color c) const {
 inline bool Position::has_setup_drop(Color c) const {
   assert(var != nullptr);
 
-  PieceType requiredDropType =
-      (var->mustDropTypeByColor[WHITE] != ALL_PIECES || var->mustDropTypeByColor[BLACK] != ALL_PIECES)
-          ? var->mustDropTypeByColor[c]
-          : var->mustDropType;
+  PieceType requiredDropType = var->mustDropType.get(c);
 
   auto canDropNow = [&](PieceType pt) {
       return can_drop(c, pt)

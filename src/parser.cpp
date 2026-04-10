@@ -1583,9 +1583,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("mustDrop", v->mustDrop);
     parse_attribute("mustDropWhite", v->mustDropByColor[WHITE]);
     parse_attribute("mustDropBlack", v->mustDropByColor[BLACK]);
-    parse_attribute("mustDropType", v->mustDropType, v);
-    parse_attribute("mustDropTypeWhite", v->mustDropTypeByColor[WHITE], v);
-    parse_attribute("mustDropTypeBlack", v->mustDropTypeByColor[BLACK], v);
+    parse_color_setting_piece("mustDropType", v->mustDropType);
     parse_attribute("openingSwapDrop", v->openingSwapDrop);
     parse_attribute("openingSwapMirrorMainDiagonal", v->openingSwapMirrorMainDiagonal);
     parse_attribute("dropKingLast", v->dropKingLast);
