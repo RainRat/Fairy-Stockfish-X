@@ -1308,42 +1308,46 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
             v->isPriorityDrop = parsedPriorityDrops;
     }
     parse_attribute("piecePromotionOnCapture", v->piecePromotionOnCapture);
-    if (config.find("mandatoryPawnPromotion") != config.end())
-    {
-        parse_attribute("mandatoryPawnPromotion", v->mandatoryPawnPromotion);
-        v->mandatoryPawnPromotionByColor[WHITE] = v->mandatoryPawnPromotion;
-        v->mandatoryPawnPromotionByColor[BLACK] = v->mandatoryPawnPromotion;
-        v->mandatoryPawnPromotionByColorSet[WHITE] = true;
-        v->mandatoryPawnPromotionByColorSet[BLACK] = true;
-    }
-    if (config.find("mandatoryPawnPromotionWhite") != config.end())
-    {
-        parse_attribute("mandatoryPawnPromotionWhite", v->mandatoryPawnPromotionByColor[WHITE]);
-        v->mandatoryPawnPromotionByColorSet[WHITE] = true;
-    }
-    if (config.find("mandatoryPawnPromotionBlack") != config.end())
-    {
-        parse_attribute("mandatoryPawnPromotionBlack", v->mandatoryPawnPromotionByColor[BLACK]);
-        v->mandatoryPawnPromotionByColorSet[BLACK] = true;
-    }
-    if (config.find("mandatoryPiecePromotion") != config.end())
-    {
-        parse_attribute("mandatoryPiecePromotion", v->mandatoryPiecePromotion);
-        v->mandatoryPiecePromotionByColor[WHITE] = v->mandatoryPiecePromotion;
-        v->mandatoryPiecePromotionByColor[BLACK] = v->mandatoryPiecePromotion;
-        v->mandatoryPiecePromotionByColorSet[WHITE] = true;
-        v->mandatoryPiecePromotionByColorSet[BLACK] = true;
-    }
-    if (config.find("mandatoryPiecePromotionWhite") != config.end())
-    {
-        parse_attribute("mandatoryPiecePromotionWhite", v->mandatoryPiecePromotionByColor[WHITE]);
-        v->mandatoryPiecePromotionByColorSet[WHITE] = true;
-    }
-    if (config.find("mandatoryPiecePromotionBlack") != config.end())
-    {
-        parse_attribute("mandatoryPiecePromotionBlack", v->mandatoryPiecePromotionByColor[BLACK]);
-        v->mandatoryPiecePromotionByColorSet[BLACK] = true;
-    }
+    auto parse_color_setting = [&](const std::string& key, auto& setting) {
+        if (config.find(key) != config.end())
+        {
+            parse_attribute(key, setting.global);
+            setting.set_global(setting.global);
+        }
+        if (config.find(key + "White") != config.end())
+        {
+            auto parsed = setting.byColor[WHITE];
+            parse_attribute(key + "White", parsed);
+            setting.set_color(WHITE, parsed);
+        }
+        if (config.find(key + "Black") != config.end())
+        {
+            auto parsed = setting.byColor[BLACK];
+            parse_attribute(key + "Black", parsed);
+            setting.set_color(BLACK, parsed);
+        }
+    };
+    auto parse_color_setting_piece = [&](const std::string& key, auto& setting) {
+        if (config.find(key) != config.end())
+        {
+            parse_attribute(key, setting.global, v);
+            setting.set_global(setting.global);
+        }
+        if (config.find(key + "White") != config.end())
+        {
+            auto parsed = setting.byColor[WHITE];
+            parse_attribute(key + "White", parsed, v);
+            setting.set_color(WHITE, parsed);
+        }
+        if (config.find(key + "Black") != config.end())
+        {
+            auto parsed = setting.byColor[BLACK];
+            parse_attribute(key + "Black", parsed, v);
+            setting.set_color(BLACK, parsed);
+        }
+    };
+    parse_color_setting("mandatoryPawnPromotion", v->mandatoryPawnPromotion);
+    parse_color_setting("mandatoryPiecePromotion", v->mandatoryPiecePromotion);
     parse_attribute("pieceDemotion", v->pieceDemotion);
     parse_attribute("blastOnCapture", v->blastOnCapture);
     parse_attribute("blastOnMove", v->blastOnMove);
@@ -1460,42 +1464,8 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("checking", v->checking);
     parse_attribute("allowChecks", v->allowChecks);
     parse_attribute("royalPieceNoThroughCheck", v->royalPieceNoThroughCheck);
-    if (config.find("dropChecks") != config.end())
-    {
-        parse_attribute("dropChecks", v->dropChecks);
-        v->dropChecksByColor[WHITE] = v->dropChecks;
-        v->dropChecksByColor[BLACK] = v->dropChecks;
-        v->dropChecksByColorSet[WHITE] = true;
-        v->dropChecksByColorSet[BLACK] = true;
-    }
-    if (config.find("dropChecksWhite") != config.end())
-    {
-        parse_attribute("dropChecksWhite", v->dropChecksByColor[WHITE]);
-        v->dropChecksByColorSet[WHITE] = true;
-    }
-    if (config.find("dropChecksBlack") != config.end())
-    {
-        parse_attribute("dropChecksBlack", v->dropChecksByColor[BLACK]);
-        v->dropChecksByColorSet[BLACK] = true;
-    }
-    if (config.find("dropMates") != config.end())
-    {
-        parse_attribute("dropMates", v->dropMates);
-        v->dropMatesByColor[WHITE] = v->dropMates;
-        v->dropMatesByColor[BLACK] = v->dropMates;
-        v->dropMatesByColorSet[WHITE] = true;
-        v->dropMatesByColorSet[BLACK] = true;
-    }
-    if (config.find("dropMatesWhite") != config.end())
-    {
-        parse_attribute("dropMatesWhite", v->dropMatesByColor[WHITE]);
-        v->dropMatesByColorSet[WHITE] = true;
-    }
-    if (config.find("dropMatesBlack") != config.end())
-    {
-        parse_attribute("dropMatesBlack", v->dropMatesByColor[BLACK]);
-        v->dropMatesByColorSet[BLACK] = true;
-    }
+    parse_color_setting("dropChecks", v->dropChecks);
+    parse_color_setting("dropMates", v->dropMates);
     parse_attribute("mustCapture", v->mustCapture);
     parse_attribute("mustCaptureEnPassant", v->mustCaptureEnPassant);
     parse_attribute("mustCaptureWhite", v->mustCaptureByColor[WHITE]);
@@ -1604,44 +1574,8 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     }
     parse_attribute("changingColorTrigger", v->changingColorTrigger);
     parse_attribute("changingColorPieceTypes", v->changingColorPieceTypes, v);
-    if (config.find("selfCapture") != config.end())
-    {
-        parse_attribute("selfCapture", v->selfCapture);
-        v->selfCaptureByColor[WHITE] = v->selfCapture;
-        v->selfCaptureByColor[BLACK] = v->selfCapture;
-        v->selfCaptureByColorSet[WHITE] = true;
-        v->selfCaptureByColorSet[BLACK] = true;
-    }
-    v->selfCaptureTypesByColor[WHITE] = v->selfCaptureTypes;
-    v->selfCaptureTypesByColor[BLACK] = v->selfCaptureTypes;
-    if (config.find("selfCaptureTypes") != config.end())
-    {
-        parse_attribute("selfCaptureTypes", v->selfCaptureTypes, v);
-        v->selfCaptureTypesByColor[WHITE] = v->selfCaptureTypes;
-        v->selfCaptureTypesByColor[BLACK] = v->selfCaptureTypes;
-        v->selfCaptureTypesByColorSet[WHITE] = true;
-        v->selfCaptureTypesByColorSet[BLACK] = true;
-    }
-    if (config.find("selfCaptureWhite") != config.end())
-    {
-        parse_attribute("selfCaptureWhite", v->selfCaptureByColor[WHITE]);
-        v->selfCaptureByColorSet[WHITE] = true;
-    }
-    if (config.find("selfCaptureBlack") != config.end())
-    {
-        parse_attribute("selfCaptureBlack", v->selfCaptureByColor[BLACK]);
-        v->selfCaptureByColorSet[BLACK] = true;
-    }
-    if (config.find("selfCaptureTypesWhite") != config.end())
-    {
-        parse_attribute("selfCaptureTypesWhite", v->selfCaptureTypesByColor[WHITE], v);
-        v->selfCaptureTypesByColorSet[WHITE] = true;
-    }
-    if (config.find("selfCaptureTypesBlack") != config.end())
-    {
-        parse_attribute("selfCaptureTypesBlack", v->selfCaptureTypesByColor[BLACK], v);
-        v->selfCaptureTypesByColorSet[BLACK] = true;
-    }
+    parse_color_setting("selfCapture", v->selfCapture);
+    parse_color_setting_piece("selfCaptureTypes", v->selfCaptureTypes);
     parse_attribute("blastOrthogonals", v->blastOrthogonals);
     parse_attribute("blastOnSameTypeCapture", v->blastOnSameTypeCapture);
     parse_attribute("captureMorph", v->captureMorph);
@@ -1830,24 +1764,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("stalemateValue", v->stalemateValue);
     parse_attribute("stalematePieceCount", v->stalematePieceCount);
     parse_attribute("checkmateValue", v->checkmateValue);
-    if (config.find("shogiPawnDropMateIllegal") != config.end())
-    {
-        parse_attribute("shogiPawnDropMateIllegal", v->shogiPawnDropMateIllegal);
-        v->shogiPawnDropMateIllegalByColor[WHITE] = v->shogiPawnDropMateIllegal;
-        v->shogiPawnDropMateIllegalByColor[BLACK] = v->shogiPawnDropMateIllegal;
-        v->shogiPawnDropMateIllegalByColorSet[WHITE] = true;
-        v->shogiPawnDropMateIllegalByColorSet[BLACK] = true;
-    }
-    if (config.find("shogiPawnDropMateIllegalWhite") != config.end())
-    {
-        parse_attribute("shogiPawnDropMateIllegalWhite", v->shogiPawnDropMateIllegalByColor[WHITE]);
-        v->shogiPawnDropMateIllegalByColorSet[WHITE] = true;
-    }
-    if (config.find("shogiPawnDropMateIllegalBlack") != config.end())
-    {
-        parse_attribute("shogiPawnDropMateIllegalBlack", v->shogiPawnDropMateIllegalByColor[BLACK]);
-        v->shogiPawnDropMateIllegalByColorSet[BLACK] = true;
-    }
+    parse_color_setting("shogiPawnDropMateIllegal", v->shogiPawnDropMateIllegal);
     parse_attribute("shatarMateRule", v->shatarMateRule);
     parse_attribute("bikjangRule", v->bikjangRule);
     parse_attribute("pseudoRoyalTypes", v->pseudoRoyalTypes, v);
@@ -1863,59 +1780,11 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("extinctionPseudoRoyal", v->extinctionPseudoRoyal);
     parse_attribute("dupleCheck", v->dupleCheck);
     // extinction piece types
-    parse_attribute("extinctionPieceTypes", v->extinctionPieceTypes, v);
     parse_attribute("extinctionMustAppear", v->extinctionMustAppear, v);
-    parse_attribute("extinctionAllPieceTypes", v->extinctionAllPieceTypes);
-    parse_attribute("extinctionPieceCount", v->extinctionPieceCount);
-    parse_attribute("extinctionOpponentPieceCount", v->extinctionOpponentPieceCount);
-    v->extinctionPieceTypesByColor[WHITE] = v->extinctionPieceTypes;
-    v->extinctionPieceTypesByColor[BLACK] = v->extinctionPieceTypes;
-    v->extinctionAllPieceTypesByColor[WHITE] = v->extinctionAllPieceTypes;
-    v->extinctionAllPieceTypesByColor[BLACK] = v->extinctionAllPieceTypes;
-    v->extinctionPieceCountByColor[WHITE] = v->extinctionPieceCount;
-    v->extinctionPieceCountByColor[BLACK] = v->extinctionPieceCount;
-    v->extinctionOpponentPieceCountByColor[WHITE] = v->extinctionOpponentPieceCount;
-    v->extinctionOpponentPieceCountByColor[BLACK] = v->extinctionOpponentPieceCount;
-    if (config.find("extinctionPieceTypesWhite") != config.end())
-    {
-        parse_attribute("extinctionPieceTypesWhite", v->extinctionPieceTypesByColor[WHITE], v);
-        v->extinctionPieceTypesByColorSet[WHITE] = true;
-    }
-    if (config.find("extinctionPieceTypesBlack") != config.end())
-    {
-        parse_attribute("extinctionPieceTypesBlack", v->extinctionPieceTypesByColor[BLACK], v);
-        v->extinctionPieceTypesByColorSet[BLACK] = true;
-    }
-    if (config.find("extinctionAllPieceTypesWhite") != config.end())
-    {
-        parse_attribute("extinctionAllPieceTypesWhite", v->extinctionAllPieceTypesByColor[WHITE]);
-        v->extinctionAllPieceTypesByColorSet[WHITE] = true;
-    }
-    if (config.find("extinctionAllPieceTypesBlack") != config.end())
-    {
-        parse_attribute("extinctionAllPieceTypesBlack", v->extinctionAllPieceTypesByColor[BLACK]);
-        v->extinctionAllPieceTypesByColorSet[BLACK] = true;
-    }
-    if (config.find("extinctionPieceCountWhite") != config.end())
-    {
-        parse_attribute("extinctionPieceCountWhite", v->extinctionPieceCountByColor[WHITE]);
-        v->extinctionPieceCountByColorSet[WHITE] = true;
-    }
-    if (config.find("extinctionPieceCountBlack") != config.end())
-    {
-        parse_attribute("extinctionPieceCountBlack", v->extinctionPieceCountByColor[BLACK]);
-        v->extinctionPieceCountByColorSet[BLACK] = true;
-    }
-    if (config.find("extinctionOpponentPieceCountWhite") != config.end())
-    {
-        parse_attribute("extinctionOpponentPieceCountWhite", v->extinctionOpponentPieceCountByColor[WHITE]);
-        v->extinctionOpponentPieceCountByColorSet[WHITE] = true;
-    }
-    if (config.find("extinctionOpponentPieceCountBlack") != config.end())
-    {
-        parse_attribute("extinctionOpponentPieceCountBlack", v->extinctionOpponentPieceCountByColor[BLACK]);
-        v->extinctionOpponentPieceCountByColorSet[BLACK] = true;
-    }
+    parse_color_setting_piece("extinctionPieceTypes", v->extinctionPieceTypes);
+    parse_color_setting("extinctionAllPieceTypes", v->extinctionAllPieceTypes);
+    parse_color_setting("extinctionPieceCount", v->extinctionPieceCount);
+    parse_color_setting("extinctionOpponentPieceCount", v->extinctionOpponentPieceCount);
 
     // Backward compatibility for legacy extinctionPseudoRoyal configs.
     if (v->extinctionPseudoRoyal && !v->pseudoRoyalTypes)
@@ -2109,10 +1978,10 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
             || v->captureType != MOVE_OUT
             || v->selfCapture
             || v->selfCaptureTypes != NO_PIECE_SET
-            || v->selfCaptureByColor[WHITE]
-            || v->selfCaptureByColor[BLACK]
-            || v->selfCaptureTypesByColor[WHITE] != NO_PIECE_SET
-            || v->selfCaptureTypesByColor[BLACK] != NO_PIECE_SET
+            || v->selfCapture.get(WHITE)
+            || v->selfCapture.get(BLACK)
+            || v->selfCaptureTypes.get(WHITE) != NO_PIECE_SET
+            || v->selfCaptureTypes.get(BLACK) != NO_PIECE_SET
             || v->captureDrops
             || v->symmetricDropTypes
             || v->twoBoards

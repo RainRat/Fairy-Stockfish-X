@@ -8,7 +8,8 @@ error() {
 }
 trap 'error ${LINENO}' ERR
 
-ENGINE=${1:-./stockfish}
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+ENGINE=${1:-${SCRIPT_DIR}/../src/stockfish}
 
 tmp_ini=$(mktemp)
 trap 'rm -f "${tmp_ini}"' EXIT
@@ -269,11 +270,29 @@ startFen = 8/8/8/8/8/8/8/R3K3 w KQ - 0 1
 """
 )
 
-pyffish.validate_fen("10/10/10/10/10/10/10/1R3K2R1 w JQ - 0 1", "castdiag-empty", False)
-pyffish.validate_fen("10/10/10/10/10/10/10/1R3K3N w JQ - 0 1", "castdiag-wrongpiece", False)
-pyffish.validate_fen("8/8/8/8/8/8/8/R3K3 w KQ - 0 1", "castdiag-single-rook", False)
+for fen, variant in [
+    ("10/10/10/10/10/10/10/1R3K2R1 w JQ - 0 1", "castdiag-empty"),
+    ("10/10/10/10/10/10/10/1R3K3N w JQ - 0 1", "castdiag-wrongpiece"),
+    ("8/8/8/8/8/8/8/R3K3 w KQ - 0 1", "castdiag-single-rook"),
+]:
+    print(f"validate_fen {variant} {pyffish.validate_fen(fen, variant, False)}")
 PY
 )
+
+if ! echo "${castling_diag_output}" | grep -q "validate_fen castdiag-empty -5"; then
+  echo "${castling_diag_output}"
+  exit 1
+fi
+
+if ! echo "${castling_diag_output}" | grep -q "validate_fen castdiag-wrongpiece -5"; then
+  echo "${castling_diag_output}"
+  exit 1
+fi
+
+if ! echo "${castling_diag_output}" | grep -q "validate_fen castdiag-single-rook -5"; then
+  echo "${castling_diag_output}"
+  exit 1
+fi
 
 if ! echo "${castling_diag_output}" | grep -q "No castling rook on file J for flag J."; then
   echo "${castling_diag_output}"
@@ -285,7 +304,7 @@ if ! echo "${castling_diag_output}" | grep -q "Flag J refers to file J, but that
   exit 1
 fi
 
-if ! echo "${castling_diag_output}" | grep -q "WHITE side has only one rook start square, so both standard castling rights cannot be valid."; then
+if ! echo "${castling_diag_output}" | grep -q "No castling rook for flag K on castling rank 1."; then
   echo "${castling_diag_output}"
   exit 1
 fi
