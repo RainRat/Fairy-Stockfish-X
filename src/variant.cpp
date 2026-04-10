@@ -925,9 +925,7 @@ namespace {
         v->promotedPieceType[SILVER]     = GOLD;
         v->promotedPieceType[BISHOP]     = DRAGON_HORSE;
         v->promotedPieceType[ROOK]       = DRAGON;
-        v->dropNoDoubled = SHOGI_PAWN;
-        v->dropNoDoubledByColor[WHITE] = SHOGI_PAWN;
-        v->dropNoDoubledByColor[BLACK] = SHOGI_PAWN;
+        v->dropNoDoubled = piece_set(SHOGI_PAWN);
         v->immobilityIllegal = true;
         v->shogiPawnDropMateIllegal = true;
         v->stalemateValue = -VALUE_MATE;
@@ -970,9 +968,7 @@ namespace {
         v->promotedPieceType[ROOK]         = NO_PIECE_TYPE;
         v->immobilityIllegal = false;
         v->shogiPawnDropMateIllegal = false;
-        v->dropNoDoubled = NO_PIECE_TYPE;
-        v->dropNoDoubledByColor[WHITE] = NO_PIECE_TYPE;
-        v->dropNoDoubledByColor[BLACK] = NO_PIECE_TYPE;
+        v->dropNoDoubled = NO_PIECE_SET;
         return v;
     }
     // Micro shogi
@@ -1021,9 +1017,7 @@ namespace {
         v->flagRegion[WHITE] = Rank4BB;
         v->flagRegion[BLACK] = Rank1BB;
         v->flagPieceSafe = true;
-        v->dropNoDoubled = NO_PIECE_TYPE;
-        v->dropNoDoubledByColor[WHITE] = NO_PIECE_TYPE;
-        v->dropNoDoubledByColor[BLACK] = NO_PIECE_TYPE;
+        v->dropNoDoubled = NO_PIECE_SET;
         v->nFoldValue = VALUE_DRAW;
         v->perpetualCheckIllegal = false;
         return v;
@@ -1083,12 +1077,8 @@ namespace {
         v->promotedPieceType[SHOGI_PAWN]    = CUSTOM_PIECE_6; // swallow promotes to goose
         v->promotedPieceType[CUSTOM_PIECE_1] = CUSTOM_PIECE_7; // falcon promotes to eagle
         v->mandatoryPiecePromotion = true;
-        v->dropNoDoubled = SHOGI_PAWN;
-        v->dropNoDoubledByColor[WHITE] = SHOGI_PAWN;
-        v->dropNoDoubledByColor[BLACK] = SHOGI_PAWN;
+        v->dropNoDoubled = piece_set(SHOGI_PAWN);
         v->dropNoDoubledCount = 2;
-        v->dropNoDoubledCountByColor[WHITE] = 2;
-        v->dropNoDoubledCountByColor[BLACK] = 2;
         v->immobilityIllegal = true;
         v->shogiPawnDropMateIllegal = true;
         v->stalemateValue = -VALUE_MATE;
@@ -1292,8 +1282,7 @@ namespace {
         v->immobilityIllegal = false;
         v->stalemateValue = -VALUE_MATE;
         v->stalematePieceCount = true;
-        v->passOnStalemate[WHITE] = true;
-        v->passOnStalemate[BLACK] = true;
+        v->passOnStalemate = true;
         v->enclosingDrop = ATAXX;
         v->flipEnclosedPieces = ATAXX;
         v->materialCounting = UNWEIGHTED_MATERIAL;
@@ -1318,8 +1307,7 @@ namespace {
         v->immobilityIllegal = false;
         v->stalemateValue = -VALUE_MATE;
         v->stalematePieceCount = true;
-        v->passOnStalemate[WHITE] = false;
-        v->passOnStalemate[BLACK] = false;
+        v->passOnStalemate = false;
         v->enclosingDrop = REVERSI;
         v->enclosingDropStart = make_bitboard(SQ_D4, SQ_E4, SQ_D5, SQ_E5);
         v->flipEnclosedPieces = REVERSI;
@@ -1332,8 +1320,7 @@ namespace {
     Variant* flipello_variant() {
         Variant* v = flipersi_variant()->init();
         v->startFen = "8/8/8/3pP3/3Pp3/8/8/8[PPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPpppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp] w 0 1";
-        v->passOnStalemate[WHITE] = true;
-        v->passOnStalemate[BLACK] = true;
+        v->passOnStalemate = true;
         return v;
     }
     // Minixiangqi
@@ -1500,9 +1487,7 @@ namespace {
         v->captureType = HAND;
         v->doubleStep = false;
         v->castling = false;
-        v->dropNoDoubled = SHOGI_PAWN;
-        v->dropNoDoubledByColor[WHITE] = SHOGI_PAWN;
-        v->dropNoDoubledByColor[BLACK] = SHOGI_PAWN;
+        v->dropNoDoubled = piece_set(SHOGI_PAWN);
         v->immobilityIllegal = true;
         v->shogiPawnDropMateIllegal = false;
         v->stalemateValue = -VALUE_MATE;
@@ -2026,8 +2011,7 @@ namespace {
         v->materialCounting = JANGGI_MATERIAL;
         v->diagonalLines = make_bitboard(SQ_D1, SQ_F1, SQ_E2, SQ_D3, SQ_F3,
                                          SQ_D8, SQ_F8, SQ_E9, SQ_D10, SQ_F10);
-        v->pass[WHITE] = true;
-        v->pass[BLACK] = true;
+        v->pass = true;
         v->nFoldValue = VALUE_DRAW;
         v->perpetualCheckIllegal = true;
         return v;

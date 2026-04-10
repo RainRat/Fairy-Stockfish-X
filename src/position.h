@@ -401,8 +401,8 @@ public:
   PieceSet drop_piece_types(PieceType pt) const;
   PieceSet symmetric_drop_types() const;
   PieceSet capture_drop_types() const;
-  PieceType drop_no_doubled() const;
-  PieceType drop_no_doubled(Color c) const;
+  PieceSet drop_no_doubled() const;
+  PieceSet drop_no_doubled(Color c) const;
   PieceSet promotion_pawn_types(Color c) const;
   PieceSet pawn_like_types(Color c) const;
   PieceSet en_passant_types(Color c) const;
@@ -1546,9 +1546,7 @@ inline bool Position::rex_exclusive_morph() const {
 
 inline bool Position::must_capture() const {
   assert(var != nullptr);
-  if (var->mustCaptureByColor[WHITE] || var->mustCaptureByColor[BLACK])
-      return var->mustCaptureByColor[side_to_move()];
-  return var->mustCapture;
+  return var->mustCapture.get(side_to_move());
 }
 
 inline bool Position::must_capture_en_passant() const {
@@ -1609,16 +1607,12 @@ inline bool Position::has_en_passant_capture() const {
 
 inline bool Position::must_drop() const {
   assert(var != nullptr);
-  if (var->mustDropByColor[WHITE] || var->mustDropByColor[BLACK])
-      return var->mustDropByColor[side_to_move()];
-  return var->mustDrop;
+  return var->mustDrop.get(side_to_move());
 }
 
 inline PieceType Position::must_drop_type() const {
   assert(var != nullptr);
-  if (var->mustDropTypeByColor[WHITE] != ALL_PIECES || var->mustDropTypeByColor[BLACK] != ALL_PIECES)
-      return var->mustDropTypeByColor[side_to_move()];
-  return var->mustDropType;
+  return var->mustDropType.get(side_to_move());
 }
 
 inline bool Position::opening_self_removal() const {
@@ -1802,9 +1796,9 @@ inline Bitboard Position::drop_region(Color c, PieceType pt) const {
           b &= ~rank_bb(relative_rank(c, RANK_1, max_rank()));
   }
   // Doubled shogi pawns
-  if (pt == drop_no_doubled(c))
+  if (piece_set(pt) & drop_no_doubled(c))
       for (File f = FILE_A; f <= max_file(); ++f)
-          if (popcount(file_bb(f) & pieces(c, pt)) >= var->dropNoDoubledCountByColor[c])
+          if (popcount(file_bb(f) & pieces(c, pt)) >= var->dropNoDoubledCount.get(c))
               b &= ~file_bb(f);
   // Sittuyin rook drops
   if (pt == ROOK && sittuyin_rook_drop())
@@ -1924,14 +1918,14 @@ inline PieceSet Position::capture_drop_types() const {
   return var->captureDrops;
 }
 
-inline PieceType Position::drop_no_doubled() const {
+inline PieceSet Position::drop_no_doubled() const {
   assert(var != nullptr);
-  return var->dropNoDoubledByColor[side_to_move()];
+  return var->dropNoDoubled.get(side_to_move());
 }
 
-inline PieceType Position::drop_no_doubled(Color c) const {
+inline PieceSet Position::drop_no_doubled(Color c) const {
   assert(var != nullptr);
-  return var->dropNoDoubledByColor[c];
+  return var->dropNoDoubled.get(c);
 }
 
 inline PieceSet Position::promotion_pawn_types(Color c) const {
@@ -2094,17 +2088,14 @@ inline bool Position::pass(Color c) const {
       && !has_setup_drop(c)
       && has_setup_drop(~c))
       return true;
-  return var->pass[c] || var->passOnStalemate[c]
+  return var->pass.get(c) || var->passOnStalemate.get(c)
       || ((var->multimoveOffset || var->progressiveMultimove) && multimove_pass(gamePly));
 }
 
 inline bool Position::has_setup_drop(Color c) const {
   assert(var != nullptr);
 
-  PieceType requiredDropType =
-      (var->mustDropTypeByColor[WHITE] != ALL_PIECES || var->mustDropTypeByColor[BLACK] != ALL_PIECES)
-          ? var->mustDropTypeByColor[c]
-          : var->mustDropType;
+  PieceType requiredDropType = var->mustDropType.get(c);
 
   auto canDropNow = [&](PieceType pt) {
       return can_drop(c, pt)
@@ -2128,7 +2119,7 @@ inline bool Position::pass_until_setup() const {
 
 inline bool Position::pass_on_stalemate(Color c) const {
   assert(var != nullptr);
-  return var->passOnStalemate[c];
+  return var->passOnStalemate.get(c);
 }
 
 // Returns whether current move is a mandatory pass to simulate multimoves
