@@ -291,6 +291,50 @@ namespace {
     }
   }
 
+  // print_variant_info() prints a summary of the current variant's configuration.
+
+  void print_variant_info(const Variant* v) {
+
+    if (!v) return;
+
+    sync_cout << "\nVariant:  " << std::string(Options["UCI_Variant"])
+              << "\nTemplate: " << v->variantTemplate
+              << "\nBoard:    " << v->maxFile + 1 << "x" << v->maxRank + 1
+              << (v->hexBoard ? " (hex)" : "")
+              << (v->cylindrical ? " (cylindrical)" : "")
+              << (v->toroidal ? " (toroidal)" : "")
+              << "\nPockets:  " << v->pocketSize
+              << "\nPieces:  ";
+
+    for (PieceSet ps = v->pieceTypes; ps; )
+    {
+        PieceType pt = pop_lsb(ps);
+        sync_cout << " " << v->pieceToChar[make_piece(WHITE, pt)]
+                  << "(" << pieceMap.get(pt)->betza << ")";
+    }
+
+    sync_cout << "\nRules:   ";
+    if (v->mustCapture[WHITE] || v->mustCapture[BLACK]) sync_cout << " mustCapture";
+    if (!v->checking)    sync_cout << " noChecking";
+    if (v->allowChecks)  sync_cout << " allowChecks";
+    if (v->castling)     sync_cout << " castling";
+    if (v->pieceDrops)   sync_cout << " pieceDrops";
+    if (v->gating)       sync_cout << " gating";
+    if (v->pass[WHITE] || v->pass[BLACK]) sync_cout << " pass";
+    if (v->checkCounting) sync_cout << " checkCounting";
+    if (v->pointsCounting) sync_cout << " pointsCounting";
+    if (v->potions)      sync_cout << " potions";
+
+    sync_cout << "\nEndgame: ";
+    if (v->nMoveRule > 0) sync_cout << " " << v->nMoveRule << "-move-rule";
+    if (v->nFoldRule > 0) sync_cout << " " << v->nFoldRule << "-fold-repetition";
+    if (v->stalemateValue.global != VALUE_DRAW) sync_cout << " stalemate=" << (v->stalemateValue.global == -VALUE_MATE ? "lose" : std::to_string(int(v->stalemateValue.global)));
+    if (v->extinctionValue.global != VALUE_NONE) sync_cout << " extinction";
+    if (v->connectN > 0) sync_cout << " connect" << v->connectN;
+
+    sync_cout << sync_endl;
+  }
+
 } // namespace
 
 
@@ -402,6 +446,7 @@ void UCI::loop(int argc, char* argv[]) {
                     << "\n  quit                        Exit the engine"
                     << "\n\nDebug/Extra commands:"
                     << "\n  d                           Display current position"
+                    << "\n  vinfo                       Display variant information"
                     << "\n  eval                        Display static evaluation"
                     << "\n  bench                       Run internal benchmark"
                     << "\n  compiler                    Show compiler information"
@@ -415,6 +460,7 @@ void UCI::loop(int argc, char* argv[]) {
       else if (token == "flip")     pos.flip();
       else if (token == "bench")    bench(pos, is, states);
       else if (token == "d")        sync_cout << pos << sync_endl;
+      else if (token == "vinfo")    print_variant_info(pos.variant());
       else if (token == "eval")     trace_eval(pos);
       else if (token == "compiler") sync_cout << compiler_info() << sync_endl;
       else if (token == "export_net")
