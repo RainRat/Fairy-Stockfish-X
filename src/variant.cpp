@@ -193,8 +193,10 @@ namespace {
     // https://arxiv.org/abs/2009.04374
     Variant* torpedo_variant() {
         Variant* v = chess_variant_base()->init();
-        v->doubleStepRegion[WHITE] = AllSquares;
-        v->doubleStepRegion[BLACK] = AllSquares;
+        v->doubleStepRegion[WHITE] = PieceTypeBitboardGroup(Bitboard(0));
+        v->doubleStepRegion[BLACK] = PieceTypeBitboardGroup(Bitboard(0));
+        v->doubleStepRegion[WHITE].set('P', AllSquares);
+        v->doubleStepRegion[BLACK].set('P', AllSquares);
         return v;
     }
     Variant* spell_chess_variant() {
@@ -229,6 +231,10 @@ namespace {
         v->promotionPawnTypes = piece_set(CUSTOM_PIECE_1);
         v->enPassantTypes = piece_set(CUSTOM_PIECE_1);
         v->nMoveRuleTypes = piece_set(CUSTOM_PIECE_1);
+        v->doubleStepRegion[WHITE] = PieceTypeBitboardGroup(Bitboard(0));
+        v->doubleStepRegion[BLACK] = PieceTypeBitboardGroup(Bitboard(0));
+        v->doubleStepRegion[WHITE].set('P', Rank2BB);
+        v->doubleStepRegion[BLACK].set('P', Rank7BB);
         return v;
     }
     // Pawnsideways
@@ -241,6 +247,10 @@ namespace {
         v->promotionPawnTypes = piece_set(CUSTOM_PIECE_1);
         v->enPassantTypes = piece_set(CUSTOM_PIECE_1);
         v->nMoveRuleTypes = piece_set(CUSTOM_PIECE_1);
+        v->doubleStepRegion[WHITE] = PieceTypeBitboardGroup(Bitboard(0));
+        v->doubleStepRegion[BLACK] = PieceTypeBitboardGroup(Bitboard(0));
+        v->doubleStepRegion[WHITE].set('P', Rank2BB);
+        v->doubleStepRegion[BLACK].set('P', Rank7BB);
         return v;
     }
     // Pawnback
@@ -255,6 +265,10 @@ namespace {
         v->promotionPawnTypes = piece_set(CUSTOM_PIECE_1);
         v->enPassantTypes = piece_set(CUSTOM_PIECE_1);
         v->nMoveRuleTypes = NO_PIECE_SET; // backwards pawn moves are reversible
+        v->doubleStepRegion[WHITE] = PieceTypeBitboardGroup(Bitboard(0));
+        v->doubleStepRegion[BLACK] = PieceTypeBitboardGroup(Bitboard(0));
+        v->doubleStepRegion[WHITE].set('P', Rank2BB);
+        v->doubleStepRegion[BLACK].set('P', Rank7BB);
         return v;
     }
     // Legan Chess
@@ -2216,7 +2230,10 @@ Variant* Variant::conclude() {
 
     // Enforce consistency to allow runtime optimizations
     if (!doubleStep)
-        doubleStepRegion[WHITE] = doubleStepRegion[BLACK] = 0;
+    {
+        doubleStepRegion[WHITE] = PieceTypeBitboardGroup(Bitboard(0));
+        doubleStepRegion[BLACK] = PieceTypeBitboardGroup(Bitboard(0));
+    }
     if (!doubleStepRegion[WHITE] && !doubleStepRegion[BLACK])
         doubleStep = false;
 
