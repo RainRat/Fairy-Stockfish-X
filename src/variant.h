@@ -134,8 +134,8 @@ struct Variant {
   ColorSetting<PieceType> mainPromotionPawnType = ColorSetting<PieceType>(PAWN);
   ColorSetting<PieceSet> promotionPawnTypes = ColorSetting<PieceSet>(piece_set(PAWN));
   ColorSetting<PieceSet> promotionPieceTypes = ColorSetting<PieceSet>(piece_set(QUEEN) | ROOK | BISHOP | KNIGHT);
-  bool promotionPieceTypesByFileEnabled[COLOR_NB] = {false, false};
-  std::array<PieceSet, FILE_NB> promotionPieceTypesByFile[COLOR_NB] = {};
+  ColorSetting<bool> promotionPieceTypesByFileEnabled = ColorSetting<bool>(false);
+  ColorSetting<std::array<PieceSet, FILE_NB>> promotionPieceTypesByFile = ColorSetting<std::array<PieceSet, FILE_NB>>(std::array<PieceSet, FILE_NB>{});
   bool sittuyinPromotion = false;
   int promotionLimit[PIECE_TYPE_NB] = {}; // 0 means unlimited
   bool promotionSteal = false;
@@ -221,12 +221,12 @@ struct Variant {
   bool pushCaptureAgainstFriendlyBlocker = false;
   bool pushNoImmediateReturn = false;
   PieceSet edgeInsertTypes = NO_PIECE_SET;
-  Bitboard edgeInsertRegion[COLOR_NB] = {};
+  ColorSetting<Bitboard> edgeInsertRegion = ColorSetting<Bitboard>(Bitboard(0));
   bool edgeInsertOnly = false;
-  bool edgeInsertFromTop[COLOR_NB] = {false, false};
-  bool edgeInsertFromBottom[COLOR_NB] = {false, false};
-  bool edgeInsertFromLeft[COLOR_NB] = {false, false};
-  bool edgeInsertFromRight[COLOR_NB] = {false, false};
+  ColorSetting<bool> edgeInsertFromTop = ColorSetting<bool>(false);
+  ColorSetting<bool> edgeInsertFromBottom = ColorSetting<bool>(false);
+  ColorSetting<bool> edgeInsertFromLeft = ColorSetting<bool>(false);
+  ColorSetting<bool> edgeInsertFromRight = ColorSetting<bool>(false);
   ColorSetting<bool> selfCapture = ColorSetting<bool>(false);
   ColorSetting<PieceSet> selfCaptureTypes = ColorSetting<PieceSet>(NO_PIECE_SET);
   bool blastOnSameTypeCapture = false;
@@ -236,7 +236,7 @@ struct Variant {
   bool dropKingLast = false;
   bool openingSelfRemoval = false;
   bool openingSelfRemovalAdjacentToLast = false;
-  Bitboard openingSelfRemovalRegion[COLOR_NB] = {AllSquares, AllSquares};
+  ColorSetting<Bitboard> openingSelfRemovalRegion = ColorSetting<Bitboard>(AllSquares);
   bool openingSwapDrop = false;
   bool openingSwapMirrorMainDiagonal = false;
   PieceSet isPriorityDrop = NO_PIECE_SET;
@@ -270,7 +270,7 @@ struct Variant {
   bool immobilityIllegal = false;
   bool gating = false;
   bool gatingFromHand = true;
-  PieceType gatingPieceAfter[COLOR_NB][PIECE_TYPE_NB] = {};
+  ColorSetting<std::array<PieceType, PIECE_TYPE_NB>> gatingPieceAfter = ColorSetting<std::array<PieceType, PIECE_TYPE_NB>>(std::array<PieceType, PIECE_TYPE_NB>{});
   PieceType firstMovePieceType[PIECE_TYPE_NB] = {};
   bool firstMoveLoseOnCheck = false;
   WallingRule wallingRule = NO_WALLING;

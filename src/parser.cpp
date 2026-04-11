@@ -1160,28 +1160,32 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     const auto& it_prom_file = config.find("promotionPieceTypesByFile");
     if (it_prom_file != config.end())
     {
+        std::array<PieceSet, FILE_NB> parsed;
         if (!parse_file_piece_set_map(it_prom_file->second, v, v->maxFile,
-                                      v->promotionPieceTypesByFile[WHITE], DoCheck, "promotionPieceTypesByFile"))
+                                      parsed, DoCheck, "promotionPieceTypesByFile"))
             return false;
-        v->promotionPieceTypesByFile[BLACK] = v->promotionPieceTypesByFile[WHITE];
-        v->promotionPieceTypesByFileEnabled[WHITE] = true;
-        v->promotionPieceTypesByFileEnabled[BLACK] = true;
+        v->promotionPieceTypesByFile.set_global(parsed);
+        v->promotionPieceTypesByFileEnabled = true;
     }
     const auto& it_prom_file_w = config.find("promotionPieceTypesByFileWhite");
     if (it_prom_file_w != config.end())
     {
+        std::array<PieceSet, FILE_NB> parsed;
         if (!parse_file_piece_set_map(it_prom_file_w->second, v, v->maxFile,
-                                      v->promotionPieceTypesByFile[WHITE], DoCheck, "promotionPieceTypesByFileWhite"))
+                                      parsed, DoCheck, "promotionPieceTypesByFileWhite"))
             return false;
-        v->promotionPieceTypesByFileEnabled[WHITE] = true;
+        v->promotionPieceTypesByFile.set_color(WHITE, parsed);
+        v->promotionPieceTypesByFileEnabled.set_color(WHITE, true);
     }
     const auto& it_prom_file_b = config.find("promotionPieceTypesByFileBlack");
     if (it_prom_file_b != config.end())
     {
+        std::array<PieceSet, FILE_NB> parsed;
         if (!parse_file_piece_set_map(it_prom_file_b->second, v, v->maxFile,
-                                      v->promotionPieceTypesByFile[BLACK], DoCheck, "promotionPieceTypesByFileBlack"))
+                                      parsed, DoCheck, "promotionPieceTypesByFileBlack"))
             return false;
-        v->promotionPieceTypesByFileEnabled[BLACK] = true;
+        v->promotionPieceTypesByFile.set_color(BLACK, parsed);
+        v->promotionPieceTypesByFileEnabled.set_color(BLACK, true);
     }
     parse_attribute("sittuyinPromotion", v->sittuyinPromotion);
     parse_attribute("promotionSteal", v->promotionSteal);
@@ -1222,33 +1226,38 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     const auto& it_gate_after = config.find("gatingPieceAfter");
     if (it_gate_after != config.end())
     {
-        if (!parse_piece_type_map(it_gate_after->second, v, v->gatingPieceAfter[WHITE], true))
+        std::array<PieceType, PIECE_TYPE_NB> parsed;
+        if (!parse_piece_type_map(it_gate_after->second, v, parsed, true))
         {
             if (DoCheck)
                 std::cerr << "gatingPieceAfter - Invalid syntax." << std::endl;
             return false;
         }
-        std::copy(std::begin(v->gatingPieceAfter[WHITE]), std::end(v->gatingPieceAfter[WHITE]), std::begin(v->gatingPieceAfter[BLACK]));
+        v->gatingPieceAfter.set_global(parsed);
     }
     const auto& it_gate_after_w = config.find("gatingPieceAfterWhite");
     if (it_gate_after_w != config.end())
     {
-        if (!parse_piece_type_map(it_gate_after_w->second, v, v->gatingPieceAfter[WHITE], true))
+        std::array<PieceType, PIECE_TYPE_NB> parsed;
+        if (!parse_piece_type_map(it_gate_after_w->second, v, parsed, true))
         {
             if (DoCheck)
                 std::cerr << "gatingPieceAfterWhite - Invalid syntax." << std::endl;
             return false;
         }
+        v->gatingPieceAfter.set_color(WHITE, parsed);
     }
     const auto& it_gate_after_b = config.find("gatingPieceAfterBlack");
     if (it_gate_after_b != config.end())
     {
-        if (!parse_piece_type_map(it_gate_after_b->second, v, v->gatingPieceAfter[BLACK], true))
+        std::array<PieceType, PIECE_TYPE_NB> parsed;
+        if (!parse_piece_type_map(it_gate_after_b->second, v, parsed, true))
         {
             if (DoCheck)
                 std::cerr << "gatingPieceAfterBlack - Invalid syntax." << std::endl;
             return false;
         }
+        v->gatingPieceAfter.set_color(BLACK, parsed);
     }
     const auto& it_first_move_pt = config.find("firstMovePieceTypes");
     if (it_first_move_pt != config.end())
@@ -1516,7 +1525,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("swapForbiddenPlies", v->swapForbiddenPlies);
     parse_attribute("edgeInsertTypes", v->edgeInsertTypes, v);
     parse_attribute("edgeInsertOnly", v->edgeInsertOnly);
-    parse_both_colors_with_overrides("edgeInsertRegion", v->edgeInsertRegion);
+    parse_color_setting("edgeInsertRegion", v->edgeInsertRegion);
     const auto& it_edge_insert_from = config.find("edgeInsertFrom");
     if (it_edge_insert_from != config.end())
     {
@@ -1527,10 +1536,10 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
                 std::cerr << "edgeInsertFrom - Invalid syntax." << std::endl;
             return false;
         }
-        v->edgeInsertFromTop[WHITE] = v->edgeInsertFromTop[BLACK] = top;
-        v->edgeInsertFromBottom[WHITE] = v->edgeInsertFromBottom[BLACK] = bottom;
-        v->edgeInsertFromLeft[WHITE] = v->edgeInsertFromLeft[BLACK] = left;
-        v->edgeInsertFromRight[WHITE] = v->edgeInsertFromRight[BLACK] = right;
+        v->edgeInsertFromTop.set_global(top);
+        v->edgeInsertFromBottom.set_global(bottom);
+        v->edgeInsertFromLeft.set_global(left);
+        v->edgeInsertFromRight.set_global(right);
     }
     const auto& it_edge_insert_from_white = config.find("edgeInsertFromWhite");
     if (it_edge_insert_from_white != config.end())
@@ -1542,10 +1551,10 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
                 std::cerr << "edgeInsertFromWhite - Invalid syntax." << std::endl;
             return false;
         }
-        v->edgeInsertFromTop[WHITE] = top;
-        v->edgeInsertFromBottom[WHITE] = bottom;
-        v->edgeInsertFromLeft[WHITE] = left;
-        v->edgeInsertFromRight[WHITE] = right;
+        v->edgeInsertFromTop.set_color(WHITE, top);
+        v->edgeInsertFromBottom.set_color(WHITE, bottom);
+        v->edgeInsertFromLeft.set_color(WHITE, left);
+        v->edgeInsertFromRight.set_color(WHITE, right);
     }
     const auto& it_edge_insert_from_black = config.find("edgeInsertFromBlack");
     if (it_edge_insert_from_black != config.end())
@@ -1557,10 +1566,10 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
                 std::cerr << "edgeInsertFromBlack - Invalid syntax." << std::endl;
             return false;
         }
-        v->edgeInsertFromTop[BLACK] = top;
-        v->edgeInsertFromBottom[BLACK] = bottom;
-        v->edgeInsertFromLeft[BLACK] = left;
-        v->edgeInsertFromRight[BLACK] = right;
+        v->edgeInsertFromTop.set_color(BLACK, top);
+        v->edgeInsertFromBottom.set_color(BLACK, bottom);
+        v->edgeInsertFromLeft.set_color(BLACK, left);
+        v->edgeInsertFromRight.set_color(BLACK, right);
     }
     parse_attribute("changingColorTrigger", v->changingColorTrigger);
     parse_attribute("changingColorPieceTypes", v->changingColorPieceTypes, v);
@@ -1577,8 +1586,8 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("dropKingLast", v->dropKingLast);
     parse_attribute("openingSelfRemoval", v->openingSelfRemoval);
     parse_attribute("openingSelfRemovalAdjacentToLast", v->openingSelfRemovalAdjacentToLast);
-    parse_both_colors_with_overrides("openingSelfRemovalRegion", v->openingSelfRemovalRegion);
-    parse_attribute("pieceDrops", v->pieceDrops);
+    parse_color_setting("openingSelfRemovalRegion", v->openingSelfRemovalRegion);
+    parse_attribute("openingSwapDrop", v->openingSwapDrop);
     parse_attribute("borrowOpponentDropsWhenEmpty", v->borrowOpponentDropsWhenEmpty);
     parse_attribute("virtualDrops", v->virtualDrops);
     const auto& it_virtual_drop_limit = config.find("virtualDropLimit");
@@ -1653,7 +1662,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("immobilityIllegal", v->immobilityIllegal);
     parse_attribute("gating", v->gating);
     parse_attribute("wallingRule", v->wallingRule);
-    parse_color_setting("wallingWhite", v->wallingSide);
+    parse_color_setting("walling", v->wallingSide);
     parse_color_setting("wallingRegion", v->wallingRegion);
     parse_attribute("wallOrMove", v->wallOrMove);
     parse_attribute("surroundClaimRegion", v->surroundClaimRegion);

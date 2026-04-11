@@ -930,23 +930,23 @@ inline PieceType Position::main_promotion_pawn_type(Color c) const {
 
 inline PieceSet Position::promotion_piece_types(Color c) const {
   assert(var != nullptr);
-  if (var->promotionPieceTypesByFileEnabled[c])
+  if (var->promotionPieceTypesByFileEnabled.get(c))
   {
       PieceSet unionSet = NO_PIECE_SET;
       for (int f = FILE_A; f <= int(var->maxFile); ++f)
-          unionSet |= var->promotionPieceTypesByFile[c][f];
+          unionSet |= var->promotionPieceTypesByFile.get(c)[f];
       return unionSet;
   }
-  return var->promotionPieceTypes[c];
+  return var->promotionPieceTypes.get(c);
 }
 
 inline PieceSet Position::promotion_piece_types(Color c, Square s) const {
   assert(var != nullptr);
-  if (var->promotionPieceTypesByFileEnabled[c] && s != SQ_NONE)
+  if (var->promotionPieceTypesByFileEnabled.get(c) && s != SQ_NONE)
   {
       File f = file_of(s);
       if (f >= FILE_A && f <= var->maxFile)
-          return var->promotionPieceTypesByFile[c][f];
+          return var->promotionPieceTypesByFile.get(c)[f];
   }
   return promotion_piece_types(c);
 }
@@ -1511,27 +1511,27 @@ inline bool Position::edge_insert_only() const {
 
 inline Bitboard Position::edge_insert_region(Color c) const {
   assert(var != nullptr);
-  return var->edgeInsertRegion[c];
+  return var->edgeInsertRegion.get(c);
 }
 
 inline bool Position::edge_insert_from_top(Color c) const {
   assert(var != nullptr);
-  return var->edgeInsertFromTop[c];
+  return var->edgeInsertFromTop.get(c);
 }
 
 inline bool Position::edge_insert_from_bottom(Color c) const {
   assert(var != nullptr);
-  return var->edgeInsertFromBottom[c];
+  return var->edgeInsertFromBottom.get(c);
 }
 
 inline bool Position::edge_insert_from_left(Color c) const {
   assert(var != nullptr);
-  return var->edgeInsertFromLeft[c];
+  return var->edgeInsertFromLeft.get(c);
 }
 
 inline bool Position::edge_insert_from_right(Color c) const {
   assert(var != nullptr);
-  return var->edgeInsertFromRight[c];
+  return var->edgeInsertFromRight.get(c);
 }
 
 inline bool Position::capture_morph() const {
@@ -1628,7 +1628,7 @@ inline Bitboard Position::opening_self_removal_targets(Color c) const {
   if (!opening_self_removal() || gamePly >= 2)
       return Bitboard(0);
 
-  Bitboard targets = pieces(c) & var->openingSelfRemovalRegion[c];
+  Bitboard targets = pieces(c) & var->openingSelfRemovalRegion.get(c);
   if (gamePly == 1 && var->openingSelfRemovalAdjacentToLast)
   {
       Move lastMove = st->move;
@@ -2017,7 +2017,7 @@ inline bool Position::gating_from_hand() const {
 
 inline PieceType Position::gating_piece_after(Color c, PieceType pt) const {
   assert(var != nullptr);
-  return var->gatingPieceAfter[c][pt];
+  return var->gatingPieceAfter.get(c)[pt];
 }
 
 inline PieceType Position::forced_gating_type(Color c, PieceType pt) const {
