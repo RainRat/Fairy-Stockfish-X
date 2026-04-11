@@ -491,7 +491,6 @@ public:
   PointsRule points_rule_captures() const;
   int points_goal() const;
   int points_count(Color c) const;
-  int points_score(Color c) const;
   int points_score_clamped(Color c) const;
   Value points_goal_value() const;
   Value points_goal_simul_value_by_most_points() const;
@@ -2464,12 +2463,8 @@ inline int Position::points_count(Color c) const {
   return st->pointsCount[c];
 }
 
-inline int Position::points_score(Color c) const {
-  return st->pointsCount[c];
-}
-
 inline int Position::points_score_clamped(Color c) const {
-  return std::max(0, std::min(points_score(c), POINTS_SCORE_MAX));
+  return std::max(0, std::min(points_count(c), POINTS_SCORE_MAX));
 }
 
 inline Value Position::points_goal_value() const {
