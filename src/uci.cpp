@@ -389,6 +389,26 @@ void UCI::loop(int argc, char* argv[]) {
       else if (token == "position")   position(pos, is, states), banmoves.clear();
       else if (token == "ucinewgame" || token == "usinewgame" || token == "uccinewgame") Search::clear();
       else if (token == "isready")    sync_cout << "readyok" << sync_endl;
+      else if (token == "help")
+          sync_cout << "\nCommands:"
+                    << "\n  uci, usi, ucci, xboard      Switch protocol"
+                    << "\n  isready                     Check if engine is ready"
+                    << "\n  setoption name V value V    Set a UCI option"
+                    << "\n  ucinewgame                  Clear search and hash"
+                    << "\n  position [startpos|fen]     Set up a position"
+                    << "\n  go                          Start searching"
+                    << "\n  stop                        Stop searching"
+                    << "\n  ponderhit                   Switch from ponder to normal search"
+                    << "\n  quit                        Exit the engine"
+                    << "\n\nDebug/Extra commands:"
+                    << "\n  d                           Display current position"
+                    << "\n  eval                        Display static evaluation"
+                    << "\n  bench                       Run internal benchmark"
+                    << "\n  compiler                    Show compiler information"
+                    << "\n  load [file|<<EOF]           Load variant configuration"
+                    << "\n  check [file|<<EOF]          Check variant configuration"
+                    << "\n  flip                        Flip the current position"
+                    << sync_endl;
 
       // Additional custom non-UCI commands, mainly for debugging.
       // Do not use these commands during a search!
