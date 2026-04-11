@@ -208,7 +208,7 @@ namespace {
         v->potionDropOnOccupied = true;
         v->remove_piece(KING);
         v->add_piece(COMMONER, 'k');
-        v->castlingKingPiece[WHITE] = v->castlingKingPiece[BLACK] = COMMONER;
+        v->castlingKingPiece = COMMONER;
         v->pieceToChar[make_piece(WHITE, CUSTOM_PIECE_1)] = 'F';
         v->pieceToChar[make_piece(BLACK, CUSTOM_PIECE_1)] = 'f';
         v->pieceToChar[make_piece(WHITE, CUSTOM_PIECE_2)] = 'J';
@@ -225,8 +225,8 @@ namespace {
         Variant* v = chess_variant_base()->init();
         v->remove_piece(PAWN);
         v->add_piece(CUSTOM_PIECE_1, 'p', "mfFcfeWimfnA");
-        v->mainPromotionPawnType[WHITE] = v->mainPromotionPawnType[BLACK] = CUSTOM_PIECE_1;
-        v->promotionPawnTypes[WHITE] = v->promotionPawnTypes[BLACK] = piece_set(CUSTOM_PIECE_1);
+        v->mainPromotionPawnType = CUSTOM_PIECE_1;
+        v->promotionPawnTypes = piece_set(CUSTOM_PIECE_1);
         v->enPassantTypes = piece_set(CUSTOM_PIECE_1);
         v->nMoveRuleTypes = piece_set(CUSTOM_PIECE_1);
         return v;
@@ -237,8 +237,8 @@ namespace {
         Variant* v = chess_variant_base()->init();
         v->remove_piece(PAWN);
         v->add_piece(CUSTOM_PIECE_1, 'p', "fsmWfceFifmnD");
-        v->mainPromotionPawnType[WHITE] = v->mainPromotionPawnType[BLACK] = CUSTOM_PIECE_1;
-        v->promotionPawnTypes[WHITE] = v->promotionPawnTypes[BLACK] = piece_set(CUSTOM_PIECE_1);
+        v->mainPromotionPawnType = CUSTOM_PIECE_1;
+        v->promotionPawnTypes = piece_set(CUSTOM_PIECE_1);
         v->enPassantTypes = piece_set(CUSTOM_PIECE_1);
         v->nMoveRuleTypes = piece_set(CUSTOM_PIECE_1);
         return v;
@@ -251,8 +251,8 @@ namespace {
         v->add_piece(CUSTOM_PIECE_1, 'p', "fbmWfceFifmnD");
         v->mobilityRegion[WHITE][CUSTOM_PIECE_1] = (Rank2BB | Rank3BB | Rank4BB | Rank5BB | Rank6BB | Rank7BB | Rank8BB);
         v->mobilityRegion[BLACK][CUSTOM_PIECE_1] = (Rank7BB | Rank6BB | Rank5BB | Rank4BB | Rank3BB | Rank2BB | Rank1BB);
-        v->mainPromotionPawnType[WHITE] = v->mainPromotionPawnType[BLACK] = CUSTOM_PIECE_1;
-        v->promotionPawnTypes[WHITE] = v->promotionPawnTypes[BLACK] = piece_set(CUSTOM_PIECE_1);
+        v->mainPromotionPawnType = CUSTOM_PIECE_1;
+        v->promotionPawnTypes = piece_set(CUSTOM_PIECE_1);
         v->enPassantTypes = piece_set(CUSTOM_PIECE_1);
         v->nMoveRuleTypes = NO_PIECE_SET; // backwards pawn moves are reversible
         return v;
@@ -529,7 +529,7 @@ namespace {
         v->variantTemplate = "giveaway";
         v->remove_piece(KING);
         v->add_piece(COMMONER, 'k');
-        v->castlingKingPiece[WHITE] = v->castlingKingPiece[BLACK] = COMMONER;
+        v->castlingKingPiece = COMMONER;
         v->promotionPieceTypes[WHITE] = piece_set(COMMONER) | QUEEN | ROOK | BISHOP | KNIGHT;
         v->promotionPieceTypes[BLACK] = piece_set(COMMONER) | QUEEN | ROOK | BISHOP | KNIGHT;
         v->stalemateValue = VALUE_MATE;
@@ -575,7 +575,7 @@ namespace {
         Variant* v = chess_variant_base()->init();
         v->remove_piece(KING);
         v->add_piece(COMMONER, 'k');
-        v->castlingKingPiece[WHITE] = v->castlingKingPiece[BLACK] = COMMONER;
+        v->castlingKingPiece = COMMONER;
         v->promotionPieceTypes[WHITE] = piece_set(COMMONER) | QUEEN | ROOK | BISHOP | KNIGHT;
         v->promotionPieceTypes[BLACK] = piece_set(COMMONER) | QUEEN | ROOK | BISHOP | KNIGHT;
         v->extinctionValue = -VALUE_MATE;
@@ -597,7 +597,7 @@ namespace {
         Variant* v = chess_variant_base()->init();
         v->remove_piece(KING);
         v->add_piece(COMMONER, 'k');
-        v->castlingKingPiece[WHITE] = v->castlingKingPiece[BLACK] = COMMONER;
+        v->castlingKingPiece = COMMONER;
         v->startFen = "knbqkbnk/pppppppp/8/8/8/8/PPPPPPPP/KNBQKBNK w - - 0 1";
         v->extinctionValue = -VALUE_MATE;
         v->extinctionPieceTypes = piece_set(COMMONER);
@@ -623,7 +623,7 @@ namespace {
         Variant* v = pawnsideways_variant()->init();
         v->remove_piece(KING);
         v->add_piece(COMMONER, 'k');
-        v->castlingKingPiece[WHITE] = v->castlingKingPiece[BLACK] = COMMONER;
+        v->castlingKingPiece = COMMONER;
         v->extinctionValue = -VALUE_MATE;
         v->extinctionPieceTypes = piece_set(COMMONER);
         v->extinctionPseudoRoyal = true;
@@ -637,7 +637,7 @@ namespace {
         v->variantTemplate = "atomic";
         v->remove_piece(KING);
         v->add_piece(COMMONER, 'k');
-        v->castlingKingPiece[WHITE] = v->castlingKingPiece[BLACK] = COMMONER;
+        v->castlingKingPiece = COMMONER;
         v->extinctionValue = -VALUE_MATE;
         v->extinctionPieceTypes = piece_set(COMMONER);
         v->blastOnCapture = true;
@@ -669,7 +669,7 @@ namespace {
         Variant* v = chess_variant_base()->init();
         v->remove_piece(KING);
         v->add_piece(COMMONER, 'k');
-        v->castlingKingPiece[WHITE] = v->castlingKingPiece[BLACK] = COMMONER;
+        v->castlingKingPiece = COMMONER;
         v->extinctionValue = -VALUE_MATE;
         v->extinctionPieceTypes = piece_set(COMMONER);
         v->wallingRule = DUCK;
@@ -790,7 +790,7 @@ namespace {
         Variant* v = bughouse_variant()->init();
         v->remove_piece(KING);
         v->add_piece(COMMONER, 'k');
-        v->castlingKingPiece[WHITE] = v->castlingKingPiece[BLACK] = COMMONER;
+        v->castlingKingPiece = COMMONER;
         v->mustDrop = true;
         v->mustDropType = COMMONER;
         v->extinctionValue = -VALUE_MATE;
@@ -1450,7 +1450,7 @@ namespace {
         v->captureType = MOVE_OUT;
         v->pieceDrops = false;
         v->promotedPieceType[CUSTOM_PIECE_1] = COMMONER;
-        v->castlingKingPiece[WHITE] = v->castlingKingPiece[BLACK] = COMMONER;
+        v->castlingKingPiece = COMMONER;
         v->extinctionValue = -VALUE_MATE;
         v->extinctionPieceTypes = piece_set(COMMONER);
         v->extinctionPseudoRoyal = true;

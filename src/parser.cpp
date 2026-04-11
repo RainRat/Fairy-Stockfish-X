@@ -888,7 +888,7 @@ template <bool Current, class T> bool VariantParser<DoCheck>::parse_attribute(co
             }
             else
             {
-                FilePieceSetMap parsedTarget;
+                FilePieceSetMap parsedTarget = Current ? target : FilePieceSetMap();
                 if (parse_file_piece_set_map(it->second, v, v->maxFile, parsedTarget, DoCheck, key))
                 {
                     target = parsedTarget;
@@ -898,7 +898,7 @@ template <bool Current, class T> bool VariantParser<DoCheck>::parse_attribute(co
             }
         }
 
-        T parsedTarget = T();
+        T parsedTarget = Current ? target : T();
         std::string token;
         std::stringstream ss(it->second);
         bool sawToken = false;
@@ -1008,8 +1008,7 @@ void VariantParser<DoCheck>::parse_color_setting(const std::string& key, ColorSe
 
 template <bool DoCheck>
 template <typename T>
-void VariantParser<DoCheck>::parse_color_setting_piece(const std::string& key, ColorSetting<T>& target) {
-    const Variant* v = nullptr; // Dummy for overload resolution
+void VariantParser<DoCheck>::parse_color_setting_piece(const std::string& key, ColorSetting<T>& target, const Variant* v) {
     if (config.find(key) != config.end())
     {
         parse_attribute(key, target.global, v);
@@ -1190,10 +1189,10 @@ bool VariantParser<DoCheck>::parse_legacy_attributes(Variant* v) {
     if (dropOnTop) v->enclosingDrop=TOP;
 
     // Parse aliases
-    parse_color_setting_piece("pawnTypes", v->mainPromotionPawnType);
-    parse_color_setting_piece("pawnTypes", v->promotionPawnTypes);
-    parse_color_setting_piece("pawnTypes", v->enPassantTypes);
-    parse_color_setting_piece("pawnTypes", v->nMoveRuleTypes);
+    parse_color_setting_piece("pawnTypes", v->mainPromotionPawnType, v);
+    parse_color_setting_piece("pawnTypes", v->promotionPawnTypes, v);
+    parse_color_setting_piece("pawnTypes", v->enPassantTypes, v);
+    parse_color_setting_piece("pawnTypes", v->nMoveRuleTypes, v);
     return true;
 }
 
@@ -1212,9 +1211,9 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_color_setting("promotionRegion", v->promotionRegion);
     parse_color_setting("mandatoryPromotionRegion", v->mandatoryPromotionRegion);
     // Take the first promotionPawnTypes as the main promotionPawnType
-    parse_color_setting_piece("promotionPawnTypes", v->mainPromotionPawnType);
-    parse_color_setting_piece("promotionPawnTypes", v->promotionPawnTypes);
-    parse_color_setting_piece("promotionPieceTypes", v->promotionPieceTypes);
+    parse_color_setting_piece("promotionPawnTypes", v->mainPromotionPawnType, v);
+    parse_color_setting_piece("promotionPawnTypes", v->promotionPawnTypes, v);
+    parse_color_setting_piece("promotionPieceTypes", v->promotionPieceTypes, v);
     parse_attribute("sittuyinPromotion", v->sittuyinPromotion);
     parse_attribute("promotionSteal", v->promotionSteal);
     parse_attribute("promotionRequireInHand", v->promotionRequireInHand);
@@ -1427,7 +1426,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_color_setting("doubleStepRegion", v->doubleStepRegion);
     parse_color_setting("tripleStepRegion", v->tripleStepRegion);
     parse_color_setting("enPassantRegion", v->enPassantRegion);
-    parse_color_setting_piece("enPassantTypes", v->enPassantTypes);
+    parse_color_setting_piece("enPassantTypes", v->enPassantTypes, v);
     parse_attribute("enPassantPassedSquares", v->enPassantPassedSquares);
     parse_attribute("castling", v->castling);
     parse_attribute("castlingDroppedPiece", v->castlingDroppedPiece);
@@ -1437,10 +1436,10 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("castlingQueensideFile", v->castlingQueensideFile);
     parse_attribute("castlingRank", v->castlingRank);
     parse_attribute("castlingKingFile", v->castlingKingFile);
-    parse_color_setting_piece("castlingKingPiece", v->castlingKingPiece);
+    parse_color_setting_piece("castlingKingPiece", v->castlingKingPiece, v);
     parse_attribute("castlingRookKingsideFile", v->castlingRookKingsideFile);
     parse_attribute("castlingRookQueensideFile", v->castlingRookQueensideFile);
-    parse_color_setting_piece("castlingRookPieces", v->castlingRookPieces);
+    parse_color_setting_piece("castlingRookPieces", v->castlingRookPieces, v);
     parse_attribute("oppositeCastling", v->oppositeCastling);
     parse_attribute("checking", v->checking);
     parse_attribute("allowChecks", v->allowChecks);
@@ -1554,13 +1553,13 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("changingColorTrigger", v->changingColorTrigger);
     parse_attribute("changingColorPieceTypes", v->changingColorPieceTypes, v);
     parse_color_setting("selfCapture", v->selfCapture);
-    parse_color_setting_piece("selfCaptureTypes", v->selfCaptureTypes);
+    parse_color_setting_piece("selfCaptureTypes", v->selfCaptureTypes, v);
     parse_attribute("blastOrthogonals", v->blastOrthogonals);
     parse_attribute("blastOnSameTypeCapture", v->blastOnSameTypeCapture);
     parse_attribute("captureMorph", v->captureMorph);
     parse_attribute("rexExclusiveMorph", v->rexExclusiveMorph);
     parse_color_setting("mustDrop", v->mustDrop);
-    parse_color_setting_piece("mustDropType", v->mustDropType);
+    parse_color_setting_piece("mustDropType", v->mustDropType, v);
     parse_attribute("openingSwapDrop", v->openingSwapDrop);
     parse_attribute("openingSwapMirrorMainDiagonal", v->openingSwapMirrorMainDiagonal);
     parse_attribute("dropKingLast", v->dropKingLast);
@@ -1617,7 +1616,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("dropPromoted", v->dropPromoted);
     parse_attribute("symmetricDropTypes", v->symmetricDropTypes, v);
     parse_attribute("captureDrops", v->captureDrops, v);
-    parse_color_setting_piece("dropNoDoubled", v->dropNoDoubled);
+    parse_color_setting_piece("dropNoDoubled", v->dropNoDoubled, v);
     parse_color_setting("dropNoDoubledCount", v->dropNoDoubledCount);
     parse_attribute("freeDrops", v->freeDrops);
     parse_attribute("payPointsToDrop", v->payPointsToDrop);
@@ -1694,7 +1693,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("soldierPromotionRank", v->soldierPromotionRank);
     parse_attribute("flipEnclosedPieces", v->flipEnclosedPieces);
     // game end
-    parse_color_setting_piece("nMoveRuleTypes", v->nMoveRuleTypes);
+    parse_color_setting_piece("nMoveRuleTypes", v->nMoveRuleTypes, v);
     parse_attribute("nMoveRule", v->nMoveRule);
     parse_attribute("nMoveRuleImmediate", v->nMoveRuleImmediate);
     parse_attribute("nMoveHardLimitRule", v->nMoveHardLimitRule);
@@ -1704,10 +1703,14 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_color_setting("nFoldValue", v->nFoldValue);
     parse_attribute("nFoldValueAbsolute", v->nFoldValueAbsolute);
     if (v->nFoldValueAbsolute) {
-        v->nFoldValue.byColor[WHITE] = v->nFoldValue.global;
-        v->nFoldValue.byColor[BLACK] = -v->nFoldValue.global;
-        v->nFoldValue.byColorSet[WHITE] = true;
-        v->nFoldValue.byColorSet[BLACK] = true;
+        if (!v->nFoldValue.byColorSet[WHITE]) {
+            v->nFoldValue.byColor[WHITE] = v->nFoldValue.global;
+            v->nFoldValue.byColorSet[WHITE] = true;
+        }
+        if (!v->nFoldValue.byColorSet[BLACK]) {
+            v->nFoldValue.byColor[BLACK] = -v->nFoldValue.global;
+            v->nFoldValue.byColorSet[BLACK] = true;
+        }
     }
     parse_attribute("perpetualCheckIllegal", v->perpetualCheckIllegal);
     parse_attribute("moveRepetitionIllegal", v->moveRepetitionIllegal);
@@ -1739,7 +1742,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("dupleCheck", v->dupleCheck);
     // extinction piece types
     parse_attribute("extinctionMustAppear", v->extinctionMustAppear, v);
-    parse_color_setting_piece("extinctionPieceTypes", v->extinctionPieceTypes);
+    parse_color_setting_piece("extinctionPieceTypes", v->extinctionPieceTypes, v);
     parse_color_setting("extinctionAllPieceTypes", v->extinctionAllPieceTypes);
     parse_color_setting("extinctionPieceCount", v->extinctionPieceCount);
     parse_color_setting("extinctionOpponentPieceCount", v->extinctionOpponentPieceCount);
@@ -1750,7 +1753,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
         v->pseudoRoyalTypes = v->extinctionPieceTypes;
         v->pseudoRoyalCount = v->extinctionPieceCount + 1;
     }
-    parse_color_setting_piece("flagPiece", v->flagPiece);
+    parse_color_setting_piece("flagPiece", v->flagPiece, v);
     parse_color_setting("flagRegion", v->flagRegion);
     parse_attribute("flagPieceCount", v->flagPieceCount);
     parse_attribute("flagPieceBlockedWin", v->flagPieceBlockedWin);
