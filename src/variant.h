@@ -130,9 +130,7 @@ struct Variant {
   ColorSetting<Bitboard> mandatoryPromotionRegion = ColorSetting<Bitboard>(Bitboard(0));
   ColorSetting<PieceType> mainPromotionPawnType = ColorSetting<PieceType>(PAWN);
   ColorSetting<PieceSet> promotionPawnTypes = ColorSetting<PieceSet>(piece_set(PAWN));
-  ColorSetting<PieceSet> promotionPieceTypes = ColorSetting<PieceSet>(piece_set(QUEEN) | ROOK | BISHOP | KNIGHT);
-  ColorSetting<bool> promotionPieceTypesByFileEnabled = ColorSetting<bool>(false);
-  ColorSetting<std::array<PieceSet, FILE_NB>> promotionPieceTypesByFile = ColorSetting<std::array<PieceSet, FILE_NB>>(std::array<PieceSet, FILE_NB>{});
+  ColorSetting<FilePieceSetMap> promotionPieceTypes = ColorSetting<FilePieceSetMap>(piece_set(QUEEN) | ROOK | BISHOP | KNIGHT);
   bool sittuyinPromotion = false;
   int promotionLimit[PIECE_TYPE_NB] = {}; // 0 means unlimited
   bool promotionSteal = false;
@@ -184,7 +182,7 @@ struct Variant {
   int castlingForbiddenPlies = 0;
   File castlingKingsideFile = FILE_G;
   File castlingQueensideFile = FILE_C;
-  File castlingRank = RANK_1;
+  Rank castlingRank = RANK_1;
   File castlingKingFile = FILE_E;
   ColorSetting<PieceType> castlingKingPiece = ColorSetting<PieceType>(KING);
   File castlingRookKingsideFile = FILE_MAX; // only has to match if rook is not in corner in non-960 variants

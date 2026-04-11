@@ -74,12 +74,12 @@ castlingQueensideFile = b
 startFen = rbnkbr/pppppp/6/6/PPPPPP/RBNKBR w KQkq - 0 1
 
 [promotion-by-file-inherit:chess]
-promotionPieceTypesByFile = a:q b:r
-promotionPieceTypesByFileWhite = a:n
+promotionPieceTypes = a:q b:r
+promotionPieceTypesWhite = a:n
 startFen = 8/1P6/8/8/8/8/8/4k2K w - - 0 1
 
 [promotion-by-file-spaces:chess]
-promotionPieceTypesByFile = a: q b: r c : b d :n e:- f: -
+promotionPieceTypes = a:q b:r c:b d:n e:- f:-
 startFen = 8/1P6/8/8/8/8/8/4k2K w - - 0 1
 
 [remove-connect-conn:fairy]

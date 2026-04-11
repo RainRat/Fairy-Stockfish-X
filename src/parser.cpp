@@ -742,11 +742,11 @@ namespace {
     bool parse_file_piece_set_map(const std::string& value,
                                   const Variant* v,
                                   File maxFile,
-                                  std::array<PieceSet, FILE_NB>& target,
+                                  FilePieceSetMap& target,
                                   bool doCheck,
                                   const std::string& key) {
         std::stringstream ss(value);
-        std::array<PieceSet, FILE_NB> parsed = target;
+        FilePieceSetMap parsed = target;
         bool sawToken = false;
 
         while (true) {
@@ -768,9 +768,8 @@ namespace {
             }
 
             int fileIdx = -1;
-            if (!parse_file_index(fileToken, fileIdx)
-                || fileIdx < int(FILE_A)
-                || fileIdx > int(maxFile)) {
+            bool isFallback = (fileToken == "*");
+            if (!isFallback && (!parse_file_index(fileToken, fileIdx) || fileIdx < 0 || fileIdx > int(maxFile))) {
                 if (doCheck)
                     std::cerr << key << " - Invalid file: " << fileToken << std::endl;
                 return false;
@@ -799,26 +798,12 @@ namespace {
 
             PieceSet pieces = NO_PIECE_SET;
             if (pieceToken != "-") {
-                std::string remaining = pieceToken;
-                while (!remaining.empty()) {
-                    std::string symbol = read_piece_token(remaining);
-                    if (symbol.empty()) {
-                        if (doCheck)
-                            std::cerr << key << " - Invalid piece type: " << remaining << std::endl;
-                        return false;
-                    }
-                    PieceType pt = parse_piece_type_token(v, symbol);
-                    if (pt == NO_PIECE_TYPE) {
-                        if (doCheck)
-                            std::cerr << key << " - Invalid piece type: " << symbol << std::endl;
-                        return false;
-                    }
-                    pieces |= pt;
-                    remaining.erase(0, symbol.size());
-                }
+                if (!parse_piece_set_token_string(pieceToken, v, pieces))
+                    return false;
             }
 
-            parsed[fileIdx] = pieces;
+            if (isFallback) parsed.fallback = pieces;
+            else parsed.set(File(fileIdx), pieces);
         }
 
         if (!sawToken) {
@@ -884,6 +869,29 @@ template <bool Current, class T> bool VariantParser<DoCheck>::parse_attribute(co
             if (DoCheck)
                 std::cerr << key << " - Invalid piece type: " << it->second << std::endl;
             return false;
+        }
+
+        if constexpr (std::is_same_v<T, FilePieceSetMap>)
+        {
+            if (it->second.find(':') == std::string::npos)
+            {
+                PieceSet globalSet = NO_PIECE_SET;
+                if (parse_piece_set_token_string(it->second, v, globalSet))
+                {
+                    target = FilePieceSetMap(globalSet);
+                    return true;
+                }
+            }
+            else
+            {
+                FilePieceSetMap parsedTarget;
+                if (parse_file_piece_set_map(it->second, v, v->maxFile, parsedTarget, DoCheck, key))
+                {
+                    target = parsedTarget;
+                    return true;
+                }
+                return false;
+            }
         }
 
         T parsedTarget = T();
@@ -1158,36 +1166,6 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_color_setting_piece("promotionPawnTypes", v->mainPromotionPawnType);
     parse_color_setting_piece("promotionPawnTypes", v->promotionPawnTypes);
     parse_color_setting_piece("promotionPieceTypes", v->promotionPieceTypes);
-    const auto& it_prom_file = config.find("promotionPieceTypesByFile");
-    if (it_prom_file != config.end())
-    {
-        std::array<PieceSet, FILE_NB> parsed;
-        if (!parse_file_piece_set_map(it_prom_file->second, v, v->maxFile,
-                                      parsed, DoCheck, "promotionPieceTypesByFile"))
-            return false;
-        v->promotionPieceTypesByFile.set_global(parsed);
-        v->promotionPieceTypesByFileEnabled = true;
-    }
-    const auto& it_prom_file_w = config.find("promotionPieceTypesByFileWhite");
-    if (it_prom_file_w != config.end())
-    {
-        std::array<PieceSet, FILE_NB> parsed;
-        if (!parse_file_piece_set_map(it_prom_file_w->second, v, v->maxFile,
-                                      parsed, DoCheck, "promotionPieceTypesByFileWhite"))
-            return false;
-        v->promotionPieceTypesByFile.set_color(WHITE, parsed);
-        v->promotionPieceTypesByFileEnabled.set_color(WHITE, true);
-    }
-    const auto& it_prom_file_b = config.find("promotionPieceTypesByFileBlack");
-    if (it_prom_file_b != config.end())
-    {
-        std::array<PieceSet, FILE_NB> parsed;
-        if (!parse_file_piece_set_map(it_prom_file_b->second, v, v->maxFile,
-                                      parsed, DoCheck, "promotionPieceTypesByFileBlack"))
-            return false;
-        v->promotionPieceTypesByFile.set_color(BLACK, parsed);
-        v->promotionPieceTypesByFileEnabled.set_color(BLACK, true);
-    }
     parse_attribute("sittuyinPromotion", v->sittuyinPromotion);
     parse_attribute("promotionSteal", v->promotionSteal);
     parse_attribute("promotionRequireInHand", v->promotionRequireInHand);

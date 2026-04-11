@@ -914,23 +914,15 @@ inline PieceType Position::main_promotion_pawn_type(Color c) const {
 
 inline PieceSet Position::promotion_piece_types(Color c) const {
   assert(var != nullptr);
-  if (var->promotionPieceTypesByFileEnabled.get(c))
-  {
-      PieceSet unionSet = NO_PIECE_SET;
-      for (int f = FILE_A; f <= int(var->maxFile); ++f)
-          unionSet |= var->promotionPieceTypesByFile.get(c)[f];
-      return unionSet;
-  }
-  return var->promotionPieceTypes.get(c);
+  return var->promotionPieceTypes.get(c).unionSet();
 }
 
 inline PieceSet Position::promotion_piece_types(Color c, Square s) const {
   assert(var != nullptr);
-  if (var->promotionPieceTypesByFileEnabled.get(c) && s != SQ_NONE)
+  if (s != SQ_NONE)
   {
       File f = file_of(s);
-      if (f >= FILE_A && f <= var->maxFile)
-          return var->promotionPieceTypesByFile.get(c)[f];
+      return var->promotionPieceTypes.get(c).piecesOfFile(f);
   }
   return promotion_piece_types(c);
 }

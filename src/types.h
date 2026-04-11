@@ -1300,6 +1300,64 @@ constexpr Key make_key(uint64_t seed) {
   return seed * 6364136223846793005ULL + 1442695040888963407ULL;
 }
 
+struct FilePieceSetMap
+{
+    FilePieceSetMap() = default;
+    FilePieceSetMap(PieceSet ps) : fallback(ps) {}
+    FilePieceSetMap(const FilePieceSetMap& other) = default;
+    FilePieceSetMap& operator=(const FilePieceSetMap& other) = default;
+
+    FilePieceSetMap& operator=(PieceSet ps) {
+        fallback = ps;
+        for (int f = FILE_A; f < FILE_NB; ++f) isSet[f] = false;
+        return *this;
+    }
+
+    FilePieceSetMap& operator&=(PieceSet ps) {
+        fallback &= ps;
+        for (int f = FILE_A; f < FILE_NB; ++f)
+            if (isSet[f]) filelist[f] &= ps;
+        return *this;
+    }
+
+    FilePieceSetMap& operator|=(PieceSet ps) {
+        fallback |= ps;
+        for (int f = FILE_A; f < FILE_NB; ++f)
+            if (isSet[f]) filelist[f] |= ps;
+        return *this;
+    }
+
+    PieceSet piecesOfFile(File f) const
+    {
+        if (f == FILE_NB) return fallback;
+        if (f < FILE_A || f > FILE_MAX) return NO_PIECE_SET;
+        return isSet[f] ? filelist[f] : fallback;
+    }
+
+    void set(File f, PieceSet ps)
+    {
+        if (f == FILE_NB) { fallback = ps; return; }
+        if (f < FILE_A || f > FILE_MAX) return;
+        filelist[f] = ps;
+        isSet[f] = true;
+    }
+
+    PieceSet unionSet() const
+    {
+        PieceSet ps = fallback;
+        for (int f = FILE_A; f < FILE_NB; ++f)
+            if (isSet[f]) ps |= filelist[f];
+        return ps;
+    }
+
+    operator PieceSet() const { return unionSet(); }
+
+    PieceSet fallback = NO_PIECE_SET;
+private:
+    PieceSet filelist[FILE_NB] = {NO_PIECE_SET};
+    bool isSet[FILE_NB] = {false};
+};
+
 } // namespace Stockfish
 
 #endif // #ifndef TYPES_H_INCLUDED
