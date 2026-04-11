@@ -1127,10 +1127,10 @@ bool VariantParser<DoCheck>::parse_legacy_attributes(Variant* v) {
     if (dropOnTop) v->enclosingDrop=TOP;
 
     // Parse aliases
-    parse_both_colors_piece("pawnTypes", v->mainPromotionPawnType, v);
-    parse_both_colors_piece("pawnTypes", v->promotionPawnTypes, v);
-    parse_both_colors_piece("pawnTypes", v->enPassantTypes, v);
-    parse_both_colors_piece("pawnTypes", v->nMoveRuleTypes, v);
+    parse_color_setting_piece("pawnTypes", v->mainPromotionPawnType);
+    parse_color_setting_piece("pawnTypes", v->promotionPawnTypes);
+    parse_color_setting_piece("pawnTypes", v->enPassantTypes);
+    parse_color_setting_piece("pawnTypes", v->nMoveRuleTypes);
     return true;
 }
 
@@ -1146,23 +1146,17 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("cylindrical", v->cylindrical);
     parse_attribute("toroidal", v->toroidal);
     parse_attribute("startFen", v->startFen);
-    parse_attribute("promotionRegionWhite", v->promotionRegion[WHITE]);
-    parse_attribute("promotionRegionBlack", v->promotionRegion[BLACK]);
-    parse_attribute("promotionRegion", v->promotionRegion[WHITE]);
-    parse_attribute("promotionRegion", v->promotionRegion[BLACK]);
-    parse_attribute("mandatoryPromotionRegionWhite", v->mandatoryPromotionRegion[WHITE]);
-    parse_attribute("mandatoryPromotionRegionBlack", v->mandatoryPromotionRegion[BLACK]);
-    parse_attribute("mandatoryPromotionRegion", v->mandatoryPromotionRegion[WHITE]);
-    parse_attribute("mandatoryPromotionRegion", v->mandatoryPromotionRegion[BLACK]);
+    parse_color_setting("promotionRegion", v->promotionRegion);
+    parse_color_setting("mandatoryPromotionRegion", v->mandatoryPromotionRegion);
     parse_attribute("pieceSpecificPromotionRegion", v->pieceSpecificPromotionRegion);
     if (!require_attributes(v->pieceSpecificPromotionRegion,
                             "whitePiecePromotionRegion", v->whitePiecePromotionRegion,
                             "blackPiecePromotionRegion", v->blackPiecePromotionRegion))
         return false;
     // Take the first promotionPawnTypes as the main promotionPawnType
-    parse_both_colors_with_overrides_piece("promotionPawnTypes", v->mainPromotionPawnType, v);
-    parse_both_colors_with_overrides_piece("promotionPawnTypes", v->promotionPawnTypes, v);
-    parse_both_colors_with_overrides_piece("promotionPieceTypes", v->promotionPieceTypes, v);
+    parse_color_setting_piece("promotionPawnTypes", v->mainPromotionPawnType);
+    parse_color_setting_piece("promotionPawnTypes", v->promotionPawnTypes);
+    parse_color_setting_piece("promotionPieceTypes", v->promotionPieceTypes);
     const auto& it_prom_file = config.find("promotionPieceTypesByFile");
     if (it_prom_file != config.end())
     {
@@ -1431,8 +1425,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("surroundCaptureMaxRegion", v->surroundCaptureMaxRegion);
     parse_attribute("surroundCaptureHostileRegion", v->surroundCaptureHostileRegion);
     parse_attribute("doubleStep", v->doubleStep);
-    parse_attribute("doubleStepRegionWhite", v->doubleStepRegion[WHITE]);
-    parse_attribute("doubleStepRegionBlack", v->doubleStepRegion[BLACK]);
+    parse_color_setting("doubleStepRegion", v->doubleStepRegion);
     parse_attribute("pieceSpecificDoubleStepRegion", v->pieceSpecificDoubleStepRegion);
     if (!require_attributes(v->pieceSpecificDoubleStepRegion,
                             "whitePieceDoubleStepRegion", v->whitePieceDoubleStepRegion,
@@ -1443,9 +1436,8 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
                             "whitePieceTripleStepRegion", v->whitePieceTripleStepRegion,
                             "blackPieceTripleStepRegion", v->blackPieceTripleStepRegion))
         return false;
-    parse_attribute("tripleStepRegionWhite", v->tripleStepRegion[WHITE]);
-    parse_attribute("tripleStepRegionBlack", v->tripleStepRegion[BLACK]);
-    parse_both_colors_with_overrides("enPassantRegion", v->enPassantRegion);
+    parse_color_setting("tripleStepRegion", v->tripleStepRegion);
+    parse_color_setting("enPassantRegion", v->enPassantRegion);
     parse_color_setting_piece("enPassantTypes", v->enPassantTypes);
     parse_attribute("enPassantPassedSquares", v->enPassantPassedSquares);
     parse_attribute("castling", v->castling);
@@ -1456,10 +1448,10 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("castlingQueensideFile", v->castlingQueensideFile);
     parse_attribute("castlingRank", v->castlingRank);
     parse_attribute("castlingKingFile", v->castlingKingFile);
-    parse_both_colors_with_overrides_piece("castlingKingPiece", v->castlingKingPiece, v);
+    parse_color_setting_piece("castlingKingPiece", v->castlingKingPiece);
     parse_attribute("castlingRookKingsideFile", v->castlingRookKingsideFile);
     parse_attribute("castlingRookQueensideFile", v->castlingRookQueensideFile);
-    parse_both_colors_with_overrides_piece("castlingRookPieces", v->castlingRookPieces, v);
+    parse_color_setting_piece("castlingRookPieces", v->castlingRookPieces);
     parse_attribute("oppositeCastling", v->oppositeCastling);
     parse_attribute("checking", v->checking);
     parse_attribute("allowChecks", v->allowChecks);
@@ -1630,9 +1622,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("promotionZonePawnDrops", v->promotionZonePawnDrops);
     parse_attribute("enclosingDrop", v->enclosingDrop);
     parse_attribute("enclosingDropStart", v->enclosingDropStart);
-    parse_both_colors_with_overrides("dropRegion", v->dropRegion);
-    parse_attribute("dropRegionWhite", v->dropRegion[WHITE]);
-    parse_attribute("dropRegionBlack", v->dropRegion[BLACK]);
+    parse_color_setting("dropRegion", v->dropRegion);
     parse_attribute("pieceSpecificDropRegion", v->pieceSpecificDropRegion);
     if (!require_attributes(v->pieceSpecificDropRegion,
                             "whitePieceDropRegion", v->whitePieceDropRegion,
@@ -1663,12 +1653,8 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("immobilityIllegal", v->immobilityIllegal);
     parse_attribute("gating", v->gating);
     parse_attribute("wallingRule", v->wallingRule);
-    parse_attribute("wallingWhite", v->wallingSide[WHITE]);
-    parse_attribute("wallingBlack", v->wallingSide[BLACK]);
-    parse_attribute("wallingRegionWhite", v->wallingRegion[WHITE]);
-    parse_attribute("wallingRegionBlack", v->wallingRegion[BLACK]);
-    parse_attribute("wallingRegion", v->wallingRegion[WHITE]);
-    parse_attribute("wallingRegion", v->wallingRegion[BLACK]);
+    parse_color_setting("wallingWhite", v->wallingSide);
+    parse_color_setting("wallingRegion", v->wallingRegion);
     parse_attribute("wallOrMove", v->wallOrMove);
     parse_attribute("surroundClaimRegion", v->surroundClaimRegion);
     parse_attribute("surroundClaimPiece", v->surroundClaimPiece, v);
@@ -1790,8 +1776,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("connectN", v->connectN);
     parse_attribute("connectPieceTypes", v->connectPieceTypes, v);
     parse_attribute("connectGoalByType", v->connectGoalByType);
-    parse_attribute("connectPieceGoalWhite", v->connectPieceGoal[WHITE]);
-    parse_attribute("connectPieceGoalBlack", v->connectPieceGoal[BLACK]);
+    parse_color_setting("connectPieceGoal", v->connectPieceGoal);
     parse_attribute("connectHorizontal", v->connectHorizontal);
     parse_attribute("connectVertical", v->connectVertical);
     parse_attribute("connectDiagonal", v->connectDiagonal);
@@ -1799,12 +1784,9 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("connectSouthEast", v->connectSouthEast);
     parse_attribute("connect3D", v->connect3D);
     parse_attribute("connect4D", v->connect4D);
-    parse_attribute("connectRegion1White", v->connectRegion1[WHITE]);
-    parse_attribute("connectRegion2White", v->connectRegion2[WHITE]);
-    parse_attribute("connectRegion3White", v->connectRegion3[WHITE]);
-    parse_attribute("connectRegion1Black", v->connectRegion1[BLACK]);
-    parse_attribute("connectRegion2Black", v->connectRegion2[BLACK]);
-    parse_attribute("connectRegion3Black", v->connectRegion3[BLACK]);
+    parse_color_setting("connectRegion1", v->connectRegion1);
+    parse_color_setting("connectRegion2", v->connectRegion2);
+    parse_color_setting("connectRegion3", v->connectRegion3);
     parse_attribute("connectNxN", v->connectNxN);
     parse_attribute("collinearN", v->collinearN);
     parse_attribute("connectGroup", v->connectGroup);
