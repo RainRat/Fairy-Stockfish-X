@@ -180,7 +180,7 @@ int slider_fraction(const std::map<Direction, int>& slider) {
 // Estimate piece value
 Value piece_value(Phase phase, PieceType pt)
 {
-    const PieceInfo* pi = pieceMap.find(pt)->second;
+    const PieceInfo* pi = pieceMap.get(pt);
     int v0 =  (phase == MG ?  60 :  60) * pi->steps[0][MODALITY_CAPTURE].size()
             + (phase == MG ?  30 :  40) * pi->steps[0][MODALITY_QUIET].size()
             + (phase == MG ? 185 : 185) * slider_fraction(pi->slider[0][MODALITY_CAPTURE]) / 100
@@ -260,7 +260,7 @@ void init(const Variant* v) {
               score += make_score(mg_value(score) * 3 / 2, eg_value(score));
       }
       
-      const PieceInfo* pi = pieceMap.find(pt)->second;
+      const PieceInfo* pi = pieceMap.get(pt);
       bool isSlider = pi->slider[0][MODALITY_QUIET].size() || pi->slider[0][MODALITY_CAPTURE].size() || pi->hopper[0][MODALITY_QUIET].size() || pi->hopper[0][MODALITY_CAPTURE].size();
       bool isPawn = !isSlider && pi->steps[0][MODALITY_QUIET].size() && !std::any_of(pi->steps[0][MODALITY_QUIET].begin(), pi->steps[0][MODALITY_QUIET].end(), [](const std::pair<const Direction, int>& d) { return d.first < SOUTH / 2; });
       bool isSlowLeaper = !isSlider && !std::any_of(pi->steps[0][MODALITY_QUIET].begin(), pi->steps[0][MODALITY_QUIET].end(), [](const std::pair<const Direction, int>& d) { return dist(d.first) > 1; });
