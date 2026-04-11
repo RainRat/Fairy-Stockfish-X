@@ -779,7 +779,7 @@ namespace {
                 b3 &= pos.check_squares(type_of(pos.unpromoted_piece_on(from)));
         }
 
-        if (Type != CAPTURES && (pos.pawn_like_types(Us) & Pt))
+        if (Type != CAPTURES && Pt != PAWN && (pos.pawn_like_types(Us) & Pt))
         {
             Square oneAhead = from + Up;
             if (is_ok(oneAhead) && (quiets & oneAhead))

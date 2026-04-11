@@ -697,6 +697,10 @@ namespace {
         target |= pt;
     }
 
+    template <> void set(PieceType pt, FilePieceSetMap& target) {
+        target |= pt;
+    }
+
     void parse_hostage_exchanges(Variant *v, const std::string &map, bool DoCheck) {
         std::stringstream groups(map);
         std::string group;
@@ -981,6 +985,51 @@ void VariantParser<DoCheck>::parse_both_colors_with_overrides_piece(const std::s
 }
 
 template <bool DoCheck>
+template <typename T>
+void VariantParser<DoCheck>::parse_color_setting(const std::string& key, ColorSetting<T>& target) {
+    if (config.find(key) != config.end())
+    {
+        parse_attribute(key, target.global);
+        target.set_global(target.global);
+    }
+    if (config.find(key + "White") != config.end())
+    {
+        T parsed = target.byColor[WHITE];
+        parse_attribute(key + "White", parsed);
+        target.set_color(WHITE, parsed);
+    }
+    if (config.find(key + "Black") != config.end())
+    {
+        T parsed = target.byColor[BLACK];
+        parse_attribute(key + "Black", parsed);
+        target.set_color(BLACK, parsed);
+    }
+}
+
+template <bool DoCheck>
+template <typename T>
+void VariantParser<DoCheck>::parse_color_setting_piece(const std::string& key, ColorSetting<T>& target) {
+    const Variant* v = nullptr; // Dummy for overload resolution
+    if (config.find(key) != config.end())
+    {
+        parse_attribute(key, target.global, v);
+        target.set_global(target.global);
+    }
+    if (config.find(key + "White") != config.end())
+    {
+        T parsed = target.byColor[WHITE];
+        parse_attribute(key + "White", parsed, v);
+        target.set_color(WHITE, parsed);
+    }
+    if (config.find(key + "Black") != config.end())
+    {
+        T parsed = target.byColor[BLACK];
+        parse_attribute(key + "Black", parsed, v);
+        target.set_color(BLACK, parsed);
+    }
+}
+
+template <bool DoCheck>
 bool VariantParser<DoCheck>::parse_piece_types(Variant* v) {
     for (PieceType pt = PAWN; pt <= KING; ++pt)
     {
@@ -1206,7 +1255,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     if (it_gate_after != config.end())
     {
         std::array<PieceType, PIECE_TYPE_NB> parsed;
-        if (!parse_piece_type_map(it_gate_after->second, v, parsed, true))
+        if (!parse_piece_type_map(it_gate_after->second, v, parsed.data(), true))
         {
             if (DoCheck)
                 std::cerr << "gatingPieceAfter - Invalid syntax." << std::endl;
@@ -1218,7 +1267,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     if (it_gate_after_w != config.end())
     {
         std::array<PieceType, PIECE_TYPE_NB> parsed;
-        if (!parse_piece_type_map(it_gate_after_w->second, v, parsed, true))
+        if (!parse_piece_type_map(it_gate_after_w->second, v, parsed.data(), true))
         {
             if (DoCheck)
                 std::cerr << "gatingPieceAfterWhite - Invalid syntax." << std::endl;
@@ -1230,7 +1279,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     if (it_gate_after_b != config.end())
     {
         std::array<PieceType, PIECE_TYPE_NB> parsed;
-        if (!parse_piece_type_map(it_gate_after_b->second, v, parsed, true))
+        if (!parse_piece_type_map(it_gate_after_b->second, v, parsed.data(), true))
         {
             if (DoCheck)
                 std::cerr << "gatingPieceAfterBlack - Invalid syntax." << std::endl;
@@ -1290,44 +1339,6 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
             v->isPriorityDrop = parsedPriorityDrops;
     }
     parse_attribute("piecePromotionOnCapture", v->piecePromotionOnCapture);
-    auto parse_color_setting = [&](const std::string& key, auto& setting) {
-        if (config.find(key) != config.end())
-        {
-            parse_attribute(key, setting.global);
-            setting.set_global(setting.global);
-        }
-        if (config.find(key + "White") != config.end())
-        {
-            auto parsed = setting.byColor[WHITE];
-            parse_attribute(key + "White", parsed);
-            setting.set_color(WHITE, parsed);
-        }
-        if (config.find(key + "Black") != config.end())
-        {
-            auto parsed = setting.byColor[BLACK];
-            parse_attribute(key + "Black", parsed);
-            setting.set_color(BLACK, parsed);
-        }
-    };
-    auto parse_color_setting_piece = [&](const std::string& key, auto& setting) {
-        if (config.find(key) != config.end())
-        {
-            parse_attribute(key, setting.global, v);
-            setting.set_global(setting.global);
-        }
-        if (config.find(key + "White") != config.end())
-        {
-            auto parsed = setting.byColor[WHITE];
-            parse_attribute(key + "White", parsed, v);
-            setting.set_color(WHITE, parsed);
-        }
-        if (config.find(key + "Black") != config.end())
-        {
-            auto parsed = setting.byColor[BLACK];
-            parse_attribute(key + "Black", parsed, v);
-            setting.set_color(BLACK, parsed);
-        }
-    };
     parse_color_setting("mandatoryPawnPromotion", v->mandatoryPawnPromotion);
     parse_color_setting("mandatoryPiecePromotion", v->mandatoryPiecePromotion);
     parse_attribute("pieceDemotion", v->pieceDemotion);
@@ -1556,7 +1567,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("openingSelfRemoval", v->openingSelfRemoval);
     parse_attribute("openingSelfRemovalAdjacentToLast", v->openingSelfRemovalAdjacentToLast);
     parse_color_setting("openingSelfRemovalRegion", v->openingSelfRemovalRegion);
-    parse_attribute("openingSwapDrop", v->openingSwapDrop);
+    parse_attribute("pieceDrops", v->pieceDrops);
     parse_attribute("borrowOpponentDropsWhenEmpty", v->borrowOpponentDropsWhenEmpty);
     parse_attribute("virtualDrops", v->virtualDrops);
     const auto& it_virtual_drop_limit = config.find("virtualDropLimit");

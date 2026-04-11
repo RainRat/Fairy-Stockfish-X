@@ -464,6 +464,21 @@ struct PieceTypeBitboardGroup
         isSet[ptc - 'A'] = true;
     }
 
+    PieceTypeBitboardGroup& operator|=(Bitboard b) {
+        fallback |= b;
+        for (size_t i = 0; i < PIECE_TYPE_COUNT; ++i)
+            if (isSet[i]) boardlist[i] |= b;
+        return *this;
+    }
+
+    explicit operator bool() const { return fallback || anySet(); }
+    operator Bitboard() const { return fallback; }
+
+    bool anySet() const {
+        for (size_t i = 0; i < PIECE_TYPE_COUNT; ++i) if (isSet[i]) return true;
+        return false;
+    }
+
     Bitboard fallback = 0;
 private:
     Bitboard boardlist[PIECE_TYPE_COUNT] = {0};
@@ -1325,6 +1340,10 @@ struct FilePieceSetMap
         for (int f = FILE_A; f < FILE_NB; ++f)
             if (isSet[f]) filelist[f] |= ps;
         return *this;
+    }
+
+    FilePieceSetMap& operator|=(PieceType pt) {
+        return *this |= piece_set(pt);
     }
 
     PieceSet piecesOfFile(File f) const

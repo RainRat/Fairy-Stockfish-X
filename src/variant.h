@@ -58,7 +58,7 @@ struct ColorSetting {
   std::array<bool, COLOR_NB> byColorSet = {false, false};
 
   constexpr ColorSetting() : global(), byColor{} {}
-  constexpr explicit ColorSetting(const T& value) : global(value), byColor{value, value} {}
+  constexpr ColorSetting(const T& value) : global(value), byColor{value, value} {}
   constexpr ColorSetting(const T& white, const T& black) : global(white), byColor{white, black}, byColorSet{true, true} {}
 
   constexpr const T& get(Color c) const {

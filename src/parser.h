@@ -86,6 +86,8 @@ private:
     template <typename T> void parse_both_colors_piece(const std::string& key, T& target, const Variant* v);
     template <typename T> void parse_both_colors_with_overrides(const std::string& key, T& target);
     template <typename T> void parse_both_colors_with_overrides_piece(const std::string& key, T& target, const Variant* v);
+    template <typename T> void parse_color_setting(const std::string& key, ColorSetting<T>& target);
+    template <typename T> void parse_color_setting_piece(const std::string& key, ColorSetting<T>& target);
 };
 
 } // namespace Stockfish
