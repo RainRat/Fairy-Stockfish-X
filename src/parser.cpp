@@ -490,6 +490,12 @@ namespace {
     }
 
     template <> bool set(const std::string& value, PieceTypeBitboardGroup& target) {
+        // Try parsing as Bitboard first for backward compatibility
+        Bitboard b;
+        if (set(value, b)) {
+            target = PieceTypeBitboardGroup(b);
+            return true;
+        }
         size_t i;
         int ParserState = -1;
         int RankNum = 0;
@@ -500,7 +506,7 @@ namespace {
         for (i = 0; i < value.length(); i++)
         {
             const char ch = value.at(i);
-            if (ch == ' ')
+            if (ch == ' ' || ch == ';')
             {
                 continue;
             }
@@ -515,7 +521,7 @@ namespace {
             }
             if (ParserState == 0)  // Find piece type character
             {
-                if (ch >= 'A' && ch <= 'Z')
+                if ((ch >= 'A' && ch <= 'Z') || ch == '*')
                 {
                     PieceChar = ch;
                     ParserState = 1;
@@ -1148,11 +1154,6 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("startFen", v->startFen);
     parse_color_setting("promotionRegion", v->promotionRegion);
     parse_color_setting("mandatoryPromotionRegion", v->mandatoryPromotionRegion);
-    parse_attribute("pieceSpecificPromotionRegion", v->pieceSpecificPromotionRegion);
-    if (!require_attributes(v->pieceSpecificPromotionRegion,
-                            "whitePiecePromotionRegion", v->whitePiecePromotionRegion,
-                            "blackPiecePromotionRegion", v->blackPiecePromotionRegion))
-        return false;
     // Take the first promotionPawnTypes as the main promotionPawnType
     parse_color_setting_piece("promotionPawnTypes", v->mainPromotionPawnType);
     parse_color_setting_piece("promotionPawnTypes", v->promotionPawnTypes);
@@ -1435,16 +1436,6 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("surroundCaptureHostileRegion", v->surroundCaptureHostileRegion);
     parse_attribute("doubleStep", v->doubleStep);
     parse_color_setting("doubleStepRegion", v->doubleStepRegion);
-    parse_attribute("pieceSpecificDoubleStepRegion", v->pieceSpecificDoubleStepRegion);
-    if (!require_attributes(v->pieceSpecificDoubleStepRegion,
-                            "whitePieceDoubleStepRegion", v->whitePieceDoubleStepRegion,
-                            "blackPieceDoubleStepRegion", v->blackPieceDoubleStepRegion))
-        return false;
-    parse_attribute("pieceSpecificTripleStepRegion", v->pieceSpecificTripleStepRegion);
-    if (!require_attributes(v->pieceSpecificTripleStepRegion,
-                            "whitePieceTripleStepRegion", v->whitePieceTripleStepRegion,
-                            "blackPieceTripleStepRegion", v->blackPieceTripleStepRegion))
-        return false;
     parse_color_setting("tripleStepRegion", v->tripleStepRegion);
     parse_color_setting("enPassantRegion", v->enPassantRegion);
     parse_color_setting_piece("enPassantTypes", v->enPassantTypes);
@@ -1632,11 +1623,6 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("enclosingDrop", v->enclosingDrop);
     parse_attribute("enclosingDropStart", v->enclosingDropStart);
     parse_color_setting("dropRegion", v->dropRegion);
-    parse_attribute("pieceSpecificDropRegion", v->pieceSpecificDropRegion);
-    if (!require_attributes(v->pieceSpecificDropRegion,
-                            "whitePieceDropRegion", v->whitePieceDropRegion,
-                            "blackPieceDropRegion", v->blackPieceDropRegion))
-        return false;
     parse_attribute("sittuyinRookDrop", v->sittuyinRookDrop);
     parse_attribute("dropOppositeColoredBishop", v->dropOppositeColoredBishop);
     parse_attribute("dropPromoted", v->dropPromoted);

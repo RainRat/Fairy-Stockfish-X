@@ -866,29 +866,13 @@ inline PieceType Position::piece_type_from_symbol(const std::string& token) cons
 
 inline Bitboard Position::promotion_zone(Color c) const {
   assert(var != nullptr);
-  return var->promotionRegion[c];
+  return var->promotionRegion.get(c).fallback;
 }
 
 inline Bitboard Position::promotion_zone(Color c, PieceType pt) const {
     assert(var != nullptr);
     assert(pt != NO_PIECE_TYPE);
-    Bitboard b = var->promotionRegion[c];
-
-    // Piece specific promotion region
-    // Only filter moves based on var->promotionRegion[] which is a restriction that applies to all pieces
-    // Set whitePromotionRegion/blackPromotionRegion to AllSquares to remove the restriction
-    if (var->pieceSpecificPromotionRegion)
-    {
-        if (c == WHITE)
-        {
-            b &= var->whitePiecePromotionRegion.boardOfPiece(toupper(piece_to_char()[(c << PIECE_TYPE_BITS) | pt]));
-        }
-        else if (c == BLACK)
-        {
-            b &= var->blackPiecePromotionRegion.boardOfPiece(toupper(piece_to_char()[(c << PIECE_TYPE_BITS) | pt]));
-        }
-    }
-    return b;
+    return var->promotionRegion.get(c).boardOfPiece(toupper(piece_to_char()[(WHITE << PIECE_TYPE_BITS) | pt]));
 }
 
 inline Bitboard Position::promotion_zone(Piece p) const {
@@ -1141,33 +1125,13 @@ inline EndgameEval Position::endgame_eval() const {
 
 inline Bitboard Position::double_step_region(Color c) const {
   assert(var != nullptr);
-  return var->doubleStepRegion[c];
+  return var->doubleStepRegion.get(c).fallback;
 }
 
 inline Bitboard Position::double_step_region(Color c, PieceType pt) const {
     assert(var != nullptr);
     assert(pt != NO_PIECE_TYPE);
-    Bitboard b = var->doubleStepRegion[c];
-
-    // Piece-specific multi-step regions override the global region for that
-    // piece type when an explicit per-piece region is configured.
-    if (var->pieceSpecificDoubleStepRegion)
-    {
-        if (c == WHITE)
-        {
-            Bitboard pieceSpecific = var->whitePieceDoubleStepRegion.boardOfPiece(toupper(piece_to_char()[(c << PIECE_TYPE_BITS) | pt]));
-            if (pieceSpecific)
-                b = pieceSpecific;
-        }
-        else if (c == BLACK)
-        {
-            Bitboard pieceSpecific = var->blackPieceDoubleStepRegion.boardOfPiece(toupper(piece_to_char()[(c << PIECE_TYPE_BITS) | pt]));
-            if (pieceSpecific)
-                b = pieceSpecific;
-        }
-    }
-
-    return b;
+    return var->doubleStepRegion.get(c).boardOfPiece(toupper(piece_to_char()[(WHITE << PIECE_TYPE_BITS) | pt]));
 }
 
 inline Bitboard Position::double_step_region(Piece p) const {
@@ -1178,33 +1142,13 @@ inline Bitboard Position::double_step_region(Piece p) const {
 
 inline Bitboard Position::triple_step_region(Color c) const {
   assert(var != nullptr);
-  return var->tripleStepRegion[c];
+  return var->tripleStepRegion.get(c).fallback;
 }
 
 inline Bitboard Position::triple_step_region(Color c, PieceType pt) const {
     assert(var != nullptr);
     assert(pt != NO_PIECE_TYPE);
-    Bitboard b = var->tripleStepRegion[c];
-
-    // Piece-specific multi-step regions override the global region for that
-    // piece type when an explicit per-piece region is configured.
-    if (var->pieceSpecificTripleStepRegion)
-    {
-        if (c == WHITE)
-        {
-            Bitboard pieceSpecific = var->whitePieceTripleStepRegion.boardOfPiece(toupper(piece_to_char()[(c << PIECE_TYPE_BITS) | pt]));
-            if (pieceSpecific)
-                b = pieceSpecific;
-        }
-        else if (c == BLACK)
-        {
-            Bitboard pieceSpecific = var->blackPieceTripleStepRegion.boardOfPiece(toupper(piece_to_char()[(c << PIECE_TYPE_BITS) | pt]));
-            if (pieceSpecific)
-                b = pieceSpecific;
-        }
-    }
-
-    return b;
+    return var->tripleStepRegion.get(c).boardOfPiece(toupper(piece_to_char()[(WHITE << PIECE_TYPE_BITS) | pt]));
 }
 
 inline Bitboard Position::triple_step_region(Piece p) const {
@@ -1766,26 +1710,14 @@ inline EnclosingRule Position::enclosing_drop() const {
 
 inline Bitboard Position::drop_region(Color c) const {
   assert(var != nullptr);
-  return var->dropRegion[c];
+  return var->dropRegion.get(c).fallback;
 }
 
 inline Bitboard Position::drop_region(Color c, PieceType pt) const {
-  Bitboard b = drop_region(c) & board_bb(c, pt);
-
-  // Piece specific drop region
-  // Only filter moves based on drop_region() which is a restriction that applies to all pieces
-  // Set whiteDropRegion/blackDropRegion to AllSquares to remove the restriction
-  if (var->pieceSpecificDropRegion)
-  {
-      if (c == WHITE)
-      {
-          b &= var->whitePieceDropRegion.boardOfPiece(toupper(piece_to_char()[(c << PIECE_TYPE_BITS) | pt]));
-      }
-      else if (c == BLACK)
-      {
-          b &= var->blackPieceDropRegion.boardOfPiece(toupper(piece_to_char()[(c << PIECE_TYPE_BITS) | pt]));
-      }
-  }
+  assert(var != nullptr);
+  assert(pt != NO_PIECE_TYPE);
+  Bitboard b = var->dropRegion.get(c).boardOfPiece(toupper(piece_to_char()[(WHITE << PIECE_TYPE_BITS) | pt]))
+             & board_bb(c, pt);
 
   // Pawns on back ranks
   if (pt == PAWN)
@@ -3535,52 +3467,44 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
     // Since double step in introduced from chess variants where pawns cannot capture forward, capturing moves are not included here.
     // Double/Triple step cannot attack other pieces, so attacks_from(Color c, PieceType pt, Square s) is not changed
     // Due to some unknown issues, shift<Direction D>(Bitboard b) cannot be used here
-    if (var->pieceSpecificTripleStepRegion)
+    Bitboard tripleStepRegion = this->triple_step_region(c, pt);
+    Bitboard occupied = this->pieces();  //Bitboard where the bits whose corresponding squares having a piece on it are 1
+    Bitboard piecePosition = square_bb(s);  //Bitboard where only the bit which refers to the square that the piece starts the move (original square) is 1
+    if (tripleStepRegion & piecePosition & this->not_moved_pieces(c))  //If the original square is in tripleStepRegion and the piece is not moved
     {
-        Bitboard tripleStepRegion = this->triple_step_region(c, pt);
-        Bitboard occupied = this->pieces();  //Bitboard where the bits whose corresponding squares having a piece on it are 1
-        Bitboard piecePosition = square_bb(s);  //Bitboard where only the bit which refers to the square that the piece starts the move (original square) is 1
         Bitboard extraMultipleStepMoveDestinations = 0x00;  //Bitboard where extra legal multi-step destination square bits are 1
-        if (tripleStepRegion & piecePosition & this->not_moved_pieces(c))  //If the original square is in tripleStepRegion and the piece is not moved
+        Bitboard oneSquareAhead = (c == WHITE) ? piecePosition << NORTH : piecePosition >> NORTH;
+        if (!(oneSquareAhead & occupied))  //If the square which is 1 square ahead of original square is NOT blocked
         {
-            Bitboard oneSquareAhead = (c == WHITE) ? piecePosition << NORTH : piecePosition >> NORTH;
-            if (!(oneSquareAhead & occupied))  //If the square which is 1 square ahead of original square is NOT blocked
+            extraMultipleStepMoveDestinations |= oneSquareAhead;  //Add the square which is 1 square ahead of original square to destination squares for triple step
+            Bitboard twoSquareAhead = (c == WHITE) ? piecePosition << NORTH << NORTH : piecePosition >> NORTH >> NORTH;
+            if (!(twoSquareAhead & occupied))  //If the square which is 2 squares ahead of original square is NOT blocked
             {
-                extraMultipleStepMoveDestinations |= oneSquareAhead;  //Add the square which is 1 square ahead of original square to destination squares for triple step
-                Bitboard twoSquareAhead = (c == WHITE) ? piecePosition << NORTH << NORTH : piecePosition >> NORTH >> NORTH;
-                if (!(twoSquareAhead & occupied))  //If the square which is 2 squares ahead of original square is NOT blocked
+                extraMultipleStepMoveDestinations |= twoSquareAhead;  //Add the square which is 2 squares ahead of original square to destination squares for triple step
+                Bitboard threeSquareAhead = (c == WHITE) ? piecePosition << NORTH << NORTH << NORTH : piecePosition >> NORTH >> NORTH >> NORTH;
+                if (!(threeSquareAhead & occupied))  //If the square which is 3 squares ahead of original square is NOT blocked
                 {
-                    extraMultipleStepMoveDestinations |= twoSquareAhead;  //Add the square which is 2 squares ahead of original square to destination squares for triple step
-                    Bitboard threeSquareAhead = (c == WHITE) ? piecePosition << NORTH << NORTH << NORTH : piecePosition >> NORTH >> NORTH >> NORTH;
-                    if (!(threeSquareAhead & occupied))  //If the square which is 3 squares ahead of original square is NOT blocked
-                    {
-                        extraMultipleStepMoveDestinations |= threeSquareAhead;  //Add the square which is 3 squares ahead of original square to destination squares for triple step
-                    }
+                    extraMultipleStepMoveDestinations |= threeSquareAhead;  //Add the square which is 3 squares ahead of original square to destination squares for triple step
                 }
             }
-            extraDestinations |= extraMultipleStepMoveDestinations; //Add destination squares to base board
         }
+        extraDestinations |= extraMultipleStepMoveDestinations; //Add destination squares to base board
     }
-    if (var->pieceSpecificDoubleStepRegion)
+    Bitboard doubleStepRegion = this->double_step_region(c, pt);
+    if (doubleStepRegion & piecePosition & this->not_moved_pieces(c))  //If the original square is in doubleStepRegion and the piece is not moved
     {
-        Bitboard doubleStepRegion = this->double_step_region(c, pt);
-        Bitboard occupied = this->pieces();  //Bitboard where the bits whose corresponding squares having a piece on it are 1
-        Bitboard piecePosition = square_bb(s);  //Bitboard where only the bit which refers to the square that the piece starts the move (original square) is 1
         Bitboard extraMultipleStepMoveDestinations = 0x00;  //Bitboard where extra legal multi-step destination square bits are 1
-        if (doubleStepRegion & piecePosition & this->not_moved_pieces(c))  //If the original square is in doubleStepRegion and the piece is not moved
+        Bitboard oneSquareAhead = (c == WHITE) ? piecePosition << NORTH : piecePosition >> NORTH;
+        if (!(oneSquareAhead & occupied))  //If the square which is 1 square ahead of original square is NOT blocked
         {
-            Bitboard oneSquareAhead = (c == WHITE) ? piecePosition << NORTH : piecePosition >> NORTH;
-            if (!(oneSquareAhead & occupied))  //If the square which is 1 square ahead of original square is NOT blocked
+            extraMultipleStepMoveDestinations |= oneSquareAhead;  //Add the square which is 1 square ahead of original square to destination squares for triple step
+            Bitboard twoSquareAhead = (c == WHITE) ? piecePosition << NORTH << NORTH : piecePosition >> NORTH >> NORTH;
+            if (!(twoSquareAhead & occupied))  //If the square which is 2 squares ahead of original square is NOT blocked
             {
-                extraMultipleStepMoveDestinations |= oneSquareAhead;  //Add the square which is 1 square ahead of original square to destination squares for triple step
-                Bitboard twoSquareAhead = (c == WHITE) ? piecePosition << NORTH << NORTH : piecePosition >> NORTH >> NORTH;
-                if (!(twoSquareAhead & occupied))  //If the square which is 2 squares ahead of original square is NOT blocked
-                {
-                    extraMultipleStepMoveDestinations |= twoSquareAhead;  //Add the square which is 2 squares ahead of original square to destination squares for triple step
-                }
+                extraMultipleStepMoveDestinations |= twoSquareAhead;  //Add the square which is 2 squares ahead of original square to destination squares for triple step
             }
-            extraDestinations |= extraMultipleStepMoveDestinations; //Add destination squares to base board
         }
+        extraDestinations |= extraMultipleStepMoveDestinations; //Add destination squares to base board
     }
 
   Bitboard occupancy = byTypeBB[ALL_PIECES];

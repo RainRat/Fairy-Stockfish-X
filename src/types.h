@@ -430,6 +430,7 @@ constexpr size_t PIECE_TYPE_COUNT = 26;
 struct PieceTypeBitboardGroup
 {
     PieceTypeBitboardGroup() = default;
+    PieceTypeBitboardGroup(Bitboard b) : fallback(b) {}
     PieceTypeBitboardGroup(const PieceTypeBitboardGroup& other) = default;
     PieceTypeBitboardGroup& operator=(const PieceTypeBitboardGroup& other) = default;
 
@@ -445,36 +446,28 @@ struct PieceTypeBitboardGroup
     // Returns the bitboard copy of a piece type.
     // ptc: Only accepts A-Z
     // <return value>: The copy of corresponding bitboard
-    // Example:
-    // _begin
-    // PieceTypeBitboardGroup a;
-    // Bitboard boardOfPieceA = a.boardOfPiece('A');
-    // _end
     Bitboard boardOfPiece(const char ptc) const
     {
-        if (ptc < 'A' || ptc > 'Z')
-        {
-            assert(false);
-            return Bitboard(0);
-        }
-        return this->boardlist[ptc - 'A'];
+        if (ptc == '*') return fallback;
+        if (ptc < 'A' || ptc > 'Z') return Bitboard(0);
+        return isSet[ptc - 'A'] ? boardlist[ptc - 'A'] : fallback;
     }
 
     // Set the bitboard of a piece type.
-    // ptc: Only accepts A-Z
+    // ptc: Only accepts A-Z or * for fallback
     // board: The bitboard to set
     void set(const char ptc, Bitboard board)
     {
-        if (ptc < 'A' || ptc > 'Z')
-        {
-            assert(false);
-            return;
-        }
-        this->boardlist[ptc - 'A'] = board;
+        if (ptc == '*') { fallback = board; return; }
+        if (ptc < 'A' || ptc > 'Z') return;
+        boardlist[ptc - 'A'] = board;
+        isSet[ptc - 'A'] = true;
     }
 
+    Bitboard fallback = 0;
 private:
     Bitboard boardlist[PIECE_TYPE_COUNT] = {0};
+    bool isSet[PIECE_TYPE_COUNT] = {false};
 };
 
 //When defined, move list will be stored in heap. Delete this if you want to use stack to store move list. Using stack can cause overflow (Segmentation Fault) when the search is too deep.

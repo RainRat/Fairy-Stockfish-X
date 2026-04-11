@@ -17,7 +17,7 @@ trap 'rm -f "${tmp_ini}"' EXIT
 cat > "${tmp_ini}" <<'INI'
 [ptbg-no-semicolon:chess]
 pieceDrops = true
-whitePieceDropRegion = P(a8)
+dropRegionWhite = P(a8)
 
 [tuple-nonsquare:chess]
 maxRank = 8
@@ -118,7 +118,7 @@ INI
 echo "parser regression tests started"
 
 check_output=$("${ENGINE}" check "${tmp_ini}" 2>&1 || true)
-if echo "${check_output}" | grep -Eq "PieceTypeBitboardGroup declaration|Invalid value.*whitePieceDropRegion|Error parsing|unterminated"; then
+if echo "${check_output}" | grep -Eq "PieceTypeBitboardGroup declaration|Invalid value.*dropRegionWhite|Error parsing|unterminated"; then
   echo "${check_output}"
   exit 1
 fi

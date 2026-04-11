@@ -19,9 +19,7 @@ checking = false
 customPiece1 = a:iW
 pieceToCharTable = A:a
 startFen = 8/8/8/8/8/8/8/4A3 w - - 0 1
-pieceSpecificDoubleStepRegion = true
-whitePieceDoubleStepRegion = A(e1);
-blackPieceDoubleStepRegion = -
+doubleStepRegionWhite = A(e1); *(*2)
 
 [irider-piece-specific:chess]
 king = -
@@ -29,9 +27,7 @@ checking = false
 customPiece1 = a:imR2
 pieceToCharTable = A:a
 startFen = 8/8/8/8/8/8/8/4A3 w - - 0 1
-pieceSpecificDoubleStepRegion = true
-whitePieceDoubleStepRegion = A(e1);
-blackPieceDoubleStepRegion = -
+doubleStepRegionWhite = A(e1); *(*2)
 
 [itriple-piece-specific:chess]
 king = -
@@ -39,9 +35,7 @@ checking = false
 customPiece1 = a:iW
 pieceToCharTable = A:a
 startFen = 8/8/8/8/8/8/8/4A3 w - - 0 1
-pieceSpecificTripleStepRegion = true
-whitePieceTripleStepRegion = A(e1);
-blackPieceTripleStepRegion = -
+tripleStepRegionWhite = A(e1)
 INI
 
 run_perft() {
