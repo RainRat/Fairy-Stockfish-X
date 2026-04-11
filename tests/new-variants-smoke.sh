@@ -47,9 +47,8 @@ echo "new variants smoke testing started"
 tmp_ini=$(mktemp)
 cat > "${tmp_ini}" <<'INI'
 [ptgroup-merge:chess]
-pieceSpecificPromotionRegion = true
-whitePiecePromotionRegion = P(a8);P(h8);
-blackPiecePromotionRegion = P(a1);P(h1);
+promotionRegionWhite = P(a8);P(h8); *(*8)
+promotionRegionBlack = P(a1);P(h1); *(*1)
 promotionPieceTypes = q
 promotionPieceTypesWhite = q
 promotionPieceTypesBlack = q

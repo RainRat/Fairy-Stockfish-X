@@ -882,7 +882,7 @@ namespace {
             score -= make_score(200, 900) / pos.count_in_hand(Us, ALL_PIECES) * (pos.count_in_hand(Us, ALL_PIECES) - popcount(pos.gates(Us)));
 
         // Redundant pieces that can not be doubled per file (e.g., shogi pawns)
-        if (pt == pos.drop_no_doubled(Us))
+        if (piece_set(pt) & pos.drop_no_doubled(Us))
             score -= make_score(50, 20) * std::max(pos.count_with_hand(Us, pt) - pos.max_file() - 1, 0);
     }
 

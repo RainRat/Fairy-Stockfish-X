@@ -430,6 +430,7 @@ constexpr size_t PIECE_TYPE_COUNT = 26;
 struct PieceTypeBitboardGroup
 {
     PieceTypeBitboardGroup() = default;
+    PieceTypeBitboardGroup(Bitboard b) : fallback(b) {}
     PieceTypeBitboardGroup(const PieceTypeBitboardGroup& other) = default;
     PieceTypeBitboardGroup& operator=(const PieceTypeBitboardGroup& other) = default;
 
@@ -445,36 +446,43 @@ struct PieceTypeBitboardGroup
     // Returns the bitboard copy of a piece type.
     // ptc: Only accepts A-Z
     // <return value>: The copy of corresponding bitboard
-    // Example:
-    // _begin
-    // PieceTypeBitboardGroup a;
-    // Bitboard boardOfPieceA = a.boardOfPiece('A');
-    // _end
     Bitboard boardOfPiece(const char ptc) const
     {
-        if (ptc < 'A' || ptc > 'Z')
-        {
-            assert(false);
-            return Bitboard(0);
-        }
-        return this->boardlist[ptc - 'A'];
+        if (ptc == '*') return fallback;
+        if (ptc < 'A' || ptc > 'Z') return Bitboard(0);
+        return isSet[ptc - 'A'] ? boardlist[ptc - 'A'] : fallback;
     }
 
     // Set the bitboard of a piece type.
-    // ptc: Only accepts A-Z
+    // ptc: Only accepts A-Z or * for fallback
     // board: The bitboard to set
     void set(const char ptc, Bitboard board)
     {
-        if (ptc < 'A' || ptc > 'Z')
-        {
-            assert(false);
-            return;
-        }
-        this->boardlist[ptc - 'A'] = board;
+        if (ptc == '*') { fallback = board; return; }
+        if (ptc < 'A' || ptc > 'Z') return;
+        boardlist[ptc - 'A'] = board;
+        isSet[ptc - 'A'] = true;
     }
 
+    PieceTypeBitboardGroup& operator|=(Bitboard b) {
+        fallback |= b;
+        for (size_t i = 0; i < PIECE_TYPE_COUNT; ++i)
+            if (isSet[i]) boardlist[i] |= b;
+        return *this;
+    }
+
+    explicit operator bool() const { return fallback || anySet(); }
+    operator Bitboard() const { return fallback; }
+
+    bool anySet() const {
+        for (size_t i = 0; i < PIECE_TYPE_COUNT; ++i) if (isSet[i]) return true;
+        return false;
+    }
+
+    Bitboard fallback = 0;
 private:
     Bitboard boardlist[PIECE_TYPE_COUNT] = {0};
+    bool isSet[PIECE_TYPE_COUNT] = {false};
 };
 
 //When defined, move list will be stored in heap. Delete this if you want to use stack to store move list. Using stack can cause overflow (Segmentation Fault) when the search is too deep.
@@ -1306,6 +1314,68 @@ inline int dist(Direction d) {
 constexpr Key make_key(uint64_t seed) {
   return seed * 6364136223846793005ULL + 1442695040888963407ULL;
 }
+
+struct FilePieceSetMap
+{
+    FilePieceSetMap() = default;
+    FilePieceSetMap(PieceSet ps) : fallback(ps) {}
+    FilePieceSetMap(const FilePieceSetMap& other) = default;
+    FilePieceSetMap& operator=(const FilePieceSetMap& other) = default;
+
+    FilePieceSetMap& operator=(PieceSet ps) {
+        fallback = ps;
+        for (int f = FILE_A; f < FILE_NB; ++f) isSet[f] = false;
+        return *this;
+    }
+
+    FilePieceSetMap& operator&=(PieceSet ps) {
+        fallback &= ps;
+        for (int f = FILE_A; f < FILE_NB; ++f)
+            if (isSet[f]) filelist[f] &= ps;
+        return *this;
+    }
+
+    FilePieceSetMap& operator|=(PieceSet ps) {
+        fallback |= ps;
+        for (int f = FILE_A; f < FILE_NB; ++f)
+            if (isSet[f]) filelist[f] |= ps;
+        return *this;
+    }
+
+    FilePieceSetMap& operator|=(PieceType pt) {
+        return *this |= piece_set(pt);
+    }
+
+    PieceSet piecesOfFile(File f) const
+    {
+        if (f == FILE_NB) return fallback;
+        if (f < FILE_A || f > FILE_MAX) return NO_PIECE_SET;
+        return isSet[f] ? filelist[f] : fallback;
+    }
+
+    void set(File f, PieceSet ps)
+    {
+        if (f == FILE_NB) { fallback = ps; return; }
+        if (f < FILE_A || f > FILE_MAX) return;
+        filelist[f] = ps;
+        isSet[f] = true;
+    }
+
+    PieceSet unionSet() const
+    {
+        PieceSet ps = fallback;
+        for (int f = FILE_A; f < FILE_NB; ++f)
+            if (isSet[f]) ps |= filelist[f];
+        return ps;
+    }
+
+    operator PieceSet() const { return unionSet(); }
+
+    PieceSet fallback = NO_PIECE_SET;
+private:
+    PieceSet filelist[FILE_NB] = {NO_PIECE_SET};
+    bool isSet[FILE_NB] = {false};
+};
 
 } // namespace Stockfish
 

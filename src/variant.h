@@ -58,10 +58,20 @@ struct ColorSetting {
   std::array<bool, COLOR_NB> byColorSet = {false, false};
 
   constexpr ColorSetting() : global(), byColor{} {}
-  constexpr explicit ColorSetting(const T& value) : global(value), byColor{value, value} {}
+  constexpr ColorSetting(const T& value) : global(value), byColor{value, value} {}
+  constexpr ColorSetting(const T& white, const T& black) : global(white), byColor{white, black}, byColorSet{true, true} {}
 
   constexpr const T& get(Color c) const {
     return byColorSet[c] ? byColor[c] : global;
+  }
+
+  T& operator[](Color c) {
+    byColorSet[c] = true;
+    return byColor[c];
+  }
+
+  const T& operator[](Color c) const {
+    return get(c);
   }
 
   constexpr bool has_override(Color c) const {
@@ -116,17 +126,11 @@ struct Variant {
   std::map<std::string, PieceType> symbolToPieceType;
   std::string startFen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
   Bitboard mobilityRegion[COLOR_NB][PIECE_TYPE_NB] = {};
-  Bitboard promotionRegion[COLOR_NB] = {Rank8BB, Rank1BB};
-  Bitboard mandatoryPromotionRegion[COLOR_NB] = {};
-  bool pieceSpecificPromotionRegion = false;
-  PieceTypeBitboardGroup whitePiecePromotionRegion;
-  PieceTypeBitboardGroup blackPiecePromotionRegion;
-  PieceType mainPromotionPawnType[COLOR_NB] = {PAWN, PAWN};
-  PieceSet promotionPawnTypes[COLOR_NB] = {piece_set(PAWN), piece_set(PAWN)};
-  PieceSet promotionPieceTypes[COLOR_NB] = {piece_set(QUEEN) | ROOK | BISHOP | KNIGHT,
-                                            piece_set(QUEEN) | ROOK | BISHOP | KNIGHT};
-  bool promotionPieceTypesByFileEnabled[COLOR_NB] = {false, false};
-  std::array<PieceSet, FILE_NB> promotionPieceTypesByFile[COLOR_NB] = {};
+  ColorSetting<PieceTypeBitboardGroup> promotionRegion = ColorSetting<PieceTypeBitboardGroup>(Rank8BB, Rank1BB);
+  ColorSetting<Bitboard> mandatoryPromotionRegion = ColorSetting<Bitboard>(Bitboard(0));
+  ColorSetting<PieceType> mainPromotionPawnType = ColorSetting<PieceType>(PAWN);
+  ColorSetting<PieceSet> promotionPawnTypes = ColorSetting<PieceSet>(piece_set(PAWN));
+  ColorSetting<FilePieceSetMap> promotionPieceTypes = ColorSetting<FilePieceSetMap>(piece_set(QUEEN) | ROOK | BISHOP | KNIGHT);
   bool sittuyinPromotion = false;
   int promotionLimit[PIECE_TYPE_NB] = {}; // 0 means unlimited
   bool promotionSteal = false;
@@ -167,16 +171,10 @@ struct Variant {
   Bitboard surroundCaptureMaxRegion = 0;
   Bitboard surroundCaptureHostileRegion = 0;
   bool doubleStep = true;
-  Bitboard doubleStepRegion[COLOR_NB] = {Rank2BB, Rank7BB};
-  Bitboard tripleStepRegion[COLOR_NB] = {};
-  bool pieceSpecificDoubleStepRegion = false;
-  PieceTypeBitboardGroup whitePieceDoubleStepRegion;
-  PieceTypeBitboardGroup blackPieceDoubleStepRegion;
-  bool pieceSpecificTripleStepRegion = false;
-  PieceTypeBitboardGroup whitePieceTripleStepRegion;
-  PieceTypeBitboardGroup blackPieceTripleStepRegion;
-  Bitboard enPassantRegion[COLOR_NB] = {AllSquares, AllSquares};
-  PieceSet enPassantTypes[COLOR_NB] = {piece_set(PAWN), piece_set(PAWN)};
+  ColorSetting<PieceTypeBitboardGroup> doubleStepRegion = ColorSetting<PieceTypeBitboardGroup>(Rank2BB, Rank7BB);
+  ColorSetting<PieceTypeBitboardGroup> tripleStepRegion = ColorSetting<PieceTypeBitboardGroup>(Bitboard(0));
+  ColorSetting<Bitboard> enPassantRegion = ColorSetting<Bitboard>(AllSquares, AllSquares);
+  ColorSetting<PieceSet> enPassantTypes = ColorSetting<PieceSet>(piece_set(PAWN));
   EnPassantPassedSquares enPassantPassedSquares = EnPassantPassedSquares::ALL;
   bool castling = true;
   bool castlingDroppedPiece = false;
@@ -186,10 +184,10 @@ struct Variant {
   File castlingQueensideFile = FILE_C;
   Rank castlingRank = RANK_1;
   File castlingKingFile = FILE_E;
-  PieceType castlingKingPiece[COLOR_NB] = {KING, KING};
+  ColorSetting<PieceType> castlingKingPiece = ColorSetting<PieceType>(KING);
   File castlingRookKingsideFile = FILE_MAX; // only has to match if rook is not in corner in non-960 variants
   File castlingRookQueensideFile = FILE_A; // only has to match if rook is not in corner in non-960 variants
-  PieceSet castlingRookPieces[COLOR_NB] = {piece_set(ROOK), piece_set(ROOK)};
+  ColorSetting<PieceSet> castlingRookPieces = ColorSetting<PieceSet>(piece_set(ROOK));
   bool oppositeCastling = false;
   PieceType kingType = KING;
   bool checking = true;
@@ -197,9 +195,8 @@ struct Variant {
   bool royalPieceNoThroughCheck = false;
   ColorSetting<bool> dropChecks = ColorSetting<bool>(true);
   ColorSetting<bool> dropMates = ColorSetting<bool>(true);
-  bool mustCapture = false;
-  bool mustCaptureEnPassant = false;
-  bool mustCaptureByColor[COLOR_NB] = {false, false};
+  ColorSetting<bool> mustCapture = ColorSetting<bool>(false);
+  ColorSetting<bool> mustCaptureEnPassant = ColorSetting<bool>(false);
   bool rifleCapture = false;
   int pushingStrength[PIECE_TYPE_NB] = {};
   int pullingStrength[PIECE_TYPE_NB] = {};
@@ -213,24 +210,22 @@ struct Variant {
   bool pushCaptureAgainstFriendlyBlocker = false;
   bool pushNoImmediateReturn = false;
   PieceSet edgeInsertTypes = NO_PIECE_SET;
-  Bitboard edgeInsertRegion[COLOR_NB] = {};
+  ColorSetting<Bitboard> edgeInsertRegion = ColorSetting<Bitboard>(Bitboard(0));
   bool edgeInsertOnly = false;
-  bool edgeInsertFromTop[COLOR_NB] = {false, false};
-  bool edgeInsertFromBottom[COLOR_NB] = {false, false};
-  bool edgeInsertFromLeft[COLOR_NB] = {false, false};
-  bool edgeInsertFromRight[COLOR_NB] = {false, false};
+  ColorSetting<bool> edgeInsertFromTop = ColorSetting<bool>(false);
+  ColorSetting<bool> edgeInsertFromBottom = ColorSetting<bool>(false);
+  ColorSetting<bool> edgeInsertFromLeft = ColorSetting<bool>(false);
+  ColorSetting<bool> edgeInsertFromRight = ColorSetting<bool>(false);
   ColorSetting<bool> selfCapture = ColorSetting<bool>(false);
   ColorSetting<PieceSet> selfCaptureTypes = ColorSetting<PieceSet>(NO_PIECE_SET);
   bool blastOnSameTypeCapture = false;
   bool blastOrthogonals = true;
-  bool mustDrop = false;
-  bool mustDropByColor[COLOR_NB] = {false, false};
-  PieceType mustDropType = ALL_PIECES;
-  PieceType mustDropTypeByColor[COLOR_NB] = {ALL_PIECES, ALL_PIECES};
+  ColorSetting<bool> mustDrop = ColorSetting<bool>(false);
+  ColorSetting<PieceType> mustDropType = ColorSetting<PieceType>(ALL_PIECES);
   bool dropKingLast = false;
   bool openingSelfRemoval = false;
   bool openingSelfRemovalAdjacentToLast = false;
-  Bitboard openingSelfRemovalRegion[COLOR_NB] = {AllSquares, AllSquares};
+  ColorSetting<Bitboard> openingSelfRemovalRegion = ColorSetting<Bitboard>(AllSquares);
   bool openingSwapDrop = false;
   bool openingSwapMirrorMainDiagonal = false;
   PieceSet isPriorityDrop = NO_PIECE_SET;
@@ -247,31 +242,26 @@ struct Variant {
   bool promotionZonePawnDrops = false;
   EnclosingRule enclosingDrop = NO_ENCLOSING;
   Bitboard enclosingDropStart = 0;
-  Bitboard dropRegion[COLOR_NB] = {AllSquares, AllSquares};
-  bool pieceSpecificDropRegion = false;
-  PieceTypeBitboardGroup whitePieceDropRegion;
-  PieceTypeBitboardGroup blackPieceDropRegion;
+  ColorSetting<PieceTypeBitboardGroup> dropRegion = ColorSetting<PieceTypeBitboardGroup>(AllSquares, AllSquares);
   bool sittuyinRookDrop = false;
   bool dropOppositeColoredBishop = false;
   bool dropPromoted = false;
   PieceSet dropPieceTypes[PIECE_TYPE_NB] = {};
   PieceSet symmetricDropTypes = NO_PIECE_SET;
   PieceSet captureDrops = NO_PIECE_SET;
-  PieceType dropNoDoubled = NO_PIECE_TYPE;
-  PieceType dropNoDoubledByColor[COLOR_NB] = {NO_PIECE_TYPE, NO_PIECE_TYPE};
-  int dropNoDoubledCount = 1;
-  int dropNoDoubledCountByColor[COLOR_NB] = {1, 1};
+  ColorSetting<PieceSet> dropNoDoubled = ColorSetting<PieceSet>(NO_PIECE_SET);
+  ColorSetting<int> dropNoDoubledCount = ColorSetting<int>(1);
   PieceSet hostageExchange[PIECE_TYPE_NB] = {};
   bool prisonPawnPromotion = false;
   bool immobilityIllegal = false;
   bool gating = false;
   bool gatingFromHand = true;
-  PieceType gatingPieceAfter[COLOR_NB][PIECE_TYPE_NB] = {};
+  ColorSetting<std::array<PieceType, PIECE_TYPE_NB>> gatingPieceAfter = ColorSetting<std::array<PieceType, PIECE_TYPE_NB>>(std::array<PieceType, PIECE_TYPE_NB>{});
   PieceType firstMovePieceType[PIECE_TYPE_NB] = {};
   bool firstMoveLoseOnCheck = false;
   WallingRule wallingRule = NO_WALLING;
-  bool wallingSide[COLOR_NB] = {true, true};
-  Bitboard wallingRegion[COLOR_NB] = {AllSquares, AllSquares};
+  ColorSetting<bool> wallingSide = ColorSetting<bool>(true);
+  ColorSetting<Bitboard> wallingRegion = ColorSetting<Bitboard>(AllSquares, AllSquares);
   bool wallOrMove = false;
   Bitboard surroundClaimRegion = 0;
   PieceType surroundClaimPiece = NO_PIECE_TYPE;
@@ -284,8 +274,8 @@ struct Variant {
   bool forcedJumpSameDirection = false;
   bool cambodianMoves = false;
   Bitboard diagonalLines = 0;
-  bool pass[COLOR_NB] = {false, false};
-  bool passOnStalemate[COLOR_NB] = {false, false};
+  ColorSetting<bool> pass = ColorSetting<bool>(false);
+  ColorSetting<bool> passOnStalemate = ColorSetting<bool>(false);
   std::vector<int> multimoves = {};
   bool progressiveMultimove = false;
   bool multimoveCheck = true;
@@ -311,14 +301,14 @@ struct Variant {
   bool potionDropOnOccupied = false;
 
   // game end
-  PieceSet nMoveRuleTypes[COLOR_NB] = {piece_set(PAWN), piece_set(PAWN)};
+  ColorSetting<PieceSet> nMoveRuleTypes = ColorSetting<PieceSet>(piece_set(PAWN));
   int nMoveRule = 50;
   int nMoveRuleImmediate = 0;
   int nMoveHardLimitRule = 0;
   Value nMoveHardLimitRuleValue = VALUE_DRAW;
   int nFoldRule = 3;
   int nFoldRuleImmediate = 0;
-  Value nFoldValue = VALUE_DRAW;
+  ColorSetting<Value> nFoldValue = ColorSetting<Value>(VALUE_DRAW);
   bool nFoldValueAbsolute = false;
   bool perpetualCheckIllegal = false;
   bool moveRepetitionIllegal = false;
@@ -330,13 +320,13 @@ struct Variant {
   bool weakCrosscutDropIllegal = false;
   bool weakConnectionNobiImpossible = false;
   ChasingRule chasingRule = NO_CHASING;
-  Value stalemateValue = VALUE_DRAW;
+  ColorSetting<Value> stalemateValue = ColorSetting<Value>(VALUE_DRAW);
   bool stalematePieceCount = false; // multiply stalemate value by sign(count(~stm) - count(stm))
-  Value checkmateValue = -VALUE_MATE;
+  ColorSetting<Value> checkmateValue = ColorSetting<Value>(-VALUE_MATE);
   ColorSetting<bool> shogiPawnDropMateIllegal = ColorSetting<bool>(false);
   bool shatarMateRule = false;
   bool bikjangRule = false;
-  Value extinctionValue = VALUE_NONE;
+  ColorSetting<Value> extinctionValue = ColorSetting<Value>(VALUE_NONE);
   bool extinctionClaim = false;
   // Deprecated legacy switch kept for compatibility with existing configs.
   bool extinctionPseudoRoyal = false;
@@ -354,8 +344,8 @@ struct Variant {
   ColorSetting<bool> extinctionAllPieceTypes = ColorSetting<bool>(false);
   ColorSetting<int> extinctionPieceCount = ColorSetting<int>(0);
   ColorSetting<int> extinctionOpponentPieceCount = ColorSetting<int>(0);
-  PieceType flagPiece[COLOR_NB] = {ALL_PIECES, ALL_PIECES};
-  Bitboard flagRegion[COLOR_NB] = {};
+  ColorSetting<PieceType> flagPiece = ColorSetting<PieceType>(ALL_PIECES);
+  ColorSetting<Bitboard> flagRegion = ColorSetting<Bitboard>(Bitboard(0));
   int flagPieceCount = 1;
   bool flagPieceBlockedWin = false;
   bool flagMove = false;
@@ -364,7 +354,7 @@ struct Variant {
   int connectN = 0;
   PieceSet connectPieceTypes = ~NO_PIECE_SET;
   bool connectGoalByType = false;
-  std::string connectPieceGoal[COLOR_NB] = {};
+  ColorSetting<std::string> connectPieceGoal = ColorSetting<std::string>("");
   bool connectHorizontal = true;
   bool connectVertical = true;
   bool connectDiagonal = true;
@@ -372,9 +362,9 @@ struct Variant {
   bool connectSouthEast = true;
   bool connect3D = false;
   bool connect4D = false;
-  Bitboard connectRegion1[COLOR_NB] = {};
-  Bitboard connectRegion2[COLOR_NB] = {};
-  Bitboard connectRegion3[COLOR_NB] = {};
+  ColorSetting<Bitboard> connectRegion1 = ColorSetting<Bitboard>(Bitboard(0));
+  ColorSetting<Bitboard> connectRegion2 = ColorSetting<Bitboard>(Bitboard(0));
+  ColorSetting<Bitboard> connectRegion3 = ColorSetting<Bitboard>(Bitboard(0));
   int connectNxN = 0;
   int collinearN = 0;
   int connectGroup = 0;

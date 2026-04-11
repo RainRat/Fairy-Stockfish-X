@@ -490,6 +490,12 @@ namespace {
     }
 
     template <> bool set(const std::string& value, PieceTypeBitboardGroup& target) {
+        // Try parsing as Bitboard first for backward compatibility
+        Bitboard b;
+        if (set(value, b)) {
+            target = PieceTypeBitboardGroup(b);
+            return true;
+        }
         size_t i;
         int ParserState = -1;
         int RankNum = 0;
@@ -515,7 +521,7 @@ namespace {
             }
             if (ParserState == 0)  // Find piece type character
             {
-                if (ch >= 'A' && ch <= 'Z')
+                if ((ch >= 'A' && ch <= 'Z') || ch == '*')
                 {
                     PieceChar = ch;
                     ParserState = 1;
@@ -691,6 +697,10 @@ namespace {
         target |= pt;
     }
 
+    template <> void set(PieceType pt, FilePieceSetMap& target) {
+        target |= pt;
+    }
+
     void parse_hostage_exchanges(Variant *v, const std::string &map, bool DoCheck) {
         std::stringstream groups(map);
         std::string group;
@@ -736,11 +746,11 @@ namespace {
     bool parse_file_piece_set_map(const std::string& value,
                                   const Variant* v,
                                   File maxFile,
-                                  std::array<PieceSet, FILE_NB>& target,
+                                  FilePieceSetMap& target,
                                   bool doCheck,
                                   const std::string& key) {
         std::stringstream ss(value);
-        std::array<PieceSet, FILE_NB> parsed = target;
+        FilePieceSetMap parsed = target;
         bool sawToken = false;
 
         while (true) {
@@ -762,9 +772,8 @@ namespace {
             }
 
             int fileIdx = -1;
-            if (!parse_file_index(fileToken, fileIdx)
-                || fileIdx < int(FILE_A)
-                || fileIdx > int(maxFile)) {
+            bool isFallback = (fileToken == "*");
+            if (!isFallback && (!parse_file_index(fileToken, fileIdx) || fileIdx < 0 || fileIdx > int(maxFile))) {
                 if (doCheck)
                     std::cerr << key << " - Invalid file: " << fileToken << std::endl;
                 return false;
@@ -793,26 +802,12 @@ namespace {
 
             PieceSet pieces = NO_PIECE_SET;
             if (pieceToken != "-") {
-                std::string remaining = pieceToken;
-                while (!remaining.empty()) {
-                    std::string symbol = read_piece_token(remaining);
-                    if (symbol.empty()) {
-                        if (doCheck)
-                            std::cerr << key << " - Invalid piece type: " << remaining << std::endl;
-                        return false;
-                    }
-                    PieceType pt = parse_piece_type_token(v, symbol);
-                    if (pt == NO_PIECE_TYPE) {
-                        if (doCheck)
-                            std::cerr << key << " - Invalid piece type: " << symbol << std::endl;
-                        return false;
-                    }
-                    pieces |= pt;
-                    remaining.erase(0, symbol.size());
-                }
+                if (!parse_piece_set_token_string(pieceToken, v, pieces))
+                    return false;
             }
 
-            parsed[fileIdx] = pieces;
+            if (isFallback) parsed.fallback = pieces;
+            else parsed.set(File(fileIdx), pieces);
         }
 
         if (!sawToken) {
@@ -880,7 +875,30 @@ template <bool Current, class T> bool VariantParser<DoCheck>::parse_attribute(co
             return false;
         }
 
-        T parsedTarget = T();
+        if constexpr (std::is_same_v<T, FilePieceSetMap>)
+        {
+            if (it->second.find(':') == std::string::npos)
+            {
+                PieceSet globalSet = NO_PIECE_SET;
+                if (parse_piece_set_token_string(it->second, v, globalSet))
+                {
+                    target = FilePieceSetMap(globalSet);
+                    return true;
+                }
+            }
+            else
+            {
+                FilePieceSetMap parsedTarget = Current ? target : FilePieceSetMap();
+                if (parse_file_piece_set_map(it->second, v, v->maxFile, parsedTarget, DoCheck, key))
+                {
+                    target = parsedTarget;
+                    return true;
+                }
+                return false;
+            }
+        }
+
+        T parsedTarget = Current ? target : T();
         std::string token;
         std::stringstream ss(it->second);
         bool sawToken = false;
@@ -964,6 +982,50 @@ void VariantParser<DoCheck>::parse_both_colors_with_overrides_piece(const std::s
     parse_both_colors_piece(key, target, v);
     parse_attribute(key + "White", target[WHITE], v);
     parse_attribute(key + "Black", target[BLACK], v);
+}
+
+template <bool DoCheck>
+template <typename T>
+void VariantParser<DoCheck>::parse_color_setting(const std::string& key, ColorSetting<T>& target) {
+    if (config.find(key) != config.end())
+    {
+        parse_attribute(key, target.global);
+        target.set_global(target.global);
+    }
+    if (config.find(key + "White") != config.end())
+    {
+        T parsed = target.byColor[WHITE];
+        parse_attribute(key + "White", parsed);
+        target.set_color(WHITE, parsed);
+    }
+    if (config.find(key + "Black") != config.end())
+    {
+        T parsed = target.byColor[BLACK];
+        parse_attribute(key + "Black", parsed);
+        target.set_color(BLACK, parsed);
+    }
+}
+
+template <bool DoCheck>
+template <typename T>
+void VariantParser<DoCheck>::parse_color_setting_piece(const std::string& key, ColorSetting<T>& target, const Variant* v) {
+    if (config.find(key) != config.end())
+    {
+        parse_attribute(key, target.global, v);
+        target.set_global(target.global);
+    }
+    if (config.find(key + "White") != config.end())
+    {
+        T parsed = target.byColor[WHITE];
+        parse_attribute(key + "White", parsed, v);
+        target.set_color(WHITE, parsed);
+    }
+    if (config.find(key + "Black") != config.end())
+    {
+        T parsed = target.byColor[BLACK];
+        parse_attribute(key + "Black", parsed, v);
+        target.set_color(BLACK, parsed);
+    }
 }
 
 template <bool DoCheck>
@@ -1127,10 +1189,10 @@ bool VariantParser<DoCheck>::parse_legacy_attributes(Variant* v) {
     if (dropOnTop) v->enclosingDrop=TOP;
 
     // Parse aliases
-    parse_both_colors_piece("pawnTypes", v->mainPromotionPawnType, v);
-    parse_both_colors_piece("pawnTypes", v->promotionPawnTypes, v);
-    parse_both_colors_piece("pawnTypes", v->enPassantTypes, v);
-    parse_both_colors_piece("pawnTypes", v->nMoveRuleTypes, v);
+    parse_color_setting_piece("pawnTypes", v->mainPromotionPawnType, v);
+    parse_color_setting_piece("pawnTypes", v->promotionPawnTypes, v);
+    parse_color_setting_piece("pawnTypes", v->enPassantTypes, v);
+    parse_color_setting_piece("pawnTypes", v->nMoveRuleTypes, v);
     return true;
 }
 
@@ -1146,49 +1208,12 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("cylindrical", v->cylindrical);
     parse_attribute("toroidal", v->toroidal);
     parse_attribute("startFen", v->startFen);
-    parse_attribute("promotionRegionWhite", v->promotionRegion[WHITE]);
-    parse_attribute("promotionRegionBlack", v->promotionRegion[BLACK]);
-    parse_attribute("promotionRegion", v->promotionRegion[WHITE]);
-    parse_attribute("promotionRegion", v->promotionRegion[BLACK]);
-    parse_attribute("mandatoryPromotionRegionWhite", v->mandatoryPromotionRegion[WHITE]);
-    parse_attribute("mandatoryPromotionRegionBlack", v->mandatoryPromotionRegion[BLACK]);
-    parse_attribute("mandatoryPromotionRegion", v->mandatoryPromotionRegion[WHITE]);
-    parse_attribute("mandatoryPromotionRegion", v->mandatoryPromotionRegion[BLACK]);
-    parse_attribute("pieceSpecificPromotionRegion", v->pieceSpecificPromotionRegion);
-    if (!require_attributes(v->pieceSpecificPromotionRegion,
-                            "whitePiecePromotionRegion", v->whitePiecePromotionRegion,
-                            "blackPiecePromotionRegion", v->blackPiecePromotionRegion))
-        return false;
+    parse_color_setting("promotionRegion", v->promotionRegion);
+    parse_color_setting("mandatoryPromotionRegion", v->mandatoryPromotionRegion);
     // Take the first promotionPawnTypes as the main promotionPawnType
-    parse_both_colors_with_overrides_piece("promotionPawnTypes", v->mainPromotionPawnType, v);
-    parse_both_colors_with_overrides_piece("promotionPawnTypes", v->promotionPawnTypes, v);
-    parse_both_colors_with_overrides_piece("promotionPieceTypes", v->promotionPieceTypes, v);
-    const auto& it_prom_file = config.find("promotionPieceTypesByFile");
-    if (it_prom_file != config.end())
-    {
-        if (!parse_file_piece_set_map(it_prom_file->second, v, v->maxFile,
-                                      v->promotionPieceTypesByFile[WHITE], DoCheck, "promotionPieceTypesByFile"))
-            return false;
-        v->promotionPieceTypesByFile[BLACK] = v->promotionPieceTypesByFile[WHITE];
-        v->promotionPieceTypesByFileEnabled[WHITE] = true;
-        v->promotionPieceTypesByFileEnabled[BLACK] = true;
-    }
-    const auto& it_prom_file_w = config.find("promotionPieceTypesByFileWhite");
-    if (it_prom_file_w != config.end())
-    {
-        if (!parse_file_piece_set_map(it_prom_file_w->second, v, v->maxFile,
-                                      v->promotionPieceTypesByFile[WHITE], DoCheck, "promotionPieceTypesByFileWhite"))
-            return false;
-        v->promotionPieceTypesByFileEnabled[WHITE] = true;
-    }
-    const auto& it_prom_file_b = config.find("promotionPieceTypesByFileBlack");
-    if (it_prom_file_b != config.end())
-    {
-        if (!parse_file_piece_set_map(it_prom_file_b->second, v, v->maxFile,
-                                      v->promotionPieceTypesByFile[BLACK], DoCheck, "promotionPieceTypesByFileBlack"))
-            return false;
-        v->promotionPieceTypesByFileEnabled[BLACK] = true;
-    }
+    parse_color_setting_piece("promotionPawnTypes", v->mainPromotionPawnType, v);
+    parse_color_setting_piece("promotionPawnTypes", v->promotionPawnTypes, v);
+    parse_color_setting_piece("promotionPieceTypes", v->promotionPieceTypes, v);
     parse_attribute("sittuyinPromotion", v->sittuyinPromotion);
     parse_attribute("promotionSteal", v->promotionSteal);
     parse_attribute("promotionRequireInHand", v->promotionRequireInHand);
@@ -1228,33 +1253,38 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     const auto& it_gate_after = config.find("gatingPieceAfter");
     if (it_gate_after != config.end())
     {
-        if (!parse_piece_type_map(it_gate_after->second, v, v->gatingPieceAfter[WHITE], true))
+        std::array<PieceType, PIECE_TYPE_NB> parsed;
+        if (!parse_piece_type_map(it_gate_after->second, v, parsed.data(), true))
         {
             if (DoCheck)
                 std::cerr << "gatingPieceAfter - Invalid syntax." << std::endl;
             return false;
         }
-        std::copy(std::begin(v->gatingPieceAfter[WHITE]), std::end(v->gatingPieceAfter[WHITE]), std::begin(v->gatingPieceAfter[BLACK]));
+        v->gatingPieceAfter.set_global(parsed);
     }
     const auto& it_gate_after_w = config.find("gatingPieceAfterWhite");
     if (it_gate_after_w != config.end())
     {
-        if (!parse_piece_type_map(it_gate_after_w->second, v, v->gatingPieceAfter[WHITE], true))
+        std::array<PieceType, PIECE_TYPE_NB> parsed;
+        if (!parse_piece_type_map(it_gate_after_w->second, v, parsed.data(), true))
         {
             if (DoCheck)
                 std::cerr << "gatingPieceAfterWhite - Invalid syntax." << std::endl;
             return false;
         }
+        v->gatingPieceAfter.set_color(WHITE, parsed);
     }
     const auto& it_gate_after_b = config.find("gatingPieceAfterBlack");
     if (it_gate_after_b != config.end())
     {
-        if (!parse_piece_type_map(it_gate_after_b->second, v, v->gatingPieceAfter[BLACK], true))
+        std::array<PieceType, PIECE_TYPE_NB> parsed;
+        if (!parse_piece_type_map(it_gate_after_b->second, v, parsed.data(), true))
         {
             if (DoCheck)
                 std::cerr << "gatingPieceAfterBlack - Invalid syntax." << std::endl;
             return false;
         }
+        v->gatingPieceAfter.set_color(BLACK, parsed);
     }
     const auto& it_first_move_pt = config.find("firstMovePieceTypes");
     if (it_first_move_pt != config.end())
@@ -1308,44 +1338,6 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
             v->isPriorityDrop = parsedPriorityDrops;
     }
     parse_attribute("piecePromotionOnCapture", v->piecePromotionOnCapture);
-    auto parse_color_setting = [&](const std::string& key, auto& setting) {
-        if (config.find(key) != config.end())
-        {
-            parse_attribute(key, setting.global);
-            setting.set_global(setting.global);
-        }
-        if (config.find(key + "White") != config.end())
-        {
-            auto parsed = setting.byColor[WHITE];
-            parse_attribute(key + "White", parsed);
-            setting.set_color(WHITE, parsed);
-        }
-        if (config.find(key + "Black") != config.end())
-        {
-            auto parsed = setting.byColor[BLACK];
-            parse_attribute(key + "Black", parsed);
-            setting.set_color(BLACK, parsed);
-        }
-    };
-    auto parse_color_setting_piece = [&](const std::string& key, auto& setting) {
-        if (config.find(key) != config.end())
-        {
-            parse_attribute(key, setting.global, v);
-            setting.set_global(setting.global);
-        }
-        if (config.find(key + "White") != config.end())
-        {
-            auto parsed = setting.byColor[WHITE];
-            parse_attribute(key + "White", parsed, v);
-            setting.set_color(WHITE, parsed);
-        }
-        if (config.find(key + "Black") != config.end())
-        {
-            auto parsed = setting.byColor[BLACK];
-            parse_attribute(key + "Black", parsed, v);
-            setting.set_color(BLACK, parsed);
-        }
-    };
     parse_color_setting("mandatoryPawnPromotion", v->mandatoryPawnPromotion);
     parse_color_setting("mandatoryPiecePromotion", v->mandatoryPiecePromotion);
     parse_attribute("pieceDemotion", v->pieceDemotion);
@@ -1431,22 +1423,10 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("surroundCaptureMaxRegion", v->surroundCaptureMaxRegion);
     parse_attribute("surroundCaptureHostileRegion", v->surroundCaptureHostileRegion);
     parse_attribute("doubleStep", v->doubleStep);
-    parse_attribute("doubleStepRegionWhite", v->doubleStepRegion[WHITE]);
-    parse_attribute("doubleStepRegionBlack", v->doubleStepRegion[BLACK]);
-    parse_attribute("pieceSpecificDoubleStepRegion", v->pieceSpecificDoubleStepRegion);
-    if (!require_attributes(v->pieceSpecificDoubleStepRegion,
-                            "whitePieceDoubleStepRegion", v->whitePieceDoubleStepRegion,
-                            "blackPieceDoubleStepRegion", v->blackPieceDoubleStepRegion))
-        return false;
-    parse_attribute("pieceSpecificTripleStepRegion", v->pieceSpecificTripleStepRegion);
-    if (!require_attributes(v->pieceSpecificTripleStepRegion,
-                            "whitePieceTripleStepRegion", v->whitePieceTripleStepRegion,
-                            "blackPieceTripleStepRegion", v->blackPieceTripleStepRegion))
-        return false;
-    parse_attribute("tripleStepRegionWhite", v->tripleStepRegion[WHITE]);
-    parse_attribute("tripleStepRegionBlack", v->tripleStepRegion[BLACK]);
-    parse_both_colors_with_overrides("enPassantRegion", v->enPassantRegion);
-    parse_both_colors_with_overrides_piece("enPassantTypes", v->enPassantTypes, v);
+    parse_color_setting("doubleStepRegion", v->doubleStepRegion);
+    parse_color_setting("tripleStepRegion", v->tripleStepRegion);
+    parse_color_setting("enPassantRegion", v->enPassantRegion);
+    parse_color_setting_piece("enPassantTypes", v->enPassantTypes, v);
     parse_attribute("enPassantPassedSquares", v->enPassantPassedSquares);
     parse_attribute("castling", v->castling);
     parse_attribute("castlingDroppedPiece", v->castlingDroppedPiece);
@@ -1456,20 +1436,18 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("castlingQueensideFile", v->castlingQueensideFile);
     parse_attribute("castlingRank", v->castlingRank);
     parse_attribute("castlingKingFile", v->castlingKingFile);
-    parse_both_colors_with_overrides_piece("castlingKingPiece", v->castlingKingPiece, v);
+    parse_color_setting_piece("castlingKingPiece", v->castlingKingPiece, v);
     parse_attribute("castlingRookKingsideFile", v->castlingRookKingsideFile);
     parse_attribute("castlingRookQueensideFile", v->castlingRookQueensideFile);
-    parse_both_colors_with_overrides_piece("castlingRookPieces", v->castlingRookPieces, v);
+    parse_color_setting_piece("castlingRookPieces", v->castlingRookPieces, v);
     parse_attribute("oppositeCastling", v->oppositeCastling);
     parse_attribute("checking", v->checking);
     parse_attribute("allowChecks", v->allowChecks);
     parse_attribute("royalPieceNoThroughCheck", v->royalPieceNoThroughCheck);
     parse_color_setting("dropChecks", v->dropChecks);
     parse_color_setting("dropMates", v->dropMates);
-    parse_attribute("mustCapture", v->mustCapture);
-    parse_attribute("mustCaptureEnPassant", v->mustCaptureEnPassant);
-    parse_attribute("mustCaptureWhite", v->mustCaptureByColor[WHITE]);
-    parse_attribute("mustCaptureBlack", v->mustCaptureByColor[BLACK]);
+    parse_color_setting("mustCapture", v->mustCapture);
+    parse_color_setting("mustCaptureEnPassant", v->mustCaptureEnPassant);
     parse_attribute("rifleCapture", v->rifleCapture);
     const auto& it_push_strength = config.find("pushingStrength");
     if (it_push_strength != config.end())
@@ -1526,7 +1504,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("swapForbiddenPlies", v->swapForbiddenPlies);
     parse_attribute("edgeInsertTypes", v->edgeInsertTypes, v);
     parse_attribute("edgeInsertOnly", v->edgeInsertOnly);
-    parse_both_colors_with_overrides("edgeInsertRegion", v->edgeInsertRegion);
+    parse_color_setting("edgeInsertRegion", v->edgeInsertRegion);
     const auto& it_edge_insert_from = config.find("edgeInsertFrom");
     if (it_edge_insert_from != config.end())
     {
@@ -1537,10 +1515,10 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
                 std::cerr << "edgeInsertFrom - Invalid syntax." << std::endl;
             return false;
         }
-        v->edgeInsertFromTop[WHITE] = v->edgeInsertFromTop[BLACK] = top;
-        v->edgeInsertFromBottom[WHITE] = v->edgeInsertFromBottom[BLACK] = bottom;
-        v->edgeInsertFromLeft[WHITE] = v->edgeInsertFromLeft[BLACK] = left;
-        v->edgeInsertFromRight[WHITE] = v->edgeInsertFromRight[BLACK] = right;
+        v->edgeInsertFromTop.set_global(top);
+        v->edgeInsertFromBottom.set_global(bottom);
+        v->edgeInsertFromLeft.set_global(left);
+        v->edgeInsertFromRight.set_global(right);
     }
     const auto& it_edge_insert_from_white = config.find("edgeInsertFromWhite");
     if (it_edge_insert_from_white != config.end())
@@ -1552,10 +1530,10 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
                 std::cerr << "edgeInsertFromWhite - Invalid syntax." << std::endl;
             return false;
         }
-        v->edgeInsertFromTop[WHITE] = top;
-        v->edgeInsertFromBottom[WHITE] = bottom;
-        v->edgeInsertFromLeft[WHITE] = left;
-        v->edgeInsertFromRight[WHITE] = right;
+        v->edgeInsertFromTop.set_color(WHITE, top);
+        v->edgeInsertFromBottom.set_color(WHITE, bottom);
+        v->edgeInsertFromLeft.set_color(WHITE, left);
+        v->edgeInsertFromRight.set_color(WHITE, right);
     }
     const auto& it_edge_insert_from_black = config.find("edgeInsertFromBlack");
     if (it_edge_insert_from_black != config.end())
@@ -1567,31 +1545,27 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
                 std::cerr << "edgeInsertFromBlack - Invalid syntax." << std::endl;
             return false;
         }
-        v->edgeInsertFromTop[BLACK] = top;
-        v->edgeInsertFromBottom[BLACK] = bottom;
-        v->edgeInsertFromLeft[BLACK] = left;
-        v->edgeInsertFromRight[BLACK] = right;
+        v->edgeInsertFromTop.set_color(BLACK, top);
+        v->edgeInsertFromBottom.set_color(BLACK, bottom);
+        v->edgeInsertFromLeft.set_color(BLACK, left);
+        v->edgeInsertFromRight.set_color(BLACK, right);
     }
     parse_attribute("changingColorTrigger", v->changingColorTrigger);
     parse_attribute("changingColorPieceTypes", v->changingColorPieceTypes, v);
     parse_color_setting("selfCapture", v->selfCapture);
-    parse_color_setting_piece("selfCaptureTypes", v->selfCaptureTypes);
+    parse_color_setting_piece("selfCaptureTypes", v->selfCaptureTypes, v);
     parse_attribute("blastOrthogonals", v->blastOrthogonals);
     parse_attribute("blastOnSameTypeCapture", v->blastOnSameTypeCapture);
     parse_attribute("captureMorph", v->captureMorph);
     parse_attribute("rexExclusiveMorph", v->rexExclusiveMorph);
-    parse_attribute("mustDrop", v->mustDrop);
-    parse_attribute("mustDropWhite", v->mustDropByColor[WHITE]);
-    parse_attribute("mustDropBlack", v->mustDropByColor[BLACK]);
-    parse_attribute("mustDropType", v->mustDropType, v);
-    parse_attribute("mustDropTypeWhite", v->mustDropTypeByColor[WHITE], v);
-    parse_attribute("mustDropTypeBlack", v->mustDropTypeByColor[BLACK], v);
+    parse_color_setting("mustDrop", v->mustDrop);
+    parse_color_setting_piece("mustDropType", v->mustDropType, v);
     parse_attribute("openingSwapDrop", v->openingSwapDrop);
     parse_attribute("openingSwapMirrorMainDiagonal", v->openingSwapMirrorMainDiagonal);
     parse_attribute("dropKingLast", v->dropKingLast);
     parse_attribute("openingSelfRemoval", v->openingSelfRemoval);
     parse_attribute("openingSelfRemovalAdjacentToLast", v->openingSelfRemovalAdjacentToLast);
-    parse_both_colors_with_overrides("openingSelfRemovalRegion", v->openingSelfRemovalRegion);
+    parse_color_setting("openingSelfRemovalRegion", v->openingSelfRemovalRegion);
     parse_attribute("pieceDrops", v->pieceDrops);
     parse_attribute("borrowOpponentDropsWhenEmpty", v->borrowOpponentDropsWhenEmpty);
     parse_attribute("virtualDrops", v->virtualDrops);
@@ -1636,33 +1610,14 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("promotionZonePawnDrops", v->promotionZonePawnDrops);
     parse_attribute("enclosingDrop", v->enclosingDrop);
     parse_attribute("enclosingDropStart", v->enclosingDropStart);
-    parse_both_colors_with_overrides("dropRegion", v->dropRegion);
-    parse_attribute("dropRegionWhite", v->dropRegion[WHITE]);
-    parse_attribute("dropRegionBlack", v->dropRegion[BLACK]);
-    parse_attribute("pieceSpecificDropRegion", v->pieceSpecificDropRegion);
-    if (!require_attributes(v->pieceSpecificDropRegion,
-                            "whitePieceDropRegion", v->whitePieceDropRegion,
-                            "blackPieceDropRegion", v->blackPieceDropRegion))
-        return false;
+    parse_color_setting("dropRegion", v->dropRegion);
     parse_attribute("sittuyinRookDrop", v->sittuyinRookDrop);
     parse_attribute("dropOppositeColoredBishop", v->dropOppositeColoredBishop);
     parse_attribute("dropPromoted", v->dropPromoted);
     parse_attribute("symmetricDropTypes", v->symmetricDropTypes, v);
     parse_attribute("captureDrops", v->captureDrops, v);
-    parse_attribute("dropNoDoubled", v->dropNoDoubled, v);
-    v->dropNoDoubledByColor[WHITE] = v->dropNoDoubled;
-    v->dropNoDoubledByColor[BLACK] = v->dropNoDoubled;
-    if (config.find("dropNoDoubledWhite") != config.end())
-        parse_attribute("dropNoDoubledWhite", v->dropNoDoubledByColor[WHITE], v);
-    if (config.find("dropNoDoubledBlack") != config.end())
-        parse_attribute("dropNoDoubledBlack", v->dropNoDoubledByColor[BLACK], v);
-    parse_attribute("dropNoDoubledCount", v->dropNoDoubledCount);
-    v->dropNoDoubledCountByColor[WHITE] = v->dropNoDoubledCount;
-    v->dropNoDoubledCountByColor[BLACK] = v->dropNoDoubledCount;
-    if (config.find("dropNoDoubledCountWhite") != config.end())
-        parse_attribute("dropNoDoubledCountWhite", v->dropNoDoubledCountByColor[WHITE]);
-    if (config.find("dropNoDoubledCountBlack") != config.end())
-        parse_attribute("dropNoDoubledCountBlack", v->dropNoDoubledCountByColor[BLACK]);
+    parse_color_setting_piece("dropNoDoubled", v->dropNoDoubled, v);
+    parse_color_setting("dropNoDoubledCount", v->dropNoDoubledCount);
     parse_attribute("freeDrops", v->freeDrops);
     parse_attribute("payPointsToDrop", v->payPointsToDrop);
     parse_attribute("potions", v->potions);
@@ -1681,12 +1636,8 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("immobilityIllegal", v->immobilityIllegal);
     parse_attribute("gating", v->gating);
     parse_attribute("wallingRule", v->wallingRule);
-    parse_attribute("wallingWhite", v->wallingSide[WHITE]);
-    parse_attribute("wallingBlack", v->wallingSide[BLACK]);
-    parse_attribute("wallingRegionWhite", v->wallingRegion[WHITE]);
-    parse_attribute("wallingRegionBlack", v->wallingRegion[BLACK]);
-    parse_attribute("wallingRegion", v->wallingRegion[WHITE]);
-    parse_attribute("wallingRegion", v->wallingRegion[BLACK]);
+    parse_color_setting("walling", v->wallingSide);
+    parse_color_setting("wallingRegion", v->wallingRegion);
     parse_attribute("wallOrMove", v->wallOrMove);
     parse_attribute("surroundClaimRegion", v->surroundClaimRegion);
     parse_attribute("surroundClaimPiece", v->surroundClaimPiece, v);
@@ -1713,8 +1664,8 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("cambodianMoves", v->cambodianMoves);
     parse_attribute("firstMoveLoseOnCheck", v->firstMoveLoseOnCheck);
     parse_attribute("diagonalLines", v->diagonalLines);
-    parse_both_colors_with_overrides("pass", v->pass);
-    parse_both_colors_with_overrides("passOnStalemate", v->passOnStalemate);
+    parse_color_setting("pass", v->pass);
+    parse_color_setting("passOnStalemate", v->passOnStalemate);
     parse_attribute("passUntilSetup", v->passUntilSetup);
     parse_attribute("multimoves", v->multimoves);
     parse_attribute("progressiveMultimove", v->progressiveMultimove);
@@ -1742,15 +1693,25 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("soldierPromotionRank", v->soldierPromotionRank);
     parse_attribute("flipEnclosedPieces", v->flipEnclosedPieces);
     // game end
-    parse_both_colors_with_overrides_piece("nMoveRuleTypes", v->nMoveRuleTypes, v);
+    parse_color_setting_piece("nMoveRuleTypes", v->nMoveRuleTypes, v);
     parse_attribute("nMoveRule", v->nMoveRule);
     parse_attribute("nMoveRuleImmediate", v->nMoveRuleImmediate);
     parse_attribute("nMoveHardLimitRule", v->nMoveHardLimitRule);
     parse_attribute("nMoveHardLimitRuleValue", v->nMoveHardLimitRuleValue);
     parse_attribute("nFoldRule", v->nFoldRule);
     parse_attribute("nFoldRuleImmediate", v->nFoldRuleImmediate);
-    parse_attribute("nFoldValue", v->nFoldValue);
+    parse_color_setting("nFoldValue", v->nFoldValue);
     parse_attribute("nFoldValueAbsolute", v->nFoldValueAbsolute);
+    if (v->nFoldValueAbsolute) {
+        if (!v->nFoldValue.byColorSet[WHITE]) {
+            v->nFoldValue.byColor[WHITE] = v->nFoldValue.global;
+            v->nFoldValue.byColorSet[WHITE] = true;
+        }
+        if (!v->nFoldValue.byColorSet[BLACK]) {
+            v->nFoldValue.byColor[BLACK] = -v->nFoldValue.global;
+            v->nFoldValue.byColorSet[BLACK] = true;
+        }
+    }
     parse_attribute("perpetualCheckIllegal", v->perpetualCheckIllegal);
     parse_attribute("moveRepetitionIllegal", v->moveRepetitionIllegal);
     parse_attribute("samePlayerBoardRepetitionIllegal", v->samePlayerBoardRepetitionIllegal);
@@ -1761,9 +1722,9 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("weakCrosscutDropIllegal", v->weakCrosscutDropIllegal);
     parse_attribute("weakConnectionNobiImpossible", v->weakConnectionNobiImpossible);
     parse_attribute("chasingRule", v->chasingRule);
-    parse_attribute("stalemateValue", v->stalemateValue);
+    parse_color_setting("stalemateValue", v->stalemateValue);
     parse_attribute("stalematePieceCount", v->stalematePieceCount);
-    parse_attribute("checkmateValue", v->checkmateValue);
+    parse_color_setting("checkmateValue", v->checkmateValue);
     parse_color_setting("shogiPawnDropMateIllegal", v->shogiPawnDropMateIllegal);
     parse_attribute("shatarMateRule", v->shatarMateRule);
     parse_attribute("bikjangRule", v->bikjangRule);
@@ -1775,13 +1736,13 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("antiRoyalCount", v->antiRoyalCount);
     parse_attribute("antiRoyalSelfCaptureOnly", v->antiRoyalSelfCaptureOnly);
     parse_attribute("antiRoyalKingMutuallyImmune", v->antiRoyalKingMutuallyImmune);
-    parse_attribute("extinctionValue", v->extinctionValue);
+    parse_color_setting("extinctionValue", v->extinctionValue);
     parse_attribute("extinctionClaim", v->extinctionClaim);
     parse_attribute("extinctionPseudoRoyal", v->extinctionPseudoRoyal);
     parse_attribute("dupleCheck", v->dupleCheck);
     // extinction piece types
     parse_attribute("extinctionMustAppear", v->extinctionMustAppear, v);
-    parse_color_setting_piece("extinctionPieceTypes", v->extinctionPieceTypes);
+    parse_color_setting_piece("extinctionPieceTypes", v->extinctionPieceTypes, v);
     parse_color_setting("extinctionAllPieceTypes", v->extinctionAllPieceTypes);
     parse_color_setting("extinctionPieceCount", v->extinctionPieceCount);
     parse_color_setting("extinctionOpponentPieceCount", v->extinctionOpponentPieceCount);
@@ -1792,8 +1753,8 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
         v->pseudoRoyalTypes = v->extinctionPieceTypes;
         v->pseudoRoyalCount = v->extinctionPieceCount + 1;
     }
-    parse_both_colors_with_overrides_piece("flagPiece", v->flagPiece, v);
-    parse_both_colors_with_overrides("flagRegion", v->flagRegion);
+    parse_color_setting_piece("flagPiece", v->flagPiece, v);
+    parse_color_setting("flagRegion", v->flagRegion);
     parse_attribute("flagPieceCount", v->flagPieceCount);
     parse_attribute("flagPieceBlockedWin", v->flagPieceBlockedWin);
     parse_attribute("flagMove", v->flagMove);
@@ -1802,8 +1763,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("connectN", v->connectN);
     parse_attribute("connectPieceTypes", v->connectPieceTypes, v);
     parse_attribute("connectGoalByType", v->connectGoalByType);
-    parse_attribute("connectPieceGoalWhite", v->connectPieceGoal[WHITE]);
-    parse_attribute("connectPieceGoalBlack", v->connectPieceGoal[BLACK]);
+    parse_color_setting("connectPieceGoal", v->connectPieceGoal);
     parse_attribute("connectHorizontal", v->connectHorizontal);
     parse_attribute("connectVertical", v->connectVertical);
     parse_attribute("connectDiagonal", v->connectDiagonal);
@@ -1811,12 +1771,9 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("connectSouthEast", v->connectSouthEast);
     parse_attribute("connect3D", v->connect3D);
     parse_attribute("connect4D", v->connect4D);
-    parse_attribute("connectRegion1White", v->connectRegion1[WHITE]);
-    parse_attribute("connectRegion2White", v->connectRegion2[WHITE]);
-    parse_attribute("connectRegion3White", v->connectRegion3[WHITE]);
-    parse_attribute("connectRegion1Black", v->connectRegion1[BLACK]);
-    parse_attribute("connectRegion2Black", v->connectRegion2[BLACK]);
-    parse_attribute("connectRegion3Black", v->connectRegion3[BLACK]);
+    parse_color_setting("connectRegion1", v->connectRegion1);
+    parse_color_setting("connectRegion2", v->connectRegion2);
+    parse_color_setting("connectRegion3", v->connectRegion3);
     parse_attribute("connectNxN", v->connectNxN);
     parse_attribute("collinearN", v->collinearN);
     parse_attribute("connectGroup", v->connectGroup);
@@ -2084,7 +2041,7 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
     {
         if (v->blastOnCapture)
             std::cerr << "Can not use flagPieceSafe with blastOnCapture (flagPieceSafe uses simple assessment that does not see blast)." << std::endl;
-        if ((v->antiRoyalTypes & v->flagPiece[WHITE]) || (v->antiRoyalTypes & v->flagPiece[BLACK]))
+        if ((v->antiRoyalTypes & v->flagPiece.get(WHITE)) || (v->antiRoyalTypes & v->flagPiece.get(BLACK)))
             std::cerr << "Flag piece can not be anti-royal when flagPieceSafe is enabled." << std::endl;
     }
     return valid;

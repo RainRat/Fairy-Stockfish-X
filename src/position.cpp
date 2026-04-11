@@ -4933,7 +4933,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       if (   !pureWallMove
           && (   type_of(m) == PROMOTION
           || (type_of(m) == PIECE_PROMOTION && !piece_demotion())
-          || (    (var->nMoveRuleTypes[us] & type_of(pc))
+          || (    (var->nMoveRuleTypes.get(us) & type_of(pc))
               && !(PseudoMoves[0][us][type_of(pc)][to] & from))))
           st->rule50 = 0;
       if (is_self_destruct(m))
@@ -7049,8 +7049,7 @@ bool Position::n_fold_game_end(Value& result, int ply, int target) const {
       {
           result = convert_mate_value(  (perpetualThem || perpetualUs) ? (!perpetualUs ? VALUE_MATE : !perpetualThem ? -VALUE_MATE : VALUE_DRAW)
                                       : (chaseThem || chaseUs) ? (!chaseUs ? VALUE_MATE : !chaseThem ? -VALUE_MATE : VALUE_DRAW)
-                                      : var->nFoldValueAbsolute && sideToMove == BLACK ? -var->nFoldValue
-                                      : var->nFoldValue, ply);
+                                      : var->nFoldValue.get(sideToMove), ply);
           if (result == VALUE_DRAW && var->materialCounting)
               result = convert_mate_value(material_counting_result(), ply);
           return true;
@@ -7743,7 +7742,7 @@ bool Position::has_game_cycle(int ply) const {
 
   int end = captures_to_hand() ? st->pliesFromNull : std::min(st->rule50, st->pliesFromNull);
 
-  if (end < 3 || var->nFoldValue != VALUE_DRAW || var->perpetualCheckIllegal || var->materialCounting || var->moveRepetitionIllegal || walling_rule() == DUCK)
+  if (end < 3 || var->nFoldValue.get(WHITE) != VALUE_DRAW || var->nFoldValue.get(BLACK) != VALUE_DRAW || var->perpetualCheckIllegal || var->materialCounting || var->moveRepetitionIllegal || walling_rule() == DUCK)
     return false;
 
   bool useBoardKey = captures_to_hand();
