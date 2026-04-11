@@ -365,6 +365,27 @@ extern "C" PyObject* pyffish_getFEN(PyObject* self, PyObject *args) {
 }
 
 // INPUT variant, fen, move list
+extern "C" PyObject* pyffish_evaluate(PyObject* self, PyObject *args) {
+    PyObject *moveList;
+    Position pos;
+    const char *fen, *variant;
+    int chess960 = false;
+    if (!PyArg_ParseTuple(args, "ssO!|p", &variant, &fen, &PyList_Type, &moveList, &chess960)) {
+        return NULL;
+    }
+
+    const Variant* v = require_variant(variant);
+    if (!v)
+        return NULL;
+
+    StateListPtr states(new std::deque<StateInfo>(1));
+    if (!buildPosition(pos, states, v, fen, moveList, chess960))
+        return NULL;
+
+    return Py_BuildValue("i", Eval::evaluate(pos));
+}
+
+// INPUT variant, fen, move list
 extern "C" PyObject* pyffish_givesCheck(PyObject* self, PyObject *args) {
     PyObject *moveList;
     Position pos;
@@ -620,6 +641,7 @@ static PyMethodDef PyFFishMethods[] = {
     {"get_san_moves", (PyCFunction)pyffish_getSANmoves, METH_VARARGS, "Get SAN movelist from given FEN and UCI movelist."},
     {"legal_moves", (PyCFunction)pyffish_legalMoves, METH_VARARGS, "Get legal moves from given FEN and movelist."},
     {"get_fen", (PyCFunction)pyffish_getFEN, METH_VARARGS, "Get resulting FEN from given FEN and movelist."},
+    {"evaluate", (PyCFunction)pyffish_evaluate, METH_VARARGS, "Get static evaluation from given FEN and movelist."},
     {"gives_check", (PyCFunction)pyffish_givesCheck, METH_VARARGS, "Get check status from given FEN and movelist."},
     {"is_capture", (PyCFunction)pyffish_isCapture, METH_VARARGS, "Get whether given move is a capture from given FEN and movelist."},
     {"piece_to_partner", (PyCFunction)pyffish_pieceToPartner, METH_VARARGS, "Get unpromoted captured piece from given FEN and movelist."},
