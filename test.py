@@ -1831,6 +1831,11 @@ startFen = 4r3/8/8/8/8/8/8/8[A] w - - 0 1
         self._check_immediate_game_end("ataxx", "PPPpppp/pppPPPp/pPPPPPP/PPPPPPp/ppPPPpp/pPPPPpP/pPPPPPP b - - 99 50", [], True, -sf.VALUE_MATE)
         self._check_immediate_game_end("ataxx", "PPPpppp/pppPPPp/pPP*PPP/PP*P*Pp/ppP*Ppp/pPPPPpP/pPPPPPP b - - 99 50", [], True, -sf.VALUE_MATE)
 
+    def test_racing_kings_goal_adjudication(self):
+        self._check_immediate_game_end("racingkings", "7K/k7/8/8/8/8/8/8 b - - 0 1", [], False)
+        self._check_immediate_game_end("racingkings", "7K/8/k7/8/8/8/8/8 b - - 0 1", [], True, -sf.VALUE_MATE)
+        self._check_immediate_game_end("racingkings", "k6K/8/8/8/8/8/8/8 w - - 0 1", [], True, sf.VALUE_DRAW)
+
     def _check_optional_game_end(self, variant, fen, moves, game_end, game_result=None):
         with self.subTest(variant=variant, fen=fen, game_end=game_end, game_result=game_result):
             result = sf.is_optional_game_end(variant, fen, moves)
