@@ -948,7 +948,7 @@ inline bool Position::promotion_allowed(Color c, PieceType pt) const {
 }
 
 inline bool Position::promotion_allowed(Color c, PieceType pt, Square s) const {
-  return bool(promotion_piece_types(c, s) & pt) && promotion_allowed(c, pt);
+  return bool(promotion_piece_types(c, s) & piece_set(pt)) && promotion_allowed(c, pt);
 }
 
 inline PieceType Position::promoted_piece_type(PieceType pt) const {
@@ -1604,7 +1604,7 @@ inline Bitboard Position::opening_swap_drop_targets(Color c, PieceType pt) const
   if (popcount(enemy) != 1)
       return Bitboard(0);
 
-  if (!(drop_piece_types(pt) & pt))
+  if (!(drop_piece_types(pt) & piece_set(pt)))
       return Bitboard(0);
 
   if (!var->openingSwapMirrorMainDiagonal)
@@ -3459,11 +3459,11 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
     // Since double step in introduced from chess variants where pawns cannot capture forward, capturing moves are not included here.
     // Double/Triple step cannot attack other pieces, so attacks_from(Color c, PieceType pt, Square s) is not changed
     // Due to some unknown issues, shift<Direction D>(Bitboard b) cannot be used here
-    const Bitboard fallbackTripleStepRegion = var->tripleStepRegion.get(c).fallback;
+    const Bitboard explicitTripleStepRegion = var->tripleStepRegion.get(c).explicitBoardOfPiece(piece_to_char()[pt]);
     Bitboard occupied = this->pieces();  //Bitboard where the bits whose corresponding squares having a piece on it are 1
     Bitboard piecePosition = square_bb(s);  //Bitboard where only the bit which refers to the square that the piece starts the move (original square) is 1
-    const bool pawnLikeNonPawn = pt != PAWN && (en_passant_types(c) & pt);
-    if (pawnLikeNonPawn && fallbackTripleStepRegion & piecePosition & this->not_moved_pieces(c))  //If the original square is in fallback tripleStepRegion and the piece is not moved
+    const bool usesGenericNonPawnStepHelper = pt != PAWN && !(en_passant_types(c) & piece_set(pt));
+    if (usesGenericNonPawnStepHelper && explicitTripleStepRegion & piecePosition & this->not_moved_pieces(c))  //If the original square is in explicit tripleStepRegion and the piece is not moved
     {
         Bitboard extraMultipleStepMoveDestinations = 0x00;  //Bitboard where extra legal multi-step destination square bits are 1
         Bitboard oneSquareAhead = (c == WHITE) ? piecePosition << NORTH : piecePosition >> NORTH;
@@ -3483,8 +3483,8 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
         }
         extraDestinations |= extraMultipleStepMoveDestinations; //Add destination squares to base board
     }
-    const Bitboard fallbackDoubleStepRegion = var->doubleStepRegion.get(c).fallback;
-    if (pawnLikeNonPawn && fallbackDoubleStepRegion & piecePosition & this->not_moved_pieces(c))  //If the original square is in fallback doubleStepRegion and the piece is not moved
+    const Bitboard explicitDoubleStepRegion = var->doubleStepRegion.get(c).explicitBoardOfPiece(piece_to_char()[pt]);
+    if (usesGenericNonPawnStepHelper && explicitDoubleStepRegion & piecePosition & this->not_moved_pieces(c))  //If the original square is in explicit doubleStepRegion and the piece is not moved
     {
         Bitboard extraMultipleStepMoveDestinations = 0x00;  //Bitboard where extra legal multi-step destination square bits are 1
         Bitboard oneSquareAhead = (c == WHITE) ? piecePosition << NORTH : piecePosition >> NORTH;
@@ -3594,7 +3594,7 @@ inline Bitboard Position::passive_blast_checkers(Color victim, Bitboard occupied
 
   Bitboard burners = Bitboard(0);
   for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
-      if (var->blastPassiveTypes & pt)
+      if (var->blastPassiveTypes & piece_set(pt))
           burners |= pieces(~victim, pt);
 
   return blast_pattern(ksq) & burners & occupied;
@@ -3694,7 +3694,7 @@ inline Square Position::jump_capture_square(Square from, Square to) const {
 
   Piece mover = piece_on(from);
   PieceSet jumpTypes = jump_capture_types();
-  if (mover == NO_PIECE || (!(jumpTypes & ALL_PIECES) && !(jumpTypes & type_of(mover))) || !empty(to))
+  if (mover == NO_PIECE || (!(jumpTypes & ALL_PIECES) && !(jumpTypes & piece_set(type_of(mover)))) || !empty(to))
       return SQ_NONE;
 
   Square mid = JumpMidpoint[from][to];
@@ -3727,7 +3727,7 @@ inline bool Position::capture(Move m) const {
   {
       Piece mover = moved_piece(m);
       PieceSet jumpTypes = jump_capture_types();
-      if (mover != NO_PIECE && ((jumpTypes & ALL_PIECES) || (jumpTypes & type_of(mover))))
+      if (mover != NO_PIECE && ((jumpTypes & ALL_PIECES) || (jumpTypes & piece_set(type_of(mover)))))
       {
           if (jump_capture_square(from_sq(m), to_sq(m)) != SQ_NONE)
               return true;

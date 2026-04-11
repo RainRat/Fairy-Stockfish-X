@@ -4933,7 +4933,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       if (   !pureWallMove
           && (   type_of(m) == PROMOTION
           || (type_of(m) == PIECE_PROMOTION && !piece_demotion())
-          || (    (var->nMoveRuleTypes.get(us) & type_of(pc))
+          || (    (var->nMoveRuleTypes.get(us) & piece_set(type_of(pc)))
               && !(PseudoMoves[0][us][type_of(pc)][to] & from))))
           st->rule50 = 0;
       if (is_self_destruct(m))
