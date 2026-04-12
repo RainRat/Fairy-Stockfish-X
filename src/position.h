@@ -665,7 +665,6 @@ private:
   Bitboard compute_evasion_checkers_bb(Color side) const;
   void set_check_info(StateInfo* si) const;
   bool compute_forced_jump_followup(Square s, int step = 0) const;
-  bool is_initial_pawn(Piece pc, Square s) const;
   Key layout_key() const;
   bool violates_same_player_board_repetition(Move m) const;
   Key reserve_key() const;
@@ -3865,10 +3864,6 @@ inline void Position::remove_piece(Square s) {
   //not-moved-piece bitboard must ensure that there is a piece
   this->st->not_moved_pieces[WHITE] &= (~square_bb(s));
   this->st->not_moved_pieces[BLACK] &= (~square_bb(s));
-}
-
-inline bool Position::is_initial_pawn(Piece pc, Square s) const {
-  return type_of(pc) == PAWN && rank_of(s) == relative_rank(color_of(pc), RANK_2, max_rank());
 }
 
 inline void Position::move_piece(Square from, Square to) {
