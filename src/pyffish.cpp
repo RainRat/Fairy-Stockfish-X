@@ -678,6 +678,12 @@ PyMODINIT_FUNC PyInit_pyffish() {
     PyModule_AddObject(module, "VALUE_MATE", PyLong_FromLong(VALUE_MATE));
     PyModule_AddObject(module, "VALUE_DRAW", PyLong_FromLong(VALUE_DRAW));
     PyModule_AddObject(module, "VALUE_NONE", PyLong_FromLong(VALUE_NONE));
+    PyModule_AddObject(module, "VALUE_INFINITE", PyLong_FromLong(VALUE_INFINITE));
+    PyModule_AddObject(module, "VALUE_KNOWN_WIN", PyLong_FromLong(VALUE_KNOWN_WIN));
+    PyModule_AddObject(module, "VALUE_MATE_IN_MAX_PLY", PyLong_FromLong(VALUE_MATE_IN_MAX_PLY));
+    PyModule_AddObject(module, "VALUE_MATED_IN_MAX_PLY", PyLong_FromLong(VALUE_MATED_IN_MAX_PLY));
+    PyModule_AddObject(module, "VALUE_TB_WIN_IN_MAX_PLY", PyLong_FromLong(VALUE_TB_WIN_IN_MAX_PLY));
+    PyModule_AddObject(module, "VALUE_TB_LOSS_IN_MAX_PLY", PyLong_FromLong(VALUE_TB_LOSS_IN_MAX_PLY));
 
     // notations
     PyModule_AddObject(module, "NOTATION_DEFAULT", PyLong_FromLong(NOTATION_DEFAULT));
