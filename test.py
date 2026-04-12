@@ -2012,6 +2012,13 @@ startFen = 4r3/8/8/8/8/8/8/8[A] w - - 0 1
                     self.assertEqual(result, -10,
                                    f"Expected non-shogi variant to fail with character error (-10): {fen}, got {result}")
 
+    def test_evaluate(self):
+        self.assertEqual(sf.evaluate("chess", CHESS, []), 0)
+        self.assertGreater(sf.evaluate("chess", "k7/8/8/8/8/8/7R/K7 w - - 0 1", []), 10000)
+        self.assertLess(sf.evaluate("chess", "k7/8/8/8/8/8/7R/K7 b - - 0 1", []), -10000)
+        with self.assertRaisesRegex(ValueError, "No such variant 'non_existent_variant'"):
+            sf.evaluate("non_existent_variant", "8/8/8/8/8/8/8/8 w - - 0 1", [])
+
     def test_get_fog_fen(self):
         fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"  # startpos
         result = sf.get_fog_fen(fen, "fogofwar")
