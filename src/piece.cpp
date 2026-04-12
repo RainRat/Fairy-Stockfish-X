@@ -141,9 +141,10 @@ namespace {
               std::string prefix;
               while (!out.empty() && prefixChars.find(out.back()) != std::string::npos)
               {
-                  prefix.insert(prefix.begin(), out.back());
+                  prefix.push_back(out.back());
                   out.pop_back();
               }
+              std::reverse(prefix.begin(), prefix.end());
               if (prefix.empty())
               {
                   out.append(in, i, close - i + 1);
@@ -502,10 +503,14 @@ namespace {
               }
               auto close = expandedBetza.find(')', i + 1);
               if (close == std::string::npos)
+              {
+                  reset_parser_state();
                   continue;
+              }
               auto comma = expandedBetza.find(',', i + 1);
               if (comma == std::string::npos || comma > close)
               {
+                  reset_parser_state();
                   i = close;
                   continue;
               }
@@ -513,12 +518,14 @@ namespace {
               if (!parse_positive_int(expandedBetza.substr(i + 1, comma - i - 1), dx)
                   || !parse_positive_int(expandedBetza.substr(comma + 1, close - comma - 1), dy))
               {
+                  reset_parser_state();
                   i = close;
                   continue;
               }
               // Tuple atoms are stored as (rankDelta, fileDelta).
               if ((dx == 0 && dy == 0) || dx > int(RANK_MAX) || dy > int(FILE_MAX))
               {
+                  reset_parser_state();
                   i = close;
                   continue;
               }
@@ -636,7 +643,7 @@ void PieceMap::add(PieceType pt, const PieceInfo* p) {
   }
 
   direct[pt] = p;
-  insert(std::pair<PieceType, const PieceInfo*>(pt, p));
+  (*this)[pt] = p;
 }
 
 void PieceMap::clear_all() {
