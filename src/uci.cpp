@@ -293,11 +293,11 @@ namespace {
 
   // print_variant_info() prints a summary of the current variant's configuration.
 
-  void print_variant_info(const Variant* v) {
+  void print_variant_info(const Variant* v, const std::string& variantName) {
 
     if (!v) return;
 
-    sync_cout << "\nVariant:  " << std::string(Options["UCI_Variant"])
+    sync_cout << "\nVariant:  " << variantName
               << "\nTemplate: " << v->variantTemplate
               << "\nBoard:    " << v->maxFile + 1 << "x" << v->maxRank + 1
               << (v->hexBoard ? " (hex)" : "")
@@ -460,7 +460,11 @@ void UCI::loop(int argc, char* argv[]) {
       else if (token == "flip")     pos.flip();
       else if (token == "bench")    bench(pos, is, states);
       else if (token == "d")        sync_cout << pos << sync_endl;
-      else if (token == "vinfo")    print_variant_info(pos.variant());
+      else if (token == "vinfo")
+      {
+          const std::string variantName = Options["UCI_Variant"];
+          print_variant_info(variants.get(variantName), variantName);
+      }
       else if (token == "eval")     trace_eval(pos);
       else if (token == "compiler") sync_cout << compiler_info() << sync_endl;
       else if (token == "export_net")
