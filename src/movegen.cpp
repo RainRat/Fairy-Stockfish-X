@@ -645,7 +645,7 @@ namespace {
 
             // An en passant capture cannot resolve a discovered check (unless there non-sliding riders)
             if (Type == EVASIONS && (target & (epSquare + Up)) && !pos.non_sliding_riders())
-                return moveList;
+                continue;
 
             Bitboard b = pawns & pawn_attacks_bb(Them, epSquare);
 
@@ -992,8 +992,8 @@ namespace {
                 moveList = generate_exchanges<Us, Type>(pos, moveList, pop_lsb(ps), target & ~pos.pieces(~Us));
 
         // Castling with non-king piece
-        if constexpr (Type != CAPTURES)
-            if (!restrictToForcedJumper && !pos.count<KING>(Us) && pos.can_castle(Us & ANY_CASTLING))
+        if constexpr (Type != CAPTURES && Type != QUIET_CHECKS)
+            if (!restrictToForcedJumper && !pos.count<KING>(Us) && pos.can_castle(Us == WHITE ? WHITE_CASTLING : BLACK_CASTLING))
             {
                 Square from = pos.castling_king_square(Us);
                 for(CastlingRights cr : { Us & KING_SIDE, Us & QUEEN_SIDE } )
@@ -1039,6 +1039,8 @@ namespace {
                 {
                     Square from = pop_lsb(froms);
                     Bitboard b = (pos.moves_from(Us, extraPt, from) | pos.attacks_from(Us, extraPt, from)) & target & ~pos.pieces(Us);
+                    if (Type == QUIET_CHECKS)
+                        b &= pos.check_squares(extraPt);
                     while (b)
                         *moveList++ = make<SPECIAL>(from, pop_lsb(b), extraPt);
                 }
@@ -1060,6 +1062,8 @@ namespace {
                 {
                     Square from = pop_lsb(froms);
                     Bitboard b = pos.clone_targets_from(Us, from) & cloneTargets;
+                    if (Type == QUIET_CHECKS)
+                        b &= pos.check_squares(pt);
                     while (b)
                         *moveList++ = make<SPECIAL>(from, pop_lsb(b));
                 }
@@ -1178,7 +1182,7 @@ namespace {
             *moveList++ = make<SPECIAL>(ksq != SQ_NONE ? ksq : lsb(pos.board_bb()),
                                         ksq != SQ_NONE ? ksq : lsb(pos.board_bb()));
 
-        if (!restrictToForcedJumper && (Type == QUIETS || Type == NON_EVASIONS) && pos.can_castle(Us & ANY_CASTLING))
+        if (!restrictToForcedJumper && (Type == QUIETS || Type == NON_EVASIONS) && pos.can_castle(Us == WHITE ? WHITE_CASTLING : BLACK_CASTLING))
             for (CastlingRights cr : { Us & KING_SIDE, Us & QUEEN_SIDE } )
                 if (!pos.castling_impeded(cr) && pos.can_castle(cr))
                     moveList = make_move_and_gating<CASTLING>(pos, moveList, Us,ksq, pos.castling_rook_square(cr));
@@ -1254,11 +1258,19 @@ namespace {
             Bitboard gateMask = square_bb(gate);
             ScopedSpellContext guard(Bitboard(0), gateMask);
 
+#ifdef USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
+            std::unique_ptr<ExtMove[]> jumpMoves(new ExtMove[MOVEGEN_OVERFLOW_CAPACITY]);
+            ExtMove* jumpEnd = generate_all_impl<Us, Type>(pos, jumpMoves.get());
+            assert(jumpEnd - jumpMoves.get() <= MOVEGEN_OVERFLOW_CAPACITY);
+
+            for (ExtMove* it = jumpMoves.get(); it != jumpEnd; ++it)
+#else
             ExtMove jumpMoves[MOVEGEN_OVERFLOW_CAPACITY];
             ExtMove* jumpEnd = generate_all_impl<Us, Type>(pos, jumpMoves);
             assert(jumpEnd - jumpMoves <= MOVEGEN_OVERFLOW_CAPACITY);
 
             for (ExtMove* it = jumpMoves; it != jumpEnd; ++it)
+#endif
             {
                 if (cur >= maxEnd)
                     return maxEnd;
