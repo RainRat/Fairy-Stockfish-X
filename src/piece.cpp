@@ -642,8 +642,12 @@ void PieceMap::add(PieceType pt, const PieceInfo* p) {
       }
   }
 
-  direct[pt] = p;
+  auto it = find(pt);
+  if (it != end()) {
+      delete it->second;
+  }
   (*this)[pt] = p;
+  direct[pt] = p;
 }
 
 void PieceMap::clear_all() {

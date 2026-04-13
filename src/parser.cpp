@@ -506,7 +506,7 @@ namespace {
         for (i = 0; i < value.length(); i++)
         {
             const char ch = value.at(i);
-            if (ch == ' ' || ch == ';')
+            if (ch == ' ')
             {
                 continue;
             }

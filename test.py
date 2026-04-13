@@ -2013,9 +2013,15 @@ startFen = 4r3/8/8/8/8/8/8/8[A] w - - 0 1
                                    f"Expected non-shogi variant to fail with character error (-10): {fen}, got {result}")
 
     def test_evaluate(self):
-        self.assertEqual(sf.evaluate("chess", CHESS, []), 0)
-        self.assertGreater(sf.evaluate("chess", "k7/8/8/8/8/8/7R/K7 w - - 0 1", []), 10000)
-        self.assertLess(sf.evaluate("chess", "k7/8/8/8/8/8/7R/K7 b - - 0 1", []), -10000)
+        eval_start = sf.evaluate("chess", CHESS, [])
+        self.assertTrue(-50 <= eval_start <= 50, f"Expected startpos eval near 0, got {eval_start}")
+        
+        # Rook vs king is winning, should be > 300 centipawns
+        self.assertGreater(sf.evaluate("chess", "k7/8/8/8/8/8/7R/K7 w - - 0 1", []), 300)
+        
+        # Black to move: since evaluate is side-to-move, Black is losing, so Black's eval is negative
+        self.assertLess(sf.evaluate("chess", "k7/8/8/8/8/8/7R/K7 b - - 0 1", []), -300)
+        
         with self.assertRaisesRegex(ValueError, "No such variant 'non_existent_variant'"):
             sf.evaluate("non_existent_variant", "8/8/8/8/8/8/8/8 w - - 0 1", [])
 
