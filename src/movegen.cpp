@@ -935,7 +935,9 @@ namespace {
                     PieceType checkerPt = type_of(pos.piece_on(checksq));
                     Bitboard checkerMask = square_bb(checksq);
                     Bitboard t = (AttackRiderTypes[checkerPt] & RIDER_ROSE)
-                               ? rose_between_intersection_bb(ksq, checksq, pos.pieces())
+                               ? (pos.topology_wraps()
+                               ? Position::wrapped_rose_between_intersection_bb(ksq, checksq, pos.pieces(), pos.max_file(), pos.max_rank(), pos.wraps_files(), pos.wraps_ranks())
+                               : rose_between_intersection_bb(ksq, checksq, pos.pieces()))
                                : between_bb(ksq, checksq, checkerPt);
 
                     bool blockableNightrider = AttackRiderTypes[checkerPt] & RIDER_NIGHTRIDER;

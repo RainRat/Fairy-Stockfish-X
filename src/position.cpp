@@ -518,14 +518,29 @@ namespace {
     return pos.attacks_from(c, pt, sq, syntheticOccupancy);
   }
 
-  Bitboard rose_revealed_blockers(Square target, Square attackerSq, Bitboard occupied) {
+  Bitboard rose_revealed_blockers(const Position& pos, Square target, Square attackerSq, Bitboard occupied) {
     Bitboard blockers = 0;
-    Bitboard candidates = rose_between_union_bb(target, attackerSq, Bitboard(0)) & occupied & ~square_bb(attackerSq);
+    const bool wrapFile = pos.wraps_files();
+    const bool wrapRank = pos.wraps_ranks();
+    const File maxF = pos.max_file();
+    const Rank maxR = pos.max_rank();
+
+    Bitboard candidates;
+    if (pos.topology_wraps())
+        candidates = Position::wrapped_rose_between_union_bb(target, attackerSq, Bitboard(0), maxF, maxR, wrapFile, wrapRank) & occupied & ~square_bb(attackerSq);
+    else
+        candidates = rose_between_union_bb(target, attackerSq, Bitboard(0)) & occupied & ~square_bb(attackerSq);
 
     while (candidates)
     {
         Square blocker = pop_lsb(candidates);
-        if (rose_attacks_bb(attackerSq, occupied ^ square_bb(blocker)) & target)
+        Bitboard attacks;
+        if (pos.topology_wraps())
+            attacks = Position::wrapped_rose_targets(attackerSq, occupied ^ square_bb(blocker), maxF, maxR, wrapFile, wrapRank, false);
+        else
+            attacks = rose_attacks_bb(attackerSq, occupied ^ square_bb(blocker));
+
+        if (attacks & target)
             blockers |= blocker;
     }
 
@@ -2339,12 +2354,13 @@ Bitboard Position::slider_blockers(Bitboard sliders, Square s, Bitboard& pinners
     PieceType sniperType = type_of(sniper);
     if (AttackRiderTypes[sniperType] & RIDER_ROSE)
     {
-        Bitboard b = rose_revealed_blockers(s, sniperSq, occupancy);
+        Bitboard b = rose_revealed_blockers(*this, s, sniperSq, occupancy);
         if (b && !more_than_one(b))
             pinners |= pieces(c) & sniperSq;
         blockers |= b;
         continue;
     }
+
     bool isHopper = AttackRiderTypes[sniperType] & HOPPING_RIDERS;
     Bitboard b = between_bb(s, sniperSq, sniperType) & (isHopper ? (allPieces ^ sniperSq) : occupancy);
 
