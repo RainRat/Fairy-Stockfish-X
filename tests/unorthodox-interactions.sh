@@ -146,9 +146,36 @@ cylindrical = true
 customPiece1 = a:jR
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 startFen = 8/8/8/8/8/8/8/Ap5p w - - 0 1
+
+[torpedo-triple:chess]
+enPassantTypes = p
+tripleStepRegion = *(* *);
+
+[custom-pawn-triple:chess]
+customPiece1 = d:fmWfceF
+pieceToCharTable = PNBRQ............D...Kpnbrq............d...k
+pawnLikeTypes = d
+enPassantTypes = d
+tripleStepRegion = D(* *);
 EOF
 
 echo "unorthodox interactions tests started"
+
+# 0. Test triple-step for pieces in enPassantTypes
+out=$(run_cmds "torpedo-triple" "${TEMP_INI}" "position fen 8/8/8/8/8/8/P7/K1k5 w - - 0 1
+go perft 1")
+echo "${out}" | grep -q "a2a3: 1"
+echo "${out}" | grep -q "a2a4: 1"
+echo "${out}" | grep -q "a2a5: 1"
+
+# 0b. Test triple-step for custom pieces in enPassantTypes (demonstrates pseudo_legal bug)
+out=$(run_cmds "custom-pawn-triple" "${TEMP_INI}" "position fen 8/8/8/8/8/8/D7/K1k5 w - - 0 1 moves a2a5
+d")
+if ! echo "${out}" | grep -q "Fen: 8/8/8/D7/8/8/8/K1k5 b"; then
+  echo "Test 0b failed: move a2a5 was rejected or resulted in wrong FEN"
+  echo "${out}" | grep "Fen:"
+  exit 1
+fi
 
 # 1. Test rifleCapture + deathOnCaptureTypes
 out=$(run_cmds "rifle-death" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/4q3/3QK3 w - - 0 1 moves d1e2
@@ -275,6 +302,7 @@ fi
 
 # 19. Test removeConnectN + royal kings rejects the variant
 out=$(run_cmds "remove-king-repro" "${TEMP_INI}" "d")
+echo "${out}" | grep -q "removeConnectN is incompatible with (pseudo/anti-)royal pieces."
 if echo "${out}" | grep -q "info string variant remove-king-repro"; then
   echo "removeConnectN + royal kings variant should have been rejected"
   exit 1

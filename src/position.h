@@ -777,7 +777,6 @@ private:
   PieceType committed_piece_type(Color cl, File fl) const;
   bool has_committed_piece(Color cl, File fl) const;
   PieceType drop_committed_piece(Color cl, File fl);
-  Bitboard find_drop_region(Direction dir, Square s, Bitboard occupied) const;
   void swap_piece(Square from, Square to);
 };
 
@@ -3456,7 +3455,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
     const Bitboard explicitTripleStepRegion = var->tripleStepRegion.get(c).explicitBoardOfPiece(piece_to_char()[pt]);
     Bitboard occupied = this->pieces();  //Bitboard where the bits whose corresponding squares having a piece on it are 1
     Bitboard piecePosition = square_bb(s);  //Bitboard where only the bit which refers to the square that the piece starts the move (original square) is 1
-    const bool usesGenericNonPawnStepHelper = pt != PAWN && !(en_passant_types(c) & piece_set(pt));
+    const bool usesGenericNonPawnStepHelper = true; // Allow all pieces to use explicit regions if defined
     if (usesGenericNonPawnStepHelper && explicitTripleStepRegion & piecePosition & this->not_moved_pieces(c))  //If the original square is in explicit tripleStepRegion and the piece is not moved
     {
         Bitboard extraMultipleStepMoveDestinations = 0x00;  //Bitboard where extra legal multi-step destination square bits are 1
@@ -3477,18 +3476,18 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
         }
         extraDestinations |= extraMultipleStepMoveDestinations; //Add destination squares to base board
     }
-    const Bitboard explicitDoubleStepRegion = var->doubleStepRegion.get(c).explicitBoardOfPiece(piece_to_char()[pt]);
-    if (usesGenericNonPawnStepHelper && explicitDoubleStepRegion & piecePosition & this->not_moved_pieces(c))  //If the original square is in explicit doubleStepRegion and the piece is not moved
+    Bitboard doubleStepRegion = this->double_step_region(c, pt);
+    if (usesGenericNonPawnStepHelper && doubleStepRegion & piecePosition & this->not_moved_pieces(c))  //If the original square is in doubleStepRegion and the piece is not moved
     {
         Bitboard extraMultipleStepMoveDestinations = 0x00;  //Bitboard where extra legal multi-step destination square bits are 1
         Bitboard oneSquareAhead = (c == WHITE) ? piecePosition << NORTH : piecePosition >> NORTH;
         if (!(oneSquareAhead & occupied))  //If the square which is 1 square ahead of original square is NOT blocked
         {
-            extraMultipleStepMoveDestinations |= oneSquareAhead;  //Add the square which is 1 square ahead of original square to destination squares for triple step
+            extraMultipleStepMoveDestinations |= oneSquareAhead;  //Add the square which is 1 square ahead of original square to destination squares for double step
             Bitboard twoSquareAhead = (c == WHITE) ? piecePosition << NORTH << NORTH : piecePosition >> NORTH >> NORTH;
             if (!(twoSquareAhead & occupied))  //If the square which is 2 squares ahead of original square is NOT blocked
             {
-                extraMultipleStepMoveDestinations |= twoSquareAhead;  //Add the square which is 2 squares ahead of original square to destination squares for triple step
+                extraMultipleStepMoveDestinations |= twoSquareAhead;  //Add the square which is 2 squares ahead of original square to destination squares for double step
             }
         }
         extraDestinations |= extraMultipleStepMoveDestinations; //Add destination squares to base board
