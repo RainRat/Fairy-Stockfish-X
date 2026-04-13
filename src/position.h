@@ -777,7 +777,6 @@ private:
   PieceType committed_piece_type(Color cl, File fl) const;
   bool has_committed_piece(Color cl, File fl) const;
   PieceType drop_committed_piece(Color cl, File fl);
-  Bitboard find_drop_region(Direction dir, Square s, Bitboard occupied) const;
   void swap_piece(Square from, Square to);
 };
 
