@@ -453,12 +453,6 @@ struct PieceTypeBitboardGroup
         return isSet[ptc - 'A'] ? boardlist[ptc - 'A'] : fallback;
     }
 
-    Bitboard explicitBoardOfPiece(const char ptc) const
-    {
-        if (ptc < 'A' || ptc > 'Z') return Bitboard(0);
-        return isSet[ptc - 'A'] ? boardlist[ptc - 'A'] : Bitboard(0);
-    }
-
     // Set the bitboard of a piece type.
     // ptc: Only accepts A-Z or * for fallback
     // board: The bitboard to set
