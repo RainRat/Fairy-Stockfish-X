@@ -2601,7 +2601,7 @@ template void VariantMap::parse<true>(std::string path);
 template void VariantMap::parse<false>(std::string path);
 
 void VariantMap::add(std::string s, Variant* v) {
-  insert(std::pair<std::string, const Variant*>(s, v->conclude()));
+  (*this)[s] = v->conclude();
 }
 
 void VariantMap::clear_all() {
