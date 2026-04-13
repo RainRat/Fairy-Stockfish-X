@@ -8,7 +8,8 @@ error() {
 }
 trap 'error ${LINENO}' ERR
 
-ENGINE=${1:-./src/stockfish-large}
+SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+ENGINE="${1:-${SCRIPT_DIR}/../src/stockfish-large}"
 
 tmp_ini=$(mktemp)
 cat > "${tmp_ini}" <<'INI'
@@ -61,9 +62,9 @@ d")
 echo "${out}" | grep -q "Sfen: 3/1A1/3 w Aa 2"
 
 out=$(run_cmds "setoption name UCI_Variant value owner-hand-eject
-position startpos moves A@a5,b5
+position startpos moves A@a1,b1
 d")
-echo "${out}" | grep -q "Fen: AAAAA/5/5/5/5\\[a\\] b - - 0 1"
+echo "${out}" | grep -q "Fen: AAAAa/5/5/5/A4\\[\\] b - - 0 1"
 
 rm -f "${tmp_ini}"
 echo "owner-return-hand tests passed"

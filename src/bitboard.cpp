@@ -263,8 +263,10 @@ namespace {
 
   void add_step_like_rider_types(RiderType& riderTypes, Direction d) {
     const int ad = std::abs(int(d));
-    if ((ad % FILE_NB) == 0 || ad < FILE_NB)
-        riderTypes |= RIDER_ROOK_H | RIDER_ROOK_V;
+    if ((ad % FILE_NB) == 0)
+        riderTypes |= RIDER_ROOK_V;
+    if (ad < FILE_NB)
+        riderTypes |= RIDER_ROOK_H;
     if ((FILE_NB > 1 && (ad % (FILE_NB - 1)) == 0) || (ad % (FILE_NB + 1)) == 0)
         riderTypes |= RIDER_BISHOP;
     if (LameDabbabaDirections.find(d) != LameDabbabaDirections.end())
@@ -510,6 +512,34 @@ inline Bitboard safe_destination_tuple(Square s, int dr, int df) {
     return square_bb(make_square(File(f), Rank(r)));
 }
 
+Bitboard tuple_rider_attacks(const std::vector<PieceInfo::TupleRay>& rays, Square s, Bitboard occupied, Color c) {
+    Bitboard attack = 0;
+
+    for (const auto& ray : rays)
+    {
+        const int stepR = c == WHITE ? ray.dr : -ray.dr;
+        const int stepF = c == WHITE ? ray.df : -ray.df;
+        Square current = s;
+        int count = 0;
+        for (;;)
+        {
+            Bitboard next = safe_destination_tuple(current, stepR, stepF);
+            if (!next)
+                break;
+
+            Square to = lsb(next);
+            attack |= next;
+            current = to;
+            if (ray.limit > 0 && ++count >= ray.limit)
+                break;
+            if (occupied & next)
+                break;
+        }
+    }
+
+    return attack;
+}
+
 Bitboard rider_terminal_squares(const std::map<Direction, int>& directions, Square sq) {
     Bitboard terminal = 0;
 
@@ -620,6 +650,29 @@ Bitboard leap_rider_moves_bb(PieceType pt, bool initial, Color c, Square s, Bitb
   return leap_rider_attacks(pieceMap.get(pt)->leapRider[initial][MODALITY_QUIET], s, occupied, c);
 }
 
+Bitboard tuple_rider_attacks_bb(PieceType pt, Color c, Square s, Bitboard occupied) {
+  return tuple_rider_attacks(pieceMap.get(pt)->tupleSlider[0][MODALITY_CAPTURE], s, occupied, c);
+}
+
+Bitboard tuple_rider_moves_bb(PieceType pt, bool initial, Color c, Square s, Bitboard occupied) {
+  return tuple_rider_attacks(pieceMap.get(pt)->tupleSlider[initial][MODALITY_QUIET], s, occupied, c);
+}
+
+Bitboard tuple_rider_between_bb(PieceType pt, Square s1, Square s2) {
+  for (const auto& ray : pieceMap.get(pt)->tupleSlider[0][MODALITY_CAPTURE])
+      if (Bitboard path = fixed_step_between_bb(s1, s2, ray.df, ray.dr))
+      {
+          int steps = popcount(path);
+          if (steps < slider_min_distance(ray.limit))
+              continue;
+          int maxDistance = slider_max_distance(ray.limit);
+          if (maxDistance && steps > maxDistance)
+              continue;
+          return path;
+      }
+  return Bitboard(0);
+}
+
 
 /// Bitboards::pretty() returns an ASCII representation of a bitboard suitable
 /// to be printed to standard output. Useful for debugging.
@@ -657,7 +710,7 @@ void Bitboards::init_pieces() {
 
   for (PieceType pt = PAWN; pt <= KING; ++pt)
   {
-      const PieceInfo* pi = pieceMap.find(pt)->second;
+      const PieceInfo* pi = pieceMap.get(pt);
 
       // Detect rider types
       for (auto modality : {MODALITY_QUIET, MODALITY_CAPTURE})
@@ -725,6 +778,23 @@ void Bitboards::init_pieces() {
                           Bitboard dst = safe_destination_tuple(s, tdr, tdf);
                           pseudo |= dst;
                           leaper |= dst;
+                      }
+                      for (const auto& ray : pi->tupleSlider[initial][modality])
+                      {
+                          int tdr = c == WHITE ? ray.dr : -ray.dr;
+                          int tdf = c == WHITE ? ray.df : -ray.df;
+                          Square current = s;
+                          int count = 0;
+                          for (;;)
+                          {
+                              Bitboard dst = safe_destination_tuple(current, tdr, tdf);
+                              if (!dst)
+                                  break;
+                              pseudo |= dst;
+                              current = lsb(dst);
+                              if (ray.limit > 0 && ++count >= ray.limit)
+                                  break;
+                          }
                       }
                       pseudo |= special_pseudo_bb(pi, initial, modality, s, c, riderDirs, skiDirs);
                       leaper |= special_leaper_bb(pi, initial, modality, s, c);
@@ -835,11 +905,12 @@ namespace {
                              {  728, 10316, 55013, 32803, 12281, 15100,  16645,   255 } };
 #endif
 
-    Bitboard* occupancy = new Bitboard[1 << (FILE_NB + RANK_NB - 4)];
-    Bitboard* reference = new Bitboard[1 << (FILE_NB + RANK_NB - 4)];
+    constexpr size_t TempTableSize = size_t(1) << (FILE_NB + RANK_NB - 4);
+    std::vector<Bitboard> occupancy(TempTableSize);
+    std::vector<Bitboard> reference(TempTableSize);
     [[maybe_unused]] Bitboard edges;
     Bitboard b;
-    int* epoch = new int[1 << (FILE_NB + RANK_NB - 4)]();
+    std::vector<int> epoch(TempTableSize);
     int cnt = 0, size = 0;
 
     for (Square s = SQ_A1; s <= SQ_MAX; ++s)
@@ -946,9 +1017,6 @@ namespace {
         }
     }
 
-    delete[] occupancy;
-    delete[] reference;
-    delete[] epoch;
   }
 #endif
 }

@@ -193,8 +193,10 @@ namespace {
     // https://arxiv.org/abs/2009.04374
     Variant* torpedo_variant() {
         Variant* v = chess_variant_base()->init();
-        v->doubleStepRegion[WHITE] = AllSquares;
-        v->doubleStepRegion[BLACK] = AllSquares;
+        v->doubleStepRegion[WHITE] = PieceTypeBitboardGroup(Bitboard(0));
+        v->doubleStepRegion[BLACK] = PieceTypeBitboardGroup(Bitboard(0));
+        v->doubleStepRegion[WHITE].set('P', AllSquares);
+        v->doubleStepRegion[BLACK].set('P', AllSquares);
         return v;
     }
     Variant* spell_chess_variant() {
@@ -208,7 +210,7 @@ namespace {
         v->potionDropOnOccupied = true;
         v->remove_piece(KING);
         v->add_piece(COMMONER, 'k');
-        v->castlingKingPiece[WHITE] = v->castlingKingPiece[BLACK] = COMMONER;
+        v->castlingKingPiece = COMMONER;
         v->pieceToChar[make_piece(WHITE, CUSTOM_PIECE_1)] = 'F';
         v->pieceToChar[make_piece(BLACK, CUSTOM_PIECE_1)] = 'f';
         v->pieceToChar[make_piece(WHITE, CUSTOM_PIECE_2)] = 'J';
@@ -225,10 +227,14 @@ namespace {
         Variant* v = chess_variant_base()->init();
         v->remove_piece(PAWN);
         v->add_piece(CUSTOM_PIECE_1, 'p', "mfFcfeWimfnA");
-        v->mainPromotionPawnType[WHITE] = v->mainPromotionPawnType[BLACK] = CUSTOM_PIECE_1;
-        v->promotionPawnTypes[WHITE] = v->promotionPawnTypes[BLACK] = piece_set(CUSTOM_PIECE_1);
-        v->enPassantTypes[WHITE] = v->enPassantTypes[BLACK] = piece_set(CUSTOM_PIECE_1);
-        v->nMoveRuleTypes[WHITE] = v->nMoveRuleTypes[BLACK] = piece_set(CUSTOM_PIECE_1);
+        v->mainPromotionPawnType = CUSTOM_PIECE_1;
+        v->promotionPawnTypes = piece_set(CUSTOM_PIECE_1);
+        v->enPassantTypes = piece_set(CUSTOM_PIECE_1);
+        v->nMoveRuleTypes = piece_set(CUSTOM_PIECE_1);
+        v->doubleStepRegion[WHITE] = PieceTypeBitboardGroup(Bitboard(0));
+        v->doubleStepRegion[BLACK] = PieceTypeBitboardGroup(Bitboard(0));
+        v->doubleStepRegion[WHITE].set('P', Rank2BB);
+        v->doubleStepRegion[BLACK].set('P', Rank7BB);
         return v;
     }
     // Pawnsideways
@@ -237,10 +243,14 @@ namespace {
         Variant* v = chess_variant_base()->init();
         v->remove_piece(PAWN);
         v->add_piece(CUSTOM_PIECE_1, 'p', "fsmWfceFifmnD");
-        v->mainPromotionPawnType[WHITE] = v->mainPromotionPawnType[BLACK] = CUSTOM_PIECE_1;
-        v->promotionPawnTypes[WHITE] = v->promotionPawnTypes[BLACK] = piece_set(CUSTOM_PIECE_1);
-        v->enPassantTypes[WHITE] = v->enPassantTypes[BLACK] = piece_set(CUSTOM_PIECE_1);
-        v->nMoveRuleTypes[WHITE] = v->nMoveRuleTypes[BLACK] = piece_set(CUSTOM_PIECE_1);
+        v->mainPromotionPawnType = CUSTOM_PIECE_1;
+        v->promotionPawnTypes = piece_set(CUSTOM_PIECE_1);
+        v->enPassantTypes = piece_set(CUSTOM_PIECE_1);
+        v->nMoveRuleTypes = piece_set(CUSTOM_PIECE_1);
+        v->doubleStepRegion[WHITE] = PieceTypeBitboardGroup(Bitboard(0));
+        v->doubleStepRegion[BLACK] = PieceTypeBitboardGroup(Bitboard(0));
+        v->doubleStepRegion[WHITE].set('P', Rank2BB);
+        v->doubleStepRegion[BLACK].set('P', Rank7BB);
         return v;
     }
     // Pawnback
@@ -251,10 +261,14 @@ namespace {
         v->add_piece(CUSTOM_PIECE_1, 'p', "fbmWfceFifmnD");
         v->mobilityRegion[WHITE][CUSTOM_PIECE_1] = (Rank2BB | Rank3BB | Rank4BB | Rank5BB | Rank6BB | Rank7BB | Rank8BB);
         v->mobilityRegion[BLACK][CUSTOM_PIECE_1] = (Rank7BB | Rank6BB | Rank5BB | Rank4BB | Rank3BB | Rank2BB | Rank1BB);
-        v->mainPromotionPawnType[WHITE] = v->mainPromotionPawnType[BLACK] = CUSTOM_PIECE_1;
-        v->promotionPawnTypes[WHITE] = v->promotionPawnTypes[BLACK] = piece_set(CUSTOM_PIECE_1);
-        v->enPassantTypes[WHITE] = v->enPassantTypes[BLACK] = piece_set(CUSTOM_PIECE_1);
-        v->nMoveRuleTypes[WHITE] = v->nMoveRuleTypes[BLACK] = NO_PIECE_SET; // backwards pawn moves are reversible
+        v->mainPromotionPawnType = CUSTOM_PIECE_1;
+        v->promotionPawnTypes = piece_set(CUSTOM_PIECE_1);
+        v->enPassantTypes = piece_set(CUSTOM_PIECE_1);
+        v->nMoveRuleTypes = NO_PIECE_SET; // backwards pawn moves are reversible
+        v->doubleStepRegion[WHITE] = PieceTypeBitboardGroup(Bitboard(0));
+        v->doubleStepRegion[BLACK] = PieceTypeBitboardGroup(Bitboard(0));
+        v->doubleStepRegion[WHITE].set('P', Rank2BB);
+        v->doubleStepRegion[BLACK].set('P', Rank7BB);
         return v;
     }
     // Legan Chess
@@ -266,8 +280,9 @@ namespace {
         v->promotionRegion[WHITE] = make_bitboard(SQ_A8, SQ_B8, SQ_C8, SQ_D8, SQ_A7, SQ_A6, SQ_A5);
         v->promotionRegion[BLACK] = make_bitboard(SQ_E1, SQ_F1, SQ_G1, SQ_H1, SQ_H2, SQ_H3, SQ_H4);
         v->mainPromotionPawnType[WHITE] = v->mainPromotionPawnType[BLACK] = CUSTOM_PIECE_1;
-        v->promotionPawnTypes[WHITE] = v->promotionPawnTypes[BLACK] = piece_set(CUSTOM_PIECE_1);
-        v->nMoveRuleTypes[WHITE] = v->nMoveRuleTypes[BLACK] = piece_set(CUSTOM_PIECE_1);
+        v->promotionPawnTypes = piece_set(CUSTOM_PIECE_1);
+
+        v->nMoveRuleTypes = piece_set(CUSTOM_PIECE_1);
         v->startFen = "knbrp3/bqpp4/npp5/rp1p3P/p3P1PR/5PPN/4PPQB/3PRBNK w - - 0 1";
         v->doubleStep = false;
         return v;
@@ -469,9 +484,8 @@ namespace {
     // https://lichess.org/variant/kingOfTheHill
     Variant* kingofthehill_variant() {
         Variant* v = chess_variant_base()->init();
-        v->flagPiece[WHITE] = v->flagPiece[BLACK] = KING;
-        v->flagRegion[WHITE] = (Rank4BB | Rank5BB) & (FileDBB | FileEBB);
-        v->flagRegion[BLACK] = (Rank4BB | Rank5BB) & (FileDBB | FileEBB);
+        v->flagPiece = KING;
+        v->flagRegion = (Rank4BB | Rank5BB) & (FileDBB | FileEBB);
         v->flagMove = false;
         return v;
     }
@@ -480,9 +494,8 @@ namespace {
     Variant* racingkings_variant() {
         Variant* v = chess_variant_base()->init();
         v->startFen = "8/8/8/8/8/8/krbnNBRK/qrbnNBRQ w - - 0 1";
-        v->flagPiece[WHITE] = v->flagPiece[BLACK] = KING;
-        v->flagRegion[WHITE] = Rank8BB;
-        v->flagRegion[BLACK] = Rank8BB;
+        v->flagPiece = KING;
+        v->flagRegion = Rank8BB;
         v->flagMove = true;
         v->castling = false;
         v->checking = false;
@@ -531,7 +544,7 @@ namespace {
         v->variantTemplate = "giveaway";
         v->remove_piece(KING);
         v->add_piece(COMMONER, 'k');
-        v->castlingKingPiece[WHITE] = v->castlingKingPiece[BLACK] = COMMONER;
+        v->castlingKingPiece = COMMONER;
         v->promotionPieceTypes[WHITE] = piece_set(COMMONER) | QUEEN | ROOK | BISHOP | KNIGHT;
         v->promotionPieceTypes[BLACK] = piece_set(COMMONER) | QUEEN | ROOK | BISHOP | KNIGHT;
         v->stalemateValue = VALUE_MATE;
@@ -577,7 +590,7 @@ namespace {
         Variant* v = chess_variant_base()->init();
         v->remove_piece(KING);
         v->add_piece(COMMONER, 'k');
-        v->castlingKingPiece[WHITE] = v->castlingKingPiece[BLACK] = COMMONER;
+        v->castlingKingPiece = COMMONER;
         v->promotionPieceTypes[WHITE] = piece_set(COMMONER) | QUEEN | ROOK | BISHOP | KNIGHT;
         v->promotionPieceTypes[BLACK] = piece_set(COMMONER) | QUEEN | ROOK | BISHOP | KNIGHT;
         v->extinctionValue = -VALUE_MATE;
@@ -599,7 +612,7 @@ namespace {
         Variant* v = chess_variant_base()->init();
         v->remove_piece(KING);
         v->add_piece(COMMONER, 'k');
-        v->castlingKingPiece[WHITE] = v->castlingKingPiece[BLACK] = COMMONER;
+        v->castlingKingPiece = COMMONER;
         v->startFen = "knbqkbnk/pppppppp/8/8/8/8/PPPPPPPP/KNBQKBNK w - - 0 1";
         v->extinctionValue = -VALUE_MATE;
         v->extinctionPieceTypes = piece_set(COMMONER);
@@ -625,7 +638,7 @@ namespace {
         Variant* v = pawnsideways_variant()->init();
         v->remove_piece(KING);
         v->add_piece(COMMONER, 'k');
-        v->castlingKingPiece[WHITE] = v->castlingKingPiece[BLACK] = COMMONER;
+        v->castlingKingPiece = COMMONER;
         v->extinctionValue = -VALUE_MATE;
         v->extinctionPieceTypes = piece_set(COMMONER);
         v->extinctionPseudoRoyal = true;
@@ -639,7 +652,7 @@ namespace {
         v->variantTemplate = "atomic";
         v->remove_piece(KING);
         v->add_piece(COMMONER, 'k');
-        v->castlingKingPiece[WHITE] = v->castlingKingPiece[BLACK] = COMMONER;
+        v->castlingKingPiece = COMMONER;
         v->extinctionValue = -VALUE_MATE;
         v->extinctionPieceTypes = piece_set(COMMONER);
         v->blastOnCapture = true;
@@ -671,7 +684,7 @@ namespace {
         Variant* v = chess_variant_base()->init();
         v->remove_piece(KING);
         v->add_piece(COMMONER, 'k');
-        v->castlingKingPiece[WHITE] = v->castlingKingPiece[BLACK] = COMMONER;
+        v->castlingKingPiece = COMMONER;
         v->extinctionValue = -VALUE_MATE;
         v->extinctionPieceTypes = piece_set(COMMONER);
         v->wallingRule = DUCK;
@@ -792,7 +805,7 @@ namespace {
         Variant* v = bughouse_variant()->init();
         v->remove_piece(KING);
         v->add_piece(COMMONER, 'k');
-        v->castlingKingPiece[WHITE] = v->castlingKingPiece[BLACK] = COMMONER;
+        v->castlingKingPiece = COMMONER;
         v->mustDrop = true;
         v->mustDropType = COMMONER;
         v->extinctionValue = -VALUE_MATE;
@@ -925,9 +938,7 @@ namespace {
         v->promotedPieceType[SILVER]     = GOLD;
         v->promotedPieceType[BISHOP]     = DRAGON_HORSE;
         v->promotedPieceType[ROOK]       = DRAGON;
-        v->dropNoDoubled = SHOGI_PAWN;
-        v->dropNoDoubledByColor[WHITE] = SHOGI_PAWN;
-        v->dropNoDoubledByColor[BLACK] = SHOGI_PAWN;
+        v->dropNoDoubled = piece_set(SHOGI_PAWN);
         v->immobilityIllegal = true;
         v->shogiPawnDropMateIllegal = true;
         v->stalemateValue = -VALUE_MATE;
@@ -970,9 +981,7 @@ namespace {
         v->promotedPieceType[ROOK]         = NO_PIECE_TYPE;
         v->immobilityIllegal = false;
         v->shogiPawnDropMateIllegal = false;
-        v->dropNoDoubled = NO_PIECE_TYPE;
-        v->dropNoDoubledByColor[WHITE] = NO_PIECE_TYPE;
-        v->dropNoDoubledByColor[BLACK] = NO_PIECE_TYPE;
+        v->dropNoDoubled = NO_PIECE_SET;
         return v;
     }
     // Micro shogi
@@ -1017,13 +1026,11 @@ namespace {
         v->shogiPawnDropMateIllegal = false;
         v->extinctionValue = -VALUE_MATE;
         v->extinctionPieceTypes = piece_set(COMMONER);
-        v->flagPiece[WHITE] = v->flagPiece[BLACK] = COMMONER;
+        v->flagPiece = COMMONER;
         v->flagRegion[WHITE] = Rank4BB;
         v->flagRegion[BLACK] = Rank1BB;
         v->flagPieceSafe = true;
-        v->dropNoDoubled = NO_PIECE_TYPE;
-        v->dropNoDoubledByColor[WHITE] = NO_PIECE_TYPE;
-        v->dropNoDoubledByColor[BLACK] = NO_PIECE_TYPE;
+        v->dropNoDoubled = NO_PIECE_SET;
         v->nFoldValue = VALUE_DRAW;
         v->perpetualCheckIllegal = false;
         return v;
@@ -1083,12 +1090,8 @@ namespace {
         v->promotedPieceType[SHOGI_PAWN]    = CUSTOM_PIECE_6; // swallow promotes to goose
         v->promotedPieceType[CUSTOM_PIECE_1] = CUSTOM_PIECE_7; // falcon promotes to eagle
         v->mandatoryPiecePromotion = true;
-        v->dropNoDoubled = SHOGI_PAWN;
-        v->dropNoDoubledByColor[WHITE] = SHOGI_PAWN;
-        v->dropNoDoubledByColor[BLACK] = SHOGI_PAWN;
+        v->dropNoDoubled = piece_set(SHOGI_PAWN);
         v->dropNoDoubledCount = 2;
-        v->dropNoDoubledCountByColor[WHITE] = 2;
-        v->dropNoDoubledCountByColor[BLACK] = 2;
         v->immobilityIllegal = true;
         v->shogiPawnDropMateIllegal = true;
         v->stalemateValue = -VALUE_MATE;
@@ -1205,7 +1208,7 @@ namespace {
         v->startFen = "lgkcckwl/hhhhhhhh/8/8/8/8/PPPPPPPP/RNBQKBNR w KQ - 0 1";
         v->mainPromotionPawnType[BLACK] = CUSTOM_PIECE_1;
         v->promotionPawnTypes[BLACK] = piece_set(CUSTOM_PIECE_1);
-        v->nMoveRuleTypes[BLACK] = piece_set(CUSTOM_PIECE_1);
+        v->nMoveRuleTypes.set_color(BLACK, piece_set(CUSTOM_PIECE_1));
         v->promotionPieceTypes[BLACK] = piece_set(COMMONER) | DRAGON | ARCHBISHOP | CUSTOM_PIECE_2 | CUSTOM_PIECE_3;
         v->promotionLimit[COMMONER] = 2;
         v->enPassantRegion[WHITE] = 0;
@@ -1271,7 +1274,7 @@ namespace {
         v->doubleStep = false;
         v->castling = false;
         v->stalemateValue = -VALUE_MATE;
-        v->flagPiece[WHITE] = v->flagPiece[BLACK] = BREAKTHROUGH_PIECE;
+        v->flagPiece = BREAKTHROUGH_PIECE;
         v->flagRegion[WHITE] = Rank8BB;
         v->flagRegion[BLACK] = Rank1BB;
         return v;
@@ -1292,8 +1295,7 @@ namespace {
         v->immobilityIllegal = false;
         v->stalemateValue = -VALUE_MATE;
         v->stalematePieceCount = true;
-        v->passOnStalemate[WHITE] = true;
-        v->passOnStalemate[BLACK] = true;
+        v->passOnStalemate = true;
         v->enclosingDrop = ATAXX;
         v->flipEnclosedPieces = ATAXX;
         v->materialCounting = UNWEIGHTED_MATERIAL;
@@ -1318,8 +1320,7 @@ namespace {
         v->immobilityIllegal = false;
         v->stalemateValue = -VALUE_MATE;
         v->stalematePieceCount = true;
-        v->passOnStalemate[WHITE] = false;
-        v->passOnStalemate[BLACK] = false;
+        v->passOnStalemate = false;
         v->enclosingDrop = REVERSI;
         v->enclosingDropStart = make_bitboard(SQ_D4, SQ_E4, SQ_D5, SQ_E5);
         v->flipEnclosedPieces = REVERSI;
@@ -1332,8 +1333,7 @@ namespace {
     Variant* flipello_variant() {
         Variant* v = flipersi_variant()->init();
         v->startFen = "8/8/8/3pP3/3Pp3/8/8/8[PPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPpppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp] w 0 1";
-        v->passOnStalemate[WHITE] = true;
-        v->passOnStalemate[BLACK] = true;
+        v->passOnStalemate = true;
         return v;
     }
     // Minixiangqi
@@ -1465,7 +1465,7 @@ namespace {
         v->captureType = MOVE_OUT;
         v->pieceDrops = false;
         v->promotedPieceType[CUSTOM_PIECE_1] = COMMONER;
-        v->castlingKingPiece[WHITE] = v->castlingKingPiece[BLACK] = COMMONER;
+        v->castlingKingPiece = COMMONER;
         v->extinctionValue = -VALUE_MATE;
         v->extinctionPieceTypes = piece_set(COMMONER);
         v->extinctionPseudoRoyal = true;
@@ -1500,9 +1500,7 @@ namespace {
         v->captureType = HAND;
         v->doubleStep = false;
         v->castling = false;
-        v->dropNoDoubled = SHOGI_PAWN;
-        v->dropNoDoubledByColor[WHITE] = SHOGI_PAWN;
-        v->dropNoDoubledByColor[BLACK] = SHOGI_PAWN;
+        v->dropNoDoubled = piece_set(SHOGI_PAWN);
         v->immobilityIllegal = true;
         v->shogiPawnDropMateIllegal = false;
         v->stalemateValue = -VALUE_MATE;
@@ -1683,9 +1681,8 @@ namespace {
         v->doubleStep = false;
         v->castling = false;
         v->stalemateValue = -VALUE_MATE;
-        v->flagPiece[WHITE] = v->flagPiece[BLACK] = KNIGHT;
-        v->flagRegion[WHITE] = make_bitboard(SQ_E5);
-        v->flagRegion[BLACK] = make_bitboard(SQ_E5);
+        v->flagPiece = KNIGHT;
+        v->flagRegion = make_bitboard(SQ_E5);
         v->flagMove = true;
         return v;
     }
@@ -1866,8 +1863,8 @@ namespace {
         v->promotionRegion[BLACK] = Rank1BB;
         v->doubleStepRegion[WHITE] = Rank2BB | make_bitboard(SQ_B3, SQ_C3, SQ_F3, SQ_G3);
         v->doubleStepRegion[BLACK] = Rank9BB | make_bitboard(SQ_B8, SQ_C8, SQ_F8, SQ_G8);
-        v->enPassantTypes[WHITE] = v->enPassantTypes[BLACK] = piece_set(PAWN);
-        v->nMoveRuleTypes[WHITE] = v->nMoveRuleTypes[BLACK] = piece_set(PAWN) | piece_set(CUSTOM_PIECE_1);
+        v->enPassantTypes = piece_set(PAWN);
+        v->nMoveRuleTypes = piece_set(PAWN) | piece_set(CUSTOM_PIECE_1);
         v->castling = false;
         return v;
     }
@@ -1928,6 +1925,20 @@ namespace {
         v->reset_pieces();
         v->add_piece(CUSTOM_PIECE_1, 'q', "mQ");
         v->startFen = "3q2q3/10/10/q8q/10/10/Q8Q/10/10/3Q2Q3 w - - 0 1";
+        v->stalemateValue = -VALUE_MATE;
+        v->wallingRule = ARROW;
+        return v;
+    }
+    // Cowboys
+    // https://www.zillions-of-games.com/cgi-bin/zilligames/submissions.cgi?do=show;id=237
+    Variant* cowboys_variant() {
+        Variant* v = chess_variant_base()->init();
+        v->pieceToCharTable = ".N.....................n....................";
+        v->maxRank = RANK_7;
+        v->maxFile = FILE_G;
+        v->reset_pieces();
+        v->add_piece(CUSTOM_PIECE_1, 'n', "mN");
+        v->startFen = "2n1n2/7/n5n/7/N5N/7/2N1N2 w - - 0 1";
         v->stalemateValue = -VALUE_MATE;
         v->wallingRule = ARROW;
         return v;
@@ -2012,8 +2023,7 @@ namespace {
         v->materialCounting = JANGGI_MATERIAL;
         v->diagonalLines = make_bitboard(SQ_D1, SQ_F1, SQ_E2, SQ_D3, SQ_F3,
                                          SQ_D8, SQ_F8, SQ_E9, SQ_D10, SQ_F10);
-        v->pass[WHITE] = true;
-        v->pass[BLACK] = true;
+        v->pass = true;
         v->nFoldValue = VALUE_DRAW;
         v->perpetualCheckIllegal = true;
         return v;
@@ -2179,6 +2189,7 @@ void VariantMap::init() {
     add("clobber10", clobber10_variant());
     add("flipello10", flipello10_variant());
 #ifdef ALLVARS
+    add("cowboys", cowboys_variant());
     add("amazons", amazons_variant());
 #endif
     add("xiangqi", xiangqi_variant());
@@ -2195,21 +2206,6 @@ void VariantMap::init() {
 // Pre-calculate derived properties
 Variant* Variant::conclude() {
     rebuild_piece_symbol_maps();
-
-    // Apply global extinction defaults to the color-specific storage used at
-    // runtime. Parser-loaded variants do this during parsing, but built-ins
-    // that set the aggregate fields directly still need the same propagation.
-    for (Color c : {WHITE, BLACK})
-    {
-        if (!extinctionPieceTypesByColorSet[c])
-            extinctionPieceTypesByColor[c] = extinctionPieceTypes;
-        if (!extinctionAllPieceTypesByColorSet[c])
-            extinctionAllPieceTypesByColor[c] = extinctionAllPieceTypes;
-        if (!extinctionPieceCountByColorSet[c])
-            extinctionPieceCountByColor[c] = extinctionPieceCount;
-        if (!extinctionOpponentPieceCountByColorSet[c])
-            extinctionOpponentPieceCountByColor[c] = extinctionOpponentPieceCount;
-    }
 
     // Backward compatibility: legacy extinctionPseudoRoyal used extinction
     // piece fields to define pseudo-royal behavior.
@@ -2235,7 +2231,10 @@ Variant* Variant::conclude() {
 
     // Enforce consistency to allow runtime optimizations
     if (!doubleStep)
-        doubleStepRegion[WHITE] = doubleStepRegion[BLACK] = 0;
+    {
+        doubleStepRegion[WHITE] = PieceTypeBitboardGroup(Bitboard(0));
+        doubleStepRegion[BLACK] = PieceTypeBitboardGroup(Bitboard(0));
+    }
     if (!doubleStepRegion[WHITE] && !doubleStepRegion[BLACK])
         doubleStep = false;
 
@@ -2281,7 +2280,7 @@ Variant* Variant::conclude() {
     }
     // We can not use popcount here yet, as the lookup tables are initialized after the variants
     int nnueSquares = (maxRank + 1) * (maxFile + 1);
-    nnueUsePockets = (pieceDrops && (captureType == HAND || (!mustDrop && std::bitset<64>(pieceTypes).count() != 1))) || seirawanGating;
+    nnueUsePockets = (pieceDrops && (captureType == HAND || (!(mustDrop[WHITE] || mustDrop[BLACK]) && std::bitset<64>(pieceTypes).count() != 1))) || seirawanGating;
     int nnuePockets = nnueUsePockets ? 2 * int(maxFile + 1) : 0;
     int nnueNonDropPieceIndices = (2 * std::bitset<64>(pieceTypes).count() - (nnueKing != NO_PIECE_TYPE)) * nnueSquares;
     int nnuePieceIndices = nnueNonDropPieceIndices + 2 * (std::bitset<64>(pieceTypes).count() - (nnueKing != NO_PIECE_TYPE)) * nnuePockets;
@@ -2358,12 +2357,17 @@ Variant* Variant::conclude() {
     endgameEval =  endgameEval != EG_EVAL_CHESS
                  ||
                    (   endgameEval == EG_EVAL_CHESS
-                    && extinctionValue == VALUE_NONE
-                    && checkmateValue == -VALUE_MATE
-                    && stalemateValue == VALUE_DRAW
+                    && extinctionValue[WHITE] == VALUE_NONE
+                    && extinctionValue[BLACK] == VALUE_NONE
+                    && checkmateValue[WHITE] == -VALUE_MATE
+                    && checkmateValue[BLACK] == -VALUE_MATE
+                    && stalemateValue[WHITE] == VALUE_DRAW
+                    && stalemateValue[BLACK] == VALUE_DRAW
                     && !materialCounting
-                    && !(flagRegion[WHITE] || flagRegion[BLACK])
-                    && !mustCapture
+                    && !flagRegion[WHITE]
+                    && !flagRegion[BLACK]
+                    && !mustCapture[WHITE]
+                    && !mustCapture[BLACK]
                     && !checkCounting
                     && !makpongRule
                     && !connectN
@@ -2395,8 +2399,10 @@ Variant* Variant::conclude() {
     }
     if (connectDiagonal)
     {
-        connectDirections.push_back(NORTH_EAST);
-        connectDirections.push_back(SOUTH_EAST);
+        if (connectNorthEast)
+            connectDirections.push_back(NORTH_EAST);
+        if (connectSouthEast)
+            connectDirections.push_back(SOUTH_EAST);
     }
 
     connectLines.clear();
@@ -2421,7 +2427,8 @@ Variant* Variant::conclude() {
 
     // If not a connect variant, set connectPieceTypesTrimmed to no pieces.
     // connectPieceTypesTrimmed is separated so that connectPieceTypes is left unchanged for inheritance.
-    if ( !(connectRegion1[WHITE] || connectRegion1[BLACK] || connectN || connectNxN || collinearN || connectGroup) )
+    if ( !(connectRegion1[WHITE] || connectRegion1[BLACK] || connectRegion3[WHITE] || connectRegion3[BLACK]
+        || connectN || connectNxN || collinearN || connectGroup) )
     {
           connectPieceTypesTrimmed = NO_PIECE_SET;
     }
@@ -2455,7 +2462,7 @@ Variant* Variant::conclude() {
               break;
           // Initialize alternating non-passing/passing moves
           for (int k = 0; k < 2 * j - 1; k++)
-              multimovePass[multimoveOffset + k] = k % 2;
+              multimovePass.set(multimoveOffset + k, k % 2);
           multimoveOffset += 2 * j - 1;
       }
       int firstMultimove =  multimoves.size() >= 2 ? multimoves[multimoves.size() - 2]
@@ -2594,7 +2601,7 @@ template void VariantMap::parse<true>(std::string path);
 template void VariantMap::parse<false>(std::string path);
 
 void VariantMap::add(std::string s, Variant* v) {
-  insert(std::pair<std::string, const Variant*>(s, v->conclude()));
+  (*this)[s] = v->conclude();
 }
 
 void VariantMap::clear_all() {

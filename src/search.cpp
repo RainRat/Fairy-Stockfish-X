@@ -284,6 +284,7 @@ void MainThread::search() {
 
   if (   int(Options["MultiPV"]) == 1
       && !Limits.depth
+      && !Limits.mate
       && !(Skill(Options["Skill Level"]).enabled() || int(Options["UCI_LimitStrength"]))
       && rootMoves[0].pv[0] != MOVE_NONE)
       bestThread = Threads.get_best_thread();
@@ -304,8 +305,13 @@ void MainThread::search() {
                                              : "stalemate");
   }
 
-  // Send again PV info if we have a new best thread
-  if (bestThread != this && show_search_output())
+  bool extractedPonder = false;
+
+  if (bestThread->rootMoves[0].pv.size() == 1)
+      extractedPonder = bestThread->rootMoves[0].extract_ponder_from_tt(rootPos);
+
+  // Send again PV info if we have a new best thread or extracted a ponder move.
+  if ((bestThread != this || extractedPonder) && show_search_output())
       sync_cout << UCI::pv(bestThread->rootPos, bestThread->completedDepth, -VALUE_INFINITE, VALUE_INFINITE) << sync_endl;
 
   if (CurrentProtocol == XBOARD)
@@ -341,8 +347,7 @@ void MainThread::search() {
           {
               XBoard::stateMachine->do_move(bestMove);
               XBoard::stateMachine->moveAfterSearch = false;
-              if (Options["Ponder"] && (   bestThread->rootMoves[0].pv.size() > 1
-                                        || bestThread->rootMoves[0].extract_ponder_from_tt(rootPos)))
+              if (Options["Ponder"] && bestThread->rootMoves[0].pv.size() > 1)
                   XBoard::stateMachine->ponderMove = bestThread->rootMoves[0].pv[1];
           }
       }
@@ -352,7 +357,7 @@ void MainThread::search() {
   SyncCout out;
   out << "bestmove " << UCI::move(rootPos, bestThread->rootMoves[0].pv[0]);
 
-  if (bestThread->rootMoves[0].pv.size() > 1 || bestThread->rootMoves[0].extract_ponder_from_tt(rootPos))
+  if (bestThread->rootMoves[0].pv.size() > 1)
       out << " ponder " << UCI::move(rootPos, bestThread->rootMoves[0].pv[1]);
 
   out << sync_endl;
@@ -372,7 +377,9 @@ void Thread::search() {
   Move  pv[MAX_PLY+1];
   Value bestValue, alpha, beta, delta;
   Move  lastBestMove = MOVE_NONE;
+  Value lastBestScore = -VALUE_INFINITE;
   Depth lastBestMoveDepth = 0;
+  std::vector<Move> lastBestPV;
   MainThread* mainThread = (this == Threads.main() ? Threads.main() : nullptr);
   double timeReduction = 1, totBestMoveChanges = 0;
   Color us = rootPos.side_to_move();
@@ -543,8 +550,29 @@ void Thread::search() {
 
           if (    mainThread
               && (Threads.stop || pvIdx + 1 == multiPV || Time.elapsed() > 3000))
-              if (show_search_output())
-                  sync_cout << UCI::pv(rootPos, rootDepth, alpha, beta) << sync_endl;
+              // If search stopped mid-iteration, an exact mated-in / TB-loss score
+              // at the front can be unproven for this thread. Suppress that PV here
+              // and below roll back to the last completed best line.
+              if (!(Threads.stop && completedDepth != rootDepth
+                    && rootMoves[0].score <= VALUE_TB_LOSS_IN_MAX_PLY))
+                  if (show_search_output())
+                      sync_cout << UCI::pv(rootPos, rootDepth, alpha, beta) << sync_endl;
+      }
+
+      if (   completedDepth != rootDepth
+          && rootMoves[0].score != -VALUE_INFINITE
+          && rootMoves[0].score <= VALUE_TB_LOSS_IN_MAX_PLY)
+      {
+          if (!lastBestPV.empty())
+          {
+              auto it = std::find_if(rootMoves.begin(), rootMoves.end(), [&lastBestPV](const RootMove& rm) {
+                  return rm == lastBestPV[0];
+              });
+              if (it != rootMoves.end())
+                  std::rotate(rootMoves.begin(), it, it + 1);
+              rootMoves[0].pv = lastBestPV;
+              rootMoves[0].score = lastBestScore;
+          }
       }
 
       if (!Threads.stop)
@@ -552,13 +580,18 @@ void Thread::search() {
 
       if (rootMoves[0].pv[0] != lastBestMove) {
          lastBestMove = rootMoves[0].pv[0];
+         lastBestScore = rootMoves[0].score;
+         lastBestPV = rootMoves[0].pv;
          lastBestMoveDepth = rootDepth;
       }
 
-      // Have we found a "mate in x"?
+      // Have we found a "mate in x" after a completed iteration?
       if (   Limits.mate
-          && bestValue >= VALUE_MATE_IN_MAX_PLY
-          && VALUE_MATE - bestValue <= 2 * Limits.mate)
+          && !Threads.stop
+          && (   (rootMoves[0].score >= VALUE_MATE_IN_MAX_PLY
+                && VALUE_MATE - rootMoves[0].score <= 2 * Limits.mate)
+              || (rootMoves[0].score <= VALUE_MATED_IN_MAX_PLY
+                && VALUE_MATE + rootMoves[0].score <= 2 * Limits.mate)))
           Threads.stop = true;
 
       if (!mainThread)
@@ -2181,13 +2214,17 @@ bool RootMove::extract_ponder_from_tt(Position& pos) {
         return false;
 
     pos.do_move(pv[0], st);
-    TTEntry* tte = TT.probe(pos.key(), ttHit);
 
-    if (ttHit)
+    if (!pos.is_draw(1))
     {
-        Move m = tte->move(); // Local copy to be SMP safe
-        if (MoveList<LEGAL>(pos).contains(m))
-            pv.push_back(m);
+        TTEntry* tte = TT.probe(pos.key(), ttHit);
+
+        if (ttHit)
+        {
+            Move m = tte->move(); // Local copy to be SMP safe
+            if (MoveList<LEGAL>(pos).contains(m))
+                pv.push_back(m);
+        }
     }
 
     pos.undo_move(pv[0]);

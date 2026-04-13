@@ -772,7 +772,8 @@ namespace {
                 // pawn diagonally in front of it is a very serious problem, especially
                 // when that pawn is also blocked.
                 if (   pos.is_chess960()
-                    && (s == relative_square(Us, make_square(FILE_A, RANK_1), pos.max_rank()) || s == relative_square(Us, make_square(pos.max_file(), RANK_1), pos.max_rank())))
+                    && (   s == relative_square(Us, make_square(FILE_A, RANK_1), pos.max_rank())
+                        || s == relative_square(Us, make_square(pos.max_file(), RANK_1), pos.max_rank())))
                 {
                     Direction d = pawn_push(Us) + (file_of(s) == FILE_A ? EAST : WEST);
                     if (pos.piece_on(s + d) == make_piece(Us, PAWN))
@@ -881,7 +882,7 @@ namespace {
             score -= make_score(200, 900) / pos.count_in_hand(Us, ALL_PIECES) * (pos.count_in_hand(Us, ALL_PIECES) - popcount(pos.gates(Us)));
 
         // Redundant pieces that can not be doubled per file (e.g., shogi pawns)
-        if (pt == pos.drop_no_doubled(Us))
+        if (piece_set(pt) & pos.drop_no_doubled(Us))
             score -= make_score(50, 20) * std::max(pos.count_with_hand(Us, pt) - pos.max_file() - 1, 0);
     }
 

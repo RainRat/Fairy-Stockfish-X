@@ -237,8 +237,8 @@ namespace {
      // Coefficients of a 3rd order polynomial fit based on fishtest data
      // for two parameters needed to transform eval to the argument of a
      // logistic function.
-     double as[] = {-3.68389304,  30.07065921, -60.52878723, 149.53378557};
-     double bs[] = {-2.0181857,   15.85685038, -29.83452023,  47.59078827};
+     static constexpr double as[] = {-3.68389304,  30.07065921, -60.52878723, 149.53378557};
+     static constexpr double bs[] = {-2.0181857,   15.85685038, -29.83452023,  47.59078827};
      double a = (((as[0] * m + as[1]) * m + as[2]) * m) + as[3];
      double b = (((bs[0] * m + bs[1]) * m + bs[2]) * m) + bs[3];
 
@@ -289,6 +289,50 @@ namespace {
                 Options["VariantPath"] = token.erase(end + 1);
         }
     }
+  }
+
+  // print_variant_info() prints a summary of the current variant's configuration.
+
+  void print_variant_info(const Variant* v) {
+
+    if (!v) return;
+
+    sync_cout << "\nVariant:  " << std::string(Options["UCI_Variant"])
+              << "\nTemplate: " << v->variantTemplate
+              << "\nBoard:    " << v->maxFile + 1 << "x" << v->maxRank + 1
+              << (v->hexBoard ? " (hex)" : "")
+              << (v->cylindrical ? " (cylindrical)" : "")
+              << (v->toroidal ? " (toroidal)" : "")
+              << "\nPockets:  " << v->pocketSize
+              << "\nPieces:  ";
+
+    for (PieceSet ps = v->pieceTypes; ps; )
+    {
+        PieceType pt = pop_lsb(ps);
+        sync_cout << " " << v->pieceToChar[make_piece(WHITE, pt)]
+                  << "(" << pieceMap.get(pt)->betza << ")";
+    }
+
+    sync_cout << "\nRules:   ";
+    if (v->mustCapture[WHITE] || v->mustCapture[BLACK]) sync_cout << " mustCapture";
+    if (!v->checking)    sync_cout << " noChecking";
+    if (v->allowChecks)  sync_cout << " allowChecks";
+    if (v->castling)     sync_cout << " castling";
+    if (v->pieceDrops)   sync_cout << " pieceDrops";
+    if (v->gating)       sync_cout << " gating";
+    if (v->pass[WHITE] || v->pass[BLACK]) sync_cout << " pass";
+    if (v->checkCounting) sync_cout << " checkCounting";
+    if (v->pointsCounting) sync_cout << " pointsCounting";
+    if (v->potions)      sync_cout << " potions";
+
+    sync_cout << "\nEndgame: ";
+    if (v->nMoveRule > 0) sync_cout << " " << v->nMoveRule << "-move-rule";
+    if (v->nFoldRule > 0) sync_cout << " " << v->nFoldRule << "-fold-repetition";
+    if (v->stalemateValue.global != VALUE_DRAW) sync_cout << " stalemate=" << (v->stalemateValue.global == -VALUE_MATE ? "lose" : std::to_string(int(v->stalemateValue.global)));
+    if (v->extinctionValue.global != VALUE_NONE) sync_cout << " extinction";
+    if (v->connectN > 0) sync_cout << " connect" << v->connectN;
+
+    sync_cout << sync_endl;
   }
 
 } // namespace
@@ -389,12 +433,34 @@ void UCI::loop(int argc, char* argv[]) {
       else if (token == "position")   position(pos, is, states), banmoves.clear();
       else if (token == "ucinewgame" || token == "usinewgame" || token == "uccinewgame") Search::clear();
       else if (token == "isready")    sync_cout << "readyok" << sync_endl;
+      else if (token == "help")
+          sync_cout << "\nStandard Protocol Commands:"
+                    << "\n  uci, usi, ucci, xboard      Select an engine protocol"
+                    << "\n  isready                     Check if the engine is ready"
+                    << "\n  setoption name N value V    Update an engine option"
+                    << "\n  ucinewgame                  Prepare for a new game"
+                    << "\n  position [startpos|fen]     Load a game position"
+                    << "\n  go                          Start searching for the best move"
+                    << "\n  stop                        Finish searching immediately"
+                    << "\n  ponderhit                   Continue as a normal search"
+                    << "\n  quit                        Exit the program"
+                    << "\n\nTools and Debugging:"
+                    << "\n  d                           Display the current board"
+                    << "\n  vinfo                       Show details about the active variant"
+                    << "\n  eval                        Show static evaluation of the position"
+                    << "\n  bench                       Run internal performance tests"
+                    << "\n  compiler                    Show information about the compiler"
+                    << "\n  load [file|<<EOF]           Load variant rules from a file or text"
+                    << "\n  check [file|<<EOF]          Validate a variant configuration"
+                    << "\n  flip                        Flip the board perspective"
+                    << sync_endl;
 
       // Additional custom non-UCI commands, mainly for debugging.
       // Do not use these commands during a search!
       else if (token == "flip")     pos.flip();
       else if (token == "bench")    bench(pos, is, states);
       else if (token == "d")        sync_cout << pos << sync_endl;
+      else if (token == "vinfo")    print_variant_info(pos.variant());
       else if (token == "eval")     trace_eval(pos);
       else if (token == "compiler") sync_cout << compiler_info() << sync_endl;
       else if (token == "export_net")
@@ -525,13 +591,18 @@ string UCI::exchange(const Position &pos, Move m) {
 /// UCI::move() converts a Move to a string in coordinate notation (g1f3, a7a8q).
 /// The only special case is castling, where we print in the e1g1 notation in
 /// normal chess mode, and in e1h1 notation in chess960 mode. Internally all
-/// castling moves are always encoded as 'king captures rook'.
+/// castling moves are always encoded as 'king captures rook'. Some fairy
+/// special moves use suffixes: clone moves append 'c', swap moves append 's',
+/// self-destruct moves append 'x', and pulls append ",<pulled-square>".
 
 string UCI::move(const Position& pos, Move m) {
 
   Square from = from_sq(m);
   Square to = to_sq(m);
   bool wallMove = pos.walling(pos.side_to_move()) && is_gating(m);
+  bool cloneMove = pos.is_clone_move(m);
+  bool pullMove = pos.is_pull_move(m);
+  bool swapMove = pos.is_swap_move(m);
 
   if (m == MOVE_NONE)
       return CurrentProtocol == USI ? "resign" : "(none)";
@@ -593,11 +664,17 @@ string UCI::move(const Position& pos, Move m) {
       if (gating_square(m) != from)
           move += UCI::square(pos, gating_square(m));
   }
+  else if (cloneMove)
+      move += "c";
+  else if (swapMove)
+      move += "s";
 
   if (pos.paired_drop(m))
       move += "," + UCI::square(pos, pos.secondary_drop_square(m));
   else if (is_insert_move(m))
       move += "," + UCI::square(pos, from_sq(m));
+  else if (pullMove)
+      move += "," + UCI::square(pos, pull_square(m));
 
   // Wall square
   if (wallMove && CurrentProtocol != XBOARD)

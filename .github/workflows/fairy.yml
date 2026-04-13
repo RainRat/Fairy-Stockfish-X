@@ -108,6 +108,26 @@ jobs:
         run: |
           ../tests/new-variants-smoke.sh
 
+      - name: Test hex board display
+        run: |
+          ../tests/hex-board-display.sh
+
+      - name: Test hex piece movement
+        run: |
+          ../tests/hex-piece-movement.sh
+
+      - name: Test connect region 3
+        run: |
+          ../tests/connect-region3.sh
+
+      - name: Test kopano
+        run: |
+          ../tests/kopano.sh
+
+      - name: Test konobi
+        run: |
+          ../tests/konobi.sh
+
       - name: Test incomplete baselines
         run: |
           ../tests/incomplete-baselines.sh ./stockfish variants-incomplete.ini
@@ -139,6 +159,34 @@ jobs:
       - name: Test immobility-illegal hoppers
         run: |
           ../tests/immobility-illegal-hoppers.sh
+
+      - name: Test self-capture types
+        run: |
+          ../tests/self-capture-types.sh
+
+      - name: Test sacrifice chess
+        run: |
+          ../tests/sacrifice.sh
+
+      - name: Test Kings or Lemmings
+        run: |
+          ../tests/kings-or-lemmings.sh
+
+      - name: Test Hindustani
+        run: |
+          ../tests/hindustani.sh
+
+      - name: Test pulling
+        run: |
+          ../tests/pulling.sh
+
+      - name: Test swapping
+        run: |
+          ../tests/swapping.sh
+
+      - name: Test borrowed opponent drops
+        run: |
+          ../tests/borrow-opponent-drops.sh
 
       - name: Test asym rider checkers
         run: |

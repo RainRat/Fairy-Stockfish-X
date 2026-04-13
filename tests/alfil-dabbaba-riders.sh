@@ -12,10 +12,26 @@ customPiece1 = a:AA
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 startFen = 7k/8/8/8/3A4/8/8/K7 w - - 0 1
 
+[alfil-rider-tuple:chess]
+customPiece1 = a:(2,2)(2,2)
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+startFen = 7k/8/8/8/3A4/8/8/K7 w - - 0 1
+
 [dabbaba-rider:chess]
 customPiece1 = a:DD
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 startFen = 7k/8/8/8/3A4/8/8/K7 w - - 0 1
+
+[dabbaba-rider-tuple:chess]
+customPiece1 = a:(2,0)2
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+startFen = 7k/8/8/8/3A4/8/8/K7 w - - 0 1
+
+[tuple-range-pin:chess]
+customPiece1 = a:(1,0)2
+customPiece2 = b:W
+pieceToCharTable = PNBRQ............AB..Kpnbrq............ab..k
+startFen = 3a4/8/8/8/8/3B4/8/3K4 w - - 0 1
 INI
 
 piece_moves() {
@@ -29,8 +45,10 @@ piece_moves() {
 expected_alfil=$(mktemp)
 expected_dabbaba=$(mktemp)
 actual_alfil=$(mktemp)
+actual_alfil_tuple=$(mktemp)
 actual_dabbaba=$(mktemp)
-trap 'rm -f "$tmp_ini" "$expected_alfil" "$expected_dabbaba" "$actual_alfil" "$actual_dabbaba"' EXIT
+actual_dabbaba_tuple=$(mktemp)
+trap 'rm -f "$tmp_ini" "$expected_alfil" "$expected_dabbaba" "$actual_alfil" "$actual_alfil_tuple" "$actual_dabbaba" "$actual_dabbaba_tuple"' EXIT
 
 cat > "$expected_alfil" <<'EOF'
 d4b2
@@ -50,9 +68,18 @@ d4h4
 EOF
 
 piece_moves alfil-rider > "$actual_alfil"
+piece_moves alfil-rider-tuple > "$actual_alfil_tuple"
 piece_moves dabbaba-rider > "$actual_dabbaba"
+piece_moves dabbaba-rider-tuple > "$actual_dabbaba_tuple"
 
 cmp "$actual_alfil" "$expected_alfil"
+cmp "$actual_alfil_tuple" "$expected_alfil"
 cmp "$actual_dabbaba" "$expected_dabbaba"
+cmp "$actual_dabbaba_tuple" "$expected_dabbaba"
+
+out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value tuple-range-pin\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
+  | ./stockfish)
+echo "$out" | grep -q "^d3c3: 1$"
+echo "$out" | grep -q "^d3e3: 1$"
 
 echo "alfil-dabbaba-riders test OK"

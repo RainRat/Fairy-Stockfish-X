@@ -141,9 +141,10 @@ namespace {
               std::string prefix;
               while (!out.empty() && prefixChars.find(out.back()) != std::string::npos)
               {
-                  prefix.insert(prefix.begin(), out.back());
+                  prefix.push_back(out.back());
                   out.pop_back();
               }
+              std::reverse(prefix.begin(), prefix.end());
               if (prefix.empty())
               {
                   out.append(in, i, close - i + 1);
@@ -240,7 +241,7 @@ namespace {
                   }
                   std::string rangeSpec = expandedBetza.substr(i + 2, close - i - 2);
                   std::size_t dash = rangeSpec.find('-');
-                  bool unsupportedCombo = !atomIsRider || hopper || contraHopper || lame || dynamicDistance || skiSlider || maxDistance;
+                  bool unsupportedCombo = !atomIsRider || atomIsTuple || hopper || contraHopper || lame || dynamicDistance || skiSlider || maxDistance;
                   bool malformedRange = dash == std::string::npos
                                      || rangeSpec.find('-', dash + 1) != std::string::npos
                                      || dash == 0;
@@ -324,11 +325,14 @@ namespace {
                                    : p->steps[initial][modality];
                   auto& leapRiderV = p->leapRider[initial][modality];
                   auto& tupleV = p->tupleSteps[initial][modality];
+                  auto& tupleSliderV = p->tupleSlider[initial][modality];
                   auto has_dir = [&](std::string s) {
                     return std::find(directions.begin(), directions.end(), s) != directions.end();
                   };
                   auto add_step = [&](int dr, int df) {
-                      if (atomIsTuple && !hopper && !rider)
+                      if (atomIsTuple && !hopper && rider)
+                          tupleSliderV.push_back({dr, df, distance});
+                      else if (atomIsTuple && !hopper && !rider)
                           tupleV.emplace_back(dr, df);
                       else
                       {
@@ -484,15 +488,13 @@ namespace {
           // Standard rose/circular knight rider.
           else if (c == '@')
               commit_rose();
-          // Tuple leaper atom: (x,y)
+          // Tuple atom: (x,y), optionally repeated or numeric for riders.
           else if (c == '(')
           {
-              // Tuple atoms are only supported as explicit leapers. Reject
-              // tuple+hoppers/riders to avoid Direction-based wrap artifacts.
-              if (hopper || contraHopper || rider || lame || dynamicDistance)
+              if (hopper || contraHopper || lame || dynamicDistance || skiSlider || maxDistance)
               {
                   std::cerr << "Unsupported Betza tuple modifier combination in '" << betza
-                            << "': tuple atoms only support explicit leapers. Ignoring tuple atom." << std::endl;
+                            << "': tuple atoms only support explicit leapers or repeated/numeric tuple riders. Ignoring tuple atom." << std::endl;
                   reset_parser_state();
                   auto closeUnsupported = expandedBetza.find(')', i + 1);
                   if (closeUnsupported != std::string::npos)
@@ -501,10 +503,14 @@ namespace {
               }
               auto close = expandedBetza.find(')', i + 1);
               if (close == std::string::npos)
+              {
+                  reset_parser_state();
                   continue;
+              }
               auto comma = expandedBetza.find(',', i + 1);
               if (comma == std::string::npos || comma > close)
               {
+                  reset_parser_state();
                   i = close;
                   continue;
               }
@@ -512,18 +518,24 @@ namespace {
               if (!parse_positive_int(expandedBetza.substr(i + 1, comma - i - 1), dx)
                   || !parse_positive_int(expandedBetza.substr(comma + 1, close - comma - 1), dy))
               {
+                  reset_parser_state();
                   i = close;
                   continue;
               }
               // Tuple atoms are stored as (rankDelta, fileDelta).
               if ((dx == 0 && dy == 0) || dx > int(RANK_MAX) || dy > int(FILE_MAX))
               {
+                  reset_parser_state();
                   i = close;
                   continue;
               }
               std::vector<std::pair<int, int>> tupleAtom = { std::make_pair(dx, dy) };
-              i = close;
-              commit_atom(tupleAtom, false, i, ')', true);
+              std::string tupleText = expandedBetza.substr(i, close - i + 1);
+              std::string::size_type next = close + 1;
+              bool repeatedTupleRider = next < expandedBetza.size()
+                                     && expandedBetza.compare(next, tupleText.size(), tupleText) == 0;
+              i = repeatedTupleRider ? next + tupleText.size() - 1 : close;
+              commit_atom(tupleAtom, repeatedTupleRider, i, ')', true);
           }
       }
       return p.release();
@@ -631,7 +643,7 @@ void PieceMap::add(PieceType pt, const PieceInfo* p) {
   }
 
   direct[pt] = p;
-  insert(std::pair<PieceType, const PieceInfo*>(pt, p));
+  (*this)[pt] = p;
 }
 
 void PieceMap::clear_all() {

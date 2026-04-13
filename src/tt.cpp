@@ -157,7 +157,7 @@ int TranspositionTable::hashfull() const {
       for (int j = 0; j < ClusterSize; ++j)
           cnt += table[i].entry[j].depth8 && (table[i].entry[j].genBound8 & GENERATION_MASK) == generation8;
 
-  return cnt / ClusterSize;
+  return sampleCount ? int((cnt * 1000) / (ClusterSize * sampleCount)) : 0;
 }
 
 } // namespace Stockfish

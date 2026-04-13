@@ -47,9 +47,8 @@ echo "new variants smoke testing started"
 tmp_ini=$(mktemp)
 cat > "${tmp_ini}" <<'INI'
 [ptgroup-merge:chess]
-pieceSpecificPromotionRegion = true
-whitePiecePromotionRegion = P(a8);P(h8);
-blackPiecePromotionRegion = P(a1);P(h1);
+promotionRegionWhite = P(a8);P(h8); *(*8)
+promotionRegionBlack = P(a1);P(h1); *(*1)
 promotionPieceTypes = q
 promotionPieceTypesWhite = q
 promotionPieceTypesBlack = q
@@ -139,7 +138,160 @@ position startpos
 go perft 1")
 echo "${out}" | grep -q "^e1d2: 1$"
 
-# 5bb) Simplified inheritance stanzas still preserve start positions.
+if variant_available "lewthwaite-swap"; then
+out=$(run_cmds "setoption name UCI_Variant value lewthwaite-swap
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched:"
+! echo "${out}" | grep -q "s: 1$"
+fi
+
+# 5bb) Additional Groups variants load and expose the expected setup-phase drops.
+for v in groups groups-fixed groups-setup groups-jump-setup groups-queen-fixed groups-queen-jump-fixed groups-queen-setup groups-queen-jump-setup; do
+  variant_available "${v}"
+done
+out=$(run_cmds "setoption name UCI_Variant value groups-setup
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 8"
+out=$(run_cmds "setoption name UCI_Variant value groups-jump-setup
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 8"
+out=$(run_cmds "setoption name UCI_Variant value groups-queen-setup
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 8"
+out=$(run_cmds "setoption name UCI_Variant value groups-queen-jump-setup
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 8"
+
+# 5bb1) Mini Hexchess loads on the masked 37-cell hex board and exposes the expected opening moves.
+if variant_available "hex-7x7"; then
+out=$(run_cmds "setoption name UCI_Variant value hex-7x7
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 49"
+fi
+
+if variant_available "hex-10x10"; then
+out=$(run_cmds "setoption name UCI_Variant value hex-10x10
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 100"
+fi
+
+if variant_available "hex-16x16"; then
+out=$(run_cmds "setoption name UCI_Variant value hex-16x16
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 256"
+fi
+
+if variant_available "esa-hex"; then
+out=$(run_cmds "setoption name UCI_Variant value esa-hex
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 100"
+out=$(run_cmds "setoption name UCI_Variant value esa-hex
+position startpos moves P@a1
+go perft 1")
+echo "${out}" | grep -q "^0000: 1$"
+fi
+
+if variant_available "misere-hex"; then
+out=$(run_cmds "setoption name UCI_Variant value misere-hex
+position fen 11/11/11/11/11/11/11/11/11/11/PPPPPPPPPPP[P] b - - 0 1
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 0"
+fi
+
+if variant_available "minihexchess"; then
+out=$(run_cmds "setoption name UCI_Variant value minihexchess
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 11"
+echo "${out}" | grep -q "^a2d3: 1$"
+echo "${out}" | grep -q "^a2b5: 1$"
+echo "${out}" | grep -q "^c1d2: 1$"
+echo "${out}" | grep -q "^a3b4: 1$"
+echo "${out}" | grep -q "^c3d4: 1$"
+echo "${out}" | grep -q "^b2d3: 1$"
+echo "${out}" | grep -q "^b2c4: 1$"
+fi
+
+if variant_available "glinski-chess"; then
+out=$(run_cmds "setoption name UCI_Variant value glinski-chess
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 48"
+echo "${out}" | grep -q "^d1d2: 1$"
+echo "${out}" | grep -q "^a4b4: 1$"
+echo "${out}" | grep -q "^a1c2: 1$"
+echo "${out}" | grep -q "^a5b6: 1$"
+echo "${out}" | grep -q "^b1d2: 1$"
+fi
+
+if variant_available "glinski-chess-3shift"; then
+out=$(run_cmds "setoption name UCI_Variant value glinski-chess-3shift
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 44"
+echo "${out}" | grep -q "^c3e4: 1$"
+echo "${out}" | grep -q "^c5d6: 1$"
+fi
+
+if variant_available "glinski-chess-5shift"; then
+out=$(run_cmds "setoption name UCI_Variant value glinski-chess-5shift
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 46"
+echo "${out}" | grep -q "^c3e4: 1$"
+echo "${out}" | grep -q "^b4c5: 1$"
+fi
+
+if variant_available "van-gennip-hexchess"; then
+out=$(run_cmds "setoption name UCI_Variant value van-gennip-hexchess
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 36"
+echo "${out}" | grep -q "^c3d4: 1$"
+fi
+
+if variant_available "van-gennip-small-hexchess"; then
+out=$(run_cmds "setoption name UCI_Variant value van-gennip-small-hexchess
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 29"
+echo "${out}" | grep -q "^c3d4: 1$"
+fi
+
+if variant_available "mccooey-chess"; then
+out=$(run_cmds "setoption name UCI_Variant value mccooey-chess
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 31"
+echo "${out}" | grep -q "^c3e4: 1$"
+echo "${out}" | grep -q "^c2e1: 1$"
+echo "${out}" | grep -q "^a4b5: 1$"
+echo "${out}" | grep -q "^a4c6: 1$"
+fi
+
+if variant_available "grand-hexachess"; then
+out=$(run_cmds "setoption name UCI_Variant value grand-hexachess
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 125"
+echo "${out}" | grep -q "^i13g12: 1$"
+echo "${out}" | grep -q "^a5a6: 1$"
+echo "${out}" | grep -q "^k5k6: 1$"
+echo "${out}" | grep -q "^c3d4: 1$"
+echo "${out}" | grep -q "^e11f10: 1$"
+echo "${out}" | grep -q "^j13k12: 1$"
+fi
+
+# 5bc) Simplified inheritance stanzas still preserve start positions.
 out=$(run_cmds "setoption name UCI_Variant value maharajah
 position startpos
 d")
@@ -319,6 +471,55 @@ go perft 1")
 echo "${out}" | grep -q "Nodes searched: 0"
 fi
 
+# 7c) Kopano: mirrored opening swap, reciprocal weak links, crosscut blocks, and no-placement wins.
+if variant_available "kopano"; then
+out=$(run_cmds "setoption name UCI_Variant value kopano
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 64"
+
+out=$(run_cmds "setoption name UCI_Variant value kopano
+position startpos moves P@b1
+go perft 1")
+echo "${out}" | grep -q "^P@a2: 1$"
+! echo "${out}" | grep -q "^P@b1: 1$"
+
+out=$(run_cmds "setoption name UCI_Variant value kopano
+position fen 8/8/8/8/8/8/1P6/8[Pp] w - - 0 1
+go perft 1")
+! echo "${out}" | grep -q "^P@c3: 1$"
+
+out=$(run_cmds "setoption name UCI_Variant value kopano
+position fen 8/8/8/8/3p4/8/1P6/8[Pp] w - - 0 1
+go perft 1")
+echo "${out}" | grep -q "^P@c3: 1$"
+
+out=$(run_cmds "setoption name UCI_Variant value kopano
+position fen 8/8/8/8/2pP4/3p4/8/8[Pp] w - - 0 1
+go perft 1")
+! echo "${out}" | grep -q "^P@c3: 1$"
+
+out=$(run_cmds "setoption name UCI_Variant value kopano
+position fen 7p/6p1/5p2/4p3/3p4/2p5/1p6/p7 w - - 0 1
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 0"
+fi
+
+# 7d) Hex-family connection variants: Y and Hex load on the expected build sizes.
+if variant_available "y"; then
+out=$(run_cmds "setoption name UCI_Variant value y
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 55"
+fi
+
+if variant_available "hex"; then
+out=$(run_cmds "setoption name UCI_Variant value hex
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 121"
+fi
+
 # 8) Neutreeko: max-distance move completes a line and ends the game.
 if variant_available "neutreeko"; then
 out=$(run_cmds "setoption name UCI_Variant value neutreeko
@@ -395,15 +596,15 @@ fi
 # 15) Kamikaze: plain chess family, capturer is removed.
 if variant_available "kamikaze"; then
 out=$(run_cmds "setoption name UCI_Variant value kamikaze
-position fen 4k3/8/8/3p4/4P3/8/8/8 w - - 0 1 moves e4d5
+position fen 4k3/8/8/3p4/4P3/8/8/4K3 w - - 0 1 moves e4d5
 d")
-echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/8 b - - 0 1"
+echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/4K3 b - - 0 1"
 
-# 15b) Kamikaze: kings are exempt from self-destruction on capture.
+# 15b) Kamikaze (nocheckatomic template): kings are explosion-immune.
 out=$(run_cmds "setoption name UCI_Variant value kamikaze
-position fen 8/8/8/3P4/4k3/8/8/4K3 b - - 0 1 moves e4d5
+position fen r1bqkbnr/pppp1ppp/8/4pK2/4P3/8/PPPP1PPP/RNBQ2NR w KQkq - 0 3 moves f5e5
 d")
-echo "${out}" | grep -q "Fen: 8/8/8/3k4/8/8/8/4K3 w - - 0 2"
+echo "${out}" | grep -q "Fen: r1bqkbnr/pppp1ppp/8/4K3/4P3/8/PPPP1PPP/RNBQ2NR b kq - 0 3"
 fi
 
 # 16) Fatal giveaway: dead squares can be captured as neutral blockers.
@@ -540,7 +741,7 @@ if variant_available "shatranj-14x14"; then
 out=$(run_cmds "setoption name UCI_Variant value shatranj-14x14
 position startpos
 d")
-echo "${out}" | grep -q "Fen: rndwbmkqsbwdnr/pppppppppppppp/14/14/14/14/14/14/14/14/14/14/PPPPPPPPPPPPPP/RNDWBSQKMBWDNR w - - 0 1"
+echo "${out}" | grep -q "Fen: rndwbmksbwdnr1/pppppppppppppp/14/14/14/14/14/14/14/14/14/14/PPPPPPPPPPPPPP/RNDWBSKMBWDNR1 w - - 0 1"
 fi
 
 # 19da) Shatranj: source-backed setup should load as documented.
@@ -652,9 +853,10 @@ echo "${out}" | grep -q "Nodes searched: 0"
 # 19fzzzz) Gale 15x15: only available on VERY_LARGE_BOARDS builds.
 if variant_available "gale-15"; then
   out=$(run_cmds "setoption name UCI_Variant value gale-15
-position fen 1P13/P14/P14/P14/P14/P14/P14/P14/P14/P14/P14/P14/P14/P14/1P13 w - - 0 1
-go depth 1")
-  echo "${out}" | grep -q "Nodes searched: 0"
+position startpos
+go perft 1")
+  echo "${out}" | grep -q "Nodes searched: 113"
+  echo "${out}" | grep -q "^P@a1: 1$"
 fi
 
 # 19g) Apit-Sodok: same reverse/intervention capture as Maak Yek.
@@ -704,6 +906,8 @@ out=$(run_cmds "setoption name UCI_Variant value hindustani
 position startpos
 go perft 1")
 ! echo "${out}" | grep -q "^e2e4:"
+echo "${out}" | grep -q "^e1d3: 1$"
+echo "${out}" | grep -q "^e1f3: 1$"
 
 # 19) Hindustani baseline: if all promotion targets are at cap, promotion is forbidden.
 out=$(run_cmds "setoption name UCI_Variant value hindustani

@@ -414,7 +414,17 @@ inline bool has_insufficient_material(Color c, const Position& pos) {
         || pos.enclosing_drop()
         || pos.count_in_hand(c, ALL_PIECES)
         || (pos.extinction_value() != VALUE_NONE && (pos.extinction_piece_types(c) & ~pos.pseudo_royal_types()))
-        || (pos.flag_region(c) && pos.count(c, pos.flag_piece(c))))
+        || (pos.flag_region(c) && pos.count(c, pos.flag_piece(c)))
+        || pos.points_goal() > 0
+        || pos.connect_n() > 0
+        || pos.connect_nxn() > 0
+        || pos.collinear_n() > 0
+        || pos.connect_group() > 0
+        || !pos.connect_piece_goal_types(c).empty()
+        || pos.variant()->castlingWins
+        || pos.variant()->connectRegion1[c]
+        || pos.variant()->connectRegion2[c]
+        || pos.variant()->connectRegion3[c])
         return false;
 
     // Precalculate if any promotion pawn types have pieces
@@ -1061,9 +1071,18 @@ inline Validation check_standard_castling(std::array<std::string, 2>& castlingIn
             continue;
         const bool hasCastlingRight = castlingInfoSplitted[c].find('k') != std::string::npos
                                    || castlingInfoSplitted[c].find('q') != std::string::npos;
+        const bool hasKingsideRight = castlingInfoSplitted[c].find('k') != std::string::npos;
+        const bool hasQueensideRight = castlingInfoSplitted[c].find('q') != std::string::npos;
         if (hasCastlingRight && kingPositions[c] != kingPositionsStart[c])
         {
             std::cerr << "The " << color_to_string(c) << " KING has moved. Castling is no longer valid for " << color_to_string(c) << "." << std::endl;
+            return NOK;
+        }
+        if (hasKingsideRight && hasQueensideRight && rookPositionsStart[c].size() == 1)
+        {
+            std::cerr << "The " << color_to_string(c)
+                      << " side has only one rook start square, so both standard castling rights cannot be valid."
+                      << std::endl;
             return NOK;
         }
 
@@ -1073,9 +1092,6 @@ inline Validation check_standard_castling(std::array<std::string, 2>& castlingIn
                 continue;
 
             size_t rookIndex = castling == QUEEN_SIDE ? 0 : rookPositionsStart[c].size() - 1;
-            if (rookIndex >= rookPositionsStart[c].size())
-                continue;
-
             CharSquare rookStartingSquare = rookPositionsStart[c][rookIndex];
             char targetChar = castling == QUEEN_SIDE ? 'q' : 'k';
             if (castlingInfoSplitted[c].find(targetChar) != std::string::npos)

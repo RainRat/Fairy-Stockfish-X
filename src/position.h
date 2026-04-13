@@ -76,6 +76,26 @@ struct ScopedSpellContext {
   }
 };
 
+struct ReversiblePieceState {
+  Piece piece = NO_PIECE;
+  Piece unpromoted = NO_PIECE;
+  bool promoted = false;
+
+  void clear() {
+    piece = NO_PIECE;
+    unpromoted = NO_PIECE;
+    promoted = false;
+  }
+
+  void set(Piece pc, bool isPromoted, Piece unpromotedPc = NO_PIECE) {
+    piece = pc;
+    promoted = isPromoted;
+    unpromoted = isPromoted ? unpromotedPc : NO_PIECE;
+  }
+
+  explicit operator bool() const { return piece != NO_PIECE; }
+};
+
 /// StateInfo struct stores information needed to restore a Position object to
 /// its previous state when we retract a move. Whenever a move is made on the
 /// board (by calling Position::do_move), a StateInfo object must be passed.
@@ -110,7 +130,6 @@ struct StateInfo {
   // Fairy-Stockfish-X split: broad royal-danger state, including pseudo-/anti-royal
   // bookkeeping, must not be conflated with actual "must evade now" check state.
   Bitboard   evasionCheckersBB;
-  Piece      unpromotedCapturedPiece;
   Piece      unpromotedBycatch[SQUARE_NB];
   Bitboard   bycatchSquares;
   Bitboard   promotedBycatch;
@@ -120,11 +139,9 @@ struct StateInfo {
   Bitboard   blockersForKing[COLOR_NB];
   Bitboard   pinners[COLOR_NB];
   Bitboard   checkSquares[PIECE_TYPE_NB];
-  Piece      capturedPiece;
+  ReversiblePieceState captured;
   Square     captureSquare; // when != to_sq, e.g., en passant
-  Piece      deadPiece;
-  Piece      deadUnpromotedPiece;
-  bool       deadPiecePromoted;
+  ReversiblePieceState dead;
   Piece      promotionPawn;
   Piece      consumedPromotionHandPiece;
   Bitboard   nonSlidingRiders;
@@ -134,48 +151,49 @@ struct StateInfo {
   PieceSet   extinctionSeen[COLOR_NB];
   OptBool    legalCapture;
   OptBool    legalEnPassant;
-  bool       capturedpromoted;
-  bool       suppressedCaptureTransfer;
-  bool       shak;
-  bool       bikjang;
   Bitboard   chased;
-  bool       pass;
   Bitboard   claimedSquares;
-  bool       pendingClaimPass;
   Square     forcedJumpSquare;
-  bool       forcedJumpHasFollowup;
-  int        forcedJumpStep;
   Move       move;
+  Color      dropHandColor;
+  int        forcedJumpStep;
   int        repetition;
   int        boardRepetition;
   PieceType removedGatingType;
   PieceType removedCastlingGatingType;
   PieceType capturedGatingType;
-  bool didMorph;
   Piece morphedFrom;
   Square morphSquare;
-  bool didColorChange;
-  Piece colorChangedFrom;
+  ReversiblePieceState colorChanged;
   Square colorChangeSquare;
-  bool colorChangedPromoted;
-  Piece colorChangedUnpromoted;
-  bool didPush;
-  bool pushStepwise;
   Square pushTailSquare;
   int pushStepF;
   int pushStepR;
   int pushCount;
-  bool pushEjected;
-  bool pushBlockedCapture;
   int pushSnapshotCount;
   Square pushSnapshotSquares[32];
   Piece pushSnapshotPieces[32];
   Piece pushSnapshotUnpromoted[32];
-  bool pushSnapshotPromoted[32];
+  uint32_t pushSnapshotPromoted;
   int pushTransferCount;
   Piece pushTransferPieces[32];
   Piece pushTransferUnpromoted[32];
-  bool pushTransferPromoted[32];
+  uint32_t pushTransferPromoted;
+  Square pullFromSquare;
+  ReversiblePieceState pulled;
+  bool       suppressedCaptureTransfer;
+  bool       shak;
+  bool       bikjang;
+  bool       pass;
+  bool       pendingClaimPass;
+  bool       forcedJumpHasFollowup;
+  bool       didMorph;
+  bool       didColorChange;
+  bool       didPush;
+  bool       didPull;
+  bool       pushStepwise;
+  bool       pushEjected;
+  bool       pushBlockedCapture;
   bool nnueRefreshNeeded;
 
   // Used by NNUE
@@ -305,6 +323,7 @@ public:
   bool wraps_files() const;
   bool wraps_ranks() const;
   bool topology_wraps() const;
+  bool is_hex_board() const;
   bool checking_permitted() const;
   bool allow_checks() const;
   bool drop_checks() const;
@@ -312,11 +331,19 @@ public:
   bool shogi_pawn_drop_mate_illegal() const;
   bool shogi_pawn_drop_mate_illegal(Color c) const;
   bool self_capture() const;
+  bool self_capture(PieceType pt) const;
   bool rifle_capture() const;
   bool rifle_capture(Piece pc) const;
   bool rifle_capture(Move m) const;
   int pushing_strength(PieceType pt) const;
   bool has_pushing() const;
+  int pulling_strength(PieceType pt) const;
+  bool has_pulling() const;
+  PieceSet adjacent_swap_move_types() const;
+  bool has_adjacent_swapping() const;
+  bool adjacent_swap_requires_empty_neighbor() const;
+  bool swap_no_immediate_return() const;
+  int swap_forbidden_plies() const;
   PushFirstColor push_first_color() const;
   PushRemoval pushing_removes() const;
   bool push_chain_enemy_only() const;
@@ -344,10 +371,19 @@ public:
   Bitboard opening_swap_drop_targets(Color c, PieceType pt) const;
   bool is_opening_self_removal_move(Move m) const;
   bool piece_drops() const;
+  Color drop_hand_color(Color c, PieceType pt) const;
   bool drop_loop() const;
   bool captures_to_hand() const;
   PieceSet capture_to_hand_types() const;
   PieceSet self_destruct_types() const;
+  PieceSet clone_move_types() const;
+  bool can_clone(Piece p) const;
+  Bitboard clone_targets_from(Color c, Square from) const;
+  Bitboard pull_sources_from(Color c, Square from) const;
+  Bitboard pull_targets_from(Color c, Square from, Square pullFrom) const;
+  Bitboard adjacent_swap_targets_from(Color c, Square from) const;
+  PieceType first_move_piece_type(PieceType pt) const;
+  bool first_move_lose_on_check() const;
   bool first_rank_pawn_drops() const;
   bool can_drop(Color c, PieceType pt) const;
   bool has_exchange() const;
@@ -365,8 +401,8 @@ public:
   PieceSet drop_piece_types(PieceType pt) const;
   PieceSet symmetric_drop_types() const;
   PieceSet capture_drop_types() const;
-  PieceType drop_no_doubled() const;
-  PieceType drop_no_doubled(Color c) const;
+  PieceSet drop_no_doubled() const;
+  PieceSet drop_no_doubled(Color c) const;
   PieceSet promotion_pawn_types(Color c) const;
   PieceSet pawn_like_types(Color c) const;
   PieceSet en_passant_types(Color c) const;
@@ -443,6 +479,7 @@ public:
   bool connect_horizontal() const;
   bool connect_vertical() const;
   bool connect_diagonal() const;
+  bool weak_diagonal_connect() const;
   const std::vector<Direction>& getConnectDirections() const;
   const std::vector<std::vector<Square>>& getConnectLines() const;
   int connect_nxn() const;
@@ -454,7 +491,6 @@ public:
   PointsRule points_rule_captures() const;
   int points_goal() const;
   int points_count(Color c) const;
-  int points_score(Color c) const;
   int points_score_clamped(Color c) const;
   Value points_goal_value() const;
   Value points_goal_simul_value_by_most_points() const;
@@ -546,6 +582,9 @@ public:
   Square jump_capture_square(Square from, Square to) const;
   bool gives_check(Move m) const;
   Piece moved_piece(Move m) const;
+  bool is_clone_move(Move m) const;
+  bool is_pull_move(Move m) const;
+  bool is_swap_move(Move m) const;
   Piece captured_piece() const;
   Piece captured_piece(Move m) const;
   const std::string piece_to_partner() const;
@@ -606,6 +645,7 @@ public:
 
   // Position consistency check, for debugging
   bool pos_is_ok() const;
+  bool material_key_is_ok() const;
   void refresh_state_derived(StateInfo* si) const;
   void flip();
 
@@ -620,11 +660,11 @@ private:
   void set_castling_right(Color c, Square rfrom);
   void set_state(StateInfo* si) const;
   void recompute_state_hashes_and_material(StateInfo* si) const;
+  Key compute_material_key() const;
   Bitboard compute_checkers_bb(Color side) const;
   Bitboard compute_evasion_checkers_bb(Color side) const;
   void set_check_info(StateInfo* si) const;
   bool compute_forced_jump_followup(Square s, int step = 0) const;
-  bool is_initial_pawn(Piece pc, Square s) const;
   Key layout_key() const;
   bool violates_same_player_board_repetition(Move m) const;
   Key reserve_key() const;
@@ -659,6 +699,11 @@ private:
                                         File maxFile, Rank maxRank,
                                         bool wrapFile, bool wrapRank,
                                         bool requireEmpty);
+  static Bitboard wrapped_tuple_rider_targets(const std::vector<PieceInfo::TupleRay>& rays,
+                                              Color c, Square sq, Bitboard occupied,
+                                              File maxFile, Rank maxRank,
+                                              bool wrapFile, bool wrapRank,
+                                              bool quietMode);
   static Bitboard wrapped_slider_targets(const std::map<Direction, int>& directions,
                                          Square sq, Bitboard occupied,
                                          File maxFile, Rank maxRank,
@@ -732,7 +777,7 @@ private:
   PieceType committed_piece_type(Color cl, File fl) const;
   bool has_committed_piece(Color cl, File fl) const;
   PieceType drop_committed_piece(Color cl, File fl);
-  Bitboard find_drop_region(Direction dir, Square s, Bitboard occupied) const;
+  void swap_piece(Square from, Square to);
 };
 
 extern std::ostream& operator<<(std::ostream& os, const Position& pos);
@@ -818,29 +863,13 @@ inline PieceType Position::piece_type_from_symbol(const std::string& token) cons
 
 inline Bitboard Position::promotion_zone(Color c) const {
   assert(var != nullptr);
-  return var->promotionRegion[c];
+  return var->promotionRegion.get(c).fallback;
 }
 
 inline Bitboard Position::promotion_zone(Color c, PieceType pt) const {
     assert(var != nullptr);
     assert(pt != NO_PIECE_TYPE);
-    Bitboard b = var->promotionRegion[c];
-
-    // Piece specific promotion region
-    // Only filter moves based on var->promotionRegion[] which is a restriction that applies to all pieces
-    // Set whitePromotionRegion/blackPromotionRegion to AllSquares to remove the restriction
-    if (var->pieceSpecificPromotionRegion)
-    {
-        if (c == WHITE)
-        {
-            b &= var->whitePiecePromotionRegion.boardOfPiece(toupper(piece_to_char()[(c << PIECE_TYPE_BITS) | pt]));
-        }
-        else if (c == BLACK)
-        {
-            b &= var->blackPiecePromotionRegion.boardOfPiece(toupper(piece_to_char()[(c << PIECE_TYPE_BITS) | pt]));
-        }
-    }
-    return b;
+    return var->promotionRegion.get(c).boardOfPiece(piece_to_char()[pt]);
 }
 
 inline Bitboard Position::promotion_zone(Piece p) const {
@@ -882,23 +911,15 @@ inline PieceType Position::main_promotion_pawn_type(Color c) const {
 
 inline PieceSet Position::promotion_piece_types(Color c) const {
   assert(var != nullptr);
-  if (var->promotionPieceTypesByFileEnabled[c])
-  {
-      PieceSet unionSet = NO_PIECE_SET;
-      for (int f = FILE_A; f <= int(var->maxFile); ++f)
-          unionSet |= var->promotionPieceTypesByFile[c][f];
-      return unionSet;
-  }
-  return var->promotionPieceTypes[c];
+  return var->promotionPieceTypes.get(c).unionSet();
 }
 
 inline PieceSet Position::promotion_piece_types(Color c, Square s) const {
   assert(var != nullptr);
-  if (var->promotionPieceTypesByFileEnabled[c] && s != SQ_NONE)
+  if (s != SQ_NONE)
   {
       File f = file_of(s);
-      if (f >= FILE_A && f <= var->maxFile)
-          return var->promotionPieceTypesByFile[c][f];
+      return var->promotionPieceTypes.get(c).piecesOfFile(f);
   }
   return promotion_piece_types(c);
 }
@@ -924,7 +945,7 @@ inline bool Position::promotion_allowed(Color c, PieceType pt) const {
 }
 
 inline bool Position::promotion_allowed(Color c, PieceType pt, Square s) const {
-  return bool(promotion_piece_types(c, s) & pt) && promotion_allowed(c, pt);
+  return bool(promotion_piece_types(c, s) & piece_set(pt)) && promotion_allowed(c, pt);
 }
 
 inline PieceType Position::promoted_piece_type(PieceType pt) const {
@@ -939,16 +960,12 @@ inline bool Position::piece_promotion_on_capture() const {
 
 inline bool Position::mandatory_pawn_promotion() const {
   assert(var != nullptr);
-  if (var->mandatoryPawnPromotionByColorSet[WHITE] || var->mandatoryPawnPromotionByColorSet[BLACK])
-      return var->mandatoryPawnPromotionByColor[side_to_move()];
-  return var->mandatoryPawnPromotion;
+  return var->mandatoryPawnPromotion.get(side_to_move());
 }
 
 inline bool Position::mandatory_piece_promotion() const {
   assert(var != nullptr);
-  if (var->mandatoryPiecePromotionByColorSet[WHITE] || var->mandatoryPiecePromotionByColorSet[BLACK])
-      return var->mandatoryPiecePromotionByColor[side_to_move()];
-  return var->mandatoryPiecePromotion;
+  return var->mandatoryPiecePromotion.get(side_to_move());
 }
 
 inline bool Position::piece_demotion() const {
@@ -1097,33 +1114,13 @@ inline EndgameEval Position::endgame_eval() const {
 
 inline Bitboard Position::double_step_region(Color c) const {
   assert(var != nullptr);
-  return var->doubleStepRegion[c];
+  return var->doubleStepRegion.get(c).fallback;
 }
 
 inline Bitboard Position::double_step_region(Color c, PieceType pt) const {
     assert(var != nullptr);
     assert(pt != NO_PIECE_TYPE);
-    Bitboard b = var->doubleStepRegion[c];
-
-    // Piece-specific multi-step regions override the global region for that
-    // piece type when an explicit per-piece region is configured.
-    if (var->pieceSpecificDoubleStepRegion)
-    {
-        if (c == WHITE)
-        {
-            Bitboard pieceSpecific = var->whitePieceDoubleStepRegion.boardOfPiece(toupper(piece_to_char()[(c << PIECE_TYPE_BITS) | pt]));
-            if (pieceSpecific)
-                b = pieceSpecific;
-        }
-        else if (c == BLACK)
-        {
-            Bitboard pieceSpecific = var->blackPieceDoubleStepRegion.boardOfPiece(toupper(piece_to_char()[(c << PIECE_TYPE_BITS) | pt]));
-            if (pieceSpecific)
-                b = pieceSpecific;
-        }
-    }
-
-    return b;
+    return var->doubleStepRegion.get(c).boardOfPiece(piece_to_char()[pt]);
 }
 
 inline Bitboard Position::double_step_region(Piece p) const {
@@ -1134,33 +1131,13 @@ inline Bitboard Position::double_step_region(Piece p) const {
 
 inline Bitboard Position::triple_step_region(Color c) const {
   assert(var != nullptr);
-  return var->tripleStepRegion[c];
+  return var->tripleStepRegion.get(c).fallback;
 }
 
 inline Bitboard Position::triple_step_region(Color c, PieceType pt) const {
     assert(var != nullptr);
     assert(pt != NO_PIECE_TYPE);
-    Bitboard b = var->tripleStepRegion[c];
-
-    // Piece-specific multi-step regions override the global region for that
-    // piece type when an explicit per-piece region is configured.
-    if (var->pieceSpecificTripleStepRegion)
-    {
-        if (c == WHITE)
-        {
-            Bitboard pieceSpecific = var->whitePieceTripleStepRegion.boardOfPiece(toupper(piece_to_char()[(c << PIECE_TYPE_BITS) | pt]));
-            if (pieceSpecific)
-                b = pieceSpecific;
-        }
-        else if (c == BLACK)
-        {
-            Bitboard pieceSpecific = var->blackPieceTripleStepRegion.boardOfPiece(toupper(piece_to_char()[(c << PIECE_TYPE_BITS) | pt]));
-            if (pieceSpecific)
-                b = pieceSpecific;
-        }
-    }
-
-    return b;
+    return var->tripleStepRegion.get(c).boardOfPiece(piece_to_char()[pt]);
 }
 
 inline Bitboard Position::triple_step_region(Piece p) const {
@@ -1319,18 +1296,19 @@ inline bool Position::topology_wraps() const {
   return wraps_files() || wraps_ranks();
 }
 
+inline bool Position::is_hex_board() const {
+  assert(var != nullptr);
+  return var->hexBoard;
+}
+
 inline bool Position::drop_checks() const {
   assert(var != nullptr);
-  if (var->dropChecksByColorSet[WHITE] || var->dropChecksByColorSet[BLACK])
-      return var->dropChecksByColor[side_to_move()];
-  return var->dropChecks;
+  return var->dropChecks.get(side_to_move());
 }
 
 inline bool Position::drop_mates() const {
   assert(var != nullptr);
-  if (var->dropMatesByColorSet[WHITE] || var->dropMatesByColorSet[BLACK])
-      return var->dropMatesByColor[side_to_move()];
-  return var->dropMates;
+  return var->dropMates.get(side_to_move());
 }
 
 inline bool Position::shogi_pawn_drop_mate_illegal() const {
@@ -1339,16 +1317,27 @@ inline bool Position::shogi_pawn_drop_mate_illegal() const {
 
 inline bool Position::shogi_pawn_drop_mate_illegal(Color c) const {
   assert(var != nullptr);
-  if (var->shogiPawnDropMateIllegalByColorSet[WHITE] || var->shogiPawnDropMateIllegalByColorSet[BLACK])
-      return var->shogiPawnDropMateIllegalByColor[c];
-  return var->shogiPawnDropMateIllegal;
+  return var->shogiPawnDropMateIllegal.get(c);
 }
 
 inline bool Position::self_capture() const {
   assert(var != nullptr);
-  if (var->selfCaptureByColorSet[WHITE] || var->selfCaptureByColorSet[BLACK])
-      return var->selfCaptureByColor[side_to_move()];
+  Color us = side_to_move();
+  if (var->selfCaptureTypes.has_override(us))
+      return var->selfCaptureTypes.get(us) != NO_PIECE_SET;
+  if (var->selfCapture.has_override(us))
+      return var->selfCapture.get(us);
+  if (var->selfCaptureTypes != NO_PIECE_SET)
+      return var->selfCaptureTypes.get(us) != NO_PIECE_SET;
   return var->selfCapture;
+}
+
+inline bool Position::self_capture(PieceType pt) const {
+  assert(var != nullptr);
+  Color us = side_to_move();
+  if (var->selfCaptureTypes.has_override(us))
+      return bool(var->selfCaptureTypes.get(us) & piece_set(pt));
+  return self_capture();
 }
 
 inline bool Position::rifle_capture() const {
@@ -1379,6 +1368,43 @@ inline bool Position::has_pushing() const {
       if (pushing_strength(pop_lsb(ps)) > 0)
           return true;
   return false;
+}
+
+inline int Position::pulling_strength(PieceType pt) const {
+  assert(var != nullptr);
+  return var->pullingStrength[pt];
+}
+
+inline bool Position::has_pulling() const {
+  assert(var != nullptr);
+  for (PieceSet ps = piece_types(); ps; )
+      if (pulling_strength(pop_lsb(ps)) > 0)
+          return true;
+  return false;
+}
+
+inline PieceSet Position::adjacent_swap_move_types() const {
+  assert(var != nullptr);
+  return var->adjacentSwapMoveTypes;
+}
+
+inline bool Position::has_adjacent_swapping() const {
+  return adjacent_swap_move_types() != NO_PIECE_SET;
+}
+
+inline bool Position::adjacent_swap_requires_empty_neighbor() const {
+  assert(var != nullptr);
+  return var->adjacentSwapRequiresEmptyNeighbor;
+}
+
+inline bool Position::swap_no_immediate_return() const {
+  assert(var != nullptr);
+  return var->swapNoImmediateReturn;
+}
+
+inline int Position::swap_forbidden_plies() const {
+  assert(var != nullptr);
+  return var->swapForbiddenPlies;
 }
 
 inline PushFirstColor Position::push_first_color() const {
@@ -1418,27 +1444,27 @@ inline bool Position::edge_insert_only() const {
 
 inline Bitboard Position::edge_insert_region(Color c) const {
   assert(var != nullptr);
-  return var->edgeInsertRegion[c];
+  return var->edgeInsertRegion.get(c);
 }
 
 inline bool Position::edge_insert_from_top(Color c) const {
   assert(var != nullptr);
-  return var->edgeInsertFromTop[c];
+  return var->edgeInsertFromTop.get(c);
 }
 
 inline bool Position::edge_insert_from_bottom(Color c) const {
   assert(var != nullptr);
-  return var->edgeInsertFromBottom[c];
+  return var->edgeInsertFromBottom.get(c);
 }
 
 inline bool Position::edge_insert_from_left(Color c) const {
   assert(var != nullptr);
-  return var->edgeInsertFromLeft[c];
+  return var->edgeInsertFromLeft.get(c);
 }
 
 inline bool Position::edge_insert_from_right(Color c) const {
   assert(var != nullptr);
-  return var->edgeInsertFromRight[c];
+  return var->edgeInsertFromRight.get(c);
 }
 
 inline bool Position::capture_morph() const {
@@ -1453,14 +1479,12 @@ inline bool Position::rex_exclusive_morph() const {
 
 inline bool Position::must_capture() const {
   assert(var != nullptr);
-  if (var->mustCaptureByColor[WHITE] || var->mustCaptureByColor[BLACK])
-      return var->mustCaptureByColor[side_to_move()];
-  return var->mustCapture;
+  return var->mustCapture.get(side_to_move());
 }
 
 inline bool Position::must_capture_en_passant() const {
   assert(var != nullptr);
-  return var->mustCaptureEnPassant;
+  return var->mustCaptureEnPassant.get(side_to_move());
 }
 
 inline bool Position::has_capture() const {
@@ -1516,16 +1540,12 @@ inline bool Position::has_en_passant_capture() const {
 
 inline bool Position::must_drop() const {
   assert(var != nullptr);
-  if (var->mustDropByColor[WHITE] || var->mustDropByColor[BLACK])
-      return var->mustDropByColor[side_to_move()];
-  return var->mustDrop;
+  return var->mustDrop.get(side_to_move());
 }
 
 inline PieceType Position::must_drop_type() const {
   assert(var != nullptr);
-  if (var->mustDropTypeByColor[WHITE] != ALL_PIECES || var->mustDropTypeByColor[BLACK] != ALL_PIECES)
-      return var->mustDropTypeByColor[side_to_move()];
-  return var->mustDropType;
+  return var->mustDropType.get(side_to_move());
 }
 
 inline bool Position::opening_self_removal() const {
@@ -1541,7 +1561,7 @@ inline Bitboard Position::opening_self_removal_targets(Color c) const {
   if (!opening_self_removal() || gamePly >= 2)
       return Bitboard(0);
 
-  Bitboard targets = pieces(c) & var->openingSelfRemovalRegion[c];
+  Bitboard targets = pieces(c) & var->openingSelfRemovalRegion.get(c);
   if (gamePly == 1 && var->openingSelfRemovalAdjacentToLast)
   {
       Move lastMove = st->move;
@@ -1581,10 +1601,15 @@ inline Bitboard Position::opening_swap_drop_targets(Color c, PieceType pt) const
   if (popcount(enemy) != 1)
       return Bitboard(0);
 
-  if (!(drop_piece_types(pt) & pt))
+  if (!(drop_piece_types(pt) & piece_set(pt)))
       return Bitboard(0);
 
-  return drop_region(c, pt) & enemy;
+  if (!var->openingSwapMirrorMainDiagonal)
+      return drop_region(c, pt) & enemy;
+
+  Square enemySq = lsb(enemy);
+  Square mirrorSq = make_square(File(int(rank_of(enemySq))), Rank(int(file_of(enemySq))));
+  return drop_region(c, pt) & square_bb(mirrorSq);
 }
 
 inline bool Position::is_opening_self_removal_move(Move m) const {
@@ -1596,6 +1621,17 @@ inline bool Position::is_opening_self_removal_move(Move m) const {
 inline bool Position::piece_drops() const {
   assert(var != nullptr);
   return var->pieceDrops;
+}
+
+inline Color Position::drop_hand_color(Color c, PieceType pt) const {
+  assert(var != nullptr);
+  if (   var->borrowOpponentDropsWhenEmpty
+      && !var->freeDrops
+      && pt != ALL_PIECES
+      && count_in_hand(c, ALL_PIECES) == 0
+      && count_in_hand(~c, pt) > 0)
+      return ~c;
+  return c;
 }
 
 inline bool Position::drop_loop() const {
@@ -1642,6 +1678,15 @@ inline PieceSet Position::self_destruct_types() const {
   return var->selfDestructTypes;
 }
 
+inline PieceSet Position::clone_move_types() const {
+  assert(var != nullptr);
+  return var->cloneMoveTypes;
+}
+
+inline bool Position::can_clone(Piece p) const {
+  return p != NO_PIECE && (clone_move_types() & piece_set(type_of(p)));
+}
+
 inline bool Position::first_rank_pawn_drops() const {
   assert(var != nullptr);
   return var->firstRankPawnDrops;
@@ -1654,26 +1699,14 @@ inline EnclosingRule Position::enclosing_drop() const {
 
 inline Bitboard Position::drop_region(Color c) const {
   assert(var != nullptr);
-  return var->dropRegion[c];
+  return var->dropRegion.get(c).fallback;
 }
 
 inline Bitboard Position::drop_region(Color c, PieceType pt) const {
-  Bitboard b = drop_region(c) & board_bb(c, pt);
-
-  // Piece specific drop region
-  // Only filter moves based on drop_region() which is a restriction that applies to all pieces
-  // Set whiteDropRegion/blackDropRegion to AllSquares to remove the restriction
-  if (var->pieceSpecificDropRegion)
-  {
-      if (c == WHITE)
-      {
-          b &= var->whitePieceDropRegion.boardOfPiece(toupper(piece_to_char()[(c << PIECE_TYPE_BITS) | pt]));
-      }
-      else if (c == BLACK)
-      {
-          b &= var->blackPieceDropRegion.boardOfPiece(toupper(piece_to_char()[(c << PIECE_TYPE_BITS) | pt]));
-      }
-  }
+  assert(var != nullptr);
+  assert(pt != NO_PIECE_TYPE);
+  Bitboard b = var->dropRegion.get(c).boardOfPiece(piece_to_char()[pt])
+             & board_bb(c, pt);
 
   // Pawns on back ranks
   if (pt == PAWN)
@@ -1684,9 +1717,9 @@ inline Bitboard Position::drop_region(Color c, PieceType pt) const {
           b &= ~rank_bb(relative_rank(c, RANK_1, max_rank()));
   }
   // Doubled shogi pawns
-  if (pt == drop_no_doubled(c))
+  if (piece_set(pt) & drop_no_doubled(c))
       for (File f = FILE_A; f <= max_file(); ++f)
-          if (popcount(file_bb(f) & pieces(c, pt)) >= var->dropNoDoubledCountByColor[c])
+          if (popcount(file_bb(f) & pieces(c, pt)) >= var->dropNoDoubledCount.get(c))
               b &= ~file_bb(f);
   // Sittuyin rook drops
   if (pt == ROOK && sittuyin_rook_drop())
@@ -1806,14 +1839,14 @@ inline PieceSet Position::capture_drop_types() const {
   return var->captureDrops;
 }
 
-inline PieceType Position::drop_no_doubled() const {
+inline PieceSet Position::drop_no_doubled() const {
   assert(var != nullptr);
-  return var->dropNoDoubledByColor[side_to_move()];
+  return var->dropNoDoubled.get(side_to_move());
 }
 
-inline PieceType Position::drop_no_doubled(Color c) const {
+inline PieceSet Position::drop_no_doubled(Color c) const {
   assert(var != nullptr);
-  return var->dropNoDoubledByColor[c];
+  return var->dropNoDoubled.get(c);
 }
 
 inline PieceSet Position::promotion_pawn_types(Color c) const {
@@ -1824,14 +1857,14 @@ inline PieceSet Position::promotion_pawn_types(Color c) const {
 inline PieceSet Position::pawn_like_types(Color c) const {
   assert(var != nullptr);
   return var->promotionPawnTypes[c]
-       | var->enPassantTypes[c]
-       | var->nMoveRuleTypes[c]
+       | var->enPassantTypes.get(c)
+       | var->nMoveRuleTypes.get(c)
        | piece_set(var->mainPromotionPawnType[c]);
 }
 
 inline PieceSet Position::en_passant_types(Color c) const {
   assert(var != nullptr);
-  return var->enPassantTypes[c];
+  return var->enPassantTypes.get(c);
 }
 
 inline bool Position::immobility_illegal() const {
@@ -1905,7 +1938,7 @@ inline bool Position::gating_from_hand() const {
 
 inline PieceType Position::gating_piece_after(Color c, PieceType pt) const {
   assert(var != nullptr);
-  return var->gatingPieceAfter[c][pt];
+  return var->gatingPieceAfter.get(c)[pt];
 }
 
 inline PieceType Position::forced_gating_type(Color c, PieceType pt) const {
@@ -1976,17 +2009,14 @@ inline bool Position::pass(Color c) const {
       && !has_setup_drop(c)
       && has_setup_drop(~c))
       return true;
-  return var->pass[c] || var->passOnStalemate[c]
+  return var->pass.get(c) || var->passOnStalemate.get(c)
       || ((var->multimoveOffset || var->progressiveMultimove) && multimove_pass(gamePly));
 }
 
 inline bool Position::has_setup_drop(Color c) const {
   assert(var != nullptr);
 
-  PieceType requiredDropType =
-      (var->mustDropTypeByColor[WHITE] != ALL_PIECES || var->mustDropTypeByColor[BLACK] != ALL_PIECES)
-          ? var->mustDropTypeByColor[c]
-          : var->mustDropType;
+  PieceType requiredDropType = var->mustDropType.get(c);
 
   auto canDropNow = [&](PieceType pt) {
       return can_drop(c, pt)
@@ -2010,7 +2040,7 @@ inline bool Position::pass_until_setup() const {
 
 inline bool Position::pass_on_stalemate(Color c) const {
   assert(var != nullptr);
-  return var->passOnStalemate[c];
+  return var->passOnStalemate.get(c);
 }
 
 // Returns whether current move is a mandatory pass to simulate multimoves
@@ -2026,7 +2056,7 @@ inline bool Position::multimove_pass(int ply) const {
       return (ply - start) & 1;
   }
   int phase = (ply - var->multimoveOffset) % var->multimoveCycle;
-  return ply < var->multimoveOffset ? var->multimovePass[ply] : (phase + (phase >= var->multimoveCycleShift)) % 2;
+  return ply < var->multimoveOffset ? var->multimovePass.test(ply) : (phase + (phase >= var->multimoveCycleShift)) % 2;
 }
 
 inline Bitboard Position::promoted_soldiers(Color c) const {
@@ -2086,7 +2116,7 @@ inline Value Position::stalemate_value(int ply) const {
           Square sr = pop_lsb(pseudoRoyals);
           if (  !(blast_on_capture() && (pseudoRoyalsTheirs & blast_pattern(sr)))
               && attackers_to(sr, ~sideToMove))
-              return convert_mate_value(var->checkmateValue, ply);
+              return convert_mate_value(var->checkmateValue.get(sideToMove), ply);
       }
       // Look for duple check
       if (var->dupleCheck)
@@ -2102,20 +2132,20 @@ inline Value Position::stalemate_value(int ply) const {
                   allCheck = false;
           }
           if (allCheck)
-              return convert_mate_value(var->checkmateValue, ply);
+              return convert_mate_value(var->checkmateValue.get(sideToMove), ply);
       }
   }
   if (anti_royal_types())
   {
       if (checked_anti_royals(sideToMove))
-          return convert_mate_value(var->checkmateValue, ply);
+          return convert_mate_value(var->checkmateValue.get(sideToMove), ply);
   }
-  Value result = var->stalemateValue;
+  Value result = var->stalemateValue.get(sideToMove);
   // Is piece count used to determine stalemate result?
   if (var->stalematePieceCount)
   {
       int c = count<ALL_PIECES>(sideToMove) - count<ALL_PIECES>(~sideToMove);
-      result = c == 0 ? VALUE_DRAW : c < 0 ? var->stalemateValue : -var->stalemateValue;
+      result = c == 0 ? VALUE_DRAW : c < 0 ? var->stalemateValue.get(sideToMove) : -var->stalemateValue.get(~sideToMove);
   }
   // Apply material counting
   if (result == VALUE_DRAW && var->materialCounting)
@@ -2128,7 +2158,7 @@ inline Value Position::checkmate_value(int ply) const {
   // Check for illegal mate by shogi pawn drop
   if (    shogi_pawn_drop_mate_illegal(~side_to_move())
       && !(evasion_checkers() & ~pieces(SHOGI_PAWN))
-      && !st->capturedPiece
+      && !st->captured.piece
       &&  st->pliesFromNull > 0
       && (st->materialKey != st->previous->materialKey))
   {
@@ -2146,7 +2176,7 @@ inline Value Position::checkmate_value(int ply) const {
       {
           // Return mate score if there is at least one shak in series of checks
           if (stp->shak)
-              return convert_mate_value(var->checkmateValue, ply);
+              return convert_mate_value(var->checkmateValue.get(sideToMove), ply);
 
           if (stp->pliesFromNull < 2)
               break;
@@ -2157,7 +2187,7 @@ inline Value Position::checkmate_value(int ply) const {
       return VALUE_DRAW;
   }
   // Checkmate using virtual pieces
-  if (two_boards() && var->checkmateValue < VALUE_ZERO)
+  if (two_boards() && var->checkmateValue.get(sideToMove) < VALUE_ZERO)
   {
       Value virtualMaterial = VALUE_ZERO;
       for (PieceSet ps = piece_types(); ps;)
@@ -2170,12 +2200,12 @@ inline Value Position::checkmate_value(int ply) const {
           return -VALUE_VIRTUAL_MATE + virtualMaterial / 20 + ply;
   }
   // Return mate value
-  return convert_mate_value(var->checkmateValue, ply);
+  return convert_mate_value(var->checkmateValue.get(sideToMove), ply);
 }
 
 inline Value Position::extinction_value(int ply) const {
   assert(var != nullptr);
-  return convert_mate_value(var->extinctionValue, ply);
+  return convert_mate_value(var->extinctionValue.get(sideToMove), ply);
 }
 
 inline bool Position::extinction_claim() const {
@@ -2190,7 +2220,7 @@ inline PieceSet Position::extinction_piece_types() const {
 
 inline PieceSet Position::extinction_piece_types(Color c) const {
   assert(var != nullptr);
-  return var->extinctionPieceTypesByColor[c];
+  return var->extinctionPieceTypes.get(c);
 }
 
 inline PieceSet Position::extinction_must_appear() const {
@@ -2200,12 +2230,12 @@ inline PieceSet Position::extinction_must_appear() const {
 
 inline bool Position::extinction_all_piece_types(Color c) const {
   assert(var != nullptr);
-  return var->extinctionAllPieceTypesByColor[c];
+  return var->extinctionAllPieceTypes.get(c);
 }
 
 inline bool Position::extinction_single_piece() const {
   assert(var != nullptr);
-  return   var->extinctionValue == -VALUE_MATE
+  return   var->extinctionValue.get(sideToMove) == -VALUE_MATE
         && (var->extinctionPieceTypes & ~piece_set(ALL_PIECES));
 }
 
@@ -2216,7 +2246,7 @@ inline int Position::extinction_piece_count() const {
 
 inline int Position::extinction_piece_count(Color c) const {
   assert(var != nullptr);
-  return var->extinctionPieceCountByColor[c];
+  return var->extinctionPieceCount.get(c);
 }
 
 inline int Position::extinction_opponent_piece_count() const {
@@ -2226,7 +2256,7 @@ inline int Position::extinction_opponent_piece_count() const {
 
 inline int Position::extinction_opponent_piece_count(Color c) const {
   assert(var != nullptr);
-  return var->extinctionOpponentPieceCountByColor[c];
+  return var->extinctionOpponentPieceCount.get(c);
 }
 
 inline PieceSet Position::pseudo_royal_types() const {
@@ -2270,12 +2300,12 @@ inline bool Position::extinction_pseudo_royal() const {
 
 inline PieceType Position::flag_piece(Color c) const {
   assert(var != nullptr);
-  return var->flagPiece[c];
+  return var->flagPiece.get(c);
 }
 
 inline Bitboard Position::flag_region(Color c) const {
   assert(var != nullptr);
-  return var->flagRegion[c];
+  return var->flagRegion.get(c);
 }
 
 inline bool Position::flag_move() const {
@@ -2358,6 +2388,10 @@ inline bool Position::connect_diagonal() const {
   assert(var != nullptr);
   return var->connectDiagonal;
 }
+inline bool Position::weak_diagonal_connect() const {
+  assert(var != nullptr);
+  return var->weakDiagonalConnect;
+}
 
 inline const std::vector<Direction>& Position::getConnectDirections() const {
     assert(var != nullptr);
@@ -2427,12 +2461,8 @@ inline int Position::points_count(Color c) const {
   return st->pointsCount[c];
 }
 
-inline int Position::points_score(Color c) const {
-  return st->pointsCount[c];
-}
-
 inline int Position::points_score_clamped(Color c) const {
-  return std::max(0, std::min(points_score(c), POINTS_SCORE_MAX));
+  return std::max(0, std::min(points_count(c), POINTS_SCORE_MAX));
 }
 
 inline Value Position::points_goal_value() const {
@@ -2489,8 +2519,83 @@ inline Piece Position::unpromoted_piece_on(Square s) const {
 
 inline Piece Position::moved_piece(Move m) const {
   if (is_drop_move(m))
-      return make_piece(sideToMove, dropped_piece_type(m));
+      return make_piece(drop_hand_color(sideToMove, in_hand_piece_type(m)), dropped_piece_type(m));
   return piece_on(from_sq(m));
+}
+
+inline bool Position::is_clone_move(Move m) const {
+  if (type_of(m) != SPECIAL || is_gating(m) || from_sq(m) == to_sq(m) || is_first_move_special(m))
+      return false;
+
+  return can_clone(moved_piece(m));
+}
+
+inline bool Position::is_pull_move(Move m) const {
+  return type_of(m) == PULL && pull_square(m) != SQ_NONE;
+}
+
+inline bool Position::is_swap_move(Move m) const {
+  return type_of(m) == SWAP && from_sq(m) != to_sq(m);
+}
+
+inline PieceType Position::first_move_piece_type(PieceType pt) const {
+  assert(var != nullptr);
+  return var->firstMovePieceType[pt];
+}
+
+inline bool Position::first_move_lose_on_check() const {
+  assert(var != nullptr);
+  return var->firstMoveLoseOnCheck;
+}
+
+inline Bitboard Position::clone_targets_from(Color c, Square from) const {
+  Piece mover = piece_on(from);
+  if (color_of(mover) != c || !can_clone(mover))
+      return 0;
+
+  PieceType pt = type_of(mover);
+  return (moves_from(c, pt, from) & ~pieces()) | (attacks_from(c, pt, from) & pieces(~c));
+}
+
+inline Bitboard Position::pull_sources_from(Color c, Square from) const {
+  Piece mover = piece_on(from);
+  if (mover == NO_PIECE || color_of(mover) != c)
+      return 0;
+
+  int moverStrength = pulling_strength(type_of(mover));
+  if (moverStrength <= 0)
+      return 0;
+
+  Bitboard sources = PseudoAttacks[WHITE][WAZIR][from] & pieces(~c);
+  Bitboard valid = 0;
+  while (sources)
+  {
+      Square sq = pop_lsb(sources);
+      Piece pulled = piece_on(sq);
+      if (pulled != NO_PIECE && moverStrength > pulling_strength(type_of(pulled)))
+          valid |= sq;
+  }
+  return valid;
+}
+
+inline Bitboard Position::pull_targets_from(Color c, Square from, Square pullFrom) const {
+  if (!(pull_sources_from(c, from) & pullFrom))
+      return 0;
+
+  Piece mover = piece_on(from);
+  PieceType pt = type_of(mover);
+  return moves_from(c, pt, from) & ~pieces();
+}
+
+inline Bitboard Position::adjacent_swap_targets_from(Color c, Square from) const {
+  Piece mover = piece_on(from);
+  if (mover == NO_PIECE || color_of(mover) != c)
+      return 0;
+  if (!(adjacent_swap_move_types() & piece_set(type_of(mover))))
+      return 0;
+  if (adjacent_swap_requires_empty_neighbor() && !(PseudoAttacks[WHITE][WAZIR][from] & ~pieces()))
+      return 0;
+  return PseudoAttacks[WHITE][WAZIR][from] & pieces(~c);
 }
 
 inline Bitboard Position::pieces(PieceType pt) const {
@@ -2766,6 +2871,40 @@ inline Bitboard Position::wrapped_tuple_targets(const std::vector<std::pair<int,
       if (requireEmpty && (occupied & to))
           continue;
       out |= to;
+  }
+  return out;
+}
+
+inline Bitboard Position::wrapped_tuple_rider_targets(const std::vector<PieceInfo::TupleRay>& rays,
+                                                      Color c, Square sq, Bitboard occupied,
+                                                      File maxFile, Rank maxRank,
+                                                      bool wrapFile, bool wrapRank,
+                                                      bool quietMode) {
+  Bitboard out = 0;
+  for (const auto& ray : rays)
+  {
+      const int stepR = c == WHITE ? ray.dr : -ray.dr;
+      const int stepF = c == WHITE ? ray.df : -ray.df;
+      Square current = sq;
+      int count = 0;
+      for (;;)
+      {
+          Square next = SQ_NONE;
+          if (!wrapped_destination_square(current, stepF, stepR, maxFile, maxRank, wrapFile, wrapRank, next))
+              break;
+          if (next == sq)
+              break;
+
+          const bool blocked = bool(occupied & next);
+          if (!quietMode || !blocked)
+              out |= next;
+
+          current = next;
+          if (ray.limit > 0 && ++count >= ray.limit)
+              break;
+          if (blocked)
+              break;
+      }
   }
   return out;
 }
@@ -3129,6 +3268,7 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
 
       b |= wrapped_step_targets(pi->steps[0][MODALITY_CAPTURE], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, false);
       b |= wrapped_tuple_targets(pi->tupleSteps[0][MODALITY_CAPTURE], c, s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, false);
+      b |= wrapped_tuple_rider_targets(pi->tupleSlider[0][MODALITY_CAPTURE], c, s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, false);
       b |= wrapped_slider_targets(pi->slider[0][MODALITY_CAPTURE], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, false);
       b |= wrapped_hopper_targets(pi->hopper[0][MODALITY_CAPTURE], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, false);
       b |= wrapped_contra_hopper_targets(pi->contraHopper[0][MODALITY_CAPTURE], c, s, occupancy, pieces(c), max_file(), max_rank(), wrapFile, wrapRank, false, true);
@@ -3192,7 +3332,7 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
   const PieceInfo* pi = pieceMap.get(movePt);
 
   if ((fast_attacks() || fast_attacks2()) && pi->riderAugmentMask == PieceInfo::AUGMENT_NONE)
-      return attacks_bb(c, pt, s, occupancy) & board_bb();
+      return attacks_bb(c, movePt, s, occupancy) & board_bb();
 
   if (pi->friendlyJump)
       occupancy &= ~pieces(c);
@@ -3273,6 +3413,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
         Bitboard b = 0;
         b |= wrapped_step_targets(pi->steps[0][MODALITY_QUIET], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
         b |= wrapped_tuple_targets(pi->tupleSteps[0][MODALITY_QUIET], c, s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
+        b |= wrapped_tuple_rider_targets(pi->tupleSlider[0][MODALITY_QUIET], c, s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
         b |= wrapped_slider_targets(pi->slider[0][MODALITY_QUIET], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
         b |= wrapped_hopper_targets(pi->hopper[0][MODALITY_QUIET], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
         b |= wrapped_contra_hopper_targets(pi->contraHopper[0][MODALITY_QUIET], c, s, occupancy, pieces(c), max_file(), max_rank(), wrapFile, wrapRank, true, false);
@@ -3288,6 +3429,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
         {
             b |= wrapped_step_targets(pi->steps[1][MODALITY_QUIET], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
             b |= wrapped_tuple_targets(pi->tupleSteps[1][MODALITY_QUIET], c, s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
+            b |= wrapped_tuple_rider_targets(pi->tupleSlider[1][MODALITY_QUIET], c, s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
             b |= wrapped_slider_targets(pi->slider[1][MODALITY_QUIET], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
             b |= wrapped_hopper_targets(pi->hopper[1][MODALITY_QUIET], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
             b |= wrapped_contra_hopper_targets(pi->contraHopper[1][MODALITY_QUIET], c, s, occupancy, pieces(c), max_file(), max_rank(), wrapFile, wrapRank, true, false);
@@ -3310,52 +3452,45 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
     // Since double step in introduced from chess variants where pawns cannot capture forward, capturing moves are not included here.
     // Double/Triple step cannot attack other pieces, so attacks_from(Color c, PieceType pt, Square s) is not changed
     // Due to some unknown issues, shift<Direction D>(Bitboard b) cannot be used here
-    if (var->pieceSpecificTripleStepRegion)
+    Bitboard tripleStepRegion = this->triple_step_region(c, pt);
+    Bitboard occupied = this->pieces();  //Bitboard where the bits whose corresponding squares having a piece on it are 1
+    Bitboard piecePosition = square_bb(s);  //Bitboard where only the bit which refers to the square that the piece starts the move (original square) is 1
+    const bool usesGenericNonPawnStepHelper = pt != PAWN && !(en_passant_types(c) & piece_set(pt));
+    if (usesGenericNonPawnStepHelper && tripleStepRegion & piecePosition & this->not_moved_pieces(c))  //If the original square is in tripleStepRegion and the piece is not moved
     {
-        Bitboard tripleStepRegion = this->triple_step_region(c, pt);
-        Bitboard occupied = this->pieces();  //Bitboard where the bits whose corresponding squares having a piece on it are 1
-        Bitboard piecePosition = square_bb(s);  //Bitboard where only the bit which refers to the square that the piece starts the move (original square) is 1
         Bitboard extraMultipleStepMoveDestinations = 0x00;  //Bitboard where extra legal multi-step destination square bits are 1
-        if (tripleStepRegion & piecePosition & this->not_moved_pieces(c))  //If the original square is in tripleStepRegion and the piece is not moved
+        Bitboard oneSquareAhead = (c == WHITE) ? piecePosition << NORTH : piecePosition >> NORTH;
+        if (!(oneSquareAhead & occupied))  //If the square which is 1 square ahead of original square is NOT blocked
         {
-            Bitboard oneSquareAhead = (c == WHITE) ? piecePosition << NORTH : piecePosition >> NORTH;
-            if (!(oneSquareAhead & occupied))  //If the square which is 1 square ahead of original square is NOT blocked
+            extraMultipleStepMoveDestinations |= oneSquareAhead;  //Add the square which is 1 square ahead of original square to destination squares for triple step
+            Bitboard twoSquareAhead = (c == WHITE) ? piecePosition << NORTH << NORTH : piecePosition >> NORTH >> NORTH;
+            if (!(twoSquareAhead & occupied))  //If the square which is 2 squares ahead of original square is NOT blocked
             {
-                extraMultipleStepMoveDestinations |= oneSquareAhead;  //Add the square which is 1 square ahead of original square to destination squares for triple step
-                Bitboard twoSquareAhead = (c == WHITE) ? piecePosition << NORTH << NORTH : piecePosition >> NORTH >> NORTH;
-                if (!(twoSquareAhead & occupied))  //If the square which is 2 squares ahead of original square is NOT blocked
+                extraMultipleStepMoveDestinations |= twoSquareAhead;  //Add the square which is 2 squares ahead of original square to destination squares for triple step
+                Bitboard threeSquareAhead = (c == WHITE) ? piecePosition << NORTH << NORTH << NORTH : piecePosition >> NORTH >> NORTH >> NORTH;
+                if (!(threeSquareAhead & occupied))  //If the square which is 3 squares ahead of original square is NOT blocked
                 {
-                    extraMultipleStepMoveDestinations |= twoSquareAhead;  //Add the square which is 2 squares ahead of original square to destination squares for triple step
-                    Bitboard threeSquareAhead = (c == WHITE) ? piecePosition << NORTH << NORTH << NORTH : piecePosition >> NORTH >> NORTH >> NORTH;
-                    if (!(threeSquareAhead & occupied))  //If the square which is 3 squares ahead of original square is NOT blocked
-                    {
-                        extraMultipleStepMoveDestinations |= threeSquareAhead;  //Add the square which is 3 squares ahead of original square to destination squares for triple step
-                    }
+                    extraMultipleStepMoveDestinations |= threeSquareAhead;  //Add the square which is 3 squares ahead of original square to destination squares for triple step
                 }
             }
-            extraDestinations |= extraMultipleStepMoveDestinations; //Add destination squares to base board
         }
+        extraDestinations |= extraMultipleStepMoveDestinations; //Add destination squares to base board
     }
-    if (var->pieceSpecificDoubleStepRegion)
+    Bitboard doubleStepRegion = this->double_step_region(c, pt);
+    if (usesGenericNonPawnStepHelper && doubleStepRegion & piecePosition & this->not_moved_pieces(c))  //If the original square is in doubleStepRegion and the piece is not moved
     {
-        Bitboard doubleStepRegion = this->double_step_region(c, pt);
-        Bitboard occupied = this->pieces();  //Bitboard where the bits whose corresponding squares having a piece on it are 1
-        Bitboard piecePosition = square_bb(s);  //Bitboard where only the bit which refers to the square that the piece starts the move (original square) is 1
         Bitboard extraMultipleStepMoveDestinations = 0x00;  //Bitboard where extra legal multi-step destination square bits are 1
-        if (doubleStepRegion & piecePosition & this->not_moved_pieces(c))  //If the original square is in doubleStepRegion and the piece is not moved
+        Bitboard oneSquareAhead = (c == WHITE) ? piecePosition << NORTH : piecePosition >> NORTH;
+        if (!(oneSquareAhead & occupied))  //If the square which is 1 square ahead of original square is NOT blocked
         {
-            Bitboard oneSquareAhead = (c == WHITE) ? piecePosition << NORTH : piecePosition >> NORTH;
-            if (!(oneSquareAhead & occupied))  //If the square which is 1 square ahead of original square is NOT blocked
+            extraMultipleStepMoveDestinations |= oneSquareAhead;  //Add the square which is 1 square ahead of original square to destination squares for triple step
+            Bitboard twoSquareAhead = (c == WHITE) ? piecePosition << NORTH << NORTH : piecePosition >> NORTH >> NORTH;
+            if (!(twoSquareAhead & occupied))  //If the square which is 2 squares ahead of original square is NOT blocked
             {
-                extraMultipleStepMoveDestinations |= oneSquareAhead;  //Add the square which is 1 square ahead of original square to destination squares for triple step
-                Bitboard twoSquareAhead = (c == WHITE) ? piecePosition << NORTH << NORTH : piecePosition >> NORTH >> NORTH;
-                if (!(twoSquareAhead & occupied))  //If the square which is 2 squares ahead of original square is NOT blocked
-                {
-                    extraMultipleStepMoveDestinations |= twoSquareAhead;  //Add the square which is 2 squares ahead of original square to destination squares for triple step
-                }
+                extraMultipleStepMoveDestinations |= twoSquareAhead;  //Add the square which is 2 squares ahead of original square to destination squares for triple step
             }
-            extraDestinations |= extraMultipleStepMoveDestinations; //Add destination squares to base board
         }
+        extraDestinations |= extraMultipleStepMoveDestinations; //Add destination squares to base board
     }
 
   Bitboard occupancy = byTypeBB[ALL_PIECES];
@@ -3369,7 +3504,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
   const PieceInfo* pi = pieceMap.get(movePt);
 
   if ((fast_attacks() || fast_attacks2()) && pi->riderAugmentMask == PieceInfo::AUGMENT_NONE)
-      return (moves_bb(c, pt, s, occupancy) | extraDestinations) & board_bb();
+      return (moves_bb(c, movePt, s, occupancy) | extraDestinations) & board_bb();
 
   if (pi->friendlyJump)
       occupancy &= ~pieces(c);
@@ -3452,7 +3587,7 @@ inline Bitboard Position::passive_blast_checkers(Color victim, Bitboard occupied
 
   Bitboard burners = Bitboard(0);
   for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
-      if (var->blastPassiveTypes & pt)
+      if (var->blastPassiveTypes & piece_set(pt))
           burners |= pieces(~victim, pt);
 
   return blast_pattern(ksq) & burners & occupied;
@@ -3552,14 +3687,14 @@ inline Square Position::jump_capture_square(Square from, Square to) const {
 
   Piece mover = piece_on(from);
   PieceSet jumpTypes = jump_capture_types();
-  if (mover == NO_PIECE || (!(jumpTypes & ALL_PIECES) && !(jumpTypes & type_of(mover))) || !empty(to))
+  if (mover == NO_PIECE || (!(jumpTypes & ALL_PIECES) && !(jumpTypes & piece_set(type_of(mover)))) || !empty(to))
       return SQ_NONE;
 
   Square mid = JumpMidpoint[from][to];
   if (mid == SQ_NONE)
       return SQ_NONE;
   Piece jumped = piece_on(mid);
-  if (jumped == NO_PIECE || (color_of(jumped) == color_of(mover) && !self_capture()))
+  if (jumped == NO_PIECE || (color_of(jumped) == color_of(mover) && !self_capture(type_of(mover))))
       return SQ_NONE;
 
   return mid;
@@ -3574,6 +3709,8 @@ inline bool Position::capture(Move m) const {
   assert(is_ok(m));
   if (type_of(m) == EN_PASSANT)
       return true;
+  if (type_of(m) == PULL || type_of(m) == SWAP)
+      return false;
   if (type_of(m) == CASTLING || from_sq(m) == to_sq(m))
       return false;
   if (push_move(m))
@@ -3583,7 +3720,7 @@ inline bool Position::capture(Move m) const {
   {
       Piece mover = moved_piece(m);
       PieceSet jumpTypes = jump_capture_types();
-      if (mover != NO_PIECE && ((jumpTypes & ALL_PIECES) || (jumpTypes & type_of(mover))))
+      if (mover != NO_PIECE && ((jumpTypes & ALL_PIECES) || (jumpTypes & piece_set(type_of(mover)))))
       {
           if (jump_capture_square(from_sq(m), to_sq(m)) != SQ_NONE)
               return true;
@@ -3658,7 +3795,7 @@ inline bool Position::virtual_drop(Move m) const {
 }
 
 inline Piece Position::captured_piece() const {
-  return st->capturedPiece;
+  return st->captured.piece;
 }
 
 inline Bitboard Position::fog_area() const {
@@ -3680,11 +3817,11 @@ inline Piece Position::captured_piece(Move m) const {
 }
 
 inline const std::string Position::piece_to_partner() const {
-  if (!st->capturedPiece) return std::string();
-  Color color = color_of(st->capturedPiece);
-  Piece piece = st->capturedpromoted ?
-      (st->unpromotedCapturedPiece ? st->unpromotedCapturedPiece : make_piece(color, main_promotion_pawn_type(color))) :
-      st->capturedPiece;
+  if (!st->captured.piece) return std::string();
+  Color color = color_of(st->captured.piece);
+  Piece piece = st->captured.promoted ?
+      (st->captured.unpromoted ? st->captured.unpromoted : make_piece(color, main_promotion_pawn_type(color))) :
+      st->captured.piece;
   return piece_symbol(piece);
 }
 
@@ -3728,10 +3865,6 @@ inline void Position::remove_piece(Square s) {
   this->st->not_moved_pieces[BLACK] &= (~square_bb(s));
 }
 
-inline bool Position::is_initial_pawn(Piece pc, Square s) const {
-  return type_of(pc) == PAWN && rank_of(s) == relative_rank(color_of(pc), RANK_2, max_rank());
-}
-
 inline void Position::move_piece(Square from, Square to) {
 
   Piece pc = board[from];
@@ -3750,6 +3883,20 @@ inline void Position::move_piece(Square from, Square to) {
   //Once moved, no matter whether the piece is on original square or on destination square (including captures) or the color of the piece, it is no longer not-moved-piece
   this->st->not_moved_pieces[WHITE] &= (~(square_bb(from) | square_bb(to)));
   this->st->not_moved_pieces[BLACK] &= (~(square_bb(from) | square_bb(to)));
+}
+
+inline void Position::swap_piece(Square from, Square to) {
+  Piece fromPc = piece_on(from);
+  Piece toPc = piece_on(to);
+  bool fromPromoted = is_promoted(from);
+  bool toPromoted = is_promoted(to);
+  Piece fromUnpromoted = fromPromoted ? unpromoted_piece_on(from) : NO_PIECE;
+  Piece toUnpromoted = toPromoted ? unpromoted_piece_on(to) : NO_PIECE;
+
+  remove_piece(from);
+  remove_piece(to);
+  put_piece(toPc, from, toPromoted, toUnpromoted);
+  put_piece(fromPc, to, fromPromoted, fromUnpromoted);
 }
 
 inline void Position::do_move(Move m, StateInfo& newSt) {
@@ -3899,7 +4046,7 @@ inline void Position::add_to_hand(Piece pc) {
   if (variant()->freeDrops) return;
   pieceCountInHand[color_of(pc)][type_of(pc)]++;
   pieceCountInHand[color_of(pc)][ALL_PIECES]++;
-  priorityDropCountInHand[color_of(pc)] += var->isPriorityDrop[type_of(pc)];
+  priorityDropCountInHand[color_of(pc)] += bool(var->isPriorityDrop & piece_set(type_of(pc)));
   psq += PSQT::psq[pc][SQ_NONE];
 }
 
@@ -3907,7 +4054,7 @@ inline void Position::remove_from_hand(Piece pc) {
   if (variant()->freeDrops) return;
   pieceCountInHand[color_of(pc)][type_of(pc)]--;
   pieceCountInHand[color_of(pc)][ALL_PIECES]--;
-  priorityDropCountInHand[color_of(pc)] -= var->isPriorityDrop[type_of(pc)];
+  priorityDropCountInHand[color_of(pc)] -= bool(var->isPriorityDrop & piece_set(type_of(pc)));
   psq -= PSQT::psq[pc][SQ_NONE];
 }
 
@@ -3961,13 +4108,18 @@ inline bool Position::can_drop(Color c, PieceType pt) const {
       return true;
 
   if (pt == ALL_PIECES)
-      return count_in_hand(c, pt) > 0;
+      return count_in_hand(c, pt) > 0
+          || (variant()->borrowOpponentDropsWhenEmpty
+              && count_in_hand(c, ALL_PIECES) == 0
+              && count_in_hand(~c, ALL_PIECES) > 0);
 
-  if (count_in_hand(c, pt) <= 0)
+  Color handColor = drop_hand_color(c, pt);
+
+  if (count_in_hand(handColor, pt) <= 0)
       return false;
 
   if (variant()->dropKingLast && pt == king_type())
-      return count_in_hand(c, ALL_PIECES) <= count_in_hand(c, pt);
+      return count_in_hand(handColor, ALL_PIECES) <= count_in_hand(handColor, pt);
 
   return true;
 }

@@ -159,6 +159,13 @@ Add a new move:
 board.push("g2g4");
 ```
 
+Some fairy-special moves use suffixes in the same coordinate string:
+
+- clone moves: `e2e4c`
+- swap moves: `d4e4s`
+- self-destruct moves: `c3c4x`
+- pull moves: `e5f5,d5`
+
 Generate all legal moves in UCI and SAN notation:
 ```javascript
 let legalMoves = board.legalMoves().split(" ");
@@ -180,6 +187,8 @@ board.delete();
 ## PGN parsing
 
 Read a string from a file and parse it as a single PGN game.
+The returned `Game` object is heap-allocated in WASM memory, so it must be
+released with `.delete()` when you are done with it.
 
 ```javascript
 fs = require('fs');

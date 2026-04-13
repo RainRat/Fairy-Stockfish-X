@@ -249,6 +249,9 @@ Thread* ThreadPool::get_best_thread() const {
 
     std::map<Move, int64_t> votes;
     Value minScore = VALUE_NONE;
+    auto incomplete_iteration = [](const Thread* th) {
+        return th->completedDepth != th->rootDepth;
+    };
 
     // Find minimum score of all threads
     for (Thread* th: *this)
@@ -266,14 +269,35 @@ Thread* ThreadPool::get_best_thread() const {
         votes[th->rootMoves[0].pv[0]] +=
             (th->rootMoves[0].score - minScore + 14) * int(th->completedDepth);
 
-        if (abs(bestThread->rootMoves[0].score) >= VALUE_TB_WIN_IN_MAX_PLY)
+        const auto bestThreadScore = bestThread->rootMoves[0].score;
+        const auto newThreadScore  = th->rootMoves[0].score;
+
+        const bool bestThreadInProvenWin  = bestThreadScore >= VALUE_TB_WIN_IN_MAX_PLY
+                                         && !incomplete_iteration(bestThread);
+        const bool newThreadInProvenWin   = newThreadScore >= VALUE_TB_WIN_IN_MAX_PLY
+                                         && !incomplete_iteration(th);
+        const bool bestThreadInProvenLoss = bestThreadScore != -VALUE_INFINITE
+                                         && bestThreadScore <= VALUE_TB_LOSS_IN_MAX_PLY
+                                         && !incomplete_iteration(bestThread);
+        const bool newThreadInProvenLoss  = newThreadScore != -VALUE_INFINITE
+                                         && newThreadScore <= VALUE_TB_LOSS_IN_MAX_PLY
+                                         && !incomplete_iteration(th);
+
+        if (bestThreadInProvenWin)
         {
-            // Make sure we pick the shortest mate / TB conversion or stave off mate the longest
-            if (th->rootMoves[0].score > bestThread->rootMoves[0].score)
+            // Make sure we pick the shortest mate / TB conversion
+            if (newThreadInProvenWin && newThreadScore > bestThreadScore)
                 bestThread = th;
         }
-        else if (   th->rootMoves[0].score >= VALUE_TB_WIN_IN_MAX_PLY
-                 || (   th->rootMoves[0].score > VALUE_TB_LOSS_IN_MAX_PLY
+        else if (bestThreadInProvenLoss)
+        {
+            // Make sure we pick the shortest mated / TB conversion
+            if (newThreadInProvenLoss && newThreadScore < bestThreadScore)
+                bestThread = th;
+        }
+        else if (   newThreadInProvenWin
+                 || newThreadInProvenLoss
+                 || (   newThreadScore > VALUE_TB_LOSS_IN_MAX_PLY
                      && votes[th->rootMoves[0].pv[0]] > votes[bestThread->rootMoves[0].pv[0]]))
             bestThread = th;
     }

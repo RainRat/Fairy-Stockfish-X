@@ -8,7 +8,8 @@ error() {
 }
 trap 'error ${LINENO}' ERR
 
-ENGINE=${1:-./stockfish}
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+ENGINE=${1:-${SCRIPT_DIR}/../src/stockfish}
 
 tmp_ini=$(mktemp)
 trap 'rm -f "${tmp_ini}"' EXIT
@@ -16,7 +17,7 @@ trap 'rm -f "${tmp_ini}"' EXIT
 cat > "${tmp_ini}" <<'INI'
 [ptbg-no-semicolon:chess]
 pieceDrops = true
-whitePieceDropRegion = P(a8)
+dropRegionWhite = P(a8)
 
 [tuple-nonsquare:chess]
 maxRank = 8
@@ -73,19 +74,51 @@ castlingQueensideFile = b
 startFen = rbnkbr/pppppp/6/6/PPPPPP/RBNKBR w KQkq - 0 1
 
 [promotion-by-file-inherit:chess]
-promotionPieceTypesByFile = a:q b:r
-promotionPieceTypesByFileWhite = a:n
+promotionPieceTypes = a:q b:r
+promotionPieceTypesWhite = a:n
 startFen = 8/1P6/8/8/8/8/8/4k2K w - - 0 1
 
 [promotion-by-file-spaces:chess]
-promotionPieceTypesByFile = a: q b: r c : b d :n e:- f: -
+promotionPieceTypes = a:q b:r c:b d:n e:- f:-
 startFen = 8/1P6/8/8/8/8/8/4k2K w - - 0 1
+
+[remove-connect-conn:fairy]
+maxRank = 3
+maxFile = 3
+connectN = 3
+removeConnectN = 3
+pieceToCharTable = -
+king = -
+immobile = p
+startFen = 3/3/3[PPPPPpppp] w - - 0 1
+pieceDrops = true
+
+[remove-connect-pseudoroyal:fairy]
+maxRank = 3
+maxFile = 3
+removeConnectN = 3
+pieceToCharTable = -
+king = -
+pseudoRoyalTypes = p
+startFen = 3/3/P2 w - - 0 1
+
+[hex-weak-crosscut:fairy]
+maxRank = 5
+maxFile = 5
+hexBoard = true
+pieceToCharTable = -
+king = -
+pieceDrops = true
+mustDrop = true
+customPiece1 = s:m
+weakCrosscutDropIllegal = true
+startFen = ****1/***2/**3/*4/5[SSSSSSSSSSSSSSSsssssssssssssss] b - - 0 1
 INI
 
 echo "parser regression tests started"
 
 check_output=$("${ENGINE}" check "${tmp_ini}" 2>&1 || true)
-if echo "${check_output}" | grep -Eq "PieceTypeBitboardGroup declaration|Invalid value.*whitePieceDropRegion|Error parsing|unterminated"; then
+if echo "${check_output}" | grep -Eq "PieceTypeBitboardGroup declaration|Invalid value.*dropRegionWhite|Error parsing|unterminated"; then
   echo "${check_output}"
   exit 1
 fi
@@ -114,6 +147,9 @@ verify_warning "falcon looks like a custom piece definition. Use customPieceN = 
 verify_warning "Wrapped boards do not support connect/collinear win conditions." "wrapped connect rejection"
 verify_warning "Wrapped boards do not support x/z rider modifiers in customPiece1." "toroidal x/z rejection"
 verify_warning "Castling destination is adjacent to castlingKingFile; some GUIs/protocols may not distinguish castling from a normal king move." "adjacent castling warning"
+verify_warning "removeConnectN is incompatible with connection win conditions." "removeConnectN connect rejection"
+verify_warning "removeConnectN is incompatible with (pseudo/anti-)royal pieces." "removeConnectN royal rejection"
+verify_warning "Hex boards do not support square weak-connection drop rules." "hex weak-link rejection"
 
 nonking_ini=$(mktemp)
 trap 'rm -f "${tmp_ini}" "${nonking_ini}"' EXIT
@@ -227,13 +263,36 @@ castlingQueensideFile = c
 castlingRookKingsideFile = j
 castlingRookQueensideFile = b
 startFen = 10/10/10/10/10/10/10/1R3K3N w JQ - 0 1
+
+[castdiag-single-rook:chess]
+castling = true
+startFen = 8/8/8/8/8/8/8/R3K3 w KQ - 0 1
 """
 )
 
-pyffish.validate_fen("10/10/10/10/10/10/10/1R3K2R1 w JQ - 0 1", "castdiag-empty", False)
-pyffish.validate_fen("10/10/10/10/10/10/10/1R3K3N w JQ - 0 1", "castdiag-wrongpiece", False)
+for fen, variant in [
+    ("10/10/10/10/10/10/10/1R3K2R1 w JQ - 0 1", "castdiag-empty"),
+    ("10/10/10/10/10/10/10/1R3K3N w JQ - 0 1", "castdiag-wrongpiece"),
+    ("8/8/8/8/8/8/8/R3K3 w KQ - 0 1", "castdiag-single-rook"),
+]:
+    print(f"validate_fen {variant} {pyffish.validate_fen(fen, variant, False)}")
 PY
 )
+
+if ! echo "${castling_diag_output}" | grep -q "validate_fen castdiag-empty -5"; then
+  echo "${castling_diag_output}"
+  exit 1
+fi
+
+if ! echo "${castling_diag_output}" | grep -q "validate_fen castdiag-wrongpiece -5"; then
+  echo "${castling_diag_output}"
+  exit 1
+fi
+
+if ! echo "${castling_diag_output}" | grep -q "validate_fen castdiag-single-rook -5"; then
+  echo "${castling_diag_output}"
+  exit 1
+fi
 
 if ! echo "${castling_diag_output}" | grep -q "No castling rook on file J for flag J."; then
   echo "${castling_diag_output}"
@@ -241,6 +300,11 @@ if ! echo "${castling_diag_output}" | grep -q "No castling rook on file J for fl
 fi
 
 if ! echo "${castling_diag_output}" | grep -q "Flag J refers to file J, but that square does not contain a WHITE castling rook."; then
+  echo "${castling_diag_output}"
+  exit 1
+fi
+
+if ! echo "${castling_diag_output}" | grep -q "No castling rook for flag K on castling rank 1."; then
   echo "${castling_diag_output}"
   exit 1
 fi

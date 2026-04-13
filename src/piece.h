@@ -69,10 +69,17 @@ struct PieceInfo {
     AUGMENT_CONTRA = 1 << 2
   };
 
+  struct TupleRay {
+    int dr;
+    int df;
+    int limit;
+  };
+
   std::string name = "";
   std::string betza = "";
   std::map<Direction, int> steps[2][MOVE_MODALITY_NB] = {};
   std::vector<std::pair<int, int>> tupleSteps[2][MOVE_MODALITY_NB] = {};
+  std::vector<TupleRay> tupleSlider[2][MOVE_MODALITY_NB] = {};
   std::map<Direction, int> slider[2][MOVE_MODALITY_NB] = {};
   std::map<Direction, int> leapRider[2][MOVE_MODALITY_NB] = {};
   std::map<Direction, int> hopper[2][MOVE_MODALITY_NB] = {};
@@ -112,7 +119,7 @@ extern PieceMap pieceMap;
 
 inline std::string piece_name(PieceType pt) {
   return is_custom(pt) ? "customPiece" + std::to_string(pt - CUSTOM_PIECES + 1)
-                       : pieceMap.find(pt)->second->name;
+                       : pieceMap.get(pt)->name;
 }
 
 } // namespace Stockfish
