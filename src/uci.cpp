@@ -293,11 +293,11 @@ namespace {
 
   // print_variant_info() prints a summary of the current variant's configuration.
 
-  void print_variant_info(const Variant* v) {
+  void print_variant_info(const Variant* v, const std::string& variantName) {
 
     if (!v) return;
 
-    sync_cout << "\nVariant:  " << std::string(Options["UCI_Variant"])
+    sync_cout << "\nVariant:  " << variantName
               << "\nTemplate: " << v->variantTemplate
               << "\nBoard:    " << v->maxFile + 1 << "x" << v->maxRank + 1
               << (v->hexBoard ? " (hex)" : "")
@@ -309,8 +309,9 @@ namespace {
     for (PieceSet ps = v->pieceTypes; ps; )
     {
         PieceType pt = pop_lsb(ps);
+        const PieceInfo* pi = pieceMap.get(pt);
         sync_cout << " " << v->pieceToChar[make_piece(WHITE, pt)]
-                  << "(" << pieceMap.get(pt)->betza << ")";
+                  << "(" << (pi ? pi->betza : "") << ")";
     }
 
     sync_cout << "\nRules:   ";
@@ -328,7 +329,7 @@ namespace {
     sync_cout << "\nEndgame: ";
     if (v->nMoveRule > 0) sync_cout << " " << v->nMoveRule << "-move-rule";
     if (v->nFoldRule > 0) sync_cout << " " << v->nFoldRule << "-fold-repetition";
-    if (v->stalemateValue.global != VALUE_DRAW) sync_cout << " stalemate=" << (v->stalemateValue.global == -VALUE_MATE ? "lose" : std::to_string(int(v->stalemateValue.global)));
+    if (v->stalemateValue.global != VALUE_DRAW) sync_cout << " stalemate=" << (v->stalemateValue.global == -VALUE_MATE ? "lose" : (v->stalemateValue.global == VALUE_MATE ? "win" : std::to_string(int(v->stalemateValue.global))));
     if (v->extinctionValue.global != VALUE_NONE) sync_cout << " extinction";
     if (v->connectN > 0) sync_cout << " connect" << v->connectN;
 
@@ -434,25 +435,25 @@ void UCI::loop(int argc, char* argv[]) {
       else if (token == "ucinewgame" || token == "usinewgame" || token == "uccinewgame") Search::clear();
       else if (token == "isready")    sync_cout << "readyok" << sync_endl;
       else if (token == "help")
-          sync_cout << "\nCommands:"
-                    << "\n  uci, usi, ucci, xboard      Switch protocol"
-                    << "\n  isready                     Check if engine is ready"
-                    << "\n  setoption name V value V    Set a UCI option"
-                    << "\n  ucinewgame                  Clear search and hash"
-                    << "\n  position [startpos|fen]     Set up a position"
-                    << "\n  go                          Start searching"
-                    << "\n  stop                        Stop searching"
-                    << "\n  ponderhit                   Switch from ponder to normal search"
-                    << "\n  quit                        Exit the engine"
-                    << "\n\nDebug/Extra commands:"
-                    << "\n  d                           Display current position"
-                    << "\n  vinfo                       Display variant information"
-                    << "\n  eval                        Display static evaluation"
-                    << "\n  bench                       Run internal benchmark"
-                    << "\n  compiler                    Show compiler information"
-                    << "\n  load [file|<<EOF]           Load variant configuration"
-                    << "\n  check [file|<<EOF]          Check variant configuration"
-                    << "\n  flip                        Flip the current position"
+          sync_cout << "\nStandard Protocol Commands:"
+                    << "\n  uci, usi, ucci, xboard      Select an engine protocol"
+                    << "\n  isready                     Check if the engine is ready"
+                    << "\n  setoption name N value V    Update an engine option"
+                    << "\n  ucinewgame                  Prepare for a new game"
+                    << "\n  position [startpos|fen]     Load a game position"
+                    << "\n  go                          Start searching for the best move"
+                    << "\n  stop                        Finish searching immediately"
+                    << "\n  ponderhit                   Continue as a normal search"
+                    << "\n  quit                        Exit the program"
+                    << "\n\nTools and Debugging:"
+                    << "\n  d                           Display the current board"
+                    << "\n  vinfo                       Show details about the active variant"
+                    << "\n  eval                        Show static evaluation of the position"
+                    << "\n  bench                       Run internal performance tests"
+                    << "\n  compiler                    Show information about the compiler"
+                    << "\n  load [file|<<EOF]           Load variant rules from a file or text"
+                    << "\n  check [file|<<EOF]          Validate a variant configuration"
+                    << "\n  flip                        Flip the board perspective"
                     << sync_endl;
 
       // Additional custom non-UCI commands, mainly for debugging.
@@ -460,7 +461,11 @@ void UCI::loop(int argc, char* argv[]) {
       else if (token == "flip")     pos.flip();
       else if (token == "bench")    bench(pos, is, states);
       else if (token == "d")        sync_cout << pos << sync_endl;
-      else if (token == "vinfo")    print_variant_info(pos.variant());
+      else if (token == "vinfo")
+      {
+          const std::string variantName = Options["UCI_Variant"];
+          print_variant_info(variants.get(variantName), variantName);
+      }
       else if (token == "eval")     trace_eval(pos);
       else if (token == "compiler") sync_cout << compiler_info() << sync_endl;
       else if (token == "export_net")
