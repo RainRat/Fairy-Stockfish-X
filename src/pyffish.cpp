@@ -382,7 +382,8 @@ extern "C" PyObject* pyffish_evaluate(PyObject* self, PyObject *args) {
     if (!buildPosition(pos, states, v, fen, moveList, chess960))
         return NULL;
 
-    return Py_BuildValue("i", Eval::evaluate(pos));
+    int eval = Eval::evaluate(pos);
+    return Py_BuildValue("i", pos.side_to_move() == WHITE ? eval : -eval);
 }
 
 // INPUT variant, fen, move list

@@ -328,7 +328,7 @@ namespace {
     sync_cout << "\nEndgame: ";
     if (v->nMoveRule > 0) sync_cout << " " << v->nMoveRule << "-move-rule";
     if (v->nFoldRule > 0) sync_cout << " " << v->nFoldRule << "-fold-repetition";
-    if (v->stalemateValue.global != VALUE_DRAW) sync_cout << " stalemate=" << (v->stalemateValue.global == -VALUE_MATE ? "lose" : std::to_string(int(v->stalemateValue.global)));
+    if (v->stalemateValue.global != VALUE_DRAW) sync_cout << " stalemate=" << (v->stalemateValue.global == -VALUE_MATE ? "lose" : (v->stalemateValue.global == VALUE_MATE ? "win" : std::to_string(int(v->stalemateValue.global))));
     if (v->extinctionValue.global != VALUE_NONE) sync_cout << " extinction";
     if (v->connectN > 0) sync_cout << " connect" << v->connectN;
 

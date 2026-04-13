@@ -3452,11 +3452,11 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
     // Since double step in introduced from chess variants where pawns cannot capture forward, capturing moves are not included here.
     // Double/Triple step cannot attack other pieces, so attacks_from(Color c, PieceType pt, Square s) is not changed
     // Due to some unknown issues, shift<Direction D>(Bitboard b) cannot be used here
-    Bitboard tripleStepRegion = this->triple_step_region(c, pt);
+    const Bitboard explicitTripleStepRegion = var->tripleStepRegion.get(c).explicitBoardOfPiece(piece_to_char()[pt]);
     Bitboard occupied = this->pieces();  //Bitboard where the bits whose corresponding squares having a piece on it are 1
     Bitboard piecePosition = square_bb(s);  //Bitboard where only the bit which refers to the square that the piece starts the move (original square) is 1
     const bool usesGenericNonPawnStepHelper = pt != PAWN && !(en_passant_types(c) & piece_set(pt));
-    if (usesGenericNonPawnStepHelper && tripleStepRegion & piecePosition & this->not_moved_pieces(c))  //If the original square is in tripleStepRegion and the piece is not moved
+    if (usesGenericNonPawnStepHelper && explicitTripleStepRegion & piecePosition & this->not_moved_pieces(c))  //If the original square is in explicit tripleStepRegion and the piece is not moved
     {
         Bitboard extraMultipleStepMoveDestinations = 0x00;  //Bitboard where extra legal multi-step destination square bits are 1
         Bitboard oneSquareAhead = (c == WHITE) ? piecePosition << NORTH : piecePosition >> NORTH;
@@ -3483,11 +3483,11 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
         Bitboard oneSquareAhead = (c == WHITE) ? piecePosition << NORTH : piecePosition >> NORTH;
         if (!(oneSquareAhead & occupied))  //If the square which is 1 square ahead of original square is NOT blocked
         {
-            extraMultipleStepMoveDestinations |= oneSquareAhead;  //Add the square which is 1 square ahead of original square to destination squares for triple step
+            extraMultipleStepMoveDestinations |= oneSquareAhead;  //Add the square which is 1 square ahead of original square to destination squares for double step
             Bitboard twoSquareAhead = (c == WHITE) ? piecePosition << NORTH << NORTH : piecePosition >> NORTH >> NORTH;
             if (!(twoSquareAhead & occupied))  //If the square which is 2 squares ahead of original square is NOT blocked
             {
-                extraMultipleStepMoveDestinations |= twoSquareAhead;  //Add the square which is 2 squares ahead of original square to destination squares for triple step
+                extraMultipleStepMoveDestinations |= twoSquareAhead;  //Add the square which is 2 squares ahead of original square to destination squares for double step
             }
         }
         extraDestinations |= extraMultipleStepMoveDestinations; //Add destination squares to base board
