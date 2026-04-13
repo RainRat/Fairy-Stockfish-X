@@ -2602,9 +2602,11 @@ template void VariantMap::parse<false>(std::string path);
 
 void VariantMap::add(std::string s, Variant* v) {
   const Variant* concluded = v->conclude();
-  if (!insert({s, concluded}).second) {
-      delete concluded;
+  auto it = find(s);
+  if (it != end()) {
+      delete it->second;
   }
+  (*this)[s] = concluded;
 }
 
 void VariantMap::clear_all() {
