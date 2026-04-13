@@ -2001,16 +2001,14 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
     {
         if (hasRoyalKing || v->pseudoRoyalTypes || v->antiRoyalTypes)
         {
-            if (DoCheck)
-                std::cerr << "removeConnectN is incompatible with (pseudo/anti-)royal pieces." << std::endl;
+            std::cerr << "removeConnectN is incompatible with (pseudo/anti-)royal pieces." << std::endl;
             valid = false;
         }
         if (v->connectN || v->connect3D || v->connect4D || v->connectNxN || v->collinearN || v->connectGroup
             || v->connectRegion1[WHITE] || v->connectRegion1[BLACK]
             || !v->connectPieceGoal[WHITE].empty() || !v->connectPieceGoal[BLACK].empty())
         {
-            if (DoCheck)
-                std::cerr << "removeConnectN is incompatible with connection win conditions." << std::endl;
+            std::cerr << "removeConnectN is incompatible with connection win conditions." << std::endl;
             valid = false;
         }
     }
