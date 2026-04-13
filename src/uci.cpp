@@ -309,8 +309,9 @@ namespace {
     for (PieceSet ps = v->pieceTypes; ps; )
     {
         PieceType pt = pop_lsb(ps);
+        const PieceInfo* pi = pieceMap.get(pt);
         sync_cout << " " << v->pieceToChar[make_piece(WHITE, pt)]
-                  << "(" << pieceMap.get(pt)->betza << ")";
+                  << "(" << (pi ? pi->betza : "") << ")";
     }
 
     sync_cout << "\nRules:   ";

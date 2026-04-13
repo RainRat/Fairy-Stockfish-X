@@ -2603,7 +2603,7 @@ template void VariantMap::parse<false>(std::string path);
 void VariantMap::add(std::string s, Variant* v) {
   const Variant* concluded = v->conclude();
   auto it = find(s);
-  if (it != end()) {
+  if (it != end() && it->second != concluded) {
       delete it->second;
   }
   (*this)[s] = concluded;

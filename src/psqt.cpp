@@ -160,7 +160,7 @@ int slider_fraction(const std::map<Direction, int>& slider) {
         if (limit == 0 || limit == MAX_SLIDER_LIMIT)
             s += 100;
         else if (limit == DYNAMIC_SLIDER_LIMIT)
-            s += 30;
+            s += 75;
         else if (limit == SKI_SLIDER_LIMIT)
             s += 97;
         else if (is_slider_range(limit))

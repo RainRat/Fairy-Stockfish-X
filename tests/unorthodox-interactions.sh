@@ -146,9 +146,20 @@ cylindrical = true
 customPiece1 = a:jR
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 startFen = 8/8/8/8/8/8/8/Ap5p w - - 0 1
+
+[torpedo-triple:chess]
+enPassantTypes = p
+tripleStepRegion = *(* *);
 EOF
 
 echo "unorthodox interactions tests started"
+
+# 0. Test triple-step for pieces in enPassantTypes
+out=$(run_cmds "torpedo-triple" "${TEMP_INI}" "position fen 8/8/8/8/8/8/P7/K1k5 w - - 0 1
+go perft 1")
+echo "${out}" | grep -q "a2a3: 1"
+echo "${out}" | grep -q "a2a4: 1"
+echo "${out}" | grep -q "a2a5: 1"
 
 # 1. Test rifleCapture + deathOnCaptureTypes
 out=$(run_cmds "rifle-death" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/4q3/3QK3 w - - 0 1 moves d1e2
@@ -275,6 +286,7 @@ fi
 
 # 19. Test removeConnectN + royal kings rejects the variant
 out=$(run_cmds "remove-king-repro" "${TEMP_INI}" "d")
+echo "${out}" | grep -q "removeConnectN is incompatible with (pseudo/anti-)royal pieces."
 if echo "${out}" | grep -q "info string variant remove-king-repro"; then
   echo "removeConnectN + royal kings variant should have been rejected"
   exit 1
