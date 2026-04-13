@@ -9,7 +9,14 @@ error() {
 }
 trap 'error ${LINENO}' ERR
 
-ENGINE=${1:-./stockfish}
+ENGINE=${1:-}
+if [[ -z "${ENGINE}" ]]; then
+  if [[ -x "src/stockfish" ]]; then
+    ENGINE="src/stockfish"
+  else
+    ENGINE="./stockfish"
+  fi
+fi
 
 TMP_VARIANT_PATH=$(mktemp /tmp/fsx-piece-step-regions-XXXXXX.ini)
 cat >"${TMP_VARIANT_PATH}" <<'INI'

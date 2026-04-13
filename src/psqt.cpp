@@ -180,7 +180,7 @@ int slider_fraction(const std::map<Direction, int>& slider) {
 // Estimate piece value
 Value piece_value(Phase phase, PieceType pt)
 {
-    const PieceInfo* pi = pieceMap.find(pt)->second;
+    const PieceInfo* pi = pieceMap.get(pt);
     int v0 =  (phase == MG ?  60 :  60) * pi->steps[0][MODALITY_CAPTURE].size()
             + (phase == MG ?  30 :  40) * pi->steps[0][MODALITY_QUIET].size()
             + (phase == MG ? 185 : 185) * slider_fraction(pi->slider[0][MODALITY_CAPTURE]) / 100
@@ -228,8 +228,23 @@ void init(const Variant* v) {
   }
 
   Value maxPromotion = VALUE_ZERO;
-  for (PieceSet ps = v->promotionPieceTypes[WHITE]; ps;)
-      maxPromotion = std::max(maxPromotion, PieceValue[EG][pop_lsb(ps)]);
+  for (Color c : {WHITE, BLACK})
+      for (PieceSet ps = v->promotionPieceTypes[c]; ps;)
+          maxPromotion = std::max(maxPromotion, PieceValue[EG][pop_lsb(ps)]);
+
+  const bool anyPromotionPawnType = v->mainPromotionPawnType[WHITE] != NO_PIECE_TYPE
+                                 || v->mainPromotionPawnType[BLACK] != NO_PIECE_TYPE;
+  const bool sharedExtinctionLoss = v->extinctionValue[WHITE] == -VALUE_MATE
+                                 && v->extinctionValue[BLACK] == -VALUE_MATE
+                                 && v->extinctionPieceCount[WHITE] == 0
+                                 && v->extinctionPieceCount[BLACK] == 0
+                                 && bool(v->extinctionPieceTypes[WHITE] & ALL_PIECES)
+                                 && bool(v->extinctionPieceTypes[BLACK] & ALL_PIECES);
+  const bool sharedExtinctionWin = v->extinctionValue[WHITE] == VALUE_MATE
+                                && v->extinctionValue[BLACK] == VALUE_MATE;
+  const bool sharedCommonerExtinction = sharedExtinctionLoss
+                                     && bool(v->extinctionPieceTypes[WHITE] & COMMONER)
+                                     && bool(v->extinctionPieceTypes[BLACK] & COMMONER);
 
   for (PieceType pt = PAWN; pt <= KING; ++pt)
   {
@@ -238,14 +253,14 @@ void init(const Variant* v) {
       Score score = make_score(PieceValue[MG][pc], PieceValue[EG][pc]);
 
       // Consider promotion types in pawn score
-      if (pt == v->mainPromotionPawnType[WHITE])
+      if (anyPromotionPawnType && (pt == v->mainPromotionPawnType[WHITE] || pt == v->mainPromotionPawnType[BLACK]))
       {
           score -= make_score(0, (QueenValueEg - maxPromotion) / 100);
           if (v->blastOnCapture)
               score += make_score(mg_value(score) * 3 / 2, eg_value(score));
       }
       
-      const PieceInfo* pi = pieceMap.find(pt)->second;
+      const PieceInfo* pi = pieceMap.get(pt);
       bool isSlider = pi->slider[0][MODALITY_QUIET].size() || pi->slider[0][MODALITY_CAPTURE].size() || pi->hopper[0][MODALITY_QUIET].size() || pi->hopper[0][MODALITY_CAPTURE].size();
       bool isPawn = !isSlider && pi->steps[0][MODALITY_QUIET].size() && !std::any_of(pi->steps[0][MODALITY_QUIET].begin(), pi->steps[0][MODALITY_QUIET].end(), [](const std::pair<const Direction, int>& d) { return d.first < SOUTH / 2; });
       bool isSlowLeaper = !isSlider && !std::any_of(pi->steps[0][MODALITY_QUIET].begin(), pi->steps[0][MODALITY_QUIET].end(), [](const std::pair<const Direction, int>& d) { return dist(d.first) > 1; });
@@ -291,9 +306,7 @@ void init(const Variant* v) {
           score = make_score(mg_value(score) * 7000 / (7000 + mg_value(score)), eg_value(score));
 
       // In variants such as horde where all pieces need to be captured, weak pieces such as pawns are more useful
-      if (   v->extinctionValue == -VALUE_MATE
-          && v->extinctionPieceCount == 0
-          && (v->extinctionPieceTypes & ALL_PIECES))
+      if (sharedExtinctionLoss)
           score += make_score(0, std::max(KnightValueEg - PieceValue[EG][pt], VALUE_ZERO) / 20);
 
       // The strongest piece of a variant usually has some dominance, such as rooks in Makruk and Xiangqi.
@@ -303,7 +316,7 @@ void init(const Variant* v) {
                                   std::max(QueenValueEg - PieceValue[EG][pt], VALUE_ZERO) / 20);
 
       // For antichess variants, use negative piece values
-      if (v->extinctionValue == VALUE_MATE)
+      if (sharedExtinctionWin)
           score = -make_score(mg_value(score) / 8, eg_value(score) / 8 / (1 + !pi->slider[0][MODALITY_CAPTURE].size()));
 
       // Override variant piece value
@@ -346,7 +359,7 @@ void init(const Variant* v) {
                                  : pt == KING  ? KingBonus[std::clamp(Rank(r - pawnRank + 1), RANK_1, RANK_8)][std::min(f, FILE_D)] * (1 + (v->captureType != MOVE_OUT))
                                  : pt <= QUEEN ? Bonus[pc][std::min(r, RANK_8)][std::min(f, FILE_D)] * (1 + v->blastOnCapture)
                                  : pt == HORSE ? Bonus[KNIGHT][std::min(r, RANK_8)][std::min(f, FILE_D)]
-                                 : pt == COMMONER && v->extinctionValue == -VALUE_MATE && (v->extinctionPieceTypes & COMMONER) ? KingBonus[std::clamp(Rank(r - pawnRank + 1), RANK_1, RANK_8)][std::min(f, FILE_D)]
+                                 : pt == COMMONER && sharedCommonerExtinction ? KingBonus[std::clamp(Rank(r - pawnRank + 1), RANK_1, RANK_8)][std::min(f, FILE_D)]
                                  : isSlider    ? make_score(5, 5) * (2 * f + std::max(std::min(r, Rank(v->maxRank - r)), RANK_1) - v->maxFile - 1)
                                  : isPawn      ? make_score(5, 5) * (2 * f - v->maxFile)
                                                : make_score(10, 10) * (1 + isSlowLeaper) * (f + std::max(std::min(r, Rank(v->maxRank - r)), RANK_1) - v->maxFile / 2));

@@ -710,7 +710,7 @@ void Bitboards::init_pieces() {
 
   for (PieceType pt = PAWN; pt <= KING; ++pt)
   {
-      const PieceInfo* pi = pieceMap.find(pt)->second;
+      const PieceInfo* pi = pieceMap.get(pt);
 
       // Detect rider types
       for (auto modality : {MODALITY_QUIET, MODALITY_CAPTURE})
@@ -905,11 +905,12 @@ namespace {
                              {  728, 10316, 55013, 32803, 12281, 15100,  16645,   255 } };
 #endif
 
-    Bitboard* occupancy = new Bitboard[1 << (FILE_NB + RANK_NB - 4)];
-    Bitboard* reference = new Bitboard[1 << (FILE_NB + RANK_NB - 4)];
+    constexpr size_t TempTableSize = size_t(1) << (FILE_NB + RANK_NB - 4);
+    std::vector<Bitboard> occupancy(TempTableSize);
+    std::vector<Bitboard> reference(TempTableSize);
     [[maybe_unused]] Bitboard edges;
     Bitboard b;
-    int* epoch = new int[1 << (FILE_NB + RANK_NB - 4)]();
+    std::vector<int> epoch(TempTableSize);
     int cnt = 0, size = 0;
 
     for (Square s = SQ_A1; s <= SQ_MAX; ++s)
@@ -1016,9 +1017,6 @@ namespace {
         }
     }
 
-    delete[] occupancy;
-    delete[] reference;
-    delete[] epoch;
   }
 #endif
 }

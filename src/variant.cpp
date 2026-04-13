@@ -193,8 +193,10 @@ namespace {
     // https://arxiv.org/abs/2009.04374
     Variant* torpedo_variant() {
         Variant* v = chess_variant_base()->init();
-        v->doubleStepRegion[WHITE] = AllSquares;
-        v->doubleStepRegion[BLACK] = AllSquares;
+        v->doubleStepRegion[WHITE] = PieceTypeBitboardGroup(Bitboard(0));
+        v->doubleStepRegion[BLACK] = PieceTypeBitboardGroup(Bitboard(0));
+        v->doubleStepRegion[WHITE].set('P', AllSquares);
+        v->doubleStepRegion[BLACK].set('P', AllSquares);
         return v;
     }
     Variant* spell_chess_variant() {
@@ -229,6 +231,10 @@ namespace {
         v->promotionPawnTypes = piece_set(CUSTOM_PIECE_1);
         v->enPassantTypes = piece_set(CUSTOM_PIECE_1);
         v->nMoveRuleTypes = piece_set(CUSTOM_PIECE_1);
+        v->doubleStepRegion[WHITE] = PieceTypeBitboardGroup(Bitboard(0));
+        v->doubleStepRegion[BLACK] = PieceTypeBitboardGroup(Bitboard(0));
+        v->doubleStepRegion[WHITE].set('P', Rank2BB);
+        v->doubleStepRegion[BLACK].set('P', Rank7BB);
         return v;
     }
     // Pawnsideways
@@ -241,6 +247,10 @@ namespace {
         v->promotionPawnTypes = piece_set(CUSTOM_PIECE_1);
         v->enPassantTypes = piece_set(CUSTOM_PIECE_1);
         v->nMoveRuleTypes = piece_set(CUSTOM_PIECE_1);
+        v->doubleStepRegion[WHITE] = PieceTypeBitboardGroup(Bitboard(0));
+        v->doubleStepRegion[BLACK] = PieceTypeBitboardGroup(Bitboard(0));
+        v->doubleStepRegion[WHITE].set('P', Rank2BB);
+        v->doubleStepRegion[BLACK].set('P', Rank7BB);
         return v;
     }
     // Pawnback
@@ -255,6 +265,10 @@ namespace {
         v->promotionPawnTypes = piece_set(CUSTOM_PIECE_1);
         v->enPassantTypes = piece_set(CUSTOM_PIECE_1);
         v->nMoveRuleTypes = NO_PIECE_SET; // backwards pawn moves are reversible
+        v->doubleStepRegion[WHITE] = PieceTypeBitboardGroup(Bitboard(0));
+        v->doubleStepRegion[BLACK] = PieceTypeBitboardGroup(Bitboard(0));
+        v->doubleStepRegion[WHITE].set('P', Rank2BB);
+        v->doubleStepRegion[BLACK].set('P', Rank7BB);
         return v;
     }
     // Legan Chess
@@ -267,7 +281,7 @@ namespace {
         v->promotionRegion[BLACK] = make_bitboard(SQ_E1, SQ_F1, SQ_G1, SQ_H1, SQ_H2, SQ_H3, SQ_H4);
         v->mainPromotionPawnType[WHITE] = v->mainPromotionPawnType[BLACK] = CUSTOM_PIECE_1;
         v->promotionPawnTypes = piece_set(CUSTOM_PIECE_1);
-        v->enPassantTypes = piece_set(CUSTOM_PIECE_1);
+
         v->nMoveRuleTypes = piece_set(CUSTOM_PIECE_1);
         v->startFen = "knbrp3/bqpp4/npp5/rp1p3P/p3P1PR/5PPN/4PPQB/3PRBNK w - - 0 1";
         v->doubleStep = false;
@@ -2217,7 +2231,10 @@ Variant* Variant::conclude() {
 
     // Enforce consistency to allow runtime optimizations
     if (!doubleStep)
-        doubleStepRegion[WHITE] = doubleStepRegion[BLACK] = 0;
+    {
+        doubleStepRegion[WHITE] = PieceTypeBitboardGroup(Bitboard(0));
+        doubleStepRegion[BLACK] = PieceTypeBitboardGroup(Bitboard(0));
+    }
     if (!doubleStepRegion[WHITE] && !doubleStepRegion[BLACK])
         doubleStep = false;
 
@@ -2263,7 +2280,7 @@ Variant* Variant::conclude() {
     }
     // We can not use popcount here yet, as the lookup tables are initialized after the variants
     int nnueSquares = (maxRank + 1) * (maxFile + 1);
-    nnueUsePockets = (pieceDrops && (captureType == HAND || (!mustDrop && std::bitset<64>(pieceTypes).count() != 1))) || seirawanGating;
+    nnueUsePockets = (pieceDrops && (captureType == HAND || (!(mustDrop[WHITE] || mustDrop[BLACK]) && std::bitset<64>(pieceTypes).count() != 1))) || seirawanGating;
     int nnuePockets = nnueUsePockets ? 2 * int(maxFile + 1) : 0;
     int nnueNonDropPieceIndices = (2 * std::bitset<64>(pieceTypes).count() - (nnueKing != NO_PIECE_TYPE)) * nnueSquares;
     int nnuePieceIndices = nnueNonDropPieceIndices + 2 * (std::bitset<64>(pieceTypes).count() - (nnueKing != NO_PIECE_TYPE)) * nnuePockets;
@@ -2340,12 +2357,17 @@ Variant* Variant::conclude() {
     endgameEval =  endgameEval != EG_EVAL_CHESS
                  ||
                    (   endgameEval == EG_EVAL_CHESS
-                    && extinctionValue == VALUE_NONE
-                    && checkmateValue == -VALUE_MATE
-                    && stalemateValue == VALUE_DRAW
+                    && extinctionValue[WHITE] == VALUE_NONE
+                    && extinctionValue[BLACK] == VALUE_NONE
+                    && checkmateValue[WHITE] == -VALUE_MATE
+                    && checkmateValue[BLACK] == -VALUE_MATE
+                    && stalemateValue[WHITE] == VALUE_DRAW
+                    && stalemateValue[BLACK] == VALUE_DRAW
                     && !materialCounting
-                    && !(flagRegion[WHITE] || flagRegion[BLACK])
-                    && !mustCapture
+                    && !flagRegion[WHITE]
+                    && !flagRegion[BLACK]
+                    && !mustCapture[WHITE]
+                    && !mustCapture[BLACK]
                     && !checkCounting
                     && !makpongRule
                     && !connectN
@@ -2579,7 +2601,7 @@ template void VariantMap::parse<true>(std::string path);
 template void VariantMap::parse<false>(std::string path);
 
 void VariantMap::add(std::string s, Variant* v) {
-  insert(std::pair<std::string, const Variant*>(s, v->conclude()));
+  (*this)[s] = v->conclude();
 }
 
 void VariantMap::clear_all() {

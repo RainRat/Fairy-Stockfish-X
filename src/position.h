@@ -491,7 +491,6 @@ public:
   PointsRule points_rule_captures() const;
   int points_goal() const;
   int points_count(Color c) const;
-  int points_score(Color c) const;
   int points_score_clamped(Color c) const;
   Value points_goal_value() const;
   Value points_goal_simul_value_by_most_points() const;
@@ -666,7 +665,6 @@ private:
   Bitboard compute_evasion_checkers_bb(Color side) const;
   void set_check_info(StateInfo* si) const;
   bool compute_forced_jump_followup(Square s, int step = 0) const;
-  bool is_initial_pawn(Piece pc, Square s) const;
   Key layout_key() const;
   bool violates_same_player_board_repetition(Move m) const;
   Key reserve_key() const;
@@ -779,7 +777,6 @@ private:
   PieceType committed_piece_type(Color cl, File fl) const;
   bool has_committed_piece(Color cl, File fl) const;
   PieceType drop_committed_piece(Color cl, File fl);
-  Bitboard find_drop_region(Direction dir, Square s, Bitboard occupied) const;
   void swap_piece(Square from, Square to);
 };
 
@@ -948,7 +945,7 @@ inline bool Position::promotion_allowed(Color c, PieceType pt) const {
 }
 
 inline bool Position::promotion_allowed(Color c, PieceType pt, Square s) const {
-  return bool(promotion_piece_types(c, s) & pt) && promotion_allowed(c, pt);
+  return bool(promotion_piece_types(c, s) & piece_set(pt)) && promotion_allowed(c, pt);
 }
 
 inline PieceType Position::promoted_piece_type(PieceType pt) const {
@@ -1604,7 +1601,7 @@ inline Bitboard Position::opening_swap_drop_targets(Color c, PieceType pt) const
   if (popcount(enemy) != 1)
       return Bitboard(0);
 
-  if (!(drop_piece_types(pt) & pt))
+  if (!(drop_piece_types(pt) & piece_set(pt)))
       return Bitboard(0);
 
   if (!var->openingSwapMirrorMainDiagonal)
@@ -2464,12 +2461,8 @@ inline int Position::points_count(Color c) const {
   return st->pointsCount[c];
 }
 
-inline int Position::points_score(Color c) const {
-  return st->pointsCount[c];
-}
-
 inline int Position::points_score_clamped(Color c) const {
-  return std::max(0, std::min(points_score(c), POINTS_SCORE_MAX));
+  return std::max(0, std::min(points_count(c), POINTS_SCORE_MAX));
 }
 
 inline Value Position::points_goal_value() const {
@@ -3462,7 +3455,8 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
     Bitboard tripleStepRegion = this->triple_step_region(c, pt);
     Bitboard occupied = this->pieces();  //Bitboard where the bits whose corresponding squares having a piece on it are 1
     Bitboard piecePosition = square_bb(s);  //Bitboard where only the bit which refers to the square that the piece starts the move (original square) is 1
-    if (pt != PAWN && tripleStepRegion & piecePosition & this->not_moved_pieces(c))  //If the original square is in tripleStepRegion and the piece is not moved
+    const bool usesGenericNonPawnStepHelper = pt != PAWN && !(en_passant_types(c) & piece_set(pt));
+    if (usesGenericNonPawnStepHelper && tripleStepRegion & piecePosition & this->not_moved_pieces(c))  //If the original square is in tripleStepRegion and the piece is not moved
     {
         Bitboard extraMultipleStepMoveDestinations = 0x00;  //Bitboard where extra legal multi-step destination square bits are 1
         Bitboard oneSquareAhead = (c == WHITE) ? piecePosition << NORTH : piecePosition >> NORTH;
@@ -3483,7 +3477,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
         extraDestinations |= extraMultipleStepMoveDestinations; //Add destination squares to base board
     }
     Bitboard doubleStepRegion = this->double_step_region(c, pt);
-    if (pt != PAWN && doubleStepRegion & piecePosition & this->not_moved_pieces(c))  //If the original square is in doubleStepRegion and the piece is not moved
+    if (usesGenericNonPawnStepHelper && doubleStepRegion & piecePosition & this->not_moved_pieces(c))  //If the original square is in doubleStepRegion and the piece is not moved
     {
         Bitboard extraMultipleStepMoveDestinations = 0x00;  //Bitboard where extra legal multi-step destination square bits are 1
         Bitboard oneSquareAhead = (c == WHITE) ? piecePosition << NORTH : piecePosition >> NORTH;
@@ -3593,7 +3587,7 @@ inline Bitboard Position::passive_blast_checkers(Color victim, Bitboard occupied
 
   Bitboard burners = Bitboard(0);
   for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
-      if (var->blastPassiveTypes & pt)
+      if (var->blastPassiveTypes & piece_set(pt))
           burners |= pieces(~victim, pt);
 
   return blast_pattern(ksq) & burners & occupied;
@@ -3693,7 +3687,7 @@ inline Square Position::jump_capture_square(Square from, Square to) const {
 
   Piece mover = piece_on(from);
   PieceSet jumpTypes = jump_capture_types();
-  if (mover == NO_PIECE || (!(jumpTypes & ALL_PIECES) && !(jumpTypes & type_of(mover))) || !empty(to))
+  if (mover == NO_PIECE || (!(jumpTypes & ALL_PIECES) && !(jumpTypes & piece_set(type_of(mover)))) || !empty(to))
       return SQ_NONE;
 
   Square mid = JumpMidpoint[from][to];
@@ -3726,7 +3720,7 @@ inline bool Position::capture(Move m) const {
   {
       Piece mover = moved_piece(m);
       PieceSet jumpTypes = jump_capture_types();
-      if (mover != NO_PIECE && ((jumpTypes & ALL_PIECES) || (jumpTypes & type_of(mover))))
+      if (mover != NO_PIECE && ((jumpTypes & ALL_PIECES) || (jumpTypes & piece_set(type_of(mover)))))
       {
           if (jump_capture_square(from_sq(m), to_sq(m)) != SQ_NONE)
               return true;
@@ -3869,10 +3863,6 @@ inline void Position::remove_piece(Square s) {
   //not-moved-piece bitboard must ensure that there is a piece
   this->st->not_moved_pieces[WHITE] &= (~square_bb(s));
   this->st->not_moved_pieces[BLACK] &= (~square_bb(s));
-}
-
-inline bool Position::is_initial_pawn(Piece pc, Square s) const {
-  return type_of(pc) == PAWN && rank_of(s) == relative_rank(color_of(pc), RANK_2, max_rank());
 }
 
 inline void Position::move_piece(Square from, Square to) {

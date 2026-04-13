@@ -174,7 +174,7 @@ namespace {
 
   template<Color Us, GenType Type>
   ExtMove* generate_drops(const Position& pos, ExtMove* moveList, PieceType pt, Bitboard b) {
-    if (pos.edge_insert_only() && (pos.edge_insert_types() & pt))
+    if (pos.edge_insert_only() && (pos.edge_insert_types() & piece_set(pt)))
         return moveList;
 
     // Do not generate virtual drops for perft and at root
@@ -183,7 +183,7 @@ namespace {
         // Restrict to valid target
         b &= pos.drop_region(Us, pt) & (~pos.pieces() | pos.opening_swap_drop_targets(Us, pt));
 
-        if ((pos.symmetric_drop_types() & pt) && pos.count_in_hand(pos.drop_hand_color(Us, pt), pt) >= 2)
+        if ((pos.symmetric_drop_types() & piece_set(pt)) && pos.count_in_hand(pos.drop_hand_color(Us, pt), pt) >= 2)
         {
             while (b)
             {
@@ -215,10 +215,10 @@ namespace {
 
   template<Color Us, GenType Type>
   ExtMove* generate_capture_drops(const Position& pos, ExtMove* moveList, PieceType pt, Bitboard b) {
-    if (pos.edge_insert_only() && (pos.edge_insert_types() & pt))
+    if (pos.edge_insert_only() && (pos.edge_insert_types() & piece_set(pt)))
         return moveList;
 
-    if (!(pos.capture_drop_types() & pt))
+    if (!(pos.capture_drop_types() & piece_set(pt)))
         return moveList;
 
     if (!(pos.can_drop(Us, pt) || (Type != NON_EVASIONS && pos.two_boards() && pos.virtual_drops() && pos.allow_virtual_drop(Us, pt))))
@@ -694,7 +694,7 @@ namespace {
         }
         Bitboard quietSquares   = (quiets & ~pos.pieces()) & target;
         Bitboard b = captureSquares | quietSquares;
-        Bitboard epSquares = (pos.en_passant_types(Us) & Pt) ? (attacks & pos.ep_squares() & ~pos.pieces()) : Bitboard(0);
+        Bitboard epSquares = (pos.en_passant_types(Us) & piece_set(Pt)) ? (attacks & pos.ep_squares() & ~pos.pieces()) : Bitboard(0);
         Bitboard b1 = b & ~epSquares;
         Bitboard pawnLikeDoubleSteps = 0;
         Bitboard pawnLikeTripleSteps = 0;
@@ -703,12 +703,12 @@ namespace {
         PieceType promPt = pos.is_promoted(from) ? NO_PIECE_TYPE : pos.promoted_piece_type(Pt);
         Bitboard b2 = promPt && pos.promotion_allowed(Us, promPt) ? b1 : Bitboard(0);
         Bitboard b3 = pos.piece_demotion() && pos.is_promoted(from) ? b1 : Bitboard(0);
-        Bitboard pawnPromotions = (pos.promotion_pawn_types(Us) & Pt)
+        Bitboard pawnPromotions = (pos.promotion_pawn_types(Us) & piece_set(Pt))
                                 ? (b & (Type == EVASIONS ? target : (~pos.pieces(Us) | (pos.self_capture(Pt) ? (pos.pieces(Us) & ~pos.pieces(Us, KING)) : Bitboard(0)))) & promotion_zone)
                                 : Bitboard(0);
         Bitboard jumpCaptures = 0;
         PieceSet jumpTypes = pos.jump_capture_types();
-        if ((jumpTypes & ALL_PIECES) || (jumpTypes & Pt))
+        if ((jumpTypes & ALL_PIECES) || (jumpTypes & piece_set(Pt)))
         {
             Bitboard candidates = (attacks | quiets) & ~pos.pieces();
             while (candidates)
@@ -779,7 +779,7 @@ namespace {
                 b3 &= pos.check_squares(type_of(pos.unpromoted_piece_on(from)));
         }
 
-        if (Type != CAPTURES && Pt != PAWN && (pos.pawn_like_types(Us) & Pt))
+        if (Type != CAPTURES && Pt != PAWN && (pos.pawn_like_types(Us) & piece_set(Pt)))
         {
             Square oneAhead = from + Up;
             if (is_ok(oneAhead) && (quiets & oneAhead))
