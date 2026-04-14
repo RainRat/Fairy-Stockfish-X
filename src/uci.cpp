@@ -653,9 +653,10 @@ string UCI::move(const Position& pos, Move m) {
           : UCI::square(pos, from))
                   + UCI::square(pos, to);
 
-  // Wall square
+  // Wall square.
+  // Keep the legacy "<base>,<to><gate>" form on output for GUI compatibility.
   if (wallMove && CurrentProtocol == XBOARD)
-      move += "," + UCI::square(pos, gating_square(m));
+      move += "," + UCI::square(pos, to) + UCI::square(pos, gating_square(m));
 
   if (type_of(m) == PROMOTION)
       move += pos.piece_symbol(make_piece(BLACK, promotion_type(m)));
@@ -681,9 +682,10 @@ string UCI::move(const Position& pos, Move m) {
   else if (pullMove)
       move += "," + UCI::square(pos, pull_square(m));
 
-  // Wall square
+  // Wall square.
+  // Keep the legacy "<base>,<to><gate>" form on output for GUI compatibility.
   if (wallMove && CurrentProtocol != XBOARD)
-      move += "," + UCI::square(pos, gating_square(m));
+      move += "," + UCI::square(pos, to) + UCI::square(pos, gating_square(m));
 
   if (potionMove)
       move = potionPrefix + "," + move;
@@ -719,7 +721,7 @@ Move UCI::to_move(const Position& pos, string& str) {
   for (const auto& m : MoveList<LEGAL>(pos)) {
       auto move_str = UCI::move(pos, m);
       string move_str_alt;
-      string move_str_legacy_wall;
+      string move_str_short_wall;
 
       if (pos.paired_drop(m))
       {
@@ -733,21 +735,23 @@ Move UCI::to_move(const Position& pos, string& str) {
           }
       }
 
-      if (CurrentProtocol == XBOARD && pos.walling(pos.side_to_move()) && is_gating(m))
+      if (pos.walling(pos.side_to_move()) && is_gating(m))
       {
           size_t comma = move_str.find(',');
+          std::string to = UCI::square(pos, to_sq(m));
           std::string gate = UCI::square(pos, gating_square(m));
-          if (comma != string::npos && gate.size() == 2)
+          if (comma != string::npos && to.size() == 2 && gate.size() == 2)
           {
               std::string base = move_str.substr(0, comma);
-              // Legacy XBoard walling commands may encode a wall relocation as
+              move_str_short_wall = base + "," + gate;
+              // Legacy walling commands encode a wall relocation as
               // "<base>,<oldWall><newWall>". Only the final wall square matters
-              // to move legality, so accept any 4-char suffix ending in the
+              // to move legality, so also accept any 4-char suffix ending in the
               // actual target wall square.
               if (str.size() == base.size() + 5
                   && str.rfind(base + ",", 0) == 0
                   && str.substr(str.size() - gate.size()) == gate)
-                  move_str_legacy_wall = str;
+                  move_str_short_wall = str;
           }
       }
 
@@ -777,7 +781,7 @@ Move UCI::to_move(const Position& pos, string& str) {
 
       if (   str == move_str
           || (!move_str_alt.empty() && str == move_str_alt)
-          || (!move_str_legacy_wall.empty() && str == move_str_legacy_wall)
+          || (!move_str_short_wall.empty() && str == move_str_short_wall)
           || (is_pass(m) && str == UCI::square(pos, from_sq(m)) + UCI::square(pos, to_sq(m))))
           return m;
   }
