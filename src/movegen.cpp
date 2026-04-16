@@ -779,7 +779,11 @@ namespace {
                 b3 &= pos.check_squares(type_of(pos.unpromoted_piece_on(from)));
         }
 
-        if (Type != CAPTURES && Pt != PAWN && (pos.pawn_like_types(Us) & piece_set(Pt)))
+        const PieceInfo* pieceInfo = pieceMap.get(Pt);
+        if (Type != CAPTURES
+            && Pt != PAWN
+            && (pos.pawn_like_types(Us) & piece_set(Pt))
+            && !pieceInfo->has_explicit_initial_moves())
         {
             Square oneAhead = from + Up;
             if (is_ok(oneAhead) && (quiets & oneAhead))

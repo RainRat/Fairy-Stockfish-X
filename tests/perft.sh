@@ -55,9 +55,9 @@ if [[ $VARIANT == "all" || $VARIANT == "variant" ]]; then
   # fairy
   expect "$perft_exp" torpedo startpos 4 209719 > /dev/null
   expect "$perft_exp" torpedo "fen rnbqkbnr/1ppppppp/8/6P1/p7/8/PPPPPP1P/RNBQKBNR w KQkq - 0 1" 4 232819 > /dev/null
-  expect "$perft_exp" berolina "fen rnbqkbnr/pppp1ppp/8/2p5/5P2/8/PPP1PPPP/RNBQKBNR w KQkq c5d6 2 2" 3 113340 > /dev/null
+  expect "$perft_exp" berolina "fen rnbqkbnr/pppp1ppp/8/2p5/5P2/8/PPP1PPPP/RNBQKBNR w KQkq c5d6 2 2" 3 47140 > /dev/null
   expect "$perft_exp" berolina "fen k7/6P1/8/8/8/2K2p2/4p3/8 w - - 0 1" 3 1983 > /dev/null
-  expect "$perft_exp" berolina "fen rnbqkbnr/pp1p1ppp/8/2pPp3/8/8/PP1PPPPP/RNBQKBNR w KQkq d6c5 0 1" 2 2016 > /dev/null
+  expect "$perft_exp" berolina "fen rnbqkbnr/pp1p1ppp/8/2pPp3/8/8/PP1PPPPP/RNBQKBNR w KQkq d6c5 0 1" 2 1051 > /dev/null
   expect "$perft_exp" pawnsideways startpos 3 10102 > /dev/null
   expect "$perft_exp" pawnback startpos 3 9302 > /dev/null
   expect "$perft_exp" legan startpos 4 8138 > /dev/null

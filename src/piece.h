@@ -98,6 +98,21 @@ struct PieceInfo {
   inline bool has_dynamic_slider() const { return riderAugmentMask & AUGMENT_DYNAMIC; }
   inline bool has_max_slider() const { return riderAugmentMask & AUGMENT_MAX; }
   inline bool has_contra_hopper() const { return riderAugmentMask & AUGMENT_CONTRA; }
+  inline bool has_explicit_initial_moves() const {
+    for (int modality = 0; modality < MOVE_MODALITY_NB; ++modality)
+      if (!steps[1][modality].empty()
+          || !tupleSteps[1][modality].empty()
+          || !tupleSlider[1][modality].empty()
+          || !slider[1][modality].empty()
+          || !leapRider[1][modality].empty()
+          || !hopper[1][modality].empty()
+          || !contraHopper[1][modality].empty()
+          || griffon[1][modality]
+          || manticore[1][modality]
+          || rose[1][modality])
+        return true;
+    return false;
+  }
 };
 
 struct PieceMap : public std::map<PieceType, const PieceInfo*> {

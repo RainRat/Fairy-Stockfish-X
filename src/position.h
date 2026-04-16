@@ -3455,7 +3455,9 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
     const Bitboard explicitTripleStepRegion = var->tripleStepRegion.get(c).explicitBoardOfPiece(piece_to_char()[pt]);
     Bitboard occupied = this->pieces();  //Bitboard where the bits whose corresponding squares having a piece on it are 1
     Bitboard piecePosition = square_bb(s);  //Bitboard where only the bit which refers to the square that the piece starts the move (original square) is 1
-    const bool usesGenericNonPawnStepHelper = true; // Allow all pieces to use explicit regions if defined
+    PieceType movePt = pt == KING ? king_type() : pt;
+    const PieceInfo* pi = pieceMap.get(movePt);
+    const bool usesGenericNonPawnStepHelper = !pi->has_explicit_initial_moves();
     if (usesGenericNonPawnStepHelper && explicitTripleStepRegion & piecePosition & this->not_moved_pieces(c))  //If the original square is in explicit tripleStepRegion and the piece is not moved
     {
         Bitboard extraMultipleStepMoveDestinations = 0x00;  //Bitboard where extra legal multi-step destination square bits are 1
@@ -3499,9 +3501,6 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
 
   if ((fast_attacks() || fast_attacks2()) && (pt != KING || king_type() == KING))
       return (moves_bb(c, pt, s, occupancy) | extraDestinations) & board_bb();
-
-  PieceType movePt = pt == KING ? king_type() : pt;
-  const PieceInfo* pi = pieceMap.get(movePt);
 
   if ((fast_attacks() || fast_attacks2()) && pi->riderAugmentMask == PieceInfo::AUGMENT_NONE)
       return (moves_bb(c, movePt, s, occupancy) | extraDestinations) & board_bb();

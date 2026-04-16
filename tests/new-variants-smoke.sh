@@ -69,6 +69,15 @@ rm -f "${tmp_ini}"
 # This smoke suite contains >8x8 and template-dependent variants.
 # Run each block only if the underlying variant exists in the current build.
 
+# 0b) Berolina pawns move diagonally, including the initial double-step.
+out=$(run_cmds "setoption name UCI_Variant value berolina
+position startpos
+go perft 1")
+echo "${out}" | grep -q "^a2b3: 1$"
+echo "${out}" | grep -q "^a2c4: 1$"
+! echo "${out}" | grep -q "^a2a3: 1$"
+! echo "${out}" | grep -q "^a2a4: 1$"
+
 # 1) Hasami: orthogonal sandwich should capture the middle piece.
 if variant_available "hasami"; then
 out=$(run_cmds "setoption name UCI_Variant value hasami
