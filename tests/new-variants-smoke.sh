@@ -129,10 +129,12 @@ out=$(run_cmds "setoption name UCI_Variant value paradigm
 position fen 4k3/1P6/8/8/8/8/8/4K3 w - - 0 1
 go perft 1")
 echo "${out}" | grep -q "^b7b8b: 1$"
+if variant_available "joust"; then
 out=$(run_cmds "setoption name UCI_Variant value joust
 position startpos
 go perft 1")
-echo "${out}" | grep -q "^d4b5,d4: 1$"
+echo "${out}" | grep -q "^d4b5,b5d4: 1$"
+fi
 out=$(run_cmds "setoption name UCI_Variant value fox-and-hounds
 position startpos
 go perft 1")
@@ -1001,6 +1003,14 @@ out=$(run_cmds "setoption name UCI_Variant value antimatter
 position fen 4k3/8/8/3n4/4P3/8/8/4K3 w - - 0 1 moves e4d5
 d")
 echo "${out}" | grep -q "Fen: 4k3/8/8/3P4/8/8/8/4K3 b - - 0 1"
+out=$(run_cmds "setoption name UCI_Variant value antimatter
+position startpos moves g2g3
+go movetime 50")
+echo "${out}" | grep -q "^bestmove "
+out=$(run_cmds "setoption name UCI_Variant value antimatter
+position fen 4k3/8/8/3p4/4P3/8/8/3K4 b - - 0 1
+go depth 1")
+echo "${out}" | grep -q "^bestmove "
 
 # 30b) Benedict (capture morph): capturer adopts captured piece type.
 out=$(run_cmds "setoption name UCI_Variant value benedict

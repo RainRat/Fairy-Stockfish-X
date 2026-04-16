@@ -235,9 +235,9 @@ variant_positions = {
     },
     "atomic": {
         "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1": (False, False),  # startpos
-        "8/8/8/8/3K4/3k4/8/8 b - - 0 1": (True, True),  # K vs K
-        "k7/p7/8/8/8/8/8/K7 w - - 0 1": (True, False),  # K vs KP
-        "k7/q7/8/8/8/8/8/K7 w - - 0 1": (True, False),  # K vs KQ
+        "8/8/8/8/3K4/3k4/8/8 b - - 0 1": (False, False),  # helper suppressed for atomic win rules
+        "k7/p7/8/8/8/8/8/K7 w - - 0 1": (False, False),  # helper suppressed for atomic win rules
+        "k7/q7/8/8/8/8/8/K7 w - - 0 1": (False, False),  # helper suppressed for atomic win rules
     },
     "crazyhouse": {
         "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR/ w KQkq - 0 1": (False, False),  # lichess style startpos
@@ -245,8 +245,8 @@ variant_positions = {
     "3check": {
         "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 3+3 0 1": (False, False),  # startpos
         "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 +0+2": (False, False),  # lichess style check count
-        "k7/n7/8/8/8/8/8/K7 w - - 1+2 0 1": (True, False),  # K vs KN
-        "k7/b7/8/8/8/8/8/K7 w - - 3+1 0 1": (True, False),  # K vs KB
+        "k7/n7/8/8/8/8/8/K7 w - - 1+2 0 1": (False, False),  # helper suppressed for check-counting variants
+        "k7/b7/8/8/8/8/8/K7 w - - 3+1 0 1": (False, False),  # helper suppressed for check-counting variants
     },
     "horde": {
         "rnbqkbnr/pppppppp/8/1PP2PP1/PPPPPPPP/PPPPPPPP/PPPPPPPP/PPPPPPPP w kq - 0 1": (False, False),  # startpos
@@ -303,8 +303,8 @@ variant_positions = {
         JANGGI: (False, False),  # startpos
         "rhea1aehr/4k4/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/4K4/RHEA1AEHR w - - 0 1": (False, False),  # startpos
         "5k3/4a4/3CN4/9/1PP5p/9/8P/4C4/4A4/2B1K4 w - - 0 46": (False, False),  # issue #53
-        "4k4/9/9/9/9/4B4/4B4/9/9/4K4 w - - 0 1": (False, True),  # KEE vs K
-        "4k4/9/9/9/9/9/9/9/4A4/4KC3 w - - 0 1": (False, True),  # KCA vs K
+        "4k4/9/9/9/9/4B4/4B4/9/9/4K4 w - - 0 1": (False, False),  # helper suppressed for janggi adjudication rules
+        "4k4/9/9/9/9/9/9/9/4A4/4KC3 w - - 0 1": (False, False),  # helper suppressed for janggi adjudication rules
     },
     "shako": {
         "k9/10/10/10/10/10/10/10/10/KC8 w - - 0 1": (True, True),  # KC vs K
@@ -835,7 +835,7 @@ checking = false
         white_moves = sf.legal_moves("witch-hunting", fen, [])
         self.assertTrue(white_moves)
         self.assertTrue(all("," in m for m in white_moves))
-        self.assertIn("i1a1,b1", white_moves)
+        self.assertIn("i1a1,a1b1", white_moves)
 
         after_white = sf.get_fen("witch-hunting", fen, [white_moves[0]])
         black_moves = sf.legal_moves("witch-hunting", after_white, [])

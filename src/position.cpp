@@ -2846,7 +2846,7 @@ bool Position::legal(Move m) const {
       if (isHop && jump_capture_square(from, to) == SQ_NONE)
           return false;
   }
-  if (topology_wraps() && !allow_checks() && (pieces(them) & to) && type_of(piece_on(to)) == KING)
+  if (!allow_checks() && (pieces(them) & to) && type_of(piece_on(to)) == KING)
       return false;
   if (!dropMove && (var->mutuallyHopIllegalTypes & movePt) && (AttackRiderTypes[movePt] & HOPPING_RIDERS))
   {
@@ -2912,7 +2912,7 @@ bool Position::legal(Move m) const {
       return false;
 
   // Illegal captures
-  if (topology_wraps() && !allow_checks() && (pieces(them) & to) && type_of(piece_on(to)) == KING)
+  if (!allow_checks() && (pieces(them) & to) && type_of(piece_on(to)) == KING)
       return false;
 
   // Illegal non-drop moves
@@ -4038,7 +4038,7 @@ bool Position::pseudo_legal(const Move m) const {
   if ((anti_royal_self_capture_only() && (anti_royal_types() & piece_set(type_of(pc)))) && (pieces(them) & to) && !is_self_destruct(m))
       return false;
 
-  if ((topology_wraps() || pushMove) && !allow_checks() && (pieces(them) & to) && type_of(piece_on(to)) == KING)
+  if (!allow_checks() && (pieces(them) & to) && type_of(piece_on(to)) == KING)
       return false;
 
   // Handle the special case of a pawn move
@@ -6223,7 +6223,8 @@ void Position::undo_move(Move m) {
   // Add the blast pieces
   if (
        ( surround_capture_opposite() || surround_capture_intervene() || surround_capture_edge() ) ||
-       ( st->captured.piece && (blast_on_capture(pc, st->captured.piece) || var->petrifyOnCaptureTypes) ) ||
+       ( st->bycatchSquares ) ||
+       ( st->captured.piece && var->petrifyOnCaptureTypes ) ||
        ( blast_on_move() && !st->captured.piece && !is_self_destruct(st->move) ) ||
        ( blast_on_self_destruct() && is_self_destruct(st->move) ) ||
        ( remove_connect_n() > 0 )
@@ -6398,9 +6399,19 @@ void Position::undo_move(Move m) {
           else if (st->dead.piece && type_of(m) != PROMOTION && type_of(m) != PIECE_PROMOTION)
           {
               if (st->deadSquares & moverSq)
+              {
                   st->deadSquares ^= moverSq;
-              put_piece(st->dead.piece, moverSq, st->dead.promoted, st->dead.unpromoted);
-              pc = piece_on(moverSq);
+                  put_piece(st->dead.piece, moverSq, st->dead.promoted, st->dead.unpromoted);
+                  pc = piece_on(moverSq);
+              }
+              else
+              {
+                  // st->dead represents the mover being removed after moving (e.g. self-destruct,
+                  // death-on-capture, zero-range blast-on-capture). When undoing, the mover belongs
+                  // back on its source square; any captured piece is restored to the destination later.
+                  put_piece(st->dead.piece, from, st->dead.promoted, st->dead.unpromoted);
+                  pc = piece_on(from);
+              }
           }
           if (cloneMove)
           {
@@ -6415,8 +6426,8 @@ void Position::undo_move(Move m) {
           }
           else if (swapMove)
               swap_piece(from, to);
-          else if (!rifleShot)
-              move_piece(to, from); // Put the piece back at the source square
+          else if (!rifleShot && piece_on(to) != NO_PIECE)
+              move_piece(to, from); // Put the piece back at the source square when the mover survived on 'to'
       }
 
       if (st->didPush && st->pushStepwise)

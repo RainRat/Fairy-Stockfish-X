@@ -82,6 +82,8 @@ jobs:
 
       - name: Test variant perft
         run: |
+          make clean
+          make -j2 ARCH=x86-64 largeboards=yes all=yes debug=yes build
           ../tests/perft.sh all
 
       - name: Test promotion-require-in-hand
