@@ -115,6 +115,7 @@ namespace Bitboards {
 
 void init_pieces();
 std::shared_ptr<const MagicGeometry> init_magics(File maxFile, Rank maxRank);
+void init_wrapped_rays(File maxFile, Rank maxRank, bool wrapFile, bool wrapRank);
 void init();
 std::string pretty(Bitboard b);
 
@@ -199,6 +200,7 @@ extern uint8_t SquareDistance[SQUARE_NB][SQUARE_NB];
 extern Bitboard SquareBB[SQUARE_NB];
 extern Bitboard BetweenBB[SQUARE_NB][SQUARE_NB];
 extern Bitboard LineBB[SQUARE_NB][SQUARE_NB];
+extern Bitboard WrappedRays[SQUARE_NB][8];
 extern Bitboard PseudoAttacks[COLOR_NB][PIECE_TYPE_NB][SQUARE_NB];
 extern Bitboard PseudoMoves[2][COLOR_NB][PIECE_TYPE_NB][SQUARE_NB];
 extern Bitboard LeaperAttacks[COLOR_NB][PIECE_TYPE_NB][SQUARE_NB];
@@ -1228,6 +1230,16 @@ inline Square msb(Bitboard b) {
 #else
   return Square(int(SQUARE_BIT_MASK) ^ __builtin_clzll(b));
 #endif
+}
+
+inline Square lsb_wrapped(Bitboard blockers, Square sq) {
+    Bitboard hi = (sq < int(SQUARE_BIT_MASK)) ? (blockers & (AllSquares << (sq + 1))) : Bitboard(0);
+    return hi ? lsb(hi) : lsb(blockers);
+}
+
+inline Square msb_wrapped(Bitboard blockers, Square sq) {
+    Bitboard lo = blockers & ~(AllSquares << sq);
+    return lo ? msb(lo) : msb(blockers);
 }
 
 #elif defined(_MSC_VER)  // MSVC

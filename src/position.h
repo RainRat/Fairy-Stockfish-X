@@ -2998,6 +2998,59 @@ inline Bitboard Position::wrapped_hopper_targets(const std::map<Direction, int>&
   Bitboard out = 0;
   for (const auto& [d, limit] : directions)
   {
+      int ridx = -1;
+      if (d == NORTH) ridx = 0;
+      else if (d == NORTH_EAST) ridx = 1;
+      else if (d == EAST) ridx = 2;
+      else if (d == SOUTH_EAST) ridx = 3;
+      else if (d == SOUTH) ridx = 4;
+      else if (d == SOUTH_WEST) ridx = 5;
+      else if (d == WEST) ridx = 6;
+      else if (d == NORTH_WEST) ridx = 7;
+
+      if (ridx != -1 && (wrapFile || wrapRank))
+      {
+          Bitboard ray = WrappedRays[sq][ridx];
+          Bitboard blockers = ray & occupied;
+          if (!blockers) continue;
+
+          Square hurdle = (d > 0) ? lsb_wrapped(blockers, sq) : msb_wrapped(blockers, sq);
+          Bitboard after_hurdle = WrappedRays[hurdle][ridx] & ray;
+          if (!after_hurdle) continue;
+
+          const int minDistance = slider_min_distance(limit);
+          const int maxDistance = slider_max_distance(limit);
+
+          // For limited distance or when multiple blockers are present, use the safe loop.
+          // Bitwise exclusion with WrappedRays is incorrect as it over-excludes by wrapping.
+          if (minDistance > 1 || maxDistance > 0 || (after_hurdle & occupied))
+          {
+              Bitboard filtered = 0;
+              Square current = hurdle;
+              for (int i = 1; (maxDistance == 0 || i <= maxDistance); ++i)
+              {
+                  Square next;
+                  auto [dr, df] = decode_direction(d);
+                  if (!wrapped_destination_square(current, df, dr, maxFile, maxRank, wrapFile, wrapRank, next) || next == sq)
+                      break;
+                  if (i >= minDistance)
+                  {
+                      if (!quietMode || !(occupied & next))
+                          filtered |= next;
+                  }
+                  if (occupied & next)
+                      break;
+                  current = next;
+              }
+              out |= filtered;
+          }
+          else
+          {
+              out |= after_hurdle;
+          }
+          continue;
+      }
+
       auto [dr, df] = decode_direction(d);
       if (!dr && !df)
           continue;
@@ -3050,6 +3103,66 @@ inline Bitboard Position::wrapped_contra_hopper_targets(const std::map<Direction
   Bitboard out = 0;
   for (const auto& [d, limit] : directions)
   {
+      Direction relD = c == WHITE ? d : Direction(-d);
+      int ridx = -1;
+      if (relD == NORTH) ridx = 0;
+      else if (relD == NORTH_EAST) ridx = 1;
+      else if (relD == EAST) ridx = 2;
+      else if (relD == SOUTH_EAST) ridx = 3;
+      else if (relD == SOUTH) ridx = 4;
+      else if (relD == SOUTH_WEST) ridx = 5;
+      else if (relD == WEST) ridx = 6;
+      else if (relD == NORTH_WEST) ridx = 7;
+
+      if (ridx != -1 && (wrapFile || wrapRank))
+      {
+          Bitboard ray = WrappedRays[sq][ridx];
+          Bitboard blockers_bb = ray & occupied;
+          if (!blockers_bb) continue;
+
+          Square hurdle = (relD > 0) ? lsb_wrapped(blockers_bb, sq) : msb_wrapped(blockers_bb, sq);
+          Bitboard after_hurdle = WrappedRays[hurdle][ridx] & ray;
+          if (!after_hurdle) continue;
+
+          auto [dr0, df0] = decode_direction(relD);
+
+          // For limited distance or when multiple blockers are present, use the safe loop.
+          // Bitwise exclusion with WrappedRays is incorrect as it over-excludes by wrapping.
+          if (limit > 0 || (after_hurdle & occupied))
+          {
+              Bitboard filtered = 0;
+              Square current = hurdle;
+              for (int i = 1; (limit == 0 || i <= limit); ++i)
+              {
+                  Square next;
+                  if (!wrapped_destination_square(current, df0, dr0, maxFile, maxRank, wrapFile, wrapRank, next) || next == sq)
+                      break;
+
+                  const bool blocked = bool(occupied & next);
+                  if (quietMode)
+                  {
+                      if (!blocked)
+                          filtered |= next;
+                  }
+                  else
+                  {
+                      if (includeOwnBlockedAttacks || !(ownPieces & next))
+                          filtered |= next;
+                  }
+
+                  if (blocked)
+                      break;
+                  current = next;
+              }
+              out |= filtered;
+          }
+          else
+          {
+              out |= after_hurdle;
+          }
+          continue;
+      }
+
       auto [dr0, df0] = decode_direction(c == WHITE ? d : Direction(-d));
       if (!dr0 && !df0)
           continue;

@@ -76,6 +76,7 @@ void init_variant(const Variant* v) {
                                                ? Bitboards::init_magics(v->maxFile, v->maxRank)
                                                : Bitboards::init_magics(FILE_MAX, RANK_MAX);
     pieceMap.init(v);
+    Bitboards::init_wrapped_rays(v->maxFile, v->maxRank, v->cylindrical || v->toroidal, v->toroidal);
     Bitboards::init_pieces();
 }
 
