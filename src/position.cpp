@@ -2463,6 +2463,7 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
 Bitboard Position::attackers_to_king(Square s, Bitboard occupied, Color c, Bitboard janggiCannons) const {
 
   Bitboard attackers = attackers_to(s, occupied, c, janggiCannons);
+  attackers |= janggi_cannon_attackers_to_king(s, occupied, c);
   // Frozen pieces cannot give check (relevant for spell-chess freeze effects).
   attackers &= ~(freeze_squares(c) | (pieces(c, PAWN) & pawnCannotCheckZone[c]));
   if (anti_royal_king_mutually_immune())
@@ -2474,6 +2475,70 @@ Bitboard Position::attackers_to_king(Square s, Bitboard occupied, Color c, Bitbo
 
   for (PieceSet ps = forbiddenToKing; ps; )
       attackers &= ~pieces(c, pop_lsb(ps));
+
+  return attackers;
+}
+
+Bitboard Position::janggi_cannon_attackers_to_king(Square s, Bitboard occupied, Color c) const {
+
+  Bitboard attackers = 0;
+  Bitboard cannons = pieces(c, JANGGI_CANNON) & occupied;
+  Bitboard cannonPieces = pieces(JANGGI_CANNON);
+
+  while (cannons)
+  {
+      Square from = pop_lsb(cannons);
+      int df = int(file_of(s)) - int(file_of(from));
+      int dr = int(rank_of(s)) - int(rank_of(from));
+      int stepF = 0;
+      int stepR = 0;
+      bool diagonal = false;
+
+      if (df == 0 && dr != 0)
+          stepR = dr > 0 ? 1 : -1;
+      else if (dr == 0 && df != 0)
+          stepF = df > 0 ? 1 : -1;
+      else if (std::abs(df) == std::abs(dr) && (diagonal_lines() & from) && (diagonal_lines() & s))
+      {
+          stepF = df > 0 ? 1 : -1;
+          stepR = dr > 0 ? 1 : -1;
+          diagonal = true;
+      }
+      else
+          continue;
+
+      int f = int(file_of(from)) + stepF;
+      int r = int(rank_of(from)) + stepR;
+      bool foundScreen = false;
+      bool blocked = false;
+
+      while (f != int(file_of(s)) || r != int(rank_of(s)))
+      {
+          Square cur = make_square(File(f), Rank(r));
+          if (diagonal && !(diagonal_lines() & cur))
+          {
+              blocked = true;
+              break;
+          }
+
+          if (occupied & cur)
+          {
+              if (!foundScreen && !(cannonPieces & cur))
+                  foundScreen = true;
+              else
+              {
+                  blocked = true;
+                  break;
+              }
+          }
+
+          f += stepF;
+          r += stepR;
+      }
+
+      if (foundScreen && !blocked)
+          attackers |= from;
+  }
 
   return attackers;
 }

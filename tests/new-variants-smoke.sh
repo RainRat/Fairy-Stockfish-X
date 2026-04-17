@@ -114,6 +114,14 @@ go perft 1")
 echo "${out}" | grep -q "^e2e8: 1$"
 fi
 
+# 5a) Janggi: non-king moves may not expose the king to a cannon check.
+if variant_available "janggi"; then
+out=$(run_cmds "setoption name UCI_Variant value janggi
+position fen rnba1abnr/4k4/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/4C2C1/4K4/RNBA1ABNR b - - 0 1
+go perft 1")
+! echo "${out}" | grep -q "^e7f7: 1$"
+fi
+
 # 5b) Little Trio: the opening cannon capture over the pawn screen is available.
 if variant_available "little-trio"; then
 out=$(run_cmds "setoption name UCI_Variant value little-trio
