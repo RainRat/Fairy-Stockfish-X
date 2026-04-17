@@ -49,57 +49,13 @@ Bitboard BoardSizeBB[FILE_NB][RANK_NB];
 RiderType AttackRiderTypes[PIECE_TYPE_NB];
 RiderType MoveRiderTypes[2][PIECE_TYPE_NB];
 
-Magic RookMagicsH[SQUARE_NB];
-Magic RookMagicsV[SQUARE_NB];
-Magic BishopMagics[SQUARE_NB];
-Magic CannonMagicsH[SQUARE_NB];
-Magic CannonMagicsV[SQUARE_NB];
-Magic HorseMagics[SQUARE_NB];
-Magic JanggiElephantMagics[SQUARE_NB];
-Magic CannonDiagMagics[SQUARE_NB];
-Magic NightriderMagics[SQUARE_NB];
-Magic GrasshopperMagicsH[SQUARE_NB];
-Magic GrasshopperMagicsV[SQUARE_NB];
-Magic GrasshopperMagicsD[SQUARE_NB];
-
-Magic* magics[] = {BishopMagics, RookMagicsH, RookMagicsV, CannonMagicsH, CannonMagicsV,
-                   BishopMagics, HorseMagics, BishopMagics, JanggiElephantMagics, CannonDiagMagics, NightriderMagics,
-                   GrasshopperMagicsH, GrasshopperMagicsV, GrasshopperMagicsD};
+thread_local const MagicGeometry* current_magic_geometry = nullptr;
 
 namespace {
 
 // Some magics need to be split in order to reduce memory consumption.
 // Otherwise on a 12x10 board they can be >100 MB.
 #if !defined(VERY_LARGE_BOARDS)
-#ifdef LARGEBOARDS
-  Bitboard RookTableH[0x11800];  // To store horizontal rook attacks
-  Bitboard RookTableV[0x4800];  // To store vertical rook attacks
-  Bitboard BishopTable[0x33C00]; // To store bishop attacks
-  Bitboard CannonTableH[0x11800];  // To store horizontal cannon attacks
-  Bitboard CannonTableV[0x4800];  // To store vertical cannon attacks
-  Bitboard HorseTable[0x500];  // To store horse attacks
-  Bitboard JanggiElephantTable[0x1C000];  // To store janggi elephant attacks
-  Bitboard CannonDiagTable[0x33C00]; // To store diagonal cannon attacks
-  // Nightrider masks trim terminal leap squares; 12x10 max needs 0xD200 entries.
-  Bitboard NightriderTable[0xD200]; // To store nightrider attacks
-  Bitboard GrasshopperTableH[0x11800];  // To store horizontal grasshopper attacks
-  Bitboard GrasshopperTableV[0x4800];  // To store vertical grasshopper attacks
-  Bitboard GrasshopperTableD[0x33C00]; // To store diagonal grasshopper attacks
-#else
-  Bitboard RookTableH[0xA00];  // To store horizontal rook attacks
-  Bitboard RookTableV[0xA00];  // To store vertical rook attacks
-  Bitboard BishopTable[0x1480]; // To store bishop attacks
-  Bitboard CannonTableH[0xA00];  // To store horizontal cannon attacks
-  Bitboard CannonTableV[0xA00];  // To store vertical cannon attacks
-  Bitboard HorseTable[0x240];  // To store horse attacks
-  Bitboard JanggiElephantTable[0x5C00];  // To store janggi elephant attacks
-  Bitboard CannonDiagTable[0x1480]; // To store diagonal cannon attacks
-  // Nightrider masks trim terminal leap squares; 8x8 max needs 0x500 entries.
-  Bitboard NightriderTable[0x500]; // To store nightrider attacks
-  Bitboard GrasshopperTableH[0xA00];  // To store horizontal grasshopper attacks
-  Bitboard GrasshopperTableV[0xA00];  // To store vertical grasshopper attacks
-  Bitboard GrasshopperTableD[0x1480]; // To store diagonal grasshopper attacks
-#endif
 #endif
 
   // Rider directions
@@ -838,8 +794,8 @@ void Bitboards::init() {
           {
               if (PseudoAttacks[WHITE][pt][s1] & s2)
               {
-                  LineBB[s1][s2]    = (attacks_bb(WHITE, pt, s1, 0) & attacks_bb(WHITE, pt, s2, 0)) | s1 | s2;
-                  BetweenBB[s1][s2] = (attacks_bb(WHITE, pt, s1, square_bb(s2)) & attacks_bb(WHITE, pt, s2, square_bb(s1)));
+                  LineBB[s1][s2]    = (attacks_bb(WHITE, pt, s1, 0, current_magic_geometry) & attacks_bb(WHITE, pt, s2, 0, current_magic_geometry)) | s1 | s2;
+                  BetweenBB[s1][s2] = (attacks_bb(WHITE, pt, s1, square_bb(s2), current_magic_geometry) & attacks_bb(WHITE, pt, s2, square_bb(s1), current_magic_geometry));
               }
               BetweenBB[s1][s2] |= s2;
           }
@@ -850,27 +806,7 @@ namespace {
 
 #if !defined(VERY_LARGE_BOARDS)
 
-  File CurrentMagicMaxFile = FILE_MAX;
-  Rank CurrentMagicMaxRank = RANK_MAX;
-  std::atomic<bool> MagicsInitialized { false };
-  std::atomic<uint16_t> CurrentMagicBoardKey { 0 };
-
-  struct MagicNumberCache {
-      std::array<Bitboard, SQUARE_NB> rookH {};
-      std::array<Bitboard, SQUARE_NB> rookV {};
-      std::array<Bitboard, SQUARE_NB> bishop {};
-      std::array<Bitboard, SQUARE_NB> cannonH {};
-      std::array<Bitboard, SQUARE_NB> cannonV {};
-      std::array<Bitboard, SQUARE_NB> horse {};
-      std::array<Bitboard, SQUARE_NB> janggiElephant {};
-      std::array<Bitboard, SQUARE_NB> cannonDiag {};
-      std::array<Bitboard, SQUARE_NB> nightrider {};
-      std::array<Bitboard, SQUARE_NB> grasshopperH {};
-      std::array<Bitboard, SQUARE_NB> grasshopperV {};
-      std::array<Bitboard, SQUARE_NB> grasshopperD {};
-  };
-
-  std::unordered_map<uint16_t, MagicNumberCache> MagicByBoardSize;
+  std::unordered_map<uint16_t, std::shared_ptr<const MagicGeometry>> MagicByBoardSize;
   std::vector<uint16_t> MagicCacheLru;
   std::mutex MagicInitMutex;
   constexpr size_t MAX_MAGIC_CACHE_ENTRIES = 16;
@@ -884,8 +820,8 @@ namespace {
           out[s] = in[s].magic;
   }
 
-  inline Bitboard active_magic_board() {
-      return BoardSizeBB[CurrentMagicMaxFile][CurrentMagicMaxRank];
+  inline Bitboard active_magic_board(File maxFile, Rank maxRank) {
+      return BoardSizeBB[maxFile][maxRank];
   }
 
   // init_magics() computes all rook and bishop attacks at startup. Magic
@@ -894,7 +830,7 @@ namespace {
   // called "fancy" approach.
 
   template <MovementType MT, bool TrimRiderTerminal = false>
-  void init_magic_table(Bitboard table[], Magic magics[], const std::map<Direction, int>& directions, const Bitboard* magicsInit = nullptr) {
+  void init_magic_table(Bitboard table[], Magic magics[], const std::map<Direction, int>& directions, File maxFile, Rank maxRank, const Bitboard* magicsInit = nullptr) {
 
     // Optimal PRNG seeds to pick the correct magics in the shortest time
 #ifdef LARGEBOARDS
@@ -916,8 +852,8 @@ namespace {
     for (Square s = SQ_A1; s <= SQ_MAX; ++s)
     {
         // Board edges are not considered in the relevant occupancies
-        edges = ((Rank1BB | rank_bb(CurrentMagicMaxRank)) & ~rank_bb(s))
-              | ((FileABB | file_bb(CurrentMagicMaxFile)) & ~file_bb(s));
+        edges = ((Rank1BB | rank_bb(maxRank)) & ~rank_bb(s))
+              | ((FileABB | file_bb(maxFile)) & ~file_bb(s));
 
         // Given a square 's', the mask is the bitboard of sliding attacks from
         // 's' computed on an empty board. The index must be big enough to contain
@@ -930,14 +866,14 @@ namespace {
         {
             // For leap-riders (e.g. nightrider), occupancy on the final square
             // of each ray cannot affect attacks, so it is not a relevant bit.
-            Bitboard emptyAttack = sliding_attack<RIDER>(directions, s, 0) & active_magic_board();
+            Bitboard emptyAttack = sliding_attack<RIDER>(directions, s, 0) & active_magic_board(maxFile, maxRank);
             m.mask = emptyAttack & ~rider_terminal_squares(directions, s);
         }
         else
         {
             m.mask = (MT == LAME_LEAPER ? lame_leaper_path(directions, s)
                                         : sliding_attack<MT == HOPPER ? HOPPER_RANGE : MT>(directions, s, 0))
-                   & active_magic_board() & ~edges;
+                   & active_magic_board(maxFile, maxRank) & ~edges;
         }
 #ifdef LARGEBOARDS
         m.shift = 128 - popcount(m.mask);
@@ -955,7 +891,7 @@ namespace {
         do {
             occupancy[size] = b;
             reference[size] = (MT == LAME_LEAPER ? lame_leaper_attack(directions, s, b) : sliding_attack<MT>(directions, s, b))
-                            & active_magic_board();
+                            & active_magic_board(maxFile, maxRank);
 
             if (HasPext)
                 m.attacks[pext(b, m.mask)] = reference[size];
@@ -1021,23 +957,13 @@ namespace {
 #endif
 }
 
-void Bitboards::init_magics(File maxFile, Rank maxRank) {
+std::shared_ptr<const MagicGeometry> Bitboards::init_magics(File maxFile, Rank maxRank) {
 #if !defined(VERY_LARGE_BOARDS)
   const uint16_t boardKey = magic_board_key(maxFile, maxRank);
-  if (MagicsInitialized.load(std::memory_order_acquire)
-      && boardKey == CurrentMagicBoardKey.load(std::memory_order_relaxed))
-      return;
 
   std::lock_guard<std::mutex> lock(MagicInitMutex);
-  if (MagicsInitialized.load(std::memory_order_relaxed)
-      && maxFile == CurrentMagicMaxFile && maxRank == CurrentMagicMaxRank)
-      return;
-
-  CurrentMagicMaxFile = maxFile;
-  CurrentMagicMaxRank = maxRank;
   const auto cacheIt = MagicByBoardSize.find(boardKey);
-  const MagicNumberCache* cache = cacheIt == MagicByBoardSize.end() ? nullptr : &cacheIt->second;
-  if (cache)
+  if (cacheIt != MagicByBoardSize.end())
   {
       auto it = std::find(MagicCacheLru.begin(), MagicCacheLru.end(), boardKey);
       if (it != MagicCacheLru.end())
@@ -1045,64 +971,82 @@ void Bitboards::init_magics(File maxFile, Rank maxRank) {
           MagicCacheLru.erase(it);
           MagicCacheLru.push_back(boardKey);
       }
+      current_magic_geometry = cacheIt->second.get();
+      return cacheIt->second;
   }
 
-#ifdef PRECOMPUTED_MAGICS
-  init_magic_table<RIDER>(RookTableH, RookMagicsH, RookDirectionsH, cache ? cache->rookH.data() : RookMagicHInit);
-  init_magic_table<RIDER>(RookTableV, RookMagicsV, RookDirectionsV, cache ? cache->rookV.data() : RookMagicVInit);
-  init_magic_table<RIDER>(BishopTable, BishopMagics, BishopDirections, cache ? cache->bishop.data() : BishopMagicInit);
-  init_magic_table<HOPPER>(CannonTableH, CannonMagicsH, RookDirectionsH, cache ? cache->cannonH.data() : CannonMagicHInit);
-  init_magic_table<HOPPER>(CannonTableV, CannonMagicsV, RookDirectionsV, cache ? cache->cannonV.data() : CannonMagicVInit);
-  init_magic_table<LAME_LEAPER>(HorseTable, HorseMagics, HorseDirections, cache ? cache->horse.data() : HorseMagicInit);
-  init_magic_table<LAME_LEAPER>(JanggiElephantTable, JanggiElephantMagics, JanggiElephantDirections, cache ? cache->janggiElephant.data() : JanggiElephantMagicInit);
-  init_magic_table<HOPPER>(CannonDiagTable, CannonDiagMagics, BishopDirections, cache ? cache->cannonDiag.data() : CannonDiagMagicInit);
-  init_magic_table<RIDER, true>(NightriderTable, NightriderMagics, HorseDirections, cache ? cache->nightrider.data() : NightriderMagicInit);
-  init_magic_table<HOPPER>(GrasshopperTableH, GrasshopperMagicsH, GrasshopperDirectionsH, cache ? cache->grasshopperH.data() : GrasshopperMagicHInit);
-  init_magic_table<HOPPER>(GrasshopperTableV, GrasshopperMagicsV, GrasshopperDirectionsV, cache ? cache->grasshopperV.data() : GrasshopperMagicVInit);
-  init_magic_table<HOPPER>(GrasshopperTableD, GrasshopperMagicsD, GrasshopperDirectionsD, cache ? cache->grasshopperD.data() : GrasshopperMagicDInit);
+  std::shared_ptr<MagicGeometry> mg = std::make_shared<MagicGeometry>();
+
+#ifdef LARGEBOARDS
+  mg->RookTableH.resize(0x11800);
+  mg->RookTableV.resize(0x4800);
+  mg->BishopTable.resize(0x33C00);
+  mg->CannonTableH.resize(0x11800);
+  mg->CannonTableV.resize(0x4800);
+  mg->HorseTable.resize(0x500);
+  mg->JanggiElephantTable.resize(0x1C000);
+  mg->CannonDiagTable.resize(0x33C00);
+  mg->NightriderTable.resize(0xD200);
+  mg->GrasshopperTableH.resize(0x11800);
+  mg->GrasshopperTableV.resize(0x4800);
+  mg->GrasshopperTableD.resize(0x33C00);
 #else
-  init_magic_table<RIDER>(RookTableH, RookMagicsH, RookDirectionsH, cache ? cache->rookH.data() : nullptr);
-  init_magic_table<RIDER>(RookTableV, RookMagicsV, RookDirectionsV, cache ? cache->rookV.data() : nullptr);
-  init_magic_table<RIDER>(BishopTable, BishopMagics, BishopDirections, cache ? cache->bishop.data() : nullptr);
-  init_magic_table<HOPPER>(CannonTableH, CannonMagicsH, RookDirectionsH, cache ? cache->cannonH.data() : nullptr);
-  init_magic_table<HOPPER>(CannonTableV, CannonMagicsV, RookDirectionsV, cache ? cache->cannonV.data() : nullptr);
-  init_magic_table<LAME_LEAPER>(HorseTable, HorseMagics, HorseDirections, cache ? cache->horse.data() : nullptr);
-  init_magic_table<LAME_LEAPER>(JanggiElephantTable, JanggiElephantMagics, JanggiElephantDirections, cache ? cache->janggiElephant.data() : nullptr);
-  init_magic_table<HOPPER>(CannonDiagTable, CannonDiagMagics, BishopDirections, cache ? cache->cannonDiag.data() : nullptr);
-  init_magic_table<RIDER, true>(NightriderTable, NightriderMagics, HorseDirections, cache ? cache->nightrider.data() : nullptr);
-  init_magic_table<HOPPER>(GrasshopperTableH, GrasshopperMagicsH, GrasshopperDirectionsH, cache ? cache->grasshopperH.data() : nullptr);
-  init_magic_table<HOPPER>(GrasshopperTableV, GrasshopperMagicsV, GrasshopperDirectionsV, cache ? cache->grasshopperV.data() : nullptr);
-  init_magic_table<HOPPER>(GrasshopperTableD, GrasshopperMagicsD, GrasshopperDirectionsD, cache ? cache->grasshopperD.data() : nullptr);
+  mg->RookTableH.resize(0xA00);
+  mg->RookTableV.resize(0xA00);
+  mg->BishopTable.resize(0x1480);
+  mg->CannonTableH.resize(0xA00);
+  mg->CannonTableV.resize(0xA00);
+  mg->HorseTable.resize(0x240);
+  mg->JanggiElephantTable.resize(0x5C00);
+  mg->CannonDiagTable.resize(0x1480);
+  mg->NightriderTable.resize(0x500);
+  mg->GrasshopperTableH.resize(0xA00);
+  mg->GrasshopperTableV.resize(0xA00);
+  mg->GrasshopperTableD.resize(0x1480);
 #endif
 
-  if (!cache) {
-      if (MagicByBoardSize.size() >= MAX_MAGIC_CACHE_ENTRIES && !MagicCacheLru.empty())
-      {
-          MagicByBoardSize.erase(MagicCacheLru.front());
-          MagicCacheLru.erase(MagicCacheLru.begin());
-      }
-      MagicNumberCache fresh {};
-      snapshot_magic_numbers(fresh.rookH, RookMagicsH);
-      snapshot_magic_numbers(fresh.rookV, RookMagicsV);
-      snapshot_magic_numbers(fresh.bishop, BishopMagics);
-      snapshot_magic_numbers(fresh.cannonH, CannonMagicsH);
-      snapshot_magic_numbers(fresh.cannonV, CannonMagicsV);
-      snapshot_magic_numbers(fresh.horse, HorseMagics);
-      snapshot_magic_numbers(fresh.janggiElephant, JanggiElephantMagics);
-      snapshot_magic_numbers(fresh.cannonDiag, CannonDiagMagics);
-      snapshot_magic_numbers(fresh.nightrider, NightriderMagics);
-      snapshot_magic_numbers(fresh.grasshopperH, GrasshopperMagicsH);
-      snapshot_magic_numbers(fresh.grasshopperV, GrasshopperMagicsV);
-      snapshot_magic_numbers(fresh.grasshopperD, GrasshopperMagicsD);
-      MagicByBoardSize.emplace(boardKey, std::move(fresh));
-      MagicCacheLru.push_back(boardKey);
-  }
+#ifdef PRECOMPUTED_MAGICS
+  init_magic_table<RIDER>(mg->RookTableH.data(), mg->RookMagicsH, RookDirectionsH, maxFile, maxRank, RookMagicHInit);
+  init_magic_table<RIDER>(mg->RookTableV.data(), mg->RookMagicsV, RookDirectionsV, maxFile, maxRank, RookMagicVInit);
+  init_magic_table<RIDER>(mg->BishopTable.data(), mg->BishopMagics, BishopDirections, maxFile, maxRank, BishopMagicInit);
+  init_magic_table<HOPPER>(mg->CannonTableH.data(), mg->CannonMagicsH, RookDirectionsH, maxFile, maxRank, CannonMagicHInit);
+  init_magic_table<HOPPER>(mg->CannonTableV.data(), mg->CannonMagicsV, RookDirectionsV, maxFile, maxRank, CannonMagicVInit);
+  init_magic_table<LAME_LEAPER>(mg->HorseTable.data(), mg->HorseMagics, HorseDirections, maxFile, maxRank, HorseMagicInit);
+  init_magic_table<LAME_LEAPER>(mg->JanggiElephantTable.data(), mg->JanggiElephantMagics, JanggiElephantDirections, maxFile, maxRank, JanggiElephantMagicInit);
+  init_magic_table<HOPPER>(mg->CannonDiagTable.data(), mg->CannonDiagMagics, BishopDirections, maxFile, maxRank, CannonDiagMagicInit);
+  init_magic_table<RIDER, true>(mg->NightriderTable.data(), mg->NightriderMagics, HorseDirections, maxFile, maxRank, NightriderMagicInit);
+  init_magic_table<HOPPER>(mg->GrasshopperTableH.data(), mg->GrasshopperMagicsH, GrasshopperDirectionsH, maxFile, maxRank, GrasshopperMagicHInit);
+  init_magic_table<HOPPER>(mg->GrasshopperTableV.data(), mg->GrasshopperMagicsV, GrasshopperDirectionsV, maxFile, maxRank, GrasshopperMagicVInit);
+  init_magic_table<HOPPER>(mg->GrasshopperTableD.data(), mg->GrasshopperMagicsD, GrasshopperDirectionsD, maxFile, maxRank, GrasshopperMagicDInit);
+#else
+  init_magic_table<RIDER>(mg->RookTableH.data(), mg->RookMagicsH, RookDirectionsH, maxFile, maxRank, nullptr);
+  init_magic_table<RIDER>(mg->RookTableV.data(), mg->RookMagicsV, RookDirectionsV, maxFile, maxRank, nullptr);
+  init_magic_table<RIDER>(mg->BishopTable.data(), mg->BishopMagics, BishopDirections, maxFile, maxRank, nullptr);
+  init_magic_table<HOPPER>(mg->CannonTableH.data(), mg->CannonMagicsH, RookDirectionsH, maxFile, maxRank, nullptr);
+  init_magic_table<HOPPER>(mg->CannonTableV.data(), mg->CannonMagicsV, RookDirectionsV, maxFile, maxRank, nullptr);
+  init_magic_table<LAME_LEAPER>(mg->HorseTable.data(), mg->HorseMagics, HorseDirections, maxFile, maxRank, nullptr);
+  init_magic_table<LAME_LEAPER>(mg->JanggiElephantTable.data(), mg->JanggiElephantMagics, JanggiElephantDirections, maxFile, maxRank, nullptr);
+  init_magic_table<HOPPER>(mg->CannonDiagTable.data(), mg->CannonDiagMagics, BishopDirections, maxFile, maxRank, nullptr);
+  init_magic_table<RIDER, true>(mg->NightriderTable.data(), mg->NightriderMagics, HorseDirections, maxFile, maxRank, nullptr);
+  init_magic_table<HOPPER>(mg->GrasshopperTableH.data(), mg->GrasshopperMagicsH, GrasshopperDirectionsH, maxFile, maxRank, nullptr);
+  init_magic_table<HOPPER>(mg->GrasshopperTableV.data(), mg->GrasshopperMagicsV, GrasshopperDirectionsV, maxFile, maxRank, nullptr);
+  init_magic_table<HOPPER>(mg->GrasshopperTableD.data(), mg->GrasshopperMagicsD, GrasshopperDirectionsD, maxFile, maxRank, nullptr);
+#endif
 
-  CurrentMagicBoardKey.store(boardKey, std::memory_order_relaxed);
-  MagicsInitialized.store(true, std::memory_order_release);
+  if (MagicByBoardSize.size() >= MAX_MAGIC_CACHE_ENTRIES && !MagicCacheLru.empty())
+  {
+      MagicByBoardSize.erase(MagicCacheLru.front());
+      MagicCacheLru.erase(MagicCacheLru.begin());
+  }
+  MagicByBoardSize.emplace(boardKey, mg);
+  MagicCacheLru.push_back(boardKey);
+
+  current_magic_geometry = mg.get();
+  return mg;
 #else
   (void) maxFile;
   (void) maxRank;
+  return nullptr;
 #endif
 }
 

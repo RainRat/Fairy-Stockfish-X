@@ -518,14 +518,14 @@ namespace {
     return pos.attacks_from(c, pt, sq, syntheticOccupancy);
   }
 
-  Bitboard rose_revealed_blockers(Square target, Square attackerSq, Bitboard occupied) {
+  Bitboard rose_revealed_blockers(Square target, Square attackerSq, Bitboard occupied, const MagicGeometry* mg) {
     Bitboard blockers = 0;
     Bitboard candidates = rose_between_union_bb(target, attackerSq, Bitboard(0)) & occupied & ~square_bb(attackerSq);
 
     while (candidates)
     {
         Square blocker = pop_lsb(candidates);
-        if (rose_attacks_bb(attackerSq, occupied ^ square_bb(blocker)) & target)
+        if (rose_attacks_bb(attackerSq, occupied ^ square_bb(blocker), mg) & target)
             blockers |= blocker;
     }
 
@@ -1045,7 +1045,7 @@ void Position::init() {
       Piece pc = make_piece(c, pop_lsb(ps));
       for (Square s1 = SQ_A1; s1 <= SQ_MAX; ++s1)
           for (Square s2 = Square(s1 + 1); s2 <= SQ_MAX; ++s2)
-              if ((type_of(pc) != PAWN) && (attacks_bb(c, type_of(pc), s1, 0) & s2))
+              if ((type_of(pc) != PAWN) && (::Stockfish::attacks_bb(c, type_of(pc), s1, 0) & s2))
               {
                   Move move = make_move(s1, s2);
                   Key key = Zobrist::psq[pc][s1] ^ Zobrist::psq[pc][s2] ^ Zobrist::side;
@@ -1750,10 +1750,10 @@ void Position::set_check_info(StateInfo* si) const {
   {
       const bool hasKing = ksq != SQ_NONE;
       const Bitboard pawnAttacks = hasKing ? pawn_attacks_bb(~sideToMove, ksq) : Bitboard(0);
-      const Bitboard knightAttacks = hasKing ? attacks_bb<KNIGHT>(ksq) : Bitboard(0);
-      const Bitboard bishopAttacks = hasKing ? attacks_bb<BISHOP>(ksq, occupied) : Bitboard(0);
-      const Bitboard rookAttacks = hasKing ? attacks_bb<ROOK>(ksq, occupied) : Bitboard(0);
-      const Bitboard kingAttacks = hasKing ? attacks_bb<KING>(ksq) : Bitboard(0);
+      const Bitboard knightAttacks = hasKing ? this->attacks_bb<KNIGHT>(ksq) : Bitboard(0);
+      const Bitboard bishopAttacks = hasKing ? this->attacks_bb<BISHOP>(ksq, occupied) : Bitboard(0);
+      const Bitboard rookAttacks = hasKing ? this->attacks_bb<ROOK>(ksq, occupied) : Bitboard(0);
+      const Bitboard kingAttacks = hasKing ? this->attacks_bb<KING>(ksq) : Bitboard(0);
       const Bitboard queenAttacks = bishopAttacks | rookAttacks;
 
       si->checkSquares[PAWN] = pawnAttacks;
@@ -2339,7 +2339,7 @@ Bitboard Position::slider_blockers(Bitboard sliders, Square s, Bitboard& pinners
     PieceType sniperType = type_of(sniper);
     if (AttackRiderTypes[sniperType] & RIDER_ROSE)
     {
-        Bitboard b = rose_revealed_blockers(s, sniperSq, occupancy);
+        Bitboard b = rose_revealed_blockers(s, sniperSq, occupancy, magic_geometry());
         if (b && !more_than_one(b))
             pinners |= pieces(c) & sniperSq;
         blockers |= b;

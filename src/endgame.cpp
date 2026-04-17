@@ -674,7 +674,7 @@ ScaleFactor Endgame<KQKRPs>::operator()(const Position& pos) const {
       &&  relative_rank(weakSide, strongKing, pos.max_rank()) >= RANK_4
       &&  relative_rank(weakSide,   weakRook, pos.max_rank()) == RANK_3
       && (  pos.pieces(weakSide, PAWN)
-          & attacks_bb<KING>(weakKing)
+          & pos.attacks_bb<KING>(weakKing)
           & pawn_attacks_bb(strongSide, weakRook)))
           return SCALE_FACTOR_DRAW;
 
@@ -825,7 +825,7 @@ ScaleFactor Endgame<KRPKB>::operator()(const Position& pos) const {
       // the corner
       if (   pawnRank == RANK_6
           && distance(strongPawn + 2 * push, weakKing) <= 1
-          && (attacks_bb<BISHOP>(weakBishop) & (strongPawn + push))
+          && (pos.attacks_bb<BISHOP>(weakBishop) & (strongPawn + push))
           && distance<File>(weakBishop, strongPawn) >= 2)
           return ScaleFactor(8);
   }
@@ -965,14 +965,14 @@ ScaleFactor Endgame<KBPPKB>::operator()(const Position& pos) const {
     if (   weakKing == blockSq1
         && opposite_colors(weakKing, strongBishop)
         && (   weakBishop == blockSq2
-            || (attacks_bb<BISHOP>(blockSq2, pos.pieces()) & pos.pieces(weakSide, BISHOP))
+            || (pos.attacks_bb<BISHOP>(blockSq2, pos.pieces()) & pos.pieces(weakSide, BISHOP))
             || distance<Rank>(strongPawn1, strongPawn2) >= 2))
         return SCALE_FACTOR_DRAW;
 
     else if (   weakKing == blockSq2
              && opposite_colors(weakKing, strongBishop)
              && (   weakBishop == blockSq1
-                 || (attacks_bb<BISHOP>(blockSq1, pos.pieces()) & pos.pieces(weakSide, BISHOP))))
+                 || (pos.attacks_bb<BISHOP>(blockSq1, pos.pieces()) & pos.pieces(weakSide, BISHOP))))
         return SCALE_FACTOR_DRAW;
     else
         return SCALE_FACTOR_NONE;
@@ -1079,8 +1079,8 @@ Value Endgame<KN, EG_EVAL_ANTI>::operator()(const Position& pos) const {
 
   Square KSq = pos.square<COMMONER>(strongSide);
   Square NSq = pos.square<KNIGHT>(weakSide);
-  Bitboard kingAttacks = attacks_bb<KING>(KSq) & pos.board_bb();
-  Bitboard knightAttacks = attacks_bb<KNIGHT>(NSq) & pos.board_bb();
+  Bitboard kingAttacks = pos.attacks_bb<KING>(KSq) & pos.board_bb();
+  Bitboard knightAttacks = pos.attacks_bb<KNIGHT>(NSq) & pos.board_bb();
   bool strongSideToMove = pos.side_to_move() == strongSide;
 
   // Loss in 1 play
@@ -1188,7 +1188,7 @@ Value Endgame<KQK, EG_EVAL_ATOMIC>::operator()(const Position& pos) const {
       return VALUE_DRAW;
   // If the weaker side is to move and there is a way to connect kings, it is a draw
   if (   pos.side_to_move() == weakSide
-      && (attacks_bb<KING>(winnerKSq) & attacks_bb<KING>(loserKSq) & ~pos.pieces()))
+      && (pos.attacks_bb<KING>(winnerKSq) & pos.attacks_bb<KING>(loserKSq) & ~pos.pieces()))
       return VALUE_DRAW;
 
   Value result =  Value(push_to_edge(loserKSq, pos))
@@ -1317,7 +1317,7 @@ Value Endgame<KQK, EG_EVAL_RK>::operator()(const Position& pos) const {
 
   if (   rank_of(weakKing) < rank_of(strongQueen)
       || rank_of(weakKing) + (weakSide == pos.side_to_move()) < penultimate
-      || (goalRank & attacks_bb<QUEEN>(strongQueen, pos.pieces()) & ~(attacks_bb<QUEEN>(weakKing) | attacks_bb<SHOGI_KNIGHT>(weakKing))))
+      || (goalRank & pos.attacks_bb<QUEEN>(strongQueen, pos.pieces()) & ~(pos.attacks_bb<QUEEN>(weakKing) | pos.attacks_bb<SHOGI_KNIGHT>(weakKing))))
       result = VALUE_KNOWN_WIN + 100 * rank_of(strongKing);
   else
       result = -VALUE_KNOWN_WIN;
@@ -1339,7 +1339,7 @@ Value Endgame<KRK, EG_EVAL_RK>::operator()(const Position& pos) const {
 
   if (   rank_of(weakKing) < rank_of(strongRook)
       || rank_of(weakKing) + (weakSide == pos.side_to_move()) < penultimate
-      || (goalRank & attacks_bb<ROOK>(strongRook, pos.pieces()) & ~(attacks_bb<QUEEN>(weakKing) | attacks_bb<SHOGI_KNIGHT>(weakKing))))
+      || (goalRank & pos.attacks_bb<ROOK>(strongRook, pos.pieces()) & ~(pos.attacks_bb<QUEEN>(weakKing) | pos.attacks_bb<SHOGI_KNIGHT>(weakKing))))
       result = VALUE_KNOWN_WIN + 100 * rank_of(strongKing);
   else
       result = -VALUE_KNOWN_WIN;

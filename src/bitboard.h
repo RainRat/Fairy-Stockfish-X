@@ -22,10 +22,87 @@
 #include <array>
 #include <utility>
 #include <string>
+#include <vector>
+#include <memory>
 
 #include "types.h"
 
 namespace Stockfish {
+
+/// Magic holds all magic bitboards relevant data for a single square
+struct Magic {
+  Bitboard  mask;
+  Bitboard  magic;
+  Bitboard* attacks;
+  unsigned  shift;
+
+  // Compute the attack's index using the 'magic bitboards' approach
+  unsigned index(Bitboard occupied) const {
+
+    if (HasPext)
+        return unsigned(pext(occupied, mask));
+
+#ifdef LARGEBOARDS
+    return unsigned(((occupied & mask) * magic) >> shift);
+#else
+    if (Is64Bit)
+        return unsigned(((occupied & mask) * magic) >> shift);
+
+    unsigned lo = unsigned(occupied) & unsigned(mask);
+    unsigned hi = unsigned(occupied >> 32) & unsigned(mask >> 32);
+    return (lo * unsigned(magic) ^ hi * unsigned(magic >> 32)) >> shift;
+#endif
+  }
+};
+
+struct MagicGeometry {
+  Magic RookMagicsH[SQUARE_NB];
+  Magic RookMagicsV[SQUARE_NB];
+  Magic BishopMagics[SQUARE_NB];
+  Magic CannonMagicsH[SQUARE_NB];
+  Magic CannonMagicsV[SQUARE_NB];
+  Magic HorseMagics[SQUARE_NB];
+  Magic JanggiElephantMagics[SQUARE_NB];
+  Magic CannonDiagMagics[SQUARE_NB];
+  Magic NightriderMagics[SQUARE_NB];
+  Magic GrasshopperMagicsH[SQUARE_NB];
+  Magic GrasshopperMagicsV[SQUARE_NB];
+  Magic GrasshopperMagicsD[SQUARE_NB];
+
+  std::vector<Bitboard> RookTableH;
+  std::vector<Bitboard> RookTableV;
+  std::vector<Bitboard> BishopTable;
+  std::vector<Bitboard> CannonTableH;
+  std::vector<Bitboard> CannonTableV;
+  std::vector<Bitboard> HorseTable;
+  std::vector<Bitboard> JanggiElephantTable;
+  std::vector<Bitboard> CannonDiagTable;
+  std::vector<Bitboard> NightriderTable;
+  std::vector<Bitboard> GrasshopperTableH;
+  std::vector<Bitboard> GrasshopperTableV;
+  std::vector<Bitboard> GrasshopperTableD;
+
+  Magic* magics[14];
+
+  MagicGeometry() {
+    magics[0] = BishopMagics;
+    magics[1] = RookMagicsH;
+    magics[2] = RookMagicsV;
+    magics[3] = CannonMagicsH;
+    magics[4] = CannonMagicsV;
+    magics[5] = BishopMagics;
+    magics[6] = HorseMagics;
+    magics[7] = BishopMagics;
+    magics[8] = JanggiElephantMagics;
+    magics[9] = CannonDiagMagics;
+    magics[10] = NightriderMagics;
+    magics[11] = GrasshopperMagicsH;
+    magics[12] = GrasshopperMagicsV;
+    magics[13] = GrasshopperMagicsD;
+  }
+};
+
+extern thread_local const MagicGeometry* current_magic_geometry;
 
 namespace Bitbases {
 
@@ -37,7 +114,7 @@ bool probe(Square wksq, Square wpsq, Square bksq, Color us);
 namespace Bitboards {
 
 void init_pieces();
-void init_magics(File maxFile, Rank maxRank);
+std::shared_ptr<const MagicGeometry> init_magics(File maxFile, Rank maxRank);
 void init();
 std::string pretty(Bitboard b);
 
@@ -145,47 +222,6 @@ constexpr std::array<std::pair<int, int>, 8> RoseSteps = {{
 int popcount(Bitboard b); // required for 128 bit pext
 #endif
 
-/// Magic holds all magic bitboards relevant data for a single square
-struct Magic {
-  Bitboard  mask;
-  Bitboard  magic;
-  Bitboard* attacks;
-  unsigned  shift;
-
-  // Compute the attack's index using the 'magic bitboards' approach
-  unsigned index(Bitboard occupied) const {
-
-    if (HasPext)
-        return unsigned(pext(occupied, mask));
-
-#ifdef LARGEBOARDS
-    return unsigned(((occupied & mask) * magic) >> shift);
-#else
-    if (Is64Bit)
-        return unsigned(((occupied & mask) * magic) >> shift);
-#endif
-
-    unsigned lo = unsigned(occupied) & unsigned(mask);
-    unsigned hi = unsigned(occupied >> 32) & unsigned(mask >> 32);
-    return (lo * unsigned(magic) ^ hi * unsigned(magic >> 32)) >> shift;
-  }
-};
-
-extern Magic RookMagicsH[SQUARE_NB];
-extern Magic RookMagicsV[SQUARE_NB];
-extern Magic BishopMagics[SQUARE_NB];
-extern Magic CannonMagicsH[SQUARE_NB];
-extern Magic CannonMagicsV[SQUARE_NB];
-extern Magic HorseMagics[SQUARE_NB];
-extern Magic JanggiElephantMagics[SQUARE_NB];
-extern Magic CannonDiagMagics[SQUARE_NB];
-extern Magic NightriderMagics[SQUARE_NB];
-extern Magic GrasshopperMagicsH[SQUARE_NB];
-extern Magic GrasshopperMagicsV[SQUARE_NB];
-extern Magic GrasshopperMagicsD[SQUARE_NB];
-
-extern Magic* magics[];
-
 constexpr Bitboard make_bitboard() { return 0; }
 
 template<typename ...Squares>
@@ -269,7 +305,7 @@ inline Bitboard safe_destination_tuple_bb(Square s, int dr, int df) {
   return square_bb(make_square(File(f), Rank(r)));
 }
 
-inline Bitboard rose_attacks_bb(Square from, Bitboard occupied) {
+inline Bitboard rose_attacks_bb(Square from, Bitboard occupied, const MagicGeometry* mg = current_magic_geometry) {
   Bitboard attack = 0;
 
   for (int start = 0; start < 8; ++start)
@@ -870,7 +906,8 @@ inline Bitboard rider_attacks_bb(Square s, Bitboard occupied) {
 
 inline Square lsb(Bitboard b);
 #else
-inline Bitboard fixed_step_rider_attacks(Square s, Bitboard occupied, int stepF, int stepR) {
+inline Bitboard fixed_step_rider_attacks(Square s, Bitboard occupied, int stepF, int stepR, const MagicGeometry* mg = current_magic_geometry) {
+  (void)mg;
   Bitboard attack = 0;
   int f = int(file_of(s));
   int r = int(rank_of(s));
@@ -890,7 +927,8 @@ inline Bitboard fixed_step_rider_attacks(Square s, Bitboard occupied, int stepF,
   return attack;
 }
 
-inline Bitboard ski_slider_attacks(Square s, Bitboard occupied, int stepF, int stepR) {
+inline Bitboard ski_slider_attacks(Square s, Bitboard occupied, int stepF, int stepR, const MagicGeometry* mg = current_magic_geometry) {
+  (void)mg;
   int f = int(file_of(s)) + stepF;
   int r = int(rank_of(s)) + stepR;
   if (f < int(FILE_A) || f > int(FILE_MAX) || r < int(RANK_1) || r > int(RANK_MAX))
@@ -912,7 +950,7 @@ inline Bitboard ski_slider_attacks(Square s, Bitboard occupied, int stepF, int s
 }
 
 template<RiderType R>
-inline Bitboard rider_attacks_bb(Square s, Bitboard occupied) {
+inline Bitboard rider_attacks_bb(Square s, Bitboard occupied, const MagicGeometry* mg = current_magic_geometry) {
 
   static_assert(R != NO_RIDER && !(R & (R - 1))); // exactly one bit
   if constexpr (R == RIDER_GRIFFON_NH || R == RIDER_GRIFFON_SH || R == RIDER_GRIFFON_EV || R == RIDER_GRIFFON_WV) {
@@ -995,26 +1033,26 @@ inline Bitboard rider_attacks_bb(Square s, Bitboard occupied) {
   if constexpr (R == RIDER_ROSE)
       return rose_attacks_bb(s, occupied);
 
-  const Magic& m =  R == RIDER_ROOK_H ? RookMagicsH[s]
-                  : R == RIDER_ROOK_V ? RookMagicsV[s]
-                  : R == RIDER_CANNON_H ? CannonMagicsH[s]
-                  : R == RIDER_CANNON_V ? CannonMagicsV[s]
-                  : R == RIDER_LAME_DABBABA ? BishopMagics[s]
-                  : R == RIDER_HORSE ? HorseMagics[s]
-                  : R == RIDER_ELEPHANT ? BishopMagics[s]
-                  : R == RIDER_JANGGI_ELEPHANT ? JanggiElephantMagics[s]
-                  : R == RIDER_CANNON_DIAG ? CannonDiagMagics[s]
-                  : R == RIDER_NIGHTRIDER ? NightriderMagics[s]
-                  : R == RIDER_GRASSHOPPER_H ? GrasshopperMagicsH[s]
-                  : R == RIDER_GRASSHOPPER_V ? GrasshopperMagicsV[s]
-                  : R == RIDER_GRASSHOPPER_D ? GrasshopperMagicsD[s]
-                  : BishopMagics[s];
+  const Magic& m =  R == RIDER_ROOK_H ? mg->RookMagicsH[s]
+                  : R == RIDER_ROOK_V ? mg->RookMagicsV[s]
+                  : R == RIDER_CANNON_H ? mg->CannonMagicsH[s]
+                  : R == RIDER_CANNON_V ? mg->CannonMagicsV[s]
+                  : R == RIDER_LAME_DABBABA ? mg->BishopMagics[s]
+                  : R == RIDER_HORSE ? mg->HorseMagics[s]
+                  : R == RIDER_ELEPHANT ? mg->BishopMagics[s]
+                  : R == RIDER_JANGGI_ELEPHANT ? mg->JanggiElephantMagics[s]
+                  : R == RIDER_CANNON_DIAG ? mg->CannonDiagMagics[s]
+                  : R == RIDER_NIGHTRIDER ? mg->NightriderMagics[s]
+                  : R == RIDER_GRASSHOPPER_H ? mg->GrasshopperMagicsH[s]
+                  : R == RIDER_GRASSHOPPER_V ? mg->GrasshopperMagicsV[s]
+                  : R == RIDER_GRASSHOPPER_D ? mg->GrasshopperMagicsD[s]
+                  : mg->BishopMagics[s];
   return m.attacks[m.index(occupied)];
 }
 
 inline Square lsb(Bitboard b);
 
-inline Bitboard rider_attacks_bb(RiderType R, Square s, Bitboard occupied) {
+inline Bitboard rider_attacks_bb(RiderType R, Square s, Bitboard occupied, const MagicGeometry* mg = current_magic_geometry) {
 
   assert(R != NO_RIDER && !(R & (R - 1))); // exactly one bit
   if (R == RIDER_LAME_DABBABA)
@@ -1040,15 +1078,15 @@ inline Bitboard rider_attacks_bb(RiderType R, Square s, Bitboard occupied) {
             | ski_slider_attacks(s, occupied, -1, -1);
   if (R == RIDER_ROSE)
       return rose_attacks_bb(s, occupied);
-  if (R == RIDER_GRIFFON_NH) return rider_attacks_bb<RIDER_GRIFFON_NH>(s, occupied);
-  if (R == RIDER_GRIFFON_SH) return rider_attacks_bb<RIDER_GRIFFON_SH>(s, occupied);
-  if (R == RIDER_GRIFFON_EV) return rider_attacks_bb<RIDER_GRIFFON_EV>(s, occupied);
-  if (R == RIDER_GRIFFON_WV) return rider_attacks_bb<RIDER_GRIFFON_WV>(s, occupied);
-  if (R == RIDER_MANTICORE_NE) return rider_attacks_bb<RIDER_MANTICORE_NE>(s, occupied);
-  if (R == RIDER_MANTICORE_NW) return rider_attacks_bb<RIDER_MANTICORE_NW>(s, occupied);
-  if (R == RIDER_MANTICORE_SE) return rider_attacks_bb<RIDER_MANTICORE_SE>(s, occupied);
-  if (R == RIDER_MANTICORE_SW) return rider_attacks_bb<RIDER_MANTICORE_SW>(s, occupied);
-  const Magic& m = magics[lsb(R)][s]; // re-use Bitboard lsb for riders
+  if (R == RIDER_GRIFFON_NH) return rider_attacks_bb<RIDER_GRIFFON_NH>(s, occupied, mg);
+  if (R == RIDER_GRIFFON_SH) return rider_attacks_bb<RIDER_GRIFFON_SH>(s, occupied, mg);
+  if (R == RIDER_GRIFFON_EV) return rider_attacks_bb<RIDER_GRIFFON_EV>(s, occupied, mg);
+  if (R == RIDER_GRIFFON_WV) return rider_attacks_bb<RIDER_GRIFFON_WV>(s, occupied, mg);
+  if (R == RIDER_MANTICORE_NE) return rider_attacks_bb<RIDER_MANTICORE_NE>(s, occupied, mg);
+  if (R == RIDER_MANTICORE_NW) return rider_attacks_bb<RIDER_MANTICORE_NW>(s, occupied, mg);
+  if (R == RIDER_MANTICORE_SE) return rider_attacks_bb<RIDER_MANTICORE_SE>(s, occupied, mg);
+  if (R == RIDER_MANTICORE_SW) return rider_attacks_bb<RIDER_MANTICORE_SW>(s, occupied, mg);
+  const Magic& m = mg->magics[lsb(R)][s]; // re-use Bitboard lsb for riders
   return m.attacks[m.index(occupied)];
 }
 #endif
@@ -1071,15 +1109,15 @@ inline Bitboard attacks_bb(Square s) {
 /// Sliding piece attacks do not continue past an occupied square.
 
 template<PieceType Pt>
-inline Bitboard attacks_bb(Square s, Bitboard occupied) {
+inline Bitboard attacks_bb(Square s, Bitboard occupied, const MagicGeometry* mg = current_magic_geometry) {
 
   assert((Pt != PAWN) && (is_ok(s)));
 
   switch (Pt)
   {
-  case BISHOP: return rider_attacks_bb<RIDER_BISHOP>(s, occupied);
-  case ROOK  : return rider_attacks_bb<RIDER_ROOK_H>(s, occupied) | rider_attacks_bb<RIDER_ROOK_V>(s, occupied);
-  case QUEEN : return attacks_bb<BISHOP>(s, occupied) | attacks_bb<ROOK>(s, occupied);
+  case BISHOP: return rider_attacks_bb<RIDER_BISHOP>(s, occupied, mg);
+  case ROOK  : return rider_attacks_bb<RIDER_ROOK_H>(s, occupied, mg) | rider_attacks_bb<RIDER_ROOK_V>(s, occupied, mg);
+  case QUEEN : return attacks_bb<BISHOP>(s, occupied, mg) | attacks_bb<ROOK>(s, occupied, mg);
   default    : return PseudoAttacks[WHITE][Pt][s];
   }
 }
@@ -1093,12 +1131,12 @@ inline RiderType pop_rider(RiderType& r) {
   return r2;
 }
 
-inline Bitboard attacks_bb(Color c, PieceType pt, Square s, Bitboard occupied) {
+inline Bitboard attacks_bb(Color c, PieceType pt, Square s, Bitboard occupied, const MagicGeometry* mg = current_magic_geometry) {
   assert(pt != NO_PIECE_TYPE);
   Bitboard b = LeaperAttacks[c][pt][s];
   RiderType r = AttackRiderTypes[pt];
   while (r)
-      b |= rider_attacks_bb(pop_rider(r), s, occupied);
+      b |= rider_attacks_bb(pop_rider(r), s, occupied, mg);
   b |= leap_rider_attacks_bb(pt, c, s, occupied);
   b |= tuple_rider_attacks_bb(pt, c, s, occupied);
   return b & PseudoAttacks[c][pt][s];
@@ -1106,12 +1144,12 @@ inline Bitboard attacks_bb(Color c, PieceType pt, Square s, Bitboard occupied) {
 
 
 template <bool Initial=false>
-inline Bitboard moves_bb(Color c, PieceType pt, Square s, Bitboard occupied) {
+inline Bitboard moves_bb(Color c, PieceType pt, Square s, Bitboard occupied, const MagicGeometry* mg = current_magic_geometry) {
   assert(pt != NO_PIECE_TYPE);
   Bitboard b = LeaperMoves[Initial][c][pt][s];
   RiderType r = MoveRiderTypes[Initial][pt];
   while (r)
-      b |= rider_attacks_bb(pop_rider(r), s, occupied);
+      b |= rider_attacks_bb(pop_rider(r), s, occupied, mg);
   b |= leap_rider_moves_bb(pt, Initial, c, s, occupied);
   b |= tuple_rider_moves_bb(pt, Initial, c, s, occupied);
   return b & PseudoMoves[Initial][c][pt][s];

@@ -498,6 +498,35 @@ public:
 
   CheckCount checks_remaining(Color c) const;
   MaterialCounting material_counting() const;
+
+  template<PieceType Pt>
+  Bitboard attacks_bb(Square s, Bitboard occupied = 0) const {
+    return Stockfish::attacks_bb<Pt>(s, occupied, magic_geometry());
+  }
+
+  template<RiderType R>
+  Bitboard rider_attacks_bb(Square s, Bitboard occupied = 0) const {
+    return Stockfish::rider_attacks_bb<R>(s, occupied, magic_geometry());
+  }
+
+  Bitboard rider_attacks_bb(RiderType R, Square s, Bitboard occupied = 0) const {
+    return Stockfish::rider_attacks_bb(R, s, occupied, magic_geometry());
+  }
+
+  Bitboard attacks_bb(Color c, PieceType pt, Square s, Bitboard occupied) const {
+    return Stockfish::attacks_bb(c, pt, s, occupied, magic_geometry());
+  }
+
+  template <bool Initial=false>
+  Bitboard moves_bb(Color c, PieceType pt, Square s, Bitboard occupied) const {
+    return Stockfish::moves_bb<Initial>(c, pt, s, occupied, magic_geometry());
+  }
+
+  const MagicGeometry* magic_geometry() const {
+      if (!variant()->magicGeometry)
+          const_cast<Variant*>(variant())->magicGeometry = Stockfish::Bitboards::init_magics(variant()->maxFile, variant()->maxRank);
+      return variant()->magicGeometry.get();
+  }
   CountingRule counting_rule() const;
 
   // Variant-specific properties
@@ -3295,26 +3324,26 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
           b = pawn_attacks_bb(c, s);
           break;
       case KNIGHT:
-          b = attacks_bb<KNIGHT>(s);
+          b = this->attacks_bb<KNIGHT>(s);
           break;
       case BISHOP:
-          b = attacks_bb<BISHOP>(s, occupancy);
+          b = this->attacks_bb<BISHOP>(s, occupancy);
           break;
       case ROOK:
-          b = attacks_bb<ROOK>(s, occupancy);
+          b = this->attacks_bb<ROOK>(s, occupancy);
           break;
       case QUEEN:
-          b = attacks_bb<BISHOP>(s, occupancy) | attacks_bb<ROOK>(s, occupancy);
+          b = this->attacks_bb<BISHOP>(s, occupancy) | this->attacks_bb<ROOK>(s, occupancy);
           break;
       case KING:
       case COMMONER:
-          b = attacks_bb<KING>(s);
+          b = this->attacks_bb<KING>(s);
           break;
       case ARCHBISHOP:
-          b = attacks_bb<BISHOP>(s, occupancy) | attacks_bb<KNIGHT>(s);
+          b = this->attacks_bb<BISHOP>(s, occupancy) | this->attacks_bb<KNIGHT>(s);
           break;
       case CHANCELLOR:
-          b = attacks_bb<ROOK>(s, occupancy) | attacks_bb<KNIGHT>(s);
+          b = this->attacks_bb<ROOK>(s, occupancy) | this->attacks_bb<KNIGHT>(s);
           break;
       case IMMOBILE_PIECE:
           b = Bitboard(0);
