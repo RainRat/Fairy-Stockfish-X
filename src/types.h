@@ -41,6 +41,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <algorithm>
+#include <utility>
 
 #if defined(_MSC_VER)
 // Disable some silly and noisy warning from MSVC compiler
@@ -913,6 +914,19 @@ enum Rank : int {
   RANK_NB,
   RANK_MAX = RANK_NB - 1
 };
+
+inline constexpr std::pair<int, int> decode_direction(Direction d) {
+    const int raw = int(d);
+    int df = raw % int(FILE_NB);
+
+    if (df > int(FILE_NB) / 2)
+        df -= int(FILE_NB);
+    if (df < -int(FILE_NB) / 2)
+        df += int(FILE_NB);
+
+    const int dr = (raw - df) / int(FILE_NB);
+    return {dr, df};
+}
 
 // Keep track of what a move changes on the board (used by NNUE)
 constexpr int DIRTY_PIECE_MAX = 12;
