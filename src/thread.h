@@ -76,6 +76,25 @@ public:
   CapturePieceToHistory captureHistory;
   ContinuationHistory continuationHistory[2][2];
   Score trend;
+
+  ExtMove* acquire_buffer() {
+    if (availableBuffers.empty()) {
+      bufferPool.push_back(std::make_unique<ExtMove[]>(MOVEGEN_OVERFLOW_CAPACITY));
+      return bufferPool.back().get();
+    }
+    ExtMove* b = availableBuffers.back();
+    availableBuffers.pop_back();
+    return b;
+  }
+
+  void release_buffer(ExtMove* b) {
+    if (b)
+      availableBuffers.push_back(b);
+  }
+
+private:
+  std::vector<std::unique_ptr<ExtMove[]>> bufferPool;
+  std::vector<ExtMove*> availableBuffers;
 };
 
 

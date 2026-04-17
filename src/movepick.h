@@ -141,6 +141,7 @@ public:
                                            Move,
                                            const Move*,
                                            int);
+  ~MovePicker();
   Move next_move(bool skipQuiets = false);
 
 private:
@@ -176,8 +177,9 @@ private:
   bool evasionPotionsDeferred = false;
   bool qcheckPotionsDeferred = false;
 #ifdef USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
-  std::unique_ptr<ExtMove[]> baseMoveList;
-  std::unique_ptr<ExtMove[]> overflowMoveList;
+  Thread* thread = nullptr;
+  ExtMove* baseMoveList = nullptr;
+  std::unique_ptr<ExtMove[]> moveListPtr;
 #else
   ExtMove moves[MOVE_PICK_OVERFLOW_CAPACITY];
 #endif

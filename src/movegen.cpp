@@ -20,8 +20,38 @@
 
 #include "movegen.h"
 #include "position.h"
+#include "thread.h"
 
 namespace Stockfish {
+
+#ifdef USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
+template<GenType T>
+MoveList<T>::MoveList(const Position& pos) {
+    thread = pos.this_thread();
+    if (thread)
+        moveList = acquire_thread_buffer(thread);
+    else {
+        moveListPtr = std::make_unique<ExtMove[]>(MOVEGEN_OVERFLOW_CAPACITY);
+        moveList = moveListPtr.get();
+    }
+    last = generate<T>(pos, moveList);
+    assert(last - moveList <= MOVEGEN_OVERFLOW_CAPACITY);
+}
+
+template<GenType T>
+MoveList<T>::~MoveList() {
+    if (thread)
+        release_thread_buffer(thread, moveList);
+}
+
+// Explicit instantiations
+template struct MoveList<CAPTURES>;
+template struct MoveList<QUIETS>;
+template struct MoveList<QUIET_CHECKS>;
+template struct MoveList<EVASIONS>;
+template struct MoveList<NON_EVASIONS>;
+template struct MoveList<LEGAL>;
+#endif
 
 namespace {
 

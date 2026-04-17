@@ -32,6 +32,14 @@ namespace Stockfish {
 
 ThreadPool Threads; // Global object
 
+ExtMove* acquire_thread_buffer(Thread* thread) {
+    return thread->acquire_buffer();
+}
+
+void release_thread_buffer(Thread* thread, ExtMove* buffer) {
+    thread->release_buffer(buffer);
+}
+
 
 /// Thread constructor launches the thread and waits until it goes to sleep
 /// in idle_loop(). Note that 'searching' and 'exit' should be already set.
