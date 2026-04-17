@@ -177,6 +177,8 @@ extern Magic BishopMagics[SQUARE_NB];
 extern Magic CannonMagicsH[SQUARE_NB];
 extern Magic CannonMagicsV[SQUARE_NB];
 extern Magic HorseMagics[SQUARE_NB];
+extern Magic LameDabbabaMagics[SQUARE_NB];
+extern Magic ElephantMagics[SQUARE_NB];
 extern Magic JanggiElephantMagics[SQUARE_NB];
 extern Magic CannonDiagMagics[SQUARE_NB];
 extern Magic NightriderMagics[SQUARE_NB];
@@ -999,9 +1001,9 @@ inline Bitboard rider_attacks_bb(Square s, Bitboard occupied) {
                   : R == RIDER_ROOK_V ? RookMagicsV[s]
                   : R == RIDER_CANNON_H ? CannonMagicsH[s]
                   : R == RIDER_CANNON_V ? CannonMagicsV[s]
-                  : R == RIDER_LAME_DABBABA ? BishopMagics[s]
+                  : R == RIDER_LAME_DABBABA ? LameDabbabaMagics[s]
                   : R == RIDER_HORSE ? HorseMagics[s]
-                  : R == RIDER_ELEPHANT ? BishopMagics[s]
+                  : R == RIDER_ELEPHANT ? ElephantMagics[s]
                   : R == RIDER_JANGGI_ELEPHANT ? JanggiElephantMagics[s]
                   : R == RIDER_CANNON_DIAG ? CannonDiagMagics[s]
                   : R == RIDER_NIGHTRIDER ? NightriderMagics[s]
