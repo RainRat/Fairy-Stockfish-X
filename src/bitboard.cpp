@@ -406,44 +406,9 @@ namespace {
   }
 
   bool decode_direction(Direction d, int& stepF, int& stepR) {
-    const int raw = int(d);
-    int bestDr = 0;
-    int bestDf = 0;
-    int bestMax = std::numeric_limits<int>::max();
-    int bestSum = std::numeric_limits<int>::max();
-    int bestZeroPenalty = std::numeric_limits<int>::max();
-    bool found = false;
-
-    for (int dr = -int(RANK_MAX); dr <= int(RANK_MAX); ++dr)
-    {
-        int df = raw - dr * FILE_NB;
-        if (df < -int(FILE_MAX) || df > int(FILE_MAX))
-            continue;
-        if (dr == 0 && df == 0)
-            continue;
-        int maxDelta = std::max(std::abs(dr), std::abs(df));
-        int sumDelta = std::abs(dr) + std::abs(df);
-        int zeroPenalty = (dr == 0 || df == 0) ? 1 : 0;
-
-        if (!found
-            || maxDelta < bestMax
-            || (maxDelta == bestMax && (zeroPenalty < bestZeroPenalty
-                || (zeroPenalty == bestZeroPenalty && sumDelta < bestSum))))
-        {
-            bestDr = dr;
-            bestDf = df;
-            bestMax = maxDelta;
-            bestSum = sumDelta;
-            bestZeroPenalty = zeroPenalty;
-            found = true;
-        }
-    }
-
-    if (!found)
-        return false;
-
-    stepR = bestDr;
-    stepF = bestDf;
+    auto [dr, df] = Stockfish::decode_direction(d);
+    stepR = dr;
+    stepF = df;
     return true;
   }
 
@@ -467,49 +432,17 @@ namespace {
 /// safe_destination() returns the bitboard of target square for the given step
 /// from the given square. If the step is off the board, returns empty bitboard.
 
-inline Bitboard safe_destination(Square s, int step) {
-    Square to = Square(int(s) + step);
-    if (!is_ok(to))
-        return Bitboard(0);
-
-    // Prevent horizontal edge wrapping by decoding the linear step into a
-    // canonical (dr, df) pair and matching exact board deltas.
-    // For a fixed 'step', two nearby decompositions exist around trunc division:
-    //   step = q * FILE_NB + r
-    // and step = (q +/- 1) * FILE_NB + (r -/+ FILE_NB).
-    // Pick the candidate with smaller Chebyshev distance, then prefer true
-    // diagonal/orthogonal components over degenerate long-file remainders.
-    const int f = FILE_NB;
-    const int q1 = step / f; // trunc toward zero
-    const int r1 = step - q1 * f;
-    const int q2 = q1 + (step >= 0 ? 1 : -1);
-    const int r2 = step - q2 * f;
-
-    const int q1Abs = std::abs(q1), r1Abs = std::abs(r1);
-    const int q2Abs = std::abs(q2), r2Abs = std::abs(r2);
-    const int m1 = std::max(q1Abs, r1Abs);
-    const int m2 = std::max(q2Abs, r2Abs);
-    const int z1 = (q1 != 0 && r1 != 0) ? 0 : 1;
-    const int z2 = (q2 != 0 && r2 != 0) ? 0 : 1;
-    const int s1 = q1Abs + r1Abs;
-    const int s2 = q2Abs + r2Abs;
-
-    const bool pickSecond = (m2 < m1) || (m2 == m1 && (z2 < z1 || (z2 == z1 && s2 < s1)));
-    const int decodedDr = pickSecond ? q2 : q1;
-    const int decodedDf = pickSecond ? r2 : r1;
-    int expectedDr = std::abs(decodedDr);
-    int expectedDf = std::abs(decodedDf);
-    int actualDr = std::abs(int(rank_of(to)) - int(rank_of(s)));
-    int actualDf = std::abs(int(file_of(to)) - int(file_of(s)));
-    return (actualDr == expectedDr && actualDf == expectedDf) ? square_bb(to) : Bitboard(0);
-}
-
 inline Bitboard safe_destination_tuple(Square s, int dr, int df) {
     int r = int(rank_of(s)) + dr;
     int f = int(file_of(s)) + df;
     if (r < 0 || r > int(RANK_MAX) || f < 0 || f > int(FILE_MAX))
         return Bitboard(0);
     return square_bb(make_square(File(f), Rank(r)));
+}
+
+inline Bitboard safe_destination(Square s, int step) {
+    auto [dr, df] = decode_direction(Direction(step));
+    return safe_destination_tuple(s, dr, df);
 }
 
 Bitboard tuple_rider_attacks(const std::vector<PieceInfo::TupleRay>& rays, Square s, Bitboard occupied, Color c) {

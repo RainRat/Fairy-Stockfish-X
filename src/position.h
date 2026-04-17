@@ -2823,18 +2823,7 @@ inline Bitboard Position::contra_hopper_bb(const std::map<Direction,int>& direct
 }
 
 inline std::pair<int, int> Position::decode_direction(Direction d) {
-  const int raw = int(d);
-  int df = raw % int(FILE_NB);
-
-  // Normalize to the shortest file delta representation, matching the
-  // previous minimal-Manhattan-distance decode without a brute-force search.
-  if (df > int(FILE_NB) / 2)
-      df -= int(FILE_NB);
-  if (df < -int(FILE_NB) / 2)
-      df += int(FILE_NB);
-
-  const int dr = (raw - df) / int(FILE_NB);
-  return {dr, df};
+  return Stockfish::decode_direction(d);
 }
 
 inline Bitboard Position::wrapped_step_targets(const std::map<Direction, int>& directions,
