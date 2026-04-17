@@ -121,12 +121,15 @@ MovePicker::MovePicker(const Position& p, Move ttm, Depth d, const ButterflyHist
 
   assert(d > 0);
 #ifdef USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
-  if (pos.potions_enabled() || pos.capture_type() == PRISON)
-      overflowMoveList = std::make_unique<ExtMove[]>(MOVE_PICK_OVERFLOW_CAPACITY);
+  thread = pos.this_thread();
+  if (thread)
+      baseMoveList = acquire_thread_buffer(thread);
   else
-      baseMoveList = std::make_unique<ExtMove[]>(MAX_MOVES);
-
-  moveList = overflowMoveList ? overflowMoveList.get() : baseMoveList.get();
+  {
+      moveListPtr = std::make_unique<ExtMove[]>(MOVE_PICK_OVERFLOW_CAPACITY);
+      baseMoveList = moveListPtr.get();
+  }
+  moveList = baseMoveList;
 #else
   moveList = moves;
 #endif
@@ -142,12 +145,15 @@ MovePicker::MovePicker(const Position& p, Move ttm, Depth d, const ButterflyHist
 
   assert(d <= 0);
 #ifdef USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
-  if (pos.potions_enabled() || pos.capture_type() == PRISON)
-      overflowMoveList = std::make_unique<ExtMove[]>(MOVE_PICK_OVERFLOW_CAPACITY);
+  thread = pos.this_thread();
+  if (thread)
+      baseMoveList = acquire_thread_buffer(thread);
   else
-      baseMoveList = std::make_unique<ExtMove[]>(MAX_MOVES);
-
-  moveList = overflowMoveList ? overflowMoveList.get() : baseMoveList.get();
+  {
+      moveListPtr = std::make_unique<ExtMove[]>(MOVE_PICK_OVERFLOW_CAPACITY);
+      baseMoveList = moveListPtr.get();
+  }
+  moveList = baseMoveList;
 #else
   moveList = moves;
 #endif
@@ -165,12 +171,15 @@ MovePicker::MovePicker(const Position& p, Move ttm, Value th, const GateHistory*
 
   assert(!pos.evasion_checkers());
 #ifdef USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
-  if (pos.potions_enabled() || pos.capture_type() == PRISON)
-      overflowMoveList = std::make_unique<ExtMove[]>(MOVE_PICK_OVERFLOW_CAPACITY);
+  thread = pos.this_thread();
+  if (thread)
+      baseMoveList = acquire_thread_buffer(thread);
   else
-      baseMoveList = std::make_unique<ExtMove[]>(MAX_MOVES);
-
-  moveList = overflowMoveList ? overflowMoveList.get() : baseMoveList.get();
+  {
+      moveListPtr = std::make_unique<ExtMove[]>(MOVE_PICK_OVERFLOW_CAPACITY);
+      baseMoveList = moveListPtr.get();
+  }
+  moveList = baseMoveList;
 #else
   moveList = moves;
 #endif
@@ -178,6 +187,13 @@ MovePicker::MovePicker(const Position& p, Move ttm, Value th, const GateHistory*
   stage = PROBCUT_TT + !(ttm && pos.capture(ttm)
                              && pos.pseudo_legal(ttm)
                              && (pos.see_pruning_unreliable() || pos.see_ge(ttm, threshold)));
+}
+
+MovePicker::~MovePicker() {
+#ifdef USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
+    if (thread)
+        release_thread_buffer(thread, baseMoveList);
+#endif
 }
 
 /// MovePicker::score() assigns a numerical value to each move in a list, used

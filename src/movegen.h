@@ -60,6 +60,12 @@ struct ExtMove {
   operator float() const = delete;
 };
 
+class Thread;
+
+ExtMove* acquire_thread_buffer(Thread* thread);
+void release_thread_buffer(Thread* thread, ExtMove* buffer);
+
+
 inline bool operator<(const ExtMove& f, const ExtMove& s) {
   return f.value < s.value;
 }
@@ -90,19 +96,8 @@ struct MoveList {
   MoveList& operator=(MoveList&&) = delete;
 
 #ifdef USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
-    explicit MoveList(const Position& pos)
-    {
-        moveList = std::unique_ptr<ExtMove[]>(new (std::nothrow) ExtMove[MOVEGEN_OVERFLOW_CAPACITY]);
-        if (!moveList)
-        {
-            std::fputs("Error: Failed to allocate memory for move list.\n", stderr);
-            exit(1);
-        }
-        this->last = generate<T>(pos, moveList.get());
-        assert(this->last - moveList.get() <= MOVEGEN_OVERFLOW_CAPACITY);
-    }
-
-    ~MoveList() = default;
+    explicit MoveList(const Position& pos);
+    ~MoveList();
 #else
     explicit MoveList(const Position& pos) : last(generate<T>(pos, moveList))
     {
@@ -111,11 +106,7 @@ struct MoveList {
 #endif
   
   const ExtMove* begin() const {
-#ifdef USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
-    return moveList.get();
-#else
     return moveList;
-#endif
   }
   const ExtMove* end() const { return last; }
   size_t size() const { return last - begin(); }
@@ -125,7 +116,9 @@ struct MoveList {
 
 private:
 #ifdef USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
-    std::unique_ptr<ExtMove[]> moveList;
+    Thread* thread;
+    std::unique_ptr<ExtMove[]> moveListPtr;
+    ExtMove* moveList;
 #else
     ExtMove moveList[MOVEGEN_OVERFLOW_CAPACITY];
 #endif
