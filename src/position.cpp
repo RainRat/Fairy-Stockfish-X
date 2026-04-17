@@ -2911,7 +2911,7 @@ bool Position::legal(Move m) const {
       if (isHop && jump_capture_square(from, to) == SQ_NONE)
           return false;
   }
-  if (!allow_checks() && (pieces(them) & to) && type_of(piece_on(to)) == KING)
+  if (!allow_checks() && checking_permitted() && (pieces(them) & to) && type_of(piece_on(to)) == KING)
       return false;
   if (!dropMove && (var->mutuallyHopIllegalTypes & movePt) && (AttackRiderTypes[movePt] & HOPPING_RIDERS))
   {
@@ -2977,7 +2977,7 @@ bool Position::legal(Move m) const {
       return false;
 
   // Illegal captures
-  if (!allow_checks() && (pieces(them) & to) && type_of(piece_on(to)) == KING)
+  if (!allow_checks() && checking_permitted() && (pieces(them) & to) && type_of(piece_on(to)) == KING)
       return false;
 
   // Illegal non-drop moves
@@ -4103,7 +4103,7 @@ bool Position::pseudo_legal(const Move m) const {
   if ((anti_royal_self_capture_only() && (anti_royal_types() & piece_set(type_of(pc)))) && (pieces(them) & to) && !is_self_destruct(m))
       return false;
 
-  if (!allow_checks() && (pieces(them) & to) && type_of(piece_on(to)) == KING)
+  if (!allow_checks() && checking_permitted() && (pieces(them) & to) && type_of(piece_on(to)) == KING)
       return false;
 
   // Handle the special case of a pawn move
@@ -4624,7 +4624,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
                                     : (color_of(captured) == them
                                        || (((self_capture(type_of(pc)) || (anti_royal_self_capture_only() && (anti_royal_types() & piece_set(type_of(pc)))))
                                            && color_of(captured) == us)))));
-  assert(type_of(captured) != KING || allow_checks());
+  assert(type_of(captured) != KING || allow_checks() || !checking_permitted());
 
   auto trigger_matches = [](ColorChangeTrigger trigger, bool isCapture) {
       switch (trigger)
@@ -6279,7 +6279,7 @@ void Position::undo_move(Move m) {
          || wasOpeningSelfRemoval
          || (commit_gates() && st->removedGatingType > NO_PIECE_TYPE)
   );
-  assert(type_of(st->captured.piece) != KING || allow_checks());
+  assert(type_of(st->captured.piece) != KING || allow_checks() || !checking_permitted());
 
   // Reset wall squares
   byTypeBB[ALL_PIECES] ^= st->wallSquares ^ st->previous->wallSquares;

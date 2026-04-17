@@ -3458,7 +3458,10 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
     Bitboard piecePosition = square_bb(s);  //Bitboard where only the bit which refers to the square that the piece starts the move (original square) is 1
     PieceType movePt = pt == KING ? king_type() : pt;
     const PieceInfo* pi = pieceMap.get(movePt);
-    const bool usesGenericNonPawnStepHelper = !pi->has_explicit_initial_moves();
+    const bool suppressGenericPawnLikeSteps = pt != PAWN
+                                           && (pawn_like_types(c) & piece_set(pt))
+                                           && pi->has_explicit_initial_moves();
+    const bool usesGenericNonPawnStepHelper = !suppressGenericPawnLikeSteps;
     if (usesGenericNonPawnStepHelper && explicitTripleStepRegion & piecePosition & this->not_moved_pieces(c))  //If the original square is in explicit tripleStepRegion and the piece is not moved
     {
         Bitboard extraMultipleStepMoveDestinations = 0x00;  //Bitboard where extra legal multi-step destination square bits are 1

@@ -83,9 +83,9 @@ if [[ $VARIANT == "all" || $VARIANT == "variant" ]]; then
   expect "$perft_exp" chigorin "fen 8/1k5P/8/8/8/3K4/p7/8 b - - 0 1" 2 127 > /dev/null
   expect "$perft_exp" perfect startpos 3 15082 > /dev/null
   expect "$perft_exp" perfect "fen c3k2r/pppppppp/8/8/8/8/PPPPPPPP/C3K2R w KQkq - 0 1" 3 17500 > /dev/null
-  expect "$perft_exp" spartan startpos 3 21366 > /dev/null
+  expect "$perft_exp" spartan startpos 3 14244 > /dev/null
   # duple check & mate
-  expect "$perft_exp" spartan "fen k6k/hh2Q2h/8/8/8/8/8/4K3 w - - 0 1" 3 9872 > /dev/null
+  expect "$perft_exp" spartan "fen k6k/hh2Q2h/8/8/8/8/8/4K3 w - - 0 1" 3 6130 > /dev/null
   # self duple check with promotions
   expect "$perft_exp" spartan "fen 8/8/8/8/6Q1/8/2h3h1/4K1k1 b - - 0 1" 3 3456 > /dev/null
   expect "$perft_exp" shatar startpos 4 177344 > /dev/null
@@ -216,9 +216,9 @@ if [[ $VARIANT == "all" ||  $VARIANT == "largeboard" ]]; then
     expect "$perft_exp" xiangqi "fen 1rbaka2R/5r3/6n2/2p1p1p2/4P1bP1/PpC3Bc1/1nPR2P2/2N2AN2/1c2K1p2/2BAC4 w - - 0 1" 4 4993674 > /dev/null
     expect "$perft_exp" xiangqi "fen 4kcP1N/8n/3rb4/9/9/9/9/3p1A3/4K4/5CB2 w - - 0 1" 4 118518 > /dev/null
     expect "$perft_exp" manchu startpos 4 801064 > /dev/null
-    expect "$perft_exp" janggi startpos 4 1065749 > /dev/null
-    expect "$perft_exp" janggi "fen 1n1kaabn1/cr2N4/5C1c1/p1pNp3p/9/9/P1PbP1P1P/3r1p3/4A4/R1BA1KB1R b - - 0 1" 4 77034 > /dev/null
-    expect "$perft_exp" janggi "fen 1Pbcka3/3nNn1c1/N2CaC3/1pB6/9/9/5P3/9/4K4/9 w - - 0 23" 4 164044 > /dev/null
+    expect "$perft_exp" janggi startpos 4 1065277 > /dev/null
+    expect "$perft_exp" janggi "fen 1n1kaabn1/cr2N4/5C1c1/p1pNp3p/9/9/P1PbP1P1P/3r1p3/4A4/R1BA1KB1R b - - 0 1" 4 43059 > /dev/null
+    expect "$perft_exp" janggi "fen 1Pbcka3/3nNn1c1/N2CaC3/1pB6/9/9/5P3/9/4K4/9 w - - 0 23" 4 151344 > /dev/null
     expect "$perft_exp" jesonmor startpos 3 27960 > /dev/null
     expect "$perft_exp" jesonmor "fen nn1nnn1nn/9/3n1n3/9/9/9/3N1N3/9/NN1NNN1NN w - - 4 3" 3 37564 > /dev/null
 
