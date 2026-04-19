@@ -467,21 +467,26 @@ namespace {
                                 : analyze_push_stepwise(pos, m, info);
   }
 
-  inline Bitboard retro_asymmetric_check_squares(Color attacker, PieceType pt, Square kingSq, Bitboard occupied) {
-    // Hopper families need hurdle-aware retro logic. Keep pseudo candidates for
-    // those, and use path-based retro filtering for other asymmetrical riders.
-    if (AttackRiderTypes[pt] & HOPPING_RIDERS)
-        return PseudoAttacks[~attacker][pt][kingSq];
-
+  inline Bitboard retro_asymmetric_check_squares(const Position& pos, Color attacker, PieceType pt, Square kingSq, Bitboard occupied) {
     Bitboard checks = 0;
     Bitboard candidates = PseudoAttacks[~attacker][pt][kingSq];
 
     while (candidates)
     {
         Square from = pop_lsb(candidates);
-        Bitboard blockers = between_bb(kingSq, from, pt) & ~square_bb(from);
-        if (!(blockers & occupied))
-            checks |= from;
+        // Hopper families need hurdle-aware retro logic.
+        if (AttackRiderTypes[pt] & HOPPING_RIDERS)
+        {
+            if (pos.attacks_from(attacker, pt, from, occupied) & kingSq)
+                checks |= from;
+        }
+        else
+        {
+            // Use path-based retro filtering for other asymmetrical riders.
+            Bitboard blockers = between_bb(kingSq, from, pt) & ~square_bb(from);
+            if (!(blockers & occupied))
+                checks |= from;
+        }
     }
 
     return checks;
@@ -1783,7 +1788,7 @@ void Position::set_check_info(StateInfo* si) const {
               PieceType movePt = pt == KING ? king_type() : pt;
               if (AttackRiderTypes[movePt] & ASYMMETRICAL_RIDERS)
                   // For asymmetrical riders, use true retro paths from the king square.
-                  si->checkSquares[pt] = retro_asymmetric_check_squares(sideToMove, movePt, ksq, occupied);
+                  si->checkSquares[pt] = retro_asymmetric_check_squares(*this, sideToMove, movePt, ksq, occupied);
               else
                   si->checkSquares[pt] = attacks_bb(~sideToMove, movePt, ksq, occupied);
               // Collect special piece types that require slower check and evasion detection
