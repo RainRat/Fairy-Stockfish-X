@@ -617,7 +617,7 @@ namespace {
                 while (b)
                 {
                     Square to = pop_lsb(b);
-                    if (!(attacks_bb(Us, pt, to, pos.pieces() ^ from) & pos.pieces(Them)))
+                    if (!(pos.attacks_bb(Us, pt, to, pos.pieces() ^ from) & pos.pieces(Them)))
                         *moveList++ = make<PROMOTION>(from, to, pt);
                 }
             }

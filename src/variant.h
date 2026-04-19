@@ -309,6 +309,9 @@ struct Variant {
   int nFoldRule = 3;
   int nFoldRuleImmediate = 0;
   ColorSetting<Value> nFoldValue = ColorSetting<Value>(VALUE_DRAW);
+
+  std::shared_ptr<const MagicGeometry> magicGeometry;
+
   bool nFoldValueAbsolute = false;
   bool perpetualCheckIllegal = false;
   bool moveRepetitionIllegal = false;

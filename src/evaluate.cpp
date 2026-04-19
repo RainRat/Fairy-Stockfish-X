@@ -608,7 +608,7 @@ namespace {
             rankLo = rankHi = pos.max_rank();
         Square s = make_square(std::clamp(file_of(ksq), fileLo, fileHi),
                                std::clamp(rank_of(ksq), rankLo, rankHi));
-        kingRing[Us] = attacks_bb<KING>(s) | s;
+        kingRing[Us] = pos.attacks_bb<KING>(s) | s;
     }
 
     kingAttackersCount[Them] = popcount(kingRing[Us] & (pe->pawn_attacks(Them) | shift<Down>(pos.pieces(Them, SHOGI_PAWN))));
@@ -644,8 +644,8 @@ namespace {
         Square s = pop_lsb(b1);
 
         // Find attacked squares, including x-ray attacks for bishops and rooks
-        b = Pt == BISHOP ? attacks_bb<BISHOP>(s, pos.pieces() ^ pos.pieces(QUEEN))
-          : Pt ==   ROOK && !pos.diagonal_lines() ? attacks_bb<  ROOK>(s, pos.pieces() ^ pos.pieces(QUEEN) ^ pos.pieces(Us, ROOK))
+        b = Pt == BISHOP ? pos.attacks_bb<BISHOP>(s, pos.pieces() ^ pos.pieces(QUEEN))
+          : Pt ==   ROOK && !pos.diagonal_lines() ? pos.attacks_bb<  ROOK>(s, pos.pieces() ^ pos.pieces(QUEEN) ^ pos.pieces(Us, ROOK))
                          : pos.attacks_from(Us, Pt, s);
 
         // Restrict mobility to actual squares of board
@@ -668,7 +668,7 @@ namespace {
         else if (Pt == ROOK && (file_bb(s) & kingRing[Them]))
             score += RookOnKingRing;
 
-        else if (Pt == BISHOP && (attacks_bb<BISHOP>(s, pos.pieces(PAWN)) & kingRing[Them]))
+        else if (Pt == BISHOP && (pos.attacks_bb<BISHOP>(s, pos.pieces(PAWN)) & kingRing[Them]))
             score += BishopOnKingRing;
 
         if (Pt > QUEEN)
@@ -762,10 +762,10 @@ namespace {
                                      * (!(attackedBy[Us][PAWN] & s) + popcount(blocked & centerFiles));
 
                 // Penalty for all enemy pawns x-rayed
-                score -= BishopXRayPawns * popcount(attacks_bb<BISHOP>(s) & pos.pieces(Them, PAWN));
+                score -= BishopXRayPawns * popcount(pos.attacks_bb<BISHOP>(s) & pos.pieces(Them, PAWN));
 
                 // Bonus for bishop on a long diagonal which can "see" both center squares
-                if (more_than_one(attacks_bb<BISHOP>(s, pos.pieces(PAWN)) & scaled_center_squares(pos)))
+                if (more_than_one(pos.attacks_bb<BISHOP>(s, pos.pieces(PAWN)) & scaled_center_squares(pos)))
                     score += LongDiagonalBishop;
 
                 // An important Chess960 pattern: a cornered bishop blocked by a friendly
@@ -919,8 +919,8 @@ namespace {
     if (!pos.check_counting() || pos.checks_remaining(Them) > 1)
     safe &= ~attackedBy[Us][ALL_PIECES] | (weak & attackedBy2[Them]);
 
-    b1 = attacks_bb<ROOK  >(ksq, pos.pieces() ^ pos.pieces(Us, QUEEN));
-    b2 = attacks_bb<BISHOP>(ksq, pos.pieces() ^ pos.pieces(Us, QUEEN));
+    b1 = pos.attacks_bb<ROOK  >(ksq, pos.pieces() ^ pos.pieces(Us, QUEEN));
+    b2 = pos.attacks_bb<BISHOP>(ksq, pos.pieces() ^ pos.pieces(Us, QUEEN));
 
     std::function <Bitboard (Color, PieceType)> get_attacks = [this](Color c, PieceType pt) {
         return attackedBy[c][pt] | (pos.piece_drops() && pos.count_in_hand(c, pt) > 0 ? pos.drop_region(c, pt) & ~pos.pieces() : Bitboard(0));
@@ -946,7 +946,7 @@ namespace {
         case ROOK:
         case BISHOP:
         case KNIGHT:
-            knightChecks = attacks_bb(Us, pt, ksq, pos.pieces() ^ pos.pieces(Us, QUEEN)) & get_attacks(Them, pt) & pos.board_bb();
+            knightChecks = pos.attacks_bb(Us, pt, ksq, pos.pieces() ^ pos.pieces(Us, QUEEN)) & get_attacks(Them, pt) & pos.board_bb();
             if (knightChecks & safe)
                 kingDanger += SafeCheck[pt][more_than_one(knightChecks & safe)];
             else
@@ -955,7 +955,7 @@ namespace {
         case PAWN:
             if (pos.piece_drops() && pos.count_in_hand(Them, pt) > 0)
             {
-                pawnChecks = attacks_bb(Us, pt, ksq, pos.pieces()) & ~pos.pieces() & pos.board_bb();
+                pawnChecks = pos.attacks_bb(Us, pt, ksq, pos.pieces()) & ~pos.pieces() & pos.board_bb();
                 if (pawnChecks & safe)
                     kingDanger += SafeCheck[PAWN][more_than_one(pawnChecks & safe)];
                 else
@@ -965,7 +965,7 @@ namespace {
         case SHOGI_PAWN:
             if (pos.promoted_piece_type(pt))
             {
-                otherChecks = attacks_bb(Us, pos.promoted_piece_type(pt), ksq, pos.pieces()) & attackedBy[Them][pt]
+                otherChecks = pos.attacks_bb(Us, pos.promoted_piece_type(pt), ksq, pos.pieces()) & attackedBy[Them][pt]
                                  & pos.promotion_zone(Them, pt) & pos.board_bb();
                 if (otherChecks & safe)
                     kingDanger += SafeCheck[FAIRY_PIECES][more_than_one(otherChecks & safe)];
@@ -976,7 +976,7 @@ namespace {
         case KING:
             break;
         default:
-            otherChecks = attacks_bb(Us, pt, ksq, pos.pieces()) & get_attacks(Them, pt) & pos.board_bb();
+            otherChecks = pos.attacks_bb(Us, pt, ksq, pos.pieces()) & get_attacks(Them, pt) & pos.board_bb();
             if (otherChecks & safe)
                 kingDanger += SafeCheck[FAIRY_PIECES][more_than_one(otherChecks & safe)];
             else
@@ -990,7 +990,7 @@ namespace {
         for (PieceSet ps = pos.piece_types(); ps;)
         {
             PieceType pt = pop_lsb(ps);
-            if (pos.count_in_hand(Them, pt) <= 0 && (attacks_bb(Us, pt, ksq, pos.pieces()) & safe & pos.drop_region(Them, pt) & ~pos.pieces()))
+            if (pos.count_in_hand(Them, pt) <= 0 && (pos.attacks_bb(Us, pt, ksq, pos.pieces()) & safe & pos.drop_region(Them, pt) & ~pos.pieces()))
             {
                 kingDanger += VirtualCheck * 500 / (500 + EvalPieceValue[MG][pt]);
                 // Presumably a mate threat
@@ -1197,12 +1197,12 @@ namespace {
               & ~pos.pieces(Us, PAWN)
               & ~stronglyProtected;
 
-        b = attackedBy[Us][KNIGHT] & attacks_bb<KNIGHT>(s);
+        b = attackedBy[Us][KNIGHT] & pos.attacks_bb<KNIGHT>(s);
 
         score += KnightOnQueen * popcount(b & safe) * (1 + queenImbalance);
 
-        b =  (attackedBy[Us][BISHOP] & attacks_bb<BISHOP>(s, pos.pieces()))
-           | (attackedBy[Us][ROOK  ] & attacks_bb<ROOK  >(s, pos.pieces()));
+        b =  (attackedBy[Us][BISHOP] & pos.attacks_bb<BISHOP>(s, pos.pieces()))
+           | (attackedBy[Us][ROOK  ] & pos.attacks_bb<ROOK  >(s, pos.pieces()));
 
         score += SliderOnQueen * popcount(b & safe & attackedBy2[Us]) * (1 + queenImbalance);
     }
@@ -1678,7 +1678,7 @@ namespace {
             Bitboard edgePieces = pos.pieces(Us) & edges;
             while (edgePieces)
             {
-                Bitboard connectedEdge = attacks_bb(Us, ROOK, pop_lsb(edgePieces), ~(pos.pieces(Us) & edges)) & edges;
+                Bitboard connectedEdge = pos.attacks_bb(Us, ROOK, pop_lsb(edgePieces), ~(pos.pieces(Us) & edges)) & edges;
                 if (!more_than_one(connectedEdge & ~pos.pieces(Us)))
                     score += make_score(300, 300);
                 else if (!(connectedEdge & ~pos.pieces()))
@@ -1694,7 +1694,7 @@ namespace {
             Square s = pop_lsb(drops);
             if (pos.flip_enclosed_pieces() == REVERSI)
             {
-                Bitboard b = attacks_bb(Them, QUEEN, s, ~pos.pieces(Us)) & ~PseudoAttacks[Them][KING][s] & pos.pieces(Them);
+                Bitboard b = pos.attacks_bb(Them, QUEEN, s, ~pos.pieces(Us)) & ~PseudoAttacks[Them][KING][s] & pos.pieces(Them);
                 while(b)
                     unstable |= between_bb(s, pop_lsb(b));
             }
@@ -1799,7 +1799,7 @@ namespace {
                 && pos.count<PAWN>(strongSide) - pos.count<PAWN>(~strongSide) <= 1
                 && bool(kingFlank & pos.pieces(strongSide, PAWN)) != bool(queenFlank & pos.pieces(strongSide, PAWN))
                 && pos.count<KING>(~strongSide)
-                && (attacks_bb<KING>(pos.square<KING>(~strongSide)) & pos.pieces(~strongSide, PAWN)))
+                && (pos.attacks_bb<KING>(pos.square<KING>(~strongSide)) & pos.pieces(~strongSide, PAWN)))
             sf = 36;
         // For queen vs no queen endgames use scale factor
         // based on number of minors of side that doesn't have queen.
