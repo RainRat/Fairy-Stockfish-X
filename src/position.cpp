@@ -467,26 +467,6 @@ namespace {
                                 : analyze_push_stepwise(pos, m, info);
   }
 
-  inline Bitboard retro_asymmetric_check_squares(Color attacker, PieceType pt, Square kingSq, Bitboard occupied) {
-    // Hopper families need hurdle-aware retro logic. Keep pseudo candidates for
-    // those, and use path-based retro filtering for other asymmetrical riders.
-    if (AttackRiderTypes[pt] & HOPPING_RIDERS)
-        return PseudoAttacks[~attacker][pt][kingSq];
-
-    Bitboard checks = 0;
-    Bitboard candidates = PseudoAttacks[~attacker][pt][kingSq];
-
-    while (candidates)
-    {
-        Square from = pop_lsb(candidates);
-        Bitboard blockers = between_bb(kingSq, from, pt) & ~square_bb(from);
-        if (!(blockers & occupied))
-            checks |= from;
-    }
-
-    return checks;
-  }
-
   bool is_pure_hopper_like(const PieceInfo* pi) {
     bool hasHopper = false;
 
@@ -1781,11 +1761,21 @@ void Position::set_check_info(StateInfo* si) const {
           {
               PieceType pt = pop_lsb(ps);
               PieceType movePt = pt == KING ? king_type() : pt;
-              if (AttackRiderTypes[movePt] & ASYMMETRICAL_RIDERS)
-                  // For asymmetrical riders, use true retro paths from the king square.
-                  si->checkSquares[pt] = retro_asymmetric_check_squares(sideToMove, movePt, ksq, occupied);
-              else
-                  si->checkSquares[pt] = attacks_bb(~sideToMove, movePt, ksq, occupied);
+
+              // Since we are checking if a piece on a candidate square attacks the king on ksq,
+              // we need to consider if that candidate square is an initial square.
+              // We use PseudoAttacks from the king as a superset of possible checking squares.
+              Bitboard candidates = PseudoAttacks[~sideToMove][movePt][ksq];
+              si->checkSquares[pt] = 0;
+              while (candidates)
+              {
+                  Square s = pop_lsb(candidates);
+                  bool initial = not_moved_pieces(sideToMove) & s;
+                  if (initial ? attacks_from<true>(sideToMove, pt, s, occupied) & ksq
+                              : attacks_from<false>(sideToMove, pt, s, occupied) & ksq)
+                      si->checkSquares[pt] |= s;
+              }
+
               // Collect special piece types that require slower check and evasion detection
               if (AttackRiderTypes[movePt] & NON_SLIDING_RIDERS)
                   si->nonSlidingRiders |= pieces(pt);
@@ -1793,7 +1783,7 @@ void Position::set_check_info(StateInfo* si) const {
       }
   }
   si->shak = si->evasionCheckersBB & (byTypeBB[KNIGHT] | byTypeBB[ROOK] | byTypeBB[BERS]);
-  si->bikjang = var->bikjangRule && ksq != SQ_NONE ? bool(attacks_bb(sideToMove, ROOK, ksq, pieces()) & pieces(sideToMove, KING)) : false;
+  si->bikjang = var->bikjangRule && ksq != SQ_NONE ? bool(attacks_from(sideToMove, ROOK, ksq, pieces()) & pieces(sideToMove, KING)) : false;
   si->chased = var->chasingRule ? chased() : Bitboard(0);
   si->legalCapture = NO_VALUE;
   si->legalEnPassant = NO_VALUE;
@@ -2266,6 +2256,7 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
 /// a pinned or a discovered check piece, according if its color is the opposite
 /// or the same of the color of the slider.
 
+template <bool Initial>
 Bitboard Position::slider_blockers(Bitboard sliders, Square s, Bitboard& pinners, Color c) const {
 
   Bitboard blockers = 0;
@@ -2307,8 +2298,18 @@ Bitboard Position::slider_blockers(Bitboard sliders, Square s, Bitboard& pinners
                   }
               }
               else
-                  snipers |= b & ~attacks_bb(~c, pt, s, pieces());
-              if ((riderTypes & ~HOPPING_RIDERS) || !pi->tupleSlider[0][MODALITY_CAPTURE].empty())
+              {
+                  Bitboard candidates = b;
+                  while (candidates)
+                  {
+                      Square s2 = pop_lsb(candidates);
+                      bool initial = not_moved_pieces(c) & s2;
+                      if (!(initial ? attacks_from<true>(c, pt, s2, pieces()) & s
+                                    : attacks_from<false>(c, pt, s2, pieces()) & s))
+                          snipers |= s2;
+                  }
+              }
+              if ((riderTypes & ~HOPPING_RIDERS) || !pi->tupleSlider[Initial][MODALITY_CAPTURE].empty())
                   slidingSnipers |= snipers & ptPieces;
           }
       }
@@ -2367,74 +2368,48 @@ Bitboard Position::slider_blockers(Bitboard sliders, Square s, Bitboard& pinners
 
 Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard janggiCannons) const {
 
-  if (topology_wraps())
-  {
-      Bitboard b = 0;
-      for (PieceSet ps = piece_types(); ps;)
-      {
-          PieceType pt = pop_lsb(ps);
-          Bitboard ptPieces = pieces(c, pt);
-          if (!ptPieces)
-              continue;
-
-          PieceType move_pt = pt == KING ? king_type() : pt;
-          if (pt == JANGGI_CANNON)
-              b |= attacks_from(~c, move_pt, s, occupied)
-                 & attacks_from(~c, move_pt, s, occupied & ~janggiCannons)
-                 & ptPieces;
-          else
-              b |= attacks_from(~c, move_pt, s, occupied) & ptPieces;
-      }
-      return b;
-  }
-
-  // Use a faster version for variants with moderate rule variations
-  if (fast_attacks())
-  {
-      return  (pawn_attacks_bb(~c, s)          & pieces(c, PAWN))
-            | (attacks_bb<KNIGHT>(s)           & pieces(c, KNIGHT, ARCHBISHOP, CHANCELLOR))
-            | (attacks_bb<  ROOK>(s, occupied) & pieces(c, ROOK, QUEEN, CHANCELLOR))
-            | (attacks_bb<BISHOP>(s, occupied) & pieces(c, BISHOP, QUEEN, ARCHBISHOP))
-            | (attacks_bb<KING>(s)             & pieces(c, KING, COMMONER));
-  }
-
-  // Use a faster version for selected fairy pieces
-  if (fast_attacks2())
-  {
-      return  (pawn_attacks_bb(~c, s)             & pieces(c, PAWN, BREAKTHROUGH_PIECE, GOLD))
-            | (attacks_bb<KNIGHT>(s)              & pieces(c, KNIGHT))
-            | (attacks_bb<  ROOK>(s, occupied)    & (  pieces(c, ROOK, QUEEN, DRAGON)
-                                                     | (pieces(c, LANCE) & PseudoAttacks[~c][LANCE][s])))
-            | (attacks_bb<BISHOP>(s, occupied)    & pieces(c, BISHOP, QUEEN, DRAGON_HORSE))
-            | (attacks_bb<KING>(s)                & pieces(c, KING, COMMONER))
-            | (attacks_bb<FERS>(s)                & pieces(c, FERS, DRAGON, SILVER))
-            | (attacks_bb<WAZIR>(s)               & pieces(c, WAZIR, DRAGON_HORSE, GOLD))
-            | (LeaperAttacks[~c][SHOGI_KNIGHT][s] & pieces(c, SHOGI_KNIGHT))
-            | (LeaperAttacks[~c][SHOGI_PAWN][s]   & pieces(c, SHOGI_PAWN, SILVER));
-  }
-
   Bitboard b = 0;
   for (PieceSet ps = piece_types(); ps;)
   {
       PieceType pt = pop_lsb(ps);
-      if (board_bb(c, pt) & s)
+      Bitboard ptPieces = pieces(c, pt);
+      if (!ptPieces)
+          continue;
+
+      PieceType movePt = pt == KING ? king_type() : pt;
+
+      // Consider asymmetrical moves (e.g., horse)
+      if (AttackRiderTypes[movePt] & ASYMMETRICAL_RIDERS)
       {
-          PieceType move_pt = pt == KING ? king_type() : pt;
-          // Consider asymmetrical moves (e.g., horse)
-          if (AttackRiderTypes[move_pt] & ASYMMETRICAL_RIDERS)
+          Bitboard asymmetricals = PseudoAttacks[~c][movePt][s] & ptPieces;
+          while (asymmetricals)
           {
-              Bitboard asymmetricals = PseudoAttacks[~c][move_pt][s] & pieces(c, pt);
-              while (asymmetricals)
-              {
-                  Square s2 = pop_lsb(asymmetricals);
-                  if (attacks_from(c, move_pt, s2, occupied) & s)
-                      b |= s2;
-              }
+              Square s2 = pop_lsb(asymmetricals);
+              // Asymmetrical riders might have different initial behavior
+              bool initial = not_moved_pieces(c) & s2;
+              if (initial ? attacks_from<true>(c, pt, s2, occupied) & s
+                          : attacks_from<false>(c, pt, s2, occupied) & s)
+                  b |= s2;
           }
-          else if (pt == JANGGI_CANNON)
-              b |= attacks_from(~c, move_pt, s, occupied) & attacks_from(~c, move_pt, s, occupied & ~janggiCannons) & pieces(c, JANGGI_CANNON);
-          else
-              b |= attacks_from(~c, move_pt, s, occupied) & pieces(c, pt);
+      }
+      else if (pt == JANGGI_CANNON)
+          b |= attacks_from(c, pt, s, occupied) & attacks_from(c, pt, s, occupied & ~janggiCannons) & ptPieces;
+      else
+      {
+          // For symmetric pieces, we can invert the attack: if pt on s2 attacks s,
+          // then an equivalent piece on s would attack s2 under the same occupancy
+          // (assuming no initial-square dependency).
+          // BUT: Special riders (Max, Contra) and initial squares break this symmetry.
+          // To be safe and unified, we use the property that PseudoAttacks are supersets.
+          Bitboard candidates = PseudoAttacks[~c][movePt][s] & ptPieces;
+          while (candidates)
+          {
+              Square s2 = pop_lsb(candidates);
+              bool initial = not_moved_pieces(c) & s2;
+              if (initial ? attacks_from<true>(c, pt, s2, occupied) & s
+                          : attacks_from<false>(c, pt, s2, occupied) & s)
+                  b |= s2;
+          }
       }
   }
 
@@ -4356,22 +4331,14 @@ bool Position::gives_check(Move m) const {
       PieceType pt = type_of(mover);
       if (!(var->captureForbidden[pt] & KING))
       {
+          bool initial = not_moved_pieces(sideToMove) & from;
           if (pt == JANGGI_CANNON)
           {
-              if (attacks_bb(sideToMove, pt, attackFrom, occupied) & attacks_bb(sideToMove, pt, attackFrom, occupied & ~janggiCannons) & square<KING>(~sideToMove))
+              if (attacks_from(sideToMove, pt, attackFrom, occupied) & attacks_from(sideToMove, pt, attackFrom, occupied & ~janggiCannons) & square<KING>(~sideToMove))
                   return true;
           }
-          else if (AttackRiderTypes[pt] & HOPPING_RIDERS)
-          {
-              if (attacks_bb(sideToMove, pt, attackFrom, occupied) & square<KING>(~sideToMove))
-                  return true;
-          }
-          else if (AttackRiderTypes[pt] & ASYMMETRICAL_RIDERS)
-          {
-              if ((check_squares(pt) & attackFrom) && (attacks_bb(sideToMove, pt, attackFrom, occupied) & square<KING>(~sideToMove)))
-                  return true;
-          }
-          else if (check_squares(pt) & attackFrom)
+          else if (initial ? attacks_from<true>(sideToMove, pt, attackFrom, occupied) & square<KING>(~sideToMove)
+                           : attacks_from<false>(sideToMove, pt, attackFrom, occupied) & square<KING>(~sideToMove))
               return true;
       }
       if (var->blastPassiveTypes && (var->blastPassiveTypes & piece_set(pt)))
@@ -4396,9 +4363,9 @@ bool Position::gives_check(Move m) const {
       && gatingPotion == Variant::POTION_TYPE_NB
       && gating_type(m) != NO_PIECE_TYPE)
   {
-      if (attacks_bb(sideToMove, gating_type(m), gating_square(m), occupied ^ square_bb(gating_square(m))) & square<KING>(~sideToMove))
+      if (attacks_from(sideToMove, gating_type(m), gating_square(m), occupied ^ square_bb(gating_square(m))) & square<KING>(~sideToMove))
           return true;
-      if (paired_drop(m) && (attacks_bb(sideToMove, gating_type(m), secondary_drop_square(m), occupied ^ square_bb(secondary_drop_square(m))) & square<KING>(~sideToMove)))
+      if (paired_drop(m) && (attacks_from(sideToMove, gating_type(m), secondary_drop_square(m), occupied ^ square_bb(secondary_drop_square(m))) & square<KING>(~sideToMove)))
           return true;
   }
 
@@ -4411,7 +4378,7 @@ bool Position::gives_check(Move m) const {
   {
       PieceType pt = type_of(mover);
       PieceType diagType = pt == WAZIR ? FERS : pt == SOLDIER ? PAWN : pt == ROOK ? BISHOP : NO_PIECE_TYPE;
-      if (diagType && (attacks_bb(sideToMove, diagType, attackFrom, occupied) & square<KING>(~sideToMove)))
+      if (diagType && (attacks_from(sideToMove, diagType, attackFrom, occupied) & square<KING>(~sideToMove)))
           return true;
       else if (pt == JANGGI_CANNON && (  rider_attacks_bb<RIDER_CANNON_DIAG>(attackFrom, occupied)
                                        & rider_attacks_bb<RIDER_CANNON_DIAG>(attackFrom, occupied & ~janggiCannons)
@@ -4430,13 +4397,13 @@ bool Position::gives_check(Move m) const {
       return false;
 
   case PROMOTION:
-      return attacks_bb(sideToMove, promotion_type(m), to, pieces() ^ from) & square<KING>(~sideToMove);
+      return attacks_from(sideToMove, promotion_type(m), to, pieces() ^ from) & square<KING>(~sideToMove);
 
   case PIECE_PROMOTION:
-      return attacks_bb(sideToMove, promoted_piece_type(type_of(mover)), to, pieces() ^ from) & square<KING>(~sideToMove);
+      return attacks_from(sideToMove, promoted_piece_type(type_of(mover)), to, pieces() ^ from) & square<KING>(~sideToMove);
 
   case PIECE_DEMOTION:
-      return attacks_bb(sideToMove, type_of(unpromoted_piece_on(from)), to, pieces() ^ from) & square<KING>(~sideToMove);
+      return attacks_from(sideToMove, type_of(unpromoted_piece_on(from)), to, pieces() ^ from) & square<KING>(~sideToMove);
 
   // En passant capture with check? We have already handled the case
   // of direct checks and ordinary discovered check, so the only case we
