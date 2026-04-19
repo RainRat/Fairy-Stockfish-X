@@ -4283,7 +4283,6 @@ bool Position::gives_check(Move m) const {
   Square from = from_sq(m);
   Square to = to_sq(m);
   bool dropMove = is_drop_move(m);
-  bool swapMove = is_swap_move(m);
 
   Bitboard freezeExtra = 0;
   Bitboard jumpRemoved = 0;

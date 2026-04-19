@@ -1,9 +1,12 @@
-
-import pyffish as sf
+import sys
 import unittest
 from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
+import pyffish as sf
 
 class TestBindings(unittest.TestCase):
     def test_is_capture_invalid_move(self):

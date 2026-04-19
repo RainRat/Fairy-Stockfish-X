@@ -69,7 +69,8 @@ namespace {
         }
 
         if (pos.walling_rule() == ARROW)
-            b &= moves_bb(us, type_of(pos.piece_on(from)), effectiveTo, occupancyAfter ^ square_bb(effectiveTo));
+            b &= pos.moves_bb(us, type_of(pos.piece_on(from)), effectiveTo,
+                              occupancyAfter ^ square_bb(effectiveTo));
 
         //Any current or future wall variant must follow the walling region rule if set:
         b &= pos.walling_region(us);
