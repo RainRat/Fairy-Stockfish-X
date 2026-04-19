@@ -9,8 +9,9 @@ trap 'rm -f "$tmp_ini"' EXIT
 
 cat > "$tmp_ini" <<'INI'
 [contrahopper:chess]
-customPiece1 = o:oR
-startFen = k7/8/8/8/8/5P2/1P3O2/7K w
+customPiece1 = a:oR
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+startFen = k7/8/8/8/8/5P2/1P3A2/7K w
 INI
 
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value contrahopper\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" | "$ENGINE")

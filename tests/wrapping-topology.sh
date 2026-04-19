@@ -75,7 +75,7 @@ cylindrical = true
 castling = false
 customPiece1 = a:oR
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
-startFen = 7k/8/8/8/8/8/8/A3K1p1 w - - 0 1
+startFen = 7k/8/8/8/8/8/8/pA2K3 w - - 0 1
 
 [cyl-griffon:chess]
 cylindrical = true
@@ -141,7 +141,7 @@ cyl_grasshopper_output=$(run_variant cyl-grasshopper)
 echo "${cyl_grasshopper_output}" | grep -q "a1g1: 1"
 
 cyl_contrahopper_output=$(run_variant cyl-contrahopper)
-echo "${cyl_contrahopper_output}" | grep -q "a1h1: 1"
+echo "${cyl_contrahopper_output}" | grep -q "b1h1: 1"
 
 cyl_griffon_output=$(run_variant cyl-griffon)
 echo "${cyl_griffon_output}" | grep -q "a1g2: 1"

@@ -3287,7 +3287,12 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
       return b & board_bb(c, pt);
   }
 
-  if (fast_attacks() && (pt != KING || king_type() == KING))
+  PieceType movePt = pt == KING ? king_type() : pt;
+  const PieceInfo* pi = pieceMap.get(movePt);
+  const bool hasRuntimeSpecialMoves = pi->riderAugmentMask != PieceInfo::AUGMENT_NONE
+                                   || pi->has_explicit_initial_moves();
+
+  if (!hasRuntimeSpecialMoves && fast_attacks() && (pt != KING || king_type() == KING))
   {
       Bitboard b = 0;
       switch (pt)
@@ -3327,11 +3332,8 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
       return b & board_bb();
   }
 
-  if (fast_attacks2() && (pt != KING || king_type() == KING))
+  if (!hasRuntimeSpecialMoves && fast_attacks2() && (pt != KING || king_type() == KING))
       return attacks_bb(c, pt, s, occupancy) & board_bb();
-
-  PieceType movePt = pt == KING ? king_type() : pt;
-  const PieceInfo* pi = pieceMap.get(movePt);
 
   if ((fast_attacks() || fast_attacks2()) && pi->riderAugmentMask == PieceInfo::AUGMENT_NONE)
       return attacks_bb(c, movePt, s, occupancy) & board_bb();
@@ -3505,10 +3507,15 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
   if (const SpellContext* spellCtx = current_spell_context(); spellCtx && c == sideToMove)
       occupancy &= ~spellCtx->jumpRemoved;
 
-  if ((fast_attacks() || fast_attacks2()) && (pt != KING || king_type() == KING))
+  const bool hasRuntimeSpecialMoves = pi->riderAugmentMask != PieceInfo::AUGMENT_NONE
+                                   || pi->has_explicit_initial_moves();
+
+  if (!hasRuntimeSpecialMoves && (fast_attacks() || fast_attacks2()) && (pt != KING || king_type() == KING))
       return (moves_bb(c, pt, s, occupancy) | extraDestinations) & board_bb();
 
-  if ((fast_attacks() || fast_attacks2()) && pi->riderAugmentMask == PieceInfo::AUGMENT_NONE)
+  if (!pi->has_explicit_initial_moves()
+      && (fast_attacks() || fast_attacks2())
+      && pi->riderAugmentMask == PieceInfo::AUGMENT_NONE)
       return (moves_bb(c, movePt, s, occupancy) | extraDestinations) & board_bb();
 
   if (pi->friendlyJump)
