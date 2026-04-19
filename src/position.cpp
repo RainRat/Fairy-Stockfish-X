@@ -4294,6 +4294,16 @@ bool Position::gives_check(Move m) const {
   else if (janggiCannons & to)
       janggiCannons ^= to;
 
+  if (topology_wraps() || has_pushing() || has_adjacent_swapping() || is_swap_move(m))
+  {
+      Position* pos = const_cast<Position*>(this);
+      StateInfo nextState;
+      pos->do_move(m, nextState, false);
+      bool givesCheck = bool(pos->evasion_checkers());
+      pos->undo_move(m);
+      return givesCheck;
+  }
+
   if (type_of(m) == PULL)
   {
       Square pullFrom = pull_square(m);
