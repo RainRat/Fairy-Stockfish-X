@@ -3394,11 +3394,12 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
             {
                 b |= to;
                 if ((double_step_region(c, pt) & s)
+                    && (not_moved_pieces(c) & s)
                     && wrapped_destination_square(to, 0, forward, max_file(), max_rank(), wrapFile, wrapRank, to)
                     && !(occupancy & to))
                     b |= to;
             }
-            if ((triple_step_region(c, pt) & s))
+            if ((triple_step_region(c, pt) & s) && (not_moved_pieces(c) & s))
             {
                 Square s1 = SQ_NONE, s2 = SQ_NONE, s3 = SQ_NONE;
                 if (wrapped_destination_square(s, 0, forward, max_file(), max_rank(), wrapFile, wrapRank, s1)

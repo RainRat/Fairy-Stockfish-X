@@ -177,6 +177,29 @@ assert not sf.gives_check("cyl-checkmove", fen, [])
 assert sf.gives_check("cyl-checkmove", fen, ["g1a1"])
 PY
 
+# Test for wrapped pawn double step logic
+cat >"${TMP_VARIANT_PATH}" <<'INI'
+[tor-pawn-repro:chess]
+toroidal = true
+castling = false
+mandatoryPawnPromotion = false
+startFen = 8/6k1/8/8/8/8/P7/4K3 w - - 0 1
+INI
+
+tor_pawn_repro_output=$(cat <<CMDS | "${ENGINE}" 2>&1
+uci
+setoption name VariantPath value ${TMP_VARIANT_PATH}
+setoption name UCI_Variant tor-pawn-repro
+position startpos moves a2a3 g7g6 a3a4 g6g5 a4a5 g5g4 a5a6 g4h3 a6a7 h3g2 a7a8 g2h1 a8a1 h1g2 a1a2 g2g1
+go perft 1
+quit
+CMDS
+)
+if echo "${tor_pawn_repro_output}" | grep -q "a2a4: 1"; then
+  echo "wrapping topology test failed: wrapped pawn allowed illegal double step"
+  exit 1
+fi
+
 rm -f "${TMP_VARIANT_PATH}"
 unset TMP_VARIANT_PATH
 
