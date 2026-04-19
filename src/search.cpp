@@ -1849,14 +1849,7 @@ moves_loop: // When in check, search starts from here
     // stalemate or no-move outcomes are decisive even outside check.
     if (bestMove == MOVE_NONE)
     {
-        bool hasLegalMove = false;
-        for (auto it = MoveList<LEGAL>(pos).begin(); it != MoveList<LEGAL>(pos).end(); ++it)
-        {
-            hasLegalMove = true;
-            break;
-        }
-
-        if (!hasLegalMove)
+        if (!pos.has_legal_move())
         {
             Value result;
             if (pos.is_game_end(result, ss->ply))

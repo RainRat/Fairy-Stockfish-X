@@ -3801,6 +3801,43 @@ bool Position::legal(Move m) const {
 }
 
 
+/// Position::has_legal_move() tests whether there is at least one legal move
+
+bool Position::has_legal_move() const {
+
+  if (is_immediate_game_end())
+      return false;
+
+  ExtMove moveList[MOVEGEN_OVERFLOW_CAPACITY];
+  ExtMove* end;
+
+  const bool useWrappedFallback = topology_wraps() && evasion_checkers();
+  const bool useNonEvasions = anti_royal_types() || useWrappedFallback;
+
+  if (evasion_checkers() && !useNonEvasions)
+  {
+      end = generate<EVASIONS>(*this, moveList);
+      for (ExtMove* it = moveList; it != end; ++it)
+          if (legal(*it) && !virtual_drop(*it))
+              return true;
+  }
+  else
+  {
+      end = generate<CAPTURES>(*this, moveList);
+      for (ExtMove* it = moveList; it != end; ++it)
+          if (legal(*it) && !virtual_drop(*it))
+              return true;
+
+      end = generate<QUIETS>(*this, moveList);
+      for (ExtMove* it = moveList; it != end; ++it)
+          if (legal(*it) && !virtual_drop(*it))
+              return true;
+  }
+
+  return false;
+}
+
+
 /// Position::pseudo_legal() takes a random move and tests whether the move is
 /// pseudo legal. It is used to validate moves from TT that can be corrupted
 /// due to SMP concurrent access or hash position key aliasing.
