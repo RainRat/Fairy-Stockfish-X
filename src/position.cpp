@@ -4332,7 +4332,7 @@ bool Position::gives_check(Move m) const {
   else if (janggiCannons & to)
       janggiCannons ^= to;
 
-  if (topology_wraps() || var->blastPassiveTypes || has_pushing() || has_pulling() || has_adjacent_swapping() || type_of(m) == PULL || swapMove)
+  if (topology_wraps() || has_pushing() || has_adjacent_swapping() || is_swap_move(m))
   {
       Position* pos = const_cast<Position*>(this);
       StateInfo nextState;
@@ -4340,6 +4340,14 @@ bool Position::gives_check(Move m) const {
       bool givesCheck = bool(pos->evasion_checkers());
       pos->undo_move(m);
       return givesCheck;
+  }
+
+  if (type_of(m) == PULL)
+  {
+      Square pullFrom = pull_square(m);
+      occupied ^= square_bb(pullFrom) ^ square_bb(from);
+      if (janggiCannons & pullFrom)
+          janggiCannons ^= square_bb(pullFrom) ^ square_bb(from);
   }
 
   // Is there a direct check?
@@ -4367,10 +4375,20 @@ bool Position::gives_check(Move m) const {
           else if (check_squares(pt) & attackFrom)
               return true;
       }
+      if (var->blastPassiveTypes && (var->blastPassiveTypes & piece_set(pt)))
+      {
+          Square ksq = square<KING>(~sideToMove);
+          if (!(blast_immune_bb() & square_bb(ksq)) && (blast_pattern(ksq) & to))
+              return true;
+      }
   }
 
   // Is there a discovered check?
-  if (  ((!dropMove && (blockers_for_king(~sideToMove) & (rifleShot ? square_bb(to) : square_bb(from)))) || (non_sliding_riders() & pieces(sideToMove)))
+  Bitboard discCheckSq = rifleShot ? square_bb(to) : square_bb(from);
+  if (type_of(m) == PULL)
+      discCheckSq |= square_bb(pull_square(m));
+
+  if (  ((!dropMove && (blockers_for_king(~sideToMove) & discCheckSq)) || (non_sliding_riders() & pieces(sideToMove)))
       && attackers_to_king(square<KING>(~sideToMove), occupied, sideToMove, janggiCannons) & occupied)
       return true;
 
