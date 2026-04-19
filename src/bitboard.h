@@ -305,7 +305,7 @@ inline Bitboard safe_destination_tuple_bb(Square s, int dr, int df) {
   return square_bb(make_square(File(f), Rank(r)));
 }
 
-inline Bitboard rose_attacks_bb(Square from, Bitboard occupied, const MagicGeometry* mg = current_magic_geometry) {
+inline Bitboard rose_attacks_bb(Square from, Bitboard occupied, const MagicGeometry* /*mg*/ = current_magic_geometry) {
   Bitboard attack = 0;
 
   for (int start = 0; start < 8; ++start)
