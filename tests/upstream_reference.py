@@ -26,6 +26,7 @@ CASES = [
     Case("allexplodeatomic_startpos", "allexplodeatomic", "position startpos"),
     Case("duck_startpos", "duck", "position startpos"),
     Case("spartan_startpos", "spartan", "position startpos"),
+    Case("racingkings_startpos", "racingkings", "position startpos"),
     Case("xiangqi_startpos", "xiangqi", "position startpos"),
     Case("janggi_startpos", "janggi", "position startpos"),
     Case(

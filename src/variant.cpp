@@ -231,10 +231,6 @@ namespace {
         v->promotionPawnTypes = piece_set(CUSTOM_PIECE_1);
         v->enPassantTypes = piece_set(CUSTOM_PIECE_1);
         v->nMoveRuleTypes = piece_set(CUSTOM_PIECE_1);
-        v->doubleStepRegion[WHITE] = PieceTypeBitboardGroup(Bitboard(0));
-        v->doubleStepRegion[BLACK] = PieceTypeBitboardGroup(Bitboard(0));
-        v->doubleStepRegion[WHITE].set('P', Rank2BB);
-        v->doubleStepRegion[BLACK].set('P', Rank7BB);
         return v;
     }
     // Pawnsideways

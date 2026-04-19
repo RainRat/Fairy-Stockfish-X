@@ -35,10 +35,28 @@ out=$(run_cmds "$ROOT_DIR/src/variants.ini" chess \
 go perft 1")
 echo "$out" | grep -q "e7e8q: 1"
 
+# Built-in Berolina should not regain orthodox forward pawn pushes.
+out=$(printf 'uci\nsetoption name UCI_Variant value berolina\nposition startpos\ngo perft 1\nquit\n' | "$ENGINE")
+echo "$out" | grep -q "a2b3: 1"
+echo "$out" | grep -q "a2c4: 1"
+! echo "$out" | grep -q "^a2a3:"
+! echo "$out" | grep -q "^a2a4:"
+
 # wallOrMove should not crash when the side to move has no pieces.
 out=$(run_cmds "$TMP_INI" wallpass \
   "position startpos
 go perft 1")
 echo "$out" | grep -q "Nodes searched:"
+
+# Racing Kings must not grant generic pawn-style initial pushes to non-pawns.
+out=$(run_cmds "$ROOT_DIR/src/variants.ini" racingkings \
+  "position startpos
+go perft 1")
+echo "$out" | grep -q "Nodes searched: 21"
+! echo "$out" | grep -q "^h2h4:"
+! echo "$out" | grep -q "^e2e3:"
+! echo "$out" | grep -q "^e2e4:"
+! echo "$out" | grep -q "^f2f3:"
+! echo "$out" | grep -q "^f2f4:"
 
 echo "movegen regressions passed"
