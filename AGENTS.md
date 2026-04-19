@@ -72,6 +72,7 @@ Run: `./stockfish < test.txt > output.txt`
 * Smoke tests for experimental variants: `../tests/new-variants-smoke.sh`
 * Python bindings unit tests: `python3 ../test.py` (requires `pyffish` to be built/installed)
 * Upstream reference checks for shared behavior: `python3 tests/upstream_reference.py src/stockfish /home/chris/fairy-stockfish-upstream/src/stockfish`
+  Current curated set covers orthodox chess, pawn-rule variants, `spartan` checking semantics, `duck` walling/duck plumbing, `allexplodeatomic` custom-pawn behavior, and the `janggi` cannon/pass path. Extend this list conservatively and keep known semantic divergences called out in the script review notes rather than silently ignored.
 * Optional: `../tests/regression.sh`, `../tests/reprosearch.sh`, `./stockfish bench [variant]`
 
 ### Test Build Requirements
