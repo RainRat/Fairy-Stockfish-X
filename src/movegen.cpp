@@ -880,7 +880,6 @@ namespace {
     Bitboard forcedFromMask = AllSquares;
     bool restrictToForcedJumper = false;
     PieceType forcedJumpPt = NO_PIECE_TYPE;
-    Bitboard jumpForbidden = current_spell_context() ? current_spell_context()->jumpRemoved : Bitboard(0);
 
     if (pos.in_opening_self_removal_phase())
     {
@@ -963,7 +962,7 @@ namespace {
             }
 
             // Remove inaccessible squares (outside board + wall squares)
-            target &= pos.board_bb() & ~jumpForbidden;
+            target &= pos.board_bb();
 
             captureTarget = target;
         }
@@ -1251,26 +1250,22 @@ namespace {
             continue;
         }
 
-        while (candidates)
+        if (potion == Variant::POTION_JUMP)
         {
-            if (cur >= maxEnd)
-                return maxEnd;
+            if (!candidates)
+                continue;
 
-            Square gate = pop_lsb(candidates);
-            assert(potion == Variant::POTION_JUMP);
-
-            Bitboard gateMask = square_bb(gate);
-            ScopedSpellContext guard(Bitboard(0), gateMask);
+            ScopedSpellContext guard(Bitboard(0), candidates);
 
 #ifdef USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
             std::unique_ptr<ExtMove[]> jumpMoves(new ExtMove[MOVEGEN_OVERFLOW_CAPACITY]);
-            ExtMove* jumpEnd = generate_all_impl<Us, Type>(pos, jumpMoves.get());
+            ExtMove* jumpEnd = generate_all_impl<Us, NON_EVASIONS>(pos, jumpMoves.get());
             assert(jumpEnd - jumpMoves.get() <= MOVEGEN_OVERFLOW_CAPACITY);
 
             for (ExtMove* it = jumpMoves.get(); it != jumpEnd; ++it)
 #else
             ExtMove jumpMoves[MOVEGEN_OVERFLOW_CAPACITY];
-            ExtMove* jumpEnd = generate_all_impl<Us, Type>(pos, jumpMoves);
+            ExtMove* jumpEnd = generate_all_impl<Us, NON_EVASIONS>(pos, jumpMoves);
             assert(jumpEnd - jumpMoves <= MOVEGEN_OVERFLOW_CAPACITY);
 
             for (ExtMove* it = jumpMoves; it != jumpEnd; ++it)
@@ -1286,6 +1281,7 @@ namespace {
                 MoveType mt = type_of(base);
                 if (mt != NORMAL && mt != CASTLING)
                     continue;
+
                 Square from = from_sq(base);
                 Square to = to_sq(base);
 
@@ -1302,19 +1298,29 @@ namespace {
                     && moverType != SOLDIER)
                     continue;
 
-                if (to == gate)
-                    continue;
-
                 if (distance(from, to) <= 1)
                     continue;
 
                 Bitboard path = between_bb(from, to, moverType);
-                if (!(path & gateMask))
+                Bitboard intersection = path & candidates & ~square_bb(to);
+                if (popcount(intersection) != 1)
+                    continue;
+
+                Square gate = lsb(intersection);
+                if (to == gate)
                     continue;
 
                 Move gatingMove = mt == NORMAL
                                   ? make_gating<NORMAL>(from, to, potionPiece, gate)
                                   : make_gating<CASTLING>(from, to, potionPiece, gate);
+
+                // Filter by original Type and legality
+                bool isCapture = pos.capture_or_promotion(gatingMove);
+                if (   (Type == CAPTURES && !isCapture)
+                    || (Type == QUIETS && isCapture)
+                    || (Type == QUIET_CHECKS && (isCapture || !pos.gives_check(gatingMove)))
+                    || !pos.legal(gatingMove))
+                    continue;
 
                 cur->move = gatingMove;
                 cur->value = it->value;
