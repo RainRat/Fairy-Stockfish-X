@@ -523,9 +523,7 @@ public:
   }
 
   const MagicGeometry* magic_geometry() const {
-      if (!variant()->magicGeometry)
-          const_cast<Variant*>(variant())->magicGeometry = Stockfish::Bitboards::init_magics(variant()->maxFile, variant()->maxRank);
-      return variant()->magicGeometry.get();
+      return variant()->magicGeometry ? variant()->magicGeometry.get() : current_magic_geometry;
   }
   CountingRule counting_rule() const;
 
