@@ -5,6 +5,7 @@ set -euo pipefail
 ROOT_DIR=$(cd "$(dirname "$0")/.." && pwd)
 ENGINE=${1:-src/stockfish}
 PYTHON=${PYTHON:-python3}
+UPSTREAM_ENGINE=${UPSTREAM_ENGINE:-/home/chris/fairy-stockfish-upstream/src/stockfish}
 
 run_step() {
   local label="$1"
@@ -25,6 +26,7 @@ run_step "variant switch after perft" timeout 60s bash tests/variant-switch-afte
 run_step "custom en passant passed squares" timeout 60s bash tests/custom-en-passant-passed-squares.sh "${ENGINE}"
 run_step "blast legal regressions" timeout 60s bash tests/blast-legal-regressions.sh "${ENGINE}"
 run_step "binding regression" timeout 60s "${PYTHON}" tests/test_binding_regression.py
+run_step "upstream movecount baseline" timeout 60s "${PYTHON}" tests/upstream_movecount_baseline.py "${ENGINE}" "${UPSTREAM_ENGINE}"
 run_step "python unit tests" timeout 180s "${PYTHON}" test.py
 
 echo "fast regression suite passed"

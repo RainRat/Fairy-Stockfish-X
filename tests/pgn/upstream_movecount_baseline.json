@@ -1,0 +1,173 @@
+{
+  "source": "/home/chris/fairy-stockfish-upstream/src/stockfish",
+  "records": [
+    {
+      "name": "chess",
+      "variant": "chess",
+      "plies": 8,
+      "moves": [
+        "a2a3",
+        "a7a6",
+        "b2b3",
+        "a6a5",
+        "c2c3",
+        "a5a4",
+        "d2d3",
+        "b7b6"
+      ],
+      "fen": "rnbqkbnr/2pppppp/1p6/8/p7/PPPP4/4PPPP/RNBQKBNR w KQkq - 0 5",
+      "move_count": 25
+    },
+    {
+      "name": "berolina",
+      "variant": "berolina",
+      "plies": 8,
+      "moves": [
+        "b1a3",
+        "b8a6",
+        "g1f3",
+        "a6b4",
+        "a3b1",
+        "b4a2",
+        "b1a3",
+        "a2c1"
+      ],
+      "fen": "r1bqkbnr/pppppppp/8/8/8/N4N2/1PPPPPPP/R1nQKB1R w KQkq - 0 5",
+      "move_count": 32
+    },
+    {
+      "name": "seirawan",
+      "variant": "seirawan",
+      "plies": 8,
+      "moves": [
+        "a2a3",
+        "a7a6",
+        "b2b3",
+        "a6a5",
+        "c2c3",
+        "a5a4",
+        "d2d3",
+        "b7b6"
+      ],
+      "fen": "rnbqkbnr/2pppppp/1p6/8/p7/PPPP4/4PPPP/RNBQKBNR[EHeh] w KQBCDFGkqbcdfg - 0 5",
+      "move_count": 51
+    },
+    {
+      "name": "torpedo",
+      "variant": "torpedo",
+      "plies": 8,
+      "moves": [
+        "a2a3",
+        "a7a6",
+        "b2b3",
+        "a6a5",
+        "c2c3",
+        "a5a4",
+        "d2d3",
+        "b7b6"
+      ],
+      "fen": "rnbqkbnr/2pppppp/1p6/8/p7/PPPP4/4PPPP/RNBQKBNR w KQkq - 0 5",
+      "move_count": 28
+    },
+    {
+      "name": "atomic",
+      "variant": "atomic",
+      "plies": 8,
+      "moves": [
+        "a2a3",
+        "a7a6",
+        "b2b3",
+        "a6a5",
+        "c2c3",
+        "a5a4",
+        "d2d3",
+        "b7b6"
+      ],
+      "fen": "rnbqkbnr/2pppppp/1p6/8/p7/PPPP4/4PPPP/RNBQKBNR w KQkq - 0 5",
+      "move_count": 25
+    },
+    {
+      "name": "allexplodeatomic",
+      "variant": "allexplodeatomic",
+      "plies": 8,
+      "moves": [
+        "a2a3",
+        "a7a6",
+        "b2b3",
+        "a6a5",
+        "c2c3",
+        "a5a4",
+        "d2d3",
+        "b7b6"
+      ],
+      "fen": "rnbqkbnr/2pppppp/1p6/8/p7/PPPP4/4PPPP/RNBQKBNR w KQkq - 0 5",
+      "move_count": 25
+    },
+    {
+      "name": "duck",
+      "variant": "duck",
+      "plies": 6,
+      "moves": [
+        "a2a3,a3a2",
+        "a7a6,a6b3",
+        "c2c3,c3a2",
+        "a6a5,a5c2",
+        "b2b3,b3a2",
+        "a5a4,a4b2"
+      ],
+      "fen": "rnbqkbnr/1ppppppp/8/8/p7/PPP5/1*1PPPPP/RNBQKBNR w KQkq - 0 4",
+      "move_count": 528
+    },
+    {
+      "name": "spartan",
+      "variant": "spartan",
+      "plies": 8,
+      "moves": [
+        "a2a3",
+        "g8f6",
+        "b2b3",
+        "f6a1",
+        "c2c3",
+        "a1b2",
+        "d2d3",
+        "b2a1"
+      ],
+      "fen": "lgkcck1l/hhhhhhhh/8/8/8/PPPP4/4PPPP/wNBQKBNR w K - 1 5",
+      "move_count": 24
+    },
+    {
+      "name": "racingkings",
+      "variant": "racingkings",
+      "plies": 8,
+      "moves": [
+        "e1c2",
+        "d1f2",
+        "c2a1",
+        "a2a3",
+        "h2g3",
+        "a3b4",
+        "g3h4",
+        "d2f1"
+      ],
+      "fen": "8/8/8/8/1k5K/8/1r2NnR1/Nrb2nRQ w - - 0 5",
+      "move_count": 17
+    },
+    {
+      "name": "xiangqi",
+      "variant": "xiangqi",
+      "plies": 8,
+      "moves": [
+        "a1a2",
+        "a10a8",
+        "i1i2",
+        "a8a9",
+        "a2a1",
+        "a9a8",
+        "a1a2",
+        "a8a9"
+      ],
+      "fen": "1nbakabnr/r8/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/R7R/1NBAKABN1 w - - 8 5",
+      "move_count": 58
+    }
+  ]
+}
