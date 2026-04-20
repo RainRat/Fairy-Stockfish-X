@@ -42,6 +42,17 @@ echo "$out" | grep -q "a2c4: 1"
 ! echo "$out" | grep -q "^a2a3:"
 ! echo "$out" | grep -q "^a2a4:"
 
+# Direct king capture must end the game immediately in capture-the-royal flows.
+out=$(run_cmds "$ROOT_DIR/src/variants.ini" british-chess \
+  "position fen 10/10/10/10/10/10/10/10/4q5/3Q6 w - - 0 1 moves d1e2
+go perft 1")
+echo "$out" | grep -q "Nodes searched: 0"
+
+out=$(run_cmds "$ROOT_DIR/src/variants.ini" minihexchess \
+  "position fen ***4/**5/*k5/7/6*/5**/KR2*** w - - 0 1 moves b1b5
+go perft 1")
+echo "$out" | grep -q "Nodes searched: 0"
+
 # wallOrMove should not crash when the side to move has no pieces.
 out=$(run_cmds "$TMP_INI" wallpass \
   "position startpos

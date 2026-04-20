@@ -7263,6 +7263,15 @@ bool Position::is_optional_game_end(Value& result, int ply, int countStarted) co
 
 bool Position::is_immediate_game_end(Value& result, int ply) const {
 
+  // Direct king capture ends the game immediately in capture-the-royal flows,
+  // even when the variant is not modeled through extinction or pseudo-royals.
+  if (type_of(st->captured.piece) == KING)
+  {
+      Color capturedColor = color_of(st->captured.piece);
+      result = capturedColor == sideToMove ? mated_in(ply) : mate_in(ply);
+      return true;
+  }
+
   // Pseudo-royal loss
   // Some variants transfer royal status across a family of piece types.
   // If a special capture removes the current pseudo-royal, the game ends
