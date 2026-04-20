@@ -7,6 +7,7 @@ error() {
   [[ -n "${TMP1:-}" ]] && rm -f "${TMP1}"
   [[ -n "${TMP2:-}" ]] && rm -f "${TMP2}"
   [[ -n "${TMP3:-}" ]] && rm -f "${TMP3}"
+  [[ -n "${TMP4:-}" ]] && rm -f "${TMP4}"
   exit 1
 }
 trap 'error ${LINENO}' ERR
@@ -75,5 +76,52 @@ echo "${out}" | grep -q "^a7b8: 1$"
 
 rm -f "${TMP3}"
 unset TMP3
+
+TMP4=$(mktemp /tmp/fsx-antimatter-XXXXXX.ini)
+cat >"${TMP4}" <<'INI'
+[antimatter:chess]
+blastOnSameTypeCapture = true
+blastOrthogonals = false
+blastDiagonals = false
+INI
+
+out=$(python3 - "${ENGINE}" "${TMP4}" <<'PY'
+import subprocess
+import sys
+import time
+
+engine = sys.argv[1]
+variant_path = sys.argv[2]
+
+proc = subprocess.Popen(
+    [engine],
+    stdin=subprocess.PIPE,
+    stdout=subprocess.PIPE,
+    stderr=subprocess.STDOUT,
+    text=True,
+)
+
+script = (
+    "uci\n"
+    f"setoption name VariantPath value {variant_path}\n"
+    "setoption name UCI_Variant value antimatter\n"
+    "setoption name UCI_AnalyseMode value true\n"
+    "position startpos moves g2g3\n"
+    "go infinite\n"
+)
+proc.stdin.write(script)
+proc.stdin.flush()
+time.sleep(1.0)
+proc.stdin.write("stop\nquit\n")
+proc.stdin.flush()
+stdout, _ = proc.communicate(timeout=10)
+sys.stdout.write(stdout)
+sys.exit(proc.returncode)
+PY
+)
+echo "${out}" | grep -q "^bestmove "
+
+rm -f "${TMP4}"
+unset TMP4
 
 echo "blast legal regressions passed"

@@ -1044,32 +1044,41 @@ namespace {
 
         pos.do_null_move(st);
 
-        Value nullValue = -search<NonPV>(pos, ss+1, -beta, -beta+1, depth-R, !cutNode);
-
-        pos.undo_null_move();
-
-        if (nullValue >= beta)
+        // Some variants can make a pass/null move unsafe because the unchanged
+        // board leaves the opponent in an immediate evasion state (for example
+        // antimatter blast semantics). Null-move pruning assumes the null
+        // position is quiet enough for an ordinary search, so skip it here.
+        if (pos.evasion_checkers())
+            pos.undo_null_move();
+        else
         {
-            // Do not return unproven mate or TB scores
-            if (nullValue >= VALUE_TB_WIN_IN_MAX_PLY)
-                nullValue = beta;
+            Value nullValue = -search<NonPV>(pos, ss+1, -beta, -beta+1, depth-R, !cutNode);
 
-            if (thisThread->nmpMinPly || (abs(beta) < VALUE_KNOWN_WIN && depth < 14))
-                return nullValue;
+            pos.undo_null_move();
 
-            assert(!thisThread->nmpMinPly); // Recursive verification is not allowed
+            if (nullValue >= beta)
+            {
+                // Do not return unproven mate or TB scores
+                if (nullValue >= VALUE_TB_WIN_IN_MAX_PLY)
+                    nullValue = beta;
 
-            // Do verification search at high depths, with null move pruning disabled
-            // for us, until ply exceeds nmpMinPly.
-            thisThread->nmpMinPly = ss->ply + 3 * (depth-R) / 4;
-            thisThread->nmpColor = us;
+                if (thisThread->nmpMinPly || (abs(beta) < VALUE_KNOWN_WIN && depth < 14))
+                    return nullValue;
 
-            Value v = search<NonPV>(pos, ss, beta-1, beta, depth-R, false);
+                assert(!thisThread->nmpMinPly); // Recursive verification is not allowed
 
-            thisThread->nmpMinPly = 0;
+                // Do verification search at high depths, with null move pruning disabled
+                // for us, until ply exceeds nmpMinPly.
+                thisThread->nmpMinPly = ss->ply + 3 * (depth-R) / 4;
+                thisThread->nmpColor = us;
 
-            if (v >= beta)
-                return nullValue;
+                Value v = search<NonPV>(pos, ss, beta-1, beta, depth-R, false);
+
+                thisThread->nmpMinPly = 0;
+
+                if (v >= beta)
+                    return nullValue;
+            }
         }
     }
 
