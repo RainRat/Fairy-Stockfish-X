@@ -59,4 +59,16 @@ echo "$out" | grep -q "Nodes searched: 21"
 ! echo "$out" | grep -q "^f2f3:"
 ! echo "$out" | grep -q "^f2f4:"
 
+# Kings Valley pieces use the maximum-distance rule, not ordinary queen slides.
+out=$(run_cmds "$ROOT_DIR/src/variants.ini" kings-valley \
+  "position startpos
+go perft 1")
+echo "$out" | grep -q "^a1d4: 1$"
+echo "$out" | grep -q "^c1a3: 1$"
+echo "$out" | grep -q "^c1c4: 1$"
+! echo "$out" | grep -q "^a1a2:"
+! echo "$out" | grep -q "^a1b2:"
+! echo "$out" | grep -q "^c1c2:"
+! echo "$out" | grep -q "^d1d2:"
+
 echo "movegen regressions passed"
