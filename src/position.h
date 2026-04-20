@@ -713,6 +713,7 @@ private:
                                     Bitboard occupiedAll, Color c);
   static Bitboard max_slider_bb(const std::map<Direction,int>& directions,
                                 Square sq, Bitboard occupied,
+                                Bitboard boardMask,
                                 Bitboard ownPieces, Color c,
                                 bool captureMode,
                                 bool includeOwnBlockedAttacks);
@@ -768,7 +769,7 @@ private:
                                        bool quietMode);
   static Bitboard special_rider_bb(const PieceInfo* pi, MoveModality modality,
                                    Square sq, Bitboard occupied,
-                                   Bitboard occupiedAll, Bitboard ownPieces,
+                                   Bitboard occupiedAll, Bitboard boardMask, Bitboard ownPieces,
                                    Color c, bool captureMode,
                                    bool includeOwnBlockedAttacks = false);
 
@@ -2773,6 +2774,7 @@ inline Bitboard Position::dynamic_slider_bb(const std::map<Direction,int>& direc
 inline Bitboard Position::max_slider_bb(const std::map<Direction,int>& directions,
                                         Square sq,
                                         Bitboard occupied,
+                                        Bitboard boardMask,
                                         Bitboard ownPieces,
                                         Color c,
                                         bool captureMode,
@@ -2788,7 +2790,7 @@ inline Bitboard Position::max_slider_bb(const std::map<Direction,int>& direction
     Square dest = SQ_NONE;
 
     for (Square s2 = sq + step;
-         is_ok(s2) && distance(s2, s2 - step) <= 2;
+         is_ok(s2) && distance(s2, s2 - step) <= 2 && (boardMask & s2);
          s2 += step)
     {
       if (occupied & s2)
@@ -3241,7 +3243,7 @@ inline Bitboard Position::wrapped_rose_targets(Square from, Bitboard occupied,
 
 inline Bitboard Position::special_rider_bb(const PieceInfo* pi, MoveModality modality,
                                            Square sq, Bitboard occupied,
-                                           Bitboard occupiedAll, Bitboard ownPieces,
+                                           Bitboard occupiedAll, Bitboard boardMask, Bitboard ownPieces,
                                            Color c, bool captureMode,
                                            bool includeOwnBlockedAttacks)
 {
@@ -3252,7 +3254,7 @@ inline Bitboard Position::special_rider_bb(const PieceInfo* pi, MoveModality mod
   if (augment & PieceInfo::AUGMENT_DYNAMIC)
       b |= Position::dynamic_slider_bb(pi->slider[0][modality], sq, occupied, occupiedAll, c);
   if (augment & PieceInfo::AUGMENT_MAX)
-      b |= Position::max_slider_bb(pi->slider[0][modality], sq, occupied, ownPieces, c, captureMode, includeOwnBlockedAttacks);
+      b |= Position::max_slider_bb(pi->slider[0][modality], sq, occupied, boardMask, ownPieces, c, captureMode, includeOwnBlockedAttacks);
   if (augment & PieceInfo::AUGMENT_CONTRA)
       b |= Position::contra_hopper_bb(pi->contraHopper[0][modality], sq, occupied, ownPieces, c, !captureMode, includeOwnBlockedAttacks);
   return b;
@@ -3363,7 +3365,7 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
 
   Bitboard b = attacks_bb(c, movePt, s, occupancy);
 
-  b |= Position::special_rider_bb(pi, MODALITY_CAPTURE, s, occupancy, occupancy, pieces(c), c, true, true);
+  b |= Position::special_rider_bb(pi, MODALITY_CAPTURE, s, occupancy, occupancy, board_bb(), pieces(c), c, true, true);
 
   if (pi->friendlyJump)
       b &= ~pieces(c);          // never hit our own men
@@ -3544,7 +3546,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
 
   Bitboard b = (moves_bb(c, movePt, s, occupancy) | extraDestinations);
 
-  b |= Position::special_rider_bb(pi, MODALITY_QUIET, s, occupancy, byTypeBB[ALL_PIECES], pieces(c), c, false, false);
+  b |= Position::special_rider_bb(pi, MODALITY_QUIET, s, occupancy, byTypeBB[ALL_PIECES], board_bb(), pieces(c), c, false, false);
 
   if (pi->friendlyJump)
       b &= ~pieces(c);          // cannot land on own piece
@@ -3558,7 +3560,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
   if (initialMoveRegion & s)
   {
       b |= moves_bb<true>(c, movePt, s, occupancy);
-      b |= Position::special_rider_bb(pi, MODALITY_QUIET, s, occupancy, byTypeBB[ALL_PIECES], pieces(c), c, true, false);
+      b |= Position::special_rider_bb(pi, MODALITY_QUIET, s, occupancy, byTypeBB[ALL_PIECES], board_bb(), pieces(c), c, true, false);
   }
   // Xiangqi soldier
   if (pt == SOLDIER && !(promoted_soldiers(c) & s))

@@ -63,9 +63,12 @@ echo "$out" | grep -q "Nodes searched: 21"
 out=$(run_cmds "$ROOT_DIR/src/variants.ini" kings-valley \
   "position startpos
 go perft 1")
+echo "$out" | grep -q "Nodes searched: 13"
 echo "$out" | grep -q "^a1d4: 1$"
+echo "$out" | grep -q "^b1e4: 1$"
 echo "$out" | grep -q "^c1a3: 1$"
 echo "$out" | grep -q "^c1c4: 1$"
+echo "$out" | grep -q "^c1e3: 1$"
 ! echo "$out" | grep -q "^a1a2:"
 ! echo "$out" | grep -q "^a1b2:"
 ! echo "$out" | grep -q "^c1c2:"
