@@ -25,5 +25,11 @@ class TestBindings(unittest.TestCase):
         self.assertEqual(sf.game_result("snort", fen, []), sf.VALUE_NONE)
         self.assertEqual(sf.has_insufficient_material("snort", fen, []), (False, False))
 
+    def test_brandub_missing_king_is_not_draw(self):
+        with open(ROOT_DIR / "src" / "variants.ini", "r", encoding="utf-8") as f:
+            sf.load_variant_config(f.read())
+        fen = "7/7/3r3/2r1r2/3R3/7/7 w - - 0 1"
+        self.assertLess(sf.game_result("brandub", fen, []), 0)
+
 if __name__ == "__main__":
     unittest.main()

@@ -63,6 +63,12 @@ out=$(run_cmds "$TMP_INI" wazir-chess \
 go perft 1")
 echo "$out" | grep -q "Nodes searched: 0"
 
+# Tablut-family surround capture of the king must also end immediately.
+out=$(run_cmds "$ROOT_DIR/src/variants.ini" brandub \
+  "position fen 4r2/7/3r3/2rK3/3r3/7/7 b - - 0 1 moves e7e4
+go perft 1")
+echo "$out" | grep -q "Nodes searched: 0"
+
 # wallOrMove should not crash when the side to move has no pieces.
 out=$(run_cmds "$TMP_INI" wallpass \
   "position startpos
