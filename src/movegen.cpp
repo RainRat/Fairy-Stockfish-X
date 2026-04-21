@@ -845,6 +845,8 @@ namespace {
         // Jump captures are emitted explicitly below in capture-generating modes.
         // Exclude them from regular NORMAL generation to avoid duplicates.
         b1 &= ~jumpCaptures;
+        if (!pos.stepwise_pushing())
+            b1 &= ~pushMoves;
 
         while (b1)
             moveList = make_move_and_gating<NORMAL>(pos, moveList, Us, from, pop_lsb(b1));

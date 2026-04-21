@@ -59,4 +59,19 @@ out=$(run_cmds push-shove "position fen 5/5/5/2Rrr/5 w - - 0 1 moves c2d2
 d")
 echo "${out}" | grep -q "Fen: 5/5/5/3Rr/5 b - - 0 1"
 
+out=$(cat <<EOF | "${ENGINE}" 2>/dev/null
+uci
+setoption name VariantPath value /home/chris/Fairy-Stockfish-X/src/variants.ini
+setoption name UCI_Variant value aries
+position fen 8/8/8/Rrrr4/8/8/8/8 w - - 0 1
+go perft 1
+quit
+EOF
+)
+echo "${out}" | grep -q "^a5b5: 1$"
+! echo "${out}" | grep -q "^a5c5: 1$"
+! echo "${out}" | grep -q "^a5d5: 1$"
+! echo "${out}" | grep -q "^a5e5: 1$"
+echo "${out}" | grep -q "^Nodes searched: 8$"
+
 echo "pushing ok"

@@ -405,6 +405,22 @@ namespace {
     if (stepF == 0 && stepR == 0)
         return false;
 
+    if (mt == NORMAL)
+    {
+        Square cur = from;
+        while (true)
+        {
+            Square next;
+            if (!advance_square(pos, cur, stepF, stepR, next))
+                return false;
+            if (next == to)
+                break;
+            if ((pos.pieces() | pos.wall_squares() | pos.dead_squares()) & next)
+                return false;
+            cur = next;
+        }
+    }
+
     Bitboard blockers = pos.pieces() | pos.wall_squares() | pos.dead_squares();
     Square cur = to;
     while (true)
@@ -463,8 +479,9 @@ namespace {
   }
 
   bool analyze_push(const Position& pos, Move m, PushInfo& info) {
-    return type_of(m) == INSERT ? analyze_push_direct(pos, m, info)
-                                : analyze_push_stepwise(pos, m, info);
+    return type_of(m) == INSERT || !pos.stepwise_pushing()
+               ? analyze_push_direct(pos, m, info)
+               : analyze_push_stepwise(pos, m, info);
   }
 
   inline Bitboard retro_asymmetric_check_squares(Color attacker, PieceType pt, Square kingSq, Bitboard occupied) {

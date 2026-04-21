@@ -1498,6 +1498,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("pushChainEnemyOnly", v->pushChainEnemyOnly);
     parse_attribute("pushCaptureAgainstFriendlyBlocker", v->pushCaptureAgainstFriendlyBlocker);
     parse_attribute("pushNoImmediateReturn", v->pushNoImmediateReturn);
+    parse_attribute("stepwisePushing", v->stepwisePushing);
     parse_attribute("adjacentSwapMoveTypes", v->adjacentSwapMoveTypes, v);
     parse_attribute("adjacentSwapRequiresEmptyNeighbor", v->adjacentSwapRequiresEmptyNeighbor);
     parse_attribute("swapNoImmediateReturn", v->swapNoImmediateReturn);

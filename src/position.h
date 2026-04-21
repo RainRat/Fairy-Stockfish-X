@@ -604,6 +604,7 @@ public:
   bool push_captures(Move m) const;
   bool push_ejects(Move m) const;
   Square push_capture_square(Move m) const;
+  bool stepwise_pushing() const;
   bool capture(Move m) const;
   bool capture_or_promotion(Move m) const;
   bool is_jump_capture(Move m) const;
@@ -1464,6 +1465,11 @@ inline bool Position::push_capture_against_friendly_blocker() const {
 inline bool Position::push_no_immediate_return() const {
   assert(var != nullptr);
   return var->pushNoImmediateReturn;
+}
+
+inline bool Position::stepwise_pushing() const {
+  assert(var != nullptr);
+  return var->stepwisePushing;
 }
 
 inline PieceSet Position::edge_insert_types() const {
