@@ -69,24 +69,42 @@ struct PieceInfo {
     AUGMENT_CONTRA = 1 << 2
   };
 
-  struct TupleRay {
-    int dr;
-    int df;
+  struct Step {
+    int8_t dr, df;
+  };
+
+  struct Ray {
+    int8_t dr, df;
     int limit;
+    bool hopper = false;
+    bool contra = false;
+    bool leap = false;
+  };
+
+  struct BentRay {
+    int8_t dr1, df1;
+    int8_t dr2, df2;
+    bool griffon = false;
+  };
+
+  struct CycleRay {
+    int8_t dr, df;
+  };
+
+  struct IR {
+    std::vector<Step> steps;
+    std::vector<Ray> rays;
+    std::vector<BentRay> bentRays;
+    std::vector<CycleRay> cycleRays;
+
+    bool empty() const {
+      return steps.empty() && rays.empty() && bentRays.empty() && cycleRays.empty();
+    }
   };
 
   std::string name = "";
   std::string betza = "";
-  std::map<Direction, int> steps[2][MOVE_MODALITY_NB] = {};
-  std::vector<std::pair<int, int>> tupleSteps[2][MOVE_MODALITY_NB] = {};
-  std::vector<TupleRay> tupleSlider[2][MOVE_MODALITY_NB] = {};
-  std::map<Direction, int> slider[2][MOVE_MODALITY_NB] = {};
-  std::map<Direction, int> leapRider[2][MOVE_MODALITY_NB] = {};
-  std::map<Direction, int> hopper[2][MOVE_MODALITY_NB] = {};
-  std::map<Direction, int> contraHopper[2][MOVE_MODALITY_NB] = {};
-  bool griffon[2][MOVE_MODALITY_NB] = {};
-  bool manticore[2][MOVE_MODALITY_NB] = {};
-  bool rose[2][MOVE_MODALITY_NB] = {};
+  IR moves[2][MOVE_MODALITY_NB] = {};
   uint8_t riderAugmentMask = AUGMENT_NONE;
   bool friendlyJump = false;
   bool rifleCapture = false;
@@ -100,16 +118,7 @@ struct PieceInfo {
   inline bool has_contra_hopper() const { return riderAugmentMask & AUGMENT_CONTRA; }
   inline bool has_explicit_initial_moves() const {
     for (int modality = 0; modality < MOVE_MODALITY_NB; ++modality)
-      if (!steps[1][modality].empty()
-          || !tupleSteps[1][modality].empty()
-          || !tupleSlider[1][modality].empty()
-          || !slider[1][modality].empty()
-          || !leapRider[1][modality].empty()
-          || !hopper[1][modality].empty()
-          || !contraHopper[1][modality].empty()
-          || griffon[1][modality]
-          || manticore[1][modality]
-          || rose[1][modality])
+      if (!moves[1][modality].empty())
         return true;
     return false;
   }

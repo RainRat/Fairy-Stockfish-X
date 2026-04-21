@@ -319,27 +319,29 @@ namespace {
               // Add moves to steps/slider/hopper tables.
               for (auto modality : moveModalities)
               {
-                  auto& v = hopper ? p->hopper[initial][modality]
-                           : contraHopper ? p->contraHopper[initial][modality]
-                           : rider ? p->slider[initial][modality]
-                                   : p->steps[initial][modality];
-                  auto& leapRiderV = p->leapRider[initial][modality];
-                  auto& tupleV = p->tupleSteps[initial][modality];
-                  auto& tupleSliderV = p->tupleSlider[initial][modality];
+                  auto& ir = p->moves[initial][modality];
                   auto has_dir = [&](std::string s) {
                     return std::find(directions.begin(), directions.end(), s) != directions.end();
                   };
                   auto add_step = [&](int dr, int df) {
                       if (atomIsTuple && !hopper && rider)
-                          tupleSliderV.push_back({dr, df, distance});
+                          ir.rays.push_back({(int8_t)dr, (int8_t)df, distance});
                       else if (atomIsTuple && !hopper && !rider)
-                          tupleV.emplace_back(dr, df);
+                          ir.steps.push_back({(int8_t)dr, (int8_t)df});
                       else
                       {
-                          v[Direction(dr * FILE_NB + df)] = distance;
+                          if (hopper)
+                              ir.rays.push_back({(int8_t)dr, (int8_t)df, distance, true});
+                          else if (contraHopper)
+                              ir.rays.push_back({(int8_t)dr, (int8_t)df, distance, false, true});
+                          else if (rider)
+                              ir.rays.push_back({(int8_t)dr, (int8_t)df, distance});
+                          else
+                              ir.steps.push_back({(int8_t)dr, (int8_t)df});
+
                           if (rider && !atomIsRider && !hopper && !contraHopper
                               && !lame && !dynamicDistance && !skiSlider && !maxDistance)
-                              leapRiderV[Direction(dr * FILE_NB + df)] = distance;
+                              ir.rays.back().leap = true;
                       }
                   };
                   if (directions.size() == 0 || has_dir("ff") || has_dir("vv") || has_dir("rf") || has_dir("rv") || has_dir("fh") || has_dir("rh") || (has_dir("hr") && !standaloneH))
@@ -364,7 +366,7 @@ namespace {
           reset_parser_state();
       };
 
-      auto commit_bent_slider = [&](bool (PieceInfo::*flag)[2][2]) {
+      auto commit_bent_slider = [&](bool griffon) {
           // Keep first implementation strict: unqualified O only.
           if (!prelimDirections.empty() || hopper || contraHopper || lame || dynamicDistance || rider)
           {
@@ -377,7 +379,7 @@ namespace {
               moveModalities.push_back(MODALITY_CAPTURE);
           }
           for (auto modality : moveModalities)
-              ((*p).*flag)[initial][modality] = true;
+              p->moves[initial][modality].bentRays.push_back({0, 0, 0, 0, griffon});
           reset_parser_state();
       };
 
@@ -393,7 +395,7 @@ namespace {
               moveModalities.push_back(MODALITY_CAPTURE);
           }
           for (auto modality : moveModalities)
-              p->rose[initial][modality] = true;
+              p->moves[initial][modality].cycleRays.push_back({2, 1}); // Standard knight rose
           reset_parser_state();
       };
 
@@ -481,10 +483,10 @@ namespace {
           }
           // Griffon bent slider (one diagonal step, then outward rook slide)
           else if (c == 'O')
-              commit_bent_slider(&PieceInfo::griffon);
+              commit_bent_slider(true);
           // Manticore bent slider (one orthogonal step, then outward bishop slide)
           else if (c == 'M')
-              commit_bent_slider(&PieceInfo::manticore);
+              commit_bent_slider(false);
           // Standard rose/circular knight rider.
           else if (c == '@')
               commit_rose();
@@ -595,9 +597,10 @@ void PieceMap::init(const Variant* v) {
 void PieceMap::add(PieceType pt, const PieceInfo* p) {
   if (p)
   {
-      auto slider_fraction = [](const std::map<Direction, int>& sliderMap) {
+      auto slider_fraction = [](const std::vector<PieceInfo::Ray>& rays) {
           int s = 0;
-          for (auto const& [_, limit] : sliderMap) {
+          for (auto const& ray : rays) {
+              int limit = ray.limit;
               if (limit == 0 || limit == MAX_SLIDER_LIMIT)
                   s += 100;
               else if (limit == DYNAMIC_SLIDER_LIMIT)
@@ -616,24 +619,24 @@ void PieceMap::add(PieceType pt, const PieceInfo* p) {
           }
           return s;
       };
-      auto is_diagonal_only_slider = [](const std::map<Direction, int>& sliderMap) {
-          if (sliderMap.empty())
+      auto is_diagonal_only_slider = [](const std::vector<PieceInfo::Ray>& rays) {
+          if (rays.empty())
               return false;
-          for (auto const& [dir, _] : sliderMap)
-              if (dir != NORTH_EAST && dir != NORTH_WEST && dir != SOUTH_EAST && dir != SOUTH_WEST)
+          for (auto const& ray : rays)
+              if (std::abs(ray.dr) != std::abs(ray.df) || ray.dr == 0)
                   return false;
           return true;
       };
 
-      bool diagonalOnly = is_diagonal_only_slider(p->slider[0][MODALITY_QUIET])
-                       || is_diagonal_only_slider(p->slider[0][MODALITY_CAPTURE]);
+      bool diagonalOnly = is_diagonal_only_slider(p->moves[0][MODALITY_QUIET].rays)
+                       || is_diagonal_only_slider(p->moves[0][MODALITY_CAPTURE].rays);
       diagonalOnly = diagonalOnly
-                  && p->slider[0][MODALITY_QUIET].size() + p->slider[0][MODALITY_CAPTURE].size() > 0;
+                  && p->moves[0][MODALITY_QUIET].rays.size() + p->moves[0][MODALITY_CAPTURE].rays.size() > 0;
 
-      int currentFrac = slider_fraction(p->slider[0][MODALITY_QUIET]) + slider_fraction(p->slider[0][MODALITY_CAPTURE])
-                      + (p->steps[0][MODALITY_QUIET].size() + p->steps[0][MODALITY_CAPTURE].size()) * 100;
-      int standardFrac = (p->slider[0][MODALITY_QUIET].size() + p->slider[0][MODALITY_CAPTURE].size()) * 100
-                       + (p->steps[0][MODALITY_QUIET].size() + p->steps[0][MODALITY_CAPTURE].size()) * 100;
+      int currentFrac = slider_fraction(p->moves[0][MODALITY_QUIET].rays) + slider_fraction(p->moves[0][MODALITY_CAPTURE].rays)
+                      + (p->moves[0][MODALITY_QUIET].steps.size() + p->moves[0][MODALITY_CAPTURE].steps.size()) * 100;
+      int standardFrac = (p->moves[0][MODALITY_QUIET].rays.size() + p->moves[0][MODALITY_CAPTURE].rays.size()) * 100
+                       + (p->moves[0][MODALITY_QUIET].steps.size() + p->moves[0][MODALITY_CAPTURE].steps.size()) * 100;
 
       if (diagonalOnly && standardFrac > 0 && currentFrac < standardFrac)
       {
