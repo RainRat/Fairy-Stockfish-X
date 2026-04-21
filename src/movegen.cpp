@@ -50,7 +50,6 @@ template struct MoveList<QUIETS>;
 template struct MoveList<QUIET_CHECKS>;
 template struct MoveList<EVASIONS>;
 template struct MoveList<NON_EVASIONS>;
-template struct MoveList<LEGAL>;
 #endif
 
 namespace {
@@ -1469,5 +1468,9 @@ ExtMove* generate<LEGAL>(const Position& pos, ExtMove* moveList) {
 
   return moveList;
 }
+
+#ifdef USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
+template struct MoveList<LEGAL>;
+#endif
 
 } // namespace Stockfish
