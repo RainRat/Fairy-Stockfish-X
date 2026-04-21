@@ -17,6 +17,10 @@ wallOrMove = true
 flagRegionWhite = *
 flagRegionBlack = *
 startFen = 4k3/8/8/8/8/8/8/8 w - - 0 1
+
+[wazir-chess:chess]
+king = w:W
+startFen = W6w/QQ6/8/8/8/8/8/8 w
 EOF
 
 run_cmds() {
@@ -50,6 +54,12 @@ echo "$out" | grep -q "Nodes searched: 0"
 
 out=$(run_cmds "$ROOT_DIR/src/variants.ini" minihexchess \
   "position fen ***4/**5/*k5/7/6*/5**/KR2*** w - - 0 1 moves b1b5
+go perft 1")
+echo "$out" | grep -q "Nodes searched: 0"
+
+# Custom king movement must still participate in orthodox checkmate semantics.
+out=$(run_cmds "$TMP_INI" wazir-chess \
+  "position startpos moves b7h7 h8h7 a7h7
 go perft 1")
 echo "$out" | grep -q "Nodes searched: 0"
 
