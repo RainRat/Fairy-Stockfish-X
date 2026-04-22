@@ -4662,6 +4662,26 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
 
   if (stepwisePush)
       captured = NO_PIECE;
+  else if (pushMove)
+  {
+      if (pushInfo.ejects)
+      {
+          captured = piece_on(pushInfo.tail);
+          st->captureSquare = pushInfo.tail;
+      }
+      else if (pushInfo.captures)
+      {
+          Square capSq = SQ_NONE;
+          advance_square(*this, pushInfo.tail, pushInfo.stepF, pushInfo.stepR, capSq);
+          captured = piece_on(capSq);
+          st->captureSquare = capSq;
+      }
+      else
+      {
+          captured = NO_PIECE;
+          st->captureSquare = SQ_NONE;
+      }
+  }
 
   if (pullMove)
   {
