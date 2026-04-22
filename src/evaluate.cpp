@@ -1484,9 +1484,12 @@ namespace {
                     : pos.points_goal_value() < VALUE_ZERO ? -1
                     : 0;
 
-        // Lead in current points and proximity to goal.
-        score += make_score(28, 20) * goalSign * std::clamp(usPoints - themPoints, -100, 100);
-        score += make_score(60, 44) * goalSign * std::clamp(themToGoal - usToGoal, -100, 100);
+        // Lead in current points and proximity to goal. Points-race games like
+        // Oshi need this term to dominate ordinary mobility/space heuristics,
+        // otherwise search can prefer flashy self-ejects that hand the opponent
+        // scoring progress without any immediate tactical punishment.
+        score += make_score(120, 90) * goalSign * std::clamp(usPoints - themPoints, -100, 100);
+        score += make_score(240, 180) * goalSign * std::clamp(themToGoal - usToGoal, -100, 100);
     }
 
     // Duple-check variants (e.g. Spartan): reward coordinated protection of

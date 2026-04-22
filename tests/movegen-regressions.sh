@@ -101,4 +101,10 @@ echo "$out" | grep -q "^c1e3: 1$"
 ! echo "$out" | grep -q "^c1c2:"
 ! echo "$out" | grep -q "^d1d2:"
 
+# Oshi search should not prefer handing the opponent a point by self-ejecting.
+out=$(run_cmds "$ROOT_DIR/src/variants.ini" oshi \
+  "position fen ca2a4/b4ab1c/4a4/9/5A3/2AC5/9/2BAA1B2/C8 w - - 10 6 {0 0}
+go depth 8")
+! echo "$out" | grep -q "^bestmove d4a4"
+
 echo "movegen regressions passed"
