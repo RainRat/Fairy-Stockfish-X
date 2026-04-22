@@ -31,5 +31,19 @@ class TestBindings(unittest.TestCase):
         fen = "7/7/3r3/2r1r2/3R3/7/7 w - - 0 1"
         self.assertLess(sf.game_result("brandub", fen, []), 0)
 
+    def test_antiminishogi_startpos_not_terminal(self):
+        with open(ROOT_DIR / "src" / "variants.ini", "r", encoding="utf-8") as f:
+            sf.load_variant_config(f.read())
+        fen = "rbsgk/4p/5/P4/KGSBR[] w - - 0 1"
+        self.assertEqual(sf.game_result("antiminishogi", fen, []), sf.VALUE_NONE)
+        self.assertTrue(sf.legal_moves("antiminishogi", fen, []))
+
+    def test_anti_losalamos_missing_queen_not_terminal(self):
+        with open(ROOT_DIR / "src" / "variants.ini", "r", encoding="utf-8") as f:
+            sf.load_variant_config(f.read())
+        fen = "rn1knr/pppppp/6/6/PPPPPP/RNQKNR w - - 0 1"
+        self.assertEqual(sf.game_result("anti-losalamos", fen, []), sf.VALUE_NONE)
+        self.assertTrue(sf.legal_moves("anti-losalamos", fen, []))
+
 if __name__ == "__main__":
     unittest.main()

@@ -69,6 +69,23 @@ out=$(run_cmds "$ROOT_DIR/src/variants.ini" brandub \
 go perft 1")
 echo "$out" | grep -q "Nodes searched: 0"
 
+# Anti extinction variants using "*" must not end when a single piece class is gone.
+out=$(run_cmds "$ROOT_DIR/src/variants.ini" antiminishogi \
+  "position startpos
+go perft 1")
+echo "$out" | grep -q "Nodes searched: 1"
+echo "$out" | grep -q "^e1e4: 1$"
+
+out=$(run_cmds "$ROOT_DIR/src/variants.ini" anti-losalamos \
+  "position fen rn1knr/pppppp/6/6/PPPPPP/RNQKNR w - - 0 1
+go perft 1")
+echo "$out" | grep -q "Nodes searched: 10"
+
+out=$(run_cmds "$ROOT_DIR/src/variants.ini" chaturanga-al-adli \
+  "position fen brn1knrb/pppppppp/8/8/8/8/PPPPPPPP/BRNFKNRB w - - 0 1
+go perft 1")
+echo "$out" | grep -q "Nodes searched: 14"
+
 # wallOrMove should not crash when the side to move has no pieces.
 out=$(run_cmds "$TMP_INI" wallpass \
   "position startpos
