@@ -1121,6 +1121,7 @@ inline RiderType pop_rider(RiderType& r) {
   return r2;
 }
 
+template <bool Initial=false>
 inline Bitboard attacks_bb(Color c, PieceType pt, Square s, Bitboard occupied, const MagicGeometry* mg = current_magic_geometry) {
   assert(pt != NO_PIECE_TYPE);
   Bitboard b = LeaperAttacks[c][pt][s];
