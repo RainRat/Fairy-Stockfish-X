@@ -2769,7 +2769,7 @@ bool Position::legal(Move m) const {
   Bitboard freezeExtra = 0;
   Bitboard jumpRemoved = 0;
   Variant::PotionType gatingPotion = Variant::POTION_TYPE_NB;
-  if (is_gating(m))
+  if (is_gating(m) && gating_type(m) != NO_PIECE_TYPE)
   {
       gatingPotion = potion_type_from_piece(var, gating_type(m));
       if (gatingPotion != Variant::POTION_TYPE_NB)
@@ -5614,7 +5614,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           apply_morph(moverSq, moveMorphType);
   }
   // Add gating piece
-  if (is_gating(m) && !rifleShot)
+  if (is_gating(m) && gating_type(m) != NO_PIECE_TYPE && !rifleShot)
   {
       Square gate = gating_square(m);
       Piece gating_piece = make_piece(us, gating_type(m));
@@ -6423,8 +6423,9 @@ void Position::undo_move(Move m) {
       pc = st->colorChanged.piece;
   }
 
-  // Remove gated piece or restore potion
-  if (is_gating(m))
+  // Remove gated piece or restore potion. Pure wall moves use the gating
+  // square to encode the wall destination, but do not place a gated piece.
+  if (is_gating(m) && gating_type(m) != NO_PIECE_TYPE)
   {
       Piece gating_piece = make_piece(us, gating_type(m));
       Variant::PotionType potion = potion_type_from_piece(var, gating_type(m));

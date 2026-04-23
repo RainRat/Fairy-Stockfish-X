@@ -92,6 +92,12 @@ out=$(run_cmds "$TMP_INI" wallpass \
 go perft 1")
 echo "$out" | grep -q "Nodes searched:"
 
+# Duck wall relocation uses gating encoding without a gated piece.
+out=$(run_cmds "$ROOT_DIR/src/variants.ini" atomicduck \
+  "position startpos moves a2a3,a3a2
+go depth 2")
+echo "$out" | grep -q "^bestmove "
+
 # Racing Kings must not grant generic pawn-style initial pushes to non-pawns.
 out=$(run_cmds "$ROOT_DIR/src/variants.ini" racingkings \
   "position startpos
