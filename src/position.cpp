@@ -509,17 +509,17 @@ namespace {
 
     for (MoveModality modality : {MODALITY_QUIET, MODALITY_CAPTURE})
     {
-        if (!pi->steps[0][modality].empty()
-            || !pi->tupleSteps[0][modality].empty()
-            || !pi->slider[0][modality].empty()
-            || pi->griffon[0][modality]
-            || pi->manticore[0][modality]
-            || pi->rose[0][modality])
+        const auto& ir = pi->moves[0][modality];
+        if (!ir.steps.empty()
+            || !ir.bentRays.empty()
+            || !ir.cycleRays.empty())
             return false;
 
-        hasHopper = hasHopper
-                 || !pi->hopper[0][modality].empty()
-                 || !pi->contraHopper[0][modality].empty();
+        for (const auto& ray : ir.rays)
+            if (!ray.hopper && !ray.contra)
+                return false;
+
+        hasHopper = hasHopper || !ir.rays.empty();
     }
 
     return hasHopper;
@@ -2325,7 +2325,7 @@ Bitboard Position::slider_blockers(Bitboard sliders, Square s, Bitboard& pinners
               }
               else
                   snipers |= b & ~attacks_bb(~c, pt, s, pieces());
-              if ((riderTypes & ~HOPPING_RIDERS) || !pi->tupleSlider[0][MODALITY_CAPTURE].empty())
+              if ((riderTypes & ~HOPPING_RIDERS) || !pi->moves[0][MODALITY_CAPTURE].rays.empty())
                   slidingSnipers |= snipers & ptPieces;
           }
       }
