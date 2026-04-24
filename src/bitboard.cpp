@@ -41,6 +41,7 @@ uint8_t SquareDistance[SQUARE_NB][SQUARE_NB];
 Bitboard SquareBB[SQUARE_NB];
 Bitboard LineBB[SQUARE_NB][SQUARE_NB];
 Bitboard BetweenBB[SQUARE_NB][SQUARE_NB];
+Bitboard WrappedRays[SQUARE_NB][8];
 Bitboard PseudoAttacks[COLOR_NB][PIECE_TYPE_NB][SQUARE_NB];
 Bitboard PseudoMoves[2][COLOR_NB][PIECE_TYPE_NB][SQUARE_NB];
 Bitboard LeaperAttacks[COLOR_NB][PIECE_TYPE_NB][SQUARE_NB];
@@ -981,4 +982,36 @@ std::shared_ptr<const MagicGeometry> Bitboards::init_magics(File maxFile, Rank m
 #endif
 }
 
+
+void Bitboards::init_wrapped_rays(File maxFile, Rank maxRank, bool wrapFile, bool wrapRank) {
+    if (!wrapFile && !wrapRank)
+        return;
+
+    static const int df[8] = { 0, 1, 1, 1, 0, -1, -1, -1 };
+    static const int dr[8] = { 1, 1, 0, -1, -1, -1, 0, 1 };
+
+    for (Rank r = RANK_1; r <= maxRank; ++r)
+    {
+        for (File f = FILE_A; f <= maxFile; ++f)
+        {
+            Square s = make_square(f, r);
+            for (int d = 0; d < 8; ++d)
+            {
+                Bitboard b = 0;
+                Square current = s;
+                for (;;)
+                {
+                    Square next = SQ_NONE;
+                    if (!wrapped_destination_square(current, df[d], dr[d], maxFile, maxRank, wrapFile, wrapRank, next))
+                        break;
+                    if (next == s)
+                        break;
+                    b |= next;
+                    current = next;
+                }
+                WrappedRays[s][d] = b;
+            }
+        }
+    }
+}
 } // namespace Stockfish
