@@ -540,7 +540,7 @@ inline bool has_insufficient_material(Color c, const Position& pos) {
 
 inline Bitboard checked(const Position& pos) {
     const PieceType royalType = pos.king_type();
-    Bitboard checkedKing = pos.evasion_checkers() && royalType != NO_PIECE_TYPE && pos.count(pos.side_to_move(), royalType)
+    Bitboard checkedKing = pos.evasion_checkers() && royalType != NO_PIECE_TYPE && pos.count(pos.side_to_move(), royalType) == 1
                          ? square_bb(pos.square(pos.side_to_move(), royalType))
                          : Bitboard(0);
     return checkedKing
@@ -550,7 +550,7 @@ inline Bitboard checked(const Position& pos) {
 
 inline Bitboard evasion_checked(const Position& pos) {
     const PieceType royalType = pos.king_type();
-    return pos.evasion_checkers() && royalType != NO_PIECE_TYPE && pos.count(pos.side_to_move(), royalType)
+    return pos.evasion_checkers() && royalType != NO_PIECE_TYPE && pos.count(pos.side_to_move(), royalType) == 1
          ? square_bb(pos.square(pos.side_to_move(), royalType))
          : Bitboard(0);
 }

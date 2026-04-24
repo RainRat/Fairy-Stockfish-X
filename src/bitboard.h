@@ -102,7 +102,7 @@ struct MagicGeometry {
   }
 };
 
-extern thread_local const MagicGeometry* current_magic_geometry;
+extern const MagicGeometry* current_magic_geometry;
 
 namespace Bitbases {
 
@@ -1016,6 +1016,11 @@ inline Bitboard rider_attacks_bb(Square s, Bitboard occupied, const MagicGeometr
             | fixed_step_rider_attacks(s, occupied, -2,  0)
             | fixed_step_rider_attacks(s, occupied,  0,  2)
             | fixed_step_rider_attacks(s, occupied,  0, -2);
+  if constexpr (R == RIDER_ELEPHANT)
+      return  fixed_step_rider_attacks(s, occupied,  2,  2)
+            | fixed_step_rider_attacks(s, occupied,  2, -2)
+            | fixed_step_rider_attacks(s, occupied, -2,  2)
+            | fixed_step_rider_attacks(s, occupied, -2, -2);
   if constexpr (R == RIDER_SKI_ROOK_H)
       return  ski_slider_attacks(s, occupied,  1, 0)
             | ski_slider_attacks(s, occupied, -1, 0);
@@ -1057,6 +1062,11 @@ inline Bitboard rider_attacks_bb(RiderType R, Square s, Bitboard occupied, const
             | fixed_step_rider_attacks(s, occupied, -2,  0)
             | fixed_step_rider_attacks(s, occupied,  0,  2)
             | fixed_step_rider_attacks(s, occupied,  0, -2);
+  if (R == RIDER_ELEPHANT)
+      return  fixed_step_rider_attacks(s, occupied,  2,  2)
+            | fixed_step_rider_attacks(s, occupied,  2, -2)
+            | fixed_step_rider_attacks(s, occupied, -2,  2)
+            | fixed_step_rider_attacks(s, occupied, -2, -2);
   if (R == RIDER_SKI_ROOK_H)
       return  ski_slider_attacks(s, occupied,  1, 0)
             | ski_slider_attacks(s, occupied, -1, 0);

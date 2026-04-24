@@ -1700,7 +1700,7 @@ void Position::set_check_info(StateInfo* si) const {
       si->blockersForKing[WHITE] = si->blockersForKing[BLACK] = 0;
       si->pinners[WHITE] = si->pinners[BLACK] = 0;
 
-      Square ksq = count(~sideToMove, king_type()) ? square(~sideToMove, king_type()) : SQ_NONE;
+      Square ksq = count(~sideToMove, king_type()) == 1 ? square(~sideToMove, king_type()) : SQ_NONE;
       si->nonSlidingRiders = 0;
 
       for (PieceSet ps = piece_types(); ps;)
@@ -1759,7 +1759,7 @@ void Position::set_check_info(StateInfo* si) const {
   si->blockersForKing[WHITE] = slider_blockers(pieces(BLACK), count<KING>(WHITE) ? square<KING>(WHITE) : SQ_NONE, si->pinners[BLACK], BLACK);
   si->blockersForKing[BLACK] = slider_blockers(pieces(WHITE), count<KING>(BLACK) ? square<KING>(BLACK) : SQ_NONE, si->pinners[WHITE], WHITE);
 
-  Square ksq = count(~sideToMove, king_type()) ? square(~sideToMove, king_type()) : SQ_NONE;
+  Square ksq = count(~sideToMove, king_type()) == 1 ? square(~sideToMove, king_type()) : SQ_NONE;
   Bitboard occupied = pieces();
 
   // For unused piece types, the check squares are left uninitialized
@@ -1964,7 +1964,7 @@ void Position::refresh_state_derived(StateInfo* si) const {
 
 Bitboard Position::compute_checkers_bb(Color side) const {
 
-  Bitboard checkers = !allow_checks() && count(side, king_type())
+  Bitboard checkers = !allow_checks() && count(side, king_type()) == 1
                     ? attackers_to_king(square(side, king_type()), ~side)
                     : Bitboard(0);
 
@@ -1986,7 +1986,7 @@ Bitboard Position::compute_evasion_checkers_bb(Color side) const {
   // Fairy-Stockfish-X split from upstream-style broad checkersBB:
   // this tracks only king-evasion state that should drive EVASIONS, mate/stalemate,
   // null-move, and perpetual-check semantics.
-  Bitboard checkers = !allow_checks() && count(side, king_type())
+  Bitboard checkers = !allow_checks() && count(side, king_type()) == 1
                     ? attackers_to_king(square(side, king_type()), ~side)
                     : Bitboard(0);
 
@@ -2897,11 +2897,11 @@ bool Position::legal(Move m) const {
   }
 
   assert(is_pass(m) || pureWallMove || color_of(moved_piece(m)) == us);
-  assert(!count(us, king_type()) || piece_on(square(us, king_type())) == make_piece(us, king_type()));
+  assert(count(us, king_type()) != 1 || piece_on(square(us, king_type())) == make_piece(us, king_type()));
   assert(board_bb() & to);
 
   const PieceType royalType = king_type();
-  const bool hasRoyal = count(us, royalType);
+  const bool hasRoyal = count(us, royalType) == 1;
   const Square royalSquare = hasRoyal ? square(us, royalType) : SQ_NONE;
 
   if (pureWallMove)
@@ -2988,7 +2988,7 @@ bool Position::legal(Move m) const {
       StateInfo setupState, nextState;
       probe.set(variant(), fen(), is_chess960(), &setupState, this_thread());
       probe.do_move(m, nextState, false);
-      if (!allow_checks() && probe.count(us, probe.king_type()) && probe.attackers_to_king(probe.square(us, probe.king_type()), them))
+      if (!allow_checks() && probe.count(us, probe.king_type()) == 1 && probe.attackers_to_king(probe.square(us, probe.king_type()), them))
           return false;
       return true;
   }
@@ -3002,7 +3002,7 @@ bool Position::legal(Move m) const {
       StateInfo setupState, nextState;
       probe.set(variant(), fen(), is_chess960(), &setupState, this_thread());
       probe.do_move(m, nextState, false);
-      if (!allow_checks() && probe.count(us, probe.king_type()) && probe.attackers_to_king(probe.square(us, probe.king_type()), them))
+      if (!allow_checks() && probe.count(us, probe.king_type()) == 1 && probe.attackers_to_king(probe.square(us, probe.king_type()), them))
           return false;
       return true;
   }
@@ -4350,7 +4350,7 @@ bool Position::gives_check(Move m) const {
   Square attackFrom = rifleShot ? from : to;
 
   const PieceType royalType = king_type();
-  if (royalType == NO_PIECE_TYPE || !count(~sideToMove, royalType))
+  if (royalType == NO_PIECE_TYPE || count(~sideToMove, royalType) != 1)
       return false;
   const Square royalSq = square(~sideToMove, royalType);
 

@@ -79,11 +79,11 @@ def run_perft(engine: Path, case: Case) -> dict[str, int]:
 def main() -> int:
     root = Path(__file__).resolve().parent.parent
     local_engine = Path(sys.argv[1]) if len(sys.argv) > 1 else root / "src" / "stockfish"
-    upstream_engine = (
-        Path(sys.argv[2])
-        if len(sys.argv) > 2
-        else Path("/home/chris/fairy-stockfish-upstream/src/stockfish")
-    )
+    if len(sys.argv) <= 2:
+        print("usage: upstream_reference.py LOCAL_ENGINE UPSTREAM_ENGINE", file=sys.stderr)
+        return 2
+
+    upstream_engine = Path(sys.argv[2])
 
     if not local_engine.exists():
         print(f"local engine not found: {local_engine}", file=sys.stderr)

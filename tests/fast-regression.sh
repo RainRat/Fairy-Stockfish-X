@@ -5,7 +5,6 @@ set -euo pipefail
 ROOT_DIR=$(cd "$(dirname "$0")/.." && pwd)
 ENGINE=${1:-src/stockfish}
 PYTHON=${PYTHON:-python3}
-UPSTREAM_ENGINE=${UPSTREAM_ENGINE:-/home/chris/fairy-stockfish-upstream/src/stockfish}
 
 run_step() {
   local label="$1"
@@ -15,6 +14,11 @@ run_step() {
 }
 
 cd "${ROOT_DIR}"
+
+if [[ -z "${UPSTREAM_ENGINE:-}" ]]; then
+  echo "UPSTREAM_ENGINE must point to an upstream Fairy-Stockfish executable for upstream baseline checks." >&2
+  exit 2
+fi
 
 run_step "protocol" timeout 90s bash tests/protocol.sh "${ENGINE}"
 run_step "parser regressions" timeout 90s bash tests/parser-regressions.sh "${ENGINE}"

@@ -150,7 +150,7 @@ def main() -> int:
     parser.add_argument(
         "upstream_engine",
         nargs="?",
-        default="/home/chris/fairy-stockfish-upstream/src/stockfish",
+        default=None,
     )
     parser.add_argument(
         "--fixture",
@@ -160,6 +160,10 @@ def main() -> int:
     args = parser.parse_args()
 
     local_engine = Path(args.local_engine)
+    if args.upstream_engine is None:
+        print("upstream_engine argument is required", file=sys.stderr)
+        return 2
+
     upstream_engine = Path(args.upstream_engine)
     fixture_path = Path(args.fixture)
 

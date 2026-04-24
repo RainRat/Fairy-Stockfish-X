@@ -566,7 +566,7 @@ namespace {
         blcp = filter_promotion_targets(blcp);
     }
 
-    if (Type == QUIET_CHECKS && pos.count(Them, pos.king_type()))
+    if (Type == QUIET_CHECKS && pos.count(Them, pos.king_type()) == 1)
     {
         // To make a quiet check, you either make a direct check by pushing a pawn
         // or push a blocker pawn that is not on the same file as the enemy king.
@@ -905,7 +905,8 @@ namespace {
     static_assert(Type != LEGAL, "Unsupported type in generate_all()");
 
     constexpr bool Checks = Type == QUIET_CHECKS; // Reduce template instantiations
-    const Square ksq = pos.count(Us, pos.king_type()) ? pos.square(Us, pos.king_type()) : SQ_NONE;
+    const Square royalSq = pos.count(Us, pos.king_type()) == 1 ? pos.square(Us, pos.king_type()) : SQ_NONE;
+    const Square ksq = pos.count<KING>(Us) ? pos.square<KING>(Us) : SQ_NONE;
     const Bitboard checkers = pos.evasion_checkers();
     Bitboard target;
     Bitboard captureTarget = Bitboard(0);
@@ -959,7 +960,7 @@ namespace {
         }
         else
         {
-            target = Type == EVASIONS     ?  between_bb(ksq, lsb(checkers))
+            target = Type == EVASIONS     ?  between_bb(royalSq, lsb(checkers))
                    : Type == NON_EVASIONS ? ~pos.pieces( Us)
                    : Type == CAPTURES     ? (pos.pieces(~Us) | pos.dead_squares())
                                           : ~pos.pieces(   ); // QUIETS || QUIET_CHECKS
@@ -970,13 +971,13 @@ namespace {
                     PieceType checkerPt = type_of(pos.piece_on(checksq));
                     Bitboard checkerMask = square_bb(checksq);
                     Bitboard t = (AttackRiderTypes[checkerPt] & RIDER_ROSE)
-                               ? rose_between_intersection_bb(ksq, checksq, pos.pieces())
-                               : between_bb(ksq, checksq, checkerPt);
+                               ? rose_between_intersection_bb(royalSq, checksq, pos.pieces())
+                               : between_bb(royalSq, checksq, checkerPt);
 
                     bool blockableNightrider = AttackRiderTypes[checkerPt] & RIDER_NIGHTRIDER;
                     if ((checkerMask & pos.non_sliding_riders()) && !blockableNightrider)
                         t = ~pos.pieces(Us);
-                    if (LeaperAttacks[~Us][checkerPt][checksq] & ksq)
+                    if (LeaperAttacks[~Us][checkerPt][checksq] & royalSq)
                         t = checkerMask;
                     return t;
                 };
