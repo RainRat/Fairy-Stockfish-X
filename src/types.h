@@ -82,7 +82,12 @@
 #if defined(USE_PEXT) && !defined(VERY_LARGE_BOARDS)
 #  include <immintrin.h> // Header for _pext_u64() intrinsic
 #  ifdef LARGEBOARDS
-#    define pext(b, m) (_pext_u64(b, m) ^ (_pext_u64(b >> 64, m >> 64) << popcount((m << 64) >> 64)))
+#    if defined(_MSC_VER)
+#      define pext_popcount64(m) int(__popcnt64(uint64_t(m)))
+#    else
+#      define pext_popcount64(m) __builtin_popcountll(uint64_t(m))
+#    endif
+#    define pext(b, m) (_pext_u64(b, m) ^ (_pext_u64(b >> 64, m >> 64) << pext_popcount64((m << 64) >> 64)))
 #  else
 #    define pext(b, m) _pext_u64(b, m)
 #  endif

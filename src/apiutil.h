@@ -539,20 +539,20 @@ inline bool has_insufficient_material(Color c, const Position& pos) {
 }
 
 inline Bitboard checked(const Position& pos) {
-    const PieceType royalType = pos.king_type();
-    Bitboard checkedKing = pos.evasion_checkers() && royalType != NO_PIECE_TYPE && pos.count(pos.side_to_move(), royalType) == 1
-                         ? square_bb(pos.square(pos.side_to_move(), royalType))
-                         : Bitboard(0);
+    Square royalSq = pos.royal_square(pos.side_to_move());
+    if (royalSq == SQ_NONE && (pos.variant()->bikjangRule || pos.variant()->flyingGeneral) && pos.count<KING>(pos.side_to_move()) == 1)
+        royalSq = pos.square<KING>(pos.side_to_move());
+    Bitboard checkedKing = pos.evasion_checkers() && royalSq != SQ_NONE ? square_bb(royalSq) : Bitboard(0);
     return checkedKing
         | (pos.pseudo_royal_types() ? pos.checked_pseudo_royals(pos.side_to_move()) : Bitboard(0))
         | (pos.anti_royal_types() ? pos.checked_anti_royals(pos.side_to_move()) : Bitboard(0));
 }
 
 inline Bitboard evasion_checked(const Position& pos) {
-    const PieceType royalType = pos.king_type();
-    return pos.evasion_checkers() && royalType != NO_PIECE_TYPE && pos.count(pos.side_to_move(), royalType) == 1
-         ? square_bb(pos.square(pos.side_to_move(), royalType))
-         : Bitboard(0);
+    Square royalSq = pos.royal_square(pos.side_to_move());
+    if (royalSq == SQ_NONE && (pos.variant()->bikjangRule || pos.variant()->flyingGeneral) && pos.count<KING>(pos.side_to_move()) == 1)
+        royalSq = pos.square<KING>(pos.side_to_move());
+    return pos.evasion_checkers() && royalSq != SQ_NONE ? square_bb(royalSq) : Bitboard(0);
 }
 
 namespace FEN {

@@ -1700,7 +1700,7 @@ void Position::set_check_info(StateInfo* si) const {
       si->blockersForKing[WHITE] = si->blockersForKing[BLACK] = 0;
       si->pinners[WHITE] = si->pinners[BLACK] = 0;
 
-      Square ksq = count(~sideToMove, king_type()) == 1 ? square(~sideToMove, king_type()) : SQ_NONE;
+      Square ksq = royal_square(~sideToMove);
       si->nonSlidingRiders = 0;
 
       for (PieceSet ps = piece_types(); ps;)
@@ -1759,7 +1759,7 @@ void Position::set_check_info(StateInfo* si) const {
   si->blockersForKing[WHITE] = slider_blockers(pieces(BLACK), count<KING>(WHITE) ? square<KING>(WHITE) : SQ_NONE, si->pinners[BLACK], BLACK);
   si->blockersForKing[BLACK] = slider_blockers(pieces(WHITE), count<KING>(BLACK) ? square<KING>(BLACK) : SQ_NONE, si->pinners[WHITE], WHITE);
 
-  Square ksq = count(~sideToMove, king_type()) == 1 ? square(~sideToMove, king_type()) : SQ_NONE;
+  Square ksq = royal_square(~sideToMove);
   Bitboard occupied = pieces();
 
   // For unused piece types, the check squares are left uninitialized
@@ -1964,8 +1964,11 @@ void Position::refresh_state_derived(StateInfo* si) const {
 
 Bitboard Position::compute_checkers_bb(Color side) const {
 
-  Bitboard checkers = !allow_checks() && count(side, king_type()) == 1
-                    ? attackers_to_king(square(side, king_type()), ~side)
+  Square royalSq = royal_square(side);
+  if (royalSq == SQ_NONE && var->bikjangRule && count<KING>(side) == 1)
+      royalSq = square<KING>(side);
+  Bitboard checkers = !allow_checks() && royalSq != SQ_NONE
+                    ? attackers_to_king(royalSq, ~side)
                     : Bitboard(0);
 
   if (!allow_checks())
@@ -1986,8 +1989,11 @@ Bitboard Position::compute_evasion_checkers_bb(Color side) const {
   // Fairy-Stockfish-X split from upstream-style broad checkersBB:
   // this tracks only king-evasion state that should drive EVASIONS, mate/stalemate,
   // null-move, and perpetual-check semantics.
-  Bitboard checkers = !allow_checks() && count(side, king_type()) == 1
-                    ? attackers_to_king(square(side, king_type()), ~side)
+  Square royalSq = royal_square(side);
+  if (royalSq == SQ_NONE && var->bikjangRule && count<KING>(side) == 1)
+      royalSq = square<KING>(side);
+  Bitboard checkers = !allow_checks() && royalSq != SQ_NONE
+                    ? attackers_to_king(royalSq, ~side)
                     : Bitboard(0);
 
   if (!allow_checks() && var->blastPassiveTypes)
@@ -2897,12 +2903,12 @@ bool Position::legal(Move m) const {
   }
 
   assert(is_pass(m) || pureWallMove || color_of(moved_piece(m)) == us);
-  assert(count(us, king_type()) != 1 || piece_on(square(us, king_type())) == make_piece(us, king_type()));
+  assert(royal_square(us) == SQ_NONE || piece_on(royal_square(us)) == make_piece(us, royal_piece_type(us)));
   assert(board_bb() & to);
 
-  const PieceType royalType = king_type();
-  const bool hasRoyal = count(us, royalType) == 1;
-  const Square royalSquare = hasRoyal ? square(us, royalType) : SQ_NONE;
+  const Square royalSquare = royal_square(us);
+  const bool hasRoyal = royalSquare != SQ_NONE;
+  const PieceType royalType = hasRoyal ? type_of(piece_on(royalSquare)) : NO_PIECE_TYPE;
 
   if (pureWallMove)
   {
@@ -2914,7 +2920,7 @@ bool Position::legal(Move m) const {
           && !violates_same_player_board_repetition(m);
   }
 
-  const bool moverIsRoyal = type_of(moved_piece(m)) == royalType;
+  const bool moverIsRoyal = hasRoyal && type_of(moved_piece(m)) == royalType;
 
   if (forced_jump_continuation() && st->forcedJumpSquare != SQ_NONE)
   {
@@ -2988,7 +2994,8 @@ bool Position::legal(Move m) const {
       StateInfo setupState, nextState;
       probe.set(variant(), fen(), is_chess960(), &setupState, this_thread());
       probe.do_move(m, nextState, false);
-      if (!allow_checks() && probe.count(us, probe.king_type()) == 1 && probe.attackers_to_king(probe.square(us, probe.king_type()), them))
+      Square probeRoyal = probe.royal_square(us);
+      if (!allow_checks() && probeRoyal != SQ_NONE && probe.attackers_to_king(probeRoyal, them))
           return false;
       return true;
   }
@@ -3002,7 +3009,8 @@ bool Position::legal(Move m) const {
       StateInfo setupState, nextState;
       probe.set(variant(), fen(), is_chess960(), &setupState, this_thread());
       probe.do_move(m, nextState, false);
-      if (!allow_checks() && probe.count(us, probe.king_type()) == 1 && probe.attackers_to_king(probe.square(us, probe.king_type()), them))
+      Square probeRoyal = probe.royal_square(us);
+      if (!allow_checks() && probeRoyal != SQ_NONE && probe.attackers_to_king(probeRoyal, them))
           return false;
       return true;
   }
@@ -3774,7 +3782,8 @@ bool Position::legal(Move m) const {
       return !violates_same_player_board_repetition(m);
   if ((var->flyingGeneral && hasRoyal) || st->bikjang)
   {
-      Square s = moverIsRoyal ? (rifleShot ? from : to) : royalSquare;
+      Square generalSquare = st->bikjang && count<KING>(us) == 1 ? square<KING>(us) : royalSquare;
+      Square s = from == generalSquare ? (rifleShot ? from : to) : generalSquare;
       if (attacks_bb(~us, ROOK, s, occupied) & pieces(~us, KING) & ~square_bb(to))
           return false;
   }
@@ -3841,29 +3850,23 @@ bool Position::has_legal_move() const {
   if (is_immediate_game_end())
       return false;
 
-  ExtMove moveList[MOVEGEN_OVERFLOW_CAPACITY];
-  ExtMove* end;
-
   const bool useWrappedFallback = topology_wraps() && evasion_checkers();
   const bool useNonEvasions = anti_royal_types() || useWrappedFallback;
 
   if (evasion_checkers() && !useNonEvasions)
   {
-      end = generate<EVASIONS>(*this, moveList);
-      for (ExtMove* it = moveList; it != end; ++it)
-          if (legal(*it) && !virtual_drop(*it))
+      for (const auto& move : MoveList<EVASIONS>(*this))
+          if (legal(move) && !virtual_drop(move))
               return true;
   }
   else
   {
-      end = generate<CAPTURES>(*this, moveList);
-      for (ExtMove* it = moveList; it != end; ++it)
-          if (legal(*it) && !virtual_drop(*it))
+      for (const auto& move : MoveList<CAPTURES>(*this))
+          if (legal(move) && !virtual_drop(move))
               return true;
 
-      end = generate<QUIETS>(*this, moveList);
-      for (ExtMove* it = moveList; it != end; ++it)
-          if (legal(*it) && !virtual_drop(*it))
+      for (const auto& move : MoveList<QUIETS>(*this))
+          if (legal(move) && !virtual_drop(move))
               return true;
   }
 
@@ -4349,10 +4352,14 @@ bool Position::gives_check(Move m) const {
   Square shotSq = capture(m) ? capture_square(m) : to;
   Square attackFrom = rifleShot ? from : to;
 
-  const PieceType royalType = king_type();
-  if (royalType == NO_PIECE_TYPE || count(~sideToMove, royalType) != 1)
+  const bool usingPhysicalKingTarget = count<KING>(~sideToMove) == 1;
+  Square royalSq = usingPhysicalKingTarget ? square<KING>(~sideToMove)
+                                           : royal_square(~sideToMove);
+  if (royalSq == SQ_NONE && count<KING>(~sideToMove) != 1)
       return false;
-  const Square royalSq = square(~sideToMove, royalType);
+  if (royalSq == SQ_NONE)
+      royalSq = square<KING>(~sideToMove);
+  const PieceType royalType = king_type() != NO_PIECE_TYPE ? king_type() : type_of(piece_on(royalSq));
 
   Bitboard occupied = rifleShot ? (pieces() ^ square_bb(shotSq))
                                 : (((!dropMove ? pieces() ^ from : pieces()) ^ square_bb(shotSq)) | to);
@@ -4383,12 +4390,16 @@ bool Position::gives_check(Move m) const {
           janggiCannons ^= square_bb(pullFrom) ^ square_bb(from);
   }
 
+  if (usingPhysicalKingTarget
+      && (attackers_to_king(royalSq, occupied, sideToMove, janggiCannons) & square_bb(attackFrom)))
+      return true;
+
   // Is there a direct check?
   if (type_of(m) != PROMOTION && type_of(m) != PIECE_PROMOTION && type_of(m) != PIECE_DEMOTION && type_of(m) != CASTLING
       && !((var->petrifyOnCaptureTypes & type_of(mover)) && capture(m)))
   {
       PieceType pt = type_of(mover);
-      if (!(var->captureForbidden[pt] & royalType))
+      if (usingPhysicalKingTarget || !(var->captureForbidden[pt] & royalType))
       {
           if (pt == JANGGI_CANNON)
           {
@@ -4403,6 +4414,11 @@ bool Position::gives_check(Move m) const {
           else if (AttackRiderTypes[pt] & ASYMMETRICAL_RIDERS)
           {
               if ((check_squares(pt) & attackFrom) && (attacks_bb(sideToMove, pt, attackFrom, occupied) & royalSq))
+                  return true;
+          }
+          else if (usingPhysicalKingTarget)
+          {
+              if (attacks_bb(sideToMove, pt, attackFrom, occupied) & royalSq)
                   return true;
           }
           else if (check_squares(pt) & attackFrom)
@@ -7299,7 +7315,9 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
 
   // Direct king capture ends the game immediately in capture-the-royal flows,
   // even when the variant is not modeled through extinction or pseudo-royals.
-  if (type_of(st->captured.piece) == king_type())
+  if (st->captured.piece != NO_PIECE
+      && king_type() != NO_PIECE_TYPE
+      && type_of(st->captured.piece) == king_type())
   {
       Color capturedColor = color_of(st->captured.piece);
       result = capturedColor == sideToMove ? mated_in(ply) : mate_in(ply);
