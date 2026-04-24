@@ -1700,7 +1700,7 @@ void Position::set_check_info(StateInfo* si) const {
       si->blockersForKing[WHITE] = si->blockersForKing[BLACK] = 0;
       si->pinners[WHITE] = si->pinners[BLACK] = 0;
 
-      Square ksq = count<KING>(~sideToMove) ? square<KING>(~sideToMove) : SQ_NONE;
+      Square ksq = count(~sideToMove, king_type()) ? square(~sideToMove, king_type()) : SQ_NONE;
       si->nonSlidingRiders = 0;
 
       for (PieceSet ps = piece_types(); ps;)
@@ -1759,7 +1759,7 @@ void Position::set_check_info(StateInfo* si) const {
   si->blockersForKing[WHITE] = slider_blockers(pieces(BLACK), count<KING>(WHITE) ? square<KING>(WHITE) : SQ_NONE, si->pinners[BLACK], BLACK);
   si->blockersForKing[BLACK] = slider_blockers(pieces(WHITE), count<KING>(BLACK) ? square<KING>(BLACK) : SQ_NONE, si->pinners[WHITE], WHITE);
 
-  Square ksq = count<KING>(~sideToMove) ? square<KING>(~sideToMove) : SQ_NONE;
+  Square ksq = count(~sideToMove, king_type()) ? square(~sideToMove, king_type()) : SQ_NONE;
   Bitboard occupied = pieces();
 
   // For unused piece types, the check squares are left uninitialized
@@ -2896,13 +2896,24 @@ bool Position::legal(Move m) const {
           return false;
   }
 
-  assert(is_pass(m) || color_of(moved_piece(m)) == us);
+  assert(is_pass(m) || pureWallMove || color_of(moved_piece(m)) == us);
   assert(!count(us, king_type()) || piece_on(square(us, king_type())) == make_piece(us, king_type()));
   assert(board_bb() & to);
 
   const PieceType royalType = king_type();
   const bool hasRoyal = count(us, royalType);
   const Square royalSquare = hasRoyal ? square(us, royalType) : SQ_NONE;
+
+  if (pureWallMove)
+  {
+      if (must_capture() && has_capture())
+          return false;
+
+      Bitboard occupied = pieces() | gating_square(m);
+      return (allow_checks() || !hasRoyal || !attackers_to_king(royalSquare, occupied, them))
+          && !violates_same_player_board_repetition(m);
+  }
+
   const bool moverIsRoyal = type_of(moved_piece(m)) == royalType;
 
   if (forced_jump_continuation() && st->forcedJumpSquare != SQ_NONE)
@@ -4338,9 +4349,10 @@ bool Position::gives_check(Move m) const {
   Square shotSq = capture(m) ? capture_square(m) : to;
   Square attackFrom = rifleShot ? from : to;
 
-  // No check possible without king
-  if (!count<KING>(~sideToMove))
+  const PieceType royalType = king_type();
+  if (royalType == NO_PIECE_TYPE || !count(~sideToMove, royalType))
       return false;
+  const Square royalSq = square(~sideToMove, royalType);
 
   Bitboard occupied = rifleShot ? (pieces() ^ square_bb(shotSq))
                                 : (((!dropMove ? pieces() ^ from : pieces()) ^ square_bb(shotSq)) | to);
@@ -4376,21 +4388,21 @@ bool Position::gives_check(Move m) const {
       && !((var->petrifyOnCaptureTypes & type_of(mover)) && capture(m)))
   {
       PieceType pt = type_of(mover);
-      if (!(var->captureForbidden[pt] & KING))
+      if (!(var->captureForbidden[pt] & royalType))
       {
           if (pt == JANGGI_CANNON)
           {
-              if (attacks_bb(sideToMove, pt, attackFrom, occupied) & attacks_bb(sideToMove, pt, attackFrom, occupied & ~janggiCannons) & square<KING>(~sideToMove))
+              if (attacks_bb(sideToMove, pt, attackFrom, occupied) & attacks_bb(sideToMove, pt, attackFrom, occupied & ~janggiCannons) & royalSq)
                   return true;
           }
           else if (AttackRiderTypes[pt] & HOPPING_RIDERS)
           {
-              if (attacks_bb(sideToMove, pt, attackFrom, occupied) & square<KING>(~sideToMove))
+              if (attacks_bb(sideToMove, pt, attackFrom, occupied) & royalSq)
                   return true;
           }
           else if (AttackRiderTypes[pt] & ASYMMETRICAL_RIDERS)
           {
-              if ((check_squares(pt) & attackFrom) && (attacks_bb(sideToMove, pt, attackFrom, occupied) & square<KING>(~sideToMove)))
+              if ((check_squares(pt) & attackFrom) && (attacks_bb(sideToMove, pt, attackFrom, occupied) & royalSq))
                   return true;
           }
           else if (check_squares(pt) & attackFrom)
@@ -4398,8 +4410,7 @@ bool Position::gives_check(Move m) const {
       }
       if (var->blastPassiveTypes && (var->blastPassiveTypes & piece_set(pt)))
       {
-          Square ksq = square<KING>(~sideToMove);
-          if (!(blast_immune_bb() & square_bb(ksq)) && (blast_pattern(ksq) & to))
+          if (!(blast_immune_bb() & royalSq) && (blast_pattern(royalSq) & to))
               return true;
       }
   }
@@ -4410,7 +4421,7 @@ bool Position::gives_check(Move m) const {
       discCheckSq |= square_bb(pull_square(m));
 
   if (  ((!dropMove && (blockers_for_king(~sideToMove) & discCheckSq)) || (non_sliding_riders() & pieces(sideToMove)))
-      && attackers_to_king(square<KING>(~sideToMove), occupied, sideToMove, janggiCannons) & occupied)
+      && attackers_to_king(royalSq, occupied, sideToMove, janggiCannons) & occupied)
       return true;
 
   // Is there a check by gated pieces?
@@ -4418,9 +4429,9 @@ bool Position::gives_check(Move m) const {
       && gatingPotion == Variant::POTION_TYPE_NB
       && gating_type(m) != NO_PIECE_TYPE)
   {
-      if (attacks_bb(sideToMove, gating_type(m), gating_square(m), occupied ^ square_bb(gating_square(m))) & square<KING>(~sideToMove))
+      if (attacks_bb(sideToMove, gating_type(m), gating_square(m), occupied ^ square_bb(gating_square(m))) & royalSq)
           return true;
-      if (paired_drop(m) && (attacks_bb(sideToMove, gating_type(m), secondary_drop_square(m), occupied ^ square_bb(secondary_drop_square(m))) & square<KING>(~sideToMove)))
+      if (paired_drop(m) && (attacks_bb(sideToMove, gating_type(m), secondary_drop_square(m), occupied ^ square_bb(secondary_drop_square(m))) & royalSq))
           return true;
   }
 
@@ -4429,15 +4440,15 @@ bool Position::gives_check(Move m) const {
       return false;
 
   // Is there a check by special diagonal moves?
-  if (more_than_one(diagonal_lines() & (to | square<KING>(~sideToMove))))
+  if (more_than_one(diagonal_lines() & (to | royalSq)))
   {
       PieceType pt = type_of(mover);
       PieceType diagType = pt == WAZIR ? FERS : pt == SOLDIER ? PAWN : pt == ROOK ? BISHOP : NO_PIECE_TYPE;
-      if (diagType && (attacks_bb(sideToMove, diagType, attackFrom, occupied) & square<KING>(~sideToMove)))
+      if (diagType && (attacks_bb(sideToMove, diagType, attackFrom, occupied) & royalSq))
           return true;
       else if (pt == JANGGI_CANNON && (  rider_attacks_bb<RIDER_CANNON_DIAG>(attackFrom, occupied)
                                        & rider_attacks_bb<RIDER_CANNON_DIAG>(attackFrom, occupied & ~janggiCannons)
-                                       & square<KING>(~sideToMove)))
+                                       & royalSq))
           return true;
   }
 
@@ -4452,13 +4463,13 @@ bool Position::gives_check(Move m) const {
       return false;
 
   case PROMOTION:
-      return attacks_bb(sideToMove, promotion_type(m), to, pieces() ^ from) & square<KING>(~sideToMove);
+      return attacks_bb(sideToMove, promotion_type(m), to, pieces() ^ from) & royalSq;
 
   case PIECE_PROMOTION:
-      return attacks_bb(sideToMove, promoted_piece_type(type_of(mover)), to, pieces() ^ from) & square<KING>(~sideToMove);
+      return attacks_bb(sideToMove, promoted_piece_type(type_of(mover)), to, pieces() ^ from) & royalSq;
 
   case PIECE_DEMOTION:
-      return attacks_bb(sideToMove, type_of(unpromoted_piece_on(from)), to, pieces() ^ from) & square<KING>(~sideToMove);
+      return attacks_bb(sideToMove, type_of(unpromoted_piece_on(from)), to, pieces() ^ from) & royalSq;
 
   // En passant capture with check? We have already handled the case
   // of direct checks and ordinary discovered check, so the only case we
@@ -4469,7 +4480,7 @@ bool Position::gives_check(Move m) const {
       Square capsq = capture_square(to);
       Bitboard b = rifleShot ? (pieces() ^ capsq) : ((pieces() ^ from ^ capsq) | to);
 
-      return attackers_to_king(square<KING>(~sideToMove), b, sideToMove) & pieces(sideToMove) & b;
+      return attackers_to_king(royalSq, b, sideToMove) & pieces(sideToMove) & b;
   }
   default: //CASTLING
   {
@@ -4482,11 +4493,11 @@ bool Position::gives_check(Move m) const {
       // Is there a discovered check?
       if (   castling_rank(WHITE) > RANK_1
           && ((blockers_for_king(~sideToMove) & rfrom) || (non_sliding_riders() & pieces(sideToMove)))
-          && attackers_to_king(square<KING>(~sideToMove), (pieces() ^ kfrom ^ rfrom) | rto | kto, sideToMove))
+          && attackers_to_king(royalSq, (pieces() ^ kfrom ^ rfrom) | rto | kto, sideToMove))
           return true;
 
-      return   (PseudoAttacks[sideToMove][type_of(piece_on(rfrom))][rto] & square<KING>(~sideToMove))
-            && (attacks_bb(sideToMove, type_of(piece_on(rfrom)), rto, (pieces() ^ kfrom ^ rfrom) | rto | kto) & square<KING>(~sideToMove));
+      return   (PseudoAttacks[sideToMove][type_of(piece_on(rfrom))][rto] & royalSq)
+            && (attacks_bb(sideToMove, type_of(piece_on(rfrom)), rto, (pieces() ^ kfrom ^ rfrom) | rto | kto) & royalSq);
   }
   }
 }

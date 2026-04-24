@@ -747,11 +747,6 @@ namespace {
       return (uint16_t(f) << 8) | uint16_t(r);
   }
 
-  inline void snapshot_magic_numbers(std::array<Bitboard, SQUARE_NB>& out, const Magic in[]) {
-      for (Square s = SQ_A1; s <= SQ_MAX; ++s)
-          out[s] = in[s].magic;
-  }
-
   inline Bitboard active_magic_board(File maxFile, Rank maxRank) {
       return BoardSizeBB[maxFile][maxRank];
   }

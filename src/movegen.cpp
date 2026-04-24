@@ -566,12 +566,12 @@ namespace {
         blcp = filter_promotion_targets(blcp);
     }
 
-    if (Type == QUIET_CHECKS && pos.count<KING>(Them))
+    if (Type == QUIET_CHECKS && pos.count(Them, pos.king_type()))
     {
         // To make a quiet check, you either make a direct check by pushing a pawn
         // or push a blocker pawn that is not on the same file as the enemy king.
         // Discovered check promotion has been already generated amongst the captures.
-        Square ksq = pos.square<KING>(Them);
+        Square ksq = pos.square(Them, pos.king_type());
         Bitboard dcCandidatePawns = pos.blockers_for_king(Them) & ~file_bb(ksq);
         b1 &= pawn_attacks_bb(Them, ksq) | shift<   Up>(dcCandidatePawns);
         b2 &= pawn_attacks_bb(Them, ksq) | shift<Up+Up>(dcCandidatePawns);
@@ -905,7 +905,7 @@ namespace {
     static_assert(Type != LEGAL, "Unsupported type in generate_all()");
 
     constexpr bool Checks = Type == QUIET_CHECKS; // Reduce template instantiations
-    const Square ksq = pos.count<KING>(Us) ? pos.square<KING>(Us) : SQ_NONE;
+    const Square ksq = pos.count(Us, pos.king_type()) ? pos.square(Us, pos.king_type()) : SQ_NONE;
     const Bitboard checkers = pos.evasion_checkers();
     Bitboard target;
     Bitboard captureTarget = Bitboard(0);

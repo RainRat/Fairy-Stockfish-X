@@ -1232,16 +1232,6 @@ inline Square msb(Bitboard b) {
 #endif
 }
 
-inline Square lsb_wrapped(Bitboard blockers, Square sq) {
-    Bitboard hi = (sq < int(SQUARE_BIT_MASK)) ? (blockers & (AllSquares << (sq + 1))) : Bitboard(0);
-    return hi ? lsb(hi) : lsb(blockers);
-}
-
-inline Square msb_wrapped(Bitboard blockers, Square sq) {
-    Bitboard lo = blockers & ~(AllSquares << sq);
-    return lo ? msb(lo) : msb(blockers);
-}
-
 #elif defined(_MSC_VER)  // MSVC
 
 #ifdef _WIN64  // MSVC, WIN64
@@ -1443,6 +1433,16 @@ inline Square msb(Bitboard b) {
 #error "Compiler not supported."
 
 #endif
+
+inline Square lsb_wrapped(Bitboard blockers, Square sq) {
+    Bitboard hi = (sq < int(SQUARE_BIT_MASK)) ? (blockers & (AllSquares << (sq + 1))) : Bitboard(0);
+    return hi ? lsb(hi) : lsb(blockers);
+}
+
+inline Square msb_wrapped(Bitboard blockers, Square sq) {
+    Bitboard lo = blockers & ~(AllSquares << sq);
+    return lo ? msb(lo) : msb(blockers);
+}
 
 /// least_significant_square_bb() returns the bitboard of the least significant
 /// square of a non-zero bitboard. It is equivalent to square_bb(lsb(bb)).

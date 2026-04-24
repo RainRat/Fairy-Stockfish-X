@@ -539,13 +539,20 @@ inline bool has_insufficient_material(Color c, const Position& pos) {
 }
 
 inline Bitboard checked(const Position& pos) {
-    return (pos.evasion_checkers() ? square_bb(pos.square<KING>(pos.side_to_move())) : Bitboard(0))
+    const PieceType royalType = pos.king_type();
+    Bitboard checkedKing = pos.evasion_checkers() && royalType != NO_PIECE_TYPE && pos.count(pos.side_to_move(), royalType)
+                         ? square_bb(pos.square(pos.side_to_move(), royalType))
+                         : Bitboard(0);
+    return checkedKing
         | (pos.pseudo_royal_types() ? pos.checked_pseudo_royals(pos.side_to_move()) : Bitboard(0))
         | (pos.anti_royal_types() ? pos.checked_anti_royals(pos.side_to_move()) : Bitboard(0));
 }
 
 inline Bitboard evasion_checked(const Position& pos) {
-    return pos.evasion_checkers() ? square_bb(pos.square<KING>(pos.side_to_move())) : Bitboard(0);
+    const PieceType royalType = pos.king_type();
+    return pos.evasion_checkers() && royalType != NO_PIECE_TYPE && pos.count(pos.side_to_move(), royalType)
+         ? square_bb(pos.square(pos.side_to_move(), royalType))
+         : Bitboard(0);
 }
 
 namespace FEN {
