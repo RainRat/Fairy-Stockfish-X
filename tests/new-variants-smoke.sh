@@ -692,14 +692,16 @@ go perft 1")
 echo "${out}" | grep -q "Nodes searched: 0"
 
 # 19bad) All Queens Chess: source-backed setup and line-of-four win.
-out=$(run_cmds "setoption name UCI_Variant value all-queens-chess
+if variant_available "allqueenschess"; then
+out=$(run_cmds "setoption name UCI_Variant value allqueenschess
 position startpos
 d")
 echo "${out}" | grep -Eq "Fen: qQqQq/5/Q3q/5/QqQqQ(\\[\\])? w - - 0 1"
-out=$(run_cmds "setoption name UCI_Variant value all-queens-chess
+out=$(run_cmds "setoption name UCI_Variant value allqueenschess
 position fen 5/QQQQ1/5/5/5 b - - 0 1
 go perft 1")
 echo "${out}" | grep -q "Nodes searched: 0"
+fi
 
 # 19bb) Compound Chess: setup and dragon-specific en passant capture.
 if variant_available "compound-chess"; then
@@ -822,10 +824,23 @@ echo "${out}" | grep -q "^M@a1: 1$"
 echo "${out}" | grep -vq "^M@c3: 1$"
 
 # 19e0) English Draughts: documented title matches the supported checkers ruleset.
+if variant_available "english-draughts"; then
 out=$(run_cmds "setoption name UCI_Variant value english-draughts
 position startpos
 d")
 echo "${out}" | grep -q "Fen: 1m1m1m1m/m1m1m1m1/1m1m1m1m/8/8/M1M1M1M1/1M1M1M1M/M1M1M1M1 w - - 0 1"
+fi
+
+# 19e1) Checkers: orthodox start moves are diagonal only.
+if variant_available "checkers"; then
+out=$(run_cmds "setoption name UCI_Variant value checkers
+position startpos
+go perft 1")
+echo "${out}" | grep -q "^a3b4: 1$"
+echo "${out}" | grep -q "^g3h4: 1$"
+! echo "${out}" | grep -q "^b2b3: 1$"
+! echo "${out}" | grep -q "^d2d3: 1$"
+fi
 
 # 19ea) HP-minichess: 5x5 orthodox setup with kings on the a-file.
 out=$(run_cmds "setoption name UCI_Variant value hp-minichess
@@ -871,16 +886,20 @@ go perft 1")
 fi
 
 # 19g) Apit-Sodok: same reverse/intervention capture as Maak Yek.
+if variant_available "apit-sodok"; then
 out=$(run_cmds "setoption name UCI_Variant value apit-sodok
 position fen 8/8/8/2r1r3/3R4/8/8/8 w - - 0 1 moves d4d5
 d")
 echo "${out}" | grep -q "Fen: 8/8/8/3R4/8/8/8/8 b - - 1 1"
+fi
 
 # 19h) Apit: canonical title for the same documented rules family.
+if variant_available "apit"; then
 out=$(run_cmds "setoption name UCI_Variant value apit
 position fen 8/8/8/2r1r3/3R4/8/8/8 w - - 0 1 moves d4d5
 d")
 echo "${out}" | grep -q "Fen: 8/8/8/3R4/8/8/8/8 b - - 1 1"
+fi
 
 # 21) Maak Yek: moving between two enemy pieces captures both of them.
 out=$(run_cmds "setoption name UCI_Variant value maak-yek
@@ -1022,12 +1041,13 @@ go depth 1")
 echo "${out}" | grep -q "^bestmove "
 
 # 30b) Benedict (capture morph): capturer adopts captured piece type.
-out=$(run_cmds "setoption name UCI_Variant value benedict
+out=$(run_cmds "setoption name UCI_Variant value benedictmorph
 position fen 4k3/8/8/3n4/4B3/8/8/4K3 w - - 0 1 moves e4d5
 d")
 echo "${out}" | grep -q "Fen: 4k3/8/8/3N4/8/8/8/4K3 b - - 0 1"
 
 # 31) Pawns baseline: pawn-only start and promotion race objective.
+if variant_available "pawns"; then
 out=$(run_cmds "setoption name UCI_Variant value pawns
 position startpos
 go perft 1")
@@ -1036,8 +1056,10 @@ out=$(run_cmds "setoption name UCI_Variant value pawns
 position fen 8/P7/8/8/8/8/8/8 w - - 0 1
 go perft 1")
 echo "${out}" | grep -q "^a7a8p: 1$"
+fi
 
 # 32) Rugby baseline: king-like pawn movement without orthogonal captures.
+if variant_available "rugby"; then
 out=$(run_cmds "setoption name UCI_Variant value rugby
 position startpos
 go perft 1")
@@ -1047,8 +1069,10 @@ position fen 8/8/8/8/8/4P3/4p3/8 w - - 0 1
 go perft 1")
 ! echo "${out}" | grep -q "^e3e2:"
 echo "${out}" | grep -q "^e3d2: 1$"
+fi
 
 # 33) Capped pawns: extra two-step window from rank 6/3 into promotion.
+if variant_available "capped-pawns"; then
 out=$(run_cmds "setoption name UCI_Variant value capped-pawns
 position fen k7/8/4P3/8/8/8/8/4K3 w - - 0 1
 go perft 1")
@@ -1057,8 +1081,10 @@ out=$(run_cmds "setoption name UCI_Variant value capped-pawns
 position fen k7/8/8/8/8/4p3/8/7K b - - 0 1
 go perft 1")
 echo "${out}" | grep -q "^e3e1q: 1$"
+fi
 
 # 34) No-castle-10: castling blocked before ply 20, allowed afterwards.
+if variant_available "no-castle-10"; then
 out=$(run_cmds "setoption name UCI_Variant value no-castle-10
 position fen r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1
 go perft 1")
@@ -1069,8 +1095,10 @@ position fen r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 11
 go perft 1")
 echo "${out}" | grep -q "^e1g1: 1$"
 echo "${out}" | grep -q "^e1c1: 1$"
+fi
 
 # 35) Dueling archbishops baseline: bishops gain knight movement.
+if variant_available "dueling-archbishops"; then
 out=$(run_cmds "setoption name UCI_Variant value dueling-archbishops
 position startpos
 go perft 1")
@@ -1082,6 +1110,7 @@ out=$(run_cmds "setoption name UCI_Variant value dueling-archbishops
 position fen 4k3/8/8/8/8/8/8/4K3[P] w - - 0 1
 go perft 1")
 echo "${out}" | grep -q "^P@a2: 1$"
+fi
 
 # 37) Royal race baseline: expected opening move count with custom movers.
 if variant_available "royal-race"; then
@@ -1153,9 +1182,11 @@ go perft 1")
 fi
 
 # 44) Rifle chess baseline: start position behaves like orthodox chess before captures appear.
+if variant_available "rifle-chess"; then
 out=$(run_cmds "setoption name UCI_Variant value rifle-chess
 position startpos
 go perft 1")
 echo "${out}" | grep -q "Nodes searched: 20"
+fi
 
 echo "new variants smoke testing OK"
