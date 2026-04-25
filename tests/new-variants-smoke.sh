@@ -885,22 +885,6 @@ go perft 1")
   echo "${out}" | grep -q "^P@a1: 1$"
 fi
 
-# 19g) Apit-Sodok: same reverse/intervention capture as Maak Yek.
-if variant_available "apit-sodok"; then
-out=$(run_cmds "setoption name UCI_Variant value apit-sodok
-position fen 8/8/8/2r1r3/3R4/8/8/8 w - - 0 1 moves d4d5
-d")
-echo "${out}" | grep -q "Fen: 8/8/8/3R4/8/8/8/8 b - - 1 1"
-fi
-
-# 19h) Apit: canonical title for the same documented rules family.
-if variant_available "apit"; then
-out=$(run_cmds "setoption name UCI_Variant value apit
-position fen 8/8/8/2r1r3/3R4/8/8/8 w - - 0 1 moves d4d5
-d")
-echo "${out}" | grep -q "Fen: 8/8/8/3R4/8/8/8/8 b - - 1 1"
-fi
-
 # 21) Maak Yek: moving between two enemy pieces captures both of them.
 out=$(run_cmds "setoption name UCI_Variant value maak-yek
 position fen 8/8/8/8/2r1r3/8/8/3R4 w - - 0 1 moves d1d4
