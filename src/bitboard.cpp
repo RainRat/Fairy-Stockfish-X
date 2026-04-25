@@ -454,7 +454,9 @@ Bitboard rider_terminal_squares(const std::map<Direction, int>& directions, Squa
 
 
 #ifdef VERY_LARGE_BOARDS
-Bitboard rider_attacks_bb(RiderType R, Square s, Bitboard occupied) {
+Bitboard rider_attacks_bb(
+    RiderType R, Square s, Bitboard occupied, const MagicGeometry* mg) {
+  (void)mg;
   auto shifted_source = [&](Direction d) -> Square {
       Bitboard shifted = safe_destination(s, d);
       if (!shifted || (occupied & shifted))

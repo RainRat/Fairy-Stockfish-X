@@ -898,12 +898,14 @@ inline int edge_distance(Rank r, Rank maxRank = RANK_8) { return std::min(r, Ran
 
 
 #ifdef VERY_LARGE_BOARDS
-Bitboard rider_attacks_bb(RiderType R, Square s, Bitboard occupied);
+Bitboard rider_attacks_bb(
+    RiderType R, Square s, Bitboard occupied, const MagicGeometry* mg = current_magic_geometry);
 
 template<RiderType R>
-inline Bitboard rider_attacks_bb(Square s, Bitboard occupied) {
+inline Bitboard rider_attacks_bb(
+    Square s, Bitboard occupied, const MagicGeometry* mg = current_magic_geometry) {
   static_assert(R != NO_RIDER && !(R & (R - 1))); // exactly one bit
-  return rider_attacks_bb(R, s, occupied);
+  return rider_attacks_bb(R, s, occupied, mg);
 }
 
 inline Square lsb(Bitboard b);
