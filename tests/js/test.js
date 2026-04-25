@@ -18,31 +18,24 @@ if (typeof process !== 'undefined' && process.versions && process.versions.node 
 
 before(() => {
   chai = require('chai');
-  return new Promise((resolve) => {
-    pgnDir = __dirname + '/../pgn/';
-    srcDir = __dirname + '/../../src/';
-    ffish = require('./ffish.js');
-    WHITE = true;
-    BLACK = false;
-    ffish['onRuntimeInitialized'] = () => {
-      resolve();
-    }
+  pgnDir = __dirname + '/../pgn/';
+  srcDir = __dirname + '/../../src/';
+  WHITE = true;
+  BLACK = false;
+  return require('./ffish.js').default({}).then((loadedModule) => {
+    ffish = loadedModule;
   });
 });
 
 describe('ffish.loadVariantConfig(config)', function () {
   it("it loads a custom variant configuration from a string", () => {
-    fs = require('fs');
-    let configFilePath = srcDir + 'variants.ini';
-     fs.readFile(configFilePath, 'utf8', function (err,data) {
-       if (err) {
-         return console.log(err);
-       }
-       ffish.loadVariantConfig(data)
-       let board = new ffish.Board("tictactoe");
-       chai.expect(board.fen()).to.equal("3/3/3[PPPPPpppp] w - - 0 1");
-       board.delete();
-     });
+    const fs = require('fs');
+    const configFilePath = srcDir + 'variants.ini';
+    const data = fs.readFileSync(configFilePath, 'utf8');
+    ffish.loadVariantConfig(data)
+    const board = new ffish.Board("tictactoe");
+    chai.expect(board.fen()).to.equal("3/3/3[PPPPPpppp] w - - 0 1");
+    board.delete();
   });
 });
 
@@ -906,29 +899,25 @@ describe('ffish.validatePosition(fen, uciVariant, uciMoves, chess960)', function
 
 describe('ffish.readGamePGN(pgn)', function () {
   it("it reads a pgn string and returns a game object", () => {
-     fs = require('fs');
-     let pgnFiles = ['deep_blue_kasparov_1997.pgn', 'lichess_pgn_2018.12.21_JannLee_vs_CrazyAra.j9eQS4TF.pgn', 'c60_ruy_lopez.pgn', 'pychess-variants_zJxHRVm1.pgn', 'Syrov - Dgebuadze.pgn', 'pychess-variants_YHEWvfWF.pgn']
+     const fs = require('fs');
+     const pgnFiles = ['deep_blue_kasparov_1997.pgn', 'lichess_pgn_2018.12.21_JannLee_vs_CrazyAra.j9eQS4TF.pgn', 'c60_ruy_lopez.pgn', 'pychess-variants_zJxHRVm1.pgn', 'Syrov - Dgebuadze.pgn', 'pychess-variants_YHEWvfWF.pgn'];
 
-     let expectedFens = ["1r6/5kp1/RqQb1p1p/1p1PpP2/1Pp1B3/2P4P/6P1/5K2 b - - 14 45",
-                         "3r2kr/2pb1Q2/4ppp1/3pN2p/1P1P4/3PbP2/P1P3PP/6NK[PPqrrbbnn] b - - 0 37",
-                         "r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3",
-                         "r1bQkb1r/ppp1pppp/2P5/2n2q2/8/2N2N2/PPP2PPP/R1BEKB1R[Hh] b KQCFkqcf - 0 8",
-                         "5rk1/4p3/2p3rR/2p1P3/2Pp1B2/1P1P2P1/2N1n3/6K1 w - - 1 44",
-                         "r1q3r1/pp3p2/2kN1bp1/8/3P1H2/6P1/PPP2BKP/R2E1R2[h] b acg - 0 20"]
+     const expectedFens = ["1r6/5kp1/RqQb1p1p/1p1PpP2/1Pp1B3/2P4P/6P1/5K2 b - - 14 45",
+                           "3r2kr/2pb1Q2/4ppp1/3pN2p/1P1P4/3PbP2/P1P3PP/6NK[PPqrrbbnn] b - - 0 37",
+                           "r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3",
+                           "r1bQkb1r/ppp1pppp/2P5/2n2q2/8/2N2N2/PPP2PPP/R1BEKB1R[Hh] b KQCFkqcf - 0 8",
+                           "5rk1/4p3/2p3rR/2p1P3/2Pp1B2/1P1P2P1/2N1n3/6K1 w - - 1 44",
+                           "r1q3r1/pp3p2/2kN1bp1/8/3P1H2/6P1/PPP2BKP/R2E1R2[h] b acg - 0 20"];
 
      for (let idx = 0; idx < pgnFiles.length; ++idx) {
-     let pgnFilePath = pgnDir + pgnFiles[idx];
-
-     fs.readFile(pgnFilePath, 'utf8', function (err,data) {
-       if (err) {
-         return console.log(err);
-       }
-       let game = ffish.readGamePGN(data);
+       const pgnFilePath = pgnDir + pgnFiles[idx];
+       const data = fs.readFileSync(pgnFilePath, 'utf8');
+       const game = ffish.readGamePGN(data);
 
        const is960 = game.headers('Variant').endsWith('960');
        const variant = game.headers('Variant').toLowerCase().replace('960', '');
        const fen = game.headers('FEN');
-       let board = new ffish.Board(variant, fen, is960);
+       const board = new ffish.Board(variant, fen, is960);
        const mainlineMoves = game.mainlineMoves().split(" ");
        for (let idx2 = 0; idx2 < mainlineMoves.length; ++idx2) {
            board.push(mainlineMoves[idx2]);
@@ -937,65 +926,49 @@ describe('ffish.readGamePGN(pgn)', function () {
        chai.expect(board.fen()).to.equal(expectedFens[idx]);
        board.delete();
        game.delete();
-     });
-         }
+     }
   });
 
 });
 
 describe('game.headerKeys()', function () {
   it("it returns all available header keys of the loaded game", () => {
-     fs = require('fs');
-     let pgnFile = 'lichess_pgn_2018.12.21_JannLee_vs_CrazyAra.j9eQS4TF.pgn'
-     let pgnFilePath = pgnDir + pgnFile;
-
-     fs.readFile(pgnFilePath, 'utf8', function (err,data) {
-       if (err) {
-         return console.log(err);
-       }
-       let game = ffish.readGamePGN(data);
-       chai.expect(game.headerKeys()).to.equal('Annotator Termination Variant ECO WhiteTitle BlackRatingDiff UTCTime Result WhiteElo Black UTCDate TimeControl BlackElo Event WhiteRatingDiff BlackTitle White Date Opening Site');
-       game.delete();
-     });
+     const fs = require('fs');
+     const pgnFile = 'lichess_pgn_2018.12.21_JannLee_vs_CrazyAra.j9eQS4TF.pgn';
+     const pgnFilePath = pgnDir + pgnFile;
+     const data = fs.readFileSync(pgnFilePath, 'utf8');
+     const game = ffish.readGamePGN(data);
+     chai.expect(game.headerKeys()).to.equal('Annotator Termination Variant ECO WhiteTitle BlackRatingDiff UTCTime Result WhiteElo Black UTCDate TimeControl BlackElo Event WhiteRatingDiff BlackTitle White Date Opening Site');
+     game.delete();
   });
 });
 
 
 describe('game.headers(key)', function () {
   it("it returns the value for a given header key of a loaded game", () => {
-     fs = require('fs');
-     let pgnFile = 'pychess-variants_zJxHRVm1.pgn';
-     let pgnFilePath = pgnDir + pgnFile;
+     const fs = require('fs');
+     const pgnFile = 'pychess-variants_zJxHRVm1.pgn';
+     const pgnFilePath = pgnDir + pgnFile;
+     const data = fs.readFileSync(pgnFilePath, 'utf8');
+     const game = ffish.readGamePGN(data);
+     chai.expect(game.headers("White")).to.equal("catask");
+     chai.expect(game.headers("Black")).to.equal("Fairy-Stockfish");
+     chai.expect(game.headers("Variant")).to.equal("Seirawan");
+     chai.expect(game.headers("FEN")).to.equal("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR[HEhe] w KQBCDFGkqbcdfg - 0 1");
 
-     fs.readFile(pgnFilePath, 'utf8', function (err,data) {
-       if (err) {
-         return console.log(err);
-       }
-       let game = ffish.readGamePGN(data);
-       chai.expect(game.headers("White")).to.equal("catask");
-       chai.expect(game.headers("Black")).to.equal("Fairy-Stockfish");
-       chai.expect(game.headers("Variant")).to.equal("Seirawan");
-       chai.expect(game.headers("FEN")).to.equal("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR[HEhe] w KQBCDFGkqbcdfg - 0 1");
-
-       game.delete();
-     });
+     game.delete();
   });
 });
 
 describe('game.mainlineMoves()', function () {
   it("it returns the mainline of the loaded game in UCI notation", () => {
-     fs = require('fs');
-     let pgnFile = 'lichess_pgn_2018.12.21_JannLee_vs_CrazyAra.j9eQS4TF.pgn';
-     let pgnFilePath = pgnDir + pgnFile;
-
-     fs.readFile(pgnFilePath, 'utf8', function (err,data) {
-       if (err) {
-         return console.log(err);
-       }
-       let game = ffish.readGamePGN(data);
-       chai.expect(game.mainlineMoves()).to.equal('e2e4 b8c6 b1c3 g8f6 d2d4 d7d5 e4e5 f6e4 f1b5 a7a6 b5c6 b7c6 g1e2 c8f5 e1g1 e7e6 f2f3 e4c3 b2c3 h7h5 N@e3 N@h4 N@a5 B@d7 e3f5 h4f5 B@b7 N@e3 a5c6 e3d1 c6d8 a8d8 f1d1 Q@b5 b7a6 b5a6 P@d3 N@e3 c1e3 f5e3 P@d6 e3d1 a1d1 B@e3 g1h1 f8d6 e5d6 a6d6 B@b4 d6b4 c3b4 P@f2 Q@f1 R@g1 f1g1 f2g1q d1g1 P@f2 N@g6 f2g1q e2g1 Q@e7 Q@d6 f7g6 d6e7 e8e7 R@f7 e7f7 N@e5 f7g8 N@f6 g7f6 Q@f7');
-       game.delete();
-     });
+     const fs = require('fs');
+     const pgnFile = 'lichess_pgn_2018.12.21_JannLee_vs_CrazyAra.j9eQS4TF.pgn';
+     const pgnFilePath = pgnDir + pgnFile;
+     const data = fs.readFileSync(pgnFilePath, 'utf8');
+     const game = ffish.readGamePGN(data);
+     chai.expect(game.mainlineMoves()).to.equal('e2e4 b8c6 b1c3 g8f6 d2d4 d7d5 e4e5 f6e4 f1b5 a7a6 b5c6 b7c6 g1e2 c8f5 e1g1 e7e6 f2f3 e4c3 b2c3 h7h5 N@e3 N@h4 N@a5 B@d7 e3f5 h4f5 B@b7 N@e3 a5c6 e3d1 c6d8 a8d8 f1d1 Q@b5 b7a6 b5a6 P@d3 N@e3 c1e3 f5e3 P@d6 e3d1 a1d1 B@e3 g1h1 f8d6 e5d6 a6d6 B@b4 d6b4 c3b4 P@f2 Q@f1 R@g1 f1g1 f2g1q d1g1 P@f2 N@g6 f2g1q e2g1 Q@e7 Q@d6 f7g6 d6e7 e8e7 R@f7 e7f7 N@e5 f7g8 N@f6 g7f6 Q@f7');
+     game.delete();
   });
 });
 
