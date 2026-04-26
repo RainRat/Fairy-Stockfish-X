@@ -3329,12 +3329,12 @@ bool Position::legal(Move m) const {
           if ((capture(m) || rifleShot) && blast_on_capture(m))
           {
               moverRemovedByBlast = zero_range_blast_on_capture(m)
-                                 || (blast_center() && effectiveTo == shotSq);
+                                 || (blast_center(shotSq) && effectiveTo == shotSq);
           }
           else if ((blast_on_move() && !capture(m) && !is_self_destruct(m))
                 || (blast_on_self_destruct() && is_self_destruct(m)))
           {
-              moverRemovedByBlast = blast_center();
+              moverRemovedByBlast = blast_center(effectiveTo);
           }
       }
 
@@ -3667,7 +3667,7 @@ bool Position::legal(Move m) const {
           Square blastCenter = (capture(m) || rifleShot) ? shotSq : effectiveTo;
           Bitboard blastRelevant = occupied & ~blast_immune_bb();
           removedByEffects |= blast_pattern(blastCenter) & blastRelevant;
-          if (blast_center())
+          if (blast_center(blastCenter))
               removedByEffects |= square_bb(blastCenter) & blastRelevant;
           if (blast_on_capture(m) && (blast_immune_types() & movePt))
               removedByEffects &= ~square_bb(effectiveTo);
