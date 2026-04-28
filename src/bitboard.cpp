@@ -476,10 +476,7 @@ Bitboard rider_attacks_bb(
                                  | fixed_step_rider_attacks(s, occupied,  2,  0)
                                  | fixed_step_rider_attacks(s, occupied, -2,  0);
   case RIDER_HORSE: return lame_leaper_attack(HorseDirections, s, occupied);
-  case RIDER_ELEPHANT: return  fixed_step_rider_attacks(s, occupied,  2,  2)
-                              | fixed_step_rider_attacks(s, occupied, -2,  2)
-                              | fixed_step_rider_attacks(s, occupied,  2, -2)
-                              | fixed_step_rider_attacks(s, occupied, -2, -2);
+  case RIDER_ELEPHANT: return lame_leaper_attack(ElephantDirections, s, occupied);
   case RIDER_JANGGI_ELEPHANT: return lame_leaper_attack(JanggiElephantDirections, s, occupied);
   case RIDER_CANNON_DIAG: return sliding_attack<HOPPER>(BishopDirections, s, occupied);
   case RIDER_NIGHTRIDER: return sliding_attack<RIDER>(HorseDirections, s, occupied);

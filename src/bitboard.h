@@ -1060,15 +1060,41 @@ inline Bitboard rider_attacks_bb(RiderType R, Square s, Bitboard occupied, const
 
   assert(R != NO_RIDER && !(R & (R - 1))); // exactly one bit
   if (R == RIDER_LAME_DABBABA)
-      return  fixed_step_rider_attacks(s, occupied,  2,  0)
-            | fixed_step_rider_attacks(s, occupied, -2,  0)
-            | fixed_step_rider_attacks(s, occupied,  0,  2)
-            | fixed_step_rider_attacks(s, occupied,  0, -2);
+  {
+      Bitboard b = 0;
+      auto check = [&](Direction d) {
+          auto [dr, df] = decode_direction(d);
+          int r = int(rank_of(s)) + dr;
+          int f = int(file_of(s)) + df;
+          if (r < 0 || r > int(RANK_MAX) || f < 0 || f > int(FILE_MAX)) return;
+          Square to = make_square(File(f), Rank(r));
+          r = int(rank_of(s)) + dr / 2;
+          f = int(file_of(s)) + df / 2;
+          Square mid = make_square(File(f), Rank(r));
+          if (!(occupied & mid))
+              b |= to;
+      };
+      check(2 * NORTH); check(2 * SOUTH); check(2 * EAST); check(2 * WEST);
+      return b;
+  }
   if (R == RIDER_ELEPHANT)
-      return  fixed_step_rider_attacks(s, occupied,  2,  2)
-            | fixed_step_rider_attacks(s, occupied,  2, -2)
-            | fixed_step_rider_attacks(s, occupied, -2,  2)
-            | fixed_step_rider_attacks(s, occupied, -2, -2);
+  {
+      Bitboard b = 0;
+      auto check = [&](Direction d) {
+          auto [dr, df] = decode_direction(d);
+          int r = int(rank_of(s)) + dr;
+          int f = int(file_of(s)) + df;
+          if (r < 0 || r > int(RANK_MAX) || f < 0 || f > int(FILE_MAX)) return;
+          Square to = make_square(File(f), Rank(r));
+          r = int(rank_of(s)) + dr / 2;
+          f = int(file_of(s)) + df / 2;
+          Square mid = make_square(File(f), Rank(r));
+          if (!(occupied & mid))
+              b |= to;
+      };
+      check(2 * NORTH_EAST); check(2 * SOUTH_EAST); check(2 * SOUTH_WEST); check(2 * NORTH_WEST);
+      return b;
+  }
   if (R == RIDER_SKI_ROOK_H)
       return  ski_slider_attacks(s, occupied,  1, 0)
             | ski_slider_attacks(s, occupied, -1, 0);

@@ -2486,7 +2486,7 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
 Bitboard Position::attackers_to_king(Square s, Bitboard occupied, Color c, Bitboard janggiCannons) const {
 
   Bitboard attackers = attackers_to(s, occupied, c, janggiCannons);
-  attackers |= janggi_cannon_attackers_to_king(s, occupied, c);
+  attackers |= janggi_cannon_attackers_to_king(s, occupied, c, janggiCannons);
   // Frozen pieces cannot give check (relevant for spell-chess freeze effects).
   attackers &= ~(freeze_squares(c) | (pieces(c, PAWN) & pawnCannotCheckZone[c]));
   if (anti_royal_king_mutually_immune())
@@ -2502,11 +2502,11 @@ Bitboard Position::attackers_to_king(Square s, Bitboard occupied, Color c, Bitbo
   return attackers;
 }
 
-Bitboard Position::janggi_cannon_attackers_to_king(Square s, Bitboard occupied, Color c) const {
+Bitboard Position::janggi_cannon_attackers_to_king(Square s, Bitboard occupied, Color c, Bitboard janggiCannons) const {
 
   Bitboard attackers = 0;
   Bitboard cannons = pieces(c, JANGGI_CANNON) & occupied;
-  Bitboard cannonPieces = pieces(JANGGI_CANNON);
+  Bitboard cannonPieces = janggiCannons;
 
   while (cannons)
   {
