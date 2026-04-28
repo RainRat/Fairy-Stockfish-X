@@ -2450,14 +2450,14 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
               while (asymmetricals)
               {
                   Square s2 = pop_lsb(asymmetricals);
-                  if (attacks_from(c, move_pt, s2, occupied) & s)
+                  if (attacks_bb(c, move_pt, s2, occupied) & s)
                       b |= s2;
               }
           }
           else if (pt == JANGGI_CANNON)
-              b |= attacks_from(~c, move_pt, s, occupied) & attacks_from(~c, move_pt, s, occupied & ~janggiCannons) & pieces(c, JANGGI_CANNON);
+              b |= attacks_bb(~c, move_pt, s, occupied) & attacks_bb(~c, move_pt, s, occupied & ~janggiCannons) & pieces(c, JANGGI_CANNON);
           else
-              b |= attacks_from(~c, move_pt, s, occupied) & pieces(c, pt);
+              b |= attacks_bb(~c, move_pt, s, occupied) & pieces(c, pt);
       }
   }
 
@@ -2488,17 +2488,25 @@ Bitboard Position::attackers_to_king(Square s, Bitboard occupied, Color c, Bitbo
   Bitboard attackers = attackers_to(s, occupied, c, janggiCannons);
   attackers |= janggi_cannon_attackers_to_king(s, occupied, c);
   // Frozen pieces cannot give check (relevant for spell-chess freeze effects).
-  attackers &= ~(freeze_squares(c) | (pieces(c, PAWN) & pawnCannotCheckZone[c]));
+  Bitboard restricted = freeze_squares(c);
+  if (var->prisonPawnPromotion)
+      restricted |= pieces(c, PAWN) & pawnCannotCheckZone[c];
+  attackers &= ~restricted;
   if (anti_royal_king_mutually_immune())
       for (PieceSet ps = anti_royal_types(); ps; )
           attackers &= ~pieces(c, pop_lsb(ps));
-  PieceSet forbiddenToKing = var->captureForbiddenToKing;
-  if (!attackers || !forbiddenToKing)
+  if (!attackers)
       return attackers;
 
-  for (PieceSet ps = forbiddenToKing; ps; )
-      attackers &= ~pieces(c, pop_lsb(ps));
-
+  Piece royalPiece = piece_on(s);
+  PieceType royalType = royalPiece != NO_PIECE ? type_of(royalPiece) : king_type();
+  if (royalType != NO_PIECE_TYPE)
+      for (PieceSet ps = piece_types(); ps; )
+      {
+          PieceType pt = pop_lsb(ps);
+          if (var->captureForbidden[pt] & royalType)
+              attackers &= ~pieces(c, pt);
+      }
   return attackers;
 }
 
