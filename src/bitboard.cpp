@@ -643,7 +643,7 @@ void Bitboards::init_pieces() {
                   for (auto const& [d, limit] : pi->slider[initial][modality])
                       if (limit == SKI_SLIDER_LIMIT)
                           skiDirs[d] = 0;
-                      else if (limit == MAX_SLIDER_LIMIT || limit >= 0 || is_slider_range(limit))
+                      else if (limit >= 0 || is_slider_range(limit))
                           riderDirs[d] = limit;
 
                   for (Square s = SQ_A1; s <= SQ_MAX; ++s)
