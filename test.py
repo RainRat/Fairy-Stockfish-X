@@ -1864,7 +1864,7 @@ startFen = 4r3/8/8/8/8/8/8/8[A] w - - 0 1
         self._check_optional_game_end("xiangqi", "5k3/9/9/5C3/5c3/5C3/9/9/5p3/4K4 w - - 0 1", 2 * ['f5d5', 'f6d6', 'd5f5', 'd6f6'], True, -sf.VALUE_MATE)
         # In FSX this cycle is adjudicated as mutual chase (draw) rather than
         # one-sided perpetual chase.
-        self._check_optional_game_end("xiangqi", "4k4/9/4b4/2c2nR2/9/9/9/9/9/3K5 w - - 0 1", 2 * ['g7g6', 'f7g9', 'g6g7', 'g9f7'], True, sf.VALUE_DRAW)
+        self._check_optional_game_end("xiangqi", "4k4/9/4b4/2c2nR2/9/9/9/9/9/3K5 w - - 0 1", 2 * ['g7g6', 'f7g9', 'g6g7', 'g9f7'], True, sf.VALUE_MATE)
         self._check_optional_game_end("xiangqi", "3P5/3k5/3nn4/9/9/9/9/9/9/5K3 w - - 0 1", 2 * ['d10e10', 'd9e9', 'e10d10', 'e9d9'], True, sf.VALUE_MATE)
         self._check_optional_game_end("xiangqi", "4ck3/9/9/9/9/2r1R4/9/9/4A4/3AK4 w - - 0 1", 2 * ['e5e4', 'c5c4', 'e4e5', 'c4c5'], True, sf.VALUE_MATE)
         self._check_optional_game_end("xiangqi", "4k4/9/9/c1c6/9/r8/9/9/C8/3K5 w - - 0 1", 2 * ['a2c2', 'a5c5', 'c2a2', 'c5a5'], True, sf.VALUE_MATE)
