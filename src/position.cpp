@@ -4436,8 +4436,10 @@ bool Position::gives_check(Move m) const {
   }
 
   // Is there a discovered check?
-  Bitboard discCheckSq = rifleShot ? square_bb(to) : square_bb(from);
-  if (type_of(m) == PULL)
+  Bitboard discCheckSq = 0;
+  if (!dropMove)
+      discCheckSq = rifleShot ? square_bb(to) : square_bb(from);
+  if (!dropMove && type_of(m) == PULL)
       discCheckSq |= square_bb(pull_square(m));
 
   if (  ((!dropMove && (blockers_for_king(~sideToMove) & discCheckSq)) || (non_sliding_riders() & pieces(sideToMove)))
