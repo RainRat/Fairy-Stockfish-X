@@ -16,7 +16,7 @@ if (typeof process !== 'undefined' && process.versions && process.versions.node 
   };
 }
 
-before(() => {
+before(async () => {
   chai = require('chai');
   pgnDir = __dirname + '/../pgn/';
   srcDir = __dirname + '/../../src/';
@@ -24,8 +24,24 @@ before(() => {
   BLACK = false;
   const ffishModule = require('./ffish.js');
   const createModule = typeof ffishModule === 'function' ? ffishModule : ffishModule.default;
-  return createModule({}).then((loadedModule) => {
-    ffish = loadedModule;
+  if (typeof createModule === 'function') {
+    ffish = await createModule({});
+    return;
+  }
+  ffish = await new Promise((resolve) => {
+    if (ffishModule && typeof ffishModule.Board === 'function') {
+      resolve(ffishModule);
+      return;
+    }
+    if (ffishModule && typeof ffishModule === 'object') {
+      const previous = ffishModule.onRuntimeInitialized;
+      ffishModule.onRuntimeInitialized = () => {
+        if (typeof previous === 'function') previous();
+        resolve(ffishModule);
+      };
+      return;
+    }
+    resolve(ffishModule);
   });
 });
 
