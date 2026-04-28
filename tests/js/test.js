@@ -22,7 +22,9 @@ before(() => {
   srcDir = __dirname + '/../../src/';
   WHITE = true;
   BLACK = false;
-  return require('./ffish.js').default({}).then((loadedModule) => {
+  const ffishModule = require('./ffish.js');
+  const createModule = typeof ffishModule === 'function' ? ffishModule : ffishModule.default;
+  return createModule({}).then((loadedModule) => {
     ffish = loadedModule;
   });
 });

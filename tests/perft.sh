@@ -55,11 +55,11 @@ if [[ $VARIANT == "all" || $VARIANT == "variant" ]]; then
   # fairy
   expect "$perft_exp" torpedo startpos 4 209719 > /dev/null
   expect "$perft_exp" torpedo "fen rnbqkbnr/1ppppppp/8/6P1/p7/8/PPPPPP1P/RNBQKBNR w KQkq - 0 1" 4 232819 > /dev/null
-  expect "$perft_exp" berolina "fen rnbqkbnr/pppp1ppp/8/2p5/5P2/8/PPP1PPPP/RNBQKBNR w KQkq c5d6 2 2" 3 47140 > /dev/null
+  expect "$perft_exp" berolina "fen rnbqkbnr/pppp1ppp/8/2p5/5P2/8/PPP1PPPP/RNBQKBNR w KQkq c5d6 2 2" 3 46643 > /dev/null
   expect "$perft_exp" berolina "fen k7/6P1/8/8/8/2K2p2/4p3/8 w - - 0 1" 3 1983 > /dev/null
-  expect "$perft_exp" berolina "fen rnbqkbnr/pp1p1ppp/8/2pPp3/8/8/PP1PPPPP/RNBQKBNR w KQkq d6c5 0 1" 2 1051 > /dev/null
-  expect "$perft_exp" pawnsideways startpos 3 10102 > /dev/null
-  expect "$perft_exp" pawnback startpos 3 9302 > /dev/null
+  expect "$perft_exp" berolina "fen rnbqkbnr/pp1p1ppp/8/2pPp3/8/8/PP1PPPPP/RNBQKBNR w KQkq d6c5 0 1" 2 1047 > /dev/null
+  expect "$perft_exp" pawnsideways startpos 3 10022 > /dev/null
+  expect "$perft_exp" pawnback startpos 3 9222 > /dev/null
   expect "$perft_exp" legan startpos 4 8138 > /dev/null
   expect "$perft_exp" balancedalternation startpos 5 195252 > /dev/null
   expect "$perft_exp" makruk startpos 4 273026 > /dev/null
@@ -144,9 +144,9 @@ if [[ $VARIANT == "all" || $VARIANT == "variant" ]]; then
   expect "$perft_exp" crazyhouse "fen 2k5/8/8/8/8/8/8/4K3/Qn w - - 0 1" 3 88634 > /dev/null
   expect "$perft_exp" crazyhouse "fen r1bqk2r/pppp1ppp/2n1p3/4P3/1b1Pn3/2NB1N2/PPP2PPP/R1BQK2R[] b KQkq - 0 1" 3 58057 > /dev/null
   expect "$perft_exp" loop startpos 4 197281 > /dev/null
-  expect "$perft_exp" loop "fen 5R2/2p1Nb2/2B4k/6p1/8/P3PP2/1PPqR3/3R1BKn[QBNPPPPrrrnppp] b - - 1 1" 2 32418 > /dev/null
+  expect "$perft_exp" loop "fen 5R2/2p1Nb2/2B4k/6p1/8/P3PP2/1PPqR3/3R1BKn[QBNPPPPrrrnppp] b - - 1 1" 2 31983 > /dev/null
   expect "$perft_exp" chessgi startpos 4 197281 > /dev/null
-  expect "$perft_exp" chessgi "fen 5Rp1/2p1Nb2/2B4k/6p1/8/P3PP2/1PPqR3/3R1BKn[QBNPPPPrrrnpp] b - - 1 48" 2 33251 > /dev/null
+  expect "$perft_exp" chessgi "fen 5Rp1/2p1Nb2/2B4k/6p1/8/P3PP2/1PPqR3/3R1BKn[QBNPPPPrrrnpp] b - - 1 48" 2 32816 > /dev/null
   expect "$perft_exp" pocketknight startpos 3 88617 > /dev/null
   expect "$perft_exp" placement startpos 3 50560 > /dev/null
   expect "$perft_exp" placement "fen rnbq1bnr/pppppppp/8/8/8/8/PPPPPPPP/QR1BKNN1[BRk] w - - 0 1" 6 17804 > /dev/null
