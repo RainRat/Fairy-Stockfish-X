@@ -587,7 +587,7 @@ public:
   Bitboard attackers_to(Square s, Bitboard occupied) const;
   Bitboard attackers_to(Square s, Bitboard occupied, Color c) const;
   Bitboard attackers_to(Square s, Bitboard occupied, Color c, Bitboard janggiCannons) const;
-  Bitboard janggi_cannon_attackers_to_king(Square s, Bitboard occupied, Color c, Bitboard janggiCannons) const;
+  Bitboard janggi_cannon_attackers_to_king(Square s, Bitboard occupied, Color c) const;
   Bitboard attackers_to_king(Square s, Color c) const;
   Bitboard attackers_to_king(Square s, Bitboard occupied, Color c) const;
   Bitboard attackers_to_king(Square s, Bitboard occupied, Color c, Bitboard janggiCannons) const;
@@ -1232,6 +1232,10 @@ inline PieceType Position::royal_piece_type(Color c) const {
   PieceType pt = king_type();
   if (pt != NO_PIECE_TYPE && count(c, pt) == 1)
       return pt;
+  // Many legacy variants rely on physical KING as implicit royal when
+  // kingType is unset or not uniquely present.
+  if (count(c, KING) == 1)
+      return KING;
   return NO_PIECE_TYPE;
 }
 

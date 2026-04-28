@@ -2486,7 +2486,7 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
 Bitboard Position::attackers_to_king(Square s, Bitboard occupied, Color c, Bitboard janggiCannons) const {
 
   Bitboard attackers = attackers_to(s, occupied, c, janggiCannons);
-  attackers |= janggi_cannon_attackers_to_king(s, occupied, c, janggiCannons);
+  attackers |= janggi_cannon_attackers_to_king(s, occupied, c);
   // Frozen pieces cannot give check (relevant for spell-chess freeze effects).
   attackers &= ~(freeze_squares(c) | (pieces(c, PAWN) & pawnCannotCheckZone[c]));
   if (anti_royal_king_mutually_immune())
@@ -2502,11 +2502,11 @@ Bitboard Position::attackers_to_king(Square s, Bitboard occupied, Color c, Bitbo
   return attackers;
 }
 
-Bitboard Position::janggi_cannon_attackers_to_king(Square s, Bitboard occupied, Color c, Bitboard janggiCannons) const {
+Bitboard Position::janggi_cannon_attackers_to_king(Square s, Bitboard occupied, Color c) const {
 
   Bitboard attackers = 0;
   Bitboard cannons = pieces(c, JANGGI_CANNON) & occupied;
-  Bitboard cannonPieces = janggiCannons;
+  Bitboard cannonPieces = pieces(JANGGI_CANNON);
 
   while (cannons)
   {
@@ -4359,7 +4359,11 @@ bool Position::gives_check(Move m) const {
       return false;
   if (royalSq == SQ_NONE)
       royalSq = square<KING>(~sideToMove);
+  if (!is_ok(royalSq))
+      return false;
   const PieceType royalType = king_type() != NO_PIECE_TYPE ? king_type() : type_of(piece_on(royalSq));
+  if (!is_ok(attackFrom))
+      return false;
 
   Bitboard occupied = rifleShot ? (pieces() ^ square_bb(shotSq))
                                 : (((!dropMove ? pieces() ^ from : pieces()) ^ square_bb(shotSq)) | to);
@@ -6572,6 +6576,12 @@ void Position::undo_move(Move m) {
                   st->deadSquares ^= moverSq;
                   put_piece(st->dead.piece, moverSq, st->dead.promoted, st->dead.unpromoted);
                   pc = piece_on(moverSq);
+              }
+              else if (st->deadSquares & to)
+              {
+                  st->deadSquares ^= to;
+                  put_piece(st->dead.piece, to, st->dead.promoted, st->dead.unpromoted);
+                  pc = piece_on(to);
               }
               else
               {
