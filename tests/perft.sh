@@ -202,7 +202,7 @@ if [[ $VARIANT == "all" ||  $VARIANT == "largeboard" ]]; then
     expect "$perft_exp" troitzky startpos 3 8766 > /dev/null
     if has_variant shogi; then
       # all=yes build path (fairy CI matrix)
-      expect "$perft_exp" wolf startpos 3 21293 > /dev/null
+      expect "$perft_exp" wolf startpos 3 13722 > /dev/null
       expect "$perft_exp" wolf "fen 8/k5SP/8/8/8/8/8/8/8/7K w - - 0 1" 4 10587 > /dev/null
 
     else

@@ -1232,8 +1232,6 @@ inline PieceType Position::royal_piece_type(Color c) const {
   PieceType pt = king_type();
   if (pt != NO_PIECE_TYPE && count(c, pt) == 1)
       return pt;
-  if (count(c, KING) == 1)
-      return KING;
   return NO_PIECE_TYPE;
 }
 
