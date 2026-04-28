@@ -1229,13 +1229,15 @@ inline PieceType Position::king_type() const {
 }
 
 inline PieceType Position::royal_piece_type(Color c) const {
+  // Xiangqi/Janggi encode king movement via kingType (often WAZIR) while the
+  // actual on-board royal piece remains KING. Prefer the physical KING when
+  // uniquely present, then fall back to kingType-based royal detection.
+  if (count(c, KING) == 1)
+      return KING;
+
   PieceType pt = king_type();
   if (pt != NO_PIECE_TYPE && count(c, pt) == 1)
       return pt;
-  // Many legacy variants rely on physical KING as implicit royal when
-  // kingType is unset or not uniquely present.
-  if (count(c, KING) == 1)
-      return KING;
   return NO_PIECE_TYPE;
 }
 

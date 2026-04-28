@@ -7325,15 +7325,24 @@ bool Position::is_optional_game_end(Value& result, int ply, int countStarted) co
 
 bool Position::is_immediate_game_end(Value& result, int ply) const {
 
-  // Direct king capture ends the game immediately in capture-the-royal flows,
-  // even when the variant is not modeled through extinction or pseudo-royals.
-  if (st->captured.piece != NO_PIECE
-      && king_type() != NO_PIECE_TYPE
-      && type_of(st->captured.piece) == king_type())
+  // Direct royal capture ends the game immediately in capture-the-royal flows.
+  // Some variants (e.g. Xiangqi/Janggi) use king_type() as movement semantics
+  // while the actual royal piece on board remains KING, so avoid treating
+  // non-royal king_type captures (e.g. advisors) as immediate game end.
+  if (st->captured.piece != NO_PIECE)
   {
       Color capturedColor = color_of(st->captured.piece);
-      result = capturedColor == sideToMove ? mated_in(ply) : mate_in(ply);
-      return true;
+      PieceType capturedType = type_of(st->captured.piece);
+      bool capturedRoyal = capturedType == KING;
+
+      if (!capturedRoyal && king_type() != NO_PIECE_TYPE && capturedType == king_type())
+          capturedRoyal = count(capturedColor, KING) == 0;
+
+      if (capturedRoyal)
+      {
+          result = capturedColor == sideToMove ? mated_in(ply) : mate_in(ply);
+          return true;
+      }
   }
 
   // Some variants treat the runtime king piece as a real royal even when the
