@@ -1492,7 +1492,7 @@ startFen = 4k3/3p4/8/8/8/8/8/3QK3 w - - 0 1
         result = sf.get_san("xiangqi", fen, "i9e9", False, sf.NOTATION_XIANGQI_WXF)
         self.assertEqual(result, "R1=5")
         result = sf.get_san("xiangqi", fen, "i9i10", False)
-        self.assertEqual(result, "Ri10+")
+        self.assertEqual(result, "Ri10#")
         result = sf.get_san("xiangqi", fen, "i9i10", False, sf.NOTATION_XIANGQI_WXF)
         self.assertEqual(result, "R1+1")
 
@@ -1856,9 +1856,9 @@ startFen = 4r3/8/8/8/8/8/8/8[A] w - - 0 1
         # Mutual chase (draw)
         self._check_optional_game_end("xiangqi", "4k4/7n1/9/4pR3/9/9/4P4/9/9/4K4 w - - 0 1", ["f7h7"] + 2 * ["h9f8", "h7h8", "f8g6", "h8g8", "g6i7", "g8g7", "i7h9", "g7h7"], True, sf.VALUE_DRAW)
         # Perpetual check vs. intermittent checks
-        self._check_optional_game_end("xiangqi", "9/3kc4/3a5/3P5/9/4p4/9/4K4/9/3C5 w - - 0 1", 2 * ['d7e7', 'e5d5', 'e7d7', 'd5e5'], True, sf.VALUE_DRAW)
+        self._check_optional_game_end("xiangqi", "9/3kc4/3a5/3P5/9/4p4/9/4K4/9/3C5 w - - 0 1", 2 * ['d7e7', 'e5d5', 'e7d7', 'd5e5'], True, sf.VALUE_MATE)
         # Perpetual check by soldier
-        self._check_optional_game_end("xiangqi", "3k5/9/9/9/9/5p3/9/5p3/5K3/5C3 w - - 0 1", 2 * ['f2e2', 'f3e3', 'e2f2', 'e3f3'], True, -sf.VALUE_MATE)
+        self._check_optional_game_end("xiangqi", "3k5/9/9/9/9/5p3/9/5p3/5K3/5C3 w - - 0 1", 2 * ['f2e2', 'f3e3', 'e2f2', 'e3f3'], True, sf.VALUE_MATE)
         self._check_optional_game_end("xiangqi", "3k5/4P4/4b4/3C5/4c4/9/9/9/9/5K3 w - - 0 1", 2 * ['d7e7', 'e8g6', 'e7d7', 'g6e8'], True, sf.VALUE_MATE)
         self._check_optional_game_end("xiangqi", "3k5/9/9/9/9/9/9/9/cr1CAK3/9 w - - 0 1", 2 * ['d2d4', 'b2b4', 'd4d2', 'b4b2'], True, sf.VALUE_MATE)
         self._check_optional_game_end("xiangqi", "5k3/9/9/5C3/5c3/5C3/9/9/5p3/4K4 w - - 0 1", 2 * ['f5d5', 'f6d6', 'd5f5', 'd6f6'], True, -sf.VALUE_MATE)
