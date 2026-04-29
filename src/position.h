@@ -711,70 +711,11 @@ private:
   void move_piece(Square from, Square to);
   template<bool Do>
   void do_castling(Color us, Square from, Square& to, Square& rfrom, Square& rto);
-  static Bitboard dynamic_slider_bb(const std::map<Direction,int>& directions,
-                                    Square sq, Bitboard blockers,
-                                    Bitboard occupiedAll, Color c);
-  static Bitboard max_slider_bb(const std::map<Direction,int>& directions,
-                                Square sq, Bitboard occupied,
-                                Bitboard boardMask,
-                                Bitboard ownPieces, Color c,
-                                bool captureMode,
-                                bool includeOwnBlockedAttacks);
-  static Bitboard contra_hopper_bb(const std::map<Direction,int>& directions,
-                                   Square sq, Bitboard occupied,
-                                   Bitboard ownPieces, Color c,
-                                   bool quietMode,
-                                   bool includeOwnBlockedAttacks);
   static std::pair<int, int> decode_direction(Direction d);
-  static Bitboard wrapped_step_targets(const std::map<Direction, int>& directions,
-                                       Square sq, Bitboard occupied,
-                                       File maxFile, Rank maxRank,
-                                       bool wrapFile, bool wrapRank,
-                                       bool requireEmpty);
-  static Bitboard wrapped_tuple_targets(const std::vector<std::pair<int, int>>& steps,
-                                        Color c, Square sq, Bitboard occupied,
-                                        File maxFile, Rank maxRank,
-                                        bool wrapFile, bool wrapRank,
-                                        bool requireEmpty);
-  static Bitboard wrapped_tuple_rider_targets(const std::vector<PieceInfo::TupleRay>& rays,
-                                              Color c, Square sq, Bitboard occupied,
-                                              File maxFile, Rank maxRank,
-                                              bool wrapFile, bool wrapRank,
-                                              bool quietMode);
-  static Bitboard wrapped_slider_targets(const std::map<Direction, int>& directions,
-                                         Square sq, Bitboard occupied,
-                                         File maxFile, Rank maxRank,
-                                         bool wrapFile, bool wrapRank,
-                                         bool quietMode);
-  static Bitboard wrapped_hopper_targets(const std::map<Direction, int>& directions,
-                                         Square sq, Bitboard occupied,
-                                         File maxFile, Rank maxRank,
-                                         bool wrapFile, bool wrapRank,
-                                         bool quietMode);
-  static Bitboard wrapped_contra_hopper_targets(const std::map<Direction, int>& directions,
-                                                Color c, Square sq, Bitboard occupied, Bitboard ownPieces,
-                                                File maxFile, Rank maxRank,
-                                                bool wrapFile, bool wrapRank,
-                                                bool quietMode,
-                                                bool includeOwnBlockedAttacks);
-  static Bitboard wrapped_bent_rider_targets(bool griffon, Square sq, Bitboard occupied,
-                                             File maxFile, Rank maxRank,
-                                             bool wrapFile, bool wrapRank,
-                                             bool quietMode);
-  static Bitboard wrapped_leap_rider_targets(const std::map<Direction, int>& directions,
-                                             Color c, Square sq, Bitboard occupied,
-                                             File maxFile, Rank maxRank,
-                                             bool wrapFile, bool wrapRank,
-                                             bool quietMode);
-  static Bitboard wrapped_rose_targets(Square sq, Bitboard occupied,
-                                       File maxFile, Rank maxRank,
-                                       bool wrapFile, bool wrapRank,
-                                       bool quietMode);
-  static Bitboard special_rider_bb(const PieceInfo* pi, MoveModality modality,
-                                   Square sq, Bitboard occupied,
-                                   Bitboard occupiedAll, Bitboard boardMask, Bitboard ownPieces,
-                                   Color c, bool captureMode,
-                                   bool includeOwnBlockedAttacks = false);
+public:
+  static Bitboard generate_ir_targets(const PieceInfo::IR& ir, Square sq, Bitboard occupied, Color us,
+                                      File maxFile, Rank maxRank, bool wrapFile, bool wrapRank,
+                                      Bitboard ownPieces, bool quietMode, bool includeOwnBlockedAttacks);
 
   // Data members
   Piece board[SQUARE_NB];
@@ -2765,526 +2706,283 @@ inline Square Position::castling_rook_square(CastlingRights cr) const {
 }
 
 // LOA-specific helper – completely private to Position
-inline Bitboard Position::dynamic_slider_bb(const std::map<Direction,int>& directions,
-                                            Square  sq,
-                                            Bitboard blockers,     // pieces that stop us
-                                            Bitboard occupiedAll,  // for distance count
-                                            Color   c)
-{
-  Bitboard out = 0;
-  for (auto const& [d, limit] : directions)
-  {
-    if (limit != DYNAMIC_SLIDER_LIMIT) continue;      // not an "x" slider
 
-    Direction step = c == WHITE ?  d : Direction(-d);
-    Square    nxt  = sq + step;
-    if (!is_ok(nxt) || distance(nxt, nxt - step) > 2) continue; // only rook/bishop steps
 
-    Bitboard line = line_bb(sq, nxt);                 // through board edge
-    int dist = popcount(line & occupiedAll);          // how far to travel
 
-    Square dest = sq;
-    bool   ok   = true;
-    for (int i = 0; i < dist; ++i)
-    {
-      dest += step;
-      if (!is_ok(dest) || distance(dest, dest - step) > 2) { ok = false; break; }
-      if (i < dist - 1 && (blockers & dest))       // hit enemy before end
-      { ok = false; break; }
-    }
-    if (ok) out |= square_bb(dest);
-  }
-  return out;
-}
-
-inline Bitboard Position::max_slider_bb(const std::map<Direction,int>& directions,
-                                        Square sq,
-                                        Bitboard occupied,
-                                        Bitboard boardMask,
-                                        Bitboard ownPieces,
-                                        Color c,
-                                        bool captureMode,
-                                        bool includeOwnBlockedAttacks)
-{
-  Bitboard out = 0;
-  for (auto const& [d, limit] : directions)
-  {
-    if (limit != MAX_SLIDER_LIMIT)
-      continue;
-
-    Direction step = c == WHITE ? d : Direction(-d);
-    Square dest = SQ_NONE;
-
-    for (Square s2 = sq + step;
-         is_ok(s2) && distance(s2, s2 - step) <= 2 && (boardMask & s2);
-         s2 += step)
-    {
-      if (occupied & s2)
-      {
-        if (captureMode && (includeOwnBlockedAttacks || !(ownPieces & s2)))
-          dest = s2;
-        break;
-      }
-      dest = s2;
-    }
-    if (dest != SQ_NONE)
-      out |= square_bb(dest);
-  }
-  return out;
-}
-
-inline Bitboard Position::contra_hopper_bb(const std::map<Direction,int>& directions,
-                                           Square  sq,
-                                           Bitboard occupied,
-                                           Bitboard ownPieces,
-                                           Color   c,
-                                           bool    quietMode,
-                                           bool    includeOwnBlockedAttacks)
-{
-  Bitboard out = 0;
-  for (auto const& [d, limit] : directions)
-  {
-    Square hurdle = sq + (c == WHITE ? d : -d);
-    if (!(is_ok(hurdle) && distance(hurdle, sq) <= 2 && (occupied & hurdle)))
-        continue;
-
-    int landingDist = 0;
-    for (Square s2 = hurdle + (c == WHITE ? d : -d);
-         is_ok(s2) && distance(s2, s2 - (c == WHITE ? d : -d)) <= 2;
-         s2 += (c == WHITE ? d : -d))
-    {
-      ++landingDist;
-      if (limit && landingDist > limit)
-          break;
-
-      const bool blocked = bool(occupied & s2);
-      if (quietMode)
-      {
-        if (blocked)
-            break;
-        out |= square_bb(s2);
-      }
-      else
-      {
-        if (blocked)
-        {
-          if (includeOwnBlockedAttacks || !(ownPieces & s2))
-              out |= square_bb(s2);
-          break;
-        }
-        out |= square_bb(s2);
-      }
-
-      if (blocked)
-        break;
-    }
-  }
-  return out;
-}
 
 inline std::pair<int, int> Position::decode_direction(Direction d) {
   return Stockfish::decode_direction(d);
 }
 
-inline Bitboard Position::wrapped_step_targets(const std::map<Direction, int>& directions,
-                                               Square sq, Bitboard occupied,
-                                               File maxFile, Rank maxRank,
-                                               bool wrapFile, bool wrapRank,
-                                               bool requireEmpty) {
+inline Bitboard Position::generate_ir_targets(const PieceInfo::IR& ir, Square sq, Bitboard occupied, Color us,
+                                               File maxFile, Rank maxRank, bool wrapFile, bool wrapRank,
+                                               Bitboard ownPieces, bool quietMode, bool includeOwnBlockedAttacks) {
   Bitboard out = 0;
-  for (const auto& [d, _] : directions)
+  for (const auto& step : ir.steps)
   {
-      auto [dr, df] = decode_direction(d);
-      Square to = SQ_NONE;
-      if (!wrapped_destination_square(sq, df, dr, maxFile, maxRank, wrapFile, wrapRank, to))
-          continue;
-      if (requireEmpty && (occupied & to))
-          continue;
-      out |= to;
-  }
-  return out;
-}
-
-inline Bitboard Position::wrapped_tuple_targets(const std::vector<std::pair<int, int>>& steps,
-                                                Color c, Square sq, Bitboard occupied,
-                                                File maxFile, Rank maxRank,
-                                                bool wrapFile, bool wrapRank,
-                                                bool requireEmpty) {
-  Bitboard out = 0;
-  for (const auto& [dr, df] : steps)
-  {
-      const int stepR = c == WHITE ? dr : -dr;
-      const int stepF = c == WHITE ? df : -df;
+      const int stepR = us == WHITE ? step.dr : -step.dr;
+      const int stepF = us == WHITE ? step.df : -step.df;
       Square to = SQ_NONE;
       if (!wrapped_destination_square(sq, stepF, stepR, maxFile, maxRank, wrapFile, wrapRank, to))
           continue;
-      if (requireEmpty && (occupied & to))
+      
+      if (step.lame)
+      {
+          int current_f = 0;
+          int current_r = 0;
+          int d_f = stepF > 0 ? 1 : (stepF < 0 ? -1 : 0);
+          int d_r = stepR > 0 ? 1 : (stepR < 0 ? -1 : 0);
+          bool blocked = false;
+          while (current_f != stepF || current_r != stepR)
+          {
+              int diff = std::abs(stepF - current_f) - std::abs(stepR - current_r);
+              if (diff > 0) current_f += d_f;
+              else if (diff < 0) current_r += d_r;
+              else { current_f += d_f; current_r += d_r; }
+              
+              if (current_f == stepF && current_r == stepR) break;
+              
+              Square p = SQ_NONE;
+              if (wrapped_destination_square(sq, current_f, current_r, maxFile, maxRank, wrapFile, wrapRank, p))
+                  if (occupied & p) { blocked = true; break; }
+          }
+          if (blocked) continue;
+      }
+
+      if (quietMode && (occupied & to))
           continue;
+      if (!quietMode)
+      {
+          if (includeOwnBlockedAttacks || !(ownPieces & to))
+              out |= to;
+          continue;
+      }
       out |= to;
   }
-  return out;
-}
-
-inline Bitboard Position::wrapped_tuple_rider_targets(const std::vector<PieceInfo::TupleRay>& rays,
-                                                      Color c, Square sq, Bitboard occupied,
-                                                      File maxFile, Rank maxRank,
-                                                      bool wrapFile, bool wrapRank,
-                                                      bool quietMode) {
-  Bitboard out = 0;
-  for (const auto& ray : rays)
+  for (const auto& ray : ir.rays)
   {
-      const int stepR = c == WHITE ? ray.dr : -ray.dr;
-      const int stepF = c == WHITE ? ray.df : -ray.df;
-      Square current = sq;
-      int count = 0;
-      for (;;)
-      {
-          Square next = SQ_NONE;
-          if (!wrapped_destination_square(current, stepF, stepR, maxFile, maxRank, wrapFile, wrapRank, next))
-              break;
-          if (next == sq)
-              break;
-
-          const bool blocked = bool(occupied & next);
-          if (!quietMode || !blocked)
-              out |= next;
-
-          current = next;
-          if (ray.limit > 0 && ++count >= ray.limit)
-              break;
-          if (blocked)
-              break;
-      }
-  }
-  return out;
-}
-
-inline Bitboard Position::wrapped_slider_targets(const std::map<Direction, int>& directions,
-                                                 Square sq, Bitboard occupied,
-                                                 File maxFile, Rank maxRank,
-                                                 bool wrapFile, bool wrapRank,
-                                                 bool quietMode) {
-  Bitboard out = 0;
-  for (const auto& [d, limit] : directions)
-  {
-      auto [dr, df] = decode_direction(d);
+      const int dr = us == WHITE ? ray.dr : -ray.dr;
+      const int df = us == WHITE ? ray.df : -ray.df;
       if (!dr && !df)
           continue;
 
-      Square current = sq;
-      int steps = 0;
+      const int limit = ray.limit;
+      const bool dynamic = limit == DYNAMIC_SLIDER_LIMIT;
+      const bool max = limit == MAX_SLIDER_LIMIT;
       const int minDistance = slider_min_distance(limit);
       const int maxDistance = slider_max_distance(limit);
-      for (;;)
+      const bool hopper = ray.hopper || ray.contra;
+      const bool contra = ray.contra;
+
+      if (dynamic)
       {
-          Square next = SQ_NONE;
-          if (!wrapped_destination_square(current, df, dr, maxFile, maxRank, wrapFile, wrapRank, next))
-              break;
-          if (next == sq)
-              break;
+          // LOA style dynamic slider
+          Square nxt;
+          if (!wrapped_destination_square(sq, df, dr, maxFile, maxRank, wrapFile, wrapRank, nxt))
+              continue;
+          Bitboard line = line_bb(sq, nxt);
+          int popCount = popcount(line & occupied); // Assuming occupied is all pieces here
 
-          ++steps;
-          const bool beyondMin = steps >= minDistance;
-          const bool beyondMax = maxDistance > 0 && steps >= maxDistance;
-          const bool blocked = bool(occupied & next);
-
-          if (beyondMin)
+          Square dest = sq;
+          bool ok = true;
+          for (int i = 0; i < popCount; ++i)
+          {
+              Square next;
+              if (!wrapped_destination_square(dest, df, dr, maxFile, maxRank, wrapFile, wrapRank, next)) { ok = false; break; }
+              if (i < popCount - 1 && (occupied & next)) { ok = false; break; }
+              dest = next;
+          }
+          if (ok && (dest != sq))
           {
               if (quietMode)
               {
-                  if (!blocked)
-                      out |= next;
+                  if (!(occupied & dest)) out |= dest;
               }
               else
-                  out |= next;
+              {
+                  if (includeOwnBlockedAttacks || !(ownPieces & dest))
+                      out |= dest;
+              }
           }
-
-          if (blocked || beyondMax)
-              break;
-          current = next;
-      }
-  }
-  return out;
-}
-
-inline Bitboard Position::wrapped_hopper_targets(const std::map<Direction, int>& directions,
-                                                 Square sq, Bitboard occupied,
-                                                 File maxFile, Rank maxRank,
-                                                 bool wrapFile, bool wrapRank,
-                                                 bool quietMode) {
-  Bitboard out = 0;
-  for (const auto& [d, limit] : directions)
-  {
-      auto [dr, df] = decode_direction(d);
-      if (!dr && !df)
           continue;
+      }
 
       Square current = sq;
-      bool hurdle = false;
-      int count = 0;
-      const int minDistance = slider_min_distance(limit);
-      const int maxDistance = slider_max_distance(limit);
+      Square lastValid = SQ_NONE;
+      int dist = 0;
+      bool hurdleFound = false;
+
       for (;;)
       {
           Square next = SQ_NONE;
           if (!wrapped_destination_square(current, df, dr, maxFile, maxRank, wrapFile, wrapRank, next))
               break;
-          if (next == sq)
+          if (next == sq) // Wrapped around and hit self
+              break;
+
+          dist++;
+
+          if (maxDistance && dist > maxDistance)
               break;
 
           const bool blocked = bool(occupied & next);
-          if (hurdle)
+
+          if (contra && !hurdleFound)
           {
-              ++count;
-              if (count >= minDistance)
-              {
-                  if (!quietMode || !blocked)
-                      out |= next;
-              }
-              if (maxDistance > 0 && count >= maxDistance)
-                  break;
+              if (blocked) hurdleFound = true;
+              current = next;
+              continue;
           }
 
-          if (blocked)
+          if (hopper && !hurdleFound)
           {
-              if (!hurdle)
-                  hurdle = true;
-              else
-                  break;
+              if (blocked) hurdleFound = true;
+              current = next;
+              continue;
           }
-          current = next;
-      }
-  }
-  return out;
-}
 
-inline Bitboard Position::wrapped_contra_hopper_targets(const std::map<Direction, int>& directions,
-                                                        Color c, Square sq, Bitboard occupied, Bitboard ownPieces,
-                                                        File maxFile, Rank maxRank,
-                                                        bool wrapFile, bool wrapRank,
-                                                        bool quietMode,
-                                                        bool includeOwnBlockedAttacks) {
-  Bitboard out = 0;
-  for (const auto& [d, limit] : directions)
-  {
-      auto [dr0, df0] = decode_direction(c == WHITE ? d : Direction(-d));
-      if (!dr0 && !df0)
-          continue;
+          if (dist < minDistance)
+          {
+              if (blocked && !ray.leap) break;
+              current = next;
+              continue;
+          }
 
-      Square hurdle = SQ_NONE;
-      if (!wrapped_destination_square(sq, df0, dr0, maxFile, maxRank, wrapFile, wrapRank, hurdle))
-          continue;
-      if (hurdle == sq || !(occupied & hurdle))
-          continue;
-
-      int landingDist = 0;
-      Square current = hurdle;
-      for (;;)
-      {
-          Square next = SQ_NONE;
-          if (!wrapped_destination_square(current, df0, dr0, maxFile, maxRank, wrapFile, wrapRank, next))
-              break;
-          if (next == sq)
-              break;
-
-          ++landingDist;
-          if (limit && landingDist > limit)
-              break;
-
-          const bool blocked = bool(occupied & next);
-          if (quietMode)
+          if (max)
           {
               if (blocked)
+              {
+                  if (!quietMode && (includeOwnBlockedAttacks || !(ownPieces & next)))
+                      lastValid = next;
                   break;
-              out |= square_bb(next);
+              }
+              lastValid = next;
+          }
+          else if (quietMode)
+          {
+              if (blocked)
+              {
+                  if (!contra && !hopper) break;
+                  if (blocked) break;
+              }
+              out |= next;
           }
           else
           {
               if (blocked)
               {
                   if (includeOwnBlockedAttacks || !(ownPieces & next))
-                      out |= square_bb(next);
+                      out |= next;
                   break;
               }
-              out |= square_bb(next);
-          }
-
-          if (blocked)
-              break;
-          current = next;
-      }
-  }
-  return out;
-}
-
-inline Bitboard Position::wrapped_bent_rider_targets(bool griffon, Square sq, Bitboard occupied,
-                                                     File maxFile, Rank maxRank,
-                                                     bool wrapFile, bool wrapRank,
-                                                     bool quietMode) {
-  Bitboard out = 0;
-  auto add_from_pivot = [&](Square pivot, std::initializer_list<Direction> dirs) {
-      for (Direction d : dirs)
-      {
-          std::map<Direction, int> sliderDirs{{d, 0}};
-          out |= wrapped_slider_targets(sliderDirs, pivot, occupied, maxFile, maxRank, wrapFile, wrapRank, quietMode);
-      }
-  };
-
-  if (griffon)
-  {
-      Square ne = SQ_NONE, nw = SQ_NONE, se = SQ_NONE, sw = SQ_NONE;
-      if (wrapped_destination_square(sq, 1, 1, maxFile, maxRank, wrapFile, wrapRank, ne) && ne != sq)
-      {
-          if (!quietMode || !(occupied & ne))
-              out |= ne;
-          if (!(occupied & ne))
-              add_from_pivot(ne, {EAST, NORTH});
-      }
-      if (wrapped_destination_square(sq, -1, 1, maxFile, maxRank, wrapFile, wrapRank, nw) && nw != sq)
-      {
-          if (!quietMode || !(occupied & nw))
-              out |= nw;
-          if (!(occupied & nw))
-              add_from_pivot(nw, {WEST, NORTH});
-      }
-      if (wrapped_destination_square(sq, 1, -1, maxFile, maxRank, wrapFile, wrapRank, se) && se != sq)
-      {
-          if (!quietMode || !(occupied & se))
-              out |= se;
-          if (!(occupied & se))
-              add_from_pivot(se, {EAST, SOUTH});
-      }
-      if (wrapped_destination_square(sq, -1, -1, maxFile, maxRank, wrapFile, wrapRank, sw) && sw != sq)
-      {
-          if (!quietMode || !(occupied & sw))
-              out |= sw;
-          if (!(occupied & sw))
-              add_from_pivot(sw, {WEST, SOUTH});
-      }
-  }
-  else
-  {
-      Square n = SQ_NONE, w = SQ_NONE, e = SQ_NONE, s = SQ_NONE;
-      if (wrapped_destination_square(sq, 0, 1, maxFile, maxRank, wrapFile, wrapRank, n) && n != sq)
-      {
-          if (!quietMode || !(occupied & n))
-              out |= n;
-          if (!(occupied & n))
-              add_from_pivot(n, {NORTH_EAST, NORTH_WEST});
-      }
-      if (wrapped_destination_square(sq, -1, 0, maxFile, maxRank, wrapFile, wrapRank, w) && w != sq)
-      {
-          if (!quietMode || !(occupied & w))
-              out |= w;
-          if (!(occupied & w))
-              add_from_pivot(w, {NORTH_WEST, SOUTH_WEST});
-      }
-      if (wrapped_destination_square(sq, 1, 0, maxFile, maxRank, wrapFile, wrapRank, e) && e != sq)
-      {
-          if (!quietMode || !(occupied & e))
-              out |= e;
-          if (!(occupied & e))
-              add_from_pivot(e, {NORTH_EAST, SOUTH_EAST});
-      }
-      if (wrapped_destination_square(sq, 0, -1, maxFile, maxRank, wrapFile, wrapRank, s) && s != sq)
-      {
-          if (!quietMode || !(occupied & s))
-              out |= s;
-          if (!(occupied & s))
-              add_from_pivot(s, {SOUTH_EAST, SOUTH_WEST});
-      }
-  }
-
-  return out;
-}
-
-inline Bitboard Position::wrapped_leap_rider_targets(const std::map<Direction, int>& directions,
-                                                     Color c, Square sq, Bitboard occupied,
-                                                     File maxFile, Rank maxRank,
-                                                     bool wrapFile, bool wrapRank,
-                                                     bool quietMode) {
-  Bitboard out = 0;
-  for (const auto& [d, limit] : directions)
-  {
-      auto [dr, df] = decode_direction(c == WHITE ? d : Direction(-d));
-      if (!dr && !df)
-          continue;
-
-      Square current = sq;
-      int count = 0;
-      for (;;)
-      {
-          Square next = SQ_NONE;
-          if (!wrapped_destination_square(current, df, dr, maxFile, maxRank, wrapFile, wrapRank, next))
-              break;
-          if (next == sq)
-              break;
-
-          const bool blocked = bool(occupied & next);
-          if (!quietMode || !blocked)
               out |= next;
+          }
 
-          if (limit > 0 && ++count >= limit)
+          if (blocked && !contra && !hopper)
               break;
-          if (blocked)
+          if (hopper && hurdleFound && blocked)
               break;
+
           current = next;
       }
+      if (max && lastValid != SQ_NONE)
+          out |= lastValid;
+  }
+  for (const auto& bent : ir.bentRays)
+  {
+      if (bent.griffon)
+      {
+          static const std::array<std::pair<int, int>, 4> pivots = {{{1, 1}, {-1, 1}, {1, -1}, {-1, -1}}};
+          static const std::array<std::vector<std::pair<int, int>>, 4> slides = {{
+              {{1, 0}, {0, 1}}, {{-1, 0}, {0, 1}}, {{1, 0}, {0, -1}}, {{-1, 0}, {0, -1}}
+          }};
+          for (size_t i = 0; i < pivots.size(); ++i)
+          {
+              Square pivot = SQ_NONE;
+              if (wrapped_destination_square(sq, pivots[i].second, pivots[i].first, maxFile, maxRank, wrapFile, wrapRank, pivot) && pivot != sq)
+              {
+                  if (!quietMode || !(occupied & pivot))
+                      out |= pivot;
+                  if (!(occupied & pivot))
+                  {
+                      for (const auto& s : slides[i])
+                      {
+                          PieceInfo::IR slideIr;
+                          slideIr.rays.push_back({(int8_t)s.first, (int8_t)s.second, 0});
+                          out |= generate_ir_targets(slideIr, pivot, occupied, us, maxFile, maxRank, wrapFile, wrapRank, ownPieces, quietMode, includeOwnBlockedAttacks);
+                      }
+                  }
+              }
+          }
+      }
+      else // Manticore
+      {
+          static const std::array<std::pair<int, int>, 4> pivots = {{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}};
+          static const std::array<std::vector<std::pair<int, int>>, 4> slides = {{
+              {{1, 1}, {1, -1}}, {{-1, 1}, {-1, -1}}, {{1, 1}, {-1, 1}}, {{1, -1}, {-1, -1}}
+          }};
+          for (size_t i = 0; i < pivots.size(); ++i)
+          {
+              Square pivot = SQ_NONE;
+              if (wrapped_destination_square(sq, pivots[i].second, pivots[i].first, maxFile, maxRank, wrapFile, wrapRank, pivot) && pivot != sq)
+              {
+                  if (!quietMode || !(occupied & pivot))
+                      out |= pivot;
+                  if (!(occupied & pivot))
+                  {
+                      for (const auto& s : slides[i])
+                      {
+                          PieceInfo::IR slideIr;
+                          slideIr.rays.push_back({(int8_t)s.first, (int8_t)s.second, 0});
+                          out |= generate_ir_targets(slideIr, pivot, occupied, us, maxFile, maxRank, wrapFile, wrapRank, ownPieces, quietMode, includeOwnBlockedAttacks);
+                      }
+                  }
+              }
+          }
+      }
+  }
+  for (const auto& cycle : ir.cycleRays)
+  {
+      (void)cycle;
+      static const std::array<std::pair<int, int>, 8> dirs = {{
+          {2, 1}, {1, 2}, {-1, 2}, {-2, 1}, {-2, -1}, {-1, -2}, {1, -2}, {2, -1}
+      }};
+      for (int start = 0; start < 8; ++start)
+          for (int turn : {-1, 1})
+          {
+              Square current = sq;
+              int index = start;
+              for (int leg = 0; leg < 7; ++leg)
+              {
+                  Square to = SQ_NONE;
+                  if (!wrapped_destination_square(current, dirs[index].second, dirs[index].first, maxFile, maxRank, wrapFile, wrapRank, to))
+                      break;
+                  if (to == sq) break;
+                  const bool blocked = bool(occupied & to);
+                  if (quietMode)
+                  {
+                      if (blocked) break;
+                      out |= to;
+                  }
+                  else
+                  {
+                      if (blocked)
+                      {
+                          if (includeOwnBlockedAttacks || !(ownPieces & to))
+                              out |= to;
+                          break;
+                      }
+                      out |= to;
+                  }
+                  current = to;
+                  index = (index + turn + 8) % 8;
+              }
+          }
   }
   return out;
 }
 
-inline Bitboard Position::wrapped_rose_targets(Square from, Bitboard occupied,
-                                               File maxFile, Rank maxRank,
-                                               bool wrapFile, bool wrapRank,
-                                               bool quietMode) {
-  Bitboard attack = 0;
 
-  for (int start = 0; start < 8; ++start)
-      for (int turn : {-1, 1})
-      {
-          Square current = from;
-          int index = start;
-          for (int leg = 0; leg < 7; ++leg)
-          {
-              Square to = SQ_NONE;
-              if (!wrapped_destination_square(current,
-                                              RoseSteps[index].second,
-                                              RoseSteps[index].first,
-                                              maxFile, maxRank, wrapFile, wrapRank, to))
-                  break;
-              if (to == from)
-                  break;
-              if (!quietMode || !(occupied & to))
-                  attack |= to;
-              if (occupied & to)
-                  break;
-              current = to;
-              index = (index + turn + 8) % 8;
-          }
-      }
-
-  return attack;
-}
-
-inline Bitboard Position::special_rider_bb(const PieceInfo* pi, MoveModality modality,
-                                           Square sq, Bitboard occupied,
-                                           Bitboard occupiedAll, Bitboard boardMask, Bitboard ownPieces,
-                                           Color c, bool captureMode,
-                                           bool includeOwnBlockedAttacks)
-{
-  const uint8_t augment = pi->riderAugmentMask;
-  if (augment == PieceInfo::AUGMENT_NONE)
-      return Bitboard(0);
-  Bitboard b = 0;
-  if (augment & PieceInfo::AUGMENT_DYNAMIC)
-      b |= Position::dynamic_slider_bb(pi->slider[0][modality], sq, occupied, occupiedAll, c);
-  if (augment & PieceInfo::AUGMENT_MAX)
-      b |= Position::max_slider_bb(pi->slider[0][modality], sq, occupied, boardMask, ownPieces, c, captureMode, includeOwnBlockedAttacks);
-  if (augment & PieceInfo::AUGMENT_CONTRA)
-      b |= Position::contra_hopper_bb(pi->contraHopper[0][modality], sq, occupied, ownPieces, c, !captureMode, includeOwnBlockedAttacks);
-  return b;
-}
 
 inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s) const {
   assert(pt != NO_PIECE_TYPE);
@@ -3316,20 +3014,7 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
           return b & board_bb(c, pt);
       }
 
-      b |= wrapped_step_targets(pi->steps[0][MODALITY_CAPTURE], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, false);
-      b |= wrapped_tuple_targets(pi->tupleSteps[0][MODALITY_CAPTURE], c, s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, false);
-      b |= wrapped_tuple_rider_targets(pi->tupleSlider[0][MODALITY_CAPTURE], c, s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, false);
-      b |= wrapped_slider_targets(pi->slider[0][MODALITY_CAPTURE], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, false);
-      b |= wrapped_hopper_targets(pi->hopper[0][MODALITY_CAPTURE], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, false);
-      b |= wrapped_contra_hopper_targets(pi->contraHopper[0][MODALITY_CAPTURE], c, s, occupancy, pieces(c), max_file(), max_rank(), wrapFile, wrapRank, false, true);
-      if (pi->griffon[0][MODALITY_CAPTURE])
-          b |= wrapped_bent_rider_targets(true, s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, false);
-      if (pi->manticore[0][MODALITY_CAPTURE])
-          b |= wrapped_bent_rider_targets(false, s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, false);
-      b |= wrapped_leap_rider_targets(pi->leapRider[0][MODALITY_CAPTURE], c, s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, false);
-      if (pi->rose[0][MODALITY_CAPTURE])
-          b |= wrapped_rose_targets(s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, false);
-
+      b |= generate_ir_targets(pi->moves[0][MODALITY_CAPTURE], s, occupancy, c, max_file(), max_rank(), wrapFile, wrapRank, pieces(c), false, true);
       if (pi->friendlyJump)
           b &= ~pieces(c);
       return b & board_bb(c, pt);
@@ -3377,21 +3062,21 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
           b = attacks_bb(c, pt, s, occupancy);
           break;
       }
-      return b & board_bb();
+      return b & board_bb(c, pt);
   }
 
   if (!hasRuntimeSpecialMoves && fast_attacks2() && (pt != KING || king_type() == KING))
-      return attacks_bb(c, pt, s, occupancy) & board_bb();
+      return attacks_bb(c, pt, s, occupancy) & board_bb(c, pt);
 
   if ((fast_attacks() || fast_attacks2()) && pi->riderAugmentMask == PieceInfo::AUGMENT_NONE)
-      return attacks_bb(c, movePt, s, occupancy) & board_bb();
+      return attacks_bb(c, movePt, s, occupancy) & board_bb(c, pt);
 
   if (pi->friendlyJump)
       occupancy &= ~pieces(c);
 
   Bitboard b = attacks_bb(c, movePt, s, occupancy);
 
-  b |= Position::special_rider_bb(pi, MODALITY_CAPTURE, s, occupancy, occupancy, board_bb(), pieces(c), c, true, true);
+  b |= generate_ir_targets(pi->moves[0][MODALITY_CAPTURE], s, occupancy, c, max_file(), max_rank(), false, false, pieces(c), false, true);
 
   if (pi->friendlyJump)
       b &= ~pieces(c);          // never hit our own men
@@ -3464,36 +3149,10 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
         }
 
         Bitboard b = 0;
-        b |= wrapped_step_targets(pi->steps[0][MODALITY_QUIET], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
-        b |= wrapped_tuple_targets(pi->tupleSteps[0][MODALITY_QUIET], c, s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
-        b |= wrapped_tuple_rider_targets(pi->tupleSlider[0][MODALITY_QUIET], c, s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
-        b |= wrapped_slider_targets(pi->slider[0][MODALITY_QUIET], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
-        b |= wrapped_hopper_targets(pi->hopper[0][MODALITY_QUIET], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
-        b |= wrapped_contra_hopper_targets(pi->contraHopper[0][MODALITY_QUIET], c, s, occupancy, pieces(c), max_file(), max_rank(), wrapFile, wrapRank, true, false);
-        if (pi->griffon[0][MODALITY_QUIET])
-            b |= wrapped_bent_rider_targets(true, s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
-        if (pi->manticore[0][MODALITY_QUIET])
-            b |= wrapped_bent_rider_targets(false, s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
-        b |= wrapped_leap_rider_targets(pi->leapRider[0][MODALITY_QUIET], c, s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
-        if (pi->rose[0][MODALITY_QUIET])
-            b |= wrapped_rose_targets(s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
+        b |= generate_ir_targets(pi->moves[0][MODALITY_QUIET], s, occupancy, c, max_file(), max_rank(), wrapFile, wrapRank, pieces(c), true, false);
 
         if (double_step_region(c, pt) & s)
-        {
-            b |= wrapped_step_targets(pi->steps[1][MODALITY_QUIET], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
-            b |= wrapped_tuple_targets(pi->tupleSteps[1][MODALITY_QUIET], c, s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
-            b |= wrapped_tuple_rider_targets(pi->tupleSlider[1][MODALITY_QUIET], c, s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
-            b |= wrapped_slider_targets(pi->slider[1][MODALITY_QUIET], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
-            b |= wrapped_hopper_targets(pi->hopper[1][MODALITY_QUIET], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
-            b |= wrapped_contra_hopper_targets(pi->contraHopper[1][MODALITY_QUIET], c, s, occupancy, pieces(c), max_file(), max_rank(), wrapFile, wrapRank, true, false);
-            if (pi->griffon[1][MODALITY_QUIET])
-                b |= wrapped_bent_rider_targets(true, s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
-            if (pi->manticore[1][MODALITY_QUIET])
-                b |= wrapped_bent_rider_targets(false, s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
-            b |= wrapped_leap_rider_targets(pi->leapRider[1][MODALITY_QUIET], c, s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
-            if (pi->rose[1][MODALITY_QUIET])
-                b |= wrapped_rose_targets(s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
-        }
+            b |= generate_ir_targets(pi->moves[1][MODALITY_QUIET], s, occupancy, c, max_file(), max_rank(), wrapFile, wrapRank, pieces(c), true, false);
 
         if (pi->friendlyJump)
             b &= ~pieces(c);
@@ -3560,19 +3219,18 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
                                    || pi->has_explicit_initial_moves();
 
   if (!hasRuntimeSpecialMoves && (fast_attacks() || fast_attacks2()) && (pt != KING || king_type() == KING))
-      return (moves_bb(c, pt, s, occupancy) | extraDestinations) & board_bb();
+      return (moves_bb(c, pt, s, occupancy) | extraDestinations) & board_bb(c, pt);
 
   if (!pi->has_explicit_initial_moves()
       && (fast_attacks() || fast_attacks2())
       && pi->riderAugmentMask == PieceInfo::AUGMENT_NONE)
-      return (moves_bb(c, movePt, s, occupancy) | extraDestinations) & board_bb();
+      return (moves_bb(c, movePt, s, occupancy) | extraDestinations) & board_bb(c, pt);
 
   if (pi->friendlyJump)
       occupancy &= ~pieces(c);
 
-  Bitboard b = (moves_bb(c, movePt, s, occupancy) | extraDestinations);
-
-  b |= Position::special_rider_bb(pi, MODALITY_QUIET, s, occupancy, byTypeBB[ALL_PIECES], board_bb(), pieces(c), c, false, false);
+  Bitboard b = generate_ir_targets(pi->moves[0][MODALITY_QUIET], s, occupancy, c, max_file(), max_rank(), false, false, pieces(c), true, false);
+  b |= extraDestinations;
 
   if (pi->friendlyJump)
       b &= ~pieces(c);          // cannot land on own piece
@@ -3585,8 +3243,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
   // Add initial moves
   if (initialMoveRegion & s)
   {
-      b |= moves_bb<true>(c, movePt, s, occupancy);
-      b |= Position::special_rider_bb(pi, MODALITY_QUIET, s, occupancy, byTypeBB[ALL_PIECES], board_bb(), pieces(c), c, true, false);
+      b |= generate_ir_targets(pi->moves[1][MODALITY_QUIET], s, occupancy, c, max_file(), max_rank(), false, false, pieces(c), true, false);
   }
   // Xiangqi soldier
   if (pt == SOLDIER && !(promoted_soldiers(c) & s))
