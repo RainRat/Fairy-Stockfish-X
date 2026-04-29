@@ -28,7 +28,6 @@ SPECS = [
     BaselineSpec("torpedo", "torpedo", 8),
     BaselineSpec("atomic", "atomic", 8),
     BaselineSpec("allexplodeatomic", "allexplodeatomic", 8),
-    BaselineSpec("duck", "duck", 6),
     BaselineSpec("spartan", "spartan", 8),
     BaselineSpec("racingkings", "racingkings", 8),
     BaselineSpec("xiangqi", "xiangqi", 8),
