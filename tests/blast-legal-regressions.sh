@@ -88,7 +88,6 @@ INI
 out=$(python3 - "${ENGINE}" "${TMP4}" <<'PY'
 import subprocess
 import sys
-import time
 
 engine = sys.argv[1]
 variant_path = sys.argv[2]
@@ -107,14 +106,20 @@ script = (
     "setoption name UCI_Variant value antimatter\n"
     "setoption name UCI_AnalyseMode value true\n"
     "position startpos moves g2g3\n"
-    "go infinite\n"
+    "go movetime 1000\n"
+    "quit\n"
 )
 proc.stdin.write(script)
 proc.stdin.flush()
-time.sleep(1.0)
-proc.stdin.write("stop\nquit\n")
-proc.stdin.flush()
-stdout, _ = proc.communicate(timeout=10)
+try:
+    stdout, _ = proc.communicate(timeout=20)
+except subprocess.TimeoutExpired:
+    proc.kill()
+    stdout, _ = proc.communicate()
+    sys.stdout.write(stdout)
+    sys.stderr.write("engine did not terminate within timeout\\n")
+    sys.exit(1)
+
 sys.stdout.write(stdout)
 sys.exit(proc.returncode)
 PY
