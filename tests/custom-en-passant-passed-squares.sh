@@ -47,6 +47,9 @@ assert sf.is_capture("custom-ep-all", fen_all, [], "e5d4"), fen_all
 
 fen_first = sf.get_fen("custom-ep-first", fen, ["d2d5"])
 assert " b - d3 " in fen_first, fen_first
+legal_first = set(sf.legal_moves("custom-ep-first", fen_first, []))
+assert "c5d4" in legal_first, fen_first
+assert "e5d4" in legal_first, fen_first
 assert not sf.is_capture("custom-ep-first", fen_first, [], "c5d4"), fen_first
 assert not sf.is_capture("custom-ep-first", fen_first, [], "e5d4"), fen_first
 
