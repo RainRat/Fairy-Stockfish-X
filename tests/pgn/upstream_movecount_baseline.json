@@ -104,6 +104,21 @@
       "move_count": 25
     },
     {
+      "name": "duck",
+      "variant": "duck",
+      "plies": 6,
+      "moves": [
+        "a2a3,a3a2",
+        "a7a6,a6b3",
+        "c2c3,c3a2",
+        "a6a5,a5c2",
+        "b2b3,b3a2",
+        "a5a4,a4b2"
+      ],
+      "fen": "rnbqkbnr/1ppppppp/8/8/p7/PPP5/1*1PPPPP/RNBQKBNR w KQkq - 0 4",
+      "move_count": 528
+    },
+    {
       "name": "spartan",
       "variant": "spartan",
       "plies": 8,

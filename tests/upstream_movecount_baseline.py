@@ -12,6 +12,7 @@ from pathlib import Path
 MOVE_RE = re.compile(r"^bestmove\s+(\S+)")
 FEN_RE = re.compile(r"^Fen:\s+(.*)$")
 PERFT_RE = re.compile(r"^Nodes searched:\s+(\d+)\s*$")
+VARIANT_RE = re.compile(r"^option name UCI_Variant type combo default \S+ var (.+)$")
 
 
 @dataclass(frozen=True)
@@ -28,10 +29,22 @@ SPECS = [
     BaselineSpec("torpedo", "torpedo", 8),
     BaselineSpec("atomic", "atomic", 8),
     BaselineSpec("allexplodeatomic", "allexplodeatomic", 8),
+    BaselineSpec("duck", "duck", 6),
     BaselineSpec("spartan", "spartan", 8),
     BaselineSpec("racingkings", "racingkings", 8),
     BaselineSpec("xiangqi", "xiangqi", 8),
 ]
+
+
+def available_variants(engine: Path) -> set[str]:
+    out = run_uci(engine, ["uci"])
+    variants = set()
+    for line in out.splitlines():
+        m = VARIANT_RE.match(line.strip())
+        if not m:
+            continue
+        variants.update(m.group(1).split())
+    return variants
 
 
 def run_uci(engine: Path, lines: list[str], timeout: int = 60) -> str:
@@ -103,8 +116,12 @@ def query_move_count(engine: Path, variant: str, fen: str) -> int:
 
 
 def generate_baseline(upstream_engine: Path) -> dict:
+    variants = available_variants(upstream_engine)
     records = []
     for spec in SPECS:
+        if spec.variant not in variants:
+            print(f"[SKIP] {spec.name} variant={spec.variant} not exposed by {upstream_engine}")
+            continue
         moves: list[str] = []
         for _ in range(spec.plies):
             bestmove = query_bestmove(upstream_engine, spec.variant, moves)
@@ -127,9 +144,13 @@ def generate_baseline(upstream_engine: Path) -> dict:
 
 
 def verify(local_engine: Path, fixture_path: Path) -> int:
+    variants = available_variants(local_engine)
     fixture = json.loads(fixture_path.read_text())
     failed = False
     for record in fixture["records"]:
+        if record["variant"] not in variants:
+            print(f"[SKIP] {record['name']} variant={record['variant']} not exposed by local engine")
+            continue
         actual = query_move_count(local_engine, record["variant"], record["fen"])
         expected = record["move_count"]
         if actual != expected:
