@@ -126,6 +126,7 @@ struct Variant {
   std::map<std::string, PieceType> symbolToPieceType;
   std::string startFen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
   Bitboard mobilityRegion[COLOR_NB][PIECE_TYPE_NB] = {};
+  Bitboard blastMask[SQUARE_NB] = {};
   ColorSetting<PieceTypeBitboardGroup> promotionRegion = ColorSetting<PieceTypeBitboardGroup>(Rank8BB, Rank1BB);
   ColorSetting<Bitboard> mandatoryPromotionRegion = ColorSetting<Bitboard>(Bitboard(0));
   ColorSetting<PieceType> mainPromotionPawnType = ColorSetting<PieceType>(PAWN);
@@ -151,8 +152,7 @@ struct Variant {
   PieceSet changingColorPieceTypes = NO_PIECE_SET;
   PieceSet selfDestructTypes = NO_PIECE_SET;
   bool blastPromotion = false;
-  bool blastDiagonals = true;
-  bool blastCenter = true;
+  std::string blastPattern = "K*";
   PieceSet blastPassiveTypes = NO_PIECE_SET;
   PieceSet blastImmuneTypes = NO_PIECE_SET;
   PieceSet mutuallyImmuneTypes = NO_PIECE_SET;
@@ -220,7 +220,6 @@ struct Variant {
   ColorSetting<bool> selfCapture = ColorSetting<bool>(false);
   ColorSetting<PieceSet> selfCaptureTypes = ColorSetting<PieceSet>(NO_PIECE_SET);
   bool blastOnSameTypeCapture = false;
-  bool blastOrthogonals = true;
   ColorSetting<bool> mustDrop = ColorSetting<bool>(false);
   ColorSetting<PieceType> mustDropType = ColorSetting<PieceType>(ALL_PIECES);
   bool dropKingLast = false;
@@ -576,6 +575,7 @@ struct Variant {
   }
 
   Variant* conclude();
+  void init_blast_masks();
 
 };
 

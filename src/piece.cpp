@@ -33,11 +33,10 @@ namespace Stockfish {
 PieceMap pieceMap; // Global object
 
 
-namespace {
-  // Keep legacy/variant-facing aliases here:
-  // L/C both mean camel (3,1), and J/Z both mean zebra (3,2).
-  // In particular, built-in Janggi elephant notation still uses nZ.
-  const std::map<char, std::vector<std::pair<int, int>>> leaperAtoms = {
+// Keep legacy/variant-facing aliases here:
+// L/C both mean camel (3,1), and J/Z both mean zebra (3,2).
+// In particular, built-in Janggi elephant notation still uses nZ.
+const std::map<char, std::vector<std::pair<int, int>>> leaperAtoms = {
       {'W', {std::make_pair(1, 0)}},
       {'F', {std::make_pair(1, 1)}},
       {'D', {std::make_pair(2, 0)}},
@@ -540,6 +539,8 @@ namespace {
       }
       return p.release();
   }
+
+namespace {
   // Special multi-leg betza description for Janggi elephant
   PieceInfo* janggi_elephant_piece() {
       PieceInfo* p = from_betza("nZ", "janggiElephant");

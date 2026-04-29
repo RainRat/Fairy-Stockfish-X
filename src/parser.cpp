@@ -1346,8 +1346,21 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("blastOnSelfDestruct", v->blastOnSelfDestruct);
     parse_attribute("selfDestructTypes", v->selfDestructTypes, v);
     parse_attribute("blastPromotion", v->blastPromotion);
-    parse_attribute("blastDiagonals", v->blastDiagonals);
-    parse_attribute("blastCenter", v->blastCenter);
+    parse_attribute("blastPattern", v->blastPattern);
+    bool blastDiagonals = true;
+    bool blastCenter = true;
+    bool blastOrthogonals = true;
+    bool hasD = parse_attribute("blastDiagonals", blastDiagonals);
+    bool hasC = parse_attribute("blastCenter", blastCenter);
+    bool hasO = parse_attribute("blastOrthogonals", blastOrthogonals);
+    if (hasD || hasC || hasO)
+    {
+        v->blastPattern = "";
+        if (blastDiagonals && blastOrthogonals) v->blastPattern += "K";
+        else if (blastDiagonals) v->blastPattern += "F";
+        else if (blastOrthogonals) v->blastPattern += "W";
+        if (blastCenter) v->blastPattern += "*";
+    }
     parse_attribute("blastPassiveTypes", v->blastPassiveTypes, v);
     parse_attribute("blastImmuneTypes", v->blastImmuneTypes, v);
     parse_attribute("mutuallyImmuneTypes", v->mutuallyImmuneTypes, v);
@@ -1555,7 +1568,6 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("changingColorPieceTypes", v->changingColorPieceTypes, v);
     parse_color_setting("selfCapture", v->selfCapture);
     parse_color_setting_piece("selfCaptureTypes", v->selfCaptureTypes, v);
-    parse_attribute("blastOrthogonals", v->blastOrthogonals);
     parse_attribute("blastOnSameTypeCapture", v->blastOnSameTypeCapture);
     parse_attribute("captureMorph", v->captureMorph);
     parse_attribute("rexExclusiveMorph", v->rexExclusiveMorph);

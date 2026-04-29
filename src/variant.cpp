@@ -2469,7 +2469,81 @@ Variant* Variant::conclude() {
       multimoveCycle = 2 * firstMultimove - 1 + 2 * secondMultimove - 1;
       multimoveCycleShift = 2 * firstMultimove - 1;
 
+    init_blast_masks();
+
     return this;
+}
+
+
+void Variant::init_blast_masks() {
+    std::string pattern = blastPattern;
+    bool includeCenter = false;
+    size_t star = pattern.find('*');
+    if (star != std::string::npos)
+    {
+        includeCenter = true;
+        pattern.erase(star, 1);
+    }
+
+    auto safe_destination_no_table = [](Square s, int dr, int df) {
+        int r = int(rank_of(s)) + dr;
+        int f = int(file_of(s)) + df;
+        if (r < 0 || r > int(RANK_MAX) || f < 0 || f > int(FILE_MAX))
+            return Bitboard(0);
+        return Bitboard(1) << make_square(File(f), Rank(r));
+    };
+
+    PieceInfo* pi = from_betza(pattern, "blast");
+    if (!pi)
+        return;
+
+    for (Square s = SQ_A1; s < SQUARE_NB; ++s)
+    {
+        blastMask[s] = includeCenter ? (Bitboard(1) << s) : Bitboard(0);
+        if (pattern.empty())
+            continue;
+
+        // Leapers
+        for (auto const& [d, _] : pi->steps[WHITE][MODALITY_QUIET])
+        {
+            auto [dr, df] = decode_direction(d);
+            blastMask[s] |= safe_destination_no_table(s, dr, df);
+        }
+        for (auto const& [d, _] : pi->steps[WHITE][MODALITY_CAPTURE])
+        {
+            auto [dr, df] = decode_direction(d);
+            blastMask[s] |= safe_destination_no_table(s, dr, df);
+        }
+
+        // Sliders
+        for (auto const& [d, limit] : pi->slider[WHITE][MODALITY_QUIET])
+        {
+            auto [dr, df] = decode_direction(d);
+            Bitboard next = safe_destination_no_table(s, dr, df);
+            int count = 0;
+            while (next)
+            {
+                blastMask[s] |= next;
+                if (limit > 0 && ++count >= limit)
+                    break;
+                next = safe_destination_no_table(lsb(next), dr, df);
+            }
+        }
+        for (auto const& [d, limit] : pi->slider[WHITE][MODALITY_CAPTURE])
+        {
+            auto [dr, df] = decode_direction(d);
+            Bitboard next = safe_destination_no_table(s, dr, df);
+            int count = 0;
+            while (next)
+            {
+                blastMask[s] |= next;
+                if (limit > 0 && ++count >= limit)
+                    break;
+                next = safe_destination_no_table(lsb(next), dr, df);
+            }
+        }
+    }
+    delete pi;
 }
 
 
