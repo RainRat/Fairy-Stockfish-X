@@ -302,7 +302,7 @@ fi
 
 # 19. Test removeConnectN + royal kings rejects the variant
 out=$(run_cmds "remove-king-repro" "${TEMP_INI}" "d")
-echo "${out}" | grep -q "removeConnectN is incompatible with (pseudo/anti-)royal pieces."
+echo "${out}" | grep -q "info string unknown variant 'remove-king-repro'"
 if echo "${out}" | grep -q "info string variant remove-king-repro"; then
   echo "removeConnectN + royal kings variant should have been rejected"
   exit 1

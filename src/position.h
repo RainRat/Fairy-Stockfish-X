@@ -2171,10 +2171,11 @@ inline Value Position::stalemate_value(int ply) const {
   {
       Bitboard pseudoRoyals = st->pseudoRoyals & pieces(sideToMove);
       Bitboard pseudoRoyalsTheirs = st->pseudoRoyals & pieces(~sideToMove);
+      Bitboard blastImmune = blast_on_capture() ? blast_immune_bb() : Bitboard(0);
       while (pseudoRoyals)
       {
           Square sr = pop_lsb(pseudoRoyals);
-          if (  !(blast_on_capture() && (pseudoRoyalsTheirs & blast_pattern(sr)))
+          if (  !(blast_on_capture() && (pseudoRoyalsTheirs & blast_pattern(sr) & ~blastImmune))
               && attackers_to(sr, ~sideToMove))
               return convert_mate_value(var->checkmateValue.get(sideToMove), ply);
       }
@@ -2187,7 +2188,7 @@ inline Value Position::stalemate_value(int ply) const {
           {
               Square sr = pop_lsb(pseudoRoyalCandidates);
               // Touching pseudo-royal pieces are immune
-              if (!(  !(blast_on_capture() && (pseudoRoyalsTheirs & blast_pattern(sr)))
+              if (!(  !(blast_on_capture() && (pseudoRoyalsTheirs & blast_pattern(sr) & ~blastImmune))
                     && attackers_to(sr, ~sideToMove)))
                   allCheck = false;
           }

@@ -33,6 +33,7 @@ run_step "piece-specific step regions" timeout 60s bash tests/piece-specific-ste
 run_step "variant switch after perft" timeout 60s bash tests/variant-switch-after-perft.sh "${ENGINE}"
 run_step "custom en passant passed squares" timeout 60s bash tests/custom-en-passant-passed-squares.sh "${ENGINE}"
 run_step "blast legal regressions" timeout 60s bash tests/blast-legal-regressions.sh "${ENGINE}"
+run_step "pseudoroyal blast immune" timeout 60s bash tests/pseudoroyal-blast-immune.sh "${ENGINE}"
 run_step "binding regression" timeout 60s "${PYTHON}" tests/test_binding_regression.py
 run_step "upstream movecount baseline" timeout 60s "${PYTHON}" tests/upstream_movecount_baseline.py "${ENGINE}" "${UPSTREAM_ENGINE}"
 run_step "python unit tests" timeout 180s "${PYTHON}" test.py
