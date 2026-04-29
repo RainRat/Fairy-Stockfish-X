@@ -20,6 +20,10 @@ if [[ -z "${UPSTREAM_ENGINE:-}" ]]; then
   exit 2
 fi
 
+if ! printf 'uci\nquit\n' | "${ENGINE}" | grep -q ' var duck'; then
+  echo "note: ${ENGINE} does not expose 'duck' in UCI_Variant (likely non-all build); all-only alias coverage is skipped." >&2
+fi
+
 run_step "protocol" timeout 90s bash tests/protocol.sh "${ENGINE}"
 run_step "parser regressions" timeout 90s bash tests/parser-regressions.sh "${ENGINE}"
 run_step "movegen regressions" timeout 90s bash tests/movegen-regressions.sh "${ENGINE}"
