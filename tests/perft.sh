@@ -200,16 +200,9 @@ if [[ $VARIANT == "all" ||  $VARIANT == "largeboard" ]]; then
     expect "$perft_exp" gustav3 startpos 4 331659 > /dev/null
     expect "$perft_exp" omicron startpos 4 967381 > /dev/null
     expect "$perft_exp" troitzky startpos 3 8766 > /dev/null
-    if has_variant shogi; then
-      # all=yes build path (fairy CI matrix)
-      expect "$perft_exp" wolf startpos 3 13722 > /dev/null
-      expect "$perft_exp" wolf "fen 8/k5SP/8/8/8/8/8/8/8/7K w - - 0 1" 4 10587 > /dev/null
-
-    else
-      # default build path
-      expect "$perft_exp" wolf startpos 3 8902 > /dev/null
-      expect "$perft_exp" wolf "fen 8/k5SP/8/8/8/8/8/8/8/7K w - - 0 1" 4 804 > /dev/null
-    fi
+    # all=yes build path (fairy CI matrix)
+    expect "$perft_exp" wolf startpos 3 13722 > /dev/null
+    expect "$perft_exp" wolf "fen 8/k5SP/8/8/8/8/8/8/8/7K w - - 0 1" 4 10587 > /dev/null
     expect "$perft_exp" shako "fen 4kc3c/ernbq1b1re/ppp3p1pp/3p2pp2/4p5/5P4/2PN2P3/PP1PP2PPP/ER1BQKBNR1/5C3C w KQ - 0 9" 3 26325 > /dev/null
     expect "$perft_exp" shako "fen 4ncr1k1/1cr2P4/pp2p2pp1/P7PN/2Ep1p4/B3P1eN2/2P1n1P3/1B1P1K4/9p/5C2CR w - - 0 1" 3 180467 > /dev/null
     expect "$perft_exp" shako "fen r5k3/4q2c2/1ebppnp3/1pp3BeEQ/10/2PE2P3/1P3P4/5NP2P/rR3KB3/7C2 w Q - 3 35" 2 4940 > /dev/null
