@@ -63,9 +63,9 @@ quit
 
 Run: `./stockfish < test.txt > output.txt`
 
-## 6) Validation & regression (from `src/`)
+## 6) Validation & regression (from repository root)
 
-* Config sanity: `./stockfish check variants.ini`
+* Config sanity: `src/stockfish check src/variants.ini`
 * Required pre-acceptance gate: `bash tests/fast-regression.sh src/stockfish`
   This now includes an upstream-FSF move-count baseline generated from deterministic self-play FENs. Keep the fixture current only when you intentionally refresh the baseline, not when trying to paper over a regression.
 * Move-gen correctness: `../tests/perft.sh all` (or `chess`, `largeboard`)

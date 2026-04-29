@@ -204,7 +204,7 @@ INI
 tor_pawn_repro_output=$(cat <<CMDS | "${ENGINE}" 2>&1
 uci
 setoption name VariantPath value ${TMP_VARIANT_PATH}
-setoption name UCI_Variant tor-pawn-repro
+setoption name UCI_Variant value tor-pawn-repro
 position startpos moves a2a3 g7g6 a3a4 g6g5 a4a5 g5g4 a5a6 g4h3 a6a7 h3g2 a7a8 g2h1 a8a1 h1g2 a1a2 g2g1
 go perft 1
 quit

@@ -180,14 +180,13 @@ def main() -> int:
     args = parser.parse_args()
 
     local_engine = Path(args.local_engine)
-    if args.upstream_engine is None:
-        print("upstream_engine argument is required", file=sys.stderr)
-        return 2
-
-    upstream_engine = Path(args.upstream_engine)
     fixture_path = Path(args.fixture)
 
     if args.regenerate:
+        if args.upstream_engine is None:
+            print("upstream_engine argument is required with --regenerate", file=sys.stderr)
+            return 2
+        upstream_engine = Path(args.upstream_engine)
         if not upstream_engine.exists():
             print(f"upstream engine not found: {upstream_engine}", file=sys.stderr)
             return 2

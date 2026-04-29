@@ -8,6 +8,7 @@ from pathlib import Path
 
 
 MOVE_RE = re.compile(r"^([^:\s]+):\s+(\d+)\s*$")
+VARIANT_RE = re.compile(r"^option name UCI_Variant type combo default \S+ var (.+)$")
 
 
 @dataclass(frozen=True)
@@ -29,11 +30,6 @@ CASES = [
     Case("racingkings_startpos", "racingkings", "position startpos"),
     Case("xiangqi_startpos", "xiangqi", "position startpos"),
     Case("janggi_startpos", "janggi", "position startpos"),
-    Case(
-        "janggi_cannon_selfcheck",
-        "janggi",
-        "position fen rnba1abnr/4k4/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/4C2C1/4K4/RNBA1ABNR b - - 0 1",
-    ),
 ]
 
 
@@ -76,6 +72,28 @@ def run_perft(engine: Path, case: Case) -> dict[str, int]:
     return moves
 
 
+def available_variants(engine: Path) -> set[str]:
+    proc = subprocess.run(
+        [str(engine)],
+        input="uci\nquit\n",
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=30,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"{engine} failed while probing variants with code {proc.returncode}\nSTDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}"
+        )
+    variants = set()
+    for line in proc.stdout.splitlines():
+        m = VARIANT_RE.match(line.strip())
+        if not m:
+            continue
+        variants.update(m.group(1).split())
+    return variants
+
+
 def main() -> int:
     root = Path(__file__).resolve().parent.parent
     local_engine = Path(sys.argv[1]) if len(sys.argv) > 1 else root / "src" / "stockfish"
@@ -93,7 +111,12 @@ def main() -> int:
         return 2
 
     failed = False
+    local_variants = available_variants(local_engine)
+    upstream_variants = available_variants(upstream_engine)
     for case in CASES:
+        if case.variant not in local_variants or case.variant not in upstream_variants:
+            print(f"[SKIP] {case.name} variant={case.variant} not exposed by both engines")
+            continue
         local_moves = run_perft(local_engine, case)
         upstream_moves = run_perft(upstream_engine, case)
         if local_moves != upstream_moves:

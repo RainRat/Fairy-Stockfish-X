@@ -9,6 +9,7 @@ error() {
 trap 'error ${LINENO}' ERR
 
 ENGINE=${1:-./stockfish}
+ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 
 TMP_INI=$(mktemp)
 trap 'rm -f "${TMP_INI}"' EXIT
@@ -61,7 +62,7 @@ echo "${out}" | grep -q "Fen: 5/5/5/3Rr/5 b - - 0 1"
 
 out=$(cat <<EOF | "${ENGINE}" 2>/dev/null
 uci
-setoption name VariantPath value /home/chris/Fairy-Stockfish-X/src/variants.ini
+setoption name VariantPath value ${ROOT_DIR}/src/variants.ini
 setoption name UCI_Variant value aries
 position fen 8/8/8/Rrrr4/8/8/8/8 w - - 0 1
 go perft 1
