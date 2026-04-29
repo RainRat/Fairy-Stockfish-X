@@ -1689,6 +1689,24 @@ startFen = 4k3/3p4/8/8/8/8/8/3QK3 w - - 0 1
         # This Janggi move is legal and gives check.
         self.assertTrue(sf.gives_check("janggi", "4ka3/4a4/9/4R4/2B6/9/9/5K3/4p4/3r5 b - - 0 113", ["e2f2"]))
 
+        # captureForbidden to royal type must suppress gives_check
+        sf.load_variant_config(
+            """
+[forbidden-check-gives:chess]
+customPiece1 = d:Q
+pieceToCharTable = PNBRQ............D...Kpnbrq............d...k
+captureForbidden = d:k
+startFen = 4k3/8/8/8/8/8/4D3/4K3 w - - 0 1
+"""
+        )
+        self.assertFalse(
+            sf.gives_check(
+                "forbidden-check-gives",
+                sf.start_fen("forbidden-check-gives"),
+                ["e2e7"],
+            )
+        )
+
     def test_is_capture(self):
         result = sf.is_capture("chess", CHESS, [], "e2e4")
         self.assertFalse(result)
