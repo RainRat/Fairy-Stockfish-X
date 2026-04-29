@@ -10,28 +10,36 @@ cat > "$tmp_ini" <<'INI'
 [alfil-rider:chess]
 customPiece1 = a:AA
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
-startFen = 7k/8/8/8/3A4/8/8/K7 w - - 0 1
+startFen = 6k1/8/8/8/3A4/8/8/K7 w - - 0 1
 
 [alfil-rider-tuple:chess]
 customPiece1 = a:(2,2)(2,2)
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
-startFen = 7k/8/8/8/3A4/8/8/K7 w - - 0 1
+startFen = 6k1/8/8/8/3A4/8/8/K7 w - - 0 1
 
 [dabbaba-rider:chess]
 customPiece1 = a:DD
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
-startFen = 7k/8/8/8/3A4/8/8/K7 w - - 0 1
+startFen = 6k1/8/8/8/3A4/8/8/K7 w - - 0 1
 
 [dabbaba-rider-tuple:chess]
 customPiece1 = a:(2,0)2
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
-startFen = 7k/8/8/8/3A4/8/8/K7 w - - 0 1
+startFen = 6k1/8/8/8/3A4/8/8/K7 w - - 0 1
 
 [tuple-range-pin:chess]
 customPiece1 = a:(1,0)2
 customPiece2 = b:W
 pieceToCharTable = PNBRQ............AB..Kpnbrq............ab..k
 startFen = 3a4/8/8/8/8/3B4/8/3K4 w - - 0 1
+
+[lame-rider-blockers:chess]
+customPiece1 = a:nD
+customPiece2 = b:nDD
+customPiece3 = c:nA
+customPiece4 = d:nAA
+pieceToCharTable = PNBRQ............ABCDKpnbrq............abcdk
+startFen = 8/3ab3/2cd5/8/8/8/8/K6k b - - 0 1
 INI
 
 piece_moves() {
@@ -81,5 +89,14 @@ out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Varia
   | ./stockfish)
 echo "$out" | grep -q "^d3c3: 1$"
 echo "$out" | grep -q "^d3e3: 1$"
+
+# Lame dabbaba/alfil and their rider forms must be blocked by the midpoint square.
+out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-rider-blockers\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
+  | ./stockfish)
+! echo "$out" | grep -q "^d7d5:"
+! echo "$out" | grep -q "^d7f7:"
+! echo "$out" | grep -q "^e7c7:"
+! echo "$out" | grep -q "^c6e8:"
+! echo "$out" | grep -q "^d6f8:"
 
 echo "alfil-dabbaba-riders test OK"
