@@ -239,6 +239,8 @@ namespace {
   void add_slider_rider_types(RiderType& riderTypes, Direction d, int limit) {
     if (limit == DYNAMIC_SLIDER_LIMIT)
         return;
+    if (limit == MAX_SLIDER_LIMIT)
+        return;
     if (limit == SKI_SLIDER_LIMIT)
     {
         if (BishopDirections.find(d) != BishopDirections.end())
@@ -333,6 +335,33 @@ namespace {
         attack |= to;
         if (occupied & to)
             break;
+    }
+
+    return attack;
+  }
+
+  Bitboard fixed_step_lame_rider_attacks(Square s, Bitboard occupied, int stepF, int stepR) {
+    Bitboard attack = 0;
+    int f = int(file_of(s));
+    int r = int(rank_of(s));
+
+    while (true)
+    {
+        int midF = f + stepF / 2;
+        int midR = r + stepR / 2;
+        int toF = f + stepF;
+        int toR = r + stepR;
+        if (toF < int(FILE_A) || toF > int(FILE_MAX) || toR < int(RANK_1) || toR > int(RANK_MAX))
+            break;
+        Square mid = make_square(File(midF), Rank(midR));
+        if (occupied & mid)
+            break;
+        Square to = make_square(File(toF), Rank(toR));
+        attack |= to;
+        if (occupied & to)
+            break;
+        f = toF;
+        r = toR;
     }
 
     return attack;
@@ -471,15 +500,17 @@ Bitboard rider_attacks_bb(
   case RIDER_ROOK_V: return sliding_attack<RIDER>(RookDirectionsV, s, occupied);
   case RIDER_CANNON_H: return sliding_attack<HOPPER>(RookDirectionsH, s, occupied);
   case RIDER_CANNON_V: return sliding_attack<HOPPER>(RookDirectionsV, s, occupied);
-  case RIDER_LAME_DABBABA: return  fixed_step_rider_attacks(s, occupied,  0,  2)
-                                 | fixed_step_rider_attacks(s, occupied,  0, -2)
-                                 | fixed_step_rider_attacks(s, occupied,  2,  0)
-                                 | fixed_step_rider_attacks(s, occupied, -2,  0);
+  case RIDER_LAME_DABBABA:
+      return fixed_step_lame_rider_attacks(s, occupied, 2, 0)
+           | fixed_step_lame_rider_attacks(s, occupied, -2, 0)
+           | fixed_step_lame_rider_attacks(s, occupied, 0, 2)
+           | fixed_step_lame_rider_attacks(s, occupied, 0, -2);
   case RIDER_HORSE: return lame_leaper_attack(HorseDirections, s, occupied);
-  case RIDER_ELEPHANT: return  fixed_step_rider_attacks(s, occupied,  2,  2)
-                              | fixed_step_rider_attacks(s, occupied, -2,  2)
-                              | fixed_step_rider_attacks(s, occupied,  2, -2)
-                              | fixed_step_rider_attacks(s, occupied, -2, -2);
+  case RIDER_ELEPHANT:
+      return fixed_step_lame_rider_attacks(s, occupied, 2, 2)
+           | fixed_step_lame_rider_attacks(s, occupied, 2, -2)
+           | fixed_step_lame_rider_attacks(s, occupied, -2, 2)
+           | fixed_step_lame_rider_attacks(s, occupied, -2, -2);
   case RIDER_JANGGI_ELEPHANT: return lame_leaper_attack(JanggiElephantDirections, s, occupied);
   case RIDER_CANNON_DIAG: return sliding_attack<HOPPER>(BishopDirections, s, occupied);
   case RIDER_NIGHTRIDER: return sliding_attack<RIDER>(HorseDirections, s, occupied);
@@ -646,7 +677,7 @@ void Bitboards::init_pieces() {
                   for (auto const& [d, limit] : pi->slider[initial][modality])
                       if (limit == SKI_SLIDER_LIMIT)
                           skiDirs[d] = 0;
-                      else if (limit == MAX_SLIDER_LIMIT || limit >= 0 || is_slider_range(limit))
+                      else if (limit >= 0 || is_slider_range(limit))
                           riderDirs[d] = limit;
 
                   for (Square s = SQ_A1; s <= SQ_MAX; ++s)

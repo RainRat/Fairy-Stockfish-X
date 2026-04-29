@@ -931,6 +931,34 @@ inline Bitboard fixed_step_rider_attacks(Square s, Bitboard occupied, int stepF,
   return attack;
 }
 
+inline Bitboard fixed_step_lame_rider_attacks(Square s, Bitboard occupied, int stepF, int stepR, const MagicGeometry* mg = current_magic_geometry) {
+  (void)mg;
+  Bitboard attack = 0;
+  int f = int(file_of(s));
+  int r = int(rank_of(s));
+
+  while (true)
+  {
+      int midF = f + stepF / 2;
+      int midR = r + stepR / 2;
+      int toF = f + stepF;
+      int toR = r + stepR;
+      if (toF < int(FILE_A) || toF > int(FILE_MAX) || toR < int(RANK_1) || toR > int(RANK_MAX))
+          break;
+      Square mid = make_square(File(midF), Rank(midR));
+      if (occupied & mid)
+          break;
+      Square to = make_square(File(toF), Rank(toR));
+      attack |= to;
+      if (occupied & to)
+          break;
+      f = toF;
+      r = toR;
+  }
+
+  return attack;
+}
+
 inline Bitboard ski_slider_attacks(Square s, Bitboard occupied, int stepF, int stepR, const MagicGeometry* mg = current_magic_geometry) {
   (void)mg;
   int f = int(file_of(s)) + stepF;
@@ -1014,15 +1042,15 @@ inline Bitboard rider_attacks_bb(Square s, Bitboard occupied, const MagicGeometr
            | fixed_step_rider_attacks(src, occupied, -1, -1);
   }
   if constexpr (R == RIDER_LAME_DABBABA)
-      return  fixed_step_rider_attacks(s, occupied,  2,  0)
-            | fixed_step_rider_attacks(s, occupied, -2,  0)
-            | fixed_step_rider_attacks(s, occupied,  0,  2)
-            | fixed_step_rider_attacks(s, occupied,  0, -2);
+      return  fixed_step_lame_rider_attacks(s, occupied,  2,  0)
+            | fixed_step_lame_rider_attacks(s, occupied, -2,  0)
+            | fixed_step_lame_rider_attacks(s, occupied,  0,  2)
+            | fixed_step_lame_rider_attacks(s, occupied,  0, -2);
   if constexpr (R == RIDER_ELEPHANT)
-      return  fixed_step_rider_attacks(s, occupied,  2,  2)
-            | fixed_step_rider_attacks(s, occupied,  2, -2)
-            | fixed_step_rider_attacks(s, occupied, -2,  2)
-            | fixed_step_rider_attacks(s, occupied, -2, -2);
+      return  fixed_step_lame_rider_attacks(s, occupied,  2,  2)
+            | fixed_step_lame_rider_attacks(s, occupied,  2, -2)
+            | fixed_step_lame_rider_attacks(s, occupied, -2,  2)
+            | fixed_step_lame_rider_attacks(s, occupied, -2, -2);
   if constexpr (R == RIDER_SKI_ROOK_H)
       return  ski_slider_attacks(s, occupied,  1, 0)
             | ski_slider_attacks(s, occupied, -1, 0);
@@ -1060,15 +1088,9 @@ inline Bitboard rider_attacks_bb(RiderType R, Square s, Bitboard occupied, const
 
   assert(R != NO_RIDER && !(R & (R - 1))); // exactly one bit
   if (R == RIDER_LAME_DABBABA)
-      return  fixed_step_rider_attacks(s, occupied,  2,  0)
-            | fixed_step_rider_attacks(s, occupied, -2,  0)
-            | fixed_step_rider_attacks(s, occupied,  0,  2)
-            | fixed_step_rider_attacks(s, occupied,  0, -2);
+      return rider_attacks_bb<RIDER_LAME_DABBABA>(s, occupied, mg);
   if (R == RIDER_ELEPHANT)
-      return  fixed_step_rider_attacks(s, occupied,  2,  2)
-            | fixed_step_rider_attacks(s, occupied,  2, -2)
-            | fixed_step_rider_attacks(s, occupied, -2,  2)
-            | fixed_step_rider_attacks(s, occupied, -2, -2);
+      return rider_attacks_bb<RIDER_ELEPHANT>(s, occupied, mg);
   if (R == RIDER_SKI_ROOK_H)
       return  ski_slider_attacks(s, occupied,  1, 0)
             | ski_slider_attacks(s, occupied, -1, 0);

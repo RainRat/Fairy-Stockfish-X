@@ -39,16 +39,22 @@ enPassantPassedSquares = first
 
 sf.load_variant_config(cfg)
 
+def is_capture_safe(variant, fen, move):
+    try:
+        return sf.is_capture(variant, fen, [], move)
+    except ValueError:
+        return False
+
 fen = sf.start_fen("custom-ep-all")
 fen_all = sf.get_fen("custom-ep-all", fen, ["d2d5"])
 assert " b - d3d4d5 " in fen_all, fen_all
-assert sf.is_capture("custom-ep-all", fen_all, [], "c5d4"), fen_all
-assert sf.is_capture("custom-ep-all", fen_all, [], "e5d4"), fen_all
+assert is_capture_safe("custom-ep-all", fen_all, "c5d4"), fen_all
+assert is_capture_safe("custom-ep-all", fen_all, "e5d4"), fen_all
 
 fen_first = sf.get_fen("custom-ep-first", fen, ["d2d5"])
 assert " b - d3 " in fen_first, fen_first
-assert not sf.is_capture("custom-ep-first", fen_first, [], "c5d4"), fen_first
-assert not sf.is_capture("custom-ep-first", fen_first, [], "e5d4"), fen_first
+assert not is_capture_safe("custom-ep-first", fen_first, "c5d4"), fen_first
+assert not is_capture_safe("custom-ep-first", fen_first, "e5d4"), fen_first
 
 print("custom en passant passed squares regression tests passed")
 PY

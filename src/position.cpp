@@ -2450,14 +2450,14 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
               while (asymmetricals)
               {
                   Square s2 = pop_lsb(asymmetricals);
-                  if (attacks_from(c, move_pt, s2, occupied) & s)
+                  if (attacks_bb(c, move_pt, s2, occupied) & s)
                       b |= s2;
               }
           }
           else if (pt == JANGGI_CANNON)
-              b |= attacks_from(~c, move_pt, s, occupied) & attacks_from(~c, move_pt, s, occupied & ~janggiCannons) & pieces(c, JANGGI_CANNON);
+              b |= attacks_bb(~c, move_pt, s, occupied) & attacks_bb(~c, move_pt, s, occupied & ~janggiCannons) & pieces(c, JANGGI_CANNON);
           else
-              b |= attacks_from(~c, move_pt, s, occupied) & pieces(c, pt);
+              b |= attacks_bb(~c, move_pt, s, occupied) & pieces(c, pt);
       }
   }
 
@@ -2488,17 +2488,25 @@ Bitboard Position::attackers_to_king(Square s, Bitboard occupied, Color c, Bitbo
   Bitboard attackers = attackers_to(s, occupied, c, janggiCannons);
   attackers |= janggi_cannon_attackers_to_king(s, occupied, c);
   // Frozen pieces cannot give check (relevant for spell-chess freeze effects).
-  attackers &= ~(freeze_squares(c) | (pieces(c, PAWN) & pawnCannotCheckZone[c]));
+  Bitboard restricted = freeze_squares(c);
+  if (var->prisonPawnPromotion)
+      restricted |= pieces(c, PAWN) & pawnCannotCheckZone[c];
+  attackers &= ~restricted;
   if (anti_royal_king_mutually_immune())
       for (PieceSet ps = anti_royal_types(); ps; )
           attackers &= ~pieces(c, pop_lsb(ps));
-  PieceSet forbiddenToKing = var->captureForbiddenToKing;
-  if (!attackers || !forbiddenToKing)
+  if (!attackers)
       return attackers;
 
-  for (PieceSet ps = forbiddenToKing; ps; )
-      attackers &= ~pieces(c, pop_lsb(ps));
-
+  Piece royalPiece = piece_on(s);
+  PieceType royalType = royalPiece != NO_PIECE ? type_of(royalPiece) : king_type();
+  if (royalType != NO_PIECE_TYPE)
+      for (PieceSet ps = piece_types(); ps; )
+      {
+          PieceType pt = pop_lsb(ps);
+          if (var->captureForbidden[pt] & royalType)
+              attackers &= ~pieces(c, pt);
+      }
   return attackers;
 }
 
@@ -4359,7 +4367,11 @@ bool Position::gives_check(Move m) const {
       return false;
   if (royalSq == SQ_NONE)
       royalSq = square<KING>(~sideToMove);
+  if (!is_ok(royalSq))
+      return false;
   const PieceType royalType = king_type() != NO_PIECE_TYPE ? king_type() : type_of(piece_on(royalSq));
+  if (!is_ok(attackFrom))
+      return false;
 
   Bitboard occupied = rifleShot ? (pieces() ^ square_bb(shotSq))
                                 : (((!dropMove ? pieces() ^ from : pieces()) ^ square_bb(shotSq)) | to);
@@ -4432,8 +4444,10 @@ bool Position::gives_check(Move m) const {
   }
 
   // Is there a discovered check?
-  Bitboard discCheckSq = rifleShot ? square_bb(to) : square_bb(from);
-  if (type_of(m) == PULL)
+  Bitboard discCheckSq = 0;
+  if (!dropMove)
+      discCheckSq = rifleShot ? square_bb(to) : square_bb(from);
+  if (!dropMove && type_of(m) == PULL)
       discCheckSq |= square_bb(pull_square(m));
 
   if (  ((!dropMove && (blockers_for_king(~sideToMove) & discCheckSq)) || (non_sliding_riders() & pieces(sideToMove)))
@@ -6573,6 +6587,12 @@ void Position::undo_move(Move m) {
                   put_piece(st->dead.piece, moverSq, st->dead.promoted, st->dead.unpromoted);
                   pc = piece_on(moverSq);
               }
+              else if (st->deadSquares & to)
+              {
+                  st->deadSquares ^= to;
+                  put_piece(st->dead.piece, to, st->dead.promoted, st->dead.unpromoted);
+                  pc = piece_on(to);
+              }
               else
               {
                   // st->dead represents the mover being removed after moving (e.g. self-destruct,
@@ -7313,15 +7333,24 @@ bool Position::is_optional_game_end(Value& result, int ply, int countStarted) co
 
 bool Position::is_immediate_game_end(Value& result, int ply) const {
 
-  // Direct king capture ends the game immediately in capture-the-royal flows,
-  // even when the variant is not modeled through extinction or pseudo-royals.
-  if (st->captured.piece != NO_PIECE
-      && king_type() != NO_PIECE_TYPE
-      && type_of(st->captured.piece) == king_type())
+  // Direct royal capture ends the game immediately in capture-the-royal flows.
+  // Some variants (e.g. Xiangqi/Janggi) use king_type() as movement semantics
+  // while the actual royal piece on board remains KING, so avoid treating
+  // non-royal king_type captures (e.g. advisors) as immediate game end.
+  if (st->captured.piece != NO_PIECE)
   {
       Color capturedColor = color_of(st->captured.piece);
-      result = capturedColor == sideToMove ? mated_in(ply) : mate_in(ply);
-      return true;
+      PieceType capturedType = type_of(st->captured.piece);
+      bool capturedRoyal = capturedType == KING;
+
+      if (!capturedRoyal && king_type() != NO_PIECE_TYPE && capturedType == king_type())
+          capturedRoyal = count(capturedColor, KING) == 0;
+
+      if (capturedRoyal)
+      {
+          result = capturedColor == sideToMove ? mated_in(ply) : mate_in(ply);
+          return true;
+      }
   }
 
   // Some variants treat the runtime king piece as a real royal even when the

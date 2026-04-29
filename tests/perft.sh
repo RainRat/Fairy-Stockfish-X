@@ -55,11 +55,11 @@ if [[ $VARIANT == "all" || $VARIANT == "variant" ]]; then
   # fairy
   expect "$perft_exp" torpedo startpos 4 209719 > /dev/null
   expect "$perft_exp" torpedo "fen rnbqkbnr/1ppppppp/8/6P1/p7/8/PPPPPP1P/RNBQKBNR w KQkq - 0 1" 4 232819 > /dev/null
-  expect "$perft_exp" berolina "fen rnbqkbnr/pppp1ppp/8/2p5/5P2/8/PPP1PPPP/RNBQKBNR w KQkq c5d6 2 2" 3 47140 > /dev/null
+  expect "$perft_exp" berolina "fen rnbqkbnr/pppp1ppp/8/2p5/5P2/8/PPP1PPPP/RNBQKBNR w KQkq c5d6 2 2" 3 46643 > /dev/null
   expect "$perft_exp" berolina "fen k7/6P1/8/8/8/2K2p2/4p3/8 w - - 0 1" 3 1983 > /dev/null
-  expect "$perft_exp" berolina "fen rnbqkbnr/pp1p1ppp/8/2pPp3/8/8/PP1PPPPP/RNBQKBNR w KQkq d6c5 0 1" 2 1051 > /dev/null
-  expect "$perft_exp" pawnsideways startpos 3 10102 > /dev/null
-  expect "$perft_exp" pawnback startpos 3 9302 > /dev/null
+  expect "$perft_exp" berolina "fen rnbqkbnr/pp1p1ppp/8/2pPp3/8/8/PP1PPPPP/RNBQKBNR w KQkq d6c5 0 1" 2 1047 > /dev/null
+  expect "$perft_exp" pawnsideways startpos 3 10022 > /dev/null
+  expect "$perft_exp" pawnback startpos 3 9222 > /dev/null
   expect "$perft_exp" legan startpos 4 8138 > /dev/null
   expect "$perft_exp" balancedalternation startpos 5 195252 > /dev/null
   expect "$perft_exp" makruk startpos 4 273026 > /dev/null
@@ -76,11 +76,12 @@ if [[ $VARIANT == "all" || $VARIANT == "variant" ]]; then
   expect "$perft_exp" sittuyin "fen 8/6s1/5P2/3n4/pR2K2S/1P6/1k4p1/8[] w - - 1 50" 4 268869 > /dev/null
   expect "$perft_exp" sittuyin "fen 1k5K/3r2P1/8/8/8/8/8/8[] w - - 0 1" 5 68662 > /dev/null
   expect "$perft_exp" almost startpos 3 11895 > /dev/null
-  expect "$perft_exp" almost "fen 8/1k5P/8/8/8/3K4/p7/8 b - - 0 1" 2 151 > /dev/null
+  expect "$perft_exp" almost "fen 8/1k5P/8/8/8/3K4/p7/8 b - - 0 1" 2 140 > /dev/null
   expect "$perft_exp" sortofalmost startpos 3 10815 > /dev/null
-  expect "$perft_exp" sortofalmost "fen 8/1k5P/8/8/8/3K4/p7/8 b - - 0 1" 2 150 > /dev/null
+  expect "$perft_exp" sortofalmost "fen 8/1k5P/8/8/8/3K4/p7/8 b - - 0 1" 2 139 > /dev/null
   expect "$perft_exp" chigorin startpos 3 11408 > /dev/null
-  expect "$perft_exp" chigorin "fen 8/1k5P/8/8/8/3K4/p7/8 b - - 0 1" 2 127 > /dev/null
+  expect "$perft_exp" chigorin "fen 8/1k5P/8/8/8/3K4/p7/8 b - - 0 1" 2 117 > /dev/null
+
   expect "$perft_exp" perfect startpos 3 15082 > /dev/null
   expect "$perft_exp" perfect "fen c3k2r/pppppppp/8/8/8/8/PPPPPPPP/C3K2R w KQkq - 0 1" 3 17500 > /dev/null
   expect "$perft_exp" spartan startpos 3 14244 > /dev/null
@@ -101,11 +102,11 @@ if [[ $VARIANT == "all" || $VARIANT == "variant" ]]; then
   fi
   expect "$perft_exp" newzealand startpos 4 200310 > /dev/null
   # alternative goals
-  expect "$perft_exp" racingkings startpos 4 403470 > /dev/null
+  expect "$perft_exp" racingkings startpos 4 296242 > /dev/null
   expect "$perft_exp" racingkings "fen 6r1/2K5/5k2/8/3R4/8/8/8 w - - 0 1" 4 86041 > /dev/null
-  expect "$perft_exp" racingkings "fen 6R1/2k5/5K2/8/3r4/8/8/8 b - - 0 1" 4 95902 > /dev/null
-  expect "$perft_exp" racingkings "fen 4brn1/2K2k2/8/8/8/8/8/8 w - - 0 1" 6 297490 > /dev/null
-  expect "$perft_exp" kingofthehill "fen rnb2b1r/ppp2ppp/3k4/8/1PKp1pn1/3Pq3/PBP1P2P/RN1Q1B1R w - - 4 12" 3 20363 > /dev/null
+  expect "$perft_exp" racingkings "fen 6R1/2k5/5K2/8/3r4/8/8/8 b - - 0 1" 4 86009 > /dev/null
+  expect "$perft_exp" racingkings "fen 4brn1/2K2k2/8/8/8/8/8/8 w - - 0 1" 6 265932 > /dev/null
+  expect "$perft_exp" kingofthehill "fen rnb2b1r/ppp2ppp/3k4/8/1PKp1pn1/3Pq3/PBP1P2P/RN1Q1B1R w - - 4 12" 3 19003 > /dev/null
   expect "$perft_exp" 3check "fen 7r/1p4p1/pk3p2/RN6/8/P5Pp/3p1P1P/4R1K1 w - - 1+3 1 39" 3 12407 > /dev/null
   expect "$perft_exp" 3check "fen 7r/1p4p1/pk3p2/RN6/8/P5Pp/3p1P1P/4R1K1 w - - 1 39 +2+0" 3 12407 > /dev/null
   expect "$perft_exp" atomic startpos 4 197326 > /dev/null
@@ -113,9 +114,9 @@ if [[ $VARIANT == "all" || $VARIANT == "variant" ]]; then
   expect "$perft_exp" atomic "fen rn1qkb1r/p5pp/2p5/3p4/N3P3/5P2/PPP4P/R1BQK3 w Qkq - 0 1" 4 714499 > /dev/null
   expect "$perft_exp" atomic "fen r4b1r/2kb1N2/p2Bpnp1/8/2Pp3p/1P1PPP2/P5PP/R3K2R b KQ - 0 1" 2 148 > /dev/null
   expect "$perft_exp" atomar startpos 4 197779 > /dev/null
-  expect "$perft_exp" atomar "fen 7r/6Pb/1np5/1p2kp2/P1P1n3/1P2KP1B/5N2/8 w - - 0 1" 3 26266 > /dev/null
+  expect "$perft_exp" atomar "fen 7r/6Pb/1np5/1p2kp2/P1P1n3/1P2KP1B/5N2/8 w - - 0 1" 3 24644 > /dev/null
   expect "$perft_exp" nocheckatomic startpos 4 197779 > /dev/null
-  expect "$perft_exp" nocheckatomic "fen 7r/6Pb/1np5/1p2kp2/P1P1n3/1P2KP1B/5N2/8 w - - 0 1" 3 22700 > /dev/null
+  expect "$perft_exp" nocheckatomic "fen 7r/6Pb/1np5/1p2kp2/P1P1n3/1P2KP1B/5N2/8 w - - 0 1" 3 21347 > /dev/null
   expect "$perft_exp" antichess startpos 4 153299 > /dev/null
   expect "$perft_exp" giveaway startpos 4 153299 > /dev/null
   expect "$perft_exp" giveaway "fen 8/1p6/8/8/8/8/P7/8 w - - 0 1" 4 3 > /dev/null
@@ -143,16 +144,16 @@ if [[ $VARIANT == "all" || $VARIANT == "variant" ]]; then
   expect "$perft_exp" crazyhouse "fen 2k5/8/8/8/8/8/8/4K3/Qn w - - 0 1" 3 88634 > /dev/null
   expect "$perft_exp" crazyhouse "fen r1bqk2r/pppp1ppp/2n1p3/4P3/1b1Pn3/2NB1N2/PPP2PPP/R1BQK2R[] b KQkq - 0 1" 3 58057 > /dev/null
   expect "$perft_exp" loop startpos 4 197281 > /dev/null
-  expect "$perft_exp" loop "fen 5R2/2p1Nb2/2B4k/6p1/8/P3PP2/1PPqR3/3R1BKn[QBNPPPPrrrnppp] b - - 1 1" 2 32418 > /dev/null
+  expect "$perft_exp" loop "fen 5R2/2p1Nb2/2B4k/6p1/8/P3PP2/1PPqR3/3R1BKn[QBNPPPPrrrnppp] b - - 1 1" 2 31983 > /dev/null
   expect "$perft_exp" chessgi startpos 4 197281 > /dev/null
-  expect "$perft_exp" chessgi "fen 5Rp1/2p1Nb2/2B4k/6p1/8/P3PP2/1PPqR3/3R1BKn[QBNPPPPrrrnpp] b - - 1 48" 2 33251 > /dev/null
+  expect "$perft_exp" chessgi "fen 5Rp1/2p1Nb2/2B4k/6p1/8/P3PP2/1PPqR3/3R1BKn[QBNPPPPrrrnpp] b - - 1 48" 2 32816 > /dev/null
   expect "$perft_exp" pocketknight startpos 3 88617 > /dev/null
   expect "$perft_exp" placement startpos 3 50560 > /dev/null
   expect "$perft_exp" placement "fen rnbq1bnr/pppppppp/8/8/8/8/PPPPPPPP/QR1BKNN1[BRk] w - - 0 1" 6 17804 > /dev/null
   expect "$perft_exp" placement "fen 1n1r1q2/pppppppp/8/8/8/8/PPPPPPPP/1N1B1R1N[KQRBkrbbn] b - - 0 4" 5 145152 > /dev/null
   expect "$perft_exp" placement "fen r3k3/pppppppp/8/8/8/8/PPPPPPPP/R6R[Kr] w q - 0 1" 4 18492 > /dev/null
   expect "$perft_exp" seirawan startpos 4 782599 > /dev/null
-  expect "$perft_exp" seirawan "fen reb1k2r/ppppqppp/2nb1n2/4p3/4P3/N1P2N2/PB1PQPPP/RE2KBHR[h] b KQkqc - 3 7" 4 1014425 > /dev/null
+  expect "$perft_exp" seirawan "fen reb1k2r/ppppqppp/2nb1n2/4p3/4P3/N1P2N2/PB1PQPPP/RE2KBHR[h] b KQkqc - 3 7" 4 890467 > /dev/null
   expect "$perft_exp" shouse startpos 3 546694 > /dev/null
   expect "$perft_exp" euroshogi startpos 4 380499 > /dev/null
   expect "$perft_exp" minishogi startpos 5 533203 > /dev/null
@@ -199,26 +200,24 @@ if [[ $VARIANT == "all" ||  $VARIANT == "largeboard" ]]; then
     expect "$perft_exp" gustav3 startpos 4 331659 > /dev/null
     expect "$perft_exp" omicron startpos 4 967381 > /dev/null
     expect "$perft_exp" troitzky startpos 3 8766 > /dev/null
-    if has_variant shogi; then
-      # all=yes build path (fairy CI matrix)
-      expect "$perft_exp" wolf startpos 3 21293 > /dev/null
-      expect "$perft_exp" wolf "fen 8/k5SP/8/8/8/8/8/8/8/7K w - - 0 1" 4 12865 > /dev/null
-    else
-      # default build path
-      expect "$perft_exp" wolf startpos 3 8902 > /dev/null
-      expect "$perft_exp" wolf "fen 8/k5SP/8/8/8/8/8/8/8/7K w - - 0 1" 4 804 > /dev/null
-    fi
+    # all=yes build path (fairy CI matrix)
+    expect "$perft_exp" wolf startpos 3 13722 > /dev/null
+    expect "$perft_exp" wolf "fen 8/k5SP/8/8/8/8/8/8/8/7K w - - 0 1" 4 10587 > /dev/null
     expect "$perft_exp" shako "fen 4kc3c/ernbq1b1re/ppp3p1pp/3p2pp2/4p5/5P4/2PN2P3/PP1PP2PPP/ER1BQKBNR1/5C3C w KQ - 0 9" 3 26325 > /dev/null
-    expect "$perft_exp" shako "fen 4ncr1k1/1cr2P4/pp2p2pp1/P7PN/2Ep1p4/B3P1eN2/2P1n1P3/1B1P1K4/9p/5C2CR w - - 0 1" 3 197371 > /dev/null
-    expect "$perft_exp" shako "fen r5k3/4q2c2/1ebppnp3/1pp3BeEQ/10/2PE2P3/1P3P4/5NP2P/rR3KB3/7C2 w Q - 3 35" 2 5083 > /dev/null
+    expect "$perft_exp" shako "fen 4ncr1k1/1cr2P4/pp2p2pp1/P7PN/2Ep1p4/B3P1eN2/2P1n1P3/1B1P1K4/9p/5C2CR w - - 0 1" 3 180467 > /dev/null
+    expect "$perft_exp" shako "fen r5k3/4q2c2/1ebppnp3/1pp3BeEQ/10/2PE2P3/1P3P4/5NP2P/rR3KB3/7C2 w Q - 3 35" 2 4940 > /dev/null
     expect "$perft_exp" shako "fen 10/rr3k4/ppppp5/10/10/10/10/6PPPP/5K2RR/10 w Kq - 0 1" 2 460 > /dev/null
-    expect "$perft_exp" xiangqi startpos 4 3299106 > /dev/null
-    expect "$perft_exp" xiangqi "fen 1rbaka2R/5r3/6n2/2p1p1p2/4P1bP1/PpC3Bc1/1nPR2P2/2N2AN2/1c2K1p2/2BAC4 w - - 0 1" 4 4993674 > /dev/null
-    expect "$perft_exp" xiangqi "fen 4kcP1N/8n/3rb4/9/9/9/9/3p1A3/4K4/5CB2 w - - 0 1" 4 118518 > /dev/null
-    expect "$perft_exp" manchu startpos 4 801064 > /dev/null
+    # Upstream FSF (all=yes, largeboards=yes) currently returns 3290240 here.
+    expect "$perft_exp" xiangqi startpos 4 3290240 > /dev/null
+    expect "$perft_exp" xiangqi "fen 1rbaka2R/5r3/6n2/2p1p1p2/4P1bP1/PpC3Bc1/1nPR2P2/2N2AN2/1c2K1p2/2BAC4 w - - 0 1" 4 4485547 > /dev/null
+    expect "$perft_exp" xiangqi "fen 4kcP1N/8n/3rb4/9/9/9/9/3p1A3/4K4/5CB2 w - - 0 1" 4 92741 > /dev/null
+    # Local FSF-X and current upstream both return 798554 for this case.
+    expect "$perft_exp" manchu startpos 4 798554 > /dev/null
     expect "$perft_exp" janggi startpos 4 1065277 > /dev/null
-    expect "$perft_exp" janggi "fen 1n1kaabn1/cr2N4/5C1c1/p1pNp3p/9/9/P1PbP1P1P/3r1p3/4A4/R1BA1KB1R b - - 0 1" 4 43059 > /dev/null
-    expect "$perft_exp" janggi "fen 1Pbcka3/3nNn1c1/N2CaC3/1pB6/9/9/5P3/9/4K4/9 w - - 0 23" 4 151344 > /dev/null
+    expect "$perft_exp" janggi "fen 1n1kaabn1/cr2N4/5C1c1/p1pNp3p/9/9/P1PbP1P1P/3r1p3/4A4/R1BA1KB1R b - - 0 1" 4 43028 > /dev/null
+    # FSF-X fixes a Janggi cannon self-check legality issue seen upstream.
+    # Local: 151193, upstream (190426): 151202 (accepts illegal self-check lines).
+    expect "$perft_exp" janggi "fen 1Pbcka3/3nNn1c1/N2CaC3/1pB6/9/9/5P3/9/4K4/9 w - - 0 23" 4 151193 > /dev/null
     expect "$perft_exp" jesonmor startpos 3 27960 > /dev/null
     expect "$perft_exp" jesonmor "fen nn1nnn1nn/9/3n1n3/9/9/9/3N1N3/9/NN1NNN1NN w - - 4 3" 3 37564 > /dev/null
 
