@@ -148,6 +148,8 @@ constexpr Bitboard AllSquares = all_squares_bb();
 constexpr Bitboard DarkSquares = dark_squares_bb();
 constexpr Bitboard FileABB = file_a_bb();
 constexpr Bitboard FileBBB = FileABB << 1;
+
+
 constexpr Bitboard FileCBB = FileABB << 2;
 constexpr Bitboard FileDBB = FileABB << 3;
 constexpr Bitboard FileEBB = FileABB << 4;
@@ -892,6 +894,31 @@ template<typename T1 = Square> inline int distance(Square x, Square y);
 template<> inline int distance<File>(Square x, Square y) { return std::abs(file_of(x) - file_of(y)); }
 template<> inline int distance<Rank>(Square x, Square y) { return std::abs(rank_of(x) - rank_of(y)); }
 template<> inline int distance<Square>(Square x, Square y) { return SquareDistance[x][y]; }
+
+inline Bitboard lame_leaper_path(Direction d, Square s) {
+  const int NORTH_DIR = int(FILE_NB);
+  Direction dr = d > 0 ? NORTH : SOUTH;
+  Direction df = (std::abs(int(d) % NORTH_DIR) < NORTH_DIR / 2 ? int(d) % NORTH_DIR : -(int(d) % NORTH_DIR)) < 0 ? WEST : EAST;
+  Square to = s + d;
+  Bitboard b = 0;
+  if (!is_ok(to) || distance(s, to) >= 4)
+      return b;
+  while (s != to)
+  {
+      int diff = std::abs(int(file_of(to)) - int(file_of(s))) - std::abs(int(rank_of(to)) - int(rank_of(s)));
+      if (diff > 0)
+          s += df;
+      else if (diff < 0)
+          s += dr;
+      else
+          s += df + dr;
+
+      if (s != to)
+          b |= s;
+  }
+  return b;
+}
+
 
 inline int edge_distance(File f, File maxFile = FILE_H) { return std::min(f, File(maxFile - f)); }
 inline int edge_distance(Rank r, Rank maxRank = RANK_8) { return std::min(r, Rank(maxRank - r)); }
