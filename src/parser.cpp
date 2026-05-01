@@ -1986,11 +1986,13 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
         if (!is_custom(v->kingType))
         {
             const PieceInfo* pi = pieceMap.find(v->kingType)->second;
-            if (   pi->hopper[0][MODALITY_QUIET].size()
-                || pi->hopper[0][MODALITY_CAPTURE].size()
-                || std::any_of(pi->steps[0][MODALITY_CAPTURE].begin(),
-                               pi->steps[0][MODALITY_CAPTURE].end(),
-                               [](const std::pair<const Direction, int>& d) { return d.second; }))
+            const auto& ir_qui = pi->moves[0][MODALITY_QUIET];
+            const auto& ir_cap = pi->moves[0][MODALITY_CAPTURE];
+            auto has_hopper = [](const auto& ir) {
+                return std::any_of(ir.rays.begin(), ir.rays.end(), [](const auto& r) { return r.hopper; });
+            };
+            if (   has_hopper(ir_qui)
+                || has_hopper(ir_cap))
             {
                 std::cerr << piece_name(v->kingType) << " is not supported as kingType." << std::endl;
                 valid = false;
