@@ -1653,13 +1653,6 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
             std::cerr << "cloneMoveTypes - PAWN is not supported for clone moves and will be ignored." << std::endl;
         v->cloneMoveTypes &= ~piece_set(PAWN);
     }
-    parse_attribute("jumpCaptureTypes", v->jumpCaptureTypes, v);
-    if (v->jumpCaptureTypes & PAWN)
-    {
-        if (DoCheck)
-            std::cerr << "jumpCaptureTypes - PAWN is not supported for jump captures and will be ignored." << std::endl;
-        v->jumpCaptureTypes &= ~piece_set(PAWN);
-    }
     parse_attribute("forcedJumpContinuation", v->forcedJumpContinuation);
     parse_attribute("forcedJumpSameDirection", v->forcedJumpSameDirection);
     parse_attribute("cambodianMoves", v->cambodianMoves);

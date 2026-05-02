@@ -62,17 +62,53 @@ inline int slider_max_distance(int limit) {
 /// PieceInfo struct stores information about the piece movements.
 
 struct PieceInfo {
-  enum RiderAugment : uint8_t {
+  enum Augment : uint8_t {
     AUGMENT_NONE = 0,
     AUGMENT_DYNAMIC = 1 << 0,
-    AUGMENT_MAX = 1 << 1,
-    AUGMENT_CONTRA = 1 << 2
+    AUGMENT_MAX = 1 << 1
   };
 
   struct TupleRay {
     int dr;
     int df;
     int limit;
+  };
+
+  enum CaptureMode {
+    CAPTURE_DEST,
+    CAPTURE_LOCUST_ALL,
+    CAPTURE_LOCUST_FIRST,
+    CAPTURE_LOCUST_LAST
+  };
+
+  enum EquiRule {
+    EQUI_NONE,
+    EQUI_HOPPER,
+    EQUI_STOPPER
+  };
+
+  struct HopperProfile {
+    enum SpecialType : uint8_t {
+      NONE = 0,
+      ENEMY = 1 << 0,
+      FRIENDLY = 1 << 1,
+      WALL = 1 << 2,
+      DEAD = 1 << 3,
+      ALL_SPECIAL = ENEMY | FRIENDLY | WALL | DEAD
+    };
+
+    int hurdlesMin = 1;
+    int hurdlesMax = 1;
+    int preMin = 1;
+    int preMax = 255;
+    int postMin = 1;
+    int postMax = 1;
+    CaptureMode captureMode = CAPTURE_DEST;
+    EquiRule equiRule = EQUI_NONE;
+    PieceSet hurdlePieceTypes = PieceSet(0);
+    PieceSet transparentPieceTypes = PieceSet(0);
+    uint8_t hurdleSpecialTypes = ENEMY | FRIENDLY;
+    uint8_t transparentSpecialTypes = NONE;
   };
 
   std::string name = "";
@@ -83,21 +119,26 @@ struct PieceInfo {
   std::map<Direction, int> slider[2][MOVE_MODALITY_NB] = {};
   std::map<Direction, int> leapRider[2][MOVE_MODALITY_NB] = {};
   std::map<Direction, int> hopper[2][MOVE_MODALITY_NB] = {};
-  std::map<Direction, int> contraHopper[2][MOVE_MODALITY_NB] = {};
+  std::map<Direction, HopperProfile> universalHopper[2][MOVE_MODALITY_NB] = {};
   bool griffon[2][MOVE_MODALITY_NB] = {};
   bool manticore[2][MOVE_MODALITY_NB] = {};
   bool rose[2][MOVE_MODALITY_NB] = {};
   uint8_t riderAugmentMask = AUGMENT_NONE;
-  bool friendlyJump = false;
   bool rifleCapture = false;
   int mobilityScaling = 100;
   bool diagonalLimitedSlider = false;
 
-  inline void add_rider_augment(RiderAugment augment) { riderAugmentMask |= augment; }
-  inline bool has_runtime_rider_augment() const { return riderAugmentMask != AUGMENT_NONE; }
+  inline void add_rider_augment(Augment augment) { riderAugmentMask |= augment; }
+  inline bool has_universal_hopper() const {
+    for (int initial = 0; initial < 2; ++initial)
+      for (int modality = 0; modality < MOVE_MODALITY_NB; ++modality)
+        if (!universalHopper[initial][modality].empty())
+          return true;
+    return false;
+  }
+  inline bool has_runtime_rider_augment() const { return riderAugmentMask != AUGMENT_NONE || has_universal_hopper(); }
   inline bool has_dynamic_slider() const { return riderAugmentMask & AUGMENT_DYNAMIC; }
   inline bool has_max_slider() const { return riderAugmentMask & AUGMENT_MAX; }
-  inline bool has_contra_hopper() const { return riderAugmentMask & AUGMENT_CONTRA; }
   inline bool has_explicit_initial_moves() const {
     for (int modality = 0; modality < MOVE_MODALITY_NB; ++modality)
       if (!steps[1][modality].empty()
@@ -106,7 +147,7 @@ struct PieceInfo {
           || !slider[1][modality].empty()
           || !leapRider[1][modality].empty()
           || !hopper[1][modality].empty()
-          || !contraHopper[1][modality].empty()
+          || !universalHopper[1][modality].empty()
           || griffon[1][modality]
           || manticore[1][modality]
           || rose[1][modality])

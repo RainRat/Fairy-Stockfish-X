@@ -270,7 +270,6 @@ struct Variant {
   bool seirawanGating = false;
   bool commitGates = false;
   PieceSet cloneMoveTypes = NO_PIECE_SET;
-  PieceSet jumpCaptureTypes = NO_PIECE_SET;
   bool forcedJumpContinuation = false;
   bool forcedJumpSameDirection = false;
   bool cambodianMoves = false;

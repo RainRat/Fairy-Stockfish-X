@@ -737,10 +737,13 @@ namespace {
                                 ? (b & (Type == EVASIONS ? target : (~pos.pieces(Us) | (pos.self_capture(Pt) ? (pos.pieces(Us) & ~pos.pieces(Us, KING)) : Bitboard(0)))) & promotion_zone)
                                 : Bitboard(0);
         Bitboard jumpCaptures = 0;
-        PieceSet jumpTypes = pos.jump_capture_types();
-        if ((jumpTypes & ALL_PIECES) || (jumpTypes & piece_set(Pt)))
+        const PieceInfo* pi = pieceMap.get(Pt);
+        if (pi->has_universal_hopper())
         {
-            Bitboard candidates = (attacks | quiets) & ~pos.pieces();
+            // For universal hoppers, both empty and enemy-occupied squares can be jump capture destinations.
+            Bitboard candidates = (attacks | quiets) & ~pos.pieces(Us);
+            candidates |= pos.universal_hopper_potential_bb(Pt, from) & ~pos.pieces(Us);
+
             while (candidates)
             {
                 Square to = pop_lsb(candidates);
