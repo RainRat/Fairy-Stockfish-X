@@ -391,7 +391,6 @@ public:
   bool has_exchange() const;
   PieceSet rescueFor(PieceType pt) const;
   CapturingRule capture_type() const;
-  PieceSet jump_capture_types() const;
   bool forced_jump_continuation() const;
   bool forced_jump_same_direction() const;
   EnclosingRule enclosing_drop() const;
@@ -712,10 +711,7 @@ private:
   void move_piece(Square from, Square to);
   template<bool Do>
   void do_castling(Color us, Square from, Square& to, Square& rfrom, Square& rto);
-  static Bitboard dynamic_slider_bb(const std::map<Direction,int>& directions,
-                                    Square sq, Bitboard blockers,
-                                    Bitboard occupiedAll, Color c);
-  static Bitboard max_slider_bb(const std::map<Direction,int>& directions,
+  static Bitboard max_slider_bb(const std::map<Direction, int>& directions,
                                 Square sq, Bitboard occupied,
                                 Bitboard boardMask,
                                 Bitboard ownPieces, Color c,
@@ -778,7 +774,7 @@ private:
                                        bool quietMode);
   Bitboard special_rider_bb(const PieceInfo* pi, MoveModality modality,
                             Square sq, Bitboard occupied,
-                            Bitboard occupiedAll, Bitboard boardMask, Bitboard ownPieces,
+                            Bitboard boardMask, Bitboard ownPieces,
                             Color c, bool captureMode,
                             bool includeOwnBlockedAttacks = false) const;
   Bitboard universal_hopper_bb(const std::map<Direction, PieceInfo::HopperProfile>& profiles,
@@ -1712,11 +1708,6 @@ inline bool Position::drop_loop() const {
 inline CapturingRule Position::capture_type() const {
   assert(var != nullptr);
   return var->captureType;
-}
-
-inline PieceSet Position::jump_capture_types() const {
-  assert(var != nullptr);
-  return var->jumpCaptureTypes;
 }
 
 inline bool Position::forced_jump_continuation() const {
@@ -2776,38 +2767,6 @@ inline Square Position::castling_rook_square(CastlingRights cr) const {
 }
 
 // LOA-specific helper – completely private to Position
-inline Bitboard Position::dynamic_slider_bb(const std::map<Direction,int>& directions,
-                                            Square  sq,
-                                            Bitboard blockers,     // pieces that stop us
-                                            Bitboard occupiedAll,  // for distance count
-                                            Color   c)
-{
-  Bitboard out = 0;
-  for (auto const& [d, limit] : directions)
-  {
-    if (limit != DYNAMIC_SLIDER_LIMIT) continue;      // not an "x" slider
-
-    Direction step = c == WHITE ?  d : Direction(-d);
-    Square    nxt  = sq + step;
-    if (!is_ok(nxt) || distance(nxt, nxt - step) > 2) continue; // only rook/bishop steps
-
-    Bitboard line = line_bb(sq, nxt);                 // through board edge
-    int dist = popcount(line & occupiedAll);          // how far to travel
-
-    Square dest = sq;
-    bool   ok   = true;
-    for (int i = 0; i < dist; ++i)
-    {
-      dest += step;
-      if (!is_ok(dest) || distance(dest, dest - step) > 2) { ok = false; break; }
-      if (i < dist - 1 && (blockers & dest))       // hit enemy before end
-      { ok = false; break; }
-    }
-    if (ok) out |= square_bb(dest);
-  }
-  return out;
-}
-
 inline Bitboard Position::max_slider_bb(const std::map<Direction,int>& directions,
                                         Square sq,
                                         Bitboard occupied,
@@ -3280,7 +3239,7 @@ inline Bitboard Position::wrapped_rose_targets(Square from, Bitboard occupied,
 
 inline Bitboard Position::special_rider_bb(const PieceInfo* pi, MoveModality modality,
                                            Square sq, Bitboard occupied,
-                                           Bitboard occupiedAll, Bitboard boardMask, Bitboard ownPieces,
+                                           Bitboard boardMask, Bitboard ownPieces,
                                            Color c, bool captureMode,
                                            bool includeOwnBlockedAttacks) const
 {
@@ -3288,8 +3247,6 @@ inline Bitboard Position::special_rider_bb(const PieceInfo* pi, MoveModality mod
       return Bitboard(0);
   Bitboard b = 0;
   const uint8_t augment = pi->riderAugmentMask;
-  if (augment & PieceInfo::AUGMENT_DYNAMIC)
-      b |= Position::dynamic_slider_bb(pi->slider[0][modality], sq, occupied, occupiedAll, c);
   if (augment & PieceInfo::AUGMENT_MAX)
       b |= Position::max_slider_bb(pi->slider[0][modality], sq, occupied, boardMask, ownPieces, c, captureMode, includeOwnBlockedAttacks);
   if (augment & PieceInfo::AUGMENT_CONTRA)
@@ -3348,7 +3305,6 @@ inline Bitboard Position::universal_hopper_bb(const std::map<Direction, PieceInf
                 if (((profile.hurdleSpecialTypes & special) != 0) || (uint64_t(profile.hurdlePieceTypes & pcSet) != 0)) {
                     hurdlesHit++;
                     if (hurdlesHit == 1) distToFirstHurdle = dist;
-                    distFromLastHurdle = 0;
                     
                     if (profile.equiRule == PieceInfo::EQUI_STOPPER && hurdlesHit >= profile.hurdlesMin && hurdlesHit <= profile.hurdlesMax) {
                         if (dist % 2 == 0) {
@@ -3358,12 +3314,10 @@ inline Bitboard Position::universal_hopper_bb(const std::map<Direction, PieceInf
                         }
                     }
 
+                    distFromLastHurdle = 0;
                     if (hurdlesHit > profile.hurdlesMax) break;
                     continue;
-                }
-                
-                // Blocked
-                break;
+                } else break; // Blocked
             } else {
                 distFromLastHurdle++;
             }
@@ -3446,7 +3400,6 @@ inline Bitboard Position::wrapped_universal_hopper_targets(const std::map<Direct
                 if (((profile.hurdleSpecialTypes & special) != 0) || (uint64_t(profile.hurdlePieceTypes & pcSet) != 0)) {
                     hurdlesHit++;
                     if (hurdlesHit == 1) distToFirstHurdle = dist;
-                    distFromLastHurdle = 0;
                     
                     if (profile.equiRule == PieceInfo::EQUI_STOPPER && hurdlesHit >= profile.hurdlesMin && hurdlesHit <= profile.hurdlesMax) {
                         if (dist % 2 == 0) {
@@ -3458,6 +3411,7 @@ inline Bitboard Position::wrapped_universal_hopper_targets(const std::map<Direct
                         }
                     }
 
+                    distFromLastHurdle = 0;
                     if (hurdlesHit > profile.hurdlesMax) break;
                     continue;
                 } else break; // Blocked
@@ -3578,7 +3532,7 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
 
   Bitboard b = attacks_bb(c, movePt, s, occupancy);
 
-  b |= special_rider_bb(pi, MODALITY_CAPTURE, s, occupancy, occupancy, board_bb(), pieces(c), c, true, true);
+  b |= special_rider_bb(pi, MODALITY_CAPTURE, s, occupancy, board_bb(), pieces(c), c, true, true);
 
   if (pi->friendlyJump)
       b &= ~pieces(c);          // never hit our own men
@@ -3761,7 +3715,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
 
   Bitboard b = (moves_bb(c, movePt, s, occupancy) | extraDestinations);
 
-  b |= special_rider_bb(pi, MODALITY_QUIET, s, occupancy, byTypeBB[ALL_PIECES], board_bb(), pieces(c), c, false, false);
+  b |= special_rider_bb(pi, MODALITY_QUIET, s, occupancy, board_bb(), pieces(c), c, false, false);
 
   if (pi->friendlyJump)
       b &= ~pieces(c);          // cannot land on own piece
@@ -3775,7 +3729,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
   if (initialMoveRegion & s)
   {
       b |= moves_bb<true>(c, movePt, s, occupancy);
-      b |= special_rider_bb(pi, MODALITY_QUIET, s, occupancy, byTypeBB[ALL_PIECES], board_bb(), pieces(c), c, true, false);
+      b |= special_rider_bb(pi, MODALITY_QUIET, s, occupancy, board_bb(), pieces(c), c, true, false);
   }
   // Xiangqi soldier
   if (pt == SOLDIER && !(promoted_soldiers(c) & s))
@@ -4054,18 +4008,25 @@ inline Square Position::jump_capture_square(Square from, Square to) const {
                                                   | (hsDead ? PieceInfo::HopperProfile::DEAD : 0);
 
                                   if (((profile.transparentSpecialTypes & hspecial) != 0) || (uint64_t(profile.transparentPieceTypes & hpcSet) != 0))
+                                  {
+                                      distFromLastHurdle++;
                                       continue;
-
+                                  }
                                   if (((profile.hurdleSpecialTypes & hspecial) != 0) || (uint64_t(profile.hurdlePieceTypes & hpcSet) != 0))
                                   {
                                       hurdlesInScan++;
+                                      distFromLastHurdle = 0;
                                       // Check if this hurdle hit matches our requirements
                                       int totalHurdles = hurdlesHit + hurdlesInScan;
                                       if (j == dist - 1 && totalHurdles >= profile.hurdlesMin && totalHurdles <= profile.hurdlesMax)
                                           return hurdleScan;
+                                      
+                                      // If this is NOT the hurdle at 2*dist, we are blocked (for Equistopper)
+                                      break;
                                   }
                                   break;
                               }
+                              else distFromLastHurdle++;
                           }
                       }
                       else if (hurdlesHit >= profile.hurdlesMin && hurdlesHit <= profile.hurdlesMax &&
@@ -4084,19 +4045,7 @@ inline Square Position::jump_capture_square(Square from, Square to) const {
       }
   }
 
-  // 2. Legacy jumpCaptureTypes
-  PieceSet jumpTypes = jump_capture_types();
-  if ((!(jumpTypes & ALL_PIECES) && !(jumpTypes & piece_set(pt))))
-      return SQ_NONE;
-
-  Square mid = JumpMidpoint[from][to];
-  if (mid == SQ_NONE)
-      return SQ_NONE;
-  Piece jumped = piece_on(mid);
-  if (jumped == NO_PIECE || (color_of(jumped) == us && !self_capture(pt)))
-      return SQ_NONE;
-
-  return mid;
+  return SQ_NONE;
 }
 
 inline Bitboard Position::universal_hopper_potential_bb(PieceType pt, Square s) const {
@@ -4145,11 +4094,8 @@ inline bool Position::capture(Move m) const {
       Piece mover = moved_piece(m);
       if (mover != NO_PIECE)
       {
-          PieceType pt = type_of(mover);
-          const PieceInfo* pi = pieceMap.get(pt);
-          PieceSet jumpTypes = jump_capture_types();
-          if (   (jumpTypes & ALL_PIECES) || (jumpTypes & piece_set(pt))
-              || pi->has_universal_hopper())
+          const PieceInfo* pi = pieceMap.get(type_of(mover));
+          if (pi->has_universal_hopper())
           {
               if (jump_capture_square(from_sq(m), to_sq(m)) != SQ_NONE)
                   return true;

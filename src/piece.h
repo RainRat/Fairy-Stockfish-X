@@ -62,9 +62,8 @@ inline int slider_max_distance(int limit) {
 /// PieceInfo struct stores information about the piece movements.
 
 struct PieceInfo {
-  enum RiderAugment : uint8_t {
+  enum Augment : uint8_t {
     AUGMENT_NONE = 0,
-    AUGMENT_DYNAMIC = 1 << 0,
     AUGMENT_MAX = 1 << 1,
     AUGMENT_CONTRA = 1 << 2
   };
@@ -131,7 +130,7 @@ struct PieceInfo {
   int mobilityScaling = 100;
   bool diagonalLimitedSlider = false;
 
-  inline void add_rider_augment(RiderAugment augment) { riderAugmentMask |= augment; }
+  inline void add_rider_augment(Augment augment) { riderAugmentMask |= augment; }
   inline bool has_universal_hopper() const {
     for (int initial = 0; initial < 2; ++initial)
       for (int modality = 0; modality < MOVE_MODALITY_NB; ++modality)
@@ -140,7 +139,6 @@ struct PieceInfo {
     return false;
   }
   inline bool has_runtime_rider_augment() const { return riderAugmentMask != AUGMENT_NONE || has_universal_hopper(); }
-  inline bool has_dynamic_slider() const { return riderAugmentMask & AUGMENT_DYNAMIC; }
   inline bool has_max_slider() const { return riderAugmentMask & AUGMENT_MAX; }
   inline bool has_contra_hopper() const { return riderAugmentMask & AUGMENT_CONTRA; }
   inline bool has_explicit_initial_moves() const {
