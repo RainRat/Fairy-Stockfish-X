@@ -138,6 +138,10 @@ jobs:
         run: |
           ../tests/contra-hopper.sh
 
+      - name: Test universal hopper
+        run: |
+          ../tests/universal-hopper.sh ./stockfish
+
       - name: Test whaleshogi
         run: |
           ../tests/whaleshogi.sh

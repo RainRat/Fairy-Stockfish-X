@@ -750,6 +750,7 @@ private:
                                            Color c, Square sq, Bitboard occupied, Bitboard ownPieces,
                                            File maxFile, Rank maxRank,
                                            bool wrapFile, bool wrapRank,
+                                           bool captureMode,
                                            bool includeOwnBlockedAttacks) const;
   static Bitboard wrapped_bent_rider_targets(bool griffon, Square sq, Bitboard occupied,
                                              File maxFile, Rank maxRank,
@@ -767,11 +768,12 @@ private:
   Bitboard special_rider_bb(const PieceInfo* pi, MoveModality modality,
                             Square sq, Bitboard occupied,
                             Bitboard boardMask, Bitboard ownPieces,
-                            Color c, bool captureMode,
+                            Color c, bool initial, bool captureMode,
                             bool includeOwnBlockedAttacks = false) const;
   Bitboard universal_hopper_bb(const std::map<Direction, PieceInfo::HopperProfile>& profiles,
                                Square sq, Bitboard occupied,
                                Bitboard ownPieces, Color c,
+                               bool captureMode,
                                bool includeOwnBlockedAttacks = false) const;
 
   // Data members
@@ -3156,7 +3158,7 @@ inline Bitboard Position::wrapped_rose_targets(Square from, Bitboard occupied,
 inline Bitboard Position::special_rider_bb(const PieceInfo* pi, MoveModality modality,
                                            Square sq, Bitboard occupied,
                                            Bitboard boardMask, Bitboard ownPieces,
-                                           Color c, bool captureMode,
+                                           Color c, bool initial, bool captureMode,
                                            bool includeOwnBlockedAttacks) const
 {
   if (!pi->has_runtime_rider_augment())
@@ -3167,14 +3169,15 @@ inline Bitboard Position::special_rider_bb(const PieceInfo* pi, MoveModality mod
       b |= Position::dynamic_slider_bb(pi->slider[0][modality], sq, occupied, byTypeBB[ALL_PIECES], c);
   if (augment & PieceInfo::AUGMENT_MAX)
       b |= Position::max_slider_bb(pi->slider[0][modality], sq, occupied, boardMask, ownPieces, c, captureMode, includeOwnBlockedAttacks);
-  if (!pi->universalHopper[0][modality].empty())
-      b |= universal_hopper_bb(pi->universalHopper[0][modality], sq, occupied, ownPieces, c, includeOwnBlockedAttacks);
+  if (!pi->universalHopper[initial ? 1 : 0][modality].empty())
+      b |= universal_hopper_bb(pi->universalHopper[initial ? 1 : 0][modality], sq, occupied, ownPieces, c, captureMode, includeOwnBlockedAttacks);
   return b;
 }
 
 inline Bitboard Position::universal_hopper_bb(const std::map<Direction, PieceInfo::HopperProfile>& profiles,
                                               Square sq, Bitboard occupied,
                                               Bitboard ownPieces, Color c,
+                                              bool captureMode,
                                               bool includeOwnBlockedAttacks) const
 {
     Bitboard b = 0;
@@ -3197,16 +3200,34 @@ inline Bitboard Position::universal_hopper_bb(const std::map<Direction, PieceInf
             bool isOccupied = (occupied & sBB);
             bool isWall = (st->wallSquares & sBB);
             bool isDead = (st->deadSquares & sBB);
+            bool isFriendly = isOccupied && bool(ownPieces & sBB);
+            bool isEnemy = isOccupied && !isFriendly;
+            bool isDestination = profile.equiRule != PieceInfo::EQUI_STOPPER
+                              && !isWall && !isDead
+                              && ((captureMode && isEnemy) || (!captureMode && !isOccupied));
+            bool knownBoardOccupancy = bool(byTypeBB[ALL_PIECES] & sBB);
+
+            if (isDestination) {
+                const int postDistance = distFromLastHurdle + 1;
+                if (profile.equiRule != PieceInfo::EQUI_STOPPER && hurdlesHit >= profile.hurdlesMin && hurdlesHit <= profile.hurdlesMax) {
+                    if (distToFirstHurdle >= profile.preMin && distToFirstHurdle <= profile.preMax) {
+                        if (postDistance >= profile.postMin && postDistance <= profile.postMax) {
+                            if (profile.equiRule == PieceInfo::EQUI_HOPPER && postDistance != distToFirstHurdle) continue;
+                            if (includeOwnBlockedAttacks || !(ownPieces & sBB))
+                                b |= sBB;
+                        }
+                    }
+                }
+                distFromLastHurdle = postDistance;
+                continue;
+            }
 
             if (isOccupied || isWall || isDead) {
                 Piece pc = piece_on(s);
                 PieceType pt = type_of(pc);
-                PieceSet pcSet = (pt == NO_PIECE_TYPE || !isOccupied) ? NO_PIECE_SET : piece_set(pt);
+                PieceSet pcSet = (pt == NO_PIECE_TYPE || !isOccupied || !knownBoardOccupancy) ? NO_PIECE_SET : piece_set(pt);
                 if (isWall) pcSet |= PieceSet(1ULL << 62);
                 if (isDead) pcSet |= PieceSet(1ULL << 61);
-                
-                bool isEnemy = isOccupied && !empty(s) && color_of(pc) != c;
-                bool isFriendly = isOccupied && !empty(s) && color_of(pc) == c;
 
                 uint8_t special = (isEnemy ? PieceInfo::HopperProfile::ENEMY : 0)
                                 | (isFriendly ? PieceInfo::HopperProfile::FRIENDLY : 0)
@@ -3267,6 +3288,7 @@ inline Bitboard Position::wrapped_universal_hopper_targets(const std::map<Direct
                                                            Color c, Square sq, Bitboard occupied, Bitboard ownPieces,
                                                            File maxFile, Rank maxRank,
                                                            bool wrapFile, bool wrapRank,
+                                                           bool captureMode,
                                                            bool includeOwnBlockedAttacks) const {
     Bitboard out = 0;
     for (const auto& it : profiles) {
@@ -3292,16 +3314,34 @@ inline Bitboard Position::wrapped_universal_hopper_targets(const std::map<Direct
             bool isOccupied = (occupied & sBB);
             bool isWall = (st->wallSquares & sBB);
             bool isDead = (st->deadSquares & sBB);
+            bool isFriendly = isOccupied && bool(ownPieces & sBB);
+            bool isEnemy = isOccupied && !isFriendly;
+            bool isDestination = profile.equiRule != PieceInfo::EQUI_STOPPER
+                              && !isWall && !isDead
+                              && ((captureMode && isEnemy) || (!captureMode && !isOccupied));
+            bool knownBoardOccupancy = bool(byTypeBB[ALL_PIECES] & sBB);
+
+            if (isDestination) {
+                const int postDistance = distFromLastHurdle + 1;
+                if (profile.equiRule != PieceInfo::EQUI_STOPPER && hurdlesHit >= profile.hurdlesMin && hurdlesHit <= profile.hurdlesMax) {
+                    if (distToFirstHurdle >= profile.preMin && distToFirstHurdle <= profile.preMax) {
+                        if (postDistance >= profile.postMin && postDistance <= profile.postMax) {
+                            if (profile.equiRule == PieceInfo::EQUI_HOPPER && postDistance != distToFirstHurdle) continue;
+                            if (includeOwnBlockedAttacks || !(ownPieces & sBB))
+                                out |= sBB;
+                        }
+                    }
+                }
+                distFromLastHurdle = postDistance;
+                continue;
+            }
 
             if (isOccupied || isWall || isDead) {
                 Piece pc = piece_on(current);
                 PieceType pt = type_of(pc);
-                PieceSet pcSet = (pt == NO_PIECE_TYPE || !isOccupied) ? NO_PIECE_SET : piece_set(pt);
+                PieceSet pcSet = (pt == NO_PIECE_TYPE || !isOccupied || !knownBoardOccupancy) ? NO_PIECE_SET : piece_set(pt);
                 if (isWall) pcSet |= PieceSet(1ULL << 62);
                 if (isDead) pcSet |= PieceSet(1ULL << 61);
-
-                bool isFriendly = isOccupied && (ownPieces & sBB);
-                bool isEnemy = isOccupied && !isFriendly;
 
                 uint8_t special = (isEnemy ? PieceInfo::HopperProfile::ENEMY : 0)
                                 | (isFriendly ? PieceInfo::HopperProfile::FRIENDLY : 0)
@@ -3377,7 +3417,7 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
       b |= wrapped_tuple_rider_targets(pi->tupleSlider[0][MODALITY_CAPTURE], c, s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, false);
       b |= wrapped_slider_targets(pi->slider[0][MODALITY_CAPTURE], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, false);
       b |= wrapped_hopper_targets(pi->hopper[0][MODALITY_CAPTURE], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, false);
-      b |= wrapped_universal_hopper_targets(pi->universalHopper[0][MODALITY_CAPTURE], c, s, occupancy, pieces(c), max_file(), max_rank(), wrapFile, wrapRank, true);
+      b |= wrapped_universal_hopper_targets(pi->universalHopper[0][MODALITY_CAPTURE], c, s, occupancy, pieces(c), max_file(), max_rank(), wrapFile, wrapRank, true, true);
       if (pi->griffon[0][MODALITY_CAPTURE])
           b |= wrapped_bent_rider_targets(true, s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, false);
       if (pi->manticore[0][MODALITY_CAPTURE])
@@ -3391,7 +3431,7 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
 
   PieceType movePt = pt == KING ? king_type() : pt;
   const PieceInfo* pi = pieceMap.get(movePt);
-  const bool hasRuntimeSpecialMoves = pi->riderAugmentMask != PieceInfo::AUGMENT_NONE
+  const bool hasRuntimeSpecialMoves = pi->has_runtime_rider_augment()
                                    || pi->has_explicit_initial_moves();
 
   if (!hasRuntimeSpecialMoves && fast_attacks() && (pt != KING || king_type() == KING))
@@ -3442,7 +3482,7 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
 
   Bitboard b = attacks_bb(c, movePt, s, occupancy);
 
-  b |= special_rider_bb(pi, MODALITY_CAPTURE, s, occupancy, board_bb(), pieces(c), c, true, true);
+  b |= special_rider_bb(pi, MODALITY_CAPTURE, s, occupancy, board_bb(), pieces(c), c, false, true, true);
 
   // Xiangqi soldier
   if (pt == SOLDIER && !(promoted_soldiers(c) & s))
@@ -3518,7 +3558,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
         b |= wrapped_tuple_rider_targets(pi->tupleSlider[0][MODALITY_QUIET], c, s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
         b |= wrapped_slider_targets(pi->slider[0][MODALITY_QUIET], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
         b |= wrapped_hopper_targets(pi->hopper[0][MODALITY_QUIET], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
-        b |= wrapped_universal_hopper_targets(pi->universalHopper[0][MODALITY_QUIET], c, s, occupancy, pieces(c), max_file(), max_rank(), wrapFile, wrapRank, false);
+        b |= wrapped_universal_hopper_targets(pi->universalHopper[0][MODALITY_QUIET], c, s, occupancy, pieces(c), max_file(), max_rank(), wrapFile, wrapRank, false, false);
         if (pi->griffon[0][MODALITY_QUIET])
             b |= wrapped_bent_rider_targets(true, s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
         if (pi->manticore[0][MODALITY_QUIET])
@@ -3534,7 +3574,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
             b |= wrapped_tuple_rider_targets(pi->tupleSlider[1][MODALITY_QUIET], c, s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
             b |= wrapped_slider_targets(pi->slider[1][MODALITY_QUIET], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
             b |= wrapped_hopper_targets(pi->hopper[1][MODALITY_QUIET], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
-            b |= wrapped_universal_hopper_targets(pi->universalHopper[1][MODALITY_QUIET], c, s, occupancy, pieces(c), max_file(), max_rank(), wrapFile, wrapRank, false);
+            b |= wrapped_universal_hopper_targets(pi->universalHopper[1][MODALITY_QUIET], c, s, occupancy, pieces(c), max_file(), max_rank(), wrapFile, wrapRank, false, false);
             if (pi->griffon[1][MODALITY_QUIET])
                 b |= wrapped_bent_rider_targets(true, s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
             if (pi->manticore[1][MODALITY_QUIET])
@@ -3603,7 +3643,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
   if (const SpellContext* spellCtx = current_spell_context(); spellCtx && c == sideToMove)
       occupancy &= ~spellCtx->jumpRemoved;
 
-  const bool hasRuntimeSpecialMoves = pi->riderAugmentMask != PieceInfo::AUGMENT_NONE
+  const bool hasRuntimeSpecialMoves = pi->has_runtime_rider_augment()
                                    || pi->has_explicit_initial_moves();
 
   if (!hasRuntimeSpecialMoves && (fast_attacks() || fast_attacks2()) && (pt != KING || king_type() == KING))
@@ -3616,7 +3656,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
 
   Bitboard b = (moves_bb(c, movePt, s, occupancy) | extraDestinations);
 
-  b |= special_rider_bb(pi, MODALITY_QUIET, s, occupancy, board_bb(), pieces(c), c, false, false);
+  b |= special_rider_bb(pi, MODALITY_QUIET, s, occupancy, board_bb(), pieces(c), c, false, false, false);
 
   const bool usesGenericPawnLikeInitialMoveHelper =
          pt == PAWN || (pawn_like_types(c) & piece_set(pt));
@@ -3628,7 +3668,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
   if (initialMoveRegion & s)
   {
       b |= moves_bb<true>(c, movePt, s, occupancy);
-      b |= special_rider_bb(pi, MODALITY_QUIET, s, occupancy, board_bb(), pieces(c), c, true, false);
+      b |= special_rider_bb(pi, MODALITY_QUIET, s, occupancy, board_bb(), pieces(c), c, true, true, false);
   }
   // Xiangqi soldier
   if (pt == SOLDIER && !(promoted_soldiers(c) & s))

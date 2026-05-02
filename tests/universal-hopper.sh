@@ -1,9 +1,21 @@
 #!/usr/bin/env bash
 
+set -euo pipefail
+
 # Test Universal Hopper features
 
 # 1. Setup temporary variant file
-INI_FILE="universal_hopper_test.ini"
+ENGINE=${1:-./stockfish}
+if [[ ! -x "${ENGINE}" ]]; then
+    ENGINE="../src/stockfish"
+fi
+if [[ ! -x "${ENGINE}" ]]; then
+    echo "engine executable not found: pass path as first argument" >&2
+    exit 2
+fi
+
+INI_FILE=$(mktemp -t universal_hopper_test.XXXXXX.ini)
+trap 'rm -f "${INI_FILE}"' EXIT
 cat << 'EOF' > $INI_FILE
 [hopper-common:chess]
 pieceToCharTable = PNBRQKDFGHS
@@ -39,18 +51,13 @@ customPiece1 = d:{hurdles: 1,1; pre: 1,*; post: 1,1}R
 customPiece1 = d:{hurdles: abc,1; pre: 1,*}R
 EOF
 
-STOCKFISH="./stockfish"
-if [ ! -f "$STOCKFISH" ]; then
-    STOCKFISH="../src/stockfish"
-fi
-
 function run_test() {
     local variant=$1
     local fen=$2
     local expected_nodes=$3
-    local moves=$4
+    local moves=${4:-}
     echo "Testing $variant..."
-    output=$($STOCKFISH << EOF
+    output=$("${ENGINE}" << EOF
 setoption name VariantPath value $INI_FILE
 uci
 setoption name UCI_Variant value $variant
@@ -99,7 +106,7 @@ run_test "directional-hopper" "7k/3p4/3d4/8/8/8/8/K7 b - - 0 1" 3
 # Moves: King A1 (3), Hopper D3D5 (1). Total = 4
 run_test "locust-first" "7k/8/8/8/3p4/3D4/8/K7 w - - 0 1" 4
 # Verify capture happened
-output=$($STOCKFISH << EOF
+output=$("${ENGINE}" << EOF
 setoption name VariantPath value $INI_FILE
 uci
 setoption name UCI_Variant value locust-first
@@ -121,7 +128,7 @@ fi
 # White D3, Enemy p4, p5. Jump to D6.
 # Moves: King A1 (3), Hopper D3D6 (1). Total = 4
 run_test "locust-all" "7k/8/8/3p4/3p4/3D4/8/K7 w - - 0 1" 4
-output=$($STOCKFISH << EOF
+output=$("${ENGINE}" << EOF
 setoption name VariantPath value $INI_FILE
 uci
 setoption name UCI_Variant value locust-all
@@ -176,4 +183,3 @@ run_test "wrapped-hopper" "7k/8/8/8/P6D/8/8/K7 w - - 0 1" 4
 run_test "parser-fail" "7k/8/8/8/3P4/3D4/8/K7 w - - 0 1" 5
 
 echo "All Universal Hopper tests passed!"
-rm $INI_FILE

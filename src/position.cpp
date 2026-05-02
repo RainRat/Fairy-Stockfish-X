@@ -2411,8 +2411,19 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
       return b;
   }
 
+  bool hasRuntimeSpecialAttackers = false;
+  for (PieceSet ps = piece_types(); ps && !hasRuntimeSpecialAttackers;)
+  {
+      PieceType pt = pop_lsb(ps);
+      if (!pieces(c, pt))
+          continue;
+      PieceType move_pt = pt == KING ? king_type() : pt;
+      if (pieceMap.get(move_pt)->has_runtime_rider_augment())
+          hasRuntimeSpecialAttackers = true;
+  }
+
   // Use a faster version for variants with moderate rule variations
-  if (fast_attacks())
+  if (!hasRuntimeSpecialAttackers && fast_attacks())
   {
       return  (pawn_attacks_bb(~c, s)          & pieces(c, PAWN))
             | (attacks_bb<KNIGHT>(s)           & pieces(c, KNIGHT, ARCHBISHOP, CHANCELLOR))
@@ -2422,7 +2433,7 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
   }
 
   // Use a faster version for selected fairy pieces
-  if (fast_attacks2())
+  if (!hasRuntimeSpecialAttackers && fast_attacks2())
   {
       return  (pawn_attacks_bb(~c, s)             & pieces(c, PAWN, BREAKTHROUGH_PIECE, GOLD))
             | (attacks_bb<KNIGHT>(s)              & pieces(c, KNIGHT))
@@ -2443,6 +2454,18 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
       if (board_bb(c, pt) & s)
       {
           PieceType move_pt = pt == KING ? king_type() : pt;
+          const PieceInfo* pi = pieceMap.get(move_pt);
+          if (pi->has_runtime_rider_augment())
+          {
+              Bitboard candidates = pieces(c, pt);
+              while (candidates)
+              {
+                  Square from = pop_lsb(candidates);
+                  if (attacks_from(c, pt, from, occupied) & s)
+                      b |= from;
+              }
+              continue;
+          }
           // Consider asymmetrical moves (e.g., horse)
           if (AttackRiderTypes[move_pt] & ASYMMETRICAL_RIDERS)
           {
@@ -4595,7 +4618,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   Piece pc = moved_piece(m);
   Color dropColor = dropMove ? drop_hand_color(us, in_hand_piece_type(m)) : us;
   PieceType movedType = type_of(pc);
-  const PieceInfo* pi = pieceMap.get(movedType);
+  const PieceInfo* pi = movedType != NO_PIECE_TYPE ? pieceMap.get(movedType) : nullptr;
   Piece captured = captured_piece(m);
   if (type_of(m) == CASTLING && captured == NO_PIECE)
       captured = piece_on(to);
@@ -4628,7 +4651,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   PieceType exchanged = exchange_piece(m);
   Square jumpCapsq = is_jump_capture(m) ? jump_capture_square(from, to) : SQ_NONE;
   Bitboard locust_all_mask = 0;
-  if (pi->has_universal_hopper() && jumpCapsq != SQ_NONE)
+  if (pi && pi->has_universal_hopper() && jumpCapsq != SQ_NONE)
   {
       const bool usesGenericPawnLikeInitialMoveHelper =
              movedType == PAWN || (pawn_like_types(us) & piece_set(movedType));
@@ -5876,7 +5899,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
          ( blast_on_self_destruct() && is_self_destruct(m) ) ||
          var->blastPassiveTypes ||
          ( remove_connect_n() > 0 ) ||
-         ( pi->has_universal_hopper() && jumpCapsq != SQ_NONE )
+         ( pi && pi->has_universal_hopper() && jumpCapsq != SQ_NONE )
        )
        && !is_pass(m)
      )
@@ -5971,7 +5994,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           }
       }
 
-      if (pi->has_universal_hopper() && jumpCapsq != SQ_NONE)
+      if (pi && pi->has_universal_hopper() && jumpCapsq != SQ_NONE)
       {
           removal_mask |= locust_all_mask;
       }
