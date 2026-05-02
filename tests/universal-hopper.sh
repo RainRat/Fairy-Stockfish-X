@@ -43,9 +43,16 @@ customPiece1 = d:{hurdles: 1,1; equi: stopper}Q
 [equi-stopper-multi:hopper-common]
 customPiece1 = d:{hurdles: 2,2; equi: stopper}Q
 
+[equi-stopper-pre3:hopper-common]
+customPiece1 = d:{hurdles: 1,1; pre: 3,3; post: 1,1; equi: stopper}Q
+
 [wrapped-hopper:hopper-common]
 topology = cylinder
 customPiece1 = d:{hurdles: 1,1; pre: 1,*; post: 1,1}R
+
+[wrapped-locust-all:hopper-common]
+topology = cylinder
+customPiece1 = d:c{hurdles: 2,2; pre: 1,1; post: 1,1; capture: locust_all; hurdle_types: enemy}R
 
 [long-step-hopper:hopper-common]
 customPiece1 = d:{hurdles: 1,1; pre: 1,1; post: 1,1}(3,2)(3,2)
@@ -174,6 +181,12 @@ run_test "equi-stopper" "7k/8/8/3p4/8/8/8/3D3K w - - 0 1" 5
 # Moves: King H1 (3), Stopper D1D3 (1) = 4.
 run_test "equi-stopper-multi" "7k/8/8/3p4/8/3p4/8/3D3K w - - 0 1" 4
 
+# Equistopper with pre-distance constraint:
+# D at D3, hurdle at D5, but pre is constrained to 3.
+# Midpoint move D3D4 (which requires pre=2) must be rejected.
+# Moves: King A1 only (3). Total = 3.
+run_test "equi-stopper-pre3" "7k/8/8/3p4/8/3D4/8/K7 w - - 0 1" 3
+
 # 5. Wrapped topology
 # Rook-hopper on cylinder jumping across the edge
 # D on h4, P on a4. Should land on b4.
@@ -185,6 +198,25 @@ run_test "wrapped-hopper" "7k/8/8/8/P6D/8/8/K7 w - - 0 1" 4
 # D on a1, hurdle on d3, landing on g5. Plus two pawn pushes and king moves.
 # Moves: D a1g5 (1), d3d4 (1), g6g7 (1), king h1 (3). Total = 6
 run_test "long-step-hopper" "7k/8/6P1/8/8/3P4/8/D6K w - - 0 1" 6
+
+# 5c. Wrapped topology + locust_all: capture-all should still remove all hurdles.
+# D at h3, enemy hurdles at h4/h5, landing at h6.
+run_test "wrapped-locust-all" "7k/8/8/p6p/p6p/7D/8/K7 w - - 0 1" 4
+output=$("${ENGINE}" << EOF
+uci
+setoption name VariantPath value $INI_FILE
+setoption name UCI_Variant value wrapped-locust-all
+position fen 7k/8/8/p6p/p6p/7D/8/K7 w - - 0 1 moves h3h6
+d
+quit
+EOF
+)
+if echo "$output" | grep -q "Fen: 7k/8/7D/p7/p7/8/8/K7"; then
+    echo "  [PASS] wrapped locust_all removed all hurdles"
+else
+    echo "  [FAIL] wrapped locust_all did not remove all hurdles"
+    exit 1
+fi
 
 # 6. Parser Robustness
 # Should not crash and use default (1) for 'abc'

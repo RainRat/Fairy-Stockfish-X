@@ -3250,7 +3250,7 @@ inline Bitboard Position::universal_hopper_bb(const std::map<Direction, PieceInf
                     if (hurdlesHit == 1) distToFirstHurdle = dist;
                     
                     if (profile.equiRule == PieceInfo::EQUI_STOPPER && hurdlesHit >= profile.hurdlesMin && hurdlesHit <= profile.hurdlesMax) {
-                        if (dist % 2 == 0) {
+                        if (dist % 2 == 0 && dist >= profile.preMin && dist <= profile.preMax) {
                             Square mid = sq + (dir * (dist / 2));
                             if (includeOwnBlockedAttacks || !(ownPieces & square_bb(mid)))
                                 b |= mid;
@@ -3370,7 +3370,7 @@ inline Bitboard Position::wrapped_universal_hopper_targets(const std::map<Direct
                     if (hurdlesHit == 1) distToFirstHurdle = dist;
                     
                     if (profile.equiRule == PieceInfo::EQUI_STOPPER && hurdlesHit >= profile.hurdlesMin && hurdlesHit <= profile.hurdlesMax) {
-                        if (dist % 2 == 0) {
+                        if (dist % 2 == 0 && dist >= profile.preMin && dist <= profile.preMax) {
                             Square mid;
                             if (wrapped_destination_square(sq, (dist / 2) * df, (dist / 2) * dr, maxFile, maxRank, wrapFile, wrapRank, mid)) {
                                 if (includeOwnBlockedAttacks || !(ownPieces & square_bb(mid)))
@@ -4008,7 +4008,10 @@ inline Square Position::jump_capture_square(Square from, Square to) const {
                                       distFromLastHurdle = 0;
                                       // Check if this hurdle hit matches our requirements
                                       int totalHurdles = hurdlesHit + hurdlesInScan;
-                                      if (j == dist - 1 && totalHurdles >= profile.hurdlesMin && totalHurdles <= profile.hurdlesMax)
+                                      const int hurdleDistance = dist + j + 1;
+                                      if (j == dist - 1
+                                          && totalHurdles >= profile.hurdlesMin && totalHurdles <= profile.hurdlesMax
+                                          && hurdleDistance >= profile.preMin && hurdleDistance <= profile.preMax)
                                           return hurdleScan;
                                       // Continue scanning: EQUI_STOPPER can require multiple hurdles.
                                       continue;
