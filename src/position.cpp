@@ -5909,10 +5909,27 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
                   current = from;
                   for (int i = 0; i < dist; ++i) {
                       current += dir;
-                      if (current != to && current != jumpCapsq && (byTypeBB[ALL_PIECES] & current))
-                          removal_mask |= current;
-                  }
-              }
+                      if (current == to) break;
+                      Bitboard sBB = square_bb(current);
+                      bool isOccupied = (byTypeBB[ALL_PIECES] & sBB);
+                      if (!isOccupied) continue;
+
+                      Piece hurdlePc = piece_on(current);
+                      PieceType hurdlePt = type_of(hurdlePc);
+                      PieceSet pcSet = piece_set(hurdlePt);
+                      bool isFriendly = (color_of(hurdlePc) == us);
+                      uint8_t special = (isFriendly ? PieceInfo::HopperProfile::FRIENDLY : PieceInfo::HopperProfile::ENEMY);
+
+                      if (((profile.transparentSpecialTypes & special) != 0) || (uint64_t(profile.transparentPieceTypes & pcSet) != 0))
+                          continue;
+
+                      if (((profile.hurdleSpecialTypes & special) != 0) || (uint64_t(profile.hurdlePieceTypes & pcSet) != 0)) {
+                          if (current != jumpCapsq)
+                              removal_mask |= current;
+                      } else {
+                          break; // Should not happen for a legal move, but stay safe
+                      }
+                  }              }
           }
       }
 
