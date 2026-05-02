@@ -47,8 +47,14 @@ customPiece1 = d:{hurdles: 2,2; equi: stopper}Q
 topology = cylinder
 customPiece1 = d:{hurdles: 1,1; pre: 1,*; post: 1,1}R
 
+[long-step-hopper:hopper-common]
+customPiece1 = d:{hurdles: 1,1; pre: 1,1; post: 1,1}(3,2)(3,2)
+
 [parser-fail:hopper-common]
 customPiece1 = d:{hurdles: abc,1; pre: 1,*}R
+
+[parser-missing-comma:hopper-common]
+customPiece1 = d:{hurdles: 2; pre: 1,*}R
 EOF
 
 function run_test() {
@@ -175,11 +181,22 @@ run_test "equi-stopper-multi" "7k/8/8/3p4/8/3p4/8/3D3K w - - 0 1" 4
 # Moves: Hopper H4B4 (1), King A1 (3). Total = 4
 run_test "wrapped-hopper" "7k/8/8/8/P6D/8/8/K7 w - - 0 1" 4
 
+# 5b. Long-step tuple hopper (3,2) ray should not be blocked by anti-wrap guards.
+# D on a1, hurdle on d3, landing on g5. Plus two pawn pushes and king moves.
+# Moves: D a1g5 (1), d3d4 (1), g6g7 (1), king h1 (3). Total = 6
+run_test "long-step-hopper" "7k/8/6P1/8/8/3P4/8/D6K w - - 0 1" 6
+
 # 6. Parser Robustness
 # Should not crash and use default (1) for 'abc'
 # customPiece1 = d:{hurdles: abc,1; pre: 1,*}R
 # White D3, White D4 (Hurdle). Jump to D5. King A1.
 # Moves: King A1 (3), D4D5 (1), Hopper D3D5 (1). Total = 5
 run_test "parser-fail" "7k/8/8/8/3P4/3D4/8/K7 w - - 0 1" 5
+
+# Missing comma in hurdles parameter should not crash and should warn.
+# customPiece1 = d:{hurdles: 2; pre: 1,*}R defaults to hurdles 1,1.
+# White D3, White D4 (Hurdle). Jump to D5. King A1.
+# Moves: King A1 (3), D4D5 (1), Hopper D3D5 (1). Total = 5
+run_test "parser-missing-comma" "7k/8/8/8/3P4/3D4/8/K7 w - - 0 1" 5
 
 echo "All Universal Hopper tests passed!"

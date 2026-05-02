@@ -3184,6 +3184,7 @@ inline Bitboard Position::universal_hopper_bb(const std::map<Direction, PieceInf
     for (const auto& it : profiles) {
         Direction dir = (c == WHITE ? it.first : -it.first);
         const PieceInfo::HopperProfile& profile = it.second;
+        auto [stepR, stepF] = decode_direction(dir);
         
         int hurdlesHit = 0;
         int dist = 0;
@@ -3192,8 +3193,9 @@ inline Bitboard Position::universal_hopper_bb(const std::map<Direction, PieceInf
 
         Square prev = sq;
         for (Square s = sq + dir; is_ok(s) && (dist < 255); s += dir) {
-            if (std::abs(int(file_of(s)) - int(file_of(prev))) > 2 ||
-                std::abs(int(rank_of(s)) - int(rank_of(prev))) > 2) break;
+            if (int(file_of(s)) - int(file_of(prev)) != stepF
+                || int(rank_of(s)) - int(rank_of(prev)) != stepR)
+                break;
             prev = s;
             dist++;
             Bitboard sBB = square_bb(s);
@@ -3897,8 +3899,8 @@ inline Square Position::jump_capture_square(Square from, Square to) const {
                       next = s + dir;
                       if (!is_ok(next))
                           break;
-                      if (std::abs(int(file_of(next)) - int(file_of(s))) > 2 ||
-                          std::abs(int(rank_of(next)) - int(rank_of(s))) > 2)
+                      if (int(file_of(next)) - int(file_of(s)) != df
+                          || int(rank_of(next)) - int(rank_of(s)) != dr)
                           break;
                   }
                   s = next;
@@ -3959,8 +3961,8 @@ inline Square Position::jump_capture_square(Square from, Square to) const {
                                   hnext = hurdleScan + dir;
                                   if (!is_ok(hnext))
                                       break;
-                                  if (std::abs(int(file_of(hnext)) - int(file_of(hurdleScan))) > 2 ||
-                                      std::abs(int(rank_of(hnext)) - int(rank_of(hurdleScan))) > 2)
+                                  if (int(file_of(hnext)) - int(file_of(hurdleScan)) != df
+                                      || int(rank_of(hnext)) - int(rank_of(hurdleScan)) != dr)
                                       break;
                               }
                               hurdleScan = hnext;
@@ -3996,9 +3998,8 @@ inline Square Position::jump_capture_square(Square from, Square to) const {
                                       int totalHurdles = hurdlesHit + hurdlesInScan;
                                       if (j == dist - 1 && totalHurdles >= profile.hurdlesMin && totalHurdles <= profile.hurdlesMax)
                                           return hurdleScan;
-                                      
-                                      // If this is NOT the hurdle at 2*dist, we are blocked (for Equistopper)
-                                      break;
+                                      // Continue scanning: EQUI_STOPPER can require multiple hurdles.
+                                      continue;
                                   }
                                   break;
                               }
@@ -4051,8 +4052,8 @@ inline Bitboard Position::universal_hopper_potential_bb(PieceType pt, Square s) 
                         next = current + dir;
                         if (!is_ok(next))
                             break;
-                        if (std::abs(int(file_of(next)) - int(file_of(current))) > 2 ||
-                            std::abs(int(rank_of(next)) - int(rank_of(current))) > 2)
+                        if (int(file_of(next)) - int(file_of(current)) != df
+                            || int(rank_of(next)) - int(rank_of(current)) != dr)
                             break;
                     }
                     current = next;

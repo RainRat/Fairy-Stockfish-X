@@ -146,11 +146,13 @@ namespace {
 
     for (auto const& [d, profile] : profiles) {
       Direction dir = (c == WHITE ? d : -d);
+      auto [stepR, stepF] = decode_direction(dir);
       int dist = 0;
       Square prev = sq;
       for (Square s = sq + dir; is_ok(s) && (dist < 255); s += dir) {
-        if (std::abs(int(file_of(s)) - int(file_of(prev))) > 2 ||
-            std::abs(int(rank_of(s)) - int(rank_of(prev))) > 2) break;
+        if (int(file_of(s)) - int(file_of(prev)) != stepF
+            || int(rank_of(s)) - int(rank_of(prev)) != stepR)
+            break;
         prev = s;
         dist++;
         attack |= s;

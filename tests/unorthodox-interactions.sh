@@ -51,8 +51,7 @@ changingColorTrigger = capture
 changingColorPieceTypes = *
 
 [rifle-jump:chess]
-customPiece1 = m:D
-jumpCaptureTypes = m
+customPiece1 = m:c{hurdles: 1,1; pre: 1,1; post: 1,1; capture: locust_first; hurdle_types: enemy}W
 rifleCapture = true
 
 [rifle-duck:chess]

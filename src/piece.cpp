@@ -419,6 +419,16 @@ namespace {
               currentHopperProfile = PieceInfo::HopperProfile();
               
               size_t pos = 0;
+              auto trim_in_place = [](std::string& text) {
+                  const size_t first = text.find_first_not_of(" ");
+                  if (first == std::string::npos)
+                  {
+                      text.clear();
+                      return;
+                  }
+                  const size_t last = text.find_last_not_of(" ");
+                  text = text.substr(first, last - first + 1);
+              };
               while (pos < params.size()) {
                   size_t next_semi = params.find(';', pos);
                   if (next_semi == std::string::npos) next_semi = params.size();
@@ -427,16 +437,26 @@ namespace {
                   if (colon != std::string::npos) {
                       std::string key = pair.substr(0, colon);
                       std::string val = pair.substr(colon + 1);
-                      key.erase(0, key.find_first_not_of(" ")); key.erase(key.find_last_not_of(" ") + 1);
-                      val.erase(0, val.find_first_not_of(" ")); val.erase(val.find_last_not_of(" ") + 1);
+                      trim_in_place(key);
+                      trim_in_place(val);
                       
                       auto parse_min_max = [](const std::string& s, int& min_val, int& max_val) {
                           size_t comma = s.find(',');
                           if (comma != std::string::npos) {
                               std::string min_s = s.substr(0, comma);
                               std::string max_s = s.substr(comma + 1);
-                              min_s.erase(0, min_s.find_first_not_of(" ")); min_s.erase(min_s.find_last_not_of(" ") + 1);
-                              max_s.erase(0, max_s.find_first_not_of(" ")); max_s.erase(max_s.find_last_not_of(" ") + 1);
+                              const auto trim_local = [](std::string& text) {
+                                  const size_t first = text.find_first_not_of(" ");
+                                  if (first == std::string::npos)
+                                  {
+                                      text.clear();
+                                      return;
+                                  }
+                                  const size_t last = text.find_last_not_of(" ");
+                                  text = text.substr(first, last - first + 1);
+                              };
+                              trim_local(min_s);
+                              trim_local(max_s);
                               
                       auto safe_stoi = [&](const std::string& str, int default_val, bool& ok) {
                                   if (str.empty()) { ok = false; return default_val; }
@@ -455,6 +475,8 @@ namespace {
                               if (!minOk || (!maxOk && max_s != "*"))
                                   std::cerr << "Invalid numeric value in Betza hopper parameters: '" << s << "'" << std::endl;
                           }
+                          else
+                              std::cerr << "Invalid hopper range (missing comma) in Betza hopper parameters: '" << s << "'" << std::endl;
                       };
                       
                       if (key == "hurdles") { parse_min_max(val, currentHopperProfile.hurdlesMin, currentHopperProfile.hurdlesMax); }
@@ -480,7 +502,7 @@ namespace {
                               size_t next_comma = val.find(',', vpos);
                               if (next_comma == std::string::npos) next_comma = val.size();
                               std::string v = val.substr(vpos, next_comma - vpos);
-                              v.erase(0, v.find_first_not_of(" ")); v.erase(v.find_last_not_of(" ") + 1);
+                              trim_in_place(v);
                               
                               if (v == "enemy") special |= PieceInfo::HopperProfile::ENEMY;
                               else if (v == "friendly") special |= PieceInfo::HopperProfile::FRIENDLY;

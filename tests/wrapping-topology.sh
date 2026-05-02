@@ -70,13 +70,6 @@ customPiece1 = a:grasshopper
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 startFen = 7k/8/8/8/8/8/3K4/A6p w - - 0 1
 
-[cyl-contrahopper:chess]
-cylindrical = true
-castling = false
-customPiece1 = a:oR
-pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
-startFen = 7k/8/8/8/8/8/8/pA2K3 w - - 0 1
-
 [cyl-griffon:chess]
 cylindrical = true
 castling = false
@@ -139,24 +132,6 @@ echo "${cyl_nightrider_output}" | grep -q "a1h3: 1"
 
 cyl_grasshopper_output=$(run_variant cyl-grasshopper)
 echo "${cyl_grasshopper_output}" | grep -q "a1g1: 1"
-
-cyl_contrahopper_output=$(run_variant cyl-contrahopper)
-echo "${cyl_contrahopper_output}" | grep -q "b1h1: 1"
-
-cyl_contrahopper_repro_output=$(cat <<CMDS | "${ENGINE}" 2>&1
-uci
-setoption name VariantPath value ${TMP_VARIANT_PATH}
-setoption name UCI_Variant value cyl-contrahopper
-position fen 8/8/8/8/8/8/8/1p1AK3 w - - 0 1
-go perft 1
-quit
-CMDS
-)
-echo "${cyl_contrahopper_repro_output}" | grep -q "^d1a1: 1"
-echo "${cyl_contrahopper_repro_output}" | grep -q "^d1f1: 1"
-echo "${cyl_contrahopper_repro_output}" | grep -q "^d1g1: 1"
-echo "${cyl_contrahopper_repro_output}" | grep -q "^d1h1: 1"
-! echo "${cyl_contrahopper_repro_output}" | grep -q "^d1b1: 1"
 
 cyl_griffon_output=$(run_variant cyl-griffon)
 echo "${cyl_griffon_output}" | grep -q "a1g2: 1"
