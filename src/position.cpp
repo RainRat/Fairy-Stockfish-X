@@ -4795,7 +4795,62 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
 
       Square capsq = st->captureSquare != SQ_NONE ? st->captureSquare : to;
       if (jumpCapsq != SQ_NONE)
+      {
           capsq = jumpCapsq;
+          
+          const PieceInfo* pi = pieceMap.get(type_of(pc));
+          // Handling locust_all multi-capture
+          if (pi->has_universal_hopper() && !rifleShot)
+          {
+              const bool usesGenericPawnLikeInitialMoveHelper =
+                     type_of(pc) == PAWN || (pawn_like_types(us) & piece_set(type_of(pc)));
+              const Bitboard initialMoveRegion = usesGenericPawnLikeInitialMoveHelper
+                                               ? double_step_region(us, type_of(pc))
+                                               : var->doubleStepRegion.get(us).explicitBoardOfPiece(piece_to_char()[type_of(pc)]);
+              bool isInitial = (initialMoveRegion & from);
+
+              for (int initialPhase : {0, 1})
+              {
+                  if (initialPhase == 1 && !isInitial) continue;
+                  for (const auto& it : pi->universalHopper[initialPhase][MODALITY_CAPTURE])
+                  {
+                      Direction dir = (us == WHITE ? it.first : -it.first);
+                      const PieceInfo::HopperProfile& profile = it.second;
+                      if (profile.captureMode != PieceInfo::CAPTURE_LOCUST_ALL) continue;
+
+                      // Verify this ray matches the move
+                      Square current = from;
+                      int dist = 0;
+                      bool match = false;
+                      for (int i = 0; i < 255; ++i) {
+                          current += dir; dist++;
+                          if (!is_ok(current)) break;
+                          if (current == to) { match = true; break; }
+                      }
+                      if (!match) continue;
+
+                      // Re-cast ray to remove pieces
+                      current = from;
+                      for (int i = 0; i < dist; ++i) {
+                          current += dir;
+                          Bitboard sBB = square_bb(current);
+                          if (current != to && (byTypeBB[ALL_PIECES] & sBB)) {
+                              Piece capturedHurdle = piece_on(current);
+                              if (type_of(capturedHurdle) == PAWN)
+                                  st->pawnKey ^= Zobrist::psq[capturedHurdle][current];
+                              else
+                                  st->nonPawnMaterial[color_of(capturedHurdle)] -= PieceValue[MG][capturedHurdle];
+                              k ^= Zobrist::psq[capturedHurdle][current];
+                              st->materialKey ^= Zobrist::psq[capturedHurdle][pieceCount[capturedHurdle] - 1];
+                              remove_piece(current);
+                          }
+                      }
+                      capsq = to; // Already handled pieces
+                      break;
+                  }
+              }
+          }
+      }
 
       if (type_of(m) == EN_PASSANT)
       {
