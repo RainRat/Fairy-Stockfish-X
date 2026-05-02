@@ -1,0 +1,171 @@
+#!/usr/bin/env bash
+
+# Test Universal Hopper features
+
+# 1. Setup temporary variant file
+INI_FILE="universal_hopper_test.ini"
+cat << 'EOF' > $INI_FILE
+[hopper-common:chess]
+pieceToCharTable = PNBRQKDFGH
+
+[hopper-base:hopper-common]
+customPiece1 = d:{hurdles: 1,1; pre: 1,*; post: 1,1}Q
+# d is a Grasshopper
+
+[directional-hopper:hopper-common]
+customPiece1 = d:f{hurdles: 1,1; pre: 1,*; post: 1,1}R
+# d can only jump forward orthogonally
+
+[locust-first:hopper-common]
+customPiece1 = d:{hurdles: 1,1; pre: 1,*; post: 1,1; capture: locust_first}R
+
+[locust-all:hopper-common]
+customPiece1 = d:{hurdles: 2,2; pre: 1,*; post: 1,1; capture: locust_all}R
+
+[equi-hopper:hopper-common]
+customPiece1 = d:{hurdles: 1,1; equi: hopper}Q
+
+[equi-stopper:hopper-common]
+customPiece1 = d:{hurdles: 1,1; equi: stopper}Q
+
+[wrapped-hopper:hopper-common]
+topology = cylinder
+customPiece1 = d:{hurdles: 1,1; pre: 1,*; post: 1,1}R
+
+[parser-fail:hopper-common]
+customPiece1 = d:{hurdles: abc,1; pre: 1,*}R
+EOF
+
+STOCKFISH="./stockfish"
+if [ ! -f "$STOCKFISH" ]; then
+    STOCKFISH="../src/stockfish"
+fi
+
+function run_test() {
+    local variant=$1
+    local fen=$2
+    local expected_nodes=$3
+    local moves=$4
+    echo "Testing $variant..."
+    output=$($STOCKFISH << EOF
+setoption name VariantPath value $INI_FILE
+uci
+setoption name UCI_Variant value $variant
+position fen $fen $moves
+go perft 1
+quit
+EOF
+)
+    nodes=$(echo "$output" | grep "Nodes searched:" | awk '{print $3}')
+    if [ "$nodes" -eq "$expected_nodes" ]; then
+        echo "  [PASS] Nodes: $nodes"
+    else
+        echo "  [FAIL] Expected $expected_nodes, got $nodes"
+        echo "Output was:"
+        echo "$output"
+        exit 1
+    fi
+}
+
+# 1. Basic Grasshopper
+# White D4 (Hopper), White D5 (Hurdle). Hopper jumps to D6.
+# White King A1, Black King H8.
+# Moves: King A1 (3), D5D6 (1), Hopper D4D6 (1). Total = 5
+run_test "hopper-base" "7k/8/8/8/3P4/3D4/8/K7 w - - 0 1" 5
+
+# 2. Side-Symmetry (Directional atoms)
+# White D4 (Hopper), White D5 (Hurdle). Forward jump to D6.
+# Moves: King A1 (3), D5D6 (1), Hopper D4D6 (1). Total = 5
+run_test "directional-hopper" "7k/8/8/8/3P4/3D4/8/K7 w - - 0 1" 5
+# White D4 (Hopper), White D3 (Hurdle). Backward jump to D2.
+# Moves: King A1 (3), D3D4? blocked. Hopper cannot jump backward.
+# Total moves = 3
+run_test "directional-hopper" "7k/8/8/8/8/3D4/3P4/K7 w - - 0 1" 3
+# Black d5 (Hopper), Black d4 (Hurdle). Forward jump (downward) to d3.
+# Moves: king h8 (3), d4d3 (1), hopper d5d3 (1). Total = 5
+run_test "directional-hopper" "7k/8/3d4/3p4/8/8/8/K7 b - - 0 1" 5
+# Black d5 (Hopper), Black d6 (Hurdle). Backward jump (upward) to d7.
+# Moves: king h8 (3), d6d5? blocked. Hopper cannot jump backward.
+# Total moves = 3
+run_test "directional-hopper" "7k/3p4/3d4/8/8/8/8/K7 b - - 0 1" 3
+
+# 3. Locust Modes
+# locust_first (1 hurdle)
+# White D3 (Locust), Enemy p4 (Hurdle). Jump to D5.
+# King A1, King H8.
+# Moves: King A1 (3), Hopper D3D5 (1). Total = 4
+run_test "locust-first" "7k/8/8/8/3p4/3D4/8/K7 w - - 0 1" 4
+# Verify capture happened
+output=$($STOCKFISH << EOF
+setoption name VariantPath value $INI_FILE
+uci
+setoption name UCI_Variant value locust-first
+position fen 7k/8/8/8/3p4/3D4/8/K7 w - - 0 1 moves d3d5
+d
+quit
+EOF
+)
+if echo "$output" | grep -q "Fen: 7k/8/8/3D4/8/8/8/K7"; then
+    echo "  [PASS] locust_first captured hurdle"
+else
+    echo "  [FAIL] locust_first did not capture hurdle"
+    echo "Output was:"
+    echo "$output"
+    exit 1
+fi
+
+# locust_all (Kangaroo)
+# White D3, Enemy p4, p5. Jump to D6.
+# Moves: King A1 (3), Hopper D3D6 (1). Total = 4
+run_test "locust-all" "7k/8/8/3p4/3p4/3D4/8/K7 w - - 0 1" 4
+output=$($STOCKFISH << EOF
+setoption name VariantPath value $INI_FILE
+uci
+setoption name UCI_Variant value locust-all
+position fen 7k/8/8/3p4/3p4/3D4/8/K7 w - - 0 1 moves d3d6
+d
+quit
+EOF
+)
+if echo "$output" | grep -q "Fen: 7k/8/3D4/8/8/8/8/K7"; then
+    echo "  [PASS] locust_all captured multiple hurdles"
+else
+    echo "  [FAIL] locust_all did not capture all hurdles"
+    echo "Output was:"
+    echo "$output"
+    exit 1
+fi
+
+# 4. Equi-family
+# Equihopper (pre=1, post=1)
+# White D3, White D4 (Hurdle). Jump to D5. King A1.
+# Moves: King A1 (3), D4D5 (1), Hopper D3D5 (1) = 5
+run_test "equi-hopper" "7k/8/8/8/3P4/3D4/8/K7 w - - 0 1" 5
+# Equihopper (pre=2, post=2)
+# White D3, White D5 (Hurdle). Jump to D7. King A1.
+# Moves: King A1 (3), Hopper D3D7 (1). Total = 4
+run_test "equi-hopper" "7k/8/3P4/8/3D4/8/8/K7 w - - 0 1" 4
+# Equistopper (halfway to hurdle)
+# D at D1, p at D5. Stopper should land at D3. King H1.
+# White King at H1: G1, G2, H2 (3 moves).
+# White Stopper D1: jumps halfway to p5 (D5) -> D3 (1 move).
+# White Stopper D1: jumps halfway to King H1 (H1) -> F1 (1 move).
+# Total = 5.
+run_test "equi-stopper" "7k/8/8/3p4/8/8/8/3D3K w - - 0 1" 5
+
+# 5. Wrapped topology
+# Rook-hopper on cylinder jumping across the edge
+# D on h4, P on a4. Should land on b4.
+# King on A1, Black King H8.
+# Moves: Hopper H4B4 (1), King A1 (3). Total = 4
+run_test "wrapped-hopper" "7k/8/8/8/P6D/8/8/K7 w - - 0 1" 4
+
+# 6. Parser Robustness
+# Should not crash and use default (1) for 'abc'
+# customPiece1 = d:{hurdles: abc,1; pre: 1,*}R
+# White D3, White D4 (Hurdle). Jump to D5. King A1.
+# Moves: King A1 (3), D4D5 (1), Hopper D3D5 (1). Total = 5
+run_test "parser-fail" "7k/8/8/8/3P4/3D4/8/K7 w - - 0 1" 5
+
+echo "All Universal Hopper tests passed!"
+rm $INI_FILE

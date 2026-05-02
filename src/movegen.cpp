@@ -737,10 +737,16 @@ namespace {
                                 ? (b & (Type == EVASIONS ? target : (~pos.pieces(Us) | (pos.self_capture(Pt) ? (pos.pieces(Us) & ~pos.pieces(Us, KING)) : Bitboard(0)))) & promotion_zone)
                                 : Bitboard(0);
         Bitboard jumpCaptures = 0;
+        const PieceInfo* pi = pieceMap.get(Pt);
         PieceSet jumpTypes = pos.jump_capture_types();
-        if ((jumpTypes & ALL_PIECES) || (jumpTypes & piece_set(Pt)))
+        if ((jumpTypes & ALL_PIECES) || (jumpTypes & piece_set(Pt)) || pi->has_universal_hopper())
         {
+            // For universal hoppers, we might need more than just (attacks | quiets)
+            // if the locust moves are not already included there.
             Bitboard candidates = (attacks | quiets) & ~pos.pieces();
+            if (pi->has_universal_hopper())
+                candidates |= pos.universal_hopper_potential_bb(Pt, from) & ~pos.pieces();
+
             while (candidates)
             {
                 Square to = pop_lsb(candidates);
