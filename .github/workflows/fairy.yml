@@ -134,9 +134,9 @@ jobs:
         run: |
           ../tests/incomplete-baselines.sh ./stockfish variants-incomplete.ini
 
-      - name: Test contra-hopper
+      - name: Test universal hopper
         run: |
-          ../tests/contra-hopper.sh
+          ../tests/universal-hopper.sh ./stockfish
 
       - name: Test whaleshogi
         run: |

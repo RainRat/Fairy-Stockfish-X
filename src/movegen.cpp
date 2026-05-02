@@ -737,10 +737,15 @@ namespace {
                                 ? (b & (Type == EVASIONS ? target : (~pos.pieces(Us) | (pos.self_capture(Pt) ? (pos.pieces(Us) & ~pos.pieces(Us, KING)) : Bitboard(0)))) & promotion_zone)
                                 : Bitboard(0);
         Bitboard jumpCaptures = 0;
-        PieceSet jumpTypes = pos.jump_capture_types();
-        if ((jumpTypes & ALL_PIECES) || (jumpTypes & piece_set(Pt)))
+        PieceType movePt = Pt == KING ? pos.king_type() : Pt;
+        const PieceInfo* pi = pieceMap.get(movePt);
+        if (pi->has_universal_hopper())
         {
+            // Universal hopper jump captures land on empty squares; captured hurdle
+            // square is resolved by jump_capture_square().
             Bitboard candidates = (attacks | quiets) & ~pos.pieces();
+            candidates |= pos.universal_hopper_potential_bb(movePt, from) & pos.board_bb() & ~pos.pieces();
+
             while (candidates)
             {
                 Square to = pop_lsb(candidates);

@@ -68,20 +68,20 @@ Run: `./stockfish < test.txt > output.txt`
 * Config sanity: `src/stockfish check src/variants.ini`
 * Required pre-acceptance gate: `bash tests/fast-regression.sh src/stockfish`
   This now includes an upstream-FSF move-count baseline generated from deterministic self-play FENs. Keep the fixture current only when you intentionally refresh the baseline, not when trying to paper over a regression.
-* Move-gen correctness: `../tests/perft.sh all` (or `chess`, `largeboard`)
-* Protocol suite: `../tests/protocol.sh`
-* Smoke tests for experimental variants: `../tests/new-variants-smoke.sh`
-* Python bindings unit tests: `python3 ../test.py` (requires `pyffish` to be built/installed)
+* Move-gen correctness: `tests/perft.sh all` (or `chess`, `largeboard`)
+* Protocol suite: `tests/protocol.sh`
+* Smoke tests for experimental variants: `tests/new-variants-smoke.sh`
+* Python bindings unit tests: `python3 test.py` (requires `pyffish` to be built/installed)
 * Upstream reference checks for shared behavior: `python3 tests/upstream_reference.py src/stockfish "$UPSTREAM_ENGINE"`
   Current curated set covers orthodox chess, pawn-rule variants, `spartan` checking semantics, `duck` walling/duck plumbing, `allexplodeatomic` custom-pawn behavior, and the `janggi` cannon/pass path. Extend this list conservatively and keep known semantic divergences called out in the script review notes rather than silently ignored.
 * Upstream deterministic move-count baseline: `python3 tests/upstream_movecount_baseline.py src/stockfish "$UPSTREAM_ENGINE"`
   The fixture lives at `tests/pgn/upstream_movecount_baseline.json`. Regenerate it with `--regenerate` only when you intentionally want a new upstream reference corpus.
-* Optional: `../tests/regression.sh`, `../tests/reprosearch.sh`, `./stockfish bench [variant]`
+* Optional: `tests/regression.sh`, `tests/reprosearch.sh`, `src/stockfish bench [variant]`
 
 ### Test Build Requirements
 
 Some tests require specific build flags to pass for all variants:
-* `../tests/perft.sh all` and `../tests/new-variants-smoke.sh` should be run with a `largeboards=yes` build to cover all included variants.
+* `tests/perft.sh all` and `tests/new-variants-smoke.sh` should be run with a `largeboards=yes` build to cover all included variants.
 * To build `pyffish` for `test.py`, use `python3 setup.py build_ext --inplace` from the root directory.
 * `tests/fast-regression.sh` is designed to stay under about five minutes on a normal local build. Run it before accepting new code. It assumes `src/stockfish` is freshly built and `pyffish` has been built if the touched code affects bindings or Python-facing state.
 * `tests/fast-regression.sh` requires `UPSTREAM_ENGINE` to point to an upstream comparison engine.
@@ -129,7 +129,7 @@ Some tests require specific build flags to pass for all variants:
 ## 12) CI gotchas
 
 * `./stockfish check variants.ini` on non-ALLVARS/board-limited builds can print expected warnings (missing templates, variants skipped for board limits). CI filtering should ignore those lines while still failing on real parse/syntax errors.
-* `../tests/perft.sh all` includes large-board variants (e.g., shogi). Run it with a `largeboards=yes` build; otherwise it will fail at the large-board section with misleading perft mismatches.
+* `tests/perft.sh all` includes large-board variants (e.g., shogi). Run it with a `largeboards=yes` build; otherwise it will fail at the large-board section with misleading perft mismatches.
 * When switching board macro families locally (`verylargeboards=yes` ↔ `largeboards=yes` ↔ default), run `make clean` first. Reusing old objects can produce ODR/link failures and misleading diagnostics unrelated to your code change.
 
 ## 10) Research links (rules & precedent)

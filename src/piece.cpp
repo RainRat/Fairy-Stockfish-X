@@ -180,7 +180,6 @@ namespace {
       const std::string expandedBetza = expand_group_sugar(alias_to_betza(betza));
       std::vector<MoveModality> moveModalities = {};
       bool hopper = false;
-      bool contraHopper = false;
       bool rider = false;
       bool lame = false;
       bool initial = false;
@@ -190,12 +189,13 @@ namespace {
       int distance = 0;
       bool standaloneH = false;
       std::vector<std::string> prelimDirections = {};
+      bool hasUniversalHopper = false;
+      PieceInfo::HopperProfile currentHopperProfile;
 
       auto reset_parser_state = [&]() {
           moveModalities.clear();
           prelimDirections.clear();
           hopper = false;
-          contraHopper = false;
           rider = false;
           lame = false;
           initial = false;
@@ -204,6 +204,8 @@ namespace {
           maxDistance = false;
           standaloneH = false;
           distance = 0;
+          hasUniversalHopper = false;
+          currentHopperProfile = PieceInfo::HopperProfile();
       };
 
       auto commit_atom = [&](const std::vector<std::pair<int, int>>& atoms, bool atomIsRider, std::string::size_type& i, char atomChar, bool atomIsTuple = false) {
@@ -241,9 +243,8 @@ namespace {
                   }
                   std::string rangeSpec = expandedBetza.substr(i + 2, close - i - 2);
                   std::size_t dash = rangeSpec.find('-');
-                  bool unsupportedCombo = !atomIsRider || atomIsTuple || hopper || contraHopper || lame || dynamicDistance || skiSlider || maxDistance;
-                  bool malformedRange = dash == std::string::npos
-                                     || rangeSpec.find('-', dash + 1) != std::string::npos
+                  bool unsupportedCombo = !atomIsRider || atomIsTuple || hopper || lame || dynamicDistance || skiSlider || maxDistance;
+                  bool malformedRange = dash == std::string::npos                                     || rangeSpec.find('-', dash + 1) != std::string::npos
                                      || dash == 0;
                   if (unsupportedCombo)
                   {
@@ -285,9 +286,9 @@ namespace {
           }
           if (!rider && lame)
               distance = -1;
-          if (rider && skiSlider && !hopper && !lame && !dynamicDistance)
+          if (rider && skiSlider && !hopper && !lame)
               distance = SKI_SLIDER_LIMIT;
-          if (rider && maxDistance && !hopper && !lame && !dynamicDistance && !skiSlider)
+          if (rider && maxDistance && !hopper && !lame && !skiSlider)
           {
               distance = MAX_SLIDER_LIMIT;
               p->add_rider_augment(PieceInfo::AUGMENT_MAX);
@@ -319,10 +320,6 @@ namespace {
               // Add moves to steps/slider/hopper tables.
               for (auto modality : moveModalities)
               {
-                  auto& v = hopper ? p->hopper[initial][modality]
-                           : contraHopper ? p->contraHopper[initial][modality]
-                           : rider ? p->slider[initial][modality]
-                                   : p->steps[initial][modality];
                   auto& leapRiderV = p->leapRider[initial][modality];
                   auto& tupleV = p->tupleSteps[initial][modality];
                   auto& tupleSliderV = p->tupleSlider[initial][modality];
@@ -330,16 +327,23 @@ namespace {
                     return std::find(directions.begin(), directions.end(), s) != directions.end();
                   };
                   auto add_step = [&](int dr, int df) {
-                      if (atomIsTuple && !hopper && rider)
-                          tupleSliderV.push_back({dr, df, distance});
-                      else if (atomIsTuple && !hopper && !rider)
-                          tupleV.emplace_back(dr, df);
-                      else
-                      {
-                          v[Direction(dr * FILE_NB + df)] = distance;
-                          if (rider && !atomIsRider && !hopper && !contraHopper
-                              && !lame && !dynamicDistance && !skiSlider && !maxDistance)
-                              leapRiderV[Direction(dr * FILE_NB + df)] = distance;
+                      if (hasUniversalHopper) {
+                          p->universalHopper[initial][modality][Direction(dr * FILE_NB + df)] = currentHopperProfile;
+                      } else {
+                          auto& v = hopper ? p->hopper[initial][modality]
+                                   : rider ? p->slider[initial][modality]
+                                           : p->steps[initial][modality];
+                          if (atomIsTuple && !hopper && rider)
+                              tupleSliderV.push_back({dr, df, distance});
+                          else if (atomIsTuple && !hopper && !rider)
+                              tupleV.emplace_back(dr, df);
+                          else
+                          {
+                              v[Direction(dr * FILE_NB + df)] = distance;
+                              if (rider && !atomIsRider && !hopper
+                                  && !lame && !dynamicDistance && !skiSlider && !maxDistance)
+                                  leapRiderV[Direction(dr * FILE_NB + df)] = distance;
+                          }
                       }
                   };
                   if (directions.size() == 0 || has_dir("ff") || has_dir("vv") || has_dir("rf") || has_dir("rv") || has_dir("fh") || has_dir("rh") || (has_dir("hr") && !standaloneH))
@@ -366,7 +370,7 @@ namespace {
 
       auto commit_bent_slider = [&](bool (PieceInfo::*flag)[2][2]) {
           // Keep first implementation strict: unqualified O only.
-          if (!prelimDirections.empty() || hopper || contraHopper || lame || dynamicDistance || rider)
+          if (!prelimDirections.empty() || hopper || lame || dynamicDistance || rider)
           {
               reset_parser_state();
               return;
@@ -382,7 +386,7 @@ namespace {
       };
 
       auto commit_rose = [&]() {
-          if (!prelimDirections.empty() || hopper || contraHopper || lame || dynamicDistance || rider || skiSlider || maxDistance)
+          if (!prelimDirections.empty() || hopper || lame || dynamicDistance || rider || skiSlider || maxDistance)
           {
               reset_parser_state();
               return;
@@ -400,8 +404,121 @@ namespace {
       for (std::string::size_type i = 0; i < expandedBetza.size(); i++)
       {
           char c = expandedBetza[i];
+          // Universal Hopper config
+          if (c == '{')
+          {
+              auto close = expandedBetza.find('}', i + 1);
+              if (close == std::string::npos)
+              {
+                  std::cerr << "Invalid Betza hopper parameters in '" << betza << "': missing closing '}'." << std::endl;
+                  reset_parser_state();
+                  continue;
+              }
+              std::string params = expandedBetza.substr(i + 1, close - i - 1);
+              hasUniversalHopper = true;
+              currentHopperProfile = PieceInfo::HopperProfile();
+              
+              size_t pos = 0;
+              auto trim_in_place = [](std::string& text) {
+                  const size_t first = text.find_first_not_of(" ");
+                  if (first == std::string::npos)
+                  {
+                      text.clear();
+                      return;
+                  }
+                  const size_t last = text.find_last_not_of(" ");
+                  text = text.substr(first, last - first + 1);
+              };
+              while (pos < params.size()) {
+                  size_t next_semi = params.find(';', pos);
+                  if (next_semi == std::string::npos) next_semi = params.size();
+                  std::string pair = params.substr(pos, next_semi - pos);
+                  size_t colon = pair.find(':');
+                  if (colon != std::string::npos) {
+                      std::string key = pair.substr(0, colon);
+                      std::string val = pair.substr(colon + 1);
+                      trim_in_place(key);
+                      trim_in_place(val);
+                      
+                      auto parse_min_max = [](const std::string& s, int& min_val, int& max_val) {
+                          size_t comma = s.find(',');
+                          if (comma != std::string::npos) {
+                              std::string min_s = s.substr(0, comma);
+                              std::string max_s = s.substr(comma + 1);
+                              const auto trim_local = [](std::string& text) {
+                                  const size_t first = text.find_first_not_of(" ");
+                                  if (first == std::string::npos)
+                                  {
+                                      text.clear();
+                                      return;
+                                  }
+                                  const size_t last = text.find_last_not_of(" ");
+                                  text = text.substr(first, last - first + 1);
+                              };
+                              trim_local(min_s);
+                              trim_local(max_s);
+                              
+                      auto safe_stoi = [&](const std::string& str, int default_val, bool& ok) {
+                                  if (str.empty()) { ok = false; return default_val; }
+                                  int res = 0;
+                                  ok = true;
+                                  for (char ch : str) {
+                                      if (!std::isdigit(static_cast<unsigned char>(ch))) { ok = false; return default_val; }
+                                      res = res * 10 + (ch - '0');
+                                  }
+                                  return res;
+                              };
+
+                              bool minOk = false, maxOk = false;
+                              min_val = safe_stoi(min_s, 1, minOk);
+                              max_val = (max_s == "*") ? 255 : safe_stoi(max_s, 1, maxOk);
+                              if (!minOk || (!maxOk && max_s != "*"))
+                                  std::cerr << "Invalid numeric value in Betza hopper parameters: '" << s << "'" << std::endl;
+                          }
+                          else
+                              std::cerr << "Invalid hopper range (missing comma) in Betza hopper parameters: '" << s << "'" << std::endl;
+                      };
+                      
+                      if (key == "hurdles") { parse_min_max(val, currentHopperProfile.hurdlesMin, currentHopperProfile.hurdlesMax); }
+                      else if (key == "pre") { parse_min_max(val, currentHopperProfile.preMin, currentHopperProfile.preMax); }
+                      else if (key == "post") { parse_min_max(val, currentHopperProfile.postMin, currentHopperProfile.postMax); }
+                      else if (key == "capture") {
+                          if (val == "locust_all") currentHopperProfile.captureMode = PieceInfo::CAPTURE_LOCUST_ALL;
+                          else if (val == "locust_first") currentHopperProfile.captureMode = PieceInfo::CAPTURE_LOCUST_FIRST;
+                          else if (val == "locust_last") currentHopperProfile.captureMode = PieceInfo::CAPTURE_LOCUST_LAST;
+                          else currentHopperProfile.captureMode = PieceInfo::CAPTURE_DEST;
+                      }
+                      else if (key == "equi") {
+                          if (val == "hopper") currentHopperProfile.equiRule = PieceInfo::EQUI_HOPPER;
+                          else if (val == "stopper") currentHopperProfile.equiRule = PieceInfo::EQUI_STOPPER;
+                      }
+                      else if (key == "hurdle_types" || key == "transparent_types") {
+                          bool isHurdle = (key == "hurdle_types");
+                          uint8_t& special = isHurdle ? currentHopperProfile.hurdleSpecialTypes : currentHopperProfile.transparentSpecialTypes;
+                          if (isHurdle) special = PieceInfo::HopperProfile::NONE; // Reset default for explicit hurdle_types
+                          
+                          size_t vpos = 0;
+                          while (vpos < val.size()) {
+                              size_t next_comma = val.find(',', vpos);
+                              if (next_comma == std::string::npos) next_comma = val.size();
+                              std::string v = val.substr(vpos, next_comma - vpos);
+                              trim_in_place(v);
+                              
+                              if (v == "enemy") special |= PieceInfo::HopperProfile::ENEMY;
+                              else if (v == "friendly") special |= PieceInfo::HopperProfile::FRIENDLY;
+                              else if (v == "wall") special |= PieceInfo::HopperProfile::WALL;
+                              else if (v == "dead") special |= PieceInfo::HopperProfile::DEAD;
+                              
+                              vpos = next_comma + 1;
+                          }
+                      }
+                  }
+                  pos = next_semi + 1;
+              }
+              i = close;
+          }
           // Modality
-          if (c == 'm' || c == 'c')
+          else if (c == 'm' || c == 'c')
               moveModalities.push_back(c == 'c' ? MODALITY_CAPTURE : MODALITY_QUIET);
           // Hopper (grasshopper when g)
           else if (c == 'p' || c == 'g')
@@ -409,12 +526,6 @@ namespace {
               hopper = true;
               if (c == 'g')
                   distance = 1;
-          }
-          // Contra-hopper
-          else if (c == 'o')
-          {
-              contraHopper = true;
-              p->add_rider_augment(PieceInfo::AUGMENT_CONTRA);
           }
           // Lame leaper
           else if (c == 'n')
@@ -431,9 +542,6 @@ namespace {
           // Initial move
           else if (c == 'i')
               initial = true;
-          // Slider ignores friendly pieces
-          else if (c == 'y')
-              p->friendlyJump = true;
           // Rifle-capture syntax marker for per-piece shot captures.
           else if (c == '^')
               p->rifleCapture = true;
@@ -491,7 +599,7 @@ namespace {
           // Tuple atom: (x,y), optionally repeated or numeric for riders.
           else if (c == '(')
           {
-              if (hopper || contraHopper || lame || dynamicDistance || skiSlider || maxDistance)
+              if (hopper || lame || dynamicDistance || skiSlider || maxDistance)
               {
                   std::cerr << "Unsupported Betza tuple modifier combination in '" << betza
                             << "': tuple atoms only support explicit leapers or repeated/numeric tuple riders. Ignoring tuple atom." << std::endl;

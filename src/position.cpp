@@ -519,7 +519,7 @@ namespace {
 
         hasHopper = hasHopper
                  || !pi->hopper[0][modality].empty()
-                 || !pi->contraHopper[0][modality].empty();
+                 || !pi->universalHopper[0][modality].empty();
     }
 
     return hasHopper;
@@ -2411,8 +2411,19 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
       return b;
   }
 
+  bool hasRuntimeSpecialAttackers = false;
+  for (PieceSet ps = piece_types(); ps && !hasRuntimeSpecialAttackers;)
+  {
+      PieceType pt = pop_lsb(ps);
+      if (!pieces(c, pt))
+          continue;
+      PieceType move_pt = pt == KING ? king_type() : pt;
+      if (pieceMap.get(move_pt)->has_runtime_rider_augment())
+          hasRuntimeSpecialAttackers = true;
+  }
+
   // Use a faster version for variants with moderate rule variations
-  if (fast_attacks())
+  if (!hasRuntimeSpecialAttackers && fast_attacks())
   {
       return  (pawn_attacks_bb(~c, s)          & pieces(c, PAWN))
             | (attacks_bb<KNIGHT>(s)           & pieces(c, KNIGHT, ARCHBISHOP, CHANCELLOR))
@@ -2422,7 +2433,7 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
   }
 
   // Use a faster version for selected fairy pieces
-  if (fast_attacks2())
+  if (!hasRuntimeSpecialAttackers && fast_attacks2())
   {
       return  (pawn_attacks_bb(~c, s)             & pieces(c, PAWN, BREAKTHROUGH_PIECE, GOLD))
             | (attacks_bb<KNIGHT>(s)              & pieces(c, KNIGHT))
@@ -2443,6 +2454,18 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
       if (board_bb(c, pt) & s)
       {
           PieceType move_pt = pt == KING ? king_type() : pt;
+          const PieceInfo* pi = pieceMap.get(move_pt);
+          if (pi->has_runtime_rider_augment())
+          {
+              Bitboard candidates = pieces(c, pt);
+              while (candidates)
+              {
+                  Square from = pop_lsb(candidates);
+                  if (attacks_from(c, pt, from, occupied) & s)
+                      b |= from;
+              }
+              continue;
+          }
           // Consider asymmetrical moves (e.g., horse)
           if (AttackRiderTypes[move_pt] & ASYMMETRICAL_RIDERS)
           {
@@ -2487,6 +2510,49 @@ Bitboard Position::attackers_to_king(Square s, Bitboard occupied, Color c, Bitbo
 
   Bitboard attackers = attackers_to(s, occupied, c, janggiCannons);
   attackers |= janggi_cannon_attackers_to_king(s, occupied, c);
+  // Locust-style universal hoppers capture the hurdle square and land beyond it,
+  // so the hurdle square is not present in attacks_from() landing targets.
+  if (piece_on(s) != NO_PIECE)
+      for (PieceSet ps = piece_types(); ps; )
+      {
+          PieceType pt = pop_lsb(ps);
+          Bitboard candidates = pieces(c, pt) & occupied;
+          if (!candidates)
+              continue;
+
+          PieceType movePt = pt == KING ? king_type() : pt;
+          if (movePt == NO_PIECE_TYPE)
+              continue;
+          const PieceInfo* pi = pieceMap.get(movePt);
+          if (!pi->has_universal_hopper())
+              continue;
+
+          bool hasLocust = false;
+          for (int initial = 0; initial < 2 && !hasLocust; ++initial)
+              for (const auto& [_, profile] : pi->universalHopper[initial][MODALITY_CAPTURE])
+                  if (profile.captureMode != PieceInfo::CAPTURE_DEST)
+                  {
+                      hasLocust = true;
+                      break;
+                  }
+          if (!hasLocust)
+              continue;
+
+          while (candidates)
+          {
+              Square from = pop_lsb(candidates);
+              Bitboard landings = attacks_from(c, pt, from, occupied) & ~pieces(c);
+              while (landings)
+              {
+                  Square to = pop_lsb(landings);
+                  if (jump_capture_square(from, to) == s)
+                  {
+                      attackers |= square_bb(from);
+                      break;
+                  }
+              }
+          }
+      }
   // Frozen pieces cannot give check (relevant for spell-chess freeze effects).
   Bitboard restricted = freeze_squares(c);
   if (var->prisonPawnPromotion)
@@ -2595,8 +2661,9 @@ bool Position::compute_forced_jump_followup(Square s, int step) const {
   if (freeze_squares() & s)
       return false;
 
-  PieceSet jumpTypes = jump_capture_types();
-  if (!(jumpTypes & ALL_PIECES) && !(jumpTypes & type_of(mover)))
+  PieceType movePt = type_of(mover) == KING ? king_type() : type_of(mover);
+  const PieceInfo* pi = pieceMap.get(movePt);
+  if (!(pi->has_universal_hopper()))
       return false;
 
   Color c = color_of(mover);
@@ -2946,18 +3013,8 @@ bool Position::legal(Move m) const {
               return false;
       }
   }
-  PieceSet jumpTypes = jump_capture_types();
-  bool jumpTypeMover = (jumpTypes & ALL_PIECES) || (jumpTypes & type_of(moved_piece(m)));
-  if ((type_of(m) == NORMAL || type_of(m) == PROMOTION) && jumpTypeMover && !empty(to))
-      return false;
-  if ((type_of(m) == NORMAL || type_of(m) == PROMOTION) && jumpTypeMover)
-  {
-      int df = std::abs(int(file_of(to)) - int(file_of(from)));
-      int dr = std::abs(int(rank_of(to)) - int(rank_of(from)));
-      bool isHop = std::max(df, dr) == 2 && (df == 0 || dr == 0 || df == dr);
-      if (isHop && jump_capture_square(from, to) == SQ_NONE)
-          return false;
-  }
+  // Universal-hopper semantics are fully encoded in attacks/moves generation and
+  // jump_capture_square() capture-square resolution; avoid legacy pre-filters here.
   if (!allow_checks() && checking_permitted() && (pieces(them) & to) && type_of(piece_on(to)) == KING)
       return false;
   if (!dropMove && (var->mutuallyHopIllegalTypes & movePt) && (AttackRiderTypes[movePt] & HOPPING_RIDERS))
@@ -3348,12 +3405,12 @@ bool Position::legal(Move m) const {
 
       if (!moverRemovedByBlast)
       {
-          const PieceInfo* pi = pieceMap.get(pt);
+          PieceType movePt2 = pt == KING ? king_type() : pt;
+          const PieceInfo* pInfo2 = pieceMap.get(movePt2);
           bool hasPotentialMove = PseudoMoves[0][us][pt][to] & board_bb();
-          if (is_pure_hopper_like(pi))
+          if (is_pure_hopper_like(pInfo2))
               hasPotentialMove = has_hopper_potential_from_square(*this, us, pt, to);
-          if (   !hasPotentialMove
-              && !(jump_capture_types() & ALL_PIECES) && !(jump_capture_types() & pt))
+          if (!hasPotentialMove && !pInfo2->has_universal_hopper())
               return false;
       }
   }
@@ -3992,18 +4049,8 @@ bool Position::pseudo_legal(const Move m) const {
               return false;
       }
   }
-  PieceSet jumpTypes = jump_capture_types();
-  bool jumpTypeMover = (jumpTypes & ALL_PIECES) || (jumpTypes & type_of(pc));
-  if ((type_of(m) == NORMAL || type_of(m) == PROMOTION) && jumpTypeMover && !empty(to))
-      return false;
-  if ((type_of(m) == NORMAL || type_of(m) == PROMOTION) && jumpTypeMover)
-  {
-      int df = std::abs(int(file_of(to)) - int(file_of(from)));
-      int dr = std::abs(int(rank_of(to)) - int(rank_of(from)));
-      bool isHop = std::max(df, dr) == 2 && (df == 0 || dr == 0 || df == dr);
-      if (isHop && jump_capture_square(from, to) == SQ_NONE)
-          return false;
-  }
+  // Universal-hopper semantics are handled by pseudo-move generation and
+  // jump_capture_square() capture-square resolution.
 
   // Illegal moves to squares outside of board or to wall squares
   if (!(board_bb() & to))
@@ -4616,6 +4663,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   Piece pc = moved_piece(m);
   Color dropColor = dropMove ? drop_hand_color(us, in_hand_piece_type(m)) : us;
   PieceType movedType = type_of(pc);
+  PieceType movedMoveType = movedType == KING ? king_type() : movedType;
+  const PieceInfo* pi = movedMoveType != NO_PIECE_TYPE ? pieceMap.get(movedMoveType) : nullptr;
   Piece captured = captured_piece(m);
   if (type_of(m) == CASTLING && captured == NO_PIECE)
       captured = piece_on(to);
@@ -4647,6 +4696,155 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   bool capturedDeadSquare = !dropMove && from != to && bool(st->deadSquares & to);
   PieceType exchanged = exchange_piece(m);
   Square jumpCapsq = is_jump_capture(m) ? jump_capture_square(from, to) : SQ_NONE;
+  Bitboard locust_all_mask = 0;
+  if (pi && pi->has_universal_hopper() && jumpCapsq != SQ_NONE)
+  {
+      const bool usesGenericPawnLikeInitialMoveHelper =
+             movedMoveType == PAWN || (pawn_like_types(us) & piece_set(movedMoveType));
+      const Bitboard initialMoveRegion = usesGenericPawnLikeInitialMoveHelper
+                                       ? double_step_region(us, movedMoveType)
+                                       : var->doubleStepRegion.get(us).explicitBoardOfPiece(piece_to_char()[movedMoveType]);
+      bool isInitial = (initialMoveRegion & from);
+
+      for (int initialPhase : {0, 1})
+      {
+          if (initialPhase == 1 && !isInitial) continue;
+          for (const auto& it : pi->universalHopper[initialPhase][MODALITY_CAPTURE])
+          {
+              Direction dir = (us == WHITE ? it.first : -it.first);
+              const PieceInfo::HopperProfile& profile = it.second;
+              if (profile.captureMode != PieceInfo::CAPTURE_LOCUST_ALL) continue;
+
+              // Re-scan ray with full validation to ensure this profile actually authorized the move
+              Square current = from;
+              int hurdlesHit = 0;
+              int dist = 0;
+              int distToFirstHurdle = 0;
+              int distFromLastHurdle = 0;
+              bool match = false;
+              auto [dr, df] = decode_direction(dir);
+              const bool wrapFile = wraps_files();
+              const bool wrapRank = wraps_ranks();
+              const bool wraps = topology_wraps();
+
+              for (int i = 0; i < 255; ++i) {
+                  Square next = SQ_NONE;
+                  if (wraps)
+                  {
+                      if (!wrapped_destination_square(current, df, dr, max_file(), max_rank(), wrapFile, wrapRank, next))
+                          break;
+                      if (next == from)
+                          break;
+                  }
+                  else
+                  {
+                      next = current + dir;
+                      if (!is_ok(next))
+                          break;
+                      if (int(file_of(next)) - int(file_of(current)) != df
+                          || int(rank_of(next)) - int(rank_of(current)) != dr)
+                          break;
+                  }
+                  current = next;
+                  dist++;
+
+                  Bitboard sBB = square_bb(current);
+                  bool isOccupied = (byTypeBB[ALL_PIECES] & sBB);
+                  bool isWall = (st->wallSquares & sBB);
+                  bool isDead = (st->deadSquares & sBB);
+
+                  if (isOccupied || isWall || isDead) {
+                      Piece hurdlePc = piece_on(current);
+                      PieceType hurdlePt = type_of(hurdlePc);
+                      PieceSet pcSet = (hurdlePt == NO_PIECE_TYPE || !isOccupied) ? NO_PIECE_SET : piece_set(hurdlePt);
+                      if (isWall) pcSet |= PieceSet(1ULL << 62);
+                      if (isDead) pcSet |= PieceSet(1ULL << 61);
+                      
+                      uint8_t special = (isOccupied && color_of(hurdlePc) != us ? PieceInfo::HopperProfile::ENEMY : 0)
+                                      | (isOccupied && color_of(hurdlePc) == us ? PieceInfo::HopperProfile::FRIENDLY : 0)
+                                      | (isWall ? PieceInfo::HopperProfile::WALL : 0)
+                                      | (isDead ? PieceInfo::HopperProfile::DEAD : 0);
+
+                      if (((profile.transparentSpecialTypes & special) != 0) || (uint64_t(profile.transparentPieceTypes & pcSet) != 0)) {
+                          distFromLastHurdle++;
+                      } else if (((profile.hurdleSpecialTypes & special) != 0) || (uint64_t(profile.hurdlePieceTypes & pcSet) != 0)) {
+                          hurdlesHit++;
+                          if (hurdlesHit == 1) distToFirstHurdle = dist;
+                          distFromLastHurdle = 0;
+                          if (hurdlesHit > profile.hurdlesMax) break;
+                      } else break; // Blocked
+                  } else {
+                      distFromLastHurdle++;
+                  }
+
+                  if (current == to) {
+                      if (hurdlesHit >= profile.hurdlesMin && hurdlesHit <= profile.hurdlesMax &&
+                          distToFirstHurdle >= profile.preMin && distToFirstHurdle <= profile.preMax &&
+                          distFromLastHurdle >= profile.postMin && distFromLastHurdle <= profile.postMax)
+                      {
+                          if (profile.equiRule == PieceInfo::EQUI_HOPPER && distFromLastHurdle != distToFirstHurdle) break;
+                          if (profile.equiRule == PieceInfo::EQUI_STOPPER && distToFirstHurdle != (dist / 2)) break;
+                          match = true;
+                      }
+                      break;
+                  }
+              }
+              if (!match) continue;
+
+              // Validation passed, re-cast one last time to populate locust_all_mask
+              current = from;
+              for (int i = 0; i < dist; ++i) {
+                  Square next = SQ_NONE;
+                  if (wraps)
+                  {
+                      if (!wrapped_destination_square(current, df, dr, max_file(), max_rank(), wrapFile, wrapRank, next))
+                          break;
+                      if (next == from)
+                          break;
+                  }
+                  else
+                  {
+                      next = current + dir;
+                      if (!is_ok(next))
+                          break;
+                      if (int(file_of(next)) - int(file_of(current)) != df
+                          || int(rank_of(next)) - int(rank_of(current)) != dr)
+                          break;
+                  }
+                  current = next;
+                  if (current == to) break;
+                  Bitboard sBB = square_bb(current);
+                  bool isOccupied = (byTypeBB[ALL_PIECES] & sBB);
+                  bool isWall = (st->wallSquares & sBB);
+                  bool isDead = (st->deadSquares & sBB);
+                  if (!isOccupied && !isWall && !isDead) continue;
+
+                  Piece hurdlePc = piece_on(current);
+                  PieceType hurdlePt = type_of(hurdlePc);
+                  PieceSet pcSet = (hurdlePt == NO_PIECE_TYPE || !isOccupied) ? NO_PIECE_SET : piece_set(hurdlePt);
+                  if (isWall) pcSet |= PieceSet(1ULL << 62);
+                  if (isDead) pcSet |= PieceSet(1ULL << 61);
+
+                  bool isFriendly = isOccupied && (color_of(hurdlePc) == us);
+                  bool isEnemy = isOccupied && !isFriendly;
+
+                  uint8_t special = (isEnemy ? PieceInfo::HopperProfile::ENEMY : 0)
+                                  | (isFriendly ? PieceInfo::HopperProfile::FRIENDLY : 0)
+                                  | (isWall ? PieceInfo::HopperProfile::WALL : 0)
+                                  | (isDead ? PieceInfo::HopperProfile::DEAD : 0);
+
+                  if (((profile.transparentSpecialTypes & special) != 0) || (uint64_t(profile.transparentPieceTypes & pcSet) != 0))
+                      continue;
+
+                  if (((profile.hurdleSpecialTypes & special) != 0) || (uint64_t(profile.hurdlePieceTypes & pcSet) != 0)) {
+                      if (current != jumpCapsq)
+                          locust_all_mask |= current;
+                  }
+              }
+          }
+      }
+  }
+
   Square moverSq = rifleShot ? from : to;
   bool openingSelfRemoval = in_opening_self_removal_phase() && is_opening_self_removal_move(m);
   auto set_castling_right_hashed = [&](Color c, Square sq) {
@@ -4795,7 +4993,9 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
 
       Square capsq = st->captureSquare != SQ_NONE ? st->captureSquare : to;
       if (jumpCapsq != SQ_NONE)
+      {
           capsq = jumpCapsq;
+      }
 
       if (type_of(m) == EN_PASSANT)
       {
@@ -5778,7 +5978,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
          ( blast_on_move() && !captured && !is_self_destruct(m) ) ||
          ( blast_on_self_destruct() && is_self_destruct(m) ) ||
          var->blastPassiveTypes ||
-         ( remove_connect_n() > 0 )
+         ( remove_connect_n() > 0 ) ||
+         ( pi && pi->has_universal_hopper() && jumpCapsq != SQ_NONE )
        )
        && !is_pass(m)
      )
@@ -5871,6 +6072,11 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
               if ((s1 & pieces(~us)) && (s2 & pieces(~us)))
                   removal_mask |= s1 | s2;
           }
+      }
+
+      if (pi && pi->has_universal_hopper() && jumpCapsq != SQ_NONE)
+      {
+          removal_mask |= locust_all_mask;
       }
 
       if (remove_connect_n() > 0) {

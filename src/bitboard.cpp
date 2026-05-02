@@ -139,42 +139,25 @@ namespace {
     return attack;
   }
 
-  Bitboard contra_hopper_attack(const std::map<Direction, int>& directions, Square sq, Bitboard occupied, Color c = WHITE) {
-    Bitboard attack = 0;
-
-    for (auto const& [d, limit] : directions)
-    {
-      Square hurdle = sq + (c == WHITE ? d : -d);
-      if (!(is_ok(hurdle) && distance(hurdle, sq) <= 2 && (occupied & hurdle)))
-          continue;
-
-      int landingDist = 0;
-      for (Square s = hurdle + (c == WHITE ? d : -d);
-           is_ok(s) && distance(s, s - (c == WHITE ? d : -d)) <= 2;
-           s += (c == WHITE ? d : -d))
-      {
-        ++landingDist;
-        if (!limit || landingDist <= limit)
-            attack |= s;
-        if (occupied & s)
-            break;
-      }
-    }
-
-    return attack;
-  }
-
   Bitboard leap_rider_attacks(const std::map<Direction, int>& directions, Square s, Bitboard occupied, Color c);
 
-  Bitboard contra_hopper_potential(const std::map<Direction, int>& directions, Square sq, Color c = WHITE) {
+  Bitboard universal_hopper_potential(const std::map<Direction, PieceInfo::HopperProfile>& profiles, Square sq, Color c = WHITE) {
     Bitboard attack = 0;
 
-    for (auto const& [d, _] : directions)
-      for (Square s = sq + 2 * (c == WHITE ? d : -d);
-           is_ok(s) && distance(s, s - (c == WHITE ? d : -d)) <= 2;
-           s += (c == WHITE ? d : -d))
-          attack |= s;
-
+    for (auto const& [d, profile] : profiles) {
+      Direction dir = (c == WHITE ? d : -d);
+      auto [stepR, stepF] = decode_direction(dir);
+      int dist = 0;
+      Square prev = sq;
+      for (Square s = sq + dir; is_ok(s) && (dist < 255); s += dir) {
+        if (int(file_of(s)) - int(file_of(prev)) != stepF
+            || int(rank_of(s)) - int(rank_of(prev)) != stepR)
+            break;
+        prev = s;
+        dist++;
+        attack |= s;
+      }
+    }
     return attack;
   }
 
@@ -187,7 +170,7 @@ namespace {
     pseudo |= leap_rider_attacks(pi->leapRider[initial][modality], s, 0, c);
     pseudo |= ski_sliding_attack(skiDirs, s, 0, c);
     pseudo |= sliding_attack<HOPPER_RANGE>(pi->hopper[initial][modality], s, 0, c);
-    pseudo |= contra_hopper_potential(pi->contraHopper[initial][modality], s, c);
+    pseudo |= universal_hopper_potential(pi->universalHopper[initial][modality], s, c);
 
     if (pi->griffon[initial][modality])
         pseudo |= rider_attacks_bb<RIDER_GRIFFON_NH>(s, Bitboard(0))
@@ -208,7 +191,8 @@ namespace {
   }
 
   Bitboard special_leaper_bb(const PieceInfo* pi, bool initial, MoveModality modality, Square s, Color c) {
-    Bitboard leaper = contra_hopper_attack(pi->contraHopper[initial][modality], s, 0, c);
+    (void)c;
+    Bitboard leaper = 0;
 
     if (pi->griffon[initial][modality])
         leaper |= PseudoAttacks[WHITE][FERS][s];
