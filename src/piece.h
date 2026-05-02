@@ -75,6 +75,32 @@ struct PieceInfo {
     int limit;
   };
 
+  enum CaptureMode {
+    CAPTURE_DEST,
+    CAPTURE_LOCUST_ALL,
+    CAPTURE_LOCUST_FIRST,
+    CAPTURE_LOCUST_LAST
+  };
+
+  enum EquiRule {
+    EQUI_NONE,
+    EQUI_HOPPER,
+    EQUI_STOPPER
+  };
+
+  struct HopperProfile {
+    int hurdlesMin = 1;
+    int hurdlesMax = 1;
+    int preMin = 1;
+    int preMax = 255;
+    int postMin = 1;
+    int postMax = 1;
+    CaptureMode captureMode = CAPTURE_DEST;
+    EquiRule equiRule = EQUI_NONE;
+    PieceSet hurdleTypes = PieceSet(~0ULL);
+    PieceSet transparentTypes = PieceSet(0);
+  };
+
   std::string name = "";
   std::string betza = "";
   std::map<Direction, int> steps[2][MOVE_MODALITY_NB] = {};
@@ -84,6 +110,7 @@ struct PieceInfo {
   std::map<Direction, int> leapRider[2][MOVE_MODALITY_NB] = {};
   std::map<Direction, int> hopper[2][MOVE_MODALITY_NB] = {};
   std::map<Direction, int> contraHopper[2][MOVE_MODALITY_NB] = {};
+  std::map<Direction, HopperProfile> universalHopper[2][MOVE_MODALITY_NB] = {};
   bool griffon[2][MOVE_MODALITY_NB] = {};
   bool manticore[2][MOVE_MODALITY_NB] = {};
   bool rose[2][MOVE_MODALITY_NB] = {};
@@ -107,6 +134,7 @@ struct PieceInfo {
           || !leapRider[1][modality].empty()
           || !hopper[1][modality].empty()
           || !contraHopper[1][modality].empty()
+          || !universalHopper[1][modality].empty()
           || griffon[1][modality]
           || manticore[1][modality]
           || rose[1][modality])
