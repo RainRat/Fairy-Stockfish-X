@@ -2510,6 +2510,49 @@ Bitboard Position::attackers_to_king(Square s, Bitboard occupied, Color c, Bitbo
 
   Bitboard attackers = attackers_to(s, occupied, c, janggiCannons);
   attackers |= janggi_cannon_attackers_to_king(s, occupied, c);
+  // Locust-style universal hoppers capture the hurdle square and land beyond it,
+  // so the hurdle square is not present in attacks_from() landing targets.
+  if (piece_on(s) != NO_PIECE)
+      for (PieceSet ps = piece_types(); ps; )
+      {
+          PieceType pt = pop_lsb(ps);
+          Bitboard candidates = pieces(c, pt) & occupied;
+          if (!candidates)
+              continue;
+
+          PieceType movePt = pt == KING ? king_type() : pt;
+          if (movePt == NO_PIECE_TYPE)
+              continue;
+          const PieceInfo* pi = pieceMap.get(movePt);
+          if (!pi->has_universal_hopper())
+              continue;
+
+          bool hasLocust = false;
+          for (int initial = 0; initial < 2 && !hasLocust; ++initial)
+              for (const auto& [_, profile] : pi->universalHopper[initial][MODALITY_CAPTURE])
+                  if (profile.captureMode != PieceInfo::CAPTURE_DEST)
+                  {
+                      hasLocust = true;
+                      break;
+                  }
+          if (!hasLocust)
+              continue;
+
+          while (candidates)
+          {
+              Square from = pop_lsb(candidates);
+              Bitboard landings = attacks_from(c, pt, from, occupied) & ~pieces(c);
+              while (landings)
+              {
+                  Square to = pop_lsb(landings);
+                  if (jump_capture_square(from, to) == s)
+                  {
+                      attackers |= square_bb(from);
+                      break;
+                  }
+              }
+          }
+      }
   // Frozen pieces cannot give check (relevant for spell-chess freeze effects).
   Bitboard restricted = freeze_squares(c);
   if (var->prisonPawnPromotion)
@@ -3362,7 +3405,8 @@ bool Position::legal(Move m) const {
 
       if (!moverRemovedByBlast)
       {
-          const PieceInfo* pInfo2 = pieceMap.get(pt);
+          PieceType movePt2 = pt == KING ? king_type() : pt;
+          const PieceInfo* pInfo2 = pieceMap.get(movePt2);
           bool hasPotentialMove = PseudoMoves[0][us][pt][to] & board_bb();
           if (is_pure_hopper_like(pInfo2))
               hasPotentialMove = has_hopper_potential_from_square(*this, us, pt, to);
@@ -4678,14 +4722,31 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
               int distToFirstHurdle = 0;
               int distFromLastHurdle = 0;
               bool match = false;
-              Square prev = from;
+              auto [dr, df] = decode_direction(dir);
+              const bool wrapFile = wraps_files();
+              const bool wrapRank = wraps_ranks();
+              const bool wraps = topology_wraps();
 
               for (int i = 0; i < 255; ++i) {
-                  current += dir; dist++;
-                  if (!is_ok(current)) break;
-                  if (std::abs(int(file_of(current)) - int(file_of(prev))) > 2 ||
-                      std::abs(int(rank_of(current)) - int(rank_of(prev))) > 2) break;
-                  prev = current;
+                  Square next = SQ_NONE;
+                  if (wraps)
+                  {
+                      if (!wrapped_destination_square(current, df, dr, max_file(), max_rank(), wrapFile, wrapRank, next))
+                          break;
+                      if (next == from)
+                          break;
+                  }
+                  else
+                  {
+                      next = current + dir;
+                      if (!is_ok(next))
+                          break;
+                      if (int(file_of(next)) - int(file_of(current)) != df
+                          || int(rank_of(next)) - int(rank_of(current)) != dr)
+                          break;
+                  }
+                  current = next;
+                  dist++;
 
                   Bitboard sBB = square_bb(current);
                   bool isOccupied = (byTypeBB[ALL_PIECES] & sBB);
@@ -4733,7 +4794,24 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
               // Validation passed, re-cast one last time to populate locust_all_mask
               current = from;
               for (int i = 0; i < dist; ++i) {
-                  current += dir;
+                  Square next = SQ_NONE;
+                  if (wraps)
+                  {
+                      if (!wrapped_destination_square(current, df, dr, max_file(), max_rank(), wrapFile, wrapRank, next))
+                          break;
+                      if (next == from)
+                          break;
+                  }
+                  else
+                  {
+                      next = current + dir;
+                      if (!is_ok(next))
+                          break;
+                      if (int(file_of(next)) - int(file_of(current)) != df
+                          || int(rank_of(next)) - int(rank_of(current)) != dr)
+                          break;
+                  }
+                  current = next;
                   if (current == to) break;
                   Bitboard sBB = square_bb(current);
                   bool isOccupied = (byTypeBB[ALL_PIECES] & sBB);

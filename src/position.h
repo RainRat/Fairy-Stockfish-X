@@ -3211,6 +3211,7 @@ inline Bitboard Position::universal_hopper_bb(const std::map<Direction, PieceInf
             bool knownBoardOccupancy = bool(byTypeBB[ALL_PIECES] & sBB);
 
             if (isDestination) {
+                const bool occupiedDestination = isOccupied;
                 const int postDistance = distFromLastHurdle + 1;
                 if (profile.equiRule != PieceInfo::EQUI_STOPPER && hurdlesHit >= profile.hurdlesMin && hurdlesHit <= profile.hurdlesMax) {
                     if (distToFirstHurdle >= profile.preMin && distToFirstHurdle <= profile.preMax) {
@@ -3222,6 +3223,8 @@ inline Bitboard Position::universal_hopper_bb(const std::map<Direction, PieceInf
                     }
                 }
                 distFromLastHurdle = postDistance;
+                if (occupiedDestination)
+                    break;
                 continue;
             }
 
@@ -3310,6 +3313,8 @@ inline Bitboard Position::wrapped_universal_hopper_targets(const std::map<Direct
             Square next;
             if (!wrapped_destination_square(current, df, dr, maxFile, maxRank, wrapFile, wrapRank, next))
                 break;
+            if (next == sq)
+                break;
             dist++;
             current = next;
 
@@ -3326,6 +3331,7 @@ inline Bitboard Position::wrapped_universal_hopper_targets(const std::map<Direct
             bool knownBoardOccupancy = bool(byTypeBB[ALL_PIECES] & sBB);
 
             if (isDestination) {
+                const bool occupiedDestination = isOccupied;
                 const int postDistance = distFromLastHurdle + 1;
                 if (profile.equiRule != PieceInfo::EQUI_STOPPER && hurdlesHit >= profile.hurdlesMin && hurdlesHit <= profile.hurdlesMax) {
                     if (distToFirstHurdle >= profile.preMin && distToFirstHurdle <= profile.preMax) {
@@ -3337,6 +3343,8 @@ inline Bitboard Position::wrapped_universal_hopper_targets(const std::map<Direct
                     }
                 }
                 distFromLastHurdle = postDistance;
+                if (occupiedDestination)
+                    break;
                 continue;
             }
 
@@ -3893,6 +3901,8 @@ inline Square Position::jump_capture_square(Square from, Square to) const {
                   {
                       if (!wrapped_destination_square(s, df, dr, max_file(), max_rank(), wrapFile, wrapRank, next))
                           break;
+                      if (next == from)
+                          break;
                   }
                   else
                   {
@@ -3954,6 +3964,8 @@ inline Square Position::jump_capture_square(Square from, Square to) const {
                               if (wraps)
                               {
                                   if (!wrapped_destination_square(hurdleScan, df, dr, max_file(), max_rank(), wrapFile, wrapRank, hnext))
+                                      break;
+                                  if (hnext == to)
                                       break;
                               }
                               else
@@ -4046,6 +4058,8 @@ inline Bitboard Position::universal_hopper_potential_bb(PieceType pt, Square s) 
                     {
                         if (!wrapped_destination_square(current, df, dr, max_file(), max_rank(), wrapFile, wrapRank, next))
                             break;
+                        if (next == s)
+                            break;
                     }
                     else
                     {
@@ -4087,7 +4101,9 @@ inline bool Position::capture(Move m) const {
       Piece mover = moved_piece(m);
       if (mover != NO_PIECE)
       {
-          const PieceInfo* pi = pieceMap.get(type_of(mover));
+          PieceType pt = type_of(mover);
+          PieceType movePt = pt == KING ? king_type() : pt;
+          const PieceInfo* pi = pieceMap.get(movePt);
           if (pi->has_universal_hopper())
           {
               if (jump_capture_square(from_sq(m), to_sq(m)) != SQ_NONE)
