@@ -5895,17 +5895,71 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
                   const PieceInfo::HopperProfile& profile = it.second;
                   if (profile.captureMode != PieceInfo::CAPTURE_LOCUST_ALL) continue;
 
-                  // Re-scan ray to find all hurdles
+                  // Re-scan ray with full validation to ensure this profile actually authorized the move
                   Square current = from;
+                  int hurdlesHit = 0;
                   int dist = 0;
+                  int distToFirstHurdle = 0;
+                  int distFromLastHurdle = 0;
                   bool match = false;
+                  Square prev = from;
+
                   for (int i = 0; i < 255; ++i) {
                       current += dir; dist++;
                       if (!is_ok(current)) break;
-                      if (current == to) { match = true; break; }
+                      if (std::abs(int(file_of(current)) - int(file_of(prev))) > 2 ||
+                          std::abs(int(rank_of(current)) - int(rank_of(prev))) > 2) break;
+                      prev = current;
+
+                      if (current == to) {
+                          if (hurdlesHit >= profile.hurdlesMin && hurdlesHit <= profile.hurdlesMax &&
+                              distToFirstHurdle >= profile.preMin && distToFirstHurdle <= profile.preMax &&
+                              distFromLastHurdle >= profile.postMin && distFromLastHurdle <= profile.postMax)
+                          {
+                              if (profile.equiRule == PieceInfo::EQUI_HOPPER && distFromLastHurdle != distToFirstHurdle) break;
+                              if (profile.equiRule == PieceInfo::EQUI_STOPPER && distToFirstHurdle != (dist / 2)) break;
+                              match = true;
+                          }
+                          break;
+                      }
+
+                      Bitboard sBB = square_bb(current);
+                      bool isOccupied = (byTypeBB[ALL_PIECES] & sBB);
+                      bool isWall = (st->wallSquares & sBB);
+                      bool isDead = (st->deadSquares & sBB);
+
+                      if (isOccupied || isWall || isDead) {
+                          Piece hurdlePc = piece_on(current);
+                          PieceType hurdlePt = type_of(hurdlePc);
+                          PieceSet pcSet = (hurdlePt == NO_PIECE_TYPE || !isOccupied) ? NO_PIECE_SET : piece_set(hurdlePt);
+                          if (isWall) pcSet |= PieceSet(1ULL << 62);
+                          if (isDead) pcSet |= PieceSet(1ULL << 61);
+
+                          uint8_t special = (isOccupied && color_of(hurdlePc) != us ? PieceInfo::HopperProfile::ENEMY : 0)
+                                          | (isOccupied && color_of(hurdlePc) == us ? PieceInfo::HopperProfile::FRIENDLY : 0)
+                                          | (isWall ? PieceInfo::HopperProfile::WALL : 0)
+                                          | (isDead ? PieceInfo::HopperProfile::DEAD : 0);
+
+                          if (((profile.transparentSpecialTypes & special) != 0) || (uint64_t(profile.transparentPieceTypes & pcSet) != 0)) {
+                              distFromLastHurdle++;
+                              continue;
+                          }
+
+                          if (((profile.hurdleSpecialTypes & special) != 0) || (uint64_t(profile.hurdlePieceTypes & pcSet) != 0)) {
+                              hurdlesHit++;
+                              if (hurdlesHit == 1) distToFirstHurdle = dist;
+                              distFromLastHurdle = 0;
+                              if (hurdlesHit > profile.hurdlesMax) break;
+                              continue;
+                          }
+                          break; // Blocked
+                      } else {
+                          distFromLastHurdle++;
+                      }
                   }
                   if (!match) continue;
 
+                  // Validation passed, re-cast one last time to populate removal_mask
                   current = from;
                   for (int i = 0; i < dist; ++i) {
                       current += dir;
@@ -5926,8 +5980,6 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
                       if (((profile.hurdleSpecialTypes & special) != 0) || (uint64_t(profile.hurdlePieceTypes & pcSet) != 0)) {
                           if (current != jumpCapsq)
                               removal_mask |= current;
-                      } else {
-                          break; // Should not happen for a legal move, but stay safe
                       }
                   }              }
           }
