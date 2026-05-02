@@ -115,19 +115,19 @@ struct PieceInfo {
   }
 };
 
-struct PieceMap : public std::map<PieceType, const PieceInfo*> {
+struct PieceMap : public std::map<PieceType, PieceInfo*> {
   PieceMap() { direct.fill(nullptr); }
   void init(const Variant* v = nullptr);
-  void add(PieceType pt, const PieceInfo* v);
+  void add(PieceType pt, PieceInfo* v);
   void clear_all();
-  const PieceInfo* get(PieceType pt) const {
+  PieceInfo* get(PieceType pt) {
     assert(pt < PIECE_TYPE_NB);
     assert(direct[pt] != nullptr);
     return direct[pt];
   }
 
 private:
-  std::array<const PieceInfo*, PIECE_TYPE_NB> direct;
+  std::array<PieceInfo*, PIECE_TYPE_NB> direct;
 };
 
 extern PieceMap pieceMap;

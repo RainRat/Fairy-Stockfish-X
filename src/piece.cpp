@@ -592,7 +592,7 @@ void PieceMap::init(const Variant* v) {
       add(pt, from_betza(v != nullptr ? v->customPiece[pt - CUSTOM_PIECES] : "", ""));
 }
 
-void PieceMap::add(PieceType pt, const PieceInfo* p) {
+void PieceMap::add(PieceType pt, PieceInfo* p) {
   if (p)
   {
       auto slider_fraction = [](const std::map<Direction, int>& sliderMap) {
@@ -637,8 +637,8 @@ void PieceMap::add(PieceType pt, const PieceInfo* p) {
 
       if (diagonalOnly && standardFrac > 0 && currentFrac < standardFrac)
       {
-          const_cast<PieceInfo*>(p)->mobilityScaling = std::max(1, currentFrac * 100 / standardFrac);
-          const_cast<PieceInfo*>(p)->diagonalLimitedSlider = true;
+          p->mobilityScaling = std::max(1, currentFrac * 100 / standardFrac);
+          p->diagonalLimitedSlider = true;
       }
   }
 
