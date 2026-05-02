@@ -2618,7 +2618,8 @@ bool Position::compute_forced_jump_followup(Square s, int step) const {
   if (freeze_squares() & s)
       return false;
 
-  const PieceInfo* pi = pieceMap.get(type_of(mover));
+  PieceType movePt = type_of(mover) == KING ? king_type() : type_of(mover);
+  const PieceInfo* pi = pieceMap.get(movePt);
   if (!(pi->has_universal_hopper()))
       return false;
 
@@ -4618,7 +4619,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   Piece pc = moved_piece(m);
   Color dropColor = dropMove ? drop_hand_color(us, in_hand_piece_type(m)) : us;
   PieceType movedType = type_of(pc);
-  const PieceInfo* pi = movedType != NO_PIECE_TYPE ? pieceMap.get(movedType) : nullptr;
+  PieceType movedMoveType = movedType == KING ? king_type() : movedType;
+  const PieceInfo* pi = movedMoveType != NO_PIECE_TYPE ? pieceMap.get(movedMoveType) : nullptr;
   Piece captured = captured_piece(m);
   if (type_of(m) == CASTLING && captured == NO_PIECE)
       captured = piece_on(to);
@@ -4654,10 +4656,10 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   if (pi && pi->has_universal_hopper() && jumpCapsq != SQ_NONE)
   {
       const bool usesGenericPawnLikeInitialMoveHelper =
-             movedType == PAWN || (pawn_like_types(us) & piece_set(movedType));
+             movedMoveType == PAWN || (pawn_like_types(us) & piece_set(movedMoveType));
       const Bitboard initialMoveRegion = usesGenericPawnLikeInitialMoveHelper
-                                       ? double_step_region(us, movedType)
-                                       : var->doubleStepRegion.get(us).explicitBoardOfPiece(piece_to_char()[movedType]);
+                                       ? double_step_region(us, movedMoveType)
+                                       : var->doubleStepRegion.get(us).explicitBoardOfPiece(piece_to_char()[movedMoveType]);
       bool isInitial = (initialMoveRegion & from);
 
       for (int initialPhase : {0, 1})

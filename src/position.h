@@ -3204,7 +3204,8 @@ inline Bitboard Position::universal_hopper_bb(const std::map<Direction, PieceInf
             bool isEnemy = isOccupied && !isFriendly;
             bool isDestination = profile.equiRule != PieceInfo::EQUI_STOPPER
                               && !isWall && !isDead
-                              && ((captureMode && isEnemy) || (!captureMode && !isOccupied));
+                              && (((captureMode && profile.captureMode == PieceInfo::CAPTURE_DEST) && isEnemy)
+                                  || (!captureMode && !isOccupied));
             bool knownBoardOccupancy = bool(byTypeBB[ALL_PIECES] & sBB);
 
             if (isDestination) {
@@ -3318,7 +3319,8 @@ inline Bitboard Position::wrapped_universal_hopper_targets(const std::map<Direct
             bool isEnemy = isOccupied && !isFriendly;
             bool isDestination = profile.equiRule != PieceInfo::EQUI_STOPPER
                               && !isWall && !isDead
-                              && ((captureMode && isEnemy) || (!captureMode && !isOccupied));
+                              && (((captureMode && profile.captureMode == PieceInfo::CAPTURE_DEST) && isEnemy)
+                                  || (!captureMode && !isOccupied));
             bool knownBoardOccupancy = bool(byTypeBB[ALL_PIECES] & sBB);
 
             if (isDestination) {
@@ -3483,6 +3485,13 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
   Bitboard b = attacks_bb(c, movePt, s, occupancy);
 
   b |= special_rider_bb(pi, MODALITY_CAPTURE, s, occupancy, board_bb(), pieces(c), c, false, true, true);
+  const bool usesGenericPawnLikeInitialAttackHelper =
+         pt == PAWN || (pawn_like_types(c) & piece_set(pt));
+  const Bitboard initialAttackRegion = usesGenericPawnLikeInitialAttackHelper
+                                     ? double_step_region(c, pt)
+                                     : var->doubleStepRegion.get(c).explicitBoardOfPiece(piece_to_char()[pt]);
+  if (initialAttackRegion & s)
+      b |= special_rider_bb(pi, MODALITY_CAPTURE, s, occupancy, board_bb(), pieces(c), c, true, true, true);
 
   // Xiangqi soldier
   if (pt == SOLDIER && !(promoted_soldiers(c) & s))
@@ -3668,7 +3677,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
   if (initialMoveRegion & s)
   {
       b |= moves_bb<true>(c, movePt, s, occupancy);
-      b |= special_rider_bb(pi, MODALITY_QUIET, s, occupancy, board_bb(), pieces(c), c, true, true, false);
+      b |= special_rider_bb(pi, MODALITY_QUIET, s, occupancy, board_bb(), pieces(c), c, true, false, false);
   }
   // Xiangqi soldier
   if (pt == SOLDIER && !(promoted_soldiers(c) & s))
@@ -3839,17 +3848,18 @@ inline Square Position::jump_capture_square(Square from, Square to) const {
       return SQ_NONE;
 
   PieceType pt = type_of(mover);
-  const PieceInfo* pi = pieceMap.get(pt);
+  PieceType movePt = pt == KING ? king_type() : pt;
+  const PieceInfo* pi = pieceMap.get(movePt);
   Color us = color_of(mover);
 
   // 1. Universal Hopper with locust capture
   if (pi->has_universal_hopper())
   {
       const bool usesGenericPawnLikeInitialMoveHelper =
-             pt == PAWN || (pawn_like_types(us) & piece_set(pt));
+             movePt == PAWN || (pawn_like_types(us) & piece_set(movePt));
       const Bitboard initialMoveRegion = usesGenericPawnLikeInitialMoveHelper
-                                       ? double_step_region(us, pt)
-                                       : var->doubleStepRegion.get(us).explicitBoardOfPiece(piece_to_char()[pt]);
+                                       ? double_step_region(us, movePt)
+                                       : var->doubleStepRegion.get(us).explicitBoardOfPiece(piece_to_char()[movePt]);
       bool isInitial = (initialMoveRegion & from);
 
       for (int initialPhase : {0, 1})
@@ -3868,13 +3878,30 @@ inline Square Position::jump_capture_square(Square from, Square to) const {
               int distFromLastHurdle = 0;
               Square firstHurdleSq = SQ_NONE;
               Square lastHurdleSq = SQ_NONE;
-              Square prev = from;
+              Square s = from;
+              const bool wrapFile = wraps_files();
+              const bool wrapRank = wraps_ranks();
+              const bool wraps = topology_wraps();
+              auto [dr, df] = decode_direction(dir);
 
-              for (Square s = from + dir; is_ok(s) && (dist < 255); s += dir)
+              for (int rayStep = 0; rayStep < 255; ++rayStep)
               {
-                  if (std::abs(int(file_of(s)) - int(file_of(prev))) > 2 ||
-                      std::abs(int(rank_of(s)) - int(rank_of(prev))) > 2) break;
-                  prev = s;
+                  Square next = SQ_NONE;
+                  if (wraps)
+                  {
+                      if (!wrapped_destination_square(s, df, dr, max_file(), max_rank(), wrapFile, wrapRank, next))
+                          break;
+                  }
+                  else
+                  {
+                      next = s + dir;
+                      if (!is_ok(next))
+                          break;
+                      if (std::abs(int(file_of(next)) - int(file_of(s))) > 2 ||
+                          std::abs(int(rank_of(next)) - int(rank_of(s))) > 2)
+                          break;
+                  }
+                  s = next;
                   dist++;
 
                   Bitboard sBB = square_bb(s);
@@ -3918,15 +3945,25 @@ inline Square Position::jump_capture_square(Square from, Square to) const {
                       {
                           // Look ahead to find the hurdle
                           Square hurdleScan = to;
-                          Square hurdleScanPrev = to;
                           int hurdlesInScan = 0;
                           for (int j = 0; j < dist; ++j) // Hurdle is at 2*dist, so dist more steps
                           {
-                              hurdleScan += dir;
-                              if (!is_ok(hurdleScan)) break;
-                              if (std::abs(int(file_of(hurdleScan)) - int(file_of(hurdleScanPrev))) > 2 ||
-                                  std::abs(int(rank_of(hurdleScan)) - int(rank_of(hurdleScanPrev))) > 2) break;
-                              hurdleScanPrev = hurdleScan;
+                              Square hnext = SQ_NONE;
+                              if (wraps)
+                              {
+                                  if (!wrapped_destination_square(hurdleScan, df, dr, max_file(), max_rank(), wrapFile, wrapRank, hnext))
+                                      break;
+                              }
+                              else
+                              {
+                                  hnext = hurdleScan + dir;
+                                  if (!is_ok(hnext))
+                                      break;
+                                  if (std::abs(int(file_of(hnext)) - int(file_of(hurdleScan))) > 2 ||
+                                      std::abs(int(rank_of(hnext)) - int(rank_of(hurdleScan))) > 2)
+                                      break;
+                              }
+                              hurdleScan = hnext;
 
                               Bitboard hsBB = square_bb(hurdleScan);
                               bool hsOccupied = (byTypeBB[ALL_PIECES] & hsBB);
@@ -3988,22 +4025,38 @@ inline Square Position::jump_capture_square(Square from, Square to) const {
 }
 
 inline Bitboard Position::universal_hopper_potential_bb(PieceType pt, Square s) const {
-    const PieceInfo* pi = pieceMap.get(pt);
+    PieceType movePt = pt == KING ? king_type() : pt;
+    const PieceInfo* pi = pieceMap.get(movePt);
     Bitboard b = 0;
     Color us = color_of(piece_on(s));
+    const bool wrapFile = wraps_files();
+    const bool wrapRank = wraps_ranks();
+    const bool wraps = topology_wraps();
     for (int initial = 0; initial < 2; ++initial) {
         for (int modality = 0; modality < MOVE_MODALITY_NB; ++modality) {
             for (const auto& it : pi->universalHopper[initial][modality]) {
                 Direction dir = (us == WHITE ? it.first : -it.first);
                 int dist = 0;
                 Square current = s;
-                Square prev = s;
+                auto [dr, df] = decode_direction(dir);
                 for (int i = 0; i < 255; ++i) {
-                    current += dir; dist++;
-                    if (!is_ok(current)) break;
-                    if (std::abs(int(file_of(current)) - int(file_of(prev))) > 2 ||
-                        std::abs(int(rank_of(current)) - int(rank_of(prev))) > 2) break;
-                    prev = current;
+                    Square next = SQ_NONE;
+                    if (wraps)
+                    {
+                        if (!wrapped_destination_square(current, df, dr, max_file(), max_rank(), wrapFile, wrapRank, next))
+                            break;
+                    }
+                    else
+                    {
+                        next = current + dir;
+                        if (!is_ok(next))
+                            break;
+                        if (std::abs(int(file_of(next)) - int(file_of(current))) > 2 ||
+                            std::abs(int(rank_of(next)) - int(rank_of(current))) > 2)
+                            break;
+                    }
+                    current = next;
+                    dist++;
                     b |= current;
                 }
             }

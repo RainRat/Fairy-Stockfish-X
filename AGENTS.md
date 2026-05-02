@@ -71,7 +71,7 @@ Run: `./stockfish < test.txt > output.txt`
 * Move-gen correctness: `tests/perft.sh all` (or `chess`, `largeboard`)
 * Protocol suite: `tests/protocol.sh`
 * Smoke tests for experimental variants: `tests/new-variants-smoke.sh`
-* Python bindings unit tests: `python3 ../test.py` (requires `pyffish` to be built/installed)
+* Python bindings unit tests: `python3 test.py` (requires `pyffish` to be built/installed)
 * Upstream reference checks for shared behavior: `python3 tests/upstream_reference.py src/stockfish "$UPSTREAM_ENGINE"`
   Current curated set covers orthodox chess, pawn-rule variants, `spartan` checking semantics, `duck` walling/duck plumbing, `allexplodeatomic` custom-pawn behavior, and the `janggi` cannon/pass path. Extend this list conservatively and keep known semantic divergences called out in the script review notes rather than silently ignored.
 * Upstream deterministic move-count baseline: `python3 tests/upstream_movecount_baseline.py src/stockfish "$UPSTREAM_ENGINE"`
