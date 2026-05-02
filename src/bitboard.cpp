@@ -178,6 +178,24 @@ namespace {
     return attack;
   }
 
+  Bitboard universal_hopper_potential(const std::map<Direction, PieceInfo::HopperProfile>& profiles, Square sq, Color c = WHITE) {
+    Bitboard attack = 0;
+
+    for (auto const& [d, profile] : profiles) {
+      Direction dir = (c == WHITE ? d : -d);
+      int dist = 0;
+      Square prev = sq;
+      for (Square s = sq + dir; is_ok(s) && (dist < 255); s += dir) {
+        if (std::abs(int(file_of(s)) - int(file_of(prev))) > 2 ||
+            std::abs(int(rank_of(s)) - int(rank_of(prev))) > 2) break;
+        prev = s;
+        dist++;
+        attack |= s;
+      }
+    }
+    return attack;
+  }
+
   Bitboard special_pseudo_bb(const PieceInfo* pi, bool initial, MoveModality modality, Square s, Color c,
                              const std::map<Direction, int>& riderDirs,
                              const std::map<Direction, int>& skiDirs) {
@@ -188,6 +206,7 @@ namespace {
     pseudo |= ski_sliding_attack(skiDirs, s, 0, c);
     pseudo |= sliding_attack<HOPPER_RANGE>(pi->hopper[initial][modality], s, 0, c);
     pseudo |= contra_hopper_potential(pi->contraHopper[initial][modality], s, c);
+    pseudo |= universal_hopper_potential(pi->universalHopper[initial][modality], s, c);
 
     if (pi->griffon[initial][modality])
         pseudo |= rider_attacks_bb<RIDER_GRIFFON_NH>(s, Bitboard(0))

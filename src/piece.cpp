@@ -459,6 +459,26 @@ namespace {
                           if (val == "hopper") currentHopperProfile.equiRule = PieceInfo::EQUI_HOPPER;
                           else if (val == "stopper") currentHopperProfile.equiRule = PieceInfo::EQUI_STOPPER;
                       }
+                      else if (key == "hurdle_types" || key == "transparent_types") {
+                          bool isHurdle = (key == "hurdle_types");
+                          uint8_t& special = isHurdle ? currentHopperProfile.hurdleSpecialTypes : currentHopperProfile.transparentSpecialTypes;
+                          if (isHurdle) special = PieceInfo::HopperProfile::NONE; // Reset default for explicit hurdle_types
+                          
+                          size_t vpos = 0;
+                          while (vpos < val.size()) {
+                              size_t next_comma = val.find(',', vpos);
+                              if (next_comma == std::string::npos) next_comma = val.size();
+                              std::string v = val.substr(vpos, next_comma - vpos);
+                              v.erase(0, v.find_first_not_of(" ")); v.erase(v.find_last_not_of(" ") + 1);
+                              
+                              if (v == "enemy") special |= PieceInfo::HopperProfile::ENEMY;
+                              else if (v == "friendly") special |= PieceInfo::HopperProfile::FRIENDLY;
+                              else if (v == "wall") special |= PieceInfo::HopperProfile::WALL;
+                              else if (v == "dead") special |= PieceInfo::HopperProfile::DEAD;
+                              
+                              vpos = next_comma + 1;
+                          }
+                      }
                   }
                   pos = next_semi + 1;
               }

@@ -89,6 +89,15 @@ struct PieceInfo {
   };
 
   struct HopperProfile {
+    enum SpecialType : uint8_t {
+      NONE = 0,
+      ENEMY = 1 << 0,
+      FRIENDLY = 1 << 1,
+      WALL = 1 << 2,
+      DEAD = 1 << 3,
+      ALL_SPECIAL = ENEMY | FRIENDLY | WALL | DEAD
+    };
+
     int hurdlesMin = 1;
     int hurdlesMax = 1;
     int preMin = 1;
@@ -97,8 +106,10 @@ struct PieceInfo {
     int postMax = 1;
     CaptureMode captureMode = CAPTURE_DEST;
     EquiRule equiRule = EQUI_NONE;
-    PieceSet hurdleTypes = PieceSet(~0ULL);
-    PieceSet transparentTypes = PieceSet(0);
+    PieceSet hurdlePieceTypes = PieceSet(0);
+    PieceSet transparentPieceTypes = PieceSet(0);
+    uint8_t hurdleSpecialTypes = ENEMY | FRIENDLY;
+    uint8_t transparentSpecialTypes = NONE;
   };
 
   std::string name = "";
@@ -121,7 +132,14 @@ struct PieceInfo {
   bool diagonalLimitedSlider = false;
 
   inline void add_rider_augment(RiderAugment augment) { riderAugmentMask |= augment; }
-  inline bool has_runtime_rider_augment() const { return riderAugmentMask != AUGMENT_NONE; }
+  inline bool has_universal_hopper() const {
+    for (int initial = 0; initial < 2; ++initial)
+      for (int modality = 0; modality < MOVE_MODALITY_NB; ++modality)
+        if (!universalHopper[initial][modality].empty())
+          return true;
+    return false;
+  }
+  inline bool has_runtime_rider_augment() const { return riderAugmentMask != AUGMENT_NONE || has_universal_hopper(); }
   inline bool has_dynamic_slider() const { return riderAugmentMask & AUGMENT_DYNAMIC; }
   inline bool has_max_slider() const { return riderAugmentMask & AUGMENT_MAX; }
   inline bool has_contra_hopper() const { return riderAugmentMask & AUGMENT_CONTRA; }
