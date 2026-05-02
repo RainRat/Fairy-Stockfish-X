@@ -180,10 +180,10 @@ namespace {
       const std::string expandedBetza = expand_group_sugar(alias_to_betza(betza));
       std::vector<MoveModality> moveModalities = {};
       bool hopper = false;
-      bool contraHopper = false;
       bool rider = false;
       bool lame = false;
       bool initial = false;
+      bool dynamicDistance = false;
       bool skiSlider = false;
       bool maxDistance = false;
       int distance = 0;
@@ -196,10 +196,10 @@ namespace {
           moveModalities.clear();
           prelimDirections.clear();
           hopper = false;
-          contraHopper = false;
           rider = false;
           lame = false;
           initial = false;
+          dynamicDistance = false;
           skiSlider = false;
           maxDistance = false;
           standaloneH = false;
@@ -243,7 +243,7 @@ namespace {
                   }
                   std::string rangeSpec = expandedBetza.substr(i + 2, close - i - 2);
                   std::size_t dash = rangeSpec.find('-');
-                  bool unsupportedCombo = !atomIsRider || atomIsTuple || hopper || contraHopper || lame || skiSlider || maxDistance;
+                  bool unsupportedCombo = !atomIsRider || atomIsTuple || hopper || lame || dynamicDistance || skiSlider || maxDistance;
                   bool malformedRange = dash == std::string::npos                                     || rangeSpec.find('-', dash + 1) != std::string::npos
                                      || dash == 0;
                   if (unsupportedCombo)
@@ -293,6 +293,11 @@ namespace {
               distance = MAX_SLIDER_LIMIT;
               p->add_rider_augment(PieceInfo::AUGMENT_MAX);
           }
+          if (dynamicDistance && rider)
+          {
+              distance = DYNAMIC_SLIDER_LIMIT;
+              p->add_rider_augment(PieceInfo::AUGMENT_DYNAMIC);
+          }
           if (moveModalities.size() == 0)
           {
               moveModalities.push_back(MODALITY_QUIET);
@@ -326,7 +331,6 @@ namespace {
                           p->universalHopper[initial][modality][Direction(dr * FILE_NB + df)] = currentHopperProfile;
                       } else {
                           auto& v = hopper ? p->hopper[initial][modality]
-                                   : contraHopper ? p->contraHopper[initial][modality]
                                    : rider ? p->slider[initial][modality]
                                            : p->steps[initial][modality];
                           if (atomIsTuple && !hopper && rider)
@@ -336,8 +340,8 @@ namespace {
                           else
                           {
                               v[Direction(dr * FILE_NB + df)] = distance;
-                              if (rider && !atomIsRider && !hopper && !contraHopper
-                                  && !lame && !skiSlider && !maxDistance)
+                              if (rider && !atomIsRider && !hopper
+                                  && !lame && !dynamicDistance && !skiSlider && !maxDistance)
                                   leapRiderV[Direction(dr * FILE_NB + df)] = distance;
                           }
                       }
@@ -366,7 +370,7 @@ namespace {
 
       auto commit_bent_slider = [&](bool (PieceInfo::*flag)[2][2]) {
           // Keep first implementation strict: unqualified O only.
-          if (!prelimDirections.empty() || hopper || contraHopper || lame || rider)
+          if (!prelimDirections.empty() || hopper || lame || dynamicDistance || rider)
           {
               reset_parser_state();
               return;
@@ -382,7 +386,7 @@ namespace {
       };
 
       auto commit_rose = [&]() {
-          if (!prelimDirections.empty() || hopper || contraHopper || lame || rider || skiSlider || maxDistance)
+          if (!prelimDirections.empty() || hopper || lame || dynamicDistance || rider || skiSlider || maxDistance)
           {
               reset_parser_state();
               return;
@@ -503,6 +507,9 @@ namespace {
           // Lame leaper
           else if (c == 'n')
               lame = true;
+          // Dynamic distance slider
+          else if (c == 'x')
+              dynamicDistance = true;
           // Ski/slip slider modifier (e.g. jR, jB, jQ)
           else if (c == 'j')
               skiSlider = true;
@@ -569,7 +576,7 @@ namespace {
           // Tuple atom: (x,y), optionally repeated or numeric for riders.
           else if (c == '(')
           {
-              if (hopper || contraHopper || lame || skiSlider || maxDistance)
+              if (hopper || lame || dynamicDistance || skiSlider || maxDistance)
               {
                   std::cerr << "Unsupported Betza tuple modifier combination in '" << betza
                             << "': tuple atoms only support explicit leapers or repeated/numeric tuple riders. Ignoring tuple atom." << std::endl;

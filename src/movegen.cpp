@@ -740,8 +740,9 @@ namespace {
         const PieceInfo* pi = pieceMap.get(Pt);
         if (pi->has_universal_hopper())
         {
-            Bitboard candidates = (attacks | quiets) & ~pos.pieces();
-            candidates |= pos.universal_hopper_potential_bb(Pt, from) & ~pos.pieces();
+            // For universal hoppers, both empty and enemy-occupied squares can be jump capture destinations.
+            Bitboard candidates = (attacks | quiets) & ~pos.pieces(Us);
+            candidates |= pos.universal_hopper_potential_bb(Pt, from) & ~pos.pieces(Us);
 
             while (candidates)
             {

@@ -519,7 +519,7 @@ namespace {
 
         hasHopper = hasHopper
                  || !pi->hopper[0][modality].empty()
-                 || !pi->contraHopper[0][modality].empty();
+                 || !pi->universalHopper[0][modality].empty();
     }
 
     return hasHopper;
@@ -2595,8 +2595,8 @@ bool Position::compute_forced_jump_followup(Square s, int step) const {
   if (freeze_squares() & s)
       return false;
 
-  PieceSet jumpTypes = jump_capture_types();
-  if (!(jumpTypes & ALL_PIECES) && !(jumpTypes & type_of(mover)))
+  const PieceInfo* pi = pieceMap.get(type_of(mover));
+  if (!(pi->has_universal_hopper()))
       return false;
 
   Color c = color_of(mover);
@@ -2946,17 +2946,23 @@ bool Position::legal(Move m) const {
               return false;
       }
   }
-  PieceSet jumpTypes = jump_capture_types();
-  bool jumpTypeMover = (jumpTypes & ALL_PIECES) || (jumpTypes & type_of(moved_piece(m)));
+  const PieceInfo* pInfo = pieceMap.get(type_of(moved_piece(m)));
+  bool jumpTypeMover = (pInfo->has_universal_hopper());
   if ((type_of(m) == NORMAL || type_of(m) == PROMOTION) && jumpTypeMover && !empty(to))
-      return false;
+  {
+      if (jump_capture_square(from, to) != SQ_NONE)
+          return false;
+  }
   if ((type_of(m) == NORMAL || type_of(m) == PROMOTION) && jumpTypeMover)
   {
-      int df = std::abs(int(file_of(to)) - int(file_of(from)));
-      int dr = std::abs(int(rank_of(to)) - int(rank_of(from)));
-      bool isHop = std::max(df, dr) == 2 && (df == 0 || dr == 0 || df == dr);
-      if (isHop && jump_capture_square(from, to) == SQ_NONE)
-          return false;
+      if (jump_capture_square(from, to) == SQ_NONE)
+      {
+          // If it's a hopper, but not a jump capture, it must be a quiet move authorized by the profile
+          // Since we are in legal(), we assume it's pseudo-legal and was authorized.
+          // BUT: Fairy-Stockfish legacy logic had distance-2 hardcoded here. 
+          // We can just rely on the fact that if jump_capture_square returns SQ_NONE, 
+          // then it's NOT a jump capture. 
+      }
   }
   if (!allow_checks() && checking_permitted() && (pieces(them) & to) && type_of(piece_on(to)) == KING)
       return false;
@@ -3348,12 +3354,11 @@ bool Position::legal(Move m) const {
 
       if (!moverRemovedByBlast)
       {
-          const PieceInfo* pi = pieceMap.get(pt);
+          const PieceInfo* pInfo2 = pieceMap.get(pt);
           bool hasPotentialMove = PseudoMoves[0][us][pt][to] & board_bb();
-          if (is_pure_hopper_like(pi))
+          if (is_pure_hopper_like(pInfo2))
               hasPotentialMove = has_hopper_potential_from_square(*this, us, pt, to);
-          if (   !hasPotentialMove
-              && !(jump_capture_types() & ALL_PIECES) && !(jump_capture_types() & pt))
+          if (!hasPotentialMove && !pInfo2->has_universal_hopper())
               return false;
       }
   }
@@ -3992,17 +3997,19 @@ bool Position::pseudo_legal(const Move m) const {
               return false;
       }
   }
-  PieceSet jumpTypes = jump_capture_types();
-  bool jumpTypeMover = (jumpTypes & ALL_PIECES) || (jumpTypes & type_of(pc));
+  const PieceInfo* pInfo = pieceMap.get(type_of(pc));
+  bool jumpTypeMover = (pInfo->has_universal_hopper());
   if ((type_of(m) == NORMAL || type_of(m) == PROMOTION) && jumpTypeMover && !empty(to))
-      return false;
+  {
+      if (jump_capture_square(from, to) != SQ_NONE)
+          return false;
+  }
   if ((type_of(m) == NORMAL || type_of(m) == PROMOTION) && jumpTypeMover)
   {
-      int df = std::abs(int(file_of(to)) - int(file_of(from)));
-      int dr = std::abs(int(rank_of(to)) - int(rank_of(from)));
-      bool isHop = std::max(df, dr) == 2 && (df == 0 || dr == 0 || df == dr);
-      if (isHop && jump_capture_square(from, to) == SQ_NONE)
-          return false;
+      if (jump_capture_square(from, to) == SQ_NONE)
+      {
+          // Same as legal(): if it's a hopper, but not a jump capture, it must be a quiet move
+      }
   }
 
   // Illegal moves to squares outside of board or to wall squares
