@@ -3300,7 +3300,7 @@ inline Bitboard Position::universal_hopper_bb(const std::map<Direction, PieceInf
 {
     Bitboard b = 0;
     for (const auto& it : profiles) {
-        Direction dir = it.first;
+        Direction dir = (c == WHITE ? it.first : -it.first);
         const PieceInfo::HopperProfile& profile = it.second;
         
         int hurdlesHit = 0;
@@ -3844,73 +3844,95 @@ inline Square Position::jump_capture_square(Square from, Square to) const {
 
   PieceType pt = type_of(mover);
   const PieceInfo* pi = pieceMap.get(pt);
+  Color us = color_of(mover);
 
   // 1. Universal Hopper with locust capture
   if (pi->has_universal_hopper())
   {
-      for (int initial = 0; initial < 2; ++initial)
-          for (int modality = 0; modality < MOVE_MODALITY_NB; ++modality)
-              for (const auto& it : pi->universalHopper[initial][modality])
+      const bool usesGenericPawnLikeInitialMoveHelper =
+             pt == PAWN || (pawn_like_types(us) & piece_set(pt));
+      const Bitboard initialMoveRegion = usesGenericPawnLikeInitialMoveHelper
+                                       ? double_step_region(us, pt)
+                                       : var->doubleStepRegion.get(us).explicitBoardOfPiece(piece_to_char()[pt]);
+      bool isInitial = (initialMoveRegion & from);
+
+      for (int initialPhase : {0, 1})
+      {
+          if (initialPhase == 1 && !isInitial) continue;
+          
+          for (const auto& it : pi->universalHopper[initialPhase][MODALITY_CAPTURE])
+          {
+              Direction dir = (us == WHITE ? it.first : -it.first);
+              const PieceInfo::HopperProfile& profile = it.second;
+              if (profile.captureMode == PieceInfo::CAPTURE_DEST) continue;
+
+              int hurdlesHit = 0;
+              int dist = 0;
+              int distToFirstHurdle = 0;
+              int distFromLastHurdle = 0;
+              Square firstHurdleSq = SQ_NONE;
+              Square lastHurdleSq = SQ_NONE;
+              Square prev = from;
+
+              for (Square s = from + dir; is_ok(s) && (dist < 255); s += dir)
               {
-                  Direction dir = it.first;
-                  const PieceInfo::HopperProfile& profile = it.second;
-                  if (profile.captureMode == PieceInfo::CAPTURE_DEST) continue;
+                  if (std::abs(int(file_of(s)) - int(file_of(prev))) > 2 ||
+                      std::abs(int(rank_of(s)) - int(rank_of(prev))) > 2) break;
+                  prev = s;
+                  dist++;
 
-                  int hurdlesHit = 0;
-                  int dist = 0;
-                  int distToFirstHurdle = 0;
-                  int distFromLastHurdle = 0;
-                  Square firstHurdleSq = SQ_NONE;
-                  Color us = color_of(mover);
+                  Bitboard sBB = square_bb(s);
+                  bool isOccupied = (byTypeBB[ALL_PIECES] & sBB);
+                  bool isWall = (st->wallSquares & sBB);
+                  bool isDead = (st->deadSquares & sBB);
 
-                  for (Square s = from + dir; is_ok(s) && (dist < 255); s += dir)
+                  if (isOccupied || isWall || isDead)
                   {
-                      dist++;
-                      if (s == to)
-                      {
-                          if (hurdlesHit >= profile.hurdlesMin && hurdlesHit <= profile.hurdlesMax &&
-                              distToFirstHurdle >= profile.preMin && distToFirstHurdle <= profile.preMax &&
-                              distFromLastHurdle >= profile.postMin && distFromLastHurdle <= profile.postMax)
-                          {
-                              if (profile.equiRule == PieceInfo::EQUI_HOPPER && distFromLastHurdle != distToFirstHurdle) break;
-                              if (profile.equiRule == PieceInfo::EQUI_STOPPER && distToFirstHurdle != (dist / 2)) break;
-                              return firstHurdleSq;
-                          }
-                          break;
-                      }
-
-                      Bitboard sBB = square_bb(s);
                       Piece pc = piece_on(s);
-                      if (!empty(s) || (st->wallSquares & sBB) || (st->deadSquares & sBB))
+                      PieceType pcPt = type_of(pc);
+                      PieceSet pcSet = (pcPt == NO_PIECE_TYPE || !isOccupied) ? NO_PIECE_SET : piece_set(pcPt);
+                      if (isWall) pcSet |= PieceSet(1ULL << 62);
+                      if (isDead) pcSet |= PieceSet(1ULL << 61);
+
+                      uint8_t special = (isOccupied && color_of(pc) != us ? PieceInfo::HopperProfile::ENEMY : 0)
+                                      | (isOccupied && color_of(pc) == us ? PieceInfo::HopperProfile::FRIENDLY : 0)
+                                      | (isWall ? PieceInfo::HopperProfile::WALL : 0)
+                                      | (isDead ? PieceInfo::HopperProfile::DEAD : 0);
+
+                      if (((profile.transparentSpecialTypes & special) != 0) || (uint64_t(profile.transparentPieceTypes & pcSet) != 0))
                       {
-                          PieceType pcPt = type_of(pc);
-                          PieceSet pcSet = pcPt == NO_PIECE_TYPE ? NO_PIECE_SET : piece_set(pcPt);
-                          if (st->wallSquares & sBB) pcSet |= PieceSet(1ULL << 62);
-                          if (st->deadSquares & sBB) pcSet |= PieceSet(1ULL << 61);
-
-                          uint8_t special = (!empty(s) && color_of(pc) != us ? PieceInfo::HopperProfile::ENEMY : 0)
-                                          | (!empty(s) && color_of(pc) == us ? PieceInfo::HopperProfile::FRIENDLY : 0)
-                                          | ((st->wallSquares & sBB) ? PieceInfo::HopperProfile::WALL : 0)
-                                          | ((st->deadSquares & sBB) ? PieceInfo::HopperProfile::DEAD : 0);
-
-                          if ((profile.transparentSpecialTypes & special) || (profile.transparentPieceTypes & pcSet))
-                          {
-                              distFromLastHurdle++;
-                              continue;
-                          }
-                          if ((profile.hurdleSpecialTypes & special) || (profile.hurdlePieceTypes & pcSet))
-                          {
-                              hurdlesHit++;
-                              if (hurdlesHit == 1) { distToFirstHurdle = dist; firstHurdleSq = s; }
-                              distFromLastHurdle = 0;
-                              if (hurdlesHit > profile.hurdlesMax) break;
-                              continue;
-                          }
-                          break;
+                          distFromLastHurdle++;
                       }
-                      else distFromLastHurdle++;
+                      else if (((profile.hurdleSpecialTypes & special) != 0) || (uint64_t(profile.hurdlePieceTypes & pcSet) != 0))
+                      {
+                          hurdlesHit++;
+                          if (hurdlesHit == 1) { distToFirstHurdle = dist; firstHurdleSq = s; }
+                          lastHurdleSq = s;
+                          distFromLastHurdle = 0;
+                          if (hurdlesHit > profile.hurdlesMax) break;
+                          continue;
+                      }
+                      else break; // Blocked
+                  }
+                  else distFromLastHurdle++;
+
+                  if (s == to)
+                  {
+                      if (hurdlesHit >= profile.hurdlesMin && hurdlesHit <= profile.hurdlesMax &&
+                          distToFirstHurdle >= profile.preMin && distToFirstHurdle <= profile.preMax &&
+                          distFromLastHurdle >= profile.postMin && distFromLastHurdle <= profile.postMax)
+                      {
+                          if (profile.equiRule == PieceInfo::EQUI_HOPPER && distFromLastHurdle != distToFirstHurdle) break;
+                          if (profile.equiRule == PieceInfo::EQUI_STOPPER && distToFirstHurdle != (dist / 2)) break;
+                          
+                          if (profile.captureMode == PieceInfo::CAPTURE_LOCUST_LAST) return lastHurdleSq;
+                          return firstHurdleSq; // locust_all or locust_first
+                      }
+                      break;
                   }
               }
+          }
+      }
   }
 
   // 2. Legacy jumpCaptureTypes
@@ -3922,7 +3944,7 @@ inline Square Position::jump_capture_square(Square from, Square to) const {
   if (mid == SQ_NONE)
       return SQ_NONE;
   Piece jumped = piece_on(mid);
-  if (jumped == NO_PIECE || (color_of(jumped) == color_of(mover) && !self_capture(pt)))
+  if (jumped == NO_PIECE || (color_of(jumped) == us && !self_capture(pt)))
       return SQ_NONE;
 
   return mid;
@@ -3947,11 +3969,17 @@ inline bool Position::capture(Move m) const {
   if (type_of(m) == NORMAL || type_of(m) == PROMOTION)
   {
       Piece mover = moved_piece(m);
-      PieceSet jumpTypes = jump_capture_types();
-      if (mover != NO_PIECE && ((jumpTypes & ALL_PIECES) || (jumpTypes & piece_set(type_of(mover)))))
+      if (mover != NO_PIECE)
       {
-          if (jump_capture_square(from_sq(m), to_sq(m)) != SQ_NONE)
-              return true;
+          PieceType pt = type_of(mover);
+          const PieceInfo* pi = pieceMap.get(pt);
+          PieceSet jumpTypes = jump_capture_types();
+          if (   (jumpTypes & ALL_PIECES) || (jumpTypes & piece_set(pt))
+              || pi->has_universal_hopper())
+          {
+              if (jump_capture_square(from_sq(m), to_sq(m)) != SQ_NONE)
+                  return true;
+          }
       }
   }
 

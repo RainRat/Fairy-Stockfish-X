@@ -441,8 +441,19 @@ namespace {
                               std::string max_s = s.substr(comma + 1);
                               min_s.erase(0, min_s.find_first_not_of(" ")); min_s.erase(min_s.find_last_not_of(" ") + 1);
                               max_s.erase(0, max_s.find_first_not_of(" ")); max_s.erase(max_s.find_last_not_of(" ") + 1);
-                              min_val = std::stoi(min_s);
-                              max_val = (max_s == "*") ? 255 : std::stoi(max_s);
+                              
+                              auto safe_stoi = [](const std::string& str, int default_val) {
+                                  if (str.empty()) return default_val;
+                                  int res = 0;
+                                  for (char ch : str) {
+                                      if (!std::isdigit(static_cast<unsigned char>(ch))) return default_val;
+                                      res = res * 10 + (ch - '0');
+                                  }
+                                  return res;
+                              };
+
+                              min_val = safe_stoi(min_s, 1);
+                              max_val = (max_s == "*") ? 255 : safe_stoi(max_s, 1);
                           }
                       };
                       
