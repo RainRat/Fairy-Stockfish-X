@@ -6,7 +6,7 @@
 INI_FILE="universal_hopper_test.ini"
 cat << 'EOF' > $INI_FILE
 [hopper-common:chess]
-pieceToCharTable = PNBRQKDFGH
+pieceToCharTable = PNBRQKDFGHS
 
 [hopper-base:hopper-common]
 customPiece1 = d:{hurdles: 1,1; pre: 1,*; post: 1,1}Q
@@ -27,6 +27,9 @@ customPiece1 = d:{hurdles: 1,1; equi: hopper}Q
 
 [equi-stopper:hopper-common]
 customPiece1 = d:{hurdles: 1,1; equi: stopper}Q
+
+[equi-stopper-multi:hopper-common]
+customPiece1 = d:{hurdles: 2,2; equi: stopper}Q
 
 [wrapped-hopper:hopper-common]
 topology = cylinder
@@ -131,8 +134,6 @@ if echo "$output" | grep -q "Fen: 7k/8/3D4/8/8/8/8/K7"; then
     echo "  [PASS] locust_all captured multiple hurdles"
 else
     echo "  [FAIL] locust_all did not capture all hurdles"
-    echo "Output was:"
-    echo "$output"
     exit 1
 fi
 
@@ -152,6 +153,13 @@ run_test "equi-hopper" "7k/8/3P4/8/3D4/8/8/K7 w - - 0 1" 4
 # White Stopper D1: jumps halfway to King H1 (H1) -> F1 (1 move).
 # Total = 5.
 run_test "equi-stopper" "7k/8/8/3p4/8/8/8/3D3K w - - 0 1" 5
+
+# Equistopper-multi (halfway to 2nd hurdle)
+# D at D1, p at D3 (1st), p at D5 (2nd). King H1.
+# Stopper halfway to 2nd hurdle (D5) lands at D3.
+# D3 is occupied by 1st hurdle, so D1D3 is a capture move.
+# Moves: King H1 (3), Stopper D1D3 (1) = 4.
+run_test "equi-stopper-multi" "7k/8/8/3p4/8/3p4/8/3D3K w - - 0 1" 4
 
 # 5. Wrapped topology
 # Rook-hopper on cylinder jumping across the edge

@@ -3350,7 +3350,7 @@ inline Bitboard Position::universal_hopper_bb(const std::map<Direction, PieceInf
                     if (hurdlesHit == 1) distToFirstHurdle = dist;
                     distFromLastHurdle = 0;
                     
-                    if (profile.equiRule == PieceInfo::EQUI_STOPPER) {
+                    if (profile.equiRule == PieceInfo::EQUI_STOPPER && hurdlesHit >= profile.hurdlesMin && hurdlesHit <= profile.hurdlesMax) {
                         if (dist % 2 == 0) {
                             Square mid = sq + (dir * (dist / 2));
                             if (includeOwnBlockedAttacks || !(ownPieces & square_bb(mid)))
@@ -3448,7 +3448,7 @@ inline Bitboard Position::wrapped_universal_hopper_targets(const std::map<Direct
                     if (hurdlesHit == 1) distToFirstHurdle = dist;
                     distFromLastHurdle = 0;
                     
-                    if (profile.equiRule == PieceInfo::EQUI_STOPPER) {
+                    if (profile.equiRule == PieceInfo::EQUI_STOPPER && hurdlesHit >= profile.hurdlesMin && hurdlesHit <= profile.hurdlesMax) {
                         if (dist % 2 == 0) {
                             Square mid;
                             if (wrapped_destination_square(sq, (dist / 2) * df, (dist / 2) * dr, maxFile, maxRank, wrapFile, wrapRank, mid)) {
@@ -4026,6 +4026,7 @@ inline Square Position::jump_capture_square(Square from, Square to) const {
                           // Look ahead to find the hurdle
                           Square hurdleScan = to;
                           Square hurdleScanPrev = to;
+                          int hurdlesInScan = 0;
                           for (int j = 0; j < dist; ++j) // Hurdle is at 2*dist, so dist more steps
                           {
                               hurdleScan += dir;
@@ -4057,8 +4058,11 @@ inline Square Position::jump_capture_square(Square from, Square to) const {
 
                                   if (((profile.hurdleSpecialTypes & hspecial) != 0) || (uint64_t(profile.hurdlePieceTypes & hpcSet) != 0))
                                   {
-                                      // Found the hurdle at exactly 2*dist?
-                                      if (j == dist - 1) return hurdleScan;
+                                      hurdlesInScan++;
+                                      // Check if this hurdle hit matches our requirements
+                                      int totalHurdles = hurdlesHit + hurdlesInScan;
+                                      if (j == dist - 1 && totalHurdles >= profile.hurdlesMin && totalHurdles <= profile.hurdlesMax)
+                                          return hurdleScan;
                                   }
                                   break;
                               }
