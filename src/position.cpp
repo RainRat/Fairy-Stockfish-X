@@ -4797,59 +4797,6 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       if (jumpCapsq != SQ_NONE)
       {
           capsq = jumpCapsq;
-          
-          const PieceInfo* pi = pieceMap.get(type_of(pc));
-          // Handling locust_all multi-capture
-          if (pi->has_universal_hopper() && !rifleShot)
-          {
-              const bool usesGenericPawnLikeInitialMoveHelper =
-                     type_of(pc) == PAWN || (pawn_like_types(us) & piece_set(type_of(pc)));
-              const Bitboard initialMoveRegion = usesGenericPawnLikeInitialMoveHelper
-                                               ? double_step_region(us, type_of(pc))
-                                               : var->doubleStepRegion.get(us).explicitBoardOfPiece(piece_to_char()[type_of(pc)]);
-              bool isInitial = (initialMoveRegion & from);
-
-              for (int initialPhase : {0, 1})
-              {
-                  if (initialPhase == 1 && !isInitial) continue;
-                  for (const auto& it : pi->universalHopper[initialPhase][MODALITY_CAPTURE])
-                  {
-                      Direction dir = (us == WHITE ? it.first : -it.first);
-                      const PieceInfo::HopperProfile& profile = it.second;
-                      if (profile.captureMode != PieceInfo::CAPTURE_LOCUST_ALL) continue;
-
-                      // Verify this ray matches the move
-                      Square current = from;
-                      int dist = 0;
-                      bool match = false;
-                      for (int i = 0; i < 255; ++i) {
-                          current += dir; dist++;
-                          if (!is_ok(current)) break;
-                          if (current == to) { match = true; break; }
-                      }
-                      if (!match) continue;
-
-                      // Re-cast ray to remove pieces
-                      current = from;
-                      for (int i = 0; i < dist; ++i) {
-                          current += dir;
-                          Bitboard sBB = square_bb(current);
-                          if (current != to && (byTypeBB[ALL_PIECES] & sBB)) {
-                              Piece capturedHurdle = piece_on(current);
-                              if (type_of(capturedHurdle) == PAWN)
-                                  st->pawnKey ^= Zobrist::psq[capturedHurdle][current];
-                              else
-                                  st->nonPawnMaterial[color_of(capturedHurdle)] -= PieceValue[MG][capturedHurdle];
-                              k ^= Zobrist::psq[capturedHurdle][current];
-                              st->materialKey ^= Zobrist::psq[capturedHurdle][pieceCount[capturedHurdle] - 1];
-                              remove_piece(current);
-                          }
-                      }
-                      capsq = to; // Already handled pieces
-                      break;
-                  }
-              }
-          }
       }
 
       if (type_of(m) == EN_PASSANT)
@@ -5826,6 +5773,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       st->gatesBB[them] ^= square<KING>(them);
 
   //resolve blast and custodial capture. custodial capture is essentially blast with extra restrictions
+  const PieceInfo* pi = pieceMap.get(movedType);
   if (
        (
          ( surround_capture_opposite() || surround_capture_intervene() || surround_capture_edge() ) ||
@@ -5833,7 +5781,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
          ( blast_on_move() && !captured && !is_self_destruct(m) ) ||
          ( blast_on_self_destruct() && is_self_destruct(m) ) ||
          var->blastPassiveTypes ||
-         ( remove_connect_n() > 0 )
+         ( remove_connect_n() > 0 ) ||
+         ( pi->has_universal_hopper() && jumpCapsq != SQ_NONE )
        )
        && !is_pass(m)
      )
@@ -5928,8 +5877,46 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           }
       }
 
-      if (remove_connect_n() > 0) {
-          auto mark_line = [&](Bitboard line) {
+      if (pi->has_universal_hopper() && jumpCapsq != SQ_NONE)
+      {
+          const bool usesGenericPawnLikeInitialMoveHelper =
+                 movedType == PAWN || (pawn_like_types(us) & piece_set(movedType));
+          const Bitboard initialMoveRegion = usesGenericPawnLikeInitialMoveHelper
+                                           ? double_step_region(us, movedType)
+                                           : var->doubleStepRegion.get(us).explicitBoardOfPiece(piece_to_char()[movedType]);
+          bool isInitial = (initialMoveRegion & from);
+
+          for (int initialPhase : {0, 1})
+          {
+              if (initialPhase == 1 && !isInitial) continue;
+              for (const auto& it : pi->universalHopper[initialPhase][MODALITY_CAPTURE])
+              {
+                  Direction dir = (us == WHITE ? it.first : -it.first);
+                  const PieceInfo::HopperProfile& profile = it.second;
+                  if (profile.captureMode != PieceInfo::CAPTURE_LOCUST_ALL) continue;
+
+                  // Re-scan ray to find all hurdles
+                  Square current = from;
+                  int dist = 0;
+                  bool match = false;
+                  for (int i = 0; i < 255; ++i) {
+                      current += dir; dist++;
+                      if (!is_ok(current)) break;
+                      if (current == to) { match = true; break; }
+                  }
+                  if (!match) continue;
+
+                  current = from;
+                  for (int i = 0; i < dist; ++i) {
+                      current += dir;
+                      if (current != to && current != jumpCapsq && (byTypeBB[ALL_PIECES] & current))
+                          removal_mask |= current;
+                  }
+              }
+          }
+      }
+
+      if (remove_connect_n() > 0) {          auto mark_line = [&](Bitboard line) {
               for (Direction d : var->connectDirections) {
                   Bitboard temp = line;
                   for (int i = 1; i < remove_connect_n(); ++i)
