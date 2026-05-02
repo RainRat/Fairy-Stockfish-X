@@ -57,9 +57,9 @@ function run_test() {
     local expected_nodes=$3
     local moves=${4:-}
     echo "Testing $variant..."
-    output=$("${ENGINE}" << EOF
-setoption name VariantPath value $INI_FILE
+output=$("${ENGINE}" << EOF
 uci
+setoption name VariantPath value $INI_FILE
 setoption name UCI_Variant value $variant
 position fen $fen $moves
 go perft 1
@@ -107,8 +107,8 @@ run_test "directional-hopper" "7k/3p4/3d4/8/8/8/8/K7 b - - 0 1" 3
 run_test "locust-first" "7k/8/8/8/3p4/3D4/8/K7 w - - 0 1" 4
 # Verify capture happened
 output=$("${ENGINE}" << EOF
-setoption name VariantPath value $INI_FILE
 uci
+setoption name VariantPath value $INI_FILE
 setoption name UCI_Variant value locust-first
 position fen 7k/8/8/8/3p4/3D4/8/K7 w - - 0 1 moves d3d5
 d
@@ -129,8 +129,8 @@ fi
 # Moves: King A1 (3), Hopper D3D6 (1). Total = 4
 run_test "locust-all" "7k/8/8/3p4/3p4/3D4/8/K7 w - - 0 1" 4
 output=$("${ENGINE}" << EOF
-setoption name VariantPath value $INI_FILE
 uci
+setoption name VariantPath value $INI_FILE
 setoption name UCI_Variant value locust-all
 position fen 7k/8/8/3p4/3p4/3D4/8/K7 w - - 0 1 moves d3d6
 d
