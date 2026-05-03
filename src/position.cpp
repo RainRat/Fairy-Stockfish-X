@@ -2412,14 +2412,13 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
   }
 
   bool hasRuntimeSpecialAttackers = false;
-  for (PieceSet ps = piece_types(); ps && !hasRuntimeSpecialAttackers;)
+  for (PieceSet ps = pieceMap.runtime_rider_augment_types(); ps && !hasRuntimeSpecialAttackers;)
   {
-      PieceType pt = pop_lsb(ps);
-      if (!pieces(c, pt))
-          continue;
-      PieceType move_pt = pt == KING ? king_type() : pt;
-      if (pieceMap.get(move_pt)->has_runtime_rider_augment())
-          hasRuntimeSpecialAttackers = true;
+      PieceType move_pt = pop_lsb(ps);
+      if (move_pt == king_type())
+          hasRuntimeSpecialAttackers = bool(pieces(c, KING));
+      else
+          hasRuntimeSpecialAttackers = bool(pieces(c, move_pt));
   }
 
   // Use a faster version for variants with moderate rule variations
@@ -7550,7 +7549,12 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
       bool capturedRoyal = capturedType == KING;
 
       if (!capturedRoyal && king_type() != NO_PIECE_TYPE && capturedType == king_type())
-          capturedRoyal = count(capturedColor, KING) == 0;
+      {
+          // Only treat king_type() capture as direct royal capture when this
+          // variant actually uses physical KING pieces on the board.
+          const bool usesPhysicalKings = count(WHITE, KING) + count(BLACK, KING) > 0;
+          capturedRoyal = usesPhysicalKings && count(capturedColor, KING) == 0;
+      }
 
       if (capturedRoyal)
       {

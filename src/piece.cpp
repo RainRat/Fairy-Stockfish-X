@@ -756,6 +756,10 @@ void PieceMap::add(PieceType pt, PieceInfo* p) {
   }
   (*this)[pt] = p;
   direct[pt] = p;
+  if (p && p->has_runtime_rider_augment())
+      runtimeRiderAugmentTypes |= piece_set(pt);
+  else
+      runtimeRiderAugmentTypes &= ~piece_set(pt);
 }
 
 void PieceMap::clear_all() {
@@ -763,6 +767,7 @@ void PieceMap::clear_all() {
       delete element.second;
   clear();
   direct.fill(nullptr);
+  runtimeRiderAugmentTypes = PieceSet(0);
 }
 
 } // namespace Stockfish

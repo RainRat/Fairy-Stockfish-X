@@ -157,7 +157,10 @@ struct PieceInfo {
 };
 
 struct PieceMap : public std::map<PieceType, PieceInfo*> {
-  PieceMap() { direct.fill(nullptr); }
+  PieceMap() {
+    direct.fill(nullptr);
+    runtimeRiderAugmentTypes = PieceSet(0);
+  }
   void init(const Variant* v = nullptr);
   void add(PieceType pt, PieceInfo* v);
   void clear_all();
@@ -171,9 +174,11 @@ struct PieceMap : public std::map<PieceType, PieceInfo*> {
     assert(direct[pt] != nullptr);
     return direct[pt];
   }
+  PieceSet runtime_rider_augment_types() const { return runtimeRiderAugmentTypes; }
 
 private:
   std::array<PieceInfo*, PIECE_TYPE_NB> direct;
+  PieceSet runtimeRiderAugmentTypes;
 };
 
 extern PieceMap pieceMap;
