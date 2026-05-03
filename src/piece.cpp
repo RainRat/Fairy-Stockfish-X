@@ -458,15 +458,22 @@ namespace {
                               trim_local(min_s);
                               trim_local(max_s);
                               
-                      auto safe_stoi = [&](const std::string& str, int default_val, bool& ok) {
+                              auto safe_stoi = [&](const std::string& str, int default_val, bool& ok) {
                                   if (str.empty()) { ok = false; return default_val; }
-                                  int res = 0;
+                                  long long res = 0;
                                   ok = true;
                                   for (char ch : str) {
-                                      if (!std::isdigit(static_cast<unsigned char>(ch))) { ok = false; return default_val; }
+                                      if (!std::isdigit(static_cast<unsigned char>(ch))) {
+                                          ok = false;
+                                          return default_val;
+                                      }
                                       res = res * 10 + (ch - '0');
+                                      if (res > std::numeric_limits<int>::max()) {
+                                          ok = false;
+                                          return default_val;
+                                      }
                                   }
-                                  return res;
+                                  return static_cast<int>(res);
                               };
 
                               bool minOk = false, maxOk = false;

@@ -4044,8 +4044,19 @@ inline Square Position::jump_capture_square(Square from, Square to) const {
                           distFromLastHurdle >= profile.postMin && distFromLastHurdle <= profile.postMax)
                       {
                           if (profile.equiRule == PieceInfo::EQUI_HOPPER && distFromLastHurdle != distToFirstHurdle) break;
-                          
-                          if (profile.captureMode == PieceInfo::CAPTURE_LOCUST_LAST) return lastHurdleSq;
+
+                          if (profile.captureMode == PieceInfo::CAPTURE_LOCUST_LAST)
+                          {
+                              if (lastHurdleSq != SQ_NONE
+                                  && (pieces(us) & square_bb(lastHurdleSq))
+                                  && !self_capture(movePt))
+                                  return SQ_NONE;
+                              return lastHurdleSq;
+                          }
+                          if (firstHurdleSq != SQ_NONE
+                              && (pieces(us) & square_bb(firstHurdleSq))
+                              && !self_capture(movePt))
+                              return SQ_NONE;
                           return firstHurdleSq; // locust_all or locust_first
                       }
                       break;
