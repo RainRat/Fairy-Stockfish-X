@@ -420,13 +420,13 @@ namespace {
               
               size_t pos = 0;
               auto trim_in_place = [](std::string& text) {
-                  const size_t first = text.find_first_not_of(" ");
+                  const size_t first = text.find_first_not_of(" \t\r\n");
                   if (first == std::string::npos)
                   {
                       text.clear();
                       return;
                   }
-                  const size_t last = text.find_last_not_of(" ");
+                  const size_t last = text.find_last_not_of(" \t\r\n");
                   text = text.substr(first, last - first + 1);
               };
               while (pos < params.size()) {
@@ -446,13 +446,13 @@ namespace {
                               std::string min_s = s.substr(0, comma);
                               std::string max_s = s.substr(comma + 1);
                               const auto trim_local = [](std::string& text) {
-                                  const size_t first = text.find_first_not_of(" ");
+                                  const size_t first = text.find_first_not_of(" \t\r\n");
                                   if (first == std::string::npos)
                                   {
                                       text.clear();
                                       return;
                                   }
-                                  const size_t last = text.find_last_not_of(" ");
+                                  const size_t last = text.find_last_not_of(" \t\r\n");
                                   text = text.substr(first, last - first + 1);
                               };
                               trim_local(min_s);
@@ -478,7 +478,13 @@ namespace {
 
                               bool minOk = false, maxOk = false;
                               min_val = safe_stoi(min_s, 1, minOk);
-                              max_val = (max_s == "*") ? 255 : safe_stoi(max_s, 1, maxOk);
+                              if (max_s == "*")
+                              {
+                                  max_val = 255;
+                                  maxOk = true;
+                              }
+                              else
+                                  max_val = safe_stoi(max_s, 1, maxOk);
                               if (!minOk || (!maxOk && max_s != "*"))
                                   std::cerr << "Invalid numeric value in Betza hopper parameters: '" << s << "'" << std::endl;
                               if (minOk && (maxOk || max_s == "*") && min_val > max_val)
