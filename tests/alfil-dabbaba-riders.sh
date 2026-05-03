@@ -40,6 +40,12 @@ customPiece3 = c:nA
 customPiece4 = d:nAA
 pieceToCharTable = PNBRQ............ABCDKpnbrq............abcdk
 startFen = 8/3ab3/2cd5/8/8/8/8/K6k b - - 0 1
+
+[plain-rider-midpoint:chess]
+customPiece1 = a:DD
+customPiece2 = b:AA
+pieceToCharTable = PNBRQ............AB..Kpnbrq............ab..k
+startFen = 8/3ab3/3pp3/8/8/8/8/K6k b - - 0 1
 INI
 
 piece_moves() {
@@ -98,5 +104,11 @@ out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Varia
 ! echo "$out" | grep -q "^e7c7:"
 ! echo "$out" | grep -q "^c6e8:"
 ! echo "$out" | grep -q "^d6f8:"
+
+# Plain DD/AA riders are not lame: midpoint blockers must NOT stop them.
+out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value plain-rider-midpoint\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
+  | ./stockfish)
+echo "$out" | grep -q "^d7d5:"
+echo "$out" | grep -q "^e7c5:"
 
 echo "alfil-dabbaba-riders test OK"
