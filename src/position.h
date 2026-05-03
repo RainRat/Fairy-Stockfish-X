@@ -3203,10 +3203,17 @@ inline Bitboard Position::universal_hopper_bb(const std::map<Direction, PieceInf
             bool isDead = (st->deadSquares & sBB);
             bool isFriendly = isOccupied && bool(ownPieces & sBB);
             bool isEnemy = isOccupied && !isFriendly;
-            bool isDestination = profile.equiRule != PieceInfo::EQUI_STOPPER
-                              && !isWall && !isDead
-                              && (((captureMode && profile.captureMode == PieceInfo::CAPTURE_DEST) && isEnemy)
-                                  || (!captureMode && !isOccupied));
+            bool isDestination = false;
+            if (profile.equiRule != PieceInfo::EQUI_STOPPER && !isWall && !isDead) {
+                // For CAPTURE_DEST, only treat occupied enemy squares as destinations
+                // after at least one hurdle has already been crossed. Otherwise the
+                // enemy square must still be processed as a hurdle/blocker.
+                isDestination = (!captureMode && !isOccupied)
+                             || (captureMode
+                                 && profile.captureMode == PieceInfo::CAPTURE_DEST
+                                 && isEnemy
+                                 && hurdlesHit > 0);
+            }
             bool knownBoardOccupancy = bool(byTypeBB[ALL_PIECES] & sBB);
 
             if (isDestination) {
@@ -3327,10 +3334,14 @@ inline Bitboard Position::wrapped_universal_hopper_targets(const std::map<Direct
             bool isDead = (st->deadSquares & sBB);
             bool isFriendly = isOccupied && bool(ownPieces & sBB);
             bool isEnemy = isOccupied && !isFriendly;
-            bool isDestination = profile.equiRule != PieceInfo::EQUI_STOPPER
-                              && !isWall && !isDead
-                              && (((captureMode && profile.captureMode == PieceInfo::CAPTURE_DEST) && isEnemy)
-                                  || (!captureMode && !isOccupied));
+            bool isDestination = false;
+            if (profile.equiRule != PieceInfo::EQUI_STOPPER && !isWall && !isDead) {
+                isDestination = (!captureMode && !isOccupied)
+                             || (captureMode
+                                 && profile.captureMode == PieceInfo::CAPTURE_DEST
+                                 && isEnemy
+                                 && hurdlesHit > 0);
+            }
             bool knownBoardOccupancy = bool(byTypeBB[ALL_PIECES] & sBB);
 
             if (isDestination) {

@@ -34,6 +34,9 @@ customPiece1 = d:{hurdles: 1,1; pre: 1,*; post: 1,1; capture: locust_first}R
 [locust-all:hopper-common]
 customPiece1 = d:{hurdles: 2,2; pre: 1,*; post: 1,1; capture: locust_all}R
 
+[dest-capture-hopper:hopper-common]
+customPiece1 = d:c{hurdles: 1,1; pre: 1,1; post: 1,1; capture: dest; hurdle_types: enemy}R
+
 [equi-hopper:hopper-common]
 customPiece1 = d:{hurdles: 1,1; equi: hopper}Q
 
@@ -154,6 +157,26 @@ if echo "$output" | grep -q "Fen: 7k/8/3D4/8/8/8/8/K7"; then
     echo "  [PASS] locust_all captured multiple hurdles"
 else
     echo "  [FAIL] locust_all did not capture all hurdles"
+    exit 1
+fi
+
+# CAPTURE_DEST with enemy hurdle + enemy destination:
+# D at d3, enemies at d4 and d5. d3d5 must be generated as a capture.
+output=$("${ENGINE}" << EOF
+uci
+setoption name VariantPath value $INI_FILE
+setoption name UCI_Variant value dest-capture-hopper
+position fen 7k/8/8/3p4/3p4/3D4/8/K7 w - - 0 1
+go perft 1
+quit
+EOF
+)
+if echo "$output" | grep -q "^d3d5: 1$"; then
+    echo "  [PASS] destination-capture hopper can hop over enemy hurdle"
+else
+    echo "  [FAIL] destination-capture hopper missed d3d5 over enemy hurdle"
+    echo "Output was:"
+    echo "$output"
     exit 1
 fi
 

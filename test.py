@@ -137,12 +137,13 @@ pawnTypes = ps
 selfCapture = true
 
 [checkersmini]
-customPiece1 = m:fFc{hurdles: 1,1; pre: 1,1; post: 1,1; capture: locust_first; hurdle_types: enemy}fF
-customPiece2 = k:FAc{hurdles: 1,1; pre: 1,1; post: 1,1; capture: locust_first; hurdle_types: enemy}A
+customPiece1 = m:fFfA
+customPiece2 = k:FA
 startFen = 8/8/8/8/8/8/8/8 w - - 0 1
 promotionPawnTypes = m
 promotionPieceTypes = k
 mustCapture = true
+jumpCaptureTypes = *
 checking = false
 forcedJumpContinuation = true
 stalemateValue = loss
@@ -906,10 +907,7 @@ checking = false
         # rule set is available in the current build.
         fen = "8/8/5m2/8/3m4/2M5/8/7K w - - 0 1"
         first_moves = sf.legal_moves("checkersmini", fen, [])
-        if first_moves != ["c3e5"]:
-            # Default/non-all builds can fall back to plain diagonal capture rules.
-            self.assertEqual(first_moves, ["c3d4"])
-            return
+        self.assertEqual(first_moves, ["c3e5"])
 
         after_first_jump = sf.get_fen("checkersmini", fen, ["c3e5"])
         self.assertEqual(sf.legal_moves("checkersmini", after_first_jump, []), ["f6d4"])
