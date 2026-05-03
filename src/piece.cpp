@@ -474,6 +474,12 @@ namespace {
                               max_val = (max_s == "*") ? 255 : safe_stoi(max_s, 1, maxOk);
                               if (!minOk || (!maxOk && max_s != "*"))
                                   std::cerr << "Invalid numeric value in Betza hopper parameters: '" << s << "'" << std::endl;
+                              if (minOk && (maxOk || max_s == "*") && min_val > max_val)
+                              {
+                                  std::cerr << "Invalid hopper range (min > max) in Betza hopper parameters: '" << s
+                                            << "'. Swapping values." << std::endl;
+                                  std::swap(min_val, max_val);
+                              }
                           }
                           else
                               std::cerr << "Invalid hopper range (missing comma) in Betza hopper parameters: '" << s << "'" << std::endl;
