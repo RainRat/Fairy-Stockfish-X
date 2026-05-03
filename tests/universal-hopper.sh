@@ -86,6 +86,11 @@ pointsCounting = true
 pointsRuleCaptures = us
 piecePoints = p:1 d:0 k:0
 
+[locust-all-undo:chess]
+pieceToCharTable = PNBRQK....D.....pnbrqk....d.....
+customPiece1 = d:c{hurdles: 2,2; pre: 1,*; post: 1,1; capture: locust_all; hurdle_types: enemy}R
+startFen = 7k/8/8/3p4/3p4/3D4/8/K7 w - - 0 1
+
 [long-step-hopper:hopper-common]
 customPiece1 = d:{hurdles: 1,1; pre: 1,1; post: 1,1}(3,2)(3,2)
 
@@ -359,6 +364,35 @@ if echo "$output" | grep -q "Fen: 7k/8/3D4/8/8/8/8/K7 b - - 0 1 {2 0}"; then
     echo "  [PASS] locust_all awards points for all captured hurdles"
 else
     echo "  [FAIL] locust_all points side effects mismatch"
+    echo "Output was:"
+    echo "$output"
+    exit 1
+fi
+
+# 5f. do/undo integrity for locust_all multi-capture:
+# perft(2) must be stable across repeated runs, and root FEN must remain unchanged.
+output=$("${ENGINE}" << EOF
+uci
+setoption name VariantPath value $INI_FILE
+setoption name UCI_Variant value locust-all-undo
+position startpos
+go perft 2
+go perft 2
+d
+quit
+EOF
+)
+nodes=($(echo "$output" | grep "Nodes searched:" | awk '{print $3}'))
+if [[ "${#nodes[@]}" -lt 2 || "${nodes[0]}" != "${nodes[1]}" ]]; then
+    echo "  [FAIL] locust_all perft(2) instability suggests do/undo corruption"
+    echo "Output was:"
+    echo "$output"
+    exit 1
+fi
+if echo "$output" | grep -q "Fen: 7k/8/8/3p4/3p4/3D4/8/K7 w - - 0 1"; then
+    echo "  [PASS] locust_all preserves root state across repeated perft"
+else
+    echo "  [FAIL] locust_all root FEN changed after perft (do/undo mismatch)"
     echo "Output was:"
     echo "$output"
     exit 1
