@@ -34,10 +34,20 @@ customPiece1 = d:{hurdles: 1,1; pre: 1,*; post: 1,1; capture: locust_first}R
 [locust-all:hopper-common]
 customPiece1 = d:{hurdles: 2,2; pre: 1,*; post: 1,1; capture: locust_all}R
 
+[locust-last:hopper-common]
+customPiece1 = d:c{hurdles: 2,2; pre: 1,1; post: 1,1; capture: locust_last; hurdle_types: enemy}R
+
 [locust-friendly-hurdle:hopper-common]
 customPiece1 = d:c{hurdles: 1,1; pre: 1,1; post: 1,1; capture: locust_first; hurdle_types: friendly}R
 
+[locust-friendly-selfcapture:hopper-common]
+customPiece1 = d:c{hurdles: 1,1; pre: 1,1; post: 1,1; capture: locust_first; hurdle_types: friendly}R
+selfCapture = true
+
 [dest-capture-hopper:hopper-common]
+customPiece1 = d:c{hurdles: 1,1; pre: 1,1; post: 1,1; capture: dest; hurdle_types: enemy}R
+
+[dest-capture-no-hurdle:hopper-common]
 customPiece1 = d:c{hurdles: 1,1; pre: 1,1; post: 1,1; capture: dest; hurdle_types: enemy}R
 
 [equi-hopper:hopper-common]
@@ -168,6 +178,32 @@ fi
 # Moves: king A1 (3), friendly hurdle push D4D5 (1) => 4.
 run_test "locust-friendly-hurdle" "7k/8/8/8/3P4/3D4/8/K7 w - - 0 1" 4
 
+# With selfCapture enabled, friendly locust hurdle capture is legal.
+# White D3 and friendly hurdle D4. D3D5 should now be available.
+# Moves: king A1 (3), friendly hurdle push D4D5 (1), hopper D3D5 (1) => 5.
+run_test "locust-friendly-selfcapture" "7k/8/8/8/3P4/3D4/8/K7 w - - 0 1" 5
+
+# locust_last captures the last hurdle when multiple hurdles are crossed.
+run_test "locust-last" "7k/8/8/3p4/3p4/3D4/8/K7 w - - 0 1" 4
+output=$("${ENGINE}" << EOF
+uci
+setoption name VariantPath value $INI_FILE
+setoption name UCI_Variant value locust-last
+position fen 7k/8/8/3p4/3p4/3D4/8/K7 w - - 0 1 moves d3d6
+d
+quit
+EOF
+)
+# Last hurdle (d5) should be removed, first hurdle (d4) should remain.
+if echo "$output" | grep -q "Fen: 7k/8/3D4/8/3p4/8/8/K7"; then
+    echo "  [PASS] locust_last captured only the last hurdle"
+else
+    echo "  [FAIL] locust_last capture result mismatch"
+    echo "Output was:"
+    echo "$output"
+    exit 1
+fi
+
 # CAPTURE_DEST with enemy hurdle + enemy destination:
 # D at d3, enemies at d4 and d5. d3d5 must be generated as a capture.
 output=$("${ENGINE}" << EOF
@@ -186,6 +222,25 @@ else
     echo "Output was:"
     echo "$output"
     exit 1
+fi
+
+# CAPTURE_DEST must not capture directly without first crossing a hurdle.
+output=$("${ENGINE}" << EOF
+uci
+setoption name VariantPath value $INI_FILE
+setoption name UCI_Variant value dest-capture-no-hurdle
+position fen 7k/8/8/8/3p4/3D4/8/K7 w - - 0 1
+go perft 1
+quit
+EOF
+)
+if echo "$output" | grep -q "^d3d4: 1$"; then
+    echo "  [FAIL] destination-capture hopper illegally captured without hurdle"
+    echo "Output was:"
+    echo "$output"
+    exit 1
+else
+    echo "  [PASS] destination-capture requires crossing a hurdle first"
 fi
 
 # 4. Equi-family
