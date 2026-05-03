@@ -933,6 +933,7 @@ inline Bitboard fixed_step_rider_attacks(Square s, Bitboard occupied, int stepF,
 
 inline Bitboard fixed_step_lame_rider_attacks(Square s, Bitboard occupied, int stepF, int stepR, const MagicGeometry* mg = current_magic_geometry) {
   (void)mg;
+  assert((stepF % 2 == 0) && (stepR % 2 == 0));
   Bitboard attack = 0;
   int f = int(file_of(s));
   int r = int(rank_of(s));

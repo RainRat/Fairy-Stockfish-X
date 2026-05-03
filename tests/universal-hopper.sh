@@ -34,6 +34,25 @@ customPiece1 = d:{hurdles: 1,1; pre: 1,*; post: 1,1; capture: locust_first}R
 [locust-all:hopper-common]
 customPiece1 = d:{hurdles: 2,2; pre: 1,*; post: 1,1; capture: locust_all}R
 
+[locust-all-friendly-mix:hopper-common]
+customPiece1 = d:c{hurdles: 2,2; pre: 1,*; post: 1,1; capture: locust_all; hurdle_types: enemy,friendly}R
+
+[locust-last:hopper-common]
+customPiece1 = d:c{hurdles: 2,2; pre: 1,1; post: 1,1; capture: locust_last; hurdle_types: enemy}R
+
+[locust-friendly-hurdle:hopper-common]
+customPiece1 = d:c{hurdles: 1,1; pre: 1,1; post: 1,1; capture: locust_first; hurdle_types: friendly}R
+
+[locust-friendly-selfcapture:hopper-common]
+customPiece1 = d:c{hurdles: 1,1; pre: 1,1; post: 1,1; capture: locust_first; hurdle_types: friendly}R
+selfCapture = true
+
+[dest-capture-hopper:hopper-common]
+customPiece1 = d:c{hurdles: 1,1; pre: 1,1; post: 1,1; capture: dest; hurdle_types: enemy}R
+
+[dest-capture-no-hurdle:hopper-common]
+customPiece1 = d:c{hurdles: 1,1; pre: 1,1; post: 1,1; capture: dest; hurdle_types: enemy}R
+
 [equi-hopper:hopper-common]
 customPiece1 = d:{hurdles: 1,1; equi: hopper}Q
 
@@ -53,6 +72,19 @@ customPiece1 = d:{hurdles: 1,1; pre: 1,*; post: 1,1}R
 [wrapped-locust-all:hopper-common]
 topology = cylinder
 customPiece1 = d:c{hurdles: 2,2; pre: 1,1; post: 1,1; capture: locust_all; hurdle_types: enemy}R
+
+[locust-all-hand:crazyhouse]
+pieceToCharTable = PNBRQK....D.....pnbrqk....d.....
+customPiece1 = d:c{hurdles: 2,2; pre: 1,*; post: 1,1; capture: locust_all; hurdle_types: enemy}R
+startFen = 7k/8/8/3p4/3p4/3D4/8/K7[] w - - 0 1
+
+[locust-all-points:chess]
+pieceToCharTable = PNBRQK....D.....pnbrqk....d.....
+customPiece1 = d:c{hurdles: 2,2; pre: 1,*; post: 1,1; capture: locust_all; hurdle_types: enemy}R
+startFen = 7k/8/8/3p4/3p4/3D4/8/K7 w - - 0 1 {0 0}
+pointsCounting = true
+pointsRuleCaptures = us
+piecePoints = p:1 d:0 k:0
 
 [long-step-hopper:hopper-common]
 customPiece1 = d:{hurdles: 1,1; pre: 1,1; post: 1,1}(3,2)(3,2)
@@ -157,6 +189,82 @@ else
     exit 1
 fi
 
+# locust_all captures every crossed hurdle, so with selfCapture disabled it
+# must reject lines that include any friendly hurdle.
+# White D3, enemy on D4, friendly on D5. D3D6 must be rejected.
+# Moves: king A1 (3), friendly D5D6 (1), enemy D4D3 (1) => 5.
+run_test "locust-all-friendly-mix" "7k/8/8/3P4/3p4/3D4/8/K7 w - - 0 1" 5
+
+# Friendly hurdles must not be capturable unless self-capture is enabled.
+# White D3 and friendly hurdle D4. Locust jump D3D5 must be rejected.
+# Moves: king A1 (3), friendly hurdle push D4D5 (1) => 4.
+run_test "locust-friendly-hurdle" "7k/8/8/8/3P4/3D4/8/K7 w - - 0 1" 4
+
+# With selfCapture enabled, friendly locust hurdle capture is legal.
+# White D3 and friendly hurdle D4. D3D5 should now be available.
+# Moves: king A1 (3), friendly hurdle push D4D5 (1), hopper D3D5 (1) => 5.
+run_test "locust-friendly-selfcapture" "7k/8/8/8/3P4/3D4/8/K7 w - - 0 1" 5
+
+# locust_last captures the last hurdle when multiple hurdles are crossed.
+run_test "locust-last" "7k/8/8/3p4/3p4/3D4/8/K7 w - - 0 1" 4
+output=$("${ENGINE}" << EOF
+uci
+setoption name VariantPath value $INI_FILE
+setoption name UCI_Variant value locust-last
+position fen 7k/8/8/3p4/3p4/3D4/8/K7 w - - 0 1 moves d3d6
+d
+quit
+EOF
+)
+# Last hurdle (d5) should be removed, first hurdle (d4) should remain.
+if echo "$output" | grep -q "Fen: 7k/8/3D4/8/3p4/8/8/K7"; then
+    echo "  [PASS] locust_last captured only the last hurdle"
+else
+    echo "  [FAIL] locust_last capture result mismatch"
+    echo "Output was:"
+    echo "$output"
+    exit 1
+fi
+
+# CAPTURE_DEST with enemy hurdle + enemy destination:
+# D at d3, enemies at d4 and d5. d3d5 must be generated as a capture.
+output=$("${ENGINE}" << EOF
+uci
+setoption name VariantPath value $INI_FILE
+setoption name UCI_Variant value dest-capture-hopper
+position fen 7k/8/8/3p4/3p4/3D4/8/K7 w - - 0 1
+go perft 1
+quit
+EOF
+)
+if echo "$output" | grep -q "^d3d5: 1$"; then
+    echo "  [PASS] destination-capture hopper can hop over enemy hurdle"
+else
+    echo "  [FAIL] destination-capture hopper missed d3d5 over enemy hurdle"
+    echo "Output was:"
+    echo "$output"
+    exit 1
+fi
+
+# CAPTURE_DEST must not capture directly without first crossing a hurdle.
+output=$("${ENGINE}" << EOF
+uci
+setoption name VariantPath value $INI_FILE
+setoption name UCI_Variant value dest-capture-no-hurdle
+position fen 7k/8/8/8/3p4/3D4/8/K7 w - - 0 1
+go perft 1
+quit
+EOF
+)
+if echo "$output" | grep -q "^d3d4: 1$"; then
+    echo "  [FAIL] destination-capture hopper illegally captured without hurdle"
+    echo "Output was:"
+    echo "$output"
+    exit 1
+else
+    echo "  [PASS] destination-capture requires crossing a hurdle first"
+fi
+
 # 4. Equi-family
 # Equihopper (pre=1, post=1)
 # White D3, White D4 (Hurdle). Jump to D5. King A1.
@@ -215,6 +323,44 @@ if echo "$output" | grep -q "Fen: 7k/8/7D/p7/p7/8/8/K7"; then
     echo "  [PASS] wrapped locust_all removed all hurdles"
 else
     echo "  [FAIL] wrapped locust_all did not remove all hurdles"
+    exit 1
+fi
+
+# 5d. locust_all side effects: transfer all captured hurdles to hand.
+output=$("${ENGINE}" << EOF
+uci
+setoption name VariantPath value $INI_FILE
+setoption name UCI_Variant value locust-all-hand
+position startpos moves d3d6
+d
+quit
+EOF
+)
+if echo "$output" | grep -q "Fen: 7k/8/3D4/8/8/8/8/K7\\[PP\\]"; then
+    echo "  [PASS] locust_all transfers all captured hurdles to hand"
+else
+    echo "  [FAIL] locust_all hand-transfer side effects mismatch"
+    echo "Output was:"
+    echo "$output"
+    exit 1
+fi
+
+# 5e. locust_all side effects: award points for all captured hurdles.
+output=$("${ENGINE}" << EOF
+uci
+setoption name VariantPath value $INI_FILE
+setoption name UCI_Variant value locust-all-points
+position startpos moves d3d6
+d
+quit
+EOF
+)
+if echo "$output" | grep -q "Fen: 7k/8/3D4/8/8/8/8/K7 b - - 0 1 {2 0}"; then
+    echo "  [PASS] locust_all awards points for all captured hurdles"
+else
+    echo "  [FAIL] locust_all points side effects mismatch"
+    echo "Output was:"
+    echo "$output"
     exit 1
 fi
 

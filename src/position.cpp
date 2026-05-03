@@ -2544,7 +2544,7 @@ Bitboard Position::attackers_to_king(Square s, Bitboard occupied, Color c, Bitbo
               while (landings)
               {
                   Square to = pop_lsb(landings);
-                  if (jump_capture_square(from, to) == s)
+                  if (jump_capture_square(from, to, occupied) == s)
                   {
                       attackers |= square_bb(from);
                       break;

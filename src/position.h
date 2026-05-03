@@ -614,6 +614,7 @@ public:
   Square capture_square(Move m) const;
   Square secondary_drop_square(Move m) const;
   Square mirrored_pair_drop_square(Square s) const;
+  Square jump_capture_square(Square from, Square to, Bitboard occupied) const;
   Square jump_capture_square(Square from, Square to) const;
   bool gives_check(Move m) const;
   Piece moved_piece(Move m) const;
@@ -1229,14 +1230,14 @@ inline PieceType Position::king_type() const {
 }
 
 inline PieceType Position::royal_piece_type(Color c) const {
-  // Prefer explicit variant runtime royal semantics first.
+  // Prefer a physical KING when present. Variants like Xiangqi/Janggi often
+  // keep a physical KING on board while kingType() encodes movement semantics.
+  if (count(c, KING) == 1)
+      return KING;
   PieceType pt = king_type();
   if (pt != NO_PIECE_TYPE && count(c, pt) == 1)
       return pt;
-  // Xiangqi/Janggi often keep a single physical KING on board while kingType
-  // encodes movement semantics (e.g. WAZIR), so use KING as a fallback.
-  if (count(c, KING) == 1)
-      return KING;
+  // Fallback: no uniquely identifiable royal found for this side.
   return NO_PIECE_TYPE;
 }
 
@@ -3203,10 +3204,17 @@ inline Bitboard Position::universal_hopper_bb(const std::map<Direction, PieceInf
             bool isDead = (st->deadSquares & sBB);
             bool isFriendly = isOccupied && bool(ownPieces & sBB);
             bool isEnemy = isOccupied && !isFriendly;
-            bool isDestination = profile.equiRule != PieceInfo::EQUI_STOPPER
-                              && !isWall && !isDead
-                              && (((captureMode && profile.captureMode == PieceInfo::CAPTURE_DEST) && isEnemy)
-                                  || (!captureMode && !isOccupied));
+            bool isDestination = false;
+            if (profile.equiRule != PieceInfo::EQUI_STOPPER && !isWall && !isDead) {
+                // For CAPTURE_DEST, only treat occupied enemy squares as destinations
+                // after at least one hurdle has already been crossed. Otherwise the
+                // enemy square must still be processed as a hurdle/blocker.
+                isDestination = (!captureMode && !isOccupied)
+                             || (captureMode
+                                 && profile.captureMode == PieceInfo::CAPTURE_DEST
+                                 && isEnemy
+                                 && hurdlesHit > 0);
+            }
             bool knownBoardOccupancy = bool(byTypeBB[ALL_PIECES] & sBB);
 
             if (isDestination) {
@@ -3327,10 +3335,14 @@ inline Bitboard Position::wrapped_universal_hopper_targets(const std::map<Direct
             bool isDead = (st->deadSquares & sBB);
             bool isFriendly = isOccupied && bool(ownPieces & sBB);
             bool isEnemy = isOccupied && !isFriendly;
-            bool isDestination = profile.equiRule != PieceInfo::EQUI_STOPPER
-                              && !isWall && !isDead
-                              && (((captureMode && profile.captureMode == PieceInfo::CAPTURE_DEST) && isEnemy)
-                                  || (!captureMode && !isOccupied));
+            bool isDestination = false;
+            if (profile.equiRule != PieceInfo::EQUI_STOPPER && !isWall && !isDead) {
+                isDestination = (!captureMode && !isOccupied)
+                             || (captureMode
+                                 && profile.captureMode == PieceInfo::CAPTURE_DEST
+                                 && isEnemy
+                                 && hurdlesHit > 0);
+            }
             bool knownBoardOccupancy = bool(byTypeBB[ALL_PIECES] & sBB);
 
             if (isDestination) {
@@ -3856,12 +3868,12 @@ inline bool Position::capture_or_promotion(Move m) const {
   return type_of(m) == PROMOTION || capture(m);
 }
 
-inline Square Position::jump_capture_square(Square from, Square to) const {
+inline Square Position::jump_capture_square(Square from, Square to, Bitboard occupied) const {
   assert(is_ok(from));
   assert(is_ok(to));
 
   Piece mover = piece_on(from);
-  if (mover == NO_PIECE || !empty(to))
+  if (mover == NO_PIECE || (occupied & square_bb(to)))
       return SQ_NONE;
 
   PieceType pt = type_of(mover);
@@ -3900,6 +3912,7 @@ inline Square Position::jump_capture_square(Square from, Square to) const {
               const bool wrapRank = wraps_ranks();
               const bool wraps = topology_wraps();
               auto [dr, df] = decode_direction(dir);
+              const Bitboard ownPieces = pieces(us) & occupied;
 
               for (int rayStep = 0; rayStep < 255; ++rayStep)
               {
@@ -3924,20 +3937,23 @@ inline Square Position::jump_capture_square(Square from, Square to) const {
                   dist++;
 
                   Bitboard sBB = square_bb(s);
-                  bool isOccupied = (byTypeBB[ALL_PIECES] & sBB);
+                  bool isOccupied = (occupied & sBB);
                   bool isWall = (st->wallSquares & sBB);
                   bool isDead = (st->deadSquares & sBB);
+                  bool isFriendly = isOccupied && bool(ownPieces & sBB);
+                  bool isEnemy = isOccupied && !isFriendly;
+                  bool knownBoardOccupancy = bool(byTypeBB[ALL_PIECES] & sBB);
 
                   if (isOccupied || isWall || isDead)
                   {
                       Piece pc = piece_on(s);
                       PieceType pcPt = type_of(pc);
-                      PieceSet pcSet = (pcPt == NO_PIECE_TYPE || !isOccupied) ? NO_PIECE_SET : piece_set(pcPt);
+                      PieceSet pcSet = (pcPt == NO_PIECE_TYPE || !isOccupied || !knownBoardOccupancy) ? NO_PIECE_SET : piece_set(pcPt);
                       if (isWall) pcSet |= PieceSet(1ULL << 62);
                       if (isDead) pcSet |= PieceSet(1ULL << 61);
 
-                      uint8_t special = (isOccupied && color_of(pc) != us ? PieceInfo::HopperProfile::ENEMY : 0)
-                                      | (isOccupied && color_of(pc) == us ? PieceInfo::HopperProfile::FRIENDLY : 0)
+                      uint8_t special = (isEnemy ? PieceInfo::HopperProfile::ENEMY : 0)
+                                      | (isFriendly ? PieceInfo::HopperProfile::FRIENDLY : 0)
                                       | (isWall ? PieceInfo::HopperProfile::WALL : 0)
                                       | (isDead ? PieceInfo::HopperProfile::DEAD : 0);
 
@@ -3947,6 +3963,10 @@ inline Square Position::jump_capture_square(Square from, Square to) const {
                       }
                       else if (((profile.hurdleSpecialTypes & special) != 0) || (uint64_t(profile.hurdlePieceTypes & pcSet) != 0))
                       {
+                          if (profile.captureMode == PieceInfo::CAPTURE_LOCUST_ALL
+                              && isFriendly
+                              && !self_capture(movePt))
+                              return SQ_NONE;
                           hurdlesHit++;
                           if (hurdlesHit == 1) { distToFirstHurdle = dist; firstHurdleSq = s; }
                           lastHurdleSq = s;
@@ -3987,20 +4007,23 @@ inline Square Position::jump_capture_square(Square from, Square to) const {
                               hurdleScan = hnext;
 
                               Bitboard hsBB = square_bb(hurdleScan);
-                              bool hsOccupied = (byTypeBB[ALL_PIECES] & hsBB);
+                              bool hsOccupied = (occupied & hsBB);
                               bool hsWall = (st->wallSquares & hsBB);
                               bool hsDead = (st->deadSquares & hsBB);
+                              bool hsFriendly = hsOccupied && bool(ownPieces & hsBB);
+                              bool hsEnemy = hsOccupied && !hsFriendly;
+                              bool knownHsBoardOccupancy = bool(byTypeBB[ALL_PIECES] & hsBB);
 
                               if (hsOccupied || hsWall || hsDead)
                               {
                                   Piece hpc = piece_on(hurdleScan);
                                   PieceType hpcPt = type_of(hpc);
-                                  PieceSet hpcSet = (hpcPt == NO_PIECE_TYPE || !hsOccupied) ? NO_PIECE_SET : piece_set(hpcPt);
+                                  PieceSet hpcSet = (hpcPt == NO_PIECE_TYPE || !hsOccupied || !knownHsBoardOccupancy) ? NO_PIECE_SET : piece_set(hpcPt);
                                   if (hsWall) hpcSet |= PieceSet(1ULL << 62);
                                   if (hsDead) hpcSet |= PieceSet(1ULL << 61);
 
-                                  uint8_t hspecial = (hsOccupied && color_of(hpc) != us ? PieceInfo::HopperProfile::ENEMY : 0)
-                                                  | (hsOccupied && color_of(hpc) == us ? PieceInfo::HopperProfile::FRIENDLY : 0)
+                                  uint8_t hspecial = (hsEnemy ? PieceInfo::HopperProfile::ENEMY : 0)
+                                                  | (hsFriendly ? PieceInfo::HopperProfile::FRIENDLY : 0)
                                                   | (hsWall ? PieceInfo::HopperProfile::WALL : 0)
                                                   | (hsDead ? PieceInfo::HopperProfile::DEAD : 0);
 
@@ -4011,6 +4034,10 @@ inline Square Position::jump_capture_square(Square from, Square to) const {
                                   }
                                   if (((profile.hurdleSpecialTypes & hspecial) != 0) || (uint64_t(profile.hurdlePieceTypes & hpcSet) != 0))
                                   {
+                                      if (profile.captureMode == PieceInfo::CAPTURE_LOCUST_ALL
+                                          && hsFriendly
+                                          && !self_capture(movePt))
+                                          return SQ_NONE;
                                       hurdlesInScan++;
                                       distFromLastHurdle = 0;
                                       // Check if this hurdle hit matches our requirements
@@ -4033,8 +4060,19 @@ inline Square Position::jump_capture_square(Square from, Square to) const {
                           distFromLastHurdle >= profile.postMin && distFromLastHurdle <= profile.postMax)
                       {
                           if (profile.equiRule == PieceInfo::EQUI_HOPPER && distFromLastHurdle != distToFirstHurdle) break;
-                          
-                          if (profile.captureMode == PieceInfo::CAPTURE_LOCUST_LAST) return lastHurdleSq;
+
+                          if (profile.captureMode == PieceInfo::CAPTURE_LOCUST_LAST)
+                          {
+                              if (lastHurdleSq != SQ_NONE
+                                  && (ownPieces & square_bb(lastHurdleSq))
+                                  && !self_capture(movePt))
+                                  return SQ_NONE;
+                              return lastHurdleSq;
+                          }
+                          if (firstHurdleSq != SQ_NONE
+                              && (ownPieces & square_bb(firstHurdleSq))
+                              && !self_capture(movePt))
+                              return SQ_NONE;
                           return firstHurdleSq; // locust_all or locust_first
                       }
                       break;
@@ -4045,6 +4083,10 @@ inline Square Position::jump_capture_square(Square from, Square to) const {
   }
 
   return SQ_NONE;
+}
+
+inline Square Position::jump_capture_square(Square from, Square to) const {
+  return jump_capture_square(from, to, byTypeBB[ALL_PIECES]);
 }
 
 inline Bitboard Position::universal_hopper_potential_bb(PieceType pt, Square s) const {

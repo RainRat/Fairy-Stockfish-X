@@ -84,7 +84,7 @@ Some tests require specific build flags to pass for all variants:
 * `tests/perft.sh all` and `tests/new-variants-smoke.sh` should be run with a `largeboards=yes` build to cover all included variants.
 * To build `pyffish` for `test.py`, use `python3 setup.py build_ext --inplace` from the root directory.
 * `tests/fast-regression.sh` is designed to stay under about five minutes on a normal local build. Run it before accepting new code. It assumes `src/stockfish` is freshly built and `pyffish` has been built if the touched code affects bindings or Python-facing state.
-* `tests/fast-regression.sh` requires `UPSTREAM_ENGINE` to point to an upstream comparison engine.
+* `tests/fast-regression.sh` can run without `UPSTREAM_ENGINE`; when set, it additionally compares against upstream.
 * If a change touches shared parser, movegen, legality, promotion, topology, or variant-switch logic, also run `tests/upstream_reference.py` and investigate any divergence before accepting it, unless you have a documented upstream bug or intentional FSX-only behavior change.
 
 ## 7) Coding style & engine notes
