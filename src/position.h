@@ -4052,7 +4052,6 @@ inline Bitboard Position::universal_hopper_potential_bb(PieceType pt, Square s) 
         for (int modality = 0; modality < MOVE_MODALITY_NB; ++modality) {
             for (const auto& it : pi->universalHopper[initial][modality]) {
                 Direction dir = (us == WHITE ? it.first : -it.first);
-                int dist = 0;
                 Square current = s;
                 auto [dr, df] = decode_direction(dir);
                 for (int i = 0; i < 255; ++i) {
@@ -4074,7 +4073,6 @@ inline Bitboard Position::universal_hopper_potential_bb(PieceType pt, Square s) 
                             break;
                     }
                     current = next;
-                    dist++;
                     b |= current;
                 }
             }
