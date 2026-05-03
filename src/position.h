@@ -3215,7 +3215,11 @@ inline Bitboard Position::universal_hopper_bb(const std::map<Direction, PieceInf
                 if (profile.equiRule != PieceInfo::EQUI_STOPPER && hurdlesHit >= profile.hurdlesMin && hurdlesHit <= profile.hurdlesMax) {
                     if (distToFirstHurdle >= profile.preMin && distToFirstHurdle <= profile.preMax) {
                         if (postDistance >= profile.postMin && postDistance <= profile.postMax) {
-                            if (profile.equiRule == PieceInfo::EQUI_HOPPER && postDistance != distToFirstHurdle) continue;
+                            if (profile.equiRule == PieceInfo::EQUI_HOPPER && postDistance != distToFirstHurdle) {
+                                if (occupiedDestination)
+                                    break;
+                                continue;
+                            }
                             if (includeOwnBlockedAttacks || !(ownPieces & sBB))
                                 b |= sBB;
                         }
@@ -3335,7 +3339,11 @@ inline Bitboard Position::wrapped_universal_hopper_targets(const std::map<Direct
                 if (profile.equiRule != PieceInfo::EQUI_STOPPER && hurdlesHit >= profile.hurdlesMin && hurdlesHit <= profile.hurdlesMax) {
                     if (distToFirstHurdle >= profile.preMin && distToFirstHurdle <= profile.preMax) {
                         if (postDistance >= profile.postMin && postDistance <= profile.postMax) {
-                            if (profile.equiRule == PieceInfo::EQUI_HOPPER && postDistance != distToFirstHurdle) continue;
+                            if (profile.equiRule == PieceInfo::EQUI_HOPPER && postDistance != distToFirstHurdle) {
+                                if (occupiedDestination)
+                                    break;
+                                continue;
+                            }
                             if (includeOwnBlockedAttacks || !(ownPieces & sBB))
                                 out |= sBB;
                         }
