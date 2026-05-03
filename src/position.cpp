@@ -4667,8 +4667,6 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   Piece captured = captured_piece(m);
   if (type_of(m) == CASTLING && captured == NO_PIECE)
       captured = piece_on(to);
-  const bool blastOnCaptureMove = blast_on_capture(pc, captured);
-  const bool zeroRangeBlastOnCaptureMove = zero_range_blast_on_capture(pc, captured);
   PushInfo pushInfo;
   bool pushMove = analyze_push(*this, m, pushInfo);
   bool stepwisePush = pushMove && type_of(m) == NORMAL && pushInfo.distance > 1;
@@ -4686,6 +4684,11 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
       else
           pushInfo = resolved;
   }
+  if (pushMove)
+      captured = (!stepwisePush && pushInfo.captures) ? piece_on(pushInfo.tail) : NO_PIECE;
+
+  const bool blastOnCaptureMove = blast_on_capture(pc, captured);
+  const bool zeroRangeBlastOnCaptureMove = zero_range_blast_on_capture(pc, captured);
   int pushRightsMask = 0;
   int pullRightsMask = 0;
   bool rifleShot = rifle_capture(m) && captured != NO_PIECE && type_of(m) != CASTLING;
@@ -4879,7 +4882,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
           }
       }
   };
-  Square capturedSq = captured ? capture_square(m) : SQ_NONE;
+  Square capturedSq = captured ? (pushMove && !stepwisePush ? pushInfo.tail : capture_square(m)) : SQ_NONE;
   st->captured.set(captured, captured ? is_promoted(capturedSq) : false,
                    captured ? unpromoted_piece_on(capturedSq) : NO_PIECE);
   st->captureSquare = capturedSq;
@@ -4897,9 +4900,6 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   st->pendingClaimPass = false;
   st->dropHandColor = COLOR_NB;
   st->suppressedCaptureTransfer = false;
-
-  if (stepwisePush)
-      captured = NO_PIECE;
 
   if (pullMove)
   {
