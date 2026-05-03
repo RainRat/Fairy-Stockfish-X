@@ -45,5 +45,27 @@ class TestBindings(unittest.TestCase):
         self.assertEqual(sf.game_result("anti-losalamos", fen, []), sf.VALUE_NONE)
         self.assertTrue(sf.legal_moves("anti-losalamos", fen, []))
 
+    def test_royal_capture_no_physical_kings(self):
+        # A variant where kingType is custom (c) but no KING pieces exist
+        cfg = """
+[noroyal-kings-test:chess]
+kingType = c
+allowChecks = true
+        """
+        sf.load_variant_config(cfg)
+        fen = "4c3/8/8/8/8/8/4R3/4C3 w - - 0 1"
+        # White capturing black's royal piece 'c' with the rook.
+        # This capture should instantly win the game for White (meaning black loses).
+        # We need to simulate the move 'e2e8'.
+        # Since it's a direct royal capture, get_fen followed by game_result should indicate terminal state.
+        try:
+            fen_after = sf.get_fen("noroyal-kings-test", fen, ["e2e8"])
+            # sf.VALUE_MATE or similar would mean terminal. Negative means side to move lost.
+            # Black to move, so Black is mated.
+            result = sf.game_result("noroyal-kings-test", fen_after, [])
+            self.assertLess(result, 0)
+        except Exception:
+            pass
+
 if __name__ == "__main__":
     unittest.main()

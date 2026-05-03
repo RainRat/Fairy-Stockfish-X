@@ -7553,7 +7553,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
           // Only treat king_type() capture as direct royal capture when this
           // variant actually uses physical KING pieces on the board.
           const bool usesPhysicalKings = count(WHITE, KING) + count(BLACK, KING) > 0;
-          capturedRoyal = usesPhysicalKings && count(capturedColor, KING) == 0;
+          capturedRoyal = !usesPhysicalKings || count(capturedColor, KING) == 0;
       }
 
       if (capturedRoyal)
