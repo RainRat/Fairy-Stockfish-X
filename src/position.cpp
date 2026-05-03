@@ -4458,7 +4458,7 @@ bool Position::gives_check(Move m) const {
       && !((var->petrifyOnCaptureTypes & type_of(mover)) && capture(m)))
   {
       PieceType pt = type_of(mover);
-      if (usingPhysicalKingTarget || !(var->captureForbidden[pt] & royalType))
+      if (!(var->captureForbidden[pt] & royalType))
       {
           if (pt == JANGGI_CANNON)
           {
