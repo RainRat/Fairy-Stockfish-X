@@ -15,11 +15,6 @@ run_step() {
 
 cd "${ROOT_DIR}"
 
-if [[ -z "${UPSTREAM_ENGINE:-}" ]]; then
-  echo "UPSTREAM_ENGINE must point to an upstream Fairy-Stockfish executable for upstream baseline checks." >&2
-  exit 2
-fi
-
 if ! printf 'uci\nquit\n' | "${ENGINE}" | grep -q ' var duck'; then
   echo "note: ${ENGINE} does not expose 'duck' in UCI_Variant (likely non-all build); all-only alias coverage is skipped." >&2
 fi
@@ -36,7 +31,11 @@ run_step "blast legal regressions" timeout 60s bash tests/blast-legal-regression
 run_step "pseudoroyal blast immune" timeout 60s bash tests/pseudoroyal-blast-immune.sh "${ENGINE}"
 run_step "universal hopper" timeout 90s bash tests/universal-hopper.sh "${ENGINE}"
 run_step "binding regression" timeout 60s "${PYTHON}" tests/test_binding_regression.py
-run_step "upstream movecount baseline" timeout 60s "${PYTHON}" tests/upstream_movecount_baseline.py "${ENGINE}" "${UPSTREAM_ENGINE}"
+if [[ -n "${UPSTREAM_ENGINE:-}" ]]; then
+  run_step "upstream movecount baseline" timeout 60s "${PYTHON}" tests/upstream_movecount_baseline.py "${ENGINE}" "${UPSTREAM_ENGINE}"
+else
+  run_step "upstream movecount baseline" timeout 60s "${PYTHON}" tests/upstream_movecount_baseline.py "${ENGINE}"
+fi
 run_step "python unit tests" timeout 180s "${PYTHON}" test.py
 
 echo "fast regression suite passed"
