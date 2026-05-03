@@ -8,13 +8,12 @@ trap 'rm -f "$tmp_ini"' EXIT
 
 cat >"$tmp_ini" <<'EOF'
 [checkersmini]
-customPiece1 = m:fFfA
-customPiece2 = k:FA
+customPiece1 = m:mfFfc{hurdles: 1,1; pre: 1,1; post: 1,1; capture: locust_first; hurdle_types:enemy}F
+customPiece2 = k:mFc{hurdles: 1,1; pre: 1,1; post: 1,1; capture: locust_first; hurdle_types:enemy}F
 promotionPawnTypes = m
 promotionPieceTypes = k
 mustCapture = true
 checking = false
-jumpCaptureTypes = *
 forcedJumpContinuation = true
 stalemateValue = loss
 nMoveRule = 0
@@ -50,4 +49,5 @@ quit
 EOF
 )"
 
-grep -Fq "c3e5,d4: 1" <<<"$duck_out"
+grep -Fq "c3e5: 1" <<<"$duck_out"
+grep -Fq "c3e5,e5d4: 1" <<<"$duck_out"

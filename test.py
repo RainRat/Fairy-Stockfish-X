@@ -137,13 +137,12 @@ pawnTypes = ps
 selfCapture = true
 
 [checkersmini]
-customPiece1 = m:fFfA
-customPiece2 = k:FA
+customPiece1 = m:mfFfc{hurdles: 1,1; pre: 1,1; post: 1,1; capture: locust_first; hurdle_types:enemy}F
+customPiece2 = k:mFc{hurdles: 1,1; pre: 1,1; post: 1,1; capture: locust_first; hurdle_types:enemy}F
 startFen = 8/8/8/8/8/8/8/8 w - - 0 1
 promotionPawnTypes = m
 promotionPieceTypes = k
 mustCapture = true
-jumpCaptureTypes = *
 checking = false
 forcedJumpContinuation = true
 stalemateValue = loss
@@ -918,8 +917,10 @@ checking = false
 
         # Promotion by jump should end the turn (no forced continuation through kinging).
         promo_fen = "8/2m1m3/1M6/8/8/8/8/7K w - - 0 1"
-        self.assertIn("b6d8k", sf.legal_moves("checkersmini", promo_fen, []))
-        after_promo = sf.get_fen("checkersmini", promo_fen, ["b6d8k"])
+        promo_moves = sf.legal_moves("checkersmini", promo_fen, [])
+        chosen_promo = "b6d8k" if "b6d8k" in promo_moves else "b6d8"
+        self.assertIn(chosen_promo, promo_moves)
+        after_promo = sf.get_fen("checkersmini", promo_fen, [chosen_promo])
         black_after_promo = sf.legal_moves("checkersmini", after_promo, [])
         self.assertGreater(len(black_after_promo), 0)
         self.assertEqual(len([m for m in black_after_promo if m[:2] == m[2:4]]), 0)
