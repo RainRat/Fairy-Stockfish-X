@@ -34,6 +34,9 @@ customPiece1 = d:{hurdles: 1,1; pre: 1,*; post: 1,1; capture: locust_first}R
 [locust-all:hopper-common]
 customPiece1 = d:{hurdles: 2,2; pre: 1,*; post: 1,1; capture: locust_all}R
 
+[locust-all-friendly-mix:hopper-common]
+customPiece1 = d:c{hurdles: 2,2; pre: 1,*; post: 1,1; capture: locust_all; hurdle_types: enemy,friendly}R
+
 [locust-last:hopper-common]
 customPiece1 = d:c{hurdles: 2,2; pre: 1,1; post: 1,1; capture: locust_last; hurdle_types: enemy}R
 
@@ -172,6 +175,12 @@ else
     echo "  [FAIL] locust_all did not capture all hurdles"
     exit 1
 fi
+
+# locust_all captures every crossed hurdle, so with selfCapture disabled it
+# must reject lines that include any friendly hurdle.
+# White D3, enemy on D4, friendly on D5. D3D6 must be rejected.
+# Moves: king A1 (3), friendly D5D6 (1), enemy D4D3 (1) => 5.
+run_test "locust-all-friendly-mix" "7k/8/8/3P4/3p4/3D4/8/K7 w - - 0 1" 5
 
 # Friendly hurdles must not be capturable unless self-capture is enabled.
 # White D3 and friendly hurdle D4. Locust jump D3D5 must be rejected.

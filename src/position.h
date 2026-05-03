@@ -1230,14 +1230,14 @@ inline PieceType Position::king_type() const {
 }
 
 inline PieceType Position::royal_piece_type(Color c) const {
-  // Prefer explicit variant runtime royal semantics first.
+  // Prefer a physical KING when present. Variants like Xiangqi/Janggi often
+  // keep a physical KING on board while kingType() encodes movement semantics.
+  if (count(c, KING) == 1)
+      return KING;
   PieceType pt = king_type();
   if (pt != NO_PIECE_TYPE && count(c, pt) == 1)
       return pt;
-  // Xiangqi/Janggi often keep a single physical KING on board while kingType
-  // encodes movement semantics (e.g. WAZIR), so use KING as a fallback.
-  if (count(c, KING) == 1)
-      return KING;
+  // Fallback: no uniquely identifiable royal found for this side.
   return NO_PIECE_TYPE;
 }
 
@@ -3963,6 +3963,10 @@ inline Square Position::jump_capture_square(Square from, Square to, Bitboard occ
                       }
                       else if (((profile.hurdleSpecialTypes & special) != 0) || (uint64_t(profile.hurdlePieceTypes & pcSet) != 0))
                       {
+                          if (profile.captureMode == PieceInfo::CAPTURE_LOCUST_ALL
+                              && isFriendly
+                              && !self_capture(movePt))
+                              return SQ_NONE;
                           hurdlesHit++;
                           if (hurdlesHit == 1) { distToFirstHurdle = dist; firstHurdleSq = s; }
                           lastHurdleSq = s;
@@ -4030,6 +4034,10 @@ inline Square Position::jump_capture_square(Square from, Square to, Bitboard occ
                                   }
                                   if (((profile.hurdleSpecialTypes & hspecial) != 0) || (uint64_t(profile.hurdlePieceTypes & hpcSet) != 0))
                                   {
+                                      if (profile.captureMode == PieceInfo::CAPTURE_LOCUST_ALL
+                                          && hsFriendly
+                                          && !self_capture(movePt))
+                                          return SQ_NONE;
                                       hurdlesInScan++;
                                       distFromLastHurdle = 0;
                                       // Check if this hurdle hit matches our requirements
