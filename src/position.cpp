@@ -4241,14 +4241,22 @@ bool Position::pseudo_legal(const Move m) const {
       if (mandatory_pawn_promotion() && (promotion_zone(pc) & effectiveTo) && !sittuyin_promotion())
           return false;
 
-      if (   !(pawn_attacks_bb(us, from) & (self_capture(PAWN) ? pieces() : pieces(~us)) & to) // Not a capture
-          && !((from + pawn_push(us) == to) && !(pieces() & to)) // Not a single push
-          && !(   (from + 2 * pawn_push(us) == to)               // Not a double push
-               && (double_step_region(pc) & from)
-               && !(pieces() & (to | (to - pawn_push(us)))))
-          && !(   (from + 3 * pawn_push(us) == to)               // Not a triple push
-               && (triple_step_region(pc) & from)
-               && !(pieces() & (to | (to - pawn_push(us)) | (to - 2 * pawn_push(us))))))
+      const bool isStandardPawnMove =
+             (pawn_attacks_bb(us, from) & (self_capture(PAWN) ? pieces() : pieces(~us)) & to)
+          || ((from + pawn_push(us) == to) && !(pieces() & to))
+          || (   (from + 2 * pawn_push(us) == to)
+              && (double_step_region(pc) & from)
+              && !(pieces() & (to | (to - pawn_push(us)))))
+          || (   (from + 3 * pawn_push(us) == to)
+              && (triple_step_region(pc) & from)
+              && !(pieces() & (to | (to - pawn_push(us)) | (to - 2 * pawn_push(us)))));
+
+      // Custom pawn Betza (e.g. royal-race) can define non-orthodox pawn movement.
+      if (!isStandardPawnMove
+          && !is_self_destruct(m)
+          && !(pushMove ? (push_targets_from(us, type_of(pc), from) & to)
+                        : ((capture(m) ? attacks_from(us, type_of(pc), from)
+                                       : moves_from(us, type_of(pc), from)) & to)))
           return false;
   }
   else if (!is_self_destruct(m)

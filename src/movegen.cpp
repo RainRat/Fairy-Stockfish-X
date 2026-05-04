@@ -963,6 +963,18 @@ namespace {
         }
     }
 
+    const PieceInfo* pawnInfo = pieceMap.get(PAWN);
+    const bool pawnHasCustomNonStepMovement =
+           MoveRiderTypes[0][PAWN] != NO_RIDER
+        || MoveRiderTypes[1][PAWN] != NO_RIDER
+        || AttackRiderTypes[PAWN] != NO_RIDER
+        || !pawnInfo->universalHopper[0][MODALITY_QUIET].empty()
+        || !pawnInfo->universalHopper[0][MODALITY_CAPTURE].empty()
+        || !pawnInfo->universalHopper[1][MODALITY_QUIET].empty()
+        || !pawnInfo->universalHopper[1][MODALITY_CAPTURE].empty()
+        || pawnInfo->has_runtime_rider_augment();
+    const bool useGenericPawnGenerator = !pawnHasCustomNonStepMovement;
+
     // Skip generating non-king moves when in double check
     if (Type != EVASIONS || !more_than_one(checkers & ~pos.non_sliding_riders()))
     {
@@ -1016,13 +1028,17 @@ namespace {
         if (restrictToForcedJumper)
         {
             if (forcedJumpPt == PAWN)
-                moveList = generate_pawn_moves<Us, Type>(pos, moveList, target, forcedFromMask);
+                moveList = useGenericPawnGenerator
+                         ? generate_pawn_moves<Us, Type>(pos, moveList, target, forcedFromMask)
+                         : generate_moves<Us, Type>(pos, moveList, PAWN, target, captureTarget, forcedFromMask);
             else if (forcedJumpPt != KING)
                 moveList = generate_moves<Us, Type>(pos, moveList, forcedJumpPt, target, captureTarget, forcedFromMask);
         }
         else
         {
-            moveList = generate_pawn_moves<Us, Type>(pos, moveList, target, forcedFromMask);
+            moveList = useGenericPawnGenerator
+                     ? generate_pawn_moves<Us, Type>(pos, moveList, target, forcedFromMask)
+                     : generate_moves<Us, Type>(pos, moveList, PAWN, target, captureTarget, forcedFromMask);
             for (PieceSet ps = pos.piece_types() & ~(piece_set(PAWN) | KING); ps;)
                 moveList = generate_moves<Us, Type>(pos, moveList, pop_lsb(ps), target, captureTarget, forcedFromMask);
         }
