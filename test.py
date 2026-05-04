@@ -1710,6 +1710,23 @@ startFen = 4k3/8/8/8/8/8/4D3/4K3 w - - 0 1
             )
         )
 
+        # Physical KING remains royal target even when king_type() is remapped.
+        sf.load_variant_config(
+            """
+[forbidden-check-gives-royal-wazir:chess]
+king = k:W
+captureForbidden = q:k
+startFen = 4k3/8/8/8/8/8/8/4Q2K w - - 0 1
+"""
+        )
+        self.assertFalse(
+            sf.gives_check(
+                "forbidden-check-gives-royal-wazir",
+                sf.start_fen("forbidden-check-gives-royal-wazir"),
+                ["e1e2"],
+            )
+        )
+
     def test_is_capture(self):
         result = sf.is_capture("chess", CHESS, [], "e2e4")
         self.assertFalse(result)

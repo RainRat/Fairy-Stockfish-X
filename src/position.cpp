@@ -1756,8 +1756,8 @@ void Position::set_check_info(StateInfo* si) const {
       return;
   }
 
-  si->blockersForKing[WHITE] = slider_blockers(pieces(BLACK), count<KING>(WHITE) ? square<KING>(WHITE) : SQ_NONE, si->pinners[BLACK], BLACK);
-  si->blockersForKing[BLACK] = slider_blockers(pieces(WHITE), count<KING>(BLACK) ? square<KING>(BLACK) : SQ_NONE, si->pinners[WHITE], WHITE);
+  si->blockersForKing[WHITE] = slider_blockers(pieces(BLACK), count<KING>(WHITE) == 1 ? square<KING>(WHITE) : SQ_NONE, si->pinners[BLACK], BLACK);
+  si->blockersForKing[BLACK] = slider_blockers(pieces(WHITE), count<KING>(BLACK) == 1 ? square<KING>(BLACK) : SQ_NONE, si->pinners[WHITE], WHITE);
 
   Square ksq = royal_square(~sideToMove);
   Bitboard occupied = pieces();
