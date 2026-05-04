@@ -4934,10 +4934,14 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
 
   assert(pureWallMove || color_of(pc) == dropColor);
   assert(captured == NO_PIECE
-         || (type_of(m) == CASTLING ? color_of(captured) == us
-                                    : (color_of(captured) == them
-                                       || (((self_capture(type_of(pc)) || (anti_royal_self_capture_only() && (anti_royal_types() & piece_set(type_of(pc)))))
-                                           && color_of(captured) == us)))));
+         || (type_of(m) == CASTLING
+                 ? color_of(captured) == us
+                 : (color_of(captured) == them
+                    || (((self_capture(type_of(pc))
+                          || (anti_royal_self_capture_only()
+                              && (anti_royal_types() & piece_set(type_of(pc)))))
+                         && color_of(captured) == us))
+                    || (pushMove && color_of(captured) == us))));
   assert(type_of(captured) != KING || allow_checks() || !checking_permitted());
 
   auto trigger_matches = [](ColorChangeTrigger trigger, bool isCapture) {
