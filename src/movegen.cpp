@@ -138,44 +138,33 @@ namespace {
         *moveList++ = make<T>(from, to, pt);
 
     // Gating moves
-    if (pos.seirawan_gating() && (pos.gates(us) & from) && !pos.rifle_capture(make<T>(from, to, pt)))
-        for (PieceSet ps = pos.piece_types(); ps;)
+    if (pos.seirawan_gating() && !pos.rifle_capture(make<T>(from, to, pt)))
+    {
+        for (Square gateSq : {from, to})
         {
-            PieceType pt_gating = pop_lsb(ps);
-            if (pos.can_drop(us, pt_gating) && (pos.drop_region(us, pt_gating) & from))
+            if (gateSq == to && (T != CASTLING || gateSq == from)) continue;
+            if (!(pos.gates(us) & gateSq)) continue;
+
+            for (PieceSet ps = pos.piece_types(); ps;)
             {
-                if (pos.symmetric_drop_types() & pt_gating)
+                PieceType pt_gating = pop_lsb(ps);
+                if (pos.can_drop(us, pt_gating) && (pos.drop_region(us, pt_gating) & gateSq))
                 {
-                    Square gate2 = pos.mirrored_pair_drop_square(from);
-                    if (gate2 != from
-                        && (pos.drop_region(us, pt_gating) & gate2)
-                        && !(occupancyAfter & gate2)
-                        && pos.count_in_hand(us, pt_gating) >= 2)
-                        *moveList++ = make_gating<T>(from, to, pt_gating, from);
+                    if (pos.symmetric_drop_types() & pt_gating)
+                    {
+                        Square gate2 = pos.mirrored_pair_drop_square(gateSq);
+                        if (gate2 != gateSq
+                            && (pos.drop_region(us, pt_gating) & gate2)
+                            && !(occupancyAfter & gate2)
+                            && pos.count_in_hand(us, pt_gating) >= 2)
+                            *moveList++ = make_gating<T>(from, to, pt_gating, gateSq);
+                    }
+                    else
+                        *moveList++ = make_gating<T>(from, to, pt_gating, gateSq);
                 }
-                else
-                    *moveList++ = make_gating<T>(from, to, pt_gating, from);
             }
         }
-    if (pos.seirawan_gating() && T == CASTLING && (pos.gates(us) & to) && !pos.rifle_capture(make<T>(from, to, pt)))
-        for (PieceSet ps = pos.piece_types(); ps;)
-        {
-            PieceType pt_gating = pop_lsb(ps);
-            if (pos.can_drop(us, pt_gating) && (pos.drop_region(us, pt_gating) & to))
-            {
-                if (pos.symmetric_drop_types() & pt_gating)
-                {
-                    Square gate2 = pos.mirrored_pair_drop_square(to);
-                    if (gate2 != to
-                        && (pos.drop_region(us, pt_gating) & gate2)
-                        && !(occupancyAfter & gate2)
-                        && pos.count_in_hand(us, pt_gating) >= 2)
-                        *moveList++ = make_gating<T>(from, to, pt_gating, to);
-                }
-                else
-                    *moveList++ = make_gating<T>(from, to, pt_gating, to);
-            }
-        }
+    }
 
     return moveList;
   }
