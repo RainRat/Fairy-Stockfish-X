@@ -139,8 +139,8 @@ verify_warning() {
   fi
 }
 
-verify_warning "wallingRule and seirawanGating are incompatible." "seirawanGating check"
-verify_warning "wallingRule and potions are incompatible." "potions check"
+verify_warning "wallingRule and gating features (seirawanGating, potions, gating, gatingPieceAfter) are incompatible." "seirawanGating check"
+verify_warning "wallingRule and gating features (seirawanGating, potions, gating, gatingPieceAfter) are incompatible." "potions check"
 verify_warning "wallingRule=duck and petrifyOnCaptureTypes are incompatible." "petrify check"
 verify_warning "pieceDrops and any walling are incompatible." "freeDrops check"
 verify_warning "falcon looks like a custom piece definition. Use customPieceN = a:W for new custom pieces." "named custom piece hint"
