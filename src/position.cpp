@@ -4427,10 +4427,29 @@ bool Position::gives_check(Move m) const {
   if (!is_ok(attackFrom))
       return false;
 
-  Bitboard occupied = rifleShot ? (pieces() ^ square_bb(shotSq))
-                                : (((!dropMove ? pieces() ^ from : pieces()) ^ square_bb(shotSq)) | to);
+  Bitboard occupied;
+  if (type_of(m) == CASTLING)
+  {
+      Square kfrom = from;
+      Square rfrom = to;
+      Square kto = make_square(rfrom > kfrom ? castling_kingside_file() : castling_queenside_file(), castling_rank(sideToMove));
+      Square rto = kto + (rfrom > kfrom ? WEST : EAST);
+      occupied = (pieces() ^ kfrom ^ rfrom) | kto | rto;
+  }
+  else
+  {
+      occupied = rifleShot ? (pieces() ^ square_bb(shotSq))
+                           : (((!dropMove ? pieces() ^ from : pieces()) ^ square_bb(shotSq)) | to);
+  }
   if (paired_drop(m))
       occupied |= square_bb(secondary_drop_square(m));
+
+  if (is_gating(m))
+  {
+      occupied |= square_bb(gating_square(m));
+      if (paired_drop(m))
+          occupied |= square_bb(secondary_drop_square(m));
+  }
   Bitboard janggiCannons = pieces(JANGGI_CANNON);
   if (type_of(mover) == JANGGI_CANNON)
       janggiCannons = rifleShot ? (janggiCannons & ~square_bb(shotSq))
