@@ -14,8 +14,7 @@ tmp_ini=$(mktemp)
 trap 'rm -f "${tmp_ini}"' EXIT
 
 cat > "${tmp_ini}" <<'INI'
-[antiroyal-atomic:chess]
-blastOnCapture = true
+[antiroyal-atomic:atomic]
 castling = false
 antiRoyalTypes = n
 antiRoyalCount = 1

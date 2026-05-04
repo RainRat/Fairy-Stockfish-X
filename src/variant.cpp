@@ -2539,7 +2539,7 @@ void VariantMap::parse_istream(std::istream& file) {
             Variant* v = nullptr;
             if (!variant_template.empty())
             {
-                Variant* inherited = (new Variant(*variants.get(variant_template)))->init();
+                Variant* inherited = (new Variant(*variants.get(variant_template)))->conclude();
                 v = VariantParser<DoCheck>(attribs).parse(inherited);
                 if (!v)
                     delete inherited;

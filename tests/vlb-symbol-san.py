@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import pyffish as sf
 
-
 INI = """
 [vlb-token-san:fairy]
 maxRank = 5
@@ -9,7 +8,6 @@ maxFile = 5
 customPiece1 = a':W
 startFen = 4k/5/5/a'4/A'3K w - - 0 1
 """
-
 
 def main() -> None:
     sf.load_variant_config(INI)
