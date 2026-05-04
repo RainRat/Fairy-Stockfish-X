@@ -616,6 +616,11 @@ string UCI::move(const Position& pos, Move m) {
       return "@@@@";
   if (is_pass(m))
       return "0000";
+
+  bool is_wall_only = wallMove && type_of(m) == SPECIAL && from == to;
+  if (is_wall_only)
+      return (CurrentProtocol == XBOARD ? "@@@@," : "0000,") + UCI::square(pos, gating_square(m));
+
   if (is_self_destruct(m))
       return UCI::square(pos, from) + UCI::square(pos, to) + "x";
 
