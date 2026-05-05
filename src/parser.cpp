@@ -1973,9 +1973,9 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
         valid = false;
     }
 
-    if (DoCheck && hasGatingPieceAfter && (v->seirawanGating || v->potions || v->gating))
+    if (DoCheck && hasGatingPieceAfter && (v->seirawanGating || v->potions))
     {
-        std::cerr << "gatingPieceAfter and other gating features (seirawanGating, potions, gating) are incompatible." << std::endl;
+        std::cerr << "gatingPieceAfter and other gating features (seirawanGating, potions) are incompatible." << std::endl;
         valid = false;
     }
     if (DoCheck && v->seirawanGating && v->potions)
