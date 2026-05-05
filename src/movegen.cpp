@@ -676,7 +676,7 @@ namespace {
     Bitboard captureTarget = spec.captureTarget;
     Bitboard fromMask = spec.fromMask;
 
-    assert(Pt != KING && Pt != PAWN);
+    assert(Pt != KING);
 
     constexpr Direction Up = pawn_push(Us);
     Bitboard bb = pos.pieces(Us, Pt) & fromMask;

@@ -3152,7 +3152,7 @@ inline Bitboard Position::special_rider_bb(const PieceInfo* pi, MoveModality mod
   Bitboard b = 0;
   const uint8_t augment = pi->riderAugmentMask;
   if (augment & PieceInfo::AUGMENT_DYNAMIC)
-      b |= Position::dynamic_slider_bb(pi->slider[0][modality], sq, occupied, byTypeBB[ALL_PIECES], c);
+      b |= Position::dynamic_slider_bb(pi->slider[0][modality], sq, occupied, occupied, c);
   if (augment & PieceInfo::AUGMENT_MAX)
       b |= Position::max_slider_bb(pi->slider[0][modality], sq, occupied, boardMask, ownPieces, c, captureMode, includeOwnBlockedAttacks);
   if (!pi->universalHopper[initial ? 1 : 0][modality].empty())
@@ -3803,6 +3803,8 @@ inline bool Position::capture_or_promotion(Move m) const {
 inline Square Position::jump_capture_square(Square from, Square to, Bitboard occupied) const {
   assert(is_ok(from));
   assert(is_ok(to));
+  // `occupied` is the board occupancy for the position being analyzed, not a
+  // hypothetical occupancy after moving the piece off `from` onto `to`.
 
   Piece mover = piece_on(from);
   if (mover == NO_PIECE || (occupied & square_bb(to)))

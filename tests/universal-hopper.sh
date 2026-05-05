@@ -5,9 +5,13 @@ set -euo pipefail
 # Test Universal Hopper features
 
 # 1. Setup temporary variant file
-ENGINE=${1:-./stockfish}
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+ROOT_DIR=$(cd "${SCRIPT_DIR}/.." && pwd)
+ENGINE=${1:-"${ROOT_DIR}/src/stockfish"}
 if [[ ! -x "${ENGINE}" ]]; then
-    ENGINE="../src/stockfish"
+    if [[ -x "${ROOT_DIR}/stockfish" ]]; then
+        ENGINE="${ROOT_DIR}/stockfish"
+    fi
 fi
 if [[ ! -x "${ENGINE}" ]]; then
     echo "engine executable not found: pass path as first argument" >&2
