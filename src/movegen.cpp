@@ -65,12 +65,14 @@ namespace {
   template<MoveType T>
   ExtMove* make_move_and_gating(const Position& pos, ExtMove* moveList, Color us, Square from, Square to, PieceType pt = NO_PIECE_TYPE) {
 
+    Move m = make<T>(from, to, pt);
     bool iguiShot = T == SPECIAL && from != to;
-    bool rifleShot = pos.rifle_capture(make<T>(from, to, pt)) && (T == NORMAL || T == PROMOTION);
+    bool captureIsRifle = pos.rifle_capture(m);
+    bool rifleShot = captureIsRifle && (T == NORMAL || T == PROMOTION);
     Square effectiveTo = (rifleShot || iguiShot) ? from : to;
     Square capSq = T == EN_PASSANT ? pos.capture_square(to)
-                 : pos.is_jump_capture(make<T>(from, to, pt)) ? pos.jump_capture_square(from, to)
-                 : pos.capture(make<T>(from, to, pt)) ? to
+                 : pos.is_jump_capture(m) ? pos.jump_capture_square(from, to)
+                 : pos.capture(m) ? to
                  : SQ_NONE;
     Bitboard occupancyAfter = pos.pieces();
     if (from != effectiveTo) occupancyAfter ^= square_bb(from) ^ square_bb(effectiveTo);
@@ -135,10 +137,10 @@ namespace {
     if (forcedGate != NO_PIECE_TYPE)
         *moveList++ = make_gating<T>(from, to, forcedGate, forcedGateSquare);
     else
-        *moveList++ = make<T>(from, to, pt);
+        *moveList++ = m;
 
     // Gating moves
-    if (pos.seirawan_gating() && !pos.rifle_capture(make<T>(from, to, pt)))
+    if (pos.seirawan_gating() && !captureIsRifle)
     {
         for (Square gateSq : {from, to})
         {
@@ -420,6 +422,9 @@ namespace {
             for (PieceSet ps = pos.promotion_piece_types(Us, to); ps;)
                 if (pos.promotion_allowed(Us, pop_lsb(ps), to))
                     return true;
+            PieceType pt = pos.promoted_piece_type(PAWN);
+            if (pt && pos.promotion_allowed(Us, pt) && !(pos.piece_promotion_on_capture() && pos.empty(to)))
+                return true;
             return false;
         };
 
@@ -432,6 +437,9 @@ namespace {
                 if (pos.promotion_allowed(Us, pt, to))
                     moveList = make_move_and_gating<PROMOTION>(pos, moveList, Us, from, to, pt);
             }
+            PieceType pt = pos.promoted_piece_type(PAWN);
+            if (pt && pos.promotion_allowed(Us, pt) && !(pos.piece_promotion_on_capture() && pos.empty(to)))
+                moveList = make_move_and_gating<PIECE_PROMOTION>(pos, moveList, Us, from, to, pt);
         };
 
         Bitboard remaining = pawns;
@@ -458,10 +466,12 @@ namespace {
                 quiets &= ~mandatoryPromotionZone;
                 attacks &= ~mandatoryPromotionZone;
 
-                while (quietPromotions)
-                    emit_promotions(from, pop_lsb(quietPromotions));
-                while (capturePromotions)
-                    emit_promotions(from, pop_lsb(capturePromotions));
+                if (Type != CAPTURES)
+                    while (quietPromotions)
+                        emit_promotions(from, pop_lsb(quietPromotions));
+                if (Type == CAPTURES || Type == EVASIONS || Type == NON_EVASIONS)
+                    while (capturePromotions)
+                        emit_promotions(from, pop_lsb(capturePromotions));
             }
 
             if (Type != CAPTURES)
@@ -550,6 +560,7 @@ namespace {
         Bitboard dcCandidatePawns = pos.blockers_for_king(Them) & ~file_bb(ksq);
         b1 &= pawn_attacks_bb(Them, ksq) | shift<   Up>(dcCandidatePawns);
         b2 &= pawn_attacks_bb(Them, ksq) | shift<Up+Up>(dcCandidatePawns);
+        b3 &= pawn_attacks_bb(Them, ksq) | shift<Up+Up+Up>(dcCandidatePawns);
     }
 
     // Single and double pawn pushes, no promotions
