@@ -120,6 +120,23 @@ namespace {
     return true;
   }
 
+  template<typename T, size_t N>
+  bool same_array(const T (&lhs)[N], const T (&rhs)[N]) {
+      return std::equal(std::begin(lhs), std::end(lhs), std::begin(rhs));
+  }
+
+  template<typename T, size_t N, size_t M>
+  bool same_array(const T (&lhs)[N][M], const T (&rhs)[N][M]) {
+      for (size_t i = 0; i < N; ++i)
+          if (!same_array(lhs[i], rhs[i]))
+              return false;
+      return true;
+  }
+
+  inline bool same_reversible(const ReversiblePieceState& lhs, const ReversiblePieceState& rhs) {
+      return lhs.piece == rhs.piece && lhs.unpromoted == rhs.unpromoted && lhs.promoted == rhs.promoted;
+  }
+
   bool violates_push_no_immediate_return(const Position& pos, Move m, const PushInfo& info) {
     if (!pos.push_no_immediate_return())
         return false;
@@ -1683,8 +1700,8 @@ void Position::set_castling_right(Color c, Square rfrom) {
   castlingRightsMask[rfrom] |= cr;
   castlingRookSquare[cr] = rfrom;
 
-  Square kto = make_square(cr & KING_SIDE ? castling_kingside_file() : castling_queenside_file(), castling_rank(c));
-  Square rto = kto + (cr & KING_SIDE ? WEST : EAST);
+  Square kto, rto;
+  castling_destinations(c, kfrom, rfrom, kto, rto);
 
   castlingPath[cr] =   (between_bb(rfrom, rto) | between_bb(kfrom, kto))
                     & ~(kfrom | rfrom);
@@ -3448,9 +3465,9 @@ bool Position::legal(Move m) const {
       {
           // After castling, the rook and king final positions are the same in
           // Chess960 as they would be in standard chess.
-          kto = make_square(to > from ? castling_kingside_file() : castling_queenside_file(), castling_rank(us));
+          Square castlingRto;
+          castling_destinations(us, from, to, kto, castlingRto);
           Direction step = kto > from ? EAST : WEST;
-          Square rto = kto - (to > from ? EAST : WEST);
           // Pseudo-royal king
           if (st->pseudoRoyals & from)
               // Loop over squares between the king and its final position
@@ -3460,7 +3477,7 @@ bool Position::legal(Move m) const {
                       && (attackers_to(s, occupied, ~us) & ~removedAttackers))
                       return false;
           // Move the rook
-          occupied ^= to | rto;
+          occupied ^= to | castlingRto;
       }
       if (!rifleShot)
           occupied |= kto;
@@ -3558,10 +3575,10 @@ bool Position::legal(Move m) const {
           occupied |= gating_square(m);
       if (type_of(m) == CASTLING)
       {
-          kto = make_square(to > from ? castling_kingside_file() : castling_queenside_file(), castling_rank(us));
+          Square castlingRto;
+          castling_destinations(us, from, to, kto, castlingRto);
           rfrom = to;
-          rto = kto - (to > from ? EAST : WEST);
-          occupied ^= to | rto;
+          occupied ^= to | castlingRto;
       }
       if (!rifleShot)
           occupied |= kto;
@@ -3661,12 +3678,12 @@ bool Position::legal(Move m) const {
           rookFrom = castling_rook_square(us & (to > from ? KING_SIDE : QUEEN_SIDE));
       // After castling, the rook and king final positions are the same in
       // Chess960 as they would be in standard chess.
-      to = make_square(to > from ? castling_kingside_file() : castling_queenside_file(), castling_rank(us));
+      Square castlingRto;
+      castling_destinations(us, from, rookFrom, to, castlingRto);
       Direction step = to > from ? WEST : EAST;
 
       // Will the gate be blocked by king or rook?
-      Square rto = to + (to_sq(m) > from_sq(m) ? WEST : EAST);
-      if (is_gating(m) && (gating_square(m) == to || gating_square(m) == rto))
+      if (is_gating(m) && (gating_square(m) == to || gating_square(m) == castlingRto))
           return false;
 
       // Non-royal castlers are not impeded by attacked transit squares.
@@ -3710,8 +3727,8 @@ bool Position::legal(Move m) const {
   {
       Square kfrom = from;
       Square rfrom = to;
-      Square kto = make_square(rfrom > kfrom ? castling_kingside_file() : castling_queenside_file(), castling_rank(sideToMove));
-      Square rto = kto + (rfrom > kfrom ? WEST : EAST);
+      Square kto, rto;
+      castling_destinations(sideToMove, kfrom, rfrom, kto, rto);
       occupied = (pieces() ^ kfrom ^ rfrom) | kto | rto;
   }
   else
@@ -3762,9 +3779,9 @@ bool Position::legal(Move m) const {
 
       if (type_of(m) == CASTLING)
       {
-          Square kto = make_square(to > from ? castling_kingside_file() : castling_queenside_file(), castling_rank(us));
+          Square kto, rto;
+          castling_destinations(us, from, to, kto, rto);
           Square rfrom = to;
-          Square rto = kto - (to > from ? EAST : WEST);
           Piece rook = piece_on(rfrom);
           if (var->blastPassiveTypes & piece_set(type_of(moved_piece(m))))
               passiveBurners[us] |= square_bb(kto);
@@ -4432,8 +4449,8 @@ bool Position::gives_check(Move m) const {
   {
       Square kfrom = from;
       Square rfrom = to;
-      Square kto = make_square(rfrom > kfrom ? castling_kingside_file() : castling_queenside_file(), castling_rank(sideToMove));
-      Square rto = kto + (rfrom > kfrom ? WEST : EAST);
+      Square kto, rto;
+      castling_destinations(sideToMove, kfrom, rfrom, kto, rto);
       occupied = (pieces() ^ kfrom ^ rfrom) | kto | rto;
   }
   else
@@ -4590,8 +4607,8 @@ bool Position::gives_check(Move m) const {
       // Castling is encoded as 'king captures the rook'
       Square kfrom = from;
       Square rfrom = to;
-      Square kto = make_square(rfrom > kfrom ? castling_kingside_file() : castling_queenside_file(), castling_rank(sideToMove));
-      Square rto = kto + (rfrom > kfrom ? WEST : EAST);
+      Square kto, rto;
+      castling_destinations(sideToMove, kfrom, rfrom, kto, rto);
 
       // Is there a discovered check?
       if (   castling_rank(WHITE) > RANK_1
@@ -4609,7 +4626,7 @@ bool Position::gives_check(Move m) const {
 /// to a StateInfo object. The move is assumed to be legal. Pseudo-legal
 /// moves should be filtered out before this function is called.
 
-void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
+void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesCheck) {
 
   assert(is_ok(m));
   assert(&newSt != st);
@@ -6390,9 +6407,6 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   {
       bool makeDeadSquare = bool(death_on_capture_types() & piece_set(movedType));
       remove_destination_piece_no_capture_effects(moverSq, makeDeadSquare);
-
-      if (!allow_checks() && givesCheck && count<KING>(them))
-          givesCheck = bool(attackers_to_king(square<KING>(them), us) & pieces(us));
   }
 
   Bitboard localBycatch = st->bycatchSquares & (blast_pattern(moverSq) | square_bb(moverSq));
@@ -6989,10 +7003,8 @@ void Position::undo_move(Move m) {
 template<bool Do>
 void Position::do_castling(Color us, Square from, Square& to, Square& rfrom, Square& rto) {
 
-  bool kingSide = to > from;
   rfrom = to; // Castling is encoded as "king captures friendly rook"
-  to = make_square(kingSide ? castling_kingside_file() : castling_queenside_file(), castling_rank(us));
-  rto = to + (kingSide ? WEST : EAST);
+  castling_destinations(us, from, rfrom, to, rto);
 
   Piece castlingKingPiece = piece_on(Do ? from : to);
   Piece castlingRookPiece = piece_on(Do ? rfrom : rto);
@@ -8482,7 +8494,105 @@ bool Position::pos_is_ok() const {
   ASSERT_ALIGNED(&si, Eval::NNUE::CacheLineSize);
 
   set_state(&si);
-  if (std::memcmp(&si, st, sizeof(StateInfo)))
+  bool sameState =
+         si.pawnKey == st->pawnKey
+      && si.materialKey == st->materialKey
+      && same_array(si.nonPawnMaterial, st->nonPawnMaterial)
+      && si.castlingRights == st->castlingRights
+      && si.rule50 == st->rule50
+      && si.pliesFromNull == st->pliesFromNull
+      && si.countingPly == st->countingPly
+      && si.countingLimit == st->countingLimit
+      && same_array(si.pointsCount, st->pointsCount)
+      && same_array(si.checksRemaining, st->checksRemaining)
+      && si.epSquares == st->epSquares
+      && same_array(si.castlingKingSquare, st->castlingKingSquare)
+      && si.wallSquares == st->wallSquares
+      && si.deadSquares == st->deadSquares
+      && same_array(si.gatesBB, st->gatesBB)
+      && same_array(si.not_moved_pieces, st->not_moved_pieces)
+      && same_array(si.potionZones, st->potionZones)
+      && same_array(si.potionCooldown, st->potionCooldown)
+      && si.layoutKey == st->layoutKey
+      && si.key == st->key
+      && si.boardKey == st->boardKey
+      && si.checkersBB == st->checkersBB
+      && si.evasionCheckersBB == st->evasionCheckersBB
+      && same_array(si.unpromotedBycatch, st->unpromotedBycatch)
+      && si.bycatchSquares == st->bycatchSquares
+      && si.promotedBycatch == st->promotedBycatch
+      && si.demotedBycatch == st->demotedBycatch
+      && si.blastPromotedSquares == st->blastPromotedSquares
+      && si.previous == st->previous
+      && same_array(si.blockersForKing, st->blockersForKing)
+      && same_array(si.pinners, st->pinners)
+      && same_array(si.checkSquares, st->checkSquares)
+      && same_reversible(si.captured, st->captured)
+      && si.captureSquare == st->captureSquare
+      && same_reversible(si.dead, st->dead)
+      && si.promotionPawn == st->promotionPawn
+      && si.consumedPromotionHandPiece == st->consumedPromotionHandPiece
+      && si.nonSlidingRiders == st->nonSlidingRiders
+      && si.flippedPieces == st->flippedPieces
+      && si.pseudoRoyalCandidates == st->pseudoRoyalCandidates
+      && si.pseudoRoyals == st->pseudoRoyals
+      && same_array(si.extinctionSeen, st->extinctionSeen)
+      && si.legalCapture == st->legalCapture
+      && si.legalEnPassant == st->legalEnPassant
+      && si.chased == st->chased
+      && si.claimedSquares == st->claimedSquares
+      && si.forcedJumpSquare == st->forcedJumpSquare
+      && si.move == st->move
+      && si.dropHandColor == st->dropHandColor
+      && si.forcedJumpStep == st->forcedJumpStep
+      && si.repetition == st->repetition
+      && si.boardRepetition == st->boardRepetition
+      && si.removedGatingType == st->removedGatingType
+      && si.removedCastlingGatingType == st->removedCastlingGatingType
+      && si.capturedGatingType == st->capturedGatingType
+      && si.morphedFrom == st->morphedFrom
+      && si.morphSquare == st->morphSquare
+      && same_reversible(si.colorChanged, st->colorChanged)
+      && si.colorChangeSquare == st->colorChangeSquare
+      && si.pushTailSquare == st->pushTailSquare
+      && si.pushStepF == st->pushStepF
+      && si.pushStepR == st->pushStepR
+      && si.pushCount == st->pushCount
+      && si.pushSnapshotCount == st->pushSnapshotCount
+      && same_array(si.pushSnapshotSquares, st->pushSnapshotSquares)
+      && same_array(si.pushSnapshotPieces, st->pushSnapshotPieces)
+      && same_array(si.pushSnapshotUnpromoted, st->pushSnapshotUnpromoted)
+      && si.pushSnapshotPromoted == st->pushSnapshotPromoted
+      && si.pushTransferCount == st->pushTransferCount
+      && same_array(si.pushTransferPieces, st->pushTransferPieces)
+      && same_array(si.pushTransferUnpromoted, st->pushTransferUnpromoted)
+      && si.pushTransferPromoted == st->pushTransferPromoted
+      && si.pullFromSquare == st->pullFromSquare
+      && same_reversible(si.pulled, st->pulled)
+      && si.suppressedCaptureTransfer == st->suppressedCaptureTransfer
+      && si.shak == st->shak
+      && si.bikjang == st->bikjang
+      && si.pass == st->pass
+      && si.pendingClaimPass == st->pendingClaimPass
+      && si.forcedJumpHasFollowup == st->forcedJumpHasFollowup
+      && si.didMorph == st->didMorph
+      && si.didColorChange == st->didColorChange
+      && si.didPush == st->didPush
+      && si.didPull == st->didPull
+      && si.pushStepwise == st->pushStepwise
+      && si.pushEjected == st->pushEjected
+      && si.pushBlockedCapture == st->pushBlockedCapture
+      && si.nnueRefreshNeeded == st->nnueRefreshNeeded
+      && same_array(si.accumulator.accumulation, st->accumulator.accumulation)
+      && same_array(si.accumulator.psqtAccumulation, st->accumulator.psqtAccumulation)
+      && same_array(si.accumulator.computed, st->accumulator.computed)
+      && same_array(si.dirtyPiece.piece, st->dirtyPiece.piece)
+      && same_array(si.dirtyPiece.handPiece, st->dirtyPiece.handPiece)
+      && same_array(si.dirtyPiece.handCount, st->dirtyPiece.handCount)
+      && same_array(si.dirtyPiece.from, st->dirtyPiece.from)
+      && same_array(si.dirtyPiece.to, st->dirtyPiece.to);
+
+  if (!sameState)
       assert(0 && "pos_is_ok: State");
 
   for (Color c : {WHITE, BLACK})

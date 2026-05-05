@@ -77,8 +77,8 @@ namespace {
     if (capSq != SQ_NONE) occupancyAfter ^= square_bb(capSq);
     if (T == CASTLING)
     {
-        Square kto = make_square(to > from ? pos.castling_kingside_file() : pos.castling_queenside_file(), pos.castling_rank(us));
-        Square rto = kto - (to > from ? EAST : WEST);
+        Square kto, rto;
+        pos.castling_destinations(us, from, to, kto, rto);
         occupancyAfter = (pos.pieces() ^ square_bb(from) ^ square_bb(to)) | kto | rto;
     }
 
@@ -287,6 +287,17 @@ namespace {
     while (entries)
     {
         Square to = pop_lsb(entries);
+        auto emit_insert = [&](Square from, PieceType insertPt) {
+            Move m = make_insert(from, to, insertPt, insertPt);
+            bool push = pos.push_move(m);
+            if (!pos.empty(to) && !push)
+                return;
+            bool cap = push && pos.push_captures(m);
+            if ((Type == CAPTURES && cap)
+                || (Type == QUIETS && !cap)
+                || (Type != CAPTURES && Type != QUIETS))
+                *moveList++ = m;
+        };
         for (PieceSet ps = insertTypes; ps; )
         {
             PieceType pt = pop_lsb(ps);
@@ -296,53 +307,13 @@ namespace {
                 continue;
 
             if (pos.edge_insert_from_top(Us) && rank_of(to) == pos.max_rank() && rank_of(to) > RANK_1)
-            {
-                Move m = make_insert(to + SOUTH, to, pt, pt);
-                bool push = pos.push_move(m);
-                if (!pos.empty(to) && !push)
-                    continue;
-                bool cap = push && pos.push_captures(m);
-                if ((Type == CAPTURES && cap)
-                    || (Type == QUIETS && !cap)
-                    || (Type != CAPTURES && Type != QUIETS))
-                    *moveList++ = m;
-            }
+                emit_insert(to + SOUTH, pt);
             if (pos.edge_insert_from_bottom(Us) && rank_of(to) == RANK_1 && rank_of(to) < pos.max_rank())
-            {
-                Move m = make_insert(to + NORTH, to, pt, pt);
-                bool push = pos.push_move(m);
-                if (!pos.empty(to) && !push)
-                    continue;
-                bool cap = push && pos.push_captures(m);
-                if ((Type == CAPTURES && cap)
-                    || (Type == QUIETS && !cap)
-                    || (Type != CAPTURES && Type != QUIETS))
-                    *moveList++ = m;
-            }
+                emit_insert(to + NORTH, pt);
             if (pos.edge_insert_from_left(Us) && file_of(to) == FILE_A && file_of(to) < pos.max_file())
-            {
-                Move m = make_insert(to + EAST, to, pt, pt);
-                bool push = pos.push_move(m);
-                if (!pos.empty(to) && !push)
-                    continue;
-                bool cap = push && pos.push_captures(m);
-                if ((Type == CAPTURES && cap)
-                    || (Type == QUIETS && !cap)
-                    || (Type != CAPTURES && Type != QUIETS))
-                    *moveList++ = m;
-            }
+                emit_insert(to + EAST, pt);
             if (pos.edge_insert_from_right(Us) && file_of(to) == pos.max_file() && file_of(to) > FILE_A)
-            {
-                Move m = make_insert(to + WEST, to, pt, pt);
-                bool push = pos.push_move(m);
-                if (!pos.empty(to) && !push)
-                    continue;
-                bool cap = push && pos.push_captures(m);
-                if ((Type == CAPTURES && cap)
-                    || (Type == QUIETS && !cap)
-                    || (Type != CAPTURES && Type != QUIETS))
-                    *moveList++ = m;
-            }
+                emit_insert(to + WEST, pt);
         }
     }
 
@@ -367,34 +338,50 @@ namespace {
           }
           // Restrict to valid target
           b &= pos.drop_region(Us, pt);
-          // Add to move list
-          if (pos.drop_promoted() && pos.promoted_piece_type(pt)) {
-              Bitboard b2 = b;
-              if (Type == QUIET_CHECKS)
-                  b2 &= pos.check_squares(pos.promoted_piece_type(pt));
-              while (b2) {
-                  auto to = pop_lsb(b2);
+          auto emit_exchanges = [&](Bitboard targets, PieceType finalPt) {
+              while (targets) {
+                  auto to = pop_lsb(targets);
                   for (PieceSet r = rescue; r; ) {
                       PieceType ex = pop_lsb(r);
-                      *moveList++ = make_exchange(to, ex, pt, pos.promoted_piece_type(pt));
+                      *moveList++ = make_exchange(to, ex, pt, finalPt);
                   }
               }
+          };
+
+          if (pos.drop_promoted() && pos.promoted_piece_type(pt)) {
+              Bitboard promotedTargets = b;
+              if (Type == QUIET_CHECKS)
+                  promotedTargets &= pos.check_squares(pos.promoted_piece_type(pt));
+              emit_exchanges(promotedTargets, pos.promoted_piece_type(pt));
           }
           if (Type == QUIET_CHECKS)
               b &= pos.check_squares(pt);
-          while (b) {
-              auto to = pop_lsb(b);
-              for (PieceSet r = rescue; r; ) {
-                  PieceType ex = pop_lsb(r);
-                  *moveList++ = make_exchange(to, ex, pt, pt);
-              }
-          }
+          emit_exchanges(b, pt);
       }
       return moveList;
   }
 
+  struct MoveBuffer {
+      ExtMove* begin;
+      ExtMove* end;
+  };
+
+  struct PawnGenSpec {
+      Bitboard target;
+      Bitboard fromMask = AllSquares;
+  };
+
+  struct PieceGenSpec {
+      PieceType pt;
+      Bitboard target;
+      Bitboard captureTarget;
+      Bitboard fromMask = AllSquares;
+  };
+
   template<Color Us, GenType Type>
-  ExtMove* generate_pawn_moves(const Position& pos, ExtMove* moveList, Bitboard target, Bitboard fromMask = AllSquares) {
+  ExtMove* generate_pawn_moves(const Position& pos, ExtMove* moveList, PawnGenSpec spec) {
+    Bitboard target = spec.target;
+    Bitboard fromMask = spec.fromMask;
 
     if (!pos.pieces(Us, PAWN))
         return moveList;
@@ -466,10 +453,6 @@ namespace {
                 }
                 quiets &= ~blocked;
                 attacks &= ~blocked;
-            }
-
-            if (mandatoryPromotionZone)
-            {
                 Bitboard quietPromotions = quiets & mandatoryPromotionZone;
                 Bitboard capturePromotions = attacks & mandatoryPromotionZone;
                 quiets &= ~mandatoryPromotionZone;
@@ -687,7 +670,11 @@ namespace {
 
 
   template<Color Us, GenType Type>
-  ExtMove* generate_moves(const Position& pos, ExtMove* moveList, PieceType Pt, Bitboard target, Bitboard captureTarget, Bitboard fromMask = AllSquares) {
+  ExtMove* generate_moves(const Position& pos, ExtMove* moveList, PieceGenSpec spec) {
+    const PieceType Pt = spec.pt;
+    Bitboard target = spec.target;
+    Bitboard captureTarget = spec.captureTarget;
+    Bitboard fromMask = spec.fromMask;
 
     assert(Pt != KING && Pt != PAWN);
 
@@ -1014,22 +1001,22 @@ namespace {
             captureTarget = target;
         }
 
-        if (restrictToForcedJumper)
-        {
-            if (forcedJumpPt == PAWN)
+            if (restrictToForcedJumper)
+            {
+                if (forcedJumpPt == PAWN)
+                    moveList = useGenericPawnGenerator
+                         ? generate_pawn_moves<Us, Type>(pos, moveList, PawnGenSpec{target, forcedFromMask})
+                         : generate_moves<Us, Type>(pos, moveList, PieceGenSpec{PAWN, target, captureTarget, forcedFromMask});
+                else if (forcedJumpPt != KING)
+                moveList = generate_moves<Us, Type>(pos, moveList, PieceGenSpec{forcedJumpPt, target, captureTarget, forcedFromMask});
+            }
+            else
+            {
                 moveList = useGenericPawnGenerator
-                         ? generate_pawn_moves<Us, Type>(pos, moveList, target, forcedFromMask)
-                         : generate_moves<Us, Type>(pos, moveList, PAWN, target, captureTarget, forcedFromMask);
-            else if (forcedJumpPt != KING)
-                moveList = generate_moves<Us, Type>(pos, moveList, forcedJumpPt, target, captureTarget, forcedFromMask);
-        }
-        else
-        {
-            moveList = useGenericPawnGenerator
-                     ? generate_pawn_moves<Us, Type>(pos, moveList, target, forcedFromMask)
-                     : generate_moves<Us, Type>(pos, moveList, PAWN, target, captureTarget, forcedFromMask);
+                     ? generate_pawn_moves<Us, Type>(pos, moveList, PawnGenSpec{target, forcedFromMask})
+                     : generate_moves<Us, Type>(pos, moveList, PieceGenSpec{PAWN, target, captureTarget, forcedFromMask});
             for (PieceSet ps = pos.piece_types() & ~(piece_set(PAWN) | KING); ps;)
-                moveList = generate_moves<Us, Type>(pos, moveList, pop_lsb(ps), target, captureTarget, forcedFromMask);
+                moveList = generate_moves<Us, Type>(pos, moveList, PieceGenSpec{pop_lsb(ps), target, captureTarget, forcedFromMask});
         }
         // generate drops
         if (!restrictToForcedJumper && pos.piece_drops() && Type != CAPTURES && (pos.can_drop(Us, ALL_PIECES) || pos.two_boards()))
@@ -1246,10 +1233,10 @@ namespace {
   }
 
   template<Color Us, GenType Type>
-  ExtMove* generate_potion_moves(const Position& pos, ExtMove* listBegin, ExtMove* baseEnd) {
+  ExtMove* generate_potion_moves(const Position& pos, MoveBuffer buffer) {
     const Variant* var = pos.variant();
-    ExtMove* cur = baseEnd;
-    ExtMove* maxEnd = listBegin + MOVEGEN_OVERFLOW_CAPACITY;
+    ExtMove* cur = buffer.end;
+    ExtMove* maxEnd = buffer.begin + MOVEGEN_OVERFLOW_CAPACITY;
 
     for (int pt = 0; pt < Variant::POTION_TYPE_NB; ++pt)
     {
@@ -1277,7 +1264,7 @@ namespace {
                     return maxEnd;
 
                 Square gate = pop_lsb(candidates);
-                for (ExtMove* it = listBegin; it != baseEnd; ++it)
+                for (ExtMove* it = buffer.begin; it != buffer.end; ++it)
                 {
                     if (cur >= maxEnd)
                         return maxEnd;
@@ -1309,7 +1296,7 @@ namespace {
             ScopedSpellContext guard(Bitboard(0), candidates);
 
 #ifdef USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
-            std::unique_ptr<ExtMove[]> jumpMoves(new ExtMove[MOVEGEN_OVERFLOW_CAPACITY]);
+            auto jumpMoves = std::make_unique<ExtMove[]>(MOVEGEN_OVERFLOW_CAPACITY);
             ExtMove* jumpEnd = generate_all_impl<Us, NON_EVASIONS>(pos, jumpMoves.get());
             assert(jumpEnd - jumpMoves.get() <= MOVEGEN_OVERFLOW_CAPACITY);
 
@@ -1392,7 +1379,7 @@ namespace {
     if (!pos.can_cast_potion(Us, Variant::POTION_FREEZE)
         && !pos.can_cast_potion(Us, Variant::POTION_JUMP))
         return baseEnd;
-    return generate_potion_moves<Us, Type>(pos, moveList, baseEnd);
+    return generate_potion_moves<Us, Type>(pos, MoveBuffer{moveList, baseEnd});
   }
 
 } // namespace
@@ -1443,8 +1430,8 @@ ExtMove* append_potions(const Position& pos, ExtMove* listBegin, ExtMove* baseEn
       && !pos.can_cast_potion(us, Variant::POTION_JUMP))
       return baseEnd;
 
-  return us == WHITE ? generate_potion_moves<WHITE, Type>(pos, listBegin, baseEnd)
-                     : generate_potion_moves<BLACK, Type>(pos, listBegin, baseEnd);
+  return us == WHITE ? generate_potion_moves<WHITE, Type>(pos, MoveBuffer{listBegin, baseEnd})
+                     : generate_potion_moves<BLACK, Type>(pos, MoveBuffer{listBegin, baseEnd});
 }
 
 // Explicit template instantiations

@@ -147,28 +147,32 @@ namespace {
     for (auto const& [d, profile] : profiles) {
       Direction dir = (c == WHITE ? d : -d);
       auto [stepR, stepF] = decode_direction(dir);
-      int dist = 0;
+      int rayDist = 0;
       Square prev = sq;
-      for (Square s = sq + dir; is_ok(s) && (dist < 255); s += dir) {
+      for (Square s = sq + dir; is_ok(s) && (rayDist < 255); s += dir) {
         if (int(file_of(s)) - int(file_of(prev)) != stepF
             || int(rank_of(s)) - int(rank_of(prev)) != stepR)
             break;
         prev = s;
-        dist++;
+        rayDist++;
         attack |= s;
       }
     }
     return attack;
   }
 
+  struct SpecialPseudoDirections {
+    const std::map<Direction, int>& riderDirs;
+    const std::map<Direction, int>& skiDirs;
+  };
+
   Bitboard special_pseudo_bb(const PieceInfo* pi, bool initial, MoveModality modality, Square s, Color c,
-                             const std::map<Direction, int>& riderDirs,
-                             const std::map<Direction, int>& skiDirs) {
+                             const SpecialPseudoDirections& dirs) {
     Bitboard pseudo = 0;
 
-    pseudo |= sliding_attack<RIDER>(riderDirs, s, 0, c);
+    pseudo |= sliding_attack<RIDER>(dirs.riderDirs, s, 0, c);
     pseudo |= leap_rider_attacks(pi->leapRider[initial][modality], s, 0, c);
-    pseudo |= ski_sliding_attack(skiDirs, s, 0, c);
+    pseudo |= ski_sliding_attack(dirs.skiDirs, s, 0, c);
     pseudo |= sliding_attack<HOPPER_RANGE>(pi->hopper[initial][modality], s, 0, c);
     pseudo |= universal_hopper_potential(pi->universalHopper[initial][modality], s, c);
 
@@ -352,10 +356,11 @@ namespace {
   }
 #endif
 
-  Bitboard limited_step_rider_attacks(Square s, Bitboard occupied, int stepF, int stepR, int limit) {
+  Bitboard limited_step_rider_attacks(Square s, Bitboard occupied, Direction d, int limit) {
     Bitboard attack = 0;
     int f = int(file_of(s));
     int r = int(rank_of(s));
+    auto [stepR, stepF] = decode_direction(d);
     int count = 0;
 
     while (true)
@@ -375,23 +380,12 @@ namespace {
     return attack;
   }
 
-  bool decode_direction(Direction d, int& stepF, int& stepR) {
-    auto [dr, df] = Stockfish::decode_direction(d);
-    stepR = dr;
-    stepF = df;
-    return true;
-  }
-
   Bitboard leap_rider_attacks(const std::map<Direction, int>& directions, Square s, Bitboard occupied, Color c) {
     Bitboard attack = 0;
 
     for (auto const& [d, limit] : directions)
     {
-        int stepF = 0;
-        int stepR = 0;
-        if (!decode_direction(c == WHITE ? d : Direction(-d), stepF, stepR))
-            continue;
-        attack |= limited_step_rider_attacks(s, occupied, stepF, stepR, limit);
+        attack |= limited_step_rider_attacks(s, occupied, c == WHITE ? d : Direction(-d), limit);
     }
 
     return attack;
@@ -658,13 +652,17 @@ void Bitboards::init_pieces() {
 
                   std::map<Direction, int> riderDirs;
                   std::map<Direction, int> skiDirs;
-                  for (auto const& [d, limit] : pi->slider[initial][modality])
+                  for (const auto& slider : pi->slider[initial][modality])
+                  {
+                      const Direction d = slider.first;
+                      const int limit = slider.second;
                       if (limit == SKI_SLIDER_LIMIT)
                           skiDirs[d] = 0;
                       else if (limit == MAX_SLIDER_LIMIT)
                           riderDirs[d] = 0;
                       else if (limit >= 0 || is_slider_range(limit))
                           riderDirs[d] = limit;
+                  }
 
                   for (Square s = SQ_A1; s <= SQ_MAX; ++s)
                   {
@@ -703,7 +701,7 @@ void Bitboards::init_pieces() {
                                   break;
                           }
                       }
-                      pseudo |= special_pseudo_bb(pi, initial, modality, s, c, riderDirs, skiDirs);
+                      pseudo |= special_pseudo_bb(pi, initial, modality, s, c, SpecialPseudoDirections{riderDirs, skiDirs});
                       leaper |= special_leaper_bb(pi, initial, modality, s, c);
                   }
               }
