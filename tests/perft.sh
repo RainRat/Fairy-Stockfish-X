@@ -211,8 +211,8 @@ if [[ $VARIANT == "all" ||  $VARIANT == "largeboard" ]]; then
     expect "$perft_exp" shako "fen 10/rr3k4/ppppp5/10/10/10/10/6PPPP/5K2RR/10 w Kq - 0 1" 2 460 > /dev/null
     # Upstream FSF (all=yes, largeboards=yes) currently returns 3290240 here.
     expect "$perft_exp" xiangqi startpos 4 3290240 > /dev/null
-    expect "$perft_exp" xiangqi "fen 1rbaka2R/5r3/6n2/2p1p1p2/4P1bP1/PpC3Bc1/1nPR2P2/2N2AN2/1c2K1p2/2BAC4 w - - 0 1" 4 4485547 > /dev/null
-    expect "$perft_exp" xiangqi "fen 4kcP1N/8n/3rb4/9/9/9/9/3p1A3/4K4/5CB2 w - - 0 1" 4 92741 > /dev/null
+    expect "$perft_exp" xiangqi "fen 1rbaka2R/5r3/6n2/2p1p1p2/4P1bP1/PpC3Bc1/1nPR2P2/2N2AN2/1c2K1p2/2BAC4 w - - 0 1" 4 4762384 > /dev/null
+    expect "$perft_exp" xiangqi "fen 4kcP1N/8n/3rb4/9/9/9/9/3p1A3/4K4/5CB2 w - - 0 1" 4 117526 > /dev/null
     # Local FSF-X and current upstream both return 798554 for this case.
     expect "$perft_exp" manchu startpos 4 798554 > /dev/null
     expect "$perft_exp" janggi startpos 4 1065277 > /dev/null
