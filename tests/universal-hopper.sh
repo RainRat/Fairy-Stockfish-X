@@ -16,7 +16,7 @@ fi
 
 INI_FILE=$(mktemp -t universal_hopper_test.XXXXXX.ini)
 trap 'rm -f "${INI_FILE}"' EXIT
-cat << 'EOF' > $INI_FILE
+cat << 'EOF' > "$INI_FILE"
 [hopper-common:chess]
 pieceToCharTable = PNBRQKDFGHS
 
@@ -113,7 +113,7 @@ function run_test() {
     local expected_nodes=$3
     local moves=${4:-}
     echo "Testing $variant..."
-output=$("${ENGINE}" << EOF
+    output=$("${ENGINE}" << EOF
 uci
 setoption name VariantPath value $INI_FILE
 setoption name UCI_Variant value $variant
@@ -123,6 +123,12 @@ quit
 EOF
 )
     nodes=$(echo "$output" | grep "Nodes searched:" | awk '{print $3}')
+    if [[ -z "$nodes" ]]; then
+        echo "  [FAIL] No node count found"
+        echo "Output was:"
+        echo "$output"
+        exit 1
+    fi
     if [ "$nodes" -eq "$expected_nodes" ]; then
         echo "  [PASS] Nodes: $nodes"
     else

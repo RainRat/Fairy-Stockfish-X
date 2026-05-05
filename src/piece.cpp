@@ -502,14 +502,20 @@ namespace {
                       else if (key == "pre") { parse_min_max(val, currentHopperProfile.preMin, currentHopperProfile.preMax); }
                       else if (key == "post") { parse_min_max(val, currentHopperProfile.postMin, currentHopperProfile.postMax); }
                       else if (key == "capture") {
-                          if (val == "locust_all") currentHopperProfile.captureMode = PieceInfo::CAPTURE_LOCUST_ALL;
+                          if (val == "dest") currentHopperProfile.captureMode = PieceInfo::CAPTURE_DEST;
+                          else if (val == "locust_all") currentHopperProfile.captureMode = PieceInfo::CAPTURE_LOCUST_ALL;
                           else if (val == "locust_first") currentHopperProfile.captureMode = PieceInfo::CAPTURE_LOCUST_FIRST;
                           else if (val == "locust_last") currentHopperProfile.captureMode = PieceInfo::CAPTURE_LOCUST_LAST;
-                          else currentHopperProfile.captureMode = PieceInfo::CAPTURE_DEST;
+                          else {
+                              currentHopperProfile.captureMode = PieceInfo::CAPTURE_DEST;
+                              std::cerr << "Unknown Betza hopper capture mode '" << val << "' in '" << betza << "'." << std::endl;
+                          }
                       }
                       else if (key == "equi") {
                           if (val == "hopper") currentHopperProfile.equiRule = PieceInfo::EQUI_HOPPER;
                           else if (val == "stopper") currentHopperProfile.equiRule = PieceInfo::EQUI_STOPPER;
+                          else
+                              std::cerr << "Unknown Betza hopper equi mode '" << val << "' in '" << betza << "'." << std::endl;
                       }
                       else if (key == "hurdle_types" || key == "transparent_types") {
                           bool isHurdle = (key == "hurdle_types");
@@ -527,10 +533,14 @@ namespace {
                               else if (v == "friendly") special |= PieceInfo::HopperProfile::FRIENDLY;
                               else if (v == "wall") special |= PieceInfo::HopperProfile::WALL;
                               else if (v == "dead") special |= PieceInfo::HopperProfile::DEAD;
+                              else if (!v.empty())
+                                  std::cerr << "Unknown Betza hopper special type '" << v << "' in '" << betza << "'." << std::endl;
                               
                               vpos = next_comma + 1;
                           }
                       }
+                      else
+                          std::cerr << "Unknown Betza hopper parameter key '" << key << "' in '" << betza << "'." << std::endl;
                   }
                   pos = next_semi + 1;
               }
