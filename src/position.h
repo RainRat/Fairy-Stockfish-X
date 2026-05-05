@@ -3896,6 +3896,7 @@ inline Square Position::jump_capture_square(Square from, Square to, Bitboard occ
               const bool wraps = topology_wraps();
               auto [dr, df] = decode_direction(dir);
               const Bitboard ownPieces = pieces(us) & occupied;
+              bool invalidProfile = false;
 
               for (int rayStep = 0; rayStep < 255; ++rayStep)
               {
@@ -3949,7 +3950,10 @@ inline Square Position::jump_capture_square(Square from, Square to, Bitboard occ
                           if (profile.captureMode == PieceInfo::CAPTURE_LOCUST_ALL
                               && isFriendly
                               && !self_capture(movePt))
-                              return SQ_NONE;
+                          {
+                              invalidProfile = true;
+                              break;
+                          }
                           hurdlesHit++;
                           if (hurdlesHit == 1) { distToFirstHurdle = dist; firstHurdleSq = s; }
                           lastHurdleSq = s;
@@ -4020,7 +4024,10 @@ inline Square Position::jump_capture_square(Square from, Square to, Bitboard occ
                                       if (profile.captureMode == PieceInfo::CAPTURE_LOCUST_ALL
                                           && hsFriendly
                                           && !self_capture(movePt))
-                                          return SQ_NONE;
+                                      {
+                                          invalidProfile = true;
+                                          break;
+                                      }
                                       hurdlesInScan++;
                                       distFromLastHurdle = 0;
                                       // Check if this hurdle hit matches our requirements
@@ -4037,6 +4044,8 @@ inline Square Position::jump_capture_square(Square from, Square to, Bitboard occ
                               }
                               else distFromLastHurdle++;
                           }
+                          if (invalidProfile)
+                              break;
                       }
                       else if (hurdlesHit >= profile.hurdlesMin && hurdlesHit <= profile.hurdlesMax &&
                           distToFirstHurdle >= profile.preMin && distToFirstHurdle <= profile.preMax &&
@@ -4061,6 +4070,8 @@ inline Square Position::jump_capture_square(Square from, Square to, Bitboard occ
                       break;
                   }
               }
+              if (invalidProfile)
+                  continue;
           }
       }
   }

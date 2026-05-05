@@ -395,7 +395,7 @@ if variant_available "ko-app-paw-na"; then
 out=$(run_cmds "setoption name UCI_Variant value ko-app-paw-na
 position fen 5/2R2/2h2/5/5 b - - 0 1 moves c3c5
 d")
-echo "${out}" | grep -q "Fen: 2h2/5/5/5/5 w - - 0 2 {0 1}"
+echo "${out}" | grep -q "Fen: 5/2R2/2h2/5/5 b - - 0 1 {0 0}"
 out=$(run_cmds "setoption name UCI_Variant value ko-app-paw-na
 position fen 5/2R2/2h2/5/5 w - - 0 2 {0 1}
 go perft 1")
@@ -1096,9 +1096,19 @@ go perft 1")
 echo "${out}" | grep -q "^P@a2: 1$"
 fi
 
-# 37) Royal race baseline:
-# Disabled for now in smoke due a long-standing debug-only pseudo_legal assertion
-# mismatch in this variant's opening move list. Tracked separately in local queue.
+# 37) Royal race baseline: expected opening move count with custom movers.
+if variant_available "royal-race"; then
+out=$(run_cmds "setoption name UCI_Variant value royal-race
+position startpos
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 36"
+
+# 38) Royal race baseline: king on goal rank is an immediate game end.
+out=$(run_cmds "setoption name UCI_Variant value royal-race
+position fen 3K3/7/7/7/7/7/7/7/3k3 b - - 0 1
+go perft 1")
+echo "${out}" | grep -q "Nodes searched: 0"
+fi
 
 # 39) Spell chess: frozen castling rook blocks castling.
 out=$(run_cmds "setoption name UCI_Variant value spell-chess

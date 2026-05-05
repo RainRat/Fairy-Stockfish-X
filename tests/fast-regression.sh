@@ -30,7 +30,9 @@ run_step "custom en passant passed squares" timeout 60s bash tests/custom-en-pas
 run_step "blast legal regressions" timeout 60s bash tests/blast-legal-regressions.sh "${ENGINE}"
 run_step "pseudoroyal blast immune" timeout 60s bash tests/pseudoroyal-blast-immune.sh "${ENGINE}"
 run_step "universal hopper" timeout 90s bash tests/universal-hopper.sh "${ENGINE}"
+run_step "gating check regressions" timeout 60s bash tests/gating-check-regression.sh "${ENGINE}"
 run_step "binding regression" timeout 60s "${PYTHON}" tests/test_binding_regression.py
+run_step "royal capture no kings" timeout 60s "${PYTHON}" tests/test_royal_capture_no_kings.py
 if [[ -n "${UPSTREAM_ENGINE:-}" ]]; then
   run_step "upstream movecount baseline" timeout 60s "${PYTHON}" tests/upstream_movecount_baseline.py "${ENGINE}" "${UPSTREAM_ENGINE}"
 else
