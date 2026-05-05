@@ -28,6 +28,14 @@ toroidal = true
 castling = false
 startFen = 2k5/8/8/8/8/7p/P7/4K3 w - - 0 1
 
+[tor-pawn-promo:chess]
+toroidal = true
+castling = false
+promotedPieceType = p:q
+promotionRegionWhite = *8
+promotionRegionBlack = *1
+startFen = 8/P7/8/8/8/8/8/4K2k w - - 0 1
+
 [cyl-check:chess]
 cylindrical = true
 castling = false
@@ -105,6 +113,9 @@ echo "${tor_rook_output}" | grep -q "a1a8: 1"
 
 tor_pawn_output=$(run_variant tor-pawn)
 echo "${tor_pawn_output}" | grep -q "a2h3: 1"
+
+tor_pawn_promo_output=$(run_variant tor-pawn-promo)
+echo "${tor_pawn_promo_output}" | grep -q "a7a8+: 1"
 
 cyl_check_output=$(run_variant cyl-check)
 echo "${cyl_check_output}" | grep -q "a1h1: 1"
