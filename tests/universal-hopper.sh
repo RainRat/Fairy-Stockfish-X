@@ -69,6 +69,12 @@ customPiece1 = d:{hurdles: 1,1; pre: 3,3; post: 1,1; equi: stopper}Q
 topology = cylinder
 customPiece1 = d:{hurdles: 1,1; pre: 1,*; post: 1,1}R
 
+[wrapped-initial-locust:hopper-common]
+topology = cylinder
+pieceToCharTable = PNBRQKDFGHSA
+customPiece1 = a:i{hurdles: 1,1; pre: 1,1; post: 1,1; capture: locust_first; hurdle_types: enemy}R
+doubleStepRegionWhite = A(e2)
+
 [wrapped-locust-all:hopper-common]
 topology = cylinder
 customPiece1 = d:c{hurdles: 2,2; pre: 1,1; post: 1,1; capture: locust_all; hurdle_types: enemy}R
@@ -328,6 +334,25 @@ if echo "$output" | grep -q "Fen: 7k/8/7D/p7/p7/8/8/K7"; then
     echo "  [PASS] wrapped locust_all removed all hurdles"
 else
     echo "  [FAIL] wrapped locust_all did not remove all hurdles"
+    exit 1
+fi
+
+# 5ca. Wrapped topology + initial universal hopper captures should be generated too.
+output=$("${ENGINE}" << EOF
+uci
+setoption name VariantPath value $INI_FILE
+setoption name UCI_Variant value wrapped-initial-locust
+position fen 8/8/8/8/8/4p3/4A3/K6k w - - 0 1
+go perft 1
+quit
+EOF
+)
+if echo "$output" | grep -q "^e2e4: 1$" && echo "$output" | grep -q "Nodes searched: 4"; then
+    echo "  [PASS] wrapped initial locust capture is generated"
+else
+    echo "  [FAIL] wrapped initial locust capture was missed"
+    echo "Output was:"
+    echo "$output"
     exit 1
 fi
 

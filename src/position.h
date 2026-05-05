@@ -3420,6 +3420,8 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
       b |= wrapped_slider_targets(pi->slider[0][MODALITY_CAPTURE], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, false);
       b |= wrapped_hopper_targets(pi->hopper[0][MODALITY_CAPTURE], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, false);
       b |= wrapped_universal_hopper_targets(pi->universalHopper[0][MODALITY_CAPTURE], c, s, occupancy, pieces(c), max_file(), max_rank(), wrapFile, wrapRank, true, true);
+      if (double_step_region(c, pt) & s)
+          b |= wrapped_universal_hopper_targets(pi->universalHopper[1][MODALITY_CAPTURE], c, s, occupancy, pieces(c), max_file(), max_rank(), wrapFile, wrapRank, true, true);
       if (pi->griffon[0][MODALITY_CAPTURE])
           b |= wrapped_bent_rider_targets(true, s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, false);
       if (pi->manticore[0][MODALITY_CAPTURE])

@@ -395,7 +395,7 @@ if variant_available "ko-app-paw-na"; then
 out=$(run_cmds "setoption name UCI_Variant value ko-app-paw-na
 position fen 5/2R2/2h2/5/5 b - - 0 1 moves c3c5
 d")
-echo "${out}" | grep -q "Fen: 5/2R2/2h2/5/5 b - - 0 1 {0 0}"
+echo "${out}" | grep -q "Fen: 2h2/5/5/5/5 w - - 0 2 {0 1}"
 out=$(run_cmds "setoption name UCI_Variant value ko-app-paw-na
 position fen 5/2R2/2h2/5/5 w - - 0 2 {0 1}
 go perft 1")
