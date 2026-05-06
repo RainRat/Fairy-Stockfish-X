@@ -19,6 +19,7 @@
 #ifndef PIECE_H_INCLUDED
 #define PIECE_H_INCLUDED
 
+#include <cassert>
 #include <array>
 #include <string>
 #include <map>

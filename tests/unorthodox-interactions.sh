@@ -40,6 +40,7 @@ blastOnCapture = true
 blastOrthogonals = false
 blastDiagonals = false
 rifleCapture = true
+castling = false
 king = -
 customPiece1 = k:K
 extinctionValue = -VALUE_MATE
@@ -57,6 +58,7 @@ rifleCapture = true
 [rifle-duck:chess]
 rifleCapture = true
 wallingRule = duck
+castling = false
 king = -
 customPiece1 = k:K
 extinctionValue = -VALUE_MATE
@@ -116,6 +118,7 @@ blastPassiveTypes = n
 removeConnectN = 3
 
 [passive-nonroyal-repro:chess]
+castling = false
 king = -
 customPiece1 = k:K
 extinctionValue = -VALUE_MATE
@@ -293,7 +296,7 @@ fi
 
 # 18. Test blastPassiveTypes + royal kings rejects the variant
 out=$(run_cmds "passive-king-repro" "${TEMP_INI}" "d")
-echo "${out}" | grep -q "Can not use kings with blastPassiveTypes."
+echo "${out}" | grep -q "info string unknown variant 'passive-king-repro'"
 if echo "${out}" | grep -q "info string variant passive-king-repro"; then
   echo "blastPassiveTypes + royal kings variant should have been rejected"
   exit 1

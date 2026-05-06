@@ -34,46 +34,50 @@ namespace Stockfish {
 VariantMap variants; // Global object
 
 namespace {
+    bool parse_positive_int(const std::string& raw, int& out) {
+        if (raw.empty())
+            return false;
+
+        const auto first = raw.find_first_not_of(" \t\r\n\f\v");
+        if (first == std::string::npos)
+            return false;
+        const auto last = raw.find_last_not_of(" \t\r\n\f\v");
+        const char* begin = raw.data() + first;
+        const char* end = raw.data() + last + 1;
+        auto [ptr, ec] = std::from_chars(begin, end, out);
+        return ec == std::errc() && ptr == end && out >= 1;
+    }
+
+    bool parse_file_index(const std::string& raw, int& out) {
+        if (raw.empty())
+            return false;
+
+        const auto first = raw.find_first_not_of(" \t\r\n\f\v");
+        if (first == std::string::npos)
+            return false;
+        const auto last = raw.find_last_not_of(" \t\r\n\f\v");
+        const std::string value = raw.substr(first, last - first + 1);
+
+        if (std::isdigit(static_cast<unsigned char>(value[0])))
+        {
+            int file = 0;
+            auto [ptr, ec] = std::from_chars(value.data(), value.data() + value.size(), file);
+            if (ec != std::errc() || ptr != value.data() + value.size() || file < 1)
+                return false;
+            out = file - 1;
+            return true;
+        }
+
+        if (value.size() != 1)
+            return false;
+        out = std::tolower(static_cast<unsigned char>(value[0])) - 'a';
+        return true;
+    }
+
     std::string lower_ascii(std::string s) {
         for (char& c : s)
             c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
         return s;
-    }
-
-    bool parse_positive_int(const std::string& raw, int& out) {
-        std::string value = raw;
-        const auto first = value.find_first_not_of(" \t");
-        if (first == std::string::npos)
-            return false;
-        const auto last = value.find_last_not_of(" \t");
-        value = value.substr(first, last - first + 1);
-
-        auto [ptr, ec] = std::from_chars(value.data(), value.data() + value.size(), out);
-        return ec == std::errc() && ptr == value.data() + value.size() && out >= 1;
-    }
-
-    bool parse_file_value(const std::string& raw, int& out) {
-        std::stringstream ss(raw);
-        ss >> std::ws;
-        if (ss.peek() == EOF)
-            return false;
-        if (std::isdigit(ss.peek()))
-        {
-            int i;
-            ss >> i;
-            ss >> std::ws;
-            if (ss.fail() || !ss.eof() || i < 1)
-                return false;
-            out = i - 1;
-            return true;
-        }
-        char c;
-        ss >> c;
-        ss >> std::ws;
-        if (ss.fail() || !ss.eof())
-            return false;
-        out = std::tolower(static_cast<unsigned char>(c)) - 'a';
-        return true;
     }
 
     template <typename CoordToSquare>
@@ -2423,7 +2427,8 @@ Variant* Variant::conclude() {
 
     // If not a connect variant, set connectPieceTypesTrimmed to no pieces.
     // connectPieceTypesTrimmed is separated so that connectPieceTypes is left unchanged for inheritance.
-    if ( !(connectRegion1[WHITE] || connectRegion1[BLACK] || connectRegion3[WHITE] || connectRegion3[BLACK]
+    if ( !(connectRegion1[WHITE] || connectRegion1[BLACK] || connectRegion2[WHITE] || connectRegion2[BLACK]
+        || connectRegion3[WHITE] || connectRegion3[BLACK]
         || connectN || connectNxN || collinearN || connectGroup) )
     {
           connectPieceTypesTrimmed = NO_PIECE_SET;
@@ -2498,12 +2503,22 @@ void VariantMap::parse_istream(std::istream& file) {
             {
                 if (DoCheck && !input.empty() && input.find('=') == std::string::npos)
                     std::cerr << "Invalid syntax: '" << input << "'." << std::endl;
-                if (std::getline(std::getline(ss, key, '=') >> std::ws, value))
+                if (std::getline(ss, key, '='))
                 {
+                    ss >> std::ws;
+                    value.clear();
+                    std::getline(ss, value);
                     const auto first = key.find_first_not_of(" \t");
                     if (first == std::string::npos)
                         continue;
                     const auto last = key.find_last_not_of(" \t");
+                    if (value.find_first_not_of(" \t") == std::string::npos)
+                        value.clear();
+                    else
+                    {
+                        const auto value_first = value.find_first_not_of(" \t");
+                        value.erase(0, value_first);
+                    }
                     attribs[key.substr(first, last - first + 1)] = value;
                 }
             }
@@ -2525,7 +2540,7 @@ void VariantMap::parse_istream(std::istream& file) {
                     cfgMaxRank = parsedRank - 1;
             }
             if (attribs.count("maxFile"))
-                parse_file_value(attribs["maxFile"], cfgMaxFile);
+                parse_file_index(attribs["maxFile"], cfgMaxFile);
             if ((cfgMaxRank > 0 && cfgMaxRank > RANK_MAX) || (cfgMaxFile >= 0 && cfgMaxFile > FILE_MAX))
             {
                 if constexpr (!DoCheck)

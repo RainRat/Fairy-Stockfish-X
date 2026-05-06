@@ -21,6 +21,7 @@
 
 #include <bitset>
 #include <array>
+#include <memory>
 #include <set>
 #include <map>
 #include <vector>
@@ -86,6 +87,8 @@ struct ColorSetting {
     global = value;
     byColor[WHITE] = value;
     byColor[BLACK] = value;
+    byColorSet[WHITE] = false;
+    byColorSet[BLACK] = false;
   }
 
   void set_color(Color c, const T& value) {
