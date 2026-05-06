@@ -2415,10 +2415,20 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     if ((cfgMaxRank >= 0 && cfgMaxRank > RANK_MAX) || (cfgMaxFile >= 0 && cfgMaxFile > FILE_MAX))
         return nullptr;
 
-    if (itRank != config.end() && !parse_attribute<false>("maxRank", v->maxRank))
-        return nullptr;
-    if (itFile != config.end() && !parse_attribute<false>("maxFile", v->maxFile))
-        return nullptr;
+    if (itRank != config.end())
+    {
+        int parsedRank = 0;
+        if (!parse_rank_index(itRank->second, parsedRank))
+            return nullptr;
+        v->maxRank = Rank(parsedRank);
+    }
+    if (itFile != config.end())
+    {
+        int parsedFile = 0;
+        if (!parse_file_index(itFile->second, parsedFile))
+            return nullptr;
+        v->maxFile = File(parsedFile);
+    }
 
     if (!parse_piece_types(v) ||
         !parse_piece_values(v) ||

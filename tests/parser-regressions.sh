@@ -217,7 +217,6 @@ verify_warning "hostageExchange - Empty value is not allowed." "empty hostageExc
 verify_warning "Variant 'parse-error-empty-hostage' has invalid configuration. Skipping." "empty hostageExchange variant rejection"
 verify_warning "castling - Invalid value - garbage for type bool" "castling trailing garbage rejection"
 verify_warning "castlingRookPiece - Deprecated option might be removed in future version." "legacy castling rook warning"
-verify_warning "maxRank - Invalid value z for type Rank" "invalid maxRank rejection"
 verify_warning "rook - Invalid letter: r" "invalid piece token rejection"
 verify_warning "Variant 'invalid-piece-token-garbage' has invalid configuration. Skipping." "invalid piece token variant rejection"
 verify_warning "promotionPieceTypes - Invalid syntax." "ambiguous file-piece syntax rejection"
@@ -227,6 +226,14 @@ if printf '%s\n' "${check_output}" | grep -qF "promotionPawnTypes - Invalid synt
   exit 1
 fi
 if printf '%s\n' "${check_output}" | grep -qF "Variant 'promotion-pawn-clear' has invalid configuration. Skipping."; then
+  echo "${check_output}"
+  exit 1
+fi
+if printf '%s\n' "${check_output}" | grep -qF "maxRank - Deprecated option might be removed in future version."; then
+  echo "${check_output}"
+  exit 1
+fi
+if printf '%s\n' "${check_output}" | grep -qF "maxFile - Deprecated option might be removed in future version."; then
   echo "${check_output}"
   exit 1
 fi
