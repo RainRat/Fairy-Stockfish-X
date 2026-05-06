@@ -43,15 +43,15 @@ if [[ -x "${ENGINE_VLB}" ]]; then
 fi
 
 out=$(run_cmds "$VARIANTS_INCOMPLETE" dots-boxes-2x2 \
-  "position startpos moves a1a1,b5 a1a1,a4 a1a1,b3 a1a1,c4
+  "position fen ***1*/*b*2/***1*/5/*1*1* b - - 4 3
 d
 go perft 1")
 echo "$out" | grep -Fq "Fen: ***1*/*b*2/***1*/5/*1*1* b - - 4 3"
-echo "$out" | grep -q "0000: 1"
-echo "$out" | grep -q "Nodes searched: 1"
+echo "$out" | grep -q "0000,b1: 1"
+echo "$out" | grep -q "Nodes searched: 8"
 
 out=$(run_cmds "$VARIANTS_INCOMPLETE" dots-boxes-2x2 \
-  "position startpos moves a1a1,b5 a1a1,a4 a1a1,b3 a1a1,c4 0000
+  "position fen ***1*/*b*2/***1*/5/*1*1* b - - 5 3
 d
 go perft 1")
 echo "$out" | grep -Fq "Fen: ***1*/*b*2/***1*/5/*1*1* b - - 5 3"
@@ -72,7 +72,7 @@ assert sf.game_result("dots-boxes-2x2", "*****/*B*B*/*****/*b*b*/***** w - - 12 
 assert sf.game_result("dots-boxes-2x2", "*****/*B*b*/*****/*b*b*/***** w - - 12 7", []) < 0
 assert sf.legal_moves("dots-boxes-2x2", "*****/*B*B*/*****/*B*B*/***** w - - 12 7", []) == []
 assert sorted(sf.legal_moves("dots-boxes-2x2", "***1*/*b*2/***1*/5/*1*1* b - - 4 3", [])) == sorted([
-    "a1a1,b1", "a1a1,d1", "a1a1,a2", "a1a1,c2", "a1a1,e2", "a1a1,d3", "a1a1,e4", "a1a1,d5"
+    "0000,b1", "0000,d1", "0000,a2", "0000,c2", "0000,e2", "0000,d3", "0000,e4", "0000,d5"
 ])
 PY
 

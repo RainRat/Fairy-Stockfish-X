@@ -48,7 +48,7 @@ pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 startFen = 7k/8/8/4A3/8/8/8/K7 w - - 0 1
 
 [tuplewarn:chess]
-customPiece1 = a:o(2,1)
+customPiece1 = a:j(2,1)
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 startFen = 4k3/8/8/8/3A4/8/8/4K3 w - - 0 1
 INI
