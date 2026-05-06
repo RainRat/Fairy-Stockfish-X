@@ -42,6 +42,7 @@ typedef BOOL (WINAPI *fun3_t)(HANDLE, CONST GROUP_AFFINITY*, PGROUP_AFFINITY);
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <sstream>
 #include <vector>
 #include <cstdlib>
@@ -89,17 +90,21 @@ struct Tie: public streambuf { // MSVC requires split streambuf for cin and cout
   int overflow(int c) override {
     if (traits_type::eq_int_type(c, traits_type::eof()))
         return traits_type::not_eof(c);
-    return log(buf->sputc(traits_type::to_char_type(c)), "<< ");
+    const int result = buf->sputc(traits_type::to_char_type(c));
+    log(result, "<< ");
+    return result;
   }
   int underflow() override { return buf->sgetc(); }
   int uflow() override {
     int c = buf->sbumpc();
-    return traits_type::eq_int_type(c, traits_type::eof()) ? c : log(c, ">> ");
+    if (!traits_type::eq_int_type(c, traits_type::eof()))
+        log(c, ">> ");
+    return c;
   }
 
   streambuf *buf, *logBuf;
 
-  int log(int c, const char* prefix) {
+  void log(int c, const char* prefix) {
 
     static std::mutex logMutex;
     static int last = '\n'; // Single log file
@@ -108,7 +113,7 @@ struct Tie: public streambuf { // MSVC requires split streambuf for cin and cout
     if (last == '\n')
         logBuf->sputn(prefix, 3);
 
-    return last = logBuf->sputc(traits_type::to_char_type(c));
+    last = logBuf->sputc(traits_type::to_char_type(c));
   }
 };
 
@@ -383,9 +388,9 @@ void* std_aligned_alloc(size_t alignment, size_t size) {
   if (alignment == 0 || (alignment & (alignment - 1)) != 0)
       return nullptr;
 
-  size_t roundedSize = size;
-  if (roundedSize % alignment)
-      roundedSize += alignment - (roundedSize % alignment);
+  if (size > std::numeric_limits<size_t>::max() - (alignment - 1))
+      return nullptr;
+  size_t roundedSize = (size + alignment - 1) / alignment * alignment;
 
 #if defined(POSIXALIGNEDALLOC)
   void *mem;
@@ -447,6 +452,8 @@ static void* aligned_large_pages_alloc_windows(size_t allocSize) {
           GetLastError() == ERROR_SUCCESS)
       {
           // Round up size to full pages and allocate
+          if (allocSize > std::numeric_limits<size_t>::max() - (largePageSize - 1))
+              return nullptr;
           allocSize = (allocSize + largePageSize - 1) & ~size_t(largePageSize - 1);
           mem = VirtualAlloc(
               NULL, allocSize, MEM_RESERVE | MEM_COMMIT | MEM_LARGE_PAGES, PAGE_READWRITE);
@@ -486,7 +493,9 @@ void* aligned_large_pages_alloc(size_t allocSize) {
 #endif
 
   // round up to multiples of alignment
-  size_t size = ((allocSize + alignment - 1) / alignment) * alignment;
+  if (allocSize > std::numeric_limits<size_t>::max() - (alignment - 1))
+      return nullptr;
+  size_t size = (allocSize + alignment - 1) / alignment * alignment;
   void *mem = std_aligned_alloc(alignment, size);
 #if defined(MADV_HUGEPAGE)
   if (mem)
@@ -544,7 +553,7 @@ int best_group(size_t idx) {
   DWORD byteOffset = 0;
 
   // Early exit if the needed API is not available at runtime
-  HMODULE k32 = GetModuleHandle("Kernel32.dll");
+  HMODULE k32 = GetModuleHandleA("Kernel32.dll");
   auto fun1 = reinterpret_cast<fun1_t>(GetProcAddress(k32, "GetLogicalProcessorInformationEx"));
   if (!fun1)
       return -1;
@@ -618,7 +627,7 @@ void bindThisThread(size_t idx) {
       return;
 
   // Early exit if the needed API are not available at runtime
-  HMODULE k32 = GetModuleHandle("Kernel32.dll");
+  HMODULE k32 = GetModuleHandleA("Kernel32.dll");
   auto fun2 = reinterpret_cast<fun2_t>(GetProcAddress(k32, "GetNumaNodeProcessorMaskEx"));
   auto fun3 = reinterpret_cast<fun3_t>(GetProcAddress(k32, "SetThreadGroupAffinity"));
 
@@ -649,11 +658,10 @@ string binaryDirectory;  // path of the executable directory
 string workingDirectory; // path of the working directory
 
 void init(int argc, char* argv[]) {
-    (void)argc;
     string pathSeparator;
 
     // extract the path+name of the executable binary
-    argv0 = argv[0];
+    argv0 = argc > 0 && argv && argv[0] ? argv[0] : "";
 
 #ifdef _WIN32
     pathSeparator = "\\";
@@ -684,7 +692,7 @@ void init(int argc, char* argv[]) {
         binaryDirectory.resize(pos + 1);
 
     // pattern replacement: "./" at the start of path is replaced by the working directory
-    if (binaryDirectory.find("." + pathSeparator) == 0)
+    if (!workingDirectory.empty() && binaryDirectory.find("." + pathSeparator) == 0)
         binaryDirectory.replace(0, 1, workingDirectory);
 }
 

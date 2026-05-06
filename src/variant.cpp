@@ -2427,7 +2427,8 @@ Variant* Variant::conclude() {
 
     // If not a connect variant, set connectPieceTypesTrimmed to no pieces.
     // connectPieceTypesTrimmed is separated so that connectPieceTypes is left unchanged for inheritance.
-    if ( !(connectRegion1[WHITE] || connectRegion1[BLACK] || connectRegion3[WHITE] || connectRegion3[BLACK]
+    if ( !(connectRegion1[WHITE] || connectRegion1[BLACK] || connectRegion2[WHITE] || connectRegion2[BLACK]
+        || connectRegion3[WHITE] || connectRegion3[BLACK]
         || connectN || connectNxN || collinearN || connectGroup) )
     {
           connectPieceTypesTrimmed = NO_PIECE_SET;

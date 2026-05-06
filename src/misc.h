@@ -19,6 +19,7 @@
 #ifndef MISC_H_INCLUDED
 #define MISC_H_INCLUDED
 
+#include <algorithm>
 #include <cassert>
 #include <chrono>
 #include <cstdlib>
@@ -226,7 +227,7 @@ class PRNG {
   }
 
 public:
-  PRNG(uint64_t seed) : s(seed ? seed : 0x9E3779B97F4A7C15ULL) { assert(seed); }
+  PRNG(uint64_t seed) : s(seed ? seed : 0x9E3779B97F4A7C15ULL) {}
 
   template<typename T> T rand() { return T(rand64()); }
 

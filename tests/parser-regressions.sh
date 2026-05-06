@@ -9,7 +9,10 @@ error() {
 trap 'error ${LINENO}' ERR
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+ROOT_DIR=$(cd "${SCRIPT_DIR}/.." && pwd)
 ENGINE=${1:-${SCRIPT_DIR}/../src/stockfish}
+
+cd "${ROOT_DIR}"
 
 tmp_ini=$(mktemp)
 trap 'rm -f "${tmp_ini}"' EXIT
@@ -92,6 +95,10 @@ startFen = 8/1P6/8/8/8/8/8/4k2K w - - 0 1
 promotionPieceTypes = a:q b:r c:b d:n e:- f:-
 startFen = 8/1P6/8/8/8/8/8/4k2K w - - 0 1
 
+[promotion-by-file-spaces-extended:chess]
+promotionPieceTypes = a:q r b:n
+startFen = 8/1P6/8/8/8/8/8/4k2K w - - 0 1
+
 [invalid-piece-token-garbage:chess]
 rook = rxyz
 
@@ -105,6 +112,9 @@ promotionRegion = - garbage
 
 [negative-promotion-limit:chess]
 promotionLimit = p:-1
+
+[invalid-multimoves:chess]
+multimoves = 1 0
 
 [invalid-bool-retain:chess]
 king = -
@@ -207,8 +217,12 @@ verify_warning "castlingRookPiece - Deprecated option might be removed in future
 verify_warning "maxRank - Invalid value z for type Rank" "invalid maxRank rejection"
 verify_warning "rook - Invalid letter: r" "invalid piece token rejection"
 verify_warning "Variant 'invalid-piece-token-garbage' has invalid configuration. Skipping." "invalid piece token variant rejection"
+verify_warning "promotionPieceTypes - Invalid syntax." "ambiguous file-piece syntax rejection"
+verify_warning "Variant 'promotion-by-file-spaces-extended' has invalid configuration. Skipping." "ambiguous file-piece variant rejection"
 verify_warning "promotionLimit - Invalid negative value." "negative promotionLimit rejection"
 verify_warning "Variant 'negative-promotion-limit' has invalid configuration. Skipping." "negative promotionLimit variant rejection"
+verify_warning "multimoves - Invalid non-positive value." "invalid multimoves rejection"
+verify_warning "Variant 'invalid-multimoves' has invalid configuration. Skipping." "invalid multimoves variant rejection"
 verify_warning "hostageExchange - Invalid hostage piece type in: q:!" "invalid hostageExchange rejection"
 verify_warning "captureForbidden - Invalid mapping token: bad" "invalid captureForbidden rejection"
 verify_warning "Variant 'hostage-exchange-invalid' has invalid configuration. Skipping." "hostageExchange invalid variant rejection"

@@ -21,6 +21,7 @@
 
 #include <bitset>
 #include <array>
+#include <memory>
 #include <set>
 #include <map>
 #include <vector>

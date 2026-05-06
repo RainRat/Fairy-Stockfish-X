@@ -152,6 +152,17 @@ namespace {
         return NO_PIECE_TYPE;
     }
 
+    bool parse_first_piece_type_token(const Variant* v, const std::string& value, PieceType& target) {
+        std::string token = read_piece_token(trim(value));
+        if (token.empty())
+            return false;
+        PieceType pt = parse_piece_type_token(v, token);
+        if (pt == NO_PIECE_TYPE)
+            return false;
+        target = pt;
+        return true;
+    }
+
     bool parse_piece_int_map(const std::string& value, const Variant* v, int target[PIECE_TYPE_NB], bool allowZero = true) {
         std::string entry;
         int parsedValue = 0;
@@ -281,6 +292,32 @@ namespace {
         if (!sawGroup)
             return false;
         std::copy(std::begin(parsed), std::end(parsed), target);
+        return true;
+    }
+
+    template <typename T, typename ParseOne>
+    bool parse_named_color_pair(const Config& config,
+                                const std::string& whiteKey,
+                                const std::string& blackKey,
+                                T& whiteTarget,
+                                T& blackTarget,
+                                bool DoCheck,
+                                ParseOne&& parseOne) {
+        const auto& itWhite = config.find(whiteKey);
+        if (itWhite != config.end() && !parseOne(whiteKey, itWhite->second, whiteTarget))
+        {
+            if (DoCheck)
+                std::cerr << whiteKey << " - Invalid syntax." << std::endl;
+            return false;
+        }
+
+        const auto& itBlack = config.find(blackKey);
+        if (itBlack != config.end() && !parseOne(blackKey, itBlack->second, blackTarget))
+        {
+            if (DoCheck)
+                std::cerr << blackKey << " - Invalid syntax." << std::endl;
+            return false;
+        }
         return true;
     }
 
@@ -880,6 +917,7 @@ namespace {
                                   bool doCheck,
                                   const std::string& key) {
         std::stringstream ss(value);
+        std::string token;
         FilePieceSetMap parsed = target;
         bool sawToken = false;
 
@@ -888,7 +926,6 @@ namespace {
             if (ss.eof())
                 break;
 
-            std::string token;
             if (!(ss >> token))
                 break;
             sawToken = true;
@@ -916,7 +953,6 @@ namespace {
                         std::cerr << key << " - Expected ':' after file " << fileToken << std::endl;
                     return false;
                 }
-
                 if (!(ss >> pieceToken)) {
                     if (doCheck)
                         std::cerr << key << " - Missing piece set for file " << fileToken << std::endl;
@@ -928,6 +964,12 @@ namespace {
                         std::cerr << key << " - Missing piece set for file " << fileToken << std::endl;
                     return false;
                 }
+            }
+
+            if (pieceToken.empty()) {
+                if (doCheck)
+                    std::cerr << key << " - Missing piece set for file " << fileToken << std::endl;
+                return false;
             }
 
             PieceSet pieces = NO_PIECE_SET;
@@ -1160,6 +1202,33 @@ bool VariantParser<DoCheck>::parse_color_setting_piece(const std::string& key, C
 }
 
 template <bool DoCheck>
+bool VariantParser<DoCheck>::parse_color_setting_first_piece(const std::string& key, ColorSetting<PieceType>& target, const Variant* v) {
+    bool ok = true;
+    parse_color_triplet(config, key, [&](const std::string& option, Color color) {
+        PieceType parsed = color == WHITE ? target.byColor[WHITE] : color == BLACK ? target.byColor[BLACK] : target.global;
+        const auto& it = config.find(option);
+        if (it == config.end())
+            return;
+        if (parse_first_piece_type_token(v, it->second, parsed))
+        {
+            if (color == WHITE)
+                target.set_color(WHITE, parsed);
+            else if (color == BLACK)
+                target.set_color(BLACK, parsed);
+            else
+                target.set_global(parsed);
+        }
+        else
+        {
+            if (DoCheck)
+                std::cerr << option << " - Invalid syntax." << std::endl;
+            ok = false;
+        }
+    });
+    return ok;
+}
+
+template <bool DoCheck>
 bool VariantParser<DoCheck>::parse_piece_types(Variant* v) {
     for (PieceType pt = PAWN; pt <= KING; ++pt)
     {
@@ -1313,19 +1382,25 @@ bool VariantParser<DoCheck>::parse_legacy_attributes(Variant* v) {
             v->doubleStepRegion[c] =   zone_bb(c, doubleStepRankMin, v->maxRank)
                                     & ~forward_ranks_bb(c, relative_rank(c, doubleStepRank, v->maxRank));
     }
-    parse_attribute<false>("whiteFlag", v->flagRegion[WHITE]);
-    parse_attribute<false>("blackFlag", v->flagRegion[BLACK]);
+    if (!parse_named_color_pair(
+            config, "whiteFlag", "blackFlag",
+            v->flagRegion[WHITE], v->flagRegion[BLACK], DoCheck,
+            [&](const std::string&, const std::string& raw, Bitboard& target) { return set(raw, target); }))
+        return false;
     parse_attribute<false>("castlingRookPiece", v->castlingRookPieces[WHITE], v);
     parse_attribute<false>("castlingRookPiece", v->castlingRookPieces[BLACK], v);
-    parse_attribute<false>("whiteDropRegion", v->dropRegion[WHITE]);
-    parse_attribute<false>("blackDropRegion", v->dropRegion[BLACK]);
+    if (!parse_named_color_pair(
+            config, "whiteDropRegion", "blackDropRegion",
+            v->dropRegion[WHITE], v->dropRegion[BLACK], DoCheck,
+            [&](const std::string&, const std::string& raw, PieceTypeBitboardGroup& target) { return set(raw, target); }))
+        return false;
 
     bool dropOnTop = false;
     parse_attribute<false>("dropOnTop", dropOnTop);
     if (dropOnTop) v->enclosingDrop=TOP;
 
     // Parse aliases
-    if (!parse_color_setting_piece("pawnTypes", v->mainPromotionPawnType, v)) return false;
+    if (!parse_color_setting_first_piece("pawnTypes", v->mainPromotionPawnType, v)) return false;
     if (!parse_color_setting_piece("pawnTypes", v->promotionPawnTypes, v)) return false;
     if (!parse_color_setting_piece("pawnTypes", v->enPassantTypes, v)) return false;
     if (!parse_color_setting_piece("pawnTypes", v->nMoveRuleTypes, v)) return false;
@@ -1347,7 +1422,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_color_setting("promotionRegion", v->promotionRegion);
     parse_color_setting("mandatoryPromotionRegion", v->mandatoryPromotionRegion);
     // Take the first promotionPawnTypes as the main promotionPawnType
-    if (!parse_color_setting_piece("promotionPawnTypes", v->mainPromotionPawnType, v)) return false;
+    if (!parse_color_setting_first_piece("promotionPawnTypes", v->mainPromotionPawnType, v)) return false;
     if (!parse_color_setting_piece("promotionPawnTypes", v->promotionPawnTypes, v)) return false;
     if (!parse_color_setting_piece("promotionPieceTypes", v->promotionPieceTypes, v)) return false;
     parse_attribute("sittuyinPromotion", v->sittuyinPromotion);
@@ -1796,7 +1871,18 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_color_setting("pass", v->pass);
     parse_color_setting("passOnStalemate", v->passOnStalemate);
     parse_attribute("passUntilSetup", v->passUntilSetup);
-    parse_attribute("multimoves", v->multimoves);
+    if (config.count("multimoves") && !parse_attribute("multimoves", v->multimoves))
+        return false;
+    if (config.count("multimoves"))
+    {
+        for (int n : v->multimoves)
+            if (n <= 0)
+            {
+                if (DoCheck)
+                    std::cerr << "multimoves - Invalid non-positive value." << std::endl;
+                return false;
+            }
+    }
     parse_attribute("progressiveMultimove", v->progressiveMultimove);
     if (DoCheck)
     {
