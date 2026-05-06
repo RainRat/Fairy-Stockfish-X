@@ -99,6 +99,9 @@ startFen = 8/1P6/8/8/8/8/8/4k2K w - - 0 1
 promotionPieceTypes = a:q r b:n
 startFen = 8/1P6/8/8/8/8/8/4k2K w - - 0 1
 
+[promotion-pawn-clear:chess]
+promotionPawnTypes = -
+
 [invalid-piece-token-garbage:chess]
 rook = rxyz
 
@@ -219,6 +222,14 @@ verify_warning "rook - Invalid letter: r" "invalid piece token rejection"
 verify_warning "Variant 'invalid-piece-token-garbage' has invalid configuration. Skipping." "invalid piece token variant rejection"
 verify_warning "promotionPieceTypes - Invalid syntax." "ambiguous file-piece syntax rejection"
 verify_warning "Variant 'promotion-by-file-spaces-extended' has invalid configuration. Skipping." "ambiguous file-piece variant rejection"
+if printf '%s\n' "${check_output}" | grep -qF "promotionPawnTypes - Invalid syntax."; then
+  echo "${check_output}"
+  exit 1
+fi
+if printf '%s\n' "${check_output}" | grep -qF "Variant 'promotion-pawn-clear' has invalid configuration. Skipping."; then
+  echo "${check_output}"
+  exit 1
+fi
 verify_warning "promotionLimit - Invalid negative value." "negative promotionLimit rejection"
 verify_warning "Variant 'negative-promotion-limit' has invalid configuration. Skipping." "negative promotionLimit variant rejection"
 verify_warning "multimoves - Invalid non-positive value." "invalid multimoves rejection"

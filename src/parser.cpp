@@ -1050,6 +1050,15 @@ template <bool Current, class T> bool VariantParser<DoCheck>::parse_attribute(co
             return false;
         }
 
+        if constexpr (std::is_same_v<T, PieceType>)
+        {
+            if (trim(it->second) == "-")
+            {
+                target = NO_PIECE_TYPE;
+                return true;
+            }
+        }
+
         if constexpr (std::is_same_v<T, FilePieceSetMap>)
         {
             if (it->second.find(':') == std::string::npos)
@@ -1211,6 +1220,7 @@ bool VariantParser<DoCheck>::parse_color_setting_first_piece(const std::string& 
             return;
         if (trim(it->second) == "-")
         {
+            parsed = NO_PIECE_TYPE;
             if (color == WHITE)
                 target.set_color(WHITE, parsed);
             else if (color == BLACK)
