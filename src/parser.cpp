@@ -218,10 +218,14 @@ namespace {
         if (value.empty())
             return false;
 
-        const char* first = value.data();
-        const char* last  = first + value.size();
-        auto [ptr, ec] = std::from_chars(first, last, out);
-        return ec == std::errc() && ptr == last && out >= 1;
+        const auto first = value.find_first_not_of(" \t");
+        if (first == std::string::npos)
+            return false;
+        const auto last = value.find_last_not_of(" \t");
+        const char* begin = value.data() + first;
+        const char* end   = value.data() + last + 1;
+        auto [ptr, ec] = std::from_chars(begin, end, out);
+        return ec == std::errc() && ptr == end && out >= 1;
     }
 
     bool parse_rank_index(const std::string& value, int& out) {
@@ -678,6 +682,7 @@ namespace {
         int FileNum = 0;
         char PieceChar = 0;
         Bitboard board = 0x00;
+        PieceTypeBitboardGroup parsedTarget = target;
         // String parser using state machine
         for (i = 0; i < value.length(); i++)
         {
@@ -690,7 +695,11 @@ namespace {
             {
                 if (ch == '-')
                 {
-                    target = PieceTypeBitboardGroup();
+                    for (size_t j = i + 1; j < value.length(); ++j)
+                        if (!std::isspace(static_cast<unsigned char>(value[j])))
+                            return false;
+                    parsedTarget = PieceTypeBitboardGroup();
+                    target = parsedTarget;
                     return true;
                 }
                 ParserState = 0;
@@ -793,7 +802,7 @@ namespace {
                     if (ch == ')')
                     {
                         // Repeated piece clauses (e.g. "P(a8);P(h8)") are additive.
-                        target.set(PieceChar, target.boardOfPiece(PieceChar) | board);
+                        parsedTarget.set(PieceChar, parsedTarget.boardOfPiece(PieceChar) | board);
                         ParserState = 4;
                     }
                     else
@@ -831,6 +840,7 @@ namespace {
             std::cerr << "At char " << i << " of PieceTypeBitboardGroup declaration: Unterminated expression." << std::endl;
             return false;
         }
+        target = parsedTarget;
         return true;
     }
 
@@ -1042,6 +1052,9 @@ template <bool Current, class T> bool VariantParser<DoCheck>::parse_attribute(co
     const auto& it = config.find(key);
     if (it != config.end())
     {
+        if (DoCheck && !Current)
+            std::cerr << key << " - Deprecated option might be removed in future version." << std::endl;
+
         if constexpr (std::is_same_v<T, PieceSet>)
         {
             PieceSet parsedTarget = NO_PIECE_SET;
@@ -1294,7 +1307,8 @@ bool VariantParser<DoCheck>::parse_piece_values(Variant* v) {
             PieceType pt = NO_PIECE_TYPE;
             bool parseError = false;
             int parsedValue = 0;
-            auto parsed = v->pieceValue[phase];
+            int parsed[PIECE_TYPE_NB];
+            std::copy(std::begin(v->pieceValue[phase]), std::end(v->pieceValue[phase]), std::begin(parsed));
             std::stringstream ss(pv->second);
             while (ss >> entry)
             {
@@ -1315,7 +1329,7 @@ bool VariantParser<DoCheck>::parse_piece_values(Variant* v) {
             if (DoCheck && parseError)
                 std::cerr << optionName << " - Invalid syntax." << std::endl;
             if (!parseError)
-                std::copy(parsed, parsed + PIECE_TYPE_NB, v->pieceValue[phase]);
+                std::copy(std::begin(parsed), std::end(parsed), std::begin(v->pieceValue[phase]));
         }
     }
 
@@ -1407,12 +1421,24 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     const auto& it_prom_limit = config.find("promotionLimit");
     if (it_prom_limit != config.end())
     {
-        if (!parse_piece_int_map(it_prom_limit->second, v, v->promotionLimit, true))
+        int parsed[PIECE_TYPE_NB];
+        std::copy(std::begin(v->promotionLimit), std::end(v->promotionLimit), std::begin(parsed));
+        if (!parse_piece_int_map(it_prom_limit->second, v, parsed, true))
         {
             if (DoCheck)
                 std::cerr << "promotionLimit - Invalid syntax." << std::endl;
             return false;
         }
+        for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
+        {
+            if (parsed[pt] < 0)
+            {
+                if (DoCheck)
+                    std::cerr << "promotionLimit - Invalid negative value." << std::endl;
+                return false;
+            }
+        }
+        std::copy(std::begin(parsed), std::end(parsed), std::begin(v->promotionLimit));
     }
     // promoted piece types
     const auto& it_prom_pt = config.find("promotedPieceType");

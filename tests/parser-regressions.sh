@@ -82,6 +82,17 @@ startFen = 8/1P6/8/8/8/8/8/4k2K w - - 0 1
 promotionPieceTypes = a:q b:r c:b d:n e:- f:-
 startFen = 8/1P6/8/8/8/8/8/4k2K w - - 0 1
 
+[piecegroup-dash-parent:chess]
+promotionRegion = a8
+promotionPieceTypes = p:q
+startFen = 8/P7/8/8/8/8/8/4k2K w - - 0 1
+
+[piecegroup-dash-child:piecegroup-dash-parent]
+promotionRegion = - garbage
+
+[negative-promotion-limit:chess]
+promotionLimit = p:-1
+
 [invalid-bool-retain:chess]
 king = -
 potions = true
@@ -92,6 +103,9 @@ wallingRule = duck
 
 [castling-trailing-garbage:chess]
 castling = - garbage
+
+[legacy-castling-rook-piece:chess]
+castlingRookPiece = r
 
 [invalid-maxrank:chess]
 maxRank = z
@@ -135,6 +149,8 @@ weakCrosscutDropIllegal = true
 startFen = ****1/***2/**3/*4/5[SSSSSSSSSSSSSSSsssssssssssssss] b - - 0 1
 INI
 
+printf '%s\n' '[trailing-rank-space:chess]' 'maxRank = 8 ' >> "${tmp_ini}"
+
 echo "parser regression tests started"
 
 check_output=$("${ENGINE}" check "${tmp_ini}" 2>&1 || true)
@@ -164,7 +180,10 @@ verify_warning "wallingRule and gating features (seirawanGating, potions, gating
 verify_warning "Invalid value maybe for type bool" "invalid bool rejection"
 verify_warning "wallingRule and gating features (seirawanGating, potions, gating, gatingPieceAfter) are incompatible." "invalid bool state retention"
 verify_warning "castling - Invalid value - garbage for type bool" "castling trailing garbage rejection"
+verify_warning "castlingRookPiece - Deprecated option might be removed in future version." "legacy castling rook warning"
 verify_warning "maxRank - Invalid value z for type Rank" "invalid maxRank rejection"
+verify_warning "promotionLimit - Invalid negative value." "negative promotionLimit rejection"
+verify_warning "Variant 'negative-promotion-limit' has invalid configuration. Skipping." "negative promotionLimit variant rejection"
 verify_warning "hostageExchange - Invalid hostage piece type in: q:!" "invalid hostageExchange rejection"
 verify_warning "captureForbidden - Invalid mapping token: bad" "invalid captureForbidden rejection"
 verify_warning "Variant 'hostage-exchange-invalid' has invalid configuration. Skipping." "hostageExchange invalid variant rejection"
@@ -178,6 +197,11 @@ verify_warning "Castling destination is adjacent to castlingKingFile; some GUIs/
 verify_warning "removeConnectN is incompatible with connection win conditions." "removeConnectN connect rejection"
 verify_warning "removeConnectN is incompatible with (pseudo/anti-)royal pieces." "removeConnectN royal rejection"
 verify_warning "Hex boards do not support square weak-connection drop rules." "hex weak-link rejection"
+
+if printf '%s\n' "${check_output}" | grep -qF "Variant 'trailing-rank-space' has invalid configuration. Skipping."; then
+  echo "${check_output}"
+  exit 1
+fi
 
 nonking_ini=$(mktemp)
 trap 'rm -f "${tmp_ini}" "${nonking_ini}"' EXIT
@@ -245,6 +269,21 @@ CMDS
 
 if ! echo "${promotion_spaces_output}" | grep -q "b7b8r:"; then
   echo "${promotion_spaces_output}"
+  exit 1
+fi
+
+piecegroup_dash_output=$(cat <<CMDS | "${ENGINE}" 2>&1
+uci
+setoption name VariantPath value ${tmp_ini}
+setoption name UCI_Variant value piecegroup-dash-child
+position startpos
+go perft 1
+quit
+CMDS
+)
+
+if ! echo "${piecegroup_dash_output}" | grep -q "a7a8q:"; then
+  echo "${piecegroup_dash_output}"
   exit 1
 fi
 
