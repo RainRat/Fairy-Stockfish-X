@@ -131,7 +131,7 @@ cannon = c
 
 [multipawn:chess]
 soldier = s
-pawnTypes = ps
+pawnTypes = p s
 
 [capture-anything:chess]
 selfCapture = true
@@ -153,7 +153,6 @@ nFoldRule = 3
 selfCapture = true
 
 [hostageblank:chess]
-hostageExchange =
 
 [diagfaceoff:chess]
 maxRank = 10

@@ -38,10 +38,10 @@ namespace {
         if (raw.empty())
             return false;
 
-        const auto first = raw.find_first_not_of(" \t");
+        const auto first = raw.find_first_not_of(" \t\r\n\f\v");
         if (first == std::string::npos)
             return false;
-        const auto last = raw.find_last_not_of(" \t");
+        const auto last = raw.find_last_not_of(" \t\r\n\f\v");
         const char* begin = raw.data() + first;
         const char* end = raw.data() + last + 1;
         auto [ptr, ec] = std::from_chars(begin, end, out);
@@ -52,10 +52,10 @@ namespace {
         if (raw.empty())
             return false;
 
-        const auto first = raw.find_first_not_of(" \t");
+        const auto first = raw.find_first_not_of(" \t\r\n\f\v");
         if (first == std::string::npos)
             return false;
-        const auto last = raw.find_last_not_of(" \t");
+        const auto last = raw.find_last_not_of(" \t\r\n\f\v");
         const std::string value = raw.substr(first, last - first + 1);
 
         if (std::isdigit(static_cast<unsigned char>(value[0])))
@@ -2502,12 +2502,22 @@ void VariantMap::parse_istream(std::istream& file) {
             {
                 if (DoCheck && !input.empty() && input.find('=') == std::string::npos)
                     std::cerr << "Invalid syntax: '" << input << "'." << std::endl;
-                if (std::getline(std::getline(ss, key, '=') >> std::ws, value))
+                if (std::getline(ss, key, '='))
                 {
+                    ss >> std::ws;
+                    value.clear();
+                    std::getline(ss, value);
                     const auto first = key.find_first_not_of(" \t");
                     if (first == std::string::npos)
                         continue;
                     const auto last = key.find_last_not_of(" \t");
+                    if (value.find_first_not_of(" \t") == std::string::npos)
+                        value.clear();
+                    else
+                    {
+                        const auto value_first = value.find_first_not_of(" \t");
+                        value.erase(0, value_first);
+                    }
                     attribs[key.substr(first, last - first + 1)] = value;
                 }
             }

@@ -39,14 +39,28 @@ namespace {
       if (raw.empty())
           return false;
 
-      const auto first = raw.find_first_not_of(" \t");
+      const auto first = raw.find_first_not_of(" \t\r\n\f\v");
       if (first == std::string::npos)
           return false;
-      const auto last = raw.find_last_not_of(" \t");
+      const auto last = raw.find_last_not_of(" \t\r\n\f\v");
       const char* begin = raw.data() + first;
       const char* end = raw.data() + last + 1;
       auto [ptr, ec] = std::from_chars(begin, end, out);
       return ec == std::errc() && ptr == end && out >= 1;
+  }
+
+  bool parse_nonnegative_int(const std::string& raw, int& out) {
+      if (raw.empty())
+          return false;
+
+      const auto first = raw.find_first_not_of(" \t\r\n\f\v");
+      if (first == std::string::npos)
+          return false;
+      const auto last = raw.find_last_not_of(" \t\r\n\f\v");
+      const char* begin = raw.data() + first;
+      const char* end = raw.data() + last + 1;
+      auto [ptr, ec] = std::from_chars(begin, end, out);
+      return ec == std::errc() && ptr == end && out >= 0;
   }
 
   // Keep legacy/variant-facing aliases here:
@@ -651,8 +665,8 @@ namespace {
                   continue;
               }
               int dx = 0, dy = 0;
-              if (!parse_positive_int(expandedBetza.substr(i + 1, comma - i - 1), dx)
-                  || !parse_positive_int(expandedBetza.substr(comma + 1, close - comma - 1), dy))
+              if (!parse_nonnegative_int(expandedBetza.substr(i + 1, comma - i - 1), dx)
+                  || !parse_nonnegative_int(expandedBetza.substr(comma + 1, close - comma - 1), dy))
               {
                   reset_parser_state();
                   i = close;
