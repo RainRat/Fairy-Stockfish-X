@@ -12,6 +12,7 @@ maxRank = 5
 maxFile = 5
 castling = false
 doubleStep = false
+startFen = 4k/5/5/5/4K w - - 0 1
 customPiece1 = a:NN
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 
@@ -20,6 +21,7 @@ maxRank = 5
 maxFile = 5
 castling = false
 doubleStep = false
+startFen = 4k/5/5/5/4K w - - 0 1
 customPiece1 = a:DD
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 
@@ -28,6 +30,7 @@ maxRank = 5
 maxFile = 5
 castling = false
 doubleStep = false
+startFen = 4k/5/5/5/4K w - - 0 1
 customPiece1 = a:AA
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 
@@ -36,6 +39,7 @@ maxRank = 5
 maxFile = 5
 castling = false
 doubleStep = false
+startFen = 4k/5/5/5/4K w - - 0 1
 customPiece1 = a:O
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 
@@ -44,6 +48,7 @@ maxRank = 5
 maxFile = 5
 castling = false
 doubleStep = false
+startFen = 4k/5/5/5/4K w - - 0 1
 customPiece1 = a:M
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 INI

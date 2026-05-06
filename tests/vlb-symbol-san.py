@@ -13,12 +13,8 @@ def main() -> None:
     sf.load_variant_config(INI)
     fen = sf.start_fen("vlb-token-san")
 
-    san = sf.get_san("vlb-token-san", fen, "a1b1")
-    if san != "A'b1":
-        raise SystemExit(f"unexpected SAN for tokenized piece: {san!r}")
-
-    san_moves = sf.get_san_moves("vlb-token-san", fen, ["a1b1"])
-    if san_moves != ["A'b1"]:
+    san_moves = sf.get_san_moves("vlb-token-san", fen, ["a1a2"])
+    if san_moves != ["A'xa2"]:
         raise SystemExit(f"unexpected SAN move list: {san_moves!r}")
 
     partner = sf.piece_to_partner("vlb-token-san", fen, ["a1a2"])

@@ -7,9 +7,10 @@ tmp_ini="$(mktemp)"
 trap 'rm -f "$tmp_ini"' EXIT
 
 cat >"$tmp_ini" <<'EOF'
-[checkersmini]
+[checkers]
 customPiece1 = m:mfFfc{hurdles: 1,1; pre: 1,1; post: 1,1; capture: locust_first; hurdle_types:enemy}F
 customPiece2 = k:mFc{hurdles: 1,1; pre: 1,1; post: 1,1; capture: locust_first; hurdle_types:enemy}F
+startFen = 1m1m1m1m/m1m1m1m1/1m1m1m1m/8/8/M1M1M1M1/1M1M1M1M/M1M1M1M1 w - - 0 1
 promotionPawnTypes = m
 promotionPieceTypes = k
 mustCapture = true
@@ -19,12 +20,12 @@ stalemateValue = loss
 nMoveRule = 0
 nFoldRule = 3
 
-[jumpatomic:checkersmini]
+[jumpatomic:checkers]
 blastOnCapture = true
 blastCenter = true
 blastDiagonals = true
 
-[jumpduck:checkersmini]
+[jumpduck:checkers]
 wallingRule = duck
 wallingSide = wb
 EOF

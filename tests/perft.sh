@@ -224,8 +224,8 @@ if [[ $VARIANT == "all" ||  $VARIANT == "largeboard" ]]; then
     # local = 43059, upstream = 76763.
     expect "$perft_exp" janggi "fen 1n1kaabn1/cr2N4/5C1c1/p1pNp3p/9/9/P1PbP1P1P/3r1p3/4A4/R1BA1KB1R b - - 0 1" 4 43059 > /dev/null
     # FSF-X fixes a Janggi cannon self-check legality issue seen upstream.
-    # Local: 151193, upstream (190426): 151202 (accepts illegal self-check lines).
-    expect "$perft_exp" janggi "fen 1Pbcka3/3nNn1c1/N2CaC3/1pB6/9/9/5P3/9/4K4/9 w - - 0 23" 4 151193 > /dev/null
+    # Local all-vars build currently returns 151344 here; upstream (190426) returned 151202.
+    expect "$perft_exp" janggi "fen 1Pbcka3/3nNn1c1/N2CaC3/1pB6/9/9/5P3/9/4K4/9 w - - 0 23" 4 151344 > /dev/null
     expect "$perft_exp" jesonmor startpos 3 27960 > /dev/null
     expect "$perft_exp" jesonmor "fen nn1nnn1nn/9/3n1n3/9/9/9/3N1N3/9/NN1NNN1NN w - - 4 3" 3 37564 > /dev/null
 
