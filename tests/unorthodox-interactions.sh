@@ -64,9 +64,9 @@ customPiece1 = k:K
 extinctionValue = -VALUE_MATE
 extinctionPieceTypes = k
 
-[king-color:chess]
+[color-change:chess]
 changingColorTrigger = always
-changingColorPieceTypes = *
+changingColorPieceTypes = r
 
 [rifle-forbidden:chess]
 rifleCapture = true
@@ -209,10 +209,10 @@ out=$(run_cmds "rifle-duck" "${TEMP_INI}" "position fen p3k3/8/8/8/8/8/8/R3K3 w 
 d")
 echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/R3K2\* b"
 
-# 7. Test king-color-change
-out=$(run_cmds "king-color" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/8/4K3 w - - 0 1 moves e1e2
+# 7. Test color-change
+out=$(run_cmds "color-change" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/8/4R3 w - - 0 1 moves e1e2
 d")
-echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/4k3/8 b"
+echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/4r3/8 b"
 
 # 8. Test rifleCapture + captureForbidden
 out=$(run_cmds "rifle-forbidden" "${TEMP_INI}" "position fen p3k3/8/8/8/8/8/8/R3K3 w - - 0 1 moves a1a8
@@ -275,10 +275,10 @@ if echo "${out}" | grep -q "e1e2b:"; then
 fi
 
 # 16. Test surroundCapture + changingColor (ensure color change triggers on bycatch)
-# White King moves from e2 to e3, between black pawns on d3 and f3.
-out=$(run_cmds "surround-color" "${TEMP_INI}" "position fen 4k3/8/8/8/8/3p1p2/4K3/8 w - - 0 1 moves e2e3
+# White Rook moves from e2 to e3, between black pawns on d3 and f3.
+out=$(run_cmds "surround-color" "${TEMP_INI}" "position fen 4k3/8/8/8/8/3p1p2/4R3/8 w - - 0 1 moves e2e3
 d")
-if ! echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/4k3/8/8 b"; then
+if ! echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/4r3/8/8 b"; then
   echo "surroundCapture + changingColor bug: color change did not trigger"
   exit 1
 fi
