@@ -1209,6 +1209,16 @@ bool VariantParser<DoCheck>::parse_color_setting_first_piece(const std::string& 
         const auto& it = config.find(option);
         if (it == config.end())
             return;
+        if (trim(it->second) == "-")
+        {
+            if (color == WHITE)
+                target.set_color(WHITE, parsed);
+            else if (color == BLACK)
+                target.set_color(BLACK, parsed);
+            else
+                target.set_global(parsed);
+            return;
+        }
         if (parse_first_piece_type_token(v, it->second, parsed))
         {
             if (color == WHITE)
