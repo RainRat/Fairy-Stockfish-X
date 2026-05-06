@@ -104,9 +104,8 @@ script = (
     "uci\n"
     f"setoption name VariantPath value {variant_path}\n"
     "setoption name UCI_Variant value antimatter\n"
-    "setoption name UCI_AnalyseMode value true\n"
     "position startpos moves g2g3\n"
-    "go movetime 1000\n"
+    "go perft 1\n"
     "quit\n"
 )
 proc.stdin.write(script)
@@ -124,7 +123,7 @@ sys.stdout.write(stdout)
 sys.exit(proc.returncode)
 PY
 )
-echo "${out}" | grep -q "^bestmove "
+echo "${out}" | grep -q "^Nodes searched: 20$"
 
 rm -f "${TMP4}"
 unset TMP4
