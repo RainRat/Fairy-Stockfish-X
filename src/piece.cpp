@@ -18,6 +18,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <charconv>
 #include <iostream>
 #include <limits>
 #include <map>
@@ -34,6 +35,20 @@ PieceMap pieceMap; // Global object
 
 
 namespace {
+  bool parse_positive_int(const std::string& raw, int& out) {
+      if (raw.empty())
+          return false;
+
+      const auto first = raw.find_first_not_of(" \t");
+      if (first == std::string::npos)
+          return false;
+      const auto last = raw.find_last_not_of(" \t");
+      const char* begin = raw.data() + first;
+      const char* end = raw.data() + last + 1;
+      auto [ptr, ec] = std::from_chars(begin, end, out);
+      return ec == std::errc() && ptr == end && out >= 1;
+  }
+
   // Keep legacy/variant-facing aliases here:
   // L/C both mean camel (3,1), and J/Z both mean zebra (3,2).
   // In particular, built-in Janggi elephant notation still uses nZ.
@@ -159,22 +174,6 @@ namespace {
               i = close;
           }
           return out;
-      };
-
-      auto parse_positive_int = [](const std::string& s, int& out) {
-          if (s.empty())
-              return false;
-          long long v = 0;
-          for (char ch : s)
-          {
-              if (!std::isdigit(static_cast<unsigned char>(ch)))
-                  return false;
-              v = v * 10 + (ch - '0');
-              if (v > std::numeric_limits<int>::max())
-                  return false;
-          }
-          out = int(v);
-          return true;
       };
 
       const std::string expandedBetza = expand_group_sugar(alias_to_betza(betza));

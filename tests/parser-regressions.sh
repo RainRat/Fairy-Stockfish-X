@@ -82,6 +82,9 @@ startFen = 8/1P6/8/8/8/8/8/4k2K w - - 0 1
 promotionPieceTypes = a:q b:r c:b d:n e:- f:-
 startFen = 8/1P6/8/8/8/8/8/4k2K w - - 0 1
 
+[invalid-piece-token-garbage:chess]
+rook = rxyz
+
 [piecegroup-dash-parent:chess]
 promotionRegion = a8
 promotionPieceTypes = p:q
@@ -182,6 +185,8 @@ verify_warning "wallingRule and gating features (seirawanGating, potions, gating
 verify_warning "castling - Invalid value - garbage for type bool" "castling trailing garbage rejection"
 verify_warning "castlingRookPiece - Deprecated option might be removed in future version." "legacy castling rook warning"
 verify_warning "maxRank - Invalid value z for type Rank" "invalid maxRank rejection"
+verify_warning "rook - Invalid letter: r" "invalid piece token rejection"
+verify_warning "Variant 'invalid-piece-token-garbage' has invalid configuration. Skipping." "invalid piece token variant rejection"
 verify_warning "promotionLimit - Invalid negative value." "negative promotionLimit rejection"
 verify_warning "Variant 'negative-promotion-limit' has invalid configuration. Skipping." "negative promotionLimit variant rejection"
 verify_warning "hostageExchange - Invalid hostage piece type in: q:!" "invalid hostageExchange rejection"

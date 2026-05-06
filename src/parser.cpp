@@ -20,6 +20,7 @@
 #include <sstream>
 #include <limits>
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <charconv>
 #include <memory>
@@ -32,6 +33,17 @@
 namespace Stockfish {
 
 namespace {
+    template <typename T, size_t N>
+    bool parse_named_value(const std::string& value, T& target, const std::array<std::pair<const char*, T>, N>& values) {
+        for (const auto& [name, parsed] : values)
+            if (value == name)
+            {
+                target = parsed;
+                return true;
+            }
+        return false;
+    }
+
     bool only_trailing_space(std::stringstream& ss) {
         ss >> std::ws;
         return ss.eof();
@@ -63,8 +75,60 @@ namespace {
         if (s.size() == token.size())
             return {token, ""};
         if (s[token.size()] != ':')
-            return {token, ""};
+            return {"", ""};
         return {token, s.substr(token.size() + 1)};
+    }
+
+    bool parse_positive_int(const std::string& raw, int& out) {
+        if (raw.empty())
+            return false;
+
+        const auto first = raw.find_first_not_of(" \t");
+        if (first == std::string::npos)
+            return false;
+        const auto last = raw.find_last_not_of(" \t");
+        const char* begin = raw.data() + first;
+        const char* end = raw.data() + last + 1;
+        auto [ptr, ec] = std::from_chars(begin, end, out);
+        return ec == std::errc() && ptr == end && out >= 1;
+    }
+
+    bool parse_file_index(const std::string& raw, int& out) {
+        if (raw.empty())
+            return false;
+
+        const auto first = raw.find_first_not_of(" \t");
+        if (first == std::string::npos)
+            return false;
+        const auto last = raw.find_last_not_of(" \t");
+        const std::string value = raw.substr(first, last - first + 1);
+
+        if (std::isdigit(static_cast<unsigned char>(value[0])))
+        {
+            int file = 0;
+            auto [ptr, ec] = std::from_chars(value.data(), value.data() + value.size(), file);
+            if (ec != std::errc() || ptr != value.data() + value.size() || file < 1)
+                return false;
+            out = file - 1;
+            return true;
+        }
+
+        if (value.size() != 1)
+            return false;
+        out = std::tolower(static_cast<unsigned char>(value[0])) - 'a';
+        return true;
+    }
+
+    template <typename Apply>
+    void parse_color_triplet(const Config& config, const std::string& key, Apply&& apply) {
+        if (config.find(key) != config.end())
+            apply(key, COLOR_NB);
+        const std::string whiteKey = key + "White";
+        if (config.find(whiteKey) != config.end())
+            apply(whiteKey, WHITE);
+        const std::string blackKey = key + "Black";
+        if (config.find(blackKey) != config.end())
+            apply(blackKey, BLACK);
     }
 
     PieceType parse_piece_type_token(const Variant* v, const std::string& token) {
@@ -214,20 +278,6 @@ namespace {
             && value[1] == ':';
     }
 
-    bool parse_positive_int(const std::string& value, int& out) {
-        if (value.empty())
-            return false;
-
-        const auto first = value.find_first_not_of(" \t");
-        if (first == std::string::npos)
-            return false;
-        const auto last = value.find_last_not_of(" \t");
-        const char* begin = value.data() + first;
-        const char* end   = value.data() + last + 1;
-        auto [ptr, ec] = std::from_chars(begin, end, out);
-        return ec == std::errc() && ptr == end && out >= 1;
-    }
-
     bool parse_rank_index(const std::string& value, int& out) {
         int rank = 0;
         if (!parse_positive_int(value, rank))
@@ -261,29 +311,6 @@ namespace {
             any = true;
         }
         return any && only_trailing_space(ss);
-    }
-
-    bool parse_file_index(const std::string& value, int& out) {
-        std::stringstream ss(value);
-        ss >> std::ws;
-        if (ss.peek() == EOF)
-            return false;
-        if (std::isdigit(ss.peek()))
-        {
-            int file = 0;
-            ss >> file;
-            if (ss.fail() || file < 1 || !only_trailing_space(ss))
-                return false;
-            out = file - 1;
-            return true;
-        }
-
-        char c;
-        ss >> c;
-        if (ss.fail() || !only_trailing_space(ss))
-            return false;
-        out = std::tolower(static_cast<unsigned char>(c)) - 'a';
-        return true;
     }
 
     constexpr int MAX_PIECE_POINTS = 20;
@@ -357,279 +384,143 @@ namespace {
     }
 
     template <> bool set(const std::string& value, bool& target) {
-        if (value == "true") {
-            target = true;
-            return true;
-        }
-        if (value == "false") {
-            target = false;
-            return true;
-        }
-        return false;
+        static constexpr auto values = std::array{
+            std::pair{"true", true},
+            std::pair{"false", false},
+        };
+        return parse_named_value(value, target, values);
     }
 
     template <> bool set(const std::string& value, Value& target) {
-        if (value == "win") {
-            target = VALUE_MATE;
-            return true;
-        }
-        if (value == "loss") {
-            target = -VALUE_MATE;
-            return true;
-        }
-        if (value == "draw") {
-            target = VALUE_DRAW;
-            return true;
-        }
-        if (value == "none") {
-            target = VALUE_NONE;
-            return true;
-        }
-        return false;
+        static constexpr auto values = std::array{
+            std::pair{"win", VALUE_MATE},
+            std::pair{"loss", -VALUE_MATE},
+            std::pair{"draw", VALUE_DRAW},
+            std::pair{"none", VALUE_NONE},
+        };
+        return parse_named_value(value, target, values);
     }
 
     template <> bool set(const std::string& value, CapturingRule& target) {
-        if (value == "out") {
-            target = MOVE_OUT;
-            return true;
-        }
-        if (value == "hand") {
-            target = HAND;
-            return true;
-        }
-        if (value == "prison") {
-            target = PRISON;
-            return true;
-        }
-        return false;
+        static constexpr auto values = std::array{
+            std::pair{"out", MOVE_OUT},
+            std::pair{"hand", HAND},
+            std::pair{"prison", PRISON},
+        };
+        return parse_named_value(value, target, values);
     }
 
     template <> bool set(const std::string& value, PushFirstColor& target) {
-        if (value == "us") {
-            target = PUSH_US;
-            return true;
-        }
-        if (value == "them") {
-            target = PUSH_THEM;
-            return true;
-        }
-        if (value == "either") {
-            target = PUSH_EITHER;
-            return true;
-        }
-        return false;
+        static constexpr auto values = std::array{
+            std::pair{"us", PUSH_US},
+            std::pair{"them", PUSH_THEM},
+            std::pair{"either", PUSH_EITHER},
+        };
+        return parse_named_value(value, target, values);
     }
 
     template <> bool set(const std::string& value, PushRemoval& target) {
-        if (value == "none") {
-            target = PUSH_REMOVE_NONE;
-            return true;
-        }
-        if (value == "shove") {
-            target = PUSH_REMOVE_SHOVE;
-            return true;
-        }
-        return false;
+        static constexpr auto values = std::array{
+            std::pair{"none", PUSH_REMOVE_NONE},
+            std::pair{"shove", PUSH_REMOVE_SHOVE},
+        };
+        return parse_named_value(value, target, values);
     }
 
     template <> bool set(const std::string& value, MaterialCounting& target) {
-        if (value == "janggi") {
-            target = JANGGI_MATERIAL;
-            return true;
-        }
-        if (value == "unweighted") {
-            target = UNWEIGHTED_MATERIAL;
-            return true;
-        }
-        if (value == "whitedrawodds") {
-            target = WHITE_DRAW_ODDS;
-            return true;
-        }
-        if (value == "blackdrawodds") {
-            target = BLACK_DRAW_ODDS;
-            return true;
-        }
-        if (value == "connectn") {
-            target = CONNECT_N_COUNT;
-            return true;
-        }
-        if (value == "none") {
-            target = NO_MATERIAL_COUNTING;
-            return true;
-        }
-        return false;
+        static constexpr auto values = std::array{
+            std::pair{"janggi", JANGGI_MATERIAL},
+            std::pair{"unweighted", UNWEIGHTED_MATERIAL},
+            std::pair{"whitedrawodds", WHITE_DRAW_ODDS},
+            std::pair{"blackdrawodds", BLACK_DRAW_ODDS},
+            std::pair{"connectn", CONNECT_N_COUNT},
+            std::pair{"none", NO_MATERIAL_COUNTING},
+        };
+        return parse_named_value(value, target, values);
     }
 
     template <> bool set(const std::string& value, CountingRule& target) {
-        if (value == "makruk") {
-            target = MAKRUK_COUNTING;
-            return true;
-        }
-        if (value == "cambodian") {
-            target = CAMBODIAN_COUNTING;
-            return true;
-        }
-        if (value == "asean") {
-            target = ASEAN_COUNTING;
-            return true;
-        }
-        if (value == "none") {
-            target = NO_COUNTING;
-            return true;
-        }
-        return false;
+        static constexpr auto values = std::array{
+            std::pair{"makruk", MAKRUK_COUNTING},
+            std::pair{"cambodian", CAMBODIAN_COUNTING},
+            std::pair{"asean", ASEAN_COUNTING},
+            std::pair{"none", NO_COUNTING},
+        };
+        return parse_named_value(value, target, values);
     }
 
     template <> bool set(const std::string& value, ChasingRule& target) {
-        if (value == "axf") {
-            target = AXF_CHASING;
-            return true;
-        }
-        if (value == "none") {
-            target = NO_CHASING;
-            return true;
-        }
-        return false;
+        static constexpr auto values = std::array{
+            std::pair{"axf", AXF_CHASING},
+            std::pair{"none", NO_CHASING},
+        };
+        return parse_named_value(value, target, values);
     }
 
     template <> bool set(const std::string& value, EnclosingRule& target) {
-        if (value == "reversi") {
-            target = REVERSI;
-            return true;
-        }
-        if (value == "ataxx") {
-            target = ATAXX;
-            return true;
-        }
-        if (value == "quadwrangle") {
-            target = QUADWRANGLE;
-            return true;
-        }
-        if (value == "snort") {
-            target = SNORT;
-            return true;
-        }
-        if (value == "anyside") {
-            target = ANYSIDE;
-            return true;
-        }
-        if (value == "top") {
-            target = TOP;
-            return true;
-        }
-        if (value == "none") {
-            target = NO_ENCLOSING;
-            return true;
-        }
-        return false;
+        static constexpr auto values = std::array{
+            std::pair{"reversi", REVERSI},
+            std::pair{"ataxx", ATAXX},
+            std::pair{"quadwrangle", QUADWRANGLE},
+            std::pair{"snort", SNORT},
+            std::pair{"anyside", ANYSIDE},
+            std::pair{"top", TOP},
+            std::pair{"none", NO_ENCLOSING},
+        };
+        return parse_named_value(value, target, values);
     }
 
     template <> bool set(const std::string& value, WallingRule& target) {
-        if (value == "arrow") {
-            target = ARROW;
-            return true;
-        }
-        if (value == "duck") {
-            target = DUCK;
-            return true;
-        }
-        if (value == "edge") {
-            target = EDGE;
-            return true;
-        }
-        if (value == "past") {
-            target = PAST;
-            return true;
-        }
-        if (value == "static") {
-            target = STATIC;
-            return true;
-        }
-        if (value == "none") {
-            target = NO_WALLING;
-            return true;
-        }
-        return false;
+        static constexpr auto values = std::array{
+            std::pair{"arrow", ARROW},
+            std::pair{"duck", DUCK},
+            std::pair{"edge", EDGE},
+            std::pair{"past", PAST},
+            std::pair{"static", STATIC},
+            std::pair{"none", NO_WALLING},
+        };
+        return parse_named_value(value, target, values);
     }
 
     template <> bool set(const std::string& value, ColorChangeTrigger& target) {
-        if (value == "capture") {
-            target = ColorChangeTrigger::ON_CAPTURE;
-            return true;
-        }
-        if (value == "non-capture") {
-            target = ColorChangeTrigger::ON_NON_CAPTURE;
-            return true;
-        }
-        if (value == "always") {
-            target = ColorChangeTrigger::ALWAYS;
-            return true;
-        }
-        if (value == "never" || value == "none") {
-            target = ColorChangeTrigger::NEVER;
-            return true;
-        }
-        return false;
+        static constexpr auto values = std::array{
+            std::pair{"capture", ColorChangeTrigger::ON_CAPTURE},
+            std::pair{"non-capture", ColorChangeTrigger::ON_NON_CAPTURE},
+            std::pair{"always", ColorChangeTrigger::ALWAYS},
+            std::pair{"never", ColorChangeTrigger::NEVER},
+            std::pair{"none", ColorChangeTrigger::NEVER},
+        };
+        return parse_named_value(value, target, values);
     }
 
     template <> bool set(const std::string& value, EnPassantPassedSquares& target) {
-        if (value == "first") {
-            target = EnPassantPassedSquares::FIRST;
-            return true;
-        }
-        if (value == "last") {
-            target = EnPassantPassedSquares::LAST;
-            return true;
-        }
-        if (value == "all") {
-            target = EnPassantPassedSquares::ALL;
-            return true;
-        }
-        return false;
+        static constexpr auto values = std::array{
+            std::pair{"first", EnPassantPassedSquares::FIRST},
+            std::pair{"last", EnPassantPassedSquares::LAST},
+            std::pair{"all", EnPassantPassedSquares::ALL},
+        };
+        return parse_named_value(value, target, values);
     }
 
     template <> bool set(const std::string& value, PointsRule& target) {
-        if (value == "us") {
-            target = POINTS_US;
-            return true;
-        }
-        if (value == "them") {
-            target = POINTS_THEM;
-            return true;
-        }
-        if (value == "owner") {
-            target = POINTS_OWNER;
-            return true;
-        }
-        if (value == "non-owner") {
-            target = POINTS_NON_OWNER;
-            return true;
-        }
-        if (value == "none") {
-            target = POINTS_NONE;
-            return true;
-        }
-        return false;
+        static constexpr auto values = std::array{
+            std::pair{"us", POINTS_US},
+            std::pair{"them", POINTS_THEM},
+            std::pair{"owner", POINTS_OWNER},
+            std::pair{"non-owner", POINTS_NON_OWNER},
+            std::pair{"none", POINTS_NONE},
+        };
+        return parse_named_value(value, target, values);
     }
 
     template <> bool set(const std::string& value, TransferSide& target) {
-        if (value == "us") {
-            target = TRANSFER_US;
-            return true;
-        }
-        if (value == "them") {
-            target = TRANSFER_THEM;
-            return true;
-        }
-        if (value == "owner") {
-            target = TRANSFER_OWNER;
-            return true;
-        }
-        if (value == "non-owner") {
-            target = TRANSFER_NON_OWNER;
-            return true;
-        }
-        return false;
+        static constexpr auto values = std::array{
+            std::pair{"us", TRANSFER_US},
+            std::pair{"them", TRANSFER_THEM},
+            std::pair{"owner", TRANSFER_OWNER},
+            std::pair{"non-owner", TRANSFER_NON_OWNER},
+        };
+        return parse_named_value(value, target, values);
     }
 
     template <> bool set(const std::string& value, Bitboard& target) {
@@ -1180,47 +1071,35 @@ void VariantParser<DoCheck>::parse_both_colors_with_overrides_piece(const std::s
 template <bool DoCheck>
 template <typename T>
 void VariantParser<DoCheck>::parse_color_setting(const std::string& key, ColorSetting<T>& target) {
-    if (config.find(key) != config.end())
-    {
-        T parsed = target.global;
-        if (parse_attribute(key, parsed))
-            target.set_global(parsed);
-    }
-    if (config.find(key + "White") != config.end())
-    {
-        T parsed = target.byColor[WHITE];
-        if (parse_attribute(key + "White", parsed))
-            target.set_color(WHITE, parsed);
-    }
-    if (config.find(key + "Black") != config.end())
-    {
-        T parsed = target.byColor[BLACK];
-        if (parse_attribute(key + "Black", parsed))
-            target.set_color(BLACK, parsed);
-    }
+    parse_color_triplet(config, key, [&](const std::string& option, Color color) {
+        T parsed = color == WHITE ? target.byColor[WHITE] : color == BLACK ? target.byColor[BLACK] : target.global;
+        if (parse_attribute(option, parsed))
+        {
+            if (color == WHITE)
+                target.set_color(WHITE, parsed);
+            else if (color == BLACK)
+                target.set_color(BLACK, parsed);
+            else
+                target.set_global(parsed);
+        }
+    });
 }
 
 template <bool DoCheck>
 template <typename T>
 void VariantParser<DoCheck>::parse_color_setting_piece(const std::string& key, ColorSetting<T>& target, const Variant* v) {
-    if (config.find(key) != config.end())
-    {
-        T parsed = target.global;
-        if (parse_attribute(key, parsed, v))
-            target.set_global(parsed);
-    }
-    if (config.find(key + "White") != config.end())
-    {
-        T parsed = target.byColor[WHITE];
-        if (parse_attribute(key + "White", parsed, v))
-            target.set_color(WHITE, parsed);
-    }
-    if (config.find(key + "Black") != config.end())
-    {
-        T parsed = target.byColor[BLACK];
-        if (parse_attribute(key + "Black", parsed, v))
-            target.set_color(BLACK, parsed);
-    }
+    parse_color_triplet(config, key, [&](const std::string& option, Color color) {
+        T parsed = color == WHITE ? target.byColor[WHITE] : color == BLACK ? target.byColor[BLACK] : target.global;
+        if (parse_attribute(option, parsed, v))
+        {
+            if (color == WHITE)
+                target.set_color(WHITE, parsed);
+            else if (color == BLACK)
+                target.set_color(BLACK, parsed);
+            else
+                target.set_global(parsed);
+        }
+    });
 }
 
 template <bool DoCheck>
@@ -1242,9 +1121,14 @@ bool VariantParser<DoCheck>::parse_piece_types(Variant* v) {
                 v->add_piece(pt, token);
             else
             {
-                if (DoCheck && keyValue->second.at(0) != '-')
-                    std::cerr << name << " - Invalid letter: " << keyValue->second.at(0) << std::endl;
-                v->remove_piece(pt);
+                if (keyValue->second.at(0) == '-')
+                    v->remove_piece(pt);
+                else
+                {
+                    if (DoCheck)
+                        std::cerr << name << " - Invalid letter: " << keyValue->second.at(0) << std::endl;
+                    return false;
+                }
             }
             // betza
             if (is_custom(pt))
