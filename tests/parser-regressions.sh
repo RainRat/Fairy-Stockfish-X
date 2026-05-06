@@ -82,6 +82,26 @@ startFen = 8/1P6/8/8/8/8/8/4k2K w - - 0 1
 promotionPieceTypes = a:q b:r c:b d:n e:- f:-
 startFen = 8/1P6/8/8/8/8/8/4k2K w - - 0 1
 
+[invalid-bool-retain:chess]
+king = -
+potions = true
+
+[invalid-bool-retain-child:invalid-bool-retain]
+potions = maybe
+wallingRule = duck
+
+[castling-trailing-garbage:chess]
+castling = - garbage
+
+[invalid-maxrank:chess]
+maxRank = z
+
+[hostage-exchange-invalid:chess]
+hostageExchange = p:p q:!
+
+[capture-forbidden-invalid:chess]
+captureForbidden = p:q q:r bad
+
 [remove-connect-conn:fairy]
 maxRank = 3
 maxFile = 3
@@ -141,6 +161,14 @@ verify_warning() {
 
 verify_warning "wallingRule and gating features (seirawanGating, potions, gating, gatingPieceAfter) are incompatible." "seirawanGating check"
 verify_warning "wallingRule and gating features (seirawanGating, potions, gating, gatingPieceAfter) are incompatible." "potions check"
+verify_warning "Invalid value maybe for type bool" "invalid bool rejection"
+verify_warning "wallingRule and gating features (seirawanGating, potions, gating, gatingPieceAfter) are incompatible." "invalid bool state retention"
+verify_warning "castling - Invalid value - garbage for type bool" "castling trailing garbage rejection"
+verify_warning "maxRank - Invalid value z for type Rank" "invalid maxRank rejection"
+verify_warning "hostageExchange - Invalid hostage piece type in: q:!" "invalid hostageExchange rejection"
+verify_warning "captureForbidden - Invalid mapping token: bad" "invalid captureForbidden rejection"
+verify_warning "Variant 'hostage-exchange-invalid' has invalid configuration. Skipping." "hostageExchange invalid variant rejection"
+verify_warning "Variant 'capture-forbidden-invalid' has invalid configuration. Skipping." "captureForbidden invalid variant rejection"
 verify_warning "wallingRule=duck and petrifyOnCaptureTypes are incompatible." "petrify check"
 verify_warning "pieceDrops and any walling are incompatible." "freeDrops check"
 verify_warning "falcon looks like a custom piece definition. Use customPieceN = a:W for new custom pieces." "named custom piece hint"

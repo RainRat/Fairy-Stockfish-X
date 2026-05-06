@@ -85,6 +85,8 @@ namespace {
         std::string entry;
         int parsedValue = 0;
         std::stringstream ss(value);
+        int parsed[PIECE_TYPE_NB];
+        std::copy(target, target + PIECE_TYPE_NB, std::begin(parsed));
         while (ss >> entry)
         {
             auto [token, rawValue] = split_piece_entry(entry);
@@ -100,14 +102,17 @@ namespace {
                 return false;
             if (!allowZero && parsedValue < 1)
                 return false;
-            target[pt] = parsedValue;
+            parsed[pt] = parsedValue;
         }
+        std::copy(std::begin(parsed), std::end(parsed), target);
         return only_trailing_space(ss);
     }
 
     bool parse_piece_type_map(const std::string& value, const Variant* v, PieceType target[PIECE_TYPE_NB], bool allowNone = false) {
         std::string entry;
         std::stringstream ss(value);
+        PieceType parsed[PIECE_TYPE_NB];
+        std::copy(target, target + PIECE_TYPE_NB, std::begin(parsed));
         while (ss >> entry)
         {
             auto [fromToken, rawTo] = split_piece_entry(entry);
@@ -117,14 +122,17 @@ namespace {
             PieceType to = rawTo == "-" && allowNone ? NO_PIECE_TYPE : parse_piece_type_token(v, rawTo);
             if (to == NO_PIECE_TYPE && !(allowNone && rawTo == "-"))
                 return false;
-            target[from] = to;
+            parsed[from] = to;
         }
+        std::copy(std::begin(parsed), std::end(parsed), target);
         return only_trailing_space(ss);
     }
 
     bool parse_drop_piece_type_map(const std::string& value, const Variant* v, PieceSet target[PIECE_TYPE_NB]) {
         std::stringstream groups(value);
         std::string group;
+        PieceSet parsed[PIECE_TYPE_NB];
+        std::copy(target, target + PIECE_TYPE_NB, std::begin(parsed));
         while (std::getline(groups, group, ';'))
         {
             group = trim(group);
@@ -165,8 +173,9 @@ namespace {
                 mask |= pt;
             }
 
-            target[from] = mask;
+            parsed[from] = mask;
         }
+        std::copy(std::begin(parsed), std::end(parsed), target);
         return true;
     }
 
@@ -293,10 +302,14 @@ namespace {
 
         const char* first = value.data();
         const char* last  = first + value.size();
-        auto [ptr, ec] = std::from_chars(first, last, target);
+        int parsed = 0;
+        auto [ptr, ec] = std::from_chars(first, last, parsed);
         while (ptr != last && std::isspace(static_cast<unsigned char>(*ptr)))
             ptr++;
-        return ec == std::errc() && ptr == last;
+        if (ec != std::errc() || ptr != last)
+            return false;
+        target = parsed;
+        return true;
     }
 
     template <> bool set(const std::string& value, std::vector<int>& target)
@@ -340,116 +353,279 @@ namespace {
     }
 
     template <> bool set(const std::string& value, bool& target) {
-        target = value == "true";
-        return value == "true" || value == "false";
+        if (value == "true") {
+            target = true;
+            return true;
+        }
+        if (value == "false") {
+            target = false;
+            return true;
+        }
+        return false;
     }
 
     template <> bool set(const std::string& value, Value& target) {
-        target =  value == "win"  ? VALUE_MATE
-                : value == "loss" ? -VALUE_MATE
-                : value == "draw" ? VALUE_DRAW
-                : VALUE_NONE;
-        return value == "win" || value == "loss" || value == "draw" || value == "none";
+        if (value == "win") {
+            target = VALUE_MATE;
+            return true;
+        }
+        if (value == "loss") {
+            target = -VALUE_MATE;
+            return true;
+        }
+        if (value == "draw") {
+            target = VALUE_DRAW;
+            return true;
+        }
+        if (value == "none") {
+            target = VALUE_NONE;
+            return true;
+        }
+        return false;
     }
 
     template <> bool set(const std::string& value, CapturingRule& target) {
-        target = value == "out" ? MOVE_OUT
-                : value == "hand" ? HAND
-                : value == "prison" ? PRISON
-                : MOVE_OUT;
-        return value == "out" || value == "hand" || value == "prison";
+        if (value == "out") {
+            target = MOVE_OUT;
+            return true;
+        }
+        if (value == "hand") {
+            target = HAND;
+            return true;
+        }
+        if (value == "prison") {
+            target = PRISON;
+            return true;
+        }
+        return false;
     }
 
     template <> bool set(const std::string& value, PushFirstColor& target) {
-        target = value == "us" ? PUSH_US
-                : value == "them" ? PUSH_THEM
-                : value == "either" ? PUSH_EITHER
-                : PUSH_THEM;
-        return value == "us" || value == "them" || value == "either";
+        if (value == "us") {
+            target = PUSH_US;
+            return true;
+        }
+        if (value == "them") {
+            target = PUSH_THEM;
+            return true;
+        }
+        if (value == "either") {
+            target = PUSH_EITHER;
+            return true;
+        }
+        return false;
     }
 
     template <> bool set(const std::string& value, PushRemoval& target) {
-        target = value == "shove" ? PUSH_REMOVE_SHOVE
-                : PUSH_REMOVE_NONE;
-        return value == "none" || value == "shove";
+        if (value == "none") {
+            target = PUSH_REMOVE_NONE;
+            return true;
+        }
+        if (value == "shove") {
+            target = PUSH_REMOVE_SHOVE;
+            return true;
+        }
+        return false;
     }
 
     template <> bool set(const std::string& value, MaterialCounting& target) {
-        target =  value == "janggi"  ? JANGGI_MATERIAL
-                : value == "unweighted" ? UNWEIGHTED_MATERIAL
-                : value == "whitedrawodds" ? WHITE_DRAW_ODDS
-                : value == "blackdrawodds" ? BLACK_DRAW_ODDS
-                : value == "connectn" ? CONNECT_N_COUNT
-                : NO_MATERIAL_COUNTING;
-        return   value == "janggi" || value == "unweighted"
-              || value == "whitedrawodds" || value == "blackdrawodds" || value == "connectn" || value == "none";
+        if (value == "janggi") {
+            target = JANGGI_MATERIAL;
+            return true;
+        }
+        if (value == "unweighted") {
+            target = UNWEIGHTED_MATERIAL;
+            return true;
+        }
+        if (value == "whitedrawodds") {
+            target = WHITE_DRAW_ODDS;
+            return true;
+        }
+        if (value == "blackdrawodds") {
+            target = BLACK_DRAW_ODDS;
+            return true;
+        }
+        if (value == "connectn") {
+            target = CONNECT_N_COUNT;
+            return true;
+        }
+        if (value == "none") {
+            target = NO_MATERIAL_COUNTING;
+            return true;
+        }
+        return false;
     }
 
     template <> bool set(const std::string& value, CountingRule& target) {
-        target =  value == "makruk"  ? MAKRUK_COUNTING
-                : value == "cambodian" ? CAMBODIAN_COUNTING
-                : value == "asean" ? ASEAN_COUNTING
-                : NO_COUNTING;
-        return value == "makruk" || value == "cambodian" || value == "asean" || value == "none";
+        if (value == "makruk") {
+            target = MAKRUK_COUNTING;
+            return true;
+        }
+        if (value == "cambodian") {
+            target = CAMBODIAN_COUNTING;
+            return true;
+        }
+        if (value == "asean") {
+            target = ASEAN_COUNTING;
+            return true;
+        }
+        if (value == "none") {
+            target = NO_COUNTING;
+            return true;
+        }
+        return false;
     }
 
     template <> bool set(const std::string& value, ChasingRule& target) {
-        target =  value == "axf"  ? AXF_CHASING
-                : NO_CHASING;
-        return value == "axf" || value == "none";
+        if (value == "axf") {
+            target = AXF_CHASING;
+            return true;
+        }
+        if (value == "none") {
+            target = NO_CHASING;
+            return true;
+        }
+        return false;
     }
 
     template <> bool set(const std::string& value, EnclosingRule& target) {
-        target =  value == "reversi"  ? REVERSI
-                : value == "ataxx" ? ATAXX
-                : value == "quadwrangle" ? QUADWRANGLE
-                : value == "snort" ? SNORT
-                : value == "anyside" ? ANYSIDE
-                : value == "top" ? TOP
-                : NO_ENCLOSING;
-        return value == "reversi" || value == "ataxx" || value == "quadwrangle" || value =="snort" || value =="anyside" || value =="top" || value == "none";
+        if (value == "reversi") {
+            target = REVERSI;
+            return true;
+        }
+        if (value == "ataxx") {
+            target = ATAXX;
+            return true;
+        }
+        if (value == "quadwrangle") {
+            target = QUADWRANGLE;
+            return true;
+        }
+        if (value == "snort") {
+            target = SNORT;
+            return true;
+        }
+        if (value == "anyside") {
+            target = ANYSIDE;
+            return true;
+        }
+        if (value == "top") {
+            target = TOP;
+            return true;
+        }
+        if (value == "none") {
+            target = NO_ENCLOSING;
+            return true;
+        }
+        return false;
     }
 
     template <> bool set(const std::string& value, WallingRule& target) {
-        target =  value == "arrow"  ? ARROW
-                : value == "duck" ? DUCK
-                : value == "edge" ? EDGE
-                : value == "past" ? PAST
-                : value == "static" ? STATIC
-                : NO_WALLING;
-        return value == "arrow" || value == "duck" || value == "edge" || value =="past" || value == "static" || value == "none";
+        if (value == "arrow") {
+            target = ARROW;
+            return true;
+        }
+        if (value == "duck") {
+            target = DUCK;
+            return true;
+        }
+        if (value == "edge") {
+            target = EDGE;
+            return true;
+        }
+        if (value == "past") {
+            target = PAST;
+            return true;
+        }
+        if (value == "static") {
+            target = STATIC;
+            return true;
+        }
+        if (value == "none") {
+            target = NO_WALLING;
+            return true;
+        }
+        return false;
     }
 
     template <> bool set(const std::string& value, ColorChangeTrigger& target) {
-        target =  value == "capture"      ? ColorChangeTrigger::ON_CAPTURE
-                : value == "non-capture"  ? ColorChangeTrigger::ON_NON_CAPTURE
-                : value == "always"       ? ColorChangeTrigger::ALWAYS
-                : ColorChangeTrigger::NEVER;
-        return value == "capture" || value == "non-capture" || value == "always" || value == "never" || value == "none";
+        if (value == "capture") {
+            target = ColorChangeTrigger::ON_CAPTURE;
+            return true;
+        }
+        if (value == "non-capture") {
+            target = ColorChangeTrigger::ON_NON_CAPTURE;
+            return true;
+        }
+        if (value == "always") {
+            target = ColorChangeTrigger::ALWAYS;
+            return true;
+        }
+        if (value == "never" || value == "none") {
+            target = ColorChangeTrigger::NEVER;
+            return true;
+        }
+        return false;
     }
 
     template <> bool set(const std::string& value, EnPassantPassedSquares& target) {
-        target =  value == "first" ? EnPassantPassedSquares::FIRST
-                : value == "last"  ? EnPassantPassedSquares::LAST
-                : EnPassantPassedSquares::ALL;
-        return value == "all" || value == "first" || value == "last";
+        if (value == "first") {
+            target = EnPassantPassedSquares::FIRST;
+            return true;
+        }
+        if (value == "last") {
+            target = EnPassantPassedSquares::LAST;
+            return true;
+        }
+        if (value == "all") {
+            target = EnPassantPassedSquares::ALL;
+            return true;
+        }
+        return false;
     }
 
     template <> bool set(const std::string& value, PointsRule& target) {
-        target =  value == "us" ? POINTS_US
-                : value == "them" ? POINTS_THEM
-                : value == "owner" ? POINTS_OWNER
-                : value == "non-owner" ? POINTS_NON_OWNER
-                : POINTS_NONE;
-        return value == "us" || value == "them" || value =="owner" || value =="non-owner" || value =="none";
+        if (value == "us") {
+            target = POINTS_US;
+            return true;
+        }
+        if (value == "them") {
+            target = POINTS_THEM;
+            return true;
+        }
+        if (value == "owner") {
+            target = POINTS_OWNER;
+            return true;
+        }
+        if (value == "non-owner") {
+            target = POINTS_NON_OWNER;
+            return true;
+        }
+        if (value == "none") {
+            target = POINTS_NONE;
+            return true;
+        }
+        return false;
     }
 
     template <> bool set(const std::string& value, TransferSide& target) {
-        target =  value == "us" ? TRANSFER_US
-                : value == "them" ? TRANSFER_THEM
-                : value == "owner" ? TRANSFER_OWNER
-                : TRANSFER_NON_OWNER;
-        return value == "us" || value == "them" || value == "owner" || value == "non-owner";
+        if (value == "us") {
+            target = TRANSFER_US;
+            return true;
+        }
+        if (value == "them") {
+            target = TRANSFER_THEM;
+            return true;
+        }
+        if (value == "owner") {
+            target = TRANSFER_OWNER;
+            return true;
+        }
+        if (value == "non-owner") {
+            target = TRANSFER_NON_OWNER;
+            return true;
+        }
+        return false;
     }
 
     template <> bool set(const std::string& value, Bitboard& target) {
@@ -483,7 +659,7 @@ namespace {
                 return false;
             }
         }
-        if (ss.fail())
+        if (ss.fail() || !only_trailing_space(ss))
             return false;
         target = parsed;
         return true;
@@ -680,9 +856,9 @@ namespace {
                 break;
             }
         }
-        if (valid)
+        if (valid && only_trailing_space(ss))
             target = parsed;
-        return valid;
+        return valid && only_trailing_space(ss);
     }
 
     template <typename T> void set(PieceType pt, T& target) {
@@ -701,9 +877,11 @@ namespace {
         target |= pt;
     }
 
-    void parse_hostage_exchanges(Variant *v, const std::string &map, bool DoCheck) {
+    bool parse_hostage_exchanges(Variant *v, const std::string &map, bool DoCheck) {
         std::stringstream groups(map);
         std::string group;
+        PieceSet parsed[PIECE_TYPE_NB];
+        std::copy(v->hostageExchange, v->hostageExchange + PIECE_TYPE_NB, parsed);
         while (std::getline(groups, group, ' '))
         {
             group = trim(group);
@@ -715,7 +893,7 @@ namespace {
             {
                 if (DoCheck)
                     std::cerr << "hostageExchange - Invalid piece type: " << token << std::endl;
-                return;
+                return false;
             }
             PieceSet mask = NO_PIECE_SET;
             std::string rhs = trim(rest);
@@ -726,21 +904,23 @@ namespace {
                 {
                     if (DoCheck)
                         std::cerr << "hostageExchange - Invalid hostage piece type in: " << group << std::endl;
-                    return;
+                    return false;
                 }
                 PieceType pt = parse_piece_type_token(v, hostage);
                 if (pt == NO_PIECE_TYPE)
                 {
                     if (DoCheck)
                         std::cerr << "hostageExchange - Invalid hostage piece type: " << hostage << std::endl;
-                    return;
+                    return false;
                 }
                 mask |= pt;
                 rhs.erase(0, hostage.size());
                 rhs = trim(rhs);
             }
-            v->hostageExchange[from] = mask;
+            parsed[from] = mask;
         }
+        std::copy(parsed, parsed + PIECE_TYPE_NB, v->hostageExchange);
+        return true;
     }
 
     bool parse_file_piece_set_map(const std::string& value,
@@ -989,20 +1169,21 @@ template <typename T>
 void VariantParser<DoCheck>::parse_color_setting(const std::string& key, ColorSetting<T>& target) {
     if (config.find(key) != config.end())
     {
-        parse_attribute(key, target.global);
-        target.set_global(target.global);
+        T parsed = target.global;
+        if (parse_attribute(key, parsed))
+            target.set_global(parsed);
     }
     if (config.find(key + "White") != config.end())
     {
         T parsed = target.byColor[WHITE];
-        parse_attribute(key + "White", parsed);
-        target.set_color(WHITE, parsed);
+        if (parse_attribute(key + "White", parsed))
+            target.set_color(WHITE, parsed);
     }
     if (config.find(key + "Black") != config.end())
     {
         T parsed = target.byColor[BLACK];
-        parse_attribute(key + "Black", parsed);
-        target.set_color(BLACK, parsed);
+        if (parse_attribute(key + "Black", parsed))
+            target.set_color(BLACK, parsed);
     }
 }
 
@@ -1011,20 +1192,21 @@ template <typename T>
 void VariantParser<DoCheck>::parse_color_setting_piece(const std::string& key, ColorSetting<T>& target, const Variant* v) {
     if (config.find(key) != config.end())
     {
-        parse_attribute(key, target.global, v);
-        target.set_global(target.global);
+        T parsed = target.global;
+        if (parse_attribute(key, parsed, v))
+            target.set_global(parsed);
     }
     if (config.find(key + "White") != config.end())
     {
         T parsed = target.byColor[WHITE];
-        parse_attribute(key + "White", parsed, v);
-        target.set_color(WHITE, parsed);
+        if (parse_attribute(key + "White", parsed, v))
+            target.set_color(WHITE, parsed);
     }
     if (config.find(key + "Black") != config.end())
     {
         T parsed = target.byColor[BLACK];
-        parse_attribute(key + "Black", parsed, v);
-        target.set_color(BLACK, parsed);
+        if (parse_attribute(key + "Black", parsed, v))
+            target.set_color(BLACK, parsed);
     }
 }
 
@@ -1112,6 +1294,7 @@ bool VariantParser<DoCheck>::parse_piece_values(Variant* v) {
             PieceType pt = NO_PIECE_TYPE;
             bool parseError = false;
             int parsedValue = 0;
+            auto parsed = v->pieceValue[phase];
             std::stringstream ss(pv->second);
             while (ss >> entry)
             {
@@ -1127,10 +1310,12 @@ bool VariantParser<DoCheck>::parse_piece_values(Variant* v) {
                     parseError = true;
                     break;
                 }
-                v->pieceValue[phase][pt] = parsedValue;
+                parsed[pt] = parsedValue;
             }
             if (DoCheck && parseError)
                 std::cerr << optionName << " - Invalid syntax." << std::endl;
+            if (!parseError)
+                std::copy(parsed, parsed + PIECE_TYPE_NB, v->pieceValue[phase]);
         }
     }
 
@@ -1253,7 +1438,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     const auto& it_gate_after = config.find("gatingPieceAfter");
     if (it_gate_after != config.end())
     {
-        std::array<PieceType, PIECE_TYPE_NB> parsed;
+        std::array<PieceType, PIECE_TYPE_NB> parsed{};
         if (!parse_piece_type_map(it_gate_after->second, v, parsed.data(), true))
         {
             if (DoCheck)
@@ -1265,7 +1450,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     const auto& it_gate_after_w = config.find("gatingPieceAfterWhite");
     if (it_gate_after_w != config.end())
     {
-        std::array<PieceType, PIECE_TYPE_NB> parsed;
+        std::array<PieceType, PIECE_TYPE_NB> parsed{};
         if (!parse_piece_type_map(it_gate_after_w->second, v, parsed.data(), true))
         {
             if (DoCheck)
@@ -1277,7 +1462,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     const auto& it_gate_after_b = config.find("gatingPieceAfterBlack");
     if (it_gate_after_b != config.end())
     {
-        std::array<PieceType, PIECE_TYPE_NB> parsed;
+        std::array<PieceType, PIECE_TYPE_NB> parsed{};
         if (!parse_piece_type_map(it_gate_after_b->second, v, parsed.data(), true))
         {
             if (DoCheck)
@@ -1356,16 +1541,18 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     auto parse_capture_map = [&](const std::string& key, bool allow) {
         const auto& it = config.find(key);
         if (it == config.end())
-            return;
+            return true;
 
         std::string entry;
         std::stringstream ss(it->second);
+        PieceSet parsed[PIECE_TYPE_NB];
+        std::copy(v->captureForbidden, v->captureForbidden + PIECE_TYPE_NB, parsed);
         while (ss >> entry) {
             size_t sep = entry.find(':');
             if (sep == std::string::npos || sep == 0 || sep + 1 >= entry.size()) {
                 if (DoCheck)
                     std::cerr << key << " - Invalid mapping token: " << entry << std::endl;
-                continue;
+                return false;
             }
 
             std::string attackers = entry.substr(0, sep);
@@ -1376,7 +1563,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
             {
                 if (DoCheck)
                     std::cerr << key << " - Invalid attacker piece type list: " << attackers << std::endl;
-                continue;
+                return false;
             }
 
             PieceSet targetSet = NO_PIECE_SET;
@@ -1384,23 +1571,27 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
             {
                 if (DoCheck)
                     std::cerr << key << " - Invalid target piece type list: " << targets << std::endl;
-                continue;
+                return false;
             }
 
             if (!attackerSet || !targetSet)
-                continue;
+                return false;
 
             for (PieceSet ps = attackerSet; ps; ) {
                 PieceType attacker = pop_lsb(ps);
                 if (allow)
-                    v->captureForbidden[attacker] &= ~targetSet;
+                    parsed[attacker] &= ~targetSet;
                 else
-                    v->captureForbidden[attacker] |= targetSet;
+                    parsed[attacker] |= targetSet;
             }
         }
+        std::copy(parsed, parsed + PIECE_TYPE_NB, v->captureForbidden);
+        return true;
     };
-    parse_capture_map("captureForbidden", false);
-    parse_capture_map("captureAllowed", true);
+    if (!parse_capture_map("captureForbidden", false))
+        return false;
+    if (!parse_capture_map("captureAllowed", true))
+        return false;
     parse_attribute("petrifyOnCaptureTypes", v->petrifyOnCaptureTypes, v);
     if (v->deathOnCaptureTypes & v->petrifyOnCaptureTypes)
     {
@@ -1604,7 +1795,8 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     // hostage price
     const auto& it_host_p = config.find("hostageExchange");
     if (it_host_p != config.end()) {
-        parse_hostage_exchanges(v, it_host_p->second, DoCheck);
+        if (!parse_hostage_exchanges(v, it_host_p->second, DoCheck))
+            return false;
     }
     parse_attribute("prisonPawnPromotion", v->prisonPawnPromotion);
     parse_attribute("firstRankPawnDrops", v->firstRankPawnDrops);
@@ -2112,11 +2304,13 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
         parse_file_index(itFile->second, cfgMaxFile);
 
     // Fail early when a variant exceeds compile-time board dimensions.
-    if ((cfgMaxRank > 0 && cfgMaxRank - 1 > RANK_MAX) || (cfgMaxFile >= 0 && cfgMaxFile > FILE_MAX))
+    if ((cfgMaxRank >= 0 && cfgMaxRank > RANK_MAX) || (cfgMaxFile >= 0 && cfgMaxFile > FILE_MAX))
         return nullptr;
 
-    parse_attribute("maxRank", v->maxRank);
-    parse_attribute("maxFile", v->maxFile);
+    if (itRank != config.end() && !parse_attribute<false>("maxRank", v->maxRank))
+        return nullptr;
+    if (itFile != config.end() && !parse_attribute<false>("maxFile", v->maxFile))
+        return nullptr;
 
     if (!parse_piece_types(v) ||
         !parse_piece_values(v) ||
