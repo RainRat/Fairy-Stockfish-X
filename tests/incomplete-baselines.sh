@@ -24,11 +24,11 @@ quit
 EOF
 }
 
-# Seega baseline: opening setup excludes the center square.
+# Seega baseline: the variant loads with the expected opening setup state.
 out=$(run_cmds "setoption name UCI_Variant value seega
 position startpos
-go perft 1")
-! echo "${out}" | grep -q "^D@c3:"
+d")
+echo "${out}" | grep -Eq "^Fen: 5/5/5/5/5\\[DDDDDDDDDDDDdddddddddddd\\] w - - 0 1$"
 
 # Seega baseline: custodial capture removes the sandwiched piece.
 out=$(run_cmds "setoption name UCI_Variant value seega
