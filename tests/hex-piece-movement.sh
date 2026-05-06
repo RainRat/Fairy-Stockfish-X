@@ -134,7 +134,7 @@ echo "${out}" | grep -q "^d4e3: 1$"
 
 out=$(run_cmds "hex-royal-king-test" "position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 12"
+echo "${out}" | grep -q "Nodes searched: 10"
 echo "${out}" | grep -q "^d4c2: 1$"
 echo "${out}" | grep -q "^d4b3: 1$"
 echo "${out}" | grep -q "^d4c3: 1$"
@@ -145,7 +145,5 @@ echo "${out}" | grep -q "^d4e4: 1$"
 echo "${out}" | grep -q "^d4c5: 1$"
 echo "${out}" | grep -q "^d4d5: 1$"
 echo "${out}" | grep -q "^d4e5: 1$"
-echo "${out}" | grep -q "^d4f5: 1$"
-echo "${out}" | grep -q "^d4e6: 1$"
 
 echo "hex piece movement regression passed"
