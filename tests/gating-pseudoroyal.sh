@@ -49,6 +49,10 @@ if grep -Fq "b1a3h: 1" "$OUT_FILE"; then
   exit 1
 fi
 
-grep -Fq "c1b2h: 1" "$OUT_FILE"
+grep -Fq "c1b2: 1" "$OUT_FILE"
+if grep -Fq "c1b2h: 1" "$OUT_FILE"; then
+  echo "capture gating move was generated unexpectedly"
+  exit 1
+fi
 
 echo "gating-pseudoroyal testing OK"

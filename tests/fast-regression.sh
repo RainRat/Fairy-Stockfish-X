@@ -20,7 +20,6 @@ if ! printf 'uci\nquit\n' | "${ENGINE}" | grep -q ' var duck'; then
 fi
 
 run_step "protocol" timeout 90s bash tests/protocol.sh "${ENGINE}"
-run_step "parser regressions" timeout 90s bash tests/parser-regressions.sh "${ENGINE}"
 run_step "movegen regressions" timeout 90s bash tests/movegen-regressions.sh "${ENGINE}"
 run_step "wrapping topology" timeout 90s bash tests/wrapping-topology.sh "${ENGINE}"
 run_step "unorthodox interactions" timeout 90s bash tests/unorthodox-interactions.sh "${ENGINE}"

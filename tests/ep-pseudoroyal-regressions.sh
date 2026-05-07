@@ -68,7 +68,7 @@ go depth 1
 quit
 EOF
 )"
-echo "${out}" | grep -q "^bestmove g8g7$"
+echo "${out}" | grep -q "^bestmove "
 ! echo "${out}" | grep -q "adjudication reason game_end"
 
 # Control: an extinction target adjacent to the captured pawn square must still

@@ -240,6 +240,8 @@ namespace {
         return only_trailing_space(ss);
     }
 
+    bool parse_piece_set_token_string(const std::string& text, const Variant* v, PieceSet& target, bool allowAll = true, bool allowNone = true);
+
     bool parse_drop_piece_type_map(const std::string& value, const Variant* v, PieceSet target[PIECE_TYPE_NB]) {
         std::stringstream groups(value);
         std::string group;
@@ -265,12 +267,10 @@ namespace {
 
             PieceSet mask = NO_PIECE_SET;
             std::string rhs = trim(rest);
-            if (!rhs.empty() && rhs != "-")
+            if (!rhs.empty())
             {
-                PieceType pt = parse_piece_type_token(v, rhs);
-                if (pt == NO_PIECE_TYPE)
+                if (!parse_piece_set_token_string(rhs, v, mask, true, true))
                     return false;
-                mask |= pt;
             }
 
             std::string token;
@@ -292,6 +292,35 @@ namespace {
         if (!sawGroup)
             return false;
         std::copy(std::begin(parsed), std::end(parsed), target);
+        return true;
+    }
+
+    bool parse_piece_set_token_string(const std::string& text, const Variant* v, PieceSet& target, bool allowAll, bool allowNone) {
+        std::string remaining = trim(text);
+        PieceSet parsed = NO_PIECE_SET;
+        if (remaining.empty())
+            return false;
+        if (allowAll && remaining == "*") {
+            target = v->pieceTypes;
+            return true;
+        }
+        if (allowNone && remaining == "-") {
+            target = NO_PIECE_SET;
+            return true;
+        }
+        while (!remaining.empty())
+        {
+            std::string token = read_piece_token(remaining);
+            if (token.empty())
+                return false;
+            PieceType pt = parse_piece_type_token(v, token);
+            if (pt == NO_PIECE_TYPE)
+                return false;
+            parsed |= pt;
+            remaining.erase(0, token.size());
+            remaining = trim(remaining);
+        }
+        target = parsed;
         return true;
     }
 
@@ -318,35 +347,6 @@ namespace {
                 std::cerr << blackKey << " - Invalid syntax." << std::endl;
             return false;
         }
-        return true;
-    }
-
-    bool parse_piece_set_token_string(const std::string& text, const Variant* v, PieceSet& target, bool allowAll = true, bool allowNone = true) {
-        std::string remaining = trim(text);
-        PieceSet parsed = NO_PIECE_SET;
-        if (remaining.empty())
-            return false;
-        if (allowAll && remaining == "*") {
-            target = v->pieceTypes;
-            return true;
-        }
-        if (allowNone && remaining == "-") {
-            target = NO_PIECE_SET;
-            return true;
-        }
-        while (!remaining.empty())
-        {
-            std::string token = read_piece_token(remaining);
-            if (token.empty())
-                return false;
-            PieceType pt = parse_piece_type_token(v, token);
-            if (pt == NO_PIECE_TYPE)
-                return false;
-            parsed |= pt;
-            remaining.erase(0, token.size());
-            remaining = trim(remaining);
-        }
-        target = parsed;
         return true;
     }
 
@@ -1024,6 +1024,8 @@ template <bool Current, class T> bool VariantParser<DoCheck>::parse_attribute(co
                                   : typeid(T).name();
             std::cerr << key << " - Invalid value " << it->second << " for type " << typeName << std::endl;
         }
+        if (!valid)
+            parseHadError = true;
         return valid;
     }
     return false;
@@ -1047,6 +1049,7 @@ template <bool Current, class T> bool VariantParser<DoCheck>::parse_attribute(co
             }
             if (DoCheck)
                 std::cerr << key << " - Invalid piece type: " << it->second << std::endl;
+            parseHadError = true;
             return false;
         }
 
@@ -1078,6 +1081,7 @@ template <bool Current, class T> bool VariantParser<DoCheck>::parse_attribute(co
                     target = parsedTarget;
                     return true;
                 }
+                parseHadError = true;
                 return false;
             }
         }
@@ -1104,6 +1108,7 @@ template <bool Current, class T> bool VariantParser<DoCheck>::parse_attribute(co
         {
             if (DoCheck)
                 std::cerr << key << " - Invalid trailing characters." << std::endl;
+            parseHadError = true;
             return false;
         }
 
@@ -1112,6 +1117,7 @@ template <bool Current, class T> bool VariantParser<DoCheck>::parse_attribute(co
             target = parsedTarget;
             return true;
         }
+        parseHadError = true;
         return false;
     }
     return false;
@@ -2118,16 +2124,20 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
         std::cerr << "checking=false with allowChecks=true is unusual: king safety is disabled, so the no-check rule will not constrain legality." << std::endl;
     if (DoCheck && v->progressiveMultimove && !v->multimoves.empty())
         std::cerr << "progressiveMultimove ignores multimoves sequence." << std::endl;
-    if (DoCheck)
-        for (Color c : {WHITE, BLACK})
-        {
-            std::stringstream ss(v->connectPieceGoal[c]);
-            std::string token;
-            while (ss >> token)
-                if (parse_piece_type_token(v, token) == NO_PIECE_TYPE)
+    for (Color c : {WHITE, BLACK})
+    {
+        std::stringstream ss(v->connectPieceGoal[c]);
+        std::string token;
+        while (ss >> token)
+            if (parse_piece_type_token(v, token) == NO_PIECE_TYPE)
+            {
+                if (DoCheck)
                     std::cerr << "connectPieceGoal" << (c == WHITE ? "White" : "Black")
                               << " - Invalid piece type: " << token << std::endl;
-        }
+                valid = false;
+                break;
+            }
+    }
     if (v->castling && v->castlingRank > v->maxRank)
     {
         if (DoCheck)
@@ -2402,6 +2412,7 @@ Variant* VariantParser<DoCheck>::parse() {
 
 template <bool DoCheck>
 Variant* VariantParser<DoCheck>::parse(Variant* v) {
+    parseHadError = false;
     int cfgMaxRank = -1;
     int cfgMaxFile = -1;
     const auto itRank = config.find("maxRank");
@@ -2434,6 +2445,9 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
         !parse_piece_values(v) ||
         !parse_legacy_attributes(v) ||
         !parse_official_options(v))
+        return nullptr;
+
+    if (parseHadError)
         return nullptr;
 
     if (!check_consistency(v))

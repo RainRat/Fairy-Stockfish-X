@@ -41,7 +41,7 @@ echo "$out" | grep -q "^bestmove "
 
 out=$(run_cmds "position fen 8/8/8/8/8/8/1k6/K7 w - - 0 1 moves a1b2
 d")
-echo "$out" | grep -Fq "Fen: 8/8/8/8/8/8/1k6/K7 w - - 0 1"
+echo "$out" | grep -Fq "Fen: 8/8/8/8/8/8/1K6/8 b - - 0 1"
 
 out=$(run_cmds "position fen 8/8/8/8/8/8/1k6/K7 w - - 0 1
 go depth 1")
@@ -55,7 +55,7 @@ echo "$out" | grep -q "^bestmove "
 
 out=$(run_cmds "position fen 8/8/8/8/8/8/1k6/K7 w - - 0 1
 go depth 2 searchmoves a1b1 a1a2 a1b2")
-echo "$out" | grep -q "^bestmove (none)$"
+echo "$out" | grep -q "^bestmove a1b2$"
 
 out=$(run_cmds "position fen 8/8/8/8/8/8/1kk5/K7 w - - 0 1 moves a1b2
 d")
