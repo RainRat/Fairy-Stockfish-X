@@ -299,7 +299,7 @@ inline Bitboard wrapping_slider_attacks(Square s, Bitboard occ, File maxFile, Ra
   return result;
 }
 
-inline Bitboard safe_destination_tuple_bb(Square s, int dr, int df) {
+inline Bitboard safe_destination_tuple(Square s, int dr, int df) {
   int r = int(rank_of(s)) + dr;
   int f = int(file_of(s)) + df;
   if (r < 0 || r > int(RANK_MAX) || f < 0 || f > int(FILE_MAX))
@@ -317,7 +317,7 @@ inline Bitboard rose_attacks_bb(Square from, Bitboard occupied, const MagicGeome
           int index = start;
           for (int leg = 0; leg < 7; ++leg)
           {
-              Bitboard dst = safe_destination_tuple_bb(current, RoseSteps[index].first, RoseSteps[index].second);
+              Bitboard dst = safe_destination_tuple(current, RoseSteps[index].first, RoseSteps[index].second);
               if (!dst)
                   break;
               Square to = lsb(dst);
@@ -343,7 +343,7 @@ inline Bitboard rose_between_union_bb(Square from, Square to, Bitboard occupied)
           Bitboard path = 0;
           for (int leg = 0; leg < 7; ++leg)
           {
-              Bitboard dst = safe_destination_tuple_bb(current, RoseSteps[index].first, RoseSteps[index].second);
+              Bitboard dst = safe_destination_tuple(current, RoseSteps[index].first, RoseSteps[index].second);
               if (!dst)
                   break;
               Square next = lsb(dst);
@@ -375,7 +375,7 @@ inline Bitboard rose_between_intersection_bb(Square from, Square to, Bitboard oc
           Bitboard path = 0;
           for (int leg = 0; leg < 7; ++leg)
           {
-              Bitboard dst = safe_destination_tuple_bb(current, RoseSteps[index].first, RoseSteps[index].second);
+              Bitboard dst = safe_destination_tuple(current, RoseSteps[index].first, RoseSteps[index].second);
               if (!dst)
                   break;
               Square next = lsb(dst);

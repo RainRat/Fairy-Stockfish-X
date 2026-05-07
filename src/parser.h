@@ -69,6 +69,7 @@ public:
 
 private:
     Config config;
+    bool parseHadError = false;
     template <bool Current = true, class T> bool parse_attribute(const std::string& key, T& target);
     template <bool Current = true, class T> bool parse_attribute(const std::string& key, T& target, const Variant* v);
 

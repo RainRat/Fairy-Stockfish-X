@@ -43,7 +43,7 @@ rifleCapture = true
 castling = false
 king = -
 customPiece1 = k:K
-extinctionValue = -VALUE_MATE
+extinctionValue = loss
 extinctionPieceTypes = k
 
 [rifle-color:chess]
@@ -61,7 +61,7 @@ wallingRule = duck
 castling = false
 king = -
 customPiece1 = k:K
-extinctionValue = -VALUE_MATE
+extinctionValue = loss
 extinctionPieceTypes = k
 
 [color-change:chess]
@@ -121,7 +121,7 @@ removeConnectN = 3
 castling = false
 king = -
 customPiece1 = k:K
-extinctionValue = -VALUE_MATE
+extinctionValue = loss
 extinctionPieceTypes = k
 blastPassiveTypes = n
 

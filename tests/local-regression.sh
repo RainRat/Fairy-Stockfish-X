@@ -25,8 +25,18 @@ fi
 cd "${ROOT_DIR}"
 
 run_step "fast regression" timeout 30m bash tests/fast-regression.sh "${ENGINE}"
+run_step "invalid scalar regression" timeout 30s bash tests/invalid-scalar-regression.sh "${ENGINE}"
 run_step "all-vars regression" timeout 60m bash tests/allvars-regression.sh
 run_step "protocol" timeout 2m bash tests/protocol.sh "${ENGINE}"
+run_step "bench stdin" timeout 60s bash tests/bench-stdin.sh "${ENGINE}"
+run_step "ponder stop" timeout 2m bash tests/ponder-stop.sh "${ENGINE}"
+run_step "xboard regressions" timeout 2m bash tests/xboard-regressions.sh "${ENGINE}"
+run_step "battleotk" timeout 2m bash tests/battleotk.sh "${ENGINE}" "${VARIANT_PATH}"
+run_step "antiroyal blast" timeout 60s bash tests/antiroyal-blast.sh "${ENGINE}"
+run_step "antiroyal morph" timeout 60s bash tests/antiroyal-morph.sh "${ENGINE}"
+run_step "gating regressions" timeout 60s bash tests/gating-regressions.sh "${ENGINE}"
+run_step "verbosity" timeout 60s bash tests/verbosity.sh "${ENGINE}"
+run_step "state sync key" timeout 5m bash tests/state-sync-key.sh "${ENGINE}"
 run_step "new variants smoke" timeout 30m bash tests/new-variants-smoke.sh "${ENGINE}" "${VARIANT_PATH}"
 run_step "incomplete baselines" timeout 10m bash tests/incomplete-baselines.sh "${ENGINE}" "${INCOMPLETE_VARIANT_PATH}"
 run_step "rider edge consistency" timeout 60s bash tests/rider-edge-consistency.sh "${ENGINE}" "${VARIANT_PATH}"
@@ -49,10 +59,28 @@ run_step "NNUE affine regression" timeout 2m bash tests/nnue-affine-regression.s
 run_step "NNUE export failure" timeout 60s bash tests/nnue-export-failure.sh "${ENGINE}"
 run_step "rootmove searchmoves" timeout 60s bash tests/rootmove-searchmoves.sh "${ENGINE}"
 run_step "jump capture effects" timeout 60s bash tests/jump-capture-effects.sh "${ENGINE}"
+run_step "gating pseudoroyal" timeout 60s bash tests/gating-pseudoroyal.sh "${ENGINE}"
+run_step "ep pseudoroyal regressions" timeout 60s bash tests/ep-pseudoroyal-regressions.sh "${ENGINE}"
+run_step "pseudo-royal capture legality" timeout 60s bash tests/pseudoroyal-capture-illegal.sh "${ENGINE}"
+run_step "drop piece types" timeout 60s bash tests/drop-piece-types.sh "${ENGINE}"
+run_step "capture drops" timeout 60s bash tests/capture-drops.sh "${ENGINE}"
+run_step "capture to hand types" timeout 60s bash tests/capture-to-hand-types.sh "${ENGINE}"
+run_step "promotion consume in hand" timeout 60s bash tests/promotion-consume-in-hand.sh
+run_step "promotion require in hand" timeout 60s bash tests/promotion-require-in-hand.sh
+run_step "must drop by color" timeout 60s bash tests/must-drop-by-color.sh "${ENGINE}"
+run_step "must capture by color" timeout 60s bash tests/must-capture-by-color.sh "${ENGINE}"
+run_step "drop legality split" timeout 60s bash tests/drop-legality-split.sh "${ENGINE}"
+run_step "self capture color" timeout 60s bash tests/self-capture-color.sh "${ENGINE}"
+run_step "self capture types" timeout 60s bash tests/self-capture-types.sh "${ENGINE}"
 run_step "largeboard seirawan" timeout 60s bash tests/largeboard-seirawan.sh
 run_step "dots and boxes" timeout 10m bash tests/dots-and-boxes.sh "${ENGINE}" "${VARIANT_PATH}" "${INCOMPLETE_VARIANT_PATH}" "${LARGE_ENGINE}" "${VLB_ENGINE}"
 run_step "hex chess variants" timeout 10m bash tests/hex-chess-variants.sh "${VLB_CAPABLE_ENGINE}" "${VARIANT_PATH}"
-run_step "hex connection variants" timeout 10m bash tests/hex-connection-variants.sh "${VLB_CAPABLE_ENGINE}" "${VARIANT_PATH}"
+if [[ "${VLB_CAPABLE_ENGINE}" == "${ENGINE}" ]]; then
+  echo "== hex connection variants =="
+  echo "hex connection variants regression requires a very-large-board capable engine. Skipping."
+else
+  run_step "hex connection variants" timeout 10m bash tests/hex-connection-variants.sh "${VLB_CAPABLE_ENGINE}" "${VARIANT_PATH}"
+fi
 run_step "VLB gale smoke" timeout 60s bash tests/vlb-gale-smoke.sh "${VLB_CAPABLE_ENGINE}" "${VARIANT_PATH}"
 run_step "VLB symbol check" timeout 60s bash tests/vlb-symbol-check.sh "${VLB_CAPABLE_ENGINE}"
 run_step "VLB symbol fen" timeout 60s bash tests/vlb-symbol-fen.sh "${VLB_CAPABLE_ENGINE}"

@@ -226,6 +226,8 @@ void ThreadPool::start_thinking(Position& pos, StateListPtr& states,
   if (rootMoves.empty())
       rootMoves.emplace_back(MOVE_NONE);
 
+  const std::string rootFen = pos.fen();
+
   if (states.get())
       setupStates = std::move(states); // Ownership transfer, states is now empty
   else
@@ -241,7 +243,7 @@ void ThreadPool::start_thinking(Position& pos, StateListPtr& states,
       th->nodes = th->tbHits = th->nmpMinPly = th->bestMoveChanges = 0;
       th->rootDepth = th->completedDepth = 0;
       th->rootMoves = rootMoves;
-      th->rootPos.set(pos.variant(), pos.fen(), pos.is_chess960(), &th->rootState, th);
+      th->rootPos.set(pos.variant(), rootFen, pos.is_chess960(), &th->rootState, th);
       if (setupStates && !setupStates->empty())
           th->rootState = setupStates->back();
   }

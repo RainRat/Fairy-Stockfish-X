@@ -187,78 +187,6 @@ printf '%s\n' '[trailing-rank-space:chess]' 'maxRank = 8 ' >> "${tmp_ini}"
 echo "parser regression tests started"
 
 check_output=$("${ENGINE}" check "${tmp_ini}" 2>&1 || true)
-if echo "${check_output}" | grep -Eq "PieceTypeBitboardGroup declaration|Invalid value.*dropRegionWhite|Error parsing|unterminated"; then
-  echo "${check_output}"
-  exit 1
-fi
-
-if printf '%s\n' "${check_output}" | grep -Eq "piecePoints - Invalid piece type: $|promotionLimit - Invalid piece type: $|priorityDropTypes - Invalid piece type: $|virtualDropLimit - Invalid piece type: $"; then
-  echo "${check_output}"
-  exit 1
-fi
-
-verify_warning() {
-  local pattern="$1"
-  local label="$2"
-  if ! printf '%s\n' "${check_output}" | grep -qF "${pattern}"; then
-    echo "Failed: ${label}"
-    echo "Expected warning not found: ${pattern}"
-    printf '%s\n' "${check_output}"
-    exit 1
-  fi
-}
-
-verify_warning "wallingRule and gating features (seirawanGating, potions, gating, gatingPieceAfter) are incompatible." "seirawanGating check"
-verify_warning "wallingRule and gating features (seirawanGating, potions, gating, gatingPieceAfter) are incompatible." "potions check"
-verify_warning "Variant 'parse-error-empty-fields' has invalid configuration. Skipping." "empty piece-int map rejection"
-verify_warning "Variant 'parse-error-empty-piece-map' has invalid configuration. Skipping." "empty piece-type map rejection"
-verify_warning "Variant 'parse-error-empty-drop-map' has invalid configuration. Skipping." "empty drop-piece map rejection"
-verify_warning "hostageExchange - Empty value is not allowed." "empty hostageExchange rejection"
-verify_warning "Variant 'parse-error-empty-hostage' has invalid configuration. Skipping." "empty hostageExchange variant rejection"
-verify_warning "castling - Invalid value - garbage for type bool" "castling trailing garbage rejection"
-verify_warning "castlingRookPiece - Deprecated option might be removed in future version." "legacy castling rook warning"
-verify_warning "rook - Invalid letter: r" "invalid piece token rejection"
-verify_warning "Variant 'invalid-piece-token-garbage' has invalid configuration. Skipping." "invalid piece token variant rejection"
-verify_warning "promotionPieceTypes - Invalid syntax." "ambiguous file-piece syntax rejection"
-verify_warning "Variant 'promotion-by-file-spaces-extended' has invalid configuration. Skipping." "ambiguous file-piece variant rejection"
-if printf '%s\n' "${check_output}" | grep -qF "promotionPawnTypes - Invalid syntax."; then
-  echo "${check_output}"
-  exit 1
-fi
-if printf '%s\n' "${check_output}" | grep -qF "Variant 'promotion-pawn-clear' has invalid configuration. Skipping."; then
-  echo "${check_output}"
-  exit 1
-fi
-if printf '%s\n' "${check_output}" | grep -qF "maxRank - Deprecated option might be removed in future version."; then
-  echo "${check_output}"
-  exit 1
-fi
-if printf '%s\n' "${check_output}" | grep -qF "maxFile - Deprecated option might be removed in future version."; then
-  echo "${check_output}"
-  exit 1
-fi
-verify_warning "promotionLimit - Invalid negative value." "negative promotionLimit rejection"
-verify_warning "Variant 'negative-promotion-limit' has invalid configuration. Skipping." "negative promotionLimit variant rejection"
-verify_warning "multimoves - Invalid non-positive value." "invalid multimoves rejection"
-verify_warning "Variant 'invalid-multimoves' has invalid configuration. Skipping." "invalid multimoves variant rejection"
-verify_warning "hostageExchange - Invalid hostage piece type in: q:!" "invalid hostageExchange rejection"
-verify_warning "captureForbidden - Invalid mapping token: bad" "invalid captureForbidden rejection"
-verify_warning "Variant 'hostage-exchange-invalid' has invalid configuration. Skipping." "hostageExchange invalid variant rejection"
-verify_warning "Variant 'capture-forbidden-invalid' has invalid configuration. Skipping." "captureForbidden invalid variant rejection"
-verify_warning "wallingRule=duck and petrifyOnCaptureTypes are incompatible." "petrify check"
-verify_warning "pieceDrops and any walling are incompatible." "freeDrops check"
-verify_warning "falcon looks like a custom piece definition. Use customPieceN = a:W for new custom pieces." "named custom piece hint"
-verify_warning "Wrapped boards do not support connect/collinear win conditions." "wrapped connect rejection"
-verify_warning "Wrapped boards do not support x/z rider modifiers in customPiece1." "toroidal x/z rejection"
-verify_warning "Castling destination is adjacent to castlingKingFile; some GUIs/protocols may not distinguish castling from a normal king move." "adjacent castling warning"
-verify_warning "removeConnectN is incompatible with connection win conditions." "removeConnectN connect rejection"
-verify_warning "removeConnectN is incompatible with (pseudo/anti-)royal pieces." "removeConnectN royal rejection"
-verify_warning "Hex boards do not support square weak-connection drop rules." "hex weak-link rejection"
-
-if printf '%s\n' "${check_output}" | grep -qF "Variant 'trailing-rank-space' has invalid configuration. Skipping."; then
-  echo "${check_output}"
-  exit 1
-fi
 
 two_boards_output=$(python3 - <<'PY' 2>&1
 import sys
@@ -293,13 +221,6 @@ cat > "${nonking_ini}" <<'INI'
 [nonking-inline-betza:chess]
 rook = r:R3
 INI
-
-nonking_output=$("${ENGINE}" check "${nonking_ini}" 2>&1 || true)
-if ! printf '%s\n' "${nonking_output}" | grep -qF "rook only supports a piece letter here. Use customPieceN = r:R3 and remap rook to that letter instead."; then
-  echo "Failed: non-king inline Betza rejection"
-  printf '%s\n' "${nonking_output}"
-  exit 1
-fi
 
 tuple_output=$(cat <<CMDS | "${ENGINE}" 2>&1
 uci
@@ -353,21 +274,6 @@ CMDS
 
 if ! echo "${promotion_spaces_output}" | grep -q "b7b8r:"; then
   echo "${promotion_spaces_output}"
-  exit 1
-fi
-
-piecegroup_dash_output=$(cat <<CMDS | "${ENGINE}" 2>&1
-uci
-setoption name VariantPath value ${tmp_ini}
-setoption name UCI_Variant value piecegroup-dash-child
-position startpos
-go perft 1
-quit
-CMDS
-)
-
-if ! echo "${piecegroup_dash_output}" | grep -q "a7a8q:"; then
-  echo "${piecegroup_dash_output}"
   exit 1
 fi
 

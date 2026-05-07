@@ -56,9 +56,6 @@ namespace {
 
 // Some magics need to be split in order to reduce memory consumption.
 // Otherwise on a 12x10 board they can be >100 MB.
-#if !defined(VERY_LARGE_BOARDS)
-#endif
-
   // Rider directions
   const std::map<Direction, int> RookDirectionsV { {NORTH, 0}, {SOUTH, 0}};
   const std::map<Direction, int> RookDirectionsH { {EAST, 0}, {WEST, 0} };
@@ -288,7 +285,7 @@ namespace {
   }
 
   #if !defined(VERY_LARGE_BOARDS)
-  Bitboard lame_leaper_path(std::map<Direction, int> directions, Square s) {
+  Bitboard lame_leaper_path(const std::map<Direction, int>& directions, Square s) {
     Bitboard b = 0;
     for (const auto& i : directions)
         b |= lame_leaper_path(i.first, s);
@@ -296,7 +293,7 @@ namespace {
   }
   #endif
 
-  Bitboard lame_leaper_attack(std::map<Direction, int> directions, Square s, Bitboard occupied) {
+  Bitboard lame_leaper_attack(const std::map<Direction, int>& directions, Square s, Bitboard occupied) {
     Bitboard b = 0;
     for (const auto& i : directions)
     {
@@ -391,17 +388,6 @@ namespace {
     return attack;
   }
 
-}
-
-/// safe_destination() returns the bitboard of target square for the given step
-/// from the given square. If the step is off the board, returns empty bitboard.
-
-inline Bitboard safe_destination_tuple(Square s, int dr, int df) {
-    int r = int(rank_of(s)) + dr;
-    int f = int(file_of(s)) + df;
-    if (r < 0 || r > int(RANK_MAX) || f < 0 || f > int(FILE_MAX))
-        return Bitboard(0);
-    return square_bb(make_square(File(f), Rank(r)));
 }
 
 inline Bitboard safe_destination(Square s, int step) {
