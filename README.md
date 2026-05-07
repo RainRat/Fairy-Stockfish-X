@@ -47,6 +47,18 @@ Fairy-Stockfish-X supports many variants through a configuration file. To load t
    ```
 3. Use the `d` command to see the current board.
 
+### Common Commands
+
+Once the engine is running, you can use these commands to interact with it:
+
+- **`position startpos`**: Load the standard starting position.
+- **`position startpos moves e2e4 e7e5`**: Load the starting position and play the specified moves.
+- **`go movetime 1000`**: Search for the best move for 1000 milliseconds (1 second).
+- **`go depth 10`**: Search until a specific depth is reached.
+- **`d`**: Display the current board and diagnostic information.
+- **`help`**: Show all available commands.
+- **`quit`**: Exit the engine.
+
 ## Python Bindings
 
 You can also use Fairy-Stockfish-X in Python.
