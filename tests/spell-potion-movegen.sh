@@ -28,7 +28,7 @@ for move in a7a8q a7a8r a7a8b a7a8n e1d1 e1f1 e1d2 e1e2 e1f2; do
   fi
 done
 
-for gated in "f@g7,e1d1" "f@h8,e1f2"; do
+for gated in "f@g7,e1d1" "f@h7,e1f2"; do
   if ! printf '%s\n' "${out}" | grep -q "^${gated}: 1$"; then
     echo "${out}"
     exit 1

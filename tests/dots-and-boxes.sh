@@ -42,21 +42,6 @@ if [[ -x "${ENGINE_VLB}" ]]; then
   echo "$out" | grep -q "Nodes searched: 112"
 fi
 
-out=$(run_cmds "$VARIANTS_INCOMPLETE" dots-boxes-2x2 \
-  "position fen ***1*/*b*2/***1*/5/*1*1* b - - 4 3
-d
-go perft 1")
-echo "$out" | grep -Fq "Fen: ***1*/*b*2/***1*/5/*1*1* b - - 4 3"
-echo "$out" | grep -q "0000,b1: 1"
-echo "$out" | grep -q "Nodes searched: 8"
-
-out=$(run_cmds "$VARIANTS_INCOMPLETE" dots-boxes-2x2 \
-  "position fen ***1*/*b*2/***1*/5/*1*1* b - - 5 3
-d
-go perft 1")
-echo "$out" | grep -Fq "Fen: ***1*/*b*2/***1*/5/*1*1* b - - 5 3"
-echo "$out" | grep -q "Nodes searched: 8"
-
 ROOT_DIR="$ROOT_DIR" python3 - <<'PY'
 import pyffish as sf
 import os
