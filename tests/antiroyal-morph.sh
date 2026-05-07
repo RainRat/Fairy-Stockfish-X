@@ -40,7 +40,7 @@ out=$(cat <<EOF | "${ENGINE}" 2>/dev/null
 uci
 setoption name VariantPath value ${TMP_INI}
 setoption name UCI_Variant value antiroyal-capturemorph
-position fen q3k3/8/8/8/8/8/4q3/3QK1N1 w - - 0 1
+position fen q3k3/8/8/8/8/8/4q3/2KQ2N1 w - - 0 1
 go perft 1
 quit
 EOF
