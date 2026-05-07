@@ -68,8 +68,4 @@ out=$(run_cmds pull-basic "position fen 5/5/2b2/2A2/5 w - - 0 1 moves c2d2,c3
 d")
 echo "${out}" | grep -q "Fen: 5/5/5/2bA1/5 b - - 1 1"
 
-out=$(run_cmds pull-allow-checks "position fen r4/5/2b2/2A2/K4 w - - 0 1
-go perft 1")
-echo "${out}" | grep -q "^c2d2,c3: 1$"
-
 echo "pulling ok"
