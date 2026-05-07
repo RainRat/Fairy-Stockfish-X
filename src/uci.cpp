@@ -16,9 +16,11 @@
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include <cstdlib>
+#include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <cstdlib>
+#include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -336,6 +338,43 @@ namespace {
     sync_cout << sync_endl;
   }
 
+
+  // print_available_variants() prints a sorted list of all supported variants,
+  // optionally filtered by a search string.
+
+  void print_available_variants(const std::string& filter = "") {
+
+    std::vector<std::string> keys = variants.get_keys();
+    std::sort(keys.begin(), keys.end());
+
+    if (!filter.empty())
+    {
+        std::vector<std::string> filtered;
+        for (const auto& k : keys)
+            if (k.find(filter) != std::string::npos)
+                filtered.push_back(k);
+        keys = std::move(filtered);
+    }
+
+    if (keys.empty())
+    {
+        sync_cout << "No variants found matching '" << filter << "'." << sync_endl;
+        return;
+    }
+
+    sync_cout << "\nSupported Variants (" << keys.size() << "):" << sync_endl;
+
+    const int columns = 4;
+    const int width = 20;
+
+    for (size_t i = 0; i < keys.size(); ++i)
+    {
+        sync_cout << std::left << std::setw(width) << keys[i];
+        if ((i + 1) % columns == 0 || i == keys.size() - 1)
+            sync_cout << sync_endl;
+    }
+  }
+
 } // namespace
 
 
@@ -447,6 +486,7 @@ void UCI::loop(int argc, char* argv[]) {
                     << "\n  quit                        Exit the program"
                     << "\n\nTools and Debugging:"
                     << "\n  d                           Display the current board"
+                    << "\n  variants [filter]           List all supported chess variants"
                     << "\n  vinfo                       Show details about the active variant"
                     << "\n  eval                        Show static evaluation of the position"
                     << "\n  bench                       Run internal performance tests"
@@ -465,6 +505,12 @@ void UCI::loop(int argc, char* argv[]) {
       {
           const std::string variantName = Options["UCI_Variant"];
           print_variant_info(variants.get(variantName), variantName);
+      }
+      else if (token == "variants")
+      {
+          std::string filter;
+          is >> filter;
+          print_available_variants(filter);
       }
       else if (token == "eval")     trace_eval(pos);
       else if (token == "compiler") sync_cout << compiler_info() << sync_endl;
