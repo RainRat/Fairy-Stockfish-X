@@ -2359,6 +2359,12 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
     // 3. Moving a (pseudo-)royal mutuallyImmuneType into a square threatened by the same type is legal.
     if (v->pseudoRoyalTypes || v->antiRoyalTypes || hasRoyalKing)
     {
+        if (v->wallingRule == DUCK)
+        {
+            if (DoCheck)
+                std::cerr << "Can not use (pseudo/anti-)royal pieces with wallingRule = duck." << std::endl;
+            valid = false;
+        }
         if (v->blastImmuneTypes) //I may have this solved now.
         {
             if (DoCheck)
