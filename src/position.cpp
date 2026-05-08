@@ -1723,7 +1723,7 @@ void Position::set_check_info(StateInfo* si) const {
       for (PieceSet ps = piece_types(); ps;)
       {
           PieceType pt = pop_lsb(ps);
-          PieceType movePt = pt == KING ? king_type() : pt;
+          PieceType movePt = effective_piece_type(pt);
           si->checkSquares[pt] = 0;
 
           if (ksq != SQ_NONE)
@@ -1814,7 +1814,7 @@ void Position::set_check_info(StateInfo* si) const {
           for (PieceSet ps = piece_types(); ps;)
           {
               PieceType pt = pop_lsb(ps);
-              PieceType movePt = pt == KING ? king_type() : pt;
+              PieceType movePt = effective_piece_type(pt);
               if (AttackRiderTypes[movePt] & ASYMMETRICAL_RIDERS)
                   // For asymmetrical riders, use true retro paths from the king square.
                   si->checkSquares[pt] = retro_asymmetric_check_squares(sideToMove, movePt, ksq, occupied);
@@ -2417,7 +2417,7 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
           if (!ptPieces)
               continue;
 
-          PieceType move_pt = pt == KING ? king_type() : pt;
+          PieceType move_pt = effective_piece_type(pt);
           if (pt == JANGGI_CANNON)
               b |= attacks_from(~c, move_pt, s, occupied)
                  & attacks_from(~c, move_pt, s, occupied & ~janggiCannons)
@@ -2469,7 +2469,7 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
       PieceType pt = pop_lsb(ps);
       if (board_bb(c, pt) & s)
       {
-          PieceType move_pt = pt == KING ? king_type() : pt;
+          PieceType move_pt = effective_piece_type(pt);
           const PieceInfo* pi = pieceMap.get(move_pt);
           if (pi->has_runtime_rider_augment())
           {
@@ -2536,7 +2536,7 @@ Bitboard Position::attackers_to_king(Square s, Bitboard occupied, Color c, Bitbo
           if (!candidates)
               continue;
 
-          PieceType movePt = pt == KING ? king_type() : pt;
+          PieceType movePt = effective_piece_type(pt);
           if (movePt == NO_PIECE_TYPE)
               continue;
           const PieceInfo* pi = pieceMap.get(movePt);
@@ -3420,7 +3420,7 @@ bool Position::legal(Move m) const {
 
       if (!moverRemovedByBlast)
       {
-          PieceType movePt2 = pt == KING ? king_type() : pt;
+          PieceType movePt2 = effective_piece_type(pt);
           const PieceInfo* pInfo2 = pieceMap.get(movePt2);
           bool hasPotentialMove = PseudoMoves[0][us][pt][to] & board_bb();
           if (is_pure_hopper_like(pInfo2))
@@ -4697,7 +4697,7 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
   Piece pc = moved_piece(m);
   Color dropColor = dropMove ? drop_hand_color(us, in_hand_piece_type(m)) : us;
   PieceType movedType = type_of(pc);
-  PieceType movedMoveType = movedType == KING ? king_type() : movedType;
+  PieceType movedMoveType = effective_piece_type(movedType);
   const PieceInfo* pi = movedMoveType != NO_PIECE_TYPE ? pieceMap.get(movedMoveType) : nullptr;
   Piece captured = captured_piece(m);
   if (type_of(m) == CASTLING && captured == NO_PIECE)
