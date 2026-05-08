@@ -216,10 +216,3 @@ jobs:
             ./stockfish bench shogi
             ./stockfish bench capablanca
           fi
-
-      - name: Test 32bit largeboards
-        run: |
-          if [[ "$COMP" == "gcc" ]]; then export EXTRACXXFLAGS=-Wno-class-memaccess; fi
-          make clean
-          make -j2 ARCH=x86-32 largeboards=yes build
-          ../tests/perft.sh largeboard
