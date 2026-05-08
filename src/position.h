@@ -251,6 +251,7 @@ public:
   Bitboard mandatory_promotion_zone(Color c) const;
   Bitboard mandatory_promotion_zone(Color c, PieceType pt) const;
   Bitboard mandatory_promotion_zone(Piece p) const;
+  PieceType effective_piece_type(PieceType pt) const { return pt == KING ? king_type() : pt; }
   Square promotion_square(Color c, Square s) const;
   PieceType main_promotion_pawn_type(Color c) const;
   PieceSet promotion_piece_types(Color c) const;
@@ -3344,7 +3345,7 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
 
   if (topology_wraps())
   {
-      PieceType movePt = pt == KING ? king_type() : pt;
+      PieceType movePt = effective_piece_type(pt);
       const PieceInfo* pi = pieceMap.get(movePt);
       const bool wrapFile = wraps_files();
       const bool wrapRank = wraps_ranks();
@@ -3380,7 +3381,7 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
       return b & board_bb(c, pt);
   }
 
-  PieceType movePt = pt == KING ? king_type() : pt;
+  PieceType movePt = effective_piece_type(pt);
   const PieceInfo* pi = pieceMap.get(movePt);
   const bool hasRuntimeSpecialMoves = pi->has_runtime_rider_augment()
                                    || pi->has_explicit_initial_moves();
@@ -3477,7 +3478,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
         if (const SpellContext* spellCtx = current_spell_context(); spellCtx && c == sideToMove)
             occupancy &= ~spellCtx->jumpRemoved;
 
-        PieceType movePt = pt == KING ? king_type() : pt;
+        PieceType movePt = effective_piece_type(pt);
         const PieceInfo* pi = pieceMap.get(movePt);
         const bool wrapFile = wraps_files();
         const bool wrapRank = wraps_ranks();
@@ -3554,7 +3555,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
     const Bitboard explicitDoubleStepRegion = var->doubleStepRegion.get(c).explicitBoardOfPiece(piece_to_char()[pt]);
     Bitboard occupied = this->pieces();  //Bitboard where the bits whose corresponding squares having a piece on it are 1
     Bitboard piecePosition = square_bb(s);  //Bitboard where only the bit which refers to the square that the piece starts the move (original square) is 1
-    PieceType movePt = pt == KING ? king_type() : pt;
+    PieceType movePt = effective_piece_type(pt);
     const PieceInfo* pi = pieceMap.get(movePt);
     const bool pawnLikeHasCustomNonStepQuietMovement =
            !pi->slider[0][MODALITY_QUIET].empty()
@@ -3811,7 +3812,7 @@ inline Square Position::jump_capture_square(Square from, Square to, Bitboard occ
       return SQ_NONE;
 
   PieceType pt = type_of(mover);
-  PieceType movePt = pt == KING ? king_type() : pt;
+  PieceType movePt = effective_piece_type(pt);
   const PieceInfo* pi = pieceMap.get(movePt);
   Color us = color_of(mover);
 
@@ -4044,7 +4045,7 @@ inline Square Position::jump_capture_square(Square from, Square to) const {
 }
 
 inline Bitboard Position::universal_hopper_potential_bb(PieceType pt, Square s) const {
-    PieceType movePt = pt == KING ? king_type() : pt;
+    PieceType movePt = effective_piece_type(pt);
     const PieceInfo* pi = pieceMap.get(movePt);
     Bitboard b = 0;
     Color us = color_of(piece_on(s));
@@ -4106,7 +4107,7 @@ inline bool Position::capture(Move m) const {
       if (mover != NO_PIECE)
       {
           PieceType pt = type_of(mover);
-          PieceType movePt = pt == KING ? king_type() : pt;
+          PieceType movePt = effective_piece_type(pt);
           const PieceInfo* pi = pieceMap.get(movePt);
           if (pi->has_universal_hopper())
           {
