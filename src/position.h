@@ -2907,9 +2907,9 @@ inline Bitboard Position::wrapped_tuple_rider_targets(const std::vector<PieceInf
           if (next == sq)
               break;
 
-          const bool blocked = bool(occupied & next);
+          const bool blocked = bool(occupied & square_bb(next));
           if (!quietMode || !blocked)
-              out |= next;
+              out |= square_bb(next);
 
           current = next;
           if (ray.limit > 0 && ++count >= ray.limit)
@@ -2948,17 +2948,17 @@ inline Bitboard Position::wrapped_slider_targets(const std::map<Direction, int>&
           ++steps;
           const bool beyondMin = steps >= minDistance;
           const bool beyondMax = maxDistance > 0 && steps >= maxDistance;
-          const bool blocked = bool(occupied & next);
+          const bool blocked = bool(occupied & square_bb(next));
 
           if (beyondMin)
           {
               if (quietMode)
               {
                   if (!blocked)
-                      out |= next;
+                      out |= square_bb(next);
               }
               else
-                  out |= next;
+                  out |= square_bb(next);
           }
 
           if (blocked || beyondMax)
@@ -2994,14 +2994,14 @@ inline Bitboard Position::wrapped_hopper_targets(const std::map<Direction, int>&
           if (next == sq)
               break;
 
-          const bool blocked = bool(occupied & next);
+          const bool blocked = bool(occupied & square_bb(next));
           if (hurdle)
           {
               ++count;
               if (count >= minDistance)
               {
                   if (!quietMode || !blocked)
-                      out |= next;
+                      out |= square_bb(next);
               }
               if (maxDistance > 0 && count >= maxDistance)
                   break;
@@ -3094,9 +3094,9 @@ inline Bitboard Position::wrapped_leap_rider_targets(const std::map<Direction, i
           if (next == sq)
               break;
 
-          const bool blocked = bool(occupied & next);
+          const bool blocked = bool(occupied & square_bb(next));
           if (!quietMode || !blocked)
-              out |= next;
+              out |= square_bb(next);
 
           if (limit > 0 && ++count >= limit)
               break;
