@@ -148,12 +148,13 @@ vector<string> setup_bench(const Position& current, istream& is) {
   string limitType = next_arg(idx, "depth");
   string evalType  = next_arg(idx, "mixed");
 
-  auto is_uint = [](const string& s) {
-      return !s.empty() && std::all_of(s.begin(), s.end(), [](unsigned char ch) { return std::isdigit(ch) != 0; });
+  auto is_uint = [](const string& s, bool allowZero = true) {
+      return !s.empty() && std::all_of(s.begin(), s.end(), [](unsigned char ch) { return std::isdigit(ch) != 0; })
+             && (allowZero || std::any_of(s.begin(), s.end(), [](char ch) { return ch != '0'; }));
   };
-  if (!is_uint(ttSize))
+  if (!is_uint(ttSize, false))
       ttSize = "16";
-  if (!is_uint(threads))
+  if (!is_uint(threads, false))
       threads = "1";
   if (limitType != "eval" && !is_uint(limit))
       limit = "13";
