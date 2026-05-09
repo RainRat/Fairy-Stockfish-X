@@ -204,6 +204,7 @@ namespace {
       std::vector<std::string> prelimDirections = {};
       bool hasUniversalHopper = false;
       PieceInfo::HopperProfile currentHopperProfile;
+      bool parserSuccess = true;
 
       auto reset_parser_state = [&]() {
           moveModalities.clear();
@@ -453,7 +454,7 @@ namespace {
                       trim_in_place(key);
                       trim_in_place(val);
                       
-                      auto parse_min_max = [](const std::string& s, int& min_val, int& max_val) {
+                      auto parse_min_max = [&](const std::string& s, int& min_val, int& max_val) {
                           size_t comma = s.find(',');
                           if (comma != std::string::npos) {
                               std::string min_s = s.substr(0, comma);
@@ -499,7 +500,10 @@ namespace {
                               else
                                   max_val = safe_stoi(max_s, 1, maxOk);
                               if (!minOk || (!maxOk && max_s != "*"))
+                              {
                                   std::cerr << "Invalid numeric value in Betza hopper parameters: '" << s << "'" << std::endl;
+                                  parserSuccess = false;
+                              }
                               if (minOk && (maxOk || max_s == "*") && min_val > max_val)
                               {
                                   std::cerr << "Invalid hopper range (min > max) in Betza hopper parameters: '" << s
@@ -508,7 +512,10 @@ namespace {
                               }
                           }
                           else
+                          {
                               std::cerr << "Invalid hopper range (missing comma) in Betza hopper parameters: '" << s << "'" << std::endl;
+                              parserSuccess = false;
+                          }
                       };
                       
                       if (key == "hurdles") { parse_min_max(val, currentHopperProfile.hurdlesMin, currentHopperProfile.hurdlesMax); }
@@ -522,13 +529,17 @@ namespace {
                           else {
                               currentHopperProfile.captureMode = PieceInfo::CAPTURE_DEST;
                               std::cerr << "Unknown Betza hopper capture mode '" << val << "' in '" << betza << "'." << std::endl;
+                              parserSuccess = false;
                           }
                       }
                       else if (key == "equi") {
                           if (val == "hopper") currentHopperProfile.equiRule = PieceInfo::EQUI_HOPPER;
                           else if (val == "stopper") currentHopperProfile.equiRule = PieceInfo::EQUI_STOPPER;
                           else
+                          {
                               std::cerr << "Unknown Betza hopper equi mode '" << val << "' in '" << betza << "'." << std::endl;
+                              parserSuccess = false;
+                          }
                       }
                       else if (key == "hurdle_types" || key == "transparent_types") {
                           bool isHurdle = (key == "hurdle_types");
@@ -547,13 +558,19 @@ namespace {
                               else if (v == "wall") special |= PieceInfo::HopperProfile::WALL;
                               else if (v == "dead") special |= PieceInfo::HopperProfile::DEAD;
                               else if (!v.empty())
+                              {
                                   std::cerr << "Unknown Betza hopper special type '" << v << "' in '" << betza << "'." << std::endl;
+                                  parserSuccess = false;
+                              }
                               
                               vpos = next_comma + 1;
                           }
                       }
                       else
+                      {
                           std::cerr << "Unknown Betza hopper parameter key '" << key << "' in '" << betza << "'." << std::endl;
+                          parserSuccess = false;
+                      }
                   }
                   pos = next_semi + 1;
               }
@@ -688,7 +705,7 @@ namespace {
               commit_atom(tupleAtom, repeatedTupleRider, i, ')', true);
           }
       }
-      return p.release();
+      return parserSuccess ? p.release() : nullptr;
   }
   // Special multi-leg betza description for Janggi elephant
   PieceInfo* janggi_elephant_piece() {
