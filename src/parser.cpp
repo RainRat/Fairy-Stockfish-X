@@ -1266,8 +1266,15 @@ bool VariantParser<DoCheck>::parse_piece_types(Variant* v) {
         std::string name = piece_name(pt);
 
         const auto& keyValue = config.find(name);
-        if (keyValue != config.end() && !keyValue->second.empty())
+        if (keyValue != config.end())
         {
+            if (keyValue->second.empty())
+            {
+                if (DoCheck)
+                    std::cerr << name << " - Empty piece definition" << std::endl;
+                return false;
+            }
+
             auto [token, rest] = split_piece_entry(keyValue->second);
             if (!token.empty())
                 v->add_piece(pt, token);
@@ -1363,7 +1370,10 @@ bool VariantParser<DoCheck>::parse_piece_values(Variant* v) {
                 parsed[pt] = parsedValue;
             }
             if (DoCheck && parseError)
+            {
                 std::cerr << optionName << " - Invalid syntax." << std::endl;
+                return false;
+            }
             if (!parseError)
                 std::copy(std::begin(parsed), std::end(parsed), std::begin(v->pieceValue[phase]));
         }
@@ -1387,7 +1397,7 @@ bool VariantParser<DoCheck>::parse_piece_values(Variant* v) {
         }))
             return false;
     }
-    return true;
+    return !parseHadError;
 }
 
 template <bool DoCheck>
