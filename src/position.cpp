@@ -1990,6 +1990,10 @@ Bitboard Position::compute_checkers_bb(Color side) const {
 
   if (!allow_checks())
   {
+      if (pseudo_royal_types())
+          checkers |= checked_pseudo_royals(side);
+      if (anti_royal_types())
+          checkers |= checked_anti_royals(side);
       if (var->blastPassiveTypes)
           checkers |= passive_blast_checkers(side, pieces());
   }
@@ -3405,8 +3409,7 @@ bool Position::legal(Move m) const {
       {
           if ((capture(m) || rifleShot) && blast_on_capture(m))
           {
-              moverRemovedByBlast = zero_range_blast_on_capture(m)
-                                 || (blast_center() && effectiveTo == shotSq);
+              moverRemovedByBlast = (blast_center() && effectiveTo == shotSq);
           }
           else if ((blast_on_move() && !capture(m) && !is_self_destruct(m))
                 || (blast_on_self_destruct() && is_self_destruct(m)))
