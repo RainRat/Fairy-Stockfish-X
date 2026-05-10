@@ -47,17 +47,22 @@ Fairy-Stockfish-X supports many variants through a configuration file. To load t
    ```
 3. Use the `d` command to see the current board.
 
-### Common Commands
+### Using with a GUI
 
-Once the engine is running, you can use these commands to interact with it:
+Most users should use Fairy-Stockfish-X with a chess Graphical User Interface (GUI) like:
+- **Cute Chess**
+- **Arena**
+- **BanksiaGUI**
 
-- **`position startpos`**: Load the standard starting position.
-- **`position startpos moves e2e4 e7e5`**: Load the starting position and play the specified moves.
-- **`go movetime 1000`**: Search for the best move for 1000 milliseconds (1 second).
-- **`go depth 10`**: Search until a specific depth is reached.
-- **`d`**: Display the current board and diagnostic information.
-- **`help`**: Show all available commands.
-- **`quit`**: Exit the engine.
+In your GUI, add the `stockfish` binary as a new engine. The GUI will handle all the technical commands for you.
+
+### Command Line Interface
+
+If you prefer to use the terminal, Fairy-Stockfish-X supports the UCI protocol.
+
+- Run `./stockfish` to start the engine.
+- Type `help` to see a list of available commands.
+- For detailed development information, see [AGENTS.md](AGENTS.md).
 
 ## Python Bindings
 
