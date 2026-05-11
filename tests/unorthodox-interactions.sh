@@ -51,6 +51,10 @@ rifleCapture = true
 changingColorTrigger = capture
 changingColorPieceTypes = *
 
+[rifle-jump:chess]
+customPiece1 = m:c{hurdles: 1,1; pre: 1,1; post: 1,1; capture: locust_first; hurdle_types: enemy}W
+rifleCapture = true
+
 [jump-blast:chess]
 customPiece1 = m:c{hurdles: 1,1; pre: 1,1; post: 1,1; capture: locust_first; hurdle_types: enemy}W
 blastOnSameTypeCapture = true
@@ -61,10 +65,6 @@ blastDiagonals = false
 [jump-blast-color:jump-blast]
 changingColorTrigger = capture
 changingColorPieceTypes = *
-
-[rifle-jump:chess]
-customPiece1 = m:c{hurdles: 1,1; pre: 1,1; post: 1,1; capture: locust_first; hurdle_types: enemy}W
-rifleCapture = true
 
 [rifle-duck:chess]
 rifleCapture = true
@@ -201,10 +201,10 @@ d")
 echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/3RK3 b"
 
 # 3. Test rifleCapture + zero-range blast-on-capture.
-# The blast is centered on the captured piece; the shooter stays at its source.
+# The shooter is removed by the blast.
 out=$(run_cmds "rifle-atomic" "${TEMP_INI}" "position fen r3k3/8/8/8/8/8/8/R3K3 w - - 0 1 moves a1a8
 d")
-echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/R3K3 b"
+echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/4K3 b"
 
 # 4. Test rifleCapture + changingColorTrigger
 out=$(run_cmds "rifle-color" "${TEMP_INI}" "position fen r3k3/8/8/8/8/8/8/R3K3 w - - 0 1 moves a1a8
@@ -217,17 +217,16 @@ d")
 echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/M3K3 b"
 
 # 5b. Test jumpCapture + zero-range blast-on-capture.
-# The captured piece is blasted and the mover remains on the landing square.
+# The capturer and captured piece are both removed.
 out=$(run_cmds "jump-blast" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/m7/M3K3 w - - 0 1 moves a1a3
 d")
-echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/M7/8/4K3 b"
+echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/4K3 b"
 
 # 5c. Test jumpCapture + blast + changingColor.
-# The surviving mover changes color after the capture.
+# The capturer dies, so color change is not visible.
 out=$(run_cmds "jump-blast-color" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/m7/M3K3 w - - 0 1 moves a1a3
 d")
-echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/m7/8/4K3 b"
-
+echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/4K3 b"
 # 6. Test rifleCapture + duck
 out=$(run_cmds "rifle-duck" "${TEMP_INI}" "position fen p3k3/8/8/8/8/8/8/R3K3 w - - 0 1 moves a1a8,h1
 d")

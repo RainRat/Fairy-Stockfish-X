@@ -1723,7 +1723,7 @@ void Position::set_check_info(StateInfo* si) const {
       for (PieceSet ps = piece_types(); ps;)
       {
           PieceType pt = pop_lsb(ps);
-          PieceType movePt = effective_piece_type(pt);
+          PieceType movePt = pt == KING ? king_type() : pt;
           si->checkSquares[pt] = 0;
 
           if (ksq != SQ_NONE)
@@ -1814,7 +1814,7 @@ void Position::set_check_info(StateInfo* si) const {
           for (PieceSet ps = piece_types(); ps;)
           {
               PieceType pt = pop_lsb(ps);
-              PieceType movePt = effective_piece_type(pt);
+              PieceType movePt = pt == KING ? king_type() : pt;
               if (AttackRiderTypes[movePt] & ASYMMETRICAL_RIDERS)
                   // For asymmetrical riders, use true retro paths from the king square.
                   si->checkSquares[pt] = retro_asymmetric_check_squares(sideToMove, movePt, ksq, occupied);
@@ -1990,6 +1990,10 @@ Bitboard Position::compute_checkers_bb(Color side) const {
 
   if (!allow_checks())
   {
+      if (pseudo_royal_types())
+          checkers |= checked_pseudo_royals(side);
+      if (anti_royal_types())
+          checkers |= checked_anti_royals(side);
       if (var->blastPassiveTypes)
           checkers |= passive_blast_checkers(side, pieces());
   }
@@ -2009,8 +2013,15 @@ Bitboard Position::compute_evasion_checkers_bb(Color side) const {
                     ? attackers_to_king(royalSq, ~side)
                     : Bitboard(0);
 
-  if (!allow_checks() && var->blastPassiveTypes)
-      checkers |= passive_blast_checkers(side, pieces());
+  if (!allow_checks())
+  {
+      if (pseudo_royal_types())
+          checkers |= checked_pseudo_royals(side);
+      if (anti_royal_types())
+          checkers |= checked_anti_royals(side);
+      if (var->blastPassiveTypes)
+          checkers |= passive_blast_checkers(side, pieces());
+  }
 
   return checkers;
 }
@@ -2413,7 +2424,7 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
           if (!ptPieces)
               continue;
 
-          PieceType move_pt = effective_piece_type(pt);
+          PieceType move_pt = pt == KING ? king_type() : pt;
           if (pt == JANGGI_CANNON)
               b |= attacks_from(~c, move_pt, s, occupied)
                  & attacks_from(~c, move_pt, s, occupied & ~janggiCannons)
@@ -2465,7 +2476,7 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
       PieceType pt = pop_lsb(ps);
       if (board_bb(c, pt) & s)
       {
-          PieceType move_pt = effective_piece_type(pt);
+          PieceType move_pt = pt == KING ? king_type() : pt;
           const PieceInfo* pi = pieceMap.get(move_pt);
           if (pi->has_runtime_rider_augment())
           {
@@ -2532,7 +2543,7 @@ Bitboard Position::attackers_to_king(Square s, Bitboard occupied, Color c, Bitbo
           if (!candidates)
               continue;
 
-          PieceType movePt = effective_piece_type(pt);
+          PieceType movePt = pt == KING ? king_type() : pt;
           if (movePt == NO_PIECE_TYPE)
               continue;
           const PieceInfo* pi = pieceMap.get(movePt);
@@ -3417,7 +3428,7 @@ bool Position::legal(Move m) const {
 
       if (!moverRemovedByBlast)
       {
-          PieceType movePt2 = effective_piece_type(pt);
+          PieceType movePt2 = pt == KING ? king_type() : pt;
           const PieceInfo* pInfo2 = pieceMap.get(movePt2);
           bool hasPotentialMove = PseudoMoves[0][us][pt][to] & board_bb();
           if (is_pure_hopper_like(pInfo2))
@@ -3448,6 +3459,7 @@ bool Position::legal(Move m) const {
   if (pseudo_royal_types())
   {
       const bool blastOnCapture = blast_on_capture(m);
+      const bool zeroRangeBlastOnCapture = zero_range_blast_on_capture(m);
       Square kto = rifleShot ? from : to;
       Square blastCenter = (type_of(m) == EN_PASSANT || rifleShot) ? shotSq : kto;
       Bitboard occupied = rifleShot ? pieces() : (!dropMove && !cloneMove ? pieces() ^ from : pieces());
@@ -3485,6 +3497,8 @@ bool Position::legal(Move m) const {
           occupied &= ~blast_squares(blastCenter);
           if (blast_immune_types() & movePt)
               occupied |= square_bb(kto);
+          else if (zeroRangeBlastOnCapture)
+              occupied &= ~square_bb(kto);
       }
       // Petrifying a pseudo-royal piece is illegal
       if (capture(m) && (var->petrifyOnCaptureTypes & type_of(moved_piece(m))) && (st->pseudoRoyals & from))
@@ -3556,6 +3570,7 @@ bool Position::legal(Move m) const {
   if (anti_royal_types())
   {
       const bool blastOnCapture = blast_on_capture(m);
+      const bool zeroRangeBlastOnCapture = zero_range_blast_on_capture(m);
       Square kto = rifleShot ? from : to;
       Square blastCenter = (type_of(m) == EN_PASSANT || rifleShot) ? shotSq : kto;
       Square rfrom = SQ_NONE, rto = SQ_NONE;
@@ -3581,6 +3596,8 @@ bool Position::legal(Move m) const {
           occupied &= ~blast_squares(blastCenter);
           if (blast_immune_types() & movePt)
               occupied |= square_bb(kto);
+          else if (zeroRangeBlastOnCapture)
+              occupied &= ~square_bb(kto);
       }
 
       Bitboard antiRoyals = 0;
@@ -3742,6 +3759,8 @@ bool Position::legal(Move m) const {
               removedByEffects |= square_bb(blastCenter) & blastRelevant;
           if (blast_on_capture(m) && (blast_immune_types() & movePt))
               removedByEffects &= ~square_bb(effectiveTo);
+          else if (zero_range_blast_on_capture(m))
+              removedByEffects |= square_bb(effectiveTo);
       }
 
       if ((capture(m) || rifleShot) && (var->petrifyOnCaptureTypes & movePt))
@@ -4694,7 +4713,7 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
   Piece pc = moved_piece(m);
   Color dropColor = dropMove ? drop_hand_color(us, in_hand_piece_type(m)) : us;
   PieceType movedType = type_of(pc);
-  PieceType movedMoveType = effective_piece_type(movedType);
+  PieceType movedMoveType = movedType == KING ? king_type() : movedType;
   const PieceInfo* pi = movedMoveType != NO_PIECE_TYPE ? pieceMap.get(movedMoveType) : nullptr;
   Piece captured = captured_piece(m);
   if (type_of(m) == CASTLING && captured == NO_PIECE)
@@ -4720,6 +4739,7 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
       captured = (!stepwisePush && pushInfo.captures) ? piece_on(pushInfo.tail) : NO_PIECE;
 
   const bool blastOnCaptureMove = blast_on_capture(pc, captured);
+  const bool zeroRangeBlastOnCaptureMove = zero_range_blast_on_capture(pc, captured);
   int pushRightsMask = 0;
   int pullRightsMask = 0;
   bool rifleShot = rifle_capture(m) && captured != NO_PIECE && type_of(m) != CASTLING;
@@ -6035,6 +6055,8 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
               : (var->petrifyOnCaptureTypes & type_of(pc) ? square_bb(moverSq) : Bitboard(0));
           if (captured && blastOnCaptureMove && (blast_immune_types() & movedType))
               blast_mask &= ~square_bb(moverSq);
+          if (captured && zeroRangeBlastOnCaptureMove && !(blast_immune_types() & movedType))
+              blast_mask |= square_bb(dropMove ? to : from);
           removal_mask |= blast_mask;
       };
 
@@ -6387,7 +6409,8 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
       }
   };
 
-  bool diesOnCapture = (death_on_capture_types() & piece_set(movedType));
+  bool diesOnCapture = (death_on_capture_types() & piece_set(movedType))
+                    || (captured != NO_PIECE && zeroRangeBlastOnCaptureMove && !(blast_immune_types() & movedType));
   if (!capturedDeadSquare && captured != NO_PIECE && !dropMove && diesOnCapture
       && piece_on(moverSq) != NO_PIECE)
   {
@@ -7164,9 +7187,12 @@ Value Position::blast_see(Move m) const {
   Square from = from_sq(m);
   Square to = to_sq(m);
   Piece mover = moved_piece(m);
+  Piece victim = captured_piece(m);
   Color us = color_of(mover);
   Bitboard fromto = is_drop_move(m) ? square_bb(to) | (paired_drop(m) ? square_bb(secondary_drop_square(m)) : Bitboard(0)) : from | to;
   Bitboard blast = blast_squares(capture(m) ? capture_square(m) : to);
+  if (capture(m) && zero_range_blast_on_capture(mover, victim) && !(blast_immune_types() & type_of(mover)))
+      blast |= square_bb(is_drop_move(m) ? to : from);
 
   // If the explosion would capture an opponent royal or pseudo-royal piece,
   // treat the move as delivering immediate mate. This prevents the static

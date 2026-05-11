@@ -289,7 +289,7 @@ inline Bitboard wrapping_slider_attacks(Square s, Bitboard occ, File maxFile, Ra
               break;
           if (next == s)
               break;
-          result |= square_bb(next);
+          result |= next;
           if (occ & square_bb(next))
               break;
           current = next;

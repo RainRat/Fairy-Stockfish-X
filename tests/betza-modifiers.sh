@@ -7,6 +7,16 @@ tmp_ini=$(mktemp)
 trap 'rm -f "$tmp_ini"' EXIT
 
 cat > "$tmp_ini" <<'INI'
+[modsugar_contra_group:chess]
+customPiece1 = a:o(RB)
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+startFen = 7k/8/3p4/8/3A1p2/8/3p4/K7 w - - 0 1
+
+[modsugar_contra_explicit:chess]
+customPiece1 = a:oRoB
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+startFen = 7k/8/3p4/8/3A1p2/8/3p4/K7 w - - 0 1
+
 [modsugar_ski_group:chess]
 customPiece1 = a:j(RB)
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
@@ -50,6 +60,7 @@ perft_moves() {
     | grep ':'
 }
 
+cmp <(perft_moves modsugar_contra_group) <(perft_moves modsugar_contra_explicit)
 cmp <(perft_moves modsugar_ski_group) <(perft_moves modsugar_ski_explicit)
 cmp <(perft_moves modsugar_max_group) <(perft_moves modsugar_max_explicit)
 
