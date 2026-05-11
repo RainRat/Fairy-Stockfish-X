@@ -432,6 +432,26 @@ void UCI::loop(int argc, char* argv[]) {
           while (is >> token)
               banmoves.push_back(UCI::to_move(pos, token));
       else if (token == "go")         go(pos, is, states, banmoves);
+      else if (token == "legal")
+      {
+          string type = "uci";
+          is >> type;
+          Notation n = type == "san" ? default_notation(pos.variant()) : NOTATION_DEFAULT;
+          bool first = true;
+          for (const auto& m : MoveList<LEGAL>(pos))
+          {
+              if (!first) sync_cout << " ";
+              if (n == NOTATION_DEFAULT)
+                  sync_cout << UCI::move(pos, m);
+              else
+              {
+                  Position& p = const_cast<Position&>(pos);
+                  sync_cout << SAN::move_to_san(p, m, n);
+              }
+              first = false;
+          }
+          sync_cout << sync_endl;
+      }
       else if (token == "position")   position(pos, is, states), banmoves.clear();
       else if (token == "ucinewgame" || token == "usinewgame" || token == "uccinewgame") Search::clear();
       else if (token == "isready")    sync_cout << "readyok" << sync_endl;
@@ -449,6 +469,7 @@ void UCI::loop(int argc, char* argv[]) {
                     << "\n\nTools and Debugging:"
                     << "\n  d                           Display the current board"
                     << "\n  vinfo                       Show details about the active variant"
+                    << "\n  legal [uci|san]             List legal moves in the position"
                     << "\n  eval                        Show static evaluation of the position"
                     << "\n  bench                       Run internal performance tests"
                     << "\n  compiler                    Show information about the compiler"
@@ -461,15 +482,6 @@ void UCI::loop(int argc, char* argv[]) {
       // Do not use these commands during a search!
       else if (token == "flip")     pos.flip();
       else if (token == "bench")    bench(pos, is, states);
-      else if (token == "legal") {
-          std::string notation;
-          is >> notation;
-          Notation n = notation == "san" ? NOTATION_SAN : NOTATION_DEFAULT;
-          if (n == NOTATION_DEFAULT) n = default_notation(pos.variant());
-          for (const auto& m : MoveList<LEGAL>(pos))
-              sync_cout << (notation == "san" ? SAN::move_to_san(pos, m, n) : UCI::move(pos, m)) << " ";
-          sync_cout << sync_endl;
-      }
       else if (token == "d")        sync_cout << pos << sync_endl;
       else if (token == "vinfo")
       {

@@ -206,6 +206,37 @@ extern "C" PyObject* pyffish_capturesToHand(PyObject* self, PyObject *args) {
     return Py_BuildValue("O", v->captureType != MOVE_OUT ? Py_True : Py_False);
 }
 
+// INPUT variant, fen, san
+extern "C" PyObject* pyffish_fromSAN(PyObject* self, PyObject *args) {
+    Position pos;
+    const char *fen, *variant, *san;
+
+    int chess960 = false;
+    Notation notation = NOTATION_DEFAULT;
+    if (!PyArg_ParseTuple(args, "sss|pi", &variant, &fen,  &san, &chess960, &notation)) {
+        return NULL;
+    }
+    const Variant* v = require_variant(variant);
+    if (!v) {
+        return NULL;
+    }
+    if (notation == NOTATION_DEFAULT)
+        notation = default_notation(v);
+    StateListPtr states(new std::deque<StateInfo>(1));
+    if (!buildPosition(pos, states, v, fen, NULL, chess960)) {
+        return NULL;
+    }
+
+    Move m = SAN::from_san(pos, san, notation);
+    if (m == MOVE_NONE)
+    {
+        PyErr_SetString(PyExc_ValueError, (std::string("Invalid SAN move '") + san + "'").c_str());
+        return NULL;
+    }
+
+    return Py_BuildValue("s", UCI::move(pos, m).c_str());
+}
+
 // INPUT variant, fen, move
 extern "C" PyObject* pyffish_getSAN(PyObject* self, PyObject *args) {
     Position pos;
@@ -307,36 +338,6 @@ extern "C" PyObject* pyffish_getSANmoves(PyObject* self, PyObject *args) {
     return Result;
 }
 
-// INPUT variant, fen, move
-extern "C" PyObject* pyffish_fromSAN(PyObject* self, PyObject *args) {
-    Position pos;
-    const char *fen, *variant, *san;
-
-    int chess960 = false;
-    Notation notation = NOTATION_DEFAULT;
-    if (!PyArg_ParseTuple(args, "sss|pi", &variant, &fen, &san, &chess960, &notation)) {
-        return NULL;
-    }
-    const Variant* v = require_variant(variant);
-    if (!v) {
-        return NULL;
-    }
-    if (notation == NOTATION_DEFAULT)
-        notation = default_notation(v);
-    StateListPtr states(new std::deque<StateInfo>(1));
-    if (!buildPosition(pos, states, v, fen, NULL, chess960)) {
-        return NULL;
-    }
-
-    Move m = SAN::from_san(pos, std::string(san), notation);
-    if (m == MOVE_NONE)
-    {
-        Py_RETURN_NONE;
-    }
-
-    return Py_BuildValue("s", UCI::move(pos, m).c_str());
-}
-
 // INPUT variant, fen, move list
 extern "C" PyObject* pyffish_legalMoves(PyObject* self, PyObject *args) {
     PyObject* legalMoves = PyList_New(0), *moveList;
@@ -361,6 +362,10 @@ extern "C" PyObject* pyffish_legalMoves(PyObject* self, PyObject *args) {
         Py_XDECREF(legalMoves);
         return NULL;
     }
+
+    if (notation != NOTATION_DEFAULT && notation == -1) // use variant default
+        notation = default_notation(v);
+
     for (const auto& m : MoveList<LEGAL>(pos))
     {
         PyObject *moveStr;

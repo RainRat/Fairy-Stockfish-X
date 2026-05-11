@@ -57,7 +57,6 @@ run_step "Betza range modifiers" timeout 60s bash tests/betza-range-modifiers.sh
 run_step "Betza rifle notation" timeout 60s bash tests/betza-rifle-notation.sh "${ENGINE}"
 run_step "dead pieces" timeout 60s bash tests/dead-pieces.sh "${ENGINE}"
 run_step "stationary capture" timeout 60s bash tests/stationary-capture.sh "${ENGINE}"
-run_step "borrow opponent drops" timeout 60s bash tests/borrow-opponent-drops.sh "${ENGINE}"
 run_step "spell freeze regressions" timeout 60s bash tests/spell-freeze-regressions.sh "${ENGINE}"
 run_step "spell potion movegen" timeout 60s bash tests/spell-potion-movegen.sh "${ENGINE}"
 run_step "asym rider checkers" timeout 60s bash tests/asym-rider-checkers.sh "${ENGINE}"

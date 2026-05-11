@@ -496,11 +496,9 @@ namespace {
   }
 
   bool analyze_push(const Position& pos, Move m, PushInfo& info) {
-    bool res = type_of(m) == INSERT || !pos.stepwise_pushing()
+    return type_of(m) == INSERT || !pos.stepwise_pushing()
                ? analyze_push_direct(pos, m, info)
                : analyze_push_stepwise(pos, m, info);
-    if (is_gating(m)) sync_cout << "analyze_push gating=" << is_gating(m) << " res=" << res << sync_endl;
-    return res;
   }
 
   inline Bitboard retro_asymmetric_check_squares(Color attacker, PieceType pt, Square kingSq, Bitboard occupied) {
@@ -4373,21 +4371,29 @@ bool Position::pseudo_legal(const Move m) const {
 }
 
 bool Position::push_move(Move m) const {
+  if (is_gating(m))
+      return false;
   PushInfo info;
   return analyze_push(*this, m, info);
 }
 
 bool Position::push_captures(Move m) const {
+  if (is_gating(m))
+      return false;
   PushInfo info;
   return analyze_push(*this, m, info) && info.captures;
 }
 
 bool Position::push_ejects(Move m) const {
+  if (is_gating(m))
+      return false;
   PushInfo info;
   return analyze_push(*this, m, info) && info.ejects;
 }
 
 Square Position::push_capture_square(Move m) const {
+  if (is_gating(m))
+      return SQ_NONE;
   PushInfo info;
   return analyze_push(*this, m, info) && info.captures ? info.tail : SQ_NONE;
 }
@@ -4742,7 +4748,6 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
 
   const bool blastOnCaptureMove = blast_on_capture(pc, captured);
   const bool zeroRangeBlastOnCaptureMove = zero_range_blast_on_capture(pc, captured);
-  // sync_cout << "rifleShot=" << rifleShot << " zeroRange=" << zeroRangeBlastOnCaptureMove << sync_endl;
   int pushRightsMask = 0;
   int pullRightsMask = 0;
   bool rifleShot = rifle_capture(m) && captured != NO_PIECE && type_of(m) != CASTLING;
@@ -6058,6 +6063,8 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
               : (var->petrifyOnCaptureTypes & type_of(pc) ? square_bb(moverSq) : Bitboard(0));
           if (captured && blastOnCaptureMove && (blast_immune_types() & movedType))
               blast_mask &= ~square_bb(moverSq);
+          if (captured && zeroRangeBlastOnCaptureMove && !(blast_immune_types() & movedType))
+              blast_mask |= square_bb(dropMove ? to : from);
           removal_mask |= blast_mask;
       };
 
