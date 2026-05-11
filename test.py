@@ -1821,11 +1821,13 @@ startFen = 4k3/8/2S5/3p4/8/8/8/4K3 w - d6 0 1
         result = sf.game_result("atomic", "KQ6/Rk6/2B5/8/8/8/8/8 b - - 0 1", [])
         self.assertEqual(result, sf.VALUE_DRAW)
 
-        # royalduck checkmate and stalemate
-        result = sf.game_result("royalduck", "r1bqkbnr/pp1*p1p1/n2p1pQp/1Bp5/8/2N1PN2/PPPP1PPP/R1B1K2R b KQkq - 1 6", [])
-        self.assertEqual(result, -sf.VALUE_MATE)
-        result = sf.game_result("royalduck", "rnbqk1nr/pppp1ppp/4p3/8/7P/5Pb1/PPPPP*P1/RNBQKBNR w KQkq - 1 4", [])
-        self.assertEqual(result, sf.VALUE_MATE)
+        # royalduck is derived from the all-only duck variant, so it is only
+        # available when the current build exposes that template.
+        if "royalduck" in sf.variants():
+            result = sf.game_result("royalduck", "r1bqkbnr/pp1*p1p1/n2p1pQp/1Bp5/8/2N1PN2/PPPP1PPP/R1B1K2R b KQkq - 1 6", [])
+            self.assertEqual(result, -sf.VALUE_MATE)
+            result = sf.game_result("royalduck", "rnbqk1nr/pppp1ppp/4p3/8/7P/5Pb1/PPPPP*P1/RNBQKBNR w KQkq - 1 4", [])
+            self.assertEqual(result, sf.VALUE_MATE)
 
     def test_pseudoroyal_drop_cannot_land_in_check(self):
         sf.load_variant_config(
