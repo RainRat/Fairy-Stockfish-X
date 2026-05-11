@@ -31,6 +31,7 @@
 #include "timeman.h"
 #include "tt.h"
 #include "uci.h"
+#include "apiutil.h"
 #include "xboard.h"
 #include "syzygy/tbprobe.h"
 
@@ -460,6 +461,15 @@ void UCI::loop(int argc, char* argv[]) {
       // Do not use these commands during a search!
       else if (token == "flip")     pos.flip();
       else if (token == "bench")    bench(pos, is, states);
+      else if (token == "legal") {
+          std::string notation;
+          is >> notation;
+          Notation n = notation == "san" ? NOTATION_SAN : NOTATION_DEFAULT;
+          if (n == NOTATION_DEFAULT) n = default_notation(pos.variant());
+          for (const auto& m : MoveList<LEGAL>(pos))
+              sync_cout << (notation == "san" ? SAN::move_to_san(pos, m, n) : UCI::move(pos, m)) << " ";
+          sync_cout << sync_endl;
+      }
       else if (token == "d")        sync_cout << pos << sync_endl;
       else if (token == "vinfo")
       {
@@ -791,7 +801,9 @@ Move UCI::to_move(const Position& pos, string& str) {
           return m;
   }
 
-  return MOVE_NONE;
+  // Fallback to SAN parsing
+  Position& p = const_cast<Position&>(pos);
+  return SAN::from_san(p, str, default_notation(p.variant()));
 }
 
 std::string UCI::option_name(std::string name) {
