@@ -274,6 +274,7 @@ public:
   bool blast_diagonals() const;
   bool blast_orthogonals() const;
   bool blast_center() const;
+  bool blast_on_capture_mover_center() const;
   bool zero_range_blast_on_capture(Piece mover, Piece captured) const;
   bool zero_range_blast_on_capture(Move m) const;
   PieceSet blast_immune_types() const;
@@ -1067,6 +1068,11 @@ inline bool Position::blast_orthogonals() const {
 inline bool Position::blast_center() const {
   assert(var != nullptr);
   return var->blastCenter;
+}
+
+inline bool Position::blast_on_capture_mover_center() const {
+  assert(var != nullptr);
+  return var->blastOnCaptureMoverCenter;
 }
 
 inline bool Position::zero_range_blast_on_capture(Move m) const {

@@ -1592,6 +1592,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("blastPromotion", v->blastPromotion);
     parse_attribute("blastDiagonals", v->blastDiagonals);
     parse_attribute("blastCenter", v->blastCenter);
+    parse_attribute("blastOnCaptureMoverCenter", v->blastOnCaptureMoverCenter);
     parse_attribute("blastPassiveTypes", v->blastPassiveTypes, v);
     parse_attribute("blastImmuneTypes", v->blastImmuneTypes, v);
     parse_attribute("mutuallyImmuneTypes", v->mutuallyImmuneTypes, v);

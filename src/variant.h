@@ -156,6 +156,7 @@ struct Variant {
   bool blastPromotion = false;
   bool blastDiagonals = true;
   bool blastCenter = true;
+  bool blastOnCaptureMoverCenter = false;
   PieceSet blastPassiveTypes = NO_PIECE_SET;
   PieceSet blastImmuneTypes = NO_PIECE_SET;
   PieceSet mutuallyImmuneTypes = NO_PIECE_SET;
