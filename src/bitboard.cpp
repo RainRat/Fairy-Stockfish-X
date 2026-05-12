@@ -390,11 +390,6 @@ namespace {
 
 }
 
-inline Bitboard safe_destination(Square s, int step) {
-    auto [dr, df] = decode_direction(Direction(step));
-    return safe_destination_tuple(s, dr, df);
-}
-
 Bitboard tuple_rider_attacks(const std::vector<PieceInfo::TupleRay>& rays, Square s, Bitboard occupied, Color c) {
     Bitboard attack = 0;
 

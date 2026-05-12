@@ -271,9 +271,7 @@ public:
   bool blast_on_move() const;
   bool blast_on_self_destruct() const;
   bool blast_promotion() const;
-  bool blast_diagonals() const;
-  bool blast_orthogonals() const;
-  bool blast_center() const;
+  bool blast_center(Square s) const;
   bool zero_range_blast_on_capture(Piece mover, Piece captured) const;
   bool zero_range_blast_on_capture(Move m) const;
   PieceSet blast_immune_types() const;
@@ -1054,19 +1052,9 @@ inline bool Position::blast_promotion() const {
   return var->blastPromotion;
 }
 
-inline bool Position::blast_diagonals() const {
+inline bool Position::blast_center(Square s) const {
   assert(var != nullptr);
-  return var->blastDiagonals;
-}
-
-inline bool Position::blast_orthogonals() const {
-  assert(var != nullptr);
-  return var->blastOrthogonals;
-}
-
-inline bool Position::blast_center() const {
-  assert(var != nullptr);
-  return var->blastCenter;
+  return var->blastMask[s] & square_bb(s);
 }
 
 inline bool Position::zero_range_blast_on_capture(Move m) const {
@@ -1075,7 +1063,11 @@ inline bool Position::zero_range_blast_on_capture(Move m) const {
 
 inline bool Position::zero_range_blast_on_capture(Piece mover, Piece captured) const {
   assert(var != nullptr);
-  return blast_on_capture(mover, captured) && blast_center() && !blast_orthogonals() && !blast_diagonals();
+  // Zero-range blast means only the center square is affected.
+  // We can't easily check this from the pre-calculated mask without knowing 'to',
+  // but this method is only used in evaluate.cpp which we will also update.
+  // For now, let's keep it simple.
+  return blast_on_capture(mover, captured) && var->blastPattern == "*";
 }
 
 inline PieceSet Position::blast_immune_types() const {
@@ -1098,19 +1090,16 @@ inline Bitboard Position::blast_immune_bb() const {
 }
 
 inline Bitboard Position::blast_pattern(Square to) const {
-    Bitboard blastPattern = 0;
-    if (blast_orthogonals())
-        blastPattern |= attacks_bb<WAZIR>(to);
-    if (blast_diagonals())
-        blastPattern |= attacks_bb<KING>(to) & ~attacks_bb<WAZIR>(to);
-    return blastPattern;
+    return var->blastMask[to];
 }
 
 inline Bitboard Position::blast_squares(Square to) const {
     Bitboard blastImmune = blast_immune_bb();
     Bitboard blastPattern = blast_pattern(to);
     Bitboard relevantPieces = (pieces(WHITE) | pieces(BLACK)) ^ pieces(PAWN);
-    Bitboard blastArea = (blastPattern & relevantPieces) | (blast_center() ? square_bb(to) : Bitboard(0));
+    // Pieces on the surrounding blast pattern are only removed if they are not pawns.
+    // The piece at the epicenter (to) is always removed if it was part of the pattern.
+    Bitboard blastArea = (blastPattern & relevantPieces) | (blastPattern & square_bb(to));
 
     return blastArea & (pieces() ^ blastImmune);
 }

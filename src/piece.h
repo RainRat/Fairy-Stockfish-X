@@ -157,6 +157,8 @@ struct PieceInfo {
   }
 };
 
+PieceInfo* from_betza(const std::string& betza, const std::string& name);
+
 struct PieceMap : public std::map<PieceType, PieceInfo*> {
   PieceMap() {
     direct.fill(nullptr);

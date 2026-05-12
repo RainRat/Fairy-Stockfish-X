@@ -2204,6 +2204,58 @@ void VariantMap::init() {
 
 
 // Pre-calculate derived properties
+void Variant::init_blast_masks() {
+    std::string pattern = blastPattern;
+    bool includeCenter = false;
+    size_t star = pattern.find('*');
+    if (star != std::string::npos)
+    {
+        includeCenter = true;
+        pattern.erase(star, 1);
+    }
+
+    PieceInfo* pi = from_betza(pattern, "blast");
+    for (Square s = SQ_A1; s < SQUARE_NB; ++s)
+    {
+        blastMask[s] = includeCenter ? square_bb(s) : Bitboard(0);
+        if (pattern.empty())
+            continue;
+
+        // Leapers
+        for (auto const& [d, _] : pi->steps[WHITE][MODALITY_QUIET])
+            blastMask[s] |= safe_destination(s, d);
+        for (auto const& [d, _] : pi->steps[WHITE][MODALITY_CAPTURE])
+            blastMask[s] |= safe_destination(s, d);
+
+        // Sliders
+        for (auto const& [d, limit] : pi->slider[WHITE][MODALITY_QUIET])
+        {
+            Bitboard next = safe_destination(s, d);
+            int count = 0;
+            while (next)
+            {
+                blastMask[s] |= next;
+                if (limit > 0 && ++count >= limit)
+                    break;
+                next = safe_destination(lsb(next), d);
+            }
+        }
+        for (auto const& [d, limit] : pi->slider[WHITE][MODALITY_CAPTURE])
+        {
+            Bitboard next = safe_destination(s, d);
+            int count = 0;
+            while (next)
+            {
+                blastMask[s] |= next;
+                if (limit > 0 && ++count >= limit)
+                    break;
+                next = safe_destination(lsb(next), d);
+            }
+        }
+    }
+    delete pi;
+}
+
 Variant* Variant::conclude() {
     rebuild_piece_symbol_maps();
 
@@ -2474,6 +2526,8 @@ Variant* Variant::conclude() {
       multimoveCycle = 2 * firstMultimove - 1 + 2 * secondMultimove - 1;
       multimoveCycleShift = 2 * firstMultimove - 1;
 
+    init_blast_masks();
+
     return this;
 }
 
@@ -2618,6 +2672,7 @@ void VariantMap::add(std::string s, Variant* v) {
       delete it->second;
   }
   (*this)[s] = concluded;
+  std::cerr << "Added variant: " << s << std::endl;
 }
 
 void VariantMap::clear_all() {

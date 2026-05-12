@@ -1430,6 +1430,22 @@ bool VariantParser<DoCheck>::parse_legacy_attributes(Variant* v) {
     if (!parse_color_setting_piece("pawnTypes", v->promotionPawnTypes, v)) return false;
     if (!parse_color_setting_piece("pawnTypes", v->enPassantTypes, v)) return false;
     if (!parse_color_setting_piece("pawnTypes", v->nMoveRuleTypes, v)) return false;
+
+    bool blastDiagonals = true;
+    bool blastOrthogonals = true;
+    bool blastCenter = true;
+    bool hasD = parse_attribute("blastDiagonals", blastDiagonals);
+    bool hasO = parse_attribute("blastOrthogonals", blastOrthogonals);
+    bool hasC = parse_attribute("blastCenter", blastCenter);
+    if (hasD || hasO || hasC)
+    {
+        v->blastPattern = "";
+        if (blastDiagonals && blastOrthogonals) v->blastPattern += "K";
+        else if (blastDiagonals) v->blastPattern += "F";
+        else if (blastOrthogonals) v->blastPattern += "W";
+        if (blastCenter) v->blastPattern += "*";
+    }
+
     return true;
 }
 
@@ -1590,8 +1606,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("blastOnSelfDestruct", v->blastOnSelfDestruct);
     parse_attribute("selfDestructTypes", v->selfDestructTypes, v);
     parse_attribute("blastPromotion", v->blastPromotion);
-    parse_attribute("blastDiagonals", v->blastDiagonals);
-    parse_attribute("blastCenter", v->blastCenter);
+    parse_attribute("blastPattern", v->blastPattern);
     parse_attribute("blastPassiveTypes", v->blastPassiveTypes, v);
     parse_attribute("blastImmuneTypes", v->blastImmuneTypes, v);
     parse_attribute("mutuallyImmuneTypes", v->mutuallyImmuneTypes, v);
@@ -1795,7 +1810,6 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("changingColorPieceTypes", v->changingColorPieceTypes, v);
     parse_color_setting("selfCapture", v->selfCapture);
     if (!parse_color_setting_piece("selfCaptureTypes", v->selfCaptureTypes, v)) return false;
-    parse_attribute("blastOrthogonals", v->blastOrthogonals);
     parse_attribute("blastOnSameTypeCapture", v->blastOnSameTypeCapture);
     parse_attribute("captureMorph", v->captureMorph);
     parse_attribute("rexExclusiveMorph", v->rexExclusiveMorph);

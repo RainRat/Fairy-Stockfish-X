@@ -653,7 +653,7 @@ string UCI::move(const Position& pos, Move m) {
           to = to_sq(m);
   }
 
-  string move = (is_drop_move(m)
+  std::string move = (is_drop_move(m)
           ? UCI::dropped_piece(pos, m) + UCI::exchange(pos, m) + (CurrentProtocol == USI ? '*' : '@')
           : UCI::square(pos, from))
                   + UCI::square(pos, to);

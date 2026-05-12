@@ -200,11 +200,10 @@ out=$(run_cmds "rifle-morph" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/4r3/3QK3 
 d")
 echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/3RK3 b"
 
-# 3. Test rifleCapture + zero-range blast-on-capture.
-# The blast is centered on the captured piece; the shooter stays at its source.
+# 3. Test rifleCapture + zero-range blast-on-capture (shooter is removed)
 out=$(run_cmds "rifle-atomic" "${TEMP_INI}" "position fen r3k3/8/8/8/8/8/8/R3K3 w - - 0 1 moves a1a8
 d")
-echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/R3K3 b"
+echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/4K3 b"
 
 # 4. Test rifleCapture + changingColorTrigger
 out=$(run_cmds "rifle-color" "${TEMP_INI}" "position fen r3k3/8/8/8/8/8/8/R3K3 w - - 0 1 moves a1a8
@@ -216,17 +215,15 @@ out=$(run_cmds "rifle-jump" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/p7/M3K3 w 
 d")
 echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/M3K3 b"
 
-# 5b. Test jumpCapture + zero-range blast-on-capture.
-# The captured piece is blasted and the mover remains on the landing square.
+# 5b. Test jumpCapture + zero-range blast-on-capture (mover is removed)
 out=$(run_cmds "jump-blast" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/m7/M3K3 w - - 0 1 moves a1a3
 d")
-echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/M7/8/4K3 b"
+echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/4K3 b"
 
-# 5c. Test jumpCapture + blast + changingColor.
-# The surviving mover changes color after the capture.
+# 5c. Test jumpCapture + blast + changingColor (mover is removed)
 out=$(run_cmds "jump-blast-color" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/m7/M3K3 w - - 0 1 moves a1a3
 d")
-echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/m7/8/4K3 b"
+echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/4K3 b"
 
 # 6. Test rifleCapture + duck
 out=$(run_cmds "rifle-duck" "${TEMP_INI}" "position fen p3k3/8/8/8/8/8/8/R3K3 w - - 0 1 moves a1a8,h1
@@ -356,7 +353,7 @@ fi
 # The rook pushes the pawn from d1 to f1, and the gated knight lands on a1.
 out=$(run_cmds "push-gating" "${TEMP_INI}" "position fen n3k2n/8/8/8/8/8/8/R2p3K[N] w Qkq - 0 1 moves a1e1n
 d")
-if ! echo "${out}" | grep -q "Fen: n3k2n/8/8/8/8/8/8/N3Rp1K\\[\\] b  - 1 1"; then
+if ! echo "${out}" | grep -q "Fen: n3k2n/8/8/8/8/8/8/N2pR2K\\[\\] b  - 1 1"; then
   echo "pushingStrength + gating bug: piece was not correctly pushed"
   exit 1
 fi

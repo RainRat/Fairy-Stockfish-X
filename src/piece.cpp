@@ -63,6 +63,8 @@ namespace {
       return ec == std::errc() && ptr == end && out >= 0;
   }
 
+} // namespace
+
   // Keep legacy/variant-facing aliases here:
   // L/C both mean camel (3,1), and J/Z both mean zebra (3,2).
   // In particular, built-in Janggi elephant notation still uses nZ.
@@ -690,6 +692,8 @@ namespace {
       }
       return p.release();
   }
+
+namespace {
   // Special multi-leg betza description for Janggi elephant
   PieceInfo* janggi_elephant_piece() {
       PieceInfo* p = from_betza("nZ", "janggiElephant");
