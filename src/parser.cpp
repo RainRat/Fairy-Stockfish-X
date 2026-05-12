@@ -2360,18 +2360,6 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
     // 3. Moving a (pseudo-)royal mutuallyImmuneType into a square threatened by the same type is legal.
     if (v->pseudoRoyalTypes || v->antiRoyalTypes || hasRoyalKing)
     {
-        if (v->blastImmuneTypes) //I may have this solved now.
-        {
-            if (DoCheck)
-                std::cerr << "Can not use kings, pseudo-royal, or anti-royal with blastImmuneTypes." << std::endl;
-            valid = false;
-        }
-        if (v->mutuallyImmuneTypes)
-        {
-            if (DoCheck)
-                std::cerr << "Can not use kings, pseudo-royal, or anti-royal with mutuallyImmuneTypes." << std::endl;
-            valid = false;
-        }
         if (v->antiRoyalTypes & v->pseudoRoyalTypes)
         {
             if (DoCheck)
