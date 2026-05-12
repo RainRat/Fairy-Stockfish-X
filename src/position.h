@@ -724,7 +724,6 @@ private:
                                 Bitboard ownPieces, Color c,
                                 bool captureMode,
                                 bool includeOwnBlockedAttacks);
-  static std::pair<int, int> decode_direction(Direction d);
   static Bitboard wrapped_step_targets(const std::map<Direction, int>& directions,
                                        Square sq, Bitboard occupied,
                                        File maxFile, Rank maxRank,
@@ -2849,10 +2848,6 @@ inline Bitboard Position::max_slider_bb(const std::map<Direction,int>& direction
       out |= square_bb(dest);
   }
   return out;
-}
-
-inline std::pair<int, int> Position::decode_direction(Direction d) {
-  return Stockfish::decode_direction(d);
 }
 
 inline Bitboard Position::wrapped_step_targets(const std::map<Direction, int>& directions,
