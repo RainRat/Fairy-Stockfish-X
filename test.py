@@ -2086,6 +2086,36 @@ startFen = 4r3/8/8/8/8/8/8/8[A] w - - 0 1
         with self.assertRaisesRegex(ValueError, "No such variant 'non_existent_variant'"):
             sf.evaluate("non_existent_variant", "8/8/8/8/8/8/8/8 w - - 0 1", [])
 
+    def test_racing_kings_endgame_eval(self):
+        # White on 8th, Black on 2nd, Black to move. Black losing.
+        # Rank 7 (8th rank), Rank 1 (2nd rank). 10000 + 100*7 = 10700.
+        res = sf.evaluate("racingkings", "K7/8/8/8/8/8/k7/8 b - - 0 1", [])
+        self.assertLess(res, -10000)
+
+        # White on 8th, Black on 7th, Black to move. Draw because Black can reach 8th rank.
+        res = sf.evaluate("racingkings", "K7/k7/8/8/8/8/8/8 b - - 0 1", [])
+        self.assertEqual(res, 0)
+
+    def test_atomic_endgame_eval(self):
+        # White has enough material to trigger specialized evaluator
+        # Kings at distance 1.
+        eval1 = sf.evaluate("atomic", "8/8/8/8/8/5k2/5K2/4Q3 w - - 0 1", [])
+        # Kings at distance 2.
+        eval2 = sf.evaluate("atomic", "8/8/8/8/5k2/8/5K2/4Q3 w - - 0 1", [])
+        # second FEN has a higher static evaluation than the first for the side to move (White).
+        self.assertGreater(eval2, eval1)
+
+    def test_misere_endgame_eval(self):
+        # Side with more material should have a negative evaluation in Misere.
+        # Trigger is_KXKX: material difference > QueenValueMg
+        # Give Black a pawn so it's not an immediate draw in the evaluator
+        res1 = sf.evaluate("misere", "4k3/8/8/8/8/4p3/8/4K1QQ w - - 0 1", [])
+        self.assertLess(res1, 0)
+
+        # Side with less material should have a positive evaluation
+        res2 = sf.evaluate("misere", "4k3/8/8/8/8/4p3/8/4K1QQ b - - 0 1", [])
+        self.assertGreater(res2, 0)
+
     def test_get_fog_fen(self):
         fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"  # startpos
         result = sf.get_fog_fen(fen, "fogofwar")
