@@ -618,7 +618,7 @@ void Bitboards::init_pieces() {
               auto& riderTypes = modality == MODALITY_CAPTURE ? AttackRiderTypes[pt] : MoveRiderTypes[initial][pt];
               riderTypes = NO_RIDER;
               for (auto const& [d, limit] : pi->steps[initial][modality])
-                  if (limit)
+                  if (limit && pi->stepsLame[initial][modality].find(d) == pi->stepsLame[initial][modality].end())
                       add_step_like_rider_types(riderTypes, d);
               for (auto const& [d, limit] : pi->slider[initial][modality])
                   add_slider_rider_types(riderTypes, d, limit);

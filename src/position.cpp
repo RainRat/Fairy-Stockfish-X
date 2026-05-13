@@ -1819,7 +1819,7 @@ void Position::set_check_info(StateInfo* si) const {
                   // For asymmetrical riders, use true retro paths from the king square.
                   si->checkSquares[pt] = retro_asymmetric_check_squares(sideToMove, movePt, ksq, occupied);
               else
-                  si->checkSquares[pt] = attacks_bb(~sideToMove, movePt, ksq, occupied);
+                  si->checkSquares[pt] = attacks_from(~sideToMove, movePt, ksq, occupied);
               // Collect special piece types that require slower check and evasion detection
               if (AttackRiderTypes[movePt] & NON_SLIDING_RIDERS)
                   si->nonSlidingRiders |= pieces(pt);

@@ -195,6 +195,8 @@ namespace {
       bool hopper = false;
       bool rider = false;
       bool lame = false;
+      bool hasLameProfile = false;
+      PieceInfo::LameProfile currentLameProfile;
       bool initial = false;
       bool dynamicDistance = false;
       bool skiSlider = false;
@@ -211,6 +213,8 @@ namespace {
           hopper = false;
           rider = false;
           lame = false;
+          hasLameProfile = false;
+          currentLameProfile = PieceInfo::LameProfile();
           initial = false;
           dynamicDistance = false;
           skiSlider = false;
@@ -353,6 +357,8 @@ namespace {
                           else
                           {
                               v[Direction(dr * FILE_NB + df)] = distance;
+                              if (hasLameProfile)
+                                  p->stepsLame[initial][modality][Direction(dr * FILE_NB + df)] = currentLameProfile;
                               if (rider && !atomIsRider && !hopper
                                   && !lame && !dynamicDistance && !skiSlider && !maxDistance)
                                   leapRiderV[Direction(dr * FILE_NB + df)] = distance;
@@ -428,8 +434,16 @@ namespace {
                   continue;
               }
               std::string params = expandedBetza.substr(i + 1, close - i - 1);
-              hasUniversalHopper = true;
-              currentHopperProfile = PieceInfo::HopperProfile();
+              if (lame)
+              {
+                  hasLameProfile = true;
+                  currentLameProfile = PieceInfo::LameProfile();
+              }
+              else
+              {
+                  hasUniversalHopper = true;
+                  currentHopperProfile = PieceInfo::HopperProfile();
+              }
               
               size_t pos = 0;
               auto trim_in_place = [](std::string& text) {
@@ -529,6 +543,21 @@ namespace {
                           else if (val == "stopper") currentHopperProfile.equiRule = PieceInfo::EQUI_STOPPER;
                           else
                               std::cerr << "Unknown Betza hopper equi mode '" << val << "' in '" << betza << "'." << std::endl;
+                      }
+                      else if (key == "path") {
+                          if (val == "default") currentLameProfile.path = PieceInfo::LameProfile::DEFAULT;
+                          else if (val == "mao") currentLameProfile.path = PieceInfo::LameProfile::MAO;
+                          else if (val == "moa") currentLameProfile.path = PieceInfo::LameProfile::MOA;
+                          else if (val == "both") currentLameProfile.path = PieceInfo::LameProfile::BOTH;
+                          else if (val == "either") currentLameProfile.path = PieceInfo::LameProfile::EITHER;
+                          else std::cerr << "Unknown Betza lame path '" << val << "' in '" << betza << "'." << std::endl;
+                      }
+                      else if (key == "filter") {
+                          if (val == "any") currentLameProfile.filter = PieceInfo::LameProfile::ANY;
+                          else if (val == "first") currentLameProfile.filter = PieceInfo::LameProfile::FIRST;
+                          else if (val == "last") currentLameProfile.filter = PieceInfo::LameProfile::LAST;
+                          else if (val == "mid") currentLameProfile.filter = PieceInfo::LameProfile::MID;
+                          else std::cerr << "Unknown Betza lame filter '" << val << "' in '" << betza << "'." << std::endl;
                       }
                       else if (key == "hurdle_types" || key == "transparent_types") {
                           bool isHurdle = (key == "hurdle_types");
