@@ -456,13 +456,13 @@ struct PieceTypeBitboardGroup
     {
         if (ptc == '*') return fallback;
         if (ptc < 'A' || ptc > 'Z') return Bitboard(0);
-        return isSet[ptc - 'A'] ? boardlist[ptc - 'A'] : fallback;
+        return (setMask & (1ULL << (ptc - 'A'))) ? boardlist[ptc - 'A'] : fallback;
     }
 
     Bitboard explicitBoardOfPiece(const char ptc) const
     {
         if (ptc < 'A' || ptc > 'Z') return Bitboard(0);
-        return isSet[ptc - 'A'] ? boardlist[ptc - 'A'] : Bitboard(0);
+        return (setMask & (1ULL << (ptc - 'A'))) ? boardlist[ptc - 'A'] : Bitboard(0);
     }
 
     // Set the bitboard of a piece type.
@@ -473,28 +473,40 @@ struct PieceTypeBitboardGroup
         if (ptc == '*') { fallback = board; return; }
         if (ptc < 'A' || ptc > 'Z') return;
         boardlist[ptc - 'A'] = board;
-        isSet[ptc - 'A'] = true;
+        setMask |= (1ULL << (ptc - 'A'));
     }
 
     PieceTypeBitboardGroup& operator|=(Bitboard b) {
         fallback |= b;
-        for (size_t i = 0; i < PIECE_TYPE_COUNT; ++i)
-            if (isSet[i]) boardlist[i] |= b;
+        uint64_t mask = setMask;
+        while (mask)
+        {
+            // use a manual bitscan to avoid needing bitboard.h here
+            int i;
+#if defined(__GNUC__)
+            i = __builtin_ctzll(mask);
+#elif defined(_MSC_VER) && defined(_WIN64)
+            unsigned long idx;
+            _BitScanForward64(&idx, mask);
+            i = (int)idx;
+#else
+            for (i = 0; !(mask & (1ULL << i)); ++i) {}
+#endif
+            boardlist[i] |= b;
+            mask &= (mask - 1);
+        }
         return *this;
     }
 
     explicit operator bool() const { return fallback || anySet(); }
     operator Bitboard() const { return fallback; }
 
-    bool anySet() const {
-        for (size_t i = 0; i < PIECE_TYPE_COUNT; ++i) if (isSet[i]) return true;
-        return false;
-    }
+    bool anySet() const { return setMask != 0; }
 
     Bitboard fallback = 0;
 private:
     Bitboard boardlist[PIECE_TYPE_COUNT] = {0};
-    bool isSet[PIECE_TYPE_COUNT] = {false};
+    uint64_t setMask = 0;
 };
 
 //When defined, move list will be stored in heap. Delete this if you want to use stack to store move list. Using stack can cause overflow (Segmentation Fault) when the search is too deep.

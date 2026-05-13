@@ -1999,20 +1999,10 @@ Bitboard Position::compute_checkers_bb(Color side) const {
 
 Bitboard Position::compute_evasion_checkers_bb(Color side) const {
 
-  // Fairy-Stockfish-X split from upstream-style broad checkersBB:
-  // this tracks only king-evasion state that should drive EVASIONS, mate/stalemate,
-  // null-move, and perpetual-check semantics.
-  Square royalSq = royal_square(side);
-  if (royalSq == SQ_NONE && var->bikjangRule && count<KING>(side) == 1)
-      royalSq = square<KING>(side);
-  Bitboard checkers = !allow_checks() && royalSq != SQ_NONE
-                    ? attackers_to_king(royalSq, ~side)
-                    : Bitboard(0);
-
-  if (!allow_checks() && var->blastPassiveTypes)
-      checkers |= passive_blast_checkers(side, pieces());
-
-  return checkers;
+  // Fairy-Stockfish-X split: evasion checkers track the "must evade now" state
+  // for king safety. Currently identical to broad checkers, but kept separate
+  // to support future divergence in pseudo-royal and anti-royal variants.
+  return compute_checkers_bb(side);
 }
 
 
@@ -4631,8 +4621,6 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
   std::memcpy(static_cast<void*>(&newSt), static_cast<void*>(st), offsetof(StateInfo, key));
   newSt.previous = st;
   st = &newSt;
-  st->extinctionSeen[WHITE] = newSt.previous->extinctionSeen[WHITE];
-  st->extinctionSeen[BLACK] = newSt.previous->extinctionSeen[BLACK];
   st->move = m;
   st->legalCapture = NO_VALUE;
   st->legalEnPassant = NO_VALUE;

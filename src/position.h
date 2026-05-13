@@ -121,6 +121,7 @@ struct StateInfo {
   Bitboard not_moved_pieces[COLOR_NB];
   Bitboard potionZones[COLOR_NB][Variant::POTION_TYPE_NB];
   int potionCooldown[COLOR_NB][Variant::POTION_TYPE_NB];
+  PieceSet extinctionSeen[COLOR_NB];
   Key layoutKey;
 
   // Not copied when making a move (will be recomputed anyhow)
@@ -148,7 +149,6 @@ struct StateInfo {
   Bitboard   flippedPieces;
   Bitboard   pseudoRoyalCandidates;
   Bitboard   pseudoRoyals;
-  PieceSet   extinctionSeen[COLOR_NB];
   OptBool    legalCapture;
   OptBool    legalEnPassant;
   Bitboard   chased;
