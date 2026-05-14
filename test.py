@@ -2092,9 +2092,8 @@ startFen = 4r3/8/8/8/8/8/8/8[A] w - - 0 1
         res = sf.evaluate("racingkings", "K7/8/8/8/8/8/k7/8 b - - 0 1", [])
         self.assertLess(res, -10000)
 
-        # White on 8th, Black on 7th, Black to move. Draw because Black can reach
-        # the 8th rank; keep the kings separated so the draw move is legal.
-        res = sf.evaluate("racingkings", "7K/k7/8/8/8/8/8/8 b - - 0 1", [])
+        # White on 8th, Black reaches the 8th rank too. This is an immediate draw.
+        res = sf.evaluate("racingkings", "7K/k7/8/8/8/8/8/8 b - - 0 1", ["a7a8"])
         self.assertEqual(res, 0)
 
     def test_atomic_endgame_eval(self):

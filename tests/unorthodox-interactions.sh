@@ -200,8 +200,7 @@ out=$(run_cmds "rifle-morph" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/4r3/3QK3 
 d")
 echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/3RK3 b"
 
-# 3. Test rifleCapture + zero-range blast-on-capture.
-# The blast is centered on the captured piece; the shooter stays at its source.
+# 3. Test rifleCapture + zero-range blast-on-capture (shooter survives)
 out=$(run_cmds "rifle-atomic" "${TEMP_INI}" "position fen r3k3/8/8/8/8/8/8/R3K3 w - - 0 1 moves a1a8
 d")
 echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/R3K3 b"
@@ -216,14 +215,12 @@ out=$(run_cmds "rifle-jump" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/p7/M3K3 w 
 d")
 echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/M3K3 b"
 
-# 5b. Test jumpCapture + zero-range blast-on-capture.
-# The captured piece is blasted and the mover remains on the landing square.
+# 5b. Test jumpCapture + zero-range blast-on-capture (mover survives)
 out=$(run_cmds "jump-blast" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/m7/M3K3 w - - 0 1 moves a1a3
 d")
 echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/M7/8/4K3 b"
 
-# 5c. Test jumpCapture + blast + changingColor.
-# The surviving mover changes color after the capture.
+# 5c. Test jumpCapture + blast + changingColor (mover changes color)
 out=$(run_cmds "jump-blast-color" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/m7/M3K3 w - - 0 1 moves a1a3
 d")
 echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/m7/8/4K3 b"

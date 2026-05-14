@@ -19,6 +19,9 @@ if ! printf 'uci\nquit\n' | "${ENGINE}" | grep -q ' var duck'; then
   echo "note: ${ENGINE} does not expose 'duck' in UCI_Variant (likely non-all build); all-only alias coverage is skipped." >&2
 fi
 
+run_step "pyffish extension" timeout 10m "${PYTHON}" setup.py build_ext --inplace --build-temp .local/build/pyffish
+export PYTHONPATH="${ROOT_DIR}${PYTHONPATH:+:${PYTHONPATH}}"
+
 run_step "protocol" timeout 90s bash tests/protocol.sh "${ENGINE}"
 run_step "movegen regressions" timeout 90s bash tests/movegen-regressions.sh "${ENGINE}"
 run_step "wrapping topology" timeout 90s bash tests/wrapping-topology.sh "${ENGINE}"
