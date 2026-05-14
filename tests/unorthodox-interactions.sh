@@ -62,6 +62,9 @@ blastDiagonals = false
 changingColorTrigger = capture
 changingColorPieceTypes = *
 
+[jump-blast-mover:jump-blast]
+blastOnCaptureMoverCenter = true
+
 [rifle-jump:chess]
 customPiece1 = m:c{hurdles: 1,1; pre: 1,1; post: 1,1; capture: locust_first; hurdle_types: enemy}W
 rifleCapture = true
@@ -219,6 +222,11 @@ echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/M3K3 b"
 out=$(run_cmds "jump-blast" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/m7/M3K3 w - - 0 1 moves a1a3
 d")
 echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/M7/8/4K3 b"
+
+# 5c. Test mover-centered jump blast (mover is removed by the blast)
+out=$(run_cmds "jump-blast-mover" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/m7/M3K3 w - - 0 1 moves a1a3
+d")
+echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/4K3 b"
 
 # 5c. Test jumpCapture + blast + changingColor (mover changes color)
 out=$(run_cmds "jump-blast-color" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/m7/M3K3 w - - 0 1 moves a1a3

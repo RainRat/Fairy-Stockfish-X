@@ -268,6 +268,7 @@ public:
   bool blast_on_capture() const;
   bool blast_on_capture(Piece mover, Piece captured) const;
   bool blast_on_capture(Move m) const;
+  bool blast_on_capture_mover_center() const;
   bool blast_on_move() const;
   bool blast_on_self_destruct() const;
   bool blast_promotion() const;
