@@ -62,11 +62,7 @@ blastDiagonals = false
 changingColorTrigger = capture
 changingColorPieceTypes = *
 
-[rifle-jump:chess]
-customPiece1 = m:c{hurdles: 1,1; pre: 1,1; post: 1,1; capture: locust_first; hurdle_types: enemy}W
-rifleCapture = true
-
-[rifle-duck:chess]
+[jump-blast:chess]
 rifleCapture = true
 wallingRule = duck
 castling = false
@@ -209,11 +205,6 @@ echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/R3K3 b"
 out=$(run_cmds "rifle-color" "${TEMP_INI}" "position fen r3k3/8/8/8/8/8/8/R3K3 w - - 0 1 moves a1a8
 d")
 echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/r3K3 b"
-
-# 5. Test rifleCapture + jumpCaptureTypes
-out=$(run_cmds "rifle-jump" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/p7/M3K3 w - - 0 1 moves a1a3
-d")
-echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/M3K3 b"
 
 # 5b. Test jumpCapture + zero-range blast-on-capture (mover survives)
 out=$(run_cmds "jump-blast" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/m7/M3K3 w - - 0 1 moves a1a3

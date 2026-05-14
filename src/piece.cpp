@@ -131,7 +131,7 @@ namespace {
 
       // Parser sugar: m(AB) -> mAmB, c(RB) -> cRcB
       auto expand_group_sugar = [&](const std::string& in) {
-          const std::string prefixChars = "mcpgnojzxiyfbrlvsh";
+          const std::string prefixChars = "mcpgnjzxifbrlvsh";
           std::string out;
           for (std::string::size_type i = 0; i < in.size(); ++i)
           {

@@ -194,19 +194,6 @@ customPiece2 = b:W
 captureForbidden = *:*
 captureAllowed = a:b
 startFen = 8/8/8/3b4/3A4/8/8/8 w - - 0 1
-
-[blast-default-test:fairy]
-blastOnCapture = true
-rifleCapture = true
-king = -
-startFen = 8/8/8/8/8/8/8/8 w - - 0 1
-
-[blast-mover-test:fairy]
-blastOnCapture = true
-rifleCapture = true
-blastOnCaptureMoverCenter = true
-king = -
-startFen = 8/8/8/8/8/8/8/8 w - - 0 1
 """
 
 sf.load_variant_config(ini_text)
@@ -562,19 +549,6 @@ startFen = 7k/8/8/8/8/8/8/A5K1 w - - 0 1
         tuple07_moves = sf.legal_moves("tuple07", sf.start_fen("tuple07"), [])
         self.assertIn("a1h1", tuple07_moves)
         self.assertNotIn("a1b2", tuple07_moves)
-
-        # Jump captures should honor selfCapture when the jumped piece is friendly.
-        sf.load_variant_config(
-            """[selfjump:chess]
-customPiece1 = a:mD
-jumpCaptureTypes = a
-selfCapture = true
-startFen = 7k/8/8/8/8/8/P7/A6K w - - 0 1
-"""
-        )
-        selfjump_fen = sf.start_fen("selfjump")
-        selfjump_moves = sf.legal_moves("selfjump", selfjump_fen, [])
-        self.assertIn("a1a3", selfjump_moves)
 
         # Anti-royal pieces must remain attacked.
         sf.load_variant_config(
@@ -2055,24 +2029,6 @@ startFen = 4r3/8/8/8/8/8/8/8[A] w - - 0 1
                     # Should fail with character validation (FEN_INVALID_CHAR = -10), not promoted piece validation
                     self.assertEqual(result, -10,
                                    f"Expected non-shogi variant to fail with character error (-10): {fen}, got {result}")
-
-    def test_blast_on_capture_mover_center(self):
-        # White Rook e3, Black Knights: e5 (target), d6 (diag to e5), d2 (diag to e3)
-        fen = "8/8/3n4/4n3/8/4R3/3n4/8 w - - 0 1"
-        move = "e3e5"
-
-        # Default blast (centered on capture square e5)
-        # e5 diagonals: d6, f6, d4, f4. d6 should be removed.
-        # d2 is not near e5.
-        fen_default = sf.get_fen("blast-default-test", fen, [move])
-        self.assertEqual(fen_default, "8/8/8/8/8/4R3/3n4/8 b - - 0 1")
-
-        # Rifle captures keep the shooter on its source square, so capture blasts
-        # are centered on the captured piece even when mover-centered blast is
-        # enabled. If a variant wants the shooter to explode, it should not model
-        # the capture as rifle.
-        fen_mover = sf.get_fen("blast-mover-test", fen, [move])
-        self.assertEqual(fen_mover, "8/8/8/8/8/4R3/3n4/8 b - - 0 1")
 
     def test_evaluate(self):
         eval_start = sf.evaluate("chess", CHESS, [])

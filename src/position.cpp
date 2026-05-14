@@ -3477,7 +3477,7 @@ bool Position::legal(Move m) const {
           || (blast_on_move() && !capture(m) && !is_self_destruct(m))
           || (blast_on_self_destruct() && is_self_destruct(m)))
       {
-          Square blastCenter = (capture(m) || rifleShot) ? (blast_on_capture_mover_center() && !rifleShot ? effectiveTo : shotSq) : effectiveTo;
+          Square blastCenter = (capture(m) || rifleShot) ? shotSq : effectiveTo;
           Bitboard blastRelevant = postMoveOccupied & ~blast_immune_bb();
           removedByEffects |= blast_pattern(blastCenter) & blastRelevant;
           if (blast_center())
@@ -3606,7 +3606,7 @@ bool Position::legal(Move m) const {
   {
       const bool blastOnCapture = blast_on_capture(m);
       Square kto = rifleShot ? from : to;
-      Square blastCenter = (type_of(m) == EN_PASSANT || rifleShot) ? (blast_on_capture_mover_center() && !rifleShot ? effectiveTo : shotSq) : kto;
+      Square blastCenter = (type_of(m) == EN_PASSANT || rifleShot) ? shotSq : kto;
       Bitboard occupied = rifleShot ? pieces() : (!dropMove && !cloneMove ? pieces() ^ from : pieces());
       Bitboard blastImmune = blastOnCapture ? blast_immune_bb() : Bitboard(0);
       if (walling_rule() == DUCK)
@@ -3717,7 +3717,7 @@ bool Position::legal(Move m) const {
   {
       const bool blastOnCapture = blast_on_capture(m);
       Square kto = rifleShot ? from : to;
-      Square blastCenter = (type_of(m) == EN_PASSANT || rifleShot) ? (blast_on_capture_mover_center() && !rifleShot ? effectiveTo : shotSq) : kto;
+      Square blastCenter = (type_of(m) == EN_PASSANT || rifleShot) ? shotSq : kto;
       Square rfrom = SQ_NONE, rto = SQ_NONE;
       Bitboard occupied = rifleShot ? pieces() : (!dropMove ? pieces() ^ from : pieces());
       Bitboard blastImmune = blastOnCapture ? blast_immune_bb() : Bitboard(0);
@@ -6149,7 +6149,7 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
            ( blast_on_move() && !captured && !is_self_destruct(m) ) ||
            ( blast_on_self_destruct() && is_self_destruct(m) ) ) {
 
-          blast_mask = (blastOnCaptureMove || blast_on_move() || blast_on_self_destruct()) ? blast_squares(captured ? (blast_on_capture_mover_center() && !rifleShot ? moverSq : st->captureSquare) : to)
+          blast_mask = (blastOnCaptureMove || blast_on_move() || blast_on_self_destruct()) ? blast_squares(captured ? st->captureSquare : to)
               : (var->petrifyOnCaptureTypes & type_of(pc) ? square_bb(moverSq) : Bitboard(0));
           if (captured && blastOnCaptureMove && (blast_immune_types() & movedType))
               blast_mask &= ~square_bb(moverSq);
@@ -7284,7 +7284,7 @@ Value Position::blast_see(Move m) const {
   Piece mover = moved_piece(m);
   Color us = color_of(mover);
   Bitboard fromto = is_drop_move(m) ? square_bb(to) | (paired_drop(m) ? square_bb(secondary_drop_square(m)) : Bitboard(0)) : from | to;
-  Bitboard blast = blast_squares(capture(m) ? (blast_on_capture_mover_center() && !rifle_capture(m) ? to : capture_square(m)) : to);
+  Bitboard blast = blast_squares(capture(m) ? capture_square(m) : to);
 
   // If the explosion would capture an opponent royal or pseudo-royal piece,
   // treat the move as delivering immediate mate. This prevents the static
