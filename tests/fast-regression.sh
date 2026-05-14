@@ -27,6 +27,7 @@ run_step "piece-specific step regions" timeout 60s bash tests/piece-specific-ste
 run_step "variant switch after perft" timeout 60s bash tests/variant-switch-after-perft.sh "${ENGINE}"
 run_step "custom en passant passed squares" timeout 60s bash tests/custom-en-passant-passed-squares.sh "${ENGINE}"
 run_step "crazyhouse multi pawn promo" timeout 60s bash tests/crazyhouse-multi-pawn-promo.sh "${ENGINE}"
+run_step "borrow opponent drops" timeout 60s bash tests/borrow-opponent-drops.sh "${ENGINE}"
 run_step "blast legal regressions" timeout 60s bash tests/blast-legal-regressions.sh "${ENGINE}"
 run_step "pseudoroyal blast immune" timeout 60s bash tests/pseudoroyal-blast-immune.sh "${ENGINE}"
 run_step "universal hopper" timeout 90s bash tests/universal-hopper.sh "${ENGINE}"
