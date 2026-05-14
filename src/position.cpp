@@ -2999,7 +2999,8 @@ bool Position::legal(Move m) const {
           return false;
   }
 
-  assert(is_pass(m) || pureWallMove || color_of(moved_piece(m)) == us);
+  Color movedPieceColor = dropMove ? drop_hand_color(us, in_hand_piece_type(m)) : us;
+  assert(is_pass(m) || pureWallMove || color_of(moved_piece(m)) == movedPieceColor);
   assert(royal_square(us) == SQ_NONE || piece_on(royal_square(us)) == make_piece(us, royal_piece_type(us)));
   assert(board_bb() & to);
 
@@ -4499,11 +4500,12 @@ bool Position::gives_check(Move m) const {
   // Setup/pass-style pseudo-legal moves can exist without a board mover.
   if (mover == NO_PIECE)
       return false;
-  assert(color_of(mover) == sideToMove);
 
   Square from = from_sq(m);
   Square to = to_sq(m);
   bool dropMove = is_drop_move(m);
+  Color moverColor = dropMove ? drop_hand_color(sideToMove, in_hand_piece_type(m)) : sideToMove;
+  assert(color_of(mover) == moverColor);
 
   Bitboard freezeExtra = 0;
   Bitboard jumpRemoved = 0;
