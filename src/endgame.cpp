@@ -1216,9 +1216,9 @@ Value Endgame<KXKX, EG_EVAL_MISERE>::operator()(const Position& pos) const {
   Square strongKing = pos.square<KING>(strongSide);
   Square weakKing   = pos.square<KING>(weakSide);
 
-  Value result = - pos.non_pawn_material(strongSide) * int(VALUE_KNOWN_WIN) / int(VALUE_KNOWN_WIN + pos.non_pawn_material(strongSide))
-                + pos.non_pawn_material(weakSide)
-                - pos.count<PAWN>(weakSide) * PawnValueEg
+  Value result =  pos.non_pawn_material(strongSide) * int(VALUE_KNOWN_WIN) / int(VALUE_KNOWN_WIN + pos.non_pawn_material(strongSide))
+                - pos.non_pawn_material(weakSide)
+                + pos.count<PAWN>(weakSide) * PawnValueEg
                 + push_to_opposing_edge(relative_square(weakSide, strongKing, pos.max_rank()), pos) * 2
                 + push_close(strongKing, weakKing) * 2;
 

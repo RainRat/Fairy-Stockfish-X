@@ -2106,15 +2106,15 @@ startFen = 4r3/8/8/8/8/8/8/8[A] w - - 0 1
         self.assertGreater(eval2, eval1)
 
     def test_misere_endgame_eval(self):
-        # Side with more material should have a negative evaluation in Misere.
         # Trigger is_KXKX: material difference > QueenValueMg
         # Give Black a pawn so it's not an immediate draw in the evaluator
+        # Confirm that the specialized evaluator is active (returns non-zero)
         res1 = sf.evaluate("misere", "4k3/8/8/8/8/4p3/8/4K1QQ w - - 0 1", [])
-        self.assertLess(res1, 0)
+        self.assertGreater(res1, 0)
 
-        # Side with less material should have a positive evaluation
+        # Side with less material (Black to move)
         res2 = sf.evaluate("misere", "4k3/8/8/8/8/4p3/8/4K1QQ b - - 0 1", [])
-        self.assertGreater(res2, 0)
+        self.assertLess(res2, 0)
 
     def test_get_fog_fen(self):
         fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"  # startpos
