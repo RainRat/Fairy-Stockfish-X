@@ -2086,6 +2086,21 @@ startFen = 4r3/8/8/8/8/8/8/8[A] w - - 0 1
         with self.assertRaisesRegex(ValueError, "No such variant 'non_existent_variant'"):
             sf.evaluate("non_existent_variant", "8/8/8/8/8/8/8/8 w - - 0 1", [])
 
+    def test_racing_kings_endgame_eval(self):
+        # White on 8th, Black on 2nd, Black to move. Black is losing.
+        res = sf.evaluate("racingkings", "K7/8/8/8/8/8/k7/8 b - - 0 1", [])
+        self.assertLess(res, -10000)
+
+        # White on 8th, Black on 7th, Black to move. Draw because Black can reach 8th rank.
+        res = sf.evaluate("racingkings", "K7/k7/8/8/8/8/8/8 b - - 0 1", [])
+        self.assertEqual(res, 0)
+
+    def test_atomic_endgame_eval(self):
+        # White has enough material to trigger the specialized evaluator.
+        eval1 = sf.evaluate("atomic", "8/8/8/8/8/5k2/5K2/4Q3 w - - 0 1", [])
+        eval2 = sf.evaluate("atomic", "8/8/8/8/5k2/8/5K2/4Q3 w - - 0 1", [])
+        self.assertGreater(eval2, eval1)
+
     def test_get_fog_fen(self):
         fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"  # startpos
         result = sf.get_fog_fen(fen, "fogofwar")
