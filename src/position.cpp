@@ -2522,21 +2522,21 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
   return b;
 }
 
-Bitboard Position::attackers_to_king(Square s, Bitboard occupied, Color c, Bitboard janggiCannons) const {
+Bitboard Position::attackers_to_king(Square s, Bitboard occupied, Color c, Bitboard janggiCannons, PieceType pt) const {
 
   Bitboard attackers = attackers_to(s, occupied, c, janggiCannons);
   attackers |= janggi_cannon_attackers_to_king(s, occupied, c);
   // Locust-style universal hoppers capture the hurdle square and land beyond it,
   // so the hurdle square is not present in attacks_from() landing targets.
-  if (piece_on(s) != NO_PIECE)
+  if (pt != NO_PIECE_TYPE || piece_on(s) != NO_PIECE)
       for (PieceSet ps = piece_types(); ps; )
       {
-          PieceType pt = pop_lsb(ps);
-          Bitboard candidates = pieces(c, pt) & occupied;
+          PieceType apt = pop_lsb(ps);
+          Bitboard candidates = pieces(c, apt) & occupied;
           if (!candidates)
               continue;
 
-          PieceType movePt = effective_piece_type(pt);
+          PieceType movePt = effective_piece_type(apt);
           if (movePt == NO_PIECE_TYPE)
               continue;
           const PieceInfo* pi = pieceMap.get(movePt);
@@ -2557,7 +2557,7 @@ Bitboard Position::attackers_to_king(Square s, Bitboard occupied, Color c, Bitbo
           while (candidates)
           {
               Square from = pop_lsb(candidates);
-              Bitboard landings = attacks_from(c, pt, from, occupied) & ~pieces(c);
+              Bitboard landings = attacks_from(c, apt, from, occupied) & ~pieces(c);
               while (landings)
               {
                   Square to = pop_lsb(landings);
@@ -2574,20 +2574,26 @@ Bitboard Position::attackers_to_king(Square s, Bitboard occupied, Color c, Bitbo
   if (var->prisonPawnPromotion)
       restricted |= pieces(c, PAWN) & pawnCannotCheckZone[c];
   attackers &= ~restricted;
-  if (anti_royal_king_mutually_immune())
-      for (PieceSet ps = anti_royal_types(); ps; )
-          attackers &= ~pieces(c, pop_lsb(ps));
-  if (!attackers)
-      return attackers;
+  PieceType royalType = pt != NO_PIECE_TYPE ? pt :
+                        (piece_on(s) != NO_PIECE ? type_of(piece_on(s)) : king_type());
 
-  Piece royalPiece = piece_on(s);
-  PieceType royalType = royalPiece != NO_PIECE ? type_of(royalPiece) : king_type();
+  if (anti_royal_king_mutually_immune())
+  {
+      if (royalType == king_type())
+      {
+          for (PieceSet ps = anti_royal_types(); ps; )
+              attackers &= ~pieces(c, pop_lsb(ps));
+      }
+      else if (anti_royal_types() & royalType)
+          attackers &= ~pieces(c, king_type());
+  }
+
   if (royalType != NO_PIECE_TYPE)
       for (PieceSet ps = piece_types(); ps; )
       {
-          PieceType pt = pop_lsb(ps);
-          if (var->captureForbidden[pt] & royalType)
-              attackers &= ~pieces(c, pt);
+          PieceType apt = pop_lsb(ps);
+          if (var->captureForbidden[apt] & royalType)
+              attackers &= ~pieces(c, apt);
       }
   return attackers;
 }
@@ -3447,6 +3453,154 @@ bool Position::legal(Move m) const {
           return false;
   }
 
+  Bitboard postMoveOccupied;
+  if (type_of(m) == CASTLING)
+  {
+      Square kfrom = from;
+      Square rfrom = to;
+      Square kto, rto;
+      castling_destinations(sideToMove, kfrom, rfrom, kto, rto);
+      postMoveOccupied = (pieces() ^ kfrom ^ rfrom) | kto | rto;
+  }
+  else
+      postMoveOccupied = rifleShot ? (pieces() ^ square_bb(shotSq))
+                           : (((!dropMove ? pieces() ^ from : pieces()) ^ square_bb(shotSq)) | to);
+
+  if (paired_drop(m))
+      postMoveOccupied |= square_bb(secondary_drop_square(m));
+
+  Bitboard removedByEffects = 0;
+  Bitboard structuralRemoval = 0;
+  if (!is_pass(m))
+  {
+      if (((capture(m) || rifleShot) && blast_on_capture(m))
+          || (blast_on_move() && !capture(m) && !is_self_destruct(m))
+          || (blast_on_self_destruct() && is_self_destruct(m)))
+      {
+          Square blastCenter = (capture(m) || rifleShot) ? (blast_on_capture_mover_center() ? effectiveTo : shotSq) : effectiveTo;
+          Bitboard blastRelevant = postMoveOccupied & ~blast_immune_bb();
+          removedByEffects |= blast_pattern(blastCenter) & blastRelevant;
+          if (blast_center())
+              removedByEffects |= square_bb(blastCenter) & blastRelevant;
+          if (blast_on_capture(m) && (blast_immune_types() & movePt))
+              removedByEffects &= ~square_bb(effectiveTo);
+          else if (zero_range_blast_on_capture(m))
+              removedByEffects |= square_bb(effectiveTo);
+      }
+
+      if ((capture(m) || rifleShot) && (var->petrifyOnCaptureTypes & movePt))
+          removedByEffects |= square_bb(effectiveTo);
+
+      // Surround capture
+      if (surround_capture_opposite() || surround_capture_intervene() || surround_capture_edge())
+      {
+          for (int sign : {-1, 1})
+          {
+              for (const Direction& d : var->connectDirections)
+              {
+                  Direction mod_d = d * sign;
+                  Square s = effectiveTo + mod_d;
+                  if (!is_ok(s) || !(square_bb(s) & pieces(~us) & ~square_bb(shotSq))) continue;
+
+                  if (s & surround_capture_max_region())
+                  {
+                      bool surrounded = true;
+                      Bitboard b = (attacks_bb<WAZIR>(s, postMoveOccupied) & postMoveOccupied) & ~square_bb(from) & pieces(~us);
+                      while(b)
+                      {
+                          Square s2 = pop_lsb(b);
+                          if (!((s2 & surround_capture_hostile_region()) || (s2 & (pieces(us) | effectiveTo))))
+                          {
+                              surrounded = false;
+                              break;
+                          }
+                      }
+                      if (surrounded) { removedByEffects |= s; structuralRemoval |= s; }
+                  }
+
+                  Square oppSquare = s + mod_d;
+                  if (!is_ok(oppSquare))
+                  {
+                      if (surround_capture_edge()) { removedByEffects |= s; structuralRemoval |= s; }
+                  }
+                  else
+                  {
+                      if (surround_capture_opposite() && ((pieces(us) & oppSquare) || (oppSquare == effectiveTo) || (surround_capture_hostile_region() & oppSquare)))
+                          { removedByEffects |= s; structuralRemoval |= s; }
+                  }
+              }
+          }
+          if (surround_capture_intervene())
+          {
+              for (const Direction& d : var->connectDirections)
+              {
+                  Square s1 = effectiveTo + d, s2 = effectiveTo - d;
+                  if (is_ok(s1) && is_ok(s2) && (pieces(~us) & s1) && (pieces(~us) & s2))
+                      { removedByEffects |= square_bb(s1) | s2; structuralRemoval |= square_bb(s1) | s2; }
+              }
+          }
+      }
+      // Remove connect N
+      if (remove_connect_n() > 0)
+      {
+          Bitboard connectMask = 0;
+          auto mark_line = [&](Bitboard line) {
+              for (Direction d : var->connectDirections)
+              {
+                  Bitboard temp = line;
+                  for (int i = 1; i < remove_connect_n(); ++i)
+                      temp &= shift(d, temp);
+                  Bitboard lineStarts = temp;
+                  while (lineStarts)
+                  {
+                      Square start = pop_lsb(lineStarts);
+                      for (int i = 0; i < remove_connect_n(); ++i)
+                      {
+                          Square sq = start - i * d;
+                          removedByEffects |= sq;
+                          structuralRemoval |= sq;
+                          connectMask |= sq;
+                      }
+                  }
+              }
+          };
+          if (remove_connect_n_by_type())
+          {
+              for (PieceSet ps = variant()->pieceTypes; ps; )
+              {
+                  PieceType pt = pop_lsb(ps);
+                  Bitboard line = pieces(pt);
+                  if (!dropMove) line &= ~from;
+                  if (movePt == pt) line |= effectiveTo;
+                  if (capture(m) && type_of(captured_piece(m)) == pt) line &= ~shotSq;
+                  line &= ~(removedByEffects & ~connectMask);
+                  mark_line(line);
+              }
+          }
+          else
+          {
+              Bitboard whiteLine = pieces(WHITE), blackLine = pieces(BLACK);
+              if (!dropMove) { if (us == WHITE) whiteLine &= ~from; else blackLine &= ~from; }
+              if (us == WHITE) whiteLine |= effectiveTo; else blackLine |= effectiveTo;
+              if (capture(m)) { if (us == WHITE) blackLine &= ~shotSq; else whiteLine &= ~shotSq; }
+              whiteLine &= ~(removedByEffects & ~connectMask);
+              blackLine &= ~(removedByEffects & ~connectMask);
+              mark_line(whiteLine); mark_line(blackLine);
+          }
+      }
+  }
+  postMoveOccupied &= ~structuralRemoval;
+
+  Bitboard janggiCannons = pieces(JANGGI_CANNON);
+  if (!is_pass(m))
+  {
+      if (type_of(moved_piece(m)) == JANGGI_CANNON)
+          janggiCannons = rifleShot ? (janggiCannons & ~square_bb(shotSq))
+                                    : ((!dropMove ? janggiCannons ^ from : janggiCannons) | to);
+      else if (janggiCannons & (rifleShot ? square_bb(shotSq) : square_bb(to)))
+          janggiCannons ^= (rifleShot ? square_bb(shotSq) : square_bb(to));
+  }
+
   // Check for attacks to pseudo-royal pieces
   if (pseudo_royal_types())
   {
@@ -3472,7 +3626,7 @@ bool Position::legal(Move m) const {
               // Ensure to include the initial square if from == kto
               for (Square s = from; from != kto ? s != kto : s == from; s += step)
                   if (  !(blastOnCapture && (blast_pattern(s) & st->pseudoRoyals & pieces(~sideToMove) & ~blastImmune))
-                      && (attackers_to(s, occupied, ~us) & ~removedAttackers))
+                      && (attackers_to(s, occupied, ~us) & occupied & ~removedAttackers))
                       return false;
           // Move the rook
           occupied ^= to | castlingRto;
@@ -3489,6 +3643,7 @@ bool Position::legal(Move m) const {
           if (blast_immune_types() & movePt)
               occupied |= square_bb(kto);
       }
+      occupied &= ~removedByEffects;
       // Petrifying a pseudo-royal piece is illegal
       if (capture(m) && (var->petrifyOnCaptureTypes & type_of(moved_piece(m))) && (st->pseudoRoyals & from))
           return false;
@@ -3526,9 +3681,10 @@ bool Position::legal(Move m) const {
           while (pseudoRoyals)
           {
               Square sr = pop_lsb(pseudoRoyals);
+              PieceType pt = (sr == kto) ? finalMovePt : type_of(piece_on(sr));
               // Touching pseudo-royal pieces are immune
               if (  !(blastOnCapture && (pseudoRoyalsTheirs & blast_pattern(sr) & ~blastImmune))
-                  && (attackers_to(sr, occupied, ~us) & ~removedAttackers & attackerCandidatesTheirs))
+                  && (attackers_to_king(sr, occupied, ~us, janggiCannons, pt) & occupied & ~removedAttackers & attackerCandidatesTheirs))
                   return false;
           }
       // Look for duple check
@@ -3545,9 +3701,10 @@ bool Position::legal(Move m) const {
           while (allCheck && pseudoRoyalCandidates)
           {
               Square sr = pop_lsb(pseudoRoyalCandidates);
+              PieceType pt = (sr == kto) ? finalMovePt : type_of(piece_on(sr));
               // Touching pseudo-royal pieces are immune
               if (!(  !(blastOnCapture && (pseudoRoyalsTheirs & blast_pattern(sr) & ~blastImmune))
-                    && (attackers_to(sr, occupied, ~us) & ~removedAttackers & attackerCandidatesTheirs)))
+                    && (attackers_to_king(sr, occupied, ~us, janggiCannons, pt) & occupied & ~removedAttackers & attackerCandidatesTheirs)))
                   allCheck = false;
           }
           if (allCheck)
@@ -3585,6 +3742,7 @@ bool Position::legal(Move m) const {
           if (blast_immune_types() & movePt)
               occupied |= square_bb(kto);
       }
+      occupied &= ~removedByEffects;
 
       Bitboard antiRoyals = 0;
       for (PieceSet ps = anti_royal_types(); ps; )
@@ -3626,9 +3784,8 @@ bool Position::legal(Move m) const {
       while (antiRoyals)
       {
           Square sr = pop_lsb(antiRoyals);
-          Bitboard attackers = attackers_to(sr, occupied, ~us);
-          if (anti_royal_king_mutually_immune())
-              attackers &= ~pieces(~us, king_type());
+          PieceType pt = (sr == kto) ? finalMovePt : type_of(piece_on(sr));
+          Bitboard attackers = attackers_to_king(sr, occupied, ~us, janggiCannons, pt) & occupied;
           if (!(occupied & sr)
               || (blastOnCapture && (vulnerableEnemyRoyals & blast_pattern(sr)))
               || !(attackers & ~removedAttackers))
@@ -3715,45 +3872,9 @@ bool Position::legal(Move m) const {
           && !violates_same_player_board_repetition(m);
   }
 
-  Bitboard occupied;
-  if (type_of(m) == CASTLING)
-  {
-      Square kfrom = from;
-      Square rfrom = to;
-      Square kto, rto;
-      castling_destinations(sideToMove, kfrom, rfrom, kto, rto);
-      occupied = (pieces() ^ kfrom ^ rfrom) | kto | rto;
-  }
-  else
-      occupied = rifleShot ? (pieces() ^ square_bb(shotSq))
-                           : (((!dropMove ? pieces() ^ from : pieces()) ^ square_bb(shotSq)) | to);
-
-  if (paired_drop(m))
-      occupied |= square_bb(secondary_drop_square(m));
-
-  Bitboard removedByEffects = 0;
-  if (!is_pass(m))
-  {
-      if (((capture(m) || rifleShot) && blast_on_capture(m))
-          || (blast_on_move() && !capture(m) && !is_self_destruct(m))
-          || (blast_on_self_destruct() && is_self_destruct(m)))
-      {
-          Square blastCenter = (capture(m) || rifleShot) ? (blast_on_capture_mover_center() ? effectiveTo : shotSq) : effectiveTo;
-          Bitboard blastRelevant = occupied & ~blast_immune_bb();
-          removedByEffects |= blast_pattern(blastCenter) & blastRelevant;
-          if (blast_center())
-              removedByEffects |= square_bb(blastCenter) & blastRelevant;
-          if (blast_on_capture(m) && (blast_immune_types() & movePt))
-              removedByEffects &= ~square_bb(effectiveTo);
-      }
-
-      if ((capture(m) || rifleShot) && (var->petrifyOnCaptureTypes & movePt))
-          removedByEffects |= square_bb(effectiveTo);
-  }
-
   if (var->blastPassiveTypes && !is_pass(m))
   {
-      Bitboard occupiedAfterEffects = occupied & ~removedByEffects;
+      Bitboard occupiedAfterEffects = postMoveOccupied & ~removedByEffects;
       Bitboard burnImmune = blast_immune_bb();
       Bitboard passiveBurners[COLOR_NB] = { Bitboard(0), Bitboard(0) };
       PieceSet passiveTypes = var->blastPassiveTypes;
@@ -3837,7 +3958,7 @@ bool Position::legal(Move m) const {
       if (gateType == KING || (pseudo_royal_types() & piece_set(gateType)))
       {
           Square gate = gating_square(m);
-          Bitboard occ = occupied | gate;
+          Bitboard occ = postMoveOccupied | gate;
 
           Bitboard attackers = gateType == KING ? attackers_to_king(gate, occ, ~us)
                                                 : attackers_to(gate, occ, ~us);
@@ -3856,13 +3977,13 @@ bool Position::legal(Move m) const {
   {
       Square generalSquare = st->bikjang && count<KING>(us) == 1 ? square<KING>(us) : royalSquare;
       Square s = from == generalSquare ? (rifleShot ? from : to) : generalSquare;
-      if (attacks_bb(~us, ROOK, s, occupied) & pieces(~us, KING) & ~square_bb(to))
+      if (attacks_bb(~us, ROOK, s, postMoveOccupied) & pieces(~us, KING) & ~square_bb(to))
           return false;
   }
   if (var->diagonalGeneral && hasRoyal)
   {
       Square s = moverIsRoyal ? (rifleShot ? from : to) : royalSquare;
-      if (attacks_bb(~us, BISHOP, s, occupied) & pieces(~us, KING) & ~square_bb(to))
+      if (attacks_bb(~us, BISHOP, s, postMoveOccupied) & pieces(~us, KING) & ~square_bb(to))
           return false;
   }
 
@@ -3893,22 +4014,16 @@ bool Position::legal(Move m) const {
   // If the moving piece is a king, check whether the destination square is
   // attacked by the opponent.
   if (!allow_checks() && moverIsRoyal)
-      return !(attackers_to_king(rifleShot ? from : to, occupied, ~us) & ~removedAttackers)
+      return !(attackers_to_king(rifleShot ? from : to, postMoveOccupied, ~us) & ~removedAttackers)
           && !violates_same_player_board_repetition(m);
 
   // Return early when without king
   if (!hasRoyal)
       return !violates_same_player_board_repetition(m);
 
-  Bitboard janggiCannons = pieces(JANGGI_CANNON);
-  if (type_of(moved_piece(m)) == JANGGI_CANNON)
-      janggiCannons = rifleShot ? (janggiCannons & ~square_bb(shotSq))
-                                : ((!dropMove ? janggiCannons ^ from : janggiCannons) | to);
-  else if (janggiCannons & to)
-      janggiCannons ^= to;
-
   // A non-king move is legal if the king is not under attack after the move.
-  return (allow_checks() || !(attackers_to_king(royalSquare, occupied, ~us, janggiCannons)
+  return (allow_checks() || !(attackers_to_king(royalSquare, postMoveOccupied, ~us, janggiCannons)
+                              & postMoveOccupied
                               & ~removedAttackers
                               & ~(rifleShot ? Bitboard(0) : SquareBB[to])))
       && !violates_same_player_board_repetition(m);
