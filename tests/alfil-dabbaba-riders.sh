@@ -56,6 +56,11 @@ startFen = k7/8/8/8/8/8/8/A1p4K w - - 0 1
 customPiece1 = a:n{path:default;filter:last}L
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 startFen = k7/8/8/8/8/8/8/A1p4K w - - 0 1
+
+[moo-either:chess]
+customPiece1 = a:n{path:either;filter:first}N
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+startFen = k7/8/8/8/8/8/pp6/A6K w - - 0 1
 INI
 
 piece_moves() {
@@ -128,5 +133,14 @@ echo "$out" | grep -q "^a1d2: 1$"
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-filter-last\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
   | ./stockfish)
 ! echo "$out" | grep -q "^a1d2:"
+
+# Moo-style lame knight: either Mao or Moa path being clear should allow the move.
+out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value moo-either\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
+  | ./stockfish)
+! echo "$out" | grep -q "^a1b3:"
+
+out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value moo-either\nposition fen k7/8/8/8/8/8/p7/A6K w - - 0 1\ngo perft 1\nquit\n' "$tmp_ini" \
+  | ./stockfish)
+echo "$out" | grep -q "^a1b3: 1$"
 
 echo "alfil-dabbaba-riders test OK"
