@@ -383,6 +383,10 @@ extern "C" PyObject* pyffish_evaluate(PyObject* self, PyObject *args) {
     if (!buildPosition(pos, states, v, fen, moveList, chess960))
         return NULL;
 
+    Value result;
+    if (pos.is_immediate_game_end(result))
+        return Py_BuildValue("i", normalize_public_mate_score(pos, result));
+
     return Py_BuildValue("i", Eval::evaluate(pos));
 }
 

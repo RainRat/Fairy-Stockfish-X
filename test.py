@@ -2067,11 +2067,12 @@ startFen = 4r3/8/8/8/8/8/8/8[A] w - - 0 1
         fen_default = sf.get_fen("blast-default-test", fen, [move])
         self.assertEqual(fen_default, "8/8/8/8/8/4R3/3n4/8 b - - 0 1")
 
-        # Mover center blast (centered on mover square e3)
-        # e3 diagonals: d4, f4, d2, f2. d2 should be removed.
-        # d6 is not near e3.
+        # Rifle captures keep the shooter on its source square, so capture blasts
+        # are centered on the captured piece even when mover-centered blast is
+        # enabled. If a variant wants the shooter to explode, it should not model
+        # the capture as rifle.
         fen_mover = sf.get_fen("blast-mover-test", fen, [move])
-        self.assertEqual(fen_mover, "8/8/3n4/8/8/8/8/8 b - - 0 1")
+        self.assertEqual(fen_mover, "8/8/8/8/8/4R3/3n4/8 b - - 0 1")
 
     def test_evaluate(self):
         eval_start = sf.evaluate("chess", CHESS, [])
@@ -2091,8 +2092,9 @@ startFen = 4r3/8/8/8/8/8/8/8[A] w - - 0 1
         res = sf.evaluate("racingkings", "K7/8/8/8/8/8/k7/8 b - - 0 1", [])
         self.assertLess(res, -10000)
 
-        # White on 8th, Black on 7th, Black to move. Draw because Black can reach 8th rank.
-        res = sf.evaluate("racingkings", "K7/k7/8/8/8/8/8/8 b - - 0 1", [])
+        # White on 8th, Black on 7th, Black to move. Draw because Black can reach
+        # the 8th rank; keep the kings separated so the draw move is legal.
+        res = sf.evaluate("racingkings", "7K/k7/8/8/8/8/8/8 b - - 0 1", [])
         self.assertEqual(res, 0)
 
     def test_atomic_endgame_eval(self):
