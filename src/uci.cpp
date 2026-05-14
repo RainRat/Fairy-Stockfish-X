@@ -471,6 +471,26 @@ void UCI::loop(int argc, char* argv[]) {
           while (is >> token)
               banmoves.push_back(UCI::to_move(pos, token));
       else if (token == "go")         go(pos, is, states, banmoves);
+      else if (token == "legal")
+      {
+          string type = "uci";
+          is >> type;
+          Notation n = type == "san" ? default_notation(pos.variant()) : NOTATION_DEFAULT;
+          bool first = true;
+          for (const auto& m : MoveList<LEGAL>(pos))
+          {
+              if (!first) sync_cout << " ";
+              if (n == NOTATION_DEFAULT)
+                  sync_cout << UCI::move(pos, m);
+              else
+              {
+                  Position& p = const_cast<Position&>(pos);
+                  sync_cout << SAN::move_to_san(p, m, n);
+              }
+              first = false;
+          }
+          sync_cout << sync_endl;
+      }
       else if (token == "position")   position(pos, is, states), banmoves.clear();
       else if (token == "ucinewgame" || token == "usinewgame" || token == "uccinewgame") Search::clear();
       else if (token == "isready")    sync_cout << "readyok" << sync_endl;
@@ -488,6 +508,7 @@ void UCI::loop(int argc, char* argv[]) {
                     << "\n\nTools and Debugging:"
                     << "\n  d                           Display the current board"
                     << "\n  vinfo                       Show details about the active variant"
+                    << "\n  legal [uci|san]             List legal moves in the position"
                     << "\n  eval                        Show static evaluation of the position"
                     << "\n  bench                       Run internal performance tests"
                     << "\n  compiler                    Show information about the compiler"
@@ -838,7 +859,9 @@ Move UCI::to_move(const Position& pos, string& str) {
           return m;
   }
 
-  return MOVE_NONE;
+  // Fallback to SAN parsing
+  Position& p = const_cast<Position&>(pos);
+  return SAN::from_san(p, str, default_notation(p.variant()));
 }
 
 std::string UCI::option_name(std::string name) {
