@@ -2999,7 +2999,8 @@ bool Position::legal(Move m) const {
           return false;
   }
 
-  assert(is_pass(m) || pureWallMove || color_of(moved_piece(m)) == (dropMove ? drop_hand_color(us, in_hand_piece_type(m)) : us));
+  [[maybe_unused]] Color movedPieceColor = dropMove ? drop_hand_color(us, in_hand_piece_type(m)) : us;
+  assert(is_pass(m) || pureWallMove || color_of(moved_piece(m)) == movedPieceColor);
   assert(royal_square(us) == SQ_NONE || piece_on(royal_square(us)) == make_piece(us, royal_piece_type(us)));
   assert(board_bb() & to);
 

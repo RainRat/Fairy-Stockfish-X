@@ -275,7 +275,6 @@ public:
   bool blast_diagonals() const;
   bool blast_orthogonals() const;
   bool blast_center() const;
-  bool blast_on_capture_mover_center() const;
   bool zero_range_blast_on_capture(Piece mover, Piece captured) const;
   bool zero_range_blast_on_capture(Move m) const;
   PieceSet blast_immune_types() const;
