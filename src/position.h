@@ -3639,12 +3639,13 @@ inline Bitboard Position::lame_leaper_bb(const std::map<Direction, PieceInfo::La
             if (to == sq)
                 break;
 
+            Square from = cur;
             cur = to;
             ++steps;
             Bitboard toBB = square_bb(to);
             bool occupiedDestination = occupied & toBB;
 
-            if (!is_lame_blocked(sq, to, profile, occupied) && (!quietMode || !occupiedDestination))
+            if (!is_lame_blocked(from, to, profile, occupied) && (!quietMode || !occupiedDestination))
                 b |= to;
 
             if (occupiedDestination)
