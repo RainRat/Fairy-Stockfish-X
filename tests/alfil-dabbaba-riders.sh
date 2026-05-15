@@ -93,6 +93,16 @@ customPiece1 = a:n{path:orthfirst;filter:last}L
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 startFen = k7/8/8/8/8/8/8/A6K w - - 0 1
 
+[lame-invalid-clears-piece:chess]
+customPiece1 = a:Rn{path:orthfirst;filter:first}L
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+startFen = k7/8/8/8/8/8/8/A6K w - - 0 1
+
+[lame-tuple-reject:chess]
+customPiece1 = a:n(2,1)
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+startFen = k7/8/8/8/8/8/8/A6K w - - 0 1
+
 [lame-filter-mid-single:chess]
 customPiece1 = a:n{path:mid;filter:mid}D
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
@@ -261,6 +271,17 @@ reject_out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UC
   | ./stockfish 2>&1)
 grep -q "Unknown Betza lame filter 'last'" <<<"$reject_out"
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-filter-last-reject\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
+  | ./stockfish)
+! echo "$out" | grep -q "^a1"
+
+out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-invalid-clears-piece\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
+  | ./stockfish)
+! echo "$out" | grep -q "^a1"
+
+reject_out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-tuple-reject\nquit\n' "$tmp_ini" \
+  | ./stockfish 2>&1)
+grep -q "Unsupported Betza tuple modifier combination" <<<"$reject_out"
+out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-tuple-reject\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
   | ./stockfish)
 ! echo "$out" | grep -q "^a1"
 

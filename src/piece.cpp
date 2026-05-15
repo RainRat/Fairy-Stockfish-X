@@ -226,6 +226,11 @@ namespace {
           hasUniversalHopper = false;
           currentHopperProfile = PieceInfo::HopperProfile();
       };
+      auto reset_piece = [&]() {
+          p = std::make_unique<PieceInfo>();
+          p->name = name;
+          p->betza = betza;
+      };
 
       auto commit_atom = [&](const std::vector<std::pair<int, int>>& atoms, bool atomIsRider, std::string::size_type& i, char atomChar, bool atomIsTuple = false) {
           // Check for rider / limited-distance rider suffix.
@@ -319,6 +324,7 @@ namespace {
           }
           if (hasLameProfile && invalidLameProfile)
           {
+              reset_piece();
               reset_parser_state();
               return;
           }
@@ -326,6 +332,7 @@ namespace {
           {
               std::cerr << "Unsupported Betza lame modifier combination in '" << betza
                         << "': lame path profiles currently apply to step/leaper and rider atoms only." << std::endl;
+              reset_piece();
               reset_parser_state();
               return;
           }
