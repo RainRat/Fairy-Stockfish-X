@@ -196,6 +196,7 @@ namespace {
       bool rider = false;
       bool lame = false;
       bool hasLameProfile = false;
+      bool invalidLameProfile = false;
       PieceInfo::LameProfile currentLameProfile;
       bool initial = false;
       bool dynamicDistance = false;
@@ -214,6 +215,7 @@ namespace {
           rider = false;
           lame = false;
           hasLameProfile = false;
+          invalidLameProfile = false;
           currentLameProfile = PieceInfo::LameProfile();
           initial = false;
           dynamicDistance = false;
@@ -314,6 +316,11 @@ namespace {
           {
               distance = DYNAMIC_SLIDER_LIMIT;
               p->add_rider_augment(PieceInfo::AUGMENT_DYNAMIC);
+          }
+          if (hasLameProfile && invalidLameProfile)
+          {
+              reset_parser_state();
+              return;
           }
           if (hasLameProfile && (hopper || dynamicDistance || skiSlider || maxDistance || hasUniversalHopper))
           {
@@ -449,6 +456,7 @@ namespace {
               if (lame)
               {
                   hasLameProfile = true;
+                  invalidLameProfile = false;
                   currentLameProfile = PieceInfo::LameProfile();
               }
               else
@@ -552,7 +560,10 @@ namespace {
                               else if (val == "mid")
                                   currentLameProfile.path = PieceInfo::LameProfile::MIDPOINT;
                               else
+                              {
                                   std::cerr << "Unknown Betza lame path '" << val << "' in '" << betza << "'." << std::endl;
+                                  invalidLameProfile = true;
+                              }
                           }
                           else if (key == "filter") {
                               if (val == "any")
@@ -560,15 +571,22 @@ namespace {
                               else if (val == "mid")
                                   currentLameProfile.filter = PieceInfo::LameProfile::MID;
                               else
+                              {
                                   std::cerr << "Unknown Betza lame filter '" << val << "' in '" << betza << "'." << std::endl;
+                                  invalidLameProfile = true;
+                              }
                           }
                           else if (key == "hurdles" || key == "pre" || key == "post" || key == "capture" || key == "equi"
                                    || key == "hurdle_types" || key == "transparent_types")
                           {
                               std::cerr << "Unknown Betza hopper parameter key '" << key << "' in lame block of '" << betza << "'." << std::endl;
+                              invalidLameProfile = true;
                           }
                           else
+                          {
                               std::cerr << "Unknown Betza lame parameter key '" << key << "' in '" << betza << "'." << std::endl;
+                              invalidLameProfile = true;
+                          }
                       }
                       else
                       {

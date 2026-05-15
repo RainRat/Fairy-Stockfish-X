@@ -78,6 +78,11 @@ customPiece1 = a:n{path:anypath;filter:any}N
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 startFen = k7/8/8/8/8/8/pp6/A6K w - - 0 1
 
+[moa-move-blocked:chess]
+customPiece1 = a:n{path:diagfirst;filter:any}N
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+startFen = k7/8/8/8/8/8/1p5K/A7 w - - 0 1
+
 [lame-filter-first-reject:chess]
 customPiece1 = a:n{path:orthfirst;filter:first}L
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
@@ -102,6 +107,11 @@ startFen = k7/8/8/8/8/8/8/A6K w - - 0 1
 customPiece1 = a:n{path:diagfirst;filter:any}N
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 startFen = 8/8/8/8/3k4/2p5/8/A6K w - - 0 1
+
+[lame-range-reject:chess]
+customPiece1 = a:n{path:mid}A[2-3]
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+startFen = k7/8/8/8/8/8/8/A6K w - - 0 1
 INI
 
 piece_moves() {
@@ -222,6 +232,10 @@ out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Varia
   | ./stockfish)
 echo "$out" | grep -q "^a1b3: 1$"
 
+out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value moa-move-blocked\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
+  | ./stockfish)
+! echo "$out" | grep -q "^a1c2:"
+
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value moa-check\nposition startpos moves a1c2\nd\nquit\n' "$tmp_ini" \
   | ./stockfish)
 echo "$out" | grep -q "Checkers: c2"
@@ -233,10 +247,20 @@ out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Varia
 reject_out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-filter-first-reject\nquit\n' "$tmp_ini" \
   | ./stockfish 2>&1)
 grep -q "Unknown Betza lame filter 'first'" <<<"$reject_out"
+out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-filter-first-reject\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
+  | ./stockfish)
+! echo "$out" | grep -q "^a1"
 
 reject_out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-filter-last-reject\nquit\n' "$tmp_ini" \
   | ./stockfish 2>&1)
 grep -q "Unknown Betza lame filter 'last'" <<<"$reject_out"
+out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-filter-last-reject\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
+  | ./stockfish)
+! echo "$out" | grep -q "^a1"
+
+reject_out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-range-reject\nquit\n' "$tmp_ini" \
+  | ./stockfish 2>&1)
+grep -q "Unsupported Betza rider range" <<<"$reject_out"
 
 tmp_key_ini=$(mktemp)
 cat > "$tmp_key_ini" <<'INI'

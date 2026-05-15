@@ -19,6 +19,7 @@
 #ifndef POSITION_H_INCLUDED
 #define POSITION_H_INCLUDED
 
+#include <array>
 #include <cassert>
 #include <cmath>
 #include <cstdint>
@@ -750,6 +751,8 @@ private:
                                          File maxFile, Rank maxRank,
                                          bool wrapFile, bool wrapRank,
                                          bool quietMode);
+  static std::map<Direction, int> without_lame_dirs(const std::map<Direction, int>& directions,
+                                                    const std::map<Direction, PieceInfo::LameProfile>& lameDirections);
   Bitboard wrapped_universal_hopper_targets(const std::map<Direction, PieceInfo::HopperProfile>& profiles,
                                            Color c, Square sq, Bitboard occupied, Bitboard ownPieces,
                                            File maxFile, Rank maxRank,
@@ -3148,6 +3151,14 @@ inline Bitboard Position::wrapped_rose_targets(Square from, Bitboard occupied,
   return attack;
 }
 
+inline std::map<Direction, int> Position::without_lame_dirs(const std::map<Direction, int>& directions,
+                                                           const std::map<Direction, PieceInfo::LameProfile>& lameDirections) {
+    std::map<Direction, int> filtered = directions;
+    for (const auto& [d, _] : lameDirections)
+        filtered.erase(d);
+    return filtered;
+}
+
 inline Bitboard Position::special_rider_bb(const PieceInfo* pi, MoveModality modality,
                                            Square sq, Bitboard occupied,
                                            Bitboard boardMask, Bitboard ownPieces,
@@ -3454,10 +3465,7 @@ inline bool Position::is_lame_blocked(Square from, Square to, const PieceInfo::L
         return cur == to;
     };
 
-    auto path_blocked = [&](PieceInfo::LameProfile::PathType pathType) -> bool {
-        std::vector<Square> path;
-        if (!build_path(pathType, path))
-            return true;
+    auto path_blocked = [&](const std::vector<Square>& path) -> bool {
         if (path.empty())
             return false;
         switch (profile.filter)
@@ -3482,20 +3490,92 @@ inline bool Position::is_lame_blocked(Square from, Square to, const PieceInfo::L
         return false;
     };
 
+    auto path_type_blocked = [&](PieceInfo::LameProfile::PathType pathType) -> bool {
+        std::vector<Square> path;
+        if (!build_path(pathType, path))
+            return true;
+        return path_blocked(path);
+    };
+
+    auto any_shortest_path_blocked = [&]() -> bool {
+        int targetDf = int(file_of(to)) - int(file_of(from));
+        int targetDr = int(rank_of(to)) - int(rank_of(from));
+        if (topology_wraps())
+        {
+            targetDf = adjust_delta(targetDf, int(max_file()) + 1);
+            targetDr = adjust_delta(targetDr, int(max_rank()) + 1);
+        }
+
+        const int minSteps = std::max(std::abs(targetDf), std::abs(targetDr));
+        if (!minSteps)
+            return false;
+
+        std::vector<Square> path;
+        auto search = [&](auto&& self, Square cur, int remaining) -> bool {
+            if (!remaining)
+                return cur == to && !path_blocked(path);
+
+            int df = int(file_of(to)) - int(file_of(cur));
+            int dr = int(rank_of(to)) - int(rank_of(cur));
+            if (topology_wraps())
+            {
+                df = adjust_delta(df, int(max_file()) + 1);
+                dr = adjust_delta(dr, int(max_rank()) + 1);
+            }
+
+            const int stepF = (df > 0) - (df < 0);
+            const int stepR = (dr > 0) - (dr < 0);
+            const std::array<std::pair<int, int>, 3> steps = {{
+                {stepF, stepR},
+                {stepF, 0},
+                {0, stepR}
+            }};
+
+            for (const auto& [sf, sr] : steps)
+            {
+                if (!sf && !sr)
+                    continue;
+
+                Square next = SQ_NONE;
+                if (!advance(cur, sf, sr, next))
+                    continue;
+
+                int nextDf = int(file_of(to)) - int(file_of(next));
+                int nextDr = int(rank_of(to)) - int(rank_of(next));
+                if (topology_wraps())
+                {
+                    nextDf = adjust_delta(nextDf, int(max_file()) + 1);
+                    nextDr = adjust_delta(nextDr, int(max_rank()) + 1);
+                }
+                if (std::max(std::abs(nextDf), std::abs(nextDr)) != remaining - 1)
+                    continue;
+
+                if (next != to)
+                    path.push_back(next);
+                const bool clear = self(self, next, remaining - 1);
+                if (next != to)
+                    path.pop_back();
+                if (clear)
+                    return true;
+            }
+            return false;
+        };
+
+        return !search(search, from, minSteps);
+    };
+
     switch (profile.path)
     {
     case PieceInfo::LameProfile::ORTH_FIRST:
-        return path_blocked(PieceInfo::LameProfile::ORTH_FIRST);
+        return path_type_blocked(PieceInfo::LameProfile::ORTH_FIRST);
     case PieceInfo::LameProfile::DIAG_FIRST:
-        return path_blocked(PieceInfo::LameProfile::DIAG_FIRST);
+        return path_type_blocked(PieceInfo::LameProfile::DIAG_FIRST);
     case PieceInfo::LameProfile::ORTH_ONLY:
-        return path_blocked(PieceInfo::LameProfile::ORTH_ONLY);
+        return path_type_blocked(PieceInfo::LameProfile::ORTH_ONLY);
     case PieceInfo::LameProfile::ANY_PATH:
-        return path_blocked(PieceInfo::LameProfile::ORTH_FIRST)
-            && path_blocked(PieceInfo::LameProfile::DIAG_FIRST)
-            && path_blocked(PieceInfo::LameProfile::ORTH_ONLY);
+        return any_shortest_path_blocked();
     case PieceInfo::LameProfile::MIDPOINT:
-        return path_blocked(PieceInfo::LameProfile::MIDPOINT);
+        return path_type_blocked(PieceInfo::LameProfile::MIDPOINT);
     }
     return false;
 }
@@ -3580,11 +3660,11 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
           return b & board_bb(c, pt);
       }
 
-      b |= wrapped_step_targets(pi->steps[0][MODALITY_CAPTURE], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, false);
+      b |= wrapped_step_targets(without_lame_dirs(pi->steps[0][MODALITY_CAPTURE], pi->stepsLame[0][MODALITY_CAPTURE]), s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, false);
       b |= wrapped_tuple_targets(pi->tupleSteps[0][MODALITY_CAPTURE], c, s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, false);
       b |= wrapped_tuple_rider_targets(pi->tupleSlider[0][MODALITY_CAPTURE], c, s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, false);
-      b |= wrapped_slider_targets(pi->slider[0][MODALITY_CAPTURE], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, false);
-      b |= wrapped_hopper_targets(pi->hopper[0][MODALITY_CAPTURE], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, false);
+      b |= wrapped_slider_targets(without_lame_dirs(pi->slider[0][MODALITY_CAPTURE], pi->stepsLame[0][MODALITY_CAPTURE]), s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, false);
+      b |= wrapped_hopper_targets(without_lame_dirs(pi->hopper[0][MODALITY_CAPTURE], pi->stepsLame[0][MODALITY_CAPTURE]), s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, false);
       b |= wrapped_universal_hopper_targets(pi->universalHopper[0][MODALITY_CAPTURE], c, s, occupancy, pieces(c), max_file(), max_rank(), wrapFile, wrapRank, true, true);
       b |= lame_leaper_bb(pi->stepsLame[0][MODALITY_CAPTURE], s, occupancy, c, false);
       if (double_step_region(c, pt) & s)
@@ -3738,11 +3818,11 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
         }
 
         Bitboard b = 0;
-        b |= wrapped_step_targets(pi->steps[0][MODALITY_QUIET], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
+        b |= wrapped_step_targets(without_lame_dirs(pi->steps[0][MODALITY_QUIET], pi->stepsLame[0][MODALITY_QUIET]), s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
         b |= wrapped_tuple_targets(pi->tupleSteps[0][MODALITY_QUIET], c, s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
         b |= wrapped_tuple_rider_targets(pi->tupleSlider[0][MODALITY_QUIET], c, s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
-        b |= wrapped_slider_targets(pi->slider[0][MODALITY_QUIET], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
-        b |= wrapped_hopper_targets(pi->hopper[0][MODALITY_QUIET], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
+        b |= wrapped_slider_targets(without_lame_dirs(pi->slider[0][MODALITY_QUIET], pi->stepsLame[0][MODALITY_QUIET]), s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
+        b |= wrapped_hopper_targets(without_lame_dirs(pi->hopper[0][MODALITY_QUIET], pi->stepsLame[0][MODALITY_QUIET]), s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
         b |= wrapped_universal_hopper_targets(pi->universalHopper[0][MODALITY_QUIET], c, s, occupancy, pieces(c), max_file(), max_rank(), wrapFile, wrapRank, false, false);
         b |= lame_leaper_bb(pi->stepsLame[0][MODALITY_QUIET], s, occupancy, c, true);
         if (pi->griffon[0][MODALITY_QUIET])
@@ -3755,11 +3835,11 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
 
         if (double_step_region(c, pt) & s)
         {
-            b |= wrapped_step_targets(pi->steps[1][MODALITY_QUIET], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
+            b |= wrapped_step_targets(without_lame_dirs(pi->steps[1][MODALITY_QUIET], pi->stepsLame[1][MODALITY_QUIET]), s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
             b |= wrapped_tuple_targets(pi->tupleSteps[1][MODALITY_QUIET], c, s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
             b |= wrapped_tuple_rider_targets(pi->tupleSlider[1][MODALITY_QUIET], c, s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
-            b |= wrapped_slider_targets(pi->slider[1][MODALITY_QUIET], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
-            b |= wrapped_hopper_targets(pi->hopper[1][MODALITY_QUIET], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
+            b |= wrapped_slider_targets(without_lame_dirs(pi->slider[1][MODALITY_QUIET], pi->stepsLame[1][MODALITY_QUIET]), s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
+            b |= wrapped_hopper_targets(without_lame_dirs(pi->hopper[1][MODALITY_QUIET], pi->stepsLame[1][MODALITY_QUIET]), s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
             b |= wrapped_universal_hopper_targets(pi->universalHopper[1][MODALITY_QUIET], c, s, occupancy, pieces(c), max_file(), max_rank(), wrapFile, wrapRank, false, false);
             b |= lame_leaper_bb(pi->stepsLame[1][MODALITY_QUIET], s, occupancy, c, true);
             if (pi->griffon[1][MODALITY_QUIET])
