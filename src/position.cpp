@@ -521,9 +521,9 @@ namespace {
     return checks;
   }
 
-  inline Bitboard retro_lame_check_squares(const Position& pos, Color attacker, PieceType pt, Square kingSq, Bitboard occupied) {
+  inline Bitboard retro_lame_check_squares(const Position& pos, Color attacker, PieceType pt, PieceType movePt, Square kingSq, Bitboard occupied) {
     Bitboard checks = 0;
-    Bitboard candidates = PseudoAttacks[~attacker][pt][kingSq] & pos.pieces(attacker, pt);
+    Bitboard candidates = PseudoAttacks[~attacker][movePt][kingSq] & pos.pieces(attacker, pt);
 
     while (candidates)
     {
@@ -1738,6 +1738,7 @@ void Position::set_check_info(StateInfo* si) const {
       {
           PieceType pt = pop_lsb(ps);
           PieceType movePt = effective_piece_type(pt);
+          const PieceInfo* pi = pieceMap.get(movePt);
           si->checkSquares[pt] = 0;
 
           if (ksq != SQ_NONE)
@@ -1751,7 +1752,7 @@ void Position::set_check_info(StateInfo* si) const {
               }
           }
 
-          if (AttackRiderTypes[movePt] & NON_SLIDING_RIDERS)
+          if ((AttackRiderTypes[movePt] & NON_SLIDING_RIDERS) || pi->has_lame_leaper())
               si->nonSlidingRiders |= pieces(pt);
       }
 
@@ -1829,15 +1830,16 @@ void Position::set_check_info(StateInfo* si) const {
           {
               PieceType pt = pop_lsb(ps);
               PieceType movePt = effective_piece_type(pt);
-              if (AttackRiderTypes[movePt] & LAME_LEAPERS)
-                  si->checkSquares[pt] = retro_lame_check_squares(*this, sideToMove, movePt, ksq, occupied);
+              const PieceInfo* pi = pieceMap.get(movePt);
+              if (pi->has_lame_leaper())
+                  si->checkSquares[pt] = retro_lame_check_squares(*this, sideToMove, pt, movePt, ksq, occupied);
               else if (AttackRiderTypes[movePt] & ASYMMETRICAL_RIDERS)
                   // For asymmetrical riders, use true retro paths from the king square.
                   si->checkSquares[pt] = retro_asymmetric_check_squares(sideToMove, movePt, ksq, occupied);
               else
                   si->checkSquares[pt] = attacks_from(~sideToMove, movePt, ksq, occupied);
               // Collect special piece types that require slower check and evasion detection
-              if (AttackRiderTypes[movePt] & NON_SLIDING_RIDERS)
+              if ((AttackRiderTypes[movePt] & NON_SLIDING_RIDERS) || pi->has_lame_leaper())
                   si->nonSlidingRiders |= pieces(pt);
           }
       }

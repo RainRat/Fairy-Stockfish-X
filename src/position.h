@@ -759,7 +759,7 @@ private:
   bool is_lame_blocked(Square from, Square to, const PieceInfo::LameProfile& profile,
                        Bitboard occupied) const;
   Bitboard lame_leaper_bb(const std::map<Direction, PieceInfo::LameProfile>& profiles,
-                          Square sq, Bitboard occupied, Color c) const;
+                          Square sq, Bitboard occupied, Color c, bool quietMode) const;
   static Bitboard wrapped_bent_rider_targets(bool griffon, Square sq, Bitboard occupied,
                                              File maxFile, Rank maxRank,
                                              bool wrapFile, bool wrapRank,
@@ -3501,9 +3501,10 @@ inline bool Position::is_lame_blocked(Square from, Square to, const PieceInfo::L
 }
 
 inline Bitboard Position::lame_leaper_bb(const std::map<Direction, PieceInfo::LameProfile>& profiles,
-                                         Square sq, Bitboard occupied, Color c) const
+                                         Square sq, Bitboard occupied, Color c, bool quietMode) const
 {
     Bitboard b = 0;
+    const int maxSteps = topology_wraps() ? popcount(board_bb()) : 255;
     for (const auto& it : profiles)
     {
         Direction dir = (c == WHITE ? it.first : -it.first);
@@ -3525,7 +3526,7 @@ inline Bitboard Position::lame_leaper_bb(const std::map<Direction, PieceInfo::La
 
         Square cur = sq;
         int steps = 0;
-        while (true)
+        while (steps < maxSteps)
         {
             if (profile.limit > 0 && steps >= profile.limit)
                 break;
@@ -3534,10 +3535,19 @@ inline Bitboard Position::lame_leaper_bb(const std::map<Direction, PieceInfo::La
             if (!advance_once(cur, to))
                 break;
 
+            if (to == sq)
+                break;
+
             cur = to;
             ++steps;
-            if (!is_lame_blocked(sq, to, profile, occupied))
+            Bitboard toBB = square_bb(to);
+            bool occupiedDestination = occupied & toBB;
+
+            if (!is_lame_blocked(sq, to, profile, occupied) && (!quietMode || !occupiedDestination))
                 b |= to;
+
+            if (occupiedDestination)
+                break;
 
             if (profile.limit < 0)
                 break;
@@ -3574,11 +3584,11 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
       b |= wrapped_slider_targets(pi->slider[0][MODALITY_CAPTURE], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, false);
       b |= wrapped_hopper_targets(pi->hopper[0][MODALITY_CAPTURE], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, false);
       b |= wrapped_universal_hopper_targets(pi->universalHopper[0][MODALITY_CAPTURE], c, s, occupancy, pieces(c), max_file(), max_rank(), wrapFile, wrapRank, true, true);
-      b |= lame_leaper_bb(pi->stepsLame[0][MODALITY_CAPTURE], s, occupancy, c);
+      b |= lame_leaper_bb(pi->stepsLame[0][MODALITY_CAPTURE], s, occupancy, c, false);
       if (double_step_region(c, pt) & s)
       {
           b |= wrapped_universal_hopper_targets(pi->universalHopper[1][MODALITY_CAPTURE], c, s, occupancy, pieces(c), max_file(), max_rank(), wrapFile, wrapRank, true, true);
-          b |= lame_leaper_bb(pi->stepsLame[1][MODALITY_CAPTURE], s, occupancy, c);
+          b |= lame_leaper_bb(pi->stepsLame[1][MODALITY_CAPTURE], s, occupancy, c, false);
       }
       if (pi->griffon[0][MODALITY_CAPTURE])
           b |= wrapped_bent_rider_targets(true, s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, false);
@@ -3645,7 +3655,7 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
   Bitboard b = attacks_bb(c, movePt, s, occupancy);
 
   b |= special_rider_bb(pi, MODALITY_CAPTURE, s, occupancy, board_bb(), pieces(c), c, false, true, true);
-  b |= lame_leaper_bb(pi->stepsLame[0][MODALITY_CAPTURE], s, occupancy, c);
+  b |= lame_leaper_bb(pi->stepsLame[0][MODALITY_CAPTURE], s, occupancy, c, false);
   const bool usesGenericPawnLikeInitialAttackHelper =
          pt == PAWN || (pawn_like_types(c) & piece_set(pt));
   const Bitboard initialAttackRegion = usesGenericPawnLikeInitialAttackHelper
@@ -3654,7 +3664,7 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
   if (initialAttackRegion & s)
   {
       b |= special_rider_bb(pi, MODALITY_CAPTURE, s, occupancy, board_bb(), pieces(c), c, true, true, true);
-      b |= lame_leaper_bb(pi->stepsLame[1][MODALITY_CAPTURE], s, occupancy, c);
+      b |= lame_leaper_bb(pi->stepsLame[1][MODALITY_CAPTURE], s, occupancy, c, false);
   }
 
   // Xiangqi soldier
@@ -3732,7 +3742,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
         b |= wrapped_slider_targets(pi->slider[0][MODALITY_QUIET], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
         b |= wrapped_hopper_targets(pi->hopper[0][MODALITY_QUIET], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
         b |= wrapped_universal_hopper_targets(pi->universalHopper[0][MODALITY_QUIET], c, s, occupancy, pieces(c), max_file(), max_rank(), wrapFile, wrapRank, false, false);
-        b |= lame_leaper_bb(pi->stepsLame[0][MODALITY_QUIET], s, occupancy, c);
+        b |= lame_leaper_bb(pi->stepsLame[0][MODALITY_QUIET], s, occupancy, c, true);
         if (pi->griffon[0][MODALITY_QUIET])
             b |= wrapped_bent_rider_targets(true, s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
         if (pi->manticore[0][MODALITY_QUIET])
@@ -3749,7 +3759,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
             b |= wrapped_slider_targets(pi->slider[1][MODALITY_QUIET], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
             b |= wrapped_hopper_targets(pi->hopper[1][MODALITY_QUIET], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
             b |= wrapped_universal_hopper_targets(pi->universalHopper[1][MODALITY_QUIET], c, s, occupancy, pieces(c), max_file(), max_rank(), wrapFile, wrapRank, false, false);
-            b |= lame_leaper_bb(pi->stepsLame[1][MODALITY_QUIET], s, occupancy, c);
+            b |= lame_leaper_bb(pi->stepsLame[1][MODALITY_QUIET], s, occupancy, c, true);
             if (pi->griffon[1][MODALITY_QUIET])
                 b |= wrapped_bent_rider_targets(true, s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
             if (pi->manticore[1][MODALITY_QUIET])
@@ -3845,7 +3855,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
   Bitboard b = (moves_bb(c, movePt, s, occupancy) | extraDestinations);
 
   b |= special_rider_bb(pi, MODALITY_QUIET, s, occupancy, board_bb(), pieces(c), c, false, false, false);
-  b |= lame_leaper_bb(pi->stepsLame[0][MODALITY_QUIET], s, occupancy, c);
+  b |= lame_leaper_bb(pi->stepsLame[0][MODALITY_QUIET], s, occupancy, c, true);
 
   const bool usesGenericPawnLikeInitialMoveHelper =
          (pt == PAWN || (pawn_like_types(c) & piece_set(pt)))
@@ -3859,7 +3869,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
   {
       b |= moves_bb<true>(c, movePt, s, occupancy);
       b |= special_rider_bb(pi, MODALITY_QUIET, s, occupancy, board_bb(), pieces(c), c, true, false, false);
-      b |= lame_leaper_bb(pi->stepsLame[1][MODALITY_QUIET], s, occupancy, c);
+      b |= lame_leaper_bb(pi->stepsLame[1][MODALITY_QUIET], s, occupancy, c, true);
   }
   // Xiangqi soldier
   if (pt == SOLDIER && !(promoted_soldiers(c) & s))

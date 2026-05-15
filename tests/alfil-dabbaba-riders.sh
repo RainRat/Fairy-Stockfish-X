@@ -92,6 +92,11 @@ startFen = k7/8/8/8/8/8/p7/A6K w - - 0 1
 customPiece1 = a:n{path:anypath;filter:any}U
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 startFen = k7/8/8/8/8/8/8/A6K w - - 0 1
+
+[moa-check:chess]
+customPiece1 = a:n{path:diagfirst;filter:any}N
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+startFen = 8/8/8/8/3k4/2p5/8/A6K w - - 0 1
 INI
 
 piece_moves() {
@@ -160,7 +165,19 @@ echo "$out" | grep -q "^d7h3: 1$"
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-rider-repeat\nposition fen 8/3a4/8/8/4p3/8/8/K6k b - - 0 1\ngo perft 1\nquit\n' "$tmp_ini" \
   | ./stockfish)
 echo "$out" | grep -q "^d7b5: 1$"
+echo "$out" | grep -q "^d7f5: 1$"
+echo "$out" | grep -q "^d7h3: 1$"
+
+out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-rider-repeat\nposition fen 8/3a4/8/5p2/8/8/8/K6k b - - 0 1\ngo perft 1\nquit\n' "$tmp_ini" \
+  | ./stockfish)
+echo "$out" | grep -q "^d7b5: 1$"
 ! echo "$out" | grep -q "^d7f5:"
+! echo "$out" | grep -q "^d7h3:"
+
+out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-rider-repeat\nposition fen 8/3a4/8/5P2/8/8/8/K6k b - - 0 1\ngo perft 1\nquit\n' "$tmp_ini" \
+  | ./stockfish)
+echo "$out" | grep -q "^d7b5: 1$"
+echo "$out" | grep -q "^d7f5: 1$"
 ! echo "$out" | grep -q "^d7h3:"
 
 # Plain DD/AA riders are not lame: midpoint blockers must NOT stop them.
@@ -187,10 +204,20 @@ echo "$out" | grep -q "^a1d2: 1$"
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value moo-anypath\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
   | ./stockfish)
 echo "$out" | grep -q "^a1c2: 1$"
+! echo "$out" | grep -q "^a1e3:"
+! echo "$out" | grep -q "^a1g4:"
 
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value moo-anypath\nposition fen k7/8/8/8/8/8/p7/A6K w - - 0 1\ngo perft 1\nquit\n' "$tmp_ini" \
   | ./stockfish)
 echo "$out" | grep -q "^a1b3: 1$"
+
+out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value moa-check\nposition startpos moves a1c2\nd\nquit\n' "$tmp_ini" \
+  | ./stockfish)
+echo "$out" | grep -q "Checkers: c2"
+
+out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value moa-check\nposition fen 8/8/8/8/3k4/3p4/8/A6K w - - 0 1 moves a1c2\nd\nquit\n' "$tmp_ini" \
+  | ./stockfish)
+! echo "$out" | grep -q "Checkers: c2"
 
 reject_out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-filter-first-reject\nquit\n' "$tmp_ini" \
   | ./stockfish 2>&1)

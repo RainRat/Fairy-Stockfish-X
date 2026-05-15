@@ -366,7 +366,7 @@ namespace {
                               v[Direction(dr * FILE_NB + df)] = distance;
                               if (hasLameProfile)
                               {
-                                  currentLameProfile.limit = distance;
+                                  currentLameProfile.limit = rider ? distance : -1;
                                   p->stepsLame[initial][modality][Direction(dr * FILE_NB + df)] = currentLameProfile;
                               }
                               if (rider && !atomIsRider && !hopper
