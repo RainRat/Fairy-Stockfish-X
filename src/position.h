@@ -730,7 +730,8 @@ private:
                                        Square sq, Bitboard occupied,
                                        File maxFile, Rank maxRank,
                                        bool wrapFile, bool wrapRank,
-                                       bool requireEmpty);
+                                       bool requireEmpty,
+                                       const std::map<Direction, PieceInfo::LameProfile>* lameDirections = nullptr);
   static Bitboard wrapped_tuple_targets(const std::vector<std::pair<int, int>>& steps,
                                         Color c, Square sq, Bitboard occupied,
                                         File maxFile, Rank maxRank,
@@ -745,14 +746,14 @@ private:
                                          Square sq, Bitboard occupied,
                                          File maxFile, Rank maxRank,
                                          bool wrapFile, bool wrapRank,
-                                         bool quietMode);
+                                         bool quietMode,
+                                         const std::map<Direction, PieceInfo::LameProfile>* lameDirections = nullptr);
   static Bitboard wrapped_hopper_targets(const std::map<Direction, int>& directions,
                                          Square sq, Bitboard occupied,
                                          File maxFile, Rank maxRank,
                                          bool wrapFile, bool wrapRank,
-                                         bool quietMode);
-  static std::map<Direction, int> without_lame_dirs(const std::map<Direction, int>& directions,
-                                                    const std::map<Direction, PieceInfo::LameProfile>& lameDirections);
+                                         bool quietMode,
+                                         const std::map<Direction, PieceInfo::LameProfile>* lameDirections = nullptr);
   Bitboard wrapped_universal_hopper_targets(const std::map<Direction, PieceInfo::HopperProfile>& profiles,
                                            Color c, Square sq, Bitboard occupied, Bitboard ownPieces,
                                            File maxFile, Rank maxRank,
@@ -2862,10 +2863,14 @@ inline Bitboard Position::wrapped_step_targets(const std::map<Direction, int>& d
                                                Square sq, Bitboard occupied,
                                                File maxFile, Rank maxRank,
                                                bool wrapFile, bool wrapRank,
-                                               bool requireEmpty) {
+                                               bool requireEmpty,
+                                               const std::map<Direction, PieceInfo::LameProfile>* lameDirections) {
   Bitboard out = 0;
   for (const auto& [d, _] : directions)
   {
+      if (lameDirections && lameDirections->find(d) != lameDirections->end())
+          continue;
+
       auto [dr, df] = decode_direction(d);
       Square to = SQ_NONE;
       if (!wrapped_destination_square(sq, df, dr, maxFile, maxRank, wrapFile, wrapRank, to))
@@ -2935,10 +2940,14 @@ inline Bitboard Position::wrapped_slider_targets(const std::map<Direction, int>&
                                                  Square sq, Bitboard occupied,
                                                  File maxFile, Rank maxRank,
                                                  bool wrapFile, bool wrapRank,
-                                                 bool quietMode) {
+                                                 bool quietMode,
+                                                 const std::map<Direction, PieceInfo::LameProfile>* lameDirections) {
   Bitboard out = 0;
   for (const auto& [d, limit] : directions)
   {
+      if (lameDirections && lameDirections->find(d) != lameDirections->end())
+          continue;
+
       auto [dr, df] = decode_direction(d);
       if (!dr && !df)
           continue;
@@ -2983,10 +2992,14 @@ inline Bitboard Position::wrapped_hopper_targets(const std::map<Direction, int>&
                                                  Square sq, Bitboard occupied,
                                                  File maxFile, Rank maxRank,
                                                  bool wrapFile, bool wrapRank,
-                                                 bool quietMode) {
+                                                 bool quietMode,
+                                                 const std::map<Direction, PieceInfo::LameProfile>* lameDirections) {
   Bitboard out = 0;
   for (const auto& [d, limit] : directions)
   {
+      if (lameDirections && lameDirections->find(d) != lameDirections->end())
+          continue;
+
       auto [dr, df] = decode_direction(d);
       if (!dr && !df)
           continue;
@@ -3149,14 +3162,6 @@ inline Bitboard Position::wrapped_rose_targets(Square from, Bitboard occupied,
       }
 
   return attack;
-}
-
-inline std::map<Direction, int> Position::without_lame_dirs(const std::map<Direction, int>& directions,
-                                                           const std::map<Direction, PieceInfo::LameProfile>& lameDirections) {
-    std::map<Direction, int> filtered = directions;
-    for (const auto& [d, _] : lameDirections)
-        filtered.erase(d);
-    return filtered;
 }
 
 inline Bitboard Position::special_rider_bb(const PieceInfo* pi, MoveModality modality,
@@ -3382,8 +3387,20 @@ inline bool Position::is_lame_blocked(Square from, Square to, const PieceInfo::L
             && int(rank_of(next)) - int(rank_of(cur)) == stepR;
     };
 
-    auto build_path = [&](PieceInfo::LameProfile::PathType pathType, std::vector<Square>& path) -> bool {
-        path.clear();
+    struct PathBuffer {
+        std::array<Square, SQUARE_NB> squares;
+        size_t size = 0;
+    };
+
+    auto push_path = [](PathBuffer& path, Square sq) -> bool {
+        if (path.size >= path.squares.size())
+            return false;
+        path.squares[path.size++] = sq;
+        return true;
+    };
+
+    auto build_path = [&](PieceInfo::LameProfile::PathType pathType, PathBuffer& path) -> bool {
+        path.size = 0;
         Square cur = from;
         while (cur != to)
         {
@@ -3460,30 +3477,31 @@ inline bool Position::is_lame_blocked(Square from, Square to, const PieceInfo::L
                 return false;
             cur = next;
             if (cur != to)
-                path.push_back(cur);
+                if (!push_path(path, cur))
+                    return false;
         }
         return cur == to;
     };
 
-    auto path_blocked = [&](const std::vector<Square>& path) -> bool {
-        if (path.empty())
+    auto path_blocked = [&](const PathBuffer& path) -> bool {
+        if (!path.size)
             return false;
         switch (profile.filter)
         {
         case PieceInfo::LameProfile::ANY:
-            for (Square sq : path)
-                if (occupied & square_bb(sq))
+            for (size_t i = 0; i < path.size; ++i)
+                if (occupied & square_bb(path.squares[i]))
                     return true;
             return false;
         case PieceInfo::LameProfile::MID:
-            if (path.size() == 1)
-                return bool(occupied & square_bb(path[0]));
-            if (path.size() == 2)
-                return bool(occupied & square_bb(path[0])) || bool(occupied & square_bb(path[1]));
-            if (path.size() < 3)
+            if (path.size == 1)
+                return bool(occupied & square_bb(path.squares[0]));
+            if (path.size == 2)
+                return bool(occupied & square_bb(path.squares[0])) || bool(occupied & square_bb(path.squares[1]));
+            if (path.size < 3)
                 return false;
-            for (size_t i = 1; i + 1 < path.size(); ++i)
-                if (occupied & square_bb(path[i]))
+            for (size_t i = 1; i + 1 < path.size; ++i)
+                if (occupied & square_bb(path.squares[i]))
                     return true;
             return false;
         }
@@ -3491,7 +3509,7 @@ inline bool Position::is_lame_blocked(Square from, Square to, const PieceInfo::L
     };
 
     auto path_type_blocked = [&](PieceInfo::LameProfile::PathType pathType) -> bool {
-        std::vector<Square> path;
+        PathBuffer path;
         if (!build_path(pathType, path))
             return true;
         return path_blocked(path);
@@ -3510,7 +3528,7 @@ inline bool Position::is_lame_blocked(Square from, Square to, const PieceInfo::L
         if (!minSteps)
             return false;
 
-        std::vector<Square> path;
+        PathBuffer path;
         auto search = [&](auto&& self, Square cur, int remaining) -> bool {
             if (!remaining)
                 return cur == to && !path_blocked(path);
@@ -3551,10 +3569,11 @@ inline bool Position::is_lame_blocked(Square from, Square to, const PieceInfo::L
                     continue;
 
                 if (next != to)
-                    path.push_back(next);
+                    if (!push_path(path, next))
+                        continue;
                 const bool clear = self(self, next, remaining - 1);
                 if (next != to)
-                    path.pop_back();
+                    --path.size;
                 if (clear)
                     return true;
             }
@@ -3660,11 +3679,11 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
           return b & board_bb(c, pt);
       }
 
-      b |= wrapped_step_targets(without_lame_dirs(pi->steps[0][MODALITY_CAPTURE], pi->stepsLame[0][MODALITY_CAPTURE]), s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, false);
+      b |= wrapped_step_targets(pi->steps[0][MODALITY_CAPTURE], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, false, &pi->stepsLame[0][MODALITY_CAPTURE]);
       b |= wrapped_tuple_targets(pi->tupleSteps[0][MODALITY_CAPTURE], c, s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, false);
       b |= wrapped_tuple_rider_targets(pi->tupleSlider[0][MODALITY_CAPTURE], c, s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, false);
-      b |= wrapped_slider_targets(without_lame_dirs(pi->slider[0][MODALITY_CAPTURE], pi->stepsLame[0][MODALITY_CAPTURE]), s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, false);
-      b |= wrapped_hopper_targets(without_lame_dirs(pi->hopper[0][MODALITY_CAPTURE], pi->stepsLame[0][MODALITY_CAPTURE]), s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, false);
+      b |= wrapped_slider_targets(pi->slider[0][MODALITY_CAPTURE], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, false, &pi->stepsLame[0][MODALITY_CAPTURE]);
+      b |= wrapped_hopper_targets(pi->hopper[0][MODALITY_CAPTURE], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, false, &pi->stepsLame[0][MODALITY_CAPTURE]);
       b |= wrapped_universal_hopper_targets(pi->universalHopper[0][MODALITY_CAPTURE], c, s, occupancy, pieces(c), max_file(), max_rank(), wrapFile, wrapRank, true, true);
       b |= lame_leaper_bb(pi->stepsLame[0][MODALITY_CAPTURE], s, occupancy, c, false);
       if (double_step_region(c, pt) & s)
@@ -3818,11 +3837,11 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
         }
 
         Bitboard b = 0;
-        b |= wrapped_step_targets(without_lame_dirs(pi->steps[0][MODALITY_QUIET], pi->stepsLame[0][MODALITY_QUIET]), s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
+        b |= wrapped_step_targets(pi->steps[0][MODALITY_QUIET], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true, &pi->stepsLame[0][MODALITY_QUIET]);
         b |= wrapped_tuple_targets(pi->tupleSteps[0][MODALITY_QUIET], c, s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
         b |= wrapped_tuple_rider_targets(pi->tupleSlider[0][MODALITY_QUIET], c, s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
-        b |= wrapped_slider_targets(without_lame_dirs(pi->slider[0][MODALITY_QUIET], pi->stepsLame[0][MODALITY_QUIET]), s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
-        b |= wrapped_hopper_targets(without_lame_dirs(pi->hopper[0][MODALITY_QUIET], pi->stepsLame[0][MODALITY_QUIET]), s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
+        b |= wrapped_slider_targets(pi->slider[0][MODALITY_QUIET], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true, &pi->stepsLame[0][MODALITY_QUIET]);
+        b |= wrapped_hopper_targets(pi->hopper[0][MODALITY_QUIET], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true, &pi->stepsLame[0][MODALITY_QUIET]);
         b |= wrapped_universal_hopper_targets(pi->universalHopper[0][MODALITY_QUIET], c, s, occupancy, pieces(c), max_file(), max_rank(), wrapFile, wrapRank, false, false);
         b |= lame_leaper_bb(pi->stepsLame[0][MODALITY_QUIET], s, occupancy, c, true);
         if (pi->griffon[0][MODALITY_QUIET])
@@ -3835,11 +3854,11 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
 
         if (double_step_region(c, pt) & s)
         {
-            b |= wrapped_step_targets(without_lame_dirs(pi->steps[1][MODALITY_QUIET], pi->stepsLame[1][MODALITY_QUIET]), s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
+            b |= wrapped_step_targets(pi->steps[1][MODALITY_QUIET], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true, &pi->stepsLame[1][MODALITY_QUIET]);
             b |= wrapped_tuple_targets(pi->tupleSteps[1][MODALITY_QUIET], c, s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
             b |= wrapped_tuple_rider_targets(pi->tupleSlider[1][MODALITY_QUIET], c, s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
-            b |= wrapped_slider_targets(without_lame_dirs(pi->slider[1][MODALITY_QUIET], pi->stepsLame[1][MODALITY_QUIET]), s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
-            b |= wrapped_hopper_targets(without_lame_dirs(pi->hopper[1][MODALITY_QUIET], pi->stepsLame[1][MODALITY_QUIET]), s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
+            b |= wrapped_slider_targets(pi->slider[1][MODALITY_QUIET], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true, &pi->stepsLame[1][MODALITY_QUIET]);
+            b |= wrapped_hopper_targets(pi->hopper[1][MODALITY_QUIET], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true, &pi->stepsLame[1][MODALITY_QUIET]);
             b |= wrapped_universal_hopper_targets(pi->universalHopper[1][MODALITY_QUIET], c, s, occupancy, pieces(c), max_file(), max_rank(), wrapFile, wrapRank, false, false);
             b |= lame_leaper_bb(pi->stepsLame[1][MODALITY_QUIET], s, occupancy, c, true);
             if (pi->griffon[1][MODALITY_QUIET])

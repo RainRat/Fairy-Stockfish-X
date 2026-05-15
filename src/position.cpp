@@ -523,7 +523,8 @@ namespace {
 
   inline Bitboard retro_lame_check_squares(const Position& pos, Color attacker, PieceType pt, Square kingSq, Bitboard occupied) {
     Bitboard checks = 0;
-    Bitboard candidates = pos.board_bb();
+    PieceType movePt = pos.effective_piece_type(pt);
+    Bitboard candidates = PseudoAttacks[~attacker][movePt][kingSq] & pos.board_bb();
 
     while (candidates)
     {
