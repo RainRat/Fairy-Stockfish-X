@@ -48,7 +48,7 @@ pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 startFen = 8/3a4/8/8/8/8/8/K6k b - - 0 1
 
 [lame-rider-bounded:chess]
-customPiece1 = a:n{path:mid;filter:any}A2
+customPiece1 = a:n{path:mid}A2
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 startFen = 6k1/8/8/8/8/8/1A6/K7 w - - 0 1
 
@@ -58,37 +58,37 @@ customPiece2 = b:AA
 pieceToCharTable = PNBRQ............AB..Kpnbrq............ab..k
 startFen = 8/3ab3/3pp3/8/8/8/8/K6k b - - 0 1
 
-[lame-filter-any:chess]
-customPiece1 = a:n{path:orthfirst;filter:any}L
+[lame-path-orthfirst:chess]
+customPiece1 = a:n{path:orthfirst}L
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 startFen = k7/8/8/8/8/8/8/A1p4K w - - 0 1
 
-[lame-filter-mid:chess]
-customPiece1 = a:n{path:mid;filter:mid}L
+[lame-path-mid:chess]
+customPiece1 = a:n{path:mid}L
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 startFen = k7/8/8/8/8/8/8/A1p4K w - - 0 1
 
-[lame-filter-mid-clear:chess]
-customPiece1 = a:n{path:mid;filter:mid}L
+[lame-path-mid-clear:chess]
+customPiece1 = a:n{path:mid}L
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 startFen = k7/8/8/8/8/8/8/A6K w - - 0 1
 
 [moo-anypath:chess]
-customPiece1 = a:n{path:anypath;filter:any}N
+customPiece1 = a:n{path:anypath}N
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 startFen = k7/8/8/8/8/8/pp6/A6K w - - 0 1
 
 [moa-move-blocked:chess]
-customPiece1 = a:n{path:diagfirst;filter:any}N
+customPiece1 = a:n{path:diagfirst}N
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 startFen = k7/8/8/8/8/8/1p5K/A7 w - - 0 1
 
-[lame-filter-first-reject:chess]
+[lame-filter-key-reject:chess]
 customPiece1 = a:n{path:orthfirst;filter:first}L
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 startFen = k7/8/8/8/8/8/8/A6K w - - 0 1
 
-[lame-filter-last-reject:chess]
+[lame-filter-value-reject:chess]
 customPiece1 = a:n{path:orthfirst;filter:last}L
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 startFen = k7/8/8/8/8/8/8/A6K w - - 0 1
@@ -103,18 +103,18 @@ customPiece1 = a:n(2,1)
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 startFen = k7/8/8/8/8/8/8/A6K w - - 0 1
 
-[lame-filter-mid-single:chess]
-customPiece1 = a:n{path:mid;filter:mid}D
+[lame-path-mid-single:chess]
+customPiece1 = a:n{path:mid}D
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 startFen = k7/8/8/8/8/8/p7/A6K w - - 0 1
 
 [lame-long-leaper:chess]
-customPiece1 = a:n{path:anypath;filter:any}U
+customPiece1 = a:n{path:anypath}U
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 startFen = k7/8/8/8/8/8/8/A6K w - - 0 1
 
 [moa-check:chess]
-customPiece1 = a:n{path:diagfirst;filter:any}N
+customPiece1 = a:n{path:diagfirst}N
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 startFen = 8/8/8/8/3k4/2p5/8/A6K w - - 0 1
 
@@ -223,17 +223,17 @@ out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Varia
 echo "$out" | grep -q "^d7d5:"
 echo "$out" | grep -q "^e7c5:"
 
-out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-filter-any\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
+out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-path-orthfirst\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
   | ./stockfish)
 echo "$out" | grep -q "^a1b4: 1$"
 
 # Midpoint compatibility should still be available for historical definitions.
 # For even-length paths, the midpoint region is the whole central segment.
-out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-filter-mid\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
+out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-path-mid\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
   | ./stockfish)
 ! echo "$out" | grep -q "^a1d2:"
 
-out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-filter-mid-clear\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
+out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-path-mid-clear\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
   | ./stockfish)
 echo "$out" | grep -q "^a1d2: 1$"
 
@@ -260,17 +260,17 @@ out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Varia
   | ./stockfish)
 ! echo "$out" | grep -q "Checkers: c2"
 
-reject_out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-filter-first-reject\nquit\n' "$tmp_ini" \
+reject_out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-filter-key-reject\nquit\n' "$tmp_ini" \
   | ./stockfish 2>&1)
-grep -q "Unknown Betza lame filter 'first'" <<<"$reject_out"
-out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-filter-first-reject\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
+grep -q "Unknown Betza lame parameter key 'filter'" <<<"$reject_out"
+out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-filter-key-reject\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
   | ./stockfish)
 ! echo "$out" | grep -q "^a1"
 
-reject_out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-filter-last-reject\nquit\n' "$tmp_ini" \
+reject_out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-filter-value-reject\nquit\n' "$tmp_ini" \
   | ./stockfish 2>&1)
-grep -q "Unknown Betza lame filter 'last'" <<<"$reject_out"
-out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-filter-last-reject\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
+grep -q "Unknown Betza lame parameter key 'filter'" <<<"$reject_out"
+out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-filter-value-reject\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
   | ./stockfish)
 ! echo "$out" | grep -q "^a1"
 
@@ -296,7 +296,7 @@ customPiece1 = a:n{capture:dest;path:orthfirst}L
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 
 [hopper-key-routing:chess]
-customPiece1 = a:{path:orthfirst;filter:any}W
+customPiece1 = a:{path:orthfirst}W
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 INI
 
@@ -308,7 +308,7 @@ reject_out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UC
   | ./stockfish 2>&1)
 grep -q "Unknown Betza lame parameter key 'path' in hopper block" <<<"$reject_out"
 
-out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-filter-mid-single\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
+out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-path-mid-single\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
   | ./stockfish)
 ! echo "$out" | grep -q "^a1a3:"
 

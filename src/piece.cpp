@@ -572,17 +572,6 @@ namespace {
                                   invalidLameProfile = true;
                               }
                           }
-                          else if (key == "filter") {
-                              if (val == "any")
-                                  currentLameProfile.filter = PieceInfo::LameProfile::ANY;
-                              else if (val == "mid")
-                                  currentLameProfile.filter = PieceInfo::LameProfile::MID;
-                              else
-                              {
-                                  std::cerr << "Unknown Betza lame filter '" << val << "' in '" << betza << "'." << std::endl;
-                                  invalidLameProfile = true;
-                              }
-                          }
                           else if (key == "hurdles" || key == "pre" || key == "post" || key == "capture" || key == "equi"
                                    || key == "hurdle_types" || key == "transparent_types")
                           {

@@ -3483,28 +3483,26 @@ inline bool Position::is_lame_blocked(Square from, Square to, const PieceInfo::L
         return cur == to;
     };
 
-    auto path_blocked = [&](const PathBuffer& path) -> bool {
+    auto path_blocked = [&](const PathBuffer& path, bool midpointOnly) -> bool {
         if (!path.size)
             return false;
-        switch (profile.filter)
+
+        if (!midpointOnly)
         {
-        case PieceInfo::LameProfile::ANY:
             for (size_t i = 0; i < path.size; ++i)
                 if (occupied & square_bb(path.squares[i]))
                     return true;
             return false;
-        case PieceInfo::LameProfile::MID:
-            if (path.size == 1)
-                return bool(occupied & square_bb(path.squares[0]));
-            if (path.size == 2)
-                return bool(occupied & square_bb(path.squares[0])) || bool(occupied & square_bb(path.squares[1]));
-            if (path.size < 3)
-                return false;
-            for (size_t i = 1; i + 1 < path.size; ++i)
-                if (occupied & square_bb(path.squares[i]))
-                    return true;
-            return false;
         }
+
+        if (path.size == 1)
+            return bool(occupied & square_bb(path.squares[0]));
+        if (path.size == 2)
+            return bool(occupied & square_bb(path.squares[0])) || bool(occupied & square_bb(path.squares[1]));
+
+        for (size_t i = 1; i + 1 < path.size; ++i)
+            if (occupied & square_bb(path.squares[i]))
+                return true;
         return false;
     };
 
@@ -3512,7 +3510,7 @@ inline bool Position::is_lame_blocked(Square from, Square to, const PieceInfo::L
         PathBuffer path;
         if (!build_path(pathType, path))
             return true;
-        return path_blocked(path);
+        return path_blocked(path, pathType == PieceInfo::LameProfile::MIDPOINT);
     };
 
     auto any_shortest_path_blocked = [&]() -> bool {
@@ -3531,7 +3529,7 @@ inline bool Position::is_lame_blocked(Square from, Square to, const PieceInfo::L
         PathBuffer path;
         auto search = [&](auto&& self, Square cur, int remaining) -> bool {
             if (!remaining)
-                return cur == to && !path_blocked(path);
+                return cur == to && !path_blocked(path, false);
 
             int df = int(file_of(to)) - int(file_of(cur));
             int dr = int(rank_of(to)) - int(rank_of(cur));
