@@ -3359,7 +3359,19 @@ inline bool Position::is_lame_blocked(Square from, Square to, const PieceInfo::L
         return delta;
     };
 
-    auto build_path = [&](bool diagFirst, std::vector<Square>& path) -> bool {
+    auto advance = [&](Square cur, int stepF, int stepR, Square& next) -> bool {
+        if (topology_wraps())
+            return wrapped_destination_square(cur, stepF, stepR, max_file(), max_rank(), wraps_files(), wraps_ranks(), next);
+
+        next = cur + Direction(stepR * FILE_NB + stepF);
+        if (!is_ok(next))
+            return false;
+
+        return int(file_of(next)) - int(file_of(cur)) == stepF
+            && int(rank_of(next)) - int(rank_of(cur)) == stepR;
+    };
+
+    auto build_path = [&](PieceInfo::LameProfile::PathType pathType, std::vector<Square>& path) -> bool {
         path.clear();
         Square cur = from;
         while (cur != to)
@@ -3380,23 +3392,57 @@ inline bool Position::is_lame_blocked(Square from, Square to, const PieceInfo::L
             Square next = SQ_NONE;
             bool moved = false;
 
-            if (diagFirst)
+            switch (pathType)
             {
+            case PieceInfo::LameProfile::ORTH_FIRST:
                 if (df != 0 && dr != 0)
-                    moved = wrapped_destination_square(cur, stepF, stepR, max_file(), max_rank(), wraps_files(), wraps_ranks(), next);
+                {
+                    if (std::abs(df) > std::abs(dr))
+                        moved = advance(cur, stepF, 0, next);
+                    else if (std::abs(df) < std::abs(dr))
+                        moved = advance(cur, 0, stepR, next);
+                    else
+                        moved = advance(cur, stepF, 0, next);
+                }
                 else if (df != 0)
-                    moved = wrapped_destination_square(cur, stepF, 0, max_file(), max_rank(), wraps_files(), wraps_ranks(), next);
+                    moved = advance(cur, stepF, 0, next);
                 else
-                    moved = wrapped_destination_square(cur, 0, stepR, max_file(), max_rank(), wraps_files(), wraps_ranks(), next);
-            }
-            else
-            {
+                    moved = advance(cur, 0, stepR, next);
+                break;
+            case PieceInfo::LameProfile::DIAG_FIRST:
+                if (df != 0 && dr != 0)
+                    moved = advance(cur, stepF, stepR, next);
+                else if (df != 0)
+                    moved = advance(cur, stepF, 0, next);
+                else
+                    moved = advance(cur, 0, stepR, next);
+                break;
+            case PieceInfo::LameProfile::ORTH_ONLY:
+                if (std::abs(df) >= std::abs(dr))
+                    moved = advance(cur, stepF, 0, next);
+                else
+                    moved = advance(cur, 0, stepR, next);
+                break;
+            case PieceInfo::LameProfile::ANY_PATH:
+                if (df != 0 && dr != 0)
+                    moved = advance(cur, stepF, stepR, next);
+                else if (df != 0)
+                    moved = advance(cur, stepF, 0, next);
+                else
+                    moved = advance(cur, 0, stepR, next);
+                break;
+            case PieceInfo::LameProfile::MIDPOINT:
                 if (std::abs(df) > std::abs(dr))
-                    moved = wrapped_destination_square(cur, stepF, 0, max_file(), max_rank(), wraps_files(), wraps_ranks(), next);
+                    moved = advance(cur, stepF, 0, next);
                 else if (std::abs(df) < std::abs(dr))
-                    moved = wrapped_destination_square(cur, 0, stepR, max_file(), max_rank(), wraps_files(), wraps_ranks(), next);
+                    moved = advance(cur, 0, stepR, next);
+                else if (df != 0 && dr != 0)
+                    moved = advance(cur, stepF, stepR, next);
+                else if (df != 0)
+                    moved = advance(cur, stepF, 0, next);
                 else
-                    moved = wrapped_destination_square(cur, stepF, stepR, max_file(), max_rank(), wraps_files(), wraps_ranks(), next);
+                    moved = advance(cur, 0, stepR, next);
+                break;
             }
 
             if (!moved)
@@ -3408,9 +3454,9 @@ inline bool Position::is_lame_blocked(Square from, Square to, const PieceInfo::L
         return cur == to;
     };
 
-    auto path_blocked = [&](bool diagFirst) -> bool {
+    auto path_blocked = [&](PieceInfo::LameProfile::PathType pathType) -> bool {
         std::vector<Square> path;
-        if (!build_path(diagFirst, path))
+        if (!build_path(pathType, path))
             return true;
         if (path.empty())
             return false;
@@ -3421,10 +3467,6 @@ inline bool Position::is_lame_blocked(Square from, Square to, const PieceInfo::L
                 if (occupied & square_bb(sq))
                     return true;
             return false;
-        case PieceInfo::LameProfile::FIRST:
-            return bool(occupied & square_bb(path.front()));
-        case PieceInfo::LameProfile::LAST:
-            return bool(occupied & square_bb(path.back()));
         case PieceInfo::LameProfile::MID:
             if (path.size() < 3)
                 return false;
@@ -3438,15 +3480,18 @@ inline bool Position::is_lame_blocked(Square from, Square to, const PieceInfo::L
 
     switch (profile.path)
     {
-    case PieceInfo::LameProfile::DEFAULT:
-    case PieceInfo::LameProfile::MAO:
-        return path_blocked(false);
-    case PieceInfo::LameProfile::MOA:
-        return path_blocked(true);
-    case PieceInfo::LameProfile::BOTH:
-        return path_blocked(false) || path_blocked(true);
-    case PieceInfo::LameProfile::EITHER:
-        return path_blocked(false) && path_blocked(true);
+    case PieceInfo::LameProfile::ORTH_FIRST:
+        return path_blocked(PieceInfo::LameProfile::ORTH_FIRST);
+    case PieceInfo::LameProfile::DIAG_FIRST:
+        return path_blocked(PieceInfo::LameProfile::DIAG_FIRST);
+    case PieceInfo::LameProfile::ORTH_ONLY:
+        return path_blocked(PieceInfo::LameProfile::ORTH_ONLY);
+    case PieceInfo::LameProfile::ANY_PATH:
+        return path_blocked(PieceInfo::LameProfile::ORTH_FIRST)
+            && path_blocked(PieceInfo::LameProfile::DIAG_FIRST)
+            && path_blocked(PieceInfo::LameProfile::ORTH_ONLY);
+    case PieceInfo::LameProfile::MIDPOINT:
+        return path_blocked(PieceInfo::LameProfile::MIDPOINT);
     }
     return false;
 }

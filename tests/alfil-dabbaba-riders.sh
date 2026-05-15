@@ -47,18 +47,18 @@ customPiece2 = b:AA
 pieceToCharTable = PNBRQ............AB..Kpnbrq............ab..k
 startFen = 8/3ab3/3pp3/8/8/8/8/K6k b - - 0 1
 
-[lame-filter-first:chess]
-customPiece1 = a:n{path:default;filter:first}L
+[lame-filter-any:chess]
+customPiece1 = a:n{path:orthfirst;filter:any}L
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 startFen = k7/8/8/8/8/8/8/A1p4K w - - 0 1
 
-[lame-filter-last:chess]
-customPiece1 = a:n{path:default;filter:last}L
+[lame-filter-mid:chess]
+customPiece1 = a:n{path:mid;filter:mid}L
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 startFen = k7/8/8/8/8/8/8/A1p4K w - - 0 1
 
-[moo-either:chess]
-customPiece1 = a:n{path:either;filter:first}N
+[moo-anypath:chess]
+customPiece1 = a:n{path:anypath;filter:any}N
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 startFen = k7/8/8/8/8/8/pp6/A6K w - - 0 1
 INI
@@ -126,20 +126,21 @@ out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Varia
 echo "$out" | grep -q "^d7d5:"
 echo "$out" | grep -q "^e7c5:"
 
-out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-filter-first\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
+out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-filter-any\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
+  | ./stockfish)
+echo "$out" | grep -q "^a1b4: 1$"
+
+# Midpoint compatibility should still be available for historical definitions.
+out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-filter-mid\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
   | ./stockfish)
 echo "$out" | grep -q "^a1d2: 1$"
 
-out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-filter-last\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
+# Any-path lame knight: if one valid route is clear, the move should be available.
+out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value moo-anypath\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
   | ./stockfish)
-! echo "$out" | grep -q "^a1d2:"
+echo "$out" | grep -q "^a1c2: 1$"
 
-# Moo-style lame knight: either Mao or Moa path being clear should allow the move.
-out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value moo-either\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
-  | ./stockfish)
-! echo "$out" | grep -q "^a1b3:"
-
-out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value moo-either\nposition fen k7/8/8/8/8/8/p7/A6K w - - 0 1\ngo perft 1\nquit\n' "$tmp_ini" \
+out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value moo-anypath\nposition fen k7/8/8/8/8/8/p7/A6K w - - 0 1\ngo perft 1\nquit\n' "$tmp_ini" \
   | ./stockfish)
 echo "$out" | grep -q "^a1b3: 1$"
 

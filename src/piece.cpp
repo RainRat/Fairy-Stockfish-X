@@ -545,19 +545,26 @@ namespace {
                               std::cerr << "Unknown Betza hopper equi mode '" << val << "' in '" << betza << "'." << std::endl;
                       }
                       else if (key == "path") {
-                          if (val == "default") currentLameProfile.path = PieceInfo::LameProfile::DEFAULT;
-                          else if (val == "mao") currentLameProfile.path = PieceInfo::LameProfile::MAO;
-                          else if (val == "moa") currentLameProfile.path = PieceInfo::LameProfile::MOA;
-                          else if (val == "both") currentLameProfile.path = PieceInfo::LameProfile::BOTH;
-                          else if (val == "either") currentLameProfile.path = PieceInfo::LameProfile::EITHER;
-                          else std::cerr << "Unknown Betza lame path '" << val << "' in '" << betza << "'." << std::endl;
+                          if (val == "default" || val == "mao" || val == "orthfirst")
+                              currentLameProfile.path = PieceInfo::LameProfile::ORTH_FIRST;
+                          else if (val == "moa" || val == "diagfirst")
+                              currentLameProfile.path = PieceInfo::LameProfile::DIAG_FIRST;
+                          else if (val == "orthonly")
+                              currentLameProfile.path = PieceInfo::LameProfile::ORTH_ONLY;
+                          else if (val == "anypath" || val == "either" || val == "both")
+                              currentLameProfile.path = PieceInfo::LameProfile::ANY_PATH;
+                          else if (val == "mid")
+                              currentLameProfile.path = PieceInfo::LameProfile::MIDPOINT;
+                          else
+                              std::cerr << "Unknown Betza lame path '" << val << "' in '" << betza << "'." << std::endl;
                       }
                       else if (key == "filter") {
-                          if (val == "any") currentLameProfile.filter = PieceInfo::LameProfile::ANY;
-                          else if (val == "first") currentLameProfile.filter = PieceInfo::LameProfile::FIRST;
-                          else if (val == "last") currentLameProfile.filter = PieceInfo::LameProfile::LAST;
-                          else if (val == "mid") currentLameProfile.filter = PieceInfo::LameProfile::MID;
-                          else std::cerr << "Unknown Betza lame filter '" << val << "' in '" << betza << "'." << std::endl;
+                          if (val == "any" || val == "first" || val == "last")
+                              currentLameProfile.filter = PieceInfo::LameProfile::ANY;
+                          else if (val == "mid")
+                              currentLameProfile.filter = PieceInfo::LameProfile::MID;
+                          else
+                              std::cerr << "Unknown Betza lame filter '" << val << "' in '" << betza << "'." << std::endl;
                       }
                       else if (key == "hurdle_types" || key == "transparent_types") {
                           bool isHurdle = (key == "hurdle_types");

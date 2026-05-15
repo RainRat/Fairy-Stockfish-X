@@ -114,21 +114,19 @@ struct PieceInfo {
 
   struct LameProfile {
     enum PathType : uint8_t {
-      DEFAULT,
-      MAO,
-      MOA,
-      BOTH,
-      EITHER
+      ORTH_FIRST,
+      DIAG_FIRST,
+      ORTH_ONLY,
+      ANY_PATH,
+      MIDPOINT
     };
 
     enum BlockFilter : uint8_t {
       ANY,
-      FIRST,
-      LAST,
       MID
     };
 
-    PathType path = DEFAULT;
+    PathType path = ORTH_FIRST;
     BlockFilter filter = ANY;
   };
 
