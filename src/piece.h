@@ -128,6 +128,7 @@ struct PieceInfo {
 
     PathType path = ORTH_FIRST;
     BlockFilter filter = ANY;
+    int limit = -1;
   };
 
   std::string name = "";

@@ -315,6 +315,13 @@ namespace {
               distance = DYNAMIC_SLIDER_LIMIT;
               p->add_rider_augment(PieceInfo::AUGMENT_DYNAMIC);
           }
+          if (hasLameProfile && (hopper || dynamicDistance || skiSlider || maxDistance || hasUniversalHopper))
+          {
+              std::cerr << "Unsupported Betza lame modifier combination in '" << betza
+                        << "': lame path profiles currently apply to step/leaper and rider atoms only." << std::endl;
+              reset_parser_state();
+              return;
+          }
           if (moveModalities.size() == 0)
           {
               moveModalities.push_back(MODALITY_QUIET);
@@ -358,7 +365,10 @@ namespace {
                           {
                               v[Direction(dr * FILE_NB + df)] = distance;
                               if (hasLameProfile)
+                              {
+                                  currentLameProfile.limit = distance;
                                   p->stepsLame[initial][modality][Direction(dr * FILE_NB + df)] = currentLameProfile;
+                              }
                               if (rider && !atomIsRider && !hopper
                                   && !lame && !dynamicDistance && !skiSlider && !maxDistance)
                                   leapRiderV[Direction(dr * FILE_NB + df)] = distance;

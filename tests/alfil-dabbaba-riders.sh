@@ -42,6 +42,11 @@ customPiece4 = d:nAA
 pieceToCharTable = PNBRQ............ABCDKpnbrq............abcdk
 startFen = 8/3ab3/2cd5/8/8/8/8/K6k b - - 0 1
 
+[lame-rider-repeat:chess]
+customPiece1 = a:nAA
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+startFen = 8/3a4/8/8/8/8/8/K6k b - - 0 1
+
 [plain-rider-midpoint:chess]
 customPiece1 = a:DD
 customPiece2 = b:AA
@@ -145,6 +150,18 @@ out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Varia
 ! echo "$out" | grep -q "^e7c7:"
 ! echo "$out" | grep -q "^c6e8:"
 ! echo "$out" | grep -q "^d6f8:"
+
+out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-rider-repeat\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
+  | ./stockfish)
+echo "$out" | grep -q "^d7b5: 1$"
+echo "$out" | grep -q "^d7f5: 1$"
+echo "$out" | grep -q "^d7h3: 1$"
+
+out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-rider-repeat\nposition fen 8/3a4/8/8/4p3/8/8/K6k b - - 0 1\ngo perft 1\nquit\n' "$tmp_ini" \
+  | ./stockfish)
+echo "$out" | grep -q "^d7b5: 1$"
+! echo "$out" | grep -q "^d7f5:"
+! echo "$out" | grep -q "^d7h3:"
 
 # Plain DD/AA riders are not lame: midpoint blockers must NOT stop them.
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value plain-rider-midpoint\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \

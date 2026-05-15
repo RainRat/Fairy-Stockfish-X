@@ -3507,23 +3507,41 @@ inline Bitboard Position::lame_leaper_bb(const std::map<Direction, PieceInfo::La
     for (const auto& it : profiles)
     {
         Direction dir = (c == WHITE ? it.first : -it.first);
-        Square to = SQ_NONE;
+        const PieceInfo::LameProfile& profile = it.second;
+        auto [dr, df] = decode_direction(dir);
 
-        if (topology_wraps())
+        auto advance_once = [&](Square cur, Square& next) -> bool
         {
-            auto [dr, df] = decode_direction(dir);
-            if (!wrapped_destination_square(sq, df, dr, max_file(), max_rank(), wraps_files(), wraps_ranks(), to))
-                continue;
-        }
-        else
-        {
-            to = sq + dir;
-            if (!is_ok(to))
-                continue;
-        }
+            if (topology_wraps())
+                return wrapped_destination_square(cur, df, dr, max_file(), max_rank(), wraps_files(), wraps_ranks(), next);
 
-        if (!is_lame_blocked(sq, to, it.second, occupied))
-            b |= to;
+            next = cur + dir;
+            if (!is_ok(next))
+                return false;
+
+            return int(file_of(next)) - int(file_of(cur)) == df
+                && int(rank_of(next)) - int(rank_of(cur)) == dr;
+        };
+
+        Square cur = sq;
+        int steps = 0;
+        while (true)
+        {
+            if (profile.limit > 0 && steps >= profile.limit)
+                break;
+
+            Square to = SQ_NONE;
+            if (!advance_once(cur, to))
+                break;
+
+            cur = to;
+            ++steps;
+            if (!is_lame_blocked(sq, to, profile, occupied))
+                b |= to;
+
+            if (profile.limit < 0)
+                break;
+        }
     }
     return b;
 }

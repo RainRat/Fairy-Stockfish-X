@@ -521,6 +521,20 @@ namespace {
     return checks;
   }
 
+  inline Bitboard retro_lame_check_squares(const Position& pos, Color attacker, PieceType pt, Square kingSq, Bitboard occupied) {
+    Bitboard checks = 0;
+    Bitboard candidates = PseudoAttacks[~attacker][pt][kingSq] & pos.pieces(attacker, pt);
+
+    while (candidates)
+    {
+        Square from = pop_lsb(candidates);
+        if (pos.attacks_from(attacker, pt, from, occupied) & square_bb(kingSq))
+            checks |= from;
+    }
+
+    return checks;
+  }
+
   bool is_pure_hopper_like(const PieceInfo* pi) {
     bool hasHopper = false;
 
@@ -1815,7 +1829,9 @@ void Position::set_check_info(StateInfo* si) const {
           {
               PieceType pt = pop_lsb(ps);
               PieceType movePt = effective_piece_type(pt);
-              if (AttackRiderTypes[movePt] & ASYMMETRICAL_RIDERS)
+              if (AttackRiderTypes[movePt] & LAME_LEAPERS)
+                  si->checkSquares[pt] = retro_lame_check_squares(*this, sideToMove, movePt, ksq, occupied);
+              else if (AttackRiderTypes[movePt] & ASYMMETRICAL_RIDERS)
                   // For asymmetrical riders, use true retro paths from the king square.
                   si->checkSquares[pt] = retro_asymmetric_check_squares(sideToMove, movePt, ksq, occupied);
               else
