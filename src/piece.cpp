@@ -456,6 +456,7 @@ namespace {
                   const size_t last = text.find_last_not_of(" \t\r\n");
                   text = text.substr(first, last - first + 1);
               };
+              const bool blockIsLame = lame;
               while (pos < params.size()) {
                   size_t next_semi = params.find(';', pos);
                   if (next_semi == std::string::npos) next_semi = params.size();
@@ -525,71 +526,86 @@ namespace {
                               std::cerr << "Invalid hopper range (missing comma) in Betza hopper parameters: '" << s << "'" << std::endl;
                       };
                       
-                      if (key == "hurdles") { parse_min_max(val, currentHopperProfile.hurdlesMin, currentHopperProfile.hurdlesMax); }
-                      else if (key == "pre") { parse_min_max(val, currentHopperProfile.preMin, currentHopperProfile.preMax); }
-                      else if (key == "post") { parse_min_max(val, currentHopperProfile.postMin, currentHopperProfile.postMax); }
-                      else if (key == "capture") {
-                          if (val == "dest") currentHopperProfile.captureMode = PieceInfo::CAPTURE_DEST;
-                          else if (val == "locust_all") currentHopperProfile.captureMode = PieceInfo::CAPTURE_LOCUST_ALL;
-                          else if (val == "locust_first") currentHopperProfile.captureMode = PieceInfo::CAPTURE_LOCUST_FIRST;
-                          else if (val == "locust_last") currentHopperProfile.captureMode = PieceInfo::CAPTURE_LOCUST_LAST;
-                          else {
-                              currentHopperProfile.captureMode = PieceInfo::CAPTURE_DEST;
-                              std::cerr << "Unknown Betza hopper capture mode '" << val << "' in '" << betza << "'." << std::endl;
+                      if (blockIsLame)
+                      {
+                          if (key == "path") {
+                              if (val == "default" || val == "mao" || val == "orthfirst")
+                                  currentLameProfile.path = PieceInfo::LameProfile::ORTH_FIRST;
+                              else if (val == "moa" || val == "diagfirst")
+                                  currentLameProfile.path = PieceInfo::LameProfile::DIAG_FIRST;
+                              else if (val == "orthonly")
+                                  currentLameProfile.path = PieceInfo::LameProfile::ORTH_ONLY;
+                              else if (val == "anypath" || val == "either" || val == "both")
+                                  currentLameProfile.path = PieceInfo::LameProfile::ANY_PATH;
+                              else if (val == "mid")
+                                  currentLameProfile.path = PieceInfo::LameProfile::MIDPOINT;
+                              else
+                                  std::cerr << "Unknown Betza lame path '" << val << "' in '" << betza << "'." << std::endl;
                           }
-                      }
-                      else if (key == "equi") {
-                          if (val == "hopper") currentHopperProfile.equiRule = PieceInfo::EQUI_HOPPER;
-                          else if (val == "stopper") currentHopperProfile.equiRule = PieceInfo::EQUI_STOPPER;
-                          else
-                              std::cerr << "Unknown Betza hopper equi mode '" << val << "' in '" << betza << "'." << std::endl;
-                      }
-                      else if (key == "path") {
-                          if (val == "default" || val == "mao" || val == "orthfirst")
-                              currentLameProfile.path = PieceInfo::LameProfile::ORTH_FIRST;
-                          else if (val == "moa" || val == "diagfirst")
-                              currentLameProfile.path = PieceInfo::LameProfile::DIAG_FIRST;
-                          else if (val == "orthonly")
-                              currentLameProfile.path = PieceInfo::LameProfile::ORTH_ONLY;
-                          else if (val == "anypath" || val == "either" || val == "both")
-                              currentLameProfile.path = PieceInfo::LameProfile::ANY_PATH;
-                          else if (val == "mid")
-                              currentLameProfile.path = PieceInfo::LameProfile::MIDPOINT;
-                          else
-                              std::cerr << "Unknown Betza lame path '" << val << "' in '" << betza << "'." << std::endl;
-                      }
-                      else if (key == "filter") {
-                          if (val == "any")
-                              currentLameProfile.filter = PieceInfo::LameProfile::ANY;
-                          else if (val == "mid")
-                              currentLameProfile.filter = PieceInfo::LameProfile::MID;
-                          else
-                              std::cerr << "Unknown Betza lame filter '" << val << "' in '" << betza << "'." << std::endl;
-                      }
-                      else if (key == "hurdle_types" || key == "transparent_types") {
-                          bool isHurdle = (key == "hurdle_types");
-                          uint8_t& special = isHurdle ? currentHopperProfile.hurdleSpecialTypes : currentHopperProfile.transparentSpecialTypes;
-                          if (isHurdle) special = PieceInfo::HopperProfile::NONE; // Reset default for explicit hurdle_types
-                          
-                          size_t vpos = 0;
-                          while (vpos < val.size()) {
-                              size_t next_comma = val.find(',', vpos);
-                              if (next_comma == std::string::npos) next_comma = val.size();
-                              std::string v = val.substr(vpos, next_comma - vpos);
-                              trim_in_place(v);
-                              
-                              if (v == "enemy") special |= PieceInfo::HopperProfile::ENEMY;
-                              else if (v == "friendly") special |= PieceInfo::HopperProfile::FRIENDLY;
-                              else if (v == "wall") special |= PieceInfo::HopperProfile::WALL;
-                              else if (v == "dead") special |= PieceInfo::HopperProfile::DEAD;
-                              else if (!v.empty())
-                                  std::cerr << "Unknown Betza hopper special type '" << v << "' in '" << betza << "'." << std::endl;
-                              
-                              vpos = next_comma + 1;
+                          else if (key == "filter") {
+                              if (val == "any")
+                                  currentLameProfile.filter = PieceInfo::LameProfile::ANY;
+                              else if (val == "mid")
+                                  currentLameProfile.filter = PieceInfo::LameProfile::MID;
+                              else
+                                  std::cerr << "Unknown Betza lame filter '" << val << "' in '" << betza << "'." << std::endl;
                           }
+                          else if (key == "hurdles" || key == "pre" || key == "post" || key == "capture" || key == "equi"
+                                   || key == "hurdle_types" || key == "transparent_types")
+                          {
+                              std::cerr << "Unknown Betza hopper parameter key '" << key << "' in lame block of '" << betza << "'." << std::endl;
+                          }
+                          else
+                              std::cerr << "Unknown Betza lame parameter key '" << key << "' in '" << betza << "'." << std::endl;
                       }
                       else
-                          std::cerr << "Unknown Betza hopper parameter key '" << key << "' in '" << betza << "'." << std::endl;
+                      {
+                          if (key == "hurdles") { parse_min_max(val, currentHopperProfile.hurdlesMin, currentHopperProfile.hurdlesMax); }
+                          else if (key == "pre") { parse_min_max(val, currentHopperProfile.preMin, currentHopperProfile.preMax); }
+                          else if (key == "post") { parse_min_max(val, currentHopperProfile.postMin, currentHopperProfile.postMax); }
+                          else if (key == "capture") {
+                              if (val == "dest") currentHopperProfile.captureMode = PieceInfo::CAPTURE_DEST;
+                              else if (val == "locust_all") currentHopperProfile.captureMode = PieceInfo::CAPTURE_LOCUST_ALL;
+                              else if (val == "locust_first") currentHopperProfile.captureMode = PieceInfo::CAPTURE_LOCUST_FIRST;
+                              else if (val == "locust_last") currentHopperProfile.captureMode = PieceInfo::CAPTURE_LOCUST_LAST;
+                              else {
+                                  currentHopperProfile.captureMode = PieceInfo::CAPTURE_DEST;
+                                  std::cerr << "Unknown Betza hopper capture mode '" << val << "' in '" << betza << "'." << std::endl;
+                              }
+                          }
+                          else if (key == "equi") {
+                              if (val == "hopper") currentHopperProfile.equiRule = PieceInfo::EQUI_HOPPER;
+                              else if (val == "stopper") currentHopperProfile.equiRule = PieceInfo::EQUI_STOPPER;
+                              else
+                                  std::cerr << "Unknown Betza hopper equi mode '" << val << "' in '" << betza << "'." << std::endl;
+                          }
+                          else if (key == "hurdle_types" || key == "transparent_types") {
+                              bool isHurdle = (key == "hurdle_types");
+                              uint8_t& special = isHurdle ? currentHopperProfile.hurdleSpecialTypes : currentHopperProfile.transparentSpecialTypes;
+                              if (isHurdle) special = PieceInfo::HopperProfile::NONE; // Reset default for explicit hurdle_types
+                              
+                              size_t vpos = 0;
+                              while (vpos < val.size()) {
+                                  size_t next_comma = val.find(',', vpos);
+                                  if (next_comma == std::string::npos) next_comma = val.size();
+                                  std::string v = val.substr(vpos, next_comma - vpos);
+                                  trim_in_place(v);
+
+                                  if (v == "enemy") special |= PieceInfo::HopperProfile::ENEMY;
+                                  else if (v == "friendly") special |= PieceInfo::HopperProfile::FRIENDLY;
+                                  else if (v == "wall") special |= PieceInfo::HopperProfile::WALL;
+                                  else if (v == "dead") special |= PieceInfo::HopperProfile::DEAD;
+                                  else if (!v.empty())
+                                      std::cerr << "Unknown Betza hopper special type '" << v << "' in '" << betza << "'." << std::endl;
+
+                                  vpos = next_comma + 1;
+                              }
+                          }
+                          else if (key == "path" || key == "filter")
+                              std::cerr << "Unknown Betza lame parameter key '" << key << "' in hopper block of '" << betza << "'." << std::endl;
+                          else
+                              std::cerr << "Unknown Betza hopper parameter key '" << key << "' in '" << betza << "'." << std::endl;
+                      }
                   }
                   pos = next_semi + 1;
               }

@@ -4,6 +4,7 @@ set -euo pipefail
 cd "$(dirname "$0")/../src"
 
 tmp_ini=$(mktemp)
+tmp_key_ini=""
 trap 'rm -f "$tmp_ini"' EXIT
 
 cat > "$tmp_ini" <<'INI'
@@ -57,6 +58,11 @@ customPiece1 = a:n{path:mid;filter:mid}L
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 startFen = k7/8/8/8/8/8/8/A1p4K w - - 0 1
 
+[lame-filter-mid-clear:chess]
+customPiece1 = a:n{path:mid;filter:mid}L
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+startFen = k7/8/8/8/8/8/8/A6K w - - 0 1
+
 [moo-anypath:chess]
 customPiece1 = a:n{path:anypath;filter:any}N
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
@@ -97,7 +103,7 @@ actual_alfil=$(mktemp)
 actual_alfil_tuple=$(mktemp)
 actual_dabbaba=$(mktemp)
 actual_dabbaba_tuple=$(mktemp)
-trap 'rm -f "$tmp_ini" "$expected_alfil" "$expected_dabbaba" "$actual_alfil" "$actual_alfil_tuple" "$actual_dabbaba" "$actual_dabbaba_tuple"' EXIT
+trap 'rm -f "$tmp_ini" "$tmp_key_ini" "$expected_alfil" "$expected_dabbaba" "$actual_alfil" "$actual_alfil_tuple" "$actual_dabbaba" "$actual_dabbaba_tuple"' EXIT
 
 cat > "$expected_alfil" <<'EOF'
 d4b2
@@ -151,7 +157,12 @@ out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Varia
 echo "$out" | grep -q "^a1b4: 1$"
 
 # Midpoint compatibility should still be available for historical definitions.
+# For even-length paths, the midpoint region is the whole central segment.
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-filter-mid\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
+  | ./stockfish)
+! echo "$out" | grep -q "^a1d2:"
+
+out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-filter-mid-clear\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
   | ./stockfish)
 echo "$out" | grep -q "^a1d2: 1$"
 
@@ -171,6 +182,25 @@ grep -q "Unknown Betza lame filter 'first'" <<<"$reject_out"
 reject_out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-filter-last-reject\nquit\n' "$tmp_ini" \
   | ./stockfish 2>&1)
 grep -q "Unknown Betza lame filter 'last'" <<<"$reject_out"
+
+tmp_key_ini=$(mktemp)
+cat > "$tmp_key_ini" <<'INI'
+[lame-key-routing:chess]
+customPiece1 = a:n{capture:dest;path:orthfirst}L
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+
+[hopper-key-routing:chess]
+customPiece1 = a:{path:orthfirst;filter:any}W
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+INI
+
+reject_out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-key-routing\nquit\n' "$tmp_key_ini" \
+  | ./stockfish 2>&1)
+grep -q "Unknown Betza hopper parameter key 'capture' in lame block" <<<"$reject_out"
+
+reject_out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value hopper-key-routing\nquit\n' "$tmp_key_ini" \
+  | ./stockfish 2>&1)
+grep -q "Unknown Betza lame parameter key 'path' in hopper block" <<<"$reject_out"
 
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-filter-mid-single\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
   | ./stockfish)

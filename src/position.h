@@ -3470,6 +3470,8 @@ inline bool Position::is_lame_blocked(Square from, Square to, const PieceInfo::L
         case PieceInfo::LameProfile::MID:
             if (path.size() == 1)
                 return bool(occupied & square_bb(path[0]));
+            if (path.size() == 2)
+                return bool(occupied & square_bb(path[0])) || bool(occupied & square_bb(path[1]));
             if (path.size() < 3)
                 return false;
             for (size_t i = 1; i + 1 < path.size(); ++i)
