@@ -3430,7 +3430,7 @@ inline bool Position::is_lame_blocked(Square from, Square to, const PieceInfo::L
                     else if (std::abs(df) < std::abs(dr))
                         moved = advance(cur, 0, stepR, next);
                     else
-                        moved = advance(cur, stepF, 0, next);
+                        moved = advance(cur, stepF, stepR, next);
                 }
                 else if (df != 0)
                     moved = advance(cur, stepF, 0, next);

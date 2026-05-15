@@ -83,6 +83,16 @@ customPiece1 = a:n{path:diagfirst}N
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 startFen = k7/8/8/8/8/8/1p5K/A7 w - - 0 1
 
+[mao-leg-blocked:chess]
+customPiece1 = a:n{path:orthfirst}N
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+startFen = k7/8/8/8/8/8/8/Ap5K w - - 0 1
+
+[mao-leg-clear:chess]
+customPiece1 = a:n{path:orthfirst}N
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+startFen = k7/8/8/8/8/8/8/A1p4K w - - 0 1
+
 [lame-filter-key-reject:chess]
 customPiece1 = a:n{path:orthfirst;filter:first}L
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
@@ -95,6 +105,16 @@ startFen = k7/8/8/8/8/8/8/A6K w - - 0 1
 
 [lame-invalid-clears-piece:chess]
 customPiece1 = a:Rn{path:orthfirst;filter:first}L
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+startFen = k7/8/8/8/8/8/8/A6K w - - 0 1
+
+[lame-invalid-stops-piece:chess]
+customPiece1 = a:Rn{path:bad}LB
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+startFen = k7/8/8/8/8/8/8/A6K w - - 0 1
+
+[lame-invalid-multi-block:chess]
+customPiece1 = a:n{path:bad}{path:mid}N
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 startFen = k7/8/8/8/8/8/8/A6K w - - 0 1
 
@@ -252,6 +272,14 @@ out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Varia
   | ./stockfish)
 ! echo "$out" | grep -q "^a1c2:"
 
+out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value mao-leg-blocked\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
+  | ./stockfish)
+! echo "$out" | grep -q "^a1c2:"
+
+out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value mao-leg-clear\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
+  | ./stockfish)
+echo "$out" | grep -q "^a1c2: 1$"
+
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value moa-check\nposition startpos moves a1c2\nd\nquit\n' "$tmp_ini" \
   | ./stockfish)
 echo "$out" | grep -q "Checkers: c2"
@@ -275,6 +303,14 @@ out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Varia
 ! echo "$out" | grep -q "^a1"
 
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-invalid-clears-piece\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
+  | ./stockfish)
+! echo "$out" | grep -q "^a1"
+
+out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-invalid-stops-piece\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
+  | ./stockfish)
+! echo "$out" | grep -q "^a1"
+
+out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-invalid-multi-block\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
   | ./stockfish)
 ! echo "$out" | grep -q "^a1"
 

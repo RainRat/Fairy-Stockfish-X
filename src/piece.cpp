@@ -197,6 +197,7 @@ namespace {
       bool lame = false;
       bool hasLameProfile = false;
       bool invalidLameProfile = false;
+      bool invalidPiece = false;
       PieceInfo::LameProfile currentLameProfile;
       bool initial = false;
       bool dynamicDistance = false;
@@ -325,6 +326,7 @@ namespace {
           if (hasLameProfile && invalidLameProfile)
           {
               reset_piece();
+              invalidPiece = true;
               reset_parser_state();
               return;
           }
@@ -333,6 +335,7 @@ namespace {
               std::cerr << "Unsupported Betza lame modifier combination in '" << betza
                         << "': lame path profiles currently apply to step/leaper and rider atoms only." << std::endl;
               reset_piece();
+              invalidPiece = true;
               reset_parser_state();
               return;
           }
@@ -368,22 +371,25 @@ namespace {
                       if (hasUniversalHopper) {
                           p->universalHopper[initial][modality][Direction(dr * FILE_NB + df)] = currentHopperProfile;
                       } else {
-                          auto& v = hopper ? p->hopper[initial][modality]
-                                   : rider ? p->slider[initial][modality]
-                                           : p->steps[initial][modality];
                           if (atomIsTuple && !hopper && rider)
                               tupleSliderV.push_back({dr, df, distance});
                           else if (atomIsTuple && !hopper && !rider)
                               tupleV.emplace_back(dr, df);
                           else
                           {
-                              v[Direction(dr * FILE_NB + df)] = distance;
                               if (lame)
                               {
                                   // Lame profiles use PieceInfo::LameProfile's limit convention:
                                   // -1 for a single leap, 0 for an unlimited rider, positive for a max hop count.
                                   currentLameProfile.limit = rider ? distance : -1;
                                   p->stepsLame[initial][modality][Direction(dr * FILE_NB + df)] = currentLameProfile;
+                              }
+                              else
+                              {
+                                  auto& v = hopper ? p->hopper[initial][modality]
+                                           : rider ? p->slider[initial][modality]
+                                                   : p->steps[initial][modality];
+                                  v[Direction(dr * FILE_NB + df)] = distance;
                               }
                               if (rider && !atomIsRider && !hopper
                                   && !lame && !dynamicDistance && !skiSlider && !maxDistance)
@@ -448,6 +454,9 @@ namespace {
 
       for (std::string::size_type i = 0; i < expandedBetza.size(); i++)
       {
+          if (invalidPiece)
+              break;
+
           char c = expandedBetza[i];
           // Universal Hopper config
           if (c == '{')
@@ -462,8 +471,9 @@ namespace {
               std::string params = expandedBetza.substr(i + 1, close - i - 1);
               if (lame)
               {
+                  if (hasLameProfile)
+                      invalidLameProfile = true;
                   hasLameProfile = true;
-                  invalidLameProfile = false;
                   currentLameProfile = PieceInfo::LameProfile();
               }
               else
