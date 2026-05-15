@@ -128,6 +128,7 @@ struct PieceInfo {
 
     PathType path = ORTH_FIRST;
     BlockFilter filter = ANY;
+    // -1 = single leap, 0 = unlimited rider, positive = maximum rider hops.
     int limit = -1;
   };
 

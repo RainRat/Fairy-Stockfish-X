@@ -366,6 +366,8 @@ namespace {
                               v[Direction(dr * FILE_NB + df)] = distance;
                               if (hasLameProfile)
                               {
+                                  // Lame profiles use PieceInfo::LameProfile's limit convention:
+                                  // -1 for a single leap, 0 for an unlimited rider, positive for a max hop count.
                                   currentLameProfile.limit = rider ? distance : -1;
                                   p->stepsLame[initial][modality][Direction(dr * FILE_NB + df)] = currentLameProfile;
                               }

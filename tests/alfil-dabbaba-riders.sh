@@ -47,6 +47,11 @@ customPiece1 = a:nAA
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 startFen = 8/3a4/8/8/8/8/8/K6k b - - 0 1
 
+[lame-rider-bounded:chess]
+customPiece1 = a:n{path:mid;filter:any}A2
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+startFen = 6k1/8/8/8/8/8/1A6/K7 w - - 0 1
+
 [plain-rider-midpoint:chess]
 customPiece1 = a:DD
 customPiece2 = b:AA
@@ -179,6 +184,12 @@ out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Varia
 echo "$out" | grep -q "^d7b5: 1$"
 echo "$out" | grep -q "^d7f5: 1$"
 ! echo "$out" | grep -q "^d7h3:"
+
+out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-rider-bounded\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
+  | ./stockfish)
+echo "$out" | grep -q "^b2d4: 1$"
+echo "$out" | grep -q "^b2f6: 1$"
+! echo "$out" | grep -q "^b2h8:"
 
 # Plain DD/AA riders are not lame: midpoint blockers must NOT stop them.
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value plain-rider-midpoint\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
