@@ -3468,6 +3468,8 @@ inline bool Position::is_lame_blocked(Square from, Square to, const PieceInfo::L
                     return true;
             return false;
         case PieceInfo::LameProfile::MID:
+            if (path.size() == 1)
+                return bool(occupied & square_bb(path[0]));
             if (path.size() < 3)
                 return false;
             for (size_t i = 1; i + 1 < path.size(); ++i)
@@ -3517,9 +3519,6 @@ inline Bitboard Position::lame_leaper_bb(const std::map<Direction, PieceInfo::La
             if (!is_ok(to))
                 continue;
         }
-
-        if (!topology_wraps() && distance(sq, to) >= 4)
-            continue;
 
         if (!is_lame_blocked(sq, to, it.second, occupied))
             b |= to;

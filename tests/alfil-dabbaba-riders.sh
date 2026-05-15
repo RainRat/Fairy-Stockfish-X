@@ -61,6 +61,16 @@ startFen = k7/8/8/8/8/8/8/A1p4K w - - 0 1
 customPiece1 = a:n{path:anypath;filter:any}N
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 startFen = k7/8/8/8/8/8/pp6/A6K w - - 0 1
+
+[lame-filter-mid-single:chess]
+customPiece1 = a:n{path:mid;filter:mid}D
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+startFen = k7/8/8/8/8/8/p7/A6K w - - 0 1
+
+[lame-long-leaper:chess]
+customPiece1 = a:n{path:anypath;filter:any}U
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+startFen = k7/8/8/8/8/8/8/A6K w - - 0 1
 INI
 
 piece_moves() {
@@ -143,5 +153,13 @@ echo "$out" | grep -q "^a1c2: 1$"
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value moo-anypath\nposition fen k7/8/8/8/8/8/p7/A6K w - - 0 1\ngo perft 1\nquit\n' "$tmp_ini" \
   | ./stockfish)
 echo "$out" | grep -q "^a1b3: 1$"
+
+out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-filter-mid-single\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
+  | ./stockfish)
+! echo "$out" | grep -q "^a1a3:"
+
+out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-long-leaper\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
+  | ./stockfish)
+echo "$out" | grep -q "^a1e1: 1$"
 
 echo "alfil-dabbaba-riders test OK"
