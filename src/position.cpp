@@ -572,6 +572,7 @@ namespace {
     };
 
     add_candidates(pi->stepsLame[0][MODALITY_CAPTURE]);
+    add_candidates(pi->stepsLame[1][MODALITY_CAPTURE]);
 
     return checks;
   }
@@ -1872,13 +1873,13 @@ void Position::set_check_info(StateInfo* si) const {
               PieceType pt = pop_lsb(ps);
               PieceType movePt = effective_piece_type(pt);
               const PieceInfo* pi = pieceMap.get(movePt);
-              if (pi->has_lame_leaper())
-                  si->checkSquares[pt] = retro_lame_check_squares(*this, sideToMove, pt, ksq, occupied);
-              else if (AttackRiderTypes[movePt] & ASYMMETRICAL_RIDERS)
+              if (AttackRiderTypes[movePt] & ASYMMETRICAL_RIDERS)
                   // For asymmetrical riders, use true retro paths from the king square.
                   si->checkSquares[pt] = retro_asymmetric_check_squares(sideToMove, movePt, ksq, occupied);
               else
                   si->checkSquares[pt] = attacks_bb(~sideToMove, movePt, ksq, occupied);
+              if (pi->has_lame_capture())
+                  si->checkSquares[pt] |= retro_lame_check_squares(*this, sideToMove, pt, ksq, occupied);
               // Collect special piece types that require slower check and evasion detection
               if ((AttackRiderTypes[movePt] & NON_SLIDING_RIDERS) || pi->has_lame_leaper())
                   si->nonSlidingRiders |= pieces(pt);
@@ -3001,7 +3002,7 @@ bool Position::legal(Move m) const {
   Square shotSq = capture(m) ? capture_square(m) : to;
   Bitboard removedAttackers = rifleShot ? square_bb(shotSq) : Bitboard(0);
   Square effectiveTo = rifleShot ? from : to;
-  Square captureBlastCenter = blast_on_capture_mover_center() ? from : shotSq;
+  Square captureBlastCenter = blast_on_capture_mover_center() ? effectiveTo : shotSq;
   Piece moverPiece = moved_piece(m);
   PieceType movePt = type_of(moverPiece);
   PieceType finalMovePt = movePt;
@@ -6116,7 +6117,7 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
            ( blast_on_move() && !captured && !is_self_destruct(m) ) ||
            ( blast_on_self_destruct() && is_self_destruct(m) ) ) {
 
-          blast_mask = (blastOnCaptureMove || blast_on_move() || blast_on_self_destruct()) ? blast_squares(captured ? (blast_on_capture_mover_center() ? from : st->captureSquare) : to)
+          blast_mask = (blastOnCaptureMove || blast_on_move() || blast_on_self_destruct()) ? blast_squares(captured ? (blast_on_capture_mover_center() ? moverSq : st->captureSquare) : to)
               : (var->petrifyOnCaptureTypes & type_of(pc) ? square_bb(moverSq) : Bitboard(0));
           if (captured && blastOnCaptureMove && (blast_immune_types() & movedType))
               blast_mask &= ~square_bb(moverSq);
@@ -7251,7 +7252,7 @@ Value Position::blast_see(Move m) const {
   Piece mover = moved_piece(m);
   Color us = color_of(mover);
   Bitboard fromto = is_drop_move(m) ? square_bb(to) | (paired_drop(m) ? square_bb(secondary_drop_square(m)) : Bitboard(0)) : from | to;
-  Bitboard blast = blast_squares(capture(m) ? (blast_on_capture_mover_center() ? from : capture_square(m)) : to);
+  Bitboard blast = blast_squares(capture(m) ? (blast_on_capture_mover_center() ? (rifle_capture(m) ? from : to) : capture_square(m)) : to);
 
   // If the explosion would capture an opponent royal or pseudo-royal piece,
   // treat the move as delivering immediate mate. This prevents the static

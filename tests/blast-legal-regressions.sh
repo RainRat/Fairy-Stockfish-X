@@ -128,4 +128,39 @@ echo "${out}" | grep -q "^Nodes searched: 20$"
 rm -f "${TMP4}"
 unset TMP4
 
+TMP5=$(mktemp /tmp/fsx-moverblast-XXXXXX.ini)
+cat >"${TMP5}" <<'INI'
+[moverblast:chess]
+king = -
+commoner = k
+blastOnCapture = true
+blastOnCaptureMoverCenter = true
+blastCenter = false
+blastDiagonals = false
+startFen = 4k3/8/8/8/8/8/3rp3/4Q2K w - - 0 1
+
+[riflemoverblast:chess]
+king = -
+commoner = k
+rifleCapture = true
+blastOnCapture = true
+blastOnCaptureMoverCenter = true
+blastCenter = false
+blastDiagonals = false
+startFen = 4k3/8/8/8/8/8/3rp3/4Q2K w - - 0 1
+INI
+
+# A normal mover-centered capture blasts around the mover's destination.
+out=$(run_cmds "${TMP5}" "moverblast" "position startpos moves e1e2
+d")
+echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/4Q3/7K b - - 0 1"
+
+# A rifle mover-centered capture still blasts around the stationary shooter.
+out=$(run_cmds "${TMP5}" "riflemoverblast" "position startpos moves e1e2
+d")
+echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/3r4/4Q2K b - - 0 1"
+
+rm -f "${TMP5}"
+unset TMP5
+
 echo "blast legal regressions passed"

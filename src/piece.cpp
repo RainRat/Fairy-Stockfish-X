@@ -330,7 +330,7 @@ namespace {
               reset_parser_state();
               return;
           }
-          if (hasLameProfile && (hopper || dynamicDistance || skiSlider || maxDistance || hasUniversalHopper))
+          if (lame && (hopper || dynamicDistance || skiSlider || maxDistance || hasUniversalHopper))
           {
               std::cerr << "Unsupported Betza lame modifier combination in '" << betza
                         << "': lame path profiles currently apply to step/leaper and rider atoms only." << std::endl;

@@ -617,16 +617,13 @@ void Bitboards::init_pieces() {
                   continue;
               auto& riderTypes = modality == MODALITY_CAPTURE ? AttackRiderTypes[pt] : MoveRiderTypes[initial][pt];
               riderTypes = NO_RIDER;
-              const auto& lameDirs = pi->stepsLame[initial][modality];
               for (auto const& [d, limit] : pi->steps[initial][modality])
-                  if (limit && lameDirs.find(d) == lameDirs.end())
+                  if (limit)
                       add_step_like_rider_types(riderTypes, d);
               for (auto const& [d, limit] : pi->slider[initial][modality])
-                  if (lameDirs.find(d) == lameDirs.end())
-                      add_slider_rider_types(riderTypes, d, limit);
+                  add_slider_rider_types(riderTypes, d, limit);
               for (auto const& [d, limit] : pi->hopper[initial][modality])
-                  if (lameDirs.find(d) == lameDirs.end())
-                      add_hopper_rider_types(riderTypes, d, limit);
+                  add_hopper_rider_types(riderTypes, d, limit);
               if (pi->griffon[initial][modality])
                   riderTypes |= RIDER_GRIFFON_NH | RIDER_GRIFFON_SH | RIDER_GRIFFON_EV | RIDER_GRIFFON_WV;
               if (pi->manticore[initial][modality])

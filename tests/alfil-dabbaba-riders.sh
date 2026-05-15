@@ -149,6 +149,31 @@ startFen = 8/8/8/8/3k4/2p5/8/A6K w - - 0 1
 customPiece1 = a:n{path:mid}A[2-3]
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 startFen = k7/8/8/8/8/8/8/A6K w - - 0 1
+
+[lame-bare-hopper-reject:chess]
+customPiece1 = a:npW
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+startFen = k7/8/8/8/8/8/8/A6K w - - 0 1
+
+[lame-bare-dynamic-reject:chess]
+customPiece1 = a:nxR
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+startFen = k7/8/8/8/8/8/8/A6K w - - 0 1
+
+[lame-bare-ski-reject:chess]
+customPiece1 = a:njR
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+startFen = k7/8/8/8/8/8/8/A6K w - - 0 1
+
+[lame-bare-max-reject:chess]
+customPiece1 = a:nzR
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+startFen = k7/8/8/8/8/8/8/A6K w - - 0 1
+
+[lame-hybrid-rook-check:chess]
+customPiece1 = a:RnN
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+startFen = k7/8/8/8/8/8/8/A6K w - - 0 1
 INI
 
 piece_moves() {
@@ -331,6 +356,19 @@ out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Varia
 reject_out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-range-reject\nquit\n' "$tmp_ini" \
   | "${ENGINE}" 2>&1)
 grep -q "Unsupported Betza rider range" <<<"$reject_out"
+
+for variant in lame-bare-hopper-reject lame-bare-dynamic-reject lame-bare-ski-reject lame-bare-max-reject; do
+  reject_out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value %s\nquit\n' "$tmp_ini" "$variant" \
+    | "${ENGINE}" 2>&1)
+  grep -q "Unsupported Betza lame modifier combination" <<<"$reject_out"
+  out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value %s\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" "$variant" \
+    | "${ENGINE}")
+  ! echo "$out" | grep -q "^a1"
+done
+
+out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-hybrid-rook-check\nposition startpos moves a1a7\nd\nquit\n' "$tmp_ini" \
+  | "${ENGINE}")
+echo "$out" | grep -q "Checkers: a7"
 
 tmp_key_ini=$(mktemp)
 cat > "$tmp_key_ini" <<'INI'
