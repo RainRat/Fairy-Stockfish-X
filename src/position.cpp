@@ -523,14 +523,55 @@ namespace {
 
   inline Bitboard retro_lame_check_squares(const Position& pos, Color attacker, PieceType pt, Square kingSq, Bitboard occupied) {
     Bitboard checks = 0;
-    Bitboard candidates = pos.board_bb();
-
-    while (candidates)
+    const PieceInfo* pi = pieceMap.get(pos.effective_piece_type(pt));
+    auto add_candidates = [&](const std::map<Direction, PieceInfo::LameProfile>& profiles)
     {
-        Square from = pop_lsb(candidates);
-        if (pos.attacks_from(attacker, pt, from, occupied) & square_bb(kingSq))
-            checks |= from;
-    }
+        const int maxSteps = pos.topology_wraps() ? popcount(pos.board_bb()) : 255;
+        for (const auto& [profileDir, profile] : profiles)
+        {
+            Direction dir = attacker == WHITE ? profileDir : Direction(-profileDir);
+            auto [dr, df] = decode_direction(dir);
+            Square from = kingSq;
+            int steps = 0;
+
+            while (steps < maxSteps)
+            {
+                if (profile.limit > 0 && steps >= profile.limit)
+                    break;
+
+                Square next = SQ_NONE;
+                if (pos.topology_wraps())
+                {
+                    if (!wrapped_destination_square(from, -df, -dr, pos.max_file(), pos.max_rank(),
+                                                    pos.wraps_files(), pos.wraps_ranks(), next))
+                        break;
+                }
+                else
+                {
+                    next = from - dir;
+                    if (!is_ok(next))
+                        break;
+                    if (int(file_of(from)) - int(file_of(next)) != df
+                        || int(rank_of(from)) - int(rank_of(next)) != dr)
+                        break;
+                }
+
+                if (next == kingSq)
+                    break;
+
+                from = next;
+                ++steps;
+                if (pos.attacks_from(attacker, pt, from, occupied) & square_bb(kingSq))
+                    checks |= square_bb(from);
+                if (occupied & square_bb(from))
+                    break;
+                if (profile.limit < 0)
+                    break;
+            }
+        }
+    };
+
+    add_candidates(pi->stepsLame[0][MODALITY_CAPTURE]);
 
     return checks;
   }
