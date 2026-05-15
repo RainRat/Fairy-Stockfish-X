@@ -1,7 +1,14 @@
 #!/bin/bash
 set -euo pipefail
 
-cd "$(dirname "$0")/../src"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+ENGINE=${1:-"${ROOT_DIR}/src/stockfish"}
+if [[ "${ENGINE}" != /* ]]; then
+  ENGINE="${PWD}/${ENGINE}"
+fi
+
+cd "${ROOT_DIR}/src"
 
 tmp_ini=$(mktemp)
 trap 'rm -f "$tmp_ini"' EXIT
@@ -24,7 +31,7 @@ diag() {
   local variant=$1
   local fen=$2
   printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value %s\nposition fen %s\nd\nquit\n' "$tmp_ini" "$variant" "$fen" \
-    | ./stockfish
+    | "${ENGINE}"
 }
 
 # Horse-family blocked leg: no check.

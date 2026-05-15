@@ -1,7 +1,14 @@
 #!/bin/bash
 set -euo pipefail
 
-cd "$(dirname "$0")/../src"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+ENGINE=${1:-"${ROOT_DIR}/src/stockfish"}
+if [[ "${ENGINE}" != /* ]]; then
+  ENGINE="${PWD}/${ENGINE}"
+fi
+
+cd "${ROOT_DIR}/src"
 
 tmp_ini=$(mktemp)
 tmp_key_ini=""
@@ -147,7 +154,7 @@ INI
 piece_moves() {
   local variant=$1
   printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value %s\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" "$variant" \
-    | ./stockfish \
+    | "${ENGINE}" \
     | awk -F: '/^d4/{print $1}' \
     | sort
 }
@@ -188,13 +195,13 @@ cmp "$actual_dabbaba" "$expected_dabbaba"
 cmp "$actual_dabbaba_tuple" "$expected_dabbaba"
 
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value tuple-range-pin\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
-  | ./stockfish)
+  | "${ENGINE}")
 echo "$out" | grep -q "^d3c3: 1$"
 echo "$out" | grep -q "^d3e3: 1$"
 
 # Lame dabbaba/alfil and their rider forms must be blocked by the midpoint square.
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-rider-blockers\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
-  | ./stockfish)
+  | "${ENGINE}")
 ! echo "$out" | grep -q "^d7d5:"
 ! echo "$out" | grep -q "^d7f7:"
 ! echo "$out" | grep -q "^e7c7:"
@@ -202,127 +209,127 @@ out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Varia
 ! echo "$out" | grep -q "^d6f8:"
 
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-rider-repeat\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
-  | ./stockfish)
+  | "${ENGINE}")
 echo "$out" | grep -q "^d7b5: 1$"
 echo "$out" | grep -q "^d7f5: 1$"
 echo "$out" | grep -q "^d7h3: 1$"
 
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-rider-repeat\nposition fen 8/3a4/8/8/4p3/8/8/K6k b - - 0 1\ngo perft 1\nquit\n' "$tmp_ini" \
-  | ./stockfish)
+  | "${ENGINE}")
 echo "$out" | grep -q "^d7b5: 1$"
 echo "$out" | grep -q "^d7f5: 1$"
 echo "$out" | grep -q "^d7h3: 1$"
 
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-rider-repeat\nposition fen 8/3a4/8/5p2/8/8/8/K6k b - - 0 1\ngo perft 1\nquit\n' "$tmp_ini" \
-  | ./stockfish)
+  | "${ENGINE}")
 echo "$out" | grep -q "^d7b5: 1$"
 ! echo "$out" | grep -q "^d7f5:"
 ! echo "$out" | grep -q "^d7h3:"
 
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-rider-repeat\nposition fen 8/3a4/8/5P2/8/8/8/K6k b - - 0 1\ngo perft 1\nquit\n' "$tmp_ini" \
-  | ./stockfish)
+  | "${ENGINE}")
 echo "$out" | grep -q "^d7b5: 1$"
 echo "$out" | grep -q "^d7f5: 1$"
 ! echo "$out" | grep -q "^d7h3:"
 
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-rider-repeat\nposition fen 8/3a4/8/8/6p1/8/8/K6k b - - 0 1\ngo perft 1\nquit\n' "$tmp_ini" \
-  | ./stockfish)
+  | "${ENGINE}")
 echo "$out" | grep -q "^d7b5: 1$"
 echo "$out" | grep -q "^d7f5: 1$"
 ! echo "$out" | grep -q "^d7h3:"
 
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-rider-bounded\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
-  | ./stockfish)
+  | "${ENGINE}")
 echo "$out" | grep -q "^b2d4: 1$"
 echo "$out" | grep -q "^b2f6: 1$"
 ! echo "$out" | grep -q "^b2h8:"
 
 # Plain DD/AA riders are not lame: midpoint blockers must NOT stop them.
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value plain-rider-midpoint\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
-  | ./stockfish)
+  | "${ENGINE}")
 echo "$out" | grep -q "^d7d5:"
 echo "$out" | grep -q "^e7c5:"
 
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-path-orthfirst\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
-  | ./stockfish)
+  | "${ENGINE}")
 echo "$out" | grep -q "^a1b4: 1$"
 
 # Midpoint compatibility should still be available for historical definitions.
 # For even-length paths, the midpoint region is the whole central segment.
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-path-mid\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
-  | ./stockfish)
+  | "${ENGINE}")
 ! echo "$out" | grep -q "^a1d2:"
 
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-path-mid-clear\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
-  | ./stockfish)
+  | "${ENGINE}")
 echo "$out" | grep -q "^a1d2: 1$"
 
 # Any-path lame knight: if one valid route is clear, the move should be available.
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value moo-anypath\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
-  | ./stockfish)
+  | "${ENGINE}")
 echo "$out" | grep -q "^a1c2: 1$"
 ! echo "$out" | grep -q "^a1e3:"
 ! echo "$out" | grep -q "^a1g4:"
 
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value moo-anypath\nposition fen k7/8/8/8/8/8/p7/A6K w - - 0 1\ngo perft 1\nquit\n' "$tmp_ini" \
-  | ./stockfish)
+  | "${ENGINE}")
 echo "$out" | grep -q "^a1b3: 1$"
 
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value moa-move-blocked\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
-  | ./stockfish)
+  | "${ENGINE}")
 ! echo "$out" | grep -q "^a1c2:"
 
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value mao-leg-blocked\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
-  | ./stockfish)
+  | "${ENGINE}")
 ! echo "$out" | grep -q "^a1c2:"
 
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value mao-leg-clear\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
-  | ./stockfish)
+  | "${ENGINE}")
 echo "$out" | grep -q "^a1c2: 1$"
 
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value moa-check\nposition startpos moves a1c2\nd\nquit\n' "$tmp_ini" \
-  | ./stockfish)
+  | "${ENGINE}")
 echo "$out" | grep -q "Checkers: c2"
 
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value moa-check\nposition fen 8/8/8/8/3k4/3p4/8/A6K w - - 0 1 moves a1c2\nd\nquit\n' "$tmp_ini" \
-  | ./stockfish)
+  | "${ENGINE}")
 ! echo "$out" | grep -q "Checkers: c2"
 
 reject_out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-filter-key-reject\nquit\n' "$tmp_ini" \
-  | ./stockfish 2>&1)
+  | "${ENGINE}" 2>&1)
 grep -q "Unknown Betza lame parameter key 'filter'" <<<"$reject_out"
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-filter-key-reject\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
-  | ./stockfish)
+  | "${ENGINE}")
 ! echo "$out" | grep -q "^a1"
 
 reject_out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-filter-value-reject\nquit\n' "$tmp_ini" \
-  | ./stockfish 2>&1)
+  | "${ENGINE}" 2>&1)
 grep -q "Unknown Betza lame parameter key 'filter'" <<<"$reject_out"
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-filter-value-reject\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
-  | ./stockfish)
+  | "${ENGINE}")
 ! echo "$out" | grep -q "^a1"
 
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-invalid-clears-piece\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
-  | ./stockfish)
+  | "${ENGINE}")
 ! echo "$out" | grep -q "^a1"
 
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-invalid-stops-piece\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
-  | ./stockfish)
+  | "${ENGINE}")
 ! echo "$out" | grep -q "^a1"
 
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-invalid-multi-block\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
-  | ./stockfish)
+  | "${ENGINE}")
 ! echo "$out" | grep -q "^a1"
 
 reject_out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-tuple-reject\nquit\n' "$tmp_ini" \
-  | ./stockfish 2>&1)
+  | "${ENGINE}" 2>&1)
 grep -q "Unsupported Betza tuple modifier combination" <<<"$reject_out"
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-tuple-reject\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
-  | ./stockfish)
+  | "${ENGINE}")
 ! echo "$out" | grep -q "^a1"
 
 reject_out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-range-reject\nquit\n' "$tmp_ini" \
-  | ./stockfish 2>&1)
+  | "${ENGINE}" 2>&1)
 grep -q "Unsupported Betza rider range" <<<"$reject_out"
 
 tmp_key_ini=$(mktemp)
@@ -337,19 +344,19 @@ pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 INI
 
 reject_out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-key-routing\nquit\n' "$tmp_key_ini" \
-  | ./stockfish 2>&1)
+  | "${ENGINE}" 2>&1)
 grep -q "Unknown Betza hopper parameter key 'capture' in lame block" <<<"$reject_out"
 
 reject_out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value hopper-key-routing\nquit\n' "$tmp_key_ini" \
-  | ./stockfish 2>&1)
+  | "${ENGINE}" 2>&1)
 grep -q "Unknown Betza lame parameter key 'path' in hopper block" <<<"$reject_out"
 
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-path-mid-single\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
-  | ./stockfish)
+  | "${ENGINE}")
 ! echo "$out" | grep -q "^a1a3:"
 
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-long-leaper\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
-  | ./stockfish)
+  | "${ENGINE}")
 echo "$out" | grep -q "^a1e1: 1$"
 
 echo "alfil-dabbaba-riders test OK"

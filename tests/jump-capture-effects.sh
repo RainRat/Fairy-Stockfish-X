@@ -50,5 +50,7 @@ quit
 EOF
 )"
 
-grep -Fq "c3e5: 1" <<<"$duck_out"
+# Duck walling requires a wall placement after the jump capture, so the bare
+# capture is not a complete move in perft output.
+! grep -Fq "c3e5: 1" <<<"$duck_out"
 grep -Fq "c3e5,e5d4: 1" <<<"$duck_out"

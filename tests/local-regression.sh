@@ -38,7 +38,7 @@ run_step "gating regressions" timeout 60s bash tests/gating-regressions.sh "${EN
 run_step "verbosity" timeout 60s bash tests/verbosity.sh "${ENGINE}"
 run_step "state sync key" timeout 5m bash tests/state-sync-key.sh "${ENGINE}"
 run_step "new variants smoke" timeout 30m bash tests/new-variants-smoke.sh "${ENGINE}" "${VARIANT_PATH}"
-run_step "setup chess" timeout 2m bash tests/setup-chess.sh "${ROOT_DIR}/src/stockfish"
+run_step "setup chess" timeout 2m bash tests/setup-chess.sh "${ENGINE}"
 run_step "stationary castling" timeout 60s bash tests/stationary-castling.sh "${ENGINE}"
 run_step "immobility illegal hoppers" timeout 60s bash tests/immobility-illegal-hoppers.sh "${ENGINE}"
 run_step "pushing" timeout 60s bash tests/pushing.sh "${ENGINE}"
@@ -82,8 +82,8 @@ run_step "pseudo-royal capture legality" timeout 60s bash tests/pseudoroyal-capt
 run_step "drop piece types" timeout 60s bash tests/drop-piece-types.sh "${ENGINE}"
 run_step "capture drops" timeout 60s bash tests/capture-drops.sh "${ENGINE}"
 run_step "capture to hand types" timeout 60s bash tests/capture-to-hand-types.sh "${ENGINE}"
-run_step "promotion consume in hand" timeout 60s bash tests/promotion-consume-in-hand.sh
-run_step "promotion require in hand" timeout 60s bash tests/promotion-require-in-hand.sh
+run_step "promotion consume in hand" timeout 60s bash tests/promotion-consume-in-hand.sh "${ENGINE}"
+run_step "promotion require in hand" timeout 60s bash tests/promotion-require-in-hand.sh "${ENGINE}"
 run_step "kings or lemmings" timeout 60s bash tests/kings-or-lemmings.sh "${ENGINE}" "${VARIANT_PATH}"
 run_step "hindustani" timeout 60s bash tests/hindustani.sh "${ENGINE}" "${VARIANT_PATH}"
 run_step "sacrifice" timeout 60s bash tests/sacrifice.sh "${ENGINE}" "${VARIANT_PATH}"
