@@ -559,7 +559,7 @@ namespace {
                               std::cerr << "Unknown Betza lame path '" << val << "' in '" << betza << "'." << std::endl;
                       }
                       else if (key == "filter") {
-                          if (val == "any" || val == "first" || val == "last")
+                          if (val == "any")
                               currentLameProfile.filter = PieceInfo::LameProfile::ANY;
                           else if (val == "mid")
                               currentLameProfile.filter = PieceInfo::LameProfile::MID;
