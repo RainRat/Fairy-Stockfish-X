@@ -596,15 +596,20 @@ namespace {
                               else if (val == "locust_first") currentHopperProfile.captureMode = PieceInfo::CAPTURE_LOCUST_FIRST;
                               else if (val == "locust_last") currentHopperProfile.captureMode = PieceInfo::CAPTURE_LOCUST_LAST;
                               else {
-                                  currentHopperProfile.captureMode = PieceInfo::CAPTURE_DEST;
                                   std::cerr << "Unknown Betza hopper capture mode '" << val << "' in '" << betza << "'." << std::endl;
+                                  reset_piece();
+                                  invalidPiece = true;
                               }
                           }
                           else if (key == "equi") {
                               if (val == "hopper") currentHopperProfile.equiRule = PieceInfo::EQUI_HOPPER;
                               else if (val == "stopper") currentHopperProfile.equiRule = PieceInfo::EQUI_STOPPER;
                               else
+                              {
                                   std::cerr << "Unknown Betza hopper equi mode '" << val << "' in '" << betza << "'." << std::endl;
+                                  reset_piece();
+                                  invalidPiece = true;
+                              }
                           }
                           else if (key == "hurdle_types" || key == "transparent_types") {
                               bool isHurdle = (key == "hurdle_types");
