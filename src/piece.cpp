@@ -24,6 +24,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 
 #include "types.h"
@@ -364,7 +365,7 @@ namespace {
                   auto& leapRiderV = p->leapRider[initial][modality];
                   auto& tupleV = p->tupleSteps[initial][modality];
                   auto& tupleSliderV = p->tupleSlider[initial][modality];
-                  auto has_dir = [&](std::string s) {
+                  auto has_dir = [&](std::string_view s) {
                     return std::find(directions.begin(), directions.end(), s) != directions.end();
                   };
                   auto add_step = [&](int dr, int df) {
@@ -505,23 +506,13 @@ namespace {
                       trim_in_place(key);
                       trim_in_place(val);
                       
-                      auto parse_min_max = [](const std::string& s, int& min_val, int& max_val) {
+                      auto parse_min_max = [&](const std::string& s, int& min_val, int& max_val) {
                           size_t comma = s.find(',');
                           if (comma != std::string::npos) {
                               std::string min_s = s.substr(0, comma);
                               std::string max_s = s.substr(comma + 1);
-                              const auto trim_local = [](std::string& text) {
-                                  const size_t first = text.find_first_not_of(" \t\r\n");
-                                  if (first == std::string::npos)
-                                  {
-                                      text.clear();
-                                      return;
-                                  }
-                                  const size_t last = text.find_last_not_of(" \t\r\n");
-                                  text = text.substr(first, last - first + 1);
-                              };
-                              trim_local(min_s);
-                              trim_local(max_s);
+                              trim_in_place(min_s);
+                              trim_in_place(max_s);
                               
                               auto safe_stoi = [&](const std::string& str, int default_val, bool& ok) {
                                   if (str.empty()) { ok = false; return default_val; }
