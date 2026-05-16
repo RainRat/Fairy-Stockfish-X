@@ -263,6 +263,12 @@ echo "$out" | grep -q "^d7b5: 1$"
 echo "$out" | grep -q "^d7f5: 1$"
 ! echo "$out" | grep -q "^d7h3:"
 
+out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-rider-repeat\nposition fen 8/3a4/4p3/8/8/8/8/K6k b - - 0 1\ngo perft 1\nquit\n' "$tmp_ini" \
+  | "${ENGINE}")
+echo "$out" | grep -q "^d7b5: 1$"
+! echo "$out" | grep -q "^d7f5:"
+! echo "$out" | grep -q "^d7h3:"
+
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-rider-bounded\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
   | "${ENGINE}")
 echo "$out" | grep -q "^b2d4: 1$"
