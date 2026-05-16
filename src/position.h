@@ -3962,7 +3962,8 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
   b |= lame_leaper_bb(pi->stepsLame[0][MODALITY_QUIET], s, occupancy, c, true);
 
   const bool usesGenericPawnLikeInitialMoveHelper =
-         pt == PAWN || (pawn_like_types(c) & piece_set(pt));
+         (pt == PAWN || (pawn_like_types(c) & piece_set(pt)))
+      && !pawnLikeHasCustomNonStepQuietMovement;
   const Bitboard initialMoveRegion = usesGenericPawnLikeInitialMoveHelper
                                    ? double_step_region(c, pt)
                                    : var->doubleStepRegion.get(c).explicitBoardOfPiece(piece_to_char()[pt]);

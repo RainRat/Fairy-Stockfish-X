@@ -25,6 +25,7 @@ run_step "wrapping topology" timeout 90s bash tests/wrapping-topology.sh "${ENGI
 run_step "unorthodox interactions" timeout 90s bash tests/unorthodox-interactions.sh "${ENGINE}"
 run_step "in-place transform undo" timeout 60s bash tests/in-place-transform-undo.sh "${ENGINE}"
 run_step "piece-specific step regions" timeout 60s bash tests/piece-specific-step-regions.sh "${ENGINE}"
+run_step "pawn-like custom non-step" timeout 60s bash tests/pawnlike-custom-nonstep.sh "${ENGINE}"
 run_step "variant switch after perft" timeout 60s bash tests/variant-switch-after-perft.sh "${ENGINE}"
 run_step "custom en passant passed squares" timeout 60s bash tests/custom-en-passant-passed-squares.sh "${ENGINE}"
 run_step "crazyhouse multi pawn promo" timeout 60s bash tests/crazyhouse-multi-pawn-promo.sh "${ENGINE}"

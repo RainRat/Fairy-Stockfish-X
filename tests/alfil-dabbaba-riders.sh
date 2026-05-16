@@ -12,7 +12,7 @@ cd "${ROOT_DIR}/src"
 
 tmp_ini=$(mktemp)
 tmp_key_ini=""
-trap 'rm -f "$tmp_ini"' EXIT
+trap 'rm -f "$tmp_ini" "$tmp_key_ini"' EXIT
 
 cat > "$tmp_ini" <<'INI'
 [alfil-rider:chess]

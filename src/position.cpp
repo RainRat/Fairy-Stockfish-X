@@ -1794,7 +1794,7 @@ void Position::set_check_info(StateInfo* si) const {
               }
           }
 
-          if ((AttackRiderTypes[movePt] & NON_SLIDING_RIDERS) || pi->has_lame_leaper())
+          if ((AttackRiderTypes[movePt] & NON_SLIDING_RIDERS) || pi->has_lame_capture())
               si->nonSlidingRiders |= pieces(pt);
       }
 
@@ -1881,7 +1881,7 @@ void Position::set_check_info(StateInfo* si) const {
               if (pi->has_lame_capture())
                   si->checkSquares[pt] |= retro_lame_check_squares(*this, sideToMove, pt, ksq, occupied);
               // Collect special piece types that require slower check and evasion detection
-              if ((AttackRiderTypes[movePt] & NON_SLIDING_RIDERS) || pi->has_lame_leaper())
+              if ((AttackRiderTypes[movePt] & NON_SLIDING_RIDERS) || pi->has_lame_capture())
                   si->nonSlidingRiders |= pieces(pt);
           }
       }
