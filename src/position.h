@@ -27,6 +27,7 @@
 #include <memory> // For std::unique_ptr
 #include <string>
 #include <functional>
+#include <type_traits>
 #include <vector>
 
 #include "bitboard.h"
@@ -215,6 +216,8 @@ struct StateInfo {
   Eval::NNUE::Accumulator accumulator;
   DirtyPiece dirtyPiece;
 };
+
+static_assert(std::is_trivially_copyable_v<StateInfo>, "StateInfo must remain trivially copyable");
 
 
 /// A list to keep track of the position states along the setup moves (from the
