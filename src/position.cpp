@@ -6772,18 +6772,18 @@ void Position::undo_move(Move m) {
       pc = piece_on(moverSq);
   }
 
-  if (st->didMorph && st->morphSquare == moverSq)
-  {
-      remove_piece(moverSq);
-      put_piece(st->morphedFrom, moverSq);
-      pc = st->morphedFrom;
-  }
-
   if (st->didColorChange && st->colorChangeSquare == moverSq)
   {
       remove_piece(moverSq);
       put_piece(st->colorChanged.piece, moverSq, st->colorChanged.promoted, st->colorChanged.unpromoted);
       pc = st->colorChanged.piece;
+  }
+
+  if (st->didMorph && st->morphSquare == moverSq)
+  {
+      remove_piece(moverSq);
+      put_piece(st->morphedFrom, moverSq);
+      pc = st->morphedFrom;
   }
 
   // Remove gated piece or restore potion. Pure wall moves use the gating
