@@ -2016,9 +2016,7 @@ void Position::set_state(StateInfo* si) const {
   si->capturedGatingType = NO_PIECE_TYPE;
   si->captured.clear();
   si->dead.clear();
-  si->didColorChange = false;
-  si->colorChanged.clear();
-  si->colorChangeSquare = SQ_NONE;
+  si->transforms.clear();
   si->claimedSquares = 0;
   si->pendingClaimPass = false;
   si->dropHandColor = COLOR_NB;
@@ -4733,12 +4731,7 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
       st->removedCastlingGatingType = NO_PIECE_TYPE;
       st->capturedGatingType = NO_PIECE_TYPE;
   }
-  st->didMorph = false;
-  st->morphedFrom = NO_PIECE;
-  st->morphSquare = SQ_NONE;
-  st->didColorChange = false;
-  st->colorChanged.clear();
-  st->colorChangeSquare = SQ_NONE;
+  st->transforms.clear();
   st->didPush = false;
   st->didPull = false;
   st->pushStepwise = false;
@@ -5919,11 +5912,11 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
           return;
 
       Piece morphed = make_piece(color_of(cur), targetType);
-      if (!st->didMorph)
+      if (!st->transforms.didMorph)
       {
-          st->didMorph = true;
-          st->morphedFrom = cur;
-          st->morphSquare = sq;
+          st->transforms.didMorph = true;
+          st->transforms.morphedFrom = cur;
+          st->transforms.morphSquare = sq;
       }
 
       remove_piece(sq);
@@ -6492,12 +6485,12 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
   {
       Piece cur = piece_on(moverSq);
       Piece changed = make_piece(them, type_of(cur));
-      st->didColorChange = true;
-      st->colorChanged.set(cur, is_promoted(moverSq), unpromoted_piece_on(moverSq));
-      st->colorChangeSquare = moverSq;
+      st->transforms.didColorChange = true;
+      st->transforms.colorChanged.set(cur, is_promoted(moverSq), unpromoted_piece_on(moverSq));
+      st->transforms.colorChangeSquare = moverSq;
 
       remove_piece(moverSq);
-      put_piece(changed, moverSq, st->colorChanged.promoted, st->colorChanged.unpromoted);
+      put_piece(changed, moverSq, st->transforms.colorChanged.promoted, st->transforms.colorChanged.unpromoted);
 
       k ^= Zobrist::psq[cur][moverSq] ^ Zobrist::psq[changed][moverSq];
       st->materialKey ^= Zobrist::psq[cur][pieceCount[cur]]
@@ -6772,18 +6765,18 @@ void Position::undo_move(Move m) {
       pc = piece_on(moverSq);
   }
 
-  if (st->didColorChange && st->colorChangeSquare == moverSq)
+  if (st->transforms.didColorChange && st->transforms.colorChangeSquare == moverSq)
   {
       remove_piece(moverSq);
-      put_piece(st->colorChanged.piece, moverSq, st->colorChanged.promoted, st->colorChanged.unpromoted);
-      pc = st->colorChanged.piece;
+      put_piece(st->transforms.colorChanged.piece, moverSq, st->transforms.colorChanged.promoted, st->transforms.colorChanged.unpromoted);
+      pc = st->transforms.colorChanged.piece;
   }
 
-  if (st->didMorph && st->morphSquare == moverSq)
+  if (st->transforms.didMorph && st->transforms.morphSquare == moverSq)
   {
       remove_piece(moverSq);
-      put_piece(st->morphedFrom, moverSq);
-      pc = st->morphedFrom;
+      put_piece(st->transforms.morphedFrom, moverSq);
+      pc = st->transforms.morphedFrom;
   }
 
   // Remove gated piece or restore potion. Pure wall moves use the gating
@@ -8640,10 +8633,10 @@ bool Position::pos_is_ok() const {
       && si.removedGatingType == st->removedGatingType
       && si.removedCastlingGatingType == st->removedCastlingGatingType
       && si.capturedGatingType == st->capturedGatingType
-      && si.morphedFrom == st->morphedFrom
-      && si.morphSquare == st->morphSquare
-      && same_reversible(si.colorChanged, st->colorChanged)
-      && si.colorChangeSquare == st->colorChangeSquare
+      && si.transforms.morphedFrom == st->transforms.morphedFrom
+      && si.transforms.morphSquare == st->transforms.morphSquare
+      && same_reversible(si.transforms.colorChanged, st->transforms.colorChanged)
+      && si.transforms.colorChangeSquare == st->transforms.colorChangeSquare
       && si.pushTailSquare == st->pushTailSquare
       && si.pushStepF == st->pushStepF
       && si.pushStepR == st->pushStepR
@@ -8665,8 +8658,8 @@ bool Position::pos_is_ok() const {
       && si.pass == st->pass
       && si.pendingClaimPass == st->pendingClaimPass
       && si.forcedJumpHasFollowup == st->forcedJumpHasFollowup
-      && si.didMorph == st->didMorph
-      && si.didColorChange == st->didColorChange
+      && si.transforms.didMorph == st->transforms.didMorph
+      && si.transforms.didColorChange == st->transforms.didColorChange
       && si.didPush == st->didPush
       && si.didPull == st->didPull
       && si.pushStepwise == st->pushStepwise

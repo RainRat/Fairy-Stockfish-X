@@ -98,6 +98,24 @@ struct ReversiblePieceState {
   explicit operator bool() const { return piece != NO_PIECE; }
 };
 
+struct InPlaceTransformState {
+  Piece morphedFrom = NO_PIECE;
+  Square morphSquare = SQ_NONE;
+  ReversiblePieceState colorChanged;
+  Square colorChangeSquare = SQ_NONE;
+  bool didMorph = false;
+  bool didColorChange = false;
+
+  void clear() {
+    morphedFrom = NO_PIECE;
+    morphSquare = SQ_NONE;
+    colorChanged.clear();
+    colorChangeSquare = SQ_NONE;
+    didMorph = false;
+    didColorChange = false;
+  }
+};
+
 /// StateInfo struct stores information needed to restore a Position object to
 /// its previous state when we retract a move. Whenever a move is made on the
 /// board (by calling Position::do_move), a StateInfo object must be passed.
@@ -164,10 +182,7 @@ struct StateInfo {
   PieceType removedGatingType;
   PieceType removedCastlingGatingType;
   PieceType capturedGatingType;
-  Piece morphedFrom;
-  Square morphSquare;
-  ReversiblePieceState colorChanged;
-  Square colorChangeSquare;
+  InPlaceTransformState transforms;
   Square pushTailSquare;
   int pushStepF;
   int pushStepR;
@@ -189,8 +204,6 @@ struct StateInfo {
   bool       pass;
   bool       pendingClaimPass;
   bool       forcedJumpHasFollowup;
-  bool       didMorph;
-  bool       didColorChange;
   bool       didPush;
   bool       didPull;
   bool       pushStepwise;
