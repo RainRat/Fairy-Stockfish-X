@@ -117,6 +117,8 @@ struct InPlaceTransformState {
   }
 };
 
+static_assert(std::is_trivially_copyable_v<InPlaceTransformState>, "InPlaceTransformState must remain trivially copyable");
+
 /// StateInfo struct stores information needed to restore a Position object to
 /// its previous state when we retract a move. Whenever a move is made on the
 /// board (by calling Position::do_move), a StateInfo object must be passed.
