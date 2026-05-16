@@ -218,7 +218,7 @@ namespace {
           lame = false;
           hasLameProfile = false;
           invalidLameProfile = false;
-          currentLameProfile = PieceInfo::LameProfile();
+          currentLameProfile = {};
           initial = false;
           dynamicDistance = false;
           skiSlider = false;
@@ -226,9 +226,12 @@ namespace {
           standaloneH = false;
           distance = 0;
           hasUniversalHopper = false;
-          currentHopperProfile = PieceInfo::HopperProfile();
+          currentHopperProfile = {};
       };
       auto reset_piece = [&]() {
+          // Intentionally discard a partially parsed piece after a fatal atom error.
+          // The parser exits immediately after setting invalidPiece, so replacing
+          // the unique_ptr here does not leak any committed state.
           p = std::make_unique<PieceInfo>();
           p->name = name;
           p->betza = betza;
@@ -475,12 +478,12 @@ namespace {
                   if (hasLameProfile)
                       invalidLameProfile = true;
                   hasLameProfile = true;
-                  currentLameProfile = PieceInfo::LameProfile();
+                  currentLameProfile = {};
               }
               else
               {
                   hasUniversalHopper = true;
-                  currentHopperProfile = PieceInfo::HopperProfile();
+                  currentHopperProfile = {};
               }
               
               size_t pos = 0;
