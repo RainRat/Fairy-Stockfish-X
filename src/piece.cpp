@@ -585,12 +585,12 @@ namespace {
                           else if (key == "hurdles" || key == "pre" || key == "post" || key == "capture" || key == "equi"
                                    || key == "hurdle_types" || key == "transparent_types")
                           {
-                              std::cerr << "Unknown Betza hopper parameter key '" << key << "' in lame block of '" << betza << "'." << std::endl;
+                              std::cerr << "Unknown Betza parameter key '" << key << "' in lame block of '" << betza << "'." << std::endl;
                               invalidLameProfile = true;
                           }
                           else
                           {
-                              std::cerr << "Unknown Betza lame parameter key '" << key << "' in '" << betza << "'." << std::endl;
+                              std::cerr << "Unknown Betza parameter key '" << key << "' in lame block of '" << betza << "'." << std::endl;
                               invalidLameProfile = true;
                           }
                       }
@@ -638,11 +638,21 @@ namespace {
                               }
                           }
                           else if (key == "path" || key == "filter")
-                              std::cerr << "Unknown Betza lame parameter key '" << key << "' in hopper block of '" << betza << "'." << std::endl;
+                          {
+                              std::cerr << "Unknown Betza parameter key '" << key << "' in hopper block of '" << betza << "'." << std::endl;
+                              reset_piece();
+                              invalidPiece = true;
+                          }
                           else
-                              std::cerr << "Unknown Betza hopper parameter key '" << key << "' in '" << betza << "'." << std::endl;
+                          {
+                              std::cerr << "Unknown Betza parameter key '" << key << "' in hopper block of '" << betza << "'." << std::endl;
+                              reset_piece();
+                              invalidPiece = true;
+                          }
                       }
                   }
+                  if (invalidPiece)
+                      break;
                   pos = next_semi + 1;
               }
               i = close;

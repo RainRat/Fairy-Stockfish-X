@@ -328,14 +328,14 @@ out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Varia
 
 reject_out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-filter-key-reject\nquit\n' "$tmp_ini" \
   | "${ENGINE}" 2>&1)
-grep -q "Unknown Betza lame parameter key 'filter'" <<<"$reject_out"
+grep -q "Unknown Betza parameter key 'filter' in lame block" <<<"$reject_out"
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-filter-key-reject\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
   | "${ENGINE}")
 ! echo "$out" | grep -q "^a1"
 
 reject_out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-filter-value-reject\nquit\n' "$tmp_ini" \
   | "${ENGINE}" 2>&1)
-grep -q "Unknown Betza lame parameter key 'filter'" <<<"$reject_out"
+grep -q "Unknown Betza parameter key 'filter' in lame block" <<<"$reject_out"
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-filter-value-reject\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
   | "${ENGINE}")
 ! echo "$out" | grep -q "^a1"
@@ -389,11 +389,11 @@ INI
 
 reject_out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-key-routing\nquit\n' "$tmp_key_ini" \
   | "${ENGINE}" 2>&1)
-grep -q "Unknown Betza hopper parameter key 'capture' in lame block" <<<"$reject_out"
+grep -q "Unknown Betza parameter key 'capture' in lame block" <<<"$reject_out"
 
 reject_out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value hopper-key-routing\nquit\n' "$tmp_key_ini" \
   | "${ENGINE}" 2>&1)
-grep -q "Unknown Betza lame parameter key 'path' in hopper block" <<<"$reject_out"
+grep -q "Unknown Betza parameter key 'path' in hopper block" <<<"$reject_out"
 
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-path-mid-single\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
   | "${ENGINE}")
