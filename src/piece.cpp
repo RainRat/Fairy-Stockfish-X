@@ -510,6 +510,53 @@ namespace {
                   const size_t last = text.find_last_not_of(" \t\r\n");
                   text = text.substr(first, last - first + 1);
               };
+              auto parse_min_max = [&](const std::string& s, int& min_val, int& max_val) {
+                  size_t comma = s.find(',');
+                  if (comma != std::string::npos) {
+                      std::string min_s = s.substr(0, comma);
+                      std::string max_s = s.substr(comma + 1);
+                      trim_in_place(min_s);
+                      trim_in_place(max_s);
+
+                      auto safe_stoi = [&](const std::string& str, int default_val, bool& ok) {
+                          if (str.empty()) { ok = false; return default_val; }
+                          long long res = 0;
+                          ok = true;
+                          for (char ch : str) {
+                              if (!std::isdigit(static_cast<unsigned char>(ch))) {
+                                  ok = false;
+                                  return default_val;
+                              }
+                              res = res * 10 + (ch - '0');
+                              if (res > std::numeric_limits<int>::max()) {
+                                  ok = false;
+                                  return default_val;
+                              }
+                          }
+                          return static_cast<int>(res);
+                      };
+
+                      bool minOk = false, maxOk = false;
+                      min_val = safe_stoi(min_s, 1, minOk);
+                      if (max_s == "*")
+                      {
+                          max_val = 255;
+                          maxOk = true;
+                      }
+                      else
+                          max_val = safe_stoi(max_s, 1, maxOk);
+                      if (!minOk || (!maxOk && max_s != "*"))
+                          std::cerr << "Invalid numeric value in Betza hopper parameters: '" << s << "'" << std::endl;
+                      if (minOk && (maxOk || max_s == "*") && min_val > max_val)
+                      {
+                          std::cerr << "Invalid hopper range (min > max) in Betza hopper parameters: '" << s
+                                    << "'. Swapping values." << std::endl;
+                          std::swap(min_val, max_val);
+                      }
+                  }
+                  else
+                      std::cerr << "Invalid hopper range (missing comma) in Betza hopper parameters: '" << s << "'" << std::endl;
+              };
               const bool blockIsLame = lame;
               while (pos < params.size()) {
                   size_t next_semi = params.find(';', pos);
@@ -521,55 +568,7 @@ namespace {
                       std::string val = pair.substr(colon + 1);
                       trim_in_place(key);
                       trim_in_place(val);
-                      
-                      auto parse_min_max = [&](const std::string& s, int& min_val, int& max_val) {
-                          size_t comma = s.find(',');
-                          if (comma != std::string::npos) {
-                              std::string min_s = s.substr(0, comma);
-                              std::string max_s = s.substr(comma + 1);
-                              trim_in_place(min_s);
-                              trim_in_place(max_s);
-                              
-                              auto safe_stoi = [&](const std::string& str, int default_val, bool& ok) {
-                                  if (str.empty()) { ok = false; return default_val; }
-                                  long long res = 0;
-                                  ok = true;
-                                  for (char ch : str) {
-                                      if (!std::isdigit(static_cast<unsigned char>(ch))) {
-                                          ok = false;
-                                          return default_val;
-                                      }
-                                      res = res * 10 + (ch - '0');
-                                      if (res > std::numeric_limits<int>::max()) {
-                                          ok = false;
-                                          return default_val;
-                                      }
-                                  }
-                                  return static_cast<int>(res);
-                              };
 
-                              bool minOk = false, maxOk = false;
-                              min_val = safe_stoi(min_s, 1, minOk);
-                              if (max_s == "*")
-                              {
-                                  max_val = 255;
-                                  maxOk = true;
-                              }
-                              else
-                                  max_val = safe_stoi(max_s, 1, maxOk);
-                              if (!minOk || (!maxOk && max_s != "*"))
-                                  std::cerr << "Invalid numeric value in Betza hopper parameters: '" << s << "'" << std::endl;
-                              if (minOk && (maxOk || max_s == "*") && min_val > max_val)
-                              {
-                                  std::cerr << "Invalid hopper range (min > max) in Betza hopper parameters: '" << s
-                                            << "'. Swapping values." << std::endl;
-                                  std::swap(min_val, max_val);
-                              }
-                          }
-                          else
-                              std::cerr << "Invalid hopper range (missing comma) in Betza hopper parameters: '" << s << "'" << std::endl;
-                      };
-                      
                       if (blockIsLame)
                       {
                           if (key == "path") {

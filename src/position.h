@@ -3512,14 +3512,17 @@ inline bool Position::is_lame_blocked(Square from, Square to, const PieceInfo::L
         return false;
     };
 
+    PathBuffer path;
+
     auto path_type_blocked = [&](PieceInfo::LameProfile::PathType pathType) -> bool {
-        PathBuffer path;
         if (!build_path(pathType, path))
             return true;
         return path_blocked(path, pathType == PieceInfo::LameProfile::MIDPOINT);
     };
 
     auto any_shortest_path_blocked = [&]() -> bool {
+        path.size = 0;
+
         int targetDf = int(file_of(to)) - int(file_of(from));
         int targetDr = int(rank_of(to)) - int(rank_of(from));
         if (topology_wraps())
@@ -3532,7 +3535,6 @@ inline bool Position::is_lame_blocked(Square from, Square to, const PieceInfo::L
         if (!minSteps)
             return false;
 
-        PathBuffer path;
         auto search = [&](auto&& self, Square cur, int remaining) -> bool {
             if (!remaining)
                 return cur == to && !path_blocked(path, false);
