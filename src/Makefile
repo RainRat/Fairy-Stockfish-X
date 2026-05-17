@@ -97,7 +97,6 @@ endif
 largeboards = no
 verylargeboards = no
 all = no
-extra_large_movelists = no
 precomputedmagics = yes
 nnue = no
 load_net = $(if $(filter $(nnue),yes),net)
@@ -359,12 +358,6 @@ endif
 ifneq ($(all),no)
 	CXXFLAGS += -DALLVARS
 endif
-
-# Increase move list capacity for very high-branching variants.
-ifneq ($(extra_large_movelists),no)
-	CXXFLAGS += -DEXTRA_LARGE_MOVELISTS
-endif
-
 
 ifeq ($(COMP),)
 	COMP=gcc
@@ -801,11 +794,6 @@ else
 	@echo "make build ARCH=x86-64 largeboards=yes all=yes"
 	@echo "make build ARCH=x86-64 verylargeboards=yes all=yes"
 	@echo ""
-	@echo "Enable extra-large move lists for high branching variants:"
-	@echo ""
-	@echo "make build ARCH=x86-64 all=yes extra_large_movelists=yes"
-	@echo ""
-	@echo ""
 endif
 
 
@@ -927,7 +915,6 @@ config-sanity: $(load_net)
 	@echo "largeboards: '$(largeboards)'"
 	@echo "verylargeboards: '$(verylargeboards)'"
 	@echo "all: '$(all)'"
-	@echo "extra_large_movelists: '$(extra_large_movelists)'"
 	@echo "precomputedmagics: '$(precomputedmagics)'"
 	@echo "nnue: '$(nnue)'"
 	@echo ""

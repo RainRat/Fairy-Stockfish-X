@@ -2283,7 +2283,6 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
         valid = false;
     }
 
-    // Options incompatible with royal kings
     if (hasRoyalKing)
     {
         if (v->blastOnCapture)
@@ -2354,10 +2353,6 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
         valid = false;
     }
 
-    // Options incompatible with royal kings OR pseudo-royal kings. Possible in theory though:
-    // 1. In blast variants, moving a (pseudo-)royal blastImmuneType into another piece is legal.
-    // 2. In blast variants, capturing a piece next to a (pseudo-)royal blastImmuneType is legal.
-    // 3. Moving a (pseudo-)royal mutuallyImmuneType into a square threatened by the same type is legal.
     if (v->pseudoRoyalTypes || v->antiRoyalTypes || hasRoyalKing)
     {
         if (v->antiRoyalTypes & v->pseudoRoyalTypes)
