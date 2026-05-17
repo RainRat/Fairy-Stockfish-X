@@ -103,6 +103,7 @@ else
   run_step "hex connection variants" timeout 10m bash tests/hex-connection-variants.sh "${VLB_CAPABLE_ENGINE}" "${VARIANT_PATH}"
 fi
 run_step "VLB gale smoke" timeout 60s bash tests/vlb-gale-smoke.sh "${VLB_CAPABLE_ENGINE}" "${VARIANT_PATH}"
+run_step "VLB lame riders" timeout 60s bash tests/vlb-lame-riders.sh "${VLB_CAPABLE_ENGINE}"
 run_step "VLB symbol check" timeout 60s bash tests/vlb-symbol-check.sh "${VLB_CAPABLE_ENGINE}"
 run_step "VLB symbol fen" timeout 60s bash tests/vlb-symbol-fen.sh "${VLB_CAPABLE_ENGINE}"
 run_step "VLB symbol options" timeout 60s bash tests/vlb-symbol-options.sh "${VLB_CAPABLE_ENGINE}"
