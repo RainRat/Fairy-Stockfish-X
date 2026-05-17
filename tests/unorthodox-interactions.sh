@@ -121,6 +121,11 @@ surroundCaptureIntervene = true
 changingColorTrigger = capture
 changingColorPieceTypes = *
 
+[morph-color:chess]
+captureMorph = true
+changingColorTrigger = capture
+changingColorPieceTypes = *
+
 [rifle-amazon:chess]
 rifleCapture = true
 wallingRule = arrow
@@ -242,6 +247,14 @@ echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/R3K2\* b"
 out=$(run_cmds "color-change" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/8/4R3 w - - 0 1 moves e1e2
 d")
 echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/4r3/8 b"
+
+# 7b. Test captureMorph + changingColor undo order.
+out=$(run_cmds "morph-color" "${TEMP_INI}" "position fen 4k3/8/8/3n4/4B3/8/8/4K3 w - - 0 1 moves e4d5
+d")
+echo "${out}" | grep -q "Fen: 4k3/8/8/3n4/8/8/8/4K3 b"
+out=$(run_cmds "morph-color" "${TEMP_INI}" "position fen 4k3/8/8/3n4/4B3/8/8/4K3 w - - 0 1
+go perft 2")
+echo "${out}" | grep -q "Nodes searched:"
 
 # 8. Test rifleCapture + captureForbidden
 out=$(run_cmds "rifle-forbidden" "${TEMP_INI}" "position fen p3k3/8/8/8/8/8/8/R3K3 w - - 0 1 moves a1a8

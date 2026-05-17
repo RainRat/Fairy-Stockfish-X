@@ -112,9 +112,24 @@ struct PieceInfo {
     uint8_t transparentSpecialTypes = NONE;
   };
 
+  struct LameProfile {
+    enum PathType : uint8_t {
+      ORTH_FIRST,
+      DIAG_FIRST,
+      ORTH_ONLY,
+      ANY_PATH,
+      MIDPOINT
+    };
+
+    PathType path = MIDPOINT;
+    // -1 = single leap, 0 = unlimited rider, positive = maximum rider hops.
+    int limit = -1;
+  };
+
   std::string name = "";
   std::string betza = "";
   std::map<Direction, int> steps[2][MOVE_MODALITY_NB] = {};
+  std::map<Direction, LameProfile> stepsLame[2][MOVE_MODALITY_NB] = {};
   std::vector<std::pair<int, int>> tupleSteps[2][MOVE_MODALITY_NB] = {};
   std::vector<TupleRay> tupleSlider[2][MOVE_MODALITY_NB] = {};
   std::map<Direction, int> slider[2][MOVE_MODALITY_NB] = {};
@@ -137,12 +152,26 @@ struct PieceInfo {
           return true;
     return false;
   }
-  inline bool has_runtime_rider_augment() const { return riderAugmentMask != AUGMENT_NONE || has_universal_hopper(); }
+  inline bool has_lame_leaper() const {
+    for (int initial = 0; initial < 2; ++initial)
+      for (int modality = 0; modality < MOVE_MODALITY_NB; ++modality)
+        if (!stepsLame[initial][modality].empty())
+          return true;
+    return false;
+  }
+  inline bool has_lame_capture() const {
+    for (int initial = 0; initial < 2; ++initial)
+      if (!stepsLame[initial][MODALITY_CAPTURE].empty())
+        return true;
+    return false;
+  }
+  inline bool has_runtime_rider_augment() const { return riderAugmentMask != AUGMENT_NONE || has_universal_hopper() || has_lame_leaper(); }
   inline bool has_dynamic_slider() const { return riderAugmentMask & AUGMENT_DYNAMIC; }
   inline bool has_max_slider() const { return riderAugmentMask & AUGMENT_MAX; }
   inline bool has_explicit_initial_moves() const {
     for (int modality = 0; modality < MOVE_MODALITY_NB; ++modality)
       if (!steps[1][modality].empty()
+          || !stepsLame[1][modality].empty()
           || !tupleSteps[1][modality].empty()
           || !tupleSlider[1][modality].empty()
           || !slider[1][modality].empty()

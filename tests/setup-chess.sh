@@ -3,15 +3,25 @@
 
 set -euo pipefail
 
-cd "$(dirname "$0")/../src"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+if [[ $# -gt 0 ]]; then
+  ENGINE=$1
+  if [[ "${ENGINE}" != /* ]]; then
+    ENGINE="${PWD}/${ENGINE}"
+  fi
+else
+  ENGINE="${ROOT_DIR}/src/stockfish"
+fi
+
+cd "${ROOT_DIR}/src"
 
 error() {
   echo "setup-chess testing failed on line $1"
   exit 1
 }
 trap 'error ${LINENO}' ERR
-
-ENGINE=${1:-./stockfish}
 
 echo "setup-chess testing started"
 

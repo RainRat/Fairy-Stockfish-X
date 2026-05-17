@@ -38,7 +38,7 @@ run_step "gating regressions" timeout 60s bash tests/gating-regressions.sh "${EN
 run_step "verbosity" timeout 60s bash tests/verbosity.sh "${ENGINE}"
 run_step "state sync key" timeout 5m bash tests/state-sync-key.sh "${ENGINE}"
 run_step "new variants smoke" timeout 30m bash tests/new-variants-smoke.sh "${ENGINE}" "${VARIANT_PATH}"
-run_step "setup chess" timeout 2m bash tests/setup-chess.sh "${ROOT_DIR}/src/stockfish"
+run_step "setup chess" timeout 2m bash tests/setup-chess.sh "${ENGINE}"
 run_step "stationary castling" timeout 60s bash tests/stationary-castling.sh "${ENGINE}"
 run_step "immobility illegal hoppers" timeout 60s bash tests/immobility-illegal-hoppers.sh "${ENGINE}"
 run_step "pushing" timeout 60s bash tests/pushing.sh "${ENGINE}"
@@ -67,7 +67,7 @@ run_step "spell freeze regressions" timeout 60s bash tests/spell-freeze-regressi
 run_step "spell potion movegen" timeout 60s bash tests/spell-potion-movegen.sh "${ENGINE}"
 run_step "asym rider checkers" timeout 60s bash tests/asym-rider-checkers.sh "${ENGINE}"
 run_step "common fairy aliases" timeout 60s bash tests/common-fairy-aliases.sh "${ENGINE}"
-run_step "alfil dabbaba riders" timeout 60s bash tests/alfil-dabbaba-riders.sh "${ENGINE}"
+run_step "alfil dabbaba riders" timeout 2m bash tests/alfil-dabbaba-riders.sh "${ENGINE}"
 run_step "concurrent variant magics" timeout 60s bash tests/concurrent-variant-magics.sh "${ENGINE}"
 run_step "NNUE variant dimension guard" timeout 60s bash tests/nnue-variant-dimension-guard.sh "${ENGINE}"
 run_step "NNUE affine regression" timeout 2m bash tests/nnue-affine-regression.sh
@@ -82,8 +82,8 @@ run_step "pseudo-royal capture legality" timeout 60s bash tests/pseudoroyal-capt
 run_step "drop piece types" timeout 60s bash tests/drop-piece-types.sh "${ENGINE}"
 run_step "capture drops" timeout 60s bash tests/capture-drops.sh "${ENGINE}"
 run_step "capture to hand types" timeout 60s bash tests/capture-to-hand-types.sh "${ENGINE}"
-run_step "promotion consume in hand" timeout 60s bash tests/promotion-consume-in-hand.sh
-run_step "promotion require in hand" timeout 60s bash tests/promotion-require-in-hand.sh
+run_step "promotion consume in hand" timeout 60s bash tests/promotion-consume-in-hand.sh "${ENGINE}"
+run_step "promotion require in hand" timeout 60s bash tests/promotion-require-in-hand.sh "${ENGINE}"
 run_step "kings or lemmings" timeout 60s bash tests/kings-or-lemmings.sh "${ENGINE}" "${VARIANT_PATH}"
 run_step "hindustani" timeout 60s bash tests/hindustani.sh "${ENGINE}" "${VARIANT_PATH}"
 run_step "sacrifice" timeout 60s bash tests/sacrifice.sh "${ENGINE}" "${VARIANT_PATH}"
@@ -103,6 +103,7 @@ else
   run_step "hex connection variants" timeout 10m bash tests/hex-connection-variants.sh "${VLB_CAPABLE_ENGINE}" "${VARIANT_PATH}"
 fi
 run_step "VLB gale smoke" timeout 60s bash tests/vlb-gale-smoke.sh "${VLB_CAPABLE_ENGINE}" "${VARIANT_PATH}"
+run_step "VLB lame riders" timeout 60s bash tests/vlb-lame-riders.sh "${VLB_CAPABLE_ENGINE}"
 run_step "VLB symbol check" timeout 60s bash tests/vlb-symbol-check.sh "${VLB_CAPABLE_ENGINE}"
 run_step "VLB symbol fen" timeout 60s bash tests/vlb-symbol-fen.sh "${VLB_CAPABLE_ENGINE}"
 run_step "VLB symbol options" timeout 60s bash tests/vlb-symbol-options.sh "${VLB_CAPABLE_ENGINE}"

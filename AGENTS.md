@@ -87,6 +87,23 @@ Some tests require specific build flags to pass for all variants:
 * `tests/fast-regression.sh` can run without `UPSTREAM_ENGINE`; when set, it additionally compares against upstream.
 * If a change touches shared parser, movegen, legality, promotion, topology, or variant-switch logic, also run `tests/upstream_reference.py` and investigate any divergence before accepting it, unless you have a documented upstream bug or intentional FSX-only behavior change.
 
+### Local Test Timing Notes
+
+Observed on the local largeboards build in this workspace (`src/stockfish-large`) in May 2026:
+* `bash tests/fast-regression.sh src/stockfish-large`: about 2-3 minutes.
+* `bash tests/perft.sh all src/stockfish-large`: about 2.5 minutes once the binary is built; this is also run at the end of `local-regression.sh`.
+* `bash tests/local-regression.sh src/stockfish-large`: about 20-25 minutes. This includes `fast-regression`, `allvars-regression`, many focused shell tests, VLB smoke checks, and final `perft.sh all`.
+
+For an unattended full local pass, prefer logging the run and checking the exit code later:
+
+```
+mkdir -p .local/logs
+setsid bash -lc '/usr/bin/time -f "total elapsed %es" bash tests/local-regression.sh src/stockfish-large' \
+  > .local/logs/local-regression.$(date +%Y%m%d-%H%M%S).log 2>&1 < /dev/null &
+```
+
+When reviewing the log, look for the final `local regression suite passed`; if it is missing, inspect the last `== ... ==` section and the command timeout/failure immediately above it.
+
 ## 7) Coding style & engine notes
 
 * C++17; 2-space indent at first function level, then +4 per nested level.

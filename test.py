@@ -2067,12 +2067,10 @@ startFen = 4r3/8/8/8/8/8/8/8[A] w - - 0 1
         fen_default = sf.get_fen("blast-default-test", fen, [move])
         self.assertEqual(fen_default, "8/8/8/8/8/4R3/3n4/8 b - - 0 1")
 
-        # Rifle captures keep the shooter on its source square, so capture blasts
-        # are centered on the captured piece even when mover-centered blast is
-        # enabled. If a variant wants the shooter to explode, it should not model
-        # the capture as rifle.
+        # Mover-centered rifle captures blast around the stationary shooter. With
+        # blastCenter enabled, the shooter is removed by its own blast.
         fen_mover = sf.get_fen("blast-mover-test", fen, [move])
-        self.assertEqual(fen_mover, "8/8/8/8/8/4R3/3n4/8 b - - 0 1")
+        self.assertEqual(fen_mover, "8/8/3n4/8/8/8/8/8 b - - 0 1")
 
     def test_evaluate(self):
         eval_start = sf.evaluate("chess", CHESS, [])

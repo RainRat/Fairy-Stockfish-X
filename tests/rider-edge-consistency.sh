@@ -1,7 +1,14 @@
 #!/bin/bash
 set -euo pipefail
 
-cd "$(dirname "$0")/../src"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+ENGINE=${1:-"${ROOT_DIR}/src/stockfish"}
+if [[ "${ENGINE}" != /* ]]; then
+  ENGINE="${PWD}/${ENGINE}"
+fi
+
+cd "${ROOT_DIR}/src"
 
 tmp_ini=$(mktemp)
 trap 'rm -f "$tmp_ini"' EXIT
@@ -58,7 +65,7 @@ run_searchmove() {
   local fen="$2"
   local move="$3"
   printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value %s\nposition fen %s\ngo depth 1 searchmoves %s\nquit\n' \
-    "$tmp_ini" "$variant" "$fen" "$move" | ./stockfish
+    "$tmp_ini" "$variant" "$fen" "$move" | "${ENGINE}"
 }
 
 expect_legal() {

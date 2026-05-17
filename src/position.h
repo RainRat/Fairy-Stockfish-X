@@ -19,6 +19,7 @@
 #ifndef POSITION_H_INCLUDED
 #define POSITION_H_INCLUDED
 
+#include <array>
 #include <cassert>
 #include <cmath>
 #include <cstdint>
@@ -26,6 +27,8 @@
 #include <memory> // For std::unique_ptr
 #include <string>
 #include <functional>
+#include <type_traits>
+#include <vector>
 
 #include "bitboard.h"
 #include "evaluate.h"
@@ -96,6 +99,26 @@ struct ReversiblePieceState {
   explicit operator bool() const { return piece != NO_PIECE; }
 };
 
+struct InPlaceTransformState {
+  Piece morphedFrom = NO_PIECE;
+  Square morphSquare = SQ_NONE;
+  ReversiblePieceState colorChanged;
+  Square colorChangeSquare = SQ_NONE;
+  bool didMorph = false;
+  bool didColorChange = false;
+
+  void clear() {
+    morphedFrom = NO_PIECE;
+    morphSquare = SQ_NONE;
+    colorChanged.clear();
+    colorChangeSquare = SQ_NONE;
+    didMorph = false;
+    didColorChange = false;
+  }
+};
+
+static_assert(std::is_trivially_copyable_v<InPlaceTransformState>, "InPlaceTransformState must remain trivially copyable");
+
 /// StateInfo struct stores information needed to restore a Position object to
 /// its previous state when we retract a move. Whenever a move is made on the
 /// board (by calling Position::do_move), a StateInfo object must be passed.
@@ -162,10 +185,7 @@ struct StateInfo {
   PieceType removedGatingType;
   PieceType removedCastlingGatingType;
   PieceType capturedGatingType;
-  Piece morphedFrom;
-  Square morphSquare;
-  ReversiblePieceState colorChanged;
-  Square colorChangeSquare;
+  InPlaceTransformState transforms;
   Square pushTailSquare;
   int pushStepF;
   int pushStepR;
@@ -187,8 +207,6 @@ struct StateInfo {
   bool       pass;
   bool       pendingClaimPass;
   bool       forcedJumpHasFollowup;
-  bool       didMorph;
-  bool       didColorChange;
   bool       didPush;
   bool       didPull;
   bool       pushStepwise;
@@ -200,6 +218,8 @@ struct StateInfo {
   Eval::NNUE::Accumulator accumulator;
   DirtyPiece dirtyPiece;
 };
+
+static_assert(std::is_trivially_copyable_v<StateInfo>, "StateInfo must remain trivially copyable");
 
 
 /// A list to keep track of the position states along the setup moves (from the
@@ -755,6 +775,10 @@ private:
                                            bool wrapFile, bool wrapRank,
                                            bool captureMode,
                                            bool includeOwnBlockedAttacks) const;
+  bool is_lame_blocked(Square from, Square to, const PieceInfo::LameProfile& profile,
+                       Bitboard occupied) const;
+  Bitboard lame_leaper_bb(const std::map<Direction, PieceInfo::LameProfile>& profiles,
+                          Square sq, Bitboard occupied, Color c, bool quietMode) const;
   static Bitboard wrapped_bent_rider_targets(bool griffon, Square sq, Bitboard occupied,
                                              File maxFile, Rank maxRank,
                                              bool wrapFile, bool wrapRank,
@@ -1285,6 +1309,7 @@ inline bool Position::nnue_applicable() const {
   // Do not use NNUE during setup phases (placement, sittuyin)
   return (!count_in_hand(ALL_PIECES) || nnue_use_pockets() || !must_drop())
          && !virtualPieces
+         && capture_type() != PRISON
          && (!nnue_king() || (count(WHITE, nnue_king()) == 1 && count(BLACK, nnue_king()) == 1));
 }
 
@@ -3341,6 +3366,308 @@ inline Bitboard Position::wrapped_universal_hopper_targets(const std::map<Direct
     return universal_hopper_targets_impl(profiles, sq, occupied, ownPieces, c, captureMode, includeOwnBlockedAttacks, advance, midpoint);
 }
 
+inline bool Position::is_lame_blocked(Square from, Square to, const PieceInfo::LameProfile& profile,
+                                      Bitboard occupied) const
+{
+    auto adjust_delta = [](int delta, int size) {
+        if (size <= 1)
+            return delta;
+        if (std::abs(delta + size) < std::abs(delta))
+            delta += size;
+        else if (std::abs(delta - size) < std::abs(delta))
+            delta -= size;
+        return delta;
+    };
+
+    auto advance = [&](Square cur, int stepF, int stepR, Square& next) -> bool {
+        if (topology_wraps())
+            return wrapped_destination_square(cur, stepF, stepR, max_file(), max_rank(), wraps_files(), wraps_ranks(), next);
+
+        next = cur + Direction(stepR * FILE_NB + stepF);
+        if (!is_ok(next))
+            return false;
+
+        return int(file_of(next)) - int(file_of(cur)) == stepF
+            && int(rank_of(next)) - int(rank_of(cur)) == stepR;
+    };
+
+    struct PathBuffer {
+        std::array<Square, SQUARE_NB> squares;
+        size_t size = 0;
+    };
+
+    auto push_path = [](PathBuffer& path, Square sq) -> bool {
+        if (path.size >= path.squares.size())
+            return false;
+        path.squares[path.size++] = sq;
+        return true;
+    };
+
+    auto build_path = [&](PieceInfo::LameProfile::PathType pathType, PathBuffer& path) -> bool {
+        path.size = 0;
+        Square cur = from;
+        while (cur != to)
+        {
+            int df = int(file_of(to)) - int(file_of(cur));
+            int dr = int(rank_of(to)) - int(rank_of(cur));
+            if (topology_wraps())
+            {
+                df = adjust_delta(df, int(max_file()) + 1);
+                dr = adjust_delta(dr, int(max_rank()) + 1);
+            }
+
+            if (df == 0 && dr == 0)
+                break;
+
+            const int stepF = (df > 0) - (df < 0);
+            const int stepR = (dr > 0) - (dr < 0);
+            Square next = SQ_NONE;
+            bool moved = false;
+
+            switch (pathType)
+            {
+            case PieceInfo::LameProfile::ORTH_FIRST:
+                if (df != 0 && dr != 0)
+                {
+                    if (std::abs(df) > std::abs(dr))
+                        moved = advance(cur, stepF, 0, next);
+                    else if (std::abs(df) < std::abs(dr))
+                        moved = advance(cur, 0, stepR, next);
+                    else
+                        moved = advance(cur, stepF, stepR, next);
+                }
+                else if (df != 0)
+                    moved = advance(cur, stepF, 0, next);
+                else
+                    moved = advance(cur, 0, stepR, next);
+                break;
+            case PieceInfo::LameProfile::DIAG_FIRST:
+                if (df != 0 && dr != 0)
+                    moved = advance(cur, stepF, stepR, next);
+                else if (df != 0)
+                    moved = advance(cur, stepF, 0, next);
+                else
+                    moved = advance(cur, 0, stepR, next);
+                break;
+            case PieceInfo::LameProfile::ORTH_ONLY:
+                if (std::abs(df) >= std::abs(dr))
+                    moved = advance(cur, stepF, 0, next);
+                else
+                    moved = advance(cur, 0, stepR, next);
+                break;
+            case PieceInfo::LameProfile::ANY_PATH:
+                if (df != 0 && dr != 0)
+                    moved = advance(cur, stepF, stepR, next);
+                else if (df != 0)
+                    moved = advance(cur, stepF, 0, next);
+                else
+                    moved = advance(cur, 0, stepR, next);
+                break;
+            case PieceInfo::LameProfile::MIDPOINT:
+                if (std::abs(df) > std::abs(dr))
+                    moved = advance(cur, stepF, 0, next);
+                else if (std::abs(df) < std::abs(dr))
+                    moved = advance(cur, 0, stepR, next);
+                else if (df != 0 && dr != 0)
+                    moved = advance(cur, stepF, stepR, next);
+                else if (df != 0)
+                    moved = advance(cur, stepF, 0, next);
+                else
+                    moved = advance(cur, 0, stepR, next);
+                break;
+            }
+
+            if (!moved)
+                return false;
+            cur = next;
+            if (cur != to)
+                if (!push_path(path, cur))
+                    return false;
+        }
+        return cur == to;
+    };
+
+    auto path_blocked = [&](const PathBuffer& path, bool midpointOnly) -> bool {
+        if (!path.size)
+            return false;
+
+        if (!midpointOnly)
+        {
+            for (size_t i = 0; i < path.size; ++i)
+                if (occupied & square_bb(path.squares[i]))
+                    return true;
+            return false;
+        }
+
+        if (path.size == 1)
+            return bool(occupied & square_bb(path.squares[0]));
+        if (path.size == 2)
+            return bool(occupied & (square_bb(path.squares[0]) | square_bb(path.squares[1])));
+
+        // path:mid is FSF midpoint compatibility extended to the central segment
+        // for longer generated paths, not a single mathematical midpoint square.
+        for (size_t i = 1; i + 1 < path.size; ++i)
+            if (occupied & square_bb(path.squares[i]))
+                return true;
+        return false;
+    };
+
+    auto path_type_blocked = [&](PieceInfo::LameProfile::PathType pathType) -> bool {
+        PathBuffer path;
+        if (!build_path(pathType, path))
+            return true;
+        return path_blocked(path, pathType == PieceInfo::LameProfile::MIDPOINT);
+    };
+
+    auto any_shortest_path_blocked = [&]() -> bool {
+        int targetDf = int(file_of(to)) - int(file_of(from));
+        int targetDr = int(rank_of(to)) - int(rank_of(from));
+        if (topology_wraps())
+        {
+            targetDf = adjust_delta(targetDf, int(max_file()) + 1);
+            targetDr = adjust_delta(targetDr, int(max_rank()) + 1);
+        }
+
+        const int minSteps = std::max(std::abs(targetDf), std::abs(targetDr));
+        if (!minSteps)
+            return false;
+
+        PathBuffer path;
+        auto search = [&](auto&& self, Square cur, int remaining) -> bool {
+            if (!remaining)
+                return cur == to && !path_blocked(path, false);
+
+            int df = int(file_of(to)) - int(file_of(cur));
+            int dr = int(rank_of(to)) - int(rank_of(cur));
+            if (topology_wraps())
+            {
+                df = adjust_delta(df, int(max_file()) + 1);
+                dr = adjust_delta(dr, int(max_rank()) + 1);
+            }
+
+            const int stepF = (df > 0) - (df < 0);
+            const int stepR = (dr > 0) - (dr < 0);
+            const std::array<std::pair<int, int>, 3> steps = {{
+                {stepF, stepR},
+                {stepF, 0},
+                {0, stepR}
+            }};
+
+            for (const auto& [sf, sr] : steps)
+            {
+                if (!sf && !sr)
+                    continue;
+
+                Square next = SQ_NONE;
+                if (!advance(cur, sf, sr, next))
+                    continue;
+
+                int nextDf = int(file_of(to)) - int(file_of(next));
+                int nextDr = int(rank_of(to)) - int(rank_of(next));
+                if (topology_wraps())
+                {
+                    nextDf = adjust_delta(nextDf, int(max_file()) + 1);
+                    nextDr = adjust_delta(nextDr, int(max_rank()) + 1);
+                }
+                if (std::max(std::abs(nextDf), std::abs(nextDr)) != remaining - 1)
+                    continue;
+
+                if (next != to)
+                    if (!push_path(path, next))
+                        continue;
+                const bool clear = self(self, next, remaining - 1);
+                if (next != to)
+                    --path.size;
+                if (clear)
+                    return true;
+            }
+            return false;
+        };
+
+        return !search(search, from, minSteps);
+    };
+
+    switch (profile.path)
+    {
+    case PieceInfo::LameProfile::ORTH_FIRST:
+        return path_type_blocked(PieceInfo::LameProfile::ORTH_FIRST);
+    case PieceInfo::LameProfile::DIAG_FIRST:
+        return path_type_blocked(PieceInfo::LameProfile::DIAG_FIRST);
+    case PieceInfo::LameProfile::ORTH_ONLY:
+        return path_type_blocked(PieceInfo::LameProfile::ORTH_ONLY);
+    case PieceInfo::LameProfile::ANY_PATH:
+        return any_shortest_path_blocked();
+    case PieceInfo::LameProfile::MIDPOINT:
+        return path_type_blocked(PieceInfo::LameProfile::MIDPOINT);
+    }
+    return false;
+}
+
+inline Bitboard Position::lame_leaper_bb(const std::map<Direction, PieceInfo::LameProfile>& profiles,
+                                         Square sq, Bitboard occupied, Color c, bool quietMode) const
+{
+    if (profiles.empty())
+        return 0;
+
+    Bitboard b = 0;
+    // LameProfile::limit uses -1 for a single leap, 0 for an unlimited rider,
+    // and positive values for a bounded rider hop count.
+    const int maxSteps = topology_wraps() ? popcount(board_bb()) : 255;
+    for (const auto& it : profiles)
+    {
+        Direction dir = (c == WHITE ? it.first : -it.first);
+        const PieceInfo::LameProfile& profile = it.second;
+        auto [dr, df] = decode_direction(dir);
+
+        auto advance_once = [&](Square cur, Square& next) -> bool
+        {
+            if (topology_wraps())
+                return wrapped_destination_square(cur, df, dr, max_file(), max_rank(), wraps_files(), wraps_ranks(), next);
+
+            next = cur + dir;
+            if (!is_ok(next))
+                return false;
+
+            return int(file_of(next)) - int(file_of(cur)) == df
+                && int(rank_of(next)) - int(rank_of(cur)) == dr;
+        };
+
+        Square cur = sq;
+        int steps = 0;
+        while (steps < maxSteps)
+        {
+            if (profile.limit > 0 && steps >= profile.limit)
+                break;
+
+            Square to = SQ_NONE;
+            if (!advance_once(cur, to))
+                break;
+
+            if (to == sq)
+                break;
+
+            Square from = cur;
+            cur = to;
+            ++steps;
+            Bitboard toBB = square_bb(to);
+            bool occupiedDestination = occupied & toBB;
+
+            if (is_lame_blocked(from, to, profile, occupied))
+                break;
+
+            if (!quietMode || !occupiedDestination)
+                b |= to;
+
+            if (occupiedDestination)
+                break;
+
+            if (profile.limit < 0)
+                break;
+        }
+    }
+    return b;
+}
+
 inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard occupancy) const {
   assert(pt != NO_PIECE_TYPE);
 
@@ -3369,8 +3696,12 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
       b |= wrapped_slider_targets(pi->slider[0][MODALITY_CAPTURE], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, false);
       b |= wrapped_hopper_targets(pi->hopper[0][MODALITY_CAPTURE], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, false);
       b |= wrapped_universal_hopper_targets(pi->universalHopper[0][MODALITY_CAPTURE], c, s, occupancy, pieces(c), max_file(), max_rank(), wrapFile, wrapRank, true, true);
+      b |= lame_leaper_bb(pi->stepsLame[0][MODALITY_CAPTURE], s, occupancy, c, false);
       if (double_step_region(c, pt) & s)
+      {
           b |= wrapped_universal_hopper_targets(pi->universalHopper[1][MODALITY_CAPTURE], c, s, occupancy, pieces(c), max_file(), max_rank(), wrapFile, wrapRank, true, true);
+          b |= lame_leaper_bb(pi->stepsLame[1][MODALITY_CAPTURE], s, occupancy, c, false);
+      }
       if (pi->griffon[0][MODALITY_CAPTURE])
           b |= wrapped_bent_rider_targets(true, s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, false);
       if (pi->manticore[0][MODALITY_CAPTURE])
@@ -3427,22 +3758,26 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
       return b & board_bb();
   }
 
-  if (!hasRuntimeSpecialMoves && fast_attacks2() && (pt != KING || king_type() == KING))
+  if (!hasRuntimeSpecialMoves && !pi->has_lame_leaper() && fast_attacks2() && (pt != KING || king_type() == KING))
       return attacks_bb(c, pt, s, occupancy) & board_bb();
 
-  if ((fast_attacks() || fast_attacks2()) && !pi->has_runtime_rider_augment())
+  if ((fast_attacks() || fast_attacks2()) && !pi->has_runtime_rider_augment() && !pi->has_lame_leaper())
       return attacks_bb(c, movePt, s, occupancy) & board_bb();
 
   Bitboard b = attacks_bb(c, movePt, s, occupancy);
 
   b |= special_rider_bb(pi, MODALITY_CAPTURE, s, occupancy, board_bb(), pieces(c), c, false, true, true);
+  b |= lame_leaper_bb(pi->stepsLame[0][MODALITY_CAPTURE], s, occupancy, c, false);
   const bool usesGenericPawnLikeInitialAttackHelper =
          pt == PAWN || (pawn_like_types(c) & piece_set(pt));
   const Bitboard initialAttackRegion = usesGenericPawnLikeInitialAttackHelper
                                      ? double_step_region(c, pt)
                                      : var->doubleStepRegion.get(c).explicitBoardOfPiece(piece_to_char()[pt]);
   if (initialAttackRegion & s)
+  {
       b |= special_rider_bb(pi, MODALITY_CAPTURE, s, occupancy, board_bb(), pieces(c), c, true, true, true);
+      b |= lame_leaper_bb(pi->stepsLame[1][MODALITY_CAPTURE], s, occupancy, c, false);
+  }
 
   // Xiangqi soldier
   if (pt == SOLDIER && !(promoted_soldiers(c) & s))
@@ -3519,6 +3854,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
         b |= wrapped_slider_targets(pi->slider[0][MODALITY_QUIET], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
         b |= wrapped_hopper_targets(pi->hopper[0][MODALITY_QUIET], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
         b |= wrapped_universal_hopper_targets(pi->universalHopper[0][MODALITY_QUIET], c, s, occupancy, pieces(c), max_file(), max_rank(), wrapFile, wrapRank, false, false);
+        b |= lame_leaper_bb(pi->stepsLame[0][MODALITY_QUIET], s, occupancy, c, true);
         if (pi->griffon[0][MODALITY_QUIET])
             b |= wrapped_bent_rider_targets(true, s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
         if (pi->manticore[0][MODALITY_QUIET])
@@ -3535,6 +3871,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
             b |= wrapped_slider_targets(pi->slider[1][MODALITY_QUIET], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
             b |= wrapped_hopper_targets(pi->hopper[1][MODALITY_QUIET], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
             b |= wrapped_universal_hopper_targets(pi->universalHopper[1][MODALITY_QUIET], c, s, occupancy, pieces(c), max_file(), max_rank(), wrapFile, wrapRank, false, false);
+            b |= lame_leaper_bb(pi->stepsLame[1][MODALITY_QUIET], s, occupancy, c, true);
             if (pi->griffon[1][MODALITY_QUIET])
                 b |= wrapped_bent_rider_targets(true, s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
             if (pi->manticore[1][MODALITY_QUIET])
@@ -3564,6 +3901,8 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
         || !pi->hopper[0][MODALITY_QUIET].empty()
         || !pi->tupleSlider[0][MODALITY_QUIET].empty()
         || !pi->tupleSteps[0][MODALITY_QUIET].empty()
+        || !pi->stepsLame[0][MODALITY_QUIET].empty()
+        || !pi->stepsLame[1][MODALITY_QUIET].empty()
         || !pi->universalHopper[0][MODALITY_QUIET].empty()
         || pi->griffon[0][MODALITY_QUIET]
         || pi->manticore[0][MODALITY_QUIET]
@@ -3592,7 +3931,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
         }
         extraDestinations |= extraMultipleStepMoveDestinations; //Add destination squares to base board
     }
-    Bitboard doubleStepRegion = usesGenericPawnLikeStepHelper ? this->double_step_region(c, pt)
+    Bitboard doubleStepRegion = usesGenericPawnLikeStepHelper ? this->double_step_region(c)
                                                               : explicitDoubleStepRegion;
     if (doubleStepRegion & piecePosition & this->not_moved_pieces(c))  //If the original square is in doubleStepRegion and the piece is not moved
     {
@@ -3617,23 +3956,25 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
   const bool hasRuntimeSpecialMoves = pi->has_runtime_rider_augment()
                                    || pi->has_explicit_initial_moves();
 
-  if (!hasRuntimeSpecialMoves && (fast_attacks() || fast_attacks2()) && (pt != KING || king_type() == KING))
+  if (!hasRuntimeSpecialMoves && !pi->has_lame_leaper() && (fast_attacks() || fast_attacks2()) && (pt != KING || king_type() == KING))
       return (moves_bb(c, pt, s, occupancy) | extraDestinations) & board_bb();
 
   if (!pi->has_explicit_initial_moves()
       && (fast_attacks() || fast_attacks2())
-      && !pi->has_runtime_rider_augment())
+      && !pi->has_runtime_rider_augment()
+      && !pi->has_lame_leaper())
       return (moves_bb(c, movePt, s, occupancy) | extraDestinations) & board_bb();
 
   Bitboard b = (moves_bb(c, movePt, s, occupancy) | extraDestinations);
 
   b |= special_rider_bb(pi, MODALITY_QUIET, s, occupancy, board_bb(), pieces(c), c, false, false, false);
+  b |= lame_leaper_bb(pi->stepsLame[0][MODALITY_QUIET], s, occupancy, c, true);
 
   const bool usesGenericPawnLikeInitialMoveHelper =
          (pt == PAWN || (pawn_like_types(c) & piece_set(pt)))
-      && !pawnLikeHasCustomNonStepQuietMovement;
+      ;
   const Bitboard initialMoveRegion = usesGenericPawnLikeInitialMoveHelper
-                                   ? double_step_region(c, pt)
+                                   ? double_step_region(c)
                                    : var->doubleStepRegion.get(c).explicitBoardOfPiece(piece_to_char()[pt]);
 
   // Add initial moves
@@ -3641,6 +3982,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
   {
       b |= moves_bb<true>(c, movePt, s, occupancy);
       b |= special_rider_bb(pi, MODALITY_QUIET, s, occupancy, board_bb(), pieces(c), c, true, false, false);
+      b |= lame_leaper_bb(pi->stepsLame[1][MODALITY_QUIET], s, occupancy, c, true);
   }
   // Xiangqi soldier
   if (pt == SOLDIER && !(promoted_soldiers(c) & s))
