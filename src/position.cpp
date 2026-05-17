@@ -8057,8 +8057,8 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
               std::deque<Square> q;
 
               q.push_back(start_sq);
-              current_group |= start_sq;
-              visited |= start_sq;
+              current_group |= square_bb(start_sq);
+              visited |= square_bb(start_sq);
               int group_size = 0;
 
               while (!q.empty()) {
@@ -8073,8 +8073,8 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
                           continue;
                       // Check if it's a player piece and not visited.
                       if ((square_bb(next_sq) & playerPieces) && !(square_bb(next_sq) & visited)) {
-                          visited |= next_sq;
-                          current_group |= next_sq;
+                          visited |= square_bb(next_sq);
+                          current_group |= square_bb(next_sq);
                           q.push_back(next_sq);
                       }
                   }
