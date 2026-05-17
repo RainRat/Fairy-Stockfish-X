@@ -210,6 +210,10 @@ namespace {
       bool hasUniversalHopper = false;
       PieceInfo::HopperProfile currentHopperProfile;
 
+      auto reset_lame_profile = [&]() {
+          currentLameProfile.path = PieceInfo::LameProfile::MIDPOINT;
+          currentLameProfile.limit = -1;
+      };
       auto reset_parser_state = [&]() {
           moveModalities.clear();
           prelimDirections.clear();
@@ -218,7 +222,7 @@ namespace {
           lame = false;
           hasLameProfile = false;
           invalidLameProfile = false;
-          currentLameProfile = {};
+          reset_lame_profile();
           initial = false;
           dynamicDistance = false;
           skiSlider = false;
@@ -478,7 +482,7 @@ namespace {
                   if (hasLameProfile)
                       invalidLameProfile = true;
                   hasLameProfile = true;
-                  currentLameProfile = {};
+                  reset_lame_profile();
               }
               else
               {

@@ -3755,10 +3755,10 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
       return b & board_bb();
   }
 
-  if (!hasRuntimeSpecialMoves && fast_attacks2() && (pt != KING || king_type() == KING))
+  if (!hasRuntimeSpecialMoves && !pi->has_lame_leaper() && fast_attacks2() && (pt != KING || king_type() == KING))
       return attacks_bb(c, pt, s, occupancy) & board_bb();
 
-  if ((fast_attacks() || fast_attacks2()) && !pi->has_runtime_rider_augment())
+  if ((fast_attacks() || fast_attacks2()) && !pi->has_runtime_rider_augment() && !pi->has_lame_leaper())
       return attacks_bb(c, movePt, s, occupancy) & board_bb();
 
   Bitboard b = attacks_bb(c, movePt, s, occupancy);
@@ -3928,7 +3928,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
         }
         extraDestinations |= extraMultipleStepMoveDestinations; //Add destination squares to base board
     }
-    Bitboard doubleStepRegion = usesGenericPawnLikeStepHelper ? this->double_step_region(c, pt)
+    Bitboard doubleStepRegion = usesGenericPawnLikeStepHelper ? this->double_step_region(c)
                                                               : explicitDoubleStepRegion;
     if (doubleStepRegion & piecePosition & this->not_moved_pieces(c))  //If the original square is in doubleStepRegion and the piece is not moved
     {
@@ -3953,12 +3953,13 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
   const bool hasRuntimeSpecialMoves = pi->has_runtime_rider_augment()
                                    || pi->has_explicit_initial_moves();
 
-  if (!hasRuntimeSpecialMoves && (fast_attacks() || fast_attacks2()) && (pt != KING || king_type() == KING))
+  if (!hasRuntimeSpecialMoves && !pi->has_lame_leaper() && (fast_attacks() || fast_attacks2()) && (pt != KING || king_type() == KING))
       return (moves_bb(c, pt, s, occupancy) | extraDestinations) & board_bb();
 
   if (!pi->has_explicit_initial_moves()
       && (fast_attacks() || fast_attacks2())
-      && !pi->has_runtime_rider_augment())
+      && !pi->has_runtime_rider_augment()
+      && !pi->has_lame_leaper())
       return (moves_bb(c, movePt, s, occupancy) | extraDestinations) & board_bb();
 
   Bitboard b = (moves_bb(c, movePt, s, occupancy) | extraDestinations);
@@ -3968,9 +3969,9 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
 
   const bool usesGenericPawnLikeInitialMoveHelper =
          (pt == PAWN || (pawn_like_types(c) & piece_set(pt)))
-      && !pawnLikeHasCustomNonStepQuietMovement;
+      ;
   const Bitboard initialMoveRegion = usesGenericPawnLikeInitialMoveHelper
-                                   ? double_step_region(c, pt)
+                                   ? double_step_region(c)
                                    : var->doubleStepRegion.get(c).explicitBoardOfPiece(piece_to_char()[pt]);
 
   // Add initial moves

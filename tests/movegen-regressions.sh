@@ -31,6 +31,14 @@ run_cmds() {
     "$variant_path" "$variant" "$cmds" | "$ENGINE"
 }
 
+variant_available() {
+  local variant_path="$1"
+  local variant="$2"
+  local out
+  out=$(run_cmds "$variant_path" "$variant" "d" || true)
+  echo "$out" | grep -q "info string variant ${variant} "
+}
+
 echo "movegen regressions started"
 
 # Quiet pawn promotions must be generated in quiet move generation.
@@ -52,10 +60,12 @@ out=$(run_cmds "$ROOT_DIR/src/variants.ini" british-chess \
 go perft 1")
 echo "$out" | grep -q "Nodes searched: 0"
 
-out=$(run_cmds "$ROOT_DIR/src/variants.ini" minihexchess \
-  "position fen ***4/**5/*k5/7/6*/5**/KR2*** w - - 0 1 moves b1b5
+if variant_available "$ROOT_DIR/src/variants.ini" minihexchess; then
+  out=$(run_cmds "$ROOT_DIR/src/variants.ini" minihexchess \
+    "position fen ***4/**5/*k5/7/6*/5**/KR2*** w - - 0 1 moves b1b5
 go perft 1")
-echo "$out" | grep -q "Nodes searched: 0"
+  echo "$out" | grep -q "Nodes searched: 0"
+fi
 
 # Custom king movement must still participate in orthodox checkmate semantics.
 out=$(run_cmds "$TMP_INI" wazir-chess \

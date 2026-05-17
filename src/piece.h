@@ -121,7 +121,7 @@ struct PieceInfo {
       MIDPOINT
     };
 
-    PathType path = ORTH_FIRST;
+    PathType path = MIDPOINT;
     // -1 = single leap, 0 = unlimited rider, positive = maximum rider hops.
     int limit = -1;
   };
