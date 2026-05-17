@@ -3540,7 +3540,8 @@ bool Position::legal(Move m) const {
       {
           Square blastCenter = (capture(m) || rifleShot) ? captureBlastCenter : effectiveTo;
           Bitboard blastRelevant = postMoveOccupied & ~blast_immune_bb();
-          removedByEffects |= blast_pattern(blastCenter) & blastRelevant;
+          Bitboard adjacentBlastRelevant = blastRelevant & ~pieces(PAWN);
+          removedByEffects |= blast_pattern(blastCenter) & adjacentBlastRelevant;
           if (blast_center())
               removedByEffects |= square_bb(blastCenter) & blastRelevant;
           if (blast_on_capture(m) && (blast_immune_types() & movePt))
