@@ -126,7 +126,7 @@ pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 startFen = k7/8/8/8/8/8/8/A6K w - - 0 1
 
 [lame-tuple-reject:chess]
-customPiece1 = a:n(2,1)
+customPiece1 = a:Rn(2,1)
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 startFen = k7/8/8/8/8/8/8/A6K w - - 0 1
 

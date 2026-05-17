@@ -109,6 +109,9 @@ customPiece1 = d:{hurdles: abc,1; pre: 1,*}R
 
 [parser-missing-comma:hopper-common]
 customPiece1 = d:{hurdles: 2; pre: 1,*}R
+
+[parser-unknown-hurdle-type:hopper-common]
+customPiece1 = d:{hurdles: 1,1; pre: 1,*; post: 1,1; hurdle_types: enemy,bogus}R
 EOF
 
 function run_test() {
@@ -445,5 +448,15 @@ run_test "parser-fail" "7k/8/8/8/3P4/3D4/8/K7 w - - 0 1" 5
 # White D3, White D4 (Hurdle). Jump to D5. King A1.
 # Moves: King A1 (3), D4D5 (1), Hopper D3D5 (1). Total = 5
 run_test "parser-missing-comma" "7k/8/8/8/3P4/3D4/8/K7 w - - 0 1" 5
+
+reject_out=$("${ENGINE}" << EOF 2>&1
+uci
+setoption name VariantPath value $INI_FILE
+setoption name UCI_Variant value parser-unknown-hurdle-type
+quit
+EOF
+)
+grep -q "Unknown Betza hopper special type 'bogus'" <<<"$reject_out"
+run_test "parser-unknown-hurdle-type" "7k/8/8/8/3P4/3D4/8/K7 w - - 0 1" 4
 
 echo "All Universal Hopper tests passed!"

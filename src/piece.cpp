@@ -338,6 +338,15 @@ namespace {
               reset_parser_state();
               return;
           }
+          if (lame && atomIsTuple)
+          {
+              std::cerr << "Unsupported Betza tuple modifier combination in '" << betza
+                        << "': lame path profiles currently apply to named step/leaper and rider atoms only." << std::endl;
+              reset_piece();
+              invalidPiece = true;
+              reset_parser_state();
+              return;
+          }
           if (lame && (hopper || dynamicDistance || skiSlider || maxDistance || hasUniversalHopper))
           {
               std::cerr << "Unsupported Betza lame modifier combination in '" << betza
@@ -635,7 +644,11 @@ namespace {
                                   else if (v == "wall") special |= PieceInfo::HopperProfile::WALL;
                                   else if (v == "dead") special |= PieceInfo::HopperProfile::DEAD;
                                   else if (!v.empty())
+                                  {
                                       std::cerr << "Unknown Betza hopper special type '" << v << "' in '" << betza << "'." << std::endl;
+                                      reset_piece();
+                                      invalidPiece = true;
+                                  }
 
                                   vpos = next_comma + 1;
                               }
@@ -745,7 +758,9 @@ namespace {
               if (hopper || lame || dynamicDistance || skiSlider || maxDistance)
               {
                   std::cerr << "Unsupported Betza tuple modifier combination in '" << betza
-                            << "': tuple atoms only support explicit leapers or repeated/numeric tuple riders. Ignoring tuple atom." << std::endl;
+                            << "': tuple atoms only support explicit leapers or repeated/numeric tuple riders." << std::endl;
+                  reset_piece();
+                  invalidPiece = true;
                   reset_parser_state();
                   auto closeUnsupported = expandedBetza.find(')', i + 1);
                   if (closeUnsupported != std::string::npos)
