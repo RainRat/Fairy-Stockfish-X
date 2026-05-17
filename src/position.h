@@ -3502,7 +3502,7 @@ inline bool Position::is_lame_blocked(Square from, Square to, const PieceInfo::L
         if (path.size == 1)
             return bool(occupied & square_bb(path.squares[0]));
         if (path.size == 2)
-            return bool(occupied & square_bb(path.squares[0])) || bool(occupied & square_bb(path.squares[1]));
+            return bool(occupied & (square_bb(path.squares[0]) | square_bb(path.squares[1])));
 
         // path:mid is FSF midpoint compatibility extended to the central segment
         // for longer generated paths, not a single mathematical midpoint square.
@@ -3606,6 +3606,9 @@ inline bool Position::is_lame_blocked(Square from, Square to, const PieceInfo::L
 inline Bitboard Position::lame_leaper_bb(const std::map<Direction, PieceInfo::LameProfile>& profiles,
                                          Square sq, Bitboard occupied, Color c, bool quietMode) const
 {
+    if (profiles.empty())
+        return 0;
+
     Bitboard b = 0;
     // LameProfile::limit uses -1 for a single leap, 0 for an unlimited rider,
     // and positive values for a bounded rider hop count.
