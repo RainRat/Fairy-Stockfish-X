@@ -92,7 +92,7 @@ Some tests require specific build flags to pass for all variants:
 Observed on the local largeboards build in this workspace (`src/stockfish-large`) in May 2026:
 * `bash tests/fast-regression.sh src/stockfish-large`: about 2-3 minutes.
 * `bash tests/perft.sh all src/stockfish-large`: about 2.5 minutes once the binary is built; this is also run at the end of `local-regression.sh`.
-* `bash tests/local-regression.sh src/stockfish-large`: about 20 minutes. This includes `fast-regression`, `allvars-regression`, many focused shell tests, VLB smoke checks, and final `perft.sh all`.
+* `bash tests/local-regression.sh src/stockfish-large`: about 20-25 minutes. This includes `fast-regression`, `allvars-regression`, many focused shell tests, VLB smoke checks, and final `perft.sh all`.
 
 For an unattended full local pass, prefer logging the run and checking the exit code later:
 

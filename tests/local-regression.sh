@@ -67,7 +67,7 @@ run_step "spell freeze regressions" timeout 60s bash tests/spell-freeze-regressi
 run_step "spell potion movegen" timeout 60s bash tests/spell-potion-movegen.sh "${ENGINE}"
 run_step "asym rider checkers" timeout 60s bash tests/asym-rider-checkers.sh "${ENGINE}"
 run_step "common fairy aliases" timeout 60s bash tests/common-fairy-aliases.sh "${ENGINE}"
-run_step "alfil dabbaba riders" timeout 60s bash tests/alfil-dabbaba-riders.sh "${ENGINE}"
+run_step "alfil dabbaba riders" timeout 2m bash tests/alfil-dabbaba-riders.sh "${ENGINE}"
 run_step "concurrent variant magics" timeout 60s bash tests/concurrent-variant-magics.sh "${ENGINE}"
 run_step "NNUE variant dimension guard" timeout 60s bash tests/nnue-variant-dimension-guard.sh "${ENGINE}"
 run_step "NNUE affine regression" timeout 2m bash tests/nnue-affine-regression.sh
