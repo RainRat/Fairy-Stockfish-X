@@ -98,8 +98,8 @@ For an unattended full local pass, prefer logging the run and checking the exit 
 
 ```
 mkdir -p .local/logs
-nohup bash -lc '/usr/bin/time -f "total elapsed %es" bash tests/local-regression.sh src/stockfish-large' \
-  > .local/logs/local-regression.$(date +%Y%m%d-%H%M%S).log 2>&1 &
+setsid bash -lc '/usr/bin/time -f "total elapsed %es" bash tests/local-regression.sh src/stockfish-large' \
+  > .local/logs/local-regression.$(date +%Y%m%d-%H%M%S).log 2>&1 < /dev/null &
 ```
 
 When reviewing the log, look for the final `local regression suite passed`; if it is missing, inspect the last `== ... ==` section and the command timeout/failure immediately above it.
