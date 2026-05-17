@@ -125,6 +125,26 @@ customPiece1 = a:n{path:bad}{path:mid}N
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 startFen = k7/8/8/8/8/8/8/A6K w - - 0 1
 
+[lame-invalid-dangling-path:chess]
+customPiece1 = a:Rn{path:bad}
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+startFen = k7/8/8/8/8/8/8/A6K w - - 0 1
+
+[lame-invalid-dangling-filter:chess]
+customPiece1 = a:Rn{filter:first}
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+startFen = k7/8/8/8/8/8/8/A6K w - - 0 1
+
+[lame-invalid-only-block:chess]
+customPiece1 = a:n{path:bad}
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+startFen = k7/8/8/8/8/8/8/A6K w - - 0 1
+
+[lame-valid-after-block:chess]
+customPiece1 = a:Rn{path:mid}A
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+startFen = k7/8/8/8/8/8/8/A6K w - - 0 1
+
 [lame-tuple-reject:chess]
 customPiece1 = a:Rn(2,1)
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
@@ -351,6 +371,18 @@ out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Varia
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-invalid-multi-block\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
   | "${ENGINE}")
 ! echo "$out" | grep -q "^a1"
+
+for variant in lame-invalid-dangling-path lame-invalid-dangling-filter lame-invalid-only-block; do
+  out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value %s\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" "$variant" \
+    | "${ENGINE}")
+  ! echo "$out" | grep -q "^a1"
+done
+
+out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-valid-after-block\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
+  | "${ENGINE}")
+echo "$out" | grep -q "^a1a2: 1$"
+echo "$out" | grep -q "^a1b1: 1$"
+echo "$out" | grep -q "^a1c3: 1$"
 
 reject_out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-tuple-reject\nquit\n' "$tmp_ini" \
   | "${ENGINE}" 2>&1)

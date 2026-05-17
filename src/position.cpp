@@ -559,6 +559,8 @@ namespace {
 
                 if (next == kingSq)
                     break;
+                if (!(square_bb(next) & pos.board_bb()))
+                    break;
 
                 from = next;
                 ++steps;
@@ -3513,6 +3515,16 @@ bool Position::legal(Move m) const {
           return false;
       if (multimove_pass(gamePly + 1) && ((!var->multimoveCapture && capture(m)) || (!var->multimoveCheck && gives_check(m))))
           return false;
+  }
+
+  if (is_pass(m))
+  {
+      Bitboard occupied = pieces();
+      return (st->bikjang
+           || allow_checks()
+           || !hasRoyal
+           || !(attackers_to_king(royalSquare, occupied, them) & occupied & ~removedAttackers))
+          && !violates_same_player_board_repetition(m);
   }
 
   Bitboard postMoveOccupied;

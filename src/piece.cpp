@@ -670,6 +670,12 @@ namespace {
                       break;
                   pos = next_semi + 1;
               }
+              if (blockIsLame && invalidLameProfile)
+              {
+                  reset_piece();
+                  invalidPiece = true;
+                  reset_parser_state();
+              }
               i = close;
           }
           // Modality
