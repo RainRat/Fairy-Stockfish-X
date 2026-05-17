@@ -526,7 +526,8 @@ namespace {
     const PieceInfo* pi = pieceMap.get(pos.effective_piece_type(pt));
     auto add_candidates = [&](const std::map<Direction, PieceInfo::LameProfile>& profiles)
     {
-        const int maxSteps = pos.topology_wraps() ? popcount(pos.board_bb()) : 255;
+        const int maxSteps = pos.topology_wraps() ? popcount(pos.board_bb())
+                                                  : std::max(int(pos.max_file()), int(pos.max_rank())) + 1;
         for (const auto& [profileDir, profile] : profiles)
         {
             Direction dir = attacker == WHITE ? profileDir : Direction(-profileDir);
@@ -6886,6 +6887,7 @@ void Position::undo_move(Move m) {
       pc = piece_on(moverSq);
   }
 
+  // do_move applies morphing before color changes, so undo restores color first.
   if (st->transforms.didColorChange && st->transforms.colorChangeSquare == moverSq)
   {
       remove_piece(moverSq);

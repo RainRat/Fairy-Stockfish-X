@@ -3612,7 +3612,8 @@ inline Bitboard Position::lame_leaper_bb(const std::map<Direction, PieceInfo::La
     Bitboard b = 0;
     // LameProfile::limit uses -1 for a single leap, 0 for an unlimited rider,
     // and positive values for a bounded rider hop count.
-    const int maxSteps = topology_wraps() ? popcount(board_bb()) : 255;
+    const int maxSteps = topology_wraps() ? popcount(board_bb())
+                                         : std::max(int(max_file()), int(max_rank())) + 1;
     for (const auto& it : profiles)
     {
         Direction dir = (c == WHITE ? it.first : -it.first);

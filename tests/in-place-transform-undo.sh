@@ -8,7 +8,9 @@ error() {
 }
 trap 'error ${LINENO}' ERR
 
-ENGINE=${1:-./stockfish}
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+ENGINE=${1:-"${ROOT_DIR}/src/stockfish"}
 
 run_cmds() {
   local variant="$1"
