@@ -762,6 +762,7 @@ inline Validation check_promoted_pieces(const std::string& firstFenPart, const V
                          << "'. This piece cannot be promoted in variant." << std::endl;
                 return NOK;
             }
+            i = symbolIdx - 1;
         }
     }
     return OK;

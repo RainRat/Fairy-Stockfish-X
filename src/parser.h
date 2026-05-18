@@ -45,8 +45,10 @@ public:
         constexpr bool PrintOptions = false; // print config options?
         if (PrintOptions)
             std::cout << s << std::endl;
-        consumedKeys.insert(s);
-        return data.find(s);
+        const auto it = data.find(s);
+        if (it != data.end())
+            consumedKeys.insert(s);
+        return it;
     }
 
     const_iterator begin() const { return data.begin(); }
