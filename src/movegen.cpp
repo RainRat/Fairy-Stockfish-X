@@ -450,6 +450,9 @@ namespace {
             Bitboard attacks = pos.attacks_from(Us, PAWN, from) & capturable & target;
             Bitboard epSquares = pos.attacks_from(Us, PAWN, from) & pos.ep_squares() & ~pos.pieces() & target;
 
+            if (Type == QUIET_CHECKS)
+                quiets &= pos.check_squares(PAWN);
+
             if (mandatoryPromotionZone)
             {
                 Bitboard blocked = 0;
@@ -523,6 +526,9 @@ namespace {
         for (PieceSet ps = pos.promotion_piece_types(Us, to); ps;)
             if (pos.promotion_allowed(Us, pop_lsb(ps), to))
                 return true;
+        PieceType pt = pos.promoted_piece_type(PAWN);
+        if (pt && pos.promotion_allowed(Us, pt) && !(pos.piece_promotion_on_capture() && pos.empty(to)))
+            return true;
         return false;
     };
 

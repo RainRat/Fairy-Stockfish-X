@@ -66,6 +66,12 @@ adjacentSwapMoveTypes = a
 adjacentSwapRequiresEmptyNeighbor = true
 swapNoImmediateReturn = true
 startFen = 5/5/5/5/5 w - - 0 1
+
+[wrapped-quiet-check:chess]
+cylindrical = true
+castling = false
+checking = false
+startFen = 2k5/8/8/8/8/7p/P7/4K3 w - - 0 1
 )ini");
     variants.parse_istream<false>(ss);
 }
@@ -103,6 +109,15 @@ int main() {
         Position pos;
         pos.set(variants.get("swap-basic"), "5/5/2Ab1/5/5 w - - 0 1", false, &st, nullptr);
         const Move m = make<SWAP>(SQ_C3, SQ_D3);
+        assert(!pos.gives_check(m));
+        assert(!MoveList<QUIET_CHECKS>(pos).contains(m));
+    }
+
+    {
+        StateInfo st{};
+        Position pos;
+        pos.set(variants.get("wrapped-quiet-check"), "2k5/8/8/8/8/7p/P7/4K3 w - - 0 1", false, &st, nullptr);
+        const Move m = make<NORMAL>(SQ_A2, SQ_A3);
         assert(!pos.gives_check(m));
         assert(!MoveList<QUIET_CHECKS>(pos).contains(m));
     }
