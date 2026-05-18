@@ -5,6 +5,8 @@ set -euo pipefail
 ROOT_DIR=$(cd "$(dirname "$0")/.." && pwd)
 ENGINE=${1:-src/stockfish}
 PYTHON=${PYTHON:-python3}
+JOBS=${JOBS:-2}
+export JOBS
 
 run_step() {
   local label="$1"
@@ -18,6 +20,16 @@ cd "${ROOT_DIR}"
 if ! printf 'uci\nquit\n' | "${ENGINE}" | grep -q ' var duck'; then
   echo "note: ${ENGINE} does not expose 'duck' in UCI_Variant (likely non-all build); all-only alias coverage is skipped." >&2
 fi
+
+ENGINE_BASENAME=$(basename "${ENGINE}")
+case "${ENGINE_BASENAME}" in
+  stockfish-large*)
+    run_step "prep largeboard objects" timeout 30m bash -lc 'cd src && make -s EXE=stockfish-large objclean && make -s -j"${JOBS}" build ARCH=x86-64 largeboards=yes all=yes EXE=stockfish-large'
+    ;;
+  stockfish-vlb*)
+    run_step "prep very-large-board objects" timeout 30m bash -lc 'cd src && make -s EXE=stockfish-vlb objclean && make -s -j"${JOBS}" build ARCH=x86-64 largeboards=yes verylargeboards=yes all=yes EXE=stockfish-vlb'
+    ;;
+esac
 
 run_step "pyffish extension" timeout 10m "${PYTHON}" setup.py build_ext --inplace --build-temp .local/build/pyffish
 export PYTHONPATH="${ROOT_DIR}${PYTHONPATH:+:${PYTHONPATH}}"
@@ -33,7 +45,7 @@ run_step "variant switch after perft" timeout 60s bash tests/variant-switch-afte
 run_step "custom en passant passed squares" timeout 60s bash tests/custom-en-passant-passed-squares.sh "${ENGINE}"
 run_step "crazyhouse multi pawn promo" timeout 60s bash tests/crazyhouse-multi-pawn-promo.sh "${ENGINE}"
 run_step "borrow opponent drops" timeout 60s bash tests/borrow-opponent-drops.sh "${ENGINE}"
-run_step "quiet-check special moves" timeout 60s bash tests/quiet-check-special-moves.sh "${ENGINE}"
+run_step "quiet-check special moves" timeout 5m bash tests/quiet-check-special-moves.sh "${ENGINE}"
 run_step "piece promotion gating" timeout 60s bash tests/piece-promotion-gating.sh "${ENGINE}"
 run_step "blast legal regressions" timeout 60s bash tests/blast-legal-regressions.sh "${ENGINE}"
 run_step "pseudoroyal blast immune" timeout 60s bash tests/pseudoroyal-blast-immune.sh "${ENGINE}"

@@ -843,6 +843,8 @@ describe('ffish.validateFen(fen)', function () {
 });
 
 describe('ffish.validateFen(fen, uciVariant)', function () {
+    const FEN_INVALID_CHAR = -10;
+
     it("it validates a given fen and returns +1 if fen is valid. Otherwise an error code will be returned.", () => {
       // check if starting fens are valid for all variants
       const variants = ffish.variants().split(" ")
@@ -862,9 +864,9 @@ describe('ffish.validateFen(fen, uciVariant)', function () {
       chai.expect(ffish.validateFen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR[-] w KQkq - 3+3 0 1", "3check-crazyhouse")).to.equal(1);
 
       // error id checks
-      chai.expect(ffish.validateFen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR[]wKQkq-3+301", "3check-crazyhouse")).to.equal(-10);
+      chai.expect(ffish.validateFen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR[]wKQkq-3+301", "3check-crazyhouse")).to.equal(FEN_INVALID_CHAR);
       chai.expect(ffish.validateFen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR[] KQkq - 3+3 0 1", "3check-crazyhouse")).to.equal(-6);
-      chai.expect(ffish.validateFen("rnbqkbnr/ppppXppp/8/8/8/8/PPPPPPPP/RNBQKBNR[] w KQkq - 3+3 0 1", "3check-crazyhouse")).to.equal(-10);
+      chai.expect(ffish.validateFen("rnbqkbnr/ppppXppp/8/8/8/8/PPPPPPPP/RNBQKBNR[] w KQkq - 3+3 0 1", "3check-crazyhouse")).to.equal(FEN_INVALID_CHAR);
       chai.expect(ffish.validateFen("rnbqkbnr/pppppKpp/8/8/8/8/PPPPPPPP/RNBQ1BNR[] w KQkq - 3+3 0 1", "3check-crazyhouse")).to.equal(-9);
       chai.expect(ffish.validateFen("rnbqkbnr/ppppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR[] w KQkq - 3+3 0 1", "3check-crazyhouse")).to.equal(-8);
       chai.expect(ffish.validateFen("rnbqkbnr/pppppppp/8/8/8/PPPPPPPP/RNBQKBNR[] w KQkq - 3+3 0 1", "3check-crazyhouse")).to.equal(-8);
