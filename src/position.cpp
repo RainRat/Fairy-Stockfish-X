@@ -4680,7 +4680,13 @@ bool Position::gives_check(Move m) const {
   else if (janggiCannons & to)
       janggiCannons ^= to;
 
-  if (topology_wraps() || has_pushing() || has_adjacent_swapping() || is_swap_move(m))
+  if (topology_wraps()
+      || has_pushing()
+      || has_adjacent_swapping()
+      || is_swap_move(m)
+      || type_of(m) == PULL
+      || type_of(m) == DROP2
+      || type_of(m) == INSERT)
   {
       Position* pos = const_cast<Position*>(this);
       StateInfo nextState;

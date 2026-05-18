@@ -10,6 +10,8 @@ error() {
 trap 'error ${LINENO}' ERR
 
 ENGINE=${1:-./src/stockfish}
+ROOT_DIR=$(cd "$(dirname "$0")/.." && pwd)
+CXX=${CXX:-g++}
 
 run_cmds() {
   local ini=$1
@@ -20,7 +22,9 @@ run_cmds() {
 echo "Running gating-check-regression tests..."
 
 TMP_INI=$(mktemp)
-trap 'rm -f "${TMP_INI}"' EXIT
+TMP_CPP=""
+TMP_BIN=""
+trap 'rm -f "${TMP_INI}" "${TMP_CPP}" "${TMP_BIN}"' EXIT
 
 # --- TEST 1: Gated piece blocking discovered check ---
 cat > "${TMP_INI}" <<'EOF'
@@ -74,5 +78,26 @@ if [ "$NODES" -ne 9 ]; then
     echo "FAILED: Expected 9 nodes for symmetric gating, found $NODES"
     exit 1
 fi
+
+# --- TEST 4: Encoded gate/pull squares must preserve the last board square ---
+TMP_CPP=$(mktemp /tmp/gating-check-XXXXXX.cpp)
+TMP_BIN=$(mktemp /tmp/gating-check-XXXXXX)
+cat > "${TMP_CPP}" <<'EOF'
+#include <cassert>
+#include "types.h"
+
+using namespace Stockfish;
+
+int main() {
+    assert(gating_square(make_gating<NORMAL>(SQ_A1, SQ_A2, NO_PIECE_TYPE, SQ_H8)) == SQ_H8);
+    assert(gating_square(make_gating<CASTLING>(SQ_E1, SQ_G1, ROOK, SQ_H8)) == SQ_H8);
+    assert(pull_square(make_pull(SQ_A1, SQ_A2, SQ_H8)) == SQ_H8);
+    assert(is_gating(make_gating<NORMAL>(SQ_A1, SQ_A2, NO_PIECE_TYPE, SQ_H8)));
+    return 0;
+}
+EOF
+rm -f "${TMP_BIN}"
+"${CXX}" -std=c++17 -O2 -Wall -Wextra -I"${ROOT_DIR}/src" "${TMP_CPP}" -o "${TMP_BIN}"
+"${TMP_BIN}"
 
 echo "gating-check-regression testing OK"

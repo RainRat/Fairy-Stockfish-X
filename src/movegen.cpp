@@ -214,7 +214,10 @@ namespace {
                     continue;
                 if (to > to2)
                     continue;
-                *moveList++ = make_drop_pair(to, to2, pt, pt);
+                Move m = make_drop_pair(to, to2, pt, pt);
+                if (Type == QUIET_CHECKS && !pos.gives_check(m))
+                    continue;
+                *moveList++ = m;
             }
             return moveList;
         }
@@ -1133,17 +1136,22 @@ namespace {
                 {
                     Square from = pop_lsb(froms);
                     Bitboard pullSources = pos.pull_sources_from(Us, from);
-                    while (pullSources)
+                while (pullSources)
+                {
+                    Square pullFrom = pop_lsb(pullSources);
+                    Bitboard b = pos.pull_targets_from(Us, from, pullFrom);
+                    if (Type == QUIET_CHECKS)
+                        b &= target;
+                    while (b)
                     {
-                        Square pullFrom = pop_lsb(pullSources);
-                        Bitboard b = pos.pull_targets_from(Us, from, pullFrom);
-                        if (Type == QUIET_CHECKS)
-                            b &= target;
-                        while (b)
-                            *moveList++ = make_pull(from, pop_lsb(b), pullFrom);
+                        Move m = make_pull(from, pop_lsb(b), pullFrom);
+                        if (Type == QUIET_CHECKS && !pos.gives_check(m))
+                            continue;
+                        *moveList++ = m;
                     }
                 }
             }
+        }
         }
 
         if (!restrictToForcedJumper && pos.has_adjacent_swapping()
@@ -1160,7 +1168,12 @@ namespace {
                     if (Type == QUIET_CHECKS)
                         b &= target;
                     while (b)
-                        *moveList++ = make<SWAP>(from, pop_lsb(b));
+                    {
+                        Move m = make<SWAP>(from, pop_lsb(b));
+                        if (Type == QUIET_CHECKS && !pos.gives_check(m))
+                            continue;
+                        *moveList++ = m;
+                    }
                 }
             }
         }

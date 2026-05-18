@@ -1187,7 +1187,8 @@ inline PieceType gating_type(Move m) {
 
 inline Square gating_square(Move m) {
   const uint64_t raw = static_cast<uint64_t>(m);
-  const uint64_t gate = (raw >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & SQUARE_BIT_MASK;
+  constexpr uint64_t SquareFieldMask = (uint64_t(SQUARE_BIT_MASK) << 1) | 1;
+  const uint64_t gate = (raw >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & SquareFieldMask;
   if (gate)
       return Square(gate - 1);
   if (type_of(m) == CASTLING && gating_type(m) != NO_PIECE_TYPE)
@@ -1201,7 +1202,8 @@ inline Square pull_square(Move m) {
   if (type_of(m) != PULL)
       return SQ_NONE;
   const uint64_t raw = static_cast<uint64_t>(m);
-  const uint64_t sq = (raw >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & SQUARE_BIT_MASK;
+  constexpr uint64_t SquareFieldMask = (uint64_t(SQUARE_BIT_MASK) << 1) | 1;
+  const uint64_t sq = (raw >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & SquareFieldMask;
   return sq ? Square(sq - 1) : SQ_NONE;
 }
 
@@ -1211,11 +1213,12 @@ inline Square swap_square(Move m) {
 
 inline bool is_gating(Move m) {
   const MoveType mt = type_of(m);
+  constexpr uint64_t SquareFieldMask = (uint64_t(SQUARE_BIT_MASK) << 1) | 1;
   if (mt == SPECIAL)
-      return ((m >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & SQUARE_BIT_MASK) != 0;
+      return ((m >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & SquareFieldMask) != 0;
   return (mt == NORMAL || mt == CASTLING)
       && (gating_type(m) != NO_PIECE_TYPE
-          || ((m >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & SQUARE_BIT_MASK));
+          || ((m >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & SquareFieldMask));
 }
 
 inline bool is_drop_move(Move m) {

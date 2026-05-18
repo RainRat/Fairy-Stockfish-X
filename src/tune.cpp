@@ -18,8 +18,6 @@
 
 #include <algorithm>
 #include <iostream>
-#include <sstream>
-
 #include "types.h"
 #include "misc.h"
 #include "uci.h"
@@ -35,6 +33,17 @@ static std::map<std::string, int> TuneResults;
 string Tune::next(string& names, bool pop) {
 
   string name;
+  auto trim_in_place = [](string& text) {
+      const size_t first = text.find_first_not_of(" \t\n\r\f\v");
+      if (first == string::npos)
+      {
+          text.clear();
+          return;
+      }
+
+      const size_t last = text.find_last_not_of(" \t\n\r\f\v");
+      text = text.substr(first, last - first + 1);
+  };
 
   do {
       size_t comma = names.find(',');
@@ -43,8 +52,8 @@ string Tune::next(string& names, bool pop) {
       if (pop)
           names.erase(0, comma == string::npos ? names.size() : comma + 1);
 
-      std::stringstream ws(token);
-      name += (ws >> token, token); // Remove trailing whitespace
+      trim_in_place(token);
+      name += token;
 
   } while (  std::count(name.begin(), name.end(), '(')
            - std::count(name.begin(), name.end(), ')'));
