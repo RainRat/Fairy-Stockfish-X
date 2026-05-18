@@ -474,27 +474,33 @@ echo "$out" | grep -q "^a1e1: 1$"
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value cylinder-anypath\nposition fen k7/8/8/8/8/8/8/A3K3 w - - 0 1\ngo perft 1\nquit\n' "$tmp_ini" \
   | "${ENGINE}")
 echo "$out" | grep -q "^a1h3: 1$"
+echo "$out" | grep -q "^a1g2: 1$"
 # a2 blocked
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value cylinder-anypath\nposition fen k7/8/8/8/8/8/P7/A3K3 w - - 0 1\ngo perft 1\nquit\n' "$tmp_ini" \
   | "${ENGINE}")
 echo "$out" | grep -q "^a1h3: 1$"
+echo "$out" | grep -q "^a1g2: 1$"
 # h2 blocked
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value cylinder-anypath\nposition fen k7/8/8/8/8/8/7P/A3K3 w - - 0 1\ngo perft 1\nquit\n' "$tmp_ini" \
   | "${ENGINE}")
 echo "$out" | grep -q "^a1h3: 1$"
+echo "$out" | grep -q "^a1g2: 1$"
 # a2 and h2 both blocked
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value cylinder-anypath\nposition fen k7/8/8/8/8/8/P6P/A3K3 w - - 0 1\ngo perft 1\nquit\n' "$tmp_ini" \
   | "${ENGINE}")
 ! echo "$out" | grep -q "^a1h3:"
+! echo "$out" | grep -q "^a1g2:"
 
 # Wrapped-board custom lame profile: ORTH_FIRST
 # clear board
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value cylinder-orthfirst\nposition fen k7/8/8/8/8/8/8/A3K3 w - - 0 1\ngo perft 1\nquit\n' "$tmp_ini" \
   | "${ENGINE}")
 echo "$out" | grep -q "^a1h3: 1$"
+echo "$out" | grep -q "^a1g2: 1$"
 # a2 blocked (this leg blocks the ORTH_FIRST wrapped h3 jump)
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value cylinder-orthfirst\nposition fen k7/8/8/8/8/8/P7/A3K3 w - - 0 1\ngo perft 1\nquit\n' "$tmp_ini" \
   | "${ENGINE}")
 ! echo "$out" | grep -q "^a1h3:"
+echo "$out" | grep -q "^a1g2: 1$"
 
 echo "alfil-dabbaba-riders test OK"
