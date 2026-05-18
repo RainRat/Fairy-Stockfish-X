@@ -43,6 +43,13 @@ customPiece1 = a:iW
 pieceToCharTable = A:a
 startFen = 8/8/8/8/8/8/8/4A3 w - - 0 1
 tripleStepRegionWhite = A(e1)
+
+[ipawnlike-piece-specific:chess]
+customPiece1 = a:iW
+pieceToCharTable = A:a
+pawnLikeTypes = a
+startFen = 4k3/8/8/8/8/8/8/4A2K w - - 0 1
+doubleStepRegionWhite = A(e1); *(*2)
 INI
 
 run_perft() {
@@ -72,6 +79,11 @@ out=$(run_perft "itriple-piece-specific")
 echo "${out}" | grep -q "^e1e2: 1$"
 echo "${out}" | grep -q "^e1e3: 1$"
 echo "${out}" | grep -q "^e1e4: 1$"
+
+out=$(run_perft "ipawnlike-piece-specific")
+echo "${out}" | grep -q "^e1e2: 1$"
+echo "${out}" | grep -q "^e1e3: 1$"
+! echo "${out}" | grep -q "^e1e4: 1$"
 
 rm -f "${TMP_VARIANT_PATH}"
 unset TMP_VARIANT_PATH

@@ -3913,7 +3913,9 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
     const bool usesGenericPawnLikeStepHelper =
            (pt == PAWN || (pawn_like_types(c) & piece_set(pt)))
         && !pi->has_explicit_initial_moves()
-        && !pawnLikeHasCustomNonStepQuietMovement;
+        && !pawnLikeHasCustomNonStepQuietMovement
+        && !explicitTripleStepRegion
+        && !explicitDoubleStepRegion;
     if (explicitTripleStepRegion & piecePosition & this->not_moved_pieces(c))  //If the original square is in explicit tripleStepRegion and the piece is not moved
     {
         Bitboard extraMultipleStepMoveDestinations = 0x00;  //Bitboard where extra legal multi-step destination square bits are 1
@@ -3975,7 +3977,8 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
 
   const bool usesGenericPawnLikeInitialMoveHelper =
          (pt == PAWN || (pawn_like_types(c) & piece_set(pt)))
-      ;
+      && !explicitTripleStepRegion
+      && !explicitDoubleStepRegion;
   const Bitboard initialMoveRegion = usesGenericPawnLikeInitialMoveHelper
                                    ? double_step_region(c)
                                    : var->doubleStepRegion.get(c).explicitBoardOfPiece(piece_to_char()[pt]);
