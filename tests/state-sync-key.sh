@@ -317,4 +317,12 @@ assert_reload_perft1_match "" "spell-chess" "position startpos moves f@a6,e2e4 j
 assert_reload_perft1_moves_match "" "spell-chess" "position startpos moves f@a6,e2e4 j@a7,a8a2"
 assert_reload_eval_match "" "spell-chess" "position startpos moves f@a6,e2e4 j@a7,a8a2"
 
+# 7) Surround-claim extra-turn positions must round-trip through FEN reload.
+# This sequence completes the b2 claim square in dots-boxes-2x2 and grants the
+# claimer an extra turn via the forced-pass model.
+assert_reload_key_match "${DEFAULT_VARIANT_PATH}" "dots-boxes-2x2" \
+  "position startpos moves 0000,b1 0000,a2 0000,c2 0000,b3"
+assert_reload_perft1_match "${DEFAULT_VARIANT_PATH}" "dots-boxes-2x2" \
+  "position startpos moves 0000,b1 0000,a2 0000,c2 0000,b3"
+
 echo "state-sync key tests OK"
