@@ -4026,6 +4026,8 @@ bool Position::legal(Move m) const {
           return false;
   }
 
+  Bitboard occupiedAfterEffects = postMoveOccupied & ~removedByEffects;
+
   // Gated kings and pseudo-royals must not be introduced onto attacked squares.
   // If the move captures an attacker on its way, ignore that disappearing attack.
   if (is_gating(m) && gating_type(m) != NO_PIECE_TYPE)
@@ -4034,11 +4036,11 @@ bool Position::legal(Move m) const {
       if (gateType == KING || (pseudo_royal_types() & piece_set(gateType)))
       {
           Square gate = gating_square(m);
-          Bitboard occ = postMoveOccupied | gate;
+          Bitboard occ = occupiedAfterEffects | gate;
 
           Bitboard attackers = gateType == KING ? attackers_to_king(gate, occ, ~us)
                                                 : attackers_to(gate, occ, ~us);
-          attackers &= ~removedAttackers;
+          attackers &= ~(removedAttackers | removedByEffects);
 
           if (attackers)
               return false;
@@ -4053,13 +4055,13 @@ bool Position::legal(Move m) const {
   {
       Square generalSquare = st->bikjang && count<KING>(us) == 1 ? square<KING>(us) : royalSquare;
       Square s = from == generalSquare ? (rifleShot ? from : to) : generalSquare;
-      if (attacks_bb(~us, ROOK, s, postMoveOccupied) & pieces(~us, KING) & ~square_bb(to))
+      if (attacks_bb(~us, ROOK, s, occupiedAfterEffects) & pieces(~us, KING) & ~square_bb(to))
           return false;
   }
   if (var->diagonalGeneral && hasRoyal)
   {
       Square s = moverIsRoyal ? (rifleShot ? from : to) : royalSquare;
-      if (attacks_bb(~us, BISHOP, s, postMoveOccupied) & pieces(~us, KING) & ~square_bb(to))
+      if (attacks_bb(~us, BISHOP, s, occupiedAfterEffects) & pieces(~us, KING) & ~square_bb(to))
           return false;
   }
 
@@ -4074,7 +4076,7 @@ bool Position::legal(Move m) const {
       {
           Square s = pop_lsb(traversed);
           Bitboard pathOccupied = (pieces() ^ from) | s;
-          if (attackers_to_king(s, pathOccupied, ~us) & ~removedAttackers)
+          if (attackers_to_king(s, pathOccupied, ~us) & ~(removedAttackers | removedByEffects))
               return false;
       }
   }
@@ -4090,7 +4092,7 @@ bool Position::legal(Move m) const {
   // If the moving piece is a king, check whether the destination square is
   // attacked by the opponent.
   if (!allow_checks() && moverIsRoyal)
-      return !(attackers_to_king(rifleShot ? from : to, postMoveOccupied, ~us) & ~removedAttackers)
+      return !(attackers_to_king(rifleShot ? from : to, occupiedAfterEffects, ~us) & ~(removedAttackers | removedByEffects))
           && !violates_same_player_board_repetition(m);
 
   // Return early when without king
@@ -4098,9 +4100,9 @@ bool Position::legal(Move m) const {
       return !violates_same_player_board_repetition(m);
 
   // A non-king move is legal if the king is not under attack after the move.
-  return (allow_checks() || !(attackers_to_king(royalSquare, postMoveOccupied, ~us, janggiCannons)
+  return (allow_checks() || !(attackers_to_king(royalSquare, occupiedAfterEffects, ~us, janggiCannons)
                               & postMoveOccupied
-                              & ~removedAttackers
+                              & ~(removedAttackers | removedByEffects)
                               & ~(rifleShot ? Bitboard(0) : SquareBB[to])))
       && !violates_same_player_board_repetition(m);
 }
@@ -4557,7 +4559,8 @@ bool Position::pseudo_legal(const Move m) const {
           while (remaining)
               evasionTargets &= checker_targets(pop_lsb(remaining));
 
-          if (!(evasionTargets & to))
+          const bool blastEvasion = blast_on_capture() || blast_on_move() || blast_on_self_destruct();
+          if (!blastEvasion && !(evasionTargets & to))
               return false;
           }
       }

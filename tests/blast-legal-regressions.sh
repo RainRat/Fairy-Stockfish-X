@@ -163,4 +163,24 @@ echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/3r4/4Q2K b - - 0 1"
 rm -f "${TMP5}"
 unset TMP5
 
+TMP6=$(mktemp /tmp/fsx-blastcheck-XXXXXX.ini)
+cat >"${TMP6}" <<'INI'
+[blastcheck:chess]
+checking = false
+blastOnCapture = true
+blastCenter = true
+blastDiagonals = false
+# Black king is off the queen's attack line so the evasion only tests the blast.
+startFen = 3pr3/8/8/8/8/8/3Q4/k3K3 w - - 0 1
+INI
+
+# Capturing the d8 pawn detonates the checking rook on e8, so the move must
+# remain legal even though it is not a direct capture of the checker.
+out=$(run_cmds "${TMP6}" "blastcheck" "position startpos
+go perft 1")
+echo "${out}" | grep -q "^d2d8: 1$"
+
+rm -f "${TMP6}"
+unset TMP6
+
 echo "blast legal regressions passed"

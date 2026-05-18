@@ -1010,12 +1010,16 @@ namespace {
                 }
                 else
                     target = checker_targets(lsb(checkers));
+
             }
 
             // Remove inaccessible squares (outside board + wall squares)
             target &= pos.board_bb();
 
-            captureTarget = target;
+            if (Type == EVASIONS && (pos.blast_on_capture() || pos.blast_on_self_destruct()))
+                captureTarget = ~pos.pieces(Us);
+            else
+                captureTarget = target;
         }
 
             if (restrictToForcedJumper)
