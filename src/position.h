@@ -295,8 +295,6 @@ public:
   bool blast_diagonals() const;
   bool blast_orthogonals() const;
   bool blast_center() const;
-  bool zero_range_blast_on_capture(Piece mover, Piece captured) const;
-  bool zero_range_blast_on_capture(Move m) const;
   PieceSet blast_immune_types() const;
   PieceSet death_on_capture_types() const;
   Bitboard blast_immune_bb() const;
@@ -1096,15 +1094,6 @@ inline bool Position::blast_center() const {
 inline bool Position::blast_on_capture_mover_center() const {
   assert(var != nullptr);
   return var->blastOnCaptureMoverCenter;
-}
-
-inline bool Position::zero_range_blast_on_capture(Move m) const {
-  return zero_range_blast_on_capture(moved_piece(m), captured_piece(m));
-}
-
-inline bool Position::zero_range_blast_on_capture(Piece mover, Piece captured) const {
-  assert(var != nullptr);
-  return blast_on_capture(mover, captured) && blast_center() && !blast_orthogonals() && !blast_diagonals();
 }
 
 inline PieceSet Position::blast_immune_types() const {

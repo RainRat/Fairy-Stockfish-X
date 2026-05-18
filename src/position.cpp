@@ -3478,7 +3478,8 @@ bool Position::legal(Move m) const {
       {
           if ((capture(m) || rifleShot) && blast_on_capture(m))
           {
-              moverRemovedByBlast = zero_range_blast_on_capture(m)
+              moverRemovedByBlast = (blast_on_capture(moved_piece(m), captured_piece(m))
+                                     && blast_center() && !blast_orthogonals() && !blast_diagonals())
                                  || (blast_center() && effectiveTo == captureBlastCenter);
           }
           else if ((blast_on_move() && !capture(m) && !is_self_destruct(m))
@@ -3559,7 +3560,7 @@ bool Position::legal(Move m) const {
               removedByEffects |= square_bb(blastCenter) & blastRelevant;
           if (blast_on_capture(m) && (blast_immune_types() & movePt))
               removedByEffects &= ~square_bb(effectiveTo);
-          else if (zero_range_blast_on_capture(m))
+          else if (blast_on_capture(moved_piece(m), captured_piece(m)) && blast_center() && !blast_orthogonals() && !blast_diagonals())
               removedByEffects |= square_bb(effectiveTo);
       }
 
