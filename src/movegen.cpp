@@ -1146,22 +1146,44 @@ namespace {
                 {
                     Square from = pop_lsb(froms);
                     Bitboard pullSources = pos.pull_sources_from(Us, from);
-                while (pullSources)
-                {
-                    Square pullFrom = pop_lsb(pullSources);
-                    Bitboard b = pos.pull_targets_from(Us, from, pullFrom);
-                    if (Type == QUIET_CHECKS)
-                        b &= target;
-                    while (b)
+                    while (pullSources)
                     {
-                        Move m = make_pull(from, pop_lsb(b), pullFrom);
-                        if (Type == QUIET_CHECKS && !pos.gives_check(m))
-                            continue;
-                        *moveList++ = m;
+                        Square pullFrom = pop_lsb(pullSources);
+                        Bitboard b = pos.pull_targets_from(Us, from, pullFrom);
+                        if (Type == EVASIONS)
+                        {
+                            Bitboard mask = target;
+                            if (target & from)
+                                mask = AllSquares;
+                            if (!more_than_one(checkers) && (checkers & pullFrom))
+                                mask = AllSquares;
+                            b &= mask;
+                            if (b && more_than_one(checkers))
+                            {
+                                Bitboard b2 = b;
+                                b = 0;
+                                while (b2)
+                                {
+                                    Square to = pop_lsb(b2);
+                                    Move m = make_pull(from, to, pullFrom);
+                                    if (pos.legal(m))
+                                        b |= to;
+                                }
+                            }
+                        }
+                        else if (Type == QUIET_CHECKS)
+                            b &= target;
+
+                        while (b)
+                        {
+                            Move m = make_pull(from, pop_lsb(b), pullFrom);
+                            if (Type == QUIET_CHECKS && !pos.gives_check(m))
+                                continue;
+                            *moveList++ = m;
+                        }
                     }
                 }
             }
-        }
         }
 
         if (!restrictToForcedJumper && pos.has_adjacent_swapping()

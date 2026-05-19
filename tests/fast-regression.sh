@@ -12,7 +12,7 @@ run_step() {
   local label="$1"
   shift
   echo "== ${label} =="
-  /usr/bin/time -f "elapsed %es" "$@"
+  "$@"
 }
 
 cd "${ROOT_DIR}"

@@ -1,0 +1,8 @@
+uci
+setoption name VariantPath value src/variants.ini
+isready
+setoption name UCI_Variant value pull-chess
+isready
+position fen rnbqkbnr/pppp1ppp/8/8/3Qp3/8/PPPP1PPP/RNBK1BNR b KQkq - 1 1
+d
+quit
