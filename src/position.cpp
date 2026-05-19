@@ -6145,7 +6145,7 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
 
           st->gatesBB[us] ^= gate;
           k ^= Zobrist::psq[gating_piece][gate];
-          st->materialKey ^= Zobrist::psq[gating_piece][pieceCount[gating_piece]];
+          st->materialKey ^= Zobrist::psq[gating_piece][pieceCount[gating_piece] - 1];
           st->nonPawnMaterial[us] += PieceValue[MG][gating_piece];
 
           if (paired_drop(m))
@@ -6164,7 +6164,7 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
               }
 
               k ^= Zobrist::psq[gating_piece][gate2];
-              st->materialKey ^= Zobrist::psq[gating_piece][pieceCount[gating_piece]];
+              st->materialKey ^= Zobrist::psq[gating_piece][pieceCount[gating_piece] - 1];
               st->nonPawnMaterial[us] += PieceValue[MG][gating_piece];
           }
       }
@@ -6943,6 +6943,15 @@ void Position::undo_move(Move m) {
           if (gating_from_hand())
               add_to_hand(gating_piece);
           st->gatesBB[us] |= gating_square(m);
+
+          if (paired_drop(m))
+          {
+              Square gate2 = secondary_drop_square(m);
+              remove_piece(gate2);
+              board[gate2] = NO_PIECE;
+              if (gating_from_hand())
+                  add_to_hand(gating_piece);
+          }
       }
   }
 

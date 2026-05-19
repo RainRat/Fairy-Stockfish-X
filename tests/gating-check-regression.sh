@@ -24,7 +24,9 @@ echo "Running gating-check-regression tests..."
 TMP_INI=$(mktemp)
 TMP_CPP=""
 TMP_BIN=""
-trap 'rm -f "${TMP_INI}" "${TMP_CPP}" "${TMP_BIN}"' EXIT
+HARNESS_CPP=""
+HARNESS_BIN=""
+trap 'rm -f "${TMP_INI}" "${TMP_CPP}" "${TMP_BIN}" "${HARNESS_CPP}" "${HARNESS_BIN}"' EXIT
 
 # --- TEST 1: Gated piece blocking discovered check ---
 cat > "${TMP_INI}" <<'EOF'
@@ -99,5 +101,77 @@ EOF
 rm -f "${TMP_BIN}"
 "${CXX}" -std=c++17 -O2 -Wall -Wextra -I"${ROOT_DIR}/src" "${TMP_CPP}" -o "${TMP_BIN}"
 "${TMP_BIN}"
+
+# --- TEST 5: Paired gating must undo cleanly and preserve the material key ---
+HARNESS_CPP=$(mktemp /tmp/gating-check-roundtrip-XXXXXX.cpp)
+HARNESS_BIN=$(mktemp /tmp/gating-check-roundtrip-XXXXXX)
+cat > "${HARNESS_CPP}" <<'EOF'
+#include <cassert>
+#include <sstream>
+
+#include "bitboard.h"
+#include "endgame.h"
+#include "piece.h"
+#include "position.h"
+#include "psqt.h"
+#include "variant.h"
+
+using namespace Stockfish;
+
+static void load_variants() {
+    std::istringstream ss(R"ini(
+[symgating:chess]
+gating = true
+seirawanGating = true
+symmetricDropTypes = r
+)ini");
+    variants.parse_istream<false>(ss);
+}
+
+static void init_engine() {
+    pieceMap.init();
+    variants.init();
+    PSQT::init(variants.get("fairy"));
+    Bitboards::init();
+    Position::init();
+    Bitbases::init();
+    Endgames::init();
+    load_variants();
+}
+
+int main() {
+    init_engine();
+
+    StateInfo st{};
+    Position pos;
+    pos.set(variants.get("symgating"), "4k3/8/8/8/8/8/8/4K3[RR] w ABCDEFGH - 0 1", false, &st, nullptr);
+
+    const Move m = make_gating<NORMAL>(SQ_E1, SQ_E2, ROOK, SQ_D1);
+    assert(pos.legal(m));
+
+    StateInfo next{};
+    pos.do_move(m, next);
+    assert(pos.pos_is_ok());
+
+    pos.undo_move(m);
+    assert(pos.pos_is_ok());
+    return 0;
+}
+EOF
+
+OBJ_FILES=()
+while IFS= read -r -d '' obj; do
+  OBJ_FILES+=("${obj}")
+done < <(find "${ROOT_DIR}/src" -maxdepth 1 -name '*.o' ! -name 'main.o' -print0 | sort -z)
+
+(
+  cd "${ROOT_DIR}/src"
+  "${CXX}" -std=c++17 -O2 -Wall -Wextra -I"${ROOT_DIR}/src" "${HARNESS_CPP}" "${OBJ_FILES[@]}" -pthread -o "${HARNESS_BIN}"
+  "${HARNESS_BIN}"
+)
+
+rm -f "${HARNESS_CPP}" "${HARNESS_BIN}"
+HARNESS_CPP=""
+HARNESS_BIN=""
 
 echo "gating-check-regression testing OK"
