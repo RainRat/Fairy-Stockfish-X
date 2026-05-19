@@ -2746,7 +2746,7 @@ bool Position::compute_forced_jump_followup(Square s, int step) const {
 
   PieceType movePt = type_of(mover) == KING ? king_type() : type_of(mover);
   const PieceInfo* pi = pieceMap.get(movePt);
-  if (!(pi->has_universal_hopper()))
+  if (!(pi->has_universal_capture_hopper()))
       return false;
 
   Color c = color_of(mover);

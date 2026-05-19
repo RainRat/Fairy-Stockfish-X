@@ -152,6 +152,12 @@ struct PieceInfo {
           return true;
     return false;
   }
+  inline bool has_universal_capture_hopper() const {
+    for (int initial = 0; initial < 2; ++initial)
+      if (!universalHopper[initial][MODALITY_CAPTURE].empty())
+        return true;
+    return false;
+  }
   inline bool has_lame_leaper() const {
     for (int initial = 0; initial < 2; ++initial)
       for (int modality = 0; modality < MOVE_MODALITY_NB; ++modality)
