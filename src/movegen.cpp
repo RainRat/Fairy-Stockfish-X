@@ -1291,12 +1291,14 @@ namespace {
         {
             while (candidates)
             {
+                assert(cur < maxEnd);
                 if (cur >= maxEnd)
                     return maxEnd;
 
                 Square gate = pop_lsb(candidates);
                 for (ExtMove* it = buffer.begin; it != buffer.end; ++it)
                 {
+                    assert(cur < maxEnd);
                     if (cur >= maxEnd)
                         return maxEnd;
 
@@ -1340,6 +1342,7 @@ namespace {
             for (ExtMove* it = jumpMoves; it != jumpEnd; ++it)
 #endif
             {
+                assert(cur < maxEnd);
                 if (cur >= maxEnd)
                     return maxEnd;
 
