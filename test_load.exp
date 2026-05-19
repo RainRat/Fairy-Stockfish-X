@@ -1,0 +1,16 @@
+#!/usr/bin/expect -f
+
+set engine "./src/stockfish"
+set tmp_ini "/tmp/fsx-wall-V4AZfD.ini"
+
+spawn $engine
+expect "Stockfish"
+send "uci\r"
+expect "uciok"
+send "setoption name VariantPath value $tmp_ini\r"
+send "isready\r"
+expect "readyok"
+send "setoption name UCI_Variant value walling-gating-test\r"
+send "isready\r"
+expect "readyok"
+send "quit\r"
