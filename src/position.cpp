@@ -4395,35 +4395,6 @@ bool Position::pseudo_legal(const Move m) const {
           && !violates_same_player_board_repetition(m);
   }
 
-  //if walling, and walling is not optional, or they didn't move, do the checks.
-  if (walling(us) && is_gating(m) && (!wall_or_move() || (from == to)))
-  {
-      Bitboard wallsquares = st->wallSquares;
-      Square capSq = capture(m) ? capture_square(m) : SQ_NONE;
-      Bitboard occupancyAfter = pieces();
-      if (from != effectiveTo) occupancyAfter ^= square_bb(from) ^ square_bb(effectiveTo);
-      if (capSq != SQ_NONE) occupancyAfter ^= square_bb(capSq);
-
-      // Illegal wall square placement
-      if (!((board_bb() & ~occupancyAfter) & gating_square(m)))
-          return false;
-      if (!(walling_region(us) & gating_square(m)) || //putting a wall on disallowed square
-          wallsquares & gating_square(m)) //or square already with a wall
-          return false;
-      if (walling_rule() == ARROW && !(moves_bb(us, type_of(pc), effectiveTo, occupancyAfter ^ square_bb(effectiveTo)) & gating_square(m)))
-          return false;
-      if (walling_rule() == PAST && (from != gating_square(m)))
-          return false;
-      if (walling_rule() == EDGE)
-      {
-          Bitboard validsquares = board_bb() &
-                  ((FileABB | file_bb(max_file()) | Rank1BB | rank_bb(max_rank())) |
-                  ( shift<NORTH     >(wallsquares) | shift<SOUTH     >(wallsquares)
-                  | shift<EAST      >(wallsquares) | shift<WEST      >(wallsquares)));
-          if (!(validsquares & gating_square(m))) return false;
-      };
-  }
-
   // Handle the case where a mandatory piece promotion/demotion is not taken
   if (    mandatory_piece_promotion()
       && (is_promoted(from) ? piece_demotion() : promoted_piece_type(type_of(pc)) != NO_PIECE_TYPE)
