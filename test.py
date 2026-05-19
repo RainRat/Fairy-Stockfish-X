@@ -2073,33 +2073,8 @@ startFen = 4r3/8/8/8/8/8/8/8[A] w - - 0 1
         self.assertEqual(fen_mover, "8/8/3n4/8/8/8/8/8 b - - 0 1")
 
     def test_potion_overflow(self):
-        ini_text = """
-[potion_overflow_test]
-fairy = chess
-potions = true
-freezePotion = p
-potionDropOnOccupied = true
-pieceDrops = true
-customPiece1 = a:QN
-customPiece2 = c:K
-customPiece3 = e:B
-customPiece4 = h:R
-customPiece5 = i:N
-customPiece6 = m:Q
-"""
-        sf.load_variant_config(ini_text)
-
-        # We need a FEN that generates > 65536 moves.
-        # Max moves on 8x8 is roughly ~220 from board.
-        # Drop moves: 11 piece types * 64 squares = 704 drop moves.
-        # Total base moves = 704 + 220 = 924.
-        # 924 * 64 potion drop squares = 59136 moves. Still < 65536 (if limit is 65536).
-        # To get more, we can add more custom pieces or just make a FEN with more pieces.
-        # 25 piece types in hand * 64 squares = 1600 drop moves.
-        # 1600 * 64 = 102400 potion moves. This will definitively overflow 65536.
         ini_text_expanded = """
-[potion_overflow_test_expanded]
-fairy = chess
+[potion_overflow_test_expanded:chess]
 potions = true
 freezePotion = p
 potionDropOnOccupied = true
@@ -2129,14 +2104,22 @@ customPiece14 = g:Q
 
         # In release mode, this will execute the fallback and truncate the move list, returning <= 65536 moves.
         # In debug mode, this would hit the assert.
+        # We need pyffish to load the variant.
+        # To make sure base fairy templates work, load all repo variants if available.
+        path = load_repo_variants_or_skip()
+        sf.load_variant_config(path.read_text() + "\n" + ini_text_expanded)
+
+        # We test that the move generator stays within the verified capacity bounds
+        # (<= 65536 moves for ALLVARS build) and does not crash or silently corrupt memory.
         try:
             moves = sf.legal_moves("potion_overflow_test_expanded", fen, [])
-            self.assertLessEqual(len(moves), 65536)
-        except Exception:
-            # If pyffish is built in debug mode, the assert might crash the process.
-            # In unittest, this would fail the suite, which correctly catches the regression.
-            # But normally we just want to ensure it either truncates correctly or crashes on assert.
-            pass
+            self.assertLessEqual(len(moves), 65536, "Move count must stay within the engine's MOVEGEN_OVERFLOW_CAPACITY bound.")
+        except AssertionError as e:
+            raise e
+        except Exception as e:
+            # If pyffish is built in debug mode, the assert(cur < maxEnd) might crash the
+            # Python process entirely. If it throws a catchable exception, we fail the test.
+            self.fail(f"Engine crashed or threw unexpected exception during extreme potion move generation: {e}")
 
     def test_evaluate(self):
         eval_start = sf.evaluate("chess", CHESS, [])
