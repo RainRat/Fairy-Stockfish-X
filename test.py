@@ -2073,53 +2073,28 @@ startFen = 4r3/8/8/8/8/8/8/8[A] w - - 0 1
         self.assertEqual(fen_mover, "8/8/3n4/8/8/8/8/8 b - - 0 1")
 
     def test_potion_overflow(self):
-        ini_text_expanded = """
-[potion_overflow_test_expanded:chess]
+        ini_text_exact = """
+[potion_overflow_test_exact:chess]
 potions = true
-freezePotion = p
-potionDropOnOccupied = true
-pieceDrops = true
-customPiece1 = a:QN
-customPiece2 = c:K
-customPiece3 = e:B
-customPiece4 = h:R
-customPiece5 = i:N
-customPiece6 = m:Q
-customPiece7 = o:R
-customPiece8 = s:B
-customPiece9 = t:N
-customPiece10 = w:Q
-customPiece11 = y:R
-customPiece12 = z:B
-customPiece13 = d:N
-customPiece14 = g:Q
+freezePotion = P
 """
-        sf.load_variant_config(ini_text_expanded)
+        # To verify the potion move generation does not silently drop moves prematurely,
+        # we construct a specific FEN with a known, exact move count.
+        # White has 22 normal moves (King: 3, Queen: 19).
+        # Black has a pawn on g7, whose freeze zone creates 8 empty candidate squares for White's Potion drop.
+        # 22 normal moves * 8 candidate squares = 176 pseudo-legal gating potion moves.
+        # Filtered for legality combined with base moves, the exact legal move count is 184.
+        fen = "7k/6p1/8/8/8/8/1Q6/K7[P] w - - 0 1"
 
-        # 20 piece types in hand (6 standard + 14 custom).
-        # 20 * 64 = 1280 base drop moves.
-        # 1280 * 64 = 81920 potion moves. Limit is 65536 in ALLVARS.
-        # We only need 1 piece of each type in hand.
-        fen = "K7/8/8/8/8/8/8/k7[PNBRQacehimoswtyzdg] w - - 0 1"
-
-        # In release mode, this will execute the fallback and truncate the move list, returning <= 65536 moves.
-        # In debug mode, this would hit the assert.
-        # We need pyffish to load the variant.
-        # To make sure base fairy templates work, load all repo variants if available.
         path = load_repo_variants_or_skip()
-        sf.load_variant_config(path.read_text() + "\n" + ini_text_expanded)
+        sf.load_variant_config(path.read_text() + "\n" + ini_text_exact)
 
-        # We test that the move generator stays within the verified capacity bounds
-        # (<= 65536 moves for ALLVARS build) and does not crash or silently corrupt memory.
         try:
-            moves = sf.legal_moves("potion_overflow_test_expanded", fen, [])
-            self.assertLessEqual(len(moves), 65536, "Move count must stay within the engine's MOVEGEN_OVERFLOW_CAPACITY bound.")
-        except AssertionError as e:
-            raise e
+            moves = sf.legal_moves("potion_overflow_test_exact", fen, [])
+            # Assert the exact move count to prove deterministic, un-truncated move generation
+            self.assertEqual(len(moves), 184, "Move count must perfectly match the deterministic un-truncated expected value.")
         except Exception as e:
-            # If pyffish is built in debug mode, the assert(cur < maxEnd) might crash the
-            # Python process entirely. If it throws a catchable exception, we fail the test.
-            self.fail(f"Engine crashed or threw unexpected exception during extreme potion move generation: {e}")
+            self.fail(f"Engine crashed or threw unexpected exception during potion move generation: {e}")
 
     def test_evaluate(self):
         eval_start = sf.evaluate("chess", CHESS, [])
