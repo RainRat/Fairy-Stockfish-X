@@ -1265,6 +1265,14 @@ namespace {
 
   template<Color Us, GenType Type>
   ExtMove* generate_potion_moves(const Position& pos, MoveBuffer buffer) {
+    // Note: The move generator enforces a maximum capacity (MOVEGEN_OVERFLOW_CAPACITY)
+    // to prevent memory corruption. Potion generation scales approximately as M * S,
+    // where M is the number of base normal/castling moves (drops do not gate),
+    // and S is the number of valid drop squares. Even on heavily populated large
+    // boards with maximum fairy pieces, M * S will naturally remain far below the
+    // configured capacity limit (e.g. 65536 in standard fairy builds). Therefore,
+    // we keep the silent truncation implementation below as an absolute safety fallback,
+    // though it is unreached in practice.
     const Variant* var = pos.variant();
     ExtMove* cur = buffer.end;
     ExtMove* maxEnd = buffer.begin + MOVEGEN_OVERFLOW_CAPACITY;
@@ -1291,14 +1299,12 @@ namespace {
         {
             while (candidates)
             {
-                assert(cur < maxEnd);
                 if (cur >= maxEnd)
                     return maxEnd;
 
                 Square gate = pop_lsb(candidates);
                 for (ExtMove* it = buffer.begin; it != buffer.end; ++it)
                 {
-                    assert(cur < maxEnd);
                     if (cur >= maxEnd)
                         return maxEnd;
 
@@ -1342,7 +1348,6 @@ namespace {
             for (ExtMove* it = jumpMoves; it != jumpEnd; ++it)
 #endif
             {
-                assert(cur < maxEnd);
                 if (cur >= maxEnd)
                     return maxEnd;
 

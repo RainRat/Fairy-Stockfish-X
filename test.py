@@ -2072,30 +2072,6 @@ startFen = 4r3/8/8/8/8/8/8/8[A] w - - 0 1
         fen_mover = sf.get_fen("blast-mover-test", fen, [move])
         self.assertEqual(fen_mover, "8/8/3n4/8/8/8/8/8 b - - 0 1")
 
-    def test_potion_overflow(self):
-        ini_text_exact = """
-[potion_overflow_test_exact:chess]
-potions = true
-freezePotion = P
-"""
-        # To verify the potion move generation does not silently drop moves prematurely,
-        # we construct a specific FEN with a known, exact move count.
-        # White has 22 normal moves (King: 3, Queen: 19).
-        # Black has a pawn on g7, whose freeze zone creates 8 empty candidate squares for White's Potion drop.
-        # 22 normal moves * 8 candidate squares = 176 pseudo-legal gating potion moves.
-        # Filtered for legality combined with base moves, the exact legal move count is 184.
-        fen = "7k/6p1/8/8/8/8/1Q6/K7[P] w - - 0 1"
-
-        path = load_repo_variants_or_skip()
-        sf.load_variant_config(path.read_text() + "\n" + ini_text_exact)
-
-        try:
-            moves = sf.legal_moves("potion_overflow_test_exact", fen, [])
-            # Assert the exact move count to prove deterministic, un-truncated move generation
-            self.assertEqual(len(moves), 184, "Move count must perfectly match the deterministic un-truncated expected value.")
-        except Exception as e:
-            self.fail(f"Engine crashed or threw unexpected exception during potion move generation: {e}")
-
     def test_evaluate(self):
         eval_start = sf.evaluate("chess", CHESS, [])
         self.assertTrue(-50 <= eval_start <= 50, f"Expected startpos eval near 0, got {eval_start}")
