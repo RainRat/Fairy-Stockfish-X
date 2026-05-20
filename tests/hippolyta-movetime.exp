@@ -2,17 +2,15 @@
 
 set timeout 2
 
-set SCRIPT_DIR [file dirname [file normalize [info script]]]
-set ROOT_DIR [file dirname $SCRIPT_DIR]
-set VARIANTS [file join $ROOT_DIR src variants.ini]
+source [file join [file dirname [file normalize [info script]]] expect_common.tcl]
 
 set engine [lindex $argv 0]
 if {$engine eq ""} {
-    set engine [file join $ROOT_DIR src stockfish]
+    set engine [fsx_default_engine]
 }
 
 spawn $engine
-send "setoption name VariantPath value $VARIANTS\r"
+send "setoption name VariantPath value [fsx_variants_ini]\r"
 expect {
     -re {info string variant hippolyta} {}
     timeout {}
