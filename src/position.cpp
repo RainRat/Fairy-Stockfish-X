@@ -5807,6 +5807,8 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
           }
 
           swap_piece(from, to);
+          if (type_of(piece_on(from)) == PAWN || type_of(piece_on(to)) == PAWN)
+              st->rule50 = 0;
       }
       else if (!rifleShot)
           move_piece(from, to);
@@ -5815,6 +5817,7 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
   // If the moving piece is a pawn do some special extra work
   if (type_of(pc) == PAWN)
   {
+      st->rule50 = 0;
       if (type_of(m) == PROMOTION || type_of(m) == PIECE_PROMOTION)
       {
           Piece promotion = make_piece(us, type_of(m) == PROMOTION ? promotion_type(m) : promoted_piece_type(PAWN));
