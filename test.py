@@ -2110,5 +2110,38 @@ startFen = 4r3/8/8/8/8/8/8/8[A] w - - 0 1
         self.assertEqual(result, "********/********/2******/Pp*p***1/4P3/4*3/1PPP1PPP/RNBQKBNR w KQkq b6 0 1")
         
 
+    def test_push_state_consistency(self):
+        ini_text = """
+[push-test:fairy]
+maxFile = e
+maxRank = 5
+castling = false
+checking = false
+startFen = 5/5/5/5/5 w - - 0 1
+rook = r
+pushingStrength = r:5
+pushFirstColor = them
+pushChainEnemyOnly = true
+pushCaptureAgainstFriendlyBlocker = true
+pushingRemoves = none
+stepwisePushing = true
+"""
+        with open("push_test.ini", "w") as f:
+            f.write(ini_text)
+        sf.set_option("VariantPath", "push_test.ini")
+
+        variant = "push-test"
+        # Case 1: displacement
+        fen1 = "5/5/1R1r1/5/5 w - - 0 1"
+        moves1 = ["b3d3"]
+        expected1 = "5/5/3Rr/5/5 b - - 1 1"
+        self.assertEqual(sf.get_fen(variant, fen1, moves1), expected1)
+
+        # Case 2: capture
+        fen2 = "5/5/1R1rR/5/5 w - - 0 1"
+        moves2 = ["b3d3"]
+        expected2 = "5/5/3RR/5/5 b - - 0 1"
+        self.assertEqual(sf.get_fen(variant, fen2, moves2), expected2)
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)
