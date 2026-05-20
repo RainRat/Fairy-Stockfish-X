@@ -11,7 +11,7 @@ trap 'error ${LINENO}' ERR
 
 ENGINE=${1:-./stockfish}
 
-TMP_VARIANT_PATH=$(mktemp /tmp/fsx-drop-split-XXXXXX.ini)
+TMP_VARIANT_PATH=$(mktemp "${TMPDIR:-/tmp}/fsx-drop-split-XXXXXX")
 cat >"${TMP_VARIANT_PATH}" <<'INI'
 [dropcheck-split-white:chess]
 pieceDrops = true

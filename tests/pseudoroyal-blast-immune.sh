@@ -26,7 +26,7 @@ CMDS
 
 echo "pseudoroyal-blast-immune tests started"
 
-TMP=$(mktemp /tmp/fsx-immune-blast-XXXXXX.ini)
+TMP=$(mktemp "${TMPDIR:-/tmp}/fsx-immune-blast-XXXXXX")
 cat >"${TMP}" <<'INI'
 [immune-blast-test:atomic]
 blastImmuneTypes = k

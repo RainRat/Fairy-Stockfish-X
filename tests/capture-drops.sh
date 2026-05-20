@@ -11,7 +11,7 @@ trap 'error ${LINENO}' ERR
 
 ENGINE=${1:-./stockfish}
 
-TMP_VARIANT_PATH=$(mktemp /tmp/fsx-capture-drops-XXXXXX.ini)
+TMP_VARIANT_PATH=$(mktemp "${TMPDIR:-/tmp}/fsx-capture-drops-XXXXXX")
 cat >"${TMP_VARIANT_PATH}" <<'INI'
 [capture-drop-control:chess]
 captureType = hand

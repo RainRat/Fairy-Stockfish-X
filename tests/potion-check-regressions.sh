@@ -11,7 +11,7 @@ trap 'error ${LINENO}' ERR
 
 ENGINE=${1:-./stockfish}
 
-TMP_VARIANT_PATH=$(mktemp /tmp/fsx-potioncheck-XXXXXX.ini)
+TMP_VARIANT_PATH=$(mktemp "${TMPDIR:-/tmp}/fsx-potioncheck-XXXXXX.ini")
 cat >"${TMP_VARIANT_PATH}" <<'INI'
 [potioncheck:chess]
 potions = true

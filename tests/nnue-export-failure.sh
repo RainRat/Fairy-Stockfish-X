@@ -3,7 +3,7 @@ set -euo pipefail
 
 ENGINE="${1:-src/stockfish}"
 
-tmpfile="$(mktemp /tmp/fsx-nnue-export-XXXXXX.nnue)"
+tmpfile="$(mktemp "${TMPDIR:-/tmp}/fsx-nnue-export-XXXXXX.nnue")"
 rm -f "$tmpfile"
 trap 'rm -f "$tmpfile"' EXIT
 

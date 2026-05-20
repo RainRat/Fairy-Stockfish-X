@@ -10,7 +10,7 @@ trap 'error ${LINENO}' ERR
 
 ENGINE=${1:-./stockfish}
 
-tmp_ini=$(mktemp /tmp/fsx-flip-XXXXXX.ini)
+tmp_ini=$(mktemp "${TMPDIR:-/tmp}/fsx-flip-XXXXXX.ini")
 trap 'rm -f "$tmp_ini"' EXIT
 
 cat >"$tmp_ini" <<'INI'

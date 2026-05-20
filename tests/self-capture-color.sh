@@ -10,7 +10,7 @@ trap 'error ${LINENO}' ERR
 
 ENGINE=${1:-./stockfish}
 
-TMP_VARIANT_PATH=$(mktemp /tmp/fsx-selfcapture-color-XXXXXX.ini)
+TMP_VARIANT_PATH=$(mktemp "${TMPDIR:-/tmp}/fsx-selfcapture-color-XXXXXX.ini")
 trap 'rm -f "${TMP_VARIANT_PATH}"' EXIT
 
 cat >"${TMP_VARIANT_PATH}" <<'INI'

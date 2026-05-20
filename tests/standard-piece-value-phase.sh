@@ -11,7 +11,7 @@ trap 'error ${LINENO}' ERR
 
 ENGINE=${1:-./stockfish}
 
-TMP_VARIANT_PATH=$(mktemp /tmp/fsx-piecevalue-phase-XXXXXX.ini)
+TMP_VARIANT_PATH=$(mktemp "${TMPDIR:-/tmp}/fsx-piecevalue-phase-XXXXXX.ini")
 cat >"${TMP_VARIANT_PATH}" <<'INI'
 [knight-low-eg:chess]
 pieceValueMg = n:1000

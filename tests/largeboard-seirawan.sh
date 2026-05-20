@@ -11,7 +11,7 @@ trap 'error ${LINENO}' ERR
 
 PYTHON=${PYTHON:-python3}
 
-TMP_VARIANT_PATH=$(mktemp /tmp/fsx-seirawan10-XXXXXX.ini)
+TMP_VARIANT_PATH=$(mktemp "${TMPDIR:-/tmp}/fsx-seirawan10-XXXXXX")
 cat >"${TMP_VARIANT_PATH}" <<'INI'
 [seirawan10:chess]
 gating = true

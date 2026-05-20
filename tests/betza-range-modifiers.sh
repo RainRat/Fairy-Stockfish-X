@@ -11,7 +11,7 @@ trap 'error ${LINENO}' ERR
 
 ENGINE=${1:-./stockfish}
 
-TMP_VARIANT_PATH=$(mktemp /tmp/fsx-betza-range-XXXXXX.ini)
+TMP_VARIANT_PATH=$(mktemp "${TMPDIR:-/tmp}/fsx-betza-range-XXXXXX.ini")
 cat >"${TMP_VARIANT_PATH}" <<'INI'
 [range35:chess]
 king = -

@@ -18,7 +18,7 @@ if [[ -z "${ENGINE}" ]]; then
   fi
 fi
 
-TMP_VARIANT_PATH=$(mktemp /tmp/fsx-piece-step-regions-XXXXXX.ini)
+TMP_VARIANT_PATH=$(mktemp "${TMPDIR:-/tmp}/fsx-piece-step-regions-XXXXXX")
 cat >"${TMP_VARIANT_PATH}" <<'INI'
 [istep-piece-specific:chess]
 king = -

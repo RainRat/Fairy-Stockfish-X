@@ -10,7 +10,7 @@ trap 'error ${LINENO}' ERR
 SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 ENGINE="${1:-${SCRIPT_DIR}/../src/stockfish}"
 
-TMP_VARIANT_PATH=$(mktemp /tmp/fsx-borrow-drops-XXXXXX.ini)
+TMP_VARIANT_PATH=$(mktemp "${TMPDIR:-/tmp}/fsx-borrow-drops-XXXXXX")
 trap 'rm -f "${TMP_VARIANT_PATH}"' EXIT
 
 cat >"${TMP_VARIANT_PATH}" <<'INI'

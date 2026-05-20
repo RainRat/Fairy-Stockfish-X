@@ -29,7 +29,7 @@ CMDS
 
 echo "blast legal regressions started"
 
-TMP1=$(mktemp /tmp/fsx-blastblock-XXXXXX.ini)
+TMP1=$(mktemp "${TMPDIR:-/tmp}/fsx-blastblock-XXXXXX")
 cat >"${TMP1}" <<'INI'
 [blastblock:chess]
 blastOnMove = true
@@ -42,7 +42,7 @@ out=$(run_cmds "${TMP1}" "blastblock" "position startpos
 go perft 1")
 echo "${out}" | grep -q "^a2e2: 1$"
 
-TMP2=$(mktemp /tmp/fsx-selfatomic-XXXXXX.ini)
+TMP2=$(mktemp "${TMPDIR:-/tmp}/fsx-selfatomic-XXXXXX")
 cat >"${TMP2}" <<'INI'
 [selfatomic:chess]
 blastOnCapture = true
@@ -58,7 +58,7 @@ go perft 1")
 rm -f "${TMP1}" "${TMP2}"
 unset TMP1 TMP2
 
-TMP3=$(mktemp /tmp/fsx-immobilityblast-XXXXXX.ini)
+TMP3=$(mktemp "${TMPDIR:-/tmp}/fsx-immobilityblast-XXXXXX")
 cat >"${TMP3}" <<'INI'
 [immobilityblast:chess]
 king = -
@@ -77,7 +77,7 @@ echo "${out}" | grep -q "^a7b8: 1$"
 rm -f "${TMP3}"
 unset TMP3
 
-TMP4=$(mktemp /tmp/fsx-antimatter-XXXXXX.ini)
+TMP4=$(mktemp "${TMPDIR:-/tmp}/fsx-antimatter-XXXXXX")
 cat >"${TMP4}" <<'INI'
 [antimatter:chess]
 blastOnSameTypeCapture = true
@@ -128,7 +128,7 @@ echo "${out}" | grep -q "^Nodes searched: 20$"
 rm -f "${TMP4}"
 unset TMP4
 
-TMP5=$(mktemp /tmp/fsx-moverblast-XXXXXX.ini)
+TMP5=$(mktemp "${TMPDIR:-/tmp}/fsx-moverblast-XXXXXX")
 cat >"${TMP5}" <<'INI'
 [moverblast:chess]
 king = -
@@ -163,7 +163,7 @@ echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/3r4/4Q2K b - - 0 1"
 rm -f "${TMP5}"
 unset TMP5
 
-TMP6=$(mktemp /tmp/fsx-blastcheck-XXXXXX.ini)
+TMP6=$(mktemp "${TMPDIR:-/tmp}/fsx-blastcheck-XXXXXX")
 cat >"${TMP6}" <<'INI'
 [blastcheck:chess]
 checking = false

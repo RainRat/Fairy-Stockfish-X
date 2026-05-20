@@ -10,7 +10,7 @@ trap 'error ${LINENO}' ERR
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ENGINE="${1:-${SCRIPT_DIR}/../src/stockfish}"
 
-TMP_VARIANT_PATH=$(mktemp /tmp/fsx-hex-pieces-XXXXXX.ini)
+TMP_VARIANT_PATH=$(mktemp "${TMPDIR:-/tmp}/fsx-hex-pieces-XXXXXX.ini")
 trap 'rm -f "${TMP_VARIANT_PATH}"' EXIT
 
 cat >"${TMP_VARIANT_PATH}" <<'INI'

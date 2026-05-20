@@ -11,7 +11,7 @@ trap 'error ${LINENO}' ERR
 
 ENGINE=${1:-./stockfish}
 
-TMP_VARIANT_PATH=$(mktemp /tmp/fsx-changing-color-drop-capture-XXXXXX.ini)
+TMP_VARIANT_PATH=$(mktemp "${TMPDIR:-/tmp}/fsx-changing-color-drop-capture-XXXXXX")
 cat >"${TMP_VARIANT_PATH}" <<'INI'
 [capture-drop-color:chess]
 customPiece1 = u:W

@@ -11,7 +11,7 @@ trap 'error ${LINENO}' ERR
 
 ENGINE=${1:-./stockfish}
 
-TMP_VARIANT_PATH=$(mktemp /tmp/fsx-shogi-drop-mate-split-XXXXXX.ini)
+TMP_VARIANT_PATH=$(mktemp "${TMPDIR:-/tmp}/fsx-shogi-drop-mate-split-XXXXXX")
 cat >"${TMP_VARIANT_PATH}" <<'INI'
 [shogi-pawn-drop-split-white:minishogi]
 shogiPawnDropMateIllegalWhite = true

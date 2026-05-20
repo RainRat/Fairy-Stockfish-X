@@ -11,7 +11,7 @@ trap 'error ${LINENO}' ERR
 
 ENGINE=${1:-./stockfish}
 
-TMP_VARIANT_PATH=$(mktemp /tmp/fsx-same-player-repeat-XXXXXX.ini)
+TMP_VARIANT_PATH=$(mktemp "${TMPDIR:-/tmp}/fsx-same-player-repeat-XXXXXX")
 cat >"${TMP_VARIANT_PATH}" <<'INI'
 [same-player-repeat-control:chess]
 startFen = 4k3/8/8/8/8/8/R7/4K3 w - - 0 1

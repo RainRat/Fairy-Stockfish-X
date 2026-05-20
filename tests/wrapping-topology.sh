@@ -11,7 +11,7 @@ trap 'error ${LINENO}' ERR
 
 ENGINE=${1:-./stockfish}
 
-TMP_VARIANT_PATH=$(mktemp /tmp/fsx-wrap-XXXXXX.ini)
+TMP_VARIANT_PATH=$(mktemp "${TMPDIR:-/tmp}/fsx-wrap-XXXXXX")
 cat >"${TMP_VARIANT_PATH}" <<'INI'
 [cyl-rook:chess]
 cylindrical = true

@@ -11,7 +11,7 @@ trap 'error ${LINENO}' ERR
 
 ENGINE=${1:-./stockfish}
 
-TMP_VARIANT_PATH=$(mktemp /tmp/fsx-promowall-XXXXXX.ini)
+TMP_VARIANT_PATH=$(mktemp "${TMPDIR:-/tmp}/fsx-promowall-XXXXXX")
 cat >"${TMP_VARIANT_PATH}" <<'INI'
 [promowall:chess]
 wallingRule = past

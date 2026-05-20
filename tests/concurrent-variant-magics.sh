@@ -11,7 +11,7 @@ trap 'error ${LINENO}' ERR
 
 ENGINE=${1:-./stockfish}
 
-TMP_VARIANT_PATH=$(mktemp /tmp/fsx-concurrent-magics-XXXXXX.ini)
+TMP_VARIANT_PATH=$(mktemp "${TMPDIR:-/tmp}/fsx-concurrent-magics-XXXXXX")
 cat >"${TMP_VARIANT_PATH}" <<'INI'
 [v8x8:chess]
 maxFile = 8
