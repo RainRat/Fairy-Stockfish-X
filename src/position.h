@@ -3609,7 +3609,9 @@ inline Bitboard Position::lame_leaper_bb(const std::map<Direction, PieceInfo::La
     {
         Direction dir = (c == WHITE ? it.first : -it.first);
         const PieceInfo::LameProfile& profile = it.second;
-        auto [dr, df] = decode_direction(dir);
+        auto delta = decode_direction(dir);
+        int dr = delta.first;
+        int df = delta.second;
 
         auto advance_once = [&](Square cur, Square& next) -> bool
         {
