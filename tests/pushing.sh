@@ -96,7 +96,7 @@ EOF
 echo "${out}" | grep -q "^a5b5: 1$"
 ! echo "${out}" | grep -q "^a5c5: 1$"
 ! echo "${out}" | grep -q "^a5d5: 1$"
-echo "${out}" | grep -q "^a5b5: 1$"
+! echo "${out}" | grep -q "^a5e5: 1$"
 echo "${out}" | grep -q "^Nodes searched: 8$"
 
 echo "Testing push-stepwise-capture..."
