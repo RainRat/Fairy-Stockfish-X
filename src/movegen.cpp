@@ -311,13 +311,13 @@ namespace {
                 || !(pos.drop_region(Us, pt) & to))
                 continue;
 
-            if (pos.edge_insert_from_top(Us) && rank_of(to) == pos.max_rank() && rank_of(to) > RANK_1)
+            if (pos.edge_insert_from_top(Us) && rank_of(to) == pos.max_rank())
                 emit_insert(to + SOUTH, pt);
-            if (pos.edge_insert_from_bottom(Us) && rank_of(to) == RANK_1 && rank_of(to) < pos.max_rank())
+            if (pos.edge_insert_from_bottom(Us) && rank_of(to) == RANK_1)
                 emit_insert(to + NORTH, pt);
-            if (pos.edge_insert_from_left(Us) && file_of(to) == FILE_A && file_of(to) < pos.max_file())
+            if (pos.edge_insert_from_left(Us) && file_of(to) == FILE_A)
                 emit_insert(to + EAST, pt);
-            if (pos.edge_insert_from_right(Us) && file_of(to) == pos.max_file() && file_of(to) > FILE_A)
+            if (pos.edge_insert_from_right(Us) && file_of(to) == pos.max_file())
                 emit_insert(to + WEST, pt);
         }
     }
@@ -850,8 +850,7 @@ namespace {
         // Jump captures are emitted explicitly below in capture-generating modes.
         // Exclude them from regular NORMAL generation to avoid duplicates.
         b1 &= ~jumpCaptures;
-        if (!pos.stepwise_pushing())
-            b1 &= ~pushMoves;
+        b1 &= ~pushMoves;
 
         while (b1)
             moveList = make_move_and_gating<NORMAL>(pos, moveList, Us, from, pop_lsb(b1));
