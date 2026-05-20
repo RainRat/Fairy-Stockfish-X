@@ -2,13 +2,17 @@
 
 set timeout 2
 
+set SCRIPT_DIR [file dirname [file normalize [info script]]]
+set ROOT_DIR [file dirname $SCRIPT_DIR]
+set VARIANTS [file join $ROOT_DIR src variants.ini]
+
 set engine [lindex $argv 0]
 if {$engine eq ""} {
-    set engine "./src/stockfish"
+    set engine [file join $ROOT_DIR src stockfish]
 }
 
 spawn $engine
-send "setoption name VariantPath value /home/chris/Fairy-Stockfish-X/src/variants.ini\r"
+send "setoption name VariantPath value $VARIANTS\r"
 expect {
     -re {info string variant hippolyta} {}
     timeout {}
