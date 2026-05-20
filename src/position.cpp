@@ -314,7 +314,11 @@ namespace {
 
       int tailIndex = nextIndex;
       while (tailIndex + 1 < lineCount && line[tailIndex + 1].piece != NO_PIECE)
+      {
+          if (pos.push_chain_enemy_only() && color_of(line[tailIndex + 1].piece) == color_of(mover))
+              break;
           ++tailIndex;
+      }
 
       int chainCount = tailIndex - nextIndex + 1;
       if (chainCount > strength)
@@ -338,11 +342,30 @@ namespace {
           Square beyond = squares[tailIndex + 1];
           if ((pos.wall_squares() | pos.dead_squares()) & beyond)
               return false;
+
           if (line[tailIndex + 1].piece != NO_PIECE)
-              return false;
-          for (int i = tailIndex + 1; i > nextIndex; --i)
-              line[i] = line[i - 1];
-          line[nextIndex] = PushTempPiece{};
+          {
+              if (pos.push_chain_enemy_only() && color_of(line[tailIndex + 1].piece) == color_of(mover))
+              {
+                  if (!pos.push_capture_against_friendly_blocker())
+                      return false;
+
+                  transfers[transferCount++] = line[tailIndex];
+                  for (int i = tailIndex; i > nextIndex; --i)
+                      line[i] = line[i - 1];
+                  line[nextIndex] = PushTempPiece{};
+                  info.captures = true;
+                  info.ejects = false;
+              }
+              else
+                  return false;
+          }
+          else
+          {
+              for (int i = tailIndex + 1; i > nextIndex; --i)
+                  line[i] = line[i - 1];
+              line[nextIndex] = PushTempPiece{};
+          }
       }
 
       moverIndex = nextIndex;
@@ -5215,7 +5238,7 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
       }
   }
 
-  if (captured)
+  if (captured && !stepwisePush)
   {
       st->suppressedCaptureTransfer = var->petrifyOnCaptureSuppressTransfer
                                    && bool(var->petrifyOnCaptureTypes & type_of(pc));
@@ -5343,6 +5366,12 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
   if (pushMove)
   {
       st->nnueRefreshNeeded = true;
+      if (captured && stepwisePush)
+      {
+          st->captured.clear();
+          captured = NO_PIECE;
+      }
+
       if (stepwisePush)
       {
           recomputeDerivedState = true;
@@ -5384,11 +5413,24 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
 
               if (finalSq == SQ_NONE)
               {
+                  k ^= Zobrist::psq[original][pushSquares[i]];
                   remove_piece(pushSquares[i]);
                   board[pushSquares[i]] = NO_PIECE;
+
+                  st->materialKey ^= Zobrist::psq[original][pieceCount[original]];
+                  if (type_of(original) == PAWN)
+                      st->pawnKey ^= Zobrist::psq[original][pushSquares[i]];
+                  else
+                      st->nonPawnMaterial[color_of(original)] -= PieceValue[MG][original];
               }
               else if (finalSq != pushSquares[i])
+              {
+                  k ^= Zobrist::psq[original][pushSquares[i]] ^ Zobrist::psq[original][finalSq];
+                  if (type_of(original) == PAWN)
+                      st->pawnKey ^= Zobrist::psq[original][pushSquares[i]] ^ Zobrist::psq[original][finalSq];
+
                   move_piece(pushSquares[i], finalSq);
+              }
           }
 
           for (int i = 0; i < pushTransferCount; ++i)
@@ -5400,7 +5442,11 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
                                                            drop_loop(), var->captureToHandSide,
                                                            main_promotion_pawn_type(color_of(transferred)));
               if (capture_type() == HAND && (capture_to_hand_types() & type_of(transferPiece)))
+              {
                   add_to_hand(transferPiece);
+                  int n = pieceCountInHand[color_of(transferPiece)][type_of(transferPiece)];
+                  xor_in_hand_count(k, transferPiece, n - 1, n);
+              }
               else if (capture_type() == PRISON)
               {
                   Piece prisonPiece = !drop_loop() && (st->pushTransferPromoted & (1U << i))
@@ -5408,7 +5454,8 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
                            ? st->pushTransferUnpromoted[i]
                            : make_piece(color_of(transferred), main_promotion_pawn_type(color_of(transferred))))
                         : transferred;
-                  add_to_prison(prisonPiece);
+                  int n = add_to_prison(prisonPiece);
+                  xor_in_hand_count(k, prisonPiece, n - 1, n);
               }
 
               if (points_counting())
