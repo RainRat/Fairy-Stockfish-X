@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 
 import faulthandler
+import os
+import tempfile
 from pathlib import Path
 import unittest
 import pyffish as sf
@@ -2126,22 +2128,27 @@ pushCaptureAgainstFriendlyBlocker = true
 pushingRemoves = none
 stepwisePushing = true
 """
-        with open("push_test.ini", "w") as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".ini", delete=False) as f:
             f.write(ini_text)
-        sf.set_option("VariantPath", "push_test.ini")
+            temp_name = f.name
 
-        variant = "push-test"
-        # Case 1: displacement
-        fen1 = "5/5/1R1r1/5/5 w - - 0 1"
-        moves1 = ["b3d3"]
-        expected1 = "5/5/3Rr/5/5 b - - 1 1"
-        self.assertEqual(sf.get_fen(variant, fen1, moves1), expected1)
+        try:
+            sf.set_option("VariantPath", temp_name)
 
-        # Case 2: capture
-        fen2 = "5/5/1R1rR/5/5 w - - 0 1"
-        moves2 = ["b3d3"]
-        expected2 = "5/5/3RR/5/5 b - - 0 1"
-        self.assertEqual(sf.get_fen(variant, fen2, moves2), expected2)
+            variant = "push-test"
+            # Case 1: displacement
+            fen1 = "5/5/1R1r1/5/5 w - - 0 1"
+            moves1 = ["b3d3"]
+            expected1 = "5/5/3Rr/5/5 b - - 1 1"
+            self.assertEqual(sf.get_fen(variant, fen1, moves1), expected1)
+
+            # Case 2: capture
+            fen2 = "5/5/1R1rR/5/5 w - - 0 1"
+            moves2 = ["b3d3"]
+            expected2 = "5/5/3RR/5/5 b - - 0 1"
+            self.assertEqual(sf.get_fen(variant, fen2, moves2), expected2)
+        finally:
+            os.remove(temp_name)
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
