@@ -7,6 +7,13 @@ trap 'rm -rf "$TMPDIR"' EXIT
 
 CXX=${CXX:-g++}
 COMMON=(-std=c++17 -O2 -Wall -Wextra -I"$ROOT/src")
+case "$(uname -m)" in
+  x86_64|amd64|i386|i686) ;;
+  *)
+    echo "nnue-affine-regression skipped: x86 SIMD flags are unavailable on $(uname -m)"
+    exit 0
+    ;;
+esac
 
 $CXX "${COMMON[@]}" \
   -DUSE_SSE2 -DUSE_SSSE3 \

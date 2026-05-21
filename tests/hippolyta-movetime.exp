@@ -10,6 +10,11 @@ if {$engine eq ""} {
 }
 
 spawn $engine
+send "uci\r"
+expect {
+    -re {uciok} {}
+    timeout {send_user "engine did not acknowledge uci\n"; exit 1}
+}
 send "setoption name VariantPath value [fsx_variants_ini]\r"
 expect {
     -re {info string variant hippolyta} {}

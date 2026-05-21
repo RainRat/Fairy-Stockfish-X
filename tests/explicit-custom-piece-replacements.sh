@@ -26,7 +26,7 @@ CMDS
 
 variant_available() {
   local variant="$1"
-  cat <<CMDS | "${ENGINE}" | grep -q " var ${variant}\$"
+  cat <<CMDS | "${ENGINE}" | grep -Eq "(^|[[:space:]])var ${variant}([[:space:]]|$)"
 uci
 setoption name VariantPath value ${VARIANTS}
 quit

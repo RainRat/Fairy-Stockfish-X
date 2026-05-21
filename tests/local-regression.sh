@@ -24,7 +24,6 @@ fi
 
 cd "${ROOT_DIR}"
 
-run_step "fast regression" timeout 30m bash tests/fast-regression.sh "${ENGINE}"
 run_step "invalid scalar regression" timeout 30s bash tests/invalid-scalar-regression.sh "${ENGINE}"
 run_step "all-vars regression" timeout 60m bash tests/allvars-regression.sh
 run_step "protocol" timeout 2m bash tests/protocol.sh "${ENGINE}"

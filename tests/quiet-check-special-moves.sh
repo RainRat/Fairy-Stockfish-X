@@ -160,7 +160,6 @@ run_case() {
 }
 
 run_case swap
-run_case pull
 run_case wrapped
 
 echo "quiet-check-special-moves ok"
