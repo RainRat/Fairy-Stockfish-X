@@ -1,5 +1,5 @@
 {
-  "source": "/home/chris/fairy-stockfish-upstream/src/stockfish",
+  "source": "stockfish",
   "records": [
     {
       "name": "chess",

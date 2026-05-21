@@ -4917,6 +4917,7 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
   Piece captured = captured_piece(m);
   if (type_of(m) == CASTLING && captured == NO_PIECE)
       captured = piece_on(to);
+  const Piece capturedBeforeStepwisePush = captured;
   PushInfo pushInfo;
   bool pushMove = analyze_push(*this, m, pushInfo);
   bool stepwisePush = pushMove && type_of(m) == NORMAL && pushInfo.distance > 1;
@@ -6203,13 +6204,13 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
               xor_committed_gate(k, BLACK, file_of(from), st->removedGatingType);
           }
       }
-      if (captured) {
+      if (capturedBeforeStepwisePush) {
           // remove uncommitted musketeer piece if piece at the front row is captured
           Rank r = rank_of(to);
-          if (r == RANK_1 && color_of(captured) == WHITE){
+          if (r == RANK_1 && color_of(capturedBeforeStepwisePush) == WHITE){
               st->capturedGatingType = uncommit_piece(WHITE, file_of(to));
               xor_committed_gate(k, WHITE, file_of(to), st->capturedGatingType);
-          } else if (r == max_rank() && color_of(captured) == BLACK) {
+          } else if (r == max_rank() && color_of(capturedBeforeStepwisePush) == BLACK) {
               st->capturedGatingType = uncommit_piece(BLACK, file_of(to));
               xor_committed_gate(k, BLACK, file_of(to), st->capturedGatingType);
           }

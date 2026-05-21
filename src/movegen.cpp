@@ -293,6 +293,8 @@ namespace {
     {
         Square to = pop_lsb(entries);
         auto emit_insert = [&](Square from, PieceType insertPt) {
+            if (!is_ok(from))
+                return;
             Move m = make_insert(from, to, insertPt, insertPt);
             bool push = pos.push_move(m);
             if (!pos.empty(to) && !push)
@@ -1010,6 +1012,8 @@ namespace {
                 else
                     target = checker_targets(lsb(checkers));
 
+                if (pos.blast_on_move() || pos.blast_on_self_destruct())
+                    target = AllSquares;
             }
 
             // Remove inaccessible squares (outside board + wall squares)
