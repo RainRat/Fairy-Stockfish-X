@@ -425,7 +425,7 @@ namespace {
                 if (pos.promotion_allowed(Us, pop_lsb(ps), to))
                     return true;
             PieceType pt = pos.promoted_piece_type(PAWN);
-            if (pt && pos.promotion_allowed(Us, pt) && !(pos.piece_promotion_on_capture() && pos.empty(to)))
+            if (pt && pos.promotion_allowed(Us, pt, to) && !(pos.piece_promotion_on_capture() && pos.empty(to)))
                 return true;
             return false;
         };
@@ -452,9 +452,6 @@ namespace {
             Bitboard attacks = pos.attacks_from(Us, PAWN, from) & capturable & target;
             Bitboard epSquares = pos.attacks_from(Us, PAWN, from) & pos.ep_squares() & ~pos.pieces() & target;
 
-            if (Type == QUIET_CHECKS)
-                quiets &= pos.check_squares(PAWN);
-
             if (mandatoryPromotionZone)
             {
                 Bitboard blocked = 0;
@@ -478,6 +475,9 @@ namespace {
                     while (capturePromotions)
                         emit_promotions(from, pop_lsb(capturePromotions));
             }
+
+            if (Type == QUIET_CHECKS)
+                quiets &= pos.check_squares(PAWN);
 
             if (Type != CAPTURES)
                 while (quiets)
@@ -524,15 +524,15 @@ namespace {
     if (pos.mandatory_pawn_promotion())
         mandatoryPromotionZone |= standardPromotionZone;
 
-    auto has_promotion_for = [&](Square to) {
-        for (PieceSet ps = pos.promotion_piece_types(Us, to); ps;)
-            if (pos.promotion_allowed(Us, pop_lsb(ps), to))
+        auto has_promotion_for = [&](Square to) {
+            for (PieceSet ps = pos.promotion_piece_types(Us, to); ps;)
+                if (pos.promotion_allowed(Us, pop_lsb(ps), to))
+                    return true;
+            PieceType pt = pos.promoted_piece_type(PAWN);
+            if (pt && pos.promotion_allowed(Us, pt, to) && !(pos.piece_promotion_on_capture() && pos.empty(to)))
                 return true;
-        PieceType pt = pos.promoted_piece_type(PAWN);
-        if (pt && pos.promotion_allowed(Us, pt) && !(pos.piece_promotion_on_capture() && pos.empty(to)))
-            return true;
-        return false;
-    };
+            return false;
+        };
 
     auto filter_promotion_targets = [&](Bitboard bb) {
         Bitboard filtered = 0;
@@ -1020,7 +1020,7 @@ namespace {
             target &= pos.board_bb();
 
             if (Type == EVASIONS && (pos.blast_on_capture() || pos.blast_on_self_destruct()))
-                captureTarget = ~pos.pieces(Us);
+                captureTarget = pos.board_bb() & ~pos.pieces(Us);
             else
                 captureTarget = target;
         }

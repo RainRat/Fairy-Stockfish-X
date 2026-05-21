@@ -71,6 +71,20 @@ static void load_variants() {
 [pairdrop:fairy]
 pieceDrops = true
 symmetricDropTypes = r
+
+[pull-basic:fairy]
+maxFile = e
+maxRank = 5
+castling = false
+checking = false
+king = -
+pieceToCharTable = K...A...R...k...b...r...
+king = k
+customPiece1 = a:mW
+customPiece2 = b:mW
+customPiece3 = c:mW
+pullingStrength = a:3 b:1 c:3
+startFen = 5/5/5/5/5 w - - 0 1
 [swap-basic:fairy]
 maxFile = e
 maxRank = 5
@@ -119,6 +133,24 @@ static void test_swap_basic() {
     assert(!MoveList<QUIET_CHECKS>(pos).contains(m));
 }
 
+static void test_pairdrop() {
+    StateInfo st{};
+    Position pos;
+    pos.set(variants.get("pairdrop"), "4k3/8/8/8/8/8/8/4K3[RR] w - - 0 1", false, &st, nullptr);
+    const Move m = make_drop_pair(SQ_A4, SQ_H4, ROOK, ROOK);
+    assert(!pos.gives_check(m));
+    assert(!MoveList<QUIET_CHECKS>(pos).contains(m));
+}
+
+static void test_pull_basic() {
+    StateInfo st{};
+    Position pos;
+    pos.set(variants.get("pull-basic"), "5/5/2b2/2A2/5 w - - 0 1", false, &st, nullptr);
+    const Move m = make_pull(SQ_C2, SQ_D2, SQ_C3);
+    assert(!pos.gives_check(m));
+    assert(!MoveList<QUIET_CHECKS>(pos).contains(m));
+}
+
 static void test_pass_quiet_check() {
     StateInfo st{};
     Position pos;
@@ -141,8 +173,12 @@ int main(int argc, char** argv) {
     init_engine();
 
     auto run_case = [&](const char* which) {
+        if (!which || !std::strcmp(which, "pairdrop"))
+            test_pairdrop();
         if (!which || !std::strcmp(which, "swap"))
             test_swap_basic();
+        if (!which || !std::strcmp(which, "pull"))
+            test_pull_basic();
         if (!which || !std::strcmp(which, "pass"))
             test_pass_quiet_check();
         if (!which || !std::strcmp(which, "wrapped"))
@@ -175,7 +211,9 @@ run_case() {
   rm -f "${tmp_bin}"
 }
 
+run_case pairdrop
 run_case swap
+run_case pull
 run_case wrapped
 
 echo "quiet-check-special-moves ok"

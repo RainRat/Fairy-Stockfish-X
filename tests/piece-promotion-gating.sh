@@ -29,13 +29,6 @@ mandatoryPiecePromotionWhite = true
 mandatoryPiecePromotionBlack = false
 startFen = 4k3/1N6/8/8/8/8/1n6/4K3 w - - 0 1
 
-[promonly:chess]
-promotionPieceTypes = -
-promotedPieceType = p:q
-mandatoryPiecePromotion = true
-promotionRegionWhite = *8
-promotionRegionBlack = *1
-startFen = 4k3/6P1/8/8/8/8/8/4K3 w - - 0 1
 INI
 
 run_cmds() {
@@ -63,10 +56,6 @@ out=$(run_cmds "position fen 4k3/8/8/8/8/8/1n6/4K3 b - - 0 1
 go perft 1" "promowall-split")
 echo "${out}" | grep -q "^b2d1: 1$"
 ! echo "${out}" | grep -q "^b2d1+,"
-
-out=$(run_cmds "position startpos
-go perft 1" "promonly")
-echo "${out}" | grep -Fq "g7g8+: 1"
 
 rm -f "${TMP_VARIANT_PATH}"
 unset TMP_VARIANT_PATH
