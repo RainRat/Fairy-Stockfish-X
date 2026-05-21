@@ -1272,13 +1272,13 @@ namespace {
             continue;
 
         Bitboard candidates = pos.board_bb();
-        if (!var->potionDropOnOccupied)
+        if (potion == Variant::POTION_JUMP)
+            candidates &= pos.pieces();
+        else if (!var->potionDropOnOccupied)
             candidates &= ~pos.pieces();
 
         if (potion == Variant::POTION_FREEZE)
             candidates &= useful_freeze_gates(pos, Us);
-        else if (potion == Variant::POTION_JUMP)
-            candidates &= pos.pieces();
 
         if (potion == Variant::POTION_FREEZE)
         {

@@ -6103,7 +6103,7 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
           apply_morph(moverSq, moveMorphType);
   }
   // Add gating piece
-  if (is_gating(m) && gating_type(m) != NO_PIECE_TYPE && !rifleShot)
+  if (is_gating(m) && gating_type(m) != NO_PIECE_TYPE)
   {
       Square gate = gating_square(m);
       Piece gating_piece = make_piece(us, gating_type(m));
@@ -6118,7 +6118,7 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
           if (Eval::useNNUE)
               append_dirty(st, gating_piece, SQ_NONE, SQ_NONE, gating_piece, pieceCountInHand[us][gating_type(m)]);
       }
-      else
+      else if (!rifleShot)
       {
           if (Eval::useNNUE)
               // Add gating piece
