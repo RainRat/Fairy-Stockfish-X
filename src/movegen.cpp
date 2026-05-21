@@ -171,26 +171,50 @@ namespace {
     return moveList;
   }
 
+  bool has_any_promotion(const Position& pos, Color us, Square to) {
+      for (PieceSet ps = pos.promotion_piece_types(us, to); ps;)
+          if (pos.promotion_allowed(us, pop_lsb(ps), to))
+              return true;
+      PieceType pt = pos.promoted_piece_type(PAWN);
+      if (pt && pos.promotion_allowed(us, pt, to) && !(pos.piece_promotion_on_capture() && pos.empty(to)))
+          return true;
+      return false;
+  }
+
+  template<GenType Type>
+  ExtMove* emit_promotion_variants(const Position& pos, ExtMove* moveList, Color us, Square from, Square to) {
+      if constexpr (Type != CAPTURES && Type != QUIETS && Type != EVASIONS && Type != NON_EVASIONS)
+          return moveList;
+
+      for (PieceSet promotions = pos.promotion_piece_types(us, to); promotions;)
+      {
+          PieceType pt = pop_msb(promotions);
+          if (pos.prison_pawn_promotion() && pos.count_in_prison(~us, pt) == 0)
+              continue;
+          if (pos.promotion_allowed(us, pt, to))
+              moveList = make_move_and_gating<PROMOTION>(pos, moveList, us, from, to, pt);
+      }
+      PieceType pt = pos.promoted_piece_type(PAWN);
+      if (pt && pos.promotion_allowed(us, pt) && !(pos.piece_promotion_on_capture() && pos.empty(to)))
+          moveList = make_move_and_gating<PIECE_PROMOTION>(pos, moveList, us, from, to, pt);
+      return moveList;
+  }
+
+  template<Color Us, GenType Type>
+  bool can_generate_drop(const Position& pos, PieceType pt) {
+      return pos.can_drop(Us, pt)
+          || (Type != NON_EVASIONS && pos.two_boards() && pos.virtual_drops() && pos.allow_virtual_drop(Us, pt));
+  }
+
+  template<Color Us>
+  bool has_castable_potion(const Position& pos) {
+      return pos.potions_enabled()
+          && (pos.can_cast_potion(Us, Variant::POTION_FREEZE) || pos.can_cast_potion(Us, Variant::POTION_JUMP));
+  }
+
   template<Color c, GenType Type, Direction D>
   ExtMove* make_promotions(const Position& pos, ExtMove* moveList, Square to) {
-
-    if (Type == CAPTURES || Type == QUIETS || Type == EVASIONS || Type == NON_EVASIONS)
-    {
-        for (PieceSet promotions = pos.promotion_piece_types(c, to); promotions;)
-        {
-            PieceType pt = pop_msb(promotions);
-            if (pos.prison_pawn_promotion() && pos.count_in_prison(~c, pt) == 0) {
-                continue;
-            }
-            if (pos.promotion_allowed(c, pt, to))
-                moveList = make_move_and_gating<PROMOTION>(pos, moveList, pos.side_to_move(), to - D, to, pt);
-        }
-        PieceType pt = pos.promoted_piece_type(PAWN);
-        if (pt && pos.promotion_allowed(c, pt) && !(pos.piece_promotion_on_capture() && pos.empty(to)))
-            moveList = make_move_and_gating<PIECE_PROMOTION>(pos, moveList, pos.side_to_move(), to - D, to);
-    }
-
-    return moveList;
+    return emit_promotion_variants<Type>(pos, moveList, c, to - D, to);
   }
 
   template<Color Us, GenType Type>
@@ -199,7 +223,7 @@ namespace {
         return moveList;
 
     // Do not generate virtual drops for perft and at root
-    if (pos.can_drop(Us, pt) || (Type != NON_EVASIONS && pos.two_boards() && pos.virtual_drops() && pos.allow_virtual_drop(Us, pt)))
+    if (can_generate_drop<Us, Type>(pos, pt))
     {
         // Restrict to valid target
         b &= pos.drop_region(Us, pt) & (~pos.pieces() | pos.opening_swap_drop_targets(Us, pt));
@@ -248,7 +272,7 @@ namespace {
     if (!(pos.capture_drop_types() & piece_set(pt)))
         return moveList;
 
-    if (!(pos.can_drop(Us, pt) || (Type != NON_EVASIONS && pos.two_boards() && pos.virtual_drops() && pos.allow_virtual_drop(Us, pt))))
+    if (!can_generate_drop<Us, Type>(pos, pt))
         return moveList;
 
     Bitboard capturable = pos.pieces(~Us);
@@ -308,8 +332,7 @@ namespace {
         for (PieceSet ps = insertTypes; ps; )
         {
             PieceType pt = pop_lsb(ps);
-            if (!(pos.can_drop(Us, pt)
-                  || (Type != NON_EVASIONS && pos.two_boards() && pos.virtual_drops() && pos.allow_virtual_drop(Us, pt)))
+            if (!can_generate_drop<Us, Type>(pos, pt)
                 || !(pos.drop_region(Us, pt) & to))
                 continue;
 
@@ -420,28 +443,10 @@ namespace {
         if (pos.mandatory_pawn_promotion())
             mandatoryPromotionZone |= standardPromotionZone;
 
-        auto has_promotion_for = [&](Square to) {
-            for (PieceSet ps = pos.promotion_piece_types(Us, to); ps;)
-                if (pos.promotion_allowed(Us, pop_lsb(ps), to))
-                    return true;
-            PieceType pt = pos.promoted_piece_type(PAWN);
-            if (pt && pos.promotion_allowed(Us, pt, to) && !(pos.piece_promotion_on_capture() && pos.empty(to)))
-                return true;
-            return false;
-        };
+        auto has_promotion_for = [&](Square to) { return has_any_promotion(pos, Us, to); };
 
         auto emit_promotions = [&](Square from, Square to) {
-            for (PieceSet promotions = pos.promotion_piece_types(Us, to); promotions;)
-            {
-                PieceType pt = pop_msb(promotions);
-                if (pos.prison_pawn_promotion() && pos.count_in_prison(~Us, pt) == 0)
-                    continue;
-                if (pos.promotion_allowed(Us, pt, to))
-                    moveList = make_move_and_gating<PROMOTION>(pos, moveList, Us, from, to, pt);
-            }
-            PieceType pt = pos.promoted_piece_type(PAWN);
-            if (pt && pos.promotion_allowed(Us, pt) && !(pos.piece_promotion_on_capture() && pos.empty(to)))
-                moveList = make_move_and_gating<PIECE_PROMOTION>(pos, moveList, Us, from, to, pt);
+            moveList = emit_promotion_variants<Type>(pos, moveList, Us, from, to);
         };
 
         Bitboard remaining = pawns;
@@ -521,18 +526,11 @@ namespace {
     }
 
     Bitboard mandatoryPromotionZone = pos.mandatory_promotion_zone(Us, PAWN);
-    if (pos.mandatory_pawn_promotion())
+    if (pos.mandatory_pawn_promotion()) {
         mandatoryPromotionZone |= standardPromotionZone;
+    }
 
-        auto has_promotion_for = [&](Square to) {
-            for (PieceSet ps = pos.promotion_piece_types(Us, to); ps;)
-                if (pos.promotion_allowed(Us, pop_lsb(ps), to))
-                    return true;
-            PieceType pt = pos.promoted_piece_type(PAWN);
-            if (pt && pos.promotion_allowed(Us, pt, to) && !(pos.piece_promotion_on_capture() && pos.empty(to)))
-                return true;
-            return false;
-        };
+    auto has_promotion_for = [&](Square to) { return has_any_promotion(pos, Us, to); };
 
     auto filter_promotion_targets = [&](Bitboard bb) {
         Bitboard filtered = 0;
@@ -877,19 +875,11 @@ namespace {
             moveList = make_move_and_gating<PIECE_DEMOTION>(pos, moveList, Us, from, pop_lsb(b3));
 
         // Pawn-style promotions
-        if ((Type == CAPTURES || Type == QUIETS || Type == EVASIONS || Type == NON_EVASIONS) && pawnPromotions)
+        if (pawnPromotions)
             for (Bitboard promotions = pawnPromotions; promotions; )
             {
                 Square to = pop_lsb(promotions);
-                for (PieceSet ps = pos.promotion_piece_types(Us, to); ps;)
-                {
-                    PieceType ptP = pop_msb(ps);
-                    if (pos.prison_pawn_promotion() && pos.count_in_prison(~Us, ptP) == 0) {
-                        continue;
-                    }
-                    if (pos.promotion_allowed(Us, ptP, to))
-                        moveList = make_move_and_gating<PROMOTION>(pos, moveList, pos.side_to_move(), from, to, ptP);
-                }
+                moveList = emit_promotion_variants<Type>(pos, moveList, Us, from, to);
             }
 
         // En passant captures
@@ -1408,10 +1398,7 @@ namespace {
   ExtMove* generate_all(const Position& pos, ExtMove* moveList) {
 
     ExtMove* baseEnd = generate_all_impl<Us, Type>(pos, moveList);
-    if (!pos.potions_enabled())
-        return baseEnd;
-    if (!pos.can_cast_potion(Us, Variant::POTION_FREEZE)
-        && !pos.can_cast_potion(Us, Variant::POTION_JUMP))
+    if (!has_castable_potion<Us>(pos))
         return baseEnd;
     return generate_potion_moves<Us, Type>(pos, MoveBuffer{moveList, baseEnd});
   }
@@ -1457,11 +1444,8 @@ ExtMove* append_potions(const Position& pos, ExtMove* listBegin, ExtMove* baseEn
   static_assert(Type != LEGAL, "Unsupported type in append_potions()");
   assert((Type == EVASIONS) == (bool)pos.evasion_checkers()
          || (pos.topology_wraps() && Type == NON_EVASIONS && pos.evasion_checkers()));
-  if (!pos.potions_enabled())
-      return baseEnd;
   Color us = pos.side_to_move();
-  if (!pos.can_cast_potion(us, Variant::POTION_FREEZE)
-      && !pos.can_cast_potion(us, Variant::POTION_JUMP))
+  if (!(us == WHITE ? has_castable_potion<WHITE>(pos) : has_castable_potion<BLACK>(pos)))
       return baseEnd;
 
   return us == WHITE ? generate_potion_moves<WHITE, Type>(pos, MoveBuffer{listBegin, baseEnd})

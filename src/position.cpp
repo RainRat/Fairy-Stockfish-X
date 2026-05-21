@@ -2953,29 +2953,12 @@ bool Position::legal(Move m) const {
       && !is_pass(m))
       return false;
 
-  Bitboard freezeExtra = 0;
-  Bitboard jumpRemoved = 0;
-  Variant::PotionType gatingPotion = Variant::POTION_TYPE_NB;
-  if (is_gating(m) && gating_type(m) != NO_PIECE_TYPE)
-  {
-      gatingPotion = potion_type_from_piece(var, gating_type(m));
-      if (gatingPotion != Variant::POTION_TYPE_NB)
-      {
-          if (!can_cast_potion(us, gatingPotion))
-              return false;
-          if (gatingPotion == Variant::POTION_FREEZE)
-              freezeExtra = freeze_zone_from_square(gating_square(m));
-          else if (gatingPotion == Variant::POTION_JUMP)
-          {
-              jumpRemoved = square_bb(gating_square(m));
-              if (!piece_on(gating_square(m)))
-                  return false;
-          }
-      }
-  }
+  PotionContext potCtx = setup_potion_context(m, us);
+  if (!potCtx.valid)
+      return false;
 
-  ScopedSpellContext spellScope(freezeExtra, jumpRemoved);
-  bool pureWallMove = is_gating(m) && gatingPotion == Variant::POTION_TYPE_NB
+  ScopedSpellContext spellScope(potCtx.freezeExtra, potCtx.jumpRemoved);
+  bool pureWallMove = is_gating(m) && potCtx.potion == Variant::POTION_TYPE_NB
                    && walling(us) && wall_or_move() && from == to;
 
   if (!dropMove && (freeze_squares() & from))
@@ -2993,7 +2976,7 @@ bool Position::legal(Move m) const {
   }
   if (type_of(m) == CASTLING && gamePly < var->castlingForbiddenPlies)
       return false;
-  if (jumpRemoved && (square_bb(to) & jumpRemoved))
+  if (potCtx.jumpRemoved && (square_bb(to) & potCtx.jumpRemoved))
       return false;
 
   if (from == to && !(is_pass(m) || is_self_destruct(m) || (type_of(m) == PROMOTION && sittuyin_promotion()) || pureWallMove))
@@ -4381,33 +4364,17 @@ bool Position::pseudo_legal(const Move m) const {
 
   // Use a slower but simpler function for uncommon cases
   // yet we skip the legality check of MoveList<LEGAL>().
-  Bitboard freezeExtra = 0;
-  Bitboard jumpRemoved = 0;
-  if (is_gating(m))
-  {
-      Variant::PotionType potion = potion_type_from_piece(var, gating_type(m));
-      if (potion != Variant::POTION_TYPE_NB)
-      {
-          if (!can_cast_potion(us, potion))
-              return false;
-          if (potion == Variant::POTION_FREEZE)
-              freezeExtra = freeze_zone_from_square(gating_square(m));
-          else if (potion == Variant::POTION_JUMP)
-          {
-              jumpRemoved = square_bb(gating_square(m));
-              if (!piece_on(gating_square(m)))
-                  return false;
-          }
-      }
-  }
+  PotionContext potCtx = setup_potion_context(m, us);
+  if (!potCtx.valid)
+      return false;
 
-  ScopedSpellContext spellScope(freezeExtra, jumpRemoved);
+  ScopedSpellContext spellScope(potCtx.freezeExtra, potCtx.jumpRemoved);
 
   if (!dropMove && (freeze_squares() & from))
       return false;
   if (type_of(m) == CASTLING && gamePly < var->castlingForbiddenPlies)
       return false;
-  if (jumpRemoved && (square_bb(to) & jumpRemoved))
+  if (potCtx.jumpRemoved && (square_bb(to) & potCtx.jumpRemoved))
       return false;
 
   if (type_of(m) != NORMAL || is_gating(m))
@@ -4605,32 +4572,15 @@ bool Position::gives_check(Move m) const {
   bool dropMove = is_drop_move(m);
   assert(color_of(mover) == (dropMove ? drop_hand_color(sideToMove, in_hand_piece_type(m)) : sideToMove));
 
-  Bitboard freezeExtra = 0;
-  Bitboard jumpRemoved = 0;
-  Variant::PotionType gatingPotion = Variant::POTION_TYPE_NB;
-  if (is_gating(m))
-  {
-      gatingPotion = potion_type_from_piece(var, gating_type(m));
-      if (gatingPotion != Variant::POTION_TYPE_NB)
-      {
-          if (!can_cast_potion(sideToMove, gatingPotion))
-              return false;
-          if (gatingPotion == Variant::POTION_FREEZE)
-              freezeExtra = freeze_zone_from_square(gating_square(m));
-          else if (gatingPotion == Variant::POTION_JUMP)
-          {
-              jumpRemoved = square_bb(gating_square(m));
-              if (!piece_on(gating_square(m)))
-                  return false;
-          }
-      }
-  }
+  PotionContext potCtx = setup_potion_context(m, sideToMove);
+  if (!potCtx.valid)
+      return false;
 
-  ScopedSpellContext spellScope(freezeExtra, jumpRemoved);
+  ScopedSpellContext spellScope(potCtx.freezeExtra, potCtx.jumpRemoved);
 
   if (!dropMove && (freeze_squares() & from))
       return false;
-  if (jumpRemoved && (square_bb(to) & jumpRemoved))
+  if (potCtx.jumpRemoved && (square_bb(to) & potCtx.jumpRemoved))
       return false;
 
   bool rifleShot = rifle_capture(m) && capture(m) && type_of(m) != CASTLING;
@@ -4758,7 +4708,7 @@ bool Position::gives_check(Move m) const {
 
   // Is there a check by gated pieces?
   if (    is_gating(m)
-      && gatingPotion == Variant::POTION_TYPE_NB
+      && potCtx.potion == Variant::POTION_TYPE_NB
       && gating_type(m) != NO_PIECE_TYPE)
   {
       if (attacks_bb(sideToMove, gating_type(m), gating_square(m), occupied ^ square_bb(gating_square(m))) & royalSq)
@@ -4832,6 +4782,31 @@ bool Position::gives_check(Move m) const {
             && (attacks_bb(sideToMove, type_of(piece_on(rfrom)), rto, (pieces() ^ kfrom ^ rfrom) | rto | kto) & royalSq);
   }
   }
+}
+
+PotionContext Position::setup_potion_context(Move m, Color us) const {
+    PotionContext pc;
+    if (is_gating(m) && gating_type(m) != NO_PIECE_TYPE)
+    {
+        pc.potion = potion_type_from_piece(var, gating_type(m));
+        if (pc.potion != Variant::POTION_TYPE_NB)
+        {
+            if (!can_cast_potion(us, pc.potion))
+            {
+                pc.valid = false;
+                return pc;
+            }
+            if (pc.potion == Variant::POTION_FREEZE)
+                pc.freezeExtra = freeze_zone_from_square(gating_square(m));
+            else if (pc.potion == Variant::POTION_JUMP)
+            {
+                pc.jumpRemoved = square_bb(gating_square(m));
+                if (!piece_on(gating_square(m)))
+                    pc.valid = false;
+            }
+        }
+    }
+    return pc;
 }
 
 /// Position::do_move() makes a move, and saves all information necessary
@@ -5162,18 +5137,9 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
                      pulled != NO_PIECE ? unpromoted_piece_on(pullFrom) : NO_PIECE);
   }
 
-  Variant::PotionType gatingPotion = Variant::POTION_TYPE_NB;
-  Bitboard freezeExtra = 0;
-  Bitboard jumpRemoved = 0;
-  if (is_gating(m))
-  {
-      gatingPotion = potion_type_from_piece(var, gating_type(m));
-      if (gatingPotion == Variant::POTION_FREEZE)
-          freezeExtra = freeze_zone_from_square(gating_square(m));
-      else if (gatingPotion == Variant::POTION_JUMP)
-          jumpRemoved = square_bb(gating_square(m));
-  }
-  bool pureWallMove = is_gating(m) && gatingPotion == Variant::POTION_TYPE_NB
+  PotionContext potCtx = setup_potion_context(m, us);
+
+  bool pureWallMove = is_gating(m) && potCtx.potion == Variant::POTION_TYPE_NB
                    && walling(us) && wall_or_move() && from == to;
 
   if (to == from)
@@ -5182,7 +5148,7 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
       captured = NO_PIECE;
   }
 
-  ScopedSpellContext spellScope(freezeExtra, jumpRemoved);
+  ScopedSpellContext spellScope(potCtx.freezeExtra, potCtx.jumpRemoved);
 
   assert(pureWallMove || color_of(pc) == dropColor);
   assert(captured == NO_PIECE
@@ -6142,7 +6108,7 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
       Square gate = gating_square(m);
       Piece gating_piece = make_piece(us, gating_type(m));
 
-      if (gatingPotion != Variant::POTION_TYPE_NB)
+      if (potCtx.potion != Variant::POTION_TYPE_NB)
       {
           int oldCount = pieceCountInHand[us][gating_type(m)];
           remove_from_hand(gating_piece);
@@ -6735,7 +6701,7 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
           if (potion_piece(potion) == NO_PIECE_TYPE)
               continue;
 
-          if (gatingPotion == potion)
+          if (potCtx.potion == potion)
           {
               int cooldown = var->potionCooldown[pt];
               st->potionCooldown[us][pt] = std::max(cooldown - 1, 0);
@@ -6744,7 +6710,7 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
               --st->potionCooldown[us][pt];
       }
 
-      st->potionZones[us][Variant::POTION_FREEZE] = gatingPotion == Variant::POTION_FREEZE ? freezeExtra : Bitboard(0);
+      st->potionZones[us][Variant::POTION_FREEZE] = potCtx.potion == Variant::POTION_FREEZE ? potCtx.freezeExtra : Bitboard(0);
       st->potionZones[us][Variant::POTION_JUMP] = Bitboard(0);
 
       st->potionZones[them][Variant::POTION_FREEZE] = Bitboard(0);

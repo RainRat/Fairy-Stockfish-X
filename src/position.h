@@ -55,6 +55,13 @@ struct SpellContext {
   bool active() const { return bool(freezeExtra | jumpRemoved); }
 };
 
+struct PotionContext {
+  Variant::PotionType potion = Variant::POTION_TYPE_NB;
+  Bitboard freezeExtra = Bitboard(0);
+  Bitboard jumpRemoved = Bitboard(0);
+  bool valid = true;
+};
+
 const SpellContext* current_spell_context() noexcept;
 void set_current_spell_context(const SpellContext* ctx) noexcept;
 
@@ -448,6 +455,7 @@ public:
   bool wall_or_move() const;
   Bitboard walling_region(Color c) const;
   bool seirawan_gating() const;
+  PotionContext setup_potion_context(Move m, Color us) const;
   bool commit_gates() const;
   bool cambodian_moves() const;
   Bitboard diagonal_lines() const;
