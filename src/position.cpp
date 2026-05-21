@@ -2065,12 +2065,7 @@ void Position::refresh_state_derived(StateInfo* si) const {
 
 Bitboard Position::compute_checkers_bb(Color side) const {
 
-  Square royalSq = royal_square(side);
-  if (royalSq == SQ_NONE && var->bikjangRule && count<KING>(side) == 1)
-      royalSq = square<KING>(side);
-  Bitboard checkers = !allow_checks() && royalSq != SQ_NONE
-                    ? attackers_to_king(royalSq, ~side)
-                    : Bitboard(0);
+  Bitboard checkers = compute_evasion_checkers_bb(side);
 
   if (!allow_checks())
   {
@@ -2078,8 +2073,6 @@ Bitboard Position::compute_checkers_bb(Color side) const {
           checkers |= checked_pseudo_royals(side);
       if (anti_royal_types())
           checkers |= checked_anti_royals(side);
-      if (var->blastPassiveTypes)
-          checkers |= passive_blast_checkers(side, pieces());
   }
 
   return checkers;
