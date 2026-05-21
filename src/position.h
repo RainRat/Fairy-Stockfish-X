@@ -1991,7 +1991,7 @@ inline Bitboard Position::freeze_squares(Color c) const {
   if (!potions_enabled())
       return Bitboard(0);
   Bitboard mask = st->potionZones[c][Variant::POTION_FREEZE];
-  if (const SpellContext* spellCtx = current_spell_context())
+  if (const SpellContext* spellCtx = current_spell_context(); spellCtx && c == ~sideToMove)
       mask |= spellCtx->freezeExtra;
   return mask;
 }
