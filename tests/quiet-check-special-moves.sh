@@ -85,6 +85,11 @@ adjacentSwapRequiresEmptyNeighbor = true
 swapNoImmediateReturn = true
 startFen = 5/5/5/5/5 w - - 0 1
 
+[pass-quiet-check:fairy]
+pass = true
+castling = false
+startFen = 8/8/8/8/8/8/8/R3K2k w - - 0 1
+
 [wrapped-quiet-check:chess]
 cylindrical = true
 castling = false
@@ -114,6 +119,15 @@ static void test_swap_basic() {
     assert(!MoveList<QUIET_CHECKS>(pos).contains(m));
 }
 
+static void test_pass_quiet_check() {
+    StateInfo st{};
+    Position pos;
+    pos.set(variants.get("pass-quiet-check"), "8/8/8/8/8/8/8/R3K2k w - - 0 1", false, &st, nullptr);
+    const Move m = make<SPECIAL>(SQ_A1, SQ_A1);
+    assert(pos.pass(WHITE));
+    assert(!MoveList<QUIET_CHECKS>(pos).contains(m));
+}
+
 static void test_wrapped_quiet_check() {
     StateInfo st{};
     Position pos;
@@ -129,6 +143,8 @@ int main(int argc, char** argv) {
     auto run_case = [&](const char* which) {
         if (!which || !std::strcmp(which, "swap"))
             test_swap_basic();
+        if (!which || !std::strcmp(which, "pass"))
+            test_pass_quiet_check();
         if (!which || !std::strcmp(which, "wrapped"))
             test_wrapped_quiet_check();
     };

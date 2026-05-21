@@ -947,7 +947,7 @@ namespace {
             {
                 // Opponent must pass while the other side completes a forced jump chain.
                 Bitboard usPieces = pos.pieces(Us);
-                if (pos.pass(Us))
+                if (Type != QUIET_CHECKS && pos.pass(Us))
                 {
                     Square passSq = usPieces ? lsb(usPieces) : lsb(pos.board_bb());
                     *moveList++ = make<SPECIAL>(passSq, passSq);
@@ -1067,7 +1067,7 @@ namespace {
             }
 
         // Special moves
-        if constexpr (Type != CAPTURES)
+        if constexpr (Type != CAPTURES && Type != QUIET_CHECKS)
         if (!restrictToForcedJumper && pos.cambodian_moves() && pos.gates(Us))
         {
             if constexpr (Type != EVASIONS)
@@ -1192,7 +1192,7 @@ namespace {
         }
 
         // Workaround for passing: Execute a non-move with any piece
-        if (!restrictToForcedJumper && pos.pass(Us) && !pos.count<KING>(Us))
+        if (!restrictToForcedJumper && Type != QUIET_CHECKS && pos.pass(Us) && !pos.count<KING>(Us))
         {
             Bitboard usPieces = pos.pieces(Us);
             Square passSq = usPieces ? lsb(usPieces) : lsb(pos.board_bb());
