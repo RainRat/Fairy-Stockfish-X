@@ -19,11 +19,15 @@ changingColorTrigger = capture
 changingColorPieceTypes = *
 
 [remote-burner-color:chess]
+castling = false
+king = -
 customPiece1 = u:R
 customPiece2 = v:N
+customPiece3 = k:K
 blastPassiveTypes = u
 changingColorTrigger = capture
 changingColorPieceTypes = v
+pieceToCharTable = PNBRQ............UV..Kpnbrq............uv..k
 INI
 
 out=$(
