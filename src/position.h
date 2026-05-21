@@ -3204,10 +3204,11 @@ inline Bitboard Position::universal_hopper_targets_impl(const std::map<Direction
         int distToFirstHurdle = 0;
         int distFromLastHurdle = 0;
         Square current = sq;
+        const int maxRaySteps = SQUARE_NB - 1;
 
         for (;;)
         {
-            if (dist >= 255)
+            if (dist >= maxRaySteps)
                 break;
             Square next;
             if (!advance(current, dir, stepR, stepF, next))
@@ -4204,7 +4205,8 @@ inline Square Position::jump_capture_square(Square from, Square to, Bitboard occ
                   return sq == to ? mover : NO_PIECE;
               };
 
-              for (int rayStep = 0; rayStep < 255; ++rayStep)
+              const int maxRaySteps = SQUARE_NB - 1;
+              for (int rayStep = 0; rayStep < maxRaySteps; ++rayStep)
               {
                   Square next = SQ_NONE;
                   if (wraps)
@@ -4406,7 +4408,8 @@ inline Bitboard Position::universal_hopper_potential_bb(PieceType pt, Square s) 
                 Direction dir = (us == WHITE ? it.first : -it.first);
                 Square current = s;
                 auto [dr, df] = decode_direction(dir);
-                for (int i = 0; i < 255; ++i) {
+                const int maxRaySteps = SQUARE_NB - 1;
+                for (int i = 0; i < maxRaySteps; ++i) {
                     Square next = SQ_NONE;
                     if (wraps)
                     {

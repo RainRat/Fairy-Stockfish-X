@@ -141,9 +141,10 @@ namespace {
     for (auto const& [d, profile] : profiles) {
       Direction dir = (c == WHITE ? d : -d);
       auto [stepR, stepF] = decode_direction(dir);
+      const int maxRaySteps = SQUARE_NB - 1;
       int rayDist = 0;
       Square prev = sq;
-      for (Square s = sq + dir; is_ok(s) && (rayDist < 255); s += dir) {
+      for (Square s = sq + dir; is_ok(s) && (rayDist < maxRaySteps); s += dir) {
         if (int(file_of(s)) - int(file_of(prev)) != stepF
             || int(rank_of(s)) - int(rank_of(prev)) != stepR)
             break;

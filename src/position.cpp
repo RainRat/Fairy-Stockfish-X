@@ -4948,8 +4948,9 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
               const bool wrapFile = wraps_files();
               const bool wrapRank = wraps_ranks();
               const bool wraps = topology_wraps();
+              const int maxRaySteps = SQUARE_NB - 1;
 
-              for (int i = 0; i < 255; ++i) {
+              for (int i = 0; i < maxRaySteps; ++i) {
                   Square next = SQ_NONE;
                   if (wraps)
                   {
