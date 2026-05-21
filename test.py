@@ -2148,6 +2148,9 @@ stepwisePushing = true
             expected2 = "5/5/3RR/5/5 b - - 0 1"
             self.assertEqual(sf.get_fen(variant, fen2, moves2), expected2)
         finally:
+            path = repo_variants_ini()
+            if path:
+                sf.set_option("VariantPath", str(path))
             os.remove(temp_name)
 
 if __name__ == '__main__':

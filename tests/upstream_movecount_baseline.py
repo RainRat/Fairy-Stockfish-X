@@ -140,7 +140,7 @@ def generate_baseline(upstream_engine: Path) -> dict:
                 "move_count": move_count,
             }
         )
-    return {"source": upstream_engine.name, "records": records}
+    return {"source": str(upstream_engine.resolve()), "records": records}
 
 
 def verify(local_engine: Path, fixture_path: Path) -> int:

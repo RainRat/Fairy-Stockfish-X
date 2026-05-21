@@ -4553,7 +4553,9 @@ bool Position::pseudo_legal(const Move m) const {
           while (remaining)
               evasionTargets &= checker_targets(pop_lsb(remaining));
 
-          const bool blastEvasion = blast_on_capture() || blast_on_move() || blast_on_self_destruct();
+          const bool blastEvasion = ((capture(m) || rifle_capture(m)) && blast_on_capture(m)) ||
+                                    (!capture(m) && !rifle_capture(m) && !is_self_destruct(m) && blast_on_move()) ||
+                                    (is_self_destruct(m) && blast_on_self_destruct());
           if (!blastEvasion && !(evasionTargets & to))
               return false;
           }

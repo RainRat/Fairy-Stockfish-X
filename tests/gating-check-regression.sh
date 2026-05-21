@@ -13,6 +13,20 @@ ENGINE=${1:-./src/stockfish}
 ROOT_DIR=$(cd "$(dirname "$0")/.." && pwd)
 CXX=${CXX:-g++}
 
+ENGINE_BASENAME=$(basename "${ENGINE}")
+CXX_DEFS=()
+case "${ENGINE_BASENAME}" in
+  stockfish-allvars*)
+    CXX_DEFS+=(-DLARGEBOARDS -DALLVARS -DNNUE_EMBEDDING_OFF)
+    ;;
+  stockfish-large*)
+    CXX_DEFS+=(-DLARGEBOARDS -DALLVARS -DNNUE_EMBEDDING_OFF)
+    ;;
+  stockfish-vlb*)
+    CXX_DEFS+=(-DLARGEBOARDS -DVERY_LARGE_BOARDS -DALLVARS -DNNUE_EMBEDDING_OFF)
+    ;;
+esac
+
 run_cmds() {
   local ini=$1
   local cmds=$2
@@ -21,7 +35,7 @@ run_cmds() {
 
 echo "Running gating-check-regression tests..."
 
-TMP_INI=$(mktemp)
+TMP_INI=$(mktemp "${TMPDIR:-/tmp}/gating-check-XXXXXX.ini")
 TMP_CPP=""
 TMP_BIN=""
 HARNESS_CPP=""
@@ -82,8 +96,8 @@ if [ "$NODES" -ne 9 ]; then
 fi
 
 # --- TEST 4: Encoded gate/pull squares must preserve the last board square ---
-TMP_CPP=$(mktemp /tmp/gating-check-XXXXXX.cpp)
-TMP_BIN=$(mktemp /tmp/gating-check-XXXXXX)
+TMP_CPP=$(mktemp "${TMPDIR:-/tmp}/gating-check-XXXXXX.cpp")
+TMP_BIN=$(mktemp "${TMPDIR:-/tmp}/gating-check-XXXXXX")
 cat > "${TMP_CPP}" <<'EOF'
 #include <cassert>
 #include "types.h"
@@ -99,12 +113,12 @@ int main() {
 }
 EOF
 rm -f "${TMP_BIN}"
-"${CXX}" -std=c++17 -O2 -Wall -Wextra -I"${ROOT_DIR}/src" "${TMP_CPP}" -o "${TMP_BIN}"
+"${CXX}" -std=c++17 -O2 -Wall -Wextra -I"${ROOT_DIR}/src" "${CXX_DEFS[@]}" "${TMP_CPP}" -o "${TMP_BIN}"
 "${TMP_BIN}"
 
 # --- TEST 5: Paired gating must undo cleanly and preserve the material key ---
-HARNESS_CPP=$(mktemp /tmp/gating-check-roundtrip-XXXXXX.cpp)
-HARNESS_BIN=$(mktemp /tmp/gating-check-roundtrip-XXXXXX)
+HARNESS_CPP=$(mktemp "${TMPDIR:-/tmp}/gating-check-roundtrip-XXXXXX.cpp")
+HARNESS_BIN=$(mktemp "${TMPDIR:-/tmp}/gating-check-roundtrip-XXXXXX")
 cat > "${HARNESS_CPP}" <<'EOF'
 #include <cassert>
 #include <sstream>
@@ -166,7 +180,7 @@ done < <(find "${ROOT_DIR}/src" -maxdepth 1 -name '*.o' ! -name 'main.o' -print0
 
 (
   cd "${ROOT_DIR}/src"
-  "${CXX}" -std=c++17 -O2 -Wall -Wextra -I"${ROOT_DIR}/src" "${HARNESS_CPP}" "${OBJ_FILES[@]}" -pthread -o "${HARNESS_BIN}"
+  "${CXX}" -std=c++17 -O2 -Wall -Wextra -I"${ROOT_DIR}/src" "${CXX_DEFS[@]}" "${HARNESS_CPP}" "${OBJ_FILES[@]}" -pthread -o "${HARNESS_BIN}"
   "${HARNESS_BIN}"
 )
 
