@@ -485,7 +485,7 @@ namespace {
                   reset_parser_state();
                   continue;
               }
-              std::string params = expandedBetza.substr(i + 1, close - i - 1);
+              std::string_view params(expandedBetza.data() + i + 1, close - i - 1);
               if (lame)
               {
                   if (hasLameProfile)
@@ -500,25 +500,20 @@ namespace {
               }
               
               size_t pos = 0;
-              auto trim_in_place = [](std::string& text) {
+              auto trim_view = [](std::string_view text) {
                   const size_t first = text.find_first_not_of(" \t\r\n");
-                  if (first == std::string::npos)
-                  {
-                      text.clear();
-                      return;
-                  }
+                  if (first == std::string_view::npos)
+                      return std::string_view{};
                   const size_t last = text.find_last_not_of(" \t\r\n");
-                  text = text.substr(first, last - first + 1);
+                  return text.substr(first, last - first + 1);
               };
-              auto parse_min_max = [&](const std::string& s, int& min_val, int& max_val) {
+              auto parse_min_max = [&](std::string_view s, int& min_val, int& max_val) {
                   size_t comma = s.find(',');
-                  if (comma != std::string::npos) {
-                      std::string min_s = s.substr(0, comma);
-                      std::string max_s = s.substr(comma + 1);
-                      trim_in_place(min_s);
-                      trim_in_place(max_s);
+                  if (comma != std::string_view::npos) {
+                      std::string_view min_s = trim_view(s.substr(0, comma));
+                      std::string_view max_s = trim_view(s.substr(comma + 1));
 
-                      auto safe_stoi = [&](const std::string& str, int default_val, bool& ok) {
+                      auto safe_stoi = [&](std::string_view str, int default_val, bool& ok) {
                           if (str.empty()) { ok = false; return default_val; }
                           long long res = 0;
                           ok = true;
@@ -560,14 +555,12 @@ namespace {
               const bool blockIsLame = lame;
               while (pos < params.size()) {
                   size_t next_semi = params.find(';', pos);
-                  if (next_semi == std::string::npos) next_semi = params.size();
-                  std::string pair = params.substr(pos, next_semi - pos);
+                  if (next_semi == std::string_view::npos) next_semi = params.size();
+                  std::string_view pair = trim_view(params.substr(pos, next_semi - pos));
                   size_t colon = pair.find(':');
-                  if (colon != std::string::npos) {
-                      std::string key = pair.substr(0, colon);
-                      std::string val = pair.substr(colon + 1);
-                      trim_in_place(key);
-                      trim_in_place(val);
+                  if (colon != std::string_view::npos) {
+                      std::string_view key = trim_view(pair.substr(0, colon));
+                      std::string_view val = trim_view(pair.substr(colon + 1));
 
                       if (blockIsLame)
                       {
@@ -634,9 +627,8 @@ namespace {
                               size_t vpos = 0;
                               while (vpos < val.size()) {
                                   size_t next_comma = val.find(',', vpos);
-                                  if (next_comma == std::string::npos) next_comma = val.size();
-                                  std::string v = val.substr(vpos, next_comma - vpos);
-                                  trim_in_place(v);
+                                  if (next_comma == std::string_view::npos) next_comma = val.size();
+                                  std::string_view v = trim_view(val.substr(vpos, next_comma - vpos));
 
                                   if (v == "enemy") special |= PieceInfo::HopperProfile::ENEMY;
                                   else if (v == "friendly") special |= PieceInfo::HopperProfile::FRIENDLY;
