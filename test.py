@@ -1862,6 +1862,22 @@ startFen = 4r3/8/8/8/8/8/8/8[A] w - - 0 1
         self.assertIn("A@d1", legal)
         self.assertNotIn("A@e1", legal)
 
+    def test_pseudoroyal_loss_waits_for_candidate_types_to_disappear(self):
+        sf.load_variant_config(
+            """[prfix:chess]
+king = -
+customPiece1 = a:N
+customPiece2 = b:B
+pseudoRoyalTypes = ab
+pseudoRoyalCount = 1
+pseudoRoyalValue = loss
+startFen = 8/8/8/8/8/8/AAaaBBbb/8 w - - 0 1
+"""
+        )
+
+        result = sf.is_immediate_game_end("prfix", "8/8/8/8/8/8/AAaaBBbb/8 w - - 0 1", [])
+        self.assertFalse(result[0])
+
     def _check_immediate_game_end(self, variant, fen, moves, game_end, game_result=None):
         with self.subTest(variant=variant, fen=fen, game_end=game_end, game_result=game_result):
             result = sf.is_immediate_game_end(variant, fen, moves)
