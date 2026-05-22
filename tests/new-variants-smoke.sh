@@ -419,6 +419,18 @@ go perft 1")
 echo "${out}" | grep -q "Nodes searched: 15"
 fi
 
+# 6b) Ardri: the escape king loss ends immediately.
+out=$(run_cmds "setoption name UCI_Variant value ardri
+position fen 2rrr2/3r3/r1RRR1r/rrR1Rrr/r1RRR1r/3r3/2rrr2 b - - 0 1
+go perft 1")
+echo "${out}" | grep -q "info string variant ardri "
+echo "${out}" | grep -q "Nodes searched: 0"
+out=$(run_cmds "setoption name UCI_Variant value ardri
+position fen 2rrr2/3r3/r1RRR1r/rrRKRrr/r1RRR1r/3r3/2rrr2 w - - 0 1
+go perft 1")
+echo "${out}" | grep -q "info string variant ardri "
+echo "${out}" | grep -q "Nodes searched: 8"
+
 # 7b) Tawlbwrdd: edge escape should end immediately on 11x11, unlike corner-escape Hnefatafl.
 if variant_available "tawlbwrdd"; then
 out=$(run_cmds "setoption name UCI_Variant value tawlbwrdd
