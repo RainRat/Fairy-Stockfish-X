@@ -56,7 +56,7 @@ startFen = 6k/7/7/3K3/7/7/7 w - - 0 1
 INI
 
 run_cmds() {
-  cat <<EOF | "${ENGINE}" 2>/dev/null
+  cat <<EOF | "${ENGINE}"
 uci
 setoption name VariantPath value ${TMP_VARIANT_PATH}
 setoption name UCI_Variant value $1

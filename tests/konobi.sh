@@ -7,7 +7,7 @@ ENGINE="${1:-${SCRIPT_DIR}/../src/stockfish}"
 VARIANT_PATH="${2:-${SCRIPT_DIR}/../src/variants.ini}"
 
 run_cmds() {
-  cat <<EOF | "${ENGINE}" 2>/dev/null
+  cat <<EOF | "${ENGINE}"
 uci
 setoption name VariantPath value ${VARIANT_PATH}
 setoption name UCI_Variant value konobi

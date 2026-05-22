@@ -35,7 +35,7 @@ run_cmds() {
   local path=$1
   local variant=$2
   local cmds=$3
-  cat <<CMD_EOF | "${ENGINE}" 2>/dev/null
+  cat <<CMD_EOF | "${ENGINE}"
 uci
 setoption name VariantPath value ${path}
 setoption name UCI_Variant value ${variant}

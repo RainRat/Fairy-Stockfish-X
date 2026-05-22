@@ -35,7 +35,7 @@ startFen = 5/5/5/5/5[a] w - - 0 1
 INI
 
 run_cmds() {
-  cat <<EOF | "${ENGINE}" 2>/dev/null
+  cat <<EOF | "${ENGINE}"
 uci
 setoption name VariantPath value ${TMP_VARIANT_PATH}
 setoption name UCI_Variant value borrow-slide

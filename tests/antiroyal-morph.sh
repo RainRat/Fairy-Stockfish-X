@@ -24,7 +24,7 @@ captureMorph = true
 checking = false
 EOF
 
-out=$(cat <<EOF | "${ENGINE}" 2>/dev/null
+out=$(cat <<EOF | "${ENGINE}"
 uci
 setoption name VariantPath value ${TMP_INI}
 setoption name UCI_Variant value antiroyal-morph
@@ -36,7 +36,7 @@ EOF
 
 echo "${out}" | grep -q "^g1f3: 1$"
 
-out=$(cat <<EOF | "${ENGINE}" 2>/dev/null
+out=$(cat <<EOF | "${ENGINE}"
 uci
 setoption name VariantPath value ${TMP_INI}
 setoption name UCI_Variant value antiroyal-capturemorph

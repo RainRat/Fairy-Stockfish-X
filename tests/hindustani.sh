@@ -8,7 +8,7 @@ VARIANTS="${2:-${SCRIPT_DIR}/../src/variants.ini}"
 run_cmds() {
   local cmds="$1"
   printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value hindustani\n%s\nquit\n' \
-    "$VARIANTS" "$cmds" | "$ENGINE" 2>/dev/null
+    "$VARIANTS" "$cmds" | "$ENGINE"
 }
 
 echo "hindustani regression started"

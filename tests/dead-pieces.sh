@@ -18,7 +18,7 @@ if [[ -z "${ENGINE}" ]]; then
 fi
 
 run_cmds() {
-  cat <<EOF | "${ENGINE}" 2>/dev/null
+  cat <<EOF | "${ENGINE}"
 uci
 setoption name VariantPath value src/variants.ini
 $1

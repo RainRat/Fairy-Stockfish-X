@@ -14,7 +14,7 @@ REPO_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
 VARIANTS=${2:-${REPO_ROOT}/src/variants.ini}
 
 run_cmds() {
-  cat <<EOF | "${ENGINE}" 2>/dev/null
+  cat <<EOF | "${ENGINE}"
 uci
 setoption name VariantPath value ${VARIANTS}
 setoption name UCI_Variant value atlantis

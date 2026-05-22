@@ -22,7 +22,7 @@ if [[ ! -f "${VARIANT_PATH}" && -f "src/variants.ini" ]]; then
 fi
 
 run_cmds() {
-  cat <<EOF | "${ENGINE}" 2>/dev/null
+  cat <<EOF | "${ENGINE}"
 uci
 setoption name VariantPath value ${VARIANT_PATH}
 $1

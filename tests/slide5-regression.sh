@@ -12,7 +12,7 @@ SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 ENGINE="${1:-${SCRIPT_DIR}/../src/stockfish}"
 VARIANT_PATH="${2:-${SCRIPT_DIR}/../src/variants.ini}"
 
-perft_out=$(cat <<EOF | "${ENGINE}" 2>/dev/null
+perft_out=$(cat <<EOF | "${ENGINE}"
 uci
 setoption name Hash value 1
 setoption name Clear Hash

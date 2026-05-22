@@ -14,10 +14,10 @@ if [ $# -eq 3 ]; then
     echo "No variants specified, extracting from UCI output..."
     
     # Extract variants from first engine
-    variants1=$(echo "uci" | $1 2>/dev/null | grep "option name UCI_Variant" | grep -o 'var [^[:space:]]*' | sed 's/var //' | sort)
+    variants1=$(echo "uci" | $1 | grep "option name UCI_Variant" | grep -o 'var [^[:space:]]*' | sed 's/var //' | sort)
     
     # Extract variants from second engine
-    variants2=$(echo "uci" | $2 2>/dev/null | grep "option name UCI_Variant" | grep -o 'var [^[:space:]]*' | sed 's/var //' | sort)
+    variants2=$(echo "uci" | $2 | grep "option name UCI_Variant" | grep -o 'var [^[:space:]]*' | sed 's/var //' | sort)
     
     # Find intersection of variants (common to both engines)
     variants=$(comm -12 <(echo "$variants1") <(echo "$variants2"))

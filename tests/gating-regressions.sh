@@ -13,7 +13,7 @@ ENGINE=${1:-./stockfish}
 run_cmds() {
   local ini=$1
   local cmds=$2
-  cat <<EOF | "${ENGINE}" 2>/dev/null
+  cat <<EOF | "${ENGINE}"
 uci
 setoption name VariantPath value ${ini}
 ${cmds}

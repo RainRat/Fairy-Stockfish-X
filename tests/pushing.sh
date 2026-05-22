@@ -53,7 +53,7 @@ INI
 run_cmds() {
   local variant=$1
   local cmds=$2
-  cat <<UCI | "${ENGINE}" 2>/dev/null
+  cat <<UCI | "${ENGINE}"
 uci
 setoption name VariantPath value ${TMP_INI}
 setoption name UCI_Variant value ${variant}
@@ -83,7 +83,7 @@ d")
 echo "${out}" | grep -q "Fen: 5/5/5/3Rr/5 b - - 0 1"
 
 echo "Testing aries..."
-out=$(cat <<EOF | "${ENGINE}" 2>/dev/null
+out=$(cat <<EOF | "${ENGINE}"
 uci
 setoption name VariantPath value ${ROOT_DIR}/src/variants.ini
 setoption name UCI_Variant value aries

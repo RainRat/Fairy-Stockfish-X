@@ -19,7 +19,7 @@ selfCaptureBlack = true
 INI
 
 run_cmds() {
-  cat <<EOF | "${ENGINE}" 2>/dev/null
+  cat <<EOF | "${ENGINE}"
 uci
 setoption name VariantPath value ${TMP_VARIANT_PATH}
 setoption name UCI_Variant value self-capture-black-only

@@ -3859,8 +3859,9 @@ bool Position::legal(Move m) const {
       while (antiRoyals)
       {
           Square sr = pop_lsb(antiRoyals);
-          PieceType pt = (sr == kto) ? finalMovePt : type_of(piece_on(sr));
-          Bitboard attackers = attackers_to_king(sr, occupied, ~us, janggiCannons, pt) & occupied;
+          Bitboard attackers = attackers_to(sr, occupied, ~us, janggiCannons) & occupied;
+          if (anti_royal_king_mutually_immune())
+              attackers &= ~pieces(~us, king_type());
           if (!(occupied & sr)
               || (blastOnCapture && (vulnerableEnemyRoyals & blast_pattern(sr)))
               || !(attackers & ~removedAttackers))

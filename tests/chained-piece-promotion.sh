@@ -36,7 +36,7 @@ checking = false
 INI
 
 run_cmds() {
-  cat <<EOF | "${ENGINE}" 2>/dev/null
+  cat <<EOF | "${ENGINE}"
 uci
 setoption name VariantPath value ${tmp_ini}
 setoption name UCI_Variant value chainbug

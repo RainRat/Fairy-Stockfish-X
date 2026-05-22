@@ -46,7 +46,7 @@ INI
 run_cmds() {
   local variant=$1
   local cmds=$2
-  cat <<EOF | "${ENGINE}" 2>/dev/null
+  cat <<EOF | "${ENGINE}"
 uci
 setoption name VariantPath value ${TMP_INI}
 setoption name UCI_Variant value ${variant}

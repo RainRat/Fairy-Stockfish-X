@@ -19,6 +19,7 @@ maxFile = c
 pieceToCharTable = -
 king = -
 customPiece1 = a:W
+pieceDrops = true
 startFen = 3/1a1/1A1[A] w - - 0 1
 checking = false
 captureType = hand
@@ -48,7 +49,7 @@ pushingRemoves = shove
 INI
 
 run_cmds() {
-  cat <<EOF | "${ENGINE}" 2>/dev/null
+  cat <<EOF | "${ENGINE}"
 uci
 setoption name VariantPath value ${tmp_ini}
 $1

@@ -33,7 +33,7 @@ checking = true
 INI
 
 run_cmds() {
-  cat <<EOF | "${ENGINE}" 2>/dev/null
+  cat <<EOF | "${ENGINE}"
 uci
 setoption name VariantPath value ${TMP_INI}
 setoption name UCI_Variant value capture-to-hand-types-demo

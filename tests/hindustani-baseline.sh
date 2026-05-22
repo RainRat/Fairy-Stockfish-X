@@ -31,7 +31,7 @@ for fen, expected in cases:
 PY
 
 run_cmds() {
-  cat <<EOF | "${ENGINE}" 2>/dev/null
+  cat <<EOF | "${ENGINE}"
 uci
 setoption name VariantPath value ${VARIANT_PATH}
 setoption name UCI_Variant value hindustani

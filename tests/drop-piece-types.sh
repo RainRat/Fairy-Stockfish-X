@@ -22,7 +22,7 @@ dropRegionBlack = a1 b1 c1 a2 c2 a3 b3 c3
 startFen = 3/3/3[KkA] w - - 0 1
 INI
 
-out=$(cat <<EOF | "$ENGINE" 2>/dev/null
+out=$(cat <<EOF | "$ENGINE"
 uci
 setoption name VariantPath value $tmp_ini
 setoption name UCI_Variant value nana-drop-forms

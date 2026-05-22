@@ -12,7 +12,7 @@ ENGINE=${1:-./stockfish}
 VARIANTS=${2:-src/variants.ini}
 
 run_cmds() {
-  cat <<EOF | "${ENGINE}" 2>/dev/null
+  cat <<EOF | "${ENGINE}"
 uci
 setoption name VariantPath value ${VARIANTS}
 setoption name UCI_Variant value hippolyta

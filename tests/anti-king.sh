@@ -15,7 +15,7 @@ VARIANTS="${2:-${SCRIPT_DIR}/../src/variants.ini}"
 run_engine() {
   local variant="$1"
   local position_cmd="$2"
-  cat <<EOF | "${ENGINE}" 2>/dev/null
+  cat <<EOF | "${ENGINE}"
 uci
 setoption name VariantPath value ${VARIANTS}
 setoption name UCI_Variant value ${variant}
