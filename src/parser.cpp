@@ -2291,12 +2291,6 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
                 std::cerr << "Can not use kings with blastOnCapture." << std::endl;
             valid = false;
         }
-        if (v->blastPassiveTypes)
-        {
-            if (DoCheck)
-                std::cerr << "Can not use kings with blastPassiveTypes." << std::endl;
-            valid = false;
-        }
         if (v->flipEnclosedPieces)
         {
             if (DoCheck)

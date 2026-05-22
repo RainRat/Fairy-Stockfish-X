@@ -336,11 +336,10 @@ if echo "${out}" | grep -q "e1e2,h5"; then
   exit 1
 fi
 
-# 18. Test blastPassiveTypes + royal kings rejects the variant
+# 18. Test blastPassiveTypes + royal kings remains loadable and behaves as a passive check rule.
 out=$(run_cmds "passive-king-repro" "${TEMP_INI}" "d")
-echo "${out}" | grep -q "info string unknown variant 'passive-king-repro'"
-if echo "${out}" | grep -q "info string variant passive-king-repro"; then
-  echo "blastPassiveTypes + royal kings variant should have been rejected"
+if ! echo "${out}" | grep -q "info string variant passive-king-repro"; then
+  echo "blastPassiveTypes + royal kings variant should remain loadable"
   exit 1
 fi
 
