@@ -7822,21 +7822,6 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
               return true;
           }
 
-  // Tablut-family variants model the escape king as a flag piece rather than
-  // the orthodox runtime king type. Once that piece is gone, the side has
-  // already lost even if the position was reconstructed from FEN and there are
-  // still other pieces left to move. Keep this scoped to surround-capture
-  // variants rather than all flag-piece games.
-  for (Color c : { ~sideToMove, sideToMove })
-      if (surround_capture_opposite()
-          && flag_piece(c) != NO_PIECE_TYPE
-          && flag_region(c)
-          && !count(c, flag_piece(c)))
-      {
-          result = c == sideToMove ? mated_in(ply) : mate_in(ply);
-          return true;
-      }
-
   // Pseudo-royal loss
   // Some variants transfer royal status across a family of piece types.
   // If a special capture removes the current pseudo-royal, the game ends
