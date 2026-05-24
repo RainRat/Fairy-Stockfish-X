@@ -351,9 +351,8 @@ namespace {
     }
 
     bool looks_like_piece_definition_value(const std::string& value) {
-        return value.size() >= 2
-            && std::isalpha(static_cast<unsigned char>(value[0]))
-            && value[1] == ':';
+        auto [token, rest] = split_piece_entry(value);
+        return !token.empty() && !rest.empty();
     }
 
     bool parse_rank_index(const std::string& value, int& out) {
@@ -649,6 +648,7 @@ namespace {
         int ParserState = -1;
         int RankNum = 0;
         int FileNum = 0;
+        bool RankWildcardSeen = false;
         char PieceChar = 0;
         Bitboard board = 0x00;
         PieceTypeBitboardGroup parsedTarget = target;
@@ -720,7 +720,13 @@ namespace {
             {
                 if (ch == '*')
                 {
+                    if (RankNum != 0 || RankWildcardSeen)
+                    {
+                        std::cerr << "At char " << i << " of PieceTypeBitboardGroup declaration: Illegal rank character: " << ch << std::endl;
+                        return false;
+                    }
                     RankNum = -1;
+                    RankWildcardSeen = true;
                 }
                 else if (ch >= '0' && ch <= '9' && RankNum >= 0)
                 {
@@ -778,6 +784,7 @@ namespace {
                     {
                         RankNum = 0;
                         FileNum = 0;
+                        RankWildcardSeen = false;
                         ParserState = 2;
                     }
                 }
@@ -794,6 +801,7 @@ namespace {
                     ParserState = 0;
                     RankNum = 0;
                     FileNum = 0;
+                    RankWildcardSeen = false;
                     PieceChar = 0;
                     board = 0x00;
                 }
@@ -1295,8 +1303,12 @@ bool VariantParser<DoCheck>::parse_piece_types(Variant* v) {
                         v->enPassantTypes[BLACK] |= piece_set(pt);
                     }
                 }
-                else if (DoCheck)
-                    std::cerr << name << " - Missing Betza move notation" << std::endl;
+                else
+                {
+                    if (DoCheck)
+                        std::cerr << name << " - Missing Betza move notation" << std::endl;
+                    return false;
+                }
             }
             else if (pt != KING && !rest.empty())
             {

@@ -186,7 +186,43 @@ printf '%s\n' '[trailing-rank-space:chess]' 'maxRank = 8 ' >> "${tmp_ini}"
 
 echo "parser regression tests started"
 
-check_output=$("${ENGINE}" check "${tmp_ini}" 2>&1 || true)
+bad_betza_ini=$(mktemp)
+bad_rank_wildcard_ini=$(mktemp)
+twochar_hint_ini=$(mktemp)
+trap 'rm -f "${tmp_ini}" "${bad_betza_ini}" "${bad_rank_wildcard_ini}" "${twochar_hint_ini}"' EXIT
+
+cat > "${bad_betza_ini}" <<'INI'
+[custom-piece-missing-betza:chess]
+customPiece1 = a
+INI
+
+cat > "${bad_rank_wildcard_ini}" <<'INI'
+[piecegroup-rank-wildcard-reject:chess]
+promotionRegion = P(a1*)
+INI
+
+cat > "${twochar_hint_ini}" <<'INI'
+[named-custom-piece-hint-twochar:chess]
+falcon = P':W
+INI
+
+check_output=$("${ENGINE}" check "${bad_betza_ini}" 2>&1 || true)
+if ! echo "${check_output}" | grep -q "customPiece1 - Missing Betza move notation"; then
+  echo "${check_output}"
+  exit 1
+fi
+
+check_output=$("${ENGINE}" check "${bad_rank_wildcard_ini}" 2>&1 || true)
+if ! echo "${check_output}" | grep -q "Illegal rank character: \*"; then
+  echo "${check_output}"
+  exit 1
+fi
+
+check_output=$("${ENGINE}" check "${twochar_hint_ini}" 2>&1 || true)
+if ! echo "${check_output}" | grep -q "falcon looks like a custom piece definition. Use customPieceN = P':W for new custom pieces."; then
+  echo "${check_output}"
+  exit 1
+fi
 
 two_boards_output=$(python3 - <<'PY' 2>&1
 import sys
