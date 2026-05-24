@@ -3187,7 +3187,7 @@ inline Position::HopperSquareProps Position::get_hopper_square_props(Square s, B
     bool knownBoardOccupancy = bool(byTypeBB[ALL_PIECES] & sBB);
 
     PieceType pcPt = type_of(pc);
-    props.pcSet = pcPt == NO_PIECE_TYPE || (!props.isOccupied && knownBoardOccupancy) ? NO_PIECE_SET : piece_set(pcPt);
+    props.pcSet = (pcPt == NO_PIECE_TYPE || !props.isOccupied || !knownBoardOccupancy) ? NO_PIECE_SET : piece_set(pcPt);
     if (props.isWall) props.pcSet |= PieceSet(1ULL << 62);
     if (props.isDead) props.pcSet |= PieceSet(1ULL << 61);
 
