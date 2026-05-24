@@ -35,6 +35,9 @@ customPiece1 = d:f{hurdles: 1,1; pre: 1,*; post: 1,1}R
 [locust-first:hopper-common]
 customPiece1 = d:{hurdles: 1,1; pre: 1,*; post: 1,1; capture: locust_first}R
 
+[piece-type-hurdles:hopper-common]
+customPiece1 = d:{hurdles: 1,1; pre: 2,2; post: 1,1; capture: locust_first; hurdle_piece_types: n; transparent_piece_types: p}R
+
 [locust-all:hopper-common]
 customPiece1 = d:{hurdles: 2,2; pre: 1,*; post: 1,1; capture: locust_all}R
 
@@ -188,6 +191,28 @@ if echo "$output" | grep -q "Fen: 7k/8/8/3D4/8/8/8/K7"; then
     echo "  [PASS] locust_first captured hurdle"
 else
     echo "  [FAIL] locust_first did not capture hurdle"
+    echo "Output was:"
+    echo "$output"
+    exit 1
+fi
+
+# Transparent piece types should be ignored by the hopper ray while hurdle_piece_types
+# still count as the captured hurdle.
+# White D3 (hopper), white p4 (transparent), black n5 (hurdle). D3D6 should be generated.
+run_test "piece-type-hurdles" "7k/8/8/3n4/3p4/3D4/8/K7 w - - 0 1" 4
+output=$("${ENGINE}" << EOF
+uci
+setoption name VariantPath value $INI_FILE
+setoption name UCI_Variant value piece-type-hurdles
+position fen 7k/8/8/3n4/3p4/3D4/8/K7 w - - 0 1 moves d3d6
+d
+quit
+EOF
+)
+if echo "$output" | grep -q "Fen: 7k/8/3D4/8/3p4/8/8/K7"; then
+    echo "  [PASS] piece-type hurdle/transparent parsing works"
+else
+    echo "  [FAIL] piece-type hurdle/transparent parsing mismatch"
     echo "Output was:"
     echo "$output"
     exit 1

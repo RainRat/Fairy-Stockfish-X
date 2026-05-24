@@ -91,7 +91,7 @@ namespace {
   const std::string horizontals = "rlsh";
   // from_betza creates a piece by parsing Betza notation
   // https://en.wikipedia.org/wiki/Betza%27s_funny_notation
-  PieceInfo* from_betza(const std::string& betza, const std::string& name) {
+  PieceInfo* from_betza(const std::string& betza, const std::string& name, const Variant* variant = nullptr) {
       std::unique_ptr<PieceInfo> p = std::make_unique<PieceInfo>();
       p->name = name;
       p->betza = betza;
@@ -507,6 +507,46 @@ namespace {
                   const size_t last = text.find_last_not_of(" \t\r\n");
                   return text.substr(first, last - first + 1);
               };
+              auto parse_piece_set = [&](std::string_view text, PieceSet& target, bool allowAll = true, bool allowNone = true) {
+                  std::string_view remaining = trim_view(text);
+                  if (remaining.empty())
+                      return false;
+                  if (allowAll && remaining == "*")
+                  {
+                      if (!variant)
+                          return false;
+                      target = variant->pieceTypes;
+                      return true;
+                  }
+                  if (allowNone && remaining == "-")
+                  {
+                      target = NO_PIECE_SET;
+                      return true;
+                  }
+
+                  PieceSet parsed = NO_PIECE_SET;
+                  while (!remaining.empty())
+                  {
+                      while (!remaining.empty() && (remaining.front() == ',' || std::isspace(static_cast<unsigned char>(remaining.front()))))
+                          remaining.remove_prefix(1);
+                      if (remaining.empty())
+                          break;
+                      if (!Variant::is_piece_id_start(remaining.front()))
+                          return false;
+
+                      std::string token(1, remaining.front());
+                      if (remaining.size() >= 2 && Variant::is_piece_id_suffix(remaining[1]))
+                          token.push_back(remaining[1]);
+
+                      PieceType pt = variant ? variant->piece_type_from_symbol(token) : NO_PIECE_TYPE;
+                      if (pt == NO_PIECE_TYPE)
+                          return false;
+                      parsed |= piece_set(pt);
+                      remaining.remove_prefix(token.size());
+                  }
+                  target = parsed;
+                  return true;
+              };
               auto parse_min_max = [&](std::string_view s, int& min_val, int& max_val) {
                   size_t comma = s.find(',');
                   if (comma != std::string_view::npos) {
@@ -628,20 +668,30 @@ namespace {
                               while (vpos < val.size()) {
                                   size_t next_comma = val.find(',', vpos);
                                   if (next_comma == std::string_view::npos) next_comma = val.size();
-                                  std::string_view v = trim_view(val.substr(vpos, next_comma - vpos));
+                                  std::string_view typeToken = trim_view(val.substr(vpos, next_comma - vpos));
 
-                                  if (v == "enemy") special |= PieceInfo::HopperProfile::ENEMY;
-                                  else if (v == "friendly") special |= PieceInfo::HopperProfile::FRIENDLY;
-                                  else if (v == "wall") special |= PieceInfo::HopperProfile::WALL;
-                                  else if (v == "dead") special |= PieceInfo::HopperProfile::DEAD;
-                                  else if (!v.empty())
+                                  if (typeToken == "enemy") special |= PieceInfo::HopperProfile::ENEMY;
+                                  else if (typeToken == "friendly") special |= PieceInfo::HopperProfile::FRIENDLY;
+                                  else if (typeToken == "wall") special |= PieceInfo::HopperProfile::WALL;
+                                  else if (typeToken == "dead") special |= PieceInfo::HopperProfile::DEAD;
+                                  else if (!typeToken.empty())
                                   {
-                                      std::cerr << "Unknown Betza hopper special type '" << v << "' in '" << betza << "'." << std::endl;
+                                      std::cerr << "Unknown Betza hopper special type '" << typeToken << "' in '" << betza << "'." << std::endl;
                                       reset_piece();
                                       invalidPiece = true;
                                   }
 
                                   vpos = next_comma + 1;
+                              }
+                          }
+                          else if (key == "hurdle_piece_types" || key == "transparent_piece_types") {
+                              bool isHurdle = (key == "hurdle_piece_types");
+                              PieceSet& target = isHurdle ? currentHopperProfile.hurdlePieceTypes : currentHopperProfile.transparentPieceTypes;
+                              if (!parse_piece_set(val, target, true, true))
+                              {
+                                  std::cerr << "Unknown Betza hopper piece type list '" << val << "' in '" << betza << "'." << std::endl;
+                                  reset_piece();
+                                  invalidPiece = true;
                               }
                           }
                           else if (key == "path" || key == "filter")
@@ -844,15 +894,15 @@ void PieceMap::init(const Variant* v) {
   add(SOLDIER, from_betza("fsW", "soldier"));
   add(HORSE, from_betza("nN", "horse"));
   add(ELEPHANT, from_betza("nA", "elephant"));
-  add(JANGGI_ELEPHANT, janggi_elephant_piece());
-  add(BANNER, from_betza("RcpRnN", "banner"));
-  add(WAZIR, from_betza("W", "wazir"));
-  add(COMMONER, from_betza("K", "commoner"));
-  add(CENTAUR, from_betza("KN", "centaur"));
-  add(KING, from_betza("K", "king"));
-  // Add custom pieces
-  for (PieceType pt = CUSTOM_PIECES; pt <= CUSTOM_PIECES_END; ++pt)
-      add(pt, from_betza(v != nullptr ? v->customPiece[pt - CUSTOM_PIECES] : "", ""));
+      add(JANGGI_ELEPHANT, janggi_elephant_piece());
+      add(BANNER, from_betza("RcpRnN", "banner"));
+      add(WAZIR, from_betza("W", "wazir"));
+      add(COMMONER, from_betza("K", "commoner"));
+      add(CENTAUR, from_betza("KN", "centaur"));
+      add(KING, from_betza("K", "king"));
+      // Add custom pieces
+      for (PieceType pt = CUSTOM_PIECES; pt <= CUSTOM_PIECES_END; ++pt)
+      add(pt, from_betza(v != nullptr ? v->customPiece[pt - CUSTOM_PIECES] : "", "", v));
 }
 
 void PieceMap::add(PieceType pt, PieceInfo* p) {
