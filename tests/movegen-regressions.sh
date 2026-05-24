@@ -21,6 +21,22 @@ startFen = 4k3/8/8/8/8/8/8/8 w - - 0 1
 [wazir-chess:chess]
 king = w:W
 startFen = W6w/QQ6/8/8/8/8/8/8 w
+
+[pawn-explicit-initial:fairy]
+customPiece1 = p:iW
+pawnTypes = p
+startFen = 4k3/8/8/8/8/8/4P3/4K3 w - - 0 1
+
+[swap-roundtrip:fairy]
+maxFile = e
+maxRank = 5
+king = -
+checking = false
+pass = true
+pieceToCharTable = -
+customPiece1 = a:mW
+adjacentSwapMoveTypes = a
+startFen = 5/5/5/1AP2/5 w - - 0 1
 EOF
 
 run_cmds() {
@@ -118,6 +134,21 @@ echo "$out" | grep -q "Nodes searched: 21"
 ! echo "$out" | grep -q "^e2e4:"
 ! echo "$out" | grep -q "^f2f3:"
 ! echo "$out" | grep -q "^f2f4:"
+
+# A pawn with explicit initial W moves must use the generic move generator.
+out=$(run_cmds "$TMP_INI" pawn-explicit-initial \
+  "position fen 4k3/8/8/8/8/8/4P3/4K3 w - - 0 1
+go perft 1")
+echo "$out" | grep -q "^e2d2: 1$"
+echo "$out" | grep -q "^e2f2: 1$"
+echo "$out" | grep -q "^e2e3: 1$"
+! echo "$out" | grep -q "^e2e4:"
+
+# A pawn that moved away and returned to its starting square must not regain double-step rights.
+out=$(run_cmds "$TMP_INI" swap-roundtrip \
+  "position fen 5/5/5/1AP2/5 w - - 0 1 moves b2c2s 0000 c2b2s 0000 0000
+go perft 1")
+! echo "$out" | grep -q "^c2c4:"
 
 # Kings Valley pieces use the maximum-distance rule, not ordinary queen slides.
 out=$(run_cmds "$ROOT_DIR/src/variants.ini" kings-valley \

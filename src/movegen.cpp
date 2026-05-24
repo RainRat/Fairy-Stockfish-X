@@ -536,9 +536,11 @@ namespace {
     }
 
     // Define single and double push, left and right capture, as well as respective promotion moves
+    const Bitboard unmovedPawns = pawns & pos.not_moved_pieces(Us);
+
     Bitboard b1 = shift<Up>(pawns) & movable & target;
-    Bitboard b2 = shift<Up>(shift<Up>(pawns & doubleStepRegion) & movable) & movable & target;
-    Bitboard b3 = shift<Up>(shift<Up>(shift<Up>(pawns & tripleStepRegion) & movable) & movable) & movable & target;
+    Bitboard b2 = shift<Up>(shift<Up>(unmovedPawns & doubleStepRegion) & movable) & movable & target;
+    Bitboard b3 = shift<Up>(shift<Up>(shift<Up>(unmovedPawns & tripleStepRegion) & movable) & movable) & movable & target;
     Bitboard brc = shift<UpRight>(pawns) & capturable & target;
     Bitboard blc = shift<UpLeft >(pawns) & capturable & target;
 
@@ -967,7 +969,7 @@ namespace {
         || !pawnInfo->universalHopper[1][MODALITY_QUIET].empty()
         || !pawnInfo->universalHopper[1][MODALITY_CAPTURE].empty()
         || pawnInfo->has_runtime_rider_augment();
-    const bool useGenericPawnGenerator = !pawnHasCustomNonStepMovement;
+    const bool useGenericPawnGenerator = !pawnHasCustomNonStepMovement && !pawnInfo->has_explicit_initial_moves();
 
     // Skip generating non-king moves when in double check
     if (Type != EVASIONS || !more_than_one(checkers & ~pos.non_sliding_riders()))
@@ -1042,14 +1044,18 @@ namespace {
             for (PieceSet ps = pos.piece_types() & ~(piece_set(PAWN) | KING); ps;)
                 moveList = generate_moves<Us, Type>(pos, moveList, PieceGenSpec{pop_lsb(ps), target, captureTarget, forcedFromMask});
         }
+        const bool canGenerateDrops = !restrictToForcedJumper
+                                   && pos.piece_drops()
+                                   && (pos.can_drop(Us, ALL_PIECES) || pos.two_boards());
+
         // generate drops
-        if (!restrictToForcedJumper && pos.piece_drops() && Type != CAPTURES && (pos.can_drop(Us, ALL_PIECES) || pos.two_boards()))
+        if (canGenerateDrops && Type != CAPTURES)
             for (PieceSet ps = pos.piece_types(); ps;)
                 moveList = generate_drops<Us, Type>(pos, moveList, pop_lsb(ps), target);
-        if (!restrictToForcedJumper && pos.piece_drops() && (pos.can_drop(Us, ALL_PIECES) || pos.two_boards()))
+        if (canGenerateDrops)
             for (PieceSet ps = pos.piece_types(); ps;)
                 moveList = generate_capture_drops<Us, Type>(pos, moveList, pop_lsb(ps), captureTarget);
-        if (!restrictToForcedJumper && pos.piece_drops() && (pos.can_drop(Us, ALL_PIECES) || pos.two_boards()))
+        if (canGenerateDrops)
             moveList = generate_edge_insertions<Us, Type>(pos, moveList);
         // generate exchange
         if (!restrictToForcedJumper && pos.capture_type() == PRISON && Type != CAPTURES && pos.has_exchange())
