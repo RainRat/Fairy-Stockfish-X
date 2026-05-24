@@ -80,6 +80,11 @@ customPiece1 = a:n{path:mid}L
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 startFen = k7/8/8/8/8/8/8/A6K w - - 0 1
 
+[lame-ferz-blockers:chess]
+customPiece1 = a:nF
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+startFen = 8/8/8/8/3A4/8/8/K6k w - - 0 1
+
 [moo-anypath:chess]
 customPiece1 = a:n{path:anypath}N
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
@@ -326,6 +331,15 @@ out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Varia
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-path-mid-clear\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
   | "${ENGINE}")
 echo "$out" | grep -q "^a1d2: 1$"
+
+# A lame Ferz is blocked only when both orthogonally adjacent squares are occupied.
+out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-ferz-blockers\nposition fen 8/8/8/3p4/3A4/8/8/K6k w - - 0 1\ngo perft 1\nquit\n' "$tmp_ini" \
+  | "${ENGINE}")
+echo "$out" | grep -q "^d4e5: 1$"
+
+out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-ferz-blockers\nposition fen 8/8/8/3p4/3Ap3/8/8/K6k w - - 0 1\ngo perft 1\nquit\n' "$tmp_ini" \
+  | "${ENGINE}")
+! echo "$out" | grep -q "^d4e5:"
 
 # Any-path lame knight: if one valid route is clear, the move should be available.
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value moo-anypath\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \

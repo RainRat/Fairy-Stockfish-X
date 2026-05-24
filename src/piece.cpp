@@ -609,8 +609,6 @@ namespace {
                                   currentLameProfile.path = PieceInfo::LameProfile::ORTH_FIRST;
                               else if (val == "moa" || val == "diagfirst")
                                   currentLameProfile.path = PieceInfo::LameProfile::DIAG_FIRST;
-                              else if (val == "orthonly")
-                                  currentLameProfile.path = PieceInfo::LameProfile::ORTH_ONLY;
                               else if (val == "anypath" || val == "either" || val == "both")
                                   currentLameProfile.path = PieceInfo::LameProfile::ANY_PATH;
                               else if (val == "mid")

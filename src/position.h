@@ -1955,7 +1955,6 @@ inline PieceSet Position::promotion_pawn_types(Color c) const {
 inline PieceSet Position::pawn_like_types(Color c) const {
   assert(var != nullptr);
   return var->promotionPawnTypes[c]
-       | var->enPassantTypes.get(c)
        | var->nMoveRuleTypes.get(c)
        | piece_set(var->mainPromotionPawnType[c]);
 }
@@ -3447,12 +3446,6 @@ inline bool Position::is_lame_blocked(Square from, Square to, const PieceInfo::L
                 else
                     moved = advance(cur, 0, stepR, next);
                 break;
-            case PieceInfo::LameProfile::ORTH_ONLY:
-                if (std::abs(df) >= std::abs(dr))
-                    moved = advance(cur, stepF, 0, next);
-                else
-                    moved = advance(cur, 0, stepR, next);
-                break;
             case PieceInfo::LameProfile::ANY_PATH:
                 if (df != 0 && dr != 0)
                     moved = advance(cur, stepF, stepR, next);
@@ -3485,6 +3478,32 @@ inline bool Position::is_lame_blocked(Square from, Square to, const PieceInfo::L
         return cur == to;
     };
 
+    // A lame Ferz is the only verified special case outside the generic path
+    // profiles: a one-step diagonal move is blocked only when both orthogonal
+    // corner squares are occupied.
+    auto lame_ferz_blocked = [&]() -> bool {
+        if (profile.limit != -1)
+            return false;
+
+        int df = int(file_of(to)) - int(file_of(from));
+        int dr = int(rank_of(to)) - int(rank_of(from));
+        if (topology_wraps())
+        {
+            df = adjust_delta(df, int(max_file()) + 1);
+            dr = adjust_delta(dr, int(max_rank()) + 1);
+        }
+        if (std::abs(df) != 1 || std::abs(dr) != 1)
+            return false;
+
+        const int stepF = (df > 0) - (df < 0);
+        const int stepR = (dr > 0) - (dr < 0);
+        Square orthFile = SQ_NONE;
+        Square orthRank = SQ_NONE;
+        if (!advance(from, stepF, 0, orthFile) || !advance(from, 0, stepR, orthRank))
+            return true;
+        return bool(occupied & square_bb(orthFile) & square_bb(orthRank));
+    };
+
     auto path_blocked = [&](const PathBuffer& path, bool midpointOnly) -> bool {
         if (!path.size)
             return false;
@@ -3513,12 +3532,17 @@ inline bool Position::is_lame_blocked(Square from, Square to, const PieceInfo::L
     PathBuffer path;
 
     auto path_type_blocked = [&](PieceInfo::LameProfile::PathType pathType) -> bool {
+        if (lame_ferz_blocked())
+            return true;
         if (!build_path(pathType, path))
             return true;
         return path_blocked(path, pathType == PieceInfo::LameProfile::MIDPOINT);
     };
 
     auto any_shortest_path_blocked = [&]() -> bool {
+        if (lame_ferz_blocked())
+            return true;
+
         path.size = 0;
 
         int targetDf = int(file_of(to)) - int(file_of(from));
@@ -3593,8 +3617,6 @@ inline bool Position::is_lame_blocked(Square from, Square to, const PieceInfo::L
         return path_type_blocked(PieceInfo::LameProfile::ORTH_FIRST);
     case PieceInfo::LameProfile::DIAG_FIRST:
         return path_type_blocked(PieceInfo::LameProfile::DIAG_FIRST);
-    case PieceInfo::LameProfile::ORTH_ONLY:
-        return path_type_blocked(PieceInfo::LameProfile::ORTH_ONLY);
     case PieceInfo::LameProfile::ANY_PATH:
         return any_shortest_path_blocked();
     case PieceInfo::LameProfile::MIDPOINT:

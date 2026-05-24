@@ -109,6 +109,10 @@ cylindrical = true
 castling = false
 checking = false
 startFen = 2k5/8/8/8/8/7p/P7/4K3 w - - 0 1
+
+[promotion-quiet-check:fairy]
+castling = false
+startFen = 7k/6P1/8/8/8/8/8/7K w - - 0 1
 )ini");
     variants.parse_istream<false>(ss);
 }
@@ -169,6 +173,21 @@ static void test_wrapped_quiet_check() {
     assert(!MoveList<QUIET_CHECKS>(pos).contains(m));
 }
 
+static void test_promotion_quiet_check() {
+    StateInfo st{};
+    Position pos;
+    pos.set(variants.get("promotion-quiet-check"), "7k/6P1/8/8/8/8/8/7K w - - 0 1", false, &st, nullptr);
+    const auto quietChecks = MoveList<QUIET_CHECKS>(pos);
+    assert(pos.gives_check(make<PROMOTION>(SQ_G7, SQ_G8, QUEEN)));
+    assert(pos.gives_check(make<PROMOTION>(SQ_G7, SQ_G8, ROOK)));
+    assert(!pos.gives_check(make<PROMOTION>(SQ_G7, SQ_G8, BISHOP)));
+    assert(!pos.gives_check(make<PROMOTION>(SQ_G7, SQ_G8, KNIGHT)));
+    assert(quietChecks.contains(make<PROMOTION>(SQ_G7, SQ_G8, QUEEN)));
+    assert(quietChecks.contains(make<PROMOTION>(SQ_G7, SQ_G8, ROOK)));
+    assert(!quietChecks.contains(make<PROMOTION>(SQ_G7, SQ_G8, BISHOP)));
+    assert(!quietChecks.contains(make<PROMOTION>(SQ_G7, SQ_G8, KNIGHT)));
+}
+
 int main(int argc, char** argv) {
     init_engine();
 
@@ -183,6 +202,8 @@ int main(int argc, char** argv) {
             test_pass_quiet_check();
         if (!which || !std::strcmp(which, "wrapped"))
             test_wrapped_quiet_check();
+        if (!which || !std::strcmp(which, "promotion"))
+            test_promotion_quiet_check();
     };
 
     if (argc > 1)

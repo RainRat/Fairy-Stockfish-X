@@ -192,11 +192,27 @@ namespace {
           if (pos.prison_pawn_promotion() && pos.count_in_prison(~us, pt) == 0)
               continue;
           if (pos.promotion_allowed(us, pt, to))
+          {
+              if constexpr (Type == QUIET_CHECKS)
+              {
+                  Move m = make<PROMOTION>(from, to, pt);
+                  if (!pos.gives_check(m))
+                      continue;
+              }
               moveList = make_move_and_gating<PROMOTION>(pos, moveList, us, from, to, pt);
+          }
       }
       PieceType pt = pos.promoted_piece_type(PAWN);
       if (pt && pos.promotion_allowed(us, pt) && !(pos.piece_promotion_on_capture() && pos.empty(to)))
+      {
+          if constexpr (Type == QUIET_CHECKS)
+          {
+              Move m = make<PIECE_PROMOTION>(from, to);
+              if (!pos.gives_check(m))
+                  return moveList;
+          }
           moveList = make_move_and_gating<PIECE_PROMOTION>(pos, moveList, us, from, to, pt);
+      }
       return moveList;
   }
 

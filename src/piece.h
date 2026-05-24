@@ -116,7 +116,6 @@ struct PieceInfo {
     enum PathType : uint8_t {
       ORTH_FIRST,
       DIAG_FIRST,
-      ORTH_ONLY,
       ANY_PATH,
       MIDPOINT
     };

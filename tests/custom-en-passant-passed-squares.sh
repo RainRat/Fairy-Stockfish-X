@@ -24,6 +24,7 @@ cfg = """
 customPiece1 = a:mWifemR3
 customPiece2 = s:fK
 pawn = -
+pawnTypes = a
 enPassantTypes = as
 tripleStepRegionWhite = *2
 tripleStepRegionBlack = *7

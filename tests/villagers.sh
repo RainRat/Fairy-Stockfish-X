@@ -34,6 +34,14 @@ position fen 7u/8/8/3sG3/8/8/8/U7 w - d6 0 1
 go perft 1")
 echo "$out" | grep -q "^e5d6: 1$"
 
+# Pieces that are only in enPassantTypes must not inherit pawn-style initial steps.
+out=$(run_cmds "setoption name UCI_Variant value villagers
+position startpos
+go perft 1")
+echo "$out" | grep -q "^a2a3: 1$"
+echo "$out" | grep -q "^a2a4: 1$"
+! echo "$out" | grep -q "^b1b3: 1$"
+
 # Royal pawns promote while keeping royal status through dedicated royal piece types.
 out=$(run_cmds "setoption name UCI_Variant value villagers
 position fen 8/3U4/8/8/8/8/8/7u w - - 0 1
