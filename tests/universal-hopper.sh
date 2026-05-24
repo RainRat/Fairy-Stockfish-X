@@ -149,6 +149,25 @@ EOF
     fi
 }
 
+function expect_variant_rejected() {
+    local variant=$1
+    local expected_message=$2
+    local output
+    output=$("${ENGINE}" << EOF 2>&1
+uci
+setoption name VariantPath value $INI_FILE
+setoption name UCI_Variant value $variant
+quit
+EOF
+)
+    if ! grep -Fq "$expected_message" <<<"$output"; then
+        echo "  [FAIL] expected rejection for $variant"
+        echo "Output was:"
+        echo "$output"
+        exit 1
+    fi
+}
+
 # 1. Basic Grasshopper
 # White D4 (Hopper), White D5 (Hurdle). Hopper jumps to D6.
 # White King A1, Black King H8.
@@ -461,18 +480,10 @@ else
     exit 1
 fi
 
-# 6. Parser Robustness
-# Should not crash and use default (1) for 'abc'
-# customPiece1 = d:{hurdles: abc,1; pre: 1,*}R
-# White D3, White D4 (Hurdle). Jump to D5. King A1.
-# Moves: King A1 (3), D4D5 (1), Hopper D3D5 (1). Total = 5
-run_test "parser-fail" "7k/8/8/8/3P4/3D4/8/K7 w - - 0 1" 5
-
-# Missing comma in hurdles parameter should not crash and should warn.
-# customPiece1 = d:{hurdles: 2; pre: 1,*}R defaults to hurdles 1,1.
-# White D3, White D4 (Hurdle). Jump to D5. King A1.
-# Moves: King A1 (3), D4D5 (1), Hopper D3D5 (1). Total = 5
-run_test "parser-missing-comma" "7k/8/8/8/3P4/3D4/8/K7 w - - 0 1" 5
+# 6. Parser robustness
+# Malformed numeric hopper ranges are now rejected during variant loading.
+expect_variant_rejected "parser-fail" "unknown variant 'parser-fail'; keeping 'chess'"
+expect_variant_rejected "parser-missing-comma" "unknown variant 'parser-missing-comma'; keeping 'chess'"
 
 reject_out=$("${ENGINE}" << EOF 2>&1
 uci

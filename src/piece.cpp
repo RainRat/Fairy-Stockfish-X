@@ -583,7 +583,11 @@ namespace {
                       else
                           max_val = safe_stoi(max_s, 1, maxOk);
                       if (!minOk || (!maxOk && max_s != "*"))
+                      {
                           std::cerr << "Invalid numeric value in Betza hopper parameters: '" << s << "'" << std::endl;
+                          reset_piece();
+                          invalidPiece = true;
+                      }
                       if (minOk && (maxOk || max_s == "*") && min_val > max_val)
                       {
                           std::cerr << "Invalid hopper range (min > max) in Betza hopper parameters: '" << s
@@ -592,7 +596,11 @@ namespace {
                       }
                   }
                   else
+                  {
                       std::cerr << "Invalid hopper range (missing comma) in Betza hopper parameters: '" << s << "'" << std::endl;
+                      reset_piece();
+                      invalidPiece = true;
+                  }
               };
               const bool blockIsLame = lame;
               while (pos < params.size()) {

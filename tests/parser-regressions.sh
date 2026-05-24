@@ -192,7 +192,8 @@ bad_rider_range_ini=$(mktemp)
 bad_rank_wildcard_ini=$(mktemp)
 twochar_hint_ini=$(mktemp)
 bad_hopper_type_ini=$(mktemp)
-trap 'rm -f "${tmp_ini}" "${bad_betza_ini}" "${bad_hopper_brace_ini}" "${bad_rider_range_ini}" "${bad_rank_wildcard_ini}" "${twochar_hint_ini}" "${bad_hopper_type_ini}"' EXIT
+bad_hopper_numeric_ini=$(mktemp)
+trap 'rm -f "${tmp_ini}" "${bad_betza_ini}" "${bad_hopper_brace_ini}" "${bad_rider_range_ini}" "${bad_rank_wildcard_ini}" "${twochar_hint_ini}" "${bad_hopper_type_ini}" "${bad_hopper_numeric_ini}"' EXIT
 
 cat > "${bad_betza_ini}" <<'INI'
 [custom-piece-missing-betza:chess]
@@ -222,6 +223,11 @@ INI
 cat > "${bad_hopper_type_ini}" <<'INI'
 [bad-hopper-type:chess]
 customPiece1 = d:{hurdles: 1,1; pre: 1,*; post: 1,1; hurdle_types: enemy,bogus}R
+INI
+
+cat > "${bad_hopper_numeric_ini}" <<'INI'
+[bad-hopper-numeric:chess]
+customPiece1 = d:{hurdles: abc,1; pre: 1,*}R
 INI
 
 check_output=$("${ENGINE}" check "${bad_betza_ini}" 2>&1 || true)
@@ -272,6 +278,32 @@ fi
 
 if ! echo "${bad_hopper_type_output}" | grep -q "unknown variant 'bad-hopper-type'; keeping 'chess'"; then
   echo "${bad_hopper_type_output}"
+  exit 1
+fi
+
+set +e
+bad_hopper_numeric_output=$(cat <<CMDS | "${ENGINE}" 2>&1
+uci
+setoption name VariantPath value ${bad_hopper_numeric_ini}
+setoption name UCI_Variant value bad-hopper-numeric
+quit
+CMDS
+)
+bad_hopper_numeric_rc=$?
+set -e
+
+if [ "${bad_hopper_numeric_rc}" -ne 0 ]; then
+  echo "${bad_hopper_numeric_output}"
+  exit 1
+fi
+
+if ! echo "${bad_hopper_numeric_output}" | grep -Fq "Invalid numeric value in Betza hopper parameters: 'abc,1'"; then
+  echo "${bad_hopper_numeric_output}"
+  exit 1
+fi
+
+if ! echo "${bad_hopper_numeric_output}" | grep -Fq "unknown variant 'bad-hopper-numeric'; keeping 'chess'"; then
+  echo "${bad_hopper_numeric_output}"
   exit 1
 fi
 
