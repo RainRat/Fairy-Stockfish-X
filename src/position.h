@@ -827,7 +827,7 @@ private:
       uint8_t special;
   };
 
-  inline HopperSquareProps get_hopper_square_props(Square s, Bitboard occupied, Bitboard ownPieces, Color us, Piece pc) const;
+  inline HopperSquareProps get_hopper_square_props(Square s, Bitboard occupied, Bitboard ownPieces, Piece pc) const;
 
   inline bool is_valid_hopper_destination(const PieceInfo::HopperProfile& profile, int hurdlesHit, int distToFirstHurdle, int distFromLastHurdle) const;
 
@@ -3178,7 +3178,7 @@ inline Bitboard Position::wrapped_rose_targets(Square from, Bitboard occupied,
   return attack;
 }
 
-inline Position::HopperSquareProps Position::get_hopper_square_props(Square s, Bitboard occupied, Bitboard ownPieces, Color us, Piece pc) const {
+inline Position::HopperSquareProps Position::get_hopper_square_props(Square s, Bitboard occupied, Bitboard ownPieces, Piece pc) const {
     HopperSquareProps props;
     Bitboard sBB = square_bb(s);
     props.isOccupied = (occupied & sBB);
@@ -3261,7 +3261,7 @@ inline Bitboard Position::universal_hopper_targets_impl(const std::map<Direction
             current = next;
 
             Bitboard sBB = square_bb(current);
-            HopperSquareProps props = get_hopper_square_props(current, occupied, ownPieces, c, piece_on(current));
+            HopperSquareProps props = get_hopper_square_props(current, occupied, ownPieces, piece_on(current));
 
             bool isDestination = false;
             if (profile.equiRule != PieceInfo::EQUI_STOPPER && !props.isWall && !props.isDead) {
@@ -4263,7 +4263,7 @@ inline Square Position::jump_capture_square(Square from, Square to, Bitboard occ
 
                   Bitboard sBB = square_bb(s);
                   bool knownBoardOccupancy = bool(byTypeBB[ALL_PIECES] & sBB);
-                  HopperSquareProps props = get_hopper_square_props(s, occupied, byColorBB[us], us, resolved_piece(s, knownBoardOccupancy));
+                  HopperSquareProps props = get_hopper_square_props(s, occupied, byColorBB[us], resolved_piece(s, knownBoardOccupancy));
 
                   if (props.isOccupied || props.isWall || props.isDead)
                   {
@@ -4324,7 +4324,7 @@ inline Square Position::jump_capture_square(Square from, Square to, Bitboard occ
 
                               Bitboard hsBB = square_bb(hurdleScan);
                               bool knownHsBoardOccupancy = bool(byTypeBB[ALL_PIECES] & hsBB);
-                              HopperSquareProps hprops = get_hopper_square_props(hurdleScan, occupied, byColorBB[us], us, resolved_piece(hurdleScan, knownHsBoardOccupancy));
+                              HopperSquareProps hprops = get_hopper_square_props(hurdleScan, occupied, byColorBB[us], resolved_piece(hurdleScan, knownHsBoardOccupancy));
 
                               if (hprops.isOccupied || hprops.isWall || hprops.isDead)
                               {
