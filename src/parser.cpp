@@ -355,6 +355,46 @@ namespace {
         return !token.empty() && !rest.empty();
     }
 
+    bool validate_custom_piece_betza_structure(const std::string& betza, const std::string& name) {
+        int braceDepth = 0;
+        int bracketDepth = 0;
+
+        for (char ch : betza) {
+            if (ch == '{')
+                ++braceDepth;
+            else if (ch == '}') {
+                if (braceDepth == 0) {
+                    std::cerr << name << " - Invalid Betza hopper parameters in '" << betza
+                              << "': missing opening '}'." << std::endl;
+                    return false;
+                }
+                --braceDepth;
+            }
+            else if (ch == '[')
+                ++bracketDepth;
+            else if (ch == ']') {
+                if (bracketDepth == 0) {
+                    std::cerr << name << " - Invalid Betza rider range in '" << betza
+                              << "': missing opening ']'." << std::endl;
+                    return false;
+                }
+                --bracketDepth;
+            }
+        }
+
+        if (braceDepth != 0) {
+            std::cerr << name << " - Invalid Betza hopper parameters in '" << betza
+                      << "': missing closing '}'." << std::endl;
+            return false;
+        }
+        if (bracketDepth != 0) {
+            std::cerr << name << " - Invalid Betza rider range in '" << betza
+                      << "': missing closing ']'." << std::endl;
+            return false;
+        }
+        return true;
+    }
+
     bool parse_rank_index(const std::string& value, int& out) {
         int rank = 0;
         if (!parse_positive_int(value, rank))
@@ -1295,6 +1335,8 @@ bool VariantParser<DoCheck>::parse_piece_types(Variant* v) {
             {
                 if (!rest.empty())
                 {
+                    if (!validate_custom_piece_betza_structure(rest, name))
+                        return false;
                     v->customPiece[pt - CUSTOM_PIECES] = rest;
                     // Is there an en passant flag in the Betza notation?
                     if (v->customPiece[pt - CUSTOM_PIECES].find('e') != std::string::npos)

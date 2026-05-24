@@ -187,13 +187,25 @@ printf '%s\n' '[trailing-rank-space:chess]' 'maxRank = 8 ' >> "${tmp_ini}"
 echo "parser regression tests started"
 
 bad_betza_ini=$(mktemp)
+bad_hopper_brace_ini=$(mktemp)
+bad_rider_range_ini=$(mktemp)
 bad_rank_wildcard_ini=$(mktemp)
 twochar_hint_ini=$(mktemp)
-trap 'rm -f "${tmp_ini}" "${bad_betza_ini}" "${bad_rank_wildcard_ini}" "${twochar_hint_ini}"' EXIT
+trap 'rm -f "${tmp_ini}" "${bad_betza_ini}" "${bad_hopper_brace_ini}" "${bad_rider_range_ini}" "${bad_rank_wildcard_ini}" "${twochar_hint_ini}"' EXIT
 
 cat > "${bad_betza_ini}" <<'INI'
 [custom-piece-missing-betza:chess]
-customPiece1 = a
+customPiece1 = a:
+INI
+
+cat > "${bad_hopper_brace_ini}" <<'INI'
+[hopper-missing-brace:chess]
+customPiece1 = a:R{hurdles: 1,1
+INI
+
+cat > "${bad_rider_range_ini}" <<'INI'
+[rider-missing-bracket:chess]
+customPiece1 = a:R[3-
 INI
 
 cat > "${bad_rank_wildcard_ini}" <<'INI'
@@ -207,7 +219,19 @@ falcon = P':W
 INI
 
 check_output=$("${ENGINE}" check "${bad_betza_ini}" 2>&1 || true)
-if ! echo "${check_output}" | grep -q "customPiece1 - Missing Betza move notation"; then
+if ! echo "${check_output}" | grep -Fq "customPiece1 - Missing Betza move notation"; then
+  echo "${check_output}"
+  exit 1
+fi
+
+check_output=$("${ENGINE}" check "${bad_hopper_brace_ini}" 2>&1 || true)
+if ! echo "${check_output}" | grep -Fq "customPiece1 - Invalid Betza hopper parameters in 'R{hurdles: 1,1': missing closing '}'."; then
+  echo "${check_output}"
+  exit 1
+fi
+
+check_output=$("${ENGINE}" check "${bad_rider_range_ini}" 2>&1 || true)
+if ! echo "${check_output}" | grep -Fq "customPiece1 - Invalid Betza rider range in 'R[3-': missing closing ']'."; then
   echo "${check_output}"
   exit 1
 fi

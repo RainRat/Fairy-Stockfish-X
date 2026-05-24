@@ -272,6 +272,7 @@ namespace {
                       std::cerr << "Invalid Betza rider range in '" << betza
                                 << "': missing closing ']'." << std::endl;
                       reset_parser_state();
+                      invalidPiece = true;
                       return;
                   }
                   std::string rangeSpec = expandedBetza.substr(i + 2, close - i - 2);
@@ -483,6 +484,7 @@ namespace {
               {
                   std::cerr << "Invalid Betza hopper parameters in '" << betza << "': missing closing '}'." << std::endl;
                   reset_parser_state();
+                  invalidPiece = true;
                   continue;
               }
               std::string_view params(expandedBetza.data() + i + 1, close - i - 1);
@@ -849,6 +851,8 @@ namespace {
               commit_atom(tupleAtom, repeatedTupleRider, i, ')', true);
           }
       }
+      if (invalidPiece)
+          return nullptr;
       return p.release();
   }
   // Special multi-leg betza description for Janggi elephant
