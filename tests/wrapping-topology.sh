@@ -36,6 +36,15 @@ promotionRegionWhite = *8
 promotionRegionBlack = *1
 startFen = 8/P7/8/8/8/8/8/4K2k w - - 0 1
 
+[tor-pawn-optional-promo:chess]
+toroidal = true
+castling = false
+mandatoryPawnPromotion = false
+promotionPieceTypes = q r b n
+promotionRegionWhite = *8
+promotionRegionBlack = *1
+startFen = 8/P7/8/8/8/8/8/4K2k w - - 0 1
+
 [cyl-check:chess]
 cylindrical = true
 castling = false
@@ -116,6 +125,13 @@ echo "${tor_pawn_output}" | grep -q "a2h3: 1"
 
 tor_pawn_promo_output=$(run_variant tor-pawn-promo)
 echo "${tor_pawn_promo_output}" | grep -q "a7a8+: 1"
+
+tor_pawn_optional_promo_output=$(run_variant tor-pawn-optional-promo)
+echo "${tor_pawn_optional_promo_output}" | grep -q "^a7a8: 1$"
+echo "${tor_pawn_optional_promo_output}" | grep -q "^a7a8q: 1$"
+echo "${tor_pawn_optional_promo_output}" | grep -q "^a7a8r: 1$"
+echo "${tor_pawn_optional_promo_output}" | grep -q "^a7a8b: 1$"
+echo "${tor_pawn_optional_promo_output}" | grep -q "^a7a8n: 1$"
 
 cyl_check_output=$(run_variant cyl-check)
 echo "${cyl_check_output}" | grep -q "a1h1: 1"

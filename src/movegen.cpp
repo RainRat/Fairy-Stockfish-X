@@ -486,6 +486,8 @@ namespace {
             Bitboard quiets = pos.moves_from(Us, PAWN, from) & target;
             Bitboard attacks = pos.attacks_from(Us, PAWN, from) & capturable & target;
             Bitboard epSquares = pos.attacks_from(Us, PAWN, from) & pos.ep_squares() & ~pos.pieces() & target;
+            Bitboard quietPromotions = quiets & standardPromotionZone;
+            Bitboard capturePromotions = attacks & standardPromotionZone;
 
             if (mandatoryPromotionZone)
             {
@@ -498,17 +500,10 @@ namespace {
                 }
                 quiets &= ~blocked;
                 attacks &= ~blocked;
-                Bitboard quietPromotions = quiets & mandatoryPromotionZone;
-                Bitboard capturePromotions = attacks & mandatoryPromotionZone;
+                quietPromotions &= ~blocked;
+                capturePromotions &= ~blocked;
                 quiets &= ~mandatoryPromotionZone;
                 attacks &= ~mandatoryPromotionZone;
-
-                if (GeneratesQuiets)
-                    while (quietPromotions)
-                        emit_promotions(from, pop_lsb(quietPromotions));
-                if (GeneratesCaptures)
-                    while (capturePromotions)
-                        emit_promotions(from, pop_lsb(capturePromotions));
             }
 
             if (QuietChecks)
@@ -530,6 +525,13 @@ namespace {
                     moveList = make_move_and_gating<EN_PASSANT>(pos, moveList, Us, from, epSquare);
                 }
             }
+
+            if (GeneratesQuiets)
+                while (quietPromotions)
+                    emit_promotions(from, pop_lsb(quietPromotions));
+            if (GeneratesCaptures)
+                while (capturePromotions)
+                    emit_promotions(from, pop_lsb(capturePromotions));
         }
 
         return moveList;
