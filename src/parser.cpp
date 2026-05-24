@@ -1337,6 +1337,8 @@ bool VariantParser<DoCheck>::parse_piece_types(Variant* v) {
                 {
                     if (!validate_custom_piece_betza_structure(rest, name))
                         return false;
+                    if (!validate_custom_piece_betza(rest, name, v))
+                        return false;
                     v->customPiece[pt - CUSTOM_PIECES] = rest;
                     // Is there an en passant flag in the Betza notation?
                     if (v->customPiece[pt - CUSTOM_PIECES].find('e') != std::string::npos)

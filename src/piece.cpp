@@ -855,12 +855,18 @@ namespace {
           return nullptr;
       return p.release();
   }
+
   // Special multi-leg betza description for Janggi elephant
   PieceInfo* janggi_elephant_piece() {
       PieceInfo* p = from_betza("nZ", "janggiElephant");
       p->betza = "mafsmafW"; // for compatibility with XBoard/Winboard
       return p;
   }
+}
+
+bool validate_custom_piece_betza(const std::string& betza, const std::string& name, const Variant* variant) {
+    std::unique_ptr<PieceInfo> p(from_betza(betza, name, variant));
+    return bool(p);
 }
 
 void PieceMap::init(const Variant* v) {

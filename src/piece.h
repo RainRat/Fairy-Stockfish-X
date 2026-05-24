@@ -218,6 +218,8 @@ private:
 
 extern PieceMap pieceMap;
 
+bool validate_custom_piece_betza(const std::string& betza, const std::string& name, const Variant* variant = nullptr);
+
 inline std::string piece_name(PieceType pt) {
   return is_custom(pt) ? "customPiece" + std::to_string(pt - CUSTOM_PIECES + 1)
                        : pieceMap.get(pt)->name;
