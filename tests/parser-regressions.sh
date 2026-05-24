@@ -193,7 +193,8 @@ bad_rank_wildcard_ini=$(mktemp)
 twochar_hint_ini=$(mktemp)
 bad_hopper_type_ini=$(mktemp)
 bad_hopper_numeric_ini=$(mktemp)
-trap 'rm -f "${tmp_ini}" "${bad_betza_ini}" "${bad_hopper_brace_ini}" "${bad_rider_range_ini}" "${bad_rank_wildcard_ini}" "${twochar_hint_ini}" "${bad_hopper_type_ini}" "${bad_hopper_numeric_ini}"' EXIT
+capture_allowed_only_ini=$(mktemp)
+trap 'rm -f "${tmp_ini}" "${bad_betza_ini}" "${bad_hopper_brace_ini}" "${bad_rider_range_ini}" "${bad_rank_wildcard_ini}" "${twochar_hint_ini}" "${bad_hopper_type_ini}" "${bad_hopper_numeric_ini}" "${capture_allowed_only_ini}"' EXIT
 
 cat > "${bad_betza_ini}" <<'INI'
 [custom-piece-missing-betza:chess]
@@ -228,6 +229,14 @@ INI
 cat > "${bad_hopper_numeric_ini}" <<'INI'
 [bad-hopper-numeric:chess]
 customPiece1 = d:{hurdles: abc,1; pre: 1,*}R
+INI
+
+cat > "${capture_allowed_only_ini}" <<'INI'
+[capture-allowed-only:chess]
+king = -
+checking = false
+captureAllowed = *:p
+startFen = 8/3p4/8/8/3Q2n1/8/8/8 w - - 0 1
 INI
 
 check_output=$("${ENGINE}" check "${bad_betza_ini}" 2>&1 || true)
@@ -304,6 +313,26 @@ fi
 
 if ! echo "${bad_hopper_numeric_output}" | grep -Fq "unknown variant 'bad-hopper-numeric'; keeping 'chess'"; then
   echo "${bad_hopper_numeric_output}"
+  exit 1
+fi
+
+capture_allowed_only_output=$(cat <<CMDS | "${ENGINE}" 2>&1
+uci
+setoption name VariantPath value ${capture_allowed_only_ini}
+setoption name UCI_Variant value capture-allowed-only
+position fen 8/3p4/8/8/3Q2n1/8/8/8 w - - 0 1
+go perft 1
+quit
+CMDS
+)
+
+if ! echo "${capture_allowed_only_output}" | grep -q "d4d7:"; then
+  echo "${capture_allowed_only_output}"
+  exit 1
+fi
+
+if echo "${capture_allowed_only_output}" | grep -q "d4g4:"; then
+  echo "${capture_allowed_only_output}"
   exit 1
 fi
 

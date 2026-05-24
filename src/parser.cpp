@@ -1654,6 +1654,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("mutuallyImmuneTypes", v->mutuallyImmuneTypes, v);
     parse_attribute("deathOnCaptureTypes", v->deathOnCaptureTypes, v);
     parse_attribute("mutuallyHopIllegalTypes", v->mutuallyHopIllegalTypes, v);
+    const bool hasCaptureForbidden = config.find("captureForbidden") != config.end();
     auto parse_capture_map = [&](const std::string& key, bool allow) {
         const auto& it = config.find(key);
         if (it == config.end())
@@ -1662,7 +1663,10 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
         std::string entry;
         std::stringstream ss(it->second);
         PieceSet parsed[PIECE_TYPE_NB];
-        std::copy(v->captureForbidden, v->captureForbidden + PIECE_TYPE_NB, parsed);
+        if (allow && !hasCaptureForbidden)
+            std::fill(std::begin(parsed), std::end(parsed), v->pieceTypes);
+        else
+            std::copy(v->captureForbidden, v->captureForbidden + PIECE_TYPE_NB, parsed);
         while (ss >> entry) {
             size_t sep = entry.find(':');
             if (sep == std::string::npos || sep == 0 || sep + 1 >= entry.size()) {
