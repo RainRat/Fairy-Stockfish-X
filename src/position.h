@@ -613,7 +613,7 @@ public:
   Bitboard attackers_to_king(Square s, Color c) const;
   Bitboard attackers_to_king(Square s, Bitboard occupied, Color c) const;
   Bitboard attackers_to_king(Square s, Bitboard occupied, Color c, Bitboard janggiCannons, PieceType pt = NO_PIECE_TYPE) const;
-  Bitboard janggi_cannon_attackers_to_king(Square s, Bitboard occupied, Color c) const;
+  Bitboard janggi_cannon_attackers_to_king(Square s, Bitboard occupied, Color c, Bitboard janggiCannons) const;
   template <bool Initial=false>
   Bitboard attacks_from(Color c, PieceType pt, Square s) const;
   template <bool Initial=false>
@@ -4047,7 +4047,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s, Bitboard o
   {
       PieceType diagType = movePt == WAZIR ? FERS : movePt == SOLDIER ? PAWN : movePt == ROOK ? BISHOP : NO_PIECE_TYPE;
       if (diagType)
-          b |= moves_bb<false>(c, diagType, s, occupancy) & diagonal_lines();
+          b |= attacks_bb(c, diagType, s, occupancy) & diagonal_lines();
       else if (movePt == JANGGI_CANNON)
           b |=  rider_attacks_bb<RIDER_CANNON_DIAG>(s, occupancy)
               & rider_attacks_bb<RIDER_CANNON_DIAG>(s, (occupancy ^ pieces(pt)))

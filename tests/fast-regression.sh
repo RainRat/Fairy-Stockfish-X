@@ -36,6 +36,7 @@ export PYTHONPATH="${ROOT_DIR}${PYTHONPATH:+:${PYTHONPATH}}"
 
 run_step "protocol" timeout 90s bash tests/protocol.sh "${ENGINE}"
 run_step "movegen regressions" timeout 90s bash tests/movegen-regressions.sh "${ENGINE}"
+run_step "janggi regressions" timeout 60s bash tests/janggi-regression.sh "${ENGINE}"
 run_step "wrapping topology" timeout 90s bash tests/wrapping-topology.sh "${ENGINE}"
 run_step "unorthodox interactions" timeout 90s bash tests/unorthodox-interactions.sh "${ENGINE}"
 run_step "in-place transform undo" timeout 60s bash tests/in-place-transform-undo.sh "${ENGINE}"

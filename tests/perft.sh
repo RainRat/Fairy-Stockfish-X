@@ -222,9 +222,7 @@ if [[ $VARIANT == "all" ||  $VARIANT == "largeboard" ]]; then
     # Local FSF-X and current upstream both return 798554 for this case.
     expect "$perft_exp" manchu startpos 4 798554 > /dev/null
     expect "$perft_exp" janggi startpos 4 1065277 > /dev/null
-    # FSF-X diverges from upstream FSF (all=yes, largeboards=yes) on this Janggi position:
-    # local = 43059, upstream = 76763.
-    expect "$perft_exp" janggi "fen 1n1kaabn1/cr2N4/5C1c1/p1pNp3p/9/9/P1PbP1P1P/3r1p3/4A4/R1BA1KB1R b - - 0 1" 4 43059 > /dev/null
+    expect "$perft_exp" janggi "fen 1n1kaabn1/cr2N4/5C1c1/p1pNp3p/9/9/P1PbP1P1P/3r1p3/4A4/R1BA1KB1R b - - 0 1" 4 76763 > /dev/null
     # FSF-X fixes a Janggi cannon self-check legality issue seen upstream.
     # Local all-vars build currently returns 151344 here; upstream (190426) returned 151202.
     expect "$perft_exp" janggi "fen 1Pbcka3/3nNn1c1/N2CaC3/1pB6/9/9/5P3/9/4K4/9 w - - 0 23" 4 151344 > /dev/null
