@@ -49,7 +49,6 @@ case "${ENGINE_BASENAME}" in
 esac
 
 HARNESS_CPP=$(mktemp /tmp/quiet-check-special-moves-XXXXXX.cpp)
-trap 'rm -f "${HARNESS_CPP}"' EXIT
 
 cat > "${HARNESS_CPP}" <<'EOF'
 #include <cassert>
@@ -220,16 +219,16 @@ while IFS= read -r -d '' obj; do
   OBJ_FILES+=("${obj}")
 done < <(find "${ROOT_DIR}/src" -maxdepth 1 -name '*.o' ! -name 'main.o' -print0 | sort -z)
 
+TMP_BIN=$(mktemp /tmp/quiet-check-special-moves-XXXXXX)
+trap 'rm -f "${HARNESS_CPP}" "${TMP_BIN}"' EXIT
+(
+  cd "${ROOT_DIR}/src"
+  "${CXX}" -std=c++17 -O2 -Wall -Wextra -flto -I"${ROOT_DIR}/src" "${CXX_DEFS[@]}" "${HARNESS_CPP}" "${OBJ_FILES[@]}" -pthread -o "${TMP_BIN}"
+)
+
 run_case() {
   local which="$1"
-  local tmp_bin
-  tmp_bin=$(mktemp /tmp/quiet-check-special-moves-XXXXXX)
-  (
-    cd "${ROOT_DIR}/src"
-    "${CXX}" -std=c++17 -O2 -Wall -Wextra -flto -I"${ROOT_DIR}/src" "${CXX_DEFS[@]}" "${HARNESS_CPP}" "${OBJ_FILES[@]}" -pthread -o "${tmp_bin}"
-    "${tmp_bin}" "${which}"
-  )
-  rm -f "${tmp_bin}"
+  "${TMP_BIN}" "${which}"
 }
 
 run_case pairdrop

@@ -21,7 +21,6 @@
 #include <fstream>
 #include <sstream>
 #include <cctype>
-#include <charconv>
 
 #include "parser.h"
 #include "piece.h"
@@ -34,46 +33,6 @@ namespace Stockfish {
 VariantMap variants; // Global object
 
 namespace {
-    bool parse_positive_int(const std::string& raw, int& out) {
-        if (raw.empty())
-            return false;
-
-        const auto first = raw.find_first_not_of(" \t\r\n\f\v");
-        if (first == std::string::npos)
-            return false;
-        const auto last = raw.find_last_not_of(" \t\r\n\f\v");
-        const char* begin = raw.data() + first;
-        const char* end = raw.data() + last + 1;
-        auto [ptr, ec] = std::from_chars(begin, end, out);
-        return ec == std::errc() && ptr == end && out >= 1;
-    }
-
-    bool parse_file_index(const std::string& raw, int& out) {
-        if (raw.empty())
-            return false;
-
-        const auto first = raw.find_first_not_of(" \t\r\n\f\v");
-        if (first == std::string::npos)
-            return false;
-        const auto last = raw.find_last_not_of(" \t\r\n\f\v");
-        const std::string value = raw.substr(first, last - first + 1);
-
-        if (std::isdigit(static_cast<unsigned char>(value[0])))
-        {
-            int file = 0;
-            auto [ptr, ec] = std::from_chars(value.data(), value.data() + value.size(), file);
-            if (ec != std::errc() || ptr != value.data() + value.size() || file < 1)
-                return false;
-            out = file - 1;
-            return true;
-        }
-
-        if (value.size() != 1)
-            return false;
-        out = std::tolower(static_cast<unsigned char>(value[0])) - 'a';
-        return true;
-    }
-
     std::string lower_ascii(std::string s) {
         for (char& c : s)
             c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
