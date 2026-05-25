@@ -1249,7 +1249,7 @@ namespace {
             Bitboard kingAttacks = pos.attacks_from(Us, KING, ksq) & pos.pieces();
             Bitboard kingMoves   = pos.moves_from(Us, KING, ksq) & ~pos.pieces();
             Bitboard kingCaptureMask = Type == EVASIONS ? ~pos.pieces(Us) : captureTarget;
-            if (Type == EVASIONS && pos.self_capture(KING))
+            if (Type != QUIETS && Type != QUIET_CHECKS && pos.self_capture(KING))
                 kingCaptureMask |= pos.pieces(Us) & ~pos.pieces(Us, KING);
             Bitboard kingQuietMask = Type == EVASIONS ? ~pos.pieces(Us) : target;
             b = (kingAttacks & kingCaptureMask) | (kingMoves & kingQuietMask);
