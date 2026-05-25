@@ -634,14 +634,14 @@ namespace {
     return pos.attacks_from(c, pt, sq, syntheticOccupancy);
   }
 
-  Bitboard rose_revealed_blockers(Square target, Square attackerSq, Bitboard occupied, const MagicGeometry* mg) {
+  Bitboard rose_revealed_blockers(Square target, Square attackerSq, Bitboard occupied) {
     Bitboard blockers = 0;
     Bitboard candidates = rose_between_union_bb(target, attackerSq, Bitboard(0)) & occupied & ~square_bb(attackerSq);
 
     while (candidates)
     {
         Square blocker = pop_lsb(candidates);
-        if (rose_attacks_bb(attackerSq, occupied ^ square_bb(blocker), mg) & target)
+        if (rose_attacks_bb(attackerSq, occupied ^ square_bb(blocker)) & target)
             blockers |= blocker;
     }
 
@@ -2456,7 +2456,7 @@ Bitboard Position::slider_blockers(Bitboard sliders, Square s, Bitboard& pinners
     PieceType sniperType = type_of(sniper);
     if (AttackRiderTypes[sniperType] & RIDER_ROSE)
     {
-        Bitboard b = rose_revealed_blockers(s, sniperSq, occupancy, magic_geometry());
+        Bitboard b = rose_revealed_blockers(s, sniperSq, occupancy);
         if (b && !more_than_one(b))
             pinners |= pieces(c) & sniperSq;
         blockers |= b;

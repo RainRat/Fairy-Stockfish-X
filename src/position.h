@@ -531,34 +531,27 @@ public:
 
   template<PieceType Pt>
   Bitboard attacks_bb(Square s, Bitboard occupied = 0) const {
-    return Stockfish::attacks_bb<Pt>(s, occupied, magic_geometry());
+    return Stockfish::attacks_bb<Pt>(s, occupied);
   }
 
   template<RiderType R>
   Bitboard rider_attacks_bb(Square s, Bitboard occupied = 0) const {
-    return Stockfish::rider_attacks_bb<R>(s, occupied, magic_geometry());
+    return Stockfish::rider_attacks_bb<R>(s, occupied);
   }
 
   Bitboard rider_attacks_bb(RiderType R, Square s, Bitboard occupied = 0) const {
-    return Stockfish::rider_attacks_bb(R, s, occupied, magic_geometry());
+    return Stockfish::rider_attacks_bb(R, s, occupied);
   }
 
   Bitboard attacks_bb(Color c, PieceType pt, Square s, Bitboard occupied) const {
-    return Stockfish::attacks_bb(c, pt, s, occupied, magic_geometry());
+    return Stockfish::attacks_bb(c, pt, s, occupied);
   }
 
   template <bool Initial=false>
   Bitboard moves_bb(Color c, PieceType pt, Square s, Bitboard occupied) const {
-    return Stockfish::moves_bb<Initial>(c, pt, s, occupied, magic_geometry());
+    return Stockfish::moves_bb<Initial>(c, pt, s, occupied);
   }
 
-  const MagicGeometry* magic_geometry() const {
-      if (!variant()->magicGeometry)
-          const_cast<Variant*>(variant())->magicGeometry = Stockfish::Bitboards::init_magics(
-              variant()->cylindrical || variant()->toroidal ? variant()->maxFile : FILE_MAX,
-              variant()->cylindrical || variant()->toroidal ? variant()->maxRank : RANK_MAX);
-      return variant()->magicGeometry.get();
-  }
   CountingRule counting_rule() const;
 
   // Variant-specific properties
@@ -580,6 +573,8 @@ public:
   Bitboard pieces(Color c, PieceType pt1, PieceType pt2, PieceType pt3) const;
   Bitboard major_pieces(Color c) const;
   Bitboard non_sliding_riders() const;
+  Bitboard line_bb(Square s1, Square s2) const;
+  Bitboard between_bb(Square s1, Square s2, PieceType pt = NO_PIECE_TYPE) const;
   Piece piece_on(Square s) const;
   Piece unpromoted_piece_on(Square s) const;
   Bitboard ep_squares() const;
@@ -615,13 +610,18 @@ public:
   Bitboard attackers_to(Square s, Bitboard occupied) const;
   Bitboard attackers_to(Square s, Bitboard occupied, Color c) const;
   Bitboard attackers_to(Square s, Bitboard occupied, Color c, Bitboard janggiCannons) const;
-  Bitboard janggi_cannon_attackers_to_king(Square s, Bitboard occupied, Color c) const;
   Bitboard attackers_to_king(Square s, Color c) const;
   Bitboard attackers_to_king(Square s, Bitboard occupied, Color c) const;
   Bitboard attackers_to_king(Square s, Bitboard occupied, Color c, Bitboard janggiCannons, PieceType pt = NO_PIECE_TYPE) const;
+  Bitboard janggi_cannon_attackers_to_king(Square s, Bitboard occupied, Color c) const;
+  template <bool Initial=false>
   Bitboard attacks_from(Color c, PieceType pt, Square s) const;
+  template <bool Initial=false>
   Bitboard attacks_from(Color c, PieceType pt, Square s, Bitboard occupancy) const;
+  template <bool Initial=false>
   Bitboard moves_from(Color c, PieceType pt, Square s) const;
+  template <bool Initial=false>
+  Bitboard moves_from(Color c, PieceType pt, Square s, Bitboard occupancy) const;
   Bitboard universal_hopper_potential_bb(PieceType pt, Square s) const;
   Bitboard push_targets_from(Color c, PieceType pt, Square s) const;
   Bitboard slider_blockers(Bitboard sliders, Square s, Bitboard& pinners, Color c) const;
@@ -806,10 +806,11 @@ private:
                                          bool includeOwnBlockedAttacks,
                                          AdvanceFn advance,
                                          MidpointFn midpoint) const;
+  template <bool Initial=false>
   Bitboard special_rider_bb(const PieceInfo* pi, MoveModality modality,
                             Square sq, Bitboard occupied,
                             Bitboard boardMask, Bitboard ownPieces,
-                            Color c, bool initial, bool captureMode,
+                            Color c, bool captureMode,
                             bool includeOwnBlockedAttacks = false) const;
   Bitboard universal_hopper_bb(const std::map<Direction, PieceInfo::HopperProfile>& profiles,
                                Square sq, Bitboard occupied,
@@ -2742,6 +2743,15 @@ inline Bitboard Position::non_sliding_riders() const {
   return st->nonSlidingRiders;
 }
 
+inline Bitboard Position::line_bb(Square s1, Square s2) const {
+  return Stockfish::line_bb(s1, s2);
+}
+
+inline Bitboard Position::between_bb(Square s1, Square s2, PieceType pt) const {
+  return pt == NO_PIECE_TYPE ? Stockfish::between_bb(s1, s2)
+                             : Stockfish::between_bb(s1, s2, pt);
+}
+
 inline int Position::count(Color c, PieceType pt) const {
   return pieceCount[make_piece(c, pt)];
 }
@@ -2793,7 +2803,7 @@ inline Square Position::gate_square(Move m) const {
 }
 
 inline bool Position::is_on_semiopen_file(Color c, Square s) const {
-  return !((pieces(c, PAWN) | pieces(c, SHOGI_PAWN, SOLDIER)) & file_bb(s));
+  return !((pieces(c, PAWN) | pieces(c, SHOGI_PAWN, SOLDIER)) & Stockfish::file_bb(file_of(s)));
 }
 
 inline bool Position::can_castle(CastlingRights cr) const {
@@ -2832,7 +2842,7 @@ inline Bitboard Position::dynamic_slider_bb(const std::map<Direction,int>& direc
     Square    nxt  = sq + step;
     if (!is_ok(nxt) || distance(nxt, nxt - step) > 2) continue; // only rook/bishop steps
 
-    Bitboard line = line_bb(sq, nxt);                 // through board edge
+    Bitboard line = Stockfish::line_bb(sq, nxt);                 // through board edge
     int dist = popcount(line & occupiedAll);          // how far to travel
 
     Square dest = sq;
@@ -3207,10 +3217,11 @@ inline bool Position::is_valid_hopper_destination(const PieceInfo::HopperProfile
         && (profile.equiRule != PieceInfo::EQUI_HOPPER || distFromLastHurdle == distToFirstHurdle);
 }
 
+template <bool Initial>
 inline Bitboard Position::special_rider_bb(const PieceInfo* pi, MoveModality modality,
                                            Square sq, Bitboard occupied,
                                            Bitboard boardMask, Bitboard ownPieces,
-                                           Color c, bool initial, bool captureMode,
+                                           Color c, bool captureMode,
                                            bool includeOwnBlockedAttacks) const
 {
   if (!pi->has_runtime_rider_augment())
@@ -3218,11 +3229,11 @@ inline Bitboard Position::special_rider_bb(const PieceInfo* pi, MoveModality mod
   Bitboard b = 0;
   const uint8_t augment = pi->riderAugmentMask;
   if (augment & PieceInfo::AUGMENT_DYNAMIC)
-      b |= Position::dynamic_slider_bb(pi->slider[0][modality], sq, occupied, occupied, c);
+      b |= Position::dynamic_slider_bb(pi->slider[Initial][modality], sq, occupied, occupied, c);
   if (augment & PieceInfo::AUGMENT_MAX)
-      b |= Position::max_slider_bb(pi->slider[0][modality], sq, occupied, boardMask, ownPieces, c, captureMode, includeOwnBlockedAttacks);
-  if (!pi->universalHopper[initial ? 1 : 0][modality].empty())
-      b |= universal_hopper_bb(pi->universalHopper[initial ? 1 : 0][modality], sq, occupied, ownPieces, c, captureMode, includeOwnBlockedAttacks);
+      b |= Position::max_slider_bb(pi->slider[Initial][modality], sq, occupied, boardMask, ownPieces, c, captureMode, includeOwnBlockedAttacks);
+  if (!pi->universalHopper[Initial][modality].empty())
+      b |= universal_hopper_bb(pi->universalHopper[Initial][modality], sq, occupied, ownPieces, c, captureMode, includeOwnBlockedAttacks);
   return b;
 }
 
@@ -3346,14 +3357,6 @@ inline Bitboard Position::universal_hopper_bb(const std::map<Direction, PieceInf
         return true;
     };
     return universal_hopper_targets_impl(profiles, sq, occupied, ownPieces, c, captureMode, includeOwnBlockedAttacks, advance, midpoint);
-}
-
-inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s) const {
-  assert(pt != NO_PIECE_TYPE);
-  Bitboard occupancy = byTypeBB[ALL_PIECES];
-  if (const SpellContext* spellCtx = current_spell_context(); spellCtx && c == sideToMove)
-      occupancy &= ~spellCtx->jumpRemoved;
-  return attacks_from(c, pt, s, occupancy);
 }
 
 inline Bitboard Position::wrapped_universal_hopper_targets(const std::map<Direction, PieceInfo::HopperProfile>& profiles,
@@ -3704,6 +3707,17 @@ inline Bitboard Position::lame_leaper_bb(const std::map<Direction, PieceInfo::La
     return b;
 }
 
+template <bool Initial>
+inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s) const {
+  assert(pt != NO_PIECE_TYPE);
+  Bitboard occupancy = byTypeBB[ALL_PIECES];
+  if (const SpellContext* spellCtx = current_spell_context(); spellCtx && c == sideToMove)
+      occupancy &= ~spellCtx->jumpRemoved;
+  return attacks_from<Initial>(c, pt, s, occupancy);
+}
+
+
+template <bool Initial>
 inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard occupancy) const {
   assert(pt != NO_PIECE_TYPE);
 
@@ -3733,7 +3747,12 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
       b |= wrapped_hopper_targets(pi->hopper[0][MODALITY_CAPTURE], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, false);
       b |= wrapped_universal_hopper_targets(pi->universalHopper[0][MODALITY_CAPTURE], c, s, occupancy, pieces(c), max_file(), max_rank(), wrapFile, wrapRank, true, true);
       b |= lame_leaper_bb(pi->stepsLame[0][MODALITY_CAPTURE], s, occupancy, c, false);
-      if (double_step_region(c, pt) & s)
+      const bool usesGenericPawnLikeInitialAttackHelper =
+             pt == PAWN || (pawn_like_types(c) & piece_set(pt));
+      const Bitboard initialAttackRegion = usesGenericPawnLikeInitialAttackHelper
+                                         ? double_step_region(c, pt)
+                                         : var->doubleStepRegion.get(c).explicitBoardOfPiece(piece_to_char()[pt]);
+      if ((initialAttackRegion & s) && (Initial || (not_moved_pieces(c) & s)))
       {
           b |= wrapped_universal_hopper_targets(pi->universalHopper[1][MODALITY_CAPTURE], c, s, occupancy, pieces(c), max_file(), max_rank(), wrapFile, wrapRank, true, true);
           b |= lame_leaper_bb(pi->stepsLame[1][MODALITY_CAPTURE], s, occupancy, c, false);
@@ -3802,21 +3821,21 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
 
   Bitboard b = attacks_bb(c, movePt, s, occupancy);
 
-  b |= special_rider_bb(pi, MODALITY_CAPTURE, s, occupancy, board_bb(), pieces(c), c, false, true, true);
+  b |= special_rider_bb<false>(pi, MODALITY_CAPTURE, s, occupancy, board_bb(), pieces(c), c, true, true);
   b |= lame_leaper_bb(pi->stepsLame[0][MODALITY_CAPTURE], s, occupancy, c, false);
   const bool usesGenericPawnLikeInitialAttackHelper =
          pt == PAWN || (pawn_like_types(c) & piece_set(pt));
   const Bitboard initialAttackRegion = usesGenericPawnLikeInitialAttackHelper
                                      ? double_step_region(c, pt)
                                      : var->doubleStepRegion.get(c).explicitBoardOfPiece(piece_to_char()[pt]);
-  if (initialAttackRegion & s)
+  if ((initialAttackRegion & s) && (Initial || (not_moved_pieces(c) & s)))
   {
-      b |= special_rider_bb(pi, MODALITY_CAPTURE, s, occupancy, board_bb(), pieces(c), c, true, true, true);
+      b |= special_rider_bb<true>(pi, MODALITY_CAPTURE, s, occupancy, board_bb(), pieces(c), c, true, true);
       b |= lame_leaper_bb(pi->stepsLame[1][MODALITY_CAPTURE], s, occupancy, c, false);
   }
 
   // Xiangqi soldier
-  if (pt == SOLDIER && !(promoted_soldiers(c) & s))
+  if (pt == SOLDIER && !(zone_bb(c, var->soldierPromotionRank, max_rank()) & s))
       b &= file_bb(file_of(s));
   // Janggi cannon restrictions
   if (pt == JANGGI_CANNON)
@@ -3839,17 +3858,23 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
   return b & board_bb(c, pt);
 }
 
+template <bool Initial>
 inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
+  assert(pt != NO_PIECE_TYPE);
+  Bitboard occupancy = byTypeBB[ALL_PIECES];
+  if (const SpellContext* spellCtx = current_spell_context(); spellCtx && c == sideToMove)
+      occupancy &= ~spellCtx->jumpRemoved;
+  return moves_from<Initial>(c, pt, s, occupancy);
+}
+
+template <bool Initial>
+inline Bitboard Position::moves_from(Color c, PieceType pt, Square s, Bitboard occupancy) const {
     assert(pt != NO_PIECE_TYPE);
 
     Bitboard extraDestinations = 0x00;
 
     if (topology_wraps())
     {
-        Bitboard occupancy = byTypeBB[ALL_PIECES];
-        if (const SpellContext* spellCtx = current_spell_context(); spellCtx && c == sideToMove)
-            occupancy &= ~spellCtx->jumpRemoved;
-
         PieceType movePt = effective_piece_type(pt);
         const PieceInfo* pi = pieceMap.get(movePt);
         const bool wrapFile = wraps_files();
@@ -3862,14 +3887,14 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
             Square to = SQ_NONE;
             if (wrapped_destination_square(s, 0, forward, max_file(), max_rank(), wrapFile, wrapRank, to) && !(occupancy & to))
             {
-                b |= to;
+                b |= square_bb(to);
                 if ((double_step_region(c, pt) & s)
-                    && (not_moved_pieces(c) & s)
+                    && (Initial || (not_moved_pieces(c) & s))
                     && wrapped_destination_square(to, 0, forward, max_file(), max_rank(), wrapFile, wrapRank, to)
                     && !(occupancy & to))
-                    b |= to;
+                    b |= square_bb(to);
             }
-            if ((triple_step_region(c, pt) & s) && (not_moved_pieces(c) & s))
+            if ((triple_step_region(c, pt) & s) && (Initial || (not_moved_pieces(c) & s)))
             {
                 Square s1 = SQ_NONE, s2 = SQ_NONE, s3 = SQ_NONE;
                 if (wrapped_destination_square(s, 0, forward, max_file(), max_rank(), wrapFile, wrapRank, s1)
@@ -3878,7 +3903,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
                     && !(occupancy & s2)
                     && wrapped_destination_square(s2, 0, forward, max_file(), max_rank(), wrapFile, wrapRank, s3)
                     && !(occupancy & s3))
-                    b |= s1 | s2 | s3;
+                    b |= square_bb(s1) | square_bb(s2) | square_bb(s3);
             }
             return b & board_bb(c, pt);
         }
@@ -3899,7 +3924,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
         if (pi->rose[0][MODALITY_QUIET])
             b |= wrapped_rose_targets(s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
 
-        if (double_step_region(c, pt) & s)
+        if ((double_step_region(c, pt) & s) && (Initial || (not_moved_pieces(c) & s)))
         {
             b |= wrapped_step_targets(pi->steps[1][MODALITY_QUIET], s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
             b |= wrapped_tuple_targets(pi->tupleSteps[1][MODALITY_QUIET], c, s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
@@ -3927,7 +3952,6 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
     // Due to some unknown issues, shift<Direction D>(Bitboard b) cannot be used here
     const Bitboard explicitTripleStepRegion = var->tripleStepRegion.get(c).explicitBoardOfPiece(piece_to_char()[pt]);
     const Bitboard explicitDoubleStepRegion = var->doubleStepRegion.get(c).explicitBoardOfPiece(piece_to_char()[pt]);
-    Bitboard occupied = this->pieces();  //Bitboard where the bits whose corresponding squares having a piece on it are 1
     Bitboard piecePosition = square_bb(s);  //Bitboard where only the bit which refers to the square that the piece starts the move (original square) is 1
     PieceType movePt = effective_piece_type(pt);
     const PieceInfo* pi = pieceMap.get(movePt);
@@ -3949,19 +3973,21 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
         && !pawnLikeHasCustomNonStepQuietMovement
         && !explicitTripleStepRegion
         && !explicitDoubleStepRegion;
-    if (explicitTripleStepRegion & piecePosition & this->not_moved_pieces(c))  //If the original square is in explicit tripleStepRegion and the piece is not moved
+    const Bitboard tripleStepRegion = usesGenericPawnLikeStepHelper ? this->triple_step_region(c)
+                                                                    : explicitTripleStepRegion;
+    if (tripleStepRegion & piecePosition & (Initial ? AllSquares : this->not_moved_pieces(c)))  //If the original square is in tripleStepRegion and the piece is not moved
     {
         Bitboard extraMultipleStepMoveDestinations = 0x00;  //Bitboard where extra legal multi-step destination square bits are 1
         Bitboard oneSquareAhead = (c == WHITE) ? piecePosition << NORTH : piecePosition >> NORTH;
-        if (!(oneSquareAhead & occupied))  //If the square which is 1 square ahead of original square is NOT blocked
+        if (!(oneSquareAhead & occupancy))  //If the square which is 1 square ahead of original square is NOT blocked
         {
             extraMultipleStepMoveDestinations |= oneSquareAhead;  //Add the square which is 1 square ahead of original square to destination squares for triple step
             Bitboard twoSquareAhead = (c == WHITE) ? piecePosition << NORTH << NORTH : piecePosition >> NORTH >> NORTH;
-            if (!(twoSquareAhead & occupied))  //If the square which is 2 squares ahead of original square is NOT blocked
+            if (!(twoSquareAhead & occupancy))  //If the square which is 2 squares ahead of original square is NOT blocked
             {
                 extraMultipleStepMoveDestinations |= twoSquareAhead;  //Add the square which is 2 squares ahead of original square to destination squares for triple step
                 Bitboard threeSquareAhead = (c == WHITE) ? piecePosition << NORTH << NORTH << NORTH : piecePosition >> NORTH >> NORTH >> NORTH;
-                if (!(threeSquareAhead & occupied))  //If the square which is 3 squares ahead of original square is NOT blocked
+                if (!(threeSquareAhead & occupancy))  //If the square which is 3 squares ahead of original square is NOT blocked
                 {
                     extraMultipleStepMoveDestinations |= threeSquareAhead;  //Add the square which is 3 squares ahead of original square to destination squares for triple step
                 }
@@ -3971,15 +3997,15 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
     }
     Bitboard doubleStepRegion = usesGenericPawnLikeStepHelper ? this->double_step_region(c)
                                                               : explicitDoubleStepRegion;
-    if (doubleStepRegion & piecePosition & this->not_moved_pieces(c))  //If the original square is in doubleStepRegion and the piece is not moved
+    if (doubleStepRegion & piecePosition & (Initial ? AllSquares : this->not_moved_pieces(c)))  //If the original square is in doubleStepRegion and the piece is not moved
     {
         Bitboard extraMultipleStepMoveDestinations = 0x00;  //Bitboard where extra legal multi-step destination square bits are 1
         Bitboard oneSquareAhead = (c == WHITE) ? piecePosition << NORTH : piecePosition >> NORTH;
-        if (!(oneSquareAhead & occupied))  //If the square which is 1 square ahead of original square is NOT blocked
+        if (!(oneSquareAhead & occupancy))  //If the square which is 1 square ahead of original square is NOT blocked
         {
             extraMultipleStepMoveDestinations |= oneSquareAhead;  //Add the square which is 1 square ahead of original square to destination squares for double step
             Bitboard twoSquareAhead = (c == WHITE) ? piecePosition << NORTH << NORTH : piecePosition >> NORTH >> NORTH;
-            if (!(twoSquareAhead & occupied))  //If the square which is 2 squares ahead of original square is NOT blocked
+            if (!(twoSquareAhead & occupancy))  //If the square which is 2 squares ahead of original square is NOT blocked
             {
                 extraMultipleStepMoveDestinations |= twoSquareAhead;  //Add the square which is 2 squares ahead of original square to destination squares for double step
             }
@@ -3987,25 +4013,9 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
         extraDestinations |= extraMultipleStepMoveDestinations; //Add destination squares to base board
     }
 
-  Bitboard occupancy = byTypeBB[ALL_PIECES];
-  if (const SpellContext* spellCtx = current_spell_context(); spellCtx && c == sideToMove)
-      occupancy &= ~spellCtx->jumpRemoved;
+  Bitboard b = (moves_bb<false>(c, movePt, s, occupancy) | extraDestinations);
 
-  const bool hasRuntimeSpecialMoves = pi->has_runtime_rider_augment()
-                                   || pi->has_explicit_initial_moves();
-
-  if (!hasRuntimeSpecialMoves && !pi->has_lame_leaper() && (fast_attacks() || fast_attacks2()) && (pt != KING || king_type() == KING))
-      return (moves_bb(c, pt, s, occupancy) | extraDestinations) & board_bb();
-
-  if (!pi->has_explicit_initial_moves()
-      && (fast_attacks() || fast_attacks2())
-      && !pi->has_runtime_rider_augment()
-      && !pi->has_lame_leaper())
-      return (moves_bb(c, movePt, s, occupancy) | extraDestinations) & board_bb();
-
-  Bitboard b = (moves_bb(c, movePt, s, occupancy) | extraDestinations);
-
-  b |= special_rider_bb(pi, MODALITY_QUIET, s, occupancy, board_bb(), pieces(c), c, false, false, false);
+  b |= special_rider_bb<false>(pi, MODALITY_QUIET, s, occupancy, board_bb(), pieces(c), c, false, false);
   b |= lame_leaper_bb(pi->stepsLame[0][MODALITY_QUIET], s, occupancy, c, true);
 
   const bool usesGenericPawnLikeInitialMoveHelper =
@@ -4017,27 +4027,27 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
                                    : var->doubleStepRegion.get(c).explicitBoardOfPiece(piece_to_char()[pt]);
 
   // Add initial moves
-  if ((initialMoveRegion & s) && (this->not_moved_pieces(c) & s))
+  if ((initialMoveRegion & s) && (Initial || (this->not_moved_pieces(c) & s)))
   {
       b |= moves_bb<true>(c, movePt, s, occupancy);
-      b |= special_rider_bb(pi, MODALITY_QUIET, s, occupancy, board_bb(), pieces(c), c, true, false, false);
+      b |= special_rider_bb<true>(pi, MODALITY_QUIET, s, occupancy, board_bb(), pieces(c), c, false, false);
       b |= lame_leaper_bb(pi->stepsLame[1][MODALITY_QUIET], s, occupancy, c, true);
   }
   // Xiangqi soldier
-  if (pt == SOLDIER && !(promoted_soldiers(c) & s))
+  if (pt == SOLDIER && !(zone_bb(c, var->soldierPromotionRank, max_rank()) & s))
       b &= file_bb(file_of(s));
   // Janggi cannon restrictions
   if (pt == JANGGI_CANNON)
   {
       b &= ~pieces(pt);
-      b &= attacks_bb(c, pt, s, (occupancy ^ pieces(pt)));
+      b &= moves_bb<false>(c, pt, s, (occupancy ^ pieces(pt)));
   }
   // Janggi palace moves
   if (diagonal_lines() & s)
   {
       PieceType diagType = movePt == WAZIR ? FERS : movePt == SOLDIER ? PAWN : movePt == ROOK ? BISHOP : NO_PIECE_TYPE;
       if (diagType)
-          b |= attacks_bb(c, diagType, s, occupancy) & diagonal_lines();
+          b |= moves_bb<false>(c, diagType, s, occupancy) & diagonal_lines();
       else if (movePt == JANGGI_CANNON)
           b |=  rider_attacks_bb<RIDER_CANNON_DIAG>(s, occupancy)
               & rider_attacks_bb<RIDER_CANNON_DIAG>(s, (occupancy ^ pieces(pt)))
