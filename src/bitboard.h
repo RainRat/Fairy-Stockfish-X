@@ -102,8 +102,8 @@ struct MagicGeometry {
   }
 };
 
-extern thread_local std::shared_ptr<const MagicGeometry> current_magic_geometry_owner;
-extern thread_local const MagicGeometry* current_magic_geometry;
+extern std::shared_ptr<const MagicGeometry> current_magic_geometry_owner;
+extern const MagicGeometry* current_magic_geometry;
 
 namespace Bitbases {
 

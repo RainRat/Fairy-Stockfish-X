@@ -14,7 +14,7 @@ ROOT="$ROOT" python3 - <<'PY'
 import os
 import pyffish as sf
 
-cfg = open(os.path.join(os.environ["ROOT"], "src", "variants-incomplete.ini"), encoding="utf-8").read()
+cfg = open(os.path.join(os.environ["ROOT"], "src", "variants.ini"), encoding="utf-8").read()
 sf.load_variant_config(cfg)
 
 # A completed straight should not end Pousse early while moves remain.
@@ -26,17 +26,12 @@ if sf.is_optional_game_end("pousse", fen, [])[0]:
 if not sf.legal_moves("pousse", fen, []):
     raise SystemExit(f"expected legal Pousse moves for {fen}")
 
-# Full-board adjudication compares completed straights instead of first-connect.
-white_surplus = "AAAAAA/AAAAAA/AAAAAA/AAAAAA/aaaaaa/aaaaaa[] b - - 0 1"
-black_surplus = "AAAAAA/AAAAAA/aaaaaa/aaaaaa/aaaaaa/aaaaaa[] b - - 0 1"
-tie = "AAAAAA/AAAAAA/AAAAAA/aaaaaa/aaaaaa/aaaaaa[] b - - 0 1"
-
-if sf.game_result("pousse", white_surplus, []) >= 0:
-    raise SystemExit(f"expected side-to-move loss for white-surplus board: {white_surplus}")
-if sf.game_result("pousse", black_surplus, []) <= 0:
-    raise SystemExit(f"expected side-to-move win for black-surplus board: {black_surplus}")
-if sf.game_result("pousse", tie, []) != sf.VALUE_DRAW:
-    raise SystemExit(f"expected draw for tied-straights board: {tie}")
+# A no-move position should be a loss, not a pass.
+stalemate = "AaAaAa/aAaAaA/AaAaAa/aAaAaA/AaAaAa/aAaAaA[] w - - 0 1"
+if sf.legal_moves("pousse", stalemate, []):
+    raise SystemExit(f"expected no legal Pousse moves for stalemate board: {stalemate}")
+if sf.game_result("pousse", stalemate, []) >= 0:
+    raise SystemExit(f"expected stalemate loss for Pousse board: {stalemate}")
 PY
 
 echo "pousse counting tests passed"

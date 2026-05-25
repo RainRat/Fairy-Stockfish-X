@@ -116,6 +116,12 @@ rifleCapture = true
 gating = true
 seirawanGating = true
 
+[rifle-symgating:chess]
+rifleCapture = true
+gating = true
+seirawanGating = true
+symmetricDropTypes = r
+
 [surround-color:chess]
 surroundCaptureIntervene = true
 changingColorTrigger = capture
@@ -313,6 +319,18 @@ out=$(run_cmds "rifle-gating" "${TEMP_INI}" "position fen r3k2r/8/8/8/8/8/4q3/4K
 go perft 1")
 if echo "${out}" | grep -q "e1e2b:"; then
   echo "rifleCapture + gating bug: gating move was generated"
+  exit 1
+fi
+
+# 15b. Test rifleCapture + symmetric gating still allows quiet gating moves
+out=$(run_cmds "rifle-symgating" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/8/4K3[RR] w ABCDEFGH - 0 1
+go perft 1")
+if ! echo "${out}" | grep -q "^e1e2r,d1: 1$"; then
+  echo "rifleCapture + symmetric gating bug: quiet gating move was suppressed"
+  exit 1
+fi
+if ! echo "${out}" | grep -q "^Nodes searched: 9$"; then
+  echo "rifleCapture + symmetric gating bug: expected 9 nodes"
   exit 1
 fi
 

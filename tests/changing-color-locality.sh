@@ -31,32 +31,38 @@ pieceToCharTable = PNBRQ............UV..Kpnbrq............uv..k
 INI
 
 out=$(
-  cat <<CMDS | "${ENGINE}"
-uci
-setoption name VariantPath value ${TMP_VARIANT_PATH}
-setoption name UCI_Variant value surround-color
-position fen 4k3/8/8/8/8/3p1p2/4K3/8 w - - 0 1 moves e2e3
-d
-quit
-CMDS
+  python3 - <<'PY' "${TMP_VARIANT_PATH}"
+import sys
+
+import pyffish as sf
+
+variant_path = sys.argv[1]
+with open(variant_path, "r", encoding="utf-8") as f:
+    sf.load_variant_config(f.read())
+
+print(sf.get_fen("surround-color", "4k3/8/8/8/8/3p1p2/4K3/8 w - - 0 1", ["e2e3"]))
+PY
 )
-grep -q "Fen: 4k3/8/8/8/8/4k3/8/8 b" <<<"${out}"
+grep -q "^4k3/8/8/8/8/4k3/8/8 b - - 1 1$" <<<"${out}"
 
 out=$(
-  cat <<CMDS | "${ENGINE}"
-uci
-setoption name VariantPath value ${TMP_VARIANT_PATH}
-setoption name UCI_Variant value remote-burner-color
-position fen 8/8/8/8/8/8/1p6/U3V3 w - - 0 1 moves e1g2
-d
-quit
-CMDS
+  python3 - <<'PY' "${TMP_VARIANT_PATH}"
+import sys
+
+import pyffish as sf
+
+variant_path = sys.argv[1]
+with open(variant_path, "r", encoding="utf-8") as f:
+    sf.load_variant_config(f.read())
+
+print(sf.get_fen("remote-burner-color", "8/8/8/8/8/8/1p6/U3V3 w - - 0 1", ["e1g2"]))
+PY
 )
-if grep -q "Fen: 8/8/8/8/8/8/6n1/U7 b" <<<"${out}"; then
+if grep -q "^8/8/8/8/8/8/6n1/U7 b - - 1 1$" <<<"${out}"; then
   echo "remote passive burner incorrectly triggered changingColor"
   exit 1
 fi
-grep -q "Fen: 8/8/8/8/8/8/6V1/U7 b" <<<"${out}"
+grep -q "^8/8/8/8/8/8/6V1/U7 b - - 1 1$" <<<"${out}"
 
 rm -f "${TMP_VARIANT_PATH}"
 unset TMP_VARIANT_PATH

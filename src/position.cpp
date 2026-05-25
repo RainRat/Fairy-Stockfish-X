@@ -4558,6 +4558,8 @@ Square Position::push_capture_square(Move m) const {
 bool Position::gives_check(Move m) const {
 
   assert(is_ok(m));
+  if (is_pass(m))
+      return false;
   Piece mover = moved_piece(m);
   // Setup/pass-style pseudo-legal moves can exist without a board mover.
   if (mover == NO_PIECE)

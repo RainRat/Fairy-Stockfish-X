@@ -100,6 +100,13 @@ castling = false
 customPiece1 = a:M
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 startFen = 7k/8/8/8/8/8/3K4/A7 w - - 0 1
+
+[cyl-forward:chess]
+cylindrical = true
+castling = false
+customPiece1 = g:fFfW
+pieceToCharTable = PNBRQGE......S.F..LKpnbrqge......s.f..lk
+startFen = 4k3/8/8/8/8/8/8/g3K3 b - - 0 1
 INI
 
 run_variant() {
@@ -165,6 +172,13 @@ echo "${cyl_griffon_output}" | grep -q "a1g2: 1"
 
 cyl_manticore_output=$(run_variant cyl-manticore)
 echo "${cyl_manticore_output}" | grep -q "a1g2: 1"
+
+cyl_forward_output=$(run_variant cyl-forward)
+echo "${cyl_forward_output}" | grep -q "^e8d7: 1$"
+if echo "${cyl_forward_output}" | grep -q "^a1"; then
+  echo "wrapping topology test failed: black forward piece got white-oriented moves"
+  exit 1
+fi
 
 cyl_search_output=$(cat <<CMDS | "${ENGINE}" 2>&1
 uci

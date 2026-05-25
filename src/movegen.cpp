@@ -67,7 +67,7 @@ namespace {
 
     Move m = make<T>(from, to, pt);
     bool iguiShot = T == SPECIAL && from != to;
-    bool captureIsRifle = pos.rifle_capture(m);
+    bool captureIsRifle = pos.rifle_capture(m) && pos.capture(m);
     bool rifleShot = captureIsRifle && (T == NORMAL || T == PROMOTION);
     Square effectiveTo = (rifleShot || iguiShot) ? from : to;
     Square capSq = T == EN_PASSANT ? pos.capture_square(to)

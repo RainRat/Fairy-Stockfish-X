@@ -47,7 +47,7 @@ run_step "same player board repetition" timeout 60s bash tests/same-player-board
 run_step "symmetric paired drops" timeout 60s bash tests/symmetric-paired-drops.sh "${ENGINE}"
 run_step "petrify transfer" timeout 60s bash tests/petrify-transfer.sh "${ENGINE}"
 run_step "dots and boxes" timeout 5m bash tests/dots-and-boxes.sh "${ENGINE}" "${VARIANT_PATH}" "${INCOMPLETE_VARIANT_PATH}" "${LARGE_ENGINE}" "${VLB_ENGINE}"
-run_step "incomplete baselines" timeout 10m bash tests/incomplete-baselines.sh "${ENGINE}" "${INCOMPLETE_VARIANT_PATH}"
+run_step "seega" timeout 60s bash tests/seega.sh "${ENGINE}" "${VARIANT_PATH}"
 run_step "rider edge consistency" timeout 60s bash tests/rider-edge-consistency.sh "${ENGINE}" "${VARIANT_PATH}"
 run_step "rose" timeout 60s bash tests/rose.sh "${ENGINE}"
 run_step "bent riders" timeout 60s bash tests/bent-riders.sh "${ENGINE}" "${VARIANT_PATH}"

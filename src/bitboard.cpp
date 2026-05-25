@@ -47,8 +47,8 @@ Bitboard BoardSizeBB[FILE_NB][RANK_NB];
 RiderType AttackRiderTypes[PIECE_TYPE_NB];
 RiderType MoveRiderTypes[2][PIECE_TYPE_NB];
 
-thread_local std::shared_ptr<const MagicGeometry> current_magic_geometry_owner;
-thread_local const MagicGeometry* current_magic_geometry = nullptr;
+std::shared_ptr<const MagicGeometry> current_magic_geometry_owner;
+const MagicGeometry* current_magic_geometry = nullptr;
 
 namespace {
 
