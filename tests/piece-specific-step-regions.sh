@@ -50,6 +50,15 @@ pieceToCharTable = A:a
 pawnLikeTypes = a
 startFen = 4k3/8/8/8/8/8/8/4A2K w - - 0 1
 doubleStepRegionWhite = A(e1); *(*2)
+
+[irider-roundtrip:chess]
+king = k
+customPiece1 = d:efWfFmsWifmnD
+pieceToCharTable = PNBRQ............D...Kpnbrq............d...k
+pawnLikeTypes = d
+enPassantTypes = d
+startFen = 4k3/8/8/8/8/8/8/4D2K w - - 0 1
+doubleStepRegionWhite = D(e1); *(*2)
 INI
 
 run_perft() {
@@ -60,6 +69,18 @@ setoption name VariantPath value ${TMP_VARIANT_PATH}
 setoption name UCI_Variant value ${variant}
 position startpos
 go perft 1
+quit
+CMDS
+}
+
+run_position() {
+  local variant="$1"
+  local cmds="$2"
+  cat <<CMDS | "${ENGINE}"
+uci
+setoption name VariantPath value ${TMP_VARIANT_PATH}
+setoption name UCI_Variant value ${variant}
+${cmds}
 quit
 CMDS
 }
@@ -84,6 +105,11 @@ out=$(run_perft "ipawnlike-piece-specific")
 echo "${out}" | grep -q "^e1e2: 1$"
 echo "${out}" | grep -q "^e1e3: 1$"
 ! echo "${out}" | grep -q "^e1e4: 1$"
+
+out=$(run_position "irider-roundtrip" "position fen 4k3/8/8/8/8/8/8/4D2K w - - 0 1 moves e1d1 e8e7 d1e1 e7e8
+go perft 1")
+echo "${out}" | grep -q "^e1e2: 1$"
+! echo "${out}" | grep -q "^e1e3: 1$"
 
 rm -f "${TMP_VARIANT_PATH}"
 unset TMP_VARIANT_PATH

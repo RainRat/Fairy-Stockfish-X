@@ -4017,7 +4017,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s) const {
                                    : var->doubleStepRegion.get(c).explicitBoardOfPiece(piece_to_char()[pt]);
 
   // Add initial moves
-  if (initialMoveRegion & s)
+  if ((initialMoveRegion & s) && (this->not_moved_pieces(c) & s))
   {
       b |= moves_bb<true>(c, movePt, s, occupancy);
       b |= special_rider_bb(pi, MODALITY_QUIET, s, occupancy, board_bb(), pieces(c), c, true, false, false);
