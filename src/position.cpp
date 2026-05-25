@@ -2605,7 +2605,9 @@ Bitboard Position::attackers_to_king(Square s, Bitboard occupied, Color c, Bitbo
   attackers |= janggi_cannon_attackers_to_king(s, occupied, c);
   // Locust-style universal hoppers capture the hurdle square and land beyond it,
   // so the hurdle square is not present in attacks_from() landing targets.
-  if (pt != NO_PIECE_TYPE || piece_on(s) != NO_PIECE)
+  // When `occupied` is hypothetical and already includes s, we still need to
+  // consider locust attacks on that square even if it is empty on the board.
+  if (pt != NO_PIECE_TYPE || piece_on(s) != NO_PIECE || (occupied & square_bb(s)))
       for (PieceSet ps = piece_types(); ps; )
       {
           PieceType apt = pop_lsb(ps);

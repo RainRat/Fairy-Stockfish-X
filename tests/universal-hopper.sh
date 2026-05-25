@@ -35,6 +35,9 @@ customPiece1 = d:f{hurdles: 1,1; pre: 1,*; post: 1,1}R
 [locust-first:hopper-common]
 customPiece1 = d:{hurdles: 1,1; pre: 1,*; post: 1,1; capture: locust_first}R
 
+[locust-king:hopper-common]
+customPiece1 = d:{hurdles: 1,1; pre: 1,*; post: 1,1; capture: locust_first}R
+
 [piece-type-hurdles:hopper-common]
 customPiece1 = d:{hurdles: 1,1; pre: 2,2; post: 1,1; capture: locust_first; hurdle_piece_types: n; transparent_piece_types: p}R
 
@@ -196,6 +199,11 @@ run_test "directional-hopper" "7k/3p4/3d4/8/8/8/8/K7 b - - 0 1" 3
 # King A1, King H8.
 # Moves: King A1 (3), Hopper D3D5 (1). Total = 4
 run_test "locust-first" "7k/8/8/8/3p4/3D4/8/K7 w - - 0 1" 4
+
+# A king moving onto the hurdle square of a locust hop must be rejected.
+# White King A1, Black hopper A2. B2 is attacked because the hopper lands on C2.
+run_test "locust-king" "7k/8/8/8/8/8/d7/K7 w - - 0 1" 2
+
 # Verify capture happened
 output=$("${ENGINE}" << EOF
 uci
