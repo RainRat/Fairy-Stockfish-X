@@ -24,7 +24,7 @@ out_white=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI
 grep -q "e4d5:" <<<"$out_white"
 ! grep -q "e4e5:" <<<"$out_white"
 
-grep -q "Nodes searched: 1" <<<"$out_white"
+grep -Fxq "Nodes searched: 1" <<<"$out_white"
 
 black_fen='4k3/8/8/4p3/3P4/8/8/4K3 b - - 0 1'
 out_black=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value asymmustcapture\nposition fen %s\ngo perft 1\nquit\n' "$tmp_ini" "$black_fen" | "${ENGINE}")

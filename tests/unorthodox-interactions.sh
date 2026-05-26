@@ -260,7 +260,7 @@ d")
 echo "${out}" | grep -q "Fen: 4k3/8/8/3n4/8/8/8/4K3 b"
 out=$(run_cmds "morph-color" "${TEMP_INI}" "position fen 4k3/8/8/3n4/4B3/8/8/4K3 w - - 0 1
 go perft 2")
-echo "${out}" | grep -q "Nodes searched:"
+grep -q "Nodes searched:" <<<"$out"
 
 # 8. Test rifleCapture + captureForbidden
 out=$(run_cmds "rifle-forbidden" "${TEMP_INI}" "position fen p3k3/8/8/8/8/8/8/R3K3 w - - 0 1 moves a1a8
@@ -329,7 +329,7 @@ if ! echo "${out}" | grep -q "^e1e2r,d1: 1$"; then
   echo "rifleCapture + symmetric gating bug: quiet gating move was suppressed"
   exit 1
 fi
-if ! echo "${out}" | grep -q "^Nodes searched: 9$"; then
+if ! grep -Fxq "Nodes searched: 9" <<<"$out"; then
   echo "rifleCapture + symmetric gating bug: expected 9 nodes"
   exit 1
 fi

@@ -49,7 +49,7 @@ go perft 1")
 echo "${out}" | grep -q "^e1d1: 1$"
 ! echo "${out}" | grep -q "^e1d1r,d1: 1$"
 echo "${out}" | grep -q "^e1e2r,d1: 1$"
-echo "${out}" | grep -q "^Nodes searched: 9$"
+grep -Fxq "Nodes searched: 9" <<<"$out"
 
 # A legal symmetric gating move keeps the king and adds both gated rooks.
 out=$(run_cmds "${TMP_INI}" "setoption name UCI_Variant value symgating

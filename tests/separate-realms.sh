@@ -13,7 +13,7 @@ echo "separate realms regression tests started"
 out=$(run_cmds "setoption name UCI_Variant value separate-realms
 position startpos
 go perft 1")
-echo "$out" | grep -q "Nodes searched: 36"
+grep -Fxq "Nodes searched: 36" <<<"$out"
 echo "$out" | grep -q "^b1a3: 1$"
 ! echo "$out" | grep -q "^b1d2: 1$"
 

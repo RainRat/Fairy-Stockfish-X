@@ -12,7 +12,7 @@ cd "${ROOT_DIR}/src"
 
 # Basic smoke: opening move count from configured start position.
 out_start=$(printf 'uci\nsetoption name VariantPath value variants.ini\nsetoption name UCI_Variant value whaleshogi\nposition startpos\ngo perft 1\nquit\n' | "${ENGINE}")
-grep -q "Nodes searched: 7" <<<"$out_start"
+grep -Fxq "Nodes searched: 7" <<<"$out_start"
 
 # Dolphin promotion to eagle is mandatory on furthest rank.
 out_promo=$(printf 'uci\nsetoption name VariantPath value variants.ini\nsetoption name UCI_Variant value whaleshogi\nposition fen 5w/4D1/6/6/6/W5 w - - 0 1\ngo perft 1\nquit\n' | "${ENGINE}")

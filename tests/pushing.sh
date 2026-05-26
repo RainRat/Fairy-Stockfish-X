@@ -97,7 +97,7 @@ echo "${out}" | grep -q "^a5b5: 1$"
 ! echo "${out}" | grep -q "^a5c5: 1$"
 ! echo "${out}" | grep -q "^a5d5: 1$"
 ! echo "${out}" | grep -q "^a5e5: 1$"
-echo "${out}" | grep -q "^Nodes searched: 8$"
+grep -Fxq "Nodes searched: 8" <<<"$out"
 
 echo "Testing push-stepwise-capture..."
 out=$(run_cmds push-stepwise-capture "position fen 5/5/1R1r1/5/5 w - - 0 1 moves b3d3
@@ -121,11 +121,11 @@ go perft 1")
 echo "Testing control case..."
 out=$(run_cmds push-stepwise-shove "position fen 5/5/R4/5/5 w - - 0 1
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 8"
+grep -Fxq "Nodes searched: 8" <<<"$out"
 
 echo "Testing perft round-trip (exercises undo_move)..."
 out=$(run_cmds push-stepwise-capture "position fen 5/5/1R1rR/5/5 w - - 0 1
 go perft 2")
-echo "${out}" | grep -q "Nodes searched: 81"
+grep -Fxq "Nodes searched: 81" <<<"$out"
 
 echo "pushing ok"

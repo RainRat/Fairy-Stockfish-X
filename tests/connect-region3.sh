@@ -52,11 +52,11 @@ EOF
 
 out=$(run_cmds "position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 15"
+grep -Fxq "Nodes searched: 15" <<<"$out"
 
 out=$(run_cmds "position fen ^^^^b/^^^1b/^^2b/^3b/bbbbb w - - 0 1
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 0"
+grep -Fxq "Nodes searched: 0" <<<"$out"
 
 out=$(run_cmds "position fen ^^^^1/^^^2/^^3/^b1b1/b1b1b[S] w - - 0 1
 go perft 1")

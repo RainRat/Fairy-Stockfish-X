@@ -4105,10 +4105,10 @@ bool Position::legal(Move m) const {
 
   // A non-king move is legal if the king is not under attack after the move.
   Bitboard postMoveAttackers = attackers_to_king(royalSquare, occupiedAfterEffects, ~us, janggiCannonsAfter);
-  bool blockedByPostMove = postMoveAttackers
-                        & postMoveOccupied
-                        & ~(removedAttackers | removedByEffects)
-                        & ~(rifleShot ? Bitboard(0) : SquareBB[to]);
+  bool blockedByPostMove = (postMoveAttackers
+                         & postMoveOccupied
+                         & ~(removedAttackers | removedByEffects)
+                         & ~(rifleShot ? Bitboard(0) : SquareBB[to])) != 0;
   return (allow_checks() || !blockedByPostMove)
       && !violates_same_player_board_repetition(m);
 }

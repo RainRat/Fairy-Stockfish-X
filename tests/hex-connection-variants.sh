@@ -44,43 +44,43 @@ fi
 
 out=$(run_cmds "hex" "position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 121"
+grep -Fxq "Nodes searched: 121" <<<"$out"
 
 out=$(run_cmds "hex-7x7" "position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 49"
+grep -Fxq "Nodes searched: 49" <<<"$out"
 
 out=$(run_cmds "hex-10x10" "position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 100"
+grep -Fxq "Nodes searched: 100" <<<"$out"
 
 out=$(run_cmds "hex-16x16" "position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 256"
+grep -Fxq "Nodes searched: 256" <<<"$out"
 
 out=$(run_cmds "esa-hex" "position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 100"
+grep -Fxq "Nodes searched: 100" <<<"$out"
 
 out=$(run_cmds "esa-hex" "position startpos moves P@a1
 go perft 1")
 echo "${out}" | grep -q "^0000: 1$"
-echo "${out}" | grep -q "Nodes searched: 1"
+grep -Fxq "Nodes searched: 1" <<<"$out"
 
 out=$(run_cmds "esa-hex" "position startpos moves P@a1 0000 p@b1 0000
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 99"
+grep -Fxq "Nodes searched: 99" <<<"$out"
 
 out=$(run_cmds "hex" "position fen 11/11/11/11/11/11/11/11/11/11/PPPPPPPPPPP b - - 0 1
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 0"
+grep -Fxq "Nodes searched: 0" <<<"$out"
 
 out=$(run_cmds "misere-hex" "position fen 11/11/11/11/11/11/11/11/11/11/PPPPPPPPPPP[P] b - - 0 1
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 0"
+grep -Fxq "Nodes searched: 0" <<<"$out"
 
 out=$(run_cmds "y" "position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 55"
+grep -Fxq "Nodes searched: 55" <<<"$out"
 
 echo "hex connection variants regression passed"

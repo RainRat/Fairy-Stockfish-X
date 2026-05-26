@@ -25,21 +25,21 @@ fi
 out=$(run_cmds "setoption name UCI_Variant value qubic
 position fen 8/8/8/8/8/8/8/8[pppppppppppppppppppppppppppppppp] b - - 0 1
 go perft 1")
-echo "$out" | grep -q "Nodes searched: 64"
+grep -Fxq "Nodes searched: 64" <<<"$out"
 
 out=$(run_cmds "setoption name UCI_Variant value qubic
 position fen 8/8/8/P3P3/8/8/8/P3P3[pppppppppppppppppppppppppppp] b - - 0 1
 go perft 1")
-echo "$out" | grep -q "Nodes searched: 0"
+grep -Fxq "Nodes searched: 0" <<<"$out"
 
 out=$(run_cmds "setoption name UCI_Variant value qubic
 position fen 8/8/8/8/8/8/8/P7[ppppppppppppppppppppppppppppppp] b - - 0 1
 go perft 1")
-echo "$out" | grep -q "Nodes searched: 63"
+grep -Fxq "Nodes searched: 63" <<<"$out"
 
 out=$(run_cmds "setoption name UCI_Variant value qubic
 position fen 7P/2P5/8/8/8/8/5P2/P7[pppppppppppppppppppppppppppp] b - - 0 1
 go perft 1")
-echo "$out" | grep -q "Nodes searched: 0"
+grep -Fxq "Nodes searched: 0" <<<"$out"
 
 echo "qubic regression tests passed"

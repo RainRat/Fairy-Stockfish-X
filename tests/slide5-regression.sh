@@ -26,7 +26,7 @@ quit
 EOF
 )
 
-echo "${perft_out}" | grep -q "Nodes searched: 10"
+grep -Fxq "Nodes searched: 10" <<<"$out"
 
 tty_out=$(expect <<EOF
 log_user 1

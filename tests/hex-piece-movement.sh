@@ -67,7 +67,7 @@ EOF
 
 out=$(run_cmds "hex-rook-test" "position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 12"
+grep -Fxq "Nodes searched: 12" <<<"$out"
 echo "${out}" | grep -q "^c3a1: 1$"
 echo "${out}" | grep -q "^c3c1: 1$"
 echo "${out}" | grep -q "^c3b2: 1$"
@@ -83,7 +83,7 @@ echo "${out}" | grep -q "^c3e5: 1$"
 
 out=$(run_cmds "hex-king-test" "position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 6"
+grep -Fxq "Nodes searched: 6" <<<"$out"
 echo "${out}" | grep -q "^c3b2: 1$"
 echo "${out}" | grep -q "^c3c2: 1$"
 echo "${out}" | grep -q "^c3b3: 1$"
@@ -93,7 +93,7 @@ echo "${out}" | grep -q "^c3d4: 1$"
 
 out=$(run_cmds "hex-bishop-test" "position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 8"
+grep -Fxq "Nodes searched: 8" <<<"$out"
 echo "${out}" | grep -q "^c3b1: 1$"
 echo "${out}" | grep -q "^c3e1: 1$"
 echo "${out}" | grep -q "^c3a2: 1$"
@@ -105,7 +105,7 @@ echo "${out}" | grep -q "^c3d5: 1$"
 
 out=$(run_cmds "hex-queen-test" "position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 20"
+grep -Fxq "Nodes searched: 20" <<<"$out"
 echo "${out}" | grep -q "^c3a1: 1$"
 echo "${out}" | grep -q "^c3e5: 1$"
 echo "${out}" | grep -q "^c3b1: 1$"
@@ -115,7 +115,7 @@ echo "${out}" | grep -q "^c3d5: 1$"
 
 out=$(run_cmds "hex-knight-test" "position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 8"
+grep -Fxq "Nodes searched: 8" <<<"$out"
 echo "${out}" | grep -q "^d4c2: 1$"
 echo "${out}" | grep -q "^d4e2: 1$"
 echo "${out}" | grep -q "^d4b3: 1$"
@@ -127,14 +127,14 @@ echo "${out}" | grep -q "^d4e6: 1$"
 
 out=$(run_cmds "hex-pawn-test" "position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 3"
+grep -Fxq "Nodes searched: 3" <<<"$out"
 echo "${out}" | grep -q "^d4c3: 1$"
 echo "${out}" | grep -q "^d4d5: 1$"
 echo "${out}" | grep -q "^d4e3: 1$"
 
 out=$(run_cmds "hex-royal-king-test" "position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 10"
+grep -Fxq "Nodes searched: 10" <<<"$out"
 echo "${out}" | grep -q "^d4c2: 1$"
 echo "${out}" | grep -q "^d4b3: 1$"
 echo "${out}" | grep -q "^d4c3: 1$"

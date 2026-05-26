@@ -23,7 +23,7 @@ EOF
 
 out=$(run_cmds "position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 64"
+grep -Fxq "Nodes searched: 64" <<<"$out"
 
 out=$(run_cmds "position startpos moves P@b1
 go perft 1")
@@ -44,6 +44,6 @@ go perft 1")
 
 out=$(run_cmds "position fen 7p/6p1/5p2/4p3/3p4/2p5/1p6/p7 w - - 0 1
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 0"
+grep -Fxq "Nodes searched: 0" <<<"$out"
 
 echo "kopano regression passed"

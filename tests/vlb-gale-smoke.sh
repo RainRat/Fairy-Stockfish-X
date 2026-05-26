@@ -21,4 +21,4 @@ if grep -q "No such variant: gale" <<<"$output"; then
 fi
 
 grep -q "info string variant gale " <<<"$output"
-grep -q "Nodes searched: 41" <<<"$output"
+grep -Fxq "Nodes searched: 41" <<<"$output"

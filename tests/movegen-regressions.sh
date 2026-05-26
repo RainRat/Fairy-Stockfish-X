@@ -74,49 +74,49 @@ echo "$out" | grep -q "a2c4: 1"
 out=$(run_cmds "$ROOT_DIR/src/variants.ini" british-chess \
   "position fen 10/10/10/10/10/10/10/10/4q5/3Q6 w - - 0 1 moves d1e2
 go perft 1")
-echo "$out" | grep -q "Nodes searched: 0"
+grep -Fxq "Nodes searched: 0" <<<"$out"
 
 if variant_available "$ROOT_DIR/src/variants.ini" minihexchess; then
   out=$(run_cmds "$ROOT_DIR/src/variants.ini" minihexchess \
     "position fen ***4/**5/*k5/7/6*/5**/KR2*** w - - 0 1 moves b1b5
 go perft 1")
-  echo "$out" | grep -q "Nodes searched: 0"
+  grep -Fxq "Nodes searched: 0" <<<"$out"
 fi
 
 # Custom king movement must still participate in orthodox checkmate semantics.
 out=$(run_cmds "$TMP_INI" wazir-chess \
   "position startpos moves b7h7 h8h7 a7h7
 go perft 1")
-echo "$out" | grep -q "Nodes searched: 0"
+grep -Fxq "Nodes searched: 0" <<<"$out"
 
 # Tablut-family surround capture of the king must also end immediately.
 out=$(run_cmds "$ROOT_DIR/src/variants.ini" brandub \
   "position fen 4r2/7/3r3/2rK3/3r3/7/7 b - - 0 1 moves e7e4
 go perft 1")
-echo "$out" | grep -q "Nodes searched: 0"
+grep -Fxq "Nodes searched: 0" <<<"$out"
 
 # Anti extinction variants using "*" must not end when a single piece class is gone.
 out=$(run_cmds "$ROOT_DIR/src/variants.ini" antiminishogi \
   "position startpos
 go perft 1")
-echo "$out" | grep -q "Nodes searched: 1"
+grep -Fxq "Nodes searched: 1" <<<"$out"
 echo "$out" | grep -q "^e1e4: 1$"
 
 out=$(run_cmds "$ROOT_DIR/src/variants.ini" anti-losalamos \
   "position fen rn1knr/pppppp/6/6/PPPPPP/RNQKNR w - - 0 1
 go perft 1")
-echo "$out" | grep -q "Nodes searched: 10"
+grep -Fxq "Nodes searched: 10" <<<"$out"
 
 out=$(run_cmds "$ROOT_DIR/src/variants.ini" chaturanga-al-adli \
   "position fen brn1knrb/pppppppp/8/8/8/8/PPPPPPPP/BRNFKNRB w - - 0 1
 go perft 1")
-echo "$out" | grep -q "Nodes searched: 14"
+grep -Fxq "Nodes searched: 14" <<<"$out"
 
 # wallOrMove should not crash when the side to move has no pieces.
 out=$(run_cmds "$TMP_INI" wallpass \
   "position startpos
 go perft 1")
-echo "$out" | grep -q "Nodes searched:"
+grep -q "Nodes searched:" <<<"$out"
 
 # Duck wall relocation uses gating encoding without a gated piece.
 out=$(run_cmds "$ROOT_DIR/src/variants.ini" atomicduck \
@@ -128,7 +128,7 @@ echo "$out" | grep -q "^bestmove "
 out=$(run_cmds "$ROOT_DIR/src/variants.ini" racingkings \
   "position startpos
 go perft 1")
-echo "$out" | grep -q "Nodes searched: 21"
+grep -Fxq "Nodes searched: 21" <<<"$out"
 ! echo "$out" | grep -q "^h2h4:"
 ! echo "$out" | grep -q "^e2e3:"
 ! echo "$out" | grep -q "^e2e4:"
@@ -154,7 +154,7 @@ go perft 1")
 out=$(run_cmds "$ROOT_DIR/src/variants.ini" kings-valley \
   "position startpos
 go perft 1")
-echo "$out" | grep -q "Nodes searched: 13"
+grep -Fxq "Nodes searched: 13" <<<"$out"
 echo "$out" | grep -q "^a1d4: 1$"
 echo "$out" | grep -q "^b1e4: 1$"
 echo "$out" | grep -q "^c1a3: 1$"

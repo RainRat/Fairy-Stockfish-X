@@ -13,7 +13,7 @@ echo "haynie leapers regression tests started"
 out=$(run_cmds "setoption name UCI_Variant value haynie-leapers
 position startpos
 go perft 1")
-echo "$out" | grep -q "Nodes searched: 28"
+grep -Fxq "Nodes searched: 28" <<<"$out"
 echo "$out" | grep -q "^a1c4: 1$"
 echo "$out" | grep -q "^c1b3: 1$"
 echo "$out" | grep -q "^b1a4: 1$"

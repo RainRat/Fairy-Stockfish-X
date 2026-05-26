@@ -412,7 +412,7 @@ go perft 1
 quit
 EOF
 )
-if echo "$output" | grep -q "^e2e4: 1$" && echo "$output" | grep -q "Nodes searched: 4"; then
+if echo "$output" | grep -q "^e2e4: 1$" && grep -Fxq "Nodes searched: 4" <<<"$output"; then
     echo "  [PASS] wrapped initial locust capture is generated"
 else
     echo "  [FAIL] wrapped initial locust capture was missed"

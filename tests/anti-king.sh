@@ -29,11 +29,11 @@ echo "anti-king tests started"
 
 out=$(run_engine anti-king-1 "position startpos")
 echo "${out}" | grep -q "^info string variant anti-king-1 "
-echo "${out}" | grep -q "^Nodes searched: 20$"
+grep -Fxq "Nodes searched: 20" <<<"$out"
 
 out=$(run_engine anti-king-2 "position startpos")
 echo "${out}" | grep -q "^info string variant anti-king-2 "
-echo "${out}" | grep -q "^Nodes searched: 20$"
+grep -Fxq "Nodes searched: 20" <<<"$out"
 echo "${out}" | grep -q "^d6e6: 1$"
 ! echo "${out}" | grep -q "^d6d7: 1$"
 
@@ -45,10 +45,10 @@ echo "${out}" | grep -q "^d4d3: 1$"
 
 # Kings do not attack anti-kings, so king-only pressure leaves the anti-king side lost.
 out=$(run_engine anti-king-2 "position fen 7a/8/8/3Ak3/8/8/8/K6R w - - 0 1")
-echo "${out}" | grep -q "^Nodes searched: 0$"
+grep -Fxq "Nodes searched: 0" <<<"$out"
 
 # A non-king attacker restores anti-king legality.
 out=$(run_engine anti-king-2 "position fen 3r3a/8/8/3Ak3/8/8/8/K6R w - - 0 1")
-echo "${out}" | grep -q "^Nodes searched: 17$"
+grep -Fxq "Nodes searched: 17" <<<"$out"
 
 echo "anti-king tests passed"

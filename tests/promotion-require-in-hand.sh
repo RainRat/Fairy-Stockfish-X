@@ -39,7 +39,7 @@ run_perft() {
 out_gate=$(run_perft promhandgate)
 out_ok=$(run_perft promhandok)
 
-grep -q "Nodes searched: 5" <<<"$out_gate"
+grep -Fxq "Nodes searched: 5" <<<"$out_gate"
 ! grep -q "g7g8q:" <<<"$out_gate"
 
 grep -q "g7g8q:" <<<"$out_ok"

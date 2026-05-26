@@ -21,25 +21,25 @@ echo "dots and boxes regression started"
 out=$(run_cmds "$VARIANTS_INCOMPLETE" dots-boxes-2x2 \
   "position startpos
 go perft 1")
-echo "$out" | grep -q "Nodes searched: 12"
+grep -Fxq "Nodes searched: 12" <<<"$out"
 
 out=$(run_cmds "$VARIANTS_MAIN" dots-boxes-7x7 \
   "position startpos
 go perft 1")
-echo "$out" | grep -q "Nodes searched: 24"
+grep -Fxq "Nodes searched: 24" <<<"$out"
 
 if [[ -x "${ENGINE_LARGE}" ]]; then
   out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value %s\nposition startpos\ngo perft 1\nquit\n' \
     "$VARIANTS_MAIN" "dots-boxes-9x9" | "$ENGINE_LARGE")
   echo "$out" | grep -q "info string variant dots-boxes-9x9 "
-  echo "$out" | grep -q "Nodes searched: 40"
+  grep -Fxq "Nodes searched: 40" <<<"$out"
 fi
 
 if [[ -x "${ENGINE_VLB}" ]]; then
   out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value %s\nposition startpos\ngo perft 1\nquit\n' \
     "$VARIANTS_MAIN" "dots-boxes-15x15" | "$ENGINE_VLB")
   echo "$out" | grep -q "info string variant dots-boxes-15x15 "
-  echo "$out" | grep -q "Nodes searched: 112"
+  grep -Fxq "Nodes searched: 112" <<<"$out"
 fi
 
 ROOT_DIR="$ROOT_DIR" python3 - <<'PY'

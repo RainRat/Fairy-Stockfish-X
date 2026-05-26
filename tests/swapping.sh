@@ -62,7 +62,7 @@ go perft 1")
 
 out=$(run_cmds "${VARIANT_PATH}" lewthwaite-swap "position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched:"
+grep -q "Nodes searched:" <<<"$out"
 ! echo "${out}" | grep -q "s: 1$"
 
 # Regression: SWAP gives check

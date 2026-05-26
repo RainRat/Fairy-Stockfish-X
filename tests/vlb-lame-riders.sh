@@ -44,13 +44,13 @@ grep -q "info string variant vlb-lame-clear files 16 ranks 16" <<<"$out"
 grep -q "^m16m14: 1$" <<<"$out"
 grep -q "^m16k16: 1$" <<<"$out"
 grep -q "^m16o16: 1$" <<<"$out"
-grep -q "Nodes searched: 6" <<<"$out"
+grep -Fxq "Nodes searched: 6" <<<"$out"
 
 out=$(run_variant vlb-lame-blocked)
 grep -q "info string variant vlb-lame-blocked files 16 ranks 16" <<<"$out"
 ! grep -q "^m16m14:" <<<"$out"
 grep -q "^m16k16: 1$" <<<"$out"
 grep -q "^m16o16: 1$" <<<"$out"
-grep -q "Nodes searched: 5" <<<"$out"
+grep -Fxq "Nodes searched: 5" <<<"$out"
 
 echo "VLB lame rider regression passed"

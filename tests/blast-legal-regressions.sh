@@ -123,7 +123,7 @@ sys.stdout.write(stdout)
 sys.exit(proc.returncode)
 PY
 )
-echo "${out}" | grep -q "^Nodes searched: 20$"
+grep -Fxq "Nodes searched: 20" <<<"$out"
 
 rm -f "${TMP4}"
 unset TMP4

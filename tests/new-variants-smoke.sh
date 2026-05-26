@@ -97,13 +97,13 @@ if variant_available "achi"; then
 out=$(run_cmds "setoption name UCI_Variant value achi
 position fen PPP/3/3[PPPPpppp] b - - 0 1
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 0"
+grep -Fxq "Nodes searched: 0" <<<"$out"
 
 # 4) Achi: non-terminal filled setup still yields legal drops.
 out=$(run_cmds "setoption name UCI_Variant value achi
 position fen PpP/pPp/3[PpppPPPP] w - - 0 1
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 3"
+grep -Fxq "Nodes searched: 3" <<<"$out"
 fi
 
 # 5) Checkless: king capture is legal (checks are disabled by variant).
@@ -137,7 +137,7 @@ done
 out=$(run_cmds "setoption name UCI_Variant value balancedalternation2
 position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 20"
+grep -Fxq "Nodes searched: 20" <<<"$out"
 out=$(run_cmds "setoption name UCI_Variant value raazuvaa
 position startpos
 d")
@@ -161,7 +161,7 @@ if variant_available "lewthwaite-swap"; then
 out=$(run_cmds "setoption name UCI_Variant value lewthwaite-swap
 position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched:"
+grep -q "Nodes searched:" <<<"$out"
 ! echo "${out}" | grep -q "s: 1$"
 fi
 
@@ -172,47 +172,47 @@ done
 out=$(run_cmds "setoption name UCI_Variant value groups-setup
 position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 8"
+grep -Fxq "Nodes searched: 8" <<<"$out"
 out=$(run_cmds "setoption name UCI_Variant value groups-jump-setup
 position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 8"
+grep -Fxq "Nodes searched: 8" <<<"$out"
 out=$(run_cmds "setoption name UCI_Variant value groups-queen-setup
 position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 8"
+grep -Fxq "Nodes searched: 8" <<<"$out"
 out=$(run_cmds "setoption name UCI_Variant value groups-queen-jump-setup
 position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 8"
+grep -Fxq "Nodes searched: 8" <<<"$out"
 
 # 5bb1) Mini Hexchess loads on the masked 37-cell hex board and exposes the expected opening moves.
 if variant_available "hex-7x7"; then
 out=$(run_cmds "setoption name UCI_Variant value hex-7x7
 position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 49"
+grep -Fxq "Nodes searched: 49" <<<"$out"
 fi
 
 if variant_available "hex-10x10"; then
 out=$(run_cmds "setoption name UCI_Variant value hex-10x10
 position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 100"
+grep -Fxq "Nodes searched: 100" <<<"$out"
 fi
 
 if variant_available "hex-16x16"; then
 out=$(run_cmds "setoption name UCI_Variant value hex-16x16
 position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 256"
+grep -Fxq "Nodes searched: 256" <<<"$out"
 fi
 
 if variant_available "esa-hex"; then
 out=$(run_cmds "setoption name UCI_Variant value esa-hex
 position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 100"
+grep -Fxq "Nodes searched: 100" <<<"$out"
 out=$(run_cmds "setoption name UCI_Variant value esa-hex
 position startpos moves P@a1
 go perft 1")
@@ -223,14 +223,14 @@ if variant_available "misere-hex"; then
 out=$(run_cmds "setoption name UCI_Variant value misere-hex
 position fen 11/11/11/11/11/11/11/11/11/11/PPPPPPPPPPP[P] b - - 0 1
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 0"
+grep -Fxq "Nodes searched: 0" <<<"$out"
 fi
 
 if variant_available "minihexchess"; then
 out=$(run_cmds "setoption name UCI_Variant value minihexchess
 position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 11"
+grep -Fxq "Nodes searched: 11" <<<"$out"
 echo "${out}" | grep -q "^a2d3: 1$"
 echo "${out}" | grep -q "^a2b5: 1$"
 echo "${out}" | grep -q "^c1d2: 1$"
@@ -244,7 +244,7 @@ if variant_available "glinski-chess"; then
 out=$(run_cmds "setoption name UCI_Variant value glinski-chess
 position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 48"
+grep -Fxq "Nodes searched: 48" <<<"$out"
 echo "${out}" | grep -q "^d1d2: 1$"
 echo "${out}" | grep -q "^a4b4: 1$"
 echo "${out}" | grep -q "^a1c2: 1$"
@@ -256,7 +256,7 @@ if variant_available "glinski-chess-3shift"; then
 out=$(run_cmds "setoption name UCI_Variant value glinski-chess-3shift
 position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 44"
+grep -Fxq "Nodes searched: 44" <<<"$out"
 echo "${out}" | grep -q "^c3e4: 1$"
 echo "${out}" | grep -q "^c5d6: 1$"
 fi
@@ -265,7 +265,7 @@ if variant_available "glinski-chess-5shift"; then
 out=$(run_cmds "setoption name UCI_Variant value glinski-chess-5shift
 position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 46"
+grep -Fxq "Nodes searched: 46" <<<"$out"
 echo "${out}" | grep -q "^c3e4: 1$"
 echo "${out}" | grep -q "^b4c5: 1$"
 fi
@@ -274,7 +274,7 @@ if variant_available "van-gennip-hexchess"; then
 out=$(run_cmds "setoption name UCI_Variant value van-gennip-hexchess
 position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 36"
+grep -Fxq "Nodes searched: 36" <<<"$out"
 echo "${out}" | grep -q "^c3d4: 1$"
 fi
 
@@ -282,7 +282,7 @@ if variant_available "van-gennip-small-hexchess"; then
 out=$(run_cmds "setoption name UCI_Variant value van-gennip-small-hexchess
 position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 29"
+grep -Fxq "Nodes searched: 29" <<<"$out"
 echo "${out}" | grep -q "^c3d4: 1$"
 fi
 
@@ -290,7 +290,7 @@ if variant_available "mccooey-chess"; then
 out=$(run_cmds "setoption name UCI_Variant value mccooey-chess
 position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 31"
+grep -Fxq "Nodes searched: 31" <<<"$out"
 echo "${out}" | grep -q "^c3e4: 1$"
 echo "${out}" | grep -q "^c2e1: 1$"
 echo "${out}" | grep -q "^a4b5: 1$"
@@ -301,7 +301,7 @@ if variant_available "grand-hexachess"; then
 out=$(run_cmds "setoption name UCI_Variant value grand-hexachess
 position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 125"
+grep -Fxq "Nodes searched: 125" <<<"$out"
 echo "${out}" | grep -q "^i13g12: 1$"
 echo "${out}" | grep -q "^a5a6: 1$"
 echo "${out}" | grep -q "^k5k6: 1$"
@@ -371,11 +371,11 @@ echo "${out}" | grep -q "Fen: 9/9/9/9/9/9/9/9/C8 b - - 0 1 {0 3}"
 out=$(run_cmds "setoption name UCI_Variant value oshi
 position fen C8/9/9/9/9/9/9/9/9 b - - 0 1 {7 0}
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 0"
+grep -Fxq "Nodes searched: 0" <<<"$out"
 out=$(run_cmds "setoption name UCI_Variant value oshi
 position fen 9/9/9/9/9/9/9/9/9 b - - 0 1 {8 7}
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 0"
+grep -Fxq "Nodes searched: 0" <<<"$out"
 fi
 
 # 5f) Aries: opening setup loads and a repetition-losing move is avoided in search.
@@ -399,11 +399,11 @@ echo "${out}" | grep -q "Fen: 2h2/5/5/5/5 w - - 0 2 {0 1}"
 out=$(run_cmds "setoption name UCI_Variant value ko-app-paw-na
 position fen 5/2R2/2h2/5/5 w - - 0 2 {0 1}
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 0"
+grep -Fxq "Nodes searched: 0" <<<"$out"
 out=$(run_cmds "setoption name UCI_Variant value ko-app-paw-na
 position fen RRRRR/5/R1h1R/5/5 b - - 0 1
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 0"
+grep -Fxq "Nodes searched: 0" <<<"$out"
 fi
 
 # 6) Tablut split: edge-escape should end immediately, corner-escape should not.
@@ -411,12 +411,12 @@ if variant_available "tablut" && variant_available "tablut-corner-escape"; then
 out=$(run_cmds "setoption name UCI_Variant value tablut
 position fen 4K4/9/9/9/4r4/9/9/9/9 b - - 0 1
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 0"
+grep -Fxq "Nodes searched: 0" <<<"$out"
 
 out=$(run_cmds "setoption name UCI_Variant value tablut-corner-escape
 position fen 4K4/9/9/9/4r4/9/9/9/9 b - - 0 1
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 15"
+grep -Fxq "Nodes searched: 15" <<<"$out"
 fi
 
 # 6b) Ardri: the escape king loss ends immediately.
@@ -424,19 +424,19 @@ out=$(run_cmds "setoption name UCI_Variant value ardri
 position fen 2rrr2/3r3/r1RRR1r/rrR1Rrr/r1RRR1r/3r3/2rrr2 b - - 0 1
 go perft 1")
 echo "${out}" | grep -q "info string variant ardri "
-echo "${out}" | grep -q "Nodes searched: 0"
+grep -Fxq "Nodes searched: 0" <<<"$out"
 out=$(run_cmds "setoption name UCI_Variant value ardri
 position fen 2rrr2/3r3/r1RRR1r/rrRKRrr/r1RRR1r/3r3/2rrr2 w - - 0 1
 go perft 1")
 echo "${out}" | grep -q "info string variant ardri "
-echo "${out}" | grep -q "Nodes searched: 8"
+grep -Fxq "Nodes searched: 8" <<<"$out"
 
 # 7b) Tawlbwrdd: edge escape should end immediately on 11x11, unlike corner-escape Hnefatafl.
 if variant_available "tawlbwrdd"; then
 out=$(run_cmds "setoption name UCI_Variant value tawlbwrdd
 position fen 5K5/11/11/11/11/5r5/11/11/11/11/11 b - - 0 1
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 0"
+grep -Fxq "Nodes searched: 0" <<<"$out"
 fi
 
 # 7) Tablut split: throne-adjacent king strength changes capture outcome.
@@ -444,12 +444,12 @@ if variant_available "tablut" && variant_available "tablut-throne-adjacent-stron
 out=$(run_cmds "setoption name UCI_Variant value tablut
 position fen 9/9/9/9/3K5/2r6/9/9/9 b - - 0 1 moves c4c5
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 0"
+grep -Fxq "Nodes searched: 0" <<<"$out"
 
 out=$(run_cmds "setoption name UCI_Variant value tablut-throne-adjacent-strong
 position fen 9/9/9/9/3K5/2r6/9/9/9 b - - 0 1 moves c4c5
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 12"
+grep -Fxq "Nodes searched: 12" <<<"$out"
 fi
 
 # 7a) Crossway: alternating 2x2 checker-pattern placements are illegal.
@@ -463,7 +463,7 @@ go perft 1")
 out=$(run_cmds "setoption name UCI_Variant value crossway
 position fen 8/8/8/SSSSSSSS/8/8/8/8[Ss] b - - 0 1
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 0"
+grep -Fxq "Nodes searched: 0" <<<"$out"
 
 out=$(run_cmds "setoption name UCI_Variant value crossway
 position startpos moves S@d4
@@ -491,7 +491,7 @@ echo "${out}" | grep -q "^P@c2: 1$"
 out=$(run_cmds "setoption name UCI_Variant value pathway
 position fen PPPPPP/PPPPPP/PPPPPP/pppppp/pppppp/pppppp[Pp] w - - 0 1
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 0"
+grep -Fxq "Nodes searched: 0" <<<"$out"
 fi
 
 # 7c) Kopano: mirrored opening swap, reciprocal weak links, crosscut blocks, and no-placement wins.
@@ -499,7 +499,7 @@ if variant_available "kopano"; then
 out=$(run_cmds "setoption name UCI_Variant value kopano
 position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 64"
+grep -Fxq "Nodes searched: 64" <<<"$out"
 
 out=$(run_cmds "setoption name UCI_Variant value kopano
 position startpos moves P@b1
@@ -525,7 +525,7 @@ go perft 1")
 out=$(run_cmds "setoption name UCI_Variant value kopano
 position fen 7p/6p1/5p2/4p3/3p4/2p5/1p6/p7 w - - 0 1
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 0"
+grep -Fxq "Nodes searched: 0" <<<"$out"
 fi
 
 # 7d) Hex-family connection variants: Y and Hex load on the expected build sizes.
@@ -533,14 +533,14 @@ if variant_available "y"; then
 out=$(run_cmds "setoption name UCI_Variant value y
 position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 55"
+grep -Fxq "Nodes searched: 55" <<<"$out"
 fi
 
 if variant_available "hex"; then
 out=$(run_cmds "setoption name UCI_Variant value hex
 position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 121"
+grep -Fxq "Nodes searched: 121" <<<"$out"
 fi
 
 # 8) Neutreeko: max-distance move completes a line and ends the game.
@@ -548,7 +548,7 @@ if variant_available "neutreeko"; then
 out=$(run_cmds "setoption name UCI_Variant value neutreeko
 position fen 5/3N1/5/1N3/N4 w - - 0 1 moves d4c3
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 0"
+grep -Fxq "Nodes searched: 0" <<<"$out"
 fi
 
 # 9) Forced en passant: when EP is legal, ordinary king moves are forbidden.
@@ -557,7 +557,7 @@ out=$(run_cmds "setoption name UCI_Variant value forced-en-passant
 position fen 4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1
 go perft 1")
 echo "${out}" | grep -q "^e5d6: 1$"
-echo "${out}" | grep -q "Nodes searched: 1"
+grep -Fxq "Nodes searched: 1" <<<"$out"
 fi
 
 # 10) Eurasian: entering the optional promotion band without reserve is still legal.
@@ -697,11 +697,11 @@ echo "${out}" | grep -q "a7a8n: 1"
 out=$(run_cmds "setoption name UCI_Variant value reach-chess
 position fen 4P3/8/8/8/8/8/8/4k3 b - - 0 1
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 0"
+grep -Fxq "Nodes searched: 0" <<<"$out"
 out=$(run_cmds "setoption name UCI_Variant value reach-chess
 position fen 7k/6Q1/5K2/8/8/8/8/8 b - - 0 1
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 0"
+grep -Fxq "Nodes searched: 0" <<<"$out"
 
 # 19bad) All Queens Chess: source-backed setup and line-of-four win.
 if variant_available "allqueenschess"; then
@@ -712,7 +712,7 @@ echo "${out}" | grep -Eq "Fen: qQqQq/5/Q3q/5/QqQqQ(\\[\\])? w - - 0 1"
 out=$(run_cmds "setoption name UCI_Variant value allqueenschess
 position fen 5/QQQQ1/5/5/5 b - - 0 1
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 0"
+grep -Fxq "Nodes searched: 0" <<<"$out"
 fi
 
 # 19bb) Compound Chess: setup and dragon-specific en passant capture.
@@ -731,7 +731,7 @@ go perft 1")
 out=$(run_cmds "setoption name UCI_Variant value crown-prince-chess
 position fen 4C3/8/8/8/8/8/8/4k3 b - - 0 1
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 0"
+grep -Fxq "Nodes searched: 0" <<<"$out"
 
 # 19c) Dris at-Talata: setup by drops, then pieces move to any empty square.
 out=$(run_cmds "setoption name UCI_Variant value dris-at-talata
@@ -869,7 +869,7 @@ echo "${out}" | grep -q "Fen: nnnnnnnnn/9/9/9/9/9/9/9/NNNNNNNNN w - - 0 1"
 out=$(run_cmds "setoption name UCI_Variant value jesonmor
 position fen 9/9/9/9/4N4/9/9/9/9 b - - 0 1
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 0"
+grep -Fxq "Nodes searched: 0" <<<"$out"
 fi
 
 # 19eb) Dodgem: classic 3x3 rules on an internal 5x4 board with escape lanes.
@@ -886,14 +886,14 @@ echo "${out}" | grep -q "^c2d2: 1$"
 out=$(run_cmds "setoption name UCI_Variant value dodgem
 position fen 4k/5/3U1/3UK b - - 0 1
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 0"
+grep -Fxq "Nodes searched: 0" <<<"$out"
 
 # 19fzzzz) Gale 15x15: only available on VERY_LARGE_BOARDS builds.
 if variant_available "gale-15"; then
   out=$(run_cmds "setoption name UCI_Variant value gale-15
 position startpos
 go perft 1")
-  echo "${out}" | grep -q "Nodes searched: 113"
+  grep -Fxq "Nodes searched: 113" <<<"$out"
   echo "${out}" | grep -q "^P@a1: 1$"
 fi
 
@@ -913,12 +913,12 @@ echo "${out}" | grep -q "Fen: 8/8/8/8/8/3P4/3P4/3P4 b - - 0 1"
 out=$(run_cmds "setoption name UCI_Variant value tictactoe-misere
 position fen PPP/3/3[pppp] b - - 0 1
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 0"
+grep -Fxq "Nodes searched: 0" <<<"$out"
 
 out=$(run_cmds "setoption name UCI_Variant value progressive
 position startpos moves e2e4 e7e5 e1e1
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 29"
+grep -Fxq "Nodes searched: 29" <<<"$out"
 
 # 17b) Progressive: forced pass plies must not increment halfmove clock.
 out=$(run_cmds "setoption name UCI_Variant value progressive
@@ -953,7 +953,7 @@ fi
 out=$(run_cmds "setoption name UCI_Variant value gala
 position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 10"
+grep -Fxq "Nodes searched: 10" <<<"$out"
 
 # 22) Gala: custodial capture by orthogonal sandwich.
 out=$(run_cmds "setoption name UCI_Variant value gala
@@ -1047,7 +1047,7 @@ if variant_available "pawns"; then
 out=$(run_cmds "setoption name UCI_Variant value pawns
 position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 8"
+grep -Fxq "Nodes searched: 8" <<<"$out"
 out=$(run_cmds "setoption name UCI_Variant value pawns
 position fen 8/P7/8/8/8/8/8/8 w - - 0 1
 go perft 1")
@@ -1059,7 +1059,7 @@ if variant_available "rugby"; then
 out=$(run_cmds "setoption name UCI_Variant value rugby
 position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 22"
+grep -Fxq "Nodes searched: 22" <<<"$out"
 out=$(run_cmds "setoption name UCI_Variant value rugby
 position fen 8/8/8/8/8/4P3/4p3/8 w - - 0 1
 go perft 1")
@@ -1166,7 +1166,7 @@ if variant_available "monad"; then
   out=$(run_cmds "setoption name UCI_Variant value monad
 position startpos
 go perft 1")
-  echo "${out}" | grep -q "Nodes searched: 37"
+  grep -Fxq "Nodes searched: 37" <<<"$out"
 fi
 
 # 43) Camel-rhino baseline (large-board): setup loads and generates legal moves.
@@ -1174,7 +1174,7 @@ if variant_available "camel-rhino"; then
   out=$(run_cmds "setoption name UCI_Variant value camel-rhino
 position startpos
 go perft 1")
-  echo "${out}" | grep -q "Nodes searched: 68"
+  grep -Fxq "Nodes searched: 68" <<<"$out"
 fi
 
 # 44) Rifle chess baseline: start position behaves like orthodox chess before captures appear.
@@ -1182,7 +1182,7 @@ if variant_available "rifle-chess"; then
 out=$(run_cmds "setoption name UCI_Variant value rifle-chess
 position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 20"
+grep -Fxq "Nodes searched: 20" <<<"$out"
 fi
 
 echo "new variants smoke testing OK"

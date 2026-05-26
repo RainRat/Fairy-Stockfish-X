@@ -18,7 +18,7 @@ EOF
 
 out=$(run_cmds "position startpos
 go perft 1")
-echo "${out}" | grep -q "Nodes searched: 64"
+grep -Fxq "Nodes searched: 64" <<<"$out"
 
 out=$(run_cmds "position startpos moves P@b1
 go perft 1")

@@ -49,7 +49,7 @@ d")
 echo "${out}" | grep -q "Fen: 4k3/8/8/3n4/8/8/8/4K3 b"
 out=$(run_cmds "capture-morph-color" "${TEMP_INI}" "position fen 4k3/8/8/3n4/4B3/8/8/4K3 w - - 0 1
 go perft 2")
-echo "${out}" | grep -q "Nodes searched:"
+grep -q "Nodes searched:" <<<"$out"
 
 # moveMorph can also compose with changingColor on the same mover.
 out=$(run_cmds "move-morph-color" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/8/2B1K3 w - - 0 1 moves c1g5
@@ -57,6 +57,6 @@ d")
 echo "${out}" | grep -q "Fen: 4k3/8/8/6n1/8/8/8/4K3 b"
 out=$(run_cmds "move-morph-color" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/8/2B1K3 w - - 0 1
 go perft 2")
-echo "${out}" | grep -q "Nodes searched:"
+grep -q "Nodes searched:" <<<"$out"
 
 echo "in-place transform undo tests passed"

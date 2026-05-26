@@ -219,11 +219,6 @@ namespace {
       return false;
   }
 
-  inline bool has_castable_potion(const Position& pos) {
-      return pos.side_to_move() == WHITE ? has_castable_potion<WHITE>(pos)
-                                         : has_castable_potion<BLACK>(pos);
-  }
-
   template<GenType Type>
   bool potion_move_matches(const Position& pos, Move m, bool isCapture) {
       return !((Type == CAPTURES && !isCapture)
@@ -1029,32 +1024,34 @@ namespace {
             {
                 if (forcedJumpPt == PAWN)
                     moveList = useGenericPawnGenerator
-                         ? generate_pawn_moves<Us, Type>(pos, moveList, PawnGenSpec{target, forcedFromMask})
-                         : generate_moves<Us, Type>(pos, moveList, PieceGenSpec{PAWN, target, captureTarget, forcedFromMask});
+                             ? generate_pawn_moves<Us, Type>(pos, moveList, PawnGenSpec{target, forcedFromMask})
+                             : generate_moves<Us, Type>(pos, moveList, PieceGenSpec{PAWN, target, captureTarget, forcedFromMask});
                 else if (forcedJumpPt != KING)
-                moveList = generate_moves<Us, Type>(pos, moveList, PieceGenSpec{forcedJumpPt, target, captureTarget, forcedFromMask});
+                    moveList = generate_moves<Us, Type>(pos, moveList, PieceGenSpec{forcedJumpPt, target, captureTarget, forcedFromMask});
             }
             else
             {
                 moveList = useGenericPawnGenerator
-                     ? generate_pawn_moves<Us, Type>(pos, moveList, PawnGenSpec{target, forcedFromMask})
-                     : generate_moves<Us, Type>(pos, moveList, PieceGenSpec{PAWN, target, captureTarget, forcedFromMask});
-            for (PieceSet ps = pos.piece_types() & ~(piece_set(PAWN) | KING); ps;)
-                moveList = generate_moves<Us, Type>(pos, moveList, PieceGenSpec{pop_lsb(ps), target, captureTarget, forcedFromMask});
-        }
+                         ? generate_pawn_moves<Us, Type>(pos, moveList, PawnGenSpec{target, forcedFromMask})
+                         : generate_moves<Us, Type>(pos, moveList, PieceGenSpec{PAWN, target, captureTarget, forcedFromMask});
+                for (PieceSet ps = pos.piece_types() & ~(piece_set(PAWN) | KING); ps;)
+                    moveList = generate_moves<Us, Type>(pos, moveList, PieceGenSpec{pop_lsb(ps), target, captureTarget, forcedFromMask});
+            }
         const bool canGenerateDrops = !restrictToForcedJumper
                                    && pos.piece_drops()
                                    && (pos.can_drop(Us, ALL_PIECES) || pos.two_boards());
+        const bool generateQuietDrops = canGenerateDrops && Type != CAPTURES;
 
         // generate drops
-        if (canGenerateDrops && Type != CAPTURES)
-            for (PieceSet ps = pos.piece_types(); ps;)
-                moveList = generate_drops<Us, Type>(pos, moveList, pop_lsb(ps), target);
         if (canGenerateDrops)
+        {
+            if (generateQuietDrops)
+                for (PieceSet ps = pos.piece_types(); ps;)
+                    moveList = generate_drops<Us, Type>(pos, moveList, pop_lsb(ps), target);
             for (PieceSet ps = pos.piece_types(); ps;)
                 moveList = generate_capture_drops<Us, Type>(pos, moveList, pop_lsb(ps), captureTarget);
-        if (canGenerateDrops)
             moveList = generate_edge_insertions<Us, Type>(pos, moveList);
+        }
         // generate exchange
         if (!restrictToForcedJumper && pos.capture_type() == PRISON && Type != CAPTURES && pos.has_exchange())
             for (PieceSet ps = pos.piece_types(); ps;)
@@ -1153,22 +1150,22 @@ namespace {
                 {
                     Square from = pop_lsb(froms);
                     Bitboard pullSources = pos.pull_sources_from(Us, from);
-                while (pullSources)
-                {
-                    Square pullFrom = pop_lsb(pullSources);
-                    Bitboard b = pos.pull_targets_from(Us, from, pullFrom);
-                    if (Type == QUIET_CHECKS)
-                        b &= target;
-                    while (b)
+                    while (pullSources)
                     {
-                        Move m = make_pull(from, pop_lsb(b), pullFrom);
-                        if (Type == QUIET_CHECKS && !pos.gives_check(m))
-                            continue;
-                        *moveList++ = m;
+                        Square pullFrom = pop_lsb(pullSources);
+                        Bitboard b = pos.pull_targets_from(Us, from, pullFrom);
+                        if (Type == QUIET_CHECKS)
+                            b &= target;
+                        while (b)
+                        {
+                            Move m = make_pull(from, pop_lsb(b), pullFrom);
+                            if (Type == QUIET_CHECKS && !pos.gives_check(m))
+                                continue;
+                            *moveList++ = m;
+                        }
                     }
                 }
             }
-        }
         }
 
         if (!restrictToForcedJumper && pos.has_adjacent_swapping()
@@ -1414,7 +1411,8 @@ namespace {
   ExtMove* generate_all(const Position& pos, ExtMove* moveList) {
 
     ExtMove* baseEnd = generate_all_impl<Us, Type>(pos, moveList);
-    if (!has_castable_potion(pos))
+    if (pos.side_to_move() == WHITE ? !has_castable_potion<WHITE>(pos)
+                                    : !has_castable_potion<BLACK>(pos))
         return baseEnd;
     return generate_potion_moves<Us, Type>(pos, MoveBuffer{moveList, baseEnd});
   }
@@ -1461,7 +1459,8 @@ ExtMove* append_potions(const Position& pos, ExtMove* listBegin, ExtMove* baseEn
   assert((Type == EVASIONS) == (bool)pos.evasion_checkers()
          || (pos.topology_wraps() && Type == NON_EVASIONS && pos.evasion_checkers()));
   Color us = pos.side_to_move();
-  if (!has_castable_potion(pos))
+  if (us == WHITE ? !has_castable_potion<WHITE>(pos)
+                  : !has_castable_potion<BLACK>(pos))
       return baseEnd;
 
   return us == WHITE ? generate_potion_moves<WHITE, Type>(pos, MoveBuffer{listBegin, baseEnd})
