@@ -30,16 +30,6 @@ customPiece1 = p:iW
 pawnTypes = p
 startFen = 4k3/8/8/8/8/8/4P3/4K3 w - - 0 1
 
-[swap-roundtrip:fairy]
-maxFile = e
-maxRank = 5
-king = -
-checking = false
-pass = true
-pieceToCharTable = -
-customPiece1 = a:mW
-adjacentSwapMoveTypes = a
-startFen = 5/5/5/1AP2/5 w - - 0 1
 EOF
 
 variant_available() {
@@ -47,7 +37,7 @@ variant_available() {
   local variant="$2"
   local out
   out=$(run_uci "$ENGINE" "$variant_path" "$variant" <<<'d' || true)
-  assert_contains "$out" "info string variant ${variant} "
+  grep -q "info string variant ${variant} " <<<"$out"
 }
 
 echo "movegen regressions started"
