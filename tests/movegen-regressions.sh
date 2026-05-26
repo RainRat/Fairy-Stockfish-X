@@ -47,7 +47,7 @@ variant_available() {
   local variant="$2"
   local out
   out=$(run_uci "$ENGINE" "$variant_path" "$variant" <<<'d' || true)
-  echo "$out" | grep -q "info string variant ${variant} "
+  grep -q "info string variant ${variant} " <<<"$out"
 }
 
 echo "movegen regressions started"

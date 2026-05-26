@@ -280,7 +280,7 @@ go perft 2
 d
 UCI
 )
-nodes=($(echo "$output" | grep "Nodes searched:" | awk '{print $3}'))
+nodes=($(grep "Nodes searched:" <<<"$output" | awk '{print $3}'))
 if [[ "${#nodes[@]}" -lt 2 || "${nodes[0]}" != "${nodes[1]}" ]]; then
     echo "  [FAIL] locust_all perft(2) instability suggests do/undo corruption"
     echo "Output was:"
