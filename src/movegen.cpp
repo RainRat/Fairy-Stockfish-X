@@ -70,10 +70,7 @@ namespace {
     bool captureIsRifle = pos.rifle_capture(m) && pos.capture(m);
     bool rifleShot = captureIsRifle && (T == NORMAL || T == PROMOTION);
     Square effectiveTo = (rifleShot || iguiShot) ? from : to;
-    Square capSq = T == EN_PASSANT ? pos.capture_square(to)
-                 : pos.is_jump_capture(m) ? pos.jump_capture_square(from, to)
-                 : pos.capture(m) ? to
-                 : SQ_NONE;
+    Square capSq = pos.capture(m) ? pos.capture_square(m) : SQ_NONE;
     Bitboard occupancyAfter = pos.pieces();
     if (from != effectiveTo) occupancyAfter ^= square_bb(from) ^ square_bb(effectiveTo);
     if (capSq != SQ_NONE) occupancyAfter ^= square_bb(capSq);
@@ -193,24 +190,12 @@ namespace {
               continue;
           if (pos.promotion_allowed(us, pt, to))
           {
-              if constexpr (Type == QUIET_CHECKS)
-              {
-                  Move m = make<PROMOTION>(from, to, pt);
-                  if (!pos.gives_check(m))
-                      continue;
-              }
               moveList = make_move_and_gating<PROMOTION>(pos, moveList, us, from, to, pt);
           }
       }
       PieceType pt = pos.promoted_piece_type(PAWN);
       if (pt && pos.promotion_allowed(us, pt) && !(pos.piece_promotion_on_capture() && pos.empty(to)))
       {
-          if constexpr (Type == QUIET_CHECKS)
-          {
-              Move m = make<PIECE_PROMOTION>(from, to);
-              if (!pos.gives_check(m))
-                  return moveList;
-          }
           moveList = make_move_and_gating<PIECE_PROMOTION>(pos, moveList, us, from, to, pt);
       }
       return moveList;
@@ -224,8 +209,27 @@ namespace {
 
   template<Color Us>
   bool has_castable_potion(const Position& pos) {
-      return pos.potions_enabled()
-          && (pos.can_cast_potion(Us, Variant::POTION_FREEZE) || pos.can_cast_potion(Us, Variant::POTION_JUMP));
+      if (!pos.potions_enabled())
+          return false;
+
+      for (int pt = 0; pt < Variant::POTION_TYPE_NB; ++pt)
+          if (pos.can_cast_potion(Us, static_cast<Variant::PotionType>(pt)))
+              return true;
+
+      return false;
+  }
+
+  inline bool has_castable_potion(const Position& pos) {
+      return pos.side_to_move() == WHITE ? has_castable_potion<WHITE>(pos)
+                                         : has_castable_potion<BLACK>(pos);
+  }
+
+  template<GenType Type>
+  bool potion_move_matches(const Position& pos, Move m, bool isCapture) {
+      return !((Type == CAPTURES && !isCapture)
+            || (Type == QUIETS && isCapture)
+            || (Type == QUIET_CHECKS && (isCapture || !pos.gives_check(m)))
+            || !pos.legal(m));
   }
 
   template<Color c, GenType Type, Direction D>
@@ -235,8 +239,6 @@ namespace {
 
   template<Color Us, GenType Type>
   ExtMove* generate_drops(const Position& pos, ExtMove* moveList, PieceType pt, Bitboard b) {
-    [[maybe_unused]] constexpr bool GeneratesCaptures = Type == CAPTURES || Type == EVASIONS || Type == NON_EVASIONS;
-    [[maybe_unused]] constexpr bool GeneratesQuiets = Type != CAPTURES;
     [[maybe_unused]] constexpr bool QuietChecks = Type == QUIET_CHECKS;
 
     if (pos.edge_insert_only() && (pos.edge_insert_types() & piece_set(pt)))
@@ -321,11 +323,7 @@ namespace {
 
   template<Color Us, GenType Type>
   ExtMove* generate_edge_insertions(const Position& pos, ExtMove* moveList) {
-    [[maybe_unused]] constexpr bool GeneratesCaptures = Type == CAPTURES || Type == EVASIONS || Type == NON_EVASIONS;
-    [[maybe_unused]] constexpr bool GeneratesQuiets = Type != CAPTURES;
-    [[maybe_unused]] constexpr bool QuietChecks = Type == QUIET_CHECKS;
-
-    if (QuietChecks)
+    if (Type == QUIET_CHECKS)
         return moveList;
 
     PieceSet insertTypes = pos.edge_insert_types();
@@ -352,7 +350,7 @@ namespace {
             bool cap = push && pos.push_captures(m);
             if ((Type == CAPTURES && cap)
                 || (Type == QUIETS && !cap)
-                || (GeneratesCaptures && GeneratesQuiets))
+                || (Type == EVASIONS || Type == NON_EVASIONS))
                 *moveList++ = m;
         };
         for (PieceSet ps = insertTypes; ps; )
@@ -548,9 +546,10 @@ namespace {
     Bitboard b3p = b3 & standardPromotionZone;
     Bitboard brcp = brc & standardPromotionZone;
     Bitboard blcp = blc & standardPromotionZone;
-    Bitboard rifleBrcp = pos.rifle_capture(make_piece(Us, PAWN)) ? brcp : Bitboard(0);
-    Bitboard rifleBlcp = pos.rifle_capture(make_piece(Us, PAWN)) ? blcp : Bitboard(0);
-    if (pos.rifle_capture(make_piece(Us, PAWN)))
+    const bool pawnRifleCapture = pos.rifle_capture(make_piece(Us, PAWN));
+    Bitboard rifleBrcp = pawnRifleCapture ? brcp : Bitboard(0);
+    Bitboard rifleBlcp = pawnRifleCapture ? blcp : Bitboard(0);
+    if (pawnRifleCapture)
     {
         brcp = 0;
         blcp = 0;
@@ -1273,10 +1272,6 @@ namespace {
 
   template<Color Us, GenType Type>
   ExtMove* generate_potion_moves(const Position& pos, MoveBuffer buffer) {
-    [[maybe_unused]] constexpr bool GeneratesCaptures = Type == CAPTURES || Type == EVASIONS || Type == NON_EVASIONS;
-    [[maybe_unused]] constexpr bool GeneratesQuiets = Type != CAPTURES;
-    [[maybe_unused]] constexpr bool QuietChecks = Type == QUIET_CHECKS;
-
     const Variant* var = pos.variant();
     ExtMove* cur = buffer.end;
     ExtMove* maxEnd = buffer.begin + MOVEGEN_OVERFLOW_CAPACITY;
@@ -1325,10 +1320,7 @@ namespace {
 
                     // Filter by original Type and legality
                     bool isCapture = pos.capture_or_promotion(gatingMove);
-                    if (   (Type == CAPTURES && !isCapture)
-                        || (Type == QUIETS && isCapture)
-                        || (Type == QUIET_CHECKS && (isCapture || !pos.gives_check(gatingMove)))
-                        || !pos.legal(gatingMove))
+                    if (!potion_move_matches<Type>(pos, gatingMove, isCapture))
                         continue;
 
                     cur->move = gatingMove;
@@ -1405,10 +1397,7 @@ namespace {
 
                 // Filter by original Type and legality
                 bool isCapture = pos.capture_or_promotion(gatingMove);
-                if (   (Type == CAPTURES && !isCapture)
-                    || (Type == QUIETS && isCapture)
-                    || (Type == QUIET_CHECKS && (isCapture || !pos.gives_check(gatingMove)))
-                    || !pos.legal(gatingMove))
+                if (!potion_move_matches<Type>(pos, gatingMove, isCapture))
                     continue;
 
                 cur->move = gatingMove;
@@ -1425,7 +1414,7 @@ namespace {
   ExtMove* generate_all(const Position& pos, ExtMove* moveList) {
 
     ExtMove* baseEnd = generate_all_impl<Us, Type>(pos, moveList);
-    if (!has_castable_potion<Us>(pos))
+    if (!has_castable_potion(pos))
         return baseEnd;
     return generate_potion_moves<Us, Type>(pos, MoveBuffer{moveList, baseEnd});
   }
@@ -1472,7 +1461,7 @@ ExtMove* append_potions(const Position& pos, ExtMove* listBegin, ExtMove* baseEn
   assert((Type == EVASIONS) == (bool)pos.evasion_checkers()
          || (pos.topology_wraps() && Type == NON_EVASIONS && pos.evasion_checkers()));
   Color us = pos.side_to_move();
-  if (!(us == WHITE ? has_castable_potion<WHITE>(pos) : has_castable_potion<BLACK>(pos)))
+  if (!has_castable_potion(pos))
       return baseEnd;
 
   return us == WHITE ? generate_potion_moves<WHITE, Type>(pos, MoveBuffer{listBegin, baseEnd})
