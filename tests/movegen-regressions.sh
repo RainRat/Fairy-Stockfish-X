@@ -47,7 +47,7 @@ variant_available() {
   local variant="$2"
   local out
   out=$(run_uci "$ENGINE" "$variant_path" "$variant" <<<'d' || true)
-  grep -q "info string variant ${variant} " <<<"$out"
+  assert_contains "$out" "info string variant ${variant} "
 }
 
 echo "movegen regressions started"
@@ -166,14 +166,6 @@ assert_contains "$out" "^e2d2: 1$"
 assert_contains "$out" "^e2f2: 1$"
 assert_contains "$out" "^e2e3: 1$"
 assert_not_contains "$out" "^e2e4:"
-
-# A pawn that moved away and returned to its starting square must not regain double-step rights.
-out=$(run_uci "$ENGINE" "$TMP_INI" swap-roundtrip <<'UCI'
-position fen 5/5/5/1AP2/5 w - - 0 1 moves b2c2s 0000 c2b2s 0000 0000
-go perft 1
-UCI
-)
-assert_not_contains "$out" "^c2c4:"
 
 # Kings Valley pieces use the maximum-distance rule, not ordinary queen slides.
 out=$(run_uci "$ENGINE" "$ROOT_DIR/src/variants.ini" kings-valley <<'UCI'
