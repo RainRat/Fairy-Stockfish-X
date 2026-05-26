@@ -2,53 +2,55 @@
 
 set -euo pipefail
 
-error() {
-  echo "anti-king test failed on line $1" >&2
-  exit 1
-}
-trap 'error ${LINENO}' ERR
-
 SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 ENGINE="${1:-${SCRIPT_DIR}/../src/stockfish}"
 VARIANTS="${2:-${SCRIPT_DIR}/../src/variants.ini}"
-
-run_engine() {
-  local variant="$1"
-  local position_cmd="$2"
-  cat <<EOF | "${ENGINE}"
-uci
-setoption name VariantPath value ${VARIANTS}
-setoption name UCI_Variant value ${variant}
-${position_cmd}
-go perft 1
-quit
-EOF
-}
+source "${SCRIPT_DIR}/lib/uci.sh"
 
 echo "anti-king tests started"
 
-out=$(run_engine anti-king-1 "position startpos")
-echo "${out}" | grep -q "^info string variant anti-king-1 "
-grep -Fxq "Nodes searched: 20" <<<"$out"
+out=$(run_uci "$ENGINE" "$VARIANTS" anti-king-1 <<'EOF'
+position startpos
+go perft 1
+EOF
+)
+assert_contains "$out" "^info string variant anti-king-1 "
+assert_nodes "$out" 20
 
-out=$(run_engine anti-king-2 "position startpos")
-echo "${out}" | grep -q "^info string variant anti-king-2 "
-grep -Fxq "Nodes searched: 20" <<<"$out"
-echo "${out}" | grep -q "^d6e6: 1$"
-! echo "${out}" | grep -q "^d6d7: 1$"
+out=$(run_uci "$ENGINE" "$VARIANTS" anti-king-2 <<'EOF'
+position startpos
+go perft 1
+EOF
+)
+assert_contains "$out" "^info string variant anti-king-2 "
+assert_nodes "$out" 20
+assert_contains "$out" "^d6e6: 1$"
+assert_not_contains "$out" "^d6d7: 1$"
 
 # Anti-kings may capture friendly pieces, but may not capture enemy pieces or anti-kings.
-out=$(run_engine anti-king-2 "position fen 3rr2a/8/8/8/3Ap3/3P4/8/K6R w - - 0 1")
-echo "${out}" | grep -q "^d4d3: 1$"
-! echo "${out}" | grep -q "^d4e4: 1$"
-! echo "${out}" | grep -q "^h1h8: 1$"
+out=$(run_uci "$ENGINE" "$VARIANTS" anti-king-2 <<'EOF'
+position fen 3rr2a/8/8/8/3Ap3/3P4/8/K6R w - - 0 1
+go perft 1
+EOF
+)
+assert_contains "$out" "^d4d3: 1$"
+assert_not_contains "$out" "^d4e4: 1$"
+assert_not_contains "$out" "^h1h8: 1$"
 
 # Kings do not attack anti-kings, so king-only pressure leaves the anti-king side lost.
-out=$(run_engine anti-king-2 "position fen 7a/8/8/3Ak3/8/8/8/K6R w - - 0 1")
-grep -Fxq "Nodes searched: 0" <<<"$out"
+out=$(run_uci "$ENGINE" "$VARIANTS" anti-king-2 <<'EOF'
+position fen 7a/8/8/3Ak3/8/8/8/K6R w - - 0 1
+go perft 1
+EOF
+)
+assert_nodes "$out" 0
 
 # A non-king attacker restores anti-king legality.
-out=$(run_engine anti-king-2 "position fen 3r3a/8/8/3Ak3/8/8/8/K6R w - - 0 1")
-grep -Fxq "Nodes searched: 17" <<<"$out"
+out=$(run_uci "$ENGINE" "$VARIANTS" anti-king-2 <<'EOF'
+position fen 3r3a/8/8/3Ak3/8/8/8/K6R w - - 0 1
+go perft 1
+EOF
+)
+assert_nodes "$out" 17
 
 echo "anti-king tests passed"

@@ -1,49 +1,52 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-error() {
-  echo "kopano regression failed on line $1"
-  exit 1
-}
-trap 'error ${LINENO}' ERR
-
 SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 ENGINE="${1:-${SCRIPT_DIR}/../src/stockfish}"
 VARIANT_PATH="${2:-${SCRIPT_DIR}/../src/variants.ini}"
+source "${SCRIPT_DIR}/lib/uci.sh"
 
-run_cmds() {
-  cat <<EOF | "${ENGINE}"
-uci
-setoption name VariantPath value ${VARIANT_PATH}
-setoption name UCI_Variant value kopano
-$1
-quit
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" kopano <<'EOF'
+position startpos
+go perft 1
 EOF
-}
+)
+assert_nodes "$out" 64
 
-out=$(run_cmds "position startpos
-go perft 1")
-grep -Fxq "Nodes searched: 64" <<<"$out"
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" kopano <<'EOF'
+position startpos moves P@b1
+go perft 1
+EOF
+)
+assert_contains "$out" "^P@a2: 1$"
+assert_not_contains "$out" "^P@b1: 1$"
 
-out=$(run_cmds "position startpos moves P@b1
-go perft 1")
-echo "${out}" | grep -q "^P@a2: 1$"
-! echo "${out}" | grep -q "^P@b1: 1$"
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" kopano <<'EOF'
+position fen 8/8/8/8/8/8/1P6/8[Pp] w - - 0 1
+go perft 1
+EOF
+)
+assert_not_contains "$out" "^P@c3: 1$"
 
-out=$(run_cmds "position fen 8/8/8/8/8/8/1P6/8[Pp] w - - 0 1
-go perft 1")
-! echo "${out}" | grep -q "^P@c3: 1$"
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" kopano <<'EOF'
+position fen 8/8/8/8/3p4/8/1P6/8[Pp] w - - 0 1
+go perft 1
+EOF
+)
+assert_contains "$out" "^P@c3: 1$"
 
-out=$(run_cmds "position fen 8/8/8/8/3p4/8/1P6/8[Pp] w - - 0 1
-go perft 1")
-echo "${out}" | grep -q "^P@c3: 1$"
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" kopano <<'EOF'
+position fen 8/8/8/8/2pP4/3p4/8/8[Pp] w - - 0 1
+go perft 1
+EOF
+)
+assert_not_contains "$out" "^P@c3: 1$"
 
-out=$(run_cmds "position fen 8/8/8/8/2pP4/3p4/8/8[Pp] w - - 0 1
-go perft 1")
-! echo "${out}" | grep -q "^P@c3: 1$"
-
-out=$(run_cmds "position fen 7p/6p1/5p2/4p3/3p4/2p5/1p6/p7 w - - 0 1
-go perft 1")
-grep -Fxq "Nodes searched: 0" <<<"$out"
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" kopano <<'EOF'
+position fen 7p/6p1/5p2/4p3/3p4/2p5/1p6/p7 w - - 0 1
+go perft 1
+EOF
+)
+assert_nodes "$out" 0
 
 echo "kopano regression passed"
