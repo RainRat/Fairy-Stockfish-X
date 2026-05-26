@@ -9,19 +9,20 @@ error() {
 trap 'error ${LINENO}' ERR
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+ROOT_DIR=$(cd "${SCRIPT_DIR}/.." && pwd)
 source "${SCRIPT_DIR}/lib/uci.sh"
 
 ENGINE=${1:-}
 if [[ -z "${ENGINE}" ]]; then
-  if [[ -x "src/stockfish" ]]; then
-    ENGINE="src/stockfish"
+  if [[ -x "${ROOT_DIR}/src/stockfish" ]]; then
+    ENGINE="${ROOT_DIR}/src/stockfish"
   else
-    ENGINE="./stockfish"
+    ENGINE="${ROOT_DIR}/stockfish"
   fi
 fi
-VARIANT_PATH=${2:-variants.ini}
-if [[ ! -f "${VARIANT_PATH}" && -f "src/variants.ini" ]]; then
-  VARIANT_PATH="src/variants.ini"
+VARIANT_PATH=${2:-"${ROOT_DIR}/src/variants.ini"}
+if [[ ! -f "${VARIANT_PATH}" && -f "${ROOT_DIR}/src/variants.ini" ]]; then
+  VARIANT_PATH="${ROOT_DIR}/src/variants.ini"
 fi
 
 run_cmds() {

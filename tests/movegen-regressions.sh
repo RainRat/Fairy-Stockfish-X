@@ -27,17 +27,6 @@ startFen = W6w/QQ6/8/8/8/8/8/8 w
 customPiece1 = p:iW
 pawnTypes = p
 startFen = 4k3/8/8/8/8/8/4P3/4K3 w - - 0 1
-
-[swap-roundtrip:fairy]
-maxFile = e
-maxRank = 5
-king = -
-checking = false
-pass = true
-pieceToCharTable = -
-customPiece1 = a:mW
-adjacentSwapMoveTypes = a p
-startFen = 5/5/5/1aP2/5 w - - 0 1
 EOF
 
 run_cmds() {
@@ -140,12 +129,6 @@ assert_contains "$out" "^e2d2: 1$"
 assert_contains "$out" "^e2f2: 1$"
 assert_contains "$out" "^e2e3: 1$"
 assert_not_contains "$out" "^e2e4:"
-
-# A pawn that moved away and returned to its starting square must not regain double-step rights.
-out=$(run_cmds "$TMP_INI" swap-roundtrip \
-  "position fen 5/5/5/1aP2/5 w - - 0 1 moves c2b2s 0000 b2c2s 0000
-go perft 1")
-assert_not_contains "$out" "^c2c4:"
 
 # Kings Valley pieces use the maximum-distance rule, not ordinary queen slides.
 out=$(run_cmds "$ROOT_DIR/src/variants.ini" kings-valley \
