@@ -451,6 +451,7 @@ namespace {
 
     const Bitboard frozen     = pos.freeze_squares();
     const Bitboard pawns      = pos.pieces(Us, PAWN) & fromMask & ~frozen;
+    const Bitboard unmovedPawns = pawns & pos.not_moved_pieces(Us);
     const Bitboard neutral    = pos.dead_squares();
     const Bitboard movable    = pos.board_bb(Us, PAWN) & ~pos.pieces();
     const Bitboard friendlyCapturable = pos.pieces(Us) & ~pos.pieces(Us, KING);
@@ -531,8 +532,8 @@ namespace {
     }
 
     Bitboard b1 = shift<Up>(pawns) & movable & target;
-    Bitboard b2 = shift<Up>(shift<Up>(pawns & doubleStepRegion) & movable) & movable & target;
-    Bitboard b3 = shift<Up>(shift<Up>(shift<Up>(pawns & tripleStepRegion) & movable) & movable) & movable & target;
+    Bitboard b2 = shift<Up>(shift<Up>(unmovedPawns & doubleStepRegion) & movable) & movable & target;
+    Bitboard b3 = shift<Up>(shift<Up>(shift<Up>(unmovedPawns & tripleStepRegion) & movable) & movable) & movable & target;
     Bitboard brc = shift<UpRight>(pawns) & capturable & target;
     Bitboard blc = shift<UpLeft >(pawns) & capturable & target;
 
