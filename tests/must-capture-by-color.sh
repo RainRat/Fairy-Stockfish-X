@@ -3,14 +3,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-ENGINE=${1:-"${ROOT_DIR}/src/stockfish"}
-if [[ "${ENGINE}" != /* ]]; then
-  ENGINE="${PWD}/${ENGINE}"
-fi
+source "${SCRIPT_DIR}/lib/uci.sh"
 
-cd "${ROOT_DIR}/src"
-
-tmp_ini=$(mktemp)
+tmp_ini="$(mktemp)"
 trap 'rm -f "$tmp_ini"' EXIT
 
 cat > "$tmp_ini" <<'INI'
@@ -20,15 +15,23 @@ mustCaptureBlack = false
 startFen = 4k3/8/8/3p4/4P3/8/8/4K3 w - - 0 1
 INI
 
-out_white=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value asymmustcapture\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" | "${ENGINE}")
-grep -q "e4d5:" <<<"$out_white"
-! grep -q "e4e5:" <<<"$out_white"
+out_white=$(run_uci "${1:-"${ROOT_DIR}/src/stockfish"}" "$tmp_ini" asymmustcapture <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_contains "$out_white" "e4d5:"
+assert_not_contains "$out_white" "e4e5:"
 
-grep -Fxq "Nodes searched: 1" <<<"$out_white"
+assert_nodes "$out_white" 1
 
 black_fen='4k3/8/8/4p3/3P4/8/8/4K3 b - - 0 1'
-out_black=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value asymmustcapture\nposition fen %s\ngo perft 1\nquit\n' "$tmp_ini" "$black_fen" | "${ENGINE}")
-grep -q "e5d4:" <<<"$out_black"
-grep -q "e5e4:" <<<"$out_black"
+out_black=$(run_uci "${1:-"${ROOT_DIR}/src/stockfish"}" "$tmp_ini" asymmustcapture <<UCI
+position fen ${black_fen}
+go perft 1
+UCI
+)
+assert_contains "$out_black" "e5d4:"
+assert_contains "$out_black" "e5e4:"
 
 echo "mustCaptureByColor test OK"
