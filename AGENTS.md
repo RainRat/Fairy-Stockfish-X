@@ -39,6 +39,7 @@
 
   * `setoption name VariantPath value variants.ini`
   * `setoption name UCI_Variant value <your_variant>`
+  * Use `isready` after `setoption` to ensure the engine finishes loading the variant.
 * UCI basics:
 
   * `position startpos moves e2e4 e7e5`
@@ -160,3 +161,11 @@ When reviewing the log, look for the final `local regression suite passed`; if i
 * Keep changes minimal and scoped; stage only what you touched.
 * Verify your `.ini` parses, positions play, tests pass, and performance is sane.
 * Summarize new settings in `variants.ini` comments and note any compatibility shims.
+
+## 13) Test Harness Cleanup Queue
+
+The following scripts are candidates for migration to `tests/lib/uci.sh`:
+* `tests/blast-legal-regressions.sh`: currently uses local `run_cmds`.
+* `tests/quiet-check-special-moves.sh`: high duplication of UCI boilerplate.
+* `tests/gating-check-regression.sh`: uses local UCI loop.
+* `tests/potion-check-regressions.sh`: uses local UCI loop.

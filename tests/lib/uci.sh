@@ -12,8 +12,13 @@ run_uci() {
 
   {
     printf 'uci\n'
-    printf 'setoption name VariantPath value %s\n' "$variant_path"
-    printf 'setoption name UCI_Variant value %s\n' "$variant"
+    if [[ -n "$variant_path" ]]; then
+      printf 'setoption name VariantPath value %s\n' "$variant_path"
+    fi
+    if [[ -n "$variant" ]]; then
+      printf 'setoption name UCI_Variant value %s\n' "$variant"
+    fi
+    printf 'isready\n'
     cat
     printf 'quit\n'
   } | uci_timeout "$engine"
@@ -52,3 +57,20 @@ assert_nodes() {
   assert_contains "$haystack" "^Nodes searched: ${expected}$" "have exact node count"
 }
 
+assert_fen() {
+  local haystack="$1"
+  local expected_fen="$2"
+
+  if ! grep -Fq "Fen: ${expected_fen}" <<<"$haystack"; then
+    echo "expected FEN: ${expected_fen}" >&2
+    local actual_fen=$(grep "Fen: " <<<"$haystack" | head -n 1)
+    if [[ -n "$actual_fen" ]]; then
+        echo "actual $actual_fen" >&2
+    else
+        echo "actual FEN not found in output" >&2
+        echo "full output:" >&2
+        printf '%s\n' "$haystack" >&2
+    fi
+    return 1
+  fi
+}

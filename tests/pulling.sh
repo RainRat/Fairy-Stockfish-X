@@ -11,6 +11,8 @@ trap 'error ${LINENO}' ERR
 SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 ENGINE="${1:-${SCRIPT_DIR}/../src/stockfish}"
 
+source "${SCRIPT_DIR}/lib/uci.sh"
+
 TMP_INI=$(mktemp)
 trap 'rm -f "${TMP_INI}"' EXIT
 
@@ -43,29 +45,26 @@ pullingStrength = a:3 b:1
 startFen = 5/5/5/5/5 w - - 0 1
 INI
 
-run_cmds() {
-  local variant=$1
-  local cmds=$2
-  cat <<EOF | "${ENGINE}"
-uci
-setoption name VariantPath value ${TMP_INI}
-setoption name UCI_Variant value ${variant}
-${cmds}
-quit
-EOF
-}
+out=$(run_uci "${ENGINE}" "${TMP_INI}" pull-basic <<'UCI'
+position fen 5/5/2b2/2A2/5 w - - 0 1
+go perft 1
+UCI
+)
+assert_contains "$out" "^c2d2: 1$"
+assert_contains "$out" "^c2d2,c3: 1$"
 
-out=$(run_cmds pull-basic "position fen 5/5/2b2/2A2/5 w - - 0 1
-go perft 1")
-echo "${out}" | grep -q "^c2d2: 1$"
-echo "${out}" | grep -q "^c2d2,c3: 1$"
+out=$(run_uci "${ENGINE}" "${TMP_INI}" pull-basic <<'UCI'
+position fen 5/5/2c2/2A2/5 w - - 0 1
+go perft 1
+UCI
+)
+assert_not_contains "$out" "^c2d2,c3: 1$"
 
-out=$(run_cmds pull-basic "position fen 5/5/2c2/2A2/5 w - - 0 1
-go perft 1")
-! echo "${out}" | grep -q "^c2d2,c3: 1$"
-
-out=$(run_cmds pull-basic "position fen 5/5/2b2/2A2/5 w - - 0 1 moves c2d2,c3
-d")
-echo "${out}" | grep -q "Fen: 5/5/5/2bA1/5 b - - 1 1"
+out=$(run_uci "${ENGINE}" "${TMP_INI}" pull-basic <<'UCI'
+position fen 5/5/2b2/2A2/5 w - - 0 1 moves c2d2,c3
+d
+UCI
+)
+assert_fen "$out" "5/5/5/2bA1/5 b - - 1 1"
 
 echo "pulling ok"
