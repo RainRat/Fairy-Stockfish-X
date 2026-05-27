@@ -3515,7 +3515,7 @@ inline bool Position::is_lame_blocked(Square from, Square to, const PieceInfo::L
         Square orthRank = SQ_NONE;
         if (!advance(from, stepF, 0, orthFile) || !advance(from, 0, stepR, orthRank))
             return true;
-        return bool(occupied & square_bb(orthFile) & square_bb(orthRank));
+        return bool((occupied & square_bb(orthFile)) && (occupied & square_bb(orthRank)));
     };
 
     auto path_blocked = [&](const PathBuffer& path, bool midpointOnly) -> bool {

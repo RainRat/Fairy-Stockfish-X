@@ -1,17 +1,14 @@
 #!/bin/bash
-
 set -euo pipefail
 
-error() {
-  echo "betza range modifiers test failed on line $1"
-  [[ -n "${TMP_VARIANT_PATH:-}" ]] && rm -f "${TMP_VARIANT_PATH}"
-  exit 1
-}
-trap 'error ${LINENO}' ERR
+SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+source "${SCRIPT_DIR}/lib/uci.sh"
 
-ENGINE=${1:-./stockfish}
+ENGINE=$(default_engine "${1:-}")
 
 TMP_VARIANT_PATH=$(mktemp "${TMPDIR:-/tmp}/fsx-betza-range-XXXXXX.ini")
+trap 'rm -f "${TMP_VARIANT_PATH}"' EXIT
+
 cat >"${TMP_VARIANT_PATH}" <<'INI'
 [range35:chess]
 king = -
@@ -35,51 +32,39 @@ pieceToCharTable = A:a
 startFen = 8/8/8/8/4A3/8/8/8 w - - 0 1
 INI
 
-run_perft() {
-  local variant="$1"
-  cat <<CMDS | "${ENGINE}"
-uci
-setoption name VariantPath value ${TMP_VARIANT_PATH}
-setoption name UCI_Variant value ${variant}
-position startpos
-go perft 1
-quit
-CMDS
-}
-
 echo "betza range modifiers tests started"
 
-out=$(run_perft "range35")
-echo "${out}" | grep -q "^e4e7: 1$"
-echo "${out}" | grep -q "^e4e8: 1$"
-echo "${out}" | grep -q "^e4b4: 1$"
-echo "${out}" | grep -q "^e4h4: 1$"
-! echo "${out}" | grep -q "^e4e5: 1$"
-! echo "${out}" | grep -q "^e4e6: 1$"
-! echo "${out}" | grep -q "^e4d4: 1$"
-! echo "${out}" | grep -q "^e4c4: 1$"
-
-out=$(run_perft "range3plus")
-echo "${out}" | grep -q "^e4e7: 1$"
-echo "${out}" | grep -q "^e4e8: 1$"
-echo "${out}" | grep -q "^e4b4: 1$"
-echo "${out}" | grep -q "^e4h4: 1$"
-! echo "${out}" | grep -q "^e4e5: 1$"
-! echo "${out}" | grep -q "^e4e6: 1$"
-! echo "${out}" | grep -q "^e4d4: 1$"
-! echo "${out}" | grep -q "^e4c4: 1$"
-
-invalid_out=$(cat <<CMDS | "${ENGINE}" 2>&1
-uci
-setoption name VariantPath value ${TMP_VARIANT_PATH}
-setoption name UCI_Variant value rangeinvalid
-quit
-CMDS
+out=$(run_uci "$ENGINE" "$TMP_VARIANT_PATH" range35 <<'UCI'
+position startpos
+go perft 1
+UCI
 )
+assert_contains "$out" "^e4e7: 1$"
+assert_contains "$out" "^e4e8: 1$"
+assert_contains "$out" "^e4b4: 1$"
+assert_contains "$out" "^e4h4: 1$"
+assert_not_contains "$out" "^e4e5: 1$"
+assert_not_contains "$out" "^e4e6: 1$"
+assert_not_contains "$out" "^e4d4: 1$"
+assert_not_contains "$out" "^e4c4: 1$"
 
-echo "${invalid_out}" | grep -q "Invalid Betza rider range"
+out=$(run_uci "$ENGINE" "$TMP_VARIANT_PATH" range3plus <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_contains "$out" "^e4e7: 1$"
+assert_contains "$out" "^e4e8: 1$"
+assert_contains "$out" "^e4b4: 1$"
+assert_contains "$out" "^e4h4: 1$"
+assert_not_contains "$out" "^e4e5: 1$"
+assert_not_contains "$out" "^e4e6: 1$"
+assert_not_contains "$out" "^e4d4: 1$"
+assert_not_contains "$out" "^e4c4: 1$"
 
-rm -f "${TMP_VARIANT_PATH}"
-unset TMP_VARIANT_PATH
+invalid_out=$(run_uci "$ENGINE" "$TMP_VARIANT_PATH" rangeinvalid <<'UCI' 2>&1
+UCI
+)
+assert_contains "$invalid_out" "Invalid Betza rider range"
 
 echo "betza range modifiers tests passed"

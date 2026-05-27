@@ -1,8 +1,17 @@
-#!/usr/bin/env bash
+#!/bin/bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ENGINE="${1:-$ROOT_DIR/src/stockfish-vlb}"
+SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+source "${SCRIPT_DIR}/lib/uci.sh"
+
+ENGINE="${1:-}"
+if [[ -z "$ENGINE" ]]; then
+  if [[ -x "${ROOT_DIR}/src/stockfish-vlb" ]]; then
+    ENGINE="${ROOT_DIR}/src/stockfish-vlb"
+  else
+    ENGINE="${ROOT_DIR}/stockfish-vlb"
+  fi
+fi
 
 TMPDIR=$(mktemp -d)
 trap 'rm -rf "$TMPDIR"' EXIT
@@ -26,8 +35,10 @@ VAR
 
 run_variant() {
   local variant="$1"
-  printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value %s\nposition startpos\ngo perft 1\nquit\n' \
-    "$VARIANT_FILE" "$variant" | "$ENGINE" 2>&1
+  run_uci "$ENGINE" "$VARIANT_FILE" "$variant" <<'UCI' 2>&1
+position startpos
+go perft 1
+UCI
 }
 
 out=$(run_variant vlb-lame-clear)
@@ -40,17 +51,17 @@ if grep -q "No such variant" <<<"$out"; then
   exit 0
 fi
 
-grep -q "info string variant vlb-lame-clear files 16 ranks 16" <<<"$out"
-grep -q "^m16m14: 1$" <<<"$out"
-grep -q "^m16k16: 1$" <<<"$out"
-grep -q "^m16o16: 1$" <<<"$out"
-grep -Fxq "Nodes searched: 6" <<<"$out"
+assert_contains "$out" "info string variant vlb-lame-clear files 16 ranks 16"
+assert_contains "$out" "^m16m14: 1$"
+assert_contains "$out" "^m16k16: 1$"
+assert_contains "$out" "^m16o16: 1$"
+assert_nodes "$out" 6
 
 out=$(run_variant vlb-lame-blocked)
-grep -q "info string variant vlb-lame-blocked files 16 ranks 16" <<<"$out"
-! grep -q "^m16m14:" <<<"$out"
-grep -q "^m16k16: 1$" <<<"$out"
-grep -q "^m16o16: 1$" <<<"$out"
-grep -Fxq "Nodes searched: 5" <<<"$out"
+assert_contains "$out" "info string variant vlb-lame-blocked files 16 ranks 16"
+assert_not_contains "$out" "^m16m14:"
+assert_contains "$out" "^m16k16: 1$"
+assert_contains "$out" "^m16o16: 1$"
+assert_nodes "$out" 5
 
 echo "VLB lame rider regression passed"

@@ -1,38 +1,35 @@
 #!/bin/bash
-
 set -euo pipefail
 
-error() {
-  echo "atlantis regression failed on line $1"
-  exit 1
-}
-trap 'error ${LINENO}' ERR
+SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+source "${SCRIPT_DIR}/lib/uci.sh"
 
-ENGINE=${1:-./stockfish}
-SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-REPO_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
-VARIANTS=${2:-${REPO_ROOT}/src/variants.ini}
+ENGINE=$(default_engine "${1:-}")
+VARIANTS=$(default_variants "${2:-}")
 
-run_cmds() {
-  cat <<EOF | "${ENGINE}"
-uci
-setoption name VariantPath value ${VARIANTS}
-setoption name UCI_Variant value atlantis
-$1
-quit
+echo "atlantis tests started"
+
+out=$(run_uci "$ENGINE" "$VARIANTS" atlantis <<'EOF'
+position startpos
+go perft 1
 EOF
-}
+)
+assert_contains "$out" "^a2a3: 1$"
+assert_not_contains "$out" "^a2a3,a1: 1$"
+assert_contains "$out" "^0000,a3: 1$"
 
-out=$(run_cmds "position startpos
-go perft 1")
-echo "${out}" | grep -q "^a2a3: 1$"
-! echo "${out}" | grep -q "^a2a3,a1: 1$"
-echo "${out}" | grep -q "^0000,a3: 1$"
+out=$(run_uci "$ENGINE" "$VARIANTS" atlantis <<'EOF'
+position startpos moves a2a3
+d
+EOF
+)
+assert_contains_literal "$out" "Fen: rnbqkbnr/pppppppp/8/8/8/P7/1PPPPPPP/RNBQKBNR b KQkq - 0 1"
 
-out=$(run_cmds "position startpos moves a2a3
-d")
-echo "${out}" | grep -q "Fen: rnbqkbnr/pppppppp/8/8/8/P7/1PPPPPPP/RNBQKBNR b KQkq - 0 1"
+out=$(run_uci "$ENGINE" "$VARIANTS" atlantis <<'EOF'
+position startpos moves 0000,a3
+d
+EOF
+)
+assert_contains_literal "$out" "Fen: rnbqkbnr/pppppppp/8/8/8/*7/PPPPPPPP/RNBQKBNR b KQkq - 1 1"
 
-out=$(run_cmds "position startpos moves 0000,a3
-d")
-echo "${out}" | grep -q "Fen: rnbqkbnr/pppppppp/8/8/8/\\*7/PPPPPPPP/RNBQKBNR b KQkq - 1 1"
+echo "atlantis tests passed"

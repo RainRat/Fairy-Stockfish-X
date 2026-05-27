@@ -1,14 +1,10 @@
 #!/bin/bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-ENGINE=${1:-"${ROOT_DIR}/src/stockfish"}
-if [[ "${ENGINE}" != /* ]]; then
-  ENGINE="${PWD}/${ENGINE}"
-fi
+SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+source "${SCRIPT_DIR}/lib/uci.sh"
 
-cd "${ROOT_DIR}/src"
+ENGINE=$(default_engine "${1:-}")
 
 tmp_ini=$(mktemp)
 tmp_key_ini=""
@@ -215,10 +211,10 @@ INI
 
 piece_moves() {
   local variant=$1
-  printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value %s\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" "$variant" \
-    | "${ENGINE}" \
-    | awk -F: '/^d4/{print $1}' \
-    | sort
+  run_uci "$ENGINE" "$tmp_ini" "$variant" <<'UCI' | awk -F: '/^d4/{print $1}' | sort
+position startpos
+go perft 1
+UCI
 }
 
 expected_alfil=$(mktemp)
@@ -256,183 +252,284 @@ cmp "$actual_alfil_tuple" "$expected_alfil"
 cmp "$actual_dabbaba" "$expected_dabbaba"
 cmp "$actual_dabbaba_tuple" "$expected_dabbaba"
 
-out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value tuple-range-pin\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
-  | "${ENGINE}")
-echo "$out" | grep -q "^d3c3: 1$"
-echo "$out" | grep -q "^d3e3: 1$"
+out=$(run_uci "$ENGINE" "$tmp_ini" tuple-range-pin <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_contains "$out" "^d3c3: 1$"
+assert_contains "$out" "^d3e3: 1$"
 
 # Lame dabbaba/alfil and their rider forms must be blocked by the midpoint square.
-out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-rider-blockers\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
-  | "${ENGINE}")
-! echo "$out" | grep -q "^d7d5:"
-! echo "$out" | grep -q "^d7f7:"
-! echo "$out" | grep -q "^e7c7:"
-! echo "$out" | grep -q "^c6e8:"
-! echo "$out" | grep -q "^d6f8:"
+out=$(run_uci "$ENGINE" "$tmp_ini" lame-rider-blockers <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_not_contains "$out" "^d7d5:"
+assert_not_contains "$out" "^d7f7:"
+assert_not_contains "$out" "^e7c7:"
+assert_not_contains "$out" "^c6e8:"
+assert_not_contains "$out" "^d6f8:"
 
-out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-rider-repeat\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
-  | "${ENGINE}")
-echo "$out" | grep -q "^d7b5: 1$"
-echo "$out" | grep -q "^d7f5: 1$"
-echo "$out" | grep -q "^d7h3: 1$"
+out=$(run_uci "$ENGINE" "$tmp_ini" lame-rider-repeat <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_contains "$out" "^d7b5: 1$"
+assert_contains "$out" "^d7f5: 1$"
+assert_contains "$out" "^d7h3: 1$"
 
-out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-rider-repeat\nposition fen 8/3a4/8/8/4p3/8/8/K6k b - - 0 1\ngo perft 1\nquit\n' "$tmp_ini" \
-  | "${ENGINE}")
-echo "$out" | grep -q "^d7b5: 1$"
-echo "$out" | grep -q "^d7f5: 1$"
-echo "$out" | grep -q "^d7h3: 1$"
+out=$(run_uci "$ENGINE" "$tmp_ini" lame-rider-repeat <<'UCI'
+position fen 8/3a4/8/8/4p3/8/8/K6k b - - 0 1
+go perft 1
+UCI
+)
+assert_contains "$out" "^d7b5: 1$"
+assert_contains "$out" "^d7f5: 1$"
+assert_contains "$out" "^d7h3: 1$"
 
-out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-rider-repeat\nposition fen 8/3a4/8/5p2/8/8/8/K6k b - - 0 1\ngo perft 1\nquit\n' "$tmp_ini" \
-  | "${ENGINE}")
-echo "$out" | grep -q "^d7b5: 1$"
-! echo "$out" | grep -q "^d7f5:"
-! echo "$out" | grep -q "^d7h3:"
+out=$(run_uci "$ENGINE" "$tmp_ini" lame-rider-repeat <<'UCI'
+position fen 8/3a4/8/5p2/8/8/8/K6k b - - 0 1
+go perft 1
+UCI
+)
+assert_contains "$out" "^d7b5: 1$"
+assert_not_contains "$out" "^d7f5:"
+assert_not_contains "$out" "^d7h3:"
 
-out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-rider-repeat\nposition fen 8/3a4/8/5P2/8/8/8/K6k b - - 0 1\ngo perft 1\nquit\n' "$tmp_ini" \
-  | "${ENGINE}")
-echo "$out" | grep -q "^d7b5: 1$"
-echo "$out" | grep -q "^d7f5: 1$"
-! echo "$out" | grep -q "^d7h3:"
+out=$(run_uci "$ENGINE" "$tmp_ini" lame-rider-repeat <<'UCI'
+position fen 8/3a4/8/5P2/8/8/8/K6k b - - 0 1
+go perft 1
+UCI
+)
+assert_contains "$out" "^d7b5: 1$"
+assert_contains "$out" "^d7f5: 1$"
+assert_not_contains "$out" "^d7h3:"
 
-out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-rider-repeat\nposition fen 8/3a4/8/8/6p1/8/8/K6k b - - 0 1\ngo perft 1\nquit\n' "$tmp_ini" \
-  | "${ENGINE}")
-echo "$out" | grep -q "^d7b5: 1$"
-echo "$out" | grep -q "^d7f5: 1$"
-! echo "$out" | grep -q "^d7h3:"
+out=$(run_uci "$ENGINE" "$tmp_ini" lame-rider-repeat <<'UCI'
+position fen 8/3a4/8/8/6p1/8/8/K6k b - - 0 1
+go perft 1
+UCI
+)
+assert_contains "$out" "^d7b5: 1$"
+assert_contains "$out" "^d7f5: 1$"
+assert_not_contains "$out" "^d7h3:"
 
-out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-rider-repeat\nposition fen 8/3a4/4p3/8/8/8/8/K6k b - - 0 1\ngo perft 1\nquit\n' "$tmp_ini" \
-  | "${ENGINE}")
-echo "$out" | grep -q "^d7b5: 1$"
-! echo "$out" | grep -q "^d7f5:"
-! echo "$out" | grep -q "^d7h3:"
+out=$(run_uci "$ENGINE" "$tmp_ini" lame-rider-repeat <<'UCI'
+position fen 8/3a4/4p3/8/8/8/8/K6k b - - 0 1
+go perft 1
+UCI
+)
+assert_contains "$out" "^d7b5: 1$"
+assert_not_contains "$out" "^d7f5:"
+assert_not_contains "$out" "^d7h3:"
 
-out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-rider-bounded\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
-  | "${ENGINE}")
-echo "$out" | grep -q "^b2d4: 1$"
-echo "$out" | grep -q "^b2f6: 1$"
-! echo "$out" | grep -q "^b2h8:"
+out=$(run_uci "$ENGINE" "$tmp_ini" lame-rider-bounded <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_contains "$out" "^b2d4: 1$"
+assert_contains "$out" "^b2f6: 1$"
+assert_not_contains "$out" "^b2h8:"
 
 # Plain DD/AA riders are not lame: midpoint blockers must NOT stop them.
-out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value plain-rider-midpoint\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
-  | "${ENGINE}")
-echo "$out" | grep -q "^d7d5:"
-echo "$out" | grep -q "^e7c5:"
+out=$(run_uci "$ENGINE" "$tmp_ini" plain-rider-midpoint <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_contains "$out" "^d7d5:"
+assert_contains "$out" "^e7c5:"
 
-out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-path-orthfirst\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
-  | "${ENGINE}")
-echo "$out" | grep -q "^a1b4: 1$"
+out=$(run_uci "$ENGINE" "$tmp_ini" lame-path-orthfirst <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_contains "$out" "^a1b4: 1$"
 
 # Midpoint compatibility should still be available for historical definitions.
 # For even-length paths, the midpoint region is the whole central segment.
-out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-path-mid\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
-  | "${ENGINE}")
-! echo "$out" | grep -q "^a1d2:"
+out=$(run_uci "$ENGINE" "$tmp_ini" lame-path-mid <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_not_contains "$out" "^a1d2:"
 
-out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-path-mid-clear\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
-  | "${ENGINE}")
-echo "$out" | grep -q "^a1d2: 1$"
+out=$(run_uci "$ENGINE" "$tmp_ini" lame-path-mid-clear <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_contains "$out" "^a1d2: 1$"
 
 # A lame Ferz is blocked only when both orthogonally adjacent squares are occupied.
-out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-ferz-blockers\nposition fen 8/8/8/3p4/3A4/8/8/K6k w - - 0 1\ngo perft 1\nquit\n' "$tmp_ini" \
-  | "${ENGINE}")
-echo "$out" | grep -q "^d4e5: 1$"
+out=$(run_uci "$ENGINE" "$tmp_ini" lame-ferz-blockers <<'UCI'
+position fen 8/8/8/3p4/3A4/8/8/K6k w - - 0 1
+go perft 1
+UCI
+)
+assert_contains "$out" "^d4e5: 1$"
 
-out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-ferz-blockers\nposition fen 8/8/8/3p4/3Ap3/8/8/K6k w - - 0 1\ngo perft 1\nquit\n' "$tmp_ini" \
-  | "${ENGINE}")
-! echo "$out" | grep -q "^d4e5:"
+out=$(run_uci "$ENGINE" "$tmp_ini" lame-ferz-blockers <<'UCI'
+position fen 8/8/8/3p4/3Ap3/8/8/K6k w - - 0 1
+go perft 1
+UCI
+)
+assert_not_contains "$out" "^d4e5:"
 
 # Any-path lame knight: if one valid route is clear, the move should be available.
-out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value moo-anypath\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
-  | "${ENGINE}")
-echo "$out" | grep -q "^a1c2: 1$"
-! echo "$out" | grep -q "^a1e3:"
-! echo "$out" | grep -q "^a1g4:"
+out=$(run_uci "$ENGINE" "$tmp_ini" moo-anypath <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_contains "$out" "^a1c2: 1$"
+assert_not_contains "$out" "^a1e3:"
+assert_not_contains "$out" "^a1g4:"
 
-out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value moo-anypath\nposition fen k7/8/8/8/8/8/p7/A6K w - - 0 1\ngo perft 1\nquit\n' "$tmp_ini" \
-  | "${ENGINE}")
-echo "$out" | grep -q "^a1b3: 1$"
+out=$(run_uci "$ENGINE" "$tmp_ini" moo-anypath <<'UCI'
+position fen k7/8/8/8/8/8/p7/A6K w - - 0 1
+go perft 1
+UCI
+)
+assert_contains "$out" "^a1b3: 1$"
 
-out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value moa-move-blocked\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
-  | "${ENGINE}")
-! echo "$out" | grep -q "^a1c2:"
+out=$(run_uci "$ENGINE" "$tmp_ini" moa-move-blocked <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_not_contains "$out" "^a1c2:"
 
-out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value mao-leg-blocked\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
-  | "${ENGINE}")
-! echo "$out" | grep -q "^a1c2:"
+out=$(run_uci "$ENGINE" "$tmp_ini" mao-leg-blocked <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_not_contains "$out" "^a1c2:"
 
-out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value mao-leg-clear\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
-  | "${ENGINE}")
-echo "$out" | grep -q "^a1c2: 1$"
+out=$(run_uci "$ENGINE" "$tmp_ini" mao-leg-clear <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_contains "$out" "^a1c2: 1$"
 
-out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value moa-check\nposition startpos moves a1c2\nd\nquit\n' "$tmp_ini" \
-  | "${ENGINE}")
-echo "$out" | grep -q "Checkers: c2"
+out=$(run_uci "$ENGINE" "$tmp_ini" moa-check <<'UCI'
+position startpos moves a1c2
+d
+UCI
+)
+assert_contains "$out" "Checkers: c2"
 
-out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value moa-check\nposition fen 8/8/8/8/3k4/3p4/8/A6K w - - 0 1 moves a1c2\nd\nquit\n' "$tmp_ini" \
-  | "${ENGINE}")
-! echo "$out" | grep -q "Checkers: c2"
+out=$(run_uci "$ENGINE" "$tmp_ini" moa-check <<'UCI'
+position fen 8/8/8/8/3k4/3p4/8/A6K w - - 0 1 moves a1c2
+d
+UCI
+)
+assert_not_contains "$out" "Checkers: c2"
 
-reject_out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-filter-key-reject\nquit\n' "$tmp_ini" \
-  | "${ENGINE}" 2>&1)
-grep -q "Unknown Betza parameter key 'filter' in lame block" <<<"$reject_out"
-out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-filter-key-reject\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
-  | "${ENGINE}")
-! echo "$out" | grep -q "^a1"
+reject_out=$(run_uci "$ENGINE" "$tmp_ini" lame-filter-key-reject <<'UCI' 2>&1
+UCI
+)
+assert_contains "$reject_out" "Unknown Betza parameter key 'filter' in lame block"
+out=$(run_uci "$ENGINE" "$tmp_ini" lame-filter-key-reject <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_not_contains "$out" "^a1"
 
-reject_out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-filter-value-reject\nquit\n' "$tmp_ini" \
-  | "${ENGINE}" 2>&1)
-grep -q "Unknown Betza parameter key 'filter' in lame block" <<<"$reject_out"
-out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-filter-value-reject\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
-  | "${ENGINE}")
-! echo "$out" | grep -q "^a1"
+reject_out=$(run_uci "$ENGINE" "$tmp_ini" lame-filter-value-reject <<'UCI' 2>&1
+UCI
+)
+assert_contains "$reject_out" "Unknown Betza parameter key 'filter' in lame block"
+out=$(run_uci "$ENGINE" "$tmp_ini" lame-filter-value-reject <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_not_contains "$out" "^a1"
 
-out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-invalid-clears-piece\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
-  | "${ENGINE}")
-! echo "$out" | grep -q "^a1"
+out=$(run_uci "$ENGINE" "$tmp_ini" lame-invalid-clears-piece <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_not_contains "$out" "^a1"
 
-out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-invalid-stops-piece\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
-  | "${ENGINE}")
-! echo "$out" | grep -q "^a1"
+out=$(run_uci "$ENGINE" "$tmp_ini" lame-invalid-stops-piece <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_not_contains "$out" "^a1"
 
-out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-invalid-multi-block\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
-  | "${ENGINE}")
-! echo "$out" | grep -q "^a1"
+out=$(run_uci "$ENGINE" "$tmp_ini" lame-invalid-multi-block <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_not_contains "$out" "^a1"
 
 for variant in lame-invalid-dangling-path lame-invalid-dangling-filter lame-invalid-only-block; do
-  out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value %s\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" "$variant" \
-    | "${ENGINE}")
-  ! echo "$out" | grep -q "^a1"
+  out=$(run_uci "$ENGINE" "$tmp_ini" "$variant" <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+  assert_not_contains "$out" "^a1"
 done
 
-out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-valid-after-block\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
-  | "${ENGINE}")
-echo "$out" | grep -q "^a1a2: 1$"
-echo "$out" | grep -q "^a1b1: 1$"
-echo "$out" | grep -q "^a1c3: 1$"
+out=$(run_uci "$ENGINE" "$tmp_ini" lame-valid-after-block <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_contains "$out" "^a1a2: 1$"
+assert_contains "$out" "^a1b1: 1$"
+assert_contains "$out" "^a1c3: 1$"
 
-reject_out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-tuple-reject\nquit\n' "$tmp_ini" \
-  | "${ENGINE}" 2>&1)
-grep -q "Unsupported Betza tuple modifier combination" <<<"$reject_out"
-out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-tuple-reject\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
-  | "${ENGINE}")
-! echo "$out" | grep -q "^a1"
+reject_out=$(run_uci "$ENGINE" "$tmp_ini" lame-tuple-reject <<'UCI' 2>&1
+UCI
+)
+assert_contains "$reject_out" "Unsupported Betza tuple modifier combination"
+out=$(run_uci "$ENGINE" "$tmp_ini" lame-tuple-reject <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_not_contains "$out" "^a1"
 
-reject_out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-range-reject\nquit\n' "$tmp_ini" \
-  | "${ENGINE}" 2>&1)
-grep -q "Unsupported Betza rider range" <<<"$reject_out"
+reject_out=$(run_uci "$ENGINE" "$tmp_ini" lame-range-reject <<'UCI' 2>&1
+UCI
+)
+assert_contains "$reject_out" "Unsupported Betza rider range"
 
 for variant in lame-bare-hopper-reject lame-bare-dynamic-reject lame-bare-ski-reject lame-bare-max-reject; do
-  reject_out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value %s\nquit\n' "$tmp_ini" "$variant" \
-    | "${ENGINE}" 2>&1)
-  grep -q "Unsupported Betza lame modifier combination" <<<"$reject_out"
-  out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value %s\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" "$variant" \
-    | "${ENGINE}")
-  ! echo "$out" | grep -q "^a1"
+  reject_out=$(run_uci "$ENGINE" "$tmp_ini" "$variant" <<'UCI' 2>&1
+UCI
+)
+  assert_contains "$reject_out" "Unsupported Betza lame modifier combination"
+  out=$(run_uci "$ENGINE" "$tmp_ini" "$variant" <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+  assert_not_contains "$out" "^a1"
 done
 
-out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-hybrid-rook-check\nposition startpos moves a1a7\nd\nquit\n' "$tmp_ini" \
-  | "${ENGINE}")
-echo "$out" | grep -q "Checkers: a7"
+out=$(run_uci "$ENGINE" "$tmp_ini" lame-hybrid-rook-check <<'UCI'
+position startpos moves a1a7
+d
+UCI
+)
+assert_contains "$out" "Checkers: a7"
 
 tmp_key_ini=$(mktemp)
 cat > "$tmp_key_ini" <<'INI'
@@ -453,68 +550,102 @@ customPiece1 = a:{equi:bogus}W
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 INI
 
-reject_out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-key-routing\nquit\n' "$tmp_key_ini" \
-  | "${ENGINE}" 2>&1)
-grep -q "Unknown Betza parameter key 'capture' in lame block" <<<"$reject_out"
+reject_out=$(run_uci "$ENGINE" "$tmp_key_ini" lame-key-routing <<'UCI' 2>&1
+UCI
+)
+assert_contains "$reject_out" "Unknown Betza parameter key 'capture' in lame block"
 
-reject_out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value hopper-key-routing\nquit\n' "$tmp_key_ini" \
-  | "${ENGINE}" 2>&1)
-grep -q "Unknown Betza parameter key 'path' in hopper block" <<<"$reject_out"
+reject_out=$(run_uci "$ENGINE" "$tmp_key_ini" hopper-key-routing <<'UCI' 2>&1
+UCI
+)
+assert_contains "$reject_out" "Unknown Betza parameter key 'path' in hopper block"
 
-reject_out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value hopper-capture-value-reject\nquit\n' "$tmp_key_ini" \
-  | "${ENGINE}" 2>&1)
-grep -q "Unknown Betza hopper capture mode 'bogus'" <<<"$reject_out"
-out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value hopper-capture-value-reject\nposition startpos\ngo perft 1\nquit\n' "$tmp_key_ini" \
-  | "${ENGINE}")
-! echo "$out" | grep -q "^a1"
+reject_out=$(run_uci "$ENGINE" "$tmp_key_ini" hopper-capture-value-reject <<'UCI' 2>&1
+UCI
+)
+assert_contains "$reject_out" "Unknown Betza hopper capture mode 'bogus'"
+out=$(run_uci "$ENGINE" "$tmp_key_ini" hopper-capture-value-reject <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_not_contains "$out" "^a1"
 
-reject_out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value hopper-equi-value-reject\nquit\n' "$tmp_key_ini" \
-  | "${ENGINE}" 2>&1)
-grep -q "Unknown Betza hopper equi mode 'bogus'" <<<"$reject_out"
-out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value hopper-equi-value-reject\nposition startpos\ngo perft 1\nquit\n' "$tmp_key_ini" \
-  | "${ENGINE}")
-! echo "$out" | grep -q "^a1"
+reject_out=$(run_uci "$ENGINE" "$tmp_key_ini" hopper-equi-value-reject <<'UCI' 2>&1
+UCI
+)
+assert_contains "$reject_out" "Unknown Betza hopper equi mode 'bogus'"
+out=$(run_uci "$ENGINE" "$tmp_key_ini" hopper-equi-value-reject <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_not_contains "$out" "^a1"
 
-out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-path-mid-single\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
-  | "${ENGINE}")
-! echo "$out" | grep -q "^a1a3:"
+out=$(run_uci "$ENGINE" "$tmp_ini" lame-path-mid-single <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_not_contains "$out" "^a1a3:"
 
-out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value lame-long-leaper\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
-  | "${ENGINE}")
-echo "$out" | grep -q "^a1e1: 1$"
+out=$(run_uci "$ENGINE" "$tmp_ini" lame-long-leaper <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_contains "$out" "^a1e1: 1$"
 
 # Wrapped-board custom lame profile: ANY_PATH
 # clear board
-out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value cylinder-anypath\nposition fen k7/8/8/8/8/8/8/A3K3 w - - 0 1\ngo perft 1\nquit\n' "$tmp_ini" \
-  | "${ENGINE}")
-echo "$out" | grep -q "^a1h3: 1$"
-echo "$out" | grep -q "^a1g2: 1$"
+out=$(run_uci "$ENGINE" "$tmp_ini" cylinder-anypath <<'UCI'
+position fen k7/8/8/8/8/8/8/A3K3 w - - 0 1
+go perft 1
+UCI
+)
+assert_contains "$out" "^a1h3: 1$"
+assert_contains "$out" "^a1g2: 1$"
 # a2 blocked
-out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value cylinder-anypath\nposition fen k7/8/8/8/8/8/P7/A3K3 w - - 0 1\ngo perft 1\nquit\n' "$tmp_ini" \
-  | "${ENGINE}")
-echo "$out" | grep -q "^a1h3: 1$"
-echo "$out" | grep -q "^a1g2: 1$"
+out=$(run_uci "$ENGINE" "$tmp_ini" cylinder-anypath <<'UCI'
+position fen k7/8/8/8/8/8/P7/A3K3 w - - 0 1
+go perft 1
+UCI
+)
+assert_contains "$out" "^a1h3: 1$"
+assert_contains "$out" "^a1g2: 1$"
 # h2 blocked
-out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value cylinder-anypath\nposition fen k7/8/8/8/8/8/7P/A3K3 w - - 0 1\ngo perft 1\nquit\n' "$tmp_ini" \
-  | "${ENGINE}")
-echo "$out" | grep -q "^a1h3: 1$"
-echo "$out" | grep -q "^a1g2: 1$"
+out=$(run_uci "$ENGINE" "$tmp_ini" cylinder-anypath <<'UCI'
+position fen k7/8/8/8/8/8/7P/A3K3 w - - 0 1
+go perft 1
+UCI
+)
+assert_contains "$out" "^a1h3: 1$"
+assert_contains "$out" "^a1g2: 1$"
 # a2 and h2 both blocked
-out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value cylinder-anypath\nposition fen k7/8/8/8/8/8/P6P/A3K3 w - - 0 1\ngo perft 1\nquit\n' "$tmp_ini" \
-  | "${ENGINE}")
-! echo "$out" | grep -q "^a1h3:"
-! echo "$out" | grep -q "^a1g2:"
+out=$(run_uci "$ENGINE" "$tmp_ini" cylinder-anypath <<'UCI'
+position fen k7/8/8/8/8/8/P6P/A3K3 w - - 0 1
+go perft 1
+UCI
+)
+assert_not_contains "$out" "^a1h3:"
+assert_not_contains "$out" "^a1g2:"
 
 # Wrapped-board custom lame profile: ORTH_FIRST
 # clear board
-out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value cylinder-orthfirst\nposition fen k7/8/8/8/8/8/8/A3K3 w - - 0 1\ngo perft 1\nquit\n' "$tmp_ini" \
-  | "${ENGINE}")
-echo "$out" | grep -q "^a1h3: 1$"
-echo "$out" | grep -q "^a1g2: 1$"
+out=$(run_uci "$ENGINE" "$tmp_ini" cylinder-orthfirst <<'UCI'
+position fen k7/8/8/8/8/8/8/A3K3 w - - 0 1
+go perft 1
+UCI
+)
+assert_contains "$out" "^a1h3: 1$"
+assert_contains "$out" "^a1g2: 1$"
 # a2 blocked (this leg blocks the ORTH_FIRST wrapped h3 jump)
-out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value cylinder-orthfirst\nposition fen k7/8/8/8/8/8/P7/A3K3 w - - 0 1\ngo perft 1\nquit\n' "$tmp_ini" \
-  | "${ENGINE}")
-! echo "$out" | grep -q "^a1h3:"
-echo "$out" | grep -q "^a1g2: 1$"
+out=$(run_uci "$ENGINE" "$tmp_ini" cylinder-orthfirst <<'UCI'
+position fen k7/8/8/8/8/8/P7/A3K3 w - - 0 1
+go perft 1
+UCI
+)
+assert_not_contains "$out" "^a1h3:"
+assert_contains "$out" "^a1g2: 1$"
 
 echo "alfil-dabbaba-riders test OK"
