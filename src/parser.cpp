@@ -62,8 +62,7 @@ namespace {
         return s.substr(first, last - first + 1);
     }
 
-    std::string read_piece_token(const std::string& value) {
-        std::string s = trim(value);
+    std::string read_piece_token(const std::string& s) {
         if (s.empty() || !Variant::is_piece_id_start(s[0]))
             return "";
         std::string token(1, s[0]);
