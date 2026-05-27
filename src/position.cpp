@@ -442,8 +442,6 @@ namespace {
     int stepR = (dr > 0) - (dr < 0);
     if ((df != 0 && dr != 0 && std::abs(df) != std::abs(dr)) || (df == 0 && dr == 0))
         return false;
-    if (stepF == 0 && stepR == 0)
-        return false;
 
     if (mt == NORMAL)
     {
@@ -4815,6 +4813,68 @@ PotionContext Position::setup_potion_context(Move m, Color us) const {
 /// to a StateInfo object. The move is assumed to be legal. Pseudo-legal
 /// moves should be filtered out before this function is called.
 
+bool Position::add_capture_transfer(StateInfo* state, Key& k, Piece transferPiece, bool undo, bool simulate) const {
+    if (state->suppressedCaptureTransfer || !captures_to_hand())
+        return false;
+    if (!(capture_to_hand_types() & type_of(transferPiece)))
+        return false;
+
+    Position* pos = const_cast<Position*>(this);
+
+    if (capture_type() == HAND) {
+        Piece pieceToHand = transferPiece;
+        int n = pieceCountInHand[color_of(pieceToHand)][type_of(pieceToHand)];
+        if (!simulate) {
+            if (!undo) {
+                pos->add_to_hand(pieceToHand);
+                xor_in_hand_count(k, pieceToHand, n, n + 1);
+            } else {
+                pos->remove_from_hand(pieceToHand);
+                xor_in_hand_count(k, pieceToHand, n, n - 1);
+            }
+        } else {
+            xor_in_hand_count(k, pieceToHand, n, n + 1);
+        }
+        return true;
+    } else if (capture_type() == PRISON) {
+        Piece prisonPiece = ~transferPiece;
+        int n = pieceCountInPrison[color_of(transferPiece)][type_of(transferPiece)];
+        if (!simulate) {
+            if (!undo) {
+                pos->add_to_prison(prisonPiece);
+                xor_in_hand_count(k, prisonPiece, n, n + 1);
+            } else {
+                pos->remove_from_prison(prisonPiece);
+                xor_in_hand_count(k, prisonPiece, n, n - 1);
+            }
+        } else {
+            xor_in_hand_count(k, prisonPiece, n, n + 1);
+        }
+        return true;
+    }
+    return false;
+}
+
+void Position::add_capture_points(StateInfo* state, Color us, Piece captured) const {
+    int points = var->piecePoints[type_of(captured)];
+    switch (points_rule_captures()) {
+        case POINTS_US:
+            state->pointsCount[us] += points;
+            break;
+        case POINTS_THEM:
+            state->pointsCount[~us] += points;
+            break;
+        case POINTS_OWNER:
+            state->pointsCount[color_of(captured)] += points;
+            break;
+        case POINTS_NON_OWNER:
+            state->pointsCount[~color_of(captured)] += points;
+            break;
+        default:
+            break;
+    }
+}
+
 void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesCheck) {
 
   assert(is_ok(m));
@@ -5266,53 +5326,23 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
       Piece transferPiece = reserve_transfer_piece(us, captured, capturedPromoted, unpromotedCaptured,
                                                    drop_loop(), var->captureToHandSide,
                                                    main_promotion_pawn_type(color_of(captured)));
-      if (capture_type() == HAND && !st->suppressedCaptureTransfer && (capture_to_hand_types() & type_of(transferPiece)))
+      bool transferred = add_capture_transfer(st, k, transferPiece, false, false);
+      if (Eval::useNNUE)
       {
-          Piece pieceToHand = transferPiece;
-          add_to_hand(pieceToHand);
-          int newN = pieceCountInHand[color_of(pieceToHand)][type_of(pieceToHand)];
-          xor_in_hand_count(k, pieceToHand, newN - 1, newN);
-
-          if (Eval::useNNUE)
+          if (transferred && capture_type() == HAND)
           {
-              dp.handPiece[1] = pieceToHand;
-              dp.handCount[1] = pieceCountInHand[color_of(pieceToHand)][type_of(pieceToHand)];
+              dp.handPiece[1] = transferPiece;
+              dp.handCount[1] = pieceCountInHand[color_of(transferPiece)][type_of(transferPiece)];
+          }
+          else if (capture_type() != PRISON)
+          {
+              dp.handPiece[1] = NO_PIECE;
           }
       }
-      else if (capture_type() == PRISON && !st->suppressedCaptureTransfer)
-      {
-          Piece pieceToPrison = !capturedPromoted || drop_loop()
-                  ? captured
-                  : unpromotedCaptured
-                      ? unpromotedCaptured
-                      : make_piece(color_of(captured), main_promotion_pawn_type(color_of(captured)));
-          int n = add_to_prison(pieceToPrison);
-          xor_in_hand_count(k, pieceToPrison, n - 1, n);
-      }
-      else if (Eval::useNNUE)
-          dp.handPiece[1] = NO_PIECE;
 
       // Points assignment logic
       if (points_counting()) {
-          PointsRule pointsOwner = points_rule_captures();
-          int points = var->piecePoints[type_of(captured)];
-
-          switch (pointsOwner) {
-              case POINTS_US:
-                  st->pointsCount[us] += points;
-                  break;
-              case POINTS_THEM:
-                  st->pointsCount[them] += points;
-                  break;
-              case POINTS_OWNER:
-                  st->pointsCount[color_of(captured)] += points;
-                  break;
-              case POINTS_NON_OWNER:
-                  st->pointsCount[~color_of(captured)] += points;
-                  break;
-              case POINTS_NONE:
-                  break;
-          }
+          add_capture_points(st, us, captured);
       }
 
       // Update material hash key and prefetch access to materialTable
@@ -5413,34 +5443,11 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
                                                            st->pushTransferUnpromoted[i],
                                                            drop_loop(), var->captureToHandSide,
                                                            main_promotion_pawn_type(color_of(transferred)));
-              if (capture_type() == HAND && (capture_to_hand_types() & type_of(transferPiece)))
-              {
-                  add_to_hand(transferPiece);
-                  int n = pieceCountInHand[color_of(transferPiece)][type_of(transferPiece)];
-                  xor_in_hand_count(k, transferPiece, n - 1, n);
-              }
-              else if (capture_type() == PRISON)
-              {
-                  Piece prisonPiece = !drop_loop() && (st->pushTransferPromoted & (1U << i))
-                        ? (st->pushTransferUnpromoted[i]
-                           ? st->pushTransferUnpromoted[i]
-                           : make_piece(color_of(transferred), main_promotion_pawn_type(color_of(transferred))))
-                        : transferred;
-                  int n = add_to_prison(prisonPiece);
-                  xor_in_hand_count(k, prisonPiece, n - 1, n);
-              }
+              add_capture_transfer(st, k, transferPiece, false, false);
 
               if (points_counting())
               {
-                  PointsRule pointsOwner = points_rule_captures();
-                  int points = var->piecePoints[type_of(transferred)];
-                  switch (pointsOwner) {
-                      case POINTS_US:        st->pointsCount[us] += points; break;
-                      case POINTS_THEM:      st->pointsCount[them] += points; break;
-                      case POINTS_OWNER:     st->pointsCount[color_of(transferred)] += points; break;
-                      case POINTS_NON_OWNER: st->pointsCount[~color_of(transferred)] += points; break;
-                      case POINTS_NONE:      break;
-                  }
+                  add_capture_points(st, us, transferred);
               }
           }
 
@@ -6460,35 +6467,19 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
 
           // Points assignment logic
           if (points_counting()) {
-              int pts = var->piecePoints[type_of(bpc)];
-              switch (points_rule_captures()) {
-                  case POINTS_US:    st->pointsCount[us]  += pts; break;
-                  case POINTS_THEM:  st->pointsCount[~us] += pts; break;
-                  case POINTS_OWNER: st->pointsCount[bc]  += pts; break;
-                  case POINTS_NON_OWNER: st->pointsCount[~bc] += pts; break;
-                 default: break;
-              }
+              add_capture_points(st, us, bpc);
           }
 
           bool petrifiedCenter = bsq == moverSq && (var->petrifyOnCaptureTypes & type_of(bpc));
           Piece transferPiece = reserve_transfer_piece(us, bpc, capturedPromoted, unpromotedCaptured,
                                                        drop_loop(), var->captureToHandSide,
                                                        main_promotion_pawn_type(color_of(bpc)));
-          if (captures_to_hand() && !petrifiedCenter && !st->suppressedCaptureTransfer && (capture_to_hand_types() & type_of(transferPiece)))
+          if (!petrifiedCenter)
           {
-              Piece pieceToHand = transferPiece;
-              int n;
-              if (capture_type() == PRISON) {
-                  pieceToHand = ~pieceToHand;
-                  n = add_to_prison(pieceToHand);
-              } else {
-                  add_to_hand(pieceToHand);
-                  n = pieceCountInHand[color_of(pieceToHand)][type_of(pieceToHand)];
-              }
-              xor_in_hand_count(k, pieceToHand, n - 1, n);
-
-              if (Eval::useNNUE && bycatchDirtyIdx >= 0)
+              bool transferred = add_capture_transfer(st, k, transferPiece, false, false);
+              if (Eval::useNNUE && bycatchDirtyIdx >= 0 && transferred)
               {
+                  Piece pieceToHand = capture_type() == PRISON ? ~transferPiece : transferPiece;
                   dp.handPiece[bycatchDirtyIdx] = pieceToHand;
                   dp.handCount[bycatchDirtyIdx] = pieceCountInHand[color_of(pieceToHand)][type_of(pieceToHand)];
               }
@@ -6890,12 +6881,10 @@ void Position::undo_move(Move m) {
               Piece transferPiece = reserve_transfer_piece(us, bpc, bool((st->promotedBycatch | st->demotedBycatch) & bsq), unpromotedBpc,
                                                            drop_loop(), var->captureToHandSide,
                                                            main_promotion_pawn_type(color_of(unpromotedBpc)));
-              if (!wasBlastPromoted && !petrifiedCenter && !st->suppressedCaptureTransfer && capture_type() == HAND && (capture_to_hand_types() & type_of(transferPiece))) {
-                  remove_from_hand(transferPiece);
-              } else if (!wasBlastPromoted && !petrifiedCenter && !st->suppressedCaptureTransfer && capture_type() == PRISON) {
-                  remove_from_prison(!drop_loop() && (st->promotedBycatch & bsq)
-                                    ? make_piece(color_of(unpromotedBpc), main_promotion_pawn_type(color_of(unpromotedBpc)))
-                                    : unpromotedBpc);
+              if (!wasBlastPromoted && !petrifiedCenter)
+              {
+                  Key dummyKey;
+                  add_capture_transfer(st, dummyKey, transferPiece, true, false);
               }
           }
       }
@@ -7092,17 +7081,8 @@ void Position::undo_move(Move m) {
                                                            st->pushTransferUnpromoted[i],
                                                            drop_loop(), var->captureToHandSide,
                                                            main_promotion_pawn_type(color_of(transferred)));
-              if (capture_type() == HAND && (capture_to_hand_types() & type_of(transferPiece)))
-                  remove_from_hand(transferPiece);
-              else if (capture_type() == PRISON)
-              {
-                  Piece prisonPiece = !drop_loop() && (st->pushTransferPromoted & (1U << i))
-                        ? (st->pushTransferUnpromoted[i]
-                           ? st->pushTransferUnpromoted[i]
-                           : make_piece(color_of(transferred), main_promotion_pawn_type(color_of(transferred))))
-                        : transferred;
-                  remove_from_prison(prisonPiece);
-              }
+              Key dummyKey;
+              add_capture_transfer(st, dummyKey, transferPiece, true, false);
           }
 
           for (int i = 0; i < st->pushSnapshotCount; ++i)
@@ -7177,15 +7157,8 @@ void Position::undo_move(Move m) {
           Piece transferPiece = reserve_transfer_piece(us, st->captured.piece, st->captured.promoted, st->captured.unpromoted,
                                                        drop_loop(), var->captureToHandSide,
                                                        main_promotion_pawn_type(color_of(st->captured.piece)));
-          if (!st->suppressedCaptureTransfer && capture_type() == HAND && (capture_to_hand_types() & type_of(transferPiece))) {
-              remove_from_hand(transferPiece);
-          } else if (!st->suppressedCaptureTransfer && capture_type() == PRISON) {
-              remove_from_prison(!drop_loop() && st->captured.promoted
-                               ? (st->captured.unpromoted
-                                  ? st->captured.unpromoted
-                                  : make_piece(color_of(st->captured.piece), main_promotion_pawn_type(color_of(st->captured.piece))))
-                               : st->captured.piece);
-          }
+          Key dummyKey;
+          add_capture_transfer(st, dummyKey, transferPiece, true, false);
       }
   }
 
@@ -7329,18 +7302,7 @@ Key Position::key_after(Move m) const {
       Piece removedPiece = reserve_transfer_piece(sideToMove, captured, is_promoted(to), unpromoted_piece_on(to),
                                                   drop_loop(), var->captureToHandSide,
                                                   main_promotion_pawn_type(color_of(captured)));
-      if (captures_to_hand() && (capture_to_hand_types() & type_of(removedPiece))) {
-          int n;
-          if (capture_type() == HAND) {
-              n = pieceCountInHand[color_of(removedPiece)][type_of(removedPiece)];
-          } else {
-              n = pieceCountInPrison[color_of(removedPiece)][type_of(removedPiece)];
-              removedPiece = ~removedPiece;
-          }
-          {
-              xor_in_hand_count(k, removedPiece, n + 1, n);
-          }
-      }
+      add_capture_transfer(st, k, removedPiece, false, true);
   }
   if (is_drop_move(m))
   {

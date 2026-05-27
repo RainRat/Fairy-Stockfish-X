@@ -194,7 +194,7 @@ namespace {
           }
       }
       PieceType pt = pos.promoted_piece_type(PAWN);
-      if (pt && pos.promotion_allowed(us, pt) && !(pos.piece_promotion_on_capture() && pos.empty(to)))
+      if (pt && pos.promotion_allowed(us, pt, to) && !(pos.piece_promotion_on_capture() && pos.empty(to)))
       {
           moveList = make_move_and_gating<PIECE_PROMOTION>(pos, moveList, us, from, to, pt);
       }
@@ -227,10 +227,7 @@ namespace {
             || !pos.legal(m));
   }
 
-  template<Color c, GenType Type, Direction D>
-  ExtMove* make_promotions(const Position& pos, ExtMove* moveList, Square to) {
-    return emit_promotion_variants<Type>(pos, moveList, c, to - D, to);
-  }
+
 
   template<Color Us, GenType Type>
   ExtMove* generate_drops(const Position& pos, ExtMove* moveList, PieceType pt, Bitboard b) {
@@ -615,20 +612,35 @@ namespace {
     if (GeneratesCaptures)
     {
         while (brcp)
-            moveList = make_promotions<Us, Type, UpRight>(pos, moveList, pop_lsb(brcp));
+        {
+            Square to = pop_lsb(brcp);
+            moveList = emit_promotion_variants<Type>(pos, moveList, Us, to - UpRight, to);
+        }
 
         while (blcp)
-            moveList = make_promotions<Us, Type, UpLeft >(pos, moveList, pop_lsb(blcp));
+        {
+            Square to = pop_lsb(blcp);
+            moveList = emit_promotion_variants<Type>(pos, moveList, Us, to - UpLeft, to);
+        }
     }
 
     while (b1p)
-        moveList = make_promotions<Us, Type, Up     >(pos, moveList, pop_lsb(b1p));
+    {
+        Square to = pop_lsb(b1p);
+        moveList = emit_promotion_variants<Type>(pos, moveList, Us, to - Up, to);
+    }
 
     while (b2p)
-        moveList = make_promotions<Us, Type, Up+Up  >(pos, moveList, pop_lsb(b2p));
+    {
+        Square to = pop_lsb(b2p);
+        moveList = emit_promotion_variants<Type>(pos, moveList, Us, to - (Up + Up), to);
+    }
 
     while (b3p)
-        moveList = make_promotions<Us, Type, Up+Up+Up>(pos, moveList, pop_lsb(b3p));
+    {
+        Square to = pop_lsb(b3p);
+        moveList = emit_promotion_variants<Type>(pos, moveList, Us, to - (Up + Up + Up), to);
+    }
 
     if (GeneratesCaptures)
     {
@@ -1409,13 +1421,16 @@ namespace {
   }
 
   template<Color Us, GenType Type>
-  ExtMove* generate_all(const Position& pos, ExtMove* moveList) {
+  ExtMove* append_potions_if_any(const Position& pos, ExtMove* listBegin, ExtMove* baseEnd) {
+      if (!has_castable_potion<Us>(pos))
+          return baseEnd;
+      return generate_potion_moves<Us, Type>(pos, MoveBuffer{listBegin, baseEnd});
+  }
 
+  template<Color Us, GenType Type>
+  ExtMove* generate_all(const Position& pos, ExtMove* moveList) {
     ExtMove* baseEnd = generate_all_impl<Us, Type>(pos, moveList);
-    if (pos.side_to_move() == WHITE ? !has_castable_potion<WHITE>(pos)
-                                    : !has_castable_potion<BLACK>(pos))
-        return baseEnd;
-    return generate_potion_moves<Us, Type>(pos, MoveBuffer{moveList, baseEnd});
+    return append_potions_if_any<Us, Type>(pos, moveList, baseEnd);
   }
 
 } // namespace
@@ -1460,12 +1475,8 @@ ExtMove* append_potions(const Position& pos, ExtMove* listBegin, ExtMove* baseEn
   assert((Type == EVASIONS) == (bool)pos.evasion_checkers()
          || (pos.topology_wraps() && Type == NON_EVASIONS && pos.evasion_checkers()));
   Color us = pos.side_to_move();
-  if (us == WHITE ? !has_castable_potion<WHITE>(pos)
-                  : !has_castable_potion<BLACK>(pos))
-      return baseEnd;
-
-  return us == WHITE ? generate_potion_moves<WHITE, Type>(pos, MoveBuffer{listBegin, baseEnd})
-                     : generate_potion_moves<BLACK, Type>(pos, MoveBuffer{listBegin, baseEnd});
+  return us == WHITE ? append_potions_if_any<WHITE, Type>(pos, listBegin, baseEnd)
+                     : append_potions_if_any<BLACK, Type>(pos, listBegin, baseEnd);
 }
 
 // Explicit template instantiations

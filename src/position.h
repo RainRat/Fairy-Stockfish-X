@@ -665,6 +665,8 @@ public:
   void do_move(Move m, StateInfo& newSt);
   void do_move(Move m, StateInfo& newSt, bool givesCheck);
   void undo_move(Move m);
+  bool add_capture_transfer(StateInfo* state, Key& k, Piece transferPiece, bool undo, bool simulate) const;
+  void add_capture_points(StateInfo* state, Color us, Piece captured) const;
   void do_null_move(StateInfo& newSt);
   void undo_null_move();
 
@@ -1038,7 +1040,10 @@ inline bool Position::promotion_allowed(Color c, PieceType pt) const {
 }
 
 inline bool Position::promotion_allowed(Color c, PieceType pt, Square s) const {
-  return bool(promotion_piece_types(c, s) & piece_set(pt)) && promotion_allowed(c, pt);
+  return ((pt == promoted_piece_type(PAWN))
+          ? bool(promotion_zone(c, PAWN) & s)
+          : bool(promotion_piece_types(c, s) & piece_set(pt)))
+      && promotion_allowed(c, pt);
 }
 
 inline PieceType Position::promoted_piece_type(PieceType pt) const {
