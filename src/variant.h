@@ -584,6 +584,7 @@ struct Variant {
 
 class VariantMap : public std::map<std::string, const Variant*> {
 public:
+  ~VariantMap() { clear_all(); }
   void init();
   template <bool DoCheck> void parse(std::string path);
   template <bool DoCheck> void parse_istream(std::istream& file);
