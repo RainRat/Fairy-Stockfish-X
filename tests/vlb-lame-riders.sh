@@ -42,7 +42,7 @@ UCI
 }
 
 out=$(run_variant vlb-lame-clear)
-if grep -q "exceeds build board limits" <<<"$out"; then
+if grep -q "variants skipped because of board size limits" <<<"$out"; then
   echo "skip: VLB lame rider regression requires a very-large-board capable engine"
   exit 0
 fi

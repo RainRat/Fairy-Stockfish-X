@@ -39,6 +39,10 @@ namespace {
         return s;
     }
 
+    struct VariantParseWarnings {
+        std::size_t boardSize = 0;
+    };
+
     template <typename CoordToSquare>
     std::vector<std::vector<Square>> generate_nd_ttt_lines(const std::vector<int>& dims, int lineLen, CoordToSquare coord_to_square) {
         std::vector<std::vector<Square>> lines;
@@ -2441,6 +2445,7 @@ Variant* Variant::conclude() {
 
 template <bool DoCheck>
 void VariantMap::parse_istream(std::istream& file) {
+    VariantParseWarnings warnings;
     std::string variant, variant_template, key, value, input;
     while (file.peek() != '[' && std::getline(file, input)) {}
 
@@ -2503,8 +2508,13 @@ void VariantMap::parse_istream(std::istream& file) {
             if ((cfgMaxRank > 0 && cfgMaxRank > RANK_MAX) || (cfgMaxFile >= 0 && cfgMaxFile > FILE_MAX))
             {
                 if constexpr (!DoCheck)
-                    std::cerr << "Variant '" << variant << "' exceeds build board limits (maxFile=" << int(FILE_MAX) + 1
-                              << ", maxRank=" << int(RANK_MAX) + 1 << "). Skipping." << std::endl;
+                {
+                    if (verboseBoardSizeWarnings)
+                        std::cerr << "Variant '" << variant << "' exceeds build board limits (maxFile=" << int(FILE_MAX) + 1
+                                  << ", maxRank=" << int(RANK_MAX) + 1 << "). Skipping." << std::endl;
+                    else
+                        ++warnings.boardSize;
+                }
                 continue;
             }
 
@@ -2537,10 +2547,25 @@ void VariantMap::parse_istream(std::istream& file) {
             else
             {
                 if constexpr (!DoCheck)
-                    std::cerr << "Variant '" << variant << "' exceeds build board limits (maxFile=" << int(FILE_MAX) + 1
-                              << ", maxRank=" << int(RANK_MAX) + 1 << "). Skipping." << std::endl;
+                {
+                    if (verboseBoardSizeWarnings)
+                        std::cerr << "Variant '" << variant << "' exceeds build board limits (maxFile=" << int(FILE_MAX) + 1
+                                  << ", maxRank=" << int(RANK_MAX) + 1 << "). Skipping." << std::endl;
+                    else
+                        ++warnings.boardSize;
+                }
                 delete v;
             }
+        }
+    }
+    if constexpr (!DoCheck)
+    {
+        if (!verboseBoardSizeWarnings && warnings.boardSize)
+        {
+            std::cerr << "[" << warnings.boardSize
+                      << "] variants skipped because of board size limits."
+                      << " Set option VerboseVariantBoardSizeWarnings to true to see full details."
+                      << std::endl;
         }
     }
     // Clean up temporary variants
@@ -2569,6 +2594,10 @@ void VariantMap::parse(std::string path) {
 
 template void VariantMap::parse<true>(std::string path);
 template void VariantMap::parse<false>(std::string path);
+
+void VariantMap::set_verbose_board_size_warnings(bool verbose) {
+    verboseBoardSizeWarnings = verbose;
+}
 
 void VariantMap::add(std::string s, Variant* v) {
   const Variant* concluded = v->conclude();

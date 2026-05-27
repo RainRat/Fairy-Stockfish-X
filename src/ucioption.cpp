@@ -83,6 +83,7 @@ void on_hash_size(const Option& o) { TT.resize(size_t(o)); }
 void on_logger(const Option& o) { start_logger(o); }
 void on_threads(const Option& o) { Threads.set(size_t(o)); }
 void on_tb_path(const Option& o) { Tablebases::init(o); }
+void on_variant_board_size_warnings(const Option& o) { variants.set_verbose_board_size_warnings(bool(o)); }
 
 void on_use_NNUE(const Option& ) { Eval::NNUE::init(); }
 void on_eval_file(const Option& ) { Eval::NNUE::init(); }
@@ -231,6 +232,7 @@ void init(OptionsMap& o) {
   o["EvalFile"]              << Option("<empty>", on_eval_file);
 #endif
   o["TsumeMode"]             << Option(false);
+  o["VerboseVariantBoardSizeWarnings"] << Option(false, on_variant_board_size_warnings);
   o["VariantPath"]           << Option("<empty>", on_variant_path);
   o["DynamicMagicsByBoardSize"] << Option(false);
   o["usemillisec"]           << Option(true); // time unit for UCCI
