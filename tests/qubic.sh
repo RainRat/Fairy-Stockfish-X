@@ -1,18 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ENGINE=${1:-./stockfish}
-VARIANTS=${2:-src/variants.ini}
+source "$(dirname "${BASH_SOURCE[0]}")/lib/uci.sh"
 
-run_cmds() {
-  printf 'uci\nsetoption name VariantPath value %s\n%s\nquit\n' "$VARIANTS" "$1" | "$ENGINE"
-}
+ENGINE=$(default_engine "${1:-}")
+VARIANTS=$(default_variants "${2:-}")
 
 variant_available() {
   local out
-  out=$(run_cmds "setoption name UCI_Variant value qubic
-d")
-  echo "$out" | grep -q "info string variant qubic "
+  out=$(run_uci "$ENGINE" "$VARIANTS" qubic <<<'d')
+  grep -Fq "info string variant qubic " <<<"$out"
 }
 
 echo "qubic regression tests started"
@@ -22,24 +19,20 @@ if ! variant_available; then
   exit 0
 fi
 
-out=$(run_cmds "setoption name UCI_Variant value qubic
-position fen 8/8/8/8/8/8/8/8[pppppppppppppppppppppppppppppppp] b - - 0 1
-go perft 1")
-grep -Fxq "Nodes searched: 64" <<<"$out"
+out=$(run_uci "$ENGINE" "$VARIANTS" qubic <<<'position fen 8/8/8/8/8/8/8/8[pppppppppppppppppppppppppppppppp] b - - 0 1
+go perft 1')
+assert_nodes "$out" 64
 
-out=$(run_cmds "setoption name UCI_Variant value qubic
-position fen 8/8/8/P3P3/8/8/8/P3P3[pppppppppppppppppppppppppppp] b - - 0 1
-go perft 1")
-grep -Fxq "Nodes searched: 0" <<<"$out"
+out=$(run_uci "$ENGINE" "$VARIANTS" qubic <<<'position fen 8/8/8/P3P3/8/8/8/P3P3[pppppppppppppppppppppppppppp] b - - 0 1
+go perft 1')
+assert_nodes "$out" 0
 
-out=$(run_cmds "setoption name UCI_Variant value qubic
-position fen 8/8/8/8/8/8/8/P7[ppppppppppppppppppppppppppppppp] b - - 0 1
-go perft 1")
-grep -Fxq "Nodes searched: 63" <<<"$out"
+out=$(run_uci "$ENGINE" "$VARIANTS" qubic <<<'position fen 8/8/8/8/8/8/8/P7[ppppppppppppppppppppppppppppppp] b - - 0 1
+go perft 1')
+assert_nodes "$out" 63
 
-out=$(run_cmds "setoption name UCI_Variant value qubic
-position fen 7P/2P5/8/8/8/8/5P2/P7[pppppppppppppppppppppppppppp] b - - 0 1
-go perft 1")
-grep -Fxq "Nodes searched: 0" <<<"$out"
+out=$(run_uci "$ENGINE" "$VARIANTS" qubic <<<'position fen 7P/2P5/8/8/8/8/5P2/P7[pppppppppppppppppppppppppppp] b - - 0 1
+go perft 1')
+assert_nodes "$out" 0
 
 echo "qubic regression tests passed"

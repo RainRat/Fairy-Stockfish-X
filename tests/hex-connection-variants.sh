@@ -7,34 +7,23 @@ error() {
 }
 trap 'error ${LINENO}' ERR
 
+source "$(dirname "${BASH_SOURCE[0]}")/lib/uci.sh"
+
 ENGINE="${1:-}"
 if [[ -z "${ENGINE}" ]]; then
-  if [[ -x "src/stockfish-vlb" ]]; then
-    ENGINE="src/stockfish-vlb"
-  elif [[ -x "./src/stockfish-vlb" ]]; then
-    ENGINE="./src/stockfish-vlb"
+  if [[ -x "${ROOT_DIR}/src/stockfish-vlb" ]]; then
+    ENGINE="${ROOT_DIR}/src/stockfish-vlb"
   else
-    ENGINE="./src/stockfish"
+    ENGINE=$(default_engine)
   fi
 fi
-SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-VARIANT_PATH="${2:-${SCRIPT_DIR}/../src/variants.ini}"
-
-run_cmds() {
-  cat <<EOF | "${ENGINE}"
-uci
-setoption name VariantPath value ${VARIANT_PATH}
-setoption name UCI_Variant value $1
-$2
-quit
-EOF
-}
+VARIANT_PATH=$(default_variants "${2:-}")
 
 variant_available() {
   local v="$1"
   local out
-  out=$(run_cmds "${v}" "d")
-  echo "${out}" | grep -q "info string variant ${v} "
+  out=$(run_uci "$ENGINE" "$VARIANT_PATH" "$v" <<<'d')
+  grep -Fq "info string variant ${v} " <<<"${out}"
 }
 
 if ! variant_available "hex"; then
@@ -42,45 +31,45 @@ if ! variant_available "hex"; then
   exit 1
 fi
 
-out=$(run_cmds "hex" "position startpos
-go perft 1")
-grep -Fxq "Nodes searched: 121" <<<"$out"
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" "hex" <<<'position startpos
+go perft 1')
+assert_nodes "$out" 121
 
-out=$(run_cmds "hex-7x7" "position startpos
-go perft 1")
-grep -Fxq "Nodes searched: 49" <<<"$out"
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" "hex-7x7" <<<'position startpos
+go perft 1')
+assert_nodes "$out" 49
 
-out=$(run_cmds "hex-10x10" "position startpos
-go perft 1")
-grep -Fxq "Nodes searched: 100" <<<"$out"
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" "hex-10x10" <<<'position startpos
+go perft 1')
+assert_nodes "$out" 100
 
-out=$(run_cmds "hex-16x16" "position startpos
-go perft 1")
-grep -Fxq "Nodes searched: 256" <<<"$out"
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" "hex-16x16" <<<'position startpos
+go perft 1')
+assert_nodes "$out" 256
 
-out=$(run_cmds "esa-hex" "position startpos
-go perft 1")
-grep -Fxq "Nodes searched: 100" <<<"$out"
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" "esa-hex" <<<'position startpos
+go perft 1')
+assert_nodes "$out" 100
 
-out=$(run_cmds "esa-hex" "position startpos moves P@a1
-go perft 1")
-echo "${out}" | grep -q "^0000: 1$"
-grep -Fxq "Nodes searched: 1" <<<"$out"
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" "esa-hex" <<<'position startpos moves P@a1
+go perft 1')
+assert_contains "$out" "^0000: 1$"
+assert_nodes "$out" 1
 
-out=$(run_cmds "esa-hex" "position startpos moves P@a1 0000 p@b1 0000
-go perft 1")
-grep -Fxq "Nodes searched: 99" <<<"$out"
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" "esa-hex" <<<'position startpos moves P@a1 0000 p@b1 0000
+go perft 1')
+assert_nodes "$out" 99
 
-out=$(run_cmds "hex" "position fen 11/11/11/11/11/11/11/11/11/11/PPPPPPPPPPP b - - 0 1
-go perft 1")
-grep -Fxq "Nodes searched: 0" <<<"$out"
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" "hex" <<<'position fen 11/11/11/11/11/11/11/11/11/11/PPPPPPPPPPP b - - 0 1
+go perft 1')
+assert_nodes "$out" 0
 
-out=$(run_cmds "misere-hex" "position fen 11/11/11/11/11/11/11/11/11/11/PPPPPPPPPPP[P] b - - 0 1
-go perft 1")
-grep -Fxq "Nodes searched: 0" <<<"$out"
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" "misere-hex" <<<'position fen 11/11/11/11/11/11/11/11/11/11/PPPPPPPPPPP[P] b - - 0 1
+go perft 1')
+assert_nodes "$out" 0
 
-out=$(run_cmds "y" "position startpos
-go perft 1")
-grep -Fxq "Nodes searched: 55" <<<"$out"
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" "y" <<<'position startpos
+go perft 1')
+assert_nodes "$out" 55
 
 echo "hex connection variants regression passed"

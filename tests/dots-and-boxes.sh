@@ -1,45 +1,48 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ENGINE="${1:-$ROOT_DIR/src/stockfish}"
-VARIANTS_MAIN="${2:-$ROOT_DIR/src/variants.ini}"
+source "$(dirname "${BASH_SOURCE[0]}")/lib/uci.sh"
+
+ENGINE=$(default_engine "${1:-}")
+VARIANTS_MAIN=$(default_variants "${2:-}")
 VARIANTS_INCOMPLETE="${3:-$ROOT_DIR/src/variants-incomplete.ini}"
 ENGINE_LARGE="${4:-$ROOT_DIR/src/stockfish-large}"
 ENGINE_VLB="${5:-$ROOT_DIR/src/stockfish-vlb}"
 
-run_cmds() {
-  local variants="$1"
-  local variant="$2"
-  local cmds="$3"
-  printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value %s\n%s\nquit\n' \
-    "$variants" "$variant" "$cmds" | "$ENGINE"
-}
-
 echo "dots and boxes regression started"
 
-out=$(run_cmds "$VARIANTS_INCOMPLETE" dots-boxes-2x2 \
-  "position startpos
-go perft 1")
-grep -Fxq "Nodes searched: 12" <<<"$out"
+out=$(run_uci "$ENGINE" "$VARIANTS_INCOMPLETE" dots-boxes-2x2 <<'EOF'
+position startpos
+go perft 1
+EOF
+)
+assert_nodes "$out" 12
 
-out=$(run_cmds "$VARIANTS_MAIN" dots-boxes-7x7 \
-  "position startpos
-go perft 1")
-grep -Fxq "Nodes searched: 24" <<<"$out"
+out=$(run_uci "$ENGINE" "$VARIANTS_MAIN" dots-boxes-7x7 <<'EOF'
+position startpos
+go perft 1
+EOF
+)
+assert_nodes "$out" 24
 
 if [[ -x "${ENGINE_LARGE}" ]]; then
-  out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value %s\nposition startpos\ngo perft 1\nquit\n' \
-    "$VARIANTS_MAIN" "dots-boxes-9x9" | "$ENGINE_LARGE")
-  echo "$out" | grep -q "info string variant dots-boxes-9x9 "
-  grep -Fxq "Nodes searched: 40" <<<"$out"
+  out=$(run_uci "$ENGINE_LARGE" "$VARIANTS_MAIN" dots-boxes-9x9 <<'EOF'
+position startpos
+go perft 1
+EOF
+)
+  assert_contains_literal "$out" "info string variant dots-boxes-9x9 "
+  assert_nodes "$out" 40
 fi
 
 if [[ -x "${ENGINE_VLB}" ]]; then
-  out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value %s\nposition startpos\ngo perft 1\nquit\n' \
-    "$VARIANTS_MAIN" "dots-boxes-15x15" | "$ENGINE_VLB")
-  echo "$out" | grep -q "info string variant dots-boxes-15x15 "
-  grep -Fxq "Nodes searched: 112" <<<"$out"
+  out=$(run_uci "$ENGINE_VLB" "$VARIANTS_MAIN" dots-boxes-15x15 <<'EOF'
+position startpos
+go perft 1
+EOF
+)
+  assert_contains_literal "$out" "info string variant dots-boxes-15x15 "
+  assert_nodes "$out" 112
 fi
 
 ROOT_DIR="$ROOT_DIR" python3 - <<'PY'
