@@ -54,6 +54,9 @@ template struct MoveList<NON_EVASIONS>;
 
 namespace {
 
+  template<GenType Type>
+  constexpr bool CanEmitPromotions = Type == CAPTURES || Type == QUIETS || Type == EVASIONS || Type == NON_EVASIONS;
+
   Bitboard useful_freeze_gates(const Position& pos, Color us) {
     Bitboard gates = 0;
     Bitboard enemies = pos.pieces(~us);
@@ -207,17 +210,7 @@ namespace {
           || (Type != NON_EVASIONS && pos.two_boards() && pos.virtual_drops() && pos.allow_virtual_drop(Us, pt));
   }
 
-  template<Color Us>
-  bool has_castable_potion(const Position& pos) {
-      if (!pos.potions_enabled())
-          return false;
 
-      for (int pt = 0; pt < Variant::POTION_TYPE_NB; ++pt)
-          if (pos.can_cast_potion(Us, static_cast<Variant::PotionType>(pt)))
-              return true;
-
-      return false;
-  }
 
   template<GenType Type>
   bool potion_move_matches(const Position& pos, Move m, bool isCapture) {
@@ -336,10 +329,11 @@ namespace {
             if (!is_ok(from))
                 return;
             Move m = make_insert(from, to, insertPt, insertPt);
-            bool push = pos.push_move(m);
+            PushInfo pushInfo;
+            bool push = pos.analyze_push(m, pushInfo);
             if (!pos.empty(to) && !push)
                 return;
-            bool cap = push && pos.push_captures(m);
+            bool cap = push && pushInfo.captures;
             if ((Type == CAPTURES && cap)
                 || (Type == QUIETS && !cap)
                 || (Type == EVASIONS || Type == NON_EVASIONS))
@@ -517,12 +511,15 @@ namespace {
                 }
             }
 
-            if (GeneratesQuiets)
-                while (quietPromotions)
-                    emit_promotions(from, pop_lsb(quietPromotions));
-            if (GeneratesCaptures)
-                while (capturePromotions)
-                    emit_promotions(from, pop_lsb(capturePromotions));
+            if constexpr (CanEmitPromotions<Type>)
+            {
+                if (GeneratesQuiets)
+                    while (quietPromotions)
+                        emit_promotions(from, pop_lsb(quietPromotions));
+                if (GeneratesCaptures)
+                    while (capturePromotions)
+                        emit_promotions(from, pop_lsb(capturePromotions));
+            }
         }
 
         return moveList;
@@ -609,37 +606,40 @@ namespace {
     }
 
     // Promotions and underpromotions
-    if (GeneratesCaptures)
+    if constexpr (CanEmitPromotions<Type>)
     {
-        while (brcp)
+        if (GeneratesCaptures)
         {
-            Square to = pop_lsb(brcp);
-            moveList = emit_promotion_variants<Type>(pos, moveList, Us, to - UpRight, to);
+            while (brcp)
+            {
+                Square to = pop_lsb(brcp);
+                moveList = emit_promotion_variants<Type>(pos, moveList, Us, to - UpRight, to);
+            }
+
+            while (blcp)
+            {
+                Square to = pop_lsb(blcp);
+                moveList = emit_promotion_variants<Type>(pos, moveList, Us, to - UpLeft, to);
+            }
         }
 
-        while (blcp)
+        while (b1p)
         {
-            Square to = pop_lsb(blcp);
-            moveList = emit_promotion_variants<Type>(pos, moveList, Us, to - UpLeft, to);
+            Square to = pop_lsb(b1p);
+            moveList = emit_promotion_variants<Type>(pos, moveList, Us, to - Up, to);
         }
-    }
 
-    while (b1p)
-    {
-        Square to = pop_lsb(b1p);
-        moveList = emit_promotion_variants<Type>(pos, moveList, Us, to - Up, to);
-    }
+        while (b2p)
+        {
+            Square to = pop_lsb(b2p);
+            moveList = emit_promotion_variants<Type>(pos, moveList, Us, to - (Up + Up), to);
+        }
 
-    while (b2p)
-    {
-        Square to = pop_lsb(b2p);
-        moveList = emit_promotion_variants<Type>(pos, moveList, Us, to - (Up + Up), to);
-    }
-
-    while (b3p)
-    {
-        Square to = pop_lsb(b3p);
-        moveList = emit_promotion_variants<Type>(pos, moveList, Us, to - (Up + Up + Up), to);
+        while (b3p)
+        {
+            Square to = pop_lsb(b3p);
+            moveList = emit_promotion_variants<Type>(pos, moveList, Us, to - (Up + Up + Up), to);
+        }
     }
 
     if (GeneratesCaptures)
@@ -780,9 +780,10 @@ namespace {
             {
                 Square to = pop_lsb(candidates);
                 Move pm = make<NORMAL>(from, to);
-                if (!pos.push_move(pm))
+                PushInfo pushInfo;
+                if (!pos.analyze_push(pm, pushInfo))
                     continue;
-                if (pos.push_captures(pm))
+                if (pushInfo.captures)
                 {
                     if (GeneratesCaptures)
                         pushMoves |= to;
@@ -893,12 +894,15 @@ namespace {
             moveList = make_move_and_gating<PIECE_DEMOTION>(pos, moveList, Us, from, pop_lsb(b3));
 
         // Pawn-style promotions
-        if (pawnPromotions)
-            for (Bitboard promotions = pawnPromotions; promotions; )
-            {
-                Square to = pop_lsb(promotions);
-                moveList = emit_promotion_variants<Type>(pos, moveList, Us, from, to);
-            }
+        if constexpr (CanEmitPromotions<Type>)
+        {
+            if (pawnPromotions)
+                for (Bitboard promotions = pawnPromotions; promotions; )
+                {
+                    Square to = pop_lsb(promotions);
+                    moveList = emit_promotion_variants<Type>(pos, moveList, Us, from, to);
+                }
+        }
 
         // En passant captures
         if (GeneratesCaptures)
@@ -1280,6 +1284,28 @@ namespace {
     return moveList;
   }
 
+  template<GenType Type>
+  inline bool try_append_potion_gating_move(const Position& pos, ExtMove*& cur, ExtMove* maxEnd,
+                                            Square from, Square to, MoveType mt,
+                                            PieceType potionPiece, Square gate, int value) {
+      if (cur >= maxEnd)
+          return false;
+
+      Move gatingMove = mt == NORMAL
+                        ? make_gating<NORMAL>(from, to, potionPiece, gate)
+                        : make_gating<CASTLING>(from, to, potionPiece, gate);
+
+      // Filter by original Type and legality
+      bool isCapture = pos.capture_or_promotion(gatingMove);
+      if (!potion_move_matches<Type>(pos, gatingMove, isCapture))
+          return true;
+
+      cur->move = gatingMove;
+      cur->value = value;
+      ++cur;
+      return true;
+  }
+
   template<Color Us, GenType Type>
   ExtMove* generate_potion_moves(const Position& pos, MoveBuffer buffer) {
     const Variant* var = pos.variant();
@@ -1314,9 +1340,6 @@ namespace {
                 Square gate = pop_lsb(candidates);
                 for (ExtMove* it = buffer.begin; it != buffer.end; ++it)
                 {
-                    if (cur >= maxEnd)
-                        return maxEnd;
-
                     Move base = it->move;
                     MoveType mt = type_of(base);
                     if (is_gating(base) || (mt != NORMAL && mt != CASTLING))
@@ -1324,18 +1347,8 @@ namespace {
                     Square from = from_sq(base);
                     Square to = to_sq(base);
 
-                    Move gatingMove = mt == NORMAL
-                                      ? make_gating<NORMAL>(from, to, potionPiece, gate)
-                                      : make_gating<CASTLING>(from, to, potionPiece, gate);
-
-                    // Filter by original Type and legality
-                    bool isCapture = pos.capture_or_promotion(gatingMove);
-                    if (!potion_move_matches<Type>(pos, gatingMove, isCapture))
-                        continue;
-
-                    cur->move = gatingMove;
-                    cur->value = it->value;
-                    ++cur;
+                    if (!try_append_potion_gating_move<Type>(pos, cur, maxEnd, from, to, mt, potionPiece, gate, it->value))
+                        return maxEnd;
                 }
             }
             continue;
@@ -1401,18 +1414,8 @@ namespace {
                 if (to == gate)
                     continue;
 
-                Move gatingMove = mt == NORMAL
-                                  ? make_gating<NORMAL>(from, to, potionPiece, gate)
-                                  : make_gating<CASTLING>(from, to, potionPiece, gate);
-
-                // Filter by original Type and legality
-                bool isCapture = pos.capture_or_promotion(gatingMove);
-                if (!potion_move_matches<Type>(pos, gatingMove, isCapture))
-                    continue;
-
-                cur->move = gatingMove;
-                cur->value = it->value;
-                ++cur;
+                if (!try_append_potion_gating_move<Type>(pos, cur, maxEnd, from, to, mt, potionPiece, gate, it->value))
+                    return maxEnd;
             }
         }
     }
@@ -1422,7 +1425,7 @@ namespace {
 
   template<Color Us, GenType Type>
   ExtMove* append_potions_if_any(const Position& pos, ExtMove* listBegin, ExtMove* baseEnd) {
-      if (!has_castable_potion<Us>(pos))
+      if (!pos.potions_enabled())
           return baseEnd;
       return generate_potion_moves<Us, Type>(pos, MoveBuffer{listBegin, baseEnd});
   }

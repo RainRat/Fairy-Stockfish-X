@@ -62,6 +62,18 @@ struct PotionContext {
   bool valid = true;
 };
 
+struct PushInfo {
+  bool valid = false;
+  bool captures = false;
+  bool ejects = false;
+  Square tail = SQ_NONE;
+  Square first = SQ_NONE;
+  int stepF = 0;
+  int stepR = 0;
+  int count = 0;
+  int distance = 0;
+};
+
 const SpellContext* current_spell_context() noexcept;
 void set_current_spell_context(const SpellContext* ctx) noexcept;
 
@@ -456,6 +468,7 @@ public:
   Bitboard walling_region(Color c) const;
   bool seirawan_gating() const;
   PotionContext setup_potion_context(Move m, Color us) const;
+  bool analyze_push(Move m, PushInfo& info) const;
   bool commit_gates() const;
   bool cambodian_moves() const;
   Bitboard diagonal_lines() const;
@@ -4458,8 +4471,10 @@ inline bool Position::capture(Move m) const {
       return false;
   if (type_of(m) == CASTLING || from_sq(m) == to_sq(m))
       return false;
-  if (push_move(m))
-      return push_captures(m);
+
+  PushInfo pushInfo;
+  if (analyze_push(m, pushInfo))
+      return pushInfo.captures;
 
   if (type_of(m) == NORMAL || type_of(m) == PROMOTION)
   {
@@ -4514,10 +4529,16 @@ inline Square Position::capture_square(Square to) const {
 
 inline Square Position::capture_square(Move m) const {
   Square to = to_sq(m);
-  return type_of(m) == EN_PASSANT ? capture_square(to)
-       : is_jump_capture(m)      ? jump_capture_square(from_sq(m), to)
-       : push_move(m)            ? push_capture_square(m)
-                                 : to;
+  if (type_of(m) == EN_PASSANT)
+      return capture_square(to);
+  if (is_jump_capture(m))
+      return jump_capture_square(from_sq(m), to);
+
+  PushInfo pushInfo;
+  if (analyze_push(m, pushInfo))
+      return pushInfo.captures ? pushInfo.tail : SQ_NONE;
+
+  return to;
 }
 
 inline bool Position::paired_drop(Move m) const {

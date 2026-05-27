@@ -89,18 +89,6 @@ namespace {
   }
 
   
-  struct PushInfo {
-    bool valid = false;
-    bool captures = false;
-    bool ejects = false;
-    Square tail = SQ_NONE;
-    Square first = SQ_NONE;
-    int stepF = 0;
-    int stepR = 0;
-    int count = 0;
-    int distance = 0;
-  };
-
   struct PushTempPiece {
     Piece piece = NO_PIECE;
     Square origin = SQ_NONE;
@@ -516,11 +504,7 @@ namespace {
     }
   }
 
-  bool analyze_push(const Position& pos, Move m, PushInfo& info) {
-    return type_of(m) == INSERT || !pos.stepwise_pushing()
-               ? analyze_push_direct(pos, m, info)
-               : analyze_push_stepwise(pos, m, info);
-  }
+
 
   inline Bitboard retro_asymmetric_check_squares(Color attacker, PieceType pt, Square kingSq, Bitboard occupied) {
     // Hopper families need hurdle-aware retro logic. Keep pseudo candidates for
@@ -4475,7 +4459,7 @@ bool Position::pseudo_legal(const Move m) const {
               if (pushMove)
               {
                   PushInfo info;
-                  if (!analyze_push(*this, m, info))
+                  if (!analyze_push(m, info))
                       return false;
                   Square cur = info.tail;
                   Square next = SQ_NONE;
@@ -4536,22 +4520,22 @@ bool Position::pseudo_legal(const Move m) const {
 
 bool Position::push_move(Move m) const {
   PushInfo info;
-  return analyze_push(*this, m, info);
+  return analyze_push(m, info);
 }
 
 bool Position::push_captures(Move m) const {
   PushInfo info;
-  return analyze_push(*this, m, info) && info.captures;
+  return analyze_push(m, info) && info.captures;
 }
 
 bool Position::push_ejects(Move m) const {
   PushInfo info;
-  return analyze_push(*this, m, info) && info.ejects;
+  return analyze_push(m, info) && info.ejects;
 }
 
 Square Position::push_capture_square(Move m) const {
   PushInfo info;
-  return analyze_push(*this, m, info) && info.captures ? info.tail : SQ_NONE;
+  return analyze_push(m, info) && info.captures ? info.tail : SQ_NONE;
 }
 
 
@@ -4788,6 +4772,12 @@ PotionContext Position::setup_potion_context(Move m, Color us) const {
     PotionContext pc;
     if (is_gating(m) && gating_type(m) != NO_PIECE_TYPE)
     {
+        Square gs = gating_square(m);
+        if (!is_ok(gs))
+        {
+            pc.valid = false;
+            return pc;
+        }
         pc.potion = potion_type_from_piece(var, gating_type(m));
         if (pc.potion != Variant::POTION_TYPE_NB)
         {
@@ -4797,16 +4787,22 @@ PotionContext Position::setup_potion_context(Move m, Color us) const {
                 return pc;
             }
             if (pc.potion == Variant::POTION_FREEZE)
-                pc.freezeExtra = freeze_zone_from_square(gating_square(m));
+                pc.freezeExtra = freeze_zone_from_square(gs);
             else if (pc.potion == Variant::POTION_JUMP)
             {
-                pc.jumpRemoved = square_bb(gating_square(m));
-                if (!piece_on(gating_square(m)))
+                pc.jumpRemoved = square_bb(gs);
+                if (!piece_on(gs))
                     pc.valid = false;
             }
         }
     }
     return pc;
+}
+
+bool Position::analyze_push(Move m, PushInfo& info) const {
+    return type_of(m) == INSERT || !stepwise_pushing()
+               ? analyze_push_direct(*this, m, info)
+               : analyze_push_stepwise(*this, m, info);
 }
 
 /// Position::do_move() makes a move, and saves all information necessary
@@ -4958,7 +4954,7 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
       captured = piece_on(to);
   const Piece capturedBeforeStepwisePush = captured;
   PushInfo pushInfo;
-  bool pushMove = analyze_push(*this, m, pushInfo);
+  bool pushMove = analyze_push(m, pushInfo);
   bool stepwisePush = pushMove && type_of(m) == NORMAL && pushInfo.distance > 1;
   Square pushSquares[MAX_PUSH_SNAPSHOT];
   PushTempPiece pushFinalLine[MAX_PUSH_SNAPSHOT];
