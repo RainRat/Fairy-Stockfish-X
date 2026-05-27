@@ -5,20 +5,10 @@ set -euo pipefail
 # Test Universal Hopper features
 
 # 1. Setup temporary variant file
-SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
-ROOT_DIR=$(cd "${SCRIPT_DIR}/.." && pwd)
-ENGINE=${1:-"${ROOT_DIR}/src/stockfish"}
-if [[ ! -x "${ENGINE}" ]]; then
-    if [[ -x "${ROOT_DIR}/stockfish" ]]; then
-        ENGINE="${ROOT_DIR}/stockfish"
-    fi
-fi
-if [[ ! -x "${ENGINE}" ]]; then
-    echo "engine executable not found: pass path as first argument" >&2
-    exit 2
-fi
-
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source "${SCRIPT_DIR}/lib/uci.sh"
+
+ENGINE=$(default_engine "${1:-}")
 
 INI_FILE=$(mktemp -t universal_hopper_test.XXXXXX.ini)
 trap 'rm -f "${INI_FILE}"' EXIT

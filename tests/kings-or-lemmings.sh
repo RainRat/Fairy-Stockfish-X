@@ -2,11 +2,10 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
-ENGINE="${1:-${ROOT_DIR}/src/stockfish}"
-VARIANTS="${2:-${ROOT_DIR}/src/variants.ini}"
-
 source "${SCRIPT_DIR}/lib/uci.sh"
+
+ENGINE=$(default_engine "${1:-}")
+VARIANTS=$(default_variants "${2:-}")
 
 echo "kings or lemmings regression started"
 
@@ -45,6 +44,6 @@ position fen 7k/8/8/8/8/8/rq6/K6K w - - 0 1
 go depth 1
 UCI
 )
-assert_contains "$out" "^bestmove \\(none\\)$"
+assert_contains_literal "$out" "bestmove (none)"
 
 echo "kings or lemmings regression passed"

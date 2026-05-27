@@ -9,21 +9,10 @@ error() {
 trap 'error ${LINENO}' ERR
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-ROOT_DIR=$(cd "${SCRIPT_DIR}/.." && pwd)
 source "${SCRIPT_DIR}/lib/uci.sh"
 
-ENGINE=${1:-}
-if [[ -z "${ENGINE}" ]]; then
-  if [[ -x "${ROOT_DIR}/src/stockfish" ]]; then
-    ENGINE="${ROOT_DIR}/src/stockfish"
-  else
-    ENGINE="${ROOT_DIR}/stockfish"
-  fi
-fi
-VARIANT_PATH=${2:-"${ROOT_DIR}/src/variants.ini"}
-if [[ ! -f "${VARIANT_PATH}" && -f "${ROOT_DIR}/src/variants.ini" ]]; then
-  VARIANT_PATH="${ROOT_DIR}/src/variants.ini"
-fi
+ENGINE=$(default_engine "${1:-}")
+VARIANT_PATH=$(default_variants "${2:-}")
 
 run_cmds() {
   local cmds="$1"
@@ -1133,7 +1122,7 @@ contains "^bestmove "
 out=$(run_cmds "setoption name UCI_Variant value royal-race
 position fen 3K3/7/7/7/7/7/7/7/3k3 b - - 0 1
 go movetime 10")
-contains "bestmove \(none\)"
+assert_contains_literal "$out" "bestmove (none)"
 fi
 
 # 39) Spell chess: frozen castling rook blocks castling.

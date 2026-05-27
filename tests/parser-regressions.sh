@@ -8,11 +8,10 @@ error() {
 }
 trap 'error ${LINENO}' ERR
 
-SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
-ROOT_DIR=$(cd "${SCRIPT_DIR}/.." && pwd)
-ENGINE=${1:-${SCRIPT_DIR}/../src/stockfish}
-
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source "${SCRIPT_DIR}/lib/uci.sh"
+
+ENGINE=$(default_engine "${1:-}")
 
 cd "${ROOT_DIR}"
 
@@ -326,7 +325,7 @@ position fen 7k/5Q2/7K/8/8/8/8/8 b - - 0 1
 go depth 1
 EOF
 )
-assert_contains "${terminal_output}" "bestmove \(none\)"
+assert_contains_literal "${terminal_output}" "bestmove (none)"
 
 bench_output=$("${ENGINE}" bench 16 1 1 default nonsense 2>&1 || true)
 assert_contains "${bench_output}" "Nodes searched  : "

@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ENGINE="${1:-$ROOT_DIR/src/stockfish}"
-source "$ROOT_DIR/tests/lib/uci.sh"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib/uci.sh"
+
+ENGINE=$(default_engine "${1:-}")
+VARIANTS=$(default_variants "${2:-}")
 
 TMP_INI="$(mktemp)"
 cleanup() {
@@ -44,7 +46,7 @@ variant_available() {
 echo "movegen regressions started"
 
 # Quiet pawn promotions must be generated in quiet move generation.
-out=$(run_cmds "$ROOT_DIR/src/variants.ini" chess \
+out=$(run_cmds "$VARIANTS" chess \
   "position fen 7k/4P3/8/8/8/8/8/4K3 w - - 0 1
 go perft 1")
 assert_contains "$out" "e7e8q: 1"
@@ -57,13 +59,13 @@ assert_not_contains "$out" "^a2a3:"
 assert_not_contains "$out" "^a2a4:"
 
 # Direct king capture must end the game immediately in capture-the-royal flows.
-out=$(run_cmds "$ROOT_DIR/src/variants.ini" british-chess \
+out=$(run_cmds "$VARIANTS" british-chess \
   "position fen 10/10/10/10/10/10/10/10/4q5/3Q6 w - - 0 1 moves d1e2
 go perft 1")
 assert_nodes "$out" "0"
 
-if variant_available "$ROOT_DIR/src/variants.ini" minihexchess; then
-  out=$(run_cmds "$ROOT_DIR/src/variants.ini" minihexchess \
+if variant_available "$VARIANTS" minihexchess; then
+  out=$(run_cmds "$VARIANTS" minihexchess \
     "position fen ***4/**5/*k5/7/6*/5**/KR2*** w - - 0 1 moves b1b5
 go perft 1")
   assert_nodes "$out" "0"
@@ -76,24 +78,24 @@ go perft 1")
 assert_nodes "$out" "0"
 
 # Tablut-family surround capture of the king must also end immediately.
-out=$(run_cmds "$ROOT_DIR/src/variants.ini" brandub \
+out=$(run_cmds "$VARIANTS" brandub \
   "position fen 4r2/7/3r3/2rK3/3r3/7/7 b - - 0 1 moves e7e4
 go perft 1")
 assert_nodes "$out" "0"
 
 # Anti extinction variants using "*" must not end when a single piece class is gone.
-out=$(run_cmds "$ROOT_DIR/src/variants.ini" antiminishogi \
+out=$(run_cmds "$VARIANTS" antiminishogi \
   "position startpos
 go perft 1")
 assert_nodes "$out" "1"
 assert_contains "$out" "^e1e4: 1$"
 
-out=$(run_cmds "$ROOT_DIR/src/variants.ini" anti-losalamos \
+out=$(run_cmds "$VARIANTS" anti-losalamos \
   "position fen rn1knr/pppppp/6/6/PPPPPP/RNQKNR w - - 0 1
 go perft 1")
 assert_nodes "$out" "10"
 
-out=$(run_cmds "$ROOT_DIR/src/variants.ini" chaturanga-al-adli \
+out=$(run_cmds "$VARIANTS" chaturanga-al-adli \
   "position fen brn1knrb/pppppppp/8/8/8/8/PPPPPPPP/BRNFKNRB w - - 0 1
 go perft 1")
 assert_nodes "$out" "14"
@@ -105,13 +107,13 @@ go perft 1")
 assert_contains "$out" "Nodes searched:"
 
 # Duck wall relocation uses gating encoding without a gated piece.
-out=$(run_cmds "$ROOT_DIR/src/variants.ini" atomicduck \
+out=$(run_cmds "$VARIANTS" atomicduck \
   "position startpos moves a2a3,a3a2
 go depth 2")
 assert_contains "$out" "^bestmove "
 
 # Racing Kings must not grant generic pawn-style initial pushes to non-pawns.
-out=$(run_cmds "$ROOT_DIR/src/variants.ini" racingkings \
+out=$(run_cmds "$VARIANTS" racingkings \
   "position startpos
 go perft 1")
 assert_nodes "$out" "21"
@@ -131,7 +133,7 @@ assert_contains "$out" "^e2e3: 1$"
 assert_not_contains "$out" "^e2e4:"
 
 # Kings Valley pieces use the maximum-distance rule, not ordinary queen slides.
-out=$(run_cmds "$ROOT_DIR/src/variants.ini" kings-valley \
+out=$(run_cmds "$VARIANTS" kings-valley \
   "position startpos
 go perft 1")
 assert_nodes "$out" "13"
@@ -146,7 +148,7 @@ assert_not_contains "$out" "^c1c2:"
 assert_not_contains "$out" "^d1d2:"
 
 # Oshi search should not prefer handing the opponent a point by self-ejecting.
-out=$(run_cmds "$ROOT_DIR/src/variants.ini" oshi \
+out=$(run_cmds "$VARIANTS" oshi \
   "position fen ca2a4/b4ab1c/4a4/9/5A3/2AC5/9/2BAA1B2/C8 w - - 10 6 {0 0}
 go depth 8")
 assert_not_contains "$out" "^bestmove d4a4"
