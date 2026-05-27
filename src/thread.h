@@ -123,6 +123,7 @@ struct MainThread : public Thread {
 /// is done through this class.
 
 struct ThreadPool : public std::vector<Thread*> {
+  ~ThreadPool() { set(0); }
 
   void start_thinking(Position&, StateListPtr&, const Search::LimitsType&, bool = false);
   void clear();

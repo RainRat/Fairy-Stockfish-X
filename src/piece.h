@@ -196,6 +196,7 @@ struct PieceMap : public std::map<PieceType, PieceInfo*> {
     direct.fill(nullptr);
     runtimeRiderAugmentTypes = PieceSet(0);
   }
+  ~PieceMap() { clear_all(); }
   void init(const Variant* v = nullptr);
   void add(PieceType pt, PieceInfo* v);
   void clear_all();
