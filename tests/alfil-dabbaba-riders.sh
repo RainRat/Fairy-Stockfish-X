@@ -621,9 +621,9 @@ UCI
 )
 assert_contains "$out" "^a1h3: 1$"
 assert_contains "$out" "^a1g2: 1$"
-# a2 and h2 both blocked
+# a2, h2, and h1 blocked: both wrapped routes are gone.
 out=$(run_uci "$ENGINE" "$tmp_ini" cylinder-anypath <<'UCI'
-position fen k7/8/8/8/8/8/P6P/A3K3 w - - 0 1
+position fen k7/8/8/8/8/8/P6P/A3K2P w - - 0 1
 go perft 1
 UCI
 )
