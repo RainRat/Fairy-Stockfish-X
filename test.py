@@ -774,7 +774,7 @@ customPiece1 = n:mNcB
 customPiece2 = b:mFfWcB
 customPiece3 = r:mWcRfF
 customPiece4 = q:BmRcN
-customPiece5 = k:FmWcNisO2
+customPiece5 = k:FmWcNisR2
 castling = false
 startFen = rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w - - 0 1
 """

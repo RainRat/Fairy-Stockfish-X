@@ -127,13 +127,7 @@ private:
     bool check_consistency(Variant* v);
 
     template <typename T> bool require_attribute(bool enabled, const std::string& key, T& target);
-    template <typename T, typename U> bool require_attributes(bool enabled,
-                                                              const std::string& key1, T& target1,
-                                                              const std::string& key2, U& target2);
-    template <typename T> void parse_both_colors(const std::string& key, T& target);
-    template <typename T> void parse_both_colors_piece(const std::string& key, T& target, const Variant* v);
-    template <typename T> void parse_both_colors_with_overrides(const std::string& key, T& target);
-    template <typename T> void parse_both_colors_with_overrides_piece(const std::string& key, T& target, const Variant* v);
+    template <typename T> void apply_color_setting(ColorSetting<T>& target, Color color, const T& parsed);
     template <typename T> void parse_color_setting(const std::string& key, ColorSetting<T>& target);
     bool parse_color_setting_first_piece(const std::string& key, ColorSetting<PieceType>& target, const Variant* v);
     template <typename T> bool parse_color_setting_piece(const std::string& key, ColorSetting<T>& target, const Variant* v);

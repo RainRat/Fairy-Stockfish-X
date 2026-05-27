@@ -272,7 +272,7 @@ namespace {
                       std::cerr << "Unsupported Betza rider range in '" << betza
                                 << "': bracketed ranges currently support plain rider atoms such as R[3-5] or R[3-]." << std::endl;
                       reset_parser_state();
-                      i = close;
+                      invalidPiece = true;
                       return;
                   }
                   if (malformedRange)
@@ -280,7 +280,7 @@ namespace {
                       std::cerr << "Invalid Betza rider range in '" << betza
                                 << "': use [n-m] or [n-], and keep existing Rn syntax for max-only ranges." << std::endl;
                       reset_parser_state();
-                      i = close;
+                      invalidPiece = true;
                       return;
                   }
                   int minDistance = 0;
@@ -295,7 +295,7 @@ namespace {
                       std::cerr << "Invalid Betza rider range in '" << betza
                                 << "': use [n-m] or [n-], and keep existing Rn syntax for max-only ranges." << std::endl;
                       reset_parser_state();
-                      i = close;
+                      invalidPiece = true;
                       return;
                   }
                   if (maxPart.empty())
@@ -426,9 +426,11 @@ namespace {
 
       auto commit_bent_slider = [&](bool (PieceInfo::*flag)[2][2]) {
           // Keep first implementation strict: unqualified O only.
-          if (!prelimDirections.empty() || hopper || lame || dynamicDistance || rider)
+          if (!prelimDirections.empty() || hopper || lame || dynamicDistance || rider || skiSlider || maxDistance)
           {
+              std::cerr << "Unsupported modifier combination with bent slider: '" << betza << "'." << std::endl;
               reset_parser_state();
+              invalidPiece = true;
               return;
           }
           if (moveModalities.size() == 0)
@@ -444,7 +446,9 @@ namespace {
       auto commit_rose = [&]() {
           if (!prelimDirections.empty() || hopper || lame || dynamicDistance || rider || skiSlider || maxDistance)
           {
+              std::cerr << "Unsupported modifier combination with rose: '" << betza << "'." << std::endl;
               reset_parser_state();
+              invalidPiece = true;
               return;
           }
           if (moveModalities.size() == 0)
@@ -577,9 +581,9 @@ namespace {
                       }
                       if (minOk && (maxOk || max_s == "*") && min_val > max_val)
                       {
-                          std::cerr << "Invalid hopper range (min > max) in Betza hopper parameters: '" << s
-                                    << "'. Swapping values." << std::endl;
-                          std::swap(min_val, max_val);
+                          std::cerr << "Invalid hopper range (min > max) in Betza hopper parameters: '" << s << "'" << std::endl;
+                          reset_piece();
+                          invalidPiece = true;
                       }
                   }
                   else
@@ -812,12 +816,16 @@ namespace {
               auto close = expandedBetza.find(')', i + 1);
               if (close == std::string::npos)
               {
+                  reset_piece();
+                  invalidPiece = true;
                   reset_parser_state();
                   continue;
               }
               auto comma = expandedBetza.find(',', i + 1);
               if (comma == std::string::npos || comma > close)
               {
+                  reset_piece();
+                  invalidPiece = true;
                   reset_parser_state();
                   i = close;
                   continue;
@@ -826,6 +834,8 @@ namespace {
               if (!parse_nonnegative_int(expandedBetza.substr(i + 1, comma - i - 1), dx)
                   || !parse_nonnegative_int(expandedBetza.substr(comma + 1, close - comma - 1), dy))
               {
+                  reset_piece();
+                  invalidPiece = true;
                   reset_parser_state();
                   i = close;
                   continue;
@@ -833,6 +843,8 @@ namespace {
               // Tuple atoms are stored as (rankDelta, fileDelta).
               if ((dx == 0 && dy == 0) || dx > int(RANK_MAX) || dy > int(FILE_MAX))
               {
+                  reset_piece();
+                  invalidPiece = true;
                   reset_parser_state();
                   i = close;
                   continue;

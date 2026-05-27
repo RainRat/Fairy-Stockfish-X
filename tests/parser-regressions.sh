@@ -196,7 +196,12 @@ twochar_hint_ini=$(mktemp)
 bad_hopper_type_ini=$(mktemp)
 bad_hopper_numeric_ini=$(mktemp)
 capture_allowed_only_ini=$(mktemp)
-trap 'rm -f "${tmp_ini}" "${bad_betza_ini}" "${bad_hopper_brace_ini}" "${bad_rider_range_ini}" "${bad_rank_wildcard_ini}" "${twochar_hint_ini}" "${bad_hopper_type_ini}" "${bad_hopper_numeric_ini}" "${capture_allowed_only_ini}"' EXIT
+bad_rider_range_val_ini=$(mktemp)
+bad_tuple_atom_ini=$(mktemp)
+unsupported_bent_rose_modifier_ini=$(mktemp)
+bad_ini_syntax_option_ini=$(mktemp)
+bad_hopper_minmax_ini=$(mktemp)
+trap 'rm -f "${tmp_ini}" "${bad_betza_ini}" "${bad_hopper_brace_ini}" "${bad_rider_range_ini}" "${bad_rank_wildcard_ini}" "${twochar_hint_ini}" "${bad_hopper_type_ini}" "${bad_hopper_numeric_ini}" "${capture_allowed_only_ini}" "${bad_rider_range_val_ini}" "${bad_tuple_atom_ini}" "${unsupported_bent_rose_modifier_ini}" "${bad_ini_syntax_option_ini}" "${bad_hopper_minmax_ini}"' EXIT
 
 cat > "${bad_betza_ini}" <<'INI'
 [custom-piece-missing-betza:chess]
@@ -241,6 +246,49 @@ captureAllowed = *:p
 startFen = 8/3p4/8/8/3Q2n1/8/8/8 w - - 0 1
 INI
 
+cat > "${bad_rider_range_val_ini}" <<'INI'
+[rider-range-val-1:chess]
+customPiece1 = a:N[3-5]
+
+[rider-range-val-2:chess]
+customPiece2 = b:R[-3]
+
+[rider-range-val-3:chess]
+customPiece3 = c:R[5-3]
+INI
+
+cat > "${bad_tuple_atom_ini}" <<'INI'
+[tuple-atom-1:chess]
+customPiece1 = a:(1)
+
+[tuple-atom-2:chess]
+customPiece2 = b:(x,2)
+
+[tuple-atom-3:chess]
+customPiece3 = c:(0,0)
+
+[tuple-atom-4:chess]
+customPiece4 = d:(999,1)
+INI
+
+cat > "${unsupported_bent_rose_modifier_ini}" <<'INI'
+[unsupported-bent-1:chess]
+customPiece1 = a:jO
+
+[unsupported-rose-1:chess]
+customPiece2 = b:j@
+INI
+
+cat > "${bad_ini_syntax_option_ini}" <<'INI'
+[bad-ini-syntax:chess]
+badOptionWithoutEquals
+INI
+
+cat > "${bad_hopper_minmax_ini}" <<'INI'
+[bad-hopper-minmax:chess]
+customPiece1 = a:{hurdles:3,1}R
+INI
+
 check_output=$("${ENGINE}" check "${bad_betza_ini}" 2>&1 || true)
 assert_contains "${check_output}" "customPiece1 - Missing Betza move notation"
 
@@ -270,6 +318,40 @@ EOF
 )
 assert_contains "${capture_allowed_only_output}" "d4d7:"
 assert_not_contains "${capture_allowed_only_output}" "d4g4:"
+
+bad_rider_range_val_output1=$(run_uci "$ENGINE" "$bad_rider_range_val_ini" "rider-range-val-1" </dev/null 2>&1 || true)
+assert_contains "${bad_rider_range_val_output1}" "unknown variant 'rider-range-val-1'; keeping 'chess'"
+
+bad_rider_range_val_output2=$(run_uci "$ENGINE" "$bad_rider_range_val_ini" "rider-range-val-2" </dev/null 2>&1 || true)
+assert_contains "${bad_rider_range_val_output2}" "unknown variant 'rider-range-val-2'; keeping 'chess'"
+
+bad_rider_range_val_output3=$(run_uci "$ENGINE" "$bad_rider_range_val_ini" "rider-range-val-3" </dev/null 2>&1 || true)
+assert_contains "${bad_rider_range_val_output3}" "unknown variant 'rider-range-val-3'; keeping 'chess'"
+
+bad_tuple_atom_output1=$(run_uci "$ENGINE" "$bad_tuple_atom_ini" "tuple-atom-1" </dev/null 2>&1 || true)
+assert_contains "${bad_tuple_atom_output1}" "unknown variant 'tuple-atom-1'; keeping 'chess'"
+
+bad_tuple_atom_output2=$(run_uci "$ENGINE" "$bad_tuple_atom_ini" "tuple-atom-2" </dev/null 2>&1 || true)
+assert_contains "${bad_tuple_atom_output2}" "unknown variant 'tuple-atom-2'; keeping 'chess'"
+
+bad_tuple_atom_output3=$(run_uci "$ENGINE" "$bad_tuple_atom_ini" "tuple-atom-3" </dev/null 2>&1 || true)
+assert_contains "${bad_tuple_atom_output3}" "unknown variant 'tuple-atom-3'; keeping 'chess'"
+
+bad_tuple_atom_output4=$(run_uci "$ENGINE" "$bad_tuple_atom_ini" "tuple-atom-4" </dev/null 2>&1 || true)
+assert_contains "${bad_tuple_atom_output4}" "unknown variant 'tuple-atom-4'; keeping 'chess'"
+
+unsupported_bent_rose_output1=$(run_uci "$ENGINE" "$unsupported_bent_rose_modifier_ini" "unsupported-bent-1" </dev/null 2>&1 || true)
+assert_contains "${unsupported_bent_rose_output1}" "unknown variant 'unsupported-bent-1'; keeping 'chess'"
+
+unsupported_bent_rose_output2=$(run_uci "$ENGINE" "$unsupported_bent_rose_modifier_ini" "unsupported-rose-1" </dev/null 2>&1 || true)
+assert_contains "${unsupported_bent_rose_output2}" "unknown variant 'unsupported-rose-1'; keeping 'chess'"
+
+bad_ini_syntax_output=$("${ENGINE}" check "${bad_ini_syntax_option_ini}" 2>&1 || true)
+assert_contains "${bad_ini_syntax_output}" "Invalid syntax: 'badOptionWithoutEquals'"
+
+bad_hopper_minmax_output=$(run_uci "$ENGINE" "$bad_hopper_minmax_ini" "bad-hopper-minmax" </dev/null 2>&1 || true)
+assert_contains_literal "${bad_hopper_minmax_output}" "Invalid hopper range (min > max)"
+assert_contains "${bad_hopper_minmax_output}" "unknown variant 'bad-hopper-minmax'; keeping 'chess'"
 
 two_boards_output=$(python3 - <<'PY' 2>&1
 import sys

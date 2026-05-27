@@ -2462,11 +2462,17 @@ void VariantMap::parse_istream(std::istream& file) {
         {
             if (!input.empty() && input.back() == '\r')
                 input.pop_back();
+            if (input.find_first_not_of(" \t") == std::string::npos)
+                continue;
             std::stringstream ss(input);
             if (ss.peek() != ';' && ss.peek() != '#')
             {
-                if (DoCheck && !input.empty() && input.find('=') == std::string::npos)
-                    std::cerr << "Invalid syntax: '" << input << "'." << std::endl;
+                if (input.find('=') == std::string::npos)
+                {
+                    if (DoCheck)
+                        std::cerr << "Invalid syntax: '" << input << "'." << std::endl;
+                    continue;
+                }
                 if (std::getline(ss, key, '='))
                 {
                     ss >> std::ws;

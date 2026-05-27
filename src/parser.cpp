@@ -840,9 +840,10 @@ namespace {
                 break;
             }
         }
-        if (valid && only_trailing_space(ss))
+        const bool trailingOk = only_trailing_space(ss);
+        if (valid && trailingOk)
             target = parsed;
-        return valid && only_trailing_space(ss);
+        return valid && trailingOk;
     }
 
     template <typename T> void set(PieceType pt, T& target) {
@@ -1124,42 +1125,14 @@ bool VariantParser<DoCheck>::require_attribute(bool enabled, const std::string& 
 }
 
 template <bool DoCheck>
-template <typename T, typename U>
-bool VariantParser<DoCheck>::require_attributes(bool enabled,
-                                                const std::string& key1, T& target1,
-                                                const std::string& key2, U& target2) {
-    return require_attribute(enabled, key1, target1)
-        && require_attribute(enabled, key2, target2);
-}
-
-template <bool DoCheck>
 template <typename T>
-void VariantParser<DoCheck>::parse_both_colors(const std::string& key, T& target) {
-    parse_attribute(key, target[WHITE]);
-    parse_attribute(key, target[BLACK]);
-}
-
-template <bool DoCheck>
-template <typename T>
-void VariantParser<DoCheck>::parse_both_colors_piece(const std::string& key, T& target, const Variant* v) {
-    parse_attribute(key, target[WHITE], v);
-    parse_attribute(key, target[BLACK], v);
-}
-
-template <bool DoCheck>
-template <typename T>
-void VariantParser<DoCheck>::parse_both_colors_with_overrides(const std::string& key, T& target) {
-    parse_both_colors(key, target);
-    parse_attribute(key + "White", target[WHITE]);
-    parse_attribute(key + "Black", target[BLACK]);
-}
-
-template <bool DoCheck>
-template <typename T>
-void VariantParser<DoCheck>::parse_both_colors_with_overrides_piece(const std::string& key, T& target, const Variant* v) {
-    parse_both_colors_piece(key, target, v);
-    parse_attribute(key + "White", target[WHITE], v);
-    parse_attribute(key + "Black", target[BLACK], v);
+void VariantParser<DoCheck>::apply_color_setting(ColorSetting<T>& target, Color color, const T& parsed) {
+    if (color == WHITE)
+        target.set_color(WHITE, parsed);
+    else if (color == BLACK)
+        target.set_color(BLACK, parsed);
+    else
+        target.set_global(parsed);
 }
 
 template <bool DoCheck>
@@ -1169,12 +1142,7 @@ void VariantParser<DoCheck>::parse_color_setting(const std::string& key, ColorSe
         T parsed = color == WHITE ? target.byColor[WHITE] : color == BLACK ? target.byColor[BLACK] : target.global;
         if (parse_attribute(option, parsed))
         {
-            if (color == WHITE)
-                target.set_color(WHITE, parsed);
-            else if (color == BLACK)
-                target.set_color(BLACK, parsed);
-            else
-                target.set_global(parsed);
+            apply_color_setting(target, color, parsed);
         }
     });
 }
@@ -1187,12 +1155,7 @@ bool VariantParser<DoCheck>::parse_color_setting_piece(const std::string& key, C
         T parsed = color == WHITE ? target.byColor[WHITE] : color == BLACK ? target.byColor[BLACK] : target.global;
         if (parse_attribute(option, parsed, v))
         {
-            if (color == WHITE)
-                target.set_color(WHITE, parsed);
-            else if (color == BLACK)
-                target.set_color(BLACK, parsed);
-            else
-                target.set_global(parsed);
+            apply_color_setting(target, color, parsed);
         }
         else
         {
@@ -1215,22 +1178,12 @@ bool VariantParser<DoCheck>::parse_color_setting_first_piece(const std::string& 
         if (trim(it->second) == "-")
         {
             parsed = NO_PIECE_TYPE;
-            if (color == WHITE)
-                target.set_color(WHITE, parsed);
-            else if (color == BLACK)
-                target.set_color(BLACK, parsed);
-            else
-                target.set_global(parsed);
+            apply_color_setting(target, color, parsed);
             return;
         }
         if (parse_first_piece_type_token(v, it->second, parsed))
         {
-            if (color == WHITE)
-                target.set_color(WHITE, parsed);
-            else if (color == BLACK)
-                target.set_color(BLACK, parsed);
-            else
-                target.set_global(parsed);
+            apply_color_setting(target, color, parsed);
         }
         else
         {
@@ -1490,42 +1443,31 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
             return false;
         }
     }
-    auto it_gate_after = config.find("gatingPieceAfter");
-    if (it_gate_after != config.end())
-    {
-        std::array<PieceType, PIECE_TYPE_NB> parsed{};
-        if (!parse_piece_type_map(it_gate_after->second, v, parsed.data(), true))
+    bool parse_gating_piece_after_ok = true;
+    parse_color_triplet(config, "gatingPieceAfter", [&](const std::string& option, Color color) {
+        if (!parse_gating_piece_after_ok)
+            return;
+        auto it = config.find(option);
+        if (it != config.end())
         {
-            if (DoCheck)
-                std::cerr << "gatingPieceAfter - Invalid syntax." << std::endl;
-            return false;
+            std::array<PieceType, PIECE_TYPE_NB> parsed{};
+            if (!parse_piece_type_map(it->second, v, parsed.data(), true))
+            {
+                if (DoCheck)
+                    std::cerr << option << " - Invalid syntax." << std::endl;
+                parse_gating_piece_after_ok = false;
+                return;
+            }
+            if (color == WHITE)
+                v->gatingPieceAfter.set_color(WHITE, parsed);
+            else if (color == BLACK)
+                v->gatingPieceAfter.set_color(BLACK, parsed);
+            else
+                v->gatingPieceAfter.set_global(parsed);
         }
-        v->gatingPieceAfter.set_global(parsed);
-    }
-    auto it_gate_after_w = config.find("gatingPieceAfterWhite");
-    if (it_gate_after_w != config.end())
-    {
-        std::array<PieceType, PIECE_TYPE_NB> parsed{};
-        if (!parse_piece_type_map(it_gate_after_w->second, v, parsed.data(), true))
-        {
-            if (DoCheck)
-                std::cerr << "gatingPieceAfterWhite - Invalid syntax." << std::endl;
-            return false;
-        }
-        v->gatingPieceAfter.set_color(WHITE, parsed);
-    }
-    auto it_gate_after_b = config.find("gatingPieceAfterBlack");
-    if (it_gate_after_b != config.end())
-    {
-        std::array<PieceType, PIECE_TYPE_NB> parsed{};
-        if (!parse_piece_type_map(it_gate_after_b->second, v, parsed.data(), true))
-        {
-            if (DoCheck)
-                std::cerr << "gatingPieceAfterBlack - Invalid syntax." << std::endl;
-            return false;
-        }
-        v->gatingPieceAfter.set_color(BLACK, parsed);
-    }
+    });
+    if (!parse_gating_piece_after_ok)
+        return false;
     auto it_first_move_pt = config.find("firstMovePieceTypes");
     if (it_first_move_pt != config.end())
     {
@@ -1747,51 +1689,40 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("edgeInsertTypes", v->edgeInsertTypes, v);
     parse_attribute("edgeInsertOnly", v->edgeInsertOnly);
     parse_color_setting("edgeInsertRegion", v->edgeInsertRegion);
-    auto it_edge_insert_from = config.find("edgeInsertFrom");
-    if (it_edge_insert_from != config.end())
-    {
-        bool top = false, bottom = false, left = false, right = false;
-        if (!apply_edge_insert_from_alias(it_edge_insert_from->second, top, bottom, left, right))
+    auto parse_edge_insert_from = [&](const std::string& key, const Color* color) -> bool {
+        auto it = config.find(key);
+        if (it != config.end())
         {
-            if (DoCheck)
-                std::cerr << "edgeInsertFrom - Invalid syntax." << std::endl;
-            return false;
+            bool top = false, bottom = false, left = false, right = false;
+            if (!apply_edge_insert_from_alias(it->second, top, bottom, left, right))
+            {
+                if (DoCheck)
+                    std::cerr << key << " - Invalid syntax." << std::endl;
+                return false;
+            }
+            if (color)
+            {
+                v->edgeInsertFromTop.set_color(*color, top);
+                v->edgeInsertFromBottom.set_color(*color, bottom);
+                v->edgeInsertFromLeft.set_color(*color, left);
+                v->edgeInsertFromRight.set_color(*color, right);
+            }
+            else
+            {
+                v->edgeInsertFromTop.set_global(top);
+                v->edgeInsertFromBottom.set_global(bottom);
+                v->edgeInsertFromLeft.set_global(left);
+                v->edgeInsertFromRight.set_global(right);
+            }
         }
-        v->edgeInsertFromTop.set_global(top);
-        v->edgeInsertFromBottom.set_global(bottom);
-        v->edgeInsertFromLeft.set_global(left);
-        v->edgeInsertFromRight.set_global(right);
-    }
-    auto it_edge_insert_from_white = config.find("edgeInsertFromWhite");
-    if (it_edge_insert_from_white != config.end())
-    {
-        bool top = false, bottom = false, left = false, right = false;
-        if (!apply_edge_insert_from_alias(it_edge_insert_from_white->second, top, bottom, left, right))
-        {
-            if (DoCheck)
-                std::cerr << "edgeInsertFromWhite - Invalid syntax." << std::endl;
-            return false;
-        }
-        v->edgeInsertFromTop.set_color(WHITE, top);
-        v->edgeInsertFromBottom.set_color(WHITE, bottom);
-        v->edgeInsertFromLeft.set_color(WHITE, left);
-        v->edgeInsertFromRight.set_color(WHITE, right);
-    }
-    auto it_edge_insert_from_black = config.find("edgeInsertFromBlack");
-    if (it_edge_insert_from_black != config.end())
-    {
-        bool top = false, bottom = false, left = false, right = false;
-        if (!apply_edge_insert_from_alias(it_edge_insert_from_black->second, top, bottom, left, right))
-        {
-            if (DoCheck)
-                std::cerr << "edgeInsertFromBlack - Invalid syntax." << std::endl;
-            return false;
-        }
-        v->edgeInsertFromTop.set_color(BLACK, top);
-        v->edgeInsertFromBottom.set_color(BLACK, bottom);
-        v->edgeInsertFromLeft.set_color(BLACK, left);
-        v->edgeInsertFromRight.set_color(BLACK, right);
-    }
+        return true;
+    };
+    Color white = WHITE;
+    Color black = BLACK;
+    if (!parse_edge_insert_from("edgeInsertFrom", nullptr)
+        || !parse_edge_insert_from("edgeInsertFromWhite", &white)
+        || !parse_edge_insert_from("edgeInsertFromBlack", &black))
+        return false;
     parse_attribute("changingColorTrigger", v->changingColorTrigger);
     parse_attribute("changingColorPieceTypes", v->changingColorPieceTypes, v);
     parse_color_setting("selfCapture", v->selfCapture);
