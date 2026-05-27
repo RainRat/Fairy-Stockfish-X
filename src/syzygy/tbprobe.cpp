@@ -214,26 +214,33 @@ public:
         if (fd == -1)
             return *baseAddress = nullptr, nullptr;
 
-        fstat(fd, &statbuf);
+        if (fstat(fd, &statbuf) == -1)
+        {
+            ::close(fd);
+            return *baseAddress = nullptr, nullptr;
+        }
 
         if (statbuf.st_size % 64 != 16)
         {
+            ::close(fd);
             std::cerr << "Corrupt tablebase file " << fname << std::endl;
             exit(EXIT_FAILURE);
         }
 
         *mapping = statbuf.st_size;
         *baseAddress = mmap(nullptr, statbuf.st_size, PROT_READ, MAP_SHARED, fd, 0);
+
+        if (*baseAddress == MAP_FAILED)
+        {
+            ::close(fd);
+            std::cerr << "Could not mmap() " << fname << std::endl;
+            exit(EXIT_FAILURE);
+        }
+
 #if defined(MADV_RANDOM)
         madvise(*baseAddress, statbuf.st_size, MADV_RANDOM);
 #endif
         ::close(fd);
-
-        if (*baseAddress == MAP_FAILED)
-        {
-            std::cerr << "Could not mmap() " << fname << std::endl;
-            exit(EXIT_FAILURE);
-        }
 #else
         // Note FILE_FLAG_RANDOM_ACCESS is only a hint to Windows and as such may get ignored.
         HANDLE fd = CreateFile(fname.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr,
