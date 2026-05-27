@@ -10,7 +10,7 @@ output="$(
     | "$ENGINE" 2>&1
 )"
 
-if grep -q "Variant 'gale' exceeds build board limits" <<<"$output"; then
+if grep -q "variants skipped because of board size limits" <<<"$output"; then
   echo "skip: gale requires VERY_LARGE_BOARDS"
   exit 0
 fi

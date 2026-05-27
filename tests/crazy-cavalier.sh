@@ -23,7 +23,7 @@ run_cmds() {
 # Start position loads and exposes the reconstructed 9x10 setup.
 out=$(run_cmds "position startpos
 go perft 1")
-if grep -q "Variant 'crazy-cavalier' exceeds build board limits" <<<"${out}"; then
+if grep -q "variants skipped because of board size limits" <<<"${out}"; then
   echo "skip: crazy-cavalier requires a larger-board capable engine"
   exit 0
 fi

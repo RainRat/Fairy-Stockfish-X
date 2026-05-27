@@ -35,7 +35,7 @@ quit
 EOF
 )"
 
-if echo "${out}" | grep -Eq "unknown variant 'nnguard'|exceeds build board limits"; then
+if echo "${out}" | grep -Eq "unknown variant 'nnguard'|variants skipped because of board size limits"; then
   echo "nnue variant dimension guard skipped: engine cannot load nnguard board size"
   exit 0
 fi
