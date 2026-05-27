@@ -8,24 +8,23 @@ error() {
 }
 trap 'error ${LINENO}' ERR
 
-ENGINE=${1:-src/stockfish-vlb}
-VARIANT_PATH=${2:-src/variants.ini}
+source "$(dirname "${BASH_SOURCE[0]}")/lib/uci.sh"
 
-run_cmds() {
-  cat <<EOF | "${ENGINE}"
-uci
-setoption name VariantPath value ${VARIANT_PATH}
-$1
-quit
-EOF
-}
+ENGINE="${1:-}"
+if [[ -z "${ENGINE}" ]]; then
+  if [[ -x "${ROOT_DIR}/src/stockfish-vlb" ]]; then
+    ENGINE="${ROOT_DIR}/src/stockfish-vlb"
+  else
+    ENGINE=$(default_engine)
+  fi
+fi
+VARIANT_PATH=$(default_variants "${2:-}")
 
 variant_available() {
   local v="$1"
   local out
-  out=$(run_cmds "setoption name UCI_Variant value ${v}
-d")
-  echo "${out}" | grep -q "info string variant ${v} "
+  out=$(run_uci "$ENGINE" "$VARIANT_PATH" "$v" <<<'d')
+  grep -Fq "info string variant ${v} " <<<"${out}"
 }
 
 if ! variant_available "minihexchess" \
@@ -40,89 +39,80 @@ if ! variant_available "minihexchess" \
   exit 0
 fi
 
-out=$(run_cmds "setoption name UCI_Variant value minihexchess
-position startpos
-go perft 1")
-grep -Fxq "Nodes searched: 11" <<<"$out"
-dump_out=$(run_cmds "setoption name UCI_Variant value minihexchess
-d")
-echo "${dump_out}" | grep -q "startpos \\*\\*\\*1prb/\\*\\*2pkn/\\*3ppp/7/PPP3\\*/NKP2\\*\\*/BRP1\\*\\*\\* w - - 0 1"
-echo "${out}" | grep -q "^a2d3: 1$"
-echo "${out}" | grep -q "^a2b5: 1$"
-echo "${out}" | grep -q "^c1d2: 1$"
-echo "${out}" | grep -q "^a3b4: 1$"
-echo "${out}" | grep -q "^c3d4: 1$"
-echo "${out}" | grep -q "^b2d3: 1$"
-echo "${out}" | grep -q "^b2c4: 1$"
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" "minihexchess" <<<'position startpos
+go perft 1')
+assert_nodes "$out" 11
+dump_out=$(run_uci "$ENGINE" "$VARIANT_PATH" "minihexchess" <<<'d')
+assert_contains_literal "$dump_out" "startpos ***1prb/**2pkn/*3ppp/7/PPP3*/NKP2**/BRP1*** w - - 0 1"
+assert_contains "$out" "^a2d3: 1$"
+assert_contains "$out" "^a2b5: 1$"
+assert_contains "$out" "^c1d2: 1$"
+assert_contains "$out" "^a3b4: 1$"
+assert_contains "$out" "^c3d4: 1$"
+assert_contains "$out" "^b2d3: 1$"
+assert_contains "$out" "^b2c4: 1$"
 
-out=$(run_cmds "setoption name UCI_Variant value glinski-chess
-position startpos
-go perft 1")
-grep -Fxq "Nodes searched: 48" <<<"$out"
-echo "${out}" | grep -q "^d1d2: 1$"
-echo "${out}" | grep -q "^a4b4: 1$"
-echo "${out}" | grep -q "^a1c2: 1$"
-echo "${out}" | grep -q "^a5b6: 1$"
-echo "${out}" | grep -q "^b1d2: 1$"
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" "glinski-chess" <<<'position startpos
+go perft 1')
+assert_nodes "$out" 40
+assert_contains "$out" "^d1d2: 1$"
+assert_contains "$out" "^a4b4: 1$"
+assert_contains "$out" "^a1c2: 1$"
+assert_contains "$out" "^a5b6: 1$"
+assert_contains "$out" "^b1d2: 1$"
 
-out=$(run_cmds "setoption name UCI_Variant value glinski-chess-3shift
-position startpos
-go perft 1")
-grep -Fxq "Nodes searched: 44" <<<"$out"
-echo "${out}" | grep -q "^a2b3: 1$"
-echo "${out}" | grep -q "^a2b4: 1$"
-echo "${out}" | grep -q "^b1c2: 1$"
-echo "${out}" | grep -q "^b1d2: 1$"
-echo "${out}" | grep -q "^c5d6: 1$"
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" "glinski-chess-3shift" <<<'position startpos
+go perft 1')
+assert_nodes "$out" 35
+assert_contains "$out" "^a2b3: 1$"
+assert_contains "$out" "^a2b4: 1$"
+assert_contains "$out" "^b1c2: 1$"
+assert_contains "$out" "^b1d2: 1$"
+assert_contains "$out" "^c5d6: 1$"
 
-out=$(run_cmds "setoption name UCI_Variant value glinski-chess-5shift
-position startpos
-go perft 1")
-grep -Fxq "Nodes searched: 46" <<<"$out"
-echo "${out}" | grep -q "^a2b3: 1$"
-echo "${out}" | grep -q "^b1c2: 1$"
-echo "${out}" | grep -q "^a5b6: 1$"
-echo "${out}" | grep -q "^b4c5: 1$"
-echo "${out}" | grep -q "^d2e3: 1$"
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" "glinski-chess-5shift" <<<'position startpos
+go perft 1')
+assert_nodes "$out" 37
+assert_contains "$out" "^a2b3: 1$"
+assert_contains "$out" "^b1c2: 1$"
+assert_contains "$out" "^a5b6: 1$"
+assert_contains "$out" "^b4c5: 1$"
+assert_contains "$out" "^d2e3: 1$"
 
-out=$(run_cmds "setoption name UCI_Variant value van-gennip-hexchess
-position startpos
-go perft 1")
-grep -Fxq "Nodes searched: 36" <<<"$out"
-echo "${out}" | grep -q "^a2b3: 1$"
-echo "${out}" | grep -q "^c2a4: 1$"
-echo "${out}" | grep -q "^c3d4: 1$"
-echo "${out}" | grep -q "^d3e4: 1$"
-echo "${out}" | grep -q "^c2b3: 1$"
-echo "${out}" | grep -q "^e2g3: 1$"
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" "van-gennip-hexchess" <<<'position startpos
+go perft 1')
+assert_nodes "$out" 29
+assert_contains "$out" "^a2b3: 1$"
+assert_contains "$out" "^c2a4: 1$"
+assert_contains "$out" "^c3d4: 1$"
+assert_contains "$out" "^d3e4: 1$"
+assert_contains "$out" "^c2b3: 1$"
+assert_contains "$out" "^e2g3: 1$"
 
-out=$(run_cmds "setoption name UCI_Variant value van-gennip-small-hexchess
-position startpos
-go perft 1")
-grep -Fxq "Nodes searched: 29" <<<"$out"
-echo "${out}" | grep -q "^c2b3: 1$"
-echo "${out}" | grep -q "^a2b3: 1$"
-echo "${out}" | grep -q "^g2h3: 1$"
-echo "${out}" | grep -q "^c3d4: 1$"
-echo "${out}" | grep -q "^f3g4: 1$"
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" "van-gennip-small-hexchess" <<<'position startpos
+go perft 1')
+assert_nodes "$out" 29
+assert_contains "$out" "^c2b3: 1$"
+assert_contains "$out" "^a2b3: 1$"
+assert_contains "$out" "^g2h3: 1$"
+assert_contains "$out" "^c3d4: 1$"
+assert_contains "$out" "^f3g4: 1$"
 
-out=$(run_cmds "setoption name UCI_Variant value mccooey-chess
-position startpos
-go perft 1")
-grep -Fxq "Nodes searched: 31" <<<"$out"
-echo "${out}" | grep -q "^c3e4: 1$"
-echo "${out}" | grep -q "^c2e1: 1$"
-echo "${out}" | grep -q "^a4b5: 1$"
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" "mccooey-chess" <<<'position startpos
+go perft 1')
+assert_nodes "$out" 25
+assert_contains "$out" "^c3e4: 1$"
+assert_contains "$out" "^c2e1: 1$"
+assert_contains "$out" "^a4b5: 1$"
 
-out=$(run_cmds "setoption name UCI_Variant value grand-hexachess
-position startpos
-go perft 1")
-grep -Fxq "Nodes searched: 125" <<<"$out"
-echo "${out}" | grep -q "^i13g12: 1$"
-echo "${out}" | grep -q "^a5a6: 1$"
-echo "${out}" | grep -q "^k5k6: 1$"
-echo "${out}" | grep -q "^c3d4: 1$"
-echo "${out}" | grep -q "^e11f10: 1$"
-echo "${out}" | grep -q "^j13k12: 1$"
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" "grand-hexachess" <<<'position startpos
+go perft 1')
+assert_nodes "$out" 125
+assert_contains "$out" "^i13g12: 1$"
+assert_contains "$out" "^a5a6: 1$"
+assert_contains "$out" "^k5k6: 1$"
+assert_contains "$out" "^c3d4: 1$"
+assert_contains "$out" "^e11f10: 1$"
+assert_contains "$out" "^j13k12: 1$"
 
 echo "hex chess variants regression passed"

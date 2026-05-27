@@ -4108,7 +4108,7 @@ bool Position::legal(Move m) const {
   bool blockedByPostMove = (postMoveAttackers
                          & postMoveOccupied
                          & ~(removedAttackers | removedByEffects)
-                         & ~(rifleShot ? Bitboard(0) : SquareBB[to])) != 0;
+                         & ~(rifleShot ? Bitboard(0) : SquareBB[to])) != Bitboard(0);
   return (allow_checks() || !blockedByPostMove)
       && !violates_same_player_board_repetition(m);
 }
