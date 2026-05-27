@@ -8,9 +8,10 @@ error() {
 }
 trap 'error ${LINENO}' ERR
 
-SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
-ROOT_DIR=$(cd "${SCRIPT_DIR}/.." && pwd)
-ENGINE=${1:-${SCRIPT_DIR}/../src/stockfish}
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+source "${SCRIPT_DIR}/lib/uci.sh"
+
+ENGINE=$(default_engine "${1:-}")
 
 cd "${ROOT_DIR}"
 
@@ -182,7 +183,8 @@ weakCrosscutDropIllegal = true
 startFen = ****1/***2/**3/*4/5[SSSSSSSSSSSSSSSsssssssssssssss] b - - 0 1
 INI
 
-printf '%s\n' '[trailing-rank-space:chess]' 'maxRank = 8 ' >> "${tmp_ini}"
+printf '%s
+' '[trailing-rank-space:chess]' 'maxRank = 8 ' >> "${tmp_ini}"
 
 echo "parser regression tests started"
 
@@ -240,101 +242,34 @@ startFen = 8/3p4/8/8/3Q2n1/8/8/8 w - - 0 1
 INI
 
 check_output=$("${ENGINE}" check "${bad_betza_ini}" 2>&1 || true)
-if ! echo "${check_output}" | grep -Fq "customPiece1 - Missing Betza move notation"; then
-  echo "${check_output}"
-  exit 1
-fi
+assert_contains "${check_output}" "customPiece1 - Missing Betza move notation"
 
 check_output=$("${ENGINE}" check "${bad_hopper_brace_ini}" 2>&1 || true)
-if ! echo "${check_output}" | grep -Fq "customPiece1 - Invalid Betza hopper parameters in 'R{hurdles: 1,1': missing closing '}'."; then
-  echo "${check_output}"
-  exit 1
-fi
+assert_contains "${check_output}" "customPiece1 - Invalid Betza hopper parameters in 'R{hurdles: 1,1': missing closing '}'."
 
 check_output=$("${ENGINE}" check "${bad_rider_range_ini}" 2>&1 || true)
-if ! echo "${check_output}" | grep -Fq "customPiece1 - Invalid Betza rider range in 'R[3-': missing closing ']'."; then
-  echo "${check_output}"
-  exit 1
-fi
+assert_contains "${check_output}" "customPiece1 - Invalid Betza rider range in 'R\[3-': missing closing '\]'."
 
 check_output=$("${ENGINE}" check "${bad_rank_wildcard_ini}" 2>&1 || true)
-if ! echo "${check_output}" | grep -q "Illegal rank character: \*"; then
-  echo "${check_output}"
-  exit 1
-fi
+assert_contains "${check_output}" "Illegal rank character: \*"
 
 check_output=$("${ENGINE}" check "${twochar_hint_ini}" 2>&1 || true)
-if ! echo "${check_output}" | grep -q "falcon looks like a custom piece definition. Use customPieceN = P':W for new custom pieces."; then
-  echo "${check_output}"
-  exit 1
-fi
+assert_contains "${check_output}" "falcon looks like a custom piece definition. Use customPieceN = P':W for new custom pieces."
 
-set +e
-bad_hopper_type_output=$(cat <<CMDS | "${ENGINE}" 2>&1
-uci
-setoption name VariantPath value ${bad_hopper_type_ini}
-setoption name UCI_Variant value bad-hopper-type
-quit
-CMDS
-)
-bad_hopper_type_rc=$?
-set -e
+bad_hopper_type_output=$(run_uci "$ENGINE" "$bad_hopper_type_ini" "bad-hopper-type" </dev/null 2>&1 || true)
+assert_contains "${bad_hopper_type_output}" "unknown variant 'bad-hopper-type'; keeping 'chess'"
 
-if [ "${bad_hopper_type_rc}" -ne 0 ]; then
-  echo "${bad_hopper_type_output}"
-  exit 1
-fi
+bad_hopper_numeric_output=$(run_uci "$ENGINE" "$bad_hopper_numeric_ini" "bad-hopper-numeric" </dev/null 2>&1 || true)
+assert_contains "${bad_hopper_numeric_output}" "Invalid numeric value in Betza hopper parameters: 'abc,1'"
+assert_contains "${bad_hopper_numeric_output}" "unknown variant 'bad-hopper-numeric'; keeping 'chess'"
 
-if ! echo "${bad_hopper_type_output}" | grep -q "unknown variant 'bad-hopper-type'; keeping 'chess'"; then
-  echo "${bad_hopper_type_output}"
-  exit 1
-fi
-
-set +e
-bad_hopper_numeric_output=$(cat <<CMDS | "${ENGINE}" 2>&1
-uci
-setoption name VariantPath value ${bad_hopper_numeric_ini}
-setoption name UCI_Variant value bad-hopper-numeric
-quit
-CMDS
-)
-bad_hopper_numeric_rc=$?
-set -e
-
-if [ "${bad_hopper_numeric_rc}" -ne 0 ]; then
-  echo "${bad_hopper_numeric_output}"
-  exit 1
-fi
-
-if ! echo "${bad_hopper_numeric_output}" | grep -Fq "Invalid numeric value in Betza hopper parameters: 'abc,1'"; then
-  echo "${bad_hopper_numeric_output}"
-  exit 1
-fi
-
-if ! echo "${bad_hopper_numeric_output}" | grep -Fq "unknown variant 'bad-hopper-numeric'; keeping 'chess'"; then
-  echo "${bad_hopper_numeric_output}"
-  exit 1
-fi
-
-capture_allowed_only_output=$(cat <<CMDS | "${ENGINE}" 2>&1
-uci
-setoption name VariantPath value ${capture_allowed_only_ini}
-setoption name UCI_Variant value capture-allowed-only
+capture_allowed_only_output=$(run_uci "$ENGINE" "$capture_allowed_only_ini" "capture-allowed-only" <<EOF
 position fen 8/3p4/8/8/3Q2n1/8/8/8 w - - 0 1
 go perft 1
-quit
-CMDS
+EOF
 )
-
-if ! echo "${capture_allowed_only_output}" | grep -q "d4d7:"; then
-  echo "${capture_allowed_only_output}"
-  exit 1
-fi
-
-if echo "${capture_allowed_only_output}" | grep -q "d4g4:"; then
-  echo "${capture_allowed_only_output}"
-  exit 1
-fi
+assert_contains "${capture_allowed_only_output}" "d4d7:"
+assert_not_contains "${capture_allowed_only_output}" "d4g4:"
 
 two_boards_output=$(python3 - <<'PY' 2>&1
 import sys
@@ -344,11 +279,7 @@ pyffish.load_variant_config("[x:chess]\ntwoBoards = true" + "   \n")
 print("two_boards_trailing_space_bool", pyffish.two_boards("x"))
 PY
 )
-
-if ! printf '%s\n' "${two_boards_output}" | grep -qF "two_boards_trailing_space_bool True"; then
-  echo "${two_boards_output}"
-  exit 1
-fi
+assert_contains "${two_boards_output}" "two_boards_trailing_space_bool True"
 
 capture_type_output=$(python3 - <<'PY' 2>&1
 import pyffish
@@ -357,11 +288,7 @@ pyffish.load_variant_config("[x:chess]\ncaptureType = hand" + "   \n")
 print("capture_type_trailing_space_enum", pyffish.captures_to_hand("x"))
 PY
 )
-
-if ! printf '%s\n' "${capture_type_output}" | grep -qF "capture_type_trailing_space_enum True"; then
-  echo "${capture_type_output}"
-  exit 1
-fi
+assert_contains "${capture_type_output}" "capture_type_trailing_space_enum True"
 
 nonking_ini=$(mktemp)
 trap 'rm -f "${tmp_ini}" "${nonking_ini}"' EXIT
@@ -370,79 +297,38 @@ cat > "${nonking_ini}" <<'INI'
 rook = r:R3
 INI
 
-tuple_output=$(cat <<CMDS | "${ENGINE}" 2>&1
-uci
-setoption name VariantPath value ${tmp_ini}
-setoption name UCI_Variant value tuple-nonsquare
+tuple_output=$(run_uci "$ENGINE" "$tmp_ini" "tuple-nonsquare" <<EOF
 position startpos
 go perft 1
-quit
-CMDS
+EOF
 )
+assert_not_contains "${tuple_output}" "No piece char found for custom piece"
 
-if echo "${tuple_output}" | grep -q "No piece char found for custom piece"; then
-  echo "${tuple_output}"
-  exit 1
-fi
-
-promotion_file_output=$(cat <<CMDS | "${ENGINE}" 2>&1
-uci
-setoption name VariantPath value ${tmp_ini}
-setoption name UCI_Variant value promotion-by-file-inherit
+promotion_file_output=$(run_uci "$ENGINE" "$tmp_ini" "promotion-by-file-inherit" <<EOF
 position startpos
 go perft 1
-quit
-CMDS
+EOF
 )
+assert_contains "${promotion_file_output}" "b7b8r:"
+assert_not_contains "${promotion_file_output}" "b7b8q:"
+assert_not_contains "${promotion_file_output}" "b7b8n:"
 
-if ! echo "${promotion_file_output}" | grep -q "b7b8r:"; then
-  echo "${promotion_file_output}"
-  exit 1
-fi
-
-if echo "${promotion_file_output}" | grep -q "b7b8q:"; then
-  echo "${promotion_file_output}"
-  exit 1
-fi
-
-if echo "${promotion_file_output}" | grep -q "b7b8n:"; then
-  echo "${promotion_file_output}"
-  exit 1
-fi
-
-promotion_spaces_output=$(cat <<CMDS | "${ENGINE}" 2>&1
-uci
-setoption name VariantPath value ${tmp_ini}
-setoption name UCI_Variant value promotion-by-file-spaces
+promotion_spaces_output=$(run_uci "$ENGINE" "$tmp_ini" "promotion-by-file-spaces" <<EOF
 position startpos
 go perft 1
-quit
-CMDS
+EOF
 )
+assert_contains "${promotion_spaces_output}" "b7b8r:"
 
-if ! echo "${promotion_spaces_output}" | grep -q "b7b8r:"; then
-  echo "${promotion_spaces_output}"
-  exit 1
-fi
-
-terminal_output=$(cat <<'CMDS' | "${ENGINE}" 2>&1
-uci
+terminal_output=$(run_uci "$ENGINE" "" "" <<EOF
 position fen 7k/5Q2/7K/8/8/8/8/8 b - - 0 1
 go depth 1
-quit
-CMDS
+EOF
 )
-
-if ! echo "${terminal_output}" | grep -q "bestmove (none)"; then
-  echo "${terminal_output}"
-  exit 1
-fi
+assert_contains_literal "${terminal_output}" "bestmove (none)"
 
 bench_output=$("${ENGINE}" bench 16 1 1 default nonsense 2>&1 || true)
-if ! echo "${bench_output}" | grep -q "Nodes searched  : "; then
-  echo "${bench_output}"
-  exit 1
-fi
+assert_contains "${bench_output}" "Nodes searched  : "
 
 castling_diag_output=$(python3 - <<'PY' 2>&1
 import pyffish
@@ -482,34 +368,11 @@ for fen, variant in [
 PY
 )
 
-if ! echo "${castling_diag_output}" | grep -q "validate_fen castdiag-empty -5"; then
-  echo "${castling_diag_output}"
-  exit 1
-fi
-
-if ! echo "${castling_diag_output}" | grep -q "validate_fen castdiag-wrongpiece -5"; then
-  echo "${castling_diag_output}"
-  exit 1
-fi
-
-if ! echo "${castling_diag_output}" | grep -q "validate_fen castdiag-single-rook -5"; then
-  echo "${castling_diag_output}"
-  exit 1
-fi
-
-if ! echo "${castling_diag_output}" | grep -q "No castling rook on file J for flag J."; then
-  echo "${castling_diag_output}"
-  exit 1
-fi
-
-if ! echo "${castling_diag_output}" | grep -q "Flag J refers to file J, but that square does not contain a WHITE castling rook."; then
-  echo "${castling_diag_output}"
-  exit 1
-fi
-
-if ! echo "${castling_diag_output}" | grep -q "No castling rook for flag K on castling rank 1."; then
-  echo "${castling_diag_output}"
-  exit 1
-fi
+assert_contains "${castling_diag_output}" "validate_fen castdiag-empty -5"
+assert_contains "${castling_diag_output}" "validate_fen castdiag-wrongpiece -5"
+assert_contains "${castling_diag_output}" "validate_fen castdiag-single-rook -5"
+assert_contains "${castling_diag_output}" "No castling rook on file J for flag J."
+assert_contains "${castling_diag_output}" "Flag J refers to file J, but that square does not contain a WHITE castling rook."
+assert_contains "${castling_diag_output}" "No castling rook for flag K on castling rank 1."
 
 echo "parser regression tests passed"

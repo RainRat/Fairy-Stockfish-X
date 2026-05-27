@@ -1,14 +1,10 @@
 #!/bin/bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-ENGINE=${1:-"${ROOT_DIR}/src/stockfish"}
-if [[ "${ENGINE}" != /* ]]; then
-  ENGINE="${PWD}/${ENGINE}"
-fi
+SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+source "${SCRIPT_DIR}/lib/uci.sh"
 
-cd "${ROOT_DIR}/src"
+ENGINE=$(default_engine "${1:-}")
 
 tmp_ini=$(mktemp)
 trap 'rm -f "$tmp_ini"' EXIT
@@ -27,24 +23,26 @@ INI
 
 perft_out() {
   local variant="$1"
-  printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value %s\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" "$variant" \
-    | "${ENGINE}"
+  run_uci "$ENGINE" "$tmp_ini" "$variant" <<'UCI'
+position startpos
+go perft 1
+UCI
 }
 
 g=$(perft_out griffon-test)
-grep -q "d4h5:" <<<"$g"
-grep -q "d4a5:" <<<"$g"
-grep -q "d4e8:" <<<"$g"
-grep -q "d4c1:" <<<"$g"
-! grep -q "d4d5:" <<<"$g"
-! grep -q "d4e4:" <<<"$g"
+assert_contains "$g" "d4h5:"
+assert_contains "$g" "d4a5:"
+assert_contains "$g" "d4e8:"
+assert_contains "$g" "d4c1:"
+assert_not_contains "$g" "d4d5:"
+assert_not_contains "$g" "d4e4:"
 
 m=$(perft_out manticore-test)
-grep -q "d4g8:" <<<"$m"
-grep -q "d4a6:" <<<"$m"
-grep -q "d4h1:" <<<"$m"
-grep -q "d4b1:" <<<"$m"
-! grep -q "d4h5:" <<<"$m"
-! grep -q "d4e8:" <<<"$m"
+assert_contains "$m" "d4g8:"
+assert_contains "$m" "d4a6:"
+assert_contains "$m" "d4h1:"
+assert_contains "$m" "d4b1:"
+assert_not_contains "$m" "d4h5:"
+assert_not_contains "$m" "d4e8:"
 
 echo "bent-riders test OK"

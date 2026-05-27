@@ -922,6 +922,9 @@ namespace {
                                   FilePieceSetMap& target,
                                   bool doCheck,
                                   const std::string& key) {
+        // Keep file-mapped piece-set syntax compact and unambiguous:
+        // "a:qr b:n" is supported, but spaced piece lists are rejected so
+        // file/value boundaries stay easy to read and parse.
         std::stringstream ss(value);
         std::string token;
         FilePieceSetMap parsed = target;
@@ -952,29 +955,9 @@ namespace {
                 return false;
             }
 
-            if (colon == std::string::npos) {
-                char sep = '\0';
-                if (!(ss >> sep) || sep != ':') {
-                    if (doCheck)
-                        std::cerr << key << " - Expected ':' after file " << fileToken << std::endl;
-                    return false;
-                }
-                if (!(ss >> pieceToken)) {
-                    if (doCheck)
-                        std::cerr << key << " - Missing piece set for file " << fileToken << std::endl;
-                    return false;
-                }
-            } else if (pieceToken.empty()) {
-                if (!(ss >> pieceToken)) {
-                    if (doCheck)
-                        std::cerr << key << " - Missing piece set for file " << fileToken << std::endl;
-                    return false;
-                }
-            }
-
-            if (pieceToken.empty()) {
+            if (colon == std::string::npos || pieceToken.empty()) {
                 if (doCheck)
-                    std::cerr << key << " - Missing piece set for file " << fileToken << std::endl;
+                    std::cerr << key << " - Use compact file-map syntax like a:qr b:n" << std::endl;
                 return false;
             }
 
@@ -1002,7 +985,7 @@ namespace {
 
 template <bool DoCheck>
 template <bool Current, class T> bool VariantParser<DoCheck>::parse_attribute(const std::string& key, T& target) {
-    const auto& it = config.find(key);
+    auto it = config.find(key);
     if (it != config.end())
     {
         bool valid = set(it->second, target);
@@ -1039,7 +1022,7 @@ template <bool Current, class T> bool VariantParser<DoCheck>::parse_attribute(co
 
 template <bool DoCheck>
 template <bool Current, class T> bool VariantParser<DoCheck>::parse_attribute(const std::string& key, T& target, const Variant* v) {
-    const auto& it = config.find(key);
+    auto it = config.find(key);
     if (it != config.end())
     {
         if (DoCheck && !Current)
@@ -1227,7 +1210,7 @@ bool VariantParser<DoCheck>::parse_color_setting_first_piece(const std::string& 
     bool ok = true;
     parse_color_triplet(config, key, [&](const std::string& option, Color color) {
         PieceType parsed = color == WHITE ? target.byColor[WHITE] : color == BLACK ? target.byColor[BLACK] : target.global;
-        const auto& it = config.find(option);
+        auto it = config.find(option);
         if (it == config.end())
             return;
         if (trim(it->second) == "-")
@@ -1470,7 +1453,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("promotionRequireInHand", v->promotionRequireInHand);
     parse_attribute("promotionConsumeInHand", v->promotionConsumeInHand);
     // promotion limit
-    const auto& it_prom_limit = config.find("promotionLimit");
+    auto it_prom_limit = config.find("promotionLimit");
     if (it_prom_limit != config.end())
     {
         if (!parse_piece_int_map_option("promotionLimit", it_prom_limit->second, v, v->promotionLimit, true, DoCheck, [&](int (&parsed)[PIECE_TYPE_NB]) {
@@ -1488,7 +1471,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
             return false;
     }
     // promoted piece types
-    const auto& it_prom_pt = config.find("promotedPieceType");
+    auto it_prom_pt = config.find("promotedPieceType");
     if (it_prom_pt != config.end())
     {
         if (!parse_piece_type_map(it_prom_pt->second, v, v->promotedPieceType, true))
@@ -1498,7 +1481,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
             return false;
         }
     }
-    const auto& it_move_morph_pt = config.find("moveMorphPieceType");
+    auto it_move_morph_pt = config.find("moveMorphPieceType");
     if (it_move_morph_pt != config.end())
     {
         if (!parse_piece_type_map(it_move_morph_pt->second, v, v->moveMorphPieceType, true))
@@ -1508,7 +1491,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
             return false;
         }
     }
-    const auto& it_gate_after = config.find("gatingPieceAfter");
+    auto it_gate_after = config.find("gatingPieceAfter");
     if (it_gate_after != config.end())
     {
         std::array<PieceType, PIECE_TYPE_NB> parsed{};
@@ -1520,7 +1503,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
         }
         v->gatingPieceAfter.set_global(parsed);
     }
-    const auto& it_gate_after_w = config.find("gatingPieceAfterWhite");
+    auto it_gate_after_w = config.find("gatingPieceAfterWhite");
     if (it_gate_after_w != config.end())
     {
         std::array<PieceType, PIECE_TYPE_NB> parsed{};
@@ -1532,7 +1515,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
         }
         v->gatingPieceAfter.set_color(WHITE, parsed);
     }
-    const auto& it_gate_after_b = config.find("gatingPieceAfterBlack");
+    auto it_gate_after_b = config.find("gatingPieceAfterBlack");
     if (it_gate_after_b != config.end())
     {
         std::array<PieceType, PIECE_TYPE_NB> parsed{};
@@ -1544,7 +1527,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
         }
         v->gatingPieceAfter.set_color(BLACK, parsed);
     }
-    const auto& it_first_move_pt = config.find("firstMovePieceTypes");
+    auto it_first_move_pt = config.find("firstMovePieceTypes");
     if (it_first_move_pt != config.end())
     {
         if (!parse_piece_type_map(it_first_move_pt->second, v, v->firstMovePieceType, true))
@@ -1554,7 +1537,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
             return false;
         }
     }
-    const auto& it_drop_piece_types = config.find("dropPieceTypes");
+    auto it_drop_piece_types = config.find("dropPieceTypes");
     if (it_drop_piece_types != config.end())
     {
         if (!parse_drop_piece_type_map(it_drop_piece_types->second, v, v->dropPieceTypes))
@@ -1565,7 +1548,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
         }
     }
     // priority drops
-    const auto& it_pr_drop = config.find("priorityDropTypes");
+    auto it_pr_drop = config.find("priorityDropTypes");
     if (it_pr_drop != config.end())
     {
         PieceSet parsedPriorityDrops = v->isPriorityDrop;
@@ -1614,7 +1597,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("mutuallyHopIllegalTypes", v->mutuallyHopIllegalTypes, v);
     const bool hasCaptureForbidden = config.find("captureForbidden") != config.end();
     auto parse_capture_map = [&](const std::string& key, bool allow) {
-        const auto& it = config.find(key);
+        auto it = config.find(key);
         if (it == config.end())
             return true;
 
@@ -1718,7 +1701,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_color_setting("mustCapture", v->mustCapture);
     parse_color_setting("mustCaptureEnPassant", v->mustCaptureEnPassant);
     parse_attribute("rifleCapture", v->rifleCapture);
-    const auto& it_push_strength = config.find("pushingStrength");
+    auto it_push_strength = config.find("pushingStrength");
     if (it_push_strength != config.end())
     {
         if (!parse_piece_int_map_option("pushingStrength", it_push_strength->second, v, v->pushingStrength, true, DoCheck, [&](int (&parsedStrengths)[PIECE_TYPE_NB]) {
@@ -1735,7 +1718,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
         }))
             return false;
     }
-    const auto& it_pull_strength = config.find("pullingStrength");
+    auto it_pull_strength = config.find("pullingStrength");
     if (it_pull_strength != config.end())
     {
         if (!parse_piece_int_map_option("pullingStrength", it_pull_strength->second, v, v->pullingStrength, true, DoCheck, [&](int (&parsedStrengths)[PIECE_TYPE_NB]) {
@@ -1765,7 +1748,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("edgeInsertTypes", v->edgeInsertTypes, v);
     parse_attribute("edgeInsertOnly", v->edgeInsertOnly);
     parse_color_setting("edgeInsertRegion", v->edgeInsertRegion);
-    const auto& it_edge_insert_from = config.find("edgeInsertFrom");
+    auto it_edge_insert_from = config.find("edgeInsertFrom");
     if (it_edge_insert_from != config.end())
     {
         bool top = false, bottom = false, left = false, right = false;
@@ -1780,7 +1763,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
         v->edgeInsertFromLeft.set_global(left);
         v->edgeInsertFromRight.set_global(right);
     }
-    const auto& it_edge_insert_from_white = config.find("edgeInsertFromWhite");
+    auto it_edge_insert_from_white = config.find("edgeInsertFromWhite");
     if (it_edge_insert_from_white != config.end())
     {
         bool top = false, bottom = false, left = false, right = false;
@@ -1795,7 +1778,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
         v->edgeInsertFromLeft.set_color(WHITE, left);
         v->edgeInsertFromRight.set_color(WHITE, right);
     }
-    const auto& it_edge_insert_from_black = config.find("edgeInsertFromBlack");
+    auto it_edge_insert_from_black = config.find("edgeInsertFromBlack");
     if (it_edge_insert_from_black != config.end())
     {
         bool top = false, bottom = false, left = false, right = false;
@@ -1829,7 +1812,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("pieceDrops", v->pieceDrops);
     parse_attribute("borrowOpponentDropsWhenEmpty", v->borrowOpponentDropsWhenEmpty);
     parse_attribute("virtualDrops", v->virtualDrops);
-    const auto& it_virtual_drop_limit = config.find("virtualDropLimit");
+    auto it_virtual_drop_limit = config.find("virtualDropLimit");
     if (it_virtual_drop_limit != config.end())
     {
         if (!parse_piece_int_map_option("virtualDropLimit", it_virtual_drop_limit->second, v, v->virtualDropLimit, true, DoCheck, [&](int (&parsedLimits)[PIECE_TYPE_NB]) {
@@ -1856,7 +1839,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("captureToHandSide", v->captureToHandSide);
     parse_attribute("captureToHandTypes", v->captureToHandTypes, v);
     // hostage price
-    const auto& it_host_p = config.find("hostageExchange");
+    auto it_host_p = config.find("hostageExchange");
     if (it_host_p != config.end()) {
         if (!parse_hostage_exchanges(v, it_host_p->second, DoCheck))
             return false;

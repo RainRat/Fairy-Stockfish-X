@@ -1,14 +1,10 @@
 #!/bin/bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-ENGINE=${1:-"${ROOT_DIR}/src/stockfish"}
-if [[ "${ENGINE}" != /* ]]; then
-  ENGINE="${PWD}/${ENGINE}"
-fi
+SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+source "${SCRIPT_DIR}/lib/uci.sh"
 
-cd "${ROOT_DIR}/src"
+ENGINE=$(default_engine "${1:-}")
 
 tmp_ini=$(mktemp)
 trap 'rm -f "$tmp_ini"' EXIT
@@ -52,22 +48,33 @@ INI
 
 perft_moves() {
   local variant=$1
-  printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value %s\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" "$variant" \
-    | "${ENGINE}" \
-    | grep ':'
+  run_uci "$ENGINE" "$tmp_ini" "$variant" <<'UCI' | grep ':'
+position startpos
+go perft 1
+UCI
 }
 
 cmp <(perft_moves modsugar_ski_group) <(perft_moves modsugar_ski_explicit)
 cmp <(perft_moves modsugar_max_group) <(perft_moves modsugar_max_explicit)
 
-dist_out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value dist10\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" | "${ENGINE}")
-grep -q 'e5e8:' <<<"$dist_out"
-grep -q 'e5h5:' <<<"$dist_out"
+dist_out=$(run_uci "$ENGINE" "$tmp_ini" dist10 <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_contains "$dist_out" "e5e8:"
+assert_contains "$dist_out" "e5h5:"
 
-check_out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value tuplewarn\nquit\n' "$tmp_ini" | "${ENGINE}" 2>&1)
-grep -q "Unsupported Betza tuple modifier combination" <<<"$check_out"
+check_out=$(run_uci "$ENGINE" "$tmp_ini" tuplewarn <<'UCI' 2>&1
+UCI
+)
+assert_contains "$check_out" "Unsupported Betza tuple modifier combination"
 
-ski_out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value ski_autocheck\nposition startpos moves e7e5\nd\nquit\n' "$tmp_ini" | "${ENGINE}")
-grep -q 'Checkers: e5 ' <<<"$ski_out"
+ski_out=$(run_uci "$ENGINE" "$tmp_ini" ski_autocheck <<'UCI'
+position startpos moves e7e5
+d
+UCI
+)
+assert_contains "$ski_out" 'Checkers: e5 '
 
 echo "betza-modifiers test OK"

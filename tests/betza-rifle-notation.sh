@@ -1,7 +1,10 @@
-#!/usr/bin/env bash
+#!/bin/bash
 set -euo pipefail
 
-ENGINE="${1:-src/stockfish}"
+SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+source "${SCRIPT_DIR}/lib/uci.sh"
+
+ENGINE=$(default_engine "${1:-}")
 
 tmp_ini="$(mktemp)"
 trap 'rm -f "$tmp_ini"' EXIT
@@ -17,29 +20,23 @@ EOF
 run_d() {
   local variant="$1"
   local moves="$2"
-  "$ENGINE" <<EOF
-setoption name VariantPath value $tmp_ini
-setoption name UCI_Variant value $variant
+  run_uci "$ENGINE" "$tmp_ini" "$variant" <<UCI
 position fen p3k3/8/8/8/8/8/8/A3K3 w - - 0 1${moves}
 d
-quit
-EOF
+UCI
 }
 
-rifle_moves="$("$ENGINE" <<EOF
-setoption name VariantPath value $tmp_ini
-setoption name UCI_Variant value betzarifle
+rifle_moves=$(run_uci "$ENGINE" "$tmp_ini" betzarifle <<'UCI'
 position fen p3k3/8/8/8/8/8/8/A3K3 w - - 0 1
 go perft 1
-quit
-EOF
-)"
-echo "${rifle_moves}" | grep -q "^a1a8: 1$"
+UCI
+)
+assert_contains "$rifle_moves" "^a1a8: 1$"
 
 plain_after="$(run_d "betzaplain" " moves a1a8")"
-echo "${plain_after}" | grep -q "Fen: A3k3/8/8/8/8/8/8/4K3 b - - 0 1"
+assert_contains_literal "$plain_after" "Fen: A3k3/8/8/8/8/8/8/4K3 b - - 0 1"
 
 rifle_after="$(run_d "betzarifle" " moves a1a8")"
-echo "${rifle_after}" | grep -q "Fen: 4k3/8/8/8/8/8/8/A3K3 b - - 0 1"
+assert_contains_literal "$rifle_after" "Fen: 4k3/8/8/8/8/8/8/A3K3 b - - 0 1"
 
 echo "betza rifle notation passed"

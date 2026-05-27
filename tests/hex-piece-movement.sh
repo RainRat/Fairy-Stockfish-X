@@ -1,14 +1,10 @@
-#!/usr/bin/env bash
+#!/bin/bash
 set -euo pipefail
 
-error() {
-  echo "hex piece movement regression failed on line $1"
-  exit 1
-}
-trap 'error ${LINENO}' ERR
+SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+source "${SCRIPT_DIR}/lib/uci.sh"
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ENGINE="${1:-${SCRIPT_DIR}/../src/stockfish}"
+ENGINE=$(default_engine "${1:-}")
 
 TMP_VARIANT_PATH=$(mktemp "${TMPDIR:-/tmp}/fsx-hex-pieces-XXXXXX.ini")
 trap 'rm -f "${TMP_VARIANT_PATH}"' EXIT
@@ -55,95 +51,106 @@ king = k:WrfFlbFflFrbFrf(2,1)lb(2,1)fr(2,1)bl(2,1)
 startFen = 6k/7/7/3K3/7/7/7 w - - 0 1
 INI
 
-run_cmds() {
-  cat <<EOF | "${ENGINE}"
-uci
-setoption name VariantPath value ${TMP_VARIANT_PATH}
-setoption name UCI_Variant value $1
-$2
-quit
-EOF
-}
+out=$(run_uci "$ENGINE" "$TMP_VARIANT_PATH" hex-rook-test <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_nodes "$out" 12
+assert_contains "$out" "^c3a1: 1$"
+assert_contains "$out" "^c3c1: 1$"
+assert_contains "$out" "^c3b2: 1$"
+assert_contains "$out" "^c3c2: 1$"
+assert_contains "$out" "^c3a3: 1$"
+assert_contains "$out" "^c3b3: 1$"
+assert_contains "$out" "^c3d3: 1$"
+assert_contains "$out" "^c3e3: 1$"
+assert_contains "$out" "^c3c4: 1$"
+assert_contains "$out" "^c3d4: 1$"
+assert_contains "$out" "^c3c5: 1$"
+assert_contains "$out" "^c3e5: 1$"
 
-out=$(run_cmds "hex-rook-test" "position startpos
-go perft 1")
-grep -Fxq "Nodes searched: 12" <<<"$out"
-echo "${out}" | grep -q "^c3a1: 1$"
-echo "${out}" | grep -q "^c3c1: 1$"
-echo "${out}" | grep -q "^c3b2: 1$"
-echo "${out}" | grep -q "^c3c2: 1$"
-echo "${out}" | grep -q "^c3a3: 1$"
-echo "${out}" | grep -q "^c3b3: 1$"
-echo "${out}" | grep -q "^c3d3: 1$"
-echo "${out}" | grep -q "^c3e3: 1$"
-echo "${out}" | grep -q "^c3c4: 1$"
-echo "${out}" | grep -q "^c3d4: 1$"
-echo "${out}" | grep -q "^c3c5: 1$"
-echo "${out}" | grep -q "^c3e5: 1$"
+out=$(run_uci "$ENGINE" "$TMP_VARIANT_PATH" hex-king-test <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_nodes "$out" 6
+assert_contains "$out" "^c3b2: 1$"
+assert_contains "$out" "^c3c2: 1$"
+assert_contains "$out" "^c3b3: 1$"
+assert_contains "$out" "^c3d3: 1$"
+assert_contains "$out" "^c3c4: 1$"
+assert_contains "$out" "^c3d4: 1$"
 
-out=$(run_cmds "hex-king-test" "position startpos
-go perft 1")
-grep -Fxq "Nodes searched: 6" <<<"$out"
-echo "${out}" | grep -q "^c3b2: 1$"
-echo "${out}" | grep -q "^c3c2: 1$"
-echo "${out}" | grep -q "^c3b3: 1$"
-echo "${out}" | grep -q "^c3d3: 1$"
-echo "${out}" | grep -q "^c3c4: 1$"
-echo "${out}" | grep -q "^c3d4: 1$"
+out=$(run_uci "$ENGINE" "$TMP_VARIANT_PATH" hex-bishop-test <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_nodes "$out" 8
+assert_contains "$out" "^c3b1: 1$"
+assert_contains "$out" "^c3e1: 1$"
+assert_contains "$out" "^c3a2: 1$"
+assert_contains "$out" "^c3d2: 1$"
+assert_contains "$out" "^c3b4: 1$"
+assert_contains "$out" "^c3e4: 1$"
+assert_contains "$out" "^c3a5: 1$"
+assert_contains "$out" "^c3d5: 1$"
 
-out=$(run_cmds "hex-bishop-test" "position startpos
-go perft 1")
-grep -Fxq "Nodes searched: 8" <<<"$out"
-echo "${out}" | grep -q "^c3b1: 1$"
-echo "${out}" | grep -q "^c3e1: 1$"
-echo "${out}" | grep -q "^c3a2: 1$"
-echo "${out}" | grep -q "^c3d2: 1$"
-echo "${out}" | grep -q "^c3b4: 1$"
-echo "${out}" | grep -q "^c3e4: 1$"
-echo "${out}" | grep -q "^c3a5: 1$"
-echo "${out}" | grep -q "^c3d5: 1$"
+out=$(run_uci "$ENGINE" "$TMP_VARIANT_PATH" hex-queen-test <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_nodes "$out" 20
+assert_contains "$out" "^c3a1: 1$"
+assert_contains "$out" "^c3e5: 1$"
+assert_contains "$out" "^c3b1: 1$"
+assert_contains "$out" "^c3e1: 1$"
+assert_contains "$out" "^c3a2: 1$"
+assert_contains "$out" "^c3d5: 1$"
 
-out=$(run_cmds "hex-queen-test" "position startpos
-go perft 1")
-grep -Fxq "Nodes searched: 20" <<<"$out"
-echo "${out}" | grep -q "^c3a1: 1$"
-echo "${out}" | grep -q "^c3e5: 1$"
-echo "${out}" | grep -q "^c3b1: 1$"
-echo "${out}" | grep -q "^c3e1: 1$"
-echo "${out}" | grep -q "^c3a2: 1$"
-echo "${out}" | grep -q "^c3d5: 1$"
+out=$(run_uci "$ENGINE" "$TMP_VARIANT_PATH" hex-knight-test <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_nodes "$out" 8
+assert_contains "$out" "^d4c2: 1$"
+assert_contains "$out" "^d4e2: 1$"
+assert_contains "$out" "^d4b3: 1$"
+assert_contains "$out" "^d4f3: 1$"
+assert_contains "$out" "^d4b5: 1$"
+assert_contains "$out" "^d4f5: 1$"
+assert_contains "$out" "^d4c6: 1$"
+assert_contains "$out" "^d4e6: 1$"
 
-out=$(run_cmds "hex-knight-test" "position startpos
-go perft 1")
-grep -Fxq "Nodes searched: 8" <<<"$out"
-echo "${out}" | grep -q "^d4c2: 1$"
-echo "${out}" | grep -q "^d4e2: 1$"
-echo "${out}" | grep -q "^d4b3: 1$"
-echo "${out}" | grep -q "^d4f3: 1$"
-echo "${out}" | grep -q "^d4b5: 1$"
-echo "${out}" | grep -q "^d4f5: 1$"
-echo "${out}" | grep -q "^d4c6: 1$"
-echo "${out}" | grep -q "^d4e6: 1$"
+out=$(run_uci "$ENGINE" "$TMP_VARIANT_PATH" hex-pawn-test <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_nodes "$out" 3
+assert_contains "$out" "^d4c3: 1$"
+assert_contains "$out" "^d4d5: 1$"
+assert_contains "$out" "^d4e3: 1$"
 
-out=$(run_cmds "hex-pawn-test" "position startpos
-go perft 1")
-grep -Fxq "Nodes searched: 3" <<<"$out"
-echo "${out}" | grep -q "^d4c3: 1$"
-echo "${out}" | grep -q "^d4d5: 1$"
-echo "${out}" | grep -q "^d4e3: 1$"
-
-out=$(run_cmds "hex-royal-king-test" "position startpos
-go perft 1")
-grep -Fxq "Nodes searched: 10" <<<"$out"
-echo "${out}" | grep -q "^d4c2: 1$"
-echo "${out}" | grep -q "^d4b3: 1$"
-echo "${out}" | grep -q "^d4c3: 1$"
-echo "${out}" | grep -q "^d4d3: 1$"
-echo "${out}" | grep -q "^d4e3: 1$"
-echo "${out}" | grep -q "^d4c4: 1$"
-echo "${out}" | grep -q "^d4e4: 1$"
-echo "${out}" | grep -q "^d4c5: 1$"
-echo "${out}" | grep -q "^d4d5: 1$"
-echo "${out}" | grep -q "^d4e5: 1$"
+out=$(run_uci "$ENGINE" "$TMP_VARIANT_PATH" hex-royal-king-test <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_nodes "$out" 10
+assert_contains "$out" "^d4c2: 1$"
+assert_contains "$out" "^d4b3: 1$"
+assert_contains "$out" "^d4c3: 1$"
+assert_contains "$out" "^d4d3: 1$"
+assert_contains "$out" "^d4e3: 1$"
+assert_contains "$out" "^d4c4: 1$"
+assert_contains "$out" "^d4e4: 1$"
+assert_contains "$out" "^d4c5: 1$"
+assert_contains "$out" "^d4d5: 1$"
+assert_contains "$out" "^d4e5: 1$"
 
 echo "hex piece movement regression passed"

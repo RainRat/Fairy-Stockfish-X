@@ -1,5 +1,55 @@
 #!/bin/bash
 
+# Detect project root directory relative to this script
+UCI_LIB_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+ROOT_DIR=$(cd "${UCI_LIB_DIR}/../.." && pwd)
+
+default_engine() {
+  local custom_engine="${1:-}"
+  if [[ -n "$custom_engine" ]]; then
+    echo "$custom_engine"
+  elif [[ -x "${ROOT_DIR}/src/stockfish" ]]; then
+    echo "${ROOT_DIR}/src/stockfish"
+  else
+    echo "${ROOT_DIR}/stockfish"
+  fi
+}
+
+default_variants() {
+  local custom_variants="${1:-}"
+  if [[ -n "$custom_variants" ]]; then
+    echo "$custom_variants"
+  else
+    echo "${ROOT_DIR}/src/variants.ini"
+  fi
+}
+
+assert_contains_literal() {
+  local haystack="$1"
+  local needle="$2"
+  local context="${3:-contains}"
+
+  if ! grep -Fq "$needle" <<<"$haystack"; then
+    echo "expected output to ${context}: $needle" >&2
+    echo "actual output:" >&2
+    printf '%s\n' "$haystack" >&2
+    return 1
+  fi
+}
+
+assert_not_contains_literal() {
+  local haystack="$1"
+  local needle="$2"
+  local context="${3:-not contain}"
+
+  if grep -Fq "$needle" <<<"$haystack"; then
+    echo "expected output to ${context}: $needle" >&2
+    echo "actual output:" >&2
+    printf '%s\n' "$haystack" >&2
+    return 1
+  fi
+}
+
 uci_timeout() {
   timeout "${UCI_TIMEOUT:-60s}" "$@"
 }
