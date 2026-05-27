@@ -26,6 +26,49 @@ case "${ENGINE_BASENAME}" in
     ;;
 esac
 
+BUILD_CACHE_DIR="${ROOT_DIR}/.local/build/gating-check-regression"
+mkdir -p "${BUILD_CACHE_DIR}"
+
+if command -v sha256sum >/dev/null 2>&1; then
+  HASHER=(sha256sum)
+elif command -v shasum >/dev/null 2>&1; then
+  HASHER=(shasum -a 256)
+else
+  HASHER=()
+fi
+
+hash_text() {
+  if [[ ${#HASHER[@]} -gt 0 ]]; then
+    printf '%s' "$1" | "${HASHER[@]}" | awk '{print $1}'
+  else
+    printf '%s' "$1" | wc -c | awk '{print $1}'
+  fi
+}
+
+engine_signature() {
+  if [[ -e "${ENGINE}" ]]; then
+    if [[ ${#HASHER[@]} -gt 0 ]]; then
+      "${HASHER[@]}" "${ENGINE}" | awk '{print $1}'
+    else
+      stat -c '%Y %s' "${ENGINE}" 2>/dev/null || echo "0 0"
+    fi
+  else
+    echo "0 0"
+  fi
+}
+
+build_signature() {
+  local label="$1"
+  local source="$2"
+  printf '%s|%s|%s|%s|%s|%s\n' \
+    "${label}" \
+    "${CXX}" \
+    "${ENGINE_BASENAME}" \
+    "${CXX_DEFS[*]}" \
+    "$(engine_signature)" \
+    "$(hash_text "${source}")"
+}
+
 run_cmds() {
   local ini=$1
   local cmds=$2
@@ -35,11 +78,11 @@ run_cmds() {
 echo "Running gating-check-regression tests..."
 
 TMP_INI=$(mktemp "${TMPDIR:-/tmp}/gating-check-XXXXXX.ini")
-TMP_CPP=""
-TMP_BIN=""
-HARNESS_CPP=""
-HARNESS_BIN=""
-trap 'rm -f "${TMP_INI}" "${TMP_CPP}" "${TMP_BIN}" "${HARNESS_CPP}" "${HARNESS_BIN}"' EXIT
+TMP_CPP="${BUILD_CACHE_DIR}/gating-check-1.cpp"
+TMP_BIN="${BUILD_CACHE_DIR}/gating-check-1.bin"
+HARNESS_CPP="${BUILD_CACHE_DIR}/gating-check-roundtrip.cpp"
+HARNESS_BIN="${BUILD_CACHE_DIR}/gating-check-roundtrip.bin"
+trap 'rm -f "${TMP_INI}"' EXIT
 
 # --- TEST 1: Gated piece blocking discovered check ---
 cat > "${TMP_INI}" <<'EOF'
@@ -95,8 +138,8 @@ if [ "$NODES" -ne 9 ]; then
 fi
 
 # --- TEST 4: Encoded gate/pull squares must preserve the last board square ---
-TMP_CPP=$(mktemp "${TMPDIR:-/tmp}/gating-check-XXXXXX.cpp")
-TMP_BIN=$(mktemp "${TMPDIR:-/tmp}/gating-check-XXXXXX")
+TMP_CPP="${BUILD_CACHE_DIR}/gating-check-1.cpp"
+TMP_BIN="${BUILD_CACHE_DIR}/gating-check-1.bin"
 cat > "${TMP_CPP}" <<'EOF'
 #include <cassert>
 #include "types.h"
@@ -111,13 +154,16 @@ int main() {
     return 0;
 }
 EOF
-rm -f "${TMP_BIN}"
-"${CXX}" -std=c++17 -O2 -Wall -Wextra -I"${ROOT_DIR}/src" "${CXX_DEFS[@]}" "${TMP_CPP}" -o "${TMP_BIN}"
+TMP_SIG_FILE="${BUILD_CACHE_DIR}/gating-check-1.sig"
+TMP_SIG="$(build_signature "gating-check-1" "$(cat "${TMP_CPP}")")"
+if [[ ! -x "${TMP_BIN}" || ! -f "${TMP_SIG_FILE}" || "$(cat "${TMP_SIG_FILE}")" != "${TMP_SIG}" ]]; then
+    rm -f "${TMP_BIN}"
+    "${CXX}" -std=c++17 -O2 -Wall -Wextra -flto -I"${ROOT_DIR}/src" "${CXX_DEFS[@]}" "${TMP_CPP}" -o "${TMP_BIN}"
+    printf '%s\n' "${TMP_SIG}" > "${TMP_SIG_FILE}"
+fi
 "${TMP_BIN}"
 
 # --- TEST 5: Paired gating must undo cleanly and preserve the material key ---
-HARNESS_CPP=$(mktemp "${TMPDIR:-/tmp}/gating-check-roundtrip-XXXXXX.cpp")
-HARNESS_BIN=$(mktemp "${TMPDIR:-/tmp}/gating-check-roundtrip-XXXXXX")
 cat > "${HARNESS_CPP}" <<'EOF'
 #include <cassert>
 #include <sstream>
@@ -177,14 +223,16 @@ while IFS= read -r -d '' obj; do
   OBJ_FILES+=("${obj}")
 done < <(find "${ROOT_DIR}/src" -maxdepth 1 -name '*.o' ! -name 'main.o' -print0 | sort -z)
 
-(
-  cd "${ROOT_DIR}/src"
-  "${CXX}" -std=c++17 -O2 -Wall -Wextra -I"${ROOT_DIR}/src" "${CXX_DEFS[@]}" "${HARNESS_CPP}" "${OBJ_FILES[@]}" -pthread -o "${HARNESS_BIN}"
-  "${HARNESS_BIN}"
-)
-
-rm -f "${HARNESS_CPP}" "${HARNESS_BIN}"
-HARNESS_CPP=""
-HARNESS_BIN=""
+HARNESS_SIG_FILE="${BUILD_CACHE_DIR}/gating-check-roundtrip.sig"
+HARNESS_SIG="$(build_signature "gating-check-roundtrip" "$(cat "${HARNESS_CPP}")")"
+if [[ ! -x "${HARNESS_BIN}" || ! -f "${HARNESS_SIG_FILE}" || "$(cat "${HARNESS_SIG_FILE}")" != "${HARNESS_SIG}" ]]; then
+    rm -f "${HARNESS_BIN}"
+    (
+      cd "${ROOT_DIR}/src"
+      "${CXX}" -std=c++17 -O2 -Wall -Wextra -flto -I"${ROOT_DIR}/src" "${CXX_DEFS[@]}" "${HARNESS_CPP}" "${OBJ_FILES[@]}" -pthread -o "${HARNESS_BIN}"
+    )
+    printf '%s\n' "${HARNESS_SIG}" > "${HARNESS_SIG_FILE}"
+fi
+"${HARNESS_BIN}"
 
 echo "gating-check-regression testing OK"

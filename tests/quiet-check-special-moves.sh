@@ -27,28 +27,58 @@ case "${ENGINE_BASENAME}" in
     ;;
 esac
 
+BUILD_SIG_DIR="${ROOT_DIR}/.local/build/quiet-check-special-moves"
+BUILD_SIG_FILE="${BUILD_SIG_DIR}/${ENGINE_BASENAME}.sig"
+HARNESS_CPP="${BUILD_SIG_DIR}/quiet-check-special-moves.cpp"
+HARNESS_BIN="${BUILD_SIG_DIR}/quiet-check-special-moves.bin"
+HARNESS_SIG_FILE="${BUILD_SIG_DIR}/${ENGINE_BASENAME}.harness.sig"
+mkdir -p "${BUILD_SIG_DIR}"
+if command -v sha256sum >/dev/null 2>&1; then
+  MAKEFILE_HASH="$(cd "${ROOT_DIR}/src" && sha256sum Makefile | cut -d' ' -f1)"
+elif command -v shasum >/dev/null 2>&1; then
+  MAKEFILE_HASH="$(cd "${ROOT_DIR}/src" && shasum -a 256 Makefile | cut -d' ' -f1)"
+else
+  MAKEFILE_HASH="no-hash-tool"
+fi
+BUILD_SIG="$(printf '%s|%s|%s|%s\n' \
+    "${ENGINE_BASENAME}" \
+    "${CXX}" \
+    "${MAKEFILE_HASH}" \
+    "${CXX_DEFS[*]}")"
+NEEDS_REBUILD=1
+if [[ -f "${BUILD_SIG_FILE}" ]] && [[ "$(cat "${BUILD_SIG_FILE}")" == "${BUILD_SIG}" ]]; then
+  NEEDS_REBUILD=0
+fi
+
 case "${ENGINE_BASENAME}" in
   stockfish)
     # The harness links against the object files in src/. Rebuild the standard
     # object set so the test is independent of any previous largeboard build.
-    make -C "${ROOT_DIR}/src" EXE=stockfish objclean
+    if [[ "${NEEDS_REBUILD}" -eq 1 ]]; then
+      make -C "${ROOT_DIR}/src" EXE=stockfish objclean
+    fi
     make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 EXE=stockfish
     ;;
   stockfish-allvars*)
-    make -C "${ROOT_DIR}/src" EXE=stockfish-allvars objclean
+    if [[ "${NEEDS_REBUILD}" -eq 1 ]]; then
+      make -C "${ROOT_DIR}/src" EXE=stockfish-allvars objclean
+    fi
     make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 largeboards=yes all=yes nnue=yes EXE=stockfish-allvars
     ;;
   stockfish-large*)
-    make -C "${ROOT_DIR}/src" EXE=stockfish-large objclean
+    if [[ "${NEEDS_REBUILD}" -eq 1 ]]; then
+      make -C "${ROOT_DIR}/src" EXE=stockfish-large objclean
+    fi
     make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 largeboards=yes all=yes EXE=stockfish-large
     ;;
   stockfish-vlb*)
-    make -C "${ROOT_DIR}/src" EXE=stockfish-vlb objclean
+    if [[ "${NEEDS_REBUILD}" -eq 1 ]]; then
+      make -C "${ROOT_DIR}/src" EXE=stockfish-vlb objclean
+    fi
     make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 largeboards=yes verylargeboards=yes all=yes nnue=yes EXE=stockfish-vlb
     ;;
 esac
-
-HARNESS_CPP=$(mktemp /tmp/quiet-check-special-moves-XXXXXX.cpp)
+printf '%s\n' "${BUILD_SIG}" > "${BUILD_SIG_FILE}"
 
 cat > "${HARNESS_CPP}" <<'EOF'
 #include <cassert>
@@ -219,16 +249,51 @@ while IFS= read -r -d '' obj; do
   OBJ_FILES+=("${obj}")
 done < <(find "${ROOT_DIR}/src" -maxdepth 1 -name '*.o' ! -name 'main.o' -print0 | sort -z)
 
-TMP_BIN=$(mktemp /tmp/quiet-check-special-moves-XXXXXX)
-trap 'rm -f "${HARNESS_CPP}" "${TMP_BIN}"' EXIT
-(
-  cd "${ROOT_DIR}/src"
-  "${CXX}" -std=c++17 -O2 -Wall -Wextra -flto -I"${ROOT_DIR}/src" "${CXX_DEFS[@]}" "${HARNESS_CPP}" "${OBJ_FILES[@]}" -pthread -o "${TMP_BIN}"
-)
+if command -v sha256sum >/dev/null 2>&1; then
+  HASHER=(sha256sum)
+elif command -v shasum >/dev/null 2>&1; then
+  HASHER=(shasum -a 256)
+else
+  HASHER=()
+fi
+
+hash_text() {
+  if [[ ${#HASHER[@]} -gt 0 ]]; then
+    printf '%s' "$1" | "${HASHER[@]}" | awk '{print $1}'
+  else
+    printf '%s' "$1" | wc -c | awk '{print $1}'
+  fi
+}
+
+object_signature() {
+  local sig
+  sig=$(
+    for obj in "${OBJ_FILES[@]}"; do
+      stat -c '%n %Y %s' "${obj}" 2>/dev/null || stat -f '%N %m %z' "${obj}"
+    done
+  )
+  hash_text "${sig}"
+}
+
+HARNESS_SIG="$(printf '%s|%s|%s|%s|%s|%s\n' \
+    "${ENGINE_BASENAME}" \
+    "${CXX}" \
+    "${MAKEFILE_HASH}" \
+    "${CXX_DEFS[*]}" \
+    "$(object_signature)" \
+    "$(hash_text "$(cat "${HARNESS_CPP}")")")"
+if [[ ! -x "${HARNESS_BIN}" || ! -f "${HARNESS_SIG_FILE}" || "$(cat "${HARNESS_SIG_FILE}")" != "${HARNESS_SIG}" ]]; then
+  rm -f "${HARNESS_BIN}"
+  (
+    cd "${ROOT_DIR}/src"
+    "${CXX}" -std=c++17 -O2 -Wall -Wextra -flto -I"${ROOT_DIR}/src" "${CXX_DEFS[@]}" "${HARNESS_CPP}" "${OBJ_FILES[@]}" -pthread -o "${HARNESS_BIN}"
+  )
+  printf '%s\n' "${HARNESS_SIG}" > "${HARNESS_SIG_FILE}"
+fi
 
 run_case() {
   local which="$1"
-  "${TMP_BIN}" "${which}"
+  "${HARNESS_BIN}" "${which}"
 }
 
 run_case pairdrop
