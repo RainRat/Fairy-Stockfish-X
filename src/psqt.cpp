@@ -310,7 +310,7 @@ void init(const Variant* v) {
       {
           if (std::any_of(pi->steps[0][MODALITY_CAPTURE].begin(), pi->steps[0][MODALITY_CAPTURE].end(), [](const std::pair<const Direction, int>& d) { return dist(d.first) > 1 && !d.second; }))
               score = make_score(mg_value(score) * 4200 / (3500 + mg_value(score)),
-                                 eg_value(score) * 4700 / (3500 + mg_value(score)));
+                                 eg_value(score) * 4700 / (3500 + eg_value(score)));
       }
 
       // Adjust piece values for atomic captures
@@ -352,6 +352,7 @@ void init(const Variant* v) {
 
       // Determine pawn rank
       std::istringstream ss(v->startFen);
+      ss >> std::noskipws;
       unsigned char token;
       Rank rc = v->maxRank;
       Rank pawnRank = RANK_2;

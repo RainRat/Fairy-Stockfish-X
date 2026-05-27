@@ -347,23 +347,17 @@ namespace {
 
 #undef S
 
-  // Map promotion distance on arbitrary board heights into the 8x8-tuned
-  // PassedRank buckets, preserving exact mapping on 8x8.
-  inline int scaled_passed_rank_bucket(int distanceToPromo, Rank maxRank) {
-    int maxDistance = int(maxRank);
-    int clamped = std::clamp(distanceToPromo, 0, maxDistance);
-    return maxDistance > 0
-         ? (int(RANK_8) * (maxDistance - clamped) + maxDistance / 2) / maxDistance
-         : 0;
-  }
-
   inline int passed_rank_bucket(const Position& pos, Color c, Square s) {
     Square promo = pos.promotion_square(c, s);
     if (promo == SQ_NONE)
       return 0;
 
     int distanceToPromo = relative_rank(c, promo, pos.max_rank()) - relative_rank(c, s, pos.max_rank());
-    return scaled_passed_rank_bucket(distanceToPromo, pos.max_rank());
+    int maxDistance = int(pos.max_rank());
+    int clamped = std::clamp(distanceToPromo, 0, maxDistance);
+    return maxDistance > 0
+         ? (int(RANK_8) * (maxDistance - clamped) + maxDistance / 2) / maxDistance
+         : 0;
   }
 
   inline Score mobility_bonus(PieceType pt, int mobility) {
@@ -1014,9 +1008,8 @@ namespace {
     int kingFlankAttack  = popcount(b1) + popcount(b2);
     int kingFlankDefense = popcount(b3);
 
-    kingDanger +=        kingAttackersCount[Them] * kingAttackersWeight[Them]
-                 +       kingAttackersCountInHand[Them] * kingAttackersWeight[Them]
-                 +       kingAttackersCount[Them] * kingAttackersWeightInHand[Them]
+    kingDanger +=        (kingAttackersCount[Them] + kingAttackersCountInHand[Them])
+                       * (kingAttackersWeight[Them] + kingAttackersWeightInHand[Them])
                  + 183 * popcount(kingRing[Us] & (weak | ~pos.board_bb(Us, KING))) * (1 + pos.captures_to_hand() + pos.check_counting())
                  + 148 * popcount(unsafeChecks) * (1 + pos.check_counting())
                  +  98 * popcount(pos.blockers_for_king(Us))
@@ -1051,7 +1044,7 @@ namespace {
     // For drop games, king danger is independent of game phase, but dependent on material density
     if (pos.captures_to_hand() || pos.two_boards())
         score = make_score(mg_value(score) * me->material_density() / 11000,
-                           mg_value(score) * me->material_density() / 11000);
+                           eg_value(score) * me->material_density() / 11000);
 
     if constexpr (T)
         Trace::add(KING, Us, score);
@@ -1812,7 +1805,7 @@ namespace {
         // In every other case use scale factor based on
         // the number of pawns of the strong side reduced if pawns are on a single flank.
         else
-            sf = std::min(sf, 36 + 7 * (pos.count<PAWN>(strongSide) + pos.count<SOLDIER>(strongSide))) - 4 * !pawnsOnBothFlanks;
+            sf = std::min(sf, 36 + 7 * (pos.count<PAWN>(strongSide) + pos.count<SOLDIER>(strongSide)));
 
         // Reduce scale factor in case of pawns being on a single flank
         sf -= 4 * !pawnsOnBothFlanks;
