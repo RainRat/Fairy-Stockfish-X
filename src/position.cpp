@@ -4770,15 +4770,18 @@ bool Position::gives_check(Move m) const {
 
 PotionContext Position::setup_potion_context(Move m, Color us) const {
     PotionContext pc;
-    if (is_gating(m) && gating_type(m) != NO_PIECE_TYPE)
+    bool hasPotion = (is_gating(m) && gating_type(m) != NO_PIECE_TYPE) || (type_of(m) == PROMOTION_POTION);
+    if (hasPotion)
     {
-        Square gs = gating_square(m);
+        Square gs = (type_of(m) == PROMOTION_POTION) ? potion_target_square(m) : gating_square(m);
         if (!is_ok(gs))
         {
             pc.valid = false;
             return pc;
         }
-        pc.potion = potion_type_from_piece(var, gating_type(m));
+        pc.potion = (type_of(m) == PROMOTION_POTION)
+                     ? static_cast<Variant::PotionType>(potion_type(m))
+                     : potion_type_from_piece(var, gating_type(m));
         if (pc.potion != Variant::POTION_TYPE_NB)
         {
             if (!can_cast_potion(us, pc.potion))
