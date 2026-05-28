@@ -2900,22 +2900,7 @@ bool Position::legal(Move m) const {
       if (!(edge_insert_region(us) & to))
           return false;
 
-      int df = int(file_of(from)) - int(file_of(to));
-      int dr = int(rank_of(from)) - int(rank_of(to));
-      if (std::abs(df) + std::abs(dr) != 1)
-          return false;
-
-      bool dirOk = false;
-      if (df == 0 && dr == -1)
-          dirOk = edge_insert_from_top(us) && rank_of(to) == max_rank();
-      else if (df == 0 && dr == 1)
-          dirOk = edge_insert_from_bottom(us) && rank_of(to) == RANK_1;
-      else if (df == 1 && dr == 0)
-          dirOk = edge_insert_from_left(us) && file_of(to) == FILE_A;
-      else if (df == -1 && dr == 0)
-          dirOk = edge_insert_from_right(us) && file_of(to) == max_file();
-
-      if (!dirOk)
+      if (!edge_insert_direction_ok(us, from, to))
           return false;
 
       if (!empty(to) && !push_move(m))
@@ -4274,27 +4259,12 @@ bool Position::pseudo_legal(const Move m) const {
   {
       if (insertMove)
       {
-          int df = int(file_of(from)) - int(file_of(to));
-          int dr = int(rank_of(from)) - int(rank_of(to));
-          if (std::abs(df) + std::abs(dr) != 1)
-              return false;
-
-          bool dirOk = false;
-          if (df == 0 && dr == -1)
-              dirOk = edge_insert_from_top(us) && rank_of(to) == max_rank();
-          else if (df == 0 && dr == 1)
-              dirOk = edge_insert_from_bottom(us) && rank_of(to) == RANK_1;
-          else if (df == 1 && dr == 0)
-              dirOk = edge_insert_from_left(us) && file_of(to) == FILE_A;
-          else if (df == -1 && dr == 0)
-              dirOk = edge_insert_from_right(us) && file_of(to) == max_file();
-
           return   piece_drops()
                 && pc != NO_PIECE
                 && color_of(pc) == dropColor
                 && (edge_insert_types() & type_of(pc))
                 && (edge_insert_region(us) & to)
-                && dirOk
+                && edge_insert_direction_ok(us, from, to)
                 && (!pay_points_to_drop() || st->pointsCount[us] >= var->piecePoints[type_of(pc)])
                 && (can_drop(us, in_hand_piece_type(m))
                     || (two_boards() && allow_virtual_drop(us, type_of(pc))))
@@ -8115,7 +8085,7 @@ Bitboard Position::chased() const {
       int dr = int(rank_of(enemyKing)) - int(rank_of(ourKing));
       if (df == dr || df == -dr)
       {
-          Bitboard kingDiagonalPieces = line_bb(enemyKing, ourKing) & pieces(sideToMove);
+          Bitboard kingDiagonalPieces = Stockfish::line_bb(enemyKing, ourKing) & pieces(sideToMove);
           if ((kingDiagonalPieces & pieces(sideToMove, KING))
               && !more_than_one(kingDiagonalPieces & ~pieces(KING)))
               pins |= kingDiagonalPieces & ~pieces(KING);
@@ -8181,7 +8151,7 @@ Bitboard Position::chased() const {
       Bitboard directAttacks = attacks_from(~sideToMove, movedPiece, to) & pieces(sideToMove);
       // Only new attacks count. This avoids expensive comparison of previous and new attacks.
       if (movedPiece == ROOK || movedPiece == CANNON)
-          directAttacks &= ~line_bb(from, to);
+          directAttacks &= ~Stockfish::line_bb(from, to);
       addChased(to, movedPiece, directAttacks);
   }
 

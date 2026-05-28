@@ -346,13 +346,13 @@ namespace {
                 || !(pos.drop_region(Us, pt) & to))
                 continue;
 
-            if (pos.edge_insert_from_top(Us) && rank_of(to) == pos.max_rank())
+            if (pos.edge_insert_direction_ok(Us, to + SOUTH, to))
                 emit_insert(to + SOUTH, pt);
-            if (pos.edge_insert_from_bottom(Us) && rank_of(to) == RANK_1)
+            if (pos.edge_insert_direction_ok(Us, to + NORTH, to))
                 emit_insert(to + NORTH, pt);
-            if (pos.edge_insert_from_left(Us) && file_of(to) == FILE_A)
+            if (pos.edge_insert_direction_ok(Us, to + EAST, to))
                 emit_insert(to + EAST, pt);
-            if (pos.edge_insert_from_right(Us) && file_of(to) == pos.max_file())
+            if (pos.edge_insert_direction_ok(Us, to + WEST, to))
                 emit_insert(to + WEST, pt);
         }
     }
@@ -756,7 +756,7 @@ namespace {
                                 ? (b & (Type == EVASIONS ? target : (~pos.pieces(Us) | (pos.self_capture(Pt) ? (pos.pieces(Us) & ~pos.pieces(Us, KING)) : Bitboard(0)))) & promotion_zone)
                                 : Bitboard(0);
         Bitboard jumpCaptures = 0;
-        PieceType movePt = Pt == KING ? pos.king_type() : Pt;
+        PieceType movePt = Pt;
         const PieceInfo* pi = pieceMap.get(movePt);
         if (pi->has_universal_hopper())
         {
@@ -1413,8 +1413,6 @@ namespace {
                     continue;
 
                 Square gate = lsb(intersection);
-                if (to == gate)
-                    continue;
 
                 if (!try_append_potion_gating_move<Type>(pos, cur, maxEnd, from, to, mt, base, potion, potionPiece, gate, it->value))
                     return maxEnd;
@@ -1450,13 +1448,17 @@ namespace {
 /// Returns a pointer to the end of the move list.
 
 template<GenType Type>
+inline Color check_and_side(const Position& pos) {
+  assert((Type == EVASIONS) == (bool)pos.evasion_checkers()
+         || (pos.topology_wraps() && Type == NON_EVASIONS && pos.evasion_checkers()));
+  return pos.side_to_move();
+}
+
+template<GenType Type>
 ExtMove* generate(const Position& pos, ExtMove* moveList) {
 
   static_assert(Type != LEGAL, "Unsupported type in generate()");
-  assert((Type == EVASIONS) == (bool)pos.evasion_checkers()
-         || (pos.topology_wraps() && Type == NON_EVASIONS && pos.evasion_checkers()));
-
-  Color us = pos.side_to_move();
+  Color us = check_and_side<Type>(pos);
 
   return us == WHITE ? generate_all<WHITE, Type>(pos, moveList)
                      : generate_all<BLACK, Type>(pos, moveList);
@@ -1466,9 +1468,7 @@ template<GenType Type>
 ExtMove* generate_without_potions(const Position& pos, ExtMove* moveList) {
 
   static_assert(Type != LEGAL, "Unsupported type in generate_without_potions()");
-  assert((Type == EVASIONS) == (bool)pos.evasion_checkers()
-         || (pos.topology_wraps() && Type == NON_EVASIONS && pos.evasion_checkers()));
-  Color us = pos.side_to_move();
+  Color us = check_and_side<Type>(pos);
   return us == WHITE ? generate_all_impl<WHITE, Type>(pos, moveList)
                      : generate_all_impl<BLACK, Type>(pos, moveList);
 }
@@ -1477,9 +1477,7 @@ template<GenType Type>
 ExtMove* append_potions(const Position& pos, ExtMove* listBegin, ExtMove* baseEnd) {
 
   static_assert(Type != LEGAL, "Unsupported type in append_potions()");
-  assert((Type == EVASIONS) == (bool)pos.evasion_checkers()
-         || (pos.topology_wraps() && Type == NON_EVASIONS && pos.evasion_checkers()));
-  Color us = pos.side_to_move();
+  Color us = check_and_side<Type>(pos);
   return us == WHITE ? append_potions_if_any<WHITE, Type>(pos, listBegin, baseEnd)
                      : append_potions_if_any<BLACK, Type>(pos, listBegin, baseEnd);
 }

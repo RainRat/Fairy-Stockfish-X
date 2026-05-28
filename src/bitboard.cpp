@@ -155,18 +155,14 @@ namespace {
     return attack;
   }
 
-  struct SpecialPseudoDirections {
-    const std::map<Direction, int>& riderDirs;
-    const std::map<Direction, int>& skiDirs;
-  };
-
   Bitboard special_pseudo_bb(const PieceInfo* pi, bool initial, MoveModality modality, Square s, Color c,
-                             const SpecialPseudoDirections& dirs) {
+                             const std::map<Direction, int>& riderDirs,
+                             const std::map<Direction, int>& skiDirs) {
     Bitboard pseudo = 0;
 
-    pseudo |= sliding_attack<RIDER>(dirs.riderDirs, s, 0, c);
+    pseudo |= sliding_attack<RIDER>(riderDirs, s, 0, c);
     pseudo |= leap_rider_attacks(pi->leapRider[initial][modality], s, 0, c);
-    pseudo |= ski_sliding_attack(dirs.skiDirs, s, 0, c);
+    pseudo |= ski_sliding_attack(skiDirs, s, 0, c);
     pseudo |= sliding_attack<HOPPER_RANGE>(pi->hopper[initial][modality], s, 0, c);
     pseudo |= universal_hopper_potential(pi->universalHopper[initial][modality], s, c);
 
@@ -188,8 +184,7 @@ namespace {
     return pseudo;
   }
 
-  Bitboard special_leaper_bb(const PieceInfo* pi, bool initial, MoveModality modality, Square s, Color c) {
-    (void)c;
+  Bitboard special_leaper_bb(const PieceInfo* pi, bool initial, MoveModality modality, Square s) {
     Bitboard leaper = 0;
 
     if (pi->griffon[initial][modality])
@@ -692,8 +687,8 @@ void Bitboards::init_pieces() {
                                   break;
                           }
                       }
-                      pseudo |= special_pseudo_bb(pi, initial, modality, s, c, SpecialPseudoDirections{riderDirs, skiDirs});
-                      leaper |= special_leaper_bb(pi, initial, modality, s, c);
+                      pseudo |= special_pseudo_bb(pi, initial, modality, s, c, riderDirs, skiDirs);
+                      leaper |= special_leaper_bb(pi, initial, modality, s);
                   }
               }
           }
@@ -942,32 +937,25 @@ std::shared_ptr<const MagicGeometry> Bitboards::init_magics(File maxFile, Rank m
 #endif
 
 #ifdef PRECOMPUTED_MAGICS
-  init_magic_table<RIDER>(mg->RookTableH.data(), mg->RookMagicsH, RookDirectionsH, maxFile, maxRank, RookMagicHInit);
-  init_magic_table<RIDER>(mg->RookTableV.data(), mg->RookMagicsV, RookDirectionsV, maxFile, maxRank, RookMagicVInit);
-  init_magic_table<RIDER>(mg->BishopTable.data(), mg->BishopMagics, BishopDirections, maxFile, maxRank, BishopMagicInit);
-  init_magic_table<HOPPER>(mg->CannonTableH.data(), mg->CannonMagicsH, RookDirectionsH, maxFile, maxRank, CannonMagicHInit);
-  init_magic_table<HOPPER>(mg->CannonTableV.data(), mg->CannonMagicsV, RookDirectionsV, maxFile, maxRank, CannonMagicVInit);
-  init_magic_table<LAME_LEAPER>(mg->HorseTable.data(), mg->HorseMagics, HorseDirections, maxFile, maxRank, HorseMagicInit);
-  init_magic_table<LAME_LEAPER>(mg->JanggiElephantTable.data(), mg->JanggiElephantMagics, JanggiElephantDirections, maxFile, maxRank, JanggiElephantMagicInit);
-  init_magic_table<HOPPER>(mg->CannonDiagTable.data(), mg->CannonDiagMagics, BishopDirections, maxFile, maxRank, CannonDiagMagicInit);
-  init_magic_table<RIDER, true>(mg->NightriderTable.data(), mg->NightriderMagics, HorseDirections, maxFile, maxRank, NightriderMagicInit);
-  init_magic_table<HOPPER>(mg->GrasshopperTableH.data(), mg->GrasshopperMagicsH, GrasshopperDirectionsH, maxFile, maxRank, GrasshopperMagicHInit);
-  init_magic_table<HOPPER>(mg->GrasshopperTableV.data(), mg->GrasshopperMagicsV, GrasshopperDirectionsV, maxFile, maxRank, GrasshopperMagicVInit);
-  init_magic_table<HOPPER>(mg->GrasshopperTableD.data(), mg->GrasshopperMagicsD, GrasshopperDirectionsD, maxFile, maxRank, GrasshopperMagicDInit);
+  #define SELECT_MAGIC(init) init
 #else
-  init_magic_table<RIDER>(mg->RookTableH.data(), mg->RookMagicsH, RookDirectionsH, maxFile, maxRank, nullptr);
-  init_magic_table<RIDER>(mg->RookTableV.data(), mg->RookMagicsV, RookDirectionsV, maxFile, maxRank, nullptr);
-  init_magic_table<RIDER>(mg->BishopTable.data(), mg->BishopMagics, BishopDirections, maxFile, maxRank, nullptr);
-  init_magic_table<HOPPER>(mg->CannonTableH.data(), mg->CannonMagicsH, RookDirectionsH, maxFile, maxRank, nullptr);
-  init_magic_table<HOPPER>(mg->CannonTableV.data(), mg->CannonMagicsV, RookDirectionsV, maxFile, maxRank, nullptr);
-  init_magic_table<LAME_LEAPER>(mg->HorseTable.data(), mg->HorseMagics, HorseDirections, maxFile, maxRank, nullptr);
-  init_magic_table<LAME_LEAPER>(mg->JanggiElephantTable.data(), mg->JanggiElephantMagics, JanggiElephantDirections, maxFile, maxRank, nullptr);
-  init_magic_table<HOPPER>(mg->CannonDiagTable.data(), mg->CannonDiagMagics, BishopDirections, maxFile, maxRank, nullptr);
-  init_magic_table<RIDER, true>(mg->NightriderTable.data(), mg->NightriderMagics, HorseDirections, maxFile, maxRank, nullptr);
-  init_magic_table<HOPPER>(mg->GrasshopperTableH.data(), mg->GrasshopperMagicsH, GrasshopperDirectionsH, maxFile, maxRank, nullptr);
-  init_magic_table<HOPPER>(mg->GrasshopperTableV.data(), mg->GrasshopperMagicsV, GrasshopperDirectionsV, maxFile, maxRank, nullptr);
-  init_magic_table<HOPPER>(mg->GrasshopperTableD.data(), mg->GrasshopperMagicsD, GrasshopperDirectionsD, maxFile, maxRank, nullptr);
+  #define SELECT_MAGIC(init) nullptr
 #endif
+
+  init_magic_table<RIDER>(mg->RookTableH.data(), mg->RookMagicsH, RookDirectionsH, maxFile, maxRank, SELECT_MAGIC(RookMagicHInit));
+  init_magic_table<RIDER>(mg->RookTableV.data(), mg->RookMagicsV, RookDirectionsV, maxFile, maxRank, SELECT_MAGIC(RookMagicVInit));
+  init_magic_table<RIDER>(mg->BishopTable.data(), mg->BishopMagics, BishopDirections, maxFile, maxRank, SELECT_MAGIC(BishopMagicInit));
+  init_magic_table<HOPPER>(mg->CannonTableH.data(), mg->CannonMagicsH, RookDirectionsH, maxFile, maxRank, SELECT_MAGIC(CannonMagicHInit));
+  init_magic_table<HOPPER>(mg->CannonTableV.data(), mg->CannonMagicsV, RookDirectionsV, maxFile, maxRank, SELECT_MAGIC(CannonMagicVInit));
+  init_magic_table<LAME_LEAPER>(mg->HorseTable.data(), mg->HorseMagics, HorseDirections, maxFile, maxRank, SELECT_MAGIC(HorseMagicInit));
+  init_magic_table<LAME_LEAPER>(mg->JanggiElephantTable.data(), mg->JanggiElephantMagics, JanggiElephantDirections, maxFile, maxRank, SELECT_MAGIC(JanggiElephantMagicInit));
+  init_magic_table<HOPPER>(mg->CannonDiagTable.data(), mg->CannonDiagMagics, BishopDirections, maxFile, maxRank, SELECT_MAGIC(CannonDiagMagicInit));
+  init_magic_table<RIDER, true>(mg->NightriderTable.data(), mg->NightriderMagics, HorseDirections, maxFile, maxRank, SELECT_MAGIC(NightriderMagicInit));
+  init_magic_table<HOPPER>(mg->GrasshopperTableH.data(), mg->GrasshopperMagicsH, GrasshopperDirectionsH, maxFile, maxRank, SELECT_MAGIC(GrasshopperMagicHInit));
+  init_magic_table<HOPPER>(mg->GrasshopperTableV.data(), mg->GrasshopperMagicsV, GrasshopperDirectionsV, maxFile, maxRank, SELECT_MAGIC(GrasshopperMagicVInit));
+  init_magic_table<HOPPER>(mg->GrasshopperTableD.data(), mg->GrasshopperMagicsD, GrasshopperDirectionsD, maxFile, maxRank, SELECT_MAGIC(GrasshopperMagicDInit));
+
+#undef SELECT_MAGIC
 
   if (MagicByBoardSize.size() >= MAX_MAGIC_CACHE_ENTRIES && !MagicCacheLru.empty())
   {
