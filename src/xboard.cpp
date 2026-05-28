@@ -182,7 +182,7 @@ namespace XBoard {
         Square from = from_sq(m), to = to_sq(m);
         if (is_ok(from) && UCI::square(pos, from) == square && !is_pass(m))
         {
-            if (type_of(m) == PROMOTION)
+            if (is_promotion_move(m))
                 promotions |= to;
             else if (pos.capture(m))
                 captures |= to;

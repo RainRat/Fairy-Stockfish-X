@@ -554,6 +554,7 @@ enum MoveType : int {
   INSERT             = 9 << (2 * SQUARE_BITS),
   PULL               = 10 << (2 * SQUARE_BITS),
   SWAP               = 11 << (2 * SQUARE_BITS),
+  PROMOTION_POTION   = 12 << (2 * SQUARE_BITS),
 };
 
 constexpr int MOVE_TYPE_BITS = 4;
@@ -1178,7 +1179,25 @@ inline int from_to(Move m) {
 }
 
 inline PieceType promotion_type(Move m) {
-  return type_of(m) == PROMOTION ? PieceType((m >> (2 * SQUARE_BITS + MOVE_TYPE_BITS)) & (PIECE_TYPE_NB - 1)) : NO_PIECE_TYPE;
+  if (type_of(m) == PROMOTION)
+    return PieceType((m >> (2 * SQUARE_BITS + MOVE_TYPE_BITS)) & (PIECE_TYPE_NB - 1));
+  if (type_of(m) == PROMOTION_POTION) {
+    int choice = (m >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + SQUARE_BITS)) & 3;
+    return choice == 0 ? KNIGHT : (choice == 1 ? BISHOP : (choice == 2 ? ROOK : QUEEN));
+  }
+  return NO_PIECE_TYPE;
+}
+
+inline bool is_promotion_move(Move m) {
+  return type_of(m) == PROMOTION || type_of(m) == PROMOTION_POTION;
+}
+
+inline Square potion_target_square(Move m) {
+  return Square((m >> (2 * SQUARE_BITS + MOVE_TYPE_BITS)) & SQUARE_BIT_MASK);
+}
+
+inline int potion_type(Move m) {
+  return (m >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + SQUARE_BITS + 2)) & 1;
 }
 
 inline PieceType gating_type(Move m) {
@@ -1317,6 +1336,20 @@ constexpr Move make_pull(Square from, Square to, Square pullFrom) {
             + static_cast<uint64_t>(to));
 }
 
+constexpr Move make_promotion_potion(Square from, Square to, PieceType prom_pt, int potion, Square target) {
+  uint64_t prom_val = (prom_pt == KNIGHT ? 0 : (prom_pt == BISHOP ? 1 : (prom_pt == ROOK ? 2 : 3)));
+  uint64_t potion_val = static_cast<uint64_t>(potion);
+  uint64_t target_val = static_cast<uint64_t>(target);
+  return Move(
+      (potion_val << (2 * SQUARE_BITS + MOVE_TYPE_BITS + SQUARE_BITS + 2))
+    + (prom_val << (2 * SQUARE_BITS + MOVE_TYPE_BITS + SQUARE_BITS))
+    + (target_val << (2 * SQUARE_BITS + MOVE_TYPE_BITS))
+    + static_cast<uint64_t>(PROMOTION_POTION)
+    + (static_cast<uint64_t>(from) << SQUARE_BITS)
+    + static_cast<uint64_t>(to)
+  );
+}
+
 constexpr PieceType dropped_piece_type(Move m) {
   return PieceType((m >> (2 * SQUARE_BITS + MOVE_TYPE_BITS)) & (PIECE_TYPE_NB - 1));
 }
@@ -1333,7 +1366,8 @@ inline bool is_ok(Move m) {
   return from_sq(m) != to_sq(m)
       || type_of(m) == PROMOTION
       || type_of(m) == SPECIAL
-      || type_of(m) == CASTLING; // Catch MOVE_NULL and MOVE_NONE, allow stationary castling
+      || type_of(m) == CASTLING
+      || type_of(m) == PROMOTION_POTION; // Catch MOVE_NULL and MOVE_NONE, allow stationary castling and promotion/potions
 }
 
 inline int dist(Direction d) {

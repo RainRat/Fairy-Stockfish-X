@@ -1286,14 +1286,16 @@ namespace {
 
   template<GenType Type>
   inline bool try_append_potion_gating_move(const Position& pos, ExtMove*& cur, ExtMove* maxEnd,
-                                            Square from, Square to, MoveType mt,
-                                            PieceType potionPiece, Square gate, int value) {
+                                            Square from, Square to, MoveType mt, Move base,
+                                            Variant::PotionType potion, PieceType potionPiece, Square gate, int value) {
       if (cur >= maxEnd)
           return false;
 
-      Move gatingMove = mt == NORMAL
-                        ? make_gating<NORMAL>(from, to, potionPiece, gate)
-                        : make_gating<CASTLING>(from, to, potionPiece, gate);
+      Move gatingMove = mt == PROMOTION
+                        ? make_promotion_potion(from, to, promotion_type(base), potion, gate)
+                        : (mt == NORMAL
+                            ? make_gating<NORMAL>(from, to, potionPiece, gate)
+                            : make_gating<CASTLING>(from, to, potionPiece, gate));
 
       // Filter by original Type and legality
       bool isCapture = pos.capture_or_promotion(gatingMove);
@@ -1342,12 +1344,12 @@ namespace {
                 {
                     Move base = it->move;
                     MoveType mt = type_of(base);
-                    if (is_gating(base) || (mt != NORMAL && mt != CASTLING))
+                    if (is_gating(base) || (mt != NORMAL && mt != CASTLING && mt != PROMOTION))
                         continue;
                     Square from = from_sq(base);
                     Square to = to_sq(base);
 
-                    if (!try_append_potion_gating_move<Type>(pos, cur, maxEnd, from, to, mt, potionPiece, gate, it->value))
+                    if (!try_append_potion_gating_move<Type>(pos, cur, maxEnd, from, to, mt, base, potion, potionPiece, gate, it->value))
                         return maxEnd;
                 }
             }
@@ -1383,7 +1385,7 @@ namespace {
                     continue;
 
                 MoveType mt = type_of(base);
-                if (mt != NORMAL && mt != CASTLING)
+                if (mt != NORMAL && mt != CASTLING && mt != PROMOTION)
                     continue;
 
                 Square from = from_sq(base);
@@ -1395,7 +1397,7 @@ namespace {
 
                 PieceType moverType = type_of(mover);
                 // Pure leapers cannot have an intermediate path square.
-                if (mt == NORMAL
+                if ((mt == NORMAL || mt == PROMOTION)
                     && AttackRiderTypes[moverType] == NO_RIDER
                     && moverType != PAWN
                     && moverType != SHOGI_PAWN
@@ -1414,7 +1416,7 @@ namespace {
                 if (to == gate)
                     continue;
 
-                if (!try_append_potion_gating_move<Type>(pos, cur, maxEnd, from, to, mt, potionPiece, gate, it->value))
+                if (!try_append_potion_gating_move<Type>(pos, cur, maxEnd, from, to, mt, base, potion, potionPiece, gate, it->value))
                     return maxEnd;
             }
         }

@@ -258,7 +258,7 @@ inline Disambiguation disambiguation_level(const Position& pos, Move m, Notation
     {
         if (pos.capture(m))
             return FILE_DISAMBIGUATION;
-        if (type_of(m) == PROMOTION && from != to && pos.sittuyin_promotion())
+        if (is_promotion_move(m) && from != to && pos.sittuyin_promotion())
             return SQUARE_DISAMBIGUATION;
     }
 
@@ -358,7 +358,7 @@ inline const std::string move_to_san(Position& pos, Move m, Notation n) {
             san += square(pos, to, n);
 
         // Suffix
-        if (type_of(m) == PROMOTION)
+        if (is_promotion_move(m))
             san += std::string("=") + display_symbol(pos.piece_symbol(make_piece(us, promotion_type(m))));
         else if (type_of(m) == PIECE_PROMOTION)
             san += is_shogi(n) ? std::string("+") : std::string("=") + display_symbol(pos.piece_symbol(make_piece(us, pos.promoted_piece_type(type_of(pos.moved_piece(m))))));

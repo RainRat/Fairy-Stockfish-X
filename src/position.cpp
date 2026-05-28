@@ -2956,7 +2956,7 @@ bool Position::legal(Move m) const {
   if (potCtx.jumpRemoved && (square_bb(to) & potCtx.jumpRemoved))
       return false;
 
-  if (from == to && !(is_pass(m) || is_self_destruct(m) || (type_of(m) == PROMOTION && sittuyin_promotion()) || pureWallMove))
+  if (from == to && !(is_pass(m) || is_self_destruct(m) || (is_promotion_move(m) && sittuyin_promotion()) || pureWallMove))
       return false;
 
   if (st->pendingClaimPass)
@@ -3001,7 +3001,7 @@ bool Position::legal(Move m) const {
   PieceType movePt = type_of(moverPiece);
   PieceType finalMovePt = movePt;
 
-  if (type_of(m) == PROMOTION)
+  if (is_promotion_move(m))
       finalMovePt = promotion_type(m);
   else if (type_of(m) == PIECE_PROMOTION)
       finalMovePt = promoted_piece_type(movePt);
@@ -3014,7 +3014,7 @@ bool Position::legal(Move m) const {
 
   if (   !dropMove
       && type_of(m) != CASTLING
-      && type_of(m) != PROMOTION
+      && !is_promotion_move(m)
       && type_of(m) != PIECE_PROMOTION
       && !is_pass(m))
   {
@@ -3030,13 +3030,13 @@ bool Position::legal(Move m) const {
           finalMovePt = moveMorphType;
   }
 
-  if (type_of(m) == PROMOTION && !promotion_allowed(us, promotion_type(m), to))
+  if (is_promotion_move(m) && !promotion_allowed(us, promotion_type(m), to))
       return false;
   if (type_of(m) == PIECE_PROMOTION && (is_promoted(from) || !promotion_allowed(us, promoted_piece_type(type_of(moved_piece(m))))))
       return false;
-  if (rifleShot && (type_of(m) == PROMOTION || type_of(m) == PIECE_PROMOTION))
+  if (rifleShot && (is_promotion_move(m) || type_of(m) == PIECE_PROMOTION))
       return false;
-  if (!dropMove && type_of(m) != PROMOTION && type_of(m) != PIECE_PROMOTION)
+  if (!dropMove && !is_promotion_move(m) && type_of(m) != PIECE_PROMOTION)
   {
       Piece mover = moved_piece(m);
       Bitboard mandatoryZone = mover == NO_PIECE ? Bitboard(0) : mandatory_promotion_zone(mover);
@@ -3096,7 +3096,7 @@ bool Position::legal(Move m) const {
   }
 
   // Illegal checks
-  if (((!checking_permitted() && !allow_checks()) || (sittuyin_promotion() && type_of(m) == PROMOTION) || (!drop_checks() && dropMove)) && gives_check(m))
+  if (((!checking_permitted() && !allow_checks()) || (sittuyin_promotion() && is_promotion_move(m)) || (!drop_checks() && dropMove)) && gives_check(m))
       return false;
 
   // Optional rule: disallow checkmate by drops.
@@ -3721,7 +3721,7 @@ bool Position::legal(Move m) const {
           pseudoRoyals |= kto;
       else if (!rifleShot && is_ok(from) && (pseudoRoyals & from))
           pseudoRoyals ^= square_bb(from) ^ kto;
-      if (type_of(m) == PROMOTION && (pseudo_royal_types() & promotion_type(m)))
+      if (is_promotion_move(m) && (pseudo_royal_types() & promotion_type(m)))
       {
           if (count(sideToMove, promotion_type(m)) >= pseudo_royal_count())
               // increase in count leads to loss of pseudo-royalty
@@ -3756,7 +3756,7 @@ bool Position::legal(Move m) const {
               pseudoRoyalCandidates |= kto;
           else if (!rifleShot && is_ok(from) && (pseudoRoyalCandidates & from))
               pseudoRoyalCandidates ^= square_bb(from) ^ kto;
-          if (type_of(m) == PROMOTION && (pseudo_royal_types() & promotion_type(m)))
+          if (is_promotion_move(m) && (pseudo_royal_types() & promotion_type(m)))
               pseudoRoyalCandidates |= kto;
           bool allCheck = bool(pseudoRoyalCandidates);
           while (allCheck && pseudoRoyalCandidates)
@@ -3974,7 +3974,7 @@ bool Position::legal(Move m) const {
       else if (!rifleShot)
       {
           PieceType finalPt = movePt;
-          if (type_of(m) == PROMOTION)
+          if (is_promotion_move(m))
               finalPt = promotion_type(m);
           else if (type_of(m) == PIECE_PROMOTION)
               finalPt = promoted_piece_type(movePt);
@@ -4163,7 +4163,7 @@ bool Position::pseudo_legal(const Move m) const {
       && !is_pass(m))
       return false;
 
-  if (from == to && !(is_pass(m) || is_self_destruct(m) || (type_of(m) == PROMOTION && sittuyin_promotion()) || pureWallMove))
+  if (from == to && !(is_pass(m) || is_self_destruct(m) || (is_promotion_move(m) && sittuyin_promotion()) || pureWallMove))
       return false;
 
   if (st->pendingClaimPass)
@@ -4177,11 +4177,11 @@ bool Position::pseudo_legal(const Move m) const {
           return false;
   }
 
-  if (type_of(m) == PROMOTION && !promotion_allowed(us, promotion_type(m), to))
+  if (is_promotion_move(m) && !promotion_allowed(us, promotion_type(m), to))
       return false;
   if (type_of(m) == PIECE_PROMOTION && (is_promoted(from) || !promotion_allowed(us, promoted_piece_type(type_of(pc)))))
       return false;
-  if (!dropMove && type_of(m) != PROMOTION && type_of(m) != PIECE_PROMOTION)
+  if (!dropMove && !is_promotion_move(m) && type_of(m) != PIECE_PROMOTION)
   {
       Bitboard mandatoryZone = pc == NO_PIECE ? Bitboard(0) : mandatory_promotion_zone(pc);
       if ((mandatoryZone & effectiveTo) && !(mandatoryZone & from))
@@ -4643,7 +4643,7 @@ bool Position::gives_check(Move m) const {
       return true;
 
   // Is there a direct check?
-  if (type_of(m) != PROMOTION && type_of(m) != PIECE_PROMOTION && type_of(m) != PIECE_DEMOTION && type_of(m) != CASTLING
+  if (!is_promotion_move(m) && type_of(m) != PIECE_PROMOTION && type_of(m) != PIECE_DEMOTION && type_of(m) != CASTLING
       && !((var->petrifyOnCaptureTypes & type_of(mover)) && capture(m)))
   {
       PieceType pt = type_of(mover);
@@ -4729,6 +4729,7 @@ bool Position::gives_check(Move m) const {
       return false;
 
   case PROMOTION:
+  case PROMOTION_POTION:
       return attacks_bb(sideToMove, promotion_type(m), to, pieces() ^ from) & royalSq;
 
   case PIECE_PROMOTION:
@@ -4770,15 +4771,18 @@ bool Position::gives_check(Move m) const {
 
 PotionContext Position::setup_potion_context(Move m, Color us) const {
     PotionContext pc;
-    if (is_gating(m) && gating_type(m) != NO_PIECE_TYPE)
+    bool hasPotion = (is_gating(m) && gating_type(m) != NO_PIECE_TYPE) || (type_of(m) == PROMOTION_POTION);
+    if (hasPotion)
     {
-        Square gs = gating_square(m);
+        Square gs = (type_of(m) == PROMOTION_POTION) ? potion_target_square(m) : gating_square(m);
         if (!is_ok(gs))
         {
             pc.valid = false;
             return pc;
         }
-        pc.potion = potion_type_from_piece(var, gating_type(m));
+        pc.potion = (type_of(m) == PROMOTION_POTION)
+                     ? static_cast<Variant::PotionType>(potion_type(m))
+                     : potion_type_from_piece(var, gating_type(m));
         if (pc.potion != Variant::POTION_TYPE_NB)
         {
             if (!can_cast_potion(us, pc.potion))
@@ -5061,7 +5065,7 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
 
   if (to == from)
   {
-      assert((type_of(m) == PROMOTION && sittuyin_promotion()) || is_pass(m) || openingSelfRemoval || pureWallMove);
+      assert((is_promotion_move(m) && sittuyin_promotion()) || is_pass(m) || openingSelfRemoval || pureWallMove);
       captured = NO_PIECE;
   }
 
@@ -5421,7 +5425,7 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
       // - irreversible pawn/piece promotions
       // - irreversible pawn moves
       if (   !pureWallMove
-          && (   type_of(m) == PROMOTION
+          && (   is_promotion_move(m)
           || (type_of(m) == PIECE_PROMOTION && !piece_demotion())
           || (    (var->nMoveRuleTypes.get(us) & piece_set(type_of(pc)))
               && !(PseudoMoves[0][us][type_of(pc)][to] & from))))
@@ -5698,9 +5702,9 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
   if (type_of(pc) == PAWN)
   {
       st->rule50 = 0;
-      if (type_of(m) == PROMOTION || type_of(m) == PIECE_PROMOTION)
+      if (is_promotion_move(m) || type_of(m) == PIECE_PROMOTION)
       {
-          Piece promotion = make_piece(us, type_of(m) == PROMOTION ? promotion_type(m) : promoted_piece_type(PAWN));
+          Piece promotion = make_piece(us, is_promotion_move(m) ? promotion_type(m) : promoted_piece_type(PAWN));
           Piece promotedHandPiece = make_piece(us, type_of(promotion));
 
           assert((promotion_zone(pc) & to) || sittuyin_promotion());
@@ -5710,7 +5714,7 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
           remove_piece(to);
           // Preserve exact source piece for variants with multiple promotion pawn types.
           put_piece(promotion, to, true, pc);
-          if (prison_pawn_promotion() && type_of(m) == PROMOTION) {
+          if (prison_pawn_promotion() && is_promotion_move(m)) {
               int addedN = add_to_prison(st->promotionPawn);
               int removedN = remove_from_prison(promotion);
               // Keep prison inventory hash in sync with promotion swap.
@@ -5815,9 +5819,9 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
       // Update pawn hash key
       st->pawnKey ^= (!dropMove ? Zobrist::psq[pc][from] : 0) ^ Zobrist::psq[pc][to];
   }
-  else if (type_of(m) == PROMOTION || type_of(m) == PIECE_PROMOTION)
+  else if (is_promotion_move(m) || type_of(m) == PIECE_PROMOTION)
   {
-      Piece promotion = make_piece(us, type_of(m) == PROMOTION ? promotion_type(m) : promoted_piece_type(type_of(pc)));
+      Piece promotion = make_piece(us, is_promotion_move(m) ? promotion_type(m) : promoted_piece_type(type_of(pc)));
       Piece promotedHandPiece = make_piece(us, type_of(promotion));
 
       st->promotionPawn = piece_on(to);
@@ -5944,7 +5948,7 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
       && captured != NO_PIECE
       && !dropMove
       && type_of(m) != CASTLING
-      && type_of(m) != PROMOTION
+      && !is_promotion_move(m)
       && type_of(m) != PIECE_PROMOTION
       && !is_pass(m))
   {
@@ -5957,7 +5961,7 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
 
   if (   !dropMove
       && type_of(m) != CASTLING
-      && type_of(m) != PROMOTION
+      && !is_promotion_move(m)
       && type_of(m) != PIECE_PROMOTION
       && !is_pass(m))
   {
@@ -6504,7 +6508,7 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
                                     : false;
           st->forcedJumpStep = st->previous->forcedJumpStep;
       }
-      else if (jumpCapsq != SQ_NONE && type_of(m) != PROMOTION && type_of(m) != PIECE_PROMOTION
+      else if (jumpCapsq != SQ_NONE && !is_promotion_move(m) && type_of(m) != PIECE_PROMOTION
             && piece_on(moverSq) != NO_PIECE
             && color_of(piece_on(moverSq)) == us)
       {
@@ -6603,7 +6607,7 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
           st->countingPly = 2 * count<ALL_PIECES>() - 1;
       }
 
-      if ((!st->countingLimit || ((captured || type_of(m) == PROMOTION) && count<ALL_PIECES>(sideToMove) == 1)) && count_limit(sideToMove))
+      if ((!st->countingLimit || ((captured || is_promotion_move(m)) && count<ALL_PIECES>(sideToMove) == 1)) && count_limit(sideToMove))
       {
           st->countingLimit = 2 * count_limit(sideToMove);
           st->countingPly = counting_rule() == ASEAN_COUNTING || count<ALL_PIECES>(sideToMove) > 1 ? 0 : 2 * count<ALL_PIECES>();
@@ -6687,7 +6691,7 @@ void Position::undo_move(Move m) {
                             && !st->pass;
 
   assert(is_drop_move(m) || empty(from) || type_of(m) == CASTLING || is_gating(m)
-         || (type_of(m) == PROMOTION && sittuyin_promotion())
+         || (is_promotion_move(m) && sittuyin_promotion())
          || is_pass(m)
          || pullMove
          || swapMove
@@ -6820,7 +6824,7 @@ void Position::undo_move(Move m) {
       commit_piece(make_piece(color_of(st->captured.piece), st->capturedGatingType), file_of(to));
   }
 
-  if (type_of(m) == PROMOTION)
+  if (is_promotion_move(m))
   {
       assert((promotion_zone(st->promotionPawn) & to) || sittuyin_promotion());
       Piece promotedPiece = piece_on(moverSq);
@@ -6885,7 +6889,7 @@ void Position::undo_move(Move m) {
               put_piece(st->dead.piece, from, st->dead.promoted, st->dead.unpromoted);
               pc = piece_on(from);
           }
-          else if (st->dead.piece && type_of(m) != PROMOTION && type_of(m) != PIECE_PROMOTION)
+          else if (st->dead.piece && !is_promotion_move(m) && type_of(m) != PIECE_PROMOTION)
           {
               if (st->deadSquares & moverSq)
               {
@@ -7586,7 +7590,7 @@ bool Position::is_optional_game_end(Value& result, int ply, int countStarted) co
   {
       bool promotionsOnly = true;
       for (const auto& m : MoveList<LEGAL>(*this))
-          if (type_of(m) != PROMOTION)
+          if (!is_promotion_move(m))
           {
               promotionsOnly = false;
               break;
