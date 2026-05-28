@@ -1612,6 +1612,9 @@ inline bool Position::edge_insert_from_right(Color c) const {
 }
 
 inline bool Position::edge_insert_direction_ok(Color us, Square from, Square to) const {
+  if (!is_ok(from) || !is_ok(to))
+      return false;
+
   int df = int(file_of(from)) - int(file_of(to));
   int dr = int(rank_of(from)) - int(rank_of(to));
   if (std::abs(df) + std::abs(dr) != 1)
