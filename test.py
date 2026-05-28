@@ -2169,5 +2169,24 @@ stepwisePushing = true
                 sf.set_option("VariantPath", str(path))
             os.remove(temp_name)
 
+    def test_spell_chess(self):
+        # 1. Verification of promotion potion moves and hands
+        fen_promo = "7k/P7/8/8/8/8/8/K7[F] w - - 0 1"
+        next_fen = sf.get_fen("spell-chess", fen_promo, ["a7a8q"])
+        self.assertEqual(next_fen, "Q6k/8/8/8/8/8/8/K7[F] b - - 0 1")
+
+        # 2. Frozen attackers block castling?
+        # White commoner e1, rook h1, enemy king on e8. Enemy bishop at d4 controls f2.
+        # Without freezing, White cannot castle e1g1.
+        fen_freeze_test = "4k3/8/8/8/3b4/8/8/R3K2R[F] w K - 0 1"
+        
+        # Test 2a: Dropping freeze potion on d4 AND castling e1g1 in the same turn (double move) should be legal
+        moves = sf.legal_moves("spell-chess", fen_freeze_test, [])
+        self.assertIn("f@d4,e1g1", moves, "Should be allowed to castle by freezing the attacker in the same turn")
+
+        # Test 2b: Castling e1g1 on its own without freezing the attacker first should NOT be legal
+        self.assertNotIn("e1g1", moves, "Should not be allowed to castle through unfrozen attacker on its own")
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)
+

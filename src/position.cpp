@@ -6019,6 +6019,22 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
       }
   }
 
+  if (type_of(m) == PROMOTION_POTION && potCtx.potion != Variant::POTION_TYPE_NB)
+  {
+      PieceType potionPiece = potion_piece(potCtx.potion);
+      if (potionPiece != NO_PIECE_TYPE)
+      {
+          Piece gating_piece = make_piece(us, potionPiece);
+          int oldCount = pieceCountInHand[us][potionPiece];
+          remove_from_hand(gating_piece);
+          int newCount = pieceCountInHand[us][potionPiece];
+          xor_in_hand_count(k, gating_piece, oldCount, newCount);
+
+          if (Eval::useNNUE)
+              append_dirty(st, gating_piece, SQ_NONE, SQ_NONE, gating_piece, pieceCountInHand[us][potionPiece]);
+      }
+  }
+
   // Musketeer gating
   if(commit_gates() && !rifleShot){
       {
@@ -6737,6 +6753,17 @@ void Position::undo_move(Move m) {
               if (gating_from_hand())
                   add_to_hand(gating_piece);
           }
+      }
+  }
+
+  if (type_of(m) == PROMOTION_POTION)
+  {
+      Variant::PotionType potion = static_cast<Variant::PotionType>(potion_type(m));
+      PieceType potionPiece = potion_piece(potion);
+      if (potionPiece != NO_PIECE_TYPE)
+      {
+          Piece gating_piece = make_piece(us, potionPiece);
+          add_to_hand(gating_piece);
       }
   }
 

@@ -213,10 +213,8 @@ namespace {
 
 
   template<GenType Type>
-  bool potion_move_matches(const Position& pos, Move m, bool isCapture) {
-      return !((Type == CAPTURES && !isCapture)
-            || (Type == QUIETS && isCapture)
-            || (Type == QUIET_CHECKS && (isCapture || !pos.gives_check(m)))
+  bool potion_move_matches(const Position& pos, Move m, [[maybe_unused]] bool isCapture) {
+      return !((Type == QUIET_CHECKS && !pos.gives_check(m))
             || !pos.legal(m));
   }
 
