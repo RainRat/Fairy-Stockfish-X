@@ -38,6 +38,7 @@ tests/*.exp
 src/*.log
 src/*.epd
 src/*.txt
+.local/
 
 # IDEs
 .vscode
