@@ -843,7 +843,15 @@ private:
       uint8_t special;
   };
 
+  struct HopperMoveDetails {
+      Square primaryCaptureSq;
+      Bitboard locustAllMask;
+      bool isValid;
+  };
+
   inline HopperSquareProps get_hopper_square_props(Square s, Bitboard occupied, Bitboard ownPieces, Piece pc) const;
+
+  inline HopperMoveDetails resolve_hopper_move_details(Square from, Square to, Bitboard occupied) const;
 
   inline bool is_valid_hopper_destination(const PieceInfo::HopperProfile& profile, int hurdlesHit, int distToFirstHurdle, int distFromLastHurdle) const;
 
@@ -4210,23 +4218,20 @@ inline bool Position::capture_or_promotion(Move m) const {
   assert(is_ok(m));
   return type_of(m) == PROMOTION || capture(m);
 }
-
-inline Square Position::jump_capture_square(Square from, Square to, Bitboard occupied) const {
+inline Position::HopperMoveDetails Position::resolve_hopper_move_details(Square from, Square to, Bitboard occupied) const {
   assert(is_ok(from));
   assert(is_ok(to));
-  // `occupied` is the board occupancy for the position being analyzed, not a
-  // hypothetical occupancy after moving the piece off `from` onto `to`.
+  HopperMoveDetails details = { SQ_NONE, 0, false };
 
   Piece mover = piece_on(from);
   if (mover == NO_PIECE || (occupied & square_bb(to)))
-      return SQ_NONE;
+      return details;
 
   PieceType pt = type_of(mover);
   PieceType movePt = effective_piece_type(pt);
   const PieceInfo* pi = pieceMap.get(movePt);
   Color us = color_of(mover);
 
-  // 1. Universal Hopper with locust capture
   if (pi->has_universal_hopper())
   {
       const bool usesGenericPawnLikeInitialMoveHelper =
@@ -4300,7 +4305,7 @@ inline Square Position::jump_capture_square(Square from, Square to, Bitboard occ
                           distFromLastHurdle++;
                       }
                       else if (((profile.hurdleSpecialTypes & props.special) != 0) || (uint64_t(profile.hurdlePieceTypes & props.pcSet) != 0))
-                          {
+                      {
                               if (profile.captureMode == PieceInfo::CAPTURE_LOCUST_ALL
                                   && props.isFriendly
                                   && !self_capture(movePt))
@@ -4378,8 +4383,11 @@ inline Square Position::jump_capture_square(Square from, Square to, Bitboard occ
                                       if (j == dist - 1
                                           && totalHurdles >= profile.hurdlesMin && totalHurdles <= profile.hurdlesMax
                                           && hurdleDistance >= profile.preMin && hurdleDistance <= profile.preMax)
-                                          return hurdleScan;
-                                      // Continue scanning: EQUI_STOPPER can require multiple hurdles.
+                                      {
+                                          details.primaryCaptureSq = hurdleScan;
+                                          details.isValid = true;
+                                          goto populate_locust_mask;
+                                      }
                                       continue;
                                   }
                                   break;
@@ -4391,30 +4399,94 @@ inline Square Position::jump_capture_square(Square from, Square to, Bitboard occ
                       }
                       else if (is_valid_hopper_destination(profile, hurdlesHit, distToFirstHurdle, distFromLastHurdle))
                       {
+                          Square primary = SQ_NONE;
                           if (profile.captureMode == PieceInfo::CAPTURE_LOCUST_LAST)
                           {
                               if (lastHurdleSq != SQ_NONE
                                   && lastHurdleFriendly
                                   && !self_capture(movePt))
-                                  return SQ_NONE;
-                              return lastHurdleSq;
+                                  primary = SQ_NONE;
+                              else
+                                  primary = lastHurdleSq;
                           }
-                          if (firstHurdleSq != SQ_NONE
-                              && firstHurdleFriendly
-                              && !self_capture(movePt))
-                              return SQ_NONE;
-                          return firstHurdleSq; // locust_all or locust_first
+                          else
+                          {
+                              if (firstHurdleSq != SQ_NONE
+                                  && firstHurdleFriendly
+                                  && !self_capture(movePt))
+                                  primary = SQ_NONE;
+                              else
+                                  primary = firstHurdleSq;
+                          }
+                          
+                          if (primary != SQ_NONE) {
+                              details.primaryCaptureSq = primary;
+                              details.isValid = true;
+                              goto populate_locust_mask;
+                          }
                       }
                       break;
                   }
               }
               if (invalidProfile)
                   continue;
+
+              continue;
+
+          populate_locust_mask:
+              if (profile.captureMode == PieceInfo::CAPTURE_LOCUST_ALL)
+              {
+                  int limit = (profile.equiRule == PieceInfo::EQUI_STOPPER) ? (2 * dist) : dist;
+                  Square cur = from;
+                  for (int i = 0; i < limit; ++i)
+                  {
+                      Square next = SQ_NONE;
+                      if (wraps)
+                          wrapped_destination_square(cur, df, dr, max_file(), max_rank(), wrapFile, wrapRank, next);
+                      else
+                          next = cur + dir;
+                      
+                      cur = next;
+                      if (cur == details.primaryCaptureSq) continue;
+                      
+                      Bitboard sBB = square_bb(cur);
+                      bool isOccupied = (byTypeBB[ALL_PIECES] & sBB);
+                      bool isWall = (st->wallSquares & sBB);
+                      bool isDead = (st->deadSquares & sBB);
+                      if (!isOccupied && !isWall && !isDead) continue;
+                      
+                      Piece hurdlePc = cur == to ? mover : piece_on(cur);
+                      PieceType hurdlePt = type_of(hurdlePc);
+                      PieceSet pcSet = (hurdlePt == NO_PIECE_TYPE || !isOccupied) ? NO_PIECE_SET : piece_set(hurdlePt);
+                      if (isWall) pcSet |= PieceSet(1ULL << 62);
+                      if (isDead) pcSet |= PieceSet(1ULL << 61);
+                      
+                      bool isFriendly = isOccupied && (color_of(hurdlePc) == us);
+                      bool isEnemy = isOccupied && !isFriendly;
+                      
+                      uint8_t special = (isEnemy ? PieceInfo::HopperProfile::ENEMY : 0)
+                                      | (isFriendly ? PieceInfo::HopperProfile::FRIENDLY : 0)
+                                      | (isWall ? PieceInfo::HopperProfile::WALL : 0)
+                                      | (isDead ? PieceInfo::HopperProfile::DEAD : 0);
+                      
+                      if (((profile.transparentSpecialTypes & special) != 0) || (uint64_t(profile.transparentPieceTypes & pcSet) != 0))
+                          continue;
+                      
+                      if (((profile.hurdleSpecialTypes & special) != 0) || (uint64_t(profile.hurdlePieceTypes & pcSet) != 0))
+                      {
+                          details.locustAllMask |= cur;
+                      }
+                  }
+              }
+              return details;
           }
       }
   }
+  return details;
+}
 
-  return SQ_NONE;
+inline Square Position::jump_capture_square(Square from, Square to, Bitboard occupied) const {
+  return resolve_hopper_move_details(from, to, occupied).primaryCaptureSq;
 }
 
 inline Square Position::jump_capture_square(Square from, Square to) const {
