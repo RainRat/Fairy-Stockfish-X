@@ -1349,6 +1349,18 @@ namespace {
                     Square from = from_sq(base);
                     Square to = to_sq(base);
 
+                    if (gate == to)
+                        continue;
+                    Piece mover = pos.piece_on(from);
+                    if (mover != NO_PIECE)
+                    {
+                        if (pos.freeze_squares() & from)
+                            continue;
+                        PieceType moverType = type_of(mover);
+                        if ((between_bb(from, to, moverType) & ~square_bb(to)) & gate)
+                            continue;
+                    }
+
                     if (!try_append_potion_gating_move<Type>(pos, cur, maxEnd, from, to, mt, base, potion, potionPiece, gate, it->value))
                         return maxEnd;
                 }
@@ -1413,6 +1425,17 @@ namespace {
                     continue;
 
                 Square gate = lsb(intersection);
+
+                bool moveOk = false;
+                {
+                    ScopedSpellContext revalGuard(Bitboard(0), square_bb(gate));
+                    bool isInitial = pos.not_moved_pieces(Us) & from;
+                    Bitboard okSquares = isInitial ? (pos.moves_from<true>(Us, moverType, from) | pos.attacks_from<true>(Us, moverType, from))
+                                                   : (pos.moves_from<false>(Us, moverType, from) | pos.attacks_from<false>(Us, moverType, from));
+                    moveOk = bool(okSquares & to);
+                }
+                if (!moveOk)
+                    continue;
 
                 if (!try_append_potion_gating_move<Type>(pos, cur, maxEnd, from, to, mt, base, potion, potionPiece, gate, it->value))
                     return maxEnd;

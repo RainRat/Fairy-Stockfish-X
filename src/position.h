@@ -327,6 +327,7 @@ public:
   bool surround_capture_edge() const;
   Bitboard surround_capture_max_region() const;
   Bitboard surround_capture_hostile_region() const;
+  Bitboard compute_surround_capture_mask(Square moverSq, Bitboard usPieces, Bitboard themPieces, Bitboard occupied) const;
   EndgameEval endgame_eval() const;
   Bitboard double_step_region(Color c) const;
   Bitboard double_step_region(Color c, PieceType pt) const;
@@ -345,6 +346,7 @@ public:
   PieceSet castling_rook_pieces(Color c) const;
   PieceType king_type() const;
   PieceType royal_piece_type(Color c) const;
+  bool is_actual_runtime_royal(Color c, PieceType pt) const;
   Square royal_square(Color c) const;
   PieceType nnue_king() const;
   Square nnue_king_square(Color c) const;
@@ -1323,6 +1325,12 @@ inline PieceType Position::royal_piece_type(Color c) const {
       return pt;
   // Fallback: no uniquely identifiable royal found for this side.
   return NO_PIECE_TYPE;
+}
+
+inline bool Position::is_actual_runtime_royal(Color c, PieceType pt) const {
+  if (pt == NO_PIECE_TYPE)
+      return false;
+  return pt == royal_piece_type(c) || allow_checks() || flag_piece(c) == pt;
 }
 
 inline Square Position::royal_square(Color c) const {
