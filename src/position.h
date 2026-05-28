@@ -545,28 +545,35 @@ public:
   CheckCount checks_remaining(Color c) const;
   MaterialCounting material_counting() const;
 
+  const MagicGeometry* magic_geometry() const {
+    const Variant* v = variant();
+    return (v && v->magicGeometry) ? v->magicGeometry.get() : current_magic_geometry;
+  }
+
   template<PieceType Pt>
   Bitboard attacks_bb(Square s, Bitboard occupied = 0) const {
-    return Stockfish::attacks_bb<Pt>(s, occupied);
+    return Stockfish::attacks_bb<Pt>(s, occupied, magic_geometry());
   }
 
   template<RiderType R>
   Bitboard rider_attacks_bb(Square s, Bitboard occupied = 0) const {
-    return Stockfish::rider_attacks_bb<R>(s, occupied);
+    return Stockfish::rider_attacks_bb<R>(s, occupied, magic_geometry());
   }
 
   Bitboard rider_attacks_bb(RiderType R, Square s, Bitboard occupied = 0) const {
-    return Stockfish::rider_attacks_bb(R, s, occupied);
+    return Stockfish::rider_attacks_bb(R, s, occupied, magic_geometry());
   }
 
   Bitboard attacks_bb(Color c, PieceType pt, Square s, Bitboard occupied) const {
-    return Stockfish::attacks_bb(c, pt, s, occupied);
+    return Stockfish::attacks_bb(c, pt, s, occupied, magic_geometry());
   }
 
   template <bool Initial=false>
   Bitboard moves_bb(Color c, PieceType pt, Square s, Bitboard occupied) const {
-    return Stockfish::moves_bb<Initial>(c, pt, s, occupied);
+    return Stockfish::moves_bb<Initial>(c, pt, s, occupied, magic_geometry());
   }
+
+  Bitboard checker_evasion_targets(Color us, Square royalSq, Square checksq) const;
 
   CountingRule counting_rule() const;
 
@@ -2985,6 +2992,25 @@ inline Bitboard Position::wrapped_tuple_targets(const std::vector<std::pair<int,
   return out;
 }
 
+template <typename WalkPolicy>
+static inline Bitboard wrapped_ray_walk(Square sq, Bitboard occupied, File maxFile, Rank maxRank, bool wrapFile, bool wrapRank, int stepF, int stepR, WalkPolicy&& policy) {
+  Square current = sq;
+  Bitboard out = 0;
+  int count = 0;
+  for (;;) {
+      Square next = SQ_NONE;
+      if (!wrapped_destination_square(current, stepF, stepR, maxFile, maxRank, wrapFile, wrapRank, next))
+          break;
+      if (next == sq)
+          break;
+      const bool blocked = bool(occupied & square_bb(next));
+      if (policy(next, blocked, ++count, out))
+          break;
+      current = next;
+  }
+  return out;
+}
+
 inline Bitboard Position::wrapped_tuple_rider_targets(const std::vector<PieceInfo::TupleRay>& rays,
                                                       Color c, Square sq, Bitboard occupied,
                                                       File maxFile, Rank maxRank,
@@ -2995,26 +3021,12 @@ inline Bitboard Position::wrapped_tuple_rider_targets(const std::vector<PieceInf
   {
       const int stepR = c == WHITE ? ray.dr : -ray.dr;
       const int stepF = c == WHITE ? ray.df : -ray.df;
-      Square current = sq;
-      int count = 0;
-      for (;;)
-      {
-          Square next = SQ_NONE;
-          if (!wrapped_destination_square(current, stepF, stepR, maxFile, maxRank, wrapFile, wrapRank, next))
-              break;
-          if (next == sq)
-              break;
-
-          const bool blocked = bool(occupied & square_bb(next));
-          if (!quietMode || !blocked)
-              out |= square_bb(next);
-
-          current = next;
-          if (ray.limit > 0 && ++count >= ray.limit)
-              break;
-          if (blocked)
-              break;
-      }
+      out |= wrapped_ray_walk(sq, occupied, maxFile, maxRank, wrapFile, wrapRank, stepF, stepR,
+          [&](Square next, bool blocked, int count, Bitboard& out_bb) {
+              if (!quietMode || !blocked)
+                  out_bb |= square_bb(next);
+              return blocked || (ray.limit > 0 && count >= ray.limit);
+          });
   }
   return out;
 }
@@ -3031,38 +3043,18 @@ inline Bitboard Position::wrapped_slider_targets(const std::map<Direction, int>&
       if (!dr && !df)
           continue;
 
-      Square current = sq;
-      int steps = 0;
       const int minDistance = slider_min_distance(limit);
       const int maxDistance = slider_max_distance(limit);
-      for (;;)
-      {
-          Square next = SQ_NONE;
-          if (!wrapped_destination_square(current, df, dr, maxFile, maxRank, wrapFile, wrapRank, next))
-              break;
-          if (next == sq)
-              break;
-
-          ++steps;
-          const bool beyondMin = steps >= minDistance;
-          const bool beyondMax = maxDistance > 0 && steps >= maxDistance;
-          const bool blocked = bool(occupied & square_bb(next));
-
-          if (beyondMin)
-          {
-              if (quietMode)
-              {
-                  if (!blocked)
-                      out |= square_bb(next);
+      out |= wrapped_ray_walk(sq, occupied, maxFile, maxRank, wrapFile, wrapRank, df, dr,
+          [&](Square next, bool blocked, int count, Bitboard& out_bb) {
+              const bool beyondMin = count >= minDistance;
+              const bool beyondMax = maxDistance > 0 && count >= maxDistance;
+              if (beyondMin) {
+                  if (!quietMode || !blocked)
+                      out_bb |= square_bb(next);
               }
-              else
-                  out |= square_bb(next);
-          }
-
-          if (blocked || beyondMax)
-              break;
-          current = next;
-      }
+              return blocked || beyondMax;
+          });
   }
   return out;
 }
@@ -3079,41 +3071,33 @@ inline Bitboard Position::wrapped_hopper_targets(const std::map<Direction, int>&
       if (!dr && !df)
           continue;
 
-      Square current = sq;
       bool hurdle = false;
-      int count = 0;
+      int hopper_count = 0;
       const int minDistance = slider_min_distance(limit);
       const int maxDistance = slider_max_distance(limit);
-      for (;;)
-      {
-          Square next = SQ_NONE;
-          if (!wrapped_destination_square(current, df, dr, maxFile, maxRank, wrapFile, wrapRank, next))
-              break;
-          if (next == sq)
-              break;
-
-          const bool blocked = bool(occupied & square_bb(next));
-          if (hurdle)
-          {
-              ++count;
-              if (count >= minDistance)
+      out |= wrapped_ray_walk(sq, occupied, maxFile, maxRank, wrapFile, wrapRank, df, dr,
+          [&](Square next, bool blocked, int /*count*/, Bitboard& out_bb) {
+              if (hurdle)
               {
-                  if (!quietMode || !blocked)
-                      out |= square_bb(next);
+                  ++hopper_count;
+                  if (hopper_count >= minDistance)
+                  {
+                      if (!quietMode || !blocked)
+                          out_bb |= square_bb(next);
+                  }
+                  if (maxDistance > 0 && hopper_count >= maxDistance)
+                      return true; // Stop
               }
-              if (maxDistance > 0 && count >= maxDistance)
-                  break;
-          }
 
-          if (blocked)
-          {
-              if (!hurdle)
-                  hurdle = true;
-              else
-                  break;
-          }
-          current = next;
-      }
+              if (blocked)
+              {
+                  if (!hurdle)
+                      hurdle = true;
+                  else
+                      return true; // Stop
+              }
+              return false; // Continue
+          });
   }
   return out;
 }
@@ -3182,26 +3166,12 @@ inline Bitboard Position::wrapped_leap_rider_targets(const std::map<Direction, i
       if (!dr && !df)
           continue;
 
-      Square current = sq;
-      int count = 0;
-      for (;;)
-      {
-          Square next = SQ_NONE;
-          if (!wrapped_destination_square(current, df, dr, maxFile, maxRank, wrapFile, wrapRank, next))
-              break;
-          if (next == sq)
-              break;
-
-          const bool blocked = bool(occupied & square_bb(next));
-          if (!quietMode || !blocked)
-              out |= square_bb(next);
-
-          if (limit > 0 && ++count >= limit)
-              break;
-          if (blocked)
-              break;
-          current = next;
-      }
+      out |= wrapped_ray_walk(sq, occupied, maxFile, maxRank, wrapFile, wrapRank, df, dr,
+          [&](Square next, bool blocked, int count, Bitboard& out_bb) {
+              if (!quietMode || !blocked)
+                  out_bb |= square_bb(next);
+              return blocked || (limit > 0 && count >= limit);
+          });
   }
   return out;
 }

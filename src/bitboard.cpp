@@ -138,6 +138,7 @@ namespace {
     Bitboard attack = 0;
 
     for (auto const& [d, profile] : profiles) {
+      (void)profile;
       Direction dir = (c == WHITE ? d : -d);
       auto [stepR, stepF] = decode_direction(dir);
       const int maxRaySteps = SQUARE_NB - 1;
@@ -529,20 +530,12 @@ Bitboard rider_attacks_bb(
 }
 #endif
 
-Bitboard leap_rider_attacks_bb(PieceType pt, Color c, Square s, Bitboard occupied) {
-  return leap_rider_attacks(pieceMap.get(pt)->leapRider[0][MODALITY_CAPTURE], s, occupied, c);
-}
-
-Bitboard leap_rider_moves_bb(PieceType pt, bool initial, Color c, Square s, Bitboard occupied) {
-  return leap_rider_attacks(pieceMap.get(pt)->leapRider[initial][MODALITY_QUIET], s, occupied, c);
-}
-
-Bitboard tuple_rider_attacks_bb(PieceType pt, Color c, Square s, Bitboard occupied) {
-  return tuple_rider_attacks(pieceMap.get(pt)->tupleSlider[0][MODALITY_CAPTURE], s, occupied, c);
-}
-
-Bitboard tuple_rider_moves_bb(PieceType pt, bool initial, Color c, Square s, Bitboard occupied) {
-  return tuple_rider_attacks(pieceMap.get(pt)->tupleSlider[initial][MODALITY_QUIET], s, occupied, c);
+Bitboard custom_rider_attacks(PieceType pt, bool initial, bool isCapture, Color c, Square s, Bitboard occupied, bool isTuple) {
+  MoveModality m = isCapture ? MODALITY_CAPTURE : MODALITY_QUIET;
+  if (isTuple)
+      return tuple_rider_attacks(pieceMap.get(pt)->tupleSlider[initial][m], s, occupied, c);
+  else
+      return leap_rider_attacks(pieceMap.get(pt)->leapRider[initial][m], s, occupied, c);
 }
 
 Bitboard tuple_rider_between_bb(PieceType pt, Square s1, Square s2) {

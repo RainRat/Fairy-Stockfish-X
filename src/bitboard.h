@@ -207,10 +207,7 @@ extern Bitboard LeaperMoves[2][COLOR_NB][PIECE_TYPE_NB][SQUARE_NB];
 extern Bitboard BoardSizeBB[FILE_NB][RANK_NB];
 extern RiderType AttackRiderTypes[PIECE_TYPE_NB];
 extern RiderType MoveRiderTypes[2][PIECE_TYPE_NB];
-Bitboard leap_rider_attacks_bb(PieceType pt, Color c, Square s, Bitboard occupied);
-Bitboard leap_rider_moves_bb(PieceType pt, bool initial, Color c, Square s, Bitboard occupied);
-Bitboard tuple_rider_attacks_bb(PieceType pt, Color c, Square s, Bitboard occupied);
-Bitboard tuple_rider_moves_bb(PieceType pt, bool initial, Color c, Square s, Bitboard occupied);
+Bitboard custom_rider_attacks(PieceType pt, bool initial, bool isCapture, Color c, Square s, Bitboard occupied, bool isTuple);
 Bitboard tuple_rider_between_bb(PieceType pt, Square s1, Square s2);
 inline Square lsb(Bitboard b);
 
@@ -306,34 +303,8 @@ inline Bitboard safe_destination_tuple(Square s, int dr, int df) {
   return square_bb(make_square(File(f), Rank(r)));
 }
 
-inline Bitboard rose_attacks_bb(Square from, Bitboard occupied, const MagicGeometry* /*mg*/ = current_magic_geometry) {
-  Bitboard attack = 0;
-
-  for (int start = 0; start < 8; ++start)
-      for (int turn : {-1, 1})
-      {
-          Square current = from;
-          int index = start;
-          for (int leg = 0; leg < 7; ++leg)
-          {
-              Bitboard dst = safe_destination_tuple(current, RoseSteps[index].first, RoseSteps[index].second);
-              if (!dst)
-                  break;
-              Square to = lsb(dst);
-              attack |= dst;
-              if (occupied & square_bb(to))
-                  break;
-              current = to;
-              index = (index + turn + 8) % 8;
-          }
-      }
-
-  return attack;
-}
-
-inline Bitboard rose_between_union_bb(Square from, Square to, Bitboard occupied) {
-  Bitboard pathUnion = 0;
-
+template <typename Callback>
+inline void walk_rose_paths(Square from, Callback&& callback) {
   for (int start = 0; start < 8; ++start)
       for (int turn : {-1, 1})
       {
@@ -347,51 +318,48 @@ inline Bitboard rose_between_union_bb(Square from, Square to, Bitboard occupied)
                   break;
               Square next = lsb(dst);
               path |= dst;
-              if (next == to)
-              {
-                  pathUnion |= path;
-                  break;
-              }
-              if (occupied & square_bb(next))
+              if (callback(path, dst, next))
                   break;
               current = next;
               index = (index + turn + 8) % 8;
           }
       }
+}
 
+inline Bitboard rose_attacks_bb(Square from, Bitboard occupied, const MagicGeometry* /*mg*/ = current_magic_geometry) {
+  Bitboard attack = 0;
+  walk_rose_paths(from, [&](Bitboard /*path*/, Bitboard dst, Square next) {
+      attack |= dst;
+      return bool(occupied & next);
+  });
+  return attack;
+}
+
+inline Bitboard rose_between_union_bb(Square from, Square to, Bitboard occupied) {
+  Bitboard pathUnion = 0;
+  walk_rose_paths(from, [&](Bitboard path, Bitboard /*dst*/, Square next) {
+      if (next == to)
+      {
+          pathUnion |= path;
+          return true;
+      }
+      return bool(occupied & next);
+  });
   return pathUnion;
 }
 
 inline Bitboard rose_between_intersection_bb(Square from, Square to, Bitboard occupied) {
   Bitboard pathIntersection = 0;
   bool found = false;
-
-  for (int start = 0; start < 8; ++start)
-      for (int turn : {-1, 1})
+  walk_rose_paths(from, [&](Bitboard path, Bitboard /*dst*/, Square next) {
+      if (next == to)
       {
-          Square current = from;
-          int index = start;
-          Bitboard path = 0;
-          for (int leg = 0; leg < 7; ++leg)
-          {
-              Bitboard dst = safe_destination_tuple(current, RoseSteps[index].first, RoseSteps[index].second);
-              if (!dst)
-                  break;
-              Square next = lsb(dst);
-              path |= dst;
-              if (next == to)
-              {
-                  pathIntersection = found ? (pathIntersection & path) : path;
-                  found = true;
-                  break;
-              }
-              if (occupied & square_bb(next))
-                  break;
-              current = next;
-              index = (index + turn + 8) % 8;
-          }
+          pathIntersection = found ? (pathIntersection & path) : path;
+          found = true;
+          return true;
       }
-
+      return bool(occupied & next);
+  });
   return found ? pathIntersection : square_bb(to);
 }
 
@@ -483,19 +451,6 @@ constexpr Bitboard king_flank(File f) {
 }
 
 
-/// shift() moves a bitboard one or two steps as specified by the direction D
-
-template<Direction D>
-constexpr Bitboard shift(Bitboard b) {
-  return  D == NORTH      ?  b                       << NORTH      : D == SOUTH      ?  b             >> NORTH
-        : D == NORTH+NORTH?  b                       <<(2 * NORTH) : D == SOUTH+SOUTH?  b             >> (2 * NORTH)
-        : D == EAST       ? (b & ~file_bb(FILE_MAX)) << EAST       : D == WEST       ? (b & ~FileABB) >> EAST
-        : D == NORTH_EAST ? (b & ~file_bb(FILE_MAX)) << NORTH_EAST : D == NORTH_WEST ? (b & ~FileABB) << NORTH_WEST
-        : D == SOUTH_EAST ? (b & ~file_bb(FILE_MAX)) >> NORTH_WEST : D == SOUTH_WEST ? (b & ~FileABB) >> NORTH_EAST
-        : Bitboard(0);
-}
-
-
 /// shift() moves a bitboard one step along direction D (mainly for pawns)
 
 constexpr Bitboard shift(Direction D, Bitboard b) {
@@ -505,6 +460,14 @@ constexpr Bitboard shift(Direction D, Bitboard b) {
         : D == NORTH_EAST ? (b & ~file_bb(FILE_MAX)) << NORTH_EAST : D == NORTH_WEST ? (b & ~FileABB) << NORTH_WEST
         : D == SOUTH_EAST ? (b & ~file_bb(FILE_MAX)) >> NORTH_WEST : D == SOUTH_WEST ? (b & ~FileABB) >> NORTH_EAST
         : Bitboard(0);
+}
+
+
+/// shift() moves a bitboard one or two steps as specified by the direction D
+
+template<Direction D>
+constexpr Bitboard shift(Bitboard b) {
+  return shift(D, b);
 }
 
 
@@ -765,62 +728,33 @@ inline Bitboard between_bb(Square s1, Square s2, PieceType pt) {
           return path;
   }
 
-  if (r & RIDER_GRIFFON_NH)
+  struct BentRiderRule {
+      RiderType mask;
+      int df;
+      int dr;
+      bool allowH;
+      bool allowV;
+      bool allowD;
+  };
+  static constexpr BentRiderRule rules[] = {
+      { RIDER_GRIFFON_NH,   1,  1,  true,  true, false },
+      { RIDER_GRIFFON_SH,  -1,  1,  true,  true, false },
+      { RIDER_GRIFFON_EV,   1, -1,  true,  true, false },
+      { RIDER_GRIFFON_WV,  -1, -1,  true,  true, false },
+      { RIDER_MANTICORE_NE, 0,  1, false, false,  true },
+      { RIDER_MANTICORE_NW, -1, 0, false, false,  true },
+      { RIDER_MANTICORE_SE, 1,  0, false, false,  true },
+      { RIDER_MANTICORE_SW, 0, -1, false, false,  true }
+  };
+  for (const auto& rule : rules)
   {
-      if ((path = bent_slider_between_bb(s1, s2, 1, 1, true, true)))
-          return path;
-      if ((path = bent_slider_between_bb(s2, s1, 1, 1, true, true)))
-          return remap_reverse_path(path);
-  }
-  if (r & RIDER_GRIFFON_SH)
-  {
-      if ((path = bent_slider_between_bb(s1, s2, -1, 1, true, true)))
-          return path;
-      if ((path = bent_slider_between_bb(s2, s1, -1, 1, true, true)))
-          return remap_reverse_path(path);
-  }
-  if (r & RIDER_GRIFFON_EV)
-  {
-      if ((path = bent_slider_between_bb(s1, s2, 1, -1, true, true)))
-          return path;
-      if ((path = bent_slider_between_bb(s2, s1, 1, -1, true, true)))
-          return remap_reverse_path(path);
-  }
-  if (r & RIDER_GRIFFON_WV)
-  {
-      if ((path = bent_slider_between_bb(s1, s2, -1, -1, true, true)))
-          return path;
-      if ((path = bent_slider_between_bb(s2, s1, -1, -1, true, true)))
-          return remap_reverse_path(path);
-  }
-
-  if (r & RIDER_MANTICORE_NE)
-  {
-      if ((path = bent_slider_between_bb(s1, s2, 0, 1, false, false, true)))
-          return path;
-      if ((path = bent_slider_between_bb(s2, s1, 0, 1, false, false, true)))
-          return remap_reverse_path(path);
-  }
-  if (r & RIDER_MANTICORE_NW)
-  {
-      if ((path = bent_slider_between_bb(s1, s2, -1, 0, false, false, true)))
-          return path;
-      if ((path = bent_slider_between_bb(s2, s1, -1, 0, false, false, true)))
-          return remap_reverse_path(path);
-  }
-  if (r & RIDER_MANTICORE_SE)
-  {
-      if ((path = bent_slider_between_bb(s1, s2, 1, 0, false, false, true)))
-          return path;
-      if ((path = bent_slider_between_bb(s2, s1, 1, 0, false, false, true)))
-          return remap_reverse_path(path);
-  }
-  if (r & RIDER_MANTICORE_SW)
-  {
-      if ((path = bent_slider_between_bb(s1, s2, 0, -1, false, false, true)))
-          return path;
-      if ((path = bent_slider_between_bb(s2, s1, 0, -1, false, false, true)))
-          return remap_reverse_path(path);
+      if (r & rule.mask)
+      {
+          if ((path = bent_slider_between_bb(s1, s2, rule.df, rule.dr, rule.allowH, rule.allowV, rule.allowD)))
+              return path;
+          if ((path = bent_slider_between_bb(s2, s1, rule.df, rule.dr, rule.allowH, rule.allowV, rule.allowD)))
+              return remap_reverse_path(path);
+      }
   }
 
   return between_bb(s1, s2);
@@ -1163,8 +1097,8 @@ inline Bitboard attacks_bb(Color c, PieceType pt, Square s, Bitboard occupied, c
   RiderType r = AttackRiderTypes[pt];
   while (r)
       b |= rider_attacks_bb(pop_rider(r), s, occupied, mg);
-  b |= leap_rider_attacks_bb(pt, c, s, occupied);
-  b |= tuple_rider_attacks_bb(pt, c, s, occupied);
+  b |= custom_rider_attacks(pt, false, true, c, s, occupied, false);
+  b |= custom_rider_attacks(pt, false, true, c, s, occupied, true);
   return b & PseudoAttacks[c][pt][s];
 }
 
@@ -1176,8 +1110,8 @@ inline Bitboard moves_bb(Color c, PieceType pt, Square s, Bitboard occupied, con
   RiderType r = MoveRiderTypes[Initial][pt];
   while (r)
       b |= rider_attacks_bb(pop_rider(r), s, occupied, mg);
-  b |= leap_rider_moves_bb(pt, Initial, c, s, occupied);
-  b |= tuple_rider_moves_bb(pt, Initial, c, s, occupied);
+  b |= custom_rider_attacks(pt, Initial, false, c, s, occupied, false);
+  b |= custom_rider_attacks(pt, Initial, false, c, s, occupied, true);
   return b & PseudoMoves[Initial][c][pt][s];
 }
 

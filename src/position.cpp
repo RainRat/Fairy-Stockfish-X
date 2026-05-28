@@ -4473,25 +4473,10 @@ bool Position::pseudo_legal(const Move m) const {
           }
           else
           {
-          auto checker_targets = [&](Square checksq) {
-              PieceType checkerPt = type_of(piece_on(checksq));
-              Bitboard checkerMask = square_bb(checksq);
-              Bitboard t = (AttackRiderTypes[checkerPt] & RIDER_ROSE)
-                         ? rose_between_intersection_bb(square<KING>(us), checksq, pieces())
-                         : between_bb(square<KING>(us), checksq, checkerPt);
-
-              bool blockableNightrider = AttackRiderTypes[checkerPt] & RIDER_NIGHTRIDER;
-              if ((checkerMask & non_sliding_riders()) && !blockableNightrider)
-                  t = ~pieces(us);
-              if (LeaperAttacks[~us][checkerPt][checksq] & square<KING>(us))
-                  t = checkerMask;
-              return t;
-          };
-
           Bitboard evasionTargets = AllSquares;
           Bitboard remaining = evasion_checkers();
           while (remaining)
-              evasionTargets &= checker_targets(pop_lsb(remaining));
+              evasionTargets &= checker_evasion_targets(us, square<KING>(us), pop_lsb(remaining));
 
           const bool blastEvasion = ((capture(m) || rifle_capture(m)) && blast_on_capture(m)) ||
                                     (!capture(m) && !rifle_capture(m) && !is_self_destruct(m) && blast_on_move()) ||
@@ -4507,6 +4492,21 @@ bool Position::pseudo_legal(const Move m) const {
   }
 
   return !violates_same_player_board_repetition(m);
+}
+
+Bitboard Position::checker_evasion_targets(Color us, Square royalSq, Square checksq) const {
+    PieceType checkerPt = type_of(piece_on(checksq));
+    Bitboard checkerMask = square_bb(checksq);
+    Bitboard t = (AttackRiderTypes[checkerPt] & RIDER_ROSE)
+               ? rose_between_intersection_bb(royalSq, checksq, pieces())
+               : between_bb(royalSq, checksq, checkerPt);
+
+    bool blockableNightrider = AttackRiderTypes[checkerPt] & RIDER_NIGHTRIDER;
+    if ((checkerMask & non_sliding_riders()) && !blockableNightrider)
+        t = ~pieces(us);
+    if (LeaperAttacks[~us][checkerPt][checksq] & royalSq)
+        t = checkerMask;
+    return t;
 }
 
 bool Position::push_move(Move m) const {

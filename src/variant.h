@@ -580,6 +580,7 @@ struct Variant {
 
   Variant* conclude();
 
+  mutable std::shared_ptr<const MagicGeometry> magicGeometry = nullptr;
 };
 
 class VariantMap : public std::map<std::string, const Variant*> {

@@ -2187,6 +2187,28 @@ stepwisePushing = true
         # Test 2b: Castling e1g1 on its own without freezing the attacker first should NOT be legal
         self.assertNotIn("e1g1", moves, "Should not be allowed to castle through unfrozen attacker on its own")
 
+    def test_magic_geometry_pollution(self):
+        # Chess (8x8) and Capablanca (10x8)
+        # We will query legal moves for a rook on a4 on both boards multiple times, alternating,
+        # to ensure that the board-size-specific MagicGeometry does not get polluted.
+        # Chess FEN: rook on a4, kings on e1 and e8
+        chess_fen = "4k3/8/8/8/R7/8/8/4K3 w - - 0 1"
+        # Capablanca FEN: rook on a4, kings on e1 and e8 (10 files)
+        capa_fen = "4k5/10/10/10/R9/10/10/4K5 w - - 0 1"
+
+        for _ in range(5):
+            chess_moves = sf.legal_moves("chess", chess_fen, [])
+            # Rook should have horizontal moves b4, c4, d4, e4, f4, g4, h4 (7 moves)
+            # and vertical moves a1, a2, a3, a5, a6, a7, a8 (7 moves).
+            rook_chess_moves = [m for m in chess_moves if m.startswith("a4")]
+            self.assertEqual(len(rook_chess_moves), 14, f"Expected 14 moves in chess, got: {rook_chess_moves}")
+
+            capa_moves = sf.legal_moves("capablanca", capa_fen, [])
+            # Rook should have horizontal moves b4, c4, d4, e4, f4, g4, h4, i4, j4 (9 moves)
+            # and vertical moves a1, a2, a3, a5, a6, a7, a8 (7 moves).
+            rook_capa_moves = [m for m in capa_moves if m.startswith("a4")]
+            self.assertEqual(len(rook_capa_moves), 16, f"Expected 16 moves in capablanca, got: {rook_capa_moves}")
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)
 

@@ -213,7 +213,7 @@ namespace {
 
 
   template<GenType Type>
-  bool potion_move_matches(const Position& pos, Move m, [[maybe_unused]] bool isCapture) {
+  bool potion_move_matches(const Position& pos, Move m) {
       return !((Type == QUIET_CHECKS && !pos.gives_check(m))
             || !pos.legal(m));
   }
@@ -996,31 +996,16 @@ namespace {
 
             if (Type == EVASIONS)
             {
-                auto checker_targets = [&](Square checksq) {
-                    PieceType checkerPt = type_of(pos.piece_on(checksq));
-                    Bitboard checkerMask = square_bb(checksq);
-                    Bitboard t = (AttackRiderTypes[checkerPt] & RIDER_ROSE)
-                               ? rose_between_intersection_bb(royalSq, checksq, pos.pieces())
-                               : between_bb(royalSq, checksq, checkerPt);
-
-                    bool blockableNightrider = AttackRiderTypes[checkerPt] & RIDER_NIGHTRIDER;
-                    if ((checkerMask & pos.non_sliding_riders()) && !blockableNightrider)
-                        t = ~pos.pieces(Us);
-                    if (LeaperAttacks[~Us][checkerPt][checksq] & royalSq)
-                        t = checkerMask;
-                    return t;
-                };
-
                 const bool multipleCheckers = more_than_one(checkers);
                 if (multipleCheckers)
                 {
                     target = AllSquares;
                     Bitboard remaining = checkers;
                     while (remaining)
-                        target &= checker_targets(pop_lsb(remaining));
+                        target &= pos.checker_evasion_targets(Us, royalSq, pop_lsb(remaining));
                 }
                 else
-                    target = checker_targets(lsb(checkers));
+                    target = pos.checker_evasion_targets(Us, royalSq, lsb(checkers));
 
                 if (pos.blast_on_move() || pos.blast_on_self_destruct())
                     target = AllSquares;
@@ -1296,8 +1281,7 @@ namespace {
                             : make_gating<CASTLING>(from, to, potionPiece, gate));
 
       // Filter by original Type and legality
-      bool isCapture = pos.capture_or_promotion(gatingMove);
-      if (!potion_move_matches<Type>(pos, gatingMove, isCapture))
+      if (!potion_move_matches<Type>(pos, gatingMove))
           return true;
 
       cur->move = gatingMove;
