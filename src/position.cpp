@@ -2871,6 +2871,67 @@ Bitboard Position::checked_anti_royals(Color c) const {
 }
 
 
+Bitboard Position::compute_surround_capture_mask(Square moverSq, Bitboard usPieces, Bitboard themPieces, Bitboard occupied) const {
+  Bitboard mask = 0;
+  if (!(surround_capture_opposite() || surround_capture_intervene() || surround_capture_edge()))
+      return mask;
+
+  for (int sign : {-1, 1})
+  {
+      for (const Direction& d : var->connectDirections)
+      {
+          Direction mod_d = d * sign;
+          Square s = moverSq + mod_d;
+          if (!is_ok(s) || !(square_bb(s) & themPieces & occupied))
+              continue;
+
+          if (s & surround_capture_max_region())
+          {
+              bool surrounded = true;
+              Bitboard adj = attacks_bb<WAZIR>(s, occupied) & board_bb();
+              while (adj)
+              {
+                  Square s2 = pop_lsb(adj);
+                  if (!((s2 & surround_capture_hostile_region()) || (s2 & usPieces & occupied) || (s2 == moverSq)))
+                  {
+                      surrounded = false;
+                      break;
+                  }
+              }
+              if (surrounded)
+                  mask |= s;
+              else
+                  continue;
+          }
+
+          Square oppSquare = s + mod_d;
+          if (!is_ok(oppSquare))
+          {
+              if (surround_capture_edge())
+                  mask |= s;
+          }
+          else
+          {
+              if (surround_capture_opposite() && ((usPieces & oppSquare & occupied) || (oppSquare == moverSq) || (surround_capture_hostile_region() & oppSquare)))
+                  mask |= s;
+          }
+      }
+  }
+  if (surround_capture_intervene())
+  {
+      for (const Direction& d : var->connectDirections)
+      {
+          Square s1 = moverSq + d;
+          Square s2 = moverSq - d;
+          if (is_ok(s1) && is_ok(s2) && (themPieces & s1 & occupied) && (themPieces & s2 & occupied))
+              mask |= square_bb(s1) | s2;
+      }
+  }
+  return mask;
+}
+
+
+
 /// Position::legal() tests whether a pseudo-legal move is legal
 
 bool Position::legal(Move m) const {
@@ -2919,10 +2980,6 @@ bool Position::legal(Move m) const {
   if (!potCtx.valid)
       return false;
 
-  ScopedSpellContext spellScope(potCtx.freezeExtra, potCtx.jumpRemoved);
-  bool pureWallMove = is_gating(m) && potCtx.potion == Variant::POTION_TYPE_NB
-                   && walling(us) && wall_or_move() && from == to;
-
   if (!dropMove && (freeze_squares() & from))
       return false;
   // Castling is also blocked if the participating rook is frozen.
@@ -2936,9 +2993,14 @@ bool Position::legal(Move m) const {
       if (freeze_squares() & rookFrom)
           return false;
   }
-  if (type_of(m) == CASTLING && gamePly < var->castlingForbiddenPlies)
-      return false;
   if (potCtx.jumpRemoved && (square_bb(to) & potCtx.jumpRemoved))
+      return false;
+
+  ScopedSpellContext spellScope(potCtx.freezeExtra, potCtx.jumpRemoved);
+  bool pureWallMove = is_gating(m) && potCtx.potion == Variant::POTION_TYPE_NB
+                   && walling(us) && wall_or_move() && from == to;
+
+  if (type_of(m) == CASTLING && gamePly < var->castlingForbiddenPlies)
       return false;
 
   if (from == to && !(is_pass(m) || is_self_destruct(m) || (is_promotion_move(m) && sittuyin_promotion()) || pureWallMove))
@@ -3538,51 +3600,10 @@ bool Position::legal(Move m) const {
       // Surround capture
       if (surround_capture_opposite() || surround_capture_intervene() || surround_capture_edge())
       {
-          for (int sign : {-1, 1})
-          {
-              for (const Direction& d : var->connectDirections)
-              {
-                  Direction mod_d = d * sign;
-                  Square s = effectiveTo + mod_d;
-                  if (!is_ok(s) || !(square_bb(s) & pieces(~us) & ~square_bb(shotSq))) continue;
-
-                  if (s & surround_capture_max_region())
-                  {
-                      bool surrounded = true;
-                      Bitboard b = (attacks_bb<WAZIR>(s, postMoveOccupied) & postMoveOccupied) & ~square_bb(from) & pieces(~us);
-                      while(b)
-                      {
-                          Square s2 = pop_lsb(b);
-                          if (!((s2 & surround_capture_hostile_region()) || (s2 & (pieces(us) | effectiveTo))))
-                          {
-                              surrounded = false;
-                              break;
-                          }
-                      }
-                      if (surrounded) { removedByEffects |= s; structuralRemoval |= s; }
-                  }
-
-                  Square oppSquare = s + mod_d;
-                  if (!is_ok(oppSquare))
-                  {
-                      if (surround_capture_edge()) { removedByEffects |= s; structuralRemoval |= s; }
-                  }
-                  else
-                  {
-                      if (surround_capture_opposite() && ((pieces(us) & oppSquare) || (oppSquare == effectiveTo) || (surround_capture_hostile_region() & oppSquare)))
-                          { removedByEffects |= s; structuralRemoval |= s; }
-                  }
-              }
-          }
-          if (surround_capture_intervene())
-          {
-              for (const Direction& d : var->connectDirections)
-              {
-                  Square s1 = effectiveTo + d, s2 = effectiveTo - d;
-                  if (is_ok(s1) && is_ok(s2) && (pieces(~us) & s1) && (pieces(~us) & s2))
-                      { removedByEffects |= square_bb(s1) | s2; structuralRemoval |= square_bb(s1) | s2; }
-              }
-          }
+          Bitboard usPostMove = dropMove ? (pieces(us) | effectiveTo) : (pieces(us) ^ from ^ effectiveTo);
+          Bitboard surroundMask = compute_surround_capture_mask(effectiveTo, usPostMove, (pieces(~us) & ~square_bb(shotSq)), postMoveOccupied);
+          removedByEffects |= surroundMask;
+          structuralRemoval |= surroundMask;
       }
       // Remove connect N
       if (remove_connect_n() > 0)
@@ -3895,12 +3916,7 @@ bool Position::legal(Move m) const {
       // "cannot castle through attack", with frozen attackers ignored.
       bool spellLikeCastler = type_of(piece_on(from)) != KING && potions_enabled();
       auto attackers_for_castling = [&](Square s, Bitboard occ) {
-          Bitboard att = spellLikeCastler ? attackers_to(s, occ, ~us)
-                                          : attackers_to_king(s, occ, ~us);
-          att &= ~removedAttackers;
-          if (spellLikeCastler)
-              att &= ~freeze_squares(~us);
-          return att;
+          return attackers_to_king(s, occ, ~us) & ~removedAttackers;
       };
 
       if (((!allow_checks()) || spellLikeCastler) && attackers_for_castling(from, pieces()))
@@ -4320,8 +4336,6 @@ bool Position::pseudo_legal(const Move m) const {
   if (!potCtx.valid)
       return false;
 
-  ScopedSpellContext spellScope(potCtx.freezeExtra, potCtx.jumpRemoved);
-
   if (!dropMove && (freeze_squares() & from))
       return false;
   if (type_of(m) == CASTLING && gamePly < var->castlingForbiddenPlies)
@@ -4336,6 +4350,8 @@ bool Position::pseudo_legal(const Move m) const {
                                                           : MoveList<NON_EVASIONS>(*this).contains(m))
           && !violates_same_player_board_repetition(m);
   }
+
+  ScopedSpellContext spellScope(potCtx.freezeExtra, potCtx.jumpRemoved);
 
   // Handle the case where a mandatory piece promotion/demotion is not taken
   if (    mandatory_piece_promotion()
@@ -6111,53 +6127,7 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
       //A piece could be immune to blast but not immune to custodial.
 
       if ( surround_capture_opposite() || surround_capture_intervene() || surround_capture_edge() ) {
-          for (int sign : {-1, 1}) {
-
-              for (const Direction& d : var->connectDirections)
-              //using getConnectDirections to determine whether two pieces are connected
-              //in that they can capture a piece between them. if there was a
-              //variant with connection as a victory condition, and different
-              //directions for surround-capture, yes, we'd have to separate them
-              {
-                  Direction mod_d = d * sign;
-                  Square s = moverSq + mod_d;
-                  if (!is_ok(s)) continue;
-                  if (!(s&pieces(~us))) continue;
-                  Square oppSquare = s + mod_d;
-
-                  if (s & surround_capture_max_region()) {
-                      bool surrounded = true;
-                      Bitboard b = attacks_bb(us, WAZIR, s, pieces(~us));
-                      while(b) {
-                          Square s2 = pop_lsb(b);
-                          if (!((s2 & surround_capture_hostile_region()) || (s2 & pieces(us)))) {
-                              surrounded = false;
-                              break;
-                          };
-                      };
-                      if (surrounded) { removal_mask |= s; } else continue;
-                  };
-
-                  if (!is_ok(oppSquare)) {
-                      if (surround_capture_edge()) removal_mask |= s;
-                  }
-                  else {
-                      if (surround_capture_opposite() && ((pieces(us) & oppSquare) || (surround_capture_hostile_region() & oppSquare))) removal_mask |= s;
-                  };
-              };
-          };
-      };
-
-      if (surround_capture_intervene()) {
-          for (const Direction& d : var->connectDirections)
-          {
-              Square s1 = moverSq + d;
-              Square s2 = moverSq - d;
-              if (!is_ok(s1) || !is_ok(s2))
-                  continue;
-              if ((s1 & pieces(~us)) && (s2 & pieces(~us)))
-                  removal_mask |= s1 | s2;
-          }
+          removal_mask |= compute_surround_capture_mask(moverSq, pieces(us), pieces(~us), pieces());
       }
 
       if (pi && pi->has_universal_hopper() && jumpCapsq != SQ_NONE)
@@ -7614,7 +7584,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
   // because st->captured is empty in the reconstructed state.
   if (king_type() != NO_PIECE_TYPE)
       for (Color c : { ~sideToMove, sideToMove })
-          if (!count(c, king_type()) && (allow_checks() || flag_piece(c) == king_type()))
+          if (!count(c, king_type()) && is_actual_runtime_royal(c, king_type()))
           {
               result = c == sideToMove ? mated_in(ply) : mate_in(ply);
               return true;
