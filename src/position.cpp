@@ -3916,7 +3916,12 @@ bool Position::legal(Move m) const {
       // "cannot castle through attack", with frozen attackers ignored.
       bool spellLikeCastler = type_of(piece_on(from)) != KING && potions_enabled();
       auto attackers_for_castling = [&](Square s, Bitboard occ) {
-          return attackers_to_king(s, occ, ~us) & ~removedAttackers;
+          Bitboard att = spellLikeCastler ? attackers_to(s, occ, ~us)
+                                          : attackers_to_king(s, occ, ~us);
+          att &= ~removedAttackers;
+          if (spellLikeCastler)
+              att &= ~freeze_squares(~us);
+          return att;
       };
 
       if (((!allow_checks()) || spellLikeCastler) && attackers_for_castling(from, pieces()))
