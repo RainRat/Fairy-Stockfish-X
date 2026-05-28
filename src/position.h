@@ -1328,7 +1328,7 @@ inline PieceType Position::royal_piece_type(Color c) const {
 }
 
 inline bool Position::is_actual_runtime_royal(Color c, PieceType pt) const {
-  if (pt == NO_PIECE_TYPE)
+  if (pt == NO_PIECE_TYPE || !(var->pieceTypes & piece_set(pt)))
       return false;
   return pt == royal_piece_type(c) || allow_checks() || flag_piece(c) == pt;
 }
