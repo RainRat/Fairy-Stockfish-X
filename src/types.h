@@ -1188,6 +1188,10 @@ inline PieceType promotion_type(Move m) {
   return NO_PIECE_TYPE;
 }
 
+inline bool is_promotion_move(Move m) {
+  return type_of(m) == PROMOTION || type_of(m) == PROMOTION_POTION;
+}
+
 inline Square potion_target_square(Move m) {
   return Square((m >> (2 * SQUARE_BITS + MOVE_TYPE_BITS)) & SQUARE_BIT_MASK);
 }

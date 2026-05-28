@@ -4216,7 +4216,7 @@ inline bool Position::is_chess960() const {
 
 inline bool Position::capture_or_promotion(Move m) const {
   assert(is_ok(m));
-  return type_of(m) == PROMOTION || capture(m);
+  return is_promotion_move(m) || capture(m);
 }
 inline Position::HopperMoveDetails Position::resolve_hopper_move_details(Square from, Square to, Bitboard occupied) const {
   assert(is_ok(from));
@@ -4532,7 +4532,7 @@ inline Bitboard Position::universal_hopper_potential_bb(PieceType pt, Square s) 
 
 inline bool Position::is_jump_capture(Move m) const {
   assert(is_ok(m));
-  return (type_of(m) == NORMAL || type_of(m) == PROMOTION) && jump_capture_square(from_sq(m), to_sq(m)) != SQ_NONE;
+  return (type_of(m) == NORMAL || is_promotion_move(m)) && jump_capture_square(from_sq(m), to_sq(m)) != SQ_NONE;
 }
 
 inline bool Position::capture(Move m) const {
@@ -4548,7 +4548,7 @@ inline bool Position::capture(Move m) const {
   if (analyze_push(m, pushInfo))
       return pushInfo.captures;
 
-  if (type_of(m) == NORMAL || type_of(m) == PROMOTION)
+  if (type_of(m) == NORMAL || is_promotion_move(m))
   {
       Piece mover = moved_piece(m);
       if (mover != NO_PIECE)
