@@ -398,6 +398,7 @@ public:
   bool edge_insert_from_bottom(Color c) const;
   bool edge_insert_from_left(Color c) const;
   bool edge_insert_from_right(Color c) const;
+  bool edge_insert_direction_ok(Color us, Square from, Square to) const;
   bool capture_morph() const;
   bool rex_exclusive_morph() const;
   bool must_capture() const;
@@ -586,7 +587,6 @@ public:
   Bitboard pieces(Color c, PieceType pt1, PieceType pt2, PieceType pt3) const;
   Bitboard major_pieces(Color c) const;
   Bitboard non_sliding_riders() const;
-  Bitboard line_bb(Square s1, Square s2) const;
   Bitboard between_bb(Square s1, Square s2, PieceType pt = NO_PIECE_TYPE) const;
   Piece piece_on(Square s) const;
   Piece unpromoted_piece_on(Square s) const;
@@ -749,8 +749,10 @@ private:
   Key layout_key() const;
   bool violates_same_player_board_repetition(Move m) const;
   Key reserve_key() const;
-  bool n_fold_game_end(Value& result, int ply, int target) const;
   Bitboard passive_blast_checkers(Color victim, Bitboard occupied) const;
+  const Variant& var_ref() const;
+
+  bool n_fold_game_end(Value& result, int ply, int target) const;
 
   // Other helpers
   void move_piece(Square from, Square to);
@@ -898,34 +900,33 @@ private:
 
 extern std::ostream& operator<<(std::ostream& os, const Position& pos);
 
-inline const Variant* Position::variant() const {
+inline const Variant& Position::var_ref() const {
   assert(var != nullptr);
-  return var;
+  return *var;
+}
+
+inline const Variant* Position::variant() const {
+  return &var_ref();
 }
 
 inline Rank Position::max_rank() const {
-  assert(var != nullptr);
-  return var->maxRank;
+  return var_ref().maxRank;
 }
 
 inline File Position::max_file() const {
-  assert(var != nullptr);
-  return var->maxFile;
+  return var_ref().maxFile;
 }
 
 inline int Position::ranks() const {
-  assert(var != nullptr);
-  return var->maxRank + 1;
+  return var_ref().maxRank + 1;
 }
 
 inline int Position::files() const {
-  assert(var != nullptr);
-  return var->maxFile + 1;
+  return var_ref().maxFile + 1;
 }
 
 inline bool Position::two_boards() const {
-  assert(var != nullptr);
-  return var->twoBoards;
+  return var_ref().twoBoards;
 }
 
 inline Bitboard Position::board_bb() const {
@@ -1607,8 +1608,28 @@ inline bool Position::edge_insert_from_left(Color c) const {
 }
 
 inline bool Position::edge_insert_from_right(Color c) const {
-  assert(var != nullptr);
-  return var->edgeInsertFromRight.get(c);
+  return var_ref().edgeInsertFromRight.get(c);
+}
+
+inline bool Position::edge_insert_direction_ok(Color us, Square from, Square to) const {
+  if (!is_ok(from) || !is_ok(to))
+      return false;
+
+  int df = int(file_of(from)) - int(file_of(to));
+  int dr = int(rank_of(from)) - int(rank_of(to));
+  if (std::abs(df) + std::abs(dr) != 1)
+      return false;
+
+  if (df == 0 && dr == -1)
+      return edge_insert_from_top(us) && rank_of(to) == max_rank();
+  if (df == 0 && dr == 1)
+      return edge_insert_from_bottom(us) && rank_of(to) == RANK_1;
+  if (df == 1 && dr == 0)
+      return edge_insert_from_left(us) && file_of(to) == FILE_A;
+  if (df == -1 && dr == 0)
+      return edge_insert_from_right(us) && file_of(to) == max_file();
+
+  return false;
 }
 
 inline bool Position::capture_morph() const {
@@ -2767,10 +2788,6 @@ inline Bitboard Position::major_pieces(Color c) const {
 
 inline Bitboard Position::non_sliding_riders() const {
   return st->nonSlidingRiders;
-}
-
-inline Bitboard Position::line_bb(Square s1, Square s2) const {
-  return Stockfish::line_bb(s1, s2);
 }
 
 inline Bitboard Position::between_bb(Square s1, Square s2, PieceType pt) const {
