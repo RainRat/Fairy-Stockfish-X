@@ -138,10 +138,14 @@ namespace {
     Bitboard attack = 0;
 
     for (auto const& [d, profile] : profiles) {
-      (void)profile;
       Direction dir = (c == WHITE ? d : -d);
       auto [stepR, stepF] = decode_direction(dir);
-      const int maxRaySteps = SQUARE_NB - 1;
+      int maxRaySteps = SQUARE_NB - 1;
+      if (profile.hurdlesMax == 1)
+          maxRaySteps = std::min(maxRaySteps, profile.preMax + profile.postMax);
+      if (profile.equiRule == PieceInfo::EQUI_HOPPER && profile.preMax < 255)
+          maxRaySteps = std::min(maxRaySteps, 2 * profile.preMax + 1);
+
       int rayDist = 0;
       Square prev = sq;
       for (Square s = sq + dir; is_ok(s) && (rayDist < maxRaySteps); s += dir) {

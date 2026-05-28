@@ -4175,6 +4175,9 @@ bool Position::pseudo_legal(const Move m) const {
   if (st->pendingClaimPass)
       return is_pass(m);
 
+  if (!dropMove && !is_pass(m) && !pureWallMove && (freeze_squares() & from))
+      return false;
+
   if (is_self_destruct(m))
   {
       if (dropMove || pc == NO_PIECE || color_of(pc) != us)
@@ -4341,8 +4344,6 @@ bool Position::pseudo_legal(const Move m) const {
   if (!potCtx.valid)
       return false;
 
-  if (!dropMove && (freeze_squares() & from))
-      return false;
   if (type_of(m) == CASTLING && gamePly < var->castlingForbiddenPlies)
       return false;
   if (potCtx.jumpRemoved && (square_bb(to) & potCtx.jumpRemoved))
@@ -4621,14 +4622,6 @@ bool Position::gives_check(Move m) const {
       return givesCheck;
   }
 
-  if (type_of(m) == PULL)
-  {
-      Square pullFrom = pull_square(m);
-      occupied ^= square_bb(pullFrom) ^ square_bb(from);
-      if (janggiCannons & pullFrom)
-          janggiCannons ^= square_bb(pullFrom) ^ square_bb(from);
-  }
-
   if (usingPhysicalKingTarget
       && (attackers_to_king(royalSq, occupied, sideToMove, janggiCannons) & square_bb(attackFrom)))
       return true;
@@ -4674,8 +4667,6 @@ bool Position::gives_check(Move m) const {
   Bitboard discCheckSq = 0;
   if (!dropMove)
       discCheckSq = rifleShot ? square_bb(to) : square_bb(from);
-  if (!dropMove && type_of(m) == PULL)
-      discCheckSq |= square_bb(pull_square(m));
 
   if (  ((!dropMove && (blockers_for_king(~sideToMove) & discCheckSq)) || (non_sliding_riders() & pieces(sideToMove)))
       && attackers_to_king(royalSq, occupied, sideToMove, janggiCannons) & occupied)
@@ -4717,6 +4708,7 @@ bool Position::gives_check(Move m) const {
   case SPECIAL:
   case PULL:
   case SWAP:
+  case DROP2:
       return false;
 
   case PROMOTION:
@@ -4740,7 +4732,7 @@ bool Position::gives_check(Move m) const {
 
       return attackers_to_king(royalSq, b, sideToMove) & pieces(sideToMove) & b;
   }
-  default: //CASTLING
+  case CASTLING:
   {
       // Castling is encoded as 'king captures the rook'
       Square kfrom = from;
@@ -4757,6 +4749,9 @@ bool Position::gives_check(Move m) const {
       return   (PseudoAttacks[sideToMove][type_of(piece_on(rfrom))][rto] & royalSq)
             && (attacks_bb(sideToMove, type_of(piece_on(rfrom)), rto, (pieces() ^ kfrom ^ rfrom) | rto | kto) & royalSq);
   }
+  default:
+      assert(false);
+      return false;
   }
 }
 

@@ -212,11 +212,7 @@ namespace {
 
 
 
-  template<GenType Type>
-  bool potion_move_matches(const Position& pos, Move m) {
-      return !((Type == QUIET_CHECKS && !pos.gives_check(m))
-            || !pos.legal(m));
-  }
+
 
 
 
@@ -1267,6 +1263,10 @@ namespace {
     return moveList;
   }
 
+  inline bool supports_potion_gating(MoveType mt) {
+      return mt == NORMAL || mt == CASTLING || mt == PROMOTION;
+  }
+
   template<GenType Type>
   inline bool try_append_potion_gating_move(const Position& pos, ExtMove*& cur, ExtMove* maxEnd,
                                             Square from, Square to, MoveType mt, Move base,
@@ -1274,14 +1274,25 @@ namespace {
       if (cur >= maxEnd)
           return false;
 
-      Move gatingMove = mt == PROMOTION
-                        ? make_promotion_potion(from, to, promotion_type(base), potion, gate)
-                        : (mt == NORMAL
-                            ? make_gating<NORMAL>(from, to, potionPiece, gate)
-                            : make_gating<CASTLING>(from, to, potionPiece, gate));
+      Move gatingMove = MOVE_NONE;
+      switch (mt)
+      {
+          case NORMAL:
+              gatingMove = make_gating<NORMAL>(from, to, potionPiece, gate);
+              break;
+          case CASTLING:
+              gatingMove = make_gating<CASTLING>(from, to, potionPiece, gate);
+              break;
+          case PROMOTION:
+              gatingMove = make_promotion_potion(from, to, promotion_type(base), potion, gate);
+              break;
+          default:
+              assert(false);
+              return true;
+      }
 
-      // Filter by original Type and legality
-      if (!potion_move_matches<Type>(pos, gatingMove))
+      // Filter by original Type and legality (inlined potion_move_matches)
+      if ((Type == QUIET_CHECKS && !pos.gives_check(gatingMove)) || !pos.legal(gatingMove))
           return true;
 
       cur->move = gatingMove;
@@ -1326,8 +1337,14 @@ namespace {
                 {
                     Move base = it->move;
                     MoveType mt = type_of(base);
-                    if (is_gating(base) || (mt != NORMAL && mt != CASTLING && mt != PROMOTION))
+                    if (is_gating(base) || !supports_potion_gating(mt))
                         continue;
+                    if (mt == PROMOTION)
+                    {
+                        PieceType prom_pt = promotion_type(base);
+                        if (prom_pt != KNIGHT && prom_pt != BISHOP && prom_pt != ROOK && prom_pt != QUEEN)
+                            continue;
+                    }
                     Square from = from_sq(base);
                     Square to = to_sq(base);
 
@@ -1379,8 +1396,14 @@ namespace {
                     continue;
 
                 MoveType mt = type_of(base);
-                if (mt != NORMAL && mt != CASTLING && mt != PROMOTION)
+                if (!supports_potion_gating(mt))
                     continue;
+                if (mt == PROMOTION)
+                {
+                    PieceType prom_pt = promotion_type(base);
+                    if (prom_pt != KNIGHT && prom_pt != BISHOP && prom_pt != ROOK && prom_pt != QUEEN)
+                        continue;
+                }
 
                 Square from = from_sq(base);
                 Square to = to_sq(base);
@@ -1429,16 +1452,11 @@ namespace {
   }
 
   template<Color Us, GenType Type>
-  ExtMove* append_potions_if_any(const Position& pos, ExtMove* listBegin, ExtMove* baseEnd) {
-      if (!pos.potions_enabled())
-          return baseEnd;
-      return generate_potion_moves<Us, Type>(pos, MoveBuffer{listBegin, baseEnd});
-  }
-
-  template<Color Us, GenType Type>
   ExtMove* generate_all(const Position& pos, ExtMove* moveList) {
     ExtMove* baseEnd = generate_all_impl<Us, Type>(pos, moveList);
-    return append_potions_if_any<Us, Type>(pos, moveList, baseEnd);
+    if (!pos.potions_enabled())
+        return baseEnd;
+    return generate_potion_moves<Us, Type>(pos, MoveBuffer{moveList, baseEnd});
   }
 
 } // namespace
@@ -1482,9 +1500,11 @@ template<GenType Type>
 ExtMove* append_potions(const Position& pos, ExtMove* listBegin, ExtMove* baseEnd) {
 
   static_assert(Type != LEGAL, "Unsupported type in append_potions()");
+  if (!pos.potions_enabled())
+      return baseEnd;
   Color us = check_and_side<Type>(pos);
-  return us == WHITE ? append_potions_if_any<WHITE, Type>(pos, listBegin, baseEnd)
-                     : append_potions_if_any<BLACK, Type>(pos, listBegin, baseEnd);
+  return us == WHITE ? generate_potion_moves<WHITE, Type>(pos, MoveBuffer{listBegin, baseEnd})
+                     : generate_potion_moves<BLACK, Type>(pos, MoveBuffer{listBegin, baseEnd});
 }
 
 // Explicit template instantiations

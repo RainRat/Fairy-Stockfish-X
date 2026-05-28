@@ -46,11 +46,11 @@ echo "piece promotion gating regression tests started"
 
 out=$(run_cmds "position startpos
 go perft 1")
-echo "${out}" | grep -q "^b7d8+: 1$"
+echo "${out}" | grep -q "^b7d8+,d8b7: 1$"
 
-out=$(run_cmds "position startpos moves b7d8+
+out=$(run_cmds "position startpos moves b7d8+,d8b7
 d")
-echo "${out}" | grep -q "Fen: 3+Nk3/8/8/8/8/8/8/4K3 b - - 0 1"
+echo "${out}" | grep -q "Fen: 3+Nk3/1\*6/8/8/8/8/8/4K3 b - - 0 1"
 
 out=$(run_cmds "position fen 4k3/8/8/8/8/8/1n6/4K3 b - - 0 1
 go perft 1" "promowall-split")

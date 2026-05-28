@@ -1235,9 +1235,11 @@ inline bool is_gating(Move m) {
   constexpr uint64_t SquareFieldMask = (uint64_t(SQUARE_BIT_MASK) << 1) | 1;
   if (mt == SPECIAL)
       return ((m >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & SquareFieldMask) != 0;
-  return (mt == NORMAL || mt == CASTLING)
-      && (gating_type(m) != NO_PIECE_TYPE
-          || ((m >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & SquareFieldMask));
+  if (mt == NORMAL || mt == CASTLING)
+      return gating_type(m) != NO_PIECE_TYPE
+          || ((m >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & SquareFieldMask);
+  return (mt == PROMOTION || mt == PIECE_PROMOTION || mt == PIECE_DEMOTION)
+      && ((m >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & SquareFieldMask) != 0;
 }
 
 inline bool is_drop_move(Move m) {
