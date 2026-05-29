@@ -59,6 +59,11 @@ pawnLikeTypes = d
 enPassantTypes = d
 startFen = 4k3/8/8/8/8/8/8/4D2K w - - 0 1
 doubleStepRegionWhite = D(e1); *(*2)
+
+[semitorpedo-test:chess]
+doubleStepRegionWhite = *2 *3
+doubleStepRegionBlack = *7 *6
+startFen = rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
 INI
 
 run_perft() {
@@ -110,6 +115,18 @@ out=$(run_position "irider-roundtrip" "position fen 4k3/8/8/8/8/8/8/4D2K w - - 0
 go perft 1")
 echo "${out}" | grep -q "^e1e2: 1$"
 ! echo "${out}" | grep -q "^e1e3: 1$"
+
+# Semitorpedo double-step test: pawn can double-step from 3rd rank even after moving
+out=$(run_position "semitorpedo-test" "position startpos moves e2e3 a7a6
+go perft 1")
+echo "${out}" | grep -q "^e3e4: 1$"
+echo "${out}" | grep -q "^e3e5: 1$"
+
+# Negative test: pawn outside doubleStepRegion cannot double-step
+out=$(run_position "semitorpedo-test" "position startpos moves e2e4 a7a6
+go perft 1")
+echo "${out}" | grep -q "^e4e5: 1$"
+! echo "${out}" | grep -q "^e4e6: 1$"
 
 rm -f "${TMP_VARIANT_PATH}"
 unset TMP_VARIANT_PATH

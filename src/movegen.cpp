@@ -436,7 +436,7 @@ namespace {
 
     const Bitboard frozen     = pos.freeze_squares();
     const Bitboard pawns      = pos.pieces(Us, PAWN) & fromMask & ~frozen;
-    const Bitboard unmovedPawns = (doubleStepRegion == AllSquares) ? pawns : (pawns & pos.not_moved_pieces(Us));
+    const Bitboard unmovedPawns = pawns;
     const Bitboard neutral    = pos.dead_squares();
     const Bitboard movable    = pos.board_bb(Us, PAWN) & ~pos.pieces();
     const Bitboard friendlyCapturable = pos.pieces(Us) & ~pos.pieces(Us, KING);
