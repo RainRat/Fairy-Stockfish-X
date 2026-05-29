@@ -3971,7 +3971,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s, Bitboard o
         && !pawnLikeHasCustomNonStepQuietMovement
         && !explicitTripleStepRegion
         && !explicitDoubleStepRegion;
-    const Bitboard tripleStepRegion = usesGenericPawnLikeStepHelper ? this->triple_step_region(c)
+    const Bitboard tripleStepRegion = usesGenericPawnLikeStepHelper ? this->triple_step_region(c, pt)
                                                                     : explicitTripleStepRegion;
     if (tripleStepRegion & piecePosition & (Initial ? AllSquares : (tripleStepRegion == AllSquares ? AllSquares : this->not_moved_pieces(c))))  //If the original square is in tripleStepRegion and the piece is not moved
     {
@@ -3993,7 +3993,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s, Bitboard o
         }
         extraDestinations |= extraMultipleStepMoveDestinations; //Add destination squares to base board
     }
-    Bitboard doubleStepRegion = usesGenericPawnLikeStepHelper ? this->double_step_region(c)
+    Bitboard doubleStepRegion = usesGenericPawnLikeStepHelper ? this->double_step_region(c, pt)
                                                               : explicitDoubleStepRegion;
     if (doubleStepRegion & piecePosition & (Initial ? AllSquares : (doubleStepRegion == AllSquares ? AllSquares : this->not_moved_pieces(c))))  //If the original square is in doubleStepRegion and the piece is not moved
     {
@@ -4021,7 +4021,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s, Bitboard o
       && !explicitTripleStepRegion
       && !explicitDoubleStepRegion;
   const Bitboard initialMoveRegion = usesGenericPawnLikeInitialMoveHelper
-                                   ? double_step_region(c)
+                                   ? double_step_region(c, pt)
                                    : var->doubleStepRegion.get(c).explicitBoardOfPiece(piece_to_char()[pt]);
 
   // Add initial moves

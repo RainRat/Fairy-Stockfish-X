@@ -173,6 +173,7 @@ cat > "${HARNESS_CPP}" <<'EOF'
 #include "piece.h"
 #include "position.h"
 #include "psqt.h"
+#include "uci.h"
 #include "variant.h"
 
 using namespace Stockfish;
@@ -188,6 +189,7 @@ symmetricDropTypes = r
 }
 
 static void init_engine() {
+    UCI::init(Options);
     pieceMap.init();
     variants.init();
     PSQT::init(variants.get("fairy"));

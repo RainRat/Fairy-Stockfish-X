@@ -1264,7 +1264,26 @@ namespace {
   }
 
   inline bool supports_potion_gating(MoveType mt) {
+      // PIECE_PROMOTION is Shogi-style piece promotion and is rejected here because
+      // potion gating is a Spell Chess mechanic, which only uses standard chess PROMOTION.
       return mt == NORMAL || mt == CASTLING || mt == PROMOTION;
+  }
+
+  inline bool is_potion_eligible_base(Move base, MoveType& mt, Square& from, Square& to) {
+      if (is_gating(base))
+          return false;
+      mt = type_of(base);
+      if (!supports_potion_gating(mt))
+          return false;
+      if (mt == PROMOTION)
+      {
+          PieceType prom_pt = promotion_type(base);
+          if (prom_pt != KNIGHT && prom_pt != BISHOP && prom_pt != ROOK && prom_pt != QUEEN)
+              return false;
+      }
+      from = from_sq(base);
+      to = to_sq(base);
+      return true;
   }
 
   template<GenType Type>
@@ -1288,7 +1307,7 @@ namespace {
               break;
           default:
               assert(false);
-              return true;
+              return false;
       }
 
       // Filter by original Type and legality (inlined potion_move_matches)
@@ -1336,17 +1355,10 @@ namespace {
                 for (ExtMove* it = buffer.begin; it != buffer.end; ++it)
                 {
                     Move base = it->move;
-                    MoveType mt = type_of(base);
-                    if (is_gating(base) || !supports_potion_gating(mt))
+                    MoveType mt;
+                    Square from, to;
+                    if (!is_potion_eligible_base(base, mt, from, to))
                         continue;
-                    if (mt == PROMOTION)
-                    {
-                        PieceType prom_pt = promotion_type(base);
-                        if (prom_pt != KNIGHT && prom_pt != BISHOP && prom_pt != ROOK && prom_pt != QUEEN)
-                            continue;
-                    }
-                    Square from = from_sq(base);
-                    Square to = to_sq(base);
 
                     if (gate == to)
                         continue;
@@ -1392,21 +1404,10 @@ namespace {
                     return maxEnd;
 
                 Move base = it->move;
-                if (is_gating(base))
+                MoveType mt;
+                Square from, to;
+                if (!is_potion_eligible_base(base, mt, from, to))
                     continue;
-
-                MoveType mt = type_of(base);
-                if (!supports_potion_gating(mt))
-                    continue;
-                if (mt == PROMOTION)
-                {
-                    PieceType prom_pt = promotion_type(base);
-                    if (prom_pt != KNIGHT && prom_pt != BISHOP && prom_pt != ROOK && prom_pt != QUEEN)
-                        continue;
-                }
-
-                Square from = from_sq(base);
-                Square to = to_sq(base);
 
                 Piece mover = pos.piece_on(from);
                 if (mover == NO_PIECE)

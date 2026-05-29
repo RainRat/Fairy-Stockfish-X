@@ -85,6 +85,21 @@ struct MagicGeometry {
   Magic* magics[14];
 
   MagicGeometry() {
+    static_assert(RIDER_BISHOP == (1 << 0), "RIDER_BISHOP must be at bit 0");
+    static_assert(RIDER_ROOK_H == (1 << 1), "RIDER_ROOK_H must be at bit 1");
+    static_assert(RIDER_ROOK_V == (1 << 2), "RIDER_ROOK_V must be at bit 2");
+    static_assert(RIDER_CANNON_H == (1 << 3), "RIDER_CANNON_H must be at bit 3");
+    static_assert(RIDER_CANNON_V == (1 << 4), "RIDER_CANNON_V must be at bit 4");
+    static_assert(RIDER_LAME_DABBABA == (1 << 5), "RIDER_LAME_DABBABA must be at bit 5");
+    static_assert(RIDER_HORSE == (1 << 6), "RIDER_HORSE must be at bit 6");
+    static_assert(RIDER_ELEPHANT == (1 << 7), "RIDER_ELEPHANT must be at bit 7");
+    static_assert(RIDER_JANGGI_ELEPHANT == (1 << 8), "RIDER_JANGGI_ELEPHANT must be at bit 8");
+    static_assert(RIDER_CANNON_DIAG == (1 << 9), "RIDER_CANNON_DIAG must be at bit 9");
+    static_assert(RIDER_NIGHTRIDER == (1 << 10), "RIDER_NIGHTRIDER must be at bit 10");
+    static_assert(RIDER_GRASSHOPPER_H == (1 << 11), "RIDER_GRASSHOPPER_H must be at bit 11");
+    static_assert(RIDER_GRASSHOPPER_V == (1 << 12), "RIDER_GRASSHOPPER_V must be at bit 12");
+    static_assert(RIDER_GRASSHOPPER_D == (1 << 13), "RIDER_GRASSHOPPER_D must be at bit 13");
+
     magics[0] = BishopMagics;
     magics[1] = RookMagicsH;
     magics[2] = RookMagicsV;
@@ -1018,6 +1033,9 @@ inline Bitboard rider_attacks_bb(Square s, Bitboard occupied, const MagicGeometr
 inline Square lsb(Bitboard b);
 
 inline Bitboard rider_attacks_bb(RiderType R, Square s, Bitboard occupied, const MagicGeometry* mg = current_magic_geometry) {
+
+  if (R == NO_RIDER || (R & (R - 1)))
+      return Bitboard(0);
 
   assert(R != NO_RIDER && !(R & (R - 1))); // exactly one bit
   if (R == RIDER_LAME_DABBABA)

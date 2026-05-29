@@ -2088,13 +2088,19 @@ Bitboard Position::compute_evasion_checkers_bb(Color side) const {
 
 Position& Position::set(const string& code, Color c, StateInfo* si) {
 
-  string sides[] = { code.substr(code.find('v') != string::npos ? code.find('v') + 1 : code.find('K', 1)),      // Weak
-                     code.substr(0, std::min(code.find('v'), code.find('K', 1))) }; // Strong
+  size_t v_pos = code.find('v');
+  size_t k_pos = code.find('K', 1);
+  size_t split_pos = (v_pos != string::npos) ? v_pos : (k_pos != string::npos ? k_pos : code.length());
+
+  string sides[] = {
+      (split_pos < code.length()) ? code.substr(v_pos != string::npos ? v_pos + 1 : k_pos) : "",      // Weak
+      code.substr(0, split_pos) // Strong
+  };
 
   assert(sides[0].length() > 0 && sides[0].length() < 8);
   assert(sides[1].length() > 0 && sides[1].length() < 8);
 
-  std::transform(sides[c].begin(), sides[c].end(), sides[c].begin(), tolower);
+  std::transform(sides[c].begin(), sides[c].end(), sides[c].begin(), [](unsigned char ch) { return char(std::tolower(ch)); });
 
   string fenStr =  sides[0] + "///////" + sides[1] + " w - - 0 10";
 
