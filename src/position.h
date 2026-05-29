@@ -3161,6 +3161,7 @@ inline Bitboard Position::wrapped_leap_rider_targets(const std::map<Direction, i
   Bitboard out = 0;
   for (const auto& [d, limit] : directions)
   {
+      int currentLimit = limit;
       auto [dr, df] = decode_direction(c == WHITE ? d : Direction(-d));
       if (!dr && !df)
           continue;
@@ -3169,7 +3170,7 @@ inline Bitboard Position::wrapped_leap_rider_targets(const std::map<Direction, i
           [&](Square next, bool blocked, int count, Bitboard& out_bb) {
               if (!quietMode || !blocked)
                   out_bb |= square_bb(next);
-              return blocked || (limit > 0 && count >= limit);
+              return blocked || (currentLimit > 0 && count >= currentLimit);
           });
   }
   return out;
