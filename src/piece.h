@@ -30,7 +30,7 @@
 
 namespace Stockfish {
 
-enum MoveModality {MODALITY_QUIET, MODALITY_CAPTURE, MOVE_MODALITY_NB};
+
 
 // Special distance value for dynamic slider length (Betza 'x' modifier)
 constexpr int DYNAMIC_SLIDER_LIMIT = -2;

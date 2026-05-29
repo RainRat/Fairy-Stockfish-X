@@ -1230,7 +1230,8 @@ namespace {
             {
                 Square sq = pop_lsb(b);
                 Piece mover = pos.piece_on(sq);
-                if (mover != NO_PIECE && (pos.self_destruct_types() & piece_set(type_of(mover))))
+                assert(mover != NO_PIECE);
+                if (pos.self_destruct_types() & piece_set(type_of(mover)))
                     *moveList++ = make<SPECIAL>(sq, sq, type_of(mover));
             }
         }
@@ -1395,7 +1396,9 @@ namespace {
                         if (pos.freeze_squares() & from)
                             continue;
                         PieceType moverType = type_of(mover);
-                        if ((between_bb(from, to, moverType) & ~square_bb(to)) & gate)
+                        bool isInitial = pos.not_moved_pieces(Us) & from;
+                        MoveModality modality = pos.capture(base) ? MODALITY_CAPTURE : MODALITY_QUIET;
+                        if ((between_bb(from, to, moverType, modality, isInitial) & ~square_bb(to)) & gate)
                             continue;
                     }
 
@@ -1452,7 +1455,8 @@ namespace {
                 if (distance(from, to) <= 1)
                     continue;
 
-                Bitboard path = between_bb(from, to, moverType);
+                bool isInitial = pos.not_moved_pieces(Us) & from;
+                Bitboard path = between_bb(from, to, moverType, pos.capture(base) ? MODALITY_CAPTURE : MODALITY_QUIET, isInitial);
                 Bitboard intersection = path & candidates & ~square_bb(to);
                 if (popcount(intersection) != 1)
                     continue;
@@ -1462,7 +1466,6 @@ namespace {
                 bool moveOk = false;
                 {
                     ScopedSpellContext revalGuard(Bitboard(0), square_bb(gate));
-                    bool isInitial = pos.not_moved_pieces(Us) & from;
                     Bitboard okSquares = isInitial ? (pos.moves_from<true>(Us, moverType, from) | pos.attacks_from<true>(Us, moverType, from))
                                                    : (pos.moves_from<false>(Us, moverType, from) | pos.attacks_from<false>(Us, moverType, from));
                     moveOk = bool(okSquares & to);

@@ -906,6 +906,8 @@ private:
   void swap_piece(Square from, Square to);
 };
 
+static_assert(std::is_trivially_copyable_v<Position>);
+
 extern std::ostream& operator<<(std::ostream& os, const Position& pos);
 
 inline const Variant& Position::var_ref() const {
@@ -4211,7 +4213,8 @@ inline Position::HopperMoveDetails Position::resolve_hopper_move_details(Square 
       const Bitboard initialMoveRegion = usesGenericPawnLikeInitialMoveHelper
                                        ? double_step_region(us, movePt)
                                        : var->doubleStepRegion.get(us).explicitBoardOfPiece(piece_to_char()[movePt]);
-      bool isInitial = (initialMoveRegion & from);
+      bool isInitial = (initialMoveRegion & from)
+                    && ((initialMoveRegion == AllSquares) || (not_moved_pieces(us) & from));
 
       for (int initialPhase : {0, 1})
       {
@@ -4471,6 +4474,14 @@ inline Bitboard Position::universal_hopper_potential_bb(PieceType pt, Square s) 
     Bitboard b = 0;
     Color us = color_of(piece_on(s));
 
+    const bool usesGenericPawnLikeInitialMoveHelper =
+           movePt == PAWN || (pawn_like_types(us) & piece_set(movePt));
+    const Bitboard initialMoveRegion = usesGenericPawnLikeInitialMoveHelper
+                                     ? double_step_region(us, movePt)
+                                     : var->doubleStepRegion.get(us).explicitBoardOfPiece(piece_to_char()[movePt]);
+    bool isInitial = (initialMoveRegion & s)
+                  && ((initialMoveRegion == AllSquares) || (not_moved_pieces(us) & s));
+
     auto advance = [&](Square current, Direction dir, int stepR, int stepF, Square& next) -> bool {
         if (topology_wraps())
             return wrapped_destination_square(current, stepF, stepR, max_file(), max_rank(), wraps_files(), wraps_ranks(), next);
@@ -4483,6 +4494,7 @@ inline Bitboard Position::universal_hopper_potential_bb(PieceType pt, Square s) 
     };
 
     for (int initial = 0; initial < 2; ++initial) {
+        if (initial == 1 && !isInitial) continue;
         for (int modality = 0; modality < MOVE_MODALITY_NB; ++modality) {
             for (const auto& it : pi->universalHopper[initial][modality]) {
                 Direction dir = (us == WHITE ? it.first : -it.first);
@@ -4543,7 +4555,7 @@ inline bool Position::capture(Move m) const {
 inline Square Position::capture_square(Square to) const {
   assert(is_ok(to));
   // The capture square of en passant is either the marked ep piece or the closest piece behind the target square
-  Bitboard customEp = ep_squares() & pieces();
+  Bitboard customEp = ep_squares() & pieces() & file_bb(to);
   if (customEp)
   {
       // For longer custom en passant paths, we take the frontmost piece

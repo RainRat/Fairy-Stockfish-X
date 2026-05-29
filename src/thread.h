@@ -57,6 +57,7 @@ public:
   void start_searching();
   void wait_for_search_finished();
   size_t id() const { return idx; }
+  bool is_searching() const { return searching; }
 
   Pawns::Table pawnsTable;
   Material::Table materialTable;
@@ -138,6 +139,12 @@ struct ThreadPool : public std::vector<Thread*> {
   Thread* get_best_thread() const;
   void start_searching();
   void wait_for_search_finished() const;
+  bool is_searching() const {
+    for (Thread* th : *this)
+        if (th->is_searching())
+            return true;
+    return false;
+  }
 
   std::atomic_bool stop, increaseDepth;
   std::atomic_bool abort, sit;

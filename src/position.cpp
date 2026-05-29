@@ -3022,6 +3022,8 @@ bool Position::legal(Move m) const {
       return false;
 
   ScopedSpellContext spellScope(potCtx.freezeExtra, potCtx.jumpRemoved);
+  const bool isCapture = capture(m);
+  const Square shotSq = isCapture ? capture_square(m) : to;
   bool pureWallMove = is_gating(m) && potCtx.potion == Variant::POTION_TYPE_NB
                    && walling(us) && wall_or_move() && from == to;
 
@@ -3043,7 +3045,7 @@ bool Position::legal(Move m) const {
           return false;
   }
 
-  bool rifleShot = rifle_capture(m) && capture(m) && type_of(m) != CASTLING;
+  bool rifleShot = rifle_capture(m) && isCapture && type_of(m) != CASTLING;
   bool cloneMove = is_clone_move(m);
   bool pullMove = is_pull_move(m);
   if (cloneMove && !(clone_targets_from(us, from) & to))
@@ -3065,7 +3067,6 @@ bool Position::legal(Move m) const {
               return false;
       }
   }
-  Square shotSq = capture(m) ? capture_square(m) : to;
   Bitboard removedAttackers = rifleShot ? square_bb(shotSq) : Bitboard(0);
   Square effectiveTo = rifleShot ? from : to;
   Square captureBlastCenter = blast_on_capture_mover_center() ? effectiveTo : shotSq;
@@ -3090,7 +3091,7 @@ bool Position::legal(Move m) const {
       && type_of(m) != PIECE_PROMOTION
       && !is_pass(m))
   {
-      if (capture_morph() && capture(m))
+      if (capture_morph() && isCapture)
       {
           Piece captured = piece_on(shotSq);
           if (captured != NO_PIECE)
@@ -3187,7 +3188,7 @@ bool Position::legal(Move m) const {
   }
 
   // Illegal quiet moves
-  if (must_capture() && !capture(m) && has_capture())
+  if (must_capture() && !isCapture && has_capture())
       return false;
 
   auto legal_after_probe_move = [&](Move m) {
@@ -3201,15 +3202,7 @@ bool Position::legal(Move m) const {
       return true;
   };
 
-  if (swapMove)
-  {
-      if (violates_same_player_board_repetition(m))
-          return false;
-
-      return legal_after_probe_move(m);
-  }
-
-  if (pullMove)
+  if (swapMove || pullMove)
   {
       if (violates_same_player_board_repetition(m))
           return false;
@@ -3217,10 +3210,6 @@ bool Position::legal(Move m) const {
       return legal_after_probe_move(m);
   }
   if (must_capture_en_passant() && type_of(m) != EN_PASSANT && has_en_passant_capture())
-      return false;
-
-  // Illegal captures
-  if (!allow_checks() && checking_permitted() && (pieces(them) & to) && type_of(piece_on(to)) == KING)
       return false;
 
   // Illegal non-drop moves

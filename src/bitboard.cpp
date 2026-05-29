@@ -28,6 +28,7 @@
 #include "magic.h"
 #include "misc.h"
 #include "piece.h"
+#include "thread.h"
 
 namespace Stockfish {
 
@@ -252,12 +253,13 @@ namespace {
   }
 
   void add_hopper_rider_types(RiderType& riderTypes, Direction d, int limit) {
+    int maxDist = slider_max_distance(limit);
     if (RookDirectionsH.find(d) != RookDirectionsH.end())
-        riderTypes |= limit == 1 ? RIDER_GRASSHOPPER_H : RIDER_CANNON_H;
+        riderTypes |= maxDist == 1 ? RIDER_GRASSHOPPER_H : RIDER_CANNON_H;
     if (RookDirectionsV.find(d) != RookDirectionsV.end())
-        riderTypes |= limit == 1 ? RIDER_GRASSHOPPER_V : RIDER_CANNON_V;
+        riderTypes |= maxDist == 1 ? RIDER_GRASSHOPPER_V : RIDER_CANNON_V;
     if (BishopDirections.find(d) != BishopDirections.end())
-        riderTypes |= limit == 1 ? RIDER_GRASSHOPPER_D : RIDER_CANNON_DIAG;
+        riderTypes |= maxDist == 1 ? RIDER_GRASSHOPPER_D : RIDER_CANNON_DIAG;
   }
 
   Bitboard lame_leaper_path(Direction d, Square s) {
@@ -555,8 +557,8 @@ Bitboard custom_rider_attacks(PieceType pt, bool initial, bool isCapture, Color 
        | tuple_rider_attacks(pieceMap.get(pt)->tupleSlider[initial][m], s, occupied, c);
 }
 
-Bitboard tuple_rider_between_bb(PieceType pt, Square s1, Square s2) {
-  for (const auto& ray : pieceMap.get(pt)->tupleSlider[0][MODALITY_CAPTURE])
+Bitboard tuple_rider_between_bb(PieceType pt, MoveModality modality, bool initial, Square s1, Square s2) {
+  for (const auto& ray : pieceMap.get(pt)->tupleSlider[initial][modality])
       if (Bitboard path = fixed_step_between_bb(s1, s2, ray.df, ray.dr))
       {
           int steps = popcount(path);
@@ -762,6 +764,7 @@ namespace {
   }
 
   inline Bitboard active_magic_board(File maxFile, Rank maxRank) {
+      assert(BoardSizeBB[maxFile][maxRank] != 0);
       return BoardSizeBB[maxFile][maxRank];
   }
 
@@ -904,6 +907,7 @@ namespace {
 // thread before search threads start, as current_magic_geometry is accessed
 // lock-free during search.
 std::shared_ptr<const MagicGeometry> Bitboards::init_magics(File maxFile, Rank maxRank) {
+  assert(Threads.empty() || !Threads.is_searching());
 #if !defined(VERY_LARGE_BOARDS)
   const uint16_t boardKey = magic_board_key(maxFile, maxRank);
 

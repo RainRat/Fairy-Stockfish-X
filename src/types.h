@@ -557,6 +557,8 @@ enum MoveType : int {
   PROMOTION_POTION   = 12 << (2 * SQUARE_BITS),
 };
 
+enum MoveModality {MODALITY_QUIET, MODALITY_CAPTURE, MOVE_MODALITY_NB};
+
 constexpr int MOVE_TYPE_BITS = 4;
 
 enum Color {
