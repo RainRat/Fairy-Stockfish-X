@@ -4567,6 +4567,8 @@ inline Square Position::capture_square(Square to) const {
       }
       // The capture square of normal en passant is the closest piece behind the target square
       Bitboard epCandidates = pieces(~sideToMove) & forward_file_bb(~sideToMove, to);
+      if (!epCandidates)
+          return SQ_NONE;
       return sideToMove == WHITE ? msb(epCandidates) : lsb(epCandidates);
   }
 }

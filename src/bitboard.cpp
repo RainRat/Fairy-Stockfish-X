@@ -771,7 +771,7 @@ namespace {
   // called "fancy" approach.
 
   template <MovementType MT, bool TrimRiderTerminal = false>
-  void init_magic_table(Bitboard table[], Magic magics[], const std::map<Direction, int>& directions, File maxFile, Rank maxRank, const Bitboard* magicsInit = nullptr) {
+  void init_magic_table(std::vector<Bitboard>& table, Magic magics[], const std::map<Direction, int>& directions, File maxFile, Rank maxRank, const Bitboard* magicsInit = nullptr) {
 
     // Optimal PRNG seeds to pick the correct magics in the shortest time
 #ifdef LARGEBOARDS
@@ -824,7 +824,8 @@ namespace {
 
         // Set the offset for the attacks table of the square. We have individual
         // table sizes for each square with "Fancy Magic Bitboards".
-        m.attacks = s == SQ_A1 ? table : magics[s - 1].attacks + size;
+        m.attacks = s == SQ_A1 ? table.data() : magics[s - 1].attacks + size;
+        assert(size_t((m.attacks - table.data()) + (size_t(1) << popcount(m.mask))) <= table.size());
 
         // Use Carry-Rippler trick to enumerate all subsets of masks[s] and
         // store the corresponding sliding attack bitboard in reference[].
@@ -953,18 +954,18 @@ std::shared_ptr<const MagicGeometry> Bitboards::init_magics(File maxFile, Rank m
   #define SELECT_MAGIC(init) nullptr
 #endif
 
-  init_magic_table<RIDER>(mg->RookTableH.data(), mg->RookMagicsH, RookDirectionsH, maxFile, maxRank, SELECT_MAGIC(RookMagicHInit));
-  init_magic_table<RIDER>(mg->RookTableV.data(), mg->RookMagicsV, RookDirectionsV, maxFile, maxRank, SELECT_MAGIC(RookMagicVInit));
-  init_magic_table<RIDER>(mg->BishopTable.data(), mg->BishopMagics, BishopDirections, maxFile, maxRank, SELECT_MAGIC(BishopMagicInit));
-  init_magic_table<HOPPER>(mg->CannonTableH.data(), mg->CannonMagicsH, RookDirectionsH, maxFile, maxRank, SELECT_MAGIC(CannonMagicHInit));
-  init_magic_table<HOPPER>(mg->CannonTableV.data(), mg->CannonMagicsV, RookDirectionsV, maxFile, maxRank, SELECT_MAGIC(CannonMagicVInit));
-  init_magic_table<LAME_LEAPER>(mg->HorseTable.data(), mg->HorseMagics, HorseDirections, maxFile, maxRank, SELECT_MAGIC(HorseMagicInit));
-  init_magic_table<LAME_LEAPER>(mg->JanggiElephantTable.data(), mg->JanggiElephantMagics, JanggiElephantDirections, maxFile, maxRank, SELECT_MAGIC(JanggiElephantMagicInit));
-  init_magic_table<HOPPER>(mg->CannonDiagTable.data(), mg->CannonDiagMagics, BishopDirections, maxFile, maxRank, SELECT_MAGIC(CannonDiagMagicInit));
-  init_magic_table<RIDER, true>(mg->NightriderTable.data(), mg->NightriderMagics, HorseDirections, maxFile, maxRank, SELECT_MAGIC(NightriderMagicInit));
-  init_magic_table<HOPPER>(mg->GrasshopperTableH.data(), mg->GrasshopperMagicsH, GrasshopperDirectionsH, maxFile, maxRank, SELECT_MAGIC(GrasshopperMagicHInit));
-  init_magic_table<HOPPER>(mg->GrasshopperTableV.data(), mg->GrasshopperMagicsV, GrasshopperDirectionsV, maxFile, maxRank, SELECT_MAGIC(GrasshopperMagicVInit));
-  init_magic_table<HOPPER>(mg->GrasshopperTableD.data(), mg->GrasshopperMagicsD, GrasshopperDirectionsD, maxFile, maxRank, SELECT_MAGIC(GrasshopperMagicDInit));
+  init_magic_table<RIDER>(mg->RookTableH, mg->RookMagicsH, RookDirectionsH, maxFile, maxRank, SELECT_MAGIC(RookMagicHInit));
+  init_magic_table<RIDER>(mg->RookTableV, mg->RookMagicsV, RookDirectionsV, maxFile, maxRank, SELECT_MAGIC(RookMagicVInit));
+  init_magic_table<RIDER>(mg->BishopTable, mg->BishopMagics, BishopDirections, maxFile, maxRank, SELECT_MAGIC(BishopMagicInit));
+  init_magic_table<HOPPER>(mg->CannonTableH, mg->CannonMagicsH, RookDirectionsH, maxFile, maxRank, SELECT_MAGIC(CannonMagicHInit));
+  init_magic_table<HOPPER>(mg->CannonTableV, mg->CannonMagicsV, RookDirectionsV, maxFile, maxRank, SELECT_MAGIC(CannonMagicVInit));
+  init_magic_table<LAME_LEAPER>(mg->HorseTable, mg->HorseMagics, HorseDirections, maxFile, maxRank, SELECT_MAGIC(HorseMagicInit));
+  init_magic_table<LAME_LEAPER>(mg->JanggiElephantTable, mg->JanggiElephantMagics, JanggiElephantDirections, maxFile, maxRank, SELECT_MAGIC(JanggiElephantMagicInit));
+  init_magic_table<HOPPER>(mg->CannonDiagTable, mg->CannonDiagMagics, BishopDirections, maxFile, maxRank, SELECT_MAGIC(CannonDiagMagicInit));
+  init_magic_table<RIDER, true>(mg->NightriderTable, mg->NightriderMagics, HorseDirections, maxFile, maxRank, SELECT_MAGIC(NightriderMagicInit));
+  init_magic_table<HOPPER>(mg->GrasshopperTableH, mg->GrasshopperMagicsH, GrasshopperDirectionsH, maxFile, maxRank, SELECT_MAGIC(GrasshopperMagicHInit));
+  init_magic_table<HOPPER>(mg->GrasshopperTableV, mg->GrasshopperMagicsV, GrasshopperDirectionsV, maxFile, maxRank, SELECT_MAGIC(GrasshopperMagicVInit));
+  init_magic_table<HOPPER>(mg->GrasshopperTableD, mg->GrasshopperMagicsD, GrasshopperDirectionsD, maxFile, maxRank, SELECT_MAGIC(GrasshopperMagicDInit));
 
 #undef SELECT_MAGIC
 

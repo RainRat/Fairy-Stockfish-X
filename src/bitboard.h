@@ -105,9 +105,9 @@ struct MagicGeometry {
     magics[2] = RookMagicsV;
     magics[3] = CannonMagicsH;
     magics[4] = CannonMagicsV;
-    magics[5] = BishopMagics;
+    magics[5] = nullptr;
     magics[6] = HorseMagics;
-    magics[7] = BishopMagics;
+    magics[7] = nullptr;
     magics[8] = JanggiElephantMagics;
     magics[9] = CannonDiagMagics;
     magics[10] = NightriderMagics;
@@ -935,6 +935,7 @@ constexpr bool is_magic_rider(RiderType R) {
 
 inline const Magic& magic_for_rider(const MagicGeometry* mg, RiderType R, Square s) {
   assert(is_magic_rider(R));
+  assert(mg->magics[lsb(Bitboard(R))] != nullptr);
   return mg->magics[lsb(Bitboard(R))][s];
 }
 
@@ -1037,7 +1038,7 @@ inline Bitboard rider_attacks_bb(RiderType R, Square s, Bitboard occupied, const
   if (R == NO_RIDER || (R & (R - 1)))
       return Bitboard(0);
 
-  assert(R != NO_RIDER && !(R & (R - 1))); // exactly one bit
+
   if (R == RIDER_LAME_DABBABA)
       return rider_attacks_bb<RIDER_LAME_DABBABA>(s, occupied, mg);
   if (R == RIDER_ELEPHANT)

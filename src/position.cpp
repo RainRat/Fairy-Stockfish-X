@@ -1277,13 +1277,16 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
                   || !std::isdigit(static_cast<unsigned char>(next)))
                   break;
 
-              ss >> token;
-              steps = 10 * steps + (token - '0');
-          }
-          if (commit_gates() && (rank == 0 || rank == max_rank() + 2))
-              commitFile += steps;
-          else
-              sq += steps * EAST; // Advance the given number of files
+               ss >> token;
+               if (steps <= int(max_file()) + 1)
+                   steps = 10 * steps + (token - '0');
+               else
+                   steps = int(max_file()) + 2;
+           }
+           if (commit_gates() && (rank == 0 || rank == max_rank() + 2))
+               commitFile += steps;
+           else
+               sq += steps * EAST; // Advance the given number of files
       }
 
       else if (token == '/')
@@ -1583,20 +1586,29 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
               // b) there is an enemy pawn one or two (for triple steps) squares in front of epSquare
               // c) there is no (non-wall) piece on epSquare or behind epSquare
               Square gateBehind = epSquare + pawn_push(sideToMove);
-              bool behindSquareAllowed = !((pieces(WHITE) | pieces(BLACK)) & gateBehind);
-              if (!behindSquareAllowed)
+              bool behindSquareAllowed = false;
+              if (is_ok(gateBehind) && file_of(gateBehind) <= max_file() && rank_of(gateBehind) <= max_rank())
               {
-                  PieceType forcedGate = forced_gating_type(~sideToMove, PAWN);
-                  behindSquareAllowed = forcedGate != NO_PIECE_TYPE
-                                     && piece_on(gateBehind) == make_piece(~sideToMove, forcedGate);
+                  behindSquareAllowed = !((pieces(WHITE) | pieces(BLACK)) & gateBehind);
+                  if (!behindSquareAllowed)
+                  {
+                      PieceType forcedGate = forced_gating_type(~sideToMove, PAWN);
+                      behindSquareAllowed = forcedGate != NO_PIECE_TYPE
+                                         && piece_on(gateBehind) == make_piece(~sideToMove, forcedGate);
+                  }
               }
+
+              Square front1 = epSquare + pawn_push(~sideToMove);
+              Square front2 = epSquare + 2 * pawn_push(~sideToMove);
+              bool front1_ok = is_ok(front1) && file_of(front1) <= max_file() && rank_of(front1) <= max_rank();
+              bool front2_ok = is_ok(front2) && file_of(front2) <= max_file() && rank_of(front2) <= max_rank();
 
               if (   (var->enPassantRegion[sideToMove] & epSquare)
                   && (   !var->fastAttacks
                       || (var->enPassantTypes[sideToMove] & ~piece_set(PAWN))
                       || (   pawn_attacks_bb(~sideToMove, epSquare) & pieces(sideToMove, PAWN)
-                          && (   (pieces(~sideToMove, PAWN) & (epSquare + pawn_push(~sideToMove)))
-                              || (pieces(~sideToMove, PAWN) & (epSquare + 2 * pawn_push(~sideToMove))))
+                          && (   (front1_ok && (pieces(~sideToMove, PAWN) & front1))
+                              || (front2_ok && (pieces(~sideToMove, PAWN) & front2)))
                           && !((pieces(WHITE) | pieces(BLACK)) & epSquare)
                           && behindSquareAllowed)))
                   st->epSquares |= epSquare;
@@ -1638,8 +1650,12 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
           else if (std::isdigit(static_cast<unsigned char>(token)))
           {
               handCount = token - '0';
-              while (std::isdigit(ss.peek()) && ss >> token)
-                  handCount = 10 * handCount + (token - '0');
+              while (std::isdigit(ss.peek()) && ss >> token) {
+                  if (handCount <= 1000)
+                      handCount = 10 * handCount + (token - '0');
+                  else
+                      handCount = 1001;
+              }
           }
           else if (Variant::is_piece_id_start(token))
           {
@@ -4781,6 +4797,7 @@ PotionContext Position::setup_potion_context(Move m, Color us) const {
 }
 
 bool Position::analyze_push(Move m, PushInfo& info) const {
+    info = PushInfo{};
     return type_of(m) == INSERT || !stepwise_pushing()
                ? analyze_push_direct(*this, m, info)
                : analyze_push_stepwise(*this, m, info);
