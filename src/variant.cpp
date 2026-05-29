@@ -2450,6 +2450,8 @@ void VariantMap::parse_istream(std::istream& file) {
     while (file.peek() != '[' && std::getline(file, input)) {}
 
     std::vector<std::string> varsToErase = {};
+    std::set<std::string> skippedVariants = {};
+    std::set<std::string> missingTemplates = {};
     while (file.get() && std::getline(std::getline(file, variant, ']'), input))
     {
         // Extract variant template, if specified
@@ -2497,8 +2499,28 @@ void VariantMap::parse_istream(std::istream& file) {
         // Create variant
         if (variants.has(variant))
             std::cerr << "Variant '" << variant << "' already exists." << std::endl;
-        else if (!variant_template.empty() && !variants.has(variant_template))
-            std::cerr << "Variant template '" << variant_template << "' does not exist." << std::endl;
+        else if (!variant_template.empty() && (skippedVariants.count(variant_template) || !variants.has(variant_template)))
+        {
+            skippedVariants.insert(variant);
+            if (!variants.has(variant_template))
+            {
+                if (verboseBoardSizeWarnings)
+                    std::cerr << "Variant template '" << variant_template << "' does not exist." << std::endl;
+                else
+                    missingTemplates.insert(variant_template);
+            }
+            else
+            {
+                if constexpr (!DoCheck)
+                {
+                    if (verboseBoardSizeWarnings)
+                        std::cerr << "Variant '" << variant << "' inherits from skipped template '" << variant_template << "'. Skipping." << std::endl;
+                    else
+                        ++warnings.boardSize;
+                }
+            }
+            continue;
+        }
         else
         {
             int cfgMaxRank = -1;
@@ -2513,6 +2535,7 @@ void VariantMap::parse_istream(std::istream& file) {
                 parse_file_index(attribs["maxFile"], cfgMaxFile);
             if ((cfgMaxRank > 0 && cfgMaxRank > RANK_MAX) || (cfgMaxFile >= 0 && cfgMaxFile > FILE_MAX))
             {
+                skippedVariants.insert(variant);
                 if constexpr (!DoCheck)
                 {
                     if (verboseBoardSizeWarnings)
@@ -2552,6 +2575,7 @@ void VariantMap::parse_istream(std::istream& file) {
             }
             else
             {
+                skippedVariants.insert(variant);
                 if constexpr (!DoCheck)
                 {
                     if (verboseBoardSizeWarnings)
@@ -2572,6 +2596,19 @@ void VariantMap::parse_istream(std::istream& file) {
                       << "] variants skipped because of board size limits."
                       << " Set option VerboseVariantBoardSizeWarnings to true to see full details."
                       << std::endl;
+        }
+        if (!verboseBoardSizeWarnings && !missingTemplates.empty())
+        {
+            std::cerr << "[" << missingTemplates.size()
+                      << "] variant templates not found or skipped because of board size limits (";
+            bool first = true;
+            for (const auto& t : missingTemplates)
+            {
+                if (!first) std::cerr << ", ";
+                std::cerr << t;
+                first = false;
+            }
+            std::cerr << ")." << std::endl;
         }
     }
     // Clean up temporary variants

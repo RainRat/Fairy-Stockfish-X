@@ -449,7 +449,7 @@ Bitboard rider_attacks_bb(
   (void)mg;
   auto shifted_source = [&](Direction d) -> Square {
       Bitboard shifted = safe_destination(s, d);
-      if (!shifted || (occupied & shifted))
+      if (!shifted)
           return SQ_NONE;
       return lsb(shifted);
   };
@@ -480,55 +480,64 @@ Bitboard rider_attacks_bb(
   case RIDER_GRASSHOPPER_D: return sliding_attack<HOPPER>(GrasshopperDirectionsD, s, occupied);
   case RIDER_GRIFFON_NH: {
       Square src = shifted_source(NORTH_EAST);
-      return src == SQ_NONE ? Bitboard(0)
-                            : square_bb(src) | fixed_step_rider_attacks(src, occupied, 1, 0)
-                                             | fixed_step_rider_attacks(src, occupied, 0, 1);
+      if (src == SQ_NONE) return Bitboard(0);
+      if (occupied & src) return square_bb(src);
+      return square_bb(src) | fixed_step_rider_attacks(src, occupied, 1, 0)
+                            | fixed_step_rider_attacks(src, occupied, 0, 1);
   }
   case RIDER_GRIFFON_SH: {
       Square src = shifted_source(NORTH_WEST);
-      return src == SQ_NONE ? Bitboard(0)
-                            : square_bb(src) | fixed_step_rider_attacks(src, occupied, -1, 0)
-                                             | fixed_step_rider_attacks(src, occupied, 0, 1);
+      if (src == SQ_NONE) return Bitboard(0);
+      if (occupied & src) return square_bb(src);
+      return square_bb(src) | fixed_step_rider_attacks(src, occupied, -1, 0)
+                            | fixed_step_rider_attacks(src, occupied, 0, 1);
   }
   case RIDER_GRIFFON_EV: {
       Square src = shifted_source(SOUTH_EAST);
-      return src == SQ_NONE ? Bitboard(0)
-                            : square_bb(src) | fixed_step_rider_attacks(src, occupied, 1, 0)
-                                             | fixed_step_rider_attacks(src, occupied, 0, -1);
+      if (src == SQ_NONE) return Bitboard(0);
+      if (occupied & src) return square_bb(src);
+      return square_bb(src) | fixed_step_rider_attacks(src, occupied, 1, 0)
+                            | fixed_step_rider_attacks(src, occupied, 0, -1);
   }
   case RIDER_GRIFFON_WV: {
       Square src = shifted_source(SOUTH_WEST);
-      return src == SQ_NONE ? Bitboard(0)
-                            : square_bb(src) | fixed_step_rider_attacks(src, occupied, -1, 0)
-                                             | fixed_step_rider_attacks(src, occupied, 0, -1);
+      if (src == SQ_NONE) return Bitboard(0);
+      if (occupied & src) return square_bb(src);
+      return square_bb(src) | fixed_step_rider_attacks(src, occupied, -1, 0)
+                            | fixed_step_rider_attacks(src, occupied, 0, -1);
   }
   case RIDER_MANTICORE_NE: {
       Square src = shifted_source(NORTH);
-      return src == SQ_NONE ? Bitboard(0)
-                            : square_bb(src)
-                            | sliding_attack<RIDER>(std::map<Direction, int>{{NORTH_EAST, 0}, {NORTH_WEST, 0}}, src, occupied);
+      if (src == SQ_NONE) return Bitboard(0);
+      if (occupied & src) return square_bb(src);
+      return square_bb(src)
+            | sliding_attack<RIDER>(std::map<Direction, int>{{NORTH_EAST, 0}, {NORTH_WEST, 0}}, src, occupied);
   }
   case RIDER_MANTICORE_NW: {
       Square src = shifted_source(WEST);
-      return src == SQ_NONE ? Bitboard(0)
-                            : square_bb(src)
-                            | sliding_attack<RIDER>(std::map<Direction, int>{{NORTH_WEST, 0}, {SOUTH_WEST, 0}}, src, occupied);
+      if (src == SQ_NONE) return Bitboard(0);
+      if (occupied & src) return square_bb(src);
+      return square_bb(src)
+            | sliding_attack<RIDER>(std::map<Direction, int>{{NORTH_WEST, 0}, {SOUTH_WEST, 0}}, src, occupied);
   }
   case RIDER_MANTICORE_SE: {
       Square src = shifted_source(EAST);
-      return src == SQ_NONE ? Bitboard(0)
-                            : square_bb(src)
-                            | sliding_attack<RIDER>(std::map<Direction, int>{{NORTH_EAST, 0}, {SOUTH_EAST, 0}}, src, occupied);
+      if (src == SQ_NONE) return Bitboard(0);
+      if (occupied & src) return square_bb(src);
+      return square_bb(src)
+            | sliding_attack<RIDER>(std::map<Direction, int>{{NORTH_EAST, 0}, {SOUTH_EAST, 0}}, src, occupied);
   }
   case RIDER_MANTICORE_SW: {
       Square src = shifted_source(SOUTH);
-      return src == SQ_NONE ? Bitboard(0)
-                            : square_bb(src)
-                            | sliding_attack<RIDER>(std::map<Direction, int>{{SOUTH_EAST, 0}, {SOUTH_WEST, 0}}, src, occupied);
+      if (src == SQ_NONE) return Bitboard(0);
+      if (occupied & src) return square_bb(src);
+      return square_bb(src)
+            | sliding_attack<RIDER>(std::map<Direction, int>{{SOUTH_EAST, 0}, {SOUTH_WEST, 0}}, src, occupied);
   }
   case RIDER_SKI_ROOK_H: return ski_sliding_attack(RookDirectionsH, s, occupied);
   case RIDER_SKI_ROOK_V: return ski_sliding_attack(RookDirectionsV, s, occupied);
   case RIDER_SKI_BISHOP: return ski_sliding_attack(BishopDirections, s, occupied);
+  case RIDER_ROSE: return rose_attacks_bb(s, occupied);
   default: return Bitboard(0);
   }
 }

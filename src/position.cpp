@@ -590,17 +590,20 @@ namespace {
 
     for (MoveModality modality : {MODALITY_QUIET, MODALITY_CAPTURE})
     {
-        if (!pi->steps[0][modality].empty()
-            || !pi->tupleSteps[0][modality].empty()
-            || !pi->slider[0][modality].empty()
-            || pi->griffon[0][modality]
-            || pi->manticore[0][modality]
-            || pi->rose[0][modality])
-            return false;
+        for (int initial : {0, 1})
+        {
+            if (!pi->steps[initial][modality].empty()
+                || !pi->tupleSteps[initial][modality].empty()
+                || !pi->slider[initial][modality].empty()
+                || pi->griffon[initial][modality]
+                || pi->manticore[initial][modality]
+                || pi->rose[initial][modality])
+                return false;
 
-        hasHopper = hasHopper
-                 || !pi->hopper[0][modality].empty()
-                 || !pi->universalHopper[0][modality].empty();
+            hasHopper = hasHopper
+                     || !pi->hopper[initial][modality].empty()
+                     || !pi->universalHopper[initial][modality].empty();
+        }
     }
 
     return hasHopper;
@@ -2478,11 +2481,11 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
 
           PieceType move_pt = effective_piece_type(pt);
           if (pt == JANGGI_CANNON)
-              b |= attacks_from(~c, move_pt, s, occupied)
-                 & attacks_from(~c, move_pt, s, occupied & ~janggiCannons)
+              b |= attacks_from<false, false>(~c, move_pt, s, occupied)
+                 & attacks_from<false, false>(~c, move_pt, s, occupied & ~janggiCannons)
                  & ptPieces;
           else
-              b |= attacks_from(~c, move_pt, s, occupied) & ptPieces;
+              b |= attacks_from<false, false>(~c, move_pt, s, occupied) & ptPieces;
       }
       return b;
   }
@@ -2553,9 +2556,9 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
               }
           }
           else if (pt == JANGGI_CANNON)
-              b |= attacks_from(~c, move_pt, s, occupied) & attacks_from(~c, move_pt, s, occupied & ~janggiCannons) & pieces(c, JANGGI_CANNON);
+              b |= attacks_from<false, false>(~c, move_pt, s, occupied) & attacks_from<false, false>(~c, move_pt, s, occupied & ~janggiCannons) & pieces(c, JANGGI_CANNON);
           else
-              b |= attacks_from(~c, move_pt, s, occupied) & pieces(c, pt);
+              b |= attacks_from<false, false>(~c, move_pt, s, occupied) & pieces(c, pt);
       }
   }
 
@@ -3523,9 +3526,9 @@ bool Position::legal(Move m) const {
       {
           PieceType movePt2 = effective_piece_type(pt);
           const PieceInfo* pInfo2 = pieceMap.get(movePt2);
-          bool hasPotentialMove = PseudoMoves[0][us][pt][to] & board_bb();
+          bool hasPotentialMove = PseudoMoves[0][us][movePt2][to] & board_bb();
           if (is_pure_hopper_like(pInfo2))
-              hasPotentialMove = has_hopper_potential_from_square(*this, us, pt, to);
+              hasPotentialMove = has_hopper_potential_from_square(*this, us, movePt2, to);
           if (!hasPotentialMove && !pInfo2->has_universal_hopper())
               return false;
       }

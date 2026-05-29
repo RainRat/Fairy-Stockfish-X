@@ -330,7 +330,7 @@ inline Bitboard rose_attacks_bb(Square from, Bitboard occupied, const MagicGeome
   Bitboard attack = 0;
   walk_rose_paths(from, [&](Bitboard /*path*/, Bitboard dst, Square next) {
       attack |= dst;
-      return bool(occupied & next);
+      return bool(occupied & square_bb(next));
   });
   return attack;
 }
@@ -343,7 +343,7 @@ inline Bitboard rose_between_union_bb(Square from, Square to, Bitboard occupied)
           pathUnion |= path;
           return true;
       }
-      return bool(occupied & next);
+      return bool(occupied & square_bb(next));
   });
   return pathUnion;
 }
@@ -358,7 +358,7 @@ inline Bitboard rose_between_intersection_bb(Square from, Square to, Bitboard oc
           found = true;
           return true;
       }
-      return bool(occupied & next);
+      return bool(occupied & square_bb(next));
   });
   return found ? pathIntersection : square_bb(to);
 }

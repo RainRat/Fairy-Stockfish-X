@@ -636,9 +636,9 @@ public:
   Bitboard attackers_to_king(Square s, Bitboard occupied, Color c) const;
   Bitboard attackers_to_king(Square s, Bitboard occupied, Color c, Bitboard janggiCannons, PieceType pt = NO_PIECE_TYPE) const;
   Bitboard janggi_cannon_attackers_to_king(Square s, Bitboard occupied, Color c, Bitboard janggiCannons) const;
-  template <bool Initial=false>
+  template <bool Initial=false, bool FilterMobility=true>
   Bitboard attacks_from(Color c, PieceType pt, Square s) const;
-  template <bool Initial=false>
+  template <bool Initial=false, bool FilterMobility=true>
   Bitboard attacks_from(Color c, PieceType pt, Square s, Bitboard occupancy) const;
   template <bool Initial=false>
   Bitboard moves_from(Color c, PieceType pt, Square s) const;
@@ -3728,17 +3728,17 @@ inline Bitboard Position::lame_leaper_bb(const std::map<Direction, PieceInfo::La
     return b;
 }
 
-template <bool Initial>
+template <bool Initial, bool FilterMobility>
 inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s) const {
   assert(pt != NO_PIECE_TYPE);
   Bitboard occupancy = byTypeBB[ALL_PIECES];
   if (const SpellContext* spellCtx = current_spell_context(); spellCtx && c == sideToMove)
       occupancy &= ~spellCtx->jumpRemoved;
-  return attacks_from<Initial>(c, pt, s, occupancy);
+  return attacks_from<Initial, FilterMobility>(c, pt, s, occupancy);
 }
 
 
-template <bool Initial>
+template <bool Initial, bool FilterMobility>
 inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard occupancy) const {
   assert(pt != NO_PIECE_TYPE);
 
@@ -3758,7 +3758,7 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
               b |= to;
           if (wrapped_destination_square(s, 1, forward, max_file(), max_rank(), wrapFile, wrapRank, to))
               b |= to;
-          return b & board_bb(c, pt);
+          return b & (FilterMobility ? board_bb(c, pt) : board_bb());
       }
 
       b |= wrapped_step_targets(pi->steps[0][MODALITY_CAPTURE], c, s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, false);
@@ -3786,7 +3786,7 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
       if (pi->rose[0][MODALITY_CAPTURE])
           b |= wrapped_rose_targets(s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, false);
 
-      return b & board_bb(c, pt);
+      return b & (FilterMobility ? board_bb(c, pt) : board_bb());
   }
 
   PieceType movePt = effective_piece_type(pt);
@@ -3831,14 +3831,14 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
           b = attacks_bb(c, pt, s, occupancy);
           break;
       }
-      return b & board_bb();
+      return b & (FilterMobility ? board_bb(c, pt) : board_bb());
   }
 
   if (!hasRuntimeSpecialMoves && !pi->has_lame_leaper() && fast_attacks2() && (pt != KING || king_type() == KING))
-      return attacks_bb(c, pt, s, occupancy) & board_bb();
+      return attacks_bb(c, pt, s, occupancy) & (FilterMobility ? board_bb(c, pt) : board_bb());
 
   if ((fast_attacks() || fast_attacks2()) && !pi->has_runtime_rider_augment() && !pi->has_lame_leaper())
-      return attacks_bb(c, movePt, s, occupancy) & board_bb();
+      return attacks_bb(c, movePt, s, occupancy) & (FilterMobility ? board_bb(c, pt) : board_bb());
 
   Bitboard b = attacks_bb(c, movePt, s, occupancy);
 
@@ -3869,14 +3869,14 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
   {
       PieceType diagType = movePt == WAZIR ? FERS : movePt == SOLDIER ? PAWN : movePt == ROOK ? BISHOP : NO_PIECE_TYPE;
       if (diagType)
-          b |= attacks_bb(c, diagType, s, occupancy) & diagonal_lines();
+          b |= attacks_from<Initial, FilterMobility>(c, diagType, s, occupancy) & diagonal_lines();
       else if (movePt == JANGGI_CANNON)
           b |=  rider_attacks_bb<RIDER_CANNON_DIAG>(s, occupancy)
               & rider_attacks_bb<RIDER_CANNON_DIAG>(s, (occupancy ^ pieces(pt)))
               & ~pieces(pt)
               & diagonal_lines();
   }
-  return b & board_bb(c, pt);
+  return b & (FilterMobility ? board_bb(c, pt) : board_bb());
 }
 
 template <bool Initial>
