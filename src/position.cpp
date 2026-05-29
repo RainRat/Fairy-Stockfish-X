@@ -5068,7 +5068,7 @@ void Position::do_move(Move m, StateInfo& newSt) {
 
   ScopedSpellContext spellScope(potCtx.freezeExtra, potCtx.jumpRemoved);
 
-  assert(pureWallMove || color_of(pc) == dropColor);
+  assert(pureWallMove || is_pass(m) || color_of(pc) == dropColor);
   assert(captured == NO_PIECE
          || (type_of(m) == CASTLING
                  ? color_of(captured) == us

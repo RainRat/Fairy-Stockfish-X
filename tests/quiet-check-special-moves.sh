@@ -91,6 +91,7 @@ cat > "${HARNESS_CPP}" <<'EOF'
 #include "piece.h"
 #include "position.h"
 #include "psqt.h"
+#include "uci.h"
 #include "variant.h"
 
 using namespace Stockfish;
@@ -147,6 +148,7 @@ startFen = 7k/6P1/8/8/8/8/8/7K w - - 0 1
 }
 
 static void init_engine() {
+    UCI::init(Options);
     pieceMap.init();
     variants.init();
     PSQT::init(variants.get("fairy"));
