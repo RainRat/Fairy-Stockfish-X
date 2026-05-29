@@ -3975,7 +3975,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s, Bitboard o
         && !explicitDoubleStepRegion;
     const Bitboard tripleStepRegion = usesGenericPawnLikeStepHelper ? this->triple_step_region(c, pt)
                                                                     : explicitTripleStepRegion;
-    if (tripleStepRegion & piecePosition & (Initial ? AllSquares : (tripleStepRegion == AllSquares ? AllSquares : this->not_moved_pieces(c))))  //If the original square is in tripleStepRegion and the piece is not moved
+    if (tripleStepRegion & piecePosition)  //If the original square is in tripleStepRegion
     {
         Bitboard extraMultipleStepMoveDestinations = 0x00;  //Bitboard where extra legal multi-step destination square bits are 1
         Bitboard oneSquareAhead = (c == WHITE) ? piecePosition << NORTH : piecePosition >> NORTH;
@@ -3997,7 +3997,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s, Bitboard o
     }
     Bitboard doubleStepRegion = usesGenericPawnLikeStepHelper ? this->double_step_region(c, pt)
                                                               : explicitDoubleStepRegion;
-    if (doubleStepRegion & piecePosition & (Initial ? AllSquares : (doubleStepRegion == AllSquares ? AllSquares : this->not_moved_pieces(c))))  //If the original square is in doubleStepRegion and the piece is not moved
+    if (doubleStepRegion & piecePosition)  //If the original square is in doubleStepRegion
     {
         Bitboard extraMultipleStepMoveDestinations = 0x00;  //Bitboard where extra legal multi-step destination square bits are 1
         Bitboard oneSquareAhead = (c == WHITE) ? piecePosition << NORTH : piecePosition >> NORTH;
