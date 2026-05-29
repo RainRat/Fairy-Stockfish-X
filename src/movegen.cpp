@@ -421,11 +421,10 @@ namespace {
     Bitboard target = spec.target;
     Bitboard fromMask = spec.fromMask;
 
-    if (!pos.pieces(Us, PAWN))
-        return moveList;
-
     constexpr Color     Them     = ~Us;
     constexpr Direction Up       = pawn_push(Us);
+    constexpr Direction Up2      = Direction(2 * int(Up));
+    constexpr Direction Up3      = Direction(3 * int(Up));
     constexpr Direction UpRight  = (Us == WHITE ? NORTH_EAST : SOUTH_WEST);
     constexpr Direction UpLeft   = (Us == WHITE ? NORTH_WEST : SOUTH_EAST);
 
@@ -436,6 +435,13 @@ namespace {
 
     const Bitboard frozen     = pos.freeze_squares();
     const Bitboard pawns      = pos.pieces(Us, PAWN) & fromMask & ~frozen;
+    if (!pawns)
+        return moveList;
+
+    Bitboard localCaptureTarget = target;
+    if (pos.self_capture(PAWN) && GeneratesCaptures)
+        localCaptureTarget |= pos.pieces(Us) & ~pos.pieces(Us, KING) & (Type == EVASIONS ? target : AllSquares);
+
     const Bitboard unmovedPawns = pawns;
     const Bitboard neutral    = pos.dead_squares();
     const Bitboard movable    = pos.board_bb(Us, PAWN) & ~pos.pieces();
@@ -444,27 +450,19 @@ namespace {
                               & (pos.self_capture(PAWN) ? (pos.pieces(Them) | friendlyCapturable | neutral)
                                                     :  (pos.pieces(Them) | neutral));
 
-    target = Type == EVASIONS ? target : AllSquares;
-
     if (pos.topology_wraps())
     {
         Bitboard mandatoryPromotionZone = pos.mandatory_promotion_zone(Us, PAWN);
         if (pos.mandatory_pawn_promotion())
             mandatoryPromotionZone |= standardPromotionZone;
 
-        auto has_promotion_for = [&](Square to) { return has_any_promotion(pos, Us, to); };
-
-        auto emit_promotions = [&](Square from, Square to) {
-            moveList = emit_promotion_variants<Type>(pos, moveList, Us, from, to);
-        };
-
         Bitboard remaining = pawns;
         while (remaining)
         {
             Square from = pop_lsb(remaining);
             Bitboard quiets = pos.moves_from(Us, PAWN, from) & target;
-            Bitboard attacks = pos.attacks_from(Us, PAWN, from) & capturable & target;
-            Bitboard epSquares = pos.attacks_from(Us, PAWN, from) & pos.ep_squares() & ~pos.pieces() & target;
+            Bitboard attacks = pos.attacks_from(Us, PAWN, from) & capturable & localCaptureTarget;
+            Bitboard epSquares = pos.attacks_from(Us, PAWN, from) & pos.ep_squares() & ~pos.pieces() & localCaptureTarget;
             Bitboard quietPromotions = quiets & standardPromotionZone;
             Bitboard capturePromotions = attacks & standardPromotionZone;
 
@@ -474,7 +472,7 @@ namespace {
                 for (Bitboard candidates = (quiets | attacks) & mandatoryPromotionZone; candidates; )
                 {
                     Square to = pop_lsb(candidates);
-                    if (!has_promotion_for(to))
+                    if (!has_any_promotion(pos, Us, to))
                         blocked |= to;
                 }
                 quiets &= ~blocked;
@@ -509,10 +507,10 @@ namespace {
             {
                 if (GeneratesQuiets)
                     while (quietPromotions)
-                        emit_promotions(from, pop_lsb(quietPromotions));
+                        moveList = emit_promotion_variants<Type>(pos, moveList, Us, from, pop_lsb(quietPromotions));
                 if (GeneratesCaptures)
                     while (capturePromotions)
-                        emit_promotions(from, pop_lsb(capturePromotions));
+                        moveList = emit_promotion_variants<Type>(pos, moveList, Us, from, pop_lsb(capturePromotions));
             }
         }
 
@@ -522,8 +520,8 @@ namespace {
     Bitboard b1 = shift<Up>(pawns) & movable & target;
     Bitboard b2 = shift<Up>(shift<Up>(unmovedPawns & doubleStepRegion) & movable) & movable & target;
     Bitboard b3 = shift<Up>(shift<Up>(shift<Up>(unmovedPawns & tripleStepRegion) & movable) & movable) & movable & target;
-    Bitboard brc = shift<UpRight>(pawns) & capturable & target;
-    Bitboard blc = shift<UpLeft >(pawns) & capturable & target;
+    Bitboard brc = shift<UpRight>(pawns) & capturable & localCaptureTarget;
+    Bitboard blc = shift<UpLeft >(pawns) & capturable & localCaptureTarget;
 
     Bitboard b1p = b1 & standardPromotionZone;
     Bitboard b2p = b2 & standardPromotionZone;
@@ -544,8 +542,6 @@ namespace {
         mandatoryPromotionZone |= standardPromotionZone;
     }
 
-    auto has_promotion_for = [&](Square to) { return has_any_promotion(pos, Us, to); };
-
     auto emit_normal_moves = [&](Bitboard bb, Direction delta) {
         while (bb)
         {
@@ -559,7 +555,7 @@ namespace {
         while (bb)
         {
             Square to = pop_lsb(bb);
-            if (has_promotion_for(to))
+            if (has_any_promotion(pos, Us, to))
                 filtered |= to;
         }
         return filtered;
@@ -587,16 +583,16 @@ namespace {
         // Discovered check promotion has been already generated amongst the captures.
         Bitboard dcCandidatePawns = pos.blockers_for_king(Them) & ~file_bb(ksq);
         b1 &= pawn_attacks_bb(Them, ksq) | shift<   Up>(dcCandidatePawns);
-        b2 &= pawn_attacks_bb(Them, ksq) | shift<Up+Up>(dcCandidatePawns);
-        b3 &= pawn_attacks_bb(Them, ksq) | shift<Up+Up+Up>(dcCandidatePawns);
+        b2 &= pawn_attacks_bb(Them, ksq) | shift<Up2>(dcCandidatePawns);
+        b3 &= pawn_attacks_bb(Them, ksq) | shift<Up3>(dcCandidatePawns);
     }
 
     // Single and double pawn pushes, no promotions
     if (GeneratesQuiets)
     {
         emit_normal_moves(b1, Up);
-        emit_normal_moves(b2, Up + Up);
-        emit_normal_moves(b3, Up + Up + Up);
+        emit_normal_moves(b2, Up2);
+        emit_normal_moves(b3, Up3);
     }
 
     // Promotions and underpromotions
@@ -626,13 +622,13 @@ namespace {
         while (b2p)
         {
             Square to = pop_lsb(b2p);
-            moveList = emit_promotion_variants<Type>(pos, moveList, Us, to - (Up + Up), to);
+            moveList = emit_promotion_variants<Type>(pos, moveList, Us, to - Up2, to);
         }
 
         while (b3p)
         {
             Square to = pop_lsb(b3p);
-            moveList = emit_promotion_variants<Type>(pos, moveList, Us, to - (Up + Up + Up), to);
+            moveList = emit_promotion_variants<Type>(pos, moveList, Us, to - Up3, to);
         }
     }
 
@@ -655,7 +651,9 @@ namespace {
                 PieceType pt = pop_msb(ps);
                 if (!pos.promotion_allowed(Us, pt))
                     continue;
-                Bitboard b = ((pos.attacks_from(Us, pt, from) & ~(pos.pieces() | pos.dead_squares())) | from) & target;
+                Bitboard b = (pos.attacks_from(Us, pt, from) & ~(pos.pieces() | pos.dead_squares())) & target;
+                if (Type == EVASIONS ? bool(target & from) : true)
+                    b |= from;
                 while (b)
                 {
                     Square to = pop_lsb(b);
@@ -1000,7 +998,20 @@ namespace {
         || !pawnInfo->universalHopper[1][MODALITY_QUIET].empty()
         || !pawnInfo->universalHopper[1][MODALITY_CAPTURE].empty()
         || pawnInfo->has_runtime_rider_augment();
-    const bool useGenericPawnGenerator = !pawnHasCustomNonStepMovement && !pawnInfo->has_explicit_initial_moves();
+    const bool useFastStandardPawnGenerator =
+           !pawnHasCustomNonStepMovement
+        && !pawnInfo->has_explicit_initial_moves()
+        && pawnInfo->steps[0][MODALITY_QUIET].size() == 1
+        && pawnInfo->steps[0][MODALITY_QUIET].count(NORTH)
+        && pawnInfo->steps[0][MODALITY_CAPTURE].size() == 2
+        && pawnInfo->steps[0][MODALITY_CAPTURE].count(NORTH_EAST)
+        && pawnInfo->steps[0][MODALITY_CAPTURE].count(NORTH_WEST)
+        && pawnInfo->slider[0][MODALITY_QUIET].empty()
+        && pawnInfo->slider[0][MODALITY_CAPTURE].empty()
+        && pawnInfo->tupleSteps[0][MODALITY_QUIET].empty()
+        && pawnInfo->tupleSteps[0][MODALITY_CAPTURE].empty()
+        && pawnInfo->tupleSlider[0][MODALITY_QUIET].empty()
+        && pawnInfo->tupleSlider[0][MODALITY_CAPTURE].empty();
 
     // Skip generating non-king moves when in double check
     if (Type != EVASIONS || !more_than_one(checkers & ~pos.non_sliding_riders()))
@@ -1046,7 +1057,7 @@ namespace {
             if (restrictToForcedJumper)
             {
                 if (forcedJumpPt == PAWN)
-                    moveList = useGenericPawnGenerator
+                    moveList = useFastStandardPawnGenerator
                              ? generate_pawn_moves<Us, Type>(pos, moveList, PawnGenSpec{target, forcedFromMask})
                              : generate_moves<Us, Type>(pos, moveList, PieceGenSpec{PAWN, target, captureTarget, forcedFromMask});
                 else if (forcedJumpPt != KING)
@@ -1054,7 +1065,7 @@ namespace {
             }
             else
             {
-                moveList = useGenericPawnGenerator
+                moveList = useFastStandardPawnGenerator
                          ? generate_pawn_moves<Us, Type>(pos, moveList, PawnGenSpec{target, forcedFromMask})
                          : generate_moves<Us, Type>(pos, moveList, PieceGenSpec{PAWN, target, captureTarget, forcedFromMask});
                 for (PieceSet ps = pos.piece_types() & ~(piece_set(PAWN) | KING); ps;)

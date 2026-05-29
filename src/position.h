@@ -477,6 +477,7 @@ public:
   bool commit_gates() const;
   bool cambodian_moves() const;
   Bitboard diagonal_lines() const;
+  Square pawn_step(Square s, Color us, int steps) const;
   bool pass(Color c) const;
   bool has_setup_drop(Color c) const;
   bool pass_until_setup() const;
@@ -2145,6 +2146,23 @@ inline bool Position::cambodian_moves() const {
 inline Bitboard Position::diagonal_lines() const {
   assert(var != nullptr);
   return var->diagonalLines;
+}
+
+inline Square Position::pawn_step(Square s, Color us, int steps) const {
+  if (s == SQ_NONE)
+      return SQ_NONE;
+  if (topology_wraps()) {
+      const int forward = us == WHITE ? 1 : -1;
+      Square out = SQ_NONE;
+      if (!wrapped_destination_square(s, 0, steps * forward, max_file(), max_rank(), wraps_files(), wraps_ranks(), out))
+          return SQ_NONE;
+      return out;
+  } else {
+      int destRank = int(rank_of(s)) + steps * (us == WHITE ? 1 : -1);
+      if (destRank < 0 || destRank > int(max_rank()))
+          return SQ_NONE;
+      return s + Direction(steps * int(pawn_push(us)));
+  }
 }
 
 inline bool Position::pass(Color c) const {
@@ -3903,7 +3921,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s, Bitboard o
                     && !(occupancy & s2)
                     && wrapped_destination_square(s2, 0, forward, max_file(), max_rank(), wrapFile, wrapRank, s3)
                     && !(occupancy & s3))
-                    b |= square_bb(s1) | square_bb(s2) | square_bb(s3);
+                    b |= square_bb(s3);
             }
             return b & board_bb(c, pt);
         }

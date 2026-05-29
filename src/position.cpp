@@ -1585,7 +1585,7 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
               // a) side to move have a pawn threatening epSquare
               // b) there is an enemy pawn one or two (for triple steps) squares in front of epSquare
               // c) there is no (non-wall) piece on epSquare or behind epSquare
-              Square gateBehind = epSquare + pawn_push(sideToMove);
+              Square gateBehind = pawn_step(epSquare, sideToMove, 1);
               bool behindSquareAllowed = false;
               if (is_ok(gateBehind) && file_of(gateBehind) <= max_file() && rank_of(gateBehind) <= max_rank())
               {
@@ -1598,8 +1598,8 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
                   }
               }
 
-              Square front1 = epSquare + pawn_push(~sideToMove);
-              Square front2 = epSquare + 2 * pawn_push(~sideToMove);
+              Square front1 = pawn_step(epSquare, ~sideToMove, 1);
+              Square front2 = pawn_step(epSquare, ~sideToMove, 2);
               bool front1_ok = is_ok(front1) && file_of(front1) <= max_file() && rank_of(front1) <= max_rank();
               bool front2_ok = is_ok(front2) && file_of(front2) <= max_file() && rank_of(front2) <= max_rank();
 
@@ -4413,15 +4413,18 @@ bool Position::pseudo_legal(const Move m) const {
       if (mandatory_pawn_promotion() && (promotion_zone(pc) & effectiveTo) && !sittuyin_promotion())
           return false;
 
+      Square step1 = pawn_step(from, us, 1);
+      Square step2 = pawn_step(from, us, 2);
+      Square step3 = pawn_step(from, us, 3);
       const bool isStandardPawnMove =
              (pawn_attacks_bb(us, from) & (self_capture(PAWN) ? pieces() : pieces(~us)) & to)
-          || ((from + pawn_push(us) == to) && !(pieces() & to))
-          || (   (from + 2 * pawn_push(us) == to)
+          || ((step1 == to) && !(pieces() & to))
+          || (   (step2 == to)
               && (double_step_region(pc) & from)
-              && !(pieces() & (to | (to - pawn_push(us)))))
-          || (   (from + 3 * pawn_push(us) == to)
+              && !(pieces() & (to | step1)))
+          || (   (step3 == to)
               && (triple_step_region(pc) & from)
-              && !(pieces() & (to | (to - pawn_push(us)) | (to - 2 * pawn_push(us)))));
+              && !(pieces() & (to | step1 | step2)));
 
       // Custom pawn Betza (e.g. royal-race) can define non-orthodox pawn movement.
       if (!isStandardPawnMove
@@ -5763,56 +5766,23 @@ void Position::do_move(Move m, StateInfo& newSt) {
   }
 
       // Set en passant square(s) if the moved pawn can be captured
-      else if (   !topology_wraps()
-          && !dropMove
-          && (   std::abs(int(to) - int(from)) == 2 * NORTH
-              || std::abs(int(to) - int(from)) == 3 * NORTH))
+      else if (!dropMove)
       {
-          if (   (var->enPassantRegion[them] & (to - pawn_push(us)))
-              && ((pawn_attacks_bb(us, to - pawn_push(us)) & pieces(them, PAWN)) || (var->enPassantTypes[them] & ~piece_set(PAWN)))
-              && !(walling(us) && gating_square(m) == to - pawn_push(us)))
-          {
-              st->epSquares |= to - pawn_push(us);
-              k ^= Zobrist::enpassant[to - pawn_push(us)];
-          }
-          if (   std::abs(int(to) - int(from)) == 3 * NORTH
-              && (var->enPassantRegion[them] & (to - 2 * pawn_push(us)))
-              && ((pawn_attacks_bb(us, to - 2 * pawn_push(us)) & pieces(them, PAWN)) || (var->enPassantTypes[them] & ~piece_set(PAWN)))
-              && !(walling(us) && gating_square(m) == to - 2 * pawn_push(us)))
-          {
-              st->epSquares |= to - 2 * pawn_push(us);
-              k ^= Zobrist::enpassant[to - 2 * pawn_push(us)];
-          }
-      }
-      else if (!dropMove && topology_wraps())
-      {
-          auto stepped = [&](Square start, int count) {
-              Square s = start;
-              int forwardDr = us == WHITE ? 1 : -1;
-              for (int i = 0; i < count; ++i)
-              {
-                  Square next;
-                  if (!wrapped_destination_square(s, 0, forwardDr, max_file(), max_rank(), wraps_files(), wraps_ranks(), next))
-                      break;
-                  s = next;
-              }
-              return s;
-          };
+          Square step1 = pawn_step(from, us, 1);
+          Square step2 = pawn_step(from, us, 2);
+          Square step3 = pawn_step(from, us, 3);
 
           auto maybe_add_ep = [&](Square epSq) {
               if (   epSq != SQ_NONE
                   && (var->enPassantRegion[them] & epSq)
-                  && ((attacks_from(us, PAWN, epSq) & pieces(them, PAWN)) || (var->enPassantTypes[them] & ~piece_set(PAWN)))
+                  && (((topology_wraps() ? attacks_from(us, PAWN, epSq) : pawn_attacks_bb(us, epSq)) & pieces(them, PAWN))
+                      || (var->enPassantTypes[them] & ~piece_set(PAWN)))
                   && !(walling(us) && gating_square(m) == epSq))
               {
                   st->epSquares |= epSq;
                   k ^= Zobrist::enpassant[epSq];
               }
           };
-
-          Square step1 = stepped(from, 1);
-          Square step2 = stepped(from, 2);
-          Square step3 = stepped(from, 3);
 
           if (to == step2)
               maybe_add_ep(step1);
