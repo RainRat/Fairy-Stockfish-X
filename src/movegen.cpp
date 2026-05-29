@@ -762,8 +762,35 @@ namespace {
             while (candidates)
             {
                 Square to = pop_lsb(candidates);
-                if (pos.jump_capture_square(from, to) != SQ_NONE)
-                    jumpCaptures |= to;
+                Square hurdle = pos.jump_capture_square(from, to);
+                if (hurdle != SQ_NONE)
+                {
+                    bool ok = true;
+                    if constexpr (Type == EVASIONS)
+                    {
+                        Bitboard checkers = pos.evasion_checkers();
+                        Square royalSq = pos.royal_square(Us);
+                        if (checkers & hurdle)
+                        {
+                            Bitboard remaining = checkers & ~square_bb(hurdle);
+                            while (remaining)
+                            {
+                                Square checksq = pop_lsb(remaining);
+                                if (!(pos.checker_evasion_targets(Us, royalSq, checksq) & to))
+                                {
+                                    ok = false;
+                                    break;
+                                }
+                            }
+                        }
+                        else
+                        {
+                            ok = (target & to);
+                        }
+                    }
+                    if (ok)
+                        jumpCaptures |= to;
+                }
             }
         }
         Bitboard pushMoves = 0;
@@ -981,7 +1008,7 @@ namespace {
         if (restrictToForcedJumper)
         {
             target = Bitboard(0);
-            captureTarget = Bitboard(0);
+            captureTarget = pos.pieces(~Us) | pos.dead_squares();
         }
         else
         {

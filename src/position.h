@@ -4684,6 +4684,12 @@ inline void Position::remove_piece(Square s) {
 
 inline void Position::move_piece(Square from, Square to) {
 
+  if (from == to) {
+      this->st->not_moved_pieces[WHITE] &= (~square_bb(from));
+      this->st->not_moved_pieces[BLACK] &= (~square_bb(from));
+      return;
+  }
+
   Piece pc = board[from];
   Bitboard fromTo = square_bb(from) ^ to; // from == to needs to cancel out
   byTypeBB[ALL_PIECES] ^= fromTo;

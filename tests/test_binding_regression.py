@@ -45,5 +45,16 @@ class TestBindings(unittest.TestCase):
         self.assertEqual(sf.game_result("anti-losalamos", fen, []), sf.VALUE_NONE)
         self.assertTrue(sf.legal_moves("anti-losalamos", fen, []))
 
+    def test_move_piece_self_move_promoted(self):
+        with open(ROOT_DIR / "src" / "variants.ini", "r", encoding="utf-8") as f:
+            sf.load_variant_config(f.read())
+        # White has a promoted checkers king (K) on c3 and a man on e5.
+        # Black has a checkers man on f6.
+        # FEN: 8/8/5m2/4M3/8/2K5/8/7K b - - 0 1
+        fen = "8/8/5m2/4M3/8/2K5/8/7K b - - 0 1"
+        # Black plays f6d4 (jump capture), forcing White to pass (0000) on c3 where the King is.
+        next_fen = sf.get_fen("checkers", fen, ["f6d4", "0000"])
+        self.assertIn("K", next_fen)
+
 if __name__ == "__main__":
     unittest.main()

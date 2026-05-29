@@ -340,7 +340,7 @@ inline void walk_rose_paths(Square from, Callback&& callback) {
       }
 }
 
-inline Bitboard rose_attacks_bb(Square from, Bitboard occupied, const MagicGeometry* /*mg*/ = current_magic_geometry) {
+inline Bitboard rose_attacks_bb(Square from, Bitboard occupied) {
   Bitboard attack = 0;
   walk_rose_paths(from, [&](Bitboard /*path*/, Bitboard dst, Square next) {
       attack |= dst;

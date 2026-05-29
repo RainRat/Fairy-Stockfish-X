@@ -899,6 +899,10 @@ namespace {
 #endif
 }
 
+// init_magics() computes all magic bitboard tables for a given board size.
+// Assumes single-threaded initialization: must be called only from the main
+// thread before search threads start, as current_magic_geometry is accessed
+// lock-free during search.
 std::shared_ptr<const MagicGeometry> Bitboards::init_magics(File maxFile, Rank maxRank) {
 #if !defined(VERY_LARGE_BOARDS)
   const uint16_t boardKey = magic_board_key(maxFile, maxRank);
