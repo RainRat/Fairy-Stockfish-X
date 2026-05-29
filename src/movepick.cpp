@@ -120,19 +120,7 @@ MovePicker::MovePicker(const Position& p, Move ttm, Depth d, const ButterflyHist
              ttMove(ttm), refutations{{killers[0], 0}, {killers[1], 0}, {cm, 0}}, depth(d), ply(pl) {
 
   assert(d > 0);
-#ifdef USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
-  thread = pos.this_thread();
-  if (thread)
-      baseMoveList = acquire_thread_buffer(thread);
-  else
-  {
-      moveListPtr = std::make_unique<ExtMove[]>(MOVE_PICK_OVERFLOW_CAPACITY);
-      baseMoveList = moveListPtr.get();
-  }
-  moveList = baseMoveList;
-#else
-  moveList = moves;
-#endif
+  init_move_list_storage();
 
   stage = (pos.evasion_checkers() ? EVASION_TT : MAIN_TT) +
           !(ttm && pos.pseudo_legal(ttm));
@@ -144,19 +132,7 @@ MovePicker::MovePicker(const Position& p, Move ttm, Depth d, const ButterflyHist
            : pos(p), mainHistory(mh), gateHistory(dh), captureHistory(cph), continuationHistory(ch), ttMove(ttm), recaptureSquare(rs), depth(d) {
 
   assert(d <= 0);
-#ifdef USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
-  thread = pos.this_thread();
-  if (thread)
-      baseMoveList = acquire_thread_buffer(thread);
-  else
-  {
-      moveListPtr = std::make_unique<ExtMove[]>(MOVE_PICK_OVERFLOW_CAPACITY);
-      baseMoveList = moveListPtr.get();
-  }
-  moveList = baseMoveList;
-#else
-  moveList = moves;
-#endif
+  init_move_list_storage();
 
   stage = (pos.evasion_checkers() ? EVASION_TT : QSEARCH_TT) +
           !(   ttm
@@ -170,6 +146,14 @@ MovePicker::MovePicker(const Position& p, Move ttm, Value th, const GateHistory*
            : pos(p), gateHistory(dh), captureHistory(cph), ttMove(ttm), threshold(th) {
 
   assert(!pos.evasion_checkers());
+  init_move_list_storage();
+
+  stage = PROBCUT_TT + !(ttm && pos.capture(ttm)
+                             && pos.pseudo_legal(ttm)
+                             && (pos.see_pruning_unreliable() || pos.see_ge(ttm, threshold)));
+}
+
+void MovePicker::init_move_list_storage() {
 #ifdef USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
   thread = pos.this_thread();
   if (thread)
@@ -183,10 +167,6 @@ MovePicker::MovePicker(const Position& p, Move ttm, Value th, const GateHistory*
 #else
   moveList = moves;
 #endif
-
-  stage = PROBCUT_TT + !(ttm && pos.capture(ttm)
-                             && pos.pseudo_legal(ttm)
-                             && (pos.see_pruning_unreliable() || pos.see_ge(ttm, threshold)));
 }
 
 MovePicker::~MovePicker() {
@@ -344,6 +324,28 @@ Move MovePicker::select(Pred filter) {
   return MOVE_NONE;
 }
 
+template<GenType Type>
+bool MovePicker::resume_deferred_potions(
+    ExtMove* appendBegin,
+    ExtMove* baseEnd,
+    bool& deferred,
+    bool scoreMoves) {
+  if (deferred)
+  {
+      endMoves = append_potions<Type>(pos, appendBegin, baseEnd);
+      endMoves = prune_useless_potions(baseEnd, endMoves);
+      cur = baseEnd;
+      if constexpr (Type == CAPTURES || Type == QUIETS || Type == EVASIONS)
+      {
+          if (scoreMoves)
+              score<Type>();
+      }
+      deferred = false;
+      return true;
+  }
+  return false;
+}
+
 /// MovePicker::next_move() is the most important method of the MovePicker class. It
 /// returns a new pseudo-legal move every time it is called until there are no more
 /// moves left, picking the move with the highest score from a list of generated moves.
@@ -394,15 +396,8 @@ top:
                               true : (*endBadCaptures++ = *cur, false); }))
           return *(cur - 1);
 
-      if (capturePotionsDeferred)
-      {
-          endMoves = append_potions<CAPTURES>(pos, moveList, captureBaseEnd);
-          endMoves = prune_useless_potions(captureBaseEnd, endMoves);
-          cur = captureBaseEnd;
-          score<CAPTURES>();
-          capturePotionsDeferred = false;
+      if (resume_deferred_potions<CAPTURES>(moveList, captureBaseEnd, capturePotionsDeferred, true))
           goto top;
-      }
 
       // Prepare the pointers to loop over the refutations array
       cur = std::begin(refutations);
@@ -450,14 +445,8 @@ top:
                                       && *cur != refutations[2].move;}))
           return *(cur - 1);
 
-      if (!skipQuiets && quietPotionsDeferred)
-      {
-          endMoves = append_potions<QUIETS>(pos, quietListBegin, quietBaseEnd);
-          endMoves = prune_useless_potions(quietBaseEnd, endMoves);
-          cur = quietBaseEnd;
-          quietPotionsDeferred = false;
+      if (!skipQuiets && resume_deferred_potions<QUIETS>(quietListBegin, quietBaseEnd, quietPotionsDeferred, false))
           goto top;
-      }
 
       // Prepare the pointers to loop over the bad captures
       cur = moveList;
@@ -486,15 +475,8 @@ top:
       if (Move m = select<Best>([](){ return true; }))
           return m;
 
-      if (evasionPotionsDeferred)
-      {
-          endMoves = append_potions<EVASIONS>(pos, moveList, evasionBaseEnd);
-          endMoves = prune_useless_potions(evasionBaseEnd, endMoves);
-          cur = evasionBaseEnd;
-          score<EVASIONS>();
-          evasionPotionsDeferred = false;
+      if (resume_deferred_potions<EVASIONS>(moveList, evasionBaseEnd, evasionPotionsDeferred, true))
           goto top;
-      }
 
       return MOVE_NONE;
 
@@ -529,14 +511,8 @@ top:
       if (Move m = select<Next>([](){ return true; }))
           return m;
 
-      if (qcheckPotionsDeferred)
-      {
-          endMoves = append_potions<QUIET_CHECKS>(pos, moveList, qcheckBaseEnd);
-          endMoves = prune_useless_potions(qcheckBaseEnd, endMoves);
-          cur = qcheckBaseEnd;
-          qcheckPotionsDeferred = false;
+      if (resume_deferred_potions<QUIET_CHECKS>(moveList, qcheckBaseEnd, qcheckPotionsDeferred, false))
           goto top;
-      }
 
       return MOVE_NONE;
   }

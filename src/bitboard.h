@@ -1026,16 +1026,11 @@ inline Bitboard rider_attacks_bb(RiderType R, Square s, Bitboard occupied, const
   if (R == RIDER_ELEPHANT)
       return rider_attacks_bb<RIDER_ELEPHANT>(s, occupied, mg);
   if (R == RIDER_SKI_ROOK_H)
-      return  ski_slider_attacks(s, occupied,  1, 0)
-            | ski_slider_attacks(s, occupied, -1, 0);
+      return rider_attacks_bb<RIDER_SKI_ROOK_H>(s, occupied, mg);
   if (R == RIDER_SKI_ROOK_V)
-      return  ski_slider_attacks(s, occupied, 0,  1)
-            | ski_slider_attacks(s, occupied, 0, -1);
+      return rider_attacks_bb<RIDER_SKI_ROOK_V>(s, occupied, mg);
   if (R == RIDER_SKI_BISHOP)
-      return  ski_slider_attacks(s, occupied,  1,  1)
-            | ski_slider_attacks(s, occupied,  1, -1)
-            | ski_slider_attacks(s, occupied, -1,  1)
-            | ski_slider_attacks(s, occupied, -1, -1);
+      return rider_attacks_bb<RIDER_SKI_BISHOP>(s, occupied, mg);
   if (R == RIDER_ROSE)
       return rose_attacks_bb(s, occupied);
   if (R == RIDER_GRIFFON_NH) return rider_attacks_bb<RIDER_GRIFFON_NH>(s, occupied, mg);

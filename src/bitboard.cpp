@@ -45,6 +45,9 @@ Bitboard BoardSizeBB[FILE_NB][RANK_NB];
 RiderType AttackRiderTypes[PIECE_TYPE_NB];
 RiderType MoveRiderTypes[2][PIECE_TYPE_NB];
 
+// Lifecycle constraint: current_magic_geometry is strictly updated before worker threads
+// are started (e.g. during option initialization or before search start) and is
+// read-only during parallel search, ensuring safe unsynchronized reads.
 std::shared_ptr<const MagicGeometry> current_magic_geometry_owner;
 const MagicGeometry* current_magic_geometry = nullptr;
 

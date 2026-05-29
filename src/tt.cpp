@@ -66,7 +66,7 @@ void TranspositionTable::resize(size_t mbSize) {
 
   aligned_large_pages_free(table);
 
-  clusterCount = mbSize * 1024 * 1024 / sizeof(Cluster);
+  clusterCount = std::max<size_t>(1, mbSize * 1024 * 1024 / sizeof(Cluster));
 
   table = static_cast<Cluster*>(aligned_large_pages_alloc(clusterCount * sizeof(Cluster)));
   if (!table)
