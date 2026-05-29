@@ -102,7 +102,6 @@ struct MagicGeometry {
   }
 };
 
-extern std::shared_ptr<const MagicGeometry> current_magic_geometry_owner;
 extern const MagicGeometry* current_magic_geometry;
 
 namespace Bitbases {
@@ -207,7 +206,7 @@ extern Bitboard LeaperMoves[2][COLOR_NB][PIECE_TYPE_NB][SQUARE_NB];
 extern Bitboard BoardSizeBB[FILE_NB][RANK_NB];
 extern RiderType AttackRiderTypes[PIECE_TYPE_NB];
 extern RiderType MoveRiderTypes[2][PIECE_TYPE_NB];
-Bitboard custom_rider_attacks(PieceType pt, bool initial, bool isCapture, Color c, Square s, Bitboard occupied, bool isTuple);
+Bitboard custom_rider_attacks(PieceType pt, bool initial, bool isCapture, Color c, Square s, Bitboard occupied);
 Bitboard tuple_rider_between_bb(PieceType pt, Square s1, Square s2);
 inline Square lsb(Bitboard b);
 
@@ -915,6 +914,15 @@ inline Bitboard ski_slider_attacks(Square s, Bitboard occupied, int stepF, int s
   return attack;
 }
 
+constexpr bool is_magic_rider(RiderType R) {
+  return R >= RIDER_BISHOP && R <= RIDER_GRASSHOPPER_D && R != RIDER_LAME_DABBABA && R != RIDER_ELEPHANT;
+}
+
+inline const Magic& magic_for_rider(const MagicGeometry* mg, RiderType R, Square s) {
+  assert(is_magic_rider(R));
+  return mg->magics[lsb(Bitboard(R))][s];
+}
+
 template<RiderType R>
 inline Bitboard rider_attacks_bb(Square s, Bitboard occupied, const MagicGeometry* mg = current_magic_geometry) {
 
@@ -999,21 +1007,12 @@ inline Bitboard rider_attacks_bb(Square s, Bitboard occupied, const MagicGeometr
   if constexpr (R == RIDER_ROSE)
       return rose_attacks_bb(s, occupied);
 
-  const Magic& m =  R == RIDER_ROOK_H ? mg->RookMagicsH[s]
-                  : R == RIDER_ROOK_V ? mg->RookMagicsV[s]
-                  : R == RIDER_CANNON_H ? mg->CannonMagicsH[s]
-                  : R == RIDER_CANNON_V ? mg->CannonMagicsV[s]
-                  : R == RIDER_LAME_DABBABA ? mg->BishopMagics[s]
-                  : R == RIDER_HORSE ? mg->HorseMagics[s]
-                  : R == RIDER_ELEPHANT ? mg->BishopMagics[s]
-                  : R == RIDER_JANGGI_ELEPHANT ? mg->JanggiElephantMagics[s]
-                  : R == RIDER_CANNON_DIAG ? mg->CannonDiagMagics[s]
-                  : R == RIDER_NIGHTRIDER ? mg->NightriderMagics[s]
-                  : R == RIDER_GRASSHOPPER_H ? mg->GrasshopperMagicsH[s]
-                  : R == RIDER_GRASSHOPPER_V ? mg->GrasshopperMagicsV[s]
-                  : R == RIDER_GRASSHOPPER_D ? mg->GrasshopperMagicsD[s]
-                  : mg->BishopMagics[s];
-  return m.attacks[m.index(occupied)];
+  if constexpr (is_magic_rider(R)) {
+      const Magic& m = magic_for_rider(mg, R, s);
+      return m.attacks[m.index(occupied)];
+  } else {
+      return 0;
+  }
 }
 
 inline Square lsb(Bitboard b);
@@ -1041,8 +1040,11 @@ inline Bitboard rider_attacks_bb(RiderType R, Square s, Bitboard occupied, const
   if (R == RIDER_MANTICORE_NW) return rider_attacks_bb<RIDER_MANTICORE_NW>(s, occupied, mg);
   if (R == RIDER_MANTICORE_SE) return rider_attacks_bb<RIDER_MANTICORE_SE>(s, occupied, mg);
   if (R == RIDER_MANTICORE_SW) return rider_attacks_bb<RIDER_MANTICORE_SW>(s, occupied, mg);
-  const Magic& m = mg->magics[lsb(R)][s]; // re-use Bitboard lsb for riders
-  return m.attacks[m.index(occupied)];
+  if (is_magic_rider(R)) {
+      const Magic& m = magic_for_rider(mg, R, s);
+      return m.attacks[m.index(occupied)];
+  }
+  return 0;
 }
 #endif
 
@@ -1092,8 +1094,7 @@ inline Bitboard attacks_bb(Color c, PieceType pt, Square s, Bitboard occupied, c
   RiderType r = AttackRiderTypes[pt];
   while (r)
       b |= rider_attacks_bb(pop_rider(r), s, occupied, mg);
-  b |= custom_rider_attacks(pt, false, true, c, s, occupied, false);
-  b |= custom_rider_attacks(pt, false, true, c, s, occupied, true);
+  b |= custom_rider_attacks(pt, false, true, c, s, occupied);
   return b & PseudoAttacks[c][pt][s];
 }
 
@@ -1105,8 +1106,7 @@ inline Bitboard moves_bb(Color c, PieceType pt, Square s, Bitboard occupied, con
   RiderType r = MoveRiderTypes[Initial][pt];
   while (r)
       b |= rider_attacks_bb(pop_rider(r), s, occupied, mg);
-  b |= custom_rider_attacks(pt, Initial, false, c, s, occupied, false);
-  b |= custom_rider_attacks(pt, Initial, false, c, s, occupied, true);
+  b |= custom_rider_attacks(pt, Initial, false, c, s, occupied);
   return b & PseudoMoves[Initial][c][pt][s];
 }
 

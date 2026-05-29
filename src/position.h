@@ -548,8 +548,8 @@ public:
   MaterialCounting material_counting() const;
 
   const MagicGeometry* magic_geometry() const {
-    const Variant* v = variant();
-    return (v && v->magicGeometry) ? v->magicGeometry.get() : current_magic_geometry;
+    const Variant& v = var_ref();
+    return v.magicGeometry ? v.magicGeometry.get() : current_magic_geometry;
   }
 
   template<PieceType Pt>
@@ -938,8 +938,7 @@ inline bool Position::two_boards() const {
 }
 
 inline Bitboard Position::board_bb() const {
-  assert(var != nullptr);
-  return board_size_bb(var->maxFile, var->maxRank) & ~st->wallSquares;
+  return board_size_bb(var_ref().maxFile, var_ref().maxRank) & ~st->wallSquares;
 }
 
 inline Bitboard Position::dead_squares() const {
@@ -947,116 +946,97 @@ inline Bitboard Position::dead_squares() const {
 }
 
 inline Bitboard Position::board_bb(Color c, PieceType pt) const {
-  assert(var != nullptr);
-  return var->mobilityRegion[c][pt] ? var->mobilityRegion[c][pt] & board_bb() : board_bb();
+  return var_ref().mobilityRegion[c][pt] ? var_ref().mobilityRegion[c][pt] & board_bb() : board_bb();
 }
 
 inline PieceSet Position::piece_types() const {
-  assert(var != nullptr);
-  return var->pieceTypes;
+  return var_ref().pieceTypes;
 }
 
 inline const std::string& Position::piece_to_char() const {
-  assert(var != nullptr);
-  return var->pieceToChar;
+  return var_ref().pieceToChar;
 }
 
 inline const std::string& Position::piece_to_char_synonyms() const {
-  assert(var != nullptr);
-  return var->pieceToCharSynonyms;
+  return var_ref().pieceToCharSynonyms;
 }
 
 inline const std::string& Position::piece_symbol(Piece pc) const {
-  assert(var != nullptr);
-  return var->piece_symbol(pc);
+  return var_ref().piece_symbol(pc);
 }
 
 inline const std::string& Position::piece_symbol_synonym(Piece pc) const {
-  assert(var != nullptr);
-  return var->piece_symbol_synonym(pc);
+  return var_ref().piece_symbol_synonym(pc);
 }
 
 inline Piece Position::piece_from_symbol(const std::string& token) const {
-  assert(var != nullptr);
-  return var->piece_from_symbol(token);
+  return var_ref().piece_from_symbol(token);
 }
 
 inline PieceType Position::piece_type_from_symbol(const std::string& token) const {
-  assert(var != nullptr);
-  return var->piece_type_from_symbol(token);
+  return var_ref().piece_type_from_symbol(token);
 }
 
 inline Bitboard Position::promotion_zone(Color c) const {
-  assert(var != nullptr);
-  return var->promotionRegion.get(c).fallback;
+  return var_ref().promotionRegion.get(c).fallback;
 }
 
 inline Bitboard Position::promotion_zone(Color c, PieceType pt) const {
-    assert(var != nullptr);
     assert(pt != NO_PIECE_TYPE);
-    return var->promotionRegion.get(c).boardOfPiece(piece_to_char()[pt]);
+    return var_ref().promotionRegion.get(c).boardOfPiece(piece_to_char()[pt]);
 }
 
 inline Bitboard Position::promotion_zone(Piece p) const {
-    assert(var != nullptr);
     assert(p != NO_PIECE);
     return promotion_zone(color_of(p), type_of(p));
 }
 
 inline Bitboard Position::mandatory_promotion_zone(Color c) const {
-  assert(var != nullptr);
-  return var->mandatoryPromotionRegion[c];
+  return var_ref().mandatoryPromotionRegion[c];
 }
 
 inline Bitboard Position::mandatory_promotion_zone(Color c, PieceType pt) const {
-  assert(var != nullptr);
   return mandatory_promotion_zone(c) & promotion_zone(c, pt);
 }
 
 inline Bitboard Position::mandatory_promotion_zone(Piece p) const {
-  assert(var != nullptr);
   assert(p != NO_PIECE);
   return mandatory_promotion_zone(color_of(p), type_of(p));
 }
 
 inline Square Position::promotion_square(Color c, Square s) const {
-  assert(var != nullptr);
   // Return the nearest promotion-zone square for the piece currently on `s`,
   // searching along color `c`'s forward file. Callers should pass a square
   // occupied by a piece of color `c`; empty or mismatched squares return SQ_NONE.
   Piece p = piece_on(s);
-  Bitboard b = ((p == NO_PIECE) ? Bitboard(0) : promotion_zone(p)) & forward_file_bb(c, s) & board_bb();
+  if (p == NO_PIECE || color_of(p) != c) return SQ_NONE;
+  Bitboard b = promotion_zone(p) & forward_file_bb(c, s) & board_bb();
   return !b ? SQ_NONE : c == WHITE ? lsb(b) : msb(b);
 }
 
 inline PieceType Position::main_promotion_pawn_type(Color c) const {
-  assert(var != nullptr);
-  return var->mainPromotionPawnType[c];
+  return var_ref().mainPromotionPawnType[c];
 }
 
 inline PieceSet Position::promotion_piece_types(Color c) const {
-  assert(var != nullptr);
-  return var->promotionPieceTypes.get(c).unionSet();
+  return var_ref().promotionPieceTypes.get(c).unionSet();
 }
 
 inline PieceSet Position::promotion_piece_types(Color c, Square s) const {
-  assert(var != nullptr);
   if (s != SQ_NONE)
   {
       File f = file_of(s);
-      return var->promotionPieceTypes.get(c).piecesOfFile(f);
+      return var_ref().promotionPieceTypes.get(c).piecesOfFile(f);
   }
   return promotion_piece_types(c);
 }
 
 inline bool Position::sittuyin_promotion() const {
-  assert(var != nullptr);
-  return var->sittuyinPromotion;
+  return var_ref().sittuyinPromotion;
 }
 
 inline int Position::promotion_limit(PieceType pt) const {
-  assert(var != nullptr);
-  return var->promotionLimit[pt];
+  return var_ref().promotionLimit[pt];
 }
 
 inline bool Position::promotion_allowed(Color c, PieceType pt) const {
@@ -1077,17 +1057,14 @@ inline bool Position::promotion_allowed(Color c, PieceType pt, Square s) const {
 }
 
 inline PieceType Position::promoted_piece_type(PieceType pt) const {
-  assert(var != nullptr);
-  return var->promotedPieceType[pt];
+  return var_ref().promotedPieceType[pt];
 }
 
 inline bool Position::piece_promotion_on_capture() const {
-  assert(var != nullptr);
-  return var->piecePromotionOnCapture;
+  return var_ref().piecePromotionOnCapture;
 }
 
 inline bool Position::mandatory_pawn_promotion() const {
-  assert(var != nullptr);
   return var->mandatoryPawnPromotion.get(side_to_move());
 }
 
@@ -2724,7 +2701,7 @@ inline bool Position::first_move_lose_on_check() const {
 
 inline Bitboard Position::clone_targets_from(Color c, Square from) const {
   Piece mover = piece_on(from);
-  if (color_of(mover) != c || !can_clone(mover))
+  if (mover == NO_PIECE || color_of(mover) != c || !can_clone(mover))
       return 0;
 
   PieceType pt = type_of(mover);

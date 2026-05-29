@@ -45,10 +45,9 @@ Bitboard BoardSizeBB[FILE_NB][RANK_NB];
 RiderType AttackRiderTypes[PIECE_TYPE_NB];
 RiderType MoveRiderTypes[2][PIECE_TYPE_NB];
 
-// Lifecycle constraint: current_magic_geometry is strictly updated before worker threads
-// are started (e.g. during option initialization or before search start) and is
-// read-only during parallel search, ensuring safe unsynchronized reads.
-std::shared_ptr<const MagicGeometry> current_magic_geometry_owner;
+namespace {
+  std::shared_ptr<const MagicGeometry> current_magic_geometry_owner;
+}
 const MagicGeometry* current_magic_geometry = nullptr;
 
 namespace {
@@ -514,28 +513,32 @@ Bitboard rider_attacks_bb(
       if (src == SQ_NONE) return Bitboard(0);
       if (occupied & src) return square_bb(src);
       return square_bb(src)
-            | sliding_attack<RIDER>(std::map<Direction, int>{{NORTH_EAST, 0}, {NORTH_WEST, 0}}, src, occupied);
+            | fixed_step_rider_attacks(src, occupied, 1, 1)
+            | fixed_step_rider_attacks(src, occupied, -1, 1);
   }
   case RIDER_MANTICORE_NW: {
       Square src = shifted_source(WEST);
       if (src == SQ_NONE) return Bitboard(0);
       if (occupied & src) return square_bb(src);
       return square_bb(src)
-            | sliding_attack<RIDER>(std::map<Direction, int>{{NORTH_WEST, 0}, {SOUTH_WEST, 0}}, src, occupied);
+            | fixed_step_rider_attacks(src, occupied, -1, 1)
+            | fixed_step_rider_attacks(src, occupied, -1, -1);
   }
   case RIDER_MANTICORE_SE: {
       Square src = shifted_source(EAST);
       if (src == SQ_NONE) return Bitboard(0);
       if (occupied & src) return square_bb(src);
       return square_bb(src)
-            | sliding_attack<RIDER>(std::map<Direction, int>{{NORTH_EAST, 0}, {SOUTH_EAST, 0}}, src, occupied);
+            | fixed_step_rider_attacks(src, occupied, 1, 1)
+            | fixed_step_rider_attacks(src, occupied, 1, -1);
   }
   case RIDER_MANTICORE_SW: {
       Square src = shifted_source(SOUTH);
       if (src == SQ_NONE) return Bitboard(0);
       if (occupied & src) return square_bb(src);
       return square_bb(src)
-            | sliding_attack<RIDER>(std::map<Direction, int>{{SOUTH_EAST, 0}, {SOUTH_WEST, 0}}, src, occupied);
+            | fixed_step_rider_attacks(src, occupied, 1, -1)
+            | fixed_step_rider_attacks(src, occupied, -1, -1);
   }
   case RIDER_SKI_ROOK_H: return ski_sliding_attack(RookDirectionsH, s, occupied);
   case RIDER_SKI_ROOK_V: return ski_sliding_attack(RookDirectionsV, s, occupied);
@@ -546,12 +549,10 @@ Bitboard rider_attacks_bb(
 }
 #endif
 
-Bitboard custom_rider_attacks(PieceType pt, bool initial, bool isCapture, Color c, Square s, Bitboard occupied, bool isTuple) {
+Bitboard custom_rider_attacks(PieceType pt, bool initial, bool isCapture, Color c, Square s, Bitboard occupied) {
   MoveModality m = isCapture ? MODALITY_CAPTURE : MODALITY_QUIET;
-  if (isTuple)
-      return tuple_rider_attacks(pieceMap.get(pt)->tupleSlider[initial][m], s, occupied, c);
-  else
-      return leap_rider_attacks(pieceMap.get(pt)->leapRider[initial][m], s, occupied, c);
+  return leap_rider_attacks(pieceMap.get(pt)->leapRider[initial][m], s, occupied, c)
+       | tuple_rider_attacks(pieceMap.get(pt)->tupleSlider[initial][m], s, occupied, c);
 }
 
 Bitboard tuple_rider_between_bb(PieceType pt, Square s1, Square s2) {
@@ -635,30 +636,30 @@ void Bitboards::init_pieces() {
       }
 
       // Initialize move/attack bitboards
-      for (Color c : { WHITE, BLACK })
+      for (auto modality : {MODALITY_QUIET, MODALITY_CAPTURE})
       {
-          for (auto modality : {MODALITY_QUIET, MODALITY_CAPTURE})
+          for (bool initial : {false, true})
           {
-              for (bool initial : {false, true})
+              // We do not support initial captures
+              if (modality == MODALITY_CAPTURE && initial)
+                  continue;
+
+              std::map<Direction, int> riderDirs;
+              std::map<Direction, int> skiDirs;
+              for (const auto& slider : pi->slider[initial][modality])
               {
-                  // We do not support initial captures
-                  if (modality == MODALITY_CAPTURE && initial)
-                      continue;
+                  const Direction d = slider.first;
+                  const int limit = slider.second;
+                  if (limit == SKI_SLIDER_LIMIT)
+                      skiDirs[d] = 0;
+                  else if (limit == MAX_SLIDER_LIMIT)
+                      riderDirs[d] = 0;
+                  else if (limit >= 0 || is_slider_range(limit))
+                      riderDirs[d] = limit;
+              }
 
-                  std::map<Direction, int> riderDirs;
-                  std::map<Direction, int> skiDirs;
-                  for (const auto& slider : pi->slider[initial][modality])
-                  {
-                      const Direction d = slider.first;
-                      const int limit = slider.second;
-                      if (limit == SKI_SLIDER_LIMIT)
-                          skiDirs[d] = 0;
-                      else if (limit == MAX_SLIDER_LIMIT)
-                          riderDirs[d] = 0;
-                      else if (limit >= 0 || is_slider_range(limit))
-                          riderDirs[d] = limit;
-                  }
-
+              for (Color c : { WHITE, BLACK })
+              {
                   for (Square s = SQ_A1; s <= SQ_MAX; ++s)
                   {
                       auto& pseudo = modality == MODALITY_CAPTURE ? PseudoAttacks[c][pt][s] : PseudoMoves[initial][c][pt][s];
@@ -667,9 +668,10 @@ void Bitboards::init_pieces() {
                       leaper = 0;
                       for (auto const& [d, limit] : pi->steps[initial][modality])
                       {
-                          pseudo |= safe_destination(s, c == WHITE ? d : -d);
+                          Bitboard dst = safe_destination(s, c == WHITE ? d : -d);
+                          pseudo |= dst;
                           if (!limit)
-                              leaper |= safe_destination(s, c == WHITE ? d : -d);
+                              leaper |= dst;
                       }
                       for (auto const& [dr, df] : pi->tupleSteps[initial][modality])
                       {

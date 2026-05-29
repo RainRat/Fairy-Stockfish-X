@@ -390,6 +390,9 @@ invalid_variant_positions = {
 
 
 class TestPyffish(unittest.TestCase):
+    def test_run_cpp_tests(self):
+        self.assertTrue(sf.run_cpp_tests())
+
     def test_version(self):
         result = sf.version()
         self.assertEqual(len(result), 3)

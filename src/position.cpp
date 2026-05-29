@@ -3168,11 +3168,7 @@ bool Position::legal(Move m) const {
   if (must_capture() && !capture(m) && has_capture())
       return false;
 
-  if (swapMove)
-  {
-      if (violates_same_player_board_repetition(m))
-          return false;
-
+  auto legal_after_probe_move = [&](Move m) {
       Position probe;
       StateInfo setupState, nextState;
       probe.set(variant(), fen(), is_chess960(), &setupState, this_thread());
@@ -3181,6 +3177,14 @@ bool Position::legal(Move m) const {
       if (!allow_checks() && probeRoyal != SQ_NONE && probe.attackers_to_king(probeRoyal, them))
           return false;
       return true;
+  };
+
+  if (swapMove)
+  {
+      if (violates_same_player_board_repetition(m))
+          return false;
+
+      return legal_after_probe_move(m);
   }
 
   if (pullMove)
@@ -3188,14 +3192,7 @@ bool Position::legal(Move m) const {
       if (violates_same_player_board_repetition(m))
           return false;
 
-      Position probe;
-      StateInfo setupState, nextState;
-      probe.set(variant(), fen(), is_chess960(), &setupState, this_thread());
-      probe.do_move(m, nextState);
-      Square probeRoyal = probe.royal_square(us);
-      if (!allow_checks() && probeRoyal != SQ_NONE && probe.attackers_to_king(probeRoyal, them))
-          return false;
-      return true;
+      return legal_after_probe_move(m);
   }
   if (must_capture_en_passant() && type_of(m) != EN_PASSANT && has_en_passant_capture())
       return false;

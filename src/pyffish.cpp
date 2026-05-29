@@ -633,7 +633,49 @@ extern "C" PyObject* pyffish_getFogFEN(PyObject* self, PyObject *args) {
     return Py_BuildValue("s", pos.fen(sfen, showPromoted, countStarted, "-", pos.fog_area()).c_str());
 }
 
+static PyObject* pyffish_runCppTests(PyObject* self, PyObject* args) {
+    (void)self;
+    (void)args;
+
+    // Test 1: Fix Position::promotion_square() mismatched-color bug
+    {
+        Position pos;
+        StateListPtr states;
+        const Variant* v = require_variant("chess");
+        if (!v) return nullptr;
+        buildPosition(pos, states, v, "rnbqkbnr/1ppppppp/8/8/8/8/pPPPPPPP/RNBQKBNR w KQkq - 0 1", nullptr, false);
+        Square psq = pos.promotion_square(WHITE, SQ_A2);
+        if (psq != SQ_NONE) {
+            PyErr_SetString(PyFFishError, "promotion_square(WHITE, SQ_A2) with black piece did not return SQ_NONE");
+            return nullptr;
+        }
+        
+        buildPosition(pos, states, v, "rnbqkbnr/P1pppppp/8/8/8/8/1PPPPPPP/RNBQKBNR w KQkq - 0 1", nullptr, false);
+        if (pos.promotion_square(WHITE, SQ_A7) != SQ_A8) {
+            PyErr_SetString(PyFFishError, "promotion_square(WHITE, SQ_A7) did not return SQ_A8");
+            return nullptr;
+        }
+    }
+    
+    // Test 2: Fix clone_targets_from() empty-square assert/UB path
+    {
+        Position pos;
+        StateListPtr states;
+        const Variant* v = require_variant("chess");
+        if (!v) return nullptr;
+        buildPosition(pos, states, v, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", nullptr, false);
+        Bitboard targets = pos.clone_targets_from(WHITE, SQ_A3);
+        if (targets != 0) {
+            PyErr_SetString(PyFFishError, "clone_targets_from on empty square did not return 0");
+            return nullptr;
+        }
+    }
+    
+    Py_RETURN_TRUE;
+}
+
 static PyMethodDef PyFFishMethods[] = {
+    {"run_cpp_tests", (PyCFunction)pyffish_runCppTests, METH_NOARGS, "Run C++ internal unit tests."},
     {"version", (PyCFunction)pyffish_version, METH_NOARGS, "Get package version."},
     {"info", (PyCFunction)pyffish_info, METH_NOARGS, "Get Stockfish version info."},
     {"variants", (PyCFunction)pyffish_variants, METH_NOARGS, "Get supported variants."},
