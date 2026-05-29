@@ -3191,11 +3191,11 @@ bool Position::legal(Move m) const {
   if (must_capture() && !isCapture && has_capture())
       return false;
 
-  auto legal_after_probe_move = [&](Move m) {
+  auto legal_after_probe_move = [&](Move mp) {
       Position probe;
       StateInfo setupState, nextState;
       probe.set(variant(), fen(), is_chess960(), &setupState, this_thread());
-      probe.do_move(m, nextState);
+      probe.do_move(mp, nextState);
       Square probeRoyal = probe.royal_square(us);
       if (!allow_checks() && probeRoyal != SQ_NONE && probe.attackers_to_king(probeRoyal, them))
           return false;
