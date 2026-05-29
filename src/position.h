@@ -42,6 +42,8 @@
 
 namespace Stockfish {
 
+constexpr int MAX_PUSH_SNAPSHOT = 32;
+
 extern Square JumpMidpoint[SQUARE_NB][SQUARE_NB];
 
 struct SpellContext {
@@ -210,13 +212,13 @@ struct StateInfo {
   int pushStepR;
   int pushCount;
   int pushSnapshotCount;
-  Square pushSnapshotSquares[32];
-  Piece pushSnapshotPieces[32];
-  Piece pushSnapshotUnpromoted[32];
+  Square pushSnapshotSquares[MAX_PUSH_SNAPSHOT];
+  Piece pushSnapshotPieces[MAX_PUSH_SNAPSHOT];
+  Piece pushSnapshotUnpromoted[MAX_PUSH_SNAPSHOT];
   uint32_t pushSnapshotPromoted;
   int pushTransferCount;
-  Piece pushTransferPieces[32];
-  Piece pushTransferUnpromoted[32];
+  Piece pushTransferPieces[MAX_PUSH_SNAPSHOT];
+  Piece pushTransferUnpromoted[MAX_PUSH_SNAPSHOT];
   uint32_t pushTransferPromoted;
   Square pullFromSquare;
   ReversiblePieceState pulled;
@@ -654,9 +656,6 @@ public:
   bool virtual_drop(Move m) const;
   bool paired_drop(Move m) const;
   bool push_move(Move m) const;
-  bool push_captures(Move m) const;
-  bool push_ejects(Move m) const;
-  Square push_capture_square(Move m) const;
   bool stepwise_pushing() const;
   bool capture(Move m) const;
   bool capture_or_promotion(Move m) const;
@@ -685,9 +684,9 @@ public:
 
   // Doing and undoing moves
   void do_move(Move m, StateInfo& newSt);
-  void do_move(Move m, StateInfo& newSt, bool givesCheck);
   void undo_move(Move m);
-  bool add_capture_transfer(StateInfo* state, Key& k, Piece transferPiece, bool undo, bool simulate) const;
+  bool add_capture_transfer(StateInfo* state, Key& k, Piece transferPiece, bool undo);
+  bool simulate_capture_transfer(StateInfo* state, Key& k, Piece transferPiece) const;
   void add_capture_points(StateInfo* state, Color us, Piece captured) const;
   void do_null_move(StateInfo& newSt);
   void undo_null_move();
@@ -4737,9 +4736,6 @@ inline void Position::swap_piece(Square from, Square to) {
   put_piece(fromPc, to, fromPromoted, fromUnpromoted);
 }
 
-inline void Position::do_move(Move m, StateInfo& newSt) {
-  do_move(m, newSt, gives_check(m));
-}
 
 inline StateInfo* Position::state() const {
 

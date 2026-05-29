@@ -96,8 +96,8 @@ namespace {
     Piece unpromoted = NO_PIECE;
   };
 
-  constexpr int MAX_PUSH_SNAPSHOT = 32;
   static_assert(MAX_PUSH_SNAPSHOT <= 32, "push snapshot promotion bitmask must fit in uint32_t");
+  static_assert(sizeof(StateInfo::pushSnapshotSquares) / sizeof(StateInfo::pushSnapshotSquares[0]) == MAX_PUSH_SNAPSHOT, "pushSnapshotSquares size mismatch");
 
   inline bool advance_square(const Position& pos, Square from, int stepF, int stepR, Square& out) {
     int f = int(file_of(from)) + stepF;
@@ -1045,7 +1045,7 @@ bool Position::violates_same_player_board_repetition(Move m) const {
   Position probe;
   StateInfo probeState, nextState;
   probe.set(variant(), fen(), is_chess960(), &probeState, this_thread());
-  probe.do_move(m, nextState, false);
+  probe.do_move(m, nextState);
 
   bool repeated = false;
   int end = probe.captures_to_hand() ? probe.st->pliesFromNull
@@ -1950,7 +1950,7 @@ void Position::recompute_state_hashes_and_material(StateInfo* si) const {
       si->key ^= Zobrist::psq[pc][s];
 
       if (!pc)
-          si->key ^= (st->deadSquares & s) ? Zobrist::dead[s] : Zobrist::wall[s];
+          si->key ^= (si->deadSquares & s) ? Zobrist::dead[s] : Zobrist::wall[s];
 
       else if (type_of(pc) == PAWN)
           si->pawnKey ^= Zobrist::psq[pc][s];
@@ -3159,7 +3159,7 @@ bool Position::legal(Move m) const {
       StateInfo setupState, nextState;
       Position p;
       p.set(variant(), fen(), is_chess960(), &setupState, this_thread());
-      p.do_move(m, nextState, true);
+      p.do_move(m, nextState);
       if (p.evasion_checkers() && MoveList<LEGAL>(p).size() == 0)
           return false;
   }
@@ -3176,7 +3176,7 @@ bool Position::legal(Move m) const {
       Position probe;
       StateInfo setupState, nextState;
       probe.set(variant(), fen(), is_chess960(), &setupState, this_thread());
-      probe.do_move(m, nextState, false);
+      probe.do_move(m, nextState);
       Square probeRoyal = probe.royal_square(us);
       if (!allow_checks() && probeRoyal != SQ_NONE && probe.attackers_to_king(probeRoyal, them))
           return false;
@@ -3191,7 +3191,7 @@ bool Position::legal(Move m) const {
       Position probe;
       StateInfo setupState, nextState;
       probe.set(variant(), fen(), is_chess960(), &setupState, this_thread());
-      probe.do_move(m, nextState, false);
+      probe.do_move(m, nextState);
       Square probeRoyal = probe.royal_square(us);
       if (!allow_checks() && probeRoyal != SQ_NONE && probe.attackers_to_king(probeRoyal, them))
           return false;
@@ -4518,21 +4518,6 @@ bool Position::push_move(Move m) const {
   return analyze_push(m, info);
 }
 
-bool Position::push_captures(Move m) const {
-  PushInfo info;
-  return analyze_push(m, info) && info.captures;
-}
-
-bool Position::push_ejects(Move m) const {
-  PushInfo info;
-  return analyze_push(m, info) && info.ejects;
-}
-
-Square Position::push_capture_square(Move m) const {
-  PushInfo info;
-  return analyze_push(m, info) && info.captures ? info.tail : SQ_NONE;
-}
-
 
 /// Position::gives_check() tests whether a pseudo-legal move gives a check
 
@@ -4619,7 +4604,7 @@ bool Position::gives_check(Move m) const {
   {
       Position* pos = const_cast<Position*>(this);
       StateInfo nextState;
-      pos->do_move(m, nextState, false);
+      pos->do_move(m, nextState);
       bool givesCheck = bool(pos->evasion_checkers());
       pos->undo_move(m);
       return givesCheck;
@@ -4802,43 +4787,65 @@ bool Position::analyze_push(Move m, PushInfo& info) const {
 /// to a StateInfo object. The move is assumed to be legal. Pseudo-legal
 /// moves should be filtered out before this function is called.
 
-bool Position::add_capture_transfer(StateInfo* state, Key& k, Piece transferPiece, bool undo, bool simulate) const {
+inline void clear_dirty_piece(StateInfo* st) {
+  auto& dp = st->dirtyPiece;
+  dp.dirty_num = 0;
+  for (int i = 0; i < DIRTY_PIECE_MAX; ++i) {
+      dp.piece[i] = NO_PIECE;
+      dp.handPiece[i] = NO_PIECE;
+      dp.handCount[i] = 0;
+      dp.from[i] = SQ_NONE;
+      dp.to[i] = SQ_NONE;
+  }
+}
+
+bool Position::add_capture_transfer(StateInfo* state, Key& k, Piece transferPiece, bool undo) {
     if (state->suppressedCaptureTransfer || !captures_to_hand())
         return false;
     if (!(capture_to_hand_types() & type_of(transferPiece)))
         return false;
 
-    Position* pos = const_cast<Position*>(this);
-
     if (capture_type() == HAND) {
         Piece pieceToHand = transferPiece;
         int n = pieceCountInHand[color_of(pieceToHand)][type_of(pieceToHand)];
-        if (!simulate) {
-            if (!undo) {
-                pos->add_to_hand(pieceToHand);
-                xor_in_hand_count(k, pieceToHand, n, n + 1);
-            } else {
-                pos->remove_from_hand(pieceToHand);
-                xor_in_hand_count(k, pieceToHand, n, n - 1);
-            }
-        } else {
+        if (!undo) {
+            add_to_hand(pieceToHand);
             xor_in_hand_count(k, pieceToHand, n, n + 1);
+        } else {
+            remove_from_hand(pieceToHand);
+            xor_in_hand_count(k, pieceToHand, n, n - 1);
         }
         return true;
     } else if (capture_type() == PRISON) {
         Piece prisonPiece = ~transferPiece;
         int n = pieceCountInPrison[color_of(transferPiece)][type_of(transferPiece)];
-        if (!simulate) {
-            if (!undo) {
-                pos->add_to_prison(prisonPiece);
-                xor_in_hand_count(k, prisonPiece, n, n + 1);
-            } else {
-                pos->remove_from_prison(prisonPiece);
-                xor_in_hand_count(k, prisonPiece, n, n - 1);
-            }
-        } else {
+        if (!undo) {
+            add_to_prison(prisonPiece);
             xor_in_hand_count(k, prisonPiece, n, n + 1);
+        } else {
+            remove_from_prison(prisonPiece);
+            xor_in_hand_count(k, prisonPiece, n, n - 1);
         }
+        return true;
+    }
+    return false;
+}
+
+bool Position::simulate_capture_transfer(StateInfo* state, Key& k, Piece transferPiece) const {
+    if (state->suppressedCaptureTransfer || !captures_to_hand())
+        return false;
+    if (!(capture_to_hand_types() & type_of(transferPiece)))
+        return false;
+
+    if (capture_type() == HAND) {
+        Piece pieceToHand = transferPiece;
+        int n = pieceCountInHand[color_of(pieceToHand)][type_of(pieceToHand)];
+        xor_in_hand_count(k, pieceToHand, n, n + 1);
+        return true;
+    } else if (capture_type() == PRISON) {
+        Piece prisonPiece = ~transferPiece;
+        int n = pieceCountInPrison[color_of(transferPiece)][type_of(transferPiece)];
+        xor_in_hand_count(k, prisonPiece, n, n + 1);
         return true;
     }
     return false;
@@ -4864,7 +4871,7 @@ void Position::add_capture_points(StateInfo* state, Color us, Piece captured) co
     }
 }
 
-void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesCheck) {
+void Position::do_move(Move m, StateInfo& newSt) {
 
   assert(is_ok(m));
   assert(&newSt != st);
@@ -4929,6 +4936,7 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
   st->accumulator.computed[WHITE] = false;
   st->accumulator.computed[BLACK] = false;
   st->nnueRefreshNeeded = false;
+  clear_dirty_piece(st);
   auto& dp = st->dirtyPiece;
   dp.dirty_num = 1;
 
@@ -5173,17 +5181,18 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
       Piece transferPiece = reserve_transfer_piece(us, captured, capturedPromoted, unpromotedCaptured,
                                                    drop_loop(), var->captureToHandSide,
                                                    main_promotion_pawn_type(color_of(captured)));
-      bool transferred = add_capture_transfer(st, k, transferPiece, false, false);
+      bool transferred = add_capture_transfer(st, k, transferPiece, false);
       if (Eval::useNNUE)
       {
+          int captureDirtyIdx = rifleShot ? 0 : 1;
           if (transferred && capture_type() == HAND)
           {
-              dp.handPiece[1] = transferPiece;
-              dp.handCount[1] = pieceCountInHand[color_of(transferPiece)][type_of(transferPiece)];
+              dp.handPiece[captureDirtyIdx] = transferPiece;
+              dp.handCount[captureDirtyIdx] = pieceCountInHand[color_of(transferPiece)][type_of(transferPiece)];
           }
           else if (capture_type() != PRISON)
           {
-              dp.handPiece[1] = NO_PIECE;
+              dp.handPiece[captureDirtyIdx] = NO_PIECE;
           }
       }
 
@@ -5290,7 +5299,7 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
                                                            st->pushTransferUnpromoted[i],
                                                            drop_loop(), var->captureToHandSide,
                                                            main_promotion_pawn_type(color_of(transferred)));
-              add_capture_transfer(st, k, transferPiece, false, false);
+              add_capture_transfer(st, k, transferPiece, false);
 
               if (points_counting())
               {
@@ -6293,7 +6302,7 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
                                                        main_promotion_pawn_type(color_of(bpc)));
           if (!petrifiedCenter)
           {
-              bool transferred = add_capture_transfer(st, k, transferPiece, false, false);
+               bool transferred = add_capture_transfer(st, k, transferPiece, false);
               if (Eval::useNNUE && bycatchDirtyIdx >= 0 && transferred)
               {
                   Piece pieceToHand = capture_type() == PRISON ? ~transferPiece : transferPiece;
@@ -6620,6 +6629,13 @@ void Position::do_move(Move m, StateInfo& newSt, [[maybe_unused]] bool givesChec
       }
   }
 
+#ifndef NDEBUG
+  for (int i = 0; i < st->dirtyPiece.dirty_num; ++i) {
+      assert(st->dirtyPiece.piece[i] != NO_PIECE);
+      assert(st->dirtyPiece.from[i] != SQ_NONE || st->dirtyPiece.to[i] != SQ_NONE || st->dirtyPiece.handPiece[i] != NO_PIECE);
+  }
+#endif
+
   assert(pos_is_ok());
 }
 
@@ -6698,11 +6714,11 @@ void Position::undo_move(Move m) {
               Piece transferPiece = reserve_transfer_piece(us, bpc, bool((st->promotedBycatch | st->demotedBycatch) & bsq), unpromotedBpc,
                                                            drop_loop(), var->captureToHandSide,
                                                            main_promotion_pawn_type(color_of(unpromotedBpc)));
-              if (!wasBlastPromoted && !petrifiedCenter)
-              {
-                  Key dummyKey;
-                  add_capture_transfer(st, dummyKey, transferPiece, true, false);
-              }
+               if (!wasBlastPromoted && !petrifiedCenter)
+               {
+                   Key dummyKey = 0;
+                   add_capture_transfer(st, dummyKey, transferPiece, true);
+               }
           }
       }
       // Reset piece since it exploded itself
@@ -6909,8 +6925,8 @@ void Position::undo_move(Move m) {
                                                            st->pushTransferUnpromoted[i],
                                                            drop_loop(), var->captureToHandSide,
                                                            main_promotion_pawn_type(color_of(transferred)));
-              Key dummyKey;
-              add_capture_transfer(st, dummyKey, transferPiece, true, false);
+              Key dummyKey = 0;
+              add_capture_transfer(st, dummyKey, transferPiece, true);
           }
 
           for (int i = 0; i < st->pushSnapshotCount; ++i)
@@ -6985,8 +7001,8 @@ void Position::undo_move(Move m) {
           Piece transferPiece = reserve_transfer_piece(us, st->captured.piece, st->captured.promoted, st->captured.unpromoted,
                                                        drop_loop(), var->captureToHandSide,
                                                        main_promotion_pawn_type(color_of(st->captured.piece)));
-          Key dummyKey;
-          add_capture_transfer(st, dummyKey, transferPiece, true, false);
+          Key dummyKey = 0;
+          add_capture_transfer(st, dummyKey, transferPiece, true);
       }
   }
 
@@ -7078,6 +7094,41 @@ void Position::do_null_move(StateInfo& newSt) {
   st->accumulator.computed[BLACK] = false;
   st->nnueRefreshNeeded = false;
 
+  st->move = MOVE_NULL;
+  st->legalCapture = NO_VALUE;
+  st->legalEnPassant = NO_VALUE;
+  st->blastPromotedSquares = 0;
+  st->bycatchSquares = 0;
+  st->captured.clear();
+  st->consumedPromotionHandPiece = NO_PIECE;
+  st->dead.clear();
+  if (commit_gates()) {
+      st->removedGatingType = NO_PIECE_TYPE;
+      st->removedCastlingGatingType = NO_PIECE_TYPE;
+      st->capturedGatingType = NO_PIECE_TYPE;
+  }
+  st->transforms.clear();
+  st->didPush = false;
+  st->didPull = false;
+  st->pushStepwise = false;
+  st->pushTailSquare = SQ_NONE;
+  st->pushStepF = 0;
+  st->pushStepR = 0;
+  st->pushCount = 0;
+  st->pushEjected = false;
+  st->pushBlockedCapture = false;
+  st->pushSnapshotCount = 0;
+  st->pushTransferCount = 0;
+  st->pullFromSquare = SQ_NONE;
+  st->pulled.clear();
+  st->shak = false;
+  st->bikjang = false;
+  st->pass = false;
+  st->pendingClaimPass = false;
+  st->forcedJumpSquare = SQ_NONE;
+  st->forcedJumpHasFollowup = false;
+  st->forcedJumpStep = 0;
+
   while (st->epSquares)
       st->key ^= Zobrist::enpassant[pop_lsb(st->epSquares)];
 
@@ -7130,7 +7181,7 @@ Key Position::key_after(Move m) const {
       Piece removedPiece = reserve_transfer_piece(sideToMove, captured, is_promoted(to), unpromoted_piece_on(to),
                                                   drop_loop(), var->captureToHandSide,
                                                   main_promotion_pawn_type(color_of(captured)));
-      add_capture_transfer(st, k, removedPiece, false, true);
+      simulate_capture_transfer(st, k, removedPiece);
   }
   if (is_drop_move(m))
   {
@@ -8467,7 +8518,11 @@ void Position::updatePawnCheckZone() {
 
 bool Position::pos_is_ok() const {
 
-  constexpr bool Fast = true; // Quick (default) or full check?
+#if defined(DEBUG_STATEINFO)
+  constexpr bool Fast = false;
+#else
+  constexpr bool Fast = true;
+#endif
 
   if (   (sideToMove != WHITE && sideToMove != BLACK)
       || (count<KING>(WHITE) && piece_on(square<KING>(WHITE)) != make_piece(WHITE, KING))
