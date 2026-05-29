@@ -6630,9 +6630,12 @@ void Position::do_move(Move m, StateInfo& newSt) {
   }
 
 #ifndef NDEBUG
-  for (int i = 0; i < st->dirtyPiece.dirty_num; ++i) {
-      assert(st->dirtyPiece.piece[i] != NO_PIECE);
-      assert(st->dirtyPiece.from[i] != SQ_NONE || st->dirtyPiece.to[i] != SQ_NONE || st->dirtyPiece.handPiece[i] != NO_PIECE);
+  if (Eval::useNNUE)
+  {
+      for (int i = 0; i < st->dirtyPiece.dirty_num; ++i) {
+          assert(st->dirtyPiece.piece[i] != NO_PIECE);
+          assert(st->dirtyPiece.from[i] != SQ_NONE || st->dirtyPiece.to[i] != SQ_NONE || st->dirtyPiece.handPiece[i] != NO_PIECE);
+      }
   }
 #endif
 
