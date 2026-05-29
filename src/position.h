@@ -3773,7 +3773,7 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
       const Bitboard initialAttackRegion = usesGenericPawnLikeInitialAttackHelper
                                          ? double_step_region(c, pt)
                                          : var->doubleStepRegion.get(c).explicitBoardOfPiece(piece_to_char()[pt]);
-      if ((initialAttackRegion & s) && (Initial || (not_moved_pieces(c) & s)))
+      if ((initialAttackRegion & s) && (Initial || (initialAttackRegion == AllSquares) || (not_moved_pieces(c) & s)))
       {
           b |= wrapped_universal_hopper_targets(pi->universalHopper[1][MODALITY_CAPTURE], c, s, occupancy, pieces(c), max_file(), max_rank(), wrapFile, wrapRank, true, true);
           b |= lame_leaper_bb(pi->stepsLame[1][MODALITY_CAPTURE], s, occupancy, c, false);
@@ -3849,7 +3849,7 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
   const Bitboard initialAttackRegion = usesGenericPawnLikeInitialAttackHelper
                                      ? double_step_region(c, pt)
                                      : var->doubleStepRegion.get(c).explicitBoardOfPiece(piece_to_char()[pt]);
-  if ((initialAttackRegion & s) && (Initial || (not_moved_pieces(c) & s)))
+  if ((initialAttackRegion & s) && (Initial || (initialAttackRegion == AllSquares) || (not_moved_pieces(c) & s)))
   {
       b |= special_rider_bb<true>(pi, MODALITY_CAPTURE, s, occupancy, board_bb(), pieces(c), c, true, true);
       b |= lame_leaper_bb(pi->stepsLame[1][MODALITY_CAPTURE], s, occupancy, c, false);
@@ -3910,12 +3910,12 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s, Bitboard o
             {
                 b |= square_bb(to);
                 if ((double_step_region(c, pt) & s)
-                    && (Initial || (not_moved_pieces(c) & s))
+                    && (Initial || (double_step_region(c, pt) == AllSquares) || (not_moved_pieces(c) & s))
                     && wrapped_destination_square(to, 0, forward, max_file(), max_rank(), wrapFile, wrapRank, to)
                     && !(occupancy & to))
                     b |= square_bb(to);
             }
-            if ((triple_step_region(c, pt) & s) && (Initial || (not_moved_pieces(c) & s)))
+            if ((triple_step_region(c, pt) & s) && (Initial || (triple_step_region(c, pt) == AllSquares) || (not_moved_pieces(c) & s)))
             {
                 Square s1 = SQ_NONE, s2 = SQ_NONE, s3 = SQ_NONE;
                 if (wrapped_destination_square(s, 0, forward, max_file(), max_rank(), wrapFile, wrapRank, s1)
@@ -3945,7 +3945,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s, Bitboard o
         if (pi->rose[0][MODALITY_QUIET])
             b |= wrapped_rose_targets(s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
 
-        if ((double_step_region(c, pt) & s) && (Initial || (not_moved_pieces(c) & s)))
+        if ((double_step_region(c, pt) & s) && (Initial || (double_step_region(c, pt) == AllSquares) || (not_moved_pieces(c) & s)))
         {
             b |= wrapped_step_targets(pi->steps[1][MODALITY_QUIET], c, s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
             b |= wrapped_tuple_targets(pi->tupleSteps[1][MODALITY_QUIET], c, s, occupancy, max_file(), max_rank(), wrapFile, wrapRank, true);
@@ -3996,7 +3996,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s, Bitboard o
         && !explicitDoubleStepRegion;
     const Bitboard tripleStepRegion = usesGenericPawnLikeStepHelper ? this->triple_step_region(c)
                                                                     : explicitTripleStepRegion;
-    if (tripleStepRegion & piecePosition & (Initial ? AllSquares : this->not_moved_pieces(c)))  //If the original square is in tripleStepRegion and the piece is not moved
+    if (tripleStepRegion & piecePosition & (Initial ? AllSquares : (tripleStepRegion == AllSquares ? AllSquares : this->not_moved_pieces(c))))  //If the original square is in tripleStepRegion and the piece is not moved
     {
         Bitboard extraMultipleStepMoveDestinations = 0x00;  //Bitboard where extra legal multi-step destination square bits are 1
         Bitboard oneSquareAhead = (c == WHITE) ? piecePosition << NORTH : piecePosition >> NORTH;
@@ -4018,7 +4018,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s, Bitboard o
     }
     Bitboard doubleStepRegion = usesGenericPawnLikeStepHelper ? this->double_step_region(c)
                                                               : explicitDoubleStepRegion;
-    if (doubleStepRegion & piecePosition & (Initial ? AllSquares : this->not_moved_pieces(c)))  //If the original square is in doubleStepRegion and the piece is not moved
+    if (doubleStepRegion & piecePosition & (Initial ? AllSquares : (doubleStepRegion == AllSquares ? AllSquares : this->not_moved_pieces(c))))  //If the original square is in doubleStepRegion and the piece is not moved
     {
         Bitboard extraMultipleStepMoveDestinations = 0x00;  //Bitboard where extra legal multi-step destination square bits are 1
         Bitboard oneSquareAhead = (c == WHITE) ? piecePosition << NORTH : piecePosition >> NORTH;
@@ -4048,7 +4048,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s, Bitboard o
                                    : var->doubleStepRegion.get(c).explicitBoardOfPiece(piece_to_char()[pt]);
 
   // Add initial moves
-  if ((initialMoveRegion & s) && (Initial || (this->not_moved_pieces(c) & s)))
+  if ((initialMoveRegion & s) && (Initial || (initialMoveRegion == AllSquares) || (this->not_moved_pieces(c) & s)))
   {
       b |= moves_bb<true>(c, movePt, s, occupancy);
       b |= special_rider_bb<true>(pi, MODALITY_QUIET, s, occupancy, board_bb(), pieces(c), c, false, false);
