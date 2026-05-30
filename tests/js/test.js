@@ -1,20 +1,13 @@
-// Node's fetch rejects absolute filesystem paths (e.g. "/.../ffish.wasm"),
-// but Emscripten may pass such paths when loading wasm in CI.
-if (typeof process !== 'undefined' && process.versions && process.versions.node && typeof fetch === 'function') {
-  const fs = require('fs');
-  const originalFetch = fetch;
-  global.fetch = async (resource, init) => {
-    if (typeof resource === 'string' && resource.startsWith('/')) {
-      try {
-        const bytes = await fs.promises.readFile(resource);
-        return new Response(bytes, { status: 200 });
-      } catch (_) {
-        return new Response(null, { status: 404 });
-      }
-    }
-    return originalFetch(resource, init);
-  };
-}
+"use strict";
+
+let chai;
+let pgnDir;
+let srcDir;
+let WHITE;
+let BLACK;
+let ffish;
+
+require('./fetch-shim.js').setupFetchShim();
 
 before(async () => {
   chai = require('chai');
@@ -231,12 +224,19 @@ describe('board.reset()', function () {
 });
 
 describe('board.is960()', function () {
-  it("it checks if the board originates from a 960 position", () => {
+  it("it returns true if the board was created with is960 identifier", () => {
     let board = new ffish.Board();
-    chai.expect(board.is960()).to.equal(false);
-    const board2 = new ffish.Board("chess", "rnknb1rq/pp2ppbp/3p2p1/2p5/4PP2/2N1N1P1/PPPP3P/R1K1BBRQ b KQkq - 1 5", true);
-    chai.expect(board2.is960()).to.equal(true);
-    board.delete();
+    try {
+      chai.expect(board.is960()).to.equal(false);
+      const board2 = new ffish.Board("chess", "rnknb1rq/pp2ppbp/3p2p1/2p5/4PP2/2N1N1P1/PPPP3P/R1K1BBRQ b KQkq - 1 5", true);
+      try {
+        chai.expect(board2.is960()).to.equal(true);
+      } finally {
+        board2.delete();
+      }
+    } finally {
+      board.delete();
+    }
   });
 });
 
@@ -251,17 +251,25 @@ describe('board.fen()', function () {
 describe('board.fen(showPromoted)', function () {
   it("it returns the current position in fen format. showPromoted makes promoted pieces always followed by the symbol ~ regardless of variant.", () => {
     let board = new ffish.Board("makruk", "8/6ks/3M~2r1/2K1M3/8/3R4/8/8 w - 128 18 50");
-    chai.expect(board.fen(true)).to.equal("8/6ks/3M~2r1/2K1M3/8/3R4/8/8 w - 128 18 50");
-    chai.expect(board.fen(false)).to.equal("8/6ks/3M2r1/2K1M3/8/3R4/8/8 w - 128 18 50");
+    try {
+      chai.expect(board.fen(true)).to.equal("8/6ks/3M~2r1/2K1M3/8/3R4/8/8 w - 128 18 50");
+      chai.expect(board.fen(false)).to.equal("8/6ks/3M2r1/2K1M3/8/3R4/8/8 w - 128 18 50");
+    } finally {
+      board.delete();
+    }
   });
 });
 
 describe('board.fen(showPromoted, countStarted)', function () {
   it("it returns the current position in fen format. showPromoted makes promoted pieces always followed by the symbol ~ regardless of variant. countStarted overwrites the start of makruk's board honor counting.", () => {
     let board = new ffish.Board("makruk", "8/6ks/3M~2r1/2K1M3/8/3R4/8/8 w - 128 18 50");
-    chai.expect(board.fen(true, 0)).to.equal("8/6ks/3M~2r1/2K1M3/8/3R4/8/8 w - 128 18 50");
-    chai.expect(board.fen(true, -1)).to.equal("8/6ks/3M~2r1/2K1M3/8/3R4/8/8 w - 128 0 50");
-    chai.expect(board.fen(true, 89)).to.equal("8/6ks/3M~2r1/2K1M3/8/3R4/8/8 w - 128 10 50");
+    try {
+      chai.expect(board.fen(true, 0)).to.equal("8/6ks/3M~2r1/2K1M3/8/3R4/8/8 w - 128 18 50");
+      chai.expect(board.fen(true, -1)).to.equal("8/6ks/3M~2r1/2K1M3/8/3R4/8/8 w - 128 0 50");
+      chai.expect(board.fen(true, 89)).to.equal("8/6ks/3M~2r1/2K1M3/8/3R4/8/8 w - 128 10 50");
+    } finally {
+      board.delete();
+    }
   });
 });
 

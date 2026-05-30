@@ -1,14 +1,10 @@
 #!/bin/bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-ENGINE=${1:-"${ROOT_DIR}/src/stockfish"}
-if [[ "${ENGINE}" != /* ]]; then
-  ENGINE="${PWD}/${ENGINE}"
-fi
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib/uci.sh"
 
-cd "${ROOT_DIR}/src"
+ENGINE=$(default_engine "${1:-}")
 
 tmp_ini=$(mktemp)
 trap 'rm -f "$tmp_ini"' EXIT
@@ -23,10 +19,11 @@ mustDropTypeWhite = p
 startFen = 4k3/8/8/8/8/8/8/4K3[P] w - - 0 1
 INI
 
-out_white=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value asymmustdrop\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" | "${ENGINE}")
+out_white=$(run_uci_cmds "$ENGINE" "$tmp_ini" asymmustdrop "position startpos
+go perft 1")
 # White must drop pawn; non-drop king moves should be suppressed.
-grep -q "P@a" <<<"$out_white"
-! grep -q "e1e2:" <<<"$out_white"
+assert_contains "$out_white" "P@a"
+assert_not_contains "$out_white" "e1e2:"
 
 white_nodes=$(grep -o "Nodes searched: [0-9]*" <<<"$out_white" | awk '{print $3}')
 if [[ -z "$white_nodes" || "$white_nodes" -le 0 ]]; then
@@ -35,9 +32,10 @@ if [[ -z "$white_nodes" || "$white_nodes" -le 0 ]]; then
 fi
 
 black_fen='4k3/8/8/8/8/8/8/4K3[p] b - - 0 1'
-out_black=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value asymmustdrop\nposition fen %s\ngo perft 1\nquit\n' "$tmp_ini" "$black_fen" | "${ENGINE}")
+out_black=$(run_uci_cmds "$ENGINE" "$tmp_ini" asymmustdrop "position fen ${black_fen}
+go perft 1")
 # Black can either move king or drop pawn.
-grep -q "e8e7:" <<<"$out_black"
-grep -q "@a" <<<"$out_black"
+assert_contains "$out_black" "e8e7:"
+assert_contains "$out_black" "@a"
 
 echo "mustDropByColor test OK"

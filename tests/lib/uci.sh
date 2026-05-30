@@ -69,6 +69,15 @@ run_uci() {
   } | uci_timeout "$engine"
 }
 
+run_uci_cmds() {
+  local engine="$1"
+  local variant_path="$2"
+  local variant="$3"
+  local cmds="$4"
+  run_uci "$engine" "$variant_path" "$variant" <<< "$cmds"
+}
+
+
 assert_contains() {
   local haystack="$1"
   local pattern="$2"

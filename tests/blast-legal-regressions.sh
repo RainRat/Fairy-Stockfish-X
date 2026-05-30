@@ -2,12 +2,14 @@
 
 set -euo pipefail
 
+tmp_dir=$(mktemp -d)
+cleanup() {
+  rm -rf "$tmp_dir"
+}
+trap cleanup EXIT
+
 error() {
   echo "blast legal regression failed on line $1"
-  [[ -n "${TMP1:-}" ]] && rm -f "${TMP1}"
-  [[ -n "${TMP2:-}" ]] && rm -f "${TMP2}"
-  [[ -n "${TMP3:-}" ]] && rm -f "${TMP3}"
-  [[ -n "${TMP4:-}" ]] && rm -f "${TMP4}"
   exit 1
 }
 trap 'error ${LINENO}' ERR
@@ -29,7 +31,7 @@ CMDS
 
 echo "blast legal regressions started"
 
-TMP1=$(mktemp "${TMPDIR:-/tmp}/fsx-blastblock-XXXXXX")
+TMP1="${tmp_dir}/fsx-blastblock"
 cat >"${TMP1}" <<'INI'
 [blastblock:chess]
 blastOnMove = true
@@ -42,7 +44,7 @@ out=$(run_cmds "${TMP1}" "blastblock" "position startpos
 go perft 1")
 echo "${out}" | grep -q "^a2e2: 1$"
 
-TMP2=$(mktemp "${TMPDIR:-/tmp}/fsx-selfatomic-XXXXXX")
+TMP2="${tmp_dir}/fsx-selfatomic"
 cat >"${TMP2}" <<'INI'
 [selfatomic:chess]
 blastOnCapture = true
@@ -55,10 +57,7 @@ out=$(run_cmds "${TMP2}" "selfatomic" "position startpos
 go perft 1")
 ! echo "${out}" | grep -q "^e1e2:"
 
-rm -f "${TMP1}" "${TMP2}"
-unset TMP1 TMP2
-
-TMP3=$(mktemp "${TMPDIR:-/tmp}/fsx-immobilityblast-XXXXXX")
+TMP3="${tmp_dir}/fsx-immobilityblast"
 cat >"${TMP3}" <<'INI'
 [immobilityblast:chess]
 king = -
@@ -74,10 +73,7 @@ out=$(run_cmds "${TMP3}" "immobilityblast" "position startpos
 go perft 1")
 echo "${out}" | grep -q "^a7b8: 1$"
 
-rm -f "${TMP3}"
-unset TMP3
-
-TMP4=$(mktemp "${TMPDIR:-/tmp}/fsx-antimatter-XXXXXX")
+TMP4="${tmp_dir}/fsx-antimatter"
 cat >"${TMP4}" <<'INI'
 [antimatter:chess]
 blastOnSameTypeCapture = true
@@ -116,7 +112,7 @@ except subprocess.TimeoutExpired:
     proc.kill()
     stdout, _ = proc.communicate()
     sys.stdout.write(stdout)
-    sys.stderr.write("engine did not terminate within timeout\\n")
+    sys.stderr.write("engine did not terminate within timeout\n")
     sys.exit(1)
 
 sys.stdout.write(stdout)
@@ -125,10 +121,7 @@ PY
 )
 grep -Fxq "Nodes searched: 20" <<<"$out"
 
-rm -f "${TMP4}"
-unset TMP4
-
-TMP5=$(mktemp "${TMPDIR:-/tmp}/fsx-moverblast-XXXXXX")
+TMP5="${tmp_dir}/fsx-moverblast"
 cat >"${TMP5}" <<'INI'
 [moverblast:chess]
 king = -
@@ -160,10 +153,7 @@ out=$(run_cmds "${TMP5}" "riflemoverblast" "position startpos moves e1e2
 d")
 echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/3r4/4Q2K b - - 0 1"
 
-rm -f "${TMP5}"
-unset TMP5
-
-TMP6=$(mktemp "${TMPDIR:-/tmp}/fsx-blastcheck-XXXXXX")
+TMP6="${tmp_dir}/fsx-blastcheck"
 cat >"${TMP6}" <<'INI'
 [blastcheck:chess]
 checking = false
@@ -179,8 +169,5 @@ INI
 out=$(run_cmds "${TMP6}" "blastcheck" "position startpos
 go perft 1")
 echo "${out}" | grep -q "^d2d8: 1$"
-
-rm -f "${TMP6}"
-unset TMP6
 
 echo "blast legal regressions passed"
