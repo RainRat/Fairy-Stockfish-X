@@ -1852,6 +1852,29 @@ namespace {
         Trace::add(MATERIAL, score);
     score += me->imbalance() + pos.this_thread()->trend;
 
+    if (pos.topology_wraps())
+    {
+        Value mg = mg_value(score);
+        Value eg = eg_value(score);
+        Value v =  mg * int(me->game_phase())
+                 + eg * int(PHASE_MIDGAME - me->game_phase());
+        v /= PHASE_MIDGAME;
+
+        // Evaluation grain
+        v = (v / 16) * 16;
+
+        // Side to move point of view
+        v = (pos.side_to_move() == WHITE ? v : -v) + 80 * pos.captures_to_hand();
+
+        if constexpr (T)
+        {
+            Trace::add(IMBALANCE, me->imbalance());
+            Trace::add(TOTAL, make_score(mg, eg));
+        }
+
+        return v;
+    }
+
     // Probe the pawn hash table
     pe = Pawns::probe(pos);
     score += pe->pawn_score(WHITE) - pe->pawn_score(BLACK);
@@ -1979,7 +2002,7 @@ Value Eval::evaluate(const Position& pos) {
 
   Value v;
 
-  if (!Eval::useNNUE || !pos.nnue_applicable())
+  if (!Eval::useNNUE || !pos.nnue_applicable() || pos.topology_wraps())
       v = Evaluation<NO_TRACE>(pos).value();
   else
   {
