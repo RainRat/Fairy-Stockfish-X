@@ -2961,6 +2961,8 @@ inline Bitboard Position::wrapped_step_targets(const std::map<Direction, int>& d
       Square to = SQ_NONE;
       if (!wrapped_destination_square(sq, df, dr, maxFile, maxRank, wrapFile, wrapRank, to))
           continue;
+      if (to == sq)
+          continue;
       if (requireEmpty && (occupied & to))
           continue;
       out |= to;
@@ -2980,6 +2982,8 @@ inline Bitboard Position::wrapped_tuple_targets(const std::vector<std::pair<int,
       const int stepF = c == WHITE ? df : -df;
       Square to = SQ_NONE;
       if (!wrapped_destination_square(sq, stepF, stepR, maxFile, maxRank, wrapFile, wrapRank, to))
+          continue;
+      if (to == sq)
           continue;
       if (requireEmpty && (occupied & to))
           continue;
@@ -3751,9 +3755,9 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
       {
           const int forward = c == WHITE ? 1 : -1;
           Square to = SQ_NONE;
-          if (wrapped_destination_square(s, -1, forward, max_file(), max_rank(), wrapFile, wrapRank, to))
+          if (wrapped_destination_square(s, -1, forward, max_file(), max_rank(), wrapFile, wrapRank, to) && to != s)
               b |= to;
-          if (wrapped_destination_square(s, 1, forward, max_file(), max_rank(), wrapFile, wrapRank, to))
+          if (wrapped_destination_square(s, 1, forward, max_file(), max_rank(), wrapFile, wrapRank, to) && to != s)
               b |= to;
           return b & (FilterMobility ? board_bb(c, pt) : board_bb());
       }
@@ -3903,7 +3907,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s, Bitboard o
             Bitboard b = 0;
             const int forward = c == WHITE ? 1 : -1;
             Square to = SQ_NONE;
-            if (wrapped_destination_square(s, 0, forward, max_file(), max_rank(), wrapFile, wrapRank, to) && !(occupancy & to))
+            if (wrapped_destination_square(s, 0, forward, max_file(), max_rank(), wrapFile, wrapRank, to) && to != s && !(occupancy & to))
             {
                 b |= square_bb(to);
                 if ((double_step_region(c, pt) & s)

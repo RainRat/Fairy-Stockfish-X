@@ -460,7 +460,13 @@ top:
 
   case EVASION_INIT:
       cur = moveList;
-      endMoves = generate_without_potions<EVASIONS>(pos, cur);
+      // On wrapped boards, between_bb / checker_evasion_targets are not
+      // topology-aware and can miss interposition moves that cross the
+      // seam. Use NON_EVASIONS and rely on the search's legal() filter,
+      // matching the fallback already used by generate<LEGAL>.
+      endMoves = pos.topology_wraps()
+               ? generate_without_potions<NON_EVASIONS>(pos, cur)
+               : generate_without_potions<EVASIONS>(pos, cur);
       evasionBaseEnd = endMoves;
       evasionPotionsDeferred = potions
           && (pos.can_cast_potion(pos.side_to_move(), Variant::POTION_FREEZE)

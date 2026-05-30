@@ -2502,7 +2502,21 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
               continue;
 
           PieceType move_pt = effective_piece_type(pt);
-          if (pt == JANGGI_CANNON)
+          const PieceInfo* pi = pieceMap.get(move_pt);
+          // Runtime rider augments and asymmetric riders need per-piece forward
+          // attack testing — the reverse-attack shortcut is incorrect for these.
+          if (pi->has_runtime_rider_augment()
+              || (AttackRiderTypes[move_pt] & ASYMMETRICAL_RIDERS))
+          {
+              Bitboard candidates = ptPieces;
+              while (candidates)
+              {
+                  Square from = pop_lsb(candidates);
+                  if (attacks_from(c, pt, from, occupied) & s)
+                      b |= from;
+              }
+          }
+          else if (pt == JANGGI_CANNON)
               b |= attacks_from<false, false>(~c, move_pt, s, occupied)
                  & attacks_from<false, false>(~c, move_pt, s, occupied & ~janggiCannons)
                  & ptPieces;
