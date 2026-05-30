@@ -764,7 +764,7 @@ namespace {
   }
 
   inline Bitboard active_magic_board(File maxFile, Rank maxRank) {
-      assert(BoardSizeBB[maxFile][maxRank] != 0);
+      assert(BoardSizeBB[maxFile][maxRank] != Bitboard(0));
       return BoardSizeBB[maxFile][maxRank];
   }
 
