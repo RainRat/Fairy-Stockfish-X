@@ -8125,7 +8125,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
 
 Bitboard Position::chased() const {
   Bitboard b = 0;
-  if (st->move == MOVE_NONE)
+  if (st->move == MOVE_NONE || st->move == MOVE_NULL)
       return b;
 
   Bitboard pins = blockers_for_king(sideToMove);
@@ -8204,7 +8204,7 @@ Bitboard Position::chased() const {
   Square from = from_sq(st->move);
   Square to = to_sq(st->move);
   PieceType movedPiece = type_of(piece_on(to));
-  if (movedPiece != KING && movedPiece != SOLDIER)
+  if (movedPiece != NO_PIECE_TYPE && movedPiece != KING && movedPiece != SOLDIER)
   {
       Bitboard directAttacks = attacks_from(~sideToMove, movedPiece, to) & pieces(sideToMove);
       // Only new attacks count. This avoids expensive comparison of previous and new attacks.
