@@ -91,14 +91,6 @@ namespace {
         const bool pureWallMove = T == SPECIAL && from == to && pt == NO_PIECE_TYPE && pos.wall_or_move();
         Bitboard b = pos.wall_target_mask(us, from, effectiveTo, pureWallMove ? SQ_NONE : to, occupancyAfter);
 
-        // Duck is by far the hottest walling mode: avoid extra rule checks.
-        if (pos.walling_rule() == DUCK)
-        {
-            while (b)
-                *moveList++ = make_gating<T>(from, to, pt, pop_lsb(b));
-            return moveList;
-        }
-
         while (b)
             *moveList++ = make_gating<T>(from, to, pt, pop_lsb(b));
         return moveList;

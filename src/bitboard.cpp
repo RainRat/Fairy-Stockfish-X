@@ -18,6 +18,7 @@
 
 #include <algorithm>
 #include <bitset>
+#include <cstdarg>
 #include <cstdio>
 #include <cstdint>
 #include <cstdlib>
@@ -761,6 +762,14 @@ namespace {
   std::mutex MagicInitMutex;
   constexpr size_t MAX_MAGIC_CACHE_ENTRIES = 16;
 
+  [[noreturn]] void fatal_magic_initialization_error(const char* fmt, ...) {
+      va_list args;
+      va_start(args, fmt);
+      std::vfprintf(stderr, fmt, args);
+      va_end(args);
+      std::abort();
+  }
+
   inline uint16_t magic_board_key(File f, Rank r) {
       return (uint16_t(f) << 8) | uint16_t(r);
   }
@@ -769,16 +778,38 @@ namespace {
       const int f = int(maxFile);
       const int r = int(maxRank);
       if (f < int(FILE_A) || f > int(FILE_MAX) || r < int(RANK_1) || r > int(RANK_MAX))
-      {
-          std::fprintf(stderr, "invalid magic board size: file=%d rank=%d\n", f, r);
-          std::abort();
-      }
+          fatal_magic_initialization_error("invalid magic board size: file=%d rank=%d\n", f, r);
       if (BoardSizeBB[maxFile][maxRank] == Bitboard(0))
-      {
-          std::fprintf(stderr, "uninitialized magic board size: file=%d rank=%d\n", f, r);
-          std::abort();
-      }
+          fatal_magic_initialization_error("uninitialized magic board size: file=%d rank=%d\n", f, r);
       return BoardSizeBB[maxFile][maxRank];
+  }
+
+  template <MovementType MT, bool TrimRiderTerminal = false>
+  Bitboard magic_mask_for_square(const std::map<Direction, int>& directions, Square s, File maxFile, Rank maxRank) {
+      if constexpr (MT == RIDER && TrimRiderTerminal)
+      {
+          // For leap-riders (e.g. nightrider), occupancy on the final square
+          // of each ray cannot affect attacks, so it is not a relevant bit.
+          Bitboard emptyAttack = sliding_attack<RIDER>(directions, s, 0) & active_magic_board(maxFile, maxRank);
+          return emptyAttack & ~rider_terminal_squares(directions, s);
+      }
+      else
+      {
+          // Board edges are not considered in the relevant occupancies.
+          Bitboard edges = ((Rank1BB | rank_bb(maxRank)) & ~rank_bb(s))
+                         | ((FileABB | file_bb(maxFile)) & ~file_bb(s));
+          return (MT == LAME_LEAPER ? lame_leaper_path(directions, s)
+                                    : sliding_attack<MT == HOPPER ? HOPPER_RANGE : MT>(directions, s, 0))
+               & active_magic_board(maxFile, maxRank) & ~edges;
+      }
+  }
+
+  template <MovementType MT, bool TrimRiderTerminal = false>
+  size_t required_magic_table_size(const std::map<Direction, int>& directions, File maxFile, Rank maxRank) {
+      size_t required = 0;
+      for (Square s = SQ_A1; s <= SQ_MAX; ++s)
+          required += size_t(1) << popcount(magic_mask_for_square<MT, TrimRiderTerminal>(directions, s, maxFile, maxRank));
+      return required;
   }
 
   // init_magics() computes all rook and bishop attacks at startup. Magic
@@ -801,17 +832,16 @@ namespace {
     constexpr size_t TempTableSize = size_t(1) << (FILE_NB + RANK_NB - 4);
     std::vector<Bitboard> occupancy(TempTableSize);
     std::vector<Bitboard> reference(TempTableSize);
-    [[maybe_unused]] Bitboard edges;
     Bitboard b;
     std::vector<int> epoch(TempTableSize);
     int cnt = 0, size = 0;
 
+    const size_t requiredSize = required_magic_table_size<MT, TrimRiderTerminal>(directions, maxFile, maxRank);
+    if (table.size() < requiredSize)
+        table.resize(requiredSize);
+
     for (Square s = SQ_A1; s <= SQ_MAX; ++s)
     {
-        // Board edges are not considered in the relevant occupancies
-        edges = ((Rank1BB | rank_bb(maxRank)) & ~rank_bb(s))
-              | ((FileABB | file_bb(maxFile)) & ~file_bb(s));
-
         // Given a square 's', the mask is the bitboard of sliding attacks from
         // 's' computed on an empty board. The index must be big enough to contain
         // all the attacks for each possible subset of the mask and so is 2 power
@@ -819,19 +849,7 @@ namespace {
         // apply to the 64 or 32 bits word to get the index.
         Magic& m = magics[s];
         // The mask for hoppers is unlimited distance, even if the hopper is limited distance (e.g., grasshopper).
-        if constexpr (MT == RIDER && TrimRiderTerminal)
-        {
-            // For leap-riders (e.g. nightrider), occupancy on the final square
-            // of each ray cannot affect attacks, so it is not a relevant bit.
-            Bitboard emptyAttack = sliding_attack<RIDER>(directions, s, 0) & active_magic_board(maxFile, maxRank);
-            m.mask = emptyAttack & ~rider_terminal_squares(directions, s);
-        }
-        else
-        {
-            m.mask = (MT == LAME_LEAPER ? lame_leaper_path(directions, s)
-                                        : sliding_attack<MT == HOPPER ? HOPPER_RANGE : MT>(directions, s, 0))
-                   & active_magic_board(maxFile, maxRank) & ~edges;
-        }
+        m.mask = magic_mask_for_square<MT, TrimRiderTerminal>(directions, s, maxFile, maxRank);
 #ifdef LARGEBOARDS
         m.shift = 128 - popcount(m.mask);
 #else
@@ -921,10 +939,7 @@ namespace {
 // lock-free during search.
 std::shared_ptr<const MagicGeometry> Bitboards::init_magics(File maxFile, Rank maxRank) {
   if (!Threads.empty() && Threads.is_searching())
-  {
-      std::fprintf(stderr, "Bitboards::init_magics called while search threads are active\n");
-      std::abort();
-  }
+      fatal_magic_initialization_error("Bitboards::init_magics called while search threads are active\n");
 #if !defined(VERY_LARGE_BOARDS)
   active_magic_board(maxFile, maxRank);
   const uint16_t boardKey = magic_board_key(maxFile, maxRank);

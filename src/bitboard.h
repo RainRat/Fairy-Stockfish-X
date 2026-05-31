@@ -82,7 +82,9 @@ struct MagicGeometry {
   std::vector<Bitboard> GrasshopperTableV;
   std::vector<Bitboard> GrasshopperTableD;
 
-  Magic* magics[14];
+  static constexpr size_t MagicRiderSlots = 14;
+  // Indexed by lsb(Bitboard(RiderType)); only magic-backed rider slots are non-null.
+  Magic* magics[MagicRiderSlots];
 
   MagicGeometry() {
     static_assert(RIDER_BISHOP == (1 << 0), "RIDER_BISHOP must be at bit 0");
@@ -99,6 +101,7 @@ struct MagicGeometry {
     static_assert(RIDER_GRASSHOPPER_H == (1 << 11), "RIDER_GRASSHOPPER_H must be at bit 11");
     static_assert(RIDER_GRASSHOPPER_V == (1 << 12), "RIDER_GRASSHOPPER_V must be at bit 12");
     static_assert(RIDER_GRASSHOPPER_D == (1 << 13), "RIDER_GRASSHOPPER_D must be at bit 13");
+    static_assert(RIDER_GRASSHOPPER_D == (1 << (MagicRiderSlots - 1)), "Magic rider slot count must cover RIDER_GRASSHOPPER_D");
 
     magics[0] = BishopMagics;
     magics[1] = RookMagicsH;

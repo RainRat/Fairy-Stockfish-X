@@ -30,6 +30,16 @@ flagRegionWhite = *8
 flagRegionBlack = *1
 startFen = 8/8/8/8/8/8/8/8 w - - 0 1
 
+[duck-wall-anchor:fairy]
+king = -
+checking = false
+wallingRule = duck
+wallingSide = wb
+wallOrMove = true
+flagRegionWhite = *8
+flagRegionBlack = *1
+startFen = 8/8/8/8/8/8/8/8 w - - 0 1
+
 [wall-or-move-disabled:chess]
 wallOrMove = true
 startFen = 4k3/8/8/8/8/8/8/4K3 w - - 0 1
@@ -121,6 +131,13 @@ out=$(run_uci_cmds "$ENGINE" "$TMP_INI" edge-wall-anchor \
   "position startpos
 go perft 1")
 assert_contains "$out" "^0000,a1: 1$"
+
+# Duck wall-or-move uses the same gating emission path but keeps unrestricted
+# wall placement instead of edge-adjacency filtering.
+out=$(run_uci_cmds "$ENGINE" "$TMP_INI" duck-wall-anchor \
+  "position startpos
+go perft 1")
+assert_contains "$out" "^0000,d4: 1$"
 
 # wallOrMove alone should not emit pseudo-special wall anchors when no walling
 # rule is enabled for the side to move.
