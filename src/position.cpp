@@ -121,10 +121,6 @@ namespace {
       return true;
   }
 
-  inline bool same_reversible(const ReversiblePieceState& lhs, const ReversiblePieceState& rhs) {
-      return lhs.piece == rhs.piece && lhs.unpromoted == rhs.unpromoted && lhs.promoted == rhs.promoted;
-  }
-
   bool violates_push_no_immediate_return(const Position& pos, Move m, const PushInfo& info) {
     if (!pos.push_no_immediate_return())
         return false;
