@@ -807,7 +807,7 @@ namespace {
                     if (GeneratesCaptures)
                         pushMoves |= to;
                 }
-                else if (GeneratesQuiets)
+                else if (GeneratesQuiets && (!QuietChecks || pos.gives_check(pm)))
                     pushMoves |= to;
             }
         }

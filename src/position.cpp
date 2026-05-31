@@ -3216,13 +3216,6 @@ bool Position::legal(Move m) const {
       return true;
   };
 
-  if (swapMove || pullMove)
-  {
-      if (violates_same_player_board_repetition(m))
-          return false;
-
-      return legal_after_probe_move(m);
-  }
   if (must_capture_en_passant() && type_of(m) != EN_PASSANT && has_en_passant_capture())
       return false;
 
@@ -3247,6 +3240,14 @@ bool Position::legal(Move m) const {
               if (is_drop_move(mquiet) && legal(mquiet))
                   return false;
       }
+  }
+
+  if (swapMove || pullMove)
+  {
+      if (violates_same_player_board_repetition(m))
+          return false;
+
+      return legal_after_probe_move(m);
   }
 
   // Illegal drop move
@@ -5348,9 +5349,15 @@ void Position::do_move(Move m, StateInfo& newSt) {
           }
 
           Square dest = pushInfo.tail;
-          if (!pushInfo.ejects && !pushInfo.captures
-              && !advance_square(*this, pushInfo.tail, pushInfo.stepF, pushInfo.stepR, dest))
-              assert(false && "validated push missing destination");
+          if (!pushInfo.ejects && !pushInfo.captures)
+          {
+#ifndef NDEBUG
+              bool advanced = advance_square(*this, pushInfo.tail, pushInfo.stepF, pushInfo.stepR, dest);
+              assert(advanced && "validated push missing destination");
+#else
+              advance_square(*this, pushInfo.tail, pushInfo.stepF, pushInfo.stepR, dest);
+#endif
+          }
 
           if (!(pushInfo.ejects && pushInfo.tail == to))
           {
@@ -6958,8 +6965,12 @@ void Position::undo_move(Move m) {
               finalSource = st->pushTailSquare;
               if (!st->pushEjected)
               {
-                  if (!advance_square(*this, st->pushTailSquare, st->pushStepF, st->pushStepR, finalSource))
-                      assert(false && "stored push state missing tail destination");
+#ifndef NDEBUG
+                  bool advanced = advance_square(*this, st->pushTailSquare, st->pushStepF, st->pushStepR, finalSource);
+                  assert(advanced && "stored push state missing tail destination");
+#else
+                  advance_square(*this, st->pushTailSquare, st->pushStepF, st->pushStepR, finalSource);
+#endif
               }
           }
 
