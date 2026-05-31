@@ -33,6 +33,14 @@ namespace Stockfish {
 VariantMap variants; // Global object
 
 namespace {
+    std::string trim_ascii_spaces(const std::string& s) {
+        const auto first = s.find_first_not_of(" \t");
+        if (first == std::string::npos)
+            return "";
+        const auto last = s.find_last_not_of(" \t");
+        return s.substr(first, last - first + 1);
+    }
+
     std::string lower_ascii(std::string s) {
         for (char& c : s)
             c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
@@ -2457,6 +2465,8 @@ void VariantMap::parse_istream(std::istream& file) {
         // Extract variant template, if specified
         if (!std::getline(std::getline(std::stringstream(variant), variant, ':'), variant_template))
             variant_template = "";
+        variant = trim_ascii_spaces(variant);
+        variant_template = trim_ascii_spaces(variant_template);
 
         // Read variant rules
         Config attribs = {};
@@ -2632,7 +2642,6 @@ void VariantMap::parse(std::string path) {
         return;
     }
     parse_istream<DoCheck>(file);
-    file.close();
 }
 
 template void VariantMap::parse<true>(std::string path);

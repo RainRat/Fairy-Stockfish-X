@@ -201,7 +201,11 @@ bad_tuple_atom_ini=$(mktemp)
 unsupported_bent_rose_modifier_ini=$(mktemp)
 bad_ini_syntax_option_ini=$(mktemp)
 bad_hopper_minmax_ini=$(mktemp)
-trap 'rm -f "${tmp_ini}" "${bad_betza_ini}" "${bad_hopper_brace_ini}" "${bad_rider_range_ini}" "${bad_rank_wildcard_ini}" "${twochar_hint_ini}" "${bad_hopper_type_ini}" "${bad_hopper_numeric_ini}" "${capture_allowed_only_ini}" "${bad_rider_range_val_ini}" "${bad_tuple_atom_ini}" "${unsupported_bent_rose_modifier_ini}" "${bad_ini_syntax_option_ini}" "${bad_hopper_minmax_ini}"' EXIT
+bad_piece_value_ini=$(mktemp)
+bad_royal_betza_ini=$(mktemp)
+bad_unmatched_closer_ini=$(mktemp)
+nonking_ini=$(mktemp)
+trap 'rm -f "${tmp_ini}" "${bad_betza_ini}" "${bad_hopper_brace_ini}" "${bad_rider_range_ini}" "${bad_rank_wildcard_ini}" "${twochar_hint_ini}" "${bad_hopper_type_ini}" "${bad_hopper_numeric_ini}" "${capture_allowed_only_ini}" "${bad_rider_range_val_ini}" "${bad_tuple_atom_ini}" "${unsupported_bent_rose_modifier_ini}" "${bad_ini_syntax_option_ini}" "${bad_hopper_minmax_ini}" "${bad_piece_value_ini}" "${bad_royal_betza_ini}" "${bad_unmatched_closer_ini}" "${nonking_ini}"' EXIT
 
 cat > "${bad_betza_ini}" <<'INI'
 [custom-piece-missing-betza:chess]
@@ -289,6 +293,24 @@ cat > "${bad_hopper_minmax_ini}" <<'INI'
 customPiece1 = a:{hurdles:3,1}R
 INI
 
+cat > "${bad_piece_value_ini}" <<'INI'
+[bad-piece-value:chess]
+pieceValueMg = p:not_an_int
+INI
+
+cat > "${bad_royal_betza_ini}" <<'INI'
+[bad-royal-betza:chess]
+king = k:R[
+INI
+
+cat > "${bad_unmatched_closer_ini}" <<'INI'
+[bad-hopper-close:chess]
+customPiece1 = a:}
+
+[bad-rider-close:chess]
+customPiece1 = a:]
+INI
+
 check_output=$("${ENGINE}" check "${bad_betza_ini}" 2>&1 || true)
 assert_contains "${check_output}" "customPiece1 - Missing Betza move notation"
 
@@ -353,6 +375,19 @@ bad_hopper_minmax_output=$(run_uci "$ENGINE" "$bad_hopper_minmax_ini" "bad-hoppe
 assert_contains_literal "${bad_hopper_minmax_output}" "Invalid hopper range (min > max)"
 assert_contains "${bad_hopper_minmax_output}" "unknown variant 'bad-hopper-minmax'; keeping 'chess'"
 
+bad_piece_value_check_output=$("${ENGINE}" check "${bad_piece_value_ini}" 2>&1 || true)
+assert_contains "${bad_piece_value_check_output}" "pieceValueMg - Invalid syntax."
+bad_piece_value_uci_output=$(run_uci "$ENGINE" "$bad_piece_value_ini" "bad-piece-value" </dev/null 2>&1 || true)
+assert_contains "${bad_piece_value_uci_output}" "unknown variant 'bad-piece-value'; keeping 'chess'"
+
+bad_royal_betza_output=$(run_uci "$ENGINE" "$bad_royal_betza_ini" "bad-royal-betza" </dev/null 2>&1 || true)
+assert_contains "${bad_royal_betza_output}" "king - Invalid Betza rider range in 'R\\[': missing closing '\\]'."
+assert_contains "${bad_royal_betza_output}" "unknown variant 'bad-royal-betza'; keeping 'chess'"
+
+bad_unmatched_closer_output=$("${ENGINE}" check "${bad_unmatched_closer_ini}" 2>&1 || true)
+assert_contains_literal "${bad_unmatched_closer_output}" "customPiece1 - Invalid Betza hopper parameters in '}': missing opening '{'."
+assert_contains_literal "${bad_unmatched_closer_output}" "customPiece1 - Invalid Betza rider range in ']': missing opening '['."
+
 two_boards_output=$(python3 - <<'PY' 2>&1
 import sys
 import pyffish
@@ -372,8 +407,38 @@ PY
 )
 assert_contains "${capture_type_output}" "capture_type_trailing_space_enum True"
 
-nonking_ini=$(mktemp)
-trap 'rm -f "${tmp_ini}" "${nonking_ini}"' EXIT
+header_trim_output=$(python3 - <<'PY' 2>&1
+import pyffish
+
+pyffish.load_variant_config("""
+[ spaced-parent : chess ]
+twoBoards = true
+
+[ spaced-child : spaced-parent ]
+""")
+print("trimmed_header_inheritance", pyffish.two_boards("spaced-child"))
+PY
+)
+assert_contains "${header_trim_output}" "trimmed_header_inheritance True"
+
+priority_drop_clear_output=$(python3 - <<'PY' 2>&1
+import pyffish
+
+pyffish.load_variant_config("""
+[priority-clear-parent:chess]
+pieceDrops = true
+priorityDropTypes = p
+startFen = 8/8/8/8/8/8/8/4K2k[PN] w - - 0 1
+
+[priority-clear-child:priority-clear-parent]
+priorityDropTypes = -
+""")
+moves = pyffish.legal_moves("priority-clear-child", pyffish.start_fen("priority-clear-child"), [])
+print("priority_drop_clear_allows_knight", "N@d4" in moves)
+PY
+)
+assert_contains "${priority_drop_clear_output}" "priority_drop_clear_allows_knight True"
+
 cat > "${nonking_ini}" <<'INI'
 [nonking-inline-betza:chess]
 rook = r:R3

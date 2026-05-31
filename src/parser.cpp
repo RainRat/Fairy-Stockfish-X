@@ -322,7 +322,7 @@ namespace {
             else if (ch == '}') {
                 if (braceDepth == 0) {
                     std::cerr << name << " - Invalid Betza hopper parameters in '" << betza
-                              << "': missing opening '}'." << std::endl;
+                              << "': missing opening '{'." << std::endl;
                     return false;
                 }
                 --braceDepth;
@@ -332,7 +332,7 @@ namespace {
             else if (ch == ']') {
                 if (bracketDepth == 0) {
                     std::cerr << name << " - Invalid Betza rider range in '" << betza
-                              << "': missing opening ']'." << std::endl;
+                              << "': missing opening '['." << std::endl;
                     return false;
                 }
                 --bracketDepth;
@@ -1114,18 +1114,6 @@ template <bool Current, class T> bool VariantParser<DoCheck>::parse_attribute(co
 
 template <bool DoCheck>
 template <typename T>
-bool VariantParser<DoCheck>::require_attribute(bool enabled, const std::string& key, T& target) {
-    if (!enabled)
-        return true;
-    if (parse_attribute(key, target))
-        return true;
-    if (DoCheck)
-        std::cerr << "Syntax error in " << key << " or missing " << key << " definition." << std::endl;
-    return false;
-}
-
-template <bool DoCheck>
-template <typename T>
 void VariantParser<DoCheck>::apply_color_setting(ColorSetting<T>& target, Color color, const T& parsed) {
     if (color == WHITE)
         target.set_color(WHITE, parsed);
@@ -1258,6 +1246,10 @@ bool VariantParser<DoCheck>::parse_piece_types(Variant* v) {
             {
                 if (!rest.empty())
                 {
+                    if (!validate_custom_piece_betza_structure(rest, name))
+                        return false;
+                    if (!validate_custom_piece_betza(rest, name, v))
+                        return false;
                     // custom royal piece
                     v->add_piece(CUSTOM_PIECES_ROYAL, token);
                     v->customPiece[CUSTOM_PIECES_ROYAL - CUSTOM_PIECES] = rest;
@@ -1288,33 +1280,10 @@ bool VariantParser<DoCheck>::parse_piece_values(Variant* v) {
         const auto& pv = config.find(optionName);
         if (pv != config.end())
         {
-            std::string entry;
-            PieceType pt = NO_PIECE_TYPE;
-            bool parseError = false;
-            int parsedValue = 0;
-            int parsed[PIECE_TYPE_NB];
-            std::copy(std::begin(v->pieceValue[phase]), std::end(v->pieceValue[phase]), std::begin(parsed));
-            std::stringstream ss(pv->second);
-            while (ss >> entry)
-            {
-                auto [token, rawValue] = split_piece_entry(entry);
-                pt = parse_piece_type_token(v, token);
-                if (pt == NO_PIECE_TYPE || rawValue.empty())
-                {
-                    parseError = true;
-                    break;
-                }
-                if (!set(rawValue, parsedValue))
-                {
-                    parseError = true;
-                    break;
-                }
-                parsed[pt] = parsedValue;
-            }
-            if (DoCheck && parseError)
-                std::cerr << optionName << " - Invalid syntax." << std::endl;
-            if (!parseError)
-                std::copy(std::begin(parsed), std::end(parsed), std::begin(v->pieceValue[phase]));
+            if (!parse_piece_int_map_option(optionName, pv->second, v, v->pieceValue[phase], true, DoCheck, [](int (&)[PIECE_TYPE_NB]) {
+                return true;
+            }))
+                return false;
         }
     }
 
@@ -1500,12 +1469,22 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
         {
             sawToken = true;
             if (token == "-")
+            {
+                parsedPriorityDrops = NO_PIECE_SET;
+                if (!only_trailing_space(ss))
+                {
+                    if (DoCheck)
+                        std::cerr << "priorityDropTypes - Invalid trailing characters." << std::endl;
+                    return false;
+                }
+                v->isPriorityDrop = parsedPriorityDrops;
                 break;
+            }
             PieceType pt = parse_piece_type_token(v, token);
             if (pt == NO_PIECE_TYPE)
             {
                 if (DoCheck)
-                std::cerr << "priorityDropTypes - Invalid piece type: " << token << std::endl;
+                    std::cerr << "priorityDropTypes - Invalid piece type: " << token << std::endl;
                 return false;
             }
             parsedPriorityDrops |= piece_set(pt);

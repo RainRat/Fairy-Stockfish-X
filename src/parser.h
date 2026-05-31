@@ -126,7 +126,6 @@ private:
     bool parse_official_options(Variant* v);
     bool check_consistency(Variant* v);
 
-    template <typename T> bool require_attribute(bool enabled, const std::string& key, T& target);
     template <typename T> void apply_color_setting(ColorSetting<T>& target, Color color, const T& parsed);
     template <typename T> void parse_color_setting(const std::string& key, ColorSetting<T>& target);
     bool parse_color_setting_first_piece(const std::string& key, ColorSetting<PieceType>& target, const Variant* v);
