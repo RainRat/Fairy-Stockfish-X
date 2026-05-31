@@ -88,34 +88,17 @@ namespace {
     //if it's "wall or move", and they chose non-null move, skip even generating wall move
     if (pos.walling(us) && !(pos.wall_or_move() && (from!=to)))
     {
-        Bitboard b = pos.board_bb() & ~occupancyAfter & ~square_bb(to);
+        const bool pureWallMove = T == SPECIAL && from == to && pt == NO_PIECE_TYPE && pos.wall_or_move();
+        Bitboard b = pos.wall_target_mask(us, from, effectiveTo, pureWallMove ? SQ_NONE : to, occupancyAfter);
 
         // Duck is by far the hottest walling mode: avoid extra rule checks.
         if (pos.walling_rule() == DUCK)
         {
-            b &= pos.walling_region(us);
             while (b)
                 *moveList++ = make_gating<T>(from, to, pt, pop_lsb(b));
             return moveList;
         }
 
-        if (pos.walling_rule() == ARROW)
-            b &= pos.moves_bb(us, type_of(pos.piece_on(from)), effectiveTo,
-                              occupancyAfter ^ square_bb(effectiveTo));
-
-        //Any current or future wall variant must follow the walling region rule if set:
-        b &= pos.walling_region(us);
-
-        if (pos.walling_rule() == PAST)
-            b &= square_bb(from);
-        if (pos.walling_rule() == EDGE)
-        {
-            Bitboard wallsquares = pos.state()->wallSquares;
-
-            b &= (FileABB | file_bb(pos.max_file()) | Rank1BB | rank_bb(pos.max_rank())) |
-               ( shift<NORTH     >(wallsquares) | shift<SOUTH     >(wallsquares)
-               | shift<EAST      >(wallsquares) | shift<WEST      >(wallsquares));
-        }
         while (b)
             *moveList++ = make_gating<T>(from, to, pt, pop_lsb(b));
         return moveList;
@@ -1248,7 +1231,7 @@ namespace {
         }
 
         //if "wall or move", generate walling action with null move
-        if (!restrictToForcedJumper && pos.wall_or_move())
+        if (!restrictToForcedJumper && pos.walling(Us) && pos.wall_or_move())
         {
             Bitboard usPieces = pos.pieces(Us);
             Bitboard wallAnchors = pos.wall_squares();

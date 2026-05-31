@@ -471,6 +471,7 @@ public:
   WallingRule walling_rule() const;
   bool wall_or_move() const;
   Bitboard walling_region(Color c) const;
+  Bitboard wall_target_mask(Color c, Square from, Square effectiveTo, Square blockedWallSq, Bitboard occupancyAfter) const;
   bool seirawan_gating() const;
   PotionContext setup_potion_context(Move m, Color us) const;
   bool analyze_push(Move m, PushInfo& info) const;
@@ -2133,6 +2134,35 @@ inline bool Position::wall_or_move() const {
 inline Bitboard Position::walling_region(Color c) const {
   assert(var != nullptr);
   return var->wallingRegion[c];
+}
+
+inline Bitboard Position::wall_target_mask(Color c, Square from, Square effectiveTo, Square blockedWallSq, Bitboard occupancyAfter) const {
+  Bitboard b = board_bb() & ~occupancyAfter;
+  if (blockedWallSq != SQ_NONE)
+      b &= ~square_bb(blockedWallSq);
+
+  // Arrow walling needs a real move vector; pure wall-or-move placements use
+  // from/to only as an encoding anchor.
+  if (walling_rule() == ARROW)
+  {
+      if (from == effectiveTo)
+          return 0;
+      b &= moves_bb(c, type_of(piece_on(from)), effectiveTo, occupancyAfter ^ square_bb(effectiveTo));
+  }
+
+  b &= walling_region(c) & ~st->wallSquares;
+
+  if (walling_rule() == PAST)
+      b &= square_bb(from);
+  if (walling_rule() == EDGE)
+  {
+      Bitboard wallsquares = st->wallSquares;
+      b &= (FileABB | file_bb(max_file()) | Rank1BB | rank_bb(max_rank())) |
+           ( shift<NORTH     >(wallsquares) | shift<SOUTH     >(wallsquares)
+           | shift<EAST      >(wallsquares) | shift<WEST      >(wallsquares));
+  }
+
+  return b;
 }
 
 inline bool Position::seirawan_gating() const {

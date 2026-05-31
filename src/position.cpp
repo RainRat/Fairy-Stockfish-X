@@ -4283,25 +4283,7 @@ bool Position::pseudo_legal(const Move m) const {
   if (pureWallMove)
   {
       Square wallSq = gating_square(m);
-      if (!((board_bb() & ~pieces()) & wallSq))
-          return false;
-      if (!(walling_region(us) & wallSq) || (st->wallSquares & wallSq))
-          return false;
-      if (walling_rule() == ARROW)
-          return false;
-      if (walling_rule() == PAST && from != wallSq)
-          return false;
-      if (walling_rule() == EDGE)
-      {
-          Bitboard wallsquares = st->wallSquares;
-          Bitboard validSquares = board_bb() &
-                  ((FileABB | file_bb(max_file()) | Rank1BB | rank_bb(max_rank())) |
-                  ( shift<NORTH     >(wallsquares) | shift<SOUTH     >(wallsquares)
-                  | shift<EAST      >(wallsquares) | shift<WEST      >(wallsquares)));
-          if (!(validSquares & wallSq))
-              return false;
-      }
-      return true;
+      return wall_target_mask(us, from, from, SQ_NONE, pieces()) & wallSq;
   }
 
   // Illegal moves to squares outside of board or to wall squares

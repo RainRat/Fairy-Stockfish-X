@@ -21,6 +21,19 @@ flagRegionWhite = *
 flagRegionBlack = *
 startFen = 4k3/8/8/8/8/8/8/8 w - - 0 1
 
+[edge-wall-anchor:fairy]
+king = -
+checking = false
+wallingRule = edge
+wallOrMove = true
+flagRegionWhite = *8
+flagRegionBlack = *1
+startFen = 8/8/8/8/8/8/8/8 w - - 0 1
+
+[wall-or-move-disabled:chess]
+wallOrMove = true
+startFen = 4k3/8/8/8/8/8/8/4K3 w - - 0 1
+
 [wazir-chess:chess]
 king = w:W
 startFen = W6w/QQ6/8/8/8/8/8/8 w
@@ -101,6 +114,20 @@ out=$(run_uci_cmds "$ENGINE" "$TMP_INI" wallpass \
   "position startpos
 go perft 1")
 assert_contains "$out" "Nodes searched:"
+
+# Pure wall-or-move generation must include the encoding anchor itself when it
+# is a legal empty wall target.
+out=$(run_uci_cmds "$ENGINE" "$TMP_INI" edge-wall-anchor \
+  "position startpos
+go perft 1")
+assert_contains "$out" "^0000,a1: 1$"
+
+# wallOrMove alone should not emit pseudo-special wall anchors when no walling
+# rule is enabled for the side to move.
+out=$(run_uci_cmds "$ENGINE" "$TMP_INI" wall-or-move-disabled \
+  "position startpos
+go perft 1")
+assert_nodes "$out" "5"
 
 # Duck wall relocation uses gating encoding without a gated piece.
 out=$(run_uci_cmds "$ENGINE" "$VARIANTS" atomicduck \

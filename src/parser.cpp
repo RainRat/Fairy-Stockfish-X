@@ -2101,6 +2101,15 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
             std::cerr << "Wrapped boards do not support connect/collinear win conditions." << std::endl;
         valid = false;
     }
+    bool hasPushing = false;
+    for (int strength : v->pushingStrength)
+        hasPushing |= strength > 0;
+    if (wrapsTopology && hasPushing)
+    {
+        if (DoCheck)
+            std::cerr << "Wrapped boards do not support pushing." << std::endl;
+        valid = false;
+    }
 
     if (wrapsTopology)
         for (int i = 0; i < CUSTOM_PIECES_NB; ++i)
@@ -2165,6 +2174,12 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
     {
         if (DoCheck)
             std::cerr << "wallingRule and gating features (seirawanGating, potions, gating, gatingPieceAfter) are incompatible." << std::endl;
+        valid = false;
+    }
+    if (v->wallOrMove && v->wallingRule == ARROW)
+    {
+        if (DoCheck)
+            std::cerr << "wallOrMove is not supported with wallingRule=arrow." << std::endl;
         valid = false;
     }
     if (v->wallingRule == DUCK && v->petrifyOnCaptureTypes)

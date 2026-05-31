@@ -66,9 +66,17 @@ petrifyOnCaptureTypes = p
 wallingRule = duck
 freeDrops = true
 
+[wall-or-move-arrow:chess]
+wallingRule = arrow
+wallOrMove = true
+
 [toroidal-connect:chess]
 toroidal = true
 connectN = 4
+
+[toroidal-pushing:chess]
+toroidal = true
+pushingStrength = q:1
 
 [toroidal-maxrider:chess]
 toroidal = true
@@ -332,6 +340,12 @@ assert_contains "${bad_hopper_type_output}" "unknown variant 'bad-hopper-type'; 
 bad_hopper_numeric_output=$(run_uci "$ENGINE" "$bad_hopper_numeric_ini" "bad-hopper-numeric" </dev/null 2>&1 || true)
 assert_contains "${bad_hopper_numeric_output}" "Invalid numeric value in Betza hopper parameters: 'abc,1'"
 assert_contains "${bad_hopper_numeric_output}" "unknown variant 'bad-hopper-numeric'; keeping 'chess'"
+
+wall_or_move_arrow_output=$(run_uci "$ENGINE" "$tmp_ini" "wall-or-move-arrow" </dev/null 2>&1 || true)
+assert_contains "${wall_or_move_arrow_output}" "unknown variant 'wall-or-move-arrow'; keeping 'chess'"
+
+toroidal_pushing_output=$(run_uci "$ENGINE" "$tmp_ini" "toroidal-pushing" </dev/null 2>&1 || true)
+assert_contains "${toroidal_pushing_output}" "unknown variant 'toroidal-pushing'; keeping 'chess'"
 
 capture_allowed_only_output=$(run_uci "$ENGINE" "$capture_allowed_only_ini" "capture-allowed-only" <<EOF
 position fen 8/3p4/8/8/3Q2n1/8/8/8 w - - 0 1
