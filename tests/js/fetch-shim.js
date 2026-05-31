@@ -8,10 +8,11 @@ function setupFetchShim() {
     const originalFetch = fetch;
     global.fetch = async (resource, init) => {
       if (typeof resource === 'string' && resource.startsWith('/')) {
-        const basename = path.basename(resource);
-        if (basename === 'ffish.wasm') {
+        const requestedPath = path.resolve(resource);
+        const expectedWasmPath = path.resolve(__dirname, 'ffish.wasm');
+        if (requestedPath === expectedWasmPath) {
           try {
-            const bytes = await fs.promises.readFile(resource);
+            const bytes = await fs.promises.readFile(expectedWasmPath);
             return new Response(bytes, { status: 200 });
           } catch (err) {
             if (err.code === 'ENOENT') {

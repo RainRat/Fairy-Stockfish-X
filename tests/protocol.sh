@@ -1,6 +1,8 @@
 #!/bin/bash
 # verify protocol implementations
 
+set -euo pipefail
+
 error()
 {
   echo "protocol testing failed on line $1"
@@ -15,8 +17,16 @@ REPO_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
 ENGINE="${1:-${REPO_ROOT}/src/stockfish}"
 
 uci_exp=$(mktemp)
+ucci_exp=$(mktemp)
+usi_exp=$(mktemp)
+ucicyclone_exp=$(mktemp)
+ucicyclone2_exp=$(mktemp)
+xboard_exp=$(mktemp)
+trap 'rm -f "$uci_exp" "$ucci_exp" "$usi_exp" "$ucicyclone_exp" "$ucicyclone2_exp" "$xboard_exp"' EXIT
+
 cat << EOF > "$uci_exp"
-   spawn $ENGINE
+   set engine [lindex \$argv 0]
+   spawn \$engine
    send "uci\\n"
    expect "default chess"
    expect "uciok"
@@ -24,9 +34,9 @@ cat << EOF > "$uci_exp"
    expect eof
 EOF
 
-ucci_exp=$(mktemp)
 cat << EOF > "$ucci_exp"
-   spawn $ENGINE
+   set engine [lindex \$argv 0]
+   spawn \$engine
    send "ucci\\n"
    expect "option UCI_Variant"
    expect -re "default (xiangqi|minixiangqi)"
@@ -35,9 +45,9 @@ cat << EOF > "$ucci_exp"
    expect eof
 EOF
 
-usi_exp=$(mktemp)
 cat << EOF > "$usi_exp"
-   spawn $ENGINE
+   set engine [lindex \$argv 0]
+   spawn \$engine
    send "usi\\n"
    expect -re "default (shogi|minishogi)"
    expect "usiok"
@@ -45,9 +55,9 @@ cat << EOF > "$usi_exp"
    expect eof
 EOF
 
-ucicyclone_exp=$(mktemp)
 cat << EOF > "$ucicyclone_exp"
-   spawn $ENGINE
+   set engine [lindex \$argv 0]
+   spawn \$engine
    send "uci\\n"
    expect "uciok"
    send "startpos\\n"
@@ -57,9 +67,9 @@ cat << EOF > "$ucicyclone_exp"
    expect eof
 EOF
 
-ucicyclone2_exp=$(mktemp)
 cat << EOF > "$ucicyclone2_exp"
-   spawn $ENGINE ucicyclone
+   set engine [lindex \$argv 0]
+   spawn \$engine ucicyclone
    send "uci\\n"
    expect "uciok"
    send "position startpos\\n"
@@ -69,9 +79,10 @@ cat << EOF > "$ucicyclone2_exp"
    expect eof
 EOF
 
-xboard_exp=$(mktemp)
 cat << EOF > "$xboard_exp"
-   spawn $ENGINE load ${REPO_ROOT}/src/variants.ini
+   set engine [lindex \$argv 0]
+   set variant_path [lindex \$argv 1]
+   spawn \$engine load \$variant_path
    send "xboard\\n"
    send "protover 2\\n"
    expect "feature done=1"
@@ -88,8 +99,7 @@ EOF
 for exp in "$uci_exp" "$ucci_exp" "$usi_exp" "$ucicyclone_exp" "$ucicyclone2_exp" "$xboard_exp"
 do
   echo "Testing $exp"
-  timeout 20 expect "$exp" > /dev/null
-  rm "$exp"
+  timeout 20 expect "$exp" "$ENGINE" "${REPO_ROOT}/src/variants.ini" > /dev/null
 done
 
 echo "protocol testing OK"

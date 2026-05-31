@@ -1,3 +1,5 @@
+"use strict";
+
 const express = require('express')
 require('./fetch-shim.js').setupFetchShim();
 
@@ -61,12 +63,12 @@ app.get('/', (req, res) => {
   console.log(`board.legalMoves().split(" ").length: ${legalMoves.length}`)
   console.log(`Call to board.legalMoves() took ${(t1 - t0).toFixed(2)}  milliseconds.`)
 
-  cz_moves = ["e4", "d5", "exd5", "Qxd5", "Nf3", "Nf6", "Nc3", "e6", "d4", "Qxf3", "Qxf3"]
+  const czMoves = ["e4", "d5", "exd5", "Qxd5", "Nf3", "Nf6", "Nc3", "e6", "d4", "Qxf3", "Qxf3"]
   // pass in a FEN string to load a particular position
   const crazyhouse = new Crazyhouse()
 
-  for (let idx = 0; idx < cz_moves.length; ++idx) {
-    crazyhouse.move(cz_moves[idx])
+  for (let idx = 0; idx < czMoves.length; ++idx) {
+    crazyhouse.move(czMoves[idx])
   }
 
   t0 = performance.now()
@@ -89,7 +91,7 @@ app.get('/', (req, res) => {
   res.send(String("Test server of ffish.js"));
 });
 
-app.listen(8000, () => {
+app.listen(8000, "127.0.0.1", () => {
   console.log('Test server of ffish.js listening on port 8000.')
   console.log('http://127.0.0.1:8000/')
 });

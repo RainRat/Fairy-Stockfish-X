@@ -26,7 +26,8 @@ quit
 EOF
 )
 
-grep -Fxq "Nodes searched: 10" <<<"$out"
+grep -Fxq "Nodes searched: 10" <<<"$perft_out"
+grep -Fxq "Nodes searched: 9" <<<"$perft_out"
 
 tty_out=$(expect <<EOF
 log_user 1
@@ -48,9 +49,9 @@ expect eof
 EOF
 )
 
-echo "${tty_out}" | grep -q "^info depth "
-echo "${tty_out}" | grep -q "^bestmove "
-! echo "${tty_out}" | grep -q "score mate"
-! echo "${tty_out}" | grep -q "^bestmove A@e5,e4$"
+grep -q "^info depth " <<<"${tty_out}"
+grep -q "^bestmove " <<<"${tty_out}"
+! grep -q "score mate" <<<"${tty_out}"
+! grep -q "^bestmove A@e5,e4$" <<<"${tty_out}"
 
 echo "slide-5 regression passed"

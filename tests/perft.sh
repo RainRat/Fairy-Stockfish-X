@@ -1,6 +1,8 @@
 #!/bin/bash
 # verify perft numbers (positions from www.chessprogramming.org/Perft_Results)
 
+set -euo pipefail
+
 VARIANT=${1:-}
 ENGINE=${2:-}
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -19,6 +21,7 @@ trap 'error ${LINENO}' ERR
 echo "perft testing started"
 
 perft_exp=$(mktemp)
+trap 'rm -f "$perft_exp"' EXIT
 cat << EOF > "$perft_exp"
    set timeout 60
    lassign \$argv var pos depth result chess960
@@ -249,7 +252,5 @@ if [[ $VARIANT == "all" ]]; then
     echo "skipping amazons perft: variant not available in this build"
   fi
 fi
-
-rm "$perft_exp"
 
 echo "perft testing OK"
