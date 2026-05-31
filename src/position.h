@@ -3061,6 +3061,22 @@ inline Bitboard Position::wrapped_slider_targets(const std::map<Direction, int>&
   return out;
 }
 
+inline Bitboard wrapped_slider_direction_targets(Direction d, Square sq, Bitboard occupied,
+                                                 File maxFile, Rank maxRank,
+                                                 bool wrapFile, bool wrapRank,
+                                                 bool quietMode) {
+  auto [dr, df] = decode_direction(d);
+  if (!dr && !df)
+      return Bitboard(0);
+
+  return wrapped_ray_walk(sq, occupied, maxFile, maxRank, wrapFile, wrapRank, df, dr,
+      [&](Square next, bool blocked, int /*count*/, Bitboard& out_bb) {
+          if (!quietMode || !blocked)
+              out_bb |= square_bb(next);
+          return blocked;
+      });
+}
+
 inline Bitboard Position::wrapped_hopper_targets(const std::map<Direction, int>& directions,
                                                  Color c, Square sq, Bitboard occupied,
                                                  File maxFile, Rank maxRank,
@@ -3111,10 +3127,7 @@ inline Bitboard Position::wrapped_bent_rider_targets(bool griffon, Square sq, Bi
   Bitboard out = 0;
   auto add_from_pivot = [&](Square pivot, std::initializer_list<Direction> dirs) {
       for (Direction d : dirs)
-      {
-          std::map<Direction, int> sliderDirs{{d, 0}};
-          out |= wrapped_slider_targets(sliderDirs, WHITE, pivot, occupied, maxFile, maxRank, wrapFile, wrapRank, quietMode);
-      }
+          out |= wrapped_slider_direction_targets(d, pivot, occupied, maxFile, maxRank, wrapFile, wrapRank, quietMode);
   };
 
   struct BentRiderData {

@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-cd "$(dirname "$0")/../src"
+if [[ $# -gt 0 ]]; then
+  ENGINE=$(cd "$(dirname "$1")" && pwd)/$(basename "$1")
+else
+  ENGINE="./stockfish"
+fi
 
-ENGINE="${1:-./stockfish}"
+cd "$(dirname "$0")/../src"
 
 tmp_ini="$(mktemp)"
 trap 'rm -f "$tmp_ini"' EXIT

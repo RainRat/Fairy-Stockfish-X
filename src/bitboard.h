@@ -275,41 +275,6 @@ inline bool wrapped_destination_square(Square from, int df, int dr,
   return true;
 }
 
-inline Bitboard wrapping_slider_attacks(Square s, Bitboard occ, File maxFile, Rank maxRank,
-                                        bool wrapFile, bool wrapRank,
-                                        bool orthogonal, bool diagonal) {
-  Bitboard result = 0;
-
-  constexpr std::array<std::pair<int, int>, 8> dirs = {{
-      { 1,  0}, {-1,  0}, { 0,  1}, { 0, -1},
-      { 1,  1}, { 1, -1}, {-1,  1}, {-1, -1}
-  }};
-
-  for (size_t i = 0; i < dirs.size(); ++i)
-  {
-      const auto [df, dr] = dirs[i];
-      const bool isDiag = df && dr;
-      if ((isDiag && !diagonal) || (!isDiag && !orthogonal))
-          continue;
-
-      Square current = s;
-      for (;;)
-      {
-          Square next = SQ_NONE;
-          if (!wrapped_destination_square(current, df, dr, maxFile, maxRank, wrapFile, wrapRank, next))
-              break;
-          if (next == s)
-              break;
-          result |= square_bb(next);
-          if (occ & square_bb(next))
-              break;
-          current = next;
-      }
-  }
-
-  return result;
-}
-
 inline Bitboard safe_destination_tuple(Square s, int dr, int df) {
   int r = int(rank_of(s)) + dr;
   int f = int(file_of(s)) + df;
@@ -548,47 +513,6 @@ inline Bitboard between_bb(Square s1, Square s2) {
   return BetweenBB[s1][s2];
 }
 
-inline Bitboard nightrider_between_bb(Square s1, Square s2) {
-  int df = int(file_of(s2)) - int(file_of(s1));
-  int dr = int(rank_of(s2)) - int(rank_of(s1));
-
-  auto make_path = [&](int stepF, int stepR) {
-      if ((stepF == 0) || (stepR == 0))
-          return Bitboard(0);
-      if (df % stepF || dr % stepR)
-          return Bitboard(0);
-      int nF = df / stepF;
-      int nR = dr / stepR;
-      if (nF != nR || nF <= 0)
-          return Bitboard(0);
-      int n = nF;
-      Bitboard b = 0;
-      int f = int(file_of(s1));
-      int r = int(rank_of(s1));
-      for (int i = 1; i <= n; ++i)
-      {
-          f += stepF;
-          r += stepR;
-          if (f < int(FILE_A) || f > int(FILE_MAX) || r < int(RANK_1) || r > int(RANK_MAX))
-              return Bitboard(0);
-          b |= make_square(File(f), Rank(r));
-      }
-      return b;
-  };
-
-  // Nightrider rays are repeated knight vectors.
-  static constexpr int StepFile[8] = { 1, 2, 2, 1, -1, -2, -2, -1 };
-  static constexpr int StepRank[8] = { 2, 1, -1, -2, -2, -1, 1, 2 };
-  for (int i = 0; i < 8; ++i)
-  {
-      Bitboard path = make_path(StepFile[i], StepRank[i]);
-      if (path)
-          return path;
-  }
-
-  return Bitboard(0);
-}
-
 inline Bitboard fixed_step_between_bb(Square s1, Square s2, int stepF, int stepR) {
   int df = int(file_of(s2)) - int(file_of(s1));
   int dr = int(rank_of(s2)) - int(rank_of(s1));
@@ -621,6 +545,21 @@ inline Bitboard fixed_step_between_bb(Square s1, Square s2, int stepF, int stepR
   };
 
   return make_path(stepF, stepR);
+}
+
+inline Bitboard nightrider_between_bb(Square s1, Square s2) {
+
+  // Nightrider rays are repeated knight vectors.
+  static constexpr int StepFile[8] = { 1, 2, 2, 1, -1, -2, -2, -1 };
+  static constexpr int StepRank[8] = { 2, 1, -1, -2, -2, -1, 1, 2 };
+  for (int i = 0; i < 8; ++i)
+  {
+      Bitboard path = fixed_step_between_bb(s1, s2, StepFile[i], StepRank[i]);
+      if (path)
+          return path;
+  }
+
+  return Bitboard(0);
 }
 
 // Reconstruct the unique blocker/interposition path for bent riders by

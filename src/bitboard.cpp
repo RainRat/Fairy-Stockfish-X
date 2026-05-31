@@ -18,7 +18,9 @@
 
 #include <algorithm>
 #include <bitset>
+#include <cstdio>
 #include <cstdint>
+#include <cstdlib>
 #include <map>
 #include <mutex>
 #include <unordered_map>
@@ -764,7 +766,18 @@ namespace {
   }
 
   inline Bitboard active_magic_board(File maxFile, Rank maxRank) {
-      assert(BoardSizeBB[maxFile][maxRank] != Bitboard(0));
+      const int f = int(maxFile);
+      const int r = int(maxRank);
+      if (f < int(FILE_A) || f > int(FILE_MAX) || r < int(RANK_1) || r > int(RANK_MAX))
+      {
+          std::fprintf(stderr, "invalid magic board size: file=%d rank=%d\n", f, r);
+          std::abort();
+      }
+      if (BoardSizeBB[maxFile][maxRank] == Bitboard(0))
+      {
+          std::fprintf(stderr, "uninitialized magic board size: file=%d rank=%d\n", f, r);
+          std::abort();
+      }
       return BoardSizeBB[maxFile][maxRank];
   }
 
@@ -907,8 +920,13 @@ namespace {
 // thread before search threads start, as current_magic_geometry is accessed
 // lock-free during search.
 std::shared_ptr<const MagicGeometry> Bitboards::init_magics(File maxFile, Rank maxRank) {
-  assert(Threads.empty() || !Threads.is_searching());
+  if (!Threads.empty() && Threads.is_searching())
+  {
+      std::fprintf(stderr, "Bitboards::init_magics called while search threads are active\n");
+      std::abort();
+  }
 #if !defined(VERY_LARGE_BOARDS)
+  active_magic_board(maxFile, maxRank);
   const uint16_t boardKey = magic_board_key(maxFile, maxRank);
 
   std::lock_guard<std::mutex> lock(MagicInitMutex);

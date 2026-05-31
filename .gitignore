@@ -43,3 +43,4 @@ src/*.txt
 # IDEs
 .vscode
 .idea
+.antigravitycli/

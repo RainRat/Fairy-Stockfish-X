@@ -1199,6 +1199,7 @@ inline Square potion_target_square(Move m) {
 }
 
 inline int potion_type(Move m) {
+  assert(type_of(m) == PROMOTION_POTION);
   return (m >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + SQUARE_BITS + 2)) & 1;
 }
 
@@ -1341,6 +1342,8 @@ constexpr Move make_pull(Square from, Square to, Square pullFrom) {
 }
 
 constexpr Move make_promotion_potion(Square from, Square to, PieceType prom_pt, int potion, Square target) {
+  assert(prom_pt == KNIGHT || prom_pt == BISHOP || prom_pt == ROOK || prom_pt == QUEEN);
+  assert(potion == 0 || potion == 1);
   uint64_t prom_val = (prom_pt == KNIGHT ? 0 : (prom_pt == BISHOP ? 1 : (prom_pt == ROOK ? 2 : 3)));
   uint64_t potion_val = static_cast<uint64_t>(potion);
   uint64_t target_val = static_cast<uint64_t>(target);

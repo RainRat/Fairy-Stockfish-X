@@ -50,4 +50,14 @@ position startpos
 go perft 1")
 echo "${out}" | grep -q "Nodes searched: 7"
 
+# Malformed cooldown syntax must not consume the remainder as valid cooldowns
+# or retain previously parsed cooldown state.
+out=$(run_cmds "setoption name UCI_Variant value spell-chess
+position fen 7k/8/8/8/8/8/8/4K3[J] w - - 0 1 - <1 2 3 4>
+d
+position fen 7k/8/8/8/8/8/8/4K3[J] w - - 0 1 - <1 2 3 4
+d")
+grep -q "^Fen: 7k/8/8/8/8/8/8/4K3\\[J\\] w - - 0 1 - <1 2 3 4>$" <<<"${out}"
+grep -q "^Fen: 7k/8/8/8/8/8/8/4K3\\[J\\] w - - 0 1$" <<<"${out}"
+
 echo "potion custom tests passed"

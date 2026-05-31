@@ -1747,13 +1747,17 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
           char open = 0;
           ss >> open;
           std::string cooldownSpec;
-          std::getline(ss, cooldownSpec, '>');
-          auto vals = parse_potion_cooldowns(cooldownSpec);
-          int maxCooldown = (1 << POTION_COOLDOWN_BITS) - 1;
-          st->potionCooldown[WHITE][Variant::POTION_FREEZE] = std::min(vals[0], maxCooldown);
-          st->potionCooldown[WHITE][Variant::POTION_JUMP]   = std::min(vals[1], maxCooldown);
-          st->potionCooldown[BLACK][Variant::POTION_FREEZE] = std::min(vals[2], maxCooldown);
-          st->potionCooldown[BLACK][Variant::POTION_JUMP]   = std::min(vals[3], maxCooldown);
+          if (std::getline(ss, cooldownSpec, '>') && !ss.eof())
+          {
+              auto vals = parse_potion_cooldowns(cooldownSpec);
+              int maxCooldown = (1 << POTION_COOLDOWN_BITS) - 1;
+              st->potionCooldown[WHITE][Variant::POTION_FREEZE] = std::min(vals[0], maxCooldown);
+              st->potionCooldown[WHITE][Variant::POTION_JUMP]   = std::min(vals[1], maxCooldown);
+              st->potionCooldown[BLACK][Variant::POTION_FREEZE] = std::min(vals[2], maxCooldown);
+              st->potionCooldown[BLACK][Variant::POTION_JUMP]   = std::min(vals[3], maxCooldown);
+          }
+          else
+              ss.setstate(std::ios::failbit);
       }
   }
 
