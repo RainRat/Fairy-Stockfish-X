@@ -386,6 +386,13 @@ inline const std::string move_to_san(Position& pos, Move m, Notation n) {
     return san;
 }
 
+inline Move from_san(Position& pos, std::string san, Notation n) {
+    for (const auto& m : MoveList<LEGAL>(pos))
+        if (san == move_to_san(pos, m, n))
+            return m;
+    return MOVE_NONE;
+}
+
 } // namespace SAN
 
 inline bool has_insufficient_material(Color c, const Position& pos) {

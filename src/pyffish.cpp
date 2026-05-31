@@ -207,6 +207,37 @@ extern "C" PyObject* pyffish_capturesToHand(PyObject* self, PyObject *args) {
     return Py_BuildValue("O", v->captureType != MOVE_OUT ? Py_True : Py_False);
 }
 
+// INPUT variant, fen, san
+extern "C" PyObject* pyffish_fromSAN(PyObject* self, PyObject *args) {
+    Position pos;
+    const char *fen, *variant, *san;
+
+    int chess960 = false;
+    Notation notation = NOTATION_DEFAULT;
+    if (!PyArg_ParseTuple(args, "sss|pi", &variant, &fen,  &san, &chess960, &notation)) {
+        return NULL;
+    }
+    const Variant* v = require_variant(variant);
+    if (!v) {
+        return NULL;
+    }
+    if (notation == NOTATION_DEFAULT)
+        notation = default_notation(v);
+    StateListPtr states(new std::deque<StateInfo>(1));
+    if (!buildPosition(pos, states, v, fen, NULL, chess960)) {
+        return NULL;
+    }
+
+    Move m = SAN::from_san(pos, san, notation);
+    if (m == MOVE_NONE)
+    {
+        PyErr_SetString(PyExc_ValueError, (std::string("Invalid SAN move '") + san + "'").c_str());
+        return NULL;
+    }
+
+    return Py_BuildValue("s", UCI::move(pos, m).c_str());
+}
+
 // INPUT variant, fen, move
 extern "C" PyObject* pyffish_getSAN(PyObject* self, PyObject *args) {
     Position pos;
@@ -315,7 +346,8 @@ extern "C" PyObject* pyffish_legalMoves(PyObject* self, PyObject *args) {
     const char *fen, *variant;
 
     int chess960 = false;
-    if (!PyArg_ParseTuple(args, "ssO!|p", &variant, &fen, &PyList_Type, &moveList, &chess960)) {
+    Notation notation = NOTATION_DEFAULT;
+    if (!PyArg_ParseTuple(args, "ssO!|pi", &variant, &fen, &PyList_Type, &moveList, &chess960, &notation)) {
         Py_XDECREF(legalMoves);
         return NULL;
     }
@@ -326,6 +358,9 @@ extern "C" PyObject* pyffish_legalMoves(PyObject* self, PyObject *args) {
         return NULL;
     }
 
+    if (notation != NOTATION_DEFAULT && notation == -1) // use variant default
+        notation = default_notation(v);
+
     StateListPtr states(new std::deque<StateInfo>(1));
     if (!buildPosition(pos, states, v, fen, moveList, chess960)) {
         Py_XDECREF(legalMoves);
@@ -334,7 +369,10 @@ extern "C" PyObject* pyffish_legalMoves(PyObject* self, PyObject *args) {
     for (const auto& m : MoveList<LEGAL>(pos))
     {
         PyObject *moveStr;
-        moveStr = Py_BuildValue("s", UCI::move(pos, m).c_str());
+        if (notation == NOTATION_DEFAULT)
+            moveStr = Py_BuildValue("s", UCI::move(pos, m).c_str());
+        else
+            moveStr = Py_BuildValue("s", SAN::move_to_san(pos, m, notation).c_str());
         PyList_Append(legalMoves, moveStr);
         Py_XDECREF(moveStr);
     }
@@ -684,6 +722,7 @@ static PyMethodDef PyFFishMethods[] = {
     {"start_fen", (PyCFunction)pyffish_startFen, METH_VARARGS, "Get starting position FEN."},
     {"two_boards", (PyCFunction)pyffish_twoBoards, METH_VARARGS, "Checks whether the variant is played on two boards."},
     {"captures_to_hand", (PyCFunction)pyffish_capturesToHand, METH_VARARGS, "Checks whether the variant rules contains capturesToHand."},
+    {"from_san", (PyCFunction)pyffish_fromSAN, METH_VARARGS, "Get UCI move from given FEN and SAN move."},
     {"get_san", (PyCFunction)pyffish_getSAN, METH_VARARGS, "Get SAN move from given FEN and UCI move."},
     {"get_san_moves", (PyCFunction)pyffish_getSANmoves, METH_VARARGS, "Get SAN movelist from given FEN and UCI movelist."},
     {"legal_moves", (PyCFunction)pyffish_legalMoves, METH_VARARGS, "Get legal moves from given FEN and movelist."},
