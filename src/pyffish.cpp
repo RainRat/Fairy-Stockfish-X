@@ -665,7 +665,7 @@ static PyObject* pyffish_runCppTests(PyObject* self, PyObject* args) {
         if (!v) return nullptr;
         buildPosition(pos, states, v, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", nullptr, false);
         Bitboard targets = pos.clone_targets_from(WHITE, SQ_A3);
-        if (targets != 0) {
+        if (targets) {
             PyErr_SetString(PyFFishError, "clone_targets_from on empty square did not return 0");
             return nullptr;
         }
