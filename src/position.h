@@ -907,7 +907,9 @@ private:
   void swap_piece(Square from, Square to);
 };
 
+#ifndef _MSC_VER
 static_assert(std::is_trivially_copyable_v<Position>);
+#endif
 
 extern std::ostream& operator<<(std::ostream& os, const Position& pos);
 

@@ -522,7 +522,7 @@ describe('board.result()', function () {
     chai.expect(board.result()).to.equal("1-0");
 
     // Enclosing-drop placement games must not be drawn just because no mating material exists.
-    fs = require('fs');
+    const fs = require('fs');
     ffish.loadVariantConfig(fs.readFileSync(srcDir + 'variants.ini', 'utf8'));
     board.delete();
     board = new ffish.Board("snort");
