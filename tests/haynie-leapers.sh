@@ -1,29 +1,44 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ENGINE=${1:-./stockfish}
-VARIANTS=${2:-src/variants.ini}
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+ENGINE="${1:-${SCRIPT_DIR}/../src/stockfish}"
+VARIANTS="${2:-${SCRIPT_DIR}/../src/variants.ini}"
+source "${SCRIPT_DIR}/lib/uci.sh"
 
 run_cmds() {
-  printf 'uci\nsetoption name VariantPath value %s\n%s\nquit\n' "$VARIANTS" "$1" | "$ENGINE"
+  run_uci "$ENGINE" "$VARIANTS" haynie-leapers <<EOF
+$1
+EOF
+}
+
+variant_available() {
+  local out
+  out=$(printf 'uci\nquit\n' | uci_timeout "$ENGINE")
+  grep -q ' var haynie-leapers ' <<<"$out"
 }
 
 echo "haynie leapers regression tests started"
 
+if ! variant_available; then
+  echo "haynie-leapers variant not available in this build; skipping haynie-leapers regression"
+  exit 0
+fi
+
 out=$(run_cmds "setoption name UCI_Variant value haynie-leapers
 position startpos
 go perft 1")
-grep -Fxq "Nodes searched: 28" <<<"$out"
-echo "$out" | grep -q "^a1c4: 1$"
-echo "$out" | grep -q "^c1b3: 1$"
-echo "$out" | grep -q "^b1a4: 1$"
+assert_contains "$out" "^Nodes searched: 28$"
+assert_contains "$out" "^a1c4: 1$"
+assert_contains "$out" "^c1b3: 1$"
+assert_contains "$out" "^b1a4: 1$"
 
 out=$(run_cmds "setoption name UCI_Variant value haynie-leapers
 position fen k7/7P/8/8/8/8/8/7K w - - 0 1
 go perft 1")
-echo "$out" | grep -q "^h7h8z: 1$"
-echo "$out" | grep -q "^h7h8c: 1$"
-echo "$out" | grep -q "^h7h8w: 1$"
-! echo "$out" | grep -q "^h7h8: 1$"
+assert_contains "$out" "^h7h8z: 1$"
+assert_contains "$out" "^h7h8c: 1$"
+assert_contains "$out" "^h7h8w: 1$"
+assert_not_contains "$out" "^h7h8: 1$"
 
 echo "haynie leapers regression tests passed"

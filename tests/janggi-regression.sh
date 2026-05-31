@@ -8,19 +8,13 @@ error() {
 }
 trap 'error ${LINENO}' ERR
 
-ENGINE=${1:-src/stockfish}
-
-run_cmds() {
-  cat <<EOF | "${ENGINE}"
-uci
-$1
-quit
-EOF
-}
+SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+ENGINE="${1:-${SCRIPT_DIR}/../src/stockfish}"
+source "${SCRIPT_DIR}/lib/uci.sh"
 
 variant_available() {
   local out
-  out=$(printf 'uci\nquit\n' | "${ENGINE}")
+  out=$(printf 'uci\nquit\n' | uci_timeout "${ENGINE}")
   grep -q ' var janggi' <<<"${out}"
 }
 
@@ -29,17 +23,21 @@ if ! variant_available; then
   exit 0
 fi
 
-out=$(run_cmds "setoption name UCI_Variant value janggi
+out=$(run_uci "${ENGINE}" "${SCRIPT_DIR}/../src/variants.ini" janggi <<'EOF'
 position startpos
-go perft 1")
-grep -Fxq "Nodes searched: 32" <<<"${out}"
-grep -Fxq "0000: 1" <<<"${out}"
+go perft 1
+EOF
+)
+assert_contains "${out}" "^Nodes searched: 32$"
+assert_contains "${out}" "^0000: 1$"
 
-out=$(run_cmds "setoption name UCI_Variant value janggi
+out=$(run_uci "${ENGINE}" "${SCRIPT_DIR}/../src/variants.ini" janggi <<'EOF'
 position fen 1n1kaabn1/cr2N4/5C1c1/p1pNp3p/9/9/P1PbP1P1P/3r1p3/4A4/R1BA1KB1R b - - 0 1 moves a9e9 e2d3
-go perft 1")
-grep -Fxq "Nodes searched: 37" <<<"${out}"
-grep -Fxq "f3e2: 1" <<<"${out}"
-grep -Fxq "0000: 1" <<<"${out}"
+go perft 1
+EOF
+)
+assert_contains "${out}" "^Nodes searched: 37$"
+assert_contains "${out}" "^f3e2: 1$"
+assert_contains "${out}" "^0000: 1$"
 
 echo "janggi regression tests passed"

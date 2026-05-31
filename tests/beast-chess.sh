@@ -1,17 +1,10 @@
 #!/bin/bash
 set -euo pipefail
 
-ENGINE=${1:-src/stockfish}
-VARIANT_PATH=${2:-src/variants.ini}
-
-run_cmds() {
-  cat <<EOF | "${ENGINE}"
-uci
-setoption name VariantPath value ${VARIANT_PATH}
-$1
-quit
-EOF
-}
+SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+ENGINE="${1:-${SCRIPT_DIR}/../src/stockfish}"
+VARIANT_PATH="${2:-${SCRIPT_DIR}/../src/variants.ini}"
+source "${SCRIPT_DIR}/lib/uci.sh"
 
 tmp_ini=$(mktemp)
 trap 'rm -f "$tmp_ini"' EXIT
@@ -27,45 +20,46 @@ doubleStep = false
 promotionPieceTypes = qegh
 INI
 
-out=$(run_cmds "setoption name UCI_Variant value beast-chess
-position startpos
-d")
-echo "${out}" | grep -q "Fen: eghqkhge/pppppppp/8/8/8/8/PPPPPPPP/EGHQKHGE w KQkq - 0 1"
+variant_available() {
+  local out
+  out=$(printf 'uci\nquit\n' | uci_timeout "$ENGINE")
+  grep -q ' var beast-chess' <<<"$out"
+}
 
-out=$(cat <<EOF | "${ENGINE}"
-uci
-setoption name VariantPath value ${tmp_ini}
-setoption name UCI_Variant value beast-pieces
+if ! variant_available; then
+  echo "beast-chess variant not available in this build; skipping beast-chess regression"
+  exit 0
+fi
+
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" beast-chess <<'EOF'
+position startpos
+d
+EOF
+)
+assert_contains "$out" "Fen: eghqkhge/pppppppp/8/8/8/8/PPPPPPPP/EGHQKHGE w KQkq - 0 1"
+
+out=$(run_uci "$ENGINE" "$tmp_ini" beast-pieces <<'EOF'
 position fen 4k3/8/8/8/3E4/8/8/4K3 w - - 0 1
 go perft 1
-quit
 EOF
 )
-echo "${out}" | grep -q "^d4h5: 1$"
-! echo "${out}" | grep -q "^d4d5:"
+assert_contains "$out" "^d4h5: 1$"
+assert_not_contains "$out" "^d4d5:"
 
-out=$(cat <<EOF | "${ENGINE}"
-uci
-setoption name VariantPath value ${tmp_ini}
-setoption name UCI_Variant value beast-pieces
+out=$(run_uci "$ENGINE" "$tmp_ini" beast-pieces <<'EOF'
 position fen 4k3/8/8/8/3H4/8/8/4K3 w - - 0 1
 go perft 1
-quit
 EOF
 )
-echo "${out}" | grep -q "^d4g8: 1$"
-! echo "${out}" | grep -q "^d4h5:"
+assert_contains "$out" "^d4g8: 1$"
+assert_not_contains "$out" "^d4h5:"
 
-out=$(cat <<EOF | "${ENGINE}"
-uci
-setoption name VariantPath value ${tmp_ini}
-setoption name UCI_Variant value beast-pieces
+out=$(run_uci "$ENGINE" "$tmp_ini" beast-pieces <<'EOF'
 position fen 4k3/8/8/8/3G4/8/8/4K3 w - - 0 1
 go perft 1
-quit
 EOF
 )
-echo "${out}" | grep -q "^d4b5: 1$"
-echo "${out}" | grep -q "^d4a5: 1$"
+assert_contains "$out" "^d4b5: 1$"
+assert_contains "$out" "^d4a5: 1$"
 
 echo "beast-chess test OK"

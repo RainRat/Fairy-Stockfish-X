@@ -2,7 +2,9 @@
 
 set -euo pipefail
 
-ENGINE=${1:-src/stockfish}
+SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+ENGINE="${1:-${SCRIPT_DIR}/../src/stockfish}"
+source "${SCRIPT_DIR}/lib/uci.sh"
 
 tmp_ini=$(mktemp)
 trap 'rm -f "$tmp_ini"' EXIT
@@ -22,27 +24,23 @@ dropRegionBlack = a1 b1 c1 a2 c2 a3 b3 c3
 startFen = 3/3/3[KkA] w - - 0 1
 INI
 
-out=$(cat <<EOF | "$ENGINE"
-uci
-setoption name VariantPath value $tmp_ini
-setoption name UCI_Variant value nana-drop-forms
+out=$(run_uci "$ENGINE" "$tmp_ini" nana-drop-forms <<'EOF'
 position startpos
 go perft 1
-quit
 EOF
 )
 
-echo "$out" | grep -q '^A@a1: 1$'
-echo "$out" | grep -q '^B@a1: 1$'
-echo "$out" | grep -q '^C@a1: 1$'
-echo "$out" | grep -q '^D@a1: 1$'
+assert_contains "$out" '^A@a1: 1$'
+assert_contains "$out" '^B@a1: 1$'
+assert_contains "$out" '^C@a1: 1$'
+assert_contains "$out" '^D@a1: 1$'
 
-if echo "$out" | grep -q '@b2:'; then
+if grep -q '@b2:' <<<"$out"; then
   echo "center square should remain excluded for all drop forms" >&2
   exit 1
 fi
 
-if echo "$out" | grep -q '^E@'; then
+if grep -q '^E@' <<<"$out"; then
   echo "unexpected unconfigured drop form generated" >&2
   exit 1
 fi

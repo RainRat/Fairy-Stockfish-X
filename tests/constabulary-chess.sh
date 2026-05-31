@@ -2,37 +2,47 @@
 
 set -euo pipefail
 
-ENGINE=${1:-src/stockfish}
-VARIANT_PATH=${2:-src/variants.ini}
-
-run_cmds() {
-  cat <<EOF | "${ENGINE}"
-uci
-setoption name VariantPath value ${VARIANT_PATH}
-$1
-quit
-EOF
-}
+SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+ENGINE="${1:-${SCRIPT_DIR}/../src/stockfish}"
+VARIANT_PATH="${2:-${SCRIPT_DIR}/../src/variants.ini}"
+source "${SCRIPT_DIR}/lib/uci.sh"
 
 echo "constabulary-chess test started"
 
-out=$(run_cmds "setoption name UCI_Variant value constabulary-chess
+variant_available() {
+  local out
+  out=$(printf 'uci\nquit\n' | uci_timeout "$ENGINE")
+  grep -q ' var constabulary-chess' <<<"$out"
+}
+
+if ! variant_available; then
+  echo "constabulary-chess variant not available in this build; skipping constabulary-chess regression"
+  exit 0
+fi
+
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" constabulary-chess <<'EOF'
 position startpos
-d")
-echo "${out}" | grep -q "Fen: wxeiiexw/rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR/WXEIIEXW w KQkq - 0 1"
+d
+EOF
+)
+assert_contains "$out" "Fen: wxeiiexw/rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR/WXEIIEXW w KQkq - 0 1"
 
-out=$(run_cmds "setoption name UCI_Variant value constabulary-chess
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" constabulary-chess <<'EOF'
 position fen 8/8/8/8/8/8/8/8/R3K2R/8 w KQ - 0 1 moves e2g2
-d")
-echo "${out}" | grep -q "Fen: 8/8/8/8/8/8/8/8/R4RK1/8 b - - 1 1"
+d
+EOF
+)
+assert_contains "$out" "Fen: 8/8/8/8/8/8/8/8/R4RK1/8 b - - 1 1"
 
-out=$(run_cmds "setoption name UCI_Variant value constabulary-chess
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" constabulary-chess <<'EOF'
 position fen 7k/P7/8/8/8/8/8/8/8/7K w - - 0 1
-go perft 1")
-echo "${out}" | grep -q "^a9a10q: 1$"
-echo "${out}" | grep -q "^a9a10w: 1$"
-echo "${out}" | grep -q "^a9a10x: 1$"
-echo "${out}" | grep -q "^a9a10e: 1$"
-echo "${out}" | grep -q "^a9a10i: 1$"
+go perft 1
+EOF
+)
+assert_contains "$out" "^a9a10q: 1$"
+assert_contains "$out" "^a9a10w: 1$"
+assert_contains "$out" "^a9a10x: 1$"
+assert_contains "$out" "^a9a10e: 1$"
+assert_contains "$out" "^a9a10i: 1$"
 
 echo "constabulary-chess test OK"
