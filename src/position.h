@@ -675,7 +675,7 @@ public:
   bool is_swap_move(Move m) const;
   Piece captured_piece() const;
   Piece captured_piece(Move m) const;
-  const std::string piece_to_partner() const;
+  std::string piece_to_partner() const;
   PieceType committed_piece_type(Move m, bool castlingRook) const;
 
   // Piece specific
@@ -4712,7 +4712,7 @@ inline Piece Position::captured_piece(Move m) const {
   return capture(m) ? piece_on(capture_square(m)) : NO_PIECE;
 }
 
-inline const std::string Position::piece_to_partner() const {
+inline std::string Position::piece_to_partner() const {
   if (!st->captured.piece) return std::string();
   Color color = color_of(st->captured.piece);
   Piece piece = st->captured.promoted ?

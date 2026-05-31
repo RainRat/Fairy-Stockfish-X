@@ -1799,6 +1799,9 @@ void Position::set_castling_right(Color c, Square rfrom) {
 
 void Position::set_check_info(StateInfo* si) const {
 
+  si->pseudoRoyalCandidates = 0;
+  si->pseudoRoyals = 0;
+
   if (topology_wraps())
   {
       si->blockersForKing[WHITE] = si->blockersForKing[BLACK] = 0;
@@ -1846,8 +1849,6 @@ void Position::set_check_info(StateInfo* si) const {
       }
       if (pseudo_royal_types())
       {
-          si->pseudoRoyalCandidates = 0;
-          si->pseudoRoyals = 0;
           for (PieceSet ps = pseudo_royal_types(); ps;)
           {
               PieceType pt = pop_lsb(ps);
@@ -1934,8 +1935,6 @@ void Position::set_check_info(StateInfo* si) const {
   }
   if (pseudo_royal_types())
   {
-      si->pseudoRoyalCandidates = 0;
-      si->pseudoRoyals = 0;
       for (PieceSet ps = pseudo_royal_types(); ps;)
       {
           PieceType pt = pop_lsb(ps);
@@ -4803,13 +4802,11 @@ bool Position::analyze_push(Move m, PushInfo& info) const {
 inline void clear_dirty_piece(StateInfo* st) {
   auto& dp = st->dirtyPiece;
   dp.dirty_num = 0;
-  for (int i = 0; i < DIRTY_PIECE_MAX; ++i) {
-      dp.piece[i] = NO_PIECE;
-      dp.handPiece[i] = NO_PIECE;
-      dp.handCount[i] = 0;
-      dp.from[i] = SQ_NONE;
-      dp.to[i] = SQ_NONE;
-  }
+  dp.piece[0] = NO_PIECE;
+  dp.handPiece[0] = NO_PIECE;
+  dp.handCount[0] = 0;
+  dp.from[0] = SQ_NONE;
+  dp.to[0] = SQ_NONE;
 }
 
 bool Position::add_capture_transfer(StateInfo* state, Key& k, Piece transferPiece, bool undo) {
@@ -8550,102 +8547,24 @@ bool Position::pos_is_ok() const {
 
   set_state(&si);
   bool sameState =
-         si.pawnKey == st->pawnKey
+         si.key == st->key
+      && si.boardKey == st->boardKey
+      && (!var->samePlayerBoardRepetitionIllegal || si.layoutKey == st->layoutKey)
+      && si.pawnKey == st->pawnKey
       && si.materialKey == st->materialKey
       && same_array(si.nonPawnMaterial, st->nonPawnMaterial)
-      && si.castlingRights == st->castlingRights
-      && si.rule50 == st->rule50
-      && si.pliesFromNull == st->pliesFromNull
-      && si.countingPly == st->countingPly
-      && si.countingLimit == st->countingLimit
-      && same_array(si.pointsCount, st->pointsCount)
-      && same_array(si.checksRemaining, st->checksRemaining)
-      && si.epSquares == st->epSquares
-      && same_array(si.castlingKingSquare, st->castlingKingSquare)
-      && si.wallSquares == st->wallSquares
-      && si.deadSquares == st->deadSquares
-      && same_array(si.gatesBB, st->gatesBB)
-      && same_array(si.not_moved_pieces, st->not_moved_pieces)
-      && same_array(si.potionZones, st->potionZones)
-      && same_array(si.potionCooldown, st->potionCooldown)
-      && si.layoutKey == st->layoutKey
-      && si.key == st->key
-      && si.boardKey == st->boardKey
       && si.checkersBB == st->checkersBB
       && si.evasionCheckersBB == st->evasionCheckersBB
-      && same_array(si.unpromotedBycatch, st->unpromotedBycatch)
-      && si.bycatchSquares == st->bycatchSquares
-      && si.promotedBycatch == st->promotedBycatch
-      && si.demotedBycatch == st->demotedBycatch
-      && si.blastPromotedSquares == st->blastPromotedSquares
-      && si.previous == st->previous
       && same_array(si.blockersForKing, st->blockersForKing)
       && same_array(si.pinners, st->pinners)
       && same_array(si.checkSquares, st->checkSquares)
-      && same_reversible(si.captured, st->captured)
-      && si.captureSquare == st->captureSquare
-      && same_reversible(si.dead, st->dead)
-      && si.promotionPawn == st->promotionPawn
-      && si.consumedPromotionHandPiece == st->consumedPromotionHandPiece
       && si.nonSlidingRiders == st->nonSlidingRiders
-      && si.flippedPieces == st->flippedPieces
       && si.pseudoRoyalCandidates == st->pseudoRoyalCandidates
       && si.pseudoRoyals == st->pseudoRoyals
       && same_array(si.extinctionSeen, st->extinctionSeen)
-      && si.legalCapture == st->legalCapture
-      && si.legalEnPassant == st->legalEnPassant
       && si.chased == st->chased
-      && si.claimedSquares == st->claimedSquares
-      && si.forcedJumpSquare == st->forcedJumpSquare
-      && si.move == st->move
-      && si.dropHandColor == st->dropHandColor
-      && si.forcedJumpStep == st->forcedJumpStep
-      && si.repetition == st->repetition
-      && si.boardRepetition == st->boardRepetition
-      && si.removedGatingType == st->removedGatingType
-      && si.removedCastlingGatingType == st->removedCastlingGatingType
-      && si.capturedGatingType == st->capturedGatingType
-      && si.transforms.morphedFrom == st->transforms.morphedFrom
-      && si.transforms.morphSquare == st->transforms.morphSquare
-      && same_reversible(si.transforms.colorChanged, st->transforms.colorChanged)
-      && si.transforms.colorChangeSquare == st->transforms.colorChangeSquare
-      && si.pushTailSquare == st->pushTailSquare
-      && si.pushStepF == st->pushStepF
-      && si.pushStepR == st->pushStepR
-      && si.pushCount == st->pushCount
-      && si.pushSnapshotCount == st->pushSnapshotCount
-      && same_array(si.pushSnapshotSquares, st->pushSnapshotSquares)
-      && same_array(si.pushSnapshotPieces, st->pushSnapshotPieces)
-      && same_array(si.pushSnapshotUnpromoted, st->pushSnapshotUnpromoted)
-      && si.pushSnapshotPromoted == st->pushSnapshotPromoted
-      && si.pushTransferCount == st->pushTransferCount
-      && same_array(si.pushTransferPieces, st->pushTransferPieces)
-      && same_array(si.pushTransferUnpromoted, st->pushTransferUnpromoted)
-      && si.pushTransferPromoted == st->pushTransferPromoted
-      && si.pullFromSquare == st->pullFromSquare
-      && same_reversible(si.pulled, st->pulled)
-      && si.suppressedCaptureTransfer == st->suppressedCaptureTransfer
       && si.shak == st->shak
-      && si.bikjang == st->bikjang
-      && si.pass == st->pass
-      && si.pendingClaimPass == st->pendingClaimPass
-      && si.forcedJumpHasFollowup == st->forcedJumpHasFollowup
-      && si.transforms.didMorph == st->transforms.didMorph
-      && si.transforms.didColorChange == st->transforms.didColorChange
-      && si.didPush == st->didPush
-      && si.didPull == st->didPull
-      && si.pushStepwise == st->pushStepwise
-      && si.pushEjected == st->pushEjected
-      && si.pushBlockedCapture == st->pushBlockedCapture
-      && si.nnueRefreshNeeded == st->nnueRefreshNeeded
-      && same_array(si.accumulator.accumulation, st->accumulator.accumulation)
-      && same_array(si.accumulator.psqtAccumulation, st->accumulator.psqtAccumulation)
-      && same_array(si.accumulator.computed, st->accumulator.computed)
-      && same_array(si.dirtyPiece.piece, st->dirtyPiece.piece)
-      && same_array(si.dirtyPiece.handPiece, st->dirtyPiece.handPiece)
-      && same_array(si.dirtyPiece.handCount, st->dirtyPiece.handCount)
-      && same_array(si.dirtyPiece.from, st->dirtyPiece.from)
-      && same_array(si.dirtyPiece.to, st->dirtyPiece.to);
+      && si.bikjang == st->bikjang;
 
   if (!sameState)
       assert(0 && "pos_is_ok: State");

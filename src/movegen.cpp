@@ -1308,12 +1308,14 @@ namespace {
       return true;
   }
 
+  enum class AppendStatus { Appended, Skipped, Full };
+
   template<GenType Type>
-  inline bool try_append_potion_gating_move(const Position& pos, ExtMove*& cur, ExtMove* maxEnd,
-                                            Square from, Square to, MoveType mt, Move base,
-                                            Variant::PotionType potion, PieceType potionPiece, Square gate, int value) {
+  inline AppendStatus try_append_potion_gating_move(const Position& pos, ExtMove*& cur, ExtMove* maxEnd,
+                                                    Square from, Square to, MoveType mt, Move base,
+                                                    Variant::PotionType potion, PieceType potionPiece, Square gate, int value) {
       if (cur >= maxEnd)
-          return false;
+          return AppendStatus::Full;
 
       Move gatingMove = MOVE_NONE;
       switch (mt)
@@ -1329,17 +1331,17 @@ namespace {
               break;
           default:
               assert(false);
-              return false;
+              return AppendStatus::Skipped;
       }
 
       // Filter by original Type and legality (inlined potion_move_matches)
       if ((Type == QUIET_CHECKS && !pos.gives_check(gatingMove)) || !pos.legal(gatingMove))
-          return true;
+          return AppendStatus::Skipped;
 
       cur->move = gatingMove;
       cur->value = value;
       ++cur;
-      return true;
+      return AppendStatus::Appended;
   }
 
   template<Color Us, GenType Type>
@@ -1396,7 +1398,8 @@ namespace {
                             continue;
                     }
 
-                    if (!try_append_potion_gating_move<Type>(pos, cur, maxEnd, from, to, mt, base, potion, potionPiece, gate, it->value))
+                    if (try_append_potion_gating_move<Type>(pos, cur, maxEnd, from, to, mt, base, potion, potionPiece, gate, it->value)
+                        == AppendStatus::Full)
                         return maxEnd;
                 }
             }
@@ -1467,7 +1470,8 @@ namespace {
                 if (!moveOk)
                     continue;
 
-                if (!try_append_potion_gating_move<Type>(pos, cur, maxEnd, from, to, mt, base, potion, potionPiece, gate, it->value))
+                if (try_append_potion_gating_move<Type>(pos, cur, maxEnd, from, to, mt, base, potion, potionPiece, gate, it->value)
+                    == AppendStatus::Full)
                     return maxEnd;
             }
         }
