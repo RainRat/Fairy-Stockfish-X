@@ -87,7 +87,7 @@ namespace {
 
     StateListPtr states(new std::deque<StateInfo>(1));
     Position p;
-    p.set(pos.variant(), pos.fen(), Options["UCI_Chess960"], &states->back(), Threads.main());
+    p.set(pos.variant(), pos.fen(), pos.is_chess960(), &states->back(), Threads.main());
 
     Eval::NNUE::verify();
 
@@ -193,7 +193,7 @@ namespace {
     uint64_t num, nodes = 0, cnt = 1;
 
     vector<string> list = setup_bench(pos, args);
-    num = count_if(list.begin(), list.end(), [](string s) { return s.find("go ") == 0 || s.find("eval") == 0; });
+    num = count_if(list.begin(), list.end(), [](const string& s) { return s.find("go ") == 0 || s.find("eval") == 0; });
 
     TimePoint elapsed = now();
 
@@ -721,10 +721,14 @@ string UCI::move(const Position& pos, Move m) {
           : UCI::square(pos, from))
                   + UCI::square(pos, to);
 
+  auto appendWall = [&] {
+      move += "," + UCI::square(pos, to) + UCI::square(pos, gating_square(m));
+  };
+
   // Wall square.
   // Keep the legacy "<base>,<to><gate>" form on output for GUI compatibility.
   if (wallMove && CurrentProtocol == XBOARD)
-      move += "," + UCI::square(pos, to) + UCI::square(pos, gating_square(m));
+      appendWall();
 
   if (type_of(m) == PROMOTION || type_of(m) == PROMOTION_POTION)
       move += pos.piece_symbol(make_piece(BLACK, promotion_type(m)));
@@ -753,7 +757,7 @@ string UCI::move(const Position& pos, Move m) {
   // Wall square.
   // Keep the legacy "<base>,<to><gate>" form on output for GUI compatibility.
   if (wallMove && CurrentProtocol != XBOARD)
-      move += "," + UCI::square(pos, to) + UCI::square(pos, gating_square(m));
+      appendWall();
 
   if (potionMove)
       move = potionPrefix + "," + move;

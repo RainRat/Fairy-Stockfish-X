@@ -7,12 +7,82 @@ ENGINE=${1:-src/stockfish}
 PYTHON=${PYTHON:-python3}
 JOBS=${JOBS:-2}
 export JOBS
+PYFFISH_BUILD_DIR="${ROOT_DIR}/.local/build/pyffish"
+PYFFISH_SIG_FILE="${PYFFISH_BUILD_DIR}/fast-regression.sig"
 
 run_step() {
   local label="$1"
   shift
   echo "== ${label} =="
   /usr/bin/time -f "elapsed %es" "$@"
+}
+
+hash_file() {
+  local path="$1"
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$path" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$path" | awk '{print $1}'
+  else
+    wc -c < "$path" | awk '{print $1}'
+  fi
+}
+
+hash_source_tree() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    find src -type f \( -name '*.cpp' -o -name '*.h' \) -print0 \
+      | sort -z \
+      | xargs -0 sha256sum \
+      | sha256sum \
+      | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    find src -type f \( -name '*.cpp' -o -name '*.h' \) -print0 \
+      | sort -z \
+      | xargs -0 shasum -a 256 \
+      | shasum -a 256 \
+      | awk '{print $1}'
+  else
+    find src -type f \( -name '*.cpp' -o -name '*.h' \) -print0 \
+      | sort -z \
+      | xargs -0 wc -c \
+      | awk '{sum += $1} END {print sum}'
+  fi
+}
+
+ensure_pyffish_extension() {
+  local setup_hash source_hash py_version cxx_version current_sig cached_sig pyffish_so
+
+  mkdir -p "${PYFFISH_BUILD_DIR}"
+
+  shopt -s nullglob
+  local pyffish_candidates=("${ROOT_DIR}"/pyffish*.so)
+  shopt -u nullglob
+  if (( ${#pyffish_candidates[@]} > 0 )); then
+    pyffish_so="${pyffish_candidates[0]}"
+  fi
+
+  setup_hash=$(hash_file "${ROOT_DIR}/setup.py")
+  source_hash=$(hash_source_tree)
+  py_version=$("${PYTHON}" -V 2>&1)
+  cxx_version=$("${CXX:-g++}" --version | head -n1)
+  current_sig=$(printf '%s|%s|%s|%s\n' "${setup_hash}" "${source_hash}" "${py_version}" "${cxx_version}")
+
+  if [[ -f "${PYFFISH_SIG_FILE}" ]] && [[ -n "${pyffish_so}" ]]; then
+    cached_sig=$(<"${PYFFISH_SIG_FILE}")
+    if [[ "${cached_sig}" == "${current_sig}" ]]; then
+      return
+    fi
+  fi
+
+  if [[ -n "${pyffish_so}" ]] && [[ "${ROOT_DIR}/setup.py" -ot "${pyffish_so}" ]]; then
+    if ! find src -type f \( -name '*.cpp' -o -name '*.h' \) -newer "${pyffish_so}" -print -quit | grep -q .; then
+      printf '%s\n' "${current_sig}" > "${PYFFISH_SIG_FILE}"
+      return
+    fi
+  fi
+
+  run_step "pyffish extension" timeout 10m "${PYTHON}" setup.py build_ext --inplace --build-temp "${PYFFISH_BUILD_DIR}"
+  printf '%s\n' "${current_sig}" > "${PYFFISH_SIG_FILE}"
 }
 
 cd "${ROOT_DIR}"
@@ -31,7 +101,7 @@ case "${ENGINE_BASENAME}" in
     ;;
 esac
 
-run_step "pyffish extension" timeout 10m "${PYTHON}" setup.py build_ext --inplace --build-temp .local/build/pyffish
+ensure_pyffish_extension
 export PYTHONPATH="${ROOT_DIR}${PYTHONPATH:+:${PYTHONPATH}}"
 
 run_step "protocol" timeout 90s bash tests/protocol.sh "${ENGINE}"
