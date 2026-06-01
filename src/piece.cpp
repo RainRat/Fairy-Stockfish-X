@@ -923,27 +923,6 @@ void PieceMap::init(const Variant* v) {
 void PieceMap::add(PieceType pt, PieceInfo* p) {
   if (p)
   {
-      auto slider_fraction = [](const std::map<Direction, int>& sliderMap) {
-          int s = 0;
-          for (auto const& [_, limit] : sliderMap) {
-              if (limit == 0 || limit == MAX_SLIDER_LIMIT)
-                  s += 100;
-              else if (limit == DYNAMIC_SLIDER_LIMIT)
-                  s += 30;
-              else if (limit == SKI_SLIDER_LIMIT)
-                  s += 97;
-              else if (is_slider_range(limit))
-              {
-                  int minDistance = slider_min_distance(limit);
-                  int maxDistance = slider_max_distance(limit);
-                  int reach = (maxDistance ? maxDistance : 8) - minDistance + 1;
-                  s += 200 * std::max(0, std::min(reach, 8)) / 16;
-              }
-              else
-                  s += 200 * std::min(limit + 1, 8) / 16;
-          }
-          return s;
-      };
       auto is_diagonal_only_slider = [](const std::map<Direction, int>& sliderMap) {
           if (sliderMap.empty())
               return false;
@@ -958,7 +937,7 @@ void PieceMap::add(PieceType pt, PieceInfo* p) {
       diagonalOnly = diagonalOnly
                   && p->slider[0][MODALITY_QUIET].size() + p->slider[0][MODALITY_CAPTURE].size() > 0;
 
-      int currentFrac = slider_fraction(p->slider[0][MODALITY_QUIET]) + slider_fraction(p->slider[0][MODALITY_CAPTURE])
+      int currentFrac = Stockfish::slider_fraction(p->slider[0][MODALITY_QUIET]) + Stockfish::slider_fraction(p->slider[0][MODALITY_CAPTURE])
                       + (p->steps[0][MODALITY_QUIET].size() + p->steps[0][MODALITY_CAPTURE].size()) * 100;
       int standardFrac = (p->slider[0][MODALITY_QUIET].size() + p->slider[0][MODALITY_CAPTURE].size()) * 100
                        + (p->steps[0][MODALITY_QUIET].size() + p->steps[0][MODALITY_CAPTURE].size()) * 100;

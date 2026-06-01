@@ -154,37 +154,14 @@ constexpr Score PBonus[RANK_NB][FILE_NB] =
 
 
 // Scale down slider value based on distance
-int slider_fraction(const std::map<Direction, int>& slider) {
-    int s = 0;
-    for (auto const& [_, limit] : slider) {
-        if (limit == 0 || limit == MAX_SLIDER_LIMIT)
-            s += 100;
-        else if (limit == DYNAMIC_SLIDER_LIMIT)
-            s += 30;
-        else if (limit == SKI_SLIDER_LIMIT)
-            s += 97;
-        else if (is_slider_range(limit))
-        {
-            int minDistance = slider_min_distance(limit);
-            int maxDistance = slider_max_distance(limit);
-            int reach = (maxDistance ? maxDistance : 8) - minDistance + 1;
-            s += 200 * std::max(0, std::min(reach, 8)) / 16;
-        }
-        else
-            s += 200 * std::min(limit + 1, 8) / 16;
-    }
-    return s;
-}
-
-
 // Estimate piece value
 Value piece_value(Phase phase, PieceType pt)
 {
     const PieceInfo* pi = pieceMap.get(pt);
     int v0 =  (phase == MG ?  60 :  60) * pi->steps[0][MODALITY_CAPTURE].size()
             + (phase == MG ?  30 :  40) * pi->steps[0][MODALITY_QUIET].size()
-            + (phase == MG ? 185 : 185) * slider_fraction(pi->slider[0][MODALITY_CAPTURE]) / 100
-            + (phase == MG ?  55 :  45) * slider_fraction(pi->slider[0][MODALITY_QUIET]) / 100
+            + (phase == MG ? 185 : 185) * Stockfish::slider_fraction(pi->slider[0][MODALITY_CAPTURE]) / 100
+            + (phase == MG ?  55 :  45) * Stockfish::slider_fraction(pi->slider[0][MODALITY_QUIET]) / 100
             // Hoppers are more useful with more pieces on the board
             + (phase == MG ? 100 :  80) * pi->hopper[0][MODALITY_CAPTURE].size()
             + (phase == MG ?  85 :  60) * pi->hopper[0][MODALITY_QUIET].size()

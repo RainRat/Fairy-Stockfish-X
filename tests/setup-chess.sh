@@ -4,18 +4,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-
-if [[ $# -gt 0 ]]; then
-  ENGINE=$1
-  if [[ "${ENGINE}" != /* ]]; then
-    ENGINE="${PWD}/${ENGINE}"
-  fi
-else
-  ENGINE="${ROOT_DIR}/src/stockfish"
-fi
-
-cd "${ROOT_DIR}/src"
+source "${SCRIPT_DIR}/lib/uci.sh"
 
 error() {
   echo "setup-chess testing failed on line $1"
@@ -23,72 +12,47 @@ error() {
 }
 trap 'error ${LINENO}' ERR
 
+ENGINE=$(default_engine "${1:-}")
+VARIANTS=$(default_variants "${2:-}")
+
 echo "setup-chess testing started"
 
-run_uci() {
-  local cmd_file
-  cmd_file=$(mktemp)
-  cat > "$cmd_file"
-  local out
-  out=$(mktemp)
-  timeout 20s "$ENGINE" < "$cmd_file" > "$out" 2>&1
-  rm -f "$cmd_file"
-  cat "$out"
-  rm -f "$out"
-}
-
 # 1) White can drop a second queen later in setup, as long as points remain.
-output=$(run_uci <<'CMDS'
-uci
-setoption name VariantPath value variants.ini
-setoption name UCI_Variant value setup-chess
+output=$(run_uci "$ENGINE" "$VARIANTS" setup-chess <<'CMDS'
 position startpos moves Q@a1 Q@a8 Q@b1
 d
-quit
 CMDS
 )
 
-echo "$output" | grep -Fq "Fen: q7/8/8/8/8/8/8/QQ6"
+assert_contains_literal "$output" "Fen: q7/8/8/8/8/8/8/QQ6"
 
 # 2) Points are still enforced (after four white queen drops, another is illegal).
-output=$(run_uci <<'CMDS'
-uci
-setoption name VariantPath value variants.ini
-setoption name UCI_Variant value setup-chess
+output=$(run_uci "$ENGINE" "$VARIANTS" setup-chess <<'CMDS'
 position startpos moves Q@a1 Q@a8 Q@b1 Q@b8 Q@c1 Q@c8 Q@d1 Q@d8
 go depth 1
-quit
 CMDS
 )
 
 # White has 3 points left after four queens, so no more queen drops should be considered.
-! echo "$output" | grep -Eq " pv .*Q@"
+assert_not_contains "$output" " pv .*Q@"
 
 # 3) passUntilSetup: if a side has no affordable setup drop left while the opponent
 # still can set up, only pass is legal.
-output=$(run_uci <<'CMDS'
-uci
-setoption name VariantPath value variants.ini
-setoption name UCI_Variant value setup-chess
+output=$(run_uci "$ENGINE" "$VARIANTS" setup-chess <<'CMDS'
 position fen 8/8/8/8/8/8/8/4K3[QQQQRRRRRRRBBBBBBBBBBBBBNNNNNNNNNNNNNPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPkqqqqrrrrrrrbbbbbbbbbbbbbnnnnnnnnnnnnnppppppppppppppppppppppppppppppppppppppp] w - - 0 1 {0 39}
 go depth 1
-quit
 CMDS
 )
 
-echo "$output" | grep -Fq "bestmove 0000"
+assert_contains_literal "$output" "bestmove 0000"
 
 # 4) Captures in the regular play phase must not refund setup points and unlock drops.
-output=$(run_uci <<'CMDS'
-uci
-setoption name VariantPath value variants.ini
-setoption name UCI_Variant value setup-chess
+output=$(run_uci "$ENGINE" "$VARIANTS" setup-chess <<'CMDS'
 position fen 4k3/8/8/8/8/8/4p3/4K3[P] w - - 0 1 {0 0} moves e1e2 e8e7
 go depth 1
-quit
 CMDS
 )
 
-! echo "$output" | grep -Eq " pv .*P@"
+assert_not_contains "$output" " pv .*P@"
 
 echo "setup-chess testing OK"

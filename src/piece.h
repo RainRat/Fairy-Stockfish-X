@@ -60,6 +60,28 @@ inline int slider_max_distance(int limit) {
   return is_slider_range(limit) ? (limit & 0xFF) : (limit > 0 ? limit : 0);
 }
 
+inline int slider_fraction(const std::map<Direction, int>& slider) {
+  int s = 0;
+  for (auto const& [_, limit] : slider) {
+    if (limit == 0 || limit == MAX_SLIDER_LIMIT)
+        s += 100;
+    else if (limit == DYNAMIC_SLIDER_LIMIT)
+        s += 30;
+    else if (limit == SKI_SLIDER_LIMIT)
+        s += 97;
+    else if (is_slider_range(limit))
+    {
+        int minDistance = slider_min_distance(limit);
+        int maxDistance = slider_max_distance(limit);
+        int reach = (maxDistance ? maxDistance : 8) - minDistance + 1;
+        s += 200 * std::max(0, std::min(reach, 8)) / 16;
+    }
+    else
+        s += 200 * std::min(limit + 1, 8) / 16;
+  }
+  return s;
+}
+
 /// PieceInfo struct stores information about the piece movements.
 
 struct PieceInfo {
