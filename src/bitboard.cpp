@@ -310,23 +310,10 @@ namespace {
 
 #ifdef VERY_LARGE_BOARDS
   Bitboard fixed_step_rider_attacks(Square s, Bitboard occupied, int stepF, int stepR) {
-    Bitboard attack = 0;
-    int f = int(file_of(s));
-    int r = int(rank_of(s));
-
-    while (true)
-    {
-        f += stepF;
-        r += stepR;
-        if (f < int(FILE_A) || f > int(FILE_MAX) || r < int(RANK_1) || r > int(RANK_MAX))
-            break;
-        Square to = make_square(File(f), Rank(r));
+    return walk_ray(s, stepF, stepR, false, [&](Square to, Bitboard& attack) {
         attack |= to;
-        if (occupied & to)
-            break;
-    }
-
-    return attack;
+        return !(occupied & to);
+    });
   }
 
   Bitboard fixed_step_lame_rider_attacks(Square s, Bitboard occupied, int stepF, int stepR) {
@@ -358,27 +345,15 @@ namespace {
 #endif
 
   Bitboard limited_step_rider_attacks(Square s, Bitboard occupied, Direction d, int limit) {
-    Bitboard attack = 0;
-    int f = int(file_of(s));
-    int r = int(rank_of(s));
     auto [stepR, stepF] = decode_direction(d);
     int count = 0;
 
-    while (true)
-    {
-        f += stepF;
-        r += stepR;
-        if (f < int(FILE_A) || f > int(FILE_MAX) || r < int(RANK_1) || r > int(RANK_MAX))
-            break;
-        Square to = make_square(File(f), Rank(r));
+    return walk_ray(s, stepF, stepR, false, [&](Square to, Bitboard& attack) {
         attack |= to;
         if (limit > 0 && ++count >= limit)
-            break;
-        if (occupied & to)
-            break;
-    }
-
-    return attack;
+            return false;
+        return !(occupied & to);
+    });
   }
 
   Bitboard leap_rider_attacks(const std::map<Direction, int>& directions, Square s, Bitboard occupied, Color c) {
@@ -451,15 +426,23 @@ Bitboard rider_terminal_squares(const std::map<Direction, int>& directions, Squa
 
 
 #ifdef VERY_LARGE_BOARDS
-Bitboard rider_attacks_bb(
+  Bitboard bent_rider_attack(Square s, Bitboard occupied, Direction pivot, int stepF1, int stepR1, int stepF2, int stepR2) {
+    Bitboard shifted = safe_destination(s, pivot);
+    if (!shifted)
+        return Bitboard(0);
+
+    Square src = lsb(shifted);
+    if (occupied & src)
+        return square_bb(src);
+
+    return square_bb(src)
+         | fixed_step_rider_attacks(src, occupied, stepF1, stepR1)
+         | fixed_step_rider_attacks(src, occupied, stepF2, stepR2);
+  }
+
+  Bitboard rider_attacks_bb(
     RiderType R, Square s, Bitboard occupied, const MagicGeometry* mg) {
   (void)mg;
-  auto shifted_source = [&](Direction d) -> Square {
-      Bitboard shifted = safe_destination(s, d);
-      if (!shifted)
-          return SQ_NONE;
-      return lsb(shifted);
-  };
 
   switch (R)
   {
@@ -485,66 +468,14 @@ Bitboard rider_attacks_bb(
   case RIDER_GRASSHOPPER_H: return sliding_attack<HOPPER>(GrasshopperDirectionsH, s, occupied);
   case RIDER_GRASSHOPPER_V: return sliding_attack<HOPPER>(GrasshopperDirectionsV, s, occupied);
   case RIDER_GRASSHOPPER_D: return sliding_attack<HOPPER>(GrasshopperDirectionsD, s, occupied);
-  case RIDER_GRIFFON_NH: {
-      Square src = shifted_source(NORTH_EAST);
-      if (src == SQ_NONE) return Bitboard(0);
-      if (occupied & src) return square_bb(src);
-      return square_bb(src) | fixed_step_rider_attacks(src, occupied, 1, 0)
-                            | fixed_step_rider_attacks(src, occupied, 0, 1);
-  }
-  case RIDER_GRIFFON_SH: {
-      Square src = shifted_source(NORTH_WEST);
-      if (src == SQ_NONE) return Bitboard(0);
-      if (occupied & src) return square_bb(src);
-      return square_bb(src) | fixed_step_rider_attacks(src, occupied, -1, 0)
-                            | fixed_step_rider_attacks(src, occupied, 0, 1);
-  }
-  case RIDER_GRIFFON_EV: {
-      Square src = shifted_source(SOUTH_EAST);
-      if (src == SQ_NONE) return Bitboard(0);
-      if (occupied & src) return square_bb(src);
-      return square_bb(src) | fixed_step_rider_attacks(src, occupied, 1, 0)
-                            | fixed_step_rider_attacks(src, occupied, 0, -1);
-  }
-  case RIDER_GRIFFON_WV: {
-      Square src = shifted_source(SOUTH_WEST);
-      if (src == SQ_NONE) return Bitboard(0);
-      if (occupied & src) return square_bb(src);
-      return square_bb(src) | fixed_step_rider_attacks(src, occupied, -1, 0)
-                            | fixed_step_rider_attacks(src, occupied, 0, -1);
-  }
-  case RIDER_MANTICORE_NE: {
-      Square src = shifted_source(NORTH);
-      if (src == SQ_NONE) return Bitboard(0);
-      if (occupied & src) return square_bb(src);
-      return square_bb(src)
-            | fixed_step_rider_attacks(src, occupied, 1, 1)
-            | fixed_step_rider_attacks(src, occupied, -1, 1);
-  }
-  case RIDER_MANTICORE_NW: {
-      Square src = shifted_source(WEST);
-      if (src == SQ_NONE) return Bitboard(0);
-      if (occupied & src) return square_bb(src);
-      return square_bb(src)
-            | fixed_step_rider_attacks(src, occupied, -1, 1)
-            | fixed_step_rider_attacks(src, occupied, -1, -1);
-  }
-  case RIDER_MANTICORE_SE: {
-      Square src = shifted_source(EAST);
-      if (src == SQ_NONE) return Bitboard(0);
-      if (occupied & src) return square_bb(src);
-      return square_bb(src)
-            | fixed_step_rider_attacks(src, occupied, 1, 1)
-            | fixed_step_rider_attacks(src, occupied, 1, -1);
-  }
-  case RIDER_MANTICORE_SW: {
-      Square src = shifted_source(SOUTH);
-      if (src == SQ_NONE) return Bitboard(0);
-      if (occupied & src) return square_bb(src);
-      return square_bb(src)
-            | fixed_step_rider_attacks(src, occupied, 1, -1)
-            | fixed_step_rider_attacks(src, occupied, -1, -1);
-  }
+  case RIDER_GRIFFON_NH: return bent_rider_attack(s, occupied, NORTH_EAST,  1,  0,  0,  1);
+  case RIDER_GRIFFON_SH: return bent_rider_attack(s, occupied, NORTH_WEST, -1,  0,  0,  1);
+  case RIDER_GRIFFON_EV: return bent_rider_attack(s, occupied, SOUTH_EAST,  1,  0,  0, -1);
+  case RIDER_GRIFFON_WV: return bent_rider_attack(s, occupied, SOUTH_WEST, -1,  0,  0, -1);
+  case RIDER_MANTICORE_NE: return bent_rider_attack(s, occupied, NORTH,  1,  1, -1,  1);
+  case RIDER_MANTICORE_NW: return bent_rider_attack(s, occupied, WEST,  -1,  1, -1, -1);
+  case RIDER_MANTICORE_SE: return bent_rider_attack(s, occupied, EAST,    1,  1,  1, -1);
+  case RIDER_MANTICORE_SW: return bent_rider_attack(s, occupied, SOUTH,   1, -1, -1, -1);
   case RIDER_SKI_ROOK_H: return ski_sliding_attack(RookDirectionsH, s, occupied);
   case RIDER_SKI_ROOK_V: return ski_sliding_attack(RookDirectionsV, s, occupied);
   case RIDER_SKI_BISHOP: return ski_sliding_attack(BishopDirections, s, occupied);
@@ -755,13 +686,6 @@ void Bitboards::init() {
 
 namespace {
 
-#if !defined(VERY_LARGE_BOARDS)
-
-  std::unordered_map<uint16_t, std::shared_ptr<const MagicGeometry>> MagicByBoardSize;
-  std::vector<uint16_t> MagicCacheLru;
-  std::mutex MagicInitMutex;
-  constexpr size_t MAX_MAGIC_CACHE_ENTRIES = 16;
-
   [[noreturn]] void fatal_magic_initialization_error(const char* fmt, ...) {
       va_list args;
       va_start(args, fmt);
@@ -769,6 +693,13 @@ namespace {
       va_end(args);
       std::abort();
   }
+
+#if !defined(VERY_LARGE_BOARDS)
+
+  std::unordered_map<uint16_t, std::shared_ptr<const MagicGeometry>> MagicByBoardSize;
+  std::vector<uint16_t> MagicCacheLru;
+  std::mutex MagicInitMutex;
+  constexpr size_t MAX_MAGIC_CACHE_ENTRIES = 16;
 
   inline uint16_t magic_board_key(File f, Rank r) {
       return (uint16_t(f) << 8) | uint16_t(r);

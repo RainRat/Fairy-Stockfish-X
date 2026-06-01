@@ -786,6 +786,34 @@ template<> inline int distance<Square>(Square x, Square y) { return SquareDistan
 inline int edge_distance(File f, File maxFile = FILE_H) { return std::min(f, File(maxFile - f)); }
 inline int edge_distance(Rank r, Rank maxRank = RANK_8) { return std::min(r, Rank(maxRank - r)); }
 
+template <typename StepFn>
+inline Bitboard walk_ray(Square s, int stepF, int stepR, bool skipFirst, StepFn&& step) {
+  Bitboard attack = 0;
+  int f = int(file_of(s));
+  int r = int(rank_of(s));
+
+  if (skipFirst)
+  {
+      f += stepF;
+      r += stepR;
+      if (f < int(FILE_A) || f > int(FILE_MAX) || r < int(RANK_1) || r > int(RANK_MAX))
+          return attack;
+  }
+
+  while (true)
+  {
+      f += stepF;
+      r += stepR;
+      if (f < int(FILE_A) || f > int(FILE_MAX) || r < int(RANK_1) || r > int(RANK_MAX))
+          break;
+      Square to = make_square(File(f), Rank(r));
+      if (!step(to, attack))
+          break;
+  }
+
+  return attack;
+}
+
 
 #ifdef VERY_LARGE_BOARDS
 Bitboard rider_attacks_bb(
@@ -802,23 +830,10 @@ inline Square lsb(Bitboard b);
 #else
 inline Bitboard fixed_step_rider_attacks(Square s, Bitboard occupied, int stepF, int stepR, const MagicGeometry* mg = current_magic_geometry) {
   (void)mg;
-  Bitboard attack = 0;
-  int f = int(file_of(s));
-  int r = int(rank_of(s));
-
-  while (true)
-  {
-      f += stepF;
-      r += stepR;
-      if (f < int(FILE_A) || f > int(FILE_MAX) || r < int(RANK_1) || r > int(RANK_MAX))
-          break;
-      Square to = make_square(File(f), Rank(r));
+  return walk_ray(s, stepF, stepR, false, [&](Square to, Bitboard& attack) {
       attack |= to;
-      if (occupied & to)
-          break;
-  }
-
-  return attack;
+      return !(occupied & to);
+  });
 }
 
 inline Bitboard fixed_step_lame_rider_attacks(Square s, Bitboard occupied, int stepF, int stepR, const MagicGeometry* mg = current_magic_geometry) {
@@ -852,24 +867,10 @@ inline Bitboard fixed_step_lame_rider_attacks(Square s, Bitboard occupied, int s
 
 inline Bitboard ski_slider_attacks(Square s, Bitboard occupied, int stepF, int stepR, const MagicGeometry* mg = current_magic_geometry) {
   (void)mg;
-  int f = int(file_of(s)) + stepF;
-  int r = int(rank_of(s)) + stepR;
-  if (f < int(FILE_A) || f > int(FILE_MAX) || r < int(RANK_1) || r > int(RANK_MAX))
-      return Bitboard(0);
-
-  Bitboard attack = 0;
-  f += stepF;
-  r += stepR;
-  while (f >= int(FILE_A) && f <= int(FILE_MAX) && r >= int(RANK_1) && r <= int(RANK_MAX))
-  {
-      Square to = make_square(File(f), Rank(r));
+  return walk_ray(s, stepF, stepR, true, [&](Square to, Bitboard& attack) {
       attack |= to;
-      if (occupied & to)
-          break;
-      f += stepF;
-      r += stepR;
-  }
-  return attack;
+      return !(occupied & to);
+  });
 }
 
 constexpr bool is_magic_rider(RiderType R) {
