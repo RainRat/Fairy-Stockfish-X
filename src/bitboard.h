@@ -666,11 +666,22 @@ inline Bitboard between_bb(Square s1, Square s2, PieceType pt, MoveModality moda
 
   if (r & (RIDER_SKI_ROOK_H | RIDER_SKI_ROOK_V | RIDER_SKI_BISHOP))
   {
-      path = between_bb(s1, s2);
-      // Ski sliders ignore the first square in front of the attacker.
-      path &= ~PseudoAttacks[WHITE][KING][s1];
+      const File sf = file_of(s1);
+      const File tf = file_of(s2);
+      const Rank sr = rank_of(s1);
+      const Rank tr = rank_of(s2);
+      if ((r & RIDER_SKI_ROOK_H) && sr == tr)
+          path = between_bb(s1, s2);
+      else if ((r & RIDER_SKI_ROOK_V) && sf == tf)
+          path = between_bb(s1, s2);
+      else if ((r & RIDER_SKI_BISHOP) && abs(int(sf) - int(tf)) == abs(int(sr) - int(tr)))
+          path = between_bb(s1, s2);
       if (path)
+      {
+          // Ski sliders ignore the first square in front of the attacker.
+          path &= ~PseudoAttacks[WHITE][KING][s1];
           return path;
+      }
   }
 
   if (r & RIDER_ROSE)

@@ -65,9 +65,13 @@ namespace {
   inline Variant::PotionType potion_type_from_piece(const Variant* var, PieceType pt) {
     if (!var || !var->potions)
         return static_cast<Variant::PotionType>(Variant::POTION_TYPE_NB);
-    if (pt == var->potionPiece[Variant::POTION_FREEZE])
+    if (pt == NO_PIECE_TYPE)
+        return static_cast<Variant::PotionType>(Variant::POTION_TYPE_NB);
+    if (var->potionPiece[Variant::POTION_FREEZE] != NO_PIECE_TYPE
+        && pt == var->potionPiece[Variant::POTION_FREEZE])
         return Variant::POTION_FREEZE;
-    if (pt == var->potionPiece[Variant::POTION_JUMP])
+    if (var->potionPiece[Variant::POTION_JUMP] != NO_PIECE_TYPE
+        && pt == var->potionPiece[Variant::POTION_JUMP])
         return Variant::POTION_JUMP;
     return static_cast<Variant::PotionType>(Variant::POTION_TYPE_NB);
   }

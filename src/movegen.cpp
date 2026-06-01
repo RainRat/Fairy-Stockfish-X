@@ -1277,17 +1277,13 @@ namespace {
     return moveList;
   }
 
-  inline bool supports_potion_gating(MoveType mt) {
-      // PIECE_PROMOTION is Shogi-style piece promotion and is rejected here because
-      // potion gating is a Spell Chess mechanic, which only uses standard chess PROMOTION.
-      return mt == NORMAL || mt == CASTLING || mt == PROMOTION;
-  }
-
   inline bool is_potion_eligible_base(Move base, MoveType& mt, Square& from, Square& to) {
       if (is_gating(base))
           return false;
       mt = type_of(base);
-      if (!supports_potion_gating(mt))
+      // PIECE_PROMOTION is Shogi-style piece promotion and is rejected here because
+      // potion gating is a Spell Chess mechanic, which only uses standard chess PROMOTION.
+      if (mt != NORMAL && mt != CASTLING && mt != PROMOTION)
           return false;
       if (mt == PROMOTION)
       {
@@ -1298,6 +1294,60 @@ namespace {
       from = from_sq(base);
       to = to_sq(base);
       return true;
+  }
+
+  template<GenType Type>
+  inline bool potion_move_matches(const Position& pos, Move base, Move m) {
+      if (!pos.legal(m))
+          return false;
+
+      if constexpr (Type == EVASIONS)
+      {
+          Color us = pos.side_to_move();
+          Bitboard occupied = pos.pieces();
+          Square from = from_sq(base);
+          Square to = to_sq(base);
+          if (type_of(base) == CASTLING)
+          {
+              Square kto, rto;
+              pos.castling_destinations(us, from, to, kto, rto);
+              occupied = (occupied ^ square_bb(from) ^ square_bb(to)) | square_bb(kto) | square_bb(rto);
+          }
+          else if (from != to)
+              occupied ^= square_bb(from) ^ square_bb(to);
+
+          if (pos.capture(m))
+              occupied ^= square_bb(pos.capture_square(m));
+
+          if (is_gating(m) && gating_square(m) != SQ_NONE)
+              occupied |= square_bb(gating_square(m));
+
+          if (pos.attackers_to(pos.royal_square(us), occupied, ~us))
+              return false;
+          return true;
+      }
+
+      const bool destinationOccupied = !pos.empty(to_sq(base));
+
+      if constexpr (Type == CAPTURES)
+      {
+          if (destinationOccupied)
+              return true;
+          return is_promotion_move(base) && promotion_type(base) == QUEEN;
+      }
+      else if constexpr (Type == QUIETS)
+      {
+          return !destinationOccupied ? !is_promotion_move(base) || promotion_type(base) != QUEEN
+                                      : is_promotion_move(base) && promotion_type(base) != QUEEN;
+      }
+      else if constexpr (Type == QUIET_CHECKS)
+      {
+          return !destinationOccupied && type_of(base) != CASTLING && !is_promotion_move(base) && pos.gives_check(m);
+      }
+      else
+      {
+          return true;
+      }
   }
 
   enum class AppendStatus { Appended, Skipped, Full };
@@ -1326,8 +1376,7 @@ namespace {
               return AppendStatus::Skipped;
       }
 
-      // Filter by original Type and legality (inlined potion_move_matches)
-      if ((Type == QUIET_CHECKS && !pos.gives_check(gatingMove)) || !pos.legal(gatingMove))
+      if (!potion_move_matches<Type>(pos, base, gatingMove))
           return AppendStatus::Skipped;
 
       cur->move = gatingMove;

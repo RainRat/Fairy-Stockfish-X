@@ -74,7 +74,6 @@ ExtMove* append_potions(const Position& pos, ExtMove* listBegin, ExtMove* baseEn
 // Some variant-specific generators (potions, exchanges) can exceed MAX_MOVES.
 // Keep a larger shared capacity so move lists stay in-bounds.
 constexpr int MOVEGEN_OVERFLOW_CAPACITY = MAX_MOVES * 4;
-constexpr size_t moveListSize = sizeof(ExtMove) * MAX_MOVES;
 constexpr size_t moveListSizeOverflow = sizeof(ExtMove) * MOVEGEN_OVERFLOW_CAPACITY;
 
 /// The MoveList struct is a simple wrapper around generate(). It sometimes comes

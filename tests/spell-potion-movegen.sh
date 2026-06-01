@@ -1,38 +1,186 @@
-#!/bin/bash
-
+#!/usr/bin/env bash
 set -euo pipefail
 
 error() {
-  echo "spell potion movegen test failed on line $1"
+  echo "spell potion movegen test failed on line $1" >&2
   exit 1
 }
 trap 'error ${LINENO}' ERR
 
+SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+ROOT_DIR=$(cd -- "${SCRIPT_DIR}/.." && pwd)
+CXX=${CXX:-g++}
+JOBS=${JOBS:-2}
 ENGINE=${1:-./stockfish}
+ENGINE_BASENAME=$(basename "${ENGINE}")
+CXX_DEFS=()
+case "${ENGINE_BASENAME}" in
+  stockfish-allvars*)
+    CXX_DEFS+=(-DLARGEBOARDS -DALLVARS -DNNUE_EMBEDDING_OFF)
+    ;;
+  stockfish-large*)
+    CXX_DEFS+=(-DLARGEBOARDS -DALLVARS -DNNUE_EMBEDDING_OFF)
+    ;;
+  stockfish-vlb*)
+    CXX_DEFS+=(-DLARGEBOARDS -DVERY_LARGE_BOARDS -DALLVARS -DNNUE_EMBEDDING_OFF)
+    ;;
+esac
+
+BUILD_SIG_DIR="${ROOT_DIR}/.local/build/spell-potion-movegen"
+BUILD_SIG_FILE="${BUILD_SIG_DIR}/${ENGINE_BASENAME}.sig"
+HARNESS_CPP="${BUILD_SIG_DIR}/spell-potion-movegen.cpp"
+HARNESS_BIN="${BUILD_SIG_DIR}/spell-potion-movegen.bin"
+HARNESS_SIG_FILE="${BUILD_SIG_DIR}/${ENGINE_BASENAME}.harness.sig"
+mkdir -p "${BUILD_SIG_DIR}"
+
+if command -v sha256sum >/dev/null 2>&1; then
+  MAKEFILE_HASH="$(cd "${ROOT_DIR}/src" && sha256sum Makefile | cut -d' ' -f1)"
+elif command -v shasum >/dev/null 2>&1; then
+  MAKEFILE_HASH="$(cd "${ROOT_DIR}/src" && shasum -a 256 Makefile | cut -d' ' -f1)"
+else
+  MAKEFILE_HASH="no-hash-tool"
+fi
+
+BUILD_SIG="$(printf '%s|%s|%s|%s\n' \
+    "${ENGINE_BASENAME}" \
+    "${CXX}" \
+    "${MAKEFILE_HASH}" \
+    "${CXX_DEFS[*]}")"
+if [[ ! -f "${BUILD_SIG_FILE}" || "$(cat "${BUILD_SIG_FILE}" 2>/dev/null || true)" != "${BUILD_SIG}" ]]; then
+  printf '%s\n' "${BUILD_SIG}" > "${BUILD_SIG_FILE}"
+fi
+
+cat > "${HARNESS_CPP}" <<'EOF'
+#include <cstdlib>
+#include <cstring>
+#include <iostream>
+#include <sstream>
+
+#include "bitboard.h"
+#include "endgame.h"
+#include "movegen.h"
+#include "piece.h"
+#include "position.h"
+#include "psqt.h"
+#include "uci.h"
+#include "variant.h"
+
+using namespace Stockfish;
+
+static void init_engine() {
+    UCI::init(Options);
+    pieceMap.init();
+    variants.init();
+    PSQT::init(variants.get("fairy"));
+    Bitboards::init();
+    Position::init();
+    Bitbases::init();
+    Endgames::init();
+}
+
+static void expect(bool cond, const char* msg) {
+    if (!cond) {
+        std::cerr << msg << std::endl;
+        std::exit(1);
+    }
+}
+
+static void test_jump_lists() {
+    StateInfo st{};
+    Position pos;
+    pos.set(variants.get("spell-chess"), "7k/8/8/p7/8/p7/8/R3K3[J] w - - 0 1", false, &st, nullptr);
+
+    const Move quietJump = make_gating<NORMAL>(SQ_A1, SQ_A4, pos.potion_piece(Variant::POTION_JUMP), SQ_A3);
+    const Move captureJump = make_gating<NORMAL>(SQ_A1, SQ_A5, pos.potion_piece(Variant::POTION_JUMP), SQ_A3);
+
+    const auto captures = MoveList<CAPTURES>(pos);
+    const auto quiets = MoveList<QUIETS>(pos);
+
+    expect(quiets.contains(quietJump), "jump potion quiet move missing from QUIETS");
+    expect(!captures.contains(quietJump), "jump potion quiet move leaked into CAPTURES");
+    expect(captures.contains(captureJump), "jump potion capture missing from CAPTURES");
+    expect(!quiets.contains(captureJump), "jump potion capture leaked into QUIETS");
+}
+
+static void test_jump_checks() {
+    StateInfo st{};
+    Position captureCheckPos;
+    captureCheckPos.set(variants.get("spell-chess"), "7K/8/8/8/8/8/8/R1p3pk[J] w - - 0 1", false, &st, nullptr);
+    const Move captureCheck = make_gating<NORMAL>(SQ_A1, SQ_G1, captureCheckPos.potion_piece(Variant::POTION_JUMP), SQ_C1);
+
+    const auto captureChecks = MoveList<QUIET_CHECKS>(captureCheckPos);
+    const auto captureMoves = MoveList<CAPTURES>(captureCheckPos);
+
+    expect(!captureChecks.contains(captureCheck), "jump potion checking capture leaked into QUIET_CHECKS");
+    expect(captureMoves.contains(captureCheck), "jump potion checking capture missing from CAPTURES");
+}
+
+static void test_jump_evasions() {
+    StateInfo st{};
+    Position pos;
+    pos.set(variants.get("spell-chess"), "k6r/8/8/8/8/8/8/R1p4K[J] w - - 0 1", false, &st, nullptr);
+    const Move nonEvasion = make_gating<NORMAL>(SQ_A1, SQ_G1, pos.potion_piece(Variant::POTION_JUMP), SQ_C1);
+
+    const auto evasions = MoveList<EVASIONS>(pos);
+    expect(!evasions.contains(nonEvasion), "non-evasion jump potion move leaked into EVASIONS");
+}
+
+int main() {
+    init_engine();
+    test_jump_lists();
+    test_jump_checks();
+    test_jump_evasions();
+    return 0;
+}
+EOF
+
+OBJ_FILES=()
+while IFS= read -r -d '' obj; do
+  OBJ_FILES+=("${obj}")
+done < <(find "${ROOT_DIR}/src" -maxdepth 1 -name '*.o' ! -name 'main.o' -print0 | sort -z)
+
+if command -v sha256sum >/dev/null 2>&1; then
+  HASHER=(sha256sum)
+elif command -v shasum >/dev/null 2>&1; then
+  HASHER=(shasum -a 256)
+else
+  HASHER=()
+fi
+
+hash_text() {
+  if [[ ${#HASHER[@]} -gt 0 ]]; then
+    printf '%s' "$1" | "${HASHER[@]}" | awk '{print $1}'
+  else
+    printf '%s' "$1" | wc -c | awk '{print $1}'
+  fi
+}
+
+object_signature() {
+  local sig
+  sig=$(
+    for obj in "${OBJ_FILES[@]}"; do
+      stat -c '%n %Y %s' "${obj}" 2>/dev/null || stat -f '%N %m %z' "${obj}"
+    done
+  )
+  hash_text "${sig}"
+}
+
+HARNESS_SIG="$(printf '%s|%s|%s|%s|%s|%s\n' \
+    "${ENGINE_BASENAME}" \
+    "${CXX}" \
+    "${MAKEFILE_HASH}" \
+    "${CXX_DEFS[*]}" \
+    "$(object_signature)" \
+    "$(hash_text "$(cat "${HARNESS_CPP}")")")"
+if [[ ! -x "${HARNESS_BIN}" || ! -f "${HARNESS_SIG_FILE}" || "$(cat "${HARNESS_SIG_FILE}")" != "${HARNESS_SIG}" ]]; then
+  rm -f "${HARNESS_BIN}"
+  (
+    cd "${ROOT_DIR}/src"
+    "${CXX}" -std=c++17 -O2 -Wall -Wextra -flto -I"${ROOT_DIR}/src" "${CXX_DEFS[@]}" "${HARNESS_CPP}" "${OBJ_FILES[@]}" -pthread -o "${HARNESS_BIN}"
+  )
+  printf '%s\n' "${HARNESS_SIG}" > "${HARNESS_SIG_FILE}"
+fi
 
 echo "spell potion movegen test started"
-
-out=$(cat <<'EOF' | "${ENGINE}" 2>&1
-uci
-setoption name UCI_Variant value spell-chess
-position fen 7k/P7/8/8/8/8/8/4K3[JFj] w - - 0 1
-go perft 1
-quit
-EOF
-)
-
-for move in a7a8q a7a8r a7a8b a7a8n e1d1 e1f1 e1d2 e1e2 e1f2; do
-  if [ "$(printf '%s\n' "${out}" | grep -c "^${move}: 1$")" -ne 1 ]; then
-    echo "${out}"
-    exit 1
-  fi
-done
-
-for gated in "f@g7,e1d1" "f@h7,e1f2"; do
-  if ! printf '%s\n' "${out}" | grep -q "^${gated}: 1$"; then
-    echo "${out}"
-    exit 1
-  fi
-done
-
+"${HARNESS_BIN}"
 echo "spell potion movegen test passed"
