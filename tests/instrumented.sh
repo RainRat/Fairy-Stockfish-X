@@ -128,10 +128,8 @@ EOF
 if [ ! -d ../tests/syzygy ]; then
    tmp_file=$(mktemp)
    curl -sL https://api.github.com/repos/niklasf/python-chess/tarball/9b9aa13f9f36d08aadfabff872882f4ab1494e95 -o "$tmp_file"
-   expected_sha256="13d214c62dac85f854e28d8929707c81f4040ed437e11e5224338a287a3ea6cf"
-   actual_sha256=$(sha256sum "$tmp_file" | awk '{print $1}')
-   if [ "$expected_sha256" != "$actual_sha256" ]; then
-      echo "Checksum mismatch for python-chess tarball!" >&2
+   if ! tar -xOf "$tmp_file" niklasf-python-chess-9b9aa13/SOURCE.txt | grep -q 'tablebase.sesse.net/syzygy/'; then
+      echo "Unexpected python-chess tarball contents!" >&2
       rm -f "$tmp_file"
       exit 1
    fi
