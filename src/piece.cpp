@@ -40,13 +40,8 @@ namespace {
   bool parse_nonnegative_int(const std::string& raw, int& out) {
       if (raw.empty())
           return false;
-
-      const auto first = raw.find_first_not_of(" \t\r\n\f\v");
-      if (first == std::string::npos)
-          return false;
-      const auto last = raw.find_last_not_of(" \t\r\n\f\v");
-      const char* begin = raw.data() + first;
-      const char* end = raw.data() + last + 1;
+      const char* begin = raw.data();
+      const char* end = begin + raw.size();
       auto [ptr, ec] = std::from_chars(begin, end, out);
       return ec == std::errc() && ptr == end && out >= 0;
   }
@@ -227,6 +222,19 @@ namespace {
           p->name = name;
           p->betza = betza;
       };
+      auto fail_piece = [&](bool discardPiece) {
+          if (discardPiece)
+              reset_piece();
+          invalidPiece = true;
+          reset_parser_state();
+      };
+      auto ensure_default_modalities = [&]() {
+          if (moveModalities.empty())
+          {
+              moveModalities.push_back(MODALITY_QUIET);
+              moveModalities.push_back(MODALITY_CAPTURE);
+          }
+      };
 
       auto commit_atom = [&](const std::vector<std::pair<int, int>>& atoms, bool atomIsRider, std::string::size_type& i, char atomChar, bool atomIsTuple = false) {
           // Check for rider / limited-distance rider suffix.
@@ -258,8 +266,7 @@ namespace {
                   {
                       std::cerr << "Invalid Betza rider range in '" << betza
                                 << "': missing closing ']'." << std::endl;
-                      reset_parser_state();
-                      invalidPiece = true;
+                      fail_piece(false);
                       return;
                   }
                   std::string rangeSpec = expandedBetza.substr(i + 2, close - i - 2);
@@ -271,16 +278,14 @@ namespace {
                   {
                       std::cerr << "Unsupported Betza rider range in '" << betza
                                 << "': bracketed ranges currently support plain rider atoms such as R[3-5] or R[3-]." << std::endl;
-                      reset_parser_state();
-                      invalidPiece = true;
+                      fail_piece(false);
                       return;
                   }
                   if (malformedRange)
                   {
                       std::cerr << "Invalid Betza rider range in '" << betza
                                 << "': use [n-m] or [n-], and keep existing Rn syntax for max-only ranges." << std::endl;
-                      reset_parser_state();
-                      invalidPiece = true;
+                      fail_piece(false);
                       return;
                   }
                   int minDistance = 0;
@@ -294,8 +299,7 @@ namespace {
                   {
                       std::cerr << "Invalid Betza rider range in '" << betza
                                 << "': use [n-m] or [n-], and keep existing Rn syntax for max-only ranges." << std::endl;
-                      reset_parser_state();
-                      invalidPiece = true;
+                      fail_piece(false);
                       return;
                   }
                   if (maxPart.empty())
@@ -321,34 +325,24 @@ namespace {
           }
           if (hasLameProfile && invalidLameProfile)
           {
-              reset_piece();
-              invalidPiece = true;
-              reset_parser_state();
+              fail_piece(true);
               return;
           }
           if (lame && atomIsTuple)
           {
               std::cerr << "Unsupported Betza tuple modifier combination in '" << betza
                         << "': lame path profiles currently apply to named step/leaper and rider atoms only." << std::endl;
-              reset_piece();
-              invalidPiece = true;
-              reset_parser_state();
+              fail_piece(true);
               return;
           }
           if (lame && (hopper || dynamicDistance || skiSlider || maxDistance || hasUniversalHopper))
           {
               std::cerr << "Unsupported Betza lame modifier combination in '" << betza
                         << "': lame path profiles currently apply to step/leaper and rider atoms only." << std::endl;
-              reset_piece();
-              invalidPiece = true;
-              reset_parser_state();
+              fail_piece(true);
               return;
           }
-          if (moveModalities.size() == 0)
-          {
-              moveModalities.push_back(MODALITY_QUIET);
-              moveModalities.push_back(MODALITY_CAPTURE);
-          }
+          ensure_default_modalities();
           // Define moves for each atom and modality.
           for (const auto& atom : atoms)
           {
@@ -424,41 +418,22 @@ namespace {
           reset_parser_state();
       };
 
-      auto commit_bent_slider = [&](bool (PieceInfo::*flag)[2][2]) {
+      auto commit_bent_slider = [&](auto flag, const char* pieceName) {
           // Keep first implementation strict: unqualified O only.
           if (!prelimDirections.empty() || hopper || lame || dynamicDistance || rider || skiSlider || maxDistance)
           {
-              std::cerr << "Unsupported modifier combination with bent slider: '" << betza << "'." << std::endl;
-              reset_parser_state();
-              invalidPiece = true;
+              std::cerr << "Unsupported modifier combination with " << pieceName << ": '" << betza << "'." << std::endl;
+              fail_piece(false);
               return;
           }
-          if (moveModalities.size() == 0)
-          {
-              moveModalities.push_back(MODALITY_QUIET);
-              moveModalities.push_back(MODALITY_CAPTURE);
-          }
+          ensure_default_modalities();
           for (auto modality : moveModalities)
               ((*p).*flag)[initial][modality] = true;
           reset_parser_state();
       };
 
       auto commit_rose = [&]() {
-          if (!prelimDirections.empty() || hopper || lame || dynamicDistance || rider || skiSlider || maxDistance)
-          {
-              std::cerr << "Unsupported modifier combination with rose: '" << betza << "'." << std::endl;
-              reset_parser_state();
-              invalidPiece = true;
-              return;
-          }
-          if (moveModalities.size() == 0)
-          {
-              moveModalities.push_back(MODALITY_QUIET);
-              moveModalities.push_back(MODALITY_CAPTURE);
-          }
-          for (auto modality : moveModalities)
-              p->rose[initial][modality] = true;
-          reset_parser_state();
+          commit_bent_slider(&PieceInfo::rose, "rose");
       };
 
       for (std::string::size_type i = 0; i < expandedBetza.size(); i++)
@@ -474,8 +449,7 @@ namespace {
               if (close == std::string::npos)
               {
                   std::cerr << "Invalid Betza hopper parameters in '" << betza << "': missing closing '}'." << std::endl;
-                  reset_parser_state();
-                  invalidPiece = true;
+                  fail_piece(false);
                   continue;
               }
               std::string_view params(expandedBetza.data() + i + 1, close - i - 1);
@@ -576,21 +550,21 @@ namespace {
                       if (!minOk || (!maxOk && max_s != "*"))
                       {
                           std::cerr << "Invalid numeric value in Betza hopper parameters: '" << s << "'" << std::endl;
-                          reset_piece();
-                          invalidPiece = true;
+                          fail_piece(true);
+                          return;
                       }
                       if (minOk && (maxOk || max_s == "*") && min_val > max_val)
                       {
                           std::cerr << "Invalid hopper range (min > max) in Betza hopper parameters: '" << s << "'" << std::endl;
-                          reset_piece();
-                          invalidPiece = true;
+                          fail_piece(true);
+                          return;
                       }
                   }
                   else
                   {
                       std::cerr << "Invalid hopper range (missing comma) in Betza hopper parameters: '" << s << "'" << std::endl;
-                      reset_piece();
-                      invalidPiece = true;
+                      fail_piece(true);
+                      return;
                   }
               };
               const bool blockIsLame = lame;
@@ -620,12 +594,6 @@ namespace {
                                   invalidLameProfile = true;
                               }
                           }
-                          else if (key == "hurdles" || key == "pre" || key == "post" || key == "capture" || key == "equi"
-                                   || key == "hurdle_types" || key == "transparent_types")
-                          {
-                              std::cerr << "Unknown Betza parameter key '" << key << "' in lame block of '" << betza << "'." << std::endl;
-                              invalidLameProfile = true;
-                          }
                           else
                           {
                               std::cerr << "Unknown Betza parameter key '" << key << "' in lame block of '" << betza << "'." << std::endl;
@@ -644,8 +612,7 @@ namespace {
                               else if (val == "locust_last") currentHopperProfile.captureMode = PieceInfo::CAPTURE_LOCUST_LAST;
                               else {
                                   std::cerr << "Unknown Betza hopper capture mode '" << val << "' in '" << betza << "'." << std::endl;
-                                  reset_piece();
-                                  invalidPiece = true;
+                                  fail_piece(true);
                               }
                           }
                           else if (key == "equi") {
@@ -654,8 +621,7 @@ namespace {
                               else
                               {
                                   std::cerr << "Unknown Betza hopper equi mode '" << val << "' in '" << betza << "'." << std::endl;
-                                  reset_piece();
-                                  invalidPiece = true;
+                                  fail_piece(true);
                               }
                           }
                           else if (key == "hurdle_types" || key == "transparent_types") {
@@ -676,8 +642,7 @@ namespace {
                                   else if (!typeToken.empty())
                                   {
                                       std::cerr << "Unknown Betza hopper special type '" << typeToken << "' in '" << betza << "'." << std::endl;
-                                      reset_piece();
-                                      invalidPiece = true;
+                                      fail_piece(true);
                                   }
 
                                   vpos = next_comma + 1;
@@ -689,21 +654,13 @@ namespace {
                               if (!parse_piece_set(val, target, true, true))
                               {
                                   std::cerr << "Unknown Betza hopper piece type list '" << val << "' in '" << betza << "'." << std::endl;
-                                  reset_piece();
-                                  invalidPiece = true;
+                                  fail_piece(true);
                               }
-                          }
-                          else if (key == "path" || key == "filter")
-                          {
-                              std::cerr << "Unknown Betza parameter key '" << key << "' in hopper block of '" << betza << "'." << std::endl;
-                              reset_piece();
-                              invalidPiece = true;
                           }
                           else
                           {
                               std::cerr << "Unknown Betza parameter key '" << key << "' in hopper block of '" << betza << "'." << std::endl;
-                              reset_piece();
-                              invalidPiece = true;
+                              fail_piece(true);
                           }
                       }
                   }
@@ -713,9 +670,7 @@ namespace {
               }
               if (blockIsLame && invalidLameProfile)
               {
-                  reset_piece();
-                  invalidPiece = true;
-                  reset_parser_state();
+                  fail_piece(true);
               }
               i = close;
           }
@@ -791,10 +746,10 @@ namespace {
           }
           // Griffon bent slider (one diagonal step, then outward rook slide)
           else if (c == 'O')
-              commit_bent_slider(&PieceInfo::griffon);
+              commit_bent_slider(&PieceInfo::griffon, "bent slider");
           // Manticore bent slider (one orthogonal step, then outward bishop slide)
           else if (c == 'M')
-              commit_bent_slider(&PieceInfo::manticore);
+              commit_bent_slider(&PieceInfo::manticore, "bent slider");
           // Standard rose/circular knight rider.
           else if (c == '@')
               commit_rose();
@@ -805,9 +760,7 @@ namespace {
               {
                   std::cerr << "Unsupported Betza tuple modifier combination in '" << betza
                             << "': tuple atoms only support explicit leapers or repeated/numeric tuple riders." << std::endl;
-                  reset_piece();
-                  invalidPiece = true;
-                  reset_parser_state();
+                  fail_piece(true);
                   auto closeUnsupported = expandedBetza.find(')', i + 1);
                   if (closeUnsupported != std::string::npos)
                       i = closeUnsupported;
@@ -816,17 +769,13 @@ namespace {
               auto close = expandedBetza.find(')', i + 1);
               if (close == std::string::npos)
               {
-                  reset_piece();
-                  invalidPiece = true;
-                  reset_parser_state();
+                  fail_piece(true);
                   continue;
               }
               auto comma = expandedBetza.find(',', i + 1);
               if (comma == std::string::npos || comma > close)
               {
-                  reset_piece();
-                  invalidPiece = true;
-                  reset_parser_state();
+                  fail_piece(true);
                   i = close;
                   continue;
               }
@@ -834,18 +783,14 @@ namespace {
               if (!parse_nonnegative_int(expandedBetza.substr(i + 1, comma - i - 1), dx)
                   || !parse_nonnegative_int(expandedBetza.substr(comma + 1, close - comma - 1), dy))
               {
-                  reset_piece();
-                  invalidPiece = true;
-                  reset_parser_state();
+                  fail_piece(true);
                   i = close;
                   continue;
               }
               // Tuple atoms are stored as (rankDelta, fileDelta).
               if ((dx == 0 && dy == 0) || dx > int(RANK_MAX) || dy > int(FILE_MAX))
               {
-                  reset_piece();
-                  invalidPiece = true;
-                  reset_parser_state();
+                  fail_piece(true);
                   i = close;
                   continue;
               }
@@ -866,6 +811,11 @@ namespace {
   // Special multi-leg betza description for Janggi elephant
   PieceInfo* janggi_elephant_piece() {
       PieceInfo* p = from_betza("nZ", "janggiElephant");
+      if (!p)
+      {
+          std::cerr << "Internal error: failed to build built-in Janggi elephant piece." << std::endl;
+          return nullptr;
+      }
       p->betza = "mafsmafW"; // for compatibility with XBoard/Winboard
       return p;
   }
@@ -934,8 +884,6 @@ void PieceMap::add(PieceType pt, PieceInfo* p) {
 
       bool diagonalOnly = is_diagonal_only_slider(p->slider[0][MODALITY_QUIET])
                        || is_diagonal_only_slider(p->slider[0][MODALITY_CAPTURE]);
-      diagonalOnly = diagonalOnly
-                  && p->slider[0][MODALITY_QUIET].size() + p->slider[0][MODALITY_CAPTURE].size() > 0;
 
       int currentFrac = Stockfish::slider_fraction(p->slider[0][MODALITY_QUIET]) + Stockfish::slider_fraction(p->slider[0][MODALITY_CAPTURE])
                       + (p->steps[0][MODALITY_QUIET].size() + p->steps[0][MODALITY_CAPTURE].size()) * 100;
