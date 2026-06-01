@@ -251,6 +251,17 @@ pieceDrops = true
 captureType = prison
 castling = false
 
+[dropnormal:chess]
+pieceDrops = true
+castling = false
+startFen = 4k3/8/8/8/8/8/8/4K3[Q] w - - 0 1
+
+[dropsym:chess]
+pieceDrops = true
+symmetricDropTypes = r
+castling = false
+startFen = 4k3/8/8/8/8/8/8/4K3[RR] w - - 0 1
+
 [exsync:chess]
 pieceDrops = true
 captureType = prison
@@ -275,6 +286,14 @@ castling = false
 startFen = 8/8/8/3p1p2/2P1P3/8/8/4K2k[Qq] w - - 0 1
 INI
 assert_reload_key_match "$tmp_ini" "prsync" "position startpos moves e2e4 d7d5 e4d5"
+
+# 2b) Normal drops should keep incremental and reload keys aligned.
+assert_reload_key_match "$tmp_ini" "dropnormal" "position startpos moves Q@e5"
+assert_reload_perft1_match "$tmp_ini" "dropnormal" "position startpos moves Q@e5"
+
+# 2c) Paired drops should keep incremental and reload keys aligned.
+assert_reload_key_match "$tmp_ini" "dropsym" "position startpos moves R@a4,h4"
+assert_reload_perft1_match "$tmp_ini" "dropsym" "position startpos moves R@a4,h4"
 
 # 3) Prison exchange drops mutate both prison/hand counts; key must match after FEN reload.
 assert_reload_key_match "$tmp_ini" "exsync" "position startpos moves c4d5 f5e4 P#P@a2"

@@ -38,6 +38,10 @@ changingColorPieceTypes = *
 moveMorphPieceType = b:n
 changingColorTrigger = always
 changingColorPieceTypes = n
+
+[move-morph-promoted:chess]
+capturesToHand = true
+moveMorphPieceType = b:n
 EOF
 
 echo "in-place transform undo tests started"
@@ -58,5 +62,12 @@ echo "${out}" | grep -q "Fen: 4k3/8/8/6n1/8/8/8/4K3 b"
 out=$(run_cmds "move-morph-color" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/8/2B1K3 w - - 0 1
 go perft 2")
 grep -q "Nodes searched:" <<<"$out"
+
+# A promoted piece that morphs on move must restore its promoted state after
+# the full do/undo cycle exercised by perft.
+out=$(run_cmds "move-morph-promoted" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/8/2B~1K3[] w - - 0 1
+go perft 1
+d")
+echo "${out}" | grep -q "~B"
 
 echo "in-place transform undo tests passed"

@@ -121,7 +121,7 @@ struct ReversiblePieceState {
 };
 
 struct InPlaceTransformState {
-  Piece morphedFrom = NO_PIECE;
+  ReversiblePieceState morphedFrom;
   Square morphSquare = SQ_NONE;
   ReversiblePieceState colorChanged;
   Square colorChangeSquare = SQ_NONE;
@@ -129,7 +129,7 @@ struct InPlaceTransformState {
   bool didColorChange = false;
 
   void clear() {
-    morphedFrom = NO_PIECE;
+    morphedFrom.clear();
     morphSquare = SQ_NONE;
     colorChanged.clear();
     colorChangeSquare = SQ_NONE;
@@ -689,6 +689,7 @@ public:
   void undo_move(Move m);
   bool add_capture_transfer(StateInfo* state, Key& k, Piece transferPiece, bool undo);
   bool simulate_capture_transfer(StateInfo* state, Key& k, Piece transferPiece) const;
+  void apply_drop_hash_delta(Key& k, Move m, Piece pc, Color dropColor, PieceType exchanged) const;
   void add_capture_points(StateInfo* state, Color us, Piece captured) const;
   void do_null_move(StateInfo& newSt);
   void undo_null_move();

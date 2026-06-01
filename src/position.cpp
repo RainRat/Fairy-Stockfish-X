@@ -4861,6 +4861,42 @@ bool Position::simulate_capture_transfer(StateInfo* state, Key& k, Piece transfe
     return false;
 }
 
+void Position::apply_drop_hash_delta(Key& k, Move m, Piece pc, Color dropColor, PieceType exchanged) const {
+    Piece pc_hand = make_piece(dropColor, in_hand_piece_type(m));
+    k ^= Zobrist::psq[pc][to_sq(m)];
+    if (paired_drop(m))
+    {
+        Square to2 = secondary_drop_square(m);
+        k ^= Zobrist::psq[pc][to2];
+        int n = pieceCountInHand[color_of(pc_hand)][type_of(pc_hand)];
+        xor_in_hand_count(k, pc_hand, n - 2, n);
+    }
+    else if (exchanged == NO_PIECE_TYPE)
+    {
+        int n = pieceCountInHand[color_of(pc_hand)][type_of(pc_hand)];
+        xor_in_hand_count(k, pc_hand, n - 1, n);
+    }
+    else
+    {
+        Color us = dropColor;
+        Color them = ~us;
+        Piece exchangedPiece = make_piece(them, exchanged);
+
+        // Exchange drop mutates one hand bucket and two prison buckets.
+        int handOld = pieceCountInHand[them][exchanged];
+        int handNew = handOld + 1;
+        xor_in_hand_count(k, exchangedPiece, handOld, handNew);
+
+        int prisonOldEx = pieceCountInPrison[us][exchanged];
+        int prisonNewEx = prisonOldEx - 1;
+        xor_in_hand_count(k, exchangedPiece, prisonOldEx, prisonNewEx);
+
+        int prisonOldDrop = pieceCountInPrison[them][type_of(pc)];
+        int prisonNewDrop = prisonOldDrop - 1;
+        xor_in_hand_count(k, pc, prisonOldDrop, prisonNewDrop);
+    }
+}
+
 void Position::add_capture_points(StateInfo* state, Color us, Piece captured) const {
     int points = var->piecePoints[type_of(captured)];
     switch (points_rule_captures()) {
@@ -5382,37 +5418,7 @@ void Position::do_move(Move m, StateInfo& newSt) {
   if (dropMove)
   {
       st->dropHandColor = dropColor;
-      Piece pc_hand = make_piece(dropColor, in_hand_piece_type(m));
-      k ^= Zobrist::psq[pc][to];
-      if (paired_drop(m))
-      {
-          Square to2 = secondary_drop_square(m);
-          k ^= Zobrist::psq[pc][to2];
-          int n = pieceCountInHand[color_of(pc_hand)][type_of(pc_hand)];
-          xor_in_hand_count(k, pc_hand, n - 2, n);
-      }
-      else if (exchanged == NO_PIECE_TYPE)
-      {
-          int n = pieceCountInHand[color_of(pc_hand)][type_of(pc_hand)];
-          xor_in_hand_count(k, pc_hand, n - 1, n);
-      }
-      else
-      {
-          Piece exchangedPiece = make_piece(them, exchanged);
-
-          // Exchange drop mutates one hand bucket and two prison buckets.
-          int handOld = pieceCountInHand[them][exchanged];
-          int handNew = handOld + 1;
-          xor_in_hand_count(k, exchangedPiece, handOld, handNew);
-
-          int prisonOldEx = pieceCountInPrison[us][exchanged];
-          int prisonNewEx = prisonOldEx - 1;
-          xor_in_hand_count(k, exchangedPiece, prisonOldEx, prisonNewEx);
-
-          int prisonOldDrop = pieceCountInPrison[them][type_of(pc)];
-          int prisonNewDrop = prisonOldDrop - 1;
-          xor_in_hand_count(k, pc, prisonOldDrop, prisonNewDrop);
-      }
+      apply_drop_hash_delta(k, m, pc, dropColor, exchanged);
 
       // Reset rule 50 counter for irreversible drops
       st->rule50 = 0;
@@ -5899,7 +5905,7 @@ void Position::do_move(Move m, StateInfo& newSt) {
       if (!st->transforms.didMorph)
       {
           st->transforms.didMorph = true;
-          st->transforms.morphedFrom = cur;
+          st->transforms.morphedFrom.set(cur, is_promoted(sq), unpromoted_piece_on(sq));
           st->transforms.morphSquare = sq;
       }
 
@@ -6722,8 +6728,9 @@ void Position::undo_move(Move m) {
   if (st->transforms.didMorph && st->transforms.morphSquare == moverSq)
   {
       remove_piece(moverSq);
-      put_piece(st->transforms.morphedFrom, moverSq);
-      pc = st->transforms.morphedFrom;
+      put_piece(st->transforms.morphedFrom.piece, moverSq,
+                st->transforms.morphedFrom.promoted, st->transforms.morphedFrom.unpromoted);
+      pc = st->transforms.morphedFrom.piece;
   }
 
   // Remove gated piece or restore potion. Pure wall moves use the gating
@@ -7175,40 +7182,8 @@ Key Position::key_after(Move m) const {
   }
   if (is_drop_move(m))
   {
-      Piece pc_hand = make_piece(sideToMove, in_hand_piece_type(m));
       PieceType exchanged = exchange_piece(m);
-      k ^= Zobrist::psq[pc][to];
-      if (paired_drop(m))
-      {
-          Square to2 = secondary_drop_square(m);
-          k ^= Zobrist::psq[pc][to2];
-          int n = pieceCountInHand[color_of(pc_hand)][type_of(pc_hand)];
-          xor_in_hand_count(k, pc_hand, n - 2, n);
-          return k;
-      }
-
-      if (exchanged == NO_PIECE_TYPE)
-      {
-          int n = pieceCountInHand[color_of(pc_hand)][type_of(pc_hand)];
-          xor_in_hand_count(k, pc_hand, n - 1, n);
-          return k;
-      }
-
-      Color us = sideToMove;
-      Color them = ~us;
-      Piece exchangedPiece = make_piece(them, exchanged);
-
-      int handOld = pieceCountInHand[them][exchanged];
-      int handNew = handOld + 1;
-      xor_in_hand_count(k, exchangedPiece, handOld, handNew);
-
-      int prisonOldEx = pieceCountInPrison[us][exchanged];
-      int prisonNewEx = prisonOldEx - 1;
-      xor_in_hand_count(k, exchangedPiece, prisonOldEx, prisonNewEx);
-
-      int prisonOldDrop = pieceCountInPrison[them][type_of(pc)];
-      int prisonNewDrop = prisonOldDrop - 1;
-      xor_in_hand_count(k, pc, prisonOldDrop, prisonNewDrop);
+      apply_drop_hash_delta(k, m, pc, sideToMove, exchanged);
       return k;
   }
 
