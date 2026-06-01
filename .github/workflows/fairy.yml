@@ -107,11 +107,11 @@ jobs:
 
       - name: Test hex board display
         run: |
-          ../tests/hex-board-display.sh
+          ../tests/test_hex_boards.sh
 
       - name: Test hex piece movement
         run: |
-          ../tests/hex-piece-movement.sh
+          ../tests/test_hex_boards.sh
 
       - name: Test connect region 3
         run: |
