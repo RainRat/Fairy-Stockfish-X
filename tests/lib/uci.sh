@@ -77,6 +77,23 @@ run_uci_cmds() {
   run_uci "$engine" "$variant_path" "$variant" <<< "$cmds"
 }
 
+cleanup_tmp_ini() {
+  if [[ -n "${FSX_TMP_INI:-}" && -e "${FSX_TMP_INI}" ]]; then
+    rm -f "${FSX_TMP_INI}"
+  fi
+}
+
+create_tmp_ini() {
+  cleanup_tmp_ini
+  FSX_TMP_INI=$(mktemp "${TMPDIR:-/tmp}/fsx-uci-XXXXXX.ini")
+  export FSX_TMP_INI
+}
+
+init_tmp_ini() {
+  create_tmp_ini
+  trap cleanup_tmp_ini EXIT
+}
+
 
 assert_contains() {
   local haystack="$1"
@@ -110,4 +127,3 @@ assert_nodes() {
 
   assert_contains "$haystack" "^Nodes searched: ${expected}$" "have exact node count"
 }
-

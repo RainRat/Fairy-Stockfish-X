@@ -2,6 +2,9 @@
 
 set -euo pipefail
 
+SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+source "${SCRIPT_DIR}/lib/uci.sh"
+
 error() {
   echo "pseudoroyal-blast-immune test failed on line $1"
   [[ -n "${TMP:-}" ]] && rm -f "${TMP}"
@@ -9,19 +12,13 @@ error() {
 }
 trap 'error ${LINENO}' ERR
 
-ENGINE=${1:-./stockfish}
+ENGINE="$(default_engine "${1:-}")"
 
 run_cmds() {
   local variant_path="$1"
   local variant="$2"
   local cmds="$3"
-  cat <<CMDS | "${ENGINE}"
-uci
-setoption name VariantPath value ${variant_path}
-setoption name UCI_Variant value ${variant}
-${cmds}
-quit
-CMDS
+  run_uci "${ENGINE}" "${variant_path}" "${variant}" <<< "${cmds}"
 }
 
 echo "pseudoroyal-blast-immune tests started"
@@ -44,7 +41,7 @@ INI
 # if they are NOT blastImmune) doesn't falsely trigger. So this should evaluate as checkmate.
 out=$(run_cmds "${TMP}" "immune-blast-test" "position fen k1R5/K7/8/8/8/8/8/8 b - - 0 1
 go depth 1")
-echo "${out}" | grep -q "score mate 0" || error ${LINENO}
+assert_contains_literal "${out}" "score mate 0" "report mate score"
 
 rm -f "${TMP}"
 

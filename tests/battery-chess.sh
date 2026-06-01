@@ -1,9 +1,11 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 set -euo pipefail
 
-ENGINE=${1:-src/stockfish}
+SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+ENGINE="${1:-${SCRIPT_DIR}/../src/stockfish}"
 VARIANT_PATH=${2:-}
+source "${SCRIPT_DIR}/lib/uci.sh"
 
 tmp_ini=
 cleanup() {
@@ -25,33 +27,30 @@ EOF
   VARIANT_PATH="${tmp_ini}"
 fi
 
-run_cmds() {
-  cat <<EOF | "${ENGINE}"
-uci
-setoption name VariantPath value ${VARIANT_PATH}
-$1
-quit
-EOF
-}
-
 echo "battery-chess test started"
 
-out=$(run_cmds "setoption name UCI_Variant value battery-chess
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" battery-chess <<'EOF'
 position fen 4k3/P7/8/8/8/8/8/4K3 w - - 0 1
-go perft 1")
-! echo "${out}" | grep -q "^a7a8"
+go perft 1
+EOF
+)
+assert_not_contains "$out" "^a7a8"
 
-out=$(run_cmds "setoption name UCI_Variant value battery-chess
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" battery-chess <<'EOF'
 position fen 4k3/P7/8/8/8/8/8/4K3[Q] w - - 0 1
-go perft 1")
-echo "${out}" | grep -q "^a7a8q: 1$"
-! echo "${out}" | grep -q "^a7a8n:"
-! echo "${out}" | grep -q "^a7a8r:"
-! echo "${out}" | grep -q "^a7a8b:"
+go perft 1
+EOF
+)
+assert_contains "$out" "^a7a8q: 1$"
+assert_not_contains "$out" "^a7a8n:"
+assert_not_contains "$out" "^a7a8r:"
+assert_not_contains "$out" "^a7a8b:"
 
-out=$(run_cmds "setoption name UCI_Variant value battery-chess
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" battery-chess <<'EOF'
 position fen 4k3/P7/8/8/8/8/8/4K3[Q] w - - 0 1 moves a7a8q
-d")
-echo "${out}" | grep -q "Fen: Q~3k3/8/8/8/8/8/8/4K3\\[\\] b - - 0 1"
+d
+EOF
+)
+assert_contains "$out" "Fen: Q~3k3/8/8/8/8/8/8/4K3\\[\\] b - - 0 1"
 
 echo "battery-chess test OK"

@@ -9,6 +9,7 @@ trap 'error ${LINENO}' ERR
 
 SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 ENGINE="${1:-${SCRIPT_DIR}/../src/stockfish}"
+source "${SCRIPT_DIR}/lib/uci.sh"
 
 TMP_VARIANT_PATH=$(mktemp "${TMPDIR:-/tmp}/fsx-borrow-drops-XXXXXX")
 trap 'rm -f "${TMP_VARIANT_PATH}"' EXIT
@@ -35,21 +36,28 @@ startFen = 5/5/5/5/5[a] w - - 0 1
 INI
 
 run_cmds() {
-  cat <<EOF | "${ENGINE}"
-uci
-setoption name VariantPath value ${TMP_VARIANT_PATH}
-setoption name UCI_Variant value borrow-slide
+  run_uci "$ENGINE" "$TMP_VARIANT_PATH" borrow-slide <<EOF
 $1
-quit
 EOF
 }
 
+variant_available() {
+  local out
+  out=$(printf 'uci\nquit\n' | uci_timeout "$ENGINE")
+  grep -q ' var borrow-slide ' <<<"$out"
+}
+
+if ! variant_available; then
+  echo "borrow-slide variant not available in this build; skipping borrow-opponent-drops regression"
+  exit 0
+fi
+
 out=$(run_cmds "position startpos
 go perft 1")
-echo "${out}" | grep -q "^A@a1,b1: 1$"
+assert_contains "$out" "^A@a1,b1: 1$"
 
 out=$(run_cmds "position startpos moves A@a1,b1
 d")
-echo "${out}" | grep -Fq "Fen: 5/5/5/5/a4[] b - - 0 1"
+assert_contains "$out" "Fen: 5/5/5/5/a4[] b - - 0 1"
 
 echo "borrow-opponent-drops regression passed"

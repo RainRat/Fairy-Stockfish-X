@@ -3,12 +3,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-ENGINE=${1:-"${ROOT_DIR}/src/stockfish"}
-if [[ "${ENGINE}" != /* ]]; then
-  ENGINE="${PWD}/${ENGINE}"
-fi
-
-cd "${ROOT_DIR}/src"
+source "${SCRIPT_DIR}/lib/uci.sh"
+ENGINE="$(default_engine "${1:-}")"
 
 tmp_ini=$(mktemp)
 trap 'rm -f "$tmp_ini"' EXIT
@@ -67,9 +63,11 @@ INI
 
 perft_moves() {
   local variant=$1
-  printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value %s\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" "$variant" \
-    | "${ENGINE}" \
+  run_uci "$ENGINE" "$tmp_ini" "$variant" <<'EOF' \
     | grep -E '^[a-z][0-9]+[a-z][0-9]+:'
+position startpos
+go perft 1
+EOF
 }
 
 cmp <(perft_moves alias-wazir) <(perft_moves alias-wazir-ref)

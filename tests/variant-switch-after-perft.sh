@@ -9,7 +9,9 @@ error() {
 }
 trap 'error ${LINENO}' ERR
 
-ENGINE=${1:-./stockfish}
+SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+source "${SCRIPT_DIR}/lib/uci.sh"
+ENGINE=$(default_engine "${1:-}")
 
 TMP_VARIANT_PATH=$(mktemp "${TMPDIR:-/tmp}/fsx-variant-switch-XXXXXX")
 cat >"${TMP_VARIANT_PATH}" <<'INI'
@@ -20,7 +22,7 @@ startFen = 4k3/8/8/8/8/8/8/4K3 w - - 0 1
 startFen = 4k3/8/8/8/4P3/8/8/4K3 w - - 0 1
 INI
 
-out=$(cat <<CMDS | "${ENGINE}"
+out=$(cat <<CMDS | uci_timeout "${ENGINE}"
 uci
 setoption name VariantPath value ${TMP_VARIANT_PATH}
 setoption name UCI_Variant value v1

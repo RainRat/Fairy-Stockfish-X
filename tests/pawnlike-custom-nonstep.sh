@@ -8,7 +8,9 @@ error() {
 }
 trap 'error ${LINENO}' ERR
 
-ENGINE=${1:-./stockfish}
+SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+source "${SCRIPT_DIR}/lib/uci.sh"
+ENGINE=$(default_engine "${1:-}")
 
 tmp_ini=$(mktemp)
 trap 'rm -f "$tmp_ini"' EXIT
@@ -22,7 +24,7 @@ startFen = 4k3/8/8/8/8/8/D7/K7 w - - 0 1
 INI
 
 out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value pawnlike-nonstep\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" \
-  | "$ENGINE")
+  | uci_timeout "$ENGINE")
 
 echo "$out" | grep -q "^a2c1: 1$"
 echo "$out" | grep -q "^a2c3: 1$"

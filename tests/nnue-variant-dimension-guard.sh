@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ENGINE="${1:-src/stockfish}"
+SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+ENGINE="${1:-${SCRIPT_DIR}/../src/stockfish}"
+source "${SCRIPT_DIR}/lib/uci.sh"
 
 tmp_ini="$(mktemp)"
 trap 'rm -f "$tmp_ini"' EXIT
@@ -24,24 +26,20 @@ customPiece8 = i:A
 startFen = 11k/12/12/12/12/12/12/12/12/11K[] w - - 0 1
 EOF
 
-out="$("$ENGINE" <<EOF
-uci
-setoption name VariantPath value $tmp_ini
-setoption name UCI_Variant value nnguard
+out=$(run_uci "$ENGINE" "$tmp_ini" nnguard <<'EOF'
 setoption name EvalFile value nnguard.nnue
 position startpos
 go depth 1
-quit
 EOF
-)"
+)
 
-if echo "${out}" | grep -Eq "unknown variant 'nnguard'|variants skipped because of board size limits"; then
+if grep -Eq "unknown variant 'nnguard'|variants skipped because of board size limits" <<<"${out}"; then
   echo "nnue variant dimension guard skipped: engine cannot load nnguard board size"
   exit 0
 fi
 
-echo "${out}" | grep -q "info string NNUE disabled for variant nnguard"
-echo "${out}" | grep -q "info string classical evaluation enabled"
-! echo "${out}" | grep -q "The option is set to true, but the network file"
+assert_contains "$out" "info string NNUE disabled for variant nnguard"
+assert_contains "$out" "info string classical evaluation enabled"
+assert_not_contains "$out" "The option is set to true, but the network file"
 
 echo "nnue variant dimension guard passed"

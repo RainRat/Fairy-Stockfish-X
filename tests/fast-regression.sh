@@ -47,7 +47,7 @@ run_step "custom en passant passed squares" timeout 60s bash tests/custom-en-pas
 run_step "standard piece value phase" timeout 60s bash tests/standard-piece-value-phase.sh "${ENGINE}"
 run_step "betza range modifiers" timeout 60s bash tests/betza-range-modifiers.sh "${ENGINE}"
 run_step "flip regressions" timeout 60s bash tests/flip-regressions.sh "${ENGINE}"
-run_step "hex piece movement" timeout 60s bash tests/hex-piece-movement.sh "${ENGINE}"
+run_step "hex boards" timeout 60s bash tests/test_hex_boards.sh "${ENGINE}"
 run_step "changing-color locality" timeout 60s bash tests/changing-color-locality.sh "${ENGINE}"
 run_step "nnue export failure" timeout 60s bash tests/nnue-export-failure.sh "${ENGINE}"
 run_step "potion check regressions" timeout 60s bash tests/potion-check-regressions.sh "${ENGINE}"
