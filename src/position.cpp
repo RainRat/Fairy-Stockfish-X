@@ -1002,6 +1002,14 @@ inline int non_negative_points(int points) {
   return std::max(points, 0);
 }
 
+inline void init_dirty_piece_entry(DirtyPiece& dp, int idx, Piece pc, Square from, Square to, Piece handPiece, int handCount) {
+  dp.piece[idx] = pc;
+  dp.from[idx] = from;
+  dp.to[idx] = to;
+  dp.handPiece[idx] = handPiece;
+  dp.handCount[idx] = handCount;
+}
+
 inline int append_dirty(StateInfo* st, Piece pc, Square from, Square to, Piece handPiece = NO_PIECE, int handCount = 0) {
   auto& dp = st->dirtyPiece;
   if (dp.dirty_num >= DIRTY_PIECE_MAX) {
@@ -1012,11 +1020,7 @@ inline int append_dirty(StateInfo* st, Piece pc, Square from, Square to, Piece h
   }
 
   int idx = dp.dirty_num++;
-  dp.piece[idx] = pc;
-  dp.from[idx] = from;
-  dp.to[idx] = to;
-  dp.handPiece[idx] = handPiece;
-  dp.handCount[idx] = handCount;
+  init_dirty_piece_entry(dp, idx, pc, from, to, handPiece, handCount);
   return idx;
 }
 
@@ -1818,6 +1822,7 @@ void Position::set_castling_right(Color c, Square rfrom) {
 
 void Position::set_check_info(StateInfo* si) const {
 
+  std::fill_n(si->checkSquares, PIECE_TYPE_NB, Bitboard(0));
   si->pseudoRoyalCandidates = 0;
   si->pseudoRoyals = 0;
 
@@ -4817,20 +4822,10 @@ bool Position::analyze_push(Move m, PushInfo& info) const {
 /// moves should be filtered out before this function is called.
 
 inline void clear_dirty_piece(StateInfo* st) {
-  auto& dp = st->dirtyPiece;
-  dp.dirty_num = 0;
-  for (int i = 0; i < DIRTY_PIECE_MAX; ++i)
-  {
-      dp.piece[i] = NO_PIECE;
-      dp.handPiece[i] = NO_PIECE;
-      dp.handCount[i] = 0;
-      dp.from[i] = SQ_NONE;
-      dp.to[i] = SQ_NONE;
-  }
+  st->dirtyPiece.dirty_num = 0;
 }
 
-inline void clear_move_undo_state(StateInfo* st, bool resetGates, bool commitGates) {
-  (void) commitGates;
+inline void clear_move_undo_state(StateInfo* st) {
   st->legalCapture = NO_VALUE;
   st->legalEnPassant = NO_VALUE;
   st->blastPromotedSquares = 0;
@@ -4842,11 +4837,9 @@ inline void clear_move_undo_state(StateInfo* st, bool resetGates, bool commitGat
   st->promotionPawn = NO_PIECE;
   st->consumedPromotionHandPiece = NO_PIECE;
   st->dead.clear();
-  if (resetGates) {
-      st->removedGatingType = NO_PIECE_TYPE;
-      st->removedCastlingGatingType = NO_PIECE_TYPE;
-      st->capturedGatingType = NO_PIECE_TYPE;
-  }
+  st->removedGatingType = NO_PIECE_TYPE;
+  st->removedCastlingGatingType = NO_PIECE_TYPE;
+  st->capturedGatingType = NO_PIECE_TYPE;
   st->transforms.clear();
   st->flippedPieces = 0;
   st->claimedSquares = 0;
@@ -4873,6 +4866,13 @@ inline void clear_move_undo_state(StateInfo* st, bool resetGates, bool commitGat
 }
 
 #ifndef NDEBUG
+inline bool no_move_undo_transform_payload(const InPlaceTransformState& transforms) {
+  return !transforms.morphedFrom
+      && transforms.morphSquare == SQ_NONE
+      && !transforms.colorChanged
+      && transforms.colorChangeSquare == SQ_NONE;
+}
+
 inline void assert_no_move_undo_payload(const StateInfo* st) {
   assert(st->bycatchSquares == Bitboard(0));
   assert(st->promotedBycatch == Bitboard(0));
@@ -4891,10 +4891,7 @@ inline void assert_no_move_undo_payload(const StateInfo* st) {
   assert(st->removedGatingType == NO_PIECE_TYPE);
   assert(st->removedCastlingGatingType == NO_PIECE_TYPE);
   assert(st->capturedGatingType == NO_PIECE_TYPE);
-  assert(!st->transforms.morphedFrom);
-  assert(st->transforms.morphSquare == SQ_NONE);
-  assert(!st->transforms.colorChanged);
-  assert(st->transforms.colorChangeSquare == SQ_NONE);
+  assert(no_move_undo_transform_payload(st->transforms));
   assert(st->pushTailSquare == SQ_NONE);
   assert(st->pushStepF == 0);
   assert(st->pushStepR == 0);
@@ -4915,8 +4912,8 @@ inline void assert_no_move_undo_payload(const StateInfo* st) {
 }
 #endif
 
-CaptureTransferTarget Position::capture_transfer_target(StateInfo* state, Piece transferPiece) const {
-    if (state->suppressedCaptureTransfer || !captures_to_hand())
+CaptureTransferTarget Position::capture_transfer_target(Piece transferPiece, bool suppressedCaptureTransfer) const {
+    if (suppressedCaptureTransfer || !captures_to_hand())
         return {};
     if (!(capture_to_hand_types() & type_of(transferPiece)))
         return {};
@@ -4940,29 +4937,34 @@ CaptureTransferTarget Position::capture_transfer_target(StateInfo* state, Piece 
     return {};
 }
 
-bool Position::add_capture_transfer(StateInfo* state, Key& k, Piece transferPiece, bool undo) {
-    CaptureTransferTarget target = capture_transfer_target(state, transferPiece);
+bool Position::add_capture_transfer(StateInfo* state, Key& k, Piece transferPiece) {
+    CaptureTransferTarget target = capture_transfer_target(transferPiece, state->suppressedCaptureTransfer);
     if (!target.valid)
         return false;
 
-    if (!undo) {
-        if (target.prison)
-            add_to_prison(target.hashedPiece);
-        else
-            add_to_hand(target.hashedPiece);
-        xor_in_hand_count(k, target.hashedPiece, target.oldCount, target.oldCount + 1);
-    } else {
-        if (target.prison)
-            remove_from_prison(target.hashedPiece);
-        else
-            remove_from_hand(target.hashedPiece);
-        xor_in_hand_count(k, target.hashedPiece, target.oldCount, target.oldCount - 1);
-    }
+    if (target.prison)
+        add_to_prison(target.hashedPiece);
+    else
+        add_to_hand(target.hashedPiece);
+    xor_in_hand_count(k, target.hashedPiece, target.oldCount, target.oldCount + 1);
     return true;
 }
 
-bool Position::simulate_capture_transfer(StateInfo* state, Key& k, Piece transferPiece) const {
-    CaptureTransferTarget target = capture_transfer_target(state, transferPiece);
+bool Position::undo_capture_transfer(StateInfo* state, Key& k, Piece transferPiece) {
+    CaptureTransferTarget target = capture_transfer_target(transferPiece, state->suppressedCaptureTransfer);
+    if (!target.valid)
+        return false;
+
+    if (target.prison)
+        remove_from_prison(target.hashedPiece);
+    else
+        remove_from_hand(target.hashedPiece);
+    xor_in_hand_count(k, target.hashedPiece, target.oldCount, target.oldCount - 1);
+    return true;
+}
+
+bool Position::simulate_capture_transfer(Key& k, Piece transferPiece, bool suppressedCaptureTransfer) const {
+    CaptureTransferTarget target = capture_transfer_target(transferPiece, suppressedCaptureTransfer);
     if (!target.valid)
         return false;
 
@@ -5047,7 +5049,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   st->extinctionSeen[WHITE] = newSt.previous->extinctionSeen[WHITE];
   st->extinctionSeen[BLACK] = newSt.previous->extinctionSeen[BLACK];
   st->move = m;
-  clear_move_undo_state(st, true, commit_gates());
+  clear_move_undo_state(st);
   // Mandatory multimove pass plies should not advance the halfmove clock.
   const bool currentMultimovePass = is_pass(m) && multimove_pass(gamePly);
   const bool currentClaimPass = is_pass(m) && previousClaimPass;
@@ -5309,7 +5311,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       Piece transferPiece = reserve_transfer_piece(us, captured, capturedPromoted, unpromotedCaptured,
                                                    drop_loop(), var->captureToHandSide,
                                                    main_promotion_pawn_type(color_of(captured)));
-      bool transferred = add_capture_transfer(st, k, transferPiece, false);
+      bool transferred = add_capture_transfer(st, k, transferPiece);
       if (Eval::useNNUE)
       {
           int captureDirtyIdx = rifleShot ? 0 : 1;
@@ -5427,7 +5429,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
                                                            st->pushTransferUnpromoted[i],
                                                            drop_loop(), var->captureToHandSide,
                                                            main_promotion_pawn_type(color_of(transferred)));
-              add_capture_transfer(st, k, transferPiece, false);
+              add_capture_transfer(st, k, transferPiece);
 
               if (points_counting())
               {
@@ -6376,7 +6378,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
                                                        main_promotion_pawn_type(color_of(bpc)));
           if (!petrifiedCenter)
           {
-               bool transferred = add_capture_transfer(st, k, transferPiece, false);
+               bool transferred = add_capture_transfer(st, k, transferPiece);
               if (Eval::useNNUE && bycatchDirtyIdx >= 0 && transferred)
               {
                   Piece pieceToHand = capture_type() == PRISON ? ~transferPiece : transferPiece;
@@ -6792,7 +6794,7 @@ void Position::undo_move(Move m) {
                if (!wasBlastPromoted && !petrifiedCenter)
                {
                    Key dummyKey = 0;
-                   add_capture_transfer(st, dummyKey, transferPiece, true);
+                   undo_capture_transfer(st, dummyKey, transferPiece);
                }
           }
       }
@@ -7002,7 +7004,7 @@ void Position::undo_move(Move m) {
                                                            drop_loop(), var->captureToHandSide,
                                                            main_promotion_pawn_type(color_of(transferred)));
               Key dummyKey = 0;
-              add_capture_transfer(st, dummyKey, transferPiece, true);
+              undo_capture_transfer(st, dummyKey, transferPiece);
           }
 
           for (int i = 0; i < st->pushSnapshotCount; ++i)
@@ -7082,7 +7084,7 @@ void Position::undo_move(Move m) {
                                                        drop_loop(), var->captureToHandSide,
                                                        main_promotion_pawn_type(color_of(st->captured.piece)));
           Key dummyKey = 0;
-          add_capture_transfer(st, dummyKey, transferPiece, true);
+          undo_capture_transfer(st, dummyKey, transferPiece);
       }
   }
 
@@ -7175,7 +7177,7 @@ void Position::do_null_move(StateInfo& newSt) {
   st->nnueRefreshNeeded = false;
 
   st->move = MOVE_NULL;
-  clear_move_undo_state(st, true, commit_gates());
+  clear_move_undo_state(st);
 #ifndef NDEBUG
   assert_no_move_undo_payload(st);
 #endif
@@ -7234,7 +7236,7 @@ Key Position::key_after(Move m) const {
       Piece removedPiece = reserve_transfer_piece(sideToMove, captured, is_promoted(to), unpromoted_piece_on(to),
                                                   drop_loop(), var->captureToHandSide,
                                                   main_promotion_pawn_type(color_of(captured)));
-      simulate_capture_transfer(st, k, removedPiece);
+      simulate_capture_transfer(k, removedPiece, false);
   }
   if (is_drop_move(m))
   {
