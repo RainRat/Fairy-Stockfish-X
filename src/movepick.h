@@ -148,6 +148,7 @@ private:
   template<PickType T, typename Pred> Move select(Pred);
   template<GenType> void score();
   bool is_useless_potion(Move m) const;
+  bool potions_pending() const;
   void init_move_list_storage();
   template<GenType Type>
   bool resume_deferred_potions(ExtMove* appendBegin, ExtMove* baseEnd, bool& deferred, bool scoreMoves = false);

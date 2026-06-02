@@ -93,6 +93,12 @@ bool MovePicker::is_useless_potion(Move m) const {
   return false;
 }
 
+bool MovePicker::potions_pending() const {
+  return pos.potions_enabled()
+      && (pos.can_cast_potion(pos.side_to_move(), Variant::POTION_FREEZE)
+          || pos.can_cast_potion(pos.side_to_move(), Variant::POTION_JUMP));
+}
+
 ExtMove* MovePicker::prune_useless_potions(ExtMove* begin, ExtMove* end) const {
 
   if (!pos.potions_enabled())
@@ -304,9 +310,6 @@ void MovePicker::score() {
 /// It never returns the TT move.
 template<MovePicker::PickType T, typename Pred>
 Move MovePicker::select(Pred filter) {
-
-  const bool potions = pos.potions_enabled();
-
   while (cur < endMoves)
   {
       if (T == Best)
@@ -314,9 +317,7 @@ Move MovePicker::select(Pred filter) {
 
       Move move = *cur;
 
-      if (move != ttMove
-          && (!potions || !is_gating(move) || !is_useless_potion(move))
-          && filter())
+      if (move != ttMove && filter())
           return *cur++;
 
       cur++;
@@ -356,7 +357,6 @@ Move MovePicker::next_move(bool skipQuiets) {
       assert(endMoves - moveList <= MOVE_PICK_OVERFLOW_CAPACITY);
       assert(cur >= moveList && cur <= endMoves);
   };
-  const bool potions = pos.potions_enabled();
 
 top:
   switch (stage) {
@@ -375,14 +375,20 @@ top:
       goto top;
 
   case CAPTURE_INIT:
+      cur = endBadCaptures = moveList;
+      endMoves = generate_without_potions<CAPTURES>(pos, cur);
+      captureBaseEnd = endMoves;
+      capturePotionsDeferred = potions_pending();
+      assert_move_list_bounds();
+
+      score<CAPTURES>();
+      ++stage;
+      goto top;
+
   case PROBCUT_INIT:
   case QCAPTURE_INIT:
       cur = endBadCaptures = moveList;
       endMoves = generate_without_potions<CAPTURES>(pos, cur);
-      captureBaseEnd = endMoves;
-      capturePotionsDeferred = potions
-          && (pos.can_cast_potion(pos.side_to_move(), Variant::POTION_FREEZE)
-              || pos.can_cast_potion(pos.side_to_move(), Variant::POTION_JUMP));
       assert_move_list_bounds();
 
       score<CAPTURES>();
@@ -426,9 +432,7 @@ top:
           cur = quietListBegin;
           endMoves = generate_without_potions<QUIETS>(pos, cur);
           quietBaseEnd = endMoves;
-          quietPotionsDeferred = potions
-              && (pos.can_cast_potion(pos.side_to_move(), Variant::POTION_FREEZE)
-                  || pos.can_cast_potion(pos.side_to_move(), Variant::POTION_JUMP));
+          quietPotionsDeferred = potions_pending();
           assert_move_list_bounds();
 
           score<QUIETS>();
@@ -468,9 +472,7 @@ top:
                ? generate_without_potions<NON_EVASIONS>(pos, cur)
                : generate_without_potions<EVASIONS>(pos, cur);
       evasionBaseEnd = endMoves;
-      evasionPotionsDeferred = potions
-          && (pos.can_cast_potion(pos.side_to_move(), Variant::POTION_FREEZE)
-              || pos.can_cast_potion(pos.side_to_move(), Variant::POTION_JUMP));
+      evasionPotionsDeferred = potions_pending();
       assert_move_list_bounds();
 
       score<EVASIONS>();
@@ -505,9 +507,7 @@ top:
       cur = moveList;
       endMoves = generate_without_potions<QUIET_CHECKS>(pos, cur);
       qcheckBaseEnd = endMoves;
-      qcheckPotionsDeferred = potions
-          && (pos.can_cast_potion(pos.side_to_move(), Variant::POTION_FREEZE)
-              || pos.can_cast_potion(pos.side_to_move(), Variant::POTION_JUMP));
+      qcheckPotionsDeferred = potions_pending();
       assert_move_list_bounds();
 
       ++stage;

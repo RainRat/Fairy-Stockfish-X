@@ -67,6 +67,7 @@ namespace {
 
   constexpr uint64_t TtHitAverageWindow     = 4096;
   constexpr uint64_t TtHitAverageResolution = 1024;
+  constexpr int MaxReductionIndex = MAX_MOVES - 1;
 
   // Futility margin
   Value futility_margin(Depth d, bool improving) {
@@ -77,7 +78,8 @@ namespace {
   int Reductions[MAX_MOVES]; // [depth or moveNumber]
 
   Depth reduction(bool i, Depth d, int mn) {
-    int r = Reductions[d] * Reductions[mn];
+    int r = Reductions[std::clamp(int(d), 0, MaxReductionIndex)]
+           * Reductions[std::clamp(mn, 0, MaxReductionIndex)];
     return (r + 534) / 1024 + (!i && r > 904);
   }
 
@@ -103,6 +105,23 @@ namespace {
 
   bool show_debug_adjudication() {
     return int(Options["Verbosity"]) >= 2;
+  }
+
+  struct RootTerminal {
+    Value value;
+    const char* reason;
+  };
+
+  RootTerminal compute_root_terminal(const Position& pos) {
+    Value variantResult;
+    bool variantGameEnd = pos.is_game_end(variantResult);
+    bool inCheck = pos.evasion_checkers();
+    return { variantGameEnd ? variantResult
+                            : inCheck ? pos.checkmate_value()
+                                      : pos.stalemate_value(),
+             variantGameEnd ? "game_end"
+                            : inCheck ? "checkmate"
+                                      : "stalemate" };
   }
 
   void print_root_adjudication(const Position& pos, Value result, const char* reason) {
@@ -141,6 +160,16 @@ namespace {
                         Move* quietsSearched, int quietCount, Move* capturesSearched, int captureCount, Depth depth);
   void idle_wait() {
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+
+  void check_main_thread_time(Thread* thisThread) {
+    if (thisThread != Threads.main())
+        return;
+
+    if (Limits.movetime && Time.elapsed() >= Limits.movetime)
+        Threads.stop = true;
+    else
+        static_cast<MainThread*>(thisThread)->check_time();
   }
 
   // perft() is our utility to verify move generation. All the leaf nodes up
@@ -218,32 +247,24 @@ void MainThread::search() {
   if ((rootMoves.size() == 1 && rootMoves[0].pv[0] == MOVE_NONE)
       || (CurrentProtocol == XBOARD && rootPos.is_optional_game_end()))
   {
-      Value variantResult;
-      bool variantGameEnd = rootPos.is_game_end(variantResult);
-      bool inCheck = rootPos.evasion_checkers();
-      Value result = variantGameEnd ? variantResult
-                    : inCheck       ? rootPos.checkmate_value()
-                                    : rootPos.stalemate_value();
+      RootTerminal terminal = compute_root_terminal(rootPos);
       if (CurrentProtocol == XBOARD)
       {
           // rotate MOVE_NONE to front (for optional game end)
           std::rotate(rootMoves.rbegin(), rootMoves.rbegin() + 1, rootMoves.rend());
           // do not claim when pondering
           if (!ponder)
-              sync_cout << (  result == VALUE_DRAW ? "1/2-1/2 {Draw}"
-                              : (rootPos.side_to_move() == BLACK ? -result : result) == VALUE_MATE ? "1-0 {White wins}"
+              sync_cout << (  terminal.value == VALUE_DRAW ? "1/2-1/2 {Draw}"
+                              : (rootPos.side_to_move() == BLACK ? -terminal.value : terminal.value) == VALUE_MATE ? "1-0 {White wins}"
                               : "0-1 {Black wins}")
                           << sync_endl;
       }
       else if (show_search_output())
           sync_cout << "info depth 0 score "
-                    << UCI::value(result)
+                    << UCI::value(terminal.value)
                     << sync_endl;
 
-      print_root_adjudication(rootPos, result,
-                              variantGameEnd ? "game_end"
-                              : inCheck      ? "checkmate"
-                                             : "stalemate");
+      print_root_adjudication(rootPos, terminal.value, terminal.reason);
   }
   else
   {
@@ -293,16 +314,8 @@ void MainThread::search() {
 
   if (bestThread->rootMoves[0].pv[0] == MOVE_NONE)
   {
-      Value variantResult;
-      bool variantGameEnd = rootPos.is_game_end(variantResult);
-      bool inCheck = rootPos.evasion_checkers();
-      Value result = variantGameEnd ? variantResult
-                    : inCheck       ? rootPos.checkmate_value()
-                                    : rootPos.stalemate_value();
-      print_root_adjudication(rootPos, result,
-                              variantGameEnd ? "game_end"
-                              : inCheck      ? "checkmate"
-                                             : "stalemate");
+      RootTerminal terminal = compute_root_terminal(rootPos);
+      print_root_adjudication(rootPos, terminal.value, terminal.reason);
   }
 
   bool extractedPonder = false;
@@ -787,13 +800,7 @@ namespace {
     maxValue           = VALUE_INFINITE;
 
     // Check for the available remaining time
-    if (thisThread == Threads.main())
-    {
-        if (Limits.movetime && Time.elapsed() >= Limits.movetime)
-            Threads.stop = true;
-        else
-            static_cast<MainThread*>(thisThread)->check_time();
-    }
+    check_main_thread_time(thisThread);
 
     // Used to send selDepth info to GUI (selDepth counts from 1, ply from 0)
     if (PvNode && thisThread->selDepth < ss->ply + 1)
@@ -1652,8 +1659,7 @@ moves_loop: // When in check, search starts from here
     ss->inCheck = pos.evasion_checkers();
     moveCount = 0;
 
-    if (thisThread == Threads.main())
-        static_cast<MainThread*>(thisThread)->check_time();
+    check_main_thread_time(thisThread);
 
     Value gameResult;
     if (pos.is_game_end(gameResult, ss->ply))
