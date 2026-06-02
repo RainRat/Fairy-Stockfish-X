@@ -44,6 +44,18 @@ extern vector<string> setup_bench(const Position&, istream&);
 
 namespace {
 
+  bool contains_case_insensitive(const std::string& haystack, const std::string& needle) {
+    if (needle.empty())
+        return true;
+
+    auto it = std::search(haystack.begin(), haystack.end(),
+                          needle.begin(), needle.end(),
+                          [](unsigned char a, unsigned char b) {
+                              return std::tolower(a) == std::tolower(b);
+                          });
+    return it != haystack.end();
+  }
+
   // position() is called when engine receives the "position" UCI command.
   // The function sets up the position described in the given FEN string ("fen")
   // or the starting position ("startpos") and then makes the moves given in the
@@ -299,43 +311,44 @@ namespace {
 
     if (!v) return;
 
-    sync_cout << "\nVariant:  " << variantName
-              << "\nTemplate: " << v->variantTemplate
-              << "\nBoard:    " << v->maxFile + 1 << "x" << v->maxRank + 1
-              << (v->hexBoard ? " (hex)" : "")
-              << (v->cylindrical ? " (cylindrical)" : "")
-              << (v->toroidal ? " (toroidal)" : "")
-              << "\nPockets:  " << v->pocketSize
-              << "\nPieces:  ";
+    std::ostringstream oss;
+    oss << "\nVariant:  " << variantName
+        << "\nTemplate: " << v->variantTemplate
+        << "\nBoard:    " << v->maxFile + 1 << "x" << v->maxRank + 1
+        << (v->hexBoard ? " (hex)" : "")
+        << (v->cylindrical ? " (cylindrical)" : "")
+        << (v->toroidal ? " (toroidal)" : "")
+        << "\nPockets:  " << v->pocketSize
+        << "\nPieces:  ";
 
     for (PieceSet ps = v->pieceTypes; ps; )
     {
         PieceType pt = pop_lsb(ps);
         const PieceInfo* pi = pieceMap.get(pt);
-        sync_cout << " " << v->pieceToChar[make_piece(WHITE, pt)]
-                  << "(" << (pi ? pi->betza : "") << ")";
+        oss << " " << v->pieceToChar[make_piece(WHITE, pt)]
+            << "(" << (pi ? pi->betza : "") << ")";
     }
 
-    sync_cout << "\nRules:   ";
-    if (v->mustCapture[WHITE] || v->mustCapture[BLACK]) sync_cout << " mustCapture";
-    if (!v->checking)    sync_cout << " noChecking";
-    if (v->allowChecks)  sync_cout << " allowChecks";
-    if (v->castling)     sync_cout << " castling";
-    if (v->pieceDrops)   sync_cout << " pieceDrops";
-    if (v->gating)       sync_cout << " gating";
-    if (v->pass[WHITE] || v->pass[BLACK]) sync_cout << " pass";
-    if (v->checkCounting) sync_cout << " checkCounting";
-    if (v->pointsCounting) sync_cout << " pointsCounting";
-    if (v->potions)      sync_cout << " potions";
+    oss << "\nRules:   ";
+    if (v->mustCapture[WHITE] || v->mustCapture[BLACK]) oss << " mustCapture";
+    if (!v->checking)    oss << " noChecking";
+    if (v->allowChecks)  oss << " allowChecks";
+    if (v->castling)     oss << " castling";
+    if (v->pieceDrops)   oss << " pieceDrops";
+    if (v->gating)       oss << " gating";
+    if (v->pass[WHITE] || v->pass[BLACK]) oss << " pass";
+    if (v->checkCounting) oss << " checkCounting";
+    if (v->pointsCounting) oss << " pointsCounting";
+    if (v->potions)      oss << " potions";
 
-    sync_cout << "\nEndgame: ";
-    if (v->nMoveRule > 0) sync_cout << " " << v->nMoveRule << "-move-rule";
-    if (v->nFoldRule > 0) sync_cout << " " << v->nFoldRule << "-fold-repetition";
-    if (v->stalemateValue.global != VALUE_DRAW) sync_cout << " stalemate=" << (v->stalemateValue.global == -VALUE_MATE ? "lose" : (v->stalemateValue.global == VALUE_MATE ? "win" : std::to_string(int(v->stalemateValue.global))));
-    if (v->extinctionValue.global != VALUE_NONE) sync_cout << " extinction";
-    if (v->connectN > 0) sync_cout << " connect" << v->connectN;
+    oss << "\nEndgame: ";
+    if (v->nMoveRule > 0) oss << " " << v->nMoveRule << "-move-rule";
+    if (v->nFoldRule > 0) oss << " " << v->nFoldRule << "-fold-repetition";
+    if (v->stalemateValue.global != VALUE_DRAW) oss << " stalemate=" << (v->stalemateValue.global == -VALUE_MATE ? "lose" : (v->stalemateValue.global == VALUE_MATE ? "win" : std::to_string(int(v->stalemateValue.global))));
+    if (v->extinctionValue.global != VALUE_NONE) oss << " extinction";
+    if (v->connectN > 0) oss << " connect" << v->connectN;
 
-    sync_cout << sync_endl;
+    sync_cout << oss.str() << sync_endl;
   }
 
   // print_available_variants() prints a sorted list of all supported variants,
@@ -350,7 +363,7 @@ namespace {
     {
         std::vector<std::string> filtered;
         for (const auto& k : keys)
-            if (k.find(filter) != std::string::npos)
+            if (contains_case_insensitive(k, filter))
                 filtered.push_back(k);
         keys = std::move(filtered);
     }
@@ -491,6 +504,7 @@ void UCI::loop(int argc, char* argv[]) {
                     << "\n  eval                        Show static evaluation of the position"
                     << "\n  bench                       Run internal performance tests"
                     << "\n  compiler                    Show information about the compiler"
+                    << "\n  export_net [file]           Export the currently loaded NNUE net"
                     << "\n  variants [filter]           Show supported variants, optionally filtered"
                     << "\n  load [file|<<EOF]           Load variant rules from a file or text"
                     << "\n  check [file|<<EOF]          Validate a variant configuration"

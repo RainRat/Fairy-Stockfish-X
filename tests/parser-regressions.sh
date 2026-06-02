@@ -536,4 +536,54 @@ assert_contains "${castling_diag_output}" "No castling rook on file J for flag J
 assert_contains "${castling_diag_output}" "Flag J refers to file J, but that square does not contain a WHITE castling rook."
 assert_contains "${castling_diag_output}" "No castling rook for flag K on castling rank 1."
 
+counter_diag_output=$(python3 - <<'PY' 2>&1
+import pyffish
+
+pyffish.load_variant_config(
+    """
+[counterdiag:gothic]
+maxRank = 8
+maxFile = 8
+checkCounting = true
+startFen = 4k3/8/8/8/8/8/8/4K3 w - - 0 1
+"""
+)
+
+for fen in [
+    ("4k3/8/8/8/8/8/8/4K3 w - - x 1 a0a0", "half move"),
+    ("4k3/8/8/8/8/8/8/4K3 w - - 0 x a0a0", "move"),
+]:
+    print(f"{fen[1]} {pyffish.validate_fen(fen[0], 'counterdiag', False)}")
+PY
+)
+
+assert_contains_literal "${counter_diag_output}" "half move -2"
+assert_contains_literal "${counter_diag_output}" "move -1"
+assert_contains_literal "${counter_diag_output}" "Invalid half move counter: 'x'."
+assert_contains_literal "${counter_diag_output}" "Invalid move counter: 'x'."
+
+help_output=$(run_uci "$ENGINE" "$(default_variants)" chess <<EOF
+help
+EOF
+)
+assert_contains_literal "${help_output}" "export_net [file]"
+
+variants_lower=$(run_uci "$ENGINE" "$(default_variants)" chess <<EOF
+variants sh
+EOF
+)
+variants_upper=$(run_uci "$ENGINE" "$(default_variants)" chess <<EOF
+variants SH
+EOF
+)
+
+if [[ "${variants_lower}" != "${variants_upper}" ]]; then
+    echo "expected variants filter to be case-insensitive" >&2
+    echo "--- variants sh ---" >&2
+    printf '%s\n' "${variants_lower}" >&2
+    echo "--- variants SH ---" >&2
+    printf '%s\n' "${variants_upper}" >&2
+    exit 1
+fi
+
 echo "parser regression tests passed"

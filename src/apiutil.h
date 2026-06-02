@@ -975,7 +975,7 @@ inline std::string castling_rights_to_string(CastlingRights castlingRights) {
     case KING_SIDE:
         return "KING_SIDE";
     case QUEEN_SIDE:
-        return "QUEENS_SIDE";
+        return "QUEEN_SIDE";
     case WHITE_OO:
         return "WHITE_OO";
     case WHITE_OOO:
@@ -1517,17 +1517,20 @@ inline FenValidation validate_fen(const std::string& fen, const Variant* v, bool
 
     // 6) Part
     // check half move counter
-    if (fenParts.size() >= 3 + optionalInbetweenFields && check_digit_field(fenParts[fenParts.size() - 2 - optionalTrailingFields]) == NOK)
+    const size_t halfMoveIndex = fenParts.size() - 2 - optionalTrailingFields;
+    const size_t moveIndex = fenParts.size() - 1 - optionalTrailingFields;
+
+    if (fenParts.size() >= 3 + optionalInbetweenFields && check_digit_field(fenParts[halfMoveIndex]) == NOK)
     {
-        std::cerr << "Invalid half move counter: '" << fenParts[fenParts.size()-2] << "'." << std::endl;
+        std::cerr << "Invalid half move counter: '" << fenParts[halfMoveIndex] << "'." << std::endl;
         return FEN_INVALID_HALF_MOVE_COUNTER;
     }
 
     // 7) Part
     // check move counter
-    if (fenParts.size() >= 4 + optionalInbetweenFields && check_digit_field(fenParts[fenParts.size() - 1 - optionalTrailingFields]) == NOK)
+    if (fenParts.size() >= 4 + optionalInbetweenFields && check_digit_field(fenParts[moveIndex]) == NOK)
     {
-        std::cerr << "Invalid move counter: '" << fenParts[fenParts.size()-1] << "'." << std::endl;
+        std::cerr << "Invalid move counter: '" << fenParts[moveIndex] << "'." << std::endl;
         return FEN_INVALID_MOVE_COUNTER;
     }
 
