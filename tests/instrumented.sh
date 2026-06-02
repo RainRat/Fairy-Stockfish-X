@@ -102,6 +102,14 @@ cat << EOF > "$game_exp"
  set timeout 240
  spawn $spawn_cmd
 
+ proc expect_bestmove {} {
+     expect {
+         -re "bestmove\[^\\r\\n\]*(\\r\\n|\\n)" {}
+         eof {exit 1}
+         timeout {exit 1}
+     }
+ }
+
  send "uci\n"
  expect "uciok"
 
@@ -110,15 +118,15 @@ cat << EOF > "$game_exp"
  send "ucinewgame\n"
  send "position startpos\n"
  send "go nodes 1000\n"
- expect "bestmove"
+ expect_bestmove
 
  send "position startpos moves e2e4 e7e6\n"
  send "go nodes 1000\n"
- expect "bestmove"
+ expect_bestmove
 
  send "position fen 5rk1/1K4p1/8/8/3B4/8/8/8 b - - 0 1\n"
  send "go depth 10\n"
- expect "bestmove"
+ expect_bestmove
 
  send "quit\n"
  expect eof
@@ -161,7 +169,14 @@ EOF
 run_expect_test() {
   local exp="$1"
   if [[ "$mode" == "valgrind" || "$mode" == "valgrind-thread" ]]; then
-    expect "$exp" >/dev/null
+    local out
+    out=$(mktemp)
+    if ! expect "$exp" >"$out" 2>&1; then
+      cat "$out" >&2
+      rm -f "$out"
+      return 1
+    fi
+    rm -f "$out"
   elif [[ "$mode" == "sanitizer-undefined" || "$mode" == "sanitizer-thread" ]]; then
     local out
     out=$(expect "$exp" 2>&1)
