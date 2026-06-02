@@ -1853,6 +1853,9 @@ moves_loop: // When in check, search starts from here
        }
     }
 
+    if (Threads.stop.load(std::memory_order_relaxed) && bestValue == -VALUE_INFINITE)
+        return ss->inCheck ? value_draw(pos.this_thread()) : evaluate(pos);
+
     // If qsearch found no tactical moves, the position may still be terminal
     // because there are no legal moves at all. That matters in variants where
     // stalemate or no-move outcomes are decisive even outside check.
