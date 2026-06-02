@@ -4874,17 +4874,17 @@ inline void clear_move_undo_state(StateInfo* st, bool resetGates, bool commitGat
 
 #ifndef NDEBUG
 inline void assert_no_move_undo_payload(const StateInfo* st) {
-  assert(st->bycatchSquares == 0);
-  assert(st->promotedBycatch == 0);
-  assert(st->demotedBycatch == 0);
-  assert(st->blastPromotedSquares == 0);
+  assert(st->bycatchSquares == Bitboard(0));
+  assert(st->promotedBycatch == Bitboard(0));
+  assert(st->demotedBycatch == Bitboard(0));
+  assert(st->blastPromotedSquares == Bitboard(0));
   assert(!st->captured);
   assert(st->captureSquare == SQ_NONE);
   assert(!st->dead);
   assert(st->promotionPawn == NO_PIECE);
   assert(st->consumedPromotionHandPiece == NO_PIECE);
-  assert(st->flippedPieces == 0);
-  assert(st->claimedSquares == 0);
+  assert(st->flippedPieces == Bitboard(0));
+  assert(st->claimedSquares == Bitboard(0));
   assert(st->dropHandColor == COLOR_NB);
   assert(st->forcedJumpSquare == SQ_NONE);
   assert(st->forcedJumpStep == 0);
