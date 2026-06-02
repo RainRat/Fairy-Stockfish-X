@@ -237,6 +237,7 @@ struct StateInfo {
 };
 
 static_assert(std::is_trivially_copyable_v<StateInfo>, "StateInfo must remain trivially copyable");
+static_assert(std::is_standard_layout_v<StateInfo>, "StateInfo must remain standard layout for partial copies");
 
 
 /// A list to keep track of the position states along the setup moves (from the
@@ -681,7 +682,9 @@ public:
   int  pawns_on_same_color_squares(Color c, Square s) const;
 
   // Doing and undoing moves
-  void do_move(Move m, StateInfo& newSt);
+  void do_move(Move m, StateInfo& newSt, bool countNode = true);
+  void do_move_probe(Move m, StateInfo& newSt) const;
+  void undo_move_probe(Move m) const;
   void undo_move(Move m);
   bool add_capture_transfer(StateInfo* state, Key& k, Piece transferPiece, bool undo);
   bool simulate_capture_transfer(StateInfo* state, Key& k, Piece transferPiece) const;

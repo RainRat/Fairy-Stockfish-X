@@ -943,9 +943,8 @@ struct DirtyPiece {
   // Number of changed pieces
   int dirty_num;
 
-  // Max 3 pieces can change in one move. A promotion with capture moves
-  // both the pawn and the captured piece to SQ_NONE and the piece promoted
-  // to from SQ_NONE to the capture square.
+  // Up to 12 entries cover the high-dirty move families: blast moves, paired
+  // drops, pushes, pulls, morphs, color changes, and hand updates.
   Piece piece[DIRTY_PIECE_MAX];
   Piece handPiece[DIRTY_PIECE_MAX];
   int handCount[DIRTY_PIECE_MAX];

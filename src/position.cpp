@@ -1045,7 +1045,7 @@ bool Position::violates_same_player_board_repetition(Move m) const {
   Position probe;
   StateInfo probeState, nextState;
   probe.set(variant(), fen(), is_chess960(), &probeState, this_thread());
-  probe.do_move(m, nextState);
+  probe.do_move_probe(m, nextState);
 
   bool repeated = false;
   int end = probe.captures_to_hand() ? probe.st->pliesFromNull
@@ -3185,21 +3185,28 @@ bool Position::legal(Move m) const {
           return false;
   }
 
+  OptBool gives = NO_VALUE;
+  auto move_gives_check = [&]() {
+      if (gives == NO_VALUE)
+          gives = gives_check(m) ? VALUE_TRUE : VALUE_FALSE;
+      return gives == VALUE_TRUE;
+  };
+
   // Illegal checks
-  if (((!checking_permitted() && !allow_checks()) || (sittuyin_promotion() && is_promotion_move(m)) || (!drop_checks() && dropMove)) && gives_check(m))
+  if (((!checking_permitted() && !allow_checks()) || (sittuyin_promotion() && is_promotion_move(m)) || (!drop_checks() && dropMove)) && move_gives_check())
       return false;
 
   // Optional rule: disallow checkmate by drops.
   // Shogi pawn-drop mate rule is a stricter piece-specific version.
   if (   dropMove
-      && gives_check(m)
+      && move_gives_check()
       && (   !drop_mates()
           || (shogi_pawn_drop_mate_illegal() && type_of(moved_piece(m)) == SHOGI_PAWN)))
   {
       StateInfo setupState, nextState;
       Position p;
       p.set(variant(), fen(), is_chess960(), &setupState, this_thread());
-      p.do_move(m, nextState);
+      p.do_move_probe(m, nextState);
       if (p.evasion_checkers() && MoveList<LEGAL>(p).size() == 0)
           return false;
   }
@@ -3212,7 +3219,7 @@ bool Position::legal(Move m) const {
       Position probe;
       StateInfo setupState, nextState;
       probe.set(variant(), fen(), is_chess960(), &setupState, this_thread());
-      probe.do_move(mp, nextState);
+      probe.do_move_probe(mp, nextState);
       Square probeRoyal = probe.royal_square(us);
       if (!allow_checks() && probeRoyal != SQ_NONE && probe.attackers_to_king(probeRoyal, them))
           return false;
@@ -4613,11 +4620,10 @@ bool Position::gives_check(Move m) const {
       || type_of(m) == DROP2
       || type_of(m) == INSERT)
   {
-      Position* pos = const_cast<Position*>(this);
       StateInfo nextState;
-      pos->do_move(m, nextState);
-      bool givesCheck = bool(pos->evasion_checkers());
-      pos->undo_move(m);
+      do_move_probe(m, nextState);
+      bool givesCheck = bool(evasion_checkers());
+      undo_move_probe(m);
       return givesCheck;
   }
 
@@ -4949,13 +4955,13 @@ void Position::add_capture_points(StateInfo* state, Color us, Piece captured) co
     }
 }
 
-void Position::do_move(Move m, StateInfo& newSt) {
+void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
 
   assert(is_ok(m));
   assert(&newSt != st);
 
 #ifndef NO_THREADS
-  if (thisThread)
+  if (countNode && thisThread)
       thisThread->nodes.fetch_add(1, std::memory_order_relaxed);
 #endif
   Key k = st->key ^ Zobrist::side;
@@ -6632,6 +6638,14 @@ void Position::do_move(Move m, StateInfo& newSt) {
 #endif
 
   assert(pos_is_ok());
+}
+
+void Position::do_move_probe(Move m, StateInfo& newSt) const {
+  const_cast<Position*>(this)->do_move(m, newSt, false);
+}
+
+void Position::undo_move_probe(Move m) const {
+  const_cast<Position*>(this)->undo_move(m);
 }
 
 

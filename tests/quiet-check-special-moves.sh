@@ -91,6 +91,7 @@ cat > "${HARNESS_CPP}" <<'EOF'
 #include "piece.h"
 #include "position.h"
 #include "psqt.h"
+#include "thread.h"
 #include "uci.h"
 #include "variant.h"
 
@@ -101,6 +102,12 @@ static void load_variants() {
 [pairdrop:fairy]
 pieceDrops = true
 symmetricDropTypes = r
+
+[pairdrop-nocheck:fairy]
+pieceDrops = true
+symmetricDropTypes = r
+checking = false
+allowChecks = false
 
 [pull-basic:fairy]
 maxFile = e
@@ -177,6 +184,24 @@ static void test_pairdrop() {
     assert(!MoveList<QUIET_CHECKS>(pos).contains(m));
 }
 
+static void test_probe_nodes() {
+    Thread thread(0);
+    thread.nodes.store(0);
+
+    StateInfo st{};
+    Position pos;
+    pos.set(variants.get("pairdrop-nocheck"), "4k3/8/8/8/8/8/8/4K3[RR] w - - 0 1", false, &st, &thread);
+    const Move m = make_drop_pair(SQ_A1, SQ_B1, ROOK, ROOK);
+
+    const auto before = thread.nodes.load();
+    assert(pos.legal(m));
+    assert(!pos.gives_check(m));
+    assert(!pos.gives_check(m));
+    assert(thread.nodes.load() == before);
+    assert(MoveList<LEGAL>(pos).contains(m));
+    assert(thread.nodes.load() == before);
+}
+
 static void test_pull_basic() {
     StateInfo st{};
     Position pos;
@@ -225,6 +250,8 @@ int main(int argc, char** argv) {
     auto run_case = [&](const char* which) {
         if (!which || !std::strcmp(which, "pairdrop"))
             test_pairdrop();
+        if (!which || !std::strcmp(which, "probe-nodes"))
+            test_probe_nodes();
         if (!which || !std::strcmp(which, "swap"))
             test_swap_basic();
         if (!which || !std::strcmp(which, "pull"))
