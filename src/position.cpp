@@ -8250,36 +8250,52 @@ bool Position::has_game_cycle(int ply) const {
   Key originalKey = useBoardKey ? st->boardKey : st->key;
   StateInfo* stp = st->previous;
 
+  enum class CuckooMatch { NoMatch, Rejected, Found };
+  auto check_cuckoo_slot = [&](int slot, int plyDistance, Key moveKey) {
+      if (cuckoo[slot] != moveKey)
+          return CuckooMatch::NoMatch;
+
+      Move move = cuckooMove[slot];
+      Square s1 = from_sq(move);
+      Square s2 = to_sq(move);
+
+      if ((between_bb(s1, s2) ^ s2) & pieces())
+          return CuckooMatch::NoMatch;
+
+      if (ply > plyDistance)
+          return CuckooMatch::Found;
+
+      // For nodes before or at the root, check that the move is a
+      // repetition rather than a move to the current position.
+      // In the cuckoo table, both moves Rc1c5 and Rc5c1 are stored in
+      // the same location, so we have to select which square to check.
+      Square checkSq = empty(s1) ? s2 : s1;
+      if (empty(checkSq) || color_of(piece_on(checkSq)) != side_to_move())
+          return CuckooMatch::Rejected;
+
+      // For repetitions before or at the root, require one more
+      return (useBoardKey ? stp->boardRepetition : stp->repetition)
+           ? CuckooMatch::Found
+           : CuckooMatch::NoMatch;
+  };
+
   for (int i = 3; i <= end; i += 2)
   {
       stp = stp->previous->previous;
 
       Key moveKey = originalKey ^ (useBoardKey ? stp->boardKey : stp->key);
-      if (   (j = H1(moveKey), cuckoo[j] == moveKey)
-          || (j = H2(moveKey), cuckoo[j] == moveKey))
+      j = H1(moveKey);
+      CuckooMatch match = check_cuckoo_slot(j, i, moveKey);
+      if (match == CuckooMatch::NoMatch)
       {
-          Move move = cuckooMove[j];
-          Square s1 = from_sq(move);
-          Square s2 = to_sq(move);
-
-          if (!((between_bb(s1, s2) ^ s2) & pieces()))
-          {
-              if (ply > i)
-                  return true;
-
-              // For nodes before or at the root, check that the move is a
-              // repetition rather than a move to the current position.
-              // In the cuckoo table, both moves Rc1c5 and Rc5c1 are stored in
-              // the same location, so we have to select which square to check.
-              Square checkSq = empty(s1) ? s2 : s1;
-              if (empty(checkSq) || color_of(piece_on(checkSq)) != side_to_move())
-                  continue;
-
-              // For repetitions before or at the root, require one more
-              if (useBoardKey ? stp->boardRepetition : stp->repetition)
-                  return true;
-          }
+          j = H2(moveKey);
+          match = check_cuckoo_slot(j, i, moveKey);
       }
+
+      if (match == CuckooMatch::Found)
+          return true;
+      if (match == CuckooMatch::Rejected)
+          continue;
   }
   return false;
 }
