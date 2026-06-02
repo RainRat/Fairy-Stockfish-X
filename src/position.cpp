@@ -4809,6 +4809,38 @@ inline void clear_dirty_piece(StateInfo* st) {
   dp.to[0] = SQ_NONE;
 }
 
+inline void clear_move_undo_state(StateInfo* st, bool resetGates, bool commitGates) {
+  st->legalCapture = NO_VALUE;
+  st->legalEnPassant = NO_VALUE;
+  st->blastPromotedSquares = 0;
+  st->bycatchSquares = 0;
+  st->promotedBycatch = 0;
+  st->demotedBycatch = 0;
+  st->captured.clear();
+  st->consumedPromotionHandPiece = NO_PIECE;
+  st->dead.clear();
+  if (resetGates && commitGates) {
+      st->removedGatingType = NO_PIECE_TYPE;
+      st->removedCastlingGatingType = NO_PIECE_TYPE;
+      st->capturedGatingType = NO_PIECE_TYPE;
+  }
+  st->transforms.clear();
+  st->didPush = false;
+  st->didPull = false;
+  st->pushStepwise = false;
+  st->pushTailSquare = SQ_NONE;
+  st->pushStepF = 0;
+  st->pushStepR = 0;
+  st->pushCount = 0;
+  st->pushEjected = false;
+  st->pushBlockedCapture = false;
+  st->pushSnapshotCount = 0;
+  st->pushTransferCount = 0;
+  st->pullFromSquare = SQ_NONE;
+  st->pulled.clear();
+  st->pendingClaimPass = false;
+}
+
 bool Position::add_capture_transfer(StateInfo* state, Key& k, Piece transferPiece, bool undo) {
     if (state->suppressedCaptureTransfer || !captures_to_hand())
         return false;
@@ -4938,33 +4970,7 @@ void Position::do_move(Move m, StateInfo& newSt) {
   st->extinctionSeen[WHITE] = newSt.previous->extinctionSeen[WHITE];
   st->extinctionSeen[BLACK] = newSt.previous->extinctionSeen[BLACK];
   st->move = m;
-  st->legalCapture = NO_VALUE;
-  st->legalEnPassant = NO_VALUE;
-  st->blastPromotedSquares = 0;
-  st->bycatchSquares = 0;
-  st->captured.clear();
-  st->consumedPromotionHandPiece = NO_PIECE;
-  st->dead.clear();
-
-  if (commit_gates()) {
-      st->removedGatingType = NO_PIECE_TYPE;
-      st->removedCastlingGatingType = NO_PIECE_TYPE;
-      st->capturedGatingType = NO_PIECE_TYPE;
-  }
-  st->transforms.clear();
-  st->didPush = false;
-  st->didPull = false;
-  st->pushStepwise = false;
-  st->pushTailSquare = SQ_NONE;
-  st->pushStepF = 0;
-  st->pushStepR = 0;
-  st->pushCount = 0;
-  st->pushEjected = false;
-  st->pushBlockedCapture = false;
-  st->pushSnapshotCount = 0;
-  st->pushTransferCount = 0;
-  st->pullFromSquare = SQ_NONE;
-  st->pulled.clear();
+  clear_move_undo_state(st, true, commit_gates());
   // Mandatory multimove pass plies should not advance the halfmove clock.
   const bool currentMultimovePass = is_pass(m) && multimove_pass(gamePly);
   const bool currentClaimPass = is_pass(m) && previousClaimPass;
@@ -5088,7 +5094,6 @@ void Position::do_move(Move m, StateInfo& newSt) {
   st->pushBlockedCapture = pushMove && pushInfo.captures && !pushInfo.ejects;
   st->pass = is_pass(m) && !openingSelfRemoval;
   st->claimedSquares = 0;
-  st->pendingClaimPass = false;
   st->dropHandColor = COLOR_NB;
   st->suppressedCaptureTransfer = false;
 
@@ -5902,9 +5907,8 @@ void Position::do_move(Move m, StateInfo& newSt) {
           return;
 
       Piece morphed = make_piece(color_of(cur), targetType);
-      if (!st->transforms.didMorph)
+      if (!st->transforms.morphedFrom)
       {
-          st->transforms.didMorph = true;
           st->transforms.morphedFrom.set(cur, is_promoted(sq), unpromoted_piece_on(sq));
           st->transforms.morphSquare = sq;
       }
@@ -6429,7 +6433,6 @@ void Position::do_move(Move m, StateInfo& newSt) {
   {
       Piece cur = piece_on(moverSq);
       Piece changed = make_piece(them, type_of(cur));
-      st->transforms.didColorChange = true;
       st->transforms.colorChanged.set(cur, is_promoted(moverSq), unpromoted_piece_on(moverSq));
       st->transforms.colorChangeSquare = moverSq;
 
@@ -6718,14 +6721,14 @@ void Position::undo_move(Move m) {
   }
 
   // do_move applies morphing before color changes, so undo restores color first.
-  if (st->transforms.didColorChange && st->transforms.colorChangeSquare == moverSq)
+  if (st->transforms.colorChanged && st->transforms.colorChangeSquare == moverSq)
   {
       remove_piece(moverSq);
       put_piece(st->transforms.colorChanged.piece, moverSq, st->transforms.colorChanged.promoted, st->transforms.colorChanged.unpromoted);
       pc = st->transforms.colorChanged.piece;
   }
 
-  if (st->transforms.didMorph && st->transforms.morphSquare == moverSq)
+  if (st->transforms.morphedFrom && st->transforms.morphSquare == moverSq)
   {
       remove_piece(moverSq);
       put_piece(st->transforms.morphedFrom.piece, moverSq,
@@ -7092,36 +7095,10 @@ void Position::do_null_move(StateInfo& newSt) {
   st->nnueRefreshNeeded = false;
 
   st->move = MOVE_NULL;
-  st->legalCapture = NO_VALUE;
-  st->legalEnPassant = NO_VALUE;
-  st->blastPromotedSquares = 0;
-  st->bycatchSquares = 0;
-  st->captured.clear();
-  st->consumedPromotionHandPiece = NO_PIECE;
-  st->dead.clear();
-  if (commit_gates()) {
-      st->removedGatingType = NO_PIECE_TYPE;
-      st->removedCastlingGatingType = NO_PIECE_TYPE;
-      st->capturedGatingType = NO_PIECE_TYPE;
-  }
-  st->transforms.clear();
-  st->didPush = false;
-  st->didPull = false;
-  st->pushStepwise = false;
-  st->pushTailSquare = SQ_NONE;
-  st->pushStepF = 0;
-  st->pushStepR = 0;
-  st->pushCount = 0;
-  st->pushEjected = false;
-  st->pushBlockedCapture = false;
-  st->pushSnapshotCount = 0;
-  st->pushTransferCount = 0;
-  st->pullFromSquare = SQ_NONE;
-  st->pulled.clear();
+  clear_move_undo_state(st, true, commit_gates());
   st->shak = false;
   st->bikjang = false;
   st->pass = false;
-  st->pendingClaimPass = false;
   st->forcedJumpSquare = SQ_NONE;
   st->forcedJumpHasFollowup = false;
   st->forcedJumpStep = 0;

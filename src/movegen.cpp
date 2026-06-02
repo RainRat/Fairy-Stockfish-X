@@ -1359,6 +1359,8 @@ namespace {
       if (cur >= maxEnd)
           return AppendStatus::Full;
 
+      // is_potion_eligible_base() restricts mt to the cases below.
+      assert(mt == NORMAL || mt == CASTLING || mt == PROMOTION);
       Move gatingMove = MOVE_NONE;
       switch (mt)
       {
@@ -1371,9 +1373,6 @@ namespace {
           case PROMOTION:
               gatingMove = make_promotion_potion(from, to, promotion_type(base), potion, gate);
               break;
-          default:
-              assert(false);
-              return AppendStatus::Skipped;
       }
 
       if (!potion_move_matches<Type>(pos, base, gatingMove))

@@ -125,16 +125,12 @@ struct InPlaceTransformState {
   Square morphSquare = SQ_NONE;
   ReversiblePieceState colorChanged;
   Square colorChangeSquare = SQ_NONE;
-  bool didMorph = false;
-  bool didColorChange = false;
 
   void clear() {
     morphedFrom.clear();
     morphSquare = SQ_NONE;
     colorChanged.clear();
     colorChangeSquare = SQ_NONE;
-    didMorph = false;
-    didColorChange = false;
   }
 };
 
