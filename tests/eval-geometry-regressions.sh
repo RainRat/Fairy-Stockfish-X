@@ -28,6 +28,22 @@ quit
 CMDS
 }
 
+run_trace() {
+  local variant_path="$1"
+  local variant="$2"
+  local fen="$3"
+  cat <<CMDS | "${ENGINE}"
+uci
+setoption name Use NNUE value true
+setoption name EvalFile value src/nn-3475407dc199.nnue
+setoption name VariantPath value ${variant_path}
+setoption name UCI_Variant value ${variant}
+position fen ${fen}
+eval
+quit
+CMDS
+}
+
 tmp_ini=$(mktemp)
 trap 'rm -f "${tmp_ini}"' EXIT
 
@@ -73,5 +89,10 @@ quit
 CMDS
 )
 [[ "${bishop_mg}" == "0.00" ]]
+
+# NNUE trace headers should align to the same four-column width as the body.
+trace_output=$(run_trace "${tmp_ini}" "chess" "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+[[ "${trace_output}" == *"|   Bucket   |  Material  | Positional |   Total    |"* ]]
+[[ "${trace_output}" == *"|            |   (PSQT)   |  (Layers)  |            |"* ]]
 
 echo "eval geometry regression tests passed"
