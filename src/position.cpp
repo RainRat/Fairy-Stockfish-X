@@ -100,6 +100,25 @@ namespace {
     Piece unpromoted = NO_PIECE;
   };
 
+  class ScopedProbeMove {
+  public:
+    ScopedProbeMove(const Position& pos, Move m, StateInfo& newSt)
+      : pos_(const_cast<Position&>(pos)), move_(m) {
+      pos_.do_move(move_, newSt, false);
+    }
+
+    ~ScopedProbeMove() {
+      pos_.undo_move(move_);
+    }
+
+    ScopedProbeMove(const ScopedProbeMove&) = delete;
+    ScopedProbeMove& operator=(const ScopedProbeMove&) = delete;
+
+  private:
+    Position& pos_;
+    Move move_;
+  };
+
   static_assert(MAX_PUSH_SNAPSHOT <= 32, "push snapshot promotion bitmask must fit in uint32_t");
   static_assert(sizeof(StateInfo::pushSnapshotSquares) / sizeof(StateInfo::pushSnapshotSquares[0]) == MAX_PUSH_SNAPSHOT, "pushSnapshotSquares size mismatch");
 
@@ -988,6 +1007,7 @@ inline int append_dirty(StateInfo* st, Piece pc, Square from, Square to, Piece h
   if (dp.dirty_num >= DIRTY_PIECE_MAX) {
       assert(false && "DirtyPiece overflow");
       st->nnueRefreshNeeded = true;
+      dp.dirty_num = 0;
       return -1;
   }
 
@@ -1042,21 +1062,20 @@ bool Position::violates_same_player_board_repetition(Move m) const {
   if (!var->samePlayerBoardRepetitionIllegal)
       return false;
 
-  Position probe;
-  StateInfo probeState, nextState;
-  probe.set(variant(), fen(), is_chess960(), &probeState, this_thread());
-  probe.do_move_probe(m, nextState);
+  StateInfo* previousState = st;
+  StateInfo nextState;
+  ScopedProbeMove probe(*this, m, nextState);
 
   bool repeated = false;
-  int end = probe.captures_to_hand() ? probe.st->pliesFromNull
-                                     : std::min(probe.st->rule50, probe.st->pliesFromNull);
+  int end = captures_to_hand() ? st->pliesFromNull
+                               : std::min(st->rule50, st->pliesFromNull);
   if (end >= 4)
   {
-      StateInfo* stp = st;
+      StateInfo* stp = previousState;
       for (int i = 4; i <= end; i += 2)
       {
           stp = stp->previous->previous;
-          if (stp->move != MOVE_NONE && stp->layoutKey == probe.st->layoutKey)
+          if (stp->move != MOVE_NONE && stp->layoutKey == st->layoutKey)
           {
               repeated = true;
               break;
@@ -3203,11 +3222,9 @@ bool Position::legal(Move m) const {
       && (   !drop_mates()
           || (shogi_pawn_drop_mate_illegal() && type_of(moved_piece(m)) == SHOGI_PAWN)))
   {
-      StateInfo setupState, nextState;
-      Position p;
-      p.set(variant(), fen(), is_chess960(), &setupState, this_thread());
-      p.do_move_probe(m, nextState);
-      if (p.evasion_checkers() && MoveList<LEGAL>(p).size() == 0)
+      StateInfo nextState;
+      ScopedProbeMove probe(*this, m, nextState);
+      if (evasion_checkers() && MoveList<LEGAL>(*this).size() == 0)
           return false;
   }
 
@@ -3216,12 +3233,10 @@ bool Position::legal(Move m) const {
       return false;
 
   auto legal_after_probe_move = [&](Move mp) {
-      Position probe;
-      StateInfo setupState, nextState;
-      probe.set(variant(), fen(), is_chess960(), &setupState, this_thread());
-      probe.do_move_probe(mp, nextState);
-      Square probeRoyal = probe.royal_square(us);
-      if (!allow_checks() && probeRoyal != SQ_NONE && probe.attackers_to_king(probeRoyal, them))
+      StateInfo nextState;
+      ScopedProbeMove probe(*this, mp, nextState);
+      Square probeRoyal = royal_square(us);
+      if (!allow_checks() && probeRoyal != SQ_NONE && attackers_to_king(probeRoyal, them))
           return false;
       return true;
   };
@@ -4600,11 +4615,8 @@ bool Position::gives_check(Move m) const {
       occupied |= square_bb(secondary_drop_square(m));
 
   if (is_gating(m))
-  {
       occupied |= square_bb(gating_square(m));
-      if (paired_drop(m))
-          occupied |= square_bb(secondary_drop_square(m));
-  }
+
   Bitboard janggiCannons = pieces(JANGGI_CANNON);
   if (type_of(mover) == JANGGI_CANNON)
       janggiCannons = rifleShot ? (janggiCannons & ~square_bb(shotSq))
@@ -4621,9 +4633,8 @@ bool Position::gives_check(Move m) const {
       || type_of(m) == INSERT)
   {
       StateInfo nextState;
-      do_move_probe(m, nextState);
+      ScopedProbeMove probe(*this, m, nextState);
       bool givesCheck = bool(evasion_checkers());
-      undo_move_probe(m);
       return givesCheck;
   }
 
@@ -4808,14 +4819,18 @@ bool Position::analyze_push(Move m, PushInfo& info) const {
 inline void clear_dirty_piece(StateInfo* st) {
   auto& dp = st->dirtyPiece;
   dp.dirty_num = 0;
-  dp.piece[0] = NO_PIECE;
-  dp.handPiece[0] = NO_PIECE;
-  dp.handCount[0] = 0;
-  dp.from[0] = SQ_NONE;
-  dp.to[0] = SQ_NONE;
+  for (int i = 0; i < DIRTY_PIECE_MAX; ++i)
+  {
+      dp.piece[i] = NO_PIECE;
+      dp.handPiece[i] = NO_PIECE;
+      dp.handCount[i] = 0;
+      dp.from[i] = SQ_NONE;
+      dp.to[i] = SQ_NONE;
+  }
 }
 
 inline void clear_move_undo_state(StateInfo* st, bool resetGates, bool commitGates) {
+  (void) commitGates;
   st->legalCapture = NO_VALUE;
   st->legalEnPassant = NO_VALUE;
   st->blastPromotedSquares = 0;
@@ -4823,14 +4838,24 @@ inline void clear_move_undo_state(StateInfo* st, bool resetGates, bool commitGat
   st->promotedBycatch = 0;
   st->demotedBycatch = 0;
   st->captured.clear();
+  st->captureSquare = SQ_NONE;
+  st->promotionPawn = NO_PIECE;
   st->consumedPromotionHandPiece = NO_PIECE;
   st->dead.clear();
-  if (resetGates && commitGates) {
+  if (resetGates) {
       st->removedGatingType = NO_PIECE_TYPE;
       st->removedCastlingGatingType = NO_PIECE_TYPE;
       st->capturedGatingType = NO_PIECE_TYPE;
   }
   st->transforms.clear();
+  st->flippedPieces = 0;
+  st->claimedSquares = 0;
+  st->dropHandColor = COLOR_NB;
+  st->suppressedCaptureTransfer = false;
+  st->forcedJumpSquare = SQ_NONE;
+  st->forcedJumpStep = 0;
+  st->forcedJumpHasFollowup = false;
+  st->pass = false;
   st->didPush = false;
   st->didPull = false;
   st->pushStepwise = false;
@@ -4847,56 +4872,102 @@ inline void clear_move_undo_state(StateInfo* st, bool resetGates, bool commitGat
   st->pendingClaimPass = false;
 }
 
-bool Position::add_capture_transfer(StateInfo* state, Key& k, Piece transferPiece, bool undo) {
+#ifndef NDEBUG
+inline void assert_no_move_undo_payload(const StateInfo* st) {
+  assert(st->bycatchSquares == 0);
+  assert(st->promotedBycatch == 0);
+  assert(st->demotedBycatch == 0);
+  assert(st->blastPromotedSquares == 0);
+  assert(!st->captured);
+  assert(st->captureSquare == SQ_NONE);
+  assert(!st->dead);
+  assert(st->promotionPawn == NO_PIECE);
+  assert(st->consumedPromotionHandPiece == NO_PIECE);
+  assert(st->flippedPieces == 0);
+  assert(st->claimedSquares == 0);
+  assert(st->dropHandColor == COLOR_NB);
+  assert(st->forcedJumpSquare == SQ_NONE);
+  assert(st->forcedJumpStep == 0);
+  assert(st->removedGatingType == NO_PIECE_TYPE);
+  assert(st->removedCastlingGatingType == NO_PIECE_TYPE);
+  assert(st->capturedGatingType == NO_PIECE_TYPE);
+  assert(!st->transforms.morphedFrom);
+  assert(st->transforms.morphSquare == SQ_NONE);
+  assert(!st->transforms.colorChanged);
+  assert(st->transforms.colorChangeSquare == SQ_NONE);
+  assert(st->pushTailSquare == SQ_NONE);
+  assert(st->pushStepF == 0);
+  assert(st->pushStepR == 0);
+  assert(st->pushCount == 0);
+  assert(st->pushSnapshotCount == 0);
+  assert(st->pushTransferCount == 0);
+  assert(st->pullFromSquare == SQ_NONE);
+  assert(!st->pulled);
+  assert(!st->suppressedCaptureTransfer);
+  assert(!st->pass);
+  assert(!st->pendingClaimPass);
+  assert(!st->forcedJumpHasFollowup);
+  assert(!st->didPush);
+  assert(!st->didPull);
+  assert(!st->pushStepwise);
+  assert(!st->pushEjected);
+  assert(!st->pushBlockedCapture);
+}
+#endif
+
+CaptureTransferTarget Position::capture_transfer_target(StateInfo* state, Piece transferPiece) const {
     if (state->suppressedCaptureTransfer || !captures_to_hand())
-        return false;
+        return {};
     if (!(capture_to_hand_types() & type_of(transferPiece)))
+        return {};
+
+    if (capture_type() == HAND)
+    {
+        return {transferPiece,
+                pieceCountInHand[color_of(transferPiece)][type_of(transferPiece)],
+                false,
+                true};
+    }
+
+    if (capture_type() == PRISON)
+    {
+        return {~transferPiece,
+                pieceCountInPrison[color_of(transferPiece)][type_of(transferPiece)],
+                true,
+                true};
+    }
+
+    return {};
+}
+
+bool Position::add_capture_transfer(StateInfo* state, Key& k, Piece transferPiece, bool undo) {
+    CaptureTransferTarget target = capture_transfer_target(state, transferPiece);
+    if (!target.valid)
         return false;
 
-    if (capture_type() == HAND) {
-        Piece pieceToHand = transferPiece;
-        int n = pieceCountInHand[color_of(pieceToHand)][type_of(pieceToHand)];
-        if (!undo) {
-            add_to_hand(pieceToHand);
-            xor_in_hand_count(k, pieceToHand, n, n + 1);
-        } else {
-            remove_from_hand(pieceToHand);
-            xor_in_hand_count(k, pieceToHand, n, n - 1);
-        }
-        return true;
-    } else if (capture_type() == PRISON) {
-        Piece prisonPiece = ~transferPiece;
-        int n = pieceCountInPrison[color_of(transferPiece)][type_of(transferPiece)];
-        if (!undo) {
-            add_to_prison(prisonPiece);
-            xor_in_hand_count(k, prisonPiece, n, n + 1);
-        } else {
-            remove_from_prison(prisonPiece);
-            xor_in_hand_count(k, prisonPiece, n, n - 1);
-        }
-        return true;
+    if (!undo) {
+        if (target.prison)
+            add_to_prison(target.hashedPiece);
+        else
+            add_to_hand(target.hashedPiece);
+        xor_in_hand_count(k, target.hashedPiece, target.oldCount, target.oldCount + 1);
+    } else {
+        if (target.prison)
+            remove_from_prison(target.hashedPiece);
+        else
+            remove_from_hand(target.hashedPiece);
+        xor_in_hand_count(k, target.hashedPiece, target.oldCount, target.oldCount - 1);
     }
-    return false;
+    return true;
 }
 
 bool Position::simulate_capture_transfer(StateInfo* state, Key& k, Piece transferPiece) const {
-    if (state->suppressedCaptureTransfer || !captures_to_hand())
-        return false;
-    if (!(capture_to_hand_types() & type_of(transferPiece)))
+    CaptureTransferTarget target = capture_transfer_target(state, transferPiece);
+    if (!target.valid)
         return false;
 
-    if (capture_type() == HAND) {
-        Piece pieceToHand = transferPiece;
-        int n = pieceCountInHand[color_of(pieceToHand)][type_of(pieceToHand)];
-        xor_in_hand_count(k, pieceToHand, n, n + 1);
-        return true;
-    } else if (capture_type() == PRISON) {
-        Piece prisonPiece = ~transferPiece;
-        int n = pieceCountInPrison[color_of(transferPiece)][type_of(transferPiece)];
-        xor_in_hand_count(k, prisonPiece, n, n + 1);
-        return true;
-    }
-    return false;
+    xor_in_hand_count(k, target.hashedPiece, target.oldCount, target.oldCount + 1);
+    return true;
 }
 
 void Position::apply_drop_hash_delta(Key& k, Move m, Piece pc, Color dropColor, PieceType exchanged) const {
@@ -6260,6 +6331,10 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
                   }
 
                   k ^= Zobrist::psq[bpc][bsq] ^ Zobrist::psq[promotedPiece][bsq];
+                  if (type_of(bpc) == PAWN)
+                      st->pawnKey ^= Zobrist::psq[bpc][bsq];
+                  if (type_of(promotedPiece) == PAWN)
+                      st->pawnKey ^= Zobrist::psq[promotedPiece][bsq];
                   st->materialKey ^= Zobrist::psq[promotedPiece][pieceCount[promotedPiece] - 1]
                                   ^ Zobrist::psq[bpc][pieceCount[bpc]];
                   st->nonPawnMaterial[bc] += PieceValue[MG][promotedPiece]
@@ -6639,15 +6714,6 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
 
   assert(pos_is_ok());
 }
-
-void Position::do_move_probe(Move m, StateInfo& newSt) const {
-  const_cast<Position*>(this)->do_move(m, newSt, false);
-}
-
-void Position::undo_move_probe(Move m) const {
-  const_cast<Position*>(this)->undo_move(m);
-}
-
 
 /// Position::undo_move() unmakes a move. When it returns, the position should
 /// be restored to exactly the same state as before the move was made.
@@ -7097,25 +7163,24 @@ void Position::do_null_move(StateInfo& newSt) {
   assert(!evasion_checkers());
   assert(&newSt != st);
 
-  std::memcpy(static_cast<void*>(&newSt), static_cast<const void*>(st), offsetof(StateInfo, accumulator));
+  std::memcpy(static_cast<void*>(&newSt), static_cast<const void*>(st), offsetof(StateInfo, key));
 
   newSt.previous = st;
   st = &newSt;
+  st->key = st->previous->key;
 
-  st->dirtyPiece.dirty_num = 0;
-  st->dirtyPiece.piece[0] = NO_PIECE; // Avoid checks in UpdateAccumulator()
+  clear_dirty_piece(st);
   st->accumulator.computed[WHITE] = false;
   st->accumulator.computed[BLACK] = false;
   st->nnueRefreshNeeded = false;
 
   st->move = MOVE_NULL;
   clear_move_undo_state(st, true, commit_gates());
+#ifndef NDEBUG
+  assert_no_move_undo_payload(st);
+#endif
   st->shak = false;
   st->bikjang = false;
-  st->pass = false;
-  st->forcedJumpSquare = SQ_NONE;
-  st->forcedJumpHasFollowup = false;
-  st->forcedJumpStep = 0;
 
   while (st->epSquares)
       st->key ^= Zobrist::enpassant[pop_lsb(st->epSquares)];

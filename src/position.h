@@ -239,6 +239,13 @@ struct StateInfo {
 static_assert(std::is_trivially_copyable_v<StateInfo>, "StateInfo must remain trivially copyable");
 static_assert(std::is_standard_layout_v<StateInfo>, "StateInfo must remain standard layout for partial copies");
 
+struct CaptureTransferTarget {
+  Piece hashedPiece = NO_PIECE;
+  int oldCount = 0;
+  bool prison = false;
+  bool valid = false;
+};
+
 
 /// A list to keep track of the position states along the setup moves (from the
 /// start position to the position just before the search starts). Needed by
@@ -683,11 +690,10 @@ public:
 
   // Doing and undoing moves
   void do_move(Move m, StateInfo& newSt, bool countNode = true);
-  void do_move_probe(Move m, StateInfo& newSt) const;
-  void undo_move_probe(Move m) const;
   void undo_move(Move m);
   bool add_capture_transfer(StateInfo* state, Key& k, Piece transferPiece, bool undo);
   bool simulate_capture_transfer(StateInfo* state, Key& k, Piece transferPiece) const;
+  CaptureTransferTarget capture_transfer_target(StateInfo* state, Piece transferPiece) const;
   void apply_drop_hash_delta(Key& k, Move m, Piece pc, Color dropColor, PieceType exchanged) const;
   void add_capture_points(StateInfo* state, Color us, Piece captured) const;
   void do_null_move(StateInfo& newSt);

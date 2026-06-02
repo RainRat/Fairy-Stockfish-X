@@ -111,6 +111,7 @@ run_step "wrapping topology" timeout 90s bash tests/wrapping-topology.sh "${ENGI
 run_step "unorthodox interactions" timeout 90s bash tests/unorthodox-interactions.sh "${ENGINE}"
 run_step "in-place transform undo" timeout 60s bash tests/in-place-transform-undo.sh "${ENGINE}"
 run_step "bycatch undo parity" timeout 60s bash tests/bycatch-undo-parity.sh "${ENGINE}"
+run_step "StateInfo regressions" timeout 60s bash tests/stateinfo-regressions.sh "${ENGINE}"
 run_step "piece-specific step regions" timeout 60s bash tests/piece-specific-step-regions.sh "${ENGINE}"
 run_step "pawn-like custom non-step" timeout 60s bash tests/pawnlike-custom-nonstep.sh "${ENGINE}"
 run_step "variant switch after perft" timeout 60s bash tests/variant-switch-after-perft.sh "${ENGINE}"
