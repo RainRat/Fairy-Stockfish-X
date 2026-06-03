@@ -2,20 +2,12 @@
 
 set -euo pipefail
 
-error() {
-  echo "gating regressions test failed on line $1" >&2
-  exit 1
-}
-trap 'error ${LINENO}' ERR
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+source "${SCRIPT_DIR}/lib/uci.sh"
 
-source "$(dirname "${BASH_SOURCE[0]}")/lib/uci.sh"
+init_test_env "${1:-}" "${2:-}" "gating regressions"
 
-ENGINE=$(default_engine "${1:-}")
-
-TMP_INI=$(mktemp)
-trap 'rm -f "${TMP_INI}"' EXIT
-
-cat > "${TMP_INI}" <<'EOF'
+load_inline_variants <<'EOF'
 [gatingblock:chess]
 gating = true
 seirawanGating = true
@@ -25,6 +17,7 @@ gating = true
 seirawanGating = true
 symmetricDropTypes = r
 EOF
+TMP_INI="${FSX_TMP_INI}"
 
 # Legal gating move: the gated knight on e1 should block the rook line to h1.
 out=$(run_uci "$ENGINE" "${TMP_INI}" "gatingblock" <<<'position fen 8/8/8/8/8/8/8/R3K2k[N] w KQBCDEFGH - 0 1 moves e1e2n

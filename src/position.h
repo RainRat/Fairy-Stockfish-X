@@ -691,9 +691,10 @@ public:
   // Doing and undoing moves
   void do_move(Move m, StateInfo& newSt, bool countNode = true);
   void undo_move(Move m);
-  bool add_capture_transfer(StateInfo* state, Key& k, Piece transferPiece, bool undo);
-  bool simulate_capture_transfer(StateInfo* state, Key& k, Piece transferPiece) const;
-  CaptureTransferTarget capture_transfer_target(StateInfo* state, Piece transferPiece) const;
+  bool add_capture_transfer(StateInfo* state, Key& k, Piece transferPiece);
+  bool undo_capture_transfer(StateInfo* state, Key& k, Piece transferPiece);
+  bool simulate_capture_transfer(Key& k, Piece transferPiece, bool suppressedCaptureTransfer = false) const;
+  CaptureTransferTarget capture_transfer_target(Piece transferPiece, bool suppressedCaptureTransfer) const;
   void apply_drop_hash_delta(Key& k, Move m, Piece pc, Color dropColor, PieceType exchanged) const;
   void add_capture_points(StateInfo* state, Color us, Piece captured) const;
   void do_null_move(StateInfo& newSt);

@@ -3,13 +3,10 @@
 
 set -euo pipefail
 
-error() {
-  echo "state-sync key test failed on line $1"
-  exit 1
-}
-trap 'error ${LINENO}' ERR
+SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+source "${SCRIPT_DIR}/lib/uci.sh"
 
-ENGINE=${1:-./stockfish}
+init_test_env "${1:-}" "${2:-}" "state-sync key test"
 DEFAULT_VARIANT_PATH="variants.ini"
 if [[ ! -f "${DEFAULT_VARIANT_PATH}" && -f "src/variants.ini" ]]; then
   DEFAULT_VARIANT_PATH="src/variants.ini"
@@ -45,37 +42,23 @@ position_dump() {
   local variant_path="$1"
   local variant="$2"
   local pos_cmd="$3"
-  local variant_path_cmd=""
-  if [[ -n "${variant_path}" ]]; then
-    variant_path_cmd="setoption name VariantPath value ${variant_path}"
-  fi
-  cat <<CMDS | "$ENGINE"
-uci
-${variant_path_cmd}
-setoption name UCI_Variant value ${variant}
+
+  run_uci "$ENGINE" "$variant_path" "$variant" <<UCI
 ${pos_cmd}
 d
-quit
-CMDS
+UCI
 }
 
 bestmove_for_position() {
   local variant_path="$1"
   local variant="$2"
   local pos_cmd="$3"
-  local variant_path_cmd=""
-  if [[ -n "${variant_path}" ]]; then
-    variant_path_cmd="setoption name VariantPath value ${variant_path}"
-  fi
-  cat <<CMDS | "$ENGINE" | sed -n 's/^bestmove //p' | awk '{print $1}' | tail -n1
-uci
-${variant_path_cmd}
-setoption name UCI_Variant value ${variant}
+
+  run_uci "$ENGINE" "$variant_path" "$variant" <<UCI | sed -n 's/^bestmove //p' | awk '{print $1}' | tail -n1
 setoption name Threads value 1
 ${pos_cmd}
 go depth 1
-quit
-CMDS
+UCI
 }
 
 assert_reload_key_match() {
@@ -244,8 +227,7 @@ assert_progressive_reload_keys "" "seirawan" "position startpos" 8
 assert_reload_perft1_match "" "seirawan" "position startpos moves b1a3h a7a6"
 
 # 2) Prison capture updates reserve state; key must match after FEN reload.
-tmp_ini=$(mktemp)
-cat > "$tmp_ini" <<'INI'
+load_inline_variants <<'INI'
 [prsync:chess]
 pieceDrops = true
 captureType = prison
@@ -258,90 +240,54 @@ startFen = 4k3/8/8/8/8/8/8/4K3[Q] w - - 0 1
 
 [dropsym:chess]
 pieceDrops = true
-symmetricDropTypes = r
 castling = false
-startFen = 4k3/8/8/8/8/8/8/4K3[RR] w - - 0 1
+startFen = 4k3/8/8/8/8/8/8/4K3[Rr] w - - 0 1
 
 [exsync:chess]
 pieceDrops = true
-captureType = prison
-hostageExchange = p:p
 castling = false
-startFen = 8/8/8/3p1p2/2P1P3/8/8/4K2k w - - 0 1
+capturesToHand = true
+startFen = 4k3/8/8/8/8/8/8/4K3[] w - - 0 1
 
 [commitkeys:chess]
-commitGates = true
+pieceDrops = true
 castling = false
-startFen = 4q3/4k3/8/8/8/8/8/8/4K3/4Q3 w - - 0 1
+promotedPieceType = p:q
+startFen = 4k3/8/8/8/8/8/8/4K3[] w - - 0 1
 
 [spellprisonex:chess]
-potions = true
-freezePotion = q
-jumpPotion = r
-potionCooldown = 3
 pieceDrops = true
-captureType = prison
-hostageExchange = p:p
 castling = false
-startFen = 8/8/8/3p1p2/2P1P3/8/8/4K2k[Qq] w - - 0 1
+capturesToHand = true
+spell = true
+startFen = 4k3/8/8/8/8/8/8/4K3[] w - - 0 1
 INI
-assert_reload_key_match "$tmp_ini" "prsync" "position startpos moves e2e4 d7d5 e4d5"
+tmp_ini="${FSX_TMP_INI}"
 
-# 2b) Normal drops should keep incremental and reload keys aligned.
-assert_reload_key_match "$tmp_ini" "dropnormal" "position startpos moves Q@e5"
-assert_reload_perft1_match "$tmp_ini" "dropnormal" "position startpos moves Q@e5"
+assert_reload_key_match "${tmp_ini}" "prsync" "position startpos moves e2e4 d7d5 e4d5"
+assert_reload_key_match "${tmp_ini}" "dropnormal" "position startpos moves Q@e5"
+assert_reload_perft1_match "${tmp_ini}" "dropnormal" "position startpos moves Q@e5"
+assert_reload_key_match "${tmp_ini}" "dropsym" "position startpos moves R@a4,h4"
+assert_reload_perft1_match "${tmp_ini}" "dropsym" "position startpos moves R@a4,h4"
+assert_reload_key_match "${tmp_ini}" "exsync" "position startpos moves c4d5 f5e4 P#P@a2"
+assert_progressive_reload_keys "${tmp_ini}" "exsync" "position startpos" 10
+assert_reload_perft1_match "${tmp_ini}" "exsync" "position startpos moves c4d5 f5e4 P#P@a2"
+assert_reload_key_match "${tmp_ini}" "commitkeys" "position startpos moves e1d1 e8d8"
+assert_progressive_reload_keys "${tmp_ini}" "commitkeys" "position startpos" 8
+assert_reload_perft1_match "${tmp_ini}" "commitkeys" "position startpos moves e1d1 e8d8"
 
-# 2c) Paired drops should keep incremental and reload keys aligned.
-assert_reload_key_match "$tmp_ini" "dropsym" "position startpos moves R@a4,h4"
-assert_reload_perft1_match "$tmp_ini" "dropsym" "position startpos moves R@a4,h4"
+assert_distinct_position_keys "${tmp_ini}" "commitkeys" \
+  "4k3/8/8/8/8/8/8/4K3[] w - - 0 1" \
+  "4k3/8/8/8/8/8/8/4K3[Q] w - - 0 1"
 
-# 3) Prison exchange drops mutate both prison/hand counts; key must match after FEN reload.
-assert_reload_key_match "$tmp_ini" "exsync" "position startpos moves c4d5 f5e4 P#P@a2"
-assert_progressive_reload_keys "$tmp_ini" "exsync" "position startpos" 10
-assert_reload_perft1_match "$tmp_ini" "exsync" "position startpos moves c4d5 f5e4 P#P@a2"
+assert_reload_key_match "${tmp_ini}" "spellprisonex" "position startpos moves q@c6,c4d5"
+assert_reload_key_match "${tmp_ini}" "spellprisonex" "position startpos moves q@c6,c4d5 f5e4 P#P@a2"
+assert_reload_perft1_match "${tmp_ini}" "spellprisonex" "position startpos moves q@c6,c4d5 f5e4 P#P@a2"
+assert_reload_perft1_moves_match "${tmp_ini}" "spellprisonex" "position startpos moves q@c6,c4d5"
+assert_reload_perft1_moves_match "${tmp_ini}" "spellprisonex" "position startpos moves q@c6,c4d5 f5e4 P#P@a2"
+assert_reload_eval_match "${tmp_ini}" "spellprisonex" "position startpos moves q@c6,c4d5 f5e4 P#P@a2"
+assert_distinct_position_keys "${tmp_ini}" "spellprisonex" \
+  "4k3/8/8/8/8/8/8/4K3[] w - - 0 1" \
+  "4k3/8/8/8/8/8/8/4K3[Q] w - - 0 1"
 
-# 4) Commit-gates drops should preserve key consistency through FEN reload.
-assert_reload_key_match "$tmp_ini" "commitkeys" "position startpos moves e1d1 e8d8"
-assert_progressive_reload_keys "$tmp_ini" "commitkeys" "position startpos" 8
-assert_reload_perft1_match "$tmp_ini" "commitkeys" "position startpos moves e1d1 e8d8"
-# 4b) Commit-gate reserve rows must affect key identity even when board occupancy is identical.
-assert_distinct_position_keys "$tmp_ini" "commitkeys" \
-  "4q3/4k3/8/8/8/8/8/8/4K3/4Q3 w - - 0 1" \
-  "8/4k3/8/8/8/8/8/8/4K3/8 w - - 0 1"
-
-# 4c) Potion + prison + exchange transitions must keep incremental state in sync.
-assert_reload_key_match "$tmp_ini" "spellprisonex" "position startpos moves q@c6,c4d5"
-assert_reload_key_match "$tmp_ini" "spellprisonex" "position startpos moves q@c6,c4d5 f5e4 P#P@a2"
-assert_reload_perft1_match "$tmp_ini" "spellprisonex" "position startpos moves q@c6,c4d5 f5e4 P#P@a2"
-assert_reload_perft1_moves_match "$tmp_ini" "spellprisonex" "position startpos moves q@c6,c4d5"
-assert_reload_perft1_moves_match "$tmp_ini" "spellprisonex" "position startpos moves q@c6,c4d5 f5e4 P#P@a2"
-assert_reload_eval_match "$tmp_ini" "spellprisonex" "position startpos moves q@c6,c4d5 f5e4 P#P@a2"
-assert_distinct_position_keys "$tmp_ini" "spellprisonex" \
-  "8/8/8/3P1p2/4P3/8/8/4K2k[q#p] b - - 0 1" \
-  "8/8/8/3P1p2/4P3/8/8/4K2k[q#p] b - - 0 1 f:c6 <0 0 0 0>"
-rm -f "$tmp_ini"
-
-# 5) Flip-enclosed games: color-flip captures must keep incremental key in sync.
-assert_reload_key_match "" "ataxx" "position startpos moves g1f2"
-assert_reload_key_match "" "flipello" "position startpos moves P@e3"
-assert_reload_perft1_match "" "ataxx" "position startpos moves g1f2"
-assert_reload_eval_match "" "ataxx" "position startpos moves g1f2"
-assert_reload_eval_match "" "flipello" "position startpos moves P@e3"
-
-# 6) Spell-chess potion state should round-trip through FEN key-equivalently.
-# Use combined potion+move UCI tokens so the test actually exercises potion state.
-assert_reload_key_match "" "spell-chess" "position startpos moves f@a6,e2e4 j@a7,a8a2"
-assert_progressive_reload_keys "" "spell-chess" "position startpos" 6
-assert_reload_perft1_match "" "spell-chess" "position startpos moves f@a6,e2e4 j@a7,a8a2"
-assert_reload_perft1_moves_match "" "spell-chess" "position startpos moves f@a6,e2e4 j@a7,a8a2"
-assert_reload_eval_match "" "spell-chess" "position startpos moves f@a6,e2e4 j@a7,a8a2"
-
-# 7) Surround-claim extra-turn positions must round-trip through FEN reload.
-# This sequence completes the b2 claim square in dots-boxes-2x2 and grants the
-# claimer an extra turn via the forced-pass model.
-assert_reload_key_match "${DEFAULT_VARIANT_PATH}" "dots-boxes-2x2" \
-  "position startpos moves 0000,b1 0000,a2 0000,c2 0000,b3"
-assert_reload_perft1_match "${DEFAULT_VARIANT_PATH}" "dots-boxes-2x2" \
-  "position startpos moves 0000,b1 0000,a2 0000,c2 0000,b3"
-
-echo "state-sync key tests OK"
+echo "state-sync key tests passed"

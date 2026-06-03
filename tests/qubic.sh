@@ -7,9 +7,7 @@ ENGINE=$(default_engine "${1:-}")
 VARIANTS=$(default_variants "${2:-}")
 
 variant_available() {
-  local out
-  out=$(run_uci "$ENGINE" "$VARIANTS" qubic <<<'d')
-  grep -Fq "info string variant qubic " <<<"$out"
+  probe_variant_available "$ENGINE" qubic "$VARIANTS"
 }
 
 echo "qubic regression tests started"

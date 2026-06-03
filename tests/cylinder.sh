@@ -2,38 +2,19 @@
 
 set -euo pipefail
 
-error() {
-  echo "cylinder test failed on line $1"
-  exit 1
-}
-trap 'error ${LINENO}' ERR
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+source "${SCRIPT_DIR}/lib/uci.sh"
 
-ENGINE=${1:-./stockfish}
-VARIANT_PATH=${2:-src/variants.ini}
+init_test_env "${1:-}" "${2:-}" "cylinder test"
 
-run_cmds() {
-  cat <<EOF | "${ENGINE}"
-uci
-setoption name VariantPath value ${VARIANT_PATH}
-$1
-quit
-EOF
-}
-
-out=$(run_cmds "setoption name UCI_Variant value cylinder
-position fen 4k3/8/8/8/8/8/8/R3K3 w - - 0 1
-go perft 1")
+out=$(run_perft cylinder "4k3/8/8/8/8/8/8/R3K3 w - - 0 1" 1)
 echo "${out}" | grep -q "^a1h1: 1$"
 
-out=$(run_cmds "setoption name UCI_Variant value cylinder
-position fen r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1
-go perft 1")
+out=$(run_perft cylinder "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1" 1)
 ! echo "${out}" | grep -q "^e1g1: 1$"
 ! echo "${out}" | grep -q "^e1c1: 1$"
 
-out=$(run_cmds "setoption name UCI_Variant value cylinder-castling
-position fen r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1
-go perft 1")
+out=$(run_perft cylinder-castling "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1" 1)
 echo "${out}" | grep -q "^e1g1: 1$"
 echo "${out}" | grep -q "^e1c1: 1$"
 

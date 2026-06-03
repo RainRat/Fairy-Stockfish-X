@@ -1,28 +1,34 @@
-#!/bin/bash
+#!/usr/bin/env bash
+
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-ENGINE=${1:-"${ROOT_DIR}/src/stockfish"}
-if [[ "${ENGINE}" != /* ]]; then
-  ENGINE="${PWD}/${ENGINE}"
-fi
+SCRIPT_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib/uci.sh"
 
-cd "${ROOT_DIR}/src"
+init_test_env "${1:-}" "${2:-}" "whaleshogi regression"
 
-# Basic smoke: opening move count from configured start position.
-out_start=$(printf 'uci\nsetoption name VariantPath value variants.ini\nsetoption name UCI_Variant value whaleshogi\nposition startpos\ngo perft 1\nquit\n' | "${ENGINE}")
-grep -Fxq "Nodes searched: 7" <<<"$out_start"
+out_start=$(run_uci "$ENGINE" "$VARIANTS" whaleshogi <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_nodes "$out_start" 7
 
-# Dolphin promotion to eagle is mandatory on furthest rank.
-out_promo=$(printf 'uci\nsetoption name VariantPath value variants.ini\nsetoption name UCI_Variant value whaleshogi\nposition fen 5w/4D1/6/6/6/W5 w - - 0 1\ngo perft 1\nquit\n' | "${ENGINE}")
-grep -q "e5e6+:" <<<"$out_promo"
-! grep -q "e5e6:" <<<"$out_promo"
+out_promo=$(run_uci "$ENGINE" "$VARIANTS" whaleshogi <<'UCI'
+position fen 5w/4D1/6/6/6/W5 w - - 0 1
+go perft 1
+UCI
+)
+assert_contains_literal "$out_promo" "e5e6+:"
+assert_not_contains_literal "$out_promo" "e5e6:"
 
-# Promoted dolphin (+D) demotes when leaving the back rank.
-out_demote=$(printf 'uci\nsetoption name VariantPath value variants.ini\nsetoption name UCI_Variant value whaleshogi\nposition fen 4+Dw/6/6/6/6/W5 w - - 0 1\ngo perft 1\nquit\n' | "${ENGINE}")
-grep -q "e6d5-:" <<<"$out_demote"
-grep -q "e6f5-:" <<<"$out_demote"
-! grep -q "e6d5:" <<<"$out_demote"
+out_demote=$(run_uci "$ENGINE" "$VARIANTS" whaleshogi <<'UCI'
+position fen 4+Dw/6/6/6/6/W5 w - - 0 1
+go perft 1
+UCI
+)
+assert_contains_literal "$out_demote" "e6d5-:"
+assert_contains_literal "$out_demote" "e6f5-:"
+assert_not_contains_literal "$out_demote" "e6d5:"
 
-echo "whaleshogi test OK"
+echo "whaleshogi regression passed"

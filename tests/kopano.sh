@@ -2,9 +2,10 @@
 set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-ENGINE="${1:-${SCRIPT_DIR}/../src/stockfish}"
-VARIANT_PATH="${2:-${SCRIPT_DIR}/../src/variants.ini}"
 source "${SCRIPT_DIR}/lib/uci.sh"
+
+init_test_env "${1:-}" "${2:-}" "kopano regression"
+VARIANT_PATH="${VARIANT_PATH:-${VARIANTS}}"
 
 out=$(run_uci "$ENGINE" "$VARIANT_PATH" kopano <<'EOF'
 position startpos

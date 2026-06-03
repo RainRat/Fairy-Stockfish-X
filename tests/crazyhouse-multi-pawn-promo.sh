@@ -4,35 +4,26 @@
 
 set -euo pipefail
 
-error() {
-  echo "crazyhouse-multi-pawn-promo testing failed on line $1"
-  exit 1
-}
-trap 'error ${LINENO}' ERR
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+source "${SCRIPT_DIR}/lib/uci.sh"
 
-ENGINE=${1:-./stockfish}
+init_test_env "${1:-}" "${2:-}" "crazyhouse multi pawn promo"
 
 echo "crazyhouse-multi-pawn-promo testing started"
 
-VARIANT_FILE=$(mktemp)
-OUT_FILE=$(mktemp)
-trap 'rm -f "$VARIANT_FILE" "$OUT_FILE"' EXIT
-
-cat > "$VARIANT_FILE" <<'VAR'
+load_inline_variants <<'VAR'
 [newvariant:crazyhouse]
 promotionPawnTypes=pb
 promotionPieceTypes=qn
 VAR
+VARIANT_FILE="${FSX_TMP_INI}"
 
-cat <<CMDS | "$ENGINE" > "$OUT_FILE" 2>&1
-uci
-setoption name VariantPath value $VARIANT_FILE
-setoption name UCI_Variant value newvariant
+out=$(run_uci "$ENGINE" "$VARIANT_FILE" newvariant <<'EOF' 2>&1
 position fen r7/7P/8/8/8/8/8/k1K5 w - - 0 1 moves h7h8q a8h8
 d
-quit
-CMDS
+EOF
+)
 
-grep -Fq "Fen: 7r/8/8/8/8/8/8/k1K5[p] w - - 0 2" "$OUT_FILE"
+grep -Fq "Fen: 7r/8/8/8/8/8/8/k1K5[p] w - - 0 2" <<<"$out"
 
 echo "crazyhouse-multi-pawn-promo testing OK"

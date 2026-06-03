@@ -2,21 +2,16 @@
 
 set -euo pipefail
 
-error() {
-  echo "hindustani baseline test failed on line $1" >&2
-  exit 1
-}
-trap 'error ${LINENO}' ERR
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+source "${SCRIPT_DIR}/lib/uci.sh"
 
-ROOT=$(cd "$(dirname "$0")/.." && pwd)
-ENGINE=${1:-"${ROOT}/src/stockfish"}
-VARIANT_PATH=${2:-"${ROOT}/src/variants.ini"}
+init_test_env "${1:-}" "${2:-}" "hindustani baseline test"
 
-ROOT="$ROOT" python3 - <<'PY'
+run_pyffish_test <<'PY'
 import os
 import pyffish as sf
 
-cfg = open(os.path.join(os.environ["ROOT"], "src", "variants.ini"), encoding='utf-8').read()
+cfg = open(os.path.join(os.environ["ROOT_DIR"], "src", "variants.ini"), encoding="utf-8").read()
 sf.load_variant_config(cfg)
 
 cases = [
@@ -30,35 +25,25 @@ for fen, expected in cases:
         raise SystemExit(f"unexpected Hindustani result for {fen}: got {result}, expected {expected}")
 PY
 
-run_cmds() {
-  cat <<EOF | "${ENGINE}"
-uci
-setoption name VariantPath value ${VARIANT_PATH}
-setoption name UCI_Variant value hindustani
-$1
-quit
-EOF
-}
-
-out=$(run_cmds "position fen 4k3/P7/8/8/8/8/8/4K3 w - - 0 1
-go perft 1")
+out=$(run_perft "hindustani" "4k3/P7/8/8/8/8/8/4K3 w - - 0 1" 1)
 echo "${out}" | grep -q "^a7a8r: 1$"
 ! echo "${out}" | grep -q "^a7a8q: 1$"
 
-out=$(run_cmds "position fen 4k3/2P5/8/8/8/8/8/4K3 w - - 0 1
-go perft 1")
+out=$(run_perft "hindustani" "4k3/2P5/8/8/8/8/8/4K3 w - - 0 1" 1)
 echo "${out}" | grep -q "^c7c8x: 1$"
 ! echo "${out}" | grep -q "^c7c8b: 1$"
 
-out=$(run_cmds "position fen 4k3/4P3/8/8/8/8/8/4K3 w - - 0 1
-go perft 1")
+out=$(run_perft "hindustani" "4k3/4P3/8/8/8/8/8/4K3 w - - 0 1" 1)
 ! echo "${out}" | grep -q "^e7e8"
 
-out=$(run_cmds "position fen 4k3/2P5/8/8/8/8/8/2X1K3 w - - 0 1
-go perft 1")
+out=$(run_perft "hindustani" "4k3/2P5/8/8/8/8/8/2X1K3 w - - 0 1" 1)
 ! echo "${out}" | grep -q "^c7c8x: 1$"
 
-out=$(run_cmds "position startpos
-go perft 1")
+out=$(run_perft "hindustani" "startpos" 1)
 echo "${out}" | grep -q "^e1d3: 1$"
 echo "${out}" | grep -q "^e1f3: 1$"
+
+display_out=$(run_display "hindustani" "startpos")
+assert_contains_literal "$display_out" "Fen: rnxqkynr/pppppppp/8/8/8/8/PPPPPPPP/RNXQKYNR w Ed - 0 1"
+
+echo "hindustani baseline test passed"

@@ -175,6 +175,7 @@ cat > "${HARNESS_CPP}" <<'EOF'
 #include "psqt.h"
 #include "uci.h"
 #include "variant.h"
+#include "test_engine_init.hpp"
 
 using namespace Stockfish;
 
@@ -188,20 +189,9 @@ symmetricDropTypes = r
     variants.parse_istream<false>(ss);
 }
 
-static void init_engine() {
-    UCI::init(Options);
-    pieceMap.init();
-    variants.init();
-    PSQT::init(variants.get("fairy"));
-    Bitboards::init();
-    Position::init();
-    Bitbases::init();
-    Endgames::init();
-    load_variants();
-}
-
 int main() {
-    init_engine();
+    init_test_engine();
+    load_variants();
 
     StateInfo st{};
     Position pos;
@@ -231,7 +221,7 @@ if [[ ! -x "${HARNESS_BIN}" || ! -f "${HARNESS_SIG_FILE}" || "$(cat "${HARNESS_S
     rm -f "${HARNESS_BIN}"
     (
       cd "${ROOT_DIR}/src"
-      "${CXX}" -std=c++17 -O2 -Wall -Wextra -flto -I"${ROOT_DIR}/src" "${CXX_DEFS[@]}" "${HARNESS_CPP}" "${OBJ_FILES[@]}" -pthread -o "${HARNESS_BIN}"
+      "${CXX}" -std=c++17 -O2 -Wall -Wextra -flto -I"${ROOT_DIR}/src" -I"${ROOT_DIR}/tests/lib" "${CXX_DEFS[@]}" "${HARNESS_CPP}" "${OBJ_FILES[@]}" -pthread -o "${HARNESS_BIN}"
     )
     printf '%s\n' "${HARNESS_SIG}" > "${HARNESS_SIG_FILE}"
 fi

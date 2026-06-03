@@ -2,31 +2,13 @@
 
 set -euo pipefail
 
-error() {
-  echo "unorthodox interactions test failed on line $1"
-  exit 1
-}
-trap 'error ${LINENO}' ERR
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+source "${SCRIPT_DIR}/lib/uci.sh"
 
-ENGINE=${1:-./stockfish}
-VARIANT_PATH=${2:-src/variants.ini}
-
-run_cmds() {
-  local variant="$1"
-  local vpath="$2"
-  local cmds="$3"
-  cat <<CMDS | "${ENGINE}" 2>&1
-uci
-setoption name VariantPath value ${vpath}
-setoption name UCI_Variant value ${variant}
-${cmds}
-quit
-CMDS
-}
+init_test_env "${1:-}" "${2:-}" "unorthodox interactions test"
 
 # Create a temporary ini file for testing
-TEMP_INI=$(mktemp)
-cat <<EOF > "${TEMP_INI}"
+load_inline_variants <<'EOF'
 [rifle-death:chess]
 rifleCapture = true
 deathOnCaptureTypes = nbrqk
@@ -185,6 +167,15 @@ pawnLikeTypes = d
 enPassantTypes = d
 tripleStepRegion = D(* *);
 EOF
+TEMP_INI="${FSX_TMP_INI}"
+
+run_cmds() {
+  local variant="$1"
+  local vpath="$2"
+  local cmds="$3"
+
+  run_uci "$ENGINE" "$vpath" "$variant" <<<"$cmds"
+}
 
 echo "unorthodox interactions tests started"
 

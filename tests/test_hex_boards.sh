@@ -2,41 +2,26 @@
 
 set -euo pipefail
 
-error() {
-  echo "hex boards regression failed on line $1" >&2
-  exit 1
-}
-trap 'error ${LINENO}' ERR
+SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+source "${SCRIPT_DIR}/lib/uci.sh"
 
-source "$(dirname "${BASH_SOURCE[0]}")/lib/uci.sh"
-
-ENGINE="${1:-$(default_engine)}"
-VARIANT_PATH="${2:-$(default_variants)}"
+init_test_env "${1:-}" "${2:-}" "hex boards regression"
+VARIANT_PATH=${VARIANTS}
 VLB_ENGINE="${ENGINE}"
-
-variant_available() {
-  local engine="$1"
-  local variant="$2"
-  local out
-
-  out=$(run_uci "$engine" "$VARIANT_PATH" "$variant" <<<'d')
-  grep -Fq "info string variant ${variant} " <<<"$out"
-}
 
 ensure_vlb_engine() {
   local probe_variant="$1"
 
-  if variant_available "$VLB_ENGINE" "$probe_variant"; then
+  if variant_available "$VLB_ENGINE" "$probe_variant" "$VARIANT_PATH"; then
     return 0
   fi
   if [[ -x "${ROOT_DIR}/src/stockfish-vlb" && "$VLB_ENGINE" != "${ROOT_DIR}/src/stockfish-vlb" ]]; then
     VLB_ENGINE="${ROOT_DIR}/src/stockfish-vlb"
   fi
-  variant_available "$VLB_ENGINE" "$probe_variant"
+  variant_available "$VLB_ENGINE" "$probe_variant" "$VARIANT_PATH"
 }
 
-init_tmp_ini
-cat >"${FSX_TMP_INI}" <<'INI'
+load_inline_variants <<'INI'
 [hex-display:fairy]
 maxRank = 5
 maxFile = e
@@ -91,10 +76,11 @@ hexBoard = true
 cylindrical = true
 startFen = 8/8/8/8/8/8/8/8 w - - 0 1
 INI
+tmp_ini="${FSX_TMP_INI}"
 
 echo "hex board regression tests started"
 
-out=$(run_uci "$ENGINE" "$FSX_TMP_INI" hex-display <<'UCI'
+out=$(run_uci "$ENGINE" "$tmp_ini" hex-display <<'UCI'
 position startpos
 d
 UCI
@@ -105,7 +91,7 @@ assert_contains_literal "$out" "         [  ] [  ] [  ] [  ] [  ] 1 *"
 assert_contains_literal "$out" "           a    b    c    d    e"
 assert_contains_literal "$out" "Fen: 5/5/5/5/5 w - - 0 1"
 
-bad_out=$("${ENGINE}" check "${FSX_TMP_INI}" 2>&1 || true)
+bad_out=$("${ENGINE}" check "${tmp_ini}" 2>&1 || true)
 assert_contains "$bad_out" "hexBoard is not supported together with cylindrical or toroidal topology."
 assert_contains "$bad_out" "Variant 'bad-hex' has invalid configuration. Skipping."
 

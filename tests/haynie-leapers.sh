@@ -12,15 +12,9 @@ $1
 EOF
 }
 
-variant_available() {
-  local out
-  out=$(printf 'uci\nquit\n' | uci_timeout "$ENGINE")
-  grep -q ' var haynie-leapers ' <<<"$out"
-}
-
 echo "haynie leapers regression tests started"
 
-if ! variant_available; then
+if ! variant_available "$ENGINE" haynie-leapers "$VARIANTS"; then
   echo "haynie-leapers variant not available in this build; skipping haynie-leapers regression"
   exit 0
 fi

@@ -9,13 +9,7 @@ source "${SCRIPT_DIR}/lib/uci.sh"
 
 echo "constabulary-chess test started"
 
-variant_available() {
-  local out
-  out=$(printf 'uci\nquit\n' | uci_timeout "$ENGINE")
-  grep -q ' var constabulary-chess' <<<"$out"
-}
-
-if ! variant_available; then
+if ! variant_available "$ENGINE" constabulary-chess "$VARIANT_PATH"; then
   echo "constabulary-chess variant not available in this build; skipping constabulary-chess regression"
   exit 0
 fi

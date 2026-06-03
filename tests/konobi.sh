@@ -1,13 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-error() { echo "konobi regression failed on line $1"; exit 1; }
-trap 'error ${LINENO}' ERR
-
 SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-ENGINE="${1:-${SCRIPT_DIR}/../src/stockfish}"
-VARIANT_PATH="${2:-${SCRIPT_DIR}/../src/variants.ini}"
 source "${SCRIPT_DIR}/lib/uci.sh"
+
+init_test_env "${1:-}" "${2:-}" "konobi regression"
+VARIANT_PATH="${VARIANT_PATH:-${VARIANTS}}"
 
 run_cmds() {
   run_uci "$ENGINE" "$VARIANT_PATH" konobi <<EOF
@@ -15,13 +13,7 @@ $1
 EOF
 }
 
-variant_available() {
-  local out
-  out=$(printf 'uci\nquit\n' | uci_timeout "$ENGINE")
-  grep -q ' var konobi ' <<<"$out"
-}
-
-if ! variant_available; then
+if ! variant_available "$ENGINE" konobi "$VARIANT_PATH"; then
   echo "konobi variant not available in this build; skipping konobi regression"
   exit 0
 fi

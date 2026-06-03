@@ -2,17 +2,11 @@
 
 set -euo pipefail
 
-error() {
-  echo "new-variants smoke test failed on line $1"
-  exit 1
-}
-trap 'error ${LINENO}' ERR
-
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source "${SCRIPT_DIR}/lib/uci.sh"
 
-ENGINE=$(default_engine "${1:-}")
-VARIANT_PATH=$(default_variants "${2:-}")
+init_test_env "${1:-}" "${2:-}" "new variants smoke test"
+VARIANT_PATH="${VARIANT_PATH:-${VARIANTS}}"
 
 run_cmds() {
   local cmds="$1"
@@ -25,24 +19,15 @@ run_cmds() {
 }
 
 
-
-
 variant_available() {
   local v="$1"
-  local out
-  out=$(run_cmds "setoption name UCI_Variant value ${v}
-d")
-  if grep -q "info string variant ${v} " <<<"${out}"; then
-    return 0
-  fi
-  return 1
+  probe_variant_available "$ENGINE" "$v" "$VARIANT_PATH"
 }
 
 echo "new variants smoke testing started"
 
 # 0) PieceTypeBitboardGroup repeated piece clauses are additive, not overwrite.
-tmp_ini=$(mktemp)
-cat > "${tmp_ini}" <<'INI'
+load_inline_variants <<'INI'
 [ptgroup-merge:chess]
 promotionRegionWhite = P(a8);P(h8); *(*8)
 promotionRegionBlack = P(a1);P(h1); *(*1)
@@ -50,18 +35,14 @@ promotionPieceTypes = q
 promotionPieceTypesWhite = q
 promotionPieceTypesBlack = q
 INI
-out=$(cat <<EOF | "${ENGINE}"
-uci
-setoption name VariantPath value ${tmp_ini}
-setoption name UCI_Variant value ptgroup-merge
+tmp_ini="${FSX_TMP_INI}"
+out=$(run_uci "$ENGINE" "$tmp_ini" ptgroup-merge <<'EOF'
 position fen 4k3/P6P/8/8/8/8/8/4K3 w - - 0 1
 go perft 1
-quit
 EOF
 )
 assert_contains "$out" "^a7a8q: 1$"
 assert_contains "$out" "^h7h8q: 1$"
-rm -f "${tmp_ini}"
 
 # This smoke suite contains >8x8 and template-dependent variants.
 # Run each block only if the underlying variant exists in the current build.

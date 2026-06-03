@@ -2,24 +2,12 @@
 
 set -euo pipefail
 
-error() {
-  echo "piece-specific step region regression failed on line $1"
-  [[ -n "${TMP_VARIANT_PATH:-}" ]] && rm -f "${TMP_VARIANT_PATH}"
-  exit 1
-}
-trap 'error ${LINENO}' ERR
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+source "${SCRIPT_DIR}/lib/uci.sh"
 
-ENGINE=${1:-}
-if [[ -z "${ENGINE}" ]]; then
-  if [[ -x "src/stockfish" ]]; then
-    ENGINE="src/stockfish"
-  else
-    ENGINE="./stockfish"
-  fi
-fi
+init_test_env "${1:-}" "${2:-}" "piece-specific step region regression"
 
-TMP_VARIANT_PATH=$(mktemp "${TMPDIR:-/tmp}/fsx-piece-step-regions-XXXXXX")
-cat >"${TMP_VARIANT_PATH}" <<'INI'
+load_inline_variants <<'INI'
 [istep-piece-specific:chess]
 king = -
 checking = false
@@ -65,29 +53,22 @@ doubleStepRegionWhite = *2 *3
 doubleStepRegionBlack = *7 *6
 startFen = rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
 INI
+TMP_VARIANT_PATH="${FSX_TMP_INI}"
 
 run_perft() {
   local variant="$1"
-  cat <<CMDS | "${ENGINE}"
-uci
-setoption name VariantPath value ${TMP_VARIANT_PATH}
-setoption name UCI_Variant value ${variant}
+
+  run_uci "$ENGINE" "$TMP_VARIANT_PATH" "$variant" <<'UCI'
 position startpos
 go perft 1
-quit
-CMDS
+UCI
 }
 
 run_position() {
   local variant="$1"
   local cmds="$2"
-  cat <<CMDS | "${ENGINE}"
-uci
-setoption name VariantPath value ${TMP_VARIANT_PATH}
-setoption name UCI_Variant value ${variant}
-${cmds}
-quit
-CMDS
+
+  run_uci "$ENGINE" "$TMP_VARIANT_PATH" "$variant" <<<"$cmds"
 }
 
 echo "piece-specific step region regression tests started"
@@ -127,8 +108,5 @@ out=$(run_position "semitorpedo-test" "position startpos moves e2e4 a7a6
 go perft 1")
 echo "${out}" | grep -q "^e4e5: 1$"
 ! echo "${out}" | grep -q "^e4e6: 1$"
-
-rm -f "${TMP_VARIANT_PATH}"
-unset TMP_VARIANT_PATH
 
 echo "piece-specific step region regression tests passed"

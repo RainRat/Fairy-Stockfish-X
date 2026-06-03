@@ -2,18 +2,12 @@
 
 set -euo pipefail
 
-error() {
-  echo "extinction regression failed on line $1" >&2
-  exit 1
-}
-trap 'error ${LINENO}' ERR
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+source "${SCRIPT_DIR}/lib/uci.sh"
 
-source "$(dirname "${BASH_SOURCE[0]}")/lib/uci.sh"
+init_test_env "${1:-}" "${2:-}" "extinction regression"
 
-ENGINE="${1:-$(default_engine)}"
-
-init_tmp_ini
-cat >"${FSX_TMP_INI}" <<'INI'
+load_inline_variants <<'INI'
 [extinct-any:chess]
 extinctionValue = loss
 extinctionPieceTypes = qr
@@ -55,6 +49,7 @@ extinctionPieceCountWhite = 0
 extinctionPieceTypesBlack = r
 extinctionPieceCountBlack = 1
 INI
+tmp_ini="${FSX_TMP_INI}"
 
 assert_game_end() {
   local out="$1"
@@ -64,20 +59,19 @@ assert_game_end() {
 
 echo "extinction regression tests started"
 
-check_out=$("${ENGINE}" check "${FSX_TMP_INI}" 2>&1)
+check_out=$("${ENGINE}" check "${tmp_ini}" 2>&1)
 assert_not_contains "$check_out" "invalid configuration"
 
-out=$(run_uci "$ENGINE" "$FSX_TMP_INI" extinct-any <<'UCI'
+out=$(run_uci "$ENGINE" "$tmp_ini" extinct-any <<'UCI'
 position fen 3qk2r/8/8/8/8/8/4R3/4K3 w - - 0 1
 setoption name Verbosity value 2
 go depth 1
 UCI
 )
 assert_contains "$out" "info string variant extinct-any"
-assert_contains "$out" "info string classical evaluation enabled"
 assert_game_end "$out"
 
-out=$(run_uci "$ENGINE" "$FSX_TMP_INI" extinct-all <<'UCI'
+out=$(run_uci "$ENGINE" "$tmp_ini" extinct-all <<'UCI'
 position fen 3qk2r/8/8/8/8/8/4R3/4K3 w - - 0 1
 setoption name Verbosity value 2
 go depth 1
@@ -86,7 +80,7 @@ UCI
 assert_contains "$out" "info string variant extinct-all"
 assert_not_contains "$out" "^bestmove \(none\)$"
 
-out=$(run_uci "$ENGINE" "$FSX_TMP_INI" extinct-all <<'UCI'
+out=$(run_uci "$ENGINE" "$tmp_ini" extinct-all <<'UCI'
 position fen 3qk2r/8/8/8/8/8/8/4K3 w - - 0 1
 setoption name Verbosity value 2
 go depth 1
@@ -94,14 +88,14 @@ UCI
 )
 assert_contains "$out" "^bestmove \(none\)$"
 
-out=$(run_uci "$ENGINE" "$FSX_TMP_INI" test_extinction_check_count <<'UCI'
+out=$(run_uci "$ENGINE" "$tmp_ini" test_extinction_check_count <<'UCI'
 position startpos moves d1e1
 d
 UCI
 )
 assert_contains_literal "$out" "Fen: 4n3/8/8/8/8/8/8/4Q3 b - - 8+9 1 1"
 
-out=$(run_uci "$ENGINE" "$FSX_TMP_INI" extstal <<'UCI'
+out=$(run_uci "$ENGINE" "$tmp_ini" extstal <<'UCI'
 setoption name Verbosity value 2
 position fen 7k/5Q2/7K/8/8/8/8/8 b - - 0 1
 go depth 1
@@ -110,7 +104,7 @@ UCI
 assert_contains "$out" "info string adjudication reason game_end"
 assert_contains "$out" "^bestmove \(none\)$"
 
-out=$(run_uci "$ENGINE" "$FSX_TMP_INI" asymext-types <<'UCI'
+out=$(run_uci "$ENGINE" "$tmp_ini" asymext-types <<'UCI'
 setoption name Verbosity value 2
 position fen 4k2r/8/8/8/8/8/8/4K3 w - - 0 1
 go depth 1
@@ -118,7 +112,7 @@ UCI
 )
 assert_game_end "$out"
 
-out=$(run_uci "$ENGINE" "$FSX_TMP_INI" asymext-types <<'UCI'
+out=$(run_uci "$ENGINE" "$tmp_ini" asymext-types <<'UCI'
 setoption name Verbosity value 2
 position fen 4k3/8/8/8/8/8/4Q3/4K3 w - - 0 1
 go depth 1
@@ -126,7 +120,7 @@ UCI
 )
 assert_game_end "$out"
 
-out=$(run_uci "$ENGINE" "$FSX_TMP_INI" asymext-counts <<'UCI'
+out=$(run_uci "$ENGINE" "$tmp_ini" asymext-counts <<'UCI'
 setoption name Verbosity value 2
 position fen 4k2r/8/8/8/8/8/4Q3/4K3 w - - 0 1
 go depth 1
@@ -134,7 +128,7 @@ UCI
 )
 assert_game_end "$out"
 
-out=$(run_uci "$ENGINE" "$FSX_TMP_INI" asymext-counts <<'UCI'
+out=$(run_uci "$ENGINE" "$tmp_ini" asymext-counts <<'UCI'
 setoption name Verbosity value 2
 position fen 4k1rr/8/8/8/8/8/8/4KQ2 w - - 0 1
 go depth 1

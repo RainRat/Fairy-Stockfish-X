@@ -7,7 +7,7 @@ VARIANT_PATH="${2:-${SCRIPT_DIR}/../src/variants.ini}"
 source "${SCRIPT_DIR}/lib/uci.sh"
 
 tmp_ini=$(mktemp)
-trap 'rm -f "$tmp_ini"' EXIT
+fsx_add_exit_cleanup 'rm -f "$tmp_ini"'
 
 cat > "$tmp_ini" <<'INI'
 [beast-pieces:chess]
@@ -20,13 +20,7 @@ doubleStep = false
 promotionPieceTypes = qegh
 INI
 
-variant_available() {
-  local out
-  out=$(printf 'uci\nquit\n' | uci_timeout "$ENGINE")
-  grep -q ' var beast-chess' <<<"$out"
-}
-
-if ! variant_available; then
+if ! variant_available "$ENGINE" beast-chess "$VARIANT_PATH"; then
   echo "beast-chess variant not available in this build; skipping beast-chess regression"
   exit 0
 fi

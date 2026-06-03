@@ -2,13 +2,10 @@
 
 set -euo pipefail
 
-error() {
-  echo "non8x8 endgame test failed on line $1"
-  exit 1
-}
-trap 'error ${LINENO}' ERR
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+source "${SCRIPT_DIR}/lib/uci.sh"
 
-ENGINE=${1:-./stockfish}
+init_test_env "${1:-}" "${2:-}" "non8x8 endgame test"
 
 extract_eval() {
   sed -n 's/^Final evaluation[[:space:]]*//p' | tail -n1 | awk '{print $1}'
@@ -18,20 +15,14 @@ run_eval() {
   local variant_path="$1"
   local variant="$2"
   local fen="$3"
-  cat <<CMDS | "${ENGINE}" | extract_eval
-uci
-setoption name VariantPath value ${variant_path}
-setoption name UCI_Variant value ${variant}
+
+  run_uci "$ENGINE" "${variant_path}" "${variant}" <<CMDS | extract_eval
 position fen ${fen}
 eval
-quit
 CMDS
 }
 
-tmp_ini=$(mktemp)
-trap 'rm -f "${tmp_ini}"' EXIT
-
-cat > "${tmp_ini}" <<'INI'
+load_inline_variants <<'INI'
 [mini-anti:giveaway]
 maxFile = 5
 maxRank = 5
@@ -47,6 +38,7 @@ maxFile = 10
 maxRank = 8
 castling = false
 INI
+tmp_ini="${FSX_TMP_INI}"
 
 # Non-8x8 anti endgames should remain horizontally symmetric.
 anti_left=$(run_eval "${tmp_ini}" "mini-anti" "5/5/K4/5/2n2 w - - 0 1")

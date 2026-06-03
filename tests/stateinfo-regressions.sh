@@ -1,15 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-error() {
-  echo "StateInfo regression test failed on line $1" >&2
-  exit 1
-}
-trap 'error ${LINENO}' ERR
-
-ENGINE=${1:-src/stockfish}
 SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-ROOT_DIR=$(cd -- "${SCRIPT_DIR}/.." && pwd)
+source "${SCRIPT_DIR}/lib/uci.sh"
+
+init_test_env "${1:-}" "${2:-}" "StateInfo regression test"
 
 BUILD_DIR="${ROOT_DIR}/.local/build/stateinfo-regressions"
 mkdir -p "${BUILD_DIR}"
@@ -32,6 +27,7 @@ cat > "${HARNESS_CPP}" <<'EOF'
 #include "types.h"
 #include "uci.h"
 #include "variant.h"
+#include "test_engine_init.hpp"
 
 using namespace Stockfish;
 
@@ -41,20 +37,14 @@ static void load_variants() {
 promotedPieceType = p:q
 blastOnMove = true
 blastPromotion = true
+
+[hand-petrify:chess]
+pieceDrops = true
+captureType = hand
+petrifyOnCaptureTypes = r
+petrifyOnCaptureSuppressTransfer = true
 )ini");
     variants.parse_istream<false>(ss);
-}
-
-static void init_engine() {
-    UCI::init(Options);
-    pieceMap.init();
-    variants.init();
-    PSQT::init(variants.get("fairy"));
-    Bitboards::init();
-    Position::init();
-    Bitbases::init();
-    Endgames::init();
-    load_variants();
 }
 
 static void assert_recomputed_state_matches(const Position& pos) {
@@ -124,27 +114,26 @@ static void test_blast_center_pawn_promotion_updates_pawn_key() {
     assert_recomputed_state_matches(pos);
 }
 
-static void test_clear_dirty_piece_clears_unused_slots() {
+static void test_key_after_ignores_previous_capture_suppression() {
     StateInfo st{};
     Position pos;
-    pos.set(variants.get("chess"), "startpos", false, &st, nullptr);
+    pos.set(variants.get("hand-petrify"),
+            "r6q/4k3/8/8/8/8/8/R3K3 w - - 0 1", false, &st, nullptr);
 
+    const Move whiteCapture = make<NORMAL>(SQ_A1, SQ_A8);
+    assert(pos.legal(whiteCapture));
     StateInfo next{};
-    std::memset(&next.dirtyPiece, 0x7f, sizeof(next.dirtyPiece));
+    pos.do_move(whiteCapture, next);
+    assert(pos.state()->suppressedCaptureTransfer);
 
-    const Move m = make<NORMAL>(SQ_E2, SQ_E4);
-    assert(pos.legal(m));
-    pos.do_move(m, next);
+    const Move blackCapture = make<NORMAL>(SQ_H8, SQ_A8);
+    assert(pos.legal(blackCapture));
 
-    assert(pos.state()->dirtyPiece.dirty_num <= DIRTY_PIECE_MAX);
-    for (int i = pos.state()->dirtyPiece.dirty_num; i < DIRTY_PIECE_MAX; ++i)
-    {
-        assert(pos.state()->dirtyPiece.piece[i] == NO_PIECE);
-        assert(pos.state()->dirtyPiece.handPiece[i] == NO_PIECE);
-        assert(pos.state()->dirtyPiece.handCount[i] == 0);
-        assert(pos.state()->dirtyPiece.from[i] == SQ_NONE);
-        assert(pos.state()->dirtyPiece.to[i] == SQ_NONE);
-    }
+    const Key predicted = pos.key_after(blackCapture);
+    StateInfo next2{};
+    pos.do_move(blackCapture, next2);
+
+    assert(predicted == pos.key());
 }
 
 static void poison_undo_payload(StateInfo& st) {
@@ -207,9 +196,10 @@ static void test_null_move_clears_undo_payload() {
 }
 
 int main() {
-    init_engine();
+    init_test_engine();
+    load_variants();
     test_blast_center_pawn_promotion_updates_pawn_key();
-    test_clear_dirty_piece_clears_unused_slots();
+    test_key_after_ignores_previous_capture_suppression();
     test_null_move_clears_undo_payload();
     return 0;
 }
@@ -227,7 +217,7 @@ fi
 
 (
   cd "${ROOT_DIR}/src"
-  g++ -std=c++17 -O2 -Wall -Wextra -flto -I"${ROOT_DIR}/src" "${HARNESS_CPP}" "${OBJ_FILES[@]}" -pthread -o "${HARNESS_BIN}"
+  g++ -std=c++17 -O2 -Wall -Wextra -flto -I"${ROOT_DIR}/src" -I"${ROOT_DIR}/tests/lib" "${HARNESS_CPP}" "${OBJ_FILES[@]}" -pthread -o "${HARNESS_BIN}"
 )
 
 echo "StateInfo regression test started"

@@ -2,17 +2,12 @@
 
 set -euo pipefail
 
-error() {
-  echo "rose regression failed on line $1"
-  [[ -n "${TMP_VARIANT_PATH:-}" ]] && rm -f "${TMP_VARIANT_PATH}"
-  exit 1
-}
-trap 'error ${LINENO}' ERR
+SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+source "${SCRIPT_DIR}/lib/uci.sh"
 
-ENGINE=${1:-./stockfish}
+init_test_env "${1:-}" "${2:-}" "rose regression"
 
-TMP_VARIANT_PATH=$(mktemp "${TMPDIR:-/tmp}/fsx-rose-XXXXXX")
-cat >"${TMP_VARIANT_PATH}" <<'INI'
+load_inline_variants <<'INI'
 [rose-empty:chess]
 king = -
 checking = false
@@ -29,16 +24,13 @@ startFen = 8/8/8/8/8/8/2p5/A7 w - - 0 1
 [rose-block-both:rose-empty]
 startFen = 8/8/8/8/8/1p6/2p5/A7 w - - 0 1
 INI
+TMP_VARIANT_PATH="${FSX_TMP_INI}"
 
 perft_out() {
   local variant="$1"
-  cat <<CMDS | "${ENGINE}"
-uci
-setoption name VariantPath value ${TMP_VARIANT_PATH}
-setoption name UCI_Variant value ${variant}
+  run_uci "$ENGINE" "$TMP_VARIANT_PATH" "$variant" <<'CMDS'
 position startpos
 go perft 1
-quit
 CMDS
 }
 
@@ -60,8 +52,5 @@ block_both=$(perft_out rose-block-both)
 ! echo "${block_both}" | grep -q "^a1d4: 1$"
 echo "${block_both}" | grep -q "^a1b3: 1$"
 echo "${block_both}" | grep -q "^a1c2: 1$"
-
-rm -f "${TMP_VARIANT_PATH}"
-unset TMP_VARIANT_PATH
 
 echo "rose regression tests passed"

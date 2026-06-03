@@ -1,32 +1,23 @@
-#!/usr/bin/env bash
+#!/bin/bash
+
 set -euo pipefail
 
-SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-ENGINE="${1:-${SCRIPT_DIR}/../src/stockfish}"
-VARIANTS="${2:-${SCRIPT_DIR}/../src/variants.ini}"
-TMP_VARIANTS="$(mktemp)"
+SCRIPT_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib/uci.sh"
 
-die() {
-  echo "igui regression failed on line $1" >&2
-  exit 1
-}
-trap 'die $LINENO' ERR
-trap 'rm -f "${TMP_VARIANTS}"' EXIT
+init_test_env "${1:-}" "${2:-}" "stationary capture regression"
 
-cat > "${TMP_VARIANTS}" <<EOF
+load_inline_variants <<'EOF'
 [stationary-capture-demo:chess]
 customPiece1 = a:c^W
 customPiece2 = b:mWc^K
 EOF
+tmp_variants="${FSX_TMP_INI}"
 
 run_cmds() {
-  {
-    echo "setoption name VariantPath value ${VARIANTS}"
-    echo "setoption name VariantPath value ${TMP_VARIANTS}"
-    echo "setoption name UCI_Variant value stationary-capture-demo"
-    printf '%s\n' "$1"
-    echo quit
-  } | "${ENGINE}"
+  run_uci "$ENGINE" "$tmp_variants" stationary-capture-demo <<EOF
+$1
+EOF
 }
 
 # A stationary-capture-only piece can capture an adjacent enemy without moving.

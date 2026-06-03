@@ -2,41 +2,44 @@
 
 set -euo pipefail
 
-error() {
-  echo "xboard regression test failed on line $1"
-  exit 1
-}
-trap 'error ${LINENO}' ERR
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+source "${SCRIPT_DIR}/lib/uci.sh"
 
-ENGINE=${1:-./stockfish}
+init_test_env "${1:-}" "${2:-}" "xboard regression test"
 
 run_xboard() {
-  cat <<CMDS | "${ENGINE}" xboard
-protover 2
-$1
-quit
-CMDS
+  local commands="$1"
+  run_expect "$ENGINE" <<EOF
+$(expect_engine_setup xboard)
+   send "protover 2\n"
+   $commands
+   send "quit\n"
+   expect eof
+EOF
 }
 
 echo "xboard regression tests started"
 
-out=$(run_xboard "level 40 x y")
+out=$(run_xboard $'expect "feature done=1"\nsend "level 40 x y\\n"\n')
 echo "${out}" | grep -q "feature done=1"
 
-out=$(run_xboard "level 40 5:xx z")
+out=$(run_xboard $'expect "feature done=1"\nsend "level 40 5:xx z\\n"\n')
 echo "${out}" | grep -q "feature done=1"
 
-out=$(run_xboard "option   Verbosity=2")
+out=$(run_xboard $'expect "feature done=1"\nsend "option   Verbosity=2\\n"\n')
 echo "${out}" | grep -q "feature done=1"
 
-out=$(cat <<'CMDS' | "${ENGINE}" xboard
-protover 2
-variant isolation
-setboard 2*3/2**2/*1p3/6/6/1****1/***P*1/**1*** b - - 17 9
-usermove c6d6,d6f2
-d
-quit
-CMDS
+out=$(run_expect "$ENGINE" <<EOF
+$(expect_engine_setup xboard)
+   send "protover 2\n"
+   expect "feature done=1"
+   send "variant isolation\n"
+   send "setboard 2*3/2**2/*1p3/6/6/1****1/***P*1/**1*** b - - 17 9\n"
+   send "usermove c6d6,d6f2\n"
+   send "d\n"
+   send "quit\n"
+   expect eof
+EOF
 )
 if echo "${out}" | grep -q "Illegal move: c6d6,d6f2"; then
   echo "${out}"

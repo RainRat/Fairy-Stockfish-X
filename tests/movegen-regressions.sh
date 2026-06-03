@@ -57,9 +57,8 @@ EOF
 variant_available() {
   local variant_path="$1"
   local variant="$2"
-  local out
-  out=$(run_uci_cmds "$ENGINE" "$variant_path" "$variant" "d" || true)
-  assert_contains "$out" "info string variant ${variant} "
+
+  probe_variant_available "$ENGINE" "$variant" "$variant_path"
 }
 
 echo "movegen regressions started"
