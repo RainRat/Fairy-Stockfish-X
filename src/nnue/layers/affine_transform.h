@@ -145,11 +145,12 @@ namespace Stockfish::Eval::NNUE::Layers {
         __m512i product1 = _mm512_maddubs_epi16(a1, b1);
         __m512i product2 = _mm512_maddubs_epi16(a2, b2);
         __m512i product3 = _mm512_maddubs_epi16(a3, b3);
-        product0 = _mm512_adds_epi16(product0, product1);
         product0 = _mm512_madd_epi16(product0, Ones512);
-        product2 = _mm512_adds_epi16(product2, product3);
+        product1 = _mm512_madd_epi16(product1, Ones512);
         product2 = _mm512_madd_epi16(product2, Ones512);
-        acc = _mm512_add_epi32(acc, _mm512_add_epi32(product0, product2));
+        product3 = _mm512_madd_epi16(product3, Ones512);
+        acc = _mm512_add_epi32(acc, _mm512_add_epi32(_mm512_add_epi32(product0, product1),
+                                                    _mm512_add_epi32(product2, product3)));
 #endif
       };
 
@@ -403,14 +404,28 @@ namespace Stockfish::Eval::NNUE::Layers {
         output[i] = _mm_cvtsi64_si32(sum);
 
 #elif defined(USE_NEON)
+#if defined(__aarch64__)
+        int32x4_t sum = vsetq_lane_s32(biases[i], vdupq_n_s32(0), 0);
+#else
         int32x4_t sum = {biases[i]};
+#endif
         const auto row = reinterpret_cast<const int8x8_t*>(&weights[offset]);
         for (IndexType j = 0; j < NumChunks; ++j) {
+#if defined(__ARM_FEATURE_DOTPROD)
+          const auto in = reinterpret_cast<const int8x16_t*>(&inputVector[j * 2])[0];
+          const auto rw = reinterpret_cast<const int8x16_t*>(&row[j * 2])[0];
+          sum = vdotq_s32(sum, in, rw);
+#else
           int16x8_t product = vmull_s8(inputVector[j * 2], row[j * 2]);
           product = vmlal_s8(product, inputVector[j * 2 + 1], row[j * 2 + 1]);
           sum = vpadalq_s16(sum, product);
+#endif
         }
+#if defined(__aarch64__)
+        output[i] = vaddvq_s32(sum);
+#else
         output[i] = sum[0] + sum[1] + sum[2] + sum[3];
+#endif
 
 #else
         OutputType sum = biases[i];
