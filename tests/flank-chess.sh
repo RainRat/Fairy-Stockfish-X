@@ -12,15 +12,9 @@ $1
 EOF
 }
 
-variant_available() {
-  local out
-  out=$(printf 'uci\nquit\n' | uci_timeout "$ENGINE")
-  grep -q ' var flank-chess ' <<<"$out"
-}
-
 echo "flank-chess regression tests started"
 
-if ! variant_available; then
+if ! variant_available "$ENGINE" flank-chess "$VARIANTS"; then
   echo "flank-chess regression skipped: variant unavailable in this build"
   exit 0
 fi

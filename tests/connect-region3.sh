@@ -1,19 +1,13 @@
 #!/usr/bin/env bash
+
 set -euo pipefail
 
-error() {
-  echo "connect-region3 regression failed on line $1"
-  exit 1
-}
-trap 'error ${LINENO}' ERR
+SCRIPT_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib/uci.sh"
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ENGINE="${1:-${SCRIPT_DIR}/../src/stockfish}"
+init_test_env "${1:-}" "${2:-}" "connect-region3 regression"
 
-TMP_VARIANT_PATH=$(mktemp "${TMPDIR:-/tmp}/fsx-connect-region3-XXXXXX")
-trap 'rm -f "${TMP_VARIANT_PATH}"' EXIT
-
-cat >"${TMP_VARIANT_PATH}" <<'INI'
+load_inline_variants <<'INI'
 [mini-y:fairy]
 maxRank = 5
 maxFile = 5
@@ -40,26 +34,27 @@ nMoveRule = 0
 startFen = ****1/***2/**3/*4/5[SSSSSSSSSSSSSSSsssssssssssssss] b - - 0 1
 INI
 
-run_cmds() {
-  cat <<EOF | "${ENGINE}"
-uci
-setoption name VariantPath value ${TMP_VARIANT_PATH}
-setoption name UCI_Variant value mini-y
-$1
-quit
-EOF
-}
+tmp_ini="${FSX_TMP_INI}"
 
-out=$(run_cmds "position startpos
-go perft 1")
-grep -Fxq "Nodes searched: 15" <<<"$out"
+out=$(run_uci "$ENGINE" "$tmp_ini" mini-y <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_nodes "$out" 15
 
-out=$(run_cmds "position fen ^^^^b/^^^1b/^^2b/^3b/bbbbb w - - 0 1
-go perft 1")
-grep -Fxq "Nodes searched: 0" <<<"$out"
+out=$(run_uci "$ENGINE" "$tmp_ini" mini-y <<'UCI'
+position fen ^^^^b/^^^1b/^^2b/^3b/bbbbb w - - 0 1
+go perft 1
+UCI
+)
+assert_nodes "$out" 0
 
-out=$(run_cmds "position fen ^^^^1/^^^2/^^3/^b1b1/b1b1b[S] w - - 0 1
-go perft 1")
-echo "${out}" | grep -q "^S@b1: 1$"
+out=$(run_uci "$ENGINE" "$tmp_ini" mini-y <<'UCI'
+position fen ^^^^1/^^^2/^^3/^b1b1/b1b1b[S] w - - 0 1
+go perft 1
+UCI
+)
+assert_contains "$out" "^S@b1: 1$"
 
 echo "connect-region3 regression passed"

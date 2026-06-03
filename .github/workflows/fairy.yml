@@ -99,7 +99,7 @@ jobs:
 
       - name: Test setup-chess
         run: |
-          ../tests/setup-chess.sh
+          bash ../tests/setup-chess.sh
 
       - name: Test new variants smoke
         run: |
@@ -115,7 +115,7 @@ jobs:
 
       - name: Test connect region 3
         run: |
-          ../tests/connect-region3.sh
+          bash ../tests/connect-region3.sh
 
       - name: Test kopano
         run: |
@@ -135,11 +135,11 @@ jobs:
 
       - name: Test whaleshogi
         run: |
-          ../tests/whaleshogi.sh
+          bash ../tests/whaleshogi.sh
 
-      - name: Test Betza modifiers
+      - name: Test fairy notation regressions
         run: |
-          ../tests/betza-modifiers.sh
+          ../tests/fairy-notation-regressions.sh
 
       - name: Test bent riders
         run: |
@@ -165,9 +165,9 @@ jobs:
         run: |
           ../tests/sacrifice.sh
 
-      - name: Test antiroyal morph
+      - name: Test royal variant regressions
         run: |
-          ../tests/antiroyal-morph.sh
+          ../tests/royal-variant-regressions.sh
 
       - name: Test Kings or Lemmings
         run: |
@@ -189,17 +189,9 @@ jobs:
         run: |
           ../tests/asym-rider-checkers.sh
 
-      - name: Test common fairy aliases
-        run: |
-          ../tests/common-fairy-aliases.sh
-
       - name: Test alfil/dabbaba riders
         run: |
           ../tests/alfil-dabbaba-riders.sh
-
-      - name: Test pseudoroyal blast immune
-        run: |
-          ../tests/pseudoroyal-blast-immune.sh
 
       - name: Test variant bench
         run: |

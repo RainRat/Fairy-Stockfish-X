@@ -4,20 +4,14 @@
 
 set -euo pipefail
 
-error()
-{
-  echo "running bench for signature failed on line $1"
-  exit 1
-}
-trap 'error ${LINENO}' ERR
-
-# obtain
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-REPO_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
-ENGINE="${2:-${ENGINE:-${REPO_ROOT}/src/stockfish}}"
+source "${SCRIPT_DIR}/lib/uci.sh"
 
-bench_output="$("${ENGINE}" bench 2>&1)"
-signature=$(awk '/Nodes searched  : / {print $4}' <<<"$bench_output" | tail -n1)
+init_test_env "${2:-}" "${3:-}" "signature regression"
+
+# Bench can take longer in debug CI builds than the default UCI timeout.
+bench_output="$(UCI_TIMEOUT=15m run_engine_stdin "$ENGINE" $'bench\nquit\n')"
+signature="$(printf '%s\n' "$bench_output" | bench_nodes)"
 
 if [ -z "$signature" ]; then
    echo "No signature obtained from bench. Code crashed or assert triggered ?"

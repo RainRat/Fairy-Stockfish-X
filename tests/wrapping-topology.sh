@@ -2,17 +2,12 @@
 
 set -euo pipefail
 
-error() {
-  echo "wrapping topology test failed on line $1"
-  [[ -n "${TMP_VARIANT_PATH:-}" ]] && rm -f "${TMP_VARIANT_PATH}"
-  exit 1
-}
-trap 'error ${LINENO}' ERR
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+source "${SCRIPT_DIR}/lib/uci.sh"
 
-ENGINE=${1:-./stockfish}
+init_test_env "${1:-}" "${2:-}" "wrapping topology tests"
 
-TMP_VARIANT_PATH=$(mktemp "${TMPDIR:-/tmp}/fsx-wrap-XXXXXX")
-cat >"${TMP_VARIANT_PATH}" <<'INI'
+load_inline_variants <<'INI'
 [cyl-rook:chess]
 cylindrical = true
 castling = false
@@ -108,17 +103,14 @@ customPiece1 = g:fFfW
 pieceToCharTable = PNBRQGE......S.F..LKpnbrqge......s.f..lk
 startFen = 4k3/8/8/8/8/8/8/g3K3 b - - 0 1
 INI
+TMP_VARIANT_PATH="${FSX_TMP_INI}"
 
 run_variant() {
   local variant="$1"
-  cat <<CMDS | "${ENGINE}" 2>&1
-uci
-setoption name VariantPath value ${TMP_VARIANT_PATH}
-setoption name UCI_Variant value ${variant}
+  run_uci "$ENGINE" "$TMP_VARIANT_PATH" "$variant" <<'UCI'
 position startpos
 go perft 1
-quit
-CMDS
+UCI
 }
 
 cyl_output=$(run_variant cyl-rook)
@@ -147,14 +139,10 @@ cyl_nocheck_output=$(run_variant cyl-nocheck)
 echo "${cyl_nocheck_output}" | grep -q "g1g2: 1"
 ! echo "${cyl_nocheck_output}" | grep -q "g1a1: 1"
 
-cyl_ep_output=$(cat <<CMDS | "${ENGINE}" 2>&1
-uci
-setoption name VariantPath value ${TMP_VARIANT_PATH}
-setoption name UCI_Variant value cyl-ep
+cyl_ep_output=$(run_uci "$ENGINE" "$TMP_VARIANT_PATH" cyl-ep <<'UCI'
 position startpos moves h7h5
 go perft 1
-quit
-CMDS
+UCI
 )
 echo "${cyl_ep_output}" | grep -q "a5h6: 1"
 
@@ -180,14 +168,10 @@ if echo "${cyl_forward_output}" | grep -q "^a1"; then
   exit 1
 fi
 
-cyl_search_output=$(cat <<CMDS | "${ENGINE}" 2>&1
-uci
-setoption name VariantPath value ${TMP_VARIANT_PATH}
-setoption name UCI_Variant value cyl-ep
+cyl_search_output=$(run_uci "$ENGINE" "$TMP_VARIANT_PATH" cyl-ep <<'UCI'
 position startpos moves h7h5
 go depth 2
-quit
-CMDS
+UCI
 )
 echo "${cyl_search_output}" | grep -q "^bestmove "
 
@@ -217,21 +201,14 @@ mandatoryPawnPromotion = false
 startFen = 8/6k1/8/8/8/8/P7/4K3 w - - 0 1
 INI
 
-tor_pawn_repro_output=$(cat <<CMDS | "${ENGINE}" 2>&1
-uci
-setoption name VariantPath value ${TMP_VARIANT_PATH}
-setoption name UCI_Variant value tor-pawn-repro
+tor_pawn_repro_output=$(run_uci "$ENGINE" "$TMP_VARIANT_PATH" tor-pawn-repro <<'UCI'
 position startpos moves a2a3 g7g6 a3a4 g6g5 a4a5 g5g4 a5a6 g4h3 a6a7 h3g2 a7a8 g2h1 a8a1 h1g2 a1a2 g2g1
 go perft 1
-quit
-CMDS
+UCI
 )
 if echo "${tor_pawn_repro_output}" | grep -q "a2a4: 1"; then
   echo "wrapping topology test failed: wrapped pawn allowed illegal double step"
   exit 1
 fi
-
-rm -f "${TMP_VARIANT_PATH}"
-unset TMP_VARIANT_PATH
 
 echo "wrapping topology tests passed"

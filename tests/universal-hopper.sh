@@ -8,11 +8,9 @@ set -euo pipefail
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source "${SCRIPT_DIR}/lib/uci.sh"
 
-ENGINE=$(default_engine "${1:-}")
+init_test_env "${1:-}" "${2:-}" "universal hopper test"
 
-INI_FILE=$(mktemp -t universal_hopper_test.XXXXXX.ini)
-trap 'rm -f "${INI_FILE}"' EXIT
-cat << 'EOF' > "$INI_FILE"
+load_inline_variants <<'EOF'
 [hopper-common:chess]
 pieceToCharTable = PNBRQKDFGHS
 
@@ -111,6 +109,7 @@ customPiece1 = d:{hurdles: 2; pre: 1,*}R
 [parser-unknown-hurdle-type:hopper-common]
 customPiece1 = d:{hurdles: 1,1; pre: 1,*; post: 1,1; hurdle_types: enemy,bogus}R
 EOF
+INI_FILE="${FSX_TMP_INI}"
 
 function run_test() {
     local variant=$1

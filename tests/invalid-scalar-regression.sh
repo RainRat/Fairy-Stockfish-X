@@ -1,27 +1,18 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 set -euo pipefail
 
-error() {
-  echo "invalid scalar regression test failed on line $1"
-  exit 1
-}
-trap 'error ${LINENO}' ERR
-
-SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
-ENGINE=${1:-${SCRIPT_DIR}/../src/stockfish}
+SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source "${SCRIPT_DIR}/lib/uci.sh"
 
-tmp_ini=$(mktemp)
-trap 'rm -f "${tmp_ini}"' EXIT
+init_test_env "${1:-}" "${2:-}" "invalid scalar regression"
 
-cat > "${tmp_ini}" <<'INI'
+load_inline_variants <<'INI'
 [bad-bool-scalar:chess]
 chess960 = maybe
 INI
 
-output=$(uci_timeout "${ENGINE}" check "${tmp_ini}" 2>&1 || true)
+output=$("${ENGINE}" check "${FSX_TMP_INI}" 2>&1 || true)
 
 assert_contains_literal "$output" "chess960 - Invalid value maybe for type bool"
-
 assert_contains_literal "$output" "Variant 'bad-bool-scalar' has invalid configuration. Skipping."

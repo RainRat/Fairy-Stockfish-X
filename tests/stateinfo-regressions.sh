@@ -1,15 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-error() {
-  echo "StateInfo regression test failed on line $1" >&2
-  exit 1
-}
-trap 'error ${LINENO}' ERR
-
-ENGINE=${1:-src/stockfish}
 SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-ROOT_DIR=$(cd -- "${SCRIPT_DIR}/.." && pwd)
+source "${SCRIPT_DIR}/lib/uci.sh"
+
+init_test_env "${1:-}" "${2:-}" "StateInfo regression test"
 
 BUILD_DIR="${ROOT_DIR}/.local/build/stateinfo-regressions"
 mkdir -p "${BUILD_DIR}"
@@ -32,6 +27,7 @@ cat > "${HARNESS_CPP}" <<'EOF'
 #include "types.h"
 #include "uci.h"
 #include "variant.h"
+#include "test_engine_init.hpp"
 
 using namespace Stockfish;
 
@@ -49,18 +45,6 @@ petrifyOnCaptureTypes = r
 petrifyOnCaptureSuppressTransfer = true
 )ini");
     variants.parse_istream<false>(ss);
-}
-
-static void init_engine() {
-    UCI::init(Options);
-    pieceMap.init();
-    variants.init();
-    PSQT::init(variants.get("fairy"));
-    Bitboards::init();
-    Position::init();
-    Bitbases::init();
-    Endgames::init();
-    load_variants();
 }
 
 static void assert_recomputed_state_matches(const Position& pos) {
@@ -212,7 +196,8 @@ static void test_null_move_clears_undo_payload() {
 }
 
 int main() {
-    init_engine();
+    init_test_engine();
+    load_variants();
     test_blast_center_pawn_promotion_updates_pawn_key();
     test_key_after_ignores_previous_capture_suppression();
     test_null_move_clears_undo_payload();
@@ -232,7 +217,7 @@ fi
 
 (
   cd "${ROOT_DIR}/src"
-  g++ -std=c++17 -O2 -Wall -Wextra -flto -I"${ROOT_DIR}/src" "${HARNESS_CPP}" "${OBJ_FILES[@]}" -pthread -o "${HARNESS_BIN}"
+  g++ -std=c++17 -O2 -Wall -Wextra -flto -I"${ROOT_DIR}/src" -I"${ROOT_DIR}/tests/lib" "${HARNESS_CPP}" "${OBJ_FILES[@]}" -pthread -o "${HARNESS_BIN}"
 )
 
 echo "StateInfo regression test started"

@@ -2,13 +2,12 @@
 
 set -euo pipefail
 
-ENGINE=${1:-./stockfish}
-ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+source "${SCRIPT_DIR}/lib/uci.sh"
 
-TMP_INI=$(mktemp)
-trap 'rm -f "${TMP_INI}"' EXIT
+init_test_env "${1:-}" "${2:-}" "pushing regression"
 
-cat > "${TMP_INI}" <<'INI'
+load_inline_variants <<'INI'
 [push-base:fairy]
 maxFile = e
 maxRank = 5
@@ -49,6 +48,7 @@ pushCaptureAgainstFriendlyBlocker = false
 pushingRemoves = none
 stepwisePushing = true
 INI
+TMP_INI="${FSX_TMP_INI}"
 
 run_cmds() {
   local variant=$1

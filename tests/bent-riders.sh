@@ -4,12 +4,9 @@ set -euo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source "${SCRIPT_DIR}/lib/uci.sh"
 
-ENGINE=$(default_engine "${1:-}")
+init_test_env "${1:-}" "${2:-}" "bent-riders test"
 
-tmp_ini=$(mktemp)
-trap 'rm -f "$tmp_ini"' EXIT
-
-cat > "$tmp_ini" <<'INI'
+load_inline_variants <<'INI'
 [griffon-test:chess]
 customPiece1 = a:O
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
@@ -20,6 +17,7 @@ customPiece1 = a:M
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 startFen = 7k/8/8/8/3A4/8/8/K7 w - - 0 1
 INI
+tmp_ini="${FSX_TMP_INI}"
 
 perft_out() {
   local variant="$1"

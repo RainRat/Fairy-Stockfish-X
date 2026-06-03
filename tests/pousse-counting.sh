@@ -2,19 +2,16 @@
 
 set -euo pipefail
 
-error() {
-  echo "pousse counting test failed on line $1" >&2
-  exit 1
-}
-trap 'error ${LINENO}' ERR
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+source "${SCRIPT_DIR}/lib/uci.sh"
 
-ROOT=$(cd "$(dirname "$0")/.." && pwd)
+init_test_env "${1:-}" "${2:-}" "pousse counting test"
 
-ROOT="$ROOT" python3 - <<'PY'
+run_pyffish_test <<'PY'
 import os
 import pyffish as sf
 
-cfg = open(os.path.join(os.environ["ROOT"], "src", "variants.ini"), encoding="utf-8").read()
+cfg = open(os.path.join(os.environ["ROOT_DIR"], "src", "variants.ini"), encoding="utf-8").read()
 sf.load_variant_config(cfg)
 
 # A completed straight should not end Pousse early while moves remain.

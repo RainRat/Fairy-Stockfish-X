@@ -3,24 +3,12 @@
 
 set -euo pipefail
 
-error() {
-  echo "petrify-transfer testing failed on line $1"
-  exit 1
-}
-trap 'error ${LINENO}' ERR
+SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+source "${SCRIPT_DIR}/lib/uci.sh"
 
-ENGINE=${1:-./stockfish}
+init_test_env "${1:-}" "${2:-}" "petrify-transfer test"
 
-echo "petrify-transfer testing started"
-
-cfg=$(mktemp)
-out=$(mktemp)
-cleanup() {
-  rm -f "$cfg" "$out"
-}
-trap cleanup EXIT
-
-cat > "$cfg" <<'EOF'
+load_inline_variants <<'EOF'
 [petrihouse:chess]
 captureType = hand
 pieceDrops = true
@@ -43,13 +31,14 @@ petrifyOnCaptureSuppressTransfer = true
 [petriatomic-control:petriatomic]
 petrifyOnCaptureSuppressTransfer = false
 EOF
+tmp_ini="${FSX_TMP_INI}"
 
-"$ENGINE" check "$cfg" > "$out" 2>&1
+echo "petrify-transfer testing started"
 
-cat <<CMDS | "$ENGINE" > "$out" 2>&1
-uci
-setoption name VariantPath value $cfg
-setoption name UCI_Variant value petrihouse-control
+check_out=$("${ENGINE}" check "${tmp_ini}" 2>&1)
+echo "${check_out}" > /dev/null
+
+out=$(run_uci "$ENGINE" "$tmp_ini" petrihouse-control <<'CMDS'
 position fen 4k3/8/8/3p4/4Q3/8/8/4K3[] w - - 0 1 moves e4d5
 d
 setoption name UCI_Variant value petrihouse
@@ -61,11 +50,11 @@ d
 setoption name UCI_Variant value petriatomic
 position fen 4k3/8/3n4/3p4/4Q3/8/8/4K3[] w - - 0 1 moves e4d5
 d
-quit
 CMDS
+)
 
-grep -Fq "Fen: 4k3/8/8/3*4/8/8/8/4K3[P] b - - 0 1" "$out"
-grep -Fq "Fen: 4k3/8/8/3*4/8/8/8/4K3[NP] b - - 0 1" "$out"
-test "$(grep -Fc "Fen: 4k3/8/8/3*4/8/8/8/4K3[] b - - 0 1" "$out")" -eq 2
+grep -Fq "Fen: 4k3/8/8/3*4/8/8/8/4K3[P] b - - 0 1" <<<"$out"
+grep -Fq "Fen: 4k3/8/8/3*4/8/8/8/4K3[NP] b - - 0 1" <<<"$out"
+test "$(grep -Fc "Fen: 4k3/8/8/3*4/8/8/8/4K3[] b - - 0 1" <<<"$out")" -eq 2
 
 echo "petrify-transfer testing OK"

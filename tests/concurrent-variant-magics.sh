@@ -9,10 +9,12 @@ error() {
 }
 trap 'error ${LINENO}' ERR
 
-ENGINE=${1:-./stockfish}
+SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+source "${SCRIPT_DIR}/lib/uci.sh"
 
-TMP_VARIANT_PATH=$(mktemp "${TMPDIR:-/tmp}/fsx-concurrent-magics-XXXXXX")
-cat >"${TMP_VARIANT_PATH}" <<'INI'
+init_test_env "${1:-}" "${2:-}" "concurrent-variant-magics test"
+
+load_inline_variants <<'INI'
 [v8x8:chess]
 maxFile = 8
 maxRank = 8
@@ -21,6 +23,7 @@ maxRank = 8
 maxFile = 6
 maxRank = 6
 INI
+TMP_VARIANT_PATH="${FSX_TMP_INI}"
 
 # We want to verify that after initializing a 6x6 variant, the 8x8 variant still works correctly
 # and its magic bitboards haven't been corrupted by the global state of the 6x6 variant.
@@ -28,10 +31,7 @@ INI
 # For 8x8 chess startpos, perft 1 is 20.
 # For 6x6 chess startpos (if it fits), let's see.
 
-out=$(cat <<CMDS | "${ENGINE}"
-uci
-setoption name VariantPath value ${TMP_VARIANT_PATH}
-setoption name UCI_Variant value v8x8
+out=$(run_uci "$ENGINE" "$TMP_VARIANT_PATH" v8x8 <<'CMDS'
 position startpos
 go perft 1
 setoption name UCI_Variant value v6x6
@@ -40,13 +40,9 @@ go perft 1
 setoption name UCI_Variant value v8x8
 position startpos
 go perft 1
-quit
 CMDS
 )
 
-# 8x8 startpos perft 1 is 20 moves
-# If magics were corrupted, it might give different results.
-echo "${out}"
 count8x8=$(echo "${out}" | grep "Nodes searched" | head -n 1 | awk '{print $3}')
 count6x6=$(echo "${out}" | grep "Nodes searched" | head -n 2 | tail -n 1 | awk '{print $3}')
 count8x8_again=$(echo "${out}" | grep "Nodes searched" | tail -n 1 | awk '{print $3}')
@@ -64,8 +60,5 @@ if [ "${count8x8_again}" != "20" ]; then
     echo "Subsequent v8x8 perft count incorrect after variant switch: ${count8x8_again}"
     exit 1
 fi
-
-rm -f "${TMP_VARIANT_PATH}"
-unset TMP_VARIANT_PATH
 
 echo "concurrent-variant-magics tests passed"

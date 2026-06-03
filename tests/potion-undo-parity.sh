@@ -2,22 +2,17 @@
 
 set -euo pipefail
 
-error() {
-  echo "potion undo parity test failed on line $1"
-  exit 1
-}
-trap 'error ${LINENO}' ERR
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+source "${SCRIPT_DIR}/lib/uci.sh"
 
-ENGINE=${1:-./stockfish}
-DEFAULT_VARIANT_PATH="variants.ini"
-if [[ ! -f "${DEFAULT_VARIANT_PATH}" && -f "src/variants.ini" ]]; then
-  DEFAULT_VARIANT_PATH="src/variants.ini"
-fi
-VARIANT_PATH=${2:-${DEFAULT_VARIANT_PATH}}
+init_test_env "${1:-}" "${2:-}" "potion undo parity test"
+
+VARIANT_PATH="${VARIANTS}"
 
 extract_fen_and_key() {
   local output="$1"
   local fen key
+  output=$(printf '%s' "$output" | tr -d '\r')
   fen=$(echo "$output" | sed -n 's/^Fen: //p' | tail -n1)
   key=$(echo "$output" | sed -n 's/^Key: //p' | tail -n1)
   if [[ -z "${fen}" || -z "${key}" ]]; then
@@ -30,17 +25,10 @@ uci_dump() {
   local variant_path="$1"
   local variant="$2"
   local pos_cmd="$3"
-  local variant_path_cmd=""
-  if [[ -n "${variant_path}" ]]; then
-    variant_path_cmd="setoption name VariantPath value ${variant_path}"
-  fi
-  cat <<CMDS | "${ENGINE}"
-uci
-${variant_path_cmd}
-setoption name UCI_Variant value ${variant}
+
+  run_uci "$ENGINE" "${variant_path}" "${variant}" <<CMDS
 ${pos_cmd}
 d
-quit
 CMDS
 }
 
@@ -48,17 +36,22 @@ xboard_dump() {
   local variant_path="$1"
   local variant="$2"
   local cmds="$3"
-  cat <<CMDS | "${ENGINE}"
-xboard
-protover 2
-option VariantPath=${variant_path}
-variant ${variant}
-new
-force
-${cmds}
-d
-quit
-CMDS
+
+  run_expect "$ENGINE" <<EOF
+$(expect_engine_setup xboard)
+   send "protover 2\n"
+   send "option VariantPath=${variant_path}\n"
+   send "variant ${variant}\n"
+   send "new\n"
+   send "force\n"
+$(while IFS= read -r line; do
+  [[ -z "${line}" ]] && continue
+  printf '   send "%s\\n"\n' "${line}"
+done <<< "${cmds}")
+   send "d\n"
+   send "quit\n"
+   expect eof
+EOF
 }
 
 assert_xboard_matches_uci() {
@@ -108,10 +101,7 @@ assert_xboard_matches_uci "${VARIANT_PATH}" "spell-chess" \
   $'usermove f@a6,e2e4\nusermove j@a7,a8a2\nundo\nundo' \
   "position startpos"
 
-tmp_ini=$(mktemp)
-trap 'rm -f "${tmp_ini}"' EXIT
-
-cat > "${tmp_ini}" <<'INI'
+load_inline_variants <<'INI'
 [spellprisonex:chess]
 potions = true
 freezePotion = q
@@ -123,6 +113,7 @@ hostageExchange = p:p
 castling = false
 startFen = 8/8/8/3p1p2/2P1P3/8/8/4K2k[Qq] w - - 0 1
 INI
+tmp_ini="${FSX_TMP_INI}"
 
 # Mixed potion + prison + exchange path: undoing the exchange must match the pre-exchange prefix.
 assert_xboard_matches_uci "${tmp_ini}" "spellprisonex" \

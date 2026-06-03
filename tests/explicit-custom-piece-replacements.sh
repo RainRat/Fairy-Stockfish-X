@@ -2,35 +2,25 @@
 
 set -euo pipefail
 
-error() {
-  echo "explicit custom piece replacement regression failed on line $1"
-  exit 1
-}
-trap 'error ${LINENO}' ERR
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+source "${SCRIPT_DIR}/lib/uci.sh"
 
-ENGINE=${1:-./stockfish}
-VARIANTS=${2:-src/variants.ini}
+init_test_env "${1:-}" "${2:-}" "explicit custom piece replacement regression"
 
 run_perft() {
   local variant="$1"
   local fen="$2"
-  cat <<CMDS | "${ENGINE}"
-uci
-setoption name VariantPath value ${VARIANTS}
-setoption name UCI_Variant value ${variant}
+
+  run_uci "$ENGINE" "$VARIANTS" "$variant" <<EOF
 position fen ${fen}
 go perft 1
-quit
-CMDS
+EOF
 }
 
 variant_available() {
   local variant="$1"
-  cat <<CMDS | "${ENGINE}" | grep -Eq "(^|[[:space:]])var ${variant}([[:space:]]|$)"
-uci
-setoption name VariantPath value ${VARIANTS}
-quit
-CMDS
+
+  probe_variant_available "$ENGINE" "$variant" "$VARIANTS"
 }
 
 echo "explicit custom piece replacement regression tests started"

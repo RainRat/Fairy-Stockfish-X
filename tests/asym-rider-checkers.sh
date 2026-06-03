@@ -4,12 +4,9 @@ set -euo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source "${SCRIPT_DIR}/lib/uci.sh"
 
-ENGINE=$(default_engine "${1:-}")
+init_test_env "${1:-}" "${2:-}" "asym-rider-checkers test"
 
-tmp_ini=$(mktemp)
-trap 'rm -f "$tmp_ini"' EXIT
-
-cat > "$tmp_ini" <<'INI'
+load_inline_variants <<'INI'
 [asymcheck-horse:chess]
 customPiece1 = a:nN
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
@@ -22,6 +19,7 @@ pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 customPiece1 = a:M
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 INI
+tmp_ini="${FSX_TMP_INI}"
 
 diag() {
   local variant=$1

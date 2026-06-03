@@ -3,8 +3,7 @@ set -euo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/uci.sh"
 
-ENGINE=$(default_engine "${1:-}")
-VARIANTS=$(default_variants "${2:-}")
+init_test_env "${1:-}" "${2:-}" "battleotk regression"
 
 echo "battleotk regression started"
 
@@ -19,7 +18,7 @@ assert_contains_literal "$out" "Fen: 8/pppppppp/8/8/4P3/8/PPPPNPPP/8 b - - 0 1"
 
 out=$(run_uci "$ENGINE" "$VARIANTS" "battleotk" <<<'position fen 8/6P1/8/8/8/8/8/8 w - - 0 1 moves g7g8n
 d')
-assert_contains_literal "$out" "Fen: 6N1/8/8/8/8/8/8/8 b - - 0 1"
+assert_contains_literal "$out" "Fen: 6N1/6N1/8/8/8/8/8/8 b - - 0 1"
 
 out=$(run_uci "$ENGINE" "$VARIANTS" "battleotk" <<<'position fen 8/ppnppppp/8/2n5/2pP4/4PP2/PPPNNNPP/8 b - d3 0 3
 go perft 1')

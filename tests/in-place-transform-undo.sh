@@ -2,33 +2,12 @@
 
 set -euo pipefail
 
-error() {
-  echo "in-place transform undo test failed on line $1"
-  exit 1
-}
-trap 'error ${LINENO}' ERR
-
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-ENGINE=${1:-"${ROOT_DIR}/src/stockfish"}
+source "${SCRIPT_DIR}/lib/uci.sh"
 
-run_cmds() {
-  local variant="$1"
-  local vpath="$2"
-  local cmds="$3"
-  cat <<CMDS | "${ENGINE}" 2>&1
-uci
-setoption name VariantPath value ${vpath}
-setoption name UCI_Variant value ${variant}
-${cmds}
-quit
-CMDS
-}
+init_test_env "${1:-}" "${2:-}" "in-place transform undo test"
 
-TEMP_INI=$(mktemp)
-trap 'rm -f "${TEMP_INI}"' EXIT
-
-cat <<EOF > "${TEMP_INI}"
+load_inline_variants <<'EOF'
 [capture-morph-color:chess]
 captureMorph = true
 changingColorTrigger = capture
@@ -43,31 +22,47 @@ changingColorPieceTypes = n
 capturesToHand = true
 moveMorphPieceType = b:n
 EOF
+TEMP_INI="${FSX_TMP_INI}"
 
 echo "in-place transform undo tests started"
 
 # captureMorph applies before changingColor, so undo must restore color first,
 # then the original mover type. Perft 2 exercises do/undo on the composed move.
-out=$(run_cmds "capture-morph-color" "${TEMP_INI}" "position fen 4k3/8/8/3n4/4B3/8/8/4K3 w - - 0 1 moves e4d5
-d")
+out=$(run_uci "$ENGINE" "$TEMP_INI" "capture-morph-color" <<'CMDS'
+position fen 4k3/8/8/3n4/4B3/8/8/4K3 w - - 0 1 moves e4d5
+d
+CMDS
+)
 echo "${out}" | grep -q "Fen: 4k3/8/8/3n4/8/8/8/4K3 b"
-out=$(run_cmds "capture-morph-color" "${TEMP_INI}" "position fen 4k3/8/8/3n4/4B3/8/8/4K3 w - - 0 1
-go perft 2")
+out=$(run_uci "$ENGINE" "$TEMP_INI" "capture-morph-color" <<'CMDS'
+position fen 4k3/8/8/3n4/4B3/8/8/4K3 w - - 0 1
+go perft 2
+CMDS
+)
 grep -q "Nodes searched:" <<<"$out"
 
 # moveMorph can also compose with changingColor on the same mover.
-out=$(run_cmds "move-morph-color" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/8/2B1K3 w - - 0 1 moves c1g5
-d")
+out=$(run_uci "$ENGINE" "$TEMP_INI" "move-morph-color" <<'CMDS'
+position fen 4k3/8/8/8/8/8/8/2B1K3 w - - 0 1 moves c1g5
+d
+CMDS
+)
 echo "${out}" | grep -q "Fen: 4k3/8/8/6n1/8/8/8/4K3 b"
-out=$(run_cmds "move-morph-color" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/8/2B1K3 w - - 0 1
-go perft 2")
+out=$(run_uci "$ENGINE" "$TEMP_INI" "move-morph-color" <<'CMDS'
+position fen 4k3/8/8/8/8/8/8/2B1K3 w - - 0 1
+go perft 2
+CMDS
+)
 grep -q "Nodes searched:" <<<"$out"
 
 # A promoted piece that morphs on move must restore its promoted state after
 # the full do/undo cycle exercised by perft.
-out=$(run_cmds "move-morph-promoted" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/8/2B~1K3[] w - - 0 1
+out=$(run_uci "$ENGINE" "$TEMP_INI" "move-morph-promoted" <<'CMDS'
+position fen 4k3/8/8/8/8/8/8/2B~1K3[] w - - 0 1
 go perft 1
-d")
+d
+CMDS
+)
 echo "${out}" | grep -q "~B"
 
 echo "in-place transform undo tests passed"

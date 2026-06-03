@@ -4,17 +4,15 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/uci.sh"
 
-ENGINE=$(default_engine "${1:-}")
+init_test_env "${1:-}" "${2:-}" "must capture by color regression"
 
-tmp_ini="$(mktemp)"
-trap 'rm -f "$tmp_ini"' EXIT
-
-cat > "$tmp_ini" <<'INI'
+load_inline_variants <<'INI'
 [asymmustcapture:chess]
 mustCaptureWhite = true
 mustCaptureBlack = false
 startFen = 4k3/8/8/3p4/4P3/8/8/4K3 w - - 0 1
 INI
+tmp_ini="${FSX_TMP_INI}"
 
 out_white=$(run_uci "$ENGINE" "$tmp_ini" asymmustcapture <<'UCI'
 position startpos

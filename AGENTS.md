@@ -83,13 +83,14 @@ Run: `./stockfish < test.txt > output.txt`
 Some tests require specific build flags to pass for all variants:
 * `tests/perft.sh all` and `tests/new-variants-smoke.sh` should be run with a `largeboards=yes` build to cover all included variants.
 * To build `pyffish` for `test.py`, use `python3 setup.py build_ext --inplace` from the root directory.
-* `tests/fast-regression.sh` is designed to stay under about five minutes on a normal local build. Run it before accepting new code. It assumes `src/stockfish` is freshly built and `pyffish` has been built if the touched code affects bindings or Python-facing state.
+* `tests/fast-regression.sh` is designed to stay under about five minutes on a normal local build. On the current warm default build in this workspace it runs in about 30.65s after moving the heavier state/undo parity checks into `tests/local-regression.sh`. Run it before accepting new code. It assumes `src/stockfish` is freshly built and `pyffish` has been built if the touched code affects bindings or Python-facing state.
 * `tests/fast-regression.sh` can run without `UPSTREAM_ENGINE`; when set, it additionally compares against upstream.
 * If a change touches shared parser, movegen, legality, promotion, topology, or variant-switch logic, also run `tests/upstream_reference.py` and investigate any divergence before accepting it, unless you have a documented upstream bug or intentional FSX-only behavior change.
 
 ### Local Test Timing Notes
 
 Observed on the local largeboards build in this workspace (`src/stockfish-large`) in May 2026:
+* `bash tests/fast-regression.sh src/stockfish`: about 30.65s on a warm default build in this workspace.
 * `bash tests/fast-regression.sh src/stockfish-large`: about 2-3 minutes.
 * `bash tests/perft.sh all src/stockfish-large`: about 2.5 minutes once the binary is built; this is also run at the end of `local-regression.sh`.
 * `bash tests/local-regression.sh src/stockfish-large`: about 20-25 minutes. This includes `fast-regression`, `allvars-regression`, many focused shell tests, VLB smoke checks, and final `perft.sh all`.

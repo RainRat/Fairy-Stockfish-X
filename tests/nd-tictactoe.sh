@@ -3,19 +3,15 @@
 set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-ENGINE="${1:-${SCRIPT_DIR}/../src/stockfish}"
-VARIANT_PATH="${2:-${SCRIPT_DIR}/../src/variants.ini}"
 source "${SCRIPT_DIR}/lib/uci.sh"
+
+init_test_env "${1:-}" "${2:-}" "nd-tictactoe test"
+VARIANT_PATH=${VARIANTS}
 
 echo "nd-tictactoe test started"
 
-variant_available() {
-  local out
-  out=$(printf 'uci\nquit\n' | uci_timeout "$ENGINE")
-  grep -q ' var tictactoe-3d' <<<"$out" && grep -q ' var tictactoe-4d' <<<"$out"
-}
-
-if ! variant_available; then
+if ! variant_available "$ENGINE" tictactoe-3d "$VARIANT_PATH" || \
+   ! variant_available "$ENGINE" tictactoe-4d "$VARIANT_PATH"; then
   echo "nd-tictactoe variants not available in this build; skipping nd-tictactoe regression"
   exit 0
 fi

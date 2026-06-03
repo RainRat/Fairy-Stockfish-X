@@ -2,12 +2,11 @@
 set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-ENGINE="${1:-${SCRIPT_DIR}/../src/stockfish}"
+source "${SCRIPT_DIR}/lib/uci.sh"
 
-tmp_ini=$(mktemp)
-trap 'rm -f "$tmp_ini"' EXIT
+init_test_env "${1:-}" "${2:-}" "immobility illegal hoppers regression"
 
-cat > "$tmp_ini" <<'INI'
+load_inline_variants <<'INI'
 [immobility-illegal-hopper-test:chess]
 maxFile = h
 maxRank = 8
@@ -19,8 +18,13 @@ customPiece2 = g:W
 promotedPieceType = m:g
 startFen = 8/8/8/8/8/8/8/4K3[M]
 INI
+tmp_ini="${FSX_TMP_INI}"
 
-out=$(printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value immobility-illegal-hopper-test\nposition fen 8/8/8/8/8/8/8/4K3[M] w - - 0 1\ngo perft 1\nquit\n' "$tmp_ini" | "$ENGINE")
+out=$(run_uci "$ENGINE" "$tmp_ini" immobility-illegal-hopper-test <<'EOF'
+position fen 8/8/8/8/8/8/8/4K3[M] w - - 0 1
+go perft 1
+EOF
+)
 
 grep -q '^M@a6:' <<<"$out"
 grep -q '^M@e6:' <<<"$out"

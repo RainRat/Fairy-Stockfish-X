@@ -1,19 +1,12 @@
 #!/bin/bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-ENGINE=${1:-"${ROOT_DIR}/src/stockfish"}
-if [[ "${ENGINE}" != /* ]]; then
-  ENGINE="${PWD}/${ENGINE}"
-fi
+SCRIPT_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib/uci.sh"
 
-cd "${ROOT_DIR}/src"
+init_test_env "${1:-}" "${2:-}" "rider edge consistency"
 
-tmp_ini=$(mktemp)
-trap 'rm -f "$tmp_ini"' EXIT
-
-cat > "$tmp_ini" <<'INI'
+load_inline_variants <<'INI'
 [nr-edge:chess]
 maxRank = 5
 maxFile = 5
@@ -59,13 +52,16 @@ startFen = 4k/5/5/5/4K w - - 0 1
 customPiece1 = a:M
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 INI
+tmp_ini="${FSX_TMP_INI}"
 
 run_searchmove() {
   local variant="$1"
   local fen="$2"
   local move="$3"
-  printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value %s\nposition fen %s\ngo depth 1 searchmoves %s\nquit\n' \
-    "$tmp_ini" "$variant" "$fen" "$move" | "${ENGINE}"
+  run_uci "$ENGINE" "$tmp_ini" "$variant" <<UCI
+position fen $fen
+go depth 1 searchmoves $move
+UCI
 }
 
 expect_legal() {

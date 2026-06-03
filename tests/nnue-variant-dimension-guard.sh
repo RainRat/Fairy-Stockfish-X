@@ -2,13 +2,11 @@
 set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-ENGINE="${1:-${SCRIPT_DIR}/../src/stockfish}"
 source "${SCRIPT_DIR}/lib/uci.sh"
 
-tmp_ini="$(mktemp)"
-trap 'rm -f "$tmp_ini"' EXIT
+init_test_env "${1:-}" "${2:-}" "nnue variant dimension guard"
 
-cat >"$tmp_ini" <<'EOF'
+load_inline_variants <<'EOF'
 [nnguard:fairy]
 maxFile = 12
 maxRank = 10
@@ -25,6 +23,7 @@ customPiece7 = h:K
 customPiece8 = i:A
 startFen = 11k/12/12/12/12/12/12/12/12/11K[] w - - 0 1
 EOF
+tmp_ini="${FSX_TMP_INI}"
 
 out=$(run_uci "$ENGINE" "$tmp_ini" nnguard <<'EOF'
 setoption name EvalFile value nnguard.nnue

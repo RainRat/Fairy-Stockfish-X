@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-ENGINE="${1:-${SCRIPT_DIR}/../src/stockfish}"
-TMP_VARIANTS="$(mktemp /tmp/stationary-castling.XXXXXX.ini)"
-trap 'rm -f "${TMP_VARIANTS}"' EXIT
+SCRIPT_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib/uci.sh"
 
-cat > "${TMP_VARIANTS}" <<'INI'
+init_test_env "${1:-}" "${2:-}" "stationary castling regression"
+
+load_inline_variants <<'INI'
 [stationary-castling-safe:chess]
 castling = true
 castlingKingFile = e
@@ -25,12 +25,13 @@ castlingRookKingsideFile = h
 castlingRookQueensideFile = d
 startFen = 8/8/8/8/8/8/8/r2RK2R w KQ - 0 1
 INI
+tmp_variants="${FSX_TMP_INI}"
 
 run_cmds() {
   local variant="$1"
   local cmds="$2"
   printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value %s\n%s\nquit\n' \
-    "${TMP_VARIANTS}" "${variant}" "${cmds}" | "${ENGINE}"
+    "${tmp_variants}" "${variant}" "${cmds}" | "${ENGINE}"
 }
 
 echo "stationary castling regression started"

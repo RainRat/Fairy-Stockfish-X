@@ -3,21 +3,17 @@
 set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-REPO_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
+source "${SCRIPT_DIR}/lib/uci.sh"
 
-error() {
-  echo "custom en passant passed squares regression failed on line $1"
-  exit 1
-}
-trap 'error ${LINENO}' ERR
+init_test_env "${1:-}" "${2:-}" "custom en passant passed squares regression"
 
-export FSX_REPO_ROOT="${REPO_ROOT}"
-
-python3 - <<'PY'
+run_pyffish_test <<'PY'
 import os
-import sys
-sys.path.insert(0, os.environ["FSX_REPO_ROOT"])
 import pyffish as sf
+
+repo_root = os.environ["ROOT_DIR"]
+with open(os.path.join(repo_root, "src", "variants.ini"), encoding="utf-8") as f:
+    sf.load_variant_config(f.read())
 
 cfg = """
 [custom-ep-all:chess]

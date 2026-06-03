@@ -3,24 +3,25 @@
 
 set -euo pipefail
 
-engine="${1:-src/stockfish}"
+SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+source "${SCRIPT_DIR}/lib/uci.sh"
+
+init_test_env "${1:-}" "${2:-}" "rootmove searchmoves"
 
 run() {
-  printf '%s\n' \
-    "uci" \
-    "setoption name MultiPV value 3" \
-    "position startpos" \
-    "go depth 4 searchmoves e2e4 d2d4 g1f3" \
-    "quit" | "$engine"
+  run_uci "$ENGINE" "$VARIANTS" chess <<'EOF'
+setoption name MultiPV value 3
+position startpos
+go depth 4 searchmoves e2e4 d2d4 g1f3
+EOF
 }
 
 run_skill() {
-  printf '%s\n' \
-    "uci" \
-    "setoption name Skill Level value 0" \
-    "position startpos" \
-    "go depth 4 searchmoves e2e4 d2d4 g1f3 b1c3" \
-    "quit" | "$engine"
+  run_uci "$ENGINE" "$VARIANTS" chess <<'EOF'
+setoption name Skill Level value 0
+position startpos
+go depth 4 searchmoves e2e4 d2d4 g1f3 b1c3
+EOF
 }
 
 out="$(run)"
