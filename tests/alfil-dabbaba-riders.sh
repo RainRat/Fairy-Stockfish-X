@@ -17,6 +17,11 @@ customPiece1 = a:(2,2)(2,2)
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 startFen = 6k1/8/8/8/3A4/8/8/K7 w - - 0 1
 
+[alfil-rider-tuple-blocked:chess]
+customPiece1 = a:(2,2)(2,2)
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+startFen = 6k1/8/5p2/8/3A4/8/8/K7 w - - 0 1
+
 [dabbaba-rider:chess]
 customPiece1 = a:DD
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
@@ -238,3 +243,11 @@ d4f6
 d4h8
 EOF
 ) <(piece_moves alfil-rider)
+
+diff -u <(cat <<'EOF'
+d4b2
+d4b6
+d4f2
+d4f6
+EOF
+) <(piece_moves alfil-rider-tuple-blocked)

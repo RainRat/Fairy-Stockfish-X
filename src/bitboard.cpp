@@ -374,30 +374,37 @@ inline Bitboard safe_destination(Square s, int step) {
     return safe_destination_tuple(s, dr, df);
 }
 
-Bitboard tuple_rider_attacks(const std::vector<PieceInfo::TupleRay>& rays, Square s, Bitboard occupied, Color c) {
-    Bitboard attack = 0;
-
-    for (const auto& ray : rays)
+template <typename Fn>
+void walk_tuple_ray(const PieceInfo::TupleRay& ray, Square s, Color c, Bitboard occupied, Fn&& on_step) {
+    const int stepR = c == WHITE ? ray.dr : -ray.dr;
+    const int stepF = c == WHITE ? ray.df : -ray.df;
+    Square current = s;
+    int count = 0;
+    for (;;)
     {
-        const int stepR = c == WHITE ? ray.dr : -ray.dr;
-        const int stepF = c == WHITE ? ray.df : -ray.df;
-        Square current = s;
-        int count = 0;
-        for (;;)
-        {
-            Bitboard next = safe_destination_tuple(current, stepR, stepF);
-            if (!next)
-                break;
+        Bitboard next = safe_destination_tuple(current, stepR, stepF);
+        if (!next)
+            break;
 
-            Square to = lsb(next);
-            attack |= next;
-            current = to;
-            if (ray.limit > 0 && ++count >= ray.limit)
-                break;
-            if (occupied & next)
-                break;
-        }
+        Square to = lsb(next);
+        if (!on_step(next, to, count))
+            break;
+        current = to;
+        if (ray.limit > 0 && ++count >= ray.limit)
+            break;
+        if (occupied & next)
+            break;
     }
+}
+
+Bitboard tuple_rider_attacks(const std::vector<PieceInfo::TupleRay>& rays, Square s, Bitboard occupied, Color c) {
+  Bitboard attack = 0;
+
+  for (const auto& ray : rays)
+      walk_tuple_ray(ray, s, c, occupied, [&](Bitboard next, Square, int) {
+          attack |= next;
+          return true;
+      });
 
     return attack;
 }
@@ -426,20 +433,6 @@ Bitboard rider_terminal_squares(const std::map<Direction, int>& directions, Squa
 
 
 #ifdef VERY_LARGE_BOARDS
-  Bitboard bent_rider_attack(Square s, Bitboard occupied, Direction pivot, int stepF1, int stepR1, int stepF2, int stepR2) {
-    Bitboard shifted = safe_destination(s, pivot);
-    if (!shifted)
-        return Bitboard(0);
-
-    Square src = lsb(shifted);
-    if (occupied & src)
-        return square_bb(src);
-
-    return square_bb(src)
-         | fixed_step_rider_attacks(src, occupied, stepF1, stepR1)
-         | fixed_step_rider_attacks(src, occupied, stepF2, stepR2);
-  }
-
   Bitboard rider_attacks_bb(
     RiderType R, Square s, Bitboard occupied, const MagicGeometry* mg) {
   (void)mg;
@@ -468,14 +461,15 @@ Bitboard rider_terminal_squares(const std::map<Direction, int>& directions, Squa
   case RIDER_GRASSHOPPER_H: return sliding_attack<HOPPER>(GrasshopperDirectionsH, s, occupied);
   case RIDER_GRASSHOPPER_V: return sliding_attack<HOPPER>(GrasshopperDirectionsV, s, occupied);
   case RIDER_GRASSHOPPER_D: return sliding_attack<HOPPER>(GrasshopperDirectionsD, s, occupied);
-  case RIDER_GRIFFON_NH: return bent_rider_attack(s, occupied, NORTH_EAST,  1,  0,  0,  1);
-  case RIDER_GRIFFON_SH: return bent_rider_attack(s, occupied, NORTH_WEST, -1,  0,  0,  1);
-  case RIDER_GRIFFON_EV: return bent_rider_attack(s, occupied, SOUTH_EAST,  1,  0,  0, -1);
-  case RIDER_GRIFFON_WV: return bent_rider_attack(s, occupied, SOUTH_WEST, -1,  0,  0, -1);
-  case RIDER_MANTICORE_NE: return bent_rider_attack(s, occupied, NORTH,  1,  1, -1,  1);
-  case RIDER_MANTICORE_NW: return bent_rider_attack(s, occupied, WEST,  -1,  1, -1, -1);
-  case RIDER_MANTICORE_SE: return bent_rider_attack(s, occupied, EAST,    1,  1,  1, -1);
-  case RIDER_MANTICORE_SW: return bent_rider_attack(s, occupied, SOUTH,   1, -1, -1, -1);
+  case RIDER_GRIFFON_NH:
+  case RIDER_GRIFFON_SH:
+  case RIDER_GRIFFON_EV:
+  case RIDER_GRIFFON_WV:
+  case RIDER_MANTICORE_NE:
+  case RIDER_MANTICORE_NW:
+  case RIDER_MANTICORE_SE:
+  case RIDER_MANTICORE_SW:
+      return bent_rider_attack(R, s, occupied);
   case RIDER_SKI_ROOK_H: return ski_sliding_attack(RookDirectionsH, s, occupied);
   case RIDER_SKI_ROOK_V: return ski_sliding_attack(RookDirectionsV, s, occupied);
   case RIDER_SKI_BISHOP: return ski_sliding_attack(BishopDirections, s, occupied);
@@ -491,18 +485,102 @@ Bitboard custom_rider_attacks(PieceType pt, bool initial, bool isCapture, Color 
        | tuple_rider_attacks(pieceMap.get(pt)->tupleSlider[initial][m], s, occupied, c);
 }
 
+Bitboard stepped_rider_attacks(Square s, Bitboard occupied, int stepF, int stepR) {
+  return walk_ray(s, stepF, stepR, false, [&](Square to, Bitboard& attack) {
+      attack |= to;
+      return !(occupied & to);
+  });
+}
+
+Bitboard bent_rider_attack(RiderType R, Square s, Bitboard occupied) {
+  int r = int(rank_of(s));
+  int f = int(file_of(s));
+
+  auto make_src = [&](int pivotF, int pivotR) {
+      int srcF = f + pivotF;
+      int srcR = r + pivotR;
+      if (srcF < int(FILE_A) || srcF > int(FILE_MAX) || srcR < int(RANK_1) || srcR > int(RANK_MAX))
+          return SQ_NONE;
+      return make_square(File(srcF), Rank(srcR));
+  };
+
+  auto attack_from = [&](Square src, int stepF1, int stepR1, int stepF2, int stepR2) {
+      if (occupied & src)
+          return square_bb(src);
+      return square_bb(src)
+           | stepped_rider_attacks(src, occupied, stepF1, stepR1)
+           | stepped_rider_attacks(src, occupied, stepF2, stepR2);
+  };
+
+  switch (R)
+  {
+    case RIDER_GRIFFON_NH:
+    {
+        Square src = make_src(1, 1);
+        return is_ok(src) ? attack_from(src, 1, 0, 0, 1) : Bitboard(0);
+    }
+    case RIDER_GRIFFON_SH:
+    {
+        Square src = make_src(-1, 1);
+        return is_ok(src) ? attack_from(src, -1, 0, 0, 1) : Bitboard(0);
+    }
+    case RIDER_GRIFFON_EV:
+    {
+        Square src = make_src(1, -1);
+        return is_ok(src) ? attack_from(src, 1, 0, 0, -1) : Bitboard(0);
+    }
+    case RIDER_GRIFFON_WV:
+    {
+        Square src = make_src(-1, -1);
+        return is_ok(src) ? attack_from(src, -1, 0, 0, -1) : Bitboard(0);
+    }
+    case RIDER_MANTICORE_NE:
+    {
+        Square src = make_src(0, 1);
+        return is_ok(src) ? attack_from(src, 1, 1, -1, 1) : Bitboard(0);
+    }
+    case RIDER_MANTICORE_NW:
+    {
+        Square src = make_src(-1, 0);
+        return is_ok(src) ? attack_from(src, -1, 1, -1, -1) : Bitboard(0);
+    }
+    case RIDER_MANTICORE_SE:
+    {
+        Square src = make_src(1, 0);
+        return is_ok(src) ? attack_from(src, 1, 1, 1, -1) : Bitboard(0);
+    }
+    case RIDER_MANTICORE_SW:
+    {
+        Square src = make_src(0, -1);
+        return is_ok(src) ? attack_from(src, 1, -1, -1, -1) : Bitboard(0);
+    }
+    default:
+        return Bitboard(0);
+  }
+}
+
 Bitboard tuple_rider_between_bb(PieceType pt, MoveModality modality, bool initial, Square s1, Square s2) {
   for (const auto& ray : pieceMap.get(pt)->tupleSlider[initial][modality])
-      if (Bitboard path = fixed_step_between_bb(s1, s2, ray.df, ray.dr))
-      {
-          int steps = popcount(path);
+  {
+      Bitboard path = 0;
+      bool hit = false;
+      walk_tuple_ray(ray, s1, WHITE, Bitboard(0), [&](Bitboard next, Square to, int count) {
+          path |= next;
+          if (to != s2)
+              return true;
+
+          int steps = count + 1;
           if (steps < slider_min_distance(ray.limit))
-              continue;
+              return false;
           int maxDistance = slider_max_distance(ray.limit);
           if (maxDistance && steps > maxDistance)
-              continue;
+              return false;
+          hit = true;
+          return false;
+      });
+      if (hit)
           return path;
-      }
+  }
   return Bitboard(0);
 }
 

@@ -715,7 +715,8 @@ public:
   Bitboard pieces(Color c, PieceType pt1, PieceType pt2, PieceType pt3) const;
   Bitboard major_pieces(Color c) const;
   Bitboard non_sliding_riders() const;
-  Bitboard between_bb(Square s1, Square s2, PieceType pt = NO_PIECE_TYPE) const;
+  Bitboard between_bb(Square s1, Square s2, PieceType pt = NO_PIECE_TYPE,
+                      MoveModality modality = MODALITY_CAPTURE, bool initial = false) const;
   Piece piece_on(Square s) const;
   Piece unpromoted_piece_on(Square s) const;
   Bitboard ep_squares() const;
@@ -2968,9 +2969,9 @@ inline Bitboard Position::non_sliding_riders() const {
   return st->nonSlidingRiders;
 }
 
-inline Bitboard Position::between_bb(Square s1, Square s2, PieceType pt) const {
+inline Bitboard Position::between_bb(Square s1, Square s2, PieceType pt, MoveModality modality, bool initial) const {
   return pt == NO_PIECE_TYPE ? Stockfish::between_bb(s1, s2)
-                             : Stockfish::between_bb(s1, s2, pt);
+                             : Stockfish::between_bb(s1, s2, pt, modality, initial);
 }
 
 inline int Position::count(Color c, PieceType pt) const {

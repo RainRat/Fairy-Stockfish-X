@@ -56,8 +56,12 @@ out=$(run_cmds "setoption name UCI_Variant value spell-chess
 position fen 7k/8/8/8/8/8/8/4K3[J] w - - 0 1 - <1 2 3 4>
 d
 position fen 7k/8/8/8/8/8/8/4K3[J] w - - 0 1 - <1 2 3 4
-d")
+d
+position fen 7k/8/8/8/8/8/8/4K3[J] w - - 0 1 - <1 2 x 4>
+d" 2>&1)
 grep -q "^Fen: 7k/8/8/8/8/8/8/4K3\\[J\\] w - - 0 1 - <1 2 3 4>$" <<<"${out}"
 grep -q "^Fen: 7k/8/8/8/8/8/8/4K3\\[J\\] w - - 0 1$" <<<"${out}"
+grep -q "^Fen: 7k/8/8/8/8/8/8/4K3\\[J\\] w - - 0 1$" <<<"${out}"
+grep -q "^Invalid potion cooldown specification in FEN: '<1 2 x 4>'\.$" <<<"${out}"
 
 echo "potion custom tests passed"

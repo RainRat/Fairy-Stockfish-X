@@ -82,7 +82,9 @@ bool MovePicker::is_useless_potion(Move m) const {
           if (pos.piece_on(gate) == NO_PIECE)
               return true;
 
-          Bitboard path = between_bb(from_sq(m), to_sq(m), type_of(pos.moved_piece(m)));
+          const bool initial = pos.not_moved_pieces(pos.side_to_move()) & from_sq(m);
+          const MoveModality modality = pos.capture(m) ? MODALITY_CAPTURE : MODALITY_QUIET;
+          Bitboard path = pos.between_bb(from_sq(m), to_sq(m), type_of(pos.moved_piece(m)), modality, initial);
           path &= ~square_bb(to_sq(m));
           return !(path & square_bb(gate));
       }

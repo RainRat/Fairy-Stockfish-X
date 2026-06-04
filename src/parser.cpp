@@ -134,12 +134,7 @@ namespace {
             PieceType pt = parse_piece_type_token(v, token);
             if (pt == NO_PIECE_TYPE || rawValue.empty())
                 return false;
-            const char* first = rawValue.data();
-            const char* last  = first + rawValue.size();
-            auto [ptr, ec] = std::from_chars(first, last, parsedValue);
-            while (ptr != last && std::isspace(static_cast<unsigned char>(*ptr)))
-                ptr++;
-            if (ec != std::errc() || ptr != last)
+            if (!parse_int_strict(rawValue, parsedValue))
                 return false;
             if (!allowZero && parsedValue < 1)
                 return false;
@@ -402,16 +397,8 @@ namespace {
 
     template <> bool set(const std::string& value, int& target)
     {
-        if (value.empty())
-            return false;
-
-        const char* first = value.data();
-        const char* last  = first + value.size();
         int parsed = 0;
-        auto [ptr, ec] = std::from_chars(first, last, parsed);
-        while (ptr != last && std::isspace(static_cast<unsigned char>(*ptr)))
-            ptr++;
-        if (ec != std::errc() || ptr != last)
+        if (!parse_int_strict(value, parsed))
             return false;
         target = parsed;
         return true;

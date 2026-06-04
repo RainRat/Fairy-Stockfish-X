@@ -328,6 +328,13 @@ namespace {
               fail_piece(true);
               return;
           }
+          if (initial && std::find(moveModalities.begin(), moveModalities.end(), MODALITY_CAPTURE) != moveModalities.end())
+          {
+              std::cerr << "Initial capture Betza moves are not supported in '" << betza
+                        << "': remove the capture modality or the initial modifier." << std::endl;
+              fail_piece(true);
+              return;
+          }
           if (lame && atomIsTuple)
           {
               std::cerr << "Unsupported Betza tuple modifier combination in '" << betza

@@ -56,7 +56,7 @@ inline bool parse_file_index(const std::string& raw, int& out) {
     return true;
 }
 
-inline bool parse_positive_int(const std::string& raw, int& out) {
+inline bool parse_int_strict(const std::string& raw, int& out) {
     if (raw.empty())
         return false;
 
@@ -67,7 +67,11 @@ inline bool parse_positive_int(const std::string& raw, int& out) {
     const char* begin = raw.data() + first;
     const char* end = raw.data() + last + 1;
     auto [ptr, ec] = std::from_chars(begin, end, out);
-    return ec == std::errc() && ptr == end && out >= 1;
+    return ec == std::errc() && ptr == end;
+}
+
+inline bool parse_positive_int(const std::string& raw, int& out) {
+    return parse_int_strict(raw, out) && out >= 1;
 }
 
 class Config {

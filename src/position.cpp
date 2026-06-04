@@ -764,33 +764,54 @@ namespace {
       return make_square(File(spec[0] - 'a'), Rank(rankNumber - 1));
   }
 
-  inline std::array<int, 4> parse_potion_cooldowns(std::string content) {
+  inline bool parse_potion_cooldowns(const std::string& content, std::array<int, 4>& parsed) {
       // Order: white-freeze, white-jump, black-freeze, black-jump.
-      std::array<int, 4> parsed = {0, 0, 0, 0};
-      for (char& ch : content)
-          if (!(std::isdigit(static_cast<unsigned char>(ch)) || ch == '-'))
-              ch = ' ';
+      parsed = {0, 0, 0, 0};
 
       std::istringstream ss(content);
       std::vector<int> vals;
-      int v = 0;
-      while (ss >> v)
-          vals.push_back(std::max(0, v));
+      std::string token;
+      while (ss >> token)
+      {
+          if (token.empty())
+              return false;
 
-      if (vals.size() >= 4)
+          size_t start = token[0] == '-' ? 1 : 0;
+          if (start == token.size())
+              return false;
+
+          long long value = 0;
+          for (size_t i = start; i < token.size(); ++i)
+          {
+              unsigned char ch = static_cast<unsigned char>(token[i]);
+              if (!std::isdigit(ch))
+                  return false;
+              value = value * 10 + (token[i] - '0');
+              if (value > std::numeric_limits<int>::max())
+                  return false;
+          }
+
+          int signedValue = token[0] == '-' ? -int(value) : int(value);
+          vals.push_back(std::max(0, signedValue));
+      }
+
+      if (vals.size() == 2)
+      {
+          // Compact form: "<w b>" means both potion cooldowns for each side.
+          parsed[0] = parsed[1] = vals[0];
+          parsed[2] = parsed[3] = vals[1];
+          return true;
+      }
+      if (vals.size() == 4)
       {
           parsed[0] = vals[0];
           parsed[1] = vals[1];
           parsed[2] = vals[2];
           parsed[3] = vals[3];
+          return true;
       }
-      else if (vals.size() == 2)
-      {
-          // Compact form: "<w b>" means both potion cooldowns for each side.
-          parsed[0] = parsed[1] = vals[0];
-          parsed[2] = parsed[3] = vals[1];
-      }
-      return parsed;
+
+      return false;
   }
 
 } // namespace
@@ -1777,12 +1798,21 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
           std::string cooldownSpec;
           if (std::getline(ss, cooldownSpec, '>') && !ss.eof())
           {
-              auto vals = parse_potion_cooldowns(cooldownSpec);
-              int maxCooldown = (1 << POTION_COOLDOWN_BITS) - 1;
-              st->potionCooldown[WHITE][Variant::POTION_FREEZE] = std::min(vals[0], maxCooldown);
-              st->potionCooldown[WHITE][Variant::POTION_JUMP]   = std::min(vals[1], maxCooldown);
-              st->potionCooldown[BLACK][Variant::POTION_FREEZE] = std::min(vals[2], maxCooldown);
-              st->potionCooldown[BLACK][Variant::POTION_JUMP]   = std::min(vals[3], maxCooldown);
+              std::array<int, 4> vals = {0, 0, 0, 0};
+              if (parse_potion_cooldowns(cooldownSpec, vals))
+              {
+                  int maxCooldown = (1 << POTION_COOLDOWN_BITS) - 1;
+                  st->potionCooldown[WHITE][Variant::POTION_FREEZE] = std::min(vals[0], maxCooldown);
+                  st->potionCooldown[WHITE][Variant::POTION_JUMP]   = std::min(vals[1], maxCooldown);
+                  st->potionCooldown[BLACK][Variant::POTION_FREEZE] = std::min(vals[2], maxCooldown);
+                  st->potionCooldown[BLACK][Variant::POTION_JUMP]   = std::min(vals[3], maxCooldown);
+              }
+              else
+              {
+                  std::cerr << "Invalid potion cooldown specification in FEN: '<" << cooldownSpec << ">'."
+                            << std::endl;
+                  ss.setstate(std::ios::failbit);
+              }
           }
           else
               ss.setstate(std::ios::failbit);
@@ -8416,11 +8446,14 @@ void Position::flip() {
       f += token;
   else
   {
-      File epFile = File(token[0] - 'a');
-      Rank epRank = Rank(std::atoi(token.substr(1).c_str()) - 1);
-      Square ep = make_square(epFile, epRank);
-      f += char('a' + file_of(ep));
-      f += std::to_string(relative_rank(~side_to_move(), ep, max_rank()) + 1);
+      Square ep = parse_fen_square(*this, token);
+      if (is_ok(ep))
+      {
+          f += char('a' + file_of(ep));
+          f += std::to_string(relative_rank(~side_to_move(), ep, max_rank()) + 1);
+      }
+      else
+          f += "-";
   }
 
   std::getline(ss, token); // Half and full moves

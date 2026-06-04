@@ -225,8 +225,8 @@ extern Bitboard BoardSizeBB[FILE_NB][RANK_NB];
 extern RiderType AttackRiderTypes[PIECE_TYPE_NB];
 extern RiderType MoveRiderTypes[2][PIECE_TYPE_NB];
 Bitboard custom_rider_attacks(PieceType pt, bool initial, bool isCapture, Color c, Square s, Bitboard occupied);
+Bitboard bent_rider_attack(RiderType R, Square s, Bitboard occupied);
 Bitboard tuple_rider_between_bb(PieceType pt, MoveModality modality, bool initial, Square s1, Square s2);
-inline Bitboard tuple_rider_between_bb(PieceType pt, Square s1, Square s2) { return tuple_rider_between_bb(pt, MODALITY_CAPTURE, false, s1, s2); }
 inline Square lsb(Bitboard b);
 
 constexpr std::array<std::pair<int, int>, 8> RoseSteps = {{
@@ -899,60 +899,10 @@ inline Bitboard rider_attacks_bb(Square s, Bitboard occupied, const MagicGeometr
 
   static_assert(R != NO_RIDER && !(R & (R - 1))); // exactly one bit
   if constexpr (R == RIDER_GRIFFON_NH || R == RIDER_GRIFFON_SH || R == RIDER_GRIFFON_EV || R == RIDER_GRIFFON_WV) {
-      int r = int(rank_of(s));
-      int f = int(file_of(s));
-      if constexpr (R == RIDER_GRIFFON_NH) { ++r; ++f; }
-      if constexpr (R == RIDER_GRIFFON_SH) { ++r; --f; }
-      if constexpr (R == RIDER_GRIFFON_EV) { --r; ++f; }
-      if constexpr (R == RIDER_GRIFFON_WV) { --r; --f; }
-      if (r < 0 || r > int(RANK_MAX) || f < 0 || f > int(FILE_MAX))
-          return Bitboard(0);
-      Square src = make_square(File(f), Rank(r));
-      if (occupied & src)
-          return square_bb(src);
-      if constexpr (R == RIDER_GRIFFON_NH)
-          return square_bb(src)
-               | fixed_step_rider_attacks(src, occupied, 1, 0)
-               | fixed_step_rider_attacks(src, occupied, 0, 1);
-      if constexpr (R == RIDER_GRIFFON_SH)
-          return square_bb(src)
-               | fixed_step_rider_attacks(src, occupied, -1, 0)
-               | fixed_step_rider_attacks(src, occupied, 0, 1);
-      if constexpr (R == RIDER_GRIFFON_EV)
-          return square_bb(src)
-               | fixed_step_rider_attacks(src, occupied, 1, 0)
-               | fixed_step_rider_attacks(src, occupied, 0, -1);
-      return square_bb(src)
-           | fixed_step_rider_attacks(src, occupied, -1, 0)
-           | fixed_step_rider_attacks(src, occupied, 0, -1);
+      return bent_rider_attack(R, s, occupied);
   }
   if constexpr (R == RIDER_MANTICORE_NE || R == RIDER_MANTICORE_NW || R == RIDER_MANTICORE_SE || R == RIDER_MANTICORE_SW) {
-      int r = int(rank_of(s));
-      int f = int(file_of(s));
-      if constexpr (R == RIDER_MANTICORE_NE) ++r;
-      if constexpr (R == RIDER_MANTICORE_NW) --f;
-      if constexpr (R == RIDER_MANTICORE_SE) ++f;
-      if constexpr (R == RIDER_MANTICORE_SW) --r;
-      if (r < 0 || r > int(RANK_MAX) || f < 0 || f > int(FILE_MAX))
-          return Bitboard(0);
-      Square src = make_square(File(f), Rank(r));
-      if (occupied & src)
-          return square_bb(src);
-      if constexpr (R == RIDER_MANTICORE_NE)
-          return square_bb(src)
-               | fixed_step_rider_attacks(src, occupied, 1, 1)
-               | fixed_step_rider_attacks(src, occupied, -1, 1);
-      if constexpr (R == RIDER_MANTICORE_NW)
-          return square_bb(src)
-               | fixed_step_rider_attacks(src, occupied, -1, 1)
-               | fixed_step_rider_attacks(src, occupied, -1, -1);
-      if constexpr (R == RIDER_MANTICORE_SE)
-          return square_bb(src)
-               | fixed_step_rider_attacks(src, occupied, 1, 1)
-               | fixed_step_rider_attacks(src, occupied, 1, -1);
-      return square_bb(src)
-           | fixed_step_rider_attacks(src, occupied, 1, -1)
-           | fixed_step_rider_attacks(src, occupied, -1, -1);
+      return bent_rider_attack(R, s, occupied);
   }
   if constexpr (R == RIDER_LAME_DABBABA)
       return  fixed_step_lame_rider_attacks(s, occupied,  2,  0)

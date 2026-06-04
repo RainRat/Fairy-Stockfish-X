@@ -132,6 +132,9 @@ multimoves = 1 0
 king = -
 potions = true
 
+[initial-capture-betza:chess]
+customPiece1 = a:ciW
+
 [invalid-bool-retain-child:invalid-bool-retain]
 potions = maybe
 wallingRule = duck
@@ -328,6 +331,9 @@ INI
 
 check_output=$("${ENGINE}" check "${bad_betza_ini}" 2>&1 || true)
 assert_contains "${check_output}" "customPiece1 - Missing Betza move notation"
+
+initial_capture_output=$("${ENGINE}" check "${tmp_ini}" 2>&1 || true)
+assert_contains "${initial_capture_output}" "Initial capture Betza moves are not supported in 'ciW'"
 
 check_output=$("${ENGINE}" check "${bad_hopper_brace_ini}" 2>&1 || true)
 assert_contains "${check_output}" "customPiece1 - Invalid Betza hopper parameters in 'R{hurdles: 1,1': missing closing '}'."

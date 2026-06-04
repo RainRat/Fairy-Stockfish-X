@@ -17,6 +17,7 @@
 */
 
 #include <cassert>
+#include <cstdlib>
 
 #include "movegen.h"
 #include "position.h"
@@ -1352,6 +1353,30 @@ namespace {
 
   enum class AppendStatus { Appended, Skipped, Full };
 
+  struct PotionBaseInfo {
+      MoveType mt = NORMAL;
+      Square from = SQ_NONE;
+      Square to = SQ_NONE;
+      Piece mover = NO_PIECE;
+      PieceType moverType = NO_PIECE_TYPE;
+      bool isInitial = false;
+      MoveModality modality = MODALITY_QUIET;
+  };
+
+  inline bool prepare_potion_base(const Position& pos, Move base, PotionBaseInfo& info) {
+      if (!is_potion_eligible_base(base, info.mt, info.from, info.to))
+          return false;
+
+      info.mover = pos.piece_on(info.from);
+      if (info.mover == NO_PIECE)
+          return false;
+
+      info.moverType = type_of(info.mover);
+      info.isInitial = pos.not_moved_pieces(pos.side_to_move()) & info.from;
+      info.modality = pos.capture(base) ? MODALITY_CAPTURE : MODALITY_QUIET;
+      return true;
+  }
+
   template<GenType Type>
   inline AppendStatus try_append_potion_gating_move(const Position& pos, ExtMove*& cur, ExtMove* maxEnd,
                                                     Square from, Square to, MoveType mt, Move base,
@@ -1375,7 +1400,7 @@ namespace {
               break;
           default:
               assert(false);
-              return AppendStatus::Skipped;
+              std::abort();
       }
 
       if (!potion_move_matches<Type>(pos, base, gatingMove))
@@ -1421,27 +1446,21 @@ namespace {
                 Square gate = pop_lsb(candidates);
                 for (ExtMove* it = buffer.begin; it != buffer.end; ++it)
                 {
-                    Move base = it->move;
-                    MoveType mt;
-                    Square from, to;
-                    if (!is_potion_eligible_base(base, mt, from, to))
+                    PotionBaseInfo baseInfo;
+                    if (!prepare_potion_base(pos, it->move, baseInfo))
                         continue;
 
-                    if (gate == to)
+                    if (gate == baseInfo.to)
                         continue;
-                    Piece mover = pos.piece_on(from);
-                    if (mover != NO_PIECE)
+                    if (baseInfo.mover != NO_PIECE)
                     {
-                        if (pos.freeze_squares() & from)
+                        if (pos.freeze_squares() & baseInfo.from)
                             continue;
-                        PieceType moverType = type_of(mover);
-                        bool isInitial = pos.not_moved_pieces(Us) & from;
-                        MoveModality modality = pos.capture(base) ? MODALITY_CAPTURE : MODALITY_QUIET;
-                        if ((between_bb(from, to, moverType, modality, isInitial) & ~square_bb(to)) & gate)
+                        if ((between_bb(baseInfo.from, baseInfo.to, baseInfo.moverType, baseInfo.modality, baseInfo.isInitial) & ~square_bb(baseInfo.to)) & gate)
                             continue;
                     }
 
-                    if (try_append_potion_gating_move<Type>(pos, cur, maxEnd, from, to, mt, base, potion, potionPiece, gate, it->value)
+                    if (try_append_potion_gating_move<Type>(pos, cur, maxEnd, baseInfo.from, baseInfo.to, baseInfo.mt, it->move, potion, potionPiece, gate, it->value)
                         == AppendStatus::Full)
                         return maxEnd;
                 }
@@ -1473,31 +1492,23 @@ namespace {
                 if (cur >= maxEnd)
                     return maxEnd;
 
-                Move base = it->move;
-                MoveType mt;
-                Square from, to;
-                if (!is_potion_eligible_base(base, mt, from, to))
+                PotionBaseInfo baseInfo;
+                if (!prepare_potion_base(pos, it->move, baseInfo))
                     continue;
 
-                Piece mover = pos.piece_on(from);
-                if (mover == NO_PIECE)
-                    continue;
-
-                PieceType moverType = type_of(mover);
                 // Pure leapers cannot have an intermediate path square.
-                if ((mt == NORMAL || mt == PROMOTION)
-                    && AttackRiderTypes[moverType] == NO_RIDER
-                    && moverType != PAWN
-                    && moverType != SHOGI_PAWN
-                    && moverType != SOLDIER)
+                if ((baseInfo.mt == NORMAL || baseInfo.mt == PROMOTION)
+                    && AttackRiderTypes[baseInfo.moverType] == NO_RIDER
+                    && baseInfo.moverType != PAWN
+                    && baseInfo.moverType != SHOGI_PAWN
+                    && baseInfo.moverType != SOLDIER)
                     continue;
 
-                if (distance(from, to) <= 1)
+                if (distance(baseInfo.from, baseInfo.to) <= 1)
                     continue;
 
-                bool isInitial = pos.not_moved_pieces(Us) & from;
-                Bitboard path = between_bb(from, to, moverType, pos.capture(base) ? MODALITY_CAPTURE : MODALITY_QUIET, isInitial);
-                Bitboard intersection = path & candidates & ~square_bb(to);
+                Bitboard path = between_bb(baseInfo.from, baseInfo.to, baseInfo.moverType, baseInfo.modality, baseInfo.isInitial);
+                Bitboard intersection = path & candidates & ~square_bb(baseInfo.to);
                 if (popcount(intersection) != 1)
                     continue;
 
@@ -1506,14 +1517,14 @@ namespace {
                 bool moveOk = false;
                 {
                     ScopedSpellContext revalGuard(Bitboard(0), square_bb(gate));
-                    Bitboard okSquares = isInitial ? (pos.moves_from<true>(Us, moverType, from) | pos.attacks_from<true>(Us, moverType, from))
-                                                   : (pos.moves_from<false>(Us, moverType, from) | pos.attacks_from<false>(Us, moverType, from));
-                    moveOk = bool(okSquares & to);
+                    Bitboard okSquares = baseInfo.isInitial ? (pos.moves_from<true>(Us, baseInfo.moverType, baseInfo.from) | pos.attacks_from<true>(Us, baseInfo.moverType, baseInfo.from))
+                                                            : (pos.moves_from<false>(Us, baseInfo.moverType, baseInfo.from) | pos.attacks_from<false>(Us, baseInfo.moverType, baseInfo.from));
+                    moveOk = bool(okSquares & baseInfo.to);
                 }
                 if (!moveOk)
                     continue;
 
-                if (try_append_potion_gating_move<Type>(pos, cur, maxEnd, from, to, mt, base, potion, potionPiece, gate, it->value)
+                if (try_append_potion_gating_move<Type>(pos, cur, maxEnd, baseInfo.from, baseInfo.to, baseInfo.mt, it->move, potion, potionPiece, gate, it->value)
                     == AppendStatus::Full)
                     return maxEnd;
             }
