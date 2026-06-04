@@ -224,7 +224,7 @@ public:
         {
             ::close(fd);
             std::cerr << "Corrupt tablebase file " << fname << std::endl;
-            exit(EXIT_FAILURE);
+            return *baseAddress = nullptr, nullptr;
         }
 
         *mapping = statbuf.st_size;
@@ -234,7 +234,7 @@ public:
         {
             ::close(fd);
             std::cerr << "Could not mmap() " << fname << std::endl;
-            exit(EXIT_FAILURE);
+            return *baseAddress = nullptr, nullptr;
         }
 
 #if defined(MADV_RANDOM)
@@ -254,8 +254,9 @@ public:
 
         if (size_low % 64 != 16)
         {
+            CloseHandle(fd);
             std::cerr << "Corrupt tablebase file " << fname << std::endl;
-            exit(EXIT_FAILURE);
+            return *baseAddress = nullptr, nullptr;
         }
 
         HANDLE mmap = CreateFileMapping(fd, nullptr, PAGE_READONLY, size_high, size_low, nullptr);
@@ -264,7 +265,7 @@ public:
         if (!mmap)
         {
             std::cerr << "CreateFileMapping() failed" << std::endl;
-            exit(EXIT_FAILURE);
+            return *baseAddress = nullptr, nullptr;
         }
 
         *mapping = (uint64_t)mmap;
@@ -274,7 +275,9 @@ public:
         {
             std::cerr << "MapViewOfFile() failed, name = " << fname
                       << ", error = " << GetLastError() << std::endl;
-            exit(EXIT_FAILURE);
+            CloseHandle(mmap);
+            *mapping = 0;
+            return *baseAddress = nullptr, nullptr;
         }
 #endif
         uint8_t* data = (uint8_t*)*baseAddress;

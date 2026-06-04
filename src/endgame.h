@@ -132,8 +132,8 @@ namespace Endgames {
   void add(const std::string& code) {
 
     StateInfo st;
-    map<T>()[Position().set(code, WHITE, &st).material_key(V)] = Ptr<T>(new Endgame<E, V>(WHITE));
-    map<T>()[Position().set(code, BLACK, &st).material_key(V)] = Ptr<T>(new Endgame<E, V>(BLACK));
+    map<T>()[Position().set(code, WHITE, &st).material_key(V)] = std::make_unique<Endgame<E, V>>(WHITE);
+    map<T>()[Position().set(code, BLACK, &st).material_key(V)] = std::make_unique<Endgame<E, V>>(BLACK);
   }
 
   template<typename T>

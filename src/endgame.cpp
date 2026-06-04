@@ -77,6 +77,52 @@ namespace {
     return strongSide == WHITE ? sq : flip_rank(sq, pos.max_rank());
   }
 
+  bool can_probe_standard_kpk_bitbase(const Position& pos, Color strongSide) {
+      return pos.promotion_zone(strongSide, PAWN) == rank_bb(relative_rank(strongSide, RANK_8, pos.max_rank()))
+          && pos.max_file() == FILE_H
+          && pos.max_rank() == RANK_8
+          && RANK_MAX == RANK_8
+          && (pos.promotion_piece_types(strongSide) & QUEEN);
+  }
+
+  bool defending_king_blocks_pawn(const Position& pos, Color strongSide, Color weakSide, Square strongPawn, Square strongBishop) {
+      Square weakKing = pos.square<KING>(weakSide);
+      const int blockRank = std::max(int(RANK_1), int(pos.max_rank()) - 2);
+      return (forward_file_bb(strongSide, strongPawn) & weakKing)
+          && (   opposite_colors(weakKing, strongBishop)
+              || int(relative_rank(strongSide, weakKing, pos.max_rank())) <= blockRank);
+  }
+
+  Value duck_minor_vs_king(const Position& pos, Color strongSide, Color weakSide) {
+      Square strongKing = pos.square<COMMONER>(strongSide);
+      Square weakKing   = pos.square<COMMONER>(weakSide);
+
+      Value result =  Value(push_to_edge(weakKing, pos))
+                    + push_close(strongKing, weakKing);
+
+      return strongSide == pos.side_to_move() ? result : -result;
+  }
+
+  template<PieceType Pt>
+  Value racing_major_vs_king(const Position& pos, Color strongSide, Color weakSide) {
+      Square strongKing  = pos.square<KING>(strongSide);
+      Square weakKing    = pos.square<KING>(weakSide);
+      Square strongPiece = pos.square<Pt>(strongSide);
+
+      Value result;
+      Bitboard goalRank = rank_bb(pos.max_rank());
+      Rank penultimate = penultimate_rank(pos);
+
+      if (   rank_of(weakKing) < rank_of(strongPiece)
+          || rank_of(weakKing) + (weakSide == pos.side_to_move()) < penultimate
+          || (goalRank & pos.attacks_bb<Pt>(strongPiece, pos.pieces()) & ~(pos.attacks_bb<QUEEN>(weakKing) | pos.attacks_bb<SHOGI_KNIGHT>(weakKing))))
+          result = VALUE_KNOWN_WIN + 100 * rank_of(strongKing);
+      else
+          result = -VALUE_KNOWN_WIN;
+
+      return strongSide == pos.side_to_move() ? result : -result;
+  }
+
 } // namespace
 
 
@@ -221,13 +267,7 @@ Value Endgame<KPK>::operator()(const Position& pos) const {
 
   Color us = strongSide == pos.side_to_move() ? WHITE : BLACK;
 
-  // KPK is registered only for literal PAWN material signatures.
-  // For non-standard promotion rules, skip bitbase probing and use fallback eval.
-  if (   pos.promotion_zone(strongSide, PAWN) != rank_bb(relative_rank(strongSide, RANK_8, pos.max_rank()))
-      || pos.max_file() != FILE_H
-      || pos.max_rank() != RANK_8
-      || RANK_MAX != RANK_8
-      || !(pos.promotion_piece_types(strongSide) & QUEEN))
+  if (!can_probe_standard_kpk_bitbase(pos, strongSide))
   {
       Value result = PawnValueEg + Value(rank_of(strongPawn));
       return strongSide == pos.side_to_move() ? result : -result;
@@ -900,13 +940,9 @@ ScaleFactor Endgame<KBPKB>::operator()(const Position& pos) const {
   Square strongPawn = pos.square<PAWN>(strongSide);
   Square strongBishop = pos.square<BISHOP>(strongSide);
   Square weakBishop = pos.square<BISHOP>(weakSide);
-  Square weakKing = pos.square<KING>(weakSide);
 
   // Case 1: Defending king blocks the pawn, and cannot be driven away
-  const int bishopBlockRank = std::max(int(RANK_1), int(pos.max_rank()) - 2);
-  if (   (forward_file_bb(strongSide, strongPawn) & weakKing)
-      && (   opposite_colors(weakKing, strongBishop)
-          || int(relative_rank(strongSide, weakKing, pos.max_rank())) <= bishopBlockRank))
+  if (defending_king_blocks_pawn(pos, strongSide, weakSide, strongPawn, strongBishop))
       return SCALE_FACTOR_DRAW;
 
   // Case 2: Opposite colored bishops
@@ -995,13 +1031,8 @@ ScaleFactor Endgame<KBPKN>::operator()(const Position& pos) const {
 
   Square strongPawn = pos.square<PAWN>(strongSide);
   Square strongBishop = pos.square<BISHOP>(strongSide);
-  Square weakKing = pos.square<KING>(weakSide);
 
-  const int knightBlockRank = std::max(int(RANK_1), int(pos.max_rank()) - 2);
-  if (   file_of(weakKing) == file_of(strongPawn)
-      && relative_rank(strongSide, strongPawn, pos.max_rank()) < relative_rank(strongSide, weakKing, pos.max_rank())
-      && (   opposite_colors(weakKing, strongBishop)
-          || int(relative_rank(strongSide, weakKing, pos.max_rank())) <= knightBlockRank))
+  if (defending_king_blocks_pawn(pos, strongSide, weakSide, strongPawn, strongBishop))
       return SCALE_FACTOR_DRAW;
 
   return SCALE_FACTOR_NONE;
@@ -1033,12 +1064,7 @@ ScaleFactor Endgame<KPKP>::operator()(const Position& pos) const {
 
   // Probe the KPK bitbase with the weakest side's pawn removed. If it's a draw,
   // it's probably at least a draw even with the pawn.
-  // KPKP is registered only for literal PAWN material signatures.
-  if (   pos.promotion_zone(strongSide, PAWN) != rank_bb(relative_rank(strongSide, RANK_8, pos.max_rank()))
-      || pos.max_file() != FILE_H
-      || pos.max_rank() != RANK_8
-      || RANK_MAX != RANK_8
-      || !(pos.promotion_piece_types(strongSide) & QUEEN))
+  if (!can_probe_standard_kpk_bitbase(pos, strongSide))
       return SCALE_FACTOR_NONE;
 
   return Bitbases::probe(strongKing, strongPawn, weakKing, us) ? SCALE_FACTOR_NONE : SCALE_FACTOR_DRAW;
@@ -1258,31 +1284,16 @@ Value Endgame<KXK, EG_EVAL_DUCK>::operator()(const Position& pos) const {
 }
 
 
-/// Drawish, but king should stay away from the edge
 template<>
 Value Endgame<KNK, EG_EVAL_DUCK>::operator()(const Position& pos) const {
-
-  Square strongKing = pos.square<COMMONER>(strongSide);
-  Square weakKing   = pos.square<COMMONER>(weakSide);
-
-  Value result =  Value(push_to_edge(weakKing, pos))
-                + push_close(strongKing, weakKing);
-
-  return strongSide == pos.side_to_move() ? result : -result;
+  return duck_minor_vs_king(pos, strongSide, weakSide);
 }
 
 
 /// Drawish, but king should stay away from the edge
 template<>
 Value Endgame<KBK, EG_EVAL_DUCK>::operator()(const Position& pos) const {
-
-  Square strongKing = pos.square<COMMONER>(strongSide);
-  Square weakKing   = pos.square<COMMONER>(weakSide);
-
-  Value result =  Value(push_to_edge(weakKing, pos))
-                + push_close(strongKing, weakKing);
-
-  return strongSide == pos.side_to_move() ? result : -result;
+  return duck_minor_vs_king(pos, strongSide, weakSide);
 }
 
 
@@ -1303,48 +1314,15 @@ Value Endgame<KPK, EG_EVAL_DUCK>::operator()(const Position& pos) const {
   return strongSide == pos.side_to_move() ? result : -result;
 }
 
-/// Winning as long as last rank can be blocked
 template<>
 Value Endgame<KQK, EG_EVAL_RK>::operator()(const Position& pos) const {
-
-  Square strongKing  = pos.square<KING>(strongSide);
-  Square weakKing    = pos.square<KING>(weakSide);
-  Square strongQueen = pos.square<QUEEN>(strongSide);
-
-  Value result;
-  Bitboard goalRank = rank_bb(pos.max_rank());
-  Rank penultimate = penultimate_rank(pos);
-
-  if (   rank_of(weakKing) < rank_of(strongQueen)
-      || rank_of(weakKing) + (weakSide == pos.side_to_move()) < penultimate
-      || (goalRank & pos.attacks_bb<QUEEN>(strongQueen, pos.pieces()) & ~(pos.attacks_bb<QUEEN>(weakKing) | pos.attacks_bb<SHOGI_KNIGHT>(weakKing))))
-      result = VALUE_KNOWN_WIN + 100 * rank_of(strongKing);
-  else
-      result = -VALUE_KNOWN_WIN;
-
-  return strongSide == pos.side_to_move() ? result : -result;
+  return racing_major_vs_king<QUEEN>(pos, strongSide, weakSide);
 }
 
 /// Winning as long as last rank can be blocked
 template<>
 Value Endgame<KRK, EG_EVAL_RK>::operator()(const Position& pos) const {
-
-  Square strongKing = pos.square<KING>(strongSide);
-  Square weakKing   = pos.square<KING>(weakSide);
-  Square strongRook = pos.square<ROOK>(strongSide);
-
-  Value result;
-  Bitboard goalRank = rank_bb(pos.max_rank());
-  Rank penultimate = penultimate_rank(pos);
-
-  if (   rank_of(weakKing) < rank_of(strongRook)
-      || rank_of(weakKing) + (weakSide == pos.side_to_move()) < penultimate
-      || (goalRank & pos.attacks_bb<ROOK>(strongRook, pos.pieces()) & ~(pos.attacks_bb<QUEEN>(weakKing) | pos.attacks_bb<SHOGI_KNIGHT>(weakKing))))
-      result = VALUE_KNOWN_WIN + 100 * rank_of(strongKing);
-  else
-      result = -VALUE_KNOWN_WIN;
-
-  return strongSide == pos.side_to_move() ? result : -result;
+  return racing_major_vs_king<ROOK>(pos, strongSide, weakSide);
 }
 
 /// KvK. Pure race

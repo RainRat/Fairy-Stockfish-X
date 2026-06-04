@@ -4843,7 +4843,10 @@ inline Bitboard Position::fog_area() const {
 }
 
 inline Piece Position::captured_piece(Move m) const {
-  return capture(m) ? piece_on(capture_square(m)) : NO_PIECE;
+  if (!capture(m))
+      return NO_PIECE;
+  Square cs = capture_square(m);
+  return is_ok(cs) ? piece_on(cs) : NO_PIECE;
 }
 
 inline std::string Position::piece_to_partner() const {

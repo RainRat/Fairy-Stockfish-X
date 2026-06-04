@@ -144,10 +144,12 @@ namespace Eval {
             {
                 // C++ way to prepare a buffer for a memory stream
                 class MemoryBuffer : public basic_streambuf<char> {
-                    public: MemoryBuffer(char* p, size_t n) { setg(p, p, p + n); setp(p, p + n); }
+                    public: MemoryBuffer(const char* p, size_t n) {
+                        setg(const_cast<char*>(p), const_cast<char*>(p), const_cast<char*>(p) + n);
+                    }
                 };
 
-                MemoryBuffer buffer(const_cast<char*>(reinterpret_cast<const char*>(gEmbeddedNNUEData)),
+                MemoryBuffer buffer(reinterpret_cast<const char*>(gEmbeddedNNUEData),
                                     size_t(gEmbeddedNNUESize));
 
                 istream stream(&buffer);
