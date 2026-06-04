@@ -1444,8 +1444,6 @@ inline bool Position::is_actual_runtime_royal(Color c, PieceType pt) const {
       return false;
   if (pt == royal_piece_type(c))
       return true;
-  if (pt == king_type() && is_custom(pt) && count(c, pt) == 0)
-      return true;
   return flag_piece(c) == pt && v.flagPieceSafe;
 }
 
@@ -1994,8 +1992,7 @@ inline Bitboard Position::drop_region(Color c) const {
 inline Bitboard Position::drop_region(Color c, PieceType pt) const {
   assert(var != nullptr);
   assert(pt != NO_PIECE_TYPE);
-  Bitboard b = var->dropRegion.get(c).boardOfPiece(piece_to_char()[pt])
-             & board_bb(c, pt);
+  Bitboard b = var->dropRegion.get(c).boardOfPiece(piece_to_char()[pt]);
 
   // Pawns on back ranks
   if (pt == PAWN)

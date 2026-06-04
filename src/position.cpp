@@ -628,6 +628,16 @@ namespace {
     return hasHopper;
   }
 
+  bool has_hopper_like(const PieceInfo* pi) {
+    for (MoveModality modality : {MODALITY_QUIET, MODALITY_CAPTURE})
+      for (int initial : {0, 1})
+        if (!pi->hopper[initial][modality].empty()
+            || !pi->universalHopper[initial][modality].empty())
+          return true;
+
+    return false;
+  }
+
   bool has_hopper_potential_from_square(const Position& pos, Color c, PieceType pt, Square sq) {
     // PseudoMoves deliberately treats hopper families too optimistically on an
     // empty board. For immobility checks, ask the real attack generator with a
@@ -635,7 +645,7 @@ namespace {
     // any genuine adjacent-hurdle lane remains available while edge-trapped
     // hoppers still report no future move.
     Bitboard syntheticOccupancy = pos.board_bb() & ~square_bb(sq);
-    return pos.attacks_from(c, pt, sq, syntheticOccupancy);
+    return pos.attacks_from<false, false>(c, pt, sq, syntheticOccupancy);
   }
 
   Bitboard rose_revealed_blockers(Square target, Square attackerSq, Bitboard occupied) {
@@ -3184,7 +3194,7 @@ bool Position::legal(Move m) const {
   const Square royalSquare = royal_square(us);
   const bool hasRoyal = royalSquare != SQ_NONE;
   const PieceType royalType = hasRoyal ? type_of(piece_on(royalSquare)) : NO_PIECE_TYPE;
-  if (!is_pass(m) && !hasRoyal && is_actual_runtime_royal(us, king_type()))
+  if (!is_pass(m) && !hasRoyal && royal_piece_type(us) != NO_PIECE_TYPE && is_actual_runtime_royal(us, king_type()))
       return false;
 
   if (pureWallMove)
@@ -3601,7 +3611,7 @@ bool Position::legal(Move m) const {
           PieceType movePt2 = effective_piece_type(pt);
           const PieceInfo* pInfo2 = pieceMap.get(movePt2);
           bool hasPotentialMove = PseudoMoves[0][us][movePt2][to] & board_bb();
-          if (is_pure_hopper_like(pInfo2))
+          if (has_hopper_like(pInfo2) || is_pure_hopper_like(pInfo2))
               hasPotentialMove = has_hopper_potential_from_square(*this, us, movePt2, to);
           if (!hasPotentialMove && !pInfo2->has_universal_hopper())
               return false;
