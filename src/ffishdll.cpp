@@ -65,13 +65,9 @@ const Variant* get_variant(const std::string& uciVariant) {
 }
 
 template <bool isUCI>
-inline bool is_move_none(Move move, const std::string& strMove, const Position& pos) {
-  if (move == MOVE_NONE) {
-    std::cerr << "The given " << (isUCI ? "uciMove" : "sanMove")
-              << " '" << strMove << "' for position '" << pos.fen()
-              << "' is invalid." << std::endl;
+inline bool is_move_none(Move move, const std::string&, const Position&) {
+  if (move == MOVE_NONE)
     return true;
-  }
   return false;
 }
 

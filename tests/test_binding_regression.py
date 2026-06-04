@@ -15,6 +15,10 @@ class TestBindings(unittest.TestCase):
         with self.assertRaises(ValueError):
             sf.is_capture("chess", "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", [], "invalid")
 
+    def test_validate_position_reports_encoding_failure(self):
+        with self.assertRaisesRegex(ValueError, "Failed to encode move string"):
+            sf.validate_position("chess", "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", ["\udcff"])
+
     def test_game_result_not_terminal(self):
         res = sf.game_result("chess", "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", [])
         self.assertEqual(res, sf.VALUE_NONE)

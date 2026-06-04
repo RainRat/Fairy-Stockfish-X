@@ -97,8 +97,10 @@ bool py_move_list_to_vector(PyObject* moveList, std::vector<std::string>& moves)
             return false;
         }
         PyObject *moveStr = PyUnicode_AsEncodedString(item, "UTF-8", "strict");
-        if (!moveStr)
+        if (!moveStr) {
+            PyErr_SetString(PyExc_ValueError, "Failed to encode move string");
             return false;
+        }
         moves.emplace_back(PyBytes_AS_STRING(moveStr));
         Py_XDECREF(moveStr);
     }
