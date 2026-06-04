@@ -1319,7 +1319,7 @@ namespace {
           if (pos.capture(m))
               occupied ^= square_bb(pos.capture_square(m));
 
-          if (is_gating(m) && gating_square(m) != SQ_NONE)
+          if (pos.gating_move_blocks_occupancy(m) && gating_square(m) != SQ_NONE)
               occupied |= square_bb(gating_square(m));
 
           if (pos.attackers_to(pos.royal_square(us), occupied, ~us))
@@ -1327,22 +1327,22 @@ namespace {
           return true;
       }
 
-      const bool destinationOccupied = !pos.empty(to_sq(base));
+      const bool baseCaptures = pos.capture(base);
 
       if constexpr (Type == CAPTURES)
       {
-          if (destinationOccupied)
+          if (baseCaptures)
               return true;
           return is_promotion_move(base) && promotion_type(base) == QUEEN;
       }
       else if constexpr (Type == QUIETS)
       {
-          return !destinationOccupied ? !is_promotion_move(base) || promotion_type(base) != QUEEN
-                                      : is_promotion_move(base) && promotion_type(base) != QUEEN;
+          return !baseCaptures ? !is_promotion_move(base) || promotion_type(base) != QUEEN
+                               : is_promotion_move(base) && promotion_type(base) != QUEEN;
       }
       else if constexpr (Type == QUIET_CHECKS)
       {
-          return !destinationOccupied && type_of(base) != CASTLING && !is_promotion_move(base) && pos.gives_check(m);
+          return !baseCaptures && type_of(base) != CASTLING && !is_promotion_move(base) && pos.gives_check(m);
       }
       else
       {

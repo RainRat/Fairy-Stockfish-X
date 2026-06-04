@@ -1371,12 +1371,14 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
           if (ss.peek() == '~')
               ss >> token;
 
-          if(v->commitGates && (rank == 0 || rank == max_rank() + 2))
+          if (v->commitGates && (rank == 0 || rank == max_rank() + 2))
           {
-              commit_piece(pc, File(commitFile));
+              if (commitFile <= max_file())
+                  commit_piece(pc, File(commitFile));
               ++commitFile;
           }
-          else{
+          else
+          {
               put_piece(pc, sq, token == '~', NO_PIECE, true);
               ++sq;
           }
@@ -1390,13 +1392,16 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
           Piece promoted = piece_from_symbol(symbol);
           if (promoted == NO_PIECE || !promoted_piece_type(type_of(promoted)))
               continue;
-          if(v->commitGates && (rank == 0 || rank == max_rank() + 2)){
-            commit_piece(promoted, File(commitFile));
-            ++commitFile;
+          if (v->commitGates && (rank == 0 || rank == max_rank() + 2))
+          {
+              if (commitFile <= max_file())
+                  commit_piece(promoted, File(commitFile));
+              ++commitFile;
           }
-          else {
-            put_piece(make_piece(color_of(promoted), promoted_piece_type(type_of(promoted))), sq, true, promoted, true);
-            ++sq;
+          else
+          {
+              put_piece(make_piece(color_of(promoted), promoted_piece_type(type_of(promoted))), sq, true, promoted, true);
+              ++sq;
           }
       }
   }
@@ -3822,14 +3827,14 @@ bool Position::legal(Move m) const {
   }
 
   // Anti-royal pieces must remain under attack.
-  if (anti_royal_types())
-  {
-      const bool blastOnCapture = blast_on_capture(m);
-      Square kto = rifleShot ? from : to;
-      Square blastCenter = (capture(m) || rifleShot) ? captureBlastCenter : kto;
-      Square rfrom = SQ_NONE, rto = SQ_NONE;
-      Bitboard occupied = rifleShot ? pieces() : (!dropMove ? pieces() ^ from : pieces());
-      Bitboard blastImmune = blastOnCapture ? blast_immune_bb() : Bitboard(0);
+      if (anti_royal_types())
+      {
+          const bool blastOnCapture = blast_on_capture(m);
+          Square kto = rifleShot ? from : to;
+          Square blastCenter = (capture(m) || rifleShot) ? captureBlastCenter : kto;
+          Square rfrom = SQ_NONE, rto = SQ_NONE;
+          Bitboard occupied = rifleShot ? pieces() : (!dropMove ? pieces() ^ from : pieces());
+          Bitboard blastImmune = blastOnCapture ? blast_immune_bb() : Bitboard(0);
       if (walling_rule() == DUCK)
           occupied ^= st->wallSquares;
       if (walling(us) || is_gating(m))
@@ -3883,13 +3888,13 @@ bool Position::legal(Move m) const {
                       antiRoyals |= square_bb(secondary_drop_square(m));
               }
           }
-      }
-      if (is_ok(rfrom) && (antiRoyals & rfrom))
-          antiRoyals ^= square_bb(rfrom) ^ rto;
+          }
+          if (is_ok(rfrom) && (antiRoyals & rfrom))
+              antiRoyals ^= square_bb(rfrom) ^ rto;
 
-      Bitboard vulnerableEnemyRoyals = blastOnCapture
-                                     ? ((st->pseudoRoyals | pieces(king_type())) & pieces(~us) & occupied) & ~blastImmune
-                                     : Bitboard(0);
+          Bitboard vulnerableEnemyRoyals = blastOnCapture
+                                         ? ((st->pseudoRoyals | pieces(king_type())) & pieces(~us) & occupied) & ~blastImmune
+                                         : Bitboard(0);
       while (antiRoyals)
       {
           Square sr = pop_lsb(antiRoyals);
@@ -4612,7 +4617,7 @@ bool Position::gives_check(Move m) const {
   if (paired_drop(m))
       occupied |= square_bb(secondary_drop_square(m));
 
-  if (is_gating(m))
+  if (gating_move_blocks_occupancy(m))
       occupied |= square_bb(gating_square(m));
 
   Bitboard janggiCannons = pieces(JANGGI_CANNON);
@@ -8549,23 +8554,20 @@ bool Position::pos_is_ok() const {
 PieceType Position::committed_piece_type(Move m, bool castlingRook) const {
     PieceType result = NO_PIECE_TYPE;
     if (commit_gates()) {
-        Square from = from_sq(m);
-        Rank r = rank_of(from);
-        if (castlingRook){
-            if (type_of(m) == CASTLING){
-                from = to_sq(m);
-            } else {
-                from = SQ_NONE;
-            }
-        }
-        if (from != SQ_NONE){
-            if (r == RANK_1){
-                result = committed_piece_type(WHITE, file_of(from));
-            } else if (r == max_rank()){
-                result = committed_piece_type(BLACK, file_of(from));
-            } else{
-                assert(false);
-            }
+        if (castlingRook && type_of(m) != CASTLING)
+            return result;
+
+        Square source = castlingRook ? to_sq(m) : from_sq(m);
+        if (!is_ok(source))
+            return result;
+
+        Rank r = rank_of(source);
+        if (r == RANK_1){
+            result = committed_piece_type(WHITE, file_of(source));
+        } else if (r == max_rank()){
+            result = committed_piece_type(BLACK, file_of(source));
+        } else{
+            assert(false);
         }
     }
     return result;

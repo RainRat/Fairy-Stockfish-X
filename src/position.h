@@ -571,6 +571,7 @@ public:
   bool can_cast_potion(Color c, Variant::PotionType type) const;
   Bitboard potion_zone(Color c, Variant::PotionType type) const;
   int potion_cooldown(Color c, Variant::PotionType type) const;
+  bool gating_move_blocks_occupancy(Move m) const;
   Bitboard freeze_squares() const;
   Bitboard freeze_squares(Color c) const;
   Bitboard jump_squares(Color c) const;
@@ -5176,16 +5177,22 @@ inline Bitboard Position::wall_squares() const {
 }
 
 inline void Position::commit_piece(Piece pc, File fl){
+    if (fl < FILE_A || fl > max_file())
+        return;
     committedGates[color_of(pc)][fl] = type_of(pc);
 }
 
 inline PieceType Position::uncommit_piece(Color cl, File fl){
+    if (fl < FILE_A || fl > max_file())
+        return NO_PIECE_TYPE;
     PieceType committedPieceType = committedGates[cl][fl];
     committedGates[cl][fl] = NO_PIECE_TYPE;
     return committedPieceType;
 }
 
 inline PieceType Position::committed_piece_type(Color cl, File fl) const {
+    if (fl < FILE_A || fl > max_file())
+        return NO_PIECE_TYPE;
     return committedGates[cl][fl];
 }
 
@@ -5194,6 +5201,8 @@ inline bool Position::has_committed_piece(Color cl, File fl) const {
 }
 
 inline PieceType Position::drop_committed_piece(Color cl, File fl){
+    if (fl < FILE_A || fl > max_file())
+        return NO_PIECE_TYPE;
     if(has_committed_piece(cl, fl)){
         Square dropSquare = make_square(fl, (cl == WHITE)? RANK_1 : max_rank());
         PieceType committedPieceType = committedGates[cl][fl];
@@ -5202,6 +5211,21 @@ inline PieceType Position::drop_committed_piece(Color cl, File fl){
         return committedPieceType;
     }
     else return NO_PIECE_TYPE;
+}
+
+inline bool Position::gating_move_blocks_occupancy(Move m) const {
+    if (!is_gating(m))
+        return false;
+
+    PieceType gt = gating_type(m);
+    if (gt == NO_PIECE_TYPE)
+        return true;
+
+    for (int pt = 0; pt < Variant::POTION_TYPE_NB; ++pt)
+        if (potion_piece(static_cast<Variant::PotionType>(pt)) == gt)
+            return false;
+
+    return true;
 }
 
 } // namespace Stockfish

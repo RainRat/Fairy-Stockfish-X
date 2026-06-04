@@ -85,6 +85,21 @@ static void expect(bool cond, const char* msg) {
     }
 }
 
+static void load_test_variants() {
+    static bool loaded = false;
+    if (loaded)
+        return;
+
+    std::istringstream in(R"INI(
+[commitgate-test:chess]
+commitGates = true
+castling = false
+startFen = n7/4k3/8/8/8/8/8/8/4K3/4R3 w - - 0 1
+)INI");
+    variants.parse_istream<false>(in);
+    loaded = true;
+}
+
 static void test_jump_lists() {
     StateInfo st{};
     Position pos;
@@ -115,6 +130,19 @@ static void test_jump_checks() {
     expect(captureMoves.contains(captureCheck), "jump potion checking capture missing from CAPTURES");
 }
 
+static void test_empty_destination_capture_predicate() {
+    StateInfo st{};
+    Position pos;
+    pos.set(variants.get("spell-chess"), "4k3/8/8/3pP3/8/8/8/4K3[F] w - d6 0 1", false, &st, nullptr);
+
+    const Move epCapture = make<EN_PASSANT>(SQ_E5, SQ_D6);
+    const bool oldStyleCapture = !pos.empty(to_sq(epCapture));
+    const bool newStyleCapture = pos.capture(epCapture);
+    expect(newStyleCapture, "en passant base move should be a capture");
+    expect(pos.empty(to_sq(epCapture)), "en passant destination should be empty");
+    expect(oldStyleCapture != newStyleCapture, "empty-destination capture did not expose the misclassification condition");
+}
+
 static void test_jump_evasions() {
     StateInfo st{};
     Position pos;
@@ -125,11 +153,39 @@ static void test_jump_evasions() {
     expect(!evasions.contains(nonEvasion), "non-evasion jump potion move leaked into EVASIONS");
 }
 
+static void test_committed_piece_type_helpers() {
+    StateInfo st{};
+    const Variant* v = variants.get("commitgate-test");
+    expect(v != nullptr, "commitgate-test variant failed to load");
+
+    Position pos;
+    pos.set(v, "n7/4k3/8/8/8/8/8/8/4K3/4R3 w - - 0 1", false, &st, nullptr);
+
+    const Move fakeCastling = make<CASTLING>(SQ_E1, SQ_A8);
+    expect(pos.committed_piece_type(fakeCastling, false) == ROOK, "king-side committed piece lookup failed");
+    expect(pos.committed_piece_type(fakeCastling, true) == KNIGHT, "rook-side committed piece lookup failed");
+    expect(pos.committed_piece_type(make<NORMAL>(SQ_E2, SQ_E4), true) == NO_PIECE_TYPE, "non-castling lookup should be empty");
+}
+
+static void test_committed_gate_overflow_parse() {
+    StateInfo st{};
+    const Variant* v = variants.get("commitgate-test");
+    expect(v != nullptr, "commitgate-test variant failed to load");
+
+    Position pos;
+    pos.set(v, "nnnnnnnnn/4k3/8/8/8/8/8/8/4K3/RRRRRRRRR w - - 0 1", false, &st, nullptr);
+    expect(pos.pos_is_ok(), "overlong committed-gate FEN did not parse cleanly");
+}
+
 int main() {
     init_engine();
+    load_test_variants();
     test_jump_lists();
     test_jump_checks();
+    test_empty_destination_capture_predicate();
     test_jump_evasions();
+    test_committed_piece_type_helpers();
+    test_committed_gate_overflow_parse();
     return 0;
 }
 EOF
