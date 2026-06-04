@@ -1865,6 +1865,32 @@ startFen = 4r3/8/8/8/8/8/8/8[A] w - - 0 1
         self.assertIn("A@d1", legal)
         self.assertNotIn("A@e1", legal)
 
+    def test_runtime_royal_self_capture_is_illegal(self):
+        sf.load_variant_config(
+            """[runtime-royal-selfcapture:chess]
+king = k:W
+castling = false
+selfCapture = true
+startFen = 4k3/8/8/8/8/8/8/3QK3 w - - 0 1
+"""
+        )
+
+        legal = sf.legal_moves("runtime-royal-selfcapture", sf.start_fen("runtime-royal-selfcapture"), [])
+        self.assertNotIn("d1e1", legal)
+
+    def test_runtime_royal_no_through_check_uses_actual_royal(self):
+        sf.load_variant_config(
+            """[runtime-royal-through-check:chess]
+king = k:R
+castling = false
+royalPieceNoThroughCheck = true
+startFen = 1r2k3/8/8/8/8/8/8/K7 w - - 0 1
+"""
+        )
+
+        legal = sf.legal_moves("runtime-royal-through-check", sf.start_fen("runtime-royal-through-check"), [])
+        self.assertNotIn("a1d1", legal)
+
     def test_pseudoroyal_loss_waits_for_candidate_types_to_disappear(self):
         sf.load_variant_config(
             """[prfix:chess]
@@ -1880,6 +1906,25 @@ startFen = 8/8/8/8/8/8/AAaaBBbb/8 w - - 0 1
 
         result = sf.is_immediate_game_end("prfix", "8/8/8/8/8/8/AAaaBBbb/8 w - - 0 1", [])
         self.assertFalse(result[0])
+
+    def test_extinction_value_uses_extinct_side(self):
+        sf.load_variant_config(
+            """[asym-extinction-values:chess]
+checking = false
+extinctionValueWhite = loss
+extinctionValueBlack = win
+extinctionPieceTypes = q
+startFen = 4k3/8/8/8/8/8/4Q3/4K3 w - - 0 1
+"""
+        )
+
+        is_end, result = sf.is_immediate_game_end(
+            "asym-extinction-values",
+            sf.start_fen("asym-extinction-values"),
+            [],
+        )
+        self.assertTrue(is_end)
+        self.assertEqual(result, -sf.VALUE_MATE)
 
     def _check_immediate_game_end(self, variant, fen, moves, game_end, game_result=None):
         with self.subTest(variant=variant, fen=fen, game_end=game_end, game_result=game_result):
@@ -2214,4 +2259,3 @@ stepwisePushing = true
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
-

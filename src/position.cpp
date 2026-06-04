@@ -1823,8 +1823,33 @@ void Position::set_castling_right(Color c, Square rfrom) {
 void Position::set_check_info(StateInfo* si) const {
 
   std::fill_n(si->checkSquares, PIECE_TYPE_NB, Bitboard(0));
-  si->pseudoRoyalCandidates = 0;
-  si->pseudoRoyals = 0;
+  auto init_royal_extinction_state = [&]() {
+      si->extinctionSeen[WHITE] = NO_PIECE_SET;
+      si->extinctionSeen[BLACK] = NO_PIECE_SET;
+      for (PieceSet ps = extinction_must_appear(); ps;)
+      {
+          PieceType pt = pop_lsb(ps);
+          if (count(WHITE, pt))
+              si->extinctionSeen[WHITE] |= piece_set(pt);
+          if (count(BLACK, pt))
+              si->extinctionSeen[BLACK] |= piece_set(pt);
+      }
+
+      si->pseudoRoyalCandidates = 0;
+      si->pseudoRoyals = 0;
+      if (pseudo_royal_types())
+      {
+          for (PieceSet ps = pseudo_royal_types(); ps;)
+          {
+              PieceType pt = pop_lsb(ps);
+              si->pseudoRoyalCandidates |= pieces(pt);
+              if (count(sideToMove, pt) <= pseudo_royal_count())
+                  si->pseudoRoyals |= pieces(sideToMove, pt);
+              if (count(~sideToMove, pt) <= pseudo_royal_count())
+                  si->pseudoRoyals |= pieces(~sideToMove, pt);
+          }
+      }
+  };
 
   if (topology_wraps())
   {
@@ -1861,28 +1886,7 @@ void Position::set_check_info(StateInfo* si) const {
       si->chased = Bitboard(0);
       si->legalCapture = NO_VALUE;
       si->legalEnPassant = NO_VALUE;
-      si->extinctionSeen[WHITE] = NO_PIECE_SET;
-      si->extinctionSeen[BLACK] = NO_PIECE_SET;
-      for (PieceSet ps = extinction_must_appear(); ps;)
-      {
-          PieceType pt = pop_lsb(ps);
-          if (count(WHITE, pt))
-              si->extinctionSeen[WHITE] |= piece_set(pt);
-          if (count(BLACK, pt))
-              si->extinctionSeen[BLACK] |= piece_set(pt);
-      }
-      if (pseudo_royal_types())
-      {
-          for (PieceSet ps = pseudo_royal_types(); ps;)
-          {
-              PieceType pt = pop_lsb(ps);
-              si->pseudoRoyalCandidates |= pieces(pt);
-              if (count(sideToMove, pt) <= pseudo_royal_count())
-                  si->pseudoRoyals |= pieces(sideToMove, pt);
-              if (count(~sideToMove, pt) <= pseudo_royal_count())
-                  si->pseudoRoyals |= pieces(~sideToMove, pt);
-          }
-      }
+      init_royal_extinction_state();
       return;
   }
 
@@ -1947,28 +1951,7 @@ void Position::set_check_info(StateInfo* si) const {
   si->chased = var->chasingRule ? chased() : Bitboard(0);
   si->legalCapture = NO_VALUE;
   si->legalEnPassant = NO_VALUE;
-  si->extinctionSeen[WHITE] = NO_PIECE_SET;
-  si->extinctionSeen[BLACK] = NO_PIECE_SET;
-  for (PieceSet ps = extinction_must_appear(); ps;)
-  {
-      PieceType pt = pop_lsb(ps);
-      if (count(WHITE, pt))
-          si->extinctionSeen[WHITE] |= piece_set(pt);
-      if (count(BLACK, pt))
-          si->extinctionSeen[BLACK] |= piece_set(pt);
-  }
-  if (pseudo_royal_types())
-  {
-      for (PieceSet ps = pseudo_royal_types(); ps;)
-      {
-          PieceType pt = pop_lsb(ps);
-          si->pseudoRoyalCandidates |= pieces(pt);
-          if (count(sideToMove, pt) <= pseudo_royal_count())
-              si->pseudoRoyals |= pieces(sideToMove, pt);
-          if (count(~sideToMove, pt) <= pseudo_royal_count())
-              si->pseudoRoyals |= pieces(~sideToMove, pt);
-      }
-  }
+  init_royal_extinction_state();
 
 }
 
@@ -3166,6 +3149,8 @@ bool Position::legal(Move m) const {
   const Square royalSquare = royal_square(us);
   const bool hasRoyal = royalSquare != SQ_NONE;
   const PieceType royalType = hasRoyal ? type_of(piece_on(royalSquare)) : NO_PIECE_TYPE;
+  if (!is_pass(m) && !hasRoyal && is_actual_runtime_royal(us, king_type()))
+      return false;
 
   if (pureWallMove)
   {
@@ -3198,6 +3183,8 @@ bool Position::legal(Move m) const {
   // Universal-hopper semantics are fully encoded in attacks/moves generation and
   // jump_capture_square() capture-square resolution; avoid legacy pre-filters here.
   if (!allow_checks() && checking_permitted() && (pieces(them) & to) && type_of(piece_on(to)) == KING)
+      return false;
+  if ((pieces(us) & to) && !is_pass(m) && !is_self_destruct(m) && is_uncapturable_royal_square(us, to))
       return false;
   if (!dropMove && (var->mutuallyHopIllegalTypes & movePt) && (AttackRiderTypes[movePt] & HOPPING_RIDERS))
   {
@@ -3237,15 +3224,6 @@ bool Position::legal(Move m) const {
   if (must_capture() && !isCapture && has_capture())
       return false;
 
-  auto legal_after_probe_move = [&](Move mp) {
-      StateInfo nextState;
-      ScopedProbeMove probe(*this, mp, nextState);
-      Square probeRoyal = royal_square(us);
-      if (!allow_checks() && probeRoyal != SQ_NONE && attackers_to_king(probeRoyal, them))
-          return false;
-      return true;
-  };
-
   if (must_capture_en_passant() && type_of(m) != EN_PASSANT && has_en_passant_capture())
       return false;
 
@@ -3277,7 +3255,12 @@ bool Position::legal(Move m) const {
       if (violates_same_player_board_repetition(m))
           return false;
 
-      return legal_after_probe_move(m);
+      StateInfo nextState;
+      ScopedProbeMove probe(*this, m, nextState);
+      Square probeRoyal = royal_square(us);
+      if (!allow_checks() && probeRoyal != SQ_NONE && attackers_to_king(probeRoyal, them))
+          return false;
+      return true;
   }
 
   // Illegal drop move
@@ -3289,7 +3272,10 @@ bool Position::legal(Move m) const {
       {
           legalDropTargets |= pieces(them);
           if (self_capture(in_hand_piece_type(m)))
-              legalDropTargets |= pieces(us) & ~pieces(us, KING);
+          {
+              Bitboard ownRoyal = royal_square(us) != SQ_NONE ? square_bb(royal_square(us)) : Bitboard(0);
+              legalDropTargets |= pieces(us) & ~ownRoyal;
+          }
       }
 
       if (!(drop_region(us, type_of(moved_piece(m))) & legalDropTargets & to))
@@ -4081,13 +4067,16 @@ bool Position::legal(Move m) const {
   if (is_gating(m) && gating_type(m) != NO_PIECE_TYPE)
   {
       PieceType gateType = gating_type(m);
-      if (gateType == KING || (pseudo_royal_types() & piece_set(gateType)))
+      if (gateType == KING
+          || is_actual_runtime_royal(us, gateType)
+          || (pseudo_royal_types() & piece_set(gateType)))
       {
           Square gate = gating_square(m);
           Bitboard occ = occupiedAfterEffects | gate;
 
-          Bitboard attackers = gateType == KING ? attackers_to_king(gate, occ, ~us)
-                                                : attackers_to(gate, occ, ~us);
+          Bitboard attackers = gateType == KING || is_actual_runtime_royal(us, gateType)
+                             ? attackers_to_king(gate, occ, ~us)
+                             : attackers_to(gate, occ, ~us);
           attackers &= ~(removedAttackers | removedByEffects);
 
           if (attackers)
@@ -4117,7 +4106,7 @@ bool Position::legal(Move m) const {
   if (var->makpongRule && evasion_checkers() && moverIsRoyal && (evasion_checkers() ^ to))
       return false;
 
-  if (var->royalPieceNoThroughCheck && type_of(moved_piece(m)) == king_type())
+  if (var->royalPieceNoThroughCheck && moverIsRoyal)
   {
       Bitboard traversed = between_bb(from, to) & ~square_bb(to);
       while (traversed)
@@ -4343,7 +4332,10 @@ bool Position::pseudo_legal(const Move m) const {
       {
           legalDropTargets |= pieces(them);
           if (self_capture(in_hand_piece_type(m)))
-              legalDropTargets |= pieces(us) & ~pieces(us, KING);
+          {
+              Bitboard ownRoyal = royal_square(us) != SQ_NONE ? square_bb(royal_square(us)) : Bitboard(0);
+              legalDropTargets |= pieces(us) & ~ownRoyal;
+          }
       }
       if (paired_drop(m))
       {
@@ -4417,12 +4409,12 @@ bool Position::pseudo_legal(const Move m) const {
 
   // The destination square cannot be occupied by a friendly piece unless
   // self-capture is enabled. Friendly kings remain uncapturable.
-  if ((pieces(us) & to) && !is_self_destruct(m))
+  if ((pieces(us) & to) && !is_pass(m) && !is_self_destruct(m))
   {
       bool antiRoyalSelfCapture = anti_royal_self_capture_only() && (anti_royal_types() & piece_set(type_of(pc)));
       if (!pushMove && !((self_capture(type_of(pc)) || antiRoyalSelfCapture) && capture(m)))
           return false;
-      if (type_of(piece_on(to)) == KING)
+      if (is_uncapturable_royal_square(us, to))
           return false;
   }
 
@@ -4598,7 +4590,8 @@ bool Position::gives_check(Move m) const {
       royalSq = square<KING>(~sideToMove);
   if (!is_ok(royalSq))
       return false;
-  const PieceType royalType = king_type() != NO_PIECE_TYPE ? king_type() : type_of(piece_on(royalSq));
+  const Piece royalPiece = piece_on(royalSq);
+  const PieceType royalType = royalPiece != NO_PIECE ? type_of(royalPiece) : king_type();
   if (!is_ok(attackFrom))
       return false;
 
@@ -4645,7 +4638,7 @@ bool Position::gives_check(Move m) const {
 
   if (usingPhysicalKingTarget
       && (attackers_to_king(royalSq, occupied, sideToMove, janggiCannons) & square_bb(attackFrom)))
-      return true;
+      return !(var->captureForbidden[type_of(mover)] & royalType);
 
   // Is there a direct check?
   if (!is_promotion_move(m) && type_of(m) != PIECE_PROMOTION && type_of(m) != PIECE_DEMOTION && type_of(m) != CASTLING
@@ -7615,10 +7608,13 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
   // Extinction
   // Extinction does not apply for pseudo-royal pieces in normal capture rules,
   // because they cannot be captured directly.
-  if (extinction_value() != VALUE_NONE)
+  if (var->extinctionValue.get(WHITE) != VALUE_NONE || var->extinctionValue.get(BLACK) != VALUE_NONE)
   {
       for (Color c : { ~sideToMove, sideToMove })
       {
+          if (var->extinctionValue.get(c) == VALUE_NONE)
+              continue;
+
           PieceSet extinctTargets = extinction_piece_types(c);
           if (!blast_on_capture())
               extinctTargets &= ~pseudo_royal_types();
@@ -7640,7 +7636,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
 
           if (sawEligibleType && (extinction_all_piece_types(c) ? allTypesExtinct : anyTypeExtinct))
           {
-              result = c == sideToMove ? extinction_value(ply) : -extinction_value(ply);
+              result = c == sideToMove ? extinction_value(c, ply) : -extinction_value(c, ply);
               return true;
           }
       }

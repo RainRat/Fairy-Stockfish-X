@@ -212,8 +212,9 @@ bad_hopper_minmax_ini=$(mktemp)
 bad_piece_value_ini=$(mktemp)
 bad_royal_betza_ini=$(mktemp)
 bad_unmatched_closer_ini=$(mktemp)
+royal_blast_ini=$(mktemp)
 nonking_ini=$(mktemp)
-trap 'rm -f "${tmp_ini}" "${bad_betza_ini}" "${bad_hopper_brace_ini}" "${bad_rider_range_ini}" "${bad_rank_wildcard_ini}" "${twochar_hint_ini}" "${bad_hopper_type_ini}" "${bad_hopper_numeric_ini}" "${capture_allowed_only_ini}" "${bad_rider_range_val_ini}" "${bad_tuple_atom_ini}" "${unsupported_bent_rose_modifier_ini}" "${bad_ini_syntax_option_ini}" "${bad_hopper_minmax_ini}" "${bad_piece_value_ini}" "${bad_royal_betza_ini}" "${bad_unmatched_closer_ini}" "${nonking_ini}"' EXIT
+trap 'rm -f "${tmp_ini}" "${bad_betza_ini}" "${bad_hopper_brace_ini}" "${bad_rider_range_ini}" "${bad_rank_wildcard_ini}" "${twochar_hint_ini}" "${bad_hopper_type_ini}" "${bad_hopper_numeric_ini}" "${capture_allowed_only_ini}" "${bad_rider_range_val_ini}" "${bad_tuple_atom_ini}" "${unsupported_bent_rose_modifier_ini}" "${bad_ini_syntax_option_ini}" "${bad_hopper_minmax_ini}" "${bad_piece_value_ini}" "${bad_royal_betza_ini}" "${bad_unmatched_closer_ini}" "${royal_blast_ini}" "${nonking_ini}"' EXIT
 
 cat > "${bad_betza_ini}" <<'INI'
 [custom-piece-missing-betza:chess]
@@ -319,6 +320,12 @@ customPiece1 = a:}
 customPiece1 = a:]
 INI
 
+cat > "${royal_blast_ini}" <<'INI'
+[royal-blast-rejected:chess]
+checking = true
+blastOnCapture = true
+INI
+
 check_output=$("${ENGINE}" check "${bad_betza_ini}" 2>&1 || true)
 assert_contains "${check_output}" "customPiece1 - Missing Betza move notation"
 
@@ -346,6 +353,10 @@ assert_contains "${wall_or_move_arrow_output}" "unknown variant 'wall-or-move-ar
 
 toroidal_pushing_output=$(run_uci "$ENGINE" "$tmp_ini" "toroidal-pushing" </dev/null 2>&1 || true)
 assert_contains "${toroidal_pushing_output}" "unknown variant 'toroidal-pushing'; keeping 'chess'"
+
+royal_blast_output=$("${ENGINE}" check "${royal_blast_ini}" 2>&1 || true)
+assert_contains "${royal_blast_output}" "Can not use kings with blastOnCapture."
+assert_contains "${royal_blast_output}" "Variant 'royal-blast-rejected' has invalid configuration. Skipping."
 
 capture_allowed_only_output=$(run_uci "$ENGINE" "$capture_allowed_only_ini" "capture-allowed-only" <<EOF
 position fen 8/3p4/8/8/3Q2n1/8/8/8 w - - 0 1

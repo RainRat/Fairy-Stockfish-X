@@ -461,6 +461,7 @@ public:
   PieceType king_type() const;
   PieceType royal_piece_type(Color c) const;
   bool is_actual_runtime_royal(Color c, PieceType pt) const;
+  bool is_uncapturable_royal_square(Color c, Square s) const;
   Square royal_square(Color c) const;
   PieceType nnue_king() const;
   Square nnue_king_square(Color c) const;
@@ -611,6 +612,7 @@ public:
   Value stalemate_value(int ply = 0) const;
   Value checkmate_value(int ply = 0) const;
   Value extinction_value(int ply = 0) const;
+  Value extinction_value(Color c, int ply = 0) const;
   bool extinction_claim() const;
   PieceSet extinction_piece_types() const;
   PieceSet extinction_piece_types(Color c) const;
@@ -1438,7 +1440,16 @@ inline bool Position::is_actual_runtime_royal(Color c, PieceType pt) const {
   const Variant& v = var_ref();
   if (pt == NO_PIECE_TYPE || !(v.pieceTypes & piece_set(pt)))
       return false;
-  return pt == royal_piece_type(c) || allow_checks() || flag_piece(c) == pt;
+  if (pt == royal_piece_type(c))
+      return true;
+  if (pt == king_type() && is_custom(pt) && count(c, pt) == 0)
+      return true;
+  return flag_piece(c) == pt && v.flagPieceSafe;
+}
+
+inline bool Position::is_uncapturable_royal_square(Color c, Square s) const {
+  Square rs = royal_square(c);
+  return rs != SQ_NONE && rs == s;
 }
 
 inline Square Position::royal_square(Color c) const {
@@ -2526,8 +2537,12 @@ inline Value Position::checkmate_value(int ply) const {
 }
 
 inline Value Position::extinction_value(int ply) const {
+  return extinction_value(sideToMove, ply);
+}
+
+inline Value Position::extinction_value(Color c, int ply) const {
   assert(var != nullptr);
-  return convert_mate_value(var->extinctionValue.get(sideToMove), ply);
+  return convert_mate_value(var->extinctionValue.get(c), ply);
 }
 
 inline bool Position::extinction_claim() const {
