@@ -2682,6 +2682,8 @@ const Variant* VariantMap::get(const std::string& name) const {
   std::string folded = lower_ascii(name);
   if (folded != name)
   {
+      // Optimization: Try a fast O(log N) lookup using the folded key
+      // before falling back to a full linear scan over all keys.
       it = find(folded);
       if (it != end())
           return it->second;

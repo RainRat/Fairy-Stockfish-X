@@ -73,6 +73,13 @@ customPiece1 = a:R[3]
 pieceToCharTable = A:a
 startFen = 8/8/8/8/4A3/8/8/8 w - - 0 1
 
+[rangeinvalid0:chess]
+king = -
+checking = false
+customPiece1 = a:R0
+pieceToCharTable = A:a
+startFen = 8/8/8/8/4A3/8/8/8 w - - 0 1
+
 [betzarifle:chess]
 customPiece1 = a:R^
 
@@ -195,6 +202,11 @@ invalid_out=$(run_uci "$ENGINE" "$tmp_ini" rangeinvalid <<'UCI' 2>&1
 UCI
 )
 assert_contains "$invalid_out" "Invalid Betza rider range"
+
+invalid_out0=$(run_uci "$ENGINE" "$tmp_ini" rangeinvalid0 <<'UCI' 2>&1
+UCI
+)
+assert_contains "$invalid_out0" "Invalid Betza rider range in 'R0': distance must be greater than zero."
 
 rifle_moves=$(run_uci "$ENGINE" "$tmp_ini" betzarifle <<'UCI'
 position fen p3k3/8/8/8/8/8/8/A3K3 w - - 0 1
