@@ -1400,10 +1400,8 @@ namespace {
           case PROMOTION:
               gatingMove = make_promotion_potion(from, to, promotion_type(base), potion, gate);
               break;
-          default:
-              assert(false);
-              std::abort();
       }
+      assert(gatingMove != MOVE_NONE);
 
       if (!potion_move_matches<Type>(pos, base, gatingMove))
           return AppendStatus::Skipped;
@@ -1454,13 +1452,10 @@ namespace {
 
                     if (gate == baseInfo.to)
                         continue;
-                    if (baseInfo.mover != NO_PIECE)
-                    {
-                        if (pos.freeze_squares() & baseInfo.from)
-                            continue;
-                        if ((between_bb(baseInfo.from, baseInfo.to, baseInfo.moverType, baseInfo.modality, baseInfo.isInitial) & ~square_bb(baseInfo.to)) & gate)
-                            continue;
-                    }
+                    if (pos.freeze_squares() & baseInfo.from)
+                        continue;
+                    if ((between_bb(baseInfo.from, baseInfo.to, baseInfo.moverType, baseInfo.modality, baseInfo.isInitial) & ~square_bb(baseInfo.to)) & gate)
+                        continue;
 
                     if (try_append_potion_gating_move<Type>(pos, cur, maxEnd, baseInfo.from, baseInfo.to, baseInfo.mt, it->move, potion, potionPiece, gate, it->value)
                         == AppendStatus::Full)

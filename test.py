@@ -209,6 +209,13 @@ rifleCapture = true
 blastOnCaptureMoverCenter = true
 king = -
 startFen = 8/8/8/8/8/8/8/8 w - - 0 1
+
+[mini-nightrider:chess]
+maxRank = 7
+maxFile = 7
+king = k
+customPiece1 = N:NN
+startFen = 6k/7/7/3N3/7/7/K6 w - - 0 1
 """
 
 sf.load_variant_config(ini_text)
@@ -2251,11 +2258,17 @@ stepwisePushing = true
             rook_chess_moves = [m for m in chess_moves if m.startswith("a4")]
             self.assertEqual(len(rook_chess_moves), 14, f"Expected 14 moves in chess, got: {rook_chess_moves}")
 
-            capa_moves = sf.legal_moves("capablanca", capa_fen, [])
-            # Rook should have horizontal moves b4, c4, d4, e4, f4, g4, h4, i4, j4 (9 moves)
-            # and vertical moves a1, a2, a3, a5, a6, a7, a8 (7 moves).
-            rook_capa_moves = [m for m in capa_moves if m.startswith("a4")]
-            self.assertEqual(len(rook_capa_moves), 16, f"Expected 16 moves in capablanca, got: {rook_capa_moves}")
+        capa_moves = sf.legal_moves("capablanca", capa_fen, [])
+        # Rook should have horizontal moves b4, c4, d4, e4, f4, g4, h4, i4, j4 (9 moves)
+        # and vertical moves a1, a2, a3, a5, a6, a7, a8 (7 moves).
+        rook_capa_moves = [m for m in capa_moves if m.startswith("a4")]
+        self.assertEqual(len(rook_capa_moves), 16, f"Expected 16 moves in capablanca, got: {rook_capa_moves}")
+
+        mini_nightrider_moves = sf.legal_moves("mini-nightrider", "6k/7/7/3N3/7/7/K6 w - - 0 1", [])
+        self.assertEqual(
+            sorted(m for m in mini_nightrider_moves if m.startswith("d4")),
+            ["d4b3", "d4b5", "d4c2", "d4c6", "d4e2", "d4e6", "d4f3", "d4f5"],
+        )
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

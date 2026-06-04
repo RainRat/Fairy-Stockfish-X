@@ -839,14 +839,6 @@ inline Bitboard rider_attacks_bb(
 
 inline Square lsb(Bitboard b);
 #else
-inline Bitboard fixed_step_rider_attacks(Square s, Bitboard occupied, int stepF, int stepR, const MagicGeometry* mg = current_magic_geometry) {
-  (void)mg;
-  return walk_ray(s, stepF, stepR, false, [&](Square to, Bitboard& attack) {
-      attack |= to;
-      return !(occupied & to);
-  });
-}
-
 inline Bitboard fixed_step_lame_rider_attacks(Square s, Bitboard occupied, int stepF, int stepR, const MagicGeometry* mg = current_magic_geometry) {
   (void)mg;
   assert((stepF % 2 == 0) && (stepR % 2 == 0));

@@ -309,13 +309,6 @@ namespace {
   }
 
 #ifdef VERY_LARGE_BOARDS
-  Bitboard fixed_step_rider_attacks(Square s, Bitboard occupied, int stepF, int stepR) {
-    return walk_ray(s, stepF, stepR, false, [&](Square to, Bitboard& attack) {
-        attack |= to;
-        return !(occupied & to);
-    });
-  }
-
   Bitboard fixed_step_lame_rider_attacks(Square s, Bitboard occupied, int stepF, int stepR) {
     Bitboard attack = 0;
     int f = int(file_of(s));
@@ -409,7 +402,7 @@ Bitboard tuple_rider_attacks(const std::vector<PieceInfo::TupleRay>& rays, Squar
     return attack;
 }
 
-Bitboard rider_terminal_squares(const std::map<Direction, int>& directions, Square sq) {
+Bitboard rider_terminal_squares(const std::map<Direction, int>& directions, Square sq, Bitboard activeBoard) {
     Bitboard terminal = 0;
 
     for (auto const& [d, _] : directions)
@@ -419,7 +412,7 @@ Bitboard rider_terminal_squares(const std::map<Direction, int>& directions, Squa
         {
             Square to = lsb(next);
             Bitboard after = safe_destination(to, d);
-            if (!after)
+            if (!after || !(activeBoard & after))
             {
                 terminal |= next;
                 break;
@@ -805,7 +798,7 @@ namespace {
           // For leap-riders (e.g. nightrider), occupancy on the final square
           // of each ray cannot affect attacks, so it is not a relevant bit.
           Bitboard emptyAttack = sliding_attack<RIDER>(directions, s, 0) & active_magic_board(maxFile, maxRank);
-          return emptyAttack & ~rider_terminal_squares(directions, s);
+          return emptyAttack & ~rider_terminal_squares(directions, s, active_magic_board(maxFile, maxRank));
       }
       else
       {
