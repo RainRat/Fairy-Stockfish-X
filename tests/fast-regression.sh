@@ -50,7 +50,7 @@ hash_source_tree() {
 }
 
 ensure_pyffish_extension() {
-  local setup_hash source_hash py_version cxx_version current_sig cached_sig pyffish_so
+  local setup_hash source_hash py_version cxx_version current_sig cached_sig pyffish_so=""
 
   mkdir -p "${PYFFISH_BUILD_DIR}"
 

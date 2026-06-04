@@ -600,15 +600,20 @@ void Bitboards::init_pieces() {
                   {
                       auto& pseudo = modality == MODALITY_CAPTURE ? PseudoAttacks[c][pt][s] : PseudoMoves[initial][c][pt][s];
                       auto& leaper = modality == MODALITY_CAPTURE ? LeaperAttacks[c][pt][s] : LeaperMoves[initial][c][pt][s];
-                      pseudo = 0;
-                      leaper = 0;
-                      for (auto const& [d, limit] : pi->steps[initial][modality])
-                      {
-                          Bitboard dst = safe_destination(s, c == WHITE ? d : -d);
-                          pseudo |= dst;
-                          if (!limit)
-                              leaper |= dst;
-                      }
+                       pseudo = 0;
+                       leaper = 0;
+                       for (auto const& [d, limit] : pi->steps[initial][modality])
+                       {
+                           Bitboard dst = safe_destination(s, c == WHITE ? d : -d);
+                           pseudo |= dst;
+                           if (!limit)
+                               leaper |= dst;
+                       }
+                       for (auto const& [d, profile] : pi->stepsLame[initial][modality])
+                       {
+                           Bitboard dst = safe_destination(s, c == WHITE ? d : -d);
+                           pseudo |= dst;
+                       }
                       for (auto const& [dr, df] : pi->tupleSteps[initial][modality])
                       {
                           int tdr = c == WHITE ? dr : -dr;

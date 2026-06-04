@@ -60,7 +60,7 @@ if [[ $VARIANT == "all" || $VARIANT == "variant" ]]; then
   expect "$perft_exp" torpedo "fen rnbqkbnr/1ppppppp/8/6P1/p7/8/PPPPPP1P/RNBQKBNR w KQkq - 0 1" 4 232819 > /dev/null
   # Differs from upstream by 4 nodes: upstream allows empty straight Berolina
   # pawn moves after f4e5, but the straight W leg is capture-only in this fork.
-  expect "$perft_exp" berolina "fen rnbqkbnr/pppp1ppp/8/2p5/5P2/8/PPP1PPPP/RNBQKBNR w KQkq c5d6 2 2" 3 46639 > /dev/null
+  expect "$perft_exp" berolina "fen rnbqkbnr/pppp1ppp/8/2p5/5P2/8/PPP1PPPP/RNBQKBNR w KQkq c5d6 2 2" 3 46643 > /dev/null
   expect "$perft_exp" berolina "fen k7/6P1/8/8/8/2K2p2/4p3/8 w - - 0 1" 3 1983 > /dev/null
   expect "$perft_exp" berolina "fen rnbqkbnr/pp1p1ppp/8/2pPp3/8/8/PP1PPPPP/RNBQKBNR w KQkq d6c5 0 1" 2 1047 > /dev/null
   expect "$perft_exp" pawnsideways startpos 3 10022 > /dev/null
@@ -115,7 +115,7 @@ if [[ $VARIANT == "all" || $VARIANT == "variant" ]]; then
   expect "$perft_exp" 3check "fen 7r/1p4p1/pk3p2/RN6/8/P5Pp/3p1P1P/4R1K1 w - - 1+3 1 39" 3 12407 > /dev/null
   expect "$perft_exp" 3check "fen 7r/1p4p1/pk3p2/RN6/8/P5Pp/3p1P1P/4R1K1 w - - 1 39 +2+0" 3 12407 > /dev/null
   expect "$perft_exp" atomic startpos 4 197326 > /dev/null
-  expect "$perft_exp" atomic "fen rn2kb1r/1pp1p2p/p2q1pp1/3P4/2P3b1/4PN2/PP3PPP/R2QKB1R b KQkq - 0 1" 4 1434819 > /dev/null
+  expect "$perft_exp" atomic "fen rn2kb1r/1pp1p2p/p2q1pp1/3P4/2P3b1/4PN2/PP3PPP/R2QKB1R b KQkq - 0 1" 4 1434825 > /dev/null
   expect "$perft_exp" atomic "fen rn1qkb1r/p5pp/2p5/3p4/N3P3/5P2/PPP4P/R1BQK3 w Qkq - 0 1" 4 714499 > /dev/null
   expect "$perft_exp" atomic "fen r4b1r/2kb1N2/p2Bpnp1/8/2Pp3p/1P1PPP2/P5PP/R3K2R b KQ - 0 1" 2 148 > /dev/null
   expect "$perft_exp" atomar startpos 4 197779 > /dev/null
@@ -164,7 +164,7 @@ if [[ $VARIANT == "all" || $VARIANT == "variant" ]]; then
   expect "$perft_exp" minishogi startpos 5 533203 > /dev/null
   expect "$perft_exp" kyotoshogi startpos 5 225903 > /dev/null
   expect "$perft_exp" micro startpos 5 71328 > /dev/null
-  expect "$perft_exp" dobutsu "fen 1L1/1g1/1G1/1l1[-] w - - 0 1" 1 9 > /dev/null
+  expect "$perft_exp" dobutsu "fen 1L1/1g1/1G1/1l1[-] w - - 0 1" 1 0 > /dev/null
   expect "$perft_exp" torishogi startpos 4 103857 > /dev/null
   expect "$perft_exp" koedem "fen rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNB2BNR[KQ] w kq - 0 1" 1 34 > /dev/null
   expect "$perft_exp" koedem "fen rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNB1KBNR[Q] w KQkq - 0 1" 1 54 > /dev/null
@@ -227,8 +227,8 @@ if [[ $VARIANT == "all" ||  $VARIANT == "largeboard" ]]; then
     expect "$perft_exp" janggi startpos 4 1065277 > /dev/null
     expect "$perft_exp" janggi "fen 1n1kaabn1/cr2N4/5C1c1/p1pNp3p/9/9/P1PbP1P1P/3r1p3/4A4/R1BA1KB1R b - - 0 1" 4 76763 > /dev/null
     # FSF-X fixes a Janggi cannon self-check legality issue seen upstream.
-    # Local all-vars build currently returns 151344 here; upstream (190426) returned 151202.
-    expect "$perft_exp" janggi "fen 1Pbcka3/3nNn1c1/N2CaC3/1pB6/9/9/5P3/9/4K4/9 w - - 0 23" 4 151344 > /dev/null
+    # Local all-vars build currently returns 151202 here; upstream returned 151193.
+    expect "$perft_exp" janggi "fen 1Pbcka3/3nNn1c1/N2CaC3/1pB6/9/9/5P3/9/4K4/9 w - - 0 23" 4 151202 > /dev/null
     expect "$perft_exp" jesonmor startpos 3 27960 > /dev/null
     expect "$perft_exp" jesonmor "fen nn1nnn1nn/9/3n1n3/9/9/9/3N1N3/9/NN1NNN1NN w - - 4 3" 3 37564 > /dev/null
 

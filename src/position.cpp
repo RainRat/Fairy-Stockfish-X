@@ -120,7 +120,7 @@ namespace {
   };
 
   static_assert(MAX_PUSH_SNAPSHOT <= 32, "push snapshot promotion bitmask must fit in uint32_t");
-  static_assert(sizeof(StateInfo::pushSnapshotSquares) / sizeof(StateInfo::pushSnapshotSquares[0]) == MAX_PUSH_SNAPSHOT, "pushSnapshotSquares size mismatch");
+  static_assert(sizeof(StateInfo::push.snapshots) / sizeof(StateInfo::push.snapshots[0]) == MAX_PUSH_SNAPSHOT, "push snapshots array size mismatch");
 
   inline bool advance_square(const Position& pos, Square from, int stepF, int stepR, Square& out) {
     int f = int(file_of(from)) + stepF;
@@ -4823,92 +4823,18 @@ bool Position::analyze_push(Move m, PushInfo& info) const {
 
 inline void clear_dirty_piece(StateInfo* st) {
   st->dirtyPiece.dirty_num = 0;
+  for (int i = 0; i < DIRTY_PIECE_MAX; ++i) {
+      st->dirtyPiece.handPiece[i] = NO_PIECE;
+  }
 }
 
 inline void clear_move_undo_state(StateInfo* st) {
-  st->legalCapture = NO_VALUE;
-  st->legalEnPassant = NO_VALUE;
-  st->blastPromotedSquares = 0;
-  st->bycatchSquares = 0;
-  st->promotedBycatch = 0;
-  st->demotedBycatch = 0;
-  st->captured.clear();
-  st->captureSquare = SQ_NONE;
-  st->promotionPawn = NO_PIECE;
-  st->consumedPromotionHandPiece = NO_PIECE;
-  st->dead.clear();
-  st->removedGatingType = NO_PIECE_TYPE;
-  st->removedCastlingGatingType = NO_PIECE_TYPE;
-  st->capturedGatingType = NO_PIECE_TYPE;
-  st->transforms.clear();
-  st->flippedPieces = 0;
-  st->claimedSquares = 0;
-  st->dropHandColor = COLOR_NB;
-  st->suppressedCaptureTransfer = false;
-  st->forcedJumpSquare = SQ_NONE;
-  st->forcedJumpStep = 0;
-  st->forcedJumpHasFollowup = false;
-  st->pass = false;
-  st->didPush = false;
-  st->didPull = false;
-  st->pushStepwise = false;
-  st->pushTailSquare = SQ_NONE;
-  st->pushStepF = 0;
-  st->pushStepR = 0;
-  st->pushCount = 0;
-  st->pushEjected = false;
-  st->pushBlockedCapture = false;
-  st->pushSnapshotCount = 0;
-  st->pushTransferCount = 0;
-  st->pullFromSquare = SQ_NONE;
-  st->pulled.clear();
-  st->pendingClaimPass = false;
+  st->MoveUndoInfo::clear();
 }
 
 #ifndef NDEBUG
-inline bool no_move_undo_transform_payload(const InPlaceTransformState& transforms) {
-  return !transforms.morphedFrom
-      && transforms.morphSquare == SQ_NONE
-      && !transforms.colorChanged
-      && transforms.colorChangeSquare == SQ_NONE;
-}
-
 inline void assert_no_move_undo_payload(const StateInfo* st) {
-  assert(st->bycatchSquares == Bitboard(0));
-  assert(st->promotedBycatch == Bitboard(0));
-  assert(st->demotedBycatch == Bitboard(0));
-  assert(st->blastPromotedSquares == Bitboard(0));
-  assert(!st->captured);
-  assert(st->captureSquare == SQ_NONE);
-  assert(!st->dead);
-  assert(st->promotionPawn == NO_PIECE);
-  assert(st->consumedPromotionHandPiece == NO_PIECE);
-  assert(st->flippedPieces == Bitboard(0));
-  assert(st->claimedSquares == Bitboard(0));
-  assert(st->dropHandColor == COLOR_NB);
-  assert(st->forcedJumpSquare == SQ_NONE);
-  assert(st->forcedJumpStep == 0);
-  assert(st->removedGatingType == NO_PIECE_TYPE);
-  assert(st->removedCastlingGatingType == NO_PIECE_TYPE);
-  assert(st->capturedGatingType == NO_PIECE_TYPE);
-  assert(no_move_undo_transform_payload(st->transforms));
-  assert(st->pushTailSquare == SQ_NONE);
-  assert(st->pushStepF == 0);
-  assert(st->pushStepR == 0);
-  assert(st->pushCount == 0);
-  assert(st->pushSnapshotCount == 0);
-  assert(st->pushTransferCount == 0);
-  assert(st->pullFromSquare == SQ_NONE);
-  assert(!st->pulled);
-  assert(!st->suppressedCaptureTransfer);
-  assert(!st->pass);
-  assert(!st->pendingClaimPass);
-  assert(!st->forcedJumpHasFollowup);
-  assert(!st->didPush);
-  assert(!st->didPull);
-  assert(!st->pushStepwise);
-  assert(!st->pushEjected);
-  assert(!st->pushBlockedCapture);
+  assert(st->MoveUndoInfo::empty());
 }
 #endif
 
@@ -4937,7 +4863,7 @@ CaptureTransferTarget Position::capture_transfer_target(Piece transferPiece, boo
     return {};
 }
 
-bool Position::add_capture_transfer(StateInfo* state, Key& k, Piece transferPiece) {
+bool Position::add_capture_transfer(StateInfo* state, Piece transferPiece, Key* k) {
     CaptureTransferTarget target = capture_transfer_target(transferPiece, state->suppressedCaptureTransfer);
     if (!target.valid)
         return false;
@@ -4946,11 +4872,12 @@ bool Position::add_capture_transfer(StateInfo* state, Key& k, Piece transferPiec
         add_to_prison(target.hashedPiece);
     else
         add_to_hand(target.hashedPiece);
-    xor_in_hand_count(k, target.hashedPiece, target.oldCount, target.oldCount + 1);
+    if (k)
+        xor_in_hand_count(*k, target.hashedPiece, target.oldCount, target.oldCount + 1);
     return true;
 }
 
-bool Position::undo_capture_transfer(StateInfo* state, Key& k, Piece transferPiece) {
+bool Position::undo_capture_transfer(StateInfo* state, Piece transferPiece, Key* k) {
     CaptureTransferTarget target = capture_transfer_target(transferPiece, state->suppressedCaptureTransfer);
     if (!target.valid)
         return false;
@@ -4959,7 +4886,8 @@ bool Position::undo_capture_transfer(StateInfo* state, Key& k, Piece transferPie
         remove_from_prison(target.hashedPiece);
     else
         remove_from_hand(target.hashedPiece);
-    xor_in_hand_count(k, target.hashedPiece, target.oldCount, target.oldCount - 1);
+    if (k)
+        xor_in_hand_count(*k, target.hashedPiece, target.oldCount, target.oldCount - 1);
     return true;
 }
 
@@ -5042,7 +4970,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   // Copy some fields of the old state to our new StateInfo object except the
   // ones which are going to be recalculated from scratch anyway and then switch
   // our state pointer to point to the new (ready to be updated) state.
-  std::memcpy(static_cast<void*>(&newSt), static_cast<void*>(st), offsetof(StateInfo, key));
+  static_cast<StateInfoCopied&>(newSt) = static_cast<const StateInfoCopied&>(*st);
   const bool previousClaimPass = st->pendingClaimPass;
   newSt.previous = st;
   st = &newSt;
@@ -5063,6 +4991,13 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   if (st->countingLimit)
       ++st->countingPly;
 
+  Color us = sideToMove;
+  Color them = ~us;
+  bool dropMove = is_drop_move(m);
+  Square from = from_sq(m);
+  Square to = to_sq(m);
+  Piece pc = moved_piece(m);
+
   // Used by NNUE
   st->accumulator.computed[WHITE] = false;
   st->accumulator.computed[BLACK] = false;
@@ -5070,38 +5005,42 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   clear_dirty_piece(st);
   auto& dp = st->dirtyPiece;
   dp.dirty_num = 1;
+  init_dirty_piece_entry(dp, 0, pc, from, to, NO_PIECE, 0);
 
-  Color us = sideToMove;
-  Color them = ~us;
-  bool dropMove = is_drop_move(m);
-  Square from = from_sq(m);
-  Square to = to_sq(m);
-  Piece pc = moved_piece(m);
   Color dropColor = dropMove ? drop_hand_color(us, in_hand_piece_type(m)) : us;
   PieceType movedType = type_of(pc);
   PieceType movedMoveType = effective_piece_type(movedType);
   const PieceInfo* pi = movedMoveType != NO_PIECE_TYPE ? pieceMap.get(movedMoveType) : nullptr;
   Piece captured = captured_piece(m);
-  if (type_of(m) == CASTLING && captured == NO_PIECE)
-      captured = piece_on(to);
+  Piece castlingRook = NO_PIECE;
+  if (type_of(m) == CASTLING)
+  {
+      castlingRook = captured;
+      if (castlingRook == NO_PIECE)
+          castlingRook = piece_on(to);
+      captured = NO_PIECE;
+  }
   const Piece capturedBeforeStepwisePush = captured;
   PushInfo pushInfo;
-  bool pushMove = analyze_push(m, pushInfo);
-  bool stepwisePush = pushMove && type_of(m) == NORMAL && pushInfo.distance > 1;
+  bool pushMove = false;
+  bool stepwisePush = false;
   Square pushSquares[MAX_PUSH_SNAPSHOT];
   PushTempPiece pushFinalLine[MAX_PUSH_SNAPSHOT];
   PushTempPiece pushTransfers[MAX_PUSH_SNAPSHOT];
   int pushLineCount = 0;
   int pushTransferCount = 0;
   bool recomputeDerivedState = false;
-  if (stepwisePush)
+
+  if (stepwise_pushing() && type_of(m) == NORMAL)
   {
-      PushInfo resolved;
-      if (!analyze_push_stepwise(*this, m, resolved, pushSquares, &pushLineCount, pushFinalLine, pushTransfers, &pushTransferCount))
-          stepwisePush = false;
-      else
-          pushInfo = resolved;
+      pushMove = analyze_push_stepwise(*this, m, pushInfo, pushSquares, &pushLineCount, pushFinalLine, pushTransfers, &pushTransferCount);
+      stepwisePush = pushMove && pushInfo.distance > 1;
   }
+  else
+  {
+      pushMove = analyze_push(m, pushInfo);
+  }
+
   if (pushMove)
       captured = (!stepwisePush && pushInfo.captures) ? piece_on(pushInfo.tail) : NO_PIECE;
 
@@ -5159,18 +5098,23 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       }
   };
   Square capturedSq = captured ? (pushMove && !stepwisePush ? pushInfo.tail : capture_square(m)) : SQ_NONE;
-  st->captured.set(captured, captured ? is_promoted(capturedSq) : false,
-                   captured ? unpromoted_piece_on(capturedSq) : NO_PIECE);
-  st->captureSquare = capturedSq;
-  st->didPush = pushMove;
+  if (captured)
+  {
+      st->captured.set(captured, is_promoted(capturedSq), unpromoted_piece_on(capturedSq), capturedSq);
+  }
+  else
+  {
+      st->captured.clear();
+  }
+  st->push.didPush = pushMove;
   st->didPull = pullMove;
-  st->pushStepwise = stepwisePush;
-  st->pushTailSquare = pushMove ? pushInfo.tail : SQ_NONE;
-  st->pushStepF = pushMove ? pushInfo.stepF : 0;
-  st->pushStepR = pushMove ? pushInfo.stepR : 0;
-  st->pushCount = pushMove ? pushInfo.count : 0;
-  st->pushEjected = pushMove && pushInfo.ejects;
-  st->pushBlockedCapture = pushMove && pushInfo.captures && !pushInfo.ejects;
+  st->push.stepwise = stepwisePush;
+  st->push.tailSquare = pushMove ? pushInfo.tail : SQ_NONE;
+  st->push.stepF = pushMove ? pushInfo.stepF : 0;
+  st->push.stepR = pushMove ? pushInfo.stepR : 0;
+  st->push.count = pushMove ? pushInfo.count : 0;
+  st->push.ejected = pushMove && pushInfo.ejects;
+  st->push.blockedCapture = pushMove && pushInfo.captures && !pushInfo.ejects;
   st->pass = is_pass(m) && !openingSelfRemoval;
   st->claimedSquares = 0;
   st->dropHandColor = COLOR_NB;
@@ -5179,13 +5123,13 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   if (pullMove)
   {
       Square pullFrom = pull_square(m);
-      st->pullFromSquare = pullFrom;
       Piece pulled = piece_on(pullFrom);
       st->pulled.set(pulled, pulled != NO_PIECE && is_promoted(pullFrom),
-                     pulled != NO_PIECE ? unpromoted_piece_on(pullFrom) : NO_PIECE);
+                     pulled != NO_PIECE ? unpromoted_piece_on(pullFrom) : NO_PIECE, pullFrom);
   }
 
   PotionContext potCtx = setup_potion_context(m, us);
+  assert(potCtx.valid);
 
   bool pureWallMove = is_gating(m) && potCtx.potion == Variant::POTION_TYPE_NB
                    && walling(us) && wall_or_move() && from == to;
@@ -5228,13 +5172,12 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   if (type_of(m) == CASTLING)
   {
       assert(type_of(pc) != NO_PIECE_TYPE);
-      assert(castling_rook_pieces(us) & type_of(captured));
+      assert(castling_rook_pieces(us) & type_of(castlingRook));
 
       Square rfrom, rto;
       do_castling<true>(us, from, to, rfrom, rto);
 
-      k ^= Zobrist::psq[captured][rfrom] ^ Zobrist::psq[captured][rto];
-      captured = NO_PIECE;
+      k ^= Zobrist::psq[castlingRook][rfrom] ^ Zobrist::psq[castlingRook][rto];
 
       if (commit_gates() && st->removedCastlingGatingType > NO_PIECE_TYPE)
       {
@@ -5260,7 +5203,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       st->suppressedCaptureTransfer = var->petrifyOnCaptureSuppressTransfer
                                    && bool(var->petrifyOnCaptureTypes & type_of(pc));
 
-      Square capsq = st->captureSquare != SQ_NONE ? st->captureSquare : to;
+      Square capsq = st->captured.square != SQ_NONE ? st->captured.square : to;
       if (jumpCapsq != SQ_NONE)
       {
           capsq = jumpCapsq;
@@ -5269,7 +5212,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       if (type_of(m) == EN_PASSANT)
       {
           capsq = capture_square(to);
-          st->captureSquare = capsq;
+          st->captured.square = capsq;
 
           assert(st->epSquares & to);
           assert(var->enPassantRegion[us] & to);
@@ -5288,16 +5231,12 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           if (rifleShot)
           {
               dp.dirty_num = 1;
-              dp.piece[0] = captured;
-              dp.from[0] = capsq;
-              dp.to[0] = SQ_NONE;
+              init_dirty_piece_entry(dp, 0, captured, capsq, SQ_NONE, NO_PIECE, 0);
           }
           else
           {
               dp.dirty_num = 2;  // 1 piece moved, 1 piece captured
-              dp.piece[1] = captured;
-              dp.from[1] = capsq;
-              dp.to[1] = SQ_NONE;
+              init_dirty_piece_entry(dp, 1, captured, capsq, SQ_NONE, NO_PIECE, 0);
           }
       }
 
@@ -5311,7 +5250,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       Piece transferPiece = reserve_transfer_piece(us, captured, capturedPromoted, unpromotedCaptured,
                                                    drop_loop(), var->captureToHandSide,
                                                    main_promotion_pawn_type(color_of(captured)));
-      bool transferred = add_capture_transfer(st, k, transferPiece);
+      bool transferred = add_capture_transfer(st, transferPiece, &k);
       if (Eval::useNNUE)
       {
           int captureDirtyIdx = rifleShot ? 0 : 1;
@@ -5363,31 +5302,27 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       if (stepwisePush)
       {
           recomputeDerivedState = true;
-          st->pushSnapshotCount = pushLineCount;
-          st->pushTransferCount = pushTransferCount;
-          st->pushSnapshotPromoted = 0;
+          st->push.snapshotCount = pushLineCount;
+          st->push.transferCount = pushTransferCount;
           for (int i = 0; i < pushLineCount; ++i)
           {
               Square sq = pushSquares[i];
-              st->pushSnapshotSquares[i] = sq;
-              st->pushSnapshotPieces[i] = piece_on(sq);
-              if (st->pushSnapshotPieces[i] != NO_PIECE && is_promoted(sq))
-                  st->pushSnapshotPromoted |= (1U << i);
-              st->pushSnapshotUnpromoted[i] = (st->pushSnapshotPromoted & (1U << i)) ? unpromoted_piece_on(sq) : NO_PIECE;
+              st->push.snapshots[i].sq = sq;
+              st->push.snapshots[i].piece = piece_on(sq);
+              st->push.snapshots[i].promoted = (st->push.snapshots[i].piece != NO_PIECE && is_promoted(sq));
+              st->push.snapshots[i].unpromoted = st->push.snapshots[i].promoted ? unpromoted_piece_on(sq) : NO_PIECE;
               pushRightsMask |= castlingRightsMask[sq];
           }
-          st->pushTransferPromoted = 0;
           for (int i = 0; i < pushTransferCount; ++i)
           {
-              st->pushTransferPieces[i] = pushTransfers[i].piece;
-              if (pushTransfers[i].promoted)
-                  st->pushTransferPromoted |= (1U << i);
-              st->pushTransferUnpromoted[i] = pushTransfers[i].unpromoted;
+              st->push.transfers[i].piece = pushTransfers[i].piece;
+              st->push.transfers[i].promoted = pushTransfers[i].promoted;
+              st->push.transfers[i].unpromoted = pushTransfers[i].unpromoted;
           }
 
           for (int i = pushLineCount - 1; i >= 0; --i)
           {
-              Piece original = st->pushSnapshotPieces[i];
+              Piece original = st->push.snapshots[i].piece;
               if (original == NO_PIECE)
                   continue;
 
@@ -5423,13 +5358,13 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
 
           for (int i = 0; i < pushTransferCount; ++i)
           {
-              Piece transferred = st->pushTransferPieces[i];
+              Piece transferred = st->push.transfers[i].piece;
               Piece transferPiece = reserve_transfer_piece(us, transferred,
-                                                           (st->pushTransferPromoted & (1U << i)),
-                                                           st->pushTransferUnpromoted[i],
+                                                           st->push.transfers[i].promoted,
+                                                           st->push.transfers[i].unpromoted,
                                                            drop_loop(), var->captureToHandSide,
                                                            main_promotion_pawn_type(color_of(transferred)));
-              add_capture_transfer(st, k, transferPiece);
+              add_capture_transfer(st, transferPiece, &k);
 
               if (points_counting())
               {
@@ -5513,8 +5448,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           k ^= Zobrist::psq[pc][from] ^ Zobrist::psq[pc][to];
       else if (pullMove)
       {
-          Piece pulled = st->pulled.piece;
-          Square pullFrom = st->pullFromSquare;
+          Piece pulled = st->pulled.piece.piece;
+          Square pullFrom = st->pulled.square;
           k ^= Zobrist::psq[pc][from] ^ Zobrist::psq[pc][to];
           if (pulled != NO_PIECE)
               k ^= Zobrist::psq[pulled][pullFrom] ^ Zobrist::psq[pulled][from];
@@ -5611,19 +5546,11 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       if (Eval::useNNUE)
       {
           // Add drop piece
-          dp.piece[0] = pc;
-          dp.handPiece[0] = make_piece(dropColor, in_hand_piece_type(m));
-          dp.handCount[0] = pieceCountInHand[dropColor][in_hand_piece_type(m)];
-          dp.from[0] = SQ_NONE;
-          dp.to[0] = to;
+          init_dirty_piece_entry(dp, 0, pc, SQ_NONE, to, make_piece(dropColor, in_hand_piece_type(m)), pieceCountInHand[dropColor][in_hand_piece_type(m)]);
           if (paired_drop(m))
           {
               dp.dirty_num = 2;
-              dp.piece[1] = pc;
-              dp.handPiece[1] = make_piece(dropColor, in_hand_piece_type(m));
-              dp.handCount[1] = pieceCountInHand[dropColor][in_hand_piece_type(m)] - 1;
-              dp.from[1] = SQ_NONE;
-              dp.to[1] = secondary_drop_square(m);
+              init_dirty_piece_entry(dp, 1, pc, SQ_NONE, secondary_drop_square(m), make_piece(dropColor, in_hand_piece_type(m)), pieceCountInHand[dropColor][in_hand_piece_type(m)] - 1);
           }
 
           // Exchange drops also add a piece to the opponent's hand without any board
@@ -5687,9 +5614,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
 
       if (Eval::useNNUE)
       {
-          dp.piece[0] = pc;
-          dp.from[0] = from;
-          dp.to[0] = SQ_NONE;
+          init_dirty_piece_entry(dp, 0, pc, from, SQ_NONE, NO_PIECE, 0);
       }
 
       remove_piece(from);
@@ -5709,15 +5634,13 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           if (pureWallMove)
           {
               dp.dirty_num = 0;
-              dp.piece[0] = NO_PIECE;
+              init_dirty_piece_entry(dp, 0, NO_PIECE, SQ_NONE, SQ_NONE, NO_PIECE, 0);
           }
           else if (rifleShot)
               dp.dirty_num = std::min(dp.dirty_num, 1);
           else
           {
-              dp.piece[0] = pc;
-              dp.from[0] = from;
-              dp.to[0] = to;
+              init_dirty_piece_entry(dp, 0, pc, from, to, NO_PIECE, 0);
           }
       }
 
@@ -5748,9 +5671,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
 
           if (Eval::useNNUE)
           {
-              dp.piece[0] = pc;
-              dp.from[0] = SQ_NONE;
-              dp.to[0] = to;
+              init_dirty_piece_entry(dp, 0, pc, SQ_NONE, to, NO_PIECE, 0);
           }
 
           put_piece(pc, to, clonedPromoted, clonedUnpromoted);
@@ -5763,18 +5684,14 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       }
       else if (pullMove)
       {
-          Piece pulled = st->pulled.piece;
-          Square pullFrom = st->pullFromSquare;
+          Piece pulled = st->pulled.piece.piece;
+          Square pullFrom = st->pulled.square;
 
           if (Eval::useNNUE)
           {
               dp.dirty_num = 2;
-              dp.piece[0] = pc;
-              dp.from[0] = from;
-              dp.to[0] = to;
-              dp.piece[1] = pulled;
-              dp.from[1] = pullFrom;
-              dp.to[1] = from;
+              init_dirty_piece_entry(dp, 0, pc, from, to, NO_PIECE, 0);
+              init_dirty_piece_entry(dp, 1, pulled, pullFrom, from, NO_PIECE, 0);
           }
 
           move_piece(from, to);
@@ -5786,12 +5703,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           if (Eval::useNNUE)
           {
               dp.dirty_num = 2;
-              dp.piece[0] = pc;
-              dp.from[0] = from;
-              dp.to[0] = to;
-              dp.piece[1] = piece_on(to);
-              dp.from[1] = to;
-              dp.to[1] = from;
+              init_dirty_piece_entry(dp, 0, pc, from, to, NO_PIECE, 0);
+              init_dirty_piece_entry(dp, 1, piece_on(to), to, from, NO_PIECE, 0);
           }
 
           swap_piece(from, to);
@@ -5951,14 +5864,14 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       st->materialKey ^=  Zobrist::psq[demotion][pieceCount[demotion]-1]
                         ^ Zobrist::psq[pc][pieceCount[pc]];
 
-      // Update material
-      st->nonPawnMaterial[us] += PieceValue[MG][demotion] - PieceValue[MG][pc];
-  }
-  // Set en passant square(s) if the moved piece can be captured
-  else if (   !dropMove
-           && ((PseudoMoves[1][us][type_of(pc)][from] & ~PseudoMoves[0][us][type_of(pc)][from]) & to))
-  {
-      assert(type_of(pc) != PAWN);
+       // Update material
+       st->nonPawnMaterial[us] += PieceValue[MG][demotion] - PieceValue[MG][pc];
+   }
+   // Set en passant square(s) if the moved piece can be captured
+   else if (   !dropMove
+            && ((PseudoMoves[1][us][type_of(pc)][from] & ~PseudoMoves[0][us][type_of(pc)][from]) & to))
+   {
+       assert(type_of(pc) != PAWN);
       st->epSquares = between_bb(from, to) & var->enPassantRegion[them];
       if (st->epSquares)
       {
@@ -5988,8 +5901,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       Piece morphed = make_piece(color_of(cur), targetType);
       if (!st->transforms.morphedFrom)
       {
-          st->transforms.morphedFrom.set(cur, is_promoted(sq), unpromoted_piece_on(sq));
-          st->transforms.morphSquare = sq;
+          st->transforms.morphedFrom.set(cur, is_promoted(sq), unpromoted_piece_on(sq), sq);
       }
 
       remove_piece(sq);
@@ -6199,7 +6111,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
            ( blast_on_move() && !captured && !is_self_destruct(m) ) ||
            ( blast_on_self_destruct() && is_self_destruct(m) ) ) {
 
-          blast_mask = (blastOnCaptureMove || blast_on_move() || blast_on_self_destruct()) ? blast_squares(captured ? (blast_on_capture_mover_center() ? moverSq : st->captureSquare) : to)
+          blast_mask = (blastOnCaptureMove || blast_on_move() || blast_on_self_destruct()) ? blast_squares(captured ? (blast_on_capture_mover_center() ? moverSq : st->captured.square) : to)
               : (var->petrifyOnCaptureTypes & type_of(pc) ? square_bb(moverSq) : Bitboard(0));
           if (captured && blastOnCaptureMove && (blast_immune_types() & movedType))
               blast_mask &= ~square_bb(moverSq);
@@ -6378,7 +6290,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
                                                        main_promotion_pawn_type(color_of(bpc)));
           if (!petrifiedCenter)
           {
-               bool transferred = add_capture_transfer(st, k, transferPiece);
+              bool transferred = add_capture_transfer(st, transferPiece, &k);
               if (Eval::useNNUE && bycatchDirtyIdx >= 0 && transferred)
               {
                   Piece pieceToHand = capture_type() == PRISON ? ~transferPiece : transferPiece;
@@ -6516,11 +6428,10 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   {
       Piece cur = piece_on(moverSq);
       Piece changed = make_piece(them, type_of(cur));
-      st->transforms.colorChanged.set(cur, is_promoted(moverSq), unpromoted_piece_on(moverSq));
-      st->transforms.colorChangeSquare = moverSq;
+      st->transforms.colorChanged.set(cur, is_promoted(moverSq), unpromoted_piece_on(moverSq), moverSq);
 
       remove_piece(moverSq);
-      put_piece(changed, moverSq, st->transforms.colorChanged.promoted, st->transforms.colorChanged.unpromoted);
+      put_piece(changed, moverSq, st->transforms.colorChanged.piece.promoted, st->transforms.colorChanged.piece.unpromoted);
 
       k ^= Zobrist::psq[cur][moverSq] ^ Zobrist::psq[changed][moverSq];
       st->materialKey ^= Zobrist::psq[cur][pieceCount[cur]]
@@ -6729,7 +6640,7 @@ void Position::undo_move(Move m) {
   Color us = sideToMove;
   Square from = from_sq(m);
   Square to = to_sq(m);
-  bool rifleShot = rifle_capture(m) && st->captured.piece != NO_PIECE && type_of(m) != CASTLING;
+  bool rifleShot = rifle_capture(m) && st->captured.piece.piece != NO_PIECE && type_of(m) != CASTLING;
   bool cloneMove = is_clone_move(m);
   bool pullMove = is_pull_move(m);
   bool swapMove = is_swap_move(m);
@@ -6750,7 +6661,7 @@ void Position::undo_move(Move m) {
          || wasOpeningSelfRemoval
          || (commit_gates() && st->removedGatingType > NO_PIECE_TYPE)
   );
-  assert(type_of(st->captured.piece) != KING || allow_checks() || !checking_permitted());
+  assert(type_of(st->captured.piece.piece) != KING || allow_checks() || !checking_permitted());
 
   // Reset wall squares
   byTypeBB[ALL_PIECES] ^= st->wallSquares ^ st->previous->wallSquares;
@@ -6760,8 +6671,8 @@ void Position::undo_move(Move m) {
   if (
        ( surround_capture_opposite() || surround_capture_intervene() || surround_capture_edge() ) ||
        ( st->bycatchSquares ) ||
-       ( st->captured.piece && var->petrifyOnCaptureTypes ) ||
-       ( blast_on_move() && !st->captured.piece && !is_self_destruct(st->move) ) ||
+       ( st->captured.piece.piece && var->petrifyOnCaptureTypes ) ||
+       ( blast_on_move() && !st->captured.piece.piece && !is_self_destruct(st->move) ) ||
        ( blast_on_self_destruct() && is_self_destruct(st->move) ) ||
        ( remove_connect_n() > 0 )
      )
@@ -6793,8 +6704,7 @@ void Position::undo_move(Move m) {
                                                            main_promotion_pawn_type(color_of(unpromotedBpc)));
                if (!wasBlastPromoted && !petrifiedCenter)
                {
-                   Key dummyKey = 0;
-                   undo_capture_transfer(st, dummyKey, transferPiece);
+                   undo_capture_transfer(st, transferPiece);
                }
           }
       }
@@ -6803,19 +6713,19 @@ void Position::undo_move(Move m) {
   }
 
   // do_move applies morphing before color changes, so undo restores color first.
-  if (st->transforms.colorChanged && st->transforms.colorChangeSquare == moverSq)
+  if (st->transforms.colorChanged && st->transforms.colorChanged.square == moverSq)
   {
       remove_piece(moverSq);
-      put_piece(st->transforms.colorChanged.piece, moverSq, st->transforms.colorChanged.promoted, st->transforms.colorChanged.unpromoted);
-      pc = st->transforms.colorChanged.piece;
+      put_piece(st->transforms.colorChanged.piece.piece, moverSq, st->transforms.colorChanged.piece.promoted, st->transforms.colorChanged.piece.unpromoted);
+      pc = st->transforms.colorChanged.piece.piece;
   }
 
-  if (st->transforms.morphedFrom && st->transforms.morphSquare == moverSq)
+  if (st->transforms.morphedFrom && st->transforms.morphedFrom.square == moverSq)
   {
       remove_piece(moverSq);
-      put_piece(st->transforms.morphedFrom.piece, moverSq,
-                st->transforms.morphedFrom.promoted, st->transforms.morphedFrom.unpromoted);
-      pc = st->transforms.morphedFrom.piece;
+      put_piece(st->transforms.morphedFrom.piece.piece, moverSq,
+                st->transforms.morphedFrom.piece.promoted, st->transforms.morphedFrom.piece.unpromoted);
+      pc = st->transforms.morphedFrom.piece.piece;
   }
 
   // Remove gated piece or restore potion. Pure wall moves use the gating
@@ -6885,7 +6795,7 @@ void Position::undo_move(Move m) {
   }
   if (commit_gates() && st->captured.piece && st->capturedGatingType > NO_PIECE_TYPE){
       // return musketeer piece fronted by the captured piece
-      commit_piece(make_piece(color_of(st->captured.piece), st->capturedGatingType), file_of(to));
+      commit_piece(make_piece(color_of(st->captured.piece.piece), st->capturedGatingType), file_of(to));
   }
 
   if (is_promotion_move(m))
@@ -6984,7 +6894,7 @@ void Position::undo_move(Move m) {
           else if (pullMove)
           {
               if (piece_on(from) != NO_PIECE)
-                  move_piece(from, st->pullFromSquare);
+                  move_piece(from, st->pulled.square);
               move_piece(to, from);
           }
           else if (swapMove)
@@ -6993,58 +6903,57 @@ void Position::undo_move(Move m) {
               move_piece(to, from); // Put the piece back at the source square when the mover survived on 'to'
       }
 
-      if (st->didPush && st->pushStepwise)
+      if (st->push.didPush && st->push.stepwise)
       {
-          for (int i = 0; i < st->pushTransferCount; ++i)
+          for (int i = 0; i < st->push.transferCount; ++i)
           {
-              Piece transferred = st->pushTransferPieces[i];
+              Piece transferred = st->push.transfers[i].piece;
               Piece transferPiece = reserve_transfer_piece(us, transferred,
-                                                           (st->pushTransferPromoted & (1U << i)),
-                                                           st->pushTransferUnpromoted[i],
+                                                           st->push.transfers[i].promoted,
+                                                           st->push.transfers[i].unpromoted,
                                                            drop_loop(), var->captureToHandSide,
                                                            main_promotion_pawn_type(color_of(transferred)));
-              Key dummyKey = 0;
-              undo_capture_transfer(st, dummyKey, transferPiece);
+              undo_capture_transfer(st, transferPiece);
           }
 
-          for (int i = 0; i < st->pushSnapshotCount; ++i)
-              if (piece_on(st->pushSnapshotSquares[i]) != NO_PIECE)
-                  remove_piece(st->pushSnapshotSquares[i]);
+          for (int i = 0; i < st->push.snapshotCount; ++i)
+              if (piece_on(st->push.snapshots[i].sq) != NO_PIECE)
+                  remove_piece(st->push.snapshots[i].sq);
 
-          for (int i = 0; i < st->pushSnapshotCount; ++i)
+          for (int i = 0; i < st->push.snapshotCount; ++i)
           {
-              if (st->pushSnapshotPieces[i] == NO_PIECE)
+              if (st->push.snapshots[i].piece == NO_PIECE)
               {
-                  board[st->pushSnapshotSquares[i]] = NO_PIECE;
+                  board[st->push.snapshots[i].sq] = NO_PIECE;
                   continue;
               }
-              put_piece(st->pushSnapshotPieces[i], st->pushSnapshotSquares[i],
-                        (st->pushSnapshotPromoted & (1U << i)), st->pushSnapshotUnpromoted[i]);
+              put_piece(st->push.snapshots[i].piece, st->push.snapshots[i].sq,
+                        st->push.snapshots[i].promoted, st->push.snapshots[i].unpromoted);
           }
       }
-      else if (st->didPush)
+      else if (st->push.didPush)
       {
           Square source = SQ_NONE;
           Square finalSource = SQ_NONE;
-          if (st->pushBlockedCapture)
+          if (st->push.blockedCapture)
           {
-              if (st->pushCount > 1)
+              if (st->push.count > 1)
               {
-                  source = st->pushTailSquare;
-                  finalSource = make_square(File(int(file_of(to)) + st->pushStepF),
-                                            Rank(int(rank_of(to)) + st->pushStepR));
+                  source = st->push.tailSquare;
+                  finalSource = make_square(File(int(file_of(to)) + st->push.stepF),
+                                            Rank(int(rank_of(to)) + st->push.stepR));
               }
           }
-          else if (advance_square(*this, to, st->pushStepF, st->pushStepR, source))
+          else if (advance_square(*this, to, st->push.stepF, st->push.stepR, source))
           {
-              finalSource = st->pushTailSquare;
-              if (!st->pushEjected)
+              finalSource = st->push.tailSquare;
+              if (!st->push.ejected)
               {
 #ifndef NDEBUG
-                  bool advanced = advance_square(*this, st->pushTailSquare, st->pushStepF, st->pushStepR, finalSource);
+                  bool advanced = advance_square(*this, st->push.tailSquare, st->push.stepF, st->push.stepR, finalSource);
                   assert(advanced && "stored push state missing tail destination");
 #else
-                  advance_square(*this, st->pushTailSquare, st->pushStepF, st->pushStepR, finalSource);
+                  advance_square(*this, st->push.tailSquare, st->push.stepF, st->push.stepR, finalSource);
 #endif
               }
           }
@@ -7053,38 +6962,33 @@ void Position::undo_move(Move m) {
           {
               while (true)
               {
-                  Square dest = make_square(File(int(file_of(source)) - st->pushStepF),
-                                            Rank(int(rank_of(source)) - st->pushStepR));
+                  Square dest = make_square(File(int(file_of(source)) - st->push.stepF),
+                                            Rank(int(rank_of(source)) - st->push.stepR));
                   move_piece(source, dest);
                   if (source == finalSource)
                       break;
-                  if (!advance_square(*this, source, st->pushStepF, st->pushStepR, source))
+                  if (!advance_square(*this, source, st->push.stepF, st->push.stepR, source))
                       break;
               }
           }
       }
 
-      if (st->captured.piece)
+      if (st->captured)
       {
-          Square capsq = to;
+          Square capsq = st->captured.square != SQ_NONE ? st->captured.square : to;
 
           if (type_of(m) == EN_PASSANT)
           {
-              capsq = st->captureSquare;
-
               assert(st->previous->epSquares & to);
               assert(var->enPassantRegion[sideToMove] & to);
               assert(piece_on(capsq) == NO_PIECE);
           }
-          else if (st->captureSquare != SQ_NONE)
-              capsq = st->captureSquare;
 
-          put_piece(st->captured.piece, capsq, st->captured.promoted, st->captured.unpromoted); // Restore the captured piece
-          Piece transferPiece = reserve_transfer_piece(us, st->captured.piece, st->captured.promoted, st->captured.unpromoted,
+          put_piece(st->captured.piece.piece, capsq, st->captured.piece.promoted, st->captured.piece.unpromoted); // Restore the captured piece
+          Piece transferPiece = reserve_transfer_piece(us, st->captured.piece.piece, st->captured.piece.promoted, st->captured.piece.unpromoted,
                                                        drop_loop(), var->captureToHandSide,
-                                                       main_promotion_pawn_type(color_of(st->captured.piece)));
-          Key dummyKey = 0;
-          undo_capture_transfer(st, dummyKey, transferPiece);
+                                                       main_promotion_pawn_type(color_of(st->captured.piece.piece)));
+          undo_capture_transfer(st, transferPiece);
       }
   }
 
@@ -7165,7 +7069,7 @@ void Position::do_null_move(StateInfo& newSt) {
   assert(!evasion_checkers());
   assert(&newSt != st);
 
-  std::memcpy(static_cast<void*>(&newSt), static_cast<const void*>(st), offsetof(StateInfo, key));
+  static_cast<StateInfoCopied&>(newSt) = static_cast<const StateInfoCopied&>(*st);
 
   newSt.previous = st;
   st = &newSt;
@@ -7241,7 +7145,8 @@ Key Position::key_after(Move m) const {
   if (is_drop_move(m))
   {
       PieceType exchanged = exchange_piece(m);
-      apply_drop_hash_delta(k, m, pc, sideToMove, exchanged);
+      Color dropColor = drop_hand_color(sideToMove, in_hand_piece_type(m));
+      apply_drop_hash_delta(k, m, pc, dropColor, exchanged);
       return k;
   }
 
@@ -7659,10 +7564,10 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
   // Some variants (e.g. Xiangqi/Janggi) use king_type() as movement semantics
   // while the actual royal piece on board remains KING, so avoid treating
   // non-royal king_type captures (e.g. advisors) as immediate game end.
-  if (st->captured.piece != NO_PIECE)
+  if (st->captured.piece.piece != NO_PIECE)
   {
-      Color capturedColor = color_of(st->captured.piece);
-      PieceType capturedType = type_of(st->captured.piece);
+      Color capturedColor = color_of(st->captured.piece.piece);
+      PieceType capturedType = type_of(st->captured.piece.piece);
       bool capturedRoyal = capturedType == KING;
 
       if (!capturedRoyal && king_type() != NO_PIECE_TYPE && capturedType == king_type())

@@ -171,7 +171,7 @@ namespace {
               moveList = make_move_and_gating<PROMOTION>(pos, moveList, us, from, to, pt);
           }
       }
-      PieceType pt = pos.promoted_piece_type(PAWN);
+      PieceType pt = pos.promoted_piece_type(type_of(pos.piece_on(from)));
       if (pt && pos.promotion_allowed(us, pt, to) && !(pos.piece_promotion_on_capture() && pos.empty(to)))
       {
           moveList = make_move_and_gating<PIECE_PROMOTION>(pos, moveList, us, from, to, pt);

@@ -627,6 +627,7 @@ namespace {
         v->extinctionValue = -VALUE_MATE;
         v->extinctionPieceTypes = piece_set(COMMONER);
         v->blastOnCapture = true;
+        v->blastOnCaptureMoverCenter = true;
         v->nnueAlias = "atomic";
         return v;
     }

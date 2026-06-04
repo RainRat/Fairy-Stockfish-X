@@ -120,29 +120,81 @@ struct ReversiblePieceState {
   explicit operator bool() const { return piece != NO_PIECE; }
 };
 
+struct ReversiblePieceOnSquare {
+  ReversiblePieceState piece;
+  Square square = SQ_NONE;
+
+  void clear() {
+    piece.clear();
+    square = SQ_NONE;
+  }
+
+  void set(Piece pc, bool isPromoted, Piece unpromotedPc = NO_PIECE, Square sq = SQ_NONE) {
+    piece.set(pc, isPromoted, unpromotedPc);
+    square = sq;
+  }
+
+  explicit operator bool() const { return bool(piece); }
+};
+
 struct InPlaceTransformState {
-  ReversiblePieceState morphedFrom;
-  Square morphSquare = SQ_NONE;
-  ReversiblePieceState colorChanged;
-  Square colorChangeSquare = SQ_NONE;
+  ReversiblePieceOnSquare morphedFrom;
+  ReversiblePieceOnSquare colorChanged;
 
   void clear() {
     morphedFrom.clear();
-    morphSquare = SQ_NONE;
     colorChanged.clear();
-    colorChangeSquare = SQ_NONE;
   }
 };
 
 static_assert(std::is_trivially_copyable_v<InPlaceTransformState>, "InPlaceTransformState must remain trivially copyable");
 
-/// StateInfo struct stores information needed to restore a Position object to
-/// its previous state when we retract a move. Whenever a move is made on the
-/// board (by calling Position::do_move), a StateInfo object must be passed.
+struct PushSnapshot {
+  Square sq = SQ_NONE;
+  Piece piece = NO_PIECE;
+  Piece unpromoted = NO_PIECE;
+  bool promoted = false;
+};
 
-struct StateInfo {
+struct PushTransfer {
+  Piece piece = NO_PIECE;
+  Piece unpromoted = NO_PIECE;
+  bool promoted = false;
+};
 
-  // Copied when making a move
+struct PushUndo {
+  Square tailSquare = SQ_NONE;
+  int stepF = 0;
+  int stepR = 0;
+  int count = 0;
+  int snapshotCount = 0;
+  PushSnapshot snapshots[MAX_PUSH_SNAPSHOT];
+  int transferCount = 0;
+  PushTransfer transfers[MAX_PUSH_SNAPSHOT];
+  bool didPush = false;
+  bool stepwise = false;
+  bool ejected = false;
+  bool blockedCapture = false;
+
+  void clear() {
+    tailSquare = SQ_NONE;
+    stepF = 0;
+    stepR = 0;
+    count = 0;
+    snapshotCount = 0;
+    transferCount = 0;
+    didPush = false;
+    stepwise = false;
+    ejected = false;
+    blockedCapture = false;
+  }
+
+  bool active() const { return didPush; }
+};
+
+struct StateInfo;
+
+struct StateInfoCopied {
   Key    pawnKey;
   Key    materialKey;
   Value  nonPawnMaterial[COLOR_NB];
@@ -162,82 +214,138 @@ struct StateInfo {
   Bitboard potionZones[COLOR_NB][Variant::POTION_TYPE_NB];
   int potionCooldown[COLOR_NB][Variant::POTION_TYPE_NB];
   Key layoutKey;
+};
 
-  // Not copied when making a move (will be recomputed anyhow)
+struct StateInfoDerived {
   Key        key;
   Key        boardKey;
   Bitboard   checkersBB;
-  // Fairy-Stockfish-X split: broad royal-danger state, including pseudo-/anti-royal
-  // bookkeeping, must not be conflated with actual "must evade now" check state.
   Bitboard   evasionCheckersBB;
-  Piece      unpromotedBycatch[SQUARE_NB];
-  Bitboard   bycatchSquares;
-  Bitboard   promotedBycatch;
-  Bitboard   demotedBycatch;
-  Bitboard   blastPromotedSquares;
   StateInfo* previous;
   Bitboard   blockersForKing[COLOR_NB];
   Bitboard   pinners[COLOR_NB];
   Bitboard   checkSquares[PIECE_TYPE_NB];
-  ReversiblePieceState captured;
-  Square     captureSquare; // when != to_sq, e.g., en passant
-  ReversiblePieceState dead;
-  Piece      promotionPawn;
-  Piece      consumedPromotionHandPiece;
   Bitboard   nonSlidingRiders;
-  Bitboard   flippedPieces;
   Bitboard   pseudoRoyalCandidates;
   Bitboard   pseudoRoyals;
   PieceSet   extinctionSeen[COLOR_NB];
-  OptBool    legalCapture;
-  OptBool    legalEnPassant;
-  Bitboard   chased;
-  Bitboard   claimedSquares;
-  Square     forcedJumpSquare;
-  Move       move;
-  Color      dropHandColor;
-  int        forcedJumpStep;
   int        repetition;
   int        boardRepetition;
-  PieceType removedGatingType;
-  PieceType removedCastlingGatingType;
-  PieceType capturedGatingType;
-  InPlaceTransformState transforms;
-  Square pushTailSquare;
-  int pushStepF;
-  int pushStepR;
-  int pushCount;
-  int pushSnapshotCount;
-  Square pushSnapshotSquares[MAX_PUSH_SNAPSHOT];
-  Piece pushSnapshotPieces[MAX_PUSH_SNAPSHOT];
-  Piece pushSnapshotUnpromoted[MAX_PUSH_SNAPSHOT];
-  uint32_t pushSnapshotPromoted;
-  int pushTransferCount;
-  Piece pushTransferPieces[MAX_PUSH_SNAPSHOT];
-  Piece pushTransferUnpromoted[MAX_PUSH_SNAPSHOT];
-  uint32_t pushTransferPromoted;
-  Square pullFromSquare;
-  ReversiblePieceState pulled;
-  bool       suppressedCaptureTransfer;
   bool       shak;
   bool       bikjang;
-  bool       pass;
-  bool       pendingClaimPass;
-  bool       forcedJumpHasFollowup;
-  bool       didPush;
-  bool       didPull;
-  bool       pushStepwise;
-  bool       pushEjected;
-  bool       pushBlockedCapture;
-  bool nnueRefreshNeeded;
+  Move       move = MOVE_NONE;
+  bool       pendingClaimPass = false;
+  OptBool    legalCapture = NO_VALUE;
+  OptBool    legalEnPassant = NO_VALUE;
+  Bitboard   chased = Bitboard(0);
+};
 
-  // Used by NNUE
+struct MoveUndoInfo {
+  Bitboard   bycatchSquares = Bitboard(0);
+  Piece      unpromotedBycatch[SQUARE_NB] = {NO_PIECE};
+  Bitboard   promotedBycatch = Bitboard(0);
+  Bitboard   demotedBycatch = Bitboard(0);
+  Bitboard   blastPromotedSquares = Bitboard(0);
+  ReversiblePieceOnSquare captured;
+  ReversiblePieceState dead;
+  Piece      promotionPawn = NO_PIECE;
+  Piece      consumedPromotionHandPiece = NO_PIECE;
+  Bitboard   flippedPieces = Bitboard(0);
+  Bitboard   claimedSquares = Bitboard(0);
+  Square     forcedJumpSquare = SQ_NONE;
+  Color      dropHandColor = COLOR_NB;
+  int        forcedJumpStep = 0;
+  PieceType  removedGatingType = NO_PIECE_TYPE;
+  PieceType  removedCastlingGatingType = NO_PIECE_TYPE;
+  PieceType  capturedGatingType = NO_PIECE_TYPE;
+  InPlaceTransformState transforms;
+  PushUndo   push;
+  ReversiblePieceOnSquare pulled;
+  bool       suppressedCaptureTransfer = false;
+  bool       pass = false;
+  bool       forcedJumpHasFollowup = false;
+  bool       didPull = false;
+
+  void clear() {
+    bycatchSquares = Bitboard(0);
+    std::memset(unpromotedBycatch, 0, sizeof(unpromotedBycatch));
+    promotedBycatch = Bitboard(0);
+    demotedBycatch = Bitboard(0);
+    blastPromotedSquares = Bitboard(0);
+    captured.clear();
+    dead.clear();
+    promotionPawn = NO_PIECE;
+    consumedPromotionHandPiece = NO_PIECE;
+    flippedPieces = Bitboard(0);
+    claimedSquares = Bitboard(0);
+    forcedJumpSquare = SQ_NONE;
+    dropHandColor = COLOR_NB;
+    forcedJumpStep = 0;
+    removedGatingType = NO_PIECE_TYPE;
+    removedCastlingGatingType = NO_PIECE_TYPE;
+    capturedGatingType = NO_PIECE_TYPE;
+    transforms.clear();
+    push.clear();
+    pulled.clear();
+    suppressedCaptureTransfer = false;
+    pass = false;
+    forcedJumpHasFollowup = false;
+    didPull = false;
+  }
+
+#ifndef NDEBUG
+  bool empty() const {
+    return bycatchSquares == Bitboard(0)
+        && promotedBycatch == Bitboard(0)
+        && demotedBycatch == Bitboard(0)
+        && blastPromotedSquares == Bitboard(0)
+        && !captured
+        && !dead
+        && promotionPawn == NO_PIECE
+        && consumedPromotionHandPiece == NO_PIECE
+        && flippedPieces == Bitboard(0)
+        && claimedSquares == Bitboard(0)
+        && forcedJumpSquare == SQ_NONE
+        && dropHandColor == COLOR_NB
+        && forcedJumpStep == 0
+        && removedGatingType == NO_PIECE_TYPE
+        && removedCastlingGatingType == NO_PIECE_TYPE
+        && capturedGatingType == NO_PIECE_TYPE
+        && !transforms.morphedFrom
+        && !transforms.colorChanged
+        && !push.active()
+        && !pulled
+        && !suppressedCaptureTransfer
+        && !pass
+        && !forcedJumpHasFollowup
+        && !didPull;
+  }
+#endif
+};
+
+struct NnueStateInfo {
+  bool nnueRefreshNeeded = false;
   Eval::NNUE::Accumulator accumulator;
   DirtyPiece dirtyPiece;
 };
 
+/// StateInfo struct stores information needed to restore a Position object to
+/// its previous state when we retract a move. Whenever a move is made on the
+/// board (by calling Position::do_move), a StateInfo object must be passed.
+
+struct StateInfo : public StateInfoCopied, public StateInfoDerived, public MoveUndoInfo, public NnueStateInfo {
+};
+
+static_assert(std::is_trivially_copyable_v<StateInfoCopied>, "StateInfoCopied must remain trivially copyable");
+static_assert(std::is_trivially_copyable_v<StateInfoDerived>, "StateInfoDerived must remain trivially copyable");
+static_assert(std::is_trivially_copyable_v<MoveUndoInfo>, "MoveUndoInfo must remain trivially copyable");
+static_assert(std::is_trivially_copyable_v<NnueStateInfo>, "NnueStateInfo must remain trivially copyable");
 static_assert(std::is_trivially_copyable_v<StateInfo>, "StateInfo must remain trivially copyable");
-static_assert(std::is_standard_layout_v<StateInfo>, "StateInfo must remain standard layout for partial copies");
+
+static_assert(std::is_standard_layout_v<StateInfoCopied>, "StateInfoCopied must remain standard layout");
+static_assert(std::is_standard_layout_v<StateInfoDerived>, "StateInfoDerived must remain standard layout");
+static_assert(std::is_standard_layout_v<MoveUndoInfo>, "MoveUndoInfo must remain standard layout");
+static_assert(std::is_standard_layout_v<NnueStateInfo>, "NnueStateInfo must remain standard layout");
 
 struct CaptureTransferTarget {
   Piece hashedPiece = NO_PIECE;
@@ -691,8 +799,8 @@ public:
   // Doing and undoing moves
   void do_move(Move m, StateInfo& newSt, bool countNode = true);
   void undo_move(Move m);
-  bool add_capture_transfer(StateInfo* state, Key& k, Piece transferPiece);
-  bool undo_capture_transfer(StateInfo* state, Key& k, Piece transferPiece);
+  bool add_capture_transfer(StateInfo* state, Piece transferPiece, Key* k = nullptr);
+  bool undo_capture_transfer(StateInfo* state, Piece transferPiece, Key* k = nullptr);
   bool simulate_capture_transfer(Key& k, Piece transferPiece, bool suppressedCaptureTransfer = false) const;
   CaptureTransferTarget capture_transfer_target(Piece transferPiece, bool suppressedCaptureTransfer) const;
   void apply_drop_hash_delta(Key& k, Move m, Piece pc, Color dropColor, PieceType exchanged) const;
@@ -1319,6 +1427,9 @@ inline PieceType Position::royal_piece_type(Color c) const {
   PieceType pt = king_type();
   if (pt != NO_PIECE_TYPE && count(c, pt) == 1)
       return pt;
+  PieceType flag = flag_piece(c);
+  if (flag != NO_PIECE_TYPE && count(c, flag) == 1 && var->flagPieceSafe)
+      return flag;
   // Fallback: no uniquely identifiable royal found for this side.
   return NO_PIECE_TYPE;
 }
@@ -4630,7 +4741,7 @@ inline bool Position::capture(Move m) const {
 inline Square Position::capture_square(Square to) const {
   assert(is_ok(to));
   // The capture square of en passant is either the marked ep piece or the closest piece behind the target square
-  Bitboard customEp = ep_squares() & pieces() & file_bb(to);
+  Bitboard customEp = ep_squares() & pieces();
   if (customEp)
   {
       // For longer custom en passant paths, we take the frontmost piece
@@ -4699,7 +4810,7 @@ inline bool Position::virtual_drop(Move m) const {
 }
 
 inline Piece Position::captured_piece() const {
-  return st->captured.piece;
+  return st->captured.piece.piece;
 }
 
 inline Bitboard Position::fog_area() const {
@@ -4722,10 +4833,10 @@ inline Piece Position::captured_piece(Move m) const {
 
 inline std::string Position::piece_to_partner() const {
   if (!st->captured.piece) return std::string();
-  Color color = color_of(st->captured.piece);
-  Piece piece = st->captured.promoted ?
-      (st->captured.unpromoted ? st->captured.unpromoted : make_piece(color, main_promotion_pawn_type(color))) :
-      st->captured.piece;
+  Color color = color_of(st->captured.piece.piece);
+  Piece piece = st->captured.piece.promoted ?
+      (st->captured.piece.unpromoted ? st->captured.piece.unpromoted : make_piece(color, main_promotion_pawn_type(color))) :
+      st->captured.piece.piece;
   return piece_symbol(piece);
 }
 
