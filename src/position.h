@@ -1992,7 +1992,8 @@ inline Bitboard Position::drop_region(Color c) const {
 inline Bitboard Position::drop_region(Color c, PieceType pt) const {
   assert(var != nullptr);
   assert(pt != NO_PIECE_TYPE);
-  Bitboard b = var->dropRegion.get(c).boardOfPiece(piece_to_char()[pt]);
+  Bitboard b = var->dropRegion.get(c).boardOfPiece(piece_to_char()[pt])
+             & board_bb(c, pt);
 
   // Pawns on back ranks
   if (pt == PAWN)
