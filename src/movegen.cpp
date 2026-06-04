@@ -1400,6 +1400,8 @@ namespace {
           case PROMOTION:
               gatingMove = make_promotion_potion(from, to, promotion_type(base), potion, gate);
               break;
+          default:
+              break;
       }
       assert(gatingMove != MOVE_NONE);
 
