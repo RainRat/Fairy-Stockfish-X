@@ -148,8 +148,13 @@ namespace {
   }
 
   bool has_any_promotion(const Position& pos, Color us, Square to) {
+      auto can_emit_promotion_variant = [&](PieceType pt) {
+          return pos.promotion_allowed(us, pt, to)
+              && !(pos.prison_pawn_promotion() && pos.count_in_prison(~us, pt) == 0);
+      };
+
       for (PieceSet ps = pos.promotion_piece_types(us, to); ps;)
-          if (pos.promotion_allowed(us, pop_lsb(ps), to))
+          if (can_emit_promotion_variant(pop_lsb(ps)))
               return true;
       PieceType pt = pos.promoted_piece_type(PAWN);
       if (pt && pos.promotion_allowed(us, pt, to) && !(pos.piece_promotion_on_capture() && pos.empty(to)))
@@ -162,12 +167,15 @@ namespace {
       if constexpr (Type != CAPTURES && Type != QUIETS && Type != EVASIONS && Type != NON_EVASIONS)
           return moveList;
 
+      auto can_emit_promotion_variant = [&](PieceType pt) {
+          return pos.promotion_allowed(us, pt, to)
+              && !(pos.prison_pawn_promotion() && pos.count_in_prison(~us, pt) == 0);
+      };
+
       for (PieceSet promotions = pos.promotion_piece_types(us, to); promotions;)
       {
           PieceType pt = pop_msb(promotions);
-          if (pos.prison_pawn_promotion() && pos.count_in_prison(~us, pt) == 0)
-              continue;
-          if (pos.promotion_allowed(us, pt, to))
+          if (can_emit_promotion_variant(pt))
           {
               moveList = make_move_and_gating<PROMOTION>(pos, moveList, us, from, to, pt);
           }
@@ -184,6 +192,21 @@ namespace {
   bool can_generate_drop(const Position& pos, PieceType pt) {
       return pos.can_drop(Us, pt)
           || (Type != NON_EVASIONS && pos.two_boards() && pos.virtual_drops() && pos.allow_virtual_drop(Us, pt));
+  }
+
+  template<Color Us, GenType Type>
+  ExtMove* emit_drop_forms(const Position& pos, ExtMove* moveList, PieceType pt, Bitboard b, bool restrictToCheckSquares) {
+      PieceSet dropForms = pos.drop_piece_types(pt);
+      while (dropForms)
+      {
+          PieceType dropped = pop_lsb(dropForms);
+          Bitboard b2 = b;
+          if (restrictToCheckSquares)
+              b2 &= pos.check_squares(dropped);
+          while (b2)
+              *moveList++ = make_drop(pop_lsb(b2), pt, dropped);
+      }
+      return moveList;
   }
 
 
@@ -223,16 +246,7 @@ namespace {
             return moveList;
         }
 
-        PieceSet dropForms = pos.drop_piece_types(pt);
-        while (dropForms)
-        {
-            PieceType dropped = pop_lsb(dropForms);
-            Bitboard b2 = b;
-            if (QuietChecks || !pos.can_drop(Us, pt))
-                b2 &= pos.check_squares(dropped);
-            while (b2)
-                *moveList++ = make_drop(pop_lsb(b2), pt, dropped);
-        }
+        moveList = emit_drop_forms<Us, Type>(pos, moveList, pt, b, QuietChecks || !pos.can_drop(Us, pt));
     }
 
     return moveList;
@@ -264,14 +278,7 @@ namespace {
     }
     b = dropTargets & pos.drop_region(Us, pt) & capturable;
 
-    PieceSet dropForms = pos.drop_piece_types(pt);
-    while (dropForms)
-    {
-        PieceType dropped = pop_lsb(dropForms);
-        Bitboard b2 = b;
-        while (b2)
-            *moveList++ = make_drop(pop_lsb(b2), pt, dropped);
-    }
+    moveList = emit_drop_forms<Us, Type>(pos, moveList, pt, b, false);
 
     return moveList;
   }
@@ -296,8 +303,6 @@ namespace {
     {
         Square to = pop_lsb(entries);
         auto emit_insert = [&](Square from, PieceType insertPt) {
-            if (!is_ok(from))
-                return;
             Move m = make_insert(from, to, insertPt, insertPt);
             PushInfo pushInfo;
             bool push = pos.analyze_push(m, pushInfo);
@@ -481,9 +486,8 @@ namespace {
 
             if constexpr (CanEmitPromotions<Type>)
             {
-                if (GeneratesQuiets)
-                    while (quietPromotions)
-                        moveList = emit_promotion_variants<Type>(pos, moveList, Us, from, pop_lsb(quietPromotions));
+                while (quietPromotions)
+                    moveList = emit_promotion_variants<Type>(pos, moveList, Us, from, pop_lsb(quietPromotions));
                 if (GeneratesCaptures)
                     while (capturePromotions)
                         moveList = emit_promotion_variants<Type>(pos, moveList, Us, from, pop_lsb(capturePromotions));
@@ -718,7 +722,7 @@ namespace {
         Bitboard promotion_zone = pos.promotion_zone(Us, Pt);
         Bitboard mandatoryPromotionZone = pos.mandatory_promotion_zone(Us, Pt);
         PieceType promPt = pos.is_promoted(from) ? NO_PIECE_TYPE : pos.promoted_piece_type(Pt);
-        Bitboard b2 = promPt && pos.promotion_allowed(Us, promPt) ? b1 : Bitboard(0);
+        Bitboard b2 = promPt ? b1 : Bitboard(0);
         Bitboard b3 = pos.piece_demotion() && pos.is_promoted(from) ? b1 : Bitboard(0);
         Bitboard pawnPromotions = (pos.promotion_pawn_types(Us) & piece_set(Pt))
                                 ? (b & (Type == EVASIONS ? target : (~pos.pieces(Us) | (pos.self_capture(Pt) ? (pos.pieces(Us) & ~pos.pieces(Us, KING)) : Bitboard(0)))) & promotion_zone)
@@ -879,8 +883,6 @@ namespace {
             moveList = make_move_and_gating<NORMAL>(pos, moveList, Us, from, pop_lsb(pawnLikeTripleSteps));
 
         // Shogi-style piece promotions
-        if (promPt && !pos.promotion_allowed(Us, promPt))
-            b2 = 0;
         while (b2)
             moveList = make_move_and_gating<PIECE_PROMOTION>(pos, moveList, Us, from, pop_lsb(b2));
 

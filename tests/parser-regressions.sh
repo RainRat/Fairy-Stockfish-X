@@ -211,13 +211,14 @@ bad_rider_range_val_ini=$(mktemp)
 bad_tuple_atom_ini=$(mktemp)
 unsupported_bent_rose_modifier_ini=$(mktemp)
 bad_ini_syntax_option_ini=$(mktemp)
+bad_check_counting_ini=$(mktemp)
 bad_hopper_minmax_ini=$(mktemp)
 bad_piece_value_ini=$(mktemp)
 bad_royal_betza_ini=$(mktemp)
 bad_unmatched_closer_ini=$(mktemp)
 royal_blast_ini=$(mktemp)
 nonking_ini=$(mktemp)
-trap 'rm -f "${tmp_ini}" "${bad_betza_ini}" "${bad_hopper_brace_ini}" "${bad_rider_range_ini}" "${bad_rank_wildcard_ini}" "${twochar_hint_ini}" "${bad_hopper_type_ini}" "${bad_hopper_numeric_ini}" "${capture_allowed_only_ini}" "${bad_rider_range_val_ini}" "${bad_tuple_atom_ini}" "${unsupported_bent_rose_modifier_ini}" "${bad_ini_syntax_option_ini}" "${bad_hopper_minmax_ini}" "${bad_piece_value_ini}" "${bad_royal_betza_ini}" "${bad_unmatched_closer_ini}" "${royal_blast_ini}" "${nonking_ini}"' EXIT
+trap 'rm -f "${tmp_ini}" "${bad_betza_ini}" "${bad_hopper_brace_ini}" "${bad_rider_range_ini}" "${bad_rank_wildcard_ini}" "${twochar_hint_ini}" "${bad_hopper_type_ini}" "${bad_hopper_numeric_ini}" "${capture_allowed_only_ini}" "${bad_rider_range_val_ini}" "${bad_tuple_atom_ini}" "${unsupported_bent_rose_modifier_ini}" "${bad_ini_syntax_option_ini}" "${bad_check_counting_ini}" "${bad_hopper_minmax_ini}" "${bad_piece_value_ini}" "${bad_royal_betza_ini}" "${bad_unmatched_closer_ini}" "${royal_blast_ini}" "${nonking_ini}"' EXIT
 
 cat > "${bad_betza_ini}" <<'INI'
 [custom-piece-missing-betza:chess]
@@ -300,6 +301,13 @@ cat > "${bad_ini_syntax_option_ini}" <<'INI'
 badOptionWithoutEquals
 INI
 
+cat > "${bad_check_counting_ini}" <<'INI'
+[bad-check-counting:chess]
+checking = false
+checkCounting = true
+startFen = 4k3/8/8/8/8/8/8/4K3 w - - 0 1
+INI
+
 cat > "${bad_hopper_minmax_ini}" <<'INI'
 [bad-hopper-minmax:chess]
 customPiece1 = a:{hurdles:3,1}R
@@ -324,9 +332,11 @@ customPiece1 = a:]
 INI
 
 cat > "${royal_blast_ini}" <<'INI'
-[royal-blast-rejected:chess]
+[royal-blast-allowed:chess]
 checking = true
 blastOnCapture = true
+castling = false
+startFen = 4r2k/8/8/8/8/4p3/3Qp3/4K3 w - - 0 1
 INI
 
 check_output=$("${ENGINE}" check "${bad_betza_ini}" 2>&1 || true)
@@ -358,11 +368,15 @@ wall_or_move_arrow_output=$(run_uci "$ENGINE" "$tmp_ini" "wall-or-move-arrow" </
 assert_contains "${wall_or_move_arrow_output}" "unknown variant 'wall-or-move-arrow'; keeping 'chess'"
 
 toroidal_pushing_output=$(run_uci "$ENGINE" "$tmp_ini" "toroidal-pushing" </dev/null 2>&1 || true)
-assert_contains "${toroidal_pushing_output}" "unknown variant 'toroidal-pushing'; keeping 'chess'"
+assert_contains "${toroidal_pushing_output}" "^info string variant toroidal-pushing "
+assert_not_contains "${toroidal_pushing_output}" "invalid configuration"
 
-royal_blast_output=$("${ENGINE}" check "${royal_blast_ini}" 2>&1 || true)
-assert_contains "${royal_blast_output}" "Can not use kings with blastOnCapture."
-assert_contains "${royal_blast_output}" "Variant 'royal-blast-rejected' has invalid configuration. Skipping."
+royal_blast_output=$(run_uci "${ENGINE}" "${royal_blast_ini}" "royal-blast-allowed" <<'EOF'
+d
+EOF
+)
+assert_contains "${royal_blast_output}" "^info string variant royal-blast-allowed "
+assert_not_contains "${royal_blast_output}" "invalid configuration"
 
 capture_allowed_only_output=$(run_uci "$ENGINE" "$capture_allowed_only_ini" "capture-allowed-only" <<EOF
 position fen 8/3p4/8/8/3Q2n1/8/8/8 w - - 0 1
@@ -401,6 +415,10 @@ assert_contains "${unsupported_bent_rose_output2}" "unknown variant 'unsupported
 
 bad_ini_syntax_output=$("${ENGINE}" check "${bad_ini_syntax_option_ini}" 2>&1 || true)
 assert_contains "${bad_ini_syntax_output}" "Invalid syntax: 'badOptionWithoutEquals'"
+
+bad_check_counting_output=$("${ENGINE}" check "${bad_check_counting_ini}" 2>&1 || true)
+assert_contains_literal "${bad_check_counting_output}" "checkCounting=true requires checking=true."
+assert_contains_literal "${bad_check_counting_output}" "Variant 'bad-check-counting' has invalid configuration. Skipping."
 
 bad_hopper_minmax_output=$(run_uci "$ENGINE" "$bad_hopper_minmax_ini" "bad-hopper-minmax" </dev/null 2>&1 || true)
 assert_contains_literal "${bad_hopper_minmax_output}" "Invalid hopper range (min > max)"

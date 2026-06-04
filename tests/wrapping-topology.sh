@@ -102,6 +102,20 @@ castling = false
 customPiece1 = g:fFfW
 pieceToCharTable = PNBRQGE......S.F..LKpnbrqge......s.f..lk
 startFen = 4k3/8/8/8/8/8/8/g3K3 b - - 0 1
+
+[cyl-dynamic-slider:chess]
+cylindrical = true
+castling = false
+customPiece1 = a:xR
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+startFen = 4K2k/8/8/8/8/8/8/A7 w - - 0 1
+
+[cyl-max-slider:chess]
+cylindrical = true
+castling = false
+customPiece1 = a:zR
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+startFen = 4K2k/8/8/8/8/8/8/A7 w - - 0 1
 INI
 TMP_VARIANT_PATH="${FSX_TMP_INI}"
 
@@ -167,6 +181,20 @@ if echo "${cyl_forward_output}" | grep -q "^a1"; then
   echo "wrapping topology test failed: black forward piece got white-oriented moves"
   exit 1
 fi
+
+cyl_dynamic_slider_output=$(run_variant cyl-dynamic-slider)
+echo "${cyl_dynamic_slider_output}" | grep -q "^a1h1: 1$"
+echo "${cyl_dynamic_slider_output}" | grep -q "^a1b1: 1$"
+echo "${cyl_dynamic_slider_output}" | grep -q "^a1a2: 1$"
+! echo "${cyl_dynamic_slider_output}" | grep -q "^a1c1: 1$"
+! echo "${cyl_dynamic_slider_output}" | grep -q "^a1a8: 1$"
+
+cyl_max_slider_output=$(run_variant cyl-max-slider)
+echo "${cyl_max_slider_output}" | grep -q "^a1h1: 1$"
+echo "${cyl_max_slider_output}" | grep -q "^a1b1: 1$"
+echo "${cyl_max_slider_output}" | grep -q "^a1a8: 1$"
+! echo "${cyl_max_slider_output}" | grep -q "^a1c1: 1$"
+! echo "${cyl_max_slider_output}" | grep -q "^a1a2: 1$"
 
 cyl_search_output=$(run_uci "$ENGINE" "$TMP_VARIANT_PATH" cyl-ep <<'UCI'
 position startpos moves h7h5

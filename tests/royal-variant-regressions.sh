@@ -90,6 +90,11 @@ blastCenter = true
 blastDiagonals = false
 startFen = 3pr3/8/8/8/8/8/3Q4/k3K3 w - - 0 1
 
+[royalblast:chess]
+blastOnCapture = true
+castling = false
+startFen = 4r2k/8/8/8/8/4p3/3Qp3/4K3 w - - 0 1
+
 [pairdrop:fairy]
 pieceDrops = true
 symmetricDropTypes = r
@@ -211,6 +216,13 @@ go perft 1
 EOF
 )
 assert_contains "$out" "^d2d8: 1$"
+
+out=$(run_uci "$ENGINE" "$tmp_ini" royalblast <<'EOF'
+position startpos
+go perft 1
+EOF
+)
+assert_contains "$out" "^d2d1: 1$"
 
 out=$(run_uci "$ENGINE" "$tmp_ini" pairdrop <<'EOF'
 position fen 4k3/8/8/8/8/8/8/4K3[RR] w - - 0 1

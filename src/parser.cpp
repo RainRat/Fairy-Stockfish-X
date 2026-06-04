@@ -2017,7 +2017,10 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
 
     // Contradictory options
     if (DoCheck && !v->checking && v->checkCounting)
+    {
         std::cerr << "checkCounting=true requires checking=true." << std::endl;
+        valid = false;
+    }
     if (DoCheck && !v->checking && v->allowChecks)
         std::cerr << "checking=false with allowChecks=true is unusual: king safety is disabled, so the no-check rule will not constrain legality." << std::endl;
     if (DoCheck && v->progressiveMultimove && !v->multimoves.empty())
@@ -2082,33 +2085,12 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
             std::cerr << "connect4D currently requires a square board of size connectN^2 with connectN >= 3." << std::endl;
         valid = false;
     }
-    if (wrapsTopology && (v->connectN || v->connect3D || v->connect4D || v->connectNxN || v->collinearN || v->connectGroup || v->removeConnectN))
+    if (wrapsTopology && (v->connect3D || v->connect4D || v->connectNxN || v->connectGroup || v->removeConnectN))
     {
         if (DoCheck)
-            std::cerr << "Wrapped boards do not support connect/collinear win conditions." << std::endl;
+            std::cerr << "Wrapped boards do not support connect3D/connect4D/connectNxN/connectGroup/removeConnectN win conditions." << std::endl;
         valid = false;
     }
-    bool hasPushing = false;
-    for (int strength : v->pushingStrength)
-        hasPushing |= strength > 0;
-    if (wrapsTopology && hasPushing)
-    {
-        if (DoCheck)
-            std::cerr << "Wrapped boards do not support pushing." << std::endl;
-        valid = false;
-    }
-
-    if (wrapsTopology)
-        for (int i = 0; i < CUSTOM_PIECES_NB; ++i)
-            if (!v->customPiece[i].empty() && (v->customPiece[i].find('x') != std::string::npos || v->customPiece[i].find('z') != std::string::npos))
-            {
-                if (DoCheck)
-                    std::cerr << "Wrapped boards do not support x/z rider modifiers in customPiece"
-                              << (i + 1) << "." << std::endl;
-                valid = false;
-                break;
-            }
-
     // Check for limitations
     if ((v->pieceDrops || v->freeDrops) && v->wallingRule != NO_WALLING)
     {
@@ -2197,12 +2179,6 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
 
     if (hasRoyalKing)
     {
-        if (v->blastOnCapture)
-        {
-            if (DoCheck)
-                std::cerr << "Can not use kings with blastOnCapture." << std::endl;
-            valid = false;
-        }
         if (v->flipEnclosedPieces)
         {
             if (DoCheck)

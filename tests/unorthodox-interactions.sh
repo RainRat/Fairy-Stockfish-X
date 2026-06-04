@@ -156,6 +156,33 @@ customPiece1 = a:jR
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 startFen = 8/8/8/8/8/8/8/Ap5p w - - 0 1
 
+[cylindrical-push-direct:fairy]
+cylindrical = true
+maxFile = e
+maxRank = 5
+checking = false
+castling = false
+rook = r
+pushingStrength = r:5
+pushFirstColor = them
+pushingRemoves = none
+stepwisePushing = false
+startFen = 5/5/5/5/rr2R w - - 0 1
+
+[cylindrical-push-stepwise:fairy]
+cylindrical = true
+maxFile = e
+maxRank = 5
+checking = false
+castling = false
+rook = r
+pushingStrength = r:5
+pushFirstColor = them
+pushChainEnemyOnly = true
+pushingRemoves = none
+stepwisePushing = true
+startFen = 5/5/5/5/rr2R w - - 0 1
+
 [torpedo-triple:chess]
 enPassantTypes = p
 tripleStepRegion = *(* *);
@@ -395,14 +422,32 @@ if ! echo "${out}" | grep -q "Fen: K3k3/8/8/8/8/8/8/7\\* b"; then
   exit 1
 fi
 
-# 24. Test cylindrical + max distance rejects the variant
-out=$("${ENGINE}" check "${TEMP_INI}" 2>&1)
-if ! echo "${out}" | grep -q "Wrapped boards do not support x/z rider modifiers"; then
-  echo "cylindrical + x/z rider variant should have been rejected (warned)"
-  exit 1
-fi
+# 24. Test cylindrical + max distance accepts the variant and reaches the wrapped ray endpoint.
+out=$(run_cmds "cylindrical-max-distance" "${TEMP_INI}" "position fen 8/8/8/8/8/8/8/A7 w - - 0 1
+go perft 1")
+echo "${out}" | grep -q "^a1b1: 1$"
+echo "${out}" | grep -q "^a1h1: 1$"
+! echo "${out}" | grep -q "^a1c1:"
 
-# 25. Test cylindrical + ski-slip skips the first square (and is blocked by it)
+# 25. Test cylindrical push across the file edge with both direct and stepwise analyzers.
+out=$(run_cmds "cylindrical-push-direct" "${TEMP_INI}" "position startpos
+go perft 1")
+echo "${out}" | grep -q "^e1a1: 1$"
+! echo "${out}" | grep -q "^e1a1: 2$"
+
+out=$(run_cmds "cylindrical-push-direct" "${TEMP_INI}" "position fen 5/5/5/5/rrrrR w - - 0 1
+go perft 1")
+! echo "${out}" | grep -q "^e1a1:"
+
+out=$(run_cmds "cylindrical-push-stepwise" "${TEMP_INI}" "position startpos
+go perft 1")
+echo "${out}" | grep -q "^e1a1: 1$"
+
+out=$(run_cmds "cylindrical-push-stepwise" "${TEMP_INI}" "position fen 5/5/5/5/rrrrR w - - 0 1
+go perft 1")
+! echo "${out}" | grep -q "^e1a1:"
+
+# 26. Test cylindrical + ski-slip skips the first square (and is blocked by it)
 out=$(run_cmds "cylindrical-ski-slip" "${TEMP_INI}" "position startpos
 go perft 1")
 if echo "${out}" | grep -q "a1b1:"; then

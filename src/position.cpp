@@ -123,12 +123,27 @@ namespace {
   static_assert(sizeof(StateInfo::push.snapshots) / sizeof(StateInfo::push.snapshots[0]) == MAX_PUSH_SNAPSHOT, "push snapshots array size mismatch");
 
   inline bool advance_square(const Position& pos, Square from, int stepF, int stepR, Square& out) {
+    if (pos.topology_wraps())
+        return wrapped_destination_square(from, stepF, stepR, pos.max_file(), pos.max_rank(),
+                                          pos.wraps_files(), pos.wraps_ranks(), out);
+
     int f = int(file_of(from)) + stepF;
     int r = int(rank_of(from)) + stepR;
     if (f < int(FILE_A) || f > int(pos.max_file()) || r < int(RANK_1) || r > int(pos.max_rank()))
         return false;
     out = make_square(File(f), Rank(r));
     return true;
+  }
+
+  inline int adjusted_delta(const Position& pos, int delta, int size) {
+    if (!pos.topology_wraps() || size <= 1)
+        return delta;
+
+    if (std::abs(delta + size) < std::abs(delta))
+        delta += size;
+    else if (std::abs(delta - size) < std::abs(delta))
+        delta -= size;
+    return delta;
   }
 
   template<typename T, size_t N>
@@ -162,7 +177,7 @@ namespace {
         return false;
 
     Square cur = to_sq(m);
-    while (true)
+    for (int steps = 0; steps < int(popcount(pos.board_bb())); ++steps)
     {
         if (cur == lastTo)
         {
@@ -187,8 +202,10 @@ namespace {
         if (cur == info.tail)
             break;
 
-        cur = make_square(File(int(file_of(cur)) + info.stepF),
-                          Rank(int(rank_of(cur)) + info.stepR));
+        Square next = SQ_NONE;
+        if (!advance_square(pos, cur, info.stepF, info.stepR, next) || next == cur)
+            break;
+        cur = next;
     }
 
     return false;
@@ -197,10 +214,13 @@ namespace {
   int collect_push_line(const Position& pos, Square from, int stepF, int stepR, Square squares[MAX_PUSH_SNAPSHOT]) {
     int count = 0;
     Square cur = from;
-    while (count < MAX_PUSH_SNAPSHOT)
+    const int maxSteps = std::min<int>(MAX_PUSH_SNAPSHOT, pos.topology_wraps() ? popcount(pos.board_bb()) : MAX_PUSH_SNAPSHOT);
+    while (count < maxSteps)
     {
       Square next = SQ_NONE;
       if (!advance_square(pos, cur, stepF, stepR, next))
+          break;
+      if (next == from)
           break;
       squares[count++] = next;
       cur = next;
@@ -235,7 +255,7 @@ namespace {
                              PushTempPiece* outTransfers = nullptr,
                              int* outTransferCount = nullptr) {
     const MoveType mt = type_of(m);
-    if (mt != NORMAL || pos.topology_wraps())
+    if (mt != NORMAL)
         return false;
 
     Square from = from_sq(m);
@@ -257,6 +277,11 @@ namespace {
 
     int df = int(file_of(to)) - int(file_of(from));
     int dr = int(rank_of(to)) - int(rank_of(from));
+    if (pos.topology_wraps())
+    {
+        df = adjusted_delta(pos, df, int(pos.max_file()) + 1);
+        dr = adjusted_delta(pos, dr, int(pos.max_rank()) + 1);
+    }
     int stepF = (df > 0) - (df < 0);
     int stepR = (dr > 0) - (dr < 0);
     if ((df != 0 && dr != 0 && std::abs(df) != std::abs(dr)) || (df == 0 && dr == 0))
@@ -416,8 +441,6 @@ namespace {
     const MoveType mt = type_of(m);
     if ((mt != NORMAL && mt != INSERT))
         return false;
-    if (pos.topology_wraps())
-        return false;
 
     Square from = from_sq(m);
     Square to = to_sq(m);
@@ -445,6 +468,11 @@ namespace {
                           : int(file_of(to)) - int(file_of(from));
     int dr = mt == INSERT ? int(rank_of(from)) - int(rank_of(to))
                           : int(rank_of(to)) - int(rank_of(from));
+    if (pos.topology_wraps())
+    {
+        df = adjusted_delta(pos, df, int(pos.max_file()) + 1);
+        dr = adjusted_delta(pos, dr, int(pos.max_rank()) + 1);
+    }
     int stepF = (df > 0) - (df < 0);
     int stepR = (dr > 0) - (dr < 0);
     if ((df != 0 && dr != 0 && std::abs(df) != std::abs(dr)) || (df == 0 && dr == 0))
@@ -7828,6 +7856,43 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
               return false;
           }
 
+          auto wrapped_step = [&](Square cur, Direction d, Square& next) {
+              auto [dr, df] = decode_direction(d);
+              return wrapped_destination_square(cur, df, dr, max_file(), max_rank(), wraps_files(), wraps_ranks(), next);
+          };
+
+          if (topology_wraps())
+          {
+              for (Direction d : var->connectDirections)
+              {
+                  for (Square s = SQ_A1; s <= SQ_MAX; ++s)
+                  {
+                      Piece pc = piece_on(s);
+                      if (pc == NO_PIECE || color_of(pc) != c || type_of(pc) != goal.front())
+                          continue;
+
+                      auto matches = [&](Direction dir, const std::vector<PieceType>& sequence) {
+                          Square cur = s;
+                          for (size_t i = 1; i < sequence.size(); ++i)
+                          {
+                              Square next = SQ_NONE;
+                              if (!wrapped_step(cur, dir, next) || next == s)
+                                  return false;
+                              Piece nextPc = piece_on(next);
+                              if (nextPc == NO_PIECE || color_of(nextPc) != c || type_of(nextPc) != sequence[i])
+                                  return false;
+                              cur = next;
+                          }
+                          return true;
+                      };
+
+                      if (matches(d, goal) || matches(-d, std::vector<PieceType>(goal.rbegin(), goal.rend())))
+                          return true;
+                  }
+              }
+              return false;
+          }
+
           for (Direction d : var->connectDirections)
           {
               Bitboard starts = pieces(goal.front());
@@ -7898,6 +7963,42 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
       }
       else
       {
+          if (topology_wraps())
+          {
+              auto wrapped_step = [&](Square cur, Direction d, Square& next) {
+                  auto [dr, df] = decode_direction(d);
+                  return wrapped_destination_square(cur, df, dr, max_file(), max_rank(), wraps_files(), wraps_ranks(), next);
+              };
+              const int maxSteps = popcount(board_bb());
+
+              for (Direction d : var->connectDirections)
+              {
+                  Bitboard starts = connectPieces;
+                  while (starts)
+                  {
+                      Square s = pop_lsb(starts);
+                      Square cur = s;
+                      int steps = 1;
+                      while (steps < connect_n() && steps < maxSteps)
+                      {
+                          Square next = SQ_NONE;
+                          if (!wrapped_step(cur, d, next) || next == s)
+                              break;
+                          if (!(connectPieces & square_bb(next)))
+                              break;
+                          cur = next;
+                          ++steps;
+                      }
+                      if (steps >= connect_n())
+                      {
+                          result = convert_mate_value(-connect_value(), ply);
+                          return true;
+                      }
+                  }
+              }
+          }
+          else
+          {
           Bitboard b;
 
           for (Direction d : var->connectDirections)
@@ -7910,6 +8011,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
                   result = convert_mate_value(-connect_value(), ply);
                   return true;
               }
+          }
           }
       }
   }
@@ -7959,25 +8061,52 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
 
   // Collinear-n
   if ((collinear_n() > 0) && (popcount(connectPieces) >= collinear_n())) {
-      // Directional line scan from border starts using shift() to avoid wraps.
-      auto next_square = [&](Square sq, Direction d) {
-          Bitboard n = shift(d, square_bb(sq));
-          return n ? Square(lsb(n)) : SQ_NONE;
-      };
+      if (topology_wraps()) {
+          auto wrapped_step = [&](Square cur, Direction d, Square& next) {
+              auto [dr, df] = decode_direction(d);
+              return wrapped_destination_square(cur, df, dr, max_file(), max_rank(), wraps_files(), wraps_ranks(), next);
+          };
+          const int maxSteps = popcount(board_bb());
 
-      for (Direction d : var->connectDirections) {
-          for (Square s = SQ_A1; s <= SQ_MAX; ++s) {
-              // Start only once per line: predecessor in -d must be off-board.
-              if (next_square(s, -d) != SQ_NONE)
-                  continue;
+          for (Direction d : var->connectDirections) {
+              for (Square s = SQ_A1; s <= SQ_MAX; ++s) {
+                  int cnt = 0;
+                  Square cur = s;
+                  for (int steps = 0; steps < maxSteps; ++steps) {
+                      if (connectPieces & square_bb(cur))
+                          ++cnt;
+                      Square next = SQ_NONE;
+                      if (!wrapped_step(cur, d, next) || next == s)
+                          break;
+                      cur = next;
+                  }
+                  if (cnt >= collinear_n()) {
+                      result = convert_mate_value(-connect_value(), ply);
+                      return true;
+                  }
+              }
+          }
+      } else {
+          // Directional line scan from border starts using shift() to avoid wraps.
+          auto next_square = [&](Square sq, Direction d) {
+              Bitboard n = shift(d, square_bb(sq));
+              return n ? Square(lsb(n)) : SQ_NONE;
+          };
 
-              int cnt = 0;
-              for (Square cur = s; cur != SQ_NONE; cur = next_square(cur, d))
-                  cnt += int(bool(connectPieces & cur));
+          for (Direction d : var->connectDirections) {
+              for (Square s = SQ_A1; s <= SQ_MAX; ++s) {
+                  // Start only once per line: predecessor in -d must be off-board.
+                  if (next_square(s, -d) != SQ_NONE)
+                      continue;
 
-              if (cnt >= collinear_n()) {
-                  result = convert_mate_value(-connect_value(), ply);
-                  return true;
+                  int cnt = 0;
+                  for (Square cur = s; cur != SQ_NONE; cur = next_square(cur, d))
+                      cnt += int(bool(connectPieces & cur));
+
+                  if (cnt >= collinear_n()) {
+                      result = convert_mate_value(-connect_value(), ply);
+                      return true;
+                  }
               }
           }
       }
