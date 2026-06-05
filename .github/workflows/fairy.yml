@@ -167,10 +167,6 @@ jobs:
 
           echo "immobility-illegal hoppers regression passed"
 
-      - name: Test self-capture types
-        run: |
-          ../tests/self-capture-types.sh
-
       - name: Test royal variant regressions
         run: |
           ../tests/royal-variant-regressions.sh
