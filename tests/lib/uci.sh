@@ -39,7 +39,7 @@ fsx_add_exit_cleanup() {
   FSX_EXIT_CLEANUPS+=("${cleanup}")
 }
 
-init_test_env() {
+setup_test_context() {
   local engine_arg="${1:-}"
   local variants_arg="${2:-}"
   local test_name="${3:-${BASH_SOURCE[1]##*/}}"
@@ -53,7 +53,8 @@ init_test_env() {
 
   ENGINE="${ENGINE:-$(default_engine "${engine_arg}")}"
   VARIANTS="${VARIANTS:-$(default_variants "${variants_arg}")}"
-  export SCRIPT_DIR ROOT_DIR ENGINE VARIANTS
+  VARIANT_PATH="${VARIANTS}"
+  export SCRIPT_DIR ROOT_DIR ENGINE VARIANTS VARIANT_PATH
 
   FSX_TEST_NAME="${test_name}"
   export FSX_TEST_NAME
@@ -61,10 +62,17 @@ init_test_env() {
   trap 'fsx_error "${FSX_TEST_NAME}" "${LINENO}"' ERR
 }
 
+init_test_env() {
+  setup_test_context "$@"
+}
+
 default_engine() {
   local custom_engine="${1:-}"
   if [[ -n "$custom_engine" ]]; then
-    echo "$custom_engine"
+    case "$custom_engine" in
+      /*) echo "$custom_engine" ;;
+      *) echo "${ROOT_DIR}/${custom_engine}" ;;
+    esac
   elif [[ -x "${ROOT_DIR}/src/stockfish" ]]; then
     echo "${ROOT_DIR}/src/stockfish"
   else
@@ -75,7 +83,10 @@ default_engine() {
 default_variants() {
   local custom_variants="${1:-}"
   if [[ -n "$custom_variants" ]]; then
-    echo "$custom_variants"
+    case "$custom_variants" in
+      /*) echo "$custom_variants" ;;
+      *) echo "${ROOT_DIR}/${custom_variants}" ;;
+    esac
   else
     echo "${ROOT_DIR}/src/variants.ini"
   fi
@@ -132,6 +143,10 @@ run_uci_cmds() {
   local variant="$3"
   local cmds="$4"
   run_uci "$engine" "$variant_path" "$variant" <<< "$cmds"
+}
+
+run_cmds() {
+  run_uci_cmds "$@"
 }
 
 probe_variant_available() {

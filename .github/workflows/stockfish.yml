@@ -72,7 +72,7 @@ jobs:
           export CXXFLAGS="-Werror -D_GLIBCXX_DEBUG"
           make clean
           make -j2 ARCH=x86-64-modern optimize=no debug=yes build
-          ../tests/signature.sh $benchref
+          ../tests/bench-regressions.sh $benchref
           cd .. && python3 setup.py build_ext --inplace --build-temp .local/build/pyffish && bash tests/wrapping-topology.sh src/stockfish
 
       - name: Test debug x86-64-modern profile build (Optimization on, All features)
@@ -85,31 +85,31 @@ jobs:
         run: |
           make clean
           make -j2 ARCH=x86-64-modern build
-          ../tests/signature.sh $benchref
+          ../tests/bench-regressions.sh $benchref
 
       - name: Test x86-64-ssse3 build
         run: |
           make clean
           make -j2 ARCH=x86-64-ssse3 build
-          ../tests/signature.sh $benchref
+          ../tests/bench-regressions.sh $benchref
 
       - name: Test x86-64-sse3-popcnt build
         run: |
           make clean
           make -j2 ARCH=x86-64-sse3-popcnt build
-          ../tests/signature.sh $benchref
+          ../tests/bench-regressions.sh $benchref
 
       - name: Test x86-64 build
         run: |
           make clean
           make -j2 ARCH=x86-64 build
-          ../tests/signature.sh $benchref
+          ../tests/bench-regressions.sh $benchref
 
       - name: Test general-64 build
         run: |
           make clean
           make -j2 ARCH=general-64 build
-          ../tests/signature.sh $benchref
+          ../tests/bench-regressions.sh $benchref
 
       # x86-64 with newer extensions tests
 

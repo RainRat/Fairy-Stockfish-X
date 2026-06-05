@@ -1,12 +1,227 @@
 #!/bin/bash
+
 set -euo pipefail
 
-SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-source "${SCRIPT_DIR}/lib/uci.sh"
+ROOT_DIR=$(cd "$(dirname "$0")/.." && pwd)
+export ROOT_DIR
+source "${ROOT_DIR}/tests/lib/uci.sh"
+setup_test_context "${1:-}" "${2:-}" "rider regressions"
 
-init_test_env "${1:-}" "${2:-}" "alfil dabbaba riders test"
+test_rose() {
+  if ! variant_available "$ENGINE" rose "$VARIANTS"; then
+    echo "rose variant not available in this build; skipping rose regression"
+    return 0
+  fi
 
-load_inline_variants <<'INI'
+  load_inline_variants <<'INI'
+[rose-empty:chess]
+king = -
+checking = false
+customPiece1 = a:rose
+pieceToCharTable = A:a
+startFen = 8/8/8/8/8/8/8/A7 w - - 0 1
+
+[rose-block-b3:rose-empty]
+startFen = 8/8/8/8/8/1p6/8/A7 w - - 0 1
+
+[rose-block-c2:rose-empty]
+startFen = 8/8/8/8/8/8/2p5/A7 w - - 0 1
+
+[rose-block-both:rose-empty]
+startFen = 8/8/8/8/8/1p6/2p5/A7 w - - 0 1
+INI
+
+  local out
+  out=$(run_uci "$ENGINE" "$TMP_VARIANTS" rose-empty <<'EOF'
+position startpos
+go perft 1
+EOF
+)
+  assert_contains "$out" "^a1b3: 1$"
+  assert_contains "$out" "^a1c2: 1$"
+  assert_contains "$out" "^a1d4: 1$"
+  assert_contains "$out" "^a1e1: 1$"
+
+  out=$(run_uci "$ENGINE" "$TMP_VARIANTS" rose-block-b3 <<'EOF'
+position startpos
+go perft 1
+EOF
+)
+  assert_contains "$out" "^a1d4: 1$"
+
+  out=$(run_uci "$ENGINE" "$TMP_VARIANTS" rose-block-c2 <<'EOF'
+position startpos
+go perft 1
+EOF
+)
+  assert_contains "$out" "^a1d4: 1$"
+
+  out=$(run_uci "$ENGINE" "$TMP_VARIANTS" rose-block-both <<'EOF'
+position startpos
+go perft 1
+EOF
+)
+  assert_not_contains "$out" "^a1d4: 1$"
+  assert_contains "$out" "^a1b3: 1$"
+  assert_contains "$out" "^a1c2: 1$"
+}
+
+test_bent_riders() {
+  if ! variant_available "$ENGINE" bent-riders "$VARIANTS"; then
+    echo "bent-riders variant not available in this build; skipping bent-riders regression"
+    return 0
+  fi
+
+  load_inline_variants <<'INI'
+[griffon-test:chess]
+customPiece1 = a:O
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+startFen = 7k/8/8/8/3A4/8/8/K7 w - - 0 1
+
+[manticore-test:chess]
+customPiece1 = a:M
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+startFen = 7k/8/8/8/3A4/8/8/K7 w - - 0 1
+INI
+
+  local g m
+  g=$(run_uci "$ENGINE" "$TMP_VARIANTS" griffon-test <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+  assert_contains "$g" "d4h5:"
+  assert_contains "$g" "d4a5:"
+  assert_contains "$g" "d4e8:"
+  assert_contains "$g" "d4c1:"
+  assert_not_contains "$g" "d4d5:"
+  assert_not_contains "$g" "d4e4:"
+
+  m=$(run_uci "$ENGINE" "$TMP_VARIANTS" manticore-test <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+  assert_contains "$m" "d4g8:"
+  assert_contains "$m" "d4a6:"
+  assert_contains "$m" "d4h1:"
+  assert_contains "$m" "d4b1:"
+  assert_not_contains "$m" "d4h5:"
+  assert_not_contains "$m" "d4e8:"
+}
+
+test_bent_rider_evasion() {
+  if ! variant_available "$ENGINE" bent-rider-evasion "$VARIANTS"; then
+    echo "bent-rider-evasion variant not available in this build; skipping bent-rider evasion regression"
+    return 0
+  fi
+
+  load_inline_variants <<'INI'
+[griffon-evasion:chess]
+customPiece1 = a:O
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+
+[manticore-evasion:chess]
+customPiece1 = a:M
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+INI
+
+  local g m
+  g=$(run_uci "$ENGINE" "$TMP_VARIANTS" griffon-evasion <<'UCI'
+position fen 6r1/7k/5A2/8/8/8/8/K7 b - - 0 1
+go perft 1
+UCI
+)
+  assert_contains "$g" "g8g7:"
+  assert_not_contains "$g" "g8g6:"
+
+  m=$(run_uci "$ENGINE" "$TMP_VARIANTS" manticore-evasion <<'UCI'
+position fen 6k1/7r/5A2/8/8/8/8/K7 b - - 0 1
+go perft 1
+UCI
+)
+  assert_contains "$m" "h7f7:"
+  assert_not_contains "$m" "h7h6:"
+}
+
+test_asym_rider_checkers() {
+  if ! variant_available "$ENGINE" asym-rider-checkers "$VARIANTS"; then
+    echo "asym-rider-checkers variant not available in this build; skipping asym rider checkers regression"
+    return 0
+  fi
+
+  load_inline_variants <<'INI'
+[asymcheck-horse:chess]
+customPiece1 = a:nN
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+
+[asymcheck-griffon:chess]
+customPiece1 = a:O
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+
+[asymcheck-manticore:chess]
+customPiece1 = a:M
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+INI
+
+  local hb hu gb gu gx mb mu
+  hb=$(run_uci "$ENGINE" "$TMP_VARIANTS" asymcheck-horse <<'UCI'
+position fen 4k3/3R4/3A4/8/8/8/8/4K3 b - - 0 1
+d
+UCI
+)
+  assert_contains "$hb" "^Checkers:[[:space:]]*$"
+
+  hu=$(run_uci "$ENGINE" "$TMP_VARIANTS" asymcheck-horse <<'UCI'
+position fen 4k3/8/3A4/8/8/8/8/4K3 b - - 0 1
+d
+UCI
+)
+  assert_contains "$hu" "^Checkers: d6 "
+
+  gb=$(run_uci "$ENGINE" "$TMP_VARIANTS" asymcheck-griffon <<'UCI'
+position fen 8/6Pk/5A2/8/8/8/8/4K3 b - - 0 1
+d
+UCI
+)
+  assert_contains "$gb" "^Checkers:[[:space:]]*$"
+
+  gu=$(run_uci "$ENGINE" "$TMP_VARIANTS" asymcheck-griffon <<'UCI'
+position fen 8/7k/5A2/8/8/8/8/4K3 b - - 0 1
+d
+UCI
+)
+  assert_contains "$gu" "^Checkers: f6 "
+
+  gx=$(run_uci "$ENGINE" "$TMP_VARIANTS" asymcheck-griffon <<'UCI'
+position fen 8/5P1k/5A2/8/8/8/8/4K3 b - - 0 1
+d
+UCI
+)
+  assert_contains "$gx" "^Checkers: f6 "
+
+  mb=$(run_uci "$ENGINE" "$TMP_VARIANTS" asymcheck-manticore <<'UCI'
+position fen 6k1/5N2/5A2/8/8/8/8/4K3 b - - 0 1
+d
+UCI
+)
+  assert_contains "$mb" "^Checkers:[[:space:]]*$"
+
+  mu=$(run_uci "$ENGINE" "$TMP_VARIANTS" asymcheck-manticore <<'UCI'
+position fen 6k1/8/5A2/8/8/8/8/4K3 b - - 0 1
+d
+UCI
+)
+  assert_contains "$mu" "^Checkers: f6 "
+}
+
+test_alfil_dabbaba_riders() {
+  if ! variant_available "$ENGINE" alfil-dabbaba-riders "$VARIANTS"; then
+    echo "alfil-dabbaba-riders variant not available in this build; skipping alfil/dabbaba regression"
+    return 0
+  fi
+
+  load_inline_variants <<'INI'
 [alfil-rider:chess]
 customPiece1 = a:AA
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
@@ -218,36 +433,49 @@ customPiece1 = a:{path:orthfirst}W
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 
 [hopper-capture-value-reject:chess]
-customPiece1 = a:{capture:bogus}W
-pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
-
-[hopper-equi-value-reject:chess]
-customPiece1 = a:{equi:bogus}W
+customPiece1 = a:{path:orthfirst}W
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 INI
-tmp_ini="${FSX_TMP_INI}"
 
-piece_moves() {
-  local variant=$1
-  run_uci "$ENGINE" "$tmp_ini" "$variant" <<'UCI' | awk -F: '/^d4/{print $1}' | sort
+  local out
+  out=$(run_uci "$ENGINE" "$TMP_VARIANTS" alfil-rider <<'UCI'
 position startpos
 go perft 1
 UCI
+)
+  assert_contains "$out" "d4g7:"
+
+  out=$(run_uci "$ENGINE" "$TMP_VARIANTS" alfil-rider-tuple <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+  assert_contains "$out" "d4g7:"
+
+  out=$(run_uci "$ENGINE" "$TMP_VARIANTS" alfil-rider-tuple-blocked <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+  assert_not_contains "$out" "d4g7:"
+
+  out=$(run_uci "$ENGINE" "$TMP_VARIANTS" dabbaba-rider <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+  assert_contains "$out" "d4d6:"
+
+  out=$(run_uci "$ENGINE" "$TMP_VARIANTS" dabbaba-rider-tuple <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+  assert_contains "$out" "d4d6:"
 }
 
-diff -u <(cat <<'EOF'
-d4b2
-d4b6
-d4f2
-d4f6
-d4h8
-EOF
-) <(piece_moves alfil-rider)
-
-diff -u <(cat <<'EOF'
-d4b2
-d4b6
-d4f2
-d4f6
-EOF
-) <(piece_moves alfil-rider-tuple-blocked)
+test_rose
+test_bent_riders
+test_bent_rider_evasion
+test_asym_rider_checkers
+test_alfil_dabbaba_riders

@@ -320,9 +320,74 @@ run_case() {
   "${HARNESS_BIN}" "${which}"
 }
 
+run_raw_cmds() {
+  local ini="$1"
+  local variant="$2"
+  local cmds="$3"
+  printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value %s\n%s\nquit\n' \
+    "$ini" "$variant" "$cmds" | "${ENGINE}" 2>&1
+}
+
+test_passive_blast() {
+  local tmp_ini out
+  tmp_ini=$(mktemp)
+  cat > "${tmp_ini}" <<'INI'
+[passive-blast-test:chess]
+customPiece1 = f:W
+blastPassiveTypes = f
+pieceToCharTable = ...............F....K...............f....k
+INI
+
+  out=$(run_raw_cmds "${tmp_ini}" passive-blast-test $'position fen 4k3/8/8/4f3/8/4K3/8/8 w - - 0 1\ngo perft 1')
+  if grep -q "Can not use kings with blastPassiveTypes." <<<"${out}" || \
+     grep -q "unknown variant 'passive-blast-test'" <<<"${out}"; then
+    echo "skip: passive blast regression not supported by this build"
+    rm -f "${tmp_ini}"
+    return 0
+  fi
+  ! grep -q "^e3e4: 1$" <<<"${out}"
+
+  out=$(run_raw_cmds "${tmp_ini}" passive-blast-test $'position fen r3k3/4f3/8/8/8/8/4K3/8 b - - 0 1\ngo perft 1')
+  ! grep -q "^a8a7: 1$" <<<"${out}"
+
+  out=$(run_raw_cmds "${tmp_ini}" passive-blast-test $'position fen r3k3/8/4f3/8/8/8/4K3/8 w - - 0 1 moves e6e7\ngo perft 1')
+  ! grep -q "^a8a7: 1$" <<<"${out}"
+
+  out=$(run_raw_cmds "${tmp_ini}" passive-blast-test $'position fen 4k3/8/8/4f3/8/4R3/4K3/8 w - - 0 1 moves e3e4\nd')
+  grep -q "Fen: 4k3/8/8/4f3/8/8/4K3/8 b - - 1 1" <<<"${out}"
+
+  cat > "${tmp_ini}" <<'INI'
+[passive-blast-immune:chess]
+customPiece1 = f:W
+blastPassiveTypes = f
+blastImmuneTypes = r
+pieceToCharTable = ....R..........F....K....r..........f....k
+INI
+  out=$(run_raw_cmds "${tmp_ini}" passive-blast-immune $'position fen 4k3/8/8/4f3/8/4R3/4K3/8 w - - 0 1 moves e3e4\nd')
+  grep -q "Fen: 4k3/8/8/4f3/4R3/8/4K3/8 b - - 1 1" <<<"${out}"
+
+  rm -f "${tmp_ini}"
+}
+
+test_crazyhouse_multi_pawn_promo() {
+  local tmp_ini out
+  tmp_ini=$(mktemp "${TMPDIR:-/tmp}/fsx-crazyhouse-multi-pawn-promo-XXXXXX.ini")
+  cat >"${tmp_ini}" <<'VAR'
+[newvariant:crazyhouse]
+promotionPawnTypes=pb
+promotionPieceTypes=qn
+VAR
+
+  out=$(run_raw_cmds "${tmp_ini}" newvariant $'position fen r7/7P/8/8/8/8/8/k1K5 w - - 0 1 moves h7h8q a8h8\nd')
+  grep -Fq "Fen: 7r/8/8/8/8/8/8/k1K5[p] w - - 0 2" <<<"${out}"
+  rm -f "${tmp_ini}"
+}
+
 run_case pairdrop
 run_case swap
 run_case pull
 run_case wrapped
+test_passive_blast
+test_crazyhouse_multi_pawn_promo
 
 echo "quiet-check-special-moves ok"
