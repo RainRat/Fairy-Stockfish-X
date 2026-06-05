@@ -166,6 +166,18 @@ namespace {
     return attack;
   }
 
+  Bitboard hopper_potential(const std::map<Direction, int>& directions, Square sq, Color c = WHITE) {
+    Bitboard attack = 0;
+
+    for (auto const& [d, _] : directions) {
+      Direction dir = (c == WHITE ? d : -d);
+      for (Square s = sq + dir; is_ok(s) && distance(s, s - dir) <= 2; s += dir)
+        attack |= s;
+    }
+
+    return attack;
+  }
+
   Bitboard special_pseudo_bb(const PieceInfo* pi, bool initial, MoveModality modality, Square s, Color c,
                              const std::map<Direction, int>& riderDirs,
                              const std::map<Direction, int>& skiDirs) {
@@ -174,7 +186,7 @@ namespace {
     pseudo |= sliding_attack<RIDER>(riderDirs, s, 0, c);
     pseudo |= leap_rider_attacks(pi->leapRider[initial][modality], s, 0, c);
     pseudo |= ski_sliding_attack(skiDirs, s, 0, c);
-    pseudo |= sliding_attack<HOPPER_RANGE>(pi->hopper[initial][modality], s, 0, c);
+    pseudo |= hopper_potential(pi->hopper[initial][modality], s, c);
     pseudo |= universal_hopper_potential(pi->universalHopper[initial][modality], s, c);
 
     if (pi->griffon[initial][modality])
@@ -258,11 +270,11 @@ namespace {
   void add_hopper_rider_types(RiderType& riderTypes, Direction d, int limit) {
     int maxDist = slider_max_distance(limit);
     if (RookDirectionsH.find(d) != RookDirectionsH.end())
-        riderTypes |= maxDist == 1 ? RIDER_GRASSHOPPER_H : RIDER_CANNON_H;
+        riderTypes |= maxDist == 1 ? RIDER_GRASSHOPPER_H : maxDist == 0 ? RIDER_CANNON_H : NO_RIDER;
     if (RookDirectionsV.find(d) != RookDirectionsV.end())
-        riderTypes |= maxDist == 1 ? RIDER_GRASSHOPPER_V : RIDER_CANNON_V;
+        riderTypes |= maxDist == 1 ? RIDER_GRASSHOPPER_V : maxDist == 0 ? RIDER_CANNON_V : NO_RIDER;
     if (BishopDirections.find(d) != BishopDirections.end())
-        riderTypes |= maxDist == 1 ? RIDER_GRASSHOPPER_D : RIDER_CANNON_DIAG;
+        riderTypes |= maxDist == 1 ? RIDER_GRASSHOPPER_D : maxDist == 0 ? RIDER_CANNON_DIAG : NO_RIDER;
   }
 
   Bitboard lame_leaper_path(Direction d, Square s) {

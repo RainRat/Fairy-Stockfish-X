@@ -931,6 +931,9 @@ private:
                                          File maxFile, Rank maxRank,
                                          bool wrapFile, bool wrapRank,
                                          bool quietMode);
+  Bitboard hopper_targets(const std::map<Direction, int>& directions,
+                          Color c, Square sq, Bitboard occupied,
+                          bool quietMode) const;
   Bitboard wrapped_universal_hopper_targets(const std::map<Direction, PieceInfo::HopperProfile>& profiles,
                                            Color c, Square sq, Bitboard occupied, Bitboard ownPieces,
                                            File maxFile, Rank maxRank,
@@ -3337,8 +3340,65 @@ inline Bitboard wrapped_slider_direction_targets(Direction d, Square sq, Bitboar
       [&](Square next, bool blocked, int /*count*/, Bitboard& out_bb) {
           if (!quietMode || !blocked)
               out_bb |= square_bb(next);
-          return blocked;
-      });
+      return blocked;
+  });
+}
+
+template<typename AdvanceFn>
+inline Bitboard hopper_targets_impl(const std::map<Direction, int>& directions,
+                                    Color c, Square sq, Bitboard occupied,
+                                    bool quietMode, AdvanceFn advance) {
+  Bitboard out = 0;
+
+  for (const auto& [d, limit] : directions)
+  {
+      Direction dir = (c == WHITE ? d : -d);
+      auto [stepR, stepF] = decode_direction(dir);
+      if (!stepR && !stepF)
+          continue;
+
+      const int minDistance = slider_min_distance(limit);
+      const int maxDistance = slider_max_distance(limit);
+      bool hurdleSeen = false;
+      int hopCount = 0;
+      Square current = sq;
+
+      for (;;)
+      {
+          Square next = SQ_NONE;
+          if (!advance(current, dir, stepR, stepF, next) || next == sq)
+              break;
+
+          current = next;
+          const Bitboard nextBB = square_bb(current);
+          const bool blocked = bool(occupied & nextBB);
+
+          if (hurdleSeen)
+          {
+              ++hopCount;
+              if (hopCount >= minDistance)
+              {
+                  if (!quietMode || !blocked)
+                      out |= nextBB;
+              }
+              if (maxDistance > 0 && hopCount >= maxDistance)
+                  break;
+          }
+
+          if (blocked)
+          {
+              if (!hurdleSeen)
+              {
+                  hurdleSeen = true;
+                  hopCount = 0;
+                  continue;
+              }
+              break;
+          }
+      }
+  }
+
+  return out;
 }
 
 inline Bitboard Position::wrapped_hopper_targets(const std::map<Direction, int>& directions,
@@ -3346,42 +3406,24 @@ inline Bitboard Position::wrapped_hopper_targets(const std::map<Direction, int>&
                                                  File maxFile, Rank maxRank,
                                                  bool wrapFile, bool wrapRank,
                                                  bool quietMode) {
-  Bitboard out = 0;
-  for (const auto& [d, limit] : directions)
-  {
-      auto [dr, df] = decode_direction(c == WHITE ? d : Direction(-d));
-      if (!dr && !df)
-          continue;
+  auto advance = [&](Square current, Direction dir, int stepR, int stepF, Square& next) -> bool {
+      (void)dir;
+      return wrapped_destination_square(current, stepF, stepR, maxFile, maxRank, wrapFile, wrapRank, next);
+  };
+  return hopper_targets_impl(directions, c, sq, occupied, quietMode, advance);
+}
 
-      bool hurdle = false;
-      int hopper_count = 0;
-      const int minDistance = slider_min_distance(limit);
-      const int maxDistance = slider_max_distance(limit);
-      out |= wrapped_ray_walk(sq, occupied, maxFile, maxRank, wrapFile, wrapRank, df, dr,
-          [&](Square next, bool blocked, int /*count*/, Bitboard& out_bb) {
-              if (hurdle)
-              {
-                  ++hopper_count;
-                  if (hopper_count >= minDistance)
-                  {
-                      if (!quietMode || !blocked)
-                          out_bb |= square_bb(next);
-                  }
-                  if (maxDistance > 0 && hopper_count >= maxDistance)
-                      return true; // Stop
-              }
-
-              if (blocked)
-              {
-                  if (!hurdle)
-                      hurdle = true;
-                  else
-                      return true; // Stop
-              }
-              return false; // Continue
-          });
-  }
-  return out;
+inline Bitboard Position::hopper_targets(const std::map<Direction, int>& directions,
+                                         Color c, Square sq, Bitboard occupied,
+                                         bool quietMode) const {
+  auto advance = [&](Square current, Direction dir, int stepR, int stepF, Square& next) -> bool {
+      next = current + dir;
+      if (!is_ok(next))
+          return false;
+      return int(file_of(next)) - int(file_of(current)) == stepF
+          && int(rank_of(next)) - int(rank_of(current)) == stepR;
+  };
+  return hopper_targets_impl(directions, c, sq, occupied, quietMode, advance);
 }
 
 inline Bitboard Position::wrapped_bent_rider_targets(bool griffon, Square sq, Bitboard occupied,
@@ -4076,8 +4118,13 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
 
   PieceType movePt = effective_piece_type(pt);
   const PieceInfo* pi = pieceMap.get(movePt);
+  const bool hasSimpleHopper = !pi->hopper[0][MODALITY_QUIET].empty()
+                            || !pi->hopper[0][MODALITY_CAPTURE].empty()
+                            || !pi->hopper[1][MODALITY_QUIET].empty()
+                            || !pi->hopper[1][MODALITY_CAPTURE].empty();
   const bool hasRuntimeSpecialMoves = pi->has_runtime_rider_augment()
-                                   || pi->has_explicit_initial_moves();
+                                   || pi->has_explicit_initial_moves()
+                                   || hasSimpleHopper;
 
   if (!hasRuntimeSpecialMoves && fast_attacks() && (pt != KING || king_type() == KING))
   {
@@ -4128,6 +4175,7 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
   Bitboard b = attacks_bb(c, movePt, s, occupancy);
 
   b |= special_rider_bb<false>(pi, MODALITY_CAPTURE, s, occupancy, board_bb(), pieces(c), c, true, true);
+  b |= hopper_targets(pi->hopper[0][MODALITY_CAPTURE], c, s, occupancy, false);
   b |= lame_leaper_bb(pi->stepsLame[0][MODALITY_CAPTURE], s, occupancy, c, false);
   const bool usesGenericPawnLikeInitialAttackHelper =
          pt == PAWN || (pawn_like_types(c) & piece_set(pt));
@@ -4332,6 +4380,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s, Bitboard o
   Bitboard b = (moves_bb<false>(c, movePt, s, occupancy) | extraDestinations);
 
   b |= special_rider_bb<false>(pi, MODALITY_QUIET, s, occupancy, board_bb(), pieces(c), c, false, false);
+  b |= hopper_targets(pi->hopper[0][MODALITY_QUIET], c, s, occupancy, true);
   b |= lame_leaper_bb(pi->stepsLame[0][MODALITY_QUIET], s, occupancy, c, true);
 
   const bool usesGenericPawnLikeInitialMoveHelper =
@@ -4347,6 +4396,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s, Bitboard o
   {
       b |= moves_bb<true>(c, movePt, s, occupancy);
       b |= special_rider_bb<true>(pi, MODALITY_QUIET, s, occupancy, board_bb(), pieces(c), c, false, false);
+      b |= hopper_targets(pi->hopper[1][MODALITY_QUIET], c, s, occupancy, true);
       b |= lame_leaper_bb(pi->stepsLame[1][MODALITY_QUIET], s, occupancy, c, true);
   }
   // Xiangqi soldier
