@@ -2461,6 +2461,7 @@ void VariantMap::parse_istream(std::istream& file) {
     std::vector<std::string> varsToErase = {};
     std::set<std::string> skippedVariants = {};
     std::set<std::string> missingTemplates = {};
+    std::set<std::string> duplicateVariants = {};
     while (file.get() && std::getline(std::getline(file, variant, ']'), input))
     {
         // Extract variant template, if specified
@@ -2509,13 +2510,18 @@ void VariantMap::parse_istream(std::istream& file) {
 
         // Create variant
         if (variants.has(variant))
-            std::cerr << "Variant '" << variant << "' already exists." << std::endl;
+        {
+            if (!DoCheck && !verboseLoadWarnings)
+                duplicateVariants.insert(variant);
+            else
+                std::cerr << "Variant '" << variant << "' already exists." << std::endl;
+        }
         else if (!variant_template.empty() && (skippedVariants.count(variant_template) || !variants.has(variant_template)))
         {
             skippedVariants.insert(variant);
             if (!variants.has(variant_template))
             {
-                if (verboseBoardSizeWarnings)
+                if (verboseLoadWarnings)
                     std::cerr << "Variant template '" << variant_template << "' does not exist." << std::endl;
                 else
                     missingTemplates.insert(variant_template);
@@ -2524,7 +2530,7 @@ void VariantMap::parse_istream(std::istream& file) {
             {
                 if constexpr (!DoCheck)
                 {
-                    if (verboseBoardSizeWarnings)
+                    if (verboseLoadWarnings)
                         std::cerr << "Variant '" << variant << "' inherits from skipped template '" << variant_template << "'. Skipping." << std::endl;
                     else
                         ++warnings.boardSize;
@@ -2549,7 +2555,7 @@ void VariantMap::parse_istream(std::istream& file) {
                 skippedVariants.insert(variant);
                 if constexpr (!DoCheck)
                 {
-                    if (verboseBoardSizeWarnings)
+                    if (verboseLoadWarnings)
                         std::cerr << "Variant '" << variant << "' exceeds build board limits (maxFile=" << int(FILE_MAX) + 1
                                   << ", maxRank=" << int(RANK_MAX) + 1 << "). Skipping." << std::endl;
                     else
@@ -2589,7 +2595,7 @@ void VariantMap::parse_istream(std::istream& file) {
                 skippedVariants.insert(variant);
                 if constexpr (!DoCheck)
                 {
-                    if (verboseBoardSizeWarnings)
+                    if (verboseLoadWarnings)
                         std::cerr << "Variant '" << variant << "' exceeds build board limits (maxFile=" << int(FILE_MAX) + 1
                                   << ", maxRank=" << int(RANK_MAX) + 1 << "). Skipping." << std::endl;
                     else
@@ -2601,14 +2607,14 @@ void VariantMap::parse_istream(std::istream& file) {
     }
     if constexpr (!DoCheck)
     {
-        if (!verboseBoardSizeWarnings && warnings.boardSize)
+        if (!verboseLoadWarnings && warnings.boardSize)
         {
             std::cerr << "[" << warnings.boardSize
                       << "] variants skipped because of board size limits."
-                      << " Set option VerboseVariantBoardSizeWarnings to true to see full details."
+                      << " Set option VerboseVariantLoadWarnings to true to see full details."
                       << std::endl;
         }
-        if (!verboseBoardSizeWarnings && !missingTemplates.empty())
+        if (!verboseLoadWarnings && !missingTemplates.empty())
         {
             std::cerr << "[" << missingTemplates.size()
                       << "] variant templates not found or skipped because of board size limits (";
@@ -2620,6 +2626,13 @@ void VariantMap::parse_istream(std::istream& file) {
                 first = false;
             }
             std::cerr << ")." << std::endl;
+        }
+        if (!verboseLoadWarnings && !duplicateVariants.empty())
+        {
+            std::cerr << "[" << duplicateVariants.size()
+                      << "] variants already existed."
+                      << " Set option VerboseVariantLoadWarnings to true to see full details."
+                      << std::endl;
         }
     }
     // Clean up temporary variants
@@ -2648,8 +2661,8 @@ void VariantMap::parse(std::string path) {
 template void VariantMap::parse<true>(std::string path);
 template void VariantMap::parse<false>(std::string path);
 
-void VariantMap::set_verbose_board_size_warnings(bool verbose) {
-    verboseBoardSizeWarnings = verbose;
+void VariantMap::set_verbose_load_warnings(bool verbose) {
+    verboseLoadWarnings = verbose;
 }
 
 void VariantMap::add(std::string s, Variant* v) {

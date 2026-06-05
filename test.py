@@ -2,6 +2,8 @@
 
 import faulthandler
 import os
+import subprocess
+import sys
 import tempfile
 from pathlib import Path
 import unittest
@@ -412,6 +414,16 @@ class TestPyffish(unittest.TestCase):
         variants = sf.variants()
         self.assertTrue("shogun" in variants)
         self.assertTrue("hostageblank" in variants)
+
+    def test_duplicate_variant_warnings_are_summarized(self):
+        code = (
+            "import pyffish as sf\n"
+            "sf.load_variant_config('[chess]\\n[normal]\\n')\n"
+        )
+        result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
+        self.assertIn("[2] variants already existed.", result.stderr)
+        self.assertIn("Set option VerboseVariantLoadWarnings to true to see full details.", result.stderr)
+        self.assertNotIn("Variant 'chess' already exists.", result.stderr)
 
     def test_set_option(self):
         result = sf.set_option("UCI_Variant", "capablanca")

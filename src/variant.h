@@ -589,14 +589,14 @@ public:
   void init();
   template <bool DoCheck> void parse(std::string path);
   template <bool DoCheck> void parse_istream(std::istream& file);
-  void set_verbose_board_size_warnings(bool verbose);
+  void set_verbose_load_warnings(bool verbose);
   void clear_all();
   std::vector<std::string> get_keys();
   const Variant* get(const std::string& name) const;
   bool has(const std::string& name) const;
 
 private:
-  bool verboseBoardSizeWarnings = false;
+  bool verboseLoadWarnings = false;
   void add(std::string s, Variant* v);
 };
 
