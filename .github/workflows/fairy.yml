@@ -119,7 +119,7 @@ jobs:
 
       - name: Test universal hopper
         run: |
-          ../tests/universal-hopper.sh ./stockfish
+          ../tests/universal-hopper.sh
 
       - name: Test special regressions
         run: |
