@@ -30,21 +30,25 @@ bool Tune::update_on_last;
 const UCI::Option* LastOption = nullptr;
 static std::map<std::string, int> TuneResults;
 
+namespace {
+
+void trim_in_place(string& text) {
+  const size_t first = text.find_first_not_of(" \t\n\r\f\v");
+  if (first == string::npos)
+  {
+      text.clear();
+      return;
+  }
+
+  const size_t last = text.find_last_not_of(" \t\n\r\f\v");
+  text = text.substr(first, last - first + 1);
+}
+
+} // namespace
+
 string Tune::next(string& names, bool pop) {
 
   string name;
-  auto trim_in_place = [](string& text) {
-      const size_t first = text.find_first_not_of(" \t\n\r\f\v");
-      if (first == string::npos)
-      {
-          text.clear();
-          return;
-      }
-
-      const size_t last = text.find_last_not_of(" \t\n\r\f\v");
-      text = text.substr(first, last - first + 1);
-  };
-
   do {
       size_t comma = names.find(',');
       string token = names.substr(0, comma);

@@ -19,6 +19,7 @@
 #include <cassert>
 
 #include "movepick.h"
+#include "thread.h"
 
 namespace Stockfish {
 
@@ -165,7 +166,7 @@ void MovePicker::init_move_list_storage() {
 #ifdef USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
   thread = pos.this_thread();
   if (thread)
-      baseMoveList = acquire_thread_buffer(thread);
+      baseMoveList = thread->acquire_buffer();
   else
   {
       moveListPtr = std::make_unique<ExtMove[]>(MOVE_PICK_OVERFLOW_CAPACITY);
@@ -180,7 +181,7 @@ void MovePicker::init_move_list_storage() {
 MovePicker::~MovePicker() {
 #ifdef USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
     if (thread)
-        release_thread_buffer(thread, baseMoveList);
+        thread->release_buffer(baseMoveList);
 #endif
 }
 

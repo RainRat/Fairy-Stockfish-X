@@ -30,7 +30,7 @@ template<GenType T>
 MoveList<T>::MoveList(const Position& pos) {
     thread = pos.this_thread();
     if (thread)
-        moveList = acquire_thread_buffer(thread);
+        moveList = thread->acquire_buffer();
     else {
         moveListPtr = std::make_unique<ExtMove[]>(MOVEGEN_OVERFLOW_CAPACITY);
         moveList = moveListPtr.get();
@@ -42,7 +42,7 @@ MoveList<T>::MoveList(const Position& pos) {
 template<GenType T>
 MoveList<T>::~MoveList() {
     if (thread)
-        release_thread_buffer(thread, moveList);
+        thread->release_buffer(moveList);
 }
 
 // Explicit instantiations

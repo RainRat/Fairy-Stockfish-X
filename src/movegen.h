@@ -54,9 +54,6 @@ struct ExtMove {
 
 class Thread;
 
-ExtMove* acquire_thread_buffer(Thread* thread);
-void release_thread_buffer(Thread* thread, ExtMove* buffer);
-
 
 inline bool operator<(const ExtMove& f, const ExtMove& s) {
   return f.value < s.value;

@@ -32,13 +32,8 @@ namespace Stockfish {
 
 ThreadPool Threads; // Global object
 
-ExtMove* acquire_thread_buffer(Thread* thread) {
-    return thread->acquire_buffer();
-}
 
-void release_thread_buffer(Thread* thread, ExtMove* buffer) {
-    thread->release_buffer(buffer);
-}
+
 
 
 /// Thread constructor launches the thread and waits until it goes to sleep
@@ -258,7 +253,7 @@ Thread* ThreadPool::get_best_thread() const {
         return bestThread;
 
     std::map<Move, int64_t> votes;
-    Value minScore = VALUE_NONE;
+    Value minScore = VALUE_NONE; // Seed with maximum value (VALUE_NONE is larger than any valid score)
     auto incomplete_iteration = [](const Thread* th) {
         return th->completedDepth != th->rootDepth;
     };

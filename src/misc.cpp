@@ -383,14 +383,25 @@ void prefetch(void* addr) {
 /// does not guarantee the availability of aligned_alloc(). Memory allocated with
 /// std_aligned_alloc() must be freed with std_aligned_free().
 
+namespace {
+bool round_up_to_multiple(size_t size, size_t alignment, size_t& rounded) {
+    if (alignment == 0)
+        return false;
+    if (size > std::numeric_limits<size_t>::max() - (alignment - 1))
+        return false;
+    rounded = (size + alignment - 1) / alignment * alignment;
+    return true;
+}
+}
+
 void* std_aligned_alloc(size_t alignment, size_t size) {
 
   if (alignment == 0 || (alignment & (alignment - 1)) != 0)
       return nullptr;
 
-  if (size > std::numeric_limits<size_t>::max() - (alignment - 1))
+  size_t roundedSize;
+  if (!round_up_to_multiple(size, alignment, roundedSize))
       return nullptr;
-  size_t roundedSize = (size + alignment - 1) / alignment * alignment;
 
 #if defined(POSIXALIGNEDALLOC)
   void *mem;
@@ -452,9 +463,10 @@ static void* aligned_large_pages_alloc_windows(size_t allocSize) {
           GetLastError() == ERROR_SUCCESS)
       {
           // Round up size to full pages and allocate
-          if (allocSize > std::numeric_limits<size_t>::max() - (largePageSize - 1))
+          size_t roundedSize;
+          if (!round_up_to_multiple(allocSize, largePageSize, roundedSize))
               return nullptr;
-          allocSize = (allocSize + largePageSize - 1) & ~size_t(largePageSize - 1);
+          allocSize = roundedSize;
           mem = VirtualAlloc(
               NULL, allocSize, MEM_RESERVE | MEM_COMMIT | MEM_LARGE_PAGES, PAGE_READWRITE);
 
@@ -493,9 +505,9 @@ void* aligned_large_pages_alloc(size_t allocSize) {
 #endif
 
   // round up to multiples of alignment
-  if (allocSize > std::numeric_limits<size_t>::max() - (alignment - 1))
+  size_t size;
+  if (!round_up_to_multiple(allocSize, alignment, size))
       return nullptr;
-  size_t size = (allocSize + alignment - 1) / alignment * alignment;
   void *mem = std_aligned_alloc(alignment, size);
 #if defined(MADV_HUGEPAGE)
   if (mem)
@@ -567,7 +579,7 @@ void bindThisThread(size_t idx) {
       while (byteOffset < returnLength)
       {
           auto* ptr = (PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX)(buffer + byteOffset);
-          if (ptr->Relationship == 4) // RelationGroup
+          if (ptr->Relationship == RelationGroup)
           {
               for (WORD g = 0; g < ptr->Group.ActiveGroupCount; ++g)
               {
