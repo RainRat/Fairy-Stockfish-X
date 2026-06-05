@@ -81,21 +81,9 @@ jobs:
           make -j2 ARCH=x86-64 largeboards=yes all=yes debug=yes build
           ../tests/perft.sh all
 
-      - name: Test promotion-require-in-hand
+      - name: Test capture and promotion regressions
         run: |
-          ../tests/promotion-require-in-hand.sh
-
-      - name: Test promotion-consume-in-hand
-        run: |
-          ../tests/promotion-consume-in-hand.sh
-
-      - name: Test must-capture-by-color
-        run: |
-          ../tests/must-capture-by-color.sh
-
-      - name: Test must-drop-by-color
-        run: |
-          ../tests/must-drop-by-color.sh
+          bash ../tests/capture-promotion-regressions.sh
 
       - name: Test setup-chess
         run: |
@@ -133,9 +121,9 @@ jobs:
         run: |
           ../tests/universal-hopper.sh ./stockfish
 
-      - name: Test whaleshogi
+      - name: Test special regressions
         run: |
-          bash ../tests/whaleshogi.sh
+          bash ../tests/special-regressions.sh
 
       - name: Test fairy notation regressions
         run: |
@@ -191,10 +179,6 @@ jobs:
         run: |
           ../tests/self-capture-types.sh
 
-      - name: Test sacrifice chess
-        run: |
-          ../tests/sacrifice.sh
-
       - name: Test royal variant regressions
         run: |
           ../tests/royal-variant-regressions.sh
@@ -202,10 +186,6 @@ jobs:
       - name: Test Kings or Lemmings
         run: |
           ../tests/kings-or-lemmings.sh
-
-      - name: Test Hindustani
-        run: |
-          ../tests/hindustani.sh
 
       - name: Test pulling
         run: |
@@ -215,13 +195,9 @@ jobs:
         run: |
           ../tests/swapping.sh
 
-      - name: Test asym rider checkers
+      - name: Test rider regressions
         run: |
-          ../tests/asym-rider-checkers.sh
-
-      - name: Test alfil/dabbaba riders
-        run: |
-          ../tests/alfil-dabbaba-riders.sh
+          bash ../tests/rider-regressions.sh
 
       - name: Test variant bench
         run: |

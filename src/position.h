@@ -1617,6 +1617,8 @@ inline bool Position::self_capture(PieceType pt) const {
   Color us = side_to_move();
   if (var->selfCaptureTypes.has_override(us))
       return bool(var->selfCaptureTypes.get(us) & piece_set(pt));
+  if (var->selfCaptureTypes != NO_PIECE_SET)
+      return bool(var->selfCaptureTypes.get(us) & piece_set(pt));
   return self_capture();
 }
 
