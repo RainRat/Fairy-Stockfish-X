@@ -322,30 +322,7 @@ namespace {
 
 #ifdef VERY_LARGE_BOARDS
   Bitboard fixed_step_lame_rider_attacks(Square s, Bitboard occupied, int stepF, int stepR) {
-    Bitboard attack = 0;
-    int f = int(file_of(s));
-    int r = int(rank_of(s));
-
-    while (true)
-    {
-        int midF = f + stepF / 2;
-        int midR = r + stepR / 2;
-        int toF = f + stepF;
-        int toR = r + stepR;
-        if (toF < int(FILE_A) || toF > int(FILE_MAX) || toR < int(RANK_1) || toR > int(RANK_MAX))
-            break;
-        Square mid = make_square(File(midF), Rank(midR));
-        if (occupied & mid)
-            break;
-        Square to = make_square(File(toF), Rank(toR));
-        attack |= to;
-        if (occupied & to)
-            break;
-        f = toF;
-        r = toR;
-    }
-
-    return attack;
+    return fixed_step_lame_rider_attacks_core(s, occupied, stepF, stepR);
   }
 #endif
 
@@ -372,11 +349,11 @@ namespace {
     return attack;
   }
 
-}
+  inline Bitboard safe_destination(Square s, int step) {
+      auto [dr, df] = decode_direction(Direction(step));
+      return safe_destination_tuple(s, dr, df);
+  }
 
-inline Bitboard safe_destination(Square s, int step) {
-    auto [dr, df] = decode_direction(Direction(step));
-    return safe_destination_tuple(s, dr, df);
 }
 
 template <typename Fn>
@@ -491,10 +468,7 @@ Bitboard custom_rider_attacks(PieceType pt, bool initial, bool isCapture, Color 
 }
 
 Bitboard stepped_rider_attacks(Square s, Bitboard occupied, int stepF, int stepR) {
-  return walk_ray(s, stepF, stepR, false, [&](Square to, Bitboard& attack) {
-      attack |= to;
-      return !(occupied & to);
-  });
+  return limited_step_rider_attacks(s, occupied, Direction(stepR * FILE_NB + stepF), 0);
 }
 
 Bitboard bent_rider_attack(RiderType R, Square s, Bitboard occupied) {
@@ -707,20 +681,10 @@ void Bitboards::init_pieces() {
                       }
                       for (const auto& ray : pi->tupleSlider[initial][modality])
                       {
-                          int tdr = c == WHITE ? ray.dr : -ray.dr;
-                          int tdf = c == WHITE ? ray.df : -ray.df;
-                          Square current = s;
-                          int count = 0;
-                          for (;;)
-                          {
-                              Bitboard dst = safe_destination_tuple(current, tdr, tdf);
-                              if (!dst)
-                                  break;
-                              pseudo |= dst;
-                              current = lsb(dst);
-                              if (ray.limit > 0 && ++count >= ray.limit)
-                                  break;
-                          }
+                          walk_tuple_ray(ray, s, c, Bitboard(0), [&](Bitboard next, Square, int) {
+                              pseudo |= next;
+                              return true;
+                          });
                       }
                       pseudo |= special_pseudo_bb(pi, initial, modality, s, c, riderDirs, skiDirs);
                       leaper |= special_leaper_bb(pi, initial, modality, s);
@@ -809,8 +773,9 @@ namespace {
       {
           // For leap-riders (e.g. nightrider), occupancy on the final square
           // of each ray cannot affect attacks, so it is not a relevant bit.
-          Bitboard emptyAttack = sliding_attack<RIDER>(directions, s, 0) & active_magic_board(maxFile, maxRank);
-          return emptyAttack & ~rider_terminal_squares(directions, s, active_magic_board(maxFile, maxRank));
+          const Bitboard board = active_magic_board(maxFile, maxRank);
+          Bitboard emptyAttack = sliding_attack<RIDER>(directions, s, 0) & board;
+          return emptyAttack & ~rider_terminal_squares(directions, s, board);
       }
       else
       {
@@ -821,14 +786,6 @@ namespace {
                                     : sliding_attack<MT == HOPPER ? HOPPER_RANGE : MT>(directions, s, 0))
                & active_magic_board(maxFile, maxRank) & ~edges;
       }
-  }
-
-  template <MovementType MT, bool TrimRiderTerminal = false>
-  size_t required_magic_table_size(const std::map<Direction, int>& directions, File maxFile, Rank maxRank) {
-      size_t required = 0;
-      for (Square s = SQ_A1; s <= SQ_MAX; ++s)
-          required += size_t(1) << popcount(magic_mask_for_square<MT, TrimRiderTerminal>(directions, s, maxFile, maxRank));
-      return required;
   }
 
   // init_magics() computes all rook and bishop attacks at startup. Magic
@@ -851,11 +808,17 @@ namespace {
     constexpr size_t TempTableSize = size_t(1) << (FILE_NB + RANK_NB - 4);
     std::vector<Bitboard> occupancy(TempTableSize);
     std::vector<Bitboard> reference(TempTableSize);
+    std::array<Bitboard, SQUARE_NB> masks{};
     Bitboard b;
     std::vector<int> epoch(TempTableSize);
     int cnt = 0, size = 0;
 
-    const size_t requiredSize = required_magic_table_size<MT, TrimRiderTerminal>(directions, maxFile, maxRank);
+    size_t requiredSize = 0;
+    for (Square s = SQ_A1; s <= SQ_MAX; ++s)
+    {
+        masks[s] = magic_mask_for_square<MT, TrimRiderTerminal>(directions, s, maxFile, maxRank);
+        requiredSize += size_t(1) << popcount(masks[s]);
+    }
     if (table.size() < requiredSize)
         table.resize(requiredSize);
 
@@ -868,7 +831,7 @@ namespace {
         // apply to the 64 or 32 bits word to get the index.
         Magic& m = magics[s];
         // The mask for hoppers is unlimited distance, even if the hopper is limited distance (e.g., grasshopper).
-        m.mask = magic_mask_for_square<MT, TrimRiderTerminal>(directions, s, maxFile, maxRank);
+        m.mask = masks[s];
 #ifdef LARGEBOARDS
         m.shift = 128 - popcount(m.mask);
 #else

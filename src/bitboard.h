@@ -825,22 +825,7 @@ inline Bitboard walk_ray(Square s, int stepF, int stepR, bool skipFirst, StepFn&
   return attack;
 }
 
-
-#ifdef VERY_LARGE_BOARDS
-Bitboard rider_attacks_bb(
-    RiderType R, Square s, Bitboard occupied, const MagicGeometry* mg = current_magic_geometry);
-
-template<RiderType R>
-inline Bitboard rider_attacks_bb(
-    Square s, Bitboard occupied, const MagicGeometry* mg = current_magic_geometry) {
-  static_assert(R != NO_RIDER && !(R & (R - 1))); // exactly one bit
-  return rider_attacks_bb(R, s, occupied, mg);
-}
-
-inline Square lsb(Bitboard b);
-#else
-inline Bitboard fixed_step_lame_rider_attacks(Square s, Bitboard occupied, int stepF, int stepR, const MagicGeometry* mg = current_magic_geometry) {
-  (void)mg;
+inline Bitboard fixed_step_lame_rider_attacks_core(Square s, Bitboard occupied, int stepF, int stepR) {
   assert((stepF % 2 == 0) && (stepR % 2 == 0));
   Bitboard attack = 0;
   int f = int(file_of(s));
@@ -866,6 +851,25 @@ inline Bitboard fixed_step_lame_rider_attacks(Square s, Bitboard occupied, int s
   }
 
   return attack;
+}
+
+
+#ifdef VERY_LARGE_BOARDS
+Bitboard rider_attacks_bb(
+    RiderType R, Square s, Bitboard occupied, const MagicGeometry* mg = current_magic_geometry);
+
+template<RiderType R>
+inline Bitboard rider_attacks_bb(
+    Square s, Bitboard occupied, const MagicGeometry* mg = current_magic_geometry) {
+  static_assert(R != NO_RIDER && !(R & (R - 1))); // exactly one bit
+  return rider_attacks_bb(R, s, occupied, mg);
+}
+
+inline Square lsb(Bitboard b);
+#else
+inline Bitboard fixed_step_lame_rider_attacks(Square s, Bitboard occupied, int stepF, int stepR, const MagicGeometry* mg = current_magic_geometry) {
+  (void)mg;
+  return fixed_step_lame_rider_attacks_core(s, occupied, stepF, stepR);
 }
 
 inline Bitboard ski_slider_attacks(Square s, Bitboard occupied, int stepF, int stepR, const MagicGeometry* mg = current_magic_geometry) {
@@ -948,14 +952,9 @@ inline Bitboard rider_attacks_bb(RiderType R, Square s, Bitboard occupied, const
       return rider_attacks_bb<RIDER_SKI_BISHOP>(s, occupied, mg);
   if (R == RIDER_ROSE)
       return rose_attacks_bb(s, occupied);
-  if (R == RIDER_GRIFFON_NH) return rider_attacks_bb<RIDER_GRIFFON_NH>(s, occupied, mg);
-  if (R == RIDER_GRIFFON_SH) return rider_attacks_bb<RIDER_GRIFFON_SH>(s, occupied, mg);
-  if (R == RIDER_GRIFFON_EV) return rider_attacks_bb<RIDER_GRIFFON_EV>(s, occupied, mg);
-  if (R == RIDER_GRIFFON_WV) return rider_attacks_bb<RIDER_GRIFFON_WV>(s, occupied, mg);
-  if (R == RIDER_MANTICORE_NE) return rider_attacks_bb<RIDER_MANTICORE_NE>(s, occupied, mg);
-  if (R == RIDER_MANTICORE_NW) return rider_attacks_bb<RIDER_MANTICORE_NW>(s, occupied, mg);
-  if (R == RIDER_MANTICORE_SE) return rider_attacks_bb<RIDER_MANTICORE_SE>(s, occupied, mg);
-  if (R == RIDER_MANTICORE_SW) return rider_attacks_bb<RIDER_MANTICORE_SW>(s, occupied, mg);
+  if (R & (RIDER_GRIFFON_NH | RIDER_GRIFFON_SH | RIDER_GRIFFON_EV | RIDER_GRIFFON_WV
+         | RIDER_MANTICORE_NE | RIDER_MANTICORE_NW | RIDER_MANTICORE_SE | RIDER_MANTICORE_SW))
+      return bent_rider_attack(R, s, occupied);
   if (is_magic_rider(R)) {
       const Magic& m = magic_for_rider(mg, R, s);
       return m.attacks[m.index(occupied)];
