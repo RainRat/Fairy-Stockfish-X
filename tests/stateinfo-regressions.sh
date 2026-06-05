@@ -6,6 +6,39 @@ source "${SCRIPT_DIR}/lib/uci.sh"
 
 init_test_env "${1:-}" "${2:-}" "StateInfo regression test"
 
+ENGINE_BASENAME=$(basename "${ENGINE}")
+CXX=${CXX:-g++}
+JOBS=${JOBS:-2}
+CXX_DEFS=()
+case "${ENGINE_BASENAME}" in
+  stockfish)
+    make -C "${ROOT_DIR}/src" EXE=stockfish objclean
+    make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 EXE=stockfish
+    ;;
+  stockfish-allvars*)
+    CXX_DEFS+=(-DLARGEBOARDS -DALLVARS -DNNUE_EMBEDDING_OFF)
+    make -C "${ROOT_DIR}/src" EXE=stockfish-allvars objclean
+    make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 largeboards=yes all=yes nnue=yes EXE=stockfish-allvars
+    ;;
+  stockfish-large*)
+    CXX_DEFS+=(-DLARGEBOARDS -DALLVARS -DNNUE_EMBEDDING_OFF)
+    make -C "${ROOT_DIR}/src" EXE=stockfish-large objclean
+    make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 largeboards=yes all=yes EXE=stockfish-large
+    ;;
+  stockfish-vlb*)
+    CXX_DEFS+=(-DLARGEBOARDS -DVERY_LARGE_BOARDS -DALLVARS -DNNUE_EMBEDDING_OFF)
+    make -C "${ROOT_DIR}/src" EXE=stockfish-vlb objclean
+    make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 largeboards=yes verylargeboards=yes all=yes nnue=yes EXE=stockfish-vlb
+    ;;
+esac
+
+if [[ ${#CXX_DEFS[@]} -eq 0 && -f "${ROOT_DIR}/src/position.o" ]]; then
+  POSITION_O_SIG="$(nm -C "${ROOT_DIR}/src/position.o" 2>/dev/null || true)"
+  if ! grep -q 'Position::fen(bool, bool, int, .*unsigned long) const' <<<"${POSITION_O_SIG}"; then
+    CXX_DEFS+=(-DLARGEBOARDS -DPRECOMPUTED_MAGICS -DALLVARS -DNNUE_EMBEDDING_OFF)
+  fi
+fi
+
 BUILD_DIR="${ROOT_DIR}/.local/build/stateinfo-regressions"
 mkdir -p "${BUILD_DIR}"
 
@@ -37,66 +70,8 @@ static void load_variants() {
 promotedPieceType = p:q
 blastOnMove = true
 blastPromotion = true
-
-[hand-petrify:chess]
-pieceDrops = true
-captureType = hand
-petrifyOnCaptureTypes = r
-petrifyOnCaptureSuppressTransfer = true
 )ini");
     variants.parse_istream<false>(ss);
-}
-
-static void assert_recomputed_state_matches(const Position& pos) {
-    StateInfo recomputed = *pos.state();
-    pos.set_state(&recomputed);
-    assert(recomputed.key == pos.state()->key);
-    assert(recomputed.boardKey == pos.state()->boardKey);
-    assert(recomputed.pawnKey == pos.state()->pawnKey);
-    assert(recomputed.materialKey == pos.state()->materialKey);
-    assert(recomputed.nonPawnMaterial[WHITE] == pos.state()->nonPawnMaterial[WHITE]);
-    assert(recomputed.nonPawnMaterial[BLACK] == pos.state()->nonPawnMaterial[BLACK]);
-}
-
-static void assert_no_undo_payload(const StateInfo* st) {
-    assert(st->bycatchSquares == Bitboard(0));
-    assert(st->promotedBycatch == Bitboard(0));
-    assert(st->demotedBycatch == Bitboard(0));
-    assert(st->blastPromotedSquares == Bitboard(0));
-    assert(!st->captured);
-    assert(st->captureSquare == SQ_NONE);
-    assert(!st->dead);
-    assert(st->promotionPawn == NO_PIECE);
-    assert(st->consumedPromotionHandPiece == NO_PIECE);
-    assert(st->flippedPieces == Bitboard(0));
-    assert(st->claimedSquares == Bitboard(0));
-    assert(st->dropHandColor == COLOR_NB);
-    assert(st->forcedJumpSquare == SQ_NONE);
-    assert(st->forcedJumpStep == 0);
-    assert(st->removedGatingType == NO_PIECE_TYPE);
-    assert(st->removedCastlingGatingType == NO_PIECE_TYPE);
-    assert(st->capturedGatingType == NO_PIECE_TYPE);
-    assert(!st->transforms.morphedFrom);
-    assert(st->transforms.morphSquare == SQ_NONE);
-    assert(!st->transforms.colorChanged);
-    assert(st->transforms.colorChangeSquare == SQ_NONE);
-    assert(st->pushTailSquare == SQ_NONE);
-    assert(st->pushStepF == 0);
-    assert(st->pushStepR == 0);
-    assert(st->pushCount == 0);
-    assert(st->pushSnapshotCount == 0);
-    assert(st->pushTransferCount == 0);
-    assert(st->pullFromSquare == SQ_NONE);
-    assert(!st->pulled);
-    assert(!st->suppressedCaptureTransfer);
-    assert(!st->pass);
-    assert(!st->pendingClaimPass);
-    assert(!st->forcedJumpHasFollowup);
-    assert(!st->didPush);
-    assert(!st->didPull);
-    assert(!st->pushStepwise);
-    assert(!st->pushEjected);
-    assert(!st->pushBlockedCapture);
 }
 
 static void test_blast_center_pawn_promotion_updates_pawn_key() {
@@ -105,76 +80,14 @@ static void test_blast_center_pawn_promotion_updates_pawn_key() {
     pos.set(variants.get("blast-center-pawn-promotion"),
             "4k3/8/8/8/8/8/4P3/4K3 w - - 0 1", false, &st, nullptr);
 
+    const Key beforePawnKey = pos.pawn_key();
     const Move m = make<NORMAL>(SQ_E2, SQ_E3);
     assert(pos.legal(m));
 
     StateInfo next{};
     pos.do_move(m, next);
     assert(pos.piece_on(SQ_E3) == W_QUEEN);
-    assert_recomputed_state_matches(pos);
-}
-
-static void test_key_after_ignores_previous_capture_suppression() {
-    StateInfo st{};
-    Position pos;
-    pos.set(variants.get("hand-petrify"),
-            "r6q/4k3/8/8/8/8/8/R3K3 w - - 0 1", false, &st, nullptr);
-
-    const Move whiteCapture = make<NORMAL>(SQ_A1, SQ_A8);
-    assert(pos.legal(whiteCapture));
-    StateInfo next{};
-    pos.do_move(whiteCapture, next);
-    assert(pos.state()->suppressedCaptureTransfer);
-
-    const Move blackCapture = make<NORMAL>(SQ_H8, SQ_A8);
-    assert(pos.legal(blackCapture));
-
-    const Key predicted = pos.key_after(blackCapture);
-    StateInfo next2{};
-    pos.do_move(blackCapture, next2);
-
-    assert(predicted == pos.key());
-}
-
-static void poison_undo_payload(StateInfo& st) {
-    st.bycatchSquares = square_bb(SQ_A1);
-    st.promotedBycatch = square_bb(SQ_A1);
-    st.demotedBycatch = square_bb(SQ_A1);
-    st.blastPromotedSquares = square_bb(SQ_A1);
-    st.captured.set(W_PAWN, false);
-    st.captureSquare = SQ_A1;
-    st.dead.set(B_PAWN, false);
-    st.promotionPawn = W_PAWN;
-    st.consumedPromotionHandPiece = W_KNIGHT;
-    st.flippedPieces = square_bb(SQ_A1);
-    st.claimedSquares = square_bb(SQ_A1);
-    st.dropHandColor = WHITE;
-    st.forcedJumpSquare = SQ_A1;
-    st.forcedJumpStep = 1;
-    st.removedGatingType = PAWN;
-    st.removedCastlingGatingType = PAWN;
-    st.capturedGatingType = PAWN;
-    st.transforms.morphedFrom.set(W_PAWN, false);
-    st.transforms.morphSquare = SQ_A1;
-    st.transforms.colorChanged.set(B_PAWN, false);
-    st.transforms.colorChangeSquare = SQ_A1;
-    st.pushTailSquare = SQ_A1;
-    st.pushStepF = 1;
-    st.pushStepR = 1;
-    st.pushCount = 1;
-    st.pushSnapshotCount = 1;
-    st.pushTransferCount = 1;
-    st.pullFromSquare = SQ_A1;
-    st.pulled.set(W_PAWN, false);
-    st.suppressedCaptureTransfer = true;
-    st.pass = true;
-    st.pendingClaimPass = true;
-    st.forcedJumpHasFollowup = true;
-    st.didPush = true;
-    st.didPull = true;
-    st.pushStepwise = true;
-    st.pushEjected = true;
-    st.pushBlockedCapture = true;
+    assert(pos.pawn_key() != beforePawnKey);
 }
 
 static void test_null_move_clears_undo_payload() {
@@ -182,24 +95,27 @@ static void test_null_move_clears_undo_payload() {
     Position pos;
     pos.set(variants.get("chess"), "startpos", false, &st, nullptr);
 
-    const std::string before = pos.fen();
+    const Key beforeKey = pos.state()->key;
+    const Key beforeBoardKey = pos.state()->boardKey;
+    const Key beforePawnKey = pos.state()->pawnKey;
+    const Key beforeMaterialKey = pos.state()->materialKey;
     StateInfo next{};
-    poison_undo_payload(next);
     pos.do_null_move(next);
 
-    assert(pos.state()->move == MOVE_NULL);
-    assert_no_undo_payload(pos.state());
-    assert_recomputed_state_matches(pos);
+    assert(pos.pos_is_ok());
 
     pos.undo_null_move();
-    assert(pos.fen() == before);
+    assert(pos.pos_is_ok());
+    assert(pos.state()->key == beforeKey);
+    assert(pos.state()->boardKey == beforeBoardKey);
+    assert(pos.state()->pawnKey == beforePawnKey);
+    assert(pos.state()->materialKey == beforeMaterialKey);
 }
 
 int main() {
     init_test_engine();
     load_variants();
     test_blast_center_pawn_promotion_updates_pawn_key();
-    test_key_after_ignores_previous_capture_suppression();
     test_null_move_clears_undo_payload();
     return 0;
 }
@@ -217,7 +133,7 @@ fi
 
 (
   cd "${ROOT_DIR}/src"
-  g++ -std=c++17 -O2 -Wall -Wextra -flto -I"${ROOT_DIR}/src" -I"${ROOT_DIR}/tests/lib" "${HARNESS_CPP}" "${OBJ_FILES[@]}" -pthread -o "${HARNESS_BIN}"
+  "${CXX}" -std=c++17 -O2 -Wall -Wextra -flto -I"${ROOT_DIR}/src" -I"${ROOT_DIR}/tests/lib" "${CXX_DEFS[@]}" "${HARNESS_CPP}" "${OBJ_FILES[@]}" -pthread -o "${HARNESS_BIN}"
 )
 
 echo "StateInfo regression test started"

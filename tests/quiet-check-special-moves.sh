@@ -40,12 +40,12 @@ elif command -v shasum >/dev/null 2>&1; then
 else
   MAKEFILE_HASH="no-hash-tool"
 fi
+NEEDS_REBUILD=1
 BUILD_SIG="$(printf '%s|%s|%s|%s\n' \
     "${ENGINE_BASENAME}" \
     "${CXX}" \
     "${MAKEFILE_HASH}" \
     "${CXX_DEFS[*]}")"
-NEEDS_REBUILD=1
 if [[ -f "${BUILD_SIG_FILE}" ]] && [[ "$(cat "${BUILD_SIG_FILE}")" == "${BUILD_SIG}" ]]; then
   NEEDS_REBUILD=0
 fi
@@ -54,30 +54,35 @@ case "${ENGINE_BASENAME}" in
   stockfish)
     # The harness links against the object files in src/. Rebuild the standard
     # object set so the test is independent of any previous largeboard build.
-    if [[ "${NEEDS_REBUILD}" -eq 1 ]]; then
-      make -C "${ROOT_DIR}/src" EXE=stockfish objclean
-    fi
+    make -C "${ROOT_DIR}/src" EXE=stockfish objclean
     make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 EXE=stockfish
     ;;
   stockfish-allvars*)
-    if [[ "${NEEDS_REBUILD}" -eq 1 ]]; then
-      make -C "${ROOT_DIR}/src" EXE=stockfish-allvars objclean
-    fi
+    make -C "${ROOT_DIR}/src" EXE=stockfish-allvars objclean
     make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 largeboards=yes all=yes nnue=yes EXE=stockfish-allvars
     ;;
   stockfish-large*)
-    if [[ "${NEEDS_REBUILD}" -eq 1 ]]; then
-      make -C "${ROOT_DIR}/src" EXE=stockfish-large objclean
-    fi
+    make -C "${ROOT_DIR}/src" EXE=stockfish-large objclean
     make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 largeboards=yes all=yes EXE=stockfish-large
     ;;
   stockfish-vlb*)
-    if [[ "${NEEDS_REBUILD}" -eq 1 ]]; then
-      make -C "${ROOT_DIR}/src" EXE=stockfish-vlb objclean
-    fi
+    make -C "${ROOT_DIR}/src" EXE=stockfish-vlb objclean
     make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 largeboards=yes verylargeboards=yes all=yes nnue=yes EXE=stockfish-vlb
     ;;
 esac
+
+if [[ ${#CXX_DEFS[@]} -eq 0 && -f "${ROOT_DIR}/src/position.o" ]]; then
+  POSITION_O_SIG="$(nm -C "${ROOT_DIR}/src/position.o" 2>/dev/null || true)"
+  if ! grep -q 'Position::fen(bool, bool, int, .*unsigned long) const' <<<"${POSITION_O_SIG}"; then
+    CXX_DEFS+=(-DLARGEBOARDS -DPRECOMPUTED_MAGICS -DALLVARS -DNNUE_EMBEDDING_OFF)
+  fi
+fi
+
+BUILD_SIG="$(printf '%s|%s|%s|%s\n' \
+    "${ENGINE_BASENAME}" \
+    "${CXX}" \
+    "${MAKEFILE_HASH}" \
+    "${CXX_DEFS[*]}")"
 printf '%s\n' "${BUILD_SIG}" > "${BUILD_SIG_FILE}"
 
 cat > "${HARNESS_CPP}" <<'EOF'

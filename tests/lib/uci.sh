@@ -153,12 +153,15 @@ cleanup_tmp_ini() {
     rm -f "${FSX_TMP_INI}"
   fi
   FSX_TMP_INI=
+  TMP_VARIANTS=
 }
 
 create_tmp_ini() {
   cleanup_tmp_ini
   FSX_TMP_INI=$(mktemp "${TMPDIR:-/tmp}/fsx-uci-XXXXXX.ini")
   export FSX_TMP_INI
+  TMP_VARIANTS="${FSX_TMP_INI}"
+  export TMP_VARIANTS
 }
 
 init_tmp_ini() {

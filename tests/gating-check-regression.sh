@@ -12,6 +12,7 @@ trap 'error ${LINENO}' ERR
 ENGINE=${1:-./src/stockfish}
 ROOT_DIR=$(cd "$(dirname "$0")/.." && pwd)
 CXX=${CXX:-g++}
+JOBS=${JOBS:-2}
 ENGINE_BASENAME=$(basename "${ENGINE}")
 CXX_DEFS=()
 case "${ENGINE_BASENAME}" in
@@ -83,6 +84,25 @@ TMP_BIN="${BUILD_CACHE_DIR}/gating-check-1.bin"
 HARNESS_CPP="${BUILD_CACHE_DIR}/gating-check-roundtrip.cpp"
 HARNESS_BIN="${BUILD_CACHE_DIR}/gating-check-roundtrip.bin"
 trap 'rm -f "${TMP_INI}"' EXIT
+
+case "${ENGINE_BASENAME}" in
+  stockfish)
+    make -C "${ROOT_DIR}/src" EXE=stockfish objclean
+    make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 EXE=stockfish
+    ;;
+  stockfish-allvars*)
+    make -C "${ROOT_DIR}/src" EXE=stockfish-allvars objclean
+    make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 largeboards=yes all=yes nnue=yes EXE=stockfish-allvars
+    ;;
+  stockfish-large*)
+    make -C "${ROOT_DIR}/src" EXE=stockfish-large objclean
+    make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 largeboards=yes all=yes EXE=stockfish-large
+    ;;
+  stockfish-vlb*)
+    make -C "${ROOT_DIR}/src" EXE=stockfish-vlb objclean
+    make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 largeboards=yes verylargeboards=yes all=yes nnue=yes EXE=stockfish-vlb
+    ;;
+esac
 
 # --- TEST 1: Gated piece blocking discovered check ---
 cat > "${TMP_INI}" <<'EOF'

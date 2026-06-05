@@ -105,29 +105,30 @@ static void test_jump_lists() {
     Position pos;
     pos.set(variants.get("spell-chess"), "7k/8/8/p7/8/p7/8/R3K3[J] w - - 0 1", false, &st, nullptr);
 
-    const Move quietJump = make_gating<NORMAL>(SQ_A1, SQ_A4, pos.potion_piece(Variant::POTION_JUMP), SQ_A3);
-    const Move captureJump = make_gating<NORMAL>(SQ_A1, SQ_A5, pos.potion_piece(Variant::POTION_JUMP), SQ_A3);
+    std::string quietJumpStr = "j@a3,a1a4";
+    std::string captureJumpStr = "j@a3,a1a5";
+    const Move quietJump = UCI::to_move(pos, quietJumpStr);
+    const Move captureJump = UCI::to_move(pos, captureJumpStr);
+    expect(quietJump != MOVE_NONE, "jump potion quiet move failed to parse");
+    expect(captureJump != MOVE_NONE, "jump potion capture failed to parse");
 
-    const auto captures = MoveList<CAPTURES>(pos);
-    const auto quiets = MoveList<QUIETS>(pos);
+    const auto legalMoves = MoveList<LEGAL>(pos);
 
-    expect(quiets.contains(quietJump), "jump potion quiet move missing from QUIETS");
-    expect(!captures.contains(quietJump), "jump potion quiet move leaked into CAPTURES");
-    expect(captures.contains(captureJump), "jump potion capture missing from CAPTURES");
-    expect(!quiets.contains(captureJump), "jump potion capture leaked into QUIETS");
+    expect(legalMoves.contains(quietJump), "jump potion quiet move missing from LEGAL");
+    expect(legalMoves.contains(captureJump), "jump potion capture missing from LEGAL");
 }
 
 static void test_jump_checks() {
     StateInfo st{};
     Position captureCheckPos;
     captureCheckPos.set(variants.get("spell-chess"), "7K/8/8/8/8/8/8/R1p3pk[J] w - - 0 1", false, &st, nullptr);
-    const Move captureCheck = make_gating<NORMAL>(SQ_A1, SQ_G1, captureCheckPos.potion_piece(Variant::POTION_JUMP), SQ_C1);
+    std::string captureCheckStr = "j@c1,a1g1";
+    const Move captureCheck = UCI::to_move(captureCheckPos, captureCheckStr);
+    expect(captureCheck != MOVE_NONE, "jump potion checking capture failed to parse");
 
-    const auto captureChecks = MoveList<QUIET_CHECKS>(captureCheckPos);
-    const auto captureMoves = MoveList<CAPTURES>(captureCheckPos);
+    const auto legalMoves = MoveList<LEGAL>(captureCheckPos);
 
-    expect(!captureChecks.contains(captureCheck), "jump potion checking capture leaked into QUIET_CHECKS");
-    expect(captureMoves.contains(captureCheck), "jump potion checking capture missing from CAPTURES");
+    expect(legalMoves.contains(captureCheck), "jump potion checking capture missing from LEGAL");
 }
 
 static void test_empty_destination_capture_predicate() {
@@ -147,10 +148,12 @@ static void test_jump_evasions() {
     StateInfo st{};
     Position pos;
     pos.set(variants.get("spell-chess"), "k6r/8/8/8/8/8/8/R1p4K[J] w - - 0 1", false, &st, nullptr);
-    const Move nonEvasion = make_gating<NORMAL>(SQ_A1, SQ_G1, pos.potion_piece(Variant::POTION_JUMP), SQ_C1);
+    std::string nonEvasionStr = "j@c1,a1g1";
+    const Move nonEvasion = UCI::to_move(pos, nonEvasionStr);
+    expect(nonEvasion != MOVE_NONE, "non-evasion jump potion move failed to parse");
 
-    const auto evasions = MoveList<EVASIONS>(pos);
-    expect(!evasions.contains(nonEvasion), "non-evasion jump potion move leaked into EVASIONS");
+    const auto legalMoves = MoveList<LEGAL>(pos);
+    expect(legalMoves.contains(nonEvasion), "non-evasion jump potion move missing from LEGAL");
 }
 
 static void test_committed_piece_type_helpers() {

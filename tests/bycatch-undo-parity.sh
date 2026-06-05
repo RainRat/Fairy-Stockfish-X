@@ -7,6 +7,12 @@ source "${SCRIPT_DIR}/lib/uci.sh"
 
 init_test_env "${1:-}" "${2:-}" "bycatch undo parity test"
 
+CXX=${CXX:-g++}
+CXX_DEFS=()
+if ! nm -C "${ROOT_DIR}/src/position.o" | grep -q 'Position::fen(bool, bool, int, .*unsigned long) const'; then
+  CXX_DEFS+=(-DLARGEBOARDS -DPRECOMPUTED_MAGICS -DALLVARS)
+fi
+
 DEFAULT_VARIANT_PATH="variants.ini"
 if [[ ! -f "${DEFAULT_VARIANT_PATH}" && -f "src/variants.ini" ]]; then
   DEFAULT_VARIANT_PATH="src/variants.ini"
@@ -57,14 +63,20 @@ int main() {
     const Move m = make<NORMAL>(SQ_E2, SQ_E3);
     assert(pos.legal(m));
 
-    const std::string before = pos.fen();
+    const Key beforeKey = pos.state()->key;
+    const Key beforeBoardKey = pos.state()->boardKey;
+    const Key beforePawnKey = pos.state()->pawnKey;
+    const Key beforeMaterialKey = pos.state()->materialKey;
     StateInfo next{};
     pos.do_move(m, next);
     assert(pos.pos_is_ok());
 
     pos.undo_move(m);
     assert(pos.pos_is_ok());
-    assert(pos.fen() == before);
+    assert(pos.state()->key == beforeKey);
+    assert(pos.state()->boardKey == beforeBoardKey);
+    assert(pos.state()->pawnKey == beforePawnKey);
+    assert(pos.state()->materialKey == beforeMaterialKey);
     return 0;
 }
 EOF
@@ -76,7 +88,7 @@ done < <(find "${ROOT_DIR}/src" -maxdepth 1 -name '*.o' ! -name 'main.o' -print0
 
 (
   cd "${ROOT_DIR}/src"
-  g++ -std=c++17 -O2 -Wall -Wextra -flto -I"${ROOT_DIR}/src" -I"${ROOT_DIR}/tests/lib" "${HARNESS_CPP}" "${OBJ_FILES[@]}" -pthread -o "${HARNESS_BIN}"
+  "${CXX}" -std=c++17 -O2 -Wall -Wextra -flto -I"${ROOT_DIR}/src" -I"${ROOT_DIR}/tests/lib" "${CXX_DEFS[@]}" "${HARNESS_CPP}" "${OBJ_FILES[@]}" -pthread -o "${HARNESS_BIN}"
 )
 
 echo "bycatch undo parity test started"
