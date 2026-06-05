@@ -121,22 +121,13 @@ EOF
 }
 
 test_self_destruct_special() {
-  load_inline_variants <<'EOF'
-[self-destruct-special:chess]
-king = -
-customPiece1 = m:W
-selfDestructTypes = m
-checking = false
-startFen = 8/8/8/8/8/8/8/M7 w - - 0 1
-EOF
-
   local out
-  out=$(run_uci "$ENGINE" "$FSX_TMP_INI" self-destruct-special <<'EOF'
-position startpos moves a1a1x
+  out=$(run_uci "$ENGINE" "$VARIANTS" bombardment <<'EOF'
+position fen 8/8/2mmm3/2mMm3/2mmm3/8/8/M7 w - - 0 1 moves d5d5x
 d
 EOF
 )
-  assert_contains_literal "$out" "Fen: 8/8/8/8/8/8/8/8 b - - 0 1"
+  assert_contains_literal "$out" "Fen: 8/8/8/8/8/8/8/M7 b - - 0 1"
 }
 
 test_toot_otto() {
