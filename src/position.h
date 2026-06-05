@@ -3360,7 +3360,8 @@ inline Bitboard hopper_targets_impl(const std::map<Direction, int>& directions,
       const int minDistance = slider_min_distance(limit);
       const int maxDistance = slider_max_distance(limit);
       bool hurdleSeen = false;
-      int hopCount = 0;
+      int postHurdleCount = 0;
+      int totalCount = 0;
       Square current = sq;
 
       for (;;)
@@ -3370,27 +3371,31 @@ inline Bitboard hopper_targets_impl(const std::map<Direction, int>& directions,
               break;
 
           current = next;
+          ++totalCount;
           const Bitboard nextBB = square_bb(current);
           const bool blocked = bool(occupied & nextBB);
 
           if (hurdleSeen)
           {
-              ++hopCount;
-              if (hopCount >= minDistance)
+              ++postHurdleCount;
+              const int distanceCount = maxDistance == 1 ? postHurdleCount : totalCount;
+              if (distanceCount >= minDistance)
               {
                   if (!quietMode || !blocked)
                       out |= nextBB;
               }
-              if (maxDistance > 0 && hopCount >= maxDistance)
+              if (maxDistance > 0 && distanceCount >= maxDistance)
                   break;
           }
+          else if (maxDistance > 1 && totalCount >= maxDistance)
+              break;
 
           if (blocked)
           {
               if (!hurdleSeen)
               {
                   hurdleSeen = true;
-                  hopCount = 0;
+                  postHurdleCount = 0;
                   continue;
               }
               break;

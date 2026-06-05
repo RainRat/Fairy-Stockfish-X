@@ -146,25 +146,34 @@ function expect_variant_rejected() {
 # Moves: King A1 (3), D5D6 (1), Hopper D4D6 (1). Total = 5
 run_test "hopper-base" "7k/8/8/8/3P4/3D4/8/K7 w - - 0 1" 5
 
-# Limited hoppers preserve their post-hurdle range even when the hurdle is
-# farther away.
+# Limited hoppers preserve Betza's total ray range: pR2 can hop an adjacent
+# hurdle to the second square, but cannot continue farther or hop a distant
+# hurdle.
+output=$(run_uci "$ENGINE" "$INI_FILE" limited-hopper << 'EOF'
+position fen 7k/8/8/8/8/8/3P4/3D3K w - - 0 1
+go perft 1
+EOF
+)
+assert_nodes "$output" 6
+assert_contains "$output" "^d1d3: 1$" "limited hopper can land on the second square after an adjacent hurdle"
+assert_not_contains "$output" "^d1d4: 1$" "limited hopper cannot exceed its total range"
+
 output=$(run_uci "$ENGINE" "$INI_FILE" limited-hopper << 'EOF'
 position fen 7k/8/8/3P4/8/8/8/3D3K w - - 0 1
 go perft 1
 EOF
 )
-assert_nodes "$output" 6
-assert_contains "$output" "^d1d6: 1$" "limited hopper can land one square beyond a distant hurdle"
-assert_contains "$output" "^d1d7: 1$" "limited hopper can land two squares beyond a distant hurdle"
+assert_nodes "$output" 4
+assert_not_contains "$output" "^d1d6: 1$" "limited hopper cannot hop a hurdle beyond its total range"
 
 output=$(run_uci "$ENGINE" "$INI_FILE" wrapped-limited-hopper << 'EOF'
-position fen 7k/8/8/3P4/8/8/8/3D3K w - - 0 1
+position fen 7k/8/8/8/8/8/3P4/3D3K w - - 0 1
 go perft 1
 EOF
 )
 assert_nodes "$output" 6
-assert_contains "$output" "^d1d6: 1$" "wrapped limited hopper can land one square beyond a distant hurdle"
-assert_contains "$output" "^d1d7: 1$" "wrapped limited hopper can land two squares beyond a distant hurdle"
+assert_contains "$output" "^d1d3: 1$" "wrapped limited hopper can land on the second square after an adjacent hurdle"
+assert_not_contains "$output" "^d1d4: 1$" "wrapped limited hopper cannot exceed its total range"
 
 # 2. Side-Symmetry (Directional atoms)
 # White D4 (Hopper), White D5 (Hurdle). Forward jump to D6.
