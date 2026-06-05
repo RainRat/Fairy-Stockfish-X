@@ -17,6 +17,58 @@ run_step() {
   /usr/bin/time -f "elapsed %es" "$@"
 }
 
+TEMP_LOG_DIR=""
+PIDS=()
+LABELS=()
+LOGS=()
+
+setup_parallel() {
+  TEMP_LOG_DIR=$(mktemp -d "${TMPDIR:-/tmp}/fast-regression-logs-XXXXXX")
+}
+
+cleanup_parallel() {
+  if [[ -n "${TEMP_LOG_DIR:-}" && -d "${TEMP_LOG_DIR}" ]]; then
+    rm -rf "${TEMP_LOG_DIR}"
+  fi
+}
+
+trap cleanup_parallel EXIT
+
+run_step_bg() {
+  local label="$1"
+  shift
+  local safe_label="${label//[^a-zA-Z0-9_]/_}"
+  local log_file="${TEMP_LOG_DIR}/${safe_label}.log"
+
+  (
+    echo "== ${label} =="
+    /usr/bin/time -f "elapsed %es" "$@"
+  ) > "${log_file}" 2>&1 &
+
+  PIDS+=($!)
+  LABELS+=("${label}")
+  LOGS+=("${log_file}")
+}
+
+wait_all() {
+  local exit_code=0
+  for i in "${!PIDS[@]}"; do
+    local pid="${PIDS[$i]}"
+    local label="${LABELS[$i]}"
+    local log="${LOGS[$i]}"
+
+    if ! wait "$pid"; then
+      exit_code=1
+    fi
+    cat "$log"
+  done
+
+  if [[ $exit_code -ne 0 ]]; then
+    echo "fast regression suite failed"
+    exit 1
+  fi
+}
+
 hash_file() {
   local path="$1"
   if command -v sha256sum >/dev/null 2>&1; then
@@ -104,35 +156,32 @@ esac
 ensure_pyffish_extension
 export PYTHONPATH="${ROOT_DIR}${PYTHONPATH:+:${PYTHONPATH}}"
 
-run_step "movegen regressions" timeout 90s bash tests/movegen-regressions.sh "${ENGINE}"
-run_step "royal variant regressions" timeout 2m bash tests/royal-variant-regressions.sh "${ENGINE}" "${VARIANTS:-src/variants.ini}"
-run_step "drop regressions" timeout 2m bash tests/drop-regressions.sh "${ENGINE}"
-run_step "fairy notation regressions" timeout 2m bash tests/fairy-notation-regressions.sh "${ENGINE}"
-run_step "janggi regressions" timeout 60s bash tests/janggi-regression.sh "${ENGINE}"
-run_step "wrapping topology" timeout 90s bash tests/wrapping-topology.sh "${ENGINE}"
-run_step "unorthodox interactions" timeout 90s bash tests/unorthodox-interactions.sh "${ENGINE}"
-run_step "piece-specific step regions" timeout 60s bash tests/piece-specific-step-regions.sh "${ENGINE}"
-run_step "pawn-like custom non-step" timeout 60s bash tests/pawnlike-custom-nonstep.sh "${ENGINE}"
-run_step "custom en passant passed squares" timeout 60s bash tests/custom-en-passant-passed-squares.sh "${ENGINE}"
-run_step "standard piece value phase" timeout 60s bash tests/standard-piece-value-phase.sh "${ENGINE}"
-run_step "flip regressions" timeout 60s bash tests/flip-regressions.sh "${ENGINE}"
-run_step "changing-color locality" timeout 60s bash tests/changing-color-locality.sh "${ENGINE}"
-run_step "potion check regressions" timeout 60s bash tests/potion-check-regressions.sh "${ENGINE}"
-run_step "passive blast" timeout 60s bash tests/passive-blast.sh "${ENGINE}"
-run_step "crazyhouse multi pawn promo" timeout 60s bash tests/crazyhouse-multi-pawn-promo.sh "${ENGINE}"
-run_step "pousse counting" timeout 60s bash tests/pousse-counting.sh "${ENGINE}"
-run_step "repetition loss search" timeout 60s bash tests/repetition-loss-search.sh "${ENGINE}"
-run_step "quiet-check special moves" timeout 5m bash tests/quiet-check-special-moves.sh "${ENGINE}"
-run_step "universal hopper" timeout 90s bash tests/universal-hopper.sh "${ENGINE}"
-run_step "gating check regressions" timeout 60s bash tests/gating-check-regression.sh "${ENGINE}"
-run_step "binding regression" timeout 60s "${PYTHON}" tests/test_binding_regression.py
-run_step "royal capture no kings" timeout 60s "${PYTHON}" tests/test_royal_capture_no_kings.py
-run_step "potion custom" timeout 60s bash tests/potion-custom.sh "${ENGINE}"
+setup_parallel
+
+run_step_bg "janggi regressions" timeout 60s bash tests/janggi-regression.sh "${ENGINE}"
+run_step_bg "piece-specific step regions" timeout 60s bash tests/piece-specific-step-regions.sh "${ENGINE}"
+run_step_bg "pawn-like custom non-step" timeout 60s bash tests/pawnlike-custom-nonstep.sh "${ENGINE}"
+run_step_bg "custom en passant passed squares" timeout 60s bash tests/custom-en-passant-passed-squares.sh "${ENGINE}"
+run_step_bg "standard piece value phase" timeout 60s bash tests/standard-piece-value-phase.sh "${ENGINE}"
+run_step_bg "flip regressions" timeout 60s bash tests/flip-regressions.sh "${ENGINE}"
+run_step_bg "changing-color locality" timeout 60s bash tests/changing-color-locality.sh "${ENGINE}"
+run_step_bg "potion check regressions" timeout 60s bash tests/potion-check-regressions.sh "${ENGINE}"
+run_step_bg "passive blast" timeout 60s bash tests/passive-blast.sh "${ENGINE}"
+run_step_bg "crazyhouse multi pawn promo" timeout 60s bash tests/crazyhouse-multi-pawn-promo.sh "${ENGINE}"
+run_step_bg "pousse counting" timeout 60s bash tests/pousse-counting.sh "${ENGINE}"
+run_step_bg "repetition loss search" timeout 60s bash tests/repetition-loss-search.sh "${ENGINE}"
+run_step_bg "quiet-check special moves" timeout 5m bash tests/quiet-check-special-moves.sh "${ENGINE}"
+run_step_bg "gating check regressions" timeout 60s bash tests/gating-check-regression.sh "${ENGINE}"
+run_step_bg "binding regression" timeout 60s "${PYTHON}" tests/test_binding_regression.py
+run_step_bg "royal capture no kings" timeout 60s "${PYTHON}" tests/test_royal_capture_no_kings.py
+run_step_bg "potion custom" timeout 60s bash tests/potion-custom.sh "${ENGINE}"
 if [[ -n "${UPSTREAM_ENGINE:-}" ]]; then
-  run_step "upstream movecount baseline" timeout 60s "${PYTHON}" tests/upstream_movecount_baseline.py "${ENGINE}" "${UPSTREAM_ENGINE}"
+  run_step_bg "upstream movecount baseline" timeout 60s "${PYTHON}" tests/upstream_movecount_baseline.py "${ENGINE}" "${UPSTREAM_ENGINE}"
 else
-  run_step "upstream movecount baseline" timeout 60s "${PYTHON}" tests/upstream_movecount_baseline.py "${ENGINE}"
+  run_step_bg "upstream movecount baseline" timeout 60s "${PYTHON}" tests/upstream_movecount_baseline.py "${ENGINE}"
 fi
-run_step "python unit tests" timeout 180s "${PYTHON}" test.py
+run_step_bg "python unit tests" timeout 180s "${PYTHON}" test.py
+
+wait_all
 
 echo "fast regression suite passed"

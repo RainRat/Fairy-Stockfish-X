@@ -26,6 +26,13 @@ cd "${ROOT_DIR}"
 
 run_step "fast regression" timeout 2m bash tests/fast-regression.sh "${ENGINE}"
 run_step "invalid scalar regression" timeout 30s bash tests/invalid-scalar-regression.sh "${ENGINE}"
+run_step "movegen regressions" timeout 90s bash tests/movegen-regressions.sh "${ENGINE}"
+run_step "royal variant regressions" timeout 2m bash tests/royal-variant-regressions.sh "${ENGINE}" "${VARIANT_PATH}"
+run_step "drop regressions" timeout 2m bash tests/drop-regressions.sh "${ENGINE}"
+run_step "fairy notation regressions" timeout 2m bash tests/fairy-notation-regressions.sh "${ENGINE}"
+run_step "wrapping topology" timeout 90s bash tests/wrapping-topology.sh "${ENGINE}"
+run_step "unorthodox interactions" timeout 90s bash tests/unorthodox-interactions.sh "${ENGINE}"
+run_step "universal hopper" timeout 90s bash tests/universal-hopper.sh "${ENGINE}"
 run_step "all-vars regression" timeout 60m bash tests/allvars-regression.sh
 run_step "protocol" timeout 2m bash tests/protocol.sh "${ENGINE}"
 run_step "bench stdin" timeout 60s bash tests/bench-stdin.sh "${ENGINE}"
