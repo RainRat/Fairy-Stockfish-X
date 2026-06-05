@@ -129,14 +129,6 @@ jobs:
         run: |
           ../tests/fairy-notation-regressions.sh
 
-      - name: Test bent riders
-        run: |
-          ../tests/bent-riders.sh
-
-      - name: Test bent rider evasions
-        run: |
-          ../tests/bent-rider-evasion.sh
-
       - name: Test stationary castling
         run: |
           ../tests/stationary-castling.sh

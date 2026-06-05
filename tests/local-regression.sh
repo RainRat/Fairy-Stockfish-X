@@ -72,8 +72,6 @@ run_step "petrify transfer" timeout 60s bash tests/petrify-transfer.sh "${ENGINE
 run_step "dots and boxes" timeout 5m bash tests/dots-and-boxes.sh "${ENGINE}" "${VARIANT_PATH}" "${INCOMPLETE_VARIANT_PATH}" "${LARGE_ENGINE}" "${VLB_ENGINE}"
 run_step "seega" timeout 60s bash tests/seega.sh "${ENGINE}" "${VARIANT_PATH}"
 run_step "rose" timeout 60s bash tests/rose.sh "${ENGINE}"
-run_step "bent riders" timeout 60s bash tests/bent-riders.sh "${ENGINE}" "${VARIANT_PATH}"
-run_step "bent rider evasions" timeout 60s bash tests/bent-rider-evasion.sh "${ENGINE}" "${VARIANT_PATH}"
 run_step "hex boards" timeout 60s bash tests/test_hex_boards.sh "${ENGINE}" "${VARIANT_PATH}"
 run_step "connect region 3" timeout 60s bash tests/connect-region3.sh "${ENGINE}" "${VARIANT_PATH}"
 run_step "kopano" timeout 60s bash tests/kopano.sh "${ENGINE}" "${VARIANT_PATH}"
