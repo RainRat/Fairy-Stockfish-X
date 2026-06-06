@@ -8,11 +8,6 @@ source "${ROOT_DIR}/tests/lib/uci.sh"
 setup_test_context "${1:-}" "${2:-}" "rider regressions"
 
 test_rose() {
-  if ! variant_available "$ENGINE" rose "$VARIANTS"; then
-    echo "rose variant not available in this build; skipping rose regression"
-    return 0
-  fi
-
   load_inline_variants <<'INI'
 [rose-empty:chess]
 king = -
@@ -67,11 +62,6 @@ EOF
 }
 
 test_bent_riders() {
-  if ! variant_available "$ENGINE" bent-riders "$VARIANTS"; then
-    echo "bent-riders variant not available in this build; skipping bent-riders regression"
-    return 0
-  fi
-
   load_inline_variants <<'INI'
 [griffon-test:chess]
 customPiece1 = a:O
@@ -111,11 +101,6 @@ UCI
 }
 
 test_bent_rider_evasion() {
-  if ! variant_available "$ENGINE" bent-rider-evasion "$VARIANTS"; then
-    echo "bent-rider-evasion variant not available in this build; skipping bent-rider evasion regression"
-    return 0
-  fi
-
   load_inline_variants <<'INI'
 [griffon-evasion:chess]
 customPiece1 = a:O
@@ -145,11 +130,6 @@ UCI
 }
 
 test_asym_rider_checkers() {
-  if ! variant_available "$ENGINE" asym-rider-checkers "$VARIANTS"; then
-    echo "asym-rider-checkers variant not available in this build; skipping asym rider checkers regression"
-    return 0
-  fi
-
   load_inline_variants <<'INI'
 [asymcheck-horse:chess]
 customPiece1 = a:nN
@@ -216,11 +196,6 @@ UCI
 }
 
 test_alfil_dabbaba_riders() {
-  if ! variant_available "$ENGINE" alfil-dabbaba-riders "$VARIANTS"; then
-    echo "alfil-dabbaba-riders variant not available in this build; skipping alfil/dabbaba regression"
-    return 0
-  fi
-
   load_inline_variants <<'INI'
 [alfil-rider:chess]
 customPiece1 = a:AA
@@ -443,21 +418,21 @@ position startpos
 go perft 1
 UCI
 )
-  assert_contains "$out" "d4g7:"
+  assert_contains "$out" "d4h8:"
 
   out=$(run_uci "$ENGINE" "$TMP_VARIANTS" alfil-rider-tuple <<'UCI'
 position startpos
 go perft 1
 UCI
 )
-  assert_contains "$out" "d4g7:"
+  assert_contains "$out" "d4h8:"
 
   out=$(run_uci "$ENGINE" "$TMP_VARIANTS" alfil-rider-tuple-blocked <<'UCI'
 position startpos
 go perft 1
 UCI
 )
-  assert_not_contains "$out" "d4g7:"
+  assert_not_contains "$out" "d4h8:"
 
   out=$(run_uci "$ENGINE" "$TMP_VARIANTS" dabbaba-rider <<'UCI'
 position startpos

@@ -69,7 +69,6 @@ run_step "stationary castling" timeout 60s bash tests/stationary-castling.sh "${
 run_step "move morph" timeout 60s bash tests/move-morph.sh "${ENGINE}" "${VARIANT_PATH}"
 run_step "petrify transfer" timeout 60s bash tests/petrify-transfer.sh "${ENGINE}"
 run_step "dots and boxes" timeout 5m bash tests/dots-and-boxes.sh "${ENGINE}" "${VARIANT_PATH}" "${INCOMPLETE_VARIANT_PATH}" "${LARGE_ENGINE}" "${VLB_ENGINE}"
-run_step "rose" timeout 60s bash tests/rose.sh "${ENGINE}"
 run_step "hex boards" timeout 60s bash tests/test_hex_boards.sh "${ENGINE}" "${VARIANT_PATH}"
 run_step "spell freeze regressions" timeout 60s bash tests/spell-freeze-regressions.sh "${ENGINE}"
 run_step "spell potion movegen" timeout 60s bash tests/spell-potion-movegen.sh "${ENGINE}"
