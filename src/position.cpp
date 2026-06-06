@@ -5179,7 +5179,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
 
   if (to == from)
   {
-      assert((is_promotion_move(m) && sittuyin_promotion()) || is_pass(m) || openingSelfRemoval || pureWallMove);
+      assert((is_promotion_move(m) && sittuyin_promotion()) || is_pass(m) || is_self_destruct(m) || openingSelfRemoval || pureWallMove);
       captured = NO_PIECE;
   }
 

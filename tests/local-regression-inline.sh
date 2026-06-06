@@ -131,6 +131,13 @@ d
 EOF
 )
   assert_contains "$out" "Fen: mmmmmmmm/mmmmmmmm/8/8/8/M7/1MMMMMMM/MMMMMMMM b - - 1 1"
+
+  out=$(run_uci "$ENGINE" "$VARIANT_PATH" bombardment <<'EOF'
+position startpos moves a1a1x
+d
+EOF
+)
+  assert_contains "$out" "Fen: mmmmmmmm/mmmmmmmm/8/8/8/8/2MMMMMM/2MMMMMM b - - 0 1"
 }
 
 test_cowboys_opening() {
