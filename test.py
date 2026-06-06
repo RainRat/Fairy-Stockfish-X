@@ -439,6 +439,9 @@ class TestPyffish(unittest.TestCase):
                 if not os.path.exists(engine):
                     engine = os.path.join(repo_root, "stockfish")
 
+            if not os.path.exists(engine):
+                self.skipTest("Stockfish engine binary not found")
+
             proc = subprocess.Popen([engine], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
             stdout, stderr = proc.communicate(f"check {temp_path}\nquit\n")
             self.assertIn("piecePoints - Negative value clamped to 0.", stderr)
