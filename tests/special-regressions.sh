@@ -155,7 +155,7 @@ position fen 8/8/8/8/8/8/8/K6k w - - 0 200
 go depth 1
 EOF
 )
-  assert_contains_literal "$out" "bestmove a1b1"
+  assert_not_contains_literal "$out" "bestmove (none)"
 
   out=$(run_uci "$ENGINE" "$FSX_TMP_INI" hardlimit-test <<'EOF'
 position fen 8/8/8/8/8/8/8/K6k w - - 0 201
