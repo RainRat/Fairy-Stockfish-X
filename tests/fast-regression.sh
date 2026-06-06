@@ -172,6 +172,7 @@ export PYTHONPATH="${ROOT_DIR}${PYTHONPATH:+:${PYTHONPATH}}"
 setup_parallel
 
 dispatch_test "piece-specific step regions" bash tests/fast-regression-piece-regions.sh "${ENGINE}" "${VARIANT_PATH}"
+dispatch_test "fast variant regressions" timeout 5m bash tests/fast-variant-regressions.sh "${ENGINE}" "${VARIANT_PATH}"
 dispatch_test "fast rules regression" bash tests/fast-regression-rules.sh "${ENGINE}" "${VARIANT_PATH}"
 dispatch_test "quiet-check special moves" timeout 5m bash tests/quiet-check-special-moves.sh "${ENGINE}"
 dispatch_test "gating check regressions" timeout 2m bash tests/gating-check-regression.sh "${ENGINE}"

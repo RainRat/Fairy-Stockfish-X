@@ -155,12 +155,188 @@ probe_variant_available() {
   local variant_path="${3:-${VARIANTS}}"
   local out
 
-  out=$(run_uci "$engine" "$variant_path" "$variant" <<<'d')
+  out=$(run_uci "$engine" "$variant_path" "$variant" <<<'d' 2>&1)
+  FSX_VARIANT_PROBE_OUTPUT="$out"
+  export FSX_VARIANT_PROBE_OUTPUT
   grep -Fq "info string variant ${variant} " <<<"$out"
 }
 
+declare -A FSX_VARIANT_META_LOADED=()
+declare -A FSX_VARIANT_PARENT=()
+declare -A FSX_VARIANT_MAX_FILE=()
+declare -A FSX_VARIANT_MAX_RANK=()
+
+fsx_file_index() {
+  local value="${1,,}"
+  if [[ "$value" =~ ^[0-9]+$ ]]; then
+    echo $((10#$value - 1))
+  else
+    local code
+    printf -v code '%d' "'${value:0:1}"
+    echo $((code - 97))
+  fi
+}
+
+fsx_variant_load_metadata() {
+  local variant_path="$1"
+  local current_variant=""
+  local current_parent=""
+  local line section
+
+  if [[ -n "${FSX_VARIANT_META_LOADED["$variant_path"]:-}" ]]; then
+    return
+  fi
+
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    case "$line" in
+      \[*\])
+        section="${line#[}"
+        section="${section%]}"
+        current_variant="${section%%:*}"
+        current_parent=""
+        if [[ "$section" == *:* ]]; then
+          current_parent="${section#*:}"
+          [[ "$current_parent" == "$current_variant" ]] && current_parent=""
+        fi
+        FSX_VARIANT_PARENT["${variant_path}::${current_variant}"]="${current_parent}"
+        ;;
+      maxFile\ =\ *)
+        if [[ -n "$current_variant" ]]; then
+          FSX_VARIANT_MAX_FILE["${variant_path}::${current_variant}"]="$(fsx_file_index "${line#maxFile = }")"
+        fi
+        ;;
+      maxRank\ =\ *)
+        if [[ -n "$current_variant" ]]; then
+          FSX_VARIANT_MAX_RANK["${variant_path}::${current_variant}"]="$((10#${line#maxRank = } - 1))"
+        fi
+        ;;
+    esac
+  done < "$variant_path"
+
+  FSX_VARIANT_META_LOADED["$variant_path"]=1
+}
+
+fsx_variant_effective_limits() {
+  local variant_path="$1"
+  local variant="$2"
+  local current="$variant"
+  local key parent
+  local max_file=-1
+  local max_rank=-1
+  local depth=0
+
+  fsx_variant_load_metadata "$variant_path"
+
+  while [[ -n "$current" && $depth -lt 32 ]]; do
+    key="${variant_path}::${current}"
+    if [[ $max_file -lt 0 && -n "${FSX_VARIANT_MAX_FILE["$key"]:-}" ]]; then
+      max_file="${FSX_VARIANT_MAX_FILE["$key"]}"
+    fi
+    if [[ $max_rank -lt 0 && -n "${FSX_VARIANT_MAX_RANK["$key"]:-}" ]]; then
+      max_rank="${FSX_VARIANT_MAX_RANK["$key"]}"
+    fi
+    parent="${FSX_VARIANT_PARENT["$key"]:-}"
+    if [[ -z "$parent" || "$parent" == "$current" ]]; then
+      break
+    fi
+    current="$parent"
+    ((++depth))
+  done
+
+  [[ $max_file -lt 0 ]] && max_file=7
+  [[ $max_rank -lt 0 ]] && max_rank=7
+  printf '%s %s\n' "$max_file" "$max_rank"
+}
+
+fsx_build_variant_limits() {
+  local engine="$1"
+  local engine_basen="${engine##*/}"
+
+  case "$engine_basen" in
+    stockfish-large*|stockfish-allvars*)
+      echo "9 11"
+      ;;
+    stockfish-vlb*)
+      echo "16 16"
+      ;;
+    *)
+      echo "7 7"
+      ;;
+  esac
+}
+
+fsx_variant_exceeds_build_limits() {
+  local engine="$1"
+  local variant="$2"
+  local variant_path="${3:-${VARIANTS}}"
+  local variant_file variant_rank build_file build_rank
+
+  read -r variant_file variant_rank < <(fsx_variant_effective_limits "$variant_path" "$variant")
+  read -r build_file build_rank < <(fsx_build_variant_limits "$engine")
+
+  [[ $variant_file -gt $build_file || $variant_rank -gt $build_rank ]]
+}
+
+fsx_variant_skipped_by_build_output() {
+  local variant="$1"
+  local variant_path="${2:-${VARIANTS}}"
+  local out="${3:-${FSX_VARIANT_PROBE_OUTPUT:-}}"
+  local summary_lines candidate
+  local -a candidates
+
+  if [[ -z "$out" ]]; then
+    return 1
+  fi
+
+  summary_lines=$(grep -E 'variants skipped because of board size limits|variant templates not found or skipped because of board size limits' <<<"$out" || true)
+  if [[ -z "$summary_lines" ]]; then
+    return 1
+  fi
+
+  candidates=("$variant")
+  fsx_variant_load_metadata "$variant_path"
+  local current="$variant" key parent depth=0
+  while [[ -n "$current" && $depth -lt 32 ]]; do
+    key="${variant_path}::${current}"
+    parent="${FSX_VARIANT_PARENT["$key"]:-}"
+    if [[ -z "$parent" || "$parent" == "$current" ]]; then
+      break
+    fi
+    candidates+=("$parent")
+    current="$parent"
+    ((++depth))
+  done
+
+  local candidate_name
+  for candidate_name in "${candidates[@]}"; do
+    if grep -Fq "$candidate_name" <<<"$summary_lines"; then
+      return 0
+    fi
+  done
+
+  return 1
+}
+
 variant_available() {
-  probe_variant_available "$@"
+  local engine="$1"
+  local variant="$2"
+  local variant_path="${3:-${VARIANTS}}"
+
+  if probe_variant_available "$engine" "$variant" "$variant_path"; then
+    return 0
+  fi
+
+  if fsx_variant_exceeds_build_limits "$engine" "$variant" "$variant_path"; then
+    return 1
+  fi
+
+  if fsx_variant_skipped_by_build_output "$variant" "$variant_path"; then
+    return 1
+  fi
+
+  echo "expected variant '${variant}' is missing from ${variant_path}" >&2
+  echo "build target ${engine##*/} should provide it; treat this as a regression" >&2
+  exit 1
 }
 
 cleanup_tmp_ini() {
