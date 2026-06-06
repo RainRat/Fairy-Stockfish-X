@@ -1317,6 +1317,7 @@ namespace {
           if (pos.gating_move_blocks_occupancy(m) && gating_square(m) != SQ_NONE)
               occupied |= square_bb(gating_square(m));
 
+          Position::SimulatedMoveGuard guard(pos, m);
           if (pos.attackers_to(pos.royal_square(us), occupied, ~us))
               return false;
           return true;

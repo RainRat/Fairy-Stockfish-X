@@ -370,6 +370,16 @@ class Thread;
 
 class Position {
 public:
+  struct SimulatedMoveGuard {
+      const Position& pos;
+      SimulatedMoveGuard(const Position& p, Move m) : pos(p) {
+          pos.simulatedMove = m;
+      }
+      ~SimulatedMoveGuard() {
+          pos.simulatedMove = MOVE_NONE;
+      }
+  };
+
   static void init();
 
   Position() = default;
@@ -1008,6 +1018,8 @@ private:
 
   inline HopperMoveDetails resolve_hopper_move_details(Square from, Square to, Bitboard occupied) const;
 
+  inline Piece piece_at(Square sq, Bitboard occupied) const;
+
   inline bool is_valid_hopper_destination(const PieceInfo::HopperProfile& profile, int hurdlesHit, int distToFirstHurdle, int distFromLastHurdle) const;
 
   // Data members
@@ -1024,6 +1036,7 @@ private:
   int gamePly;
   Color sideToMove;
   Score psq;
+  mutable Move simulatedMove = MOVE_NONE;
 
   // variant-specific
   const Variant* var;
@@ -3557,6 +3570,72 @@ inline Bitboard Position::wrapped_rose_targets(Square from, Bitboard occupied,
   return attack;
 }
 
+inline Piece Position::piece_at(Square sq, Bitboard occupied) const {
+  if (!(occupied & sq))
+      return NO_PIECE;
+
+  if (simulatedMove != MOVE_NONE)
+  {
+      Square from = from_sq(simulatedMove);
+      Square to = to_sq(simulatedMove);
+      Color us = sideToMove;
+
+      if (sq == to)
+      {
+          if (is_promotion_move(simulatedMove))
+              return make_piece(us, promotion_type(simulatedMove));
+          return moved_piece(simulatedMove);
+      }
+
+      if (type_of(simulatedMove) == CASTLING)
+      {
+          Square kto, rto;
+          castling_destinations(us, from, to, kto, rto);
+          if (sq == kto)
+              return make_piece(us, KING);
+          if (sq == rto)
+              return make_piece(us, ROOK);
+      }
+
+      if (sq == secondary_drop_square(simulatedMove))
+      {
+          return make_piece(us, dropped_piece_type(simulatedMove));
+      }
+
+      return piece_on(sq);
+  }
+
+  Bitboard vacated = pieces() & ~occupied;
+  if (!vacated)
+  {
+      if (pieces() & sq)
+          return piece_on(sq);
+      return make_piece(sideToMove, PAWN);
+  }
+
+  if (more_than_one(vacated)) {
+      Square fromK = square<KING>(sideToMove);
+      if (is_ok(fromK) && (vacated & fromK)) {
+          Square fromR = lsb(vacated & ~square_bb(fromK));
+          Square toK, toR;
+          castling_destinations(sideToMove, fromK, fromR, toK, toR);
+          if (sq == toK)
+              return make_piece(sideToMove, KING);
+          if (sq == toR)
+              return make_piece(sideToMove, ROOK);
+      }
+      return piece_on(sq);
+  }
+
+  Square from = lsb(vacated);
+  Piece mover = piece_on(from);
+
+  if (!(pieces() & sq))
+      return mover;
+
+  return piece_on(sq);
+}
+
 inline Position::HopperSquareProps Position::get_hopper_square_props(Square s, Bitboard occupied, Color friendlyColor, Piece pc) const {
     HopperSquareProps props;
     Bitboard sBB = square_bb(s);
@@ -3640,7 +3719,7 @@ inline Bitboard Position::universal_hopper_targets_impl(const std::map<Direction
             current = next;
 
             Bitboard sBB = square_bb(current);
-            HopperSquareProps props = get_hopper_square_props(current, occupied, c, (occupied & sBB) ? piece_on(current) : NO_PIECE);
+            HopperSquareProps props = get_hopper_square_props(current, occupied, c, piece_at(current, occupied));
 
             bool isDestination = false;
             if (profile.equiRule != PieceInfo::EQUI_STOPPER && !props.isWall && !props.isDead) {
@@ -4633,7 +4712,7 @@ inline Position::HopperMoveDetails Position::resolve_hopper_move_details(Square 
               bool invalidProfile = false;
               auto resolved_piece = [&](Square sq) {
                   if (sq == from) return NO_PIECE;
-                  return (occupied & square_bb(sq)) ? piece_on(sq) : NO_PIECE;
+                  return piece_at(sq, occupied);
               };
 
               const int maxRaySteps = SQUARE_NB - 1;

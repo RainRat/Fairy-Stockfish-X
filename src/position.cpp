@@ -3024,6 +3024,7 @@ Bitboard Position::compute_surround_capture_mask(Square moverSq, Bitboard usPiec
 /// Position::legal() tests whether a pseudo-legal move is legal
 
 bool Position::legal(Move m) const {
+  SimulatedMoveGuard guard(*this, m);
 
   assert(is_ok(m));
   assert(!is_drop_move(m) || piece_drops());
@@ -7258,6 +7259,7 @@ Value Position::blast_see(Move m) const {
 /// algorithm similar to alpha-beta pruning with a null window.
 
 bool Position::see_ge(Move m, Value threshold) const {
+  SimulatedMoveGuard guard(*this, m);
 
   assert(is_ok(m));
 
