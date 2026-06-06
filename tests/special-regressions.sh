@@ -120,6 +120,16 @@ EOF
   assert_contains_literal "$out" "Fen: 4k3/8/8/4B3/8/8/8/4K3 b - - 1 1"
 }
 
+test_self_destruct_special() {
+  local out
+  out=$(run_uci "$ENGINE" "$VARIANTS" bombardment <<'EOF'
+position fen 8/8/2mmm3/2mMm3/2mmm3/8/8/M7 w - - 0 1 moves d5d5x
+d
+EOF
+)
+  assert_contains_literal "$out" "Fen: 8/8/8/8/8/8/8/M7 b - - 0 1"
+}
+
 test_toot_otto() {
   local out
   out=$(run_uci "$ENGINE" "$VARIANTS" toot-otto <<'EOF'
@@ -260,6 +270,7 @@ test_dead_pieces
 test_material_hand_cache
 test_sacrifice
 test_stationary_capture
+test_self_destruct_special
 test_toot_otto
 test_hardlimit
 test_hindustani

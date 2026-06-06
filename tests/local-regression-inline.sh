@@ -126,6 +126,14 @@ EOF
   assert_not_contains "$out" "^a2b2:"
 
   out=$(run_uci "$ENGINE" "$VARIANT_PATH" bombardment <<'EOF'
+position startpos
+go movetime 500
+EOF
+)
+  assert_contains "$out" "^bestmove "
+  assert_not_contains "$out" "score mate"
+
+  out=$(run_uci "$ENGINE" "$VARIANT_PATH" bombardment <<'EOF'
 position startpos moves a2a3
 d
 EOF
@@ -138,6 +146,13 @@ d
 EOF
 )
   assert_contains "$out" "Fen: mmmmmmmm/mmmmmmmm/8/8/8/8/2MMMMMM/2MMMMMM b - - 0 1"
+
+  out=$(run_uci "$ENGINE" "$VARIANT_PATH" bombardment <<'EOF'
+position fen 8/8/2mmm3/2mMm3/2mmm3/8/8/M7 w - - 0 1 moves d5d5x
+d
+EOF
+)
+  assert_contains "$out" "Fen: 8/8/8/8/8/8/8/M7 b - - 0 1"
 }
 
 test_cowboys_opening() {
