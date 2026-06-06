@@ -679,6 +679,15 @@ public:
     return Stockfish::rider_attacks_bb(R, s, occupied, magic_geometry());
   }
 
+  Bitboard janggi_cannon_diagonal_targets(Square s, Bitboard occupied) const {
+    return janggi_cannon_diagonal_targets(s, occupied, pieces(JANGGI_CANNON));
+  }
+
+  Bitboard janggi_cannon_diagonal_targets(Square s, Bitboard occupied, Bitboard janggiCannons) const {
+    return rider_attacks_bb<RIDER_CANNON_DIAG>(s, occupied)
+         & rider_attacks_bb<RIDER_CANNON_DIAG>(s, occupied & ~janggiCannons);
+  }
+
   Bitboard attacks_bb(Color c, PieceType pt, Square s, Bitboard occupied) const {
     return Stockfish::attacks_bb(c, pt, s, occupied, magic_geometry());
   }
@@ -713,6 +722,8 @@ public:
   Bitboard non_sliding_riders() const;
   Bitboard between_bb(Square s1, Square s2, PieceType pt = NO_PIECE_TYPE,
                       MoveModality modality = MODALITY_CAPTURE, bool initial = false) const;
+  bool violates_mutual_hop_restriction(Square from, Square to, PieceType movePt) const;
+  Color color_of_piece_at(Square s1, Square s2, PieceType pt) const;
   Piece piece_on(Square s) const;
   Piece unpromoted_piece_on(Square s) const;
   Bitboard ep_squares() const;
@@ -993,7 +1004,7 @@ private:
       bool isValid;
   };
 
-  inline HopperSquareProps get_hopper_square_props(Square s, Bitboard occupied, Bitboard ownPieces, Piece pc) const;
+  inline HopperSquareProps get_hopper_square_props(Square s, Bitboard occupied, Color friendlyColor, Piece pc) const;
 
   inline HopperMoveDetails resolve_hopper_move_details(Square from, Square to, Bitboard occupied) const;
 
@@ -2967,7 +2978,15 @@ inline Bitboard Position::non_sliding_riders() const {
 
 inline Bitboard Position::between_bb(Square s1, Square s2, PieceType pt, MoveModality modality, bool initial) const {
   return pt == NO_PIECE_TYPE ? Stockfish::between_bb(s1, s2)
-                             : Stockfish::between_bb(s1, s2, pt, modality, initial);
+                             : Stockfish::between_bb(s1, s2, pt, modality, initial, color_of_piece_at(s1, s2, pt));
+}
+
+inline Color Position::color_of_piece_at(Square s1, Square s2, PieceType pt) const {
+  if (is_ok(s1) && type_of(piece_on(s1)) == pt)
+      return color_of(piece_on(s1));
+  if (is_ok(s2) && type_of(piece_on(s2)) == pt)
+      return color_of(piece_on(s2));
+  return sideToMove;
 }
 
 inline int Position::count(Color c, PieceType pt) const {
@@ -3398,9 +3417,9 @@ inline Bitboard hopper_targets_impl(const std::map<Direction, int>& directions,
               {
                   hurdleSeen = true;
                   postHurdleCount = 0;
-                  continue;
               }
-              break;
+              else
+                  break;
           }
       }
   }
@@ -3538,21 +3557,20 @@ inline Bitboard Position::wrapped_rose_targets(Square from, Bitboard occupied,
   return attack;
 }
 
-inline Position::HopperSquareProps Position::get_hopper_square_props(Square s, Bitboard occupied, Bitboard ownPieces, Piece pc) const {
+inline Position::HopperSquareProps Position::get_hopper_square_props(Square s, Bitboard occupied, Color friendlyColor, Piece pc) const {
     HopperSquareProps props;
     Bitboard sBB = square_bb(s);
     props.isOccupied = (occupied & sBB);
     props.isWall = (st->wallSquares & sBB);
     props.isDead = (st->deadSquares & sBB);
-    bool knownBoardOccupancy = bool(byTypeBB[ALL_PIECES] & sBB);
 
     PieceType pcPt = type_of(pc);
-    props.pcSet = pcPt == NO_PIECE_TYPE || (!props.isOccupied && knownBoardOccupancy) ? NO_PIECE_SET : piece_set(pcPt);
+    props.pcSet = pcPt == NO_PIECE_TYPE ? NO_PIECE_SET : piece_set(pcPt);
     if (props.isWall) props.pcSet |= PieceSet(1ULL << 62);
     if (props.isDead) props.pcSet |= PieceSet(1ULL << 61);
 
-    props.isFriendly = props.isOccupied && bool(ownPieces & sBB);
-    props.isEnemy = props.isOccupied && !props.isFriendly;
+    props.isFriendly = props.isOccupied && pc != NO_PIECE && color_of(pc) == friendlyColor;
+    props.isEnemy = props.isOccupied && pc != NO_PIECE && !props.isFriendly;
     props.special = (props.isEnemy ? PieceInfo::HopperProfile::ENEMY : 0)
                   | (props.isFriendly ? PieceInfo::HopperProfile::FRIENDLY : 0)
                   | (props.isWall ? PieceInfo::HopperProfile::WALL : 0)
@@ -3574,10 +3592,10 @@ inline Bitboard Position::special_rider_bb(const PieceInfo* pi, MoveModality mod
                                            Color c, bool captureMode,
                                            bool includeOwnBlockedAttacks) const
 {
-  if (!pi->has_runtime_rider_augment())
+  const uint8_t augment = pi->riderAugmentMask;
+  if (!augment && pi->universalHopper[Initial][modality].empty())
       return Bitboard(0);
   Bitboard b = 0;
-  const uint8_t augment = pi->riderAugmentMask;
   if (augment & PieceInfo::AUGMENT_DYNAMIC)
       b |= Position::dynamic_slider_bb(pi->slider[Initial][modality], sq, occupied, occupied, c);
   if (augment & PieceInfo::AUGMENT_MAX)
@@ -3622,7 +3640,7 @@ inline Bitboard Position::universal_hopper_targets_impl(const std::map<Direction
             current = next;
 
             Bitboard sBB = square_bb(current);
-            HopperSquareProps props = get_hopper_square_props(current, occupied, ownPieces, piece_on(current));
+            HopperSquareProps props = get_hopper_square_props(current, occupied, c, (occupied & sBB) ? piece_on(current) : NO_PIECE);
 
             bool isDestination = false;
             if (profile.equiRule != PieceInfo::EQUI_STOPPER && !props.isWall && !props.isDead) {
@@ -4211,8 +4229,7 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
       if (diagType)
           b |= attacks_from<Initial, FilterMobility>(c, diagType, s, occupancy) & diagonal_lines();
       else if (movePt == JANGGI_CANNON)
-          b |=  rider_attacks_bb<RIDER_CANNON_DIAG>(s, occupancy)
-              & rider_attacks_bb<RIDER_CANNON_DIAG>(s, (occupancy ^ pieces(pt)))
+          b |= janggi_cannon_diagonal_targets(s, occupancy)
               & ~pieces(pt)
               & diagonal_lines();
   }
@@ -4422,8 +4439,7 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s, Bitboard o
       if (diagType)
           b |= attacks_bb(c, diagType, s, occupancy) & diagonal_lines();
       else if (movePt == JANGGI_CANNON)
-          b |=  rider_attacks_bb<RIDER_CANNON_DIAG>(s, occupancy)
-              & rider_attacks_bb<RIDER_CANNON_DIAG>(s, (occupancy ^ pieces(pt)))
+          b |= janggi_cannon_diagonal_targets(s, occupancy)
               & ~pieces(pt)
               & diagonal_lines();
   }
@@ -4615,10 +4631,9 @@ inline Position::HopperMoveDetails Position::resolve_hopper_move_details(Square 
               const bool wraps = topology_wraps();
               auto [dr, df] = decode_direction(dir);
               bool invalidProfile = false;
-              auto resolved_piece = [&](Square sq, bool knownBoardOccupancy) {
-                  if (knownBoardOccupancy)
-                      return piece_on(sq);
-                  return sq == to ? mover : NO_PIECE;
+              auto resolved_piece = [&](Square sq) {
+                  if (sq == from) return NO_PIECE;
+                  return (occupied & square_bb(sq)) ? piece_on(sq) : NO_PIECE;
               };
 
               const int maxRaySteps = SQUARE_NB - 1;
@@ -4644,9 +4659,7 @@ inline Position::HopperMoveDetails Position::resolve_hopper_move_details(Square 
                   s = next;
                   dist++;
 
-                  Bitboard sBB = square_bb(s);
-                  bool knownBoardOccupancy = bool(byTypeBB[ALL_PIECES] & sBB);
-                  HopperSquareProps props = get_hopper_square_props(s, occupied, byColorBB[us], resolved_piece(s, knownBoardOccupancy));
+                  HopperSquareProps props = get_hopper_square_props(s, occupied, us, resolved_piece(s));
 
                   if (props.isOccupied || props.isWall || props.isDead)
                   {
@@ -4705,9 +4718,7 @@ inline Position::HopperMoveDetails Position::resolve_hopper_move_details(Square 
                               }
                               hurdleScan = hnext;
 
-                              Bitboard hsBB = square_bb(hurdleScan);
-                              bool knownHsBoardOccupancy = bool(byTypeBB[ALL_PIECES] & hsBB);
-                              HopperSquareProps hprops = get_hopper_square_props(hurdleScan, occupied, byColorBB[us], resolved_piece(hurdleScan, knownHsBoardOccupancy));
+                              HopperSquareProps hprops = get_hopper_square_props(hurdleScan, occupied, us, resolved_piece(hurdleScan));
 
                               if (hprops.isOccupied || hprops.isWall || hprops.isDead)
                               {

@@ -967,15 +967,7 @@ namespace {
     }
 
     const PieceInfo* pawnInfo = pieceMap.get(PAWN);
-    const bool pawnHasCustomNonStepMovement =
-           MoveRiderTypes[0][PAWN] != NO_RIDER
-        || MoveRiderTypes[1][PAWN] != NO_RIDER
-        || AttackRiderTypes[PAWN] != NO_RIDER
-        || !pawnInfo->universalHopper[0][MODALITY_QUIET].empty()
-        || !pawnInfo->universalHopper[0][MODALITY_CAPTURE].empty()
-        || !pawnInfo->universalHopper[1][MODALITY_QUIET].empty()
-        || !pawnInfo->universalHopper[1][MODALITY_CAPTURE].empty()
-        || pawnInfo->has_runtime_rider_augment();
+    const bool pawnHasCustomNonStepMovement = pawnInfo->has_nonstandard_pawn_movement();
     const bool useFastStandardPawnGenerator =
            !pawnHasCustomNonStepMovement
         && !pawnInfo->has_explicit_initial_moves()

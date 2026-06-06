@@ -104,6 +104,7 @@ customPiece1 = a:lhN
 customPiece2 = b:rhN
 customPiece3 = c:hlN
 customPiece4 = d:hrN
+customPiece5 = e:pB3
 startFen = 7/7/7/3A3/7/7/7 w - - 0 1
 
 [cannonshogi:shogi]
@@ -647,6 +648,9 @@ startFen = 3k4/1B4N1/8/8/8/8/8/4K3 w - - 0 1
         self.assertEqual(['d4e2', 'd4b3', 'd4f5', 'd4c6'], result)
         result = sf.legal_moves("betzatest", "7/7/7/3D3/7/7/7 w - - 0 1", [])
         self.assertEqual(['d4c2', 'd4f3', 'd4b5', 'd4e6'], result)
+        # Test simple hopper with range limit > 1 (e:pB3)
+        result = sf.legal_moves("betzatest", "7/7/4a2/3E3/7/7/7 w - - 0 1", [])
+        self.assertEqual(['d4f6', 'd4g7'], sorted(result))
 
         # diagonalGeneral: moving the blocker off the king diagonal is illegal
         result = sf.legal_moves("diagfaceoff", sf.start_fen("diagfaceoff"), [])

@@ -166,6 +166,37 @@ struct PieceInfo {
   bool diagonalLimitedSlider = false;
 
   inline void add_rider_augment(Augment augment) { riderAugmentMask |= augment; }
+  inline bool has_hopper_like_movement() const {
+    for (int initial = 0; initial < 2; ++initial)
+      for (int modality = 0; modality < MOVE_MODALITY_NB; ++modality)
+        if (!hopper[initial][modality].empty() || !universalHopper[initial][modality].empty())
+          return true;
+    return false;
+  }
+  inline bool has_hopper_like_capture() const {
+    for (int initial = 0; initial < 2; ++initial)
+      if (!hopper[initial][MODALITY_CAPTURE].empty() || !universalHopper[initial][MODALITY_CAPTURE].empty())
+        return true;
+    return false;
+  }
+  inline bool has_nonstandard_pawn_movement() const {
+    for (int initial = 0; initial < 2; ++initial)
+      for (int modality = 0; modality < MOVE_MODALITY_NB; ++modality)
+      {
+          if (!slider[initial][modality].empty()
+              || !leapRider[initial][modality].empty()
+              || !hopper[initial][modality].empty()
+              || !universalHopper[initial][modality].empty()
+              || !stepsLame[initial][modality].empty()
+              || !tupleSteps[initial][modality].empty()
+              || !tupleSlider[initial][modality].empty()
+              || griffon[initial][modality]
+              || manticore[initial][modality]
+              || rose[initial][modality])
+              return true;
+      }
+    return false;
+  }
   inline bool has_universal_hopper() const {
     for (int initial = 0; initial < 2; ++initial)
       for (int modality = 0; modality < MOVE_MODALITY_NB; ++modality)

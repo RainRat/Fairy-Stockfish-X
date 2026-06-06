@@ -556,7 +556,7 @@ namespace {
   inline Bitboard retro_asymmetric_check_squares(Color attacker, PieceType pt, Square kingSq, Bitboard occupied) {
     // Hopper families need hurdle-aware retro logic. Keep pseudo candidates for
     // those, and use path-based retro filtering for other asymmetrical riders.
-    if (AttackRiderTypes[pt] & HOPPING_RIDERS)
+    if (pieceMap.get(pt)->has_hopper_like_capture())
         return PseudoAttacks[~attacker][pt][kingSq];
 
     Bitboard checks = 0;
@@ -632,15 +632,7 @@ namespace {
     return checks;
   }
 
-  bool has_hopper_like(const PieceInfo* pi) {
-    for (MoveModality modality : {MODALITY_QUIET, MODALITY_CAPTURE})
-      for (int initial : {0, 1})
-        if (!pi->hopper[initial][modality].empty()
-            || !pi->universalHopper[initial][modality].empty())
-          return true;
 
-    return false;
-  }
 
   bool has_hopper_potential_from_square(const Position& pos, Color c, PieceType pt, Square sq) {
     // PseudoMoves deliberately treats hopper families too optimistically on an
@@ -1927,7 +1919,7 @@ void Position::set_check_info(StateInfo* si) const {
               }
           }
 
-          if ((AttackRiderTypes[movePt] & NON_SLIDING_RIDERS) || pi->has_lame_capture())
+          if ((AttackRiderTypes[movePt] & NON_SLIDING_RIDERS) || pi->has_lame_capture() || pi->has_hopper_like_capture())
               si->nonSlidingRiders |= pieces(pt);
       }
 
@@ -1991,7 +1983,7 @@ void Position::set_check_info(StateInfo* si) const {
               if (pi->has_lame_capture())
                   si->checkSquares[pt] |= retro_lame_check_squares(*this, sideToMove, pt, ksq, occupied);
               // Collect special piece types that require slower check and evasion detection
-              if ((AttackRiderTypes[movePt] & NON_SLIDING_RIDERS) || pi->has_lame_capture())
+              if ((AttackRiderTypes[movePt] & NON_SLIDING_RIDERS) || pi->has_lame_capture() || pi->has_hopper_like_capture())
                   si->nonSlidingRiders |= pieces(pt);
           }
       }
@@ -2492,7 +2484,7 @@ Bitboard Position::slider_blockers(Bitboard sliders, Square s, Bitboard& pinners
               }
               else
                   snipers |= b & ~attacks_bb(~c, pt, s, pieces());
-              if ((riderTypes & ~HOPPING_RIDERS) || !pi->tupleSlider[0][MODALITY_CAPTURE].empty())
+              if (((riderTypes & ~HOPPING_RIDERS) && !pi->has_hopper_like_capture()) || !pi->tupleSlider[0][MODALITY_CAPTURE].empty())
                   slidingSnipers |= snipers & ptPieces;
           }
       }
@@ -2529,7 +2521,7 @@ Bitboard Position::slider_blockers(Bitboard sliders, Square s, Bitboard& pinners
         blockers |= b;
         continue;
     }
-    bool isHopper = AttackRiderTypes[sniperType] & HOPPING_RIDERS;
+    bool isHopper = (AttackRiderTypes[sniperType] & HOPPING_RIDERS) || pieceMap.get(sniperType)->has_hopper_like_capture();
     Bitboard b = between_bb(s, sniperSq, sniperType) & (isHopper ? (allPieces ^ sniperSq) : occupancy);
 
     if (b && (!more_than_one(b) || (isHopper && popcount(b) == 2)))
@@ -2652,7 +2644,7 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
               }
           }
           else if (pt == JANGGI_CANNON)
-              b |= attacks_from<false, false>(~c, move_pt, s, occupied) & attacks_from<false, false>(~c, move_pt, s, occupied & ~janggiCannons) & pieces(c, JANGGI_CANNON);
+              b |= attacks_from<false, false>(~c, move_pt, s, occupied) & attacks_from<false, false>(~c, move_pt, s, occupied & ~janggiCannons) & (janggiCannons & pieces(c));
           else
               b |= attacks_from<false, false>(~c, move_pt, s, occupied) & pieces(c, pt);
       }
@@ -2667,9 +2659,7 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
       diags |= attacks_bb(~c, FERS, s, occupied) & pieces(c, WAZIR);
       diags |= attacks_bb(~c, PAWN, s, occupied) & pieces(c, SOLDIER);
       diags |= rider_attacks_bb<RIDER_BISHOP>(s, occupied) & pieces(c, ROOK);
-      diags |=  rider_attacks_bb<RIDER_CANNON_DIAG>(s, occupied)
-              & rider_attacks_bb<RIDER_CANNON_DIAG>(s, occupied & ~janggiCannons)
-              & pieces(c, JANGGI_CANNON);
+      diags |= janggi_cannon_diagonal_targets(s, occupied, janggiCannons) & (janggiCannons & pieces(c));
       b |= diags & diagonal_lines();
   }
 
@@ -3148,6 +3138,18 @@ bool Position::legal(Move m) const {
   PieceType movePt = type_of(moverPiece);
   PieceType finalMovePt = movePt;
 
+  Bitboard janggiCannons = pieces(JANGGI_CANNON);
+  if (!is_pass(m))
+  {
+      if (type_of(moverPiece) == JANGGI_CANNON)
+          janggiCannons = rifleShot ? (janggiCannons & ~square_bb(shotSq))
+                                    : ((!dropMove ? janggiCannons ^ from : janggiCannons) | to);
+      else if (janggiCannons & (rifleShot ? square_bb(shotSq) : square_bb(to)))
+          janggiCannons ^= (rifleShot ? square_bb(shotSq) : square_bb(to));
+  }
+
+  Bitboard janggiCannonsAfter = janggiCannons;
+
   if (is_promotion_move(m))
       finalMovePt = promotion_type(m);
   else if (type_of(m) == PIECE_PROMOTION)
@@ -3208,7 +3210,7 @@ bool Position::legal(Move m) const {
           return false;
 
       Bitboard occupied = pieces() | gating_square(m);
-      return (allow_checks() || !hasRoyal || !attackers_to_king(royalSquare, occupied, them))
+      return (allow_checks() || !hasRoyal || !attackers_to_king(royalSquare, occupied, them, janggiCannonsAfter))
           && !violates_same_player_board_repetition(m);
   }
 
@@ -3236,15 +3238,8 @@ bool Position::legal(Move m) const {
       return false;
   if ((pieces(us) & to) && !is_pass(m) && !is_self_destruct(m) && is_uncapturable_royal_square(us, to))
       return false;
-  if (!dropMove && (var->mutuallyHopIllegalTypes & movePt) && (AttackRiderTypes[movePt] & HOPPING_RIDERS))
-  {
-      Bitboard between = between_bb(from, to);
-      Bitboard hopIllegalPieces = 0;
-      for (PieceSet ps = var->mutuallyHopIllegalTypes; ps;)
-          hopIllegalPieces |= pieces(pop_lsb(ps));
-      if ((between & pieces()) && ((between | to) & hopIllegalPieces))
-          return false;
-  }
+  if (!dropMove && violates_mutual_hop_restriction(from, to, movePt))
+      return false;
 
   OptBool gives = NO_VALUE;
   auto move_gives_check = [&]() {
@@ -3616,7 +3611,7 @@ bool Position::legal(Move m) const {
           PieceType movePt2 = effective_piece_type(pt);
           const PieceInfo* pInfo2 = pieceMap.get(movePt2);
           bool hasPotentialMove = PseudoMoves[0][us][movePt2][to] & board_bb();
-          if (has_hopper_like(pInfo2))
+          if (pInfo2->has_hopper_like_movement())
               hasPotentialMove = has_hopper_potential_from_square(*this, us, movePt2, to);
           if (!hasPotentialMove)
               return false;
@@ -3646,7 +3641,7 @@ bool Position::legal(Move m) const {
       return (st->bikjang
            || allow_checks()
            || !hasRoyal
-           || !(attackers_to_king(royalSquare, occupied, them) & occupied & ~removedAttackers))
+           || !(attackers_to_king(royalSquare, occupied, them, janggiCannonsAfter) & occupied & ~removedAttackers))
           && !violates_same_player_board_repetition(m);
   }
 
@@ -3748,18 +3743,6 @@ bool Position::legal(Move m) const {
   }
   postMoveOccupied &= ~structuralRemoval;
 
-  Bitboard janggiCannons = pieces(JANGGI_CANNON);
-  if (!is_pass(m))
-  {
-      if (type_of(moved_piece(m)) == JANGGI_CANNON)
-          janggiCannons = rifleShot ? (janggiCannons & ~square_bb(shotSq))
-                                    : ((!dropMove ? janggiCannons ^ from : janggiCannons) | to);
-      else if (janggiCannons & (rifleShot ? square_bb(shotSq) : square_bb(to)))
-          janggiCannons ^= (rifleShot ? square_bb(shotSq) : square_bb(to));
-  }
-
-  Bitboard janggiCannonsAfter = janggiCannons;
-
   // Check for attacks to pseudo-royal pieces
   if (pseudo_royal_types())
   {
@@ -3785,7 +3768,7 @@ bool Position::legal(Move m) const {
               // Ensure to include the initial square if from == kto
               for (Square s = from; from != kto ? s != kto : s == from; s += step)
                   if (  !(blastOnCapture && (blast_pattern(s) & st->pseudoRoyals & pieces(~sideToMove) & ~blastImmune))
-                      && (attackers_to(s, occupied, ~us) & occupied & ~removedAttackers))
+                      && (attackers_to(s, occupied, ~us, janggiCannonsAfter) & occupied & ~removedAttackers))
                       return false;
           // Move the rook
           occupied ^= to | castlingRto;
@@ -3943,7 +3926,7 @@ bool Position::legal(Move m) const {
       while (antiRoyals)
       {
           Square sr = pop_lsb(antiRoyals);
-          Bitboard attackers = attackers_to(sr, occupied, ~us, janggiCannons) & occupied;
+          Bitboard attackers = attackers_to(sr, occupied, ~us, janggiCannonsAfter) & occupied;
           if (anti_royal_king_mutually_immune())
               attackers &= ~pieces(~us, king_type());
           if (!(occupied & sr)
@@ -3973,7 +3956,7 @@ bool Position::legal(Move m) const {
       assert(ep_squares() & to);
       assert(piece_on(to) == NO_PIECE);
 
-      return !((attackers_to_king(ksq, occupied, ~us) & ~removedAttackers) & occupied)
+      return !((attackers_to_king(ksq, occupied, ~us, janggiCannonsAfter) & ~removedAttackers) & occupied)
           && !violates_same_player_board_repetition(m);
   }
 
@@ -4008,8 +3991,8 @@ bool Position::legal(Move m) const {
       // "cannot castle through attack", with frozen attackers ignored.
       bool spellLikeCastler = type_of(piece_on(from)) != KING && potions_enabled();
       auto attackers_for_castling = [&](Square s, Bitboard occ) {
-          Bitboard att = spellLikeCastler ? attackers_to(s, occ, ~us)
-                                          : attackers_to_king(s, occ, ~us);
+          Bitboard att = spellLikeCastler ? attackers_to(s, occ, ~us, janggiCannonsAfter)
+                                          : attackers_to_king(s, occ, ~us, janggiCannonsAfter);
           att &= ~removedAttackers;
           if (spellLikeCastler)
               att &= ~freeze_squares(~us);
@@ -4125,8 +4108,8 @@ bool Position::legal(Move m) const {
           Bitboard occ = occupiedAfterEffects | gate;
 
           Bitboard attackers = gateType == KING || is_actual_runtime_royal(us, gateType)
-                             ? attackers_to_king(gate, occ, ~us)
-                             : attackers_to(gate, occ, ~us);
+                             ? attackers_to_king(gate, occ, ~us, janggiCannonsAfter)
+                             : attackers_to(gate, occ, ~us, janggiCannonsAfter);
           attackers &= ~(removedAttackers | removedByEffects);
 
           if (attackers)
@@ -4163,7 +4146,7 @@ bool Position::legal(Move m) const {
       {
           Square s = pop_lsb(traversed);
           Bitboard pathOccupied = (pieces() ^ from) | s;
-          if (attackers_to_king(s, pathOccupied, ~us) & ~(removedAttackers | removedByEffects))
+          if (attackers_to_king(s, pathOccupied, ~us, janggiCannonsAfter) & ~(removedAttackers | removedByEffects))
               return false;
       }
   }
@@ -4179,7 +4162,7 @@ bool Position::legal(Move m) const {
   // If the moving piece is a king, check whether the destination square is
   // attacked by the opponent.
   if (!allow_checks() && moverIsRoyal)
-      return !(attackers_to_king(rifleShot ? from : to, occupiedAfterEffects, ~us) & ~(removedAttackers | removedByEffects))
+      return !(attackers_to_king(rifleShot ? from : to, occupiedAfterEffects, ~us, janggiCannonsAfter) & ~(removedAttackers | removedByEffects))
           && !violates_same_player_board_repetition(m);
 
   // Return early when without king
@@ -4511,15 +4494,8 @@ bool Position::pseudo_legal(const Move m) const {
   // Hopper-type pieces can optionally be configured to avoid hopping over
   // or capturing selected piece types (e.g. Janggi cannons vs cannons).
   PieceType movePt = type_of(pc);
-  if ((var->mutuallyHopIllegalTypes & movePt) && (AttackRiderTypes[movePt] & HOPPING_RIDERS))
-  {
-      Bitboard between = between_bb(from, to);
-      Bitboard hopIllegalPieces = 0;
-      for (PieceSet ps = var->mutuallyHopIllegalTypes; ps;)
-          hopIllegalPieces |= pieces(pop_lsb(ps));
-      if ((between & pieces()) && ((between | to) & hopIllegalPieces))
-          return false;
-  }
+  if (violates_mutual_hop_restriction(from, to, movePt))
+      return false;
 
   // Evasions generator already takes care to avoid some kind of illegal moves
   // and legal() relies on this. We therefore have to take care that the same
@@ -4702,7 +4678,7 @@ bool Position::gives_check(Move m) const {
               if (attacks_bb(sideToMove, pt, attackFrom, occupied) & attacks_bb(sideToMove, pt, attackFrom, occupied & ~janggiCannons) & royalSq)
                   return true;
           }
-          else if (AttackRiderTypes[pt] & HOPPING_RIDERS)
+          else if (pieceMap.get(pt)->has_hopper_like_capture())
           {
               if (attacks_bb(sideToMove, pt, attackFrom, occupied) & royalSq)
                   return true;
@@ -4758,9 +4734,7 @@ bool Position::gives_check(Move m) const {
       PieceType diagType = pt == WAZIR ? FERS : pt == SOLDIER ? PAWN : pt == ROOK ? BISHOP : NO_PIECE_TYPE;
       if (diagType && (attacks_bb(sideToMove, diagType, attackFrom, occupied) & royalSq))
           return true;
-      else if (pt == JANGGI_CANNON && (  rider_attacks_bb<RIDER_CANNON_DIAG>(attackFrom, occupied)
-                                       & rider_attacks_bb<RIDER_CANNON_DIAG>(attackFrom, occupied & ~janggiCannons)
-                                       & royalSq))
+      else if (pt == JANGGI_CANNON && (janggi_cannon_diagonal_targets(attackFrom, occupied) & royalSq))
           return true;
   }
 
@@ -8720,6 +8694,19 @@ PieceType Position::committed_piece_type(Move m, bool castlingRook) const {
         }
     }
     return result;
+}
+
+bool Position::violates_mutual_hop_restriction(Square from, Square to, PieceType movePt) const {
+  if ((var->mutuallyHopIllegalTypes & movePt) && (pieceMap.get(movePt)->has_hopper_like_movement()))
+  {
+      Bitboard between = between_bb(from, to);
+      Bitboard hopIllegalPieces = 0;
+      for (PieceSet ps = var->mutuallyHopIllegalTypes; ps;)
+          hopIllegalPieces |= pieces(pop_lsb(ps));
+      if ((between & pieces()) && ((between | to) & hopIllegalPieces))
+          return true;
+  }
+  return false;
 }
 
 } // namespace Stockfish

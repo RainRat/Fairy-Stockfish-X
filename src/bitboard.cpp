@@ -268,13 +268,23 @@ namespace {
   }
 
   void add_hopper_rider_types(RiderType& riderTypes, Direction d, int limit) {
+    int minDist = slider_min_distance(limit);
     int maxDist = slider_max_distance(limit);
-    if (RookDirectionsH.find(d) != RookDirectionsH.end())
-        riderTypes |= maxDist == 1 ? RIDER_GRASSHOPPER_H : maxDist == 0 ? RIDER_CANNON_H : NO_RIDER;
-    if (RookDirectionsV.find(d) != RookDirectionsV.end())
-        riderTypes |= maxDist == 1 ? RIDER_GRASSHOPPER_V : maxDist == 0 ? RIDER_CANNON_V : NO_RIDER;
-    if (BishopDirections.find(d) != BishopDirections.end())
-        riderTypes |= maxDist == 1 ? RIDER_GRASSHOPPER_D : maxDist == 0 ? RIDER_CANNON_DIAG : NO_RIDER;
+    if (minDist == 1 && maxDist == 1) {
+        if (RookDirectionsH.find(d) != RookDirectionsH.end())
+            riderTypes |= RIDER_GRASSHOPPER_H;
+        if (RookDirectionsV.find(d) != RookDirectionsV.end())
+            riderTypes |= RIDER_GRASSHOPPER_V;
+        if (BishopDirections.find(d) != BishopDirections.end())
+            riderTypes |= RIDER_GRASSHOPPER_D;
+    } else if (minDist == 1 && maxDist == 0) {
+        if (RookDirectionsH.find(d) != RookDirectionsH.end())
+            riderTypes |= RIDER_CANNON_H;
+        if (RookDirectionsV.find(d) != RookDirectionsV.end())
+            riderTypes |= RIDER_CANNON_V;
+        if (BishopDirections.find(d) != BishopDirections.end())
+            riderTypes |= RIDER_CANNON_DIAG;
+    }
   }
 
   Bitboard lame_leaper_path(Direction d, Square s) {
@@ -538,12 +548,12 @@ Bitboard bent_rider_attack(RiderType R, Square s, Bitboard occupied) {
   }
 }
 
-Bitboard tuple_rider_between_bb(PieceType pt, MoveModality modality, bool initial, Square s1, Square s2) {
+Bitboard tuple_rider_between_bb(PieceType pt, MoveModality modality, bool initial, Square s1, Square s2, Color c) {
   for (const auto& ray : pieceMap.get(pt)->tupleSlider[initial][modality])
   {
       Bitboard path = 0;
       bool hit = false;
-      walk_tuple_ray(ray, s1, WHITE, Bitboard(0), [&](Bitboard next, Square to, int count) {
+      walk_tuple_ray(ray, s1, c, Bitboard(0), [&](Bitboard next, Square to, int count) {
           path |= next;
           if (to != s2)
               return true;
@@ -559,6 +569,27 @@ Bitboard tuple_rider_between_bb(PieceType pt, MoveModality modality, bool initia
       });
       if (hit)
           return path;
+  }
+  for (const auto& ray : pieceMap.get(pt)->tupleSlider[initial][modality])
+  {
+      Bitboard path = 0;
+      bool hit = false;
+      walk_tuple_ray(ray, s2, c, Bitboard(0), [&](Bitboard next, Square to, int count) {
+          path |= next;
+          if (to != s1)
+              return true;
+
+          int steps = count + 1;
+          if (steps < slider_min_distance(ray.limit))
+              return false;
+          int maxDistance = slider_max_distance(ray.limit);
+          if (maxDistance && steps > maxDistance)
+              return false;
+          hit = true;
+          return false;
+      });
+      if (hit)
+          return (path & ~square_bb(s1)) | square_bb(s2);
   }
   return Bitboard(0);
 }
@@ -768,14 +799,13 @@ namespace {
   }
 
   template <MovementType MT, bool TrimRiderTerminal = false>
-  Bitboard magic_mask_for_square(const std::map<Direction, int>& directions, Square s, File maxFile, Rank maxRank) {
+  Bitboard magic_mask_for_square(const std::map<Direction, int>& directions, Square s, File maxFile, Rank maxRank, Bitboard activeBoard) {
       if constexpr (MT == RIDER && TrimRiderTerminal)
       {
           // For leap-riders (e.g. nightrider), occupancy on the final square
           // of each ray cannot affect attacks, so it is not a relevant bit.
-          const Bitboard board = active_magic_board(maxFile, maxRank);
-          Bitboard emptyAttack = sliding_attack<RIDER>(directions, s, 0) & board;
-          return emptyAttack & ~rider_terminal_squares(directions, s, board);
+          Bitboard emptyAttack = sliding_attack<RIDER>(directions, s, 0) & activeBoard;
+          return emptyAttack & ~rider_terminal_squares(directions, s, activeBoard);
       }
       else
       {
@@ -784,7 +814,7 @@ namespace {
                          | ((FileABB | file_bb(maxFile)) & ~file_bb(s));
           return (MT == LAME_LEAPER ? lame_leaper_path(directions, s)
                                     : sliding_attack<MT == HOPPER ? HOPPER_RANGE : MT>(directions, s, 0))
-               & active_magic_board(maxFile, maxRank) & ~edges;
+               & activeBoard & ~edges;
       }
   }
 
@@ -794,7 +824,7 @@ namespace {
   // called "fancy" approach.
 
   template <MovementType MT, bool TrimRiderTerminal = false>
-  void init_magic_table(std::vector<Bitboard>& table, Magic magics[], const std::map<Direction, int>& directions, File maxFile, Rank maxRank, const Bitboard* magicsInit = nullptr) {
+  void init_magic_table(std::vector<Bitboard>& table, Magic magics[], const std::map<Direction, int>& directions, File maxFile, Rank maxRank, Bitboard activeBoard, const Bitboard* magicsInit = nullptr) {
 
     // Optimal PRNG seeds to pick the correct magics in the shortest time
 #ifdef LARGEBOARDS
@@ -816,11 +846,10 @@ namespace {
     size_t requiredSize = 0;
     for (Square s = SQ_A1; s <= SQ_MAX; ++s)
     {
-        masks[s] = magic_mask_for_square<MT, TrimRiderTerminal>(directions, s, maxFile, maxRank);
+        masks[s] = magic_mask_for_square<MT, TrimRiderTerminal>(directions, s, maxFile, maxRank, activeBoard);
         requiredSize += size_t(1) << popcount(masks[s]);
     }
-    if (table.size() < requiredSize)
-        table.resize(requiredSize);
+    table.resize(requiredSize);
 
     for (Square s = SQ_A1; s <= SQ_MAX; ++s)
     {
@@ -849,7 +878,7 @@ namespace {
         do {
             occupancy[size] = b;
             reference[size] = (MT == LAME_LEAPER ? lame_leaper_attack(directions, s, b) : sliding_attack<MT>(directions, s, b))
-                            & active_magic_board(maxFile, maxRank);
+                            & activeBoard;
 
             if (HasPext)
                 m.attacks[pext(b, m.mask)] = reference[size];
@@ -942,34 +971,8 @@ std::shared_ptr<const MagicGeometry> Bitboards::init_magics(File maxFile, Rank m
   }
 
   std::shared_ptr<MagicGeometry> mg = std::make_shared<MagicGeometry>();
+  Bitboard activeBoard = active_magic_board(maxFile, maxRank);
 
-#ifdef LARGEBOARDS
-  mg->RookTableH.resize(0x11800);
-  mg->RookTableV.resize(0x4800);
-  mg->BishopTable.resize(0x33C00);
-  mg->CannonTableH.resize(0x11800);
-  mg->CannonTableV.resize(0x4800);
-  mg->HorseTable.resize(0x500);
-  mg->JanggiElephantTable.resize(0x1C000);
-  mg->CannonDiagTable.resize(0x33C00);
-  mg->NightriderTable.resize(0xD200);
-  mg->GrasshopperTableH.resize(0x11800);
-  mg->GrasshopperTableV.resize(0x4800);
-  mg->GrasshopperTableD.resize(0x33C00);
-#else
-  mg->RookTableH.resize(0xA00);
-  mg->RookTableV.resize(0xA00);
-  mg->BishopTable.resize(0x1480);
-  mg->CannonTableH.resize(0xA00);
-  mg->CannonTableV.resize(0xA00);
-  mg->HorseTable.resize(0x240);
-  mg->JanggiElephantTable.resize(0x5C00);
-  mg->CannonDiagTable.resize(0x1480);
-  mg->NightriderTable.resize(0x500);
-  mg->GrasshopperTableH.resize(0xA00);
-  mg->GrasshopperTableV.resize(0xA00);
-  mg->GrasshopperTableD.resize(0x1480);
-#endif
 
 #ifdef PRECOMPUTED_MAGICS
   #define SELECT_MAGIC(init) init
@@ -977,18 +980,18 @@ std::shared_ptr<const MagicGeometry> Bitboards::init_magics(File maxFile, Rank m
   #define SELECT_MAGIC(init) nullptr
 #endif
 
-  init_magic_table<RIDER>(mg->RookTableH, mg->RookMagicsH, RookDirectionsH, maxFile, maxRank, SELECT_MAGIC(RookMagicHInit));
-  init_magic_table<RIDER>(mg->RookTableV, mg->RookMagicsV, RookDirectionsV, maxFile, maxRank, SELECT_MAGIC(RookMagicVInit));
-  init_magic_table<RIDER>(mg->BishopTable, mg->BishopMagics, BishopDirections, maxFile, maxRank, SELECT_MAGIC(BishopMagicInit));
-  init_magic_table<HOPPER>(mg->CannonTableH, mg->CannonMagicsH, RookDirectionsH, maxFile, maxRank, SELECT_MAGIC(CannonMagicHInit));
-  init_magic_table<HOPPER>(mg->CannonTableV, mg->CannonMagicsV, RookDirectionsV, maxFile, maxRank, SELECT_MAGIC(CannonMagicVInit));
-  init_magic_table<LAME_LEAPER>(mg->HorseTable, mg->HorseMagics, HorseDirections, maxFile, maxRank, SELECT_MAGIC(HorseMagicInit));
-  init_magic_table<LAME_LEAPER>(mg->JanggiElephantTable, mg->JanggiElephantMagics, JanggiElephantDirections, maxFile, maxRank, SELECT_MAGIC(JanggiElephantMagicInit));
-  init_magic_table<HOPPER>(mg->CannonDiagTable, mg->CannonDiagMagics, BishopDirections, maxFile, maxRank, SELECT_MAGIC(CannonDiagMagicInit));
-  init_magic_table<RIDER, true>(mg->NightriderTable, mg->NightriderMagics, HorseDirections, maxFile, maxRank, SELECT_MAGIC(NightriderMagicInit));
-  init_magic_table<HOPPER>(mg->GrasshopperTableH, mg->GrasshopperMagicsH, GrasshopperDirectionsH, maxFile, maxRank, SELECT_MAGIC(GrasshopperMagicHInit));
-  init_magic_table<HOPPER>(mg->GrasshopperTableV, mg->GrasshopperMagicsV, GrasshopperDirectionsV, maxFile, maxRank, SELECT_MAGIC(GrasshopperMagicVInit));
-  init_magic_table<HOPPER>(mg->GrasshopperTableD, mg->GrasshopperMagicsD, GrasshopperDirectionsD, maxFile, maxRank, SELECT_MAGIC(GrasshopperMagicDInit));
+  init_magic_table<RIDER>(mg->RookTableH, mg->RookMagicsH, RookDirectionsH, maxFile, maxRank, activeBoard, SELECT_MAGIC(RookMagicHInit));
+  init_magic_table<RIDER>(mg->RookTableV, mg->RookMagicsV, RookDirectionsV, maxFile, maxRank, activeBoard, SELECT_MAGIC(RookMagicVInit));
+  init_magic_table<RIDER>(mg->BishopTable, mg->BishopMagics, BishopDirections, maxFile, maxRank, activeBoard, SELECT_MAGIC(BishopMagicInit));
+  init_magic_table<HOPPER>(mg->CannonTableH, mg->CannonMagicsH, RookDirectionsH, maxFile, maxRank, activeBoard, SELECT_MAGIC(CannonMagicHInit));
+  init_magic_table<HOPPER>(mg->CannonTableV, mg->CannonMagicsV, RookDirectionsV, maxFile, maxRank, activeBoard, SELECT_MAGIC(CannonMagicVInit));
+  init_magic_table<LAME_LEAPER>(mg->HorseTable, mg->HorseMagics, HorseDirections, maxFile, maxRank, activeBoard, SELECT_MAGIC(HorseMagicInit));
+  init_magic_table<LAME_LEAPER>(mg->JanggiElephantTable, mg->JanggiElephantMagics, JanggiElephantDirections, maxFile, maxRank, activeBoard, SELECT_MAGIC(JanggiElephantMagicInit));
+  init_magic_table<HOPPER>(mg->CannonDiagTable, mg->CannonDiagMagics, BishopDirections, maxFile, maxRank, activeBoard, SELECT_MAGIC(CannonDiagMagicInit));
+  init_magic_table<RIDER, true>(mg->NightriderTable, mg->NightriderMagics, HorseDirections, maxFile, maxRank, activeBoard, SELECT_MAGIC(NightriderMagicInit));
+  init_magic_table<HOPPER>(mg->GrasshopperTableH, mg->GrasshopperMagicsH, GrasshopperDirectionsH, maxFile, maxRank, activeBoard, SELECT_MAGIC(GrasshopperMagicHInit));
+  init_magic_table<HOPPER>(mg->GrasshopperTableV, mg->GrasshopperMagicsV, GrasshopperDirectionsV, maxFile, maxRank, activeBoard, SELECT_MAGIC(GrasshopperMagicVInit));
+  init_magic_table<HOPPER>(mg->GrasshopperTableD, mg->GrasshopperMagicsD, GrasshopperDirectionsD, maxFile, maxRank, activeBoard, SELECT_MAGIC(GrasshopperMagicDInit));
 
 #undef SELECT_MAGIC
 

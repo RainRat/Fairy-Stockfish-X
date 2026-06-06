@@ -226,7 +226,7 @@ extern RiderType AttackRiderTypes[PIECE_TYPE_NB];
 extern RiderType MoveRiderTypes[2][PIECE_TYPE_NB];
 Bitboard custom_rider_attacks(PieceType pt, bool initial, bool isCapture, Color c, Square s, Bitboard occupied);
 Bitboard bent_rider_attack(RiderType R, Square s, Bitboard occupied);
-Bitboard tuple_rider_between_bb(PieceType pt, MoveModality modality, bool initial, Square s1, Square s2);
+Bitboard tuple_rider_between_bb(PieceType pt, MoveModality modality, bool initial, Square s1, Square s2, Color c);
 inline Square lsb(Bitboard b);
 
 constexpr std::array<std::pair<int, int>, 8> RoseSteps = {{
@@ -626,13 +626,13 @@ inline Bitboard bent_slider_between_bb(Square s1, Square s2, int pivotF, int piv
   return Bitboard(0);
 }
 
-inline Bitboard between_bb(Square s1, Square s2, PieceType pt, MoveModality modality = MODALITY_CAPTURE, bool initial = false) {
+inline Bitboard between_bb(Square s1, Square s2, PieceType pt, MoveModality modality = MODALITY_CAPTURE, bool initial = false, Color c = WHITE) {
   RiderType r = modality == MODALITY_CAPTURE ? AttackRiderTypes[pt] : MoveRiderTypes[initial][pt];
   Bitboard path = Bitboard(0);
   auto remap_reverse_path = [&](Bitboard reversePath) {
       return (reversePath & ~square_bb(s1)) | square_bb(s2);
   };
-  if ((path = tuple_rider_between_bb(pt, modality, initial, s1, s2)))
+  if ((path = tuple_rider_between_bb(pt, modality, initial, s1, s2, c)))
       return path;
 
   if ((r & RIDER_HORSE) && (path = PseudoAttacks[WHITE][WAZIR][s2] & PseudoAttacks[WHITE][FERS][s1]))
