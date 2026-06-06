@@ -129,6 +129,11 @@ private:
     bool parse_legacy_attributes(Variant* v);
     bool parse_official_options(Variant* v);
     bool check_consistency(Variant* v);
+    bool parse_gating_piece_after(Variant* v);
+    bool parse_capture_maps(Variant* v);
+    bool parse_edge_insert(Variant* v);
+    bool parse_priority_drops(Variant* v);
+    bool parse_multimoves(Variant* v);
 
     template <typename T> void apply_color_setting(ColorSetting<T>& target, Color color, const T& parsed);
     template <typename T> void parse_color_setting(const std::string& key, ColorSetting<T>& target);

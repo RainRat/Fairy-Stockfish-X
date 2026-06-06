@@ -426,6 +426,26 @@ class TestPyffish(unittest.TestCase):
         self.assertIn("Set option VerboseVariantLoadWarnings to true to see full details.", result.stderr)
         self.assertNotIn("Variant 'chess' already exists.", result.stderr)
 
+    def test_piece_points_clamping_warnings(self):
+        ini_content = "[invalid-piece-points:chess]\npiecePoints = P:-1 R:100\n"
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.ini', delete=False) as f:
+            f.write(ini_content)
+            temp_path = f.name
+        try:
+            engine = os.environ.get("ENGINE")
+            if not engine or not os.path.exists(engine):
+                repo_root = os.environ.get("ROOT_DIR", str(Path(__file__).resolve().parent))
+                engine = os.path.join(repo_root, "src", "stockfish")
+                if not os.path.exists(engine):
+                    engine = os.path.join(repo_root, "stockfish")
+
+            proc = subprocess.Popen([engine], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            stdout, stderr = proc.communicate(f"check {temp_path}\nquit\n")
+            self.assertIn("piecePoints - Negative value clamped to 0.", stderr)
+            self.assertIn("piecePoints - Value exceeds MAX_PIECE_POINTS and was clamped.", stderr)
+        finally:
+            os.remove(temp_path)
+
     def test_set_option(self):
         result = sf.set_option("UCI_Variant", "capablanca")
         self.assertIsNone(result)
