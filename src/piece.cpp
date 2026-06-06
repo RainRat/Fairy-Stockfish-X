@@ -114,7 +114,7 @@ namespace {
       return true;
   }
 
-  bool parse_min_max(std::string_view s, int& min_val, int& max_val, bool& fail_piece_flag) {
+  void parse_min_max(std::string_view s, int& min_val, int& max_val, bool& fail_piece_flag) {
       size_t comma = s.find(',');
       if (comma != std::string_view::npos) {
           std::string_view min_s = trim_view(s.substr(0, comma));
@@ -151,21 +151,21 @@ namespace {
           {
               std::cerr << "Invalid numeric value in Betza hopper parameters: '" << s << "'" << std::endl;
               fail_piece_flag = true;
-              return false;
+              return;
           }
           if (minOk && (maxOk || max_s == "*") && min_val > max_val)
           {
               std::cerr << "Invalid hopper range (min > max) in Betza hopper parameters: '" << s << "'" << std::endl;
               fail_piece_flag = true;
-              return false;
+              return;
           }
-          return true;
+          return;
       }
       else
       {
           std::cerr << "Invalid hopper range (missing comma) in Betza hopper parameters: '" << s << "'" << std::endl;
           fail_piece_flag = true;
-          return false;
+          return;
       }
   }
 
@@ -186,8 +186,7 @@ namespace {
           if (hasLameProfile)
               invalidLameProfile = true;
           hasLameProfile = true;
-          currentLameProfile.path = PieceInfo::LameProfile::MIDPOINT;
-          currentLameProfile.limit = -1;
+          currentLameProfile = {};
       }
       else
       {
@@ -256,7 +255,7 @@ namespace {
                   else if (key == "hurdle_types" || key == "transparent_types") {
                       bool isHurdle = (key == "hurdle_types");
                       uint8_t& special = isHurdle ? currentHopperProfile.hurdleSpecialTypes : currentHopperProfile.transparentSpecialTypes;
-                      if (isHurdle) special = PieceInfo::HopperProfile::NONE; // Reset default for explicit hurdle_types
+                      special = PieceInfo::HopperProfile::NONE; // Reset default for explicit types
 
                       size_t vpos = 0;
                       while (vpos < val.size()) {
@@ -424,10 +423,6 @@ namespace {
       bool hasUniversalHopper = false;
       PieceInfo::HopperProfile currentHopperProfile;
 
-      auto reset_lame_profile = [&]() {
-          currentLameProfile.path = PieceInfo::LameProfile::MIDPOINT;
-          currentLameProfile.limit = -1;
-      };
       auto reset_parser_state = [&]() {
           moveModalities.clear();
           prelimDirections.clear();
@@ -436,7 +431,7 @@ namespace {
           lame = false;
           hasLameProfile = false;
           invalidLameProfile = false;
-          reset_lame_profile();
+          currentLameProfile = {};
           initial = false;
           dynamicDistance = false;
           skiSlider = false;
@@ -551,11 +546,7 @@ namespace {
               distance = DYNAMIC_SLIDER_LIMIT;
               p->add_rider_augment(PieceInfo::AUGMENT_DYNAMIC);
           }
-          if (hasLameProfile && invalidLameProfile)
-          {
-              fail_piece();
-              return;
-          }
+
           if (initial && std::find(moveModalities.begin(), moveModalities.end(), MODALITY_CAPTURE) != moveModalities.end())
           {
               std::cerr << "Initial capture Betza moves are not supported in '" << betza
@@ -682,7 +673,7 @@ namespace {
           // Keep first implementation strict: unqualified O only.
           if (!prelimDirections.empty() || hopper || lame || dynamicDistance || skiSlider || maxDistance)
           {
-              std::cerr << "Unsupported modifier combination with " << pieceName << ": '" << betza << "'." << std::endl;
+              std::cerr << "Modifiers are not yet implemented for " << pieceName << " in '" << betza << "'." << std::endl;
               fail_piece();
               return;
           }
@@ -750,7 +741,14 @@ namespace {
                       || (verticals.find(c) != std::string::npos && horizontals.find(c2) != std::string::npos)
                       || (horizontals.find(c) != std::string::npos && verticals.find(c2) != std::string::npos))
                   {
-                      prelimDirections.push_back(std::string(1, c) + c2);
+                      std::string combo = std::string(1, c) + c2;
+                      if ((c == 'h' || c2 == 'h') && combo != "hr" && combo != "hl" && combo != "fh" && combo != "bh" && combo != "rh" && combo != "lh")
+                      {
+                          std::cerr << "Invalid Betza direction modifier combination: '" << combo << "' in '" << betza << "'." << std::endl;
+                          fail_piece();
+                          continue;
+                      }
+                      prelimDirections.push_back(combo);
                       i++;
                       continue;
                   }
@@ -765,11 +763,13 @@ namespace {
                   prelimDirections.push_back(std::string(2, c));
           }
           // Standard Betza move atom
-          else if (leaperAtoms.find(c) != leaperAtoms.end() || riderAtoms.find(c) != riderAtoms.end())
+          else if (auto leaperIt = leaperAtoms.find(c); leaperIt != leaperAtoms.end())
           {
-              const auto& atoms = riderAtoms.find(c) != riderAtoms.end() ? riderAtoms.find(c)->second
-                                                                         : leaperAtoms.find(c)->second;
-              commit_atom(atoms, riderAtoms.find(c) != riderAtoms.end(), i, c);
+              commit_atom(leaperIt->second, false, i, c);
+          }
+          else if (auto riderIt = riderAtoms.find(c); riderIt != riderAtoms.end())
+          {
+              commit_atom(riderIt->second, true, i, c);
           }
           // Universal leaper: U can target any square on board.
           else if (c == 'U')
@@ -919,6 +919,10 @@ void PieceMap::add(PieceType pt, PieceInfo* p) {
       bool diagonalOnly = is_diagonal_only_slider(p->slider[0][MODALITY_QUIET])
                        || is_diagonal_only_slider(p->slider[0][MODALITY_CAPTURE]);
 
+      // The identical step terms (p->steps * 100) are added to both numerator and denominator
+      // as a weighted average. This ensures that hybrid pieces (slider + steps) only scale down
+      // the mobility contribution of their sliding moves, without incorrectly scaling down
+      // the mobility contribution of their step moves (which have no range limitation).
       int currentFrac = Stockfish::slider_fraction(p->slider[0][MODALITY_QUIET]) + Stockfish::slider_fraction(p->slider[0][MODALITY_CAPTURE])
                       + (p->steps[0][MODALITY_QUIET].size() + p->steps[0][MODALITY_CAPTURE].size()) * 100;
       int standardFrac = (p->slider[0][MODALITY_QUIET].size() + p->slider[0][MODALITY_CAPTURE].size()) * 100

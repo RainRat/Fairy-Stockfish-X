@@ -135,6 +135,20 @@ startFen = 7k/8/8/8/3A4/8/8/K7 w - - 0 1
 customPiece1 = a:BN
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 startFen = 7k/8/8/8/3A4/8/8/K7 w - - 0 1
+
+[invalid_dir_h:chess]
+king = -
+checking = false
+customPiece1 = a:hfR
+pieceToCharTable = A:a
+startFen = 8/8/8/8/4A3/8/8/8 w - - 0 1
+
+[bent_slider_modifiers:chess]
+king = -
+checking = false
+customPiece1 = a:fO
+pieceToCharTable = A:a
+startFen = 8/8/8/8/4A3/8/8/8 w - - 0 1
 INI
 
 perft_moves() {
@@ -234,5 +248,17 @@ cmp <(perft_moves alias-nightrider) <(perft_moves alias-nightrider-ref)
 cmp <(perft_moves alias-grasshopper) <(perft_moves alias-grasshopper-ref)
 cmp <(perft_moves alias-marshall) <(perft_moves alias-marshall-ref)
 cmp <(perft_moves alias-cardinal) <(perft_moves alias-cardinal-ref)
+
+invalid_dir_h_out=$(run_uci "$ENGINE" "$tmp_ini" invalid_dir_h <<'UCI' 2>&1
+UCI
+)
+assert_contains "$invalid_dir_h_out" "Invalid Betza direction modifier combination: 'hf' in 'hfR'."
+
+bent_slider_modifiers_out=$(run_uci "$ENGINE" "$tmp_ini" bent_slider_modifiers <<'UCI' 2>&1
+UCI
+)
+assert_contains "$bent_slider_modifiers_out" "Modifiers are not yet implemented for bent slider in 'fO'."
+
+
 
 echo "fairy notation regressions passed"
