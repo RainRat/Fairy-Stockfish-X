@@ -665,9 +665,13 @@ namespace {
     if (!(pos.pieces(c) & a) || !(pos.pieces(c) & b))
         return false;
 
-    int df = int(file_of(b)) - int(file_of(a));
-    int dr = int(rank_of(b)) - int(rank_of(a));
-    if (std::abs(df) != 1 || std::abs(dr) != 1)
+    int df = std::abs(int(file_of(b)) - int(file_of(a)));
+    int dr = std::abs(int(rank_of(b)) - int(rank_of(a)));
+
+    bool f_adj = (df == 1) || (pos.wraps_files() && df == int(pos.max_file()));
+    bool r_adj = (dr == 1) || (pos.wraps_ranks() && dr == int(pos.max_rank()));
+
+    if (!f_adj || !r_adj)
         return false;
 
     Square bridge1 = make_square(file_of(a), rank_of(b));
@@ -678,25 +682,62 @@ namespace {
   Bitboard weak_connection_expansion(const Position& pos, Bitboard frontier, Bitboard connectPieces, Color c) {
     Bitboard expanded = 0;
 
-    for (Direction d : pos.getConnectDirections())
-        expanded |= shift(d, frontier) & connectPieces;
-
-    while (frontier)
+    if (pos.topology_wraps())
     {
-        Square from = pop_lsb(frontier);
-        if (!pos.weak_diagonal_connect())
-            continue;
+        Bitboard tmp = frontier;
+        while (tmp)
+        {
+            Square s = pop_lsb(tmp);
+            for (Direction d : pos.getConnectDirections())
+            {
+                auto [dr, df] = decode_direction(d);
+                Square next = SQ_NONE;
+                if (wrapped_destination_square(s, df, dr, pos.max_file(), pos.max_rank(), pos.wraps_files(), pos.wraps_ranks(), next))
+                {
+                    if (connectPieces & next)
+                        expanded |= next;
+                }
+            }
+        }
+    }
+    else
+    {
+        for (Direction d : pos.getConnectDirections())
+            expanded |= shift(d, frontier) & connectPieces;
+    }
 
-        Bitboard fromBb = square_bb(from);
+    if (!pos.weak_diagonal_connect())
+        return expanded;
+
+    Bitboard tmp = frontier;
+    while (tmp)
+    {
+        Square from = pop_lsb(tmp);
         static constexpr Direction diagonals[] = {NORTH_EAST, NORTH_WEST, SOUTH_EAST, SOUTH_WEST};
         for (Direction d : diagonals)
         {
-            Bitboard toBb = shift(d, fromBb) & connectPieces;
-            if (!toBb)
-                continue;
-            Square to = lsb(toBb);
-            if (weak_diagonal_link(pos, c, from, to))
-                expanded |= toBb;
+            Square to = SQ_NONE;
+            bool ok = false;
+            if (pos.topology_wraps())
+            {
+                auto [dr, df] = decode_direction(d);
+                ok = wrapped_destination_square(from, df, dr, pos.max_file(), pos.max_rank(), pos.wraps_files(), pos.wraps_ranks(), to);
+            }
+            else
+            {
+                Bitboard toBb = shift(d, square_bb(from));
+                if (toBb)
+                {
+                    to = lsb(toBb);
+                    ok = true;
+                }
+            }
+
+            if (ok && (connectPieces & to))
+            {
+                if (weak_diagonal_link(pos, c, from, to))
+                    expanded |= to;
+            }
         }
     }
 
@@ -3020,6 +3061,107 @@ Bitboard Position::compute_surround_capture_mask(Square moverSq, Bitboard usPiec
 }
 
 
+Bitboard Position::compute_remove_connect_n_mask(
+    const std::vector<Bitboard>& baseLines,
+    Bitboard alreadyRemoved,
+    Bitboard blastMask,
+    Bitboard& connectMask) const
+{
+    Bitboard removalMask = 0;
+
+    if (blast_promotion() && blastMask)
+    {
+        Bitboard b = blastMask;
+        while (b)
+        {
+            Square sq = pop_lsb(b);
+            Piece p = piece_on(sq);
+            if (p != NO_PIECE && promoted_piece_type(type_of(p)) != NO_PIECE_TYPE)
+                alreadyRemoved &= ~square_bb(sq);
+        }
+    }
+
+    auto mark_line = [&](Bitboard line) {
+        for (Direction d : var->connectDirections)
+        {
+            Bitboard temp = line;
+            for (int i = 1; i < remove_connect_n(); ++i)
+                temp &= shift(d, temp);
+            Bitboard lineStarts = temp;
+            while (lineStarts)
+            {
+                Square start = pop_lsb(lineStarts);
+                for (int i = 0; i < remove_connect_n(); ++i)
+                {
+                    Square sq = start - i * d;
+                    if (is_ok(sq))
+                    {
+                        removalMask |= sq;
+                        connectMask |= sq;
+                    }
+                }
+            }
+        }
+    };
+
+    if (remove_connect_n_by_type())
+    {
+        for (PieceSet ps = variant()->pieceTypes; ps; )
+        {
+            PieceType pt = pop_lsb(ps);
+            Bitboard line = baseLines[pt];
+            if (blast_promotion() && blastMask)
+            {
+                Bitboard b = blastMask;
+                while (b)
+                {
+                    Square sq = pop_lsb(b);
+                    Piece p = piece_on(sq);
+                    if (p == NO_PIECE)
+                        continue;
+                    PieceType fromPt = type_of(p);
+                    PieceType toPt = promoted_piece_type(fromPt);
+                    if (fromPt == pt)
+                        line &= ~square_bb(sq);
+                    if (toPt == pt)
+                        line |= square_bb(sq);
+                }
+            }
+            line &= ~(alreadyRemoved & ~connectMask);
+            mark_line(line);
+        }
+    }
+    else
+    {
+        Bitboard whiteLine = baseLines[WHITE];
+        Bitboard blackLine = baseLines[BLACK];
+        if (blast_promotion() && blastMask)
+        {
+            Bitboard b = blastMask;
+            while (b)
+            {
+                Square sq = pop_lsb(b);
+                Piece p = piece_on(sq);
+                if (p == NO_PIECE)
+                    continue;
+                if (promoted_piece_type(type_of(p)) == NO_PIECE_TYPE)
+                {
+                    if (color_of(p) == WHITE)
+                        whiteLine &= ~square_bb(sq);
+                    else
+                        blackLine &= ~square_bb(sq);
+                }
+            }
+        }
+        whiteLine &= ~(alreadyRemoved & ~connectMask);
+        blackLine &= ~(alreadyRemoved & ~connectMask);
+        mark_line(whiteLine);
+        mark_line(blackLine);
+    }
+
+    return removalMask;
+}
+
 
 /// Position::legal() tests whether a pseudo-legal move is legal
 
@@ -3696,29 +3838,10 @@ bool Position::legal(Move m) const {
       // Remove connect N
       if (remove_connect_n() > 0)
       {
-          Bitboard connectMask = 0;
-          auto mark_line = [&](Bitboard line) {
-              for (Direction d : var->connectDirections)
-              {
-                  Bitboard temp = line;
-                  for (int i = 1; i < remove_connect_n(); ++i)
-                      temp &= shift(d, temp);
-                  Bitboard lineStarts = temp;
-                  while (lineStarts)
-                  {
-                      Square start = pop_lsb(lineStarts);
-                      for (int i = 0; i < remove_connect_n(); ++i)
-                      {
-                          Square sq = start - i * d;
-                          removedByEffects |= sq;
-                          structuralRemoval |= sq;
-                          connectMask |= sq;
-                      }
-                  }
-              }
-          };
+          std::vector<Bitboard> baseLines;
           if (remove_connect_n_by_type())
           {
+              baseLines.resize(PIECE_TYPE_NB, 0);
               for (PieceSet ps = variant()->pieceTypes; ps; )
               {
                   PieceType pt = pop_lsb(ps);
@@ -3726,20 +3849,36 @@ bool Position::legal(Move m) const {
                   if (!dropMove) line &= ~from;
                   if (movePt == pt) line |= effectiveTo;
                   if (capture(m) && type_of(captured_piece(m)) == pt) line &= ~shotSq;
-                  line &= ~(removedByEffects & ~connectMask);
-                  mark_line(line);
+                  baseLines[pt] = line;
               }
           }
           else
           {
+              baseLines.resize(COLOR_NB, 0);
               Bitboard whiteLine = pieces(WHITE), blackLine = pieces(BLACK);
               if (!dropMove) { if (us == WHITE) whiteLine &= ~from; else blackLine &= ~from; }
               if (us == WHITE) whiteLine |= effectiveTo; else blackLine |= effectiveTo;
               if (capture(m)) { if (us == WHITE) blackLine &= ~shotSq; else whiteLine &= ~shotSq; }
-              whiteLine &= ~(removedByEffects & ~connectMask);
-              blackLine &= ~(removedByEffects & ~connectMask);
-              mark_line(whiteLine); mark_line(blackLine);
+              baseLines[WHITE] = whiteLine;
+              baseLines[BLACK] = blackLine;
           }
+          Bitboard connectMask = 0;
+          Bitboard blast_mask = 0;
+          if (blast_promotion() && !is_pass(m))
+          {
+              const bool blastOnCaptureMove = (capture(m) || rifleShot) && blast_on_capture(m);
+              if (blastOnCaptureMove || (blast_on_move() && !capture(m) && !is_self_destruct(m)) || (blast_on_self_destruct() && is_self_destruct(m)))
+              {
+                  Square blastCenter = (capture(m) || rifleShot) ? captureBlastCenter : effectiveTo;
+                  blast_mask = blast_squares(blastCenter);
+                  Square moverSq = rifleShot ? from : to;
+                  if (blastOnCaptureMove && !blast_on_capture_mover_center())
+                      blast_mask &= ~square_bb(moverSq);
+              }
+          }
+          Bitboard removalMask = compute_remove_connect_n_mask(baseLines, removedByEffects, blast_mask, connectMask);
+          removedByEffects |= removalMask;
+          structuralRemoval |= removalMask;
       }
   }
   postMoveOccupied &= ~structuralRemoval;
@@ -6165,79 +6304,26 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           removal_mask |= locust_all_mask;
       }
 
-      if (remove_connect_n() > 0) {
-          auto mark_line = [&](Bitboard line) {
-              for (Direction d : var->connectDirections) {
-                  Bitboard temp = line;
-                  for (int i = 1; i < remove_connect_n(); ++i)
-                      temp &= shift(d, temp);
-
-                  Bitboard lineStarts = temp;
-                  while (lineStarts) {
-                      Square start = pop_lsb(lineStarts);
-                      for (int i = 0; i < remove_connect_n(); ++i) {
-                          Square sq = start - i * d;
-                          if (is_ok(sq)) {
-                              removal_mask |= sq;
-                              connect_mask |= sq;
-                          }
-                      }
-                  }
-              }
-          };
-
-          if (remove_connect_n_by_type()) {
-              for (PieceSet ps = variant()->pieceTypes; ps; ) {
+      if (remove_connect_n() > 0)
+      {
+          std::vector<Bitboard> baseLines;
+          if (remove_connect_n_by_type())
+          {
+              baseLines.resize(PIECE_TYPE_NB, 0);
+              for (PieceSet ps = variant()->pieceTypes; ps; )
+              {
                   PieceType pt = pop_lsb(ps);
-                  Bitboard line = pieces(pt);
-
-                  // removeConnectN is evaluated after move effects. With blastPromotion,
-                  // adjust per-type occupancy to the post-promotion type map.
-                  if (blast_promotion() && blast_mask) {
-                      Bitboard b = blast_mask;
-                      while (b) {
-                          Square sq = pop_lsb(b);
-                          Piece p = piece_on(sq);
-                          if (p == NO_PIECE)
-                              continue;
-
-                          PieceType fromPt = type_of(p);
-                          PieceType toPt = promoted_piece_type(fromPt);
-
-                          if (fromPt == pt)
-                              line &= ~square_bb(sq);
-                          if (toPt == pt)
-                              line |= square_bb(sq);
-                      }
-                  }
-
-                  mark_line(line);
+                  baseLines[pt] = pieces(pt);
               }
-          } else {
-              Bitboard whiteLine = pieces(WHITE);
-              Bitboard blackLine = pieces(BLACK);
-
-              // Color ownership is stable under blastPromotion, except when a piece
-              // has no promoted target and is therefore removed.
-              if (blast_promotion() && blast_mask) {
-                  Bitboard b = blast_mask;
-                  while (b) {
-                      Square sq = pop_lsb(b);
-                      Piece p = piece_on(sq);
-                      if (p == NO_PIECE)
-                          continue;
-                      if (promoted_piece_type(type_of(p)) == NO_PIECE_TYPE) {
-                          if (color_of(p) == WHITE)
-                              whiteLine &= ~square_bb(sq);
-                          else
-                              blackLine &= ~square_bb(sq);
-                      }
-                  }
-              }
-
-              mark_line(whiteLine);
-              mark_line(blackLine);
           }
+          else
+          {
+              baseLines.resize(COLOR_NB, 0);
+              baseLines[WHITE] = pieces(WHITE);
+              baseLines[BLACK] = pieces(BLACK);
+          }
+          Bitboard removalMask = compute_remove_connect_n_mask(baseLines, removal_mask, blast_mask, connect_mask);
+          removal_mask |= removalMask;
       }
 
       while (removal_mask)
@@ -7800,8 +7886,8 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
                   bool reverse = true;
                   for (size_t i = 0; i < goal.size(); ++i)
                   {
-                      forward &= type_of(piece_on(line[i])) == goal[i] && color_of(piece_on(line[i])) == c;
-                      reverse &= type_of(piece_on(line[goal.size() - 1 - i])) == goal[i] && color_of(piece_on(line[goal.size() - 1 - i])) == c;
+                      forward &= piece_on(line[i]) != NO_PIECE && type_of(piece_on(line[i])) == goal[i];
+                      reverse &= piece_on(line[goal.size() - 1 - i]) != NO_PIECE && type_of(piece_on(line[goal.size() - 1 - i])) == goal[i];
                   }
                   if (forward || reverse)
                       return true;
@@ -7821,7 +7907,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
                   for (Square s = SQ_A1; s <= SQ_MAX; ++s)
                   {
                       Piece pc = piece_on(s);
-                      if (pc == NO_PIECE || color_of(pc) != c || type_of(pc) != goal.front())
+                      if (pc == NO_PIECE || type_of(pc) != goal.front())
                           continue;
 
                       auto matches = [&](Direction dir, const std::vector<PieceType>& sequence) {
@@ -7832,14 +7918,14 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
                               if (!wrapped_step(cur, dir, next) || next == s)
                                   return false;
                               Piece nextPc = piece_on(next);
-                              if (nextPc == NO_PIECE || color_of(nextPc) != c || type_of(nextPc) != sequence[i])
+                              if (nextPc == NO_PIECE || type_of(nextPc) != sequence[i])
                                   return false;
                               cur = next;
                           }
                           return true;
                       };
 
-                      if (matches(d, goal) || matches(-d, std::vector<PieceType>(goal.rbegin(), goal.rend())))
+                      if (matches(d, goal) || matches(-d, goal))
                           return true;
                   }
               }
@@ -7848,23 +7934,26 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
 
           for (Direction d : var->connectDirections)
           {
-              Bitboard starts = pieces(goal.front());
-              while (starts)
+              for (Direction dir : {d, -d})
               {
-                  Square s = pop_lsb(starts);
-                  Bitboard cur = square_bb(s);
-                  bool matched = true;
-                  for (size_t i = 1; i < goal.size(); ++i)
+                  Bitboard starts = pieces(goal.front());
+                  while (starts)
                   {
-                      cur = shift(d, cur);
-                      if (!cur || type_of(piece_on(lsb(cur))) != goal[i])
+                      Square s = pop_lsb(starts);
+                      Bitboard cur = square_bb(s);
+                      bool matched = true;
+                      for (size_t i = 1; i < goal.size(); ++i)
                       {
-                          matched = false;
-                          break;
+                          cur = shift(dir, cur);
+                          if (!cur || type_of(piece_on(lsb(cur))) != goal[i])
+                          {
+                              matched = false;
+                              break;
+                          }
                       }
+                      if (matched)
+                          return true;
                   }
-                  if (matched)
-                      return true;
               }
           }
           return false;
@@ -8066,8 +8155,8 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
   }
 
   // Connect-Group (ends game if a player has N pieces in any connected group)
-  if (connect_group() != 0 && (popcount(pieces(~sideToMove)) >= std::abs(connect_group()) || connect_group() == -1)) {
-      Bitboard playerPieces = pieces(~sideToMove); // Pieces of the player who just moved
+  if (connect_group() != 0 && (popcount(connectPieces) >= std::abs(connect_group()) || connect_group() == -1)) {
+      Bitboard playerPieces = connectPieces; // Pieces of the player who just moved
       Bitboard visited = 0;
       int targetGroupSize = connect_group();
       int totalPlayerPieces = popcount(playerPieces);
@@ -8093,10 +8182,18 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
                   group_size++;
 
                   for (Direction d : getConnectDirections()) {
-                      Square next_sq = s + d;
-                      // Guard against horizontal/diagonal edge wrap when adding raw directions.
-                      if (!is_ok(next_sq) || distance(s, next_sq) != dist(d))
+                      Square next_sq = SQ_NONE;
+                      bool ok = false;
+                      if (topology_wraps()) {
+                          auto [dr, df] = decode_direction(d);
+                          ok = wrapped_destination_square(s, df, dr, max_file(), max_rank(), wraps_files(), wraps_ranks(), next_sq);
+                      } else {
+                          next_sq = s + d;
+                          ok = is_ok(next_sq) && distance(s, next_sq) == dist(d);
+                      }
+                      if (!ok)
                           continue;
+
                       // Check if it's a player piece and not visited.
                       if ((square_bb(next_sq) & playerPieces) && !(square_bb(next_sq) & visited)) {
                           visited |= next_sq;

@@ -330,11 +330,7 @@ namespace {
     return b;
   }
 
-#ifdef VERY_LARGE_BOARDS
-  Bitboard fixed_step_lame_rider_attacks(Square s, Bitboard occupied, int stepF, int stepR) {
-    return fixed_step_lame_rider_attacks_core(s, occupied, stepF, stepR);
-  }
-#endif
+
 
   Bitboard limited_step_rider_attacks(Square s, Bitboard occupied, Direction d, int limit) {
     auto [stepR, stepF] = decode_direction(d);
@@ -548,14 +544,13 @@ Bitboard bent_rider_attack(RiderType R, Square s, Bitboard occupied) {
   }
 }
 
-Bitboard tuple_rider_between_bb(PieceType pt, MoveModality modality, bool initial, Square s1, Square s2, Color c) {
-  for (const auto& ray : pieceMap.get(pt)->tupleSlider[initial][modality])
-  {
+namespace {
+  Bitboard tuple_rider_path_between(const PieceInfo::TupleRay& ray, Square from, Square to, Color c, bool& hit) {
       Bitboard path = 0;
-      bool hit = false;
-      walk_tuple_ray(ray, s1, c, Bitboard(0), [&](Bitboard next, Square to, int count) {
+      hit = false;
+      walk_tuple_ray(ray, from, c, Bitboard(0), [&](Bitboard next, Square target, int count) {
           path |= next;
-          if (to != s2)
+          if (target != to)
               return true;
 
           int steps = count + 1;
@@ -567,27 +562,24 @@ Bitboard tuple_rider_between_bb(PieceType pt, MoveModality modality, bool initia
           hit = true;
           return false;
       });
+      return path;
+  }
+}
+
+Bitboard tuple_rider_between_bb(PieceType pt, MoveModality modality, bool initial, Square s1, Square s2, Color c) {
+  if (initial && !pieceMap.get(pt)->has_explicit_initial_moves())
+      initial = false;
+  for (const auto& ray : pieceMap.get(pt)->tupleSlider[initial][modality])
+  {
+      bool hit = false;
+      Bitboard path = tuple_rider_path_between(ray, s1, s2, c, hit);
       if (hit)
           return path;
   }
   for (const auto& ray : pieceMap.get(pt)->tupleSlider[initial][modality])
   {
-      Bitboard path = 0;
       bool hit = false;
-      walk_tuple_ray(ray, s2, c, Bitboard(0), [&](Bitboard next, Square to, int count) {
-          path |= next;
-          if (to != s1)
-              return true;
-
-          int steps = count + 1;
-          if (steps < slider_min_distance(ray.limit))
-              return false;
-          int maxDistance = slider_max_distance(ray.limit);
-          if (maxDistance && steps > maxDistance)
-              return false;
-          hit = true;
-          return false;
-      });
+      Bitboard path = tuple_rider_path_between(ray, s2, s1, c, hit);
       if (hit)
           return (path & ~square_bb(s1)) | square_bb(s2);
   }
@@ -720,6 +712,18 @@ void Bitboards::init_pieces() {
                       pseudo |= special_pseudo_bb(pi, initial, modality, s, c, riderDirs, skiDirs);
                       leaper |= special_leaper_bb(pi, initial, modality, s);
                   }
+              }
+          }
+      }
+      if (!pi->has_explicit_initial_moves())
+      {
+          MoveRiderTypes[true][pt] = MoveRiderTypes[false][pt];
+          for (Color c : { WHITE, BLACK })
+          {
+              for (Square s = SQ_A1; s <= SQ_MAX; ++s)
+              {
+                  PseudoMoves[true][c][pt][s] = PseudoMoves[false][c][pt][s];
+                  LeaperMoves[true][c][pt][s] = LeaperMoves[false][c][pt][s];
               }
           }
       }

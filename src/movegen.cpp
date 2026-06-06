@@ -1489,8 +1489,13 @@ namespace {
                     continue;
 
                 // Pure leapers cannot have an intermediate path square.
+                const bool initial = baseInfo.isInitial && pieceMap.get(baseInfo.moverType)->has_explicit_initial_moves();
+                const bool isRider = baseInfo.modality == MODALITY_CAPTURE
+                    ? AttackRiderTypes[baseInfo.moverType] != NO_RIDER
+                    : MoveRiderTypes[initial][baseInfo.moverType] != NO_RIDER;
+
                 if ((baseInfo.mt == NORMAL || baseInfo.mt == PROMOTION)
-                    && AttackRiderTypes[baseInfo.moverType] == NO_RIDER
+                    && !isRider
                     && baseInfo.moverType != PAWN
                     && baseInfo.moverType != SHOGI_PAWN
                     && baseInfo.moverType != SOLDIER)

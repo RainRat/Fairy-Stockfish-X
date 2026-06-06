@@ -452,6 +452,7 @@ public:
   Bitboard surround_capture_max_region() const;
   Bitboard surround_capture_hostile_region() const;
   Bitboard compute_surround_capture_mask(Square moverSq, Bitboard usPieces, Bitboard themPieces, Bitboard occupied) const;
+  Bitboard compute_remove_connect_n_mask(const std::vector<Bitboard>& baseLines, Bitboard alreadyRemoved, Bitboard blastMask, Bitboard& connectMask) const;
   EndgameEval endgame_eval() const;
   Bitboard double_step_region(Color c) const;
   Bitboard double_step_region(Color c, PieceType pt) const;
@@ -5332,12 +5333,46 @@ inline int Position::connect_line_count(Color c) const {
       return countLines;
   }
 
-  for (Direction d : var->connectDirections)
+  if (topology_wraps())
   {
-      Bitboard b = connectPieces;
-      for (int i = 1; i < connect_n() && b; i++)
-          b &= shift(d, b);
-      countLines += popcount(b);
+      auto wrapped_step = [&](Square cur, Direction d, Square& next) {
+          auto [dr, df] = decode_direction(d);
+          return wrapped_destination_square(cur, df, dr, max_file(), max_rank(), wraps_files(), wraps_ranks(), next);
+      };
+      const int maxSteps = popcount(board_bb());
+
+      for (Direction d : var->connectDirections)
+      {
+          Bitboard starts = connectPieces;
+          while (starts)
+          {
+              Square s = pop_lsb(starts);
+              Square cur = s;
+              int steps = 1;
+              while (steps < connect_n() && steps < maxSteps)
+              {
+                  Square next = SQ_NONE;
+                  if (!wrapped_step(cur, d, next) || next == s)
+                      break;
+                  if (!(connectPieces & square_bb(next)))
+                      break;
+                  cur = next;
+                  ++steps;
+              }
+              if (steps >= connect_n())
+                  countLines++;
+          }
+      }
+  }
+  else
+  {
+      for (Direction d : var->connectDirections)
+      {
+          Bitboard b = connectPieces;
+          for (int i = 1; i < connect_n() && b; i++)
+              b &= shift(d, b);
+          countLines += popcount(b);
+      }
   }
   return countLines;
 }

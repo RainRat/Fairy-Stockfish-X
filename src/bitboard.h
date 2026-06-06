@@ -853,6 +853,10 @@ inline Bitboard fixed_step_lame_rider_attacks_core(Square s, Bitboard occupied, 
   return attack;
 }
 
+inline Bitboard fixed_step_lame_rider_attacks(Square s, Bitboard occupied, int stepF, int stepR) {
+  return fixed_step_lame_rider_attacks_core(s, occupied, stepF, stepR);
+}
+
 
 #ifdef VERY_LARGE_BOARDS
 Bitboard rider_attacks_bb(
@@ -867,10 +871,6 @@ inline Bitboard rider_attacks_bb(
 
 inline Square lsb(Bitboard b);
 #else
-inline Bitboard fixed_step_lame_rider_attacks(Square s, Bitboard occupied, int stepF, int stepR, const MagicGeometry* mg = current_magic_geometry) {
-  (void)mg;
-  return fixed_step_lame_rider_attacks_core(s, occupied, stepF, stepR);
-}
 
 inline Bitboard ski_slider_attacks(Square s, Bitboard occupied, int stepF, int stepR, const MagicGeometry* mg = current_magic_geometry) {
   (void)mg;
