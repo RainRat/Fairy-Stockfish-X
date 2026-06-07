@@ -101,7 +101,10 @@ namespace Stockfish::Eval::NNUE {
   namespace {
 
   static std::size_t compute_bucket(const Position& pos) {
-    return std::min((pos.count<ALL_PIECES>() - 1) * 8 / currentNnueVariant->nnueMaxPieces, 7);
+    int maxPieces = currentNnueVariant->nnueMaxPieces;
+    if (maxPieces <= 0)
+        return 0;
+    return std::min((pos.count<ALL_PIECES>() - 1) * 8 / maxPieces, 7);
   }
 
   static void append_trace_cell(std::ostream& os, const std::string& text) {
@@ -221,16 +224,17 @@ namespace Stockfish::Eval::NNUE {
     const auto psqt = featureTransformer->transform(pos, buffers.transformedFeatures, bucket);
     const auto output = network[bucket]->propagate(buffers.transformedFeatures, buffers.buffer);
 
-    int materialist = psqt;
-    int positional  = output[0];
+    int psqtVal = psqt;
+    int positionalVal = output[0];
 
     int delta_npm = std::abs(pos.non_pawn_material(WHITE) - pos.non_pawn_material(BLACK));
-    int entertainment = (adjusted && delta_npm <= BishopValueMg - KnightValueMg ? 7 : 0);
+    // When the difference in non-pawn material is small, we slightly bias towards positional evaluation
+    int npmCloseBonus = (adjusted && delta_npm <= BishopValueMg - KnightValueMg ? 7 : 0);
 
-    int A = 128 - entertainment;
-    int B = 128 + entertainment;
+    int materialScale = 128 - npmCloseBonus;
+    int positionalScale = 128 + npmCloseBonus;
 
-    int sum = (A * materialist + B * positional) / 128;
+    int sum = (materialScale * psqtVal + positionalScale * positionalVal) / 128;
 
     return static_cast<Value>( sum / OutputScale );
   }
@@ -268,6 +272,7 @@ namespace Stockfish::Eval::NNUE {
     buffer[0] = (v < 0 ? '-' : v > 0 ? '+' : ' ');
 
     int cp = std::abs(100 * v / PawnValueEg);
+    if (cp > 99999) cp = 99999;
 
     if (cp >= 10000)
     {
@@ -297,6 +302,7 @@ namespace Stockfish::Eval::NNUE {
     buffer[0] = (v < 0 ? '-' : v > 0 ? '+' : ' ');
 
     int cp = std::abs(100 * v / PawnValueEg);
+    if (cp > 99999) cp = 99999;
 
     if (cp >= 10000)
     {
@@ -307,19 +313,11 @@ namespace Stockfish::Eval::NNUE {
       buffer[5] = '0' + cp / 10; cp %= 10;
       buffer[6] = '0' + cp;
     }
-    else if (cp >= 1000)
-    {
-      buffer[1] = ' ';
-      buffer[2] = '0' + cp / 1000; cp %= 1000;
-      buffer[3] = '0' + cp / 100; cp %= 100;
-      buffer[4] = '.';
-      buffer[5] = '0' + cp / 10; cp %= 10;
-      buffer[6] = '0' + cp;
-    }
     else
     {
       buffer[1] = ' ';
-      buffer[2] = ' ';
+      buffer[2] = (cp >= 1000 ? '0' + cp / 1000 : ' ');
+      if (cp >= 1000) cp %= 1000;
       buffer[3] = '0' + cp / 100; cp %= 100;
       buffer[4] = '.';
       buffer[5] = '0' + cp / 10; cp %= 10;
@@ -360,6 +358,11 @@ namespace Stockfish::Eval::NNUE {
         format_cp_compact(value, board[y+2].data() + x + 2);
     };
 
+    auto invalidate = [&st] {
+      st->accumulator.computed[WHITE] = false;
+      st->accumulator.computed[BLACK] = false;
+    };
+
     // We estimate the value of each piece by doing a differential evaluation from
     // the current base eval, simulating the removal of the piece from its square.
     Value base = evaluate(pos);
@@ -377,16 +380,14 @@ namespace Stockfish::Eval::NNUE {
         if (pc != NO_PIECE && type_of(pc) != pos.nnue_king())
         {
           pos.remove_piece(sq);
-          st->accumulator.computed[WHITE] = false;
-          st->accumulator.computed[BLACK] = false;
+          invalidate();
 
           Value eval = evaluate(pos);
           eval = pos.side_to_move() == WHITE ? eval : -eval;
           v = base - eval;
 
           pos.put_piece(pc, sq, isPromoted, unpromotedPc);
-          st->accumulator.computed[WHITE] = false;
-          st->accumulator.computed[BLACK] = false;
+          invalidate();
         }
 
         writeSquare(f, r, pc, v);
@@ -399,8 +400,7 @@ namespace Stockfish::Eval::NNUE {
 
     auto t = trace_evaluate(pos);
     st->nnueRefreshNeeded = savedRefreshNeeded;
-    st->accumulator.computed[WHITE] = false;
-    st->accumulator.computed[BLACK] = false;
+    invalidate();
 
     ss << " NNUE network contributions "
        << (pos.side_to_move() == WHITE ? "(White to move)" : "(Black to move)") << std::endl

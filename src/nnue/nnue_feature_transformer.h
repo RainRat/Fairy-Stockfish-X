@@ -132,8 +132,8 @@ namespace Stockfish::Eval::NNUE {
                 int      MaxRegisters>
       static constexpr int BestRegisterCount()
       {
-          #define RegisterSize  sizeof(SIMDRegisterType)
-          #define LaneSize      sizeof(LaneType)
+          constexpr auto RegisterSize = sizeof(SIMDRegisterType);
+          constexpr auto LaneSize     = sizeof(LaneType);
 
           static_assert(RegisterSize >= LaneSize);
           static_assert(MaxRegisters <= NumRegistersSIMD);

@@ -50,8 +50,7 @@ namespace Stockfish::Eval::NNUE::Features {
     return IndexType(orient(perspective, s, pos) + pos.nnue_wall_index_base() + pos.nnue_king_square_index(ksq));
   }
 
-  inline IndexType HalfKAv2Variants::make_points_index(Color perspective, int plane, Square ksq, const Position& pos) {
-    (void)perspective;
+  inline IndexType HalfKAv2Variants::make_points_index(int plane, Square ksq, const Position& pos) {
     return IndexType(plane + pos.nnue_points_index_base() + pos.nnue_king_square_index(ksq));
   }
 
@@ -112,9 +111,9 @@ namespace Stockfish::Eval::NNUE::Features {
         {
           int mask = 1 << bit;
           if (usScore & mask)
-            active.push_back(make_points_index(perspective, planeOffset + bit, oriented_ksq, pos));
+            active.push_back(make_points_index(planeOffset + bit, oriented_ksq, pos));
           if (themScore & mask)
-            active.push_back(make_points_index(perspective, planeOffset + POINTS_SCORE_BITS + bit, oriented_ksq, pos));
+            active.push_back(make_points_index(planeOffset + POINTS_SCORE_BITS + bit, oriented_ksq, pos));
         }
         planeOffset += pos.nnue_points_score_planes();
       }
@@ -126,9 +125,9 @@ namespace Stockfish::Eval::NNUE::Features {
         {
           int mask = 1 << bit;
           if (usChecks & mask)
-            active.push_back(make_points_index(perspective, planeOffset + bit, oriented_ksq, pos));
+            active.push_back(make_points_index(planeOffset + bit, oriented_ksq, pos));
           if (themChecks & mask)
-            active.push_back(make_points_index(perspective, planeOffset + CHECKS_BITS + bit, oriented_ksq, pos));
+            active.push_back(make_points_index(planeOffset + CHECKS_BITS + bit, oriented_ksq, pos));
         }
       }
     }
@@ -210,9 +209,9 @@ namespace Stockfish::Eval::NNUE::Features {
           if ((oldValue ^ newValue) & mask)
           {
             if (oldValue & mask)
-              removed.push_back(make_points_index(perspective, baseOffset + bit, oriented_ksq, pos));
+              removed.push_back(make_points_index(baseOffset + bit, oriented_ksq, pos));
             else
-              added.push_back(make_points_index(perspective, baseOffset + bit, oriented_ksq, pos));
+              added.push_back(make_points_index(baseOffset + bit, oriented_ksq, pos));
           }
         }
       };
