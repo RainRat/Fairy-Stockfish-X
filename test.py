@@ -1430,6 +1430,14 @@ startFen = 4k3/3p4/8/8/8/8/8/3QK3 w - - 0 1
         self.assertIn("f:e4", normalized)
         self.assertIn("<1 2 3 4>", normalized)
 
+        bad_cooldowns = [
+            "4k3/8/8/8/8/8/8/4K3[] w - - 0 1 f:e4 <1,2>",
+            "4k3/8/8/8/8/8/8/4K3[] w - - 0 1 f:e4 <1 x 2>",
+            "4k3/8/8/8/8/8/8/4K3[] w - - 0 1 f:e4 <999999999999999999999 2>",
+        ]
+        for bad_fen in bad_cooldowns:
+            self.assertNotEqual(sf.validate_fen(bad_fen, "spell-chess"), sf.FEN_OK)
+
     def test_spell_chess_potion_fen_roundtrip_after_both_potion_types(self):
         fen = sf.get_fen("spell-chess", sf.start_fen("spell-chess"), ["f@a6,e2e4", "j@a7,a8a2"])
         self.assertEqual(sf.validate_fen(fen, "spell-chess"), sf.FEN_OK)

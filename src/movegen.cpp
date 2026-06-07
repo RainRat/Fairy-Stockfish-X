@@ -686,15 +686,11 @@ namespace {
     assert(Pt != KING);
 
     constexpr Direction Up = pawn_push(Us);
-    Bitboard bb = pos.pieces(Us, Pt) & fromMask;
-    Bitboard frozen = pos.freeze_squares();
+    Bitboard bb = pos.pieces(Us, Pt) & fromMask & ~pos.freeze_squares();
 
     while (bb)
     {
         Square from = pop_lsb(bb);
-
-        if (frozen & from)
-            continue;
 
         Bitboard attacks = pos.attacks_from(Us, Pt, from);
         Bitboard quiets = pos.moves_from(Us, Pt, from);
@@ -1551,17 +1547,12 @@ namespace {
 /// Returns a pointer to the end of the move list.
 
 template<GenType Type>
-inline Color check_and_side(const Position& pos) {
-  assert((Type == EVASIONS) == (bool)pos.evasion_checkers()
-         || (pos.topology_wraps() && Type == NON_EVASIONS && pos.evasion_checkers()));
-  return pos.side_to_move();
-}
-
-template<GenType Type>
 ExtMove* generate(const Position& pos, ExtMove* moveList) {
 
   static_assert(Type != LEGAL, "Unsupported type in generate()");
-  Color us = check_and_side<Type>(pos);
+  assert((Type == EVASIONS) == (bool)pos.evasion_checkers()
+         || (pos.topology_wraps() && Type == NON_EVASIONS && pos.evasion_checkers()));
+  Color us = pos.side_to_move();
 
   return us == WHITE ? generate_all<WHITE, Type>(pos, moveList)
                      : generate_all<BLACK, Type>(pos, moveList);
@@ -1571,7 +1562,9 @@ template<GenType Type>
 ExtMove* generate_without_potions(const Position& pos, ExtMove* moveList) {
 
   static_assert(Type != LEGAL, "Unsupported type in generate_without_potions()");
-  Color us = check_and_side<Type>(pos);
+  assert((Type == EVASIONS) == (bool)pos.evasion_checkers()
+         || (pos.topology_wraps() && Type == NON_EVASIONS && pos.evasion_checkers()));
+  Color us = pos.side_to_move();
   return us == WHITE ? generate_all_impl<WHITE, Type>(pos, moveList)
                      : generate_all_impl<BLACK, Type>(pos, moveList);
 }
@@ -1582,7 +1575,9 @@ ExtMove* append_potions(const Position& pos, ExtMove* listBegin, ExtMove* baseEn
   static_assert(Type != LEGAL, "Unsupported type in append_potions()");
   if (!pos.potions_enabled())
       return baseEnd;
-  Color us = check_and_side<Type>(pos);
+  assert((Type == EVASIONS) == (bool)pos.evasion_checkers()
+         || (pos.topology_wraps() && Type == NON_EVASIONS && pos.evasion_checkers()));
+  Color us = pos.side_to_move();
   return us == WHITE ? generate_potion_moves<WHITE, Type>(pos, MoveBuffer{listBegin, baseEnd})
                      : generate_potion_moves<BLACK, Type>(pos, MoveBuffer{listBegin, baseEnd});
 }

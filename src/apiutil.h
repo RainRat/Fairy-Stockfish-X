@@ -1579,15 +1579,29 @@ inline FenValidation validate_fen(const std::string& fen, const Variant* v, bool
         if (potionCooldownInfo.front() != '<' || potionCooldownInfo.back() != '>')
             return FEN_INVALID_CHAR;
         std::string content = potionCooldownInfo.substr(1, potionCooldownInfo.size() - 2);
-        for (char& c : content)
-            if (!(std::isdigit(static_cast<unsigned char>(c)) || c == ' '))
-                c = ' ';
         std::vector<std::string> vals = get_fen_parts(content, ' ');
         if (!(vals.size() == 2 || vals.size() == 4))
             return FEN_INVALID_CHAR;
         for (const auto& value : vals)
-            if (check_digit_field(value) == NOK)
+        {
+            if (value.empty())
                 return FEN_INVALID_CHAR;
+
+            size_t start = value[0] == '-' ? 1 : 0;
+            if (start == value.size())
+                return FEN_INVALID_CHAR;
+
+            long long parsed = 0;
+            for (size_t i = start; i < value.size(); ++i)
+            {
+                unsigned char ch = static_cast<unsigned char>(value[i]);
+                if (!std::isdigit(ch))
+                    return FEN_INVALID_CHAR;
+                parsed = parsed * 10 + (value[i] - '0');
+                if (parsed > std::numeric_limits<int>::max())
+                    return FEN_INVALID_CHAR;
+            }
+        }
     }
 
     return FEN_OK;
