@@ -48,6 +48,65 @@ extinctionPieceTypesWhite = q
 extinctionPieceCountWhite = 0
 extinctionPieceTypesBlack = r
 extinctionPieceCountBlack = 1
+
+[extinct-all-white-default:chess]
+king = -
+checking = false
+castling = false
+pieceToCharTable = -
+extinctionValue = loss
+extinctionPieceTypes = qr
+startFen = 8/8/8/8/8/8/8/8 w - - 0 1
+
+[extinct-all-white-specific:extinct-all-white-default]
+extinctionAllPieceTypesWhite = true
+
+[extcount-white-default:chess]
+king = -
+checking = false
+castling = false
+pieceToCharTable = -
+extinctionValue = loss
+extinctionPieceTypes = q
+startFen = 8/8/8/8/8/8/8/8 w - - 0 1
+
+[extcount-white-specific:extcount-white-default]
+extinctionOpponentPieceCountWhite = 2
+
+[extcount-black-default:chess]
+king = -
+checking = false
+castling = false
+pieceToCharTable = -
+extinctionValue = loss
+extinctionPieceTypes = q
+startFen = 8/8/8/8/8/8/8/8 b - - 0 1
+
+[extcount-black-specific:extcount-black-default]
+extinctionOpponentPieceCountBlack = 2
+
+[extinct-all-black-default:chess]
+king = -
+checking = false
+castling = false
+pieceToCharTable = -
+extinctionValue = loss
+extinctionPieceTypesWhite = -
+extinctionPieceTypesBlack = qr
+startFen = 8/8/8/8/8/8/8/8 b - - 0 1
+
+[extinct-all-black-specific:extinct-all-black-default]
+extinctionAllPieceTypesBlack = true
+
+[flag-split:chess]
+king = -
+checking = false
+pieceToCharTable = -
+flagPieceWhite = q
+flagPieceBlack = r
+flagRegionWhite = h8
+flagRegionBlack = a1
+startFen = 8/8/8/8/8/8/8/8 w - - 0 1
 INI
 tmp_ini="${FSX_TMP_INI}"
 
@@ -135,5 +194,101 @@ go depth 1
 UCI
 )
 assert_not_contains "$out" "^bestmove \(none\)$"
+
+out=$(run_uci "$ENGINE" "$tmp_ini" extinct-all-white-default <<'UCI'
+setoption name Verbosity value 2
+setoption name Use NNUE value false
+position fen 4Q3/8/8/8/8/8/8/4qr2 w - - 0 1
+go depth 1
+UCI
+)
+assert_contains "$out" "info string adjudication reason game_end"
+assert_contains "$out" "^bestmove \(none\)$"
+
+out=$(run_uci "$ENGINE" "$tmp_ini" extinct-all-white-specific <<'UCI'
+setoption name Verbosity value 2
+setoption name Use NNUE value false
+position fen 4Q3/8/8/8/8/8/8/4qr2 w - - 0 1
+go depth 1
+UCI
+)
+assert_not_contains "$out" "^bestmove \(none\)$"
+
+out=$(run_uci "$ENGINE" "$tmp_ini" extcount-white-default <<'UCI'
+setoption name Verbosity value 2
+setoption name Use NNUE value false
+position fen 4q3/8/8/8/8/8/8/R7 w - - 0 1
+go depth 1
+UCI
+)
+assert_contains "$out" "info string adjudication reason game_end"
+assert_contains "$out" "^bestmove \(none\)$"
+
+out=$(run_uci "$ENGINE" "$tmp_ini" extcount-white-specific <<'UCI'
+setoption name Verbosity value 2
+setoption name Use NNUE value false
+position fen 4q3/8/8/8/8/8/8/R7 w - - 0 1
+go depth 1
+UCI
+)
+assert_not_contains "$out" "^bestmove \(none\)$"
+
+out=$(run_uci "$ENGINE" "$tmp_ini" extcount-black-default <<'UCI'
+setoption name Verbosity value 2
+setoption name Use NNUE value false
+position fen 8/8/8/8/8/8/8/4Q3 b - - 0 1
+go depth 1
+UCI
+)
+assert_contains "$out" "info string adjudication reason game_end"
+assert_contains "$out" "^bestmove \(none\)$"
+
+out=$(run_uci "$ENGINE" "$tmp_ini" extcount-black-specific <<'UCI'
+setoption name Verbosity value 2
+setoption name Use NNUE value false
+position fen 4Q3/8/8/8/8/8/8/r7 b - - 0 1
+go depth 1
+UCI
+)
+assert_not_contains "$out" "^bestmove \(none\)$"
+
+out=$(run_uci "$ENGINE" "$tmp_ini" extinct-all-black-default <<'UCI'
+setoption name Verbosity value 2
+setoption name Use NNUE value false
+position fen 4Q3/8/8/8/8/8/8/4q3 b - - 0 1
+go depth 1
+UCI
+)
+assert_contains "$out" "info string adjudication reason game_end"
+assert_contains "$out" "^bestmove \(none\)$"
+
+out=$(run_uci "$ENGINE" "$tmp_ini" extinct-all-black-specific <<'UCI'
+setoption name Verbosity value 2
+setoption name Use NNUE value false
+position fen 4Q3/8/8/8/8/8/8/4q3 b - - 0 1
+go depth 1
+UCI
+)
+assert_not_contains "$out" "^bestmove \(none\)$"
+
+out=$(run_uci "$ENGINE" "$tmp_ini" flag-split <<'UCI'
+setoption name Verbosity value 2
+setoption name Use NNUE value false
+position fen 4Q3/8/8/8/8/8/8/r7 w - - 0 1
+go depth 1
+UCI
+)
+assert_contains "$out" "info string adjudication reason game_end"
+assert_contains "$out" "^bestmove \(none\)$"
+
+out=$(run_uci "$ENGINE" "$tmp_ini" flag-split <<'UCI'
+setoption name Verbosity value 2
+setoption name Use NNUE value false
+position fen 7Q/8/8/8/8/8/8/r7 b - - 0 1
+go depth 1
+UCI
+)
+assert_contains "$out" "info string adjudication reason game_end"
+assert_contains "$out" "^bestmove \(none\)$"
 
 echo "extinction regression tests passed"

@@ -211,6 +211,164 @@ print("custom en passant passed squares regression tests passed")
 PY
 }
 
+test_rule_definition_color_overrides() {
+  local tmp_ini out
+  tmp_ini=$(mktemp "${TMPDIR:-/tmp}/fsx-rule-color-overrides-XXXXXX.ini")
+  cat >"${tmp_ini}" <<'INI'
+[promo-color-overrides:chess]
+pawn = p
+promotionPawnTypesWhite = p
+promotionPawnTypesBlack = p
+promotionRegionWhite = *8
+promotionRegionBlack = *1
+mandatoryPromotionRegionWhite = a8
+mandatoryPromotionRegionBlack = h1
+promotionPieceTypes = q
+startFen = 7k/P6P/8/8/8/8/p6p/K7 w - - 0 1
+
+[selfcapture-color-overrides:chess]
+selfCaptureWhite = true
+selfCaptureTypesWhite = q
+startFen = 4k3/8/8/8/8/8/3RQ3/7K w - - 0 1
+
+[pass-color-overrides:chess]
+passWhite = true
+passBlack = false
+passOnStalemateWhite = true
+passOnStalemateBlack = true
+startFen = 4k3/8/8/8/8/8/8/4K3 w - - 0 1
+
+[gating-piece-after-split:fairy]
+gating = true
+gatingFromHand = false
+castling = false
+startFen = 8/pppppppp/8/8/8/8/PPPPPPPP/8 w - - 0 1
+gatingPieceAfterWhite = p:n
+gatingPieceAfterBlack = p:b
+
+INI
+
+  out=$(run_uci "$ENGINE" "$tmp_ini" promo-color-overrides <<'EOF'
+position fen 4k3/P6P/8/8/8/8/p6p/K7 w - - 0 1
+go perft 1
+EOF
+)
+  assert_contains "$out" "^a7a8q: 1$"
+  assert_contains "$out" "^h7h8q: 1$"
+  assert_not_contains "$out" "^a2a1:"
+  assert_not_contains "$out" "^h2h1:"
+
+  out=$(run_uci "$ENGINE" "$tmp_ini" promo-color-overrides <<'EOF'
+position fen 4k3/8/8/8/8/8/p6p/4K3 b - - 0 1
+go perft 1
+EOF
+)
+  assert_contains "$out" "^a2a1q: 1$"
+  assert_contains "$out" "^h2h1q: 1$"
+  assert_not_contains "$out" "^a7a8:"
+  assert_not_contains "$out" "^h7h8:"
+
+  out=$(run_uci "$ENGINE" "$tmp_ini" selfcapture-color-overrides <<'EOF'
+position fen 4k3/8/8/8/8/8/3RQ3/7K w - - 0 1
+go perft 1
+EOF
+)
+  assert_contains "$out" "^e2d2: 1$"
+
+  out=$(run_uci "$ENGINE" "$tmp_ini" pass-color-overrides <<'EOF'
+position fen 7k/8/8/8/8/6k1/5q2/7K w - - 0 1
+go perft 1
+EOF
+)
+  assert_contains_literal "$out" "0000: 1"
+
+  out=$(run_uci "$ENGINE" "$tmp_ini" pass-color-overrides <<'EOF'
+position fen 7k/5Q2/6K1/8/8/8/8/8 b - - 0 1
+go perft 1
+EOF
+)
+  assert_contains_literal "$out" "0000: 1"
+
+  out=$(run_uci "$ENGINE" "$tmp_ini" gating-piece-after-split <<'EOF'
+position startpos
+go perft 1
+EOF
+)
+  assert_contains "$out" "^a2a3n: 1$"
+  assert_not_contains "$out" "^a2a3b: 1$"
+
+  out=$(run_uci "$ENGINE" "$tmp_ini" gating-piece-after-split <<'EOF'
+position fen 8/pppppppp/8/8/8/8/PPPPPPPP/8 b - - 0 1
+go perft 1
+EOF
+)
+  assert_contains "$out" "^a7a6b: 1$"
+  assert_not_contains "$out" "^a7a6n: 1$"
+
+  rm -f "$tmp_ini"
+}
+
+test_rule_definition_phase_overrides() {
+  local tmp_ini out
+  tmp_ini=$(mktemp "${TMPDIR:-/tmp}/fsx-rule-phase-overrides-XXXXXX.ini")
+  cat >"${tmp_ini}" <<'INI'
+[osr-split:chess]
+maxRank = 1
+maxFile = b
+king = -
+checking = false
+openingSelfRemoval = true
+openingSelfRemovalRegionWhite = a1
+openingSelfRemovalRegionBlack = b1
+startFen = Rr w - - 0 1
+
+[nmove-color:chess]
+king = -
+checking = false
+nMoveRule = 50
+nMoveRuleTypesWhite = r
+nMoveRuleTypesBlack = b
+startFen = 8/8/8/8/8/8/p7/R7 w - - 49 1
+INI
+
+  out=$(run_uci "$ENGINE" "$tmp_ini" osr-split <<'EOF'
+position startpos
+go perft 1
+EOF
+)
+  assert_contains "$out" "^0000: 1$"
+
+  out=$(run_uci "$ENGINE" "$tmp_ini" osr-split <<'EOF'
+position startpos moves 0000
+go perft 1
+EOF
+)
+  assert_contains "$out" "^0000: 1$"
+
+  out=$(run_uci "$ENGINE" "$tmp_ini" osr-split <<'EOF'
+position startpos moves 0000
+d
+EOF
+)
+  assert_contains_literal "$out" "Fen: 1r b - - 0 1"
+
+  out=$(run_uci "$ENGINE" "$tmp_ini" nmove-color <<'EOF'
+position fen 8/8/8/8/8/8/p7/R7 w - - 49 1 moves a1a2
+d
+EOF
+)
+  assert_contains_literal "$out" "Fen: 8/8/8/8/8/8/R7/8 b - - 0 1"
+
+  out=$(run_uci "$ENGINE" "$tmp_ini" nmove-color <<'EOF'
+position fen 7b/6P1/8/8/8/8/8/8 b - - 49 1 moves h8g7
+d
+EOF
+)
+  assert_contains_literal "$out" "Fen: 8/6b1/8/8/8/8/8/8 w - - 0 2"
+
+  rm -f "$tmp_ini"
+}
+
 test_standard_piece_value_phase() {
   local tmp_ini output material_eg
   tmp_ini=$(mktemp "${TMPDIR:-/tmp}/fsx-piecevalue-phase-XXXXXX.ini")
@@ -553,6 +711,8 @@ test_flip_regressions
 test_potion_check_regressions
 test_repetition_loss_search
 test_custom_en_passant_passed_squares
+test_rule_definition_color_overrides
+test_rule_definition_phase_overrides
 test_standard_piece_value_phase
 test_potion_custom
 test_pousse_counting

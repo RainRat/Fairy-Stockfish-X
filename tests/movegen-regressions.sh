@@ -40,6 +40,26 @@ flagRegionWhite = *8
 flagRegionBlack = *1
 startFen = 8/8/8/8/8/8/8/8 w - - 0 1
 
+[wall-split:fairy]
+king = -
+checking = false
+wallingRule = edge
+wallOrMove = true
+wallingRegionWhite = a1
+wallingRegionBlack = h8
+startFen = 8/8/8/8/8/8/8/8 w - - 0 1
+
+[wall-color-split:fairy]
+king = -
+checking = false
+wallingRule = edge
+wallingWhite = false
+wallingBlack = true
+wallOrMove = true
+wallingRegionWhite = a1
+wallingRegionBlack = h8
+startFen = 8/8/8/8/8/8/8/8 w - - 0 1
+
 [wall-or-move-disabled:chess]
 wallOrMove = true
 startFen = 4k3/8/8/8/8/8/8/4K3 w - - 0 1
@@ -137,6 +157,27 @@ out=$(run_uci_cmds "$ENGINE" "$TMP_INI" duck-wall-anchor \
   "position startpos
 go perft 1")
 assert_contains "$out" "^0000,d4: 1$"
+
+out=$(run_uci_cmds "$ENGINE" "$TMP_INI" wall-split \
+  "position startpos
+go perft 1")
+assert_contains "$out" "^0000,a1: 1$"
+assert_not_contains "$out" "^0000,h8: 1$"
+
+out=$(run_uci_cmds "$ENGINE" "$TMP_INI" wall-split \
+  "position fen 8/8/8/8/8/8/8/8 b - - 0 1
+go perft 1")
+assert_contains "$out" "^0000,h8: 1$"
+
+out=$(run_uci_cmds "$ENGINE" "$TMP_INI" wall-color-split \
+  "position startpos
+go perft 1")
+assert_not_contains "$out" "^0000,a1: 1$"
+
+out=$(run_uci_cmds "$ENGINE" "$TMP_INI" wall-color-split \
+  "position fen 8/8/8/8/8/8/8/8 b - - 0 1
+go perft 1")
+assert_contains "$out" "^0000,h8: 1$"
 
 # wallOrMove alone should not emit pseudo-special wall anchors when no walling
 # rule is enabled for the side to move.

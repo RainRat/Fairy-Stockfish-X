@@ -27,6 +27,25 @@ edgeInsertFrom = top left
 pushingStrength = a:5
 startFen = 5/5/5/5/5[a] w - - 0 1
 
+[borrow-slide-black:fairy]
+maxRank = 5
+maxFile = e
+pieceToCharTable = -
+king = -
+customPiece1 = a:-
+pieceDrops = true
+mustDrop = true
+captureType = hand
+captureToHandSide = owner
+borrowOpponentDropsWhenEmpty = true
+edgeInsertOnly = true
+dropRegion = a* *5
+edgeInsertTypes = a
+edgeInsertRegionBlack = a* *1
+edgeInsertFromBlack = top left
+pushingStrength = a:5
+startFen = 5/5/5/5/5[a] b - - 0 1
+
 [capture-to-hand-types-demo:fairy]
 maxFile = h
 maxRank = 7
@@ -138,7 +157,7 @@ startFen = 4k3/8/8/8/8/8/4P3/4K3[P] w - - 0 1
 
 [dropnodoubled-split-black:chess]
 pieceDrops = true
-dropNoDoubledWhite = p
+dropNoDoubledBlack = p
 startFen = 4k3/4p3/8/8/8/8/8/4K3[p] b - - 0 1
 
 [dropnodoubledcount-split-white:chess]
@@ -150,7 +169,7 @@ startFen = 4k3/8/8/8/8/8/4P3/4K3[P] w - - 0 1
 [dropnodoubledcount-split-black:chess]
 pieceDrops = true
 dropNoDoubled = p
-dropNoDoubledCountWhite = 2
+dropNoDoubledCountBlack = 2
 startFen = 4k3/4p3/8/8/8/8/8/4K3[p] b - - 0 1
 
 [pathway-drop-rule]
@@ -214,6 +233,13 @@ d
 UCI
 )
 assert_contains "$out" "Fen: 5/5/5/5/a4\\[] b - - 0 1"
+
+out=$(run_uci "$ENGINE" "$tmp_ini" borrow-slide-black <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_contains "$out" "Nodes searched:"
 
 out=$(run_uci "$ENGINE" "$tmp_ini" capture-to-hand-types-demo <<'UCI'
 position fen r3k3/8/8/8/8/8/R3K3/8 w - - 0 1 moves a1a7
@@ -353,7 +379,7 @@ position startpos
 go perft 1
 UCI
 )
-assert_contains "$out" "^P@e5: 1$"
+assert_not_contains "$out" "^P@e5: 1$"
 
 out=$(run_uci "$ENGINE" "$tmp_ini" dropnodoubledcount-split-white <<'UCI'
 position startpos
@@ -367,7 +393,7 @@ position startpos
 go perft 1
 UCI
 )
-assert_not_contains "$out" "^P@e5: 1$"
+assert_contains "$out" "^P@e5: 1$"
 
 out=$(run_uci "$ENGINE" "$tmp_ini" pathway-drop-rule <<'UCI'
 position fen 6/6/6/6/3p2/6[Pp] w - - 0 1
