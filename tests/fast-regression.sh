@@ -174,8 +174,6 @@ setup_parallel
 dispatch_test "piece-specific step regions" bash tests/fast-regression-piece-regions.sh "${ENGINE}" "${VARIANT_PATH}"
 dispatch_test "fast variant regressions" timeout 5m bash tests/fast-variant-regressions.sh "${ENGINE}" "${VARIANT_PATH}"
 dispatch_test "fast rules regression" bash tests/fast-regression-rules.sh "${ENGINE}" "${VARIANT_PATH}"
-dispatch_test "quiet-check special moves" timeout 5m bash tests/quiet-check-special-moves.sh "${ENGINE}"
-dispatch_test "gating check regressions" timeout 2m bash tests/gating-check-regression.sh "${ENGINE}"
 dispatch_test "binding regression" timeout 60s "${PYTHON}" tests/test_binding_regression.py
 dispatch_test "royal capture no kings" timeout 60s "${PYTHON}" tests/test_royal_capture_no_kings.py
 if [[ -n "${UPSTREAM_ENGINE:-}" ]]; then
@@ -186,5 +184,8 @@ fi
 dispatch_test "python unit tests" timeout 180s "${PYTHON}" test.py
 
 wait_all
+
+run_step "quiet-check special moves" timeout 5m bash tests/quiet-check-special-moves.sh "${ENGINE}"
+run_step "gating check regressions" timeout 2m bash tests/gating-check-regression.sh "${ENGINE}"
 
 echo "fast regression suite passed"

@@ -136,6 +136,41 @@ customPiece1 = a:BN
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 startFen = 7k/8/8/8/3A4/8/8/K7 w - - 0 1
 
+[alias-camel:chess]
+king = -
+checking = false
+customPiece1 = a:C
+pieceToCharTable = A:a
+startFen = 8/8/8/8/4A3/8/8/8 w - - 0 1
+
+[alias-zebra-j:chess]
+king = -
+checking = false
+customPiece1 = a:J
+pieceToCharTable = A:a
+startFen = 8/8/8/8/4A3/8/8/8 w - - 0 1
+
+[alias-zebra-z:chess]
+king = -
+checking = false
+customPiece1 = a:Z
+pieceToCharTable = A:a
+startFen = 8/8/8/8/4A3/8/8/8 w - - 0 1
+
+[alias-hook:chess]
+king = -
+checking = false
+customPiece1 = a:H
+pieceToCharTable = A:a
+startFen = 8/8/8/8/4A3/8/8/8 w - - 0 1
+
+[alias-grasshopper3:chess]
+king = -
+checking = false
+customPiece1 = a:G
+pieceToCharTable = A:a
+startFen = 8/8/8/8/4A3/8/8/8 w - - 0 1
+
 [invalid_dir_h:chess]
 king = -
 checking = false
@@ -159,10 +194,67 @@ go perft 1
 EOF
 }
 
+perft_move_ids() {
+  local variant="$1"
+  perft_moves "$variant" | awk -F: '{print $1}' | sort
+}
+
 echo "fairy notation regressions started"
 
 cmp <(perft_moves modsugar_ski_group) <(perft_moves modsugar_ski_explicit)
 cmp <(perft_moves modsugar_max_group) <(perft_moves modsugar_max_explicit)
+
+cmp <(perft_move_ids alias-camel) <(cat <<'EOF'
+e4b3
+e4b5
+e4d1
+e4d7
+e4f1
+e4f7
+e4h3
+e4h5
+EOF
+)
+
+cmp <(perft_move_ids alias-zebra-j) <(cat <<'EOF'
+e4b2
+e4b6
+e4c1
+e4c7
+e4g1
+e4g7
+e4h2
+e4h6
+EOF
+)
+
+cmp <(perft_move_ids alias-zebra-z) <(cat <<'EOF'
+e4b2
+e4b6
+e4c1
+e4c7
+e4g1
+e4g7
+e4h2
+e4h6
+EOF
+)
+
+cmp <(perft_move_ids alias-hook) <(cat <<'EOF'
+e4b4
+e4e1
+e4e7
+e4h4
+EOF
+)
+
+cmp <(perft_move_ids alias-grasshopper3) <(cat <<'EOF'
+e4b1
+e4b7
+e4h1
+e4h7
+EOF
+)
 
 dist_out=$(run_uci "$ENGINE" "$tmp_ini" dist10 <<'UCI'
 position startpos

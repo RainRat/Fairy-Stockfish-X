@@ -57,7 +57,7 @@ fi
 run_step "protocol" timeout 2m bash tests/protocol.sh "${ENGINE}"
 run_step "bench stdin" timeout 60s bash tests/bench-regressions.sh --stdin "${ENGINE}"
 run_step "xboard regressions" timeout 2m bash tests/xboard-regressions.sh "${ENGINE}"
-run_step "gating regressions" timeout 60s bash tests/gating-regressions.sh "${ENGINE}"
+run_step "gating regressions" timeout 60s bash tests/gating-check-regression.sh "${ENGINE}"
 run_step "in-place transform undo" timeout 60s bash tests/in-place-transform-undo.sh "${ENGINE}"
 run_step "bycatch undo parity" timeout 60s bash tests/bycatch-undo-parity.sh "${ENGINE}"
 run_step "StateInfo regressions" timeout 3m bash tests/stateinfo-regressions.sh "${ENGINE}"

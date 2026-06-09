@@ -88,19 +88,19 @@ trap 'rm -f "${TMP_INI}"' EXIT
 case "${ENGINE_BASENAME}" in
   stockfish)
     make -C "${ROOT_DIR}/src" EXE=stockfish objclean
-    make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 EXE=stockfish
+    make -C "${ROOT_DIR}/src" -j1 build ARCH=x86-64 EXE=stockfish
     ;;
   stockfish-allvars*)
     make -C "${ROOT_DIR}/src" EXE=stockfish-allvars objclean
-    make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 largeboards=yes all=yes nnue=yes EXE=stockfish-allvars
+    make -C "${ROOT_DIR}/src" -j1 build ARCH=x86-64 largeboards=yes all=yes nnue=yes EXE=stockfish-allvars
     ;;
   stockfish-large*)
     make -C "${ROOT_DIR}/src" EXE=stockfish-large objclean
-    make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 largeboards=yes all=yes EXE=stockfish-large
+    make -C "${ROOT_DIR}/src" -j1 build ARCH=x86-64 largeboards=yes all=yes EXE=stockfish-large
     ;;
   stockfish-vlb*)
     make -C "${ROOT_DIR}/src" EXE=stockfish-vlb objclean
-    make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 largeboards=yes verylargeboards=yes all=yes nnue=yes EXE=stockfish-vlb
+    make -C "${ROOT_DIR}/src" -j1 build ARCH=x86-64 largeboards=yes verylargeboards=yes all=yes nnue=yes EXE=stockfish-vlb
     ;;
 esac
 
