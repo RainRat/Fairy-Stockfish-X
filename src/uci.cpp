@@ -673,6 +673,9 @@ string UCI::move(const Position& pos, Move m) {
   if (m == MOVE_NONE)
       return CurrentProtocol == USI ? "resign" : "(none)";
 
+  if (pos.in_opening_self_removal_phase() && is_pass(m))
+      return UCI::square(pos, from) + UCI::square(pos, to);
+
   if (is_pass(m) && CurrentProtocol == XBOARD)
       return "@@@@";
   if (is_pass(m))

@@ -8157,55 +8157,100 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
   // Connect-Group (ends game if a player has N pieces in any connected group)
   if (connect_group() != 0 && (popcount(connectPieces) >= std::abs(connect_group()) || connect_group() == -1)) {
       Bitboard playerPieces = connectPieces; // Pieces of the player who just moved
-      Bitboard visited = 0;
-      int targetGroupSize = connect_group();
       int totalPlayerPieces = popcount(playerPieces);
+      if (connect_group() == -1) {
+          if (totalPlayerPieces > 0) {
+              // LOA and similar "all pieces connected" variants dominate this
+              // path, so use a bitboard flood fill instead of queue-based
+              // component walks.
+              Bitboard connected = playerPieces & -playerPieces;
+              Bitboard frontier = connected;
 
-      if (targetGroupSize == -1) {
-          targetGroupSize = totalPlayerPieces;
-      }
+              if (!topology_wraps()) {
+                  while (frontier) {
+                      Bitboard expanded = 0;
+                      for (Direction d : getConnectDirections())
+                          expanded |= shift(d, frontier) & playerPieces;
+                      expanded &= ~connected;
+                      frontier = expanded;
+                      connected |= expanded;
+                  }
+              } else {
+                  // Preserve wrap-aware semantics using the existing
+                  // square-by-square expansion when the board topology wraps.
+                  Bitboard visited = connected;
+                  std::deque<Square> q;
+                  q.push_back(lsb(connected));
 
-      if (targetGroupSize > 0 && totalPlayerPieces >= targetGroupSize) { // Optimization: no need to check if not enough pieces
-          while (playerPieces & ~visited) {
-              Square start_sq = lsb(playerPieces & ~visited);
-              Bitboard current_group = 0;
-              std::deque<Square> q;
+                  while (!q.empty()) {
+                      Square s = q.front();
+                      q.pop_front();
 
-              q.push_back(start_sq);
-              current_group |= start_sq;
-              visited |= start_sq;
-              int group_size = 0;
-
-              while (!q.empty()) {
-                  Square s = q.front();
-                  q.pop_front();
-                  group_size++;
-
-                  for (Direction d : getConnectDirections()) {
-                      Square next_sq = SQ_NONE;
-                      bool ok = false;
-                      if (topology_wraps()) {
+                      for (Direction d : getConnectDirections()) {
+                          Square next_sq = SQ_NONE;
                           auto [dr, df] = decode_direction(d);
-                          ok = wrapped_destination_square(s, df, dr, max_file(), max_rank(), wraps_files(), wraps_ranks(), next_sq);
-                      } else {
-                          next_sq = s + d;
-                          ok = is_ok(next_sq) && distance(s, next_sq) == dist(d);
-                      }
-                      if (!ok)
-                          continue;
-
-                      // Check if it's a player piece and not visited.
-                      if ((square_bb(next_sq) & playerPieces) && !(square_bb(next_sq) & visited)) {
+                          if (!wrapped_destination_square(s, df, dr, max_file(), max_rank(), wraps_files(), wraps_ranks(), next_sq))
+                              continue;
+                          if (!(square_bb(next_sq) & playerPieces) || (square_bb(next_sq) & visited))
+                              continue;
                           visited |= next_sq;
-                          current_group |= next_sq;
+                          connected |= next_sq;
                           q.push_back(next_sq);
                       }
                   }
               }
 
-              if (group_size >= targetGroupSize) {
+              if (popcount(connected) == totalPlayerPieces) {
                   result = convert_mate_value(-connect_value(), ply); // ~sideToMove won
                   return true;
+              }
+          }
+      } else {
+          Bitboard visited = 0;
+          int targetGroupSize = connect_group();
+
+          if (targetGroupSize > 0 && totalPlayerPieces >= targetGroupSize) { // Optimization: no need to check if not enough pieces
+              while (playerPieces & ~visited) {
+                  Square start_sq = lsb(playerPieces & ~visited);
+                  Bitboard current_group = 0;
+                  std::deque<Square> q;
+
+                  q.push_back(start_sq);
+                  current_group |= start_sq;
+                  visited |= start_sq;
+                  int group_size = 0;
+
+                  while (!q.empty()) {
+                      Square s = q.front();
+                      q.pop_front();
+                      group_size++;
+
+                      for (Direction d : getConnectDirections()) {
+                          Square next_sq = SQ_NONE;
+                          bool ok = false;
+                          if (topology_wraps()) {
+                              auto [dr, df] = decode_direction(d);
+                              ok = wrapped_destination_square(s, df, dr, max_file(), max_rank(), wraps_files(), wraps_ranks(), next_sq);
+                          } else {
+                              next_sq = s + d;
+                              ok = is_ok(next_sq) && distance(s, next_sq) == dist(d);
+                          }
+                          if (!ok)
+                              continue;
+
+                          // Check if it's a player piece and not visited.
+                          if ((square_bb(next_sq) & playerPieces) && !(square_bb(next_sq) & visited)) {
+                              visited |= next_sq;
+                              current_group |= next_sq;
+                              q.push_back(next_sq);
+                          }
+                      }
+                  }
+
+                  if (group_size >= targetGroupSize) {
+                      result = convert_mate_value(-connect_value(), ply); // ~sideToMove won
+                      return true;
+                  }
               }
           }
       }

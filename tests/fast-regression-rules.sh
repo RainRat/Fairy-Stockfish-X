@@ -336,17 +336,17 @@ position startpos
 go perft 1
 EOF
 )
-  assert_contains "$out" "^0000: 1$"
+  assert_contains "$out" "^a1a1: 1$"
 
   out=$(run_uci "$ENGINE" "$tmp_ini" osr-split <<'EOF'
-position startpos moves 0000
+position startpos moves a1a1
 go perft 1
 EOF
 )
-  assert_contains "$out" "^0000: 1$"
+  assert_contains "$out" "^b1b1: 1$"
 
   out=$(run_uci "$ENGINE" "$tmp_ini" osr-split <<'EOF'
-position startpos moves 0000
+position startpos moves a1a1
 d
 EOF
 )

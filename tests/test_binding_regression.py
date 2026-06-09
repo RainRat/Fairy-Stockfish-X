@@ -38,6 +38,12 @@ class TestBindings(unittest.TestCase):
         self.assertEqual(sf.game_result("antiminishogi", fen, []), sf.VALUE_NONE)
         self.assertTrue(sf.legal_moves("antiminishogi", fen, []))
 
+    def test_konane_opening_removals_are_not_rendered_as_passes(self):
+        fen = "MmMmMmMmMm/mMmMmMmMmM/MmMmMmMmMm/mMmMmMmMmM/MmMmMmMmMm/mMmMmMmMmM/MmMmMmMmMm/mMmMmMmMmM/MmMmMmMmMm/mMmMmMmMmM w - - 0 1"
+        moves = sf.legal_moves("konane", fen, [])
+        self.assertTrue(moves)
+        self.assertTrue(any(move != "0000" for move in moves))
+
     def test_anti_losalamos_missing_queen_not_terminal(self):
         fen = "rn1knr/pppppp/6/6/PPPPPP/RNQKNR w - - 0 1"
         self.assertEqual(sf.game_result("anti-losalamos", fen, []), sf.VALUE_NONE)
