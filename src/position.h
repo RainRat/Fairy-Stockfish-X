@@ -5330,7 +5330,13 @@ inline int Position::connect_line_count(Color c) const {
               continue;
           bool complete = true;
           for (Square s : line)
-              complete &= bool(connectPieces & square_bb(s));
+          {
+              if (!(connectPieces & square_bb(s)))
+              {
+                  complete = false;
+                  break;
+              }
+          }
           countLines += complete;
       }
       return countLines;

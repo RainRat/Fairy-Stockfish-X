@@ -7876,12 +7876,22 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
       };
   };
 
+  auto wrapped_step = [&](Square cur, Direction d, Square& next) {
+      auto [dr, df] = decode_direction(d);
+      return wrapped_destination_square(cur, df, dr, max_file(), max_rank(), wraps_files(), wraps_ranks(), next);
+  };
+
   if (connect_goal_by_type())
   {
       auto has_connect_goal = [&](Color c) {
           const auto& goal = connect_piece_goal_types(c);
           if (goal.empty())
               return false;
+
+          // Type-goal games such as Toot-Otto match piece types only; colors
+          // are intentionally ignored so either player's drops can complete
+          // either configured word.
+          const bool palindrome = std::equal(goal.begin(), goal.end(), goal.rbegin());
 
           if (!var->connectLines.empty())
           {
@@ -7890,13 +7900,19 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
                   if (line.size() != goal.size())
                       continue;
                   bool forward = true;
-                  bool reverse = true;
-                  for (size_t i = 0; i < goal.size(); ++i)
+                  bool reverse = !palindrome;
+                  for (size_t i = 0; i < goal.size() && (forward || reverse); ++i)
                   {
-                      Piece forwardPc = piece_on(line[i]);
-                      Piece reversePc = piece_on(line[goal.size() - 1 - i]);
-                      forward &= forwardPc != NO_PIECE && type_of(forwardPc) == goal[i];
-                      reverse &= reversePc != NO_PIECE && type_of(reversePc) == goal[i];
+                      if (forward)
+                      {
+                          Piece forwardPc = piece_on(line[i]);
+                          forward = forwardPc != NO_PIECE && type_of(forwardPc) == goal[i];
+                      }
+                      if (reverse)
+                      {
+                          Piece reversePc = piece_on(line[goal.size() - 1 - i]);
+                          reverse = reversePc != NO_PIECE && type_of(reversePc) == goal[i];
+                      }
                   }
                   if (forward || reverse)
                       return true;
@@ -7904,20 +7920,14 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
               return false;
           }
 
-          auto wrapped_step = [&](Square cur, Direction d, Square& next) {
-              auto [dr, df] = decode_direction(d);
-              return wrapped_destination_square(cur, df, dr, max_file(), max_rank(), wraps_files(), wraps_ranks(), next);
-          };
-
           if (topology_wraps())
           {
               for (Direction d : var->connectDirections)
               {
-                  for (Square s = SQ_A1; s <= SQ_MAX; ++s)
+                  Bitboard candidates = pieces(goal.front());
+                  while (candidates)
                   {
-                      Piece pc = piece_on(s);
-                      if (pc == NO_PIECE || type_of(pc) != goal.front())
-                          continue;
+                      Square s = pop_lsb(candidates);
 
                       auto matches = [&](Direction dir, const std::vector<PieceType>& sequence) {
                           Square cur = s;
@@ -7934,7 +7944,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
                           return true;
                       };
 
-                      if (matches(d, goal) || matches(-d, goal))
+                      if (matches(d, goal) || (!palindrome && matches(-d, goal)))
                           return true;
                   }
               }
@@ -7943,15 +7953,13 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
 
           for (Direction d : var->connectDirections)
           {
-              for (Direction dir : {d, -d})
+              for (int pass = 0; pass < (palindrome ? 1 : 2); ++pass)
               {
+                  Direction dir = pass ? -d : d;
                   Bitboard starts = pieces(goal.front());
                   while (starts)
                   {
                       Square s = pop_lsb(starts);
-                      Piece startPc = piece_on(s);
-                      if (startPc == NO_PIECE)
-                          continue;
                       Bitboard cur = square_bb(s);
                       bool matched = true;
                       for (size_t i = 1; i < goal.size(); ++i)
@@ -7993,10 +8001,11 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
 
   //Calculate eligible pieces for connection once.
   Bitboard connectPieces = 0;
-  for (PieceSet ps = connect_piece_types(); ps;){
+  for (PieceSet ps = connect_piece_types(); ps;)
+  {
       PieceType pt = pop_lsb(ps);
       connectPieces |= pieces(pt);
-  };
+  }
   connectPieces &= pieces(~sideToMove);
 
   // Connect-n
@@ -8010,7 +8019,13 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
                   continue;
               bool complete = true;
               for (Square s : line)
-                  complete &= bool(connectPieces & square_bb(s));
+              {
+                  if (!(connectPieces & square_bb(s)))
+                  {
+                      complete = false;
+                      break;
+                  }
+              }
               if (complete)
               {
                   result = convert_mate_value(-connect_value(), ply);
@@ -8022,10 +8037,6 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
       {
           if (topology_wraps())
           {
-              auto wrapped_step = [&](Square cur, Direction d, Square& next) {
-                  auto [dr, df] = decode_direction(d);
-                  return wrapped_destination_square(cur, df, dr, max_file(), max_rank(), wraps_files(), wraps_ranks(), next);
-              };
               const int maxSteps = popcount(board_bb());
 
               for (Direction d : var->connectDirections)
@@ -8056,19 +8067,19 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
           }
           else
           {
-          Bitboard b;
+              Bitboard b;
 
-          for (Direction d : var->connectDirections)
-          {
-              b = connectPieces;
-              for (int i = 1; i < connect_n() && b; i++)
-                  b &= shift(d, b);
-              if (b)
+              for (Direction d : var->connectDirections)
               {
-                  result = convert_mate_value(-connect_value(), ply);
-                  return true;
+                  b = connectPieces;
+                  for (int i = 1; i < connect_n() && b; i++)
+                      b &= shift(d, b);
+                  if (b)
+                  {
+                      result = convert_mate_value(-connect_value(), ply);
+                      return true;
+                  }
               }
-          }
           }
       }
   }
@@ -8081,6 +8092,8 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
       Bitboard current = frontier;
       bool hitsRegion2 = bool(current & region2);
       bool hitsRegion3 = !region3 || bool(current & region3);
+      if (hitsRegion2 && hitsRegion3)
+          return true;
 
       while (frontier) {
           Bitboard newBitboard = weak_connection_expansion(*this, frontier, connectPieces, ~sideToMove) & ~current;
@@ -8119,17 +8132,20 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
   // Collinear-n
   if ((collinear_n() > 0) && (popcount(connectPieces) >= collinear_n())) {
       if (topology_wraps()) {
-          auto wrapped_step = [&](Square cur, Direction d, Square& next) {
-              auto [dr, df] = decode_direction(d);
-              return wrapped_destination_square(cur, df, dr, max_file(), max_rank(), wraps_files(), wraps_ranks(), next);
-          };
           const int maxSteps = popcount(board_bb());
 
           for (Direction d : var->connectDirections) {
-              for (Square s = SQ_A1; s <= SQ_MAX; ++s) {
+              Bitboard visitedLine = 0;
+              Bitboard starts = board_bb();
+              while (starts) {
+                  Square s = pop_lsb(starts);
+                  if (visitedLine & square_bb(s))
+                      continue;
+
                   int cnt = 0;
                   Square cur = s;
                   for (int steps = 0; steps < maxSteps; ++steps) {
+                      visitedLine |= square_bb(cur);
                       if (connectPieces & square_bb(cur))
                           ++cnt;
                       Square next = SQ_NONE;
@@ -8173,6 +8189,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
   if (connect_group() != 0 && (popcount(connectPieces) >= std::abs(connect_group()) || connect_group() == -1)) {
       Bitboard playerPieces = connectPieces; // Pieces of the player who just moved
       int totalPlayerPieces = popcount(playerPieces);
+      const auto& connectDirs = getConnectDirections();
       if (connect_group() == -1) {
           if (totalPlayerPieces > 0) {
               // LOA and similar "all pieces connected" variants dominate this
@@ -8184,7 +8201,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
               if (!topology_wraps()) {
                   while (frontier) {
                       Bitboard expanded = 0;
-                      for (Direction d : getConnectDirections())
+                      for (Direction d : connectDirs)
                           expanded |= shift(d, frontier) & playerPieces;
                       expanded &= ~connected;
                       frontier = expanded;
@@ -8201,7 +8218,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
                       Square s = q.front();
                       q.pop_front();
 
-                      for (Direction d : getConnectDirections()) {
+                      for (Direction d : connectDirs) {
                           Square next_sq = SQ_NONE;
                           auto [dr, df] = decode_direction(d);
                           if (!wrapped_destination_square(s, df, dr, max_file(), max_rank(), wraps_files(), wraps_ranks(), next_sq))
@@ -8225,46 +8242,57 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
           int targetGroupSize = connect_group();
 
           if (targetGroupSize > 0 && totalPlayerPieces >= targetGroupSize) { // Optimization: no need to check if not enough pieces
-              while (playerPieces & ~visited) {
-                  Square start_sq = lsb(playerPieces & ~visited);
-                  Bitboard current_group = 0;
-                  std::deque<Square> q;
+              if (!topology_wraps()) {
+                  while (playerPieces & ~visited) {
+                      Bitboard group = playerPieces & ~visited;
+                      group &= -group;
+                      Bitboard frontier = group;
 
-                  q.push_back(start_sq);
-                  current_group |= start_sq;
-                  visited |= start_sq;
-                  int group_size = 0;
+                      while (frontier && popcount(group) < targetGroupSize) {
+                          Bitboard expanded = 0;
+                          for (Direction d : connectDirs)
+                              expanded |= shift(d, frontier);
+                          expanded &= playerPieces & ~group;
+                          group |= expanded;
+                          frontier = expanded;
+                      }
 
-                  while (!q.empty()) {
-                      Square s = q.front();
-                      q.pop_front();
-                      group_size++;
+                      if (popcount(group) >= targetGroupSize) {
+                          result = convert_mate_value(-connect_value(), ply); // ~sideToMove won
+                          return true;
+                      }
+                      visited |= group;
+                  }
+              } else {
+                  while (playerPieces & ~visited) {
+                      Square start_sq = lsb(playerPieces & ~visited);
+                      std::deque<Square> q;
 
-                      for (Direction d : getConnectDirections()) {
-                          Square next_sq = SQ_NONE;
-                          bool ok = false;
-                          if (topology_wraps()) {
-                              auto [dr, df] = decode_direction(d);
-                              ok = wrapped_destination_square(s, df, dr, max_file(), max_rank(), wraps_files(), wraps_ranks(), next_sq);
-                          } else {
-                              next_sq = s + d;
-                              ok = is_ok(next_sq) && distance(s, next_sq) == dist(d);
+                      q.push_back(start_sq);
+                      visited |= square_bb(start_sq);
+                      int group_size = 0;
+
+                      while (!q.empty()) {
+                          Square s = q.front();
+                          q.pop_front();
+                          if (++group_size >= targetGroupSize) {
+                              result = convert_mate_value(-connect_value(), ply); // ~sideToMove won
+                              return true;
                           }
-                          if (!ok)
-                              continue;
 
-                          // Check if it's a player piece and not visited.
-                          if ((square_bb(next_sq) & playerPieces) && !(square_bb(next_sq) & visited)) {
-                              visited |= next_sq;
-                              current_group |= next_sq;
-                              q.push_back(next_sq);
+                          for (Direction d : connectDirs) {
+                              Square next_sq = SQ_NONE;
+                              auto [dr, df] = decode_direction(d);
+                              if (!wrapped_destination_square(s, df, dr, max_file(), max_rank(), wraps_files(), wraps_ranks(), next_sq))
+                                  continue;
+
+                              Bitboard next = square_bb(next_sq);
+                              if ((next & playerPieces) && !(next & visited)) {
+                                  visited |= next;
+                                  q.push_back(next_sq);
+                              }
                           }
                       }
-                  }
-
-                  if (group_size >= targetGroupSize) {
-                      result = convert_mate_value(-connect_value(), ply); // ~sideToMove won
-                      return true;
                   }
               }
           }

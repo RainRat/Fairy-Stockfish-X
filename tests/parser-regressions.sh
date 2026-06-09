@@ -74,6 +74,10 @@ wallOrMove = true
 toroidal = true
 connectN = 4
 
+[toroidal-connect-nxn:chess]
+toroidal = true
+connectNxN = 2
+
 [toroidal-pushing:chess]
 toroidal = true
 pushingStrength = q:1
@@ -127,6 +131,9 @@ promotionLimit = p:-1
 
 [invalid-multimoves:chess]
 multimoves = 1 0
+
+[invalid-connect-group:chess]
+connectGroup = -2
 
 [invalid-bool-retain:chess]
 king = -
@@ -344,6 +351,8 @@ assert_contains "${check_output}" "customPiece1 - Missing Betza move notation"
 
 initial_capture_output=$("${ENGINE}" check "${tmp_ini}" 2>&1 || true)
 assert_contains "${initial_capture_output}" "Initial capture Betza moves are not supported in 'ciW'"
+assert_contains_literal "${initial_capture_output}" "Wrapped boards do not support connect3D/connect4D/connectNxN/connectGroup/removeConnectN win conditions."
+assert_contains_literal "${initial_capture_output}" "connectGroup must be -1, 0, or a positive group size."
 
 check_output=$("${ENGINE}" check "${bad_hopper_brace_ini}" 2>&1 || true)
 assert_contains "${check_output}" "customPiece1 - Invalid Betza hopper parameters in 'R{hurdles: 1,1': missing closing '}'."
@@ -370,6 +379,12 @@ assert_contains "${wall_or_move_arrow_output}" "unknown variant 'wall-or-move-ar
 toroidal_pushing_output=$(run_uci "$ENGINE" "$tmp_ini" "toroidal-pushing" </dev/null 2>&1 || true)
 assert_contains "${toroidal_pushing_output}" "^info string variant toroidal-pushing "
 assert_not_contains "${toroidal_pushing_output}" "invalid configuration"
+
+toroidal_connect_nxn_output=$(run_uci "$ENGINE" "$tmp_ini" "toroidal-connect-nxn" </dev/null 2>&1 || true)
+assert_contains "${toroidal_connect_nxn_output}" "unknown variant 'toroidal-connect-nxn'; keeping 'chess'"
+
+invalid_connect_group_output=$(run_uci "$ENGINE" "$tmp_ini" "invalid-connect-group" </dev/null 2>&1 || true)
+assert_contains "${invalid_connect_group_output}" "unknown variant 'invalid-connect-group'; keeping 'chess'"
 
 royal_blast_output=$(run_uci "${ENGINE}" "${royal_blast_ini}" "royal-blast-allowed" <<'EOF'
 d

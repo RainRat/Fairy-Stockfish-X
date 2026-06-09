@@ -463,6 +463,111 @@ EOF
   assert_contains "$out" "^S@b1: 1$"
 }
 
+test_connect_adjudication_edges() {
+  echo "== connect adjudication edges =="
+  load_inline_variants <<'INI'
+[toroidal-connect-seam:fairy]
+maxRank = 5
+maxFile = e
+toroidal = true
+pieceToCharTable = -
+king = -
+customPiece1 = s:m
+connectN = 4
+connectPieceTypes = s
+connectHorizontal = true
+connectVertical = false
+connectDiagonal = false
+nMoveRule = 0
+startFen = 5/5/5/5/SS1SS b - - 0 1
+
+[type-goal-palindrome:fairy]
+maxRank = 1
+maxFile = d
+pieceToCharTable = -
+king = -
+customPiece1 = t:m
+customPiece2 = o:m
+connectN = 0
+connectGoalByType = true
+connectPieceGoalWhite = t o o t
+connectPieceGoalBlack = t t t t
+connectHorizontal = true
+connectVertical = false
+connectDiagonal = false
+nMoveRule = 0
+startFen = TOOT b - - 0 1
+
+[type-goal-reverse:fairy]
+maxRank = 1
+maxFile = c
+pieceToCharTable = -
+king = -
+customPiece1 = a:m
+customPiece2 = b:m
+customPiece3 = c:m
+connectN = 0
+connectGoalByType = true
+connectPieceGoalWhite = a b c
+connectPieceGoalBlack = a a a
+connectHorizontal = true
+connectVertical = false
+connectDiagonal = false
+nMoveRule = 0
+startFen = CBA b - - 0 1
+
+[connect-region-seed-overlap:fairy]
+maxRank = 3
+maxFile = c
+pieceToCharTable = -
+king = -
+customPiece1 = s:m
+connectPieceTypes = s
+connectHorizontal = true
+connectVertical = true
+connectDiagonal = false
+connectRegion1White = a1
+connectRegion2White = a1
+connectRegion3White = a1
+nMoveRule = 0
+startFen = 3/3/S2 b - - 0 1
+
+[connect-group-three:fairy]
+maxRank = 3
+maxFile = c
+pieceToCharTable = -
+king = -
+customPiece1 = s:m
+connectPieceTypes = s
+connectGroup = 3
+connectHorizontal = true
+connectVertical = true
+connectDiagonal = false
+nMoveRule = 0
+startFen = 3/3/SSS b - - 0 1
+INI
+
+  local tmp_ini="${FSX_TMP_INI}" out
+
+  for variant in \
+      toroidal-connect-seam \
+      type-goal-palindrome \
+      type-goal-reverse \
+      connect-region-seed-overlap \
+      connect-group-three; do
+    if ! variant_available "$ENGINE" "$variant" "$tmp_ini"; then
+      return 0
+    fi
+
+    out=$(run_uci "$ENGINE" "$tmp_ini" "$variant" <<'EOF'
+position startpos
+go perft 1
+EOF
+)
+    assert_contains "$out" "^Nodes searched: 0$"
+  done
+}
+
 test_flank_chess() {
   echo "== flank-chess =="
   if ! variant_available "$ENGINE" flank-chess "$VARIANTS"; then
@@ -674,6 +779,7 @@ test_haynie_leapers
 test_kopano
 test_konobi
 test_connect_region3
+test_connect_adjudication_edges
 test_flank_chess
 test_crazy_cavalier
 test_constabulary_chess

@@ -1878,6 +1878,12 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
             std::cerr << "Wrapped boards do not support connect3D/connect4D/connectNxN/connectGroup/removeConnectN win conditions." << std::endl;
         valid = false;
     }
+    if (v->connectGroup < -1)
+    {
+        if (DoCheck)
+            std::cerr << "connectGroup must be -1, 0, or a positive group size." << std::endl;
+        valid = false;
+    }
     // Check for limitations
     if ((v->pieceDrops || v->freeDrops) && v->wallingRule != NO_WALLING)
     {
