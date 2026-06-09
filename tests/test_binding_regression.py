@@ -10,6 +10,27 @@ class TestBindings(unittest.TestCase):
     def setUpClass(cls):
         with open(ROOT_DIR / "src" / "variants.ini", "r", encoding="utf-8") as f:
             sf.load_variant_config(f.read())
+        sf.load_variant_config(
+            """
+[goal-immediate:fairy]
+nMoveRuleImmediate = 1
+nMoveRule = 0
+startFen = k3r3/8/8/8/8/8/8/4K3 w - - 2 1
+
+[drop-immediate:fairy]
+pieceDrops = true
+dropPieceTypes = q
+nMoveRuleImmediate = 1
+nMoveRule = 0
+startFen = 4k3/8/8/8/8/8/8/4K3[Q] w - - 1 1
+
+[prison-no-king:fairy]
+king = -
+checking = false
+prisonPawnPromotion = true
+startFen = 8/8/8/8/8/8/4P3/8 w - - 0 1
+"""
+        )
 
     def test_is_capture_invalid_move(self):
         with self.assertRaises(ValueError):
@@ -57,6 +78,20 @@ class TestBindings(unittest.TestCase):
         # Black plays f6d4 (jump capture), forcing White to pass (0000) on c3 where the King is.
         next_fen = sf.get_fen("checkers", fen, ["f6d4", "0000"])
         self.assertIn("K", next_fen)
+
+    def test_immediate_n_move_rule_in_check_uses_non_recursive_legal_move_probe(self):
+        is_end, result = sf.is_immediate_game_end("goal-immediate", "k3r3/8/8/8/8/8/8/4K3 w - - 2 1", [])
+        self.assertTrue(is_end)
+        self.assertEqual(result, sf.VALUE_DRAW)
+
+    def test_drop_check_under_immediate_n_move_rule_is_not_misclassified_as_mate(self):
+        next_fen = sf.get_fen("drop-immediate", "4k3/8/8/8/8/8/8/4K3[Q] w - - 1 1", ["Q@e7"])
+        self.assertIn("4Q3", next_fen)
+        self.assertIn(" b ", next_fen)
+
+    def test_prison_pawn_promotion_without_opponent_king_is_safe(self):
+        is_end, result = sf.is_immediate_game_end("prison-no-king", "8/8/8/8/8/8/4P3/8 w - - 0 1", [])
+        self.assertFalse(is_end)
 
 if __name__ == "__main__":
     unittest.main()

@@ -3404,7 +3404,7 @@ bool Position::legal(Move m) const {
   {
       StateInfo nextState;
       ScopedProbeMove probe(*this, m, nextState);
-      if (evasion_checkers() && MoveList<LEGAL>(*this).size() == 0)
+      if (evasion_checkers() && !has_legal_move_ignoring_immediate_end())
           return false;
   }
 
@@ -4326,6 +4326,11 @@ bool Position::has_legal_move() const {
 
   if (is_immediate_game_end())
       return false;
+
+  return has_legal_move_ignoring_immediate_end();
+}
+
+bool Position::has_legal_move_ignoring_immediate_end() const {
 
   const bool useWrappedFallback = topology_wraps() && evasion_checkers();
   const bool useNonEvasions = anti_royal_types() || useWrappedFallback;
@@ -7599,7 +7604,7 @@ bool Position::n_fold_game_end(Value& result, int ply, int target) const {
 bool Position::is_optional_game_end(Value& result, int ply, int countStarted) const {
 
   // n-move rule
-  if (n_move_rule() && st->rule50 > (2 * n_move_rule() - 1) && (!evasion_checkers() || MoveList<LEGAL>(*this).size()))
+  if (n_move_rule() && st->rule50 > (2 * n_move_rule() - 1) && (!evasion_checkers() || has_legal_move_ignoring_immediate_end()))
   {
       int offset = 0;
       if (var->chasingRule == AXF_CHASING && st->pliesFromNull >= 20)
@@ -7630,7 +7635,7 @@ bool Position::is_optional_game_end(Value& result, int ply, int countStarted) co
   if (   counting_rule()
       && st->countingLimit
       && counting_ply(countStarted) > counting_limit(countStarted)
-      && (!evasion_checkers() || MoveList<LEGAL>(*this).size()))
+      && (!evasion_checkers() || has_legal_move_ignoring_immediate_end()))
   {
       result = VALUE_DRAW;
       return true;
@@ -7823,7 +7828,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
   // Immediate n-move adjudication (e.g. FIDE 75-move rule)
   if (   n_move_rule_immediate()
       && st->rule50 > (2 * n_move_rule_immediate() - 1)
-      && (!evasion_checkers() || MoveList<LEGAL>(*this).size()))
+      && (!evasion_checkers() || has_legal_move_ignoring_immediate_end()))
   {
       result = var->materialCounting ? convert_mate_value(material_counting_result(), ply) : VALUE_DRAW;
       return true;
@@ -7878,16 +7883,20 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
           if (goal.empty())
               return false;
 
-          if (!var->connectLines.empty() && goal.size() == var->connectLines.front().size())
+          if (!var->connectLines.empty())
           {
               for (const auto& line : var->connectLines)
               {
+                  if (line.size() != goal.size())
+                      continue;
                   bool forward = true;
                   bool reverse = true;
                   for (size_t i = 0; i < goal.size(); ++i)
                   {
-                      forward &= piece_on(line[i]) != NO_PIECE && type_of(piece_on(line[i])) == goal[i];
-                      reverse &= piece_on(line[goal.size() - 1 - i]) != NO_PIECE && type_of(piece_on(line[goal.size() - 1 - i])) == goal[i];
+                      Piece forwardPc = piece_on(line[i]);
+                      Piece reversePc = piece_on(line[goal.size() - 1 - i]);
+                      forward &= forwardPc != NO_PIECE && type_of(forwardPc) == goal[i];
+                      reverse &= reversePc != NO_PIECE && type_of(reversePc) == goal[i];
                   }
                   if (forward || reverse)
                       return true;
@@ -7940,12 +7949,16 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
                   while (starts)
                   {
                       Square s = pop_lsb(starts);
+                      Piece startPc = piece_on(s);
+                      if (startPc == NO_PIECE)
+                          continue;
                       Bitboard cur = square_bb(s);
                       bool matched = true;
                       for (size_t i = 1; i < goal.size(); ++i)
                       {
                           cur = shift(dir, cur);
-                          if (!cur || type_of(piece_on(lsb(cur))) != goal[i])
+                          Piece pc = cur ? piece_on(lsb(cur)) : NO_PIECE;
+                          if (pc == NO_PIECE || type_of(pc) != goal[i])
                           {
                               matched = false;
                               break;
@@ -7989,10 +8002,12 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
   // Connect-n
   if (var->materialCounting != CONNECT_N_COUNT && (connect_n() > 0) && (popcount(connectPieces) >= connect_n()))
   {
-      if (!var->connectLines.empty() && connect_n() == int(var->connectLines.front().size()))
+      if (!var->connectLines.empty())
       {
           for (const auto& line : var->connectLines)
           {
+              if (line.size() != size_t(connect_n()))
+                  continue;
               bool complete = true;
               for (Square s : line)
                   complete &= bool(connectPieces & square_bb(s));
@@ -8296,12 +8311,17 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
           return true;
       }
   }
-  if (var->prisonPawnPromotion &&
-      (pawn_attacks_bb(~sideToMove, square<KING>(~sideToMove))
-       & pieces(sideToMove, PAWN)
-       & ~pawnCannotCheckZone[sideToMove]) ){
-      result = mate_in(ply);
-      return true;
+  if (var->prisonPawnPromotion && count<KING>(~sideToMove) == 1)
+  {
+      Square royalSq = square<KING>(~sideToMove);
+      if (   (pawn_attacks_bb(~sideToMove, royalSq)
+             & pieces(sideToMove, PAWN)
+             & ~pawnCannotCheckZone[sideToMove])
+          )
+      {
+          result = mate_in(ply);
+          return true;
+      }
   }
 
   return false;

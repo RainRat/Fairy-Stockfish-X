@@ -848,6 +848,7 @@ public:
   bool is_immediate_game_end() const;
   bool is_immediate_game_end(Value& result, int ply = 0) const;
   bool has_legal_move() const;
+  bool has_legal_move_ignoring_immediate_end() const;
   bool is_optional_game_end() const;
   bool is_optional_game_end(Value& result, int ply = 0, int countStarted = 0) const;
   bool is_game_end(Value& result, int ply = 0) const;
@@ -5321,10 +5322,12 @@ inline int Position::connect_line_count(Color c) const {
       return 0;
 
   int countLines = 0;
-  if (!var->connectLines.empty() && connect_n() == int(var->connectLines.front().size()))
+  if (!var->connectLines.empty())
   {
       for (const auto& line : var->connectLines)
       {
+          if (line.size() != size_t(connect_n()))
+              continue;
           bool complete = true;
           for (Square s : line)
               complete &= bool(connectPieces & square_bb(s));
