@@ -672,7 +672,74 @@ static PyObject* pyffish_runCppTests(PyObject* self, PyObject* args) {
             return nullptr;
         }
     }
-    
+    // Test 3: Castling simulation ordering in piece_at()
+    {
+        Position pos;
+        StateListPtr states;
+        const Variant* v = require_variant("chess");
+        if (!v) return nullptr;
+        buildPosition(pos, states, v, "r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1", nullptr, false);
+        std::string moveStr = "e1g1";
+        Move m = UCI::to_move(pos, moveStr);
+        if (m == MOVE_NONE) {
+            PyErr_SetString(PyFFishError, "Failed to parse castling move e1g1");
+            return nullptr;
+        }
+
+        Position::SimulatedMoveGuard guard(pos, m);
+
+        Bitboard occupied = pos.pieces();
+        occupied &= ~square_bb(SQ_E1);
+        occupied &= ~square_bb(SQ_H1);
+        occupied |= square_bb(SQ_G1);
+        occupied |= square_bb(SQ_F1);
+
+        if (pos.piece_at(SQ_G1, occupied) != make_piece(WHITE, KING)) {
+            PyErr_SetString(PyFFishError, "piece_at(g1) during simulated castling did not return WHITE KING");
+            return nullptr;
+        }
+        if (pos.piece_at(SQ_F1, occupied) != make_piece(WHITE, ROOK)) {
+            PyErr_SetString(PyFFishError, "piece_at(f1) during simulated castling did not return WHITE ROOK");
+            return nullptr;
+        }
+        if (pos.piece_at(SQ_E1, occupied) != NO_PIECE) {
+            PyErr_SetString(PyFFishError, "piece_at(e1) during simulated castling did not return NO_PIECE");
+            return nullptr;
+        }
+        if (pos.piece_at(SQ_H1, occupied) != NO_PIECE) {
+            PyErr_SetString(PyFFishError, "piece_at(h1) during simulated castling did not return NO_PIECE");
+            return nullptr;
+        }
+    }
+
+    // Test 4: Position::piece_at() synthetic pawn fallback and wall/dead squares
+    {
+        Position pos;
+        StateListPtr states;
+        const Variant* v = require_variant("chess");
+        if (!v) return nullptr;
+        buildPosition(pos, states, v, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", nullptr, false);
+
+        StateInfo* st = pos.state();
+        st->wallSquares = square_bb(SQ_E4);
+        st->deadSquares = square_bb(SQ_D4);
+
+        Bitboard occupied = pos.pieces() | square_bb(SQ_E4) | square_bb(SQ_D4) | square_bb(SQ_C4);
+
+        if (pos.piece_at(SQ_E4, occupied) != NO_PIECE) {
+            PyErr_SetString(PyFFishError, "piece_at(e4) on wall square did not return NO_PIECE");
+            return nullptr;
+        }
+        if (pos.piece_at(SQ_D4, occupied) != NO_PIECE) {
+            PyErr_SetString(PyFFishError, "piece_at(d4) on dead square did not return NO_PIECE");
+            return nullptr;
+        }
+        if (pos.piece_at(SQ_C4, occupied) != NO_PIECE) {
+            PyErr_SetString(PyFFishError, "piece_at(c4) on empty square under synthetic occupied bit did not return NO_PIECE");
+            return nullptr;
+        }
+    }
+
     Py_RETURN_TRUE;
 }
 

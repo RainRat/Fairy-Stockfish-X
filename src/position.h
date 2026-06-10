@@ -736,6 +736,7 @@ public:
   bool violates_mutual_hop_restriction(Square from, Square to, PieceType movePt) const;
   Color color_of_piece_at(Square s1, Square s2, PieceType pt) const;
   Piece piece_on(Square s) const;
+  Piece piece_at(Square sq, Bitboard occupied) const;
   Piece unpromoted_piece_on(Square s) const;
   Bitboard ep_squares() const;
   Square castling_king_square(Color c) const;
@@ -1022,8 +1023,6 @@ private:
   inline HopperSquareProps get_hopper_square_props(Square s, Bitboard occupied, Color friendlyColor, Piece pc) const;
 
   inline HopperMoveDetails resolve_hopper_move_details(Square from, Square to, Bitboard occupied) const;
-
-  inline Piece piece_at(Square sq, Bitboard occupied) const;
 
   inline bool is_valid_hopper_destination(const PieceInfo::HopperProfile& profile, int hurdlesHit, int distToFirstHurdle, int distFromLastHurdle) const;
 
@@ -3592,18 +3591,14 @@ inline Piece Position::piece_at(Square sq, Bitboard occupied) const {
   if (!(occupied & sq))
       return NO_PIECE;
 
+  if ((st->wallSquares | st->deadSquares) & sq)
+      return NO_PIECE;
+
   if (simulatedMove != MOVE_NONE)
   {
       Square from = from_sq(simulatedMove);
       Square to = to_sq(simulatedMove);
       Color us = sideToMove;
-
-      if (sq == to)
-      {
-          if (is_promotion_move(simulatedMove))
-              return make_piece(us, promotion_type(simulatedMove));
-          return moved_piece(simulatedMove);
-      }
 
       if (type_of(simulatedMove) == CASTLING)
       {
@@ -3613,6 +3608,13 @@ inline Piece Position::piece_at(Square sq, Bitboard occupied) const {
               return make_piece(us, KING);
           if (sq == rto)
               return make_piece(us, ROOK);
+      }
+
+      if (sq == to)
+      {
+          if (is_promotion_move(simulatedMove))
+              return make_piece(us, promotion_type(simulatedMove));
+          return moved_piece(simulatedMove);
       }
 
       if (sq == secondary_drop_square(simulatedMove))
@@ -3628,7 +3630,7 @@ inline Piece Position::piece_at(Square sq, Bitboard occupied) const {
   {
       if (pieces() & sq)
           return piece_on(sq);
-      return make_piece(sideToMove, PAWN);
+      return NO_PIECE;
   }
 
   if (more_than_one(vacated)) {
