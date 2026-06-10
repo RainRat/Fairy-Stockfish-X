@@ -8236,8 +8236,20 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
           // Mover (~sideToMove) takes precedence on simultaneous connection.
           bool moverWins = all_connected(~sideToMove);
           bool stmWins   = all_connected(sideToMove);
-          if (moverWins || stmWins) {
-              result = convert_mate_value(moverWins ? -connect_value() : connect_value(), ply);
+          if (moverWins && stmWins) {
+              if (var->connectGoalSimulValueByMover != VALUE_NONE) {
+                  result = convert_mate_value(-var->connectGoalSimulValueByMover, ply);
+                  return true;
+              }
+              result = convert_mate_value(-connect_value(), ply); // default mover wins
+              return true;
+          }
+          if (moverWins) {
+              result = convert_mate_value(-connect_value(), ply);
+              return true;
+          }
+          if (stmWins) {
+              result = convert_mate_value(connect_value(), ply);
               return true;
           }
       } else {

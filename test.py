@@ -2044,9 +2044,10 @@ startFen = 4k3/8/8/8/8/8/4Q3/4K3 w - - 0 1
         # Let's set up a custom position where black is about to move but white's pieces are already fully connected.
         # e.g., White (N) has 3 pieces that are connected, while Black (n) is not connected.
         self._check_immediate_game_end("linesofaction", "8/8/8/8/8/8/3NN3/8 b - - 0 1", [], True, -sf.VALUE_MATE)
-        # Simultaneous connection: both sides connected. Mover (White, since it is b's turn) takes precedence and wins.
         # So stm (Black) loses, meaning game_result is -sf.VALUE_MATE.
         self._check_immediate_game_end("linesofaction", "8/8/8/8/8/8/3NN3/3nn3 b - - 0 1", [], True, -sf.VALUE_MATE)
+        # In linesofaction-draw, simultaneous connection results in a draw.
+        self._check_immediate_game_end("linesofaction-draw", "8/8/8/8/8/8/3NN3/3nn3 b - - 0 1", [], True, sf.VALUE_DRAW)
 
     def test_connect_goal_simul_value_by_mover(self):
         # Load a custom variant testing simultaneous connection goals with a mover policy
