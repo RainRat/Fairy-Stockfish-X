@@ -3101,7 +3101,7 @@ inline Bitboard Position::dynamic_slider_bb(const std::map<Direction,int>& direc
     if (!is_ok(nxt) || distance(nxt, nxt - step) > 2) continue; // only rook/bishop steps
 
     Bitboard line = Stockfish::line_bb(sq, nxt);                 // through board edge
-    if (line == 0) continue;
+    if (!line) continue;
 
     int dist = popcount(line & occupiedAll);          // how far to travel
     if (dist <= 0) continue;
