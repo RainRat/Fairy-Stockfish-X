@@ -4295,6 +4295,34 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
       b |= wrapped_universal_hopper_targets(pi->universalHopper[0][MODALITY_CAPTURE], c, s, occ, pieces(c), max_file(), max_rank(), wrapFile, wrapRank, true, true);
       b |= lame_leaper_bb(pi->stepsLame[0][MODALITY_CAPTURE], s, occ, c, false);
 
+      const bool usesGenericPawnLikeInitialAttackHelper =
+             pt == PAWN || (pawn_like_types(c) & piece_set(pt));
+      const Bitboard initialAttackRegion = usesGenericPawnLikeInitialAttackHelper
+                                         ? double_step_region(c, pt)
+                                         : var->doubleStepRegion.get(c).explicitBoardOfPiece(piece_to_char()[pt]);
+      if ((initialAttackRegion & s) && (Initial || (initialAttackRegion == AllSquares) || (not_moved_pieces(c) & s)))
+      {
+          b |= wrapped_step_targets(pi->steps[1][MODALITY_CAPTURE], c, s, occ, max_file(), max_rank(), wrapFile, wrapRank, false);
+          b |= wrapped_tuple_targets(pi->tupleSteps[1][MODALITY_CAPTURE], c, s, occ, max_file(), max_rank(), wrapFile, wrapRank, false);
+          b |= wrapped_tuple_rider_targets(pi->tupleSlider[1][MODALITY_CAPTURE], c, s, occ, max_file(), max_rank(), wrapFile, wrapRank, false);
+          b |= wrapped_slider_targets(pi->slider[1][MODALITY_CAPTURE], c, s, occ, max_file(), max_rank(), wrapFile, wrapRank, false);
+          if (pi->has_runtime_rider_augment())
+          {
+              b |= wrapped_dynamic_slider_targets(pi->slider[1][MODALITY_CAPTURE], c, s, occ, pieces(c), max_file(), max_rank(), wrapFile, wrapRank, true, true);
+              b |= wrapped_max_slider_targets(pi->slider[1][MODALITY_CAPTURE], c, s, occ, pieces(c), max_file(), max_rank(), wrapFile, wrapRank, true, true);
+          }
+          b |= wrapped_hopper_targets(pi->hopper[1][MODALITY_CAPTURE], c, s, occ, max_file(), max_rank(), wrapFile, wrapRank, false);
+          b |= wrapped_universal_hopper_targets(pi->universalHopper[1][MODALITY_CAPTURE], c, s, occ, pieces(c), max_file(), max_rank(), wrapFile, wrapRank, true, true);
+          b |= lame_leaper_bb(pi->stepsLame[1][MODALITY_CAPTURE], s, occ, c, false);
+          if (pi->griffon[1][MODALITY_CAPTURE])
+              b |= wrapped_bent_rider_targets(true, s, occ, max_file(), max_rank(), wrapFile, wrapRank, false);
+          if (pi->manticore[1][MODALITY_CAPTURE])
+              b |= wrapped_bent_rider_targets(false, s, occ, max_file(), max_rank(), wrapFile, wrapRank, false);
+          b |= wrapped_leap_rider_targets(pi->leapRider[1][MODALITY_CAPTURE], c, s, occ, max_file(), max_rank(), wrapFile, wrapRank, false);
+          if (pi->rose[1][MODALITY_CAPTURE])
+              b |= wrapped_rose_targets(s, occ, max_file(), max_rank(), wrapFile, wrapRank, false);
+      }
+
       if (pi->griffon[0][MODALITY_CAPTURE])
           b |= wrapped_bent_rider_targets(true, s, occ, max_file(), max_rank(), wrapFile, wrapRank, false);
       if (pi->manticore[0][MODALITY_CAPTURE])
@@ -4366,6 +4394,17 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
   b |= special_rider_bb<false>(pi, MODALITY_CAPTURE, s, occ, board_bb(), pieces(c), c, true, true);
   b |= hopper_targets(pi->hopper[0][MODALITY_CAPTURE], c, s, occ, false);
   b |= lame_leaper_bb(pi->stepsLame[0][MODALITY_CAPTURE], s, occ, c, false);
+
+  const bool usesGenericPawnLikeInitialAttackHelper =
+         pt == PAWN || (pawn_like_types(c) & piece_set(pt));
+  const Bitboard initialAttackRegion = usesGenericPawnLikeInitialAttackHelper
+                                     ? double_step_region(c, pt)
+                                     : var->doubleStepRegion.get(c).explicitBoardOfPiece(piece_to_char()[pt]);
+  if ((initialAttackRegion & s) && (Initial || (initialAttackRegion == AllSquares) || (not_moved_pieces(c) & s)))
+  {
+      b |= special_rider_bb<true>(pi, MODALITY_CAPTURE, s, occ, board_bb(), pieces(c), c, true, true);
+      b |= lame_leaper_bb(pi->stepsLame[1][MODALITY_CAPTURE], s, occ, c, false);
+  }
 
 
   // Xiangqi soldier
