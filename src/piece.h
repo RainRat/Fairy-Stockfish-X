@@ -132,6 +132,7 @@ struct PieceInfo {
     PieceSet transparentPieceTypes = PieceSet(0);
     uint8_t hurdleSpecialTypes = ENEMY | FRIENDLY;
     uint8_t transparentSpecialTypes = NONE;
+    bool isHopper = false;
   };
 
   struct LameProfile {
@@ -161,6 +162,7 @@ struct PieceInfo {
   bool manticore[2][MOVE_MODALITY_NB] = {};
   bool rose[2][MOVE_MODALITY_NB] = {};
   uint8_t riderAugmentMask = AUGMENT_NONE;
+  bool friendlyJump = false;
   bool rifleCapture = false;
   int mobilityScaling = 100;
   bool diagonalLimitedSlider = false;
@@ -223,7 +225,7 @@ struct PieceInfo {
         return true;
     return false;
   }
-  inline bool has_runtime_rider_augment() const { return riderAugmentMask != AUGMENT_NONE || has_universal_hopper() || has_lame_leaper(); }
+  inline bool has_runtime_rider_augment() const { return riderAugmentMask != AUGMENT_NONE || has_universal_hopper() || has_lame_leaper() || friendlyJump; }
   inline bool has_dynamic_slider() const { return riderAugmentMask & AUGMENT_DYNAMIC; }
   inline bool has_max_slider() const { return riderAugmentMask & AUGMENT_MAX; }
   inline bool has_explicit_initial_moves() const {

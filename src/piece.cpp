@@ -230,27 +230,29 @@ namespace {
               }
               else
               {
-                  if (key == "hurdles") { parse_min_max(val, currentHopperProfile.hurdlesMin, currentHopperProfile.hurdlesMax, invalidPiece); }
-                  else if (key == "pre") { parse_min_max(val, currentHopperProfile.preMin, currentHopperProfile.preMax, invalidPiece); }
-                  else if (key == "post") { parse_min_max(val, currentHopperProfile.postMin, currentHopperProfile.postMax, invalidPiece); }
-                  else if (key == "capture") {
-                      if (val == "dest") currentHopperProfile.captureMode = PieceInfo::CAPTURE_DEST;
-                      else if (val == "locust_all") currentHopperProfile.captureMode = PieceInfo::CAPTURE_LOCUST_ALL;
-                      else if (val == "locust_first") currentHopperProfile.captureMode = PieceInfo::CAPTURE_LOCUST_FIRST;
-                      else if (val == "locust_last") currentHopperProfile.captureMode = PieceInfo::CAPTURE_LOCUST_LAST;
-                      else {
-                          std::cerr << "Unknown Betza hopper capture mode '" << val << "' in '" << betza << "'." << std::endl;
-                          invalidPiece = true;
-                      }
-                  }
-                  else if (key == "equi") {
-                      if (val == "hopper") currentHopperProfile.equiRule = PieceInfo::EQUI_HOPPER;
-                      else if (val == "stopper") currentHopperProfile.equiRule = PieceInfo::EQUI_STOPPER;
-                      else
-                      {
-                          std::cerr << "Unknown Betza hopper equi mode '" << val << "' in '" << betza << "'." << std::endl;
-                          invalidPiece = true;
-                      }
+                   if (key == "hurdles") { currentHopperProfile.isHopper = true; parse_min_max(val, currentHopperProfile.hurdlesMin, currentHopperProfile.hurdlesMax, invalidPiece); }
+                   else if (key == "pre") { currentHopperProfile.isHopper = true; parse_min_max(val, currentHopperProfile.preMin, currentHopperProfile.preMax, invalidPiece); }
+                   else if (key == "post") { currentHopperProfile.isHopper = true; parse_min_max(val, currentHopperProfile.postMin, currentHopperProfile.postMax, invalidPiece); }
+                   else if (key == "capture") {
+                       currentHopperProfile.isHopper = true;
+                       if (val == "dest") currentHopperProfile.captureMode = PieceInfo::CAPTURE_DEST;
+                       else if (val == "locust_all") currentHopperProfile.captureMode = PieceInfo::CAPTURE_LOCUST_ALL;
+                       else if (val == "locust_first") currentHopperProfile.captureMode = PieceInfo::CAPTURE_LOCUST_FIRST;
+                       else if (val == "locust_last") currentHopperProfile.captureMode = PieceInfo::CAPTURE_LOCUST_LAST;
+                       else {
+                           std::cerr << "Unknown Betza hopper capture mode '" << val << "' in '" << betza << "'." << std::endl;
+                           invalidPiece = true;
+                       }
+                   }
+                   else if (key == "equi") {
+                       currentHopperProfile.isHopper = true;
+                       if (val == "hopper") currentHopperProfile.equiRule = PieceInfo::EQUI_HOPPER;
+                       else if (val == "stopper") currentHopperProfile.equiRule = PieceInfo::EQUI_STOPPER;
+                       else
+                       {
+                           std::cerr << "Unknown Betza hopper equi mode '" << val << "' in '" << betza << "'." << std::endl;
+                           invalidPiece = true;
+                       }
                   }
                   else if (key == "hurdle_types" || key == "transparent_types") {
                       bool isHurdle = (key == "hurdle_types");
@@ -568,6 +570,12 @@ namespace {
               fail_piece();
               return;
           }
+          if (hasUniversalHopper && !currentHopperProfile.isHopper)
+          {
+              if (currentHopperProfile.transparentSpecialTypes & PieceInfo::HopperProfile::FRIENDLY)
+                  p->friendlyJump = true;
+              hasUniversalHopper = false;
+          }
           ensure_default_modalities();
           // Define moves for each atom and modality.
           for (const auto& atom : atoms)
@@ -595,6 +603,8 @@ namespace {
                   auto add_step = [&](int dr, int df) {
                       if (hasUniversalHopper) {
                           p->universalHopper[initial][modality][Direction(dr * FILE_NB + df)] = currentHopperProfile;
+                          if (dynamicDistance && rider)
+                              p->slider[initial][modality][Direction(dr * FILE_NB + df)] = DYNAMIC_SLIDER_LIMIT;
                       } else {
                           if (atomIsTuple && !hopper && rider)
                               tupleSliderV.push_back({dr, df, distance});
@@ -710,6 +720,7 @@ namespace {
           else if (c == 'p' || c == 'g')
           {
               hopper = true;
+              currentHopperProfile.isHopper = true;
               if (c == 'g')
                   distance = 1;
           }

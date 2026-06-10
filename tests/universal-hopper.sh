@@ -115,6 +115,15 @@ customPiece1 = d:{hurdles: 2; pre: 1,*}R
 
 [parser-unknown-hurdle-type:hopper-common]
 customPiece1 = d:{hurdles: 1,1; pre: 1,*; post: 1,1; hurdle_types: enemy,bogus}R
+
+[dynamic-slider-counts-both:hopper-common]
+customPiece1 = d:xR
+
+[friendly-jump-slider:hopper-common]
+customPiece1 = d:{transparent_types: friendly}R
+
+[dynamic-slider-friendly-jump-compose:hopper-common]
+customPiece1 = d:x{transparent_types: friendly}R
 EOF
 INI_FILE="${FSX_TMP_INI}"
 
@@ -377,6 +386,53 @@ expect_variant_rejected "parser-missing-comma" "unknown variant 'parser-missing-
 
 reject_out=$(run_uci "$ENGINE" "$INI_FILE" parser-unknown-hurdle-type </dev/null 2>&1 || true)
 assert_contains "$reject_out" "Unknown Betza hopper special type 'bogus'" "reject unknown hurdle type"
-run_test "parser-unknown-hurdle-type" "7k/8/8/8/3P4/3D4/8/K7 w - - 0 1" 4
+# 7. Composability and dynamic slider tests
+output=$(run_uci "$ENGINE" "$INI_FILE" dynamic-slider-counts-both << 'EOF'
+position fen k7/8/8/8/8/8/1K6/D2p2P1 w - - 0 1
+go perft 1
+EOF
+)
+# D is on a1.
+# Horizontal pieces on 1st rank: D(a1), p(d1), P(g1). Total = 3.
+# D moves 3 squares horizontally -> a1d1 (capture). (1 move)
+# Vertical pieces on A-file: D(a1). Total = 1.
+# D moves 1 square vertically -> a1a2. (1 move)
+# White King is on b2. Moves: a1, a2, a3, b1, b3, c1, c2, c3.
+# But wait! a1 has D (blocked). b1 is empty. c1 is empty.
+# So King moves: b2a2 (1), b2a3 (1), b2b1 (1), b2b3 (1), b2c1 (1), b2c2 (1), b2c3 (1). Total King moves = 7.
+# Total moves = 1 (a1d1) + 1 (a1a2) + 7 (King) + 1 (Pawn g1) = 10.
+assert_nodes "$output" 10
+assert_contains "$output" "a1d1: 1" "dynamic-slider-counts-both a1d1 generated"
+assert_contains "$output" "a1a3: 1" "dynamic-slider-counts-both a1a3 generated"
+
+output=$(run_uci "$ENGINE" "$INI_FILE" friendly-jump-slider << 'EOF'
+position fen k7/8/8/8/8/4K3/P7/D1P5 w - - 0 1
+go perft 1
+EOF
+)
+# D is on a1.
+# Vertically: P on a2 is friendly. friendlyJump allows jumping. Moves: a3, a4, a5, a6, a7. a8 has opponent King, which is uncapturable. (5 moves)
+# Horizontally: P on c1 is friendly. friendlyJump allows jumping. Moves: b1 (1), d1 (1), e1 (1), f1 (1), g1 (1), h1 (1). (6 moves)
+# King on e3. Moves: d4, e4, f4, d3, f3, d2, e2, f2. (8 moves)
+# Pawn P on a2: moves a2a3 (1), a2a4 (1). (2 moves)
+# Pawn P on c1: moves c1c2 (1 move). (1 move)
+# Total moves = 5 (D vert) + 6 (D horiz) + 8 (King) + 2 (Pawn a2) + 1 (Pawn c1) = 22.
+assert_nodes "$output" 22
+
+output=$(run_uci "$ENGINE" "$INI_FILE" dynamic-slider-friendly-jump-compose << 'EOF'
+position fen k7/8/8/8/8/8/P7/D1P1p2K w - - 0 1
+go perft 1
+EOF
+)
+# D on a1.
+# 1st rank pieces: D(a1), P(c1), p(e1), K(h1). Total = 4.
+# D moves 4 squares horizontally -> a1e1 (capture). Friendly jump allows jumping P(c1). (1 move)
+# A-file pieces: D(a1), P(a2). Total = 2.
+# D moves 2 squares vertically -> a1a3. Friendly jump allows jumping P(a2). (1 move)
+# King on h1. Neighbors: g1, g2, h2. All empty. (3 moves)
+# Pawn P on a2: moves a2a3 (1), a2a4 (1). (2 moves)
+# Pawn P on c1: moves c1c2 (1 move). (1 move)
+# Total moves = 1 (a1e1) + 1 (a1a3) + 3 (King) + 2 (Pawn a2) + 1 (Pawn c1) = 8.
+assert_nodes "$output" 8
 
 echo "All Universal Hopper tests passed!"
