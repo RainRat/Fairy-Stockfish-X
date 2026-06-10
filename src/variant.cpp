@@ -2413,6 +2413,15 @@ Variant* Variant::conclude() {
             connectPieceGoalTypes[c].push_back(pt);
         }
     }
+
+    connectLineMasks.clear();
+    for (const auto& line : connectLines)
+    {
+        Bitboard mask = 0;
+        for (Square s : line)
+            mask |= square_bb(s);
+        connectLineMasks.push_back(mask);
+    }
       // Initialize multimove passing parameters
       multimoveOffset = 0;
       for (int j : multimoves)

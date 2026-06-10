@@ -1803,6 +1803,11 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
     }
 
     // Contradictory options
+    if (DoCheck && v->connectNxN && (v->cylindrical || v->toroidal))
+    {
+        std::cerr << "connectNxN is not supported on wrapping boards (cylindrical/toroidal)." << std::endl;
+        valid = false;
+    }
     if (DoCheck && !v->checking && v->checkCounting)
     {
         std::cerr << "checkCounting=true requires checking=true." << std::endl;

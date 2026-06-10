@@ -7863,13 +7863,13 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
           }
           result = convert_mate_value(VALUE_DRAW, ply);
           return true;
-      };
+      }
       //Finally, rule on the simple cases.
       if (st->pointsCount[~sideToMove]>=points_goal())
       {
           result = convert_mate_value(-var->pointsGoalValue, ply);
           return true;
-      };
+      }
       if (st->pointsCount[sideToMove]>=points_goal())
       {
           result = convert_mate_value(var->pointsGoalValue, ply);
@@ -7898,25 +7898,28 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
           {
               for (const auto& line : var->connectLines)
               {
-                  if (line.size() != goal.size())
+                  if (line.size() < goal.size())
                       continue;
-                  bool forward = true;
-                  bool reverse = !palindrome;
-                  for (size_t i = 0; i < goal.size() && (forward || reverse); ++i)
+                  for (size_t off = 0; off + goal.size() <= line.size(); ++off)
                   {
-                      if (forward)
+                      bool forward = true;
+                      bool reverse = !palindrome;
+                      for (size_t i = 0; i < goal.size() && (forward || reverse); ++i)
                       {
-                          Piece forwardPc = piece_on(line[i]);
-                          forward = forwardPc != NO_PIECE && type_of(forwardPc) == goal[i];
+                          if (forward)
+                          {
+                              Piece forwardPc = piece_on(line[off + i]);
+                              forward = forwardPc != NO_PIECE && type_of(forwardPc) == goal[i];
+                          }
+                          if (reverse)
+                          {
+                              Piece reversePc = piece_on(line[off + goal.size() - 1 - i]);
+                              reverse = reversePc != NO_PIECE && type_of(reversePc) == goal[i];
+                          }
                       }
-                      if (reverse)
-                      {
-                          Piece reversePc = piece_on(line[goal.size() - 1 - i]);
-                          reverse = reversePc != NO_PIECE && type_of(reversePc) == goal[i];
-                      }
+                      if (forward || reverse)
+                          return true;
                   }
-                  if (forward || reverse)
-                      return true;
               }
               return false;
           }
@@ -8012,22 +8015,14 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
   // Connect-n
   if (var->materialCounting != CONNECT_N_COUNT && (connect_n() > 0) && (popcount(connectPieces) >= connect_n()))
   {
-      if (!var->connectLines.empty())
+      if (!var->connectLineMasks.empty())
       {
-          for (const auto& line : var->connectLines)
+          for (size_t i = 0; i < var->connectLineMasks.size(); ++i)
           {
-              if (line.size() != size_t(connect_n()))
+              if (var->connectLines[i].size() != size_t(connect_n()))
                   continue;
-              bool complete = true;
-              for (Square s : line)
-              {
-                  if (!(connectPieces & square_bb(s)))
-                  {
-                      complete = false;
-                      break;
-                  }
-              }
-              if (complete)
+              Bitboard mask = var->connectLineMasks[i];
+              if ((connectPieces & mask) == mask)
               {
                   result = convert_mate_value(-connect_value(), ply);
                   return true;
@@ -8161,22 +8156,17 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
               }
           }
       } else {
-          // Directional line scan from border starts using shift() to avoid wraps.
-          auto next_square = [&](Square sq, Direction d) {
-              Bitboard n = shift(d, square_bb(sq));
-              return n ? Square(lsb(n)) : SQ_NONE;
-          };
-
           for (Direction d : var->connectDirections) {
-              for (Square s = SQ_A1; s <= SQ_MAX; ++s) {
-                  // Start only once per line: predecessor in -d must be off-board.
-                  if (next_square(s, -d) != SQ_NONE)
-                      continue;
-
+              // Line starts: on-board squares with no on-board predecessor along d.
+              Bitboard starts = board_bb() & ~shift(d, board_bb());
+              while (starts) {
+                  Square s = pop_lsb(starts);
                   int cnt = 0;
-                  for (Square cur = s; cur != SQ_NONE; cur = next_square(cur, d))
-                      cnt += int(bool(connectPieces & cur));
-
+                  for (Bitboard cur = square_bb(s); cur; cur = shift(d, cur) & board_bb()) {
+                      if (cur & connectPieces) {
+                          ++cnt;
+                      }
+                  }
                   if (cnt >= collinear_n()) {
                       result = convert_mate_value(-connect_value(), ply);
                       return true;
@@ -8187,15 +8177,17 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
   }
 
   // Connect-Group (ends game if a player has N pieces in any connected group)
-  if (connect_group() != 0 && (popcount(connectPieces) >= std::abs(connect_group()) || connect_group() == -1)) {
-      Bitboard playerPieces = connectPieces; // Pieces of the player who just moved
-      int totalPlayerPieces = popcount(playerPieces);
+  if (connect_group() != 0) {
       const auto& connectDirs = getConnectDirections();
       if (connect_group() == -1) {
-          if (totalPlayerPieces > 0) {
-              // LOA and similar "all pieces connected" variants dominate this
-              // path, so use a bitboard flood fill instead of queue-based
-              // component walks.
+          auto all_connected = [&](Color c) {
+              Bitboard playerPieces = 0;
+              for (PieceSet ps = connect_piece_types(); ps;)
+                  playerPieces |= pieces(c, pop_lsb(ps));
+              int totalPlayerPieces = popcount(playerPieces);
+              if (totalPlayerPieces <= 0)
+                  return false;
+
               Bitboard connected = playerPieces & -playerPieces;
               Bitboard frontier = connected;
 
@@ -8233,12 +8225,19 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
                   }
               }
 
-              if (popcount(connected) == totalPlayerPieces) {
-                  result = convert_mate_value(-connect_value(), ply); // ~sideToMove won
-                  return true;
-              }
+              return popcount(connected) == totalPlayerPieces;
+          };
+
+          // Mover (~sideToMove) takes precedence on simultaneous connection.
+          bool moverWins = all_connected(~sideToMove);
+          bool stmWins   = all_connected(sideToMove);
+          if (moverWins || stmWins) {
+              result = convert_mate_value(moverWins ? -connect_value() : connect_value(), ply);
+              return true;
           }
       } else {
+          Bitboard playerPieces = connectPieces; // Pieces of the player who just moved
+          int totalPlayerPieces = popcount(playerPieces);
           Bitboard visited = 0;
           int targetGroupSize = connect_group();
 

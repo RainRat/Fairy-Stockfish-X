@@ -410,6 +410,7 @@ struct Variant {
   bool shogiStylePromotions = false;
   std::vector<Direction> connectDirections;
   std::vector<std::vector<Square>> connectLines;
+  std::vector<Bitboard> connectLineMasks;
   PieceSet connectPieceTypesTrimmed = ~NO_PIECE_SET;
   std::vector<PieceType> connectPieceGoalTypes[COLOR_NB];
   std::bitset<START_MULTIMOVES> multimovePass; // irregular pattern of multimove passes at game start
