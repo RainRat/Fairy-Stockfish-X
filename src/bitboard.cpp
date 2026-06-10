@@ -87,26 +87,36 @@ namespace {
         int minDistance = slider_min_distance(limit);
         int maxDistance = slider_max_distance(limit);
         int count = 0;
+        int totalCount = 0;
         bool hurdle = false;
         for (Square s = sq + (c == WHITE ? d : -d);
              is_ok(s) && distance(s, s - (c == WHITE ? d : -d)) <= 2;
              s += (c == WHITE ? d : -d))
         {
+            ++totalCount;
             if (MT != HOPPER || hurdle)
             {
                 ++count;
-                if (count >= minDistance)
+                int distanceCount = (MT == HOPPER && maxDistance == 1) ? count : totalCount;
+                if (distanceCount >= minDistance)
                     attack |= s;
                 // For hoppers we consider limit == 1 as a grasshopper,
                 // but limit > 1 as a limited distance hopper
-                if (maxDistance > 0 && !(MT == HOPPER_RANGE && maxDistance == 1) && count >= maxDistance)
+                if (maxDistance > 0 && !(MT == HOPPER_RANGE && maxDistance == 1) && distanceCount >= maxDistance)
                     break;
+            }
+            else if (MT == HOPPER && maxDistance > 1 && totalCount >= maxDistance)
+            {
+                break;
             }
 
             if (occupied & s)
             {
                 if (MT == HOPPER && !hurdle)
+                {
                     hurdle = true;
+                    count = 0;
+                }
                 else
                     break;
             }

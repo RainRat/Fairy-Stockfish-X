@@ -825,7 +825,7 @@ inline Bitboard walk_ray(Square s, int stepF, int stepR, bool skipFirst, StepFn&
   return attack;
 }
 
-inline Bitboard fixed_step_lame_rider_attacks_core(Square s, Bitboard occupied, int stepF, int stepR) {
+inline Bitboard fixed_step_lame_rider_attacks(Square s, Bitboard occupied, int stepF, int stepR) {
   assert((stepF % 2 == 0) && (stepR % 2 == 0));
   Bitboard attack = 0;
   int f = int(file_of(s));
@@ -851,10 +851,6 @@ inline Bitboard fixed_step_lame_rider_attacks_core(Square s, Bitboard occupied, 
   }
 
   return attack;
-}
-
-inline Bitboard fixed_step_lame_rider_attacks(Square s, Bitboard occupied, int stepF, int stepR) {
-  return fixed_step_lame_rider_attacks_core(s, occupied, stepF, stepR);
 }
 
 

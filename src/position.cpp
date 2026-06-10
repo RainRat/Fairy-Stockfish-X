@@ -2599,6 +2599,7 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
           // Runtime rider augments and asymmetric riders need per-piece forward
           // attack testing — the reverse-attack shortcut is incorrect for these.
           if (pi->has_runtime_rider_augment()
+              || pi->has_universal_hopper()
               || (AttackRiderTypes[move_pt] & ASYMMETRICAL_RIDERS))
           {
               Bitboard candidates = ptPieces;
@@ -2662,7 +2663,7 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
       {
           PieceType move_pt = effective_piece_type(pt);
           const PieceInfo* pi = pieceMap.get(move_pt);
-          if (pi->has_runtime_rider_augment())
+          if (pi->has_runtime_rider_augment() || pi->has_universal_hopper())
           {
               Bitboard candidates = pieces(c, pt);
               while (candidates)

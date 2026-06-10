@@ -908,7 +908,10 @@ private:
   void do_castling(Color us, Square from, Square& to, Square& rfrom, Square& rto);
   static Bitboard dynamic_slider_bb(const std::map<Direction,int>& directions,
                                     Square sq, Bitboard blockers,
-                                    Bitboard occupiedAll, Color c);
+                                    Bitboard occupiedAll, Color c,
+                                    Bitboard ownPieces = 0,
+                                    bool captureMode = true,
+                                    bool includeOwnBlockedAttacks = true);
   static Bitboard max_slider_bb(const std::map<Direction, int>& directions,
                                 Square sq, Bitboard occupied,
                                 Bitboard boardMask,
@@ -3083,7 +3086,10 @@ inline Bitboard Position::dynamic_slider_bb(const std::map<Direction,int>& direc
                                             Square  sq,
                                             Bitboard blockers,     // pieces that stop us
                                             Bitboard occupiedAll,  // for distance count
-                                            Color   c)
+                                            Color   c,
+                                            Bitboard ownPieces,
+                                            bool   captureMode,
+                                            bool   includeOwnBlockedAttacks)
 {
   Bitboard out = 0;
   for (auto const& [d, limit] : directions)
@@ -3095,7 +3101,10 @@ inline Bitboard Position::dynamic_slider_bb(const std::map<Direction,int>& direc
     if (!is_ok(nxt) || distance(nxt, nxt - step) > 2) continue; // only rook/bishop steps
 
     Bitboard line = Stockfish::line_bb(sq, nxt);                 // through board edge
+    if (line == 0) continue;
+
     int dist = popcount(line & occupiedAll);          // how far to travel
+    if (dist <= 0) continue;
 
     Square dest = sq;
     bool   ok   = true;
@@ -3106,7 +3115,14 @@ inline Bitboard Position::dynamic_slider_bb(const std::map<Direction,int>& direc
       if (i < dist - 1 && (blockers & dest))       // hit enemy before end
       { ok = false; break; }
     }
-    if (ok) out |= square_bb(dest);
+    if (ok && dest != sq)
+    {
+      if (!captureMode && (occupiedAll & square_bb(dest)))
+          continue;
+      if (captureMode && !includeOwnBlockedAttacks && (ownPieces & square_bb(dest)))
+          continue;
+      out |= square_bb(dest);
+    }
   }
   return out;
 }
@@ -3721,7 +3737,7 @@ inline Bitboard Position::special_rider_bb(const PieceInfo* pi, MoveModality mod
 
               Bitboard dynBlockers = occupied & ~transparentPieces;
 
-              Bitboard b_dyn = Position::dynamic_slider_bb(singleDirSlider, sq, dynBlockers, byTypeBB[ALL_PIECES], c);
+              Bitboard b_dyn = Position::dynamic_slider_bb(singleDirSlider, sq, dynBlockers, byTypeBB[ALL_PIECES], c, ownPieces, captureMode, includeOwnBlockedAttacks);
               Bitboard b_hop = hopIt->second.isHopper
                                ? universal_hopper_bb(singleDirHopper, sq, occupied, ownPieces, c, captureMode, includeOwnBlockedAttacks)
                                : ~Bitboard(0);
@@ -3735,7 +3751,7 @@ inline Bitboard Position::special_rider_bb(const PieceInfo* pi, MoveModality mod
       }
 
       if (!pureDynamicDirs.empty())
-          b |= Position::dynamic_slider_bb(pureDynamicDirs, sq, occupied, byTypeBB[ALL_PIECES], c);
+          b |= Position::dynamic_slider_bb(pureDynamicDirs, sq, occupied, byTypeBB[ALL_PIECES], c, ownPieces, captureMode, includeOwnBlockedAttacks);
 
       b |= combinedDynamicHopperAttacks;
   }
@@ -4278,16 +4294,7 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
       b |= wrapped_hopper_targets(pi->hopper[0][MODALITY_CAPTURE], c, s, occ, max_file(), max_rank(), wrapFile, wrapRank, false);
       b |= wrapped_universal_hopper_targets(pi->universalHopper[0][MODALITY_CAPTURE], c, s, occ, pieces(c), max_file(), max_rank(), wrapFile, wrapRank, true, true);
       b |= lame_leaper_bb(pi->stepsLame[0][MODALITY_CAPTURE], s, occ, c, false);
-      const bool usesGenericPawnLikeInitialAttackHelper =
-             pt == PAWN || (pawn_like_types(c) & piece_set(pt));
-      const Bitboard initialAttackRegion = usesGenericPawnLikeInitialAttackHelper
-                                         ? double_step_region(c, pt)
-                                         : var->doubleStepRegion.get(c).explicitBoardOfPiece(piece_to_char()[pt]);
-      if ((initialAttackRegion & s) && (Initial || (initialAttackRegion == AllSquares) || (not_moved_pieces(c) & s)))
-      {
-          b |= wrapped_universal_hopper_targets(pi->universalHopper[1][MODALITY_CAPTURE], c, s, occ, pieces(c), max_file(), max_rank(), wrapFile, wrapRank, true, true);
-          b |= lame_leaper_bb(pi->stepsLame[1][MODALITY_CAPTURE], s, occ, c, false);
-      }
+
       if (pi->griffon[0][MODALITY_CAPTURE])
           b |= wrapped_bent_rider_targets(true, s, occ, max_file(), max_rank(), wrapFile, wrapRank, false);
       if (pi->manticore[0][MODALITY_CAPTURE])
@@ -4304,6 +4311,7 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
                             || !pi->hopper[1][MODALITY_QUIET].empty()
                             || !pi->hopper[1][MODALITY_CAPTURE].empty();
   const bool hasRuntimeSpecialMoves = pi->has_runtime_rider_augment()
+                                   || pi->has_universal_hopper()
                                    || pi->has_explicit_initial_moves()
                                    || hasSimpleHopper;
 
@@ -4347,10 +4355,10 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
       return b & (FilterMobility ? board_bb(c, pt) : board_bb());
   }
 
-  if (!hasRuntimeSpecialMoves && !pi->has_lame_leaper() && fast_attacks2() && (pt != KING || king_type() == KING))
+  if (!hasRuntimeSpecialMoves && !pi->has_lame_leaper() && !pi->has_universal_hopper() && fast_attacks2() && (pt != KING || king_type() == KING))
       return attacks_bb(c, pt, s, occ) & (FilterMobility ? board_bb(c, pt) : board_bb());
 
-  if ((fast_attacks() || fast_attacks2()) && !pi->has_runtime_rider_augment() && !pi->has_lame_leaper())
+  if ((fast_attacks() || fast_attacks2()) && !pi->has_runtime_rider_augment() && !pi->has_lame_leaper() && !pi->has_universal_hopper())
       return attacks_bb(c, movePt, s, occ) & (FilterMobility ? board_bb(c, pt) : board_bb());
 
   Bitboard b = attacks_bb(c, movePt, s, occ);
@@ -4358,16 +4366,7 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
   b |= special_rider_bb<false>(pi, MODALITY_CAPTURE, s, occ, board_bb(), pieces(c), c, true, true);
   b |= hopper_targets(pi->hopper[0][MODALITY_CAPTURE], c, s, occ, false);
   b |= lame_leaper_bb(pi->stepsLame[0][MODALITY_CAPTURE], s, occ, c, false);
-  const bool usesGenericPawnLikeInitialAttackHelper =
-         pt == PAWN || (pawn_like_types(c) & piece_set(pt));
-  const Bitboard initialAttackRegion = usesGenericPawnLikeInitialAttackHelper
-                                     ? double_step_region(c, pt)
-                                     : var->doubleStepRegion.get(c).explicitBoardOfPiece(piece_to_char()[pt]);
-  if ((initialAttackRegion & s) && (Initial || (initialAttackRegion == AllSquares) || (not_moved_pieces(c) & s)))
-  {
-      b |= special_rider_bb<true>(pi, MODALITY_CAPTURE, s, occ, board_bb(), pieces(c), c, true, true);
-      b |= lame_leaper_bb(pi->stepsLame[1][MODALITY_CAPTURE], s, occ, c, false);
-  }
+
 
   // Xiangqi soldier
   if (pt == SOLDIER && !(zone_bb(c, var->soldierPromotionRank, max_rank()) & s))

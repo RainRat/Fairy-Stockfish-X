@@ -675,6 +675,43 @@ startFen = 3k4/1B4N1/8/8/8/8/8/4K3 w - - 0 1
         result = sf.legal_moves("betzatest", "7/7/4a2/3E3/7/7/7 w - - 0 1", [])
         self.assertEqual(['d4f6', 'd4g7'], sorted(result))
 
+        # Test universal hopper, dynamic slider, and limited hopper semantics (Issue 1-5)
+        sf.load_variant_config(
+            """[goaltest:chess]
+customPiece1 = h:pU
+customPiece2 = d:xR
+customPiece3 = e:pB2
+customPiece4 = n:xN
+startFen = 4k3/8/8/8/8/8/8/4K3 w - - 0 1
+"""
+        )
+        # Universal hopper: Jump over e5 to f6
+        result = sf.legal_moves("goaltest", "4k3/8/8/4p3/3H4/8/8/4K3 w - - 0 1", [])
+        self.assertIn("d4f6", result)
+        self.assertNotIn("d4e5", result)
+
+        # Check detection for universal hopper gives check to f6
+        self.assertTrue(sf.gives_check("goaltest", "8/8/5k2/4p3/3H4/8/8/4K3 b - - 0 1", []))
+
+        # Dynamic slider quiet moves check
+        result = sf.legal_moves("goaltest", "4k3/8/3P4/8/3D4/8/8/4K3 w - - 0 1", [])
+        self.assertNotIn("d4d6", result)
+        # Capture of enemy is legal
+        result = sf.legal_moves("goaltest", "4k3/8/3p4/8/3D4/8/8/4K3 w - - 0 1", [])
+        self.assertIn("d4d6", result)
+
+        # Dynamic slider with knight direction should not self-destination
+        result = sf.legal_moves("goaltest", "4k3/8/8/8/3N4/8/8/4K3 w - - 0 1", [])
+        self.assertNotIn("d4d4", result)
+
+        # Limited-range hopper pB2: hurdle at e5 (dist 1) -> land at f6 (dist 2) is ok
+        result = sf.legal_moves("goaltest", "4k3/8/8/4p3/3E4/8/8/4K3 w - - 0 1", [])
+        self.assertIn("d4f6", result)
+        # Hurdle at f6 (dist 2) -> land at g7 (dist 3) is too far
+        result = sf.legal_moves("goaltest", "4k3/6p1/5p2/8/3E4/8/8/4K3 w - - 0 1", [])
+        self.assertNotIn("d4g7", result)
+
+
         # diagonalGeneral: moving the blocker off the king diagonal is illegal
         result = sf.legal_moves("diagfaceoff", sf.start_fen("diagfaceoff"), [])
         self.assertNotIn("d4d5", result)
