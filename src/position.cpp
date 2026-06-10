@@ -7988,6 +7988,11 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
       bool stmGoal = has_connect_goal(sideToMove);
       if (prevMoverGoal && stmGoal)
       {
+          if (var->connectGoalSimulValueByMover != VALUE_NONE)
+          {
+              result = convert_mate_value(-var->connectGoalSimulValueByMover, ply);
+              return true;
+          }
           result = convert_mate_value(VALUE_DRAW, ply);
           return true;
       }

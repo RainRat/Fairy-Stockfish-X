@@ -1704,6 +1704,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("collinearN", v->collinearN);
     parse_attribute("connectGroup", v->connectGroup);
     parse_attribute("connectValue", v->connectValue);
+    parse_attribute("connectGoalSimulValueByMover", v->connectGoalSimulValueByMover);
     parse_attribute("materialCounting", v->materialCounting);
     parse_attribute("materialCountingPieceTypes", v->materialCountingPieceTypes, v);
     parse_attribute("adjudicateFullBoard", v->adjudicateFullBoard);

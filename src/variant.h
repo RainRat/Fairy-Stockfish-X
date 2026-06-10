@@ -387,6 +387,7 @@ struct Variant {
   Value pointsGoalValue = VALUE_MATE;
   Value pointsGoalSimulValueByMostPoints = VALUE_MATE;
   Value pointsGoalSimulValueByMover = VALUE_NONE;
+  Value connectGoalSimulValueByMover = VALUE_NONE;
   int pointsGoal = 0;
 
   // Derived properties

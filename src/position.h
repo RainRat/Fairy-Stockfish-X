@@ -667,6 +667,7 @@ public:
   Value points_goal_value() const;
   Value points_goal_simul_value_by_most_points() const;
   Value points_goal_simul_value_by_mover() const;
+  Value connect_goal_simul_value_by_mover() const;
 
   CheckCount checks_remaining(Color c) const;
   MaterialCounting material_counting() const;
@@ -2841,6 +2842,11 @@ inline Value Position::points_goal_simul_value_by_most_points() const {
 inline Value Position::points_goal_simul_value_by_mover() const {
   assert(var != nullptr);
   return var->pointsGoalSimulValueByMover;
+}
+
+inline Value Position::connect_goal_simul_value_by_mover() const {
+  assert(var != nullptr);
+  return var->connectGoalSimulValueByMover;
 }
 
 
