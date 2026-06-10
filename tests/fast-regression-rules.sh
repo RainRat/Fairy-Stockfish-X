@@ -276,7 +276,7 @@ EOF
   assert_contains "$out" "^e2d2: 1$"
 
   out=$(run_uci "$ENGINE" "$tmp_ini" pass-color-overrides <<'EOF'
-position fen 7k/8/8/8/8/6k1/5q2/7K w - - 0 1
+position fen 7k/8/8/8/8/8/5q2/7K w - - 0 1
 go perft 1
 EOF
 )
