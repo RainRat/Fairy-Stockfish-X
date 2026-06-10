@@ -8008,305 +8008,249 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
       }
   }
 
-  //Calculate eligible pieces for connection once.
-  Bitboard connectPieces = 0;
-  for (PieceSet ps = connect_piece_types(); ps;)
-  {
-      PieceType pt = pop_lsb(ps);
-      connectPieces |= pieces(pt);
-  }
-  connectPieces &= pieces(~sideToMove);
+  auto check_connection_adjudications = [&](Color c) {
+      Bitboard eligible = 0;
+      for (PieceSet ps = connect_piece_types(); ps;)
+          eligible |= pieces(c, pop_lsb(ps));
 
-  // Connect-n
-  if (var->materialCounting != CONNECT_N_COUNT && (connect_n() > 0) && (popcount(connectPieces) >= connect_n()))
-  {
-      if (!var->connectLineMasks.empty())
+      // Connect-n
+      if (var->materialCounting != CONNECT_N_COUNT && (connect_n() > 0) && (popcount(eligible) >= connect_n()))
       {
-          for (size_t i = 0; i < var->connectLineMasks.size(); ++i)
+          if (!var->connectLineMasks.empty())
           {
-              if (var->connectLines[i].size() != size_t(connect_n()))
-                  continue;
-              Bitboard mask = var->connectLineMasks[i];
-              if ((connectPieces & mask) == mask)
+              for (size_t i = 0; i < var->connectLineMasks.size(); ++i)
               {
-                  result = convert_mate_value(-connect_value(), ply);
-                  return true;
-              }
-          }
-      }
-      else
-      {
-          if (topology_wraps())
-          {
-              const int maxSteps = popcount(board_bb());
-
-              for (Direction d : var->connectDirections)
-              {
-                  Bitboard starts = connectPieces;
-                  while (starts)
-                  {
-                      Square s = pop_lsb(starts);
-                      Square cur = s;
-                      int steps = 1;
-                      while (steps < connect_n() && steps < maxSteps)
-                      {
-                          Square next = SQ_NONE;
-                          if (!wrapped_step(cur, d, next) || next == s)
-                              break;
-                          if (!(connectPieces & square_bb(next)))
-                              break;
-                          cur = next;
-                          ++steps;
-                      }
-                      if (steps >= connect_n())
-                      {
-                          result = convert_mate_value(-connect_value(), ply);
-                          return true;
-                      }
-                  }
+                  if (var->connectLines[i].size() != size_t(connect_n()))
+                      continue;
+                  Bitboard mask = var->connectLineMasks[i];
+                  if ((eligible & mask) == mask)
+                      return true;
               }
           }
           else
           {
-              Bitboard b;
-
-              for (Direction d : var->connectDirections)
+              if (topology_wraps())
               {
-                  b = connectPieces;
-                  for (int i = 1; i < connect_n() && b; i++)
-                      b &= shift(d, b);
-                  if (b)
+                  const int maxSteps = popcount(board_bb());
+
+                  for (Direction d : var->connectDirections)
                   {
-                      result = convert_mate_value(-connect_value(), ply);
-                      return true;
+                      Bitboard starts = eligible;
+                      while (starts)
+                      {
+                          Square s = pop_lsb(starts);
+                          Square cur = s;
+                          int steps = 1;
+                          while (steps < connect_n() && steps < maxSteps)
+                          {
+                              Square next = SQ_NONE;
+                              if (!wrapped_step(cur, d, next) || next == s)
+                                  break;
+                              if (!(eligible & square_bb(next)))
+                                  break;
+                              cur = next;
+                              ++steps;
+                          }
+                          if (steps >= connect_n())
+                              return true;
+                      }
+                  }
+              }
+              else
+              {
+                  Bitboard b;
+
+                  for (Direction d : var->connectDirections)
+                  {
+                      b = eligible;
+                      for (int i = 1; i < connect_n() && b; i++)
+                          b &= shift(d, b);
+                      if (b)
+                          return true;
                   }
               }
           }
       }
-  }
 
-  auto connected_regions = [&](Bitboard region1, Bitboard region2, Bitboard region3 = 0) {
-      if (!(region1 & connectPieces) || !(region2 & connectPieces) || (region3 && !(region3 & connectPieces)))
-          return false;
+      auto connected_regions = [&](Bitboard region1, Bitboard region2, Bitboard region3 = 0) {
+          if (!(region1 & eligible) || !(region2 & eligible) || (region3 && !(region3 & eligible)))
+              return false;
 
-      Bitboard frontier = region1 & connectPieces;
-      Bitboard current = frontier;
-      bool hitsRegion2 = bool(current & region2);
-      bool hitsRegion3 = !region3 || bool(current & region3);
-      if (hitsRegion2 && hitsRegion3)
-          return true;
-
-      while (frontier) {
-          Bitboard newBitboard = weak_connection_expansion(*this, frontier, connectPieces, ~sideToMove) & ~current;
-
-          hitsRegion2 |= bool(newBitboard & region2);
-          hitsRegion3 |= !region3 || bool(newBitboard & region3);
+          Bitboard frontier = region1 & eligible;
+          Bitboard current = frontier;
+          bool hitsRegion2 = bool(current & region2);
+          bool hitsRegion3 = !region3 || bool(current & region3);
           if (hitsRegion2 && hitsRegion3)
               return true;
 
-          frontier = newBitboard;
-          current |= newBitboard;
-      }
+          while (frontier) {
+              Bitboard newBitboard = weak_connection_expansion(*this, frontier, eligible, ~sideToMove) & ~current;
 
-      return false;
-  };
-
-  if (connected_regions(var->connectRegion1[~sideToMove], var->connectRegion2[~sideToMove],
-                        var->connectRegion3[~sideToMove]))
-  {
-      result = convert_mate_value(-connect_value(), ply);
-      return true;
-  }
-
-  if ((connect_nxn()) && (popcount(connectPieces) >= connect_nxn() * connect_nxn()))
-  {
-      Bitboard connectors = connectPieces;
-      for (int i = 1; i < connect_nxn() && connectors; i++)
-          connectors &= shift<SOUTH>(connectors) & shift<EAST>(connectors) & shift<SOUTH_EAST>(connectors);
-      if (connectors)
-      {
-          result = convert_mate_value(-connect_value(), ply);
-          return true;
-      }
-  }
-
-  // Collinear-n
-  if ((collinear_n() > 0) && (popcount(connectPieces) >= collinear_n())) {
-      if (topology_wraps()) {
-          const int maxSteps = popcount(board_bb());
-
-          for (Direction d : var->connectDirections) {
-              Bitboard visitedLine = 0;
-              Bitboard starts = board_bb();
-              while (starts) {
-                  Square s = pop_lsb(starts);
-                  if (visitedLine & square_bb(s))
-                      continue;
-
-                  int cnt = 0;
-                  Square cur = s;
-                  for (int steps = 0; steps < maxSteps; ++steps) {
-                      visitedLine |= square_bb(cur);
-                      if (connectPieces & square_bb(cur))
-                          ++cnt;
-                      Square next = SQ_NONE;
-                      if (!wrapped_step(cur, d, next) || next == s)
-                          break;
-                      cur = next;
-                  }
-                  if (cnt >= collinear_n()) {
-                      result = convert_mate_value(-connect_value(), ply);
-                      return true;
-                  }
-              }
-          }
-      } else {
-          for (Direction d : var->connectDirections) {
-              // Line starts: on-board squares with no on-board predecessor along d.
-              Bitboard starts = board_bb() & ~shift(d, board_bb());
-              while (starts) {
-                  Square s = pop_lsb(starts);
-                  int cnt = 0;
-                  for (Bitboard cur = square_bb(s); cur; cur = shift(d, cur) & board_bb()) {
-                      if (cur & connectPieces) {
-                          ++cnt;
-                      }
-                  }
-                  if (cnt >= collinear_n()) {
-                      result = convert_mate_value(-connect_value(), ply);
-                      return true;
-                  }
-              }
-          }
-      }
-  }
-
-  // Connect-Group (ends game if a player has N pieces in any connected group)
-  if (connect_group() != 0) {
-      const auto& connectDirs = getConnectDirections();
-      if (connect_group() == -1) {
-          auto all_connected = [&](Color c) {
-              Bitboard playerPieces = 0;
-              for (PieceSet ps = connect_piece_types(); ps;)
-                  playerPieces |= pieces(c, pop_lsb(ps));
-              int totalPlayerPieces = popcount(playerPieces);
-              if (totalPlayerPieces <= 0)
-                  return false;
-
-              Bitboard connected = playerPieces & -playerPieces;
-              Bitboard frontier = connected;
-
-              if (!topology_wraps()) {
-                  while (frontier) {
-                      Bitboard expanded = 0;
-                      for (Direction d : connectDirs)
-                          expanded |= shift(d, frontier) & playerPieces;
-                      expanded &= ~connected;
-                      frontier = expanded;
-                      connected |= expanded;
-                  }
-              } else {
-                  // Preserve wrap-aware semantics using the existing
-                  // square-by-square expansion when the board topology wraps.
-                  Bitboard visited = connected;
-                  std::deque<Square> q;
-                  q.push_back(lsb(connected));
-
-                  while (!q.empty()) {
-                      Square s = q.front();
-                      q.pop_front();
-
-                      for (Direction d : connectDirs) {
-                          Square next_sq = SQ_NONE;
-                          auto [dr, df] = decode_direction(d);
-                          if (!wrapped_destination_square(s, df, dr, max_file(), max_rank(), wraps_files(), wraps_ranks(), next_sq))
-                              continue;
-                          if (!(square_bb(next_sq) & playerPieces) || (square_bb(next_sq) & visited))
-                              continue;
-                          visited |= next_sq;
-                          connected |= next_sq;
-                          q.push_back(next_sq);
-                      }
-                  }
-              }
-
-              return popcount(connected) == totalPlayerPieces;
-          };
-
-          // Mover (~sideToMove) takes precedence on simultaneous connection.
-          bool moverWins = all_connected(~sideToMove);
-          bool stmWins   = all_connected(sideToMove);
-          if (moverWins && stmWins) {
-              if (var->connectGoalSimulValueByMover != VALUE_NONE) {
-                  result = convert_mate_value(-var->connectGoalSimulValueByMover, ply);
+              hitsRegion2 |= bool(newBitboard & region2);
+              hitsRegion3 |= !region3 || bool(newBitboard & region3);
+              if (hitsRegion2 && hitsRegion3)
                   return true;
+
+              frontier = newBitboard;
+              current |= newBitboard;
+          }
+
+          return false;
+      };
+
+      if (connected_regions(var->connectRegion1[c], var->connectRegion2[c], var->connectRegion3[c]))
+          return true;
+
+      if ((connect_nxn()) && (popcount(eligible) >= connect_nxn() * connect_nxn()))
+      {
+          Bitboard connectors = eligible;
+          for (int i = 1; i < connect_nxn() && connectors; i++)
+              connectors &= shift<SOUTH>(connectors) & shift<EAST>(connectors) & shift<SOUTH_EAST>(connectors);
+          if (connectors)
+              return true;
+      }
+
+      // Collinear-n
+      if ((collinear_n() > 0) && (popcount(eligible) >= collinear_n())) {
+          if (topology_wraps()) {
+              const int maxSteps = popcount(board_bb());
+
+              for (Direction d : var->connectDirections) {
+                  Bitboard visitedLine = 0;
+                  Bitboard starts = board_bb();
+                  while (starts) {
+                      Square s = pop_lsb(starts);
+                      if (visitedLine & square_bb(s))
+                          continue;
+
+                      int cnt = 0;
+                      Square cur = s;
+                      for (int steps = 0; steps < maxSteps; ++steps) {
+                          visitedLine |= square_bb(cur);
+                          if (eligible & square_bb(cur))
+                              ++cnt;
+                          Square next = SQ_NONE;
+                          if (!wrapped_step(cur, d, next) || next == s)
+                              break;
+                          cur = next;
+                      }
+                      if (cnt >= collinear_n())
+                          return true;
+                  }
               }
-              result = convert_mate_value(-connect_value(), ply); // default mover wins
-              return true;
+          } else {
+              for (Direction d : var->connectDirections) {
+                  // Line starts: on-board squares with no on-board predecessor along d.
+                  Bitboard starts = board_bb() & ~shift(d, board_bb());
+                  while (starts) {
+                      Square s = pop_lsb(starts);
+                      int cnt = 0;
+                      for (Bitboard cur = square_bb(s); cur; cur = shift(d, cur) & board_bb()) {
+                          if (cur & eligible) {
+                              ++cnt;
+                          }
+                      }
+                      if (cnt >= collinear_n())
+                          return true;
+                  }
+              }
           }
-          if (moverWins) {
-              result = convert_mate_value(-connect_value(), ply);
-              return true;
-          }
-          if (stmWins) {
-              result = convert_mate_value(connect_value(), ply);
-              return true;
-          }
-      } else {
-          Bitboard playerPieces = connectPieces; // Pieces of the player who just moved
-          int totalPlayerPieces = popcount(playerPieces);
-          Bitboard visited = 0;
-          int targetGroupSize = connect_group();
+      }
 
-          if (targetGroupSize > 0 && totalPlayerPieces >= targetGroupSize) { // Optimization: no need to check if not enough pieces
-              if (!topology_wraps()) {
-                  while (playerPieces & ~visited) {
-                      Bitboard group = playerPieces & ~visited;
-                      group &= -group;
-                      Bitboard frontier = group;
+      // Connect-Group
+      if (connect_group() != 0) {
+          const auto& connectDirs = getConnectDirections();
+          if (connect_group() == -1) {
+              int totalPlayerPieces = popcount(eligible);
+              if (totalPlayerPieces > 0) {
+                  Bitboard connected = eligible & -eligible;
+                  Bitboard frontier = connected;
 
-                      while (frontier && popcount(group) < targetGroupSize) {
+                  if (!topology_wraps()) {
+                      while (frontier) {
                           Bitboard expanded = 0;
                           for (Direction d : connectDirs)
-                              expanded |= shift(d, frontier);
-                          expanded &= playerPieces & ~group;
-                          group |= expanded;
+                              expanded |= shift(d, frontier) & eligible;
+                          expanded &= ~connected;
                           frontier = expanded;
+                          connected |= expanded;
                       }
-
-                      if (popcount(group) >= targetGroupSize) {
-                          result = convert_mate_value(-connect_value(), ply); // ~sideToMove won
-                          return true;
-                      }
-                      visited |= group;
-                  }
-              } else {
-                  while (playerPieces & ~visited) {
-                      Square start_sq = lsb(playerPieces & ~visited);
+                  } else {
+                      Bitboard visited = connected;
                       std::deque<Square> q;
-
-                      q.push_back(start_sq);
-                      visited |= square_bb(start_sq);
-                      int group_size = 0;
+                      q.push_back(lsb(connected));
 
                       while (!q.empty()) {
                           Square s = q.front();
                           q.pop_front();
-                          if (++group_size >= targetGroupSize) {
-                              result = convert_mate_value(-connect_value(), ply); // ~sideToMove won
-                              return true;
-                          }
 
                           for (Direction d : connectDirs) {
                               Square next_sq = SQ_NONE;
                               auto [dr, df] = decode_direction(d);
                               if (!wrapped_destination_square(s, df, dr, max_file(), max_rank(), wraps_files(), wraps_ranks(), next_sq))
                                   continue;
+                              if (!(square_bb(next_sq) & eligible) || (square_bb(next_sq) & visited))
+                                  continue;
+                              visited |= next_sq;
+                              connected |= next_sq;
+                              q.push_back(next_sq);
+                          }
+                      }
+                  }
 
-                              Bitboard next = square_bb(next_sq);
-                              if ((next & playerPieces) && !(next & visited)) {
-                                  visited |= next;
-                                  q.push_back(next_sq);
+                  if (popcount(connected) == totalPlayerPieces)
+                      return true;
+              }
+          } else {
+              int targetGroupSize = connect_group();
+              int totalPlayerPieces = popcount(eligible);
+              if (targetGroupSize > 0 && totalPlayerPieces >= targetGroupSize) {
+                  Bitboard visited = 0;
+                  if (!topology_wraps()) {
+                      while (eligible & ~visited) {
+                          Bitboard group = eligible & ~visited;
+                          group &= -group;
+                          Bitboard frontier = group;
+
+                          while (frontier && popcount(group) < targetGroupSize) {
+                              Bitboard expanded = 0;
+                              for (Direction d : connectDirs)
+                                  expanded |= shift(d, frontier);
+                              expanded &= eligible & ~group;
+                              group |= expanded;
+                              frontier = expanded;
+                          }
+
+                          if (popcount(group) >= targetGroupSize)
+                              return true;
+                          visited |= group;
+                      }
+                  } else {
+                      while (eligible & ~visited) {
+                          Square start_sq = lsb(eligible & ~visited);
+                          std::deque<Square> q;
+
+                          q.push_back(start_sq);
+                          visited |= square_bb(start_sq);
+                          int group_size = 0;
+
+                          while (!q.empty()) {
+                              Square s = q.front();
+                              q.pop_front();
+                              if (++group_size >= targetGroupSize)
+                                  return true;
+
+                              for (Direction d : connectDirs) {
+                                  Square next_sq = SQ_NONE;
+                                  auto [dr, df] = decode_direction(d);
+                                  if (!wrapped_destination_square(s, df, dr, max_file(), max_rank(), wraps_files(), wraps_ranks(), next_sq))
+                                      continue;
+
+                                  Bitboard next = square_bb(next_sq);
+                                  if ((next & eligible) && !(next & visited)) {
+                                      visited |= next;
+                                      q.push_back(next_sq);
+                                  }
                               }
                           }
                       }
@@ -8314,6 +8258,31 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
               }
           }
       }
+
+      return false;
+  };
+
+  bool prevMoverConnected = check_connection_adjudications(~sideToMove);
+  bool stmConnected = check_connection_adjudications(sideToMove);
+  if (prevMoverConnected && stmConnected)
+  {
+      if (var->connectGoalSimulValueByMover != VALUE_NONE)
+      {
+          result = convert_mate_value(-var->connectGoalSimulValueByMover, ply);
+          return true;
+      }
+      result = convert_mate_value(-connect_value(), ply); // default mover wins
+      return true;
+  }
+  if (prevMoverConnected)
+  {
+      result = convert_mate_value(-connect_value(), ply);
+      return true;
+  }
+  if (stmConnected)
+  {
+      result = convert_mate_value(connect_value(), ply);
+      return true;
   }
 
   // Check for bikjang rule (Janggi), double passing, or board running full
