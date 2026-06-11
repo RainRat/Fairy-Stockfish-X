@@ -43,7 +43,6 @@ public:
     moveList = std::deque<Move>();
     moveAfterSearch = false;
     playColor = COLOR_NB;
-    ponderMove = MOVE_NONE;
     ponderHighlight = "";
     shuttingDown = false;
   }
@@ -61,7 +60,7 @@ public:
   void join_ponder_worker();
   void cancel_ponder_worker();
   bool moveAfterSearch;
-  Move ponderMove;
+  std::atomic<Move> ponderMove {MOVE_NONE};
 
 private:
   Position& pos;

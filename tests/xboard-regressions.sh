@@ -21,10 +21,17 @@ EOF
 echo "xboard regression tests started"
 
 out=$(run_xboard $'expect "feature done=1"\nsend "level 40 x y\\n"\n')
-echo "${out}" | grep -q "feature done=1"
+echo "${out}" | grep -q "Error (bad level): level"
 
 out=$(run_xboard $'expect "feature done=1"\nsend "level 40 5:xx z\\n"\n')
-echo "${out}" | grep -q "feature done=1"
+echo "${out}" | grep -q "Error (bad level): level"
+
+out=$(run_xboard $'expect "feature done=1"\nsend "usermove\\n"\n')
+echo "${out}" | grep -q "Error (bad usermove): usermove"
+
+out=$(run_xboard $'expect "feature done=1"\nsend "sd -4\\n"\nsend "perft 0\\n"\n')
+echo "${out}" | grep -q "Error (bad sd): sd"
+echo "${out}" | grep -q "Error (bad perft): perft"
 
 out=$(run_xboard $'expect "feature done=1"\nsend "option   Verbosity=2\\n"\n')
 echo "${out}" | grep -q "feature done=1"
@@ -61,5 +68,18 @@ $(expect_engine_setup xboard)
 EOF
 )
 echo "${out}" | grep -q "feature done=1"
+
+out=$(run_expect "$ENGINE" <<EOF
+$(expect_engine_setup xboard)
+   send "protover 2\n"
+   expect "feature done=1"
+   send "variant chess\n"
+   send "holding \\[R\\] \\[r\\] bQ\n"
+   send "d\n"
+   send "quit\n"
+   expect eof
+EOF
+)
+echo "${out}" | grep -q "Fen: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w"
 
 echo "xboard regression tests passed"
