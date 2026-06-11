@@ -3085,20 +3085,61 @@ Bitboard Position::compute_remove_connect_n_mask(
     auto mark_line = [&](Bitboard line) {
         for (Direction d : var->connectDirections)
         {
-            Bitboard temp = line;
-            for (int i = 1; i < remove_connect_n(); ++i)
-                temp &= shift(d, temp);
-            Bitboard lineStarts = temp;
-            while (lineStarts)
+            if (topology_wraps())
             {
-                Square start = pop_lsb(lineStarts);
-                for (int i = 0; i < remove_connect_n(); ++i)
+                auto [dr, df] = decode_direction(d);
+                Bitboard lineSquares = line;
+                while (lineSquares)
                 {
-                    Square sq = start - i * d;
-                    if (is_ok(sq))
+                    Square end = pop_lsb(lineSquares);
+                    Bitboard seq = square_bb(end);
+                    Square cur = end;
+                    bool ok = true;
+
+                    for (int i = 1; i < remove_connect_n(); ++i)
                     {
-                        removalMask |= sq;
-                        connectMask |= sq;
+                        Square prev = SQ_NONE;
+                        if (!wrapped_destination_square(cur, -df, -dr, max_file(), max_rank(), wraps_files(), wraps_ranks(), prev))
+                        {
+                            ok = false;
+                            break;
+                        }
+
+                        Bitboard prev_bb = square_bb(prev);
+                        if (!(line & prev_bb))
+                        {
+                            ok = false;
+                            break;
+                        }
+
+                        seq |= prev_bb;
+                        cur = prev;
+                    }
+
+                    if (ok)
+                    {
+                        removalMask |= seq;
+                        connectMask |= seq;
+                    }
+                }
+            }
+            else
+            {
+                Bitboard temp = line;
+                for (int i = 1; i < remove_connect_n(); ++i)
+                    temp &= shift(d, temp);
+                Bitboard lineStarts = temp;
+                while (lineStarts)
+                {
+                    Square start = pop_lsb(lineStarts);
+                    for (int i = 0; i < remove_connect_n(); ++i)
+                    {
+                        Square sq = start - i * d;
+                        if (is_ok(sq))
+                        {
+                            removalMask |= sq;
+                            connectMask |= sq;
+                        }
                     }
                 }
             }
@@ -8092,13 +8133,47 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
       if (connected_regions(var->connectRegion1[c], var->connectRegion2[c], var->connectRegion3[c]))
           return true;
 
-      if ((connect_nxn()) && (popcount(eligible) >= connect_nxn() * connect_nxn()))
+      if (connect_nxn() && popcount(eligible) >= connect_nxn() * connect_nxn())
       {
-          Bitboard connectors = eligible;
-          for (int i = 1; i < connect_nxn() && connectors; i++)
-              connectors &= shift<SOUTH>(connectors) & shift<EAST>(connectors) & shift<SOUTH_EAST>(connectors);
-          if (connectors)
-              return true;
+          if (topology_wraps())
+          {
+              const int n = connect_nxn();
+              const int files = int(max_file()) + 1;
+              const int ranks = int(max_rank()) + 1;
+
+              if (files >= n && ranks >= n)
+              {
+                  Bitboard starts = eligible;
+                  while (starts)
+                  {
+                      Square start = pop_lsb(starts);
+                      bool fits = true;
+
+                      for (int dr = 0; dr < n && fits; ++dr)
+                          for (int df = 0; df < n; ++df)
+                          {
+                              Square sq = SQ_NONE;
+                              if (!wrapped_destination_square(start, df, dr, max_file(), max_rank(), wraps_files(), wraps_ranks(), sq)
+                                  || !(eligible & square_bb(sq)))
+                              {
+                                  fits = false;
+                                  break;
+                              }
+                          }
+
+                      if (fits)
+                          return true;
+                  }
+              }
+          }
+          else
+          {
+              Bitboard connectors = eligible;
+              for (int i = 1; i < connect_nxn() && connectors; i++)
+                  connectors &= shift<SOUTH>(connectors) & shift<EAST>(connectors) & shift<SOUTH_EAST>(connectors);
+              if (connectors)
+                  return true;
+          }
       }
 
       // Collinear-n

@@ -188,6 +188,49 @@ king = -
 pseudoRoyalTypes = p
 startFen = 3/3/P2 w - - 0 1
 
+[wrapped-connect-group:fairy]
+maxRank = 1
+maxFile = d
+toroidal = true
+pieceToCharTable = -
+king = -
+customPiece1 = s:m
+connectPieceTypes = s
+connectGroup = 3
+connectHorizontal = true
+connectVertical = false
+connectDiagonal = false
+nMoveRule = 0
+startFen = S1SS w - - 0 1
+
+[wrapped-connect-nxn:fairy]
+maxRank = 3
+maxFile = c
+toroidal = true
+pieceToCharTable = -
+king = -
+customPiece1 = s:m
+connectNxN = 2
+connectPieceTypes = s
+connectHorizontal = true
+connectVertical = true
+connectDiagonal = true
+nMoveRule = 0
+startFen = S1S/3/S1S w - - 0 1
+
+[wrapped-remove-connect:fairy]
+maxRank = 1
+maxFile = d
+toroidal = true
+pieceToCharTable = -
+king = -
+customPiece1 = s:m
+pieceDrops = true
+immobile = s
+removeConnectN = 3
+removeConnectNByType = true
+startFen = S2S[S] w - - 0 1
+
 [hex-weak-crosscut:fairy]
 maxRank = 5
 maxFile = 5
@@ -225,7 +268,8 @@ bad_royal_betza_ini=$(mktemp)
 bad_unmatched_closer_ini=$(mktemp)
 royal_blast_ini=$(mktemp)
 nonking_ini=$(mktemp)
-trap 'rm -f "${tmp_ini}" "${bad_betza_ini}" "${bad_hopper_brace_ini}" "${bad_rider_range_ini}" "${bad_rank_wildcard_ini}" "${twochar_hint_ini}" "${bad_hopper_type_ini}" "${bad_hopper_numeric_ini}" "${capture_allowed_only_ini}" "${bad_rider_range_val_ini}" "${bad_tuple_atom_ini}" "${unsupported_bent_rose_modifier_ini}" "${bad_ini_syntax_option_ini}" "${bad_check_counting_ini}" "${bad_hopper_minmax_ini}" "${bad_piece_value_ini}" "${bad_royal_betza_ini}" "${bad_unmatched_closer_ini}" "${royal_blast_ini}" "${nonking_ini}"' EXIT
+wrapped_support_ini=$(mktemp)
+trap 'rm -f "${tmp_ini}" "${bad_betza_ini}" "${bad_hopper_brace_ini}" "${bad_rider_range_ini}" "${bad_rank_wildcard_ini}" "${twochar_hint_ini}" "${bad_hopper_type_ini}" "${bad_hopper_numeric_ini}" "${capture_allowed_only_ini}" "${bad_rider_range_val_ini}" "${bad_tuple_atom_ini}" "${unsupported_bent_rose_modifier_ini}" "${bad_ini_syntax_option_ini}" "${bad_check_counting_ini}" "${bad_hopper_minmax_ini}" "${bad_piece_value_ini}" "${bad_royal_betza_ini}" "${bad_unmatched_closer_ini}" "${royal_blast_ini}" "${nonking_ini}" "${wrapped_support_ini}"' EXIT
 
 cat > "${bad_betza_ini}" <<'INI'
 [custom-piece-missing-betza:chess]
@@ -351,8 +395,10 @@ assert_contains "${check_output}" "customPiece1 - Missing Betza move notation"
 
 initial_capture_output=$("${ENGINE}" check "${tmp_ini}" 2>&1 || true)
 assert_contains "${initial_capture_output}" "Initial capture Betza moves are not supported in 'ciW'"
-assert_contains_literal "${initial_capture_output}" "Wrapped boards do not support connect3D/connect4D/connectNxN/connectGroup/removeConnectN win conditions."
 assert_contains_literal "${initial_capture_output}" "connectGroup must be -1, 0, or a positive group size."
+
+wrapped_support_output=$("${ENGINE}" check "${wrapped_support_ini}" 2>&1 || true)
+assert_not_contains_literal "${wrapped_support_output}" "Wrapped boards do not support connect3D/connect4D win conditions."
 
 check_output=$("${ENGINE}" check "${bad_hopper_brace_ini}" 2>&1 || true)
 assert_contains "${check_output}" "customPiece1 - Invalid Betza hopper parameters in 'R{hurdles: 1,1': missing closing '}'."
@@ -381,7 +427,8 @@ assert_contains "${toroidal_pushing_output}" "^info string variant toroidal-push
 assert_not_contains "${toroidal_pushing_output}" "invalid configuration"
 
 toroidal_connect_nxn_output=$(run_uci "$ENGINE" "$tmp_ini" "toroidal-connect-nxn" </dev/null 2>&1 || true)
-assert_contains "${toroidal_connect_nxn_output}" "unknown variant 'toroidal-connect-nxn'; keeping 'chess'"
+assert_contains "${toroidal_connect_nxn_output}" "^info string variant toroidal-connect-nxn "
+assert_not_contains "${toroidal_connect_nxn_output}" "invalid configuration"
 
 invalid_connect_group_output=$(run_uci "$ENGINE" "$tmp_ini" "invalid-connect-group" </dev/null 2>&1 || true)
 assert_contains "${invalid_connect_group_output}" "unknown variant 'invalid-connect-group'; keeping 'chess'"

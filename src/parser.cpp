@@ -1804,11 +1804,6 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
     }
 
     // Contradictory options
-    if (DoCheck && v->connectNxN && (v->cylindrical || v->toroidal))
-    {
-        std::cerr << "connectNxN is not supported on wrapping boards (cylindrical/toroidal)." << std::endl;
-        valid = false;
-    }
     if (DoCheck && !v->checking && v->checkCounting)
     {
         std::cerr << "checkCounting=true requires checking=true." << std::endl;
@@ -1878,10 +1873,10 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
             std::cerr << "connect4D currently requires a square board of size connectN^2 with connectN >= 3." << std::endl;
         valid = false;
     }
-    if (wrapsTopology && (v->connect3D || v->connect4D || v->connectNxN || v->connectGroup || v->removeConnectN))
+    if (wrapsTopology && (v->connect3D || v->connect4D))
     {
         if (DoCheck)
-            std::cerr << "Wrapped boards do not support connect3D/connect4D/connectNxN/connectGroup/removeConnectN win conditions." << std::endl;
+            std::cerr << "Wrapped boards do not support connect3D/connect4D win conditions." << std::endl;
         valid = false;
     }
     if (v->connectGroup < -1)

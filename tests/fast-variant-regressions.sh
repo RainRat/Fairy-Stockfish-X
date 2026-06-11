@@ -614,6 +614,90 @@ EOF
   assert_not_contains_literal "$out" "Nodes searched: 0"
 }
 
+test_wrapped_connect_features() {
+  echo "== wrapped connect features =="
+  load_inline_variants <<'INI'
+[wrapped-connect-group:fairy]
+maxRank = 1
+maxFile = d
+toroidal = true
+checking = false
+pieceToCharTable = -
+king = -
+customPiece1 = s:m
+connectPieceTypes = s
+connectGroup = 3
+connectHorizontal = true
+connectVertical = false
+connectDiagonal = false
+nMoveRule = 0
+startFen = S1SS w - - 0 1
+
+[wrapped-connect-nxn:fairy]
+maxRank = 3
+maxFile = c
+toroidal = true
+checking = false
+pieceToCharTable = -
+king = -
+customPiece1 = s:m
+connectNxN = 2
+connectPieceTypes = s
+connectHorizontal = true
+connectVertical = true
+connectDiagonal = true
+nMoveRule = 0
+startFen = S1S/3/S1S w - - 0 1
+
+[wrapped-remove-connect:fairy]
+maxRank = 1
+maxFile = d
+toroidal = true
+checking = false
+pieceToCharTable = -
+king = -
+customPiece1 = s:m
+pieceDrops = true
+immobile = s
+removeConnectN = 3
+removeConnectNByType = true
+startFen = S2S[S] w - - 0 1
+INI
+
+  local tmp_ini="${FSX_TMP_INI}" out
+
+  for variant in wrapped-connect-group wrapped-connect-nxn; do
+    if ! variant_available "$ENGINE" "$variant" "$tmp_ini"; then
+      return 0
+    fi
+
+    out=$(run_uci "$ENGINE" "$tmp_ini" "$variant" <<'EOF'
+position startpos
+go perft 1
+EOF
+)
+    assert_contains "$out" "^Nodes searched: 0$"
+  done
+
+  if ! variant_available "$ENGINE" wrapped-remove-connect "$tmp_ini"; then
+    return 0
+  fi
+
+  out=$(run_uci "$ENGINE" "$tmp_ini" wrapped-remove-connect <<'EOF'
+position startpos
+go perft 1
+EOF
+)
+  assert_contains "$out" "^S@b1: 1$"
+
+  out=$(run_uci "$ENGINE" "$tmp_ini" wrapped-remove-connect <<'EOF'
+position startpos moves S@b1
+d
+EOF
+)
+  assert_contains_literal "$out" "Fen: 4[] b - - 0 1"
+}
+
 test_flank_chess() {
   echo "== flank-chess =="
   if ! variant_available "$ENGINE" flank-chess "$VARIANTS"; then
@@ -826,6 +910,7 @@ test_kopano
 test_konobi
 test_connect_region3
 test_connect_adjudication_edges
+test_wrapped_connect_features
 test_flank_chess
 test_crazy_cavalier
 test_constabulary_chess
