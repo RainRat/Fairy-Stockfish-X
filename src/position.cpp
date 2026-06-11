@@ -8271,7 +8271,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
           result = convert_mate_value(-var->connectGoalSimulValueByMover, ply);
           return true;
       }
-      result = convert_mate_value(-connect_value(), ply); // default mover wins
+      result = convert_mate_value(VALUE_DRAW, ply); // default is draw
       return true;
   }
   if (prevMoverConnected)
