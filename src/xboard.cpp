@@ -19,6 +19,8 @@
 #include <iostream>
 #include <string>
 #include <cstdlib>
+#include <charconv>
+#include <limits>
 
 #include "evaluate.h"
 #include "misc.h"
@@ -38,6 +40,57 @@ namespace {
     limits.infinite = 1;
     return limits;
   }();
+
+  bool parse_non_negative_int64(const std::string& text, TimePoint& out) {
+    if (text.empty()) {
+        out = 0;
+        return true;
+    }
+
+    long long parsed = 0;
+    const char* begin = text.data();
+    const char* end = begin + text.size();
+    auto [ptr, ec] = std::from_chars(begin, end, parsed);
+    if (ec != std::errc() || ptr != end || parsed < 0 || parsed > std::numeric_limits<TimePoint>::max())
+        return false;
+
+    out = TimePoint(parsed);
+    return true;
+  }
+
+  bool parse_scaled_time_token(const std::string& text, TimePoint scale, TimePoint& out) {
+    TimePoint parsed = 0;
+    if (!parse_non_negative_int64(text, parsed))
+        return false;
+    if (parsed > std::numeric_limits<TimePoint>::max() / scale)
+        return false;
+    out = parsed * scale;
+    return true;
+  }
+
+  bool parse_level_base_time(const std::string& token, TimePoint& out) {
+    const std::size_t colon = token.find(':');
+    if (colon == std::string::npos)
+        return parse_scaled_time_token(token, 60 * 1000, out);
+
+    TimePoint minutes = 0;
+    TimePoint seconds = 0;
+    if (!parse_non_negative_int64(token.substr(0, colon), minutes))
+        return false;
+    if (!parse_non_negative_int64(token.substr(colon + 1), seconds))
+        return false;
+
+    const TimePoint maxTime = std::numeric_limits<TimePoint>::max();
+    if (minutes > maxTime / (60 * 1000))
+        return false;
+
+    TimePoint parsed = minutes * 60 * 1000;
+    if (seconds > (maxTime - parsed) / 1000)
+        return false;
+
+    out = parsed + seconds * 1000;
+    return true;
+  }
 
 } // namespace
 
@@ -316,7 +369,6 @@ void StateMachine::process_command(std::string token, std::istringstream& is) {
   }
   else if (token == "level" || token == "st" || token == "sd" || token == "time" || token == "otim")
   {
-      int num = 0;
       if (token == "level")
       {
           // moves to go
@@ -325,25 +377,16 @@ void StateMachine::process_command(std::string token, std::istringstream& is) {
               // base time
               if (is >> token)
               {
-                  size_t idx = token.find(":");
-                  if (idx != std::string::npos)
-                  {
-                      std::string m_str = token.substr(0, idx);
-                      std::string s_str = token.substr(idx + 1);
-                      int m = m_str.empty() ? 0 : std::atoi(m_str.c_str());
-                      int s = s_str.empty() ? 0 : std::atoi(s_str.c_str());
-                      num = m * 60 + s;
-                  }
-                  else
-                      num = std::atoi(token.c_str()) * 60;
-                  limits.time[WHITE] = num * 1000;
-                  limits.time[BLACK] = num * 1000;
+                  TimePoint baseTime = 0;
+                  if (parse_level_base_time(token, baseTime))
+                      limits.time[WHITE] = limits.time[BLACK] = baseTime;
               }
               // increment
-              if (is >> num)
+              if (is >> token)
               {
-                  limits.inc[WHITE] = num * 1000;
-                  limits.inc[BLACK] = num * 1000;
+                  TimePoint increment = 0;
+                  if (parse_scaled_time_token(token, 1000, increment))
+                      limits.inc[WHITE] = limits.inc[BLACK] = increment;
               }
           }
       }
@@ -351,27 +394,33 @@ void StateMachine::process_command(std::string token, std::istringstream& is) {
           is >> limits.depth;
       else if (token == "st")
       {
-          if (is >> num)
+          if (is >> token)
           {
-              limits.movetime = num * 1000;
+              TimePoint movetime = 0;
+              if (parse_scaled_time_token(token, 1000, movetime))
+                  limits.movetime = movetime;
               limits.time[WHITE] = limits.time[BLACK] = 0;
           }
       }
       // Note: time/otim are in centi-, not milliseconds
       else if (token == "time")
       {
-          if (is >> num)
+          if (is >> token)
           {
               Color us = playColor != COLOR_NB ? playColor : pos.side_to_move();
-              limits.time[us] = num * 10;
+              TimePoint time = 0;
+              if (parse_scaled_time_token(token, 10, time))
+                  limits.time[us] = time;
           }
       }
       else if (token == "otim")
       {
-          if (is >> num)
+          if (is >> token)
           {
               Color them = playColor != COLOR_NB ? ~playColor : ~pos.side_to_move();
-              limits.time[them] = num * 10;
+              TimePoint time = 0;
+              if (parse_scaled_time_token(token, 10, time))
+                  limits.time[them] = time;
           }
       }
   }
@@ -497,11 +546,15 @@ void StateMachine::process_command(std::string token, std::istringstream& is) {
           if (is >> color && is >> pieceType)
           {
               fen = pos.fen();
-              fen.insert(fen.find(']'), 1, toupper(color) == 'B' ? tolower(pieceType) : toupper(pieceType));
+              fen.insert(fen.find(']'), 1,
+                         std::toupper(static_cast<unsigned char>(color)) == 'B'
+                             ? char(std::tolower(static_cast<unsigned char>(pieceType)))
+                             : char(std::toupper(static_cast<unsigned char>(pieceType))));
           }
           else
           {
-              std::transform(black_holdings.begin(), black_holdings.end(), black_holdings.begin(), ::tolower);
+              std::transform(black_holdings.begin(), black_holdings.end(), black_holdings.begin(),
+                             [](unsigned char c) { return char(std::tolower(c)); });
               fen = pos.fen(false, false, 0, white_holdings + black_holdings);
           }
           setboard(fen);

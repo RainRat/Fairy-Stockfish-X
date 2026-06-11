@@ -47,4 +47,19 @@ if echo "${out}" | grep -q "Illegal move: c6d6,d6f2"; then
 fi
 echo "${out}" | grep -q "Fen: 2\\*3/2\\*\\*2/\\*2p2/6/6/1\\*\\*\\*\\*1/\\*\\*\\*P\\*\\*/\\*\\*1\\*\\*\\* w - - 18 10"
 
+out=$(run_expect "$ENGINE" <<EOF
+$(expect_engine_setup xboard)
+   send "protover 2\n"
+   expect "feature done=1"
+   send "level 40 999999999999:59 999999999999\n"
+   send "time 2147483647\n"
+   send "otim 2147483647\n"
+   send "st 2147483647\n"
+   send "holding \\[R\\] \\[r\\] bQ\n"
+   send "quit\n"
+   expect eof
+EOF
+)
+echo "${out}" | grep -q "feature done=1"
+
 echo "xboard regression tests passed"
