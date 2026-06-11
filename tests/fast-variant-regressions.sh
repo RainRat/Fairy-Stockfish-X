@@ -532,6 +532,38 @@ connectRegion3White = a1
 nMoveRule = 0
 startFen = 3/3/S2 b - - 0 1
 
+[weak-diagonal-region:fairy]
+maxRank = 8
+maxFile = 8
+pieceToCharTable = -
+king = -
+customPiece1 = s:m
+connectPieceTypes = s
+connectHorizontal = true
+connectVertical = true
+connectDiagonal = false
+weakDiagonalConnect = true
+connectRegion1White = a1
+connectRegion2White = b2
+nMoveRule = 0
+startFen = 8/8/8/8/8/8/1S6/S7 w - - 0 1
+
+[connect-region-three-disconnected:fairy]
+maxRank = 1
+maxFile = e
+pieceToCharTable = -
+king = -
+customPiece1 = s:R
+connectPieceTypes = s
+connectHorizontal = true
+connectVertical = false
+connectDiagonal = false
+connectRegion1White = a1 d1
+connectRegion2White = b1
+connectRegion3White = e1
+nMoveRule = 0
+startFen = SS1SS w - - 0 1
+
 [connect-group-three:fairy]
 maxRank = 3
 maxFile = c
@@ -563,9 +595,23 @@ INI
 position startpos
 go perft 1
 EOF
-)
+    )
     assert_contains "$out" "^Nodes searched: 0$"
   done
+
+  out=$(run_uci "$ENGINE" "$tmp_ini" weak-diagonal-region <<'EOF'
+position startpos
+go perft 1
+EOF
+)
+  assert_contains "$out" "^Nodes searched: 0$"
+
+  out=$(run_uci "$ENGINE" "$tmp_ini" connect-region-three-disconnected <<'EOF'
+position startpos
+go perft 1
+EOF
+)
+  assert_not_contains_literal "$out" "Nodes searched: 0"
 }
 
 test_flank_chess() {
@@ -766,7 +812,7 @@ EOF
 position fen 9/9/9/9/1P7/9/9/9/P8[PPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPpppppppppppppppppppppppppppppppppppppppp] w - - 0 1 moves P@c9
 go perft 1
 EOF
-)
+  )
   assert_contains "$out" "^Nodes searched: 0$"
 }
 

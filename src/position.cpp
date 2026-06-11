@@ -7882,131 +7882,108 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
       return wrapped_destination_square(cur, df, dr, max_file(), max_rank(), wraps_files(), wraps_ranks(), next);
   };
 
-  if (connect_goal_by_type())
-  {
-      auto has_connect_goal = [&](Color c) {
-          const auto& goal = connect_piece_goal_types(c);
-          if (goal.empty())
-              return false;
+  auto has_connect_goal = [&](Color c) {
+      if (!connect_goal_by_type())
+          return false;
 
-          // Type-goal games such as Toot-Otto match piece types only; colors
-          // are intentionally ignored so either player's drops can complete
-          // either configured word.
-          const bool palindrome = std::equal(goal.begin(), goal.end(), goal.rbegin());
+      const auto& goal = connect_piece_goal_types(c);
+      if (goal.empty())
+          return false;
 
-          if (!var->connectLines.empty())
+      // Type-goal games such as Toot-Otto match piece types only; colors
+      // are intentionally ignored so either player's drops can complete
+      // either configured word.
+      const bool palindrome = std::equal(goal.begin(), goal.end(), goal.rbegin());
+
+      if (!var->connectLines.empty())
+      {
+          for (const auto& line : var->connectLines)
           {
-              for (const auto& line : var->connectLines)
+              if (line.size() < goal.size())
+                  continue;
+              for (size_t off = 0; off + goal.size() <= line.size(); ++off)
               {
-                  if (line.size() < goal.size())
-                      continue;
-                  for (size_t off = 0; off + goal.size() <= line.size(); ++off)
+                  bool forward = true;
+                  bool reverse = !palindrome;
+                  for (size_t i = 0; i < goal.size() && (forward || reverse); ++i)
                   {
-                      bool forward = true;
-                      bool reverse = !palindrome;
-                      for (size_t i = 0; i < goal.size() && (forward || reverse); ++i)
+                      if (forward)
                       {
-                          if (forward)
-                          {
-                              Piece forwardPc = piece_on(line[off + i]);
-                              forward = forwardPc != NO_PIECE && type_of(forwardPc) == goal[i];
-                          }
-                          if (reverse)
-                          {
-                              Piece reversePc = piece_on(line[off + goal.size() - 1 - i]);
-                              reverse = reversePc != NO_PIECE && type_of(reversePc) == goal[i];
-                          }
+                          Piece forwardPc = piece_on(line[off + i]);
+                          forward = forwardPc != NO_PIECE && type_of(forwardPc) == goal[i];
                       }
-                      if (forward || reverse)
-                          return true;
-                  }
-              }
-              return false;
-          }
-
-          if (topology_wraps())
-          {
-              for (Direction d : var->connectDirections)
-              {
-                  Bitboard candidates = pieces(goal.front());
-                  while (candidates)
-                  {
-                      Square s = pop_lsb(candidates);
-
-                      auto matches = [&](Direction dir, const std::vector<PieceType>& sequence) {
-                          Square cur = s;
-                          for (size_t i = 1; i < sequence.size(); ++i)
-                          {
-                              Square next = SQ_NONE;
-                              if (!wrapped_step(cur, dir, next) || next == s)
-                                  return false;
-                              Piece nextPc = piece_on(next);
-                              if (nextPc == NO_PIECE || type_of(nextPc) != sequence[i])
-                                  return false;
-                              cur = next;
-                          }
-                          return true;
-                      };
-
-                      if (matches(d, goal) || (!palindrome && matches(-d, goal)))
-                          return true;
-                  }
-              }
-              return false;
-          }
-
-          for (Direction d : var->connectDirections)
-          {
-              for (int pass = 0; pass < (palindrome ? 1 : 2); ++pass)
-              {
-                  Direction dir = pass ? -d : d;
-                  Bitboard starts = pieces(goal.front());
-                  while (starts)
-                  {
-                      Square s = pop_lsb(starts);
-                      Bitboard cur = square_bb(s);
-                      bool matched = true;
-                      for (size_t i = 1; i < goal.size(); ++i)
+                      if (reverse)
                       {
-                          cur = shift(dir, cur);
-                          Piece pc = cur ? piece_on(lsb(cur)) : NO_PIECE;
-                          if (pc == NO_PIECE || type_of(pc) != goal[i])
-                          {
-                              matched = false;
-                              break;
-                          }
+                          Piece reversePc = piece_on(line[off + goal.size() - 1 - i]);
+                          reverse = reversePc != NO_PIECE && type_of(reversePc) == goal[i];
                       }
-                      if (matched)
-                          return true;
                   }
+                  if (forward || reverse)
+                      return true;
               }
           }
           return false;
-      };
+      }
 
-      bool prevMoverGoal = has_connect_goal(~sideToMove);
-      bool stmGoal = has_connect_goal(sideToMove);
-      if (prevMoverGoal && stmGoal)
+      if (topology_wraps())
       {
-          if (var->connectGoalSimulValueByMover != VALUE_NONE)
+          for (Direction d : var->connectDirections)
           {
-              result = convert_mate_value(-var->connectGoalSimulValueByMover, ply);
-              return true;
+              Bitboard candidates = pieces(goal.front());
+              while (candidates)
+              {
+                  Square s = pop_lsb(candidates);
+
+                  auto matches = [&](Direction dir, const std::vector<PieceType>& sequence) {
+                      Square cur = s;
+                      for (size_t i = 1; i < sequence.size(); ++i)
+                      {
+                          Square next = SQ_NONE;
+                          if (!wrapped_step(cur, dir, next) || next == s)
+                              return false;
+                          Piece nextPc = piece_on(next);
+                          if (nextPc == NO_PIECE || type_of(nextPc) != sequence[i])
+                              return false;
+                          cur = next;
+                      }
+                      return true;
+                  };
+
+                  if (matches(d, goal) || (!palindrome && matches(-d, goal)))
+                      return true;
+              }
           }
-          result = convert_mate_value(VALUE_DRAW, ply);
-          return true;
+          return false;
       }
-      if (prevMoverGoal)
+
+      for (Direction d : var->connectDirections)
       {
-          result = convert_mate_value(-connect_value(), ply);
-          return true;
+          for (int pass = 0; pass < (palindrome ? 1 : 2); ++pass)
+          {
+              Direction dir = pass ? -d : d;
+              Bitboard starts = pieces(goal.front());
+              while (starts)
+              {
+                  Square s = pop_lsb(starts);
+                  Bitboard cur = square_bb(s);
+                  bool matched = true;
+                  for (size_t i = 1; i < goal.size(); ++i)
+                  {
+                      cur = shift(dir, cur);
+                      Piece pc = cur ? piece_on(lsb(cur)) : NO_PIECE;
+                      if (pc == NO_PIECE || type_of(pc) != goal[i])
+                      {
+                          matched = false;
+                          break;
+                      }
+                  }
+                  if (matched)
+                      return true;
+              }
+          }
       }
-      if (stmGoal)
-      {
-          result = convert_mate_value(connect_value(), ply);
-          return true;
-      }
-  }
+      return false;
+  };
 
   auto check_connection_adjudications = [&](Color c) {
       Bitboard eligible = 0;
@@ -8073,26 +8050,40 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
       }
 
       auto connected_regions = [&](Bitboard region1, Bitboard region2, Bitboard region3 = 0) {
-          if (!(region1 & eligible) || !(region2 & eligible) || (region3 && !(region3 & eligible)))
+          Bitboard region1Pieces = region1 & eligible;
+          Bitboard region2Pieces = region2 & eligible;
+          Bitboard region3Pieces = region3 & eligible;
+
+          if (!region1Pieces || !region2Pieces || (region3 && !region3Pieces))
               return false;
 
-          Bitboard frontier = region1 & eligible;
-          Bitboard current = frontier;
-          bool hitsRegion2 = bool(current & region2);
-          bool hitsRegion3 = !region3 || bool(current & region3);
-          if (hitsRegion2 && hitsRegion3)
-              return true;
+          Bitboard visited = 0;
 
-          while (frontier) {
-              Bitboard newBitboard = weak_connection_expansion(*this, frontier, eligible, ~sideToMove) & ~current;
-
-              hitsRegion2 |= bool(newBitboard & region2);
-              hitsRegion3 |= !region3 || bool(newBitboard & region3);
+          while (Bitboard frontierStart = region1Pieces & ~visited)
+          {
+              Bitboard frontier = frontierStart & -frontierStart;
+              Bitboard current = frontier;
+              bool hitsRegion2 = bool(frontier & region2Pieces);
+              bool hitsRegion3 = !region3 || bool(frontier & region3Pieces);
               if (hitsRegion2 && hitsRegion3)
                   return true;
 
-              frontier = newBitboard;
-              current |= newBitboard;
+              while (frontier)
+              {
+                  Bitboard newBitboard = weak_connection_expansion(*this, frontier, eligible, c) & ~current;
+                  if (!newBitboard)
+                      break;
+
+                  current |= newBitboard;
+                  hitsRegion2 |= bool(newBitboard & region2Pieces);
+                  hitsRegion3 |= !region3 || bool(newBitboard & region3Pieces);
+                  if (hitsRegion2 && hitsRegion3)
+                      return true;
+
+                  frontier = newBitboard;
+              }
+
+              visited |= current;
           }
 
           return false;
@@ -8262,8 +8253,12 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
       return false;
   };
 
-  bool prevMoverConnected = check_connection_adjudications(~sideToMove);
-  bool stmConnected = check_connection_adjudications(sideToMove);
+  auto connection_met = [&](Color c) {
+      return has_connect_goal(c) || check_connection_adjudications(c);
+  };
+
+  bool prevMoverConnected = connection_met(~sideToMove);
+  bool stmConnected = connection_met(sideToMove);
   if (prevMoverConnected && stmConnected)
   {
       if (var->connectGoalSimulValueByMover != VALUE_NONE)

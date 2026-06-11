@@ -24,6 +24,26 @@ nMoveRuleImmediate = 1
 nMoveRule = 0
 startFen = 4k3/8/8/8/8/8/8/4K3[Q] w - - 1 1
 
+[mixed-goal-simul:fairy]
+maxFile = d
+maxRank = 1
+pieceToCharTable = -
+king = -
+customPiece1 = a:m
+customPiece2 = b:m
+customPiece3 = s:m
+connectGoalByType = true
+connectPieceGoalWhite = a b
+connectPieceGoalBlack = a a
+connectPieceTypes = s
+connectHorizontal = true
+connectVertical = false
+connectDiagonal = false
+connectRegion1Black = a1
+connectRegion2Black = b1
+connectGoalSimulValueByMover = draw
+startFen = ssAB b - - 0 1
+
 [prison-no-king:fairy]
 king = -
 checking = false
@@ -88,6 +108,9 @@ startFen = 8/8/8/8/8/8/4P3/8 w - - 0 1
         next_fen = sf.get_fen("drop-immediate", "4k3/8/8/8/8/8/8/4K3[Q] w - - 1 1", ["Q@e7"])
         self.assertIn("4Q3", next_fen)
         self.assertIn(" b ", next_fen)
+
+    def test_type_goal_and_region_simultaneous_connection_uses_simultaneous_policy(self):
+        self.assertEqual(sf.game_result("mixed-goal-simul", "ssAB b - - 0 1", []), sf.VALUE_DRAW)
 
     def test_prison_pawn_promotion_without_opponent_king_is_safe(self):
         is_end, result = sf.is_immediate_game_end("prison-no-king", "8/8/8/8/8/8/4P3/8 w - - 0 1", [])
