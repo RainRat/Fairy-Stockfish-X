@@ -4689,7 +4689,10 @@ bool Position::pseudo_legal(const Move m) const {
   // kind of moves are filtered out here.
   if (!allow_checks() && evasion_checkers() && !(evasion_checkers() & non_sliding_riders()))
   {
-      if (type_of(pc) != KING)
+      const Square royalSq = royal_square(us);
+      assert(royalSq != SQ_NONE);
+
+      if (from != royalSq)
       {
           if (topology_wraps())
           {
@@ -4715,7 +4718,7 @@ bool Position::pseudo_legal(const Move m) const {
               }
               if (paired_drop(m))
                   occupied |= square_bb(secondary_drop_square(m));
-              if (attackers_to_king(square<KING>(us), occupied, ~us) & ~removedAttackers)
+              if (attackers_to_king(royalSq, occupied, ~us) & ~removedAttackers)
                   return false;
           }
           else
@@ -4723,7 +4726,7 @@ bool Position::pseudo_legal(const Move m) const {
           Bitboard evasionTargets = AllSquares;
           Bitboard remaining = evasion_checkers();
           while (remaining)
-              evasionTargets &= checker_evasion_targets(us, square<KING>(us), pop_lsb(remaining));
+              evasionTargets &= checker_evasion_targets(us, royalSq, pop_lsb(remaining));
 
           const bool blastEvasion = ((capture(m) || rifle_capture(m)) && blast_on_capture(m)) ||
                                     (!capture(m) && !rifle_capture(m) && !is_self_destruct(m) && blast_on_move()) ||
