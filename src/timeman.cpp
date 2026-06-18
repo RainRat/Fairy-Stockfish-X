@@ -80,11 +80,13 @@ void TimeManagement::init(const Position& pos, Search::LimitsType& limits, Color
           if (Partner.fast || Partner.partnerDead)
               timeLeft /= 4;
       }
+      timeLeft = std::max(TimePoint(1), timeLeft);
   }
 
   // A user may scale time usage by setting UCI option "Slow Mover"
   // Default is 100 and changing this value will probably lose elo.
   timeLeft = slowMover * timeLeft / 100;
+  timeLeft = std::max(TimePoint(1), timeLeft);
 
   // x basetime (+ z increment)
   // If there is a healthy increment, timeLeft can exceed actual available

@@ -176,6 +176,10 @@ dispatch_test "fast variant regressions" timeout 5m bash tests/fast-variant-regr
 dispatch_test "fast rules regression" bash tests/fast-regression-rules.sh "${ENGINE}" "${VARIANT_PATH}"
 dispatch_test "binding regression" timeout 60s "${PYTHON}" tests/test_binding_regression.py
 dispatch_test "royal capture no kings" timeout 60s "${PYTHON}" tests/test_royal_capture_no_kings.py
+dispatch_test "touched search regressions" timeout 2m bash tests/touched-search-regressions.sh "${ENGINE}" "${VARIANT_PATH}"
+dispatch_test "setup chess" timeout 2m bash tests/setup-chess.sh "${ENGINE}" "${VARIANT_PATH}"
+dispatch_test "xboard regressions" timeout 2m bash tests/xboard-regressions.sh "${ENGINE}" "${VARIANT_PATH}"
+dispatch_test "hex board regressions" timeout 2m bash tests/test_hex_boards.sh "${ENGINE}" "${VARIANT_PATH}"
 if [[ -n "${UPSTREAM_ENGINE:-}" ]]; then
   dispatch_test "upstream movecount baseline" timeout 60s "${PYTHON}" tests/upstream_movecount_baseline.py "${ENGINE}" "${UPSTREAM_ENGINE}"
 else
@@ -186,6 +190,6 @@ dispatch_test "python unit tests" timeout 180s "${PYTHON}" test.py
 wait_all
 
 run_step "quiet-check special moves" timeout 5m bash tests/quiet-check-special-moves.sh "${ENGINE}"
-run_step "gating check regressions" timeout 2m bash tests/gating-check-regression.sh "${ENGINE}"
+run_step "gating check regressions" timeout 5m bash tests/gating-check-regression.sh "${ENGINE}"
 
 echo "fast regression suite passed"

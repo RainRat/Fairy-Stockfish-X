@@ -93,6 +93,7 @@ cat > "${HARNESS_CPP}" <<'EOF'
 #include "bitboard.h"
 #include "endgame.h"
 #include "movegen.h"
+#include "movepick.h"
 #include "piece.h"
 #include "position.h"
 #include "psqt.h"
@@ -238,6 +239,50 @@ static void test_promotion_quiet_check() {
     assert(!quietChecks.contains(make<PROMOTION>(SQ_G7, SQ_G8, KNIGHT)));
 }
 
+static void test_qsearch_rejects_quiet_tt_move() {
+    StateInfo st{};
+    Position pos;
+    pos.set(variants.get("chess"),
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+            false, &st, nullptr);
+
+    ButterflyHistory mainHistory{};
+    GateHistory gateHistory{};
+    CapturePieceToHistory captureHistory{};
+    PieceToHistory histories[6]{};
+    const PieceToHistory* continuationHistory[] = {
+        &histories[0], &histories[1], &histories[2],
+        &histories[3], &histories[4], &histories[5]
+    };
+
+    MovePicker picker(pos, make<NORMAL>(SQ_E2, SQ_E4), DEPTH_QS_NO_CHECKS,
+                      &mainHistory, &gateHistory, &captureHistory,
+                      continuationHistory, SQ_NONE);
+    assert(picker.next_move() == MOVE_NONE);
+}
+
+static void test_probcut_accepts_quiet_promotion_tt_move() {
+    StateInfo st{};
+    Position pos;
+    pos.set(variants.get("promotion-quiet-check"),
+            "7k/6P1/8/8/8/8/8/7K w - - 0 1", false, &st, nullptr);
+
+    GateHistory gateHistory{};
+    CapturePieceToHistory captureHistory{};
+    const Move promotion = make<PROMOTION>(SQ_G7, SQ_G8, QUEEN);
+    MovePicker picker(pos, promotion, Value(100), &gateHistory, &captureHistory);
+    assert(picker.next_move() == promotion);
+}
+
+static void test_gate_history_square_validation() {
+    const Move valid = make_gating<NORMAL>(SQ_E1, SQ_E2, ROOK, SQ_D1);
+    assert(gate_history_square(valid) == SQ_D1);
+
+    const Move ordinary = make<NORMAL>(SQ_E2, SQ_E4);
+    assert(!is_gating(ordinary));
+    assert(gate_history_square(ordinary) == SQ_NONE);
+}
+
 int main(int argc, char** argv) {
     init_test_engine();
     load_variants();
@@ -257,6 +302,12 @@ int main(int argc, char** argv) {
             test_wrapped_quiet_check();
         if (!which || !std::strcmp(which, "promotion"))
             test_promotion_quiet_check();
+        if (!which || !std::strcmp(which, "qsearch-tt"))
+            test_qsearch_rejects_quiet_tt_move();
+        if (!which || !std::strcmp(which, "probcut-promotion"))
+            test_probcut_accepts_quiet_promotion_tt_move();
+        if (!which || !std::strcmp(which, "gate-history-square"))
+            test_gate_history_square_validation();
     };
 
     if (argc > 1)
@@ -387,6 +438,7 @@ run_case pairdrop
 run_case swap
 run_case pull
 run_case wrapped
+run_case gate-history-square
 test_passive_blast
 test_crazyhouse_multi_pawn_promo
 

@@ -105,16 +105,50 @@ if ensure_vlb_engine minihexchess \
   && variant_available "$VLB_ENGINE" "grand-hexachess"; then
   out=$(run_uci "$VLB_ENGINE" "$VARIANT_PATH" "minihexchess" <<<'position startpos
 go perft 1')
-  assert_nodes "$out" 11
+  assert_nodes "$out" 9
   dump_out=$(run_uci "$VLB_ENGINE" "$VARIANT_PATH" "minihexchess" <<<'d')
   assert_contains_literal "$dump_out" "startpos ***1prb/**2pkn/*3ppp/7/PPP3*/NKP2**/BRP1*** w - - 0 1"
   assert_contains "$out" "^a2d3: 1$"
+  assert_contains "$out" "^a2d4: 1$"
   assert_contains "$out" "^a2b5: 1$"
+  assert_contains "$out" "^a2c5: 1$"
   assert_contains "$out" "^c1d2: 1$"
+  assert_contains "$out" "^c2d3: 1$"
   assert_contains "$out" "^a3b4: 1$"
+  assert_contains "$out" "^b3c4: 1$"
   assert_contains "$out" "^c3d4: 1$"
-  assert_contains "$out" "^b2d3: 1$"
-  assert_contains "$out" "^b2c4: 1$"
+
+  out=$(run_uci "$VLB_ENGINE" "$VARIANT_PATH" "minihexchess" <<<'position startpos moves c3d4 g6d5
+go perft 1')
+  assert_contains "$out" "^b2c3: 1$"
+
+  out=$(run_uci "$VLB_ENGINE" "$VARIANT_PATH" "minihexchess" <<<'position fen ***3K/**2p2/*4p1/3P3/6*/5**/3k*** w - - 0 1
+go perft 1')
+  assert_contains "$out" "^d4e5: 1$"
+  assert_contains "$out" "^d4e6: 1$"
+  assert_contains "$out" "^d4f5: 1$"
+
+  out=$(run_uci "$VLB_ENGINE" "$VARIANT_PATH" "minihexchess" <<<'position fen ***3k/**5/*6/3N3/7/7/K6 w - - 0 1
+go perft 1')
+  assert_contains "$out" "^d4b1: 1$"
+  assert_contains "$out" "^d4c1: 1$"
+  assert_contains "$out" "^d4a2: 1$"
+  assert_contains "$out" "^d4e2: 1$"
+  assert_contains "$out" "^d4a3: 1$"
+  assert_contains "$out" "^d4f3: 1$"
+  assert_contains "$out" "^d4b5: 1$"
+  assert_contains "$out" "^d4g5: 1$"
+  assert_contains "$out" "^d4c6: 1$"
+  assert_contains "$out" "^d4g6: 1$"
+  assert_contains "$out" "^d4e7: 1$"
+  assert_contains "$out" "^d4f7: 1$"
+
+  out=$(run_uci "$VLB_ENGINE" "$VARIANT_PATH" "minihexchess" <<<'position startpos moves c2d3
+go movetime 100
+go movetime 400')
+  assert_contains "$out" "^bestmove [a-g][1-7][a-g][1-7]"
+  assert_contains "$out" "score cp"
+  assert_not_contains "$out" "score mate"
 
   out=$(run_uci "$VLB_ENGINE" "$VARIANT_PATH" "glinski-chess" <<<'position startpos
 go perft 1')
@@ -222,6 +256,10 @@ go perft 1')
 go perft 1')
   assert_nodes "$out" 0
 
+  out=$(run_uci "$VLB_ENGINE" "$VARIANT_PATH" "hex" <<<'position fen 11/11/11/11/11/4PPP4/11/11/11/11/11[p] b - - 0 1
+go perft 1')
+  assert_nodes "$out" 118
+
   out=$(run_uci "$VLB_ENGINE" "$VARIANT_PATH" "misere-hex" <<<'position fen 11/11/11/11/11/11/11/11/11/11/PPPPPPPPPPP[P] b - - 0 1
 go perft 1')
   assert_nodes "$out" 0
@@ -229,6 +267,18 @@ go perft 1')
   out=$(run_uci "$VLB_ENGINE" "$VARIANT_PATH" "y" <<<'position startpos
 go perft 1')
   assert_nodes "$out" 55
+
+  out=$(run_uci "$VLB_ENGINE" "$VARIANT_PATH" "y" <<<'position startpos moves P@h6 P@g4 P@g6 P@h3 P@i6
+go perft 1')
+  assert_nodes "$out" 50
+
+  out=$(run_uci "$VLB_ENGINE" "$VARIANT_PATH" "y" <<<'position startpos
+go depth 14')
+  assert_not_contains "$out" "score mate"
+
+  out=$(run_uci "$VLB_ENGINE" "$VARIANT_PATH" "y" <<<'position startpos moves P@h6
+go depth 14')
+  assert_not_contains "$out" "score mate"
 else
   echo "hex connection variants regression requires a very-large-board capable engine. Skipping."
 fi

@@ -687,6 +687,10 @@ namespace {
 
     constexpr Direction Up = pawn_push(Us);
     Bitboard bb = pos.pieces(Us, Pt) & fromMask & ~pos.freeze_squares();
+    Bitboard selfCaptureTargets = pos.pieces(Us);
+    Square royalSq = pos.royal_square(Us);
+    if (royalSq != SQ_NONE)
+        selfCaptureTargets &= ~square_bb(royalSq);
 
     while (bb)
     {
@@ -697,14 +701,14 @@ namespace {
         Bitboard captureSquares;
         Bitboard localCaptureTarget = captureTarget;
         if (pos.self_capture(Pt) && GeneratesCaptures)
-            localCaptureTarget |= pos.pieces(Us) & ~pos.pieces(Us, KING) & (Type == EVASIONS ? target : AllSquares);
+            localCaptureTarget |= selfCaptureTargets & (Type == EVASIONS ? target : AllSquares);
         if (pos.anti_royal_self_capture_only() && (pos.anti_royal_types() & piece_set(Pt)))
-            captureSquares = attacks & pos.pieces(Us) & ~pos.pieces(Us, KING);
+            captureSquares = attacks & selfCaptureTargets;
         else
         {
             Bitboard capturable = (pos.pieces() & ~pos.pieces(Us)) | pos.dead_squares();
             if (pos.self_capture(Pt) && GeneratesCaptures)
-                capturable |= pos.pieces(Us) & ~pos.pieces(Us, KING);
+                capturable |= selfCaptureTargets;
             captureSquares = (attacks & capturable) & localCaptureTarget;
         }
         if (Type == QUIETS || Type == QUIET_CHECKS)
@@ -721,7 +725,7 @@ namespace {
         Bitboard b2 = promPt ? b1 : Bitboard(0);
         Bitboard b3 = pos.piece_demotion() && pos.is_promoted(from) ? b1 : Bitboard(0);
         Bitboard pawnPromotions = (pos.promotion_pawn_types(Us) & piece_set(Pt))
-                                ? (b & (Type == EVASIONS ? target : (~pos.pieces(Us) | (pos.self_capture(Pt) ? (pos.pieces(Us) & ~pos.pieces(Us, KING)) : Bitboard(0)))) & promotion_zone)
+                                ? (b & (Type == EVASIONS ? target : (~pos.pieces(Us) | (pos.self_capture(Pt) ? selfCaptureTargets : Bitboard(0)))) & promotion_zone)
                                 : Bitboard(0);
         Bitboard jumpCaptures = 0;
         PieceType movePt = Pt;
@@ -743,7 +747,6 @@ namespace {
                     if constexpr (Type == EVASIONS)
                     {
                         Bitboard checkers = pos.evasion_checkers();
-                        Square royalSq = pos.royal_square(Us);
                         if (checkers & hurdle)
                         {
                             Bitboard remaining = checkers & ~square_bb(hurdle);
@@ -917,8 +920,8 @@ namespace {
     static_assert(Type != LEGAL, "Unsupported type in generate_all()");
 
     constexpr bool Checks = Type == QUIET_CHECKS; // Reduce template instantiations
+    const PieceType royalPt = pos.royal_piece_type(Us);
     const Square royalSq = pos.royal_square(Us);
-    const Square ksq = pos.count<KING>(Us) ? pos.square<KING>(Us) : SQ_NONE;
     const Bitboard checkers = pos.evasion_checkers();
     Bitboard target;
     Bitboard captureTarget = Bitboard(0);
@@ -1022,19 +1025,24 @@ namespace {
 
             if (restrictToForcedJumper)
             {
-                if (forcedJumpPt == PAWN)
+                if (forcedJumpPt == PAWN && forcedJumpPt != royalPt)
                     moveList = useFastStandardPawnGenerator
                              ? generate_pawn_moves<Us, Type>(pos, moveList, PawnGenSpec{target, forcedFromMask})
                              : generate_moves<Us, Type>(pos, moveList, PieceGenSpec{PAWN, target, captureTarget, forcedFromMask});
-                else if (forcedJumpPt != KING)
+                else if (forcedJumpPt != royalPt)
                     moveList = generate_moves<Us, Type>(pos, moveList, PieceGenSpec{forcedJumpPt, target, captureTarget, forcedFromMask});
             }
             else
             {
-                moveList = useFastStandardPawnGenerator
-                         ? generate_pawn_moves<Us, Type>(pos, moveList, PawnGenSpec{target, forcedFromMask})
-                         : generate_moves<Us, Type>(pos, moveList, PieceGenSpec{PAWN, target, captureTarget, forcedFromMask});
-                for (PieceSet ps = pos.piece_types() & ~(piece_set(PAWN) | KING); ps;)
+                if (royalPt != PAWN)
+                    moveList = useFastStandardPawnGenerator
+                             ? generate_pawn_moves<Us, Type>(pos, moveList, PawnGenSpec{target, forcedFromMask})
+                             : generate_moves<Us, Type>(pos, moveList, PieceGenSpec{PAWN, target, captureTarget, forcedFromMask});
+
+                PieceSet nonRoyalTypes = pos.piece_types() & ~(piece_set(PAWN) | KING);
+                if (royalPt != NO_PIECE_TYPE && royalPt != KING)
+                    nonRoyalTypes &= ~piece_set(royalPt);
+                for (PieceSet ps = nonRoyalTypes; ps;)
                     moveList = generate_moves<Us, Type>(pos, moveList, PieceGenSpec{pop_lsb(ps), target, captureTarget, forcedFromMask});
             }
         const bool canGenerateDrops = !restrictToForcedJumper
@@ -1226,43 +1234,46 @@ namespace {
 
     }
 
-    // King moves
-    if (pos.count<KING>(Us) && (!restrictToForcedJumper || (forcedFromMask & ksq))
-        && (!Checks || pos.topology_wraps() || pos.blockers_for_king(~Us) & ksq))
+    // Royal moves must not be restricted to checker capture/interposition targets.
+    if (royalPt != NO_PIECE_TYPE && royalSq != SQ_NONE
+        && (!restrictToForcedJumper || (forcedFromMask & royalSq))
+        && (!Checks || pos.topology_wraps() || pos.blockers_for_king(~Us) & royalSq))
     {
         Bitboard b = 0;
         if (restrictToForcedJumper)
         {
-            Bitboard candidates = (pos.attacks_from(Us, KING, ksq) | pos.moves_from(Us, KING, ksq)) & ~pos.pieces();
+            Bitboard candidates = (pos.attacks_from(Us, royalPt, royalSq)
+                                 | pos.moves_from(Us, royalPt, royalSq)) & ~pos.pieces();
             while (candidates)
             {
                 Square to = pop_lsb(candidates);
-                if (pos.jump_capture_square(ksq, to) != SQ_NONE)
+                if (pos.jump_capture_square(royalSq, to) != SQ_NONE)
                     b |= to;
             }
         }
         else
         {
-            Bitboard kingAttacks = pos.attacks_from(Us, KING, ksq) & pos.pieces();
-            Bitboard kingMoves   = pos.moves_from(Us, KING, ksq) & ~pos.pieces();
+            Bitboard kingAttacks = pos.attacks_from(Us, royalPt, royalSq) & pos.pieces();
+            Bitboard kingMoves   = pos.moves_from(Us, royalPt, royalSq) & ~pos.pieces();
             Bitboard kingCaptureMask = Type == EVASIONS ? ~pos.pieces(Us) : captureTarget;
-            if (Type != QUIETS && Type != QUIET_CHECKS && pos.self_capture(KING))
-                kingCaptureMask |= pos.pieces(Us) & ~pos.pieces(Us, KING);
+            if (Type != QUIETS && Type != QUIET_CHECKS && pos.self_capture(royalPt))
+                kingCaptureMask |= pos.pieces(Us) & ~square_bb(royalSq);
             Bitboard kingQuietMask = Type == EVASIONS ? ~pos.pieces(Us) : target;
             b = (kingAttacks & kingCaptureMask) | (kingMoves & kingQuietMask);
         }
         while (b)
-            moveList = make_move_and_gating<NORMAL>(pos, moveList, Us, ksq, pop_lsb(b));
+            moveList = make_move_and_gating<NORMAL>(pos, moveList, Us, royalSq, pop_lsb(b));
 
-        // Passing move by king
+        // Passing move by royal piece
         if (!restrictToForcedJumper && pos.pass(Us))
-            *moveList++ = make<SPECIAL>(ksq != SQ_NONE ? ksq : lsb(pos.board_bb()),
-                                        ksq != SQ_NONE ? ksq : lsb(pos.board_bb()));
+            *moveList++ = make<SPECIAL>(royalSq, royalSq);
 
-        if (!restrictToForcedJumper && (Type == QUIETS || Type == NON_EVASIONS) && pos.can_castle(Us == WHITE ? WHITE_CASTLING : BLACK_CASTLING))
+        if (royalPt == KING && !restrictToForcedJumper
+            && (Type == QUIETS || Type == NON_EVASIONS)
+            && pos.can_castle(Us == WHITE ? WHITE_CASTLING : BLACK_CASTLING))
             for (CastlingRights cr : { Us & KING_SIDE, Us & QUEEN_SIDE } )
                 if (!pos.castling_impeded(cr) && pos.can_castle(cr))
-                    moveList = make_move_and_gating<CASTLING>(pos, moveList, Us,ksq, pos.castling_rook_square(cr));
+                    moveList = make_move_and_gating<CASTLING>(pos, moveList, Us, royalSq, pos.castling_rook_square(cr));
     }
 
     return moveList;
