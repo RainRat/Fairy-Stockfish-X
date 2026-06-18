@@ -242,7 +242,8 @@ void MovePicker::score() {
       return int(PieceValue[MG][captured_piece_or_on(pos, mv)]);
   };
   auto gate_history_bonus = [&](Move mv) {
-      return is_gating(mv) ? (*gateHistory)[pos.side_to_move()][gating_square(mv)] : 0;
+      const Square gate = gate_history_square(mv);
+      return gate != SQ_NONE ? (*gateHistory)[pos.side_to_move()][gate] : 0;
   };
 
   for (auto& m : *this)

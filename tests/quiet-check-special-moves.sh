@@ -274,6 +274,15 @@ static void test_probcut_accepts_quiet_promotion_tt_move() {
     assert(picker.next_move() == promotion);
 }
 
+static void test_gate_history_square_validation() {
+    const Move valid = make_gating<NORMAL>(SQ_E1, SQ_E2, ROOK, SQ_D1);
+    assert(gate_history_square(valid) == SQ_D1);
+
+    const Move ordinary = make<NORMAL>(SQ_E2, SQ_E4);
+    assert(!is_gating(ordinary));
+    assert(gate_history_square(ordinary) == SQ_NONE);
+}
+
 int main(int argc, char** argv) {
     init_test_engine();
     load_variants();
@@ -297,6 +306,8 @@ int main(int argc, char** argv) {
             test_qsearch_rejects_quiet_tt_move();
         if (!which || !std::strcmp(which, "probcut-promotion"))
             test_probcut_accepts_quiet_promotion_tt_move();
+        if (!which || !std::strcmp(which, "gate-history-square"))
+            test_gate_history_square_validation();
     };
 
     if (argc > 1)
@@ -427,6 +438,7 @@ run_case pairdrop
 run_case swap
 run_case pull
 run_case wrapped
+run_case gate-history-square
 test_passive_blast
 test_crazyhouse_multi_pawn_promo
 

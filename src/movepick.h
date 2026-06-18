@@ -39,6 +39,11 @@ inline PieceType captured_type(const Position& pos, Move m) {
   return type_of(captured_piece_or_on(pos, m));
 }
 
+inline Square gate_history_square(Move m) {
+  const Square gate = gating_square(m);
+  return is_gating(m) && is_ok(gate) ? gate : SQ_NONE;
+}
+
 /// StatsEntry stores the stat table value. It is usually a number but could
 /// be a move or even a nested history. We use a class instead of naked value
 /// to directly call history update operator<<() on the entry so to use stats

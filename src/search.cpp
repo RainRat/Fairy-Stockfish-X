@@ -913,8 +913,9 @@ namespace {
             {
                 int penalty = -stat_bonus(depth);
                 thisThread->mainHistory[us][from_to(ttMove)] << penalty;
-                if (pos.walling() && is_gating(ttMove))
-                    thisThread->gateHistory[us][gating_square(ttMove)] << penalty;
+                const Square gate = gate_history_square(ttMove);
+                if (pos.walling() && gate != SQ_NONE)
+                    thisThread->gateHistory[us][gate] << penalty;
                 update_continuation_histories(ss, pos.moved_piece(ttMove), to_sq(ttMove), penalty);
             }
         }
@@ -1455,8 +1456,9 @@ moves_loop: // When in check, search starts from here
               if (ttCapture)
                   r++;
 
+              const Square gate = gate_history_square(move);
               ss->statScore =  thisThread->mainHistory[us][from_to(move)]
-                             + (is_gating(move) ? thisThread->gateHistory[us][gating_square(move)] * 2 : 0)
+                             + (gate != SQ_NONE ? thisThread->gateHistory[us][gate] * 2 : 0)
                              + (*contHist[0])[history_slot(movedPiece)][to_sq(move)]
                              + (*contHist[1])[history_slot(movedPiece)][to_sq(move)]
                              + (*contHist[3])[history_slot(movedPiece)][to_sq(move)]
@@ -1980,8 +1982,9 @@ moves_loop: // When in check, search starts from here
         {
             if (!(pos.walling() && from_to(quietsSearched[i]) == from_to(bestMove)))
                 thisThread->mainHistory[us][from_to(quietsSearched[i])] << -bonus2;
-            if (pos.walling() && is_gating(quietsSearched[i]))
-                thisThread->gateHistory[us][gating_square(quietsSearched[i])] << -bonus2;
+            const Square gate = gate_history_square(quietsSearched[i]);
+            if (pos.walling() && gate != SQ_NONE)
+                thisThread->gateHistory[us][gate] << -bonus2;
             update_continuation_histories(ss, pos.moved_piece(quietsSearched[i]), to_sq(quietsSearched[i]), -bonus2);
         }
     }
@@ -1989,8 +1992,9 @@ moves_loop: // When in check, search starts from here
     {
         // Increase stats for the best move in case it was a capture move
         captureHistory[moved_piece][to_sq(bestMove)][captured] << bonus1;
-        if (pos.walling() && is_gating(bestMove))
-            thisThread->gateHistory[us][gating_square(bestMove)] << bonus1;
+        const Square gate = gate_history_square(bestMove);
+        if (pos.walling() && gate != SQ_NONE)
+            thisThread->gateHistory[us][gate] << bonus1;
     }
 
     // Extra penalty for a quiet early move that was not a TT move or
@@ -2006,8 +2010,9 @@ moves_loop: // When in check, search starts from here
         captured = captured_type(pos, capturesSearched[i]);
         if (!(pos.walling() && from_to(capturesSearched[i]) == from_to(bestMove)))
             captureHistory[moved_piece][to_sq(capturesSearched[i])][captured] << -bonus1;
-        if (pos.walling() && is_gating(capturesSearched[i]))
-            thisThread->gateHistory[us][gating_square(capturesSearched[i])] << -bonus1;
+        const Square gate = gate_history_square(capturesSearched[i]);
+        if (pos.walling() && gate != SQ_NONE)
+            thisThread->gateHistory[us][gate] << -bonus1;
     }
   }
 
@@ -2042,8 +2047,9 @@ moves_loop: // When in check, search starts from here
     Color us = pos.side_to_move();
     Thread* thisThread = pos.this_thread();
     thisThread->mainHistory[us][from_to(move)] << bonus;
-    if (pos.walling() && is_gating(move))
-        thisThread->gateHistory[us][gating_square(move)] << bonus;
+    const Square gate = gate_history_square(move);
+    if (pos.walling() && gate != SQ_NONE)
+        thisThread->gateHistory[us][gate] << bonus;
     update_continuation_histories(ss, pos.moved_piece(move), to_sq(move), bonus);
 
     // Penalty for reversed move in case of moved piece not being a pawn
