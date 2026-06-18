@@ -30,6 +30,15 @@
 
 namespace Stockfish {
 
+inline Piece captured_piece_or_on(const Position& pos, Move m) {
+  Piece captured = pos.captured_piece(m);
+  return captured != NO_PIECE ? captured : pos.piece_on(to_sq(m));
+}
+
+inline PieceType captured_type(const Position& pos, Move m) {
+  return type_of(captured_piece_or_on(pos, m));
+}
+
 /// StatsEntry stores the stat table value. It is usually a number but could
 /// be a move or even a nested history. We use a class instead of naked value
 /// to directly call history update operator<<() on the entry so to use stats
@@ -147,11 +156,11 @@ public:
 private:
   template<PickType T, typename Pred> Move select(Pred);
   template<GenType> void score();
+  bool is_qsearch_tt_move(Move m) const;
   bool is_useless_potion(Move m) const;
-  bool potions_pending() const;
   void init_move_list_storage();
   template<GenType Type>
-  bool resume_deferred_potions(ExtMove* appendBegin, ExtMove* baseEnd, bool& deferred, bool scoreMoves = false);
+  bool resume_deferred_potions(ExtMove* appendBegin, ExtMove* baseEnd, bool& deferred);
   ExtMove* prune_useless_potions(ExtMove* begin, ExtMove* end) const;
   ExtMove* begin() { return cur; }
   ExtMove* end() { return endMoves; }

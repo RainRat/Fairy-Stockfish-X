@@ -46,7 +46,18 @@ CMDS
 
 assert_contains_literal "$output" "bestmove 0000"
 
-# 4) Captures in the regular play phase must not refund setup points and unlock drops.
+# 4) A normal UCI root with no legal moves must stay on the terminal path and
+# report MOVE_NONE instead of entering search with an empty root move list.
+output=$(run_uci "$ENGINE" "$VARIANTS" chess <<'CMDS'
+position fen 7k/5Q2/7K/8/8/8/8/8 b - - 0 1
+go depth 1
+CMDS
+)
+
+assert_contains_literal "$output" "info depth 0 score"
+assert_contains_literal "$output" "bestmove (none)"
+
+# 5) Captures in the regular play phase must not refund setup points and unlock drops.
 output=$(run_uci "$ENGINE" "$VARIANTS" setup-chess <<'CMDS'
 position fen 4k3/8/8/8/8/8/4p3/4K3[P] w - - 0 1 {0 0} moves e1e2 e8e7
 go depth 1

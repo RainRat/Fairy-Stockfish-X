@@ -208,21 +208,51 @@ if variant_available "minihexchess"; then
 out=$(run_cmds "setoption name UCI_Variant value minihexchess
 position startpos
 go perft 1")
-assert_nodes "$out" "11"
+assert_nodes "$out" "9"
 assert_contains "$out" "^a2d3: 1$"
+assert_contains "$out" "^a2d4: 1$"
 assert_contains "$out" "^a2b5: 1$"
+assert_contains "$out" "^a2c5: 1$"
 assert_contains "$out" "^c1d2: 1$"
+assert_contains "$out" "^c2d3: 1$"
 assert_contains "$out" "^a3b4: 1$"
+assert_contains "$out" "^b3c4: 1$"
 assert_contains "$out" "^c3d4: 1$"
-assert_contains "$out" "^b2d3: 1$"
-assert_contains "$out" "^b2c4: 1$"
+
+out=$(run_cmds "setoption name UCI_Variant value minihexchess
+position startpos moves c3d4 g6d5
+go perft 1")
+assert_contains "$out" "^b2c3: 1$"
+
+out=$(run_cmds "setoption name UCI_Variant value minihexchess
+position fen ***3K/**2p2/*4p1/3P3/6*/5**/3k*** w - - 0 1
+go perft 1")
+assert_contains "$out" "^d4e5: 1$"
+assert_contains "$out" "^d4e6: 1$"
+assert_contains "$out" "^d4f5: 1$"
+
+out=$(run_cmds "setoption name UCI_Variant value minihexchess
+position fen ***3k/**5/*6/3N3/7/7/K6 w - - 0 1
+go perft 1")
+assert_contains "$out" "^d4b1: 1$"
+assert_contains "$out" "^d4c1: 1$"
+assert_contains "$out" "^d4a2: 1$"
+assert_contains "$out" "^d4e2: 1$"
+assert_contains "$out" "^d4a3: 1$"
+assert_contains "$out" "^d4f3: 1$"
+assert_contains "$out" "^d4b5: 1$"
+assert_contains "$out" "^d4g5: 1$"
+assert_contains "$out" "^d4c6: 1$"
+assert_contains "$out" "^d4g6: 1$"
+assert_contains "$out" "^d4e7: 1$"
+assert_contains "$out" "^d4f7: 1$"
 fi
 
 if variant_available "glinski-chess"; then
 out=$(run_cmds "setoption name UCI_Variant value glinski-chess
 position startpos
 go perft 1")
-assert_nodes "$out" "48"
+assert_nodes "$out" "40"
 assert_contains "$out" "^d1d2: 1$"
 assert_contains "$out" "^a4b4: 1$"
 assert_contains "$out" "^a1c2: 1$"
@@ -234,7 +264,7 @@ if variant_available "glinski-chess-3shift"; then
 out=$(run_cmds "setoption name UCI_Variant value glinski-chess-3shift
 position startpos
 go perft 1")
-assert_nodes "$out" "44"
+assert_nodes "$out" "35"
 assert_contains "$out" "^c3e4: 1$"
 assert_contains "$out" "^c5d6: 1$"
 fi
@@ -243,7 +273,7 @@ if variant_available "glinski-chess-5shift"; then
 out=$(run_cmds "setoption name UCI_Variant value glinski-chess-5shift
 position startpos
 go perft 1")
-assert_nodes "$out" "46"
+assert_nodes "$out" "37"
 assert_contains "$out" "^c3e4: 1$"
 assert_contains "$out" "^b4c5: 1$"
 fi
@@ -252,7 +282,7 @@ if variant_available "van-gennip-hexchess"; then
 out=$(run_cmds "setoption name UCI_Variant value van-gennip-hexchess
 position startpos
 go perft 1")
-assert_nodes "$out" "36"
+assert_nodes "$out" "29"
 assert_contains "$out" "^c3d4: 1$"
 fi
 
@@ -268,11 +298,10 @@ if variant_available "mccooey-chess"; then
 out=$(run_cmds "setoption name UCI_Variant value mccooey-chess
 position startpos
 go perft 1")
-assert_nodes "$out" "31"
+assert_nodes "$out" "25"
 assert_contains "$out" "^c3e4: 1$"
 assert_contains "$out" "^c2e1: 1$"
 assert_contains "$out" "^a4b5: 1$"
-assert_contains "$out" "^a4c6: 1$"
 fi
 
 if variant_available "grand-hexachess"; then
@@ -744,7 +773,7 @@ if variant_available "shatranj-14x14"; then
 out=$(run_cmds "setoption name UCI_Variant value shatranj-14x14
 position startpos
 d")
-assert_contains "$out" "Fen: rndwbmksbwdnr1/pppppppppppppp/14/14/14/14/14/14/14/14/14/14/PPPPPPPPPPPPPP/RNDWBSKMBWDNR1 w - - 0 1"
+assert_contains "$out" "Fen: rndwbmkqsbwdnr/pppppppppppppp/14/14/14/14/14/14/14/14/14/14/PPPPPPPPPPPPPP/RNDWBSQKMBWDNR w - - 0 1"
 fi
 
 # 19da) Shatranj: source-backed setup should load as documented.

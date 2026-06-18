@@ -74,6 +74,39 @@ $(expect_engine_setup xboard)
    send "protover 2\n"
    expect "feature done=1"
    send "variant chess\n"
+   send "setboard 4k3/8/8/8/8/8/8/4K3 w - - 100 51\n"
+   send "go\n"
+   expect "1/2-1/2 {Draw}"
+   send "quit\n"
+   expect eof
+EOF
+)
+echo "${out}" | grep -q "1/2-1/2 {Draw}"
+
+out=$(run_expect "$ENGINE" <<EOF
+$(expect_engine_setup xboard)
+   send "protover 2\n"
+   expect "feature done=1"
+   send "variant chess\n"
+   send "sd 1\n"
+   send "setboard 6k1/5Q2/6K1/8/8/8/8/8 w - - 100 51\n"
+   send "go\n"
+   expect "move "
+   send "quit\n"
+   expect eof
+EOF
+)
+echo "${out}" | grep -q "move "
+if echo "${out}" | grep -q "1/2-1/2 {Draw}"; then
+  echo "${out}"
+  false
+fi
+
+out=$(run_expect "$ENGINE" <<EOF
+$(expect_engine_setup xboard)
+   send "protover 2\n"
+   expect "feature done=1"
+   send "variant chess\n"
    send "holding \\[R\\] \\[r\\] bQ\n"
    send "d\n"
    send "quit\n"
