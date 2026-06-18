@@ -1039,9 +1039,9 @@ namespace {
                              ? generate_pawn_moves<Us, Type>(pos, moveList, PawnGenSpec{target, forcedFromMask})
                              : generate_moves<Us, Type>(pos, moveList, PieceGenSpec{PAWN, target, captureTarget, forcedFromMask});
 
-                PieceSet nonRoyalTypes = pos.piece_types() & ~piece_set(PAWN);
-                if (royalPt != NO_PIECE_TYPE)
-                    nonRoyalTypes = nonRoyalTypes & ~piece_set(royalPt);
+                PieceSet nonRoyalTypes = pos.piece_types() & ~(piece_set(PAWN) | KING);
+                if (royalPt != NO_PIECE_TYPE && royalPt != KING)
+                    nonRoyalTypes &= ~piece_set(royalPt);
                 for (PieceSet ps = nonRoyalTypes; ps;)
                     moveList = generate_moves<Us, Type>(pos, moveList, PieceGenSpec{pop_lsb(ps), target, captureTarget, forcedFromMask});
             }
