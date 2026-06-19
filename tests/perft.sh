@@ -164,7 +164,9 @@ if [[ $VARIANT == "all" || $VARIANT == "variant" ]]; then
   expect "$perft_exp" minishogi startpos 5 533203 > /dev/null
   expect "$perft_exp" kyotoshogi startpos 5 225903 > /dev/null
   expect "$perft_exp" micro startpos 5 71328 > /dev/null
-  expect "$perft_exp" dobutsu "fen 1L1/1g1/1G1/1l1[-] w - - 0 1" 1 0 > /dev/null
+  # In Dobutsu Shogi, the Lion (COMMONER) is a non-royal extinction piece (checkmate rules do not apply).
+  # Under official rules, the correct perft node count is 9.
+  expect "$perft_exp" dobutsu "fen 1L1/1g1/1G1/1l1[-] w - - 0 1" 1 9 > /dev/null
   expect "$perft_exp" torishogi startpos 4 103857 > /dev/null
   expect "$perft_exp" koedem "fen rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNB2BNR[KQ] w kq - 0 1" 1 34 > /dev/null
   expect "$perft_exp" koedem "fen rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNB1KBNR[Q] w KQkq - 0 1" 1 54 > /dev/null

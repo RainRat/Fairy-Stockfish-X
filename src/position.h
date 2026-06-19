@@ -1473,9 +1473,6 @@ inline PieceType Position::royal_piece_type(Color c) const {
   PieceType pt = king_type();
   if (pt != NO_PIECE_TYPE && count(c, pt) == 1)
       return pt;
-  PieceType flag = flag_piece(c);
-  if (flag != NO_PIECE_TYPE && count(c, flag) == 1 && var->flagPieceSafe)
-      return flag;
   // Fallback: no uniquely identifiable royal found for this side.
   return NO_PIECE_TYPE;
 }
