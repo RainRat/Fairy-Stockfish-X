@@ -113,6 +113,8 @@ namespace {
 
     if (forcedGate != NO_PIECE_TYPE)
     {
+        // Only generate forced gating if the target square is not occupied after the base move
+        // (e.g., to prevent overwriting/disappearing pieces in rifle capture or special moves)
         if (!(occupancyAfter & forcedGateSquare))
             *moveList++ = make_gating<T>(from, to, forcedGate, forcedGateSquare);
     }
