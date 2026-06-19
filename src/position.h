@@ -372,11 +372,12 @@ class Position {
 public:
   struct SimulatedMoveGuard {
       const Position& pos;
-      SimulatedMoveGuard(const Position& p, Move m) : pos(p) {
+      Move previous;
+      SimulatedMoveGuard(const Position& p, Move m) : pos(p), previous(p.simulatedMove) {
           pos.simulatedMove = m;
       }
       ~SimulatedMoveGuard() {
-          pos.simulatedMove = MOVE_NONE;
+          pos.simulatedMove = previous;
       }
   };
 

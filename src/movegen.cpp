@@ -18,6 +18,7 @@
 
 #include <cassert>
 #include <cstdlib>
+#include <vector>
 
 #include "movegen.h"
 #include "position.h"
@@ -111,7 +112,10 @@ namespace {
     }
 
     if (forcedGate != NO_PIECE_TYPE)
-        *moveList++ = make_gating<T>(from, to, forcedGate, forcedGateSquare);
+    {
+        if (!(occupancyAfter & forcedGateSquare))
+            *moveList++ = make_gating<T>(from, to, forcedGate, forcedGateSquare);
+    }
     else
         *moveList++ = m;
 
@@ -122,6 +126,7 @@ namespace {
         {
             if (gateSq == to && (T != CASTLING || gateSq == from)) continue;
             if (!(pos.gates(us) & gateSq)) continue;
+            if (occupancyAfter & gateSq) continue;
 
             for (PieceSet ps = pos.piece_types(); ps;)
             {
@@ -1237,7 +1242,7 @@ namespace {
     // Royal moves must not be restricted to checker capture/interposition targets.
     if (royalPt != NO_PIECE_TYPE && royalSq != SQ_NONE
         && (!restrictToForcedJumper || (forcedFromMask & royalSq))
-        && (!Checks || pos.topology_wraps() || pos.blockers_for_king(~Us) & royalSq))
+        && (!Checks || pos.topology_wraps() || (pos.blockers_for_king(~Us) & royalSq) || royalPt != KING))
     {
         Bitboard b = 0;
         if (restrictToForcedJumper)
@@ -1262,7 +1267,19 @@ namespace {
             b = (kingAttacks & kingCaptureMask) | (kingMoves & kingQuietMask);
         }
         while (b)
-            moveList = make_move_and_gating<NORMAL>(pos, moveList, Us, royalSq, pop_lsb(b));
+        {
+            Square to = pop_lsb(b);
+            if constexpr (Type == QUIET_CHECKS)
+            {
+                ExtMove temp[256];
+                ExtMove* tempEnd = make_move_and_gating<NORMAL>(pos, temp, Us, royalSq, to);
+                for (ExtMove* it = temp; it != tempEnd; ++it)
+                    if (pos.gives_check(it->move))
+                        *moveList++ = *it;
+            }
+            else
+                moveList = make_move_and_gating<NORMAL>(pos, moveList, Us, royalSq, to);
+        }
 
         // Passing move by royal piece
         if (!restrictToForcedJumper && pos.pass(Us))
@@ -1300,9 +1317,6 @@ namespace {
 
   template<GenType Type>
   inline bool potion_move_matches(const Position& pos, Move base, Move m) {
-      if (!pos.legal(m))
-          return false;
-
       if constexpr (Type == EVASIONS)
       {
           Color us = pos.side_to_move();
@@ -1440,26 +1454,36 @@ namespace {
 
         if (potion == Variant::POTION_FREEZE)
         {
+            struct PreparedPotionBase {
+                Move move;
+                int value;
+                PotionBaseInfo info;
+            };
+            std::vector<PreparedPotionBase> bases;
+            bases.reserve(buffer.end - buffer.begin);
+            for (ExtMove* it = buffer.begin; it != buffer.end; ++it)
+            {
+                PotionBaseInfo baseInfo;
+                if (prepare_potion_base(pos, it->move, baseInfo))
+                    bases.push_back({it->move, it->value, baseInfo});
+            }
+
             while (candidates)
             {
                 if (cur >= maxEnd)
                     return maxEnd;
 
                 Square gate = pop_lsb(candidates);
-                for (ExtMove* it = buffer.begin; it != buffer.end; ++it)
+                for (const auto& base : bases)
                 {
-                    PotionBaseInfo baseInfo;
-                    if (!prepare_potion_base(pos, it->move, baseInfo))
+                    if (gate == base.info.to)
+                        continue;
+                    if (pos.freeze_squares() & base.info.from)
+                        continue;
+                    if ((between_bb(base.info.from, base.info.to, base.info.moverType, base.info.modality, base.info.isInitial) & ~square_bb(base.info.to)) & gate)
                         continue;
 
-                    if (gate == baseInfo.to)
-                        continue;
-                    if (pos.freeze_squares() & baseInfo.from)
-                        continue;
-                    if ((between_bb(baseInfo.from, baseInfo.to, baseInfo.moverType, baseInfo.modality, baseInfo.isInitial) & ~square_bb(baseInfo.to)) & gate)
-                        continue;
-
-                    if (try_append_potion_gating_move<Type>(pos, cur, maxEnd, baseInfo.from, baseInfo.to, baseInfo.mt, it->move, potion, potionPiece, gate, it->value)
+                    if (try_append_potion_gating_move<Type>(pos, cur, maxEnd, base.info.from, base.info.to, base.info.mt, base.move, potion, potionPiece, gate, base.value)
                         == AppendStatus::Full)
                         return maxEnd;
                 }
