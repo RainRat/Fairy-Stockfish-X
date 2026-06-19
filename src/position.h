@@ -2717,7 +2717,18 @@ inline bool Position::flag_reached(Color c) const {
           while (flagAttackers)
           {
               Square currentAttack = pop_lsb(flagAttackers);
-              if (legal(make_move(currentAttack, sr)))
+              bool isLegal;
+              if (c == sideToMove)
+              {
+                  Position& pos = const_cast<Position&>(*this);
+                  pos.sideToMove = ~c;
+                  isLegal = pos.legal(make_move(currentAttack, sr));
+                  pos.sideToMove = c;
+              }
+              else
+                  isLegal = legal(make_move(currentAttack, sr));
+
+              if (isLegal)
               {
                   potentialPieces--;
                   break;
