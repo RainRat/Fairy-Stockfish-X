@@ -691,11 +691,14 @@ namespace {
             for (Direction d : pos.getConnectDirections())
             {
                 auto [dr, df] = decode_direction(d);
-                Square next = SQ_NONE;
-                if (wrapped_destination_square(s, df, dr, pos.max_file(), pos.max_rank(), pos.wraps_files(), pos.wraps_ranks(), next))
+                for (int sign : {1, -1})
                 {
-                    if (connectPieces & next)
-                        expanded |= next;
+                    Square next = SQ_NONE;
+                    if (wrapped_destination_square(s, sign * df, sign * dr, pos.max_file(), pos.max_rank(), pos.wraps_files(), pos.wraps_ranks(), next))
+                    {
+                        if (connectPieces & next)
+                            expanded |= next;
+                    }
                 }
             }
         }
@@ -703,7 +706,7 @@ namespace {
     else
     {
         for (Direction d : pos.getConnectDirections())
-            expanded |= shift(d, frontier) & connectPieces;
+            expanded |= (shift(d, frontier) | shift(-d, frontier)) & connectPieces;
     }
 
     if (!pos.weak_diagonal_connect())
