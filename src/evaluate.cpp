@@ -1528,6 +1528,21 @@ namespace {
         }
     }
 
+    // Spell Chess pocket potions bonus / penalty for using unnecessarily
+    if (pos.potions_enabled())
+    {
+        for (int pt = 0; pt < Variant::POTION_TYPE_NB; ++pt)
+        {
+            Variant::PotionType potion = static_cast<Variant::PotionType>(pt);
+            PieceType pPiece = pos.potion_piece(potion);
+            if (pPiece != NO_PIECE_TYPE)
+            {
+                int cnt = pos.count_in_hand(Us, pPiece);
+                score += make_score(60, 60) * cnt;
+            }
+        }
+    }
+
     // Extinction
     if (pos.extinction_value() != VALUE_NONE)
     {

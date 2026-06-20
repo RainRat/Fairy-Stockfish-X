@@ -112,11 +112,48 @@ static void test_null_move_clears_undo_payload() {
     assert(pos.state()->materialKey == beforeMaterialKey);
 }
 
+static void test_spell_chess_null_move_decays() {
+    StateInfo st{};
+    Position pos;
+    pos.set(variants.get("spell-chess"), "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 f:e4 <3 1 2 0>", false, &st, nullptr);
+
+    assert(pos.state()->potionZones[BLACK][Variant::POTION_FREEZE] != Bitboard(0));
+    assert(pos.state()->potionCooldown[WHITE][Variant::POTION_FREEZE] == 3);
+    assert(pos.state()->potionCooldown[WHITE][Variant::POTION_JUMP] == 1);
+    assert(pos.state()->potionCooldown[BLACK][Variant::POTION_FREEZE] == 2);
+    assert(pos.state()->potionCooldown[BLACK][Variant::POTION_JUMP] == 0);
+
+    StateInfo next{};
+    pos.do_null_move(next);
+
+    assert(pos.state()->potionZones[WHITE][Variant::POTION_FREEZE] == Bitboard(0));
+    assert(pos.state()->potionZones[WHITE][Variant::POTION_JUMP] == Bitboard(0));
+    assert(pos.state()->potionZones[BLACK][Variant::POTION_FREEZE] == Bitboard(0));
+    assert(pos.state()->potionZones[BLACK][Variant::POTION_JUMP] == Bitboard(0));
+
+    assert(pos.state()->potionCooldown[WHITE][Variant::POTION_FREEZE] == 2);
+    assert(pos.state()->potionCooldown[WHITE][Variant::POTION_JUMP] == 0);
+    assert(pos.state()->potionCooldown[BLACK][Variant::POTION_FREEZE] == 2);
+    assert(pos.state()->potionCooldown[BLACK][Variant::POTION_JUMP] == 0);
+
+    Position expectedPos;
+    StateInfo expectedSt{};
+    expectedPos.set(variants.get("spell-chess"), "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 1 1 - <2 0 2 0>", false, &expectedSt, nullptr);
+
+    assert(pos.state()->key == expectedPos.state()->key);
+
+    pos.undo_null_move();
+    assert(pos.state()->potionZones[BLACK][Variant::POTION_FREEZE] != Bitboard(0));
+    assert(pos.state()->potionCooldown[WHITE][Variant::POTION_FREEZE] == 3);
+    assert(pos.state()->potionCooldown[WHITE][Variant::POTION_JUMP] == 1);
+}
+
 int main() {
     init_test_engine();
     load_variants();
     test_blast_center_pawn_promotion_updates_pawn_key();
     test_null_move_clears_undo_payload();
+    test_spell_chess_null_move_decays();
     return 0;
 }
 EOF

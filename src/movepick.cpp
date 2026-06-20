@@ -69,12 +69,15 @@ bool MovePicker::is_useless_potion(Move m) const {
   {
       Bitboard zone = pos.freeze_zone_from_square(gate);
       Bitboard enemies = pos.pieces(~pos.side_to_move());
-      return !(zone & enemies);
+      return !(zone & enemies & ~pos.freeze_squares());
   }
 
   if (pos.potion_piece(Variant::POTION_JUMP) == gatingPiece)
   {
       if (pos.piece_on(gate) == NO_PIECE)
+          return true;
+
+      if ((pos.jump_squares(WHITE) | pos.jump_squares(BLACK)) & square_bb(gate))
           return true;
 
       const bool initial = pos.not_moved_pieces(pos.side_to_move()) & from_sq(m);

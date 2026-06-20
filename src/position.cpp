@@ -3257,7 +3257,7 @@ bool Position::legal(Move m) const {
   if (!potCtx.valid)
       return false;
 
-  if (!dropMove && (freeze_squares() & from))
+  if (!dropMove && ((freeze_squares() | potCtx.freezeExtra) & from))
       return false;
   // Castling is also blocked if the participating rook is frozen.
   if (type_of(m) == CASTLING)
@@ -3267,7 +3267,7 @@ bool Position::legal(Move m) const {
           || color_of(piece_on(rookFrom)) != us
           || !(castling_rook_pieces(us) & type_of(piece_on(rookFrom))))
           rookFrom = castling_rook_square(us & (to > from ? KING_SIDE : QUEEN_SIDE));
-      if (freeze_squares() & rookFrom)
+      if ((freeze_squares() | potCtx.freezeExtra) & rookFrom)
           return false;
   }
   if (potCtx.jumpRemoved && (square_bb(to) & potCtx.jumpRemoved))
@@ -4791,7 +4791,7 @@ bool Position::gives_check(Move m) const {
 
   ScopedSpellContext spellScope(potCtx.freezeExtra, potCtx.jumpRemoved);
 
-  if (!dropMove && (freeze_squares() & from))
+  if (!dropMove && ((freeze_squares() | potCtx.freezeExtra) & from))
       return false;
   if (potCtx.jumpRemoved && (square_bb(to) & potCtx.jumpRemoved))
       return false;
@@ -7231,6 +7231,42 @@ void Position::do_null_move(StateInfo& newSt) {
   newSt.previous = st;
   st = &newSt;
   st->key = st->previous->key;
+
+  if (potions_enabled())
+  {
+      auto togglePotionHashes = [&](Key& key) {
+          for (Color c : {WHITE, BLACK})
+              for (int pt = 0; pt < Variant::POTION_TYPE_NB; ++pt)
+              {
+                  Variant::PotionType potion = static_cast<Variant::PotionType>(pt);
+                  if (potion_piece(potion) == NO_PIECE_TYPE)
+                      continue;
+
+                  xor_potion_zone(key, c, potion, st->potionZones[c][pt]);
+                  xor_potion_cooldown(key, c, potion, st->potionCooldown[c][pt]);
+              }
+      };
+
+      togglePotionHashes(st->key);
+
+      Color us = sideToMove;
+      for (int pt = 0; pt < Variant::POTION_TYPE_NB; ++pt)
+      {
+          Variant::PotionType potion = static_cast<Variant::PotionType>(pt);
+          if (potion_piece(potion) == NO_PIECE_TYPE)
+              continue;
+
+          if (st->potionCooldown[us][pt] > 0)
+              --st->potionCooldown[us][pt];
+      }
+
+      for (Color c : {WHITE, BLACK})
+          for (int pt = 0; pt < Variant::POTION_TYPE_NB; ++pt)
+              st->potionZones[c][pt] = Bitboard(0);
+
+      togglePotionHashes(st->key);
+  }
+
 
   clear_dirty_piece(st);
   st->accumulator.computed[WHITE] = false;

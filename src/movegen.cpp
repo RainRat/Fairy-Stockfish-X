@@ -432,7 +432,10 @@ namespace {
 
     const Bitboard unmovedPawns = pawns;
     const Bitboard neutral    = pos.dead_squares();
-    const Bitboard movable    = pos.board_bb(Us, PAWN) & ~pos.pieces();
+    Bitboard occupancy = pos.pieces();
+    if (const SpellContext* spellCtx = current_spell_context(); spellCtx && Us == pos.side_to_move())
+        occupancy &= ~spellCtx->jumpRemoved;
+    const Bitboard movable    = pos.board_bb(Us, PAWN) & ~occupancy;
     const Bitboard friendlyCapturable = pos.pieces(Us) & ~pos.pieces(Us, KING);
     const Bitboard capturable = pos.board_bb(Us, PAWN)
                               & (pos.self_capture(PAWN) ? (pos.pieces(Them) | friendlyCapturable | neutral)
@@ -1476,11 +1479,14 @@ namespace {
                     return maxEnd;
 
                 Square gate = pop_lsb(candidates);
+                Bitboard newFreezeZone = pos.freeze_zone_from_square(gate);
                 for (const auto& base : bases)
                 {
                     if (gate == base.info.to)
                         continue;
                     if (pos.freeze_squares() & base.info.from)
+                        continue;
+                    if (newFreezeZone & base.info.from)
                         continue;
                     if ((between_bb(base.info.from, base.info.to, base.info.moverType, base.info.modality, base.info.isInitial) & ~square_bb(base.info.to)) & gate)
                         continue;

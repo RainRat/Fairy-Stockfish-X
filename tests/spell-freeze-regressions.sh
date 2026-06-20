@@ -59,4 +59,20 @@ out=$(run_cmds "position fen 4k3/3p4/8/4P3/8/8/8/4K3[f] b - - 0 1 moves f@e5 d7d
 go perft 1")
 ! echo "${out}" | grep -q "^e5d6:"
 
+# Same-turn cast Freeze on own piece prevents that piece from moving.
+out=$(run_cmds "position fen rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR[F] w KQkq - 0 1
+go perft 1")
+! echo "${out}" | grep -q "^f@g3,f2f3:"
+! echo "${out}" | grep -q "^f@g3,f2f4:"
+
+# Blocked pawn on rank 2 can double-step to rank 4 if blocker is treated with Jump potion.
+out=$(run_cmds "position fen 4k3/8/8/8/8/4p3/4P3/4K3[J] w - - 0 1
+go perft 1")
+echo "${out}" | grep -q "^j@e3,e2e4: 1$"
+
+# Potion cooldown prevents casting the same potion type.
+out=$(run_cmds "position fen rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR[F] w KQkq - 0 1 <2 0 0 0>
+go perft 1")
+! echo "${out}" | grep -q "^f@"
+
 echo "spell freeze regression tests passed"
