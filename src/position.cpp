@@ -5117,13 +5117,19 @@ void Position::apply_drop_hash_delta(Key& k, Move m, Piece pc, Color dropColor, 
     {
         Square to2 = secondary_drop_square(m);
         k ^= Zobrist::psq[pc][to2];
-        int n = pieceCountInHand[color_of(pc_hand)][type_of(pc_hand)];
-        xor_in_hand_count(k, pc_hand, n - 2, n);
+        if (!variant()->payPointsToDrop)
+        {
+            int n = pieceCountInHand[color_of(pc_hand)][type_of(pc_hand)];
+            xor_in_hand_count(k, pc_hand, n - 2, n);
+        }
     }
     else if (exchanged == NO_PIECE_TYPE)
     {
-        int n = pieceCountInHand[color_of(pc_hand)][type_of(pc_hand)];
-        xor_in_hand_count(k, pc_hand, n - 1, n);
+        if (!variant()->payPointsToDrop)
+        {
+            int n = pieceCountInHand[color_of(pc_hand)][type_of(pc_hand)];
+            xor_in_hand_count(k, pc_hand, n - 1, n);
+        }
     }
     else
     {

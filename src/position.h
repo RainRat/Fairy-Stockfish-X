@@ -5603,7 +5603,8 @@ inline void Position::drop_piece(Piece pc_hand, Piece pc_drop, Square s, PieceTy
     remove_from_prison(ex);
     remove_from_prison(pc_drop);
   } else {
-    remove_from_hand(pc_hand);
+    if (!variant()->payPointsToDrop)
+      remove_from_hand(pc_hand);
     virtualPieces += (pieceCountInHand[color_of(pc_hand)][type_of(pc_hand)] < 0);
   }
 }
@@ -5618,12 +5619,16 @@ inline void Position::undrop_piece(Piece pc_hand, Square s, PieceType exchange) 
     add_to_prison(pc_hand);
   } else {
     virtualPieces -= (pieceCountInHand[color_of(pc_hand)][type_of(pc_hand)] < 0);
-    add_to_hand(pc_hand);
+    if (!variant()->payPointsToDrop)
+      add_to_hand(pc_hand);
   }
   assert(can_drop(color_of(pc_hand), type_of(pc_hand)) || var->twoBoards || exchange != NO_PIECE_TYPE);
 }
 
 inline bool Position::can_drop(Color c, PieceType pt) const {
+  if (pt == king_type() && king_type() != NO_PIECE_TYPE && count(c, king_type()) > 0)
+      return false;
+
   if (variant()->freeDrops)
       return true;
 
