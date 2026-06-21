@@ -252,7 +252,7 @@ if variant_available "glinski-chess"; then
 out=$(run_cmds "setoption name UCI_Variant value glinski-chess
 position startpos
 go perft 1")
-assert_nodes "$out" "40"
+assert_nodes "$out" "43"
 assert_contains "$out" "^d1d2: 1$"
 assert_contains "$out" "^a4b4: 1$"
 assert_contains "$out" "^a1c2: 1$"
@@ -264,7 +264,7 @@ if variant_available "glinski-chess-3shift"; then
 out=$(run_cmds "setoption name UCI_Variant value glinski-chess-3shift
 position startpos
 go perft 1")
-assert_nodes "$out" "35"
+assert_nodes "$out" "38"
 assert_contains "$out" "^c3e4: 1$"
 assert_contains "$out" "^c5d6: 1$"
 fi
@@ -308,7 +308,7 @@ if variant_available "grand-hexachess"; then
 out=$(run_cmds "setoption name UCI_Variant value grand-hexachess
 position startpos
 go perft 1")
-assert_nodes "$out" "125"
+assert_nodes "$out" "139"
 assert_contains "$out" "^i13g12: 1$"
 assert_contains "$out" "^a5a6: 1$"
 assert_contains "$out" "^k5k6: 1$"

@@ -152,7 +152,7 @@ go movetime 400')
 
   out=$(run_uci "$VLB_ENGINE" "$VARIANT_PATH" "glinski-chess" <<<'position startpos
 go perft 1')
-  assert_nodes "$out" 40
+  assert_nodes "$out" 43
   assert_contains "$out" "^d1d2: 1$"
   assert_contains "$out" "^a4b4: 1$"
   assert_contains "$out" "^a1c2: 1$"
@@ -161,7 +161,7 @@ go perft 1')
 
   out=$(run_uci "$VLB_ENGINE" "$VARIANT_PATH" "glinski-chess-3shift" <<<'position startpos
 go perft 1')
-  assert_nodes "$out" 35
+  assert_nodes "$out" 38
   assert_contains "$out" "^a2b3: 1$"
   assert_contains "$out" "^a2b4: 1$"
   assert_contains "$out" "^b1c2: 1$"
@@ -204,7 +204,7 @@ go perft 1')
 
   out=$(run_uci "$VLB_ENGINE" "$VARIANT_PATH" "grand-hexachess" <<<'position startpos
 go perft 1')
-  assert_nodes "$out" 125
+  assert_nodes "$out" 139
   assert_contains "$out" "^i13g12: 1$"
   assert_contains "$out" "^a5a6: 1$"
   assert_contains "$out" "^k5k6: 1$"
