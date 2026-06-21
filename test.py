@@ -2100,6 +2100,30 @@ startFen = 8/8/8/8/8/8/8/8 w - - 0 1
         # White has 5 pieces -> no perfect square can be formed using all remaining pieces -> ongoing
         self._check_immediate_game_end("connectnxn-all", "8/8/8/8/8/8/PP1P4/PP6 w - - 0 1", [], False)
 
+    def test_toroidal_line_counting_fix(self):
+        sf.load_variant_config(
+            """[wrap-count-test:chess]
+maxRank = 3
+maxFile = 4
+wrapsTopology = toroidal
+connectN = 3
+connectDiagonal = false
+materialCounting = connectn
+nMoveRule = 1
+startFen = 4/4/4 w - - 0 1
+"""
+        )
+        # White has a closed loop of length 4 (Rank 1: PPPP), which counts as 4 - 3 + 1 = 2 lines.
+        # Black has two open chains of length 3 (Rank 2: ppp., Rank 3: ppp.), which count as 1 + 1 = 2 lines.
+        # Since lines are equal (2 vs 2), it should be a draw (0 score).
+        # We trigger optional game end via nMoveRule = 1 and rule50 = 2.
+        self._check_optional_game_end("wrap-count-test", "ppp1/ppp1/PPPP[PPPPpppp] w - - 2 1", [], True, 0)
+
+        # If White has 1 open chain of 3 (PPP.), White has 1 line.
+        # Black has 2 open chains of 3 (ppp., ppp.), Black has 2 lines.
+        # Black wins (White loses), returning a negative mate value.
+        self._check_optional_game_end("wrap-count-test", "ppp1/ppp1/PPP1[PPPpppp] w - - 2 1", [], True, -sf.VALUE_MATE)
+
     def _check_optional_game_end(self, variant, fen, moves, game_end, game_result=None):
         with self.subTest(variant=variant, fen=fen, game_end=game_end, game_result=game_result):
             result = sf.is_optional_game_end(variant, fen, moves)

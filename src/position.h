@@ -5484,17 +5484,34 @@ inline int Position::connect_line_count(Color c) const {
           auto [dr, df] = decode_direction(d);
           return wrapped_destination_square(cur, df, dr, max_file(), max_rank(), wraps_files(), wraps_ranks(), next);
       };
-      const int maxSteps = popcount(board_bb());
 
       for (Direction d : var->connectDirections)
       {
-          Bitboard starts = connectPieces;
+          auto has_predecessor = [&](Square s) {
+              Square pred = SQ_NONE;
+              auto [dr, df] = decode_direction(d);
+              return wrapped_destination_square(s, -df, -dr, max_file(), max_rank(), wraps_files(), wraps_ranks(), pred)
+                  && (connectPieces & square_bb(pred));
+          };
+
+          Bitboard remaining = connectPieces;
+          Bitboard starts = 0;
+          Bitboard temp = connectPieces;
+          while (temp)
+          {
+              Square s = pop_lsb(temp);
+              if (!has_predecessor(s))
+                  starts |= square_bb(s);
+          }
+
+          // 1. Process all open chains starting at the start squares
           while (starts)
           {
               Square s = pop_lsb(starts);
               Square cur = s;
-              int steps = 1;
-              while (steps < targetN && steps < maxSteps)
+              remaining &= ~square_bb(s);
+              int L = 1;
+              while (true)
               {
                   Square next = SQ_NONE;
                   if (!wrapped_step(cur, d, next) || next == s)
@@ -5502,10 +5519,33 @@ inline int Position::connect_line_count(Color c) const {
                   if (!(connectPieces & square_bb(next)))
                       break;
                   cur = next;
-                  ++steps;
+                  remaining &= ~square_bb(next);
+                  L++;
               }
-              if (steps >= targetN)
-                  countLines++;
+              if (L >= targetN)
+                  countLines += L - targetN + 1;
+          }
+
+          // 2. Process all closed loops
+          while (remaining)
+          {
+              Square s = lsb(remaining);
+              Square cur = s;
+              remaining &= ~square_bb(s);
+              int L = 1;
+              while (true)
+              {
+                  Square next = SQ_NONE;
+                  if (!wrapped_step(cur, d, next) || next == s)
+                      break;
+                  if (!(connectPieces & square_bb(next)))
+                      break;
+                  cur = next;
+                  remaining &= ~square_bb(next);
+                  L++;
+              }
+              if (L >= targetN)
+                  countLines += L - targetN + 1;
           }
       }
   }
