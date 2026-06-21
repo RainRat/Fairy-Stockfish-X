@@ -918,7 +918,7 @@ namespace {
     b1 = pos.attacks_bb<ROOK  >(ksq, pos.pieces() ^ pos.pieces(Us, QUEEN));
     b2 = pos.attacks_bb<BISHOP>(ksq, pos.pieces() ^ pos.pieces(Us, QUEEN));
 
-    std::function <Bitboard (Color, PieceType)> get_attacks = [this](Color c, PieceType pt) {
+    auto get_attacks = [this](Color c, PieceType pt) -> Bitboard {
         return attackedBy[c][pt] | (pos.piece_drops() && pos.count_in_hand(c, pt) > 0 ? pos.drop_region(c, pt) & ~pos.pieces() : Bitboard(0));
     };
     for (PieceSet ps = pos.piece_types(); ps;)
@@ -1593,20 +1593,18 @@ namespace {
     // Connect-n
     if (pos.connect_n() > 0 && (pos.connect_value() != VALUE_DRAW))
     {
-        //Calculate eligible pieces for connection once.
-        //Still consider all opponent pieces as blocking.
+        // Calculate eligible pieces for connection once.
+        // Friendly non-eligible pieces and all opponent pieces block connections.
         Bitboard connectPiecesUs = 0;
-        for (PieceSet ps = pos.connect_piece_types(); ps;){
-            PieceType pt = pop_lsb(ps);
-            connectPiecesUs |= pos.pieces(pt);
-        };
-        connectPiecesUs &= pos.pieces(Us);
+        for (PieceSet ps = pos.connect_piece_types(); ps;)
+            connectPiecesUs |= pos.pieces(Us, pop_lsb(ps));
+
+        Bitboard blockers = pos.pieces() & ~connectPiecesUs;
 
         for (const Direction& d : pos.getConnectDirections())
-
         {
             // Find sufficiently large gaps
-            Bitboard b = pos.board_bb() & ~pos.pieces(Them);
+            Bitboard b = pos.board_bb() & ~blockers;
             for (int i = 1; i < pos.connect_n(); i++)
                 b &= shift(d, b);
             // Count number of pieces per gap
@@ -1617,10 +1615,11 @@ namespace {
                 for (int j = 0; j < pos.connect_n(); j++)
                     if (connectPiecesUs & (s - j * d))
                         c++;
-                const int remaining = pos.connect_n() - c;
-                assert(remaining > 0);
-                if (remaining <= 0)
+
+                if (c == 0 || c == pos.connect_n())
                     continue;
+
+                const int remaining = pos.connect_n() - c;
                 score += (pos.connect_value() == VALUE_MATE ? 1 : -1) * // At least change the sign for misere variants.
                          (make_score(200, 200) * c / remaining / remaining);
             }
@@ -1871,6 +1870,21 @@ namespace {
 
     if (pos.topology_wraps())
     {
+        pe = Pawns::probe(pos);
+
+        std::memset(attackedBy, 0, sizeof(attackedBy));
+        initialize<WHITE>();
+        initialize<BLACK>();
+
+        for (PieceSet ps = pos.piece_types(); ps;)
+        {
+            PieceType pt = pop_lsb(ps);
+            if (pt > PAWN)
+                score += pieces<WHITE>(pt) - pieces<BLACK>(pt);
+        }
+
+        score += variant<WHITE>() - variant<BLACK>();
+
         Value mg = mg_value(score);
         Value eg = eg_value(score);
         Value v =  mg * int(me->game_phase())

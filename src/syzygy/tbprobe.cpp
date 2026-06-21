@@ -1554,7 +1554,6 @@ int Tablebases::probe_dtz(Position& pos, ProbeState* result) {
 // A return value false indicates that not all probes were successful.
 bool Tablebases::root_probe(Position& pos, Search::RootMoves& rootMoves) {
 
-    ProbeState result;
     StateInfo st;
 
     // Obtain 50-move counter for the root position
@@ -1568,6 +1567,7 @@ bool Tablebases::root_probe(Position& pos, Search::RootMoves& rootMoves) {
     // Probe and rank each move
     for (auto& m : rootMoves)
     {
+        ProbeState result = OK;
         pos.do_move(m.pv[0], st);
 
         // Calculate dtz for the current move counting from the root position
@@ -1633,7 +1633,6 @@ bool Tablebases::root_probe_wdl(Position& pos, Search::RootMoves& rootMoves) {
 
     static const int WDL_to_rank[] = { -1000, -899, 0, 899, 1000 };
 
-    ProbeState result;
     StateInfo st;
     WDLScore wdl;
 
@@ -1642,6 +1641,7 @@ bool Tablebases::root_probe_wdl(Position& pos, Search::RootMoves& rootMoves) {
     // Probe and rank each move
     for (auto& m : rootMoves)
     {
+        ProbeState result = OK;
         pos.do_move(m.pv[0], st);
 
         if (pos.is_draw(1))

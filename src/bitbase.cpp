@@ -75,6 +75,8 @@ bool Bitbases::probe(Square wksq, Square wpsq, Square bksq, Color stm) {
   return false;
 #endif
 
+  assert(KPKBitbaseInitialized);
+
   if (!KPKBitbaseInitialized)
       return false;
 
