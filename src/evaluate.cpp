@@ -1616,8 +1616,10 @@ namespace {
                     if (connectPiecesUs & (s - j * d))
                         c++;
 
-                if (c == 0 || c == pos.connect_n())
+                if (c == 0)
                     continue;
+
+                assert(c < pos.connect_n());
 
                 const int remaining = pos.connect_n() - c;
                 score += (pos.connect_value() == VALUE_MATE ? 1 : -1) * // At least change the sign for misere variants.
