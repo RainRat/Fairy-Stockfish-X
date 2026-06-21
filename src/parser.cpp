@@ -1927,6 +1927,18 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
         valid = false;
     }
 
+    bool hasCustomDropPieceTypes = false;
+    for (int pt = 0; pt < PIECE_TYPE_NB; ++pt)
+        if (v->dropPieceTypes[pt] != NO_PIECE_SET)
+            hasCustomDropPieceTypes = true;
+
+    if (v->symmetricDropTypes && (v->dropPromoted || hasCustomDropPieceTypes))
+    {
+        if (DoCheck)
+            std::cerr << "symmetricDropTypes is incompatible with dropPromoted or custom dropPieceTypes." << std::endl;
+        valid = false;
+    }
+
     bool hasGatingPieceAfter = false;
     for (Color c : {WHITE, BLACK})
         for (int i = 0; i < PIECE_TYPE_NB; ++i)

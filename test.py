@@ -401,6 +401,13 @@ invalid_variant_positions = {
 
 class TestPyffish(unittest.TestCase):
     def test_run_cpp_tests(self):
+        sf.load_variant_config(
+            """[pairedpawns:chess]
+startFen = 8/8/8/8/8/8/8/8[PPpp] w - - 0 1
+pieceDrops = true
+symmetricDropTypes = p
+"""
+        )
         self.assertTrue(sf.run_cpp_tests())
 
     def test_version(self):
@@ -968,6 +975,26 @@ checking = false
         white_king_moves = sf.legal_moves("droplast", after_black, [])
         self.assertTrue(white_king_moves)
         self.assertTrue(all(m.startswith("K@") for m in white_king_moves))
+
+    def test_paired_drop_points(self):
+        sf.load_variant_config(
+            """[pairedpoints:chess]
+startFen = 8/8/8/8/8/8/8/8[NNnn] w - - 0 1
+pieceDrops = true
+symmetricDropTypes = n
+payPointsToDrop = true
+piecePoints = n:5
+"""
+        )
+
+        fen_10 = sf.start_fen("pairedpoints") + " {10 10}"
+        moves_10 = sf.legal_moves("pairedpoints", fen_10, [])
+        self.assertTrue(any("," in m for m in moves_10))
+
+        fen_9 = sf.start_fen("pairedpoints") + " {9 10}"
+        moves_9 = sf.legal_moves("pairedpoints", fen_9, [])
+        paired_moves_9 = [m for m in moves_9 if "," in m]
+        self.assertEqual(len(paired_moves_9), 0)
 
     def test_ichess_setup_basics(self):
         load_repo_variants_or_skip()

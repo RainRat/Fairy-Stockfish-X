@@ -5219,7 +5219,10 @@ inline Square Position::mirrored_pair_drop_square(Square s) const {
 
 inline bool Position::virtual_drop(Move m) const {
   assert(is_ok(m));
-  return type_of(m) == DROP && !can_drop(side_to_move(), in_hand_piece_type(m)) && exchange_piece(m) == NO_PIECE_TYPE;
+  return is_drop_move(m)
+      && type_of(m) != DROP2
+      && exchange_piece(m) == NO_PIECE_TYPE
+      && !can_drop(side_to_move(), in_hand_piece_type(m));
 }
 
 inline Piece Position::captured_piece() const {

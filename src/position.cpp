@@ -3462,7 +3462,12 @@ bool Position::legal(Move m) const {
 
   // Illegal non-drop moves
   PieceType requiredDropType = must_drop_type();
-  if (must_drop() && count_in_hand(us, requiredDropType) > 0)
+  bool requiredDropAvailable =
+      requiredDropType == ALL_PIECES
+          ? can_drop(us, ALL_PIECES)
+          : can_drop(us, requiredDropType);
+
+  if (must_drop() && requiredDropAvailable)
   {
       if (dropMove)
       {
@@ -3520,15 +3525,23 @@ bool Position::legal(Move m) const {
       if (type_of(moved_piece(m)) != BISHOP)
       {
           Bitboard remaining = drop_region(us, BISHOP) & ~pieces() & ~square_bb(to);
+          if (paired_drop(m))
+              remaining &= ~square_bb(secondary_drop_square(m));
           // Are enough squares available to drop bishops on opposite colors?
           if (   popcount( DarkSquares & (pieces(us, BISHOP) | remaining)) < count_with_hand(us, BISHOP) / 2
               || popcount(~DarkSquares & (pieces(us, BISHOP) | remaining)) < count_with_hand(us, BISHOP) / 2)
               return false;
       }
       else
+      {
           // Drop resulting in same-colored bishops
-          if (popcount((DarkSquares & to ? DarkSquares : ~DarkSquares) & pieces(us, BISHOP)) + 1 > (count_with_hand(us, BISHOP) + 1) / 2)
+          Bitboard bishopsAfter = pieces(us, BISHOP) | square_bb(to);
+          if (paired_drop(m))
+              bishopsAfter |= square_bb(secondary_drop_square(m));
+          if (   popcount( DarkSquares & bishopsAfter) > (count_with_hand(us, BISHOP) + 1) / 2
+              || popcount(~DarkSquares & bishopsAfter) > (count_with_hand(us, BISHOP) + 1) / 2)
               return false;
+      }
   }
   if (dropMove && (!(var->isPriorityDrop & piece_set(type_of(moved_piece(m))))) && priorityDropCountInHand[us] > 0)
       return false;
@@ -3770,9 +3783,12 @@ bool Position::legal(Move m) const {
       }
   }
 
-  if (dropMove && pay_points_to_drop()
-      && st->pointsCount[us] < var->piecePoints[type_of(moved_piece(m))])
-      return false;
+  if (dropMove && pay_points_to_drop())
+  {
+      int count = paired_drop(m) ? 2 : 1;
+      if (st->pointsCount[us] < count * var->piecePoints[type_of(moved_piece(m))])
+          return false;
+  }
 
   // No legal moves from target square
   if (immobility_illegal() && (dropMove || type_of(m) == NORMAL))
@@ -6018,6 +6034,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
 
       // Update pawn hash key
       st->pawnKey ^= (!dropMove ? Zobrist::psq[pc][from] : 0) ^ Zobrist::psq[pc][to];
+      if (dropMove && paired_drop(m))
+          st->pawnKey ^= Zobrist::psq[pc][secondary_drop_square(m)];
   }
   else if (is_promotion_move(m) || type_of(m) == PIECE_PROMOTION)
   {

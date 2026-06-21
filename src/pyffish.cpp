@@ -635,6 +635,13 @@ extern "C" PyObject* pyffish_getFogFEN(PyObject* self, PyObject *args) {
     return Py_BuildValue("s", pos.fen(sfen, showPromoted, countStarted, "-", pos.fog_area()).c_str());
 }
 
+namespace Stockfish {
+namespace Zobrist {
+  extern Key psq[PIECE_NB][SQUARE_NB];
+  extern Key noPawns;
+}
+}
+
 static PyObject* pyffish_runCppTests(PyObject* self, PyObject* args) {
     (void)self;
     (void)args;
@@ -737,6 +744,60 @@ static PyObject* pyffish_runCppTests(PyObject* self, PyObject* args) {
         if (pos.piece_at(SQ_C4, occupied) != NO_PIECE) {
             PyErr_SetString(PyFFishError, "piece_at(c4) on empty square under synthetic occupied bit did not return NO_PIECE");
             return nullptr;
+        }
+    }
+
+    // Test 5: Invariant test comparing incremental pawnKey against a recomputed pawn key after a paired pawn drop.
+    {
+        Position pos;
+        StateListPtr states;
+        const Variant* v = require_variant("pairedpawns");
+        if (v)
+        {
+            buildPosition(pos, states, v, "8/8/8/8/8/8/8/8[PPpp] w - - 0 1", nullptr, false);
+            std::string moveStr = "P@a2,h2";
+            Move m = UCI::to_move(pos, moveStr);
+            if (m == MOVE_NONE)
+            {
+                PyErr_SetString(PyFFishError, "Failed to parse paired drop move P@a2,h2");
+                return nullptr;
+            }
+
+            states->emplace_back();
+            pos.do_move(m, states->back());
+
+            uint64_t expectedPawnKey = Stockfish::Zobrist::noPawns;
+            for (Bitboard b = pos.pieces(); b; )
+            {
+                Square s = pop_lsb(b);
+                Piece pc = pos.piece_on(s);
+                if (type_of(pc) == PAWN)
+                    expectedPawnKey ^= Stockfish::Zobrist::psq[pc][s];
+            }
+
+            if (expectedPawnKey != pos.state()->pawnKey)
+            {
+                PyErr_Format(PyFFishError, "Pawn key mismatch after paired pawn drop: expected %llu, got %llu", expectedPawnKey, pos.state()->pawnKey);
+                return nullptr;
+            }
+
+            pos.undo_move(m);
+            states->pop_back();
+
+            expectedPawnKey = Stockfish::Zobrist::noPawns;
+            for (Bitboard b = pos.pieces(); b; )
+            {
+                Square s = pop_lsb(b);
+                Piece pc = pos.piece_on(s);
+                if (type_of(pc) == PAWN)
+                    expectedPawnKey ^= Stockfish::Zobrist::psq[pc][s];
+            }
+
+            if (expectedPawnKey != pos.state()->pawnKey)
+            {
+                PyErr_Format(PyFFishError, "Pawn key mismatch after undoing paired pawn drop: expected %llu, got %llu", expectedPawnKey, pos.state()->pawnKey);
+                return nullptr;
+            }
         }
     }
 

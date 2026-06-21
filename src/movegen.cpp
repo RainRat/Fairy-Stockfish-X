@@ -141,7 +141,7 @@ namespace {
                         if (gate2 != gateSq
                             && (pos.drop_region(us, pt_gating) & gate2)
                             && !(occupancyAfter & gate2)
-                            && pos.count_in_hand(us, pt_gating) >= 2)
+                            && pos.count_in_hand(pos.drop_hand_color(us, pt_gating), pt_gating) >= 2)
                             *moveList++ = make_gating<T>(from, to, pt_gating, gateSq);
                     }
                     else
@@ -202,12 +202,12 @@ namespace {
   }
 
   template<Color Us, GenType Type>
-  ExtMove* emit_drop_forms(const Position& pos, ExtMove* moveList, PieceType pt, Bitboard b, bool restrictToCheckSquares) {
+  ExtMove* emit_drop_forms(const Position& pos, ExtMove* moveList, PieceType pt, Bitboard baseTargets, bool restrictToCheckSquares) {
       PieceSet dropForms = pos.drop_piece_types(pt);
       while (dropForms)
       {
           PieceType dropped = pop_lsb(dropForms);
-          Bitboard b2 = b;
+          Bitboard b2 = baseTargets & pos.drop_region(Us, dropped);
           if (restrictToCheckSquares)
               b2 &= pos.check_squares(dropped);
           while (b2)
@@ -215,7 +215,6 @@ namespace {
       }
       return moveList;
   }
-
 
 
 
@@ -233,10 +232,11 @@ namespace {
     if (can_generate_drop<Us, Type>(pos, pt))
     {
         // Restrict to valid target
-        b &= pos.drop_region(Us, pt) & (~pos.pieces() | pos.opening_swap_drop_targets(Us, pt));
+        b &= ~pos.pieces() | pos.opening_swap_drop_targets(Us, pt);
 
         if ((pos.symmetric_drop_types() & piece_set(pt)) && pos.count_in_hand(pos.drop_hand_color(Us, pt), pt) >= 2)
         {
+            b &= pos.drop_region(Us, pt);
             while (b)
             {
                 Square to = pop_lsb(b);
@@ -283,7 +283,7 @@ namespace {
         capturable |= friendlyCapturable;
         dropTargets |= friendlyCapturable;
     }
-    b = dropTargets & pos.drop_region(Us, pt) & capturable;
+    b = dropTargets & capturable;
 
     moveList = emit_drop_forms<Us, Type>(pos, moveList, pt, b, false);
 
@@ -358,9 +358,8 @@ namespace {
           if (rescue == NO_PIECE_SET) {
               return moveList;
           }
-          // Restrict to valid target
-          b &= pos.drop_region(Us, pt);
           auto emit_exchanges = [&](Bitboard targets, PieceType finalPt) {
+              targets &= pos.drop_region(Us, finalPt);
               while (targets) {
                   auto to = pop_lsb(targets);
                   for (PieceSet r = rescue; r; ) {
