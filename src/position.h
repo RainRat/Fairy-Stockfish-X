@@ -5441,7 +5441,7 @@ inline Value Position::material_counting_result() const {
 }
 
 inline int Position::connect_line_count(Color c) const {
-  if (connect_n() <= 0)
+  if (connect_n() == 0)
       return 0;
 
   Bitboard connectPieces = 0;
@@ -5450,7 +5450,11 @@ inline int Position::connect_line_count(Color c) const {
       connectPieces |= pieces(c, pt);
   }
 
-  if (popcount(connectPieces) < connect_n())
+  int targetN = connect_n() == -1 ? popcount(connectPieces) : connect_n();
+  if (targetN < 2)
+      return 0;
+
+  if (popcount(connectPieces) < targetN)
       return 0;
 
   int countLines = 0;
@@ -5458,7 +5462,7 @@ inline int Position::connect_line_count(Color c) const {
   {
       for (const auto& line : var->connectLines)
       {
-          if (line.size() != size_t(connect_n()))
+          if (line.size() != size_t(targetN))
               continue;
           bool complete = true;
           for (Square s : line)
@@ -5490,7 +5494,7 @@ inline int Position::connect_line_count(Color c) const {
               Square s = pop_lsb(starts);
               Square cur = s;
               int steps = 1;
-              while (steps < connect_n() && steps < maxSteps)
+              while (steps < targetN && steps < maxSteps)
               {
                   Square next = SQ_NONE;
                   if (!wrapped_step(cur, d, next) || next == s)
@@ -5500,7 +5504,7 @@ inline int Position::connect_line_count(Color c) const {
                   cur = next;
                   ++steps;
               }
-              if (steps >= connect_n())
+              if (steps >= targetN)
                   countLines++;
           }
       }
@@ -5510,7 +5514,7 @@ inline int Position::connect_line_count(Color c) const {
       for (Direction d : var->connectDirections)
       {
           Bitboard b = connectPieces;
-          for (int i = 1; i < connect_n() && b; i++)
+          for (int i = 1; i < targetN && b; i++)
               b &= shift(d, b);
           countLines += popcount(b);
       }

@@ -8074,13 +8074,14 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
           eligible |= pieces(c, pop_lsb(ps));
 
       // Connect-n
-      if (var->materialCounting != CONNECT_N_COUNT && (connect_n() > 0) && (popcount(eligible) >= connect_n()))
+      int targetN = connect_n() == -1 ? popcount(eligible) : connect_n();
+      if (var->materialCounting != CONNECT_N_COUNT && (connect_n() != 0) && (targetN >= 2) && (popcount(eligible) >= targetN))
       {
           if (!var->connectLineMasks.empty())
           {
               for (size_t i = 0; i < var->connectLineMasks.size(); ++i)
               {
-                  if (var->connectLines[i].size() != size_t(connect_n()))
+                  if (var->connectLines[i].size() != size_t(targetN))
                       continue;
                   Bitboard mask = var->connectLineMasks[i];
                   if ((eligible & mask) == mask)
@@ -8101,7 +8102,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
                           Square s = pop_lsb(starts);
                           Square cur = s;
                           int steps = 1;
-                          while (steps < connect_n() && steps < maxSteps)
+                          while (steps < targetN && steps < maxSteps)
                           {
                               Square next = SQ_NONE;
                               if (!wrapped_step(cur, d, next) || next == s)
@@ -8111,7 +8112,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
                               cur = next;
                               ++steps;
                           }
-                          if (steps >= connect_n())
+                          if (steps >= targetN)
                               return true;
                       }
                   }
@@ -8123,7 +8124,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
                   for (Direction d : var->connectDirections)
                   {
                       b = eligible;
-                      for (int i = 1; i < connect_n() && b; i++)
+                      for (int i = 1; i < targetN && b; i++)
                           b &= shift(d, b);
                       if (b)
                           return true;
@@ -8175,11 +8176,21 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
       if (connected_regions(var->connectRegion1[c], var->connectRegion2[c], var->connectRegion3[c]))
           return true;
 
-      if (connect_nxn() && popcount(eligible) >= connect_nxn() * connect_nxn())
+      int targetNxN = connect_nxn();
+      if (targetNxN == -1)
+      {
+          int count = popcount(eligible);
+          int s = int(std::sqrt(count));
+          if (s >= 2 && s * s == count)
+              targetNxN = s;
+          else
+              targetNxN = 0;
+      }
+      if (targetNxN > 0 && popcount(eligible) >= targetNxN * targetNxN)
       {
           if (topology_wraps())
           {
-              const int n = connect_nxn();
+              const int n = targetNxN;
               const int files = int(max_file()) + 1;
               const int ranks = int(max_rank()) + 1;
 
@@ -8211,7 +8222,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
           else
           {
               Bitboard connectors = eligible;
-              for (int i = 1; i < connect_nxn() && connectors; i++)
+              for (int i = 1; i < targetNxN && connectors; i++)
                   connectors &= shift<SOUTH>(connectors) & shift<EAST>(connectors) & shift<SOUTH_EAST>(connectors);
               if (connectors)
                   return true;
@@ -8219,7 +8230,8 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
       }
 
       // Collinear-n
-      if ((collinear_n() > 0) && (popcount(eligible) >= collinear_n())) {
+      int targetCollinear = collinear_n() == -1 ? popcount(eligible) : collinear_n();
+      if ((collinear_n() != 0) && (targetCollinear >= 2) && (popcount(eligible) >= targetCollinear)) {
           if (topology_wraps()) {
               const int maxSteps = popcount(board_bb());
 
@@ -8242,7 +8254,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
                               break;
                           cur = next;
                       }
-                      if (cnt >= collinear_n())
+                      if (cnt >= targetCollinear)
                           return true;
                   }
               }
@@ -8258,7 +8270,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
                               ++cnt;
                           }
                       }
-                      if (cnt >= collinear_n())
+                      if (cnt >= targetCollinear)
                           return true;
                   }
               }
@@ -8704,9 +8716,9 @@ bool Position::see_pruning_unreliable() const {
       || extinction_value() != VALUE_NONE
       || flag_region(WHITE) || flag_region(BLACK)
       || var->castlingWins
-      || connect_n() > 0
-      || connect_nxn() > 0
-      || collinear_n() > 0
+      || connect_n() != 0
+      || connect_nxn() != 0
+      || collinear_n() != 0
       || var->connectRegion1[WHITE] || var->connectRegion2[WHITE] || var->connectRegion3[WHITE]
       || var->connectRegion1[BLACK] || var->connectRegion2[BLACK] || var->connectRegion3[BLACK]
       || !connect_piece_goal_types(WHITE).empty()

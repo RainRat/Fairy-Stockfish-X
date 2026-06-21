@@ -2066,6 +2066,40 @@ startFen = 8/8/8/8/8/8/8/8 w - - 0 1
         # However, to avoid mock lines complexity, checking the parser loads it cleanly is a great start.
         pass
 
+    def test_connection_all_remaining_pieces(self):
+        sf.load_variant_config(
+            """[connect-all:chess]
+connectN = -1
+startFen = 8/8/8/8/8/8/8/8 w - - 0 1
+
+[collinear-all:chess]
+collinearN = -1
+startFen = 8/8/8/8/8/8/8/8 w - - 0 1
+
+[connectnxn-all:chess]
+connectNxN = -1
+startFen = 8/8/8/8/8/8/8/8 w - - 0 1
+"""
+        )
+
+        # connectN = -1
+        # White has 3 pieces at a1, b1, c1 (aligned) -> White wins
+        self._check_immediate_game_end("connect-all", "8/8/8/8/8/8/8/PPP5 w - - 0 1", [], True, sf.VALUE_MATE)
+        # White has 3 pieces at a1, b1, d1 (not contiguous line of 3) -> ongoing
+        self._check_immediate_game_end("connect-all", "8/8/8/8/8/8/8/PP1P4 w - - 0 1", [], False)
+
+        # collinearN = -1
+        # White has 3 pieces at a1, c1, e1 (collinear) -> White wins
+        self._check_immediate_game_end("collinear-all", "8/8/8/8/8/8/8/P1P1P3 w - - 0 1", [], True, sf.VALUE_MATE)
+        # White has 3 pieces at a1, b2, d3 (not collinear) -> ongoing
+        self._check_immediate_game_end("collinear-all", "8/8/8/8/8/1P6/1P6/P7 w - - 0 1", [], False)
+
+        # connectNxN = -1
+        # White has 4 pieces forming a 2x2 square -> White wins
+        self._check_immediate_game_end("connectnxn-all", "8/8/8/8/8/8/PP6/PP6 w - - 0 1", [], True, sf.VALUE_MATE)
+        # White has 5 pieces -> no perfect square can be formed using all remaining pieces -> ongoing
+        self._check_immediate_game_end("connectnxn-all", "8/8/8/8/8/8/PP1P4/PP6 w - - 0 1", [], False)
+
     def _check_optional_game_end(self, variant, fen, moves, game_end, game_result=None):
         with self.subTest(variant=variant, fen=fen, game_end=game_end, game_result=game_result):
             result = sf.is_optional_game_end(variant, fen, moves)

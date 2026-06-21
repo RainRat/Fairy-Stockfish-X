@@ -420,10 +420,10 @@ inline bool has_insufficient_material(Color c, const Position& pos) {
         || pos.check_counting()
         || pos.material_counting() != NO_MATERIAL_COUNTING
         || pos.variant()->extinctionPseudoRoyal
-        || pos.connect_n() > 0
-        || pos.connect_nxn() > 0
-        || pos.collinear_n() > 0
-        || pos.connect_group() > 0
+        || pos.connect_n() != 0
+        || pos.connect_nxn() != 0
+        || pos.collinear_n() != 0
+        || pos.connect_group() != 0
         || !pos.connect_piece_goal_types(c).empty()
         || pos.variant()->castlingWins
         || pos.variant()->connectRegion1[c]
