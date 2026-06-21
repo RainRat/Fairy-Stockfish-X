@@ -1174,7 +1174,8 @@ constexpr Square to_sq(Move m) {
 }
 
 constexpr Square from_sq(Move m) {
-  return type_of(m) == DROP ? SQ_NONE : Square((m >> SQUARE_BITS) & SQUARE_BIT_MASK);
+  Square raw_from = Square((m >> SQUARE_BITS) & SQUARE_BIT_MASK);
+  return type_of(m) == DROP ? SQ_NONE : raw_from;
 }
 
 inline int from_to(Move m) {
@@ -1235,6 +1236,9 @@ inline Square swap_square(Move m) {
 }
 
 inline bool is_gating(Move m) {
+  if ((static_cast<uint64_t>(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS)) == 0)
+      return false;
+
   const MoveType mt = type_of(m);
   constexpr uint64_t SquareFieldMask = (uint64_t(SQUARE_BIT_MASK) << 1) | 1;
   if (mt == SPECIAL)
@@ -1247,7 +1251,7 @@ inline bool is_gating(Move m) {
 }
 
 inline bool is_drop_move(Move m) {
-  return type_of(m) == DROP || type_of(m) == DROP2 || type_of(m) == INSERT;
+  return (784 >> ((static_cast<uint64_t>(m) >> (2 * SQUARE_BITS)) & 15)) & 1;
 }
 
 inline bool is_insert_move(Move m) {
