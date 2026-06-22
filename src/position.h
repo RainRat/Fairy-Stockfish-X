@@ -1923,7 +1923,6 @@ inline Bitboard Position::opening_swap_drop_targets(Color c, PieceType pt) const
       || self_capture()
       || capture_drop_types()
       || symmetric_drop_types()
-      || free_drops()
       || two_boards()
       || edge_insert_types())
       return Bitboard(0);

@@ -1911,11 +1911,10 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
             || v->captureDrops
             || v->symmetricDropTypes
             || v->twoBoards
-            || v->freeDrops
             || v->edgeInsertTypes))
     {
         if (DoCheck)
-            std::cerr << "openingSwapDrop is only supported for simple move-out mandatory drop variants without capture drops, paired drops, self capture, free drops, edge inserts, or two-board reserves." << std::endl;
+            std::cerr << "openingSwapDrop is only supported for simple move-out mandatory drop variants without capture drops, paired drops, self capture, edge inserts, or two-board reserves." << std::endl;
         valid = false;
     }
     if (v->openingSwapMirrorMainDiagonal
