@@ -2193,6 +2193,39 @@ Bitboard Position::compute_evasion_checkers_bb(Color side) const {
   return checkers;
 }
 
+std::array<Bitboard, COLOR_NB> Position::passive_blast_burners(Bitboard occupied) const {
+
+  std::array<Bitboard, COLOR_NB> burners = { Bitboard(0), Bitboard(0) };
+  PieceSet passiveTypes = var->blastPassiveTypes;
+
+  while (passiveTypes)
+  {
+      PieceType pt = pop_lsb(passiveTypes);
+      burners[WHITE] |= pieces(WHITE, pt) & occupied;
+      burners[BLACK] |= pieces(BLACK, pt) & occupied;
+  }
+
+  return burners;
+}
+
+Bitboard Position::passive_blast_removal_mask(const std::array<Bitboard, COLOR_NB>& passiveBurners, Bitboard occupied) const {
+
+  Bitboard removal = Bitboard(0);
+  Bitboard burnImmune = blast_immune_bb();
+
+  for (Color c : {WHITE, BLACK})
+  {
+      Bitboard burners = passiveBurners[c];
+      while (burners)
+      {
+          Square sq = pop_lsb(burners);
+          removal |= blast_pattern(sq) & occupied & pieces(~c) & ~burnImmune;
+      }
+  }
+
+  return removal;
+}
+
 
 /// Position::set() is an overload to initialize the position object with
 /// the given endgame code string like "KBPKN". It is mainly a helper to
@@ -4219,16 +4252,7 @@ bool Position::legal(Move m) const {
   if (var->blastPassiveTypes && !is_pass(m))
   {
       Bitboard occupiedAfterEffects = postMoveOccupied & ~removedByEffects;
-      Bitboard burnImmune = blast_immune_bb();
-      Bitboard passiveBurners[COLOR_NB] = { Bitboard(0), Bitboard(0) };
-      PieceSet passiveTypes = var->blastPassiveTypes;
-
-      while (passiveTypes)
-      {
-          PieceType pt = pop_lsb(passiveTypes);
-          passiveBurners[WHITE] |= pieces(WHITE, pt) & occupiedAfterEffects;
-          passiveBurners[BLACK] |= pieces(BLACK, pt) & occupiedAfterEffects;
-      }
+      std::array<Bitboard, COLOR_NB> passiveBurners = passive_blast_burners(occupiedAfterEffects);
 
       if (!dropMove)
           passiveBurners[us] &= ~square_bb(from);
@@ -4272,15 +4296,7 @@ bool Position::legal(Move m) const {
       if (is_gating(m) && gating_type(m) != NO_PIECE_TYPE && (var->blastPassiveTypes & piece_set(gating_type(m))))
           passiveBurners[us] |= gating_square(m);
 
-      for (Color c : {WHITE, BLACK})
-      {
-          Bitboard burners = passiveBurners[c];
-          while (burners)
-          {
-              Square sq = pop_lsb(burners);
-              removedByEffects |= blast_pattern(sq) & occupiedAfterEffects & pieces(~c) & ~burnImmune;
-          }
-      }
+      removedByEffects |= passive_blast_removal_mask(passiveBurners, occupiedAfterEffects);
   }
 
   if (var->pseudoRoyalCaptureIllegal && pseudo_royal_types())
@@ -6354,19 +6370,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
 
       if (var->blastPassiveTypes) {
           Bitboard activeOccupied = pieces() & ~removal_mask;
-          Bitboard burnImmune = blast_immune_bb();
-          PieceSet passiveTypes = var->blastPassiveTypes;
-
-          while (passiveTypes) {
-              PieceType pt = pop_lsb(passiveTypes);
-              for (Color c : {WHITE, BLACK}) {
-                  Bitboard burners = pieces(c, pt) & activeOccupied;
-                  while (burners) {
-                      Square sq = pop_lsb(burners);
-                      removal_mask |= blast_pattern(sq) & activeOccupied & pieces(~c) & ~burnImmune;
-                  }
-              }
-          }
+          removal_mask |= passive_blast_removal_mask(passive_blast_burners(activeOccupied), activeOccupied);
       }
 
       //Use the same removal_mask variable; surround_capture only ORs.

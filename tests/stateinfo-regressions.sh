@@ -70,6 +70,10 @@ static void load_variants() {
 promotedPieceType = p:q
 blastOnMove = true
 blastPromotion = true
+
+[royal-blast-see:chess]
+blastOnCapture = true
+castling = false
 )ini");
     variants.parse_istream<false>(ss);
 }
@@ -88,6 +92,17 @@ static void test_blast_center_pawn_promotion_updates_pawn_key() {
     pos.do_move(m, next);
     assert(pos.piece_on(SQ_E3) == W_QUEEN);
     assert(pos.pawn_key() != beforePawnKey);
+}
+
+static void test_blast_see_values_enemy_royal_removal_as_win() {
+    StateInfo st{};
+    Position pos;
+    pos.set(variants.get("royal-blast-see"),
+            "8/8/8/8/4k3/4p3/3Q4/K7 w - - 0 1", false, &st, nullptr);
+
+    const Move m = make<NORMAL>(SQ_D2, SQ_E3);
+    assert(pos.legal(m));
+    assert(pos.see_ge(m, VALUE_ZERO + 1));
 }
 
 static void test_null_move_clears_undo_payload() {
@@ -152,6 +167,7 @@ int main() {
     init_test_engine();
     load_variants();
     test_blast_center_pawn_promotion_updates_pawn_key();
+    test_blast_see_values_enemy_royal_removal_as_win();
     test_null_move_clears_undo_payload();
     test_spell_chess_null_move_decays();
     return 0;

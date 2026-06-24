@@ -900,6 +900,8 @@ private:
   Key layout_key() const;
   bool violates_same_player_board_repetition(Move m) const;
   Key reserve_key() const;
+  std::array<Bitboard, COLOR_NB> passive_blast_burners(Bitboard occupied) const;
+  Bitboard passive_blast_removal_mask(const std::array<Bitboard, COLOR_NB>& burners, Bitboard occupied) const;
   Bitboard passive_blast_checkers(Color victim, Bitboard occupied) const;
   const Variant& var_ref() const;
 
