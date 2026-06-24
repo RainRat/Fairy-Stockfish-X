@@ -32,6 +32,14 @@ make -j build COMP=mingw
 
 Use `largeboards=yes` for normal large-board variants. Use `verylargeboards=yes` only beyond that matrix. When switching board macro families, run `make clean`.
 
+For named binaries used by regression scripts:
+
+```sh
+make -j build ARCH=x86-64-modern largeboards=yes EXE=stockfish-large
+make -j build ARCH=x86-64-modern verylargeboards=yes EXE=stockfish-vlb
+make -j build ARCH=x86-64-modern all=yes EXE=stockfish-allvars
+```
+
 ## Running the engine
 Use `src/stockfish`; do not rely on a stale repo-root `./stockfish`.
 
@@ -54,10 +62,19 @@ From the repository root:
 src/stockfish check src/variants.ini
 bash tests/fast-regression.sh src/stockfish
 tests/protocol.sh
-tests/perft.sh all
+tests/perft.sh all src/stockfish-large
 ```
 
 Run large-board tests against a `largeboards=yes` binary. For Python-facing changes, run `python3 setup.py build_ext --inplace` and `python3 test.py`.
+
+For JavaScript/wasm-facing changes, including `src/variants.ini` changes that affect `startFen`, pockets, `freeDrops`, or serialized FENs:
+
+```sh
+cd src
+make -f Makefile_js build
+cd ../tests/js
+npm test
+```
 
 For parser, movegen, legality, promotion, topology, variant-switching, or shared-state changes, run upstream checks when available:
 
@@ -69,7 +86,7 @@ python3 tests/upstream_movecount_baseline.py src/stockfish "$UPSTREAM_ENGINE"
 Only regenerate upstream baselines intentionally. Do not refresh fixtures to hide regressions.
 
 ## Full local regression
-Prefer a detached logged run for long checks:
+Build the named binaries first, then prefer a detached logged run for long checks:
 
 ```sh
 mkdir -p .local/logs
@@ -77,6 +94,13 @@ setsid bash -lc '/usr/bin/time -f "total elapsed %es" bash tests/local-regressio
 ```
 
 Success marker: `local regression suite passed`. If missing, inspect the last `== ... ==` section and the failure above it.
+
+## CI Mapping
+* `Stockfish`: native engine build, perft, search, and sanitizer-style checks.
+* `fairy`: variant configuration, focused regression, protocol, and variant perft checks.
+* `ffishjs`: wasm build from `src/Makefile_js` plus `tests/js` `npm test`.
+* `Wheels`: Python package/wheel builds; run Python binding checks for Python-facing changes.
+* `Release`: packaging/release build smoke checks.
 
 ## Coding style
 * C++17; follow surrounding style.
