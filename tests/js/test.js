@@ -45,7 +45,7 @@ describe('ffish.loadVariantConfig(config)', function () {
     const data = fs.readFileSync(configFilePath, 'utf8');
     ffish.loadVariantConfig(data)
     const board = new ffish.Board("tictactoe");
-    chai.expect(board.fen()).to.equal("3/3/3[PPPPPpppp] w - - 0 1");
+    chai.expect(board.fen()).to.equal("3/3/3 w - - 0 1");
     board.delete();
   });
 });
