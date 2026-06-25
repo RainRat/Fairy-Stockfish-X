@@ -2681,8 +2681,18 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
           hasRuntimeSpecialAttackers = bool(pieces(c, move_pt));
   }
 
+  bool hasSimpleHopperAttackers = false;
+  for (PieceSet ps = piece_types(); ps && !hasSimpleHopperAttackers;)
+  {
+      PieceType pt = pop_lsb(ps);
+      PieceType move_pt = effective_piece_type(pt);
+      const PieceInfo* pi = pieceMap.get(move_pt);
+      if (pi->has_simple_hopper_capture() && !(AttackRiderTypes[move_pt] & HOPPING_RIDERS))
+          hasSimpleHopperAttackers = true;
+  }
+
   // Use a faster version for variants with moderate rule variations
-  if (!hasRuntimeSpecialAttackers && fast_attacks())
+  if (!hasRuntimeSpecialAttackers && !hasSimpleHopperAttackers && fast_attacks())
   {
       return  (pawn_attacks_bb(~c, s)          & pieces(c, PAWN))
             | (attacks_bb<KNIGHT>(s)           & pieces(c, KNIGHT, ARCHBISHOP, CHANCELLOR))
@@ -2692,7 +2702,7 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
   }
 
   // Use a faster version for selected fairy pieces
-  if (!hasRuntimeSpecialAttackers && fast_attacks2())
+  if (!hasRuntimeSpecialAttackers && !hasSimpleHopperAttackers && fast_attacks2())
   {
       return  (pawn_attacks_bb(~c, s)             & pieces(c, PAWN, BREAKTHROUGH_PIECE, GOLD))
             | (attacks_bb<KNIGHT>(s)              & pieces(c, KNIGHT))

@@ -4333,16 +4333,13 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
       return b & (FilterMobility ? board_bb(c, pt) : board_bb());
   }
 
-  const bool hasSimpleHopper = !pi->hopper[0][MODALITY_QUIET].empty()
-                            || !pi->hopper[0][MODALITY_CAPTURE].empty()
-                            || !pi->hopper[1][MODALITY_QUIET].empty()
-                            || !pi->hopper[1][MODALITY_CAPTURE].empty();
-  const bool hasRuntimeSpecialMoves = pi->has_runtime_rider_augment()
-                                   || pi->has_universal_hopper()
-                                   || pi->has_explicit_initial_moves()
-                                   || hasSimpleHopper;
+  const bool needsGenericAttackAssembly = pi->has_runtime_rider_augment()
+                                       || pi->has_universal_hopper()
+                                       || pi->has_explicit_initial_moves()
+                                       || pi->has_simple_hopper_capture()
+                                       || pi->has_lame_capture();
 
-  if (!hasRuntimeSpecialMoves && fast_attacks() && (pt != KING || king_type() == KING))
+  if (!needsGenericAttackAssembly && fast_attacks() && (pt != KING || king_type() == KING))
   {
       Bitboard b = 0;
       switch (pt)
@@ -4382,10 +4379,10 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
       return b & (FilterMobility ? board_bb(c, pt) : board_bb());
   }
 
-  if (!hasRuntimeSpecialMoves && fast_attacks2() && (pt != KING || king_type() == KING))
+  if (!needsGenericAttackAssembly && fast_attacks2() && (pt != KING || king_type() == KING))
       return attacks_bb(c, pt, s, occ) & (FilterMobility ? board_bb(c, pt) : board_bb());
 
-  if ((fast_attacks() || fast_attacks2()) && !hasRuntimeSpecialMoves)
+  if ((fast_attacks() || fast_attacks2()) && !needsGenericAttackAssembly)
       return attacks_bb(c, movePt, s, occ) & (FilterMobility ? board_bb(c, pt) : board_bb());
 
   Bitboard b = attacks_bb(c, movePt, s, occ);
