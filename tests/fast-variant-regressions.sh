@@ -465,6 +465,10 @@ EOF
 
 test_hex_visual_connection_axes() {
   echo "== hex visual connection axes =="
+  if ! variant_available "$ENGINE" hex-7x7 "$VARIANTS"; then
+    echo "hex-7x7 not available. Skipping."
+    return
+  fi
   local out
 
   out=$(run_uci "$ENGINE" "$VARIANTS" hex-7x7 <<'EOF'
