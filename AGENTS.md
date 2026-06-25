@@ -76,6 +76,26 @@ cd ../tests/js
 npm test
 ```
 
+For very-large-board JavaScript/ffish work, build the ffish artifacts explicitly with very-large-board support:
+
+```sh
+cd src
+make -f Makefile_js clean
+make -f Makefile_js build verylargeboards=yes es6=yes
+```
+
+The generated files used by Fairyground are `tests/js/ffish.js` and `tests/js/ffish.wasm`. Fairyground can sync and wrap them without hardcoded paths:
+
+```sh
+cd /path/to/fairyground
+FAIRY_WASM_REPO=/path/to/fairy-stockfish.wasm \
+FAIRY_FSX_REPO=/path/to/Fairy-Stockfish-X \
+npm run sync-fsx-browser-stack
+npm run debug-build
+```
+
+When diagnosing browser adjudication or move-generation bugs, compare native FSX/pyffish behavior against browser ffish before changing Fairyground UI logic. If native FSX and FSX-built ffish return legal moves and `result="*"`, the bug is likely in artifact provenance or browser wiring, not adjudication policy.
+
 For parser, movegen, legality, promotion, topology, variant-switching, or shared-state changes, run upstream checks when available:
 
 ```sh

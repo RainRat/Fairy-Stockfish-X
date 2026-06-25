@@ -2065,6 +2065,7 @@ startFen = 4k3/8/8/8/8/8/4Q3/4K3 w - - 0 1
         self._check_immediate_game_end("racingkings", "k6K/8/8/8/8/8/8/8 w - - 0 1", [], True, sf.VALUE_DRAW)
 
     def test_loa_simultaneous_and_opponent_connection(self):
+        load_repo_variants_or_skip()
         # In Lines of Action (connectGroup = -1), a capture can connect the opponent's remaining pieces.
         # Check that opponent connection results in their win (mover loss).
         # We'll use start FEN: 1nnnnnn1/N6N/N6N/N6N/N6N/N6N/N6N/1nnnnnn1 b - - 0 1
@@ -2075,6 +2076,23 @@ startFen = 4k3/8/8/8/8/8/4Q3/4K3 w - - 0 1
         self._check_immediate_game_end("linesofaction", "8/8/8/8/8/8/3NN3/3nn3 b - - 0 1", [], True, -sf.VALUE_MATE)
         # In linesofaction-draw, simultaneous connection results in a draw.
         self._check_immediate_game_end("linesofaction-draw", "8/8/8/8/8/8/3NN3/3nn3 b - - 0 1", [], True, sf.VALUE_DRAW)
+        # Connected groups must be found symmetrically, not only by walking the
+        # canonical positive connection directions from the first discovered piece.
+        self._check_immediate_game_end("linesofaction", "8/5n2/5nn1/6n1/8/8/8/8 w - - 0 1", [], True, -sf.VALUE_MATE)
+        self._check_immediate_game_end(
+            "linesofaction",
+            "8/5n2/4Nn2/3N2nN/1NN2NnN/1N1N4/N7/8 b - - 12 18",
+            [],
+            True,
+            sf.VALUE_MATE,
+        )
+        self._check_immediate_game_end(
+            "linesofaction",
+            "8/5n2/4Nnn1/3N2nN/1NN2N1N/1N1N4/N7/8 w - - 13 19",
+            [],
+            True,
+            -sf.VALUE_MATE,
+        )
 
     def test_connect_goal_simul_value_by_mover(self):
         # Load a custom variant testing simultaneous connection goals with a mover policy

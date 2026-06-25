@@ -27,6 +27,7 @@ CXX=emcc
 CXXFLAGS += --bind -DNNUE_EMBEDDING_OFF -DNO_THREADS -std=c++17 -Wall
 
 largeboards = yes
+verylargeboards = no
 all = yes
 optimize = yes
 debug = no
@@ -45,6 +46,10 @@ endif
 
 # Compile version with support for large board variants
 # Use precomputed magics by default
+ifneq ($(verylargeboards),no)
+	largeboards = yes
+	CXXFLAGS += -DVERY_LARGE_BOARDS
+endif
 ifneq ($(largeboards),no)
 	CXXFLAGS += -DLARGEBOARDS -DPRECOMPUTED_MAGICS -s TOTAL_MEMORY=32MB -s ALLOW_MEMORY_GROWTH=1 -s WASM_MEM_MAX=1GB
 endif

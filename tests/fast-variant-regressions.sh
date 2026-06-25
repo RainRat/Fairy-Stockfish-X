@@ -424,8 +424,8 @@ connectPieceTypes = s
 connectHorizontal = true
 connectVertical = true
 connectDiagonal = true
-connectNorthEast = false
-connectSouthEast = true
+connectNorthEast = true
+connectSouthEast = false
 connectRegion1White = a1 b1 c1 d1 e1
 connectRegion2White = a1 b2 c3 d4 e5
 connectRegion3White = e1 e2 e3 e4 e5
@@ -461,6 +461,32 @@ go perft 1
 EOF
 )
   assert_contains "$out" "^S@b1: 1$"
+}
+
+test_hex_visual_connection_axes() {
+  echo "== hex visual connection axes =="
+  local out
+
+  out=$(run_uci "$ENGINE" "$VARIANTS" hex-7x7 <<'EOF'
+position fen 2Pp3/PPPP1p1/1pPpPp1/1pppPPP/1pPPpp1/p1PpP2/3p3 b - - 0 15
+go perft 1
+EOF
+)
+  assert_nodes "$out" 21
+
+  out=$(run_uci "$ENGINE" "$VARIANTS" hex-7x7 <<'EOF'
+position fen 6P/5P1/4P2/3P3/2P4/1P5/P6 b - - 0 1
+go perft 1
+EOF
+)
+  assert_nodes "$out" 0
+
+  out=$(run_uci "$ENGINE" "$VARIANTS" hex-7x7 <<'EOF'
+position fen P6/1P5/2P4/3P3/4P2/5P1/6P b - - 0 1
+go perft 1
+EOF
+)
+  assert_nodes "$out" 42
 }
 
 test_connect_adjudication_edges() {
@@ -909,6 +935,7 @@ test_haynie_leapers
 test_kopano
 test_konobi
 test_connect_region3
+test_hex_visual_connection_axes
 test_connect_adjudication_edges
 test_wrapped_connect_features
 test_flank_chess

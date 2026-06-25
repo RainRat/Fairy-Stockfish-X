@@ -194,10 +194,26 @@ VAR
   [[ "$out" != *"Invalid piece type"* ]]
 }
 
+test_vlb_toot_otto_drops() {
+  local output
+  output=$(run_uci "$ENGINE" "$VARIANTS" toot-otto <<'EOF' 2>&1
+position startpos
+go perft 1
+EOF
+)
+
+  assert_contains_literal "$output" "info string variant toot-otto "
+  assert_contains "$output" "^T@a1: 1$"
+  assert_contains "$output" "^O@a1: 1$"
+  assert_not_contains "$output" "^P@"
+  assert_nodes "$output" 12
+}
+
 test_vlb_gale_smoke
 test_vlb_lame_riders
 test_vlb_symbol_check
 test_vlb_symbol_fen
 test_vlb_symbol_options
+test_vlb_toot_otto_drops
 
 echo "VLB regressions passed"

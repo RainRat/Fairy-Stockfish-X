@@ -8318,7 +8318,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
                       while (frontier) {
                           Bitboard expanded = 0;
                           for (Direction d : connectDirs)
-                              expanded |= shift(d, frontier) & eligible;
+                              expanded |= (shift(d, frontier) | shift(-d, frontier)) & eligible;
                           expanded &= ~connected;
                           frontier = expanded;
                           connected |= expanded;
@@ -8335,13 +8335,15 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
                           for (Direction d : connectDirs) {
                               Square next_sq = SQ_NONE;
                               auto [dr, df] = decode_direction(d);
-                              if (!wrapped_destination_square(s, df, dr, max_file(), max_rank(), wraps_files(), wraps_ranks(), next_sq))
-                                  continue;
-                              if (!(square_bb(next_sq) & eligible) || (square_bb(next_sq) & visited))
-                                  continue;
-                              visited |= next_sq;
-                              connected |= next_sq;
-                              q.push_back(next_sq);
+                              for (int sign : {1, -1}) {
+                                  if (!wrapped_destination_square(s, sign * df, sign * dr, max_file(), max_rank(), wraps_files(), wraps_ranks(), next_sq))
+                                      continue;
+                                  if (!(square_bb(next_sq) & eligible) || (square_bb(next_sq) & visited))
+                                      continue;
+                                  visited |= next_sq;
+                                  connected |= next_sq;
+                                  q.push_back(next_sq);
+                              }
                           }
                       }
                   }
@@ -8363,7 +8365,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
                           while (frontier && popcount(group) < targetGroupSize) {
                               Bitboard expanded = 0;
                               for (Direction d : connectDirs)
-                                  expanded |= shift(d, frontier);
+                                  expanded |= shift(d, frontier) | shift(-d, frontier);
                               expanded &= eligible & ~group;
                               group |= expanded;
                               frontier = expanded;
@@ -8391,13 +8393,15 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
                               for (Direction d : connectDirs) {
                                   Square next_sq = SQ_NONE;
                                   auto [dr, df] = decode_direction(d);
-                                  if (!wrapped_destination_square(s, df, dr, max_file(), max_rank(), wraps_files(), wraps_ranks(), next_sq))
-                                      continue;
+                                  for (int sign : {1, -1}) {
+                                      if (!wrapped_destination_square(s, sign * df, sign * dr, max_file(), max_rank(), wraps_files(), wraps_ranks(), next_sq))
+                                          continue;
 
-                                  Bitboard next = square_bb(next_sq);
-                                  if ((next & eligible) && !(next & visited)) {
-                                      visited |= next;
-                                      q.push_back(next_sq);
+                                      Bitboard next = square_bb(next_sq);
+                                      if ((next & eligible) && !(next & visited)) {
+                                          visited |= next;
+                                          q.push_back(next_sq);
+                                      }
                                   }
                               }
                           }
