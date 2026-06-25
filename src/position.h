@@ -4337,7 +4337,15 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
                                        || pi->has_universal_hopper()
                                        || pi->has_explicit_initial_moves()
                                        || pi->has_simple_hopper_capture()
-                                       || pi->has_lame_capture();
+                                       || pi->has_lame_capture()
+                                       || pi->griffon[0][MODALITY_CAPTURE]
+                                       || pi->griffon[1][MODALITY_CAPTURE]
+                                       || pi->manticore[0][MODALITY_CAPTURE]
+                                       || pi->manticore[1][MODALITY_CAPTURE]
+                                       || pi->rose[0][MODALITY_CAPTURE]
+                                       || pi->rose[1][MODALITY_CAPTURE]
+                                       || !pi->tupleSlider[0][MODALITY_CAPTURE].empty()
+                                       || !pi->tupleSlider[1][MODALITY_CAPTURE].empty();
 
   if (!needsGenericAttackAssembly && fast_attacks() && (pt != KING || king_type() == KING))
   {
