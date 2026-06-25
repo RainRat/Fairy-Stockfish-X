@@ -855,14 +855,21 @@ inline Bitboard fixed_step_lame_rider_attacks(Square s, Bitboard occupied, int s
 
 
 #ifdef VERY_LARGE_BOARDS
-Bitboard rider_attacks_bb(
+Bitboard rider_attacks_single_rider_bb(
     RiderType R, Square s, Bitboard occupied, const MagicGeometry* mg = current_magic_geometry);
+
+inline Bitboard rider_attacks_bb(
+    RiderType R, Square s, Bitboard occupied, const MagicGeometry* mg = current_magic_geometry) {
+  if (R == NO_RIDER || (R & (R - 1)))
+      return Bitboard(0);
+  return rider_attacks_single_rider_bb(R, s, occupied, mg);
+}
 
 template<RiderType R>
 inline Bitboard rider_attacks_bb(
     Square s, Bitboard occupied, const MagicGeometry* mg = current_magic_geometry) {
   static_assert(R != NO_RIDER && !(R & (R - 1))); // exactly one bit
-  return rider_attacks_bb(R, s, occupied, mg);
+  return rider_attacks_single_rider_bb(R, s, occupied, mg);
 }
 
 inline Square lsb(Bitboard b);
@@ -930,11 +937,9 @@ inline Bitboard rider_attacks_bb(Square s, Bitboard occupied, const MagicGeometr
 
 inline Square lsb(Bitboard b);
 
-inline Bitboard rider_attacks_bb(RiderType R, Square s, Bitboard occupied, const MagicGeometry* mg = current_magic_geometry) {
+inline Bitboard rider_attacks_single_rider_bb(RiderType R, Square s, Bitboard occupied, const MagicGeometry* mg = current_magic_geometry) {
 
-  if (R == NO_RIDER || (R & (R - 1)))
-      return Bitboard(0);
-
+  assert(R != NO_RIDER && !(R & (R - 1)));
 
   if (R == RIDER_LAME_DABBABA)
       return rider_attacks_bb<RIDER_LAME_DABBABA>(s, occupied, mg);
@@ -956,6 +961,12 @@ inline Bitboard rider_attacks_bb(RiderType R, Square s, Bitboard occupied, const
       return m.attacks[m.index(occupied)];
   }
   return 0;
+}
+
+inline Bitboard rider_attacks_bb(RiderType R, Square s, Bitboard occupied, const MagicGeometry* mg = current_magic_geometry) {
+  if (R == NO_RIDER || (R & (R - 1)))
+      return Bitboard(0);
+  return rider_attacks_single_rider_bb(R, s, occupied, mg);
 }
 #endif
 
@@ -1004,7 +1015,7 @@ inline Bitboard attacks_bb(Color c, PieceType pt, Square s, Bitboard occupied, c
   Bitboard b = LeaperAttacks[c][pt][s];
   RiderType r = AttackRiderTypes[pt];
   while (r)
-      b |= rider_attacks_bb(pop_rider(r), s, occupied, mg);
+      b |= rider_attacks_single_rider_bb(pop_rider(r), s, occupied, mg);
   b |= custom_rider_attacks(pt, false, true, c, s, occupied);
   return b & PseudoAttacks[c][pt][s];
 }
@@ -1016,7 +1027,7 @@ inline Bitboard moves_bb(Color c, PieceType pt, Square s, Bitboard occupied, con
   Bitboard b = LeaperMoves[Initial][c][pt][s];
   RiderType r = MoveRiderTypes[Initial][pt];
   while (r)
-      b |= rider_attacks_bb(pop_rider(r), s, occupied, mg);
+      b |= rider_attacks_single_rider_bb(pop_rider(r), s, occupied, mg);
   b |= custom_rider_attacks(pt, Initial, false, c, s, occupied);
   return b & PseudoMoves[Initial][c][pt][s];
 }

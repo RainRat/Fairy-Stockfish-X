@@ -431,9 +431,11 @@ Bitboard rider_terminal_squares(const std::map<Direction, int>& directions, Squa
 
 
 #ifdef VERY_LARGE_BOARDS
-  Bitboard rider_attacks_bb(
+  Bitboard rider_attacks_single_rider_bb(
     RiderType R, Square s, Bitboard occupied, const MagicGeometry* mg) {
   (void)mg;
+
+  assert(R != NO_RIDER && !(R & (R - 1)));
 
   switch (R)
   {
@@ -849,21 +851,25 @@ namespace {
                              {  728, 10316, 55013, 32803, 12281, 15100,  16645,   255 } };
 #endif
 
-    constexpr size_t TempTableSize = size_t(1) << (FILE_NB + RANK_NB - 4);
-    std::vector<Bitboard> occupancy(TempTableSize);
-    std::vector<Bitboard> reference(TempTableSize);
     std::array<Bitboard, SQUARE_NB> masks{};
-    Bitboard b;
-    std::vector<int> epoch(TempTableSize);
-    int cnt = 0, size = 0;
-
     size_t requiredSize = 0;
+    int maxPopcount = 0;
     for (Square s = SQ_A1; s <= SQ_MAX; ++s)
     {
         masks[s] = magic_mask_for_square<MT, TrimRiderTerminal>(directions, s, maxFile, maxRank, activeBoard);
-        requiredSize += size_t(1) << popcount(masks[s]);
+        int pop = popcount(masks[s]);
+        if (pop > maxPopcount)
+            maxPopcount = pop;
+        requiredSize += size_t(1) << pop;
     }
     table.resize(requiredSize);
+
+    size_t tempSize = size_t(1) << maxPopcount;
+    std::vector<Bitboard> occupancy(tempSize);
+    std::vector<Bitboard> reference(tempSize);
+    std::vector<int> epoch(tempSize);
+    Bitboard b;
+    int cnt = 0, size = 0;
 
     for (Square s = SQ_A1; s <= SQ_MAX; ++s)
     {

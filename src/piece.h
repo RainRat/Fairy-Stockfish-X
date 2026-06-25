@@ -225,6 +225,12 @@ struct PieceInfo {
         return true;
     return false;
   }
+  inline bool has_simple_hopper_capture() const {
+    for (int initial = 0; initial < 2; ++initial)
+      if (!hopper[initial][MODALITY_CAPTURE].empty())
+        return true;
+    return false;
+  }
   inline bool has_runtime_rider_augment() const { return riderAugmentMask != AUGMENT_NONE || has_universal_hopper() || has_lame_leaper() || friendlyJump; }
   inline bool has_dynamic_slider() const { return riderAugmentMask & AUGMENT_DYNAMIC; }
   inline bool has_max_slider() const { return riderAugmentMask & AUGMENT_MAX; }
