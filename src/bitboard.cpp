@@ -864,6 +864,7 @@ namespace {
     }
     table.resize(requiredSize);
 
+    assert(maxPopcount < 64);
     size_t tempSize = size_t(1) << maxPopcount;
     std::vector<Bitboard> occupancy(tempSize);
     std::vector<Bitboard> reference(tempSize);
