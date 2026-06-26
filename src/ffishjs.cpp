@@ -207,7 +207,7 @@ public:
     resetStates();
     moveStack.clear();
     moveStackUCI.clear();
-    pos.set(v, fen, is960, &states->back(), Threads.main());
+    pos.set(v, fen, is960, &states->back(), Threads.empty() ? nullptr : Threads.main());
   }
 
   // note: const identifier for pos not possible due to SAN::move_to_san()
@@ -506,7 +506,7 @@ private:
     this->resetStates();
     if (fen == "")
       fen = v->startFen;
-    this->pos.set(this->v, fen, is960, &this->states->back(), Threads.main());
+    this->pos.set(this->v, fen, is960, &this->states->back(), Threads.empty() ? nullptr : Threads.main());
     this->is960 = is960;
   }
 };

@@ -204,13 +204,13 @@ go perft 1')
 
   out=$(run_uci "$VLB_ENGINE" "$VARIANT_PATH" "grand-hexachess" <<<'position startpos
 go perft 1')
-  assert_nodes "$out" 139
-  assert_contains "$out" "^i13g12: 1$"
+  assert_nodes "$out" 87
+  assert_contains "$out" "^c1b1: 1$"
   assert_contains "$out" "^a5a6: 1$"
-  assert_contains "$out" "^k5k6: 1$"
+  assert_contains "$out" "^k5l6: 1$"
   assert_contains "$out" "^c3d4: 1$"
-  assert_contains "$out" "^e11f10: 1$"
-  assert_contains "$out" "^j13k12: 1$"
+  assert_contains "$out" "^e1c2: 1$"
+  assert_contains "$out" "^d1d2: 1$"
 else
   echo "hex chess variants regression requires a very-large-board capable engine. Skipping."
 fi

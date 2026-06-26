@@ -2599,9 +2599,25 @@ Bitboard Position::slider_blockers(Bitboard sliders, Square s, Bitboard& pinners
         continue;
     }
     bool isHopper = (AttackRiderTypes[sniperType] & HOPPING_RIDERS) || pieceMap.get(sniperType)->has_hopper_like_capture();
-    Bitboard b = between_bb(s, sniperSq, sniperType) & (isHopper ? (allPieces ^ sniperSq) : occupancy);
+    Bitboard b = 0;
+    if (isHopper)
+    {
+        Bitboard candidates = between_bb(s, sniperSq, sniperType) & allPieces;
+        while (candidates)
+        {
+            Square p_sq = pop_lsb(candidates);
+            if (attacks_from(c, sniperType, sniperSq, allPieces ^ p_sq) & s)
+                b |= p_sq;
+        }
+    }
+    else
+    {
+        b = between_bb(s, sniperSq, sniperType) & occupancy;
+        if (b && more_than_one(b))
+            b = 0;
+    }
 
-    if (b && (!more_than_one(b) || (isHopper && popcount(b) == 2)))
+    if (b)
     {
         // Janggi cannons block each other
         if ((janggiCannons & sniperSq) && (janggiCannons & b))
@@ -2632,10 +2648,9 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
 
           PieceType move_pt = effective_piece_type(pt);
           const PieceInfo* pi = pieceMap.get(move_pt);
-          // Runtime rider augments and asymmetric riders need per-piece forward
-          // attack testing — the reverse-attack shortcut is incorrect for these.
           if (pi->has_runtime_rider_augment()
               || pi->has_universal_hopper()
+              || (pi->has_simple_hopper_capture() && !(AttackRiderTypes[move_pt] & HOPPING_RIDERS))
               || (AttackRiderTypes[move_pt] & ASYMMETRICAL_RIDERS))
           {
               Bitboard candidates = ptPieces;
@@ -2666,8 +2681,18 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
           hasRuntimeSpecialAttackers = bool(pieces(c, move_pt));
   }
 
+  bool hasSimpleHopperAttackers = false;
+  for (PieceSet ps = piece_types(); ps && !hasSimpleHopperAttackers;)
+  {
+      PieceType pt = pop_lsb(ps);
+      PieceType move_pt = effective_piece_type(pt);
+      const PieceInfo* pi = pieceMap.get(move_pt);
+      if (pi->has_simple_hopper_capture() && !(AttackRiderTypes[move_pt] & HOPPING_RIDERS))
+          hasSimpleHopperAttackers = true;
+  }
+
   // Use a faster version for variants with moderate rule variations
-  if (!hasRuntimeSpecialAttackers && fast_attacks())
+  if (!hasRuntimeSpecialAttackers && !hasSimpleHopperAttackers && fast_attacks())
   {
       return  (pawn_attacks_bb(~c, s)          & pieces(c, PAWN))
             | (attacks_bb<KNIGHT>(s)           & pieces(c, KNIGHT, ARCHBISHOP, CHANCELLOR))
@@ -2677,7 +2702,7 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
   }
 
   // Use a faster version for selected fairy pieces
-  if (!hasRuntimeSpecialAttackers && fast_attacks2())
+  if (!hasRuntimeSpecialAttackers && !hasSimpleHopperAttackers && fast_attacks2())
   {
       return  (pawn_attacks_bb(~c, s)             & pieces(c, PAWN, BREAKTHROUGH_PIECE, GOLD))
             | (attacks_bb<KNIGHT>(s)              & pieces(c, KNIGHT))
@@ -2699,7 +2724,9 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
       {
           PieceType move_pt = effective_piece_type(pt);
           const PieceInfo* pi = pieceMap.get(move_pt);
-          if (pi->has_runtime_rider_augment() || pi->has_universal_hopper())
+          if (pi->has_runtime_rider_augment()
+              || pi->has_universal_hopper()
+              || (pi->has_simple_hopper_capture() && !(AttackRiderTypes[move_pt] & HOPPING_RIDERS)))
           {
               Bitboard candidates = pieces(c, pt);
               while (candidates)

@@ -3732,25 +3732,9 @@ inline Bitboard Position::special_rider_bb(const PieceInfo* pi, MoveModality mod
               while (occ)
               {
                   Square s = pop_lsb(occ);
-                  Bitboard sBB = square_bb(s);
-                  bool isWall = (st->wallSquares & sBB);
-                  bool isDead = (st->deadSquares & sBB);
-                  bool isFriendly = (ownPieces & sBB);
-                  bool isEnemy = !isFriendly && !isWall && !isDead;
-
-                  uint8_t special = (isEnemy ? PieceInfo::HopperProfile::ENEMY : 0)
-                                  | (isFriendly ? PieceInfo::HopperProfile::FRIENDLY : 0)
-                                  | (isWall ? PieceInfo::HopperProfile::WALL : 0)
-                                  | (isDead ? PieceInfo::HopperProfile::DEAD : 0);
-
-                  Piece pc = piece_on(s);
-                  PieceType pt = type_of(pc);
-                  PieceSet pcSet = (pt == NO_PIECE_TYPE || !bool(byTypeBB[ALL_PIECES] & sBB)) ? NO_PIECE_SET : piece_set(pt);
-                  if (isWall) pcSet |= PieceSet(1ULL << 62);
-                  if (isDead) pcSet |= PieceSet(1ULL << 61);
-
-                  if (((hopIt->second.transparentSpecialTypes & special) != 0) || (uint64_t(hopIt->second.transparentPieceTypes & pcSet) != 0))
-                      transparentPieces |= sBB;
+                  HopperSquareProps props = get_hopper_square_props(s, occupied, c, piece_at(s, occupied));
+                  if (((hopIt->second.transparentSpecialTypes & props.special) != 0) || (uint64_t(hopIt->second.transparentPieceTypes & props.pcSet) != 0))
+                      transparentPieces |= square_bb(s);
               }
 
               Bitboard dynBlockers = occupied & ~transparentPieces;
@@ -3898,7 +3882,6 @@ inline Bitboard Position::universal_hopper_bb(const std::map<Direction, PieceInf
                                               bool includeOwnBlockedAttacks) const
 {
     auto advance = [&](Square current, Direction dir, int stepR, int stepF, Square& next) -> bool {
-        (void)dir;
         next = current + dir;
         if (!is_ok(next))
             return false;
@@ -3906,10 +3889,9 @@ inline Bitboard Position::universal_hopper_bb(const std::map<Direction, PieceInf
             && int(rank_of(next)) - int(rank_of(current)) == stepR;
     };
     auto midpoint = [&](Square origin, Direction dir, int dist, int stepR, int stepF, Square& mid) -> bool {
-        (void)origin;
         (void)stepR;
         (void)stepF;
-        mid = sq + (dir * (dist / 2));
+        mid = origin + (dir * (dist / 2));
         return true;
     };
     return universal_hopper_targets_impl(profiles, sq, occupied, ownPieces, c, captureMode, includeOwnBlockedAttacks, advance, midpoint);
@@ -3926,9 +3908,8 @@ inline Bitboard Position::wrapped_universal_hopper_targets(const std::map<Direct
         return wrapped_destination_square(current, stepF, stepR, maxFile, maxRank, wrapFile, wrapRank, next);
     };
     auto midpoint = [&](Square origin, Direction dir, int dist, int stepR, int stepF, Square& mid) -> bool {
-        (void)origin;
         (void)dir;
-        return wrapped_destination_square(sq, (dist / 2) * stepF, (dist / 2) * stepR, maxFile, maxRank, wrapFile, wrapRank, mid);
+        return wrapped_destination_square(origin, (dist / 2) * stepF, (dist / 2) * stepR, maxFile, maxRank, wrapFile, wrapRank, mid);
     };
     return universal_hopper_targets_impl(profiles, sq, occupied, ownPieces, c, captureMode, includeOwnBlockedAttacks, advance, midpoint);
 }
@@ -4352,16 +4333,21 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
       return b & (FilterMobility ? board_bb(c, pt) : board_bb());
   }
 
-  const bool hasSimpleHopper = !pi->hopper[0][MODALITY_QUIET].empty()
-                            || !pi->hopper[0][MODALITY_CAPTURE].empty()
-                            || !pi->hopper[1][MODALITY_QUIET].empty()
-                            || !pi->hopper[1][MODALITY_CAPTURE].empty();
-  const bool hasRuntimeSpecialMoves = pi->has_runtime_rider_augment()
-                                   || pi->has_universal_hopper()
-                                   || pi->has_explicit_initial_moves()
-                                   || hasSimpleHopper;
+  const bool needsGenericAttackAssembly = pi->has_runtime_rider_augment()
+                                       || pi->has_universal_hopper()
+                                       || pi->has_explicit_initial_moves()
+                                       || pi->has_simple_hopper_capture()
+                                       || pi->has_lame_capture()
+                                       || pi->griffon[0][MODALITY_CAPTURE]
+                                       || pi->griffon[1][MODALITY_CAPTURE]
+                                       || pi->manticore[0][MODALITY_CAPTURE]
+                                       || pi->manticore[1][MODALITY_CAPTURE]
+                                       || pi->rose[0][MODALITY_CAPTURE]
+                                       || pi->rose[1][MODALITY_CAPTURE]
+                                       || !pi->tupleSlider[0][MODALITY_CAPTURE].empty()
+                                       || !pi->tupleSlider[1][MODALITY_CAPTURE].empty();
 
-  if (!hasRuntimeSpecialMoves && fast_attacks() && (pt != KING || king_type() == KING))
+  if (!needsGenericAttackAssembly && fast_attacks() && (pt != KING || king_type() == KING))
   {
       Bitboard b = 0;
       switch (pt)
@@ -4401,10 +4387,10 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
       return b & (FilterMobility ? board_bb(c, pt) : board_bb());
   }
 
-  if (!hasRuntimeSpecialMoves && !pi->has_lame_leaper() && !pi->has_universal_hopper() && fast_attacks2() && (pt != KING || king_type() == KING))
+  if (!needsGenericAttackAssembly && fast_attacks2() && (pt != KING || king_type() == KING))
       return attacks_bb(c, pt, s, occ) & (FilterMobility ? board_bb(c, pt) : board_bb());
 
-  if ((fast_attacks() || fast_attacks2()) && !pi->has_runtime_rider_augment() && !pi->has_lame_leaper() && !pi->has_universal_hopper())
+  if ((fast_attacks() || fast_attacks2()) && !needsGenericAttackAssembly)
       return attacks_bb(c, movePt, s, occ) & (FilterMobility ? board_bb(c, pt) : board_bb());
 
   Bitboard b = attacks_bb(c, movePt, s, occ);
