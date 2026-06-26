@@ -16,7 +16,7 @@ PYFFISH_SIG_FILE="${PYFFISH_BUILD_DIR}/fast-regression.sig"
 
 ENGINE_RUN_DIR="${ROOT_DIR}/.local/build/fast-regression-engine"
 mkdir -p "${ENGINE_RUN_DIR}"
-DEFAULT_ENGINE_COPY="${ENGINE_RUN_DIR}/stockfish"
+DEFAULT_ENGINE_COPY="${ENGINE_RUN_DIR}/$(basename "${ENGINE}")"
 cp -f "${ENGINE}" "${DEFAULT_ENGINE_COPY}"
 chmod +x "${DEFAULT_ENGINE_COPY}"
 ENGINE="${DEFAULT_ENGINE_COPY}"

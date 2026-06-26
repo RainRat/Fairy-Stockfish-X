@@ -24,7 +24,7 @@ run_step() {
 rm -rf "${ROOT_DIR}/.local/build"
 ENGINE_RUN_DIR="${ROOT_DIR}/.local/build/local-regression-engine"
 mkdir -p "${ENGINE_RUN_DIR}"
-DEFAULT_ENGINE_COPY="${ENGINE_RUN_DIR}/stockfish"
+DEFAULT_ENGINE_COPY="${ENGINE_RUN_DIR}/$(basename "${ENGINE}")"
 cp -f "${ENGINE}" "${DEFAULT_ENGINE_COPY}"
 chmod +x "${DEFAULT_ENGINE_COPY}"
 ENGINE="${DEFAULT_ENGINE_COPY}"
@@ -49,7 +49,11 @@ run_step "fairy notation regressions" timeout 2m bash tests/fairy-notation-regre
 run_step "wrapping topology" timeout 90s bash tests/wrapping-topology.sh "${ENGINE}"
 run_step "unorthodox interactions" timeout 90s bash tests/unorthodox-interactions.sh "${ENGINE}"
 run_step "universal hopper" timeout 90s bash tests/universal-hopper.sh "${ENGINE}"
-run_step "all-vars regression" timeout 60m bash tests/allvars-regression.sh
+if [[ -x "${ROOT_DIR}/${MINI_ENGINE}" || -x "${MINI_ENGINE}" ]]; then
+  run_step "all-vars regression" timeout 60m bash tests/allvars-regression.sh "${MINI_ENGINE}"
+else
+  run_step "all-vars regression" timeout 60m bash tests/allvars-regression.sh
+fi
 if [[ -x "${LARGE_ENGINE}" ]]; then
   ENGINE="${LARGE_ENGINE}"
   export ENGINE

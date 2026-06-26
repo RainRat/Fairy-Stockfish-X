@@ -1,7 +1,14 @@
 #!/bin/bash
 set -euo pipefail
 
-cd "$(dirname "$0")/../src"
+ROOT_DIR=$(cd "$(dirname "$0")/.." && pwd)
+ENGINE=${1:-"${ROOT_DIR}/src/stockfish"}
+case "${ENGINE}" in
+  /*) ;;
+  *) ENGINE="$(pwd)/${ENGINE}" ;;
+esac
+
+cd "${ROOT_DIR}/src"
 
 tmp_ini=$(mktemp)
 expected_leaper=$(mktemp)
@@ -18,7 +25,7 @@ pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 startFen = 7k/8/8/8/4A3/8/8/4K3 w - - 0 1
 
 [camel-rider-num:chess]
-customPiece1 = a:L0
+customPiece1 = a:L2
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 startFen = 7k/8/8/8/4A3/8/8/4K3 w - - 0 1
 
@@ -31,7 +38,7 @@ INI
 piece_moves() {
   local variant=$1
   printf 'uci\nsetoption name VariantPath value %s\nsetoption name UCI_Variant value %s\nposition startpos\ngo perft 1\nquit\n' "$tmp_ini" "$variant" \
-    | ./stockfish \
+    | "$ENGINE" \
     | awk -F: '/^e4/{print $1}' \
     | sort
 }
