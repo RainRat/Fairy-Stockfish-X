@@ -2682,13 +2682,13 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
   }
 
   bool hasSimpleHopperAttackers = false;
-  for (PieceSet ps = piece_types(); ps && !hasSimpleHopperAttackers;)
+  for (PieceSet ps = pieceMap.simple_hopper_capture_types(); ps && !hasSimpleHopperAttackers;)
   {
-      PieceType pt = pop_lsb(ps);
-      PieceType move_pt = effective_piece_type(pt);
-      const PieceInfo* pi = pieceMap.get(move_pt);
-      if (pi->has_simple_hopper_capture() && !(AttackRiderTypes[move_pt] & HOPPING_RIDERS))
-          hasSimpleHopperAttackers = true;
+      PieceType move_pt = pop_lsb(ps);
+      Bitboard candidates = pieces(c, move_pt);
+      if (move_pt == king_type())
+          candidates |= pieces(c, KING);
+      hasSimpleHopperAttackers = candidates && !(AttackRiderTypes[move_pt] & HOPPING_RIDERS);
   }
 
   // Use a faster version for variants with moderate rule variations
@@ -4524,6 +4524,25 @@ bool Position::pseudo_legal(const Move m) const {
           return false;
   }
 
+  if (forced_jump_continuation() && st->forcedJumpSquare != SQ_NONE)
+  {
+      Piece forcedPiece = piece_on(st->forcedJumpSquare);
+      if (forcedPiece != NO_PIECE && st->forcedJumpHasFollowup)
+      {
+          if (color_of(forcedPiece) != us)
+          {
+              Piece passPiece = moved_piece(m);
+              return is_pass(m) && passPiece != NO_PIECE && color_of(passPiece) == us;
+          }
+          if (is_pass(m))
+              return false;
+          if (from != st->forcedJumpSquare || !is_jump_capture(m))
+              return false;
+          if (forced_jump_same_direction() && st->forcedJumpStep && int(to) - int(from) != st->forcedJumpStep)
+              return false;
+      }
+  }
+
   if (is_pull_move(m))
   {
       if (pc == NO_PIECE || color_of(pc) != us)
@@ -4555,24 +4574,6 @@ bool Position::pseudo_legal(const Move m) const {
       return bool(adjacent_swap_targets_from(us, from) & to);
   }
 
-  if (forced_jump_continuation() && st->forcedJumpSquare != SQ_NONE)
-  {
-      Piece forcedPiece = piece_on(st->forcedJumpSquare);
-      if (forcedPiece != NO_PIECE && st->forcedJumpHasFollowup)
-      {
-          if (color_of(forcedPiece) != us)
-          {
-              Piece passPiece = moved_piece(m);
-              return is_pass(m) && passPiece != NO_PIECE && color_of(passPiece) == us;
-          }
-          if (is_pass(m))
-              return false;
-          if (from != st->forcedJumpSquare || !is_jump_capture(m))
-              return false;
-          if (forced_jump_same_direction() && st->forcedJumpStep && int(to) - int(from) != st->forcedJumpStep)
-              return false;
-      }
-  }
   // Universal-hopper semantics are handled by pseudo-move generation and
   // jump_capture_square() capture-square resolution.
 

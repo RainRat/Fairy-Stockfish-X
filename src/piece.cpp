@@ -791,7 +791,7 @@ namespace {
                   for (int df = 0; df <= int(FILE_MAX); ++df)
                       if (dr != 0 || df != 0)
                           universalAtoms.emplace_back(dr, df);
-              commit_atom(universalAtoms, false, i, c);
+              commit_atom(universalAtoms, false, i, c, !lame);
           }
           // Griffon bent slider (one diagonal step, then outward rook slide)
           else if (c == 'O')
@@ -956,6 +956,14 @@ void PieceMap::add(PieceType pt, PieceInfo* p) {
       runtimeRiderAugmentTypes |= piece_set(pt);
   else
       runtimeRiderAugmentTypes &= ~piece_set(pt);
+  if (p && p->has_simple_hopper_capture())
+      simpleHopperCaptureTypes |= piece_set(pt);
+  else
+      simpleHopperCaptureTypes &= ~piece_set(pt);
+  if (p && p->needs_generic_attack_assembly())
+      genericAttackAssemblyTypes |= piece_set(pt);
+  else
+      genericAttackAssemblyTypes &= ~piece_set(pt);
 }
 
 void PieceMap::clear_all() {
@@ -964,6 +972,8 @@ void PieceMap::clear_all() {
   clear();
   direct.fill(nullptr);
   runtimeRiderAugmentTypes = PieceSet(0);
+  simpleHopperCaptureTypes = PieceSet(0);
+  genericAttackAssemblyTypes = PieceSet(0);
 }
 
 } // namespace Stockfish

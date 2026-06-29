@@ -17,7 +17,12 @@ Fairy-Stockfish-X is a Fairy-Stockfish fork for testing experimental chess varia
 * Betza and movement: `piece.cpp`, `piece.h`, `bitboard.cpp`
 * Tests: `tests/`, `test.py`
 * Add settings end-to-end: `.ini` → parser → `Variant` field → `Position` getter → gameplay logic → tests → `variants.ini` docs.
-* Keep old keys working when replacing or generalizing a setting.
+* Keep upstream Fairy-Stockfish keys working when replacing or generalizing a setting. FSX-only experimental keys may make a clean break before the first stable release.
+
+## Variant config compatibility
+* Diagnose unknown keys, but do not reject an otherwise usable variant solely because an older engine does not recognize a newer setting.
+* Never silently reinterpret an unknown key or substitute a default behavior for it.
+* Reject malformed syntax and known settings with impossible, unsafe, or always-invalid values.
 
 ## Build
 From `src/`:
@@ -106,14 +111,29 @@ python3 tests/upstream_movecount_baseline.py src/stockfish "$UPSTREAM_ENGINE"
 Only regenerate upstream baselines intentionally. Do not refresh fixtures to hide regressions.
 
 ## Full local regression
-Build the named binaries first, then prefer a detached logged run for long checks:
+Build the named binaries first. Use the regression runner for long checks; it keeps
+the full output in one log while reporting concise status and an estimate based on
+recent successful runs:
 
 ```sh
-mkdir -p .local/logs
-setsid bash -lc '/usr/bin/time -f "total elapsed %es" bash tests/local-regression.sh src/stockfish-large' > .local/logs/local-regression.$(date +%Y%m%d-%H%M%S).log 2>&1 < /dev/null &
+tests/regression-runner.sh start src/stockfish-large
+tests/regression-runner.sh status
+tests/regression-runner.sh wait
 ```
 
-Success marker: `local regression suite passed`. If missing, inspect the last `== ... ==` section and the failure above it.
+`status` reports a check-in interval and remaining-time estimate from recent runs.
+`wait` monitors the detached process and prints only the final result; use it instead
+of repeatedly polling a command session. On failure it also prints the relevant log
+tail. `tests/regression-runner.sh log` shows the latest log tail on demand. The runner
+rejects stale named binaries before launching; rebuild the reported binary rather
+than spending a full run testing old code.
+
+The fast and full suites preserve signature-based artifacts under `.local/build`.
+Do not clear that directory for a normal rerun. Use `VERBOSE=1` with
+`tests/fast-regression.sh` only when successful child logs are needed; failures are
+always printed in full. Special C++ harnesses rebuild their required object family
+when run directly, while the fast suite prepares that family once and shares it
+between harnesses.
 
 ## CI Mapping
 * `Stockfish`: native engine build, perft, search, and sanitizer-style checks.
@@ -139,6 +159,7 @@ Success marker: `local regression suite passed`. If missing, inspect the last `=
 * Alternate repetition keys must be updated in every state transition, including null moves.
 * Reserve-aware keys must keep hand and prison buckets as separate XOR terms.
 * Tuple Betza atoms use `PieceInfo::tupleSteps`; do not route long tuple leapers through `Direction` decoding.
+* Betza `U` is the unrestricted universal leaper. Braced `{...}` parameters configure universal hoppers; keep the two concepts and their storage paths distinct.
 
 ## Performance and pitfalls
 * Benchmark affected non-chess variants when relevant; prefer `checkers` and `janggi`.

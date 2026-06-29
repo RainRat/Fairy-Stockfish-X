@@ -35,7 +35,9 @@ tripleStepRegionWhite = A(e1)
 [ipawnlike-piece-specific:chess]
 customPiece1 = a:iW
 pieceToCharTable = A:a
-pawnLikeTypes = a
+promotionPawnTypes = a
+enPassantTypes = a
+nMoveRuleTypes = a
 startFen = 4k3/8/8/8/8/8/8/4A2K w - - 0 1
 doubleStepRegionWhite = A(e1); *(*2)
 
@@ -43,8 +45,9 @@ doubleStepRegionWhite = A(e1); *(*2)
 king = k
 customPiece1 = d:efWfFmsWifmnD
 pieceToCharTable = PNBRQ............D...Kpnbrq............d...k
-pawnLikeTypes = d
+promotionPawnTypes = d
 enPassantTypes = d
+nMoveRuleTypes = d
 startFen = 4k3/8/8/8/8/8/8/4D2K w - - 0 1
 doubleStepRegionWhite = D(e1); *(*2)
 
@@ -56,7 +59,9 @@ startFen = rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
 [pawnlike-nonstep:chess]
 customPiece1 = m:NN
 pieceToCharTable = PNBRQ............M...Kpnbrq............m...k
-pawnLikeTypes = m
+promotionPawnTypes = m
+enPassantTypes = m
+nMoveRuleTypes = m
 startFen = 4k3/8/8/8/8/8/M7/K7 w - - 0 1
 
 [immobility-illegal-hopper-test:chess]

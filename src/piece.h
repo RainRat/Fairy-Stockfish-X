@@ -250,12 +250,29 @@ struct PieceInfo {
         return true;
     return false;
   }
+  inline bool needs_generic_attack_assembly() const {
+    return has_runtime_rider_augment()
+        || has_universal_hopper()
+        || has_explicit_initial_moves()
+        || has_simple_hopper_capture()
+        || has_lame_capture()
+        || griffon[0][MODALITY_CAPTURE]
+        || griffon[1][MODALITY_CAPTURE]
+        || manticore[0][MODALITY_CAPTURE]
+        || manticore[1][MODALITY_CAPTURE]
+        || rose[0][MODALITY_CAPTURE]
+        || rose[1][MODALITY_CAPTURE]
+        || !tupleSlider[0][MODALITY_CAPTURE].empty()
+        || !tupleSlider[1][MODALITY_CAPTURE].empty();
+  }
 };
 
 struct PieceMap : public std::map<PieceType, PieceInfo*> {
   PieceMap() {
     direct.fill(nullptr);
     runtimeRiderAugmentTypes = PieceSet(0);
+    simpleHopperCaptureTypes = PieceSet(0);
+    genericAttackAssemblyTypes = PieceSet(0);
   }
   ~PieceMap() { clear_all(); }
   void init(const Variant* v = nullptr);
@@ -272,10 +289,14 @@ struct PieceMap : public std::map<PieceType, PieceInfo*> {
     return direct[pt];
   }
   PieceSet runtime_rider_augment_types() const { return runtimeRiderAugmentTypes; }
+  PieceSet simple_hopper_capture_types() const { return simpleHopperCaptureTypes; }
+  PieceSet generic_attack_assembly_types() const { return genericAttackAssemblyTypes; }
 
 private:
   std::array<PieceInfo*, PIECE_TYPE_NB> direct;
   PieceSet runtimeRiderAugmentTypes;
+  PieceSet simpleHopperCaptureTypes;
+  PieceSet genericAttackAssemblyTypes;
 };
 
 extern PieceMap pieceMap;

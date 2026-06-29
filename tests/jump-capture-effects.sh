@@ -27,7 +27,8 @@ blastDiagonals = true
 
 [jumpduck:checkers]
 wallingRule = duck
-wallingSide = wb
+wallingWhite = true
+wallingBlack = true
 EOF
 tmp_ini="${FSX_TMP_INI}"
 

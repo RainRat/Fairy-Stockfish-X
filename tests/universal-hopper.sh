@@ -22,7 +22,7 @@ customPiece1 = d:{hurdles: 1,1; pre: 1,*; post: 1,1}Q
 customPiece1 = d:pR2
 
 [wrapped-limited-hopper:hopper-common]
-topology = cylinder
+cylindrical = true
 customPiece1 = d:pR2
 
 [directional-hopper:hopper-common]
@@ -73,17 +73,17 @@ customPiece1 = d:{hurdles: 2,2; equi: stopper}Q
 customPiece1 = d:{hurdles: 1,1; pre: 3,3; post: 1,1; equi: stopper}Q
 
 [wrapped-hopper:hopper-common]
-topology = cylinder
+cylindrical = true
 customPiece1 = d:{hurdles: 1,1; pre: 1,*; post: 1,1}R
 
 [wrapped-initial-locust:hopper-common]
-topology = cylinder
+cylindrical = true
 pieceToCharTable = PNBRQKDFGHSA
 customPiece1 = a:i{hurdles: 1,1; pre: 1,1; post: 1,1; capture: locust_first; hurdle_types: enemy}R
 doubleStepRegionWhite = A(e2)
 
 [wrapped-locust-all:hopper-common]
-topology = cylinder
+cylindrical = true
 customPiece1 = d:c{hurdles: 2,2; pre: 1,1; post: 1,1; capture: locust_all; hurdle_types: enemy}R
 
 [locust-all-hand:crazyhouse]
@@ -180,7 +180,7 @@ position fen 7k/8/8/8/8/8/3P4/3D3K w - - 0 1
 go perft 1
 EOF
 )
-assert_nodes "$output" 6
+assert_nodes "$output" 8
 assert_contains "$output" "^d1d3: 1$" "wrapped limited hopper can land on the second square after an adjacent hurdle"
 assert_not_contains "$output" "^d1d4: 1$" "wrapped limited hopper cannot exceed its total range"
 
@@ -318,8 +318,8 @@ run_test "equi-stopper-pre3" "7k/8/8/3p4/8/3D4/8/K7 w - - 0 1" 3
 # Rook-hopper on cylinder jumping across the edge
 # D on h4, P on a4. Should land on b4.
 # King on A1, Black King H8.
-# Moves: Hopper H4B4 (1), King A1 (3). Total = 4
-run_test "wrapped-hopper" "7k/8/8/8/P6D/8/8/K7 w - - 0 1" 4
+# Moves: Hopper H4B4 (1), pawn A4A5 (1), King A1 (5). Total = 7
+run_test "wrapped-hopper" "7k/8/8/8/P6D/8/8/K7 w - - 0 1" 7
 
 # 5b. Long-step tuple hopper (3,2) ray should not be blocked by anti-wrap guards.
 # D on a1, hurdle on d3, landing on g5. Plus two pawn pushes and king moves.
@@ -328,7 +328,7 @@ run_test "long-step-hopper" "7k/8/6P1/8/8/3P4/8/D6K w - - 0 1" 6
 
 # 5c. Wrapped topology + locust_all: capture-all should still remove all hurdles.
 # D at h3, enemy hurdles at h4/h5, landing at h6.
-run_test "wrapped-locust-all" "7k/8/8/p6p/p6p/7D/8/K7 w - - 0 1" 4
+run_test "wrapped-locust-all" "7k/8/8/p6p/p6p/7D/8/K7 w - - 0 1" 6
 output=$(run_uci "$ENGINE" "$INI_FILE" wrapped-locust-all << 'EOF'
 position fen 7k/8/8/p6p/p6p/7D/8/K7 w - - 0 1 moves h3h6
 d
@@ -338,12 +338,12 @@ assert_contains "$output" "Fen: 7k/8/7D/p7/p7/8/8/K7" "wrapped locust_all remove
 
 # 5ca. Wrapped topology + initial universal hopper captures should be generated too.
 output=$(run_uci "$ENGINE" "$INI_FILE" wrapped-initial-locust << 'EOF'
-position fen 8/8/8/8/8/4p3/4A3/K6k w - - 0 1
+position fen 7k/8/8/8/8/4p3/4A3/K7 w - - 0 1
 go perft 1
 EOF
 )
 assert_contains "$output" "^e2e4: 1$" "wrapped initial locust capture is generated"
-assert_nodes "$output" 4
+assert_nodes "$output" 6
 
 # 5d. locust_all side effects: transfer all captured hurdles to hand.
 output=$(run_uci "$ENGINE" "$INI_FILE" locust-all-hand << 'EOF'

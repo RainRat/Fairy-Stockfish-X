@@ -1721,14 +1721,13 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     if (v->payPointsToDrop)
         v->pointsCounting = true;
 
-    // Report invalid options
-    if (DoCheck)
+    // Unknown options are diagnosed but ignored so newer configs remain usable.
     {
         const std::set<std::string>& parsedKeys = config.get_consumed_keys();
         for (const auto& it : config)
             if (parsedKeys.find(it.first) == parsedKeys.end())
             {
-                std::cerr << "Invalid option: " << it.first << std::endl;
+                std::cerr << "Unknown option ignored: " << it.first << std::endl;
                 if (looks_like_piece_definition_value(it.second))
                     std::cerr << it.first << " looks like a custom piece definition. Use customPieceN = "
                               << it.second << " for new custom pieces." << std::endl;

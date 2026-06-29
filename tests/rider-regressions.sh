@@ -7,6 +7,27 @@ export ROOT_DIR
 source "${ROOT_DIR}/tests/lib/uci.sh"
 setup_test_context "${1:-}" "${2:-}" "rider regressions"
 
+test_universal_leaper() {
+  load_inline_variants <<'INI'
+[universal-leaper:chess]
+king = -
+checking = false
+customPiece1 = a:mU
+pieceToCharTable = A:a
+startFen = 8/8/8/8/8/8/8/A7 w - - 0 1
+INI
+
+  local out
+  out=$(run_uci "$ENGINE" "$TMP_VARIANTS" universal-leaper <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+  assert_nodes "$out" 63
+  assert_contains "$out" "^a1h1: 1$"
+  assert_contains "$out" "^a1h8: 1$"
+}
+
 test_rose() {
   load_inline_variants <<'INI'
 [rose-empty:chess]
@@ -449,6 +470,7 @@ UCI
   assert_contains "$out" "d4d6:"
 }
 
+test_universal_leaper
 test_rose
 test_bent_riders
 test_bent_rider_evasion

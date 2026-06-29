@@ -190,8 +190,9 @@ tripleStepRegion = *(* *);
 [custom-pawn-triple:chess]
 customPiece1 = d:fmWfceF
 pieceToCharTable = PNBRQ............D...Kpnbrq............d...k
-pawnLikeTypes = d
+promotionPawnTypes = d
 enPassantTypes = d
+nMoveRuleTypes = d
 tripleStepRegion = D(* *);
 EOF
 TEMP_INI="${FSX_TMP_INI}"
@@ -242,7 +243,7 @@ out=$(run_cmds "rifle-color" "${TEMP_INI}" "position fen r3k3/8/8/8/8/8/8/R3K3 w
 d")
 echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/r3K3 b"
 
-# 5. Test rifleCapture + jumpCaptureTypes
+# 5. Test rifleCapture + jump capture
 out=$(run_cmds "rifle-jump" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/p7/M3K3 w - - 0 1 moves a1a3
 d")
 echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/M3K3 b"

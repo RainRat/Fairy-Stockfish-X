@@ -9,30 +9,48 @@ init_test_env "${1:-}" "${2:-}" "StateInfo regression test"
 ENGINE_BASENAME=$(basename "${ENGINE}")
 CXX=${CXX:-g++}
 JOBS=${JOBS:-2}
-CXX_DEFS=()
+CXX_DEFS=(-DIS_64BIT -DUSE_PTHREADS)
+KNOWN_ENGINE_CONFIG=false
 case "${ENGINE_BASENAME}" in
   stockfish)
-    make -C "${ROOT_DIR}/src" EXE=stockfish objclean
-    make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 EXE=stockfish
+    KNOWN_ENGINE_CONFIG=true
     ;;
   stockfish-allvars*)
-    CXX_DEFS+=(-DLARGEBOARDS -DALLVARS -DNNUE_EMBEDDING_OFF)
-    make -C "${ROOT_DIR}/src" EXE=stockfish-allvars objclean
-    make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 largeboards=yes all=yes nnue=yes EXE=stockfish-allvars
+    KNOWN_ENGINE_CONFIG=true
+    CXX_DEFS+=(-DLARGEBOARDS -DPRECOMPUTED_MAGICS -DALLVARS -DNNUE_EMBEDDING_OFF)
     ;;
   stockfish-large*)
-    CXX_DEFS+=(-DLARGEBOARDS -DALLVARS -DNNUE_EMBEDDING_OFF)
-    make -C "${ROOT_DIR}/src" EXE=stockfish-large objclean
-    make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 largeboards=yes all=yes EXE=stockfish-large
+    KNOWN_ENGINE_CONFIG=true
+    CXX_DEFS+=(-DLARGEBOARDS -DPRECOMPUTED_MAGICS -DALLVARS -DNNUE_EMBEDDING_OFF)
     ;;
   stockfish-vlb*)
+    KNOWN_ENGINE_CONFIG=true
     CXX_DEFS+=(-DLARGEBOARDS -DVERY_LARGE_BOARDS -DALLVARS -DNNUE_EMBEDDING_OFF)
-    make -C "${ROOT_DIR}/src" EXE=stockfish-vlb objclean
-    make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 largeboards=yes verylargeboards=yes all=yes nnue=yes EXE=stockfish-vlb
     ;;
 esac
 
-if [[ ${#CXX_DEFS[@]} -eq 0 && -f "${ROOT_DIR}/src/position.o" ]]; then
+if [[ "${FSX_REUSE_OBJECTS:-0}" != "1" ]]; then
+  case "${ENGINE_BASENAME}" in
+    stockfish)
+      make -C "${ROOT_DIR}/src" EXE=stockfish objclean
+      make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 EXE=stockfish
+      ;;
+    stockfish-allvars*)
+      make -C "${ROOT_DIR}/src" EXE=stockfish-allvars objclean
+      make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 largeboards=yes all=yes nnue=yes EXE=stockfish-allvars
+      ;;
+    stockfish-large*)
+      make -C "${ROOT_DIR}/src" EXE=stockfish-large objclean
+      make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 largeboards=yes all=yes EXE=stockfish-large
+      ;;
+    stockfish-vlb*)
+      make -C "${ROOT_DIR}/src" EXE=stockfish-vlb objclean
+      make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 largeboards=yes verylargeboards=yes all=yes nnue=yes EXE=stockfish-vlb
+      ;;
+  esac
+fi
+
+if [[ "${KNOWN_ENGINE_CONFIG}" == "false" && -f "${ROOT_DIR}/src/position.o" ]]; then
   POSITION_O_SIG="$(nm -C "${ROOT_DIR}/src/position.o" 2>/dev/null || true)"
   if ! grep -q 'Position::fen(bool, bool, int, .*unsigned long) const' <<<"${POSITION_O_SIG}"; then
     CXX_DEFS+=(-DLARGEBOARDS -DPRECOMPUTED_MAGICS -DALLVARS -DNNUE_EMBEDDING_OFF)

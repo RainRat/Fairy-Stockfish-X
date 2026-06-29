@@ -264,12 +264,13 @@ bad_ini_syntax_option_ini=$(mktemp)
 bad_check_counting_ini=$(mktemp)
 bad_hopper_minmax_ini=$(mktemp)
 bad_piece_value_ini=$(mktemp)
+unknown_option_ini=$(mktemp)
 bad_royal_betza_ini=$(mktemp)
 bad_unmatched_closer_ini=$(mktemp)
 royal_blast_ini=$(mktemp)
 nonking_ini=$(mktemp)
 wrapped_support_ini=$(mktemp)
-trap 'rm -f "${tmp_ini}" "${bad_betza_ini}" "${bad_hopper_brace_ini}" "${bad_rider_range_ini}" "${bad_rank_wildcard_ini}" "${twochar_hint_ini}" "${bad_hopper_type_ini}" "${bad_hopper_numeric_ini}" "${capture_allowed_only_ini}" "${bad_rider_range_val_ini}" "${bad_tuple_atom_ini}" "${unsupported_bent_rose_modifier_ini}" "${bad_ini_syntax_option_ini}" "${bad_check_counting_ini}" "${bad_hopper_minmax_ini}" "${bad_piece_value_ini}" "${bad_royal_betza_ini}" "${bad_unmatched_closer_ini}" "${royal_blast_ini}" "${nonking_ini}" "${wrapped_support_ini}"' EXIT
+trap 'rm -f "${tmp_ini}" "${bad_betza_ini}" "${bad_hopper_brace_ini}" "${bad_rider_range_ini}" "${bad_rank_wildcard_ini}" "${twochar_hint_ini}" "${bad_hopper_type_ini}" "${bad_hopper_numeric_ini}" "${capture_allowed_only_ini}" "${bad_rider_range_val_ini}" "${bad_tuple_atom_ini}" "${unsupported_bent_rose_modifier_ini}" "${bad_ini_syntax_option_ini}" "${bad_check_counting_ini}" "${bad_hopper_minmax_ini}" "${bad_piece_value_ini}" "${unknown_option_ini}" "${bad_royal_betza_ini}" "${bad_unmatched_closer_ini}" "${royal_blast_ini}" "${nonking_ini}" "${wrapped_support_ini}"' EXIT
 
 cat > "${bad_betza_ini}" <<'INI'
 [custom-piece-missing-betza:chess]
@@ -367,6 +368,11 @@ INI
 cat > "${bad_piece_value_ini}" <<'INI'
 [bad-piece-value:chess]
 pieceValueMg = p:not_an_int
+INI
+
+cat > "${unknown_option_ini}" <<'INI'
+[unknown-option:chess]
+pieceDrop = true
 INI
 
 cat > "${bad_royal_betza_ini}" <<'INI'
@@ -477,6 +483,9 @@ assert_contains "${unsupported_bent_rose_output2}" "unknown variant 'unsupported
 
 bad_ini_syntax_output=$("${ENGINE}" check "${bad_ini_syntax_option_ini}" 2>&1 || true)
 assert_contains "${bad_ini_syntax_output}" "Invalid syntax: 'badOptionWithoutEquals'"
+assert_contains_literal "${bad_ini_syntax_output}" "Variant 'bad-ini-syntax' has invalid configuration. Skipping."
+bad_ini_syntax_uci_output=$(run_uci "$ENGINE" "$bad_ini_syntax_option_ini" "bad-ini-syntax" </dev/null 2>&1 || true)
+assert_contains "${bad_ini_syntax_uci_output}" "unknown variant 'bad-ini-syntax'; keeping 'chess'"
 
 bad_check_counting_output=$("${ENGINE}" check "${bad_check_counting_ini}" 2>&1 || true)
 assert_contains_literal "${bad_check_counting_output}" "checkCounting=true requires checking=true."
@@ -490,6 +499,13 @@ bad_piece_value_check_output=$("${ENGINE}" check "${bad_piece_value_ini}" 2>&1 |
 assert_contains "${bad_piece_value_check_output}" "pieceValueMg - Invalid syntax."
 bad_piece_value_uci_output=$(run_uci "$ENGINE" "$bad_piece_value_ini" "bad-piece-value" </dev/null 2>&1 || true)
 assert_contains "${bad_piece_value_uci_output}" "unknown variant 'bad-piece-value'; keeping 'chess'"
+
+unknown_option_check_output=$("${ENGINE}" check "${unknown_option_ini}" 2>&1 || true)
+assert_contains_literal "${unknown_option_check_output}" "Unknown option ignored: pieceDrop"
+assert_not_contains_literal "${unknown_option_check_output}" "has invalid configuration. Skipping."
+unknown_option_uci_output=$(run_uci "$ENGINE" "$unknown_option_ini" "unknown-option" </dev/null 2>&1 || true)
+assert_contains_literal "${unknown_option_uci_output}" "Unknown option ignored: pieceDrop"
+assert_not_contains "${unknown_option_uci_output}" "unknown variant 'unknown-option'"
 
 bad_royal_betza_output=$(run_uci "$ENGINE" "$bad_royal_betza_ini" "bad-royal-betza" </dev/null 2>&1 || true)
 assert_contains "${bad_royal_betza_output}" "king - Invalid Betza rider range in 'R\\[': missing closing '\\]'."

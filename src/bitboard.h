@@ -860,8 +860,7 @@ Bitboard rider_attacks_single_rider_bb(
 
 inline Bitboard rider_attacks_bb(
     RiderType R, Square s, Bitboard occupied, const MagicGeometry* mg = current_magic_geometry) {
-  if (R == NO_RIDER || (R & (R - 1)))
-      return Bitboard(0);
+  assert(R != NO_RIDER && !(R & (R - 1)));
   return rider_attacks_single_rider_bb(R, s, occupied, mg);
 }
 
@@ -937,7 +936,7 @@ inline Bitboard rider_attacks_bb(Square s, Bitboard occupied, const MagicGeometr
 
 inline Square lsb(Bitboard b);
 
-// Precondition: R is exactly one rider bit. Use rider_attacks_bb() for unchecked masks.
+// Precondition: R is exactly one rider bit.
 inline Bitboard rider_attacks_single_rider_bb(RiderType R, Square s, Bitboard occupied, const MagicGeometry* mg = current_magic_geometry) {
 
   assert(R != NO_RIDER && !(R & (R - 1)));
@@ -965,8 +964,7 @@ inline Bitboard rider_attacks_single_rider_bb(RiderType R, Square s, Bitboard oc
 }
 
 inline Bitboard rider_attacks_bb(RiderType R, Square s, Bitboard occupied, const MagicGeometry* mg = current_magic_geometry) {
-  if (R == NO_RIDER || (R & (R - 1)))
-      return Bitboard(0);
+  assert(R != NO_RIDER && !(R & (R - 1)));
   return rider_attacks_single_rider_bb(R, s, occupied, mg);
 }
 #endif

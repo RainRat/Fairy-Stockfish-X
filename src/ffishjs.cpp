@@ -54,6 +54,10 @@ std::mutex variant_state_mutex;
 void ensure_stockfish_initialized() {
   std::call_once(stockfish_init_flag, []() { initialize_stockfish(); });
 }
+
+[[noreturn]] void throw_js_error(const std::string& message) {
+  val::global("Error").new_(message).throw_();
+}
 }
 
 void initialize_stockfish() {
@@ -78,7 +82,7 @@ const Variant* get_variant(const std::string& uciVariant) {
     return variants.get("chess");
   if (const Variant* v = variants.get(uciVariant))
     return v;
-  return variants.get("chess");
+  throw_js_error("No such variant '" + uciVariant + "'");
 }
 
 template <bool isUCI>
@@ -399,7 +403,10 @@ public:
   }
 
   bool is_capture(std::string uciMove) const {
-    return pos.capture(UCI::to_move(pos, uciMove));
+    Move move = UCI::to_move(pos, uciMove);
+    if (move == MOVE_NONE)
+      throw_js_error("Invalid move '" + uciMove + "'");
+    return pos.capture(move);
   }
 
   std::string move_stack() const {
@@ -521,7 +528,10 @@ namespace ffish {
 
   template <typename T>
   void set_option(std::string name, T value) {
+    ensure_stockfish_initialized();
     std::lock_guard<std::mutex> lock(variant_state_mutex);
+    if (!Options.count(name))
+      throw_js_error("No such option '" + name + "'");
     Options[name] = value;
     Board::sfInitialized.store(false, std::memory_order_relaxed);
   }
@@ -549,24 +559,28 @@ namespace ffish {
   }
 
   bool captures_to_hand(std::string uciVariant) {
+    ensure_stockfish_initialized();
     std::lock_guard<std::mutex> lock(variant_state_mutex);
     const Variant* v = get_variant(uciVariant);
     return v->captureType != MOVE_OUT;
   }
 
   std::string starting_fen(std::string uciVariant) {
+    ensure_stockfish_initialized();
     std::lock_guard<std::mutex> lock(variant_state_mutex);
     const Variant* v = get_variant(uciVariant);
     return v->startFen;
   }
 
   int validate_fen(std::string fen, std::string uciVariant, bool chess960) {
+    ensure_stockfish_initialized();
     std::lock_guard<std::mutex> lock(variant_state_mutex);
     const Variant* v = get_variant(uciVariant);
     return FEN::validate_fen(fen, v, chess960);
   }
 
   int validate_position(std::string fen, std::string uciVariant, std::string uciMoves, bool chess960) {
+    ensure_stockfish_initialized();
     std::lock_guard<std::mutex> lock(variant_state_mutex);
     const Variant* v = get_variant(uciVariant);
     std::stringstream ss(uciMoves);

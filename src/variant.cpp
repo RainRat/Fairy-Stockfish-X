@@ -2468,6 +2468,7 @@ void VariantMap::parse_istream(std::istream& file) {
 
         // Read variant rules
         Config attribs = {};
+        bool invalidSyntax = false;
         while (file.peek() != '[' && std::getline(file, input))
         {
             if (!input.empty() && input.back() == '\r')
@@ -2481,6 +2482,7 @@ void VariantMap::parse_istream(std::istream& file) {
                 {
                     if (DoCheck)
                         std::cerr << "Invalid syntax: '" << input << "'." << std::endl;
+                    invalidSyntax = true;
                     continue;
                 }
                 if (std::getline(ss, key, '='))
@@ -2557,6 +2559,13 @@ void VariantMap::parse_istream(std::istream& file) {
                     else
                         ++warnings.boardSize;
                 }
+                continue;
+            }
+
+            if (invalidSyntax)
+            {
+                if (DoCheck)
+                    std::cerr << "Variant '" << variant << "' has invalid configuration. Skipping." << std::endl;
                 continue;
             }
 

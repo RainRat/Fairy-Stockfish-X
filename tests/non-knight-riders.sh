@@ -5,7 +5,7 @@ ROOT_DIR=$(cd "$(dirname "$0")/.." && pwd)
 ENGINE=${1:-"${ROOT_DIR}/src/stockfish"}
 case "${ENGINE}" in
   /*) ;;
-  *) ENGINE="$(pwd)/${ENGINE}" ;;
+  *) ENGINE="${ROOT_DIR}/${ENGINE}" ;;
 esac
 
 cd "${ROOT_DIR}/src"

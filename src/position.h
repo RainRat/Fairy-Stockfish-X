@@ -4333,19 +4333,7 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
       return b & (FilterMobility ? board_bb(c, pt) : board_bb());
   }
 
-  const bool needsGenericAttackAssembly = pi->has_runtime_rider_augment()
-                                       || pi->has_universal_hopper()
-                                       || pi->has_explicit_initial_moves()
-                                       || pi->has_simple_hopper_capture()
-                                       || pi->has_lame_capture()
-                                       || pi->griffon[0][MODALITY_CAPTURE]
-                                       || pi->griffon[1][MODALITY_CAPTURE]
-                                       || pi->manticore[0][MODALITY_CAPTURE]
-                                       || pi->manticore[1][MODALITY_CAPTURE]
-                                       || pi->rose[0][MODALITY_CAPTURE]
-                                       || pi->rose[1][MODALITY_CAPTURE]
-                                       || !pi->tupleSlider[0][MODALITY_CAPTURE].empty()
-                                       || !pi->tupleSlider[1][MODALITY_CAPTURE].empty();
+  const bool needsGenericAttackAssembly = pieceMap.generic_attack_assembly_types() & piece_set(movePt);
 
   if (!needsGenericAttackAssembly && fast_attacks() && (pt != KING || king_type() == KING))
   {
@@ -5535,7 +5523,7 @@ inline int Position::connect_line_count(Color c) const {
                   L++;
               }
               if (L >= targetN)
-                  countLines += L - targetN + 1;
+                  countLines += L == targetN ? 1 : L;
           }
       }
   }

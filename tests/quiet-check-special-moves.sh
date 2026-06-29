@@ -14,15 +14,22 @@ CXX=${CXX:-g++}
 JOBS=${JOBS:-2}
 ENGINE=${1:-./stockfish}
 ENGINE_BASENAME=$(basename "${ENGINE}")
-CXX_DEFS=()
+CXX_DEFS=(-DIS_64BIT -DUSE_PTHREADS)
+KNOWN_ENGINE_CONFIG=false
 case "${ENGINE_BASENAME}" in
+  stockfish)
+    KNOWN_ENGINE_CONFIG=true
+    ;;
   stockfish-allvars*)
-    CXX_DEFS+=(-DLARGEBOARDS -DALLVARS -DNNUE_EMBEDDING_OFF)
+    KNOWN_ENGINE_CONFIG=true
+    CXX_DEFS+=(-DLARGEBOARDS -DPRECOMPUTED_MAGICS -DALLVARS -DNNUE_EMBEDDING_OFF)
     ;;
   stockfish-large*)
-    CXX_DEFS+=(-DLARGEBOARDS -DALLVARS -DNNUE_EMBEDDING_OFF)
+    KNOWN_ENGINE_CONFIG=true
+    CXX_DEFS+=(-DLARGEBOARDS -DPRECOMPUTED_MAGICS -DALLVARS -DNNUE_EMBEDDING_OFF)
     ;;
   stockfish-vlb*)
+    KNOWN_ENGINE_CONFIG=true
     CXX_DEFS+=(-DLARGEBOARDS -DVERY_LARGE_BOARDS -DALLVARS -DNNUE_EMBEDDING_OFF)
     ;;
 esac
@@ -50,28 +57,30 @@ if [[ -f "${BUILD_SIG_FILE}" ]] && [[ "$(cat "${BUILD_SIG_FILE}")" == "${BUILD_S
   NEEDS_REBUILD=0
 fi
 
-case "${ENGINE_BASENAME}" in
-  stockfish)
-    # The harness links against the object files in src/. Rebuild the standard
-    # object set so the test is independent of any previous largeboard build.
-    make -C "${ROOT_DIR}/src" EXE=stockfish objclean
-    make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 EXE=stockfish
-    ;;
-  stockfish-allvars*)
-    make -C "${ROOT_DIR}/src" EXE=stockfish-allvars objclean
-    make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 largeboards=yes all=yes nnue=yes EXE=stockfish-allvars
-    ;;
-  stockfish-large*)
-    make -C "${ROOT_DIR}/src" EXE=stockfish-large objclean
-    make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 largeboards=yes all=yes EXE=stockfish-large
-    ;;
-  stockfish-vlb*)
-    make -C "${ROOT_DIR}/src" EXE=stockfish-vlb objclean
-    make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 largeboards=yes verylargeboards=yes all=yes nnue=yes EXE=stockfish-vlb
-    ;;
-esac
+if [[ "${FSX_REUSE_OBJECTS:-0}" != "1" ]]; then
+  case "${ENGINE_BASENAME}" in
+    stockfish)
+      # The harness links against the object files in src/. Rebuild the standard
+      # object set so the test is independent of any previous largeboard build.
+      make -C "${ROOT_DIR}/src" EXE=stockfish objclean
+      make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 EXE=stockfish
+      ;;
+    stockfish-allvars*)
+      make -C "${ROOT_DIR}/src" EXE=stockfish-allvars objclean
+      make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 largeboards=yes all=yes nnue=yes EXE=stockfish-allvars
+      ;;
+    stockfish-large*)
+      make -C "${ROOT_DIR}/src" EXE=stockfish-large objclean
+      make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 largeboards=yes all=yes EXE=stockfish-large
+      ;;
+    stockfish-vlb*)
+      make -C "${ROOT_DIR}/src" EXE=stockfish-vlb objclean
+      make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 largeboards=yes verylargeboards=yes all=yes nnue=yes EXE=stockfish-vlb
+      ;;
+  esac
+fi
 
-if [[ ${#CXX_DEFS[@]} -eq 0 && -f "${ROOT_DIR}/src/position.o" ]]; then
+if [[ "${KNOWN_ENGINE_CONFIG}" == "false" && -f "${ROOT_DIR}/src/position.o" ]]; then
   POSITION_O_SIG="$(nm -C "${ROOT_DIR}/src/position.o" 2>/dev/null || true)"
   if ! grep -q 'Position::fen(bool, bool, int, .*unsigned long) const' <<<"${POSITION_O_SIG}"; then
     CXX_DEFS+=(-DLARGEBOARDS -DPRECOMPUTED_MAGICS -DALLVARS -DNNUE_EMBEDDING_OFF)

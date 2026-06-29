@@ -8,7 +8,7 @@ source "${SCRIPT_DIR}/lib/uci.sh"
 init_test_env "${1:-}" "${2:-}" "bycatch undo parity test"
 
 CXX=${CXX:-g++}
-CXX_DEFS=()
+CXX_DEFS=(-DIS_64BIT -DUSE_PTHREADS)
 if ! nm -C "${ROOT_DIR}/src/position.o" | grep -q 'Position::fen(bool, bool, int, .*unsigned long) const'; then
   CXX_DEFS+=(-DLARGEBOARDS -DPRECOMPUTED_MAGICS -DALLVARS)
 fi

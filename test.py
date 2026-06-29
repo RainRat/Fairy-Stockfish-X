@@ -621,8 +621,7 @@ startFen = 7k/8/8/8/8/8/8/A5K1 w - - 0 1
         # Jump captures should honor selfCapture when the jumped piece is friendly.
         sf.load_variant_config(
             """[selfjump:chess]
-customPiece1 = a:mD
-jumpCaptureTypes = a
+customPiece1 = a:c{hurdles: 1,1; pre: 1,1; post: 1,1; capture: locust_first; hurdle_types: friendly}R
 selfCapture = true
 startFen = 7k/8/8/8/8/8/P7/A6K w - - 0 1
 """
@@ -2150,19 +2149,33 @@ startFen = 8/8/8/8/8/8/8/8 w - - 0 1
             """[wrap-count-test:chess]
 maxRank = 3
 maxFile = 4
-wrapsTopology = toroidal
+toroidal = true
 connectN = 3
 connectDiagonal = false
 materialCounting = connectn
 nMoveRule = 1
 startFen = 4/4/4 w - - 0 1
+
+[wrap-count-full-cycle:chess]
+maxRank = 5
+maxFile = 4
+toroidal = true
+connectN = 4
+connectDiagonal = false
+materialCounting = connectn
+nMoveRule = 1
+startFen = 4/4/4/4/4 w - - 0 1
 """
         )
-        # White has a closed loop of length 4 (Rank 1: PPPP), which counts as 4 - 3 + 1 = 2 lines.
+        # White has a closed loop of length 4 (Rank 1: PPPP), which has 4 cyclic lines of length 3.
         # Black has two open chains of length 3 (Rank 2: ppp., Rank 3: ppp.), which count as 1 + 1 = 2 lines.
-        # Since lines are equal (2 vs 2), it should be a draw (0 score).
+        # White wins by 4 lines to 2.
         # We trigger optional game end via nMoveRule = 1 and rule50 = 2.
-        self._check_optional_game_end("wrap-count-test", "ppp1/ppp1/PPPP[PPPPpppp] w - - 2 1", [], True, 0)
+        self._check_optional_game_end("wrap-count-test", "ppp1/ppp1/PPPP[PPPPpppp] w - - 2 1", [], True, sf.VALUE_MATE)
+
+        # A cycle exactly as long as connectN is one unique line. Black's vertical
+        # open chain is also one line, so this position is a draw.
+        self._check_optional_game_end("wrap-count-full-cycle", "p3/p3/p3/p3/PPPP[PPPPpppp] w - - 2 1", [], True, sf.VALUE_DRAW)
 
         # If White has 1 open chain of 3 (PPP.), White has 1 line.
         # Black has 2 open chains of 3 (ppp., ppp.), Black has 2 lines.

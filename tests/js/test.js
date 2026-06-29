@@ -666,6 +666,7 @@ describe('board.isCapture(move)', function() {
 
     board = new ffish.Board("sittuyin", "8/2k5/8/4P3/4P1N1/5K2/8/8[] w - - 0 1");
     chai.expect(board.isCapture("e5e5f")).to.equal(false);
+    chai.expect(() => board.isCapture("badmove")).to.throw("Invalid move 'badmove'");
     board.delete();
   });
 });
@@ -800,6 +801,7 @@ describe('board.variant()', function () {
     const board5 = new ffish.Board("atomic");
     chai.expect(board5.variant()).to.equal("atomic");
     board5.delete();
+    chai.expect(() => new ffish.Board("not-a-variant")).to.throw("No such variant 'not-a-variant'");
   });
 });
 
@@ -812,6 +814,7 @@ describe('ffish.info()', function () {
 describe('ffish.setOption(name, value)', function () {
   it("it sets a string uci option value pair", () => {
     ffish.setOption("VariantPath", "variants.ini");
+    chai.expect(() => ffish.setOption("DefinitelyNotAnOption", "x")).to.throw("No such option 'DefinitelyNotAnOption'");
     chai.expect(true).to.equal(true);
   });
 });
@@ -840,6 +843,7 @@ describe('ffish.capturesToHand(uciVariant)', function () {
 describe('ffish.startingFen(uciVariant)', function () {
     it("it returns the starting fen for the given uci-variant.", () => {
       chai.expect(ffish.startingFen("chess")).to.equal("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+      chai.expect(() => ffish.startingFen("not-a-variant")).to.throw("No such variant 'not-a-variant'");
     });
 });
 
@@ -889,6 +893,7 @@ describe('ffish.validateFen(fen, uciVariant)', function () {
       chai.expect(ffish.validateFen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR[] w KQkq - 3+3 x 1", "3check-crazyhouse")).to.equal(-2);
       chai.expect(ffish.validateFen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR[] w KQkq - 3+3 0 -13", "3check-crazyhouse")).to.equal(-1);
       chai.expect(ffish.validateFen("", "chess")).to.equal(0);
+      chai.expect(() => ffish.validateFen(ffish.startingFen("chess"), "not-a-variant")).to.throw("No such variant 'not-a-variant'");
       chai.expect(
         ffish.validateFen(
           "rnbqhb1r/ppppk1pp/5p2/4N2Q/4n3/8/PPPP1PPP/RNBEKB1R[He] w BCFabcdfh - 2 6",
