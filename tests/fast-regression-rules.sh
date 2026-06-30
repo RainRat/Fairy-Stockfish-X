@@ -211,6 +211,39 @@ print("custom en passant passed squares regression tests passed")
 PY
 }
 
+test_two_custom_pawn_en_passant() {
+  run_pyffish_test <<'PY'
+import pyffish as sf
+
+sf.load_variant_config(r"""
+[two-pawns:chess]
+customPiece1 = z:fmWifmW2fceF
+pawnTypes = pz
+enPassantTypes = pz
+promotionPawnTypes = pz
+promotedPieceType = z:n
+pieceToCharTable = PNBRQ....Z.........Kpnbrq....z.........k
+""")
+
+# The Betza initial modifier permits the double-step only before the piece moves.
+initial = "4k3/8/8/8/8/8/3Z4/4K3 w - - 0 1"
+assert "d2d4" in sf.legal_moves("two-pawns", initial, [])
+moved = "4k3/8/8/8/8/3Z4/8/4K3 w - - 0 1"
+assert "d3d5" not in sf.legal_moves("two-pawns", moved, [])
+
+# Either pawn family can create an EP target and either configured family can capture it.
+z_target = "4k3/8/8/8/2p5/8/3Z4/4K3 w - - 0 1"
+z_ep = sf.get_fen("two-pawns", z_target, ["d2d4"])
+assert sf.is_capture("two-pawns", z_ep, [], "c4d3"), z_ep
+
+p_target = "4k3/8/8/8/2z5/8/3P4/4K3 w - - 0 1"
+p_ep = sf.get_fen("two-pawns", p_target, ["d2d4"])
+assert sf.is_capture("two-pawns", p_ep, [], "c4d3"), p_ep
+
+print("two custom pawn en passant regression tests passed")
+PY
+}
+
 test_rule_definition_color_overrides() {
   local tmp_ini out
   tmp_ini=$(mktemp "${TMPDIR:-/tmp}/fsx-rule-color-overrides-XXXXXX.ini")
@@ -711,6 +744,7 @@ test_flip_regressions
 test_potion_check_regressions
 test_repetition_loss_search
 test_custom_en_passant_passed_squares
+test_two_custom_pawn_en_passant
 test_rule_definition_color_overrides
 test_rule_definition_phase_overrides
 test_standard_piece_value_phase
