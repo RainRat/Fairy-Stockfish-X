@@ -65,6 +65,11 @@ go perft 1")
 ! echo "${out}" | grep -q "^f@g3,f2f3:"
 ! echo "${out}" | grep -q "^f@g3,f2f4:"
 
+# Same-turn cast Freeze on own royal prevents royal moves and castling.
+out=$(run_cmds "position fen 4k3/8/8/8/8/8/8/4K2R[F] w K - 0 1
+go perft 1")
+! echo "${out}" | grep -q "^f@e1,e1"
+
 # Blocked pawn on rank 2 can double-step to rank 4 if blocker is treated with Jump potion.
 out=$(run_cmds "position fen 4k3/8/8/8/8/4p3/4P3/4K3[J] w - - 0 1
 go perft 1")

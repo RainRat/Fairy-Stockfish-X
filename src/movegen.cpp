@@ -1245,6 +1245,7 @@ namespace {
 
     // Royal moves must not be restricted to checker capture/interposition targets.
     if (royalPt != NO_PIECE_TYPE && royalSq != SQ_NONE
+        && !(pos.freeze_squares() & royalSq)
         && (!restrictToForcedJumper || (forcedFromMask & royalSq))
         && (!Checks || pos.topology_wraps() || (pos.blockers_for_king(~Us) & royalSq) || royalPt != KING))
     {
