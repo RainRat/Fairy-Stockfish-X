@@ -566,6 +566,15 @@ namespace {
         return parse_named_value(value, target, values);
     }
 
+    template <> bool set(const std::string& value, LibertyAction& target) {
+        static constexpr auto values = std::array{
+            std::pair{"none", LibertyAction::NONE},
+            std::pair{"remove", LibertyAction::REMOVE},
+            std::pair{"forbid", LibertyAction::FORBID},
+        };
+        return parse_named_value(value, target, values);
+    }
+
     template <> bool set(const std::string& value, PointsRule& target) {
         static constexpr auto values = std::array{
             std::pair{"us", POINTS_US},
@@ -992,6 +1001,7 @@ template <bool Current, class T> bool VariantParser<DoCheck>::parse_attribute(co
                                   : std::is_same_v<T, CastlingRights> ? "CastlingRights"
                                   : std::is_same_v<T, ColorChangeTrigger> ? "ColorChangeTrigger"
                                   : std::is_same_v<T, EnPassantPassedSquares> ? "EnPassantPassedSquares"
+                                  : std::is_same_v<T, LibertyAction> ? "LibertyAction"
                                   : std::is_same_v<T, WallingRule> ? "WallingRule"
                                   : std::is_same_v<T, std::vector<int>> ? "vector<int>"
                                   : typeid(T).name();
@@ -1460,6 +1470,8 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("surroundCaptureEdge", v->surroundCaptureEdge);
     parse_attribute("surroundCaptureMaxRegion", v->surroundCaptureMaxRegion);
     parse_attribute("surroundCaptureHostileRegion", v->surroundCaptureHostileRegion);
+    parse_attribute("libertyCapture", v->libertyCapture);
+    parse_attribute("libertySelfCapture", v->libertySelfCapture);
     parse_attribute("doubleStep", v->doubleStep);
     parse_color_setting("doubleStepRegion", v->doubleStepRegion);
     parse_color_setting("tripleStepRegion", v->tripleStepRegion);
@@ -1889,6 +1901,14 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
     {
         if (DoCheck)
             std::cerr << "pieceDrops and any walling are incompatible." << std::endl;
+        valid = false;
+    }
+    if ((v->libertyCapture != LibertyAction::NONE
+      || v->libertySelfCapture != LibertyAction::NONE)
+        && (!v->pieceDrops || v->captureDrops || v->symmetricDropTypes || v->openingSwapDrop))
+    {
+        if (DoCheck)
+            std::cerr << "libertyCapture/libertySelfCapture require ordinary single-piece drops onto empty squares." << std::endl;
         valid = false;
     }
     if (v->edgeInsertTypes && !v->pieceDrops)

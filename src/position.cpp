@@ -3124,6 +3124,57 @@ Bitboard Position::compute_surround_capture_mask(Square moverSq, Bitboard usPiec
   return mask;
 }
 
+Bitboard Position::compute_liberty_group(Square root, Bitboard groupPieces, Bitboard occupied,
+                                         bool& hasLiberty) const {
+  Bitboard group = 0, fringe = square_bb(root);
+  hasLiberty = false;
+
+  while (fringe)
+  {
+      Square s = pop_lsb(fringe);
+      group |= s;
+      Bitboard adjacent = attacks_bb<WAZIR>(s, occupied) & board_bb();
+      if (adjacent & ~occupied)
+          hasLiberty = true;
+      fringe |= adjacent & groupPieces & ~group;
+  }
+
+  return group;
+}
+
+Bitboard Position::compute_liberty_capture_mask(Square placed, Color us, Bitboard occupied) const {
+  Bitboard mask = 0;
+  Bitboard candidates = attacks_bb<WAZIR>(placed, occupied) & board_bb() & pieces(~us);
+
+  while (candidates)
+  {
+      Square root = lsb(candidates);
+      bool hasLiberty;
+      Bitboard group = compute_liberty_group(root, pieces(~us), occupied, hasLiberty);
+      candidates &= ~group;
+      if (!hasLiberty)
+          mask |= group;
+  }
+
+  return mask;
+}
+
+bool Position::liberty_drop_legal(Square to, Color us) const {
+  assert(var->libertyCapture != LibertyAction::NONE
+      || var->libertySelfCapture != LibertyAction::NONE);
+
+  Bitboard occupied = pieces() | to;
+  Bitboard captured = compute_liberty_capture_mask(to, us, occupied);
+  if (captured && var->libertyCapture == LibertyAction::FORBID)
+      return false;
+  if (var->libertyCapture == LibertyAction::REMOVE)
+      occupied &= ~captured;
+
+  bool hasLiberty;
+  compute_liberty_group(to, pieces(us) | to, occupied, hasLiberty);
+  return hasLiberty || var->libertySelfCapture != LibertyAction::FORBID;
+}
+
 
 Bitboard Position::compute_remove_connect_n_mask(
     const std::vector<Bitboard>& baseLines,
@@ -3577,6 +3628,11 @@ bool Position::legal(Move m) const {
       }
 
       if (!(drop_region(us, type_of(moved_piece(m))) & legalDropTargets & to))
+          return false;
+
+      if (   (var->libertyCapture != LibertyAction::NONE
+           || var->libertySelfCapture != LibertyAction::NONE)
+          && !liberty_drop_legal(to, us))
           return false;
   }
 
@@ -4648,7 +4704,10 @@ bool Position::pseudo_legal(const Move m) const {
                         && count_in_prison(us, exchange_piece(m)) > 0
                         && count_in_prison(~us, in_hand_piece_type(m)) > 0))
             && (drop_region(us, type_of(pc)) & legalDropTargets & to)
-            && (drop_piece_types(in_hand_piece_type(m)) & type_of(pc));
+            && (drop_piece_types(in_hand_piece_type(m)) & type_of(pc))
+            && ((var->libertyCapture == LibertyAction::NONE
+              && var->libertySelfCapture == LibertyAction::NONE)
+                || liberty_drop_legal(to, us));
   }
 
   // Use a slower but simpler function for uncommon cases
@@ -6371,6 +6430,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
          ( blast_on_self_destruct() && is_self_destruct(m) ) ||
          var->blastPassiveTypes ||
          ( remove_connect_n() > 0 ) ||
+         ( dropMove && (var->libertyCapture == LibertyAction::REMOVE
+                     || var->libertySelfCapture == LibertyAction::REMOVE) ) ||
          ( pi && pi->has_universal_hopper() && jumpCapsq != SQ_NONE )
        )
        && !is_pass(m)
@@ -6378,6 +6439,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
 
   {
       Bitboard removal_mask = 0;
+      Bitboard liberty_capture_removal = 0;
+      Bitboard liberty_self_removal = 0;
       Bitboard blast_mask = 0;
       Bitboard connect_mask = 0;
       std::memset(st->unpromotedBycatch, 0, sizeof(st->unpromotedBycatch));
@@ -6406,6 +6469,24 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
 
       if ( surround_capture_opposite() || surround_capture_intervene() || surround_capture_edge() ) {
           removal_mask |= compute_surround_capture_mask(moverSq, pieces(us), pieces(~us), pieces());
+      }
+
+      if (dropMove && var->libertyCapture == LibertyAction::REMOVE)
+      {
+          liberty_capture_removal = compute_liberty_capture_mask(moverSq, us, pieces());
+          removal_mask |= liberty_capture_removal;
+      }
+
+      if (dropMove && var->libertySelfCapture == LibertyAction::REMOVE)
+      {
+          Bitboard occupied = pieces() & ~liberty_capture_removal;
+          bool hasLiberty;
+          Bitboard group = compute_liberty_group(moverSq, pieces(us), occupied, hasLiberty);
+          if (!hasLiberty)
+          {
+              removal_mask |= liberty_self_removal = group;
+              st->libertySelfRemoved = group;
+          }
       }
 
       if (pi && pi->has_universal_hopper() && jumpCapsq != SQ_NONE)
@@ -6493,7 +6574,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           board[bsq] = NO_PIECE;
 
           // Points assignment logic
-          if (points_counting()) {
+          if (points_counting() && !(liberty_self_removal & bsq)) {
               add_capture_points(st, us, bpc);
           }
 
@@ -6501,7 +6582,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           Piece transferPiece = reserve_transfer_piece(us, bpc, capturedPromoted, unpromotedCaptured,
                                                        drop_loop(), var->captureToHandSide,
                                                        main_promotion_pawn_type(color_of(bpc)));
-          if (!petrifiedCenter)
+          if (!petrifiedCenter && !(liberty_self_removal & bsq))
           {
               bool transferred = add_capture_transfer(st, transferPiece, &k);
               if (Eval::useNNUE && bycatchDirtyIdx >= 0 && transferred)
@@ -6630,7 +6711,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       remove_destination_piece_no_capture_effects(moverSq, makeDeadSquare);
   }
 
-  Bitboard localBycatch = st->bycatchSquares & (blast_pattern(moverSq) | square_bb(moverSq));
+  Bitboard localBycatch = (st->bycatchSquares & ~st->libertySelfRemoved)
+                        & (blast_pattern(moverSq) | square_bb(moverSq));
   bool captureHappened = captured != NO_PIECE || localBycatch;
   if (trigger_matches(var->changingColorTrigger, captureHappened)
       && !is_pass(m)
@@ -6915,7 +6997,9 @@ void Position::undo_move(Move m) {
               Piece transferPiece = reserve_transfer_piece(us, bpc, bool((st->promotedBycatch | st->demotedBycatch) & bsq), unpromotedBpc,
                                                            drop_loop(), var->captureToHandSide,
                                                            main_promotion_pawn_type(color_of(unpromotedBpc)));
-               if (!wasBlastPromoted && !petrifiedCenter)
+               if (   !wasBlastPromoted
+                   && !petrifiedCenter
+                   && !(st->libertySelfRemoved & bsq))
                {
                    undo_capture_transfer(st, transferPiece);
                }

@@ -242,6 +242,7 @@ struct StateInfoDerived {
 
 struct MoveUndoInfo {
   Bitboard   bycatchSquares = Bitboard(0);
+  Bitboard   libertySelfRemoved = Bitboard(0);
   Piece      unpromotedBycatch[SQUARE_NB] = {NO_PIECE};
   Bitboard   promotedBycatch = Bitboard(0);
   Bitboard   demotedBycatch = Bitboard(0);
@@ -268,6 +269,7 @@ struct MoveUndoInfo {
 
   void clear() {
     bycatchSquares = Bitboard(0);
+    libertySelfRemoved = Bitboard(0);
     std::memset(unpromotedBycatch, 0, sizeof(unpromotedBycatch));
     promotedBycatch = Bitboard(0);
     demotedBycatch = Bitboard(0);
@@ -296,6 +298,7 @@ struct MoveUndoInfo {
 #ifndef NDEBUG
   bool empty() const {
     return bycatchSquares == Bitboard(0)
+        && libertySelfRemoved == Bitboard(0)
         && promotedBycatch == Bitboard(0)
         && demotedBycatch == Bitboard(0)
         && blastPromotedSquares == Bitboard(0)
@@ -453,6 +456,9 @@ public:
   Bitboard surround_capture_max_region() const;
   Bitboard surround_capture_hostile_region() const;
   Bitboard compute_surround_capture_mask(Square moverSq, Bitboard usPieces, Bitboard themPieces, Bitboard occupied) const;
+  Bitboard compute_liberty_capture_mask(Square placed, Color us, Bitboard occupied) const;
+  Bitboard compute_liberty_group(Square root, Bitboard groupPieces, Bitboard occupied, bool& hasLiberty) const;
+  bool liberty_drop_legal(Square to, Color us) const;
   Bitboard compute_remove_connect_n_mask(const std::vector<Bitboard>& baseLines, Bitboard alreadyRemoved, Bitboard blastMask, Bitboard& connectMask) const;
   EndgameEval endgame_eval() const;
   Bitboard double_step_region(Color c) const;

@@ -52,6 +52,12 @@ enum class EnPassantPassedSquares {
   LAST
 };
 
+enum class LibertyAction {
+  NONE,
+  REMOVE,
+  FORBID
+};
+
 template <typename T>
 struct ColorSetting {
   T global;
@@ -174,6 +180,8 @@ struct Variant {
   bool surroundCaptureEdge = false;
   Bitboard surroundCaptureMaxRegion = 0;
   Bitboard surroundCaptureHostileRegion = 0;
+  LibertyAction libertyCapture = LibertyAction::NONE;
+  LibertyAction libertySelfCapture = LibertyAction::NONE;
   bool doubleStep = true;
   ColorSetting<PieceTypeBitboardGroup> doubleStepRegion = ColorSetting<PieceTypeBitboardGroup>(Rank2BB, Rank7BB);
   ColorSetting<PieceTypeBitboardGroup> tripleStepRegion = ColorSetting<PieceTypeBitboardGroup>(Bitboard(0));

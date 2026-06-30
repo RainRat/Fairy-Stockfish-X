@@ -995,6 +995,63 @@ piecePoints = n:5
         paired_moves_9 = [m for m in moves_9 if "," in m]
         self.assertEqual(len(paired_moves_9), 0)
 
+    def test_liberty_capture_actions(self):
+        sf.load_variant_config(
+            """[liberty-base]
+maxRank = 5
+maxFile = 5
+pieceToCharTable = -
+king = -
+immobile = p
+startFen = 5/5/5/5/5[] b - - 0 1
+pieceDrops = true
+freeDrops = true
+libertyCapture = remove
+libertySelfCapture = forbid
+doubleStep = false
+castling = false
+immobilityIllegal = false
+nMoveRule = 0
+
+[liberty-forbid:liberty-base]
+libertyCapture = forbid
+
+[liberty-self-remove:liberty-base]
+libertySelfCapture = remove
+
+[liberty-self-hand:liberty-self-remove]
+freeDrops = false
+captureType = hand
+startFen = 5/5/2p2/1p1p1/2p2[P] w - - 0 1
+"""
+        )
+
+        start = sf.start_fen("liberty-base")
+        self.assertIn("P@c3", sf.legal_moves("liberty-base", start, []))
+
+        setup = ["P@c3", "P@c2", "P@b2", "P@a1", "P@d2", "P@a2"]
+        after_capture = sf.get_fen("liberty-base", start, setup + ["P@c1"])
+        self.assertEqual(after_capture.split()[0], "5/5/2p2/Pp1p1/P1p2")
+
+        group_fen = "5/5/1pPp1/1pPp1/2p2[] b - - 0 1"
+        after_group_capture = sf.get_fen("liberty-base", group_fen, ["P@c4"])
+        self.assertEqual(after_group_capture.split()[0], "5/2p2/1p1p1/1p1p1/2p2")
+
+        before_capture = sf.get_fen("liberty-forbid", sf.start_fen("liberty-forbid"), setup)
+        self.assertNotIn("P@c1", sf.legal_moves("liberty-forbid", before_capture, []))
+        self.assertNotIn("P@c4", sf.legal_moves("liberty-forbid", group_fen, []))
+
+        suicide_fen = "5/5/2p2/1p1p1/2p2[] w - - 0 1"
+        self.assertNotIn("P@c2", sf.legal_moves("liberty-base", suicide_fen, []))
+        self.assertIn("P@c2", sf.legal_moves("liberty-self-remove", suicide_fen, []))
+        after_suicide = sf.get_fen("liberty-self-remove", suicide_fen, ["P@c2"])
+        self.assertEqual(after_suicide.split()[0], "5/5/2p2/1p1p1/2p2")
+
+        hand_start = sf.start_fen("liberty-self-hand")
+        self.assertIn("P@c2", sf.legal_moves("liberty-self-hand", hand_start, []))
+        after_hand_suicide = sf.get_fen("liberty-self-hand", hand_start, ["P@c2"])
+        self.assertEqual(after_hand_suicide.split()[0], "5/5/2p2/1p1p1/2p2[]")
+
     def test_ichess_setup_basics(self):
         load_repo_variants_or_skip()
         fen = sf.start_fen("ichess")
