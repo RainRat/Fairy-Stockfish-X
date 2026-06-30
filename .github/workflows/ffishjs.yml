@@ -44,6 +44,20 @@ jobs:
       - name: Run unit tests
         working-directory: tests/js
         run: npm test
+      - name: Build very-large-board ES6 module
+        working-directory: src
+        run: make -f Makefile_js clean && make -f Makefile_js build verylargeboards=yes es6=yes
+      - name: Smoke test very-large-board ES6 module
+        working-directory: tests/js
+        run: |
+          node --input-type=module <<'JS'
+          import createFfish from './ffish.js';
+          const ffish = await createFfish();
+          const board = new ffish.Board('omega');
+          if (board.fen() !== 'w**********w/*crnbqkbnrc*/*pppppppppp*/*10*/*10*/*10*/*10*/*10*/*10*/*PPPPPPPPPP*/*CRNBQKBNRC*/W**********W w KQkq - 0 1')
+            throw new Error(`Unexpected omega start FEN: ${board.fen()}`);
+          board.delete();
+          JS
 
   build:
     runs-on: ubuntu-24.04

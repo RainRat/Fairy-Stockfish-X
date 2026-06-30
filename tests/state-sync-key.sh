@@ -261,6 +261,22 @@ castling = false
 capturesToHand = true
 spell = true
 startFen = 4k3/8/8/8/8/8/8/4K3[] w - - 0 1
+
+[libertysync]
+maxRank = 5
+maxFile = 5
+pieceToCharTable = -
+king = -
+immobile = p
+pieceDrops = true
+captureType = prison
+pointsCounting = true
+piecePoints = p:3
+libertyCapture = remove
+libertySelfCapture = remove
+castling = false
+immobilityIllegal = false
+startFen = 5/5/2p2/1p1p1/2p2[P] w - - 0 1 {10 10}
 INI
 tmp_ini="${FSX_TMP_INI}"
 
@@ -289,5 +305,8 @@ assert_reload_eval_match "${tmp_ini}" "spellprisonex" "position startpos moves q
 assert_distinct_position_keys "${tmp_ini}" "spellprisonex" \
   "4k3/8/8/8/8/8/8/4K3[] w - - 0 1" \
   "4k3/8/8/8/8/8/8/4K3[Q] w - - 0 1"
+
+assert_reload_key_match "${tmp_ini}" "libertysync" "position startpos moves P@c2"
+assert_reload_perft1_match "${tmp_ini}" "libertysync" "position startpos moves P@c2"
 
 echo "state-sync key tests passed"

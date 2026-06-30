@@ -48,6 +48,20 @@ surroundCaptureIntervene = true
 changingColorTrigger = capture
 changingColorPieceTypes = *
 startFen = 4k3/8/8/8/8/3p1p2/4R3/4K3 w - - 0 1
+
+[liberty-undo]
+maxRank = 5
+maxFile = 5
+pieceToCharTable = -
+king = -
+immobile = p
+pieceDrops = true
+captureType = hand
+libertyCapture = remove
+libertySelfCapture = remove
+castling = false
+immobilityIllegal = false
+startFen = 5/5/2p2/1p1p1/2p2[P] w - - 0 1
 )ini");
     variants.parse_istream<false>(ss);
 }
@@ -77,6 +91,29 @@ int main() {
     assert(pos.state()->boardKey == beforeBoardKey);
     assert(pos.state()->pawnKey == beforePawnKey);
     assert(pos.state()->materialKey == beforeMaterialKey);
+
+    StateInfo libertyState{};
+    pos.set(variants.get("liberty-undo"), variants.get("liberty-undo")->startFen,
+            false, &libertyState, nullptr);
+    std::string dropText = "P@c2";
+    const Move drop = UCI::to_move(pos, dropText);
+    assert(drop != MOVE_NONE);
+    assert(pos.legal(drop));
+    const std::string beforeFen = pos.fen();
+    const Key libertyKey = pos.state()->key;
+    const Key libertyBoardKey = pos.state()->boardKey;
+    const Key libertyPawnKey = pos.state()->pawnKey;
+    const Key libertyMaterialKey = pos.state()->materialKey;
+    StateInfo libertyNext{};
+    pos.do_move(drop, libertyNext);
+    assert(pos.pos_is_ok());
+    pos.undo_move(drop);
+    assert(pos.pos_is_ok());
+    assert(pos.fen() == beforeFen);
+    assert(pos.state()->key == libertyKey);
+    assert(pos.state()->boardKey == libertyBoardKey);
+    assert(pos.state()->pawnKey == libertyPawnKey);
+    assert(pos.state()->materialKey == libertyMaterialKey);
     return 0;
 }
 EOF

@@ -1905,7 +1905,16 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
     }
     if ((v->libertyCapture != LibertyAction::NONE
       || v->libertySelfCapture != LibertyAction::NONE)
-        && (!v->pieceDrops || v->captureDrops || v->symmetricDropTypes || v->openingSwapDrop))
+        && (!v->pieceDrops
+            || v->captureDrops
+            || v->symmetricDropTypes
+            || v->openingSwapDrop
+            || v->selfCapture
+            || v->selfCaptureTypes != NO_PIECE_SET
+            || v->selfCapture.get(WHITE)
+            || v->selfCapture.get(BLACK)
+            || v->selfCaptureTypes.get(WHITE) != NO_PIECE_SET
+            || v->selfCaptureTypes.get(BLACK) != NO_PIECE_SET))
     {
         if (DoCheck)
             std::cerr << "libertyCapture/libertySelfCapture require ordinary single-piece drops onto empty squares." << std::endl;

@@ -1023,8 +1023,19 @@ libertySelfCapture = remove
 freeDrops = false
 captureType = hand
 startFen = 5/5/2p2/1p1p1/2p2[P] w - - 0 1
+
+[liberty-self-capture-invalid:liberty-base]
+selfCapture = true
+
+[liberty-self-capture-type-invalid:liberty-base]
+selfCaptureTypesWhite = p
 """
         )
+
+        with self.assertRaises(ValueError):
+            sf.start_fen("liberty-self-capture-invalid")
+        with self.assertRaises(ValueError):
+            sf.start_fen("liberty-self-capture-type-invalid")
 
         start = sf.start_fen("liberty-base")
         self.assertIn("P@c3", sf.legal_moves("liberty-base", start, []))
@@ -1046,6 +1057,13 @@ startFen = 5/5/2p2/1p1p1/2p2[P] w - - 0 1
         self.assertIn("P@c2", sf.legal_moves("liberty-self-remove", suicide_fen, []))
         after_suicide = sf.get_fen("liberty-self-remove", suicide_fen, ["P@c2"])
         self.assertEqual(after_suicide.split()[0], "5/5/2p2/1p1p1/2p2")
+
+        group_suicide_fen = "5/2p2/1pPp1/1p1p1/2p2[P] w - - 0 1"
+        self.assertIn("P@c2", sf.legal_moves("liberty-self-remove", group_suicide_fen, []))
+        after_group_suicide = sf.get_fen(
+            "liberty-self-remove", group_suicide_fen, ["P@c2"]
+        )
+        self.assertEqual(after_group_suicide.split()[0], "5/2p2/1p1p1/1p1p1/2p2")
 
         hand_start = sf.start_fen("liberty-self-hand")
         self.assertIn("P@c2", sf.legal_moves("liberty-self-hand", hand_start, []))

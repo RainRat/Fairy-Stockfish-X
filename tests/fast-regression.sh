@@ -60,6 +60,15 @@ hash_source_tree() {
   fi
 }
 
+hash_object_tree() {
+  local obj
+  shopt -s nullglob
+  for obj in "${ROOT_DIR}"/src/*.o; do
+    printf '%s %s\n' "${obj##*/}" "$(hash_file "${obj}")"
+  done
+  shopt -u nullglob
+}
+
 ensure_pyffish_extension() {
   local setup_hash source_hash py_version cxx_version current_sig cached_sig pyffish_so=""
 
@@ -188,8 +197,7 @@ prepare_harness_objects() {
   desired_sig=$(printf '%s|%s|%s|%s|%s\n' \
     "${ENGINE_BASENAME}" "${cxx_version}" "$(hash_file "${ROOT_DIR}/src/Makefile")" \
     "$(hash_file "${ROOT_DIR}/tests/fast-regression.sh")" "$(hash_source_tree)")
-  object_sig=$(find "${ROOT_DIR}/src" -maxdepth 1 -type f -name '*.o' \
-    -printf '%f %s %T@\n' | sort | hash_file /dev/stdin)
+  object_sig=$(hash_object_tree | hash_file /dev/stdin)
 
   if [[ -f "${cache_dir}/desired.sig" && -f "${cache_dir}/objects.sig" ]] \
       && [[ "$(<"${cache_dir}/desired.sig")" == "${desired_sig}" ]] \
@@ -220,8 +228,7 @@ prepare_harness_objects() {
       ;;
   esac
 
-  object_sig=$(find "${ROOT_DIR}/src" -maxdepth 1 -type f -name '*.o' \
-    -printf '%f %s %T@\n' | sort | hash_file /dev/stdin)
+  object_sig=$(hash_object_tree | hash_file /dev/stdin)
   printf '%s\n' "${desired_sig}" > "${cache_dir}/desired.sig"
   printf '%s\n' "${object_sig}" > "${cache_dir}/objects.sig"
 }

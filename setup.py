@@ -21,6 +21,7 @@ CLASSIFIERS = [
     "Development Status :: 3 - Alpha",
     "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
     "Operating System :: OS Independent",
 ]
 
@@ -50,7 +51,7 @@ setup(name="pyffish", version="0.0.88",
       license="GPL3",
       classifiers=CLASSIFIERS,
       url="https://github.com/gbtami/Fairy-Stockfish",
-      python_requires=">=3.4",
+      python_requires=">=3.9",
       ext_modules=[pyffish_module],
       data_files=[("", ["pyffish.pyi"])]
       )
