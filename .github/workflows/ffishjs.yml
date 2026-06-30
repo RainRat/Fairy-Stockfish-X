@@ -51,7 +51,12 @@ jobs:
         working-directory: tests/js
         run: |
           node --input-type=module <<'JS'
-          import createFfish from './ffish.js';
+          import { createRequire } from 'node:module';
+          import { dirname } from 'node:path';
+          import { fileURLToPath } from 'node:url';
+          globalThis.require = createRequire(import.meta.url);
+          globalThis.__dirname = dirname(fileURLToPath(import.meta.url));
+          const { default: createFfish } = await import('./ffish.js');
           const ffish = await createFfish();
           const board = new ffish.Board('omega');
           if (board.fen() !== 'w**********w/*crnbqkbnrc*/*pppppppppp*/*10*/*10*/*10*/*10*/*10*/*10*/*PPPPPPPPPP*/*CRNBQKBNRC*/W**********W w KQkq - 0 1')
