@@ -995,6 +995,41 @@ piecePoints = n:5
         paired_moves_9 = [m for m in moves_9 if "," in m]
         self.assertEqual(len(paired_moves_9), 0)
 
+    def test_go_rule_drop_capture_and_suicide(self):
+        sf.load_variant_config(
+            """[gotest]
+maxRank = 5
+maxFile = 5
+pieceToCharTable = -
+king = -
+immobile = p
+startFen = 5/5/5/5/5[] b - - 0 1
+pieceDrops = true
+freeDrops = true
+goRule = true
+pass = true
+doubleStep = false
+castling = false
+stalemateValue = draw
+immobilityIllegal = false
+nMoveRule = 0
+"""
+        )
+
+        start = sf.start_fen("gotest")
+        start_moves = sf.legal_moves("gotest", start, [])
+        self.assertIn("P@c3", start_moves)
+        self.assertIn("P@a1", start_moves)
+
+        capture_moves = ["P@c3", "P@c2", "P@b2", "P@a1", "P@d2", "P@a2", "P@c1"]
+        after_capture = sf.get_fen("gotest", start, capture_moves)
+        self.assertEqual(after_capture.split()[0], "5/5/2p2/Pp1p1/P1p2")
+
+        suicide_fen = "5/5/2p2/1p1p1/2p2[] w - - 0 1"
+        suicide_moves = sf.legal_moves("gotest", suicide_fen, [])
+        self.assertNotIn("P@c2", suicide_moves)
+        self.assertIn("P@a1", suicide_moves)
+
     def test_ichess_setup_basics(self):
         load_repo_variants_or_skip()
         fen = sf.start_fen("ichess")

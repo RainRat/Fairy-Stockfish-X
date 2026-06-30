@@ -453,6 +453,8 @@ public:
   Bitboard surround_capture_max_region() const;
   Bitboard surround_capture_hostile_region() const;
   Bitboard compute_surround_capture_mask(Square moverSq, Bitboard usPieces, Bitboard themPieces, Bitboard occupied) const;
+  Bitboard compute_go_capture_mask(Square placed, Color us, Bitboard occupied) const;
+  bool go_drop_legal(Square to, Color us) const;
   Bitboard compute_remove_connect_n_mask(const std::vector<Bitboard>& baseLines, Bitboard alreadyRemoved, Bitboard blastMask, Bitboard& connectMask) const;
   EndgameEval endgame_eval() const;
   Bitboard double_step_region(Color c) const;
@@ -1376,6 +1378,27 @@ inline Bitboard Position::surround_capture_max_region() const {
 inline Bitboard Position::surround_capture_hostile_region() const {
   assert(var != nullptr);
   return var->surroundCaptureHostileRegion;
+}
+
+inline bool Position::go_drop_legal(Square to, Color us) const {
+  if (!var->goRule || !(board_bb() & to) || !empty(to))
+      return false;
+
+  Bitboard occupied = pieces() | to;
+  Bitboard captured = compute_go_capture_mask(to, us, occupied);
+  if (captured)
+      return true;
+
+  Bitboard ownGroup = 0, fringe = square_bb(to);
+  while (fringe)
+  {
+      Square s = pop_lsb(fringe);
+      ownGroup |= s;
+      if (attacks_bb<WAZIR>(s, occupied) & board_bb() & ~occupied)
+          return true;
+      fringe |= attacks_bb<WAZIR>(s, occupied) & board_bb() & (pieces(us) | to) & ~ownGroup;
+  }
+  return false;
 }
 
 inline EndgameEval Position::endgame_eval() const {
