@@ -3124,6 +3124,37 @@ Bitboard Position::compute_surround_capture_mask(Square moverSq, Bitboard usPiec
   return mask;
 }
 
+Bitboard Position::compute_go_capture_mask(Square placed, Color us, Bitboard occupied) const {
+  Bitboard mask = 0;
+  Bitboard candidates = attacks_bb<WAZIR>(placed, occupied) & board_bb() & pieces(~us);
+
+  while (candidates)
+  {
+      Square root = pop_lsb(candidates);
+      Bitboard group = 0, fringe = square_bb(root);
+      bool hasLiberty = false;
+
+      while (fringe)
+      {
+          Square s = pop_lsb(fringe);
+          group |= s;
+          Bitboard adj = attacks_bb<WAZIR>(s, occupied) & board_bb();
+          if (adj & ~occupied)
+          {
+              hasLiberty = true;
+              break;
+          }
+          fringe |= adj & pieces(~us) & ~group;
+      }
+
+      candidates &= ~group;
+      if (!hasLiberty)
+          mask |= group;
+  }
+
+  return mask;
+}
+
 
 Bitboard Position::compute_remove_connect_n_mask(
     const std::vector<Bitboard>& baseLines,
@@ -3577,6 +3608,9 @@ bool Position::legal(Move m) const {
       }
 
       if (!(drop_region(us, type_of(moved_piece(m))) & legalDropTargets & to))
+          return false;
+
+      if (var->goRule && !go_drop_legal(to, us))
           return false;
   }
 
@@ -4648,7 +4682,8 @@ bool Position::pseudo_legal(const Move m) const {
                         && count_in_prison(us, exchange_piece(m)) > 0
                         && count_in_prison(~us, in_hand_piece_type(m)) > 0))
             && (drop_region(us, type_of(pc)) & legalDropTargets & to)
-            && (drop_piece_types(in_hand_piece_type(m)) & type_of(pc));
+            && (drop_piece_types(in_hand_piece_type(m)) & type_of(pc))
+            && (!var->goRule || go_drop_legal(to, us));
   }
 
   // Use a slower but simpler function for uncommon cases
@@ -6371,6 +6406,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
          ( blast_on_self_destruct() && is_self_destruct(m) ) ||
          var->blastPassiveTypes ||
          ( remove_connect_n() > 0 ) ||
+         ( var->goRule && dropMove ) ||
          ( pi && pi->has_universal_hopper() && jumpCapsq != SQ_NONE )
        )
        && !is_pass(m)
@@ -6407,6 +6443,9 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       if ( surround_capture_opposite() || surround_capture_intervene() || surround_capture_edge() ) {
           removal_mask |= compute_surround_capture_mask(moverSq, pieces(us), pieces(~us), pieces());
       }
+
+      if (var->goRule && dropMove)
+          removal_mask |= compute_go_capture_mask(moverSq, us, pieces());
 
       if (pi && pi->has_universal_hopper() && jumpCapsq != SQ_NONE)
       {
