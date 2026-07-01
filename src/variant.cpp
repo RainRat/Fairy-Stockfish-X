@@ -2671,6 +2671,7 @@ void VariantMap::set_verbose_load_warnings(bool verbose) {
 }
 
 void VariantMap::add(std::string s, Variant* v) {
+  v->name = s;
   const Variant* concluded = v->conclude();
   auto it = find(s);
   if (it != end() && it->second != concluded) {

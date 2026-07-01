@@ -709,13 +709,18 @@ inline Validation check_for_valid_characters(const std::string& firstFenPart, co
         char c = firstFenPart[i];
         if (c == '+')
         {
-            if (v && v->shogiStylePromotions)
+            if (v && (v->shogiStylePromotions || v->laserGame))
             {
                 ++i;
                 continue;
             }
             std::cerr << "Invalid piece character: '+'." << std::endl;
             return NOK;
+        }
+        if (c == ':' && v && v->laserGame)
+        {
+            i += 2;
+            continue;
         }
         if (Variant::is_piece_id_start(c))
         {
@@ -808,6 +813,16 @@ inline Validation fill_char_board(CharBoard& board, const std::string& fenBoard,
                 ++i;
                 ++fileIdx;
             }
+            continue;
+        }
+        if (c == ':' && v && v->laserGame)
+        {
+            i += 2;
+            continue;
+        }
+        if (c == '+' && v && v->laserGame)
+        {
+            i += 1;
             continue;
         }
         if (c == '*' || c == '^')

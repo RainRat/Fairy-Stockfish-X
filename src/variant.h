@@ -113,6 +113,7 @@ struct ColorSetting {
 };
 
 struct Variant {
+  std::string name = "";
   std::string variantTemplate = "fairy";
   std::string pieceToCharTable = "-";
   int pocketSize = 0;
@@ -290,6 +291,66 @@ struct Variant {
   ColorSetting<bool> passOnStalemate = ColorSetting<bool>(false);
   std::vector<int> multimoves = {};
   bool progressiveMultimove = false;
+  bool laserGame = false;
+  bool laserDiagonal = false;
+  enum LaserOutcome : uint8_t {
+      OUTCOME_DESTROY = 1,
+      OUTCOME_ABSORB  = 2,
+      OUTCOME_TRANSMIT = 3,
+      OUTCOME_REFLECT_RIGHT = 4,
+      OUTCOME_REFLECT_LEFT = 5,
+      OUTCOME_REFLECT_BACK = 6,
+      OUTCOME_SPLIT = 7,
+      OUTCOME_EXIT_FACE = 8,
+  };
+  struct LaserOptics {
+      LaserOutcome outcomes[4]; // Front, Right, Back, Left
+  };
+  LaserOptics pieceOptics[PIECE_TYPE_NB] = {};
+  std::vector<Square> staticEmitters[COLOR_NB] = {};
+  std::vector<Direction> staticEmitterDirs[COLOR_NB] = {};
+  PieceType emitterPieceType = NO_PIECE_TYPE;
+  PieceSet orientedPieceTypes = NO_PIECE_SET;
+  PieceType stackedPieceMap[PIECE_TYPE_NB] = {};
+  PieceType unstackedPieceMap[PIECE_TYPE_NB] = {};
+
+  int orientation_count(PieceType pt) const {
+      if (name == "dos-laser-chess") {
+          if (pt == CUSTOM_PIECE_5 || pt == CUSTOM_PIECE_19)
+              return 2;
+      }
+      return 4;
+  }
+
+  bool is_oriented(PieceType pt) const {
+      for (PieceType base = CUSTOM_PIECES; base <= CUSTOM_PIECES_END; ++base) {
+          if (orientedPieceTypes & base) {
+              int cnt = orientation_count(base);
+              if (pt >= base && pt < base + cnt)
+                  return true;
+          }
+      }
+      return false;
+  }
+
+  PieceType base_piece_type(PieceType pt) const {
+      for (PieceType base = CUSTOM_PIECES; base <= CUSTOM_PIECES_END; ++base) {
+          if (orientedPieceTypes & base) {
+              int cnt = orientation_count(base);
+              if (pt >= base && pt < base + cnt)
+                  return base;
+          }
+      }
+      return pt;
+  }
+
+  PieceType stacked_piece_type(PieceType pt) const {
+      return stackedPieceMap[pt];
+  }
+
+  PieceType unstacked_piece_type(PieceType pt) const {
+      return unstackedPieceMap[pt];
+  }
   bool multimoveCheck = true;
   bool multimoveCapture = true;
   bool makpongRule = false;

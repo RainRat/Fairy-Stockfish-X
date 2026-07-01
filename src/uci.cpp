@@ -755,7 +755,18 @@ string UCI::move(const Position& pos, Move m) {
       move += '-';
   else if (is_gating(m) && !potionMove && !pos.walling(pos.side_to_move()))
   {
-      move += pos.piece_symbol(make_piece(BLACK, gating_type(m)));
+      PieceType gt = gating_type(m);
+      if (pos.laser_game() && pos.is_oriented(gt))
+      {
+          PieceType base = pos.variant()->base_piece_type(gt);
+          int orient = gt - base;
+          move += pos.piece_symbol(make_piece(BLACK, base));
+          if (orient > 0)
+              move += ":" + std::to_string(orient);
+      }
+      else
+          move += pos.piece_symbol(make_piece(BLACK, gt));
+
       if (gating_square(m) != from)
           move += UCI::square(pos, gating_square(m));
   }

@@ -1359,6 +1359,10 @@ bool VariantParser<DoCheck>::parse_legacy_attributes(Variant* v) {
 template <bool DoCheck>
 bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     // Parse the official config options
+    parse_attribute("laserGame", v->laserGame);
+    parse_attribute("laserDiagonal", v->laserDiagonal);
+    parse_attribute("orientedPieceTypes", v->orientedPieceTypes, v);
+
     parse_attribute("variantTemplate", v->variantTemplate);
     parse_attribute("pieceToCharTable", v->pieceToCharTable);
     parse_attribute("pocketSize", v->pocketSize);
@@ -1732,6 +1736,103 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
         parse_attribute("pointsGoalSimulValue", v->pointsGoalSimulValueByMostPoints);
     if (v->payPointsToDrop)
         v->pointsCounting = true;
+
+    auto it_stacked = config.find("stackedPieceType");
+    if (it_stacked != config.end())
+    {
+        if (!parse_piece_type_map(it_stacked->second, v, v->stackedPieceMap))
+        {
+            if (DoCheck)
+                std::cerr << "stackedPieceType - Invalid syntax." << std::endl;
+            return false;
+        }
+        for (PieceType pt = NO_PIECE_TYPE; pt < PIECE_TYPE_NB; ++pt)
+        {
+            PieceType stacked_pt = v->stackedPieceMap[pt];
+            if (stacked_pt != NO_PIECE_TYPE)
+                v->unstackedPieceMap[stacked_pt] = pt;
+        }
+    }
+
+    auto it_emitters = config.find("laserEmitters");
+    if (it_emitters != config.end())
+    {
+        std::string val = it_emitters->second;
+        std::istringstream iss(val);
+        std::string token;
+        while (std::getline(iss, token, ','))
+        {
+            token.erase(0, token.find_first_not_of(" \t"));
+            token.erase(token.find_last_not_of(" \t") + 1);
+            if (token.rfind("piece:", 0) == 0)
+            {
+                std::string symbol = token.substr(6);
+                v->emitterPieceType = v->piece_type_from_symbol(symbol);
+            }
+            else
+            {
+                size_t colon = token.find(':');
+                if (colon != std::string::npos && colon >= 2)
+                {
+                    std::string sq_str = token.substr(0, colon);
+                    std::string dir_str = token.substr(colon + 1);
+                    if (sq_str.size() >= 2 && sq_str[0] >= 'a' && sq_str[0] <= 'z' && sq_str[1] >= '1' && sq_str[1] <= '9')
+                    {
+                        Square sq = make_square(File(sq_str[0] - 'a'), Rank(sq_str[1] - '1'));
+                        int dir = std::stoi(dir_str);
+                        Color c = rank_of(sq) > v->maxRank / 2 ? BLACK : WHITE;
+                        v->staticEmitters[c].push_back(sq);
+                        v->staticEmitterDirs[c].push_back(Direction(dir));
+                    }
+                }
+            }
+        }
+    }
+
+    for (auto const& [key, val] : config)
+    {
+        if (key.rfind("laser_", 0) == 0)
+        {
+            config.find(key);
+            std::string symbol = key.substr(6);
+            int orientation = 0;
+            size_t colon = symbol.find(':');
+            if (colon != std::string::npos)
+            {
+                std::string base_symbol = symbol.substr(0, colon);
+                std::string orient_str = symbol.substr(colon + 1);
+                symbol = base_symbol;
+                orientation = std::stoi(orient_str);
+            }
+            PieceType pt = v->piece_type_from_symbol(symbol);
+            if (pt != NO_PIECE_TYPE)
+            {
+                if (v->is_oriented(pt))
+                    pt = PieceType(pt + orientation);
+
+                std::istringstream iss(val);
+                std::string outcome_str;
+                int face = 0;
+                while (std::getline(iss, outcome_str, '/') && face < 4)
+                {
+                    outcome_str.erase(0, outcome_str.find_first_not_of(" \t"));
+                    outcome_str.erase(outcome_str.find_last_not_of(" \t") + 1);
+                    Variant::LaserOutcome outcome = Variant::OUTCOME_DESTROY;
+                    if (outcome_str == "D") outcome = Variant::OUTCOME_DESTROY;
+                    else if (outcome_str == "S") outcome = Variant::OUTCOME_ABSORB;
+                    else if (outcome_str == "T") outcome = Variant::OUTCOME_TRANSMIT;
+                    else if (outcome_str == "R") outcome = Variant::OUTCOME_REFLECT_RIGHT;
+                    else if (outcome_str == "L") outcome = Variant::OUTCOME_REFLECT_LEFT;
+                    else if (outcome_str == "B") outcome = Variant::OUTCOME_REFLECT_BACK;
+                    else if (outcome_str == "X") outcome = Variant::OUTCOME_SPLIT;
+                    else if (outcome_str == "F") outcome = Variant::OUTCOME_EXIT_FACE;
+                    
+                    v->pieceOptics[pt].outcomes[face] = outcome;
+                    face++;
+                }
+            }
+        }
+    }
 
     // Unknown options are diagnosed but ignored so newer configs remain usable.
     {

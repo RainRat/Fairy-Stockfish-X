@@ -98,6 +98,43 @@ namespace {
         return moveList;
     }
 
+    if (pos.laser_game())
+    {
+        Piece pcFrom = pos.piece_on(from);
+        PieceType mt = type_of(pcFrom);
+        bool isDosChess = pos.variant()->name == "dos-laser-chess";
+        
+        if (pos.is_oriented(mt))
+        {
+            PieceType base_pt = pos.variant()->base_piece_type(mt);
+            for (int i = 0; i < 4; ++i)
+                *moveList++ = make_gating<T>(from, to, PieceType(base_pt + i), to);
+        }
+        else
+        {
+            *moveList++ = m;
+        }
+
+        if (isDosChess)
+        {
+            for (Square sq = SQ_A1; sq < SQUARE_NB; ++sq)
+            {
+                if (!is_ok(sq) || file_of(sq) > pos.max_file() || rank_of(sq) > pos.max_rank())
+                    continue;
+                if (sq == to)
+                    continue;
+                Piece pc = pos.piece_on(sq);
+                if (pc != NO_PIECE && color_of(pc) == us && pos.is_oriented(type_of(pc)))
+                {
+                    PieceType base_pt = pos.variant()->base_piece_type(type_of(pc));
+                    for (int i = 0; i < 4; ++i)
+                        *moveList++ = make_gating<T>(from, to, PieceType(base_pt + i), sq);
+                }
+            }
+        }
+        return moveList;
+    }
+
     PieceType forcedGate = NO_PIECE_TYPE;
     Square forcedGateSquare = SQ_NONE;
     if (from != to)
@@ -1573,6 +1610,26 @@ namespace {
   template<Color Us, GenType Type>
   ExtMove* generate_all(const Position& pos, ExtMove* moveList) {
     ExtMove* baseEnd = generate_all_impl<Us, Type>(pos, moveList);
+    if (pos.laser_game() && (Type == NON_EVASIONS || Type == QUIETS))
+    {
+        for (Square sq = SQ_A1; sq < SQUARE_NB; ++sq)
+        {
+            if (!is_ok(sq) || file_of(sq) > pos.max_file() || rank_of(sq) > pos.max_rank())
+                continue;
+            Piece pc = pos.piece_on(sq);
+            if (pc != NO_PIECE && color_of(pc) == Us && pos.is_oriented(type_of(pc)))
+            {
+                PieceType base_pt = pos.variant()->base_piece_type(type_of(pc));
+                int current_orient = type_of(pc) - base_pt;
+                for (int i = 0; i < 4; ++i)
+                {
+                    if (i == current_orient)
+                        continue;
+                    *baseEnd++ = make_gating<NORMAL>(sq, sq, PieceType(base_pt + i), sq);
+                }
+            }
+        }
+    }
     if (!pos.potions_enabled())
         return baseEnd;
     return generate_potion_moves<Us, Type>(pos, MoveBuffer{moveList, baseEnd});

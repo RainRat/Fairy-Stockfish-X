@@ -266,6 +266,7 @@ struct MoveUndoInfo {
   bool       pass = false;
   bool       forcedJumpHasFollowup = false;
   bool       didPull = false;
+  Piece      replacedPiece = NO_PIECE;
 
   void clear() {
     bycatchSquares = Bitboard(0);
@@ -281,6 +282,7 @@ struct MoveUndoInfo {
     flippedPieces = Bitboard(0);
     claimedSquares = Bitboard(0);
     forcedJumpSquare = SQ_NONE;
+    replacedPiece = NO_PIECE;
     dropHandColor = COLOR_NB;
     forcedJumpStep = 0;
     removedGatingType = NO_PIECE_TYPE;
@@ -424,6 +426,8 @@ public:
   PieceSet promotion_piece_types(Color c) const;
   PieceSet promotion_piece_types(Color c, Square s) const;
   bool sittuyin_promotion() const;
+  bool laser_game() const;
+  bool is_oriented(PieceType pt) const;
   int promotion_limit(PieceType pt) const;
   bool promotion_allowed(Color c, PieceType pt) const;
   bool promotion_allowed(Color c, PieceType pt, Square s) const;
@@ -830,6 +834,8 @@ public:
   // Doing and undoing moves
   void do_move(Move m, StateInfo& newSt, bool countNode = true);
   void undo_move(Move m);
+  void fire_laser(Key& k);
+  Direction orientation_to_direction(int orientation, bool diagonal) const;
   bool add_capture_transfer(StateInfo* state, Piece transferPiece, Key* k = nullptr);
   bool undo_capture_transfer(StateInfo* state, Piece transferPiece, Key* k = nullptr);
   bool simulate_capture_transfer(Key& k, Piece transferPiece, bool suppressedCaptureTransfer = false) const;
@@ -1209,6 +1215,14 @@ inline PieceSet Position::promotion_piece_types(Color c, Square s) const {
 
 inline bool Position::sittuyin_promotion() const {
   return var_ref().sittuyinPromotion;
+}
+
+inline bool Position::laser_game() const {
+  return var_ref().laserGame;
+}
+
+inline bool Position::is_oriented(PieceType pt) const {
+  return var_ref().is_oriented(pt);
 }
 
 inline int Position::promotion_limit(PieceType pt) const {
@@ -2984,6 +2998,14 @@ inline Bitboard Position::adjacent_swap_targets_from(Color c, Square from) const
 }
 
 inline Bitboard Position::pieces(PieceType pt) const {
+  if (var->is_oriented(pt)) {
+      PieceType base = var->base_piece_type(pt);
+      int cnt = var->orientation_count(base);
+      Bitboard bb = 0;
+      for (int i = 0; i < cnt; ++i)
+          bb |= byTypeBB[base + i];
+      return bb;
+  }
   return byTypeBB[pt];
 }
 
