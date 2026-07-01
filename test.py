@@ -2574,5 +2574,38 @@ stepwisePushing = true
             ["d4b3", "d4b5", "d4c2", "d4c6", "d4e2", "d4e6", "d4f3", "d4f5"],
         )
 
+    def test_laser_variants(self):
+        load_repo_variants_or_skip()
+        khet1_fen = sf.start_fen("khet1")
+        self.assertEqual(khet1_fen, "2P:2O+KO+4/7P:32/6p:03/p:01P:21S:0S:11p:31P:1/p:31P:11s:1s:01p:01P:2/3P:26/2p:17/4o+ko+p:02 w - - 0 1")
+
+        k1_imhotep = sf.start_fen("khet1-imhotep")
+        self.assertEqual(k1_imhotep, "2S:0O+KO+4/10/3P:12p:03/p:0P:22S:0p:22p:3P:1/p:3P:12P:0s:02p:0P:2/3P:22p:33/10/4o+ko+s:02 w - - 0 1")
+
+        k1_dynasty = sf.start_fen("khet1-dynasty")
+        self.assertEqual(k1_dynasty, "3P:2O+P:34/4K5/3S:0O+P:33P:1/3p:21p:01S:11P:2/p:01s:11P:21P:03/p:33p:1o+s:03/5k4/4p:1o+p:03 w - - 0 1")
+
+        khet2_fen = sf.start_fen("khet2")
+        self.assertEqual(khet2_fen, "2P:2A:0KA:03X:0/7P:32/6p:03/p:01P:21S:0S:11p:31P:1/p:31P:11s:1s:01p:01P:2/3P:26/2p:17/x:23a:2ka:2p:02 w - - 0 1")
+
+        k2_imhotep = sf.start_fen("khet2-imhotep")
+        self.assertEqual(k2_imhotep, "2S:0A:0KA:03X:0/10/3P:12p:03/p:0P:22S:0p:22p:3P:1/p:3P:12P:0s:02p:0P:2/3P:22p:33/10/x:23a:2ka:2s:02 w - - 0 1")
+
+        k2_dynasty = sf.start_fen("khet2-dynasty")
+        self.assertEqual(k2_dynasty, "3P:2A:0P:33X:0/4K5/3S:0A:0P:33P:1/3p:21p:01S:11P:2/p:01s:11P:21P:03/p:33p:1a:2s:03/5k4/x:23p:1a:2p:03 w - - 0 1")
+
+        playlaser_fen = sf.start_fen("playlaser")
+        self.assertEqual(playlaser_fen, "l:07/1knp4/1nwp4/1pp5/5PP1/4PWN1/4PNK1/7L:0 w - - 0 1")
+
+        dos_fen = sf.start_fen("dos-laser-chess")
+        self.assertEqual(dos_fen, "r:3b:0s:0l:0kq:0b:0s:0r:1/d:0m:3d:0m:1p:0m:0d:0m:2d:0/9/9/9/9/9/D:2M:0D:2M:2P:2M:3D:2M:1D:2/R:1S:2B:2Q:2KL:2S:2B:2R:3 w - - 0 1")
+
+        khet1_moves = sf.legal_moves("khet1", khet1_fen, [])
+        self.assertTrue(len(khet1_moves) > 0)
+        self.assertIn("c2d3p:1", khet1_moves)
+
+        playlaser_moves = sf.legal_moves("playlaser", playlaser_fen, [])
+        self.assertTrue(len(playlaser_moves) > 0)
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)
