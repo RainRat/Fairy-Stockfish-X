@@ -306,7 +306,7 @@ struct Variant {
       OUTCOME_SPLIT_FORWARD_LEFT = 10,
   };
   struct LaserOptics {
-      LaserOutcome outcomes[4]; // Front, Right, Back, Left
+      LaserOutcome outcomes[4] = { OUTCOME_DESTROY, OUTCOME_DESTROY, OUTCOME_DESTROY, OUTCOME_DESTROY }; // Front, Right, Back, Left
   };
   LaserOptics pieceOptics[PIECE_TYPE_NB] = {};
   std::vector<Square> staticEmitters[COLOR_NB] = {};
@@ -315,17 +315,23 @@ struct Variant {
   PieceSet orientedPieceTypes = NO_PIECE_SET;
   PieceType stackedPieceMap[PIECE_TYPE_NB] = {};
   PieceType unstackedPieceMap[PIECE_TYPE_NB] = {};
+  int orientationCounts[PIECE_TYPE_NB] = {};
+  bool rotateAfterMove = false;
+
+  bool concluded = false;
+  bool isOrientedCache[PIECE_TYPE_NB] = {};
+  PieceType basePieceTypeCache[PIECE_TYPE_NB] = {};
 
   int orientation_count(PieceType pt) const {
-      if (name == "dos-laser-chess" && (pt == CUSTOM_PIECE_1 || pt == CUSTOM_PIECE_3))
-          return 2;
-      return 4;
+      if (orientationCounts[pt] > 0)
+          return orientationCounts[pt];
+      return laserGame && is_oriented(pt) ? 4 : 0;
   }
 
-  bool is_oriented(PieceType pt) const {
+  bool is_oriented_dynamic(PieceType pt) const {
       for (PieceType base = CUSTOM_PIECES; base <= CUSTOM_PIECES_END; ++base) {
           if (orientedPieceTypes & base) {
-              int cnt = orientation_count(base);
+              int cnt = orientationCounts[base] > 0 ? orientationCounts[base] : 4;
               if (pt >= base && pt < base + cnt)
                   return true;
           }
@@ -333,10 +339,10 @@ struct Variant {
       return false;
   }
 
-  PieceType base_piece_type(PieceType pt) const {
+  PieceType base_piece_type_dynamic(PieceType pt) const {
       for (PieceType base = CUSTOM_PIECES; base <= CUSTOM_PIECES_END; ++base) {
           if (orientedPieceTypes & base) {
-              int cnt = orientation_count(base);
+              int cnt = orientationCounts[base] > 0 ? orientationCounts[base] : 4;
               if (pt >= base && pt < base + cnt)
                   return base;
           }
@@ -344,13 +350,31 @@ struct Variant {
       return pt;
   }
 
+  bool is_oriented(PieceType pt) const {
+      return concluded ? isOrientedCache[pt] : is_oriented_dynamic(pt);
+  }
+
+  PieceType base_piece_type(PieceType pt) const {
+      return concluded ? basePieceTypeCache[pt] : base_piece_type_dynamic(pt);
+  }
+
   PieceType stacked_piece_type(PieceType pt) const {
-      return stackedPieceMap[pt];
+      PieceType base = base_piece_type(pt);
+      PieceType stacked_base = stackedPieceMap[base];
+      if (stacked_base == NO_PIECE_TYPE)
+          return NO_PIECE_TYPE;
+      return PieceType(stacked_base + (pt - base));
   }
 
   PieceType unstacked_piece_type(PieceType pt) const {
-      return unstackedPieceMap[pt];
+      PieceType base = base_piece_type(pt);
+      PieceType unstacked_base = unstackedPieceMap[base];
+      if (unstacked_base == NO_PIECE_TYPE)
+          return NO_PIECE_TYPE;
+      return PieceType(unstacked_base + (pt - base));
   }
+
+
   bool multimoveCheck = true;
   bool multimoveCapture = true;
   bool makpongRule = false;

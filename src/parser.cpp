@@ -95,6 +95,26 @@ namespace {
             apply(blackKey, BLACK);
     }
 
+    bool parse_laser_outcome(const std::string& outcome_str, Variant::LaserOutcome& outcome, bool DoCheck, const std::string& key) {
+        if (outcome_str == "D") outcome = Variant::OUTCOME_DESTROY;
+        else if (outcome_str == "S") outcome = Variant::OUTCOME_ABSORB;
+        else if (outcome_str == "T") outcome = Variant::OUTCOME_TRANSMIT;
+        else if (outcome_str == "R") outcome = Variant::OUTCOME_REFLECT_RIGHT;
+        else if (outcome_str == "L") outcome = Variant::OUTCOME_REFLECT_LEFT;
+        else if (outcome_str == "B") outcome = Variant::OUTCOME_REFLECT_BACK;
+        else if (outcome_str == "X") outcome = Variant::OUTCOME_SPLIT;
+        else if (outcome_str == "F") outcome = Variant::OUTCOME_EXIT_FACE;
+        else if (outcome_str == "Y") outcome = Variant::OUTCOME_SPLIT_FORWARD_RIGHT;
+        else if (outcome_str == "Z") outcome = Variant::OUTCOME_SPLIT_FORWARD_LEFT;
+        else
+        {
+            if (DoCheck)
+                std::cerr << key << " - Invalid laser outcome: " << outcome_str << std::endl;
+            return false;
+        }
+        return true;
+    }
+
     PieceType parse_piece_type_token(const Variant* v, const std::string& token) {
         if (token.empty())
             return NO_PIECE_TYPE;
@@ -1358,10 +1378,53 @@ bool VariantParser<DoCheck>::parse_legacy_attributes(Variant* v) {
 
 template <bool DoCheck>
 bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
-    // Parse the official config options
     parse_attribute("laserGame", v->laserGame);
     parse_attribute("laserDiagonal", v->laserDiagonal);
     parse_attribute("orientedPieceTypes", v->orientedPieceTypes, v);
+    parse_attribute("rotateAfterMove", v->rotateAfterMove);
+
+    auto it_orients = config.find("orientationCounts");
+    if (it_orients != config.end())
+    {
+        std::istringstream iss(it_orients->second);
+        std::string entry;
+        while (iss >> entry)
+        {
+            size_t colon = entry.find(':');
+            if (colon == std::string::npos || colon == 0 || colon == entry.size() - 1)
+            {
+                if (DoCheck)
+                    std::cerr << "orientationCounts - Malformed entry: " << entry << std::endl;
+                return false;
+            }
+            std::string sym = entry.substr(0, colon);
+            std::string count_str = entry.substr(colon + 1);
+            PieceType pt = parse_piece_type_token(v, sym);
+            if (pt == NO_PIECE_TYPE)
+            {
+                if (DoCheck)
+                    std::cerr << "orientationCounts - Unknown piece symbol: " << sym << std::endl;
+                return false;
+            }
+            if (count_str.empty() || !std::all_of(count_str.begin(), count_str.end(), ::isdigit))
+            {
+                if (DoCheck)
+                    std::cerr << "orientationCounts - Invalid orientation count: " << count_str << std::endl;
+                return false;
+            }
+            int count = std::stoi(count_str);
+            if (count >= 1 && count <= 4)
+            {
+                v->orientationCounts[pt] = count;
+            }
+            else
+            {
+                if (DoCheck)
+                    std::cerr << "orientationCounts - Value " << count << " is out of range [1, 4]." << std::endl;
+                return false;
+            }
+        }
+    }
 
     parse_attribute("variantTemplate", v->variantTemplate);
     parse_attribute("pieceToCharTable", v->pieceToCharTable);
@@ -1750,7 +1813,15 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
         {
             PieceType stacked_pt = v->stackedPieceMap[pt];
             if (stacked_pt != NO_PIECE_TYPE)
+            {
+                if (v->unstackedPieceMap[stacked_pt] != NO_PIECE_TYPE)
+                {
+                    if (DoCheck)
+                        std::cerr << "stackedPieceType - Duplicate stacking destination." << std::endl;
+                    return false;
+                }
                 v->unstackedPieceMap[stacked_pt] = pt;
+            }
         }
     }
 
@@ -1771,32 +1842,56 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
             if (token.rfind("piece:", 0) == 0)
             {
                 std::string symbol = token.substr(6);
-                v->emitterPieceType = v->piece_type_from_symbol(symbol);
+                v->emitterPieceType = parse_piece_type_token(v, symbol);
+                if (v->emitterPieceType == NO_PIECE_TYPE)
+                {
+                    if (DoCheck)
+                        std::cerr << "laserEmitters - Unknown piece symbol: " << symbol << std::endl;
+                    return false;
+                }
             }
             else
             {
                 size_t colon = token.find(':');
-                if (colon != std::string::npos && colon >= 2)
+                if (colon == std::string::npos || colon < 2)
                 {
-                    std::string sq_str = token.substr(0, colon);
-                    std::string dir_str = token.substr(colon + 1);
-                    if (sq_str.size() >= 2 && sq_str[0] >= 'a' && sq_str[0] <= 'z' && sq_str[1] >= '1' && sq_str[1] <= '9')
-                    {
-                        File f = File(sq_str[0] - 'a');
-                        Rank r = Rank(sq_str[1] - '1');
-                        if (f <= v->maxFile && r <= v->maxRank && is_number(dir_str))
-                        {
-                            Square sq = make_square(f, r);
-                            int dir = std::stoi(dir_str);
-                            if (dir >= 0 && dir < 4)
-                            {
-                                Color c = rank_of(sq) > v->maxRank / 2 ? BLACK : WHITE;
-                                v->staticEmitters[c].push_back(sq);
-                                v->staticEmitterDirs[c].push_back(Direction(dir));
-                            }
-                        }
-                    }
+                    if (DoCheck)
+                        std::cerr << "laserEmitters - Malformed token: " << token << std::endl;
+                    return false;
                 }
+                std::string sq_str = token.substr(0, colon);
+                std::string dir_str = token.substr(colon + 1);
+                if (sq_str.size() < 2 || sq_str[0] < 'a' || sq_str[0] > 'z' || sq_str[1] < '1' || sq_str[1] > '9')
+                {
+                    if (DoCheck)
+                        std::cerr << "laserEmitters - Invalid square coordinates: " << sq_str << std::endl;
+                    return false;
+                }
+                File f = File(sq_str[0] - 'a');
+                Rank r = Rank(sq_str[1] - '1');
+                if (f > v->maxFile || r > v->maxRank)
+                {
+                    if (DoCheck)
+                        std::cerr << "laserEmitters - Square out of board bounds: " << sq_str << std::endl;
+                    return false;
+                }
+                if (!is_number(dir_str))
+                {
+                    if (DoCheck)
+                        std::cerr << "laserEmitters - Invalid direction: " << dir_str << std::endl;
+                    return false;
+                }
+                Square sq = make_square(f, r);
+                int dir = std::stoi(dir_str);
+                if (dir < 0 || dir >= 4)
+                {
+                    if (DoCheck)
+                        std::cerr << "laserEmitters - Direction out of range: " << dir << std::endl;
+                    return false;
+                }
+                Color c = rank_of(sq) > v->maxRank / 2 ? BLACK : WHITE;
+                v->staticEmitters[c].push_back(sq);
+                v->staticEmitterDirs[c].push_back(v->laserDiagonal ? (dir == 0 ? NORTH_EAST : dir == 1 ? SOUTH_EAST : dir == 2 ? SOUTH_WEST : NORTH_WEST) : (dir == 0 ? NORTH : dir == 1 ? EAST : dir == 2 ? SOUTH : WEST));
             }
         }
     }
@@ -1808,7 +1903,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
         {
             config.find(key);
             std::string symbol = key.substr(6);
-            PieceType pt = v->piece_type_from_symbol(symbol);
+            PieceType pt = parse_piece_type_token(v, symbol);
             if (pt != NO_PIECE_TYPE)
             {
                 std::istringstream iss(val);
@@ -1818,20 +1913,20 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
                 {
                     outcome_str.erase(0, outcome_str.find_first_not_of(" \t"));
                     outcome_str.erase(outcome_str.find_last_not_of(" \t") + 1);
-                    Variant::LaserOutcome outcome = Variant::OUTCOME_DESTROY;
-                    if (outcome_str == "D") outcome = Variant::OUTCOME_DESTROY;
-                    else if (outcome_str == "S") outcome = Variant::OUTCOME_ABSORB;
-                    else if (outcome_str == "T") outcome = Variant::OUTCOME_TRANSMIT;
-                    else if (outcome_str == "R") outcome = Variant::OUTCOME_REFLECT_RIGHT;
-                    else if (outcome_str == "L") outcome = Variant::OUTCOME_REFLECT_LEFT;
-                    else if (outcome_str == "B") outcome = Variant::OUTCOME_REFLECT_BACK;
-                    else if (outcome_str == "X") outcome = Variant::OUTCOME_SPLIT;
-                    else if (outcome_str == "F") outcome = Variant::OUTCOME_EXIT_FACE;
-                    else if (outcome_str == "Y") outcome = Variant::OUTCOME_SPLIT_FORWARD_RIGHT;
-                    else if (outcome_str == "Z") outcome = Variant::OUTCOME_SPLIT_FORWARD_LEFT;
+                    Variant::LaserOutcome outcome;
+                    if (!parse_laser_outcome(outcome_str, outcome, DoCheck, key))
+                    {
+                        return false;
+                    }
 
                     v->pieceOptics[pt].outcomes[face] = outcome;
                     face++;
+                }
+                if (face < 4)
+                {
+                    if (DoCheck)
+                        std::cerr << key << " - Incomplete laser outcome faces: expected 4, got " << face << std::endl;
+                    return false;
                 }
             }
         }
@@ -1866,8 +1961,8 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
             if (is_number(orient_str))
             {
                 int orientation = std::stoi(orient_str);
-                PieceType pt = v->piece_type_from_symbol(base_symbol);
-                if (pt != NO_PIECE_TYPE && v->is_oriented(pt) && orientation >= 0 && orientation < 4)
+                PieceType pt = parse_piece_type_token(v, base_symbol);
+                if (pt != NO_PIECE_TYPE && v->is_oriented(pt) && orientation >= 0 && orientation < v->orientation_count(pt))
                 {
                     PieceType subtype = PieceType(pt + orientation);
                     std::istringstream iss(val);
@@ -1877,20 +1972,20 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
                     {
                         outcome_str.erase(0, outcome_str.find_first_not_of(" \t"));
                         outcome_str.erase(outcome_str.find_last_not_of(" \t") + 1);
-                        Variant::LaserOutcome outcome = Variant::OUTCOME_DESTROY;
-                        if (outcome_str == "D") outcome = Variant::OUTCOME_DESTROY;
-                        else if (outcome_str == "S") outcome = Variant::OUTCOME_ABSORB;
-                        else if (outcome_str == "T") outcome = Variant::OUTCOME_TRANSMIT;
-                        else if (outcome_str == "R") outcome = Variant::OUTCOME_REFLECT_RIGHT;
-                        else if (outcome_str == "L") outcome = Variant::OUTCOME_REFLECT_LEFT;
-                        else if (outcome_str == "B") outcome = Variant::OUTCOME_REFLECT_BACK;
-                        else if (outcome_str == "X") outcome = Variant::OUTCOME_SPLIT;
-                        else if (outcome_str == "F") outcome = Variant::OUTCOME_EXIT_FACE;
-                        else if (outcome_str == "Y") outcome = Variant::OUTCOME_SPLIT_FORWARD_RIGHT;
-                        else if (outcome_str == "Z") outcome = Variant::OUTCOME_SPLIT_FORWARD_LEFT;
+                        Variant::LaserOutcome outcome;
+                        if (!parse_laser_outcome(outcome_str, outcome, DoCheck, key))
+                        {
+                            return false;
+                        }
 
                         v->pieceOptics[subtype].outcomes[face] = outcome;
                         face++;
+                    }
+                    if (face < 4)
+                    {
+                        if (DoCheck)
+                            std::cerr << key << " - Incomplete laser outcome faces: expected 4, got " << face << std::endl;
+                        return false;
                     }
                 }
             }

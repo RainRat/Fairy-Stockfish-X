@@ -801,6 +801,58 @@ static PyObject* pyffish_runCppTests(PyObject* self, PyObject* args) {
         }
     }
 
+    // Test 6: Laser Chess key, material key, and FEN round-trip consistency
+    {
+        Position pos;
+        StateListPtr states;
+        const Variant* v = require_variant("dos-laser-chess");
+        if (v)
+        {
+            std::string startFen = "r:1b:0s:0lkq:0b:0s:0r:1/d:0m:3d:0m:1pm:0d:0m:2d:0/9/9/9/9/9/D:2M:0D:2M:2PM:3D:2M:1D:2/R:1S:0B:2Q:2KLS:0B:2R:1 w - - 0 1";
+            buildPosition(pos, states, v, startFen.c_str(), nullptr, false);
+
+            std::string moveStr = "b3b2m:1";
+            Move m = UCI::to_move(pos, moveStr);
+            if (m == MOVE_NONE)
+            {
+                PyErr_SetString(PyFFishError, "Failed to parse DOS Laser gating move b3b2m:1");
+                return nullptr;
+            }
+
+            Key keyBefore = pos.key();
+
+            states->emplace_back();
+            pos.do_move(m, states->back());
+
+            // Recompute expected keys by building a new Position from the resulting FEN
+            std::string resultingFen = pos.fen();
+            Position expectedPos;
+            StateListPtr expectedStates;
+            buildPosition(expectedPos, expectedStates, v, resultingFen.c_str(), nullptr, false);
+
+            if (pos.key() != expectedPos.key())
+            {
+                PyErr_SetString(PyFFishError, "Zobrist key mismatch after DOS Laser gating move");
+                return nullptr;
+            }
+
+            if (pos.state()->materialKey != expectedPos.state()->materialKey)
+            {
+                PyErr_SetString(PyFFishError, "Material key mismatch after DOS Laser gating move");
+                return nullptr;
+            }
+
+            pos.undo_move(m);
+            states->pop_back();
+
+            if (pos.key() != keyBefore)
+            {
+                PyErr_SetString(PyFFishError, "Zobrist key mismatch after undoing DOS Laser gating move");
+                return nullptr;
+            }
+        }
+    }
+
     Py_RETURN_TRUE;
 }
 

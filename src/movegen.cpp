@@ -67,7 +67,7 @@ namespace {
     return gates;
   }
 
-  template<MoveType T>
+  template<MoveType T, GenType Gen = QUIETS>
   ExtMove* make_move_and_gating(const Position& pos, ExtMove* moveList, Color us, Square from, Square to, PieceType pt = NO_PIECE_TYPE) {
 
     Move m = make<T>(from, to, pt);
@@ -102,33 +102,36 @@ namespace {
     {
         Piece pcFrom = pos.piece_on(from);
         PieceType mt = type_of(pcFrom);
-        bool isDosChess = pos.variant()->name == "dos-laser-chess";
-        
-        if (pos.is_oriented(mt))
-        {
-            PieceType base_pt = pos.variant()->base_piece_type(mt);
-            for (int i = 0; i < 4; ++i)
-                *moveList++ = make_gating<T>(from, to, PieceType(base_pt + i), to);
-        }
-        else
+        bool rotateAfter = pos.variant()->rotateAfterMove;
+
+        if (from != to)
         {
             *moveList++ = m;
-        }
-
-        if (isDosChess)
-        {
-            for (Square sq = SQ_A1; sq < SQUARE_NB; ++sq)
+            if (rotateAfter && pos.is_oriented(mt))
             {
-                if (!is_ok(sq) || file_of(sq) > pos.max_file() || rank_of(sq) > pos.max_rank())
-                    continue;
-                if (sq == to)
-                    continue;
-                Piece pc = pos.piece_on(sq);
-                if (pc != NO_PIECE && color_of(pc) == us && pos.is_oriented(type_of(pc)))
+                PieceType base_pt = pos.variant()->base_piece_type(mt);
+                int current_orient = mt - base_pt;
+                int num_orients = pos.variant()->orientation_count(base_pt);
+                for (int i = 0; i < num_orients; ++i)
                 {
-                    PieceType base_pt = pos.variant()->base_piece_type(type_of(pc));
-                    for (int i = 0; i < 4; ++i)
-                        *moveList++ = make_gating<T>(from, to, PieceType(base_pt + i), sq);
+                    if (i == current_orient)
+                        continue;
+                    *moveList++ = make_gating<T>(from, to, PieceType(base_pt + i), to);
+                }
+            }
+        }
+        else if constexpr (Gen != CAPTURES)
+        {
+            if (pos.is_oriented(mt))
+            {
+                PieceType base_pt = pos.variant()->base_piece_type(mt);
+                int current_orient = mt - base_pt;
+                int num_orients = pos.variant()->orientation_count(base_pt);
+                for (int i = 0; i < num_orients; ++i)
+                {
+                    if (i == current_orient)
+                        continue;
+                    *moveList++ = make_gating<T>(from, to, PieceType(base_pt + i), to);
                 }
             }
         }
@@ -221,13 +224,13 @@ namespace {
           PieceType pt = pop_msb(promotions);
           if (can_emit_promotion_variant(pt))
           {
-              moveList = make_move_and_gating<PROMOTION>(pos, moveList, us, from, to, pt);
+              moveList = make_move_and_gating<PROMOTION, Type>(pos, moveList, us, from, to, pt);
           }
       }
       PieceType pt = pos.promoted_piece_type(type_of(pos.piece_on(from)));
       if (pt && pos.promotion_allowed(us, pt, to) && !(pos.piece_promotion_on_capture() && pos.empty(to)))
       {
-          moveList = make_move_and_gating<PIECE_PROMOTION>(pos, moveList, us, from, to, pt);
+          moveList = make_move_and_gating<PIECE_PROMOTION, Type>(pos, moveList, us, from, to, pt);
       }
       return moveList;
   }
@@ -515,18 +518,18 @@ namespace {
 
             if (GeneratesQuiets)
                 while (quiets)
-                    moveList = make_move_and_gating<NORMAL>(pos, moveList, Us, from, pop_lsb(quiets));
+                    moveList = make_move_and_gating<NORMAL, Type>(pos, moveList, Us, from, pop_lsb(quiets));
 
             if (GeneratesCaptures)
             {
                 while (attacks)
-                    moveList = make_move_and_gating<NORMAL>(pos, moveList, Us, from, pop_lsb(attacks));
+                    moveList = make_move_and_gating<NORMAL, Type>(pos, moveList, Us, from, pop_lsb(attacks));
                 while (epSquares)
                 {
                     Square epSquare = pop_lsb(epSquares);
                     if (Type == EVASIONS && (target & (epSquare + Up)) && !pos.non_sliding_riders())
                         continue;
-                    moveList = make_move_and_gating<EN_PASSANT>(pos, moveList, Us, from, epSquare);
+                    moveList = make_move_and_gating<EN_PASSANT, Type>(pos, moveList, Us, from, epSquare);
                 }
             }
 
@@ -572,7 +575,7 @@ namespace {
         while (bb)
         {
             Square to = pop_lsb(bb);
-            moveList = make_move_and_gating<NORMAL>(pos, moveList, Us, to - delta, to);
+            moveList = make_move_and_gating<NORMAL, Type>(pos, moveList, Us, to - delta, to);
         }
     };
 
@@ -710,7 +713,7 @@ namespace {
             assert(b || !pos.fast_attacks());
 
             while (b)
-                moveList = make_move_and_gating<EN_PASSANT>(pos, moveList, Us, pop_lsb(b), epSquare);
+                moveList = make_move_and_gating<EN_PASSANT, Type>(pos, moveList, Us, pop_lsb(b), epSquare);
         }
     }
 
@@ -741,6 +744,9 @@ namespace {
     while (bb)
     {
         Square from = pop_lsb(bb);
+
+        if (pos.laser_game() && Type != CAPTURES)
+            moveList = make_move_and_gating<NORMAL, Type>(pos, moveList, Us, from, from);
 
         Bitboard attacks = pos.attacks_from(Us, Pt, from);
         Bitboard quiets = pos.moves_from(Us, Pt, from);
@@ -916,24 +922,24 @@ namespace {
         b1 &= ~pushMoves;
 
         while (b1)
-            moveList = make_move_and_gating<NORMAL>(pos, moveList, Us, from, pop_lsb(b1));
+            moveList = make_move_and_gating<NORMAL, Type>(pos, moveList, Us, from, pop_lsb(b1));
 
         while (pushMoves)
-            moveList = make_move_and_gating<NORMAL>(pos, moveList, Us, from, pop_lsb(pushMoves));
+            moveList = make_move_and_gating<NORMAL, Type>(pos, moveList, Us, from, pop_lsb(pushMoves));
 
         while (pawnLikeDoubleSteps)
-            moveList = make_move_and_gating<NORMAL>(pos, moveList, Us, from, pop_lsb(pawnLikeDoubleSteps));
+            moveList = make_move_and_gating<NORMAL, Type>(pos, moveList, Us, from, pop_lsb(pawnLikeDoubleSteps));
 
         while (pawnLikeTripleSteps)
-            moveList = make_move_and_gating<NORMAL>(pos, moveList, Us, from, pop_lsb(pawnLikeTripleSteps));
+            moveList = make_move_and_gating<NORMAL, Type>(pos, moveList, Us, from, pop_lsb(pawnLikeTripleSteps));
 
         // Shogi-style piece promotions
         while (b2)
-            moveList = make_move_and_gating<PIECE_PROMOTION>(pos, moveList, Us, from, pop_lsb(b2));
+            moveList = make_move_and_gating<PIECE_PROMOTION, Type>(pos, moveList, Us, from, pop_lsb(b2));
 
         // Piece demotions
         while (b3)
-            moveList = make_move_and_gating<PIECE_DEMOTION>(pos, moveList, Us, from, pop_lsb(b3));
+            moveList = make_move_and_gating<PIECE_DEMOTION, Type>(pos, moveList, Us, from, pop_lsb(b3));
 
         // Pawn-style promotions
         if constexpr (CanEmitPromotions<Type>)
@@ -950,9 +956,9 @@ namespace {
         if (GeneratesCaptures)
         {
             while (jumpCaptures)
-                moveList = make_move_and_gating<NORMAL>(pos, moveList, Us, from, pop_lsb(jumpCaptures));
+                moveList = make_move_and_gating<NORMAL, Type>(pos, moveList, Us, from, pop_lsb(jumpCaptures));
             while (epSquares)
-                moveList = make_move_and_gating<EN_PASSANT>(pos, moveList, Us, from, pop_lsb(epSquares));
+                moveList = make_move_and_gating<EN_PASSANT, Type>(pos, moveList, Us, from, pop_lsb(epSquares));
         }
     }
 
@@ -1118,7 +1124,7 @@ namespace {
                 Square from = pos.castling_king_square(Us);
                 for(CastlingRights cr : { Us & KING_SIDE, Us & QUEEN_SIDE } )
                     if (!pos.castling_impeded(cr) && pos.can_castle(cr))
-                        moveList = make_move_and_gating<CASTLING>(pos, moveList, Us, from, pos.castling_rook_square(cr));
+                        moveList = make_move_and_gating<CASTLING, Type>(pos, moveList, Us, from, pos.castling_rook_square(cr));
             }
 
         // Special moves
@@ -1132,7 +1138,7 @@ namespace {
                 Bitboard b = PseudoAttacks[WHITE][KNIGHT][from] & rank_bb(rank_of(from + (Us == WHITE ? NORTH : SOUTH)))
                     & target & ~pos.pieces();
                 while (b)
-                    moveList = make_move_and_gating<SPECIAL>(pos, moveList, Us, from, pop_lsb(b));
+                    moveList = make_move_and_gating<SPECIAL, Type>(pos, moveList, Us, from, pop_lsb(b));
             }
 
             Bitboard b = pos.pieces(Us, FERS) & pos.gates(Us);
@@ -1141,7 +1147,7 @@ namespace {
                 Square from = pop_lsb(b);
                 Square to = from + 2 * (Us == WHITE ? NORTH : SOUTH);
                 if (is_ok(to) && (target & to & ~pos.pieces()))
-                    moveList = make_move_and_gating<SPECIAL>(pos, moveList, Us, from, to);
+                    moveList = make_move_and_gating<SPECIAL, Type>(pos, moveList, Us, from, to);
             }
         }
 
@@ -1275,7 +1281,7 @@ namespace {
             Square wallSq = wallAnchors ? lsb(wallAnchors)
                           : usPieces ? lsb(usPieces)
                           : lsb(pos.board_bb());
-            moveList = make_move_and_gating<SPECIAL>(pos, moveList, Us, wallSq, wallSq);
+            moveList = make_move_and_gating<SPECIAL, Type>(pos, moveList, Us, wallSq, wallSq);
         }
 
     }
@@ -1314,13 +1320,13 @@ namespace {
             if constexpr (Type == QUIET_CHECKS)
             {
                 ExtMove temp[256];
-                ExtMove* tempEnd = make_move_and_gating<NORMAL>(pos, temp, Us, royalSq, to);
+                ExtMove* tempEnd = make_move_and_gating<NORMAL, Type>(pos, temp, Us, royalSq, to);
                 for (ExtMove* it = temp; it != tempEnd; ++it)
                     if (pos.gives_check(it->move))
                         *moveList++ = *it;
             }
             else
-                moveList = make_move_and_gating<NORMAL>(pos, moveList, Us, royalSq, to);
+                moveList = make_move_and_gating<NORMAL, Type>(pos, moveList, Us, royalSq, to);
         }
 
         // Passing move by royal piece
@@ -1332,7 +1338,7 @@ namespace {
             && pos.can_castle(Us == WHITE ? WHITE_CASTLING : BLACK_CASTLING))
             for (CastlingRights cr : { Us & KING_SIDE, Us & QUEEN_SIDE } )
                 if (!pos.castling_impeded(cr) && pos.can_castle(cr))
-                    moveList = make_move_and_gating<CASTLING>(pos, moveList, Us, royalSq, pos.castling_rook_square(cr));
+                    moveList = make_move_and_gating<CASTLING, Type>(pos, moveList, Us, royalSq, pos.castling_rook_square(cr));
     }
 
     return moveList;
@@ -1610,26 +1616,7 @@ namespace {
   template<Color Us, GenType Type>
   ExtMove* generate_all(const Position& pos, ExtMove* moveList) {
     ExtMove* baseEnd = generate_all_impl<Us, Type>(pos, moveList);
-    if (pos.laser_game() && (Type == NON_EVASIONS || Type == QUIETS))
-    {
-        for (Square sq = SQ_A1; sq < SQUARE_NB; ++sq)
-        {
-            if (!is_ok(sq) || file_of(sq) > pos.max_file() || rank_of(sq) > pos.max_rank())
-                continue;
-            Piece pc = pos.piece_on(sq);
-            if (pc != NO_PIECE && color_of(pc) == Us && pos.is_oriented(type_of(pc)))
-            {
-                PieceType base_pt = pos.variant()->base_piece_type(type_of(pc));
-                int current_orient = type_of(pc) - base_pt;
-                for (int i = 0; i < 4; ++i)
-                {
-                    if (i == current_orient)
-                        continue;
-                    *baseEnd++ = make_gating<NORMAL>(sq, sq, PieceType(base_pt + i), sq);
-                }
-            }
-        }
-    }
+    // in-place rotations are generated in generate_moves for each piece type
     if (!pos.potions_enabled())
         return baseEnd;
     return generate_potion_moves<Us, Type>(pos, MoveBuffer{moveList, baseEnd});

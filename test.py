@@ -2602,7 +2602,9 @@ stepwisePushing = true
 
         khet1_moves = sf.legal_moves("khet1", khet1_fen, [])
         self.assertTrue(len(khet1_moves) > 0)
-        self.assertIn("c2d3p:1", khet1_moves)
+        self.assertIn("c8d7", khet1_moves)
+        self.assertIn("c8c8p:1", khet1_moves)
+        self.assertNotIn("c8d7p:1", khet1_moves)
 
         playlaser_moves = sf.legal_moves("playlaser", playlaser_fen, [])
         self.assertTrue(len(playlaser_moves) > 0)
@@ -2614,10 +2616,14 @@ stepwisePushing = true
         dos_moves = sf.legal_moves("dos-laser-chess", dos_fen, [])
         self.assertTrue(len(dos_moves) > 0)
         self.assertIn("e2e3", dos_moves)
-        self.assertIn("b2b3r:1a1", dos_moves)
+        self.assertIn("b3b2m:1", dos_moves)
 
+        # Python round-trip FEN verification
         after_fen = sf.get_fen("dos-laser-chess", dos_fen, ["e2e3"])
         self.assertEqual(sf.validate_fen(after_fen, "dos-laser-chess"), 1)
+
+        after_gating_fen = sf.get_fen("dos-laser-chess", dos_fen, ["b3b2m:1"])
+        self.assertEqual(sf.validate_fen(after_gating_fen, "dos-laser-chess"), 1)
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
