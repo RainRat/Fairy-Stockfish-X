@@ -1471,23 +1471,28 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
           int orientation = 0;
           if (ss.peek() == ':')
           {
-              unsigned char colon, digit;
-              ss >> colon >> digit;
-              if (std::isdigit(digit))
-                  orientation = digit - '0';
+              ss.get(); // consume ':'
+              if (std::isdigit(ss.peek()))
+              {
+                  orientation = ss.get() - '0';
+              }
           }
 
           bool stacked = false;
+          PieceType pt = type_of(pc);
           if (v->laserGame && ss.peek() == '+')
           {
-              ss >> token;
-              stacked = true;
+              if (v->stacked_piece_type(pt) != NO_PIECE_TYPE || v->stacked_piece_type(PieceType(pt + orientation)) != NO_PIECE_TYPE)
+              {
+                  ss.get(); // consume '+'
+                  stacked = true;
+              }
           }
 
           if (ss.peek() == '~')
               ss >> token;
 
-          PieceType pt = type_of(pc);
+          pt = type_of(pc);
           Color c = color_of(pc);
 
           if (v->is_oriented(pt) && orientation >= 0 && orientation < 4)
@@ -4621,6 +4626,47 @@ bool Position::pseudo_legal(const Move m) const {
       && has_setup_drop(them)
       && !is_pass(m))
       return false;
+
+  if (laser_game() && is_gating(m))
+  {
+      Square gateSq = gating_square(m);
+      PieceType gatePt = gating_type(m);
+      if (from == to)
+      {
+          Piece pcFrom = piece_on(from);
+          if (pcFrom == NO_PIECE || color_of(pcFrom) != us || !is_oriented(type_of(pcFrom)))
+              return false;
+          if (gateSq != from)
+              return false;
+          PieceType base = var->base_piece_type(type_of(pcFrom));
+          if (var->base_piece_type(gatePt) != base)
+              return false;
+          int current_orient = type_of(pcFrom) - base;
+          int target_orient = gatePt - base;
+          if (target_orient < 0 || target_orient >= var->orientation_count(base))
+              return false;
+          if (target_orient == current_orient)
+              return false;
+      }
+      else
+      {
+          Piece pcOnGate = (gateSq == to) ? piece_on(from) : piece_on(gateSq);
+          if (pcOnGate == NO_PIECE || color_of(pcOnGate) != us || !is_oriented(type_of(pcOnGate)))
+              return false;
+          PieceType base = var->base_piece_type(type_of(pcOnGate));
+          if (var->base_piece_type(gatePt) != base)
+              return false;
+          int target_orient = gatePt - base;
+          if (target_orient < 0 || target_orient >= var->orientation_count(base))
+              return false;
+          if (gateSq != to)
+          {
+              int current_orient = type_of(pcOnGate) - base;
+              if (target_orient == current_orient)
+                  return false;
+          }
+      }
+  }
 
   if (from == to && !(is_pass(m) || is_self_destruct(m) || (is_promotion_move(m) && sittuyin_promotion()) || pureWallMove || (laser_game() && is_gating(m))))
       return false;
@@ -9303,8 +9349,7 @@ void Position::fire_laser(Key& k) {
     }
 
     Bitboard destroyed_squares = 0;
-    int step_limit = 200;
-    int steps = 0;
+    bool visited[SQUARE_NB][4] = {};
 
     for (size_t i = 0; i < active_beams.size(); ++i) {
         LaserBeam beam = active_beams[i];
@@ -9312,16 +9357,17 @@ void Position::fire_laser(Key& k) {
         Direction dir = beam.dir;
 
         while (true) {
-            if (++steps > step_limit)
-                break;
-
             sq = sq + dir;
             if (!is_ok(sq) || file_of(sq) > max_file() || rank_of(sq) > max_rank())
                 break;
 
+            int beam_orient = direction_to_orientation(dir, var->laserDiagonal);
+            if (visited[sq][beam_orient])
+                break;
+            visited[sq][beam_orient] = true;
+
             Piece pc = piece_on(sq);
             if (pc != NO_PIECE) {
-                int beam_orient = direction_to_orientation(dir, var->laserDiagonal);
                 int piece_orient = type_of(pc) - var->base_piece_type(type_of(pc));
                 int face = (beam_orient + 2 - piece_orient + 4) % 4;
 
@@ -9351,6 +9397,14 @@ void Position::fire_laser(Key& k) {
                     active_beams.push_back({sq, left_dir});
                     active_beams.push_back({sq, right_dir});
                     break;
+                } else if (outcome == Variant::OUTCOME_SPLIT_FORWARD_LEFT) {
+                    int left_orient = (beam_orient + 3) % 4;
+                    Direction left_dir = orientation_to_direction(left_orient, var->laserDiagonal);
+                    active_beams.push_back({sq, left_dir});
+                } else if (outcome == Variant::OUTCOME_SPLIT_FORWARD_RIGHT) {
+                    int right_orient = (beam_orient + 1) % 4;
+                    Direction right_dir = orientation_to_direction(right_orient, var->laserDiagonal);
+                    active_beams.push_back({sq, right_dir});
                 } else if (outcome == Variant::OUTCOME_EXIT_FACE) {
                     dir = orientation_to_direction(piece_orient, var->laserDiagonal);
                 } else {
@@ -9368,6 +9422,7 @@ void Position::fire_laser(Key& k) {
             st->unpromotedBycatch[sq] = pc;
             remove_piece(sq);
             k ^= Zobrist::psq[pc][sq];
+            st->materialKey ^= Zobrist::psq[pc][pieceCount[pc]];
             if (Eval::useNNUE)
                 append_dirty(st, pc, sq, SQ_NONE);
         }

@@ -912,7 +912,11 @@ void PieceMap::init(const Variant* v) {
       add(KING, from_betza("K", "king"));
       // Add custom pieces
       for (PieceType pt = CUSTOM_PIECES; pt <= CUSTOM_PIECES_END; ++pt)
-      add(pt, from_betza(v != nullptr ? v->customPiece[pt - CUSTOM_PIECES] : "", "", v));
+      {
+          PieceType base = (v != nullptr && v->is_oriented(pt)) ? v->base_piece_type(pt) : pt;
+          std::string betza = v != nullptr ? v->customPiece[base - CUSTOM_PIECES] : "";
+          add(pt, from_betza(betza, "", v));
+      }
 }
 
 void PieceMap::add(PieceType pt, PieceInfo* p) {

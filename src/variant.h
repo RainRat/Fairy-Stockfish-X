@@ -302,6 +302,8 @@ struct Variant {
       OUTCOME_REFLECT_BACK = 6,
       OUTCOME_SPLIT = 7,
       OUTCOME_EXIT_FACE = 8,
+      OUTCOME_SPLIT_FORWARD_RIGHT = 9,
+      OUTCOME_SPLIT_FORWARD_LEFT = 10,
   };
   struct LaserOptics {
       LaserOutcome outcomes[4]; // Front, Right, Back, Left
@@ -315,10 +317,8 @@ struct Variant {
   PieceType unstackedPieceMap[PIECE_TYPE_NB] = {};
 
   int orientation_count(PieceType pt) const {
-      if (name == "dos-laser-chess") {
-          if (pt == CUSTOM_PIECE_5 || pt == CUSTOM_PIECE_19)
-              return 2;
-      }
+      if (name == "dos-laser-chess" && (pt == CUSTOM_PIECE_1 || pt == CUSTOM_PIECE_3))
+          return 2;
       return 4;
   }
 

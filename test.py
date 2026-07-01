@@ -2598,7 +2598,7 @@ stepwisePushing = true
         self.assertEqual(playlaser_fen, "l:07/1knp4/1nwp4/1pp5/5PP1/4PWN1/4PNK1/7L:0 w - - 0 1")
 
         dos_fen = sf.start_fen("dos-laser-chess")
-        self.assertEqual(dos_fen, "r:3b:0s:0l:0kq:0b:0s:0r:1/d:0m:3d:0m:1p:0m:0d:0m:2d:0/9/9/9/9/9/D:2M:0D:2M:2P:2M:3D:2M:1D:2/R:1S:2B:2Q:2KL:2S:2B:2R:3 w - - 0 1")
+        self.assertEqual(dos_fen, "r:1b:0s:0lkq:0b:0s:0r:1/d:0m:3d:0m:1pm:0d:0m:2d:0/9/9/9/9/9/D:2M:0D:2M:2PM:3D:2M:1D:2/R:1S:0B:2Q:2KLS:0B:2R:1 w - - 0 1")
 
         khet1_moves = sf.legal_moves("khet1", khet1_fen, [])
         self.assertTrue(len(khet1_moves) > 0)
@@ -2606,6 +2606,18 @@ stepwisePushing = true
 
         playlaser_moves = sf.legal_moves("playlaser", playlaser_fen, [])
         self.assertTrue(len(playlaser_moves) > 0)
+
+        # Targeted DOS Laser Chess tests
+        self.assertNotEqual(sf.validate_fen("invalid FEN", "dos-laser-chess"), 1)
+        self.assertNotEqual(sf.validate_fen("9/9/9/9/9/9/9/9/9 w - - 0 1", "dos-laser-chess"), 1)
+
+        dos_moves = sf.legal_moves("dos-laser-chess", dos_fen, [])
+        self.assertTrue(len(dos_moves) > 0)
+        self.assertIn("e2e3", dos_moves)
+        self.assertIn("b2b3r:1a1", dos_moves)
+
+        after_fen = sf.get_fen("dos-laser-chess", dos_fen, ["e2e3"])
+        self.assertEqual(sf.validate_fen(after_fen, "dos-laser-chess"), 1)
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

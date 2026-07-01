@@ -736,6 +736,7 @@ public:
 
   // Position representation
   Bitboard pieces(PieceType pt = ALL_PIECES) const;
+  Bitboard pieces_oriented_group(PieceType pt) const;
   Bitboard pieces(PieceType pt1, PieceType pt2) const;
   Bitboard pieces(Color c) const;
   Bitboard pieces(Color c, PieceType pt) const;
@@ -2998,6 +2999,10 @@ inline Bitboard Position::adjacent_swap_targets_from(Color c, Square from) const
 }
 
 inline Bitboard Position::pieces(PieceType pt) const {
+  return pieces_oriented_group(pt);
+}
+
+inline Bitboard Position::pieces_oriented_group(PieceType pt) const {
   if (var->is_oriented(pt)) {
       PieceType base = var->base_piece_type(pt);
       int cnt = var->orientation_count(base);

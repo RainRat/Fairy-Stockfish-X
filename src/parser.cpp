@@ -1754,6 +1754,10 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
         }
     }
 
+    auto is_number = [](const std::string& s) {
+        return !s.empty() && std::all_of(s.begin(), s.end(), ::isdigit);
+    };
+
     auto it_emitters = config.find("laserEmitters");
     if (it_emitters != config.end())
     {
@@ -1778,38 +1782,35 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
                     std::string dir_str = token.substr(colon + 1);
                     if (sq_str.size() >= 2 && sq_str[0] >= 'a' && sq_str[0] <= 'z' && sq_str[1] >= '1' && sq_str[1] <= '9')
                     {
-                        Square sq = make_square(File(sq_str[0] - 'a'), Rank(sq_str[1] - '1'));
-                        int dir = std::stoi(dir_str);
-                        Color c = rank_of(sq) > v->maxRank / 2 ? BLACK : WHITE;
-                        v->staticEmitters[c].push_back(sq);
-                        v->staticEmitterDirs[c].push_back(Direction(dir));
+                        File f = File(sq_str[0] - 'a');
+                        Rank r = Rank(sq_str[1] - '1');
+                        if (f <= v->maxFile && r <= v->maxRank && is_number(dir_str))
+                        {
+                            Square sq = make_square(f, r);
+                            int dir = std::stoi(dir_str);
+                            if (dir >= 0 && dir < 4)
+                            {
+                                Color c = rank_of(sq) > v->maxRank / 2 ? BLACK : WHITE;
+                                v->staticEmitters[c].push_back(sq);
+                                v->staticEmitterDirs[c].push_back(Direction(dir));
+                            }
+                        }
                     }
                 }
             }
         }
     }
 
+    // 1. Parse base piece optics (keys without ':')
     for (auto const& [key, val] : config)
     {
-        if (key.rfind("laser_", 0) == 0)
+        if (key.rfind("laser_", 0) == 0 && key.find(':') == std::string::npos)
         {
             config.find(key);
             std::string symbol = key.substr(6);
-            int orientation = 0;
-            size_t colon = symbol.find(':');
-            if (colon != std::string::npos)
-            {
-                std::string base_symbol = symbol.substr(0, colon);
-                std::string orient_str = symbol.substr(colon + 1);
-                symbol = base_symbol;
-                orientation = std::stoi(orient_str);
-            }
             PieceType pt = v->piece_type_from_symbol(symbol);
             if (pt != NO_PIECE_TYPE)
             {
-                if (v->is_oriented(pt))
-                    pt = PieceType(pt + orientation);
-
                 std::istringstream iss(val);
                 std::string outcome_str;
                 int face = 0;
@@ -1826,9 +1827,71 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
                     else if (outcome_str == "B") outcome = Variant::OUTCOME_REFLECT_BACK;
                     else if (outcome_str == "X") outcome = Variant::OUTCOME_SPLIT;
                     else if (outcome_str == "F") outcome = Variant::OUTCOME_EXIT_FACE;
-                    
+                    else if (outcome_str == "Y") outcome = Variant::OUTCOME_SPLIT_FORWARD_RIGHT;
+                    else if (outcome_str == "Z") outcome = Variant::OUTCOME_SPLIT_FORWARD_LEFT;
+
                     v->pieceOptics[pt].outcomes[face] = outcome;
                     face++;
+                }
+            }
+        }
+    }
+
+    // 2. Automatically propagate base optics to oriented subtypes with rotation
+    for (PieceType pt = CUSTOM_PIECES; pt <= CUSTOM_PIECES_END; ++pt)
+    {
+        if (v->is_oriented(pt) && v->base_piece_type(pt) == pt)
+        {
+            int cnt = v->orientation_count(pt);
+            for (int o = 1; o < cnt; ++o)
+            {
+                for (int f = 0; f < 4; ++f)
+                {
+                    v->pieceOptics[pt + o].outcomes[f] = v->pieceOptics[pt].outcomes[(f - o + 4) % 4];
+                }
+            }
+        }
+    }
+
+    // 3. Parse explicit overrides (keys with ':')
+    for (auto const& [key, val] : config)
+    {
+        if (key.rfind("laser_", 0) == 0 && key.find(':') != std::string::npos)
+        {
+            config.find(key);
+            std::string symbol = key.substr(6);
+            size_t colon = symbol.find(':');
+            std::string base_symbol = symbol.substr(0, colon);
+            std::string orient_str = symbol.substr(colon + 1);
+            if (is_number(orient_str))
+            {
+                int orientation = std::stoi(orient_str);
+                PieceType pt = v->piece_type_from_symbol(base_symbol);
+                if (pt != NO_PIECE_TYPE && v->is_oriented(pt) && orientation >= 0 && orientation < 4)
+                {
+                    PieceType subtype = PieceType(pt + orientation);
+                    std::istringstream iss(val);
+                    std::string outcome_str;
+                    int face = 0;
+                    while (std::getline(iss, outcome_str, '/') && face < 4)
+                    {
+                        outcome_str.erase(0, outcome_str.find_first_not_of(" \t"));
+                        outcome_str.erase(outcome_str.find_last_not_of(" \t") + 1);
+                        Variant::LaserOutcome outcome = Variant::OUTCOME_DESTROY;
+                        if (outcome_str == "D") outcome = Variant::OUTCOME_DESTROY;
+                        else if (outcome_str == "S") outcome = Variant::OUTCOME_ABSORB;
+                        else if (outcome_str == "T") outcome = Variant::OUTCOME_TRANSMIT;
+                        else if (outcome_str == "R") outcome = Variant::OUTCOME_REFLECT_RIGHT;
+                        else if (outcome_str == "L") outcome = Variant::OUTCOME_REFLECT_LEFT;
+                        else if (outcome_str == "B") outcome = Variant::OUTCOME_REFLECT_BACK;
+                        else if (outcome_str == "X") outcome = Variant::OUTCOME_SPLIT;
+                        else if (outcome_str == "F") outcome = Variant::OUTCOME_EXIT_FACE;
+                        else if (outcome_str == "Y") outcome = Variant::OUTCOME_SPLIT_FORWARD_RIGHT;
+                        else if (outcome_str == "Z") outcome = Variant::OUTCOME_SPLIT_FORWARD_LEFT;
+
+                        v->pieceOptics[subtype].outcomes[face] = outcome;
+                        face++;
+                    }
                 }
             }
         }
