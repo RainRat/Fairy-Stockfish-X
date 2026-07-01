@@ -7119,7 +7119,7 @@ void Position::undo_move(Move m) {
           // Update board and piece lists
           if (bpc || wasBlastPromoted)
           {
-              if (wasBlastPromoted && piece_on(bsq) != NO_PIECE) {
+              if ((wasBlastPromoted || (st->laserUnstackedSquares & bsq)) && piece_on(bsq) != NO_PIECE) {
                   remove_piece(bsq);
                   board[bsq] = NO_PIECE;
               }
@@ -9380,6 +9380,8 @@ void Position::fire_laser(Key& k) {
 
                 if (outcome == Variant::OUTCOME_DESTROY) {
                     destroyed_squares |= sq;
+                    if (var->laserDestroyContinues)
+                        continue;
                     break;
                 } else if (outcome == Variant::OUTCOME_ABSORB) {
                     break;
@@ -9425,6 +9427,7 @@ void Position::fire_laser(Key& k) {
         if (pc != NO_PIECE) {
             st->bycatchSquares |= sq;
             st->unpromotedBycatch[sq] = pc;
+            PieceType unstacked = var->unstacked_piece_type(type_of(pc));
             remove_piece(sq);
             k ^= Zobrist::psq[pc][sq];
             st->materialKey ^= Zobrist::psq[pc][pieceCount[pc]];
@@ -9434,6 +9437,16 @@ void Position::fire_laser(Key& k) {
                 st->nonPawnMaterial[color_of(pc)] -= PieceValue[MG][pc];
             if (Eval::useNNUE)
                 append_dirty(st, pc, sq, SQ_NONE);
+            if (unstacked != NO_PIECE_TYPE) {
+                Piece single = make_piece(color_of(pc), unstacked);
+                put_piece(single, sq);
+                st->laserUnstackedSquares |= sq;
+                k ^= Zobrist::psq[single][sq];
+                st->materialKey ^= Zobrist::psq[single][pieceCount[single] - 1];
+                st->nonPawnMaterial[color_of(single)] += PieceValue[MG][single];
+                if (Eval::useNNUE)
+                    append_dirty(st, single, SQ_NONE, sq);
+            }
         }
     }
 }

@@ -267,6 +267,7 @@ struct MoveUndoInfo {
   bool       forcedJumpHasFollowup = false;
   bool       didPull = false;
   Piece      replacedPiece = NO_PIECE;
+  Bitboard   laserUnstackedSquares = Bitboard(0);
 
   void clear() {
     bycatchSquares = Bitboard(0);
@@ -283,6 +284,7 @@ struct MoveUndoInfo {
     claimedSquares = Bitboard(0);
     forcedJumpSquare = SQ_NONE;
     replacedPiece = NO_PIECE;
+    laserUnstackedSquares = Bitboard(0);
     dropHandColor = COLOR_NB;
     forcedJumpStep = 0;
     removedGatingType = NO_PIECE_TYPE;

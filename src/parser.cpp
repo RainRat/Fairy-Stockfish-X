@@ -1380,6 +1380,7 @@ template <bool DoCheck>
 bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("laserGame", v->laserGame);
     parse_attribute("laserDiagonal", v->laserDiagonal);
+    parse_attribute("laserDestroyContinues", v->laserDestroyContinues);
     parse_attribute("orientedPieceTypes", v->orientedPieceTypes, v);
     parse_attribute("rotateAfterMove", v->rotateAfterMove);
 

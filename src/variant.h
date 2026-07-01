@@ -293,6 +293,7 @@ struct Variant {
   bool progressiveMultimove = false;
   bool laserGame = false;
   bool laserDiagonal = false;
+  bool laserDestroyContinues = false;
   enum LaserOutcome : uint8_t {
       OUTCOME_DESTROY = 1,
       OUTCOME_ABSORB  = 2,

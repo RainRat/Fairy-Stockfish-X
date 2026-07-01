@@ -2606,8 +2606,24 @@ stepwisePushing = true
         self.assertIn("c8c8p:1", khet1_moves)
         self.assertNotIn("c8d7p:1", khet1_moves)
 
+        # Khet pieces do not capture by displacement.
+        khet_capture_fen = "9k/10/10/10/10/2P:0p6/10/9K w - - 0 1"
+        self.assertNotIn("c3d3", sf.legal_moves("khet1", khet_capture_fen, []))
+
+        # A laser hit removes only the top Obelisk from a stack.
+        khet_stack_fen = "9k/10/10/10/10/2P:07/O+9/9K w - - 0 1"
+        khet_stack_after = sf.get_fen("khet1", khet_stack_fen, ["c3c3p:1"])
+        self.assertIn("/O9/", khet_stack_after)
+        self.assertNotIn("O+", khet_stack_after)
+
         playlaser_moves = sf.legal_moves("playlaser", playlaser_fen, [])
         self.assertTrue(len(playlaser_moves) > 0)
+
+        playlaser_pawn_fen = "7k/8/8/4p3/3Pp3/8/8/K6L:0 w - - 0 1"
+        playlaser_pawn_moves = sf.legal_moves("playlaser", playlaser_pawn_fen, [])
+        self.assertIn("d4c5", playlaser_pawn_moves)
+        self.assertIn("d4e4", playlaser_pawn_moves)
+        self.assertNotIn("d4e5", playlaser_pawn_moves)
 
         # Targeted DOS Laser Chess tests
         self.assertNotEqual(sf.validate_fen("invalid FEN", "dos-laser-chess"), 1)
