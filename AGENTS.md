@@ -37,12 +37,13 @@ make -j build COMP=mingw
 
 Use `largeboards=yes` for normal large-board variants. Use `verylargeboards=yes` only beyond that matrix. When switching board macro families, run `make clean`.
 
-For named binaries used by regression scripts:
+For named binaries used by regression scripts, do not build the shared object
+families manually. Use the preparation command; it handles clean family
+boundaries, leaves harness-compatible objects active, and keeps build output in
+`.local/build/regression-binaries/`:
 
 ```sh
-make -j build ARCH=x86-64-modern largeboards=yes EXE=stockfish-large
-make -j build ARCH=x86-64-modern verylargeboards=yes EXE=stockfish-vlb
-make -j build ARCH=x86-64-modern all=yes EXE=stockfish-allvars
+tests/regression-runner.sh prepare
 ```
 
 ## Running the engine
@@ -111,12 +112,12 @@ python3 tests/upstream_movecount_baseline.py src/stockfish "$UPSTREAM_ENGINE"
 Only regenerate upstream baselines intentionally. Do not refresh fixtures to hide regressions.
 
 ## Full local regression
-Build the named binaries first. Use the regression runner for long checks; it keeps
-the full output in one log while reporting concise status and an estimate based on
-recent successful runs:
+Use the regression runner for long checks. For the reliable unattended path,
+have the detached job prepare all binary families before testing. It keeps build
+and test output in logs while commands return concise status:
 
 ```sh
-tests/regression-runner.sh start src/stockfish-large
+tests/regression-runner.sh start --prepare
 tests/regression-runner.sh status
 tests/regression-runner.sh wait
 ```
@@ -125,8 +126,14 @@ tests/regression-runner.sh wait
 `wait` monitors the detached process and prints only the final result; use it instead
 of repeatedly polling a command session. On failure it also prints the relevant log
 tail. `tests/regression-runner.sh log` shows the latest log tail on demand. The runner
-rejects stale named binaries before launching; rebuild the reported binary rather
-than spending a full run testing old code.
+rejects stale, missing, or wrong-family named binaries before launching. Use
+`start --prepare` rather than manually rebuilding after such a diagnostic.
+
+Do not keep a foreground shell attached to the test process or repeatedly poll
+its log. `start --prepare` is detached and survives the initiating shell;
+`status` is for occasional progress checks, and `wait` is only for callers that
+need to block until the final concise result. On failure, the complete output is
+already preserved and `wait` prints only the relevant tail.
 
 The fast and full suites preserve signature-based artifacts under `.local/build`.
 Do not clear that directory for a normal rerun. Use `VERBOSE=1` with

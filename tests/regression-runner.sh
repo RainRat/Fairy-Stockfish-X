@@ -10,14 +10,16 @@ CURRENT_FILE="${STATE_DIR}/current"
 
 usage() {
   cat <<'EOF'
-Usage: tests/regression-runner.sh start [engine]
+Usage: tests/regression-runner.sh prepare
+       tests/regression-runner.sh start [--prepare] [engine]
        tests/regression-runner.sh status
        tests/regression-runner.sh wait
-       tests/regression-runner.sh run [engine]
+       tests/regression-runner.sh run [--prepare] [engine]
        tests/regression-runner.sh log
 
 Runs tests/local-regression.sh detached, preserving one full log while status and
 wait produce concise output. The default engine is src/stockfish-large.
+--prepare builds all required binary families inside the detached job first.
 EOF
 }
 
@@ -40,7 +42,7 @@ engine_is_stale() {
 }
 
 validate_engines() {
-  local primary="$1" candidate stale=0
+  local primary="$1" candidate stale=0 missing=0 banner expected
   local candidates=(
     "${primary}"
     "${VLB_ENGINE:-${ROOT_DIR}/src/stockfish-vlb}"
@@ -50,15 +52,26 @@ validate_engines() {
 
   for candidate in "${candidates[@]}"; do
     [[ "${candidate}" == /* ]] || candidate="${ROOT_DIR}/${candidate}"
-    [[ -x "${candidate}" ]] || continue
+    if [[ ! -x "${candidate}" ]]; then
+      echo "missing engine: ${candidate}" >&2
+      missing=1
+      continue
+    fi
     if engine_is_stale "${candidate}"; then
       echo "stale engine: ${candidate}" >&2
       stale=1
     fi
+    banner=$("${candidate}" compiler 2>/dev/null | head -n1 || true)
+    expected=" LB "
+    [[ "${candidate}" == *stockfish-vlb* ]] && expected=" VLB "
+    if [[ " ${banner} " != *"${expected}"* ]]; then
+      echo "wrong engine family: ${candidate} (expected${expected}, got '${banner}')" >&2
+      stale=1
+    fi
   done
 
-  if (( stale )); then
-    echo "rebuild the named regression binaries before starting the suite" >&2
+  if (( stale || missing )); then
+    echo "run tests/regression-runner.sh prepare before starting the suite" >&2
     return 2
   fi
 }
@@ -180,12 +193,19 @@ status_run() {
 }
 
 start_run() {
+  local prepare=0
+  if [[ "${1:-}" == "--prepare" ]]; then
+    prepare=1
+    shift
+  fi
   local engine=${1:-src/stockfish-large} run_id run_dir pid
   if [[ "${engine}" != /* ]]; then
     engine="${ROOT_DIR}/${engine}"
   fi
-  [[ -x "${engine}" ]] || { echo "engine is not executable: ${engine}" >&2; return 2; }
-  validate_engines "${engine}"
+  if (( ! prepare )); then
+    [[ -x "${engine}" ]] || { echo "engine is not executable: ${engine}" >&2; return 2; }
+    validate_engines "${engine}"
+  fi
 
   if run_dir=$(current_run_dir 2>/dev/null) && run_is_alive "${run_dir}"; then
     echo "regression already running (pid $(<"${run_dir}/pid"))" >&2
@@ -198,6 +218,7 @@ start_run() {
   mkdir -p "${run_dir}"
   printf '%s\n' "${run_dir}" > "${CURRENT_FILE}"
   printf '%s\n' "${engine}" > "${run_dir}/engine"
+  printf '%s\n' "${prepare}" > "${run_dir}/prepare"
   date +%s > "${run_dir}/start"
 
   if command -v setsid >/dev/null 2>&1; then
@@ -235,8 +256,18 @@ worker_run() {
   printf '%s\n' "$$" > "${run_dir}/pid"
   started=$(<"${run_dir}/start")
   set +e
-  /usr/bin/time -f "total elapsed %es" bash "${ROOT_DIR}/tests/local-regression.sh" "${engine}" \
-    > "${run_dir}/regression.log" 2>&1
+  if [[ "$(<"${run_dir}/prepare")" == "1" ]]; then
+    {
+      echo "== prepare regression binaries =="
+      bash "${ROOT_DIR}/tests/prepare-regression-binaries.sh" \
+        && validate_engines "${engine}" \
+        && /usr/bin/time -f "total elapsed %es" \
+             bash "${ROOT_DIR}/tests/local-regression.sh" "${engine}"
+    } > "${run_dir}/regression.log" 2>&1
+  else
+    /usr/bin/time -f "total elapsed %es" bash "${ROOT_DIR}/tests/local-regression.sh" "${engine}" \
+      > "${run_dir}/regression.log" 2>&1
+  fi
   rc=$?
   set -e
   ended=$(date +%s)
@@ -248,6 +279,10 @@ worker_run() {
 
 command=${1:-}
 case "${command}" in
+  prepare)
+    bash "${ROOT_DIR}/tests/prepare-regression-binaries.sh"
+    validate_engines "${ROOT_DIR}/src/stockfish-large"
+    ;;
   start)
     shift
     start_run "$@"
