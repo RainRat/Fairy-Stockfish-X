@@ -343,8 +343,11 @@ struct Variant {
   }
 
   PieceType orientation_piece_type(PieceType base, int orientation) const {
+      if (base < NO_PIECE_TYPE || base >= PIECE_TYPE_NB || orientation < 0 || orientation >= 4)
+          return NO_PIECE_TYPE;
       return orientationTypes[base][orientation] != NO_PIECE_TYPE
-          ? orientationTypes[base][orientation] : PieceType(base + orientation);
+          ? orientationTypes[base][orientation]
+          : int(base) + orientation < PIECE_TYPE_NB ? PieceType(base + orientation) : NO_PIECE_TYPE;
   }
 
   int orientation_index(PieceType pt) const {
@@ -352,10 +355,13 @@ struct Variant {
       for (int i = 0; i < orientation_count(base); ++i)
           if (orientation_piece_type(base, i) == pt)
               return i;
-      return 0;
+      return -1;
   }
 
   bool rotation_allowed(Color c, PieceType base, int current, int target, int count) const {
+      if (base < NO_PIECE_TYPE || base >= PIECE_TYPE_NB || count <= 0 || count > 4
+          || current < 0 || current >= count || target < 0 || target >= count)
+          return false;
       if (target == current)
           return false;
       if (rotationAllowedOrientations[c][base]
@@ -402,17 +408,19 @@ struct Variant {
   PieceType stacked_piece_type(PieceType pt) const {
       PieceType base = base_piece_type(pt);
       PieceType stacked_base = stackedPieceMap[base];
-      if (stacked_base == NO_PIECE_TYPE)
+      int orientation = is_oriented(pt) ? orientation_index(pt) : 0;
+      if (stacked_base == NO_PIECE_TYPE || orientation < 0)
           return NO_PIECE_TYPE;
-      return orientation_piece_type(stacked_base, orientation_index(pt));
+      return orientation_piece_type(stacked_base, orientation);
   }
 
   PieceType unstacked_piece_type(PieceType pt) const {
       PieceType base = base_piece_type(pt);
       PieceType unstacked_base = unstackedPieceMap[base];
-      if (unstacked_base == NO_PIECE_TYPE)
+      int orientation = is_oriented(pt) ? orientation_index(pt) : 0;
+      if (unstacked_base == NO_PIECE_TYPE || orientation < 0)
           return NO_PIECE_TYPE;
-      return orientation_piece_type(unstacked_base, orientation_index(pt));
+      return orientation_piece_type(unstacked_base, orientation);
   }
 
 

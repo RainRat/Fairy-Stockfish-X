@@ -862,6 +862,7 @@ static PyObject* pyffish_runCppTests(PyObject* self, PyObject* args) {
             {"khet1", "9k/10/10/10/3p6/2S:05/10/9K w - - 0 1", "c3d4s"},
             {"dos-laser-chess", "9/9/9/9/9/9/5k3/9/K4L:03 w - - 0 1", "f1f1f"},
             {"dos-laser-chess", "r:1b:0s:0lkq:0b:0s:0r:1/d:0m:3d:0m:1pm:0d:0m:2d:0/9/9/9/9/9/D:2M:0D:2M:2PM:3D:2M:1D:2/R:1S:0B:2Q:2KLS:0B:2R:1 w - - 0 1", "e2e3l:1f1"},
+            {"dos-laser-chess", "k8/9/9/9/4R:14/3M:05/9/9/K4L:03 w - - 0 1", "d4d5r:2e5"},
             {"dos-laser-chess", "8k/M:08/9/9/9/9/9/9/K4L:03 w - - 0 1", "a8a9q:2,f1"},
         };
 
@@ -876,6 +877,10 @@ static PyObject* pyffish_runCppTests(PyObject* self, PyObject* args) {
             std::string beforeFen = pos.fen();
             Key beforeKey = pos.key();
             Key beforeMaterial = pos.state()->materialKey;
+            Key beforePawn = pos.state()->pawnKey;
+            int beforeCounts[PIECE_NB] = {};
+            for (Piece pc = Piece(NO_PIECE + 1); pc < PIECE_NB; ++pc)
+                beforeCounts[pc] = pos.count(color_of(pc), type_of(pc));
             std::string moveStr = tc.move;
             Move m = UCI::to_move(pos, moveStr);
             if (m == MOVE_NONE)
@@ -892,7 +897,13 @@ static PyObject* pyffish_runCppTests(PyObject* self, PyObject* args) {
                 StateListPtr expectedStates;
                 std::string afterFen = pos.fen();
                 buildPosition(expected, expectedStates, v, afterFen.c_str(), nullptr, false);
-                if (pos.key() != expected.key() || pos.state()->materialKey != expected.state()->materialKey)
+                bool countsMatch = true;
+                for (Piece pc = Piece(NO_PIECE + 1); pc < PIECE_NB; ++pc)
+                    countsMatch &= pos.count(color_of(pc), type_of(pc))
+                                == expected.count(color_of(pc), type_of(pc));
+                if (pos.key() != expected.key()
+                    || pos.state()->materialKey != expected.state()->materialKey
+                    || pos.state()->pawnKey != expected.state()->pawnKey || !countsMatch)
                 {
                     PyErr_Format(PyFFishError, "Hash mismatch after %s move %s", tc.variant, tc.move);
                     return nullptr;
@@ -900,7 +911,12 @@ static PyObject* pyffish_runCppTests(PyObject* self, PyObject* args) {
 
                 pos.undo_move(m);
                 states->pop_back();
-                if (pos.fen() != beforeFen || pos.key() != beforeKey || pos.state()->materialKey != beforeMaterial)
+                bool countsRestored = true;
+                for (Piece pc = Piece(NO_PIECE + 1); pc < PIECE_NB; ++pc)
+                    countsRestored &= pos.count(color_of(pc), type_of(pc)) == beforeCounts[pc];
+                if (pos.fen() != beforeFen || pos.key() != beforeKey
+                    || pos.state()->materialKey != beforeMaterial
+                    || pos.state()->pawnKey != beforePawn || !countsRestored)
                 {
                     PyErr_Format(PyFFishError, "Undo mismatch after %s move %s", tc.variant, tc.move);
                     return nullptr;

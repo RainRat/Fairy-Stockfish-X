@@ -6522,17 +6522,23 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           if (var->laserGame && board[gate] != NO_PIECE)
           {
               st->replacedPiece = board[gate];
+              st->replacedPromoted = is_promoted(gate);
+              st->replacedUnpromoted = unpromoted_piece_on(gate);
               if (Eval::useNNUE)
                   append_dirty(st, st->replacedPiece, gate, SQ_NONE);
               remove_piece(gate);
               k ^= Zobrist::psq[st->replacedPiece][gate];
               st->materialKey ^= Zobrist::psq[st->replacedPiece][pieceCount[st->replacedPiece]];
+              if (type_of(st->replacedPiece) == PAWN)
+                  st->pawnKey ^= Zobrist::psq[st->replacedPiece][gate];
+              else
+                  st->nonPawnMaterial[color_of(st->replacedPiece)] -= PieceValue[MG][st->replacedPiece];
           }
 
           if (Eval::useNNUE)
               append_dirty(st, gating_piece, SQ_NONE, gate);
 
-          put_piece(gating_piece, gate);
+          put_piece(gating_piece, gate, st->replacedPromoted, st->replacedUnpromoted);
           if (gating_from_hand() && st->replacedPiece == NO_PIECE)
           {
               int oldCount = pieceCountInHand[us][gating_type(m)];
@@ -6545,7 +6551,10 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
               st->gatesBB[us] ^= gate;
           k ^= Zobrist::psq[gating_piece][gate];
           st->materialKey ^= Zobrist::psq[gating_piece][pieceCount[gating_piece] - 1];
-          st->nonPawnMaterial[us] += PieceValue[MG][gating_piece];
+          if (type_of(gating_piece) == PAWN)
+              st->pawnKey ^= Zobrist::psq[gating_piece][gate];
+          else
+              st->nonPawnMaterial[us] += PieceValue[MG][gating_piece];
 
           if (paired_drop(m))
           {
@@ -7271,7 +7280,8 @@ void Position::undo_move(Move m) {
           remove_piece(gating_square(m));
           board[gating_square(m)] = NO_PIECE;
           if (st->replacedPiece != NO_PIECE)
-              put_piece(st->replacedPiece, gating_square(m));
+              put_piece(st->replacedPiece, gating_square(m), st->replacedPromoted,
+                        st->replacedUnpromoted);
           if (gating_from_hand() && st->replacedPiece == NO_PIECE)
               add_to_hand(gating_piece);
           if (!var->laserGame)
@@ -9448,6 +9458,7 @@ void Position::fire_laser(Key& k) {
         Direction dir;
     };
     std::vector<LaserBeam> active_beams;
+    active_beams.reserve(var->staticEmitters[us].size() + count(us, ALL_PIECES));
 
     for (size_t i = 0; i < var->staticEmitters[us].size(); ++i) {
         Square eq = var->staticEmitters[us][i];
@@ -9456,16 +9467,14 @@ void Position::fire_laser(Key& k) {
     }
 
     if (var->emitterPieceType != NO_PIECE_TYPE) {
-        for (Square sq = SQ_A1; sq < SQUARE_NB; ++sq) {
-            if (!is_ok(sq) || file_of(sq) > max_file() || rank_of(sq) > max_rank())
-                continue;
+        Bitboard emitters = pieces_oriented_group(us, var->emitterPieceType);
+        while (emitters) {
+            Square sq = pop_lsb(emitters);
             Piece pc = piece_on(sq);
-            if (pc != NO_PIECE && color_of(pc) == us && var->base_piece_type(type_of(pc)) == var->emitterPieceType) {
-                int orientation = var->orientation_index(type_of(pc));
-                Direction dir = orientation_to_direction((orientation + var->laserEmitterOrientationOffset) % 4,
-                                                         var->laserDiagonal);
-                active_beams.push_back({sq, dir});
-            }
+            int orientation = var->orientation_index(type_of(pc));
+            Direction dir = orientation_to_direction((orientation + var->laserEmitterOrientationOffset) % 4,
+                                                     var->laserDiagonal);
+            active_beams.push_back({sq, dir});
         }
     }
 

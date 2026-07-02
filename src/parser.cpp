@@ -1405,6 +1405,12 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
         while (iss >> entry)
         {
             size_t colon = entry.find(':');
+            if (colon == std::string::npos || colon == 0 || colon == entry.size() - 1)
+            {
+                if (DoCheck)
+                    std::cerr << key << " - Malformed entry: " << entry << std::endl;
+                return false;
+            }
             PieceType base = colon == std::string::npos ? NO_PIECE_TYPE
                                                         : parse_piece_type_token(v, entry.substr(0, colon));
             std::string values = colon == std::string::npos ? "" : entry.substr(colon + 1);
@@ -1505,6 +1511,12 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
         while (iss >> entry)
         {
             size_t colon = entry.find(':');
+            if (colon == std::string::npos || colon == 0 || colon == entry.size() - 1)
+            {
+                if (DoCheck)
+                    std::cerr << "orientationGroups - Malformed entry: " << entry << std::endl;
+                return false;
+            }
             PieceType base = colon == std::string::npos ? NO_PIECE_TYPE
                                                         : parse_piece_type_token(v, entry.substr(0, colon));
             if (base == NO_PIECE_TYPE)
@@ -2051,14 +2063,23 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
                 }
                 std::string sq_str = token.substr(0, colon);
                 std::string dir_str = token.substr(colon + 1);
-                if (sq_str.size() < 2 || sq_str[0] < 'a' || sq_str[0] > 'z' || sq_str[1] < '1' || sq_str[1] > '9')
+                std::string rank_str = sq_str.size() > 1 ? sq_str.substr(1) : "";
+                if (sq_str.size() < 2 || sq_str[0] < 'a' || sq_str[0] > 'z'
+                    || !is_number(rank_str))
                 {
                     if (DoCheck)
                         std::cerr << "laserEmitters - Invalid square coordinates: " << sq_str << std::endl;
                     return false;
                 }
                 File f = File(sq_str[0] - 'a');
-                Rank r = Rank(sq_str[1] - '1');
+                int rank = std::stoi(rank_str) - 1;
+                if (rank < 0 || rank >= RANK_NB)
+                {
+                    if (DoCheck)
+                        std::cerr << "laserEmitters - Invalid square coordinates: " << sq_str << std::endl;
+                    return false;
+                }
+                Rank r = Rank(rank);
                 if (f > v->maxFile || r > v->maxRank)
                 {
                     if (DoCheck)

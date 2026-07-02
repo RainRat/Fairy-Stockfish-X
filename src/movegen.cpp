@@ -125,7 +125,7 @@ namespace {
                     if (!pos.is_oriented(rotateType))
                         continue;
                     PieceType base_pt = pos.variant()->base_piece_type(rotateType);
-                    int current = rotateType - base_pt;
+                    int current = pos.variant()->orientation_index(rotateType);
                     int count = pos.variant()->orientation_count(base_pt);
                     for (int i = 0; i < count; ++i)
                         if (pos.variant()->rotation_allowed(us, base_pt, current, i, count))
@@ -1414,13 +1414,7 @@ namespace {
         {
             Square to = pop_lsb(b);
             if constexpr (Type == QUIET_CHECKS)
-            {
-                ExtMove temp[256];
-                ExtMove* tempEnd = make_move_and_gating<NORMAL, Type>(pos, temp, Us, royalSq, to);
-                for (ExtMove* it = temp; it != tempEnd; ++it)
-                    if (pos.gives_check(it->move))
-                        *moveList++ = *it;
-            }
+                moveList = make_move_and_gating<NORMAL, Type>(pos, moveList, Us, royalSq, to);
             else
                 moveList = make_move_and_gating<NORMAL, Type>(pos, moveList, Us, royalSq, to);
         }
