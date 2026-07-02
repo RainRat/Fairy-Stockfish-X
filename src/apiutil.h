@@ -705,6 +705,8 @@ inline int read_fen_number(const std::string& text, size_t& idx) {
 
 inline Validation check_for_valid_characters(const std::string& firstFenPart, const std::string& validSpecialCharactersFirstField, const Variant* v) {
     PieceType lastPt = NO_PIECE_TYPE;
+    bool orientationSeen = false;
+    bool stackSeen = false;
     for (size_t i = 0; i < firstFenPart.size();)
     {
         char c = firstFenPart[i];
@@ -712,12 +714,14 @@ inline Validation check_for_valid_characters(const std::string& firstFenPart, co
         {
             if (v && v->laserGame)
             {
-                if (lastPt == NO_PIECE_TYPE || v->stacked_piece_type(lastPt) == NO_PIECE_TYPE)
+                if (stackSeen || lastPt == NO_PIECE_TYPE
+                    || v->stacked_piece_type(lastPt) == NO_PIECE_TYPE)
                 {
                     std::cerr << "Invalid stacked suffix: '+'." << std::endl;
                     return NOK;
                 }
                 lastPt = NO_PIECE_TYPE;
+                stackSeen = true;
                 ++i;
                 continue;
             }
@@ -732,7 +736,8 @@ inline Validation check_for_valid_characters(const std::string& firstFenPart, co
         }
         if (c == ':' && v && v->laserGame)
         {
-            if (i == 0 || i + 1 >= firstFenPart.size() || !std::isdigit(static_cast<unsigned char>(firstFenPart[i + 1])))
+            if (orientationSeen || stackSeen || i == 0 || i + 1 >= firstFenPart.size()
+                || !std::isdigit(static_cast<unsigned char>(firstFenPart[i + 1])))
             {
                 std::cerr << "Invalid orientation suffix: ':'." << std::endl;
                 return NOK;
@@ -748,6 +753,8 @@ inline Validation check_for_valid_characters(const std::string& firstFenPart, co
                 std::cerr << "Invalid orientation digit: '" << firstFenPart[i + 1] << "'." << std::endl;
                 return NOK;
             }
+            lastPt = v->orientation_piece_type(lastPt, orient);
+            orientationSeen = true;
             i += 2;
             continue;
         }
@@ -758,12 +765,16 @@ inline Validation check_for_valid_characters(const std::string& firstFenPart, co
             if (pc != NO_PIECE)
             {
                 lastPt = type_of(pc);
+                orientationSeen = false;
+                stackSeen = false;
                 continue;
             }
             std::cerr << "Invalid piece character: '" << symbol << "'." << std::endl;
             return NOK;
         }
         lastPt = NO_PIECE_TYPE;
+        orientationSeen = false;
+        stackSeen = false;
         ++i;
         if (!std::isdigit(static_cast<unsigned char>(c))
             && !contains(validSpecialCharactersFirstField, c))

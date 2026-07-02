@@ -2652,6 +2652,8 @@ stepwisePushing = true
         # Targeted DOS Laser Chess tests
         self.assertNotEqual(sf.validate_fen("invalid FEN", "dos-laser-chess"), 1)
         self.assertNotEqual(sf.validate_fen("9/9/9/9/9/9/9/9/9 w - - 0 1", "dos-laser-chess"), 1)
+        self.assertNotEqual(sf.validate_fen("9k/10/10/10/10/2P:1:26/10/9K w - - 0 1", "khet1"), 1)
+        self.assertNotEqual(sf.validate_fen("9k/10/10/10/10/2O++7/10/9K w - - 0 1", "khet1"), 1)
 
         dos_moves = sf.legal_moves("dos-laser-chess", dos_fen, [])
         self.assertTrue(len(dos_moves) > 0)
@@ -2690,6 +2692,15 @@ stepwisePushing = true
 startFen = 8/8/8/8/8/8/8/8[PPpp] w - - 0 1
 pieceDrops = true
 symmetricDropTypes = p
+
+[pawn-stack:fairy]
+laserGame = true
+checking = false
+king = -
+castling = false
+customPiece1 = a:K
+stackedPieceType = p:a
+startFen = 8/8/8/8/8/8/PP6/8 w - - 0 1
 """)
         self.assertTrue(sf.run_cpp_tests())
 

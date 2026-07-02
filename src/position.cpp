@@ -6238,7 +6238,14 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           k ^= Zobrist::psq[pc][to] ^ Zobrist::psq[stacked][to];
           st->materialKey ^= Zobrist::psq[pc][pieceCount[pc]]
                            ^ Zobrist::psq[stacked][pieceCount[stacked] - 1];
-          st->nonPawnMaterial[us] += PieceValue[MG][stacked] - PieceValue[MG][pc];
+          if (type_of(pc) == PAWN)
+              st->pawnKey ^= Zobrist::psq[pc][to];
+          else
+              st->nonPawnMaterial[us] -= PieceValue[MG][pc];
+          if (type_of(stacked) == PAWN)
+              st->pawnKey ^= Zobrist::psq[stacked][to];
+          else
+              st->nonPawnMaterial[us] += PieceValue[MG][stacked];
           if (Eval::useNNUE)
           {
               dp.dirty_num = 3;
@@ -6257,7 +6264,14 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           st->materialKey ^= Zobrist::psq[pc][pieceCount[pc]]
                            ^ Zobrist::psq[single][pieceCount[single] - 2]
                            ^ Zobrist::psq[single][pieceCount[single] - 1];
-          st->nonPawnMaterial[us] += 2 * PieceValue[MG][single] - PieceValue[MG][pc];
+          if (type_of(pc) == PAWN)
+              st->pawnKey ^= Zobrist::psq[pc][to];
+          else
+              st->nonPawnMaterial[us] -= PieceValue[MG][pc];
+          if (type_of(single) == PAWN)
+              st->pawnKey ^= Zobrist::psq[single][from] ^ Zobrist::psq[single][to];
+          else
+              st->nonPawnMaterial[us] += 2 * PieceValue[MG][single];
           if (Eval::useNNUE)
           {
               dp.dirty_num = 3;
@@ -9593,7 +9607,10 @@ void Position::fire_laser(Key& k) {
                 st->laserUnstackedSquares |= sq;
                 k ^= Zobrist::psq[single][sq];
                 st->materialKey ^= Zobrist::psq[single][pieceCount[single] - 1];
-                st->nonPawnMaterial[color_of(single)] += PieceValue[MG][single];
+                if (type_of(single) == PAWN)
+                    st->pawnKey ^= Zobrist::psq[single][sq];
+                else
+                    st->nonPawnMaterial[color_of(single)] += PieceValue[MG][single];
                 if (Eval::useNNUE)
                     append_dirty(st, single, SQ_NONE, sq);
             }

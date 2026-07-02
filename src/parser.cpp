@@ -1545,7 +1545,42 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
                     std::cerr << "orientationGroups - First member must be the base: " << entry << std::endl;
                 return false;
             }
+            if (v->orientationCounts[base] > 0 && v->orientationCounts[base] != count)
+            {
+                if (DoCheck)
+                    std::cerr << "orientationGroups - Count conflicts with orientationCounts: " << entry << std::endl;
+                return false;
+            }
             v->orientationCounts[base] = count;
+        }
+    }
+
+    PieceType orientationOwner[PIECE_TYPE_NB];
+    std::fill(std::begin(orientationOwner), std::end(orientationOwner), NO_PIECE_TYPE);
+    for (PieceType base = PAWN; base <= CUSTOM_PIECES_END; ++base)
+    {
+        bool explicitGroup = v->orientationTypes[base][0] != NO_PIECE_TYPE;
+        if (explicitGroup && !(v->orientedPieceTypes & base))
+        {
+            if (DoCheck)
+                std::cerr << "orientationGroups - Base is not in orientedPieceTypes: "
+                          << v->pieceToChar[base] << std::endl;
+            return false;
+        }
+        if (!(v->orientedPieceTypes & base))
+            continue;
+        int count = v->orientationCounts[base] > 0 ? v->orientationCounts[base] : 4;
+        for (int i = 0; i < count; ++i)
+        {
+            PieceType member = v->orientation_piece_type(base, i);
+            if (member == NO_PIECE_TYPE || orientationOwner[member] != NO_PIECE_TYPE)
+            {
+                if (DoCheck)
+                    std::cerr << "orientationGroups - Duplicate or overlapping member for base: "
+                              << v->pieceToChar[base] << std::endl;
+                return false;
+            }
+            orientationOwner[member] = base;
         }
     }
 
@@ -2020,6 +2055,33 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
                 v->unstackedPieceMap[stacked_pt] = pt;
             }
         }
+        for (PieceType pt = PAWN; pt <= CUSTOM_PIECES_END; ++pt)
+        {
+            PieceType stacked = v->stackedPieceMap[pt];
+            if (stacked == NO_PIECE_TYPE)
+                continue;
+            int sourceCount = v->orientedPieceTypes & pt
+                            ? (v->orientationCounts[pt] > 0 ? v->orientationCounts[pt] : 4) : 1;
+            int targetCount = v->orientedPieceTypes & stacked
+                            ? (v->orientationCounts[stacked] > 0 ? v->orientationCounts[stacked] : 4) : 1;
+            if (sourceCount != targetCount)
+            {
+                if (DoCheck)
+                    std::cerr << "stackedPieceType - Orientation count mismatch." << std::endl;
+                return false;
+            }
+            PieceType cur = stacked;
+            for (int depth = 0; depth < PIECE_TYPE_NB && cur != NO_PIECE_TYPE; ++depth)
+            {
+                if (cur == pt)
+                {
+                    if (DoCheck)
+                        std::cerr << "stackedPieceType - Cyclic mapping." << std::endl;
+                    return false;
+                }
+                cur = v->stackedPieceMap[cur];
+            }
+        }
     }
 
     auto is_number = [](const std::string& s) {
@@ -2450,6 +2512,14 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
         for (int i = 0; i < PIECE_TYPE_NB; ++i)
             if (v->gatingPieceAfter[c][i] != NO_PIECE_TYPE)
                 hasGatingPieceAfter = true;
+
+    if (v->laserGame && (v->gating || v->seirawanGating || v->commitGates
+                         || v->potions || hasGatingPieceAfter))
+    {
+        if (DoCheck)
+            std::cerr << "laserGame is incompatible with legacy gating, potions, and commit gates." << std::endl;
+        valid = false;
+    }
 
     if (v->wallingRule != NO_WALLING && (v->seirawanGating || v->potions || v->gating || hasGatingPieceAfter))
     {

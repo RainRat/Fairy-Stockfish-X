@@ -859,6 +859,8 @@ static PyObject* pyffish_runCppTests(PyObject* self, PyObject* args) {
         const Case cases[] = {
             {"khet1", "9k/10/10/10/10/10/OO8/9K w - - 0 1", "a2b2+"},
             {"khet1", "9k/10/10/10/10/10/1O+8/9K w - - 0 1", "b2c3-"},
+            {"pawn-stack", "8/8/8/8/8/8/PP6/8 w - - 0 1", "a2b2+"},
+            {"pawn-stack", "8/8/8/8/8/8/1A6/8 w - - 0 1", "b2c3-"},
             {"khet1", "9k/10/10/10/3p6/2S:05/10/9K w - - 0 1", "c3d4s"},
             {"dos-laser-chess", "9/9/9/9/9/9/5k3/9/K4L:03 w - - 0 1", "f1f1f"},
             {"dos-laser-chess", "r:1b:0s:0lkq:0b:0s:0r:1/d:0m:3d:0m:1pm:0d:0m:2d:0/9/9/9/9/9/D:2M:0D:2M:2PM:3D:2M:1D:2/R:1S:0B:2Q:2KLS:0B:2R:1 w - - 0 1", "e2e3l:1f1"},

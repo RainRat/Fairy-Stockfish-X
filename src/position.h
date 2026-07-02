@@ -332,7 +332,8 @@ struct MoveUndoInfo {
         && !didPull
         && replacedPiece == NO_PIECE
         && replacedUnpromoted == NO_PIECE
-        && !replacedPromoted;
+        && !replacedPromoted
+        && !laserUnstackedSquares;
   }
 #endif
 };

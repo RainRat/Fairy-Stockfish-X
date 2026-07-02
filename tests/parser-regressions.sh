@@ -274,6 +274,36 @@ checking = false
 castling = false
 startFen = 1/1/1/1/1/1/1/1/1/1 w - - 0 1
 laserEmitters = white@a10:0
+
+[bad-orientation-overlap:fairy]
+customPiece1 = a:K
+customPiece2 = b:K
+customPiece5 = c:K
+orientedPieceTypes = a c
+orientationGroups = a:a/b c:c/b
+
+[bad-orientation-count-conflict:fairy]
+customPiece1 = a:K
+customPiece2 = b:K
+orientedPieceTypes = a
+orientationCounts = a:3
+orientationGroups = a:a/b
+
+[bad-stack-cycle:fairy]
+customPiece1 = a:K
+customPiece2 = b:K
+stackedPieceType = a:b b:a
+
+[bad-stack-orientation-count:fairy]
+customPiece1 = a:K
+customPiece2 = b:K
+orientedPieceTypes = a
+orientationCounts = a:2
+stackedPieceType = a:b
+
+[bad-laser-gating:fairy]
+laserGame = true
+gating = true
 INI
 
 printf '%s
@@ -439,6 +469,11 @@ assert_contains_literal "${initial_capture_output}" "laser_p - Too many laser ou
 assert_contains_literal "${initial_capture_output}" "laserAutoFire = false requires a piece laser emitter."
 assert_contains_literal "${initial_capture_output}" "orientationGroups - Malformed entry: p:"
 assert_contains_literal "${initial_capture_output}" "laserEmitters - Invalid square coordinates: a10x"
+assert_contains_literal "${initial_capture_output}" "orientationGroups - Duplicate or overlapping member"
+assert_contains_literal "${initial_capture_output}" "orientationGroups - Count conflicts with orientationCounts"
+assert_contains_literal "${initial_capture_output}" "stackedPieceType - Cyclic mapping."
+assert_contains_literal "${initial_capture_output}" "stackedPieceType - Orientation count mismatch."
+assert_contains_literal "${initial_capture_output}" "laserGame is incompatible with legacy gating"
 
 laser_rank10_output=$(run_uci "$ENGINE" "$tmp_ini" "laser-rank10" </dev/null 2>&1 || true)
 assert_contains "${laser_rank10_output}" "^info string variant laser-rank10 "
