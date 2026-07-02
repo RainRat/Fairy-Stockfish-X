@@ -2169,6 +2169,7 @@ Variant* Variant::conclude() {
     {
         isOrientedCache[pt] = is_oriented_dynamic(pt);
         basePieceTypeCache[pt] = base_piece_type_dynamic(pt);
+        orientationIndexCache[pt] = int8_t(orientation_index_dynamic(pt));
     }
     concluded = true;
 

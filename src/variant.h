@@ -335,6 +335,7 @@ struct Variant {
   bool concluded = false;
   bool isOrientedCache[PIECE_TYPE_NB] = {};
   PieceType basePieceTypeCache[PIECE_TYPE_NB] = {};
+  int8_t orientationIndexCache[PIECE_TYPE_NB] = {};
 
   int orientation_count(PieceType pt) const {
       if (orientationCounts[pt] > 0)
@@ -350,12 +351,16 @@ struct Variant {
           : int(base) + orientation < PIECE_TYPE_NB ? PieceType(base + orientation) : NO_PIECE_TYPE;
   }
 
-  int orientation_index(PieceType pt) const {
+  int orientation_index_dynamic(PieceType pt) const {
       PieceType base = base_piece_type(pt);
       for (int i = 0; i < orientation_count(base); ++i)
           if (orientation_piece_type(base, i) == pt)
               return i;
       return -1;
+  }
+
+  int orientation_index(PieceType pt) const {
+      return concluded ? orientationIndexCache[pt] : orientation_index_dynamic(pt);
   }
 
   bool rotation_allowed(Color c, PieceType base, int current, int target, int count) const {

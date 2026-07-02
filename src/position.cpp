@@ -44,6 +44,7 @@ namespace Stockfish {
 namespace {
   thread_local SpellContext g_spellContext;
   thread_local bool g_hasSpellContext = false;
+  Bitboard LaserRay[2][4][SQUARE_NB];
 }
 
 const SpellContext* current_spell_context() noexcept {
@@ -1195,6 +1196,22 @@ bool Position::violates_same_player_board_repetition(Move m) const {
 void Position::init() {
 
   PRNG rng(1070372);
+
+  constexpr int Df[2][4] = {{0, 1, 0, -1}, {1, 1, -1, -1}};
+  constexpr int Dr[2][4] = {{1, 0, -1, 0}, {1, -1, -1, 1}};
+  for (int diagonal = 0; diagonal < 2; ++diagonal)
+      for (int orientation = 0; orientation < 4; ++orientation)
+          for (Square s = SQ_A1; s <= SQ_MAX; ++s)
+          {
+              int f = int(file_of(s)) + Df[diagonal][orientation];
+              int r = int(rank_of(s)) + Dr[diagonal][orientation];
+              while (f >= FILE_A && f <= FILE_MAX && r >= RANK_1 && r <= RANK_MAX)
+              {
+                  LaserRay[diagonal][orientation][s] |= make_square(File(f), Rank(r));
+                  f += Df[diagonal][orientation];
+                  r += Dr[diagonal][orientation];
+              }
+          }
 
   for (Color c : {WHITE, BLACK})
       for (PieceType pt = PAWN; pt <= KING; ++pt)
@@ -9479,7 +9496,7 @@ void Position::fire_laser(Key& k) {
     }
 
     Bitboard destroyed_squares = 0;
-    bool visited[SQUARE_NB][4] = {};
+    Bitboard visited[4] = {};
 
     for (size_t i = 0; i < active_beams.size(); ++i) {
         LaserBeam beam = active_beams[i];
@@ -9487,16 +9504,19 @@ void Position::fire_laser(Key& k) {
         Direction dir = beam.dir;
 
         while (true) {
-            sq = sq + dir;
-            if (!is_ok(sq) || file_of(sq) > max_file() || rank_of(sq) > max_rank())
-                break;
-
             int beam_orient = direction_to_orientation(dir, var->laserDiagonal);
-            // Shared visited table prevents redundant processing of overlapping paths
-            // and splits under simultaneous beam propagation physics.
-            if (visited[sq][beam_orient])
+            Bitboard blockers = LaserRay[var->laserDiagonal][beam_orient][sq] & pieces();
+            if (!blockers)
                 break;
-            visited[sq][beam_orient] = true;
+            bool increasing = var->laserDiagonal ? beam_orient == 0 || beam_orient == 3
+                                                 : beam_orient < 2;
+            sq = increasing ? lsb(blockers) : msb(blockers);
+
+            // Reflections can only change direction at occupied squares, so a
+            // repeated piece/direction pair is sufficient to detect beam cycles.
+            if (visited[beam_orient] & sq)
+                break;
+            visited[beam_orient] |= sq;
 
             Piece pc = piece_on(sq);
             if (pc != NO_PIECE) {
