@@ -872,6 +872,23 @@ namespace {
 
 std::ostream& operator<<(std::ostream& os, const Position& pos) {
 
+  auto board_symbol = [&](Piece pc) {
+      if (pc == NO_PIECE)
+          return std::string("");
+      PieceType pt = type_of(pc);
+      Color c = color_of(pc);
+      if (pos.variant()->is_oriented(pt)) {
+          PieceType base = pos.variant()->base_piece_type(pt);
+          std::string sym = pos.piece_symbol(make_piece(c, base));
+          int orient = pos.variant()->orientation_index(pt);
+          if (orient > 0)
+              return sym + std::to_string(orient);
+          else
+              return sym;
+      }
+      return pos.piece_symbol(pc);
+  };
+
   auto append_debug_footer = [&]() {
       os << "\nFen: " << pos.fen() << "\nSfen: " << pos.fen(true) << "\nKey: " << std::hex << std::uppercase
          << std::setfill('0') << std::setw(16) << pos.key()
@@ -912,8 +929,13 @@ std::ostream& operator<<(std::ostream& os, const Position& pos) {
           os << "~" << pos.piece_symbol(pos.piece_on(sq));
       else
       {
-          const std::string& symbol = pos.piece_symbol(pos.piece_on(sq));
-          os << " " << (symbol.empty() ? " " : symbol);
+          std::string symbol = board_symbol(pos.piece_on(sq));
+          if (symbol.empty())
+              os << "  ";
+          else if (symbol.length() == 1)
+              os << " " << symbol;
+          else
+              os << symbol;
       }
   };
 
@@ -988,8 +1010,13 @@ std::ostream& operator<<(std::ostream& os, const Position& pos) {
               os << " |~" << pos.piece_symbol(pos.piece_on(sq));
           else
           {
-              const std::string& symbol = pos.piece_symbol(pos.piece_on(sq));
-              os << " | " << (symbol.empty() ? " " : symbol);
+              std::string symbol = board_symbol(pos.piece_on(sq));
+              if (symbol.empty())
+                  os << " |  ";
+              else if (symbol.length() == 1)
+                  os << " | " << symbol;
+              else
+                  os << " |" << symbol;
           }
       }
 
@@ -1440,8 +1467,44 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
           Piece pc = piece_from_symbol(symbol);
           if (pc == NO_PIECE)
               continue;
+
+          int orientation = 0;
+          if (v->laserGame && ss.peek() == ':')
+          {
+              ss.get(); // consume ':'
+              if (std::isdigit(ss.peek()))
+              {
+                  orientation = ss.get() - '0';
+              }
+          }
+
+          bool stacked = false;
+          PieceType pt = type_of(pc);
+          if (v->laserGame && ss.peek() == '+')
+          {
+              PieceType oriented = v->is_oriented(pt) && orientation >= 0
+                                && orientation < v->orientation_count(pt)
+                                 ? v->orientation_piece_type(pt, orientation) : pt;
+              if (v->stacked_piece_type(oriented) != NO_PIECE_TYPE)
+              {
+                  ss.get(); // consume '+'
+                  stacked = true;
+              }
+          }
+
           if (ss.peek() == '~')
               ss >> token;
+
+          pt = type_of(pc);
+          Color c = color_of(pc);
+
+          if (v->is_oriented(pt) && orientation >= 0 && orientation < v->orientation_count(pt))
+              pt = v->orientation_piece_type(pt, orientation);
+
+          if (stacked && v->stacked_piece_type(pt) != NO_PIECE_TYPE)
+              pt = v->stacked_piece_type(pt);
+
+          pc = make_piece(c, pt);
 
           if (v->commitGates && (rank == 0 || rank == max_rank() + 2))
           {
@@ -2304,7 +2367,26 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
               ss << "+" << piece_symbol(unpromoted_piece_on(s));
           else
           {
-              ss << piece_symbol(piece_on(s));
+              Piece pc = piece_on(s);
+              PieceType pt = type_of(pc);
+              Color c = color_of(pc);
+              PieceType base_pt = var->base_piece_type(pt);
+              PieceType unstacked_pt = var->unstacked_piece_type(base_pt);
+              
+              if (unstacked_pt != NO_PIECE_TYPE) {
+                  int orientation = var->orientation_index(pt);
+                  ss << piece_symbol(make_piece(c, unstacked_pt));
+                  if (orientation > 0)
+                      ss << ":" << orientation;
+                  ss << "+";
+              } else if (var->is_oriented(pt)) {
+                  // Explicit :0 keeps FEN canonical and self-describing; display/UCI may omit it.
+                  int orientation = var->orientation_index(pt);
+                  ss << piece_symbol(make_piece(c, base_pt));
+                  ss << ":" << orientation;
+              } else {
+                  ss << piece_symbol(pc);
+              }
 
               // Set promoted pieces
               if (((captures_to_hand() && !drop_loop()) || two_boards() || showPromoted) && is_promoted(s))
@@ -3393,7 +3475,7 @@ bool Position::legal(Move m) const {
   if (type_of(m) == CASTLING && gamePly < var->castlingForbiddenPlies)
       return false;
 
-  if (from == to && !(is_pass(m) || is_self_destruct(m) || (is_promotion_move(m) && sittuyin_promotion()) || pureWallMove))
+  if (from == to && !(is_pass(m) || is_laser_fire(m) || is_self_destruct(m) || (is_promotion_move(m) && sittuyin_promotion()) || pureWallMove || (laser_game() && is_gating(m))))
       return false;
 
   if (st->pendingClaimPass)
@@ -3478,7 +3560,8 @@ bool Position::legal(Move m) const {
           finalMovePt = moveMorphType;
   }
 
-  if (is_promotion_move(m) && !promotion_allowed(us, promotion_type(m), to))
+  if (is_promotion_move(m) && !promotion_allowed(us,
+      laser_game() ? var->base_piece_type(promotion_type(m)) : promotion_type(m), to))
       return false;
   if (type_of(m) == PIECE_PROMOTION && (is_promoted(from) || !promotion_allowed(us, promoted_piece_type(type_of(moved_piece(m))))))
       return false;
@@ -3535,7 +3618,8 @@ bool Position::legal(Move m) const {
   // jump_capture_square() capture-square resolution; avoid legacy pre-filters here.
   if (!allow_checks() && checking_permitted() && (pieces(them) & to) && type_of(piece_on(to)) == KING)
       return false;
-  if ((pieces(us) & to) && !is_pass(m) && !is_self_destruct(m) && is_uncapturable_royal_square(us, to))
+  if ((pieces(us) & to) && !is_pass(m) && !is_self_destruct(m) && !is_stack_move(m)
+      && is_uncapturable_royal_square(us, to))
       return false;
   if (!dropMove && violates_mutual_hop_restriction(from, to, movePt))
       return false;
@@ -3599,7 +3683,7 @@ bool Position::legal(Move m) const {
       }
   }
 
-  if (swapMove || pullMove)
+  if (swapMove || pullMove || is_stack_move(m) || is_unstack_move(m) || is_laser_fire(m))
   {
       if (violates_same_player_board_repetition(m))
           return false;
@@ -4253,7 +4337,7 @@ bool Position::legal(Move m) const {
       }
   }
 
-  if (capture(m) && type_of(m) != CASTLING)
+  if (capture(m) && type_of(m) != CASTLING && !is_stack_move(m))
   {
       PieceType attacker = type_of(moved_piece(m));
       PieceType target = type_of(captured_piece(m));
@@ -4552,8 +4636,65 @@ bool Position::pseudo_legal(const Move m) const {
       && !is_pass(m))
       return false;
 
-  if (from == to && !(is_pass(m) || is_self_destruct(m) || (is_promotion_move(m) && sittuyin_promotion()) || pureWallMove))
+  if (laser_game() && is_gating(m))
+  {
+      Square gateSq = gating_square(m);
+      PieceType gatePt = gating_type(m);
+      if (var->rotationDelta && is_promotion_move(m))
+      {
+          Piece rotatePc = piece_on(gateSq);
+          if (rotatePc == NO_PIECE || color_of(rotatePc) != us || !is_oriented(type_of(rotatePc)))
+              return false;
+          PieceType base = var->base_piece_type(type_of(rotatePc));
+          gatePt = var->orientation_piece_type(base, (var->orientation_index(type_of(rotatePc))
+                                   + var->rotationDelta) % var->orientation_count(base));
+      }
+      if (from == to)
+      {
+          Piece pcFrom = piece_on(from);
+          if (pcFrom == NO_PIECE || color_of(pcFrom) != us || !is_oriented(type_of(pcFrom)))
+              return false;
+          if (gateSq != from)
+              return false;
+          PieceType base = var->base_piece_type(type_of(pcFrom));
+          if (var->base_piece_type(gatePt) != base)
+              return false;
+          int current_orient = var->orientation_index(type_of(pcFrom));
+          int target_orient = var->orientation_index(gatePt);
+          if (target_orient < 0 || target_orient >= var->orientation_count(base))
+              return false;
+          if (target_orient == current_orient)
+              return false;
+          if (!var->rotation_allowed(us, base, current_orient, target_orient,
+                                     var->orientation_count(base)))
+              return false;
+      }
+      else
+      {
+          Piece pcOnGate = (gateSq == to) ? piece_on(from) : piece_on(gateSq);
+          if (pcOnGate == NO_PIECE || color_of(pcOnGate) != us || !is_oriented(type_of(pcOnGate)))
+              return false;
+          PieceType base = var->base_piece_type(type_of(pcOnGate));
+          if (var->base_piece_type(gatePt) != base)
+              return false;
+          int target_orient = var->orientation_index(gatePt);
+          if (target_orient < 0 || target_orient >= var->orientation_count(base))
+              return false;
+          int current_orient = var->orientation_index(type_of(pcOnGate));
+          if (target_orient == current_orient)
+              return false;
+          if (!var->rotation_allowed(us, base, current_orient, target_orient,
+                                     var->orientation_count(base)))
+              return false;
+      }
+  }
+
+  if (from == to && !(is_pass(m) || is_laser_fire(m) || is_self_destruct(m) || (is_promotion_move(m) && sittuyin_promotion()) || pureWallMove || (laser_game() && is_gating(m))))
       return false;
+
+  if (is_laser_fire(m))
+      return laser_game() && !var->laserAutoFire && pc != NO_PIECE && color_of(pc) == us
+          && var->base_piece_type(type_of(pc)) == var->emitterPieceType;
 
   if (st->pendingClaimPass)
       return is_pass(m);
@@ -4569,7 +4710,8 @@ bool Position::pseudo_legal(const Move m) const {
           return false;
   }
 
-  if (is_promotion_move(m) && !promotion_allowed(us, promotion_type(m), to))
+  if (is_promotion_move(m) && !promotion_allowed(us,
+      laser_game() ? var->base_piece_type(promotion_type(m)) : promotion_type(m), to))
       return false;
   if (type_of(m) == PIECE_PROMOTION && (is_promoted(from) || !promotion_allowed(us, promoted_piece_type(type_of(pc)))))
       return false;
@@ -4629,6 +4771,20 @@ bool Position::pseudo_legal(const Move m) const {
       }
       return bool(adjacent_swap_targets_from(us, from) & to);
   }
+
+  if (is_stack_move(m))
+  {
+      Piece target = piece_on(to);
+      return pc != NO_PIECE && target != NO_PIECE
+          && color_of(pc) == us && target == pc
+          && var->stacked_piece_type(type_of(pc)) != NO_PIECE_TYPE
+          && bool(PseudoAttacks[WHITE][KING][from] & to);
+  }
+
+  if (is_unstack_move(m))
+      return pc != NO_PIECE && color_of(pc) == us && empty(to)
+          && var->unstacked_piece_type(type_of(pc)) != NO_PIECE_TYPE
+          && bool(PseudoAttacks[WHITE][KING][from] & to);
 
   // Universal-hopper semantics are handled by pseudo-move generation and
   // jump_capture_square() capture-square resolution.
@@ -5347,6 +5503,10 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   PieceType movedMoveType = effective_piece_type(movedType);
   const PieceInfo* pi = movedMoveType != NO_PIECE_TYPE ? pieceMap.get(movedMoveType) : nullptr;
   Piece captured = captured_piece(m);
+  if (is_stack_move(m))
+      captured = piece_on(to);
+  if (var->laserGame && from == to)
+      captured = NO_PIECE;
   Piece castlingRook = NO_PIECE;
   if (type_of(m) == CASTLING)
   {
@@ -5379,13 +5539,15 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   if (pushMove)
       captured = (!stepwisePush && pushInfo.captures) ? piece_on(pushInfo.tail) : NO_PIECE;
 
-  const bool blastOnCaptureMove = blast_on_capture(pc, captured);
+  const bool blastOnCaptureMove = !is_stack_move(m) && blast_on_capture(pc, captured);
   int pushRightsMask = 0;
   int pullRightsMask = 0;
   bool rifleShot = rifle_capture(m) && captured != NO_PIECE && type_of(m) != CASTLING;
   bool cloneMove = is_clone_move(m);
   bool pullMove = is_pull_move(m);
   bool swapMove = is_swap_move(m);
+  bool stackMove = is_stack_move(m);
+  bool unstackMove = is_unstack_move(m);
   bool capturedDeadSquare = !dropMove && from != to && bool(st->deadSquares & to);
   PieceType exchanged = exchange_piece(m);
   Square jumpCapsq = SQ_NONE;
@@ -5471,7 +5633,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
 
   if (to == from)
   {
-      assert((is_promotion_move(m) && sittuyin_promotion()) || is_pass(m) || is_self_destruct(m) || openingSelfRemoval || pureWallMove);
+      assert((is_promotion_move(m) && sittuyin_promotion()) || is_pass(m) || is_laser_fire(m) || is_self_destruct(m) || openingSelfRemoval || pureWallMove || is_gating(m));
       captured = NO_PIECE;
   }
 
@@ -5486,7 +5648,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
                           || (anti_royal_self_capture_only()
                               && (anti_royal_types() & piece_set(type_of(pc)))))
                          && color_of(captured) == us))
-                    || (pushMove && color_of(captured) == us))));
+                    || (pushMove && color_of(captured) == us)
+                    || (stackMove && color_of(captured) == us))));
   assert(type_of(captured) != KING || allow_checks() || !checking_permitted());
 
   auto trigger_matches = [](ColorChangeTrigger trigger, bool isCapture) {
@@ -5585,7 +5748,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       Piece transferPiece = reserve_transfer_piece(us, captured, capturedPromoted, unpromotedCaptured,
                                                    drop_loop(), var->captureToHandSide,
                                                    main_promotion_pawn_type(color_of(captured)));
-      bool transferred = add_capture_transfer(st, transferPiece, &k);
+      bool transferred = !stackMove && add_capture_transfer(st, transferPiece, &k);
       if (Eval::useNNUE)
       {
           int captureDirtyIdx = rifleShot ? 0 : 1;
@@ -5601,7 +5764,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       }
 
       // Points assignment logic
-      if (points_counting()) {
+      if (points_counting() && !stackMove) {
           add_capture_points(st, us, captured);
       }
 
@@ -5995,7 +6158,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           else
               st->nonPawnMaterial[us] -= PieceValue[MG][pc];
       }
-      else if (pureWallMove)
+      else if (pureWallMove || is_laser_fire(m))
       {
           // Wall-only move: no mover piece is touched.
       }
@@ -6035,6 +6198,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       }
       else if (swapMove)
       {
+          Piece target = piece_on(to);
           if (Eval::useNNUE)
           {
               dp.dirty_num = 2;
@@ -6042,9 +6206,48 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
               init_dirty_piece_entry(dp, 1, piece_on(to), to, from, NO_PIECE, 0);
           }
 
+          k ^= Zobrist::psq[target][to] ^ Zobrist::psq[target][from];
+          if (type_of(target) == PAWN)
+              st->pawnKey ^= Zobrist::psq[target][to] ^ Zobrist::psq[target][from];
           swap_piece(from, to);
           if (type_of(piece_on(from)) == PAWN || type_of(piece_on(to)) == PAWN)
               st->rule50 = 0;
+      }
+      else if (stackMove)
+      {
+          Piece stacked = make_piece(us, var->stacked_piece_type(type_of(pc)));
+          remove_piece(from);
+          put_piece(stacked, to);
+          k ^= Zobrist::psq[pc][to] ^ Zobrist::psq[stacked][to];
+          st->materialKey ^= Zobrist::psq[pc][pieceCount[pc]]
+                           ^ Zobrist::psq[stacked][pieceCount[stacked] - 1];
+          st->nonPawnMaterial[us] += PieceValue[MG][stacked] - PieceValue[MG][pc];
+          if (Eval::useNNUE)
+          {
+              dp.dirty_num = 3;
+              init_dirty_piece_entry(dp, 0, pc, from, SQ_NONE, NO_PIECE, 0);
+              init_dirty_piece_entry(dp, 1, pc, to, SQ_NONE, NO_PIECE, 0);
+              init_dirty_piece_entry(dp, 2, stacked, SQ_NONE, to, NO_PIECE, 0);
+          }
+      }
+      else if (unstackMove)
+      {
+          Piece single = make_piece(us, var->unstacked_piece_type(type_of(pc)));
+          remove_piece(from);
+          put_piece(single, from);
+          put_piece(single, to);
+          k ^= Zobrist::psq[pc][to] ^ Zobrist::psq[single][from] ^ Zobrist::psq[single][to];
+          st->materialKey ^= Zobrist::psq[pc][pieceCount[pc]]
+                           ^ Zobrist::psq[single][pieceCount[single] - 2]
+                           ^ Zobrist::psq[single][pieceCount[single] - 1];
+          st->nonPawnMaterial[us] += 2 * PieceValue[MG][single] - PieceValue[MG][pc];
+          if (Eval::useNNUE)
+          {
+              dp.dirty_num = 3;
+              init_dirty_piece_entry(dp, 0, pc, from, SQ_NONE, NO_PIECE, 0);
+              init_dirty_piece_entry(dp, 1, single, SQ_NONE, from, NO_PIECE, 0);
+              init_dirty_piece_entry(dp, 2, single, SQ_NONE, to, NO_PIECE, 0);
+          }
       }
       else if (!rifleShot)
           move_piece(from, to);
@@ -6265,6 +6468,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
 
   if (   capture_morph()
       && captured != NO_PIECE
+      && !stackMove
       && !dropMove
       && type_of(m) != CASTLING
       && !is_promotion_move(m)
@@ -6293,7 +6497,15 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   if (is_gating(m) && gating_type(m) != NO_PIECE_TYPE)
   {
       Square gate = gating_square(m);
-      Piece gating_piece = make_piece(us, gating_type(m));
+      PieceType gateType = gating_type(m);
+      if (var->laserGame && var->rotationDelta && is_promotion_move(m) && board[gate] != NO_PIECE)
+      {
+          PieceType current = type_of(board[gate]);
+          PieceType base = var->base_piece_type(current);
+          gateType = var->orientation_piece_type(base, (var->orientation_index(current)
+                       + var->rotationDelta) % var->orientation_count(base));
+      }
+      Piece gating_piece = make_piece(us, gateType);
 
       if (potCtx.potion != Variant::POTION_TYPE_NB)
       {
@@ -6307,12 +6519,27 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       }
       else if (!rifleShot)
       {
-          if (Eval::useNNUE)
-              // Add gating piece
-              append_dirty(st, gating_piece, SQ_NONE, gate, gating_piece, pieceCountInHand[us][gating_type(m)]);
+          if (var->laserGame && board[gate] != NO_PIECE)
+          {
+              st->replacedPiece = board[gate];
+              st->replacedPromoted = is_promoted(gate);
+              st->replacedUnpromoted = unpromoted_piece_on(gate);
+              if (Eval::useNNUE)
+                  append_dirty(st, st->replacedPiece, gate, SQ_NONE);
+              remove_piece(gate);
+              k ^= Zobrist::psq[st->replacedPiece][gate];
+              st->materialKey ^= Zobrist::psq[st->replacedPiece][pieceCount[st->replacedPiece]];
+              if (type_of(st->replacedPiece) == PAWN)
+                  st->pawnKey ^= Zobrist::psq[st->replacedPiece][gate];
+              else
+                  st->nonPawnMaterial[color_of(st->replacedPiece)] -= PieceValue[MG][st->replacedPiece];
+          }
 
-          put_piece(gating_piece, gate);
-          if (gating_from_hand())
+          if (Eval::useNNUE)
+              append_dirty(st, gating_piece, SQ_NONE, gate);
+
+          put_piece(gating_piece, gate, st->replacedPromoted, st->replacedUnpromoted);
+          if (gating_from_hand() && st->replacedPiece == NO_PIECE)
           {
               int oldCount = pieceCountInHand[us][gating_type(m)];
               remove_from_hand(gating_piece);
@@ -6320,10 +6547,14 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
               xor_in_hand_count(k, gating_piece, oldCount, newCount);
           }
 
-          st->gatesBB[us] ^= gate;
+          if (!var->laserGame)
+              st->gatesBB[us] ^= gate;
           k ^= Zobrist::psq[gating_piece][gate];
           st->materialKey ^= Zobrist::psq[gating_piece][pieceCount[gating_piece] - 1];
-          st->nonPawnMaterial[us] += PieceValue[MG][gating_piece];
+          if (type_of(gating_piece) == PAWN)
+              st->pawnKey ^= Zobrist::psq[gating_piece][gate];
+          else
+              st->nonPawnMaterial[us] += PieceValue[MG][gating_piece];
 
           if (paired_drop(m))
           {
@@ -6704,7 +6935,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   };
 
   bool diesOnCapture = (death_on_capture_types() & piece_set(movedType));
-  if (!capturedDeadSquare && captured != NO_PIECE && !dropMove && diesOnCapture
+  if (!capturedDeadSquare && captured != NO_PIECE && !stackMove && !dropMove && diesOnCapture
       && piece_on(moverSq) != NO_PIECE)
   {
       bool makeDeadSquare = bool(death_on_capture_types() & piece_set(movedType));
@@ -6713,7 +6944,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
 
   Bitboard localBycatch = (st->bycatchSquares & ~st->libertySelfRemoved)
                         & (blast_pattern(moverSq) | square_bb(moverSq));
-  bool captureHappened = captured != NO_PIECE || localBycatch;
+  bool captureHappened = (captured != NO_PIECE && !stackMove) || localBycatch;
   if (trigger_matches(var->changingColorTrigger, captureHappened)
       && !is_pass(m)
       && (!dropMove || captureHappened)
@@ -6830,6 +7061,9 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       }
   }
 
+  if (var->laserGame && (var->laserAutoFire || is_laser_fire(m)))
+      fire_laser(k);
+
   // Update the key with the final value
   st->key = k;
   st->boardKey = st->key ^ reserve_key();
@@ -6939,6 +7173,8 @@ void Position::undo_move(Move m) {
   bool cloneMove = is_clone_move(m);
   bool pullMove = is_pull_move(m);
   bool swapMove = is_swap_move(m);
+  bool stackMove = is_stack_move(m);
+  bool unstackMove = is_unstack_move(m);
   Square moverSq = rifleShot ? from : to;
   Piece pc = piece_on(moverSq);
   PieceType exchange = exchange_piece(m);
@@ -6951,8 +7187,11 @@ void Position::undo_move(Move m) {
   assert(is_drop_move(m) || empty(from) || type_of(m) == CASTLING || is_gating(m)
          || (is_promotion_move(m) && sittuyin_promotion())
          || is_pass(m)
+         || is_laser_fire(m)
          || pullMove
          || swapMove
+         || stackMove
+         || unstackMove
          || wasOpeningSelfRemoval
          || (commit_gates() && st->removedGatingType > NO_PIECE_TYPE)
   );
@@ -6988,7 +7227,7 @@ void Position::undo_move(Move m) {
           // Update board and piece lists
           if (bpc || wasBlastPromoted)
           {
-              if (wasBlastPromoted && piece_on(bsq) != NO_PIECE) {
+              if ((wasBlastPromoted || (st->laserUnstackedSquares & bsq)) && piece_on(bsq) != NO_PIECE) {
                   remove_piece(bsq);
                   board[bsq] = NO_PIECE;
               }
@@ -7040,9 +7279,13 @@ void Position::undo_move(Move m) {
       {
           remove_piece(gating_square(m));
           board[gating_square(m)] = NO_PIECE;
-          if (gating_from_hand())
+          if (st->replacedPiece != NO_PIECE)
+              put_piece(st->replacedPiece, gating_square(m), st->replacedPromoted,
+                        st->replacedUnpromoted);
+          if (gating_from_hand() && st->replacedPiece == NO_PIECE)
               add_to_hand(gating_piece);
-          st->gatesBB[us] |= gating_square(m);
+          if (!var->laserGame)
+              st->gatesBB[us] |= gating_square(m);
 
           if (paired_drop(m))
           {
@@ -7194,8 +7437,25 @@ void Position::undo_move(Move m) {
                   move_piece(from, st->pulled.square);
               move_piece(to, from);
           }
+          else if (is_laser_fire(m))
+          {
+              // The optional gating payload restores a pre-fire rotation below.
+          }
           else if (swapMove)
               swap_piece(from, to);
+          else if (stackMove)
+          {
+              remove_piece(to);
+              put_piece(make_piece(us, var->unstacked_piece_type(type_of(pc))), from);
+          }
+          else if (unstackMove)
+          {
+              Piece single = piece_on(to);
+              PieceType stacked = var->stacked_piece_type(type_of(single));
+              remove_piece(to);
+              remove_piece(from);
+              put_piece(make_piece(us, stacked), from);
+          }
           else if (!rifleShot && piece_on(to) != NO_PIECE)
               move_piece(to, from); // Put the piece back at the source square when the mover survived on 'to'
       }
@@ -7285,7 +7545,8 @@ void Position::undo_move(Move m) {
           Piece transferPiece = reserve_transfer_piece(us, st->captured.piece.piece, st->captured.piece.promoted, st->captured.piece.unpromoted,
                                                        drop_loop(), var->captureToHandSide,
                                                        main_promotion_pawn_type(color_of(st->captured.piece.piece)));
-          undo_capture_transfer(st, transferPiece);
+          if (!stackMove)
+              undo_capture_transfer(st, transferPiece);
       }
   }
 
@@ -9153,6 +9414,171 @@ bool Position::violates_mutual_hop_restriction(Square from, Square to, PieceType
           return true;
   }
   return false;
+}
+
+Direction Position::orientation_to_direction(int orientation, bool diagonal) const {
+    if (diagonal) {
+        switch (orientation) {
+            case 0: return NORTH_EAST;
+            case 1: return SOUTH_EAST;
+            case 2: return SOUTH_WEST;
+            case 3: return NORTH_WEST;
+            default: return NORTH_EAST;
+        }
+    } else {
+        switch (orientation) {
+            case 0: return NORTH;
+            case 1: return EAST;
+            case 2: return SOUTH;
+            case 3: return WEST;
+            default: return NORTH;
+        }
+    }
+}
+
+static int direction_to_orientation(Direction d, bool diagonal) {
+    if (diagonal) {
+        if (d == NORTH_EAST) return 0;
+        if (d == SOUTH_EAST) return 1;
+        if (d == SOUTH_WEST) return 2;
+        if (d == NORTH_WEST) return 3;
+    } else {
+        if (d == NORTH) return 0;
+        if (d == EAST) return 1;
+        if (d == SOUTH) return 2;
+        if (d == WEST) return 3;
+    }
+    return 0;
+}
+
+void Position::fire_laser(Key& k) {
+    Color us = sideToMove;
+    struct LaserBeam {
+        Square sq;
+        Direction dir;
+    };
+    std::vector<LaserBeam> active_beams;
+    active_beams.reserve(var->staticEmitters[us].size() + count(us, ALL_PIECES));
+
+    for (size_t i = 0; i < var->staticEmitters[us].size(); ++i) {
+        Square eq = var->staticEmitters[us][i];
+        Direction ed = var->staticEmitterDirs[us][i];
+        active_beams.push_back({eq, ed});
+    }
+
+    if (var->emitterPieceType != NO_PIECE_TYPE) {
+        Bitboard emitters = pieces_oriented_group(us, var->emitterPieceType);
+        while (emitters) {
+            Square sq = pop_lsb(emitters);
+            Piece pc = piece_on(sq);
+            int orientation = var->orientation_index(type_of(pc));
+            Direction dir = orientation_to_direction((orientation + var->laserEmitterOrientationOffset) % 4,
+                                                     var->laserDiagonal);
+            active_beams.push_back({sq, dir});
+        }
+    }
+
+    Bitboard destroyed_squares = 0;
+    bool visited[SQUARE_NB][4] = {};
+
+    for (size_t i = 0; i < active_beams.size(); ++i) {
+        LaserBeam beam = active_beams[i];
+        Square sq = beam.sq;
+        Direction dir = beam.dir;
+
+        while (true) {
+            sq = sq + dir;
+            if (!is_ok(sq) || file_of(sq) > max_file() || rank_of(sq) > max_rank())
+                break;
+
+            int beam_orient = direction_to_orientation(dir, var->laserDiagonal);
+            // Shared visited table prevents redundant processing of overlapping paths
+            // and splits under simultaneous beam propagation physics.
+            if (visited[sq][beam_orient])
+                break;
+            visited[sq][beam_orient] = true;
+
+            Piece pc = piece_on(sq);
+            if (pc != NO_PIECE) {
+                int piece_orient = var->orientation_index(type_of(pc));
+                int face = (beam_orient + 2 - piece_orient + 4) % 4;
+
+                Variant::LaserOutcome outcome = var->pieceOptics[type_of(pc)].outcomes[face];
+
+                if (outcome == Variant::OUTCOME_DESTROY) {
+                    destroyed_squares |= sq;
+                    if (var->laserDestroyContinuesTypes
+                        & piece_set(var->base_piece_type(type_of(pc))))
+                        continue;
+                    break;
+                } else if (outcome == Variant::OUTCOME_ABSORB) {
+                    break;
+                } else if (outcome == Variant::OUTCOME_TRANSMIT) {
+                    continue;
+                } else if (outcome == Variant::OUTCOME_REFLECT_RIGHT) {
+                    int new_orient = (beam_orient + 1) % 4;
+                    dir = orientation_to_direction(new_orient, var->laserDiagonal);
+                } else if (outcome == Variant::OUTCOME_REFLECT_LEFT) {
+                    int new_orient = (beam_orient + 3) % 4;
+                    dir = orientation_to_direction(new_orient, var->laserDiagonal);
+                } else if (outcome == Variant::OUTCOME_REFLECT_BACK) {
+                    int new_orient = (beam_orient + 2) % 4;
+                    dir = orientation_to_direction(new_orient, var->laserDiagonal);
+                } else if (outcome == Variant::OUTCOME_SPLIT) {
+                    int left_orient = (beam_orient + 3) % 4;
+                    int right_orient = (beam_orient + 1) % 4;
+                    Direction left_dir = orientation_to_direction(left_orient, var->laserDiagonal);
+                    Direction right_dir = orientation_to_direction(right_orient, var->laserDiagonal);
+                    active_beams.push_back({sq, left_dir});
+                    active_beams.push_back({sq, right_dir});
+                    break;
+                } else if (outcome == Variant::OUTCOME_SPLIT_FORWARD_LEFT) {
+                    int left_orient = (beam_orient + 3) % 4;
+                    Direction left_dir = orientation_to_direction(left_orient, var->laserDiagonal);
+                    active_beams.push_back({sq, left_dir});
+                } else if (outcome == Variant::OUTCOME_SPLIT_FORWARD_RIGHT) {
+                    int right_orient = (beam_orient + 1) % 4;
+                    Direction right_dir = orientation_to_direction(right_orient, var->laserDiagonal);
+                    active_beams.push_back({sq, right_dir});
+                } else if (outcome == Variant::OUTCOME_EXIT_FACE) {
+                    dir = orientation_to_direction(piece_orient, var->laserDiagonal);
+                } else if (outcome == Variant::OUTCOME_EXIT_BACK_FACE) {
+                    dir = orientation_to_direction((piece_orient + 2) % 4, var->laserDiagonal);
+                } else {
+                    break;
+                }
+            }
+        }
+    }
+
+    while (destroyed_squares) {
+        Square sq = pop_lsb(destroyed_squares);
+        Piece pc = piece_on(sq);
+        if (pc != NO_PIECE) {
+            st->bycatchSquares |= sq;
+            st->unpromotedBycatch[sq] = pc;
+            PieceType unstacked = var->unstacked_piece_type(type_of(pc));
+            remove_piece(sq);
+            k ^= Zobrist::psq[pc][sq];
+            st->materialKey ^= Zobrist::psq[pc][pieceCount[pc]];
+            if (type_of(pc) == PAWN)
+                st->pawnKey ^= Zobrist::psq[pc][sq];
+            else
+                st->nonPawnMaterial[color_of(pc)] -= PieceValue[MG][pc];
+            if (Eval::useNNUE)
+                append_dirty(st, pc, sq, SQ_NONE);
+            if (unstacked != NO_PIECE_TYPE) {
+                Piece single = make_piece(color_of(pc), unstacked);
+                put_piece(single, sq);
+                st->laserUnstackedSquares |= sq;
+                k ^= Zobrist::psq[single][sq];
+                st->materialKey ^= Zobrist::psq[single][pieceCount[single] - 1];
+                st->nonPawnMaterial[color_of(single)] += PieceValue[MG][single];
+                if (Eval::useNNUE)
+                    append_dirty(st, single, SQ_NONE, sq);
+            }
+        }
+    }
 }
 
 } // namespace Stockfish

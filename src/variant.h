@@ -113,6 +113,7 @@ struct ColorSetting {
 };
 
 struct Variant {
+  std::string name = "";
   std::string variantTemplate = "fairy";
   std::string pieceToCharTable = "-";
   int pocketSize = 0;
@@ -213,6 +214,9 @@ struct Variant {
   int pushingStrength[PIECE_TYPE_NB] = {};
   int pullingStrength[PIECE_TYPE_NB] = {};
   PieceSet adjacentSwapMoveTypes = NO_PIECE_SET;
+  PieceSet adjacentSwapTargetTypes = ~NO_PIECE_SET;
+  bool adjacentSwapFriendly = false;
+  bool adjacentSwapDiagonal = false;
   bool adjacentSwapRequiresEmptyNeighbor = false;
   bool swapNoImmediateReturn = false;
   int swapForbiddenPlies = 0;
@@ -290,6 +294,136 @@ struct Variant {
   ColorSetting<bool> passOnStalemate = ColorSetting<bool>(false);
   std::vector<int> multimoves = {};
   bool progressiveMultimove = false;
+  bool laserGame = false;
+  bool laserDiagonal = false;
+  PieceSet laserDestroyContinuesTypes = NO_PIECE_SET;
+  bool laserAutoFire = true;
+  int rotationDelta = 0;
+  bool rotationTwoWay = false;
+  uint8_t rotationAllowedOrientations[COLOR_NB][PIECE_TYPE_NB] = {};
+  int laserEmitterOrientationOffset = 0;
+  int laserPromotionOrientation[COLOR_NB][PIECE_TYPE_NB] = {};
+  bool hasLaserPromotionOrientation[COLOR_NB][PIECE_TYPE_NB] = {};
+  enum LaserOutcome : uint8_t {
+      OUTCOME_DESTROY = 1,
+      OUTCOME_ABSORB  = 2,
+      OUTCOME_TRANSMIT = 3,
+      OUTCOME_REFLECT_RIGHT = 4,
+      OUTCOME_REFLECT_LEFT = 5,
+      OUTCOME_REFLECT_BACK = 6,
+      OUTCOME_SPLIT = 7,
+      OUTCOME_EXIT_FACE = 8,
+      OUTCOME_SPLIT_FORWARD_RIGHT = 9,
+      OUTCOME_SPLIT_FORWARD_LEFT = 10,
+      OUTCOME_EXIT_BACK_FACE = 11,
+  };
+  struct LaserOptics {
+      LaserOutcome outcomes[4] = { OUTCOME_DESTROY, OUTCOME_DESTROY, OUTCOME_DESTROY, OUTCOME_DESTROY }; // Front, Right, Back, Left
+  };
+  LaserOptics pieceOptics[PIECE_TYPE_NB] = {};
+  std::vector<Square> staticEmitters[COLOR_NB] = {};
+  std::vector<Direction> staticEmitterDirs[COLOR_NB] = {};
+  PieceType emitterPieceType = NO_PIECE_TYPE;
+  PieceSet orientedPieceTypes = NO_PIECE_SET;
+  PieceType stackedPieceMap[PIECE_TYPE_NB] = {};
+  PieceType unstackedPieceMap[PIECE_TYPE_NB] = {};
+  int orientationCounts[PIECE_TYPE_NB] = {};
+  PieceType orientationTypes[PIECE_TYPE_NB][4] = {};
+  std::string orientationBetza[PIECE_TYPE_NB] = {};
+  bool rotateAfterMove = false;
+
+  bool concluded = false;
+  bool isOrientedCache[PIECE_TYPE_NB] = {};
+  PieceType basePieceTypeCache[PIECE_TYPE_NB] = {};
+
+  int orientation_count(PieceType pt) const {
+      if (orientationCounts[pt] > 0)
+          return orientationCounts[pt];
+      return laserGame && is_oriented(pt) ? 4 : 0;
+  }
+
+  PieceType orientation_piece_type(PieceType base, int orientation) const {
+      if (base < NO_PIECE_TYPE || base >= PIECE_TYPE_NB || orientation < 0 || orientation >= 4)
+          return NO_PIECE_TYPE;
+      return orientationTypes[base][orientation] != NO_PIECE_TYPE
+          ? orientationTypes[base][orientation]
+          : int(base) + orientation < PIECE_TYPE_NB ? PieceType(base + orientation) : NO_PIECE_TYPE;
+  }
+
+  int orientation_index(PieceType pt) const {
+      PieceType base = base_piece_type(pt);
+      for (int i = 0; i < orientation_count(base); ++i)
+          if (orientation_piece_type(base, i) == pt)
+              return i;
+      return -1;
+  }
+
+  bool rotation_allowed(Color c, PieceType base, int current, int target, int count) const {
+      if (base < NO_PIECE_TYPE || base >= PIECE_TYPE_NB || count <= 0 || count > 4
+          || current < 0 || current >= count || target < 0 || target >= count)
+          return false;
+      if (target == current)
+          return false;
+      if (rotationAllowedOrientations[c][base]
+          && !(rotationAllowedOrientations[c][base] & (1u << target)))
+          return false;
+      if (rotationDelta)
+          return target == (current + rotationDelta) % count;
+      return !rotationTwoWay || target == (current + 1) % count
+          || target == (current + count - 1) % count;
+  }
+
+  bool is_oriented_dynamic(PieceType pt) const {
+      for (PieceType base = PAWN; base <= CUSTOM_PIECES_END; ++base) {
+          if (orientedPieceTypes & base) {
+              int cnt = orientationCounts[base] > 0 ? orientationCounts[base] : 4;
+              for (int i = 0; i < cnt; ++i)
+                  if (orientation_piece_type(base, i) == pt)
+                      return true;
+          }
+      }
+      return false;
+  }
+
+  PieceType base_piece_type_dynamic(PieceType pt) const {
+      for (PieceType base = PAWN; base <= CUSTOM_PIECES_END; ++base) {
+          if (orientedPieceTypes & base) {
+              int cnt = orientationCounts[base] > 0 ? orientationCounts[base] : 4;
+              for (int i = 0; i < cnt; ++i)
+                  if (orientation_piece_type(base, i) == pt)
+                      return base;
+          }
+      }
+      return pt;
+  }
+
+  bool is_oriented(PieceType pt) const {
+      return concluded ? isOrientedCache[pt] : is_oriented_dynamic(pt);
+  }
+
+  PieceType base_piece_type(PieceType pt) const {
+      return concluded ? basePieceTypeCache[pt] : base_piece_type_dynamic(pt);
+  }
+
+  PieceType stacked_piece_type(PieceType pt) const {
+      PieceType base = base_piece_type(pt);
+      PieceType stacked_base = stackedPieceMap[base];
+      int orientation = is_oriented(pt) ? orientation_index(pt) : 0;
+      if (stacked_base == NO_PIECE_TYPE || orientation < 0)
+          return NO_PIECE_TYPE;
+      return orientation_piece_type(stacked_base, orientation);
+  }
+
+  PieceType unstacked_piece_type(PieceType pt) const {
+      PieceType base = base_piece_type(pt);
+      PieceType unstacked_base = unstackedPieceMap[base];
+      int orientation = is_oriented(pt) ? orientation_index(pt) : 0;
+      if (unstacked_base == NO_PIECE_TYPE || orientation < 0)
+          return NO_PIECE_TYPE;
+      return orientation_piece_type(unstacked_base, orientation);
+  }
+
+
   bool multimoveCheck = true;
   bool multimoveCapture = true;
   bool makpongRule = false;

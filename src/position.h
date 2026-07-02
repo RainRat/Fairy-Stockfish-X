@@ -266,6 +266,10 @@ struct MoveUndoInfo {
   bool       pass = false;
   bool       forcedJumpHasFollowup = false;
   bool       didPull = false;
+  Piece      replacedPiece = NO_PIECE;
+  Piece      replacedUnpromoted = NO_PIECE;
+  bool       replacedPromoted = false;
+  Bitboard   laserUnstackedSquares = Bitboard(0);
 
   void clear() {
     bycatchSquares = Bitboard(0);
@@ -281,6 +285,10 @@ struct MoveUndoInfo {
     flippedPieces = Bitboard(0);
     claimedSquares = Bitboard(0);
     forcedJumpSquare = SQ_NONE;
+    replacedPiece = NO_PIECE;
+    replacedUnpromoted = NO_PIECE;
+    replacedPromoted = false;
+    laserUnstackedSquares = Bitboard(0);
     dropHandColor = COLOR_NB;
     forcedJumpStep = 0;
     removedGatingType = NO_PIECE_TYPE;
@@ -321,7 +329,10 @@ struct MoveUndoInfo {
         && !suppressedCaptureTransfer
         && !pass
         && !forcedJumpHasFollowup
-        && !didPull;
+        && !didPull
+        && replacedPiece == NO_PIECE
+        && replacedUnpromoted == NO_PIECE
+        && !replacedPromoted;
   }
 #endif
 };
@@ -424,6 +435,8 @@ public:
   PieceSet promotion_piece_types(Color c) const;
   PieceSet promotion_piece_types(Color c, Square s) const;
   bool sittuyin_promotion() const;
+  bool laser_game() const;
+  bool is_oriented(PieceType pt) const;
   int promotion_limit(PieceType pt) const;
   bool promotion_allowed(Color c, PieceType pt) const;
   bool promotion_allowed(Color c, PieceType pt, Square s) const;
@@ -732,9 +745,11 @@ public:
 
   // Position representation
   Bitboard pieces(PieceType pt = ALL_PIECES) const;
+  Bitboard pieces_oriented_group(PieceType pt) const;
   Bitboard pieces(PieceType pt1, PieceType pt2) const;
   Bitboard pieces(Color c) const;
   Bitboard pieces(Color c, PieceType pt) const;
+  Bitboard pieces_oriented_group(Color c, PieceType pt) const;
   Bitboard pieces(Color c, PieceType pt1, PieceType pt2) const;
   Bitboard pieces(Color c, PieceType pt1, PieceType pt2, PieceType pt3) const;
   Bitboard major_pieces(Color c) const;
@@ -830,6 +845,8 @@ public:
   // Doing and undoing moves
   void do_move(Move m, StateInfo& newSt, bool countNode = true);
   void undo_move(Move m);
+  void fire_laser(Key& k);
+  Direction orientation_to_direction(int orientation, bool diagonal) const;
   bool add_capture_transfer(StateInfo* state, Piece transferPiece, Key* k = nullptr);
   bool undo_capture_transfer(StateInfo* state, Piece transferPiece, Key* k = nullptr);
   bool simulate_capture_transfer(Key& k, Piece transferPiece, bool suppressedCaptureTransfer = false) const;
@@ -1209,6 +1226,14 @@ inline PieceSet Position::promotion_piece_types(Color c, Square s) const {
 
 inline bool Position::sittuyin_promotion() const {
   return var_ref().sittuyinPromotion;
+}
+
+inline bool Position::laser_game() const {
+  return var_ref().laserGame;
+}
+
+inline bool Position::is_oriented(PieceType pt) const {
+  return var_ref().is_oriented(pt);
 }
 
 inline int Position::promotion_limit(PieceType pt) const {
@@ -2976,14 +3001,38 @@ inline Bitboard Position::adjacent_swap_targets_from(Color c, Square from) const
   Piece mover = piece_on(from);
   if (mover == NO_PIECE || color_of(mover) != c)
       return 0;
-  if (!(adjacent_swap_move_types() & piece_set(type_of(mover))))
+  PieceType moverType = var->base_piece_type(type_of(mover));
+  if (!(adjacent_swap_move_types() & piece_set(moverType)))
       return 0;
-  if (adjacent_swap_requires_empty_neighbor() && !(PseudoAttacks[WHITE][WAZIR][from] & ~pieces()))
+  Bitboard neighbors = var->adjacentSwapDiagonal ? PseudoAttacks[WHITE][KING][from]
+                                                  : PseudoAttacks[WHITE][WAZIR][from];
+  if (adjacent_swap_requires_empty_neighbor() && !(neighbors & ~pieces()))
       return 0;
-  return PseudoAttacks[WHITE][WAZIR][from] & pieces(~c);
+  Bitboard colors = pieces(~c) | (var->adjacentSwapFriendly ? pieces(c) : Bitboard(0));
+  Bitboard targets = 0;
+  Bitboard occupied = neighbors & colors;
+  while (occupied)
+  {
+      Square to = pop_lsb(occupied);
+      if (var->adjacentSwapTargetTypes & piece_set(var->base_piece_type(type_of(piece_on(to)))))
+          targets |= to;
+  }
+  return targets;
 }
 
 inline Bitboard Position::pieces(PieceType pt) const {
+  return byTypeBB[pt];
+}
+
+inline Bitboard Position::pieces_oriented_group(PieceType pt) const {
+  if (var->is_oriented(pt)) {
+      PieceType base = var->base_piece_type(pt);
+      int cnt = var->orientation_count(base);
+      Bitboard bb = 0;
+      for (int i = 0; i < cnt; ++i)
+          bb |= byTypeBB[var->orientation_piece_type(base, i)];
+      return bb;
+  }
   return byTypeBB[pt];
 }
 
@@ -2997,6 +3046,10 @@ inline Bitboard Position::pieces(Color c) const {
 
 inline Bitboard Position::pieces(Color c, PieceType pt) const {
   return pieces(c) & pieces(pt);
+}
+
+inline Bitboard Position::pieces_oriented_group(Color c, PieceType pt) const {
+  return pieces(c) & pieces_oriented_group(pt);
 }
 
 inline Bitboard Position::pieces(Color c, PieceType pt1, PieceType pt2) const {
@@ -5103,7 +5156,8 @@ inline bool Position::capture(Move m) const {
   assert(is_ok(m));
   if (type_of(m) == EN_PASSANT)
       return true;
-  if (type_of(m) == PULL || type_of(m) == SWAP)
+  if (type_of(m) == PULL || type_of(m) == SWAP || is_stack_move(m)
+      || is_unstack_move(m) || is_laser_fire(m))
       return false;
   if (type_of(m) == CASTLING || from_sq(m) == to_sq(m))
       return false;

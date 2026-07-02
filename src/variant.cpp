@@ -2164,6 +2164,18 @@ void VariantMap::init() {
 
 // Pre-calculate derived properties
 Variant* Variant::conclude() {
+    concluded = false;
+    for (PieceType pt = NO_PIECE_TYPE; pt < PIECE_TYPE_NB; ++pt)
+    {
+        isOrientedCache[pt] = is_oriented_dynamic(pt);
+        basePieceTypeCache[pt] = base_piece_type_dynamic(pt);
+    }
+    concluded = true;
+
+    for (PieceType pt = PAWN; pt <= CUSTOM_PIECES_END; ++pt)
+        if (is_oriented(pt))
+            pieceTypes |= pt;
+
     rebuild_piece_symbol_maps();
 
     // Backward compatibility: legacy extinctionPseudoRoyal used extinction
@@ -2671,6 +2683,7 @@ void VariantMap::set_verbose_load_warnings(bool verbose) {
 }
 
 void VariantMap::add(std::string s, Variant* v) {
+  v->name = s;
   const Variant* concluded = v->conclude();
   auto it = find(s);
   if (it != end() && it->second != concluded) {

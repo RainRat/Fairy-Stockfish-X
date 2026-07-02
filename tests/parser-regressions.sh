@@ -242,6 +242,38 @@ mustDrop = true
 customPiece1 = s:m
 weakCrosscutDropIllegal = true
 startFen = ****1/***2/**3/*4/5[SSSSSSSSSSSSSSSsssssssssssssss] b - - 0 1
+
+[bad-laser-piece:fairy]
+laserGame = true
+laser_notapiece = R/D/D/L
+
+[bad-laser-faces:fairy]
+laserGame = true
+laser_p = R/D/D/L/S
+
+[bad-static-manual-laser:fairy]
+laserGame = true
+laserAutoFire = false
+laserEmitters = white@a1:0
+
+[bad-orientation-group:fairy]
+laserGame = true
+orientationGroups = p:
+
+[bad-laser-square:fairy]
+laserGame = true
+laserEmitters = white@a10x:0
+
+[laser-rank10:fairy]
+laserGame = true
+maxFile = a
+maxRank = 10
+pieceToCharTable = -
+king = -
+checking = false
+castling = false
+startFen = 1/1/1/1/1/1/1/1/1/1 w - - 0 1
+laserEmitters = white@a10:0
 INI
 
 printf '%s
@@ -402,6 +434,14 @@ assert_contains "${check_output}" "customPiece1 - Missing Betza move notation"
 initial_capture_output=$("${ENGINE}" check "${tmp_ini}" 2>&1 || true)
 assert_contains "${initial_capture_output}" "Initial capture Betza moves are not supported in 'ciW'"
 assert_contains_literal "${initial_capture_output}" "connectGroup must be -1, 0, or a positive group size."
+assert_contains_literal "${initial_capture_output}" "laser_notapiece - Unknown piece symbol: notapiece"
+assert_contains_literal "${initial_capture_output}" "laser_p - Too many laser outcome faces: expected 4."
+assert_contains_literal "${initial_capture_output}" "laserAutoFire = false requires a piece laser emitter."
+assert_contains_literal "${initial_capture_output}" "orientationGroups - Malformed entry: p:"
+assert_contains_literal "${initial_capture_output}" "laserEmitters - Invalid square coordinates: a10x"
+
+laser_rank10_output=$(run_uci "$ENGINE" "$tmp_ini" "laser-rank10" </dev/null 2>&1 || true)
+assert_contains "${laser_rank10_output}" "^info string variant laser-rank10 "
 
 wrapped_support_output=$("${ENGINE}" check "${wrapped_support_ini}" 2>&1 || true)
 assert_not_contains_literal "${wrapped_support_output}" "Wrapped boards do not support connect3D/connect4D win conditions."
