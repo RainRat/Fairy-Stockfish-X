@@ -884,25 +884,52 @@ static PyObject* pyffish_runCppTests(PyObject* self, PyObject* args) {
                 return nullptr;
             }
 
-            states->emplace_back();
-            pos.do_move(m, states->back());
-            Position expected;
-            StateListPtr expectedStates;
-            std::string afterFen = pos.fen();
-            buildPosition(expected, expectedStates, v, afterFen.c_str(), nullptr, false);
-            if (pos.key() != expected.key() || pos.state()->materialKey != expected.state()->materialKey)
+            for (int cycle = 0; cycle < 3; ++cycle)
             {
-                PyErr_Format(PyFFishError, "Hash mismatch after %s move %s", tc.variant, tc.move);
-                return nullptr;
-            }
+                states->emplace_back();
+                pos.do_move(m, states->back());
+                Position expected;
+                StateListPtr expectedStates;
+                std::string afterFen = pos.fen();
+                buildPosition(expected, expectedStates, v, afterFen.c_str(), nullptr, false);
+                if (pos.key() != expected.key() || pos.state()->materialKey != expected.state()->materialKey)
+                {
+                    PyErr_Format(PyFFishError, "Hash mismatch after %s move %s", tc.variant, tc.move);
+                    return nullptr;
+                }
 
-            pos.undo_move(m);
-            states->pop_back();
-            if (pos.fen() != beforeFen || pos.key() != beforeKey || pos.state()->materialKey != beforeMaterial)
-            {
-                PyErr_Format(PyFFishError, "Undo mismatch after %s move %s", tc.variant, tc.move);
-                return nullptr;
+                pos.undo_move(m);
+                states->pop_back();
+                if (pos.fen() != beforeFen || pos.key() != beforeKey || pos.state()->materialKey != beforeMaterial)
+                {
+                    PyErr_Format(PyFFishError, "Undo mismatch after %s move %s", tc.variant, tc.move);
+                    return nullptr;
+                }
             }
+        }
+    }
+
+    // Test 8: laser special moves in QUIET_CHECKS must actually give check.
+    {
+        struct Case { const char* variant; const char* fen; };
+        const Case cases[] = {
+            {"khet1", "9k/10/10/10/10/10/OO8/9K w - - 0 1"},
+            {"dos-laser-chess", "r:1b:0s:0lkq:0b:0s:0r:1/d:0m:3d:0m:1pm:0d:0m:2d:0/9/9/9/9/9/D:2M:0D:2M:2PM:3D:2M:1D:2/R:1S:0B:2Q:2KLS:0B:2R:1 w - - 0 1"},
+        };
+        for (const Case& tc : cases)
+        {
+            const Variant* v = variants.get(tc.variant);
+            if (!v)
+                continue;
+            Position pos;
+            StateListPtr states;
+            buildPosition(pos, states, v, tc.fen, nullptr, false);
+            for (const auto& em : MoveList<QUIET_CHECKS>(pos))
+                if (!pos.gives_check(em))
+                {
+                    PyErr_Format(PyFFishError, "Non-checking move in %s QUIET_CHECKS", tc.variant);
+                    return nullptr;
+                }
         }
     }
 

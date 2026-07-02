@@ -1409,11 +1409,19 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
                                                         : parse_piece_type_token(v, entry.substr(0, colon));
             std::string values = colon == std::string::npos ? "" : entry.substr(colon + 1);
             if (base == NO_PIECE_TYPE || values.empty())
+            {
+                if (DoCheck)
+                    std::cerr << key << " - Malformed entry: " << entry << std::endl;
                 return false;
+            }
             for (char value : values)
             {
                 if (value < '0' || value > '3')
+                {
+                    if (DoCheck)
+                        std::cerr << key << " - Invalid orientation: " << value << std::endl;
                     return false;
+                }
                 v->rotationAllowedOrientations[c][base] |= uint8_t(1u << (value - '0'));
             }
         }
@@ -1545,6 +1553,58 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
                 || !validate_custom_piece_betza(betza, "orientationBetza", v))
                 return false;
             v->orientationBetza[base] = betza;
+        }
+    }
+
+    // These options are parsed before the orientation groups are complete, so
+    // validate their semantic references now that all groups are known.
+    for (Color c : {WHITE, BLACK})
+    {
+        const std::string rotationKey = c == WHITE ? "rotationAllowedOrientationsWhite"
+                                                   : "rotationAllowedOrientationsBlack";
+        auto rotationIt = config.find(rotationKey);
+        if (rotationIt != config.end())
+        {
+            std::istringstream iss(rotationIt->second);
+            std::string entry;
+            while (iss >> entry)
+            {
+                size_t colon = entry.find(':');
+                PieceType base = parse_piece_type_token(v, entry.substr(0, colon));
+                std::string values = entry.substr(colon + 1);
+                int count = v->orientationCounts[base] > 0 ? v->orientationCounts[base] : 4;
+                if (!(v->orientedPieceTypes & base)
+                    || std::any_of(values.begin(), values.end(), [&](char value) {
+                           return value - '0' >= count;
+                       }))
+                {
+                    if (DoCheck)
+                        std::cerr << rotationKey << " - Invalid oriented piece entry: " << entry << std::endl;
+                    return false;
+                }
+            }
+        }
+
+        const std::string promotionKey = c == WHITE ? "laserPromotionOrientationWhite"
+                                                    : "laserPromotionOrientationBlack";
+        auto promotionIt = config.find(promotionKey);
+        if (promotionIt != config.end())
+        {
+            std::istringstream iss(promotionIt->second);
+            std::string entry;
+            while (iss >> entry)
+            {
+                size_t colon = entry.find(':');
+                PieceType base = parse_piece_type_token(v, entry.substr(0, colon));
+                int orientation = entry[colon + 1] - '0';
+                int count = v->orientationCounts[base] > 0 ? v->orientationCounts[base] : 4;
+                if (!(v->orientedPieceTypes & base) || orientation >= count)
+                {
+                    if (DoCheck)
+                        std::cerr << promotionKey << " - Invalid oriented piece entry: " << entry << std::endl;
+                    return false;
+                }
+            }
         }
     }
 
@@ -2027,6 +2087,43 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
         }
     }
 
+    if (!v->laserAutoFire && v->emitterPieceType == NO_PIECE_TYPE
+        && (!v->staticEmitters[WHITE].empty() || !v->staticEmitters[BLACK].empty()))
+    {
+        if (DoCheck)
+            std::cerr << "laserAutoFire = false requires a piece laser emitter." << std::endl;
+        return false;
+    }
+
+    auto parse_optics = [&](const std::string& key, const std::string& val,
+                            Variant::LaserOptics& optics) {
+        std::istringstream iss(val);
+        std::string outcome_str;
+        int face = 0;
+        while (std::getline(iss, outcome_str, '/'))
+        {
+            if (face >= 4)
+            {
+                if (DoCheck)
+                    std::cerr << key << " - Too many laser outcome faces: expected 4." << std::endl;
+                return false;
+            }
+            outcome_str.erase(0, outcome_str.find_first_not_of(" \t"));
+            outcome_str.erase(outcome_str.find_last_not_of(" \t") + 1);
+            Variant::LaserOutcome outcome;
+            if (!parse_laser_outcome(outcome_str, outcome, DoCheck, key))
+                return false;
+            optics.outcomes[face++] = outcome;
+        }
+        if (face != 4)
+        {
+            if (DoCheck)
+                std::cerr << key << " - Incomplete laser outcome faces: expected 4, got " << face << std::endl;
+            return false;
+        }
+        return true;
+    };
+
     // 1. Parse base piece optics (keys without ':')
     for (auto const& [key, val] : config)
     {
@@ -2035,40 +2132,23 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
             config.find(key);
             std::string symbol = key.substr(6);
             PieceType pt = parse_piece_type_token(v, symbol);
-            if (pt != NO_PIECE_TYPE)
+            if (pt == NO_PIECE_TYPE)
             {
-                std::istringstream iss(val);
-                std::string outcome_str;
-                int face = 0;
-                while (std::getline(iss, outcome_str, '/') && face < 4)
-                {
-                    outcome_str.erase(0, outcome_str.find_first_not_of(" \t"));
-                    outcome_str.erase(outcome_str.find_last_not_of(" \t") + 1);
-                    Variant::LaserOutcome outcome;
-                    if (!parse_laser_outcome(outcome_str, outcome, DoCheck, key))
-                    {
-                        return false;
-                    }
-
-                    v->pieceOptics[pt].outcomes[face] = outcome;
-                    face++;
-                }
-                if (face < 4)
-                {
-                    if (DoCheck)
-                        std::cerr << key << " - Incomplete laser outcome faces: expected 4, got " << face << std::endl;
-                    return false;
-                }
+                if (DoCheck)
+                    std::cerr << key << " - Unknown piece symbol: " << symbol << std::endl;
+                return false;
             }
+            if (!parse_optics(key, val, v->pieceOptics[pt]))
+                return false;
         }
     }
 
     // 2. Automatically propagate base optics to oriented subtypes with rotation
     for (PieceType pt = PAWN; pt <= CUSTOM_PIECES_END; ++pt)
     {
-        if (v->is_oriented(pt) && v->base_piece_type(pt) == pt)
+        if (v->orientedPieceTypes & pt)
         {
-            int cnt = v->orientation_count(pt);
+            int cnt = v->orientationCounts[pt] > 0 ? v->orientationCounts[pt] : 4;
             for (int o = 1; o < cnt; ++o)
             {
                 for (int f = 0; f < 4; ++f)
@@ -2089,37 +2169,25 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
             size_t colon = symbol.find(':');
             std::string base_symbol = symbol.substr(0, colon);
             std::string orient_str = symbol.substr(colon + 1);
-            if (is_number(orient_str))
+            PieceType pt = parse_piece_type_token(v, base_symbol);
+            if (!is_number(orient_str) || pt == NO_PIECE_TYPE
+                || !(v->orientedPieceTypes & pt))
             {
-                int orientation = std::stoi(orient_str);
-                PieceType pt = parse_piece_type_token(v, base_symbol);
-                if (pt != NO_PIECE_TYPE && v->is_oriented(pt) && orientation >= 0 && orientation < v->orientation_count(pt))
-                {
-                    PieceType subtype = v->orientation_piece_type(pt, orientation);
-                    std::istringstream iss(val);
-                    std::string outcome_str;
-                    int face = 0;
-                    while (std::getline(iss, outcome_str, '/') && face < 4)
-                    {
-                        outcome_str.erase(0, outcome_str.find_first_not_of(" \t"));
-                        outcome_str.erase(outcome_str.find_last_not_of(" \t") + 1);
-                        Variant::LaserOutcome outcome;
-                        if (!parse_laser_outcome(outcome_str, outcome, DoCheck, key))
-                        {
-                            return false;
-                        }
-
-                        v->pieceOptics[subtype].outcomes[face] = outcome;
-                        face++;
-                    }
-                    if (face < 4)
-                    {
-                        if (DoCheck)
-                            std::cerr << key << " - Incomplete laser outcome faces: expected 4, got " << face << std::endl;
-                        return false;
-                    }
-                }
+                if (DoCheck)
+                    std::cerr << key << " - Invalid oriented piece override." << std::endl;
+                return false;
             }
+            int orientation = std::stoi(orient_str);
+            int count = v->orientationCounts[pt] > 0 ? v->orientationCounts[pt] : 4;
+            if (orientation < 0 || orientation >= count)
+            {
+                if (DoCheck)
+                    std::cerr << key << " - Orientation out of range: " << orientation << std::endl;
+                return false;
+            }
+            PieceType subtype = v->orientation_piece_type(pt, orientation);
+            if (!parse_optics(key, val, v->pieceOptics[subtype]))
+                return false;
         }
     }
 
@@ -2502,6 +2570,9 @@ Variant* VariantParser<DoCheck>::parse() {
 template <bool DoCheck>
 Variant* VariantParser<DoCheck>::parse(Variant* v) {
     parseHadError = false;
+    // Inherited variants carry derived caches from their parent. All parsing
+    // below must use the fields being mutated, not those stale caches.
+    v->concluded = false;
     int cfgMaxRank = -1;
     int cfgMaxFile = -1;
     const auto itRank = config.find("maxRank");

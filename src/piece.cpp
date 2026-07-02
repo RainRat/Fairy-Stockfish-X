@@ -920,8 +920,10 @@ void PieceMap::init(const Variant* v) {
           PieceType base = (v != nullptr && v->is_oriented(pt)) ? v->base_piece_type(pt) : pt;
           std::string betza;
           if (v != nullptr)
-              betza = base < CUSTOM_PIECES ? v->orientationBetza[base]
-                                           : v->customPiece[base - CUSTOM_PIECES];
+              betza = base < CUSTOM_PIECES
+                    ? (!v->orientationBetza[base].empty() ? v->orientationBetza[base]
+                                                          : v->customPiece[pt - CUSTOM_PIECES])
+                    : v->customPiece[base - CUSTOM_PIECES];
           add(pt, from_betza(betza, "", v));
       }
 }

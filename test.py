@@ -2675,6 +2675,11 @@ stepwisePushing = true
         for move in ("d4c5", "d4d5", "d4e5"):
             self.assertIn(move, dos_pawn_moves)
 
+        # Native-base orientation subtypes retain their configured movement.
+        dos_rotated_rook_fen = "k8/9/9/9/4R:14/9/9/9/K4L:03 w - - 0 1"
+        dos_rotated_rook_moves = sf.legal_moves("dos-laser-chess", dos_rotated_rook_fen, [])
+        self.assertIn("e5e6", dos_rotated_rook_moves)
+
         # Python round-trip FEN verification
         after_fen = sf.get_fen("dos-laser-chess", dos_fen, ["e2e3"])
         self.assertEqual(sf.validate_fen(after_fen, "dos-laser-chess"), 1)

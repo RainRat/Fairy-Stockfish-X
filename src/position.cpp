@@ -1482,7 +1482,10 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
           PieceType pt = type_of(pc);
           if (v->laserGame && ss.peek() == '+')
           {
-              if (v->stacked_piece_type(pt) != NO_PIECE_TYPE || v->stacked_piece_type(PieceType(pt + orientation)) != NO_PIECE_TYPE)
+              PieceType oriented = v->is_oriented(pt) && orientation >= 0
+                                && orientation < v->orientation_count(pt)
+                                 ? v->orientation_piece_type(pt, orientation) : pt;
+              if (v->stacked_piece_type(oriented) != NO_PIECE_TYPE)
               {
                   ss.get(); // consume '+'
                   stacked = true;
@@ -2377,6 +2380,7 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
                       ss << ":" << orientation;
                   ss << "+";
               } else if (var->is_oriented(pt)) {
+                  // Explicit :0 keeps FEN canonical and self-describing; display/UCI may omit it.
                   int orientation = var->orientation_index(pt);
                   ss << piece_symbol(make_piece(c, base_pt));
                   ss << ":" << orientation;
