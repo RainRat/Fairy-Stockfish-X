@@ -71,6 +71,12 @@ namespace {
   ExtMove* make_move_and_gating(const Position& pos, ExtMove* moveList, Color us, Square from, Square to, PieceType pt = NO_PIECE_TYPE) {
 
     Move m = make<T>(from, to, pt);
+    auto emit = [&](Move move) {
+        if constexpr (Gen != QUIET_CHECKS)
+            *moveList++ = move;
+        else if (pos.gives_check(move))
+            *moveList++ = move;
+    };
     bool iguiShot = T == SPECIAL && from != to;
     bool captureIsRifle = pos.rifle_capture(m) && pos.capture(m);
     bool rifleShot = captureIsRifle && (T == NORMAL || T == PROMOTION);
@@ -94,18 +100,12 @@ namespace {
         Bitboard b = pos.wall_target_mask(us, from, effectiveTo, pureWallMove ? SQ_NONE : to, occupancyAfter);
 
         while (b)
-            *moveList++ = make_gating<T>(from, to, pt, pop_lsb(b));
+            emit(make_gating<T>(from, to, pt, pop_lsb(b)));
         return moveList;
     }
 
     if (pos.laser_game())
     {
-        auto emit = [&](Move move) {
-            if constexpr (Gen != QUIET_CHECKS)
-                *moveList++ = move;
-            else if (pos.gives_check(move))
-                *moveList++ = move;
-        };
         Piece pcFrom = pos.piece_on(from);
         PieceType mt = type_of(pcFrom);
         bool rotateAfter = pos.variant()->rotateAfterMove;
@@ -181,10 +181,10 @@ namespace {
         // Only generate forced gating if the target square is not occupied after the base move
         // (e.g., to prevent overwriting/disappearing pieces in rifle capture or special moves)
         if (!(occupancyAfter & forcedGateSquare))
-            *moveList++ = make_gating<T>(from, to, forcedGate, forcedGateSquare);
+            emit(make_gating<T>(from, to, forcedGate, forcedGateSquare));
     }
     else
-        *moveList++ = m;
+        emit(m);
 
     // Gating moves
     if (pos.seirawan_gating() && !captureIsRifle)
@@ -207,10 +207,10 @@ namespace {
                             && (pos.drop_region(us, pt_gating) & gate2)
                             && !(occupancyAfter & gate2)
                             && pos.count_in_hand(pos.drop_hand_color(us, pt_gating), pt_gating) >= 2)
-                            *moveList++ = make_gating<T>(from, to, pt_gating, gateSq);
+                            emit(make_gating<T>(from, to, pt_gating, gateSq));
                     }
                     else
-                        *moveList++ = make_gating<T>(from, to, pt_gating, gateSq);
+                        emit(make_gating<T>(from, to, pt_gating, gateSq));
                 }
             }
         }

@@ -4709,10 +4709,6 @@ bool Position::pseudo_legal(const Move m) const {
   if (from == to && !(is_pass(m) || is_laser_fire(m) || is_self_destruct(m) || (is_promotion_move(m) && sittuyin_promotion()) || pureWallMove || (laser_game() && is_gating(m))))
       return false;
 
-  if (is_laser_fire(m))
-      return laser_game() && !var->laserAutoFire && pc != NO_PIECE && color_of(pc) == us
-          && var->base_piece_type(type_of(pc)) == var->emitterPieceType;
-
   if (st->pendingClaimPass)
       return is_pass(m);
 
@@ -4757,6 +4753,10 @@ bool Position::pseudo_legal(const Move m) const {
               return false;
       }
   }
+
+  if (is_laser_fire(m))
+      return laser_game() && !var->laserAutoFire && pc != NO_PIECE && color_of(pc) == us
+          && var->base_piece_type(type_of(pc)) == var->emitterPieceType;
 
   if (is_pull_move(m))
   {

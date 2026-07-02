@@ -1483,7 +1483,9 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
                     std::cerr << "orientationCounts - Unknown piece symbol: " << sym << std::endl;
                 return false;
             }
-            if (count_str.empty() || !std::all_of(count_str.begin(), count_str.end(), ::isdigit))
+            if (count_str.empty()
+                || !std::all_of(count_str.begin(), count_str.end(),
+                               [](unsigned char c) { return std::isdigit(c); }))
             {
                 if (DoCheck)
                     std::cerr << "orientationCounts - Invalid orientation count: " << count_str << std::endl;
@@ -2085,12 +2087,15 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     }
 
     auto is_number = [](const std::string& s) {
-        return !s.empty() && std::all_of(s.begin(), s.end(), ::isdigit);
+        return !s.empty()
+            && std::all_of(s.begin(), s.end(),
+                           [](unsigned char c) { return std::isdigit(c); });
     };
 
     auto it_emitters = config.find("laserEmitters");
     if (it_emitters != config.end())
     {
+        bool hasPieceEmitter = false;
         std::string val = it_emitters->second;
         std::istringstream iss(val);
         std::string token;
@@ -2100,6 +2105,13 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
             token.erase(token.find_last_not_of(" \t") + 1);
             if (token.rfind("piece:", 0) == 0)
             {
+                if (hasPieceEmitter)
+                {
+                    if (DoCheck)
+                        std::cerr << "laserEmitters - Multiple piece emitters are not supported." << std::endl;
+                    return false;
+                }
+                hasPieceEmitter = true;
                 std::string symbol = token.substr(6);
                 v->emitterPieceType = parse_piece_type_token(v, symbol);
                 if (v->emitterPieceType == NO_PIECE_TYPE)
@@ -2518,6 +2530,13 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
     {
         if (DoCheck)
             std::cerr << "laserGame is incompatible with legacy gating, potions, and commit gates." << std::endl;
+        valid = false;
+    }
+
+    if (v->laserGame && (v->cylindrical || v->toroidal || v->hexBoard))
+    {
+        if (DoCheck)
+            std::cerr << "laserGame is not supported on wrapped or hexagonal boards." << std::endl;
         valid = false;
     }
 

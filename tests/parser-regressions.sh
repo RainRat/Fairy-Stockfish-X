@@ -304,6 +304,14 @@ stackedPieceType = a:b
 [bad-laser-gating:fairy]
 laserGame = true
 gating = true
+
+[bad-multiple-piece-emitters:fairy]
+laserGame = true
+laserEmitters = piece:p, piece:k
+
+[bad-laser-topology:fairy]
+laserGame = true
+cylindrical = true
 INI
 
 printf '%s
@@ -474,6 +482,8 @@ assert_contains_literal "${initial_capture_output}" "orientationGroups - Count c
 assert_contains_literal "${initial_capture_output}" "stackedPieceType - Cyclic mapping."
 assert_contains_literal "${initial_capture_output}" "stackedPieceType - Orientation count mismatch."
 assert_contains_literal "${initial_capture_output}" "laserGame is incompatible with legacy gating"
+assert_contains_literal "${initial_capture_output}" "laserEmitters - Multiple piece emitters are not supported."
+assert_contains_literal "${initial_capture_output}" "laserGame is not supported on wrapped or hexagonal boards."
 
 laser_rank10_output=$(run_uci "$ENGINE" "$tmp_ini" "laser-rank10" </dev/null 2>&1 || true)
 assert_contains "${laser_rank10_output}" "^info string variant laser-rank10 "
