@@ -805,7 +805,7 @@ static PyObject* pyffish_runCppTests(PyObject* self, PyObject* args) {
     {
         Position pos;
         StateListPtr states;
-        const Variant* v = require_variant("dos-laser-chess");
+        const Variant* v = variants.get("dos-laser-chess");
         if (v)
         {
             std::string startFen = "r:1b:0s:0lkq:0b:0s:0r:1/d:0m:3d:0m:1pm:0d:0m:2d:0/9/9/9/9/9/D:2M:0D:2M:2PM:3D:2M:1D:2/R:1S:0B:2Q:2KLS:0B:2R:1 w - - 0 1";
@@ -848,6 +848,59 @@ static PyObject* pyffish_runCppTests(PyObject* self, PyObject* args) {
             if (pos.key() != keyBefore)
             {
                 PyErr_SetString(PyFFishError, "Zobrist key mismatch after undoing DOS Laser gating move");
+                return nullptr;
+            }
+        }
+    }
+
+    // Test 7: Compound laser actions preserve board and hash state through do/undo.
+    {
+        struct Case { const char* variant; const char* fen; const char* move; };
+        const Case cases[] = {
+            {"khet1", "9k/10/10/10/10/10/OO8/9K w - - 0 1", "a2b2+"},
+            {"khet1", "9k/10/10/10/10/10/1O+8/9K w - - 0 1", "b2c3-"},
+            {"khet1", "9k/10/10/10/3p6/2S:05/10/9K w - - 0 1", "c3d4s"},
+            {"dos-laser-chess", "9/9/9/9/9/9/5k3/9/K4L:03 w - - 0 1", "f1f1f"},
+            {"dos-laser-chess", "r:1b:0s:0lkq:0b:0s:0r:1/d:0m:3d:0m:1pm:0d:0m:2d:0/9/9/9/9/9/D:2M:0D:2M:2PM:3D:2M:1D:2/R:1S:0B:2Q:2KLS:0B:2R:1 w - - 0 1", "e2e3l:1f1"},
+            {"dos-laser-chess", "8k/M:08/9/9/9/9/9/9/K4L:03 w - - 0 1", "a8a9q:2,f1"},
+        };
+
+        for (const Case& tc : cases)
+        {
+            Position pos;
+            StateListPtr states;
+            const Variant* v = variants.get(tc.variant);
+            if (!v)
+                continue;
+            buildPosition(pos, states, v, tc.fen, nullptr, false);
+            std::string beforeFen = pos.fen();
+            Key beforeKey = pos.key();
+            Key beforeMaterial = pos.state()->materialKey;
+            std::string moveStr = tc.move;
+            Move m = UCI::to_move(pos, moveStr);
+            if (m == MOVE_NONE)
+            {
+                PyErr_Format(PyFFishError, "Failed to parse %s move %s", tc.variant, tc.move);
+                return nullptr;
+            }
+
+            states->emplace_back();
+            pos.do_move(m, states->back());
+            Position expected;
+            StateListPtr expectedStates;
+            std::string afterFen = pos.fen();
+            buildPosition(expected, expectedStates, v, afterFen.c_str(), nullptr, false);
+            if (pos.key() != expected.key() || pos.state()->materialKey != expected.state()->materialKey)
+            {
+                PyErr_Format(PyFFishError, "Hash mismatch after %s move %s", tc.variant, tc.move);
+                return nullptr;
+            }
+
+            pos.undo_move(m);
+            states->pop_back();
+            if (pos.fen() != beforeFen || pos.key() != beforeKey || pos.state()->materialKey != beforeMaterial)
+            {
+                PyErr_Format(PyFFishError, "Undo mismatch after %s move %s", tc.variant, tc.move);
                 return nullptr;
             }
         }

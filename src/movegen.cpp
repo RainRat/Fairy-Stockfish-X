@@ -107,16 +107,35 @@ namespace {
         if (from != to)
         {
             *moveList++ = m;
-            if (rotateAfter && pos.is_oriented(mt))
+            if (rotateAfter)
             {
-                PieceType base_pt = pos.variant()->base_piece_type(mt);
-                int current_orient = mt - base_pt;
-                int num_orients = pos.variant()->orientation_count(base_pt);
-                for (int i = 0; i < num_orients; ++i)
+                Bitboard rotators = pos.pieces(us);
+                while (rotators)
                 {
-                    if (i == current_orient)
+                    Square rotateFrom = pop_lsb(rotators);
+                    if (rotateFrom == from || rotateFrom == to)
                         continue;
-                    *moveList++ = make_gating<T>(from, to, PieceType(base_pt + i), to);
+                    PieceType rotateType = type_of(pos.piece_on(rotateFrom));
+                    if (!pos.is_oriented(rotateType))
+                        continue;
+                    PieceType base_pt = pos.variant()->base_piece_type(rotateType);
+                    int current = rotateType - base_pt;
+                    int count = pos.variant()->orientation_count(base_pt);
+                    for (int i = 0; i < count; ++i)
+                        if (pos.variant()->rotation_allowed(us, base_pt, current, i, count))
+                            *moveList++ = make_gating<T>(from, to,
+                                T == PROMOTION ? pt : pos.variant()->orientation_piece_type(base_pt, i), rotateFrom);
+                }
+
+                if (pos.is_oriented(mt))
+                {
+                    PieceType base_pt = pos.variant()->base_piece_type(mt);
+                    int current = pos.variant()->orientation_index(mt);
+                    int count = pos.variant()->orientation_count(base_pt);
+                    for (int i = 0; i < count; ++i)
+                        if (pos.variant()->rotation_allowed(us, base_pt, current, i, count))
+                            *moveList++ = make_gating<T>(from, to,
+                                T == PROMOTION ? pt : pos.variant()->orientation_piece_type(base_pt, i), to);
                 }
             }
         }
@@ -125,13 +144,13 @@ namespace {
             if (pos.is_oriented(mt))
             {
                 PieceType base_pt = pos.variant()->base_piece_type(mt);
-                int current_orient = mt - base_pt;
+                int current_orient = pos.variant()->orientation_index(mt);
                 int num_orients = pos.variant()->orientation_count(base_pt);
                 for (int i = 0; i < num_orients; ++i)
                 {
-                    if (i == current_orient)
+                    if (!pos.variant()->rotation_allowed(us, base_pt, current_orient, i, num_orients))
                         continue;
-                    *moveList++ = make_gating<T>(from, to, PieceType(base_pt + i), to);
+                    *moveList++ = make_gating<T>(from, to, pos.variant()->orientation_piece_type(base_pt, i), to);
                 }
             }
         }
@@ -224,7 +243,11 @@ namespace {
           PieceType pt = pop_msb(promotions);
           if (can_emit_promotion_variant(pt))
           {
-              moveList = make_move_and_gating<PROMOTION, Type>(pos, moveList, us, from, to, pt);
+              PieceType result = pt;
+              if (pos.laser_game() && pos.variant()->hasLaserPromotionOrientation[us][pt])
+                  result = pos.variant()->orientation_piece_type(pt,
+                      pos.variant()->laserPromotionOrientation[us][pt]);
+              moveList = make_move_and_gating<PROMOTION, Type>(pos, moveList, us, from, to, result);
           }
       }
       PieceType pt = pos.promoted_piece_type(type_of(pos.piece_on(from)));
@@ -1234,7 +1257,7 @@ namespace {
             for (PieceSet ps = pos.adjacent_swap_move_types(); ps;)
             {
                 PieceType pt = pop_lsb(ps);
-                Bitboard froms = pos.pieces(Us, pt);
+                Bitboard froms = pos.pieces_oriented_group(Us, pt);
                 while (froms)
                 {
                     Square from = pop_lsb(froms);
@@ -1249,6 +1272,58 @@ namespace {
                         *moveList++ = m;
                     }
                 }
+            }
+        }
+
+        if (!restrictToForcedJumper && pos.laser_game() && Type != CAPTURES)
+        {
+            for (PieceSet ps = pos.piece_types(); ps;)
+            {
+                PieceType pt = pop_lsb(ps);
+                PieceType stacked = pos.variant()->stacked_piece_type(pt);
+                if (stacked != NO_PIECE_TYPE)
+                {
+                    Bitboard froms = pos.pieces(Us, pt);
+                    while (froms)
+                    {
+                        Square from = pop_lsb(froms);
+                        Bitboard targets = PseudoAttacks[WHITE][KING][from] & pos.pieces(Us, pt);
+                        while (targets)
+                            *moveList++ = make<STACK>(from, pop_lsb(targets));
+                    }
+                }
+
+                PieceType single = pos.variant()->unstacked_piece_type(pt);
+                if (single != NO_PIECE_TYPE)
+                {
+                    Bitboard froms = pos.pieces(Us, pt);
+                    while (froms)
+                    {
+                        Square from = pop_lsb(froms);
+                        Bitboard targets = PseudoAttacks[WHITE][KING][from] & pos.board_bb() & ~pos.pieces();
+                        while (targets)
+                            *moveList++ = make<UNSTACK>(from, pop_lsb(targets));
+                    }
+                }
+            }
+        }
+
+
+        if (!restrictToForcedJumper && pos.laser_game() && !pos.variant()->laserAutoFire
+            && pos.variant()->emitterPieceType != NO_PIECE_TYPE && Type != CAPTURES)
+        {
+            Bitboard emitters = pos.pieces_oriented_group(Us, pos.variant()->emitterPieceType);
+            while (emitters)
+            {
+                Square from = pop_lsb(emitters);
+                PieceType pt = type_of(pos.piece_on(from));
+                *moveList++ = make<LASER_FIRE>(from, from);
+                PieceType base = pos.variant()->base_piece_type(pt);
+                int current = pos.variant()->orientation_index(pt);
+                int count = pos.variant()->orientation_count(base);
+                for (int i = 0; i < count; ++i)
+                    if (pos.variant()->rotation_allowed(Us, base, current, i, count))
+                        *moveList++ = make_gating<LASER_FIRE>(from, from, pos.variant()->orientation_piece_type(base, i), from);
             }
         }
 

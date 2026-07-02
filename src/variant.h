@@ -214,6 +214,9 @@ struct Variant {
   int pushingStrength[PIECE_TYPE_NB] = {};
   int pullingStrength[PIECE_TYPE_NB] = {};
   PieceSet adjacentSwapMoveTypes = NO_PIECE_SET;
+  PieceSet adjacentSwapTargetTypes = ~NO_PIECE_SET;
+  bool adjacentSwapFriendly = false;
+  bool adjacentSwapDiagonal = false;
   bool adjacentSwapRequiresEmptyNeighbor = false;
   bool swapNoImmediateReturn = false;
   int swapForbiddenPlies = 0;
@@ -293,7 +296,14 @@ struct Variant {
   bool progressiveMultimove = false;
   bool laserGame = false;
   bool laserDiagonal = false;
-  bool laserDestroyContinues = false;
+  PieceSet laserDestroyContinuesTypes = NO_PIECE_SET;
+  bool laserAutoFire = true;
+  int rotationDelta = 0;
+  bool rotationTwoWay = false;
+  uint8_t rotationAllowedOrientations[COLOR_NB][PIECE_TYPE_NB] = {};
+  int laserEmitterOrientationOffset = 0;
+  int laserPromotionOrientation[COLOR_NB][PIECE_TYPE_NB] = {};
+  bool hasLaserPromotionOrientation[COLOR_NB][PIECE_TYPE_NB] = {};
   enum LaserOutcome : uint8_t {
       OUTCOME_DESTROY = 1,
       OUTCOME_ABSORB  = 2,
@@ -305,6 +315,7 @@ struct Variant {
       OUTCOME_EXIT_FACE = 8,
       OUTCOME_SPLIT_FORWARD_RIGHT = 9,
       OUTCOME_SPLIT_FORWARD_LEFT = 10,
+      OUTCOME_EXIT_BACK_FACE = 11,
   };
   struct LaserOptics {
       LaserOutcome outcomes[4] = { OUTCOME_DESTROY, OUTCOME_DESTROY, OUTCOME_DESTROY, OUTCOME_DESTROY }; // Front, Right, Back, Left
@@ -317,6 +328,8 @@ struct Variant {
   PieceType stackedPieceMap[PIECE_TYPE_NB] = {};
   PieceType unstackedPieceMap[PIECE_TYPE_NB] = {};
   int orientationCounts[PIECE_TYPE_NB] = {};
+  PieceType orientationTypes[PIECE_TYPE_NB][4] = {};
+  std::string orientationBetza[PIECE_TYPE_NB] = {};
   bool rotateAfterMove = false;
 
   bool concluded = false;
@@ -329,23 +342,50 @@ struct Variant {
       return laserGame && is_oriented(pt) ? 4 : 0;
   }
 
+  PieceType orientation_piece_type(PieceType base, int orientation) const {
+      return orientationTypes[base][orientation] != NO_PIECE_TYPE
+          ? orientationTypes[base][orientation] : PieceType(base + orientation);
+  }
+
+  int orientation_index(PieceType pt) const {
+      PieceType base = base_piece_type(pt);
+      for (int i = 0; i < orientation_count(base); ++i)
+          if (orientation_piece_type(base, i) == pt)
+              return i;
+      return 0;
+  }
+
+  bool rotation_allowed(Color c, PieceType base, int current, int target, int count) const {
+      if (target == current)
+          return false;
+      if (rotationAllowedOrientations[c][base]
+          && !(rotationAllowedOrientations[c][base] & (1u << target)))
+          return false;
+      if (rotationDelta)
+          return target == (current + rotationDelta) % count;
+      return !rotationTwoWay || target == (current + 1) % count
+          || target == (current + count - 1) % count;
+  }
+
   bool is_oriented_dynamic(PieceType pt) const {
-      for (PieceType base = CUSTOM_PIECES; base <= CUSTOM_PIECES_END; ++base) {
+      for (PieceType base = PAWN; base <= CUSTOM_PIECES_END; ++base) {
           if (orientedPieceTypes & base) {
               int cnt = orientationCounts[base] > 0 ? orientationCounts[base] : 4;
-              if (pt >= base && pt < base + cnt)
-                  return true;
+              for (int i = 0; i < cnt; ++i)
+                  if (orientation_piece_type(base, i) == pt)
+                      return true;
           }
       }
       return false;
   }
 
   PieceType base_piece_type_dynamic(PieceType pt) const {
-      for (PieceType base = CUSTOM_PIECES; base <= CUSTOM_PIECES_END; ++base) {
+      for (PieceType base = PAWN; base <= CUSTOM_PIECES_END; ++base) {
           if (orientedPieceTypes & base) {
               int cnt = orientationCounts[base] > 0 ? orientationCounts[base] : 4;
-              if (pt >= base && pt < base + cnt)
-                  return base;
+              for (int i = 0; i < cnt; ++i)
+                  if (orientation_piece_type(base, i) == pt)
+                      return base;
           }
       }
       return pt;
@@ -364,7 +404,7 @@ struct Variant {
       PieceType stacked_base = stackedPieceMap[base];
       if (stacked_base == NO_PIECE_TYPE)
           return NO_PIECE_TYPE;
-      return PieceType(stacked_base + (pt - base));
+      return orientation_piece_type(stacked_base, orientation_index(pt));
   }
 
   PieceType unstacked_piece_type(PieceType pt) const {
@@ -372,7 +412,7 @@ struct Variant {
       PieceType unstacked_base = unstackedPieceMap[base];
       if (unstacked_base == NO_PIECE_TYPE)
           return NO_PIECE_TYPE;
-      return PieceType(unstacked_base + (pt - base));
+      return orientation_piece_type(unstacked_base, orientation_index(pt));
   }
 
 

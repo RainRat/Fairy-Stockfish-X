@@ -2172,7 +2172,7 @@ Variant* Variant::conclude() {
     }
     concluded = true;
 
-    for (PieceType pt = CUSTOM_PIECES; pt <= CUSTOM_PIECES_END; ++pt)
+    for (PieceType pt = PAWN; pt <= CUSTOM_PIECES_END; ++pt)
         if (is_oriented(pt))
             pieceTypes |= pt;
 

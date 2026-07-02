@@ -2994,11 +2994,23 @@ inline Bitboard Position::adjacent_swap_targets_from(Color c, Square from) const
   Piece mover = piece_on(from);
   if (mover == NO_PIECE || color_of(mover) != c)
       return 0;
-  if (!(adjacent_swap_move_types() & piece_set(type_of(mover))))
+  PieceType moverType = var->base_piece_type(type_of(mover));
+  if (!(adjacent_swap_move_types() & piece_set(moverType)))
       return 0;
-  if (adjacent_swap_requires_empty_neighbor() && !(PseudoAttacks[WHITE][WAZIR][from] & ~pieces()))
+  Bitboard neighbors = var->adjacentSwapDiagonal ? PseudoAttacks[WHITE][KING][from]
+                                                  : PseudoAttacks[WHITE][WAZIR][from];
+  if (adjacent_swap_requires_empty_neighbor() && !(neighbors & ~pieces()))
       return 0;
-  return PseudoAttacks[WHITE][WAZIR][from] & pieces(~c);
+  Bitboard colors = pieces(~c) | (var->adjacentSwapFriendly ? pieces(c) : Bitboard(0));
+  Bitboard targets = 0;
+  Bitboard occupied = neighbors & colors;
+  while (occupied)
+  {
+      Square to = pop_lsb(occupied);
+      if (var->adjacentSwapTargetTypes & piece_set(var->base_piece_type(type_of(piece_on(to)))))
+          targets |= to;
+  }
+  return targets;
 }
 
 inline Bitboard Position::pieces(PieceType pt) const {
@@ -3011,7 +3023,7 @@ inline Bitboard Position::pieces_oriented_group(PieceType pt) const {
       int cnt = var->orientation_count(base);
       Bitboard bb = 0;
       for (int i = 0; i < cnt; ++i)
-          bb |= byTypeBB[base + i];
+          bb |= byTypeBB[var->orientation_piece_type(base, i)];
       return bb;
   }
   return byTypeBB[pt];
@@ -5137,7 +5149,8 @@ inline bool Position::capture(Move m) const {
   assert(is_ok(m));
   if (type_of(m) == EN_PASSANT)
       return true;
-  if (type_of(m) == PULL || type_of(m) == SWAP)
+  if (type_of(m) == PULL || type_of(m) == SWAP || is_stack_move(m)
+      || is_unstack_move(m) || is_laser_fire(m))
       return false;
   if (type_of(m) == CASTLING || from_sq(m) == to_sq(m))
       return false;

@@ -681,6 +681,21 @@ string UCI::move(const Position& pos, Move m) {
   if (is_pass(m))
       return "0000";
 
+  if (is_laser_fire(m))
+  {
+      std::string fire = UCI::square(pos, from) + UCI::square(pos, to);
+      if (is_gating(m))
+      {
+          PieceType gt = gating_type(m);
+          PieceType base = pos.variant()->base_piece_type(gt);
+          fire += pos.piece_symbol(make_piece(BLACK, base));
+          int orient = pos.variant()->orientation_index(gt);
+          if (orient > 0)
+              fire += ":" + std::to_string(orient);
+      }
+      return fire + "f";
+  }
+
   bool is_wall_only = wallMove && type_of(m) == SPECIAL && from == to;
   if (is_wall_only)
       return (CurrentProtocol == XBOARD ? "@@@@," : "0000,") + UCI::square(pos, gating_square(m));
@@ -748,10 +763,28 @@ string UCI::move(const Position& pos, Move m) {
       appendWall();
 
   if (type_of(m) == PROMOTION || type_of(m) == PROMOTION_POTION)
-      move += pos.piece_symbol(make_piece(BLACK, promotion_type(m)));
+  {
+      PieceType pt = promotion_type(m);
+      if (pos.laser_game() && pos.is_oriented(pt))
+      {
+          PieceType base = pos.variant()->base_piece_type(pt);
+          move += pos.piece_symbol(make_piece(BLACK, base));
+          int orient = pos.variant()->orientation_index(pt);
+          if (orient > 0)
+              move += ":" + std::to_string(orient);
+      }
+      else
+          move += pos.piece_symbol(make_piece(BLACK, pt));
+      if (is_gating(m) && pos.laser_game())
+          move += "," + UCI::square(pos, gating_square(m));
+  }
   else if (type_of(m) == PIECE_PROMOTION)
       move += '+';
   else if (type_of(m) == PIECE_DEMOTION)
+      move += '-';
+  else if (is_stack_move(m))
+      move += '+';
+  else if (is_unstack_move(m))
       move += '-';
   else if (is_gating(m) && !potionMove && !pos.walling(pos.side_to_move()))
   {
@@ -759,7 +792,7 @@ string UCI::move(const Position& pos, Move m) {
       if (pos.laser_game() && pos.is_oriented(gt))
       {
           PieceType base = pos.variant()->base_piece_type(gt);
-          int orient = gt - base;
+          int orient = pos.variant()->orientation_index(gt);
           move += pos.piece_symbol(make_piece(BLACK, base));
           if (orient > 0)
               move += ":" + std::to_string(orient);

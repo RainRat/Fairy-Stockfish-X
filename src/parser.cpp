@@ -106,6 +106,7 @@ namespace {
         else if (outcome_str == "F") outcome = Variant::OUTCOME_EXIT_FACE;
         else if (outcome_str == "Y") outcome = Variant::OUTCOME_SPLIT_FORWARD_RIGHT;
         else if (outcome_str == "Z") outcome = Variant::OUTCOME_SPLIT_FORWARD_LEFT;
+        else if (outcome_str == "G") outcome = Variant::OUTCOME_EXIT_BACK_FACE;
         else
         {
             if (DoCheck)
@@ -1380,7 +1381,68 @@ template <bool DoCheck>
 bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("laserGame", v->laserGame);
     parse_attribute("laserDiagonal", v->laserDiagonal);
-    parse_attribute("laserDestroyContinues", v->laserDestroyContinues);
+    parse_attribute("laserDestroyContinuesTypes", v->laserDestroyContinuesTypes, v);
+    parse_attribute("laserAutoFire", v->laserAutoFire);
+    parse_attribute("rotationDelta", v->rotationDelta);
+    parse_attribute("rotationTwoWay", v->rotationTwoWay);
+    parse_attribute("laserEmitterOrientationOffset", v->laserEmitterOrientationOffset);
+    if (v->rotationDelta < 0 || v->rotationDelta > 3
+        || v->laserEmitterOrientationOffset < 0 || v->laserEmitterOrientationOffset > 3)
+    {
+        if (DoCheck)
+            std::cerr << "Laser orientation offsets must be in [0, 3]." << std::endl;
+        return false;
+    }
+    for (Color c : {WHITE, BLACK})
+    {
+        const std::string key = c == WHITE ? "rotationAllowedOrientationsWhite"
+                                           : "rotationAllowedOrientationsBlack";
+        auto it = config.find(key);
+        if (it == config.end())
+            continue;
+        std::istringstream iss(it->second);
+        std::string entry;
+        while (iss >> entry)
+        {
+            size_t colon = entry.find(':');
+            PieceType base = colon == std::string::npos ? NO_PIECE_TYPE
+                                                        : parse_piece_type_token(v, entry.substr(0, colon));
+            std::string values = colon == std::string::npos ? "" : entry.substr(colon + 1);
+            if (base == NO_PIECE_TYPE || values.empty())
+                return false;
+            for (char value : values)
+            {
+                if (value < '0' || value > '3')
+                    return false;
+                v->rotationAllowedOrientations[c][base] |= uint8_t(1u << (value - '0'));
+            }
+        }
+    }
+
+    for (Color c : {WHITE, BLACK})
+    {
+        const std::string key = c == WHITE ? "laserPromotionOrientationWhite" : "laserPromotionOrientationBlack";
+        auto it = config.find(key);
+        if (it == config.end())
+            continue;
+        std::istringstream iss(it->second);
+        std::string entry;
+        while (iss >> entry)
+        {
+            size_t colon = entry.find(':');
+            PieceType pt = colon == std::string::npos ? NO_PIECE_TYPE
+                                                      : parse_piece_type_token(v, entry.substr(0, colon));
+            std::string orient = colon == std::string::npos ? "" : entry.substr(colon + 1);
+            if (pt == NO_PIECE_TYPE || orient.size() != 1 || orient[0] < '0' || orient[0] > '3')
+            {
+                if (DoCheck)
+                    std::cerr << key << " - Malformed entry: " << entry << std::endl;
+                return false;
+            }
+            v->laserPromotionOrientation[c][pt] = orient[0] - '0';
+            v->hasLaserPromotionOrientation[c][pt] = true;
+        }
+    }
     parse_attribute("orientedPieceTypes", v->orientedPieceTypes, v);
     parse_attribute("rotateAfterMove", v->rotateAfterMove);
 
@@ -1424,6 +1486,65 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
                     std::cerr << "orientationCounts - Value " << count << " is out of range [1, 4]." << std::endl;
                 return false;
             }
+        }
+    }
+
+    auto it_groups = config.find("orientationGroups");
+    if (it_groups != config.end())
+    {
+        std::istringstream iss(it_groups->second);
+        std::string entry;
+        while (iss >> entry)
+        {
+            size_t colon = entry.find(':');
+            PieceType base = colon == std::string::npos ? NO_PIECE_TYPE
+                                                        : parse_piece_type_token(v, entry.substr(0, colon));
+            if (base == NO_PIECE_TYPE)
+            {
+                if (DoCheck)
+                    std::cerr << "orientationGroups - Invalid base: " << entry << std::endl;
+                return false;
+            }
+            std::istringstream members(entry.substr(colon + 1));
+            std::string symbol;
+            int count = 0;
+            while (std::getline(members, symbol, '/'))
+            {
+                PieceType member = parse_piece_type_token(v, symbol);
+                if (member == NO_PIECE_TYPE || count >= 4)
+                {
+                    if (DoCheck)
+                        std::cerr << "orientationGroups - Invalid member: " << symbol << std::endl;
+                    return false;
+                }
+                v->orientationTypes[base][count++] = member;
+            }
+            if (!count || v->orientationTypes[base][0] != base)
+            {
+                if (DoCheck)
+                    std::cerr << "orientationGroups - First member must be the base: " << entry << std::endl;
+                return false;
+            }
+            v->orientationCounts[base] = count;
+        }
+    }
+
+    auto it_orientation_betza = config.find("orientationBetza");
+    if (it_orientation_betza != config.end())
+    {
+        std::istringstream iss(it_orientation_betza->second);
+        std::string entry;
+        while (iss >> entry)
+        {
+            size_t colon = entry.find(':');
+            PieceType base = colon == std::string::npos ? NO_PIECE_TYPE
+                                                        : parse_piece_type_token(v, entry.substr(0, colon));
+            std::string betza = colon == std::string::npos ? "" : entry.substr(colon + 1);
+            if (base == NO_PIECE_TYPE || betza.empty()
+                || !validate_custom_piece_betza_structure(betza, "orientationBetza")
+                || !validate_custom_piece_betza(betza, "orientationBetza", v))
+                return false;
+            v->orientationBetza[base] = betza;
         }
     }
 
@@ -1586,6 +1707,9 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("pushNoImmediateReturn", v->pushNoImmediateReturn);
     parse_attribute("stepwisePushing", v->stepwisePushing);
     parse_attribute("adjacentSwapMoveTypes", v->adjacentSwapMoveTypes, v);
+    parse_attribute("adjacentSwapTargetTypes", v->adjacentSwapTargetTypes, v);
+    parse_attribute("adjacentSwapFriendly", v->adjacentSwapFriendly);
+    parse_attribute("adjacentSwapDiagonal", v->adjacentSwapDiagonal);
     parse_attribute("adjacentSwapRequiresEmptyNeighbor", v->adjacentSwapRequiresEmptyNeighbor);
     parse_attribute("swapNoImmediateReturn", v->swapNoImmediateReturn);
     parse_attribute("swapForbiddenPlies", v->swapForbiddenPlies);
@@ -1853,6 +1977,11 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
             }
             else
             {
+                Color explicitColor = COLOR_NB;
+                if (token.rfind("white@", 0) == 0)
+                    explicitColor = WHITE, token.erase(0, 6);
+                else if (token.rfind("black@", 0) == 0)
+                    explicitColor = BLACK, token.erase(0, 6);
                 size_t colon = token.find(':');
                 if (colon == std::string::npos || colon < 2)
                 {
@@ -1890,7 +2019,8 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
                         std::cerr << "laserEmitters - Direction out of range: " << dir << std::endl;
                     return false;
                 }
-                Color c = rank_of(sq) > v->maxRank / 2 ? BLACK : WHITE;
+                Color c = explicitColor != COLOR_NB ? explicitColor
+                                                     : (rank_of(sq) > v->maxRank / 2 ? BLACK : WHITE);
                 v->staticEmitters[c].push_back(sq);
                 v->staticEmitterDirs[c].push_back(v->laserDiagonal ? (dir == 0 ? NORTH_EAST : dir == 1 ? SOUTH_EAST : dir == 2 ? SOUTH_WEST : NORTH_WEST) : (dir == 0 ? NORTH : dir == 1 ? EAST : dir == 2 ? SOUTH : WEST));
             }
@@ -1934,7 +2064,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     }
 
     // 2. Automatically propagate base optics to oriented subtypes with rotation
-    for (PieceType pt = CUSTOM_PIECES; pt <= CUSTOM_PIECES_END; ++pt)
+    for (PieceType pt = PAWN; pt <= CUSTOM_PIECES_END; ++pt)
     {
         if (v->is_oriented(pt) && v->base_piece_type(pt) == pt)
         {
@@ -1943,7 +2073,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
             {
                 for (int f = 0; f < 4; ++f)
                 {
-                    v->pieceOptics[pt + o].outcomes[f] = v->pieceOptics[pt].outcomes[(f - o + 4) % 4];
+                    v->pieceOptics[v->orientation_piece_type(pt, o)].outcomes[f] = v->pieceOptics[pt].outcomes[(f - o + 4) % 4];
                 }
             }
         }
@@ -1965,7 +2095,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
                 PieceType pt = parse_piece_type_token(v, base_symbol);
                 if (pt != NO_PIECE_TYPE && v->is_oriented(pt) && orientation >= 0 && orientation < v->orientation_count(pt))
                 {
-                    PieceType subtype = PieceType(pt + orientation);
+                    PieceType subtype = v->orientation_piece_type(pt, orientation);
                     std::istringstream iss(val);
                     std::string outcome_str;
                     int face = 0;

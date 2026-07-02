@@ -557,6 +557,9 @@ enum MoveType : int {
   PULL               = 10 << (2 * SQUARE_BITS),
   SWAP               = 11 << (2 * SQUARE_BITS),
   PROMOTION_POTION   = 12 << (2 * SQUARE_BITS),
+  STACK              = 13 << (2 * SQUARE_BITS),
+  UNSTACK            = 14 << (2 * SQUARE_BITS),
+  LASER_FIRE         = 15 << (2 * SQUARE_BITS),
 };
 
 enum MoveModality {MODALITY_QUIET, MODALITY_CAPTURE, MOVE_MODALITY_NB};
@@ -1240,13 +1243,17 @@ inline Square swap_square(Move m) {
   return type_of(m) == SWAP ? to_sq(m) : SQ_NONE;
 }
 
+inline bool is_stack_move(Move m) { return type_of(m) == STACK; }
+inline bool is_unstack_move(Move m) { return type_of(m) == UNSTACK; }
+inline bool is_laser_fire(Move m) { return type_of(m) == LASER_FIRE; }
+
 inline bool is_gating(Move m) {
   if ((static_cast<uint64_t>(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS)) == 0)
       return false;
 
   const MoveType mt = type_of(m);
   constexpr uint64_t SquareFieldMask = (uint64_t(SQUARE_BIT_MASK) << 1) | 1;
-  if (mt == SPECIAL)
+  if (mt == SPECIAL || mt == LASER_FIRE)
       return ((m >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & SquareFieldMask) != 0;
   if (mt == NORMAL || mt == CASTLING)
       return gating_type(m) != NO_PIECE_TYPE
