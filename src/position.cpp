@@ -7093,7 +7093,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   }
 
   if (var->laserGame && (var->laserAutoFire || is_laser_fire(m)))
-      fire_laser(k);
+      fire_laser(us, k);
 
   // Update the key with the final value
   st->key = k;
@@ -9482,8 +9482,7 @@ static int direction_to_orientation(Direction d, bool diagonal) {
     return 0;
 }
 
-void Position::fire_laser(Key& k) {
-    Color us = sideToMove;
+void Position::fire_laser(Color us, Key& k) {
     struct LaserBeam {
         Square sq;
         Direction dir;
@@ -9510,6 +9509,9 @@ void Position::fire_laser(Key& k) {
     }
 
     Bitboard destroyed_squares = 0;
+    // Beam resolution is deterministic from a piece/direction state and only
+    // accumulates a set of destroyed squares, so revisiting a state from an
+    // independent emitter or split path cannot add a new outcome.
     Bitboard visited[4] = {};
 
     for (size_t i = 0; i < active_beams.size(); ++i) {

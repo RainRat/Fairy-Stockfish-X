@@ -197,6 +197,10 @@ start_run() {
   if [[ "${1:-}" == "--prepare" ]]; then
     prepare=1
     shift
+    if (( $# )); then
+      echo "--prepare always builds and uses src/stockfish-large; do not pass an engine" >&2
+      return 2
+    fi
   fi
   local engine=${1:-src/stockfish-large} run_id run_dir pid
   if [[ "${engine}" != /* ]]; then

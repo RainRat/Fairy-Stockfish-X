@@ -134,6 +134,8 @@ its log. `start --prepare` is detached and survives the initiating shell;
 `status` is for occasional progress checks, and `wait` is only for callers that
 need to block until the final concise result. On failure, the complete output is
 already preserved and `wait` prints only the relevant tail.
+`--prepare` always builds and uses `src/stockfish-large`; pass a custom engine
+only when starting without `--prepare`.
 
 The fast and full suites preserve signature-based artifacts under `.local/build`.
 Do not clear that directory for a normal rerun. Use `VERBOSE=1` with
