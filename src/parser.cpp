@@ -1572,6 +1572,20 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
         if (!(v->orientedPieceTypes & base))
             continue;
         int count = v->orientationCounts[base] > 0 ? v->orientationCounts[base] : 4;
+        if (!explicitGroup && base < CUSTOM_PIECES)
+        {
+            if (DoCheck)
+                std::cerr << "orientationGroups - Native oriented pieces require an explicit group: "
+                          << v->pieceToChar[base] << std::endl;
+            return false;
+        }
+        if (!explicitGroup && int(base) + count - 1 > CUSTOM_PIECES_END)
+        {
+            if (DoCheck)
+                std::cerr << "orientationGroups - Implicit group exceeds the custom-piece range: "
+                          << v->pieceToChar[base] << std::endl;
+            return false;
+        }
         for (int i = 0; i < count; ++i)
         {
             PieceType member = v->orientation_piece_type(base, i);

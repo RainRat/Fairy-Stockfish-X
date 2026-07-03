@@ -4659,11 +4659,20 @@ bool Position::pseudo_legal(const Move m) const {
       PieceType gatePt = gating_type(m);
       if (var->rotationDelta && is_promotion_move(m))
       {
-          Piece rotatePc = piece_on(gateSq);
-          if (rotatePc == NO_PIECE || color_of(rotatePc) != us || !is_oriented(type_of(rotatePc)))
+          PieceType rotateType;
+          if (gateSq == to)
+              rotateType = promotion_type(m);
+          else
+          {
+              Piece rotatePc = piece_on(gateSq);
+              if (rotatePc == NO_PIECE || color_of(rotatePc) != us)
+                  return false;
+              rotateType = type_of(rotatePc);
+          }
+          if (!is_oriented(rotateType))
               return false;
-          PieceType base = var->base_piece_type(type_of(rotatePc));
-          gatePt = var->orientation_piece_type(base, (var->orientation_index(type_of(rotatePc))
+          PieceType base = var->base_piece_type(rotateType);
+          gatePt = var->orientation_piece_type(base, (var->orientation_index(rotateType)
                                    + var->rotationDelta) % var->orientation_count(base));
       }
       if (from == to)
@@ -4688,16 +4697,22 @@ bool Position::pseudo_legal(const Move m) const {
       }
       else
       {
-          Piece pcOnGate = (gateSq == to) ? piece_on(from) : piece_on(gateSq);
-          if (pcOnGate == NO_PIECE || color_of(pcOnGate) != us || !is_oriented(type_of(pcOnGate)))
+          Piece pcOnGate = piece_on(gateSq);
+          PieceType currentType = is_promotion_move(m) && gateSq == to
+                                ? promotion_type(m)
+                                : (gateSq == to ? type_of(piece_on(from)) : type_of(pcOnGate));
+          if ((!is_promotion_move(m) || gateSq != to)
+              && (pcOnGate == NO_PIECE || color_of(pcOnGate) != us))
               return false;
-          PieceType base = var->base_piece_type(type_of(pcOnGate));
+          if (!is_oriented(currentType))
+              return false;
+          PieceType base = var->base_piece_type(currentType);
           if (var->base_piece_type(gatePt) != base)
               return false;
           int target_orient = var->orientation_index(gatePt);
           if (target_orient < 0 || target_orient >= var->orientation_count(base))
               return false;
-          int current_orient = var->orientation_index(type_of(pcOnGate));
+          int current_orient = var->orientation_index(currentType);
           if (target_orient == current_orient)
               return false;
           if (!var->rotation_allowed(us, base, current_orient, target_orient,

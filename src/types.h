@@ -565,6 +565,8 @@ enum MoveType : int {
 enum MoveModality {MODALITY_QUIET, MODALITY_CAPTURE, MOVE_MODALITY_NB};
 
 constexpr int MOVE_TYPE_BITS = 4;
+static_assert((LASER_FIRE >> (2 * SQUARE_BITS)) < (1 << MOVE_TYPE_BITS),
+              "MoveType exceeds its encoded field");
 
 enum Color {
   WHITE, BLACK, COLOR_NB = 2

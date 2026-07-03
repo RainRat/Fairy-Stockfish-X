@@ -289,6 +289,15 @@ orientedPieceTypes = a
 orientationCounts = a:3
 orientationGroups = a:a/b
 
+[bad-native-orientation-fallback:fairy]
+laserGame = true
+orientedPieceTypes = p
+
+[bad-custom-orientation-overflow:fairy]
+laserGame = true
+customPiece25 = z:K
+orientedPieceTypes = z
+
 [bad-stack-cycle:fairy]
 customPiece1 = a:K
 customPiece2 = b:K
@@ -479,6 +488,8 @@ assert_contains_literal "${initial_capture_output}" "orientationGroups - Malform
 assert_contains_literal "${initial_capture_output}" "laserEmitters - Invalid square coordinates: a10x"
 assert_contains_literal "${initial_capture_output}" "orientationGroups - Duplicate or overlapping member"
 assert_contains_literal "${initial_capture_output}" "orientationGroups - Count conflicts with orientationCounts"
+assert_contains_literal "${initial_capture_output}" "orientationGroups - Native oriented pieces require an explicit group"
+assert_contains_literal "${initial_capture_output}" "orientationGroups - Implicit group exceeds the custom-piece range"
 assert_contains_literal "${initial_capture_output}" "stackedPieceType - Cyclic mapping."
 assert_contains_literal "${initial_capture_output}" "stackedPieceType - Orientation count mismatch."
 assert_contains_literal "${initial_capture_output}" "laserGame is incompatible with legacy gating"
