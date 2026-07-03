@@ -9556,10 +9556,10 @@ void Position::fire_laser(Color us, Key& k) {
 
                 Variant::LaserOutcome outcome = var->pieceOptics[type_of(pc)].outcomes[face];
 
-                if (outcome == Variant::OUTCOME_DESTROY) {
+                if (outcome == Variant::OUTCOME_DESTROY
+                    || outcome == Variant::OUTCOME_DESTROY_CONTINUE) {
                     destroyed_squares |= sq;
-                    if (var->laserDestroyContinuesTypes
-                        & piece_set(var->base_piece_type(type_of(pc))))
+                    if (outcome == Variant::OUTCOME_DESTROY_CONTINUE)
                         continue;
                     break;
                 } else if (outcome == Variant::OUTCOME_ABSORB) {

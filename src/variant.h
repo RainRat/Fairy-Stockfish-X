@@ -316,6 +316,7 @@ struct Variant {
       OUTCOME_SPLIT_FORWARD_RIGHT = 9,
       OUTCOME_SPLIT_FORWARD_LEFT = 10,
       OUTCOME_EXIT_BACK_FACE = 11,
+      OUTCOME_DESTROY_CONTINUE = 12,
   };
   struct LaserOptics {
       LaserOutcome outcomes[4] = { OUTCOME_DESTROY, OUTCOME_DESTROY, OUTCOME_DESTROY, OUTCOME_DESTROY }; // Front, Right, Back, Left

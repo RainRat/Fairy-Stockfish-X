@@ -97,6 +97,7 @@ namespace {
 
     bool parse_laser_outcome(const std::string& outcome_str, Variant::LaserOutcome& outcome, bool DoCheck, const std::string& key) {
         if (outcome_str == "D") outcome = Variant::OUTCOME_DESTROY;
+        else if (outcome_str == "C") outcome = Variant::OUTCOME_DESTROY_CONTINUE;
         else if (outcome_str == "S") outcome = Variant::OUTCOME_ABSORB;
         else if (outcome_str == "T") outcome = Variant::OUTCOME_TRANSMIT;
         else if (outcome_str == "R") outcome = Variant::OUTCOME_REFLECT_RIGHT;
@@ -2299,6 +2300,15 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
                 return false;
         }
     }
+
+    // Compatibility for the original per-piece continuation setting. New
+    // variants should encode continuation directly on each optical face.
+    if (v->laserDestroyContinuesTypes)
+        for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
+            if (v->laserDestroyContinuesTypes & piece_set(v->base_piece_type(pt)))
+                for (Variant::LaserOutcome& outcome : v->pieceOptics[pt].outcomes)
+                    if (outcome == Variant::OUTCOME_DESTROY)
+                        outcome = Variant::OUTCOME_DESTROY_CONTINUE;
 
     // Unknown options are diagnosed but ignored so newer configs remain usable.
     {
