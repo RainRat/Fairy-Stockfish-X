@@ -4,9 +4,12 @@ set -euo pipefail
 
 ROOT_DIR=$(cd "$(dirname "$0")/.." && pwd)
 export ROOT_DIR
-ENGINE=${1:-src/stockfish}
+ENGINE=${1:-src/stockfish-large}
 PYTHON=${PYTHON:-python3}
-JOBS=${JOBS:-2}
+if [[ -z "${JOBS:-}" ]]; then
+  JOBS=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 2)
+  (( JOBS > 4 )) && JOBS=4
+fi
 VERBOSE=${VERBOSE:-0}
 export JOBS
 VARIANT_PATH="${VARIANT_PATH:-${ROOT_DIR}/src/variants.ini}"
@@ -16,6 +19,11 @@ PYFFISH_BUILD_DIR="${ROOT_DIR}/.local/build/pyffish"
 PYFFISH_SIG_FILE="${PYFFISH_BUILD_DIR}/fast-regression.sig"
 
 ENGINE_RUN_DIR="${ROOT_DIR}/.local/build/fast-regression-engine"
+[[ -x "${ENGINE}" ]] || {
+  echo "fast regression engine is missing or not executable: ${ENGINE}" >&2
+  echo "run tests/regression-runner.sh prepare first" >&2
+  exit 2
+}
 mkdir -p "${ENGINE_RUN_DIR}"
 DEFAULT_ENGINE_COPY="${ENGINE_RUN_DIR}/$(basename "${ENGINE}")"
 cp -f "${ENGINE}" "${DEFAULT_ENGINE_COPY}"
@@ -60,15 +68,6 @@ hash_source_tree() {
   fi
 }
 
-hash_object_tree() {
-  local obj
-  shopt -s nullglob
-  for obj in "${ROOT_DIR}"/src/*.o; do
-    printf '%s %s\n' "${obj##*/}" "$(hash_file "${obj}")"
-  done
-  shopt -u nullglob
-}
-
 ensure_pyffish_extension() {
   local setup_hash source_hash py_version cxx_version current_sig cached_sig pyffish_so=""
 
@@ -101,7 +100,8 @@ ensure_pyffish_extension() {
     fi
   fi
 
-  run_step_quiet "pyffish extension" timeout 10m "${PYTHON}" setup.py build_ext --inplace --build-temp "${PYFFISH_BUILD_DIR}"
+  run_step_quiet "pyffish extension" timeout 10m "${PYTHON}" setup.py build_ext \
+    --inplace --build-temp "${PYFFISH_BUILD_DIR}" --parallel "${JOBS}"
   printf '%s\n' "${current_sig}" > "${PYFFISH_SIG_FILE}"
 }
 
@@ -189,59 +189,14 @@ wait_all() {
   fi
 }
 
-prepare_harness_objects() {
-  local cache_dir="${ROOT_DIR}/.local/build/regression-harness-objects"
-  local desired_sig object_sig cxx_version
-  mkdir -p "${cache_dir}"
-  cxx_version=$("${CXX:-g++}" --version | head -n1)
-  desired_sig=$(printf '%s|%s|%s|%s|%s\n' \
-    "${ENGINE_BASENAME}" "${cxx_version}" "$(hash_file "${ROOT_DIR}/src/Makefile")" \
-    "$(hash_file "${ROOT_DIR}/tests/fast-regression.sh")" "$(hash_source_tree)")
-  object_sig=$(hash_object_tree | hash_file /dev/stdin)
-
-  if [[ -f "${cache_dir}/desired.sig" && -f "${cache_dir}/objects.sig" ]] \
-      && [[ "$(<"${cache_dir}/desired.sig")" == "${desired_sig}" ]] \
-      && [[ "$(<"${cache_dir}/objects.sig")" == "${object_sig}" ]]; then
-    echo "ok: prepare regression harness objects (cached)"
-    return
-  fi
-
-  case "${ENGINE_BASENAME}" in
-    stockfish)
-      run_step_quiet "prepare regression harness objects" timeout 30m bash -lc \
-        'cd src && make -s EXE=stockfish objclean && make -s -j"${JOBS}" build ARCH=x86-64 EXE=stockfish'
-      ;;
-    stockfish-allvars*)
-      run_step_quiet "prepare regression harness objects" timeout 30m bash -lc \
-        'cd src && make -s EXE=stockfish-allvars objclean && make -s -j"${JOBS}" build ARCH=x86-64 largeboards=yes all=yes nnue=yes EXE=stockfish-allvars'
-      ;;
-    stockfish-large*)
-      run_step_quiet "prepare regression harness objects" timeout 30m bash -lc \
-        'cd src && make -s EXE=stockfish-large objclean && make -s -j"${JOBS}" build ARCH=x86-64 largeboards=yes all=yes EXE=stockfish-large'
-      ;;
-    stockfish-vlb*)
-      run_step_quiet "prepare regression harness objects" timeout 30m bash -lc \
-        'cd src && make -s EXE=stockfish-vlb objclean && make -s -j"${JOBS}" build ARCH=x86-64 largeboards=yes verylargeboards=yes all=yes nnue=yes EXE=stockfish-vlb'
-      ;;
-    *)
-      return
-      ;;
-  esac
-
-  object_sig=$(hash_object_tree | hash_file /dev/stdin)
-  printf '%s\n' "${desired_sig}" > "${cache_dir}/desired.sig"
-  printf '%s\n' "${object_sig}" > "${cache_dir}/objects.sig"
-}
-
 dispatch_test() {
   local label="$1"
   shift
   run_step_bg "$label" "$@"
 }
 
-ENGINE_BASENAME=$(basename "${ENGINE}")
-
 setup_parallel
+run_step_quiet "variant config" "${ENGINE}" check "${VARIANT_PATH}"
 ensure_pyffish_extension
 export PYTHONPATH="${ROOT_DIR}${PYTHONPATH:+:${PYTHONPATH}}"
 
@@ -261,11 +216,6 @@ else
 fi
 dispatch_test "python unit tests" timeout 180s "${PYTHON}" test.py
 
-wait_all
-
-prepare_harness_objects
-dispatch_test "quiet-check special moves" timeout 5m env FSX_REUSE_OBJECTS=1 bash tests/quiet-check-special-moves.sh "${ENGINE}"
-dispatch_test "gating check regressions" timeout 5m env FSX_REUSE_OBJECTS=1 bash tests/gating-check-regression.sh "${ENGINE}"
 wait_all
 
 echo "fast regression suite passed"

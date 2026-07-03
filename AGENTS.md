@@ -67,9 +67,20 @@ the variant config check when parsing or definitions changed, and the fast suite
 This is the default development gate:
 
 ```sh
-src/stockfish check src/variants.ini
-bash tests/fast-regression.sh src/stockfish
+tests/fast-regression.sh
 ```
+
+The command defaults to `src/stockfish-large`, validates `src/variants.ini`,
+builds or reuses the pyffish extension, and runs the broad fast variant, rules,
+protocol-binding, search, setup, XBoard, hex-board, upstream-movecount, and Python
+regressions in parallel. `JOBS` defaults to the detected CPU count capped at 4;
+override `JOBS`, `PYTHON`, `VARIANT_PATH`, or the positional engine only when the
+environment requires it. Successful child logs stay quiet; failures are printed.
+
+The specialized quiet-check and gating C++ harnesses run in the full suite rather
+than the default fast gate. Run `tests/quiet-check-special-moves.sh` or
+`tests/gating-check-regression.sh` directly as a focused check when changing those
+paths.
 
 Run protocol, perft, upstream, Python, or JavaScript checks during development
 when the affected surface requires them; do not run unrelated long suites merely

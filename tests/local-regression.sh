@@ -33,6 +33,8 @@ export ENGINE
 cd "${ROOT_DIR}"
 
 run_step "fast regression" timeout 30m bash tests/fast-regression.sh "${ENGINE}"
+run_step "quiet-check special moves" timeout 5m bash tests/quiet-check-special-moves.sh "${ENGINE}"
+run_step "gating check regressions" timeout 5m env FSX_REUSE_OBJECTS=1 bash tests/gating-check-regression.sh "${ENGINE}"
 if [[ -x "${ROOT_DIR}/${MINI_ENGINE}" || -x "${MINI_ENGINE}" ]]; then
   run_step "mini variant regressions" timeout 2m bash tests/mini-variant-regressions.sh "${MINI_ENGINE}" "${VARIANT_PATH}"
 fi
