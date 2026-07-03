@@ -1382,7 +1382,6 @@ template <bool DoCheck>
 bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("laserGame", v->laserGame);
     parse_attribute("laserDiagonal", v->laserDiagonal);
-    parse_attribute("laserDestroyContinuesTypes", v->laserDestroyContinuesTypes, v);
     parse_attribute("laserAutoFire", v->laserAutoFire);
     parse_attribute("rotationDelta", v->rotationDelta);
     parse_attribute("rotationTwoWay", v->rotationTwoWay);
@@ -2300,15 +2299,6 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
                 return false;
         }
     }
-
-    // Compatibility for the original per-piece continuation setting. New
-    // variants should encode continuation directly on each optical face.
-    if (v->laserDestroyContinuesTypes)
-        for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
-            if (v->laserDestroyContinuesTypes & piece_set(v->base_piece_type(pt)))
-                for (Variant::LaserOutcome& outcome : v->pieceOptics[pt].outcomes)
-                    if (outcome == Variant::OUTCOME_DESTROY)
-                        outcome = Variant::OUTCOME_DESTROY_CONTINUE;
 
     // Unknown options are diagnosed but ignored so newer configs remain usable.
     {

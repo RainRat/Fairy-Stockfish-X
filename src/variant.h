@@ -296,7 +296,6 @@ struct Variant {
   bool progressiveMultimove = false;
   bool laserGame = false;
   bool laserDiagonal = false;
-  PieceSet laserDestroyContinuesTypes = NO_PIECE_SET;
   bool laserAutoFire = true;
   int rotationDelta = 0;
   bool rotationTwoWay = false;
