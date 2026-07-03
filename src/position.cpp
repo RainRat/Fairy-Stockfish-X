@@ -5153,6 +5153,7 @@ bool Position::gives_check(Move m) const {
       janggiCannons ^= to;
 
   if (topology_wraps()
+      || laser_game()
       || has_pushing()
       || has_adjacent_swapping()
       || is_swap_move(m)
@@ -5162,7 +5163,8 @@ bool Position::gives_check(Move m) const {
   {
       StateInfo nextState;
       ScopedProbeMove probe(*this, m, nextState);
-      bool givesCheck = bool(evasion_checkers());
+      bool givesCheck = bool(evasion_checkers())
+                    || (laser_game() && piece_on(royalSq) == NO_PIECE);
       return givesCheck;
   }
 

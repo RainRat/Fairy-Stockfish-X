@@ -950,6 +950,7 @@ static PyObject* pyffish_runCppTests(PyObject* self, PyObject* args) {
         const Case cases[] = {
             {"khet1", "9k/10/10/10/10/10/OO8/9K w - - 0 1"},
             {"dos-laser-chess", "r:1b:0s:0lkq:0b:0s:0r:1/d:0m:3d:0m:1pm:0d:0m:2d:0/9/9/9/9/9/D:2M:0D:2M:2PM:3D:2M:1D:2/R:1S:0B:2Q:2KLS:0B:2R:1 w - - 0 1"},
+            {"dos-laser-chess", "9/9/9/9/9/9/5k3/9/K4L:03 w - - 0 1"},
         };
         for (const Case& tc : cases)
         {
@@ -968,6 +969,16 @@ static PyObject* pyffish_runCppTests(PyObject* self, PyObject* args) {
                     PyErr_Format(PyFFishError, "Non-checking move in %s QUIET_CHECKS", tc.variant);
                     return nullptr;
                 }
+            if (!std::strcmp(tc.fen, "9/9/9/9/9/9/5k3/9/K4L:03 w - - 0 1"))
+            {
+                std::string fireStr = "f1f1f";
+                Move fire = UCI::to_move(pos, fireStr);
+                if (fire == MOVE_NONE || !MoveList<QUIET_CHECKS>(pos).contains(fire))
+                {
+                    PyErr_SetString(PyFFishError, "Royal-destroying laser fire missing from QUIET_CHECKS");
+                    return nullptr;
+                }
+            }
         }
     }
 

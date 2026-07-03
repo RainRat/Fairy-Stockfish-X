@@ -331,6 +331,16 @@ stackedPieceType = a:b
 laserGame = true
 gating = true
 
+[bad-variable-promotion-rotation:fairy]
+laserGame = true
+customPiece1 = a:K
+customPiece2 = b:K
+orientedPieceTypes = a
+orientationGroups = a:a/b
+rotateAfterMove = true
+promotionPawnTypes = a
+promotionPieceTypes = q
+
 [bad-multiple-piece-emitters:fairy]
 laserGame = true
 laserEmitters = piece:p, piece:k
@@ -514,6 +524,7 @@ assert_contains_literal "${initial_capture_output}" "orientationGroups - Implici
 assert_contains_literal "${initial_capture_output}" "stackedPieceType - Cyclic mapping."
 assert_contains_literal "${initial_capture_output}" "stackedPieceType - Orientation count mismatch."
 assert_contains_literal "${initial_capture_output}" "laserGame is incompatible with legacy gating"
+assert_contains_literal "${initial_capture_output}" "rotateAfterMove with promotions requires a fixed rotationDelta."
 assert_contains_literal "${initial_capture_output}" "laserEmitters - Multiple piece emitters are not supported."
 assert_contains_literal "${initial_capture_output}" "laserGame is not supported on wrapped or hexagonal boards."
 

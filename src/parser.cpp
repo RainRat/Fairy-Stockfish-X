@@ -2548,6 +2548,16 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
         valid = false;
     }
 
+    bool hasPromotingMover = false;
+    for (Color c : {WHITE, BLACK})
+        hasPromotingMover |= bool(v->pieceTypes & v->promotionPawnTypes[c]);
+    if (v->laserGame && v->rotateAfterMove && !v->rotationDelta && hasPromotingMover)
+    {
+        if (DoCheck)
+            std::cerr << "rotateAfterMove with promotions requires a fixed rotationDelta." << std::endl;
+        valid = false;
+    }
+
     if (v->wallingRule != NO_WALLING && (v->seirawanGating || v->potions || v->gating || hasGatingPieceAfter))
     {
         if (DoCheck)
