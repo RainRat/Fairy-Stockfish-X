@@ -130,9 +130,13 @@ tests/regression-runner.sh status
 tests/regression-runner.sh wait
 ```
 
-For an agent-driven run, start the detached job, report the printed estimate and
-log path, then return control to the user. Do not call `wait` or poll `status` in
-the same turn. Check `status` in a later turn after the estimate has elapsed.
+For an agent-driven run, start the detached job and use the printed estimate to
+avoid active polling. If the execution harness supports delayed continuation,
+scheduling, or sleeping without consuming model turns, use it to resume near the
+estimated completion time, then check `status` once. If the harness has no such
+capability, report the estimate and log path and return control to the user; check
+`status` in a later turn. Do not repeatedly poll or keep generating progress turns
+while the detached test is running.
 
 `status` reports a check-in interval and remaining-time estimate from recent runs.
 `wait` monitors the detached process and prints only the final result; use it instead
@@ -141,11 +145,11 @@ tail. `tests/regression-runner.sh log` shows the latest log tail on demand. The 
 rejects stale, missing, or wrong-family named binaries before launching. Use
 `start --prepare` rather than manually rebuilding after such a diagnostic.
 
-Do not keep a foreground shell attached to the test process or repeatedly poll
-its log. `start --prepare` is detached and survives the initiating shell;
-`status` is for occasional progress checks, and `wait` is only for callers that
-need to block until the final concise result. On failure, the complete output is
-already preserved and `wait` prints only the relevant tail.
+Do not keep a foreground shell attached to the test process. `start --prepare`
+is detached and survives the initiating shell; `status` is for a check near the
+estimated completion time, and `wait` is only for harnesses that can block without
+requiring active polling or model turns. On failure, the complete output is already
+preserved and `wait` prints only the relevant tail.
 `--prepare` always builds and uses `src/stockfish-large`; pass a custom engine
 only when starting without `--prepare`.
 
