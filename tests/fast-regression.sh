@@ -35,6 +35,8 @@ TEMP_LOG_DIR=""
 PIDS=()
 LABELS=()
 LOGS=()
+PASSED_STEPS=0
+SUITE_STARTED=$SECONDS
 
 hash_file() {
   local path="$1"
@@ -122,17 +124,14 @@ run_step_quiet() {
   shift
   local safe_label="${label//[^a-zA-Z0-9_]/_}"
   local log_file="${TEMP_LOG_DIR}/${safe_label}.log"
-  local elapsed
 
   if (
     echo "== ${label} =="
     /usr/bin/time -f "elapsed %es" "$@"
   ) > "${log_file}" 2>&1; then
+    PASSED_STEPS=$((PASSED_STEPS + 1))
     if [[ "${VERBOSE}" == "1" ]]; then
       cat "${log_file}"
-    else
-      elapsed=$(awk '/^elapsed / {value=$2} END {print value}' "${log_file}")
-      printf 'ok: %s%s\n' "${label}" "${elapsed:+ (${elapsed})}"
     fi
   else
     echo "FAILED: ${label}"
@@ -159,18 +158,16 @@ run_step_bg() {
 
 wait_all() {
   local exit_code=0
-  local i pid label log elapsed
+  local i pid label log
   for i in "${!PIDS[@]}"; do
     pid="${PIDS[$i]}"
     label="${LABELS[$i]}"
     log="${LOGS[$i]}"
 
     if wait "$pid"; then
+      PASSED_STEPS=$((PASSED_STEPS + 1))
       if [[ "${VERBOSE}" == "1" ]]; then
         cat "$log"
-      else
-        elapsed=$(awk '/^elapsed / {value=$2} END {print value}' "$log")
-        printf 'ok: %s%s\n' "$label" "${elapsed:+ (${elapsed})}"
       fi
     else
       exit_code=1
@@ -218,4 +215,5 @@ dispatch_test "python unit tests" timeout 180s "${PYTHON}" test.py
 
 wait_all
 
-echo "fast regression suite passed"
+printf 'fast regression suite passed: %d steps checked (%ds)\n' \
+  "${PASSED_STEPS}" "$((SECONDS - SUITE_STARTED))"

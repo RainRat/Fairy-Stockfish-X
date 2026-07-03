@@ -76,6 +76,8 @@ protocol-binding, search, setup, XBoard, hex-board, upstream-movecount, and Pyth
 regressions in parallel. `JOBS` defaults to the detected CPU count capped at 4;
 override `JOBS`, `PYTHON`, `VARIANT_PATH`, or the positional engine only when the
 environment requires it. Successful child logs stay quiet; failures are printed.
+The default output is one aggregate success line with step count and wall time.
+Use `VERBOSE=1` only when individual successful step timings or logs are needed.
 
 The specialized quiet-check and gating C++ harnesses run in the full suite rather
 than the default fast gate. Run `tests/quiet-check-special-moves.sh` or
