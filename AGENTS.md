@@ -61,17 +61,21 @@ quit
 
 Drops use `@`, for example `P@b2`. Promotions use a trailing piece letter, not `=`.
 
-## Required checks
-From the repository root:
+## Development checks
+For local changes and PR branches, run focused tests for the changed behavior,
+the variant config check when parsing or definitions changed, and the fast suite.
+This is the default development gate:
 
 ```sh
 src/stockfish check src/variants.ini
 bash tests/fast-regression.sh src/stockfish
-tests/protocol.sh
-tests/perft.sh all src/stockfish-large
 ```
 
-Run large-board tests against a `largeboards=yes` binary. For Python-facing changes, run `python3 setup.py build_ext --inplace` and `python3 test.py`.
+Run protocol, perft, upstream, Python, or JavaScript checks during development
+when the affected surface requires them; do not run unrelated long suites merely
+because a PR branch changed. Run large-board tests against a `largeboards=yes`
+binary. For Python-facing changes, run `python3 setup.py build_ext --inplace` and
+`python3 test.py`.
 
 For JavaScript/wasm-facing changes, including `src/variants.ini` changes that affect `startFen`, pockets, `freeDrops`, or serialized FENs:
 
@@ -112,6 +116,10 @@ python3 tests/upstream_movecount_baseline.py src/stockfish "$UPSTREAM_ENGINE"
 Only regenerate upstream baselines intentionally. Do not refresh fixtures to hide regressions.
 
 ## Full local regression
+The full suite is the pre-merge gate: run it before merging or pushing to
+`master`, and when explicitly requested. It is not required after every local
+change or PR update once focused and fast checks pass.
+
 Use the regression runner for long checks. For the reliable unattended path,
 have the detached job prepare all binary families before testing. It keeps build
 and test output in logs while commands return concise status:
@@ -121,6 +129,10 @@ tests/regression-runner.sh start --prepare
 tests/regression-runner.sh status
 tests/regression-runner.sh wait
 ```
+
+For an agent-driven run, start the detached job, report the printed estimate and
+log path, then return control to the user. Do not call `wait` or poll `status` in
+the same turn. Check `status` in a later turn after the estimate has elapsed.
 
 `status` reports a check-in interval and remaining-time estimate from recent runs.
 `wait` monitors the detached process and prints only the final result; use it instead

@@ -193,7 +193,7 @@ status_run() {
 }
 
 start_run() {
-  local prepare=0
+  local prepare=0 estimate
   if [[ "${1:-}" == "--prepare" ]]; then
     prepare=1
     shift
@@ -232,7 +232,14 @@ start_run() {
   fi
   pid=$!
   printf '%s\n' "${pid}" > "${run_dir}/pid"
-  printf 'started pid=%s log=%s\n' "${pid}" "$(relative_path "${run_dir}/regression.log")"
+  if estimate=$(historical_total); then
+    printf 'started pid=%s estimated_duration=%s log=%s\n' \
+      "${pid}" "$(format_duration "${estimate}")" \
+      "$(relative_path "${run_dir}/regression.log")"
+  else
+    printf 'started pid=%s estimated_duration=unknown log=%s\n' \
+      "${pid}" "$(relative_path "${run_dir}/regression.log")"
+  fi
 }
 
 wait_run() {
