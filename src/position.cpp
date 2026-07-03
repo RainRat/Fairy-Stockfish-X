@@ -4672,8 +4672,12 @@ bool Position::pseudo_legal(const Move m) const {
           if (!is_oriented(rotateType))
               return false;
           PieceType base = var->base_piece_type(rotateType);
-          gatePt = var->orientation_piece_type(base, (var->orientation_index(rotateType)
-                                   + var->rotationDelta) % var->orientation_count(base));
+          int count = var->orientation_count(base);
+          int current = var->orientation_index(rotateType);
+          if (count <= 0 || current < 0 || current >= count)
+              return false;
+          gatePt = var->orientation_piece_type(base,
+              (current + var->rotationDelta) % count);
       }
       if (from == to)
       {

@@ -83,6 +83,22 @@ namespace {
         return {token, s.substr(token.size() + 1)};
     }
 
+    bool parse_bounded_decimal(const std::string& value, int maximum, int& result) {
+        if (value.empty())
+            return false;
+        int parsed = 0;
+        for (unsigned char c : value)
+        {
+            int digit = c - '0';
+            if (!std::isdigit(c) || parsed > maximum / 10
+                || (parsed == maximum / 10 && digit > maximum % 10))
+                return false;
+            parsed = parsed * 10 + digit;
+        }
+        result = parsed;
+        return true;
+    }
+
     template <typename Apply>
     void parse_color_triplet(const Config& config, const std::string& key, Apply&& apply) {
         if (config.find(key) != config.end())
@@ -1483,25 +1499,14 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
                     std::cerr << "orientationCounts - Unknown piece symbol: " << sym << std::endl;
                 return false;
             }
-            if (count_str.empty()
-                || !std::all_of(count_str.begin(), count_str.end(),
-                               [](unsigned char c) { return std::isdigit(c); }))
+            int count;
+            if (!parse_bounded_decimal(count_str, 4, count) || count < 1)
             {
                 if (DoCheck)
                     std::cerr << "orientationCounts - Invalid orientation count: " << count_str << std::endl;
                 return false;
             }
-            int count = std::stoi(count_str);
-            if (count >= 1 && count <= 4)
-            {
-                v->orientationCounts[pt] = count;
-            }
-            else
-            {
-                if (DoCheck)
-                    std::cerr << "orientationCounts - Value " << count << " is out of range [1, 4]." << std::endl;
-                return false;
-            }
+            v->orientationCounts[pt] = count;
         }
     }
 
@@ -2100,12 +2105,6 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
         }
     }
 
-    auto is_number = [](const std::string& s) {
-        return !s.empty()
-            && std::all_of(s.begin(), s.end(),
-                           [](unsigned char c) { return std::isdigit(c); });
-    };
-
     auto it_emitters = config.find("laserEmitters");
     if (it_emitters != config.end())
     {
@@ -2115,8 +2114,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
         std::string token;
         while (std::getline(iss, token, ','))
         {
-            token.erase(0, token.find_first_not_of(" \t"));
-            token.erase(token.find_last_not_of(" \t") + 1);
+            token = trim(token);
             if (token.rfind("piece:", 0) == 0)
             {
                 if (hasPieceEmitter)
@@ -2152,15 +2150,17 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
                 std::string sq_str = token.substr(0, colon);
                 std::string dir_str = token.substr(colon + 1);
                 std::string rank_str = sq_str.size() > 1 ? sq_str.substr(1) : "";
+                int rankNumber;
                 if (sq_str.size() < 2 || sq_str[0] < 'a' || sq_str[0] > 'z'
-                    || !is_number(rank_str))
+                    || !parse_bounded_decimal(rank_str, RANK_NB, rankNumber)
+                    || rankNumber < 1)
                 {
                     if (DoCheck)
                         std::cerr << "laserEmitters - Invalid square coordinates: " << sq_str << std::endl;
                     return false;
                 }
                 File f = File(sq_str[0] - 'a');
-                int rank = std::stoi(rank_str) - 1;
+                int rank = rankNumber - 1;
                 if (rank < 0 || rank >= RANK_NB)
                 {
                     if (DoCheck)
@@ -2174,20 +2174,14 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
                         std::cerr << "laserEmitters - Square out of board bounds: " << sq_str << std::endl;
                     return false;
                 }
-                if (!is_number(dir_str))
+                int dir;
+                if (!parse_bounded_decimal(dir_str, 3, dir))
                 {
                     if (DoCheck)
                         std::cerr << "laserEmitters - Invalid direction: " << dir_str << std::endl;
                     return false;
                 }
                 Square sq = make_square(f, r);
-                int dir = std::stoi(dir_str);
-                if (dir < 0 || dir >= 4)
-                {
-                    if (DoCheck)
-                        std::cerr << "laserEmitters - Direction out of range: " << dir << std::endl;
-                    return false;
-                }
                 Color c = explicitColor != COLOR_NB ? explicitColor
                                                      : (rank_of(sq) > v->maxRank / 2 ? BLACK : WHITE);
                 v->staticEmitters[c].push_back(sq);
@@ -2279,14 +2273,14 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
             std::string base_symbol = symbol.substr(0, colon);
             std::string orient_str = symbol.substr(colon + 1);
             PieceType pt = parse_piece_type_token(v, base_symbol);
-            if (!is_number(orient_str) || pt == NO_PIECE_TYPE
+            int orientation;
+            if (!parse_bounded_decimal(orient_str, 3, orientation) || pt == NO_PIECE_TYPE
                 || !(v->orientedPieceTypes & pt))
             {
                 if (DoCheck)
                     std::cerr << key << " - Invalid oriented piece override." << std::endl;
                 return false;
             }
-            int orientation = std::stoi(orient_str);
             int count = v->orientationCounts[pt] > 0 ? v->orientationCounts[pt] : 4;
             if (orientation < 0 || orientation >= count)
             {

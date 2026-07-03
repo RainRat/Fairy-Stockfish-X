@@ -264,6 +264,23 @@ orientationGroups = p:
 laserGame = true
 laserEmitters = white@a10x:0
 
+[bad-laser-empty-emitter:fairy]
+laserGame = true
+laserEmitters = white@a1:0,   ,black@a8:2
+
+[bad-laser-huge-rank:fairy]
+laserGame = true
+laserEmitters = white@a999999999999999999999999999999:0
+
+[bad-laser-huge-direction:fairy]
+laserGame = true
+laserEmitters = white@a1:999999999999999999999999999999
+
+[bad-huge-orientation-count:fairy]
+customPiece1 = a:K
+orientedPieceTypes = a
+orientationCounts = a:999999999999999999999999999999
+
 [laser-rank10:fairy]
 laserGame = true
 maxFile = a
@@ -486,6 +503,10 @@ assert_contains_literal "${initial_capture_output}" "laser_p - Too many laser ou
 assert_contains_literal "${initial_capture_output}" "laserAutoFire = false requires a piece laser emitter."
 assert_contains_literal "${initial_capture_output}" "orientationGroups - Malformed entry: p:"
 assert_contains_literal "${initial_capture_output}" "laserEmitters - Invalid square coordinates: a10x"
+assert_contains_literal "${initial_capture_output}" "laserEmitters - Malformed token: "
+assert_contains_literal "${initial_capture_output}" "laserEmitters - Invalid square coordinates: a999999999999999999999999999999"
+assert_contains_literal "${initial_capture_output}" "laserEmitters - Invalid direction: 999999999999999999999999999999"
+assert_contains_literal "${initial_capture_output}" "orientationCounts - Invalid orientation count: 999999999999999999999999999999"
 assert_contains_literal "${initial_capture_output}" "orientationGroups - Duplicate or overlapping member"
 assert_contains_literal "${initial_capture_output}" "orientationGroups - Count conflicts with orientationCounts"
 assert_contains_literal "${initial_capture_output}" "orientationGroups - Native oriented pieces require an explicit group"
