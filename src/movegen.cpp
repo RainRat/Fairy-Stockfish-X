@@ -68,7 +68,7 @@ namespace {
   }
 
   Bitboard laser_rotation_candidates(const Position& pos, Color us) {
-    if (!pos.variant()->laserRotationPathFilter)
+    if (!pos.search_laser_rotation_filter() || !pos.variant()->laserRotationPathFilter)
         return pos.board_bb();
     struct Cache {
         Key key = 0;

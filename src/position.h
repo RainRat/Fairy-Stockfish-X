@@ -409,6 +409,8 @@ public:
 
   // Variant rule properties
   const Variant* variant() const;
+  bool search_laser_rotation_filter() const { return searchLaserRotationFilter; }
+  void set_search_laser_rotation_filter(bool enabled) { searchLaserRotationFilter = enabled; }
   Rank max_rank() const;
   File max_file() const;
   int ranks() const;
@@ -1073,6 +1075,7 @@ private:
 
   // variant-specific
   const Variant* var;
+  bool searchLaserRotationFilter = false;
   bool tsumeMode;
   bool chess960;
   int pieceCountInHand[COLOR_NB][PIECE_TYPE_NB];

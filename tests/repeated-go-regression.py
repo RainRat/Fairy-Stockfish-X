@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import re
 import subprocess
 import sys
 
@@ -41,6 +42,10 @@ for depth in range(1, 5):
         raise AssertionError("repeated go returned no move at depth " + str(depth))
     if depth > 1 and not any(" nodes " in line and " nodes 0 " not in line for line in output):
         raise AssertionError("repeated go searched no nodes at depth " + str(depth))
+    if depth == 1:
+        counts = [int(match.group(1)) for line in output if (match := re.search(r" nodes (\d+)", line))]
+        if not counts or counts[-1] >= 600:
+            raise AssertionError("laser rotation search hint was not applied")
 
 send("d")
 display = read_until("Checkers:")
