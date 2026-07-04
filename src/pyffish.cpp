@@ -870,8 +870,7 @@ static PyObject* pyffish_runCppTests(PyObject* self, PyObject* args) {
             {"dos-laser-chess", "9/9/9/9/9/9/5k3/9/K4L:03 w - - 0 1", "f1f1f"},
             {"dos-laser-chess", "r:1b:0s:0lkq:0b:0s:0r:1/d:0m:3d:0m:1pm:0d:0m:2d:0/9/9/9/9/9/D:2M:0D:2M:2PM:3D:2M:1D:2/R:1S:0B:2Q:2KLS:0B:2R:1 w - - 0 1", "e2e3l:1f1"},
             {"dos-laser-chess", "k8/9/9/9/4R:14/3M:05/9/9/K4L:03 w - - 0 1", "d4d5r:2e5"},
-            {"dos-laser-chess", "8k/M:08/9/9/9/9/9/9/K4L:03 w - - 0 1", "a8a9q:2,f1"},
-            {"dos-laser-chess", "8k/M:08/9/9/9/9/9/9/K4L:03 w - - 0 1", "a9a8q:2,a9"},
+            {"dos-laser-chess", "8k/M:08/9/9/9/9/9/9/K4L:03 w - - 0 1", "a8a9q:2"},
         };
 
         for (const Case& tc : cases)

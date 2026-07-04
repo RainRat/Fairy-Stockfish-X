@@ -113,7 +113,10 @@ namespace {
         if (from != to)
         {
             emit(m);
-            if (rotateAfter)
+            // A promotion already uses the piece-type field for its result. With
+            // variable rotations there is no second field for the chosen target
+            // orientation, so do not emit ambiguous compound promotions.
+            if (rotateAfter && (T != PROMOTION || pos.variant()->rotationDelta))
             {
                 Bitboard rotators = pos.pieces(us);
                 while (rotators)

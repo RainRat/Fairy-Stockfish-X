@@ -2641,12 +2641,16 @@ stepwisePushing = true
         self.assertNotEqual(sf.validate_fen("9k/10/10/10/10/2O++7/10/9K w - - 0 1", "khet1"), 1)
 
         dos_moves = sf.legal_moves("dos-laser-chess", dos_fen, [])
-        self.assertTrue(len(dos_moves) > 0)
+        self.assertEqual(len(dos_moves), 1539)
         self.assertIn("e2e3", dos_moves)
         self.assertIn("b3b2m:1", dos_moves)
         self.assertIn("f1f1f", dos_moves)
         self.assertIn("f1f1l:1f", dos_moves)
+        self.assertIn("f1f1l:2f", dos_moves)
+        self.assertIn("f1f1l:3f", dos_moves)
         self.assertIn("e2e3l:1f1", dos_moves)
+        self.assertIn("e2e3l:2f1", dos_moves)
+        self.assertIn("e2e3l:3f1", dos_moves)
 
         dos_manual_fire_fen = "9/9/9/9/9/9/5k3/9/K4L:03 w - - 0 1"
         self.assertIn("/5k3/", sf.get_fen("dos-laser-chess", dos_manual_fire_fen, ["a1b1"]))
