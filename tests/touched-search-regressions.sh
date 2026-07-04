@@ -33,6 +33,11 @@ EOF
 assert_contains "$out" "^e5d6: 1$"
 assert_contains "$out" "^bestmove "
 
+# Repeated go commands without a new position command must retain ownership of
+# the original state history. Laser StateInfo is large enough to expose the
+# dangling pointer immediately when that ownership is dropped.
+python3 "${SCRIPT_DIR}/repeated-go-regression.py" "$ENGINE" "$VARIANTS"
+
 # Spell-chess jump potions exercise deferred potion generation and pruning
 # without linking a board-size-specific C++ harness.
 if variant_available "$ENGINE" spell-chess "$VARIANTS"; then

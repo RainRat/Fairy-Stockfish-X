@@ -882,10 +882,7 @@ std::ostream& operator<<(std::ostream& os, const Position& pos) {
           PieceType base = pos.variant()->base_piece_type(pt);
           std::string sym = pos.piece_symbol(make_piece(c, base));
           int orient = pos.variant()->orientation_index(pt);
-          if (orient > 0)
-              return sym + std::to_string(orient);
-          else
-              return sym;
+          return sym + std::to_string(orient);
       }
       return pos.piece_symbol(pc);
   };
@@ -9109,7 +9106,7 @@ bool Position::has_game_cycle(int ply) const {
 
   int end = captures_to_hand() ? st->pliesFromNull : std::min(st->rule50, st->pliesFromNull);
 
-  if (end < 3 || var->nFoldValue.get(WHITE) != VALUE_DRAW || var->nFoldValue.get(BLACK) != VALUE_DRAW || var->perpetualCheckIllegal || var->materialCounting || var->moveRepetitionIllegal || walling_rule() == DUCK)
+  if (end < 3 || n_fold_rule() <= 0 || var->nFoldValue.get(WHITE) != VALUE_DRAW || var->nFoldValue.get(BLACK) != VALUE_DRAW || var->perpetualCheckIllegal || var->materialCounting || var->moveRepetitionIllegal || walling_rule() == DUCK)
     return false;
 
   bool useBoardKey = captures_to_hand();
