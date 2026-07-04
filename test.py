@@ -2599,6 +2599,15 @@ stepwisePushing = true
         self.assertIn("c1d2", khet1_moves)
         self.assertIn("c1c1:1", khet1_moves)
         self.assertNotIn("c1d2:1", khet1_moves)
+        self.assertNotIn("e4e5", khet1_moves)
+
+        khet_djed_swap_fen = "9k/10/10/10/4SP:04/10/10/K9 w - - 0 1"
+        khet_djed_swap_moves = sf.legal_moves("khet1", khet_djed_swap_fen, [])
+        self.assertEqual(khet_djed_swap_moves.count("e4f4s"), 1)
+        khet_djed_capture_fen = "9k/10/10/10/4Ss:04/10/10/K9 w - - 0 1"
+        khet_djed_capture_moves = sf.legal_moves("khet1", khet_djed_capture_fen, [])
+        self.assertNotIn("e4f4", khet_djed_capture_moves)
+        self.assertNotIn("e4f4s", khet_djed_capture_moves)
 
         # Khet pieces do not capture by displacement.
         khet_capture_fen = "9k/10/10/10/10/2P:0p6/10/9K w - - 0 1"

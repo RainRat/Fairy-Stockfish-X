@@ -2177,6 +2177,22 @@ Variant* Variant::conclude() {
         if (is_oriented(pt))
             pieceTypes |= pt;
 
+    auto expand_oriented_set = [&](PieceSet set) {
+        for (PieceType base = PAWN; base <= CUSTOM_PIECES_END; ++base)
+            if ((orientedPieceTypes & base) && (set & base))
+                for (int i = 0; i < orientation_count(base); ++i)
+                    set |= orientation_piece_type(base, i);
+        return set;
+    };
+    adjacentSwapTargetTypes = expand_oriented_set(adjacentSwapTargetTypes);
+
+    for (PieceType attacker = PAWN; attacker <= CUSTOM_PIECES_END; ++attacker)
+        captureForbidden[attacker] = expand_oriented_set(captureForbidden[attacker]);
+    for (PieceType base = PAWN; base <= CUSTOM_PIECES_END; ++base)
+        if (orientedPieceTypes & base)
+            for (int i = 0; i < orientation_count(base); ++i)
+                captureForbidden[orientation_piece_type(base, i)] |= captureForbidden[base];
+
     rebuild_piece_symbol_maps();
 
     // Backward compatibility: legacy extinctionPseudoRoyal used extinction
