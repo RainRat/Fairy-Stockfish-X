@@ -690,8 +690,7 @@ string UCI::move(const Position& pos, Move m) {
           PieceType base = pos.variant()->base_piece_type(gt);
           fire += pos.piece_symbol(make_piece(BLACK, base));
           int orient = pos.variant()->orientation_index(gt);
-          if (orient > 0)
-              fire += ":" + std::to_string(orient);
+          fire += ":" + std::to_string(orient);
       }
       return fire + "f";
   }
@@ -738,7 +737,7 @@ string UCI::move(const Position& pos, Move m) {
       }
   }
 
-  if (is_gating(m) && gating_square(m) == to && !potionMove)
+  if (is_gating(m) && gating_square(m) == to && !potionMove && !pos.laser_game())
       from = to_sq(m), to = from_sq(m);
   else if (type_of(m) == CASTLING && !pos.is_chess960())
   {
@@ -793,14 +792,13 @@ string UCI::move(const Position& pos, Move m) {
       {
           PieceType base = pos.variant()->base_piece_type(gt);
           int orient = pos.variant()->orientation_index(gt);
-          move += pos.piece_symbol(make_piece(BLACK, base));
-          if (orient > 0)
-              move += ":" + std::to_string(orient);
+          move += pos.piece_symbol(make_piece(BLACK, base))
+                + ":" + std::to_string(orient);
       }
       else
           move += pos.piece_symbol(make_piece(BLACK, gt));
 
-      if (gating_square(m) != from)
+      if (gating_square(m) != from && (!pos.laser_game() || from != to))
           move += UCI::square(pos, gating_square(m));
   }
   else if (cloneMove)

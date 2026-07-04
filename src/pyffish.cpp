@@ -816,11 +816,11 @@ static PyObject* pyffish_runCppTests(PyObject* self, PyObject* args) {
             std::string startFen = "r:1b:0s:0lkq:0b:0s:0r:1/d:0m:3d:0m:1pm:0d:0m:2d:0/9/9/9/9/9/D:2M:0D:2M:2PM:3D:2M:1D:2/R:1S:0B:2Q:2KLS:0B:2R:1 w - - 0 1";
             buildPosition(pos, states, v, startFen.c_str(), nullptr, false);
 
-            std::string moveStr = "b3b2m:1";
+            std::string moveStr = "b2b3m:1b3";
             Move m = UCI::to_move(pos, moveStr);
             if (m == MOVE_NONE)
             {
-                PyErr_SetString(PyFFishError, "Failed to parse DOS Laser gating move b3b2m:1");
+                PyErr_SetString(PyFFishError, "Failed to parse DOS Laser rotation move b2b3m:1b3");
                 return nullptr;
             }
 
