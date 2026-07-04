@@ -2390,7 +2390,7 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
               if (unstacked_pt != NO_PIECE_TYPE) {
                   int orientation = var->orientation_index(pt);
                   ss << piece_symbol(make_piece(c, unstacked_pt));
-                  if (orientation > 0)
+                  if (var->is_oriented(pt))
                       ss << ":" << orientation;
                   ss << "+";
               } else if (var->is_oriented(pt)) {
@@ -4702,8 +4702,7 @@ bool Position::pseudo_legal(const Move m) const {
           PieceType currentType = is_promotion_move(m) && gateSq == to
                                 ? promotion_type(m)
                                 : (gateSq == to ? type_of(piece_on(from)) : type_of(pcOnGate));
-          if ((!is_promotion_move(m) || gateSq != to)
-              && (pcOnGate == NO_PIECE || color_of(pcOnGate) != us))
+          if (gateSq != to && (pcOnGate == NO_PIECE || color_of(pcOnGate) != us))
               return false;
           if (!is_oriented(currentType))
               return false;

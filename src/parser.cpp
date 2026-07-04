@@ -2134,6 +2134,13 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
                         std::cerr << "laserEmitters - Unknown piece symbol: " << symbol << std::endl;
                     return false;
                 }
+                if (!v->is_oriented(v->emitterPieceType))
+                {
+                    if (DoCheck)
+                        std::cerr << "laserEmitters - Piece emitter must be an oriented piece type: "
+                                  << symbol << std::endl;
+                    return false;
+                }
             }
             else
             {
