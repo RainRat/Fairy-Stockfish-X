@@ -687,8 +687,6 @@ string UCI::move(const Position& pos, Move m) {
       if (is_gating(m))
       {
           PieceType gt = gating_type(m);
-          PieceType base = pos.variant()->base_piece_type(gt);
-          fire += pos.piece_symbol(make_piece(BLACK, base));
           int orient = pos.variant()->orientation_index(gt);
           fire += ":" + std::to_string(orient);
       }
@@ -790,10 +788,8 @@ string UCI::move(const Position& pos, Move m) {
       PieceType gt = gating_type(m);
       if (pos.laser_game() && pos.is_oriented(gt))
       {
-          PieceType base = pos.variant()->base_piece_type(gt);
           int orient = pos.variant()->orientation_index(gt);
-          move += pos.piece_symbol(make_piece(BLACK, base))
-                + ":" + std::to_string(orient);
+          move += ":" + std::to_string(orient);
       }
       else
           move += pos.piece_symbol(make_piece(BLACK, gt));
