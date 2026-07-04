@@ -2577,6 +2577,12 @@ stepwisePushing = true
     def test_laser_variants(self):
         load_repo_variants_or_skip()
         khet1_fen = sf.start_fen("khet1")
+        khet_rows = khet1_fen.split()[0].split("/")
+        self.assertEqual(khet_rows[0], "4o+ko+p:02")
+        self.assertEqual(khet_rows[-1], "2P:2O+KO+4")
+        khet2_rows = sf.start_fen("khet2").split()[0].split("/")
+        self.assertEqual(khet2_rows[0], "x:23a:2ka:2p:02")
+        self.assertEqual(khet2_rows[-1], "2P:2A:0KA:03X:0")
         representative_fen = "9k/10/10/10/10/2P:1O+6/10/9K w - - 0 1"
         self.assertEqual(
             sf.get_fen("khet1", representative_fen, []), representative_fen
@@ -2590,9 +2596,9 @@ stepwisePushing = true
 
         khet1_moves = sf.legal_moves("khet1", khet1_fen, [])
         self.assertTrue(len(khet1_moves) > 0)
-        self.assertIn("c8d7", khet1_moves)
-        self.assertIn("c8c8:1", khet1_moves)
-        self.assertNotIn("c8d7:1", khet1_moves)
+        self.assertIn("c1d2", khet1_moves)
+        self.assertIn("c1c1:1", khet1_moves)
+        self.assertNotIn("c1d2:1", khet1_moves)
 
         # Khet pieces do not capture by displacement.
         khet_capture_fen = "9k/10/10/10/10/2P:0p6/10/9K w - - 0 1"
