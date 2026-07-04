@@ -847,6 +847,7 @@ public:
   void do_move(Move m, StateInfo& newSt, bool countNode = true);
   void undo_move(Move m);
   void fire_laser(Color us, Key& k);
+  Bitboard laser_rotation_candidates(Color us) const;
   Direction orientation_to_direction(int orientation, bool diagonal) const;
   bool add_capture_transfer(StateInfo* state, Piece transferPiece, Key* k = nullptr);
   bool undo_capture_transfer(StateInfo* state, Piece transferPiece, Key* k = nullptr);

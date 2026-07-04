@@ -9503,6 +9503,77 @@ static int direction_to_orientation(Direction d, bool diagonal) {
     return 0;
 }
 
+Bitboard Position::laser_rotation_candidates(Color us) const {
+    struct LaserBeam { Square sq; Direction dir; };
+    std::vector<LaserBeam> beams;
+    Bitboard candidates = 0;
+
+    for (Color c : {WHITE, BLACK}) {
+        for (size_t i = 0; i < var->staticEmitters[c].size(); ++i)
+            beams.push_back({var->staticEmitters[c][i], var->staticEmitterDirs[c][i]});
+
+        if (var->emitterPieceType != NO_PIECE_TYPE) {
+            Bitboard emitters = pieces_oriented_group(c, var->emitterPieceType);
+            while (emitters) {
+                Square sq = pop_lsb(emitters);
+                if (color_of(piece_on(sq)) == us)
+                    candidates |= sq;
+                for (int i = 0; i < 4; ++i)
+                    beams.push_back({sq, orientation_to_direction(i, var->laserDiagonal)});
+            }
+        }
+    }
+
+    Bitboard visited[4] = {};
+    for (size_t i = 0; i < beams.size(); ++i) {
+        Square sq = beams[i].sq;
+        Direction dir = beams[i].dir;
+        while (true) {
+            int beamOrient = direction_to_orientation(dir, var->laserDiagonal);
+            Bitboard blockers = LaserRay[var->laserDiagonal][beamOrient][sq] & pieces();
+            if (!blockers)
+                break;
+            bool increasing = var->laserDiagonal ? beamOrient == 0 || beamOrient == 3
+                                                 : beamOrient < 2;
+            sq = increasing ? lsb(blockers) : msb(blockers);
+            if (visited[beamOrient] & sq)
+                break;
+            visited[beamOrient] |= sq;
+
+            Piece pc = piece_on(sq);
+            if (color_of(pc) == us && is_oriented(type_of(pc)))
+                candidates |= sq;
+            int pieceOrient = var->orientation_index(type_of(pc));
+            int face = (beamOrient + 2 - pieceOrient + 4) % 4;
+            Variant::LaserOutcome outcome = var->pieceOptics[type_of(pc)].outcomes[face];
+
+            if (outcome == Variant::OUTCOME_DESTROY_CONTINUE || outcome == Variant::OUTCOME_TRANSMIT)
+                continue;
+            if (outcome == Variant::OUTCOME_REFLECT_RIGHT)
+                dir = orientation_to_direction((beamOrient + 1) % 4, var->laserDiagonal);
+            else if (outcome == Variant::OUTCOME_REFLECT_LEFT)
+                dir = orientation_to_direction((beamOrient + 3) % 4, var->laserDiagonal);
+            else if (outcome == Variant::OUTCOME_REFLECT_BACK)
+                dir = orientation_to_direction((beamOrient + 2) % 4, var->laserDiagonal);
+            else if (outcome == Variant::OUTCOME_SPLIT) {
+                beams.push_back({sq, orientation_to_direction((beamOrient + 3) % 4, var->laserDiagonal)});
+                beams.push_back({sq, orientation_to_direction((beamOrient + 1) % 4, var->laserDiagonal)});
+                break;
+            } else if (outcome == Variant::OUTCOME_SPLIT_FORWARD_LEFT)
+                beams.push_back({sq, orientation_to_direction((beamOrient + 3) % 4, var->laserDiagonal)});
+            else if (outcome == Variant::OUTCOME_SPLIT_FORWARD_RIGHT)
+                beams.push_back({sq, orientation_to_direction((beamOrient + 1) % 4, var->laserDiagonal)});
+            else if (outcome == Variant::OUTCOME_EXIT_FACE)
+                dir = orientation_to_direction(pieceOrient, var->laserDiagonal);
+            else if (outcome == Variant::OUTCOME_EXIT_BACK_FACE)
+                dir = orientation_to_direction((pieceOrient + 2) % 4, var->laserDiagonal);
+            else
+                break;
+        }
+    }
+    return candidates;
+}
+
 void Position::fire_laser(Color us, Key& k) {
     struct LaserBeam {
         Square sq;

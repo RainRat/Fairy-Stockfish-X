@@ -67,6 +67,25 @@ namespace {
     return gates;
   }
 
+  Bitboard laser_rotation_candidates(const Position& pos, Color us) {
+    if (!pos.variant()->laserRotationPathFilter)
+        return pos.board_bb();
+    struct Cache {
+        Key key = 0;
+        const Variant* variant = nullptr;
+        Color side = COLOR_NB;
+        Bitboard candidates = 0;
+    };
+    static thread_local Cache cache;
+    if (cache.key != pos.key() || cache.variant != pos.variant() || cache.side != us) {
+        cache.key = pos.key();
+        cache.variant = pos.variant();
+        cache.side = us;
+        cache.candidates = pos.laser_rotation_candidates(us);
+    }
+    return cache.candidates;
+  }
+
   template<MoveType T, GenType Gen = QUIETS>
   ExtMove* make_move_and_gating(const Position& pos, ExtMove* moveList, Color us, Square from, Square to, PieceType pt = NO_PIECE_TYPE) {
 
@@ -118,7 +137,7 @@ namespace {
             // orientation, so do not emit ambiguous compound promotions.
             if (rotateAfter && (T != PROMOTION || pos.variant()->rotationDelta))
             {
-                Bitboard rotators = pos.pieces(us);
+                Bitboard rotators = pos.pieces(us) & laser_rotation_candidates(pos, us);
                 while (rotators)
                 {
                     Square rotateFrom = pop_lsb(rotators);
@@ -150,7 +169,7 @@ namespace {
         }
         else if constexpr (Gen != CAPTURES)
         {
-            if (pos.is_oriented(mt))
+            if (pos.is_oriented(mt) && (laser_rotation_candidates(pos, us) & from))
             {
                 PieceType base_pt = pos.variant()->base_piece_type(mt);
                 int current_orient = pos.variant()->orientation_index(mt);
