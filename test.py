@@ -2666,6 +2666,10 @@ stepwisePushing = true
         self.assertEqual(len(dos_black_moves), 1444)
         self.assertNotIn("e8e6", dos_black_moves)
         self.assertNotIn("f8f6", dos_black_moves)
+        self.assertEqual(
+            sf.game_result("dos-laser-chess", dos_fen, ["0000"] * 102),
+            sf.VALUE_NONE,
+        )
 
         dos_manual_fire_fen = "9/9/9/9/9/9/5k3/9/K4L:03 w - - 0 1"
         self.assertIn("/5k3/", sf.get_fen("dos-laser-chess", dos_manual_fire_fen, ["a1b1"]))

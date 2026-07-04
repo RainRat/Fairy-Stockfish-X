@@ -1939,6 +1939,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("diagonalLines", v->diagonalLines);
     parse_color_setting("pass", v->pass);
     parse_color_setting("passOnStalemate", v->passOnStalemate);
+    parse_attribute("doublePassEndsGame", v->doublePassEndsGame);
     parse_attribute("passUntilSetup", v->passUntilSetup);
     if (!parse_multimoves(v))
         return false;

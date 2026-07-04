@@ -292,6 +292,7 @@ struct Variant {
   Bitboard diagonalLines = 0;
   ColorSetting<bool> pass = ColorSetting<bool>(false);
   ColorSetting<bool> passOnStalemate = ColorSetting<bool>(false);
+  bool doublePassEndsGame = true;
   std::vector<int> multimoves = {};
   bool progressiveMultimove = false;
   bool laserGame = false;
