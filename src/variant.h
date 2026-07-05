@@ -299,6 +299,8 @@ struct Variant {
   bool laserDiagonal = false;
   bool laserAutoFire = true;
   bool laserRotationPathFilter = false;
+  bool laserFireAnyRotation = false;
+  bool laserRotationRequiresAction = false;
   int rotationDelta = 0;
   bool rotationTwoWay = false;
   uint8_t rotationAllowedOrientations[COLOR_NB][PIECE_TYPE_NB] = {};

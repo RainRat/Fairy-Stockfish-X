@@ -4771,7 +4771,8 @@ bool Position::pseudo_legal(const Move m) const {
 
   if (is_laser_fire(m))
       return laser_game() && !var->laserAutoFire && pc != NO_PIECE && color_of(pc) == us
-          && var->base_piece_type(type_of(pc)) == var->emitterPieceType;
+          && (var->base_piece_type(type_of(pc)) == var->emitterPieceType
+              || (var->laserFireAnyRotation && is_gating(m) && is_oriented(type_of(pc))));
 
   if (is_pull_move(m))
   {

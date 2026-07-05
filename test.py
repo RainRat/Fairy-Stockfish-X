@@ -2711,6 +2711,46 @@ stepwisePushing = true
 
         after_gating_fen = sf.get_fen("dos-laser-chess", dos_fen, ["b2b3:1b3"])
         self.assertEqual(sf.validate_fen(after_gating_fen, "dos-laser-chess"), 1)
+
+        dos94_fen = sf.start_fen("dos-laser-chess-1994")
+        dos94_rows = dos94_fen.split()[0].split("/")
+        self.assertEqual("".join(c for c in dos94_rows[-1] if c.isalpha()), "RBSLKQSBR")
+        self.assertEqual("".join(c for c in dos94_rows[0] if c.isalpha()), "rbsqklsbr")
+        dos94_moves = sf.legal_moves("dos-laser-chess-1994", dos94_fen, [])
+        self.assertNotIn("0000", dos94_moves)
+        self.assertNotIn("a1a1:0", dos94_moves)
+        self.assertIn("a1a1:0f", dos94_moves)
+        self.assertIn("d1d1f", dos94_moves)
+        for file_name in "abcdefghi":
+            self.assertIn(f"{file_name}2{file_name}4", dos94_moves)
+        self.assertIn(
+            "e8e6", sf.legal_moves("dos-laser-chess-1994", dos94_fen, ["e2e3"])
+        )
+
+        dos94_pawn_fen = "8k/9/9/9/9/9/3d:05/4P:04/K4L:03 w - - 0 1"
+        dos94_pawn_moves = sf.legal_moves("dos-laser-chess-1994", dos94_pawn_fen, [])
+        self.assertIn("e2e3", dos94_pawn_moves)
+        self.assertIn("e2e4", dos94_pawn_moves)
+        self.assertIn("e2d3", dos94_pawn_moves)
+        self.assertNotIn("e2f3", dos94_pawn_moves)
+        dos94_ep_fen = "8k/9/9/9/9/3d:05/9/4P:04/K4L:03 w - - 0 1"
+        after_double = sf.get_fen("dos-laser-chess-1994", dos94_ep_fen, ["e2e4"])
+        self.assertIn(" e3 ", after_double)
+        self.assertIn("d4e3", sf.legal_moves("dos-laser-chess-1994", after_double, []))
+
+        dos94_promotion_fen = "8k/P:08/9/9/9/9/9/9/K4L:03 w - - 0 1"
+        self.assertIn("a8a9l", sf.legal_moves("dos-laser-chess-1994", dos94_promotion_fen, []))
+
+        dos94_castling_fen = "8k/9/9/9/9/9/9/9/R:13K3R:1 w KQ - 0 1"
+        dos94_castling_moves = sf.legal_moves("dos-laser-chess-1994", dos94_castling_fen, [])
+        self.assertIn("e1g1", dos94_castling_moves)
+        self.assertIn("e1c1", dos94_castling_moves)
+        dos94_castling_check_fen = "k4r:03/9/9/9/9/9/9/9/R:13K3R:1 w KQ - 0 1"
+        dos94_castling_check_moves = sf.legal_moves(
+            "dos-laser-chess-1994", dos94_castling_check_fen, []
+        )
+        self.assertNotIn("e1g1", dos94_castling_check_moves)
+        self.assertIn("e1c1", dos94_castling_check_moves)
         sf.load_variant_config("""[pairedpawns:chess]
 startFen = 8/8/8/8/8/8/8/8[PPpp] w - - 0 1
 pieceDrops = true
