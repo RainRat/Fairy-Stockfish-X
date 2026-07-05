@@ -169,7 +169,9 @@ struct Variant {
   PieceSet deathOnCaptureTypes = NO_PIECE_SET;
   PieceSet mutuallyHopIllegalTypes = NO_PIECE_SET;
   PieceSet captureForbidden[PIECE_TYPE_NB] = {};
+  PieceSet captureForbiddenByColor[COLOR_NB][PIECE_TYPE_NB] = {};
   PieceSet captureForbiddenToKing = NO_PIECE_SET;
+  PieceSet captureForbiddenToKingByColor[COLOR_NB] = {};
   PieceSet petrifyOnCaptureTypes = NO_PIECE_SET;
   bool petrifyOnCaptureSuppressTransfer = false;
   bool petrifyBlastPieces = false;
@@ -191,6 +193,7 @@ struct Variant {
   bool castling = true;
   bool castlingDroppedPiece = false;
   bool castlingPromotedPiece = false;
+  bool castlingIgnoreCheck = false;
   int castlingForbiddenPlies = 0;
   File castlingKingsideFile = FILE_G;
   File castlingQueensideFile = FILE_C;

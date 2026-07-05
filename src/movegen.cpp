@@ -1291,7 +1291,7 @@ namespace {
             *moveList++ = make<SPECIAL>(royalSq, royalSq);
 
         if (royalPt == KING && !restrictToForcedJumper
-            && (Type == QUIETS || Type == NON_EVASIONS)
+            && (Type == QUIETS || Type == NON_EVASIONS || (Type == EVASIONS && pos.castling_ignore_check()))
             && pos.can_castle(Us == WHITE ? WHITE_CASTLING : BLACK_CASTLING))
             for (CastlingRights cr : { Us & KING_SIDE, Us & QUEEN_SIDE } )
                 if (!pos.castling_impeded(cr) && pos.can_castle(cr))
