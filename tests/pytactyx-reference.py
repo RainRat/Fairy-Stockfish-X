@@ -43,7 +43,7 @@ def simple_actions(rules, board, side, height, mirror=False, implicit_fire=False
     return result
 
 
-def load_fsx_board(board, fen, piece_kinds):
+def load_fsx_board(board, fen, piece_kinds, invert_sides=False):
     """Load the board portion of an FSX laser FEN into a pytactyx Board."""
     from pytactyx.core.piece import Piece
 
@@ -68,8 +68,9 @@ def load_fsx_board(board, fen, piece_kinds):
             stacked = i < len(row) and row[i] == "+"
             if stacked:
                 i += 1
+            side = 1 if symbol.isupper() else 0
             board.place(x, y, Piece(piece_kinds[symbol.lower()],
-                                    1 if symbol.isupper() else 0,
+                                    side ^ invert_sides,
                                     orient, 2 if stacked else 1))
             x += 1
 
@@ -116,7 +117,7 @@ def normalized_board(board, mirror=False, compare_orient=True):
 
 
 def compare_outcomes(name, rules, board, actions, piece_kinds, mirror=False,
-                     ignored=()):
+                     ignored=(), side=1, invert_sides=False):
     import pyffish
     from pytactyx.core.board import Board
 
@@ -128,10 +129,10 @@ def compare_outcomes(name, rules, board, actions, piece_kinds, mirror=False,
             continue
         reference = board.clone()
         try:
-            rules.apply_turn(reference, action, 1)
+            rules.apply_turn(reference, action, side)
             actual_fen = pyffish.get_fen(name, start, [move])
             actual = Board(rules)
-            load_fsx_board(actual, actual_fen, piece_kinds)
+            load_fsx_board(actual, actual_fen, piece_kinds, invert_sides)
         except Exception as exc:  # Keep a complete, actionable mismatch report.
             failures.append((move, f"execution error: {exc}"))
             continue
@@ -352,10 +353,10 @@ def main():
                 "q": "QUEEN", "k": "KING", "l": "LASER",
                 "m": "MIRROR", "d": "SHIELD", "p": "SUPER"},
     }
-    for name, cls, mirror in (
-        ("khet1", Khet1Ruleset, False),
-        ("khet2", Khet2Ruleset, False),
-        ("playlaser", PlaylaserRuleset, True),
+    for name, cls, mirror, side, invert_sides in (
+        ("khet1", Khet1Ruleset, False, 1, False),
+        ("khet2", Khet2Ruleset, False, 1, False),
+        ("playlaser", PlaylaserRuleset, False, 0, True),
     ):
         rules = cls()
         board = Board(rules)
@@ -364,9 +365,9 @@ def main():
         else:
             rules.setup_initial(board)
         cases.append((name, rules, board,
-                      simple_actions(rules, board, 1, board.h, mirror,
+                      simple_actions(rules, board, side, board.h, mirror,
                                      implicit_fire=name.startswith("khet")),
-                      piece_maps[name], mirror))
+                      piece_maps[name], mirror, side, invert_sides))
 
     for name, cls, is_1994 in (
         ("dos-laser-chess", DosChessRuleset, False),
@@ -376,17 +377,18 @@ def main():
         board = Board(rules)
         load_fsx_board(board, pyffish.start_fen(name), piece_maps["dos"])
         cases.append((name, rules, board, dos_actions(rules, board, 1, is_1994),
-                      piece_maps["dos"], False))
+                      piece_maps["dos"], False, 1, False))
 
     ok = True
-    for name, rules, board, actions, piece_kinds, mirror in cases:
+    for name, rules, board, actions, piece_kinds, mirror, side, invert_sides in cases:
         # Pytactyx labels both Sphinx rotation inputs even when its corner
         # constraint advances them to the same inward-facing orientation.
         missing = {"j1j1:1"} if name == "khet2" else set()
         ok &= compare(name, actions, allowed_missing=missing)
         if not args.moves_only:
             ok &= compare_outcomes(name, rules, board, actions, piece_kinds, mirror,
-                                   ignored=missing)
+                                   ignored=missing, side=side,
+                                   invert_sides=invert_sides)
     if not args.moves_only:
         ok &= interaction_matrix(pyffish, Board, Piece, piece_maps)
     return 0 if ok else 1

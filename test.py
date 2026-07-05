@@ -2642,8 +2642,10 @@ stepwisePushing = true
 
         playlaser_moves = sf.legal_moves("playlaser", playlaser_fen, [])
         self.assertEqual(len(playlaser_moves), 40)
-        self.assertIn("h1h1f", playlaser_moves)
-        self.assertNotIn("h1h1:0", playlaser_moves)
+        self.assertEqual(playlaser_fen.split()[0].split("/")[0], "7L:0")
+        self.assertEqual(playlaser_fen.split()[0].split("/")[-1], "l:07")
+        self.assertIn("h8h8f", playlaser_moves)
+        self.assertNotIn("h8h8:0", playlaser_moves)
 
         playlaser_pawn_fen = "7k/8/8/4p3/3Pp3/8/8/K6L:0 w - - 0 1"
         playlaser_pawn_moves = sf.legal_moves("playlaser", playlaser_pawn_fen, [])
