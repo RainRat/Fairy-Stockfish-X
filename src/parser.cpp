@@ -1408,6 +1408,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("laserAutoFire", v->laserAutoFire);
     parse_attribute("laserRotationPathFilter", v->laserRotationPathFilter);
     parse_attribute("laserFireAnyRotation", v->laserFireAnyRotation);
+    parse_attribute("laserFireSelectedEmitter", v->laserFireSelectedEmitter);
     parse_attribute("laserRotationRequiresAction", v->laserRotationRequiresAction);
     parse_attribute("rotationDelta", v->rotationDelta);
     parse_attribute("rotationTwoWay", v->rotationTwoWay);

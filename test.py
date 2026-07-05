@@ -2729,7 +2729,7 @@ stepwisePushing = true
         self.assertEqual(len(dos94_moves), 1104)
         self.assertNotIn("0000", dos94_moves)
         self.assertNotIn("a1a1:0", dos94_moves)
-        self.assertIn("a1a1:0f", dos94_moves)
+        self.assertIn("d1d1:0a1f", dos94_moves)
         self.assertIn("d1d1f", dos94_moves)
         for file_name in "abcdefghi":
             self.assertIn(f"{file_name}2{file_name}4", dos94_moves)
@@ -2753,9 +2753,21 @@ stepwisePushing = true
         self.assertIn("a8a9l", sf.legal_moves("dos-laser-chess-1994", dos94_promotion_fen, []))
 
         dos94_rotated_fire = sf.get_fen(
-            "dos-laser-chess-1994", dos94_fen, ["c2c2:1f"]
+            "dos-laser-chess-1994", dos94_fen, ["d1d1:1c2f"]
         )
         self.assertIn("/D:0M:3D:1M:1P:0", dos94_rotated_fire)
+
+        # DOS 3.1 asks which laser to fire after a pawn promotes to a second
+        # laser.  Firing one must not also resolve the other laser's beam.
+        dos94_two_lasers = "4k4/9/9/9/9/9/d:07d:0/9/L:03K3L:0 w - - 0 1"
+        left_fire = sf.get_fen(
+            "dos-laser-chess-1994", dos94_two_lasers, ["a1a1f"]
+        )
+        right_fire = sf.get_fen(
+            "dos-laser-chess-1994", dos94_two_lasers, ["i1i1f"]
+        )
+        self.assertIn("/8d:0/", left_fire)
+        self.assertIn("/d:08/", right_fire)
 
         dos94_castling_fen = "8k/9/9/9/9/9/9/9/R:13K3R:1 w KQ - 0 1"
         dos94_castling_moves = sf.legal_moves("dos-laser-chess-1994", dos94_castling_fen, [])

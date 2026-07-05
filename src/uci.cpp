@@ -689,6 +689,8 @@ string UCI::move(const Position& pos, Move m) {
           PieceType gt = gating_type(m);
           int orient = pos.variant()->orientation_index(gt);
           fire += ":" + std::to_string(orient);
+          if (gating_square(m) != from)
+              fire += UCI::square(pos, gating_square(m));
       }
       return fire + "f";
   }

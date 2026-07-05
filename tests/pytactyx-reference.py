@@ -74,6 +74,32 @@ def load_fsx_board(board, fen, piece_kinds):
             x += 1
 
 
+def fsx_fen(board, piece_chars, side=1):
+    rows = []
+    for y in range(board.h):
+        row = []
+        empty = 0
+        for x in range(board.w):
+            piece = board.occ[x][y]
+            if not piece:
+                empty += 1
+                continue
+            if empty:
+                row.append(str(empty))
+                empty = 0
+            symbol = piece_chars[piece.kind]
+            symbol = symbol.upper() if piece.side == 1 else symbol.lower()
+            row.append(symbol)
+            if piece.kind in board.ruleset.ORIENTED:
+                row.append(f":{piece.orient % 4}")
+            if piece.stack_height > 1:
+                row.append("+")
+        if empty:
+            row.append(str(empty))
+        rows.append("".join(row))
+    return "/".join(rows) + (" w - - 0 1" if side == 1 else " b - - 0 1")
+
+
 def normalized_board(board, mirror=False, compare_orient=True):
     pieces = []
     for x in range(board.w):
@@ -129,6 +155,102 @@ def compare_outcomes(name, rules, board, actions, piece_kinds, mirror=False,
     return True
 
 
+def compare_interaction(name, rules, board, action, move, piece_kinds, piece_chars):
+    import pyffish
+    from pytactyx.core.board import Board
+
+    before = fsx_fen(board, piece_chars)
+    reference = board.clone()
+    rules.apply_turn(reference, action, 1)
+    try:
+        after = pyffish.get_fen(name, before, [move])
+    except Exception as exc:
+        return f"FSX rejected {move}: {exc}"
+    actual = Board(rules)
+    load_fsx_board(actual, after, piece_kinds)
+    expected_state = normalized_board(reference)
+    actual_state = normalized_board(actual)
+    if expected_state == actual_state:
+        return None
+    expected_set = set(expected_state)
+    actual_set = set(actual_state)
+    return (f"FSX-only={sorted(actual_set - expected_set)} "
+            f"pytactyx-only={sorted(expected_set - actual_set)}")
+
+
+def interaction_matrix(pyffish, Board, Piece, piece_maps):
+    from pytactyx.games.chess_variants.dos_chess_rules import DosChessRuleset
+    from pytactyx.games.laser_games.khet1_rules import Khet1Ruleset
+    from pytactyx.games.laser_games.khet2_rules import Khet2Ruleset
+
+    failures = []
+    checked = 0
+    dos_chars = {"ROOK": "r", "SPLITTER": "s", "BISHOP": "b",
+                 "QUEEN": "q", "KING": "k", "LASER": "l",
+                 "MIRROR": "m", "SHIELD": "d", "SUPER": "p"}
+    for name, rules in (("dos-laser-chess", DosChessRuleset()),):
+        for kind in rules.KINDS:
+            if kind == "LASER":
+                continue
+            orientations = (range(2) if kind == "SPLITTER" else
+                            range(4) if kind in rules.ORIENTED else (0,))
+            for orient in orientations:
+                board = Board(rules)
+                board.place(0, 5, Piece("LASER", 1, 1))       # a4, firing east
+                board.place(4, 5, Piece(kind, 0, orient))       # e4, test target
+                board.place(4, 2, Piece("SHIELD", 0, 0))       # e7
+                board.place(4, 8, Piece("SHIELD", 0, 2))       # e1
+                board.place(7, 5, Piece("SHIELD", 0, 3))       # h4
+                if kind != "KING":
+                    board.place(8, 0, Piece("KING", 0, 0))     # i9
+                board.place(8, 8, Piece("KING", 1, 0))         # i1
+                error = compare_interaction(name, rules, board, (None, None, True),
+                                            "a4a4f", piece_maps["dos"], dos_chars)
+                checked += 1
+                if error:
+                    failures.append((f"{name}:{kind}:{orient}", error))
+
+    khet_chars = {"PYRAMID": "p", "DJED": "s", "OBELISK": "o",
+                  "PHARAOH": "k", "EYE_OF_HORUS": "e"}
+    for name, rules in (("khet1", Khet1Ruleset()), ("khet2", Khet2Ruleset())):
+        kinds = ["PYRAMID", "PHARAOH", "EYE_OF_HORUS"]
+        kinds += ["DJED", "OBELISK"] if name == "khet1" else ["SCARAB", "ANUBIS", "SPHINX"]
+        chars = dict(khet_chars)
+        if name == "khet2":
+            chars.update({"SCARAB": "s", "ANUBIS": "a", "SPHINX": "x"})
+        targets = [(kind, 1) for kind in kinds]
+        if name == "khet1":
+            targets.append(("OBELISK", 2))
+        for kind, stack_height in targets:
+            orientations = range(4) if kind in rules.ORIENTED else (0,)
+            for orient in orientations:
+                board = Board(rules)
+                board.place(1, 6, Piece("PYRAMID", 1, 0))      # b2 action dummy
+                board.place(2, 7, Piece("PHARAOH", 1, 0))      # c1
+                if name == "khet2":
+                    board.place(9, 7, Piece("SPHINX", 1, 0))   # j1 emitter
+                if kind == "PHARAOH":
+                    board.place(9, 4, Piece(kind, 0, orient, stack_height))
+                else:
+                    board.place(2, 0, Piece("PHARAOH", 0, 0))  # c8
+                    board.place(9, 4, Piece(kind, 0, orient, stack_height))
+                board.place(6, 4, Piece("OBELISK" if name == "khet1" else "ANUBIS", 0, 0))
+                board.place(9, 1, Piece("OBELISK" if name == "khet1" else "ANUBIS", 0, 0))
+                action = ((1, 6, 1), None, True)
+                error = compare_interaction(name, rules, board, action, "b2b2:1",
+                                            piece_maps[name], chars)
+                checked += 1
+                if error:
+                    failures.append((f"{name}:{kind}:{orient}:stack{stack_height}", error))
+    if failures:
+        print(f"interaction matrix: {len(failures)} mismatches after {checked} cases")
+        for case, error in failures:
+            print(f"  {case}: {error}")
+        return False
+    print(f"interaction matrix: {checked} piece/face cases matched")
+    return True
+
+
 def dos_actions(rules, board, side, variant_1994):
     result = {}
     moves = []
@@ -161,7 +283,13 @@ def dos_actions(rules, board, side, variant_1994):
         result[fire] = (None, None, True)
         fire_rotations = rotations if variant_1994 else [r for r in rotations if r[:2] == (ex, ey)]
         for rx, ry, target in fire_rotations:
-            text = square(rx, ry, board.h) * 2 + f":{target}f"
+            if variant_1994:
+                text = square(ex, ey, board.h) * 2 + f":{target}"
+                if (rx, ry) != (ex, ey):
+                    text += square(rx, ry, board.h)
+                text += "f"
+            else:
+                text = square(rx, ry, board.h) * 2 + f":{target}f"
             result[text] = ((rx, ry, (target - board.occ[rx][ry].orient) % 4), None, True)
 
     if not variant_1994:
@@ -204,6 +332,7 @@ def main():
 
     import pyffish
     from pytactyx.core.board import Board
+    from pytactyx.core.piece import Piece
     from pytactyx.games.chess_variants.dos_chess_rules import DosChessRuleset
     from pytactyx.games.laser_games.khet1_rules import Khet1Ruleset
     from pytactyx.games.laser_games.khet2_rules import Khet2Ruleset
@@ -258,6 +387,8 @@ def main():
         if not args.moves_only:
             ok &= compare_outcomes(name, rules, board, actions, piece_kinds, mirror,
                                    ignored=missing)
+    if not args.moves_only:
+        ok &= interaction_matrix(pyffish, Board, Piece, piece_maps)
     return 0 if ok else 1
 
 

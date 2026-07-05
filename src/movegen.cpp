@@ -1352,29 +1352,34 @@ namespace {
             Bitboard emitters = pos.pieces_oriented_group(Us, pos.variant()->emitterPieceType);
             if (pos.variant()->laserFireAnyRotation && emitters)
             {
-                Square emitter = lsb(emitters);
-                Move fire = make<LASER_FIRE>(emitter, emitter);
-                if (Type != QUIET_CHECKS || pos.gives_check(fire))
-                    *moveList++ = fire;
-
-                Bitboard rotators = pos.pieces(Us);
-                while (rotators)
+                Bitboard selectedEmitters = pos.variant()->laserFireSelectedEmitter
+                                          ? emitters : square_bb(lsb(emitters));
+                while (selectedEmitters)
                 {
-                    Square from = pop_lsb(rotators);
-                    PieceType pt = type_of(pos.piece_on(from));
-                    if (!pos.is_oriented(pt))
-                        continue;
-                    PieceType base = pos.variant()->base_piece_type(pt);
-                    int current = pos.variant()->orientation_index(pt);
-                    int count = pos.variant()->orientation_count(base);
-                    for (int i = 0; i < count; ++i)
-                        if (pos.variant()->rotation_allowed(Us, base, current, i, count))
-                        {
-                            Move m = make_gating<LASER_FIRE>(from, from,
-                                pos.variant()->orientation_piece_type(base, i), from);
-                            if (Type != QUIET_CHECKS || pos.gives_check(m))
-                                *moveList++ = m;
-                        }
+                    Square emitter = pop_lsb(selectedEmitters);
+                    Move fire = make<LASER_FIRE>(emitter, emitter);
+                    if (Type != QUIET_CHECKS || pos.gives_check(fire))
+                        *moveList++ = fire;
+
+                    Bitboard rotators = pos.pieces(Us);
+                    while (rotators)
+                    {
+                        Square rotateSq = pop_lsb(rotators);
+                        PieceType pt = type_of(pos.piece_on(rotateSq));
+                        if (!pos.is_oriented(pt))
+                            continue;
+                        PieceType base = pos.variant()->base_piece_type(pt);
+                        int current = pos.variant()->orientation_index(pt);
+                        int count = pos.variant()->orientation_count(base);
+                        for (int i = 0; i < count; ++i)
+                            if (pos.variant()->rotation_allowed(Us, base, current, i, count))
+                            {
+                                Move m = make_gating<LASER_FIRE>(emitter, emitter,
+                                    pos.variant()->orientation_piece_type(base, i), rotateSq);
+                                if (Type != QUIET_CHECKS || pos.gives_check(m))
+                                    *moveList++ = m;
+                            }
+                    }
                 }
                 emitters = 0;
             }

@@ -4679,14 +4679,18 @@ bool Position::pseudo_legal(const Move m) const {
       if (from == to)
       {
           Piece pcFrom = piece_on(from);
-          if (pcFrom == NO_PIECE || color_of(pcFrom) != us || !is_oriented(type_of(pcFrom)))
+          Square rotateSq = gateSq;
+          if (rotateSq != from && !(is_laser_fire(m) && var->laserFireAnyRotation))
               return false;
-          if (gateSq != from)
+          Piece rotatePc = piece_on(rotateSq);
+          if (pcFrom == NO_PIECE || color_of(pcFrom) != us
+              || rotatePc == NO_PIECE || color_of(rotatePc) != us
+              || !is_oriented(type_of(rotatePc)))
               return false;
-          PieceType base = var->base_piece_type(type_of(pcFrom));
+          PieceType base = var->base_piece_type(type_of(rotatePc));
           if (var->base_piece_type(gatePt) != base)
               return false;
-          int current_orient = var->orientation_index(type_of(pcFrom));
+          int current_orient = var->orientation_index(type_of(rotatePc));
           int target_orient = var->orientation_index(gatePt);
           if (target_orient < 0 || target_orient >= var->orientation_count(base))
               return false;
@@ -7111,7 +7115,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   }
 
   if (var->laserGame && (var->laserAutoFire || is_laser_fire(m)))
-      fire_laser(us, k);
+      fire_laser(us, k, is_laser_fire(m) ? from_sq(m) : SQ_NONE);
 
   // Update the key with the final value
   st->key = k;
@@ -9571,7 +9575,7 @@ Bitboard Position::laser_rotation_candidates(Color us) const {
     return candidates;
 }
 
-void Position::fire_laser(Color us, Key& k) {
+void Position::fire_laser(Color us, Key& k, Square selectedEmitter) {
     struct LaserBeam {
         Square sq;
         Direction dir;
@@ -9587,6 +9591,8 @@ void Position::fire_laser(Color us, Key& k) {
 
     if (var->emitterPieceType != NO_PIECE_TYPE) {
         Bitboard emitters = pieces_oriented_group(us, var->emitterPieceType);
+        if (var->laserFireSelectedEmitter && selectedEmitter != SQ_NONE)
+            emitters &= square_bb(selectedEmitter);
         while (emitters) {
             Square sq = pop_lsb(emitters);
             Piece pc = piece_on(sq);

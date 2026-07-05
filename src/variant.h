@@ -300,6 +300,7 @@ struct Variant {
   bool laserAutoFire = true;
   bool laserRotationPathFilter = false;
   bool laserFireAnyRotation = false;
+  bool laserFireSelectedEmitter = false;
   bool laserRotationRequiresAction = false;
   int rotationDelta = 0;
   bool rotationTwoWay = false;
