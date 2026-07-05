@@ -2604,7 +2604,7 @@ stepwisePushing = true
         khet2_moves = sf.legal_moves("khet2", sf.start_fen("khet2"), [])
         self.assertEqual(len(khet2_moves), 79)
         self.assertNotIn("h2i1", khet2_moves)
-        self.assertNotIn("j1j1:3", khet2_moves)
+        self.assertIn("j1j1:3", khet2_moves)
 
         khet_djed_swap_fen = "9k/10/10/10/4SP:04/10/10/K9 w - - 0 1"
         khet_djed_swap_moves = sf.legal_moves("khet1", khet_djed_swap_fen, [])

@@ -74,6 +74,61 @@ def load_fsx_board(board, fen, piece_kinds):
             x += 1
 
 
+def normalized_board(board, mirror=False, compare_orient=True):
+    pieces = []
+    for x in range(board.w):
+        for y in range(board.h):
+            piece = board.occ[x][y]
+            if not piece:
+                continue
+            nx = board.w - 1 - x if mirror else x
+            orient = 0
+            if piece.kind in board.ruleset.ORIENTED and compare_orient:
+                orient = ((3 - piece.orient) if mirror else piece.orient) % 4
+            pieces.append((nx, y, piece.kind, piece.side, orient, piece.stack_height))
+    return tuple(sorted(pieces))
+
+
+def compare_outcomes(name, rules, board, actions, piece_kinds, mirror=False,
+                     ignored=()):
+    import pyffish
+    from pytactyx.core.board import Board
+
+    start = pyffish.start_fen(name)
+    failures = []
+    checked = 0
+    for move, action in sorted(actions.items()):
+        if move in ignored:
+            continue
+        reference = board.clone()
+        try:
+            rules.apply_turn(reference, action, 1)
+            actual_fen = pyffish.get_fen(name, start, [move])
+            actual = Board(rules)
+            load_fsx_board(actual, actual_fen, piece_kinds)
+        except Exception as exc:  # Keep a complete, actionable mismatch report.
+            failures.append((move, f"execution error: {exc}"))
+            continue
+        checked += 1
+        expected_state = normalized_board(reference, mirror, not mirror)
+        actual_state = normalized_board(actual, compare_orient=not mirror)
+        if expected_state != actual_state:
+            expected_set = set(expected_state)
+            actual_set = set(actual_state)
+            failures.append((move,
+                f"FSX-only={sorted(actual_set - expected_set)} "
+                f"pytactyx-only={sorted(expected_set - actual_set)}"))
+    if failures:
+        print(f"{name}: {len(failures)} outcome mismatches after {checked} actions")
+        for move, detail in failures[:20]:
+            print(f"  {move}: {detail}")
+        if len(failures) > 20:
+            print(f"  ... {len(failures) - 20} more")
+        return False
+    print(f"{name}: {checked} one-ply outcomes matched")
+    return True
+
+
 def dos_actions(rules, board, side, variant_1994):
     result = {}
     moves = []
@@ -141,6 +196,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--pytactyx", type=Path,
                         default=Path.home() / "gem_workspace" / "pytactyx")
+    parser.add_argument("--moves-only", action="store_true",
+                        help="skip applying and comparing every one-ply outcome")
     args = parser.parse_args()
     sys.path.insert(0, str(args.pytactyx))
     sys.path.insert(0, str(ROOT))
@@ -155,6 +212,17 @@ def main():
 
     pyffish.load_variant_config((ROOT / "src" / "variants.ini").read_text())
     cases = []
+    piece_maps = {
+        "khet1": {"p": "PYRAMID", "s": "DJED", "o": "OBELISK",
+                   "d": "OBELISK", "k": "PHARAOH", "e": "EYE_OF_HORUS"},
+        "khet2": {"p": "PYRAMID", "s": "SCARAB", "a": "ANUBIS",
+                   "x": "SPHINX", "k": "PHARAOH", "e": "EYE_OF_HORUS"},
+        "playlaser": {"l": "LASER", "w": "WALL", "n": "KNIGHT",
+                      "p": "PAWN", "k": "KING"},
+        "dos": {"r": "ROOK", "s": "SPLITTER", "b": "BISHOP",
+                "q": "QUEEN", "k": "KING", "l": "LASER",
+                "m": "MIRROR", "d": "SHIELD", "p": "SUPER"},
+    }
     for name, cls, mirror in (
         ("khet1", Khet1Ruleset, False),
         ("khet2", Khet2Ruleset, False),
@@ -162,9 +230,14 @@ def main():
     ):
         rules = cls()
         board = Board(rules)
-        rules.setup_initial(board)
-        cases.append((name, simple_actions(rules, board, 1, board.h, mirror,
-                                           implicit_fire=name.startswith("khet"))))
+        if name.startswith("khet"):
+            load_fsx_board(board, pyffish.start_fen(name), piece_maps[name])
+        else:
+            rules.setup_initial(board)
+        cases.append((name, rules, board,
+                      simple_actions(rules, board, 1, board.h, mirror,
+                                     implicit_fire=name.startswith("khet")),
+                      piece_maps[name], mirror))
 
     for name, cls, is_1994 in (
         ("dos-laser-chess", DosChessRuleset, False),
@@ -172,20 +245,19 @@ def main():
     ):
         rules = cls()
         board = Board(rules)
-        load_fsx_board(board, pyffish.start_fen(name), {
-            "r": "ROOK", "s": "SPLITTER", "b": "BISHOP", "q": "QUEEN",
-            "k": "KING", "l": "LASER", "m": "MIRROR", "d": "SHIELD",
-            "p": "SUPER",
-        })
-        cases.append((name, dos_actions(rules, board, 1, is_1994)))
+        load_fsx_board(board, pyffish.start_fen(name), piece_maps["dos"])
+        cases.append((name, rules, board, dos_actions(rules, board, 1, is_1994),
+                      piece_maps["dos"], False))
 
     ok = True
-    for name, actions in cases:
-        # Pytactyx currently permits the white Khet 2 Sphinx to rotate toward
-        # the board. The physical corner restriction allows only orientations
-        # 0 and 1, so FSX intentionally omits j1j1:3.
-        missing = {"j1j1:3"} if name == "khet2" else set()
+    for name, rules, board, actions, piece_kinds, mirror in cases:
+        # Pytactyx labels both Sphinx rotation inputs even when its corner
+        # constraint advances them to the same inward-facing orientation.
+        missing = {"j1j1:1"} if name == "khet2" else set()
         ok &= compare(name, actions, allowed_missing=missing)
+        if not args.moves_only:
+            ok &= compare_outcomes(name, rules, board, actions, piece_kinds, mirror,
+                                   ignored=missing)
     return 0 if ok else 1
 
 
