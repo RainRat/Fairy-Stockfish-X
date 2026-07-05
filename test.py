@@ -2595,11 +2595,16 @@ stepwisePushing = true
         self.assertEqual("".join(c for c in dos_rows[0] if c.isalpha()), "rsbqklsbr")
 
         khet1_moves = sf.legal_moves("khet1", khet1_fen, [])
-        self.assertTrue(len(khet1_moves) > 0)
+        self.assertEqual(len(khet1_moves), 81)
         self.assertIn("c1d2", khet1_moves)
         self.assertIn("c1c1:1", khet1_moves)
         self.assertNotIn("c1d2:1", khet1_moves)
         self.assertNotIn("e4e5", khet1_moves)
+        self.assertNotIn("h2i1", khet1_moves)
+        khet2_moves = sf.legal_moves("khet2", sf.start_fen("khet2"), [])
+        self.assertEqual(len(khet2_moves), 79)
+        self.assertNotIn("h2i1", khet2_moves)
+        self.assertNotIn("j1j1:3", khet2_moves)
 
         khet_djed_swap_fen = "9k/10/10/10/4SP:04/10/10/K9 w - - 0 1"
         khet_djed_swap_moves = sf.legal_moves("khet1", khet_djed_swap_fen, [])
@@ -2634,7 +2639,9 @@ stepwisePushing = true
         self.assertIn("c3d4s", sf.legal_moves("khet1", khet_swap_fen, []))
 
         playlaser_moves = sf.legal_moves("playlaser", playlaser_fen, [])
-        self.assertTrue(len(playlaser_moves) > 0)
+        self.assertEqual(len(playlaser_moves), 40)
+        self.assertIn("h1h1f", playlaser_moves)
+        self.assertNotIn("h1h1:0", playlaser_moves)
 
         playlaser_pawn_fen = "7k/8/8/4p3/3Pp3/8/8/K6L:0 w - - 0 1"
         playlaser_pawn_moves = sf.legal_moves("playlaser", playlaser_pawn_fen, [])
@@ -2643,12 +2650,12 @@ stepwisePushing = true
         self.assertNotIn("d4e5", playlaser_pawn_moves)
 
         playlaser_beam_fen = "k7/8/8/8/8/5p2/6n1/K6L:3 w - - 0 1"
-        playlaser_beam_after = sf.get_fen("playlaser", playlaser_beam_fen, ["a1b1"])
+        playlaser_beam_after = sf.get_fen("playlaser", playlaser_beam_fen, ["h1h1f"])
         self.assertNotIn("p", playlaser_beam_after.split()[0])
         self.assertNotIn("n", playlaser_beam_after.split()[0])
 
         playlaser_wall_fen = "k7/8/8/8/8/5w2/6n1/K6L:3 w - - 0 1"
-        playlaser_wall_after = sf.get_fen("playlaser", playlaser_wall_fen, ["a1b1"])
+        playlaser_wall_after = sf.get_fen("playlaser", playlaser_wall_fen, ["h1h1f"])
         self.assertIn("w", playlaser_wall_after.split()[0])
         self.assertNotIn("n", playlaser_wall_after.split()[0])
 

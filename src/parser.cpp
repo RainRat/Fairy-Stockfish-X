@@ -1220,6 +1220,13 @@ bool VariantParser<DoCheck>::parse_color_setting_first_piece(const std::string& 
 
 template <bool DoCheck>
 bool VariantParser<DoCheck>::parse_piece_types(Variant* v) {
+    for (Color c : {WHITE, BLACK})
+    {
+        Bitboard region = 0;
+        if (parse_attribute("mobilityRegion" + std::string(c == WHITE ? "White" : "Black"), region))
+            for (PieceType pt = PAWN; pt <= KING; ++pt)
+                v->mobilityRegion[c][pt] = region;
+    }
     for (PieceType pt = PAWN; pt <= KING; ++pt)
     {
         if (pt == CUSTOM_PIECES_ROYAL)
