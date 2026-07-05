@@ -2264,7 +2264,8 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
         }
     }
 
-    // 2. Automatically propagate base optics to oriented subtypes with rotation
+    // 2. Propagate piece-relative optics to oriented subtypes. fire_laser()
+    // converts the incoming beam to a piece-relative face at runtime.
     for (PieceType pt = PAWN; pt <= CUSTOM_PIECES_END; ++pt)
     {
         if (v->orientedPieceTypes & pt)
@@ -2274,7 +2275,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
             {
                 for (int f = 0; f < 4; ++f)
                 {
-                    v->pieceOptics[v->orientation_piece_type(pt, o)].outcomes[f] = v->pieceOptics[pt].outcomes[(f - o + 4) % 4];
+                    v->pieceOptics[v->orientation_piece_type(pt, o)].outcomes[f] = v->pieceOptics[pt].outcomes[f];
                 }
             }
         }

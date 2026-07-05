@@ -2601,6 +2601,8 @@ stepwisePushing = true
         self.assertNotIn("c1d2:1", khet1_moves)
         self.assertNotIn("e4e5", khet1_moves)
         self.assertNotIn("h2i1", khet1_moves)
+        khet_reflect_fen = sf.get_fen("khet1", khet1_fen, ["j4j4:0"])
+        self.assertTrue(khet_reflect_fen.split()[0].split("/")[4].endswith("P:0"))
         khet2_moves = sf.legal_moves("khet2", sf.start_fen("khet2"), [])
         self.assertEqual(len(khet2_moves), 79)
         self.assertNotIn("h2i1", khet2_moves)
@@ -2749,6 +2751,11 @@ stepwisePushing = true
 
         dos94_promotion_fen = "8k/P:08/9/9/9/9/9/9/K4L:03 w - - 0 1"
         self.assertIn("a8a9l", sf.legal_moves("dos-laser-chess-1994", dos94_promotion_fen, []))
+
+        dos94_rotated_fire = sf.get_fen(
+            "dos-laser-chess-1994", dos94_fen, ["c2c2:1f"]
+        )
+        self.assertIn("/D:0M:3D:1M:1P:0", dos94_rotated_fire)
 
         dos94_castling_fen = "8k/9/9/9/9/9/9/9/R:13K3R:1 w KQ - 0 1"
         dos94_castling_moves = sf.legal_moves("dos-laser-chess-1994", dos94_castling_fen, [])
