@@ -2717,12 +2717,14 @@ stepwisePushing = true
         self.assertEqual("".join(c for c in dos94_rows[-1] if c.isalpha()), "RBSLKQSBR")
         self.assertEqual("".join(c for c in dos94_rows[0] if c.isalpha()), "rbsqklsbr")
         dos94_moves = sf.legal_moves("dos-laser-chess-1994", dos94_fen, [])
+        self.assertEqual(len(dos94_moves), 1104)
         self.assertNotIn("0000", dos94_moves)
         self.assertNotIn("a1a1:0", dos94_moves)
         self.assertIn("a1a1:0f", dos94_moves)
         self.assertIn("d1d1f", dos94_moves)
         for file_name in "abcdefghi":
             self.assertIn(f"{file_name}2{file_name}4", dos94_moves)
+        self.assertNotIn("d2c3", dos94_moves)
         self.assertIn(
             "e8e6", sf.legal_moves("dos-laser-chess-1994", dos94_fen, ["e2e3"])
         )
