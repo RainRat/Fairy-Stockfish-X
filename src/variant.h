@@ -321,11 +321,15 @@ struct Variant {
       OUTCOME_SPLIT_FORWARD_LEFT = 10,
       OUTCOME_EXIT_BACK_FACE = 11,
       OUTCOME_DESTROY_CONTINUE = 12,
+      OUTCOME_PORTAL_IN = 13,
+      OUTCOME_PORTAL_OUT = 14,
+      OUTCOME_PORTAL_BIDIRECTIONAL = 15,
   };
   struct LaserOptics {
       LaserOutcome outcomes[4] = { OUTCOME_DESTROY, OUTCOME_DESTROY, OUTCOME_DESTROY, OUTCOME_DESTROY }; // Front, Right, Back, Left
   };
   LaserOptics pieceOptics[PIECE_TYPE_NB] = {};
+  LaserOutcome laserPortalFallback = OUTCOME_DESTROY;
   std::vector<Square> staticEmitters[COLOR_NB] = {};
   std::vector<Direction> staticEmitterDirs[COLOR_NB] = {};
   PieceType emitterPieceType = NO_PIECE_TYPE;

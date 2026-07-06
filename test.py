@@ -2794,7 +2794,45 @@ castling = false
 customPiece1 = a:K
 stackedPieceType = p:a
 startFen = 8/8/8/8/8/8/PP6/8 w - - 0 1
+
+[laser-portals:fairy]
+laserGame = true
+laserAutoFire = false
+checking = false
+king = -
+castling = false
+customPiece1 = l:K
+customPiece2 = x:K
+customPiece3 = y:K
+customPiece4 = z:K
+customPiece5 = p:K
+customPiece6 = v:K
+customPiece7 = u:K
+orientedPieceTypes = l
+orientationGroups = l:l/x/y/z
+laserEmitters = piece:l
+laser_l = S/S/S/S
+laser_p = O/D/D/I
+laser_v = D/D/D/D
+laser_u = P/D/D/P
+laserPortalFallback = S
+startFen = 8/4v3/8/4P3/8/8/8/L:11P5 w - - 0 1
 """)
+        portal_fen = sf.start_fen("laser-portals")
+        portal_after = sf.get_fen("laser-portals", portal_fen, ["a1a1f"])
+        self.assertNotIn("v", portal_after.split()[0])
+        # With no allied output, the configured absorb fallback leaves the
+        # entry portal in place.
+        no_exit = "8/8/8/8/8/8/8/L:11P5 w - - 0 1"
+        self.assertIn("P", sf.get_fen("laser-portals", no_exit, ["a1a1f"]).split()[0])
+        output_only = "4L:23/8/8/4P3/8/8/8/8 w - - 0 1"
+        self.assertIn(
+            "P", sf.get_fen("laser-portals", output_only, ["e8e8f"]).split()[0]
+        )
+        bidirectional = "8/4v3/8/4U3/8/8/8/L:11U5 w - - 0 1"
+        self.assertNotIn(
+            "v", sf.get_fen("laser-portals", bidirectional, ["a1a1f"]).split()[0]
+        )
         self.assertTrue(sf.run_cpp_tests())
 
 if __name__ == '__main__':

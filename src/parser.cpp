@@ -124,6 +124,9 @@ namespace {
         else if (outcome_str == "Y") outcome = Variant::OUTCOME_SPLIT_FORWARD_RIGHT;
         else if (outcome_str == "Z") outcome = Variant::OUTCOME_SPLIT_FORWARD_LEFT;
         else if (outcome_str == "G") outcome = Variant::OUTCOME_EXIT_BACK_FACE;
+        else if (outcome_str == "I" || outcome_str == "In") outcome = Variant::OUTCOME_PORTAL_IN;
+        else if (outcome_str == "O" || outcome_str == "Out") outcome = Variant::OUTCOME_PORTAL_OUT;
+        else if (outcome_str == "P" || outcome_str == "Bidirectional") outcome = Variant::OUTCOME_PORTAL_BIDIRECTIONAL;
         else
         {
             if (DoCheck)
@@ -1413,6 +1416,21 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("rotationDelta", v->rotationDelta);
     parse_attribute("rotationTwoWay", v->rotationTwoWay);
     parse_attribute("laserEmitterOrientationOffset", v->laserEmitterOrientationOffset);
+    auto portal_fallback = config.find("laserPortalFallback");
+    if (portal_fallback != config.end())
+    {
+        Variant::LaserOutcome outcome;
+        if (!parse_laser_outcome(portal_fallback->second, outcome, DoCheck, "laserPortalFallback")
+            || outcome == Variant::OUTCOME_PORTAL_IN
+            || outcome == Variant::OUTCOME_PORTAL_OUT
+            || outcome == Variant::OUTCOME_PORTAL_BIDIRECTIONAL)
+        {
+            if (DoCheck)
+                std::cerr << "laserPortalFallback must be a non-portal laser outcome." << std::endl;
+            return false;
+        }
+        v->laserPortalFallback = outcome;
+    }
     if (v->rotationDelta < 0 || v->rotationDelta > 3
         || v->laserEmitterOrientationOffset < 0 || v->laserEmitterOrientationOffset > 3)
     {

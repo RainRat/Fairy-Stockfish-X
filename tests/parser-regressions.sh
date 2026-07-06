@@ -251,6 +251,10 @@ laser_notapiece = R/D/D/L
 laserGame = true
 laser_p = R/D/D/L/S
 
+[bad-portal-fallback:fairy]
+laserGame = true
+laserPortalFallback = I
+
 [bad-static-manual-laser:fairy]
 laserGame = true
 laserAutoFire = false
@@ -508,6 +512,7 @@ assert_contains "${initial_capture_output}" "Initial capture Betza moves are not
 assert_contains_literal "${initial_capture_output}" "connectGroup must be -1, 0, or a positive group size."
 assert_contains_literal "${initial_capture_output}" "laser_notapiece - Unknown piece symbol: notapiece"
 assert_contains_literal "${initial_capture_output}" "laser_p - Too many laser outcome faces: expected 4."
+assert_contains_literal "${initial_capture_output}" "laserPortalFallback must be a non-portal laser outcome."
 assert_contains_literal "${initial_capture_output}" "laserAutoFire = false requires a piece laser emitter."
 assert_contains_literal "${initial_capture_output}" "orientationGroups - Malformed entry: p:"
 assert_contains_literal "${initial_capture_output}" "laserEmitters - Invalid square coordinates: a10x"

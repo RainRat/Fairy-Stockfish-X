@@ -9503,6 +9503,31 @@ static int direction_to_orientation(Direction d, bool diagonal) {
     return 0;
 }
 
+bool Position::laser_portal_exit(Square entrance, Square& exit, Direction& direction) const {
+    Piece entrancePc = piece_on(entrance);
+    if (entrancePc == NO_PIECE)
+        return false;
+
+    Bitboard portals = pieces(color_of(entrancePc)) & ~square_bb(entrance);
+    while (portals) {
+        Square candidate = pop_lsb(portals);
+        Piece pc = piece_on(candidate);
+        PieceType pt = type_of(pc);
+        int orientation = is_oriented(pt) ? var->orientation_index(pt) : 0;
+        for (int face = 0; face < 4; ++face) {
+            Variant::LaserOutcome outcome = var->pieceOptics[pt].outcomes[face];
+            if (outcome == Variant::OUTCOME_PORTAL_OUT
+                || outcome == Variant::OUTCOME_PORTAL_BIDIRECTIONAL) {
+                exit = candidate;
+                direction = orientation_to_direction((orientation + face) % 4,
+                                                     var->laserDiagonal);
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 Bitboard Position::laser_rotation_candidates(Color us) const {
     struct LaserBeam { Square sq; Direction dir; };
     std::vector<LaserBeam> beams;
@@ -9547,6 +9572,22 @@ Bitboard Position::laser_rotation_candidates(Color us) const {
                             ? var->orientation_index(type_of(pc)) : 0;
             int face = (beamOrient + 2 - pieceOrient + 4) % 4;
             Variant::LaserOutcome outcome = var->pieceOptics[type_of(pc)].outcomes[face];
+
+            if (outcome == Variant::OUTCOME_PORTAL_IN
+                || outcome == Variant::OUTCOME_PORTAL_BIDIRECTIONAL) {
+                Square exit;
+                Direction exitDir;
+                if (laser_portal_exit(sq, exit, exitDir)) {
+                    Piece exitPc = piece_on(exit);
+                    if (color_of(exitPc) == us && is_oriented(type_of(exitPc)))
+                        candidates |= exit;
+                    sq = exit;
+                    dir = exitDir;
+                    continue;
+                }
+                outcome = var->laserPortalFallback;
+            } else if (outcome == Variant::OUTCOME_PORTAL_OUT)
+                outcome = var->laserPortalFallback;
 
             if (outcome == Variant::OUTCOME_DESTROY_CONTINUE || outcome == Variant::OUTCOME_TRANSMIT)
                 continue;
@@ -9636,6 +9677,19 @@ void Position::fire_laser(Color us, Key& k, Square selectedEmitter) {
                 int face = (beam_orient + 2 - piece_orient + 4) % 4;
 
                 Variant::LaserOutcome outcome = var->pieceOptics[type_of(pc)].outcomes[face];
+
+                if (outcome == Variant::OUTCOME_PORTAL_IN
+                    || outcome == Variant::OUTCOME_PORTAL_BIDIRECTIONAL) {
+                    Square exit;
+                    Direction exitDir;
+                    if (laser_portal_exit(sq, exit, exitDir)) {
+                        sq = exit;
+                        dir = exitDir;
+                        continue;
+                    }
+                    outcome = var->laserPortalFallback;
+                } else if (outcome == Variant::OUTCOME_PORTAL_OUT)
+                    outcome = var->laserPortalFallback;
 
                 if (outcome == Variant::OUTCOME_DESTROY
                     || outcome == Variant::OUTCOME_DESTROY_CONTINUE) {
