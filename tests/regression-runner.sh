@@ -42,15 +42,17 @@ engine_is_stale() {
 }
 
 validate_engines() {
-  local primary="$1" candidate stale=0 missing=0 banner expected
+  local primary="$1" candidate family stale=0 missing=0 banner expected entry
   local candidates=(
-    "${primary}"
-    "${VLB_ENGINE:-${ROOT_DIR}/src/stockfish-vlb}"
-    "${LARGE_ENGINE:-${ROOT_DIR}/src/stockfish-large}"
-    "${MINI_ENGINE:-${ROOT_DIR}/src/stockfish-allvars}"
+    "LB|${primary}"
+    "VLB|${VLB_ENGINE:-${ROOT_DIR}/src/stockfish-vlb}"
+    "LB|${LARGE_ENGINE:-${ROOT_DIR}/src/stockfish-large}"
+    "LB|${MINI_ENGINE:-${ROOT_DIR}/src/stockfish-allvars}"
   )
 
-  for candidate in "${candidates[@]}"; do
+  for entry in "${candidates[@]}"; do
+    family=${entry%%|*}
+    candidate=${entry#*|}
     [[ "${candidate}" == /* ]] || candidate="${ROOT_DIR}/${candidate}"
     if [[ ! -x "${candidate}" ]]; then
       echo "missing engine: ${candidate}" >&2
@@ -62,8 +64,7 @@ validate_engines() {
       stale=1
     fi
     banner=$("${candidate}" compiler 2>/dev/null | head -n1 || true)
-    expected=" LB "
-    [[ "${candidate}" == *stockfish-vlb* ]] && expected=" VLB "
+    expected=" ${family} "
     if [[ " ${banner} " != *"${expected}"* ]]; then
       echo "wrong engine family: ${candidate} (expected${expected}, got '${banner}')" >&2
       stale=1

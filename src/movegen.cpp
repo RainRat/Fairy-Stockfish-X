@@ -1361,7 +1361,7 @@ namespace {
                     if (Type != QUIET_CHECKS || pos.gives_check(fire))
                         *moveList++ = fire;
 
-                    Bitboard rotators = pos.pieces(Us);
+                    Bitboard rotators = pos.pieces(Us) & laser_rotation_candidates(pos, Us);
                     while (rotators)
                     {
                         Square rotateSq = pop_lsb(rotators);

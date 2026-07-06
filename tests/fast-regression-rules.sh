@@ -85,6 +85,22 @@ UCI
 )
   assert_contains_literal "$out" "Fen:"
   assert_not_contains_literal "$out" "Illegal move"
+
+  out=$(run_uci "$ENGINE" "${ROOT_DIR}/src/variants.ini" dos-laser-chess-1994 <<'UCI'
+position startpos
+go depth 1 searchmoves d1d1:1h1f
+UCI
+)
+  assert_contains_literal "$out" "bestmove (none)"
+
+  # Fire+rotation filtering likewise remains a search hint only.
+  out=$(run_uci "$ENGINE" "${ROOT_DIR}/src/variants.ini" dos-laser-chess-1994 <<'UCI'
+position startpos moves d1d1:1h1f
+d
+UCI
+)
+  assert_contains_literal "$out" "Fen:"
+  assert_not_contains_literal "$out" "Illegal move"
 }
 
 test_flip_regressions() {

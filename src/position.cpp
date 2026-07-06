@@ -4775,8 +4775,7 @@ bool Position::pseudo_legal(const Move m) const {
 
   if (is_laser_fire(m))
       return laser_game() && !var->laserAutoFire && pc != NO_PIECE && color_of(pc) == us
-          && (var->base_piece_type(type_of(pc)) == var->emitterPieceType
-              || (var->laserFireAnyRotation && is_gating(m) && is_oriented(type_of(pc))));
+          && var->base_piece_type(type_of(pc)) == var->emitterPieceType;
 
   if (is_pull_move(m))
   {
@@ -9544,7 +9543,8 @@ Bitboard Position::laser_rotation_candidates(Color us) const {
             Piece pc = piece_on(sq);
             if (color_of(pc) == us && is_oriented(type_of(pc)))
                 candidates |= sq;
-            int pieceOrient = var->orientation_index(type_of(pc));
+            int pieceOrient = is_oriented(type_of(pc))
+                            ? var->orientation_index(type_of(pc)) : 0;
             int face = (beamOrient + 2 - pieceOrient + 4) % 4;
             Variant::LaserOutcome outcome = var->pieceOptics[type_of(pc)].outcomes[face];
 
@@ -9631,7 +9631,8 @@ void Position::fire_laser(Color us, Key& k, Square selectedEmitter) {
 
             Piece pc = piece_on(sq);
             if (pc != NO_PIECE) {
-                int piece_orient = var->orientation_index(type_of(pc));
+                int piece_orient = is_oriented(type_of(pc))
+                                 ? var->orientation_index(type_of(pc)) : 0;
                 int face = (beam_orient + 2 - piece_orient + 4) % 4;
 
                 Variant::LaserOutcome outcome = var->pieceOptics[type_of(pc)].outcomes[face];
@@ -9687,7 +9688,12 @@ void Position::fire_laser(Color us, Key& k, Square selectedEmitter) {
         Piece pc = piece_on(sq);
         if (pc != NO_PIECE) {
             st->bycatchSquares |= sq;
-            st->unpromotedBycatch[sq] = pc;
+            Piece unpromoted = unpromoted_piece_on(sq);
+            st->unpromotedBycatch[sq] = unpromoted ? unpromoted : pc;
+            if (unpromoted)
+                st->demotedBycatch |= sq;
+            else if (is_promoted(sq))
+                st->promotedBycatch |= sq;
             PieceType unstacked = var->unstacked_piece_type(type_of(pc));
             remove_piece(sq);
             k ^= Zobrist::psq[pc][sq];

@@ -868,6 +868,7 @@ static PyObject* pyffish_runCppTests(PyObject* self, PyObject* args) {
             {"pawn-stack", "8/8/8/8/8/8/1A6/8 w - - 0 1", "b2c3-"},
             {"khet1", "9k/10/10/10/3p6/2S:05/10/9K w - - 0 1", "c3d4s"},
             {"dos-laser-chess", "9/9/9/9/9/9/5k3/9/K4L:03 w - - 0 1", "f1f1f"},
+            {"dos-laser-chess", "8k/9/9/9/9/9/5~Q:03/9/K4L:03 w - - 0 1", "f1f1f"},
             {"dos-laser-chess", "r:1s:0b:2q:2kls:0b:2r:1/d:2m:0d:2m:2pm:3d:2m:1d:2/9/9/9/9/9/D:0M:3D:0M:1PM:0D:0M:2D:0/R:1B:0S:0LKQ:0B:0S:0R:1 w - - 0 1", "e2e3:1d1"},
             {"dos-laser-chess", "k8/9/9/9/5R:13/3M:05/9/9/K4L:03 w - - 0 1", "d4d5:2f5"},
             {"dos-laser-chess", "k8/9/9/9/9/3M:05/9/9/K4L:03 w - - 0 1", "d4d5:1d5"},
