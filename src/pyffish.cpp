@@ -883,8 +883,6 @@ static PyObject* pyffish_runCppTests(PyObject* self, PyObject* args) {
             const Variant* v = variants.get(tc.variant);
             if (!v)
             {
-                if (!std::strcmp(tc.variant, "pawn-stack"))
-                    continue;
                 PyErr_Format(PyFFishError, "Required variant %s is missing", tc.variant);
                 return nullptr;
             }

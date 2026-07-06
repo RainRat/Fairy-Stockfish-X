@@ -2234,6 +2234,14 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
             std::cerr << "laserAutoFire = false requires a piece laser emitter." << std::endl;
         return false;
     }
+    if (v->laserFireSelectedEmitter
+        && (!v->staticEmitters[WHITE].empty() || !v->staticEmitters[BLACK].empty()))
+    {
+        if (DoCheck)
+            std::cerr << "laserFireSelectedEmitter is incompatible with static laser emitters."
+                      << std::endl;
+        return false;
+    }
 
     auto parse_optics = [&](const std::string& key, const std::string& val,
                             Variant::LaserOptics& optics) {

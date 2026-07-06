@@ -1265,7 +1265,8 @@ inline bool is_gating(Move m) {
 }
 
 inline bool is_drop_move(Move m) {
-  return (784 >> ((static_cast<uint64_t>(m) >> (2 * SQUARE_BITS)) & 15)) & 1;
+  MoveType mt = type_of(m);
+  return mt == DROP || mt == DROP2 || mt == INSERT;
 }
 
 inline bool is_insert_move(Move m) {

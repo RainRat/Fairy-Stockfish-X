@@ -6256,6 +6256,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           Piece stacked = make_piece(us, var->stacked_piece_type(type_of(pc)));
           remove_piece(from);
           put_piece(stacked, to);
+          // The generic mover delta below already removes pc@from and adds
+          // pc@to. Cancel that synthetic destination before adding the stack.
           k ^= Zobrist::psq[pc][to] ^ Zobrist::psq[stacked][to];
           st->materialKey ^= Zobrist::psq[pc][pieceCount[pc]]
                            ^ Zobrist::psq[stacked][pieceCount[stacked] - 1];
@@ -6281,6 +6283,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           remove_piece(from);
           put_piece(single, from);
           put_piece(single, to);
+          // As above, cancel the generic pc@to term; pc@from is removed there.
           k ^= Zobrist::psq[pc][to] ^ Zobrist::psq[single][from] ^ Zobrist::psq[single][to];
           st->materialKey ^= Zobrist::psq[pc][pieceCount[pc]]
                            ^ Zobrist::psq[single][pieceCount[single] - 2]

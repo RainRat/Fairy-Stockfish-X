@@ -401,11 +401,21 @@ invalid_variant_positions = {
 
 class TestPyffish(unittest.TestCase):
     def test_run_cpp_tests(self):
+        load_repo_variants_or_skip()
         sf.load_variant_config(
             """[pairedpawns:chess]
 startFen = 8/8/8/8/8/8/8/8[PPpp] w - - 0 1
 pieceDrops = true
 symmetricDropTypes = p
+
+[pawn-stack:fairy]
+laserGame = true
+checking = false
+king = -
+castling = false
+customPiece1 = a:K
+stackedPieceType = p:a
+startFen = 8/8/8/8/8/8/PP6/8 w - - 0 1
 """
         )
         self.assertTrue(sf.run_cpp_tests())

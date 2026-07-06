@@ -260,6 +260,11 @@ laserGame = true
 laserAutoFire = false
 laserEmitters = white@a1:0
 
+[bad-selected-static-laser:fairy]
+laserGame = true
+laserFireSelectedEmitter = true
+laserEmitters = white@a1:0
+
 [bad-orientation-group:fairy]
 laserGame = true
 orientationGroups = p:
@@ -514,6 +519,7 @@ assert_contains_literal "${initial_capture_output}" "laser_notapiece - Unknown p
 assert_contains_literal "${initial_capture_output}" "laser_p - Too many laser outcome faces: expected 4."
 assert_contains_literal "${initial_capture_output}" "laserPortalFallback must be a non-portal laser outcome."
 assert_contains_literal "${initial_capture_output}" "laserAutoFire = false requires a piece laser emitter."
+assert_contains_literal "${initial_capture_output}" "laserFireSelectedEmitter is incompatible with static laser emitters."
 assert_contains_literal "${initial_capture_output}" "orientationGroups - Malformed entry: p:"
 assert_contains_literal "${initial_capture_output}" "laserEmitters - Invalid square coordinates: a10x"
 assert_contains_literal "${initial_capture_output}" "laserEmitters - Malformed token: "

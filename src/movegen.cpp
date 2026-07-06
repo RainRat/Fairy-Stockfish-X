@@ -1469,10 +1469,7 @@ namespace {
         while (b)
         {
             Square to = pop_lsb(b);
-            if constexpr (Type == QUIET_CHECKS)
-                moveList = make_move_and_gating<NORMAL, Type>(pos, moveList, Us, royalSq, to);
-            else
-                moveList = make_move_and_gating<NORMAL, Type>(pos, moveList, Us, royalSq, to);
+            moveList = make_move_and_gating<NORMAL, Type>(pos, moveList, Us, royalSq, to);
         }
 
         // Passing move by royal piece
