@@ -34,6 +34,7 @@
 #include "tt.h"
 #include "uci.h"
 #include "xboard.h"
+#include "apiutil.h"
 #include "syzygy/tbprobe.h"
 
 using namespace std;
@@ -389,6 +390,31 @@ namespace {
     sync_cout << std::right;
   }
 
+  // print_legal_moves() prints all legal moves in the current position,
+  // optionally in a specific notation or checks a specific move's legality.
+
+  void print_legal_moves(Position& pos, istringstream& is) {
+
+    string token;
+    is >> token;
+
+    if (token == "uci" || token == "san" || token.empty())
+    {
+      bool useSan = (token == "san");
+      for (const auto& m : MoveList<LEGAL>(pos))
+        sync_cout << (useSan ? SAN::move_to_san(pos, m, NOTATION_SAN) : UCI::move(pos, m)) << " ";
+      sync_cout << sync_endl;
+    }
+    else
+    {
+      string moveStr = token;
+      if (UCI::to_move(pos, moveStr) != MOVE_NONE)
+        sync_cout << token << " is legal" << sync_endl;
+      else
+        sync_cout << token << " is illegal" << sync_endl;
+    }
+  }
+
 } // namespace
 
 
@@ -487,6 +513,7 @@ void UCI::loop(int argc, char* argv[]) {
       else if (token == "position")   position(pos, is, states), banmoves.clear();
       else if (token == "ucinewgame" || token == "usinewgame" || token == "uccinewgame") Search::clear();
       else if (token == "isready")    sync_cout << "readyok" << sync_endl;
+      else if (token == "legal")      print_legal_moves(pos, is);
       else if (token == "help")
           sync_cout << "\nStandard Protocol Commands:"
                     << "\n  uci, usi, ucci, xboard      Select an engine protocol"
@@ -506,6 +533,7 @@ void UCI::loop(int argc, char* argv[]) {
                     << "\n  compiler                    Show information about the compiler"
                     << "\n  export_net [file]           Export the currently loaded NNUE net"
                     << "\n  variants [filter]           Show supported variants, optionally filtered"
+                    << "\n  legal [uci|san|move]        List legal moves or check legality of a move"
                     << "\n  load [file|<<EOF]           Load variant rules from a file or text"
                     << "\n  check [file|<<EOF]          Validate a variant configuration"
                     << "\n  flip                        Flip the board perspective"
