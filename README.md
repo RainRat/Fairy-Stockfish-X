@@ -41,15 +41,25 @@ Fairy-Stockfish-X supports many variants through a configuration file. To load t
    ```uci
    setoption name VariantPath value variants.ini
    ```
+   *Tip: You can also use the `load` command in the CLI: `load variants.ini`*
+
 2. Choose a variant to play:
    ```uci
    setoption name UCI_Variant value antichess
    ```
 3. Use the `d` command to see the current board.
 
+### Move Notation
+
+The engine uses standard coordinate notation for moves.
+
+- **Normal moves:** Use the source and destination squares (e.g., `e2e4`, `g1f3`).
+- **Promotions:** Add the piece character at the end without an equals sign (e.g., `e7e8q`).
+- **Drops:** Use the piece letter, an `@` symbol, and the destination square (e.g., `P@b2`).
+
 ## Python Bindings
 
-You can also use Fairy-Stockfish-X in Python.
+You can also use Fairy-Stockfish-X in Python via the `pyffish` library.
 
 ### Prerequisites
 - Python 3.x
@@ -60,7 +70,26 @@ To build the Python extension, run this in the project root:
 ```bash
 python3 setup.py build_ext --inplace
 ```
-After building, you can import `pyffish` in your Python scripts.
+
+### Python API Example
+Once built, you can use `pyffish` to generate legal moves and parse FENs:
+
+```python
+import pyffish as sf
+
+# Load custom variants if needed
+# sf.load_variant_config("path/to/variants.ini")
+
+# Get legal moves for a position
+variant = "chess"
+fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+moves = sf.legal_moves(variant, fen, [])
+print(f"Legal moves: {moves}")
+
+# Get resulting FEN after a move
+new_fen = sf.get_fen(variant, fen, ["e2e4"])
+print(f"New FEN: {new_fen}")
+```
 
 ## Purpose
 
