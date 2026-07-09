@@ -2,71 +2,35 @@
 
 Fairy-Stockfish-X is an experimental version of [Fairy-Stockfish](https://github.com/fairy-stockfish/Fairy-Stockfish). It is used to test new features and support unique chess variants.
 
-## Quick Start
+## Usage in Chess GUIs
 
-To build the engine, follow these steps:
+Fairy-Stockfish-X can be used in any UCI-compatible chess GUI (such as CuteChess, Arena, or Nibbler).
 
-1. Open your terminal and go to the `src/` directory.
-2. Run the build command:
-   ```bash
-   make -j build ARCH=x86-64-modern
-   ```
-   *Note: If you have a different CPU, you can check other options by running `make help`.*
+### Installation
 
-### Build Options
-
-You can add flags to the `make` command to enable special features:
-
-- **Large Boards:** For variants like Shogi (up to 12x10), add `largeboards=yes`.
-- **Very Large Boards:** For boards up to 16x16, add `verylargeboards=yes`.
-- **All Variants:** To include unusual variants like Game of the Amazons, add `all=yes`.
-
-Example for Shogi:
-```bash
-make -j build ARCH=x86-64-modern largeboards=yes
-```
-
-## Basic Usage
-
-After building, you can start the engine by running:
-```bash
-./stockfish
-```
+1. Download or [build](DEVELOPING.md#building-from-source) the Fairy-Stockfish-X binary.
+2. Add the engine to your GUI as a new UCI engine.
 
 ### Loading Variants
 
-Fairy-Stockfish-X supports many variants through a configuration file. To load them:
+Unlike standard Stockfish, Fairy-Stockfish-X often requires two specific UCI options to be set in your GUI's engine configuration:
 
-1. Tell the engine where your variants file is:
-   ```uci
-   setoption name VariantPath value variants.ini
-   ```
-2. Choose a variant to play:
-   ```uci
-   setoption name UCI_Variant value antichess
-   ```
-3. Use the `d` command to see the current board.
+- **VariantPath:** Set this to the path of your `variants.ini` file.
+- **UCI_Variant:** Set this to the name of the variant you want to play (e.g., `antichess`, `shogi`, `atomic`).
 
-## Python Bindings
+In most GUIs, these can be configured in the "Engine Settings" or "Edit Engine" dialog.
 
-You can also use Fairy-Stockfish-X in Python.
+## Documentation
 
-### Prerequisites
-- Python 3.x
-- `setuptools` (Install via `pip install setuptools`)
-
-### Building the Extension
-To build the Python extension, run this in the project root:
-```bash
-python3 setup.py build_ext --inplace
-```
-After building, you can import `pyffish` in your Python scripts.
+- **[DEVELOPING.md](DEVELOPING.md):** Build instructions, CLI usage, and developer information.
+- **[dllbinding_usage.md](dllbinding_usage.md):** Information on using the C API / shared library.
+- **[AGENTS.md](AGENTS.md):** Internal guide for developers working on the codebase.
 
 ## Purpose
 
-This project has three main goals:
-1. Test new features before they move to the main project.
-2. Provide a place to experiment with new ideas.
-3. Support chess variants that are too unusual for the standard engine.
+This project is a fork of Fairy-Stockfish focused on:
+- Testing new experimental features.
+- Supporting extremely unusual or complex chess variants.
+- Rapid prototyping of new chess engine ideas.
 
 For standard functionality, please visit the [main Fairy-Stockfish repository](https://github.com/fairy-stockfish/Fairy-Stockfish).
