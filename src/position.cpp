@@ -1909,18 +1909,7 @@ void Position::set_castling_right(Color c, Square rfrom) {
 void Position::set_check_info(StateInfo* si) const {
 
   std::fill_n(si->checkSquares, PIECE_TYPE_NB, Bitboard(0));
-  auto init_royal_extinction_state = [&]() {
-      si->extinctionSeen[WHITE] = NO_PIECE_SET;
-      si->extinctionSeen[BLACK] = NO_PIECE_SET;
-      for (PieceSet ps = extinction_must_appear(); ps;)
-      {
-          PieceType pt = pop_lsb(ps);
-          if (count(WHITE, pt))
-              si->extinctionSeen[WHITE] |= piece_set(pt);
-          if (count(BLACK, pt))
-              si->extinctionSeen[BLACK] |= piece_set(pt);
-      }
-
+  auto init_pseudo_royal_state = [&]() {
       si->pseudoRoyalCandidates = 0;
       si->pseudoRoyals = 0;
       if (pseudo_royal_types())
@@ -1972,7 +1961,7 @@ void Position::set_check_info(StateInfo* si) const {
       si->chased = Bitboard(0);
       si->legalCapture = NO_VALUE;
       si->legalEnPassant = NO_VALUE;
-      init_royal_extinction_state();
+      init_pseudo_royal_state();
       return;
   }
 
@@ -2037,7 +2026,7 @@ void Position::set_check_info(StateInfo* si) const {
   si->chased = var->chasingRule ? chased() : Bitboard(0);
   si->legalCapture = NO_VALUE;
   si->legalEnPassant = NO_VALUE;
-  init_royal_extinction_state();
+  init_pseudo_royal_state();
 
 }
 
@@ -4178,7 +4167,7 @@ bool Position::legal(Move m) const {
           Square kto = rifleShot ? from : to;
           Square blastCenter = (capture(m) || rifleShot) ? captureBlastCenter : kto;
           Square rfrom = SQ_NONE, rto = SQ_NONE;
-          Bitboard occupied = rifleShot ? pieces() : (!dropMove ? pieces() ^ from : pieces());
+          Bitboard occupied = rifleShot ? pieces() : (!dropMove && !cloneMove ? pieces() ^ from : pieces());
           Bitboard blastImmune = blastOnCapture ? blast_immune_bb() : Bitboard(0);
       if (walling_rule() == DUCK)
           occupied ^= st->wallSquares;
@@ -4208,7 +4197,7 @@ bool Position::legal(Move m) const {
       {
           PieceType pt = pop_lsb(ps);
           int countAfter = count(sideToMove, pt);
-          if (!dropMove && movePt == pt)
+          if (!dropMove && !cloneMove && movePt == pt)
               --countAfter;
           if (finalMovePt == pt)
           {
@@ -4223,7 +4212,7 @@ bool Position::legal(Move m) const {
                   return false; // Anti-royal piece is missing and not replaced
 
               Bitboard antiRoyalsByType = pieces(sideToMove, pt);
-              if (movePt == pt)
+              if (movePt == pt && !cloneMove)
                   antiRoyalsByType &= ~square_bb(from);
               antiRoyals |= antiRoyalsByType;
               if (finalMovePt == pt)
@@ -4916,6 +4905,7 @@ bool Position::gives_check(Move m) const {
       return false;
 
   bool rifleShot = rifle_capture(m) && capture(m) && type_of(m) != CASTLING;
+  bool cloneMove = is_clone_move(m);
   Square shotSq = capture(m) ? capture_square(m) : to;
   Square attackFrom = rifleShot ? from : to;
 
@@ -4945,7 +4935,7 @@ bool Position::gives_check(Move m) const {
   else
   {
       occupied = rifleShot ? (pieces() ^ square_bb(shotSq))
-                           : (((!dropMove ? pieces() ^ from : pieces()) ^ square_bb(shotSq)) | to);
+                           : (((!dropMove && !cloneMove ? pieces() ^ from : pieces()) ^ square_bb(shotSq)) | to);
   }
   if (paired_drop(m))
       occupied |= square_bb(secondary_drop_square(m));
@@ -4956,7 +4946,7 @@ bool Position::gives_check(Move m) const {
   Bitboard janggiCannons = pieces(JANGGI_CANNON);
   if (type_of(mover) == JANGGI_CANNON)
       janggiCannons = rifleShot ? (janggiCannons & ~square_bb(shotSq))
-                                : ((!dropMove ? janggiCannons ^ from : janggiCannons) | to);
+                                : ((!dropMove && !cloneMove ? janggiCannons ^ from : janggiCannons) | to);
   else if (janggiCannons & to)
       janggiCannons ^= to;
 
@@ -4964,6 +4954,7 @@ bool Position::gives_check(Move m) const {
       || has_pushing()
       || has_adjacent_swapping()
       || is_swap_move(m)
+      || cloneMove
       || type_of(m) == PULL
       || type_of(m) == DROP2
       || type_of(m) == INSERT)
@@ -5311,6 +5302,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   st = &newSt;
   st->extinctionSeen[WHITE] = newSt.previous->extinctionSeen[WHITE];
   st->extinctionSeen[BLACK] = newSt.previous->extinctionSeen[BLACK];
+  st->pendingClaimPass = false;
   st->move = m;
   clear_move_undo_state(st);
   // Mandatory multimove pass plies should not advance the halfmove clock.
@@ -7371,6 +7363,7 @@ void Position::do_null_move(StateInfo& newSt) {
   newSt.previous = st;
   st = &newSt;
   st->key = st->previous->key;
+  st->pendingClaimPass = false;
 
   if (potions_enabled())
   {

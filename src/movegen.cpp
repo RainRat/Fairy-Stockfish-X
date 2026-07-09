@@ -452,7 +452,7 @@ namespace {
             Square from = pop_lsb(remaining);
             Bitboard quiets = pos.moves_from(Us, PAWN, from) & target;
             Bitboard attacks = pos.attacks_from(Us, PAWN, from) & capturable & localCaptureTarget;
-            Bitboard epSquares = pos.attacks_from(Us, PAWN, from) & pos.ep_squares() & ~pos.pieces() & localCaptureTarget;
+            Bitboard epSquares = pos.attacks_from(Us, PAWN, from) & pos.ep_squares() & ~(pos.pieces() | pos.dead_squares()) & localCaptureTarget;
             Bitboard quietPromotions = quiets & standardPromotionZone;
             Bitboard capturePromotions = attacks & standardPromotionZone;
 
@@ -1145,10 +1145,12 @@ namespace {
                 {
                     Square from = pop_lsb(froms);
                     Bitboard b = pos.clone_targets_from(Us, from) & cloneTargets;
-                    if (Type == QUIET_CHECKS)
-                        b &= pos.check_squares(pt);
                     while (b)
-                        *moveList++ = make<SPECIAL>(from, pop_lsb(b));
+                    {
+                        Move m = make<SPECIAL>(from, pop_lsb(b));
+                        if (Type != QUIET_CHECKS || pos.gives_check(m))
+                            *moveList++ = m;
+                    }
                 }
             }
         }

@@ -867,11 +867,8 @@ namespace {
         PieceSet parsed[PIECE_TYPE_NB];
         std::copy(v->hostageExchange, v->hostageExchange + PIECE_TYPE_NB, parsed);
         bool sawGroup = false;
-        while (std::getline(groups, group, ' '))
+        while (groups >> group)
         {
-            group = trim(group);
-            if (group.empty())
-                continue;
             sawGroup = true;
             auto [token, rest] = split_piece_entry(group);
             PieceType from = parse_piece_type_token(v, token);
@@ -2194,11 +2191,13 @@ bool VariantParser<DoCheck>::parse_capture_maps(Variant* v) {
         std::string entry;
         std::stringstream ss(it->second);
         PieceSet parsed[PIECE_TYPE_NB];
+        bool sawEntry = false;
         if (allow && !hasCaptureForbidden)
             std::fill(std::begin(parsed), std::end(parsed), v->pieceTypes);
         else
             std::copy(v->captureForbidden, v->captureForbidden + PIECE_TYPE_NB, parsed);
         while (ss >> entry) {
+            sawEntry = true;
             size_t sep = entry.find(':');
             if (sep == std::string::npos || sep == 0 || sep + 1 >= entry.size()) {
                 if (DoCheck)
@@ -2235,6 +2234,12 @@ bool VariantParser<DoCheck>::parse_capture_maps(Variant* v) {
                 else
                     parsed[attacker] |= targetSet;
             }
+        }
+        if (!sawEntry)
+        {
+            if (DoCheck)
+                std::cerr << key << " - Empty value." << std::endl;
+            return false;
         }
         std::copy(parsed, parsed + PIECE_TYPE_NB, v->captureForbidden);
         return true;
@@ -2328,6 +2333,12 @@ bool VariantParser<DoCheck>::parse_priority_drops(Variant* v) {
         }
         else if (sawToken)
             v->isPriorityDrop = parsedPriorityDrops;
+        else
+        {
+            if (DoCheck)
+                std::cerr << "priorityDropTypes - Empty value." << std::endl;
+            return false;
+        }
     }
     return true;
 }
