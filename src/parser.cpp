@@ -1481,6 +1481,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("castling", v->castling);
     parse_attribute("castlingDroppedPiece", v->castlingDroppedPiece);
     parse_attribute("castlingPromotedPiece", v->castlingPromotedPiece);
+    parse_attribute("castlingIgnoreCheck", v->castlingIgnoreCheck);
     parse_attribute("castlingForbiddenPlies", v->castlingForbiddenPlies);
     parse_attribute("castlingKingsideFile", v->castlingKingsideFile);
     parse_attribute("castlingQueensideFile", v->castlingQueensideFile);
@@ -1498,6 +1499,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_color_setting("dropMates", v->dropMates);
     parse_color_setting("mustCapture", v->mustCapture);
     parse_color_setting("mustCaptureEnPassant", v->mustCaptureEnPassant);
+    parse_color_setting("captureRequiresSelfDestruct", v->captureRequiresSelfDestruct);
     parse_attribute("rifleCapture", v->rifleCapture);
     auto it_push_strength = config.find("pushingStrength");
     if (it_push_strength != config.end())
@@ -2186,6 +2188,11 @@ bool VariantParser<DoCheck>::parse_gating_piece_after(Variant* v) {
 template <bool DoCheck>
 bool VariantParser<DoCheck>::parse_capture_maps(Variant* v) {
     const bool hasCaptureForbidden = config.find("captureForbidden") != config.end();
+    auto sync_color_maps = [&]() {
+        for (Color c : { WHITE, BLACK })
+            std::copy(v->captureForbidden, v->captureForbidden + PIECE_TYPE_NB, v->captureForbiddenByColor[c]);
+    };
+    sync_color_maps();
     auto parse_capture_map = [&](const std::string& key, bool allow) {
         auto it = config.find(key);
         if (it == config.end())
@@ -2237,13 +2244,54 @@ bool VariantParser<DoCheck>::parse_capture_maps(Variant* v) {
             }
         }
         std::copy(parsed, parsed + PIECE_TYPE_NB, v->captureForbidden);
+        sync_color_maps();
         return true;
     };
     if (!parse_capture_map("captureForbidden", false))
         return false;
     if (!parse_capture_map("captureAllowed", true))
         return false;
-    return true;
+
+    auto parse_color_capture_map = [&](const std::string& key, Color c, bool allow) {
+        auto it = config.find(key);
+        if (it == config.end())
+            return true;
+
+        std::string entry;
+        std::stringstream ss(it->second);
+        PieceSet parsed[PIECE_TYPE_NB];
+        std::copy(v->captureForbiddenByColor[c], v->captureForbiddenByColor[c] + PIECE_TYPE_NB, parsed);
+        while (ss >> entry) {
+            size_t sep = entry.find(':');
+            if (sep == std::string::npos || sep == 0 || sep + 1 >= entry.size()) {
+                if (DoCheck)
+                    std::cerr << key << " - Invalid mapping token: " << entry << std::endl;
+                return false;
+            }
+            PieceSet attackerSet = NO_PIECE_SET, targetSet = NO_PIECE_SET;
+            if (!parse_piece_set_token_string(entry.substr(0, sep), v, attackerSet, true, false)
+                || !parse_piece_set_token_string(entry.substr(sep + 1), v, targetSet, true, true)
+                || !attackerSet || !targetSet)
+            {
+                if (DoCheck)
+                    std::cerr << key << " - Invalid capture mapping: " << entry << std::endl;
+                return false;
+            }
+            for (PieceSet ps = attackerSet; ps; ) {
+                PieceType attacker = pop_lsb(ps);
+                if (allow)
+                    parsed[attacker] &= ~targetSet;
+                else
+                    parsed[attacker] |= targetSet;
+            }
+        }
+        std::copy(parsed, parsed + PIECE_TYPE_NB, v->captureForbiddenByColor[c]);
+        return true;
+    };
+    return parse_color_capture_map("captureForbiddenWhite", WHITE, false)
+        && parse_color_capture_map("captureForbiddenBlack", BLACK, false)
+        && parse_color_capture_map("captureAllowedWhite", WHITE, true)
+        && parse_color_capture_map("captureAllowedBlack", BLACK, true);
 }
 
 template <bool DoCheck>

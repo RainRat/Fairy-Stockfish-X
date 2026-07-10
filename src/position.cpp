@@ -2847,7 +2847,7 @@ Bitboard Position::attackers_to_king(Square s, Bitboard occupied, Color c, Bitbo
       for (PieceSet ps = piece_types(); ps; )
       {
           PieceType apt = pop_lsb(ps);
-          if (var->captureForbidden[apt] & royalType)
+          if (var->captureForbiddenByColor[c][apt] & royalType)
               attackers &= ~pieces(c, apt);
       }
   return attackers;
@@ -3321,7 +3321,7 @@ Bitboard Position::compute_remove_connect_n_mask(
 
 /// Position::legal() tests whether a pseudo-legal move is legal
 
-bool Position::legal(Move m) const {
+bool Position::legal(Move m, bool bypassSelfDestructCaptureRule) const {
   SimulatedMoveGuard guard(*this, m);
 
   assert(is_ok(m));
@@ -3404,7 +3404,8 @@ bool Position::legal(Move m) const {
       Piece mover = moved_piece(m);
       if (dropMove || mover == NO_PIECE || color_of(mover) != us)
           return false;
-      if (!(self_destruct_types() & piece_set(type_of(mover))))
+      if (!(self_destruct_types() & piece_set(type_of(mover)))
+          && !(capture_requires_self_destruct() && self_destructs_capturer(m)))
           return false;
   }
 
@@ -3561,6 +3562,20 @@ bool Position::legal(Move m) const {
       StateInfo nextState;
       ScopedProbeMove probe(*this, m, nextState);
       if (evasion_checkers() && !has_legal_move_ignoring_immediate_end())
+          return false;
+  }
+
+  // Before this side's first capture, a currently capturing piece must self-destruct.
+  if (!bypassSelfDestructCaptureRule && capture_requires_self_destruct())
+  {
+      if (isCapture)
+          return false;
+      if (is_self_destruct(m))
+      {
+          if (!self_destructs_capturer(m))
+              return false;
+      }
+      else if (has_capture_before_self_destruct())
           return false;
   }
 
@@ -4257,7 +4272,7 @@ bool Position::legal(Move m) const {
   {
       PieceType attacker = type_of(moved_piece(m));
       PieceType target = type_of(captured_piece(m));
-      if (attacker < PIECE_TYPE_NB && target < PIECE_TYPE_NB && (var->captureForbidden[attacker] & target))
+      if (attacker < PIECE_TYPE_NB && target < PIECE_TYPE_NB && (var->captureForbiddenByColor[us][attacker] & target))
           return false;
   }
 
@@ -4316,11 +4331,11 @@ bool Position::legal(Move m) const {
           return att;
       };
 
-      if (((!allow_checks()) || spellLikeCastler) && attackers_for_castling(from, pieces()))
+      if (((!allow_checks() && !var->castlingIgnoreCheck) || spellLikeCastler) && attackers_for_castling(from, pieces()))
           return false;
 
       for (Square s = to; s != from; s += step)
-          if (   (((!allow_checks()) || spellLikeCastler) && attackers_for_castling(s, pieces()))
+          if (   (((!allow_checks() && !var->castlingIgnoreCheck) || spellLikeCastler) && attackers_for_castling(s, pieces()))
               || (var->flyingGeneral && (attacks_bb(~us, ROOK, s, pieces() ^ from) & pieces(~us, KING)))
               || (var->diagonalGeneral && (attacks_bb(~us, BISHOP, s, pieces() ^ from) & pieces(~us, KING))))
               return false;
@@ -4565,7 +4580,8 @@ bool Position::pseudo_legal(const Move m) const {
   {
       if (dropMove || pc == NO_PIECE || color_of(pc) != us)
           return false;
-      if (!(self_destruct_types() & piece_set(type_of(pc))))
+      if (!(self_destruct_types() & piece_set(type_of(pc)))
+          && !(capture_requires_self_destruct() && self_destructs_capturer(m)))
           return false;
   }
 
@@ -4887,6 +4903,41 @@ bool Position::push_move(Move m) const {
 }
 
 
+bool Position::has_capture_before_self_destruct() const {
+  if (evasion_checkers())
+  {
+      for (const auto& mevasion : MoveList<EVASIONS>(*this))
+          if (capture(mevasion) && legal(mevasion, true))
+              return true;
+  }
+  else
+  {
+      for (const auto& mcap : MoveList<CAPTURES>(*this))
+          if (capture(mcap) && legal(mcap, true))
+              return true;
+  }
+  return false;
+}
+
+bool Position::self_destructs_capturer(Move m) const {
+  if (!is_self_destruct(m))
+      return false;
+  Square from = from_sq(m);
+  if (evasion_checkers())
+  {
+      for (const auto& mevasion : MoveList<EVASIONS>(*this))
+          if (from_sq(mevasion) == from && capture(mevasion) && legal(mevasion, true))
+              return true;
+  }
+  else
+  {
+      for (const auto& mcap : MoveList<CAPTURES>(*this))
+          if (from_sq(mcap) == from && capture(mcap) && legal(mcap, true))
+              return true;
+  }
+  return false;
+}
+
 /// Position::gives_check() tests whether a pseudo-legal move gives a check
 
 bool Position::gives_check(Move m) const {
@@ -4976,14 +5027,14 @@ bool Position::gives_check(Move m) const {
 
   if (usingPhysicalKingTarget
       && (attackers_to_king(royalSq, occupied, sideToMove, janggiCannons) & square_bb(attackFrom)))
-      return !(var->captureForbidden[type_of(mover)] & royalType);
+      return !(var->captureForbiddenByColor[color_of(mover)][type_of(mover)] & royalType);
 
   // Is there a direct check?
   if (!is_promotion_move(m) && type_of(m) != PIECE_PROMOTION && type_of(m) != PIECE_DEMOTION && type_of(m) != CASTLING
       && !((var->petrifyOnCaptureTypes & type_of(mover)) && capture(m)))
   {
       PieceType pt = type_of(mover);
-      if (!(var->captureForbidden[pt] & royalType))
+      if (!(var->captureForbiddenByColor[sideToMove][pt] & royalType))
       {
           if (pt == JANGGI_CANNON)
           {
@@ -5328,6 +5379,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
 
   Color us = sideToMove;
   Color them = ~us;
+  if (is_self_destruct(m) && var->captureRequiresSelfDestruct.get(us))
+      st->captureSelfDestructDone[us] = true;
   bool dropMove = is_drop_move(m);
   Square from = from_sq(m);
   Square to = to_sq(m);

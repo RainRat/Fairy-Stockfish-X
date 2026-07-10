@@ -1217,7 +1217,7 @@ namespace {
             *moveList++ = make<SPECIAL>(passSq, passSq);
         }
 
-        if (!restrictToForcedJumper && Type != CAPTURES && pos.self_destruct_types())
+        if (!restrictToForcedJumper && Type != CAPTURES && (pos.self_destruct_types() || pos.capture_requires_self_destruct()))
         {
             Bitboard b = pos.pieces(Us);
             while (b)
@@ -1225,7 +1225,7 @@ namespace {
                 Square sq = pop_lsb(b);
                 Piece mover = pos.piece_on(sq);
                 assert(mover != NO_PIECE);
-                if (pos.self_destruct_types() & piece_set(type_of(mover)))
+                if ((pos.self_destruct_types() & piece_set(type_of(mover))) || pos.capture_requires_self_destruct())
                     *moveList++ = make<SPECIAL>(sq, sq, type_of(mover));
             }
         }
@@ -1291,7 +1291,7 @@ namespace {
             *moveList++ = make<SPECIAL>(royalSq, royalSq);
 
         if (royalPt == KING && !restrictToForcedJumper
-            && (Type == QUIETS || Type == NON_EVASIONS)
+            && (Type == QUIETS || Type == NON_EVASIONS || (Type == EVASIONS && pos.castling_ignore_check()))
             && pos.can_castle(Us == WHITE ? WHITE_CASTLING : BLACK_CASTLING))
             for (CastlingRights cr : { Us & KING_SIDE, Us & QUEEN_SIDE } )
                 if (!pos.castling_impeded(cr) && pos.can_castle(cr))

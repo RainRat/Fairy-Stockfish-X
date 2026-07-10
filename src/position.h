@@ -209,6 +209,7 @@ struct StateInfoCopied {
   Square castlingKingSquare[COLOR_NB];
   Bitboard wallSquares;
   Bitboard deadSquares;
+  bool captureSelfDestructDone[COLOR_NB];
   Bitboard gatesBB[COLOR_NB];
   Bitboard not_moved_pieces[COLOR_NB];
   Bitboard potionZones[COLOR_NB][Variant::POTION_TYPE_NB];
@@ -503,6 +504,7 @@ public:
   bool is_hex_board() const;
   bool checking_permitted() const;
   bool allow_checks() const;
+  bool castling_ignore_check() const;
   bool drop_checks() const;
   bool drop_mates() const;
   bool shogi_pawn_drop_mate_illegal() const;
@@ -538,6 +540,9 @@ public:
   bool rex_exclusive_morph() const;
   bool must_capture() const;
   bool must_capture_en_passant() const;
+  bool capture_requires_self_destruct() const;
+  bool has_capture_before_self_destruct() const;
+  bool self_destructs_capturer(Move m) const;
   bool has_capture() const;
   bool has_en_passant_capture() const;
   bool must_drop() const;
@@ -796,7 +801,7 @@ public:
   Bitboard slider_blockers(Bitboard sliders, Square s, Bitboard& pinners, Color c) const;
 
   // Properties of moves
-  bool legal(Move m) const;
+  bool legal(Move m, bool bypassSelfDestructCaptureRule = false) const;
   bool pseudo_legal(const Move m) const;
   bool virtual_drop(Move m) const;
   bool paired_drop(Move m) const;
@@ -1582,6 +1587,11 @@ inline bool Position::allow_checks() const {
   return var->allowChecks;
 }
 
+inline bool Position::castling_ignore_check() const {
+  assert(var != nullptr);
+  return var->castlingIgnoreCheck;
+}
+
 inline bool Position::free_drops() const {
   assert(var != nullptr);
   return var->freeDrops;
@@ -1827,6 +1837,11 @@ inline bool Position::must_capture() const {
 inline bool Position::must_capture_en_passant() const {
   assert(var != nullptr);
   return var->mustCaptureEnPassant.get(side_to_move());
+}
+
+inline bool Position::capture_requires_self_destruct() const {
+  assert(var != nullptr);
+  return var->captureRequiresSelfDestruct.get(side_to_move()) && !st->captureSelfDestructDone[side_to_move()];
 }
 
 inline bool Position::has_capture() const {

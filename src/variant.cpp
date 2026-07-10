@@ -2179,13 +2179,20 @@ Variant* Variant::conclude() {
     {
         PieceType pt = pop_lsb(ps);
         captureForbidden[pt] |= pt;
+        for (Color c : { WHITE, BLACK })
+            captureForbiddenByColor[c][pt] |= pt;
     }
     captureForbiddenToKing = NO_PIECE_SET;
+    for (Color c : { WHITE, BLACK })
+        captureForbiddenToKingByColor[c] = NO_PIECE_SET;
     for (PieceSet ps = pieceTypes; ps; )
     {
         PieceType pt = pop_lsb(ps);
         if (captureForbidden[pt] & KING)
             captureForbiddenToKing |= pt;
+        for (Color c : { WHITE, BLACK })
+            if (captureForbiddenByColor[c][pt] & KING)
+                captureForbiddenToKingByColor[c] |= pt;
     }
 
     // Enforce consistency to allow runtime optimizations
