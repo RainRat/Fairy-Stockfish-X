@@ -1426,7 +1426,7 @@ namespace {
   }
 
   template<Color Us, GenType Type>
-  ExtMove* generate_potion_moves(const Position& pos, MoveBuffer buffer) {
+  ExtMove* generate_potion_moves(const Position& pos, MoveBuffer buffer, bool pruneUseless = false) {
     const Variant* var = pos.variant();
     ExtMove* cur = buffer.end;
     ExtMove* maxEnd = buffer.begin + MOVEGEN_OVERFLOW_CAPACITY;
@@ -1445,6 +1445,15 @@ namespace {
             candidates &= pos.pieces();
         else if (!var->potionDropOnOccupied)
             candidates &= ~pos.pieces();
+
+        if (pruneUseless && potion == Variant::POTION_FREEZE)
+        {
+            Bitboard useful = Bitboard(0);
+            Bitboard enemies = pos.pieces(~Us);
+            while (enemies)
+                useful |= pos.freeze_zone_from_square(pop_lsb(enemies));
+            candidates &= useful;
+        }
 
         if (potion == Variant::POTION_FREEZE)
         {
@@ -1510,6 +1519,11 @@ namespace {
             if (!candidates)
                 continue;
 
+            const Bitboard activeJump = pruneUseless
+                                      ? pos.potion_zone(WHITE, Variant::POTION_JUMP)
+                                      | pos.potion_zone(BLACK, Variant::POTION_JUMP)
+                                      : Bitboard(0);
+
             // Casting a Jump potion does not require the accompanying move to
             // cross its square.  Keep all ordinary legal moves available with
             // each possible potion target; the jump effect is then available
@@ -1520,10 +1534,23 @@ namespace {
                 if (!prepare_potion_base(pos, it->move, baseInfo))
                     continue;
 
+                const Bitboard path = pruneUseless
+                                    ? between_bb(baseInfo.from, baseInfo.to,
+                                                 baseInfo.moverType, baseInfo.modality,
+                                                 baseInfo.isInitial)
+                                      & ~square_bb(baseInfo.to)
+                                    : Bitboard(0);
                 Bitboard targets = candidates & ~square_bb(baseInfo.to);
                 while (targets)
                 {
                     Square gate = pop_lsb(targets);
+                    if (pruneUseless)
+                    {
+                        if (activeJump & square_bb(gate))
+                            continue;
+                        if (!(path & square_bb(gate)))
+                            continue;
+                    }
                     if (try_append_potion_gating_move<Type>(pos, cur, maxEnd,
                                                            baseInfo.from, baseInfo.to,
                                                            baseInfo.mt, it->move,
@@ -1661,7 +1688,8 @@ ExtMove* generate_without_potions(const Position& pos, ExtMove* moveList) {
 }
 
 template<GenType Type>
-ExtMove* append_potions(const Position& pos, ExtMove* listBegin, ExtMove* baseEnd) {
+ExtMove* append_potions(const Position& pos, ExtMove* listBegin, ExtMove* baseEnd,
+                        bool pruneUseless) {
 
   static_assert(Type != LEGAL, "Unsupported type in append_potions()");
   if (!pos.potions_enabled())
@@ -1674,8 +1702,8 @@ ExtMove* append_potions(const Position& pos, ExtMove* listBegin, ExtMove* baseEn
       current ? current->freezeExtra : Bitboard(0),
       pos.potion_zone(~us, Variant::POTION_JUMP)
           | (current ? current->jumpRemoved : Bitboard(0)));
-  return us == WHITE ? generate_potion_moves<WHITE, Type>(pos, MoveBuffer{listBegin, baseEnd})
-                     : generate_potion_moves<BLACK, Type>(pos, MoveBuffer{listBegin, baseEnd});
+  return us == WHITE ? generate_potion_moves<WHITE, Type>(pos, MoveBuffer{listBegin, baseEnd}, pruneUseless)
+                     : generate_potion_moves<BLACK, Type>(pos, MoveBuffer{listBegin, baseEnd}, pruneUseless);
 }
 
 // Explicit template instantiations
@@ -1689,11 +1717,11 @@ template ExtMove* generate_without_potions<QUIETS>(const Position&, ExtMove*);
 template ExtMove* generate_without_potions<EVASIONS>(const Position&, ExtMove*);
 template ExtMove* generate_without_potions<QUIET_CHECKS>(const Position&, ExtMove*);
 template ExtMove* generate_without_potions<NON_EVASIONS>(const Position&, ExtMove*);
-template ExtMove* append_potions<CAPTURES>(const Position&, ExtMove*, ExtMove*);
-template ExtMove* append_potions<QUIETS>(const Position&, ExtMove*, ExtMove*);
-template ExtMove* append_potions<EVASIONS>(const Position&, ExtMove*, ExtMove*);
-template ExtMove* append_potions<QUIET_CHECKS>(const Position&, ExtMove*, ExtMove*);
-template ExtMove* append_potions<NON_EVASIONS>(const Position&, ExtMove*, ExtMove*);
+template ExtMove* append_potions<CAPTURES>(const Position&, ExtMove*, ExtMove*, bool);
+template ExtMove* append_potions<QUIETS>(const Position&, ExtMove*, ExtMove*, bool);
+template ExtMove* append_potions<EVASIONS>(const Position&, ExtMove*, ExtMove*, bool);
+template ExtMove* append_potions<QUIET_CHECKS>(const Position&, ExtMove*, ExtMove*, bool);
+template ExtMove* append_potions<NON_EVASIONS>(const Position&, ExtMove*, ExtMove*, bool);
 
 
 /// generate<LEGAL> generates all the legal moves in the given position

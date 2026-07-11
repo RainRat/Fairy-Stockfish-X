@@ -316,7 +316,7 @@ bool MovePicker::resume_deferred_potions(
     bool& deferred) {
   if (deferred)
   {
-      endMoves = append_potions<Type>(pos, appendBegin, baseEnd);
+      endMoves = append_potions<Type>(pos, appendBegin, baseEnd, true);
       endMoves = prune_useless_potions(baseEnd, endMoves);
       cur = baseEnd;
       if constexpr (Type == CAPTURES || Type == QUIETS || Type == EVASIONS)

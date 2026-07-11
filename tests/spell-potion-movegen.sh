@@ -299,7 +299,7 @@ static void test_main_search_keeps_freeze_on_previously_frozen_enemy() {
            "main search pruned a freeze cast because its enemy was frozen before the cast");
 }
 
-static void test_jump_move_picker_keeps_persistent_targets() {
+static void test_jump_move_picker_prunes_dominated_targets() {
     const char* shortFen = "K7/6b1/8/4P3/8/8/4R3/7k[JJFFFFFjjfffff] w - - 0 1";
     StateInfo shortState{};
     Position shortPos;
@@ -326,7 +326,8 @@ static void test_jump_move_picker_keeps_persistent_targets() {
     bool foundShort = false;
     for (Move move; (move = shortPicker.next_move()) != MOVE_NONE; )
         foundShort |= move == shortCast;
-    expect(foundShort, "main search pruned a short Jump cast");
+    expect(!foundShort,
+           "main search kept a dominated short Jump cast that does not cross its target");
 
     const char* recastFen =
         "7k/8/8/8/8/r7/r7/R6K[JJFFFFFjjfffff] w - - 0 1 bj:a2";
@@ -342,14 +343,15 @@ static void test_jump_move_picker_keeps_persistent_targets() {
     bool foundRecast = false;
     for (Move move; (move = recastPicker.next_move()) != MOVE_NONE; )
         foundRecast |= move == recast;
-    expect(foundRecast, "main search pruned a Jump recast of the active target");
+    expect(!foundRecast,
+           "main search kept a dominated Jump recast of the active target");
 
     const char* captureFen =
-        "r3k3/8/4p3/8/8/8/8/R3K3[JJFFFFFjjfffff] w - - 0 1";
+        "r3k3/8/8/8/p7/8/8/R3K3[JJFFFFFjjfffff] w - - 0 1";
     StateInfo captureState{};
     Position capturePos;
     capturePos.set(variants.get("spell-chess"), captureFen, false, &captureState, nullptr);
-    std::string captureStr = "j@e6,a1a8";
+    std::string captureStr = "j@a4,a1a8";
     const Move capture = UCI::to_move(capturePos, captureStr);
     expect(capture != MOVE_NONE, "short Jump capture failed to parse for MovePicker");
     GateHistory captureGateHistory{};
@@ -360,7 +362,8 @@ static void test_jump_move_picker_keeps_persistent_targets() {
     bool foundCapture = false;
     for (Move move; (move = capturePicker.next_move()) != MOVE_NONE; )
         foundCapture |= move == capture;
-    expect(foundCapture, "quiescence search pruned a short Jump capture");
+    expect(foundCapture,
+           "quiescence search pruned a Jump capture that crosses its target");
 }
 
 static void test_potion_root_move_undo_integrity() {
@@ -535,7 +538,7 @@ int main() {
     test_split_potion_generation_uses_persistent_jump();
     test_qsearch_keeps_freeze_capture_defense();
     test_main_search_keeps_freeze_on_previously_frozen_enemy();
-    test_jump_move_picker_keeps_persistent_targets();
+    test_jump_move_picker_prunes_dominated_targets();
     test_potion_root_move_undo_integrity();
     test_potion_fen_zone_validation();
     test_sacred_royal();
