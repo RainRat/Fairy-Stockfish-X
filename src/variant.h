@@ -205,6 +205,7 @@ struct Variant {
   bool checking = true;
   bool allowChecks = false;
   bool royalPieceNoThroughCheck = false;
+  bool checkedRoyalsIgnoreFreeze = false;
   ColorSetting<bool> dropChecks = ColorSetting<bool>(true);
   ColorSetting<bool> dropMates = ColorSetting<bool>(true);
   ColorSetting<bool> mustCapture = ColorSetting<bool>(false);

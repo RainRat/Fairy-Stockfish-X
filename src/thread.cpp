@@ -19,6 +19,7 @@
 #include <cassert>
 
 #include <algorithm> // For std::count
+#include <unordered_map>
 #include "movegen.h"
 #include "partner.h"
 #include "search.h"
@@ -31,6 +32,30 @@
 namespace Stockfish {
 
 ThreadPool Threads; // Global object
+
+namespace {
+
+StateListPtr copy_state_list_with_relinked_history(const StateListPtr& states) {
+  auto snapshot = std::make_unique<std::deque<StateInfo>>(*states);
+  std::unordered_map<const StateInfo*, StateInfo*> copiedStates;
+
+  auto original = states->begin();
+  auto copied = snapshot->begin();
+  for (; original != states->end(); ++original, ++copied)
+      copiedStates.emplace(&*original, &*copied);
+
+  original = states->begin();
+  copied = snapshot->begin();
+  for (; original != states->end(); ++original, ++copied)
+  {
+      const auto previous = copiedStates.find(original->previous);
+      copied->previous = previous == copiedStates.end() ? nullptr : previous->second;
+  }
+
+  return snapshot;
+}
+
+} // namespace
 
 
 
@@ -223,8 +248,13 @@ void ThreadPool::start_thinking(Position& pos, StateListPtr& states,
 
   const std::string rootFen = pos.fen();
 
-  if (states.get())
-      setupStates = std::move(states); // Ownership transfer, states is now empty
+  // XBoard takes this state chain back after search so it can continue making
+  // and unmaking moves. UCI callers may issue repeated `go` commands for the
+  // same position, so retain their chain and give search a read-only snapshot.
+  if (CurrentProtocol == XBOARD)
+      setupStates = std::move(states);
+  else if (states.get())
+      setupStates = copy_state_list_with_relinked_history(states);
   else
       setupStates.reset();
 

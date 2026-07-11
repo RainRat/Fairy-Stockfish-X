@@ -1494,6 +1494,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("checking", v->checking);
     parse_attribute("allowChecks", v->allowChecks);
     parse_attribute("royalPieceNoThroughCheck", v->royalPieceNoThroughCheck);
+    parse_attribute("checkedRoyalsIgnoreFreeze", v->checkedRoyalsIgnoreFreeze);
     parse_color_setting("dropChecks", v->dropChecks);
     parse_color_setting("dropMates", v->dropMates);
     parse_color_setting("mustCapture", v->mustCapture);

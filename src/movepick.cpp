@@ -67,9 +67,12 @@ bool MovePicker::is_useless_potion(Move m) const {
 
   if (pos.potion_piece(Variant::POTION_FREEZE) == gatingPiece)
   {
+      // Existing freeze zones expire before the opponent's reply. A target is
+      // productive whenever the new zone contains an enemy, even if that
+      // enemy is frozen in the position before this cast.
       Bitboard zone = pos.freeze_zone_from_square(gate);
       Bitboard enemies = pos.pieces(~pos.side_to_move());
-      return !(zone & enemies & ~pos.freeze_squares());
+      return !(zone & enemies);
   }
 
   if (pos.potion_piece(Variant::POTION_JUMP) == gatingPiece)
@@ -381,9 +384,19 @@ top:
       goto top;
 
   case PROBCUT_INIT:
+      cur = endBadCaptures = moveList;
+      endMoves = generate_without_potions<CAPTURES>(pos, cur);
+      assert_move_list_bounds();
+
+      score<CAPTURES>();
+      ++stage;
+      goto top;
+
   case QCAPTURE_INIT:
       cur = endBadCaptures = moveList;
       endMoves = generate_without_potions<CAPTURES>(pos, cur);
+      qcaptureBaseEnd = endMoves;
+      qcapturePotionsDeferred = potions_pending();
       assert_move_list_bounds();
 
       score<CAPTURES>();
@@ -497,6 +510,9 @@ top:
       if (select<Best>([&](){ return   depth > DEPTH_QS_RECAPTURES
                                     || to_sq(*cur) == recaptureSquare; }))
           return *(cur - 1);
+
+      if (resume_deferred_potions<CAPTURES>(moveList, qcaptureBaseEnd, qcapturePotionsDeferred))
+          goto top;
 
       // If we did not find any move and we do not try checks, we have finished
       if (depth != DEPTH_QS_CHECKS)

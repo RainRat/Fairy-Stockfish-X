@@ -189,10 +189,12 @@ private:
   ExtMove* captureBaseEnd = nullptr;
   ExtMove* quietBaseEnd = nullptr;
   ExtMove* evasionBaseEnd = nullptr;
+  ExtMove* qcaptureBaseEnd = nullptr;
   ExtMove* qcheckBaseEnd = nullptr;
   bool capturePotionsDeferred = false;
   bool quietPotionsDeferred = false;
   bool evasionPotionsDeferred = false;
+  bool qcapturePotionsDeferred = false;
   bool qcheckPotionsDeferred = false;
 #ifdef USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
   Thread* thread = nullptr;

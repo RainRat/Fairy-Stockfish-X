@@ -88,7 +88,11 @@ struct ScopedSpellContext {
   ScopedSpellContext(Bitboard freezeExtra, Bitboard jumpRemoved)
       : prev(current_spell_context() ? *current_spell_context() : SpellContext()),
         prevActive(current_spell_context() && current_spell_context()->active()),
-        ctx(freezeExtra, jumpRemoved),
+        // Nested move-generation and legality checks must retain any
+        // persistent effect already being evaluated while adding the new
+        // compound move's effect.
+        ctx((current_spell_context() ? current_spell_context()->freezeExtra : Bitboard(0)) | freezeExtra,
+            (current_spell_context() ? current_spell_context()->jumpRemoved : Bitboard(0)) | jumpRemoved),
         active(ctx.active()) {
     if (active)
       set_current_spell_context(&ctx);
@@ -2238,6 +2242,33 @@ inline Bitboard Position::freeze_squares(Color c) const {
   Bitboard mask = st->potionZones[c][Variant::POTION_FREEZE];
   if (const SpellContext* spellCtx = current_spell_context(); spellCtx && c == ~sideToMove)
       mask |= spellCtx->freezeExtra;
+  if (var->checkedRoyalsIgnoreFreeze)
+      for (Color royalColor : {WHITE, BLACK})
+      {
+          const PieceType royalType = castling_king_piece(royalColor);
+          if (royalType == NO_PIECE_TYPE || count(royalColor, royalType) != 1)
+              continue;
+
+          const Square royalSquare = square(royalColor, royalType);
+          if (!(mask & royalSquare))
+              continue;
+
+          // Spell Chess represents its capturable king as a COMMONER, so it
+          // has no normal checkersBB entry. Use the raw attack map here rather
+          // than attackers_to_king(), which asks freeze_squares() again.
+          // Only a Freeze zone cast by the royal's owner can make an
+          // attacking piece frozen for Sacred Royal purposes.  A zone cast
+          // by the attacker cannot make its own checking piece disappear
+          // from the attack map.  During a compound move, include the
+          // temporary zone only when that move is being cast by the royal's
+          // owner as well.
+          Bitboard frozenAttackers = st->potionZones[royalColor][Variant::POTION_FREEZE];
+          if (const SpellContext* spellCtx = current_spell_context();
+              spellCtx && sideToMove == royalColor)
+              frozenAttackers |= spellCtx->freezeExtra;
+          if (attackers_to(royalSquare, ~royalColor) & ~frozenAttackers)
+              mask &= ~square_bb(royalSquare);
+      }
   return mask;
 }
 
