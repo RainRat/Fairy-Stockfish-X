@@ -1101,6 +1101,47 @@ Key Position::reserve_key() const {
         || capture_type() == PRISON || two_boards() || prison_pawn_promotion()))
       return 0;
 
+  if (potions_enabled() && !piece_drops() && !seirawan_gating() && !two_boards()
+      && capture_type() == MOVE_OUT && !prison_pawn_promotion()
+      && !variant()->promotionRequireInHand && !variant()->promotionConsumeInHand)
+  {
+      int potionHandCount = 0;
+      for (Color c : {WHITE, BLACK})
+          for (int i = 0; i < Variant::POTION_TYPE_NB; ++i)
+          {
+              PieceType pt = potion_piece(static_cast<Variant::PotionType>(i));
+              if (pt != NO_PIECE_TYPE)
+                  potionHandCount += pieceCountInHand[c][pt];
+          }
+
+      if (count_in_hand(ALL_PIECES) == potionHandCount)
+      {
+          // Preserve the generic reserve_key() value exactly: the non-potion
+          // piece types still contribute their zero-count Zobrist buckets.
+          static const Key zeroHandKey = [] {
+              Key k = 0;
+              for (Color c : {WHITE, BLACK})
+                  for (PieceType pt = PAWN; pt <= KING; ++pt)
+                      k ^= Zobrist::inHand[make_piece(c, pt)][0];
+              return k;
+          }();
+
+          Key k = zeroHandKey;
+          for (Color c : {WHITE, BLACK})
+              for (int i = 0; i < Variant::POTION_TYPE_NB; ++i)
+              {
+                  PieceType pt = potion_piece(static_cast<Variant::PotionType>(i));
+                  if (pt != NO_PIECE_TYPE)
+                  {
+                      Piece pc = make_piece(c, pt);
+                      k ^= Zobrist::inHand[pc][0]
+                         ^ Zobrist::inHand[pc][in_hand_zobrist_index(pieceCountInHand[c][pt])];
+                  }
+              }
+          return k;
+      }
+  }
+
   Key k = 0;
   for (Color c : {WHITE, BLACK})
       for (PieceType pt = PAWN; pt <= KING; ++pt)
