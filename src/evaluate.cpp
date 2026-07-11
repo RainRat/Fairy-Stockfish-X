@@ -1549,7 +1549,6 @@ namespace {
         const Bitboard ownFreeze = pos.potion_zone(Us, Variant::POTION_FREEZE);
         const Bitboard enemyFreeze = pos.potion_zone(Them, Variant::POTION_FREEZE);
         if ((ownFreeze || enemyFreeze)
-            && pos.variant()->variantTemplate == "spell-chess"
             && pos.potion_piece(Variant::POTION_FREEZE) != NO_PIECE_TYPE)
         {
             auto frozen_value = [&](Piece pc, Color c) {
@@ -1569,8 +1568,8 @@ namespace {
                 return result;
             };
 
-            score += frozen_score(Them, ownFreeze);
-            score -= frozen_score(Us, enemyFreeze);
+            score += frozen_score(Them, pos.freeze_squares(Us));
+            score -= frozen_score(Us, pos.freeze_squares(Them));
         }
     }
 

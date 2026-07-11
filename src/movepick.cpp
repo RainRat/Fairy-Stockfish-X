@@ -76,19 +76,10 @@ bool MovePicker::is_useless_potion(Move m) const {
   }
 
   if (pos.potion_piece(Variant::POTION_JUMP) == gatingPiece)
-  {
-      if (pos.piece_on(gate) == NO_PIECE)
-          return true;
-
-      if ((pos.jump_squares(WHITE) | pos.jump_squares(BLACK)) & square_bb(gate))
-          return true;
-
-      const bool initial = pos.not_moved_pieces(pos.side_to_move()) & from_sq(m);
-      const MoveModality modality = pos.capture(m) ? MODALITY_CAPTURE : MODALITY_QUIET;
-      Bitboard path = pos.between_bb(from_sq(m), to_sq(m), type_of(pos.moved_piece(m)), modality, initial);
-      path &= ~square_bb(to_sq(m));
-      return !(path & square_bb(gate));
-  }
+      // A Jump target changes the persistent state even when the
+      // accompanying move does not cross it.  It may also deliberately
+      // replace the currently active target, which expires after this turn.
+      return false;
 
   return false;
 }

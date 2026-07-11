@@ -1478,7 +1478,10 @@ namespace {
                     // Freeze zone installed. Sacred Royal can then thaw a
                     // king frozen by its own cast, while a checker frozen by
                     // that cast does not thaw the king.
-                    ScopedSpellContext freezeScope(newFreezeZone, Bitboard(0));
+                    const SpellContext* current = current_spell_context();
+                    ScopedSpellContext freezeScope(
+                        (current ? current->freezeExtra : Bitboard(0)) | newFreezeZone,
+                        current ? current->jumpRemoved : Bitboard(0));
                     if (pos.freeze_squares() & base.info.from)
                         continue;
                     if (base.info.mt == CASTLING)
@@ -1531,10 +1534,10 @@ namespace {
                 }
             }
 
-            const Bitboard inheritedJump = current_spell_context()
-                                         ? current_spell_context()->jumpRemoved
-                                         : Bitboard(0);
-            ScopedSpellContext guard(Bitboard(0), candidates);
+            const SpellContext* current = current_spell_context();
+            const Bitboard inheritedFreeze = current ? current->freezeExtra : Bitboard(0);
+            const Bitboard inheritedJump = current ? current->jumpRemoved : Bitboard(0);
+            ScopedSpellContext guard(inheritedFreeze, inheritedJump | candidates);
 
 #ifdef USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
             auto jumpMoves = std::make_unique<ExtMove[]>(MOVEGEN_OVERFLOW_CAPACITY);
@@ -1586,7 +1589,8 @@ namespace {
 
                 bool moveOk = false;
                 {
-                    ScopedSpellContext revalGuard(Bitboard(0), square_bb(gate));
+                    ScopedSpellContext revalGuard(inheritedFreeze,
+                                                  inheritedJump | square_bb(gate));
                     Bitboard okSquares = baseInfo.isInitial ? (pos.moves_from<true>(Us, baseInfo.moverType, baseInfo.from) | pos.attacks_from<true>(Us, baseInfo.moverType, baseInfo.from))
                                                             : (pos.moves_from<false>(Us, baseInfo.moverType, baseInfo.from) | pos.attacks_from<false>(Us, baseInfo.moverType, baseInfo.from));
                     moveOk = bool(okSquares & baseInfo.to);

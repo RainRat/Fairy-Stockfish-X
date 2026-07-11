@@ -150,6 +150,10 @@ struct ThreadPool : public std::vector<Thread*> {
   std::atomic_bool abort, sit;
 
   StateListPtr setupStates;
+  const StateListPtr* setupStateOwner = nullptr;
+  const std::deque<StateInfo>* setupStateSource = nullptr;
+  size_t setupStateSize = 0;
+  Key setupStateKey = 0;
 
 private:
   uint64_t accumulate(std::atomic<uint64_t> Thread::* member) const {

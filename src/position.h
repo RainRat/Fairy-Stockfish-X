@@ -88,11 +88,7 @@ struct ScopedSpellContext {
   ScopedSpellContext(Bitboard freezeExtra, Bitboard jumpRemoved)
       : prev(current_spell_context() ? *current_spell_context() : SpellContext()),
         prevActive(current_spell_context() && current_spell_context()->active()),
-        // Nested move-generation and legality checks must retain any
-        // persistent effect already being evaluated while adding the new
-        // compound move's effect.
-        ctx((current_spell_context() ? current_spell_context()->freezeExtra : Bitboard(0)) | freezeExtra,
-            (current_spell_context() ? current_spell_context()->jumpRemoved : Bitboard(0)) | jumpRemoved),
+        ctx(freezeExtra, jumpRemoved),
         active(ctx.active()) {
     if (active)
       set_current_spell_context(&ctx);
@@ -783,6 +779,9 @@ public:
   Bitboard attackers_to(Square s, Bitboard occupied) const;
   Bitboard attackers_to(Square s, Bitboard occupied, Color c) const;
   Bitboard attackers_to(Square s, Bitboard occupied, Color c, Bitboard janggiCannons) const;
+  Bitboard attackers_to_king_without_freeze(Square s, Bitboard occupied, Color c,
+                                            Bitboard janggiCannons,
+                                            PieceType pt = NO_PIECE_TYPE) const;
   Bitboard attackers_to_king(Square s, Color c) const;
   Bitboard attackers_to_king(Square s, Bitboard occupied, Color c) const;
   Bitboard attackers_to_king(Square s, Bitboard occupied, Color c, Bitboard janggiCannons, PieceType pt = NO_PIECE_TYPE) const;
@@ -2266,7 +2265,9 @@ inline Bitboard Position::freeze_squares(Color c) const {
           if (const SpellContext* spellCtx = current_spell_context();
               spellCtx && sideToMove == royalColor)
               frozenAttackers |= spellCtx->freezeExtra;
-          if (attackers_to(royalSquare, ~royalColor) & ~frozenAttackers)
+          if (attackers_to_king_without_freeze(royalSquare, byTypeBB[ALL_PIECES], ~royalColor,
+                                               byTypeBB[JANGGI_CANNON], royalType)
+              & ~frozenAttackers)
               mask &= ~square_bb(royalSquare);
       }
   return mask;

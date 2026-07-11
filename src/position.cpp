@@ -2822,7 +2822,8 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
   return b;
 }
 
-Bitboard Position::attackers_to_king(Square s, Bitboard occupied, Color c, Bitboard janggiCannons, PieceType pt) const {
+Bitboard Position::attackers_to_king_without_freeze(Square s, Bitboard occupied, Color c,
+                                                    Bitboard janggiCannons, PieceType pt) const {
 
   Bitboard attackers = attackers_to(s, occupied, c, janggiCannons);
   attackers |= janggi_cannon_attackers_to_king(s, occupied, c, janggiCannons);
@@ -2871,11 +2872,6 @@ Bitboard Position::attackers_to_king(Square s, Bitboard occupied, Color c, Bitbo
               }
           }
       }
-  // Frozen pieces cannot give check (relevant for spell-chess freeze effects).
-  Bitboard restricted = freeze_squares(c);
-  if (var->prisonPawnPromotion)
-      restricted |= pieces(c, PAWN) & pawnCannotCheckZone[c];
-  attackers &= ~restricted;
   PieceType royalType = pt != NO_PIECE_TYPE ? pt :
                         (piece_on(s) != NO_PIECE ? type_of(piece_on(s)) : king_type());
 
@@ -2898,6 +2894,18 @@ Bitboard Position::attackers_to_king(Square s, Bitboard occupied, Color c, Bitbo
               attackers &= ~pieces(c, apt);
       }
   return attackers;
+}
+
+Bitboard Position::attackers_to_king(Square s, Bitboard occupied, Color c,
+                                     Bitboard janggiCannons, PieceType pt) const {
+
+  Bitboard attackers = attackers_to_king_without_freeze(s, occupied, c, janggiCannons, pt);
+
+  // Frozen pieces cannot give check (relevant for spell-chess freeze effects).
+  Bitboard restricted = freeze_squares(c);
+  if (var->prisonPawnPromotion)
+      restricted |= pieces(c, PAWN) & pawnCannotCheckZone[c];
+  return attackers & ~restricted;
 }
 
 Bitboard Position::janggi_cannon_attackers_to_king(Square s, Bitboard occupied, Color c, Bitboard janggiCannons) const {

@@ -252,11 +252,33 @@ void ThreadPool::start_thinking(Position& pos, StateListPtr& states,
   // and unmaking moves. UCI callers may issue repeated `go` commands for the
   // same position, so retain their chain and give search a read-only snapshot.
   if (CurrentProtocol == XBOARD)
+  {
       setupStates = std::move(states);
+      setupStateOwner = nullptr;
+      setupStateSource = nullptr;
+  }
   else if (states.get())
-      setupStates = copy_state_list_with_relinked_history(states);
+  {
+      const bool reusable = setupStates
+                         && setupStateOwner == &states
+                         && setupStateSource == states.get()
+                         && setupStateSize == states->size()
+                         && setupStateKey == states->back().key;
+      if (!reusable)
+      {
+          setupStates = copy_state_list_with_relinked_history(states);
+          setupStateOwner = &states;
+          setupStateSource = states.get();
+          setupStateSize = states->size();
+          setupStateKey = states->back().key;
+      }
+  }
   else
+  {
       setupStates.reset();
+      setupStateOwner = nullptr;
+      setupStateSource = nullptr;
+  }
 
   // We use Position::set() to set root position across threads. But there are
   // some StateInfo fields (previous, pliesFromNull, capturedPiece) that cannot

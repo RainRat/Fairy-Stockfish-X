@@ -299,6 +299,70 @@ static void test_main_search_keeps_freeze_on_previously_frozen_enemy() {
            "main search pruned a freeze cast because its enemy was frozen before the cast");
 }
 
+static void test_jump_move_picker_keeps_persistent_targets() {
+    const char* shortFen = "K7/6b1/8/4P3/8/8/4R3/7k[JJFFFFFjjfffff] w - - 0 1";
+    StateInfo shortState{};
+    Position shortPos;
+    shortPos.set(variants.get("spell-chess"), shortFen, false, &shortState, nullptr);
+    std::string shortCastStr = "j@e5,e2e4";
+    const Move shortCast = UCI::to_move(shortPos, shortCastStr);
+    expect(shortCast != MOVE_NONE, "short Jump cast failed to parse for MovePicker");
+
+    auto mainHistory = std::make_unique<ButterflyHistory>();
+    auto gateHistory = std::make_unique<GateHistory>();
+    auto lowPlyHistory = std::make_unique<LowPlyHistory>();
+    auto captureHistory = std::make_unique<CapturePieceToHistory>();
+    std::array<std::unique_ptr<PieceToHistory>, 6> continuationStorage;
+    std::array<const PieceToHistory*, 6> continuationHistory{};
+    for (size_t i = 0; i < continuationStorage.size(); ++i)
+    {
+        continuationStorage[i] = std::make_unique<PieceToHistory>();
+        continuationHistory[i] = continuationStorage[i].get();
+    }
+    const Move killers[2] = {MOVE_NONE, MOVE_NONE};
+    MovePicker shortPicker(shortPos, MOVE_NONE, 1, mainHistory.get(), gateHistory.get(),
+                           lowPlyHistory.get(), captureHistory.get(),
+                           continuationHistory.data(), MOVE_NONE, killers, 0);
+    bool foundShort = false;
+    for (Move move; (move = shortPicker.next_move()) != MOVE_NONE; )
+        foundShort |= move == shortCast;
+    expect(foundShort, "main search pruned a short Jump cast");
+
+    const char* recastFen =
+        "7k/8/8/8/8/r7/r7/R6K[JJFFFFFjjfffff] w - - 0 1 bj:a2";
+    StateInfo recastState{};
+    Position recastPos;
+    recastPos.set(variants.get("spell-chess"), recastFen, false, &recastState, nullptr);
+    std::string recastStr = "j@a2,h1h2";
+    const Move recast = UCI::to_move(recastPos, recastStr);
+    expect(recast != MOVE_NONE, "Jump recast failed to parse for MovePicker");
+    MovePicker recastPicker(recastPos, MOVE_NONE, 1, mainHistory.get(), gateHistory.get(),
+                            lowPlyHistory.get(), captureHistory.get(),
+                            continuationHistory.data(), MOVE_NONE, killers, 0);
+    bool foundRecast = false;
+    for (Move move; (move = recastPicker.next_move()) != MOVE_NONE; )
+        foundRecast |= move == recast;
+    expect(foundRecast, "main search pruned a Jump recast of the active target");
+
+    const char* captureFen =
+        "r3k3/8/4p3/8/8/8/8/R3K3[JJFFFFFjjfffff] w - - 0 1";
+    StateInfo captureState{};
+    Position capturePos;
+    capturePos.set(variants.get("spell-chess"), captureFen, false, &captureState, nullptr);
+    std::string captureStr = "j@e6,a1a8";
+    const Move capture = UCI::to_move(capturePos, captureStr);
+    expect(capture != MOVE_NONE, "short Jump capture failed to parse for MovePicker");
+    GateHistory captureGateHistory{};
+    CapturePieceToHistory captureHistoryForQsearch{};
+    MovePicker capturePicker(capturePos, MOVE_NONE, DEPTH_QS_CHECKS, nullptr,
+                             &captureGateHistory, &captureHistoryForQsearch,
+                             nullptr, SQ_NONE);
+    bool foundCapture = false;
+    for (Move move; (move = capturePicker.next_move()) != MOVE_NONE; )
+        foundCapture |= move == capture;
+    expect(foundCapture, "quiescence search pruned a short Jump capture");
+}
+
 static void test_potion_root_move_undo_integrity() {
     StateInfo rootState{};
     Position pos;
@@ -471,6 +535,7 @@ int main() {
     test_split_potion_generation_uses_persistent_jump();
     test_qsearch_keeps_freeze_capture_defense();
     test_main_search_keeps_freeze_on_previously_frozen_enemy();
+    test_jump_move_picker_keeps_persistent_targets();
     test_potion_root_move_undo_integrity();
     test_potion_fen_zone_validation();
     test_sacred_royal();
@@ -533,25 +598,38 @@ echo "spell potion movegen test started"
 
 # Repeated searches for the same GUI position must retain the caller's state
 # chain.  Send each `go` only after the previous UCI search completed.
+ENGINE_READ_TIMEOUT=${ENGINE_READ_TIMEOUT:-10}
+ENGINE_LAST_LINE=""
 coproc ENGINE_PROCESS { "${ENGINE}"; }
+cleanup_engine() {
+  if [[ -n "${ENGINE_PROCESS_PID:-}" ]]; then
+    kill "${ENGINE_PROCESS_PID}" 2>/dev/null || true
+    wait "${ENGINE_PROCESS_PID}" 2>/dev/null || true
+  fi
+}
+trap cleanup_engine EXIT
 engine_send() {
   printf '%s\n' "$1" >&"${ENGINE_PROCESS[1]}"
 }
 engine_read_until() {
   local pattern=$1 line
-  while IFS= read -r line <&"${ENGINE_PROCESS[0]}"; do
+  while IFS= read -r -t "${ENGINE_READ_TIMEOUT}" line <&"${ENGINE_PROCESS[0]}"; do
+    ENGINE_LAST_LINE=${line}
     [[ "${line}" =~ ${pattern} ]] && return 0
   done
+  echo "timed out waiting for ${pattern}; last engine output: ${ENGINE_LAST_LINE}" >&2
   return 1
 }
 engine_read_bestmove() {
   local line
-  while IFS= read -r line <&"${ENGINE_PROCESS[0]}"; do
+  while IFS= read -r -t "${ENGINE_READ_TIMEOUT}" line <&"${ENGINE_PROCESS[0]}"; do
+    ENGINE_LAST_LINE=${line}
     if [[ "${line}" =~ ^bestmove[[:space:]]+([^[:space:]]+) ]]; then
       [[ "${BASH_REMATCH[1]}" != "(none)" ]]
       return
     fi
   done
+  echo "timed out waiting for bestmove; last engine output: ${ENGINE_LAST_LINE}" >&2
   return 1
 }
 engine_send 'uci'
