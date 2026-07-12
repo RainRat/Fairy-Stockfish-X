@@ -364,6 +364,16 @@ static void test_jump_move_picker_prunes_dominated_targets() {
         foundCapture |= move == capture;
     expect(foundCapture,
            "quiescence search pruned a Jump capture that crosses its target");
+
+    GateHistory probcutGateHistory{};
+    CapturePieceToHistory probcutCaptureHistory{};
+    MovePicker probcutPicker(capturePos, MOVE_NONE, Value(-VALUE_INFINITE + 1),
+                             &probcutGateHistory, &probcutCaptureHistory);
+    bool foundProbcutCapture = false;
+    for (Move move; (move = probcutPicker.next_move()) != MOVE_NONE; )
+        foundProbcutCapture |= move == capture;
+    expect(foundProbcutCapture,
+           "ProbCut stopped before deferred potion captures");
 }
 
 static void test_potion_root_move_undo_integrity() {

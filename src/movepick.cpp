@@ -377,6 +377,8 @@ top:
   case PROBCUT_INIT:
       cur = endBadCaptures = moveList;
       endMoves = generate_without_potions<CAPTURES>(pos, cur);
+      captureBaseEnd = endMoves;
+      capturePotionsDeferred = potions_pending();
       assert_move_list_bounds();
 
       score<CAPTURES>();
@@ -491,11 +493,17 @@ top:
       return MOVE_NONE;
 
   case PROBCUT:
-      return select<Best>([&](){
-          return pos.see_pruning_unreliable()
-              || type_of(*cur) == PROMOTION
-              || pos.see_ge(*cur, threshold);
-      });
+      if (Move m = select<Best>([&](){
+              return pos.see_pruning_unreliable()
+                  || type_of(*cur) == PROMOTION
+                  || pos.see_ge(*cur, threshold);
+          }))
+          return m;
+
+      if (resume_deferred_potions<CAPTURES>(moveList, captureBaseEnd, capturePotionsDeferred))
+          goto top;
+
+      return MOVE_NONE;
 
   case QCAPTURE:
       if (select<Best>([&](){ return   depth > DEPTH_QS_RECAPTURES
