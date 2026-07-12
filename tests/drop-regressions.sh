@@ -101,6 +101,14 @@ pushingRemoves = shove
 pieceDrops = true
 symmetricDropTypes = r
 
+[liberty-pair:chess]
+pieceDrops = true
+symmetricDropTypes = p
+libertySelfCapture = forbid
+checking = false
+castling = false
+startFen = 7k/8/8/8/8/2p2p2/3pp1p1/2p2p1K[PP] w - - 0 1
+
 [shogi-pawn-drop-split-white:minishogi]
 shogiPawnDropMateIllegalWhite = true
 shogiPawnDropMateIllegalBlack = false
@@ -291,6 +299,13 @@ d
 UCI
 )
 assert_contains "$out" "Fen: 4k3/8/8/8/R6R/8/8/4K3\\[] b - - 0 1"
+
+out=$(run_uci "$ENGINE" "$tmp_ini" liberty-pair <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_not_contains "$out" "^P@c2,f2: 1$"
 
 out=$(run_uci "$ENGINE" "$tmp_ini" shogi-pawn-drop-split-white <<'UCI'
 position startpos

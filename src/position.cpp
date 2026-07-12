@@ -3227,20 +3227,40 @@ Bitboard Position::compute_liberty_capture_mask(Square placed, Color us, Bitboar
   return mask;
 }
 
-bool Position::liberty_drop_legal(Square to, Color us) const {
+bool Position::liberty_drop_legal(Move m, Color us) const {
   assert(var->libertyCapture != LibertyAction::NONE
       || var->libertySelfCapture != LibertyAction::NONE);
 
-  Bitboard occupied = pieces() | to;
+  Square to = to_sq(m);
+  Square to2 = paired_drop(m) ? secondary_drop_square(m) : SQ_NONE;
+  Bitboard placed = square_bb(to);
+  if (to2 != SQ_NONE)
+      placed |= square_bb(to2);
+
+  Bitboard occupied = pieces() | placed;
   Bitboard captured = compute_liberty_capture_mask(to, us, occupied);
+  if (to2 != SQ_NONE)
+      captured |= compute_liberty_capture_mask(to2, us, occupied);
   if (captured && var->libertyCapture == LibertyAction::FORBID)
       return false;
   if (var->libertyCapture == LibertyAction::REMOVE)
       occupied &= ~captured;
 
-  bool hasLiberty;
-  compute_liberty_group(to, pieces(us) | to, occupied, hasLiberty);
-  return hasLiberty || var->libertySelfCapture != LibertyAction::FORBID;
+  Bitboard placedGroups = placed;
+  Bitboard groupPieces = pieces(us) | placed;
+  bool anyLiberty = false;
+  while (placedGroups)
+  {
+      Square root = pop_lsb(placedGroups);
+      bool groupHasLiberty;
+      Bitboard group = compute_liberty_group(root, groupPieces, occupied, groupHasLiberty);
+      placedGroups &= ~group;
+      if (!groupHasLiberty && var->libertySelfCapture == LibertyAction::FORBID)
+          return false;
+      anyLiberty |= groupHasLiberty;
+  }
+
+  return anyLiberty || var->libertySelfCapture != LibertyAction::FORBID;
 }
 
 
@@ -3701,7 +3721,7 @@ bool Position::legal(Move m) const {
 
       if (   (var->libertyCapture != LibertyAction::NONE
            || var->libertySelfCapture != LibertyAction::NONE)
-          && !liberty_drop_legal(to, us))
+          && !liberty_drop_legal(m, us))
           return false;
   }
 
@@ -4776,7 +4796,7 @@ bool Position::pseudo_legal(const Move m) const {
             && (drop_piece_types(in_hand_piece_type(m)) & type_of(pc))
             && ((var->libertyCapture == LibertyAction::NONE
               && var->libertySelfCapture == LibertyAction::NONE)
-                || liberty_drop_legal(to, us));
+            || liberty_drop_legal(m, us));
   }
 
   // Use a slower but simpler function for uncommon cases
