@@ -9,7 +9,9 @@ init_test_env "${1:-}" "${2:-}" "bycatch undo parity test"
 
 CXX=${CXX:-g++}
 CXX_DEFS=(-DIS_64BIT -DUSE_PTHREADS)
-if ! nm -C "${ROOT_DIR}/src/position.o" | grep -q 'Position::fen(bool, bool, int, .*unsigned long) const'; then
+# Do not use grep -q here: with pipefail, nm can report SIGPIPE after grep
+# exits early and falsely select the large-board object family.
+if ! nm -C "${ROOT_DIR}/src/position.o" | grep -F 'Position::fen(bool, bool, int, ' | grep -F 'unsigned long) const' >/dev/null; then
   CXX_DEFS+=(-DLARGEBOARDS -DPRECOMPUTED_MAGICS -DALLVARS)
 fi
 

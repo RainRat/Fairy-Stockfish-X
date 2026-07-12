@@ -213,6 +213,7 @@ struct StateInfoCopied {
   Bitboard not_moved_pieces[COLOR_NB];
   Bitboard potionZones[COLOR_NB][Variant::POTION_TYPE_NB];
   int potionCooldown[COLOR_NB][Variant::POTION_TYPE_NB];
+  Key reserveKey;
   Key layoutKey;
 };
 
@@ -838,7 +839,8 @@ public:
   bool undo_capture_transfer(StateInfo* state, Piece transferPiece, Key* k = nullptr);
   bool simulate_capture_transfer(Key& k, Piece transferPiece, bool suppressedCaptureTransfer = false) const;
   CaptureTransferTarget capture_transfer_target(Piece transferPiece, bool suppressedCaptureTransfer) const;
-  void apply_drop_hash_delta(Key& k, Move m, Piece pc, Color dropColor, PieceType exchanged) const;
+  void apply_drop_hash_delta(Key& k, Move m, Piece pc, Color dropColor, PieceType exchanged,
+                             Key* reserveKey = nullptr) const;
   void add_capture_points(StateInfo* state, Color us, Piece captured) const;
   void do_null_move(StateInfo& newSt);
   void undo_null_move();

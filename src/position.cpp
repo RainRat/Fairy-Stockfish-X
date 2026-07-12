@@ -1058,9 +1058,12 @@ inline int in_hand_zobrist_index(int count) {
   return std::clamp(count, 0, SQUARE_NB - 1);
 }
 
-inline void xor_in_hand_count(Key& k, Piece pc, int oldCount, int newCount) {
-  k ^= Zobrist::inHand[pc][in_hand_zobrist_index(oldCount)]
-    ^ Zobrist::inHand[pc][in_hand_zobrist_index(newCount)];
+inline void xor_in_hand_count(Key& k, Piece pc, int oldCount, int newCount, Key* reserveKey = nullptr) {
+  Key diff = Zobrist::inHand[pc][in_hand_zobrist_index(oldCount)]
+           ^ Zobrist::inHand[pc][in_hand_zobrist_index(newCount)];
+  k ^= diff;
+  if (reserveKey)
+      *reserveKey ^= diff;
 }
 
 inline void xor_points_bucket(Key& k, Color c, int points) {
@@ -2193,7 +2196,8 @@ void Position::recompute_state_hashes_and_material(StateInfo* si) const {
       for (Color c : {WHITE, BLACK})
           xor_points_bucket(si->key, c, si->pointsCount[c]);
 
-  si->boardKey = si->key ^ reserve_key();
+  si->reserveKey = reserve_key();
+  si->boardKey = si->key ^ si->reserveKey;
   si->layoutKey = layout_key();
 }
 
@@ -5293,7 +5297,8 @@ bool Position::add_capture_transfer(StateInfo* state, Piece transferPiece, Key* 
     else
         add_to_hand(target.hashedPiece);
     if (k)
-        xor_in_hand_count(*k, target.hashedPiece, target.oldCount, target.oldCount + 1);
+        xor_in_hand_count(*k, target.hashedPiece, target.oldCount, target.oldCount + 1,
+                          state ? &state->reserveKey : nullptr);
     return true;
 }
 
@@ -5320,7 +5325,8 @@ bool Position::simulate_capture_transfer(Key& k, Piece transferPiece, bool suppr
     return true;
 }
 
-void Position::apply_drop_hash_delta(Key& k, Move m, Piece pc, Color dropColor, PieceType exchanged) const {
+void Position::apply_drop_hash_delta(Key& k, Move m, Piece pc, Color dropColor, PieceType exchanged,
+                                     Key* reserveKey) const {
     Piece pc_hand = make_piece(dropColor, in_hand_piece_type(m));
     k ^= Zobrist::psq[pc][to_sq(m)];
     if (paired_drop(m))
@@ -5330,7 +5336,7 @@ void Position::apply_drop_hash_delta(Key& k, Move m, Piece pc, Color dropColor, 
         if (!variant()->freeDrops && !variant()->payPointsToDrop)
         {
             int n = pieceCountInHand[color_of(pc_hand)][type_of(pc_hand)];
-            xor_in_hand_count(k, pc_hand, n - 2, n);
+            xor_in_hand_count(k, pc_hand, n - 2, n, reserveKey);
         }
     }
     else if (exchanged == NO_PIECE_TYPE)
@@ -5338,7 +5344,7 @@ void Position::apply_drop_hash_delta(Key& k, Move m, Piece pc, Color dropColor, 
         if (!variant()->freeDrops && !variant()->payPointsToDrop)
         {
             int n = pieceCountInHand[color_of(pc_hand)][type_of(pc_hand)];
-            xor_in_hand_count(k, pc_hand, n - 1, n);
+            xor_in_hand_count(k, pc_hand, n - 1, n, reserveKey);
         }
     }
     else
@@ -5350,15 +5356,15 @@ void Position::apply_drop_hash_delta(Key& k, Move m, Piece pc, Color dropColor, 
         // Exchange drop mutates one hand bucket and two prison buckets.
         int handOld = pieceCountInHand[them][exchanged];
         int handNew = handOld + 1;
-        xor_in_hand_count(k, exchangedPiece, handOld, handNew);
+        xor_in_hand_count(k, exchangedPiece, handOld, handNew, reserveKey);
 
         int prisonOldEx = pieceCountInPrison[us][exchanged];
         int prisonNewEx = prisonOldEx - 1;
-        xor_in_hand_count(k, exchangedPiece, prisonOldEx, prisonNewEx);
+        xor_in_hand_count(k, exchangedPiece, prisonOldEx, prisonNewEx, reserveKey);
 
         int prisonOldDrop = pieceCountInPrison[them][type_of(pc)];
         int prisonNewDrop = prisonOldDrop - 1;
-        xor_in_hand_count(k, pc, prisonOldDrop, prisonNewDrop);
+        xor_in_hand_count(k, pc, prisonOldDrop, prisonNewDrop, reserveKey);
     }
 }
 
@@ -5864,7 +5870,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   if (dropMove)
   {
       st->dropHandColor = dropColor;
-      apply_drop_hash_delta(k, m, pc, dropColor, exchanged);
+      apply_drop_hash_delta(k, m, pc, dropColor, exchanged, &st->reserveKey);
 
       // Reset rule 50 counter for irreversible drops
       st->rule50 = 0;
@@ -6162,8 +6168,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
               int addedN = add_to_prison(st->promotionPawn);
               int removedN = remove_from_prison(promotion);
               // Keep prison inventory hash in sync with promotion swap.
-              xor_in_hand_count(k, st->promotionPawn, addedN - 1, addedN);
-              xor_in_hand_count(k, promotion, removedN + 1, removedN);
+              xor_in_hand_count(k, st->promotionPawn, addedN - 1, addedN, &st->reserveKey);
+              xor_in_hand_count(k, promotion, removedN + 1, removedN, &st->reserveKey);
           }
 
           int promoDirtyIdx = -1;
@@ -6178,7 +6184,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           {
               remove_from_hand(promotedHandPiece);
               int newN = pieceCountInHand[us][type_of(promotedHandPiece)];
-              xor_in_hand_count(k, promotedHandPiece, newN + 1, newN);
+              xor_in_hand_count(k, promotedHandPiece, newN + 1, newN, &st->reserveKey);
               st->consumedPromotionHandPiece = promotedHandPiece;
               if (Eval::useNNUE && promoDirtyIdx >= 0)
               {
@@ -6254,7 +6260,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       {
           remove_from_hand(promotedHandPiece);
           int newN = pieceCountInHand[us][type_of(promotedHandPiece)];
-          xor_in_hand_count(k, promotedHandPiece, newN + 1, newN);
+          xor_in_hand_count(k, promotedHandPiece, newN + 1, newN, &st->reserveKey);
           st->consumedPromotionHandPiece = promotedHandPiece;
           if (Eval::useNNUE && promoDirtyIdx >= 0)
           {
@@ -6392,7 +6398,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           int oldCount = pieceCountInHand[us][gating_type(m)];
           remove_from_hand(gating_piece);
           int newCount = pieceCountInHand[us][gating_type(m)];
-          xor_in_hand_count(k, gating_piece, oldCount, newCount);
+          xor_in_hand_count(k, gating_piece, oldCount, newCount, &st->reserveKey);
 
           if (Eval::useNNUE)
               append_dirty(st, gating_piece, SQ_NONE, SQ_NONE, gating_piece, pieceCountInHand[us][gating_type(m)]);
@@ -6409,7 +6415,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
               int oldCount = pieceCountInHand[us][gating_type(m)];
               remove_from_hand(gating_piece);
               int newCount = pieceCountInHand[us][gating_type(m)];
-              xor_in_hand_count(k, gating_piece, oldCount, newCount);
+              xor_in_hand_count(k, gating_piece, oldCount, newCount, &st->reserveKey);
           }
 
           st->gatesBB[us] ^= gate;
@@ -6429,7 +6435,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
                   int oldCount2 = pieceCountInHand[us][gating_type(m)];
                   remove_from_hand(gating_piece);
                   int newCount2 = pieceCountInHand[us][gating_type(m)];
-                  xor_in_hand_count(k, gating_piece, oldCount2, newCount2);
+                  xor_in_hand_count(k, gating_piece, oldCount2, newCount2, &st->reserveKey);
               }
 
               k ^= Zobrist::psq[gating_piece][gate2];
@@ -6448,7 +6454,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           int oldCount = pieceCountInHand[us][potionPiece];
           remove_from_hand(gating_piece);
           int newCount = pieceCountInHand[us][potionPiece];
-          xor_in_hand_count(k, gating_piece, oldCount, newCount);
+          xor_in_hand_count(k, gating_piece, oldCount, newCount, &st->reserveKey);
 
           if (Eval::useNNUE)
               append_dirty(st, gating_piece, SQ_NONE, SQ_NONE, gating_piece, pieceCountInHand[us][potionPiece]);
@@ -6926,7 +6932,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
 
   // Update the key with the final value
   st->key = k;
-  st->boardKey = st->key ^ reserve_key();
+  st->boardKey = st->key ^ st->reserveKey;
   if (var->samePlayerBoardRepetitionIllegal)
       st->layoutKey = layout_key();
   sideToMove = them;
@@ -7522,7 +7528,7 @@ void Position::do_null_move(StateInfo& newSt) {
       st->key ^= Zobrist::enpassant[pop_lsb(st->epSquares)];
 
   st->key ^= Zobrist::side;
-  st->boardKey = st->key ^ reserve_key();
+  st->boardKey = st->key ^ st->reserveKey;
   prefetch(TT.first_entry(key()));
 
   ++st->rule50;
@@ -9168,8 +9174,10 @@ bool Position::pos_is_ok() const {
 
   set_state(&si);
   bool sameState =
-         si.key == st->key
+      si.key == st->key
       && si.boardKey == st->boardKey
+      && si.reserveKey == st->reserveKey
+      && st->reserveKey == reserve_key()
       && (!var->samePlayerBoardRepetitionIllegal || si.layoutKey == st->layoutKey)
       && si.pawnKey == st->pawnKey
       && si.materialKey == st->materialKey
