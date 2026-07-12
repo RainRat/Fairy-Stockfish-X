@@ -67,25 +67,19 @@ bool MovePicker::is_useless_potion(Move m) const {
 
   if (pos.potion_piece(Variant::POTION_FREEZE) == gatingPiece)
   {
+      // Existing freeze zones expire before the opponent's reply. A target is
+      // productive whenever the new zone contains an enemy, even if that
+      // enemy is frozen in the position before this cast.
       Bitboard zone = pos.freeze_zone_from_square(gate);
       Bitboard enemies = pos.pieces(~pos.side_to_move());
-      return !(zone & enemies & ~pos.freeze_squares());
+      return !(zone & enemies);
   }
 
   if (pos.potion_piece(Variant::POTION_JUMP) == gatingPiece)
-  {
-      if (pos.piece_on(gate) == NO_PIECE)
-          return true;
-
-      if ((pos.jump_squares(WHITE) | pos.jump_squares(BLACK)) & square_bb(gate))
-          return true;
-
-      const bool initial = pos.not_moved_pieces(pos.side_to_move()) & from_sq(m);
-      const MoveModality modality = pos.capture(m) ? MODALITY_CAPTURE : MODALITY_QUIET;
-      Bitboard path = pos.between_bb(from_sq(m), to_sq(m), type_of(pos.moved_piece(m)), modality, initial);
-      path &= ~square_bb(to_sq(m));
-      return !(path & square_bb(gate));
-  }
+      // A Jump target changes the persistent state even when the
+      // accompanying move does not cross it.  It may also deliberately
+      // replace the currently active target, which expires after this turn.
+      return false;
 
   return false;
 }
@@ -322,7 +316,7 @@ bool MovePicker::resume_deferred_potions(
     bool& deferred) {
   if (deferred)
   {
-      endMoves = append_potions<Type>(pos, appendBegin, baseEnd);
+      endMoves = append_potions<Type>(pos, appendBegin, baseEnd, true);
       endMoves = prune_useless_potions(baseEnd, endMoves);
       cur = baseEnd;
       if constexpr (Type == CAPTURES || Type == QUIETS || Type == EVASIONS)
@@ -381,9 +375,19 @@ top:
       goto top;
 
   case PROBCUT_INIT:
+      cur = endBadCaptures = moveList;
+      endMoves = generate_without_potions<CAPTURES>(pos, cur);
+      assert_move_list_bounds();
+
+      score<CAPTURES>();
+      ++stage;
+      goto top;
+
   case QCAPTURE_INIT:
       cur = endBadCaptures = moveList;
       endMoves = generate_without_potions<CAPTURES>(pos, cur);
+      qcaptureBaseEnd = endMoves;
+      qcapturePotionsDeferred = potions_pending();
       assert_move_list_bounds();
 
       score<CAPTURES>();
@@ -497,6 +501,9 @@ top:
       if (select<Best>([&](){ return   depth > DEPTH_QS_RECAPTURES
                                     || to_sq(*cur) == recaptureSquare; }))
           return *(cur - 1);
+
+      if (resume_deferred_potions<CAPTURES>(moveList, qcaptureBaseEnd, qcapturePotionsDeferred))
+          goto top;
 
       // If we did not find any move and we do not try checks, we have finished
       if (depth != DEPTH_QS_CHECKS)

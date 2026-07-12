@@ -59,14 +59,6 @@ namespace {
   template<GenType Type>
   constexpr bool CanEmitPromotions = Type == CAPTURES || Type == QUIETS || Type == EVASIONS || Type == NON_EVASIONS;
 
-  Bitboard useful_freeze_gates(const Position& pos, Color us) {
-    Bitboard gates = 0;
-    Bitboard enemies = pos.pieces(~us);
-    while (enemies)
-      gates |= pos.freeze_zone_from_square(pop_lsb(enemies));
-    return gates;
-  }
-
   template<MoveType T>
   ExtMove* make_move_and_gating(const Position& pos, ExtMove* moveList, Color us, Square from, Square to, PieceType pt = NO_PIECE_TYPE) {
 
@@ -1436,7 +1428,7 @@ namespace {
   }
 
   template<Color Us, GenType Type>
-  ExtMove* generate_potion_moves(const Position& pos, MoveBuffer buffer) {
+  ExtMove* generate_potion_moves(const Position& pos, MoveBuffer buffer, bool pruneUseless = false) {
     const Variant* var = pos.variant();
     ExtMove* cur = buffer.end;
     ExtMove* maxEnd = buffer.begin + MOVEGEN_OVERFLOW_CAPACITY;
@@ -1456,8 +1448,14 @@ namespace {
         else if (!var->potionDropOnOccupied)
             candidates &= ~pos.pieces();
 
-        if (potion == Variant::POTION_FREEZE)
-            candidates &= useful_freeze_gates(pos, Us);
+        if (pruneUseless && potion == Variant::POTION_FREEZE)
+        {
+            Bitboard useful = Bitboard(0);
+            Bitboard enemies = pos.pieces(~Us);
+            while (enemies)
+                useful |= pos.freeze_zone_from_square(pop_lsb(enemies));
+            candidates &= useful;
+        }
 
         if (potion == Variant::POTION_FREEZE)
         {
@@ -1486,10 +1484,27 @@ namespace {
                 {
                     if (gate == base.info.to)
                         continue;
+
+                    // Evaluate the accompanying move with the proposed
+                    // Freeze zone installed. Sacred Royal can then thaw a
+                    // king frozen by its own cast, while a checker frozen by
+                    // that cast does not thaw the king.
+                    const SpellContext* current = current_spell_context();
+                    ScopedSpellContext freezeScope(
+                        (current ? current->freezeExtra : Bitboard(0)) | newFreezeZone,
+                        current ? current->jumpRemoved : Bitboard(0));
                     if (pos.freeze_squares() & base.info.from)
                         continue;
-                    if (newFreezeZone & base.info.from)
-                        continue;
+                    if (base.info.mt == CASTLING)
+                    {
+                        Square rookFrom = base.info.to;
+                        if (pos.piece_on(rookFrom) == NO_PIECE
+                            || color_of(pos.piece_on(rookFrom)) != Us
+                            || !(pos.castling_rook_pieces(Us) & type_of(pos.piece_on(rookFrom))))
+                            rookFrom = pos.castling_rook_square(Us & (base.info.to > base.info.from ? KING_SIDE : QUEEN_SIDE));
+                        if (pos.freeze_squares() & rookFrom)
+                            continue;
+                    }
                     if ((between_bb(base.info.from, base.info.to, base.info.moverType, base.info.modality, base.info.isInitial) & ~square_bb(base.info.to)) & gate)
                         continue;
 
@@ -1506,7 +1521,52 @@ namespace {
             if (!candidates)
                 continue;
 
-            ScopedSpellContext guard(Bitboard(0), candidates);
+            const Bitboard activeJump = pruneUseless
+                                      ? pos.potion_zone(WHITE, Variant::POTION_JUMP)
+                                      | pos.potion_zone(BLACK, Variant::POTION_JUMP)
+                                      : Bitboard(0);
+
+            // Casting a Jump potion does not require the accompanying move to
+            // cross its square.  Keep all ordinary legal moves available with
+            // each possible potion target; the jump effect is then available
+            // to either player until the next turn is complete.
+            for (ExtMove* it = buffer.begin; it != buffer.end; ++it)
+            {
+                PotionBaseInfo baseInfo;
+                if (!prepare_potion_base(pos, it->move, baseInfo))
+                    continue;
+
+                const Bitboard path = pruneUseless
+                                    ? between_bb(baseInfo.from, baseInfo.to,
+                                                 baseInfo.moverType, baseInfo.modality,
+                                                 baseInfo.isInitial)
+                                      & ~square_bb(baseInfo.to)
+                                    : Bitboard(0);
+                Bitboard targets = candidates & ~square_bb(baseInfo.to);
+                while (targets)
+                {
+                    Square gate = pop_lsb(targets);
+                    if (pruneUseless)
+                    {
+                        if (activeJump & square_bb(gate))
+                            continue;
+                        if (!(path & square_bb(gate)))
+                            continue;
+                    }
+                    if (try_append_potion_gating_move<Type>(pos, cur, maxEnd,
+                                                           baseInfo.from, baseInfo.to,
+                                                           baseInfo.mt, it->move,
+                                                           potion, potionPiece, gate,
+                                                           it->value)
+                        == AppendStatus::Full)
+                        return maxEnd;
+                }
+            }
+
+            const SpellContext* current = current_spell_context();
+            const Bitboard inheritedFreeze = current ? current->freezeExtra : Bitboard(0);
+            const Bitboard inheritedJump = current ? current->jumpRemoved : Bitboard(0);
+            ScopedSpellContext guard(inheritedFreeze, inheritedJump | candidates);
 
 #ifdef USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
             auto jumpMoves = std::make_unique<ExtMove[]>(MOVEGEN_OVERFLOW_CAPACITY);
@@ -1546,7 +1606,11 @@ namespace {
                     continue;
 
                 Bitboard path = between_bb(baseInfo.from, baseInfo.to, baseInfo.moverType, baseInfo.modality, baseInfo.isInitial);
-                Bitboard intersection = path & candidates & ~square_bb(baseInfo.to);
+                // Persistent Jump targets are already removed from the
+                // occupancy used to prepare these base moves, so they must
+                // not be counted again when finding the newly cast target.
+                Bitboard intersection = path & candidates & ~square_bb(baseInfo.to)
+                                      & ~inheritedJump;
                 if (popcount(intersection) != 1)
                     continue;
 
@@ -1554,7 +1618,8 @@ namespace {
 
                 bool moveOk = false;
                 {
-                    ScopedSpellContext revalGuard(Bitboard(0), square_bb(gate));
+                    ScopedSpellContext revalGuard(inheritedFreeze,
+                                                  inheritedJump | square_bb(gate));
                     Bitboard okSquares = baseInfo.isInitial ? (pos.moves_from<true>(Us, baseInfo.moverType, baseInfo.from) | pos.attacks_from<true>(Us, baseInfo.moverType, baseInfo.from))
                                                             : (pos.moves_from<false>(Us, baseInfo.moverType, baseInfo.from) | pos.attacks_from<false>(Us, baseInfo.moverType, baseInfo.from));
                     moveOk = bool(okSquares & baseInfo.to);
@@ -1598,6 +1663,11 @@ ExtMove* generate(const Position& pos, ExtMove* moveList) {
   assert((Type == EVASIONS) == (bool)pos.evasion_checkers()
          || (pos.topology_wraps() && Type == NON_EVASIONS && pos.evasion_checkers()));
   Color us = pos.side_to_move();
+  const SpellContext* current = current_spell_context();
+  ScopedSpellContext jumpScope(
+      current ? current->freezeExtra : Bitboard(0),
+      pos.potion_zone(~us, Variant::POTION_JUMP)
+          | (current ? current->jumpRemoved : Bitboard(0)));
 
   return us == WHITE ? generate_all<WHITE, Type>(pos, moveList)
                      : generate_all<BLACK, Type>(pos, moveList);
@@ -1610,12 +1680,18 @@ ExtMove* generate_without_potions(const Position& pos, ExtMove* moveList) {
   assert((Type == EVASIONS) == (bool)pos.evasion_checkers()
          || (pos.topology_wraps() && Type == NON_EVASIONS && pos.evasion_checkers()));
   Color us = pos.side_to_move();
+  const SpellContext* current = current_spell_context();
+  ScopedSpellContext jumpScope(
+      current ? current->freezeExtra : Bitboard(0),
+      pos.potion_zone(~us, Variant::POTION_JUMP)
+          | (current ? current->jumpRemoved : Bitboard(0)));
   return us == WHITE ? generate_all_impl<WHITE, Type>(pos, moveList)
                      : generate_all_impl<BLACK, Type>(pos, moveList);
 }
 
 template<GenType Type>
-ExtMove* append_potions(const Position& pos, ExtMove* listBegin, ExtMove* baseEnd) {
+ExtMove* append_potions(const Position& pos, ExtMove* listBegin, ExtMove* baseEnd,
+                        bool pruneUseless) {
 
   static_assert(Type != LEGAL, "Unsupported type in append_potions()");
   if (!pos.potions_enabled())
@@ -1623,8 +1699,13 @@ ExtMove* append_potions(const Position& pos, ExtMove* listBegin, ExtMove* baseEn
   assert((Type == EVASIONS) == (bool)pos.evasion_checkers()
          || (pos.topology_wraps() && Type == NON_EVASIONS && pos.evasion_checkers()));
   Color us = pos.side_to_move();
-  return us == WHITE ? generate_potion_moves<WHITE, Type>(pos, MoveBuffer{listBegin, baseEnd})
-                     : generate_potion_moves<BLACK, Type>(pos, MoveBuffer{listBegin, baseEnd});
+  const SpellContext* current = current_spell_context();
+  ScopedSpellContext jumpScope(
+      current ? current->freezeExtra : Bitboard(0),
+      pos.potion_zone(~us, Variant::POTION_JUMP)
+          | (current ? current->jumpRemoved : Bitboard(0)));
+  return us == WHITE ? generate_potion_moves<WHITE, Type>(pos, MoveBuffer{listBegin, baseEnd}, pruneUseless)
+                     : generate_potion_moves<BLACK, Type>(pos, MoveBuffer{listBegin, baseEnd}, pruneUseless);
 }
 
 // Explicit template instantiations
@@ -1638,11 +1719,11 @@ template ExtMove* generate_without_potions<QUIETS>(const Position&, ExtMove*);
 template ExtMove* generate_without_potions<EVASIONS>(const Position&, ExtMove*);
 template ExtMove* generate_without_potions<QUIET_CHECKS>(const Position&, ExtMove*);
 template ExtMove* generate_without_potions<NON_EVASIONS>(const Position&, ExtMove*);
-template ExtMove* append_potions<CAPTURES>(const Position&, ExtMove*, ExtMove*);
-template ExtMove* append_potions<QUIETS>(const Position&, ExtMove*, ExtMove*);
-template ExtMove* append_potions<EVASIONS>(const Position&, ExtMove*, ExtMove*);
-template ExtMove* append_potions<QUIET_CHECKS>(const Position&, ExtMove*, ExtMove*);
-template ExtMove* append_potions<NON_EVASIONS>(const Position&, ExtMove*, ExtMove*);
+template ExtMove* append_potions<CAPTURES>(const Position&, ExtMove*, ExtMove*, bool);
+template ExtMove* append_potions<QUIETS>(const Position&, ExtMove*, ExtMove*, bool);
+template ExtMove* append_potions<EVASIONS>(const Position&, ExtMove*, ExtMove*, bool);
+template ExtMove* append_potions<QUIET_CHECKS>(const Position&, ExtMove*, ExtMove*, bool);
+template ExtMove* append_potions<NON_EVASIONS>(const Position&, ExtMove*, ExtMove*, bool);
 
 
 /// generate<LEGAL> generates all the legal moves in the given position

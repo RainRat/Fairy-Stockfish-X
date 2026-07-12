@@ -1101,6 +1101,47 @@ Key Position::reserve_key() const {
         || capture_type() == PRISON || two_boards() || prison_pawn_promotion()))
       return 0;
 
+  if (potions_enabled() && !piece_drops() && !seirawan_gating() && !two_boards()
+      && capture_type() == MOVE_OUT && !prison_pawn_promotion()
+      && !variant()->promotionRequireInHand && !variant()->promotionConsumeInHand)
+  {
+      int potionHandCount = 0;
+      for (Color c : {WHITE, BLACK})
+          for (int i = 0; i < Variant::POTION_TYPE_NB; ++i)
+          {
+              PieceType pt = potion_piece(static_cast<Variant::PotionType>(i));
+              if (pt != NO_PIECE_TYPE)
+                  potionHandCount += pieceCountInHand[c][pt];
+          }
+
+      if (count_in_hand(ALL_PIECES) == potionHandCount)
+      {
+          // Preserve the generic reserve_key() value exactly: the non-potion
+          // piece types still contribute their zero-count Zobrist buckets.
+          static const Key zeroHandKey = [] {
+              Key k = 0;
+              for (Color c : {WHITE, BLACK})
+                  for (PieceType pt = PAWN; pt <= KING; ++pt)
+                      k ^= Zobrist::inHand[make_piece(c, pt)][0];
+              return k;
+          }();
+
+          Key k = zeroHandKey;
+          for (Color c : {WHITE, BLACK})
+              for (int i = 0; i < Variant::POTION_TYPE_NB; ++i)
+              {
+                  PieceType pt = potion_piece(static_cast<Variant::PotionType>(i));
+                  if (pt != NO_PIECE_TYPE)
+                  {
+                      Piece pc = make_piece(c, pt);
+                      k ^= Zobrist::inHand[pc][0]
+                         ^ Zobrist::inHand[pc][in_hand_zobrist_index(pieceCountInHand[c][pt])];
+                  }
+              }
+          return k;
+      }
+  }
+
   Key k = 0;
   for (Color c : {WHITE, BLACK})
       for (PieceType pt = PAWN; pt <= KING; ++pt)
@@ -1822,22 +1863,60 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
   {
       ss >> std::ws;
       std::string potionSpec;
-      if (ss.peek() == 'f' || ss.peek() == 'j' || ss.peek() == '-')
+      if (ss.peek() == 'f' || ss.peek() == 'j' || ss.peek() == 'w' || ss.peek() == 'b' || ss.peek() == '-')
           ss >> potionSpec;
 
       if (!potionSpec.empty() && potionSpec != "-")
       {
-          Color zoneColor = ~sideToMove;
-          if (potionSpec.size() > 2 && potionSpec[1] == ':')
+          if (potionSpec.front() == ',' || potionSpec.back() == ',')
+              ss.setstate(std::ios::failbit);
+          else
           {
-              Square zoneCenter = parse_fen_square(*this, potionSpec.substr(2));
-              if (is_ok(zoneCenter))
+              Bitboard parsedPotionZones[COLOR_NB][Variant::POTION_TYPE_NB] = {};
+              bool seenPotionZone[COLOR_NB][Variant::POTION_TYPE_NB] = {};
+              bool potionZonesValid = true;
+              std::istringstream zones(potionSpec);
+              std::string zoneSpec;
+              while (std::getline(zones, zoneSpec, ','))
               {
-                  if (potionSpec[0] == 'f')
-                      st->potionZones[zoneColor][Variant::POTION_FREEZE] = freeze_zone_from_square(zoneCenter);
-                  else if (potionSpec[0] == 'j')
-                      st->potionZones[zoneColor][Variant::POTION_JUMP] = square_bb(zoneCenter);
+                  Color zoneColor = ~sideToMove;
+                  size_t offset = 0;
+                  if (zoneSpec.size() > 1 && (zoneSpec[0] == 'w' || zoneSpec[0] == 'b'))
+                  {
+                      zoneColor = zoneSpec[0] == 'w' ? WHITE : BLACK;
+                      offset = 1;
+                  }
+                  if (zoneSpec.size() <= offset + 2 || zoneSpec[offset + 1] != ':'
+                      || (zoneSpec[offset] != 'f' && zoneSpec[offset] != 'j'))
+                  {
+                      potionZonesValid = false;
+                      break;
+                  }
+                  const Variant::PotionType potion = zoneSpec[offset] == 'f'
+                                                    ? Variant::POTION_FREEZE
+                                                    : Variant::POTION_JUMP;
+                  if (seenPotionZone[zoneColor][potion])
+                  {
+                      potionZonesValid = false;
+                      break;
+                  }
+                  seenPotionZone[zoneColor][potion] = true;
+
+                  Square zoneCenter = parse_fen_square(*this, zoneSpec.substr(offset + 2));
+                  if (!is_ok(zoneCenter))
+                  {
+                      potionZonesValid = false;
+                      break;
+                  }
+                  if (potion == Variant::POTION_FREEZE)
+                      parsedPotionZones[zoneColor][potion] = freeze_zone_from_square(zoneCenter);
+                  else
+                      parsedPotionZones[zoneColor][potion] = square_bb(zoneCenter);
               }
+              if (potionZonesValid)
+                  std::memcpy(st->potionZones, parsedPotionZones, sizeof(parsedPotionZones));
+              else
+                  ss.setstate(std::ios::failbit);
           }
       }
 
@@ -2462,35 +2541,44 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
       int bj = st->potionCooldown[BLACK][Variant::POTION_JUMP];
       bool hasCooldownState = wf || wj || bf || bj;
 
-      Color zoneColor = ~sideToMove;
-      Variant::PotionType zoneType = Variant::POTION_TYPE_NB;
-      Bitboard zone = st->potionZones[zoneColor][Variant::POTION_FREEZE];
-      if (zone)
-          zoneType = Variant::POTION_FREEZE;
-      else
-      {
-          zone = st->potionZones[zoneColor][Variant::POTION_JUMP];
-          if (zone)
-              zoneType = Variant::POTION_JUMP;
-      }
+      std::vector<std::string> zones;
+      for (Color c : {WHITE, BLACK})
+          for (int pt = 0; pt < Variant::POTION_TYPE_NB; ++pt)
+          {
+              Variant::PotionType potion = static_cast<Variant::PotionType>(pt);
+              Bitboard zone = st->potionZones[c][pt];
+              if (!zone)
+                  continue;
 
-      Square zoneCenter = SQ_NONE;
-      if (zoneType == Variant::POTION_JUMP)
-          zoneCenter = lsb(zone);
-      else if (zoneType == Variant::POTION_FREEZE)
-          for (Square s = SQ_A1; s <= SQ_MAX; ++s)
-              if ((board_bb() & s) && freeze_zone_from_square(s) == zone)
-              {
-                  zoneCenter = s;
-                  break;
-              }
+              Square zoneCenter = SQ_NONE;
+              if (potion == Variant::POTION_JUMP)
+                  zoneCenter = lsb(zone);
+              else
+                  for (Square s = SQ_A1; s <= SQ_MAX; ++s)
+                      if ((board_bb() & s) && freeze_zone_from_square(s) == zone)
+                      {
+                          zoneCenter = s;
+                          break;
+                      }
 
-      bool hasZone = is_ok(zoneCenter);
-      if (hasZone || hasCooldownState)
+              if (is_ok(zoneCenter))
+                  zones.push_back(std::string(c == WHITE ? "w" : "b")
+                                  + (potion == Variant::POTION_FREEZE ? "f:" : "j:")
+                                  + UCI::square(*this, zoneCenter));
+          }
+
+      if (!zones.empty() || hasCooldownState)
       {
           ss << " ";
-          if (hasZone)
-              ss << (zoneType == Variant::POTION_FREEZE ? "f:" : "j:") << UCI::square(*this, zoneCenter);
+          if (!zones.empty())
+          {
+              for (size_t i = 0; i < zones.size(); ++i)
+              {
+                  if (i)
+                      ss << ",";
+                  ss << zones[i];
+              }
+          }
           else
               ss << "-";
           ss << " <" << wf << " " << wj << " " << bf << " " << bj << ">";
@@ -2764,7 +2852,8 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
   return b;
 }
 
-Bitboard Position::attackers_to_king(Square s, Bitboard occupied, Color c, Bitboard janggiCannons, PieceType pt) const {
+Bitboard Position::attackers_to_king_without_freeze(Square s, Bitboard occupied, Color c,
+                                                    Bitboard janggiCannons, PieceType pt) const {
 
   Bitboard attackers = attackers_to(s, occupied, c, janggiCannons);
   attackers |= janggi_cannon_attackers_to_king(s, occupied, c, janggiCannons);
@@ -2813,11 +2902,6 @@ Bitboard Position::attackers_to_king(Square s, Bitboard occupied, Color c, Bitbo
               }
           }
       }
-  // Frozen pieces cannot give check (relevant for spell-chess freeze effects).
-  Bitboard restricted = freeze_squares(c);
-  if (var->prisonPawnPromotion)
-      restricted |= pieces(c, PAWN) & pawnCannotCheckZone[c];
-  attackers &= ~restricted;
   PieceType royalType = pt != NO_PIECE_TYPE ? pt :
                         (piece_on(s) != NO_PIECE ? type_of(piece_on(s)) : king_type());
 
@@ -2840,6 +2924,18 @@ Bitboard Position::attackers_to_king(Square s, Bitboard occupied, Color c, Bitbo
               attackers &= ~pieces(c, apt);
       }
   return attackers;
+}
+
+Bitboard Position::attackers_to_king(Square s, Bitboard occupied, Color c,
+                                     Bitboard janggiCannons, PieceType pt) const {
+
+  Bitboard attackers = attackers_to_king_without_freeze(s, occupied, c, janggiCannons, pt);
+
+  // Frozen pieces cannot give check (relevant for spell-chess freeze effects).
+  Bitboard restricted = freeze_squares(c);
+  if (var->prisonPawnPromotion)
+      restricted |= pieces(c, PAWN) & pawnCannotCheckZone[c];
+  return attackers & ~restricted;
 }
 
 Bitboard Position::janggi_cannon_attackers_to_king(Square s, Bitboard occupied, Color c, Bitboard janggiCannons) const {
@@ -3340,7 +3436,9 @@ bool Position::legal(Move m) const {
   if (!potCtx.valid)
       return false;
 
-  if (!dropMove && ((freeze_squares() | potCtx.freezeExtra) & from))
+  ScopedSpellContext spellScope(potCtx.freezeExtra, potCtx.jumpRemoved);
+
+  if (!dropMove && (freeze_squares() & from))
       return false;
   // Castling is also blocked if the participating rook is frozen.
   if (type_of(m) == CASTLING)
@@ -3350,13 +3448,12 @@ bool Position::legal(Move m) const {
           || color_of(piece_on(rookFrom)) != us
           || !(castling_rook_pieces(us) & type_of(piece_on(rookFrom))))
           rookFrom = castling_rook_square(us & (to > from ? KING_SIDE : QUEEN_SIDE));
-      if ((freeze_squares() | potCtx.freezeExtra) & rookFrom)
+      if (freeze_squares() & rookFrom)
           return false;
   }
   if (potCtx.jumpRemoved && (square_bb(to) & potCtx.jumpRemoved))
       return false;
 
-  ScopedSpellContext spellScope(potCtx.freezeExtra, potCtx.jumpRemoved);
   const bool isCapture = capture(m);
   const Square shotSq = isCapture ? capture_square(m) : to;
   bool pureWallMove = is_gating(m) && potCtx.potion == Variant::POTION_TYPE_NB
@@ -4882,7 +4979,7 @@ bool Position::gives_check(Move m) const {
 
   ScopedSpellContext spellScope(potCtx.freezeExtra, potCtx.jumpRemoved);
 
-  if (!dropMove && ((freeze_squares() | potCtx.freezeExtra) & from))
+  if (!dropMove && (freeze_squares() & from))
       return false;
   if (potCtx.jumpRemoved && (square_bb(to) & potCtx.jumpRemoved))
       return false;
@@ -6786,8 +6883,10 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
               --st->potionCooldown[us][pt];
       }
 
-      st->potionZones[us][Variant::POTION_FREEZE] = potCtx.potion == Variant::POTION_FREEZE ? potCtx.freezeExtra : Bitboard(0);
-      st->potionZones[us][Variant::POTION_JUMP] = Bitboard(0);
+      st->potionZones[us][Variant::POTION_FREEZE] =
+          potCtx.potion == Variant::POTION_FREEZE ? potCtx.freezeExtra : Bitboard(0);
+      st->potionZones[us][Variant::POTION_JUMP] =
+          potCtx.potion == Variant::POTION_JUMP ? potCtx.jumpRemoved : Bitboard(0);
 
       st->potionZones[them][Variant::POTION_FREEZE] = Bitboard(0);
       st->potionZones[them][Variant::POTION_JUMP] = Bitboard(0);

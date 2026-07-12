@@ -1541,6 +1541,36 @@ namespace {
                 score += make_score(60, 60) * cnt;
             }
         }
+
+        // An active Freeze suppresses movement and attacks for the opponent's
+        // reply.  Material-only evaluation otherwise treats a frozen queen
+        // exactly like a mobile queen, even though the effect lasts through
+        // the whole side-to-move turn.
+        const Bitboard ownFreeze = pos.potion_zone(Us, Variant::POTION_FREEZE);
+        const Bitboard enemyFreeze = pos.potion_zone(Them, Variant::POTION_FREEZE);
+        if ((ownFreeze || enemyFreeze)
+            && pos.potion_piece(Variant::POTION_FREEZE) != NO_PIECE_TYPE)
+        {
+            auto frozen_value = [&](Piece pc, Color c) {
+                if (type_of(pc) == pos.castling_king_piece(c))
+                    return make_score(350, 450);
+                return make_score(EvalPieceValue[MG][pc] / 4,
+                                  EvalPieceValue[EG][pc] / 4);
+            };
+            auto frozen_score = [&](Color c, Bitboard zone) {
+                Score result = SCORE_ZERO;
+                Bitboard frozen = zone & pos.pieces(c);
+                while (frozen)
+                {
+                    Square sq = pop_lsb(frozen);
+                    result += frozen_value(pos.piece_on(sq), c);
+                }
+                return result;
+            };
+
+            score += frozen_score(Them, pos.freeze_squares(Us));
+            score -= frozen_score(Us, pos.freeze_squares(Them));
+        }
     }
 
     // Extinction

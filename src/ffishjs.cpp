@@ -493,6 +493,10 @@ public:
     return "unknown";
   }
 
+  bool potions_enabled() const {
+    return v->potions;
+  }
+
 private:
   void resetStates() {
     this->states = StateListPtr(new std::deque<StateInfo>(1));
@@ -865,7 +869,8 @@ EMSCRIPTEN_BINDINGS(ffish_js) {
     .function("pocket", &Board::pocket)
     .function("toString", &Board::to_string)
     .function("toVerboseString", &Board::to_verbose_string)
-    .function("variant", &Board::variant);
+    .function("variant", &Board::variant)
+    .function("potionsEnabled", &Board::potions_enabled);
   class_<Game>("Game")
     .function("headerKeys", &Game::header_keys)
     .function("headers", &Game::headers)

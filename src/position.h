@@ -780,6 +780,9 @@ public:
   Bitboard attackers_to(Square s, Bitboard occupied) const;
   Bitboard attackers_to(Square s, Bitboard occupied, Color c) const;
   Bitboard attackers_to(Square s, Bitboard occupied, Color c, Bitboard janggiCannons) const;
+  Bitboard attackers_to_king_without_freeze(Square s, Bitboard occupied, Color c,
+                                            Bitboard janggiCannons,
+                                            PieceType pt = NO_PIECE_TYPE) const;
   Bitboard attackers_to_king(Square s, Color c) const;
   Bitboard attackers_to_king(Square s, Bitboard occupied, Color c) const;
   Bitboard attackers_to_king(Square s, Bitboard occupied, Color c, Bitboard janggiCannons, PieceType pt = NO_PIECE_TYPE) const;
@@ -2244,6 +2247,35 @@ inline Bitboard Position::freeze_squares(Color c) const {
   Bitboard mask = st->potionZones[c][Variant::POTION_FREEZE];
   if (const SpellContext* spellCtx = current_spell_context(); spellCtx && c == ~sideToMove)
       mask |= spellCtx->freezeExtra;
+  if (var->checkedRoyalsIgnoreFreeze)
+      for (Color royalColor : {WHITE, BLACK})
+      {
+          const PieceType royalType = castling_king_piece(royalColor);
+          if (royalType == NO_PIECE_TYPE || count(royalColor, royalType) != 1)
+              continue;
+
+          const Square royalSquare = square(royalColor, royalType);
+          if (!(mask & royalSquare))
+              continue;
+
+          // Spell Chess represents its capturable king as a COMMONER, so it
+          // has no normal checkersBB entry. Use the raw attack map here rather
+          // than attackers_to_king(), which asks freeze_squares() again.
+          // Only a Freeze zone cast by the royal's owner can make an
+          // attacking piece frozen for Sacred Royal purposes.  A zone cast
+          // by the attacker cannot make its own checking piece disappear
+          // from the attack map.  During a compound move, include the
+          // temporary zone only when that move is being cast by the royal's
+          // owner as well.
+          Bitboard frozenAttackers = st->potionZones[royalColor][Variant::POTION_FREEZE];
+          if (const SpellContext* spellCtx = current_spell_context();
+              spellCtx && sideToMove == royalColor)
+              frozenAttackers |= spellCtx->freezeExtra;
+          if (attackers_to_king_without_freeze(royalSquare, byTypeBB[ALL_PIECES], ~royalColor,
+                                               byTypeBB[JANGGI_CANNON], royalType)
+              & ~frozenAttackers)
+              mask &= ~square_bb(royalSquare);
+      }
   return mask;
 }
 

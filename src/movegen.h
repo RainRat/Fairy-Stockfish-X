@@ -66,7 +66,8 @@ template<GenType>
 ExtMove* generate_without_potions(const Position& pos, ExtMove* moveList);
 
 template<GenType>
-ExtMove* append_potions(const Position& pos, ExtMove* listBegin, ExtMove* baseEnd);
+ExtMove* append_potions(const Position& pos, ExtMove* listBegin, ExtMove* baseEnd,
+                        bool pruneUseless = false);
 
 // Some variant-specific generators (potions, exchanges) can exceed MAX_MOVES.
 // Keep a larger shared capacity so move lists stay in-bounds.
