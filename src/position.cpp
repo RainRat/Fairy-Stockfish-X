@@ -2979,48 +2979,31 @@ Bitboard Position::checked_pseudo_royals(Color c) const {
   Bitboard blastImmune = blastRelevant ? blast_immune_bb() : Bitboard(0);
   Bitboard vulnerablePseudoRoyalsTheirs = pseudoRoyalsTheirs & ~blastImmune;
 
-  if (blastRelevant)
-      while (pseudoRoyals)
-      {
-          Square sr = pop_lsb(pseudoRoyals);
-          // Skip if capturing this piece would blast any non-immune enemy
-          // pseudo-royal pieces
-          if (!(vulnerablePseudoRoyalsTheirs & blast_pattern(sr))
-              && attackers_to(sr, occupied, ~c))
-              checked |= sr;
-      }
-  else
-      while (pseudoRoyals)
-      {
-          Square sr = pop_lsb(pseudoRoyals);
-          if (attackers_to(sr, occupied, ~c))
-              checked |= sr;
-      }
+  auto is_checked = [&](Square sr) {
+      return (!blastRelevant || !(vulnerablePseudoRoyalsTheirs & blast_pattern(sr)))
+          && attackers_to(sr, occupied, ~c);
+  };
+
+  while (pseudoRoyals)
+  {
+      Square sr = pop_lsb(pseudoRoyals);
+      if (is_checked(sr))
+          checked |= sr;
+  }
+
   // Look for duple check
   if (var->dupleCheck)
   {
       Bitboard allAttacked = 0;
-      if (blastRelevant)
-          while (pseudoRoyalCandidates)
-          {
-              Square sr = pop_lsb(pseudoRoyalCandidates);
-              if (!(vulnerablePseudoRoyalsTheirs & blast_pattern(sr))
-                  && attackers_to(sr, occupied, ~c))
-                  allAttacked |= sr;
-              else
-                  // If at least one isn't attacked, it is not a duple check
-                  return checked;
-          }
-      else
-          while (pseudoRoyalCandidates)
-          {
-              Square sr = pop_lsb(pseudoRoyalCandidates);
-              if (attackers_to(sr, occupied, ~c))
-                  allAttacked |= sr;
-              else
-                  // If at least one isn't attacked, it is not a duple check
-                  return checked;
-          }
+      while (pseudoRoyalCandidates)
+      {
+          Square sr = pop_lsb(pseudoRoyalCandidates);
+          if (is_checked(sr))
+              allAttacked |= sr;
+          else
+              // If at least one isn't attacked, it is not a duple check
+              return checked;
+      }
       checked |= allAttacked;
   }
   return checked;
