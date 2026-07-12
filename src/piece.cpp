@@ -194,6 +194,13 @@ namespace {
           currentHopperProfile = {};
       }
 
+      if (trim_view(params).empty())
+      {
+          std::cerr << "Invalid Betza parameter entry '' in '" << betza << "'." << std::endl;
+          invalidPiece = true;
+          return;
+      }
+
       size_t pos = 0;
       const bool blockIsLame = lame;
       while (pos < params.size()) {
@@ -201,9 +208,20 @@ namespace {
           if (next_semi == std::string_view::npos) next_semi = params.size();
           std::string_view pair = trim_view(params.substr(pos, next_semi - pos));
           size_t colon = pair.find(':');
-          if (colon != std::string_view::npos) {
+          if (pair.empty() || colon == std::string_view::npos) {
+              std::cerr << "Invalid Betza parameter entry '" << pair << "' in '" << betza << "'." << std::endl;
+              invalidPiece = true;
+              break;
+          }
+          {
               std::string_view key = trim_view(pair.substr(0, colon));
               std::string_view val = trim_view(pair.substr(colon + 1));
+
+              if (key.empty() || val.empty()) {
+                  std::cerr << "Invalid Betza parameter entry '" << pair << "' in '" << betza << "'." << std::endl;
+                  invalidPiece = true;
+                  break;
+              }
 
               if (blockIsLame)
               {

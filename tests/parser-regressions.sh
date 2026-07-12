@@ -168,6 +168,12 @@ hostageExchange = p:p q:!
 [capture-forbidden-invalid:chess]
 captureForbidden = p:q q:r bad
 
+[capture-forbidden-empty:chess]
+captureForbidden =
+
+[capture-allowed-empty:chess]
+captureAllowed =
+
 [remove-connect-conn:fairy]
 maxRank = 3
 maxFile = 3
@@ -263,6 +269,7 @@ unsupported_bent_rose_modifier_ini=$(mktemp)
 bad_ini_syntax_option_ini=$(mktemp)
 bad_check_counting_ini=$(mktemp)
 bad_hopper_minmax_ini=$(mktemp)
+bad_hopper_entry_ini=$(mktemp)
 bad_piece_value_ini=$(mktemp)
 unknown_option_ini=$(mktemp)
 bad_royal_betza_ini=$(mktemp)
@@ -270,7 +277,7 @@ bad_unmatched_closer_ini=$(mktemp)
 royal_blast_ini=$(mktemp)
 nonking_ini=$(mktemp)
 wrapped_support_ini=$(mktemp)
-trap 'rm -f "${tmp_ini}" "${bad_betza_ini}" "${bad_hopper_brace_ini}" "${bad_rider_range_ini}" "${bad_rank_wildcard_ini}" "${twochar_hint_ini}" "${bad_hopper_type_ini}" "${bad_hopper_numeric_ini}" "${capture_allowed_only_ini}" "${bad_rider_range_val_ini}" "${bad_tuple_atom_ini}" "${unsupported_bent_rose_modifier_ini}" "${bad_ini_syntax_option_ini}" "${bad_check_counting_ini}" "${bad_hopper_minmax_ini}" "${bad_piece_value_ini}" "${unknown_option_ini}" "${bad_royal_betza_ini}" "${bad_unmatched_closer_ini}" "${royal_blast_ini}" "${nonking_ini}" "${wrapped_support_ini}"' EXIT
+trap 'rm -f "${tmp_ini}" "${bad_betza_ini}" "${bad_hopper_brace_ini}" "${bad_rider_range_ini}" "${bad_rank_wildcard_ini}" "${twochar_hint_ini}" "${bad_hopper_type_ini}" "${bad_hopper_numeric_ini}" "${capture_allowed_only_ini}" "${bad_rider_range_val_ini}" "${bad_tuple_atom_ini}" "${unsupported_bent_rose_modifier_ini}" "${bad_ini_syntax_option_ini}" "${bad_check_counting_ini}" "${bad_hopper_minmax_ini}" "${bad_hopper_entry_ini}" "${bad_piece_value_ini}" "${unknown_option_ini}" "${bad_royal_betza_ini}" "${bad_unmatched_closer_ini}" "${royal_blast_ini}" "${nonking_ini}" "${wrapped_support_ini}"' EXIT
 
 cat > "${bad_betza_ini}" <<'INI'
 [custom-piece-missing-betza:chess]
@@ -365,6 +372,14 @@ cat > "${bad_hopper_minmax_ini}" <<'INI'
 customPiece1 = a:{hurdles:3,1}R
 INI
 
+cat > "${bad_hopper_entry_ini}" <<'INI'
+[bad-hopper-empty:chess]
+customPiece1 = a:R{}
+
+[bad-hopper-separator:chess]
+customPiece1 = b:R{hurdles:1,1;;post:1,1}
+INI
+
 cat > "${bad_piece_value_ini}" <<'INI'
 [bad-piece-value:chess]
 pieceValueMg = p:not_an_int
@@ -424,6 +439,12 @@ assert_contains "${bad_hopper_type_output}" "unknown variant 'bad-hopper-type'; 
 bad_hopper_numeric_output=$(run_uci "$ENGINE" "$bad_hopper_numeric_ini" "bad-hopper-numeric" </dev/null 2>&1 || true)
 assert_contains "${bad_hopper_numeric_output}" "Invalid numeric value in Betza hopper parameters: 'abc,1'"
 assert_contains "${bad_hopper_numeric_output}" "unknown variant 'bad-hopper-numeric'; keeping 'chess'"
+
+bad_hopper_empty_output=$(run_uci "$ENGINE" "$bad_hopper_entry_ini" "bad-hopper-empty" </dev/null 2>&1 || true)
+assert_contains "${bad_hopper_empty_output}" "unknown variant 'bad-hopper-empty'; keeping 'chess'"
+
+bad_hopper_separator_output=$(run_uci "$ENGINE" "$bad_hopper_entry_ini" "bad-hopper-separator" </dev/null 2>&1 || true)
+assert_contains "${bad_hopper_separator_output}" "unknown variant 'bad-hopper-separator'; keeping 'chess'"
 
 wall_or_move_arrow_output=$(run_uci "$ENGINE" "$tmp_ini" "wall-or-move-arrow" </dev/null 2>&1 || true)
 assert_contains "${wall_or_move_arrow_output}" "unknown variant 'wall-or-move-arrow'; keeping 'chess'"
