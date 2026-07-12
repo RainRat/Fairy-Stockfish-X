@@ -145,6 +145,25 @@ static void test_null_move_clears_undo_payload() {
     assert(pos.state()->materialKey == beforeMaterialKey);
 }
 
+static void test_null_move_preserves_extinction_history() {
+    StateInfo st{};
+    Position pos;
+    pos.set(variants.get("chess"), "startpos", false, &st, nullptr);
+
+    pos.state()->extinctionSeen[WHITE] = piece_set(PAWN);
+    pos.state()->extinctionSeen[BLACK] = piece_set(KNIGHT);
+
+    StateInfo next{};
+    pos.do_null_move(next);
+
+    assert(pos.state()->extinctionSeen[WHITE] == piece_set(PAWN));
+    assert(pos.state()->extinctionSeen[BLACK] == piece_set(KNIGHT));
+
+    pos.undo_null_move();
+    assert(pos.state()->extinctionSeen[WHITE] == piece_set(PAWN));
+    assert(pos.state()->extinctionSeen[BLACK] == piece_set(KNIGHT));
+}
+
 static void test_spell_chess_null_move_decays() {
     StateInfo st{};
     Position pos;
@@ -187,6 +206,7 @@ int main() {
     test_blast_center_pawn_promotion_updates_pawn_key();
     test_blast_see_values_enemy_royal_removal_as_win();
     test_null_move_clears_undo_payload();
+    test_null_move_preserves_extinction_history();
     test_spell_chess_null_move_decays();
     return 0;
 }

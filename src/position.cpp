@@ -7444,6 +7444,8 @@ void Position::do_null_move(StateInfo& newSt) {
 
   newSt.previous = st;
   st = &newSt;
+  st->extinctionSeen[WHITE] = newSt.previous->extinctionSeen[WHITE];
+  st->extinctionSeen[BLACK] = newSt.previous->extinctionSeen[BLACK];
   st->key = st->previous->key;
   st->pendingClaimPass = false;
 
