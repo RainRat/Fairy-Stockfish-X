@@ -248,6 +248,7 @@ export PYTHONPATH="${ROOT_DIR}${PYTHONPATH:+:${PYTHONPATH}}"
 dispatch_test "piece-specific step regions" bash tests/fast-regression-piece-regions.sh "${ENGINE}" "${VARIANT_PATH}"
 dispatch_test "fast variant regressions" timeout 5m bash tests/fast-variant-regressions.sh "${ENGINE}" "${VARIANT_PATH}"
 dispatch_test "fast rules regression" bash tests/fast-regression-rules.sh "${ENGINE}" "${VARIANT_PATH}"
+dispatch_test "capture option regressions" timeout 60s bash tests/capture-options-regressions.sh "${ENGINE}"
 dispatch_test "binding regression" timeout 60s "${PYTHON}" tests/test_binding_regression.py
 dispatch_test "royal capture no kings" timeout 60s "${PYTHON}" tests/test_royal_capture_no_kings.py
 dispatch_test "touched search regressions" timeout 2m bash tests/touched-search-regressions.sh "${ENGINE}" "${VARIANT_PATH}"
