@@ -391,12 +391,17 @@ static void test_potion_root_move_undo_integrity() {
 static void test_potion_fen_zone_validation() {
     const Variant* spell = variants.get("spell-chess");
     const char* prefix = "4k3/8/8/8/8/8/8/4K3[JJFFFFFjjfffff] w - - 0 1 ";
+    const char* omittedSidePrefix = "4k3/8/8/8/8/8/8/4K3[JJFFFFFjjfffff] ";
     expect(FEN::validate_fen(std::string(prefix) + "wf:e4,wj:d5,bf:c4,bj:b3", spell) == FEN::FEN_OK,
            "explicit multi-potion FEN was rejected");
     expect(FEN::validate_fen(std::string(prefix) + "wf:e4,wf:d5", spell) != FEN::FEN_OK,
            "duplicate potion-zone FEN was accepted");
     expect(FEN::validate_fen(std::string(prefix) + "wf:e4,", spell) != FEN::FEN_OK,
            "trailing potion-zone separator was accepted");
+    expect(FEN::validate_fen(std::string(omittedSidePrefix) + "f:e4,wf:d5", spell) == FEN::FEN_OK,
+           "omitted side-to-move did not assign an unprefixed zone to Black");
+    expect(FEN::validate_fen(std::string(omittedSidePrefix) + "f:e4,bf:d5", spell) != FEN::FEN_OK,
+           "omitted side-to-move accepted duplicate Black potion zones");
 
     // Position loading must not leave a partially parsed zone behind when a
     // later entry makes the token invalid.

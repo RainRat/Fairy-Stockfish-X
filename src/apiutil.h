@@ -1563,7 +1563,7 @@ inline FenValidation validate_fen(const std::string& fen, const Variant* v, bool
                 return FEN_INVALID_CHAR;
 
             bool seenPotionZone[COLOR_NB][Variant::POTION_TYPE_NB] = {};
-            const Color implicitZoneColor = fenParts.size() > 1 && fenParts[1] == "w"
+            const Color implicitZoneColor = fenParts.size() <= 1 || fenParts[1] == "w"
                                           ? BLACK
                                           : WHITE;
             std::istringstream zones(potionInfo);
