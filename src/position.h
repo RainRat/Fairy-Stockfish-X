@@ -4569,9 +4569,9 @@ inline Bitboard Position::moves_from(Color c, PieceType pt, Square s, Bitboard o
 
     // Piece specific double/triple step region
     // It adds new moves to the pieces, enabling the piece to move 2 or 3 squares ahead
-    // Since double step in introduced from chess variants where pawns cannot capture forward, capturing moves are not included here.
+    // Since double step is introduced in variants where pawns cannot capture forward, capturing moves are not included here.
     // Double/Triple step cannot attack other pieces, so attacks_from(Color c, PieceType pt, Square s) is not changed
-    // Due to some unknown issues, shift<Direction D>(Bitboard b) cannot be used here
+    // Use explicit shifts because the direction is selected at runtime by the piece color.
     const Bitboard explicitTripleStepRegion = var->tripleStepRegion.get(c).explicitBoardOfPiece(piece_to_char()[pt]);
     const Bitboard explicitDoubleStepRegion = var->doubleStepRegion.get(c).explicitBoardOfPiece(piece_to_char()[pt]);
     Bitboard piecePosition = square_bb(s);  //Bitboard where only the bit which refers to the square that the piece starts the move (original square) is 1

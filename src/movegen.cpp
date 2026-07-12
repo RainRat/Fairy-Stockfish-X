@@ -655,7 +655,7 @@ namespace {
         {
             Square epSquare = pop_lsb(epSquares);
 
-            // An en passant capture cannot resolve a discovered check (unless there non-sliding riders)
+            // An en passant capture cannot resolve a discovered check (unless there are non-sliding riders)
             if (Type == EVASIONS && (target & (epSquare + Up)) && !pos.non_sliding_riders())
                 continue;
 
