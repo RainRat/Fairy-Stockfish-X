@@ -379,6 +379,33 @@ namespace {
       ExtMove* end;
   };
 
+#ifdef USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
+  class MoveBufferLease {
+  public:
+      explicit MoveBufferLease(const Position& pos) : thread(pos.this_thread()) {
+          if (thread)
+              buffer = thread->acquire_buffer();
+          else
+          {
+              owned = std::make_unique<ExtMove[]>(MOVEGEN_OVERFLOW_CAPACITY);
+              buffer = owned.get();
+          }
+      }
+
+      ~MoveBufferLease() {
+          if (thread)
+              thread->release_buffer(buffer);
+      }
+
+      ExtMove* get() const { return buffer; }
+
+  private:
+      Thread* thread;
+      std::unique_ptr<ExtMove[]> owned;
+      ExtMove* buffer = nullptr;
+  };
+#endif
+
   struct PawnGenSpec {
       Bitboard target;
       Bitboard fromMask = AllSquares;
@@ -1569,11 +1596,12 @@ namespace {
             ScopedSpellContext guard(inheritedFreeze, inheritedJump | candidates);
 
 #ifdef USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
-            auto jumpMoves = std::make_unique<ExtMove[]>(MOVEGEN_OVERFLOW_CAPACITY);
-            ExtMove* jumpEnd = generate_all_impl<Us, NON_EVASIONS>(pos, jumpMoves.get());
-            assert(jumpEnd - jumpMoves.get() <= MOVEGEN_OVERFLOW_CAPACITY);
+            MoveBufferLease jumpBuffer(pos);
+            ExtMove* jumpMoves = jumpBuffer.get();
+            ExtMove* jumpEnd = generate_all_impl<Us, NON_EVASIONS>(pos, jumpMoves);
+            assert(jumpEnd - jumpMoves <= MOVEGEN_OVERFLOW_CAPACITY);
 
-            for (ExtMove* it = jumpMoves.get(); it != jumpEnd; ++it)
+            for (ExtMove* it = jumpMoves; it != jumpEnd; ++it)
 #else
             ExtMove jumpMoves[MOVEGEN_OVERFLOW_CAPACITY];
             ExtMove* jumpEnd = generate_all_impl<Us, NON_EVASIONS>(pos, jumpMoves);
