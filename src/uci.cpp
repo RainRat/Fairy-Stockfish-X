@@ -33,6 +33,7 @@
 #include "timeman.h"
 #include "tt.h"
 #include "uci.h"
+#include "apiutil.h"
 #include "xboard.h"
 #include "syzygy/tbprobe.h"
 
@@ -389,6 +390,48 @@ namespace {
     sync_cout << std::right;
   }
 
+  // print_legal_moves() prints a sorted list of all legal moves in the current
+  // position using the specified notation (UCI or SAN).
+
+  void print_legal_moves(Position& pos, istringstream& is) {
+
+    string token;
+    is >> token;
+
+    Notation n = NOTATION_DEFAULT;
+
+    if (token == "san")
+        n = default_notation(pos.variant());
+    else if (token != "uci" && !token.empty())
+        sync_cout << "Unknown notation '" << token << "'; defaulting to UCI." << sync_endl;
+
+    std::vector<std::string> moves;
+    for (const auto& m : MoveList<LEGAL>(pos))
+        moves.push_back(n == NOTATION_DEFAULT ? UCI::move(pos, m) : SAN::move_to_san(pos, m, n));
+
+    std::sort(moves.begin(), moves.end());
+
+    if (moves.empty())
+    {
+        sync_cout << "No legal moves." << sync_endl;
+        return;
+    }
+
+    sync_cout << "\nLegal moves (" << moves.size() << "):" << sync_endl;
+
+    const int columns = 6;
+    const int width = 12;
+
+    for (size_t i = 0; i < moves.size(); ++i)
+    {
+        sync_cout << std::left << std::setw(width) << moves[i];
+        if ((i + 1) % columns == 0 || i == moves.size() - 1)
+            sync_cout << sync_endl;
+    }
+
+    sync_cout << std::right;
+  }
+
 } // namespace
 
 
@@ -505,6 +548,7 @@ void UCI::loop(int argc, char* argv[]) {
                     << "\n  bench                       Run internal performance tests"
                     << "\n  compiler                    Show information about the compiler"
                     << "\n  export_net [file]           Export the currently loaded NNUE net"
+                    << "\n  legal [uci|san]             List all legal moves in the current position"
                     << "\n  variants [filter]           Show supported variants, optionally filtered"
                     << "\n  load [file|<<EOF]           Load variant rules from a file or text"
                     << "\n  check [file|<<EOF]          Validate a variant configuration"
@@ -527,6 +571,8 @@ void UCI::loop(int argc, char* argv[]) {
           is >> filter;
           print_available_variants(filter);
       }
+      else if (token == "legal")
+          print_legal_moves(pos, is);
       else if (token == "eval")     trace_eval(pos);
       else if (token == "compiler") sync_cout << compiler_info() << sync_endl;
       else if (token == "export_net")
