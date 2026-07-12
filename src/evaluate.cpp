@@ -1646,10 +1646,10 @@ namespace {
                     if (connectPiecesUs & (s - j * d))
                         c++;
 
-                if (c == 0)
+                // A completed connection is adjudicated before evaluation;
+                // avoid treating it as a heuristic gap with zero remainder.
+                if (c == 0 || c >= pos.connect_n())
                     continue;
-
-                assert(c < pos.connect_n());
 
                 const int remaining = pos.connect_n() - c;
                 score += (pos.connect_value() == VALUE_MATE ? 1 : -1) * // At least change the sign for misere variants.

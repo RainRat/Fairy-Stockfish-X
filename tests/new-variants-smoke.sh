@@ -1129,7 +1129,13 @@ go movetime 10")
 assert_contains_literal "$out" "bestmove (none)"
 fi
 
-# 39) Spell chess: frozen castling rook blocks castling.
+# 39) Pousse: a full connection remains searchable without an evaluator crash.
+out=$(run_cmds "setoption name UCI_Variant value pousse
+position startpos
+go depth 10")
+assert_contains "$out" "^bestmove "
+
+# 40) Spell chess: frozen castling rook blocks castling.
 out=$(run_cmds "setoption name UCI_Variant value spell-chess
 position fen 4k3/8/8/8/8/8/8/4K2R[f] b K - 0 1 moves f@h1 e8e7
 go perft 1")
