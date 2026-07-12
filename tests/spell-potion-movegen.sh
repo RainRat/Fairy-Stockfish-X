@@ -26,6 +26,29 @@ case "${ENGINE_BASENAME}" in
     ;;
 esac
 
+if [[ "${FSX_REUSE_OBJECTS:-0}" != "1" ]]; then
+  case "${ENGINE_BASENAME}" in
+    stockfish)
+      # The harness links against src/*.o. Rebuild the standard object family
+      # so direct runs cannot accidentally use stale source objects.
+      make -C "${ROOT_DIR}/src" EXE=stockfish objclean
+      make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 EXE=stockfish
+      ;;
+    stockfish-allvars*)
+      make -C "${ROOT_DIR}/src" EXE=stockfish-allvars objclean
+      make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 largeboards=yes all=yes nnue=yes EXE=stockfish-allvars
+      ;;
+    stockfish-large*)
+      make -C "${ROOT_DIR}/src" EXE=stockfish-large objclean
+      make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 largeboards=yes all=yes EXE=stockfish-large
+      ;;
+    stockfish-vlb*)
+      make -C "${ROOT_DIR}/src" EXE=stockfish-vlb objclean
+      make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 largeboards=yes verylargeboards=yes all=yes nnue=yes EXE=stockfish-vlb
+      ;;
+  esac
+fi
+
 BUILD_SIG_DIR="${ROOT_DIR}/.local/build/spell-potion-movegen"
 BUILD_SIG_FILE="${BUILD_SIG_DIR}/${ENGINE_BASENAME}.sig"
 HARNESS_CPP="${BUILD_SIG_DIR}/spell-potion-movegen.cpp"
