@@ -503,6 +503,7 @@ public:
   bool is_hex_board() const;
   bool checking_permitted() const;
   bool allow_checks() const;
+  bool castling_ignore_check() const;
   bool drop_checks() const;
   bool drop_mates() const;
   bool shogi_pawn_drop_mate_illegal() const;
@@ -1580,6 +1581,11 @@ inline bool Position::checking_permitted() const {
 inline bool Position::allow_checks() const {
   assert(var != nullptr);
   return var->allowChecks;
+}
+
+inline bool Position::castling_ignore_check() const {
+  assert(var != nullptr);
+  return var->castlingIgnoreCheck;
 }
 
 inline bool Position::free_drops() const {

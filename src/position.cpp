@@ -2847,7 +2847,7 @@ Bitboard Position::attackers_to_king(Square s, Bitboard occupied, Color c, Bitbo
       for (PieceSet ps = piece_types(); ps; )
       {
           PieceType apt = pop_lsb(ps);
-          if (var->captureForbidden[apt] & royalType)
+          if (var->captureForbiddenByColor[c][apt] & royalType)
               attackers &= ~pieces(c, apt);
       }
   return attackers;
@@ -4240,7 +4240,7 @@ bool Position::legal(Move m) const {
   {
       PieceType attacker = type_of(moved_piece(m));
       PieceType target = type_of(captured_piece(m));
-      if (attacker < PIECE_TYPE_NB && target < PIECE_TYPE_NB && (var->captureForbidden[attacker] & target))
+      if (attacker < PIECE_TYPE_NB && target < PIECE_TYPE_NB && (var->captureForbiddenByColor[us][attacker] & target))
           return false;
   }
 
@@ -4299,11 +4299,11 @@ bool Position::legal(Move m) const {
           return att;
       };
 
-      if (((!allow_checks()) || spellLikeCastler) && attackers_for_castling(from, pieces()))
+      if (((!allow_checks() && !var->castlingIgnoreCheck) || spellLikeCastler) && attackers_for_castling(from, pieces()))
           return false;
 
       for (Square s = to; s != from; s += step)
-          if (   (((!allow_checks()) || spellLikeCastler) && attackers_for_castling(s, pieces()))
+          if (   (((!allow_checks() && !var->castlingIgnoreCheck) || spellLikeCastler) && attackers_for_castling(s, pieces()))
               || (var->flyingGeneral && (attacks_bb(~us, ROOK, s, pieces() ^ from) & pieces(~us, KING)))
               || (var->diagonalGeneral && (attacks_bb(~us, BISHOP, s, pieces() ^ from) & pieces(~us, KING))))
               return false;
@@ -4959,14 +4959,14 @@ bool Position::gives_check(Move m) const {
 
   if (usingPhysicalKingTarget
       && (attackers_to_king(royalSq, occupied, sideToMove, janggiCannons) & square_bb(attackFrom)))
-      return !(var->captureForbidden[type_of(mover)] & royalType);
+      return !(var->captureForbiddenByColor[color_of(mover)][type_of(mover)] & royalType);
 
   // Is there a direct check?
   if (!is_promotion_move(m) && type_of(m) != PIECE_PROMOTION && type_of(m) != PIECE_DEMOTION && type_of(m) != CASTLING
       && !((var->petrifyOnCaptureTypes & type_of(mover)) && capture(m)))
   {
       PieceType pt = type_of(mover);
-      if (!(var->captureForbidden[pt] & royalType))
+      if (!(var->captureForbiddenByColor[sideToMove][pt] & royalType))
       {
           if (pt == JANGGI_CANNON)
           {
