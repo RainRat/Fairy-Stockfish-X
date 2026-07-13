@@ -1509,9 +1509,6 @@ namespace {
                 Bitboard newFreezeZone = pos.freeze_zone_from_square(gate);
                 for (const auto& base : bases)
                 {
-                    if (gate == base.info.to)
-                        continue;
-
                     // Evaluate the accompanying move with the proposed
                     // Freeze zone installed. Sacred Royal can then thaw a
                     // king frozen by its own cast, while a checker frozen by
@@ -1532,9 +1529,6 @@ namespace {
                         if (pos.freeze_squares() & rookFrom)
                             continue;
                     }
-                    if ((between_bb(base.info.from, base.info.to, base.info.moverType, base.info.modality, base.info.isInitial) & ~square_bb(base.info.to)) & gate)
-                        continue;
-
                     if (try_append_potion_gating_move<Type>(pos, cur, maxEnd, base.info.from, base.info.to, base.info.mt, base.move, potion, potionPiece, gate, base.value)
                         == AppendStatus::Full)
                         return maxEnd;

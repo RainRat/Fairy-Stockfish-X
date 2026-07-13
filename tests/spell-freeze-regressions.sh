@@ -80,4 +80,14 @@ out=$(run_cmds "position fen rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR[F] w KQ
 go perft 1")
 ! echo "${out}" | grep -q "^f@"
 
+# A Freeze potion may target the square on which its accompanying move lands.
+out=$(run_cmds "position startpos moves f@c7,e2e3 f@e1,e7e6 b2b3 g8h6 d2d3 d7d5 d1h5 f@g4,h6g8 f@g8,c1a3 e8d7 h5f7 d7c6 g1h3 f@a2,g8h6
+go perft 1")
+echo "${out}" | grep -q "^f@c7,f7c7: 1$"
+
+# A Freeze potion does not block an accompanying piece's path through its target.
+out=$(run_cmds "position fen 7k/8/8/8/5Q2/8/8/K7[F] w - - 0 1
+go perft 1")
+echo "${out}" | grep -q "^f@f6,f4f7: 1$"
+
 echo "spell freeze regression tests passed"
