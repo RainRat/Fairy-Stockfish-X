@@ -17,7 +17,7 @@ jobs:
         os: [ubuntu-24.04, windows-2022, macos-14]
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       # Used to host cibuildwheel
       - uses: actions/setup-python@v6
@@ -35,7 +35,7 @@ jobs:
           CIBW_TEST_SKIP: "${{ matrix.os == 'windows-2022' && '*-win_amd64' || '' }}"
           CIBW_TEST_COMMAND: python {project}/test.py
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: dist-wheel-${{ matrix.os }}
           path: ./wheelhouse/*.whl
@@ -44,7 +44,7 @@ jobs:
     name: Build source distribution
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v6
         with:
           python-version: '3.9'
@@ -52,7 +52,7 @@ jobs:
       - name: Build sdist
         run: python setup.py sdist
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: dist-source
           path: dist/*.tar.gz
