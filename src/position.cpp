@@ -3248,7 +3248,7 @@ bool Position::liberty_drop_legal(Move m, Color us) const {
   assert(var->libertyCapture != LibertyAction::NONE
       || var->libertySelfCapture != LibertyAction::NONE);
 
-  Square to = to_sq(m);
+  Square to = is_gating(m) && !is_drop_move(m) ? gating_square(m) : to_sq(m);
   Square to2 = paired_drop(m) ? secondary_drop_square(m) : SQ_NONE;
   Bitboard placed = square_bb(to);
   if (to2 != SQ_NONE)
@@ -3278,6 +3278,364 @@ bool Position::liberty_drop_legal(Move m, Color us) const {
   }
 
   return anyLiberty || var->libertySelfCapture != LibertyAction::FORBID;
+}
+
+
+bool Position::placement_rules_legal(Move m, Color us) const {
+  const bool dropMove = is_drop_move(m);
+  const bool pairedGating = !dropMove && paired_drop(m) && is_gating(m)
+                         && gating_type(m) != NO_PIECE_TYPE
+                         && gating_move_blocks_occupancy(m);
+
+  auto mover_immobility_legal = [&]() {
+      PieceType pt = type_of(moved_piece(m));
+      bool moverRemovedByBlast = false;
+      if (!(blast_immune_types() & pt))
+      {
+          bool rifleShot = rifle_capture(m) && capture(m) && type_of(m) != CASTLING;
+          Square effectiveTo = rifleShot ? from_sq(m) : to_sq(m);
+          Square shotSq = capture(m) ? capture_square(m) : to_sq(m);
+          Square captureBlastCenter = blast_on_capture_mover_center() ? effectiveTo : shotSq;
+          if ((capture(m) || rifleShot) && blast_on_capture(m))
+          {
+              moverRemovedByBlast = (blast_on_capture(moved_piece(m), captured_piece(m))
+                                     && blast_center() && !blast_orthogonals() && !blast_diagonals())
+                                 || (blast_center() && effectiveTo == captureBlastCenter);
+          }
+          else if ((blast_on_move() && !capture(m) && !is_self_destruct(m))
+                || (blast_on_self_destruct() && is_self_destruct(m)))
+              moverRemovedByBlast = blast_center();
+      }
+
+      if (moverRemovedByBlast)
+          return true;
+
+      PieceType movePt = effective_piece_type(pt);
+      const PieceInfo* pInfo = pieceMap.get(movePt);
+      bool hasPotentialMove = PseudoMoves[0][us][movePt][to_sq(m)] & board_bb();
+      if (pInfo->has_hopper_like_movement())
+          hasPotentialMove = has_hopper_potential_from_square(*this, us, movePt, to_sq(m));
+      return hasPotentialMove;
+  };
+
+  if (!dropMove && !pairedGating)
+  {
+      if (!immobility_illegal() || type_of(m) != NORMAL)
+          return true;
+      return mover_immobility_legal();
+  }
+
+  SimulatedMoveGuard guard(*this, m);
+  SimulatedMoveInfo simulated = simulated_move_info(m, false);
+  Bitboard occupied = simulated.placementOccupancy;
+
+  std::array<Square, 2> placementSquares = {SQ_NONE, SQ_NONE};
+  std::array<Piece, 2> placementPieces = {NO_PIECE, NO_PIECE};
+  int placementCount = 0;
+  if (dropMove)
+  {
+      placementSquares[placementCount] = to_sq(m);
+      placementPieces[placementCount++] = moved_piece(m);
+      if (paired_drop(m))
+      {
+          placementSquares[placementCount] = secondary_drop_square(m);
+          placementPieces[placementCount++] = moved_piece(m);
+      }
+  }
+  else
+  {
+      placementSquares[placementCount] = gating_square(m);
+      placementPieces[placementCount++] = make_piece(us, gating_type(m));
+      placementSquares[placementCount] = secondary_drop_square(m);
+      placementPieces[placementCount++] = make_piece(us, gating_type(m));
+  }
+
+  auto piece_after = [&](Square sq) {
+      for (int i = 0; i < placementCount; ++i)
+          if (placementSquares[i] == sq)
+              return placementPieces[i];
+      return piece_at(sq, occupied);
+  };
+
+  if ((var->libertyCapture != LibertyAction::NONE
+       || var->libertySelfCapture != LibertyAction::NONE)
+      && !liberty_drop_legal(m, us))
+      return false;
+
+  PieceType placedType = type_of(placementPieces[0]);
+  if (dropMove && !(var->isPriorityDrop & piece_set(placedType)) && priorityDropCountInHand[us] > 0)
+      return false;
+  if (pairedGating && gating_from_hand()
+      && !(var->isPriorityDrop & piece_set(placedType)) && priorityDropCountInHand[us] > 0)
+      return false;
+
+  // Illegal placement creating an alternating 2x2 checker pattern (Crossway-style).
+  if (var->alternating2x2DropIllegal)
+      for (int i = 0; i < placementCount; ++i)
+      {
+          Square target = placementSquares[i];
+          int tf = int(file_of(target));
+          int tr = int(rank_of(target));
+          for (int f = tf - 1; f <= tf; ++f)
+              for (int r = tr - 1; r <= tr; ++r)
+              {
+                  if (f < int(FILE_A) || r < int(RANK_1)
+                      || f + 1 > int(max_file()) || r + 1 > int(max_rank()))
+                      continue;
+
+                  Square s00 = make_square(File(f), Rank(r));
+                  Square s10 = make_square(File(f + 1), Rank(r));
+                  Square s01 = make_square(File(f), Rank(r + 1));
+                  Square s11 = make_square(File(f + 1), Rank(r + 1));
+                  Piece p00 = piece_after(s00);
+                  Piece p10 = piece_after(s10);
+                  Piece p01 = piece_after(s01);
+                  Piece p11 = piece_after(s11);
+
+                  if (p00 == NO_PIECE || p10 == NO_PIECE || p01 == NO_PIECE || p11 == NO_PIECE)
+                      continue;
+
+                  Color c00 = color_of(p00);
+                  Color c10 = color_of(p10);
+                  Color c01 = color_of(p01);
+                  Color c11 = color_of(p11);
+                  if (c00 == c11 && c10 == c01 && c00 != c10)
+                      return false;
+              }
+      }
+
+  // Pathway-style placement legality:
+  // either no orthogonal adjacencies, or exactly one friendly orthogonal adjacency.
+  if (var->pathwayDropRule)
+      for (int i = 0; i < placementCount; ++i)
+      {
+          Square target = placementSquares[i];
+          int friendly = 0;
+          int enemy = 0;
+          int tf = int(file_of(target));
+          int tr = int(rank_of(target));
+
+          auto count_adjacent = [&](int f, int r) {
+              if (f < int(FILE_A) || r < int(RANK_1)
+                  || f > int(max_file()) || r > int(max_rank()))
+                  return;
+              Piece p = piece_after(make_square(File(f), Rank(r)));
+              if (p == NO_PIECE)
+                  return;
+              if (color_of(p) == us)
+                  ++friendly;
+              else
+                  ++enemy;
+          };
+
+          count_adjacent(tf, tr + 1);
+          count_adjacent(tf, tr - 1);
+          count_adjacent(tf + 1, tr);
+          count_adjacent(tf - 1, tr);
+          if (friendly != 1 && friendly + enemy != 0)
+              return false;
+      }
+
+  if (var->reciprocalWeakConnectionDrop
+      || var->weakCrosscutDropIllegal
+      || var->weakConnectionNobiImpossible)
+  {
+      auto has_color_at = [&](Color c, Square sq, Color placedColor, Square hypotheticalSq) {
+          if (sq == hypotheticalSq)
+              return c == placedColor;
+          Piece p = piece_after(sq);
+          return p != NO_PIECE && color_of(p) == c;
+      };
+
+      auto weak_link_between = [&](Color c, Color placedColor, Square hypotheticalSq, Square a, Square b) {
+          if (!is_ok(a) || !is_ok(b))
+              return false;
+          if (!has_color_at(c, a, placedColor, hypotheticalSq)
+              || !has_color_at(c, b, placedColor, hypotheticalSq))
+              return false;
+          int df = std::abs(int(file_of(a)) - int(file_of(b)));
+          int dr = std::abs(int(rank_of(a)) - int(rank_of(b)));
+          if (df != 1 || dr != 1)
+              return false;
+
+          Square bridge1 = make_square(file_of(a), rank_of(b));
+          Square bridge2 = make_square(file_of(b), rank_of(a));
+          return !has_color_at(c, bridge1, placedColor, hypotheticalSq)
+              && !has_color_at(c, bridge2, placedColor, hypotheticalSq);
+      };
+
+      auto created_weak_link_anchor_count = [&](Color c, Color placedColor, Square target,
+                                                Square hypotheticalSq, std::array<Square, 4>& anchors) {
+          int anchorCount = 0;
+          static constexpr int dfile[4] = {1, -1, 1, -1};
+          static constexpr int drank[4] = {1, 1, -1, -1};
+          for (int i = 0; i < 4; ++i)
+          {
+              int nf = int(file_of(target)) + dfile[i];
+              int nr = int(rank_of(target)) + drank[i];
+              if (nf < int(FILE_A) || nf > int(max_file())
+                  || nr < int(RANK_1) || nr > int(max_rank()))
+                  continue;
+
+              Square diag = make_square(File(nf), Rank(nr));
+              if (weak_link_between(c, placedColor, hypotheticalSq, target, diag))
+                  anchors[anchorCount++] = diag;
+          }
+          return anchorCount;
+      };
+
+      auto strong_nonweak_followup_exists = [&](Square anchor) {
+          auto occupied_any = [&](Square sq) { return bool(occupied & sq); };
+          auto friend_at = [&](Square sq) {
+              Piece p = piece_after(sq);
+              return p != NO_PIECE && color_of(p) == us;
+          };
+          auto enemy_at = [&](Square sq) {
+              Piece p = piece_after(sq);
+              return p != NO_PIECE && color_of(p) == ~us;
+          };
+          auto not_friend_at = [&](Square sq) { return !friend_at(sq); };
+
+          auto pattern_blocked = [&](Square q) {
+              if (q == anchor + NORTH)
+              {
+                  Square nn = q + NORTH, nne = q + NORTH_EAST, nnw = q + NORTH_WEST;
+                  return (is_ok(nne) && friend_at(nne) && is_ok(nn) && not_friend_at(nn) && is_ok(anchor + NORTH_EAST) && not_friend_at(anchor + NORTH_EAST))
+                      || (is_ok(nnw) && friend_at(nnw) && is_ok(nn) && not_friend_at(nn) && is_ok(anchor + NORTH_WEST) && not_friend_at(anchor + NORTH_WEST))
+                      || (is_ok(nn) && friend_at(nn) && is_ok(nne) && enemy_at(nne) && is_ok(anchor + NORTH_EAST) && enemy_at(anchor + NORTH_EAST))
+                      || (is_ok(nn) && friend_at(nn) && is_ok(nnw) && enemy_at(nnw) && is_ok(anchor + NORTH_WEST) && enemy_at(anchor + NORTH_WEST));
+              }
+              if (q == anchor + SOUTH)
+              {
+                  Square ss = q + SOUTH, sse = q + SOUTH_EAST, ssw = q + SOUTH_WEST;
+                  return (is_ok(sse) && friend_at(sse) && is_ok(ss) && not_friend_at(ss) && is_ok(anchor + SOUTH_EAST) && not_friend_at(anchor + SOUTH_EAST))
+                      || (is_ok(ssw) && friend_at(ssw) && is_ok(ss) && not_friend_at(ss) && is_ok(anchor + SOUTH_WEST) && not_friend_at(anchor + SOUTH_WEST))
+                      || (is_ok(ss) && friend_at(ss) && is_ok(sse) && enemy_at(sse) && is_ok(anchor + SOUTH_EAST) && enemy_at(anchor + SOUTH_EAST))
+                      || (is_ok(ss) && friend_at(ss) && is_ok(ssw) && enemy_at(ssw) && is_ok(anchor + SOUTH_WEST) && enemy_at(anchor + SOUTH_WEST));
+              }
+              if (q == anchor + EAST)
+              {
+                  Square ee = q + EAST, nee = q + NORTH_EAST, see = q + SOUTH_EAST;
+                  return (is_ok(nee) && friend_at(nee) && is_ok(ee) && not_friend_at(ee) && is_ok(anchor + NORTH_EAST) && not_friend_at(anchor + NORTH_EAST))
+                      || (is_ok(see) && friend_at(see) && is_ok(ee) && not_friend_at(ee) && is_ok(anchor + SOUTH_EAST) && not_friend_at(anchor + SOUTH_EAST))
+                      || (is_ok(ee) && friend_at(ee) && is_ok(nee) && enemy_at(nee) && is_ok(anchor + NORTH_EAST) && enemy_at(anchor + NORTH_EAST))
+                      || (is_ok(ee) && friend_at(ee) && is_ok(see) && enemy_at(see) && is_ok(anchor + SOUTH_EAST) && enemy_at(anchor + SOUTH_EAST));
+              }
+              if (q == anchor + WEST)
+              {
+                  Square ww = q + WEST, nww = q + NORTH_WEST, sww = q + SOUTH_WEST;
+                  return (is_ok(nww) && friend_at(nww) && is_ok(ww) && not_friend_at(ww) && is_ok(anchor + NORTH_WEST) && not_friend_at(anchor + NORTH_WEST))
+                      || (is_ok(sww) && friend_at(sww) && is_ok(ww) && not_friend_at(ww) && is_ok(anchor + SOUTH_WEST) && not_friend_at(anchor + SOUTH_WEST))
+                      || (is_ok(ww) && friend_at(ww) && is_ok(nww) && enemy_at(nww) && is_ok(anchor + NORTH_WEST) && enemy_at(anchor + NORTH_WEST))
+                      || (is_ok(ww) && friend_at(ww) && is_ok(sww) && enemy_at(sww) && is_ok(anchor + SOUTH_WEST) && enemy_at(anchor + SOUTH_WEST));
+              }
+              return true;
+          };
+
+          static constexpr Direction orth[] = {NORTH, SOUTH, EAST, WEST};
+          for (Direction d : orth)
+          {
+              Square q = anchor + d;
+              if (!is_ok(q) || occupied_any(q))
+                  continue;
+              if (!pattern_blocked(q))
+                  return true;
+          }
+          return false;
+      };
+
+      for (int i = 0; i < placementCount; ++i)
+      {
+          Square target = placementSquares[i];
+          std::array<Square, 4> weakFriendlyAnchors{};
+          int weakFriendlyAnchorCount = created_weak_link_anchor_count(us, us, target, SQ_NONE, weakFriendlyAnchors);
+          if (!weakFriendlyAnchorCount)
+              continue;
+
+          if (var->reciprocalWeakConnectionDrop)
+          {
+              std::array<Square, 4> opponentAnchors{};
+              if (!created_weak_link_anchor_count(~us, ~us, target, target, opponentAnchors))
+                  return false;
+          }
+
+          if (var->weakConnectionNobiImpossible)
+              for (int idx = 0; idx < weakFriendlyAnchorCount; ++idx)
+                  if (strong_nonweak_followup_exists(weakFriendlyAnchors[idx]))
+                      return false;
+
+          if (var->weakCrosscutDropIllegal)
+          {
+              const struct { int of1, or1, of2, or2, dff, drr; } patterns[] = {
+                  {0, 1, 1, 0, 1, 1}, {0, 1, -1, 0, -1, 1},
+                  {0, -1, 1, 0, 1, -1}, {0, -1, -1, 0, -1, -1},
+              };
+              for (const auto& p : patterns)
+              {
+                  int f1 = int(file_of(target)) + p.of1;
+                  int r1 = int(rank_of(target)) + p.or1;
+                  int f2 = int(file_of(target)) + p.of2;
+                  int r2 = int(rank_of(target)) + p.or2;
+                  int fd = int(file_of(target)) + p.dff;
+                  int rd = int(rank_of(target)) + p.drr;
+                  if (f1 < int(FILE_A) || f1 > int(max_file()) || r1 < int(RANK_1) || r1 > int(max_rank())
+                      || f2 < int(FILE_A) || f2 > int(max_file()) || r2 < int(RANK_1) || r2 > int(max_rank())
+                      || fd < int(FILE_A) || fd > int(max_file()) || rd < int(RANK_1) || rd > int(max_rank()))
+                      continue;
+
+                  Piece p1 = piece_after(make_square(File(f1), Rank(r1)));
+                  Piece p2 = piece_after(make_square(File(f2), Rank(r2)));
+                  Piece pd = piece_after(make_square(File(fd), Rank(rd)));
+                  if (p1 != NO_PIECE && p2 != NO_PIECE && pd != NO_PIECE
+                      && color_of(p1) == ~us && color_of(p2) == ~us && color_of(pd) == us)
+                      return false;
+              }
+          }
+      }
+  }
+
+  if (immobility_illegal())
+  {
+      if (pairedGating && type_of(m) == NORMAL && !mover_immobility_legal())
+          return false;
+
+      for (int i = 0; i < placementCount; ++i)
+      {
+          PieceType pt = type_of(placementPieces[i]);
+          bool moverRemovedByBlast = false;
+          if (dropMove && !(blast_immune_types() & pt))
+          {
+              bool rifleShot = rifle_capture(m) && capture(m) && type_of(m) != CASTLING;
+              Square effectiveTo = rifleShot ? from_sq(m) : to_sq(m);
+              if ((capture(m) || rifleShot) && blast_on_capture(m))
+              {
+                  Square captureBlastCenter = blast_on_capture_mover_center()
+                                            ? (rifleShot ? from_sq(m) : to_sq(m))
+                                            : capture_square(m);
+                  moverRemovedByBlast = (blast_on_capture(moved_piece(m), captured_piece(m))
+                                         && blast_center() && !blast_orthogonals() && !blast_diagonals())
+                                     || (blast_center() && placementSquares[i] == captureBlastCenter
+                                         && placementSquares[i] == effectiveTo);
+              }
+              else if ((blast_on_move() && !capture(m) && !is_self_destruct(m))
+                    || (blast_on_self_destruct() && is_self_destruct(m)))
+                  moverRemovedByBlast = blast_center();
+          }
+
+          if (!moverRemovedByBlast)
+          {
+              PieceType movePt = effective_piece_type(pt);
+              const PieceInfo* pInfo = pieceMap.get(movePt);
+              bool hasPotentialMove = PseudoMoves[0][us][movePt][placementSquares[i]] & board_bb();
+              if (pInfo->has_hopper_like_movement())
+                  hasPotentialMove = has_hopper_potential_from_square(*this, us, movePt, placementSquares[i]);
+              if (!hasPotentialMove)
+                  return false;
+          }
+      }
+  }
+
+  return true;
 }
 
 
@@ -3995,12 +4353,10 @@ bool Position::legal(Move m) const {
 
       if (!(drop_region(us, type_of(moved_piece(m))) & legalDropTargets & to))
           return false;
-
-      if (   (var->libertyCapture != LibertyAction::NONE
-           || var->libertySelfCapture != LibertyAction::NONE)
-          && !liberty_drop_legal(m, us))
-          return false;
   }
+
+  if (!placement_rules_legal(m, us))
+      return false;
 
   if (drop_opposite_colored_bishop() && dropMove)
   {
@@ -4025,283 +4381,11 @@ bool Position::legal(Move m) const {
               return false;
       }
   }
-  if (dropMove && (!(var->isPriorityDrop & piece_set(type_of(moved_piece(m))))) && priorityDropCountInHand[us] > 0)
-      return false;
-
-  // Illegal placement creating an alternating 2x2 checker pattern (Crossway-style).
-  if (var->alternating2x2DropIllegal && type_of(m) == DROP)
-  {
-      int tf = int(file_of(to));
-      int tr = int(rank_of(to));
-      for (int f = tf - 1; f <= tf; ++f)
-          for (int r = tr - 1; r <= tr; ++r)
-          {
-              if (f < int(FILE_A) || r < int(RANK_1))
-                  continue;
-              if (f + 1 > int(max_file()) || r + 1 > int(max_rank()))
-                  continue;
-
-              Square s00 = make_square(File(f), Rank(r));
-              Square s10 = make_square(File(f + 1), Rank(r));
-              Square s01 = make_square(File(f), Rank(r + 1));
-              Square s11 = make_square(File(f + 1), Rank(r + 1));
-
-              Piece p00 = (s00 == to) ? moved_piece(m) : piece_on(s00);
-              Piece p10 = (s10 == to) ? moved_piece(m) : piece_on(s10);
-              Piece p01 = (s01 == to) ? moved_piece(m) : piece_on(s01);
-              Piece p11 = (s11 == to) ? moved_piece(m) : piece_on(s11);
-
-              if (p00 == NO_PIECE || p10 == NO_PIECE || p01 == NO_PIECE || p11 == NO_PIECE)
-                  continue;
-
-              Color c00 = color_of(p00);
-              Color c10 = color_of(p10);
-              Color c01 = color_of(p01);
-              Color c11 = color_of(p11);
-              if (c00 == c11 && c10 == c01 && c00 != c10)
-                  return false;
-          }
-  }
-
-  // Pathway-style placement legality:
-  // either no orthogonal adjacencies, or exactly one friendly orthogonal adjacency.
-  if (var->pathwayDropRule && type_of(m) == DROP)
-  {
-      int friendly = 0;
-      int enemy = 0;
-
-      int tf = int(file_of(to));
-      int tr = int(rank_of(to));
-
-      auto count_adjacent = [&](int f, int r) {
-          if (f < int(FILE_A) || r < int(RANK_1))
-              return;
-          if (f > int(max_file()) || r > int(max_rank()))
-              return;
-
-          Piece p = piece_on(make_square(File(f), Rank(r)));
-          if (p == NO_PIECE)
-              return;
-          if (color_of(p) == us)
-              ++friendly;
-          else
-              ++enemy;
-      };
-
-      count_adjacent(tf, tr + 1);
-      count_adjacent(tf, tr - 1);
-      count_adjacent(tf + 1, tr);
-      count_adjacent(tf - 1, tr);
-
-      if (friendly != 1 && friendly + enemy != 0)
-          return false;
-  }
-
-  if (type_of(m) == DROP
-      && (var->reciprocalWeakConnectionDrop
-          || var->weakCrosscutDropIllegal
-          || var->weakConnectionNobiImpossible))
-  {
-      auto has_color_at = [&](Color c, Square sq, Color placedColor) {
-          return sq == to ? c == placedColor : bool(pieces(c) & sq);
-      };
-
-      auto weak_link_between = [&](Color c, Color placedColor, Square a, Square b) {
-          if (!is_ok(a) || !is_ok(b))
-              return false;
-          if (!has_color_at(c, a, placedColor) || !has_color_at(c, b, placedColor))
-              return false;
-          int df = std::abs(int(file_of(a)) - int(file_of(b)));
-          int dr = std::abs(int(rank_of(a)) - int(rank_of(b)));
-          if (df != 1 || dr != 1)
-              return false;
-
-          Square bridge1 = make_square(file_of(a), rank_of(b));
-          Square bridge2 = make_square(file_of(b), rank_of(a));
-          return !has_color_at(c, bridge1, placedColor) && !has_color_at(c, bridge2, placedColor);
-      };
-
-      auto created_weak_link_anchor_count = [&](Color c, Color placedColor, std::array<Square, 4>& anchors) {
-          int anchorCount = 0;
-          static constexpr int dfile[4] = {1, -1, 1, -1};
-          static constexpr int drank[4] = {1, 1, -1, -1};
-          for (int i = 0; i < 4; ++i)
-          {
-              int nf = int(file_of(to)) + dfile[i];
-              int nr = int(rank_of(to)) + drank[i];
-              if (nf < int(FILE_A) || nf > int(max_file()) || nr < int(RANK_1) || nr > int(max_rank()))
-                  continue;
-
-              Square diag = make_square(File(nf), Rank(nr));
-              if (weak_link_between(c, placedColor, to, diag))
-                  anchors[anchorCount++] = diag;
-          }
-          return anchorCount;
-      };
-
-      auto creates_hypothetical_weak_link = [&](Color c, Color placedColor) {
-          std::array<Square, 4> anchors{};
-          return created_weak_link_anchor_count(c, placedColor, anchors) != 0;
-      };
-
-      auto strong_nonweak_followup_exists = [&](Square anchor) {
-          auto occupied_any = [&](Square sq) {
-              return sq == to || bool(pieces() & sq);
-          };
-          auto friend_at = [&](Square sq) {
-              return has_color_at(us, sq, us);
-          };
-          auto enemy_at = [&](Square sq) {
-              return sq != to && bool(pieces(~us) & sq);
-          };
-          auto not_friend_at = [&](Square sq) {
-              return !friend_at(sq);
-          };
-
-          auto pattern_blocked = [&](Square q) {
-              if (q == anchor + NORTH) {
-                  Square nn = q + NORTH;
-                  Square nne = q + NORTH_EAST;
-                  Square nnw = q + NORTH_WEST;
-                  return (is_ok(nne) && friend_at(nne) && is_ok(nn) && not_friend_at(nn) && is_ok(anchor + NORTH_EAST) && not_friend_at(anchor + NORTH_EAST))
-                      || (is_ok(nnw) && friend_at(nnw) && is_ok(nn) && not_friend_at(nn) && is_ok(anchor + NORTH_WEST) && not_friend_at(anchor + NORTH_WEST))
-                      || (is_ok(nn) && friend_at(nn) && is_ok(nne) && enemy_at(nne) && is_ok(anchor + NORTH_EAST) && enemy_at(anchor + NORTH_EAST))
-                      || (is_ok(nn) && friend_at(nn) && is_ok(nnw) && enemy_at(nnw) && is_ok(anchor + NORTH_WEST) && enemy_at(anchor + NORTH_WEST));
-              }
-              if (q == anchor + SOUTH) {
-                  Square ss = q + SOUTH;
-                  Square sse = q + SOUTH_EAST;
-                  Square ssw = q + SOUTH_WEST;
-                  return (is_ok(sse) && friend_at(sse) && is_ok(ss) && not_friend_at(ss) && is_ok(anchor + SOUTH_EAST) && not_friend_at(anchor + SOUTH_EAST))
-                      || (is_ok(ssw) && friend_at(ssw) && is_ok(ss) && not_friend_at(ss) && is_ok(anchor + SOUTH_WEST) && not_friend_at(anchor + SOUTH_WEST))
-                      || (is_ok(ss) && friend_at(ss) && is_ok(sse) && enemy_at(sse) && is_ok(anchor + SOUTH_EAST) && enemy_at(anchor + SOUTH_EAST))
-                      || (is_ok(ss) && friend_at(ss) && is_ok(ssw) && enemy_at(ssw) && is_ok(anchor + SOUTH_WEST) && enemy_at(anchor + SOUTH_WEST));
-              }
-              if (q == anchor + EAST) {
-                  Square ee = q + EAST;
-                  Square nee = q + NORTH_EAST;
-                  Square see = q + SOUTH_EAST;
-                  return (is_ok(nee) && friend_at(nee) && is_ok(ee) && not_friend_at(ee) && is_ok(anchor + NORTH_EAST) && not_friend_at(anchor + NORTH_EAST))
-                      || (is_ok(see) && friend_at(see) && is_ok(ee) && not_friend_at(ee) && is_ok(anchor + SOUTH_EAST) && not_friend_at(anchor + SOUTH_EAST))
-                      || (is_ok(ee) && friend_at(ee) && is_ok(nee) && enemy_at(nee) && is_ok(anchor + NORTH_EAST) && enemy_at(anchor + NORTH_EAST))
-                      || (is_ok(ee) && friend_at(ee) && is_ok(see) && enemy_at(see) && is_ok(anchor + SOUTH_EAST) && enemy_at(anchor + SOUTH_EAST));
-              }
-              if (q == anchor + WEST) {
-                  Square ww = q + WEST;
-                  Square nww = q + NORTH_WEST;
-                  Square sww = q + SOUTH_WEST;
-                  return (is_ok(nww) && friend_at(nww) && is_ok(ww) && not_friend_at(ww) && is_ok(anchor + NORTH_WEST) && not_friend_at(anchor + NORTH_WEST))
-                      || (is_ok(sww) && friend_at(sww) && is_ok(ww) && not_friend_at(ww) && is_ok(anchor + SOUTH_WEST) && not_friend_at(anchor + SOUTH_WEST))
-                      || (is_ok(ww) && friend_at(ww) && is_ok(nww) && enemy_at(nww) && is_ok(anchor + NORTH_WEST) && enemy_at(anchor + NORTH_WEST))
-                      || (is_ok(ww) && friend_at(ww) && is_ok(sww) && enemy_at(sww) && is_ok(anchor + SOUTH_WEST) && enemy_at(anchor + SOUTH_WEST));
-              }
-              return true;
-          };
-
-          static constexpr Direction orth[] = {NORTH, SOUTH, EAST, WEST};
-          for (Direction d : orth)
-          {
-              Square q = anchor + d;
-              if (!is_ok(q) || occupied_any(q))
-                  continue;
-              if (!pattern_blocked(q))
-                  return true;
-          }
-          return false;
-      };
-
-      std::array<Square, 4> weakFriendlyAnchors{};
-      int weakFriendlyAnchorCount = created_weak_link_anchor_count(us, us, weakFriendlyAnchors);
-      bool weakFriendly = weakFriendlyAnchorCount != 0;
-      if (weakFriendly)
-      {
-          if (var->reciprocalWeakConnectionDrop && !creates_hypothetical_weak_link(~us, ~us))
-              return false;
-
-          if (var->weakConnectionNobiImpossible)
-              for (int idx = 0; idx < weakFriendlyAnchorCount; ++idx)
-              {
-                  Square anchor = weakFriendlyAnchors[idx];
-                  if (strong_nonweak_followup_exists(anchor))
-                      return false;
-              }
-
-          if (var->weakCrosscutDropIllegal)
-          {
-              auto enemy_at = [&](Square sq) { return sq != to && bool(pieces(~us) & sq); };
-              auto friendly_at = [&](Square sq) { return sq == to || bool(pieces(us) & sq); };
-
-              const struct {
-                  int of1, or1, of2, or2, dff, drr;
-              } patterns[] = {
-                  {0, 1, 1, 0, 1, 1},
-                  {0, 1, -1, 0, -1, 1},
-                  {0, -1, 1, 0, 1, -1},
-                  {0, -1, -1, 0, -1, -1},
-              };
-
-              for (const auto& p : patterns)
-              {
-                  int f1 = int(file_of(to)) + p.of1;
-                  int r1 = int(rank_of(to)) + p.or1;
-                  int f2 = int(file_of(to)) + p.of2;
-                  int r2 = int(rank_of(to)) + p.or2;
-                  int fd = int(file_of(to)) + p.dff;
-                  int rd = int(rank_of(to)) + p.drr;
-                  if (f1 < int(FILE_A) || f1 > int(max_file()) || r1 < int(RANK_1) || r1 > int(max_rank()))
-                      continue;
-                  if (f2 < int(FILE_A) || f2 > int(max_file()) || r2 < int(RANK_1) || r2 > int(max_rank()))
-                      continue;
-                  if (fd < int(FILE_A) || fd > int(max_file()) || rd < int(RANK_1) || rd > int(max_rank()))
-                      continue;
-
-                  Square orth1 = make_square(File(f1), Rank(r1));
-                  Square orth2 = make_square(File(f2), Rank(r2));
-                  Square diag = make_square(File(fd), Rank(rd));
-                  if (enemy_at(orth1) && enemy_at(orth2) && friendly_at(diag))
-                      return false;
-              }
-          }
-      }
-  }
-
   if (dropMove && pay_points_to_drop())
   {
       int count = paired_drop(m) ? 2 : 1;
       if (st->pointsCount[us] < count * var->piecePoints[type_of(moved_piece(m))])
           return false;
-  }
-
-  // No legal moves from target square
-  if (immobility_illegal() && (dropMove || type_of(m) == NORMAL))
-  {
-      PieceType pt = type_of(moved_piece(m));
-      bool moverRemovedByBlast = false;
-      if (!(blast_immune_types() & pt))
-      {
-          if ((capture(m) || rifleShot) && blast_on_capture(m))
-          {
-              moverRemovedByBlast = (blast_on_capture(moved_piece(m), captured_piece(m))
-                                     && blast_center() && !blast_orthogonals() && !blast_diagonals())
-                                 || (blast_center() && effectiveTo == captureBlastCenter);
-          }
-          else if ((blast_on_move() && !capture(m) && !is_self_destruct(m))
-                || (blast_on_self_destruct() && is_self_destruct(m)))
-          {
-              moverRemovedByBlast = blast_center();
-          }
-      }
-
-      if (!moverRemovedByBlast)
-      {
-          PieceType movePt2 = effective_piece_type(pt);
-          const PieceInfo* pInfo2 = pieceMap.get(movePt2);
-          bool hasPotentialMove = PseudoMoves[0][us][movePt2][to] & board_bb();
-          if (pInfo2->has_hopper_like_movement())
-              hasPotentialMove = has_hopper_potential_from_square(*this, us, movePt2, to);
-          if (!hasPotentialMove)
-              return false;
-      }
   }
 
   // Illegal king passing move
@@ -4924,7 +5008,8 @@ bool Position::pseudo_legal(const Move m) const {
                 && mirrored_pair_drop_square(to) == to2
                 && (drop_region(us, type_of(pc)) & legalDropTargets & to)
                 && (drop_region(us, type_of(pc)) & legalDropTargets & to2)
-                && type_of(pc) == in_hand_piece_type(m);
+                && type_of(pc) == in_hand_piece_type(m)
+                && placement_rules_legal(m, us);
       }
 
       return   piece_drops()
@@ -4938,9 +5023,7 @@ bool Position::pseudo_legal(const Move m) const {
                         && count_in_prison(~us, in_hand_piece_type(m)) > 0))
             && (drop_region(us, type_of(pc)) & legalDropTargets & to)
             && (drop_piece_types(in_hand_piece_type(m)) & type_of(pc))
-            && ((var->libertyCapture == LibertyAction::NONE
-              && var->libertySelfCapture == LibertyAction::NONE)
-            || liberty_drop_legal(m, us));
+            && placement_rules_legal(m, us);
   }
 
   // Use a slower but simpler function for uncommon cases

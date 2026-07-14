@@ -109,6 +109,80 @@ checking = false
 castling = false
 startFen = 7k/8/8/8/8/2p2p2/3pp1p1/2p2p1K[PP] w - - 0 1
 
+[paired-crossway:fairy]
+maxRank = 4
+maxFile = 4
+pieceToCharTable = -
+king = -
+pieceDrops = true
+symmetricDropTypes = r
+alternating2x2DropIllegal = true
+checking = false
+castling = false
+startFen = 4/4/4/4[RR] w - - 0 1
+
+[paired-crossway-reject:paired-crossway]
+startFen = 4/4/2r1/2Rr[RR] w - - 0 1
+
+[paired-pathway:paired-crossway]
+maxRank = 6
+maxFile = 6
+symmetricDropTypes = r
+alternating2x2DropIllegal = false
+pathwayDropRule = true
+startFen = 6/6/6/6/6/6[RR] w - - 0 1
+
+[paired-pathway-reject:paired-pathway]
+startFen = 6/6/6/5R/4R1/6[RR] w - - 0 1
+
+[paired-priority:fairy]
+maxRank = 4
+maxFile = 4
+pieceToCharTable = -
+king = -
+pieceDrops = true
+symmetricDropTypes = rn
+priorityDropTypes = r
+checking = false
+castling = false
+startFen = 4/4/4/4[RRNN] w - - 0 1
+
+[paired-immobility:chess]
+maxRank = 4
+maxFile = 4
+pieceDrops = true
+symmetricDropTypes = p
+firstRankPawnDrops = true
+promotionZonePawnDrops = true
+immobilityIllegal = true
+checking = false
+castling = false
+startFen = 4/4/4/4[PP] w - - 0 1
+
+[paired-gating-immobility:chess]
+maxRank = 5
+maxFile = 5
+customPiece1 = r:rW
+gating = true
+seirawanGating = true
+symmetricDropTypes = n
+immobilityIllegal = true
+checking = false
+castling = false
+startFen = k4/5/K4/5/3R1[NN] w D - 0 1
+
+[paired-weak-crosscut:fairy]
+maxRank = 4
+maxFile = 4
+pieceToCharTable = -
+king = -
+pieceDrops = true
+symmetricDropTypes = r
+weakCrosscutDropIllegal = true
+checking = false
+castling = false
+startFen = 4/4/2Rr/2r1[RR] w - - 0 1
+
 [shogi-pawn-drop-split-white:minishogi]
 shogiPawnDropMateIllegalWhite = true
 shogiPawnDropMateIllegalBlack = false
@@ -306,6 +380,65 @@ go perft 1
 UCI
 )
 assert_not_contains "$out" "^P@c2,f2: 1$"
+
+out=$(run_uci "$ENGINE" "$tmp_ini" paired-crossway <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_contains "$out" "^R@a1,d1: 1$"
+
+out=$(run_uci "$ENGINE" "$tmp_ini" paired-crossway-reject <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_not_contains "$out" "^R@a2,d2: 1$"
+
+out=$(run_uci "$ENGINE" "$tmp_ini" paired-pathway <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_contains "$out" "^R@a1,f1: 1$"
+
+out=$(run_uci "$ENGINE" "$tmp_ini" paired-pathway-reject <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_not_contains "$out" "^R@a2,f2: 1$"
+
+out=$(run_uci "$ENGINE" "$tmp_ini" paired-priority <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_contains "$out" "^R@a1,d1: 1$"
+assert_not_contains "$out" "^N@a1,d1: 1$"
+
+out=$(run_uci "$ENGINE" "$tmp_ini" paired-immobility <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_contains "$out" "^P@a3,d3: 1$"
+assert_not_contains "$out" "^P@a4,d4: 1$"
+
+out=$(run_uci "$ENGINE" "$tmp_ini" paired-gating-immobility <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_not_contains "$out" "^d1e1n,b1: 1$"
+
+out=$(run_uci "$ENGINE" "$tmp_ini" paired-weak-crosscut <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_contains "$out" "^R@a3,d3: 1$"
+assert_not_contains "$out" "^R@a1,d1: 1$"
 
 out=$(run_uci "$ENGINE" "$tmp_ini" shogi-pawn-drop-split-white <<'UCI'
 position startpos

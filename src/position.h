@@ -489,6 +489,7 @@ public:
   Bitboard compute_liberty_capture_mask(Square placed, Color us, Bitboard occupied) const;
   Bitboard compute_liberty_group(Square root, Bitboard groupPieces, Bitboard occupied, bool& hasLiberty) const;
   bool liberty_drop_legal(Move m, Color us) const;
+  bool placement_rules_legal(Move m, Color us) const;
   Bitboard compute_remove_connect_n_mask(const std::vector<Bitboard>& baseLines, Bitboard alreadyRemoved, Bitboard blastMask, Bitboard& connectMask) const;
   EndgameEval endgame_eval() const;
   Bitboard double_step_region(Color c) const;
