@@ -1758,6 +1758,7 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
               Square front2 = pawn_step(epSquare, ~sideToMove, 2);
               bool front1_ok = is_ok(front1) && file_of(front1) <= max_file() && rank_of(front1) <= max_rank();
               bool front2_ok = is_ok(front2) && file_of(front2) <= max_file() && rank_of(front2) <= max_rank();
+              bool jumpedEnPassant = potions_enabled() && (pieces(~sideToMove) & epSquare);
 
               if (   (var->enPassantRegion[sideToMove] & epSquare)
                   && (   !var->fastAttacks
@@ -1765,7 +1766,7 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
                       || (   pawn_attacks_bb(~sideToMove, epSquare) & pieces(sideToMove, PAWN)
                           && (   (front1_ok && (pieces(~sideToMove, PAWN) & front1))
                               || (front2_ok && (pieces(~sideToMove, PAWN) & front2)))
-                          && !((pieces(WHITE) | pieces(BLACK)) & epSquare)
+                          && (!((pieces(WHITE) | pieces(BLACK)) & epSquare) || jumpedEnPassant)
                           && behindSquareAllowed)))
                   st->epSquares |= epSquare;
           }
@@ -4198,7 +4199,11 @@ bool Position::legal(Move m) const {
       if (!rifleShot)
           occupied |= kto;
       if (type_of(m) == EN_PASSANT)
+      {
           occupied &= ~square_bb(capture_square(to));
+          if (potions_enabled() && (pieces(~us) & to))
+              occupied = (occupied & ~square_bb(to)) | kto;
+      }
       else if (rifleShot)
           occupied &= ~square_bb(shotSq);
       if (capture(m) && blastOnCapture)
@@ -4299,7 +4304,11 @@ bool Position::legal(Move m) const {
       if (!rifleShot)
           occupied |= kto;
       if (type_of(m) == EN_PASSANT)
+      {
           occupied &= ~square_bb(capture_square(to));
+          if (potions_enabled() && (pieces(~us) & to))
+              occupied = (occupied & ~square_bb(to)) | kto;
+      }
       if (capture(m) && blastOnCapture)
       {
           occupied &= ~blast_squares(blastCenter);
@@ -4376,7 +4385,7 @@ bool Position::legal(Move m) const {
       Bitboard occupied = rifleShot ? (pieces() ^ capsq) : ((pieces() ^ from ^ capsq) | to);
 
       assert(ep_squares() & to);
-      assert(piece_on(to) == NO_PIECE);
+      assert(piece_on(to) == NO_PIECE || (potions_enabled() && (pieces(~us) & to)));
 
       return !((attackers_to_king(ksq, occupied, ~us, janggiCannonsAfter) & ~removedAttackers) & occupied)
           && !violates_same_player_board_repetition(m);
@@ -5551,6 +5560,10 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   {
       st->captured.clear();
   }
+  if (type_of(m) == EN_PASSANT && potions_enabled() && (pieces(them) & to))
+      st->jumpedEnPassantCaptured.set(piece_on(to), is_promoted(to), unpromoted_piece_on(to), to);
+  else
+      st->jumpedEnPassantCaptured.clear();
   st->push.didPush = pushMove;
   st->didPull = pullMove;
   st->push.stepwise = stepwisePush;
@@ -5661,7 +5674,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
 
           assert(st->epSquares & to);
           assert(var->enPassantRegion[us] & to);
-          assert(piece_on(to) == NO_PIECE);
+          assert(piece_on(to) == NO_PIECE || (potions_enabled() && (pieces(them) & to)));
       }
 
       // If the captured piece is a pawn, update pawn hash key, otherwise
@@ -5724,6 +5737,39 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           prefetch(thisThread->materialTable[material_key(endgame_eval())]);
 #endif
       // Reset rule 50 counter
+      st->rule50 = 0;
+  }
+
+  if (st->jumpedEnPassantCaptured)
+  {
+      Piece jumped = st->jumpedEnPassantCaptured.piece.piece;
+      Square jumpedSq = st->jumpedEnPassantCaptured.square;
+
+      if (type_of(jumped) == PAWN)
+          st->pawnKey ^= Zobrist::psq[jumped][jumpedSq];
+      else
+          st->nonPawnMaterial[color_of(jumped)] -= PieceValue[MG][jumped];
+
+      int dirtyIdx = Eval::useNNUE ? append_dirty(st, jumped, jumpedSq, SQ_NONE) : -1;
+      remove_piece(jumpedSq);
+      board[jumpedSq] = NO_PIECE;
+
+      Piece transferPiece = reserve_transfer_piece(us, jumped, st->jumpedEnPassantCaptured.piece.promoted,
+                                                    st->jumpedEnPassantCaptured.piece.unpromoted, drop_loop(),
+                                                    var->captureToHandSide, main_promotion_pawn_type(color_of(jumped)));
+      bool transferred = add_capture_transfer(st, transferPiece, &k);
+      if (Eval::useNNUE && dirtyIdx >= 0 && transferred)
+      {
+          Piece pieceToHand = capture_type() == PRISON ? ~transferPiece : transferPiece;
+          dp.handPiece[dirtyIdx] = pieceToHand;
+          dp.handCount[dirtyIdx] = pieceCountInHand[color_of(pieceToHand)][type_of(pieceToHand)];
+      }
+
+      if (points_counting())
+          add_capture_points(st, us, jumped);
+
+      k ^= Zobrist::psq[jumped][jumpedSq];
+      st->materialKey ^= Zobrist::psq[jumped][pieceCount[jumped]];
       st->rule50 = 0;
   }
 
@@ -6229,6 +6275,10 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
                   && (var->enPassantRegion[them] & epSq)
                   && (((topology_wraps() ? attacks_from(us, PAWN, epSq) : pawn_attacks_bb(us, epSq)) & pieces(them, PAWN))
                       || (var->enPassantTypes[them] & ~piece_set(PAWN)))
+                  && (!var->fastAttacks
+                      || (var->enPassantTypes[them] & ~piece_set(PAWN))
+                      || !((pieces(WHITE) | pieces(BLACK)) & epSq)
+                      || (potions_enabled() && (pieces(us) & epSq)))
                   && !(walling(us) && gating_square(m) == epSq))
               {
                   st->epSquares |= epSq;
@@ -7380,6 +7430,20 @@ void Position::undo_move(Move m) {
                       break;
               }
           }
+      }
+
+      if (st->jumpedEnPassantCaptured)
+      {
+          Square jumpedSq = st->jumpedEnPassantCaptured.square;
+          put_piece(st->jumpedEnPassantCaptured.piece.piece, jumpedSq,
+                    st->jumpedEnPassantCaptured.piece.promoted,
+                    st->jumpedEnPassantCaptured.piece.unpromoted);
+          Piece transferPiece = reserve_transfer_piece(us, st->jumpedEnPassantCaptured.piece.piece,
+                                                       st->jumpedEnPassantCaptured.piece.promoted,
+                                                       st->jumpedEnPassantCaptured.piece.unpromoted,
+                                                       drop_loop(), var->captureToHandSide,
+                                                       main_promotion_pawn_type(color_of(st->jumpedEnPassantCaptured.piece.piece)));
+          undo_capture_transfer(st, transferPiece);
       }
 
       if (st->captured)

@@ -309,4 +309,11 @@ assert_distinct_position_keys "${tmp_ini}" "spellprisonex" \
 assert_reload_key_match "${tmp_ini}" "libertysync" "position startpos moves P@c2"
 assert_reload_perft1_match "${tmp_ini}" "libertysync" "position startpos moves P@c2"
 
+# A Jump potion may let a double-step pass through an occupied enemy square.
+# The resulting en-passant target remains serializable after Jump expires.
+if probe_variant_available "$ENGINE" spell-chess "$DEFAULT_VARIANT_PATH"; then
+  assert_reload_key_match "$DEFAULT_VARIANT_PATH" "spell-chess" \
+    "position startpos moves j@g8,g1h3 f@a5,b7b5 d2d3 j@a2,g7g5 f@h8,a1a5 b8a6 j@c7,b1c3 f@g7,g5g4 a2a4 j@h3,a6b4 f@e8,h2h4"
+fi
+
 echo "state-sync key tests passed"

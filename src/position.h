@@ -249,6 +249,7 @@ struct MoveUndoInfo {
   Bitboard   demotedBycatch = Bitboard(0);
   Bitboard   blastPromotedSquares = Bitboard(0);
   ReversiblePieceOnSquare captured;
+  ReversiblePieceOnSquare jumpedEnPassantCaptured;
   ReversiblePieceState dead;
   Piece      promotionPawn = NO_PIECE;
   Piece      consumedPromotionHandPiece = NO_PIECE;
@@ -276,6 +277,7 @@ struct MoveUndoInfo {
     demotedBycatch = Bitboard(0);
     blastPromotedSquares = Bitboard(0);
     captured.clear();
+    jumpedEnPassantCaptured.clear();
     dead.clear();
     promotionPawn = NO_PIECE;
     consumedPromotionHandPiece = NO_PIECE;
@@ -304,6 +306,7 @@ struct MoveUndoInfo {
         && demotedBycatch == Bitboard(0)
         && blastPromotedSquares == Bitboard(0)
         && !captured
+        && !jumpedEnPassantCaptured
         && !dead
         && promotionPawn == NO_PIECE
         && consumedPromotionHandPiece == NO_PIECE
@@ -5176,7 +5179,7 @@ inline Square Position::capture_square(Square to) const {
   assert(is_ok(to));
   // The capture square of en passant is either the marked ep piece or the closest piece behind the target square
   Bitboard customEp = ep_squares() & pieces();
-  if (customEp)
+  if (customEp && !(potions_enabled() && (customEp & pieces(~sideToMove))))
   {
       // For longer custom en passant paths, we take the frontmost piece
       return sideToMove == WHITE ? lsb(customEp) : msb(customEp);

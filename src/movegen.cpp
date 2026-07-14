@@ -471,7 +471,10 @@ namespace {
             Square from = pop_lsb(remaining);
             Bitboard quiets = pos.moves_from(Us, PAWN, from) & target;
             Bitboard attacks = pos.attacks_from(Us, PAWN, from) & capturable & localCaptureTarget;
-            Bitboard epSquares = pos.attacks_from(Us, PAWN, from) & pos.ep_squares() & ~(pos.pieces() | pos.dead_squares()) & localCaptureTarget;
+            Bitboard epSquares = pos.attacks_from(Us, PAWN, from) & pos.ep_squares() & ~pos.dead_squares() & localCaptureTarget;
+            epSquares &= ~pos.pieces() | (pos.potions_enabled() ? pos.pieces(Them) : Bitboard(0));
+            if (pos.potions_enabled())
+                attacks &= ~(pos.ep_squares() & pos.pieces(Them));
             Bitboard quietPromotions = quiets & standardPromotionZone;
             Bitboard capturePromotions = attacks & standardPromotionZone;
 
@@ -530,6 +533,9 @@ namespace {
     Bitboard b3 = shift<Up>(shift<Up>(shift<Up>(unmovedPawns & tripleStepRegion) & movable) & movable) & movable & target;
     Bitboard brc = shift<UpRight>(pawns) & capturable & localCaptureTarget;
     Bitboard blc = shift<UpLeft >(pawns) & capturable & localCaptureTarget;
+    Bitboard jumpedEpTargets = pos.potions_enabled() ? pos.ep_squares() & pos.pieces(Them) : Bitboard(0);
+    brc &= ~jumpedEpTargets;
+    blc &= ~jumpedEpTargets;
 
     Bitboard b1p = b1 & standardPromotionZone;
     Bitboard b2p = b2 & standardPromotionZone;
@@ -678,7 +684,9 @@ namespace {
         emit_normal_moves(brc, UpRight);
         emit_normal_moves(blc, UpLeft);
 
-        for (Bitboard epSquares = pos.ep_squares() & ~(pos.pieces() | pos.dead_squares()); epSquares; )
+        Bitboard epSquares = pos.ep_squares() & ~pos.dead_squares();
+        epSquares &= ~pos.pieces() | (pos.potions_enabled() ? pos.pieces(Them) : Bitboard(0));
+        for (; epSquares; )
         {
             Square epSquare = pop_lsb(epSquares);
 

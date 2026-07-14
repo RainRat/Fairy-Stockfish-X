@@ -80,6 +80,20 @@ out=$(run_cmds "position fen 4k3/8/8/8/8/4p3/4P3/4K3[J] w - - 0 1
 go perft 1")
 echo "${out}" | grep -q "^j@e3,e2e4: 1$"
 
+# Jump-assisted en passant captures both the double-stepped pawn and an
+# opposing piece on the jumped-over square. A friendly piece blocks it.
+out=$(run_cmds "position startpos moves j@g8,g1h3 f@a5,b7b5 d2d3 j@a2,g7g5 f@h8,a1a5 b8a6 j@c7,b1c3 f@g7,g5g4 a2a4 j@h3,a6b4 f@e8,h2h4
+go perft 1")
+echo "${out}" | grep -q "^g4h3: 1$"
+
+out=$(run_cmds "position startpos moves j@g8,g1h3 f@a5,b7b5 d2d3 j@a2,g7g5 f@h8,a1a5 b8a6 j@c7,b1c3 f@g7,g5g4 a2a4 j@h3,a6b4 f@e8,h2h4 g4h3
+d")
+echo "${out}" | grep -q "^Fen: r1bqkbnr/p1pppp1p/8/Rp6/Pn6/2NP3p/1PP1PPP1/2BQKB1R\\[FFFfff\\] w Kkq - 0 7 - <2 0 0 1>$"
+
+out=$(run_cmds "position fen 4k3/8/8/8/6pP/7n/8/4K3[] b - h3 0 1
+go perft 1")
+! echo "${out}" | grep -q "^g4h3:"
+
 # Potion cooldown prevents casting the same potion type.
 out=$(run_cmds "position fen rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR[F] w KQkq - 0 1 <2 0 0 0>
 go perft 1")
