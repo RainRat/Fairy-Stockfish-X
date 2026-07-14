@@ -872,6 +872,9 @@ namespace {
 
 std::ostream& operator<<(std::ostream& os, const Position& pos) {
 
+  const Bitboard freezeSquares = pos.freeze_squares();
+  const Bitboard jumpSquares = pos.jump_squares(WHITE) | pos.jump_squares(BLACK);
+
   auto append_debug_footer = [&]() {
       os << "\nFen: " << pos.fen() << "\nSfen: " << pos.fen(true) << "\nKey: " << std::hex << std::uppercase
          << std::setfill('0') << std::setw(16) << pos.key()
@@ -978,7 +981,15 @@ std::ostream& operator<<(std::ostream& os, const Position& pos) {
       for (File f = FILE_A; f <= pos.max_file(); ++f)
       {
           Square sq = make_square(f, r);
-          if (pos.state()->deadSquares & sq)
+          const bool frozen = freezeSquares & sq;
+          const bool jump = jumpSquares & sq;
+          if (frozen && jump)
+              os << " |!" << (pos.piece_symbol(pos.piece_on(sq)).empty() ? " " : pos.piece_symbol(pos.piece_on(sq))) << "!";
+          else if (frozen)
+              os << " |[" << (pos.piece_symbol(pos.piece_on(sq)).empty() ? " " : pos.piece_symbol(pos.piece_on(sq))) << "]";
+          else if (jump)
+              os << " |{" << (pos.piece_symbol(pos.piece_on(sq)).empty() ? " " : pos.piece_symbol(pos.piece_on(sq))) << "}";
+          else if (pos.state()->deadSquares & sq)
               os << " | ^";
           else if (pos.state()->wallSquares & sq)
               os << " | *";
@@ -1023,6 +1034,8 @@ std::ostream& operator<<(std::ostream& os, const Position& pos) {
   for (File f = FILE_A; f <= pos.max_file(); ++f)
       os << "   " << char('a' + f);
   os << "\n";
+  if (freezeSquares || jumpSquares)
+      os << "Spell zones: [ ] freeze, { } jump, ! ! both\n";
   append_debug_footer();
 
   return os;
