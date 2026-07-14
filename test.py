@@ -406,6 +406,58 @@ class TestPyffish(unittest.TestCase):
 startFen = 8/8/8/8/8/8/8/8[PPpp] w - - 0 1
 pieceDrops = true
 symmetricDropTypes = p
+
+[occupancy-wall:fairy]
+king = -
+checking = false
+wallingRule = edge
+wallingWhite = true
+wallingBlack = false
+wallOrMove = true
+wallingRegionWhite = a1
+startFen = 8/8/8/8/8/8/8/8 w - - 0 1
+
+[occupancy-rifle:chess]
+rifleCapture = true
+
+[occupancy-blast:chess]
+blastOnCapture = true
+
+[occupancy-clone:chess]
+king = -
+commoner = k
+castling = false
+pseudoRoyalTypes = k
+pseudoRoyalCount = 64
+cloneMoveTypes = k
+
+[occupancy-gating:chess]
+gating = true
+seirawanGating = true
+
+[occupancy-firstmove:chess]
+gating = true
+firstMovePieceTypes = k:n
+castling = false
+
+[occupancy-gating-blast:chess]
+gating = true
+seirawanGating = true
+blastOnMove = true
+
+[occupancy-passive-order:fairy]
+king = -
+checking = false
+blastOnCapture = true
+blastPassiveTypes = n
+startFen = 8/8/8/8/8/8/8/8 w - - 0 1
+
+[occupancy-clone-effects:fairy]
+king = -
+checking = false
+cloneMoveTypes = n
+blastPassiveTypes = n
+startFen = 8/8/8/8/8/8/8/8 w - - 0 1
 """
         )
         self.assertTrue(sf.run_cpp_tests())

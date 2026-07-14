@@ -76,6 +76,32 @@ struct PushInfo {
   int distance = 0;
 };
 
+// Occupancy used while reasoning about a move before it is committed.  Keep
+// the stages separate: effects are evaluated before a newly gated/walled
+// square is placed, while paired placements are part of the move itself.
+struct SimulatedMoveInfo {
+  Bitboard relocatedOccupancy = Bitboard(0);
+  Bitboard effectOccupancy = Bitboard(0);
+  Bitboard placementOccupancy = Bitboard(0);
+  Bitboard occupiedAfterEffects = Bitboard(0);
+  Bitboard removedByEffects = Bitboard(0);
+  Bitboard structuralRemoval = Bitboard(0);
+  Bitboard addedPlacements = Bitboard(0);
+  Bitboard removedWalls = Bitboard(0);
+  Square from = SQ_NONE;
+  Square to = SQ_NONE;
+  Square effectiveTo = SQ_NONE;
+  Square captureSquare = SQ_NONE;
+  Square secondarySquare = SQ_NONE;
+  Square gatingSquare = SQ_NONE;
+  bool castling = false;
+  bool enPassant = false;
+  bool rifle = false;
+  bool clone = false;
+  bool stationary = false;
+  bool paired = false;
+};
+
 const SpellContext* current_spell_context() noexcept;
 void set_current_spell_context(const SpellContext* ctx) noexcept;
 
@@ -806,6 +832,7 @@ public:
   // Properties of moves
   bool legal(Move m) const;
   bool pseudo_legal(const Move m) const;
+  SimulatedMoveInfo simulated_move_info(Move m, bool withEffects = true) const;
   bool virtual_drop(Move m) const;
   bool paired_drop(Move m) const;
   bool push_move(Move m) const;

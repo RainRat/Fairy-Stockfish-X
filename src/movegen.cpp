@@ -59,6 +59,15 @@ namespace {
   template<GenType Type>
   constexpr bool CanEmitPromotions = Type == CAPTURES || Type == QUIETS || Type == EVASIONS || Type == NON_EVASIONS;
 
+  ExtMove* emit_pass_move(const Position& pos, ExtMove* moveList, Color us, Square preferred = SQ_NONE) {
+    Bitboard usPieces = pos.pieces(us);
+    Square anchor = preferred != SQ_NONE ? preferred
+                  : usPieces             ? lsb(usPieces)
+                                         : lsb(pos.board_bb());
+    *moveList++ = make<SPECIAL>(anchor, anchor);
+    return moveList;
+  }
+
   template<MoveType T>
   ExtMove* make_move_and_gating(const Position& pos, ExtMove* moveList, Color us, Square from, Square to, PieceType pt = NO_PIECE_TYPE) {
 
@@ -67,16 +76,7 @@ namespace {
     bool captureIsRifle = pos.rifle_capture(m) && pos.capture(m);
     bool rifleShot = captureIsRifle && (T == NORMAL || T == PROMOTION);
     Square effectiveTo = (rifleShot || iguiShot) ? from : to;
-    Square capSq = pos.capture(m) ? pos.capture_square(m) : SQ_NONE;
-    Bitboard occupancyAfter = pos.pieces();
-    if (from != effectiveTo) occupancyAfter ^= square_bb(from) ^ square_bb(effectiveTo);
-    if (capSq != SQ_NONE) occupancyAfter ^= square_bb(capSq);
-    if (T == CASTLING)
-    {
-        Square kto, rto;
-        pos.castling_destinations(us, from, to, kto, rto);
-        occupancyAfter = (pos.pieces() ^ square_bb(from) ^ square_bb(to)) | kto | rto;
-    }
+    Bitboard occupancyAfter = pos.simulated_move_info(m, false).placementOccupancy;
 
     // Wall placing moves
     //if it's "wall or move", and they chose non-null move, skip even generating wall move
@@ -990,12 +990,8 @@ namespace {
             else
             {
                 // Opponent must pass while the other side completes a forced jump chain.
-                Bitboard usPieces = pos.pieces(Us);
                 if (Type != QUIET_CHECKS && pos.pass(Us))
-                {
-                    Square passSq = usPieces ? lsb(usPieces) : lsb(pos.board_bb());
-                    *moveList++ = make<SPECIAL>(passSq, passSq);
-                }
+                    moveList = emit_pass_move(pos, moveList, Us);
                 return moveList;
             }
         }
@@ -1238,13 +1234,9 @@ namespace {
             }
         }
 
-        // Workaround for passing: Execute a non-move with any piece
+        // A pass is encoded as a SPECIAL move whose source and destination are equal.
         if (!restrictToForcedJumper && Type != QUIET_CHECKS && pos.pass(Us) && !pos.count<KING>(Us))
-        {
-            Bitboard usPieces = pos.pieces(Us);
-            Square passSq = usPieces ? lsb(usPieces) : lsb(pos.board_bb());
-            *moveList++ = make<SPECIAL>(passSq, passSq);
-        }
+            moveList = emit_pass_move(pos, moveList, Us);
 
         if (!restrictToForcedJumper && Type != CAPTURES && pos.self_destruct_types())
         {
@@ -1317,7 +1309,7 @@ namespace {
 
         // Passing move by royal piece
         if (!restrictToForcedJumper && pos.pass(Us))
-            *moveList++ = make<SPECIAL>(royalSq, royalSq);
+            moveList = emit_pass_move(pos, moveList, Us, royalSq);
 
         if (royalPt == KING && !restrictToForcedJumper
             && (Type == QUIETS || Type == NON_EVASIONS || (Type == EVASIONS && pos.castling_ignore_check()))
@@ -1354,23 +1346,7 @@ namespace {
       if constexpr (Type == EVASIONS)
       {
           Color us = pos.side_to_move();
-          Bitboard occupied = pos.pieces();
-          Square from = from_sq(base);
-          Square to = to_sq(base);
-          if (type_of(base) == CASTLING)
-          {
-              Square kto, rto;
-              pos.castling_destinations(us, from, to, kto, rto);
-              occupied = (occupied ^ square_bb(from) ^ square_bb(to)) | square_bb(kto) | square_bb(rto);
-          }
-          else if (from != to)
-              occupied ^= square_bb(from) ^ square_bb(to);
-
-          if (pos.capture(m))
-              occupied ^= square_bb(pos.capture_square(m));
-
-          if (pos.gating_move_blocks_occupancy(m) && gating_square(m) != SQ_NONE)
-              occupied |= square_bb(gating_square(m));
+          Bitboard occupied = pos.simulated_move_info(m).occupiedAfterEffects;
 
           Position::SimulatedMoveGuard guard(pos, m);
           if (pos.attackers_to(pos.royal_square(us), occupied, ~us))
@@ -1402,6 +1378,11 @@ namespace {
   }
 
   enum class AppendStatus { Appended, Skipped, Full };
+
+  [[noreturn]] inline void potion_movegen_overflow() {
+      assert(false && "Potion move generation exceeded MOVEGEN_OVERFLOW_CAPACITY");
+      std::abort();
+  }
 
   struct PotionBaseInfo {
       MoveType mt = NORMAL;
@@ -1511,7 +1492,7 @@ namespace {
             while (candidates)
             {
                 if (cur >= maxEnd)
-                    return maxEnd;
+                    potion_movegen_overflow();
 
                 Square gate = pop_lsb(candidates);
                 Bitboard newFreezeZone = pos.freeze_zone_from_square(gate);
@@ -1539,7 +1520,7 @@ namespace {
                     }
                     if (try_append_potion_gating_move<Type>(pos, cur, maxEnd, base.info.from, base.info.to, base.info.mt, base.move, potion, potionPiece, gate, base.value)
                         == AppendStatus::Full)
-                        return maxEnd;
+                        potion_movegen_overflow();
                 }
             }
             continue;
@@ -1588,7 +1569,7 @@ namespace {
                                                            potion, potionPiece, gate,
                                                            it->value)
                         == AppendStatus::Full)
-                        return maxEnd;
+                        potion_movegen_overflow();
                 }
             }
 
@@ -1613,7 +1594,7 @@ namespace {
 #endif
             {
                 if (cur >= maxEnd)
-                    return maxEnd;
+                    potion_movegen_overflow();
 
                 PotionBaseInfo baseInfo;
                 if (!prepare_potion_base(pos, it->move, baseInfo))
@@ -1659,7 +1640,7 @@ namespace {
 
                 if (try_append_potion_gating_move<Type>(pos, cur, maxEnd, baseInfo.from, baseInfo.to, baseInfo.mt, it->move, potion, potionPiece, gate, it->value)
                     == AppendStatus::Full)
-                    return maxEnd;
+                    potion_movegen_overflow();
             }
         }
     }

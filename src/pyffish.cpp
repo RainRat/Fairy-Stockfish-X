@@ -646,6 +646,11 @@ static PyObject* pyffish_runCppTests(PyObject* self, PyObject* args) {
     (void)self;
     (void)args;
 
+    auto parse_move = [](const Position& pos, const char* notation) {
+        std::string moveString(notation);
+        return UCI::to_move(pos, moveString);
+    };
+
     // Test 1: Fix Position::promotion_square() mismatched-color bug
     {
         Position pos;
@@ -798,6 +803,190 @@ static PyObject* pyffish_runCppTests(PyObject* self, PyObject* args) {
                 PyErr_Format(PyFFishError, "Pawn key mismatch after undoing paired pawn drop: expected %llu, got %llu", expectedPawnKey, pos.state()->pawnKey);
                 return nullptr;
             }
+        }
+    }
+
+    // Test 6: All occupancy stages agree for castling, en passant, rifle,
+    // clone, paired placement, gating, and wall placement.
+    {
+        Position pos;
+        StateListPtr states;
+        const Variant* v = require_variant("chess");
+        if (!v) return nullptr;
+        buildPosition(pos, states, v, "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1", nullptr, false);
+        Move m = parse_move(pos, "e1g1");
+        SimulatedMoveInfo info = pos.simulated_move_info(m);
+        Bitboard expected = (pos.pieces() ^ square_bb(SQ_E1) ^ square_bb(SQ_H1))
+                          | square_bb(SQ_G1) | square_bb(SQ_F1);
+        if (!info.castling || info.relocatedOccupancy != expected || info.occupiedAfterEffects != expected)
+        {
+            PyErr_SetString(PyFFishError, "shared occupancy model disagreed for castling");
+            return nullptr;
+        }
+    }
+    {
+        Position pos;
+        StateListPtr states;
+        const Variant* v = require_variant("chess");
+        if (!v) return nullptr;
+        buildPosition(pos, states, v, "7k/8/8/3pP3/8/8/8/K7 w - d6 0 1", nullptr, false);
+        Move m = parse_move(pos, "e5d6");
+        SimulatedMoveInfo info = pos.simulated_move_info(m);
+        Bitboard expected = (pos.pieces() ^ square_bb(SQ_E5) ^ square_bb(SQ_D5)) | square_bb(SQ_D6);
+        if (!info.enPassant || info.captureSquare != SQ_D5 || info.relocatedOccupancy != expected)
+        {
+            PyErr_SetString(PyFFishError, "shared occupancy model disagreed for en passant");
+            return nullptr;
+        }
+    }
+    {
+        Position pos;
+        StateListPtr states;
+        const Variant* v = require_variant("occupancy-rifle");
+        if (!v) return nullptr;
+        buildPosition(pos, states, v, "7k/8/8/3p4/3Q4/8/8/K7 w - - 0 1", nullptr, false);
+        Move m = parse_move(pos, "d4d5");
+        SimulatedMoveInfo info = pos.simulated_move_info(m);
+        if (!info.rifle || !(info.relocatedOccupancy & square_bb(SQ_D4))
+            || (info.relocatedOccupancy & square_bb(SQ_D5)))
+        {
+            PyErr_SetString(PyFFishError, "shared occupancy model disagreed for rifle capture");
+            return nullptr;
+        }
+    }
+    {
+        Position pos;
+        StateListPtr states;
+        const Variant* v = require_variant("occupancy-blast");
+        if (!v) return nullptr;
+        buildPosition(pos, states, v, "7k/8/8/3pN3/3Q4/8/8/K7 w - - 0 1", nullptr, false);
+        Move m = parse_move(pos, "d4d5");
+        SimulatedMoveInfo info = pos.simulated_move_info(m);
+        if (!(info.removedByEffects & square_bb(SQ_E5)))
+        {
+            PyErr_SetString(PyFFishError, "shared occupancy model disagreed for capture effects");
+            return nullptr;
+        }
+    }
+    {
+        Position pos;
+        StateListPtr states;
+        const Variant* v = require_variant("occupancy-clone");
+        if (!v) return nullptr;
+        buildPosition(pos, states, v, "7k/8/8/8/8/8/8/K7 w - - 0 1", nullptr, false);
+        Move m = make<SPECIAL>(SQ_A1, SQ_A2);
+        SimulatedMoveInfo info = pos.simulated_move_info(m);
+        if (!info.clone || !(info.relocatedOccupancy & square_bb(SQ_A1))
+            || !(info.relocatedOccupancy & square_bb(SQ_A2)))
+        {
+            PyErr_SetString(PyFFishError, "shared occupancy model disagreed for clone move");
+            return nullptr;
+        }
+    }
+    {
+        Position pos;
+        StateListPtr states;
+        const Variant* v = require_variant("occupancy-firstmove");
+        if (!v) return nullptr;
+        buildPosition(pos, states, v, "7k/8/8/8/8/8/8/4K3 w E - 0 1", nullptr, false);
+        Move m = make<SPECIAL>(SQ_E1, SQ_F3, KNIGHT);
+        SimulatedMoveInfo info = pos.simulated_move_info(m);
+        Bitboard expected = (pos.pieces() ^ square_bb(SQ_E1)) | square_bb(SQ_F3);
+        if (info.stationary || info.relocatedOccupancy != expected)
+        {
+            PyErr_SetString(PyFFishError, "shared occupancy model treated a first-move special as stationary");
+            return nullptr;
+        }
+    }
+    {
+        Position pos;
+        StateListPtr states;
+        const Variant* v = require_variant("pairedpawns");
+        if (!v) return nullptr;
+        buildPosition(pos, states, v, "8/8/8/8/8/8/8/8[PPpp] w - - 0 1", nullptr, false);
+        Move m = parse_move(pos, "P@a2,h2");
+        SimulatedMoveInfo info = pos.simulated_move_info(m);
+        if (!info.paired || info.secondarySquare != SQ_H2
+            || info.effectOccupancy != (square_bb(SQ_A2) | square_bb(SQ_H2)))
+        {
+            PyErr_SetString(PyFFishError, "shared occupancy model disagreed for paired placement");
+            return nullptr;
+        }
+    }
+    {
+        Position pos;
+        StateListPtr states;
+        const Variant* v = require_variant("occupancy-gating");
+        if (!v) return nullptr;
+        buildPosition(pos, states, v, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQK1NR[HEhe] w KQBCDFGkqbcdfg - 0 1", nullptr, false);
+        Move m = make_gating<NORMAL>(SQ_B1, SQ_A3, KNIGHT, SQ_B1);
+        SimulatedMoveInfo info = pos.simulated_move_info(m);
+        if (!is_gating(m) || info.gatingSquare != SQ_B1
+            || !(info.placementOccupancy & square_bb(SQ_B1))
+            || !(info.placementOccupancy & square_bb(SQ_A3)))
+        {
+            PyErr_SetString(PyFFishError, "shared occupancy model disagreed for gating");
+            return nullptr;
+        }
+    }
+    {
+        Position pos;
+        StateListPtr states;
+        const Variant* v = require_variant("occupancy-gating-blast");
+        if (!v) return nullptr;
+        buildPosition(pos, states, v, "7k/8/8/8/8/8/8/R3K3[N] w A - 0 1", nullptr, false);
+        Move m = make_gating<NORMAL>(SQ_A1, SQ_A2, KNIGHT, SQ_A1);
+        SimulatedMoveInfo info = pos.simulated_move_info(m);
+        if (!(info.effectOccupancy & square_bb(SQ_A1))
+            || !(info.removedByEffects & square_bb(SQ_A1))
+            || (info.occupiedAfterEffects & square_bb(SQ_A1)))
+        {
+            PyErr_SetString(PyFFishError, "shared occupancy model resolved an ordinary gate after move effects");
+            return nullptr;
+        }
+    }
+    {
+        Position pos;
+        StateListPtr states;
+        const Variant* v = require_variant("occupancy-passive-order");
+        if (!v) return nullptr;
+        buildPosition(pos, states, v, "8/8/8/3pnB2/3R4/8/8/8 w - - 0 1", nullptr, false);
+        Move m = make<NORMAL>(SQ_D4, SQ_D5);
+        SimulatedMoveInfo info = pos.simulated_move_info(m);
+        if (!(info.removedByEffects & square_bb(SQ_E5))
+            || (info.removedByEffects & square_bb(SQ_F5)))
+        {
+            PyErr_SetString(PyFFishError, "shared occupancy model let an actively removed passive burner fire");
+            return nullptr;
+        }
+    }
+    {
+        Position pos;
+        StateListPtr states;
+        const Variant* v = require_variant("occupancy-clone-effects");
+        if (!v) return nullptr;
+        buildPosition(pos, states, v, "8/8/8/8/3N4/2b5/8/8 w - - 0 1", nullptr, false);
+        Move m = make<SPECIAL>(SQ_D4, SQ_F5);
+        SimulatedMoveInfo info = pos.simulated_move_info(m);
+        if (!info.clone || !(info.removedByEffects & square_bb(SQ_C3)))
+        {
+            PyErr_SetString(PyFFishError, "shared occupancy model removed a clone source before move effects");
+            return nullptr;
+        }
+    }
+    {
+        Position pos;
+        StateListPtr states;
+        const Variant* v = require_variant("occupancy-wall");
+        if (!v) return nullptr;
+        buildPosition(pos, states, v, "8/8/8/8/8/8/8/8 w - - 0 1", nullptr, false);
+        Move m = make_gating<SPECIAL>(SQ_A1, SQ_A1, NO_PIECE_TYPE, SQ_A1);
+        SimulatedMoveInfo info = pos.simulated_move_info(m);
+        if (!is_gating(m) || info.gatingSquare != SQ_A1 || !(info.addedPlacements & square_bb(SQ_A1))
+            || info.effectOccupancy || !(info.placementOccupancy & square_bb(SQ_A1)))
+        {
+            PyErr_SetString(PyFFishError, "shared occupancy model disagreed for wall placement");
+            return nullptr;
         }
     }
 

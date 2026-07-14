@@ -3424,6 +3424,266 @@ Bitboard Position::compute_remove_connect_n_mask(
 }
 
 
+SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const {
+  SimulatedMoveInfo info;
+  info.from = from_sq(m);
+  info.to = to_sq(m);
+  info.castling = type_of(m) == CASTLING;
+  info.enPassant = type_of(m) == EN_PASSANT;
+  info.clone = is_clone_move(m);
+  info.paired = paired_drop(m);
+
+  if (is_pass(m))
+  {
+      info.relocatedOccupancy = info.effectOccupancy = info.placementOccupancy = pieces();
+      info.occupiedAfterEffects = pieces();
+      return info;
+  }
+
+  const bool dropMove = is_drop_move(m);
+  const bool isCapture = capture(m);
+  info.captureSquare = isCapture ? capture_square(m) : SQ_NONE;
+  info.rifle = rifle_capture(m) && isCapture && !info.castling;
+  info.stationary = info.rifle;
+  info.effectiveTo = info.rifle ? info.from : info.to;
+  info.secondarySquare = info.paired ? secondary_drop_square(m) : SQ_NONE;
+  const bool wallPlacement = is_gating(m) && is_ok(gating_square(m))
+                          && walling(sideToMove) && (!wall_or_move() || info.from == info.to);
+  const bool pureWallMove = wallPlacement && wall_or_move() && info.from == info.to;
+
+  if (info.castling)
+  {
+      Square kto, rto;
+      castling_destinations(sideToMove, info.from, info.to, kto, rto);
+      info.relocatedOccupancy = (pieces() ^ square_bb(info.from) ^ square_bb(info.to))
+                             | square_bb(kto) | square_bb(rto);
+      info.effectiveTo = kto;
+  }
+  else if (info.rifle)
+  {
+      info.relocatedOccupancy = pieces();
+      if (is_ok(info.captureSquare))
+          info.relocatedOccupancy ^= square_bb(info.captureSquare);
+  }
+  else if (is_self_destruct(m))
+      info.relocatedOccupancy = pieces() & ~square_bb(info.from);
+  else if (pureWallMove)
+      info.relocatedOccupancy = pieces();
+  else
+  {
+      info.relocatedOccupancy = pieces();
+      if (!dropMove && !info.clone && is_ok(info.from))
+          info.relocatedOccupancy ^= square_bb(info.from);
+      if (is_ok(info.captureSquare))
+          info.relocatedOccupancy ^= square_bb(info.captureSquare);
+      if (is_ok(info.to))
+          info.relocatedOccupancy |= square_bb(info.to);
+  }
+
+  info.effectOccupancy = info.relocatedOccupancy;
+  if (info.paired && is_ok(info.secondarySquare))
+      info.effectOccupancy |= square_bb(info.secondarySquare);
+
+  Bitboard latePlacements = 0;
+
+  // Ordinary gating pieces participate in move effects. Walls are installed
+  // afterward, while spell-potion targets never occupy the board.
+  if (is_gating(m) && is_ok(gating_square(m)))
+  {
+      info.gatingSquare = gating_square(m);
+      const bool ordinaryGate = gating_type(m) != NO_PIECE_TYPE
+                             && gating_move_blocks_occupancy(m) && !info.rifle;
+      if (ordinaryGate)
+      {
+          Bitboard gates = square_bb(info.gatingSquare);
+          if (info.paired && is_ok(info.secondarySquare))
+              gates |= square_bb(info.secondarySquare);
+          info.effectOccupancy |= gates;
+          info.addedPlacements |= gates;
+      }
+
+      if (wallPlacement)
+      {
+          latePlacements |= square_bb(info.gatingSquare);
+          info.addedPlacements |= latePlacements;
+      }
+      if (walling_rule() == DUCK && wallPlacement)
+          info.removedWalls = st->wallSquares;
+  }
+
+  info.placementOccupancy = (info.effectOccupancy & ~info.removedWalls) | latePlacements;
+  if (!withEffects)
+  {
+      info.occupiedAfterEffects = info.placementOccupancy;
+      return info;
+  }
+
+  info.removedByEffects = 0;
+  info.structuralRemoval = 0;
+  const Color us = sideToMove;
+  const Piece mover = moved_piece(m);
+  const PieceType movePt = mover == NO_PIECE ? NO_PIECE_TYPE : type_of(mover);
+  const Square shotSq = isCapture ? info.captureSquare : info.to;
+  const Square captureBlastCenter = blast_on_capture_mover_center() ? info.effectiveTo : shotSq;
+
+  if (((isCapture || info.rifle) && blast_on_capture(m))
+      || (blast_on_move() && !isCapture && !is_self_destruct(m))
+      || (blast_on_self_destruct() && is_self_destruct(m)))
+  {
+      Square blastCenter = (isCapture || info.rifle) ? captureBlastCenter : info.effectiveTo;
+      Bitboard blastRelevant = info.effectOccupancy & ~blast_immune_bb();
+      Bitboard adjacentBlastRelevant = blastRelevant & ~pieces(PAWN);
+      info.removedByEffects |= blast_pattern(blastCenter) & adjacentBlastRelevant;
+      if (blast_center())
+          info.removedByEffects |= square_bb(blastCenter) & blastRelevant;
+      if (blast_on_capture(m) && (blast_immune_types() & movePt))
+          info.removedByEffects &= ~square_bb(info.effectiveTo);
+      else if (blast_on_capture(moved_piece(m), captured_piece(m)) && blast_center()
+               && !blast_orthogonals() && !blast_diagonals())
+          info.removedByEffects |= square_bb(info.effectiveTo);
+  }
+
+  if ((isCapture || info.rifle) && (var->petrifyOnCaptureTypes & movePt))
+      info.removedByEffects |= square_bb(info.effectiveTo);
+
+  // Passive burners destroyed by the active effect do not burn. Conversely,
+  // surround/connect removals happen after passive burning in do_move().
+  if (var->blastPassiveTypes)
+  {
+      Bitboard occupiedForPassive = info.effectOccupancy & ~info.removedByEffects;
+      std::array<Bitboard, COLOR_NB> passiveBurners = passive_blast_burners(occupiedForPassive);
+      if (is_ok(info.captureSquare))
+      {
+          passiveBurners[WHITE] &= ~square_bb(info.captureSquare);
+          passiveBurners[BLACK] &= ~square_bb(info.captureSquare);
+      }
+      if (!dropMove && !info.clone)
+          passiveBurners[us] &= ~square_bb(info.from);
+
+      if (info.castling)
+      {
+          Square kto, rto;
+          castling_destinations(us, info.from, info.to, kto, rto);
+          Piece rook = piece_on(info.to);
+          if (var->blastPassiveTypes & piece_set(type_of(moved_piece(m))))
+              passiveBurners[us] |= square_bb(kto);
+          if (rook != NO_PIECE && (var->blastPassiveTypes & piece_set(type_of(rook))))
+              passiveBurners[us] |= square_bb(rto);
+      }
+      else if (dropMove)
+      {
+          if (var->blastPassiveTypes & piece_set(type_of(moved_piece(m))))
+          {
+              passiveBurners[us] |= square_bb(info.to);
+              if (info.paired)
+                  passiveBurners[us] |= square_bb(info.secondarySquare);
+          }
+      }
+      else if (!info.rifle)
+      {
+          PieceType finalPt = movePt;
+          if (is_promotion_move(m))
+              finalPt = promotion_type(m);
+          else if (type_of(m) == PIECE_PROMOTION)
+              finalPt = promoted_piece_type(movePt);
+          else if (type_of(m) == PIECE_DEMOTION)
+              finalPt = type_of(unpromoted_piece_on(info.from));
+          if (var->blastPassiveTypes & piece_set(finalPt))
+              passiveBurners[us] |= square_bb(info.effectiveTo);
+      }
+      else if (var->blastPassiveTypes & piece_set(movePt))
+          passiveBurners[us] |= square_bb(info.from);
+
+      if (is_gating(m) && gating_type(m) != NO_PIECE_TYPE
+          && gating_move_blocks_occupancy(m)
+          && (var->blastPassiveTypes & piece_set(gating_type(m))))
+          passiveBurners[us] |= square_bb(info.gatingSquare);
+
+      passiveBurners[WHITE] &= occupiedForPassive;
+      passiveBurners[BLACK] &= occupiedForPassive;
+      info.removedByEffects |= passive_blast_removal_mask(passiveBurners, occupiedForPassive);
+  }
+
+  if (surround_capture_opposite() || surround_capture_intervene() || surround_capture_edge())
+  {
+      Bitboard usPostMove = (dropMove || info.clone)
+                              ? (pieces(us) | square_bb(info.effectiveTo))
+                              : (pieces(us) ^ square_bb(info.from) ^ square_bb(info.effectiveTo));
+      usPostMove |= info.effectOccupancy & info.addedPlacements;
+      Bitboard surroundMask = compute_surround_capture_mask(info.effectiveTo, usPostMove,
+                                                              pieces(~us) & ~square_bb(shotSq),
+                                                              info.effectOccupancy);
+      info.removedByEffects |= surroundMask;
+      info.structuralRemoval |= surroundMask;
+  }
+
+  if (remove_connect_n() > 0)
+  {
+      std::vector<Bitboard> baseLines;
+      if (remove_connect_n_by_type())
+      {
+          baseLines.resize(PIECE_TYPE_NB, 0);
+          for (PieceSet ps = variant()->pieceTypes; ps; )
+          {
+              PieceType pt = pop_lsb(ps);
+              Bitboard line = pieces(pt);
+              if (!dropMove && !info.clone)
+                  line &= ~square_bb(info.from);
+              if (movePt == pt)
+                  line |= square_bb(info.effectiveTo);
+              if (isCapture && captured_piece(m) != NO_PIECE && type_of(captured_piece(m)) == pt)
+                  line &= ~square_bb(shotSq);
+              baseLines[pt] = line;
+          }
+      }
+      else
+      {
+          baseLines.resize(COLOR_NB, 0);
+          Bitboard whiteLine = pieces(WHITE), blackLine = pieces(BLACK);
+          if (!dropMove && !info.clone)
+          {
+              if (us == WHITE) whiteLine &= ~square_bb(info.from);
+              else             blackLine &= ~square_bb(info.from);
+          }
+          if (us == WHITE) whiteLine |= square_bb(info.effectiveTo);
+          else             blackLine |= square_bb(info.effectiveTo);
+          if (isCapture)
+          {
+              if (us == WHITE) blackLine &= ~square_bb(shotSq);
+              else             whiteLine &= ~square_bb(shotSq);
+          }
+          baseLines[WHITE] = whiteLine;
+          baseLines[BLACK] = blackLine;
+      }
+
+      Bitboard connectMask = 0;
+      Bitboard blastMask = 0;
+      if (blast_promotion())
+      {
+          const bool blastOnCaptureMove = (isCapture || info.rifle) && blast_on_capture(m);
+          if (blastOnCaptureMove
+              || (blast_on_move() && !isCapture && !is_self_destruct(m))
+              || (blast_on_self_destruct() && is_self_destruct(m)))
+          {
+              Square blastCenter = (isCapture || info.rifle) ? captureBlastCenter : info.effectiveTo;
+              blastMask = blast_squares(blastCenter);
+              Square moverSq = info.rifle ? info.from : info.to;
+              if (blastOnCaptureMove && !blast_on_capture_mover_center())
+                  blastMask &= ~square_bb(moverSq);
+          }
+      }
+      Bitboard removalMask = compute_remove_connect_n_mask(baseLines, info.removedByEffects,
+                                                           blastMask, connectMask);
+      info.removedByEffects |= removalMask;
+      info.structuralRemoval |= removalMask;
+  }
+
+  Bitboard occupiedAfterStructural = info.effectOccupancy & ~info.structuralRemoval;
+  info.occupiedAfterEffects = (occupiedAfterStructural & ~info.removedByEffects & ~info.removedWalls)
+                            | latePlacements;
+  return info;
+}
+
 /// Position::legal() tests whether a pseudo-legal move is legal
 
 bool Position::legal(Move m) const {
@@ -4071,100 +4331,9 @@ bool Position::legal(Move m) const {
           && !violates_same_player_board_repetition(m);
   }
 
-  Bitboard postMoveOccupied;
-  if (type_of(m) == CASTLING)
-  {
-      Square kfrom = from;
-      Square rfrom = to;
-      Square kto, rto;
-      castling_destinations(sideToMove, kfrom, rfrom, kto, rto);
-      postMoveOccupied = (pieces() ^ kfrom ^ rfrom) | kto | rto;
-  }
-  else
-      postMoveOccupied = rifleShot ? (pieces() ^ square_bb(shotSq))
-                           : (((!dropMove ? pieces() ^ from : pieces()) ^ square_bb(shotSq)) | to);
-
-  if (paired_drop(m))
-      postMoveOccupied |= square_bb(secondary_drop_square(m));
-
-  Bitboard removedByEffects = 0;
-  Bitboard structuralRemoval = 0;
-  if (!is_pass(m))
-  {
-      if (((capture(m) || rifleShot) && blast_on_capture(m))
-          || (blast_on_move() && !capture(m) && !is_self_destruct(m))
-          || (blast_on_self_destruct() && is_self_destruct(m)))
-      {
-          Square blastCenter = (capture(m) || rifleShot) ? captureBlastCenter : effectiveTo;
-          Bitboard blastRelevant = postMoveOccupied & ~blast_immune_bb();
-          Bitboard adjacentBlastRelevant = blastRelevant & ~pieces(PAWN);
-          removedByEffects |= blast_pattern(blastCenter) & adjacentBlastRelevant;
-          if (blast_center())
-              removedByEffects |= square_bb(blastCenter) & blastRelevant;
-          if (blast_on_capture(m) && (blast_immune_types() & movePt))
-              removedByEffects &= ~square_bb(effectiveTo);
-          else if (blast_on_capture(moved_piece(m), captured_piece(m)) && blast_center() && !blast_orthogonals() && !blast_diagonals())
-              removedByEffects |= square_bb(effectiveTo);
-      }
-
-      if ((capture(m) || rifleShot) && (var->petrifyOnCaptureTypes & movePt))
-          removedByEffects |= square_bb(effectiveTo);
-
-      // Surround capture
-      if (surround_capture_opposite() || surround_capture_intervene() || surround_capture_edge())
-      {
-          Bitboard usPostMove = dropMove ? (pieces(us) | effectiveTo) : (pieces(us) ^ from ^ effectiveTo);
-          Bitboard surroundMask = compute_surround_capture_mask(effectiveTo, usPostMove, (pieces(~us) & ~square_bb(shotSq)), postMoveOccupied);
-          removedByEffects |= surroundMask;
-          structuralRemoval |= surroundMask;
-      }
-      // Remove connect N
-      if (remove_connect_n() > 0)
-      {
-          std::vector<Bitboard> baseLines;
-          if (remove_connect_n_by_type())
-          {
-              baseLines.resize(PIECE_TYPE_NB, 0);
-              for (PieceSet ps = variant()->pieceTypes; ps; )
-              {
-                  PieceType pt = pop_lsb(ps);
-                  Bitboard line = pieces(pt);
-                  if (!dropMove) line &= ~from;
-                  if (movePt == pt) line |= effectiveTo;
-                  if (capture(m) && type_of(captured_piece(m)) == pt) line &= ~shotSq;
-                  baseLines[pt] = line;
-              }
-          }
-          else
-          {
-              baseLines.resize(COLOR_NB, 0);
-              Bitboard whiteLine = pieces(WHITE), blackLine = pieces(BLACK);
-              if (!dropMove) { if (us == WHITE) whiteLine &= ~from; else blackLine &= ~from; }
-              if (us == WHITE) whiteLine |= effectiveTo; else blackLine |= effectiveTo;
-              if (capture(m)) { if (us == WHITE) blackLine &= ~shotSq; else whiteLine &= ~shotSq; }
-              baseLines[WHITE] = whiteLine;
-              baseLines[BLACK] = blackLine;
-          }
-          Bitboard connectMask = 0;
-          Bitboard blast_mask = 0;
-          if (blast_promotion() && !is_pass(m))
-          {
-              const bool blastOnCaptureMove = (capture(m) || rifleShot) && blast_on_capture(m);
-              if (blastOnCaptureMove || (blast_on_move() && !capture(m) && !is_self_destruct(m)) || (blast_on_self_destruct() && is_self_destruct(m)))
-              {
-                  Square blastCenter = (capture(m) || rifleShot) ? captureBlastCenter : effectiveTo;
-                  blast_mask = blast_squares(blastCenter);
-                  Square moverSq = rifleShot ? from : to;
-                  if (blastOnCaptureMove && !blast_on_capture_mover_center())
-                      blast_mask &= ~square_bb(moverSq);
-              }
-          }
-          Bitboard removalMask = compute_remove_connect_n_mask(baseLines, removedByEffects, blast_mask, connectMask);
-          removedByEffects |= removalMask;
-          structuralRemoval |= removalMask;
-      }
-  }
-  postMoveOccupied &= ~structuralRemoval;
+  SimulatedMoveInfo simulated = simulated_move_info(m);
+  Bitboard postMoveOccupied = simulated.effectOccupancy & ~simulated.structuralRemoval;
+  Bitboard removedByEffects = simulated.removedByEffects;
 
   // Check for attacks to pseudo-royal pieces
   if (pseudo_royal_types())
@@ -4446,56 +4615,6 @@ bool Position::legal(Move m) const {
           && !violates_same_player_board_repetition(m);
   }
 
-  if (var->blastPassiveTypes && !is_pass(m))
-  {
-      Bitboard occupiedAfterEffects = postMoveOccupied & ~removedByEffects;
-      std::array<Bitboard, COLOR_NB> passiveBurners = passive_blast_burners(occupiedAfterEffects);
-
-      if (!dropMove)
-          passiveBurners[us] &= ~square_bb(from);
-
-      if (type_of(m) == CASTLING)
-      {
-          Square kto, rto;
-          castling_destinations(us, from, to, kto, rto);
-          Square rfrom = to;
-          Piece rook = piece_on(rfrom);
-          if (var->blastPassiveTypes & piece_set(type_of(moved_piece(m))))
-              passiveBurners[us] |= square_bb(kto);
-          if (rook != NO_PIECE && (var->blastPassiveTypes & piece_set(type_of(rook))))
-              passiveBurners[us] |= square_bb(rto);
-      }
-      else if (dropMove)
-      {
-          if (var->blastPassiveTypes & piece_set(type_of(moved_piece(m))))
-          {
-              passiveBurners[us] |= square_bb(to);
-              if (paired_drop(m))
-                  passiveBurners[us] |= square_bb(secondary_drop_square(m));
-          }
-      }
-      else if (!rifleShot)
-      {
-          PieceType finalPt = movePt;
-          if (is_promotion_move(m))
-              finalPt = promotion_type(m);
-          else if (type_of(m) == PIECE_PROMOTION)
-              finalPt = promoted_piece_type(movePt);
-          else if (type_of(m) == PIECE_DEMOTION)
-              finalPt = type_of(unpromoted_piece_on(from));
-
-          if (var->blastPassiveTypes & piece_set(finalPt))
-              passiveBurners[us] |= square_bb(effectiveTo);
-      }
-      else if (var->blastPassiveTypes & piece_set(movePt))
-          passiveBurners[us] |= square_bb(from);
-
-      if (is_gating(m) && gating_type(m) != NO_PIECE_TYPE && (var->blastPassiveTypes & piece_set(gating_type(m))))
-          passiveBurners[us] |= gating_square(m);
-
-      removedByEffects |= passive_blast_removal_mask(passiveBurners, occupiedAfterEffects);
-  }
-
   if (var->pseudoRoyalCaptureIllegal && pseudo_royal_types())
   {
       Bitboard protectedPseudoRoyals = st->pseudoRoyals;
@@ -4507,7 +4626,7 @@ bool Position::legal(Move m) const {
           return false;
   }
 
-  Bitboard occupiedAfterEffects = postMoveOccupied & ~removedByEffects;
+  Bitboard occupiedAfterEffects = simulated.occupiedAfterEffects;
 
   // Gated kings and pseudo-royals must not be introduced onto attacked squares.
   // If the move captures an attacker on its way, ignore that disappearing attack.
@@ -5048,22 +5167,8 @@ bool Position::gives_check(Move m) const {
   if (!is_ok(attackFrom))
       return false;
 
-  Bitboard occupied;
-  if (type_of(m) == CASTLING)
-  {
-      Square kfrom = from;
-      Square rfrom = to;
-      Square kto, rto;
-      castling_destinations(sideToMove, kfrom, rfrom, kto, rto);
-      occupied = (pieces() ^ kfrom ^ rfrom) | kto | rto;
-  }
-  else
-  {
-      occupied = rifleShot ? (pieces() ^ square_bb(shotSq))
-                           : (((!dropMove && !cloneMove ? pieces() ^ from : pieces()) ^ square_bb(shotSq)) | to);
-  }
-  if (paired_drop(m))
-      occupied |= square_bb(secondary_drop_square(m));
+  SimulatedMoveInfo simulated = simulated_move_info(m);
+  Bitboard occupied = simulated.effectOccupancy;
 
   if (gating_move_blocks_occupancy(m))
       occupied |= square_bb(gating_square(m));
@@ -5179,13 +5284,13 @@ bool Position::gives_check(Move m) const {
 
   case PROMOTION:
   case PROMOTION_POTION:
-      return attacks_bb(sideToMove, promotion_type(m), to, pieces() ^ from) & royalSq;
+      return attacks_bb(sideToMove, promotion_type(m), to, simulated.effectOccupancy) & royalSq;
 
   case PIECE_PROMOTION:
-      return attacks_bb(sideToMove, promoted_piece_type(type_of(mover)), to, pieces() ^ from) & royalSq;
+      return attacks_bb(sideToMove, promoted_piece_type(type_of(mover)), to, simulated.effectOccupancy) & royalSq;
 
   case PIECE_DEMOTION:
-      return attacks_bb(sideToMove, type_of(unpromoted_piece_on(from)), to, pieces() ^ from) & royalSq;
+      return attacks_bb(sideToMove, type_of(unpromoted_piece_on(from)), to, simulated.effectOccupancy) & royalSq;
 
   // En passant capture with check? We have already handled the case
   // of direct checks and ordinary discovered check, so the only case we
@@ -5193,10 +5298,8 @@ bool Position::gives_check(Move m) const {
   // the captured pawn.
   case EN_PASSANT:
   {
-      Square capsq = capture_square(to);
-      Bitboard b = rifleShot ? (pieces() ^ capsq) : ((pieces() ^ from ^ capsq) | to);
-
-      return attackers_to_king(royalSq, b, sideToMove) & pieces(sideToMove) & b;
+      return attackers_to_king(royalSq, simulated.relocatedOccupancy, sideToMove)
+           & pieces(sideToMove) & simulated.relocatedOccupancy;
   }
   case CASTLING:
   {
@@ -5209,11 +5312,11 @@ bool Position::gives_check(Move m) const {
       // Is there a discovered check?
       if (   castling_rank(WHITE) > RANK_1
           && ((blockers_for_king(~sideToMove) & rfrom) || (non_sliding_riders() & pieces(sideToMove)))
-          && attackers_to_king(royalSq, (pieces() ^ kfrom ^ rfrom) | rto | kto, sideToMove))
+          && attackers_to_king(royalSq, simulated.effectOccupancy, sideToMove))
           return true;
 
       return   (PseudoAttacks[sideToMove][type_of(piece_on(rfrom))][rto] & royalSq)
-            && (attacks_bb(sideToMove, type_of(piece_on(rfrom)), rto, (pieces() ^ kfrom ^ rfrom) | rto | kto) & royalSq);
+            && (attacks_bb(sideToMove, type_of(piece_on(rfrom)), rto, simulated.effectOccupancy) & royalSq);
   }
   default:
       assert(false);
