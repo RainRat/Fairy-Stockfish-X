@@ -874,6 +874,7 @@ std::ostream& operator<<(std::ostream& os, const Position& pos) {
 
   const Bitboard freezeSquares = pos.freeze_squares();
   const Bitboard jumpSquares = pos.jump_squares(WHITE) | pos.jump_squares(BLACK);
+  assert(!(freezeSquares & jumpSquares));
 
   auto append_debug_footer = [&]() {
       os << "\nFen: " << pos.fen() << "\nSfen: " << pos.fen(true) << "\nKey: " << std::hex << std::uppercase
@@ -983,9 +984,7 @@ std::ostream& operator<<(std::ostream& os, const Position& pos) {
           Square sq = make_square(f, r);
           const bool frozen = freezeSquares & sq;
           const bool jump = jumpSquares & sq;
-          if (frozen && jump)
-              os << " |!" << (pos.piece_symbol(pos.piece_on(sq)).empty() ? " " : pos.piece_symbol(pos.piece_on(sq))) << "!";
-          else if (frozen)
+          if (frozen)
               os << " |[" << (pos.piece_symbol(pos.piece_on(sq)).empty() ? " " : pos.piece_symbol(pos.piece_on(sq))) << "]";
           else if (jump)
               os << " |{" << (pos.piece_symbol(pos.piece_on(sq)).empty() ? " " : pos.piece_symbol(pos.piece_on(sq))) << "}";
@@ -1035,7 +1034,7 @@ std::ostream& operator<<(std::ostream& os, const Position& pos) {
       os << "   " << char('a' + f);
   os << "\n";
   if (freezeSquares || jumpSquares)
-      os << "Spell zones: [ ] freeze, { } jump, ! ! both\n";
+      os << "Spell zones: [ ] freeze, { } jump\n";
   append_debug_footer();
 
   return os;
