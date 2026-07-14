@@ -35,7 +35,7 @@ assert_contains "$out" "^bestmove "
 
 # Spell-chess jump potions exercise deferred potion generation and pruning
 # without linking a board-size-specific C++ harness.
-if variant_available "$ENGINE" spell-chess "$VARIANTS"; then
+if probe_variant_available "$ENGINE" spell-chess "$VARIANTS"; then
   out=$(run_uci "$ENGINE" "$VARIANTS" spell-chess <<'EOF'
 position fen 7k/8/8/p7/8/p7/8/R3K3[J] w - - 0 1
 go perft 1

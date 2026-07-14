@@ -297,17 +297,19 @@ test_potion_undo_parity() {
   local variant_path="${VARIANTS}"
   ensure_local_inline_variants
 
-  assert_xboard_matches_uci "${variant_path}" "spell-chess" \
-    $'usermove f@a6,e2e4\nundo' \
-    "position startpos"
+  if probe_variant_available "$ENGINE" spell-chess "${variant_path}"; then
+    assert_xboard_matches_uci "${variant_path}" "spell-chess" \
+      $'usermove f@a6,e2e4\nundo' \
+      "position startpos"
 
-  assert_xboard_matches_uci "${variant_path}" "spell-chess" \
-    $'usermove f@a6,e2e4\nusermove j@a7,a8a2\nundo' \
-    "position startpos moves f@a6,e2e4"
+    assert_xboard_matches_uci "${variant_path}" "spell-chess" \
+      $'usermove f@a6,e2e4\nusermove j@a7,a8a2\nundo' \
+      "position startpos moves f@a6,e2e4"
 
-  assert_xboard_matches_uci "${variant_path}" "spell-chess" \
-    $'usermove f@a6,e2e4\nusermove j@a7,a8a2\nundo\nundo' \
-    "position startpos"
+    assert_xboard_matches_uci "${variant_path}" "spell-chess" \
+      $'usermove f@a6,e2e4\nusermove j@a7,a8a2\nundo\nundo' \
+      "position startpos"
+  fi
   assert_xboard_matches_uci "${TMP_VARIANTS}" "spellprisonex" \
     $'usermove q@c6,c4d5\nusermove f5e4\nusermove P#P@a2\nundo' \
     "position startpos moves q@c6,c4d5 f5e4"

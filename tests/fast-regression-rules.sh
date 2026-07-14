@@ -438,7 +438,8 @@ test_potion_custom() {
     default_variant_path="${ROOT_DIR}/src/variants.ini"
   fi
 
-  out=$(cat <<CMDS | "${ENGINE}"
+  if probe_variant_available "${ENGINE}" spell-chess "${default_variant_path}"; then
+    out=$(cat <<CMDS | "${ENGINE}"
 uci
 setoption name VariantPath value ${default_variant_path}
 setoption name UCI_Variant value spell-chess
@@ -447,9 +448,10 @@ go perft 1
 quit
 CMDS
 )
-  assert_contains "$out" "^j@a3,a1a4: 1$"
-  assert_contains "$out" "^j@a3,a1a5: 1$"
-  assert_not_contains "$out" "^j@a3,a1a6:"
+    assert_contains "$out" "^j@a3,a1a4: 1$"
+    assert_contains "$out" "^j@a3,a1a5: 1$"
+    assert_not_contains "$out" "^j@a3,a1a6:"
+  fi
 
   out=$(cat <<CMDS | "${ENGINE}"
 uci
@@ -462,7 +464,8 @@ CMDS
 )
   assert_contains "$out" "Nodes searched: 7"
 
-  out=$(cat <<CMDS | "${ENGINE}" 2>&1
+  if probe_variant_available "${ENGINE}" spell-chess "${default_variant_path}"; then
+    out=$(cat <<CMDS | "${ENGINE}" 2>&1
 uci
 setoption name VariantPath value ${default_variant_path}
 setoption name UCI_Variant value spell-chess
@@ -475,8 +478,9 @@ d
 quit
 CMDS
 )
-  assert_contains "$out" "^Fen: 7k/8/8/8/8/8/8/4K3\\[J\\] w - - 0 1 - <1 2 3 4>$"
-  assert_contains "$out" "^Fen: 7k/8/8/8/8/8/8/4K3\\[J\\] w - - 0 1$"
+    assert_contains "$out" "^Fen: 7k/8/8/8/8/8/8/4K3\\[J\\] w - - 0 1 - <1 2 3 4>$"
+    assert_contains "$out" "^Fen: 7k/8/8/8/8/8/8/4K3\\[J\\] w - - 0 1$"
+  fi
 }
 
 test_pousse_counting() {

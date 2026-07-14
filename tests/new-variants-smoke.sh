@@ -1135,6 +1135,8 @@ position startpos
 go depth 10")
 assert_contains "$out" "^bestmove "
 
+# 40-43) Spell Chess is available only in all-variants builds.
+if variant_available "spell-chess"; then
 # 40) Spell chess: frozen castling rook blocks castling.
 out=$(run_cmds "setoption name UCI_Variant value spell-chess
 position fen 4k3/8/8/8/8/8/8/4K2R[f] b K - 0 1 moves f@h1 e8e7
@@ -1173,6 +1175,7 @@ out=$(run_cmds "setoption name UCI_Variant value spell-chess
 position fen 4k3/3p4/8/4P3/8/8/8/4K3[f] b - - 0 1 moves f@e5 d7d5
 go perft 1")
 assert_not_contains "$out" "^e5d6:"
+fi
 
 # 44) Monad baseline (large-board): custom 10x10 setup is loaded.
 if variant_available "monad"; then

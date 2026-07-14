@@ -515,7 +515,11 @@ constexpr int MAX_PLY = 60;
 #endif
 /// endif USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
 #else
+#if defined(VERY_LARGE_BOARDS)
+constexpr int MAX_MOVES = 16384;
+#else
 constexpr int MAX_MOVES = 4096;
+#endif
 constexpr int MAX_PLY = 246;
 #endif
 /// endif ALLVARS

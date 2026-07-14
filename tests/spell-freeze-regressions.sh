@@ -18,6 +18,11 @@ if [[ ! -f "${DEFAULT_VARIANT_PATH}" && -f "src/variants.ini" ]]; then
 fi
 VARIANT_PATH=${2:-${DEFAULT_VARIANT_PATH}}
 
+if ! probe_variant_available "$ENGINE" spell-chess "$VARIANT_PATH"; then
+  echo "spell freeze regressions skipped (spell-chess requires all=yes)"
+  exit 0
+fi
+
 run_cmds() {
   run_uci "$ENGINE" "$VARIANT_PATH" spell-chess <<EOF
 $1
