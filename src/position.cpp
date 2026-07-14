@@ -2216,7 +2216,6 @@ void Position::recompute_state_hashes_and_material(StateInfo* si) const {
 
 void Position::set_state(StateInfo* si) const {
 
-  si->checkersBB = compute_checkers_bb(sideToMove);
   si->evasionCheckersBB = compute_evasion_checkers_bb(sideToMove);
   si->move = MOVE_NONE;
   si->removedGatingType = NO_PIECE_TYPE;
@@ -2233,6 +2232,7 @@ void Position::set_state(StateInfo* si) const {
   si->forcedJumpStep = 0;
 
   recompute_state_hashes_and_material(si);
+  si->checkersBB = compute_checkers_bb(sideToMove);
   si->repetition = 0;
   si->boardRepetition = 0;
 
@@ -2240,9 +2240,9 @@ void Position::set_state(StateInfo* si) const {
 
 void Position::refresh_state_derived(StateInfo* si) const {
 
-  si->checkersBB = compute_checkers_bb(sideToMove);
   si->evasionCheckersBB = compute_evasion_checkers_bb(sideToMove);
   recompute_state_hashes_and_material(si);
+  si->checkersBB = compute_checkers_bb(sideToMove);
 }
 
 Bitboard Position::compute_checkers_bb(Color side) const {
@@ -5236,6 +5236,15 @@ bool Position::gives_check(Move m) const {
   Square shotSq = capture(m) ? capture_square(m) : to;
   Square attackFrom = rifleShot ? from : to;
 
+  // A clone can give check to a pseudo-/anti-royal even when the variant has
+  // no ordinary king.  Probe it before requiring a conventional royal target.
+  if (cloneMove)
+  {
+      StateInfo nextState;
+      ScopedProbeMove probe(*this, m, nextState);
+      return bool(checkers());
+  }
+
   const bool usingPhysicalKingTarget = count<KING>(~sideToMove) == 1;
   Square royalSq = usingPhysicalKingTarget ? square<KING>(~sideToMove)
                                            : royal_square(~sideToMove);
@@ -5267,7 +5276,6 @@ bool Position::gives_check(Move m) const {
       || has_pushing()
       || has_adjacent_swapping()
       || is_swap_move(m)
-      || cloneMove
       || type_of(m) == PULL
       || type_of(m) == DROP2
       || type_of(m) == INSERT)
@@ -7185,8 +7193,13 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       st->layoutKey = layout_key();
   sideToMove = them;
 
-  st->checkersBB = compute_checkers_bb(sideToMove);
   st->evasionCheckersBB = compute_evasion_checkers_bb(sideToMove);
+
+  // Rebuild the derived check info before broad royal-danger checks.  The
+  // latter includes pseudo-/anti-royals, whose status can change when a move
+  // adds, removes, or transforms a piece (notably on clone moves).
+  set_check_info(st);
+  st->checkersBB = compute_checkers_bb(sideToMove);
 
   if (first_move_lose_on_check() && st->checkersBB)
       for (PieceSet ps = piece_types(); ps;)
@@ -7210,9 +7223,6 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           st->countingPly = counting_rule() == ASEAN_COUNTING || count<ALL_PIECES>(sideToMove) > 1 ? 0 : 2 * count<ALL_PIECES>();
       }
   }
-
-  // Update king attacks used for fast check detection
-  set_check_info(st);
 
   if (recomputeDerivedState)
   {
@@ -7299,6 +7309,7 @@ void Position::undo_move(Move m) {
   assert(is_drop_move(m) || empty(from) || type_of(m) == CASTLING || is_gating(m)
          || (is_promotion_move(m) && sittuyin_promotion())
          || is_pass(m)
+         || cloneMove
          || pullMove
          || swapMove
          || wasOpeningSelfRemoval
@@ -7797,10 +7808,9 @@ void Position::do_null_move(StateInfo& newSt) {
   st->pliesFromNull = 0;
 
   sideToMove = ~sideToMove;
-  st->checkersBB = compute_checkers_bb(sideToMove);
   st->evasionCheckersBB = compute_evasion_checkers_bb(sideToMove);
-
   set_check_info(st);
+  st->checkersBB = compute_checkers_bb(sideToMove);
 
   st->repetition = 0;
   st->boardRepetition = 0;

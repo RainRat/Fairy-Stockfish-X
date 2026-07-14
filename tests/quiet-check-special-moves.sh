@@ -166,6 +166,23 @@ startFen = 2k5/8/8/8/8/7p/P7/4K3 w - - 0 1
 [promotion-quiet-check:fairy]
 castling = false
 startFen = 7k/6P1/8/8/8/8/8/7K w - - 0 1
+
+[clone-pseudoroyal-check:chess]
+king = -
+pseudoRoyalTypes = q
+cloneMoveTypes = r
+castling = false
+startFen = 4q3/8/8/8/8/8/8/R7 w - - 0 1
+
+[firstmove-pseudoroyal-check:chess]
+king = -
+pseudoRoyalTypes = q
+pseudoRoyalCount = 1
+gating = true
+firstMovePieceTypes = b:n
+firstMoveLoseOnCheck = true
+castling = false
+startFen = 3bq3/8/8/8/8/8/8/R7 w d - 0 1
 )ini");
     variants.parse_istream<false>(ss);
 }
@@ -248,6 +265,56 @@ static void test_promotion_quiet_check() {
     assert(!quietChecks.contains(make<PROMOTION>(SQ_G7, SQ_G8, KNIGHT)));
 }
 
+static void test_clone_pseudoroyal_check() {
+    StateInfo st{};
+    Position pos;
+    pos.set(variants.get("clone-pseudoroyal-check"),
+            "4q3/8/8/8/8/8/8/R7 w - - 0 1", false, &st, nullptr);
+    const Move m = make<SPECIAL>(SQ_A1, SQ_E1);
+    assert(pos.is_clone_move(m));
+    StateInfo next{};
+    pos.do_move(m, next);
+    assert(pos.piece_on(SQ_E1) != NO_PIECE);
+    assert(pos.attackers_to(SQ_E8, pos.pieces(), WHITE));
+    assert(pos.checked_pseudo_royals(BLACK));
+    pos.undo_move(m);
+    assert(pos.gives_check(m));
+    assert(MoveList<QUIET_CHECKS>(pos).contains(m));
+}
+
+static void test_pseudoroyal_state_rebuild() {
+    StateInfo initialState{};
+    Position initial;
+    initial.set(variants.get("clone-pseudoroyal-check"),
+                "4q3/8/8/8/8/8/8/4R3 b - - 0 1", false, &initialState, nullptr);
+    assert(initial.checkers() & SQ_E8);
+
+    StateInfo st{};
+    Position pos;
+    pos.set(variants.get("clone-pseudoroyal-check"),
+            "4q3/8/8/8/8/8/8/4R3 w - - 0 1", false, &st, nullptr);
+    assert(!pos.checkers());
+
+    StateInfo nullState{};
+    pos.do_null_move(nullState);
+    assert(pos.checkers() & SQ_E8);
+    pos.undo_null_move();
+}
+
+static void test_firstmove_pseudoroyal_check() {
+    StateInfo st{};
+    Position pos;
+    pos.set(variants.get("firstmove-pseudoroyal-check"),
+            "3bq3/8/8/8/8/8/8/R7 w d - 0 1", false, &st, nullptr);
+    assert(pos.gates(BLACK) & SQ_D8);
+
+    StateInfo next{};
+    pos.do_move(make<NORMAL>(SQ_A1, SQ_E1), next);
+    assert(pos.checkers());
+    assert(!(pos.gates(BLACK) & SQ_D8));
+    pos.undo_move(make<NORMAL>(SQ_A1, SQ_E1));
+}
+
 static void test_qsearch_rejects_quiet_tt_move() {
     StateInfo st{};
     Position pos;
@@ -311,6 +378,12 @@ int main(int argc, char** argv) {
             test_wrapped_quiet_check();
         if (!which || !std::strcmp(which, "promotion"))
             test_promotion_quiet_check();
+        if (!which || !std::strcmp(which, "clone-pseudoroyal"))
+            test_clone_pseudoroyal_check();
+        if (!which || !std::strcmp(which, "pseudoroyal-state"))
+            test_pseudoroyal_state_rebuild();
+        if (!which || !std::strcmp(which, "firstmove-pseudoroyal"))
+            test_firstmove_pseudoroyal_check();
         if (!which || !std::strcmp(which, "qsearch-tt"))
             test_qsearch_rejects_quiet_tt_move();
         if (!which || !std::strcmp(which, "probcut-promotion"))
@@ -448,6 +521,9 @@ run_case swap
 run_case pull
 run_case wrapped
 run_case gate-history-square
+run_case clone-pseudoroyal
+run_case pseudoroyal-state
+run_case firstmove-pseudoroyal
 test_passive_blast
 test_crazyhouse_multi_pawn_promo
 
