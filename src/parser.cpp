@@ -1022,8 +1022,13 @@ template <bool Current, class T> bool VariantParser<DoCheck>::parse_attribute(co
         if constexpr (std::is_same_v<T, PieceSet>)
         {
             PieceSet parsedTarget = NO_PIECE_SET;
-            if (parse_piece_set_token_string(it->second, v, parsedTarget))
+            // For extinctionMustAppear, '*' is an aggregate activation gate,
+            // rather than the expanded set of every concrete piece type.
+            bool aggregateExtinctionAppearance = key == "extinctionMustAppear" && trim(it->second) == "*";
+            if (aggregateExtinctionAppearance || parse_piece_set_token_string(it->second, v, parsedTarget))
             {
+                if (aggregateExtinctionAppearance)
+                    parsedTarget = piece_set(ALL_PIECES);
                 target = parsedTarget;
                 return true;
             }

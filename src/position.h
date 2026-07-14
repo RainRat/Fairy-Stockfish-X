@@ -5325,6 +5325,8 @@ inline void Position::put_piece(Piece pc, Square s, bool isPromoted, Piece unpro
   if (isPromoted)
       promotedPieces |= s;
   unpromotedBoard[s] = unpromotedPc;
+  if (extinction_must_appear() & piece_set(ALL_PIECES))
+      st->extinctionSeen[color_of(pc)] |= piece_set(ALL_PIECES);
   if (extinction_must_appear() & piece_set(type_of(pc)))
       st->extinctionSeen[color_of(pc)] |= piece_set(type_of(pc));
 

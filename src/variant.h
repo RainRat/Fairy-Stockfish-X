@@ -360,9 +360,9 @@ struct Variant {
   bool dupleCheck = false;
   ColorSetting<PieceSet> extinctionPieceTypes = ColorSetting<PieceSet>(NO_PIECE_SET);
   PieceSet extinctionMustAppear = NO_PIECE_SET;
-  // TODO: Review the false default against upstream FSF extinction semantics.
-  // Existing FSX definitions rely on it, so changing it needs a variant audit.
-  ColorSetting<bool> extinctionAllPieceTypes = ColorSetting<bool>(false);
+  // Preserve upstream multi-type extinction definitions: all listed types must
+  // be extinct unless a variant explicitly selects any-type semantics.
+  ColorSetting<bool> extinctionAllPieceTypes = ColorSetting<bool>(true);
   ColorSetting<int> extinctionPieceCount = ColorSetting<int>(0);
   ColorSetting<int> extinctionOpponentPieceCount = ColorSetting<int>(0);
   ColorSetting<PieceType> flagPiece = ColorSetting<PieceType>(ALL_PIECES);

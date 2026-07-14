@@ -8239,8 +8239,14 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
               continue;
 
           PieceSet extinctTargets = extinction_piece_types(c);
+          PieceSet mustAppear = extinction_must_appear();
           if (!blast_on_capture())
               extinctTargets &= ~pseudo_royal_types();
+
+          // An aggregate appearance requirement activates extinction for the
+          // side after any piece of theirs has appeared on the board.
+          if ((mustAppear & piece_set(ALL_PIECES)) && !(st->extinctionSeen[c] & piece_set(ALL_PIECES)))
+              continue;
 
           bool allTypesExtinct = true;
           bool anyTypeExtinct = false;
@@ -8248,8 +8254,12 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
           for (PieceSet ps = extinctTargets; ps;)
           {
               PieceType pt = pop_lsb(ps);
-              if ((extinction_must_appear() & piece_set(pt)) && !(st->extinctionSeen[c] & piece_set(pt)))
+              if (!(mustAppear & piece_set(ALL_PIECES))
+                  && (mustAppear & piece_set(pt)) && !(st->extinctionSeen[c] & piece_set(pt)))
+              {
+                  allTypesExtinct = false;
                   continue;
+              }
               sawEligibleType = true;
               bool extinct = count_with_hand(c, pt) <= extinction_piece_count(c)
                           && count_with_hand(~c, pt) >= extinction_opponent_piece_count(c) + (extinction_claim() && c == sideToMove);
