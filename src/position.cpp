@@ -5763,7 +5763,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   PieceType exchanged = exchange_piece(m);
   Square jumpCapsq = SQ_NONE;
   Bitboard locust_all_mask = 0;
-  if (pi && pi->has_universal_hopper())
+  if (!dropMove && pi && pi->has_universal_hopper())
   {
       HopperMoveDetails details = resolve_hopper_move_details(from, to, byTypeBB[ALL_PIECES]);
       jumpCapsq = details.primaryCaptureSq;
@@ -7370,6 +7370,7 @@ void Position::undo_move(Move m) {
          || (is_promotion_move(m) && sittuyin_promotion())
          || is_pass(m)
          || cloneMove
+         || rifleShot
          || pullMove
          || swapMove
          || wasOpeningSelfRemoval
