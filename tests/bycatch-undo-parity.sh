@@ -8,12 +8,10 @@ source "${SCRIPT_DIR}/lib/uci.sh"
 init_test_env "${1:-}" "${2:-}" "bycatch undo parity test"
 
 CXX=${CXX:-g++}
-CXX_DEFS=(-DIS_64BIT -DUSE_PTHREADS)
-# Do not use grep -q here: with pipefail, nm can report SIGPIPE after grep
-# exits early and falsely select the large-board object family.
-if ! nm -C "${ROOT_DIR}/src/position.o" | grep -F 'Position::fen(bool, bool, int, ' | grep -F 'unsigned long) const' >/dev/null; then
-  CXX_DEFS+=(-DLARGEBOARDS -DPRECOMPUTED_MAGICS -DALLVARS)
-fi
+JOBS=${JOBS:-2}
+source "${SCRIPT_DIR}/lib/harness-build.sh"
+fsx_harness_init "${ENGINE}" "${ROOT_DIR}"
+fsx_harness_prepare_objects "${JOBS}"
 
 DEFAULT_VARIANT_PATH="variants.ini"
 if [[ ! -f "${DEFAULT_VARIANT_PATH}" && -f "src/variants.ini" ]]; then
@@ -120,15 +118,9 @@ int main() {
 }
 EOF
 
-OBJ_FILES=()
-while IFS= read -r -d '' obj; do
-  OBJ_FILES+=("${obj}")
-done < <(find "${ROOT_DIR}/src" -maxdepth 1 -name '*.o' ! -name 'main.o' -print0 | sort -z)
-
-(
-  cd "${ROOT_DIR}/src"
-  "${CXX}" -std=c++17 -O2 -Wall -Wextra -flto -I"${ROOT_DIR}/src" -I"${ROOT_DIR}/tests/lib" "${CXX_DEFS[@]}" "${HARNESS_CPP}" "${OBJ_FILES[@]}" -pthread -o "${HARNESS_BIN}"
-)
+fsx_harness_collect_objects
+fsx_harness_build "${HARNESS_CPP}" "${HARNESS_BIN}" \
+  "bycatch-undo-parity" "${HARNESS_BIN}.sig"
 
 echo "bycatch undo parity test started"
 "${HARNESS_BIN}"

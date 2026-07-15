@@ -13,42 +13,15 @@ CXX=${CXX:-g++}
 JOBS=${JOBS:-2}
 ENGINE=${1:-./stockfish}
 ENGINE_BASENAME=$(basename "${ENGINE}")
-CXX_DEFS=(-DIS_64BIT -DUSE_PTHREADS)
-case "${ENGINE_BASENAME}" in
-  stockfish-allvars*)
-    CXX_DEFS+=(-DLARGEBOARDS -DPRECOMPUTED_MAGICS -DALLVARS -DNNUE_EMBEDDING_OFF)
-    ;;
-  stockfish-large*)
-    CXX_DEFS+=(-DLARGEBOARDS -DPRECOMPUTED_MAGICS -DALLVARS -DNNUE_EMBEDDING_OFF)
-    ;;
-  stockfish-vlb*)
-    CXX_DEFS+=(-DLARGEBOARDS -DVERY_LARGE_BOARDS -DALLVARS -DNNUE_EMBEDDING_OFF)
-    ;;
-esac
+source "${SCRIPT_DIR}/lib/harness-build.sh"
+fsx_harness_init "${ENGINE}" "${ROOT_DIR}"
+fsx_harness_prepare_objects "${JOBS}"
 
 BUILD_SIG_DIR="${ROOT_DIR}/.local/build/wrapping-promotion-movegen"
-BUILD_SIG_FILE="${BUILD_SIG_DIR}/${ENGINE_BASENAME}.sig"
 HARNESS_CPP="${BUILD_SIG_DIR}/wrapping-promotion-movegen.cpp"
 HARNESS_BIN="${BUILD_SIG_DIR}/wrapping-promotion-movegen.bin"
 HARNESS_SIG_FILE="${BUILD_SIG_DIR}/${ENGINE_BASENAME}.harness.sig"
 mkdir -p "${BUILD_SIG_DIR}"
-
-if command -v sha256sum >/dev/null 2>&1; then
-  MAKEFILE_HASH="$(cd "${ROOT_DIR}/src" && sha256sum Makefile | cut -d' ' -f1)"
-elif command -v shasum >/dev/null 2>&1; then
-  MAKEFILE_HASH="$(cd "${ROOT_DIR}/src" && shasum -a 256 Makefile | cut -d' ' -f1)"
-else
-  MAKEFILE_HASH="no-hash-tool"
-fi
-
-BUILD_SIG="$(printf '%s|%s|%s|%s\n' \
-    "${ENGINE_BASENAME}" \
-    "${CXX}" \
-    "${MAKEFILE_HASH}" \
-    "${CXX_DEFS[*]}")"
-if [[ ! -f "${BUILD_SIG_FILE}" || "$(cat "${BUILD_SIG_FILE}" 2>/dev/null || true)" != "${BUILD_SIG}" ]]; then
-  printf '%s\n' "${BUILD_SIG}" > "${BUILD_SIG_FILE}"
-fi
 
 cat > "${HARNESS_CPP}" <<'EOF'
 #include <cstdlib>
@@ -132,18 +105,9 @@ int main() {
 }
 EOF
 
-OBJ_FILES=()
-while IFS= read -r -d '' obj; do
-  OBJ_FILES+=("${obj}")
-done < <(find "${ROOT_DIR}/src" -maxdepth 1 -name '*.o' ! -name 'main.o' -print0 | sort -z)
-
-${CXX} -std=c++17 -O2 -pipe -Wall -Wextra -pedantic \
-  -I"${ROOT_DIR}/src" \
-  "${HARNESS_CPP}" \
-  "${OBJ_FILES[@]}" \
-  -o "${HARNESS_BIN}" \
-  "${CXX_DEFS[@]}" \
-  -lpthread
+fsx_harness_collect_objects
+fsx_harness_build "${HARNESS_CPP}" "${HARNESS_BIN}" \
+  "wrapping-promotion-movegen" "${HARNESS_SIG_FILE}"
 
 "${HARNESS_BIN}"
 

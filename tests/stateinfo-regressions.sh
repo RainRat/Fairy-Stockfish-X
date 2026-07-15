@@ -6,56 +6,11 @@ source "${SCRIPT_DIR}/lib/uci.sh"
 
 init_test_env "${1:-}" "${2:-}" "StateInfo regression test"
 
-ENGINE_BASENAME=$(basename "${ENGINE}")
 CXX=${CXX:-g++}
 JOBS=${JOBS:-2}
-CXX_DEFS=(-DIS_64BIT -DUSE_PTHREADS)
-KNOWN_ENGINE_CONFIG=false
-case "${ENGINE_BASENAME}" in
-  stockfish)
-    KNOWN_ENGINE_CONFIG=true
-    ;;
-  stockfish-allvars*)
-    KNOWN_ENGINE_CONFIG=true
-    CXX_DEFS+=(-DLARGEBOARDS -DPRECOMPUTED_MAGICS -DALLVARS -DNNUE_EMBEDDING_OFF)
-    ;;
-  stockfish-large*)
-    KNOWN_ENGINE_CONFIG=true
-    CXX_DEFS+=(-DLARGEBOARDS -DPRECOMPUTED_MAGICS -DALLVARS -DNNUE_EMBEDDING_OFF)
-    ;;
-  stockfish-vlb*)
-    KNOWN_ENGINE_CONFIG=true
-    CXX_DEFS+=(-DLARGEBOARDS -DVERY_LARGE_BOARDS -DALLVARS -DNNUE_EMBEDDING_OFF)
-    ;;
-esac
-
-if [[ "${FSX_REUSE_OBJECTS:-0}" != "1" ]]; then
-  case "${ENGINE_BASENAME}" in
-    stockfish)
-      make -C "${ROOT_DIR}/src" EXE=stockfish objclean
-      make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 EXE=stockfish
-      ;;
-    stockfish-allvars*)
-      make -C "${ROOT_DIR}/src" EXE=stockfish-allvars objclean
-      make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 largeboards=yes all=yes nnue=yes EXE=stockfish-allvars
-      ;;
-    stockfish-large*)
-      make -C "${ROOT_DIR}/src" EXE=stockfish-large objclean
-      make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 largeboards=yes all=yes EXE=stockfish-large
-      ;;
-    stockfish-vlb*)
-      make -C "${ROOT_DIR}/src" EXE=stockfish-vlb objclean
-      make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 largeboards=yes verylargeboards=yes all=yes nnue=yes EXE=stockfish-vlb
-      ;;
-  esac
-fi
-
-if [[ "${KNOWN_ENGINE_CONFIG}" == "false" && -f "${ROOT_DIR}/src/position.o" ]]; then
-  POSITION_O_SIG="$(nm -C "${ROOT_DIR}/src/position.o" 2>/dev/null || true)"
-  if ! grep -q 'Position::fen(bool, bool, int, .*unsigned long) const' <<<"${POSITION_O_SIG}"; then
-    CXX_DEFS+=(-DLARGEBOARDS -DPRECOMPUTED_MAGICS -DALLVARS -DNNUE_EMBEDDING_OFF)
-  fi
-fi
+source "${SCRIPT_DIR}/lib/harness-build.sh"
+fsx_harness_init "${ENGINE}" "${ROOT_DIR}"
+fsx_harness_prepare_objects "${JOBS}"
 
 BUILD_DIR="${ROOT_DIR}/.local/build/stateinfo-regressions"
 mkdir -p "${BUILD_DIR}"
@@ -216,20 +171,9 @@ int main() {
 }
 EOF
 
-OBJ_FILES=()
-while IFS= read -r -d '' obj; do
-  OBJ_FILES+=("${obj}")
-done < <(find "${ROOT_DIR}/src" -maxdepth 1 -name '*.o' ! -name 'main.o' -print0 | sort -z)
-
-if (( ${#OBJ_FILES[@]} == 0 )); then
-  echo "no src/*.o objects found; build ${ENGINE} before running this test" >&2
-  exit 1
-fi
-
-(
-  cd "${ROOT_DIR}/src"
-  "${CXX}" -std=c++17 -O2 -Wall -Wextra -flto -I"${ROOT_DIR}/src" -I"${ROOT_DIR}/tests/lib" "${CXX_DEFS[@]}" "${HARNESS_CPP}" "${OBJ_FILES[@]}" -pthread -o "${HARNESS_BIN}"
-)
+fsx_harness_collect_objects
+fsx_harness_build "${HARNESS_CPP}" "${HARNESS_BIN}" \
+  "stateinfo-regressions" "${HARNESS_BIN}.sig"
 
 echo "StateInfo regression test started"
 "${HARNESS_BIN}"

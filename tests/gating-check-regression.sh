@@ -13,62 +13,15 @@ ENGINE=${1:-./src/stockfish}
 ROOT_DIR=$(cd "$(dirname "$0")/.." && pwd)
 CXX=${CXX:-g++}
 JOBS=${JOBS:-2}
-ENGINE_BASENAME=$(basename "${ENGINE}")
-CXX_DEFS=(-DIS_64BIT -DUSE_PTHREADS)
-case "${ENGINE_BASENAME}" in
-  stockfish-allvars*)
-    CXX_DEFS+=(-DLARGEBOARDS -DPRECOMPUTED_MAGICS -DALLVARS -DNNUE_EMBEDDING_OFF)
-    ;;
-  stockfish-large*)
-    CXX_DEFS+=(-DLARGEBOARDS -DPRECOMPUTED_MAGICS -DALLVARS -DNNUE_EMBEDDING_OFF)
-    ;;
-  stockfish-vlb*)
-    CXX_DEFS+=(-DLARGEBOARDS -DVERY_LARGE_BOARDS -DALLVARS -DNNUE_EMBEDDING_OFF)
-    ;;
-esac
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+source "${SCRIPT_DIR}/lib/harness-build.sh"
+fsx_harness_init "${ENGINE}" "${ROOT_DIR}"
+CXX_DEFS=("${FSX_HARNESS_CXX_DEFS[@]}")
 
 BUILD_CACHE_DIR="${ROOT_DIR}/.local/build/gating-check-regression"
 mkdir -p "${BUILD_CACHE_DIR}"
 
-if command -v sha256sum >/dev/null 2>&1; then
-  HASHER=(sha256sum)
-elif command -v shasum >/dev/null 2>&1; then
-  HASHER=(shasum -a 256)
-else
-  HASHER=()
-fi
-
-hash_text() {
-  if [[ ${#HASHER[@]} -gt 0 ]]; then
-    printf '%s' "$1" | "${HASHER[@]}" | awk '{print $1}'
-  else
-    printf '%s' "$1" | wc -c | awk '{print $1}'
-  fi
-}
-
-engine_signature() {
-  if [[ -e "${ENGINE}" ]]; then
-    if [[ ${#HASHER[@]} -gt 0 ]]; then
-      "${HASHER[@]}" "${ENGINE}" | awk '{print $1}'
-    else
-      stat -c '%Y %s' "${ENGINE}" 2>/dev/null || echo "0 0"
-    fi
-  else
-    echo "0 0"
-  fi
-}
-
-build_signature() {
-  local label="$1"
-  local source="$2"
-  printf '%s|%s|%s|%s|%s|%s\n' \
-    "${label}" \
-    "${CXX}" \
-    "${ENGINE_BASENAME}" \
-    "${CXX_DEFS[*]}" \
-    "$(engine_signature)" \
-    "$(hash_text "${source}")"
-}
+fsx_harness_prepare_objects "${JOBS}"
 
 run_cmds() {
   local ini=$1
@@ -84,27 +37,6 @@ TMP_BIN="${BUILD_CACHE_DIR}/gating-check-1.bin"
 HARNESS_CPP="${BUILD_CACHE_DIR}/gating-check-roundtrip.cpp"
 HARNESS_BIN="${BUILD_CACHE_DIR}/gating-check-roundtrip.bin"
 trap 'rm -f "${TMP_INI}"' EXIT
-
-if [[ "${FSX_REUSE_OBJECTS:-0}" != "1" ]]; then
-  case "${ENGINE_BASENAME}" in
-    stockfish)
-      make -C "${ROOT_DIR}/src" EXE=stockfish objclean
-      make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 EXE=stockfish
-      ;;
-    stockfish-allvars*)
-      make -C "${ROOT_DIR}/src" EXE=stockfish-allvars objclean
-      make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 largeboards=yes all=yes nnue=yes EXE=stockfish-allvars
-      ;;
-    stockfish-large*)
-      make -C "${ROOT_DIR}/src" EXE=stockfish-large objclean
-      make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 largeboards=yes all=yes EXE=stockfish-large
-      ;;
-    stockfish-vlb*)
-      make -C "${ROOT_DIR}/src" EXE=stockfish-vlb objclean
-      make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 largeboards=yes verylargeboards=yes all=yes nnue=yes EXE=stockfish-vlb
-      ;;
-  esac
-fi
 
 # --- TEST 1: Gated piece blocking discovered check ---
 cat > "${TMP_INI}" <<'EOF'
@@ -177,7 +109,7 @@ int main() {
 }
 EOF
 TMP_SIG_FILE="${BUILD_CACHE_DIR}/gating-check-1.sig"
-TMP_SIG="$(build_signature "gating-check-1" "$(cat "${TMP_CPP}")")"
+TMP_SIG="$(fsx_harness_signature "gating-check-1" "${TMP_CPP}")"
 if [[ ! -x "${TMP_BIN}" || ! -f "${TMP_SIG_FILE}" || "$(cat "${TMP_SIG_FILE}")" != "${TMP_SIG}" ]]; then
     rm -f "${TMP_BIN}"
     "${CXX}" -std=c++17 -O2 -Wall -Wextra -flto -I"${ROOT_DIR}/src" "${CXX_DEFS[@]}" "${TMP_CPP}" -o "${TMP_BIN}"
@@ -232,21 +164,10 @@ int main() {
 }
 EOF
 
-OBJ_FILES=()
-while IFS= read -r -d '' obj; do
-  OBJ_FILES+=("${obj}")
-done < <(find "${ROOT_DIR}/src" -maxdepth 1 -name '*.o' ! -name 'main.o' -print0 | sort -z)
-
 HARNESS_SIG_FILE="${BUILD_CACHE_DIR}/gating-check-roundtrip.sig"
-HARNESS_SIG="$(build_signature "gating-check-roundtrip" "$(cat "${HARNESS_CPP}")")"
-if [[ ! -x "${HARNESS_BIN}" || ! -f "${HARNESS_SIG_FILE}" || "$(cat "${HARNESS_SIG_FILE}")" != "${HARNESS_SIG}" ]]; then
-    rm -f "${HARNESS_BIN}"
-    (
-      cd "${ROOT_DIR}/src"
-      "${CXX}" -std=c++17 -O2 -Wall -Wextra -flto -I"${ROOT_DIR}/src" -I"${ROOT_DIR}/tests/lib" "${CXX_DEFS[@]}" "${HARNESS_CPP}" "${OBJ_FILES[@]}" -pthread -o "${HARNESS_BIN}"
-    )
-    printf '%s\n' "${HARNESS_SIG}" > "${HARNESS_SIG_FILE}"
-fi
+fsx_harness_collect_objects
+fsx_harness_build "${HARNESS_CPP}" "${HARNESS_BIN}" \
+  "gating-check-roundtrip" "${HARNESS_SIG_FILE}"
 "${HARNESS_BIN}"
 
 echo "gating-check-regression testing OK"

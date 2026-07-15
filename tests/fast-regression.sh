@@ -4,6 +4,7 @@ set -euo pipefail
 
 ROOT_DIR=$(cd "$(dirname "$0")/.." && pwd)
 export ROOT_DIR
+source "${ROOT_DIR}/tests/lib/harness-build.sh"
 ENGINE=${1:-src/stockfish}
 PYTHON=${PYTHON:-python3}
 JOBS=${JOBS:-2}
@@ -22,6 +23,7 @@ cp -f "${ENGINE}" "${DEFAULT_ENGINE_COPY}"
 chmod +x "${DEFAULT_ENGINE_COPY}"
 ENGINE="${DEFAULT_ENGINE_COPY}"
 export ENGINE
+fsx_harness_init "${ENGINE}" "${ROOT_DIR}"
 
 TEMP_LOG_DIR=""
 PIDS=()
@@ -58,15 +60,6 @@ hash_source_tree() {
       | xargs -0 wc -c \
       | awk '{sum += $1} END {print sum}'
   fi
-}
-
-hash_object_tree() {
-  local obj
-  shopt -s nullglob
-  for obj in "${ROOT_DIR}"/src/*.o; do
-    printf '%s %s\n' "${obj##*/}" "$(hash_file "${obj}")"
-  done
-  shopt -u nullglob
 }
 
 ensure_pyffish_extension() {
@@ -190,47 +183,10 @@ wait_all() {
 }
 
 prepare_harness_objects() {
-  local cache_dir="${ROOT_DIR}/.local/build/regression-harness-objects"
-  local desired_sig object_sig cxx_version
-  mkdir -p "${cache_dir}"
-  cxx_version=$("${CXX:-g++}" --version | head -n1)
-  desired_sig=$(printf '%s|%s|%s|%s|%s\n' \
-    "${ENGINE_BASENAME}" "${cxx_version}" "$(hash_file "${ROOT_DIR}/src/Makefile")" \
-    "$(hash_file "${ROOT_DIR}/tests/fast-regression.sh")" "$(hash_source_tree)")
-  object_sig=$(hash_object_tree | hash_file /dev/stdin)
-
-  if [[ -f "${cache_dir}/desired.sig" && -f "${cache_dir}/objects.sig" ]] \
-      && [[ "$(<"${cache_dir}/desired.sig")" == "${desired_sig}" ]] \
-      && [[ "$(<"${cache_dir}/objects.sig")" == "${object_sig}" ]]; then
-    echo "ok: prepare regression harness objects (cached)"
-    return
-  fi
-
-  case "${ENGINE_BASENAME}" in
-    stockfish)
-      run_step_quiet "prepare regression harness objects" timeout 30m bash -lc \
-        'cd src && make -s EXE=stockfish objclean && make -s -j"${JOBS}" build ARCH=x86-64 EXE=stockfish'
-      ;;
-    stockfish-allvars*)
-      run_step_quiet "prepare regression harness objects" timeout 30m bash -lc \
-        'cd src && make -s EXE=stockfish-allvars objclean && make -s -j"${JOBS}" build ARCH=x86-64 largeboards=yes all=yes nnue=yes EXE=stockfish-allvars'
-      ;;
-    stockfish-large*)
-      run_step_quiet "prepare regression harness objects" timeout 30m bash -lc \
-        'cd src && make -s EXE=stockfish-large objclean && make -s -j"${JOBS}" build ARCH=x86-64 largeboards=yes all=yes EXE=stockfish-large'
-      ;;
-    stockfish-vlb*)
-      run_step_quiet "prepare regression harness objects" timeout 30m bash -lc \
-        'cd src && make -s EXE=stockfish-vlb objclean && make -s -j"${JOBS}" build ARCH=x86-64 largeboards=yes verylargeboards=yes all=yes nnue=yes EXE=stockfish-vlb'
-      ;;
-    *)
-      return
-      ;;
-  esac
-
-  object_sig=$(hash_object_tree | hash_file /dev/stdin)
-  printf '%s\n' "${desired_sig}" > "${cache_dir}/desired.sig"
-  printf '%s\n' "${object_sig}" > "${cache_dir}/objects.sig"
+  echo "== prepare regression harness objects =="
+  fsx_harness_prepare_objects_cached \
+    "${ROOT_DIR}/.local/build/regression-harness-objects" \
+    "regression harness objects" "${JOBS}"
 }
 
 dispatch_test() {
@@ -238,8 +194,6 @@ dispatch_test() {
   shift
   run_step_bg "$label" "$@"
 }
-
-ENGINE_BASENAME=$(basename "${ENGINE}")
 
 setup_parallel
 ensure_pyffish_extension

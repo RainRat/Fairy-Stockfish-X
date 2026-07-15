@@ -13,65 +13,15 @@ CXX=${CXX:-g++}
 JOBS=${JOBS:-2}
 ENGINE=${1:-./stockfish}
 ENGINE_BASENAME=$(basename "${ENGINE}")
-CXX_DEFS=(-DIS_64BIT -DUSE_PTHREADS)
-case "${ENGINE_BASENAME}" in
-  stockfish-allvars*)
-    CXX_DEFS+=(-DLARGEBOARDS -DPRECOMPUTED_MAGICS -DALLVARS -DNNUE_EMBEDDING_OFF)
-    ;;
-  stockfish-large*)
-    CXX_DEFS+=(-DLARGEBOARDS -DPRECOMPUTED_MAGICS -DALLVARS -DNNUE_EMBEDDING_OFF)
-    ;;
-  stockfish-vlb*)
-    CXX_DEFS+=(-DLARGEBOARDS -DVERY_LARGE_BOARDS -DALLVARS -DNNUE_EMBEDDING_OFF)
-    ;;
-esac
-
-if [[ "${FSX_REUSE_OBJECTS:-0}" != "1" ]]; then
-  case "${ENGINE_BASENAME}" in
-    stockfish)
-      # The harness links against src/*.o. Rebuild the standard object family
-      # so direct runs cannot accidentally use stale source objects.
-      make -C "${ROOT_DIR}/src" EXE=stockfish objclean
-      make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 EXE=stockfish
-      ;;
-    stockfish-allvars*)
-      make -C "${ROOT_DIR}/src" EXE=stockfish-allvars objclean
-      make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 largeboards=yes all=yes nnue=yes EXE=stockfish-allvars
-      ;;
-    stockfish-large*)
-      make -C "${ROOT_DIR}/src" EXE=stockfish-large objclean
-      make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 largeboards=yes all=yes EXE=stockfish-large
-      ;;
-    stockfish-vlb*)
-      make -C "${ROOT_DIR}/src" EXE=stockfish-vlb objclean
-      make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 largeboards=yes verylargeboards=yes all=yes nnue=yes EXE=stockfish-vlb
-      ;;
-  esac
-fi
+source "${SCRIPT_DIR}/lib/harness-build.sh"
+fsx_harness_init "${ENGINE}" "${ROOT_DIR}"
+fsx_harness_prepare_objects "${JOBS}"
 
 BUILD_SIG_DIR="${ROOT_DIR}/.local/build/spell-potion-movegen"
-BUILD_SIG_FILE="${BUILD_SIG_DIR}/${ENGINE_BASENAME}.sig"
 HARNESS_CPP="${BUILD_SIG_DIR}/spell-potion-movegen.cpp"
 HARNESS_BIN="${BUILD_SIG_DIR}/spell-potion-movegen.bin"
 HARNESS_SIG_FILE="${BUILD_SIG_DIR}/${ENGINE_BASENAME}.harness.sig"
 mkdir -p "${BUILD_SIG_DIR}"
-
-if command -v sha256sum >/dev/null 2>&1; then
-  MAKEFILE_HASH="$(cd "${ROOT_DIR}/src" && sha256sum Makefile | cut -d' ' -f1)"
-elif command -v shasum >/dev/null 2>&1; then
-  MAKEFILE_HASH="$(cd "${ROOT_DIR}/src" && shasum -a 256 Makefile | cut -d' ' -f1)"
-else
-  MAKEFILE_HASH="no-hash-tool"
-fi
-
-BUILD_SIG="$(printf '%s|%s|%s|%s\n' \
-    "${ENGINE_BASENAME}" \
-    "${CXX}" \
-    "${MAKEFILE_HASH}" \
-    "${CXX_DEFS[*]}")"
-if [[ ! -f "${BUILD_SIG_FILE}" || "$(cat "${BUILD_SIG_FILE}" 2>/dev/null || true)" != "${BUILD_SIG}" ]]; then
-  printf '%s\n' "${BUILD_SIG}" > "${BUILD_SIG_FILE}"
-fi
 
 cat > "${HARNESS_CPP}" <<'EOF'
 #include <cstdlib>
@@ -587,52 +537,9 @@ int main() {
 }
 EOF
 
-OBJ_FILES=()
-while IFS= read -r -d '' obj; do
-  OBJ_FILES+=("${obj}")
-done < <(find "${ROOT_DIR}/src" -maxdepth 1 -name '*.o' ! -name 'main.o' -print0 | sort -z)
-
-if command -v sha256sum >/dev/null 2>&1; then
-  HASHER=(sha256sum)
-elif command -v shasum >/dev/null 2>&1; then
-  HASHER=(shasum -a 256)
-else
-  HASHER=()
-fi
-
-hash_text() {
-  if [[ ${#HASHER[@]} -gt 0 ]]; then
-    printf '%s' "$1" | "${HASHER[@]}" | awk '{print $1}'
-  else
-    printf '%s' "$1" | wc -c | awk '{print $1}'
-  fi
-}
-
-object_signature() {
-  local sig
-  sig=$(
-    for obj in "${OBJ_FILES[@]}"; do
-      stat -c '%n %Y %s' "${obj}" 2>/dev/null || stat -f '%N %m %z' "${obj}"
-    done
-  )
-  hash_text "${sig}"
-}
-
-HARNESS_SIG="$(printf '%s|%s|%s|%s|%s|%s\n' \
-    "${ENGINE_BASENAME}" \
-    "${CXX}" \
-    "${MAKEFILE_HASH}" \
-    "${CXX_DEFS[*]}" \
-    "$(object_signature)" \
-    "$(hash_text "$(cat "${HARNESS_CPP}")")")"
-if [[ ! -x "${HARNESS_BIN}" || ! -f "${HARNESS_SIG_FILE}" || "$(cat "${HARNESS_SIG_FILE}")" != "${HARNESS_SIG}" ]]; then
-  rm -f "${HARNESS_BIN}"
-  (
-    cd "${ROOT_DIR}/src"
-    "${CXX}" -std=c++17 -O2 -Wall -Wextra -flto -I"${ROOT_DIR}/src" "${CXX_DEFS[@]}" "${HARNESS_CPP}" "${OBJ_FILES[@]}" -pthread -o "${HARNESS_BIN}"
-  )
-  printf '%s\n' "${HARNESS_SIG}" > "${HARNESS_SIG_FILE}"
-fi
+fsx_harness_collect_objects
+fsx_harness_build "${HARNESS_CPP}" "${HARNESS_BIN}" \
+  "spell-potion-movegen" "${HARNESS_SIG_FILE}"
 
 echo "spell potion movegen test started"
 "${HARNESS_BIN}"

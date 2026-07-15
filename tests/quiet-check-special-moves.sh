@@ -14,85 +14,16 @@ CXX=${CXX:-g++}
 JOBS=${JOBS:-2}
 ENGINE=${1:-./stockfish}
 ENGINE_BASENAME=$(basename "${ENGINE}")
-CXX_DEFS=(-DIS_64BIT -DUSE_PTHREADS)
-KNOWN_ENGINE_CONFIG=false
-case "${ENGINE_BASENAME}" in
-  stockfish)
-    KNOWN_ENGINE_CONFIG=true
-    ;;
-  stockfish-allvars*)
-    KNOWN_ENGINE_CONFIG=true
-    CXX_DEFS+=(-DLARGEBOARDS -DPRECOMPUTED_MAGICS -DALLVARS -DNNUE_EMBEDDING_OFF)
-    ;;
-  stockfish-large*)
-    KNOWN_ENGINE_CONFIG=true
-    CXX_DEFS+=(-DLARGEBOARDS -DPRECOMPUTED_MAGICS -DALLVARS -DNNUE_EMBEDDING_OFF)
-    ;;
-  stockfish-vlb*)
-    KNOWN_ENGINE_CONFIG=true
-    CXX_DEFS+=(-DLARGEBOARDS -DVERY_LARGE_BOARDS -DALLVARS -DNNUE_EMBEDDING_OFF)
-    ;;
-esac
+source "${SCRIPT_DIR}/lib/harness-build.sh"
+fsx_harness_init "${ENGINE}" "${ROOT_DIR}"
+CXX_DEFS=("${FSX_HARNESS_CXX_DEFS[@]}")
 
 BUILD_SIG_DIR="${ROOT_DIR}/.local/build/quiet-check-special-moves"
-BUILD_SIG_FILE="${BUILD_SIG_DIR}/${ENGINE_BASENAME}.sig"
 HARNESS_CPP="${BUILD_SIG_DIR}/quiet-check-special-moves.cpp"
 HARNESS_BIN="${BUILD_SIG_DIR}/quiet-check-special-moves.bin"
 HARNESS_SIG_FILE="${BUILD_SIG_DIR}/${ENGINE_BASENAME}.harness.sig"
 mkdir -p "${BUILD_SIG_DIR}"
-if command -v sha256sum >/dev/null 2>&1; then
-  MAKEFILE_HASH="$(cd "${ROOT_DIR}/src" && sha256sum Makefile | cut -d' ' -f1)"
-elif command -v shasum >/dev/null 2>&1; then
-  MAKEFILE_HASH="$(cd "${ROOT_DIR}/src" && shasum -a 256 Makefile | cut -d' ' -f1)"
-else
-  MAKEFILE_HASH="no-hash-tool"
-fi
-NEEDS_REBUILD=1
-BUILD_SIG="$(printf '%s|%s|%s|%s\n' \
-    "${ENGINE_BASENAME}" \
-    "${CXX}" \
-    "${MAKEFILE_HASH}" \
-    "${CXX_DEFS[*]}")"
-if [[ -f "${BUILD_SIG_FILE}" ]] && [[ "$(cat "${BUILD_SIG_FILE}")" == "${BUILD_SIG}" ]]; then
-  NEEDS_REBUILD=0
-fi
-
-if [[ "${FSX_REUSE_OBJECTS:-0}" != "1" ]]; then
-  case "${ENGINE_BASENAME}" in
-    stockfish)
-      # The harness links against the object files in src/. Rebuild the standard
-      # object set so the test is independent of any previous largeboard build.
-      make -C "${ROOT_DIR}/src" EXE=stockfish objclean
-      make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 EXE=stockfish
-      ;;
-    stockfish-allvars*)
-      make -C "${ROOT_DIR}/src" EXE=stockfish-allvars objclean
-      make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 largeboards=yes all=yes nnue=yes EXE=stockfish-allvars
-      ;;
-    stockfish-large*)
-      make -C "${ROOT_DIR}/src" EXE=stockfish-large objclean
-      make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 largeboards=yes all=yes EXE=stockfish-large
-      ;;
-    stockfish-vlb*)
-      make -C "${ROOT_DIR}/src" EXE=stockfish-vlb objclean
-      make -C "${ROOT_DIR}/src" -j"${JOBS}" build ARCH=x86-64 largeboards=yes verylargeboards=yes all=yes nnue=yes EXE=stockfish-vlb
-      ;;
-  esac
-fi
-
-if [[ "${KNOWN_ENGINE_CONFIG}" == "false" && -f "${ROOT_DIR}/src/position.o" ]]; then
-  POSITION_O_SIG="$(nm -C "${ROOT_DIR}/src/position.o" 2>/dev/null || true)"
-  if ! grep -q 'Position::fen(bool, bool, int, .*unsigned long) const' <<<"${POSITION_O_SIG}"; then
-    CXX_DEFS+=(-DLARGEBOARDS -DPRECOMPUTED_MAGICS -DALLVARS -DNNUE_EMBEDDING_OFF)
-  fi
-fi
-
-BUILD_SIG="$(printf '%s|%s|%s|%s\n' \
-    "${ENGINE_BASENAME}" \
-    "${CXX}" \
-    "${MAKEFILE_HASH}" \
-    "${CXX_DEFS[*]}")"
-printf '%s\n' "${BUILD_SIG}" > "${BUILD_SIG_FILE}"
+fsx_harness_prepare_objects "${JOBS}"
 
 cat > "${HARNESS_CPP}" <<'EOF'
 #include <cassert>
@@ -401,52 +332,9 @@ int main(int argc, char** argv) {
 }
 EOF
 
-OBJ_FILES=()
-while IFS= read -r -d '' obj; do
-  OBJ_FILES+=("${obj}")
-done < <(find "${ROOT_DIR}/src" -maxdepth 1 -name '*.o' ! -name 'main.o' -print0 | sort -z)
-
-if command -v sha256sum >/dev/null 2>&1; then
-  HASHER=(sha256sum)
-elif command -v shasum >/dev/null 2>&1; then
-  HASHER=(shasum -a 256)
-else
-  HASHER=()
-fi
-
-hash_text() {
-  if [[ ${#HASHER[@]} -gt 0 ]]; then
-    printf '%s' "$1" | "${HASHER[@]}" | awk '{print $1}'
-  else
-    printf '%s' "$1" | wc -c | awk '{print $1}'
-  fi
-}
-
-object_signature() {
-  local sig
-  sig=$(
-    for obj in "${OBJ_FILES[@]}"; do
-      stat -c '%n %Y %s' "${obj}" 2>/dev/null || stat -f '%N %m %z' "${obj}"
-    done
-  )
-  hash_text "${sig}"
-}
-
-HARNESS_SIG="$(printf '%s|%s|%s|%s|%s|%s\n' \
-    "${ENGINE_BASENAME}" \
-    "${CXX}" \
-    "${MAKEFILE_HASH}" \
-    "${CXX_DEFS[*]}" \
-    "$(object_signature)" \
-    "$(hash_text "$(cat "${HARNESS_CPP}")")")"
-if [[ ! -x "${HARNESS_BIN}" || ! -f "${HARNESS_SIG_FILE}" || "$(cat "${HARNESS_SIG_FILE}")" != "${HARNESS_SIG}" ]]; then
-  rm -f "${HARNESS_BIN}"
-  (
-    cd "${ROOT_DIR}/src"
-    "${CXX}" -std=c++17 -O2 -Wall -Wextra -flto -I"${ROOT_DIR}/src" -I"${ROOT_DIR}/tests/lib" "${CXX_DEFS[@]}" "${HARNESS_CPP}" "${OBJ_FILES[@]}" -pthread -o "${HARNESS_BIN}"
-  )
-  printf '%s\n' "${HARNESS_SIG}" > "${HARNESS_SIG_FILE}"
-fi
+fsx_harness_collect_objects
+fsx_harness_build "${HARNESS_CPP}" "${HARNESS_BIN}" \
+  "quiet-check-special-moves" "${HARNESS_SIG_FILE}"
 
 run_case() {
   local which="$1"
