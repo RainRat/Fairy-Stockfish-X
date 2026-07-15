@@ -128,6 +128,15 @@ tail. `tests/regression-runner.sh log` shows the latest log tail on demand. The 
 rejects stale named binaries before launching; rebuild the reported binary rather
 than spending a full run testing old code.
 
+For long-running A/B launchers, use the same detached-job contract: launch under
+`setsid`, write a PID/status file and a single durable log, and provide an explicit
+stop path that terminates the active engine child. Do not start a multi-hour A/B job
+with a raw `command &`, since the shell and engine can outlive the visible session.
+Launchers should check their deadline before each sample block, and expose a
+`--smoke` mode that runs one swapped pair without waiting for the normal duration.
+Use the launcher's `status`/`stop` commands while it is running; keep each run in a
+fresh directory so an old log or PID file cannot be mistaken for a new result.
+
 The fast and full suites preserve signature-based artifacts under `.local/build`.
 Do not clear that directory for a normal rerun. Use `VERBOSE=1` with
 `tests/fast-regression.sh` only when successful child logs are needed; failures are
