@@ -1705,11 +1705,12 @@ namespace {
         };
 
         auto [usLargest, usComponents] = group_stats(Us);
-        auto [themLargest, themComponents] = group_stats(Them);
         int sign = pos.connect_value() == VALUE_MATE ? 1 : -1;
 
-        score += sign * make_score(120, 80) * (usLargest - themLargest);
-        score += sign * make_score(45, 30) * (themComponents - usComponents);
+        // variant<WHITE>() - variant<BLACK>() preserves the old differential
+        // exactly while avoiding recomputing the opponent's statistics here.
+        score += sign * make_score(240, 160) * usLargest;
+        score -= sign * make_score(90, 60) * usComponents;
     }
 
     // Potential piece flips (Reversi)
