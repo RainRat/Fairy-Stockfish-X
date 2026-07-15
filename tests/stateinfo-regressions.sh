@@ -165,9 +165,13 @@ static void test_null_move_preserves_extinction_history() {
 }
 
 static void test_spell_chess_null_move_decays() {
+    const Variant* spellChess = variants.get("spell-chess");
+    if (!spellChess)
+        return;
+
     StateInfo st{};
     Position pos;
-    pos.set(variants.get("spell-chess"), "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 f:e4 <3 1 2 0>", false, &st, nullptr);
+    pos.set(spellChess, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 f:e4 <3 1 2 0>", false, &st, nullptr);
 
     assert(pos.state()->potionZones[BLACK][Variant::POTION_FREEZE] != Bitboard(0));
     assert(pos.state()->potionCooldown[WHITE][Variant::POTION_FREEZE] == 3);
@@ -190,7 +194,7 @@ static void test_spell_chess_null_move_decays() {
 
     Position expectedPos;
     StateInfo expectedSt{};
-    expectedPos.set(variants.get("spell-chess"), "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 1 1 - <2 0 2 0>", false, &expectedSt, nullptr);
+    expectedPos.set(spellChess, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 1 1 - <2 0 2 0>", false, &expectedSt, nullptr);
 
     assert(pos.state()->key == expectedPos.state()->key);
 

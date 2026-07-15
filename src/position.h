@@ -1008,6 +1008,7 @@ private:
   Bitboard hopper_targets(const std::map<Direction, int>& directions,
                           Color c, Square sq, Bitboard occupied,
                           bool quietMode) const;
+  Bitboard hopper_immobility_potential(Color c, PieceType pt, Square sq) const;
   Bitboard wrapped_universal_hopper_targets(const std::map<Direction, PieceInfo::HopperProfile>& profiles,
                                            Color c, Square sq, Bitboard occupied, Bitboard ownPieces,
                                            File maxFile, Rank maxRank,

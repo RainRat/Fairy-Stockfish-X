@@ -206,6 +206,14 @@ struct PieceInfo {
           return true;
     return false;
   }
+  inline bool has_typed_universal_hopper() const {
+    for (int initial = 0; initial < 2; ++initial)
+      for (int modality = 0; modality < MOVE_MODALITY_NB; ++modality)
+        for (const auto& [_, profile] : universalHopper[initial][modality])
+          if (profile.hurdlePieceTypes || profile.transparentPieceTypes)
+            return true;
+    return false;
+  }
   inline bool has_universal_capture_hopper() const {
     for (int initial = 0; initial < 2; ++initial)
       if (!universalHopper[initial][MODALITY_CAPTURE].empty())

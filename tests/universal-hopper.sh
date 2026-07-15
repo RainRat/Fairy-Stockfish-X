@@ -38,6 +38,17 @@ customPiece1 = d:{hurdles: 1,1; pre: 1,*; post: 1,1; capture: locust_first}R
 [piece-type-hurdles:hopper-common]
 customPiece1 = d:{hurdles: 1,1; pre: 2,2; post: 1,1; capture: locust_first; hurdle_piece_types: n; transparent_piece_types: p}R
 
+[typed-locust-immobility:hopper-common]
+customPiece1 = d:c{hurdles: 1,1; pre: 1,*; post: 1,1; capture: locust_first; hurdle_types: wall; hurdle_piece_types: p}R
+immobilityIllegal = true
+startFen = 7k/8/8/3p4/8/3D4/8/K7 w - - 0 1
+
+[mixed-hopper-immobility:hopper-common]
+customPiece1 = d:mf{hurdles: 1,1; pre: 1,*; post: 1,1; hurdle_types: wall; hurdle_piece_types: p}Rmb{hurdles: 2,2; equi: stopper}R
+pieceDrops = true
+immobilityIllegal = true
+startFen = 7k/8/8/8/8/8/8/K7[D] w - - 0 1
+
 [locust-all:hopper-common]
 customPiece1 = d:{hurdles: 2,2; pre: 1,*; post: 1,1; capture: locust_all}R
 
@@ -229,6 +240,24 @@ d
 EOF
 )
 assert_contains "$output" "Fen: 7k/8/3D4/8/3p4/8/8/K7" "piece-type hurdle/transparent parsing works"
+
+# Typed immobility probes must use the post-move board. After D3D6 captures
+# the only pawn hurdle, the hopper on D6 has no future move and is illegal.
+output=$(run_uci "$ENGINE" "$INI_FILE" typed-locust-immobility << 'EOF'
+position startpos
+go perft 1
+EOF
+)
+assert_not_contains "$output" "^d3d6:" "typed locust used a captured pre-move hurdle for immobility"
+
+# A typed profile must not force an untyped profile to use live occupancy.
+# The backward untyped equistopper gives a central drop geometric potential.
+output=$(run_uci "$ENGINE" "$INI_FILE" mixed-hopper-immobility << 'EOF'
+position startpos
+go perft 1
+EOF
+)
+assert_contains "$output" "^D@d4: 1$" "typed profile disabled an untyped hopper profile"
 
 # locust_all (Kangaroo)
 # White D3, Enemy p4, p5. Jump to D6.

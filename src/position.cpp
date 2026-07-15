@@ -632,19 +632,6 @@ namespace {
     return checks;
   }
 
-
-
-  bool has_hopper_potential_from_square(const Position& pos, Color c, PieceType pt, Square sq) {
-    // PseudoMoves deliberately treats hopper families too optimistically on an
-    // empty board. For immobility checks, ask the real move/attack generators
-    // with a maximally helpful occupancy instead: every other square is
-    // occupied, so any genuine adjacent-hurdle lane remains available while
-    // edge-trapped hoppers still report no future move.
-    Bitboard syntheticOccupancy = pos.board_bb() & ~square_bb(sq);
-    return pos.attacks_from<false, false>(c, pt, sq, syntheticOccupancy)
-        | pos.moves_from<false>(c, pt, sq, syntheticOccupancy);
-  }
-
   Bitboard rose_revealed_blockers(Square target, Square attackerSq, Bitboard occupied) {
     Bitboard blockers = 0;
     Bitboard candidates = rose_between_union_bb(target, attackerSq, Bitboard(0)) & occupied & ~square_bb(attackerSq);
@@ -748,6 +735,65 @@ namespace {
   }
 
 } // namespace
+
+Bitboard Position::hopper_immobility_potential(Color c, PieceType pt, Square sq) const {
+    PieceType movePt = effective_piece_type(pt);
+    const PieceInfo* pi = pieceMap.get(movePt);
+    Bitboard syntheticOccupancy = board_bb() & ~square_bb(sq);
+    Bitboard realOccupancy = pieces() & ~square_bb(sq);
+
+    // Empty occupancy preserves every non-hopper movement family without
+    // letting a typed universal hopper classify invented hurdle pieces.
+    Bitboard potential = attacks_from<false, false>(c, pt, sq, Bitboard(0))
+                       | moves_from<false>(c, pt, sq, Bitboard(0));
+
+    const bool usesGenericPawnLikeInitialMoveHelper =
+           movePt == PAWN || (pawn_like_types(c) & piece_set(movePt));
+    const Bitboard initialMoveRegion = usesGenericPawnLikeInitialMoveHelper
+                                     ? double_step_region(c, movePt)
+                                     : var->doubleStepRegion.get(c).explicitBoardOfPiece(piece_to_char()[movePt]);
+    const bool isInitial = (initialMoveRegion & sq)
+                        && ((initialMoveRegion == AllSquares) || (not_moved_pieces(c) & sq));
+
+    for (int initial = 0; initial < 2; ++initial)
+    {
+        if (initial && !isInitial)
+            continue;
+
+        for (int modality = 0; modality < MOVE_MODALITY_NB; ++modality)
+        {
+            const bool quiet = modality == MODALITY_QUIET;
+            if (topology_wraps())
+                potential |= wrapped_hopper_targets(pi->hopper[initial][modality], c, sq, syntheticOccupancy,
+                                                     max_file(), max_rank(), wraps_files(), wraps_ranks(), quiet);
+            else
+                potential |= hopper_targets(pi->hopper[initial][modality], c, sq, syntheticOccupancy, quiet);
+
+            std::map<Direction, PieceInfo::HopperProfile> typedProfiles;
+            std::map<Direction, PieceInfo::HopperProfile> untypedProfiles;
+            for (const auto& [d, profile] : pi->universalHopper[initial][modality])
+                (profile.hurdlePieceTypes || profile.transparentPieceTypes ? typedProfiles : untypedProfiles)[d] = profile;
+
+            auto addUniversal = [&](const std::map<Direction, PieceInfo::HopperProfile>& profiles,
+                                    Bitboard occupied) {
+                if (profiles.empty())
+                    return;
+                if (topology_wraps())
+                    potential |= wrapped_universal_hopper_targets(profiles, c, sq, occupied, pieces(c) & occupied,
+                                                                  max_file(), max_rank(), wraps_files(), wraps_ranks(),
+                                                                  !quiet, !quiet);
+                else
+                    potential |= universal_hopper_bb(profiles, sq, occupied, pieces(c) & occupied,
+                                                     c, !quiet, !quiet);
+            };
+
+            addUniversal(untypedProfiles, syntheticOccupancy);
+            addUniversal(typedProfiles, realOccupancy);
+        }
+    }
+
+    return potential & board_bb();
+}
 
 namespace Zobrist {
 
@@ -3287,6 +3333,16 @@ bool Position::placement_rules_legal(Move m, Color us) const {
                          && gating_type(m) != NO_PIECE_TYPE
                          && gating_move_blocks_occupancy(m);
 
+  auto hopper_potential_after_move = [&](Square sq) {
+      StateInfo nextState;
+      SimulatedMoveGuard clearSimulation(*this, MOVE_NONE);
+      ScopedProbeMove probe(*this, m, nextState);
+      Piece placed = piece_on(sq);
+      if (placed == NO_PIECE || color_of(placed) != us)
+          return true;
+      return bool(hopper_immobility_potential(us, type_of(placed), sq));
+  };
+
   auto mover_immobility_legal = [&]() {
       PieceType pt = type_of(moved_piece(m));
       bool moverRemovedByBlast = false;
@@ -3314,7 +3370,9 @@ bool Position::placement_rules_legal(Move m, Color us) const {
       const PieceInfo* pInfo = pieceMap.get(movePt);
       bool hasPotentialMove = PseudoMoves[0][us][movePt][to_sq(m)] & board_bb();
       if (pInfo->has_hopper_like_movement())
-          hasPotentialMove = has_hopper_potential_from_square(*this, us, movePt, to_sq(m));
+          hasPotentialMove = pInfo->has_typed_universal_hopper()
+                           ? hopper_potential_after_move(to_sq(m))
+                           : bool(hopper_immobility_potential(us, movePt, to_sq(m)));
       return hasPotentialMove;
   };
 
@@ -3628,7 +3686,9 @@ bool Position::placement_rules_legal(Move m, Color us) const {
               const PieceInfo* pInfo = pieceMap.get(movePt);
               bool hasPotentialMove = PseudoMoves[0][us][movePt][placementSquares[i]] & board_bb();
               if (pInfo->has_hopper_like_movement())
-                  hasPotentialMove = has_hopper_potential_from_square(*this, us, movePt, placementSquares[i]);
+                  hasPotentialMove = pInfo->has_typed_universal_hopper()
+                                   ? hopper_potential_after_move(placementSquares[i])
+                                   : bool(hopper_immobility_potential(us, movePt, placementSquares[i]));
               if (!hasPotentialMove)
                   return false;
           }

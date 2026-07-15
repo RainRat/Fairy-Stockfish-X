@@ -277,6 +277,11 @@ libertySelfCapture = remove
 castling = false
 immobilityIllegal = false
 startFen = 5/5/2p2/1p1p1/2p2[P] w - - 0 1 {10 10}
+
+[locustallsync:chess]
+pieceToCharTable = PNBRQKDFGHS
+customPiece1 = d:c{hurdles: 2,2; pre: 1,*; post: 1,1; capture: locust_all; hurdle_types: enemy}R
+startFen = 7k/8/8/3p4/3p4/3D4/8/K7 w - - 0 1
 INI
 tmp_ini="${FSX_TMP_INI}"
 
@@ -308,6 +313,13 @@ assert_distinct_position_keys "${tmp_ini}" "spellprisonex" \
 
 assert_reload_key_match "${tmp_ini}" "libertysync" "position startpos moves P@c2"
 assert_reload_perft1_match "${tmp_ini}" "libertysync" "position startpos moves P@c2"
+
+# locust_all removes one primary hurdle through the ordinary capture path and
+# additional hurdles through bycatch; the resulting incremental key and move
+# list must still match a fresh FEN reconstruction.
+assert_reload_key_match "${tmp_ini}" "locustallsync" "position startpos moves d3d6"
+assert_reload_perft1_match "${tmp_ini}" "locustallsync" "position startpos moves d3d6"
+assert_reload_perft1_moves_match "${tmp_ini}" "locustallsync" "position startpos moves d3d6"
 
 # A Jump potion may let a double-step pass through an occupied enemy square.
 # The resulting en-passant target remains serializable after Jump expires.

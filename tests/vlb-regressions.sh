@@ -209,11 +209,73 @@ EOF
   assert_nodes "$output" 12
 }
 
+test_vlb_overlap_parity() {
+  local normal_engine="${NORMAL_ENGINE:-${ROOT_DIR}/src/stockfish}"
+  if [[ ! -x "${normal_engine}" ]]; then
+    echo "skip: normal engine unavailable for VLB overlap parity"
+    return 0
+  fi
+
+  local tmpdir variant_file variant normal_out vlb_out normal_moves vlb_moves expected_from
+  tmpdir=$(mktemp -d)
+  trap 'rm -rf "$tmpdir"' RETURN
+  variant_file="$tmpdir/vlb-overlap-parity.ini"
+  cat > "$variant_file" <<'VAR'
+[parity-universal-hopper:chess]
+pieceToCharTable = PNBRQKDFGHS
+customPiece1 = d:{hurdles: 1,1; pre: 1,*; post: 1,1}Q
+startFen = 7k/8/8/8/3p4/3D4/8/K7 w - - 0 1
+
+[parity-griffon:chess]
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+customPiece1 = a:O
+startFen = 7k/8/8/8/3A4/8/8/K7 w - - 0 1
+
+[parity-manticore:chess]
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+customPiece1 = a:M
+startFen = 7k/8/8/8/3A4/8/8/K7 w - - 0 1
+VAR
+
+  for variant in parity-universal-hopper parity-griffon parity-manticore; do
+    normal_out=$(run_uci "$normal_engine" "$variant_file" "$variant" <<'UCI' 2>&1
+position startpos
+go perft 1
+UCI
+)
+    vlb_out=$(run_uci "$ENGINE" "$variant_file" "$variant" <<'UCI' 2>&1
+position startpos
+go perft 1
+UCI
+)
+    assert_contains_literal "$normal_out" "info string variant ${variant} "
+    assert_contains_literal "$vlb_out" "info string variant ${variant} "
+
+    expected_from=$([[ "$variant" == parity-universal-hopper ]] && printf 'd3' || printf 'd4')
+    if ! grep -q "^${expected_from}[[:alnum:]]*: [0-9][0-9]*$" <<<"$normal_out"; then
+      echo "normal overlap test did not exercise ${variant}" >&2
+      return 1
+    fi
+    if ! grep -q "^${expected_from}[[:alnum:]]*: [0-9][0-9]*$" <<<"$vlb_out"; then
+      echo "VLB overlap test did not exercise ${variant}" >&2
+      return 1
+    fi
+
+    normal_moves=$(awk '/^[[:alnum:]@]+: [0-9]+$/ { print }' <<<"$normal_out" | sort)
+    vlb_moves=$(awk '/^[[:alnum:]@]+: [0-9]+$/ { print }' <<<"$vlb_out" | sort)
+    if ! diff -u <(printf '%s\n' "$normal_moves") <(printf '%s\n' "$vlb_moves"); then
+      echo "VLB parity mismatch for ${variant}" >&2
+      return 1
+    fi
+  done
+}
+
 test_vlb_gale_smoke
 test_vlb_lame_riders
 test_vlb_symbol_check
 test_vlb_symbol_fen
 test_vlb_symbol_options
 test_vlb_toot_otto_drops
+test_vlb_overlap_parity
 
 echo "VLB regressions passed"
