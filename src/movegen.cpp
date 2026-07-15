@@ -1471,6 +1471,44 @@ namespace {
             while (enemies)
                 useful |= pos.freeze_zone_from_square(pop_lsb(enemies));
             candidates &= useful;
+
+            // These are search heuristics, not equivalence reductions: the
+            // accompanying move can change the frozen attack set. For the
+            // current position, prefer targets that freeze fewer friendly
+            // pieces and retain one representative of identical effects.
+            struct FreezeEffect {
+                Square gate;
+                Bitboard enemies;
+                Bitboard friends;
+            };
+            std::vector<FreezeEffect> effects;
+            effects.reserve(popcount(candidates));
+            for (Bitboard remaining = candidates; remaining; )
+            {
+                Square gate = pop_lsb(remaining);
+                Bitboard zone = pos.freeze_zone_from_square(gate);
+                effects.push_back({gate, zone & pos.pieces(~Us), zone & pos.pieces(Us)});
+            }
+
+            candidates = Bitboard(0);
+            for (size_t i = 0; i < effects.size(); ++i)
+            {
+                bool keep = true;
+                for (size_t j = 0; j < effects.size(); ++j)
+                {
+                    if (i == j || effects[i].enemies != effects[j].enemies)
+                        continue;
+                    if ((effects[j].friends != effects[i].friends
+                         && !(effects[j].friends & ~effects[i].friends))
+                        || (j < i && effects[j].friends == effects[i].friends))
+                    {
+                        keep = false;
+                        break;
+                    }
+                }
+                if (keep)
+                    candidates |= square_bb(effects[i].gate);
+            }
         }
 
         if (potion == Variant::POTION_FREEZE)

@@ -272,6 +272,38 @@ static void test_main_search_keeps_freeze_on_previously_frozen_enemy() {
            "main search pruned a freeze cast because its enemy was frozen before the cast");
 }
 
+static void test_freeze_move_picker_prunes_dominated_targets() {
+    StateInfo state{};
+    Position pos;
+    pos.set(variants.get("spell-chess"),
+            "7k/8/8/4p3/8/2P5/8/K6R[F] w - - 0 1",
+            false, &state, nullptr);
+
+    std::string dominatedStr = "f@d4,h1h2";
+    std::string retainedStr = "f@e4,h1h2";
+    const Move dominated = UCI::to_move(pos, dominatedStr);
+    const Move retained = UCI::to_move(pos, retainedStr);
+    expect(dominated != MOVE_NONE && retained != MOVE_NONE,
+           "freeze dominance test moves failed to parse");
+
+    const auto legalMoves = MoveList<LEGAL>(pos);
+    expect(legalMoves.contains(dominated) && legalMoves.contains(retained),
+           "freeze dominance changed the complete legal move list");
+
+    ExtMove split[MOVEGEN_OVERFLOW_CAPACITY];
+    ExtMove* baseEnd = generate_without_potions<QUIETS>(pos, split);
+    const ExtMove* prunedEnd = append_potions<QUIETS>(pos, split, baseEnd, true);
+    bool foundDominated = false;
+    bool foundRetained = false;
+    for (const ExtMove* move = baseEnd; move != prunedEnd; ++move)
+    {
+        foundDominated |= move->move == dominated;
+        foundRetained |= move->move == retained;
+    }
+    expect(!foundDominated, "deferred search kept a dominated Freeze target");
+    expect(foundRetained, "deferred search pruned the preferred Freeze target");
+}
+
 static void test_jump_move_picker_prunes_dominated_targets() {
     const char* shortFen = "K7/6b1/8/4P3/8/8/4R3/7k[JJFFFFFjjfffff] w - - 0 1";
     StateInfo shortState{};
@@ -526,6 +558,7 @@ int main() {
     test_split_potion_generation_uses_persistent_jump();
     test_qsearch_keeps_freeze_capture_defense();
     test_main_search_keeps_freeze_on_previously_frozen_enemy();
+    test_freeze_move_picker_prunes_dominated_targets();
     test_jump_move_picker_prunes_dominated_targets();
     test_potion_root_move_undo_integrity();
     test_potion_fen_zone_validation();
