@@ -743,9 +743,35 @@ UCI
   assert_contains_literal "$out" "bestmove (none)"
 }
 
+test_multiple_flag_pieces() {
+  local tmp_ini out
+  tmp_ini=$(mktemp "${TMPDIR:-/tmp}/fsx-multiple-flag-pieces-XXXXXX.ini")
+  cat >"${tmp_ini}" <<'INI'
+[multiflag:chess]
+flagPieceTypes = kr
+flagRegionWhite = *8
+flagRegionBlack = *1
+startFen = 8/8/8/8/8/8/8/R6K w - - 0 1
+INI
+
+  out=$(cat <<EOF_UCI | "${ENGINE}"
+uci
+setoption name VariantPath value ${tmp_ini}
+setoption name UCI_Variant value multiflag
+position startpos moves a1a8
+go depth 1
+quit
+EOF_UCI
+)
+  assert_contains "$out" "info depth 0 score mate 0"
+  assert_contains_literal "$out" "bestmove (none)"
+  rm -f "${tmp_ini}"
+}
+
 test_changing_color_locality
 test_flip_regressions
 test_potion_check_regressions
+test_multiple_flag_pieces
 test_repetition_loss_search
 test_custom_en_passant_passed_squares
 test_two_custom_pawn_en_passant

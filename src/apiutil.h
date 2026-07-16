@@ -415,7 +415,7 @@ inline bool has_insufficient_material(Color c, const Position& pos) {
         || pos.count_in_hand(c, ALL_PIECES)
         || (pos.extinction_value() != VALUE_NONE && (pos.extinction_piece_types(c) & ~pos.pseudo_royal_types()))
         || (pos.variant()->nFoldRule && pos.variant()->nFoldValue != VALUE_DRAW)
-        || (pos.flag_region(c) && pos.count(c, pos.flag_piece(c)))
+        || (pos.flag_region(c) && pos.pieces(c, pos.flag_piece_types(c)))
         || pos.points_goal() > 0
         || pos.check_counting()
         || pos.material_counting() != NO_MATERIAL_COUNTING

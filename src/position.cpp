@@ -8440,7 +8440,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
   // A direct flag win is possible if the opponent does not get an extra flag move
   // or we can detect early for kings that they won't be able to reach the flag region
   // Note: This condition has to be after the above, since both might be true e.g. in racing kings.
-  if (   (!flag_move() || (flag_piece(sideToMove) == KING && !allow_checks())) // king-only shortcut is invalid when kings are capturable
+  if (   (!flag_move() || (flag_piece_types(sideToMove) == piece_set(KING) && !allow_checks())) // king-only shortcut is invalid when kings are capturable
        && flag_reached(~sideToMove))
   {
       bool gameEnd = true;
@@ -8448,7 +8448,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
       if (   flag_move() && sideToMove == BLACK && !evasion_checkers() && count<KING>(sideToMove)
           && (flag_region(sideToMove) & attacks_from(sideToMove, KING, square<KING>(sideToMove))))
       {
-          assert(flag_piece(sideToMove) == KING);
+          assert(flag_piece_types(sideToMove) == piece_set(KING));
           for (const auto& m : MoveList<NON_EVASIONS>(*this))
               if (type_of(moved_piece(m)) == KING && (flag_region(sideToMove) & to_sq(m)) && legal(m))
               {

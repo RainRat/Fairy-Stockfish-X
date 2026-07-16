@@ -1412,7 +1412,7 @@ namespace {
     // Capture the flag
     if (pos.flag_region(Us))
     {
-        Bitboard ctfPieces = pos.pieces(Us, pos.flag_piece(Us));
+        Bitboard ctfPieces = pos.pieces(Us, pos.flag_piece_types(Us));
         Bitboard ctfTargets = pos.flag_region(Us) & pos.board_bb();
         Bitboard onHold = 0;
         Bitboard onHold2 = 0;
@@ -1427,7 +1427,7 @@ namespace {
         // Put squares that are attacked or occupied on hold for one iteration.
         // This reflects that likely a move will be needed to block or capture the attack.
         // If all piece types are eligible, use the king path as a proxy for distance.
-        PieceType ptCtf = pos.flag_piece(Us) == ALL_PIECES ? KING : pos.flag_piece(Us);
+        PieceType ptCtf = (pos.flag_piece_types(Us) & KING) ? KING : pos.flag_piece(Us);
         int64_t ctfAccum = 0;
         for (int dist = 0; (ctfPieces || onHold || onHold2) && (ctfTargets & ~processed); dist++)
         {
