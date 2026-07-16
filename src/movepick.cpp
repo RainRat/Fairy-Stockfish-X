@@ -187,7 +187,7 @@ void MovePicker::score() {
 
   static_assert(Type == CAPTURES || Type == QUIETS || Type == EVASIONS, "Wrong type");
   const Color us = pos.side_to_move();
-  const PieceType myFlag = pos.flag_piece(us);
+  const PieceSet myFlag = pos.flag_piece_types(us);
   const Bitboard myGoal = pos.flag_region(us);
   auto distance_to_goal = [&](Square sq) {
       int best = 64;
@@ -197,10 +197,10 @@ void MovePicker::score() {
   };
   auto flag_goal_bonus = [&](Move mv) {
       Piece mp = pos.moved_piece(mv);
-      return (myGoal && mp != NO_PIECE && type_of(mp) == myFlag && (myGoal & square_bb(to_sq(mv)))) ? 30000 : 0;
+      return (myGoal && mp != NO_PIECE && (myFlag & type_of(mp)) && (myGoal & square_bb(to_sq(mv)))) ? 30000 : 0;
   };
   auto king_goal_progress_bonus = [&](Move mv) {
-      if (!myGoal || myFlag != KING)
+      if (!myGoal || myFlag != piece_set(KING))
           return 0;
       Piece mp = pos.moved_piece(mv);
       if (mp == NO_PIECE || type_of(mp) != KING)

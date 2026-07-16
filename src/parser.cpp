@@ -1695,7 +1695,8 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
         v->pseudoRoyalTypes = v->extinctionPieceTypes;
         v->pseudoRoyalCount = v->extinctionPieceCount + 1;
     }
-    if (!parse_color_setting_piece("flagPiece", v->flagPiece, v)) return false;
+    if (!parse_color_setting_piece("flagPiece", v->flagPieceTypes, v)) return false;
+    if (!parse_color_setting_piece("flagPieceTypes", v->flagPieceTypes, v)) return false;
     parse_color_setting("flagRegion", v->flagRegion);
     parse_attribute("flagPieceCount", v->flagPieceCount);
     parse_attribute("flagPieceBlockedWin", v->flagPieceBlockedWin);
@@ -2095,7 +2096,7 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
                 std::cerr << "Can not use flagPieceSafe with blastOnCapture (flagPieceSafe uses simple assessment that does not see blast)." << std::endl;
             valid = false;
         }
-        if ((v->antiRoyalTypes & v->flagPiece.get(WHITE)) || (v->antiRoyalTypes & v->flagPiece.get(BLACK)))
+        if ((v->antiRoyalTypes & v->flagPieceTypes.get(WHITE)) || (v->antiRoyalTypes & v->flagPieceTypes.get(BLACK)))
         {
             if (DoCheck)
                 std::cerr << "Flag piece can not be anti-royal when flagPieceSafe is enabled." << std::endl;

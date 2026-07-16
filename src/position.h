@@ -682,6 +682,7 @@ public:
   bool anti_royal_self_capture_only() const;
   bool anti_royal_king_mutually_immune() const;
   bool extinction_pseudo_royal() const;
+  PieceSet flag_piece_types(Color c) const;
   PieceType flag_piece(Color c) const;
   Bitboard flag_region(Color c) const;
   bool flag_move() const;
@@ -767,6 +768,7 @@ public:
   Bitboard pieces(PieceType pt1, PieceType pt2) const;
   Bitboard pieces(Color c) const;
   Bitboard pieces(Color c, PieceType pt) const;
+  Bitboard pieces(Color c, PieceSet pts) const;
   Bitboard pieces(Color c, PieceType pt1, PieceType pt2) const;
   Bitboard pieces(Color c, PieceType pt1, PieceType pt2, PieceType pt3) const;
   Bitboard major_pieces(Color c) const;
@@ -1530,7 +1532,7 @@ inline bool Position::is_actual_runtime_royal(Color c, PieceType pt) const {
       return false;
   if (pt == royal_piece_type(c))
       return true;
-  return flag_piece(c) == pt && v.flagPieceSafe;
+  return (flag_piece_types(c) & pt) && v.flagPieceSafe;
 }
 
 inline bool Position::is_uncapturable_royal_square(Color c, Square s) const {
@@ -2756,9 +2758,19 @@ inline bool Position::extinction_pseudo_royal() const {
   return pseudo_royal_types() != NO_PIECE_SET;
 }
 
-inline PieceType Position::flag_piece(Color c) const {
+inline PieceSet Position::flag_piece_types(Color c) const {
   assert(var != nullptr);
-  return var->flagPiece.get(c);
+  return var->flagPieceTypes.get(c);
+}
+
+inline PieceType Position::flag_piece(Color c) const {
+  PieceSet pts = flag_piece_types(c);
+  if (pts & ALL_PIECES)
+      return ALL_PIECES;
+  for (PieceType pt = NO_PIECE_TYPE; pt < PIECE_TYPE_NB; ++pt)
+      if (pts & pt)
+          return pt;
+  return NO_PIECE_TYPE;
 }
 
 inline Bitboard Position::flag_region(Color c) const {
@@ -2774,13 +2786,13 @@ inline bool Position::flag_move() const {
 inline bool Position::flag_reached(Color c) const {
   assert(var != nullptr);
   bool simpleResult = 
-        (flag_region(c) & pieces(c, flag_piece(c)))
-        && (   popcount(flag_region(c) & pieces(c, flag_piece(c))) >= var->flagPieceCount
+        (flag_region(c) & pieces(c, flag_piece_types(c)))
+        && (   popcount(flag_region(c) & pieces(c, flag_piece_types(c))) >= var->flagPieceCount
             || (var->flagPieceBlockedWin && !(flag_region(c) & ~pieces())));
       
   if (simpleResult&&var->flagPieceSafe)
   {
-      Bitboard piecesInFlagZone = flag_region(c) & pieces(c, flag_piece(c));
+      Bitboard piecesInFlagZone = flag_region(c) & pieces(c, flag_piece_types(c));
       int potentialPieces = (popcount(piecesInFlagZone));
       /*
       There isn't a variant that uses it, but in the hypothetical game where the rules say I need 3
@@ -3069,6 +3081,16 @@ inline Bitboard Position::pieces(Color c) const {
 
 inline Bitboard Position::pieces(Color c, PieceType pt) const {
   return pieces(c) & pieces(pt);
+}
+
+inline Bitboard Position::pieces(Color c, PieceSet pts) const {
+  if (pts & ALL_PIECES)
+      return pieces(c);
+  Bitboard b = 0;
+  for (PieceType pt = NO_PIECE_TYPE; pt < PIECE_TYPE_NB; ++pt)
+      if (pts & pt)
+          b |= pieces(c, pt);
+  return b;
 }
 
 inline Bitboard Position::pieces(Color c, PieceType pt1, PieceType pt2) const {
