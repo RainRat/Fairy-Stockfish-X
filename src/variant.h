@@ -365,7 +365,7 @@ struct Variant {
   ColorSetting<bool> extinctionAllPieceTypes = ColorSetting<bool>(true);
   ColorSetting<int> extinctionPieceCount = ColorSetting<int>(0);
   ColorSetting<int> extinctionOpponentPieceCount = ColorSetting<int>(0);
-  ColorSetting<PieceType> flagPiece = ColorSetting<PieceType>(ALL_PIECES);
+  ColorSetting<PieceSet> flagPieceTypes = ColorSetting<PieceSet>(piece_set(ALL_PIECES));
   ColorSetting<Bitboard> flagRegion = ColorSetting<Bitboard>(Bitboard(0));
   int flagPieceCount = 1;
   bool flagPieceBlockedWin = false;

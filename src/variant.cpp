@@ -457,7 +457,7 @@ namespace {
     // https://lichess.org/variant/kingOfTheHill
     Variant* kingofthehill_variant() {
         Variant* v = chess_variant_base()->init();
-        v->flagPiece = KING;
+        v->flagPieceTypes = piece_set(KING);
         v->flagRegion = (Rank4BB | Rank5BB) & (FileDBB | FileEBB);
         v->flagMove = false;
         return v;
@@ -467,7 +467,7 @@ namespace {
     Variant* racingkings_variant() {
         Variant* v = chess_variant_base()->init();
         v->startFen = "8/8/8/8/8/8/krbnNBRK/qrbnNBRQ w - - 0 1";
-        v->flagPiece = KING;
+        v->flagPieceTypes = piece_set(KING);
         v->flagRegion = Rank8BB;
         v->flagMove = true;
         v->castling = false;
@@ -1001,7 +1001,7 @@ namespace {
         v->shogiPawnDropMateIllegal = false;
         v->extinctionValue = -VALUE_MATE;
         v->extinctionPieceTypes = piece_set(COMMONER);
-        v->flagPiece = COMMONER;
+        v->flagPieceTypes = piece_set(COMMONER);
         v->flagRegion[WHITE] = Rank4BB;
         v->flagRegion[BLACK] = Rank1BB;
         v->flagPieceSafe = true;
@@ -1249,7 +1249,7 @@ namespace {
         v->doubleStep = false;
         v->castling = false;
         v->stalemateValue = -VALUE_MATE;
-        v->flagPiece = BREAKTHROUGH_PIECE;
+        v->flagPieceTypes = piece_set(BREAKTHROUGH_PIECE);
         v->flagRegion[WHITE] = Rank8BB;
         v->flagRegion[BLACK] = Rank1BB;
         return v;
@@ -1657,7 +1657,7 @@ namespace {
         v->doubleStep = false;
         v->castling = false;
         v->stalemateValue = -VALUE_MATE;
-        v->flagPiece = KNIGHT;
+        v->flagPieceTypes = piece_set(KNIGHT);
         v->flagRegion = make_bitboard(SQ_E5);
         v->flagMove = true;
         return v;
