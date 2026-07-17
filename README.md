@@ -49,6 +49,30 @@ Fairy-Stockfish-X supports many variants through a configuration file. To load t
    ```
 3. Use the `d` command to see the current board.
 
+### Using with a GUI
+
+Most users will want to add the `src/stockfish` binary to a chess GUI such as
+[Cute Chess](https://cutechess.com/), Arena, or BanksiaGUI. The GUI handles the
+UCI protocol; select the desired variant from the engine's variant list.
+
+### Command Line Interface
+
+Fairy-Stockfish-X also supports direct UCI use from a terminal:
+
+```uci
+uci
+setoption name VariantPath value src/variants.ini
+setoption name UCI_Variant value chess
+position startpos moves e2e4 e7e5
+go depth 8
+d
+quit
+```
+
+Useful commands include `position startpos`, `position ... moves ...`, `go depth N`
+or `go movetime MS`, `d` to display the position, and `help` for the complete
+command list.
+
 ### Move Notation
 
 The engine uses standard coordinate notation for moves.
@@ -99,3 +123,20 @@ This project has three main goals:
 3. Support chess variants that are too unusual for the standard engine.
 
 For standard functionality, please visit the [main Fairy-Stockfish repository](https://github.com/fairy-stockfish/Fairy-Stockfish).
+
+## Key Experimental Features
+
+Compared with mainline Fairy-Stockfish, this branch includes configurable
+extensions such as:
+
+- expanded Betza support, including tuple leapers and complex riders;
+- forced-jump continuations and same-direction continuation rules;
+- dynamic walling rules such as Amazons-style arrows, Duck-style mobile blocks,
+  edge walls, and trace-leaving walls;
+- potion drops with freeze, jump, and cooldown behavior;
+- piece-specific and multidimensional connection goals; and
+- multimove, alternation, and incomplete-variant tracking.
+
+Variant-specific settings are documented in [`src/variants.ini`](src/variants.ini),
+including the experimental options and their compatibility aliases. Developers
+should also read [AGENTS.md](AGENTS.md) before changing engine behavior.
