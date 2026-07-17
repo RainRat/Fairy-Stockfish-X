@@ -435,6 +435,8 @@ constexpr size_t PIECE_TYPE_COUNT = 26;
 //For example, piece A is related to boardlist[0], piece B is related to boardlist[1], etc.
 struct PieceTypeBitboardGroup
 {
+    static_assert(PIECE_TYPE_COUNT <= 32, "PieceTypeBitboardGroup presence mask is too small");
+
     PieceTypeBitboardGroup() = default;
     PieceTypeBitboardGroup(Bitboard b) : fallback(b) {}
     PieceTypeBitboardGroup(const PieceTypeBitboardGroup& other) = default;
@@ -456,13 +458,13 @@ struct PieceTypeBitboardGroup
     {
         if (ptc == '*') return fallback;
         if (ptc < 'A' || ptc > 'Z') return Bitboard(0);
-        return isSet[ptc - 'A'] ? boardlist[ptc - 'A'] : fallback;
+        return (setMask & (uint32_t(1) << (ptc - 'A'))) ? boardlist[ptc - 'A'] : fallback;
     }
 
     Bitboard explicitBoardOfPiece(const char ptc) const
     {
         if (ptc < 'A' || ptc > 'Z') return Bitboard(0);
-        return isSet[ptc - 'A'] ? boardlist[ptc - 'A'] : Bitboard(0);
+        return (setMask & (uint32_t(1) << (ptc - 'A'))) ? boardlist[ptc - 'A'] : Bitboard(0);
     }
 
     // Set the bitboard of a piece type.
@@ -473,28 +475,35 @@ struct PieceTypeBitboardGroup
         if (ptc == '*') { fallback = board; return; }
         if (ptc < 'A' || ptc > 'Z') return;
         boardlist[ptc - 'A'] = board;
-        isSet[ptc - 'A'] = true;
+        setMask |= uint32_t(1) << (ptc - 'A');
     }
 
     PieceTypeBitboardGroup& operator|=(Bitboard b) {
         fallback |= b;
-        for (size_t i = 0; i < PIECE_TYPE_COUNT; ++i)
-            if (isSet[i]) boardlist[i] |= b;
+        uint32_t mask = setMask;
+        while (mask)
+        {
+#if defined(__GNUC__) || defined(__clang__)
+            const int i = __builtin_ctz(mask);
+#else
+            int i = 0;
+            while (!(mask & (uint32_t(1) << i))) ++i;
+#endif
+            boardlist[i] |= b;
+            mask &= mask - 1;
+        }
         return *this;
     }
 
     explicit operator bool() const { return fallback || anySet(); }
     operator Bitboard() const { return fallback; }
 
-    bool anySet() const {
-        for (size_t i = 0; i < PIECE_TYPE_COUNT; ++i) if (isSet[i]) return true;
-        return false;
-    }
+    bool anySet() const { return setMask != 0; }
 
     Bitboard fallback = 0;
 private:
     Bitboard boardlist[PIECE_TYPE_COUNT] = {0};
-    bool isSet[PIECE_TYPE_COUNT] = {false};
+    uint32_t setMask = 0;
 };
 
 //When defined, move list will be stored in heap. Delete this if you want to use stack to store move list. Using stack can cause overflow (Segmentation Fault) when the search is too deep.

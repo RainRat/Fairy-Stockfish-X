@@ -200,6 +200,7 @@ ensure_pyffish_extension
 export PYTHONPATH="${ROOT_DIR}${PYTHONPATH:+:${PYTHONPATH}}"
 
 dispatch_test "piece-specific step regions" bash tests/fast-regression-piece-regions.sh "${ENGINE}" "${VARIANT_PATH}"
+dispatch_test "piece-type bitboard groups" timeout 60s bash tests/piece-type-bitboard-regressions.sh
 dispatch_test "fast variant regressions" timeout 5m bash tests/fast-variant-regressions.sh "${ENGINE}" "${VARIANT_PATH}"
 dispatch_test "fast rules regression" bash tests/fast-regression-rules.sh "${ENGINE}" "${VARIANT_PATH}"
 dispatch_test "capture option regressions" timeout 60s bash tests/capture-options-regressions.sh "${ENGINE}"
