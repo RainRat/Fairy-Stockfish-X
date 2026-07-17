@@ -41,6 +41,15 @@ customPiece2 = b:mW
 customPiece3 = r:R
 pullingStrength = a:3 b:1
 startFen = 5/5/5/5/5 w - - 0 1
+
+[pull-evasion:fairy]
+maxFile = e
+maxRank = 5
+pieceToCharTable = K...A...R...k...b...r...
+king = k
+customPiece1 = a:mW
+pullingStrength = a:3 r:1
+startFen = 5/5/5/5/5 w - - 0 1
 INI
 
 run_cmds() {
@@ -63,6 +72,10 @@ echo "${out}" | grep -q "^c2d2,c3: 1$"
 out=$(run_cmds pull-basic "position fen 5/5/2c2/2A2/5 w - - 0 1
 go perft 1")
 ! echo "${out}" | grep -q "^c2d2,c3: 1$"
+
+out=$(run_cmds pull-evasion "position fen 5/2rA1/2K2/5/5 w - - 0 1
+go perft 1")
+echo "${out}" | grep -q "^d4d3,c4: 1$"
 
 out=$(run_cmds pull-basic "position fen 5/5/2b2/2A2/5 w - - 0 1 moves c2d2,c3
 d")

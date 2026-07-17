@@ -207,6 +207,7 @@ dispatch_test "binding regression" timeout 60s "${PYTHON}" tests/test_binding_re
 dispatch_test "royal capture no kings" timeout 60s "${PYTHON}" tests/test_royal_capture_no_kings.py
 dispatch_test "touched search regressions" timeout 2m bash tests/touched-search-regressions.sh "${ENGINE}" "${VARIANT_PATH}"
 dispatch_test "setup chess" timeout 2m bash tests/setup-chess.sh "${ENGINE}" "${VARIANT_PATH}"
+dispatch_test "pulling regressions" timeout 60s bash tests/pulling.sh "${ENGINE}"
 dispatch_test "all variants smoke" timeout 6m bash tests/all-variants-smoke.sh "${ENGINE}" "${VARIANT_PATH}"
 dispatch_test "xboard regressions" timeout 2m bash tests/xboard-regressions.sh "${ENGINE}" "${VARIANT_PATH}"
 dispatch_test "hex board regressions" timeout 2m bash tests/test_hex_boards.sh "${ENGINE}" "${VARIANT_PATH}"

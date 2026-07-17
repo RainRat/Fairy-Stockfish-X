@@ -1196,7 +1196,28 @@ namespace {
                     {
                         Square pullFrom = pop_lsb(pullSources);
                         Bitboard b = pos.pull_targets_from(Us, from, pullFrom);
-                        if (Type == QUIET_CHECKS)
+                        if (Type == EVASIONS)
+                        {
+                            Bitboard mask = target;
+                            if (target & from)
+                                mask = AllSquares;
+                            if (!more_than_one(checkers) && (checkers & pullFrom))
+                                mask = AllSquares;
+                            b &= mask;
+                            if (b && more_than_one(checkers))
+                            {
+                                Bitboard b2 = b;
+                                b = 0;
+                                while (b2)
+                                {
+                                    Square to = pop_lsb(b2);
+                                    Move m = make_pull(from, to, pullFrom);
+                                    if (pos.legal(m))
+                                        b |= to;
+                                }
+                            }
+                        }
+                        else if (Type == QUIET_CHECKS)
                             b &= target;
                         while (b)
                         {
