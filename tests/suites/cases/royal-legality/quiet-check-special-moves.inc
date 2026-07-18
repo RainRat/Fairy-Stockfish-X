@@ -44,6 +44,12 @@ cat > "${HARNESS_CPP}" <<'EOF'
 
 using namespace Stockfish;
 
+#if defined(__GNUC__)
+#define FSX_NOINLINE __attribute__((noinline))
+#else
+#define FSX_NOINLINE
+#endif
+
 static void load_variants() {
     std::istringstream ss(R"ini(
 [pairdrop:fairy]
@@ -118,7 +124,7 @@ startFen = 3bq3/8/8/8/8/8/8/R7 w d - 0 1
     variants.parse_istream<false>(ss);
 }
 
-static void test_swap_basic() {
+static FSX_NOINLINE void test_swap_basic() {
     StateInfo st{};
     Position pos;
     pos.set(variants.get("swap-basic"), "5/5/2Ab1/5/5 w - - 0 1", false, &st, nullptr);
@@ -127,7 +133,7 @@ static void test_swap_basic() {
     assert(!MoveList<QUIET_CHECKS>(pos).contains(m));
 }
 
-static void test_pairdrop() {
+static FSX_NOINLINE void test_pairdrop() {
     StateInfo st{};
     Position pos;
     pos.set(variants.get("pairdrop"), "4k3/8/8/8/8/8/8/4K3[RR] w - - 0 1", false, &st, nullptr);
@@ -136,7 +142,7 @@ static void test_pairdrop() {
     assert(!MoveList<QUIET_CHECKS>(pos).contains(m));
 }
 
-static void test_probe_nodes() {
+static FSX_NOINLINE void test_probe_nodes() {
     Thread thread(0);
     thread.nodes.store(0);
 
@@ -154,7 +160,7 @@ static void test_probe_nodes() {
     assert(thread.nodes.load() == before);
 }
 
-static void test_pull_basic() {
+static FSX_NOINLINE void test_pull_basic() {
     StateInfo st{};
     Position pos;
     pos.set(variants.get("pull-basic"), "5/5/2b2/2A2/5 w - - 0 1", false, &st, nullptr);
@@ -163,7 +169,7 @@ static void test_pull_basic() {
     assert(!MoveList<QUIET_CHECKS>(pos).contains(m));
 }
 
-static void test_pass_quiet_check() {
+static FSX_NOINLINE void test_pass_quiet_check() {
     StateInfo st{};
     Position pos;
     pos.set(variants.get("pass-quiet-check"), "8/8/8/8/8/8/8/R3K2k w - - 0 1", false, &st, nullptr);
@@ -172,7 +178,7 @@ static void test_pass_quiet_check() {
     assert(!MoveList<QUIET_CHECKS>(pos).contains(m));
 }
 
-static void test_wrapped_quiet_check() {
+static FSX_NOINLINE void test_wrapped_quiet_check() {
     StateInfo st{};
     Position pos;
     pos.set(variants.get("wrapped-quiet-check"), "2k5/8/8/8/8/7p/P7/4K3 w - - 0 1", false, &st, nullptr);
@@ -181,7 +187,7 @@ static void test_wrapped_quiet_check() {
     assert(!MoveList<QUIET_CHECKS>(pos).contains(m));
 }
 
-static void test_promotion_quiet_check() {
+static FSX_NOINLINE void test_promotion_quiet_check() {
     StateInfo st{};
     Position pos;
     pos.set(variants.get("promotion-quiet-check"), "7k/6P1/8/8/8/8/8/7K w - - 0 1", false, &st, nullptr);
@@ -196,7 +202,7 @@ static void test_promotion_quiet_check() {
     assert(!quietChecks.contains(make<PROMOTION>(SQ_G7, SQ_G8, KNIGHT)));
 }
 
-static void test_clone_pseudoroyal_check() {
+static FSX_NOINLINE void test_clone_pseudoroyal_check() {
     StateInfo st{};
     Position pos;
     pos.set(variants.get("clone-pseudoroyal-check"),
@@ -213,7 +219,7 @@ static void test_clone_pseudoroyal_check() {
     assert(MoveList<QUIET_CHECKS>(pos).contains(m));
 }
 
-static void test_pseudoroyal_state_rebuild() {
+static FSX_NOINLINE void test_pseudoroyal_state_rebuild() {
     StateInfo initialState{};
     Position initial;
     initial.set(variants.get("clone-pseudoroyal-check"),
@@ -232,7 +238,7 @@ static void test_pseudoroyal_state_rebuild() {
     pos.undo_null_move();
 }
 
-static void test_firstmove_pseudoroyal_check() {
+static FSX_NOINLINE void test_firstmove_pseudoroyal_check() {
     StateInfo st{};
     Position pos;
     pos.set(variants.get("firstmove-pseudoroyal-check"),
@@ -246,17 +252,17 @@ static void test_firstmove_pseudoroyal_check() {
     pos.undo_move(make<NORMAL>(SQ_A1, SQ_E1));
 }
 
-static void test_qsearch_rejects_quiet_tt_move() {
+static FSX_NOINLINE void test_qsearch_rejects_quiet_tt_move() {
     StateInfo st{};
     Position pos;
     pos.set(variants.get("chess"),
             "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
             false, &st, nullptr);
 
-    ButterflyHistory mainHistory{};
-    GateHistory gateHistory{};
-    CapturePieceToHistory captureHistory{};
-    PieceToHistory histories[6]{};
+    static ButterflyHistory mainHistory{};
+    static GateHistory gateHistory{};
+    static CapturePieceToHistory captureHistory{};
+    static PieceToHistory histories[6]{};
     const PieceToHistory* continuationHistory[] = {
         &histories[0], &histories[1], &histories[2],
         &histories[3], &histories[4], &histories[5]
@@ -268,20 +274,20 @@ static void test_qsearch_rejects_quiet_tt_move() {
     assert(picker.next_move() == MOVE_NONE);
 }
 
-static void test_probcut_accepts_quiet_promotion_tt_move() {
+static FSX_NOINLINE void test_probcut_accepts_quiet_promotion_tt_move() {
     StateInfo st{};
     Position pos;
     pos.set(variants.get("promotion-quiet-check"),
             "7k/6P1/8/8/8/8/8/7K w - - 0 1", false, &st, nullptr);
 
-    GateHistory gateHistory{};
-    CapturePieceToHistory captureHistory{};
+    static GateHistory gateHistory{};
+    static CapturePieceToHistory captureHistory{};
     const Move promotion = make<PROMOTION>(SQ_G7, SQ_G8, QUEEN);
     MovePicker picker(pos, promotion, Value(100), &gateHistory, &captureHistory);
     assert(picker.next_move() == promotion);
 }
 
-static void test_gate_history_square_validation() {
+static FSX_NOINLINE void test_gate_history_square_validation() {
     const Move valid = make_gating<NORMAL>(SQ_E1, SQ_E2, ROOK, SQ_D1);
     assert(gate_history_square(valid) == SQ_D1);
 
@@ -290,7 +296,7 @@ static void test_gate_history_square_validation() {
     assert(gate_history_square(ordinary) == SQ_NONE);
 }
 
-static void test_non_laser_quiet_checks_are_checks() {
+static FSX_NOINLINE void test_non_laser_quiet_checks_are_checks() {
     StateInfo st{};
     Position pos;
     pos.set(variants.get("chess"),
@@ -300,7 +306,7 @@ static void test_non_laser_quiet_checks_are_checks() {
         assert(pos.gives_check(em));
 }
 
-static void test_discovered_quiet_check() {
+static FSX_NOINLINE void test_discovered_quiet_check() {
     StateInfo st{};
     Position pos;
     pos.set(variants.get("chess"),

@@ -4,7 +4,6 @@ set -euo pipefail
 
 ROOT_DIR=$(cd "$(dirname "$0")/.." && pwd)
 CXX=${CXX:-${COMPILER:-g++}}
-export CXX
 SUITE_DIR="${ROOT_DIR}/tests/suites"
 VARIANTS=${VARIANTS:-${ROOT_DIR}/src/variants.ini}
 RUN_DIR="${ROOT_DIR}/.local/build/test-run"
@@ -208,6 +207,7 @@ case "$command" in
         [[ -x "$engine" ]] || { echo "missing executable: $engine" >&2; exit 1; }
         [[ "$command" == fast ]] && SUITES_TO_RUN=("${FAST_SUITES[@]}") || SUITES_TO_RUN=("${ALL_SUITES[@]}")
         prepare_python
+        export CXX
         prepare_shared_objects "$engine"
         if [[ "$command" == full ]]; then
             run_fast_parallel "$engine" "$VARIANTS" "$command"
@@ -231,6 +231,7 @@ case "$command" in
             [[ -n "${SUITE_TIMEOUT[$suite]:-}" ]] || { echo "unknown suite: $suite" >&2; exit 2; }
         done
         prepare_python
+        export CXX
         prepare_shared_objects "$engine"
         engine=$(normalize_engine "$engine")
         run_suite_list "$engine" "$VARIANTS"
