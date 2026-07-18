@@ -16,7 +16,7 @@ blastPattern = N*
 blastPattern = N
 
 [blast-pattern-tuple:blast-pattern-knight]
-blastPattern = (2,1)*
+blastPattern = ( 2, 1 )*
 
 [blast-pattern-king:chess]
 blastOnCapture = true

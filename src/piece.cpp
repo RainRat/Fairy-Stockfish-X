@@ -937,13 +937,15 @@ bool parse_blast_pattern(const std::string& pattern,
         if (comma == std::string_view::npos || close == std::string_view::npos || comma > close)
             return false;
         int dr = 0, df = 0;
-        const char* drBegin = text.data() + i + 1;
-        const char* drEnd = text.data() + comma;
-        const char* dfBegin = drEnd + 1;
-        const char* dfEnd = text.data() + close;
+        std::string_view drText = trim_view(text.substr(i + 1, comma - i - 1));
+        std::string_view dfText = trim_view(text.substr(comma + 1, close - comma - 1));
+        const char* drBegin = drText.data();
+        const char* drEnd = drBegin + drText.size();
+        const char* dfBegin = dfText.data();
+        const char* dfEnd = dfBegin + dfText.size();
         auto [drPtr, drEc] = std::from_chars(drBegin, drEnd, dr);
         auto [dfPtr, dfEc] = std::from_chars(dfBegin, dfEnd, df);
-        if (drEc != std::errc() || drPtr != drEnd || dfEc != std::errc() || dfPtr != dfEnd
+        if (drEc != std::errc{} || drPtr != drEnd || dfEc != std::errc{} || dfPtr != dfEnd
             || (dr == 0 && df == 0) || dr < 0 || df < 0
             || dr > int(RANK_MAX) || df > int(FILE_MAX))
             return false;
