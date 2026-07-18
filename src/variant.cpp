@@ -2349,6 +2349,7 @@ Variant* Variant::conclude() {
                     && captureType == MOVE_OUT
                     && !twoBoards
                     && !restrictedMobility
+                    && !stackingPieceTypes
                     && kingType == KING
                    )
                  ? endgameEval : NO_EG_EVAL;

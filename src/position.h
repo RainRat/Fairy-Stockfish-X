@@ -241,6 +241,7 @@ struct StateInfoCopied {
   int potionCooldown[COLOR_NB][Variant::POTION_TYPE_NB];
   Bitboard orientationBB[2];
   Bitboard stackedPieces;
+  Score stackedPsq;
   Key pieceStateKey;
   Key reserveKey;
   Key layoutKey;
@@ -807,6 +808,7 @@ public:
   Square gate_square(Move m) const;
   bool empty(Square s) const;
   int count(Color c, PieceType pt) const;
+  int count_with_stacks(Color c, PieceType pt) const;
   template<PieceType Pt> int count(Color c) const;
   template<PieceType Pt> int count() const;
   template<PieceType Pt> Square square(Color c) const;
@@ -1615,6 +1617,7 @@ inline bool Position::nnue_applicable() const {
   // Do not use NNUE during setup phases (placement, sittuyin)
   return (!count_in_hand(ALL_PIECES) || nnue_use_pockets() || !must_drop())
          && !virtualPieces
+         && !st->stackedPieces
          && capture_type() != PRISON
          && (!nnue_king() || (count(WHITE, nnue_king()) == 1 && count(BLACK, nnue_king()) == 1));
 }
@@ -3196,6 +3199,10 @@ inline Color Position::color_of_piece_at(Square s1, Square s2, PieceType pt) con
 
 inline int Position::count(Color c, PieceType pt) const {
   return pieceCount[make_piece(c, pt)];
+}
+
+inline int Position::count_with_stacks(Color c, PieceType pt) const {
+  return count(c, pt) + popcount(st->stackedPieces & pieces(c, pt));
 }
 
 template<PieceType Pt> inline int Position::count(Color c) const {
@@ -4886,7 +4893,7 @@ inline Key Position::pawn_key() const {
 }
 
 inline Score Position::psq_score() const {
-  return psq;
+  return psq + st->stackedPsq;
 }
 
 inline Value Position::non_pawn_material(Color c) const {
@@ -5517,6 +5524,16 @@ inline void Position::set_orientation(Square s, int orientation) {
 
 inline void Position::set_stacked(Square s, bool stacked) {
   assert(is_ok(s));
+  bool wasStacked = bool(st->stackedPieces & s);
+  if (stacked == wasStacked)
+      return;
+  if (piece_on(s) != NO_PIECE)
+  {
+      if (stacked)
+          st->stackedPsq += PSQT::psq[piece_on(s)][s];
+      else
+          st->stackedPsq -= PSQT::psq[piece_on(s)][s];
+  }
   st->stackedPieces = stacked ? st->stackedPieces | s : st->stackedPieces - s;
 }
 

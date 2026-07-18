@@ -812,6 +812,7 @@ namespace Zobrist {
   Key dead[SQUARE_NB];
   Key orientation[4][SQUARE_NB];
   Key stacked[SQUARE_NB];
+  Key stackedMaterial[PIECE_NB][SQUARE_NB];
   Key endgame[EG_EVAL_NB];
   Key points[COLOR_NB][MAX_ZOBRIST_POINTS];
 }
@@ -1386,6 +1387,11 @@ void Position::init() {
   for (Square s = SQ_A1; s <= SQ_MAX; ++s)
       Zobrist::stacked[s] = rng.rand<Key>();
 
+  for (Color c : {WHITE, BLACK})
+      for (PieceType pt = PAWN; pt <= KING; ++pt)
+          for (int n = 0; n < SQUARE_NB; ++n)
+              Zobrist::stackedMaterial[make_piece(c, pt)][n] = rng.rand<Key>();
+
   for (Square from = SQ_A1; from <= SQ_MAX; ++from)
       for (Square to = SQ_A1; to <= SQ_MAX; ++to)
       {
@@ -1448,6 +1454,9 @@ Key Position::compute_material_key() const {
           Piece pc = make_piece(c, pt);
           for (int cnt = 0; cnt < pieceCount[pc]; ++cnt)
               key ^= Zobrist::psq[pc][cnt];
+          int stackedCount = count_with_stacks(c, pt) - pieceCount[pc];
+          for (int cnt = 0; cnt < stackedCount; ++cnt)
+              key ^= Zobrist::stackedMaterial[pc][cnt];
       }
 
   return key;
@@ -2268,6 +2277,7 @@ void Position::recompute_state_hashes_and_material(StateInfo* si) const {
   si->key = si->materialKey = 0;
   si->pawnKey = Zobrist::noPawns;
   si->nonPawnMaterial[WHITE] = si->nonPawnMaterial[BLACK] = VALUE_ZERO;
+  si->stackedPsq = SCORE_ZERO;
 
   set_check_info(si);
 
@@ -2285,6 +2295,13 @@ void Position::recompute_state_hashes_and_material(StateInfo* si) const {
 
       else if (type_of(pc) != KING)
           si->nonPawnMaterial[color_of(pc)] += PieceValue[MG][pc];
+
+      if (pc && (si->stackedPieces & s))
+      {
+          si->stackedPsq += PSQT::psq[pc][s];
+          if (type_of(pc) != PAWN && type_of(pc) != KING)
+              si->nonPawnMaterial[color_of(pc)] += PieceValue[MG][pc];
+      }
   }
 
   for (Bitboard b = si->epSquares; b; )
@@ -2302,6 +2319,10 @@ void Position::recompute_state_hashes_and_material(StateInfo* si) const {
 
           for (int cnt = 0; cnt < pieceCount[pc]; ++cnt)
               si->materialKey ^= Zobrist::psq[pc][cnt];
+
+          int stackedCount = count_with_stacks(c, pt) - pieceCount[pc];
+          for (int cnt = 0; cnt < stackedCount; ++cnt)
+              si->materialKey ^= Zobrist::stackedMaterial[pc][cnt];
 
           if (piece_drops() || seirawan_gating() || potions_enabled() || two_boards())
           {
@@ -6649,11 +6670,11 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           // The generic mover delta models from-to. Stacking actually removes
           // the source and leaves the destination piece in place.
           k ^= Zobrist::psq[pc][to];
-          st->materialKey ^= Zobrist::psq[pc][pieceCount[pc]];
+          int stackedCount = count_with_stacks(us, type_of(pc)) - pieceCount[pc];
+          st->materialKey ^= Zobrist::psq[pc][pieceCount[pc]]
+                           ^ Zobrist::stackedMaterial[pc][stackedCount - 1];
           if (type_of(pc) == PAWN)
               st->pawnKey ^= Zobrist::psq[pc][to];
-          else
-              st->nonPawnMaterial[us] -= PieceValue[MG][pc];
           if (Eval::useNNUE)
           {
               dp.dirty_num = 1;
@@ -6669,11 +6690,11 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           // The generic mover delta models from-to. Unstacking leaves the
           // source in place and adds an identical destination piece.
           k ^= Zobrist::psq[pc][from];
-          st->materialKey ^= Zobrist::psq[pc][pieceCount[pc] - 1];
+          int stackedCount = count_with_stacks(us, type_of(pc)) - pieceCount[pc];
+          st->materialKey ^= Zobrist::psq[pc][pieceCount[pc] - 1]
+                           ^ Zobrist::stackedMaterial[pc][stackedCount];
           if (type_of(pc) == PAWN)
               st->pawnKey ^= Zobrist::psq[pc][from];
-          else
-              st->nonPawnMaterial[us] += PieceValue[MG][pc];
           if (Eval::useNNUE)
           {
               dp.dirty_num = 1;
@@ -9835,6 +9856,7 @@ bool Position::pos_is_ok() const {
       && si.pawnKey == st->pawnKey
       && si.materialKey == st->materialKey
       && same_array(si.nonPawnMaterial, st->nonPawnMaterial)
+      && si.stackedPsq == st->stackedPsq
       && si.checkersBB == st->checkersBB
       && si.evasionCheckersBB == st->evasionCheckersBB
       && same_array(si.blockersForKing, st->blockersForKing)
@@ -10184,7 +10206,11 @@ void Position::fire_laser(Color us, Key& k, Square selectedEmitter) {
         Piece pc = piece_on(sq);
         if (pc != NO_PIECE) {
             if (is_stacked(sq)) {
+                int stackedCount = count_with_stacks(color_of(pc), type_of(pc)) - pieceCount[pc];
                 set_stacked(sq, false);
+                st->materialKey ^= Zobrist::stackedMaterial[pc][stackedCount - 1];
+                if (type_of(pc) != PAWN && type_of(pc) != KING)
+                    st->nonPawnMaterial[color_of(pc)] -= PieceValue[MG][pc];
                 continue;
             }
             st->bycatchSquares |= sq;
