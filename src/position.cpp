@@ -1334,13 +1334,6 @@ void Position::init() {
   for (Square s = SQ_A1; s <= SQ_MAX; ++s)
       Zobrist::enpassant[s] = rng.rand<Key>();
 
-  for (int orientation = 0; orientation < 4; ++orientation)
-      for (Square s = SQ_A1; s <= SQ_MAX; ++s)
-          Zobrist::orientation[orientation][s] = rng.rand<Key>();
-
-  for (Square s = SQ_A1; s <= SQ_MAX; ++s)
-      Zobrist::stacked[s] = rng.rand<Key>();
-
   for (int cr = NO_CASTLING; cr <= ANY_CASTLING; ++cr)
       Zobrist::castling[cr] = rng.rand<Key>();
 
@@ -1383,6 +1376,15 @@ void Position::init() {
   for (Color c : {WHITE, BLACK})
       for (int i = 0; i < Stockfish::Zobrist::MAX_ZOBRIST_POINTS; ++i)
           Zobrist::points[c][i] = rng.rand<Key>();
+
+  // Keep new state keys after the established sequence so adding them does not
+  // perturb orthodox position keys and search signatures.
+  for (int orientation = 0; orientation < 4; ++orientation)
+      for (Square s = SQ_A1; s <= SQ_MAX; ++s)
+          Zobrist::orientation[orientation][s] = rng.rand<Key>();
+
+  for (Square s = SQ_A1; s <= SQ_MAX; ++s)
+      Zobrist::stacked[s] = rng.rand<Key>();
 
   for (Square from = SQ_A1; from <= SQ_MAX; ++from)
       for (Square to = SQ_A1; to <= SQ_MAX; ++to)
@@ -6849,13 +6851,17 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
    // Set en passant square(s) if the moved piece can be captured
    else if (   !dropMove
             && (((PseudoMoves[1][us][type_of(pc)][from] & ~PseudoMoves[0][us][type_of(pc)][from]) & to)
-                || (type_of(pc) != PAWN && (var->enPassantTypes[us] & type_of(pc))
+                || (   type_of(pc) != PAWN
+                    && (var->enPassantTypes[us] & type_of(pc))
+                    && (pawn_like_types(us) & type_of(pc))
                     && (to == pawn_step(from, us, 2) || to == pawn_step(from, us, 3)))))
    {
        assert(type_of(pc) != PAWN);
       bool pseudoExtended = bool((PseudoMoves[1][us][type_of(pc)][from]
                                 & ~PseudoMoves[0][us][type_of(pc)][from]) & to);
-      bool customPawnStep = !pseudoExtended && (var->enPassantTypes[us] & type_of(pc))
+      bool customPawnStep = !pseudoExtended
+                         && (var->enPassantTypes[us] & type_of(pc))
+                         && (pawn_like_types(us) & type_of(pc))
                          && (to == pawn_step(from, us, 2) || to == pawn_step(from, us, 3));
       if (customPawnStep)
       {
