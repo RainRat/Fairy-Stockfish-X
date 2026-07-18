@@ -889,6 +889,75 @@ bool validate_custom_piece_betza(const std::string& betza, const std::string& na
     return bool(p);
 }
 
+bool parse_blast_pattern(const std::string& pattern,
+                         std::vector<std::pair<int, int>>& offsets,
+                         bool& includeCenter) {
+    offsets.clear();
+    includeCenter = false;
+
+    std::string_view text = trim_view(pattern);
+    if (text.empty())
+        return false;
+    if (text.back() == '*')
+    {
+        includeCenter = true;
+        text.remove_suffix(1);
+    }
+    if (text.find('*') != std::string_view::npos)
+        return false;
+
+    auto add_symmetric = [&](int dr, int df) {
+        for (int swap : {0, 1})
+        {
+            if (swap && dr == df)
+                continue;
+            int r = swap ? df : dr;
+            int f = swap ? dr : df;
+            for (int sr : {-1, 1})
+                for (int sf : {-1, 1})
+                    offsets.emplace_back(sr * r, sf * f);
+        }
+    };
+
+    for (size_t i = 0; i < text.size();)
+    {
+        auto atom = leaperAtoms.find(text[i]);
+        if (atom != leaperAtoms.end())
+        {
+            for (const auto& [dr, df] : atom->second)
+                add_symmetric(dr, df);
+            ++i;
+            continue;
+        }
+        if (text[i] != '(')
+            return false;
+
+        size_t comma = text.find(',', i + 1);
+        size_t close = text.find(')', i + 1);
+        if (comma == std::string_view::npos || close == std::string_view::npos || comma > close)
+            return false;
+        int dr = 0, df = 0;
+        std::string_view drText = trim_view(text.substr(i + 1, comma - i - 1));
+        std::string_view dfText = trim_view(text.substr(comma + 1, close - comma - 1));
+        const char* drBegin = drText.data();
+        const char* drEnd = drBegin + drText.size();
+        const char* dfBegin = dfText.data();
+        const char* dfEnd = dfBegin + dfText.size();
+        auto [drPtr, drEc] = std::from_chars(drBegin, drEnd, dr);
+        auto [dfPtr, dfEc] = std::from_chars(dfBegin, dfEnd, df);
+        if (drEc != std::errc{} || drPtr != drEnd || dfEc != std::errc{} || dfPtr != dfEnd
+            || (dr == 0 && df == 0) || dr < 0 || df < 0
+            || dr > int(RANK_MAX) || df > int(FILE_MAX))
+            return false;
+        add_symmetric(dr, df);
+        i = close + 1;
+    }
+
+    std::sort(offsets.begin(), offsets.end());
+    offsets.erase(std::unique(offsets.begin(), offsets.end()), offsets.end());
+    return includeCenter || !offsets.empty();
+}
+
 void PieceMap::init(const Variant* v) {
   clear_all();
   add(PAWN, from_betza("fmWfceF", "pawn"));
