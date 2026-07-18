@@ -2884,7 +2884,54 @@ laser_v = D/D/D/D
 laser_u = P/D/D/P
 laserPortalFallback = S
 startFen = 8/4v3/8/4P3/8/8/8/L(1)1P5 w - - 0 1
+
+[laser-piece-promotion:chess]
+promotedPieceType = n:q
+promotionRegionWhite = *8
+mandatoryPiecePromotion = true
+laserGame = true
+orientedPieceTypes = n q
+rotateAfterMove = true
+rotationDelta = 1
+laserEmitters = white@h1:1, black@a8:3
+laser_n = D/D/D/D
+laser_q = D/D/D/D
+laser_k = D/D/D/D
+castling = false
+startFen = 7k/1N(0)6/8/8/8/8/8/6K1 w - - 0 1
+
+[laser-rifle-rotation:chess]
+rifleCapture = true
+laserGame = true
+orientedPieceTypes = r
+rotateAfterMove = true
+laserEmitters = white@h1:1, black@a8:3
+laser_r = D/D/D/D
+laser_p = D/D/D/D
+laser_k = D/D/D/D
+castling = false
+startFen = 7k/8/8/8/8/8/p7/R5K1 w - - 0 1
 """)
+        promotion_moves = sf.legal_moves(
+            "laser-piece-promotion", sf.start_fen("laser-piece-promotion"), []
+        )
+        self.assertIn("b7d8+,d8", promotion_moves)
+        promoted_fen = sf.get_fen(
+            "laser-piece-promotion", sf.start_fen("laser-piece-promotion"), ["b7d8+,d8"]
+        )
+        self.assertTrue(promoted_fen.startswith("3+N(1)3k/"))
+        self.assertEqual(sf.validate_fen(promoted_fen, "laser-piece-promotion"), 1)
+
+        rifle_moves = sf.legal_moves(
+            "laser-rifle-rotation", sf.start_fen("laser-rifle-rotation"), []
+        )
+        self.assertIn("a1a2:1", rifle_moves)
+        self.assertNotIn("a1a2:1a2", rifle_moves)
+        rifle_fen = sf.get_fen(
+            "laser-rifle-rotation", sf.start_fen("laser-rifle-rotation"), ["a1a2:1"]
+        )
+        self.assertTrue(rifle_fen.startswith("7k/8/8/8/8/8/8/R(1)5K1"))
+
         portal_fen = sf.start_fen("laser-portals")
         portal_after = sf.get_fen("laser-portals", portal_fen, ["a1a1f"])
         self.assertNotIn("v", portal_after.split()[0])

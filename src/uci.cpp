@@ -822,7 +822,11 @@ string UCI::move(const Position& pos, Move m) {
           move += "," + UCI::square(pos, gating_square(m));
   }
   else if (type_of(m) == PIECE_PROMOTION)
+  {
       move += '+';
+      if (is_gating(m) && pos.laser_game())
+          move += "," + UCI::square(pos, gating_square(m));
+  }
   else if (type_of(m) == PIECE_DEMOTION)
       move += '-';
   else if (is_stack_move(m))

@@ -129,7 +129,8 @@ namespace {
             // A promotion already uses the piece-type field for its result. With
             // variable rotations there is no second field for the chosen target
             // orientation, so do not emit ambiguous compound promotions.
-            if (rotateAfter && (T != PROMOTION || pos.variant()->rotationDelta))
+            if (rotateAfter && ((T != PROMOTION && T != PIECE_PROMOTION)
+                                || pos.variant()->rotationDelta))
             {
                 Bitboard rotators = pos.pieces(us) & laser_rotation_candidates(pos, us);
                 while (rotators)
@@ -145,24 +146,33 @@ namespace {
                     for (int i = 0; i < count; ++i)
                         if (pos.variant()->rotation_allowed(us, rotateType, current, i, count))
                         {
-                            if constexpr (T == PROMOTION)
+                            if constexpr (T == PROMOTION || T == PIECE_PROMOTION)
                                 emit(make_gating<T>(from, to, pt, rotateFrom));
                             else
                                 emit(make_rotation<T>(from, to, i, rotateFrom));
                         }
                 }
 
-                if (pos.is_oriented(mt))
+                PieceType movedRotateType = mt;
+                if constexpr (T == PROMOTION)
+                    movedRotateType = pt;
+                else if constexpr (T == PIECE_PROMOTION)
+                    movedRotateType = pos.promoted_piece_type(mt);
+
+                if (pos.is_oriented(movedRotateType))
                 {
-                    int current = pos.orientation_on(from);
-                    int count = pos.variant()->orientation_count(mt);
+                    int current = pos.variant()->hasLaserPromotionOrientation[us][movedRotateType]
+                                && (T == PROMOTION || T == PIECE_PROMOTION)
+                                ? pos.variant()->laserPromotionOrientation[us][movedRotateType]
+                                : pos.orientation_on(from);
+                    int count = pos.variant()->orientation_count(movedRotateType);
                     for (int i = 0; i < count; ++i)
-                        if (pos.variant()->rotation_allowed(us, mt, current, i, count))
+                        if (pos.variant()->rotation_allowed(us, movedRotateType, current, i, count))
                         {
-                            if constexpr (T == PROMOTION)
-                                emit(make_gating<T>(from, to, pt, to));
+                            if constexpr (T == PROMOTION || T == PIECE_PROMOTION)
+                                emit(make_gating<T>(from, to, pt, effectiveTo));
                             else
-                                emit(make_rotation<T>(from, to, i, to));
+                                emit(make_rotation<T>(from, to, i, effectiveTo));
                         }
                 }
             }

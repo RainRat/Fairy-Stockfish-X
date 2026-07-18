@@ -706,6 +706,7 @@ inline int read_fen_number(const std::string& text, size_t& idx) {
 inline Validation check_for_valid_characters(const std::string& firstFenPart, const std::string& validSpecialCharactersFirstField, const Variant* v) {
     PieceType lastPt = NO_PIECE_TYPE;
     bool orientationSeen = false;
+    bool promotedPrefix = false;
     for (size_t i = 0; i < firstFenPart.size();)
     {
         char c = firstFenPart[i];
@@ -714,6 +715,7 @@ inline Validation check_for_valid_characters(const std::string& firstFenPart, co
             if (v && v->shogiStylePromotions)
             {
                 lastPt = NO_PIECE_TYPE;
+                promotedPrefix = true;
                 ++i;
                 continue;
             }
@@ -750,7 +752,8 @@ inline Validation check_for_valid_characters(const std::string& firstFenPart, co
             Piece pc = v ? v->piece_from_symbol(symbol) : NO_PIECE;
             if (pc != NO_PIECE)
             {
-                lastPt = type_of(pc);
+                lastPt = promotedPrefix ? v->promotedPieceType[type_of(pc)] : type_of(pc);
+                promotedPrefix = false;
                 orientationSeen = false;
                 continue;
             }
@@ -758,6 +761,7 @@ inline Validation check_for_valid_characters(const std::string& firstFenPart, co
             return NOK;
         }
         lastPt = NO_PIECE_TYPE;
+        promotedPrefix = false;
         orientationSeen = false;
         ++i;
         if (!std::isdigit(static_cast<unsigned char>(c))

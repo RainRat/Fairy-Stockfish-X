@@ -1373,7 +1373,7 @@ constexpr Move make_gating(Square from, Square to, PieceType pt, Square gate) {
 
 template<MoveType T>
 constexpr Move make_rotation(Square from, Square to, int orientation, Square rotate) {
-  assert(T != PROMOTION);
+  assert(T != PROMOTION && T != PIECE_PROMOTION);
   assert(orientation >= 0 && orientation < 4);
   return make_gating<T>(from, to, PieceType(orientation + 1), rotate);
 }

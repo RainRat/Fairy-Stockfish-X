@@ -1637,8 +1637,19 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
           ss >> token;
           std::string symbol = read_symbol(token);
           Piece promoted = piece_from_symbol(symbol);
-          if (promoted == NO_PIECE || !promoted_piece_type(type_of(promoted)))
+          PieceType promotedType = promoted == NO_PIECE ? NO_PIECE_TYPE
+                                                        : promoted_piece_type(type_of(promoted));
+          if (promotedType == NO_PIECE_TYPE)
               continue;
+          int orientation = 0;
+          if (v->laserGame && ss.peek() == '(')
+          {
+              ss.get();
+              if (std::isdigit(ss.peek()))
+                  orientation = ss.get() - '0';
+              if (ss.peek() == ')')
+                  ss.get();
+          }
           if (v->commitGates && (rank == 0 || rank == max_rank() + 2))
           {
               if (commitFile <= max_file())
@@ -1647,7 +1658,9 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
           }
           else
           {
-              put_piece(make_piece(color_of(promoted), promoted_piece_type(type_of(promoted))), sq, true, promoted, true);
+              put_piece(make_piece(color_of(promoted), promotedType), sq, true, promoted, true);
+              if (v->is_oriented(promotedType))
+                  set_orientation(sq, orientation);
               ++sq;
           }
       }
@@ -2507,8 +2520,13 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
           if (hasDead || hasWall || hidden)
               ss << (hasDead ? "^" : "*");
           else if (var->shogiStylePromotions && unpromoted_piece_on(s))
+          {
               // Promoted shogi pieces, e.g., +r for dragon
               ss << "+" << piece_symbol(unpromoted_piece_on(s));
+              PieceType pt = type_of(piece_on(s));
+              if (var->is_oriented(pt))
+                  ss << "(" << orientation_on(s) << ")";
+          }
           else
           {
               Piece pc = piece_on(s);
@@ -5015,12 +5033,17 @@ bool Position::pseudo_legal(const Move m) const {
   {
       Square rotateSq = rotation_square(m);
       Piece rotatePc = rotateSq == to ? piece_on(from) : piece_on(rotateSq);
-      PieceType rotateType = is_promotion_move(m) && rotateSq == to
-                           ? promotion_type(m) : type_of(rotatePc);
+      bool promotionMove = is_promotion_move(m) || type_of(m) == PIECE_PROMOTION;
+      PieceType rotateType = promotionMove && rotateSq == to
+                           ? (is_promotion_move(m) ? promotion_type(m)
+                                                   : promoted_piece_type(type_of(pc)))
+                           : type_of(rotatePc);
+      if (promotionMove && !var->rotationDelta)
+          return false;
       int targetOrient;
-      if (var->rotationDelta && is_promotion_move(m))
+      if (promotionMove)
       {
-          int current = is_promotion_move(m) && rotateSq == to
+          int current = rotateSq == to
                       && var->hasLaserPromotionOrientation[us][rotateType]
                       ? var->laserPromotionOrientation[us][rotateType]
                       : orientation_on(rotateSq == to ? from : rotateSq);
@@ -5053,7 +5076,7 @@ bool Position::pseudo_legal(const Move m) const {
               return false;
           if (!is_oriented(rotateType))
               return false;
-          int current_orient = is_promotion_move(m) && rotateSq == to
+          int current_orient = promotionMove && rotateSq == to
                              && var->hasLaserPromotionOrientation[us][rotateType]
                              ? var->laserPromotionOrientation[us][rotateType]
                              : orientation_on(rotateSq == to ? from : rotateSq);
@@ -7046,7 +7069,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       Piece rotatePc = piece_on(rotate);
       if (rotatePc != NO_PIECE && is_oriented(type_of(rotatePc)))
       {
-          int orientation = is_promotion_move(m) && var->rotationDelta
+          bool promotionMove = is_promotion_move(m) || type_of(m) == PIECE_PROMOTION;
+          int orientation = promotionMove && var->rotationDelta
                           ? (orientation_on(rotate) + var->rotationDelta)
                             % var->orientation_count(type_of(rotatePc))
                           : rotation_value(m);
