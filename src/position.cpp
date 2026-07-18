@@ -7901,7 +7901,7 @@ void Position::undo_move(Move m) {
           }
           else if (is_laser_fire(m))
           {
-              // The optional gating payload restores a pre-fire rotation below.
+              // The previous StateInfo restores any pre-fire orientation below.
           }
           else if (swapMove)
               swap_piece(from, to);
