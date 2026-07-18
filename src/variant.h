@@ -113,6 +113,7 @@ struct ColorSetting {
 };
 
 struct Variant {
+  std::string name = "";
   std::string variantTemplate = "fairy";
   std::string pieceToCharTable = "-";
   int pocketSize = 0;
@@ -217,6 +218,9 @@ struct Variant {
   int pushingStrength[PIECE_TYPE_NB] = {};
   int pullingStrength[PIECE_TYPE_NB] = {};
   PieceSet adjacentSwapMoveTypes = NO_PIECE_SET;
+  PieceSet adjacentSwapTargetTypes = ~NO_PIECE_SET;
+  bool adjacentSwapFriendly = false;
+  bool adjacentSwapDiagonal = false;
   bool adjacentSwapRequiresEmptyNeighbor = false;
   bool swapNoImmediateReturn = false;
   int swapForbiddenPlies = 0;
@@ -292,8 +296,84 @@ struct Variant {
   Bitboard diagonalLines = 0;
   ColorSetting<bool> pass = ColorSetting<bool>(false);
   ColorSetting<bool> passOnStalemate = ColorSetting<bool>(false);
+  bool doublePassEndsGame = true;
   std::vector<int> multimoves = {};
   bool progressiveMultimove = false;
+  bool laserGame = false;
+  bool laserDiagonal = false;
+  bool laserAutoFire = true;
+  bool laserRotationPathFilter = false;
+  bool laserFireAnyRotation = false;
+  bool laserFireSelectedEmitter = false;
+  bool laserRotationRequiresAction = false;
+  int rotationDelta = 0;
+  bool rotationTwoWay = false;
+  uint8_t rotationAllowedOrientations[COLOR_NB][PIECE_TYPE_NB] = {};
+  int laserEmitterOrientationOffset = 0;
+  int laserPromotionOrientation[COLOR_NB][PIECE_TYPE_NB] = {};
+  bool hasLaserPromotionOrientation[COLOR_NB][PIECE_TYPE_NB] = {};
+  enum LaserOutcome : uint8_t {
+      OUTCOME_DESTROY = 1,
+      OUTCOME_ABSORB  = 2,
+      OUTCOME_TRANSMIT = 3,
+      OUTCOME_REFLECT_RIGHT = 4,
+      OUTCOME_REFLECT_LEFT = 5,
+      OUTCOME_REFLECT_BACK = 6,
+      OUTCOME_SPLIT = 7,
+      OUTCOME_EXIT_FACE = 8,
+      OUTCOME_SPLIT_FORWARD_RIGHT = 9,
+      OUTCOME_SPLIT_FORWARD_LEFT = 10,
+      OUTCOME_EXIT_BACK_FACE = 11,
+      OUTCOME_DESTROY_CONTINUE = 12,
+      OUTCOME_PORTAL_IN = 13,
+      OUTCOME_PORTAL_OUT = 14,
+      OUTCOME_PORTAL_BIDIRECTIONAL = 15,
+  };
+  struct LaserOptics {
+      LaserOutcome outcomes[4] = { OUTCOME_DESTROY, OUTCOME_DESTROY, OUTCOME_DESTROY, OUTCOME_DESTROY }; // Front, Right, Back, Left
+  };
+  LaserOptics pieceOptics[PIECE_TYPE_NB][4] = {};
+  LaserOutcome laserPortalFallback = OUTCOME_DESTROY;
+  std::vector<Square> staticEmitters[COLOR_NB] = {};
+  std::vector<Direction> staticEmitterDirs[COLOR_NB] = {};
+  PieceType emitterPieceType = NO_PIECE_TYPE;
+  PieceSet orientedPieceTypes = NO_PIECE_SET;
+  PieceSet stackingPieceTypes = NO_PIECE_SET;
+  int orientationCounts[PIECE_TYPE_NB] = {};
+  bool rotateAfterMove = false;
+
+  bool concluded = false;
+
+  int orientation_count(PieceType pt) const {
+      if (orientationCounts[pt] > 0)
+          return orientationCounts[pt];
+      return laserGame && is_oriented(pt) ? 4 : 0;
+  }
+
+  bool rotation_allowed(Color c, PieceType base, int current, int target, int count) const {
+      if (base < NO_PIECE_TYPE || base >= PIECE_TYPE_NB || count <= 0 || count > 4
+          || current < 0 || current >= count || target < 0 || target >= count)
+          return false;
+      if (target == current)
+          return false;
+      if (rotationAllowedOrientations[c][base]
+          && !(rotationAllowedOrientations[c][base] & (1u << target)))
+          return false;
+      if (rotationDelta)
+          return target == (current + rotationDelta) % count;
+      return !rotationTwoWay || target == (current + 1) % count
+          || target == (current + count - 1) % count;
+  }
+
+  bool is_oriented(PieceType pt) const {
+      return bool(orientedPieceTypes & pt);
+  }
+
+  bool can_stack(PieceType pt) const {
+      return bool(stackingPieceTypes & pt);
+  }
+
+
   bool multimoveCheck = true;
   bool multimoveCapture = true;
   bool makpongRule = false;

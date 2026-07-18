@@ -248,6 +248,90 @@ mustDrop = true
 customPiece1 = s:m
 weakCrosscutDropIllegal = true
 startFen = ****1/***2/**3/*4/5[SSSSSSSSSSSSSSSsssssssssssssss] b - - 0 1
+
+[bad-laser-piece:fairy]
+laserGame = true
+laser_notapiece = R/D/D/L
+
+[bad-laser-faces:fairy]
+laserGame = true
+laser_p = R/D/D/L/S
+
+[bad-portal-fallback:fairy]
+laserGame = true
+laserPortalFallback = I
+
+[bad-static-manual-laser:fairy]
+laserGame = true
+laserAutoFire = false
+laserEmitters = white@a1:0
+
+[bad-selected-static-laser:fairy]
+laserGame = true
+laserFireSelectedEmitter = true
+laserEmitters = white@a1:0
+
+[bad-orientation-count-zero:fairy]
+orientedPieceTypes = p
+orientationCounts = p:0
+
+[bad-orientation-count-malformed:fairy]
+orientedPieceTypes = p
+orientationCounts = p
+
+[bad-stacking-piece:fairy]
+stackingPieceTypes = ?
+
+[bad-laser-square:fairy]
+laserGame = true
+laserEmitters = white@a10x:0
+
+[bad-laser-empty-emitter:fairy]
+laserGame = true
+laserEmitters = white@a1:0,   ,black@a8:2
+
+[bad-laser-huge-rank:fairy]
+laserGame = true
+laserEmitters = white@a999999999999999999999999999999:0
+
+[bad-laser-huge-direction:fairy]
+laserGame = true
+laserEmitters = white@a1:999999999999999999999999999999
+
+[bad-huge-orientation-count:fairy]
+customPiece1 = a:K
+orientedPieceTypes = a
+orientationCounts = a:999999999999999999999999999999
+
+[laser-rank10:fairy]
+laserGame = true
+maxFile = a
+maxRank = 10
+pieceToCharTable = -
+king = -
+checking = false
+castling = false
+startFen = 1/1/1/1/1/1/1/1/1/1 w - - 0 1
+laserEmitters = white@a10:0
+
+[bad-laser-gating:fairy]
+laserGame = true
+gating = true
+
+[bad-multiple-piece-emitters:fairy]
+laserGame = true
+customPiece1 = a:K
+customPiece2 = b:K
+orientedPieceTypes = a b
+laserEmitters = piece:a, piece:b
+
+[bad-non-oriented-piece-emitter:fairy]
+laserGame = true
+laserEmitters = piece:k
+
+[bad-laser-topology:fairy]
+laserGame = true
+cylindrical = true
 INI
 
 printf '%s
@@ -417,6 +501,26 @@ assert_contains "${check_output}" "customPiece1 - Missing Betza move notation"
 initial_capture_output=$("${ENGINE}" check "${tmp_ini}" 2>&1 || true)
 assert_contains "${initial_capture_output}" "Initial capture Betza moves are not supported in 'ciW'"
 assert_contains_literal "${initial_capture_output}" "connectGroup must be -1, 0, or a positive group size."
+assert_contains_literal "${initial_capture_output}" "laser_notapiece - Unknown piece symbol: notapiece"
+assert_contains_literal "${initial_capture_output}" "laser_p - Too many laser outcome faces: expected 4."
+assert_contains_literal "${initial_capture_output}" "laserPortalFallback must be a non-portal laser outcome."
+assert_contains_literal "${initial_capture_output}" "laserAutoFire = false requires a piece laser emitter."
+assert_contains_literal "${initial_capture_output}" "laserFireSelectedEmitter is incompatible with static laser emitters."
+assert_contains_literal "${initial_capture_output}" "orientationCounts - Invalid orientation count: 0"
+assert_contains_literal "${initial_capture_output}" "orientationCounts - Malformed entry: p"
+assert_contains_literal "${initial_capture_output}" "stackingPieceTypes - Invalid piece type: ?"
+assert_contains_literal "${initial_capture_output}" "laserEmitters - Invalid square coordinates: a10x"
+assert_contains_literal "${initial_capture_output}" "laserEmitters - Malformed token: "
+assert_contains_literal "${initial_capture_output}" "laserEmitters - Invalid square coordinates: a999999999999999999999999999999"
+assert_contains_literal "${initial_capture_output}" "laserEmitters - Invalid direction: 999999999999999999999999999999"
+assert_contains_literal "${initial_capture_output}" "orientationCounts - Invalid orientation count: 999999999999999999999999999999"
+assert_contains_literal "${initial_capture_output}" "laserGame is incompatible with legacy gating"
+assert_contains_literal "${initial_capture_output}" "laserEmitters - Multiple piece emitters are not supported."
+assert_contains_literal "${initial_capture_output}" "laserEmitters - Piece emitter must be an oriented piece type: k"
+assert_contains_literal "${initial_capture_output}" "laserGame is not supported on wrapped or hexagonal boards."
+
+laser_rank10_output=$(run_uci "$ENGINE" "$tmp_ini" "laser-rank10" </dev/null 2>&1 || true)
+assert_contains "${laser_rank10_output}" "^info string variant laser-rank10 "
 
 wrapped_support_output=$("${ENGINE}" check "${wrapped_support_ini}" 2>&1 || true)
 assert_not_contains_literal "${wrapped_support_output}" "Wrapped boards do not support connect3D/connect4D win conditions."

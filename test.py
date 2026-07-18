@@ -401,6 +401,7 @@ invalid_variant_positions = {
 
 class TestPyffish(unittest.TestCase):
     def test_run_cpp_tests(self):
+        load_repo_variants_or_skip()
         sf.load_variant_config(
             """[pairedpawns:chess]
 startFen = 8/8/8/8/8/8/8/8[PPpp] w - - 0 1
@@ -458,6 +459,14 @@ checking = false
 cloneMoveTypes = n
 blastPassiveTypes = n
 startFen = 8/8/8/8/8/8/8/8 w - - 0 1
+
+[pawn-stack:fairy]
+laserGame = true
+checking = false
+king = -
+castling = false
+stackingPieceTypes = p
+startFen = 8/8/8/8/8/8/PP6/8 w - - 0 1
 """
         )
         self.assertTrue(sf.run_cpp_tests())
@@ -2624,6 +2633,270 @@ stepwisePushing = true
         self.assertEqual(
             sorted(m for m in mini_nightrider_moves if m.startswith("d4")),
             ["d4b3", "d4b5", "d4c2", "d4c6", "d4e2", "d4e6", "d4f3", "d4f5"],
+        )
+
+    def test_laser_variants(self):
+        load_repo_variants_or_skip()
+        khet1_fen = sf.start_fen("khet1")
+        khet_rows = khet1_fen.split()[0].split("/")
+        self.assertEqual(khet_rows[0], "4o+ko+p(0)2")
+        self.assertEqual(khet_rows[-1], "2P(2)O+KO+4")
+        khet2_rows = sf.start_fen("khet2").split()[0].split("/")
+        self.assertEqual(khet2_rows[0], "x(2)3a(2)ka(2)p(0)2")
+        self.assertEqual(khet2_rows[-1], "2P(2)A(0)KA(0)3X(0)")
+        representative_fen = "9k/10/10/10/10/2P(1)O+6/10/9K w - - 0 1"
+        self.assertEqual(
+            sf.get_fen("khet1", representative_fen, []), representative_fen
+        )
+
+        playlaser_fen = sf.start_fen("playlaser")
+        dos_fen = sf.start_fen("dos-laser-chess")
+        dos_rows = dos_fen.split()[0].split("/")
+        self.assertEqual("".join(c for c in dos_rows[-1] if c.isalpha()), "RBSLKQBSR")
+        self.assertEqual("".join(c for c in dos_rows[0] if c.isalpha()), "rsbqklsbr")
+
+        khet1_moves = sf.legal_moves("khet1", khet1_fen, [])
+        self.assertEqual(len(khet1_moves), 81)
+        self.assertIn("c1d2", khet1_moves)
+        self.assertIn("c1c1:1", khet1_moves)
+        self.assertNotIn("c1d2:1", khet1_moves)
+        self.assertNotIn("e4e5", khet1_moves)
+        self.assertNotIn("h2i1", khet1_moves)
+        khet_reflect_fen = sf.get_fen("khet1", khet1_fen, ["j4j4:0"])
+        self.assertTrue(khet_reflect_fen.split()[0].split("/")[4].endswith("P(0)"))
+        khet2_moves = sf.legal_moves("khet2", sf.start_fen("khet2"), [])
+        self.assertEqual(len(khet2_moves), 79)
+        self.assertNotIn("h2i1", khet2_moves)
+        self.assertIn("j1j1:3", khet2_moves)
+
+        khet_djed_swap_fen = "9k/10/10/10/4SP(0)4/10/10/K9 w - - 0 1"
+        khet_djed_swap_moves = sf.legal_moves("khet1", khet_djed_swap_fen, [])
+        self.assertEqual(khet_djed_swap_moves.count("e4f4s"), 1)
+        khet_djed_capture_fen = "9k/10/10/10/4Ss(0)4/10/10/K9 w - - 0 1"
+        khet_djed_capture_moves = sf.legal_moves("khet1", khet_djed_capture_fen, [])
+        self.assertNotIn("e4f4", khet_djed_capture_moves)
+        self.assertNotIn("e4f4s", khet_djed_capture_moves)
+
+        # Khet pieces do not capture by displacement.
+        khet_capture_fen = "9k/10/10/10/10/2P(0)p6/10/9K w - - 0 1"
+        self.assertNotIn("c3d3", sf.legal_moves("khet1", khet_capture_fen, []))
+
+        # A laser hit removes only the top Obelisk from a stack.
+        khet_stack_fen = "K9/9O+/10/10/10/2P(0)7/10/9k w - - 0 1"
+        khet_stack_after = sf.get_fen("khet1", khet_stack_fen, ["c3c3:1"])
+        self.assertIn("/9O/", khet_stack_after)
+        self.assertNotIn("O+", khet_stack_after)
+
+        khet_stack_move_fen = "9k/10/10/10/10/10/OO8/9K w - - 0 1"
+        khet_stack_moves = sf.legal_moves("khet1", khet_stack_move_fen, [])
+        self.assertIn("a2b2+", khet_stack_moves)
+        stacked_fen = sf.get_fen("khet1", khet_stack_move_fen, ["a2b2+"])
+        self.assertIn("/1O+8/", stacked_fen)
+
+        khet_unstack_fen = "9k/10/10/10/10/10/1O+8/9K w - - 0 1"
+        self.assertIn("b2c3-", sf.legal_moves("khet1", khet_unstack_fen, []))
+        unstacked_fen = sf.get_fen("khet1", khet_unstack_fen, ["b2c3-"])
+        self.assertIn("/2O7/1O8/", unstacked_fen)
+
+        khet_swap_fen = "9k/10/10/10/3p6/2S(0)5/10/9K w - - 0 1"
+        self.assertIn("c3d4s", sf.legal_moves("khet1", khet_swap_fen, []))
+
+        playlaser_moves = sf.legal_moves("playlaser", playlaser_fen, [])
+        self.assertEqual(len(playlaser_moves), 40)
+        self.assertEqual(playlaser_fen.split()[0].split("/")[0], "7L(0)")
+        self.assertEqual(playlaser_fen.split()[0].split("/")[-1], "l(0)7")
+        self.assertIn("h8h8f", playlaser_moves)
+        self.assertNotIn("h8h8:0", playlaser_moves)
+
+        playlaser_pawn_fen = "7k/8/8/4p3/3Pp3/8/8/K6L(0) w - - 0 1"
+        playlaser_pawn_moves = sf.legal_moves("playlaser", playlaser_pawn_fen, [])
+        self.assertIn("d4c5", playlaser_pawn_moves)
+        self.assertIn("d4e4", playlaser_pawn_moves)
+        self.assertNotIn("d4e5", playlaser_pawn_moves)
+
+        playlaser_beam_fen = "k7/8/8/8/8/5p2/6n1/K6L(3) w - - 0 1"
+        playlaser_beam_after = sf.get_fen("playlaser", playlaser_beam_fen, ["h1h1f"])
+        self.assertNotIn("p", playlaser_beam_after.split()[0])
+        self.assertNotIn("n", playlaser_beam_after.split()[0])
+
+        playlaser_wall_fen = "k7/8/8/8/8/5w2/6n1/K6L(3) w - - 0 1"
+        playlaser_wall_after = sf.get_fen("playlaser", playlaser_wall_fen, ["h1h1f"])
+        self.assertIn("w", playlaser_wall_after.split()[0])
+        self.assertNotIn("n", playlaser_wall_after.split()[0])
+
+        # Targeted DOS Laser Chess tests
+        self.assertNotEqual(sf.validate_fen("invalid FEN", "dos-laser-chess"), 1)
+        self.assertNotEqual(sf.validate_fen("9/9/9/9/9/9/9/9/9 w - - 0 1", "dos-laser-chess"), 1)
+        self.assertNotEqual(sf.validate_fen("9k/10/10/10/10/2P()7/10/9K w - - 0 1", "khet1"), 1)
+        self.assertNotEqual(sf.validate_fen("9k/10/10/10/10/2P(4)7/10/9K w - - 0 1", "khet1"), 1)
+        self.assertNotEqual(sf.validate_fen("9k/10/10/10/10/2O(1)7/10/9K w - - 0 1", "khet1"), 1)
+        self.assertNotEqual(sf.validate_fen("9k/10/10/10/10/2P(1):26/10/9K w - - 0 1", "khet1"), 1)
+        self.assertNotEqual(sf.validate_fen("9k/10/10/10/10/2O++7/10/9K w - - 0 1", "khet1"), 1)
+
+        dos_moves = sf.legal_moves("dos-laser-chess", dos_fen, [])
+        self.assertEqual(len(dos_moves), 1444)
+        self.assertIn("0000", dos_moves)
+        self.assertIn("e2e3", dos_moves)
+        self.assertIn("b2b3:1b3", dos_moves)
+        self.assertIn("d1d1f", dos_moves)
+        self.assertIn("d1d1:1f", dos_moves)
+        self.assertIn("d1d1:2f", dos_moves)
+        self.assertIn("d1d1:3f", dos_moves)
+        self.assertIn("e2e3:1d1", dos_moves)
+        self.assertIn("e2e3:2d1", dos_moves)
+        self.assertIn("e2e3:3d1", dos_moves)
+        self.assertIn("e2e3:1c1", dos_moves)
+        self.assertNotIn("e2e3:2c1", dos_moves)
+        self.assertNotIn("e2e3:3c1", dos_moves)
+        self.assertIn("i2i3:1i3", dos_moves)
+        self.assertIn("i2i3:0h2", dos_moves)
+        self.assertNotIn("i2i3mh2", dos_moves)
+        self.assertNotIn("i3i2d", dos_moves)
+        self.assertNotIn("e2e4", dos_moves)
+        self.assertNotIn("b2b4", dos_moves)
+
+        dos_black_moves = sf.legal_moves("dos-laser-chess", dos_fen, ["0000"])
+        self.assertEqual(len(dos_black_moves), 1444)
+        self.assertNotIn("e8e6", dos_black_moves)
+        self.assertNotIn("f8f6", dos_black_moves)
+        self.assertEqual(
+            sf.game_result("dos-laser-chess", dos_fen, ["0000"] * 102),
+            sf.VALUE_NONE,
+        )
+
+        dos_manual_fire_fen = "9/9/9/9/9/9/5k3/9/K4L(0)3 w - - 0 1"
+        self.assertIn("/5k3/", sf.get_fen("dos-laser-chess", dos_manual_fire_fen, ["a1b1"]))
+        self.assertIn("/9/9/K4L(0)3", sf.get_fen("dos-laser-chess", dos_manual_fire_fen, ["f1f1f"]))
+
+        dos_promotion_fen = "8k/M(0)8/9/9/9/9/9/9/K4L(0)3 w - - 0 1"
+        dos_promotion_moves = sf.legal_moves("dos-laser-chess", dos_promotion_fen, [])
+        for move in ("a8a9q:2", "a8a9r:3", "a8a9b:1", "a8a9s:1"):
+            self.assertIn(move, dos_promotion_moves)
+
+        dos_pawn_fen = "8k/9/9/9/9/3M(0)5/9/9/K4L(0)3 w - - 0 1"
+        dos_pawn_moves = sf.legal_moves("dos-laser-chess", dos_pawn_fen, [])
+        for move in ("d4c5", "d4d5", "d4e5"):
+            self.assertIn(move, dos_pawn_moves)
+
+        # A native piece retains its movement when its square orientation changes.
+        dos_rotated_rook_fen = "k8/9/9/9/4R(1)4/9/9/9/K4L(0)3 w - - 0 1"
+        dos_rotated_rook_moves = sf.legal_moves("dos-laser-chess", dos_rotated_rook_fen, [])
+        self.assertIn("e5e6", dos_rotated_rook_moves)
+
+        # Python round-trip FEN verification
+        after_fen = sf.get_fen("dos-laser-chess", dos_fen, ["e2e3"])
+        self.assertEqual(sf.validate_fen(after_fen, "dos-laser-chess"), 1)
+
+        after_gating_fen = sf.get_fen("dos-laser-chess", dos_fen, ["b2b3:1b3"])
+        self.assertEqual(sf.validate_fen(after_gating_fen, "dos-laser-chess"), 1)
+
+        dos94_fen = sf.start_fen("dos-laser-chess-1994")
+        dos94_rows = dos94_fen.split()[0].split("/")
+        self.assertEqual("".join(c for c in dos94_rows[-1] if c.isalpha()), "RBSLKQSBR")
+        self.assertEqual("".join(c for c in dos94_rows[0] if c.isalpha()), "rbsqklsbr")
+        dos94_moves = sf.legal_moves("dos-laser-chess-1994", dos94_fen, [])
+        self.assertEqual(len(dos94_moves), 1104)
+        self.assertIn("e2e3:1c1", dos94_moves)
+        self.assertNotIn("e2e3:2c1", dos94_moves)
+        self.assertNotIn("e2e3:3c1", dos94_moves)
+        self.assertNotIn("0000", dos94_moves)
+        self.assertNotIn("a1a1:0", dos94_moves)
+        self.assertIn("d1d1:0a1f", dos94_moves)
+        self.assertIn("d1d1f", dos94_moves)
+        for file_name in "abcdefghi":
+            self.assertIn(f"{file_name}2{file_name}4", dos94_moves)
+        self.assertNotIn("d2c3", dos94_moves)
+        self.assertIn(
+            "e8e6", sf.legal_moves("dos-laser-chess-1994", dos94_fen, ["e2e3"])
+        )
+
+        dos94_pawn_fen = "8k/9/9/9/9/9/3d(0)5/4P(0)4/K4L(0)3 w - - 0 1"
+        dos94_pawn_moves = sf.legal_moves("dos-laser-chess-1994", dos94_pawn_fen, [])
+        self.assertIn("e2e3", dos94_pawn_moves)
+        self.assertIn("e2e4", dos94_pawn_moves)
+        self.assertIn("e2d3", dos94_pawn_moves)
+        self.assertNotIn("e2f3", dos94_pawn_moves)
+        dos94_ep_fen = "8k/9/9/9/9/3d(0)5/9/4P(0)4/K4L(0)3 w - - 0 1"
+        after_double = sf.get_fen("dos-laser-chess-1994", dos94_ep_fen, ["e2e4"])
+        self.assertIn(" e3 ", after_double)
+        self.assertIn("d4e3", sf.legal_moves("dos-laser-chess-1994", after_double, []))
+
+        dos94_promotion_fen = "8k/P(0)8/9/9/9/9/9/9/K4L(0)3 w - - 0 1"
+        self.assertIn("a8a9l", sf.legal_moves("dos-laser-chess-1994", dos94_promotion_fen, []))
+
+        dos94_rotated_fire = sf.get_fen(
+            "dos-laser-chess-1994", dos94_fen, ["d1d1:1c2f"]
+        )
+        self.assertIn("/D(0)M(3)D(1)M(1)P(0)", dos94_rotated_fire)
+
+        # DOS 3.1 asks which laser to fire after a pawn promotes to a second
+        # laser.  Firing one must not also resolve the other laser's beam.
+        dos94_two_lasers = "4k4/9/9/9/9/9/d(0)7d(0)/9/L(0)3K3L(0) w - - 0 1"
+        left_fire = sf.get_fen(
+            "dos-laser-chess-1994", dos94_two_lasers, ["a1a1f"]
+        )
+        right_fire = sf.get_fen(
+            "dos-laser-chess-1994", dos94_two_lasers, ["i1i1f"]
+        )
+        self.assertIn("/8d(0)/", left_fire)
+        self.assertIn("/d(0)8/", right_fire)
+
+        dos94_castling_fen = "8k/9/9/9/9/9/9/9/R(1)3K3R(1) w KQ - 0 1"
+        dos94_castling_moves = sf.legal_moves("dos-laser-chess-1994", dos94_castling_fen, [])
+        self.assertIn("e1g1", dos94_castling_moves)
+        self.assertIn("e1c1", dos94_castling_moves)
+        dos94_castling_check_fen = "k4r(0)3/9/9/9/9/9/9/9/R(1)3K3R(1) w KQ - 0 1"
+        dos94_castling_check_moves = sf.legal_moves(
+            "dos-laser-chess-1994", dos94_castling_check_fen, []
+        )
+        self.assertNotIn("e1g1", dos94_castling_check_moves)
+        self.assertIn("e1c1", dos94_castling_check_moves)
+        sf.load_variant_config("""[pairedpawns:chess]
+startFen = 8/8/8/8/8/8/8/8[PPpp] w - - 0 1
+pieceDrops = true
+symmetricDropTypes = p
+
+[pawn-stack:fairy]
+laserGame = true
+checking = false
+king = -
+castling = false
+stackingPieceTypes = p
+startFen = 8/8/8/8/8/8/PP6/8 w - - 0 1
+
+[laser-portals:fairy]
+laserGame = true
+laserAutoFire = false
+checking = false
+king = -
+castling = false
+customPiece1 = l:K
+customPiece2 = p:K
+customPiece3 = v:K
+customPiece4 = u:K
+orientedPieceTypes = l
+laserEmitters = piece:l
+laser_l = S/S/S/S
+laser_p = O/D/D/I
+laser_v = D/D/D/D
+laser_u = P/D/D/P
+laserPortalFallback = S
+startFen = 8/4v3/8/4P3/8/8/8/L(1)1P5 w - - 0 1
+""")
+        portal_fen = sf.start_fen("laser-portals")
+        portal_after = sf.get_fen("laser-portals", portal_fen, ["a1a1f"])
+        self.assertNotIn("v", portal_after.split()[0])
+        # With no allied output, the configured absorb fallback leaves the
+        # entry portal in place.
+        no_exit = "8/8/8/8/8/8/8/L(1)1P5 w - - 0 1"
+        self.assertIn("P", sf.get_fen("laser-portals", no_exit, ["a1a1f"]).split()[0])
+        output_only = "4L(2)3/8/8/4P3/8/8/8/8 w - - 0 1"
+        self.assertIn(
+            "P", sf.get_fen("laser-portals", output_only, ["e8e8f"]).split()[0]
+        )
+        bidirectional = "8/4v3/8/4U3/8/8/8/L(1)1U5 w - - 0 1"
+        self.assertNotIn(
+            "v", sf.get_fen("laser-portals", bidirectional, ["a1a1f"]).split()[0]
         )
 
 if __name__ == '__main__':

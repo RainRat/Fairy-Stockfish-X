@@ -990,6 +990,186 @@ static PyObject* pyffish_runCppTests(PyObject* self, PyObject* args) {
         }
     }
 
+    // Test 6: Laser Chess key, material key, and FEN round-trip consistency
+    {
+        Position pos;
+        StateListPtr states;
+        const Variant* v = variants.get("dos-laser-chess");
+        if (!v)
+        {
+            PyErr_SetString(PyFFishError, "Required variant dos-laser-chess is missing");
+            return nullptr;
+        }
+        else
+        {
+            std::string startFen = "r(1)s(0)b(2)q(2)kls(0)b(2)r(1)/d(2)m(0)d(2)m(2)pm(3)d(2)m(1)d(2)/9/9/9/9/9/D(0)M(3)D(0)M(1)PM(0)D(0)M(2)D(0)/R(1)B(0)S(0)LKQ(0)B(0)S(0)R(1) w - - 0 1";
+            buildPosition(pos, states, v, startFen.c_str(), nullptr, false);
+
+            std::string moveStr = "b2b3:1b3";
+            Move m = UCI::to_move(pos, moveStr);
+            if (m == MOVE_NONE)
+            {
+                PyErr_SetString(PyFFishError, "Failed to parse DOS Laser rotation move b2b3:1b3");
+                return nullptr;
+            }
+
+            Key keyBefore = pos.key();
+
+            states->emplace_back();
+            pos.do_move(m, states->back());
+
+            // Recompute expected keys by building a new Position from the resulting FEN
+            std::string resultingFen = pos.fen();
+            Position expectedPos;
+            StateListPtr expectedStates;
+            buildPosition(expectedPos, expectedStates, v, resultingFen.c_str(), nullptr, false);
+
+            if (pos.key() != expectedPos.key())
+            {
+                PyErr_SetString(PyFFishError, "Zobrist key mismatch after DOS Laser gating move");
+                return nullptr;
+            }
+
+            if (pos.state()->materialKey != expectedPos.state()->materialKey)
+            {
+                PyErr_SetString(PyFFishError, "Material key mismatch after DOS Laser gating move");
+                return nullptr;
+            }
+
+            pos.undo_move(m);
+            states->pop_back();
+
+            if (pos.key() != keyBefore)
+            {
+                PyErr_SetString(PyFFishError, "Zobrist key mismatch after undoing DOS Laser gating move");
+                return nullptr;
+            }
+        }
+    }
+
+    // Test 7: Compound laser actions preserve board and hash state through do/undo.
+    {
+        struct Case { const char* variant; const char* fen; const char* move; };
+        const Case cases[] = {
+            {"khet1", "9k/10/10/10/10/10/OO8/9K w - - 0 1", "a2b2+"},
+            {"khet1", "9k/10/10/10/10/10/1O+8/9K w - - 0 1", "b2c3-"},
+            {"pawn-stack", "8/8/8/8/8/8/PP6/8 w - - 0 1", "a2b2+"},
+            {"pawn-stack", "8/8/8/8/8/8/1P+6/8 w - - 0 1", "b2c3-"},
+            {"khet1", "9k/10/10/10/3p6/2S(0)5/10/9K w - - 0 1", "c3d4s"},
+            {"dos-laser-chess", "9/9/9/9/9/9/5k3/9/K4L(0)3 w - - 0 1", "f1f1f"},
+            {"dos-laser-chess", "8k/9/9/9/9/9/5~Q(0)3/9/K4L(0)3 w - - 0 1", "f1f1f"},
+            {"dos-laser-chess", "r(1)s(0)b(2)q(2)kls(0)b(2)r(1)/d(2)m(0)d(2)m(2)pm(3)d(2)m(1)d(2)/9/9/9/9/9/D(0)M(3)D(0)M(1)PM(0)D(0)M(2)D(0)/R(1)B(0)S(0)LKQ(0)B(0)S(0)R(1) w - - 0 1", "e2e3:1d1"},
+            {"dos-laser-chess", "k8/9/9/9/5R(1)3/3M(0)5/9/9/K4L(0)3 w - - 0 1", "d4d5:2f5"},
+            {"dos-laser-chess", "k8/9/9/9/9/3M(0)5/9/9/K4L(0)3 w - - 0 1", "d4d5:1d5"},
+            {"dos-laser-chess", "k8/9/9/9/3m(0)5/3M(0)5/9/9/K4L(0)3 w - - 0 1", "d4d5:1d5"},
+            {"dos-laser-chess", "8k/M(0)8/9/9/9/9/9/9/K4L(0)3 w - - 0 1", "a8a9q:2"},
+        };
+
+        for (const Case& tc : cases)
+        {
+            Position pos;
+            StateListPtr states;
+            const Variant* v = variants.get(tc.variant);
+            if (!v)
+            {
+                PyErr_Format(PyFFishError, "Required variant %s is missing", tc.variant);
+                return nullptr;
+            }
+            buildPosition(pos, states, v, tc.fen, nullptr, false);
+            std::string beforeFen = pos.fen();
+            Key beforeKey = pos.key();
+            Key beforeMaterial = pos.state()->materialKey;
+            Key beforePawn = pos.state()->pawnKey;
+            int beforeCounts[PIECE_NB] = {};
+            for (Piece pc = Piece(NO_PIECE + 1); pc < PIECE_NB; ++pc)
+                beforeCounts[pc] = pos.count(color_of(pc), type_of(pc));
+            std::string moveStr = tc.move;
+            Move m = UCI::to_move(pos, moveStr);
+            if (m == MOVE_NONE)
+            {
+                PyErr_Format(PyFFishError, "Failed to parse %s move %s", tc.variant, tc.move);
+                return nullptr;
+            }
+            if (!pos.pseudo_legal(m) || !pos.legal(m))
+            {
+                PyErr_Format(PyFFishError, "Parsed %s move %s is not legal", tc.variant, tc.move);
+                return nullptr;
+            }
+
+            for (int cycle = 0; cycle < 3; ++cycle)
+            {
+                states->emplace_back();
+                pos.do_move(m, states->back());
+                Position expected;
+                StateListPtr expectedStates;
+                std::string afterFen = pos.fen();
+                buildPosition(expected, expectedStates, v, afterFen.c_str(), nullptr, false);
+                bool countsMatch = true;
+                for (Piece pc = Piece(NO_PIECE + 1); pc < PIECE_NB; ++pc)
+                    countsMatch &= pos.count(color_of(pc), type_of(pc))
+                                == expected.count(color_of(pc), type_of(pc));
+                if (pos.key() != expected.key()
+                    || pos.state()->materialKey != expected.state()->materialKey
+                    || pos.state()->pawnKey != expected.state()->pawnKey || !countsMatch)
+                {
+                    PyErr_Format(PyFFishError, "Hash mismatch after %s move %s", tc.variant, tc.move);
+                    return nullptr;
+                }
+
+                pos.undo_move(m);
+                states->pop_back();
+                bool countsRestored = true;
+                for (Piece pc = Piece(NO_PIECE + 1); pc < PIECE_NB; ++pc)
+                    countsRestored &= pos.count(color_of(pc), type_of(pc)) == beforeCounts[pc];
+                if (pos.fen() != beforeFen || pos.key() != beforeKey
+                    || pos.state()->materialKey != beforeMaterial
+                    || pos.state()->pawnKey != beforePawn || !countsRestored)
+                {
+                    PyErr_Format(PyFFishError, "Undo mismatch after %s move %s", tc.variant, tc.move);
+                    return nullptr;
+                }
+            }
+        }
+    }
+
+    // Test 8: laser special moves in QUIET_CHECKS must actually give check.
+    {
+        struct Case { const char* variant; const char* fen; };
+        const Case cases[] = {
+            {"khet1", "9k/10/10/10/10/10/OO8/9K w - - 0 1"},
+            {"dos-laser-chess", "r(1)s(0)b(2)q(2)kls(0)b(2)r(1)/d(2)m(0)d(2)m(2)pm(3)d(2)m(1)d(2)/9/9/9/9/9/D(0)M(3)D(0)M(1)PM(0)D(0)M(2)D(0)/R(1)B(0)S(0)LKQ(0)B(0)S(0)R(1) w - - 0 1"},
+            {"dos-laser-chess", "9/9/9/9/9/9/5k3/9/K4L(0)3 w - - 0 1"},
+        };
+        for (const Case& tc : cases)
+        {
+            const Variant* v = variants.get(tc.variant);
+            if (!v)
+            {
+                PyErr_Format(PyFFishError, "Required variant %s is missing", tc.variant);
+                return nullptr;
+            }
+            Position pos;
+            StateListPtr states;
+            buildPosition(pos, states, v, tc.fen, nullptr, false);
+            for (const auto& em : MoveList<QUIET_CHECKS>(pos))
+                if (!pos.gives_check(em))
+                {
+                    PyErr_Format(PyFFishError, "Non-checking move in %s QUIET_CHECKS", tc.variant);
+                    return nullptr;
+                }
+            if (!std::strcmp(tc.fen, "9/9/9/9/9/9/5k3/9/K4L(0)3 w - - 0 1"))
+            {
+                std::string fireStr = "f1f1f";
+                Move fire = UCI::to_move(pos, fireStr);
+                if (fire == MOVE_NONE || !MoveList<QUIET_CHECKS>(pos).contains(fire))
+                {
+                    PyErr_SetString(PyFFishError, "Royal-destroying laser fire missing from QUIET_CHECKS");
+                    return nullptr;
+                }
+            }
+        }
+    }
+
     Py_RETURN_TRUE;
 }
 

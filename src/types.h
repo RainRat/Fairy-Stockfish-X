@@ -570,11 +570,16 @@ enum MoveType : int {
   PULL               = 10 << (2 * SQUARE_BITS),
   SWAP               = 11 << (2 * SQUARE_BITS),
   PROMOTION_POTION   = 12 << (2 * SQUARE_BITS),
+  STACK              = 13 << (2 * SQUARE_BITS),
+  UNSTACK            = 14 << (2 * SQUARE_BITS),
+  LASER_FIRE         = 15 << (2 * SQUARE_BITS),
 };
 
 enum MoveModality {MODALITY_QUIET, MODALITY_CAPTURE, MOVE_MODALITY_NB};
 
 constexpr int MOVE_TYPE_BITS = 4;
+static_assert((LASER_FIRE >> (2 * SQUARE_BITS)) < (1 << MOVE_TYPE_BITS),
+              "MoveType exceeds its encoded field");
 
 enum Color {
   WHITE, BLACK, COLOR_NB = 2
@@ -1235,6 +1240,15 @@ inline Square gating_square(Move m) {
   return SQ_NONE;
 }
 
+inline Square rotation_square(Move m) {
+  return gating_square(m);
+}
+
+inline int rotation_value(Move m) {
+  assert(gating_type(m) >= PieceType(1) && gating_type(m) <= PieceType(4));
+  return int(gating_type(m)) - 1;
+}
+
 inline Square pull_square(Move m) {
   if (type_of(m) != PULL)
       return SQ_NONE;
@@ -1248,13 +1262,17 @@ inline Square swap_square(Move m) {
   return type_of(m) == SWAP ? to_sq(m) : SQ_NONE;
 }
 
+inline bool is_stack_move(Move m) { return type_of(m) == STACK; }
+inline bool is_unstack_move(Move m) { return type_of(m) == UNSTACK; }
+inline bool is_laser_fire(Move m) { return type_of(m) == LASER_FIRE; }
+
 inline bool is_gating(Move m) {
   if ((static_cast<uint64_t>(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS)) == 0)
       return false;
 
   const MoveType mt = type_of(m);
   constexpr uint64_t SquareFieldMask = (uint64_t(SQUARE_BIT_MASK) << 1) | 1;
-  if (mt == SPECIAL)
+  if (mt == SPECIAL || mt == LASER_FIRE)
       return ((m >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & SquareFieldMask) != 0;
   if (mt == NORMAL || mt == CASTLING)
       return gating_type(m) != NO_PIECE_TYPE
@@ -1264,7 +1282,8 @@ inline bool is_gating(Move m) {
 }
 
 inline bool is_drop_move(Move m) {
-  return (784 >> ((static_cast<uint64_t>(m) >> (2 * SQUARE_BITS)) & 15)) & 1;
+  MoveType mt = type_of(m);
+  return mt == DROP || mt == DROP2 || mt == INSERT;
 }
 
 inline bool is_insert_move(Move m) {
@@ -1352,6 +1371,13 @@ constexpr Move make_gating(Square from, Square to, PieceType pt, Square gate) {
             + static_cast<uint64_t>(to));
 }
 
+template<MoveType T>
+constexpr Move make_rotation(Square from, Square to, int orientation, Square rotate) {
+  assert(T != PROMOTION);
+  assert(orientation >= 0 && orientation < 4);
+  return make_gating<T>(from, to, PieceType(orientation + 1), rotate);
+}
+
 constexpr Move make_pull(Square from, Square to, Square pullFrom) {
   return Move((static_cast<uint64_t>(pullFrom + 1) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS))
             + static_cast<uint64_t>(PULL)
@@ -1389,6 +1415,8 @@ inline bool is_custom(PieceType pt) {
 
 inline bool is_ok(Move m) {
   return from_sq(m) != to_sq(m)
+      || is_gating(m)
+      || is_laser_fire(m)
       || type_of(m) == PROMOTION
       || type_of(m) == SPECIAL
       || type_of(m) == CASTLING

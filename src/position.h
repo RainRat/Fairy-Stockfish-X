@@ -239,6 +239,9 @@ struct StateInfoCopied {
   Bitboard not_moved_pieces[COLOR_NB];
   Bitboard potionZones[COLOR_NB][Variant::POTION_TYPE_NB];
   int potionCooldown[COLOR_NB][Variant::POTION_TYPE_NB];
+  Bitboard orientationBB[2];
+  Bitboard stackedPieces;
+  Key pieceStateKey;
   Key reserveKey;
   Key layoutKey;
 };
@@ -294,6 +297,9 @@ struct MoveUndoInfo {
   bool       pass = false;
   bool       forcedJumpHasFollowup = false;
   bool       didPull = false;
+  Piece      replacedPiece = NO_PIECE;
+  Piece      replacedUnpromoted = NO_PIECE;
+  bool       replacedPromoted = false;
 
   void clear() {
     bycatchSquares = Bitboard(0);
@@ -310,6 +316,9 @@ struct MoveUndoInfo {
     flippedPieces = Bitboard(0);
     claimedSquares = Bitboard(0);
     forcedJumpSquare = SQ_NONE;
+    replacedPiece = NO_PIECE;
+    replacedUnpromoted = NO_PIECE;
+    replacedPromoted = false;
     dropHandColor = COLOR_NB;
     forcedJumpStep = 0;
     removedGatingType = NO_PIECE_TYPE;
@@ -351,7 +360,10 @@ struct MoveUndoInfo {
         && !suppressedCaptureTransfer
         && !pass
         && !forcedJumpHasFollowup
-        && !didPull;
+        && !didPull
+        && replacedPiece == NO_PIECE
+        && replacedUnpromoted == NO_PIECE
+        && !replacedPromoted;
   }
 #endif
 };
@@ -427,6 +439,8 @@ public:
 
   // Variant rule properties
   const Variant* variant() const;
+  bool search_laser_rotation_filter() const { return searchLaserRotationFilter; }
+  void set_search_laser_rotation_filter(bool enabled) { searchLaserRotationFilter = enabled; }
   Rank max_rank() const;
   File max_file() const;
   int ranks() const;
@@ -454,6 +468,11 @@ public:
   PieceSet promotion_piece_types(Color c) const;
   PieceSet promotion_piece_types(Color c, Square s) const;
   bool sittuyin_promotion() const;
+  bool laser_game() const;
+  bool is_oriented(PieceType pt) const;
+  int orientation_on(Square s) const;
+  bool is_stacked(Square s) const;
+  Bitboard stacked_pieces() const;
   int promotion_limit(PieceType pt) const;
   bool promotion_allowed(Color c, PieceType pt) const;
   bool promotion_allowed(Color c, PieceType pt, Square s) const;
@@ -765,10 +784,12 @@ public:
 
   // Position representation
   Bitboard pieces(PieceType pt = ALL_PIECES) const;
+  Bitboard pieces_oriented_group(PieceType pt) const;
   Bitboard pieces(PieceType pt1, PieceType pt2) const;
   Bitboard pieces(Color c) const;
   Bitboard pieces(Color c, PieceType pt) const;
   Bitboard pieces(Color c, PieceSet pts) const;
+  Bitboard pieces_oriented_group(Color c, PieceType pt) const;
   Bitboard pieces(Color c, PieceType pt1, PieceType pt2) const;
   Bitboard pieces(Color c, PieceType pt1, PieceType pt2, PieceType pt3) const;
   Bitboard major_pieces(Color c) const;
@@ -868,6 +889,10 @@ public:
   // Doing and undoing moves
   void do_move(Move m, StateInfo& newSt, bool countNode = true);
   void undo_move(Move m);
+  void fire_laser(Color us, Key& k, Square selectedEmitter = SQ_NONE);
+  Bitboard laser_rotation_candidates(Color us) const;
+  bool laser_portal_exit(Square entrance, Square& exit, Direction& direction) const;
+  Direction orientation_to_direction(int orientation, bool diagonal) const;
   bool add_capture_transfer(StateInfo* state, Piece transferPiece, Key* k = nullptr);
   bool undo_capture_transfer(StateInfo* state, Piece transferPiece, Key* k = nullptr);
   bool simulate_capture_transfer(Key& k, Piece transferPiece, bool suppressedCaptureTransfer = false) const;
@@ -938,6 +963,7 @@ private:
   void set_state(StateInfo* si) const;
   void recompute_state_hashes_and_material(StateInfo* si) const;
   Key compute_material_key() const;
+  Key compute_piece_state_key() const;
   Bitboard compute_checkers_bb(Color side) const;
   Bitboard compute_evasion_checkers_bb(Color side) const;
   void set_check_info(StateInfo* si) const;
@@ -954,6 +980,8 @@ private:
 
   // Other helpers
   void move_piece(Square from, Square to);
+  void set_orientation(Square s, int orientation);
+  void set_stacked(Square s, bool stacked);
   template<bool Do>
   void do_castling(Color us, Square from, Square& to, Square& rfrom, Square& rto);
   static Bitboard dynamic_slider_bb(const std::map<Direction,int>& directions,
@@ -1094,6 +1122,7 @@ private:
 
   // variant-specific
   const Variant* var;
+  bool searchLaserRotationFilter = false;
   bool tsumeMode;
   bool chess960;
   int pieceCountInHand[COLOR_NB][PIECE_TYPE_NB];
@@ -1249,6 +1278,29 @@ inline PieceSet Position::promotion_piece_types(Color c, Square s) const {
 
 inline bool Position::sittuyin_promotion() const {
   return var_ref().sittuyinPromotion;
+}
+
+inline bool Position::laser_game() const {
+  return var_ref().laserGame;
+}
+
+inline bool Position::is_oriented(PieceType pt) const {
+  return var_ref().is_oriented(pt);
+}
+
+inline int Position::orientation_on(Square s) const {
+  assert(is_ok(s));
+  return int(bool(st->orientationBB[0] & s))
+       | (int(bool(st->orientationBB[1] & s)) << 1);
+}
+
+inline bool Position::is_stacked(Square s) const {
+  assert(is_ok(s));
+  return bool(st->stackedPieces & s);
+}
+
+inline Bitboard Position::stacked_pieces() const {
+  return st->stackedPieces;
 }
 
 inline int Position::promotion_limit(PieceType pt) const {
@@ -3060,14 +3112,30 @@ inline Bitboard Position::adjacent_swap_targets_from(Color c, Square from) const
   Piece mover = piece_on(from);
   if (mover == NO_PIECE || color_of(mover) != c)
       return 0;
-  if (!(adjacent_swap_move_types() & piece_set(type_of(mover))))
+  PieceType moverType = type_of(mover);
+  if (!(adjacent_swap_move_types() & piece_set(moverType)))
       return 0;
-  if (adjacent_swap_requires_empty_neighbor() && !(PseudoAttacks[WHITE][WAZIR][from] & ~pieces()))
+  Bitboard neighbors = var->adjacentSwapDiagonal ? PseudoAttacks[WHITE][KING][from]
+                                                  : PseudoAttacks[WHITE][WAZIR][from];
+  if (adjacent_swap_requires_empty_neighbor() && !(neighbors & ~pieces()))
       return 0;
-  return PseudoAttacks[WHITE][WAZIR][from] & pieces(~c);
+  Bitboard colors = pieces(~c) | (var->adjacentSwapFriendly ? pieces(c) : Bitboard(0));
+  Bitboard targets = 0;
+  Bitboard occupied = neighbors & colors;
+  while (occupied)
+  {
+      Square to = pop_lsb(occupied);
+      if (var->adjacentSwapTargetTypes & piece_set(type_of(piece_on(to))))
+          targets |= to;
+  }
+  return targets;
 }
 
 inline Bitboard Position::pieces(PieceType pt) const {
+  return byTypeBB[pt];
+}
+
+inline Bitboard Position::pieces_oriented_group(PieceType pt) const {
   return byTypeBB[pt];
 }
 
@@ -3091,6 +3159,10 @@ inline Bitboard Position::pieces(Color c, PieceSet pts) const {
       if (pts & pt)
           b |= pieces(c, pt);
   return b;
+}
+
+inline Bitboard Position::pieces_oriented_group(Color c, PieceType pt) const {
+  return pieces(c) & pieces_oriented_group(pt);
 }
 
 inline Bitboard Position::pieces(Color c, PieceType pt1, PieceType pt2) const {
@@ -5197,7 +5269,8 @@ inline bool Position::capture(Move m) const {
   assert(is_ok(m));
   if (type_of(m) == EN_PASSANT)
       return true;
-  if (type_of(m) == PULL || type_of(m) == SWAP)
+  if (type_of(m) == PULL || type_of(m) == SWAP || is_stack_move(m)
+      || is_unstack_move(m) || is_laser_fire(m))
       return false;
   if (type_of(m) == CASTLING || from_sq(m) == to_sq(m))
       return false;
@@ -5340,6 +5413,8 @@ inline Thread* Position::this_thread() const {
 
 inline void Position::put_piece(Piece pc, Square s, bool isPromoted, Piece unpromotedPc, bool markNotMoved) {
 
+  set_orientation(s, 0);
+  set_stacked(s, false);
   board[s] = pc;
   byTypeBB[ALL_PIECES] |= byTypeBB[type_of(pc)] |= s;
   byColorBB[color_of(pc)] |= s;
@@ -5361,6 +5436,8 @@ inline void Position::put_piece(Piece pc, Square s, bool isPromoted, Piece unpro
 inline void Position::remove_piece(Square s) {
 
   Piece pc = board[s];
+  set_orientation(s, 0);
+  set_stacked(s, false);
   byTypeBB[ALL_PIECES] ^= s;
   byTypeBB[type_of(pc)] ^= s;
   byColorBB[color_of(pc)] ^= s;
@@ -5385,6 +5462,8 @@ inline void Position::move_piece(Square from, Square to) {
   }
 
   Piece pc = board[from];
+  int orientation = orientation_on(from);
+  bool stacked = is_stacked(from);
   Bitboard fromTo = square_bb(from) ^ to; // from == to needs to cancel out
   byTypeBB[ALL_PIECES] ^= fromTo;
   byTypeBB[type_of(pc)] ^= fromTo;
@@ -5396,6 +5475,10 @@ inline void Position::move_piece(Square from, Square to) {
       promotedPieces ^= fromTo;
   unpromotedBoard[to] = unpromotedBoard[from];
   unpromotedBoard[from] = NO_PIECE;
+  set_orientation(from, 0);
+  set_stacked(from, false);
+  set_orientation(to, orientation);
+  set_stacked(to, stacked);
 
   //Once moved, no matter whether the piece is on original square or on destination square (including captures) or the color of the piece, it is no longer not-moved-piece
   this->st->not_moved_pieces[WHITE] &= (~(square_bb(from) | square_bb(to)));
@@ -5409,11 +5492,32 @@ inline void Position::swap_piece(Square from, Square to) {
   bool toPromoted = is_promoted(to);
   Piece fromUnpromoted = fromPromoted ? unpromoted_piece_on(from) : NO_PIECE;
   Piece toUnpromoted = toPromoted ? unpromoted_piece_on(to) : NO_PIECE;
+  int fromOrientation = orientation_on(from);
+  int toOrientation = orientation_on(to);
+  bool fromStacked = is_stacked(from);
+  bool toStacked = is_stacked(to);
 
   remove_piece(from);
   remove_piece(to);
   put_piece(toPc, from, toPromoted, toUnpromoted);
   put_piece(fromPc, to, fromPromoted, fromUnpromoted);
+  set_orientation(from, toOrientation);
+  set_orientation(to, fromOrientation);
+  set_stacked(from, toStacked);
+  set_stacked(to, fromStacked);
+}
+
+inline void Position::set_orientation(Square s, int orientation) {
+  assert(is_ok(s) && orientation >= 0 && orientation < 4);
+  st->orientationBB[0] = orientation & 1 ? st->orientationBB[0] | s
+                                         : st->orientationBB[0] - s;
+  st->orientationBB[1] = orientation & 2 ? st->orientationBB[1] | s
+                                         : st->orientationBB[1] - s;
+}
+
+inline void Position::set_stacked(Square s, bool stacked) {
+  assert(is_ok(s));
+  st->stackedPieces = stacked ? st->stackedPieces | s : st->stackedPieces - s;
 }
 
 

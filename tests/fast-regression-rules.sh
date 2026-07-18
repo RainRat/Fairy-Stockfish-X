@@ -61,6 +61,48 @@ PY
   rm -f "${tmp_ini}"
 }
 
+test_dos94_rotation_search_filter() {
+  local out
+  out=$(run_uci "$ENGINE" "${ROOT_DIR}/src/variants.ini" dos-laser-chess-1994 <<'UCI'
+position startpos
+go depth 1 searchmoves c2c4:1h1
+UCI
+)
+  assert_contains_literal "$out" "bestmove (none)"
+
+  out=$(run_uci "$ENGINE" "${ROOT_DIR}/src/variants.ini" dos-laser-chess-1994 <<'UCI'
+position startpos
+go depth 1 searchmoves c2c4:1c4
+UCI
+)
+  assert_contains_literal "$out" "bestmove c2c4:1c4"
+
+  # The filter is a search hint, not a legality rule for protocol input.
+  out=$(run_uci "$ENGINE" "${ROOT_DIR}/src/variants.ini" dos-laser-chess-1994 <<'UCI'
+position startpos moves c2c4:1h1
+d
+UCI
+)
+  assert_contains_literal "$out" "Fen:"
+  assert_not_contains_literal "$out" "Illegal move"
+
+  out=$(run_uci "$ENGINE" "${ROOT_DIR}/src/variants.ini" dos-laser-chess-1994 <<'UCI'
+position startpos
+go depth 1 searchmoves d1d1:1h1f
+UCI
+)
+  assert_contains_literal "$out" "bestmove (none)"
+
+  # Fire+rotation filtering likewise remains a search hint only.
+  out=$(run_uci "$ENGINE" "${ROOT_DIR}/src/variants.ini" dos-laser-chess-1994 <<'UCI'
+position startpos moves d1d1:1h1f
+d
+UCI
+)
+  assert_contains_literal "$out" "Fen:"
+  assert_not_contains_literal "$out" "Illegal move"
+}
+
 test_flip_regressions() {
   local tmp_ini out fen
   tmp_ini=$(mktemp "${TMPDIR:-/tmp}/fsx-flip-XXXXXX.ini")
@@ -781,3 +823,4 @@ test_standard_piece_value_phase
 test_potion_custom
 test_pousse_counting
 test_pushing_regressions
+test_dos94_rotation_search_filter

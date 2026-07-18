@@ -435,8 +435,6 @@ Bitboard rider_terminal_squares(const std::map<Direction, int>& directions, Squa
     RiderType R, Square s, Bitboard occupied, const MagicGeometry* mg) {
   (void)mg;
 
-  assert(R != NO_RIDER && !(R & (R - 1)));
-
   switch (R)
   {
   case RIDER_BISHOP: return sliding_attack<RIDER>(BishopDirections, s, occupied);
