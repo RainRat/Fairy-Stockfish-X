@@ -14,6 +14,7 @@ jobs:
       COMPILER: ${{ matrix.config.compiler }}
       COMP: ${{ matrix.config.comp }}
       CXXFLAGS: "-Werror"
+      FSX_ENGINE_FAMILY: large
     strategy:
       matrix:
         config:
@@ -66,10 +67,6 @@ jobs:
           make clean
           make -j2 ARCH=x86-64 largeboards=yes all=yes debug=yes build
 
-      - name: Test protocols
-        run: |
-          ../tests/protocol.sh
-
       - name: Test variants.ini
         run: |
           ! ./stockfish check variants.ini 2>&1 >/dev/null \
@@ -77,107 +74,11 @@ jobs:
 
       - name: Test variant perft
         run: |
-          make clean
-          make -j2 ARCH=x86-64 largeboards=yes all=yes debug=yes build
           ../tests/perft.sh all
 
-      - name: Test capture and promotion regressions
+      - name: Test fast semantic profile
         run: |
-          bash ../tests/capture-promotion-regressions.sh
-
-      - name: Test setup-chess
-        run: |
-          bash ../tests/setup-chess.sh
-
-      - name: Test new variants smoke
-        run: |
-          ../tests/new-variants-smoke.sh
-
-      - name: Test hex board display
-        run: |
-          ../tests/test_hex_boards.sh
-
-      - name: Test hex piece movement
-        run: |
-          ../tests/test_hex_boards.sh
-
-      - name: Test fast variant regressions
-        run: |
-          bash ../tests/fast-variant-regressions.sh
-
-      - name: Test incomplete baselines
-        run: |
-          ../tests/incomplete-baselines.sh ./stockfish variants-incomplete.ini
-
-      - name: Test universal hopper
-        run: |
-          ../tests/universal-hopper.sh
-
-      - name: Test special regressions
-        run: |
-          bash ../tests/special-regressions.sh
-
-      - name: Test fairy notation regressions
-        run: |
-          ../tests/fairy-notation-regressions.sh
-
-      - name: Test stationary castling
-        run: |
-          ../tests/stationary-castling.sh
-
-      - name: Test immobility-illegal hoppers
-        run: |
-          set -euo pipefail
-          source ../tests/lib/uci.sh
-
-          load_inline_variants <<'INI'
-          [immobility-illegal-hopper-test:chess]
-          maxFile = h
-          maxRank = 8
-          pieceDrops = true
-          immobilityIllegal = true
-          king = k:W
-          customPiece1 = m:fpR
-          customPiece2 = g:W
-          promotedPieceType = m:g
-          startFen = 8/8/8/8/8/8/8/4K3[M]
-          INI
-          tmp_ini="${FSX_TMP_INI}"
-
-          out=$(run_uci ./stockfish "$tmp_ini" immobility-illegal-hopper-test <<'EOF'
-          position fen 8/8/8/8/8/8/8/4K3[M] w - - 0 1
-          go perft 1
-          EOF
-          )
-
-          grep -q '^M@a6:' <<<"$out"
-          grep -q '^M@e6:' <<<"$out"
-          ! grep -q '^M@a7:' <<<"$out"
-          ! grep -q '^M@e7:' <<<"$out"
-          ! grep -q '^M@a8:' <<<"$out"
-          ! grep -q '^M@e8:' <<<"$out"
-
-          echo "immobility-illegal hoppers regression passed"
-
-      - name: Test royal variant regressions
-        run: |
-          ../tests/royal-variant-regressions.sh
-
-      - name: Test Kings or Lemmings
-        run: |
-          ../tests/kings-or-lemmings.sh
-
-      - name: Test pulling
-        run: |
-          ../tests/pulling.sh
-
-      - name: Test swapping
-        run: |
-          ../tests/swapping.sh
-
-      - name: Test rider regressions
-        run: |
-          bash ../tests/rider-regressions.sh
+          ../tests/run.sh fast ./stockfish
 
       - name: Test variant bench
         run: |

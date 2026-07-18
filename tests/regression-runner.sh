@@ -16,7 +16,7 @@ Usage: tests/regression-runner.sh start [engine]
        tests/regression-runner.sh run [engine]
        tests/regression-runner.sh log
 
-Runs tests/local-regression.sh detached, preserving one full log while status and
+Runs tests/run.sh full detached, preserving one full log while status and
 wait produce concise output. The default engine is src/stockfish-large.
 EOF
 }
@@ -96,7 +96,7 @@ historical_total() {
 
   if (( count < 5 )) && [[ -d "${ROOT_DIR}/.local/logs" ]]; then
     while IFS= read -r log; do
-      grep -q '^local regression suite passed$' "${log}" || continue
+      grep -Eq '^(local regression suite passed|full profile passed)$' "${log}" || continue
       value=$(awk '/^total elapsed [0-9.]+s$/ {v=$3} END {sub(/s$/, "", v); print v}' "${log}")
       [[ -n "${value}" ]] || continue
       sum=$((sum + ${value%.*}))
@@ -235,7 +235,7 @@ worker_run() {
   printf '%s\n' "$$" > "${run_dir}/pid"
   started=$(<"${run_dir}/start")
   set +e
-  /usr/bin/time -f "total elapsed %es" bash "${ROOT_DIR}/tests/local-regression.sh" "${engine}" \
+  /usr/bin/time -f "total elapsed %es" bash "${ROOT_DIR}/tests/run.sh" full "${engine}" \
     > "${run_dir}/regression.log" 2>&1
   rc=$?
   set -e

@@ -73,7 +73,7 @@ jobs:
           make clean
           make -j2 ARCH=x86-64-modern optimize=no debug=yes build
           ../tests/bench-regressions.sh $benchref
-          cd .. && python3 setup.py build_ext --inplace --build-temp .local/build/pyffish && bash tests/wrapping-topology.sh src/stockfish
+          cd .. && FSX_ALLOW_SMALL_BOARD=1 bash tests/run.sh suite movement src/stockfish
 
       - name: Test debug x86-64-modern profile build (Optimization on, All features)
         run: |

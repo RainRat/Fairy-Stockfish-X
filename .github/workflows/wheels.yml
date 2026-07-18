@@ -33,7 +33,7 @@ jobs:
           CIBW_ARCHS_MACOS: "x86_64 arm64"
           CIBW_SKIP: "pp* *-win32 *-manylinux_i686 *-musllinux_* cp36-* cp37-* cp38"
           CIBW_TEST_SKIP: "${{ matrix.os == 'windows-2022' && '*-win_amd64' || '' }}"
-          CIBW_TEST_COMMAND: python {project}/test.py
+          CIBW_TEST_COMMAND: python {project}/tests/python/test_pyffish_api.py
 
       - uses: actions/upload-artifact@v7
         with:

@@ -404,10 +404,6 @@ d
 UCI
 }
 
-run_pyffish_test() {
-  PYTHONPATH="${ROOT_DIR}${PYTHONPATH:+:${PYTHONPATH}}" "${PYTHON:-python3}" "$@"
-}
-
 engine_config_output() {
   if [[ -z "${FSX_ENGINE_CONFIG_OUTPUT:-}" ]]; then
     FSX_ENGINE_CONFIG_OUTPUT=$(make -C "${ROOT_DIR}/src" -s config-sanity)

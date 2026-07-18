@@ -15,7 +15,7 @@ Fairy-Stockfish-X is a Fairy-Stockfish fork for testing experimental chess varia
 * Position accessors/state logic: `position.h`, `position.cpp`
 * Move generation/gating: `movegen.cpp`
 * Betza and movement: `piece.cpp`, `piece.h`, `bitboard.cpp`
-* Tests: `tests/`, `test.py`
+* Tests: `tests/`, especially `tests/run.sh`, `tests/suites/`, and `tests/python/`
 * Add settings end-to-end: `.ini` → parser → `Variant` field → `Position` getter → gameplay logic → tests → `variants.ini` docs.
 * Keep upstream Fairy-Stockfish keys working when replacing or generalizing a setting. FSX-only experimental keys may make a clean break before the first stable release.
 
@@ -70,7 +70,25 @@ tests/protocol.sh
 tests/perft.sh all src/stockfish-large
 ```
 
-Run large-board tests against a `largeboards=yes` binary. For Python-facing changes, run `python3 setup.py build_ext --inplace` and `python3 test.py`.
+Run large-board tests against a `largeboards=yes` binary. For Python-facing changes, run `python3 setup.py build_ext --inplace` and `python3 tests/python/test_pyffish_api.py`.
+
+### Focused test selection
+
+| Changed area | Minimum focused command |
+| --- | --- |
+| `variant.h`, `parser.cpp`, or validation | `tests/run.sh suite config variants-smoke src/stockfish-large` |
+| `src/variants.ini` only | config plus `variants-smoke`; also JS tests when serialized FEN, pockets, drops, or `startFen` change |
+| royal, checking, evasion, extinction, or castling legality | `tests/run.sh suite royal-legality src/stockfish-large` |
+| `movegen.cpp` or general legality | `tests/run.sh suite movement royal-legality src/stockfish-large` |
+| Betza, riders, hoppers, regions, or topology | `tests/run.sh suite movement src/stockfish-large` |
+| capture effects, blast, rifle, pulling, or swapping | `tests/run.sh suite captures-effects state-transitions src/stockfish-large` |
+| promotions, hands, prisons, gating, or drops | `tests/run.sh suite promotion-drops state-transitions src/stockfish-large` |
+| `StateInfo`, keys, do/undo, or repetition | `tests/run.sh suite state-transitions src/stockfish-large` |
+| notation, FEN, UCI, or XBoard | `tests/run.sh suite notation-protocol src/stockfish-large` |
+| search or evaluation | `tests/run.sh suite search-evaluation src/stockfish-large` |
+| spell chess | `tests/run.sh suite spells src/stockfish-large` |
+| `src/pyffish.cpp`, `apiutil`, or Python signatures | build the extension, then run `tests/python/test_pyffish_api.py` |
+| broad/shared change before submission | `tests/run.sh fast`, followed by the detached full regression when warranted |
 
 For JavaScript/wasm-facing changes, including `src/variants.ini` changes that affect `startFen`, pockets, `freeDrops`, or serialized FENs:
 

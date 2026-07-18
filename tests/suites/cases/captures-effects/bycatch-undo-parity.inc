@@ -1,0 +1,127 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+source "${SCRIPT_DIR}/../../../../tests/lib/uci.sh"
+
+init_test_env "${1:-}" "${2:-}" "bycatch undo parity test"
+
+CXX=${CXX:-g++}
+JOBS=${JOBS:-2}
+source "${SCRIPT_DIR}/../../../../tests/lib/harness-build.sh"
+fsx_harness_init "${ENGINE}" "${ROOT_DIR}"
+fsx_harness_prepare_objects "${JOBS}"
+
+DEFAULT_VARIANT_PATH="variants.ini"
+if [[ ! -f "${DEFAULT_VARIANT_PATH}" && -f "src/variants.ini" ]]; then
+  DEFAULT_VARIANT_PATH="src/variants.ini"
+fi
+VARIANT_PATH="${2:-${DEFAULT_VARIANT_PATH}}"
+
+BUILD_DIR="${ROOT_DIR}/.local/build/bycatch-undo-parity"
+mkdir -p "${BUILD_DIR}"
+
+HARNESS_CPP="${BUILD_DIR}/bycatch-undo-parity.cpp"
+HARNESS_BIN="${BUILD_DIR}/bycatch-undo-parity.bin"
+
+cat > "${HARNESS_CPP}" <<'EOF'
+#include <cassert>
+#include <sstream>
+
+#include "bitboard.h"
+#include "endgame.h"
+#include "piece.h"
+#include "position.h"
+#include "psqt.h"
+#include "uci.h"
+#include "variant.h"
+#include "test_engine_init.hpp"
+
+using namespace Stockfish;
+
+static void load_variants() {
+    std::istringstream ss(R"ini(
+[surround-color:chess]
+castling = false
+surroundCaptureIntervene = true
+changingColorTrigger = capture
+changingColorPieceTypes = *
+startFen = 4k3/8/8/8/8/3p1p2/4R3/4K3 w - - 0 1
+
+[liberty-undo]
+maxRank = 5
+maxFile = 5
+pieceToCharTable = -
+king = -
+immobile = p
+pieceDrops = true
+captureType = hand
+libertyCapture = remove
+libertySelfCapture = remove
+castling = false
+immobilityIllegal = false
+startFen = 5/5/2p2/1p1p1/2p2[P] w - - 0 1
+)ini");
+    variants.parse_istream<false>(ss);
+}
+
+int main() {
+    init_test_engine();
+    load_variants();
+
+    StateInfo st{};
+    Position pos;
+    pos.set(variants.get("surround-color"), "4k3/8/8/8/8/3p1p2/4R3/4K3 w - - 0 1", false, &st, nullptr);
+
+    const Move m = make<NORMAL>(SQ_E2, SQ_E3);
+    assert(pos.legal(m));
+
+    const Key beforeKey = pos.state()->key;
+    const Key beforeBoardKey = pos.state()->boardKey;
+    const Key beforePawnKey = pos.state()->pawnKey;
+    const Key beforeMaterialKey = pos.state()->materialKey;
+    StateInfo next{};
+    pos.do_move(m, next);
+    assert(pos.pos_is_ok());
+
+    pos.undo_move(m);
+    assert(pos.pos_is_ok());
+    assert(pos.state()->key == beforeKey);
+    assert(pos.state()->boardKey == beforeBoardKey);
+    assert(pos.state()->pawnKey == beforePawnKey);
+    assert(pos.state()->materialKey == beforeMaterialKey);
+
+    StateInfo libertyState{};
+    pos.set(variants.get("liberty-undo"), variants.get("liberty-undo")->startFen,
+            false, &libertyState, nullptr);
+    std::string dropText = "P@c2";
+    const Move drop = UCI::to_move(pos, dropText);
+    assert(drop != MOVE_NONE);
+    assert(pos.legal(drop));
+    const std::string beforeFen = pos.fen();
+    const Key libertyKey = pos.state()->key;
+    const Key libertyBoardKey = pos.state()->boardKey;
+    const Key libertyPawnKey = pos.state()->pawnKey;
+    const Key libertyMaterialKey = pos.state()->materialKey;
+    StateInfo libertyNext{};
+    pos.do_move(drop, libertyNext);
+    assert(pos.pos_is_ok());
+    pos.undo_move(drop);
+    assert(pos.pos_is_ok());
+    assert(pos.fen() == beforeFen);
+    assert(pos.state()->key == libertyKey);
+    assert(pos.state()->boardKey == libertyBoardKey);
+    assert(pos.state()->pawnKey == libertyPawnKey);
+    assert(pos.state()->materialKey == libertyMaterialKey);
+    return 0;
+}
+EOF
+
+fsx_harness_collect_objects
+fsx_harness_build "${HARNESS_CPP}" "${HARNESS_BIN}" \
+  "bycatch-undo-parity" "${HARNESS_BIN}.sig"
+
+echo "bycatch undo parity test started"
+"${HARNESS_BIN}"
+echo "bycatch undo parity test passed"

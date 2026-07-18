@@ -1,2 +1,3 @@
 include AUTHORS Copying.txt README.md test.py
+recursive-include tests/python *.py
 recursive-include src *.h *.cpp
