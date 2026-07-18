@@ -3,6 +3,8 @@
 set -euo pipefail
 
 ROOT_DIR=$(cd "$(dirname "$0")/.." && pwd)
+CXX=${CXX:-${COMPILER:-g++}}
+export CXX
 SUITE_DIR="${ROOT_DIR}/tests/suites"
 VARIANTS=${VARIANTS:-${ROOT_DIR}/src/variants.ini}
 RUN_DIR="${ROOT_DIR}/.local/build/test-run"

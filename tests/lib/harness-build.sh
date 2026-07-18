@@ -135,10 +135,11 @@ fsx_harness_prepare_objects_cached() {
   fi
 
   mkdir -p "${cache_dir}"
-  desired_signature=$(printf '%s|%s|%s|%s|%s|%s|%s|%s\n' \
+  desired_signature=$(printf '%s|%s|%s|%s|%s|%s|%s|%s|%s\n' \
     "${FSX_HARNESS_ENGINE_BASENAME}" \
     "${FSX_HARNESS_CXX}" \
     "$(fsx_harness_compiler_signature)" \
+    "${CXXFLAGS:-}" \
     "${FSX_HARNESS_CXX_DEFS[*]}" \
     "${FSX_HARNESS_BUILD_ARGS[*]}" \
     "$(fsx_harness_makefile_hash)" \
@@ -194,10 +195,11 @@ fsx_harness_signature() {
   local source_signature="missing"
   [[ -f "${source_file}" ]] && source_signature=$(fsx_harness_hash_file "${source_file}")
 
-  printf '%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\n' \
+  printf '%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\n' \
     "${label}" \
     "${FSX_HARNESS_CXX}" \
     "$(fsx_harness_compiler_signature)" \
+    "${CXXFLAGS:-}" \
     "${FSX_HARNESS_ENGINE_BASENAME}" \
     "${FSX_HARNESS_CXX_DEFS[*]}" \
     "$(fsx_harness_makefile_hash)" \
@@ -213,6 +215,9 @@ fsx_harness_build() {
   local label="$3"
   local signature_file="${4:-${output_file}.sig}"
   local signature
+  local extra_cxxflags=()
+
+  read -r -a extra_cxxflags <<<"${CXXFLAGS:-}"
 
   signature=$(fsx_harness_signature "${label}" "${source_file}")
   if [[ -x "${output_file}" && -f "${signature_file}" \
@@ -223,7 +228,7 @@ fsx_harness_build() {
   rm -f "${output_file}"
   (
     cd "${FSX_HARNESS_ROOT_DIR}/src"
-    "${FSX_HARNESS_CXX}" -std=c++17 -O2 -Wall -Wextra -flto \
+    "${FSX_HARNESS_CXX}" "${extra_cxxflags[@]}" -std=c++17 -O2 -Wall -Wextra -flto \
       -I"${FSX_HARNESS_ROOT_DIR}/src" -I"${FSX_HARNESS_ROOT_DIR}/tests/lib" \
       "${FSX_HARNESS_CXX_DEFS[@]}" "${source_file}" \
       "${FSX_HARNESS_OBJ_FILES[@]}" -pthread -o "${output_file}"
