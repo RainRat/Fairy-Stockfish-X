@@ -2,8 +2,8 @@
 
 set -euo pipefail
 
-SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-source "${SCRIPT_DIR}/../../../.."/tests/lib/uci.sh
+SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)/tests
+source "${SCRIPT_DIR}/lib/uci.sh"
 
 mode="${1:-}"
 if [[ "${mode}" == "--stdin" ]]; then

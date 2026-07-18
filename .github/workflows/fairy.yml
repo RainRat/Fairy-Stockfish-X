@@ -65,28 +65,28 @@ jobs:
       - name: Build all variants
         run: |
           make clean
-          make -j2 ARCH=x86-64 largeboards=yes all=yes debug=yes build
+          make -j2 ARCH=x86-64 largeboards=yes all=yes debug=yes EXE=stockfish-allvars build
 
       - name: Test variants.ini
         run: |
-          ! ./stockfish check variants.ini 2>&1 >/dev/null \
+          ! ./stockfish-allvars check variants.ini 2>&1 >/dev/null \
             | grep -Ev "Parsing variant|Variant template '.*' does not exist\\.|exceeds build board limits \\(maxFile=.*\\)\\. Skipping\\.|Castling destination is adjacent to castlingKingFile; some GUIs/protocols may not distinguish castling from a normal king move\\.|Can not use kings with blastOnCapture\\.|Can not use kings, pseudo-royal, or anti-royal with blastImmuneTypes\\.|Variant 'kamikaze' has invalid configuration\\. Skipping\\."
 
       - name: Test variant perft
         run: |
-          ../tests/perft.sh all
+          ../tests/perft.sh all ./stockfish-allvars
 
       - name: Test fast semantic profile
         run: |
-          ../tests/run.sh fast ./stockfish
+          ../tests/run.sh fast ./stockfish-allvars
 
       - name: Test variant bench
         run: |
-          ./stockfish bench minixiangqi
-          ./stockfish bench minishogi
-          ./stockfish bench sittuyin
+          ./stockfish-allvars bench minixiangqi
+          ./stockfish-allvars bench minishogi
+          ./stockfish-allvars bench sittuyin
           if [[ "$COMP" == "gcc" ]]; then
-            ./stockfish bench xiangqi
-            ./stockfish bench shogi
-            ./stockfish bench capablanca
+            ./stockfish-allvars bench xiangqi
+            ./stockfish-allvars bench shogi
+            ./stockfish-allvars bench capablanca
           fi
