@@ -2472,12 +2472,13 @@ Variant* Variant::conclude() {
       multimoveOffset = 0;
       for (int j : multimoves)
       {
-          if (multimoveOffset + 2 * j - 1 >= START_MULTIMOVES)
+          int64_t segment = 2 * int64_t(j) - 1;
+          if (multimoveOffset + segment >= START_MULTIMOVES)
               break;
           // Initialize alternating non-passing/passing moves
-          for (int k = 0; k < 2 * j - 1; k++)
+          for (int k = 0; k < segment; k++)
               multimovePass.set(multimoveOffset + k, k % 2);
-          multimoveOffset += 2 * j - 1;
+          multimoveOffset += int(segment);
       }
       int firstMultimove =  multimoves.size() >= 2 ? multimoves[multimoves.size() - 2]
                           : multimoves.size() == 1 ? multimoves[multimoves.size() - 1]

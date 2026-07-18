@@ -132,6 +132,24 @@ promotionLimit = p:-1
 [invalid-multimoves:chess]
 multimoves = 1 0
 
+[overflow-multimoves:chess]
+multimoves = 2147483647
+
+[overflow-multimove-cycle:chess]
+multimoves = 1073741824 1073741824
+
+[negative-drop-no-doubled-count:chess]
+dropNoDoubledCount = -1
+
+[negative-potion-cooldown:chess]
+freezeCooldown = -1
+
+[overflow-potion-cooldown:chess]
+jumpCooldown = 65537
+
+[invalid-remove-connect-n:chess]
+removeConnectN = -1
+
 [invalid-connect-group:chess]
 connectGroup = -2
 
@@ -501,6 +519,10 @@ assert_contains "${check_output}" "customPiece1 - Missing Betza move notation"
 initial_capture_output=$("${ENGINE}" check "${tmp_ini}" 2>&1 || true)
 assert_contains "${initial_capture_output}" "Initial capture Betza moves are not supported in 'ciW'"
 assert_contains_literal "${initial_capture_output}" "connectGroup must be -1, 0, or a positive group size."
+assert_contains_literal "${initial_capture_output}" "multimoves - Derived cycle exceeds the supported int range."
+assert_contains_literal "${initial_capture_output}" "dropNoDoubledCount - Invalid negative value."
+assert_contains_literal "${initial_capture_output}" "Potion cooldown must be between 0 and 65536."
+assert_contains_literal "${initial_capture_output}" "removeConnectN - Value must be in range [0,"
 assert_contains_literal "${initial_capture_output}" "laser_notapiece - Unknown piece symbol: notapiece"
 assert_contains_literal "${initial_capture_output}" "laser_p - Too many laser outcome faces: expected 4."
 assert_contains_literal "${initial_capture_output}" "laserPortalFallback must be a non-portal laser outcome."

@@ -57,6 +57,15 @@ laser_r = D/D/D/D
 laser_a = D/D/D/D
 laser_k = D/D/D/D
 castling = false
+
+[castling-piece-state:chess]
+laserGame = true
+orientedPieceTypes = r
+promotedPieceType = p:r
+laserEmitters = white@a1:0, black@h8:2
+laser_r = D/D/D/D
+laser_k = D/D/D/D
+castling = true
 )ini");
     variants.parse_istream<false>(ss);
 }
@@ -225,6 +234,30 @@ static void test_stack_piece_transforms_and_undo() {
     assert(pos.state()->materialKey == stackedMaterialKey);
 }
 
+static void test_castling_preserves_piece_state() {
+    StateInfo st{};
+    Position pos;
+    pos.set(variants.get("castling-piece-state"),
+            "4k3/8/8/8/8/8/8/4K2+P(2) w K - 0 1", false, &st, nullptr);
+
+    const Move castle = make<CASTLING>(SQ_E1, SQ_H1);
+    assert(pos.legal(castle));
+    assert(pos.is_promoted(SQ_H1));
+    assert(pos.unpromoted_piece_on(SQ_H1) == W_PAWN);
+    assert(pos.orientation_on(SQ_H1) == 2);
+
+    StateInfo next{};
+    pos.do_move(castle, next);
+    assert(pos.is_promoted(SQ_F1));
+    assert(pos.unpromoted_piece_on(SQ_F1) == W_PAWN);
+    assert(pos.orientation_on(SQ_F1) == 2);
+
+    pos.undo_move(castle);
+    assert(pos.is_promoted(SQ_H1));
+    assert(pos.unpromoted_piece_on(SQ_H1) == W_PAWN);
+    assert(pos.orientation_on(SQ_H1) == 2);
+}
+
 int main() {
     init_test_engine();
     load_variants();
@@ -234,6 +267,7 @@ int main() {
     test_null_move_preserves_extinction_history();
     test_spell_chess_null_move_decays();
     test_stack_piece_transforms_and_undo();
+    test_castling_preserves_piece_state();
     return 0;
 }
 EOF

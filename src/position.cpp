@@ -8110,6 +8110,12 @@ void Position::do_castling(Color us, Square from, Square& to, Square& rfrom, Squ
 
   Piece castlingKingPiece = piece_on(Do ? from : to);
   Piece castlingRookPiece = piece_on(Do ? rfrom : rto);
+  bool castlingKingPromoted = is_promoted(Do ? from : to);
+  bool castlingRookPromoted = is_promoted(Do ? rfrom : rto);
+  Piece castlingKingUnpromoted = unpromoted_piece_on(Do ? from : to);
+  Piece castlingRookUnpromoted = unpromoted_piece_on(Do ? rfrom : rto);
+  int castlingKingOrientation = orientation_on(Do ? from : to);
+  int castlingRookOrientation = orientation_on(Do ? rfrom : rto);
 
   if (Do && Eval::useNNUE)
   {
@@ -8127,13 +8133,15 @@ void Position::do_castling(Color us, Square from, Square& to, Square& rfrom, Squ
   remove_piece(Do ? from : to);
   remove_piece(Do ? rfrom : rto);
   board[Do ? from : to] = board[Do ? rfrom : rto] = NO_PIECE; // Since remove_piece doesn't do it for us
-  put_piece(castlingKingPiece, Do ? to : from);
+  put_piece(castlingKingPiece, Do ? to : from, castlingKingPromoted, castlingKingUnpromoted);
+  set_orientation(Do ? to : from, castlingKingOrientation);
   if (!Do && commit_gates() && st->removedCastlingGatingType > NO_PIECE_TYPE && piece_on(rfrom) != NO_PIECE)
   {
       remove_piece(rfrom);
       board[rfrom] = NO_PIECE;
   }
-  put_piece(castlingRookPiece, Do ? rto : rfrom);
+  put_piece(castlingRookPiece, Do ? rto : rfrom, castlingRookPromoted, castlingRookUnpromoted);
+  set_orientation(Do ? rto : rfrom, castlingRookOrientation);
 
   if (!Do && commit_gates() && st->removedCastlingGatingType > NO_PIECE_TYPE) {
       // Restore the removed committed slot for the rook file.

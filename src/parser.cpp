@@ -1722,8 +1722,8 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("removeConnectN", v->removeConnectN);
     if (v->removeConnectN < 0 || v->removeConnectN > int(SQUARE_NB)) {
         if (DoCheck)
-            std::cerr << "removeConnectN - Value must be in range [0, " << int(SQUARE_NB) << "]. Clamping." << std::endl;
-        v->removeConnectN = std::clamp(v->removeConnectN, 0, int(SQUARE_NB));
+            std::cerr << "removeConnectN - Value must be in range [0, " << int(SQUARE_NB) << "]." << std::endl;
+        return false;
     }
     parse_attribute("removeConnectNByType", v->removeConnectNByType);
     parse_attribute("surroundCaptureOpposite", v->surroundCaptureOpposite);
@@ -1844,6 +1844,13 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("captureDrops", v->captureDrops, v);
     if (!parse_color_setting_piece("dropNoDoubled", v->dropNoDoubled, v)) return false;
     parse_color_setting("dropNoDoubledCount", v->dropNoDoubledCount);
+    for (Color c : {WHITE, BLACK})
+        if (v->dropNoDoubledCount.get(c) < 0)
+        {
+            if (DoCheck)
+                std::cerr << "dropNoDoubledCount - Invalid negative value." << std::endl;
+            return false;
+        }
     parse_attribute("freeDrops", v->freeDrops);
     parse_attribute("payPointsToDrop", v->payPointsToDrop);
     parse_attribute("potions", v->potions);
@@ -1851,6 +1858,14 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("jumpPotion", v->potionPiece[Variant::POTION_JUMP], v);
     parse_attribute("freezeCooldown", v->potionCooldown[Variant::POTION_FREEZE]);
     parse_attribute("jumpCooldown", v->potionCooldown[Variant::POTION_JUMP]);
+    for (int cooldown : v->potionCooldown)
+        if (cooldown < 0 || cooldown > (1 << POTION_COOLDOWN_BITS))
+        {
+            if (DoCheck)
+                std::cerr << "Potion cooldown must be between 0 and "
+                          << (1 << POTION_COOLDOWN_BITS) << "." << std::endl;
+            return false;
+        }
     if (v->potionPiece[Variant::POTION_FREEZE] != NO_PIECE_TYPE
         && v->potionPiece[Variant::POTION_FREEZE] == v->potionPiece[Variant::POTION_JUMP])
     {
@@ -2915,13 +2930,24 @@ bool VariantParser<DoCheck>::parse_multimoves(Variant* v) {
                 return false;
             }
     }
+    int64_t firstMultimove = v->multimoves.size() >= 2 ? v->multimoves[v->multimoves.size() - 2]
+                           : v->multimoves.size() == 1 ? v->multimoves.back() : 1;
+    int64_t secondMultimove = v->multimoves.empty() ? 1 : v->multimoves.back();
+    int64_t cycle = 2 * firstMultimove - 1 + 2 * secondMultimove - 1;
+    if (cycle <= 0 || cycle > std::numeric_limits<int>::max())
+    {
+        if (DoCheck)
+            std::cerr << "multimoves - Derived cycle exceeds the supported int range." << std::endl;
+        return false;
+    }
+
     if (DoCheck)
     {
-        int usedPly = 0;
+        int64_t usedPly = 0;
         size_t usedEntries = 0;
         for (int n : v->multimoves)
         {
-            int segment = 2 * n - 1;
+            int64_t segment = 2 * int64_t(n) - 1;
             if (segment <= 0 || usedPly + segment >= START_MULTIMOVES)
                 break;
             usedPly += segment;

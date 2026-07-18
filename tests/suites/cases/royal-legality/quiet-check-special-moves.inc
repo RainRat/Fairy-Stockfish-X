@@ -300,6 +300,17 @@ static void test_non_laser_quiet_checks_are_checks() {
         assert(pos.gives_check(em));
 }
 
+static void test_discovered_quiet_check() {
+    StateInfo st{};
+    Position pos;
+    pos.set(variants.get("chess"),
+            "4k3/8/8/8/8/8/4B3/K3R3 w - - 0 1", false, &st, nullptr);
+
+    const Move discovered = make<NORMAL>(SQ_E2, SQ_D3);
+    assert(pos.gives_check(discovered));
+    assert(MoveList<QUIET_CHECKS>(pos).contains(discovered));
+}
+
 int main(int argc, char** argv) {
     init_test_engine();
     load_variants();
@@ -307,6 +318,8 @@ int main(int argc, char** argv) {
     auto run_case = [&](const char* which) {
         if (!which || !std::strcmp(which, "non-laser"))
             test_non_laser_quiet_checks_are_checks();
+        if (!which || !std::strcmp(which, "discovered"))
+            test_discovered_quiet_check();
         if (!which || !std::strcmp(which, "pairdrop"))
             test_pairdrop();
         if (!which || !std::strcmp(which, "probe-nodes"))

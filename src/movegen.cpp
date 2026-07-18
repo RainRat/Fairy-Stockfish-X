@@ -969,11 +969,16 @@ namespace {
 
         if (Type == QUIET_CHECKS)
         {
-            b1 &= pos.check_squares(Pt);
-            if (b2)
-                b2 &= pos.check_squares(pos.promoted_piece_type(Pt));
-            if (b3)
-                b3 &= pos.check_squares(type_of(pos.unpromoted_piece_on(from)));
+            // A move by an enemy-king blocker can give discovered check from
+            // its new square without that square being a direct check square.
+            if (Pt == QUEEN || !(pos.blockers_for_king(~Us) & from))
+            {
+                b1 &= pos.check_squares(Pt);
+                if (b2)
+                    b2 &= pos.check_squares(pos.promoted_piece_type(Pt));
+                if (b3)
+                    b3 &= pos.check_squares(type_of(pos.unpromoted_piece_on(from)));
+            }
         }
 
         const PieceInfo* pieceInfo = pieceMap.get(Pt);
