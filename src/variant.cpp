@@ -16,6 +16,7 @@
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <algorithm>
 #include <string>
 #include <iostream>
 #include <fstream>
@@ -2172,6 +2173,35 @@ Variant* Variant::conclude() {
     concluded = true;
 
     rebuild_piece_symbol_maps();
+
+    std::vector<std::pair<int, int>> blastOffsets;
+    if (blastPattern.empty())
+    {
+        if (blastOrthogonals)
+            for (const auto& offset : {std::pair<int, int>{1, 0}, {0, 1}, {-1, 0}, {0, -1}})
+                blastOffsets.push_back(offset);
+        if (blastDiagonals)
+            for (const auto& offset : {std::pair<int, int>{1, 1}, {1, -1}, {-1, 1}, {-1, -1}})
+                blastOffsets.push_back(offset);
+        blastPatternCenter = blastCenter;
+    }
+    else
+    {
+        bool valid = parse_blast_pattern(blastPattern, blastOffsets, blastPatternCenter);
+        assert(valid);
+        (void)valid;
+    }
+    blastPatternHasNonCenter = !blastOffsets.empty();
+    std::fill(std::begin(blastPatternMask), std::end(blastPatternMask), Bitboard(0));
+    for (Square s = SQ_A1; s < SQUARE_NB; ++s)
+        for (const auto& [dr, df] : blastOffsets)
+        {
+            int r = int(rank_of(s)) + dr;
+            int f = int(file_of(s)) + df;
+            if (r < 0 || r > int(maxRank) || f < 0 || f > int(maxFile))
+                continue;
+            blastPatternMask[s] |= Bitboard(1) << make_square(File(f), Rank(r));
+        }
 
     // Backward compatibility: legacy extinctionPseudoRoyal used extinction
     // piece fields to define pseudo-royal behavior.

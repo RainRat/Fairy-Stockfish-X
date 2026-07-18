@@ -494,9 +494,8 @@ public:
   bool blast_on_move() const;
   bool blast_on_self_destruct() const;
   bool blast_promotion() const;
-  bool blast_diagonals() const;
-  bool blast_orthogonals() const;
   bool blast_center() const;
+  bool blast_has_noncenter() const;
   PieceSet blast_immune_types() const;
   PieceSet death_on_capture_types() const;
   Bitboard blast_immune_bb() const;
@@ -1375,19 +1374,14 @@ inline bool Position::blast_promotion() const {
   return var->blastPromotion;
 }
 
-inline bool Position::blast_diagonals() const {
-  assert(var != nullptr);
-  return var->blastDiagonals;
-}
-
-inline bool Position::blast_orthogonals() const {
-  assert(var != nullptr);
-  return var->blastOrthogonals;
-}
-
 inline bool Position::blast_center() const {
   assert(var != nullptr);
-  return var->blastCenter;
+  return var->blastPatternCenter;
+}
+
+inline bool Position::blast_has_noncenter() const {
+  assert(var != nullptr);
+  return var->blastPatternHasNonCenter;
 }
 
 inline bool Position::blast_on_capture_mover_center() const {
@@ -1415,12 +1409,7 @@ inline Bitboard Position::blast_immune_bb() const {
 }
 
 inline Bitboard Position::blast_pattern(Square to) const {
-    Bitboard blastPattern = 0;
-    if (blast_orthogonals())
-        blastPattern |= attacks_bb<WAZIR>(to);
-    if (blast_diagonals())
-        blastPattern |= attacks_bb<KING>(to) & ~attacks_bb<WAZIR>(to);
-    return blastPattern;
+    return var->blastPatternMask[to];
 }
 
 inline Bitboard Position::blast_squares(Square to) const {

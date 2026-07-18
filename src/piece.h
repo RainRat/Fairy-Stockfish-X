@@ -31,7 +31,6 @@
 namespace Stockfish {
 
 
-
 // Special distance value for dynamic slider length (Betza 'x' modifier)
 constexpr int DYNAMIC_SLIDER_LIMIT = -2;
 // Special distance value for ski/slip sliders (Betza 'j' modifier)
@@ -310,6 +309,9 @@ private:
 extern PieceMap pieceMap;
 
 bool validate_custom_piece_betza(const std::string& betza, const std::string& name, const Variant* variant = nullptr);
+bool parse_blast_pattern(const std::string& pattern,
+                         std::vector<std::pair<int, int>>& offsets,
+                         bool& includeCenter);
 
 inline std::string piece_name(PieceType pt) {
   return is_custom(pt) ? "customPiece" + std::to_string(pt - CUSTOM_PIECES + 1)

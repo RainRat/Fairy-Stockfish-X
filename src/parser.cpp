@@ -1672,6 +1672,34 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("blastOnSelfDestruct", v->blastOnSelfDestruct);
     parse_attribute("selfDestructTypes", v->selfDestructTypes, v);
     parse_attribute("blastPromotion", v->blastPromotion);
+    const bool hasLegacyBlastShape = config.count("blastDiagonals")
+                                  || config.count("blastOrthogonals")
+                                  || config.count("blastCenter");
+    std::string blastPattern = v->blastPattern;
+    if (parse_attribute("blastPattern", blastPattern))
+    {
+        blastPattern = trim(blastPattern);
+        if (blastPattern == "-")
+            v->blastPattern.clear();
+        else
+        {
+            std::vector<std::pair<int, int>> offsets;
+            bool includeCenter = false;
+            if (hasLegacyBlastShape || !parse_blast_pattern(blastPattern, offsets, includeCenter))
+            {
+                if (DoCheck)
+                    std::cerr << "blastPattern must use symmetric leaper atoms or tuple leapers, with an optional trailing '*', and cannot be combined with legacy blast shape options." << std::endl;
+                return false;
+            }
+            v->blastPattern = blastPattern;
+        }
+    }
+    else if (hasLegacyBlastShape && !v->blastPattern.empty())
+    {
+        if (DoCheck)
+            std::cerr << "Legacy blast shape options cannot override an inherited blastPattern; set blastPattern = - to select the legacy shape." << std::endl;
+        return false;
+    }
     parse_attribute("blastDiagonals", v->blastDiagonals);
     parse_attribute("blastCenter", v->blastCenter);
     parse_attribute("blastOnCaptureMoverCenter", v->blastOnCaptureMoverCenter);

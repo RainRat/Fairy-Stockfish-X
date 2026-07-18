@@ -3453,7 +3453,7 @@ bool Position::placement_rules_legal(Move m, Color us) const {
           if ((capture(m) || rifleShot) && blast_on_capture(m))
           {
               moverRemovedByBlast = (blast_on_capture(moved_piece(m), captured_piece(m))
-                                     && blast_center() && !blast_orthogonals() && !blast_diagonals())
+                                     && blast_center() && !blast_has_noncenter())
                                  || (blast_center() && effectiveTo == captureBlastCenter);
           }
           else if ((blast_on_move() && !capture(m) && !is_self_destruct(m))
@@ -3769,7 +3769,7 @@ bool Position::placement_rules_legal(Move m, Color us) const {
                                             ? (rifleShot ? from_sq(m) : to_sq(m))
                                             : capture_square(m);
                   moverRemovedByBlast = (blast_on_capture(moved_piece(m), captured_piece(m))
-                                         && blast_center() && !blast_orthogonals() && !blast_diagonals())
+                                         && blast_center() && !blast_has_noncenter())
                                      || (blast_center() && placementSquares[i] == captureBlastCenter
                                          && placementSquares[i] == effectiveTo);
               }
@@ -4055,7 +4055,7 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
       if (blast_on_capture(m) && (blast_immune_types() & movePt))
           info.removedByEffects &= ~square_bb(info.effectiveTo);
       else if (blast_on_capture(moved_piece(m), captured_piece(m)) && blast_center()
-               && !blast_orthogonals() && !blast_diagonals())
+               && !blast_has_noncenter())
           info.removedByEffects |= square_bb(info.effectiveTo);
   }
 

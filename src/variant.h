@@ -161,6 +161,10 @@ struct Variant {
   PieceSet changingColorPieceTypes = NO_PIECE_SET;
   PieceSet selfDestructTypes = NO_PIECE_SET;
   bool blastPromotion = false;
+  std::string blastPattern = "";
+  Bitboard blastPatternMask[SQUARE_NB] = {};
+  bool blastPatternCenter = true;
+  bool blastPatternHasNonCenter = true;
   bool blastDiagonals = true;
   bool blastCenter = true;
   bool blastOnCaptureMoverCenter = false;
