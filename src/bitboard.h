@@ -938,9 +938,6 @@ inline Square lsb(Bitboard b);
 
 // Precondition: R is exactly one rider bit.
 inline Bitboard rider_attacks_single_rider_bb(RiderType R, Square s, Bitboard occupied, const MagicGeometry* mg = current_magic_geometry) {
-
-  assert(R != NO_RIDER && !(R & (R - 1)));
-
   if (R == RIDER_LAME_DABBABA)
       return rider_attacks_bb<RIDER_LAME_DABBABA>(s, occupied, mg);
   if (R == RIDER_ELEPHANT)

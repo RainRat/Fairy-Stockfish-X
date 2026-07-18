@@ -217,10 +217,13 @@ void ThreadPool::start_thinking(Position& pos, StateListPtr& states,
   Search::Limits = limits;
   Search::RootMoves rootMoves;
 
+  const bool filterLaserRotations = limits.perft == 0;
+  pos.set_search_laser_rotation_filter(filterLaserRotations);
   for (const auto& m : MoveList<LEGAL>(pos))
       if (   (limits.searchmoves.empty() || std::count(limits.searchmoves.begin(), limits.searchmoves.end(), m))
           && (limits.banmoves.empty() || !std::count(limits.banmoves.begin(), limits.banmoves.end(), m)))
           rootMoves.emplace_back(m);
+  pos.set_search_laser_rotation_filter(false);
 
   // Add virtual drops
   if (pos.two_boards() && pos.virtual_drops() && Partner.opptime && limits.time[pos.side_to_move()] > Partner.opptime + 1000)
@@ -291,6 +294,7 @@ void ThreadPool::start_thinking(Position& pos, StateListPtr& states,
       th->rootDepth = th->completedDepth = 0;
       th->rootMoves = rootMoves;
       th->rootPos.set(pos.variant(), rootFen, pos.is_chess960(), &th->rootState, th);
+      th->rootPos.set_search_laser_rotation_filter(filterLaserRotations);
       if (setupStates && !setupStates->empty())
           th->rootState = setupStates->back();
   }

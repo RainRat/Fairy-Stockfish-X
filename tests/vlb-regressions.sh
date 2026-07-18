@@ -140,7 +140,7 @@ VAR
   printf '%s\n' "$out"
   [[ "$out" == *"variant vlb-token-smoke"* ]]
   [[ "$out" == *"Fen: 4k/5/5/5/A'3K[A'a'] w - - 0 1"* ]]
-  [[ "$out" == *" | A' |"* ]]
+  [[ "$out" == *" |A' |"* ]]
   [[ "$out" == *"A'@b1: 1"* ]]
   [[ "$out" == *"Nodes searched: 27"* ]]
   [[ "$out" != *"Invalid syntax"* ]]

@@ -704,6 +704,9 @@ inline int read_fen_number(const std::string& text, size_t& idx) {
 }
 
 inline Validation check_for_valid_characters(const std::string& firstFenPart, const std::string& validSpecialCharactersFirstField, const Variant* v) {
+    PieceType lastPt = NO_PIECE_TYPE;
+    bool orientationSeen = false;
+    bool promotedPrefix = false;
     for (size_t i = 0; i < firstFenPart.size();)
     {
         char c = firstFenPart[i];
@@ -711,20 +714,55 @@ inline Validation check_for_valid_characters(const std::string& firstFenPart, co
         {
             if (v && v->shogiStylePromotions)
             {
+                lastPt = NO_PIECE_TYPE;
+                promotedPrefix = true;
                 ++i;
                 continue;
             }
             std::cerr << "Invalid piece character: '+'." << std::endl;
             return NOK;
         }
+        if (c == '(' && v && v->laserGame)
+        {
+            if (orientationSeen || i == 0 || i + 2 >= firstFenPart.size()
+                || !std::isdigit(static_cast<unsigned char>(firstFenPart[i + 1]))
+                || firstFenPart[i + 2] != ')')
+            {
+                std::cerr << "Invalid orientation suffix: '('." << std::endl;
+                return NOK;
+            }
+            if (lastPt == NO_PIECE_TYPE || !v->is_oriented(lastPt))
+            {
+                std::cerr << "Orientation specified for unoriented piece." << std::endl;
+                return NOK;
+            }
+            int orient = firstFenPart[i + 1] - '0';
+            if (orient < 0 || orient >= v->orientation_count(lastPt))
+            {
+                std::cerr << "Invalid orientation digit: '" << firstFenPart[i + 1] << "'." << std::endl;
+                return NOK;
+            }
+            orientationSeen = true;
+            i += 3;
+            continue;
+        }
         if (Variant::is_piece_id_start(c))
         {
             std::string symbol = read_piece_symbol(firstFenPart, i);
-            if (v && v->piece_from_symbol(symbol) != NO_PIECE)
+            Piece pc = v ? v->piece_from_symbol(symbol) : NO_PIECE;
+            if (pc != NO_PIECE)
+            {
+                lastPt = promotedPrefix ? v->promotedPieceType[type_of(pc)] : type_of(pc);
+                promotedPrefix = false;
+                orientationSeen = false;
                 continue;
+            }
             std::cerr << "Invalid piece character: '" << symbol << "'." << std::endl;
             return NOK;
         }
+        lastPt = NO_PIECE_TYPE;
+        promotedPrefix = false;
+        orientationSeen = false;
         ++i;
         if (!std::isdigit(static_cast<unsigned char>(c))
             && !contains(validSpecialCharactersFirstField, c))
@@ -808,6 +846,18 @@ inline Validation fill_char_board(CharBoard& board, const std::string& fenBoard,
                 ++i;
                 ++fileIdx;
             }
+            continue;
+        }
+        if (c == '(' && v && v->laserGame)
+        {
+            i += (i + 2 < fenBoard.size()
+               && std::isdigit(static_cast<unsigned char>(fenBoard[i + 1]))
+               && fenBoard[i + 2] == ')') ? 3 : 1;
+            continue;
+        }
+        if (c == '+' && v && v->laserGame)
+        {
+            i += 1;
             continue;
         }
         if (c == '*' || c == '^')

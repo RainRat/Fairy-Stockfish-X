@@ -727,6 +727,18 @@ string UCI::move(const Position& pos, Move m) {
   if (is_pass(m))
       return "0000";
 
+  if (is_laser_fire(m))
+  {
+      std::string fire = UCI::square(pos, from) + UCI::square(pos, to);
+      if (is_gating(m))
+      {
+          fire += ":" + std::to_string(rotation_value(m));
+          if (rotation_square(m) != from)
+              fire += UCI::square(pos, rotation_square(m));
+      }
+      return fire + "f";
+  }
+
   bool is_wall_only = wallMove && type_of(m) == SPECIAL && from == to;
   if (is_wall_only)
       return (CurrentProtocol == XBOARD ? "@@@@," : "0000,") + UCI::square(pos, gating_square(m));
@@ -769,7 +781,7 @@ string UCI::move(const Position& pos, Move m) {
       }
   }
 
-  if (is_gating(m) && gating_square(m) == to && !potionMove)
+  if (is_gating(m) && gating_square(m) == to && !potionMove && !pos.laser_game())
       from = to_sq(m), to = from_sq(m);
   else if (type_of(m) == CASTLING && !pos.is_chess960())
   {
@@ -794,15 +806,43 @@ string UCI::move(const Position& pos, Move m) {
       appendWall();
 
   if (type_of(m) == PROMOTION || type_of(m) == PROMOTION_POTION)
-      move += pos.piece_symbol(make_piece(BLACK, promotion_type(m)));
+  {
+      PieceType pt = promotion_type(m);
+      if (pos.laser_game() && pos.is_oriented(pt))
+      {
+          move += pos.piece_symbol(make_piece(BLACK, pt));
+          int orient = pos.variant()->hasLaserPromotionOrientation[pos.side_to_move()][pt]
+                     ? pos.variant()->laserPromotionOrientation[pos.side_to_move()][pt] : 0;
+          if (orient > 0)
+              move += ":" + std::to_string(orient);
+      }
+      else
+          move += pos.piece_symbol(make_piece(BLACK, pt));
+      if (is_gating(m) && pos.laser_game())
+          move += "," + UCI::square(pos, gating_square(m));
+  }
   else if (type_of(m) == PIECE_PROMOTION)
+  {
       move += '+';
+      if (is_gating(m) && pos.laser_game())
+          move += "," + UCI::square(pos, gating_square(m));
+  }
   else if (type_of(m) == PIECE_DEMOTION)
+      move += '-';
+  else if (is_stack_move(m))
+      move += '+';
+  else if (is_unstack_move(m))
       move += '-';
   else if (is_gating(m) && !potionMove && !pos.walling(pos.side_to_move()))
   {
-      move += pos.piece_symbol(make_piece(BLACK, gating_type(m)));
-      if (gating_square(m) != from)
+      if (pos.laser_game())
+      {
+          move += ":" + std::to_string(rotation_value(m));
+      }
+      else
+          move += pos.piece_symbol(make_piece(BLACK, gating_type(m)));
+
+      if (gating_square(m) != from && (!pos.laser_game() || from != to))
           move += UCI::square(pos, gating_square(m));
   }
   else if (cloneMove)

@@ -290,11 +290,23 @@ static void test_gate_history_square_validation() {
     assert(gate_history_square(ordinary) == SQ_NONE);
 }
 
+static void test_non_laser_quiet_checks_are_checks() {
+    StateInfo st{};
+    Position pos;
+    pos.set(variants.get("chess"),
+            "4k3/8/8/8/8/8/8/R3K3 w - - 0 1", false, &st, nullptr);
+
+    for (const auto& em : MoveList<QUIET_CHECKS>(pos))
+        assert(pos.gives_check(em));
+}
+
 int main(int argc, char** argv) {
     init_test_engine();
     load_variants();
 
     auto run_case = [&](const char* which) {
+        if (!which || !std::strcmp(which, "non-laser"))
+            test_non_laser_quiet_checks_are_checks();
         if (!which || !std::strcmp(which, "pairdrop"))
             test_pairdrop();
         if (!which || !std::strcmp(which, "probe-nodes"))

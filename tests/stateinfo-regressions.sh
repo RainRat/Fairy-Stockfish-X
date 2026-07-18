@@ -47,6 +47,16 @@ blastPromotion = true
 [royal-blast-see:chess]
 blastOnCapture = true
 castling = false
+
+[stack-transform:chess]
+laserGame = true
+customPiece1 = a:K
+stackedPieceType = r:a
+laserEmitters = white@a1:0, black@h8:2
+laser_r = D/D/D/D
+laser_a = D/D/D/D
+laser_k = D/D/D/D
+castling = false
 )ini");
     variants.parse_istream<false>(ss);
 }
@@ -159,6 +169,62 @@ static void test_spell_chess_null_move_decays() {
     assert(pos.state()->potionCooldown[WHITE][Variant::POTION_JUMP] == 1);
 }
 
+static void test_stack_piece_transforms_and_undo() {
+    const Variant* stackTransform = variants.get("stack-transform");
+    PSQT::init(stackTransform);
+    StateInfo st{};
+    Position pos;
+    pos.set(stackTransform, "7k/8/8/8/8/8/1RR5/7K w - - 0 1", false, &st, nullptr);
+
+    Piece result = make_piece(WHITE, CUSTOM_PIECE_1);
+    assert(PieceValue[MG][result] == 2 * PieceValue[MG][W_ROOK]);
+    assert(PieceValue[EG][result] == 2 * PieceValue[EG][W_ROOK]);
+    const Value beforeNpm = pos.non_pawn_material(WHITE);
+    const Key beforeKey = pos.key();
+    const Key beforeMaterialKey = pos.state()->materialKey;
+    std::string stackText = "b2c2+";
+    Move stack = UCI::to_move(pos, stackText);
+    assert(stack != MOVE_NONE && pos.legal(stack));
+
+    StateInfo stackedState{};
+    pos.do_move(stack, stackedState);
+    assert(pos.pos_is_ok());
+    assert(pos.piece_on(SQ_C2) == result);
+    assert(pos.count<ROOK>(WHITE) == 0);
+    assert(pos.count(WHITE, CUSTOM_PIECE_1) == 1);
+    assert(pos.non_pawn_material(WHITE) == beforeNpm);
+
+    pos.undo_move(stack);
+    assert(pos.pos_is_ok());
+    assert(pos.piece_on(SQ_B2) == W_ROOK && pos.piece_on(SQ_C2) == W_ROOK);
+    assert(pos.non_pawn_material(WHITE) == beforeNpm);
+    assert(pos.key() == beforeKey);
+    assert(pos.state()->materialKey == beforeMaterialKey);
+
+    StateInfo laserSt{};
+    pos.set(stackTransform, "7k/8/8/8/8/A7/8/7K w - - 0 1", false, &laserSt, nullptr);
+    assert(pos.piece_on(SQ_A3) == result);
+    const Value stackedNpm = pos.non_pawn_material(WHITE);
+    const Key stackedKey = pos.key();
+    const Key stackedMaterialKey = pos.state()->materialKey;
+    std::string triggerText = "h1g1";
+    Move trigger = UCI::to_move(pos, triggerText);
+    assert(trigger != MOVE_NONE && pos.legal(trigger));
+
+    StateInfo firedState{};
+    pos.do_move(trigger, firedState);
+    assert(pos.pos_is_ok());
+    assert(pos.piece_on(SQ_A3) == W_ROOK);
+    assert(pos.non_pawn_material(WHITE) == stackedNpm - PieceValue[MG][W_ROOK]);
+
+    pos.undo_move(trigger);
+    assert(pos.pos_is_ok());
+    assert(pos.piece_on(SQ_A3) == result);
+    assert(pos.non_pawn_material(WHITE) == stackedNpm);
+    assert(pos.key() == stackedKey);
+    assert(pos.state()->materialKey == stackedMaterialKey);
+}
+
 int main() {
     init_test_engine();
     load_variants();
@@ -167,6 +233,7 @@ int main() {
     test_null_move_clears_undo_payload();
     test_null_move_preserves_extinction_history();
     test_spell_chess_null_move_decays();
+    test_stack_piece_transforms_and_undo();
     return 0;
 }
 EOF
