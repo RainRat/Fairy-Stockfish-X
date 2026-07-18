@@ -182,10 +182,8 @@ Entry* probe(const Position& pos) {
           npm2 += pos.count_in_hand(pt) * PieceValue[MG][make_piece(WHITE, pt)];
       }
       e->gamePhase = Phase(PHASE_MIDGAME * npm / std::max(int(npm + npm2), 1));
-      int countAll = pos.count_with_hand(WHITE, ALL_PIECES) + pos.count_with_hand(BLACK, ALL_PIECES)
-                   + popcount(pos.stacked_pieces());
-      int pawnCount = pos.count_with_stacks(WHITE, PAWN) + pos.count_with_stacks(BLACK, PAWN);
-      e->materialDensity = (npm + npm2 + pawnCount * PawnValueMg) * countAll / (pos.files() * pos.ranks());
+      int countAll = pos.count_with_hand(WHITE, ALL_PIECES) + pos.count_with_hand(BLACK, ALL_PIECES);
+      e->materialDensity = (npm + npm2 + pos.count<PAWN>() * PawnValueMg) * countAll / (pos.files() * pos.ranks());
   }
   else
       e->gamePhase = Phase(((npm - EndgameLimit) * PHASE_MIDGAME) / (MidgameLimit - EndgameLimit));
@@ -307,12 +305,10 @@ Entry* probe(const Position& pos) {
   // for the bishop pair "extended piece", which allows us to be more flexible
   // in defining bishop pair bonuses.
   const int pieceCount[COLOR_NB][PIECE_TYPE_NB] = {
-  { pos.count_with_stacks(WHITE, BISHOP) > 1, pos.count_with_stacks(WHITE, PAWN),
-    pos.count_with_stacks(WHITE, KNIGHT), pos.count_with_stacks(WHITE, BISHOP),
-    pos.count_with_stacks(WHITE, ROOK), pos.count_with_stacks(WHITE, QUEEN) },
-  { pos.count_with_stacks(BLACK, BISHOP) > 1, pos.count_with_stacks(BLACK, PAWN),
-    pos.count_with_stacks(BLACK, KNIGHT), pos.count_with_stacks(BLACK, BISHOP),
-    pos.count_with_stacks(BLACK, ROOK), pos.count_with_stacks(BLACK, QUEEN) } };
+  { pos.count<BISHOP>(WHITE) > 1, pos.count<PAWN>(WHITE), pos.count<KNIGHT>(WHITE),
+    pos.count<BISHOP>(WHITE)    , pos.count<ROOK>(WHITE), pos.count<QUEEN >(WHITE) },
+  { pos.count<BISHOP>(BLACK) > 1, pos.count<PAWN>(BLACK), pos.count<KNIGHT>(BLACK),
+    pos.count<BISHOP>(BLACK)    , pos.count<ROOK>(BLACK), pos.count<QUEEN >(BLACK) } };
 
   e->score = (imbalance<WHITE>(pos, pieceCount) - imbalance<BLACK>(pos, pieceCount)) / 16;
   return e;

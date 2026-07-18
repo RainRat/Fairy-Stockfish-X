@@ -1337,12 +1337,11 @@ namespace {
             for (PieceSet ps = pos.variant()->stackingPieceTypes; ps;)
             {
                 PieceType pt = pop_lsb(ps);
-                Bitboard froms = pos.pieces(Us, pt) & ~pos.stacked_pieces();
+                Bitboard froms = pos.pieces(Us, pt);
                 while (froms)
                 {
                     Square from = pop_lsb(froms);
-                    Bitboard targets = PseudoAttacks[WHITE][KING][from]
-                                     & pos.pieces(Us, pt) & ~pos.stacked_pieces();
+                    Bitboard targets = PseudoAttacks[WHITE][KING][from] & pos.pieces(Us, pt);
                     while (targets)
                     {
                         Move m = make<STACK>(from, pop_lsb(targets));
@@ -1351,7 +1350,12 @@ namespace {
                     }
                 }
 
-                froms = pos.pieces(Us, pt) & pos.stacked_pieces();
+            }
+
+            for (PieceSet ps = pos.variant()->stackedPieceTypes; ps;)
+            {
+                PieceType pt = pop_lsb(ps);
+                Bitboard froms = pos.pieces(Us, pt);
                 while (froms)
                 {
                     Square from = pop_lsb(froms);

@@ -1973,7 +1973,34 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     if (v->payPointsToDrop)
         v->pointsCounting = true;
 
-    parse_attribute("stackingPieceTypes", v->stackingPieceTypes, v);
+    auto it_stacked_pt = config.find("stackedPieceType");
+    if (it_stacked_pt != config.end())
+    {
+        if (!parse_piece_type_map(it_stacked_pt->second, v, v->stackedPieceType))
+        {
+            if (DoCheck)
+                std::cerr << "stackedPieceType - Invalid syntax." << std::endl;
+            return false;
+        }
+    }
+    std::fill(std::begin(v->unstackedPieceType), std::end(v->unstackedPieceType), NO_PIECE_TYPE);
+    v->stackingPieceTypes = v->stackedPieceTypes = NO_PIECE_SET;
+    for (PieceType base = PAWN; base < PIECE_TYPE_NB; ++base)
+    {
+        PieceType result = v->stackedPieceType[base];
+        if (result == NO_PIECE_TYPE)
+            continue;
+        if (result == base || v->stackedPieceType[result] != NO_PIECE_TYPE
+            || v->unstackedPieceType[result] != NO_PIECE_TYPE)
+        {
+            if (DoCheck)
+                std::cerr << "stackedPieceType - Result types must be distinct and unique." << std::endl;
+            return false;
+        }
+        v->unstackedPieceType[result] = base;
+        v->stackingPieceTypes |= base;
+        v->stackedPieceTypes |= result;
+    }
 
     auto it_emitters = config.find("laserEmitters");
     if (it_emitters != config.end())

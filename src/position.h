@@ -240,8 +240,6 @@ struct StateInfoCopied {
   Bitboard potionZones[COLOR_NB][Variant::POTION_TYPE_NB];
   int potionCooldown[COLOR_NB][Variant::POTION_TYPE_NB];
   Bitboard orientationBB[2];
-  Bitboard stackedPieces;
-  Score stackedPsq;
   Key pieceStateKey;
   Key reserveKey;
   Key layoutKey;
@@ -278,6 +276,7 @@ struct MoveUndoInfo {
   Bitboard   promotedBycatch = Bitboard(0);
   Bitboard   demotedBycatch = Bitboard(0);
   Bitboard   blastPromotedSquares = Bitboard(0);
+  Bitboard   laserTransformedSquares = Bitboard(0);
   ReversiblePieceOnSquare captured;
   ReversiblePieceOnSquare jumpedEnPassantCaptured;
   ReversiblePieceState dead;
@@ -301,6 +300,8 @@ struct MoveUndoInfo {
   Piece      replacedPiece = NO_PIECE;
   Piece      replacedUnpromoted = NO_PIECE;
   bool       replacedPromoted = false;
+  Piece      stackBasePiece = NO_PIECE;
+  Piece      stackResultPiece = NO_PIECE;
 
   void clear() {
     bycatchSquares = Bitboard(0);
@@ -309,6 +310,7 @@ struct MoveUndoInfo {
     promotedBycatch = Bitboard(0);
     demotedBycatch = Bitboard(0);
     blastPromotedSquares = Bitboard(0);
+    laserTransformedSquares = Bitboard(0);
     captured.clear();
     jumpedEnPassantCaptured.clear();
     dead.clear();
@@ -320,6 +322,8 @@ struct MoveUndoInfo {
     replacedPiece = NO_PIECE;
     replacedUnpromoted = NO_PIECE;
     replacedPromoted = false;
+    stackBasePiece = NO_PIECE;
+    stackResultPiece = NO_PIECE;
     dropHandColor = COLOR_NB;
     forcedJumpStep = 0;
     removedGatingType = NO_PIECE_TYPE;
@@ -341,6 +345,7 @@ struct MoveUndoInfo {
         && promotedBycatch == Bitboard(0)
         && demotedBycatch == Bitboard(0)
         && blastPromotedSquares == Bitboard(0)
+        && laserTransformedSquares == Bitboard(0)
         && !captured
         && !jumpedEnPassantCaptured
         && !dead
@@ -364,7 +369,9 @@ struct MoveUndoInfo {
         && !didPull
         && replacedPiece == NO_PIECE
         && replacedUnpromoted == NO_PIECE
-        && !replacedPromoted;
+        && !replacedPromoted
+        && stackBasePiece == NO_PIECE
+        && stackResultPiece == NO_PIECE;
   }
 #endif
 };
@@ -472,8 +479,6 @@ public:
   bool laser_game() const;
   bool is_oriented(PieceType pt) const;
   int orientation_on(Square s) const;
-  bool is_stacked(Square s) const;
-  Bitboard stacked_pieces() const;
   int promotion_limit(PieceType pt) const;
   bool promotion_allowed(Color c, PieceType pt) const;
   bool promotion_allowed(Color c, PieceType pt, Square s) const;
@@ -808,7 +813,6 @@ public:
   Square gate_square(Move m) const;
   bool empty(Square s) const;
   int count(Color c, PieceType pt) const;
-  int count_with_stacks(Color c, PieceType pt) const;
   template<PieceType Pt> int count(Color c) const;
   template<PieceType Pt> int count() const;
   template<PieceType Pt> Square square(Color c) const;
@@ -983,7 +987,6 @@ private:
   // Other helpers
   void move_piece(Square from, Square to);
   void set_orientation(Square s, int orientation);
-  void set_stacked(Square s, bool stacked);
   template<bool Do>
   void do_castling(Color us, Square from, Square& to, Square& rfrom, Square& rto);
   static Bitboard dynamic_slider_bb(const std::map<Direction,int>& directions,
@@ -1294,15 +1297,6 @@ inline int Position::orientation_on(Square s) const {
   assert(is_ok(s));
   return int(bool(st->orientationBB[0] & s))
        | (int(bool(st->orientationBB[1] & s)) << 1);
-}
-
-inline bool Position::is_stacked(Square s) const {
-  assert(is_ok(s));
-  return bool(st->stackedPieces & s);
-}
-
-inline Bitboard Position::stacked_pieces() const {
-  return st->stackedPieces;
 }
 
 inline int Position::promotion_limit(PieceType pt) const {
@@ -1617,7 +1611,6 @@ inline bool Position::nnue_applicable() const {
   // Do not use NNUE during setup phases (placement, sittuyin)
   return (!count_in_hand(ALL_PIECES) || nnue_use_pockets() || !must_drop())
          && !virtualPieces
-         && !st->stackedPieces
          && capture_type() != PRISON
          && (!nnue_king() || (count(WHITE, nnue_king()) == 1 && count(BLACK, nnue_king()) == 1));
 }
@@ -3199,10 +3192,6 @@ inline Color Position::color_of_piece_at(Square s1, Square s2, PieceType pt) con
 
 inline int Position::count(Color c, PieceType pt) const {
   return pieceCount[make_piece(c, pt)];
-}
-
-inline int Position::count_with_stacks(Color c, PieceType pt) const {
-  return count(c, pt) + popcount(st->stackedPieces & pieces(c, pt));
 }
 
 template<PieceType Pt> inline int Position::count(Color c) const {
@@ -4893,7 +4882,7 @@ inline Key Position::pawn_key() const {
 }
 
 inline Score Position::psq_score() const {
-  return psq + st->stackedPsq;
+  return psq;
 }
 
 inline Value Position::non_pawn_material(Color c) const {
@@ -5421,7 +5410,6 @@ inline Thread* Position::this_thread() const {
 inline void Position::put_piece(Piece pc, Square s, bool isPromoted, Piece unpromotedPc, bool markNotMoved) {
 
   set_orientation(s, 0);
-  set_stacked(s, false);
   board[s] = pc;
   byTypeBB[ALL_PIECES] |= byTypeBB[type_of(pc)] |= s;
   byColorBB[color_of(pc)] |= s;
@@ -5444,7 +5432,6 @@ inline void Position::remove_piece(Square s) {
 
   Piece pc = board[s];
   set_orientation(s, 0);
-  set_stacked(s, false);
   byTypeBB[ALL_PIECES] ^= s;
   byTypeBB[type_of(pc)] ^= s;
   byColorBB[color_of(pc)] ^= s;
@@ -5470,7 +5457,6 @@ inline void Position::move_piece(Square from, Square to) {
 
   Piece pc = board[from];
   int orientation = orientation_on(from);
-  bool stacked = is_stacked(from);
   Bitboard fromTo = square_bb(from) ^ to; // from == to needs to cancel out
   byTypeBB[ALL_PIECES] ^= fromTo;
   byTypeBB[type_of(pc)] ^= fromTo;
@@ -5483,9 +5469,7 @@ inline void Position::move_piece(Square from, Square to) {
   unpromotedBoard[to] = unpromotedBoard[from];
   unpromotedBoard[from] = NO_PIECE;
   set_orientation(from, 0);
-  set_stacked(from, false);
   set_orientation(to, orientation);
-  set_stacked(to, stacked);
 
   //Once moved, no matter whether the piece is on original square or on destination square (including captures) or the color of the piece, it is no longer not-moved-piece
   this->st->not_moved_pieces[WHITE] &= (~(square_bb(from) | square_bb(to)));
@@ -5501,8 +5485,6 @@ inline void Position::swap_piece(Square from, Square to) {
   Piece toUnpromoted = toPromoted ? unpromoted_piece_on(to) : NO_PIECE;
   int fromOrientation = orientation_on(from);
   int toOrientation = orientation_on(to);
-  bool fromStacked = is_stacked(from);
-  bool toStacked = is_stacked(to);
 
   remove_piece(from);
   remove_piece(to);
@@ -5510,8 +5492,6 @@ inline void Position::swap_piece(Square from, Square to) {
   put_piece(fromPc, to, fromPromoted, fromUnpromoted);
   set_orientation(from, toOrientation);
   set_orientation(to, fromOrientation);
-  set_stacked(from, toStacked);
-  set_stacked(to, fromStacked);
 }
 
 inline void Position::set_orientation(Square s, int orientation) {
@@ -5521,22 +5501,6 @@ inline void Position::set_orientation(Square s, int orientation) {
   st->orientationBB[1] = orientation & 2 ? st->orientationBB[1] | s
                                          : st->orientationBB[1] - s;
 }
-
-inline void Position::set_stacked(Square s, bool stacked) {
-  assert(is_ok(s));
-  bool wasStacked = bool(st->stackedPieces & s);
-  if (stacked == wasStacked)
-      return;
-  if (piece_on(s) != NO_PIECE)
-  {
-      if (stacked)
-          st->stackedPsq += PSQT::psq[piece_on(s)][s];
-      else
-          st->stackedPsq -= PSQT::psq[piece_on(s)][s];
-  }
-  st->stackedPieces = stacked ? st->stackedPieces | s : st->stackedPieces - s;
-}
-
 
 inline StateInfo* Position::state() const {
 

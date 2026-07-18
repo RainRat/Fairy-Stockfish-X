@@ -280,7 +280,7 @@ orientedPieceTypes = p
 orientationCounts = p
 
 [bad-stacking-piece:fairy]
-stackingPieceTypes = ?
+stackedPieceType = p:?
 
 [bad-laser-square:fairy]
 laserGame = true
@@ -508,7 +508,7 @@ assert_contains_literal "${initial_capture_output}" "laserAutoFire = false requi
 assert_contains_literal "${initial_capture_output}" "laserFireSelectedEmitter is incompatible with static laser emitters."
 assert_contains_literal "${initial_capture_output}" "orientationCounts - Invalid orientation count: 0"
 assert_contains_literal "${initial_capture_output}" "orientationCounts - Malformed entry: p"
-assert_contains_literal "${initial_capture_output}" "stackingPieceTypes - Invalid piece type: ?"
+assert_contains_literal "${initial_capture_output}" "stackedPieceType - Invalid syntax."
 assert_contains_literal "${initial_capture_output}" "laserEmitters - Invalid square coordinates: a10x"
 assert_contains_literal "${initial_capture_output}" "laserEmitters - Malformed token: "
 assert_contains_literal "${initial_capture_output}" "laserEmitters - Invalid square coordinates: a999999999999999999999999999999"

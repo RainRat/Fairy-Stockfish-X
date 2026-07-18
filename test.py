@@ -465,7 +465,8 @@ laserGame = true
 checking = false
 king = -
 castling = false
-stackingPieceTypes = p
+customPiece1 = a:K
+stackedPieceType = p:a
 startFen = 8/8/8/8/8/8/PP6/8 w - - 0 1
 """
         )
@@ -2639,12 +2640,12 @@ stepwisePushing = true
         load_repo_variants_or_skip()
         khet1_fen = sf.start_fen("khet1")
         khet_rows = khet1_fen.split()[0].split("/")
-        self.assertEqual(khet_rows[0], "4o+ko+p(0)2")
-        self.assertEqual(khet_rows[-1], "2P(2)O+KO+4")
+        self.assertEqual(khet_rows[0], "4tktp(0)2")
+        self.assertEqual(khet_rows[-1], "2P(2)TKT4")
         khet2_rows = sf.start_fen("khet2").split()[0].split("/")
         self.assertEqual(khet2_rows[0], "x(2)3a(2)ka(2)p(0)2")
         self.assertEqual(khet2_rows[-1], "2P(2)A(0)KA(0)3X(0)")
-        representative_fen = "9k/10/10/10/10/2P(1)O+6/10/9K w - - 0 1"
+        representative_fen = "9k/10/10/10/10/2P(1)T6/10/9K w - - 0 1"
         self.assertEqual(
             sf.get_fen("khet1", representative_fen, []), representative_fen
         )
@@ -2682,18 +2683,18 @@ stepwisePushing = true
         self.assertNotIn("c3d3", sf.legal_moves("khet1", khet_capture_fen, []))
 
         # A laser hit removes only the top Obelisk from a stack.
-        khet_stack_fen = "K9/9O+/10/10/10/2P(0)7/10/9k w - - 0 1"
+        khet_stack_fen = "K9/9T/10/10/10/2P(0)7/10/9k w - - 0 1"
         khet_stack_after = sf.get_fen("khet1", khet_stack_fen, ["c3c3:1"])
         self.assertIn("/9O/", khet_stack_after)
-        self.assertNotIn("O+", khet_stack_after)
+        self.assertNotIn("T", khet_stack_after)
 
         khet_stack_move_fen = "9k/10/10/10/10/10/OO8/9K w - - 0 1"
         khet_stack_moves = sf.legal_moves("khet1", khet_stack_move_fen, [])
         self.assertIn("a2b2+", khet_stack_moves)
         stacked_fen = sf.get_fen("khet1", khet_stack_move_fen, ["a2b2+"])
-        self.assertIn("/1O+8/", stacked_fen)
+        self.assertIn("/1T8/", stacked_fen)
 
-        khet_unstack_fen = "9k/10/10/10/10/10/1O+8/9K w - - 0 1"
+        khet_unstack_fen = "9k/10/10/10/10/10/1T8/9K w - - 0 1"
         self.assertIn("b2c3-", sf.legal_moves("khet1", khet_unstack_fen, []))
         unstacked_fen = sf.get_fen("khet1", khet_unstack_fen, ["b2c3-"])
         self.assertIn("/2O7/1O8/", unstacked_fen)
@@ -2861,7 +2862,8 @@ laserGame = true
 checking = false
 king = -
 castling = false
-stackingPieceTypes = p
+customPiece1 = a:K
+stackedPieceType = p:a
 startFen = 8/8/8/8/8/8/PP6/8 w - - 0 1
 
 [laser-portals:fairy]

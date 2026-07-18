@@ -706,25 +706,11 @@ inline int read_fen_number(const std::string& text, size_t& idx) {
 inline Validation check_for_valid_characters(const std::string& firstFenPart, const std::string& validSpecialCharactersFirstField, const Variant* v) {
     PieceType lastPt = NO_PIECE_TYPE;
     bool orientationSeen = false;
-    bool stackSeen = false;
     for (size_t i = 0; i < firstFenPart.size();)
     {
         char c = firstFenPart[i];
         if (c == '+')
         {
-            if (v && v->laserGame)
-            {
-                if (stackSeen || lastPt == NO_PIECE_TYPE
-                    || !v->can_stack(lastPt))
-                {
-                    std::cerr << "Invalid stacked suffix: '+'." << std::endl;
-                    return NOK;
-                }
-                lastPt = NO_PIECE_TYPE;
-                stackSeen = true;
-                ++i;
-                continue;
-            }
             if (v && v->shogiStylePromotions)
             {
                 lastPt = NO_PIECE_TYPE;
@@ -736,7 +722,7 @@ inline Validation check_for_valid_characters(const std::string& firstFenPart, co
         }
         if (c == '(' && v && v->laserGame)
         {
-            if (orientationSeen || stackSeen || i == 0 || i + 2 >= firstFenPart.size()
+            if (orientationSeen || i == 0 || i + 2 >= firstFenPart.size()
                 || !std::isdigit(static_cast<unsigned char>(firstFenPart[i + 1]))
                 || firstFenPart[i + 2] != ')')
             {
@@ -766,7 +752,6 @@ inline Validation check_for_valid_characters(const std::string& firstFenPart, co
             {
                 lastPt = type_of(pc);
                 orientationSeen = false;
-                stackSeen = false;
                 continue;
             }
             std::cerr << "Invalid piece character: '" << symbol << "'." << std::endl;
@@ -774,7 +759,6 @@ inline Validation check_for_valid_characters(const std::string& firstFenPart, co
         }
         lastPt = NO_PIECE_TYPE;
         orientationSeen = false;
-        stackSeen = false;
         ++i;
         if (!std::isdigit(static_cast<unsigned char>(c))
             && !contains(validSpecialCharactersFirstField, c))

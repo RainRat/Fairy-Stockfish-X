@@ -48,11 +48,13 @@ blastPromotion = true
 blastOnCapture = true
 castling = false
 
-[stack-material:chess]
+[stack-transform:chess]
 laserGame = true
-stackingPieceTypes = r
+customPiece1 = a:K
+stackedPieceType = r:a
 laserEmitters = white@a1:0, black@h8:2
 laser_r = D/D/D/D
+laser_a = D/D/D/D
 laser_k = D/D/D/D
 castling = false
 )ini");
@@ -167,14 +169,18 @@ static void test_spell_chess_null_move_decays() {
     assert(pos.state()->potionCooldown[WHITE][Variant::POTION_JUMP] == 1);
 }
 
-static void test_stacked_piece_counts_as_two_material_units() {
-    const Variant* stackMaterial = variants.get("stack-material");
+static void test_stack_piece_transforms_and_undo() {
+    const Variant* stackTransform = variants.get("stack-transform");
+    PSQT::init(stackTransform);
     StateInfo st{};
     Position pos;
-    pos.set(stackMaterial, "7k/8/8/8/8/8/1RR5/7K w - - 0 1", false, &st, nullptr);
+    pos.set(stackTransform, "7k/8/8/8/8/8/1RR5/7K w - - 0 1", false, &st, nullptr);
 
+    Piece result = make_piece(WHITE, CUSTOM_PIECE_1);
+    assert(PieceValue[MG][result] == 2 * PieceValue[MG][W_ROOK]);
+    assert(PieceValue[EG][result] == 2 * PieceValue[EG][W_ROOK]);
     const Value beforeNpm = pos.non_pawn_material(WHITE);
-    const Score beforePsq = pos.psq_score();
+    const Key beforeKey = pos.key();
     const Key beforeMaterialKey = pos.state()->materialKey;
     std::string stackText = "b2c2+";
     Move stack = UCI::to_move(pos, stackText);
@@ -183,23 +189,23 @@ static void test_stacked_piece_counts_as_two_material_units() {
     StateInfo stackedState{};
     pos.do_move(stack, stackedState);
     assert(pos.pos_is_ok());
-    assert(pos.count<ROOK>(WHITE) == 1);
-    assert(pos.count_with_stacks(WHITE, ROOK) == 2);
+    assert(pos.piece_on(SQ_C2) == result);
+    assert(pos.count<ROOK>(WHITE) == 0);
+    assert(pos.count(WHITE, CUSTOM_PIECE_1) == 1);
     assert(pos.non_pawn_material(WHITE) == beforeNpm);
-    assert(pos.psq_score() == beforePsq + PSQT::psq[W_ROOK][SQ_C2] - PSQT::psq[W_ROOK][SQ_B2]);
 
     pos.undo_move(stack);
     assert(pos.pos_is_ok());
-    assert(pos.count<ROOK>(WHITE) == 2);
-    assert(pos.count_with_stacks(WHITE, ROOK) == 2);
+    assert(pos.piece_on(SQ_B2) == W_ROOK && pos.piece_on(SQ_C2) == W_ROOK);
     assert(pos.non_pawn_material(WHITE) == beforeNpm);
-    assert(pos.psq_score() == beforePsq);
+    assert(pos.key() == beforeKey);
     assert(pos.state()->materialKey == beforeMaterialKey);
 
     StateInfo laserSt{};
-    pos.set(stackMaterial, "7k/8/8/8/8/R+7/8/7K w - - 0 1", false, &laserSt, nullptr);
+    pos.set(stackTransform, "7k/8/8/8/8/A7/8/7K w - - 0 1", false, &laserSt, nullptr);
+    assert(pos.piece_on(SQ_A3) == result);
     const Value stackedNpm = pos.non_pawn_material(WHITE);
-    const Score stackedPsq = pos.psq_score();
+    const Key stackedKey = pos.key();
     const Key stackedMaterialKey = pos.state()->materialKey;
     std::string triggerText = "h1g1";
     Move trigger = UCI::to_move(pos, triggerText);
@@ -208,18 +214,14 @@ static void test_stacked_piece_counts_as_two_material_units() {
     StateInfo firedState{};
     pos.do_move(trigger, firedState);
     assert(pos.pos_is_ok());
-    assert(!pos.is_stacked(SQ_A3));
-    assert(pos.count_with_stacks(WHITE, ROOK) == 1);
+    assert(pos.piece_on(SQ_A3) == W_ROOK);
     assert(pos.non_pawn_material(WHITE) == stackedNpm - PieceValue[MG][W_ROOK]);
-    assert(pos.psq_score() == stackedPsq - PSQT::psq[W_ROOK][SQ_A3]
-                                      + PSQT::psq[W_KING][SQ_G1] - PSQT::psq[W_KING][SQ_H1]);
 
     pos.undo_move(trigger);
     assert(pos.pos_is_ok());
-    assert(pos.is_stacked(SQ_A3));
-    assert(pos.count_with_stacks(WHITE, ROOK) == 2);
+    assert(pos.piece_on(SQ_A3) == result);
     assert(pos.non_pawn_material(WHITE) == stackedNpm);
-    assert(pos.psq_score() == stackedPsq);
+    assert(pos.key() == stackedKey);
     assert(pos.state()->materialKey == stackedMaterialKey);
 }
 
@@ -231,7 +233,7 @@ int main() {
     test_null_move_clears_undo_payload();
     test_null_move_preserves_extinction_history();
     test_spell_chess_null_move_decays();
-    test_stacked_piece_counts_as_two_material_units();
+    test_stack_piece_transforms_and_undo();
     return 0;
 }
 EOF

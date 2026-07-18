@@ -338,7 +338,10 @@ struct Variant {
   std::vector<Direction> staticEmitterDirs[COLOR_NB] = {};
   PieceType emitterPieceType = NO_PIECE_TYPE;
   PieceSet orientedPieceTypes = NO_PIECE_SET;
+  PieceType stackedPieceType[PIECE_TYPE_NB] = {};
+  PieceType unstackedPieceType[PIECE_TYPE_NB] = {};
   PieceSet stackingPieceTypes = NO_PIECE_SET;
+  PieceSet stackedPieceTypes = NO_PIECE_SET;
   int orientationCounts[PIECE_TYPE_NB] = {};
   bool rotateAfterMove = false;
 
@@ -370,7 +373,17 @@ struct Variant {
   }
 
   bool can_stack(PieceType pt) const {
-      return bool(stackingPieceTypes & pt);
+      return pt > NO_PIECE_TYPE && pt < PIECE_TYPE_NB
+          && stackedPieceType[pt] != NO_PIECE_TYPE;
+  }
+
+  bool can_unstack(PieceType pt) const {
+      return pt > NO_PIECE_TYPE && pt < PIECE_TYPE_NB
+          && unstackedPieceType[pt] != NO_PIECE_TYPE;
+  }
+
+  PieceType combined_piece_type(PieceType first, PieceType second) const {
+      return first == second && can_stack(first) ? stackedPieceType[first] : NO_PIECE_TYPE;
   }
 
 

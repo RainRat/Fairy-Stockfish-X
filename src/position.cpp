@@ -811,8 +811,6 @@ namespace Zobrist {
   Key wall[SQUARE_NB];
   Key dead[SQUARE_NB];
   Key orientation[4][SQUARE_NB];
-  Key stacked[SQUARE_NB];
-  Key stackedMaterial[PIECE_NB][SQUARE_NB];
   Key endgame[EG_EVAL_NB];
   Key points[COLOR_NB][MAX_ZOBRIST_POINTS];
 }
@@ -1270,8 +1268,6 @@ Key Position::compute_piece_state_key() const {
           Square s = pop_lsb(b);
           k ^= Zobrist::orientation[orientation_on(s)][s];
       }
-  for (Bitboard b = st->stackedPieces; b; )
-      k ^= Zobrist::stacked[pop_lsb(b)];
   return k;
 }
 
@@ -1384,14 +1380,6 @@ void Position::init() {
       for (Square s = SQ_A1; s <= SQ_MAX; ++s)
           Zobrist::orientation[orientation][s] = rng.rand<Key>();
 
-  for (Square s = SQ_A1; s <= SQ_MAX; ++s)
-      Zobrist::stacked[s] = rng.rand<Key>();
-
-  for (Color c : {WHITE, BLACK})
-      for (PieceType pt = PAWN; pt <= KING; ++pt)
-          for (int n = 0; n < SQUARE_NB; ++n)
-              Zobrist::stackedMaterial[make_piece(c, pt)][n] = rng.rand<Key>();
-
   for (Square from = SQ_A1; from <= SQ_MAX; ++from)
       for (Square to = SQ_A1; to <= SQ_MAX; ++to)
       {
@@ -1454,9 +1442,6 @@ Key Position::compute_material_key() const {
           Piece pc = make_piece(c, pt);
           for (int cnt = 0; cnt < pieceCount[pc]; ++cnt)
               key ^= Zobrist::psq[pc][cnt];
-          int stackedCount = count_with_stacks(c, pt) - pieceCount[pc];
-          for (int cnt = 0; cnt < stackedCount; ++cnt)
-              key ^= Zobrist::stackedMaterial[pc][cnt];
       }
 
   return key;
@@ -1626,13 +1611,7 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
                   ss.get();
           }
 
-          bool stacked = false;
           PieceType pt = type_of(pc);
-          if (v->laserGame && ss.peek() == '+' && v->can_stack(pt))
-          {
-              ss.get(); // consume '+'
-              stacked = true;
-          }
 
           if (ss.peek() == '~')
               ss >> token;
@@ -1648,7 +1627,6 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
               put_piece(pc, sq, token == '~', NO_PIECE, true);
               if (v->is_oriented(pt))
                   set_orientation(sq, orientation);
-              set_stacked(sq, stacked);
               ++sq;
           }
       }
@@ -2277,7 +2255,6 @@ void Position::recompute_state_hashes_and_material(StateInfo* si) const {
   si->key = si->materialKey = 0;
   si->pawnKey = Zobrist::noPawns;
   si->nonPawnMaterial[WHITE] = si->nonPawnMaterial[BLACK] = VALUE_ZERO;
-  si->stackedPsq = SCORE_ZERO;
 
   set_check_info(si);
 
@@ -2295,13 +2272,6 @@ void Position::recompute_state_hashes_and_material(StateInfo* si) const {
 
       else if (type_of(pc) != KING)
           si->nonPawnMaterial[color_of(pc)] += PieceValue[MG][pc];
-
-      if (pc && (si->stackedPieces & s))
-      {
-          si->stackedPsq += PSQT::psq[pc][s];
-          if (type_of(pc) != PAWN && type_of(pc) != KING)
-              si->nonPawnMaterial[color_of(pc)] += PieceValue[MG][pc];
-      }
   }
 
   for (Bitboard b = si->epSquares; b; )
@@ -2319,10 +2289,6 @@ void Position::recompute_state_hashes_and_material(StateInfo* si) const {
 
           for (int cnt = 0; cnt < pieceCount[pc]; ++cnt)
               si->materialKey ^= Zobrist::psq[pc][cnt];
-
-          int stackedCount = count_with_stacks(c, pt) - pieceCount[pc];
-          for (int cnt = 0; cnt < stackedCount; ++cnt)
-              si->materialKey ^= Zobrist::stackedMaterial[pc][cnt];
 
           if (piece_drops() || seirawan_gating() || potions_enabled() || two_boards())
           {
@@ -2550,8 +2516,6 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
               ss << piece_symbol(pc);
               if (var->is_oriented(pt))
                   ss << "(" << orientation_on(s) << ")";
-              if (is_stacked(s))
-                  ss << "+";
 
               // Set promoted pieces
               if (((captures_to_hand() && !drop_loop()) || two_boards() || showPromoted) && is_promoted(s))
@@ -5190,14 +5154,14 @@ bool Position::pseudo_legal(const Move m) const {
       Piece target = piece_on(to);
       return pc != NO_PIECE && target != NO_PIECE
           && color_of(pc) == us && target == pc
-          && var->can_stack(type_of(pc)) && !is_stacked(from) && !is_stacked(to)
+          && var->combined_piece_type(type_of(pc), type_of(target)) != NO_PIECE_TYPE
           && (!is_oriented(type_of(pc)) || orientation_on(from) == orientation_on(to))
           && bool(PseudoAttacks[WHITE][KING][from] & to);
   }
 
   if (is_unstack_move(m))
       return pc != NO_PIECE && color_of(pc) == us && empty(to)
-          && var->can_stack(type_of(pc)) && is_stacked(from)
+          && var->can_unstack(type_of(pc))
           && bool(PseudoAttacks[WHITE][KING][from] & to);
 
   // Universal-hopper semantics are handled by pseudo-move generation and
@@ -6665,48 +6629,87 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       }
       else if (stackMove)
       {
+          int orientation = orientation_on(to);
+          Piece result = make_piece(us, var->combined_piece_type(type_of(pc), type_of(piece_on(to))));
+          assert(result != NO_PIECE);
+          st->stackBasePiece = pc;
+          st->stackResultPiece = result;
+
           remove_piece(from);
-          set_stacked(to, true);
-          // The generic mover delta models from-to. Stacking actually removes
-          // the source and leaves the destination piece in place.
-          k ^= Zobrist::psq[pc][to];
-          int stackedCount = count_with_stacks(us, type_of(pc)) - pieceCount[pc];
+          remove_piece(to);
+          put_piece(result, to);
+          if (is_oriented(type_of(result)))
+              set_orientation(to, orientation);
+
+          k ^= Zobrist::psq[result][to];
           st->materialKey ^= Zobrist::psq[pc][pieceCount[pc]]
-                           ^ Zobrist::stackedMaterial[pc][stackedCount - 1];
+                           ^ Zobrist::psq[pc][pieceCount[pc] + 1]
+                           ^ Zobrist::psq[result][pieceCount[result] - 1];
           if (type_of(pc) == PAWN)
-              st->pawnKey ^= Zobrist::psq[pc][to];
+              st->pawnKey ^= Zobrist::psq[pc][from] ^ Zobrist::psq[pc][to];
+          if (type_of(result) == PAWN)
+              st->pawnKey ^= Zobrist::psq[result][to];
+          if (type_of(pc) != PAWN)
+              st->nonPawnMaterial[us] -= 2 * PieceValue[MG][pc];
+          if (type_of(result) != PAWN)
+              st->nonPawnMaterial[us] += PieceValue[MG][result];
           if (Eval::useNNUE)
           {
-              dp.dirty_num = 1;
+              dp.dirty_num = 3;
               init_dirty_piece_entry(dp, 0, pc, from, SQ_NONE, NO_PIECE, 0);
+              init_dirty_piece_entry(dp, 1, pc, to, SQ_NONE, NO_PIECE, 0);
+              init_dirty_piece_entry(dp, 2, result, SQ_NONE, to, NO_PIECE, 0);
           }
+          pc = result;
+          st->rule50 = 0;
       }
       else if (unstackMove)
       {
-          set_stacked(from, false);
-          put_piece(pc, to);
-          if (is_oriented(type_of(pc)))
-              set_orientation(to, orientation_on(from));
-          // The generic mover delta models from-to. Unstacking leaves the
-          // source in place and adds an identical destination piece.
-          k ^= Zobrist::psq[pc][from];
-          int stackedCount = count_with_stacks(us, type_of(pc)) - pieceCount[pc];
-          st->materialKey ^= Zobrist::psq[pc][pieceCount[pc] - 1]
-                           ^ Zobrist::stackedMaterial[pc][stackedCount];
-          if (type_of(pc) == PAWN)
-              st->pawnKey ^= Zobrist::psq[pc][from];
+          Piece result = pc;
+          Piece base = make_piece(us, var->unstackedPieceType[type_of(result)]);
+          int orientation = orientation_on(from);
+          assert(base != NO_PIECE);
+          st->stackBasePiece = base;
+          st->stackResultPiece = result;
+
+          remove_piece(from);
+          put_piece(base, from);
+          put_piece(base, to);
+          if (is_oriented(type_of(base)))
+          {
+              set_orientation(from, orientation);
+              set_orientation(to, orientation);
+          }
+
+          k ^= Zobrist::psq[result][to]
+             ^ Zobrist::psq[base][from] ^ Zobrist::psq[base][to];
+          st->materialKey ^= Zobrist::psq[result][pieceCount[result]]
+                           ^ Zobrist::psq[base][pieceCount[base] - 2]
+                           ^ Zobrist::psq[base][pieceCount[base] - 1];
+          if (type_of(result) == PAWN)
+              st->pawnKey ^= Zobrist::psq[result][from];
+          if (type_of(base) == PAWN)
+              st->pawnKey ^= Zobrist::psq[base][from] ^ Zobrist::psq[base][to];
+          if (type_of(result) != PAWN)
+              st->nonPawnMaterial[us] -= PieceValue[MG][result];
+          if (type_of(base) != PAWN)
+              st->nonPawnMaterial[us] += 2 * PieceValue[MG][base];
           if (Eval::useNNUE)
           {
-              dp.dirty_num = 1;
-              init_dirty_piece_entry(dp, 0, pc, SQ_NONE, to, NO_PIECE, 0);
+              dp.dirty_num = 3;
+              init_dirty_piece_entry(dp, 0, result, from, SQ_NONE, NO_PIECE, 0);
+              init_dirty_piece_entry(dp, 1, base, SQ_NONE, from, NO_PIECE, 0);
+              init_dirty_piece_entry(dp, 2, base, SQ_NONE, to, NO_PIECE, 0);
           }
+          pc = base;
+          st->rule50 = 0;
       }
       else if (!rifleShot)
           move_piece(from, to);
   }
 
   // If the moving piece is a pawn do some special extra work
-  if (type_of(pc) == PAWN)
+  if (type_of(pc) == PAWN && !stackMove && !unstackMove)
   {
       st->rule50 = 0;
       if (is_promotion_move(m) || type_of(m) == PIECE_PROMOTION)
@@ -7706,11 +7709,12 @@ void Position::undo_move(Move m) {
                                                : unpromotedBpc;
           bool isPromoted = (st->promotedBycatch | st->demotedBycatch) & bsq;
           bool wasBlastPromoted = bool(st->blastPromotedSquares & bsq);
+          bool wasLaserTransformed = bool(st->laserTransformedSquares & bsq);
 
           // Update board and piece lists
           if (bpc || wasBlastPromoted)
           {
-              if (wasBlastPromoted && piece_on(bsq) != NO_PIECE) {
+              if ((wasBlastPromoted || wasLaserTransformed) && piece_on(bsq) != NO_PIECE) {
                   remove_piece(bsq);
                   board[bsq] = NO_PIECE;
               }
@@ -7719,7 +7723,8 @@ void Position::undo_move(Move m) {
               Piece transferPiece = reserve_transfer_piece(us, bpc, bool((st->promotedBycatch | st->demotedBycatch) & bsq), unpromotedBpc,
                                                            drop_loop(), var->captureToHandSide,
                                                            main_promotion_pawn_type(color_of(unpromotedBpc)));
-               if (   !wasBlastPromoted
+              if (   !wasBlastPromoted
+                   && !wasLaserTransformed
                    && !petrifiedCenter
                    && !(st->libertySelfRemoved & bsq))
                {
@@ -7928,13 +7933,18 @@ void Position::undo_move(Move m) {
               swap_piece(from, to);
           else if (stackMove)
           {
-              set_stacked(to, false);
-              put_piece(pc, from);
+              if (piece_on(to) != NO_PIECE)
+                  remove_piece(to);
+              put_piece(st->stackBasePiece, from);
+              put_piece(st->stackBasePiece, to);
           }
           else if (unstackMove)
           {
-              remove_piece(to);
-              set_stacked(from, true);
+              if (piece_on(from) != NO_PIECE)
+                  remove_piece(from);
+              if (piece_on(to) != NO_PIECE)
+                  remove_piece(to);
+              put_piece(st->stackResultPiece, from);
           }
           else if (!rifleShot && piece_on(to) != NO_PIECE)
               move_piece(to, from); // Put the piece back at the source square when the mover survived on 'to'
@@ -9836,11 +9846,7 @@ bool Position::pos_is_ok() const {
   Bitboard orientedPieces = 0;
   for (PieceSet ps = var->orientedPieceTypes; ps; )
       orientedPieces |= pieces(pop_lsb(ps));
-  Bitboard stackablePieces = 0;
-  for (PieceSet ps = var->stackingPieceTypes; ps; )
-      stackablePieces |= pieces(pop_lsb(ps));
-  if (((st->orientationBB[0] | st->orientationBB[1]) & ~orientedPieces)
-      || (st->stackedPieces & ~stackablePieces))
+  if ((st->orientationBB[0] | st->orientationBB[1]) & ~orientedPieces)
       assert(0 && "pos_is_ok: Piece state");
 
   StateInfo si = *st;
@@ -9856,7 +9862,6 @@ bool Position::pos_is_ok() const {
       && si.pawnKey == st->pawnKey
       && si.materialKey == st->materialKey
       && same_array(si.nonPawnMaterial, st->nonPawnMaterial)
-      && si.stackedPsq == st->stackedPsq
       && si.checkersBB == st->checkersBB
       && si.evasionCheckersBB == st->evasionCheckersBB
       && same_array(si.blockersForKing, st->blockersForKing)
@@ -10205,12 +10210,40 @@ void Position::fire_laser(Color us, Key& k, Square selectedEmitter) {
         Square sq = pop_lsb(destroyed_squares);
         Piece pc = piece_on(sq);
         if (pc != NO_PIECE) {
-            if (is_stacked(sq)) {
-                int stackedCount = count_with_stacks(color_of(pc), type_of(pc)) - pieceCount[pc];
-                set_stacked(sq, false);
-                st->materialKey ^= Zobrist::stackedMaterial[pc][stackedCount - 1];
-                if (type_of(pc) != PAWN && type_of(pc) != KING)
+            PieceType baseType = var->unstackedPieceType[type_of(pc)];
+            if (baseType != NO_PIECE_TYPE) {
+                int orientation = orientation_on(sq);
+                Piece base = make_piece(color_of(pc), baseType);
+                Piece unpromoted = unpromoted_piece_on(sq);
+                st->bycatchSquares |= sq;
+                st->laserTransformedSquares |= sq;
+                st->unpromotedBycatch[sq] = unpromoted ? unpromoted : pc;
+                if (unpromoted)
+                    st->demotedBycatch |= sq;
+                else if (is_promoted(sq))
+                    st->promotedBycatch |= sq;
+                remove_piece(sq);
+                k ^= Zobrist::psq[pc][sq];
+                st->materialKey ^= Zobrist::psq[pc][pieceCount[pc]];
+                if (type_of(pc) == PAWN)
+                    st->pawnKey ^= Zobrist::psq[pc][sq];
+                else
                     st->nonPawnMaterial[color_of(pc)] -= PieceValue[MG][pc];
+
+                put_piece(base, sq);
+                if (is_oriented(baseType))
+                    set_orientation(sq, orientation);
+                k ^= Zobrist::psq[base][sq];
+                st->materialKey ^= Zobrist::psq[base][pieceCount[base] - 1];
+                if (baseType == PAWN)
+                    st->pawnKey ^= Zobrist::psq[base][sq];
+                else
+                    st->nonPawnMaterial[color_of(base)] += PieceValue[MG][base];
+                if (Eval::useNNUE)
+                {
+                    append_dirty(st, pc, sq, SQ_NONE);
+                    append_dirty(st, base, SQ_NONE, sq);
+                }
                 continue;
             }
             st->bycatchSquares |= sq;

@@ -1052,9 +1052,9 @@ static PyObject* pyffish_runCppTests(PyObject* self, PyObject* args) {
         struct Case { const char* variant; const char* fen; const char* move; };
         const Case cases[] = {
             {"khet1", "9k/10/10/10/10/10/OO8/9K w - - 0 1", "a2b2+"},
-            {"khet1", "9k/10/10/10/10/10/1O+8/9K w - - 0 1", "b2c3-"},
+            {"khet1", "9k/10/10/10/10/10/1T8/9K w - - 0 1", "b2c3-"},
             {"pawn-stack", "8/8/8/8/8/8/PP6/8 w - - 0 1", "a2b2+"},
-            {"pawn-stack", "8/8/8/8/8/8/1P+6/8 w - - 0 1", "b2c3-"},
+            {"pawn-stack", "8/8/8/8/8/8/1A6/8 w - - 0 1", "b2c3-"},
             {"khet1", "9k/10/10/10/3p6/2S(0)5/10/9K w - - 0 1", "c3d4s"},
             {"dos-laser-chess", "9/9/9/9/9/9/5k3/9/K4L(0)3 w - - 0 1", "f1f1f"},
             {"dos-laser-chess", "8k/9/9/9/9/9/5~Q(0)3/9/K4L(0)3 w - - 0 1", "f1f1f"},
