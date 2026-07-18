@@ -11,14 +11,28 @@ cd "${SUITE_ROOT}"
 source "${SUITE_ROOT}/tests/lib/uci.sh"
 
 suite_case() {
-    local name="$1" timeout_value="$2"
+    local name="$1" timeout_value="$2" log_dir log
     shift 2
-    echo "== ${SUITE_NAME}/${name} =="
-    if ! timeout "${timeout_value}" "$@"; then
+    log_dir="${SUITE_ROOT}/.local/build/test-run/cases/${SUITE_NAME}"
+    log="${log_dir}/${name//\//_}.log"
+    if [[ "${VERBOSE:-0}" == 1 ]]; then
+        echo "== ${SUITE_NAME}/${name} =="
+        if timeout "${timeout_value}" "$@"; then
+            return 0
+        fi
+    else
+        mkdir -p "${log_dir}"
+        if timeout "${timeout_value}" "$@" >"${log}" 2>&1; then
+            echo "ok: ${SUITE_NAME}/${name}"
+            return 0
+        fi
+        cat "${log}"
+    fi
+    {
         echo "FAILED: ${SUITE_NAME}/${name}" >&2
         echo "rerun: tests/run.sh suite ${SUITE_NAME} ${ENGINE}" >&2
-        return 1
-    fi
+    }
+    return 1
 }
 
 legacy() {

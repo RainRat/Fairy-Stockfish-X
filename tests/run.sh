@@ -126,33 +126,52 @@ run_suite_list() {
 }
 
 prepare_python() {
-    local suite needs_python=0
+    local suite needs_python=0 log="${RUN_DIR}/python-build.log"
     for suite in "${SUITES_TO_RUN[@]}"; do
         [[ "${SUITE_PREREQS[$suite]}" == *python* ]] && needs_python=1
     done
     (( needs_python )) || return 0
-    mkdir -p "${ROOT_DIR}/.local/build/pyffish"
-    (
-        cd "${ROOT_DIR}"
-        python3 setup.py build_ext --inplace --build-temp "${ROOT_DIR}/.local/build/pyffish"
-    )
+    mkdir -p "${ROOT_DIR}/.local/build/pyffish" "${RUN_DIR}"
+    if [[ "${VERBOSE:-0}" == 1 ]]; then
+        (cd "${ROOT_DIR}" && python3 setup.py build_ext --inplace --build-temp "${ROOT_DIR}/.local/build/pyffish")
+    elif (cd "${ROOT_DIR}" && python3 setup.py build_ext --inplace --build-temp "${ROOT_DIR}/.local/build/pyffish") >"${log}" 2>&1; then
+        echo "ok: python extension"
+    else
+        echo "FAILED: python extension" >&2
+        cat "${log}"
+        return 1
+    fi
 }
 
 prepare_shared_objects() {
     local engine="$1"
-    local needs_objects=0 suite
+    local needs_objects=0 suite log="${RUN_DIR}/shared-objects.log"
     for suite in "${SUITES_TO_RUN[@]}"; do
         [[ "${SUITE_PREREQS[$suite]}" == *objects* ]] && needs_objects=1
     done
     (( needs_objects )) || return 0
+    mkdir -p "${RUN_DIR}"
     source "${ROOT_DIR}/tests/lib/harness-build.sh"
     fsx_harness_init "${engine}" "${ROOT_DIR}"
-    fsx_harness_prepare_objects_cached "${ROOT_DIR}/.local/build/test-run/objects" "shared test objects" "${JOBS:-2}"
+    if [[ "${VERBOSE:-0}" == 1 ]]; then
+        fsx_harness_prepare_objects_cached "${RUN_DIR}/objects" "shared test objects" "${JOBS:-2}"
+    elif fsx_harness_prepare_objects_cached "${RUN_DIR}/objects" "shared test objects" "${JOBS:-2}" >"${log}" 2>&1; then
+        echo "ok: shared test objects"
+    else
+        echo "FAILED: shared test objects" >&2
+        cat "${log}"
+        return 1
+    fi
     export FSX_REUSE_OBJECTS=1
 }
 
 run_fast_parallel() {
     local engine="$1" variants="$2" profile="${3:-fast}" suite pid status=0
+    if [[ "${VERBOSE:-0}" == 1 ]]; then
+        run_suite_list "$engine" "$variants"
+        echo "${profile} profile passed"
+        return 0
+    fi
     mkdir -p "$RUN_DIR"
     local log_dir
     log_dir=$(mktemp -d "${RUN_DIR}/fast-XXXXXX")
