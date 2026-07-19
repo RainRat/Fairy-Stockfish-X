@@ -184,6 +184,15 @@ static void test_persistent_jump_and_short_cast() {
 }
 
 template<GenType Type>
+static void expect_unique_generation(const Position& pos, const char* label) {
+    ExtMove moves[MOVEGEN_OVERFLOW_CAPACITY];
+    const ExtMove* end = generate<Type>(pos, moves);
+    std::set<Move> seen;
+    for (const ExtMove* it = moves; it != end; ++it)
+        expect(seen.insert(it->move).second, label);
+}
+
+template<GenType Type>
 static void expect_split_potion_generation_matches(const Position& pos, const char* label) {
     ExtMove complete[MOVEGEN_OVERFLOW_CAPACITY];
     ExtMove split[MOVEGEN_OVERFLOW_CAPACITY];
@@ -215,6 +224,31 @@ static void test_split_potion_generation_uses_persistent_jump() {
     expect_split_potion_generation_matches<QUIETS>(pos, "split QUIETS potion generation lost persistent Jump context");
     expect_split_potion_generation_matches<QUIET_CHECKS>(pos, "split QUIET_CHECKS potion generation lost persistent Jump context");
     expect_split_potion_generation_matches<NON_EVASIONS>(pos, "split NON_EVASIONS potion generation lost persistent Jump context");
+    expect_unique_generation<CAPTURES>(pos, "CAPTURES potion generation duplicated a move");
+    expect_unique_generation<QUIETS>(pos, "QUIETS potion generation duplicated a move");
+    expect_unique_generation<QUIET_CHECKS>(pos, "QUIET_CHECKS potion generation duplicated a move");
+    expect_unique_generation<NON_EVASIONS>(pos, "NON_EVASIONS potion generation duplicated a move");
+}
+
+static void test_promotion_bucket_partition_with_potions() {
+    StateInfo state{};
+    Position pos;
+    pos.set(variants.get("spell-chess"),
+            "1r2k3/P7/8/8/8/8/8/4K3[J] w - - 0 1", false, &state, nullptr);
+
+    const auto captures = MoveList<CAPTURES>(pos);
+    const auto quiets = MoveList<QUIETS>(pos);
+    const auto all = MoveList<NON_EVASIONS>(pos);
+    std::set<Move> seen;
+    for (const auto& extMove : all)
+    {
+        Move move = extMove;
+        expect(seen.insert(move).second, "Spell Chess promotion generation duplicated a move");
+        if (!is_promotion_move(move) && type_of(move) != PIECE_PROMOTION)
+            continue;
+        expect(captures.contains(move) != quiets.contains(move),
+               "Spell Chess promotion appeared in both search buckets");
+    }
 }
 
 static void test_qsearch_keeps_freeze_capture_defense() {
@@ -556,6 +590,7 @@ int main() {
     test_jump_evasions();
     test_persistent_jump_and_short_cast();
     test_split_potion_generation_uses_persistent_jump();
+    test_promotion_bucket_partition_with_potions();
     test_qsearch_keeps_freeze_capture_defense();
     test_main_search_keeps_freeze_on_previously_frozen_enemy();
     test_freeze_move_picker_prunes_dominated_targets();

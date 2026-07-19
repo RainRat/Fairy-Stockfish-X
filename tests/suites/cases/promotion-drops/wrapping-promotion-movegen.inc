@@ -26,6 +26,7 @@ mkdir -p "${BUILD_SIG_DIR}"
 cat > "${HARNESS_CPP}" <<'EOF'
 #include <cstdlib>
 #include <iostream>
+#include <set>
 #include <sstream>
 
 #include "bitboard.h"
@@ -57,6 +58,23 @@ static void expect(bool cond, const char* msg) {
     }
 }
 
+static void expect_promotion_partition(const Position& pos, const char* label) {
+    const auto captures = MoveList<CAPTURES>(pos);
+    const auto quiets = MoveList<QUIETS>(pos);
+    const auto all = MoveList<NON_EVASIONS>(pos);
+    std::set<Move> seen;
+    for (const auto& extMove : all)
+    {
+        Move move = extMove;
+        expect(seen.insert(move).second, label);
+        if (!is_promotion_move(move) && type_of(move) != PIECE_PROMOTION)
+            continue;
+        bool inCaptures = captures.contains(move);
+        bool inQuiets = quiets.contains(move);
+        expect(inCaptures != inQuiets, label);
+    }
+}
+
 static void load_test_variants() {
     static bool loaded = false;
     if (loaded)
@@ -65,13 +83,19 @@ static void load_test_variants() {
     std::istringstream in(R"INI(
 [promo-normal:chess]
 castling = false
-promotionPieceTypes = q
+promotionPieceTypes = q r b n
 startFen = 4k3/P7/8/8/8/8/8/4K3 w - - 0 1
 
 [promo-wrap:chess]
 toroidal = true
 castling = false
-promotionPieceTypes = q
+promotionPieceTypes = q r b n
+startFen = 4k3/P7/8/8/8/8/8/4K3 w - - 0 1
+
+[promo-mapped:chess]
+castling = false
+promotionPieceTypes = q r b n
+promotedPieceType = p:q
 startFen = 4k3/P7/8/8/8/8/8/4K3 w - - 0 1
 )INI");
     variants.parse_istream<false>(in);
@@ -95,6 +119,21 @@ static void test_wrapped_promotion_partition() {
     const auto wrappedQuiets = MoveList<QUIETS>(wrappedPos);
     expect(wrappedNonEvasions.contains(quietPromo), "wrapped NON_EVASIONS should include quiet promotion");
     expect(wrappedQuiets.contains(quietPromo), "wrapped QUIETS should include quiet promotion");
+
+    expect_promotion_partition(normalPos, "normal promotion appeared in both search buckets");
+    expect_promotion_partition(wrappedPos, "wrapped promotion appeared in both search buckets");
+
+    StateInfo captureState{};
+    Position capturePos;
+    capturePos.set(variants.get("promo-normal"), "1r2k3/P7/8/8/8/8/8/4K3 w - - 0 1", false,
+                   &captureState, nullptr);
+    expect_promotion_partition(capturePos, "capture promotion appeared in both search buckets");
+
+    StateInfo mappedState{};
+    Position mappedPos;
+    mappedPos.set(variants.get("promo-mapped"), "1r2k3/P7/8/8/8/8/8/4K3 w - - 0 1", false,
+                  &mappedState, nullptr);
+    expect_promotion_partition(mappedPos, "mapped promotion appeared in both search buckets");
 }
 
 int main() {

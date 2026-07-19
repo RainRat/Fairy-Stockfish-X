@@ -1553,17 +1553,13 @@ namespace {
 
       const bool baseCaptures = pos.capture(base);
 
+      // Keep potion moves in the same occupancy-based partition as ordinary
+      // moves.  Promotion priority is a search-policy concern, not a reason
+      // to put the same legal move in both search buckets.
       if constexpr (Type == CAPTURES)
-      {
-          if (baseCaptures)
-              return true;
-          return is_promotion_move(base) && promotion_type(base) == QUEEN;
-      }
+          return baseCaptures;
       else if constexpr (Type == QUIETS)
-      {
-          return !baseCaptures ? !is_promotion_move(base) || promotion_type(base) != QUEEN
-                               : is_promotion_move(base) && promotion_type(base) != QUEEN;
-      }
+          return !baseCaptures;
       else if constexpr (Type == QUIET_CHECKS)
       {
           return !baseCaptures && type_of(base) != CASTLING && !is_promotion_move(base) && pos.gives_check(m);
