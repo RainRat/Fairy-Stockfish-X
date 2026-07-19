@@ -282,6 +282,16 @@ startFen = 5/5/2p2/1p1p1/2p2[P] w - - 0 1 {10 10}
 pieceToCharTable = PNBRQKDFGHS
 customPiece1 = d:c{hurdles: 2,2; pre: 1,*; post: 1,1; capture: locust_all; hurdle_types: enemy}R
 startFen = 7k/8/8/3p4/3p4/3D4/8/K7 w - - 0 1
+
+[promotion-origin-sync:chess]
+pieceDrops = true
+captureType = hand
+promotedPieceType = p:q n:q
+startFen = 4k3/8/8/8/8/8/8/Q3K3[] w - - 0 1
+
+[promotion-origin-mapped-sync:chess]
+promotedPieceType = p:q
+startFen = 4k3/8/8/8/8/8/8/Q3K3 w - - 0 1
 INI
 tmp_ini="${FSX_TMP_INI}"
 
@@ -320,6 +330,21 @@ assert_reload_perft1_match "${tmp_ini}" "libertysync" "position startpos moves P
 assert_reload_key_match "${tmp_ini}" "locustallsync" "position startpos moves d3d6"
 assert_reload_perft1_match "${tmp_ini}" "locustallsync" "position startpos moves d3d6"
 assert_reload_perft1_moves_match "${tmp_ini}" "locustallsync" "position startpos moves d3d6"
+
+# Explicit promotion origins must distinguish keys and survive FEN reloads.
+assert_distinct_position_keys "${tmp_ini}" "promotion-origin-sync" \
+  "4k3/8/8/8/8/8/8/Q3K3[] w - - 0 1" \
+  "4k3/8/8/8/8/8/8/Q~:P3K3[] w - - 0 1"
+assert_distinct_position_keys "${tmp_ini}" "promotion-origin-mapped-sync" \
+  "4k3/8/8/8/8/8/8/Q3K3 w - - 0 1" \
+  "4k3/8/8/8/8/8/8/Q~:P3K3 w - - 0 1"
+assert_distinct_position_keys "${tmp_ini}" "promotion-origin-sync" \
+  "4k3/8/8/8/8/8/8/Q~:P3K3[] w - - 0 1" \
+  "4k3/8/8/8/8/8/8/Q~:N3K3[] w - - 0 1"
+assert_reload_key_match "${tmp_ini}" "promotion-origin-sync" \
+  "position fen 4k3/8/8/8/8/8/8/Q~:N3K3[] w - - 0 1"
+assert_reload_key_match "${tmp_ini}" "promotion-origin-sync" \
+  "position fen 4k3/8/8/8/8/8/8/Q~:N3K2r[] b - - 0 1 moves h1a1"
 
 # A Jump potion may let a double-step pass through an occupied enemy square.
 # The resulting en-passant target remains serializable after Jump expires.

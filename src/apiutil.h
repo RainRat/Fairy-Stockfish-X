@@ -705,6 +705,7 @@ inline int read_fen_number(const std::string& text, size_t& idx) {
 
 inline Validation check_for_valid_characters(const std::string& firstFenPart, const std::string& validSpecialCharactersFirstField, const Variant* v) {
     PieceType lastPt = NO_PIECE_TYPE;
+    Piece lastPc = NO_PIECE;
     bool orientationSeen = false;
     bool promotedPrefix = false;
     for (size_t i = 0; i < firstFenPart.size();)
@@ -715,12 +716,34 @@ inline Validation check_for_valid_characters(const std::string& firstFenPart, co
             if (v && v->shogiStylePromotions)
             {
                 lastPt = NO_PIECE_TYPE;
+                lastPc = NO_PIECE;
                 promotedPrefix = true;
                 ++i;
                 continue;
             }
             std::cerr << "Invalid piece character: '+'." << std::endl;
             return NOK;
+        }
+        if (c == '~' && i + 1 < firstFenPart.size() && firstFenPart[i + 1] == ':')
+        {
+            if (lastPt == NO_PIECE_TYPE)
+            {
+                std::cerr << "Promotion origin specified without a promoted piece." << std::endl;
+                return NOK;
+            }
+            i += 2;
+            std::string originSymbol = read_piece_symbol(firstFenPart, i);
+            Piece origin = v ? v->piece_from_symbol(originSymbol) : NO_PIECE;
+            if (!v || origin == NO_PIECE || v->promotedPieceType[type_of(origin)] != lastPt
+                || lastPc == NO_PIECE || color_of(origin) != color_of(lastPc))
+            {
+                std::cerr << "Invalid promoted-piece origin: '" << originSymbol << "'." << std::endl;
+                return NOK;
+            }
+            lastPt = NO_PIECE_TYPE;
+            lastPc = NO_PIECE;
+            orientationSeen = false;
+            continue;
         }
         if (c == '(' && v && v->laserGame)
         {
@@ -753,6 +776,7 @@ inline Validation check_for_valid_characters(const std::string& firstFenPart, co
             if (pc != NO_PIECE)
             {
                 lastPt = promotedPrefix ? v->promotedPieceType[type_of(pc)] : type_of(pc);
+                lastPc = lastPt == NO_PIECE_TYPE ? NO_PIECE : make_piece(color_of(pc), lastPt);
                 promotedPrefix = false;
                 orientationSeen = false;
                 continue;
@@ -761,6 +785,7 @@ inline Validation check_for_valid_characters(const std::string& firstFenPart, co
             return NOK;
         }
         lastPt = NO_PIECE_TYPE;
+        lastPc = NO_PIECE;
         promotedPrefix = false;
         orientationSeen = false;
         ++i;
@@ -921,6 +946,15 @@ inline Validation fill_char_board(CharBoard& board, const std::string& fenBoard,
                 return NOK;
             // we mirror the rank index because the black pieces are given first in the FEN
             ++fileIdx;
+        }
+        else if (c == '~')
+        {
+            ++i;
+            if (i < fenBoard.size() && fenBoard[i] == ':')
+            {
+                ++i;
+                read_piece_symbol(fenBoard, i);
+            }
         }
         else if (!contains(validSpecialCharactersFirstField, c))
         {
@@ -1243,7 +1277,12 @@ inline int piece_count(const std::string& fenBoard, Color c, PieceType pt, const
     for (size_t i = 0; i < fenBoard.size();)
     {
         char token = fenBoard[i];
-        if (Variant::is_piece_id_start(token))
+        if (token == '~' && i + 1 < fenBoard.size() && fenBoard[i + 1] == ':')
+        {
+            i += 2;
+            read_piece_symbol(fenBoard, i);
+        }
+        else if (Variant::is_piece_id_start(token))
         {
             std::string symbol = read_piece_symbol(fenBoard, i);
             if (v->piece_from_symbol(symbol) == target)

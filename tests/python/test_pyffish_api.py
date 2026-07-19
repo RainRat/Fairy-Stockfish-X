@@ -66,6 +66,29 @@ startFen = 4k3/8/8/8/8/8/8/4K3 w - - 0 1
             -1,
         )
 
+    def test_promotion_origin_validation(self):
+        code = r'''
+import pyffish
+
+pyffish.load_variant_config(r"""
+[api-promotion-origin:chess]
+pieceDrops = true
+captureType = hand
+promotedPieceType = p:q n:q k:q
+""")
+
+assert pyffish.validate_fen(
+    "4k3/8/8/8/8/8/8/Q~:N3K3[] w - - 0 1", "api-promotion-origin"
+) == 1
+assert pyffish.validate_fen(
+    "4k3/8/8/8/8/8/8/Q~:n3K3[] w - - 0 1", "api-promotion-origin"
+) != 1
+assert pyffish.validate_fen(
+    "4k3/8/8/8/8/8/8/Q~:K3K3[] w - - 0 1", "api-promotion-origin"
+) == 1
+'''
+        subprocess.run([sys.executable, "-c", code], check=True)
+
     def test_validation_diagnostic_messages_are_exposed_by_the_binding(self):
         code = r'''
 import pyffish

@@ -811,6 +811,7 @@ namespace Zobrist {
   Key wall[SQUARE_NB];
   Key dead[SQUARE_NB];
   Key orientation[4][SQUARE_NB];
+  Key promotionOrigin[PIECE_NB][SQUARE_NB];
   Key endgame[EG_EVAL_NB];
   Key points[COLOR_NB][MAX_ZOBRIST_POINTS];
 }
@@ -1268,6 +1269,20 @@ Key Position::compute_piece_state_key() const {
           Square s = pop_lsb(b);
           k ^= Zobrist::orientation[orientation_on(s)][s];
       }
+
+  for (Bitboard b = promotedPieces; b; )
+  {
+      Square s = pop_lsb(b);
+      Piece pc = piece_on(s);
+      Piece fallback = make_piece(color_of(pc), main_promotion_pawn_type(color_of(pc)));
+      Piece origin = unpromoted_piece_on(s);
+      if (origin == NO_PIECE)
+          origin = fallback;
+      if (origin != fallback || (var->shogiStylePromotions && unpromoted_piece_on(s) != NO_PIECE)
+          || (captures_to_hand() && !drop_loop()) || two_boards())
+          k ^= Zobrist::promotionOrigin[origin][s];
+  }
+
   return k;
 }
 
@@ -1379,6 +1394,10 @@ void Position::init() {
   for (int orientation = 0; orientation < 4; ++orientation)
       for (Square s = SQ_A1; s <= SQ_MAX; ++s)
           Zobrist::orientation[orientation][s] = rng.rand<Key>();
+
+  for (Piece pc = W_PAWN; pc < PIECE_NB; ++pc)
+      for (Square s = SQ_A1; s <= SQ_MAX; ++s)
+          Zobrist::promotionOrigin[pc][s] = rng.rand<Key>();
 
   for (Square from = SQ_A1; from <= SQ_MAX; ++from)
       for (Square to = SQ_A1; to <= SQ_MAX; ++to)
@@ -1613,8 +1632,22 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
 
           PieceType pt = type_of(pc);
 
+          bool isPromoted = false;
+          Piece unpromoted = NO_PIECE;
           if (ss.peek() == '~')
+          {
               ss >> token;
+              isPromoted = true;
+              if (ss.peek() == ':')
+              {
+                  ss >> token;
+                  if (Variant::is_piece_id_start(ss.peek()))
+                  {
+                      ss >> token;
+                      unpromoted = piece_from_symbol(read_symbol(token));
+                  }
+              }
+          }
 
           if (v->commitGates && (rank == 0 || rank == max_rank() + 2))
           {
@@ -1624,7 +1657,7 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
           }
           else
           {
-              put_piece(pc, sq, token == '~', NO_PIECE, true);
+              put_piece(pc, sq, isPromoted, unpromoted, true);
               if (v->is_oriented(pt))
                   set_orientation(sq, orientation);
               ++sq;
@@ -2536,8 +2569,17 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
                   ss << "(" << orientation_on(s) << ")";
 
               // Set promoted pieces
-              if (((captures_to_hand() && !drop_loop()) || two_boards() || showPromoted) && is_promoted(s))
+              Piece origin = unpromoted_piece_on(s);
+              Piece fallback = make_piece(color_of(pc), main_promotion_pawn_type(color_of(pc)));
+              bool showPromotion = is_promoted(s)
+                                && (((captures_to_hand() && !drop_loop()) || two_boards() || showPromoted)
+                                    || (origin != NO_PIECE && origin != fallback));
+              if (showPromotion)
+              {
                   ss << "~";
+                  if (origin != NO_PIECE && origin != fallback)
+                      ss << ":" << piece_symbol(origin);
+              }
           }
       }
 
