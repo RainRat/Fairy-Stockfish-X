@@ -11,9 +11,9 @@
 namespace Stockfish {
 
 inline void init_test_engine() {
-  UCI::init(Options);
   pieceMap.init();
   variants.init();
+  UCI::init(Options);
   PSQT::init(variants.get("fairy"));
   Bitboards::init();
   Position::init();
