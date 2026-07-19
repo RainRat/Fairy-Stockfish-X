@@ -1245,66 +1245,87 @@ bool VariantParser<DoCheck>::parse_piece_types(Variant* v) {
         if (keyValue != config.end() && !keyValue->second.empty())
         {
             auto [token, rest] = split_piece_entry(keyValue->second);
-            if (!token.empty())
+            const bool remove = trim(keyValue->second) == "-";
+            if (remove)
+                v->remove_piece(pt);
+            else if (!token.empty())
                 v->add_piece(pt, token);
             else
             {
-                if (keyValue->second.at(0) == '-')
-                    v->remove_piece(pt);
-                else
-                {
-                    if (DoCheck)
-                        std::cerr << name << " - Invalid letter: " << keyValue->second.at(0) << std::endl;
-                    return false;
-                }
-            }
-            // betza
-            if (is_custom(pt))
-            {
-                if (!rest.empty())
-                {
-                    if (!validate_custom_piece_betza_structure(rest, name))
-                        return false;
-                    if (!validate_custom_piece_betza(rest, name, v))
-                        return false;
-                    v->customPiece[pt - CUSTOM_PIECES] = rest;
-                    // Is there an en passant flag in the Betza notation?
-                    if (v->customPiece[pt - CUSTOM_PIECES].find('e') != std::string::npos)
-                    {
-                        v->enPassantTypes[WHITE] |= piece_set(pt);
-                        v->enPassantTypes[BLACK] |= piece_set(pt);
-                    }
-                }
-                else
-                {
-                    if (DoCheck)
-                        std::cerr << name << " - Missing Betza move notation" << std::endl;
-                    return false;
-                }
-            }
-            else if (pt != KING && !rest.empty())
-            {
                 if (DoCheck)
-                    std::cerr << name << " only supports a piece letter here. Use customPieceN = "
-                              << keyValue->second << " and remap " << name << " to that letter instead." << std::endl;
+                    std::cerr << name << " - Invalid syntax." << std::endl;
                 return false;
             }
-            else if (pt == KING)
+
+            if (remove)
             {
-                if (!rest.empty())
+                if (pt == KING)
                 {
-                    if (!validate_custom_piece_betza_structure(rest, name))
-                        return false;
-                    if (!validate_custom_piece_betza(rest, name, v))
-                        return false;
-                    // custom royal piece
-                    v->add_piece(CUSTOM_PIECES_ROYAL, token);
-                    v->customPiece[CUSTOM_PIECES_ROYAL - CUSTOM_PIECES] = rest;
-                    v->kingType = CUSTOM_PIECES_ROYAL;
-                    v->castlingKingPiece[WHITE] = v->castlingKingPiece[BLACK] = CUSTOM_PIECES_ROYAL;
+                    // A removed king definition must also remove the reserved
+                    // custom-royal slot used by king = <symbol>:<Betza>.
+                    v->remove_piece(CUSTOM_PIECES_ROYAL);
+                    v->kingType = NO_PIECE_TYPE;
+                    v->castlingKingPiece = NO_PIECE_TYPE;
                 }
-                else
-                    v->kingType = KING;
+            }
+            else
+            {
+                // betza
+                if (is_custom(pt))
+                {
+                    if (!rest.empty())
+                    {
+                        if (!validate_custom_piece_betza_structure(rest, name))
+                            return false;
+                        if (!validate_custom_piece_betza(rest, name, v))
+                            return false;
+                        v->customPiece[pt - CUSTOM_PIECES] = rest;
+                        for (Color c : {WHITE, BLACK})
+                            v->enPassantTypes[c] &= ~piece_set(pt);
+                        // Is there an en passant flag in the Betza notation?
+                        if (v->customPiece[pt - CUSTOM_PIECES].find('e') != std::string::npos)
+                        {
+                            v->enPassantTypes[WHITE] |= piece_set(pt);
+                            v->enPassantTypes[BLACK] |= piece_set(pt);
+                        }
+                    }
+                    else
+                    {
+                        if (DoCheck)
+                            std::cerr << name << " - Missing Betza move notation" << std::endl;
+                        return false;
+                    }
+                }
+                else if (pt != KING && !rest.empty())
+                {
+                    if (DoCheck)
+                        std::cerr << name << " only supports a piece letter here. Use customPieceN = "
+                                  << keyValue->second << " and remap " << name << " to that letter instead." << std::endl;
+                    return false;
+                }
+                else if (pt == KING)
+                {
+                    if (!rest.empty())
+                    {
+                        if (!validate_custom_piece_betza_structure(rest, name))
+                            return false;
+                        if (!validate_custom_piece_betza(rest, name, v))
+                            return false;
+                        // custom royal piece
+                        v->add_piece(CUSTOM_PIECES_ROYAL, token);
+                        v->customPiece[CUSTOM_PIECES_ROYAL - CUSTOM_PIECES] = rest;
+                        v->kingType = CUSTOM_PIECES_ROYAL;
+                        v->castlingKingPiece[WHITE] = v->castlingKingPiece[BLACK] = CUSTOM_PIECES_ROYAL;
+                    }
+                    else
+                    {
+                        v->remove_piece(CUSTOM_PIECES_ROYAL);
+                        v->kingType = KING;
+                        for (Color c : {WHITE, BLACK})
+                            if (v->castlingKingPiece[c] == CUSTOM_PIECES_ROYAL)
+                                v->castlingKingPiece[c] = KING;
+                    }
+                }
             }
         }
         // mobility region

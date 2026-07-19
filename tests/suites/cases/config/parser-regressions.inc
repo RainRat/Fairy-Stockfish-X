@@ -118,6 +118,12 @@ promotionPawnTypes = -
 [invalid-piece-token-garbage:chess]
 rook = rxyz
 
+[invalid-piece-removal-trailing:chess]
+customPiece1 = - trailing
+
+[invalid-king-removal-trailing:chess]
+king = - trailing
+
 [piecegroup-dash-parent:chess]
 promotionRegion = a8
 promotionPieceTypes = q
@@ -540,6 +546,8 @@ assert_contains_literal "${initial_capture_output}" "laserGame is incompatible w
 assert_contains_literal "${initial_capture_output}" "laserEmitters - Multiple piece emitters are not supported."
 assert_contains_literal "${initial_capture_output}" "laserEmitters - Piece emitter must be an oriented piece type: k"
 assert_contains_literal "${initial_capture_output}" "laserGame is not supported on wrapped or hexagonal boards."
+assert_contains_literal "${initial_capture_output}" "customPiece1 - Invalid syntax."
+assert_contains_literal "${initial_capture_output}" "king - Invalid syntax."
 
 laser_rank10_output=$(run_uci "$ENGINE" "$tmp_ini" "laser-rank10" </dev/null 2>&1 || true)
 assert_contains "${laser_rank10_output}" "^info string variant laser-rank10 "
@@ -663,6 +671,51 @@ assert_contains_literal "${bad_unmatched_closer_output}" "customPiece1 - Invalid
 assert_contains_literal "${bad_unmatched_closer_output}" "customPiece1 - Invalid Betza rider range in ']': missing opening '['."
 
 load_inline_variants <<'INI'
+[custom-removal-parent:fairy]
+checking = false
+castling = false
+customPiece1 = a:W
+pieceToCharTable = A:a
+startFen = 8/8/8/8/8/8/8/A7 w - - 0 1
+
+[custom-removal-child:custom-removal-parent]
+customPiece1 = -
+pieceToCharTable = -
+startFen = 8/8/8/8/8/8/8/8 w - - 0 1
+
+[royal-replace-parent:chess]
+king = k:KN
+startFen = rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
+
+[royal-replace-child:royal-replace-parent]
+king = k
+
+[royal-removal-child:royal-replace-parent]
+king = -
+checking = false
+castling = false
+pieceToCharTable = -
+startFen = 8/8/8/8/8/8/8/8 w - - 0 1
+
+[ep-redefinition-parent:chess]
+promotionPawnTypes = n
+enPassantTypes = n
+doubleStepRegionWhite = N(*2)
+
+[ep-redefinition-child:ep-redefinition-parent]
+knight = n
+
+[royal-mapping-parent:chess]
+king = k:KN
+castling = false
+castlingKingPieceWhite = q
+startFen = 4k3/8/8/8/8/8/8/4K3 w - - 0 1
+
+[royal-mapping-child:royal-mapping-parent]
+king = k
+castling = true
+startFen = 4k3/8/8/8/8/8/8/4Q2R w K - 0 1
+
 [priority-clear-parent:chess]
 pieceDrops = true
 priorityDropTypes = p
@@ -677,6 +730,34 @@ go perft 1
 UCI
 )
 assert_contains_literal "${priority_drop_clear_output}" "N@d4: 1" "cleared priority drop allows a knight"
+
+custom_removal_output=$(run_uci "$ENGINE" "$FSX_TMP_INI" custom-removal-child </dev/null)
+assert_contains "${custom_removal_output}" "^info string variant custom-removal-child "
+assert_not_contains "${custom_removal_output}" "invalid configuration"
+
+royal_replace_output=$(run_uci "$ENGINE" "$FSX_TMP_INI" royal-replace-child </dev/null)
+assert_contains "${royal_replace_output}" "^info string variant royal-replace-child "
+assert_not_contains "${royal_replace_output}" "invalid configuration"
+
+royal_removal_output=$(run_uci "$ENGINE" "$FSX_TMP_INI" royal-removal-child </dev/null)
+assert_contains "${royal_removal_output}" "^info string variant royal-removal-child "
+assert_not_contains "${royal_removal_output}" "invalid configuration"
+
+ep_redefinition_output=$(run_uci "$ENGINE" "$FSX_TMP_INI" ep-redefinition-child <<'UCI'
+position fen 4k3/8/8/8/8/8/3N4/6K1 w - - 0 1 moves d2d4
+d
+UCI
+)
+assert_contains_literal "${ep_redefinition_output}" " b - d3 " "same-symbol redefinition preserves en-passant membership"
+
+royal_mapping_output=$(run_uci "$ENGINE" "$FSX_TMP_INI" royal-mapping-child <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_contains "${royal_mapping_output}" "^info string variant royal-mapping-child "
+assert_not_contains "${royal_mapping_output}" "invalid configuration"
+assert_contains "${royal_mapping_output}" "^e1g1: 1$" "preserved inherited castling piece mapping"
 
 cat > "${nonking_ini}" <<'INI'
 [nonking-inline-betza:chess]

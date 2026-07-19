@@ -618,7 +618,7 @@ struct Variant {
           if (symbol.empty())
               return;
           for (Piece p = W_PAWN; p < PIECE_NB; ++p)
-              if (pieceToSymbol[p] == symbol || pieceToSymbolSynonyms[p] == symbol)
+              if (type_of(p) != pt && (pieceToSymbol[p] == symbol || pieceToSymbolSynonyms[p] == symbol))
                   remove_piece(type_of(p));
       };
 
@@ -662,6 +662,10 @@ struct Variant {
       pieceToSymbolSynonyms[make_piece(WHITE, pt)].clear();
       pieceToSymbolSynonyms[make_piece(BLACK, pt)].clear();
       pieceTypes &= ~piece_set(pt);
+      if (is_custom(pt))
+          customPiece[pt - CUSTOM_PIECES].clear();
+      for (Color c : {WHITE, BLACK})
+          enPassantTypes[c] &= ~piece_set(pt);
       // erase from promotion types to ensure consistency
       promotionPieceTypes[WHITE] &= ~piece_set(pt);
       promotionPieceTypes[BLACK] &= ~piece_set(pt);
