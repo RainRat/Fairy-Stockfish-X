@@ -156,6 +156,7 @@ UCI
 }
 
 run_captures_effects() {
+    native locust-all
     legacy capture-options-regressions.sh 2m "${ENGINE}"
     legacy blast-pattern.sh 2m "${ENGINE}" "${VARIANTS}"
     legacy jump-capture-effects.sh 2m "${ENGINE}"

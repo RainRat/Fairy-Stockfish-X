@@ -434,6 +434,11 @@ public:
       }
   };
 
+  struct JumpCaptureInfo {
+      Square primaryCaptureSq;
+      Bitboard captureMask;
+  };
+
   static void init();
 
   Position() = default;
@@ -873,6 +878,9 @@ public:
   Square capture_square(Move m) const;
   Square secondary_drop_square(Move m) const;
   Square mirrored_pair_drop_square(Square s) const;
+  Bitboard jump_capture_mask(Square from, Square to, Bitboard occupied) const;
+  Bitboard jump_capture_mask(Square from, Square to) const;
+  JumpCaptureInfo jump_capture_info(Square from, Square to) const;
   Square jump_capture_square(Square from, Square to, Bitboard occupied) const;
   Square jump_capture_square(Square from, Square to) const;
   bool gives_check(Move m) const;
@@ -1105,6 +1113,9 @@ private:
   inline HopperSquareProps get_hopper_square_props(Square s, Bitboard occupied, Color friendlyColor, Piece pc) const;
 
   inline HopperMoveDetails resolve_hopper_move_details(Square from, Square to, Bitboard occupied) const;
+
+  inline Bitboard capture_mask_from_hopper_details(const HopperMoveDetails& details,
+                                                   Bitboard occupied) const;
 
   inline bool is_valid_hopper_destination(const PieceInfo::HopperProfile& profile, int hurdlesHit, int distToFirstHurdle, int distFromLastHurdle) const;
 
@@ -5156,19 +5167,19 @@ inline Position::HopperMoveDetails Position::resolve_hopper_move_details(Square 
                       if (cur == details.primaryCaptureSq) continue;
                       
                       Bitboard sBB = square_bb(cur);
-                      bool isOccupied = (byTypeBB[ALL_PIECES] & sBB);
+                      bool isOccupied = (occupied & sBB);
                       bool isWall = (st->wallSquares & sBB);
                       bool isDead = (st->deadSquares & sBB);
                       if (!isOccupied && !isWall && !isDead) continue;
                       
-                      Piece hurdlePc = cur == to ? mover : piece_on(cur);
+                      Piece hurdlePc = cur == to ? mover : piece_at(cur, occupied);
                       PieceType hurdlePt = type_of(hurdlePc);
                       PieceSet pcSet = (hurdlePt == NO_PIECE_TYPE || !isOccupied) ? NO_PIECE_SET : piece_set(hurdlePt);
                       if (isWall) pcSet |= PieceSet(1ULL << 62);
                       if (isDead) pcSet |= PieceSet(1ULL << 61);
                       
-                      bool isFriendly = isOccupied && (color_of(hurdlePc) == us);
-                      bool isEnemy = isOccupied && !isFriendly;
+                      bool isFriendly = isOccupied && hurdlePc != NO_PIECE && (color_of(hurdlePc) == us);
+                      bool isEnemy = isOccupied && hurdlePc != NO_PIECE && !isFriendly;
                       
                       uint8_t special = (isEnemy ? PieceInfo::HopperProfile::ENEMY : 0)
                                       | (isFriendly ? PieceInfo::HopperProfile::FRIENDLY : 0)
@@ -5180,7 +5191,8 @@ inline Position::HopperMoveDetails Position::resolve_hopper_move_details(Square 
                       
                       if (((profile.hurdleSpecialTypes & special) != 0) || (uint64_t(profile.hurdlePieceTypes & pcSet) != 0))
                       {
-                          details.locustAllMask |= cur;
+                          if (isOccupied && !isWall && !isDead && hurdlePc != NO_PIECE)
+                              details.locustAllMask |= cur;
                       }
                   }
               }
@@ -5197,6 +5209,32 @@ inline Square Position::jump_capture_square(Square from, Square to, Bitboard occ
 
 inline Square Position::jump_capture_square(Square from, Square to) const {
   return jump_capture_square(from, to, byTypeBB[ALL_PIECES]);
+}
+
+inline Bitboard Position::capture_mask_from_hopper_details(const HopperMoveDetails& details,
+                                                           Bitboard occupied) const {
+  Bitboard mask = details.locustAllMask;
+  if (details.primaryCaptureSq != SQ_NONE
+      && (occupied & square_bb(details.primaryCaptureSq))
+      && !(st->wallSquares & square_bb(details.primaryCaptureSq))
+      && !(st->deadSquares & square_bb(details.primaryCaptureSq)))
+      mask |= square_bb(details.primaryCaptureSq);
+  return mask;
+}
+
+inline Bitboard Position::jump_capture_mask(Square from, Square to, Bitboard occupied) const {
+  HopperMoveDetails details = resolve_hopper_move_details(from, to, occupied);
+  return capture_mask_from_hopper_details(details, occupied);
+}
+
+inline Bitboard Position::jump_capture_mask(Square from, Square to) const {
+  return jump_capture_mask(from, to, byTypeBB[ALL_PIECES]);
+}
+
+inline Position::JumpCaptureInfo Position::jump_capture_info(Square from, Square to) const {
+  HopperMoveDetails details = resolve_hopper_move_details(from, to, byTypeBB[ALL_PIECES]);
+  return {details.primaryCaptureSq,
+          capture_mask_from_hopper_details(details, byTypeBB[ALL_PIECES])};
 }
 
 inline Bitboard Position::universal_hopper_potential_bb(PieceType pt, Square s) const {

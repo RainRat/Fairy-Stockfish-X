@@ -875,23 +875,24 @@ namespace {
         if (pi->has_universal_hopper())
         {
             // Universal hopper jump captures land on empty squares; captured hurdle
-            // square is resolved by jump_capture_square().
+            // squares are resolved by jump_capture_mask().
             Bitboard candidates = (attacks | quiets) & ~pos.pieces();
             candidates |= pos.universal_hopper_potential_bb(movePt, from) & pos.board_bb() & ~pos.pieces();
 
             while (candidates)
             {
                 Square to = pop_lsb(candidates);
-                Square hurdle = pos.jump_capture_square(from, to);
-                if (hurdle != SQ_NONE)
+                Position::JumpCaptureInfo jump = pos.jump_capture_info(from, to);
+                if (jump.primaryCaptureSq != SQ_NONE)
                 {
+                    Bitboard hurdles = jump.captureMask;
                     bool ok = true;
                     if constexpr (Type == EVASIONS)
                     {
                         Bitboard checkers = pos.evasion_checkers();
-                        if (checkers & hurdle)
+                        if (checkers & hurdles)
                         {
-                            Bitboard remaining = checkers & ~square_bb(hurdle);
+                            Bitboard remaining = checkers & ~hurdles;
                             while (remaining)
                             {
                                 Square checksq = pop_lsb(remaining);

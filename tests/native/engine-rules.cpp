@@ -83,6 +83,146 @@ void movement() {
           "clone_targets_from returned targets for an empty square");
 }
 
+void locust_all() {
+    Position pos;
+    StateListPtr states;
+    set_position(pos, states, "locust-all-audit",
+                 "7k/8/8/3p4/3p4/3D4/8/K7 w - - 0 1");
+
+    Move move = parse_move(pos, "d3d6");
+    check(pos.capture(move), "locust_all move was not classified as a capture");
+    check(pos.capture_square(move) == SQ_D4 && pos.captured_piece(move) == make_piece(BLACK, PAWN),
+          "locust_all primary capture metadata disagreed");
+    check(pos.see_ge(move, Value(150)),
+          "locust_all SEE ignored the second captured hurdle");
+    check(pos.jump_capture_mask(SQ_D3, SQ_D6)
+          == (square_bb(SQ_D4) | square_bb(SQ_D5)),
+          "locust_all full capture mask disagreed before simulation");
+    SimulatedMoveInfo simulated = pos.simulated_move_info(move);
+    Bitboard capturedHurdles = square_bb(SQ_D4) | square_bb(SQ_D5);
+    check(simulated.captureSquare == SQ_D4,
+          "locust_all simulated capture square disagreed");
+    check(simulated.removedByEffects & square_bb(SQ_D5),
+          "locust_all simulated removal mask missed the bycatch hurdle");
+    check(!(simulated.occupiedAfterEffects & capturedHurdles),
+          "locust_all simulated occupancy retained a captured hurdle");
+    check(simulated.occupiedAfterEffects & square_bb(SQ_D6),
+          "locust_all simulated occupancy lost the landing square");
+
+    Key beforeKey = pos.key();
+    std::string beforeFen = pos.fen();
+    states->emplace_back();
+    pos.do_move(move, states->back());
+    check(pos.state()->captured.piece.piece == make_piece(BLACK, PAWN)
+          && pos.state()->bycatchSquares == square_bb(SQ_D5),
+          "locust_all capture metadata did not separate primary and bycatch captures");
+    check(pos.piece_on(SQ_D4) == NO_PIECE && pos.piece_on(SQ_D5) == NO_PIECE,
+          "locust_all did not remove every captured hurdle");
+    Position reloaded;
+    StateListPtr reloadedStates;
+    set_position(reloaded, reloadedStates, "locust-all-audit", pos.fen().c_str());
+    check(reloaded.key() == pos.key(), "locust_all post-move FEN changed the position key");
+
+    pos.undo_move(move);
+    states->pop_back();
+    check(pos.key() == beforeKey && pos.fen() == beforeFen,
+          "locust_all metadata audit failed do/undo restoration");
+
+    Position passivePos;
+    StateListPtr passiveStates;
+    set_position(passivePos, passiveStates, "locust-all-passive-order",
+                 "7k/8/8/2Bn4/3p4/3D4/8/K7 w - - 0 1");
+    check(passivePos.blast_pattern(SQ_D5) & square_bb(SQ_C5),
+          "locust_all passive regression blast pattern was not adjacent");
+    check(type_of(passivePos.piece_on(SQ_D5)) == KNIGHT
+          && (passivePos.variant()->blastPassiveTypes & piece_set(KNIGHT)),
+          "locust_all passive regression did not configure the burner");
+    check(passivePos.simulated_move_info(parse_move(passivePos, "a1a2")).removedByEffects & square_bb(SQ_C5),
+          "locust_all passive regression baseline did not blast");
+    Move passiveMove = make<NORMAL>(SQ_D3, SQ_D6);
+    SimulatedMoveInfo passiveInfo = passivePos.simulated_move_info(passiveMove);
+    check(passiveInfo.captureSquare == SQ_D4
+          && (passiveInfo.effectOccupancy & square_bb(SQ_D5)),
+          "locust_all passive simulation lost the bycatch before effects");
+    check(passiveInfo.removedByEffects & square_bb(SQ_D5),
+          "locust_all passive simulation missed the locust hurdle");
+    check(passiveInfo.removedByEffects & square_bb(SQ_C5),
+          "locust_all passive simulation missed the passive blast");
+    check(!(passiveInfo.occupiedAfterEffects & (square_bb(SQ_D5) | square_bb(SQ_C5))),
+          "locust_all passive simulation retained an effect removal");
+    passiveStates->emplace_back();
+    passivePos.do_move(passiveMove, passiveStates->back());
+    check(passivePos.piece_on(SQ_D5) == NO_PIECE && passivePos.piece_on(SQ_C5) == NO_PIECE,
+          "locust_all passive effect result disagreed with simulation");
+
+    Position wallPos;
+    StateListPtr wallStates;
+    set_position(wallPos, wallStates, "locust-all-audit",
+                 "7k/8/8/3*4/3p4/3D4/8/K7 w - - 0 1");
+    Move wallMove = make<NORMAL>(SQ_D3, SQ_D6);
+    check(wallPos.state()->wallSquares & square_bb(SQ_D5),
+          "locust_all wall regression did not configure the wall");
+    check(!(wallPos.jump_capture_mask(SQ_D3, SQ_D6) & square_bb(SQ_D5)),
+          "locust_all capture mask included a wall");
+    check(wallPos.jump_capture_mask(SQ_D3, SQ_D6) & square_bb(SQ_D4),
+          "locust_all capture mask lost the piece hurdle");
+    SimulatedMoveInfo wallInfo = wallPos.simulated_move_info(wallMove);
+    check((wallInfo.occupiedAfterEffects & square_bb(SQ_D5))
+          && !(wallInfo.removedByEffects & square_bb(SQ_D5)),
+          "locust_all simulation removed a wall hurdle");
+
+    Position deadPos;
+    StateListPtr deadStates;
+    set_position(deadPos, deadStates, "locust-all-audit",
+                 "7k/8/8/3^4/3p4/3D4/8/K7 w - - 0 1");
+    check(!(deadPos.jump_capture_mask(SQ_D3, SQ_D6) & square_bb(SQ_D5))
+          && (deadPos.jump_capture_mask(SQ_D3, SQ_D6) & square_bb(SQ_D4)),
+          "locust_all capture mask included a dead square");
+
+    Position dropPos;
+    StateListPtr dropStates;
+    set_position(dropPos, dropStates, "crazyhouse",
+                 "7k/8/8/3p4/8/8/8/K7[P] w - - 0 1");
+    Move captureDrop = make_drop(SQ_D4, PAWN, PAWN);
+    dropPos.simulated_move_info(captureDrop);
+    dropPos.pseudo_legal(captureDrop);
+    dropPos.see_ge(captureDrop, VALUE_ZERO);
+
+    Position checkPos;
+    StateListPtr checkStates;
+    set_position(checkPos, checkStates, "locust-all-audit",
+                 "8/8/8/2Rp1k2/3p4/3D4/8/K7 w - - 0 1");
+    check(checkPos.gives_check(make<NORMAL>(SQ_D3, SQ_D6)),
+          "locust_all discovered check missed a removed bycatch hurdle");
+
+    Position evasionPos;
+    StateListPtr evasionStates;
+    set_position(evasionPos, evasionStates, "locust-all-audit",
+                 "3K3k/8/8/3r4/3p4/3D4/8/8 w - - 0 1");
+    Move evasionMove = make<NORMAL>(SQ_D3, SQ_D6);
+    check(evasionPos.evasion_checkers() & square_bb(SQ_D5),
+          "locust_all evasion regression did not configure the checker");
+    bool generatedEvasion = false;
+    for (const auto& candidate : MoveList<EVASIONS>(evasionPos))
+        generatedEvasion |= candidate == evasionMove;
+    check(generatedEvasion && evasionPos.pseudo_legal(evasionMove),
+          "locust_all evasion was rejected when recovered as a TT move");
+
+    Position extinctionPos;
+    StateListPtr extinctionStates;
+    set_position(extinctionPos, extinctionStates, "locust-all-extinction",
+                 "7k/8/8/3p4/3p4/3D4/8/K7 w - - 0 1");
+    check(extinctionPos.see_ge(make<NORMAL>(SQ_D3, SQ_D6), Value(250)),
+          "locust_all SEE ignored secondary extinction");
+
+    Position atomicPos;
+    StateListPtr atomicStates;
+    set_position(atomicPos, atomicStates, "locust-all-atomic",
+                 "7k/8/3p4/8/3p4/3D4/8/K7 w - - 0 1");
+    check(atomicPos.see_ge(make<NORMAL>(SQ_D3, SQ_D7), Value(150)),
+          "locust_all atomic SEE ignored secondary capture value");
+}
+
 void occupancy() {
     Position pos;
     StateListPtr states;
@@ -420,6 +560,29 @@ wallingBlack = false
 wallOrMove = true
 wallingRegionWhite = a1
 
+[locust-all-audit:chess]
+pieceToCharTable = PNBRQKDFGHS
+customPiece1 = d:c{hurdles: 2,2; pre: 1,*; post: 1,1; hurdle_types: enemy,wall,dead; capture: locust_all}R
+
+[locust-all-passive-order:chess]
+pieceToCharTable = PNBRQKDFGHS
+blastPassiveTypes = n
+blastPattern = W
+customPiece1 = d:c{hurdles: 2,2; pre: 1,*; post: 1,1; capture: locust_all}R
+
+[locust-all-extinction:chess]
+pieceToCharTable = PNBRQKDFGHS
+extinctionValue = loss
+extinctionPieceTypes = p
+extinctionAllPieceTypes = false
+customPiece1 = d:c{hurdles: 2,2; pre: 1,*; post: 1,1; capture: locust_all}R
+
+[locust-all-atomic:chess]
+pieceToCharTable = PNBRQKDFGHS
+blastOnCapture = true
+blastPattern = W
+customPiece1 = d:c{hurdles: 2,2; pre: 1,*; post: 1,1; capture: locust_all}R
+
 [pawn-stack:fairy]
 laserGame = true
 checking = false
@@ -485,7 +648,7 @@ int main(int argc, char** argv) {
         init_test_engine();
         auto is_group = [](const std::string& name) {
             return name == "all" || name == "promotion" || name == "movement"
-                || name == "occupancy" || name == "state" || name == "royal"
+                || name == "locust-all" || name == "occupancy" || name == "state" || name == "royal"
                 || name == "adjudication" || name == "board-games";
         };
         bool first_is_group = argc > 1 && is_group(argv[1]);
@@ -503,6 +666,7 @@ int main(int argc, char** argv) {
 
         const std::vector<std::pair<std::string, Test>> registry = {
           {"promotion", promotion}, {"movement", movement}, {"occupancy", occupancy},
+          {"locust-all", locust_all},
           {"state", state}, {"royal", royal}, {"adjudication", adjudication},
           {"board-games", board_games}
         };

@@ -3097,7 +3097,7 @@ Bitboard Position::attackers_to_king_without_freeze(Square s, Bitboard occupied,
               while (landings)
               {
                   Square to = pop_lsb(landings);
-                  if (jump_capture_square(from, to, occupied) == s)
+                  if (jump_capture_mask(from, to, occupied) & square_bb(s))
                   {
                       attackers |= square_bb(from);
                       break;
@@ -4001,6 +4001,10 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
   const bool dropMove = is_drop_move(m);
   const bool isCapture = capture(m);
   info.captureSquare = isCapture ? capture_square(m) : SQ_NONE;
+  const bool primaryPieceCapture = is_ok(info.captureSquare) && piece_on(info.captureSquare) != NO_PIECE;
+  Bitboard extraCapture = 0;
+  if (isCapture && is_jump_capture(m))
+      extraCapture = jump_capture_mask(info.from, info.to) & ~square_bb(info.captureSquare);
   info.rifle = rifle_capture(m) && isCapture && !info.castling;
   info.stationary = info.rifle;
   info.effectiveTo = info.rifle ? info.from : info.to;
@@ -4020,7 +4024,7 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
   else if (info.rifle)
   {
       info.relocatedOccupancy = pieces();
-      if (is_ok(info.captureSquare))
+      if (is_ok(info.captureSquare) && (!is_jump_capture(m) || primaryPieceCapture))
           info.relocatedOccupancy ^= square_bb(info.captureSquare);
   }
   else if (is_self_destruct(m))
@@ -4032,12 +4036,11 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
       info.relocatedOccupancy = pieces();
       if (!dropMove && !info.clone && is_ok(info.from))
           info.relocatedOccupancy ^= square_bb(info.from);
-      if (is_ok(info.captureSquare))
+      if (is_ok(info.captureSquare) && (!is_jump_capture(m) || primaryPieceCapture))
           info.relocatedOccupancy ^= square_bb(info.captureSquare);
       if (is_ok(info.to))
           info.relocatedOccupancy |= square_bb(info.to);
   }
-
   info.effectOccupancy = info.relocatedOccupancy;
   if (info.paired && is_ok(info.secondarySquare))
       info.effectOccupancy |= square_bb(info.secondarySquare);
@@ -4072,7 +4075,7 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
   info.placementOccupancy = (info.effectOccupancy & ~info.removedWalls) | latePlacements;
   if (!withEffects)
   {
-      info.occupiedAfterEffects = info.placementOccupancy;
+      info.occupiedAfterEffects = info.placementOccupancy & ~extraCapture;
       return info;
   }
 
@@ -4174,6 +4177,10 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
       info.removedByEffects |= surroundMask;
       info.structuralRemoval |= surroundMask;
   }
+
+  // locust_all bycatch is applied after passive and surround effects in do_move,
+  // but before connect-removal and final occupancy are resolved.
+  info.removedByEffects |= extraCapture;
 
   if (remove_connect_n() > 0)
   {
@@ -5053,6 +5060,8 @@ bool Position::pseudo_legal(const Move m) const {
   bool rifleShot = rifle_capture(m) && capture(m) && type_of(m) != CASTLING;
   Square effectiveTo = rifleShot ? from : to;
   Bitboard removedAttackers = capture(m) ? square_bb(capture_square(m)) : Bitboard(0);
+  if (capture(m) && is_jump_capture(m))
+      removedAttackers |= jump_capture_mask(from, to);
   Variant::PotionType pseudoPotion = Variant::POTION_TYPE_NB;
   if (is_gating(m) && !laser_game())
       pseudoPotion = potion_type_from_piece(var, gating_type(m));
@@ -5451,8 +5460,19 @@ bool Position::pseudo_legal(const Move m) const {
           const bool blastEvasion = ((capture(m) || rifle_capture(m)) && blast_on_capture(m)) ||
                                     (!capture(m) && !rifle_capture(m) && !is_self_destruct(m) && blast_on_move()) ||
                                     (is_self_destruct(m) && blast_on_self_destruct());
-          if (!blastEvasion && !(evasionTargets & to))
-              return false;
+          if (!blastEvasion)
+          {
+              Bitboard jumpHurdles = is_jump_capture(m) ? jump_capture_mask(from, to) : Bitboard(0);
+              if (jumpHurdles & evasion_checkers())
+              {
+                  Bitboard unblockedCheckers = evasion_checkers() & ~jumpHurdles;
+                  while (unblockedCheckers)
+                      if (!(checker_evasion_targets(us, royalSq, pop_lsb(unblockedCheckers)) & to))
+                          return false;
+              }
+              else if (!(evasionTargets & to))
+                  return false;
+          }
           }
       }
       // In case of king moves under check we have to remove king so as to catch
@@ -5542,10 +5562,12 @@ bool Position::gives_check(Move m) const {
       return false;
 
   SimulatedMoveInfo simulated = simulated_move_info(m);
-  Bitboard occupied = simulated.effectOccupancy;
+  Bitboard occupied = simulated.occupiedAfterEffects;
 
   if (gating_move_blocks_occupancy(m))
       occupied |= square_bb(gating_square(m));
+
+  const bool attackFromSurvives = occupied & square_bb(attackFrom);
 
   Bitboard janggiCannons = pieces(JANGGI_CANNON);
   if (type_of(mover) == JANGGI_CANNON)
@@ -5570,12 +5592,13 @@ bool Position::gives_check(Move m) const {
       return givesCheck;
   }
 
-  if (usingPhysicalKingTarget
+  if (attackFromSurvives && usingPhysicalKingTarget
       && (attackers_to_king(royalSq, occupied, sideToMove, janggiCannons) & square_bb(attackFrom)))
       return !(var->captureForbiddenByColor[color_of(mover)][type_of(mover)] & royalType);
 
   // Is there a direct check?
-  if (!is_promotion_move(m) && type_of(m) != PIECE_PROMOTION && type_of(m) != PIECE_DEMOTION && type_of(m) != CASTLING
+  if (attackFromSurvives
+      && !is_promotion_move(m) && type_of(m) != PIECE_PROMOTION && type_of(m) != PIECE_DEMOTION && type_of(m) != CASTLING
       && !((var->petrifyOnCaptureTypes & type_of(mover)) && capture(m)))
   {
       PieceType pt = type_of(mover);
@@ -5620,6 +5643,12 @@ bool Position::gives_check(Move m) const {
       && attackers_to_king(royalSq, occupied, sideToMove, janggiCannons) & occupied)
       return true;
 
+  if (is_jump_capture(m)
+      && (jump_capture_mask(from, to) & ~square_bb(shotSq))
+      && (attackers_to_king(royalSq, occupied, sideToMove, janggiCannons)
+          & occupied & pieces(sideToMove)))
+      return true;
+
   // Is there a check by gated pieces?
   if (    is_gating(m) && !laser_game()
       && potCtx.potion == Variant::POTION_TYPE_NB
@@ -5640,9 +5669,9 @@ bool Position::gives_check(Move m) const {
   {
       PieceType pt = type_of(mover);
       PieceType diagType = pt == WAZIR ? FERS : pt == SOLDIER ? PAWN : pt == ROOK ? BISHOP : NO_PIECE_TYPE;
-      if (diagType && (attacks_bb(sideToMove, diagType, attackFrom, occupied) & royalSq))
+      if (attackFromSurvives && diagType && (attacks_bb(sideToMove, diagType, attackFrom, occupied) & royalSq))
           return true;
-      else if (pt == JANGGI_CANNON && (janggi_cannon_diagonal_targets(attackFrom, occupied) & royalSq))
+      else if (attackFromSurvives && pt == JANGGI_CANNON && (janggi_cannon_diagonal_targets(attackFrom, occupied) & royalSq))
           return true;
   }
 
@@ -5659,13 +5688,13 @@ bool Position::gives_check(Move m) const {
 
   case PROMOTION:
   case PROMOTION_POTION:
-      return attacks_bb(sideToMove, promotion_type(m), to, simulated.effectOccupancy) & royalSq;
+      return attackFromSurvives && (attacks_bb(sideToMove, promotion_type(m), to, occupied) & royalSq);
 
   case PIECE_PROMOTION:
-      return attacks_bb(sideToMove, promoted_piece_type(type_of(mover)), to, simulated.effectOccupancy) & royalSq;
+      return attackFromSurvives && (attacks_bb(sideToMove, promoted_piece_type(type_of(mover)), to, occupied) & royalSq);
 
   case PIECE_DEMOTION:
-      return attacks_bb(sideToMove, type_of(unpromoted_piece_on(from)), to, simulated.effectOccupancy) & royalSq;
+      return attackFromSurvives && (attacks_bb(sideToMove, type_of(unpromoted_piece_on(from)), to, occupied) & royalSq);
 
   // En passant capture with check? We have already handled the case
   // of direct checks and ordinary discovered check, so the only case we
@@ -5687,11 +5716,12 @@ bool Position::gives_check(Move m) const {
       // Is there a discovered check?
       if (   castling_rank(WHITE) > RANK_1
           && ((blockers_for_king(~sideToMove) & rfrom) || (non_sliding_riders() & pieces(sideToMove)))
-          && attackers_to_king(royalSq, simulated.effectOccupancy, sideToMove))
+          && attackers_to_king(royalSq, occupied, sideToMove))
           return true;
 
-      return   (PseudoAttacks[sideToMove][type_of(piece_on(rfrom))][rto] & royalSq)
-            && (attacks_bb(sideToMove, type_of(piece_on(rfrom)), rto, simulated.effectOccupancy) & royalSq);
+      return   (occupied & square_bb(rto))
+            && (PseudoAttacks[sideToMove][type_of(piece_on(rfrom))][rto] & royalSq)
+            && (attacks_bb(sideToMove, type_of(piece_on(rfrom)), rto, occupied) & royalSq);
   }
   default:
       assert(false);
@@ -8337,6 +8367,8 @@ Value Position::blast_see(Move m) const {
   Color us = color_of(mover);
   Bitboard fromto = is_drop_move(m) ? square_bb(to) | (paired_drop(m) ? square_bb(secondary_drop_square(m)) : Bitboard(0)) : from | to;
   Bitboard blast = blast_squares(capture(m) ? (blast_on_capture_mover_center() ? (rifle_capture(m) ? from : to) : capture_square(m)) : to);
+  if (is_jump_capture(m))
+      blast |= jump_capture_mask(from, to);
 
   // If the explosion would capture an opponent royal or pseudo-royal piece,
   // treat the move as delivering immediate mate. This prevents the static
@@ -8425,6 +8457,16 @@ bool Position::see_ge(Move m, Value threshold) const {
 
   Square from = from_sq(m), to = to_sq(m);
 
+  Bitboard capturedSquares = 0;
+  if (capture(m))
+  {
+      Square captureSq = capture_square(m);
+      if (is_ok(captureSq) && piece_on(captureSq) != NO_PIECE)
+          capturedSquares |= square_bb(captureSq);
+      if (is_jump_capture(m))
+          capturedSquares |= jump_capture_mask(from, to);
+  }
+
   // nCheck
   if (check_counting() && color_of(moved_piece(m)) == sideToMove && gives_check(m))
       return true;
@@ -8436,14 +8478,29 @@ bool Position::see_ge(Move m, Value threshold) const {
   Piece victim = captured_piece(m);
 
   // Extinction
-  if (   extinction_value() != VALUE_NONE
-      && victim != NO_PIECE
-      && !extinction_all_piece_types(~sideToMove)
-      && (   (   (extinction_piece_types(~sideToMove) & type_of(victim))
-              && pieceCount[victim] == extinction_piece_count(~sideToMove) + 1)
-          || (   (extinction_piece_types(~sideToMove) & ALL_PIECES)
-              && count<ALL_PIECES>(~sideToMove) == extinction_piece_count(~sideToMove) + 1)))
-      return extinction_value() < VALUE_ZERO;
+  if (extinction_value() != VALUE_NONE && capturedSquares && !extinction_all_piece_types(~sideToMove))
+  {
+      Bitboard opponentCaptured = capturedSquares & pieces(~sideToMove);
+      bool extinctsTarget = false;
+      if (extinction_piece_types(~sideToMove) & ALL_PIECES)
+          extinctsTarget = count<ALL_PIECES>(~sideToMove) - popcount(opponentCaptured)
+                         <= extinction_piece_count(~sideToMove);
+      else
+      {
+          Bitboard captured = opponentCaptured;
+          while (captured && !extinctsTarget)
+          {
+              Square sq = pop_lsb(captured);
+              PieceType pt = type_of(piece_on(sq));
+              if (extinction_piece_types(~sideToMove) & piece_set(pt))
+                  extinctsTarget = count(~sideToMove, pt)
+                                 - popcount(opponentCaptured & pieces(~sideToMove, pt))
+                                 <= extinction_piece_count(~sideToMove);
+          }
+      }
+      if (extinctsTarget)
+          return extinction_value() < VALUE_ZERO;
+  }
 
   // Do not evaluate SEE if value would be unreliable
   if (must_capture() || !checking_permitted() || is_gating(m) || count<CLOBBER_PIECE>() == count<ALL_PIECES>())
@@ -8454,29 +8511,38 @@ bool Position::see_ge(Move m, Value threshold) const {
   if (topology_wraps())
       return VALUE_ZERO >= threshold;
 
-  int victimValue = PieceValue[MG][victim];
-  if (victim != NO_PIECE && color_of(victim) == color_of(moved_piece(m)) && self_capture(type_of(moved_piece(m))))
-      victimValue = -victimValue;
-  if (points_counting() && victim != NO_PIECE)
+  int victimValue = 0;
+  for (Bitboard b = capturedSquares; b; )
   {
-      int signedPts = 0;
-      int pts = variant()->piecePoints[type_of(victim)];
-      switch (points_rule_captures())
+      Piece captured = piece_on(pop_lsb(b));
+      if (captured == NO_PIECE)
+          continue;
+
+      int value = PieceValue[MG][captured];
+      if (color_of(captured) == color_of(moved_piece(m)) && self_capture(type_of(moved_piece(m))))
+          value = -value;
+      if (points_counting())
       {
-          case POINTS_US:        signedPts =  pts; break;
-          case POINTS_THEM:      signedPts = -pts; break;
-          case POINTS_OWNER:     signedPts = color_of(victim) == sideToMove ? pts : -pts; break;
-          case POINTS_NON_OWNER: signedPts = color_of(victim) == sideToMove ? -pts : pts; break;
-          case POINTS_NONE:      signedPts = 0; break;
+          int signedPts = 0;
+          int pts = variant()->piecePoints[type_of(captured)];
+          switch (points_rule_captures())
+          {
+              case POINTS_US:        signedPts =  pts; break;
+              case POINTS_THEM:      signedPts = -pts; break;
+              case POINTS_OWNER:     signedPts = color_of(captured) == sideToMove ? pts : -pts; break;
+              case POINTS_NON_OWNER: signedPts = color_of(captured) == sideToMove ? -pts : pts; break;
+              case POINTS_NONE:      signedPts = 0; break;
+          }
+          if (points_goal() > 0)
+          {
+              if (points_goal_value() < VALUE_ZERO)
+                  signedPts = -signedPts;
+              else if (points_goal_value() == VALUE_ZERO)
+                  signedPts = 0;
+          }
+          value += 20 * signedPts;
       }
-      if (points_goal() > 0)
-      {
-          if (points_goal_value() < VALUE_ZERO)
-              signedPts = -signedPts;
-          else if (points_goal_value() == VALUE_ZERO)
-              signedPts = 0;
-      }
-      victimValue += 20 * signedPts;
+      victimValue += value;
   }
   int swap = victimValue - threshold;
   if (swap < 0)
@@ -8498,6 +8564,7 @@ bool Position::see_ge(Move m, Value threshold) const {
       return false;
 
   Bitboard occupied = (!is_drop_move(m) ? pieces() ^ from : pieces()) ^ to;
+  occupied &= ~capturedSquares;
   if (paired_drop(m))
       occupied ^= secondary_drop_square(m);
   Color stm = color_of(moved_piece(m));
