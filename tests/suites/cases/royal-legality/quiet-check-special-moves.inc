@@ -111,6 +111,15 @@ cloneMoveTypes = r
 castling = false
 startFen = 4q3/8/8/8/8/8/8/R7 w - - 0 1
 
+[clone-antiroyal-check:chess]
+king = -
+antiRoyalTypes = n
+antiRoyalCount = 1
+cloneMoveTypes = r
+castling = false
+startFen = 4n3/8/8/8/8/6r1/8/R5N1 w - - 0 1
+
+
 [firstmove-pseudoroyal-check:chess]
 king = -
 pseudoRoyalTypes = q
@@ -218,6 +227,27 @@ static FSX_NOINLINE void test_clone_pseudoroyal_check() {
     assert(pos.gives_check(m));
     assert(MoveList<QUIET_CHECKS>(pos).contains(m));
 }
+
+static FSX_NOINLINE void test_clone_antiroyal_check() {
+    StateInfo st{};
+    Position pos;
+    pos.set(variants.get("clone-antiroyal-check"),
+            "4n3/8/8/8/8/6r1/8/R5N1 w - - 0 1", false, &st, nullptr);
+
+    const Move m_attacks = make<SPECIAL>(SQ_A1, SQ_E1);
+    assert(pos.is_clone_move(m_attacks));
+    assert(!pos.gives_check(m_attacks));
+    assert(!MoveList<QUIET_CHECKS>(pos).contains(m_attacks));
+
+    const Move m_no_attack = make<SPECIAL>(SQ_A1, SQ_D1);
+    assert(pos.is_clone_move(m_no_attack));
+    assert(pos.gives_check(m_no_attack));
+    assert(MoveList<QUIET_CHECKS>(pos).contains(m_no_attack));
+
+    assert(MoveList<LEGAL>(pos).contains(m_attacks));
+    assert(MoveList<LEGAL>(pos).contains(m_no_attack));
+}
+
 
 static FSX_NOINLINE void test_pseudoroyal_state_rebuild() {
     StateInfo initialState{};
@@ -342,6 +372,8 @@ int main(int argc, char** argv) {
             test_promotion_quiet_check();
         if (!which || !std::strcmp(which, "clone-pseudoroyal"))
             test_clone_pseudoroyal_check();
+        if (!which || !std::strcmp(which, "clone-antiroyal"))
+            test_clone_antiroyal_check();
         if (!which || !std::strcmp(which, "pseudoroyal-state"))
             test_pseudoroyal_state_rebuild();
         if (!which || !std::strcmp(which, "firstmove-pseudoroyal"))
@@ -441,6 +473,7 @@ run_case pull
 run_case wrapped
 run_case gate-history-square
 run_case clone-pseudoroyal
+run_case clone-antiroyal
 run_case pseudoroyal-state
 run_case firstmove-pseudoroyal
 test_passive_blast
