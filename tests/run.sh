@@ -138,16 +138,30 @@ prepare_python() {
     done
     (( needs_python )) || return 0
     mkdir -p "${ROOT_DIR}/.local/build/pyffish" "${RUN_DIR}"
-    if [[ "${VERBOSE:-0}" == 1 ]]; then
-        (cd "${ROOT_DIR}" && python3 setup.py build_ext --inplace --build-temp "${ROOT_DIR}/.local/build/pyffish")
-    elif (cd "${ROOT_DIR}" && python3 setup.py build_ext --inplace --build-temp "${ROOT_DIR}/.local/build/pyffish") >"${log}" 2>&1; then
-        echo "ok: python extension"
+
+    run_build() {
+        if [[ "${VERBOSE:-0}" == 1 ]]; then
+            (cd "${ROOT_DIR}" && python3 setup.py build_ext --inplace --build-temp "${ROOT_DIR}/.local/build/pyffish")
+        elif (cd "${ROOT_DIR}" && python3 setup.py build_ext --inplace --build-temp "${ROOT_DIR}/.local/build/pyffish") >"${log}" 2>&1; then
+            echo "ok: python extension"
+        else
+            echo "FAILED: python extension" >&2
+            cat "${log}"
+            return 1
+        fi
+    }
+
+    local status=0
+    if command -v flock >/dev/null 2>&1; then
+        (
+            flock -x 9 && run_build
+        ) 9>"${ROOT_DIR}/.local/build/pyffish.lock" || status=1
     else
-        echo "FAILED: python extension" >&2
-        cat "${log}"
-        return 1
+        run_build || status=1
     fi
+    return $status
 }
+
 
 prepare_shared_objects() {
     local engine="$1"
