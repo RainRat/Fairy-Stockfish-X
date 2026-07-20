@@ -1366,14 +1366,14 @@ bool VariantParser<DoCheck>::parse_piece_values(Variant* v) {
                 if (points < 0)
                 {
                     if (DoCheck)
-                        std::cerr << "piecePoints - Negative value clamped to 0." << std::endl;
-                    points = 0;
+                        std::cerr << "piecePoints - Invalid negative value: " << points << "." << std::endl;
+                    return false;
                 }
                 else if (points > MAX_PIECE_POINTS)
                 {
                     if (DoCheck)
-                        std::cerr << "piecePoints - Value exceeds MAX_PIECE_POINTS and was clamped." << std::endl;
-                    points = MAX_PIECE_POINTS;
+                        std::cerr << "piecePoints - Value exceeds MAX_PIECE_POINTS (" << MAX_PIECE_POINTS << "): " << points << "." << std::endl;
+                    return false;
                 }
                 parsed[pt] = points;
             }
@@ -1911,8 +1911,8 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     if (v->cloneMoveTypes & PAWN)
     {
         if (DoCheck)
-            std::cerr << "cloneMoveTypes - PAWN is not supported for clone moves and will be ignored." << std::endl;
-        v->cloneMoveTypes &= ~piece_set(PAWN);
+            std::cerr << "cloneMoveTypes - PAWN is not supported for clone moves." << std::endl;
+        return false;
     }
     parse_attribute("forcedJumpContinuation", v->forcedJumpContinuation);
     parse_attribute("forcedJumpSameDirection", v->forcedJumpSameDirection);
@@ -2342,9 +2342,10 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
     }
 
     // Contradictory options
-    if (DoCheck && !v->checking && v->checkCounting)
+    if (!v->checking && v->checkCounting)
     {
-        std::cerr << "checkCounting=true requires checking=true." << std::endl;
+        if (DoCheck)
+            std::cerr << "checkCounting=true requires checking=true." << std::endl;
         valid = false;
     }
     if (DoCheck && !v->checking && v->allowChecks)
@@ -2557,13 +2558,19 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
         if (v->flipEnclosedPieces)
         {
             if (DoCheck)
+            {
                 std::cerr << "Can not use kings with flipEnclosedPieces." << std::endl;
+                std::cerr << "Reason: Flip processing recolors the KING, causing royal_square() assumptions to fail." << std::endl;
+            }
             valid = false;
         }
         if (v->wallingRule==DUCK)
         {
             if (DoCheck)
+            {
                 std::cerr << "Can not use kings with wallingRule = duck." << std::endl;
+                std::cerr << "Reason: Evasion generation does not support compound blocking with duck placement." << std::endl;
+            }
             valid = false;
         }
         // We can not fully check support for custom king movements at this point,
@@ -2808,11 +2815,13 @@ bool VariantParser<DoCheck>::parse_capture_maps(Variant* v) {
         if (it == config.end())
             return true;
 
+        bool sawEntry = false;
         std::string entry;
         std::stringstream ss(it->second);
         PieceSet parsed[PIECE_TYPE_NB];
         std::copy(v->captureForbiddenByColor[c], v->captureForbiddenByColor[c] + PIECE_TYPE_NB, parsed);
         while (ss >> entry) {
+            sawEntry = true;
             size_t sep = entry.find(':');
             if (sep == std::string::npos || sep == 0 || sep + 1 >= entry.size()) {
                 if (DoCheck)
@@ -2835,6 +2844,12 @@ bool VariantParser<DoCheck>::parse_capture_maps(Variant* v) {
                 else
                     parsed[attacker] |= targetSet;
             }
+        }
+        if (!sawEntry)
+        {
+            if (DoCheck)
+                std::cerr << key << " - Empty value." << std::endl;
+            return false;
         }
         std::copy(parsed, parsed + PIECE_TYPE_NB, v->captureForbiddenByColor[c]);
         return true;
@@ -2962,21 +2977,21 @@ bool VariantParser<DoCheck>::parse_multimoves(Variant* v) {
         return false;
     }
 
-    if (DoCheck)
+    int64_t usedPly = 0;
+    size_t usedEntries = 0;
+    for (int n : v->multimoves)
     {
-        int64_t usedPly = 0;
-        size_t usedEntries = 0;
-        for (int n : v->multimoves)
-        {
-            int64_t segment = 2 * int64_t(n) - 1;
-            if (segment <= 0 || usedPly + segment >= START_MULTIMOVES)
-                break;
-            usedPly += segment;
-            ++usedEntries;
-        }
-        if (usedEntries < v->multimoves.size())
-            std::cerr << "multimoves - start pattern exceeds START_MULTIMOVES (" << START_MULTIMOVES
-                      << "), tail entries will be ignored." << std::endl;
+        int64_t segment = 2 * int64_t(n) - 1;
+        if (segment <= 0 || usedPly + segment >= START_MULTIMOVES)
+            break;
+        usedPly += segment;
+        ++usedEntries;
+    }
+    if (usedEntries < v->multimoves.size())
+    {
+        if (DoCheck)
+            std::cerr << "multimoves - start pattern exceeds START_MULTIMOVES (" << START_MULTIMOVES << ")." << std::endl;
+        return false;
     }
     return true;
 }

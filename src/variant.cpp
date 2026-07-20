@@ -2506,15 +2506,38 @@ void VariantMap::parse_istream(std::istream& file) {
     std::set<std::string> duplicateVariants = {};
     while (file.get() && std::getline(std::getline(file, variant, ']'), input))
     {
+        bool invalidSyntax = false;
+
+        if (variant.find('\n') != std::string::npos)
+        {
+            if (DoCheck)
+                std::cerr << "Malformed section header: missing closing bracket ']'." << std::endl;
+            invalidSyntax = true;
+        }
+
+        std::string trimmed_input = trim_ascii_spaces(input);
+        if (!trimmed_input.empty() && trimmed_input[0] != ';' && trimmed_input[0] != '#')
+        {
+            if (DoCheck)
+                std::cerr << "Invalid syntax after closing bracket: '" << trimmed_input << "'." << std::endl;
+            invalidSyntax = true;
+        }
+
         // Extract variant template, if specified
         if (!std::getline(std::getline(std::stringstream(variant), variant, ':'), variant_template))
             variant_template = "";
         variant = trim_ascii_spaces(variant);
         variant_template = trim_ascii_spaces(variant_template);
 
+        if (variant.empty())
+        {
+            if (DoCheck)
+                std::cerr << "Malformed section header: empty variant name." << std::endl;
+            invalidSyntax = true;
+        }
+
         // Read variant rules
         Config attribs = {};
-        bool invalidSyntax = false;
         while (file.peek() != '[' && std::getline(file, input))
         {
             if (!input.empty() && input.back() == '\r')
