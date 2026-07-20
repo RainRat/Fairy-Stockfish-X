@@ -58,7 +58,10 @@ validate_engines() {
   done
 
   if (( stale )); then
-    echo "rebuild the named regression binaries before starting the suite" >&2
+    echo "rebuild the named regression binaries before starting the suite:" >&2
+    echo "  tests/build.sh ARCH=x86-64-modern largeboards=yes EXE=stockfish-large" >&2
+    echo "  tests/build.sh ARCH=x86-64-modern verylargeboards=yes EXE=stockfish-vlb" >&2
+    echo "  tests/build.sh ARCH=x86-64-modern all=yes EXE=stockfish-allvars" >&2
     return 2
   fi
 }

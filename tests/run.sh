@@ -72,7 +72,7 @@ check_engine() {
     if (( $(family_rank "$actual") < $(family_rank "$expected") )) && [[ "${FSX_ALLOW_SMALL_BOARD:-0}" != 1 ]]; then
         if [[ "$expected" == large ]]; then
             echo "${suite} requires a large-board all-variant engine; got ${engine} (${actual})." >&2
-            echo "build with: make -C src -j4 build ARCH=x86-64-modern largeboards=yes all=yes EXE=stockfish-allvars" >&2
+            echo "build with: tests/build.sh ARCH=x86-64-modern largeboards=yes all=yes EXE=stockfish-allvars" >&2
         else
             echo "${suite} requires a ${expected}-board engine; got ${engine} (${actual})" >&2
         fi

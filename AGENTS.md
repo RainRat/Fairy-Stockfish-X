@@ -25,14 +25,14 @@ Fairy-Stockfish-X is a Fairy-Stockfish fork for testing experimental chess varia
 * Reject malformed syntax and known settings with impossible, unsafe, or always-invalid values.
 
 ## Build
-From `src/`:
+By default, compiling can be very verbose (especially under LTO). Prefer using the clean build wrapper from the root directory:
 
 ```sh
-make -j build ARCH=x86-64-modern
-make -j build ARCH=x86-64-modern largeboards=yes
-make -j build ARCH=x86-64-modern verylargeboards=yes
-make -j build ARCH=x86-64-modern debug=yes optimize=no
-make -j build COMP=mingw
+tests/build.sh ARCH=x86-64-modern
+tests/build.sh ARCH=x86-64-modern largeboards=yes
+tests/build.sh ARCH=x86-64-modern verylargeboards=yes
+tests/build.sh ARCH=x86-64-modern debug=yes optimize=no
+tests/build.sh COMP=mingw
 ```
 
 Use `largeboards=yes` for normal large-board variants. Use `verylargeboards=yes` only beyond that matrix. When switching board macro families, run `make clean`.
@@ -40,10 +40,12 @@ Use `largeboards=yes` for normal large-board variants. Use `verylargeboards=yes`
 For named binaries used by regression scripts:
 
 ```sh
-make -j build ARCH=x86-64-modern largeboards=yes EXE=stockfish-large
-make -j build ARCH=x86-64-modern verylargeboards=yes EXE=stockfish-vlb
-make -j build ARCH=x86-64-modern all=yes EXE=stockfish-allvars
+tests/build.sh ARCH=x86-64-modern largeboards=yes EXE=stockfish-large
+tests/build.sh ARCH=x86-64-modern verylargeboards=yes EXE=stockfish-vlb
+tests/build.sh ARCH=x86-64-modern all=yes EXE=stockfish-allvars
 ```
+
+If you prefer standard make, compile from `src/` using `make -j build ...`.
 
 ## Running the engine
 Use `src/stockfish`; do not rely on a stale repo-root `./stockfish`.

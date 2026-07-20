@@ -8581,16 +8581,37 @@ bool Position::see_ge(Move m, Value threshold) const {
       }
       victimValue += value;
   }
-  int swap = victimValue - threshold;
-  if (swap < 0)
-      return false;
-
   // In morph-capture variants, the capturing piece on 'to' may immediately
   // change type, so the first recapture loses the morphed piece value.
   Piece seeMover = moved_piece(m);
-  if (capture_morph() && capture(m) && victim != NO_PIECE)
+  int morphDelta = 0;
+  if (   capture_morph()
+      && capture(m)
+      && victim != NO_PIECE
+      && !is_drop_move(m)
+      && type_of(m) != CASTLING
+      && !is_promotion_move(m)
+      && type_of(m) != PIECE_PROMOTION)
+  {
+      PieceType finalPt = type_of(seeMover);
       if (!(rex_exclusive_morph() && type_of(seeMover) == KING))
-          seeMover = make_piece(color_of(seeMover), type_of(victim));
+          finalPt = type_of(victim);
+
+      PieceType moveMorphType = var->moveMorphPieceType[finalPt];
+      if (moveMorphType != NO_PIECE_TYPE)
+          finalPt = moveMorphType;
+
+      if (finalPt != type_of(seeMover))
+      {
+          Piece morphed = make_piece(color_of(seeMover), finalPt);
+          morphDelta = PieceValue[MG][morphed] - PieceValue[MG][seeMover];
+          seeMover = morphed;
+      }
+  }
+
+  int swap = victimValue + morphDelta - threshold;
+  if (swap < 0)
+      return false;
 
   swap = PieceValue[MG][seeMover] - swap;
   if (swap <= 0)
