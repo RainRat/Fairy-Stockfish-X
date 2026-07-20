@@ -155,4 +155,32 @@ UCI
 assert_contains_literal "$out" "Fen:" "checkers forced continuation position loaded"
 assert_contains_literal "$out" "K" "promoted checkers king survives a pass"
 
+out=$(run_uci "$ENGINE" "$VARIANTS" checkers <<'UCI'
+position fen 8/2m1m3/1M6/8/8/8/8/8 w - - 0 1
+go perft 1
+UCI
+)
+assert_contains_literal "$out" "b6d8k: 1" "checkers capture crowns a man"
+
+out=$(run_uci "$ENGINE" "$VARIANTS" checkers <<'UCI'
+position fen 8/2m1m3/1M6/8/8/8/8/8 w - - 0 1 moves b6d8k
+d
+UCI
+)
+assert_contains_literal "$out" "Fen: 3K4/4m3/8/8/8/8/8/8 b - - 0 1" "checkers crowning ends the capture turn"
+
+out=$(run_uci "$ENGINE" "$VARIANTS" checkers <<'UCI'
+position fen 1M6/8/8/8/8/8/8/8 w - - 0 1
+go perft 1
+UCI
+)
+assert_contains_literal "$out" "Nodes searched: 0" "checkers side with no legal move loses"
+
+out=$(run_uci "$ENGINE" "$VARIANTS" checkers <<'UCI'
+position fen 8/8/5k2/8/8/2K5/8/8 w - - 0 1 moves c3b4 f6g5 b4c3 g5f6 c3b4 f6g5 b4c3 g5f6
+go depth 1
+UCI
+)
+assert_not_contains_literal "$out" "info depth 1" "checkers threefold repetition is adjudicated as a draw"
+
 echo "movement rule matrix cases passed"

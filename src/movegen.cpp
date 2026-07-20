@@ -868,9 +868,7 @@ namespace {
         PieceType promPt = pos.is_promoted(from) ? NO_PIECE_TYPE : pos.promoted_piece_type(Pt);
         Bitboard b2 = promPt ? b1 : Bitboard(0);
         Bitboard b3 = pos.piece_demotion() && pos.is_promoted(from) ? b1 : Bitboard(0);
-        Bitboard pawnPromotions = (pos.promotion_pawn_types(Us) & piece_set(Pt))
-                                ? (b & (Type == EVASIONS ? target : (~pos.pieces(Us) | (pos.self_capture(Pt) ? selfCaptureTargets : Bitboard(0)))) & promotion_zone)
-                                : Bitboard(0);
+        Bitboard pawnPromotions = 0;
         Bitboard jumpCaptures = 0;
         PieceType movePt = Pt;
         const PieceInfo* pi = pieceMap.get(movePt);
@@ -913,6 +911,16 @@ namespace {
                         jumpCaptures |= to;
                 }
             }
+        }
+        if (pos.promotion_pawn_types(Us) & piece_set(Pt))
+        {
+            Bitboard promotionTargets = b & (Type == EVASIONS
+                                             ? target
+                                             : ~pos.pieces(Us) | (pos.self_capture(Pt) ? selfCaptureTargets : Bitboard(0)));
+            if constexpr (GeneratesCaptures)
+                // jumpCaptures already applies its own hurdle-aware evasion filter.
+                promotionTargets |= jumpCaptures;
+            pawnPromotions = promotionTargets & promotion_zone;
         }
         Bitboard pushMoves = 0;
         if (pos.pushing_strength(Pt) > 0)
