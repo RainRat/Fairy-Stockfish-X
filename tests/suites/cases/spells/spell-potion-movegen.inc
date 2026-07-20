@@ -557,6 +557,56 @@ static void test_sacred_royal_compound_freeze() {
            "Sacred Royal thawed a king whose zone also froze its checker");
 }
 
+static void test_spell_potion_ownership_policy() {
+    const Variant* v = variants.get("spell-chess");
+
+    // 1. Own-zone persistent Freeze: a player's own pieces are frozen on their own persistent freeze zone.
+    {
+        StateInfo st{};
+        Position pos;
+        // White persistent freeze zone centered on f3: st->potionZones[WHITE][Variant::POTION_FREEZE] covers king-area of f3
+        pos.set(v, "4k3/8/8/8/8/5P2/8/4K3[JJFFFFFjjfffff] w - - 0 1 wf:f3", false, &st, nullptr);
+        Move m = make<NORMAL>(SQ_F3, SQ_F4);
+        expect(!MoveList<LEGAL>(pos).contains(m), "pawn moved despite being in own persistent freeze zone");
+    }
+
+    // 2. Opponent-zone persistent Freeze: a player's pieces are frozen on the opponent's persistent freeze zone.
+    {
+        StateInfo st{};
+        Position pos;
+        // Black persistent freeze zone centered on f3: st->potionZones[BLACK][Variant::POTION_FREEZE] covers king-area of f3
+        pos.set(v, "4k3/8/8/8/8/5P2/8/4K3[JJFFFFFjjfffff] w - - 0 1 bf:f3", false, &st, nullptr);
+        Move m = make<NORMAL>(SQ_F3, SQ_F4);
+        expect(!MoveList<LEGAL>(pos).contains(m), "pawn moved despite being in opponent persistent freeze zone");
+    }
+
+    // 3. Inherited temporary Freeze: under current policy, a temporary freeze zone freezes all pieces inside it (both own and opponent).
+    {
+        StateInfo st{};
+        Position pos;
+        // White to move. White casts freeze on e2 (where black knight is).
+        // The freeze zone covers the king-area of e2, including f1.
+        // White tries to move white rook f1 to g1 (origin f1 is within the temporary freeze zone).
+        // Under current engine code, this is illegal because the temporary zone is in the union freeze_squares().
+        pos.set(v, "4k3/8/8/8/8/8/4n3/4KR2[JJFFFFFjjfffff] w - - 0 1", false, &st, nullptr);
+        std::string moveStr = "f@e2,f1g1";
+        Move m = UCI::to_move(pos, moveStr);
+        expect(m == MOVE_NONE, "rook moved despite being in temporary freeze zone");
+    }
+
+    // 4. Inherited temporary Jump: a player's temporary jump zone (from compound move) applies to own pieces.
+    {
+        StateInfo st{};
+        Position pos;
+        // White to move. White casts jump on a3 and moves white rook from a1 to a4.
+        pos.set(v, "4k3/8/8/8/8/p7/8/R3K3[JJFFFFFjjfffff] w - - 0 1", false, &st, nullptr);
+        std::string moveStr = "j@a3,a1a4";
+        Move m = UCI::to_move(pos, moveStr);
+        expect(m != MOVE_NONE, "compound jump/rook move failed to parse");
+        expect(MoveList<LEGAL>(pos).contains(m), "compound move with temporary jump zone rejected");
+    }
+}
+
 static void test_committed_piece_type_helpers() {
     StateInfo st{};
     const Variant* v = variants.get("commitgate-test");
@@ -599,6 +649,7 @@ int main() {
     test_potion_fen_zone_validation();
     test_sacred_royal();
     test_sacred_royal_compound_freeze();
+    test_spell_potion_ownership_policy();
     test_committed_piece_type_helpers();
     test_committed_gate_overflow_parse();
     return 0;
