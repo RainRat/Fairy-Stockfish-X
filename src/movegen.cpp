@@ -1897,7 +1897,52 @@ namespace {
     return generate_potion_moves<Us, Type>(pos, MoveBuffer{moveList, baseEnd});
   }
 
+  bool potion_move_pseudo_legal_impl(const Position& pos, Move m) {
+      if (!pos.potions_enabled())
+          return false;
+
+      Color us = pos.side_to_move();
+      PotionContext potion = pos.setup_potion_context(m, us);
+      if (!potion.valid || potion.potion == Variant::POTION_TYPE_NB)
+          return false;
+
+      Square from = from_sq(m), to = to_sq(m);
+      Move base = MOVE_NONE;
+      switch (type_of(m))
+      {
+          case NORMAL:
+              base = make_move(from, to);
+              break;
+          case CASTLING:
+              base = make<CASTLING>(from, to);
+              break;
+          case PROMOTION:
+              base = make<PROMOTION>(from, to, promotion_type(m));
+              break;
+          case PROMOTION_POTION:
+          default:
+              return false;
+      }
+
+      ScopedSpellContext spellScope(potion.freezeExtra, potion.jumpRemoved);
+      ExtMove baseMoves[MOVEGEN_OVERFLOW_CAPACITY];
+      ExtMove* baseEnd = pos.evasion_checkers() && !pos.topology_wraps()
+                       ? generate_without_potions<EVASIONS>(pos, baseMoves)
+                       : generate_without_potions<NON_EVASIONS>(pos, baseMoves);
+
+      for (ExtMove* it = baseMoves; it != baseEnd; ++it)
+          if (it->move == base)
+              return !pos.evasion_checkers() || pos.topology_wraps()
+                  || potion_move_matches<EVASIONS>(pos, base, m);
+
+      return false;
+  }
+
 } // namespace
+
+bool potion_move_pseudo_legal(const Position& pos, Move m) {
+    return potion_move_pseudo_legal_impl(pos, m);
+}
 
 
 /// <CAPTURES>     Generates all pseudo-legal captures plus queen promotions

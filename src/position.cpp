@@ -5330,6 +5330,10 @@ bool Position::pseudo_legal(const Move m) const {
 
   if (type_of(m) != NORMAL || is_gating(m))
   {
+      if (potCtx.potion != Variant::POTION_TYPE_NB)
+          return potion_move_pseudo_legal(*this, m)
+              && !violates_same_player_board_repetition(m);
+
       const bool useWrappedFallback = topology_wraps() && evasion_checkers();
       return ((evasion_checkers() && !useWrappedFallback) ? MoveList<    EVASIONS>(*this).contains(m)
                                                           : MoveList<NON_EVASIONS>(*this).contains(m))
@@ -7584,45 +7588,31 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
 
   if (potions_enabled())
   {
-      auto togglePotionHashes = [&](Key& key) {
-          for (Color c : {WHITE, BLACK})
-              for (int pt = 0; pt < Variant::POTION_TYPE_NB; ++pt)
-              {
-                  Variant::PotionType potion = static_cast<Variant::PotionType>(pt);
-                  if (potion_piece(potion) == NO_PIECE_TYPE)
-                      continue;
-
-                  xor_potion_zone(key, c, potion, st->potionZones[c][pt]);
-                  xor_potion_cooldown(key, c, potion, st->potionCooldown[c][pt]);
-              }
-      };
-
-      togglePotionHashes(k);
-
       for (int pt = 0; pt < Variant::POTION_TYPE_NB; ++pt)
       {
           Variant::PotionType potion = static_cast<Variant::PotionType>(pt);
           if (potion_piece(potion) == NO_PIECE_TYPE)
               continue;
 
+          Bitboard oldUsZone = st->potionZones[us][pt];
+          int oldUsCooldown = st->potionCooldown[us][pt];
           if (potCtx.potion == potion)
-          {
-              int cooldown = var->potionCooldown[pt];
-              st->potionCooldown[us][pt] = std::max(cooldown - 1, 0);
-          }
+              st->potionCooldown[us][pt] = std::max(var->potionCooldown[pt] - 1, 0);
           else if (st->potionCooldown[us][pt] > 0)
               --st->potionCooldown[us][pt];
+
+          Bitboard newUsZone = potion == Variant::POTION_FREEZE
+                             ? (potCtx.potion == Variant::POTION_FREEZE ? potCtx.freezeExtra : Bitboard(0))
+                             : (potCtx.potion == Variant::POTION_JUMP ? potCtx.jumpRemoved : Bitboard(0));
+          st->potionZones[us][pt] = newUsZone;
+          xor_potion_zone(k, us, potion, oldUsZone ^ newUsZone);
+          xor_potion_cooldown(k, us, potion, oldUsCooldown ^ st->potionCooldown[us][pt]);
+
+          Bitboard oldThemZone = st->potionZones[them][pt];
+          st->potionZones[them][pt] = Bitboard(0);
+          xor_potion_zone(k, them, potion, oldThemZone);
       }
 
-      st->potionZones[us][Variant::POTION_FREEZE] =
-          potCtx.potion == Variant::POTION_FREEZE ? potCtx.freezeExtra : Bitboard(0);
-      st->potionZones[us][Variant::POTION_JUMP] =
-          potCtx.potion == Variant::POTION_JUMP ? potCtx.jumpRemoved : Bitboard(0);
-
-      st->potionZones[them][Variant::POTION_FREEZE] = Bitboard(0);
-      st->potionZones[them][Variant::POTION_JUMP] = Bitboard(0);
-
-      togglePotionHashes(k);
   }
 
   updatePawnCheckZone();
@@ -8246,21 +8236,6 @@ void Position::do_null_move(StateInfo& newSt) {
 
   if (potions_enabled())
   {
-      auto togglePotionHashes = [&](Key& key) {
-          for (Color c : {WHITE, BLACK})
-              for (int pt = 0; pt < Variant::POTION_TYPE_NB; ++pt)
-              {
-                  Variant::PotionType potion = static_cast<Variant::PotionType>(pt);
-                  if (potion_piece(potion) == NO_PIECE_TYPE)
-                      continue;
-
-                  xor_potion_zone(key, c, potion, st->potionZones[c][pt]);
-                  xor_potion_cooldown(key, c, potion, st->potionCooldown[c][pt]);
-              }
-      };
-
-      togglePotionHashes(st->key);
-
       Color us = sideToMove;
       for (int pt = 0; pt < Variant::POTION_TYPE_NB; ++pt)
       {
@@ -8268,15 +8243,22 @@ void Position::do_null_move(StateInfo& newSt) {
           if (potion_piece(potion) == NO_PIECE_TYPE)
               continue;
 
+          Bitboard oldUsZone = st->potionZones[us][pt];
+          int oldUsCooldown = st->potionCooldown[us][pt];
           if (st->potionCooldown[us][pt] > 0)
               --st->potionCooldown[us][pt];
+          st->potionZones[us][pt] = Bitboard(0);
+          xor_potion_zone(st->key, us, potion, oldUsZone);
+          xor_potion_cooldown(st->key, us, potion, oldUsCooldown ^ st->potionCooldown[us][pt]);
+
+          for (Color c : {WHITE, BLACK})
+              if (c != us)
+              {
+                  Bitboard oldOtherZone = st->potionZones[c][pt];
+                  st->potionZones[c][pt] = Bitboard(0);
+                  xor_potion_zone(st->key, c, potion, oldOtherZone);
+              }
       }
-
-      for (Color c : {WHITE, BLACK})
-          for (int pt = 0; pt < Variant::POTION_TYPE_NB; ++pt)
-              st->potionZones[c][pt] = Bitboard(0);
-
-      togglePotionHashes(st->key);
   }
 
 
