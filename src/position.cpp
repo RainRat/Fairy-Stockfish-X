@@ -5513,6 +5513,61 @@ bool Position::push_move(Move m) const {
 
 bool Position::gives_check(Move m) const {
 
+#ifdef NDEBUG
+  return gives_check_impl(m);
+#else
+  bool fastResult = gives_check_impl(m);
+
+  static thread_local bool in_gives_check_cross_check = false;
+  if (!in_gives_check_cross_check)
+  {
+      PotionContext potCtx = setup_potion_context(m, sideToMove);
+
+      const bool isComplex = is_clone_move(m)
+                          || (potCtx.potion != Variant::POTION_TYPE_NB)
+                          || is_drop_move(m)
+                          || (var->wallingRule != NO_WALLING)
+                          || (var->antiRoyalTypes != NO_PIECE_SET)
+                          || (var->pseudoRoyalTypes != NO_PIECE_SET)
+                          || has_pushing()
+                          || type_of(m) == PULL
+                          || topology_wraps()
+                          || laser_game()
+                          || has_adjacent_swapping()
+                          || is_swap_move(m)
+                          || type_of(m) == DROP2
+                          || type_of(m) == INSERT;
+
+      if (isComplex)
+      {
+          in_gives_check_cross_check = true;
+
+          const bool usingPhysicalKingTarget = count<KING>(~sideToMove) == 1;
+          Square royalSq = usingPhysicalKingTarget ? square<KING>(~sideToMove)
+                                                   : royal_square(~sideToMove);
+          if (royalSq == SQ_NONE && count<KING>(~sideToMove) != 1)
+              royalSq = SQ_NONE;
+          else if (royalSq == SQ_NONE)
+              royalSq = square<KING>(~sideToMove);
+
+          StateInfo nextState;
+          ScopedProbeMove probe(*this, m, nextState);
+          bool slowResult = is_clone_move(m)
+                         ? bool(checkers())
+                         : (bool(evasion_checkers()) || (laser_game() && royalSq != SQ_NONE && piece_on(royalSq) == NO_PIECE));
+
+          in_gives_check_cross_check = false;
+
+          assert(fastResult == slowResult);
+      }
+  }
+
+  return fastResult;
+#endif
+}
+
+bool Position::gives_check_impl(Move m) const {
+
   assert(is_ok(m));
   if (is_pass(m))
       return false;

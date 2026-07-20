@@ -884,6 +884,7 @@ public:
   Square jump_capture_square(Square from, Square to, Bitboard occupied) const;
   Square jump_capture_square(Square from, Square to) const;
   bool gives_check(Move m) const;
+  bool gives_check_impl(Move m) const;
   Piece moved_piece(Move m) const;
   bool is_clone_move(Move m) const;
   bool is_pull_move(Move m) const;
