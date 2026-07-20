@@ -70,7 +70,12 @@ check_engine() {
     expected=${SUITE_FAMILY[$suite]}
     actual=$(engine_family "$engine")
     if (( $(family_rank "$actual") < $(family_rank "$expected") )) && [[ "${FSX_ALLOW_SMALL_BOARD:-0}" != 1 ]]; then
-        echo "${suite} requires a ${expected}-board engine; got ${engine} (${actual})" >&2
+        if [[ "$expected" == large ]]; then
+            echo "${suite} requires a large-board all-variant engine; got ${engine} (${actual})." >&2
+            echo "build with: make -C src -j4 build ARCH=x86-64-modern largeboards=yes all=yes EXE=stockfish-allvars" >&2
+        else
+            echo "${suite} requires a ${expected}-board engine; got ${engine} (${actual})" >&2
+        fi
         return 1
     fi
 }
@@ -234,7 +239,13 @@ case "$command" in
         export CXX
         prepare_shared_objects "$engine"
         engine=$(normalize_engine "$engine")
-        run_suite_list "$engine" "$VARIANTS"
+        if [[ "${VERBOSE:-0}" == 1 ]]; then
+            run_suite_list "$engine" "$VARIANTS"
+        else
+            mkdir -p "$RUN_DIR"
+            suite_log_dir=$(mktemp -d "${RUN_DIR}/suite-XXXXXX")
+            run_suite_list "$engine" "$VARIANTS" "$suite_log_dir"
+        fi
         ;;
     *) usage ;;
 esac
