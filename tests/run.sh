@@ -139,6 +139,21 @@ prepare_python() {
     (( needs_python )) || return 0
     mkdir -p "${ROOT_DIR}/.local/build/pyffish" "${RUN_DIR}"
 
+    local pyffish_so=""
+    shopt -s nullglob
+    local pyffish_candidates=("${ROOT_DIR}"/pyffish*.so)
+    shopt -u nullglob
+    if (( ${#pyffish_candidates[@]} > 0 )); then
+        pyffish_so="${pyffish_candidates[0]}"
+    fi
+
+    if [[ -n "${pyffish_so}" ]] && [[ "${ROOT_DIR}/setup.py" -ot "${pyffish_so}" ]]; then
+        if ! find "${ROOT_DIR}/src" -type f \( -name '*.cpp' -o -name '*.h' \) -newer "${pyffish_so}" -print -quit | grep -q .; then
+            return 0
+        fi
+    fi
+
+
     run_build() {
         if [[ "${VERBOSE:-0}" == 1 ]]; then
             (cd "${ROOT_DIR}" && python3 setup.py build_ext --inplace --build-temp "${ROOT_DIR}/.local/build/pyffish")
