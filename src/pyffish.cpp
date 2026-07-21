@@ -715,6 +715,7 @@ PyMODINIT_FUNC PyInit_pyffish() {
     UCI::init(Options);
     PSQT::init(variants.get(Options["UCI_Variant"]));
     Bitboards::init();
+    UCI::init_variant(variants.get(Options["UCI_Variant"]));
     Position::init();
     Bitbases::init();
     Endgames::init();

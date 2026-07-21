@@ -46,6 +46,7 @@ int main(int argc, char* argv[]) {
   Tune::init();
   PSQT::init(variants.get(Options["UCI_Variant"]));
   Bitboards::init();
+  UCI::init_variant(variants.get(Options["UCI_Variant"]));
   Position::init();
   Bitbases::init();
   Endgames::init();
