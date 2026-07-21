@@ -1911,6 +1911,8 @@ namespace {
 
         score += variant<WHITE>() - variant<BLACK>();
 
+        score += (mobility[WHITE] - mobility[BLACK]) * 25 / 100;
+
         Value mg = mg_value(score);
         Value eg = eg_value(score);
         Value v =  mg * int(me->game_phase())

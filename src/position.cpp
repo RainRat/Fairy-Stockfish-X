@@ -9846,6 +9846,50 @@ bool Position::see_pruning_unreliable() const {
       || connect_group() != 0;
 }
 
+bool Position::see_pruning_unreliable(Move m) const {
+  if (!see_pruning_unreliable())
+      return false;
+
+  if (points_counting()
+      || points_goal() > 0
+      || connect_n() != 0
+      || connect_nxn() != 0
+      || collinear_n() != 0
+      || connect_group() != 0
+      || var->connectRegion1[WHITE] || var->connectRegion2[WHITE] || var->connectRegion3[WHITE]
+      || var->connectRegion1[BLACK] || var->connectRegion2[BLACK] || var->connectRegion3[BLACK]
+      || !connect_piece_goal_types(WHITE).empty()
+      || !connect_piece_goal_types(BLACK).empty())
+      return true;
+
+  if (type_of(piece_on(from_sq(m))) == KING)
+      return true;
+
+  if (gives_check(m))
+      return true;
+
+  PieceType captured = type_of(piece_on(to_sq(m)));
+  Color them = ~side_to_move();
+  if (captured != NO_PIECE_TYPE)
+  {
+      if (captured == KING
+          || is_actual_runtime_royal(them, captured)
+          || (pseudo_royal_types() & captured)
+          || (anti_royal_types() & captured))
+          return true;
+      if (extinction_value() != VALUE_NONE)
+      {
+          if (count(them, captured) <= 2)
+              return true;
+      }
+  }
+
+  if (flag_region(side_to_move()) && (flag_region(side_to_move()) & to_sq(m)))
+      return true;
+
+  return false;
+}
+
 
 /// Position::count_limit() returns the counting limit in full moves.
 

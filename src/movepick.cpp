@@ -136,7 +136,7 @@ MovePicker::MovePicker(const Position& p, Move ttm, Value th, const GateHistory*
 
   stage = PROBCUT_TT + !(ttm && pos.capture_or_promotion(ttm)
                              && pos.pseudo_legal(ttm)
-                             && (   pos.see_pruning_unreliable()
+                             && (   pos.see_pruning_unreliable(ttm)
                                  || type_of(ttm) == PROMOTION
                                  || pos.see_ge(ttm, threshold)));
 }
@@ -398,7 +398,7 @@ top:
 
   case GOOD_CAPTURE:
       if (select<Best>([&](){
-                       return (pos.see_pruning_unreliable() || pos.see_ge(*cur, Value(-69 * cur->value / 1024 - 500 * (pos.captures_to_hand() && pos.gives_check(*cur)))))?
+                       return (pos.see_pruning_unreliable(*cur) || pos.see_ge(*cur, Value(-69 * cur->value / 1024 - 500 * (pos.captures_to_hand() && pos.gives_check(*cur)))))?
                               // Move losing capture to endBadCaptures to be tried later
                               true : (*endBadCaptures++ = *cur, false); }))
           return *(cur - 1);
@@ -494,7 +494,7 @@ top:
 
   case PROBCUT:
       if (Move m = select<Best>([&](){
-              return pos.see_pruning_unreliable()
+              return pos.see_pruning_unreliable(*cur)
                   || type_of(*cur) == PROMOTION
                   || pos.see_ge(*cur, threshold);
           }))
