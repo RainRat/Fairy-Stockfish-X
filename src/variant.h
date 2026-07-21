@@ -190,6 +190,7 @@ struct Variant {
   LibertyAction libertyCapture = LibertyAction::NONE;
   LibertyAction libertySelfCapture = LibertyAction::NONE;
   bool doubleStep = true;
+  mutable bool useFastStandardPawnGenerator = false;
   ColorSetting<PieceTypeBitboardGroup> doubleStepRegion = ColorSetting<PieceTypeBitboardGroup>(Rank2BB, Rank7BB);
   ColorSetting<PieceTypeBitboardGroup> tripleStepRegion = ColorSetting<PieceTypeBitboardGroup>(Bitboard(0));
   ColorSetting<Bitboard> enPassantRegion = ColorSetting<Bitboard>(AllSquares, AllSquares);

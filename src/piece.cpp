@@ -1003,6 +1003,26 @@ void PieceMap::init(const Variant* v) {
           std::string betza = v != nullptr ? v->customPiece[pt - CUSTOM_PIECES] : "";
           add(pt, from_betza(betza, "", v));
       }
+
+      if (v)
+      {
+          const PieceInfo* pawnInfo = get(PAWN);
+          const bool pawnHasCustomNonStepMovement = pawnInfo->has_nonstandard_pawn_movement();
+          v->useFastStandardPawnGenerator =
+                 !pawnHasCustomNonStepMovement
+              && !pawnInfo->has_explicit_initial_moves()
+              && pawnInfo->steps[0][MODALITY_QUIET].size() == 1
+              && pawnInfo->steps[0][MODALITY_QUIET].count(NORTH)
+              && pawnInfo->steps[0][MODALITY_CAPTURE].size() == 2
+              && pawnInfo->steps[0][MODALITY_CAPTURE].count(NORTH_EAST)
+              && pawnInfo->steps[0][MODALITY_CAPTURE].count(NORTH_WEST)
+              && pawnInfo->slider[0][MODALITY_QUIET].empty()
+              && pawnInfo->slider[0][MODALITY_CAPTURE].empty()
+              && pawnInfo->tupleSteps[0][MODALITY_QUIET].empty()
+              && pawnInfo->tupleSteps[0][MODALITY_CAPTURE].empty()
+              && pawnInfo->tupleSlider[0][MODALITY_QUIET].empty()
+              && pawnInfo->tupleSlider[0][MODALITY_CAPTURE].empty();
+      }
 }
 
 void PieceMap::add(PieceType pt, PieceInfo* p) {

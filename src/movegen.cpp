@@ -1119,9 +1119,10 @@ namespace {
         }
     }
 
+#ifndef NDEBUG
     const PieceInfo* pawnInfo = pieceMap.get(PAWN);
     const bool pawnHasCustomNonStepMovement = pawnInfo->has_nonstandard_pawn_movement();
-    const bool useFastStandardPawnGenerator =
+    const bool expected =
            !pawnHasCustomNonStepMovement
         && !pawnInfo->has_explicit_initial_moves()
         && pawnInfo->steps[0][MODALITY_QUIET].size() == 1
@@ -1135,6 +1136,9 @@ namespace {
         && pawnInfo->tupleSteps[0][MODALITY_CAPTURE].empty()
         && pawnInfo->tupleSlider[0][MODALITY_QUIET].empty()
         && pawnInfo->tupleSlider[0][MODALITY_CAPTURE].empty();
+    assert(pos.variant()->useFastStandardPawnGenerator == expected);
+#endif
+    const bool useFastStandardPawnGenerator = pos.variant()->useFastStandardPawnGenerator;
 
     // Skip generating non-king moves when in double check
     if (Type != EVASIONS || !more_than_one(checkers & ~pos.non_sliding_riders()))
