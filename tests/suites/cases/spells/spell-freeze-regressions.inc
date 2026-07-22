@@ -92,21 +92,21 @@ echo "${out}" | grep -q "^Fen: r1bqkbnr/p1pppp1p/8/Rp6/Pn6/2NP3p/1PP1PPP1/2BQKB1
 
 out=$(run_cmds "position fen 4k3/8/8/8/6pP/7n/8/4K3[] b - h3 0 1
 go perft 1")
-! echo "${out}" | grep -q "^g4h3:"
+! grep -q "^g4h3:" <<< "${out}"
 
 # Potion cooldown prevents casting the same potion type.
 out=$(run_cmds "position fen rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR[F] w KQkq - 0 1 <2 0 0 0>
 go perft 1")
-! echo "${out}" | grep -q "^f@"
+! grep -q "^f@" <<< "${out}"
 
 # A Freeze potion may target the square on which its accompanying move lands.
 out=$(run_cmds "position startpos moves f@c7,e2e3 f@e1,e7e6 b2b3 g8h6 d2d3 d7d5 d1h5 f@g4,h6g8 f@g8,c1a3 e8d7 h5f7 d7c6 g1h3 f@a2,g8h6
 go perft 1")
-echo "${out}" | grep -q "^f@c7,f7c7: 1$"
+grep -q "^f@c7,f7c7: 1$" <<< "${out}"
 
 # A Freeze potion does not block an accompanying piece's path through its target.
 out=$(run_cmds "position fen 7k/8/8/8/5Q2/8/8/K7[F] w - - 0 1
 go perft 1")
-echo "${out}" | grep -q "^f@f6,f4f7: 1$"
+grep -q "^f@f6,f4f7: 1$" <<< "${out}"
 
 echo "spell freeze regression tests passed"

@@ -67,12 +67,15 @@ EOF
 )
   assert_contains "$out" "^b2c3: 1$"
 
-  out=$(run_uci "$ENGINE" "$VARIANTS" minihexchess <<'EOF'
-position startpos moves c2d3
-go movetime 100
-go movetime 400
-EOF
-)
+  out=$( (
+    echo 'uci'
+    echo "setoption name VariantPath value $VARIANTS"
+    echo 'setoption name UCI_Variant value minihexchess'
+    echo 'position startpos moves c2d3'
+    echo 'go depth 3'
+    sleep 1
+    echo 'quit'
+  ) | uci_timeout "$ENGINE" )
   assert_contains "$out" "^bestmove [a-g][1-7][a-g][1-7]"
   assert_contains "$out" "score cp"
   assert_not_contains "$out" "score mate"
