@@ -565,4 +565,11 @@ assert_contains "$out" '^D@a1: 1$'
 assert_not_contains "$out" '@b2:'
 assert_not_contains "$out" '^E@'
 
+out=$(run_uci "$ENGINE" "${ROOT_DIR}/src/variants.ini" pousse <<'UCI'
+position fen 6/6/6/6/A5/6[AAAAAAAAAAAAAAAAAAaaaaaaaaaaaaaaaaaa] w - - 0 1
+go perft 1
+UCI
+)
+assert_contains "$out" "^A@a1,a2: 1$"
+
 echo "drop regressions passed"
