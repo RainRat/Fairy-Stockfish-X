@@ -464,6 +464,38 @@ void adjudication() {
     check(pos.is_immediate_game_end(result) && result == VALUE_DRAW,
           "simultaneous connection goal did not return a draw");
 
+    set_position(pos, states, "chess",
+                 "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+    check(!pos.see_pruning_unreliable()
+          && !pos.see_pruning_unreliable(parse_move(pos, "e2e4")),
+          "orthodox SEE pruning was disabled");
+
+    set_position(pos, states, "kingofthehill",
+                 "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+    check(pos.see_pruning_unreliable()
+          && !pos.see_pruning_unreliable(parse_move(pos, "a2a3")),
+          "flag-goal SEE policy was not move scoped");
+    set_position(pos, states, "kingofthehill",
+                 "k7/8/8/8/8/4K3/8/8 w - - 0 1");
+    check(pos.see_pruning_unreliable(parse_move(pos, "e3e4")),
+          "flag-entering king move was not protected from SEE pruning");
+
+    set_position(pos, states, "giveaway",
+                 "7k/8/8/3p4/4Q3/8/8/K7 w - - 0 1");
+    check(pos.see_pruning_unreliable()
+          && pos.see_pruning_unreliable(parse_move(pos, "e4d5")),
+          "last extinction-piece capture was not protected from SEE pruning");
+
+    set_position(pos, states, "oshi", variants.get("oshi")->startFen.c_str());
+    check(pos.see_pruning_unreliable()
+          && pos.see_pruning_unreliable(*MoveList<LEGAL>(pos).begin()),
+          "points-goal SEE pruning was enabled");
+
+    set_position(pos, states, "cfour", variants.get("cfour")->startFen.c_str());
+    check(pos.see_pruning_unreliable()
+          && pos.see_pruning_unreliable(*MoveList<LEGAL>(pos).begin()),
+          "connection-goal SEE pruning was enabled");
+
     set_position(pos, states, "prison-no-king", "8/8/8/8/8/8/4P3/8 w - - 0 1");
     expect_nonterminal(pos, "prison promotion without an opponent king");
 }
