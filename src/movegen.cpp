@@ -396,7 +396,7 @@ namespace {
     if (!insertTypes)
         return moveList;
 
-    Bitboard entries = pos.edge_insert_region(Us);
+    Bitboard entries = pos.edge_insert_region(Us) & pos.board_bb();
     if (!entries)
         return moveList;
 

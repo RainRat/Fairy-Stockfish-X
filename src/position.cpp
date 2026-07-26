@@ -9830,20 +9830,7 @@ bool Position::has_game_cycle(int ply) const {
 }
 
 bool Position::see_pruning_unreliable() const {
-
-  return points_counting()
-      || points_goal() > 0
-      || extinction_value() != VALUE_NONE
-      || flag_region(WHITE) || flag_region(BLACK)
-      || var->castlingWins
-      || connect_n() != 0
-      || connect_nxn() != 0
-      || collinear_n() != 0
-      || var->connectRegion1[WHITE] || var->connectRegion2[WHITE] || var->connectRegion3[WHITE]
-      || var->connectRegion1[BLACK] || var->connectRegion2[BLACK] || var->connectRegion3[BLACK]
-      || !connect_piece_goal_types(WHITE).empty()
-      || !connect_piece_goal_types(BLACK).empty()
-      || connect_group() != 0;
+  return false;
 }
 
 bool Position::see_pruning_unreliable(Move m) const {

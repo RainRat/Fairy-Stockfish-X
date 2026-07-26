@@ -1505,8 +1505,8 @@ namespace {
         // Oshi need this term to dominate ordinary mobility/space heuristics,
         // otherwise search can prefer flashy self-ejects that hand the opponent
         // scoring progress without any immediate tactical punishment.
-        score += make_score(120, 90) * goalSign * std::clamp(usPoints - themPoints, -100, 100);
-        score += make_score(240, 180) * goalSign * std::clamp(themToGoal - usToGoal, -100, 100);
+        score += make_score(60, 45) * goalSign * std::clamp(usPoints - themPoints, -100, 100);
+        score += make_score(120, 90) * goalSign * std::clamp(themToGoal - usToGoal, -100, 100);
     }
 
     // Duple-check variants (e.g. Spartan): reward coordinated protection of
@@ -1528,10 +1528,9 @@ namespace {
         int covered = popcount(defended & ~attacked);
 
         score += make_score(70, 45) * covered;
-        score -= make_score(140, 90) * exposed;
-        // In duple-check variants, simultaneous pressure on multiple critical
-        // pseudo-royals increases tactical danger even when currently defended.
-        score -= make_score(35, 22) * attackedCnt * attackedCnt;
+        score -= make_score(90, 60) * exposed;
+        if (attackedCnt > 1)
+            score -= make_score(110, 80) * (attackedCnt - 1);
     }
 
     // Freeze-potion variants: when opponent can currently cast a freeze potion,
