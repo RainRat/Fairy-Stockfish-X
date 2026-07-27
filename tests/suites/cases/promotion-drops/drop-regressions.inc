@@ -572,4 +572,18 @@ UCI
 )
 assert_contains "$out" "^A@a1,a2: 1$"
 
+out=$(run_uci "$ENGINE" "${ROOT_DIR}/src/variants.ini" pousse <<'UCI'
+position startpos moves A@c1,c2 A@a1,a2
+go perft 1
+UCI
+)
+assert_contains "$out" "^A@c1,c2: 1$"
+
+out=$(run_uci "$ENGINE" "${ROOT_DIR}/src/variants.ini" pousse <<'UCI'
+position startpos moves A@c1,c2 A@a1,a2 A@c1,c2 A@a1,a2 A@c1,c2 A@a1,a2
+d
+UCI
+)
+assert_contains "$out" '^Fen: 6/6/6/a1A3/a1A3/a1A3\[AAAAAAAAAAAAAAAaaaaaaaaaaaaaaa\] w - - 0 4$'
+
 echo "drop regressions passed"

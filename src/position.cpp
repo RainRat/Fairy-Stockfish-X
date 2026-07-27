@@ -4545,7 +4545,7 @@ bool Position::legal(Move m) const {
   }
 
   // Illegal drop move
-  if (dropMove)
+  if (dropMove && !insertMove)
   {
       Bitboard legalDropTargets = ~pieces();
       legalDropTargets |= opening_swap_drop_targets(us, in_hand_piece_type(m));

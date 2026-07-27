@@ -185,8 +185,11 @@ go perft 1
 quit
 EOF
 )
-  assert_contains_literal "${perft_out}" "Nodes searched: 10"
-  assert_contains_literal "${perft_out}" "Nodes searched: 9"
+  if [[ $(grep -Fc "Nodes searched: 10" <<<"${perft_out}") -ne 2 ]]; then
+    echo "slide-5 repeated edge insertion should preserve all 10 insertion choices" >&2
+    printf '%s\n' "${perft_out}" >&2
+    return 1
+  fi
 
   tty_out=$(run_expect "$ENGINE" <<EOF
 log_user 1
