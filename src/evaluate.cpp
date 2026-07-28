@@ -1528,10 +1528,9 @@ namespace {
         int covered = popcount(defended & ~attacked);
 
         score += make_score(70, 45) * covered;
-        score -= make_score(140, 90) * exposed;
-        // In duple-check variants, simultaneous pressure on multiple critical
-        // pseudo-royals increases tactical danger even when currently defended.
-        score -= make_score(35, 22) * attackedCnt * attackedCnt;
+        score -= make_score(90, 60) * exposed;
+        if (attackedCnt > 1)
+            score -= make_score(110, 80) * (attackedCnt - 1);
     }
 
     // Freeze-potion variants: when opponent can currently cast a freeze potion,

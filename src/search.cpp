@@ -504,8 +504,6 @@ void Thread::search() {
           {
               Value prev = rootMoves[pvIdx].previousScore;
               delta = Value(17 * (1 + rootPos.captures_to_hand()));
-              if (rootPos.blast_on_capture())
-                  delta = Value(delta * 2);
               alpha = std::max(prev - delta,-VALUE_INFINITE);
               beta  = std::min(prev + delta, VALUE_INFINITE);
 
