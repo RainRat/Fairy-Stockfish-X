@@ -327,8 +327,49 @@ void occupancy() {
 void state() {
     Position pos;
     StateListPtr states;
+
+    set_position(pos, states, "atomic",
+                 "4k3/8/8/8/8/8/1p6/R3K3 b - - 0 1");
+    Move move = parse_move(pos, "b2a1q");
+    std::string beforeFen = pos.fen();
+    Key beforeKey = pos.key();
+    states->emplace_back();
+    pos.do_move(move, states->back());
+    check(pos.state()->bycatchSquares & square_bb(SQ_A1),
+          "Atomic promotion blast did not record the promoted mover");
+    check(pos.state()->bycatchPieces[SQ_A1].piece() == make_piece(BLACK, QUEEN)
+          && pos.state()->bycatchPieces[SQ_A1].promoted()
+          && pos.state()->bycatchPieces[SQ_A1].unpromoted() == make_piece(BLACK, PAWN),
+          "Atomic promotion blast lost the exact promoted mover state");
+    pos.undo_move(move);
+    states->pop_back();
+    check(pos.fen() == beforeFen && pos.key() == beforeKey,
+          "Atomic promotion blast undo mismatch");
+
+    set_position(pos, states, "atomic",
+                 "4k3/8/8/8/8/8/1r6/N~:PR2K3 b - - 0 1");
+    check(pos.is_promoted(SQ_A1)
+          && pos.unpromoted_piece_on(SQ_A1) == make_piece(WHITE, PAWN),
+          "Atomic bycatch regression did not load a promoted bystander");
+    move = parse_move(pos, "b2b1");
+    beforeFen = pos.fen();
+    beforeKey = pos.key();
+    states->emplace_back();
+    pos.do_move(move, states->back());
+    check(pos.state()->bycatchPieces[SQ_A1].piece() == make_piece(WHITE, KNIGHT)
+          && pos.state()->bycatchPieces[SQ_A1].promoted()
+          && pos.state()->bycatchPieces[SQ_A1].unpromoted() == make_piece(WHITE, PAWN),
+          "Atomic blast lost an underpromoted bystander's exact state");
+    pos.undo_move(move);
+    states->pop_back();
+    check(pos.fen() == beforeFen && pos.key() == beforeKey
+          && pos.piece_on(SQ_A1) == make_piece(WHITE, KNIGHT)
+          && pos.is_promoted(SQ_A1)
+          && pos.unpromoted_piece_on(SQ_A1) == make_piece(WHITE, PAWN),
+          "Atomic underpromoted bystander undo mismatch");
+
     set_position(pos, states, "pairedpawns", "8/8/8/8/8/8/8/8[PPpp] w - - 0 1");
-    Move move = parse_move(pos, "P@a2,h2");
+    move = parse_move(pos, "P@a2,h2");
     states->emplace_back();
     pos.do_move(move, states->back());
     Key expected = Zobrist::noPawns;
@@ -353,7 +394,7 @@ void state() {
     set_position(pos, states, "dos-laser-chess",
                  "r(1)s(0)b(2)q(2)kls(0)b(2)r(1)/d(2)m(0)d(2)m(2)pm(3)d(2)m(1)d(2)/9/9/9/9/9/D(0)M(3)D(0)M(1)PM(0)D(0)M(2)D(0)/R(1)B(0)S(0)LKQ(0)B(0)S(0)R(1) w - - 0 1");
     move = parse_move(pos, "b2b3:1b3");
-    Key beforeKey = pos.key();
+    beforeKey = pos.key();
     states->emplace_back();
     pos.do_move(move, states->back());
     Position recomputed;

@@ -163,6 +163,28 @@ struct ReversiblePieceOnSquare {
   explicit operator bool() const { return bool(piece); }
 };
 
+struct PackedReversiblePiece {
+  static_assert(PIECE_NB <= 128, "Packed reversible piece needs wider fields");
+
+  uint16_t value = 0;
+
+  void clear() { value = 0; }
+
+  void set(Piece pc, bool isPromoted, Piece unpromotedPc = NO_PIECE) {
+    assert(pc > NO_PIECE && pc < PIECE_NB);
+    assert(unpromotedPc >= NO_PIECE && unpromotedPc < PIECE_NB);
+    value = uint16_t(pc)
+          | (uint16_t(unpromotedPc) << 7)
+          | (uint16_t(isPromoted) << 14);
+  }
+
+  Piece piece() const { return Piece(value & 0x7f); }
+  Piece unpromoted() const { return Piece((value >> 7) & 0x7f); }
+  bool promoted() const { return bool(value & (1 << 14)); }
+  explicit operator bool() const { return value != 0; }
+};
+static_assert(sizeof(PackedReversiblePiece) == sizeof(uint16_t));
+
 struct InPlaceTransformState {
   ReversiblePieceOnSquare morphedFrom;
   ReversiblePieceOnSquare colorChanged;
@@ -272,9 +294,7 @@ struct StateInfoDerived {
 struct MoveUndoInfo {
   Bitboard   bycatchSquares = Bitboard(0);
   Bitboard   libertySelfRemoved = Bitboard(0);
-  Piece      unpromotedBycatch[SQUARE_NB] = {NO_PIECE};
-  Bitboard   promotedBycatch = Bitboard(0);
-  Bitboard   demotedBycatch = Bitboard(0);
+  PackedReversiblePiece bycatchPieces[SQUARE_NB];
   Bitboard   blastPromotedSquares = Bitboard(0);
   Bitboard   laserTransformedSquares = Bitboard(0);
   ReversiblePieceOnSquare captured;
@@ -306,9 +326,8 @@ struct MoveUndoInfo {
   void clear() {
     bycatchSquares = Bitboard(0);
     libertySelfRemoved = Bitboard(0);
-    std::memset(unpromotedBycatch, 0, sizeof(unpromotedBycatch));
-    promotedBycatch = Bitboard(0);
-    demotedBycatch = Bitboard(0);
+    for (auto& saved : bycatchPieces)
+        saved.clear();
     blastPromotedSquares = Bitboard(0);
     laserTransformedSquares = Bitboard(0);
     captured.clear();
@@ -342,8 +361,6 @@ struct MoveUndoInfo {
   bool empty() const {
     return bycatchSquares == Bitboard(0)
         && libertySelfRemoved == Bitboard(0)
-        && promotedBycatch == Bitboard(0)
-        && demotedBycatch == Bitboard(0)
         && blastPromotedSquares == Bitboard(0)
         && laserTransformedSquares == Bitboard(0)
         && !captured

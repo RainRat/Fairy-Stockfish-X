@@ -7305,9 +7305,9 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       Bitboard liberty_self_removal = 0;
       Bitboard blast_mask = 0;
       Bitboard connect_mask = 0;
-      std::memset(st->unpromotedBycatch, 0, sizeof(st->unpromotedBycatch));
+      for (auto& saved : st->bycatchPieces)
+          saved.clear();
       st->bycatchSquares = 0;
-      st->promotedBycatch = st->demotedBycatch = Bitboard(0);
       st->blastPromotedSquares = 0;
 
       if ( ( captured && (blastOnCaptureMove || var->petrifyOnCaptureTypes) ) ||
@@ -7389,7 +7389,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
               PieceType promoted = promoted_piece_type(type_of(bpc));
               if (promoted != NO_PIECE_TYPE) {
                   Piece promotedPiece = make_piece(bc, promoted);
-                  st->unpromotedBycatch[bsq] = bpc;
+                  st->bycatchPieces[bsq].set(bpc, is_promoted(bsq), unpromoted_piece_on(bsq));
                   st->bycatchSquares |= bsq;
                   st->blastPromotedSquares |= bsq;
 
@@ -7421,17 +7421,10 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
               bycatchDirtyIdx = append_dirty(st, bpc, bsq, SQ_NONE);
 
           // Update board and piece lists
-          // In order to not have to store the values of both board and unpromotedBoard,
-          // demote promoted pieces, but keep promoted pawns as promoted,
-          // and store demotion/promotion bitboards to disambiguate the piece state
           bool capturedPromoted = is_promoted(bsq);
           Piece unpromotedCaptured = unpromoted_piece_on(bsq);
-          st->unpromotedBycatch[bsq] = unpromotedCaptured ? unpromotedCaptured : bpc;
+          st->bycatchPieces[bsq].set(bpc, capturedPromoted, unpromotedCaptured);
           st->bycatchSquares |= bsq;
-          if (unpromotedCaptured)
-              st->demotedBycatch |= bsq;
-          else if (capturedPromoted)
-              st->promotedBycatch |= bsq;
           remove_piece(bsq);
           board[bsq] = NO_PIECE;
 
@@ -7838,17 +7831,15 @@ void Position::undo_move(Move m) {
        ( remove_connect_n() > 0 )
      )
   {
-      //It's ok to just loop through all, not taking into account immunities/pawnness
-      //because we'll just not find the piece in unpromotedBycatch.
-      //Same if surround_capture_opposite is true, king is superset of all directions.
       Bitboard restoreMask = st->bycatchSquares;
       while (restoreMask)
       {
           Square bsq = pop_lsb(restoreMask);
-          Piece unpromotedBpc = st->unpromotedBycatch[bsq];
-          Piece bpc = st->demotedBycatch & bsq ? make_piece(color_of(unpromotedBpc), promoted_piece_type(type_of(unpromotedBpc)))
-                                               : unpromotedBpc;
-          bool isPromoted = (st->promotedBycatch | st->demotedBycatch) & bsq;
+          const PackedReversiblePiece& saved = st->bycatchPieces[bsq];
+          Piece bpc = saved.piece();
+          Piece unpromotedBpc = saved.unpromoted();
+          bool isPromoted = saved.promoted();
+          Piece originalBpc = unpromotedBpc != NO_PIECE ? unpromotedBpc : bpc;
           bool wasBlastPromoted = bool(st->blastPromotedSquares & bsq);
           bool wasLaserTransformed = bool(st->laserTransformedSquares & bsq);
 
@@ -7859,11 +7850,11 @@ void Position::undo_move(Move m) {
                   remove_piece(bsq);
                   board[bsq] = NO_PIECE;
               }
-              put_piece(bpc, bsq, isPromoted, st->demotedBycatch & bsq ? unpromotedBpc : NO_PIECE);
+              put_piece(bpc, bsq, isPromoted, unpromotedBpc);
               bool petrifiedCenter = bsq == moverSq && (var->petrifyOnCaptureTypes & type_of(bpc));
-              Piece transferPiece = reserve_transfer_piece(us, bpc, bool((st->promotedBycatch | st->demotedBycatch) & bsq), unpromotedBpc,
+              Piece transferPiece = reserve_transfer_piece(us, bpc, isPromoted, originalBpc,
                                                            drop_loop(), var->captureToHandSide,
-                                                           main_promotion_pawn_type(color_of(unpromotedBpc)));
+                                                           main_promotion_pawn_type(color_of(originalBpc)));
               if (   !wasBlastPromoted
                    && !wasLaserTransformed
                    && !petrifiedCenter
@@ -10460,11 +10451,7 @@ void Position::fire_laser(Color us, Key& k, Square selectedEmitter) {
                 Piece unpromoted = unpromoted_piece_on(sq);
                 st->bycatchSquares |= sq;
                 st->laserTransformedSquares |= sq;
-                st->unpromotedBycatch[sq] = unpromoted ? unpromoted : pc;
-                if (unpromoted)
-                    st->demotedBycatch |= sq;
-                else if (is_promoted(sq))
-                    st->promotedBycatch |= sq;
+                st->bycatchPieces[sq].set(pc, is_promoted(sq), unpromoted);
                 remove_piece(sq);
                 k ^= Zobrist::psq[pc][sq];
                 st->materialKey ^= Zobrist::psq[pc][pieceCount[pc]];
@@ -10491,11 +10478,7 @@ void Position::fire_laser(Color us, Key& k, Square selectedEmitter) {
             }
             st->bycatchSquares |= sq;
             Piece unpromoted = unpromoted_piece_on(sq);
-            st->unpromotedBycatch[sq] = unpromoted ? unpromoted : pc;
-            if (unpromoted)
-                st->demotedBycatch |= sq;
-            else if (is_promoted(sq))
-                st->promotedBycatch |= sq;
+            st->bycatchPieces[sq].set(pc, is_promoted(sq), unpromoted);
             remove_piece(sq);
             k ^= Zobrist::psq[pc][sq];
             st->materialKey ^= Zobrist::psq[pc][pieceCount[pc]];
