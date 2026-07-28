@@ -228,6 +228,12 @@ assert_not_contains "$out" "^a1b2:"
 assert_not_contains "$out" "^c1c2:"
 assert_not_contains "$out" "^d1d2:"
 
+# Reaching the valley ends King's Valley immediately; do not grant a reply move.
+out=$(run_uci_cmds "$ENGINE" "$VARIANTS" kings-valley \
+  "position fen 1s1ss/2KS1/2ks1/S4/1S1S1 w - - 8 5
+go depth 1")
+assert_contains_literal "$out" "bestmove (none)"
+
 # Oshi search should not prefer handing the opponent a point by self-ejecting.
 out=$(run_uci_cmds "$ENGINE" "$VARIANTS" oshi \
   "position fen ca2a4/b4ab1c/4a4/9/5A3/2AC5/9/2BAA1B2/C8 w - - 10 6 {0 0}
