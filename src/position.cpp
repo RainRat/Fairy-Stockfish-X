@@ -8877,19 +8877,6 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
       }
   }
 
-  // Some variants treat the runtime king piece as a real royal even when the
-  // current position was reconstructed after the capture happened (for example
-  // tafl surround-capture positions loaded from FEN). In those cases we must
-  // not fall through to stalemate/insufficient-material adjudication just
-  // because st->captured is empty in the reconstructed state.
-  if (king_type() != NO_PIECE_TYPE)
-      for (Color c : { ~sideToMove, sideToMove })
-          if (!count(c, king_type()) && is_actual_runtime_royal(c, king_type()))
-          {
-              result = c == sideToMove ? mated_in(ply) : mate_in(ply);
-              return true;
-          }
-
   // Pseudo-royal loss
   // Some variants transfer royal status across a family of piece types.
   // If a special capture removes the current pseudo-royal, the game ends
