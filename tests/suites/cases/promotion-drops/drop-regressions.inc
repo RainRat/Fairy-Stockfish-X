@@ -584,6 +584,6 @@ position startpos moves A@c1,c2 A@a1,a2 A@c1,c2 A@a1,a2 A@c1,c2 A@a1,a2
 d
 UCI
 )
-assert_contains "$out" '^Fen: 6/6/6/a1A3/a1A3/a1A3\[AAAAAAAAAAAAAAAaaaaaaaaaaaaaaa\] w - - 0 4$'
+assert_contains "$out" '^Fen: 6/6/6/a1A3/a1A3/a1A3\[AAAAAAAAAAAAAAAAAAAAAAAAAAAaaaaaaaaaaaaaaaaaaaaaaaaaaa\] w - - 0 4$'
 
 echo "drop regressions passed"
