@@ -525,7 +525,21 @@ position fen AAAAAA/5/5/5/5/5[aaaaaaaaaaaaaaaaaa] b - - 0 1
 go perft 1
 UCI
 )
-  assert_not_contains_literal "$out" "Nodes searched: 0" "Pousse has legal moves"
+  assert_contains_literal "$out" "Nodes searched: 0" "Pousse single straight wins immediately"
+
+  out=$(run_uci "$ENGINE" "$VARIANTS" pousse <<'UCI'
+position fen AAAAAA/aaaaaa/4/4/4/4[AAAAAAAAAAAAAAAAAAaaaaaaaaaaaaaaaaaa] b - - 0 1
+go perft 1
+UCI
+)
+  assert_not_contains_literal "$out" "Nodes searched: 0" "Pousse equal straight counts remain playable"
+
+  out=$(run_uci "$ENGINE" "$VARIANTS" pousse <<'UCI'
+position fen AAAAAA/AAAAAA/aaaaaa/4/4/4[AAAAAAAAAAAAAAAAAAaaaaaaaaaaaaaaaaaa] b - - 0 1
+go perft 1
+UCI
+)
+  assert_contains_literal "$out" "Nodes searched: 0" "Pousse greater straight count wins immediately"
 
   out=$(run_uci "$ENGINE" "$VARIANTS" pousse <<'UCI'
 position fen AaAaAa/aAaAaA/AaAaAa/aAaAaA/AaAaAa/aAaAaA[] w - - 0 1

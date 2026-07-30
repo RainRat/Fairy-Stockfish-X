@@ -1291,7 +1291,6 @@ bool Position::violates_same_player_board_repetition(Move m) const {
   if (!var->samePlayerBoardRepetitionIllegal)
       return false;
 
-  StateInfo* previousState = st;
   StateInfo nextState;
   ScopedProbeMove probe(*this, m, nextState);
 
@@ -1300,7 +1299,7 @@ bool Position::violates_same_player_board_repetition(Move m) const {
                                : std::min(st->rule50, st->pliesFromNull);
   if (end >= 4)
   {
-      StateInfo* stp = previousState;
+      StateInfo* stp = st->previous->previous;
       for (int i = 4; i <= end; i += 2)
       {
           stp = stp->previous->previous;
@@ -9483,6 +9482,21 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
   auto connection_met = [&](Color c) {
       return has_connect_goal(c) || check_connection_adjudications(c);
   };
+
+  // Pousse uses the number of completed straights as its connection result.
+  // A position ends as soon as one color has strictly more straights than the
+  // other; equal counts remain playable.  This is distinct from ordinary
+  // connect-N, where either side completing one line is sufficient.
+  if (var->materialCounting == CONNECT_N_COUNT && connect_n() != 0)
+  {
+      int whiteLines = connect_line_count(WHITE);
+      int blackLines = connect_line_count(BLACK);
+      if (whiteLines != blackLines)
+      {
+          result = convert_mate_value(material_counting_result(), ply);
+          return true;
+      }
+  }
 
   bool prevMoverConnected = connection_met(~sideToMove);
   bool stmConnected = connection_met(sideToMove);

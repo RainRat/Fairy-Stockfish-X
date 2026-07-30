@@ -476,6 +476,7 @@ out=$(run_cmds "setoption name UCI_Variant value crossway
 position startpos moves S@d4
 go perft 1")
 assert_contains "$out" "^S@d4: 1$"
+assert_not_contains "$out" "^P@a1: 1$"
 
 out=$(run_cmds "setoption name UCI_Variant value crossway
 position startpos moves S@d4 S@d4
