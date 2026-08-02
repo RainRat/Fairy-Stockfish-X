@@ -1538,7 +1538,7 @@ namespace {
       mt = type_of(base);
       // PIECE_PROMOTION is Shogi-style piece promotion and is rejected here because
       // potion gating is a Spell Chess mechanic, which only uses standard chess PROMOTION.
-      if (mt != NORMAL && mt != CASTLING && mt != PROMOTION)
+      if (mt != NORMAL && mt != CASTLING && mt != EN_PASSANT && mt != PROMOTION)
           return false;
       if (mt == PROMOTION)
       {
@@ -1622,7 +1622,7 @@ namespace {
           return AppendStatus::Full;
 
       // is_potion_eligible_base() restricts mt to the cases below.
-      assert(mt == NORMAL || mt == CASTLING || mt == PROMOTION);
+      assert(mt == NORMAL || mt == CASTLING || mt == EN_PASSANT || mt == PROMOTION);
       Move gatingMove = MOVE_NONE;
       switch (mt)
       {
@@ -1631,6 +1631,9 @@ namespace {
               break;
           case CASTLING:
               gatingMove = make_gating<CASTLING>(from, to, potionPiece, gate);
+              break;
+          case EN_PASSANT:
+              gatingMove = make_gating<EN_PASSANT>(from, to, potionPiece, gate);
               break;
           case PROMOTION:
               gatingMove = make_promotion_potion(from, to, promotion_type(base), potion, gate);
@@ -1919,6 +1922,9 @@ namespace {
               break;
           case CASTLING:
               base = make<CASTLING>(from, to);
+              break;
+          case EN_PASSANT:
+              base = make<EN_PASSANT>(from, to);
               break;
           case PROMOTION:
               base = make<PROMOTION>(from, to, promotion_type(m));
