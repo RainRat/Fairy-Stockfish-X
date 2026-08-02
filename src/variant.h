@@ -221,6 +221,7 @@ struct Variant {
   ColorSetting<bool> mustCaptureEnPassant = ColorSetting<bool>(false);
   bool rifleCapture = false;
   int pushingStrength[PIECE_TYPE_NB] = {};
+  bool hasPushing = false;
   int pullingStrength[PIECE_TYPE_NB] = {};
   PieceSet adjacentSwapMoveTypes = NO_PIECE_SET;
   PieceSet adjacentSwapTargetTypes = ~NO_PIECE_SET;

@@ -432,8 +432,9 @@ Bitboard rider_terminal_squares(const std::map<Direction, int>& directions, Squa
 
 #ifdef VERY_LARGE_BOARDS
   Bitboard rider_attacks_single_rider_bb(
-    RiderType R, Square s, Bitboard occupied, const MagicGeometry* mg) {
+    RiderType R, Square s, Bitboard occupied, const MagicGeometry* mg, bool preferMagic) {
   (void)mg;
+  (void)preferMagic;
 
   switch (R)
   {

@@ -5824,6 +5824,8 @@ PotionContext Position::setup_potion_context(Move m, Color us) const {
 
 bool Position::analyze_push(Move m, PushInfo& info) const {
     info = PushInfo{};
+    if (!var->hasPushing)
+        return false;
     return type_of(m) == INSERT || !stepwise_pushing()
                ? analyze_push_direct(*this, m, info)
                : analyze_push_stepwise(*this, m, info);
@@ -6056,12 +6058,12 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   int pushTransferCount = 0;
   bool recomputeDerivedState = false;
 
-  if (stepwise_pushing() && type_of(m) == NORMAL)
+  if (var->hasPushing && stepwise_pushing() && type_of(m) == NORMAL)
   {
       pushMove = analyze_push_stepwise(*this, m, pushInfo, pushSquares, &pushLineCount, pushFinalLine, pushTransfers, &pushTransferCount);
       stepwisePush = pushMove && pushInfo.distance > 1;
   }
-  else
+  else if (var->hasPushing)
   {
       pushMove = analyze_push(m, pushInfo);
   }

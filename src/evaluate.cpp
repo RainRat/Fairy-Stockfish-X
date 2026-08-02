@@ -1533,6 +1533,21 @@ namespace {
             score -= make_score(110, 80) * (attackedCnt - 1);
     }
 
+    // Potion variants use a capturable commoner in place of the ordinary
+    // royal.  The standard king-safety evaluator intentionally skips such
+    // positions, but a direct attack on that square is still an immediate
+    // capture threat.  Account for active Freeze zones cast by the attacker
+    // when deciding whether its attack is currently effective.
+    if (pos.potions_enabled() && pos.castling_king_piece(Us) == COMMONER
+        && pos.count(Us, COMMONER) == 1)
+    {
+        const Square royalSq = pos.square(Us, COMMONER);
+        Bitboard attackers = attackedBy[Them][ALL_PIECES] & square_bb(royalSq);
+        attackers &= ~pos.freeze_squares(Them);
+        if (attackers)
+            score -= make_score(1200, 900) * popcount(attackers);
+    }
+
     // Freeze-potion variants: when opponent can currently cast a freeze potion,
     // penalize clumping of our valuable pieces to avoid freeze-vulnerable shapes.
     if (pos.potions_enabled() && pos.potion_piece(Variant::POTION_FREEZE) != NO_PIECE_TYPE)

@@ -2260,6 +2260,10 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
         }
     }
 
+    v->hasPushing = false;
+    for (int strength : v->pushingStrength)
+        v->hasPushing |= strength > 0;
+
     // Unknown options are diagnosed but ignored so newer configs remain usable.
     {
         const std::set<std::string>& parsedKeys = config.get_consumed_keys();

@@ -242,7 +242,25 @@ void MovePicker::score() {
       const Square gate = gate_history_square(mv);
       return gate != SQ_NONE ? (*gateHistory)[pos.side_to_move()][gate] : 0;
   };
+  auto freeze_target_bonus = [&](Move mv) {
+      if (!pos.potions_enabled() || !is_gating(mv))
+          return 0;
 
+      const PieceType freezePiece = pos.potion_piece(Variant::POTION_FREEZE);
+      if (freezePiece == NO_PIECE_TYPE || gating_type(mv) != freezePiece)
+          return 0;
+
+      Bitboard targets = pos.freeze_zone_from_square(gating_square(mv))
+                       & pos.pieces(~pos.side_to_move());
+      int value = 0;
+      while (targets)
+          value += std::max(int(PieceValue[MG][type_of(pos.piece_on(pop_lsb(targets)))]), 0);
+
+      // This only orders deferred Freeze moves; it does not alter their
+      // evaluation or legality. Keep the signal below ordinary capture
+      // values while still preferring zones containing valuable targets.
+      return value / 2;
+  };
   for (auto& m : *this)
       if constexpr (Type == CAPTURES)
       {
@@ -251,6 +269,7 @@ void MovePicker::score() {
                    + flag_goal_bonus(m)
                    + king_goal_progress_bonus(m)
                    + gate_history_bonus(m)
+                   + freeze_target_bonus(m)
                    + (*captureHistory)[pos.moved_piece(m)][to_sq(m)][captured_type(pos, m)];
       }
 
@@ -264,6 +283,7 @@ void MovePicker::score() {
                    +     flag_goal_bonus(m)
                    +     king_goal_progress_bonus(m)
                    +     gate_history_bonus(m)
+                   +     freeze_target_bonus(m)
                    + 2 * (*continuationHistory[0])[history_slot(pos.moved_piece(m))][to_sq(m)]
                    +     (*continuationHistory[1])[history_slot(pos.moved_piece(m))][to_sq(m)]
                    +     (*continuationHistory[3])[history_slot(pos.moved_piece(m))][to_sq(m)]
@@ -279,12 +299,14 @@ void MovePicker::score() {
                        + flag_goal_bonus(m)
                        + king_goal_progress_bonus(m)
                        + gate_history_bonus(m)
+                       + freeze_target_bonus(m)
                        - Value(type_of(pos.moved_piece(m)));
           else
               m.value =      (*mainHistory)[pos.side_to_move()][from_to(m)]
                        +     flag_goal_bonus(m)
                        +     king_goal_progress_bonus(m)
                        +     gate_history_bonus(m)
+                       +     freeze_target_bonus(m)
                        + 2 * (*continuationHistory[0])[history_slot(pos.moved_piece(m))][to_sq(m)]
                        - (1 << 28);
       }

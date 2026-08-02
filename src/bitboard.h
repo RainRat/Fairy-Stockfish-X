@@ -856,12 +856,14 @@ inline Bitboard fixed_step_lame_rider_attacks(Square s, Bitboard occupied, int s
 
 #ifdef VERY_LARGE_BOARDS
 Bitboard rider_attacks_single_rider_bb(
-    RiderType R, Square s, Bitboard occupied, const MagicGeometry* mg = current_magic_geometry);
+    RiderType R, Square s, Bitboard occupied, const MagicGeometry* mg = current_magic_geometry,
+    bool preferMagic = false);
 
 inline Bitboard rider_attacks_bb(
-    RiderType R, Square s, Bitboard occupied, const MagicGeometry* mg = current_magic_geometry) {
+    RiderType R, Square s, Bitboard occupied, const MagicGeometry* mg = current_magic_geometry,
+    bool preferMagic = false) {
   assert(R != NO_RIDER && !(R & (R - 1)));
-  return rider_attacks_single_rider_bb(R, s, occupied, mg);
+  return rider_attacks_single_rider_bb(R, s, occupied, mg, preferMagic);
 }
 
 template<RiderType R>
@@ -960,9 +962,20 @@ inline Bitboard rider_attacks_single_rider_bb(RiderType R, Square s, Bitboard oc
   return 0;
 }
 
-inline Bitboard rider_attacks_bb(RiderType R, Square s, Bitboard occupied, const MagicGeometry* mg = current_magic_geometry) {
-  assert(R != NO_RIDER && !(R & (R - 1)));
+inline Bitboard rider_attacks_preferred_bb(RiderType R, Square s, Bitboard occupied, const MagicGeometry* mg = current_magic_geometry) {
+  if (is_magic_rider(R))
+  {
+      const Magic& m = magic_for_rider(mg, R, s);
+      return m.attacks[m.index(occupied)];
+  }
   return rider_attacks_single_rider_bb(R, s, occupied, mg);
+}
+
+inline Bitboard rider_attacks_bb(RiderType R, Square s, Bitboard occupied, const MagicGeometry* mg = current_magic_geometry,
+                                 bool preferMagic = false) {
+  assert(R != NO_RIDER && !(R & (R - 1)));
+  return preferMagic ? rider_attacks_preferred_bb(R, s, occupied, mg)
+                     : rider_attacks_single_rider_bb(R, s, occupied, mg);
 }
 #endif
 
@@ -1006,24 +1019,26 @@ inline RiderType pop_rider(RiderType& r) {
   return r2;
 }
 
-inline Bitboard attacks_bb(Color c, PieceType pt, Square s, Bitboard occupied, const MagicGeometry* mg = current_magic_geometry) {
+inline Bitboard attacks_bb(Color c, PieceType pt, Square s, Bitboard occupied, const MagicGeometry* mg = current_magic_geometry,
+                           bool preferMagic = false) {
   assert(pt != NO_PIECE_TYPE);
   Bitboard b = LeaperAttacks[c][pt][s];
   RiderType r = AttackRiderTypes[pt];
   while (r)
-      b |= rider_attacks_single_rider_bb(pop_rider(r), s, occupied, mg);
+      b |= rider_attacks_bb(pop_rider(r), s, occupied, mg, preferMagic);
   b |= custom_rider_attacks(pt, false, true, c, s, occupied);
   return b & PseudoAttacks[c][pt][s];
 }
 
 
 template <bool Initial=false>
-inline Bitboard moves_bb(Color c, PieceType pt, Square s, Bitboard occupied, const MagicGeometry* mg = current_magic_geometry) {
+inline Bitboard moves_bb(Color c, PieceType pt, Square s, Bitboard occupied, const MagicGeometry* mg = current_magic_geometry,
+                         bool preferMagic = false) {
   assert(pt != NO_PIECE_TYPE);
   Bitboard b = LeaperMoves[Initial][c][pt][s];
   RiderType r = MoveRiderTypes[Initial][pt];
   while (r)
-      b |= rider_attacks_single_rider_bb(pop_rider(r), s, occupied, mg);
+      b |= rider_attacks_bb(pop_rider(r), s, occupied, mg, preferMagic);
   b |= custom_rider_attacks(pt, Initial, false, c, s, occupied);
   return b & PseudoMoves[Initial][c][pt][s];
 }

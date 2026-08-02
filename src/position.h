@@ -774,7 +774,7 @@ public:
   }
 
   Bitboard rider_attacks_bb(RiderType R, Square s, Bitboard occupied = 0) const {
-    return Stockfish::rider_attacks_bb(R, s, occupied, magic_geometry());
+    return Stockfish::rider_attacks_bb(R, s, occupied, magic_geometry(), var->potions);
   }
 
   Bitboard janggi_cannon_diagonal_targets(Square s, Bitboard occupied) const {
@@ -787,12 +787,12 @@ public:
   }
 
   Bitboard attacks_bb(Color c, PieceType pt, Square s, Bitboard occupied) const {
-    return Stockfish::attacks_bb(c, pt, s, occupied, magic_geometry());
+    return Stockfish::attacks_bb(c, pt, s, occupied, magic_geometry(), var->potions);
   }
 
   template <bool Initial=false>
   Bitboard moves_bb(Color c, PieceType pt, Square s, Bitboard occupied) const {
-    return Stockfish::moves_bb<Initial>(c, pt, s, occupied, magic_geometry());
+    return Stockfish::moves_bb<Initial>(c, pt, s, occupied, magic_geometry(), var->potions);
   }
 
   Bitboard checker_evasion_targets(Color us, Square royalSq, Square checksq) const;
