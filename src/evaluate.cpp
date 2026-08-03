@@ -247,6 +247,51 @@ using namespace Trace;
 
 namespace {
 
+  // Lazy evaluation is only a safe shortcut when no variant feature adds a
+  // material, king-safety, goal, or mobility term that would be skipped along
+  // with the expensive part of the evaluation. Keep this feature-based rather
+  // than identifying a named variant, so custom variants get the same behavior
+  // when their rules really are equivalent.
+  bool standard_lazy_evaluation(const Position& pos) {
+    return pos.files() == 8
+        && pos.ranks() == 8
+        && pos.piece_types() == CHESS_PIECES
+        && pos.endgame_eval() == EG_EVAL_CHESS
+        && pos.extinction_value(WHITE) == VALUE_NONE
+        && pos.extinction_value(BLACK) == VALUE_NONE
+        && pos.pseudo_royal_types() == NO_PIECE_SET
+        && pos.anti_royal_types() == NO_PIECE_SET
+        && !pos.two_boards()
+        && !pos.piece_drops()
+        && !pos.captures_to_hand()
+        && !pos.gating()
+        && !pos.must_capture()
+        && !pos.check_counting()
+        && !pos.points_counting()
+        && pos.connect_n() == 0
+        && pos.connect_nxn() == 0
+        && pos.collinear_n() == 0
+        && pos.connect_group() == 0
+        && !pos.flag_move()
+        && !pos.blast_on_capture()
+        && !pos.blast_on_move()
+        && !pos.blast_on_self_destruct()
+        && !pos.self_capture()
+        && !pos.rifle_capture()
+        && !pos.has_pushing()
+        && !pos.has_pulling()
+        && !pos.has_adjacent_swapping()
+        && !pos.capture_morph()
+        && !pos.piece_promotion_on_capture()
+        && !pos.piece_demotion()
+        && !pos.walling()
+        && !pos.topology_wraps()
+        && !pos.is_hex_board()
+        && !pos.immobility_illegal()
+        && !pos.flip_enclosed_pieces()
+        && !pos.makpong();
+  }
+
   // Threshold for lazy and space evaluation
   constexpr Value LazyThreshold1    =  Value(1565);
   constexpr Value LazyThreshold2    =  Value(1102);
@@ -1957,7 +2002,7 @@ namespace {
         return abs(mg_value(score) + eg_value(score)) / 2 > lazyThreshold + pos.non_pawn_material() / 64;
     };
 
-    if (lazy_skip(LazyThreshold1) && Options["UCI_Variant"] == "chess")
+    if (lazy_skip(LazyThreshold1) && standard_lazy_evaluation(pos))
         goto make_v;
 
     // Main evaluation begins here
@@ -1989,7 +2034,7 @@ namespace {
             + passed< WHITE>() - passed< BLACK>()
             + variant<WHITE>() - variant<BLACK>();
 
-    if (lazy_skip(LazyThreshold2) && Options["UCI_Variant"] == "chess")
+    if (lazy_skip(LazyThreshold2) && standard_lazy_evaluation(pos))
         goto make_v;
 
     score +=  threats<WHITE>() - threats<BLACK>()
