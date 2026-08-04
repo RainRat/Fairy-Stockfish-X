@@ -2399,6 +2399,28 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
             std::cerr << "connect3D and connect4D are mutually exclusive." << std::endl;
         valid = false;
     }
+    if (v->nMoveRuleImmediate < 0
+        || v->nMoveRuleImmediate > (std::numeric_limits<int>::max() + 1LL) / 2)
+    {
+        if (DoCheck)
+            std::cerr << "nMoveRuleImmediate must be between 0 and "
+                      << (std::numeric_limits<int>::max() + 1LL) / 2 << "." << std::endl;
+        valid = false;
+    }
+    const int boardFiles = int(v->maxFile) + 1;
+    const int boardRanks = int(v->maxRank) + 1;
+    if (v->connectN < 0 || v->connectN > std::max(boardFiles, boardRanks))
+    {
+        if (DoCheck)
+            std::cerr << "connectN must be between 0 and the largest board dimension." << std::endl;
+        valid = false;
+    }
+    if (v->connectNxN < -1 || v->connectNxN > std::min(boardFiles, boardRanks))
+    {
+        if (DoCheck)
+            std::cerr << "connectNxN must be -1, 0, or no larger than the smallest board dimension." << std::endl;
+        valid = false;
+    }
     if (v->connect3D
         && !((v->connectN == 3 && (int(v->maxFile) + 1) == 3 && (int(v->maxRank) + 1) == 9)
           || (v->connectN == 4 && (int(v->maxFile) + 1) == 8 && (int(v->maxRank) + 1) == 8)))

@@ -254,10 +254,10 @@ fsx_build_variant_limits() {
 
   case "$engine_basen" in
     stockfish-large*|stockfish-allvars*)
-      echo "9 11"
+      echo "11 9"
       ;;
     stockfish-vlb*)
-      echo "16 16"
+      echo "15 15"
       ;;
     *)
       echo "7 7"

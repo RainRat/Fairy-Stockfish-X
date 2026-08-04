@@ -147,6 +147,21 @@ namespace {
     return delta;
   }
 
+  inline int forced_jump_step(const Position& pos, Square from, Square to) {
+      int df = int(file_of(to)) - int(file_of(from));
+      int dr = int(rank_of(to)) - int(rank_of(from));
+      if (pos.topology_wraps())
+      {
+          if (pos.wraps_files())
+              df = adjusted_delta(pos, df, int(pos.max_file()) + 1);
+          if (pos.wraps_ranks())
+              dr = adjusted_delta(pos, dr, int(pos.max_rank()) + 1);
+      }
+      // Preserve coordinate direction across a topology seam; a linear
+      // square-number delta turns h4->a4 into the opposite direction.
+      return ((dr + 128) << 8) | (df + 128);
+  }
+
   template<typename T, size_t N>
   bool same_array(const T (&lhs)[N], const T (&rhs)[N]) {
       return std::equal(std::begin(lhs), std::end(lhs), std::begin(rhs));
@@ -2620,6 +2635,7 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
       && (   piece_drops()
           || seirawan_gating()
           || potions_enabled()
+          || capture_type() == PRISON
           || var->promotionRequireInHand
           || var->promotionConsumeInHand)
       && !commit_gates())
@@ -3236,7 +3252,7 @@ bool Position::compute_forced_jump_followup(Square s, int step) const {
   while (candidates)
   {
       Square to = pop_lsb(candidates);
-      if (step && int(to) - int(s) != step)
+      if (step && forced_jump_step(*this, s, to) != step)
           continue;
       if (jump_capture_square(s, to) != SQ_NONE)
           return true;
@@ -4457,7 +4473,8 @@ bool Position::legal(Move m) const {
           }
           if (is_pass(m) || from != st->forcedJumpSquare || !is_jump_capture(m))
               return false;
-          if (forced_jump_same_direction() && st->forcedJumpStep && int(to) - int(from) != st->forcedJumpStep)
+          if (forced_jump_same_direction() && st->forcedJumpStep
+              && forced_jump_step(*this, from, to) != st->forcedJumpStep)
               return false;
       }
   }
@@ -5182,7 +5199,8 @@ bool Position::pseudo_legal(const Move m) const {
               return false;
           if (from != st->forcedJumpSquare || !is_jump_capture(m))
               return false;
-          if (forced_jump_same_direction() && st->forcedJumpStep && int(to) - int(from) != st->forcedJumpStep)
+          if (forced_jump_same_direction() && st->forcedJumpStep
+              && forced_jump_step(*this, from, to) != st->forcedJumpStep)
               return false;
       }
   }
@@ -5939,20 +5957,19 @@ void Position::apply_drop_hash_delta(Key& k, Move m, Piece pc, Color dropColor, 
     }
     else
     {
-        Color us = dropColor;
-        Color them = ~us;
-        Piece exchangedPiece = make_piece(them, exchanged);
+        Color exchangeColor = ~sideToMove;
+        Piece exchangedPiece = make_piece(exchangeColor, exchanged);
 
         // Exchange drop mutates one hand bucket and two prison buckets.
-        int handOld = pieceCountInHand[them][exchanged];
+        int handOld = pieceCountInHand[exchangeColor][exchanged];
         int handNew = handOld + 1;
         xor_in_hand_count(k, exchangedPiece, handOld, handNew, reserveKey);
 
-        int prisonOldEx = pieceCountInPrison[us][exchanged];
+        int prisonOldEx = pieceCountInPrison[sideToMove][exchanged];
         int prisonNewEx = prisonOldEx - 1;
         xor_in_hand_count(k, exchangedPiece, prisonOldEx, prisonNewEx, reserveKey);
 
-        int prisonOldDrop = pieceCountInPrison[them][type_of(pc)];
+        int prisonOldDrop = pieceCountInPrison[~dropColor][type_of(pc)];
         int prisonNewDrop = prisonOldDrop - 1;
         xor_in_hand_count(k, pc, prisonOldDrop, prisonNewDrop, reserveKey);
     }
@@ -6545,10 +6562,15 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       k ^= Zobrist::enpassant[pop_lsb(st->epSquares)];
 
   // Update castling rights if needed
-  if (!dropMove && !is_pass(m) && !pureWallMove && st->castlingRights && (castlingRightsMask[from] | castlingRightsMask[to] | pushRightsMask | pullRightsMask))
+  if (!dropMove && !is_pass(m) && !pureWallMove && st->castlingRights
+      && (castlingRightsMask[from] | castlingRightsMask[to]
+          | (jumpCapsq != SQ_NONE ? castlingRightsMask[jumpCapsq] : 0)
+          | pushRightsMask | pullRightsMask))
   {
       k ^= Zobrist::castling[st->castlingRights];
-      st->castlingRights &= ~(castlingRightsMask[from] | castlingRightsMask[to] | pushRightsMask | pullRightsMask);
+      st->castlingRights &= ~(castlingRightsMask[from] | castlingRightsMask[to]
+                              | (jumpCapsq != SQ_NONE ? castlingRightsMask[jumpCapsq] : 0)
+                              | pushRightsMask | pullRightsMask);
 
       // Remove castling rights from opponent on the same side if oppositeCastling
       if ((var->oppositeCastling) && (type_of(m) == CASTLING))
@@ -7618,7 +7640,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
             && color_of(piece_on(moverSq)) == us)
       {
           st->forcedJumpSquare = moverSq;
-          st->forcedJumpStep = forced_jump_same_direction() ? int(to) - int(from) : 0;
+          st->forcedJumpStep = forced_jump_same_direction() ? forced_jump_step(*this, from, to) : 0;
           st->forcedJumpHasFollowup = compute_forced_jump_followup(moverSq, st->forcedJumpStep);
       }
       else

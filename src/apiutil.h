@@ -135,16 +135,16 @@ inline std::string piece(const Position& pos, Move m, Notation n) {
     Piece pc = pos.moved_piece(m);
     PieceType pt = type_of(pc);
     // Quiet pawn moves
-    if ((n == NOTATION_SAN || n == NOTATION_LAN || n == NOTATION_THAI_SAN) && type_of(pc) == PAWN && type_of(m) != DROP)
+    if ((n == NOTATION_SAN || n == NOTATION_LAN || n == NOTATION_THAI_SAN) && type_of(pc) == PAWN && !is_drop_move(m))
         return "";
     // Tandem pawns
     else if (n == NOTATION_XIANGQI_WXF && popcount(pos.pieces(us, pt) & file_bb(from)) >= 3 - multi_tandem(pos.pieces(us, pt)))
         return std::to_string(popcount(forward_file_bb(us, from) & pos.pieces(us, pt)) + 1);
     // Moves of promoted pieces
-    else if (is_shogi(n) && type_of(m) != DROP && pos.unpromoted_piece_on(from))
+    else if (is_shogi(n) && !is_drop_move(m) && pos.unpromoted_piece_on(from))
         return "+" + display_symbol(pos.piece_symbol(pos.unpromoted_piece_on(from)));
     // Promoted drops
-    else if (is_shogi(n) && type_of(m) == DROP && dropped_piece_type(m) != in_hand_piece_type(m))
+    else if (is_shogi(n) && is_drop_move(m) && dropped_piece_type(m) != in_hand_piece_type(m))
         return "+" + display_symbol(pos.piece_symbol(make_piece(us, in_hand_piece_type(m))));
     else if (is_thai(n))
         return piece_to_thai_char(pc, pos.is_promoted(from));
@@ -226,7 +226,7 @@ inline std::string square(const Position& pos, Square s, Notation n) {
 
 inline Disambiguation disambiguation_level(const Position& pos, Move m, Notation n) {
     // Drops never need disambiguation
-    if (type_of(m) == DROP)
+    if (is_drop_move(m))
         return NO_DISAMBIGUATION;
 
     // NOTATION_LAN and Janggi always use disambiguation
@@ -335,7 +335,7 @@ inline const std::string move_to_san(Position& pos, Move m, Notation n) {
         san += disambiguation(pos, from, n, d);
 
         // Separator/Operator
-        if (type_of(m) == DROP)
+        if (is_drop_move(m))
             san += n == NOTATION_SHOGI_HOSKING ? '\'' : is_shogi(n) ? '*' : '@';
         else if (n == NOTATION_XIANGQI_WXF)
         {
@@ -366,12 +366,16 @@ inline const std::string move_to_san(Position& pos, Move m, Notation n) {
             san += is_shogi(n) ? std::string("-") : std::string("=") + display_symbol(pos.piece_symbol(pos.unpromoted_piece_on(from)));
         else if (type_of(m) == NORMAL && is_shogi(n) && pos.pseudo_legal(make<PIECE_PROMOTION>(from, to)))
             san += std::string("=");
+        if (pos.paired_drop(m))
+            san += "," + square(pos, pos.secondary_drop_square(m), n);
+        else if (is_insert_move(m))
+            san += "," + square(pos, from, n);
         if (is_gating(m))
             san += std::string("/") + display_symbol(pos.piece_symbol(make_piece(us, gating_type(m))));
     }
 
     // Wall square
-    if (pos.walling(us))
+    if (pos.walling(us) && is_gating(m))
         san += "," + square(pos, pos.gate_square(m), n);
 
     // Check and checkmate
@@ -696,11 +700,16 @@ inline std::string read_piece_symbol(const std::string& text, size_t& idx) {
     return symbol;
 }
 
-inline int read_fen_number(const std::string& text, size_t& idx) {
-    int value = 0;
+inline bool read_fen_number(const std::string& text, size_t& idx, int& value) {
+    value = 0;
     while (idx < text.size() && std::isdigit(static_cast<unsigned char>(text[idx])))
-        value = 10 * value + (text[idx++] - '0');
-    return value;
+    {
+        int digit = text[idx++] - '0';
+        if (value > (std::numeric_limits<int>::max() - digit) / 10)
+            return false;
+        value = 10 * value + digit;
+    }
+    return true;
 }
 
 inline Validation check_for_valid_characters(const std::string& firstFenPart, const std::string& validSpecialCharactersFirstField, const Variant* v) {
@@ -860,7 +869,12 @@ inline Validation fill_char_board(CharBoard& board, const std::string& fenBoard,
         if ((inLeadingCommitRow || inTrailingCommitRow) && c != '/')
         {
             if (std::isdigit(static_cast<unsigned char>(c)))
-                fileIdx += read_fen_number(fenBoard, i);
+            {
+                int run;
+                if (!read_fen_number(fenBoard, i, run) || run > board.get_nb_files() - fileIdx)
+                    return NOK;
+                fileIdx += run;
+            }
             else if (Variant::is_piece_id_start(c))
             {
                 read_piece_symbol(fenBoard, i);
@@ -891,7 +905,12 @@ inline Validation fill_char_board(CharBoard& board, const std::string& fenBoard,
             ++fileIdx;
         }
         else if (std::isdigit(static_cast<unsigned char>(c)))
-            fileIdx += read_fen_number(fenBoard, i);
+        {
+            int run;
+            if (!read_fen_number(fenBoard, i, run) || run > board.get_nb_files() - fileIdx)
+                return NOK;
+            fileIdx += run;
+        }
         else if (c == '/')
         {
             ++i;
@@ -1242,7 +1261,11 @@ inline Validation check_pocket_info(const std::string& fenBoard, int nbRanks, co
         }
         if (std::isdigit(static_cast<unsigned char>(c)))
         {
-            handCount = read_fen_number(pocketPart, i);
+            if (!read_fen_number(pocketPart, i, handCount) || handCount > int(SQUARE_NB))
+            {
+                std::cerr << "Invalid pocket piece count." << std::endl;
+                return NOK;
+            }
             continue;
         }
         if (Variant::is_piece_id_start(c))
@@ -1255,6 +1278,11 @@ inline Validation check_pocket_info(const std::string& fenBoard, int nbRanks, co
                 return NOK;
             }
             int repeats = handCount > 0 ? handCount : 1;
+            if (repeats > int(SQUARE_NB) - int(pocket.size()))
+            {
+                std::cerr << "Pocket contains too many pieces." << std::endl;
+                return NOK;
+            }
             for (int n = 0; n < repeats; ++n)
                 pocket.push_back(pc);
             handCount = 0;
@@ -1328,7 +1356,7 @@ inline Validation check_number_of_kings(const std::string& fenBoard, const std::
 }
 
 
-inline Validation check_en_passant_square(const std::string& enPassantInfo) {
+inline Validation check_en_passant_square(const std::string& enPassantInfo, const Variant* v) {
     if (enPassantInfo.size() != 1 || enPassantInfo[0] != '-')
     {
         if (enPassantInfo.size() < 2)
@@ -1336,17 +1364,30 @@ inline Validation check_en_passant_square(const std::string& enPassantInfo) {
             std::cerr << "Invalid en-passant square '" << enPassantInfo << "'. Expects at least 2 characters. Actual: " << enPassantInfo.size() << " character(s)." << std::endl;
             return NOK;
         }
-        if (!std::isalpha(static_cast<unsigned char>(enPassantInfo[0])))
+        if (enPassantInfo[0] < 'a' || enPassantInfo[0] > 'a' + v->maxFile)
         {
-            std::cerr << "Invalid en-passant square '" << enPassantInfo << "'. Expects 1st character to be a letter." << std::endl;
+            std::cerr << "Invalid en-passant square '" << enPassantInfo << "'. File is outside the board." << std::endl;
             return NOK;
         }
+        int rank = 0;
         for (size_t i = 1; i < enPassantInfo.size(); ++i)
             if (!std::isdigit(static_cast<unsigned char>(enPassantInfo[i])))
             {
                 std::cerr << "Invalid en-passant square '" << enPassantInfo << "'. Expects rank digits after file." << std::endl;
                 return NOK;
             }
+            else
+            {
+                int digit = enPassantInfo[i] - '0';
+                if (rank > (std::numeric_limits<int>::max() - digit) / 10)
+                    return NOK;
+                rank = 10 * rank + digit;
+            }
+        if (rank < 1 || rank > int(v->maxRank) + 1)
+        {
+            std::cerr << "Invalid en-passant square '" << enPassantInfo << "'. Rank is outside the board." << std::endl;
+            return NOK;
+        }
     }
     return OK;
 }
@@ -1532,9 +1573,9 @@ inline FenValidation validate_fen(const std::string& fen, const Variant* v, bool
 
     // 2) Part
     // check side to move char
-    if (fenParts.size() >= 2 && fenParts[1][0] != 'w' && fenParts[1][0] != 'b')
+    if (fenParts.size() >= 2 && fenParts[1] != "w" && fenParts[1] != "b")
     {
-        std::cerr << "Invalid side to move specification: '" << fenParts[1][0] << "'." << std::endl;
+        std::cerr << "Invalid side to move specification: '" << fenParts[1] << "'." << std::endl;
         return FEN_INVALID_SIDE_TO_MOVE;
     }
 
@@ -1584,7 +1625,7 @@ inline FenValidation validate_fen(const std::string& fen, const Variant* v, bool
     {
         if (v->doubleStep && (v->pieceTypes & PAWN))
         {
-            if (check_en_passant_square(fenParts[3]) == NOK)
+            if (check_en_passant_square(fenParts[3], v) == NOK)
                 return FEN_INVALID_EN_PASSANT_SQ;
         }
         else if (v->countingRule && check_digit_field(fenParts[3]) == NOK)

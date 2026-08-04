@@ -67,6 +67,8 @@ namespace Eval {
 
   bool useNNUE;
   string eval_file_loaded = "None";
+  uint32_t loadedNnueHash = 0;
+  int loadedNnueDimensions = 0;
 
   /// NNUE::init() tries to load a NNUE network at startup time, or when the engine
   /// receives a UCI command "setoption name EvalFile value nn-[a-z0-9]{12}.nnue"
@@ -121,6 +123,13 @@ namespace Eval {
     }
 
     currentNnueVariant = selectedVariant;
+    // The feature layout and header hash depend on the active variant. A
+    // variant switch must revalidate even when it selects the same filename.
+    const uint32_t selectedNnueHash = NNUE::hash_value();
+    if (eval_file_loaded == eval_file
+        && (loadedNnueHash != selectedNnueHash
+            || loadedNnueDimensions != selectedVariant->nnueDimensions))
+        eval_file_loaded = "None";
 
     #if defined(DEFAULT_NNUE_DIRECTORY)
     #define stringify2(x) #x
@@ -157,6 +166,17 @@ namespace Eval {
                     eval_file_loaded = eval_file;
             }
         }
+
+    if (eval_file_loaded == eval_file)
+    {
+        loadedNnueHash = selectedNnueHash;
+        loadedNnueDimensions = selectedVariant->nnueDimensions;
+    }
+    else
+    {
+        useNNUE = false;
+        currentNnueVariant = nullptr;
+    }
   }
 
   /// NNUE::verify() verifies that the last net used was loaded successfully
@@ -1475,7 +1495,8 @@ namespace {
         Bitboard processed[PIECE_TYPE_NB] = {};
         const bool allFlagTypes = bool(flagTypes & piece_set(ALL_PIECES));
         if (allFlagTypes)
-            ctfPieces[KING] = pos.pieces(Us);
+            for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
+                ctfPieces[pt] = pos.pieces(Us, pt);
         else
             for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
                 if (flagTypes & pt)
@@ -1626,7 +1647,7 @@ namespace {
     }
 
     // Extinction
-    if (pos.extinction_value() != VALUE_NONE)
+    if (pos.extinction_value(Us) != VALUE_NONE)
     {
         for (PieceSet ps = pos.extinction_piece_types(Us); ps;)
         {
@@ -1638,9 +1659,9 @@ namespace {
                 if (pos.count(Them, pt) >= pos.extinction_opponent_piece_count(Us) || pos.two_boards())
                     score += make_score(1000000 / (500 + EvalPieceValue[MG][pt]),
                                         1000000 / (500 + EvalPieceValue[EG][pt])) / (denom * denom)
-                            * (pos.extinction_value() / VALUE_MATE);
+                            * (pos.extinction_value(Us) / VALUE_MATE);
             }
-            else if (pos.extinction_value() == VALUE_MATE)
+            else if (pos.extinction_value(Us) == VALUE_MATE)
             {
                 // Losing chess variant bonus
                 score += make_score(pos.non_pawn_material(Us), pos.non_pawn_material(Us)) / std::max(pos.count<ALL_PIECES>(Us), 1);
@@ -1821,7 +1842,8 @@ namespace {
     bool pawnsOnBothFlanks = true;
     const Bitboard queenFlank = scaled_flank(pos, false);
     const Bitboard kingFlank = scaled_flank(pos, true);
-    if (   pos.extinction_value() == VALUE_NONE
+    if (   pos.extinction_value(WHITE) == VALUE_NONE
+        && pos.extinction_value(BLACK) == VALUE_NONE
         && !pos.captures_to_hand()
         && !pos.connect_n()
         && !pos.material_counting()
@@ -1967,6 +1989,13 @@ namespace {
             if (pt > PAWN)
                 score += pieces<WHITE>(pt) - pieces<BLACK>(pt);
         }
+
+        if (pos.piece_drops() || pos.seirawan_gating())
+            for (PieceSet ps = pos.piece_types(); ps;)
+            {
+                PieceType pt = pop_lsb(ps);
+                score += hand<WHITE>(pt) - hand<BLACK>(pt);
+            }
 
         score += variant<WHITE>() - variant<BLACK>();
 

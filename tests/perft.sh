@@ -30,9 +30,15 @@ cat << EOF > "$perft_exp"
    send "setoption name UCI_Chess960 value \$chess960\\n"
    send "setoption name UCI_Variant value \$var\\n"
    send "position \$pos\\ngo perft \$depth\\n"
-   expect "Nodes searched: \$result" {} timeout {exit 1}
-   catch { send "quit\\n" }
-   catch { expect eof }
+   expect {
+       -re "Nodes searched: \$result\\r?\\n" {}
+       timeout {exit 1}
+       eof {exit 1}
+   }
+   send "quit\\n"
+   expect eof
+   set status [wait]
+   if {[lindex \$status 3] != 0} {exit 1}
 EOF
 
 variant_list="$(printf 'uci\nquit\n' | "$ENGINE" | sed -n 's/^option name UCI_Variant type combo default [^ ]* //p' | tr ' ' '\n' | awk '/^var$/ {getline; print}')"

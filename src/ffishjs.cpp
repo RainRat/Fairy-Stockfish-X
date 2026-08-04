@@ -726,6 +726,9 @@ Game read_game_pgn(std::string pgn) {
         if (pgn[curIdx] == '*')
           return game;
 
+        if (pgn[curIdx] == ';')
+          break;
+
         if (pgn[curIdx] == '{') {
           if (!skip_comment(pgn, curIdx, lineEnd))
             return game;

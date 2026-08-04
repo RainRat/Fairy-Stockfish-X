@@ -6,4 +6,4 @@ ENGINE=${1:-${ROOT_DIR}/src/stockfish-large}
 VARIANTS=${VARIANT_PATH:-${ROOT_DIR}/src/variants.ini}
 
 cd "${ROOT_DIR}"
-exec tests/run.sh full "${ENGINE}"
+VARIANTS="${VARIANTS}" exec tests/run.sh full "${ENGINE}"

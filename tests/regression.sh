@@ -7,6 +7,7 @@
 #   Auto-detect common variants: ./regression.sh ./old_engine ./new_engine ""
 
 set -euo pipefail
+failed=0
 
 echo "variant $1 $2"
 # Convert bench_args to an array to handle empty or multi-word arguments correctly
@@ -44,7 +45,10 @@ do
         echo "${var} ${ref} none <-- no new"
     elif [ "$ref" != "$signature" ]; then
         echo "${var} ${ref} ${signature} <-- mismatch"
+        failed=1
     else
         echo "${var} ${ref} OK"
     fi
 done
+
+exit "$failed"
