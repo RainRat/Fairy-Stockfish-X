@@ -3165,6 +3165,8 @@ Bitboard Position::janggi_cannon_attackers_to_king(Square s, Bitboard occupied, 
   while (cannons)
   {
       Square from = pop_lsb(cannons);
+      if (from == s)
+          continue;
       int df = int(file_of(s)) - int(file_of(from));
       int dr = int(rank_of(s)) - int(rank_of(from));
       int stepF = 0;
