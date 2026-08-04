@@ -84,14 +84,14 @@ position fen 8/ppnppppp/8/2n5/2pP4/4PP2/PPPNNNPP/8 b - d3 0 3
 go perft 1
 EOF
 )
-  assert_contains "$out" "^c4d3: 1$"
+  assert_contains "$out" "^c4d3n: 1$"
 
   out=$(run_uci "$ENGINE" "$VARIANTS" battleotk <<'EOF'
-position fen 8/ppnppppp/8/2n5/2pP4/4PP2/PPPNNNPP/8 b - d3 0 3 moves c4d3
+position fen 8/ppnppppp/8/2n5/2pP4/4PP2/PPPNNNPP/8 b - d3 0 3 moves c4d3n
 d
 EOF
 )
-  assert_contains_literal "$out" "Fen: 8/ppnppppp/8/2n5/8/3pPP2/PPPNNNPP/8 w - - 0 4"
+  assert_contains_literal "$out" "Fen: 8/ppnppppp/8/2n5/2n5/3pPP2/PPPNNNPP/8 w - - 0 4"
 
   out=$(run_uci "$ENGINE" "$VARIANTS" battleotk <<'EOF'
 position startpos
