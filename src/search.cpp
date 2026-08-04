@@ -1800,7 +1800,7 @@ moves_loop: // When in check, search starts from here
       // Futility pruning and moveCount pruning
       if (    bestValue > VALUE_TB_LOSS_IN_MAX_PLY
           && !givesCheck
-          && !(   pos.extinction_value() == -VALUE_MATE
+          && !(   pos.extinction_value(~pos.side_to_move()) == -VALUE_MATE
                && victim != NO_PIECE
                && (pos.extinction_piece_types(~pos.side_to_move()) & type_of(victim)))
           &&  futilityBase > -VALUE_KNOWN_WIN

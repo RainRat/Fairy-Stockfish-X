@@ -927,6 +927,8 @@ namespace {
         if (pos.pushing_strength(Pt) > 0)
         {
             Bitboard candidates = pos.push_targets_from(Us, Pt, from);
+            if (!pos.stepwise_pushing())
+                candidates &= pos.pieces();
             while (candidates)
             {
                 Square to = pop_lsb(candidates);

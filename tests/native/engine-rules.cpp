@@ -83,6 +83,26 @@ void movement() {
           "clone_targets_from returned targets for an empty square");
 }
 
+void extinction_color_settings() {
+    Position pos;
+    StateListPtr states;
+
+    set_position(pos, states, "asym-extinction-audit",
+                 "4k3/8/8/3p4/3Q4/8/8/4K3 w - - 0 1");
+    Move capture = parse_move(pos, "d4d5");
+    check(pos.see_ge(capture, VALUE_ZERO + 1),
+          "SEE ignored the opponent color's losing extinction result");
+
+    set_position(pos, states, "asym-extinction-blast-audit",
+                 "4k3/8/8/3p4/3Q4/8/8/4K3 w - - 0 1");
+    capture = parse_move(pos, "d4d5");
+    check(pos.see_pruning_unreliable()
+          && pos.see_pruning_unreliable(capture),
+          "SEE pruning was not disabled for the configured opponent goal");
+    check(pos.blast_see(capture) >= VALUE_KNOWN_WIN,
+          "blast SEE ignored the opponent color's extinction result");
+}
+
 void locust_all() {
     Position pos;
     StateListPtr states;
@@ -590,6 +610,21 @@ symmetricDropTypes = p
 [occupancy-rifle:chess]
 rifleCapture = true
 
+[asym-extinction-audit:chess]
+checking = false
+castling = false
+extinctionValueWhite = win
+extinctionPieceTypesWhite = q
+extinctionAllPieceTypesWhite = false
+extinctionValueBlack = loss
+extinctionPieceTypesBlack = p
+extinctionAllPieceTypesBlack = false
+
+[asym-extinction-blast-audit:asym-extinction-audit]
+extinctionValueWhite = none
+extinctionPieceTypesWhite = -
+blastOnCapture = true
+
 [occupancy-blast:chess]
 blastOnCapture = true
 
@@ -739,6 +774,7 @@ int main(int argc, char** argv) {
 
         const std::vector<std::pair<std::string, Test>> registry = {
           {"promotion", promotion}, {"movement", movement}, {"occupancy", occupancy},
+          {"extinction-color", extinction_color_settings},
           {"locust-all", locust_all},
           {"state", state}, {"royal", royal}, {"adjudication", adjudication},
           {"board-games", board_games}

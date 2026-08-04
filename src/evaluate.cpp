@@ -1154,7 +1154,7 @@ namespace {
     }
 
     // Extinction threats
-    if (pos.extinction_value() == -VALUE_MATE)
+    if (pos.extinction_value(Them) == -VALUE_MATE)
     {
         Bitboard bExt = attackedBy[Us][ALL_PIECES] & pos.pieces(Them);
         for (PieceSet ps = pos.extinction_piece_types(Them); ps;)

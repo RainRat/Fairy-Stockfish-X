@@ -226,6 +226,7 @@ run_search_evaluation() {
     legacy kxk-fairy-endgames.sh 3m "${ENGINE}"
     legacy non8x8-endgames.sh 3m "${ENGINE}"
     legacy eval-geometry-regressions.sh 3m "${ENGINE}" "${VARIANTS}"
+    legacy asymmetric-extinction-evaluation.sh 3m "${ENGINE}"
     legacy checkers-evaluation.sh 2m "${ENGINE}" "${VARIANTS}"
     legacy nnue-variant-dimension-guard.sh 2m "${ENGINE}"
     legacy nnue-affine-regression.sh 2m

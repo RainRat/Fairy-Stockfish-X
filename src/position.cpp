@@ -8478,16 +8478,16 @@ Value Position::blast_see(Move m) const {
       if (extinctsThem && extinctsUs)
           return VALUE_ZERO;
       if (extinctsThem)
-          return std::min(-extinction_value(), VALUE_ZERO);
+          return std::min(-extinction_value(~us), VALUE_ZERO);
       if (extinctsUs)
-          return std::min(extinction_value(), VALUE_ZERO);
+          return std::min(extinction_value(us), VALUE_ZERO);
   }
   else
   {
       if (extinctsUs)
-          return extinction_value();
+          return extinction_value(us);
       if (extinctsThem)
-          return -extinction_value();
+          return -extinction_value(~us);
   }
 
   return capture(m) || must_capture() || blast_on_move() || (blast_on_self_destruct() && is_self_destruct(m))
@@ -8531,7 +8531,7 @@ bool Position::see_ge(Move m, Value threshold) const {
   Piece victim = captured_piece(m);
 
   // Extinction
-  if (extinction_value() != VALUE_NONE && capturedSquares && !extinction_all_piece_types(~sideToMove))
+  if (extinction_value(~sideToMove) != VALUE_NONE && capturedSquares && !extinction_all_piece_types(~sideToMove))
   {
       Bitboard opponentCaptured = capturedSquares & pieces(~sideToMove);
       bool extinctsTarget = false;
@@ -8552,7 +8552,7 @@ bool Position::see_ge(Move m, Value threshold) const {
           }
       }
       if (extinctsTarget)
-          return extinction_value() < VALUE_ZERO;
+          return extinction_value(~sideToMove) < VALUE_ZERO;
   }
 
   // Do not evaluate SEE if value would be unreliable
@@ -9851,7 +9851,8 @@ bool Position::see_pruning_unreliable() const {
 
   return points_counting()
       || points_goal() > 0
-      || extinction_value() != VALUE_NONE
+      || extinction_value(WHITE) != VALUE_NONE
+      || extinction_value(BLACK) != VALUE_NONE
       || flag_region(WHITE) || flag_region(BLACK)
       || var->castlingWins
       || connect_n() != 0
@@ -9895,7 +9896,7 @@ bool Position::see_pruning_unreliable(Move m) const {
           || (pseudo_royal_types() & captured)
           || (anti_royal_types() & captured))
           return true;
-      if (extinction_value() != VALUE_NONE)
+      if (extinction_value(them) != VALUE_NONE)
       {
           if (count(them, captured) <= 2)
               return true;
