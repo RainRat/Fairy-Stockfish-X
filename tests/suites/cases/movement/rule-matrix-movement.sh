@@ -176,11 +176,4 @@ UCI
 )
 assert_contains_literal "$out" "Nodes searched: 0" "checkers side with no legal move loses"
 
-out=$(run_uci "$ENGINE" "$VARIANTS" checkers <<'UCI'
-position fen 8/8/5k2/8/8/2K5/8/8 w - - 0 1 moves c3b4 f6g5 b4c3 g5f6 c3b4 f6g5 b4c3 g5f6
-go depth 1
-UCI
-)
-assert_not_contains_literal "$out" "info depth 1" "checkers threefold repetition is adjudicated as a draw"
-
 echo "movement rule matrix cases passed"

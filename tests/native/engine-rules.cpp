@@ -559,6 +559,22 @@ void adjudication() {
 
     set_position(pos, states, "prison-no-king", "8/8/8/8/8/8/4P3/8 w - - 0 1");
     expect_nonterminal(pos, "prison promotion without an opponent king");
+
+    set_position(pos, states, "checkers",
+                 "8/8/5k2/8/8/2K5/8/8 w - - 0 1");
+    const char* repetitionMoves[] = {
+      "c3b4", "f6g5", "b4c3", "g5f6",
+      "c3b4", "f6g5", "b4c3", "g5f6"
+    };
+    for (const char* notation : repetitionMoves)
+    {
+        Move move = parse_move(pos, notation);
+        check(pos.legal(move), std::string("checkers repetition move is illegal: ") + notation);
+        states->emplace_back();
+        pos.do_move(move, states->back());
+    }
+    check(pos.is_optional_game_end(result) && result == VALUE_DRAW,
+          "checkers threefold repetition was not adjudicated as a draw");
 }
 
 void board_games() {
