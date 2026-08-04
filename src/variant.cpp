@@ -1443,10 +1443,17 @@ namespace {
         v->pieceDrops = false;
         v->promotedPieceType[CUSTOM_PIECE_1] = COMMONER;
         v->castlingKingPiece = COMMONER;
+        // Keep king/prince pseudo-royalty independent from bare-material
+        // adjudication.  The promoted elephant is another COMMONER, so the
+        // last remaining commoner is the sole royal piece.
+        v->pseudoRoyalTypes = piece_set(COMMONER);
+        v->pseudoRoyalCount = 1;
+        v->pseudoRoyalValue = -VALUE_MATE;
         v->extinctionValue = -VALUE_MATE;
-        v->extinctionPieceTypes = piece_set(COMMONER);
-        v->extinctionPseudoRoyal = true;
-        v->extinctionPieceCount = 0;
+        v->extinctionClaim = true;
+        v->extinctionPieceTypes = piece_set(ALL_PIECES);
+        v->extinctionPieceCount = 1;
+        v->extinctionOpponentPieceCount = 2;
         return v;
     }
     // Yari shogi

@@ -190,6 +190,48 @@ UCI
 assert_contains "$out" "info string adjudication reason game_end"
 assert_contains "$out" "^bestmove \(none\)$"
 
+# Sho-Shogi keeps commoner pseudo-royalty separate from the bare-material
+# extinction rule.  Capturing one of two commoners must leave the other royal
+# piece in play, while capturing the final commoner must end the game even if
+# other non-royal material remains.
+out=$(run_uci "$ENGINE" "$tmp_ini" shoshogi <<'UCI'
+setoption name Verbosity value 2
+position fen 4k4/9/9/9/9/9/9/4K4/r3K4 b - - 0 1 moves a1e1
+go depth 1
+UCI
+)
+assert_contains "$out" "info string variant shoshogi"
+assert_not_contains "$out" "^bestmove \(none\)$"
+
+out=$(run_uci "$ENGINE" "$tmp_ini" shoshogi <<'UCI'
+setoption name Verbosity value 2
+position fen 4k4/9/9/9/9/9/9/7P/r3K4 b - - 0 1 moves a1e1
+go depth 1
+UCI
+)
+assert_contains "$out" "info string adjudication reason game_end"
+assert_contains "$out" "^bestmove \(none\)$"
+
+# Baring a lone commoner wins when the opponent has at least three total
+# pieces, but the existing extinctionClaim convention preserves the two-piece
+# reply/draw exception.
+out=$(run_uci "$ENGINE" "$tmp_ini" shoshogi <<'UCI'
+setoption name Verbosity value 2
+position fen 4k4/9/9/9/9/9/9/rb7/P3K4 b - - 0 1 moves a2a1
+go depth 1
+UCI
+)
+assert_contains "$out" "info string adjudication reason game_end"
+assert_contains "$out" "^bestmove \(none\)$"
+
+out=$(run_uci "$ENGINE" "$tmp_ini" shoshogi <<'UCI'
+setoption name Verbosity value 2
+position fen 4k4/9/9/9/9/9/9/r8/P3K4 b - - 0 1 moves a2a1
+go depth 1
+UCI
+)
+assert_not_contains "$out" "^bestmove \(none\)$"
+
 out=$(run_uci "$ENGINE" "$tmp_ini" asymext-types <<'UCI'
 setoption name Verbosity value 2
 position fen 4k2r/8/8/8/8/8/8/4K3 w - - 0 1
