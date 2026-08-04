@@ -7,6 +7,7 @@ SCRIPT_PATH="${ROOT_DIR}/tests/regression-runner.sh"
 STATE_DIR="${ROOT_DIR}/.local/regression"
 RUNS_DIR="${STATE_DIR}/runs"
 CURRENT_FILE="${STATE_DIR}/current"
+source "${ROOT_DIR}/tests/lib/build-signature.sh"
 
 usage() {
   cat <<'EOF'
@@ -35,6 +36,7 @@ run_is_alive() {
 
 engine_is_stale() {
   local engine="$1"
+  ! fsx_build_artifact_is_current "$ROOT_DIR" "$engine" && return 0
   find "${ROOT_DIR}/src" -type f \( -name '*.cpp' -o -name '*.h' -o -name 'Makefile' \) \
     -newer "${engine}" -print -quit | grep -q .
 }
@@ -52,7 +54,7 @@ validate_engines() {
     [[ "${candidate}" == /* ]] || candidate="${ROOT_DIR}/${candidate}"
     [[ -x "${candidate}" ]] || continue
     if engine_is_stale "${candidate}"; then
-      echo "stale engine: ${candidate}" >&2
+      echo "stale or unverified engine: ${candidate}" >&2
       stale=1
     fi
   done

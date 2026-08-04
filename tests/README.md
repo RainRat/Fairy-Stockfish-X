@@ -2,6 +2,13 @@
 
 `tests/run.sh` is the source of truth for semantic test-suite registration.
 
+Use `tests/build.sh` for named regression binaries. It fingerprints the build
+configuration and resulting executable under `.local/build/signatures/`; a
+configuration change or an unverified artifact automatically triggers an
+object clean before rebuilding. Direct `make` builds still require `make clean`
+when changing compiler, architecture, debug/sanitizer mode, or board-family
+settings.
+
 For the normal large-board/all-variant test binary, use one of these commands (tests/build.sh handles compilation output quietly):
 
 ```sh
