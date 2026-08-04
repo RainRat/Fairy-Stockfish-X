@@ -931,6 +931,14 @@ describe('ffish.validatePosition(fen, uciVariant, uciMoves, chess960)', function
 });
 
 describe('ffish.readGamePGN(pgn)', function () {
+  it("it treats semicolon text as a line comment", () => {
+     const game = ffish.readGamePGN(
+       '[Variant "chess"]\n\n1. e4 ; ignore this rest of the line\n1... e5 *'
+     );
+     chai.expect(game.mainlineMoves()).to.equal('e2e4 e7e5');
+     game.delete();
+  });
+
   it("it reads a pgn string and returns a game object", () => {
      const fs = require('fs');
      const pgnFiles = ['deep_blue_kasparov_1997.pgn', 'lichess_pgn_2018.12.21_JannLee_vs_CrazyAra.j9eQS4TF.pgn', 'c60_ruy_lopez.pgn', 'pychess-variants_zJxHRVm1.pgn', 'Syrov - Dgebuadze.pgn', 'pychess-variants_YHEWvfWF.pgn'];

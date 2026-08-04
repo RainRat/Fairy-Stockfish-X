@@ -29,6 +29,11 @@ blastDiagonals = true
 wallingRule = duck
 wallingWhite = true
 wallingBlack = true
+
+[wrapped-forced-jump:checkers]
+toroidal = true
+customPiece2 = k:mKc{hurdles: 1,1; pre: 1,1; post: 1,1; capture: locust_first; hurdle_types:enemy}K
+startFen = 8/8/8/6K1/7m/8/1m6/8 w - - 0 1
 EOF
 tmp_ini="${FSX_TMP_INI}"
 
@@ -50,3 +55,13 @@ EOF
 # capture is not a complete move in perft output.
 ! grep -Fq "c3e5: 1" <<<"$duck_out"
 grep -Fq "c3e5,e5d4: 1" <<<"$duck_out"
+
+# A forced jump crosses the file seam on the first capture, then continues
+# across a rank seam in the same geometric direction after the opponent pass.
+# The continuation must compare wrapped file/rank deltas, not raw square IDs.
+wrapped_out=$(run_uci "$ENGINE" "$tmp_ini" wrapped-forced-jump <<'EOF'
+position startpos moves g5a3 0000
+go perft 1
+EOF
+)
+grep -Fq "a3c1: 1" <<<"$wrapped_out"

@@ -159,6 +159,18 @@ removeConnectN = -1
 [invalid-connect-group:chess]
 connectGroup = -2
 
+[invalid-nmove-immediate-negative:chess]
+nMoveRuleImmediate = -1
+
+[invalid-nmove-immediate-overflow:chess]
+nMoveRuleImmediate = 1073741825
+
+[invalid-connect-n-too-large:chess]
+connectN = 9
+
+[invalid-connect-nxn-too-large:chess]
+connectNxN = 9
+
 [invalid-bool-retain:chess]
 king = -
 potions = true
@@ -529,6 +541,9 @@ assert_contains_literal "${initial_capture_output}" "multimoves - Derived cycle 
 assert_contains_literal "${initial_capture_output}" "dropNoDoubledCount - Invalid negative value."
 assert_contains_literal "${initial_capture_output}" "Potion cooldown must be between 0 and 65536."
 assert_contains_literal "${initial_capture_output}" "removeConnectN - Value must be in range [0,"
+assert_contains_literal "${initial_capture_output}" "nMoveRuleImmediate must be between 0 and 1073741824."
+assert_contains_literal "${initial_capture_output}" "connectN must be between 0 and the largest board dimension."
+assert_contains_literal "${initial_capture_output}" "connectNxN must be -1, 0, or no larger than the smallest board dimension."
 assert_contains_literal "${initial_capture_output}" "laser_notapiece - Unknown piece symbol: notapiece"
 assert_contains_literal "${initial_capture_output}" "laser_p - Too many laser outcome faces: expected 4."
 assert_contains_literal "${initial_capture_output}" "laserPortalFallback must be a non-portal laser outcome."

@@ -66,6 +66,36 @@ startFen = 4k3/8/8/8/8/8/8/4K3 w - - 0 1
             -1,
         )
 
+    def test_fen_bounds_and_side_to_move_validation(self):
+        with open(ROOT_DIR / "src" / "variants.ini", "r", encoding="utf-8") as f:
+            sf.load_variant_config(f.read())
+
+        chess_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR"
+        self.assertEqual(
+            sf.validate_fen(f"{chess_fen} ww KQkq - 0 1", "chess", False),
+            -6,
+        )
+        self.assertEqual(
+            sf.validate_fen(f"{chess_fen} w KQkq a9 0 1", "chess", False),
+            -4,
+        )
+        self.assertEqual(
+            sf.validate_fen(
+                "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/9 w KQkq - 0 1",
+                "chess",
+                False,
+            ),
+            -8,
+        )
+        self.assertEqual(
+            sf.validate_fen(
+                "4k3/8/8/8/8/8/8/4K3[999999999999999999999999P] w - - 0 1",
+                "crazyhouse",
+                False,
+            ),
+            -7,
+        )
+
     def test_promotion_origin_validation(self):
         code = r'''
 import pyffish
