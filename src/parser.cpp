@@ -532,6 +532,14 @@ namespace {
         return parse_named_value(value, target, values);
     }
 
+    template <> bool set(const std::string& value, TrapProtection& target) {
+        static constexpr auto values = std::array{
+            std::pair{"none", TrapProtection::NONE},
+            std::pair{"friendly-orthogonal", TrapProtection::FRIENDLY_ORTHOGONAL},
+        };
+        return parse_named_value(value, target, values);
+    }
+
     template <> bool set(const std::string& value, MaterialCounting& target) {
         static constexpr auto values = std::array{
             std::pair{"janggi", JANGGI_MATERIAL},
@@ -1754,6 +1762,11 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("surroundCaptureHostileRegion", v->surroundCaptureHostileRegion);
     parse_attribute("libertyCapture", v->libertyCapture);
     parse_attribute("libertySelfCapture", v->libertySelfCapture);
+    parse_attribute("freezePieceTypes", v->freezePieceTypes, v);
+    parse_attribute("freezeImmunePieceTypes", v->freezeImmunePieceTypes, v);
+    parse_attribute("freezeDiagonals", v->freezeDiagonals);
+    parse_attribute("trapRegion", v->trapRegion);
+    parse_attribute("trapProtection", v->trapProtection);
     parse_attribute("doubleStep", v->doubleStep);
     parse_color_setting("doubleStepRegion", v->doubleStepRegion);
     parse_color_setting("tripleStepRegion", v->tripleStepRegion);
