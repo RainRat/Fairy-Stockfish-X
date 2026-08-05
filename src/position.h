@@ -1172,6 +1172,10 @@ private:
   Color sideToMove;
   Score psq;
   mutable Move simulatedMove = MOVE_NONE;
+  mutable Move simulatedFreezeCacheMove = MOVE_NONE;
+  mutable StateInfo* simulatedFreezeCacheState = nullptr;
+  mutable std::array<Bitboard, COLOR_NB> simulatedFreezeCacheFreezers = {};
+  mutable std::array<Bitboard, COLOR_NB> simulatedFreezeCacheTargets = {};
 
   // variant-specific
   const Variant* var;
