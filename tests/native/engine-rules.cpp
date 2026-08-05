@@ -130,6 +130,7 @@ void arimaa_full() {
 
     Move push = parse_move(pos, "e3d3,d4");
     check(pos.legal(push), "Arimaa push was rejected");
+    check(pos.pseudo_legal(push), "Arimaa push failed pseudo-legal validation");
     const Key before = pos.key();
     const std::string beforeFen = pos.fen();
     states->emplace_back();
@@ -141,6 +142,103 @@ void arimaa_full() {
     states->pop_back();
     check(pos.key() == before && pos.fen() == beforeFen,
           "Arimaa push did not restore state exactly on undo");
+
+    set_position(pos, states, "arimaa",
+                 "7r/8/8/8/8/3cE3/R7/8 w - - 0 1");
+    Move trapPush = parse_move(pos, "e3d3,c3");
+    SimulatedMoveInfo simulated = pos.simulated_move_info(trapPush);
+    check(simulated.occupiedAfterEffects & square_bb(SQ_D3),
+          "Arimaa push simulation lost the mover");
+    check(!(simulated.occupiedAfterEffects & square_bb(SQ_C3)),
+          "Arimaa push simulation did not apply the trap after both pieces moved");
+    states->emplace_back();
+    pos.do_move(trapPush, states->back());
+    check(pos.piece_on(SQ_D3) == make_piece(WHITE, CUSTOM_PIECES)
+          && pos.piece_on(SQ_C3) == NO_PIECE,
+          "Arimaa push did not apply the trap after both pieces moved");
+    pos.undo_move(trapPush);
+    states->pop_back();
+
+    set_position(pos, states, "arimaa",
+                 "7r/8/8/8/8/3cE3/R7/8 w - - 0 1");
+    Move pull = parse_move(pos, "e3e4,d3");
+    check(pos.pseudo_legal(pull), "Arimaa pull failed pseudo-legal validation");
+    simulated = pos.simulated_move_info(pull);
+    check(simulated.occupiedAfterEffects & square_bb(SQ_E4),
+          "Arimaa pull simulation lost the mover");
+    check(simulated.colorOccupancy[BLACK] & square_bb(SQ_E3),
+          "Arimaa pull simulation did not relocate the pulled piece");
+
+    set_position(pos, states, "arimaa",
+                 "7r/8/8/8/8/4R3/R7/8 w - - 0 1");
+    check(pos.legal(parse_move(pos, "e3f3")),
+          "Arimaa rabbit sideways move was rejected");
+    check(!pos.legal(make_move(SQ_E3, SQ_E2)),
+          "Arimaa rabbit backward move was accepted");
+    check(!pos.legal(make_move(SQ_E3, SQ_F4)),
+          "Arimaa diagonal move was accepted");
+
+    set_position(pos, states, "arimaa",
+                 "7r/8/3c4/8/8/4E3/R7/8 w - - 0 1");
+    for (const char* notation : {"e3e4", "e4e5", "e5e6"})
+    {
+        Move m = parse_move(pos, notation);
+        check(pos.legal(m), "Arimaa setup step for overrun test was rejected");
+        states->emplace_back();
+        pos.do_move(m, states->back());
+    }
+    check(!pos.legal(make_pull(SQ_E6, SQ_D6, SQ_C6)),
+          "Arimaa push was allowed to overrun the four-step turn limit");
+
+    set_position(pos, states, "arimaa",
+                 "7r/8/8/8/8/4E3/R7/8 w - - 0 1");
+    Move firstStep = parse_move(pos, "e3e4");
+    states->emplace_back();
+    pos.do_move(firstStep, states->back());
+    Key oneStepKey = pos.key();
+    pos.undo_move(firstStep);
+    states->pop_back();
+
+    std::array<Move, 3> repeatedSteps;
+    for (int i = 0; i < 3; ++i)
+    {
+        repeatedSteps[i] = parse_move(pos, i == 1 ? "e4e3" : "e3e4");
+        states->emplace_back();
+        pos.do_move(repeatedSteps[i], states->back());
+    }
+    check(pos.piece_on(SQ_E4) == make_piece(WHITE, CUSTOM_PIECES)
+          && pos.key() != oneStepKey,
+          "Arimaa step count was omitted from the position key");
+    for (auto it = repeatedSteps.rbegin(); it != repeatedSteps.rend(); ++it)
+    {
+        pos.undo_move(*it);
+        states->pop_back();
+    }
+
+    Move out = parse_move(pos, "e3e4");
+    states->emplace_back();
+    pos.do_move(out, states->back());
+    Move back = parse_move(pos, "e4e3");
+    states->emplace_back();
+    pos.do_move(back, states->back());
+    check(!pos.legal(make<SPECIAL>(SQ_E4, SQ_E4)),
+          "Arimaa accepted a voluntary pass equivalent to the turn start");
+    pos.undo_move(back);
+    states->pop_back();
+    pos.undo_move(out);
+    states->pop_back();
+
+    for (const char* notation : {"e3e4", "e4e3", "e3e4"})
+    {
+        Move m = parse_move(pos, notation);
+        states->emplace_back();
+        pos.do_move(m, states->back());
+    }
+    check(!pos.legal(make_move(SQ_E4, SQ_E3)),
+          "Arimaa accepted a four-step turn equivalent to passing");
+
+    set_position(pos, states, "arimaa",
+                 "7r/8/8/8/8/3cE3/R7/8 w - - 0 1");
 
     Move partial = parse_move(pos, "e3e4");
     check(pos.legal(partial), "Arimaa partial turn step was rejected");

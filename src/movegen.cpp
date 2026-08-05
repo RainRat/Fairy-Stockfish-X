@@ -87,6 +87,10 @@ namespace {
         return moveList;
     }
 
+    const int stepsRemaining = 4 - pos.arimaa_steps();
+    if (stepsRemaining <= 0)
+        return moveList;
+
     Bitboard frozen = pos.freeze_squares(Us);
     Bitboard pieces = pos.pieces(Us);
     while (pieces)
@@ -95,17 +99,20 @@ namespace {
         if (frozen & from)
             continue;
 
-        Bitboard adjacent = PseudoAttacks[WHITE][KING][from] & pos.board_bb();
+        Bitboard adjacent = PseudoAttacks[WHITE][WAZIR][from] & pos.board_bb();
         Bitboard quiet = adjacent & ~pos.pieces();
         if (type_of(pos.piece_on(from)) == pos.variant()->arimaaRabbit)
         {
             int delta = Us == WHITE ? 1 : -1;
-            Square forwardSq = make_square(file_of(from), Rank(int(rank_of(from)) + delta));
-            Bitboard forward = is_ok(forwardSq) ? square_bb(forwardSq) : Bitboard(0);
-            quiet &= forward;
+            Square backwardSq = make_square(file_of(from), Rank(int(rank_of(from)) - delta));
+            if (is_ok(backwardSq))
+                quiet &= ~square_bb(backwardSq);
         }
         while (quiet)
             *moveList++ = make_move(from, pop_lsb(quiet));
+
+        if (stepsRemaining < 2)
+            continue;
 
         Bitboard enemies = adjacent & pos.pieces(~Us);
         while (enemies)
@@ -114,7 +121,7 @@ namespace {
             if (pos.arimaa_strength(type_of(pos.piece_on(from)))
                 <= pos.arimaa_strength(type_of(pos.piece_on(enemySq))))
                 continue;
-            Bitboard pushTo = PseudoAttacks[WHITE][KING][enemySq] & pos.board_bb() & ~pos.pieces();
+            Bitboard pushTo = PseudoAttacks[WHITE][WAZIR][enemySq] & pos.board_bb() & ~pos.pieces();
             pushTo &= ~square_bb(from);
             while (pushTo)
                 *moveList++ = make_pull(from, enemySq, pop_lsb(pushTo));
@@ -131,9 +138,9 @@ namespace {
             if (type_of(pos.piece_on(from)) == pos.variant()->arimaaRabbit)
             {
                 int delta = Us == WHITE ? 1 : -1;
-                Square forwardSq = make_square(file_of(from), Rank(int(rank_of(from)) + delta));
-                Bitboard forward = is_ok(forwardSq) ? square_bb(forwardSq) : Bitboard(0);
-                pullTo &= forward;
+                Square backwardSq = make_square(file_of(from), Rank(int(rank_of(from)) - delta));
+                if (is_ok(backwardSq))
+                    pullTo &= ~square_bb(backwardSq);
             }
             pullTo &= ~square_bb(pullFrom);
             while (pullTo)

@@ -848,6 +848,8 @@ namespace Zobrist {
   Key dead[SQUARE_NB];
   Key orientation[4][SQUARE_NB];
   Key promotionOrigin[PIECE_NB][SQUARE_NB];
+  Key arimaaSteps[5];
+  Key arimaaSetup;
   Key endgame[EG_EVAL_NB];
   Key points[COLOR_NB][MAX_ZOBRIST_POINTS];
 }
@@ -877,6 +879,12 @@ namespace {
       assert(pt >= NO_PIECE_TYPE && pt < PIECE_TYPE_NB);
       if (pt != NO_PIECE_TYPE)
           key ^= Zobrist::committed[c][f][pt];
+  }
+
+  inline Key arimaa_state_key(const Variant* var, int steps, bool setup) {
+      if (!var->arimaaRule)
+          return 0;
+      return Zobrist::arimaaSteps[steps] ^ (setup ? Zobrist::arimaaSetup : 0);
   }
 
   inline Square parse_fen_square(const Position& pos, const std::string& spec) {
@@ -1433,6 +1441,10 @@ void Position::init() {
   for (Piece pc = W_PAWN; pc < PIECE_NB; ++pc)
       for (Square s = SQ_A1; s <= SQ_MAX; ++s)
           Zobrist::promotionOrigin[pc][s] = rng.rand<Key>();
+
+  for (Key& key : Zobrist::arimaaSteps)
+      key = rng.rand<Key>();
+  Zobrist::arimaaSetup = rng.rand<Key>();
 
   for (Square from = SQ_A1; from <= SQ_MAX; ++from)
       for (Square to = SQ_A1; to <= SQ_MAX; ++to)
@@ -2411,6 +2423,7 @@ void Position::recompute_state_hashes_and_material(StateInfo* si) const {
 
   si->pieceStateKey = compute_piece_state_key();
   si->key ^= si->pieceStateKey;
+  si->key ^= arimaa_state_key(var, si->arimaaSteps, si->arimaaSetup);
 
   si->reserveKey = reserve_key();
   si->boardKey = si->key ^ si->reserveKey;
@@ -2440,6 +2453,7 @@ void Position::set_state(StateInfo* si) const {
   si->arimaaSideChanged = false;
 
   recompute_state_hashes_and_material(si);
+  si->arimaaTurnStartLayoutKey = si->layoutKey;
   si->checkersBB = compute_checkers_bb(sideToMove);
   si->repetition = 0;
   si->boardRepetition = 0;
@@ -4057,6 +4071,8 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
   const bool wallPlacement = is_gating(m) && !laser_game() && is_ok(gating_square(m))
                           && walling(sideToMove) && (!wall_or_move() || info.from == info.to);
   const bool pureWallMove = wallPlacement && wall_or_move() && info.from == info.to;
+  const bool arimaaPushMove = arimaa_push_move(m);
+  const bool arimaaPullMove = arimaa() && is_pull_move(m) && !arimaaPushMove;
 
   if (info.castling)
   {
@@ -4071,6 +4087,14 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
       info.relocatedOccupancy = pieces();
       if (is_ok(info.captureSquare) && (!is_jump_capture(m) || primaryPieceCapture))
           info.relocatedOccupancy ^= square_bb(info.captureSquare);
+  }
+  else if (arimaaPushMove)
+  {
+      info.relocatedOccupancy = pieces() ^ square_bb(info.from) ^ square_bb(pull_square(m));
+  }
+  else if (arimaaPullMove)
+  {
+      info.relocatedOccupancy = pieces() ^ square_bb(info.to) ^ square_bb(pull_square(m));
   }
   else if (is_self_destruct(m))
       info.relocatedOccupancy = pieces() & ~square_bb(info.from);
@@ -4110,6 +4134,15 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
   else if (info.rifle)
   {
       remove_color_square(info.captureSquare);
+  }
+  else if (arimaaPushMove || arimaaPullMove)
+  {
+      Square auxiliary = pull_square(m);
+      remove_color_square(info.from);
+      remove_color_square(info.to);
+      remove_color_square(auxiliary);
+      info.colorOccupancy[us] |= square_bb(info.to);
+      info.colorOccupancy[~us] |= square_bb(arimaaPushMove ? auxiliary : info.from);
   }
   else if (is_self_destruct(m))
   {
@@ -4342,7 +4375,7 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
   return info;
 }
 
-bool Position::arimaa_legal(Move m) const {
+bool Position::arimaa_pseudo_legal(Move m) const {
   Color us = sideToMove;
   bool valid = true;
   if (is_pass(m))
@@ -4370,10 +4403,10 @@ bool Position::arimaa_legal(Move m) const {
           valid = false;
       else
       {
-          Bitboard adjacent = PseudoAttacks[WHITE][KING][from] & board_bb();
+          Bitboard adjacent = PseudoAttacks[WHITE][WAZIR][from] & board_bb();
           auto forward = [&](Square a, Square b) {
               return type_of(mover) != var->arimaaRabbit
-                  || (us == WHITE ? rank_of(b) > rank_of(a) : rank_of(b) < rank_of(a));
+                  || (us == WHITE ? rank_of(b) >= rank_of(a) : rank_of(b) <= rank_of(a));
           };
 
           if (type_of(m) == NORMAL)
@@ -4386,14 +4419,17 @@ bool Position::arimaa_legal(Move m) const {
               if (arimaa_push_move(m))
               {
                   Piece enemy = piece_on(to);
-                  valid = bool(adjacent & to) && bool(PseudoAttacks[WHITE][KING][to] & board_bb() & auxiliary)
+                  valid = bool(adjacent & to) && is_ok(auxiliary)
+                       && bool(PseudoAttacks[WHITE][WAZIR][to] & board_bb() & square_bb(auxiliary))
                        && auxiliary != from && empty(auxiliary)
+                       && enemy != NO_PIECE && color_of(enemy) != us
                        && arimaa_strength(type_of(mover)) > arimaa_strength(type_of(enemy));
               }
               else
               {
                   Piece pulled = piece_on(auxiliary);
-                  valid = empty(to) && bool(adjacent & to) && bool(PseudoAttacks[WHITE][KING][from] & auxiliary)
+                  valid = is_ok(auxiliary) && empty(to) && bool(adjacent & to)
+                       && bool(PseudoAttacks[WHITE][WAZIR][from] & square_bb(auxiliary))
                        && auxiliary != to && pulled != NO_PIECE && color_of(pulled) != us
                        && arimaa_strength(type_of(mover)) > arimaa_strength(type_of(pulled))
                        && forward(from, to);
@@ -4402,14 +4438,20 @@ bool Position::arimaa_legal(Move m) const {
       }
   }
 
-  if (!valid)
+  return valid && (!is_pull_move(m) || arimaa_steps() + 2 <= 4)
+       && (is_pull_move(m) || arimaa_steps() + (is_pass(m) ? 0 : 1) <= 4);
+}
+
+bool Position::arimaa_legal(Move m) const {
+  if (!arimaa_pseudo_legal(m))
       return false;
   if (!arimaa_move_ends_turn(m))
       return true;
 
+  const Key turnStartLayoutKey = st->arimaaTurnStartLayoutKey;
   StateInfo nextState;
   ScopedProbeMove probe(*this, m, nextState);
-  return state()->repetition >= 0;
+  return layout_key() != turnStartLayoutKey && state()->repetition >= 0;
 }
 
 /// Position::legal() tests whether a pseudo-legal move is legal
@@ -5216,6 +5258,9 @@ bool Position::pseudo_legal(const Move m) const {
 
   Color us = sideToMove;
   Color them = ~us;
+  if (arimaa())
+      return arimaa_pseudo_legal(m);
+
   bool dropMove = is_drop_move(m);
   bool insertMove = is_insert_move(m);
   Square from = from_sq(m);
@@ -6202,6 +6247,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   const bool arimaaSetupMove = arimaaMode && st->arimaaSetup;
   const bool arimaaMoveEnds = arimaaMode && !arimaaSetupMove
                            && (is_pass(m) || st->arimaaSteps + (is_pull_move(m) ? 2 : 1) >= 4);
+  const int previousArimaaSteps = st->arimaaSteps;
+  const bool previousArimaaSetup = st->arimaaSetup;
   Key k = arimaaMode ? st->key : st->key ^ Zobrist::side;
 
   // Copy some fields of the old state to our new StateInfo object except the
@@ -7958,6 +8005,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
                   st->arimaaSetup = false;
                   st->arimaaTurnBoundary = true;
                   sideToMove = WHITE;
+                  st->arimaaTurnStartLayoutKey = layout_key();
               }
           }
           else
@@ -7970,6 +8018,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           st->arimaaTurnBoundary = true;
           sideToMove = them;
           sideChanged = true;
+          st->arimaaTurnStartLayoutKey = layout_key();
       }
       else
       {
@@ -7980,6 +8029,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       st->arimaaSideChanged = sideChanged;
       if (sideChanged)
           k ^= Zobrist::side;
+      k ^= arimaa_state_key(var, previousArimaaSteps, previousArimaaSetup)
+        ^ arimaa_state_key(var, st->arimaaSteps, st->arimaaSetup);
   }
   else
       sideToMove = them;

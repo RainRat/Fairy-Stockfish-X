@@ -266,6 +266,7 @@ struct StateInfoCopied {
   Key pieceStateKey;
   Key reserveKey;
   Key layoutKey;
+  Key arimaaTurnStartLayoutKey;
   int arimaaSteps;
   bool arimaaSetup;
 };
@@ -620,6 +621,7 @@ public:
   int arimaa_steps() const;
   int arimaa_strength(PieceType pt) const;
   bool arimaa_move_ends_turn(Move m) const;
+  bool arimaa_pseudo_legal(Move m) const;
   bool arimaa_legal(Move m) const;
   PieceSet edge_insert_types() const;
   bool edge_insert_only() const;
