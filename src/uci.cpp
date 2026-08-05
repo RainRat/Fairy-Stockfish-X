@@ -759,6 +759,9 @@ string UCI::move(const Position& pos, Move m) {
           : UCI::square(pos, from))
                   + UCI::square(pos, to);
 
+  if (CurrentProtocol == XBOARD && pos.is_chess960() && type_of(m) == CASTLING)
+      move = to > from ? "O-O" : "O-O-O";
+
   auto appendWall = [&] {
       move += "," + UCI::square(pos, to) + UCI::square(pos, gating_square(m));
   };
@@ -851,7 +854,7 @@ Move UCI::to_move(const Position& pos, string& str) {
               if (last >= 1 && std::isalpha(static_cast<unsigned char>(str[last - 1])))
                   str[last - 1] = char(std::tolower(static_cast<unsigned char>(str[last - 1])));
           }
-          else if (std::isalpha(static_cast<unsigned char>(str[last])))
+          else if (str != "O-O-O" && std::isalpha(static_cast<unsigned char>(str[last])))
               str[last] = char(std::tolower(static_cast<unsigned char>(str[last])));
       }
   }

@@ -40,6 +40,26 @@ out=$(run_expect "$ENGINE" <<EOF
 $(expect_engine_setup xboard)
    send "protover 2\n"
    expect "feature done=1"
+   send "variant fischerandom\n"
+   send "setboard 4k3/8/8/8/8/8/8/R3K2R w HA - 0 1\n"
+   send "force\n"
+   send "usermove O-O\n"
+   send "d\n"
+   expect "Fen: 4k3/8/8/8/8/8/8/R4RK1 b - - 1 1"
+   send "setboard 4k3/8/8/8/8/8/8/R3K2R w HA - 0 1\n"
+   send "usermove O-O-O\n"
+   send "d\n"
+   expect "Fen: 4k3/8/8/8/8/8/8/2KR3R b - - 1 1"
+   send "quit\n"
+   expect eof
+EOF
+)
+echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/2KR3R b - - 1 1"
+
+out=$(run_expect "$ENGINE" <<EOF
+$(expect_engine_setup xboard)
+   send "protover 2\n"
+   expect "feature done=1"
    send "variant isolation\n"
    send "setboard 2*3/2**2/*1p3/6/6/1****1/***P*1/**1*** b - - 17 9\n"
    send "usermove c6d6,d6f2\n"
