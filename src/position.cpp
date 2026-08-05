@@ -851,6 +851,7 @@ namespace Zobrist {
   constexpr int MAX_COMPOUND_TURN_STEPS = 16;
   Key compoundTurnSteps[MAX_COMPOUND_TURN_STEPS + 1];
   Key compoundTurnSetup;
+  Key compoundTurnStart;
   Key endgame[EG_EVAL_NB];
   Key points[COLOR_NB][MAX_ZOBRIST_POINTS];
 }
@@ -887,6 +888,12 @@ namespace {
           return 0;
       assert(steps >= 0 && steps <= Zobrist::MAX_COMPOUND_TURN_STEPS);
       return Zobrist::compoundTurnSteps[steps] ^ (setup ? Zobrist::compoundTurnSetup : 0);
+  }
+
+  inline Key compound_turn_start_key(const Variant* var, Key turnStartLayoutKey) {
+      return var->compoundTurnSteps > 0
+           ? turnStartLayoutKey ^ Zobrist::compoundTurnStart
+           : 0;
   }
 
   inline Square parse_fen_square(const Position& pos, const std::string& spec) {
@@ -1447,6 +1454,7 @@ void Position::init() {
   for (Key& key : Zobrist::compoundTurnSteps)
       key = rng.rand<Key>();
   Zobrist::compoundTurnSetup = rng.rand<Key>();
+  Zobrist::compoundTurnStart = rng.rand<Key>();
 
   for (Square from = SQ_A1; from <= SQ_MAX; ++from)
       for (Square to = SQ_A1; to <= SQ_MAX; ++to)
@@ -1562,6 +1570,27 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
 
   unsigned char col, token;
   std::istringstream ss(fenStr);
+  int loadedTurnSteps = 0;
+  bool loadedSetupPhase = false;
+  Key loadedTurnStartLayoutKey = 0;
+  bool compoundStateSpecified = false;
+
+  auto parse_unsigned = [](const std::string& text, int base, uint64_t& value) {
+      if (text.empty())
+          return false;
+      value = 0;
+      for (unsigned char c : text)
+      {
+          int digit = std::isdigit(c) ? c - '0'
+                    : std::tolower(c) >= 'a' && std::tolower(c) <= 'f' ? std::tolower(c) - 'a' + 10
+                    : -1;
+          if (digit < 0 || digit >= base
+              || value > (std::numeric_limits<uint64_t>::max() - uint64_t(digit)) / uint64_t(base))
+              return false;
+          value = value * uint64_t(base) + uint64_t(digit);
+      }
+      return true;
+  };
 
   std::memset(static_cast<void*>(this), 0, sizeof(Position));
   std::memset(static_cast<void*>(si), 0, sizeof(StateInfo));
@@ -2179,11 +2208,50 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
       }
   }
 
+  if (compound_turns())
+  {
+      ss >> std::ws;
+      std::string compoundState;
+      if (ss >> compoundState && compoundState.rfind("ct:", 0) == 0)
+      {
+          std::vector<std::string> fields;
+          std::stringstream fieldStream(compoundState.substr(3));
+          std::string field;
+          while (std::getline(fieldStream, field, ':'))
+              fields.push_back(field);
+
+          uint64_t steps = 0, setup = 0, startKey = 0;
+          compoundStateSpecified = fields.size() == 3
+                                 && parse_unsigned(fields[0], 10, steps)
+                                 && parse_unsigned(fields[1], 10, setup)
+                                 && parse_unsigned(fields[2], 16, startKey)
+                                 && steps <= uint64_t(var->compoundTurnSteps)
+                                 && setup <= 1
+                                 && (!setup || var->sequentialSetup);
+          if (compoundStateSpecified)
+          {
+              loadedTurnSteps = int(steps);
+              loadedSetupPhase = bool(setup);
+              loadedTurnStartLayoutKey = Key(startKey);
+          }
+      }
+  }
+
   chess960 = isChess960 || v->chess960;
   tsumeMode = Options["TsumeMode"];
   thisThread = th;
   updatePawnCheckZone();
   set_state(st);
+
+  if (compoundStateSpecified)
+  {
+      st->turnSteps = loadedTurnSteps;
+      st->setupPhase = loadedSetupPhase;
+      st->turnBoundary = !loadedSetupPhase && loadedTurnSteps == 0;
+      st->turnSideChanged = false;
+      st->turnStartLayoutKey = loadedTurnStartLayoutKey;
+      refresh_state_derived(st);
+  }
 
   assert(pos_is_ok());
 
@@ -2426,6 +2494,7 @@ void Position::recompute_state_hashes_and_material(StateInfo* si) const {
   si->pieceStateKey = compute_piece_state_key();
   si->key ^= si->pieceStateKey;
   si->key ^= compound_turn_state_key(var, si->turnSteps, si->setupPhase);
+  si->key ^= compound_turn_start_key(var, si->turnStartLayoutKey);
 
   si->reserveKey = reserve_key();
   si->boardKey = si->key ^ si->reserveKey;
@@ -2456,6 +2525,7 @@ void Position::set_state(StateInfo* si) const {
 
   recompute_state_hashes_and_material(si);
   si->turnStartLayoutKey = si->layoutKey;
+  recompute_state_hashes_and_material(si);
   si->checkersBB = compute_checkers_bb(sideToMove);
   si->repetition = 0;
   si->boardRepetition = 0;
@@ -2667,6 +2737,9 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
       if (count_in_hand(ALL_PIECES) == 0)
           ss << '-';
       ss << " " << gamePly + 1;
+      if (compound_turns())
+          ss << " ct:" << st->turnSteps << ":" << int(st->setupPhase) << ":"
+             << std::hex << std::setfill('0') << std::setw(16) << st->turnStartLayoutKey << std::dec;
       return ss.str();
   }
 
@@ -2844,6 +2917,10 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
           ss << " <" << wf << " " << wj << " " << bf << " " << bj << ">";
       }
   }
+
+  if (compound_turns())
+      ss << " ct:" << st->turnSteps << ":" << int(st->setupPhase) << ":"
+         << std::hex << std::setfill('0') << std::setw(16) << st->turnStartLayoutKey << std::dec;
 
   return ss.str();
 }
@@ -6250,6 +6327,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
                      && (is_pass(m) || st->turnSteps + (is_pull_move(m) && var->atomicPushPull ? 2 : 1) >= var->compoundTurnSteps);
   const int previousTurnSteps = st->turnSteps;
   const bool previousSetupPhase = st->setupPhase;
+  const Key previousTurnStartLayoutKey = st->turnStartLayoutKey;
   Key k = compoundTurnMode ? st->key : st->key ^ Zobrist::side;
 
   // Copy some fields of the old state to our new StateInfo object except the
@@ -8033,6 +8111,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           k ^= Zobrist::side;
       k ^= compound_turn_state_key(var, previousTurnSteps, previousSetupPhase)
         ^ compound_turn_state_key(var, st->turnSteps, st->setupPhase);
+      k ^= compound_turn_start_key(var, previousTurnStartLayoutKey)
+        ^ compound_turn_start_key(var, st->turnStartLayoutKey);
   }
   else
       sideToMove = them;

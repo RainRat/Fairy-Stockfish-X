@@ -2489,6 +2489,15 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
             std::cerr << "flagTurnBoundaryAdjudication requires compoundTurnSteps." << std::endl;
         valid = false;
     }
+    if (v->compoundTurnSteps > 0
+        && (v->checking || v->allowChecks || v->castling
+            || bool(v->promotionPieceTypes[WHITE]) || bool(v->promotionPieceTypes[BLACK])))
+    {
+        if (DoCheck)
+            std::cerr << "compoundTurnSteps currently supports only variants without royal, castling, or promotion legality."
+                      << std::endl;
+        valid = false;
+    }
     if (v->atomicPushPull && v->strengthOrderTypes != v->pieceTypes)
     {
         if (DoCheck)

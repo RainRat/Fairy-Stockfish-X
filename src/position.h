@@ -395,6 +395,7 @@ struct MoveUndoInfo {
         && !pass
         && !forcedJumpHasFollowup
         && !didPull
+        && !pushPullPushed
         && replacedPiece == NO_PIECE
         && replacedUnpromoted == NO_PIECE
         && !replacedPromoted

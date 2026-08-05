@@ -43,7 +43,8 @@ void set_position(Position& pos, StateListPtr& states, const char* variant, cons
 Move parse_move(const Position& pos, const char* notation) {
     std::string text(notation);
     Move move = UCI::to_move(pos, text);
-    check(move != MOVE_NONE, std::string("failed to parse move: ") + notation);
+    check(move != MOVE_NONE, std::string("failed to parse move: ") + notation
+          + " in " + pos.fen() + " steps=" + std::to_string(pos.turn_steps()));
     return move;
 }
 
@@ -191,7 +192,7 @@ void arimaa_full() {
           "Arimaa push was allowed to overrun the four-step turn limit");
 
     set_position(pos, states, "arimaa",
-                 "7r/8/8/8/8/4E3/R7/8 w - - 0 1");
+                 "7r/8/8/8/8/3cE3/R7/8 w - - 0 1");
     Move firstStep = parse_move(pos, "e3e4");
     states->emplace_back();
     pos.do_move(firstStep, states->back());
@@ -199,10 +200,26 @@ void arimaa_full() {
     pos.undo_move(firstStep);
     states->pop_back();
 
+    Position alternateStart;
+    StateListPtr alternateStates;
+    set_position(alternateStart, alternateStates, "arimaa",
+                 "7r/8/8/3E4/8/8/R7/8 w - - 0 1");
+    Move alternateStep = make_move(SQ_D4, SQ_E4);
+    alternateStates->emplace_back();
+    alternateStart.do_move(alternateStep, alternateStates->back());
+    check(alternateStart.key() != oneStepKey,
+          "Arimaa turn-start layout was omitted from the position key: "
+          + std::to_string(oneStepKey) + " vs " + std::to_string(alternateStart.key())
+          + " starts " + std::to_string(pos.state()->turnStartLayoutKey)
+          + " and " + std::to_string(alternateStart.state()->turnStartLayoutKey));
+    check(pos.side_to_move() == WHITE && pos.turn_steps() == 0 && pos.piece_on(SQ_E3) != NO_PIECE,
+          "Arimaa state changed while auditing the alternate turn start");
+
     std::array<Move, 3> repeatedSteps;
     for (int i = 0; i < 3; ++i)
     {
-        repeatedSteps[i] = parse_move(pos, i == 1 ? "e4e3" : "e3e4");
+        repeatedSteps[i] = i == 1 ? make_move(SQ_E4, SQ_E3) : make_move(SQ_E3, SQ_E4);
+        check(pos.legal(repeatedSteps[i]), "Arimaa repetition audit step was rejected");
         states->emplace_back();
         pos.do_move(repeatedSteps[i], states->back());
     }
@@ -215,10 +232,14 @@ void arimaa_full() {
         states->pop_back();
     }
 
-    Move out = parse_move(pos, "e3e4");
+    check(pos.side_to_move() == WHITE && pos.turn_steps() == 0 && pos.piece_on(SQ_E3) != NO_PIECE,
+          "Arimaa repetition audit did not restore the starting state");
+    Move out = make_move(SQ_E3, SQ_E4);
+    check(pos.legal(out), "Arimaa voluntary-turn audit step was rejected");
     states->emplace_back();
     pos.do_move(out, states->back());
-    Move back = parse_move(pos, "e4e3");
+    Move back = make_move(SQ_E4, SQ_E3);
+    check(pos.legal(back), "Arimaa voluntary-turn audit return step was rejected");
     states->emplace_back();
     pos.do_move(back, states->back());
     check(!pos.legal(make<SPECIAL>(SQ_E4, SQ_E4)),
@@ -228,9 +249,9 @@ void arimaa_full() {
     pos.undo_move(out);
     states->pop_back();
 
-    for (const char* notation : {"e3e4", "e4e3", "e3e4"})
+    for (Move m : {make_move(SQ_E3, SQ_E4), make_move(SQ_E4, SQ_E3), make_move(SQ_E3, SQ_E4)})
     {
-        Move m = parse_move(pos, notation);
+        check(pos.legal(m), "Arimaa pass-equivalence audit step was rejected");
         states->emplace_back();
         pos.do_move(m, states->back());
     }
@@ -244,6 +265,14 @@ void arimaa_full() {
     check(pos.legal(partial), "Arimaa partial turn step was rejected");
     states->emplace_back();
     pos.do_move(partial, states->back());
+    const std::string partialFen = pos.fen();
+    const Key partialKey = pos.key();
+    Position partialReloaded;
+    StateListPtr partialReloadedStates;
+    set_position(partialReloaded, partialReloadedStates, "arimaa", partialFen.c_str());
+    check(partialReloaded.turn_steps() == 1 && !partialReloaded.setup_phase()
+          && partialReloaded.key() == partialKey && partialReloaded.fen() == partialFen,
+          "Arimaa partial-turn FEN did not preserve compound state");
     Move endTurn = parse_move(pos, "0000");
     check(pos.legal(endTurn), "Arimaa voluntary turn end was rejected");
     states->emplace_back();
@@ -255,6 +284,23 @@ void arimaa_full() {
     pos.undo_move(partial);
     states->pop_back();
 
+    set_position(pos, states, "arimaa",
+                 "8/8/8/8/8/8/8/8[EMHHDDCCRRRRRRRRemhhddccrrrrrrrr] w - - 0 1");
+    Move setupDrop = parse_move(pos, "E@a1");
+    states->emplace_back();
+    pos.do_move(setupDrop, states->back());
+    const std::string setupFen = pos.fen();
+    Position setupReloaded;
+    StateListPtr setupReloadedStates;
+    set_position(setupReloaded, setupReloadedStates, "arimaa", setupFen.c_str());
+    check(setupReloaded.setup_phase() && setupReloaded.turn_steps() == 0
+          && setupReloaded.key() == pos.key() && setupReloaded.fen() == setupFen,
+          "Arimaa partial-setup FEN did not preserve compound state");
+    pos.undo_move(setupDrop);
+    states->pop_back();
+
+    set_position(pos, states, "arimaa",
+                 "7r/8/8/8/8/3cE3/R7/8 w - - 0 1");
     std::array<Move, 4> steps;
     for (int i = 0; i < 4; ++i)
     {
