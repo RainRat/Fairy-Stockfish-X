@@ -58,6 +58,22 @@ enum class LibertyAction {
   FORBID
 };
 
+enum class FreezeRule {
+  NONE,
+  STRONGER_ADJACENT,
+  ADJACENT_ENEMY
+};
+
+enum class FreezeProtection {
+  NONE,
+  FRIENDLY_ORTHOGONAL
+};
+
+enum class TrapProtection {
+  NONE,
+  FRIENDLY_ORTHOGONAL
+};
+
 template <typename T>
 struct ColorSetting {
   T global;
@@ -189,6 +205,17 @@ struct Variant {
   Bitboard surroundCaptureHostileRegion = 0;
   LibertyAction libertyCapture = LibertyAction::NONE;
   LibertyAction libertySelfCapture = LibertyAction::NONE;
+  FreezeRule freezeRule = FreezeRule::NONE;
+  FreezeProtection freezeProtection = FreezeProtection::NONE;
+  TrapProtection trapProtection = TrapProtection::NONE;
+  Bitboard trapRegion = 0;
+  std::vector<PieceType> strengthOrder = {};
+  PieceSet strengthOrderTypes = NO_PIECE_SET;
+  bool sequentialSetup = false;
+  int compoundTurnSteps = 0;
+  bool compoundTurnPass = false;
+  bool atomicPushPull = false;
+  bool flagTurnBoundaryAdjudication = false;
   bool doubleStep = true;
   mutable bool useFastStandardPawnGenerator = true;
   ColorSetting<PieceTypeBitboardGroup> doubleStepRegion = ColorSetting<PieceTypeBitboardGroup>(Rank2BB, Rank7BB);

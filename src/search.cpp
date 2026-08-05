@@ -151,6 +151,25 @@ namespace {
   template <NodeType nodeType>
   Value qsearch(Position& pos, Stack* ss, Value alpha, Value beta, Depth depth = 0);
 
+  // A compound-turn continuation keeps the same side to move.  Search values
+  // are normally negated because a child node belongs to the opponent; retain
+  // the parent's window when the move only advances the current turn.
+  template <NodeType nodeType>
+  Value search_child(Position& pos, Stack* ss, Color parentSide, Value alpha, Value beta,
+                     Depth depth, bool cutNode) {
+      return pos.side_to_move() == parentSide
+           ? search<nodeType>(pos, ss, alpha, beta, depth, cutNode)
+           : -search<nodeType>(pos, ss, -beta, -alpha, depth, cutNode);
+  }
+
+  template <NodeType nodeType>
+  Value qsearch_child(Position& pos, Stack* ss, Color parentSide, Value alpha, Value beta,
+                      Depth depth = 0) {
+      return pos.side_to_move() == parentSide
+           ? qsearch<nodeType>(pos, ss, alpha, beta, depth)
+           : -qsearch<nodeType>(pos, ss, -beta, -alpha, depth);
+  }
+
   Value value_to_tt(Value v, int ply);
   Value value_from_tt(Value v, int ply, int r50c);
   void update_pv(Move* pv, Move move, Move* childPv);
@@ -1048,6 +1067,7 @@ namespace {
     if (   !PvNode
         && (ss-1)->currentMove != MOVE_NULL
         && (ss-1)->statScore < 23767
+        && !pos.compound_turns()
         && !pos.multimove_pass(pos.game_ply())
         &&  eval >= beta
         &&  eval >= ss->staticEval
@@ -1153,11 +1173,12 @@ namespace {
                 pos.do_move(move, st);
 
                 // Perform a preliminary qsearch to verify that the move holds
-                value = -qsearch<NonPV>(pos, ss+1, -probCutBeta, -probCutBeta+1);
+                value = qsearch_child<NonPV>(pos, ss+1, us, probCutBeta - 1, probCutBeta);
 
                 // If the qsearch held, perform the regular search
                 if (value >= probCutBeta)
-                    value = -search<NonPV>(pos, ss+1, -probCutBeta, -probCutBeta+1, depth - 4, !cutNode);
+                    value = search_child<NonPV>(pos, ss+1, us, probCutBeta - 1, probCutBeta,
+                                                 depth - 4, !cutNode);
 
                 pos.undo_move(move);
 
@@ -1474,7 +1495,7 @@ moves_loop: // When in check, search starts from here
           // to be searched deeper than the first move, unless ttMove was extended by 2.
           Depth d = std::clamp(newDepth - r, 1, newDepth + (r < -1 && moveCount <= 5 && !doubleExtension));
 
-          value = -search<NonPV>(pos, ss+1, -(alpha+1), -alpha, d, true);
+          value = search_child<NonPV>(pos, ss+1, us, alpha, alpha + 1, d, true);
 
           // If the son is reduced and fails high it will be re-searched at full depth
           doFullDepthSearch = value > alpha && d < newDepth;
@@ -1489,7 +1510,7 @@ moves_loop: // When in check, search starts from here
       // Step 17. Full depth search when LMR is skipped or fails high
       if (doFullDepthSearch)
       {
-          value = -search<NonPV>(pos, ss+1, -(alpha+1), -alpha, newDepth, !cutNode);
+          value = search_child<NonPV>(pos, ss+1, us, alpha, alpha + 1, newDepth, !cutNode);
 
           // If the move passed LMR update its stats
           if (didLMR && !captureOrPromotion)
@@ -1509,8 +1530,8 @@ moves_loop: // When in check, search starts from here
           (ss+1)->pv = pv;
           (ss+1)->pv[0] = MOVE_NONE;
 
-          value = -search<PV>(pos, ss+1, -beta, -alpha,
-                              std::min(maxNextDepth, newDepth), false);
+          value = search_child<PV>(pos, ss+1, us, alpha, beta,
+                                   std::min(maxNextDepth, newDepth), false);
       }
 
       // Step 18. Undo move
@@ -1848,8 +1869,9 @@ moves_loop: // When in check, search starts from here
           continue;
 
       // Make and search the move
+      Color parentSide = pos.side_to_move();
       pos.do_move(move, st);
-      value = -qsearch<nodeType>(pos, ss+1, -beta, -alpha, depth - 1);
+      value = qsearch_child<nodeType>(pos, ss+1, parentSide, alpha, beta, depth - 1);
       pos.undo_move(move);
 
       assert(value > -VALUE_INFINITE && value < VALUE_INFINITE);

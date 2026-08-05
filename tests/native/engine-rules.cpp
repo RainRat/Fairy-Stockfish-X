@@ -43,7 +43,8 @@ void set_position(Position& pos, StateListPtr& states, const char* variant, cons
 Move parse_move(const Position& pos, const char* notation) {
     std::string text(notation);
     Move move = UCI::to_move(pos, text);
-    check(move != MOVE_NONE, std::string("failed to parse move: ") + notation);
+    check(move != MOVE_NONE, std::string("failed to parse move: ") + notation
+          + " in " + pos.fen() + " steps=" + std::to_string(pos.turn_steps()));
     return move;
 }
 
@@ -81,6 +82,246 @@ void movement() {
                  "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
     check(!pos.clone_targets_from(WHITE, SQ_A3),
           "clone_targets_from returned targets for an empty square");
+}
+
+void arimaa_foundation() {
+    Position pos;
+    StateListPtr states;
+
+    set_position(pos, states, "arimaa-foundation",
+                 "8/8/8/4e3/4M3/8/7r/8 w - - 0 1");
+    Move frozen = make_move(SQ_E4, SQ_E3);
+    check(!pos.legal(frozen), "stronger adjacent piece did not freeze the mover");
+
+    set_position(pos, states, "arimaa-foundation",
+                 "8/8/8/4e3/3MM3/8/7r/8 w - - 0 1");
+    Move protectedPiece = parse_move(pos, "e4e3");
+    check(pos.legal(protectedPiece), "friendly adjacent piece did not protect the mover");
+
+    set_position(pos, states, "arimaa-foundation",
+                 "8/8/8/8/8/8/2R4r/8 w - - 0 1");
+    Move unprotectedTrap = parse_move(pos, "c2c3");
+    SimulatedMoveInfo simulated = pos.simulated_move_info(unprotectedTrap);
+    check(!(simulated.occupiedAfterEffects & square_bb(SQ_C3)),
+          "unprotected trap occupant survived move simulation");
+    const Key beforeTrap = pos.key();
+    const std::string beforeTrapFen = pos.fen();
+    states->emplace_back();
+    pos.do_move(unprotectedTrap, states->back());
+    check(pos.piece_on(SQ_C3) == NO_PIECE,
+          "unprotected trap occupant survived move application");
+    pos.undo_move(unprotectedTrap);
+    states->pop_back();
+    check(pos.key() == beforeTrap && pos.fen() == beforeTrapFen,
+          "trap removal did not restore state exactly on undo");
+
+    set_position(pos, states, "arimaa-foundation",
+                 "8/8/8/8/8/1R6/2R4r/8 w - - 0 1");
+    Move protectedTrap = parse_move(pos, "c2c3");
+    simulated = pos.simulated_move_info(protectedTrap);
+    check(simulated.occupiedAfterEffects & square_bb(SQ_C3),
+          "friendly adjacent piece did not protect trap occupant");
+}
+
+void arimaa_full() {
+    Position pos;
+    StateListPtr states;
+    set_position(pos, states, "arimaa",
+                 "7r/8/8/8/8/3cE3/R7/8 w - - 0 1");
+
+    Move push = parse_move(pos, "e3d3,d4");
+    check(pos.legal(push), "Arimaa push was rejected");
+    check(pos.pseudo_legal(push), "Arimaa push failed pseudo-legal validation");
+    const Key before = pos.key();
+    const std::string beforeFen = pos.fen();
+    states->emplace_back();
+    pos.do_move(push, states->back());
+    check(pos.piece_on(SQ_D3) == make_piece(WHITE, CUSTOM_PIECES)
+          && pos.piece_on(SQ_D4) == make_piece(BLACK, CUSTOM_PIECES + 4),
+          "Arimaa push did not move both pieces atomically");
+    pos.undo_move(push);
+    states->pop_back();
+    check(pos.key() == before && pos.fen() == beforeFen,
+          "Arimaa push did not restore state exactly on undo");
+
+    set_position(pos, states, "arimaa",
+                 "7r/8/8/8/8/3cE3/R7/8 w - - 0 1");
+    Move trapPush = parse_move(pos, "e3d3,c3");
+    SimulatedMoveInfo simulated = pos.simulated_move_info(trapPush);
+    check(simulated.occupiedAfterEffects & square_bb(SQ_D3),
+          "Arimaa push simulation lost the mover");
+    check(!(simulated.occupiedAfterEffects & square_bb(SQ_C3)),
+          "Arimaa push simulation did not apply the trap after both pieces moved");
+    states->emplace_back();
+    pos.do_move(trapPush, states->back());
+    check(pos.piece_on(SQ_D3) == make_piece(WHITE, CUSTOM_PIECES)
+          && pos.piece_on(SQ_C3) == NO_PIECE,
+          "Arimaa push did not apply the trap after both pieces moved");
+    pos.undo_move(trapPush);
+    states->pop_back();
+
+    set_position(pos, states, "arimaa",
+                 "7r/8/8/8/8/3cE3/R7/8 w - - 0 1");
+    Move pull = parse_move(pos, "e3e4,d3");
+    check(pos.pseudo_legal(pull), "Arimaa pull failed pseudo-legal validation");
+    simulated = pos.simulated_move_info(pull);
+    check(simulated.occupiedAfterEffects & square_bb(SQ_E4),
+          "Arimaa pull simulation lost the mover");
+    check(simulated.colorOccupancy[BLACK] & square_bb(SQ_E3),
+          "Arimaa pull simulation did not relocate the pulled piece");
+
+    set_position(pos, states, "arimaa",
+                 "7r/8/8/8/8/4R3/R7/8 w - - 0 1");
+    check(pos.legal(parse_move(pos, "e3f3")),
+          "Arimaa rabbit sideways move was rejected");
+    check(!pos.legal(make_move(SQ_E3, SQ_E2)),
+          "Arimaa rabbit backward move was accepted");
+    check(!pos.legal(make_move(SQ_E3, SQ_F4)),
+          "Arimaa diagonal move was accepted");
+
+    set_position(pos, states, "arimaa",
+                 "7r/8/3c4/8/8/4E3/R7/8 w - - 0 1");
+    for (const char* notation : {"e3e4", "e4e5", "e5e6"})
+    {
+        Move m = parse_move(pos, notation);
+        check(pos.legal(m), "Arimaa setup step for overrun test was rejected");
+        states->emplace_back();
+        pos.do_move(m, states->back());
+    }
+    check(!pos.legal(make_pull(SQ_E6, SQ_D6, SQ_C6)),
+          "Arimaa push was allowed to overrun the four-step turn limit");
+
+    set_position(pos, states, "arimaa",
+                 "7r/8/8/8/8/3cE3/R7/8 w - - 0 1");
+    Move firstStep = parse_move(pos, "e3e4");
+    states->emplace_back();
+    pos.do_move(firstStep, states->back());
+    Key oneStepKey = pos.key();
+    pos.undo_move(firstStep);
+    states->pop_back();
+
+    Position alternateStart;
+    StateListPtr alternateStates;
+    set_position(alternateStart, alternateStates, "arimaa",
+                 "7r/8/8/3E4/8/8/R7/8 w - - 0 1");
+    Move alternateStep = make_move(SQ_D4, SQ_E4);
+    alternateStates->emplace_back();
+    alternateStart.do_move(alternateStep, alternateStates->back());
+    check(alternateStart.key() != oneStepKey,
+          "Arimaa turn-start layout was omitted from the position key: "
+          + std::to_string(oneStepKey) + " vs " + std::to_string(alternateStart.key())
+          + " starts " + std::to_string(pos.state()->turnStartLayoutKey)
+          + " and " + std::to_string(alternateStart.state()->turnStartLayoutKey));
+    check(pos.side_to_move() == WHITE && pos.turn_steps() == 0 && pos.piece_on(SQ_E3) != NO_PIECE,
+          "Arimaa state changed while auditing the alternate turn start");
+
+    std::array<Move, 3> repeatedSteps;
+    for (int i = 0; i < 3; ++i)
+    {
+        repeatedSteps[i] = i == 1 ? make_move(SQ_E4, SQ_E3) : make_move(SQ_E3, SQ_E4);
+        check(pos.legal(repeatedSteps[i]), "Arimaa repetition audit step was rejected");
+        states->emplace_back();
+        pos.do_move(repeatedSteps[i], states->back());
+    }
+    check(pos.piece_on(SQ_E4) == make_piece(WHITE, CUSTOM_PIECES)
+          && pos.key() != oneStepKey,
+          "Arimaa step count was omitted from the position key");
+    for (auto it = repeatedSteps.rbegin(); it != repeatedSteps.rend(); ++it)
+    {
+        pos.undo_move(*it);
+        states->pop_back();
+    }
+
+    check(pos.side_to_move() == WHITE && pos.turn_steps() == 0 && pos.piece_on(SQ_E3) != NO_PIECE,
+          "Arimaa repetition audit did not restore the starting state");
+    Move out = make_move(SQ_E3, SQ_E4);
+    check(pos.legal(out), "Arimaa voluntary-turn audit step was rejected");
+    states->emplace_back();
+    pos.do_move(out, states->back());
+    Move back = make_move(SQ_E4, SQ_E3);
+    check(pos.legal(back), "Arimaa voluntary-turn audit return step was rejected");
+    states->emplace_back();
+    pos.do_move(back, states->back());
+    check(!pos.legal(make<SPECIAL>(SQ_E4, SQ_E4)),
+          "Arimaa accepted a voluntary pass equivalent to the turn start");
+    pos.undo_move(back);
+    states->pop_back();
+    pos.undo_move(out);
+    states->pop_back();
+
+    for (Move m : {make_move(SQ_E3, SQ_E4), make_move(SQ_E4, SQ_E3), make_move(SQ_E3, SQ_E4)})
+    {
+        check(pos.legal(m), "Arimaa pass-equivalence audit step was rejected");
+        states->emplace_back();
+        pos.do_move(m, states->back());
+    }
+    check(!pos.legal(make_move(SQ_E4, SQ_E3)),
+          "Arimaa accepted a four-step turn equivalent to passing");
+
+    set_position(pos, states, "arimaa",
+                 "7r/8/8/8/8/3cE3/R7/8 w - - 0 1");
+
+    Move partial = parse_move(pos, "e3e4");
+    check(pos.legal(partial), "Arimaa partial turn step was rejected");
+    states->emplace_back();
+    pos.do_move(partial, states->back());
+    const std::string partialFen = pos.fen();
+    const Key partialKey = pos.key();
+    Position partialReloaded;
+    StateListPtr partialReloadedStates;
+    set_position(partialReloaded, partialReloadedStates, "arimaa", partialFen.c_str());
+    check(partialReloaded.turn_steps() == 1 && !partialReloaded.setup_phase()
+          && partialReloaded.key() == partialKey && partialReloaded.fen() == partialFen,
+          "Arimaa partial-turn FEN did not preserve compound state");
+    Move endTurn = parse_move(pos, "0000");
+    check(pos.legal(endTurn), "Arimaa voluntary turn end was rejected");
+    states->emplace_back();
+    pos.do_move(endTurn, states->back());
+    check(pos.side_to_move() == BLACK && pos.turn_steps() == 0,
+          "Arimaa voluntary turn end did not switch sides");
+    pos.undo_move(endTurn);
+    states->pop_back();
+    pos.undo_move(partial);
+    states->pop_back();
+
+    set_position(pos, states, "arimaa",
+                 "8/8/8/8/8/8/8/8[EMHHDDCCRRRRRRRRemhhddccrrrrrrrr] w - - 0 1");
+    Move setupDrop = parse_move(pos, "E@a1");
+    states->emplace_back();
+    pos.do_move(setupDrop, states->back());
+    const std::string setupFen = pos.fen();
+    Position setupReloaded;
+    StateListPtr setupReloadedStates;
+    set_position(setupReloaded, setupReloadedStates, "arimaa", setupFen.c_str());
+    check(setupReloaded.setup_phase() && setupReloaded.turn_steps() == 0
+          && setupReloaded.key() == pos.key() && setupReloaded.fen() == setupFen,
+          "Arimaa partial-setup FEN did not preserve compound state");
+    pos.undo_move(setupDrop);
+    states->pop_back();
+
+    set_position(pos, states, "arimaa",
+                 "7r/8/8/8/8/3cE3/R7/8 w - - 0 1");
+    std::array<Move, 4> steps;
+    for (int i = 0; i < 4; ++i)
+    {
+        const std::string from = "e" + std::to_string(3 + i);
+        const std::string to = "e" + std::to_string(4 + i);
+        const std::string notation = from + to;
+        Move m = parse_move(pos, notation.c_str());
+        steps[i] = m;
+        check(pos.legal(m), "Arimaa ordinary step was rejected");
+        states->emplace_back();
+        pos.do_move(m, states->back());
+    }
+    check(pos.side_to_move() == BLACK && pos.turn_steps() == 0,
+          "Arimaa did not end the turn after four steps");
+    for (auto it = steps.rbegin(); it != steps.rend(); ++it)
+    {
+        pos.undo_move(*it);
+        states->pop_back();
+    }
+    check(pos.side_to_move() == WHITE && pos.fen() == beforeFen,
+          "Arimaa turn state did not restore on undo");
 }
 
 void extinction_color_settings() {
@@ -761,6 +1002,33 @@ surroundClaimPiece = b
 surroundClaimExtraTurn = true
 materialCounting = unweighted
 materialCountingPieceTypes = b
+
+[arimaa-foundation:fairy]
+pieceToCharTable = -
+pawn = -
+knight = -
+bishop = -
+rook = -
+queen = -
+king = -
+fers = -
+silver = -
+aiwok = -
+archbishop = -
+customPiece1 = e:mW
+customPiece2 = m:mW
+customPiece3 = h:mW
+customPiece4 = d:mW
+customPiece5 = c:mW
+customPiece6 = r:fsmW
+castling = false
+checking = false
+strengthOrder = r c d h m e
+freezeRule = stronger-adjacent
+freezeProtection = friendly-orthogonal
+trapRegion = c3 f3 c6 f6
+trapProtection = friendly-orthogonal
+startFen = 8/8/8/8/8/8/8/8 w - - 0 1
 )INI");
     variants.parse_istream<false>(inline_config);
 }
@@ -773,7 +1041,8 @@ int main(int argc, char** argv) {
         auto is_group = [](const std::string& name) {
             return name == "all" || name == "promotion" || name == "movement"
                 || name == "locust-all" || name == "occupancy" || name == "state" || name == "royal"
-                || name == "adjudication" || name == "board-games";
+                || name == "adjudication" || name == "board-games" || name == "arimaa"
+                || name == "arimaa-full";
         };
         bool first_is_group = argc > 1 && is_group(argv[1]);
         std::string config_path = first_is_group ? "src/variants.ini"
@@ -792,6 +1061,8 @@ int main(int argc, char** argv) {
           {"promotion", promotion}, {"movement", movement}, {"occupancy", occupancy},
           {"extinction-color", extinction_color_settings},
           {"locust-all", locust_all},
+          {"arimaa", arimaa_foundation},
+          {"arimaa-full", arimaa_full},
           {"state", state}, {"royal", royal}, {"adjudication", adjudication},
           {"board-games", board_games}
         };

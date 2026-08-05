@@ -63,6 +63,27 @@ void set_current_spell_context(const SpellContext* ctx) noexcept {
 
 namespace {
 
+  Bitboard compute_trap_removal_mask(const Variant* var,
+                                     const std::array<Bitboard, COLOR_NB>& colorOccupancy,
+                                     Bitboard occupied) {
+      if (!var->trapRegion)
+          return Bitboard(0);
+
+      Bitboard removal = var->trapRegion & occupied;
+      if (var->trapProtection == TrapProtection::FRIENDLY_ORTHOGONAL)
+      {
+          Bitboard candidates = removal;
+          while (candidates)
+          {
+              Square sq = pop_lsb(candidates);
+              Color c = (colorOccupancy[WHITE] & sq) ? WHITE : BLACK;
+              if (attacks_bb<WAZIR>(sq) & colorOccupancy[c])
+                  removal &= ~square_bb(sq);
+          }
+      }
+      return removal;
+  }
+
   inline Variant::PotionType potion_type_from_piece(const Variant* var, PieceType pt) {
     if (!var || !var->potions)
         return static_cast<Variant::PotionType>(Variant::POTION_TYPE_NB);
@@ -827,6 +848,10 @@ namespace Zobrist {
   Key dead[SQUARE_NB];
   Key orientation[4][SQUARE_NB];
   Key promotionOrigin[PIECE_NB][SQUARE_NB];
+  constexpr int MAX_COMPOUND_TURN_STEPS = 16;
+  Key compoundTurnSteps[MAX_COMPOUND_TURN_STEPS + 1];
+  Key compoundTurnSetup;
+  Key compoundTurnStart;
   Key endgame[EG_EVAL_NB];
   Key points[COLOR_NB][MAX_ZOBRIST_POINTS];
 }
@@ -856,6 +881,19 @@ namespace {
       assert(pt >= NO_PIECE_TYPE && pt < PIECE_TYPE_NB);
       if (pt != NO_PIECE_TYPE)
           key ^= Zobrist::committed[c][f][pt];
+  }
+
+  inline Key compound_turn_state_key(const Variant* var, int steps, bool setup) {
+      if (var->compoundTurnSteps <= 0)
+          return 0;
+      assert(steps >= 0 && steps <= Zobrist::MAX_COMPOUND_TURN_STEPS);
+      return Zobrist::compoundTurnSteps[steps] ^ (setup ? Zobrist::compoundTurnSetup : 0);
+  }
+
+  inline Key compound_turn_start_key(const Variant* var, Key turnStartLayoutKey) {
+      return var->compoundTurnSteps > 0
+           ? turnStartLayoutKey ^ Zobrist::compoundTurnStart
+           : 0;
   }
 
   inline Square parse_fen_square(const Position& pos, const std::string& spec) {
@@ -1413,6 +1451,11 @@ void Position::init() {
       for (Square s = SQ_A1; s <= SQ_MAX; ++s)
           Zobrist::promotionOrigin[pc][s] = rng.rand<Key>();
 
+  for (Key& key : Zobrist::compoundTurnSteps)
+      key = rng.rand<Key>();
+  Zobrist::compoundTurnSetup = rng.rand<Key>();
+  Zobrist::compoundTurnStart = rng.rand<Key>();
+
   for (Square from = SQ_A1; from <= SQ_MAX; ++from)
       for (Square to = SQ_A1; to <= SQ_MAX; ++to)
       {
@@ -1527,6 +1570,27 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
 
   unsigned char col, token;
   std::istringstream ss(fenStr);
+  int loadedTurnSteps = 0;
+  bool loadedSetupPhase = false;
+  Key loadedTurnStartLayoutKey = 0;
+  bool compoundStateSpecified = false;
+
+  auto parse_unsigned = [](const std::string& text, int base, uint64_t& value) {
+      if (text.empty())
+          return false;
+      value = 0;
+      for (unsigned char c : text)
+      {
+          int digit = std::isdigit(c) ? c - '0'
+                    : std::tolower(c) >= 'a' && std::tolower(c) <= 'f' ? std::tolower(c) - 'a' + 10
+                    : -1;
+          if (digit < 0 || digit >= base
+              || value > (std::numeric_limits<uint64_t>::max() - uint64_t(digit)) / uint64_t(base))
+              return false;
+          value = value * uint64_t(base) + uint64_t(digit);
+      }
+      return true;
+  };
 
   std::memset(static_cast<void*>(this), 0, sizeof(Position));
   std::memset(static_cast<void*>(si), 0, sizeof(StateInfo));
@@ -2144,11 +2208,50 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
       }
   }
 
+  if (compound_turns())
+  {
+      ss >> std::ws;
+      std::string compoundState;
+      if (ss >> compoundState && compoundState.rfind("ct:", 0) == 0)
+      {
+          std::vector<std::string> fields;
+          std::stringstream fieldStream(compoundState.substr(3));
+          std::string field;
+          while (std::getline(fieldStream, field, ':'))
+              fields.push_back(field);
+
+          uint64_t steps = 0, setup = 0, startKey = 0;
+          compoundStateSpecified = fields.size() == 3
+                                 && parse_unsigned(fields[0], 10, steps)
+                                 && parse_unsigned(fields[1], 10, setup)
+                                 && parse_unsigned(fields[2], 16, startKey)
+                                 && steps <= uint64_t(var->compoundTurnSteps)
+                                 && setup <= 1
+                                 && (!setup || var->sequentialSetup);
+          if (compoundStateSpecified)
+          {
+              loadedTurnSteps = int(steps);
+              loadedSetupPhase = bool(setup);
+              loadedTurnStartLayoutKey = Key(startKey);
+          }
+      }
+  }
+
   chess960 = isChess960 || v->chess960;
   tsumeMode = Options["TsumeMode"];
   thisThread = th;
   updatePawnCheckZone();
   set_state(st);
+
+  if (compoundStateSpecified)
+  {
+      st->turnSteps = loadedTurnSteps;
+      st->setupPhase = loadedSetupPhase;
+      st->turnBoundary = !loadedSetupPhase && loadedTurnSteps == 0;
+      st->turnSideChanged = false;
+      st->turnStartLayoutKey = loadedTurnStartLayoutKey;
+      refresh_state_derived(st);
+  }
 
   assert(pos_is_ok());
 
@@ -2390,6 +2493,8 @@ void Position::recompute_state_hashes_and_material(StateInfo* si) const {
 
   si->pieceStateKey = compute_piece_state_key();
   si->key ^= si->pieceStateKey;
+  si->key ^= compound_turn_state_key(var, si->turnSteps, si->setupPhase);
+  si->key ^= compound_turn_start_key(var, si->turnStartLayoutKey);
 
   si->reserveKey = reserve_key();
   si->boardKey = si->key ^ si->reserveKey;
@@ -2412,7 +2517,14 @@ void Position::set_state(StateInfo* si) const {
   si->forcedJumpSquare = SQ_NONE;
   si->forcedJumpHasFollowup = false;
   si->forcedJumpStep = 0;
+  si->turnSteps = 0;
+  si->setupPhase = var->sequentialSetup && !pieces()
+                 && (count_in_hand(WHITE, ALL_PIECES) || count_in_hand(BLACK, ALL_PIECES));
+  si->turnBoundary = !si->setupPhase;
+  si->turnSideChanged = false;
 
+  recompute_state_hashes_and_material(si);
+  si->turnStartLayoutKey = si->layoutKey;
   recompute_state_hashes_and_material(si);
   si->checkersBB = compute_checkers_bb(sideToMove);
   si->repetition = 0;
@@ -2625,6 +2737,9 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
       if (count_in_hand(ALL_PIECES) == 0)
           ss << '-';
       ss << " " << gamePly + 1;
+      if (compound_turns())
+          ss << " ct:" << st->turnSteps << ":" << int(st->setupPhase) << ":"
+             << std::hex << std::setfill('0') << std::setw(16) << st->turnStartLayoutKey << std::dec;
       return ss.str();
   }
 
@@ -2802,6 +2917,10 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
           ss << " <" << wf << " " << wj << " " << bf << " " << bj << ">";
       }
   }
+
+  if (compound_turns())
+      ss << " ct:" << st->turnSteps << ":" << int(st->setupPhase) << ":"
+         << std::hex << std::setfill('0') << std::setw(16) << st->turnStartLayoutKey << std::dec;
 
   return ss.str();
 }
@@ -4001,6 +4120,8 @@ Bitboard Position::compute_remove_connect_n_mask(
 
 SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const {
   SimulatedMoveInfo info;
+  info.colorOccupancy[WHITE] = pieces(WHITE);
+  info.colorOccupancy[BLACK] = pieces(BLACK);
   info.from = from_sq(m);
   info.to = to_sq(m);
   info.castling = type_of(m) == CASTLING;
@@ -4029,6 +4150,8 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
   const bool wallPlacement = is_gating(m) && !laser_game() && is_ok(gating_square(m))
                           && walling(sideToMove) && (!wall_or_move() || info.from == info.to);
   const bool pureWallMove = wallPlacement && wall_or_move() && info.from == info.to;
+  const bool compoundPushMove = compound_push_move(m);
+  const bool compoundPullMove = var->atomicPushPull && is_pull_move(m) && !compoundPushMove;
 
   if (info.castling)
   {
@@ -4043,6 +4166,14 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
       info.relocatedOccupancy = pieces();
       if (is_ok(info.captureSquare) && (!is_jump_capture(m) || primaryPieceCapture))
           info.relocatedOccupancy ^= square_bb(info.captureSquare);
+  }
+  else if (compoundPushMove)
+  {
+      info.relocatedOccupancy = pieces() ^ square_bb(info.from) ^ square_bb(pull_square(m));
+  }
+  else if (compoundPullMove)
+  {
+      info.relocatedOccupancy = pieces() ^ square_bb(info.to) ^ square_bb(pull_square(m));
   }
   else if (is_self_destruct(m))
       info.relocatedOccupancy = pieces() & ~square_bb(info.from);
@@ -4061,6 +4192,52 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
   info.effectOccupancy = info.relocatedOccupancy;
   if (info.paired && is_ok(info.secondarySquare))
       info.effectOccupancy |= square_bb(info.secondarySquare);
+
+  const Color us = sideToMove;
+  const Color dropColor = dropMove ? drop_hand_color(us, in_hand_piece_type(m)) : us;
+  auto remove_color_square = [&](Square sq) {
+      if (is_ok(sq))
+      {
+          info.colorOccupancy[WHITE] &= ~square_bb(sq);
+          info.colorOccupancy[BLACK] &= ~square_bb(sq);
+      }
+  };
+  if (info.castling)
+  {
+      Square kto, rto;
+      castling_destinations(us, info.from, info.to, kto, rto);
+      remove_color_square(info.from);
+      remove_color_square(info.to);
+      info.colorOccupancy[us] |= square_bb(kto) | square_bb(rto);
+  }
+  else if (info.rifle)
+  {
+      remove_color_square(info.captureSquare);
+  }
+  else if (compoundPushMove || compoundPullMove)
+  {
+      Square auxiliary = pull_square(m);
+      remove_color_square(info.from);
+      remove_color_square(info.to);
+      remove_color_square(auxiliary);
+      info.colorOccupancy[us] |= square_bb(info.to);
+      info.colorOccupancy[~us] |= square_bb(compoundPushMove ? auxiliary : info.from);
+  }
+  else if (is_self_destruct(m))
+  {
+      remove_color_square(info.from);
+  }
+  else if (!pureWallMove)
+  {
+      if (!dropMove && !info.clone && is_ok(info.from))
+          remove_color_square(info.from);
+      if (is_ok(info.captureSquare) && (!is_jump_capture(m) || primaryPieceCapture))
+          remove_color_square(info.captureSquare);
+      if (is_ok(info.to))
+          info.colorOccupancy[dropColor] |= square_bb(info.to);
+  }
+  if (info.paired && is_ok(info.secondarySquare))
+      info.colorOccupancy[dropColor] |= square_bb(info.secondarySquare);
 
   Bitboard latePlacements = 0;
 
@@ -4089,6 +4266,8 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
           info.removedWalls = st->wallSquares;
   }
 
+  info.colorOccupancy[us] |= info.addedPlacements;
+
   info.placementOccupancy = (info.effectOccupancy & ~info.removedWalls) | latePlacements;
   if (!withEffects)
   {
@@ -4098,7 +4277,6 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
 
   info.removedByEffects = 0;
   info.structuralRemoval = 0;
-  const Color us = sideToMove;
   const Piece mover = moved_piece(m);
   const PieceType movePt = mover == NO_PIECE ? NO_PIECE_TYPE : type_of(mover);
   const Square shotSq = isCapture ? info.captureSquare : info.to;
@@ -4261,9 +4439,97 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
   }
 
   Bitboard occupiedAfterStructural = info.effectOccupancy & ~info.structuralRemoval;
+  if (var->trapRegion)
+  {
+      std::array<Bitboard, COLOR_NB> colorAfterEffects = info.colorOccupancy;
+      colorAfterEffects[WHITE] &= occupiedAfterStructural & ~info.removedByEffects & ~info.removedWalls;
+      colorAfterEffects[BLACK] &= occupiedAfterStructural & ~info.removedByEffects & ~info.removedWalls;
+      Bitboard trapMask = compute_trap_removal_mask(var, colorAfterEffects,
+                                                     occupiedAfterStructural & ~info.removedByEffects
+                                                                               & ~info.removedWalls);
+      info.removedByEffects |= trapMask;
+  }
   info.occupiedAfterEffects = (occupiedAfterStructural & ~info.removedByEffects & ~info.removedWalls)
                             | latePlacements;
   return info;
+}
+
+bool Position::compound_turn_pseudo_legal(Move m) const {
+  Color us = sideToMove;
+  bool valid = true;
+  if (is_pass(m))
+  {
+      if (!var->compoundTurnPass || setup_phase() || turn_steps() == 0
+          || turn_steps() >= var->compoundTurnSteps)
+          valid = false;
+  }
+  else if (setup_phase())
+  {
+      if (!is_drop_move(m) || type_of(m) != DROP)
+          valid = false;
+      else
+      {
+          PieceType pt = in_hand_piece_type(m);
+          valid = pt == dropped_piece_type(m) && can_drop(us, pt) && empty(to_sq(m))
+               && bool(drop_region(us, pt) & to_sq(m));
+      }
+  }
+  else
+  {
+      Square from = from_sq(m), to = to_sq(m);
+      Piece mover = from != SQ_NONE ? piece_on(from) : NO_PIECE;
+      if (mover == NO_PIECE || color_of(mover) != us
+          || (freeze_squares(us) & from))
+          valid = false;
+      else
+      {
+          PieceType moverType = type_of(mover);
+          Bitboard movement = (moves_from(us, moverType, from) | attacks_from(us, moverType, from)) & board_bb();
+          Bitboard adjacent = movement;
+
+          if (type_of(m) == NORMAL)
+              valid = bool(moves_from(us, moverType, from) & to) && empty(to);
+          else if (!var->atomicPushPull || !is_pull_move(m))
+              valid = false;
+          else
+          {
+              Square auxiliary = pull_square(m);
+              if (compound_push_move(m))
+              {
+                  Piece enemy = piece_on(to);
+                  valid = bool(adjacent & to) && is_ok(auxiliary)
+                       && bool(PseudoAttacks[WHITE][WAZIR][to] & board_bb() & square_bb(auxiliary))
+                       && auxiliary != from && empty(auxiliary)
+                       && enemy != NO_PIECE && color_of(enemy) != us
+                       && piece_strength(type_of(mover)) > piece_strength(type_of(enemy));
+              }
+              else
+              {
+                  Piece pulled = piece_on(auxiliary);
+                  valid = is_ok(auxiliary) && empty(to) && bool(adjacent & to)
+                       && bool(PseudoAttacks[WHITE][WAZIR][from] & square_bb(auxiliary))
+                       && auxiliary != to && pulled != NO_PIECE && color_of(pulled) != us
+                       && piece_strength(type_of(mover)) > piece_strength(type_of(pulled))
+                       && bool(moves_from(us, moverType, from) & to);
+              }
+          }
+      }
+  }
+
+  const int stepCost = is_pull_move(m) && var->atomicPushPull ? 2 : 1;
+  return valid && turn_steps() + stepCost <= var->compoundTurnSteps;
+}
+
+bool Position::compound_turn_legal(Move m) const {
+  if (!compound_turn_pseudo_legal(m))
+      return false;
+  if (!compound_turn_ends(m))
+      return true;
+
+  const Key turnStartLayoutKey = st->turnStartLayoutKey;
+  StateInfo nextState;
+  ScopedProbeMove probe(*this, m, nextState);
+  return layout_key() != turnStartLayoutKey && state()->repetition >= 0;
 }
 
 /// Position::legal() tests whether a pseudo-legal move is legal
@@ -4276,6 +4542,8 @@ bool Position::legal(Move m) const {
 
   Color us = sideToMove;
   Color them = ~us;
+  if (compound_turns())
+      return compound_turn_legal(m);
   bool dropMove = is_drop_move(m);
   bool swapMove = is_swap_move(m);
   bool insertMove = is_insert_move(m);
@@ -5068,6 +5336,9 @@ bool Position::pseudo_legal(const Move m) const {
 
   Color us = sideToMove;
   Color them = ~us;
+  if (compound_turns())
+      return compound_turn_pseudo_legal(m);
+
   bool dropMove = is_drop_move(m);
   bool insertMove = is_insert_move(m);
   Square from = from_sq(m);
@@ -5851,6 +6122,50 @@ bool Position::analyze_push(Move m, PushInfo& info) const {
                : analyze_push_stepwise(*this, m, info);
 }
 
+Bitboard Position::strength_freeze_squares(Color c) const {
+    if (var->freezeRule == FreezeRule::NONE)
+        return Bitboard(0);
+
+    Bitboard frozen = 0;
+    Bitboard friendly = pieces(c);
+    Bitboard enemy = pieces(~c);
+    Bitboard candidates = friendly;
+    while (candidates)
+    {
+        Square sq = pop_lsb(candidates);
+        Bitboard adjacent = attacks_bb<WAZIR>(sq) & board_bb();
+        if (var->freezeProtection == FreezeProtection::FRIENDLY_ORTHOGONAL
+            && (adjacent & friendly))
+            continue;
+
+        Bitboard enemyAdjacent = adjacent & enemy;
+        if (!enemyAdjacent)
+            continue;
+
+        if (var->freezeRule == FreezeRule::ADJACENT_ENEMY)
+        {
+            frozen |= sq;
+            continue;
+        }
+
+        PieceType pt = type_of(piece_on(sq));
+        auto strength = [&](PieceType type) {
+            return std::find(var->strengthOrder.begin(), var->strengthOrder.end(), type)
+                 - var->strengthOrder.begin();
+        };
+        while (enemyAdjacent)
+        {
+            Square enemySq = pop_lsb(enemyAdjacent);
+            if (strength(type_of(piece_on(enemySq))) > strength(pt))
+            {
+                frozen |= sq;
+                break;
+            }
+        }
+    }
+    return frozen;
+}
+
 /// Position::do_move() makes a move, and saves all information necessary
 /// to a StateInfo object. The move is assumed to be legal. Pseudo-legal
 /// moves should be filtered out before this function is called.
@@ -6006,7 +6321,14 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   if (countNode && thisThread)
       thisThread->nodes.fetch_add(1, std::memory_order_relaxed);
 #endif
-  Key k = st->key ^ Zobrist::side;
+  const bool compoundTurnMode = var->compoundTurnSteps > 0;
+  const bool setupMove = compoundTurnMode && st->setupPhase;
+  const bool turnEnds = compoundTurnMode && !setupMove
+                     && (is_pass(m) || st->turnSteps + (is_pull_move(m) && var->atomicPushPull ? 2 : 1) >= var->compoundTurnSteps);
+  const int previousTurnSteps = st->turnSteps;
+  const bool previousSetupPhase = st->setupPhase;
+  const Key previousTurnStartLayoutKey = st->turnStartLayoutKey;
+  Key k = compoundTurnMode ? st->key : st->key ^ Zobrist::side;
 
   // Copy some fields of the old state to our new StateInfo object except the
   // ones which are going to be recalculated from scratch anyway and then switch
@@ -6096,6 +6418,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   bool rifleShot = rifle_capture(m) && captured != NO_PIECE && type_of(m) != CASTLING;
   bool cloneMove = is_clone_move(m);
   bool pullMove = is_pull_move(m);
+  bool compoundPushMove = compoundTurnMode && compound_push_move(m);
   bool swapMove = is_swap_move(m);
   bool stackMove = is_stack_move(m);
   bool unstackMove = is_unstack_move(m);
@@ -6176,8 +6499,11 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   {
       Square pullFrom = pull_square(m);
       Piece pulled = piece_on(pullFrom);
-      st->pulled.set(pulled, pulled != NO_PIECE && is_promoted(pullFrom),
-                     pulled != NO_PIECE ? unpromoted_piece_on(pullFrom) : NO_PIECE, pullFrom);
+      if (compoundPushMove)
+          st->pushPullPushed.set(piece_on(to), is_promoted(to), unpromoted_piece_on(to), to);
+      else
+          st->pulled.set(pulled, pulled != NO_PIECE && is_promoted(pullFrom),
+                         pulled != NO_PIECE ? unpromoted_piece_on(pullFrom) : NO_PIECE, pullFrom);
   }
 
   PotionContext potCtx = setup_potion_context(m, us);
@@ -6532,6 +6858,17 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   {
       if (!pureWallMove && !cloneMove && !pullMove)
           k ^= Zobrist::psq[pc][from] ^ Zobrist::psq[pc][to];
+      else if (compoundPushMove)
+      {
+          Piece pushed = st->pushPullPushed.piece.piece;
+          Square pushTo = pull_square(m);
+          k ^= Zobrist::psq[pc][from] ^ Zobrist::psq[pc][to]
+             ^ Zobrist::psq[pushed][to] ^ Zobrist::psq[pushed][pushTo];
+          if (type_of(pc) == PAWN)
+              st->pawnKey ^= Zobrist::psq[pc][from] ^ Zobrist::psq[pc][to];
+          if (type_of(pushed) == PAWN)
+              st->pawnKey ^= Zobrist::psq[pushed][to] ^ Zobrist::psq[pushed][pushTo];
+      }
       else if (pullMove)
       {
           Piece pulled = st->pulled.piece.piece;
@@ -6772,6 +7109,18 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
               st->pawnKey ^= Zobrist::psq[pc][to];
           else
               st->nonPawnMaterial[us] += PieceValue[MG][pc];
+      }
+      else if (compoundPushMove)
+      {
+          Square pushTo = pull_square(m);
+          if (Eval::useNNUE)
+          {
+              dp.dirty_num = 2;
+              init_dirty_piece_entry(dp, 0, pc, from, to, NO_PIECE, 0);
+              init_dirty_piece_entry(dp, 1, st->pushPullPushed.piece.piece, to, pushTo, NO_PIECE, 0);
+          }
+          move_piece(to, pushTo);
+          move_piece(from, to);
       }
       else if (pullMove)
       {
@@ -7317,6 +7666,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
          ( blast_on_self_destruct() && is_self_destruct(m) ) ||
          var->blastPassiveTypes ||
          ( remove_connect_n() > 0 ) ||
+         var->trapRegion ||
          ( dropMove && (var->libertyCapture == LibertyAction::REMOVE
                      || var->libertySelfCapture == LibertyAction::REMOVE) ) ||
          ( pi && pi->has_universal_hopper() && jumpCapsq != SQ_NONE )
@@ -7403,14 +7753,27 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           removal_mask |= removalMask;
       }
 
+      if (var->trapRegion)
+      {
+          std::array<Bitboard, COLOR_NB> colorAfterEffects = {
+              pieces(WHITE) & ~removal_mask,
+              pieces(BLACK) & ~removal_mask
+          };
+          Bitboard trapMask = compute_trap_removal_mask(var, colorAfterEffects,
+                                                         pieces() & ~removal_mask);
+          removal_mask |= trapMask;
+          st->trapRemoved |= trapMask;
+      }
+
       while (removal_mask)
       {
           Square bsq = pop_lsb(removal_mask);
           Piece bpc = piece_on(bsq);
           if (bpc == NO_PIECE) continue;
           Color bc = color_of(bpc);
+          bool trapRemoval = st->trapRemoved & bsq;
 
-          if (blast_promotion() && (blast_mask & bsq) && !(connect_mask & bsq)) {
+          if (blast_promotion() && !trapRemoval && (blast_mask & bsq) && !(connect_mask & bsq)) {
               PieceType promoted = promoted_piece_type(type_of(bpc));
               if (promoted != NO_PIECE_TYPE) {
                   Piece promotedPiece = make_piece(bc, promoted);
@@ -7454,7 +7817,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           board[bsq] = NO_PIECE;
 
           // Points assignment logic
-          if (points_counting() && !(liberty_self_removal & bsq)) {
+          if (points_counting() && !(liberty_self_removal & bsq) && !trapRemoval) {
               add_capture_points(st, us, bpc);
           }
 
@@ -7462,7 +7825,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           Piece transferPiece = reserve_transfer_piece(us, bpc, capturedPromoted, unpromotedCaptured,
                                                        drop_loop(), var->captureToHandSide,
                                                        main_promotion_pawn_type(color_of(bpc)));
-          if (!petrifiedCenter && !(liberty_self_removal & bsq))
+          if (!petrifiedCenter && !(liberty_self_removal & bsq) && !trapRemoval)
           {
               bool transferred = add_capture_transfer(st, transferPiece, &k);
               if (Eval::useNNUE && bycatchDirtyIdx >= 0 && transferred)
@@ -7591,7 +7954,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       remove_destination_piece_no_capture_effects(moverSq, makeDeadSquare);
   }
 
-  Bitboard localBycatch = (st->bycatchSquares & ~st->libertySelfRemoved)
+  Bitboard localBycatch = (st->bycatchSquares & ~st->libertySelfRemoved & ~st->trapRemoved)
                         & (blast_pattern(moverSq) | square_bb(moverSq));
   bool captureHappened = (captured != NO_PIECE && !stackMove) || localBycatch;
   if (trigger_matches(var->changingColorTrigger, captureHappened)
@@ -7705,13 +8068,60 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   k ^= st->pieceStateKey ^ pieceStateKey;
   st->pieceStateKey = pieceStateKey;
 
+  if (compoundTurnMode)
+  {
+      bool sideChanged = false;
+      if (setupMove)
+      {
+          st->turnSteps = 0;
+          if (!has_setup_drop(us))
+          {
+              sideChanged = true;
+              if (has_setup_drop(them))
+                  sideToMove = them;
+              else
+              {
+                  st->setupPhase = false;
+                  st->turnBoundary = true;
+                  sideToMove = WHITE;
+                  st->turnStartLayoutKey = layout_key();
+              }
+          }
+          else
+              sideToMove = us;
+          st->turnBoundary = !st->setupPhase;
+      }
+      else if (turnEnds)
+      {
+          st->turnSteps = 0;
+          st->turnBoundary = true;
+          sideToMove = them;
+          sideChanged = true;
+          st->turnStartLayoutKey = layout_key();
+      }
+      else
+      {
+          st->turnSteps = st->previous->turnSteps
+                          + (is_pull_move(m) && var->atomicPushPull ? 2 : 1);
+          st->turnBoundary = false;
+          sideToMove = us;
+      }
+      st->turnSideChanged = sideChanged;
+      if (sideChanged)
+          k ^= Zobrist::side;
+      k ^= compound_turn_state_key(var, previousTurnSteps, previousSetupPhase)
+        ^ compound_turn_state_key(var, st->turnSteps, st->setupPhase);
+      k ^= compound_turn_start_key(var, previousTurnStartLayoutKey)
+        ^ compound_turn_start_key(var, st->turnStartLayoutKey);
+  }
+  else
+      sideToMove = them;
+
   // Update the key with the final value
   st->key = k;
   st->boardKey = st->key ^ st->reserveKey;
   if (var->samePlayerBoardRepetitionIllegal)
       st->layoutKey = layout_key();
-  sideToMove = them;
-
   st->evasionCheckersBB = compute_evasion_checkers_bb(sideToMove);
 
   // Rebuild the derived check info before broad royal-danger checks.  The
@@ -7772,7 +8182,20 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   st->repetition = 0;
   st->boardRepetition = 0;
   int end = captures_to_hand() ? st->pliesFromNull : std::min(st->rule50, st->pliesFromNull);
-  if (end >= 4)
+  if (compoundTurnMode)
+  {
+      if (st->turnBoundary)
+      {
+          int matches = 0;
+          for (StateInfo* stp = st->previous; stp; stp = stp->previous)
+              if (stp->turnBoundary && stp->key == st->key && ++matches >= 2)
+              {
+                  st->repetition = -1;
+                  break;
+              }
+      }
+  }
+  else if (end >= 4)
   {
       StateInfo* stp = st->previous->previous;
       for (int i = 4; i <= end; i += 2)
@@ -7807,7 +8230,8 @@ void Position::undo_move(Move m) {
 
   assert(is_ok(m));
 
-  sideToMove = ~sideToMove;
+  if (!compound_turns() || st->turnSideChanged)
+      sideToMove = ~sideToMove;
 
   Color us = sideToMove;
   Square from = from_sq(m);
@@ -7883,7 +8307,8 @@ void Position::undo_move(Move m) {
               if (   !wasBlastPromoted
                    && !wasLaserTransformed
                    && !petrifiedCenter
-                   && !(st->libertySelfRemoved & bsq))
+                   && !(st->libertySelfRemoved & bsq)
+                   && !(st->trapRemoved & bsq))
                {
                    undo_capture_transfer(st, transferPiece);
                }
@@ -8075,6 +8500,18 @@ void Position::undo_move(Move m) {
           {
               remove_piece(to);
               board[to] = NO_PIECE;
+          }
+          else if (var->atomicPushPull && is_pull_move(m)
+                   && st->pushPullPushed.piece.piece != NO_PIECE)
+          {
+              Square pushTo = pull_square(m);
+              if (piece_on(pushTo) != NO_PIECE)
+                  remove_piece(pushTo);
+              if (piece_on(to) != NO_PIECE)
+                  move_piece(to, from);
+              put_piece(st->pushPullPushed.piece.piece, to,
+                        st->pushPullPushed.piece.promoted,
+                        st->pushPullPushed.piece.unpromoted);
           }
           else if (pullMove)
           {
@@ -8875,6 +9312,46 @@ bool Position::is_optional_game_end(Value& result, int ply, int countStarted) co
 /// It does not detect stalemates.
 
 bool Position::is_immediate_game_end(Value& result, int ply) const {
+
+  if (var->flagTurnBoundaryAdjudication)
+  {
+      if (st->setupPhase || !st->turnBoundary)
+          return false;
+
+      Color mover = ~sideToMove;
+      Bitboard whiteFlagPieces = pieces(WHITE, flag_piece_types(WHITE));
+      Bitboard blackFlagPieces = pieces(BLACK, flag_piece_types(BLACK));
+      auto wins = [&](Color winner) {
+          result = winner == sideToMove ? mate_in(ply) : mated_in(ply);
+          return true;
+      };
+
+      if (!whiteFlagPieces && !blackFlagPieces)
+          return wins(mover);
+      Bitboard goalFlagPieces[COLOR_NB] = {
+          whiteFlagPieces & flag_region(WHITE),
+          blackFlagPieces & flag_region(BLACK)
+      };
+      if (goalFlagPieces[mover])
+          return wins(mover);
+      if (goalFlagPieces[sideToMove])
+          return wins(sideToMove);
+      if (!blackFlagPieces)
+          return wins(WHITE);
+      if (!whiteFlagPieces)
+          return wins(BLACK);
+
+      bool hasMove = false;
+      for (const auto& m : MoveList<NON_EVASIONS>(*this))
+          if (legal(m))
+          {
+              hasMove = true;
+              break;
+          }
+      if (!hasMove)
+          return wins(mover);
+      return false;
+  }
 
   // Direct royal capture ends the game immediately in capture-the-royal flows.
   // Some variants (e.g. Xiangqi/Janggi) use king_type() as movement semantics

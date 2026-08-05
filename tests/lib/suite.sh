@@ -61,7 +61,7 @@ native() {
     case "$(basename "${ENGINE}"):${FSX_ENGINE_FAMILY:-}" in
         *large*:*|*allvars*:*|*vlb*:*|*:*large|*:*very-large) ;;
         *)
-            case "${group}" in occupancy|state|royal)
+            case "${group}" in occupancy|state|royal|arimaa|arimaa-full)
                 echo "skip: ${SUITE_NAME}/native-${group} requires a large-board engine"
                 return 0
                 ;;
@@ -187,6 +187,8 @@ run_promotion_drops() {
 run_state_transitions() {
     native occupancy
     native state
+    native arimaa
+    native arimaa-full
     legacy stateinfo-regressions.sh 5m "${ENGINE}"
     legacy state-sync-key.sh 5m "${ENGINE}"
     legacy in-place-transform-undo.sh 2m "${ENGINE}"

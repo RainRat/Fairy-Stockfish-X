@@ -82,6 +82,7 @@ struct PushInfo {
 struct SimulatedMoveInfo {
   Bitboard relocatedOccupancy = Bitboard(0);
   Bitboard effectOccupancy = Bitboard(0);
+  std::array<Bitboard, COLOR_NB> colorOccupancy = {};
   Bitboard placementOccupancy = Bitboard(0);
   Bitboard occupiedAfterEffects = Bitboard(0);
   Bitboard removedByEffects = Bitboard(0);
@@ -265,6 +266,9 @@ struct StateInfoCopied {
   Key pieceStateKey;
   Key reserveKey;
   Key layoutKey;
+  Key turnStartLayoutKey;
+  int turnSteps;
+  bool setupPhase;
 };
 
 struct StateInfoDerived {
@@ -289,10 +293,13 @@ struct StateInfoDerived {
   OptBool    legalCapture = NO_VALUE;
   OptBool    legalEnPassant = NO_VALUE;
   Bitboard   chased = Bitboard(0);
+  bool       turnBoundary = false;
+  bool       turnSideChanged = false;
 };
 
 struct MoveUndoInfo {
   Bitboard   bycatchSquares = Bitboard(0);
+  Bitboard   trapRemoved = Bitboard(0);
   Bitboard   libertySelfRemoved = Bitboard(0);
   PackedReversiblePiece bycatchPieces[SQUARE_NB];
   Bitboard   blastPromotedSquares = Bitboard(0);
@@ -317,6 +324,7 @@ struct MoveUndoInfo {
   bool       pass = false;
   bool       forcedJumpHasFollowup = false;
   bool       didPull = false;
+  ReversiblePieceOnSquare pushPullPushed;
   Piece      replacedPiece = NO_PIECE;
   Piece      replacedUnpromoted = NO_PIECE;
   bool       replacedPromoted = false;
@@ -325,6 +333,7 @@ struct MoveUndoInfo {
 
   void clear() {
     bycatchSquares = Bitboard(0);
+    trapRemoved = Bitboard(0);
     libertySelfRemoved = Bitboard(0);
     for (auto& saved : bycatchPieces)
         saved.clear();
@@ -355,11 +364,13 @@ struct MoveUndoInfo {
     pass = false;
     forcedJumpHasFollowup = false;
     didPull = false;
+    pushPullPushed.clear();
   }
 
 #ifndef NDEBUG
   bool empty() const {
     return bycatchSquares == Bitboard(0)
+        && trapRemoved == Bitboard(0)
         && libertySelfRemoved == Bitboard(0)
         && blastPromotedSquares == Bitboard(0)
         && laserTransformedSquares == Bitboard(0)
@@ -384,6 +395,7 @@ struct MoveUndoInfo {
         && !pass
         && !forcedJumpHasFollowup
         && !didPull
+        && !pushPullPushed
         && replacedPiece == NO_PIECE
         && replacedUnpromoted == NO_PIECE
         && !replacedPromoted
@@ -604,6 +616,14 @@ public:
   bool push_chain_enemy_only() const;
   bool push_capture_against_friendly_blocker() const;
   bool push_no_immediate_return() const;
+  bool compound_turns() const;
+  bool setup_phase() const;
+  bool compound_push_move(Move m) const;
+  int turn_steps() const;
+  int piece_strength(PieceType pt) const;
+  bool compound_turn_ends(Move m) const;
+  bool compound_turn_pseudo_legal(Move m) const;
+  bool compound_turn_legal(Move m) const;
   PieceSet edge_insert_types() const;
   bool edge_insert_only() const;
   Bitboard edge_insert_region(Color c) const;
@@ -667,6 +687,7 @@ public:
   bool can_cast_potion(Color c, Variant::PotionType type) const;
   Bitboard potion_zone(Color c, Variant::PotionType type) const;
   int potion_cooldown(Color c, Variant::PotionType type) const;
+  Bitboard strength_freeze_squares(Color c) const;
   bool gating_move_blocks_occupancy(Move m) const;
   Bitboard freeze_squares() const;
   Bitboard freeze_squares(Color c) const;
@@ -2426,12 +2447,14 @@ inline bool Position::can_cast_potion(Color c, Variant::PotionType type) const {
 }
 
 inline Bitboard Position::freeze_squares(Color c) const {
-  if (!potions_enabled())
-      return Bitboard(0);
-  Bitboard mask = st->potionZones[c][Variant::POTION_FREEZE];
-  if (const SpellContext* spellCtx = current_spell_context(); spellCtx && c == ~sideToMove)
-      mask |= spellCtx->freezeExtra;
-  if (var->checkedRoyalsIgnoreFreeze)
+  Bitboard mask = strength_freeze_squares(c);
+  if (potions_enabled())
+  {
+      mask |= st->potionZones[c][Variant::POTION_FREEZE];
+      if (const SpellContext* spellCtx = current_spell_context(); spellCtx && c == ~sideToMove)
+          mask |= spellCtx->freezeExtra;
+  }
+  if (potions_enabled() && var->checkedRoyalsIgnoreFreeze)
       for (Color royalColor : {WHITE, BLACK})
       {
           const PieceType royalType = castling_king_piece(royalColor);
@@ -2600,6 +2623,9 @@ inline Square Position::pawn_step(Square s, Color us, int steps) const {
 
 inline bool Position::pass(Color c) const {
   assert(var != nullptr);
+  if (compound_turns())
+      return var->compoundTurnPass && c == sideToMove && !setup_phase()
+          && turn_steps() > 0 && turn_steps() < var->compoundTurnSteps;
   if (st->pendingClaimPass && c == sideToMove)
       return true;
   if (forced_jump_continuation() && st->forcedJumpSquare != SQ_NONE && st->forcedJumpHasFollowup)
@@ -3149,6 +3175,38 @@ inline bool Position::is_clone_move(Move m) const {
 
 inline bool Position::is_pull_move(Move m) const {
   return type_of(m) == PULL && pull_square(m) != SQ_NONE;
+}
+
+inline bool Position::compound_turns() const {
+  return var->compoundTurnSteps > 0;
+}
+
+inline bool Position::setup_phase() const {
+  return var->sequentialSetup && st->setupPhase;
+}
+
+inline bool Position::compound_push_move(Move m) const {
+  return var->atomicPushPull && is_pull_move(m) && empty(pull_square(m))
+      && bool(pieces(~sideToMove) & to_sq(m));
+}
+
+inline int Position::turn_steps() const {
+  return compound_turns() ? st->turnSteps : 0;
+}
+
+inline int Position::piece_strength(PieceType pt) const {
+  for (size_t i = 0; i < var->strengthOrder.size(); ++i)
+      if (var->strengthOrder[i] == pt)
+          return int(i);
+  return -1;
+}
+
+inline bool Position::compound_turn_ends(Move m) const {
+  if (!compound_turns() || setup_phase())
+      return false;
+  if (is_pass(m))
+      return true;
+  return turn_steps() + (is_pull_move(m) && var->atomicPushPull ? 2 : 1) >= var->compoundTurnSteps;
 }
 
 inline bool Position::is_swap_move(Move m) const {

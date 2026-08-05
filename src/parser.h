@@ -125,6 +125,7 @@ private:
     template <bool Current = true, class T> bool parse_attribute(const std::string& key, T& target, const Variant* v);
 
     bool parse_piece_types(Variant* v);
+    bool parse_strength_order(Variant* v);
     bool parse_piece_values(Variant* v);
     bool parse_legacy_attributes(Variant* v);
     bool parse_official_options(Variant* v);

@@ -669,6 +669,7 @@ string UCI::exchange(const Position &pos, Move m) {
 /// castling moves are always encoded as 'king captures rook'. Some fairy
 /// special moves use suffixes: clone moves append 'c', swap moves append 's',
 /// self-destruct moves append 'x', and pulls append ",<pulled-square>".
+/// Arimaa pushes reuse that extended form, with the auxiliary square being the pushed piece's destination.
 
 string UCI::move(const Position& pos, Move m) {
 

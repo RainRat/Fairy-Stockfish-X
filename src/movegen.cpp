@@ -68,6 +68,79 @@ namespace {
     return moveList;
   }
 
+  template<Color Us, GenType Type>
+  ExtMove* generate_compound_turn(const Position& pos, ExtMove* moveList) {
+    if constexpr (Type == CAPTURES || Type == QUIET_CHECKS)
+        return moveList;
+
+    if (pos.setup_phase())
+    {
+        for (PieceSet ps = pos.piece_types(); ps; )
+        {
+            PieceType pt = pop_lsb(ps);
+            if (!pos.can_drop(Us, pt))
+                continue;
+            Bitboard targets = pos.drop_region(Us, pt) & ~pos.pieces();
+            while (targets)
+                *moveList++ = make_drop(pop_lsb(targets), pt, pt);
+        }
+        return moveList;
+    }
+
+    const int stepsRemaining = pos.variant()->compoundTurnSteps - pos.turn_steps();
+    if (stepsRemaining <= 0)
+        return moveList;
+
+    Bitboard frozen = pos.freeze_squares(Us);
+    Bitboard pieces = pos.pieces(Us);
+    while (pieces)
+    {
+        Square from = pop_lsb(pieces);
+        if (frozen & from)
+            continue;
+
+        PieceType pt = type_of(pos.piece_on(from));
+        Bitboard movement = (pos.moves_from(Us, pt, from) | pos.attacks_from(Us, pt, from)) & pos.board_bb();
+        Bitboard adjacent = movement;
+        Bitboard quiet = pos.moves_from(Us, pt, from) & ~pos.pieces();
+        while (quiet)
+            *moveList++ = make_move(from, pop_lsb(quiet));
+
+        if (stepsRemaining < 2 || !pos.variant()->atomicPushPull)
+            continue;
+
+        Bitboard enemies = adjacent & pos.pieces(~Us);
+        while (enemies)
+        {
+            Square enemySq = pop_lsb(enemies);
+            if (pos.piece_strength(type_of(pos.piece_on(from)))
+                <= pos.piece_strength(type_of(pos.piece_on(enemySq))))
+                continue;
+            Bitboard pushTo = PseudoAttacks[WHITE][WAZIR][enemySq] & pos.board_bb() & ~pos.pieces();
+            pushTo &= ~square_bb(from);
+            while (pushTo)
+                *moveList++ = make_pull(from, enemySq, pop_lsb(pushTo));
+        }
+
+        Bitboard pullFroms = adjacent & pos.pieces(~Us);
+        while (pullFroms)
+        {
+            Square pullFrom = pop_lsb(pullFroms);
+            if (pos.piece_strength(type_of(pos.piece_on(from)))
+                <= pos.piece_strength(type_of(pos.piece_on(pullFrom))))
+                continue;
+            Bitboard pullTo = pos.moves_from(Us, pt, from) & ~pos.pieces();
+            pullTo &= ~square_bb(pullFrom);
+            while (pullTo)
+                *moveList++ = make_pull(from, pop_lsb(pullTo), pullFrom);
+        }
+    }
+
+    if (pos.pass(Us))
+        moveList = emit_pass_move(pos, moveList, Us);
+    return moveList;
+  }
+
   Bitboard laser_rotation_candidates(const Position& pos, Color us) {
     if (!pos.search_laser_rotation_filter() || !pos.variant()->laserRotationPathFilter)
         return pos.board_bb();
@@ -1080,6 +1153,8 @@ namespace {
     static_assert(Type != LEGAL, "Unsupported type in generate_all()");
 
     constexpr bool Checks = Type == QUIET_CHECKS; // Reduce template instantiations
+    if (pos.compound_turns())
+        return generate_compound_turn<Us, Type>(pos, moveList);
     const PieceType royalPt = pos.royal_piece_type(Us);
     const Square royalSq = pos.royal_square(Us);
     const Bitboard checkers = pos.evasion_checkers();

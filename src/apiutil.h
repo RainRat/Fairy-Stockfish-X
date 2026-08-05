@@ -20,6 +20,7 @@
 #define APIUTIL_H_INCLUDED
 
 #include <array>
+#include <cstdint>
 #include <vector>
 #include <string>
 #include <sstream>
@@ -1470,6 +1471,7 @@ inline FenValidation validate_fen(const std::string& fen, const Variant* v, bool
     std::string pointsCount = "";
     std::string potionInfo = "";
     std::string potionCooldownInfo = "";
+    std::string compoundStateInfo = "";
     std::string modifiedFen = fen;
 
     // Extract points data if exists
@@ -1512,6 +1514,23 @@ inline FenValidation validate_fen(const std::string& fen, const Variant* v, bool
                 modifiedFen.clear();
             else
                 modifiedFen.erase(lastSpace);
+        }
+    }
+
+    // Compound-turn positions append a round-trip state extension after the
+    // normal FEN fields: ct:<steps>:<setup>:<turn-start-layout-key>.
+    if (v->compoundTurnSteps > 0)
+    {
+        size_t lastSpace = modifiedFen.find_last_of(' ');
+        std::string lastToken = lastSpace == std::string::npos ? modifiedFen : modifiedFen.substr(lastSpace + 1);
+        if (lastToken.rfind("ct:", 0) == 0)
+        {
+            compoundStateInfo = lastToken;
+            if (lastSpace == std::string::npos)
+                modifiedFen.clear();
+            else
+                modifiedFen.erase(lastSpace);
+            rtrim(modifiedFen);
         }
     }
 
@@ -1767,6 +1786,37 @@ inline FenValidation validate_fen(const std::string& fen, const Variant* v, bool
                     return FEN_INVALID_CHAR;
             }
         }
+    }
+
+    if (!compoundStateInfo.empty())
+    {
+        std::vector<std::string> fields = get_fen_parts(compoundStateInfo.substr(3), ':');
+        auto parse_unsigned = [](const std::string& text, int base, uint64_t& value) {
+            if (text.empty())
+                return false;
+            value = 0;
+            for (unsigned char c : text)
+            {
+                int digit = std::isdigit(c) ? c - '0'
+                          : std::tolower(c) >= 'a' && std::tolower(c) <= 'f' ? std::tolower(c) - 'a' + 10
+                          : -1;
+                if (digit < 0 || digit >= base
+                    || value > (std::numeric_limits<uint64_t>::max() - uint64_t(digit)) / uint64_t(base))
+                    return false;
+                value = value * uint64_t(base) + uint64_t(digit);
+            }
+            return true;
+        };
+
+        uint64_t steps = 0, setup = 0, startKey = 0;
+        if (fields.size() != 3
+            || !parse_unsigned(fields[0], 10, steps)
+            || !parse_unsigned(fields[1], 10, setup)
+            || !parse_unsigned(fields[2], 16, startKey)
+            || steps > uint64_t(v->compoundTurnSteps)
+            || setup > 1
+            || (setup && !v->sequentialSetup))
+            return FEN_INVALID_CHAR;
     }
 
     return FEN_OK;
