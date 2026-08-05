@@ -1,9 +1,11 @@
 import unittest
+import json
 import subprocess
 import sys
 from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT_DIR))
 
 import pyffish as sf
 
@@ -200,6 +202,31 @@ class TestPublicAPI(unittest.TestCase):
         self.assertIn("e2e4", moves)
         self.assertIsInstance(sf.get_fen("chess", fen, ["e2e4"]), str)
         self.assertIsInstance(sf.get_san("chess", fen, "e2e4"), str)
+
+    def test_variant_info(self):
+        info = json.loads(sf.variant_info("chess"))
+        self.assertEqual(info["schemaVersion"], 1)
+        self.assertEqual(info["name"], "chess")
+        self.assertEqual(info["board"]["width"], 8)
+        self.assertEqual(info["board"]["height"], 8)
+        self.assertEqual(info["board"]["startFen"], sf.start_fen("chess"))
+        self.assertEqual([piece["fen"]["white"] for piece in info["pieces"]], ["P", "N", "B", "R", "Q", "K"])
+        self.assertEqual(info["gameEnd"]["kingType"], "king")
+        self.assertEqual(info["royalPieceTypes"], ["king"])
+        self.assertFalse(info["castling"]["wins"]["white"]["kingSide"])
+        self.assertIsInstance(info["protocol"]["pieceToCharTable"], str)
+
+        janggi_info = json.loads(sf.variant_info("janggi"))
+        self.assertIn("e2", janggi_info["board"]["diagonalLines"])
+        self.assertEqual(janggi_info["movement"]["soldierPromotionRank"], 1)
+
+        sf.load_variant_config("[variantinfocustomroyal:chess]\nking = k:KN\n")
+        custom_royal = json.loads(sf.variant_info("variantinfocustomroyal"))
+        king = next(piece for piece in custom_royal["pieces"] if piece["type"] == "king")
+        self.assertEqual(king["customBetza"], "KN")
+
+        with self.assertRaisesRegex(ValueError, "Unknown variant"):
+            sf.variant_info("does-not-exist")
 
     def test_public_predicate_return_types(self):
         fen = sf.start_fen("chess")

@@ -306,50 +306,13 @@ namespace {
     }
   }
 
-  // print_variant_info() prints a summary of the current variant's configuration.
+  // print_variant_info() prints the resolved variant configuration.
 
   void print_variant_info(const Variant* v, const std::string& variantName) {
 
     if (!v) return;
 
-    std::ostringstream oss;
-    oss << "\nVariant:  " << variantName
-        << "\nTemplate: " << v->variantTemplate
-        << "\nBoard:    " << v->maxFile + 1 << "x" << v->maxRank + 1
-        << (v->hexBoard ? " (hex)" : "")
-        << (v->cylindrical ? " (cylindrical)" : "")
-        << (v->toroidal ? " (toroidal)" : "")
-        << "\nPockets:  " << v->pocketSize
-        << "\nPieces:  ";
-
-    for (PieceSet ps = v->pieceTypes; ps; )
-    {
-        PieceType pt = pop_lsb(ps);
-        const PieceInfo* pi = pieceMap.get(pt);
-        oss << " " << v->pieceToChar[make_piece(WHITE, pt)]
-            << "(" << (pi ? pi->betza : "") << ")";
-    }
-
-    oss << "\nRules:   ";
-    if (v->mustCapture[WHITE] || v->mustCapture[BLACK]) oss << " mustCapture";
-    if (!v->checking)    oss << " noChecking";
-    if (v->allowChecks)  oss << " allowChecks";
-    if (v->castling)     oss << " castling";
-    if (v->pieceDrops)   oss << " pieceDrops";
-    if (v->gating)       oss << " gating";
-    if (v->pass[WHITE] || v->pass[BLACK]) oss << " pass";
-    if (v->checkCounting) oss << " checkCounting";
-    if (v->pointsCounting) oss << " pointsCounting";
-    if (v->potions)      oss << " potions";
-
-    oss << "\nEndgame: ";
-    if (v->nMoveRule > 0) oss << " " << v->nMoveRule << "-move-rule";
-    if (v->nFoldRule > 0) oss << " " << v->nFoldRule << "-fold-repetition";
-    if (v->stalemateValue.global != VALUE_DRAW) oss << " stalemate=" << (v->stalemateValue.global == -VALUE_MATE ? "lose" : (v->stalemateValue.global == VALUE_MATE ? "win" : std::to_string(int(v->stalemateValue.global))));
-    if (v->extinctionValue.global != VALUE_NONE) oss << " extinction";
-    if (v->connectN > 0) oss << " connect" << v->connectN;
-
-    sync_cout << oss.str() << sync_endl;
+    sync_cout << variant_info_json(variantName) << sync_endl;
   }
 
   // print_available_variants() prints a sorted list of all supported variants,

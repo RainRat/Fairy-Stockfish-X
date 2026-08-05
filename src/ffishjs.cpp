@@ -553,6 +553,12 @@ namespace ffish {
     return availableVariants;
   }
 
+  std::string variant_info(std::string uciVariant) {
+    ensure_stockfish_initialized();
+    std::lock_guard<std::mutex> lock(variant_state_mutex);
+    return variant_info_json(uciVariant);
+  }
+
   void load_variant_config(std::string variantInitContent) {
     std::stringstream ss(variantInitContent);
     ensure_stockfish_initialized();
@@ -911,6 +917,7 @@ EMSCRIPTEN_BINDINGS(ffish_js) {
   }), allow_raw_pointers());
   function("variants", &ffish::available_variants);
   function("loadVariantConfig", &ffish::load_variant_config);
+  function("variantInfo", &ffish::variant_info);
   function("capturesToHand", &ffish::captures_to_hand);
   function("startingFen", &ffish::starting_fen);
   function("validateFen", select_overload<int(std::string)>(&ffish::validate_fen));
