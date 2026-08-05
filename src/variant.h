@@ -211,8 +211,12 @@ struct Variant {
   Bitboard trapRegion = 0;
   std::vector<PieceType> strengthOrder = {};
   PieceSet strengthOrderTypes = NO_PIECE_SET;
-  bool arimaaRule = false;
-  PieceType arimaaRabbit = NO_PIECE_TYPE;
+  bool sequentialSetup = false;
+  int compoundTurnSteps = 0;
+  bool compoundTurnPass = false;
+  bool atomicPushPull = false;
+  PieceSet forwardOnlyPieceTypes = NO_PIECE_SET;
+  bool turnBoundaryAdjudication = false;
   bool doubleStep = true;
   mutable bool useFastStandardPawnGenerator = true;
   ColorSetting<PieceTypeBitboardGroup> doubleStepRegion = ColorSetting<PieceTypeBitboardGroup>(Rank2BB, Rank7BB);

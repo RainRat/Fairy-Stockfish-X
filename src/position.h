@@ -2623,7 +2623,8 @@ inline Square Position::pawn_step(Square s, Color us, int steps) const {
 inline bool Position::pass(Color c) const {
   assert(var != nullptr);
   if (arimaa())
-      return c == sideToMove && !arimaa_setup() && arimaa_steps() > 0 && arimaa_steps() < 4;
+      return var->compoundTurnPass && c == sideToMove && !arimaa_setup()
+          && arimaa_steps() > 0 && arimaa_steps() < var->compoundTurnSteps;
   if (st->pendingClaimPass && c == sideToMove)
       return true;
   if (forced_jump_continuation() && st->forcedJumpSquare != SQ_NONE && st->forcedJumpHasFollowup)
@@ -3176,15 +3177,15 @@ inline bool Position::is_pull_move(Move m) const {
 }
 
 inline bool Position::arimaa() const {
-  return var->arimaaRule;
+  return var->compoundTurnSteps > 0;
 }
 
 inline bool Position::arimaa_setup() const {
-  return arimaa() && st->arimaaSetup;
+  return var->sequentialSetup && st->arimaaSetup;
 }
 
 inline bool Position::arimaa_push_move(Move m) const {
-  return arimaa() && is_pull_move(m) && empty(pull_square(m))
+  return var->atomicPushPull && is_pull_move(m) && empty(pull_square(m))
       && bool(pieces(~sideToMove) & to_sq(m));
 }
 
@@ -3204,7 +3205,7 @@ inline bool Position::arimaa_move_ends_turn(Move m) const {
       return false;
   if (is_pass(m))
       return true;
-  return arimaa_steps() + (is_pull_move(m) ? 2 : 1) >= 4;
+  return arimaa_steps() + (is_pull_move(m) && var->atomicPushPull ? 2 : 1) >= var->compoundTurnSteps;
 }
 
 inline bool Position::is_swap_move(Move m) const {

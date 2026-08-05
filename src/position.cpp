@@ -848,8 +848,9 @@ namespace Zobrist {
   Key dead[SQUARE_NB];
   Key orientation[4][SQUARE_NB];
   Key promotionOrigin[PIECE_NB][SQUARE_NB];
-  Key arimaaSteps[5];
-  Key arimaaSetup;
+  constexpr int MAX_COMPOUND_TURN_STEPS = 16;
+  Key compoundTurnSteps[MAX_COMPOUND_TURN_STEPS + 1];
+  Key compoundTurnSetup;
   Key endgame[EG_EVAL_NB];
   Key points[COLOR_NB][MAX_ZOBRIST_POINTS];
 }
@@ -882,9 +883,10 @@ namespace {
   }
 
   inline Key arimaa_state_key(const Variant* var, int steps, bool setup) {
-      if (!var->arimaaRule)
+      if (var->compoundTurnSteps <= 0)
           return 0;
-      return Zobrist::arimaaSteps[steps] ^ (setup ? Zobrist::arimaaSetup : 0);
+      assert(steps >= 0 && steps <= Zobrist::MAX_COMPOUND_TURN_STEPS);
+      return Zobrist::compoundTurnSteps[steps] ^ (setup ? Zobrist::compoundTurnSetup : 0);
   }
 
   inline Square parse_fen_square(const Position& pos, const std::string& spec) {
@@ -1442,9 +1444,9 @@ void Position::init() {
       for (Square s = SQ_A1; s <= SQ_MAX; ++s)
           Zobrist::promotionOrigin[pc][s] = rng.rand<Key>();
 
-  for (Key& key : Zobrist::arimaaSteps)
+  for (Key& key : Zobrist::compoundTurnSteps)
       key = rng.rand<Key>();
-  Zobrist::arimaaSetup = rng.rand<Key>();
+  Zobrist::compoundTurnSetup = rng.rand<Key>();
 
   for (Square from = SQ_A1; from <= SQ_MAX; ++from)
       for (Square to = SQ_A1; to <= SQ_MAX; ++to)
@@ -2447,7 +2449,7 @@ void Position::set_state(StateInfo* si) const {
   si->forcedJumpHasFollowup = false;
   si->forcedJumpStep = 0;
   si->arimaaSteps = 0;
-  si->arimaaSetup = var->arimaaRule && !pieces()
+  si->arimaaSetup = var->sequentialSetup && !pieces()
                  && (count_in_hand(WHITE, ALL_PIECES) || count_in_hand(BLACK, ALL_PIECES));
   si->arimaaTurnBoundary = !si->arimaaSetup;
   si->arimaaSideChanged = false;
@@ -4072,7 +4074,7 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
                           && walling(sideToMove) && (!wall_or_move() || info.from == info.to);
   const bool pureWallMove = wallPlacement && wall_or_move() && info.from == info.to;
   const bool arimaaPushMove = arimaa_push_move(m);
-  const bool arimaaPullMove = arimaa() && is_pull_move(m) && !arimaaPushMove;
+  const bool arimaaPullMove = var->atomicPushPull && is_pull_move(m) && !arimaaPushMove;
 
   if (info.castling)
   {
@@ -4380,7 +4382,8 @@ bool Position::arimaa_pseudo_legal(Move m) const {
   bool valid = true;
   if (is_pass(m))
   {
-      if (arimaa_setup() || arimaa_steps() == 0 || arimaa_steps() >= 4)
+      if (!var->compoundTurnPass || arimaa_setup() || arimaa_steps() == 0
+          || arimaa_steps() >= var->compoundTurnSteps)
           valid = false;
   }
   else if (arimaa_setup())
@@ -4405,13 +4408,13 @@ bool Position::arimaa_pseudo_legal(Move m) const {
       {
           Bitboard adjacent = PseudoAttacks[WHITE][WAZIR][from] & board_bb();
           auto forward = [&](Square a, Square b) {
-              return type_of(mover) != var->arimaaRabbit
+              return !(var->forwardOnlyPieceTypes & piece_set(type_of(mover)))
                   || (us == WHITE ? rank_of(b) >= rank_of(a) : rank_of(b) <= rank_of(a));
           };
 
           if (type_of(m) == NORMAL)
               valid = bool(adjacent & to) && empty(to) && forward(from, to);
-          else if (!is_pull_move(m))
+          else if (!var->atomicPushPull || !is_pull_move(m))
               valid = false;
           else
           {
@@ -4438,8 +4441,8 @@ bool Position::arimaa_pseudo_legal(Move m) const {
       }
   }
 
-  return valid && (!is_pull_move(m) || arimaa_steps() + 2 <= 4)
-       && (is_pull_move(m) || arimaa_steps() + (is_pass(m) ? 0 : 1) <= 4);
+  const int stepCost = is_pull_move(m) && var->atomicPushPull ? 2 : 1;
+  return valid && arimaa_steps() + stepCost <= var->compoundTurnSteps;
 }
 
 bool Position::arimaa_legal(Move m) const {
@@ -6243,10 +6246,10 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   if (countNode && thisThread)
       thisThread->nodes.fetch_add(1, std::memory_order_relaxed);
 #endif
-  const bool arimaaMode = var->arimaaRule;
+  const bool arimaaMode = var->compoundTurnSteps > 0;
   const bool arimaaSetupMove = arimaaMode && st->arimaaSetup;
   const bool arimaaMoveEnds = arimaaMode && !arimaaSetupMove
-                           && (is_pass(m) || st->arimaaSteps + (is_pull_move(m) ? 2 : 1) >= 4);
+                           && (is_pass(m) || st->arimaaSteps + (is_pull_move(m) && var->atomicPushPull ? 2 : 1) >= var->compoundTurnSteps);
   const int previousArimaaSteps = st->arimaaSteps;
   const bool previousArimaaSetup = st->arimaaSetup;
   Key k = arimaaMode ? st->key : st->key ^ Zobrist::side;
@@ -8022,7 +8025,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       }
       else
       {
-          st->arimaaSteps = st->previous->arimaaSteps + (is_pull_move(m) ? 2 : 1);
+          st->arimaaSteps = st->previous->arimaaSteps
+                          + (is_pull_move(m) && var->atomicPushPull ? 2 : 1);
           st->arimaaTurnBoundary = false;
           sideToMove = us;
       }
@@ -8148,7 +8152,7 @@ void Position::undo_move(Move m) {
 
   assert(is_ok(m));
 
-  if (!var->arimaaRule || st->arimaaSideChanged)
+  if (!arimaa() || st->arimaaSideChanged)
       sideToMove = ~sideToMove;
 
   Color us = sideToMove;
@@ -8419,7 +8423,7 @@ void Position::undo_move(Move m) {
               remove_piece(to);
               board[to] = NO_PIECE;
           }
-          else if (var->arimaaRule && is_pull_move(m)
+          else if (var->atomicPushPull && is_pull_move(m)
                    && st->arimaaPushed.piece.piece != NO_PIECE)
           {
               Square pushTo = pull_square(m);
@@ -9231,14 +9235,14 @@ bool Position::is_optional_game_end(Value& result, int ply, int countStarted) co
 
 bool Position::is_immediate_game_end(Value& result, int ply) const {
 
-  if (var->arimaaRule)
+  if (var->turnBoundaryAdjudication)
   {
       if (st->arimaaSetup || !st->arimaaTurnBoundary)
           return false;
 
       Color mover = ~sideToMove;
-      Bitboard whiteRabbits = pieces(WHITE, var->arimaaRabbit);
-      Bitboard blackRabbits = pieces(BLACK, var->arimaaRabbit);
+      Bitboard whiteRabbits = pieces(WHITE, flag_piece_types(WHITE));
+      Bitboard blackRabbits = pieces(BLACK, flag_piece_types(BLACK));
       auto wins = [&](Color winner) {
           result = winner == sideToMove ? mate_in(ply) : mated_in(ply);
           return true;

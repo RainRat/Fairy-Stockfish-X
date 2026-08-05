@@ -1825,8 +1825,12 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("freezeProtection", v->freezeProtection);
     parse_attribute("trapRegion", v->trapRegion);
     parse_attribute("trapProtection", v->trapProtection);
-    parse_attribute("arimaaRule", v->arimaaRule);
-    parse_attribute("arimaaRabbit", v->arimaaRabbit, v);
+    parse_attribute("sequentialSetup", v->sequentialSetup);
+    parse_attribute("compoundTurnSteps", v->compoundTurnSteps);
+    parse_attribute("compoundTurnPass", v->compoundTurnPass);
+    parse_attribute("atomicPushPull", v->atomicPushPull);
+    parse_attribute("forwardOnlyPieceTypes", v->forwardOnlyPieceTypes, v);
+    parse_attribute("turnBoundaryAdjudication", v->turnBoundaryAdjudication);
     parse_attribute("doubleStep", v->doubleStep);
     parse_color_setting("doubleStepRegion", v->doubleStepRegion);
     parse_color_setting("tripleStepRegion", v->tripleStepRegion);
@@ -2450,20 +2454,53 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
             valid = false;
         }
     }
-    if (v->arimaaRule)
+    if (v->compoundTurnSteps < 0)
     {
-        if (v->maxFile != FILE_H || v->maxRank != RANK_8 || v->hexBoard || v->cylindrical || v->toroidal)
+        if (DoCheck)
+            std::cerr << "compoundTurnSteps must be non-negative." << std::endl;
+        valid = false;
+    }
+    if (v->compoundTurnSteps == 1)
+    {
+        if (DoCheck)
+            std::cerr << "compoundTurnSteps must be 0 or at least 2." << std::endl;
+        valid = false;
+    }
+    if (v->compoundTurnSteps > 16)
+    {
+        if (DoCheck)
+            std::cerr << "compoundTurnSteps must not exceed 16." << std::endl;
+        valid = false;
+    }
+    if (v->atomicPushPull && v->compoundTurnSteps < 2)
+    {
+        if (DoCheck)
+            std::cerr << "atomicPushPull requires compoundTurnSteps >= 2." << std::endl;
+        valid = false;
+    }
+    if (v->sequentialSetup && v->compoundTurnSteps < 1)
+    {
+        if (DoCheck)
+            std::cerr << "sequentialSetup requires compoundTurnSteps." << std::endl;
+        valid = false;
+    }
+    if (v->turnBoundaryAdjudication && v->compoundTurnSteps < 1)
+    {
+        if (DoCheck)
+            std::cerr << "turnBoundaryAdjudication requires compoundTurnSteps." << std::endl;
+        valid = false;
+    }
+    if (v->atomicPushPull && v->strengthOrderTypes != v->pieceTypes)
+    {
+        if (DoCheck)
         {
-            if (DoCheck)
-                std::cerr << "arimaaRule requires an ordinary 8x8 board." << std::endl;
-            valid = false;
+            std::cerr << "atomicPushPull requires a complete strengthOrder." << std::endl;
+            std::cerr << "Unlisted piece types:";
+            for (PieceSet ps = v->pieceTypes & ~v->strengthOrderTypes; ps; )
+                std::cerr << ' ' << piece_name(pop_lsb(ps));
+            std::cerr << std::endl;
         }
-        if (v->arimaaRabbit == NO_PIECE_TYPE || v->strengthOrderTypes != v->pieceTypes)
-        {
-            if (DoCheck)
-                std::cerr << "arimaaRule requires arimaaRabbit and a complete strengthOrder." << std::endl;
-            valid = false;
-        }
+        valid = false;
     }
     for (Color c : {WHITE, BLACK})
     {

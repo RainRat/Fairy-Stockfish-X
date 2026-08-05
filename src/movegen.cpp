@@ -87,7 +87,7 @@ namespace {
         return moveList;
     }
 
-    const int stepsRemaining = 4 - pos.arimaa_steps();
+    const int stepsRemaining = pos.variant()->compoundTurnSteps - pos.arimaa_steps();
     if (stepsRemaining <= 0)
         return moveList;
 
@@ -101,7 +101,7 @@ namespace {
 
         Bitboard adjacent = PseudoAttacks[WHITE][WAZIR][from] & pos.board_bb();
         Bitboard quiet = adjacent & ~pos.pieces();
-        if (type_of(pos.piece_on(from)) == pos.variant()->arimaaRabbit)
+        if (pos.variant()->forwardOnlyPieceTypes & piece_set(type_of(pos.piece_on(from))))
         {
             int delta = Us == WHITE ? 1 : -1;
             Square backwardSq = make_square(file_of(from), Rank(int(rank_of(from)) - delta));
@@ -111,7 +111,7 @@ namespace {
         while (quiet)
             *moveList++ = make_move(from, pop_lsb(quiet));
 
-        if (stepsRemaining < 2)
+        if (stepsRemaining < 2 || !pos.variant()->atomicPushPull)
             continue;
 
         Bitboard enemies = adjacent & pos.pieces(~Us);
@@ -135,7 +135,7 @@ namespace {
                 <= pos.arimaa_strength(type_of(pos.piece_on(pullFrom))))
                 continue;
             Bitboard pullTo = adjacent & pos.board_bb() & ~pos.pieces();
-            if (type_of(pos.piece_on(from)) == pos.variant()->arimaaRabbit)
+            if (pos.variant()->forwardOnlyPieceTypes & piece_set(type_of(pos.piece_on(from))))
             {
                 int delta = Us == WHITE ? 1 : -1;
                 Square backwardSq = make_square(file_of(from), Rank(int(rank_of(from)) - delta));
