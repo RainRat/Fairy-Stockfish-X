@@ -9239,26 +9239,26 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
           return false;
 
       Color mover = ~sideToMove;
-      Bitboard whiteRabbits = pieces(WHITE, flag_piece_types(WHITE));
-      Bitboard blackRabbits = pieces(BLACK, flag_piece_types(BLACK));
+      Bitboard whiteFlagPieces = pieces(WHITE, flag_piece_types(WHITE));
+      Bitboard blackFlagPieces = pieces(BLACK, flag_piece_types(BLACK));
       auto wins = [&](Color winner) {
           result = winner == sideToMove ? mate_in(ply) : mated_in(ply);
           return true;
       };
 
-      if (!whiteRabbits && !blackRabbits)
+      if (!whiteFlagPieces && !blackFlagPieces)
           return wins(mover);
-      Bitboard goalRabbits[COLOR_NB] = {
-          whiteRabbits & flag_region(WHITE),
-          blackRabbits & flag_region(BLACK)
+      Bitboard goalFlagPieces[COLOR_NB] = {
+          whiteFlagPieces & flag_region(WHITE),
+          blackFlagPieces & flag_region(BLACK)
       };
-      if (goalRabbits[mover])
+      if (goalFlagPieces[mover])
           return wins(mover);
-      if (goalRabbits[sideToMove])
+      if (goalFlagPieces[sideToMove])
           return wins(sideToMove);
-      if (!blackRabbits)
+      if (!blackFlagPieces)
           return wins(WHITE);
-      if (!whiteRabbits)
+      if (!whiteFlagPieces)
           return wins(BLACK);
 
       bool hasMove = false;
