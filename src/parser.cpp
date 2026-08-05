@@ -1825,6 +1825,8 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("freezeProtection", v->freezeProtection);
     parse_attribute("trapRegion", v->trapRegion);
     parse_attribute("trapProtection", v->trapProtection);
+    parse_attribute("arimaaRule", v->arimaaRule);
+    parse_attribute("arimaaRabbit", v->arimaaRabbit, v);
     parse_attribute("doubleStep", v->doubleStep);
     parse_color_setting("doubleStepRegion", v->doubleStepRegion);
     parse_color_setting("tripleStepRegion", v->tripleStepRegion);
@@ -2445,6 +2447,21 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
                     std::cerr << ' ' << piece_name(pop_lsb(ps));
                 std::cerr << std::endl;
             }
+            valid = false;
+        }
+    }
+    if (v->arimaaRule)
+    {
+        if (v->maxFile != FILE_H || v->maxRank != RANK_8 || v->hexBoard || v->cylindrical || v->toroidal)
+        {
+            if (DoCheck)
+                std::cerr << "arimaaRule requires an ordinary 8x8 board." << std::endl;
+            valid = false;
+        }
+        if (v->arimaaRabbit == NO_PIECE_TYPE || v->strengthOrderTypes != v->pieceTypes)
+        {
+            if (DoCheck)
+                std::cerr << "arimaaRule requires arimaaRabbit and a complete strengthOrder." << std::endl;
             valid = false;
         }
     }

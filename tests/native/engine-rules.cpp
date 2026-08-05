@@ -122,6 +122,64 @@ void arimaa_foundation() {
           "friendly adjacent piece did not protect trap occupant");
 }
 
+void arimaa_full() {
+    Position pos;
+    StateListPtr states;
+    set_position(pos, states, "arimaa",
+                 "7r/8/8/8/8/3cE3/R7/8 w - - 0 1");
+
+    Move push = parse_move(pos, "e3d3,d4");
+    check(pos.legal(push), "Arimaa push was rejected");
+    const Key before = pos.key();
+    const std::string beforeFen = pos.fen();
+    states->emplace_back();
+    pos.do_move(push, states->back());
+    check(pos.piece_on(SQ_D3) == make_piece(WHITE, CUSTOM_PIECES)
+          && pos.piece_on(SQ_D4) == make_piece(BLACK, CUSTOM_PIECES + 4),
+          "Arimaa push did not move both pieces atomically");
+    pos.undo_move(push);
+    states->pop_back();
+    check(pos.key() == before && pos.fen() == beforeFen,
+          "Arimaa push did not restore state exactly on undo");
+
+    Move partial = parse_move(pos, "e3e4");
+    check(pos.legal(partial), "Arimaa partial turn step was rejected");
+    states->emplace_back();
+    pos.do_move(partial, states->back());
+    Move endTurn = parse_move(pos, "0000");
+    check(pos.legal(endTurn), "Arimaa voluntary turn end was rejected");
+    states->emplace_back();
+    pos.do_move(endTurn, states->back());
+    check(pos.side_to_move() == BLACK && pos.arimaa_steps() == 0,
+          "Arimaa voluntary turn end did not switch sides");
+    pos.undo_move(endTurn);
+    states->pop_back();
+    pos.undo_move(partial);
+    states->pop_back();
+
+    std::array<Move, 4> steps;
+    for (int i = 0; i < 4; ++i)
+    {
+        const std::string from = "e" + std::to_string(3 + i);
+        const std::string to = "e" + std::to_string(4 + i);
+        const std::string notation = from + to;
+        Move m = parse_move(pos, notation.c_str());
+        steps[i] = m;
+        check(pos.legal(m), "Arimaa ordinary step was rejected");
+        states->emplace_back();
+        pos.do_move(m, states->back());
+    }
+    check(pos.side_to_move() == BLACK && pos.arimaa_steps() == 0,
+          "Arimaa did not end the turn after four steps");
+    for (auto it = steps.rbegin(); it != steps.rend(); ++it)
+    {
+        pos.undo_move(*it);
+        states->pop_back();
+    }
+    check(pos.side_to_move() == WHITE && pos.fen() == beforeFen,
+          "Arimaa turn state did not restore on undo");
+}
+
 void extinction_color_settings() {
     Position pos;
     StateListPtr states;
@@ -839,7 +897,8 @@ int main(int argc, char** argv) {
         auto is_group = [](const std::string& name) {
             return name == "all" || name == "promotion" || name == "movement"
                 || name == "locust-all" || name == "occupancy" || name == "state" || name == "royal"
-                || name == "adjudication" || name == "board-games" || name == "arimaa";
+                || name == "adjudication" || name == "board-games" || name == "arimaa"
+                || name == "arimaa-full";
         };
         bool first_is_group = argc > 1 && is_group(argv[1]);
         std::string config_path = first_is_group ? "src/variants.ini"
@@ -859,6 +918,7 @@ int main(int argc, char** argv) {
           {"extinction-color", extinction_color_settings},
           {"locust-all", locust_all},
           {"arimaa", arimaa_foundation},
+          {"arimaa-full", arimaa_full},
           {"state", state}, {"royal", royal}, {"adjudication", adjudication},
           {"board-games", board_games}
         };

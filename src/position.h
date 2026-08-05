@@ -266,6 +266,8 @@ struct StateInfoCopied {
   Key pieceStateKey;
   Key reserveKey;
   Key layoutKey;
+  int arimaaSteps;
+  bool arimaaSetup;
 };
 
 struct StateInfoDerived {
@@ -290,6 +292,8 @@ struct StateInfoDerived {
   OptBool    legalCapture = NO_VALUE;
   OptBool    legalEnPassant = NO_VALUE;
   Bitboard   chased = Bitboard(0);
+  bool       arimaaTurnBoundary = false;
+  bool       arimaaSideChanged = false;
 };
 
 struct MoveUndoInfo {
@@ -319,6 +323,7 @@ struct MoveUndoInfo {
   bool       pass = false;
   bool       forcedJumpHasFollowup = false;
   bool       didPull = false;
+  ReversiblePieceOnSquare arimaaPushed;
   Piece      replacedPiece = NO_PIECE;
   Piece      replacedUnpromoted = NO_PIECE;
   bool       replacedPromoted = false;
@@ -358,6 +363,7 @@ struct MoveUndoInfo {
     pass = false;
     forcedJumpHasFollowup = false;
     didPull = false;
+    arimaaPushed.clear();
   }
 
 #ifndef NDEBUG
@@ -608,6 +614,13 @@ public:
   bool push_chain_enemy_only() const;
   bool push_capture_against_friendly_blocker() const;
   bool push_no_immediate_return() const;
+  bool arimaa() const;
+  bool arimaa_setup() const;
+  bool arimaa_push_move(Move m) const;
+  int arimaa_steps() const;
+  int arimaa_strength(PieceType pt) const;
+  bool arimaa_move_ends_turn(Move m) const;
+  bool arimaa_legal(Move m) const;
   PieceSet edge_insert_types() const;
   bool edge_insert_only() const;
   Bitboard edge_insert_region(Color c) const;
@@ -2607,6 +2620,8 @@ inline Square Position::pawn_step(Square s, Color us, int steps) const {
 
 inline bool Position::pass(Color c) const {
   assert(var != nullptr);
+  if (arimaa())
+      return c == sideToMove && !arimaa_setup() && arimaa_steps() > 0 && arimaa_steps() < 4;
   if (st->pendingClaimPass && c == sideToMove)
       return true;
   if (forced_jump_continuation() && st->forcedJumpSquare != SQ_NONE && st->forcedJumpHasFollowup)
@@ -3156,6 +3171,38 @@ inline bool Position::is_clone_move(Move m) const {
 
 inline bool Position::is_pull_move(Move m) const {
   return type_of(m) == PULL && pull_square(m) != SQ_NONE;
+}
+
+inline bool Position::arimaa() const {
+  return var->arimaaRule;
+}
+
+inline bool Position::arimaa_setup() const {
+  return arimaa() && st->arimaaSetup;
+}
+
+inline bool Position::arimaa_push_move(Move m) const {
+  return arimaa() && is_pull_move(m) && empty(pull_square(m))
+      && bool(pieces(~sideToMove) & to_sq(m));
+}
+
+inline int Position::arimaa_steps() const {
+  return arimaa() ? st->arimaaSteps : 0;
+}
+
+inline int Position::arimaa_strength(PieceType pt) const {
+  for (size_t i = 0; i < var->strengthOrder.size(); ++i)
+      if (var->strengthOrder[i] == pt)
+          return int(i);
+  return -1;
+}
+
+inline bool Position::arimaa_move_ends_turn(Move m) const {
+  if (!arimaa() || arimaa_setup())
+      return false;
+  if (is_pass(m))
+      return true;
+  return arimaa_steps() + (is_pull_move(m) ? 2 : 1) >= 4;
 }
 
 inline bool Position::is_swap_move(Move m) const {

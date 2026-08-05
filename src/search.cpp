@@ -1048,6 +1048,7 @@ namespace {
     if (   !PvNode
         && (ss-1)->currentMove != MOVE_NULL
         && (ss-1)->statScore < 23767
+        && !pos.arimaa()
         && !pos.multimove_pass(pos.game_ply())
         &&  eval >= beta
         &&  eval >= ss->staticEval

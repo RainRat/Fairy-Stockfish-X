@@ -2433,6 +2433,11 @@ void Position::set_state(StateInfo* si) const {
   si->forcedJumpSquare = SQ_NONE;
   si->forcedJumpHasFollowup = false;
   si->forcedJumpStep = 0;
+  si->arimaaSteps = 0;
+  si->arimaaSetup = var->arimaaRule && !pieces()
+                 && (count_in_hand(WHITE, ALL_PIECES) || count_in_hand(BLACK, ALL_PIECES));
+  si->arimaaTurnBoundary = !si->arimaaSetup;
+  si->arimaaSideChanged = false;
 
   recompute_state_hashes_and_material(si);
   si->checkersBB = compute_checkers_bb(sideToMove);
@@ -4337,6 +4342,76 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
   return info;
 }
 
+bool Position::arimaa_legal(Move m) const {
+  Color us = sideToMove;
+  bool valid = true;
+  if (is_pass(m))
+  {
+      if (arimaa_setup() || arimaa_steps() == 0 || arimaa_steps() >= 4)
+          valid = false;
+  }
+  else if (arimaa_setup())
+  {
+      if (!is_drop_move(m) || type_of(m) != DROP)
+          valid = false;
+      else
+      {
+          PieceType pt = in_hand_piece_type(m);
+          valid = pt == dropped_piece_type(m) && can_drop(us, pt) && empty(to_sq(m))
+               && bool(drop_region(us, pt) & to_sq(m));
+      }
+  }
+  else
+  {
+      Square from = from_sq(m), to = to_sq(m);
+      Piece mover = from != SQ_NONE ? piece_on(from) : NO_PIECE;
+      if (mover == NO_PIECE || color_of(mover) != us
+          || (freeze_squares(us) & from))
+          valid = false;
+      else
+      {
+          Bitboard adjacent = PseudoAttacks[WHITE][KING][from] & board_bb();
+          auto forward = [&](Square a, Square b) {
+              return type_of(mover) != var->arimaaRabbit
+                  || (us == WHITE ? rank_of(b) > rank_of(a) : rank_of(b) < rank_of(a));
+          };
+
+          if (type_of(m) == NORMAL)
+              valid = bool(adjacent & to) && empty(to) && forward(from, to);
+          else if (!is_pull_move(m))
+              valid = false;
+          else
+          {
+              Square auxiliary = pull_square(m);
+              if (arimaa_push_move(m))
+              {
+                  Piece enemy = piece_on(to);
+                  valid = bool(adjacent & to) && bool(PseudoAttacks[WHITE][KING][to] & board_bb() & auxiliary)
+                       && auxiliary != from && empty(auxiliary)
+                       && arimaa_strength(type_of(mover)) > arimaa_strength(type_of(enemy));
+              }
+              else
+              {
+                  Piece pulled = piece_on(auxiliary);
+                  valid = empty(to) && bool(adjacent & to) && bool(PseudoAttacks[WHITE][KING][from] & auxiliary)
+                       && auxiliary != to && pulled != NO_PIECE && color_of(pulled) != us
+                       && arimaa_strength(type_of(mover)) > arimaa_strength(type_of(pulled))
+                       && forward(from, to);
+              }
+          }
+      }
+  }
+
+  if (!valid)
+      return false;
+  if (!arimaa_move_ends_turn(m))
+      return true;
+
+  StateInfo nextState;
+  ScopedProbeMove probe(*this, m, nextState);
+  return state()->repetition >= 0;
+}
+
 /// Position::legal() tests whether a pseudo-legal move is legal
 
 bool Position::legal(Move m) const {
@@ -4347,6 +4422,8 @@ bool Position::legal(Move m) const {
 
   Color us = sideToMove;
   Color them = ~us;
+  if (arimaa())
+      return arimaa_legal(m);
   bool dropMove = is_drop_move(m);
   bool swapMove = is_swap_move(m);
   bool insertMove = is_insert_move(m);
@@ -6121,7 +6198,11 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   if (countNode && thisThread)
       thisThread->nodes.fetch_add(1, std::memory_order_relaxed);
 #endif
-  Key k = st->key ^ Zobrist::side;
+  const bool arimaaMode = var->arimaaRule;
+  const bool arimaaSetupMove = arimaaMode && st->arimaaSetup;
+  const bool arimaaMoveEnds = arimaaMode && !arimaaSetupMove
+                           && (is_pass(m) || st->arimaaSteps + (is_pull_move(m) ? 2 : 1) >= 4);
+  Key k = arimaaMode ? st->key : st->key ^ Zobrist::side;
 
   // Copy some fields of the old state to our new StateInfo object except the
   // ones which are going to be recalculated from scratch anyway and then switch
@@ -6211,6 +6292,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   bool rifleShot = rifle_capture(m) && captured != NO_PIECE && type_of(m) != CASTLING;
   bool cloneMove = is_clone_move(m);
   bool pullMove = is_pull_move(m);
+  bool arimaaPushMove = arimaaMode && arimaa_push_move(m);
   bool swapMove = is_swap_move(m);
   bool stackMove = is_stack_move(m);
   bool unstackMove = is_unstack_move(m);
@@ -6291,8 +6373,11 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   {
       Square pullFrom = pull_square(m);
       Piece pulled = piece_on(pullFrom);
-      st->pulled.set(pulled, pulled != NO_PIECE && is_promoted(pullFrom),
-                     pulled != NO_PIECE ? unpromoted_piece_on(pullFrom) : NO_PIECE, pullFrom);
+      if (arimaaPushMove)
+          st->arimaaPushed.set(piece_on(to), is_promoted(to), unpromoted_piece_on(to), to);
+      else
+          st->pulled.set(pulled, pulled != NO_PIECE && is_promoted(pullFrom),
+                         pulled != NO_PIECE ? unpromoted_piece_on(pullFrom) : NO_PIECE, pullFrom);
   }
 
   PotionContext potCtx = setup_potion_context(m, us);
@@ -6647,6 +6732,17 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   {
       if (!pureWallMove && !cloneMove && !pullMove)
           k ^= Zobrist::psq[pc][from] ^ Zobrist::psq[pc][to];
+      else if (arimaaPushMove)
+      {
+          Piece pushed = st->arimaaPushed.piece.piece;
+          Square pushTo = pull_square(m);
+          k ^= Zobrist::psq[pc][from] ^ Zobrist::psq[pc][to]
+             ^ Zobrist::psq[pushed][to] ^ Zobrist::psq[pushed][pushTo];
+          if (type_of(pc) == PAWN)
+              st->pawnKey ^= Zobrist::psq[pc][from] ^ Zobrist::psq[pc][to];
+          if (type_of(pushed) == PAWN)
+              st->pawnKey ^= Zobrist::psq[pushed][to] ^ Zobrist::psq[pushed][pushTo];
+      }
       else if (pullMove)
       {
           Piece pulled = st->pulled.piece.piece;
@@ -6887,6 +6983,18 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
               st->pawnKey ^= Zobrist::psq[pc][to];
           else
               st->nonPawnMaterial[us] += PieceValue[MG][pc];
+      }
+      else if (arimaaPushMove)
+      {
+          Square pushTo = pull_square(m);
+          if (Eval::useNNUE)
+          {
+              dp.dirty_num = 2;
+              init_dirty_piece_entry(dp, 0, pc, from, to, NO_PIECE, 0);
+              init_dirty_piece_entry(dp, 1, st->arimaaPushed.piece.piece, to, pushTo, NO_PIECE, 0);
+          }
+          move_piece(to, pushTo);
+          move_piece(from, to);
       }
       else if (pullMove)
       {
@@ -7834,13 +7942,53 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   k ^= st->pieceStateKey ^ pieceStateKey;
   st->pieceStateKey = pieceStateKey;
 
+  if (arimaaMode)
+  {
+      bool sideChanged = false;
+      if (arimaaSetupMove)
+      {
+          st->arimaaSteps = 0;
+          if (!has_setup_drop(us))
+          {
+              sideChanged = true;
+              if (has_setup_drop(them))
+                  sideToMove = them;
+              else
+              {
+                  st->arimaaSetup = false;
+                  st->arimaaTurnBoundary = true;
+                  sideToMove = WHITE;
+              }
+          }
+          else
+              sideToMove = us;
+          st->arimaaTurnBoundary = !st->arimaaSetup;
+      }
+      else if (arimaaMoveEnds)
+      {
+          st->arimaaSteps = 0;
+          st->arimaaTurnBoundary = true;
+          sideToMove = them;
+          sideChanged = true;
+      }
+      else
+      {
+          st->arimaaSteps = st->previous->arimaaSteps + (is_pull_move(m) ? 2 : 1);
+          st->arimaaTurnBoundary = false;
+          sideToMove = us;
+      }
+      st->arimaaSideChanged = sideChanged;
+      if (sideChanged)
+          k ^= Zobrist::side;
+  }
+  else
+      sideToMove = them;
+
   // Update the key with the final value
   st->key = k;
   st->boardKey = st->key ^ st->reserveKey;
   if (var->samePlayerBoardRepetitionIllegal)
       st->layoutKey = layout_key();
-  sideToMove = them;
-
   st->evasionCheckersBB = compute_evasion_checkers_bb(sideToMove);
 
   // Rebuild the derived check info before broad royal-danger checks.  The
@@ -7901,7 +8049,20 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   st->repetition = 0;
   st->boardRepetition = 0;
   int end = captures_to_hand() ? st->pliesFromNull : std::min(st->rule50, st->pliesFromNull);
-  if (end >= 4)
+  if (arimaaMode)
+  {
+      if (st->arimaaTurnBoundary)
+      {
+          int matches = 0;
+          for (StateInfo* stp = st->previous; stp; stp = stp->previous)
+              if (stp->arimaaTurnBoundary && stp->key == st->key && ++matches >= 2)
+              {
+                  st->repetition = -1;
+                  break;
+              }
+      }
+  }
+  else if (end >= 4)
   {
       StateInfo* stp = st->previous->previous;
       for (int i = 4; i <= end; i += 2)
@@ -7936,7 +8097,8 @@ void Position::undo_move(Move m) {
 
   assert(is_ok(m));
 
-  sideToMove = ~sideToMove;
+  if (!var->arimaaRule || st->arimaaSideChanged)
+      sideToMove = ~sideToMove;
 
   Color us = sideToMove;
   Square from = from_sq(m);
@@ -8205,6 +8367,18 @@ void Position::undo_move(Move m) {
           {
               remove_piece(to);
               board[to] = NO_PIECE;
+          }
+          else if (var->arimaaRule && is_pull_move(m)
+                   && st->arimaaPushed.piece.piece != NO_PIECE)
+          {
+              Square pushTo = pull_square(m);
+              if (piece_on(pushTo) != NO_PIECE)
+                  remove_piece(pushTo);
+              if (piece_on(to) != NO_PIECE)
+                  move_piece(to, from);
+              put_piece(st->arimaaPushed.piece.piece, to,
+                        st->arimaaPushed.piece.promoted,
+                        st->arimaaPushed.piece.unpromoted);
           }
           else if (pullMove)
           {
@@ -9005,6 +9179,46 @@ bool Position::is_optional_game_end(Value& result, int ply, int countStarted) co
 /// It does not detect stalemates.
 
 bool Position::is_immediate_game_end(Value& result, int ply) const {
+
+  if (var->arimaaRule)
+  {
+      if (st->arimaaSetup || !st->arimaaTurnBoundary)
+          return false;
+
+      Color mover = ~sideToMove;
+      Bitboard whiteRabbits = pieces(WHITE, var->arimaaRabbit);
+      Bitboard blackRabbits = pieces(BLACK, var->arimaaRabbit);
+      auto wins = [&](Color winner) {
+          result = winner == sideToMove ? mate_in(ply) : mated_in(ply);
+          return true;
+      };
+
+      if (!whiteRabbits && !blackRabbits)
+          return wins(mover);
+      Bitboard goalRabbits[COLOR_NB] = {
+          whiteRabbits & flag_region(WHITE),
+          blackRabbits & flag_region(BLACK)
+      };
+      if (goalRabbits[mover])
+          return wins(mover);
+      if (goalRabbits[sideToMove])
+          return wins(sideToMove);
+      if (!blackRabbits)
+          return wins(WHITE);
+      if (!whiteRabbits)
+          return wins(BLACK);
+
+      bool hasMove = false;
+      for (const auto& m : MoveList<NON_EVASIONS>(*this))
+          if (legal(m))
+          {
+              hasMove = true;
+              break;
+          }
+      if (!hasMove)
+          return wins(mover);
+      return false;
+  }
 
   // Direct royal capture ends the game immediately in capture-the-royal flows.
   // Some variants (e.g. Xiangqi/Janggi) use king_type() as movement semantics
