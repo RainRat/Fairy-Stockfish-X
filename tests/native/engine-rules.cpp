@@ -83,6 +83,45 @@ void movement() {
           "clone_targets_from returned targets for an empty square");
 }
 
+void arimaa_foundation() {
+    Position pos;
+    StateListPtr states;
+
+    set_position(pos, states, "arimaa-foundation",
+                 "8/8/8/4e3/4M3/8/7r/8 w - - 0 1");
+    Move frozen = make_move(SQ_E4, SQ_E3);
+    check(!pos.legal(frozen), "stronger adjacent piece did not freeze the mover");
+
+    set_position(pos, states, "arimaa-foundation",
+                 "8/8/8/4e3/3MM3/8/7r/8 w - - 0 1");
+    Move protectedPiece = parse_move(pos, "e4e3");
+    check(pos.legal(protectedPiece), "friendly adjacent piece did not protect the mover");
+
+    set_position(pos, states, "arimaa-foundation",
+                 "8/8/8/8/8/8/2R4r/8 w - - 0 1");
+    Move unprotectedTrap = parse_move(pos, "c2c3");
+    SimulatedMoveInfo simulated = pos.simulated_move_info(unprotectedTrap);
+    check(!(simulated.occupiedAfterEffects & square_bb(SQ_C3)),
+          "unprotected trap occupant survived move simulation");
+    const Key beforeTrap = pos.key();
+    const std::string beforeTrapFen = pos.fen();
+    states->emplace_back();
+    pos.do_move(unprotectedTrap, states->back());
+    check(pos.piece_on(SQ_C3) == NO_PIECE,
+          "unprotected trap occupant survived move application");
+    pos.undo_move(unprotectedTrap);
+    states->pop_back();
+    check(pos.key() == beforeTrap && pos.fen() == beforeTrapFen,
+          "trap removal did not restore state exactly on undo");
+
+    set_position(pos, states, "arimaa-foundation",
+                 "8/8/8/8/8/1R6/2R4r/8 w - - 0 1");
+    Move protectedTrap = parse_move(pos, "c2c3");
+    simulated = pos.simulated_move_info(protectedTrap);
+    check(simulated.occupiedAfterEffects & square_bb(SQ_C3),
+          "friendly adjacent piece did not protect trap occupant");
+}
+
 void extinction_color_settings() {
     Position pos;
     StateListPtr states;
@@ -761,6 +800,33 @@ surroundClaimPiece = b
 surroundClaimExtraTurn = true
 materialCounting = unweighted
 materialCountingPieceTypes = b
+
+[arimaa-foundation:fairy]
+pieceToCharTable = -
+pawn = -
+knight = -
+bishop = -
+rook = -
+queen = -
+king = -
+fers = -
+silver = -
+aiwok = -
+archbishop = -
+customPiece1 = e:mW
+customPiece2 = m:mW
+customPiece3 = h:mW
+customPiece4 = d:mW
+customPiece5 = c:mW
+customPiece6 = r:fmW
+castling = false
+checking = false
+strengthOrder = r c d h m e
+freezeRule = stronger-adjacent
+freezeProtection = friendly-orthogonal
+trapRegion = c3 f3 c6 f6
+trapProtection = friendly-orthogonal
+startFen = 8/8/8/8/8/8/8/8 w - - 0 1
 )INI");
     variants.parse_istream<false>(inline_config);
 }
@@ -773,7 +839,7 @@ int main(int argc, char** argv) {
         auto is_group = [](const std::string& name) {
             return name == "all" || name == "promotion" || name == "movement"
                 || name == "locust-all" || name == "occupancy" || name == "state" || name == "royal"
-                || name == "adjudication" || name == "board-games";
+                || name == "adjudication" || name == "board-games" || name == "arimaa";
         };
         bool first_is_group = argc > 1 && is_group(argv[1]);
         std::string config_path = first_is_group ? "src/variants.ini"
@@ -792,6 +858,7 @@ int main(int argc, char** argv) {
           {"promotion", promotion}, {"movement", movement}, {"occupancy", occupancy},
           {"extinction-color", extinction_color_settings},
           {"locust-all", locust_all},
+          {"arimaa", arimaa_foundation},
           {"state", state}, {"royal", royal}, {"adjudication", adjudication},
           {"board-games", board_games}
         };

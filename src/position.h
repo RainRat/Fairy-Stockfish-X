@@ -82,6 +82,7 @@ struct PushInfo {
 struct SimulatedMoveInfo {
   Bitboard relocatedOccupancy = Bitboard(0);
   Bitboard effectOccupancy = Bitboard(0);
+  std::array<Bitboard, COLOR_NB> colorOccupancy = {};
   Bitboard placementOccupancy = Bitboard(0);
   Bitboard occupiedAfterEffects = Bitboard(0);
   Bitboard removedByEffects = Bitboard(0);
@@ -293,6 +294,7 @@ struct StateInfoDerived {
 
 struct MoveUndoInfo {
   Bitboard   bycatchSquares = Bitboard(0);
+  Bitboard   trapRemoved = Bitboard(0);
   Bitboard   libertySelfRemoved = Bitboard(0);
   PackedReversiblePiece bycatchPieces[SQUARE_NB];
   Bitboard   blastPromotedSquares = Bitboard(0);
@@ -325,6 +327,7 @@ struct MoveUndoInfo {
 
   void clear() {
     bycatchSquares = Bitboard(0);
+    trapRemoved = Bitboard(0);
     libertySelfRemoved = Bitboard(0);
     for (auto& saved : bycatchPieces)
         saved.clear();
@@ -360,6 +363,7 @@ struct MoveUndoInfo {
 #ifndef NDEBUG
   bool empty() const {
     return bycatchSquares == Bitboard(0)
+        && trapRemoved == Bitboard(0)
         && libertySelfRemoved == Bitboard(0)
         && blastPromotedSquares == Bitboard(0)
         && laserTransformedSquares == Bitboard(0)
@@ -667,6 +671,7 @@ public:
   bool can_cast_potion(Color c, Variant::PotionType type) const;
   Bitboard potion_zone(Color c, Variant::PotionType type) const;
   int potion_cooldown(Color c, Variant::PotionType type) const;
+  Bitboard strength_freeze_squares(Color c) const;
   bool gating_move_blocks_occupancy(Move m) const;
   Bitboard freeze_squares() const;
   Bitboard freeze_squares(Color c) const;
@@ -2426,12 +2431,14 @@ inline bool Position::can_cast_potion(Color c, Variant::PotionType type) const {
 }
 
 inline Bitboard Position::freeze_squares(Color c) const {
-  if (!potions_enabled())
-      return Bitboard(0);
-  Bitboard mask = st->potionZones[c][Variant::POTION_FREEZE];
-  if (const SpellContext* spellCtx = current_spell_context(); spellCtx && c == ~sideToMove)
-      mask |= spellCtx->freezeExtra;
-  if (var->checkedRoyalsIgnoreFreeze)
+  Bitboard mask = strength_freeze_squares(c);
+  if (potions_enabled())
+  {
+      mask |= st->potionZones[c][Variant::POTION_FREEZE];
+      if (const SpellContext* spellCtx = current_spell_context(); spellCtx && c == ~sideToMove)
+          mask |= spellCtx->freezeExtra;
+  }
+  if (potions_enabled() && var->checkedRoyalsIgnoreFreeze)
       for (Color royalColor : {WHITE, BLACK})
       {
           const PieceType royalType = castling_king_piece(royalColor);

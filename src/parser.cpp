@@ -532,6 +532,31 @@ namespace {
         return parse_named_value(value, target, values);
     }
 
+    template <> bool set(const std::string& value, FreezeRule& target) {
+        static constexpr auto values = std::array{
+            std::pair{"none", FreezeRule::NONE},
+            std::pair{"stronger-adjacent", FreezeRule::STRONGER_ADJACENT},
+            std::pair{"adjacent-enemy", FreezeRule::ADJACENT_ENEMY},
+        };
+        return parse_named_value(value, target, values);
+    }
+
+    template <> bool set(const std::string& value, FreezeProtection& target) {
+        static constexpr auto values = std::array{
+            std::pair{"none", FreezeProtection::NONE},
+            std::pair{"friendly-orthogonal", FreezeProtection::FRIENDLY_ORTHOGONAL},
+        };
+        return parse_named_value(value, target, values);
+    }
+
+    template <> bool set(const std::string& value, TrapProtection& target) {
+        static constexpr auto values = std::array{
+            std::pair{"none", TrapProtection::NONE},
+            std::pair{"friendly-orthogonal", TrapProtection::FRIENDLY_ORTHOGONAL},
+        };
+        return parse_named_value(value, target, values);
+    }
+
     template <> bool set(const std::string& value, MaterialCounting& target) {
         static constexpr auto values = std::array{
             std::pair{"janggi", JANGGI_MATERIAL},
@@ -1341,6 +1366,48 @@ bool VariantParser<DoCheck>::parse_piece_types(Variant* v) {
 }
 
 template <bool DoCheck>
+bool VariantParser<DoCheck>::parse_strength_order(Variant* v) {
+    auto it = config.find("strengthOrder");
+    if (it == config.end())
+        return true;
+
+    if (trim(it->second) == "-")
+    {
+        v->strengthOrder.clear();
+        v->strengthOrderTypes = NO_PIECE_SET;
+        return true;
+    }
+
+    std::istringstream iss(it->second);
+    std::string token;
+    PieceSet parsedTypes = NO_PIECE_SET;
+    std::vector<PieceType> parsedOrder;
+    while (iss >> token)
+    {
+        PieceType pt = parse_piece_type_token(v, token);
+        if (pt == NO_PIECE_TYPE || (parsedTypes & piece_set(pt)))
+        {
+            if (DoCheck)
+                std::cerr << "strengthOrder - Unknown or duplicate piece type: " << token << std::endl;
+            return false;
+        }
+        parsedOrder.push_back(pt);
+        parsedTypes |= piece_set(pt);
+    }
+
+    if (!parsedTypes)
+    {
+        if (DoCheck)
+            std::cerr << "strengthOrder - Expected an ordered list of piece types." << std::endl;
+        return false;
+    }
+
+    v->strengthOrder = std::move(parsedOrder);
+    v->strengthOrderTypes = parsedTypes;
+    return true;
+}
+
+template <bool DoCheck>
 bool VariantParser<DoCheck>::parse_piece_values(Variant* v) {
     for (Phase phase : {MG, EG})
     {
@@ -1754,6 +1821,10 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("surroundCaptureHostileRegion", v->surroundCaptureHostileRegion);
     parse_attribute("libertyCapture", v->libertyCapture);
     parse_attribute("libertySelfCapture", v->libertySelfCapture);
+    parse_attribute("freezeRule", v->freezeRule);
+    parse_attribute("freezeProtection", v->freezeProtection);
+    parse_attribute("trapRegion", v->trapRegion);
+    parse_attribute("trapProtection", v->trapProtection);
     parse_attribute("doubleStep", v->doubleStep);
     parse_color_setting("doubleStepRegion", v->doubleStepRegion);
     parse_color_setting("tripleStepRegion", v->tripleStepRegion);
@@ -2356,6 +2427,27 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
         std::cerr << "checking=false with allowChecks=true is unusual: king safety is disabled, so the no-check rule will not constrain legality." << std::endl;
     if (DoCheck && v->progressiveMultimove && !v->multimoves.empty())
         std::cerr << "progressiveMultimove ignores multimoves sequence." << std::endl;
+    if (v->freezeRule == FreezeRule::STRONGER_ADJACENT)
+    {
+        if (v->strengthOrder.empty())
+        {
+            if (DoCheck)
+                std::cerr << "freezeRule=stronger-adjacent requires strengthOrder." << std::endl;
+            valid = false;
+        }
+        else if (v->strengthOrderTypes != v->pieceTypes)
+        {
+            if (DoCheck)
+            {
+                std::cerr << "strengthOrder must list every piece type when freezeRule=stronger-adjacent." << std::endl;
+                std::cerr << "Unlisted piece types:";
+                for (PieceSet ps = v->pieceTypes & ~v->strengthOrderTypes; ps; )
+                    std::cerr << ' ' << piece_name(pop_lsb(ps));
+                std::cerr << std::endl;
+            }
+            valid = false;
+        }
+    }
     for (Color c : {WHITE, BLACK})
     {
         std::stringstream ss(v->connectPieceGoal[c]);
@@ -2719,6 +2811,7 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
     }
 
     if (!parse_piece_types(v) ||
+        !parse_strength_order(v) ||
         !parse_piece_values(v) ||
         !parse_legacy_attributes(v) ||
         !parse_official_options(v))

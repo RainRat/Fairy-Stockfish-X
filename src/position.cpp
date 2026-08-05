@@ -63,6 +63,27 @@ void set_current_spell_context(const SpellContext* ctx) noexcept {
 
 namespace {
 
+  Bitboard compute_trap_removal_mask(const Variant* var,
+                                     const std::array<Bitboard, COLOR_NB>& colorOccupancy,
+                                     Bitboard occupied) {
+      if (!var->trapRegion)
+          return Bitboard(0);
+
+      Bitboard removal = var->trapRegion & occupied;
+      if (var->trapProtection == TrapProtection::FRIENDLY_ORTHOGONAL)
+      {
+          Bitboard candidates = removal;
+          while (candidates)
+          {
+              Square sq = pop_lsb(candidates);
+              Color c = (colorOccupancy[WHITE] & sq) ? WHITE : BLACK;
+              if (attacks_bb<WAZIR>(sq) & colorOccupancy[c])
+                  removal &= ~square_bb(sq);
+          }
+      }
+      return removal;
+  }
+
   inline Variant::PotionType potion_type_from_piece(const Variant* var, PieceType pt) {
     if (!var || !var->potions)
         return static_cast<Variant::PotionType>(Variant::POTION_TYPE_NB);
@@ -4001,6 +4022,8 @@ Bitboard Position::compute_remove_connect_n_mask(
 
 SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const {
   SimulatedMoveInfo info;
+  info.colorOccupancy[WHITE] = pieces(WHITE);
+  info.colorOccupancy[BLACK] = pieces(BLACK);
   info.from = from_sq(m);
   info.to = to_sq(m);
   info.castling = type_of(m) == CASTLING;
@@ -4062,6 +4085,43 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
   if (info.paired && is_ok(info.secondarySquare))
       info.effectOccupancy |= square_bb(info.secondarySquare);
 
+  const Color us = sideToMove;
+  const Color dropColor = dropMove ? drop_hand_color(us, in_hand_piece_type(m)) : us;
+  auto remove_color_square = [&](Square sq) {
+      if (is_ok(sq))
+      {
+          info.colorOccupancy[WHITE] &= ~square_bb(sq);
+          info.colorOccupancy[BLACK] &= ~square_bb(sq);
+      }
+  };
+  if (info.castling)
+  {
+      Square kto, rto;
+      castling_destinations(us, info.from, info.to, kto, rto);
+      remove_color_square(info.from);
+      remove_color_square(info.to);
+      info.colorOccupancy[us] |= square_bb(kto) | square_bb(rto);
+  }
+  else if (info.rifle)
+  {
+      remove_color_square(info.captureSquare);
+  }
+  else if (is_self_destruct(m))
+  {
+      remove_color_square(info.from);
+  }
+  else if (!pureWallMove)
+  {
+      if (!dropMove && !info.clone && is_ok(info.from))
+          remove_color_square(info.from);
+      if (is_ok(info.captureSquare) && (!is_jump_capture(m) || primaryPieceCapture))
+          remove_color_square(info.captureSquare);
+      if (is_ok(info.to))
+          info.colorOccupancy[dropColor] |= square_bb(info.to);
+  }
+  if (info.paired && is_ok(info.secondarySquare))
+      info.colorOccupancy[dropColor] |= square_bb(info.secondarySquare);
+
   Bitboard latePlacements = 0;
 
   // Ordinary gating pieces participate in move effects. Walls are installed
@@ -4089,6 +4149,8 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
           info.removedWalls = st->wallSquares;
   }
 
+  info.colorOccupancy[us] |= info.addedPlacements;
+
   info.placementOccupancy = (info.effectOccupancy & ~info.removedWalls) | latePlacements;
   if (!withEffects)
   {
@@ -4098,7 +4160,6 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
 
   info.removedByEffects = 0;
   info.structuralRemoval = 0;
-  const Color us = sideToMove;
   const Piece mover = moved_piece(m);
   const PieceType movePt = mover == NO_PIECE ? NO_PIECE_TYPE : type_of(mover);
   const Square shotSq = isCapture ? info.captureSquare : info.to;
@@ -4261,6 +4322,16 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
   }
 
   Bitboard occupiedAfterStructural = info.effectOccupancy & ~info.structuralRemoval;
+  if (var->trapRegion)
+  {
+      std::array<Bitboard, COLOR_NB> colorAfterEffects = info.colorOccupancy;
+      colorAfterEffects[WHITE] &= occupiedAfterStructural & ~info.removedByEffects & ~info.removedWalls;
+      colorAfterEffects[BLACK] &= occupiedAfterStructural & ~info.removedByEffects & ~info.removedWalls;
+      Bitboard trapMask = compute_trap_removal_mask(var, colorAfterEffects,
+                                                     occupiedAfterStructural & ~info.removedByEffects
+                                                                               & ~info.removedWalls);
+      info.removedByEffects |= trapMask;
+  }
   info.occupiedAfterEffects = (occupiedAfterStructural & ~info.removedByEffects & ~info.removedWalls)
                             | latePlacements;
   return info;
@@ -5851,6 +5922,50 @@ bool Position::analyze_push(Move m, PushInfo& info) const {
                : analyze_push_stepwise(*this, m, info);
 }
 
+Bitboard Position::strength_freeze_squares(Color c) const {
+    if (var->freezeRule == FreezeRule::NONE)
+        return Bitboard(0);
+
+    Bitboard frozen = 0;
+    Bitboard friendly = pieces(c);
+    Bitboard enemy = pieces(~c);
+    Bitboard candidates = friendly;
+    while (candidates)
+    {
+        Square sq = pop_lsb(candidates);
+        Bitboard adjacent = attacks_bb<WAZIR>(sq) & board_bb();
+        if (var->freezeProtection == FreezeProtection::FRIENDLY_ORTHOGONAL
+            && (adjacent & friendly))
+            continue;
+
+        Bitboard enemyAdjacent = adjacent & enemy;
+        if (!enemyAdjacent)
+            continue;
+
+        if (var->freezeRule == FreezeRule::ADJACENT_ENEMY)
+        {
+            frozen |= sq;
+            continue;
+        }
+
+        PieceType pt = type_of(piece_on(sq));
+        auto strength = [&](PieceType type) {
+            return std::find(var->strengthOrder.begin(), var->strengthOrder.end(), type)
+                 - var->strengthOrder.begin();
+        };
+        while (enemyAdjacent)
+        {
+            Square enemySq = pop_lsb(enemyAdjacent);
+            if (strength(type_of(piece_on(enemySq))) > strength(pt))
+            {
+                frozen |= sq;
+                break;
+            }
+        }
+    }
+    return frozen;
+}
+
 /// Position::do_move() makes a move, and saves all information necessary
 /// to a StateInfo object. The move is assumed to be legal. Pseudo-legal
 /// moves should be filtered out before this function is called.
@@ -7317,6 +7432,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
          ( blast_on_self_destruct() && is_self_destruct(m) ) ||
          var->blastPassiveTypes ||
          ( remove_connect_n() > 0 ) ||
+         var->trapRegion ||
          ( dropMove && (var->libertyCapture == LibertyAction::REMOVE
                      || var->libertySelfCapture == LibertyAction::REMOVE) ) ||
          ( pi && pi->has_universal_hopper() && jumpCapsq != SQ_NONE )
@@ -7403,14 +7519,27 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           removal_mask |= removalMask;
       }
 
+      if (var->trapRegion)
+      {
+          std::array<Bitboard, COLOR_NB> colorAfterEffects = {
+              pieces(WHITE) & ~removal_mask,
+              pieces(BLACK) & ~removal_mask
+          };
+          Bitboard trapMask = compute_trap_removal_mask(var, colorAfterEffects,
+                                                         pieces() & ~removal_mask);
+          removal_mask |= trapMask;
+          st->trapRemoved |= trapMask;
+      }
+
       while (removal_mask)
       {
           Square bsq = pop_lsb(removal_mask);
           Piece bpc = piece_on(bsq);
           if (bpc == NO_PIECE) continue;
           Color bc = color_of(bpc);
+          bool trapRemoval = st->trapRemoved & bsq;
 
-          if (blast_promotion() && (blast_mask & bsq) && !(connect_mask & bsq)) {
+          if (blast_promotion() && !trapRemoval && (blast_mask & bsq) && !(connect_mask & bsq)) {
               PieceType promoted = promoted_piece_type(type_of(bpc));
               if (promoted != NO_PIECE_TYPE) {
                   Piece promotedPiece = make_piece(bc, promoted);
@@ -7454,7 +7583,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           board[bsq] = NO_PIECE;
 
           // Points assignment logic
-          if (points_counting() && !(liberty_self_removal & bsq)) {
+          if (points_counting() && !(liberty_self_removal & bsq) && !trapRemoval) {
               add_capture_points(st, us, bpc);
           }
 
@@ -7462,7 +7591,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           Piece transferPiece = reserve_transfer_piece(us, bpc, capturedPromoted, unpromotedCaptured,
                                                        drop_loop(), var->captureToHandSide,
                                                        main_promotion_pawn_type(color_of(bpc)));
-          if (!petrifiedCenter && !(liberty_self_removal & bsq))
+          if (!petrifiedCenter && !(liberty_self_removal & bsq) && !trapRemoval)
           {
               bool transferred = add_capture_transfer(st, transferPiece, &k);
               if (Eval::useNNUE && bycatchDirtyIdx >= 0 && transferred)
@@ -7591,7 +7720,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       remove_destination_piece_no_capture_effects(moverSq, makeDeadSquare);
   }
 
-  Bitboard localBycatch = (st->bycatchSquares & ~st->libertySelfRemoved)
+  Bitboard localBycatch = (st->bycatchSquares & ~st->libertySelfRemoved & ~st->trapRemoved)
                         & (blast_pattern(moverSq) | square_bb(moverSq));
   bool captureHappened = (captured != NO_PIECE && !stackMove) || localBycatch;
   if (trigger_matches(var->changingColorTrigger, captureHappened)
@@ -7883,7 +8012,8 @@ void Position::undo_move(Move m) {
               if (   !wasBlastPromoted
                    && !wasLaserTransformed
                    && !petrifiedCenter
-                   && !(st->libertySelfRemoved & bsq))
+                   && !(st->libertySelfRemoved & bsq)
+                   && !(st->trapRemoved & bsq))
                {
                    undo_capture_transfer(st, transferPiece);
                }
