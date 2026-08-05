@@ -69,11 +69,11 @@ namespace {
   }
 
   template<Color Us, GenType Type>
-  ExtMove* generate_arimaa(const Position& pos, ExtMove* moveList) {
+  ExtMove* generate_compound_turn(const Position& pos, ExtMove* moveList) {
     if constexpr (Type == CAPTURES || Type == QUIET_CHECKS)
         return moveList;
 
-    if (pos.arimaa_setup())
+    if (pos.setup_phase())
     {
         for (PieceSet ps = pos.piece_types(); ps; )
         {
@@ -87,7 +87,7 @@ namespace {
         return moveList;
     }
 
-    const int stepsRemaining = pos.variant()->compoundTurnSteps - pos.arimaa_steps();
+    const int stepsRemaining = pos.variant()->compoundTurnSteps - pos.turn_steps();
     if (stepsRemaining <= 0)
         return moveList;
 
@@ -99,15 +99,10 @@ namespace {
         if (frozen & from)
             continue;
 
-        Bitboard adjacent = PseudoAttacks[WHITE][WAZIR][from] & pos.board_bb();
-        Bitboard quiet = adjacent & ~pos.pieces();
-        if (pos.variant()->forwardOnlyPieceTypes & piece_set(type_of(pos.piece_on(from))))
-        {
-            int delta = Us == WHITE ? 1 : -1;
-            Square backwardSq = make_square(file_of(from), Rank(int(rank_of(from)) - delta));
-            if (is_ok(backwardSq))
-                quiet &= ~square_bb(backwardSq);
-        }
+        PieceType pt = type_of(pos.piece_on(from));
+        Bitboard movement = (pos.moves_from(Us, pt, from) | pos.attacks_from(Us, pt, from)) & pos.board_bb();
+        Bitboard adjacent = movement;
+        Bitboard quiet = pos.moves_from(Us, pt, from) & ~pos.pieces();
         while (quiet)
             *moveList++ = make_move(from, pop_lsb(quiet));
 
@@ -118,8 +113,8 @@ namespace {
         while (enemies)
         {
             Square enemySq = pop_lsb(enemies);
-            if (pos.arimaa_strength(type_of(pos.piece_on(from)))
-                <= pos.arimaa_strength(type_of(pos.piece_on(enemySq))))
+            if (pos.piece_strength(type_of(pos.piece_on(from)))
+                <= pos.piece_strength(type_of(pos.piece_on(enemySq))))
                 continue;
             Bitboard pushTo = PseudoAttacks[WHITE][WAZIR][enemySq] & pos.board_bb() & ~pos.pieces();
             pushTo &= ~square_bb(from);
@@ -131,17 +126,10 @@ namespace {
         while (pullFroms)
         {
             Square pullFrom = pop_lsb(pullFroms);
-            if (pos.arimaa_strength(type_of(pos.piece_on(from)))
-                <= pos.arimaa_strength(type_of(pos.piece_on(pullFrom))))
+            if (pos.piece_strength(type_of(pos.piece_on(from)))
+                <= pos.piece_strength(type_of(pos.piece_on(pullFrom))))
                 continue;
-            Bitboard pullTo = adjacent & pos.board_bb() & ~pos.pieces();
-            if (pos.variant()->forwardOnlyPieceTypes & piece_set(type_of(pos.piece_on(from))))
-            {
-                int delta = Us == WHITE ? 1 : -1;
-                Square backwardSq = make_square(file_of(from), Rank(int(rank_of(from)) - delta));
-                if (is_ok(backwardSq))
-                    pullTo &= ~square_bb(backwardSq);
-            }
+            Bitboard pullTo = pos.moves_from(Us, pt, from) & ~pos.pieces();
             pullTo &= ~square_bb(pullFrom);
             while (pullTo)
                 *moveList++ = make_pull(from, pop_lsb(pullTo), pullFrom);
@@ -1165,8 +1153,8 @@ namespace {
     static_assert(Type != LEGAL, "Unsupported type in generate_all()");
 
     constexpr bool Checks = Type == QUIET_CHECKS; // Reduce template instantiations
-    if (pos.arimaa())
-        return generate_arimaa<Us, Type>(pos, moveList);
+    if (pos.compound_turns())
+        return generate_compound_turn<Us, Type>(pos, moveList);
     const PieceType royalPt = pos.royal_piece_type(Us);
     const Square royalSq = pos.royal_square(Us);
     const Bitboard checkers = pos.evasion_checkers();

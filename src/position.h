@@ -266,9 +266,9 @@ struct StateInfoCopied {
   Key pieceStateKey;
   Key reserveKey;
   Key layoutKey;
-  Key arimaaTurnStartLayoutKey;
-  int arimaaSteps;
-  bool arimaaSetup;
+  Key turnStartLayoutKey;
+  int turnSteps;
+  bool setupPhase;
 };
 
 struct StateInfoDerived {
@@ -293,8 +293,8 @@ struct StateInfoDerived {
   OptBool    legalCapture = NO_VALUE;
   OptBool    legalEnPassant = NO_VALUE;
   Bitboard   chased = Bitboard(0);
-  bool       arimaaTurnBoundary = false;
-  bool       arimaaSideChanged = false;
+  bool       turnBoundary = false;
+  bool       turnSideChanged = false;
 };
 
 struct MoveUndoInfo {
@@ -324,7 +324,7 @@ struct MoveUndoInfo {
   bool       pass = false;
   bool       forcedJumpHasFollowup = false;
   bool       didPull = false;
-  ReversiblePieceOnSquare arimaaPushed;
+  ReversiblePieceOnSquare pushPullPushed;
   Piece      replacedPiece = NO_PIECE;
   Piece      replacedUnpromoted = NO_PIECE;
   bool       replacedPromoted = false;
@@ -364,7 +364,7 @@ struct MoveUndoInfo {
     pass = false;
     forcedJumpHasFollowup = false;
     didPull = false;
-    arimaaPushed.clear();
+    pushPullPushed.clear();
   }
 
 #ifndef NDEBUG
@@ -615,14 +615,14 @@ public:
   bool push_chain_enemy_only() const;
   bool push_capture_against_friendly_blocker() const;
   bool push_no_immediate_return() const;
-  bool arimaa() const;
-  bool arimaa_setup() const;
-  bool arimaa_push_move(Move m) const;
-  int arimaa_steps() const;
-  int arimaa_strength(PieceType pt) const;
-  bool arimaa_move_ends_turn(Move m) const;
-  bool arimaa_pseudo_legal(Move m) const;
-  bool arimaa_legal(Move m) const;
+  bool compound_turns() const;
+  bool setup_phase() const;
+  bool compound_push_move(Move m) const;
+  int turn_steps() const;
+  int piece_strength(PieceType pt) const;
+  bool compound_turn_ends(Move m) const;
+  bool compound_turn_pseudo_legal(Move m) const;
+  bool compound_turn_legal(Move m) const;
   PieceSet edge_insert_types() const;
   bool edge_insert_only() const;
   Bitboard edge_insert_region(Color c) const;
@@ -2622,9 +2622,9 @@ inline Square Position::pawn_step(Square s, Color us, int steps) const {
 
 inline bool Position::pass(Color c) const {
   assert(var != nullptr);
-  if (arimaa())
-      return var->compoundTurnPass && c == sideToMove && !arimaa_setup()
-          && arimaa_steps() > 0 && arimaa_steps() < var->compoundTurnSteps;
+  if (compound_turns())
+      return var->compoundTurnPass && c == sideToMove && !setup_phase()
+          && turn_steps() > 0 && turn_steps() < var->compoundTurnSteps;
   if (st->pendingClaimPass && c == sideToMove)
       return true;
   if (forced_jump_continuation() && st->forcedJumpSquare != SQ_NONE && st->forcedJumpHasFollowup)
@@ -3176,36 +3176,36 @@ inline bool Position::is_pull_move(Move m) const {
   return type_of(m) == PULL && pull_square(m) != SQ_NONE;
 }
 
-inline bool Position::arimaa() const {
+inline bool Position::compound_turns() const {
   return var->compoundTurnSteps > 0;
 }
 
-inline bool Position::arimaa_setup() const {
-  return var->sequentialSetup && st->arimaaSetup;
+inline bool Position::setup_phase() const {
+  return var->sequentialSetup && st->setupPhase;
 }
 
-inline bool Position::arimaa_push_move(Move m) const {
+inline bool Position::compound_push_move(Move m) const {
   return var->atomicPushPull && is_pull_move(m) && empty(pull_square(m))
       && bool(pieces(~sideToMove) & to_sq(m));
 }
 
-inline int Position::arimaa_steps() const {
-  return arimaa() ? st->arimaaSteps : 0;
+inline int Position::turn_steps() const {
+  return compound_turns() ? st->turnSteps : 0;
 }
 
-inline int Position::arimaa_strength(PieceType pt) const {
+inline int Position::piece_strength(PieceType pt) const {
   for (size_t i = 0; i < var->strengthOrder.size(); ++i)
       if (var->strengthOrder[i] == pt)
           return int(i);
   return -1;
 }
 
-inline bool Position::arimaa_move_ends_turn(Move m) const {
-  if (!arimaa() || arimaa_setup())
+inline bool Position::compound_turn_ends(Move m) const {
+  if (!compound_turns() || setup_phase())
       return false;
   if (is_pass(m))
       return true;
-  return arimaa_steps() + (is_pull_move(m) && var->atomicPushPull ? 2 : 1) >= var->compoundTurnSteps;
+  return turn_steps() + (is_pull_move(m) && var->atomicPushPull ? 2 : 1) >= var->compoundTurnSteps;
 }
 
 inline bool Position::is_swap_move(Move m) const {

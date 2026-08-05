@@ -215,8 +215,7 @@ struct Variant {
   int compoundTurnSteps = 0;
   bool compoundTurnPass = false;
   bool atomicPushPull = false;
-  PieceSet forwardOnlyPieceTypes = NO_PIECE_SET;
-  bool turnBoundaryAdjudication = false;
+  bool flagTurnBoundaryAdjudication = false;
   bool doubleStep = true;
   mutable bool useFastStandardPawnGenerator = true;
   ColorSetting<PieceTypeBitboardGroup> doubleStepRegion = ColorSetting<PieceTypeBitboardGroup>(Rank2BB, Rank7BB);

@@ -882,7 +882,7 @@ namespace {
           key ^= Zobrist::committed[c][f][pt];
   }
 
-  inline Key arimaa_state_key(const Variant* var, int steps, bool setup) {
+  inline Key compound_turn_state_key(const Variant* var, int steps, bool setup) {
       if (var->compoundTurnSteps <= 0)
           return 0;
       assert(steps >= 0 && steps <= Zobrist::MAX_COMPOUND_TURN_STEPS);
@@ -2425,7 +2425,7 @@ void Position::recompute_state_hashes_and_material(StateInfo* si) const {
 
   si->pieceStateKey = compute_piece_state_key();
   si->key ^= si->pieceStateKey;
-  si->key ^= arimaa_state_key(var, si->arimaaSteps, si->arimaaSetup);
+  si->key ^= compound_turn_state_key(var, si->turnSteps, si->setupPhase);
 
   si->reserveKey = reserve_key();
   si->boardKey = si->key ^ si->reserveKey;
@@ -2448,14 +2448,14 @@ void Position::set_state(StateInfo* si) const {
   si->forcedJumpSquare = SQ_NONE;
   si->forcedJumpHasFollowup = false;
   si->forcedJumpStep = 0;
-  si->arimaaSteps = 0;
-  si->arimaaSetup = var->sequentialSetup && !pieces()
+  si->turnSteps = 0;
+  si->setupPhase = var->sequentialSetup && !pieces()
                  && (count_in_hand(WHITE, ALL_PIECES) || count_in_hand(BLACK, ALL_PIECES));
-  si->arimaaTurnBoundary = !si->arimaaSetup;
-  si->arimaaSideChanged = false;
+  si->turnBoundary = !si->setupPhase;
+  si->turnSideChanged = false;
 
   recompute_state_hashes_and_material(si);
-  si->arimaaTurnStartLayoutKey = si->layoutKey;
+  si->turnStartLayoutKey = si->layoutKey;
   si->checkersBB = compute_checkers_bb(sideToMove);
   si->repetition = 0;
   si->boardRepetition = 0;
@@ -4073,8 +4073,8 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
   const bool wallPlacement = is_gating(m) && !laser_game() && is_ok(gating_square(m))
                           && walling(sideToMove) && (!wall_or_move() || info.from == info.to);
   const bool pureWallMove = wallPlacement && wall_or_move() && info.from == info.to;
-  const bool arimaaPushMove = arimaa_push_move(m);
-  const bool arimaaPullMove = var->atomicPushPull && is_pull_move(m) && !arimaaPushMove;
+  const bool compoundPushMove = compound_push_move(m);
+  const bool compoundPullMove = var->atomicPushPull && is_pull_move(m) && !compoundPushMove;
 
   if (info.castling)
   {
@@ -4090,11 +4090,11 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
       if (is_ok(info.captureSquare) && (!is_jump_capture(m) || primaryPieceCapture))
           info.relocatedOccupancy ^= square_bb(info.captureSquare);
   }
-  else if (arimaaPushMove)
+  else if (compoundPushMove)
   {
       info.relocatedOccupancy = pieces() ^ square_bb(info.from) ^ square_bb(pull_square(m));
   }
-  else if (arimaaPullMove)
+  else if (compoundPullMove)
   {
       info.relocatedOccupancy = pieces() ^ square_bb(info.to) ^ square_bb(pull_square(m));
   }
@@ -4137,14 +4137,14 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
   {
       remove_color_square(info.captureSquare);
   }
-  else if (arimaaPushMove || arimaaPullMove)
+  else if (compoundPushMove || compoundPullMove)
   {
       Square auxiliary = pull_square(m);
       remove_color_square(info.from);
       remove_color_square(info.to);
       remove_color_square(auxiliary);
       info.colorOccupancy[us] |= square_bb(info.to);
-      info.colorOccupancy[~us] |= square_bb(arimaaPushMove ? auxiliary : info.from);
+      info.colorOccupancy[~us] |= square_bb(compoundPushMove ? auxiliary : info.from);
   }
   else if (is_self_destruct(m))
   {
@@ -4377,16 +4377,16 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
   return info;
 }
 
-bool Position::arimaa_pseudo_legal(Move m) const {
+bool Position::compound_turn_pseudo_legal(Move m) const {
   Color us = sideToMove;
   bool valid = true;
   if (is_pass(m))
   {
-      if (!var->compoundTurnPass || arimaa_setup() || arimaa_steps() == 0
-          || arimaa_steps() >= var->compoundTurnSteps)
+      if (!var->compoundTurnPass || setup_phase() || turn_steps() == 0
+          || turn_steps() >= var->compoundTurnSteps)
           valid = false;
   }
-  else if (arimaa_setup())
+  else if (setup_phase())
   {
       if (!is_drop_move(m) || type_of(m) != DROP)
           valid = false;
@@ -4406,27 +4406,25 @@ bool Position::arimaa_pseudo_legal(Move m) const {
           valid = false;
       else
       {
-          Bitboard adjacent = PseudoAttacks[WHITE][WAZIR][from] & board_bb();
-          auto forward = [&](Square a, Square b) {
-              return !(var->forwardOnlyPieceTypes & piece_set(type_of(mover)))
-                  || (us == WHITE ? rank_of(b) >= rank_of(a) : rank_of(b) <= rank_of(a));
-          };
+          PieceType moverType = type_of(mover);
+          Bitboard movement = (moves_from(us, moverType, from) | attacks_from(us, moverType, from)) & board_bb();
+          Bitboard adjacent = movement;
 
           if (type_of(m) == NORMAL)
-              valid = bool(adjacent & to) && empty(to) && forward(from, to);
+              valid = bool(moves_from(us, moverType, from) & to) && empty(to);
           else if (!var->atomicPushPull || !is_pull_move(m))
               valid = false;
           else
           {
               Square auxiliary = pull_square(m);
-              if (arimaa_push_move(m))
+              if (compound_push_move(m))
               {
                   Piece enemy = piece_on(to);
                   valid = bool(adjacent & to) && is_ok(auxiliary)
                        && bool(PseudoAttacks[WHITE][WAZIR][to] & board_bb() & square_bb(auxiliary))
                        && auxiliary != from && empty(auxiliary)
                        && enemy != NO_PIECE && color_of(enemy) != us
-                       && arimaa_strength(type_of(mover)) > arimaa_strength(type_of(enemy));
+                       && piece_strength(type_of(mover)) > piece_strength(type_of(enemy));
               }
               else
               {
@@ -4434,24 +4432,24 @@ bool Position::arimaa_pseudo_legal(Move m) const {
                   valid = is_ok(auxiliary) && empty(to) && bool(adjacent & to)
                        && bool(PseudoAttacks[WHITE][WAZIR][from] & square_bb(auxiliary))
                        && auxiliary != to && pulled != NO_PIECE && color_of(pulled) != us
-                       && arimaa_strength(type_of(mover)) > arimaa_strength(type_of(pulled))
-                       && forward(from, to);
+                       && piece_strength(type_of(mover)) > piece_strength(type_of(pulled))
+                       && bool(moves_from(us, moverType, from) & to);
               }
           }
       }
   }
 
   const int stepCost = is_pull_move(m) && var->atomicPushPull ? 2 : 1;
-  return valid && arimaa_steps() + stepCost <= var->compoundTurnSteps;
+  return valid && turn_steps() + stepCost <= var->compoundTurnSteps;
 }
 
-bool Position::arimaa_legal(Move m) const {
-  if (!arimaa_pseudo_legal(m))
+bool Position::compound_turn_legal(Move m) const {
+  if (!compound_turn_pseudo_legal(m))
       return false;
-  if (!arimaa_move_ends_turn(m))
+  if (!compound_turn_ends(m))
       return true;
 
-  const Key turnStartLayoutKey = st->arimaaTurnStartLayoutKey;
+  const Key turnStartLayoutKey = st->turnStartLayoutKey;
   StateInfo nextState;
   ScopedProbeMove probe(*this, m, nextState);
   return layout_key() != turnStartLayoutKey && state()->repetition >= 0;
@@ -4467,8 +4465,8 @@ bool Position::legal(Move m) const {
 
   Color us = sideToMove;
   Color them = ~us;
-  if (arimaa())
-      return arimaa_legal(m);
+  if (compound_turns())
+      return compound_turn_legal(m);
   bool dropMove = is_drop_move(m);
   bool swapMove = is_swap_move(m);
   bool insertMove = is_insert_move(m);
@@ -5261,8 +5259,8 @@ bool Position::pseudo_legal(const Move m) const {
 
   Color us = sideToMove;
   Color them = ~us;
-  if (arimaa())
-      return arimaa_pseudo_legal(m);
+  if (compound_turns())
+      return compound_turn_pseudo_legal(m);
 
   bool dropMove = is_drop_move(m);
   bool insertMove = is_insert_move(m);
@@ -6246,13 +6244,13 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   if (countNode && thisThread)
       thisThread->nodes.fetch_add(1, std::memory_order_relaxed);
 #endif
-  const bool arimaaMode = var->compoundTurnSteps > 0;
-  const bool arimaaSetupMove = arimaaMode && st->arimaaSetup;
-  const bool arimaaMoveEnds = arimaaMode && !arimaaSetupMove
-                           && (is_pass(m) || st->arimaaSteps + (is_pull_move(m) && var->atomicPushPull ? 2 : 1) >= var->compoundTurnSteps);
-  const int previousArimaaSteps = st->arimaaSteps;
-  const bool previousArimaaSetup = st->arimaaSetup;
-  Key k = arimaaMode ? st->key : st->key ^ Zobrist::side;
+  const bool compoundTurnMode = var->compoundTurnSteps > 0;
+  const bool setupMove = compoundTurnMode && st->setupPhase;
+  const bool turnEnds = compoundTurnMode && !setupMove
+                     && (is_pass(m) || st->turnSteps + (is_pull_move(m) && var->atomicPushPull ? 2 : 1) >= var->compoundTurnSteps);
+  const int previousTurnSteps = st->turnSteps;
+  const bool previousSetupPhase = st->setupPhase;
+  Key k = compoundTurnMode ? st->key : st->key ^ Zobrist::side;
 
   // Copy some fields of the old state to our new StateInfo object except the
   // ones which are going to be recalculated from scratch anyway and then switch
@@ -6342,7 +6340,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   bool rifleShot = rifle_capture(m) && captured != NO_PIECE && type_of(m) != CASTLING;
   bool cloneMove = is_clone_move(m);
   bool pullMove = is_pull_move(m);
-  bool arimaaPushMove = arimaaMode && arimaa_push_move(m);
+  bool compoundPushMove = compoundTurnMode && compound_push_move(m);
   bool swapMove = is_swap_move(m);
   bool stackMove = is_stack_move(m);
   bool unstackMove = is_unstack_move(m);
@@ -6423,8 +6421,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   {
       Square pullFrom = pull_square(m);
       Piece pulled = piece_on(pullFrom);
-      if (arimaaPushMove)
-          st->arimaaPushed.set(piece_on(to), is_promoted(to), unpromoted_piece_on(to), to);
+      if (compoundPushMove)
+          st->pushPullPushed.set(piece_on(to), is_promoted(to), unpromoted_piece_on(to), to);
       else
           st->pulled.set(pulled, pulled != NO_PIECE && is_promoted(pullFrom),
                          pulled != NO_PIECE ? unpromoted_piece_on(pullFrom) : NO_PIECE, pullFrom);
@@ -6782,9 +6780,9 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   {
       if (!pureWallMove && !cloneMove && !pullMove)
           k ^= Zobrist::psq[pc][from] ^ Zobrist::psq[pc][to];
-      else if (arimaaPushMove)
+      else if (compoundPushMove)
       {
-          Piece pushed = st->arimaaPushed.piece.piece;
+          Piece pushed = st->pushPullPushed.piece.piece;
           Square pushTo = pull_square(m);
           k ^= Zobrist::psq[pc][from] ^ Zobrist::psq[pc][to]
              ^ Zobrist::psq[pushed][to] ^ Zobrist::psq[pushed][pushTo];
@@ -7034,14 +7032,14 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           else
               st->nonPawnMaterial[us] += PieceValue[MG][pc];
       }
-      else if (arimaaPushMove)
+      else if (compoundPushMove)
       {
           Square pushTo = pull_square(m);
           if (Eval::useNNUE)
           {
               dp.dirty_num = 2;
               init_dirty_piece_entry(dp, 0, pc, from, to, NO_PIECE, 0);
-              init_dirty_piece_entry(dp, 1, st->arimaaPushed.piece.piece, to, pushTo, NO_PIECE, 0);
+              init_dirty_piece_entry(dp, 1, st->pushPullPushed.piece.piece, to, pushTo, NO_PIECE, 0);
           }
           move_piece(to, pushTo);
           move_piece(from, to);
@@ -7992,12 +7990,12 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   k ^= st->pieceStateKey ^ pieceStateKey;
   st->pieceStateKey = pieceStateKey;
 
-  if (arimaaMode)
+  if (compoundTurnMode)
   {
       bool sideChanged = false;
-      if (arimaaSetupMove)
+      if (setupMove)
       {
-          st->arimaaSteps = 0;
+          st->turnSteps = 0;
           if (!has_setup_drop(us))
           {
               sideChanged = true;
@@ -8005,36 +8003,36 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
                   sideToMove = them;
               else
               {
-                  st->arimaaSetup = false;
-                  st->arimaaTurnBoundary = true;
+                  st->setupPhase = false;
+                  st->turnBoundary = true;
                   sideToMove = WHITE;
-                  st->arimaaTurnStartLayoutKey = layout_key();
+                  st->turnStartLayoutKey = layout_key();
               }
           }
           else
               sideToMove = us;
-          st->arimaaTurnBoundary = !st->arimaaSetup;
+          st->turnBoundary = !st->setupPhase;
       }
-      else if (arimaaMoveEnds)
+      else if (turnEnds)
       {
-          st->arimaaSteps = 0;
-          st->arimaaTurnBoundary = true;
+          st->turnSteps = 0;
+          st->turnBoundary = true;
           sideToMove = them;
           sideChanged = true;
-          st->arimaaTurnStartLayoutKey = layout_key();
+          st->turnStartLayoutKey = layout_key();
       }
       else
       {
-          st->arimaaSteps = st->previous->arimaaSteps
+          st->turnSteps = st->previous->turnSteps
                           + (is_pull_move(m) && var->atomicPushPull ? 2 : 1);
-          st->arimaaTurnBoundary = false;
+          st->turnBoundary = false;
           sideToMove = us;
       }
-      st->arimaaSideChanged = sideChanged;
+      st->turnSideChanged = sideChanged;
       if (sideChanged)
           k ^= Zobrist::side;
-      k ^= arimaa_state_key(var, previousArimaaSteps, previousArimaaSetup)
-        ^ arimaa_state_key(var, st->arimaaSteps, st->arimaaSetup);
+      k ^= compound_turn_state_key(var, previousTurnSteps, previousSetupPhase)
+        ^ compound_turn_state_key(var, st->turnSteps, st->setupPhase);
   }
   else
       sideToMove = them;
@@ -8104,13 +8102,13 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   st->repetition = 0;
   st->boardRepetition = 0;
   int end = captures_to_hand() ? st->pliesFromNull : std::min(st->rule50, st->pliesFromNull);
-  if (arimaaMode)
+  if (compoundTurnMode)
   {
-      if (st->arimaaTurnBoundary)
+      if (st->turnBoundary)
       {
           int matches = 0;
           for (StateInfo* stp = st->previous; stp; stp = stp->previous)
-              if (stp->arimaaTurnBoundary && stp->key == st->key && ++matches >= 2)
+              if (stp->turnBoundary && stp->key == st->key && ++matches >= 2)
               {
                   st->repetition = -1;
                   break;
@@ -8152,7 +8150,7 @@ void Position::undo_move(Move m) {
 
   assert(is_ok(m));
 
-  if (!arimaa() || st->arimaaSideChanged)
+  if (!compound_turns() || st->turnSideChanged)
       sideToMove = ~sideToMove;
 
   Color us = sideToMove;
@@ -8424,16 +8422,16 @@ void Position::undo_move(Move m) {
               board[to] = NO_PIECE;
           }
           else if (var->atomicPushPull && is_pull_move(m)
-                   && st->arimaaPushed.piece.piece != NO_PIECE)
+                   && st->pushPullPushed.piece.piece != NO_PIECE)
           {
               Square pushTo = pull_square(m);
               if (piece_on(pushTo) != NO_PIECE)
                   remove_piece(pushTo);
               if (piece_on(to) != NO_PIECE)
                   move_piece(to, from);
-              put_piece(st->arimaaPushed.piece.piece, to,
-                        st->arimaaPushed.piece.promoted,
-                        st->arimaaPushed.piece.unpromoted);
+              put_piece(st->pushPullPushed.piece.piece, to,
+                        st->pushPullPushed.piece.promoted,
+                        st->pushPullPushed.piece.unpromoted);
           }
           else if (pullMove)
           {
@@ -9235,9 +9233,9 @@ bool Position::is_optional_game_end(Value& result, int ply, int countStarted) co
 
 bool Position::is_immediate_game_end(Value& result, int ply) const {
 
-  if (var->turnBoundaryAdjudication)
+  if (var->flagTurnBoundaryAdjudication)
   {
-      if (st->arimaaSetup || !st->arimaaTurnBoundary)
+      if (st->setupPhase || !st->turnBoundary)
           return false;
 
       Color mover = ~sideToMove;

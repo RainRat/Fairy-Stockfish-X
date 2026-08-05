@@ -248,7 +248,7 @@ void arimaa_full() {
     check(pos.legal(endTurn), "Arimaa voluntary turn end was rejected");
     states->emplace_back();
     pos.do_move(endTurn, states->back());
-    check(pos.side_to_move() == BLACK && pos.arimaa_steps() == 0,
+    check(pos.side_to_move() == BLACK && pos.turn_steps() == 0,
           "Arimaa voluntary turn end did not switch sides");
     pos.undo_move(endTurn);
     states->pop_back();
@@ -267,7 +267,7 @@ void arimaa_full() {
         states->emplace_back();
         pos.do_move(m, states->back());
     }
-    check(pos.side_to_move() == BLACK && pos.arimaa_steps() == 0,
+    check(pos.side_to_move() == BLACK && pos.turn_steps() == 0,
           "Arimaa did not end the turn after four steps");
     for (auto it = steps.rbegin(); it != steps.rend(); ++it)
     {
@@ -974,7 +974,7 @@ customPiece2 = m:mW
 customPiece3 = h:mW
 customPiece4 = d:mW
 customPiece5 = c:mW
-customPiece6 = r:fmW
+customPiece6 = r:fsmW
 castling = false
 checking = false
 strengthOrder = r c d h m e
