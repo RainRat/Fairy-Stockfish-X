@@ -200,6 +200,7 @@ if [[ $VARIANT == "all" ||  $VARIANT == "largeboard" ]]; then
     expect "$perft_exp" shoshogi startpos 4 445372 > /dev/null  # configurable pieces
     expect "$perft_exp" yarishogi startpos 4 158404 > /dev/null  # configurable pieces
     expect "$perft_exp" capablanca startpos 4 805128 > /dev/null
+    expect "$perft_exp" capahouse "fen 3k6/10/10/10/10/10/10/4K5[CAQRBNPcaqrbnp] w - - 0 1" 2 234785 > /dev/null
     expect "$perft_exp" embassy startpos 4 809539 > /dev/null
     expect "$perft_exp" janus startpos 4 772074 > /dev/null
     expect "$perft_exp" modern startpos 4 433729 > /dev/null
