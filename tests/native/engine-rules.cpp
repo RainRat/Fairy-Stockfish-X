@@ -195,6 +195,37 @@ void composable_rules() {
     check(MoveList<LEGAL>(pos).contains(doubleFreezeEvasion),
           "double-freeze evasion was not generated");
 
+    set_position(pos, states, "composable-rex-blast",
+                 "7k/8/8/8/8/8/4q3/4K3 w - - 0 1");
+    Move rexCapture = make_move(SQ_E1, SQ_E2);
+    simulated = pos.simulated_move_info(rexCapture);
+    check(!(simulated.occupiedAfterEffects & square_bb(SQ_E2)),
+          "rex-exclusive king capture was incorrectly treated as blast-immune");
+    states->emplace_back();
+    pos.do_move(rexCapture, states->back());
+    check(pos.piece_on(SQ_E2) == NO_PIECE,
+          "rex-exclusive king capture disagreed with committed blast effects");
+    pos.undo_move(rexCapture);
+    states->pop_back();
+
+    set_position(pos, states, "composable-stack-morph",
+                 "k3r3/8/3A4/3A4/8/8/8/4K3 w - - 0 1");
+    Move stackMorph = make<STACK>(SQ_D6, SQ_D7);
+    simulated = pos.simulated_move_info(stackMorph);
+    check(!(simulated.freezerOccupancy[WHITE] & square_bb(SQ_D7)),
+          "stack simulation retained a freezer before applying move morph");
+    check(!pos.legal(stackMorph),
+          "stack move was accepted using the pre-morph freezer type");
+
+    set_position(pos, states, "composable-unstack-morph",
+                 "k3r3/8/3B4/8/8/8/8/4K3 w - - 0 1");
+    Move unstackMorph = make<UNSTACK>(SQ_D6, SQ_D7);
+    simulated = pos.simulated_move_info(unstackMorph);
+    check(simulated.freezerOccupancy[WHITE] & square_bb(SQ_D7),
+          "unstack simulation missed the post-morph freezer type");
+    check(pos.legal(unstackMorph),
+          "unstack move was rejected without applying its move morph");
+
     set_position(pos, states, "composable-blast-janggi-screen",
                  "7k/8/4c3/3R4/4c3/8/8/4K3 w - - 0 1");
     Move blastCannonScreen = make_move(SQ_D5, SQ_D4);
@@ -1170,6 +1201,29 @@ castling = false
 [composable-freeze-double-evasion:chess]
 customPiece1 = f:N
 freezePieceTypes = f
+castling = false
+
+[composable-rex-blast:chess]
+captureMorph = true
+rexExclusiveMorph = true
+blastOnCapture = true
+blastImmuneTypes = q
+castling = false
+
+[composable-stack-morph:chess]
+customPiece1 = a:W
+customPiece2 = b:W
+stackedPieceType = a:b
+moveMorphPieceType = b:q
+freezePieceTypes = b
+castling = false
+
+[composable-unstack-morph:chess]
+customPiece1 = a:W
+customPiece2 = b:W
+stackedPieceType = a:b
+moveMorphPieceType = a:q
+freezePieceTypes = q
 castling = false
 
 [composable-blast-janggi-screen:chess]

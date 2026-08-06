@@ -4485,7 +4485,8 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
       if (capture_morph() && isCapture && is_ok(info.captureSquare))
       {
           Piece captured = piece_on(info.captureSquare);
-          if (captured != NO_PIECE)
+          if (captured != NO_PIECE
+              && !(rex_exclusive_morph() && type_of(moved_piece(m)) == KING))
               pt = type_of(captured);
       }
       if (pt < PIECE_TYPE_NB && var->moveMorphPieceType[pt] != NO_PIECE_TYPE)
@@ -4494,9 +4495,17 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
   };
   PieceType placedType = final_piece_type();
   if (stackMove)
+  {
       placedType = var->combined_piece_type(type_of(moved_piece(m)), type_of(piece_on(info.to)));
+      if (placedType < PIECE_TYPE_NB && var->moveMorphPieceType[placedType] != NO_PIECE_TYPE)
+          placedType = var->moveMorphPieceType[placedType];
+  }
   else if (unstackMove)
+  {
       placedType = var->unstackedPieceType[type_of(moved_piece(m))];
+      if (placedType < PIECE_TYPE_NB && var->moveMorphPieceType[placedType] != NO_PIECE_TYPE)
+          placedType = var->moveMorphPieceType[placedType];
+  }
 
   if (info.castling)
   {
@@ -4597,7 +4606,7 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
   else if (unstackMove)
   {
       remove_color_square(info.from);
-      add_color_piece(us, placedType, info.from);
+      add_color_piece(us, var->unstackedPieceType[type_of(moved_piece(m))], info.from);
       add_color_piece(us, placedType, info.to);
   }
   else if (info.rifle)
@@ -4680,8 +4689,13 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
           if (sq == info.to)
               return make_piece(us, placedType);
       }
-      else if (unstackMove && (sq == info.from || sq == info.to))
-          return make_piece(us, placedType);
+      else if (unstackMove)
+      {
+          if (sq == info.from)
+              return make_piece(us, var->unstackedPieceType[type_of(moved_piece(m))]);
+          if (sq == info.to)
+              return make_piece(us, placedType);
+      }
 
       const bool ordinaryGate = is_gating(m) && !laser_game()
                              && gating_type(m) != NO_PIECE_TYPE
@@ -4971,6 +4985,8 @@ bool Position::legal(Move m) const {
   Color us = sideToMove;
   Color them = ~us;
   bool dropMove = is_drop_move(m);
+  bool stackMove = is_stack_move(m);
+  bool unstackMove = is_unstack_move(m);
   bool swapMove = is_swap_move(m);
   bool insertMove = is_insert_move(m);
   Square from = from_sq(m);
@@ -5151,6 +5167,10 @@ bool Position::legal(Move m) const {
       if (unpromoted != NO_PIECE)
           finalMovePt = type_of(unpromoted);
   }
+  if (stackMove)
+      finalMovePt = var->combined_piece_type(type_of(moverPiece), type_of(piece_on(to)));
+  else if (unstackMove)
+      finalMovePt = var->unstackedPieceType[type_of(moverPiece)];
 
   if (   !dropMove
       && type_of(m) != CASTLING
@@ -5161,7 +5181,8 @@ bool Position::legal(Move m) const {
       if (capture_morph() && isCapture)
       {
           Piece captured = piece_on(shotSq);
-          if (captured != NO_PIECE)
+          if (captured != NO_PIECE
+              && !(rex_exclusive_morph() && type_of(moverPiece) == KING))
               finalMovePt = type_of(captured);
       }
 
