@@ -64,6 +64,25 @@ void set_current_spell_context(const SpellContext* ctx) noexcept {
 namespace {
 
   Bitboard adjacent_squares(const Position& pos, Square sq, bool diagonal) {
+      if (pos.is_hex_board())
+      {
+          // Hex cells have six adjacent cells. In this rectangular encoding,
+          // they are the three axial directions and their inverses.
+          constexpr int hexSteps[6][2] = {
+              {-1, 0}, {1, 0}, {0, -1}, {1, -1}, {-1, 1}, {0, 1}
+          };
+          Bitboard adjacent = 0;
+          for (const auto& step : hexSteps)
+          {
+              int file = int(file_of(sq)) + step[0];
+              int rank = int(rank_of(sq)) + step[1];
+              if (file >= 0 && file <= int(pos.max_file())
+                  && rank >= 0 && rank <= int(pos.max_rank()))
+                  adjacent |= square_bb(make_square(File(file), Rank(rank)));
+          }
+          return adjacent & pos.board_bb();
+      }
+
       if (!pos.topology_wraps())
           return (diagonal ? PseudoAttacks[WHITE][KING][sq] : PseudoAttacks[WHITE][WAZIR][sq])
                & pos.board_bb();
@@ -4370,6 +4389,8 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
   }
 
   const bool dropMove = is_drop_move(m);
+  const bool stackMove = is_stack_move(m);
+  const bool unstackMove = is_unstack_move(m);
   const bool isCapture = capture(m);
   info.captureSquare = isCapture ? capture_square(m) : SQ_NONE;
   const bool primaryPieceCapture = is_ok(info.captureSquare) && piece_on(info.captureSquare) != NO_PIECE;
@@ -4411,6 +4432,8 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
                              && !blast_on_self_destruct()
                              && !info.rifle
                              && !info.clone
+                             && !stackMove
+                             && !unstackMove
                              && !is_pull_move(m)
                              && !is_swap_move(m)
                              && !is_self_destruct(m)
@@ -4466,7 +4489,11 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
           pt = var->moveMorphPieceType[pt];
       return pt;
   };
-  const PieceType placedType = final_piece_type();
+  PieceType placedType = final_piece_type();
+  if (stackMove)
+      placedType = var->combined_piece_type(type_of(moved_piece(m)), type_of(piece_on(info.to)));
+  else if (unstackMove)
+      placedType = var->unstackedPieceType[type_of(moved_piece(m))];
 
   if (info.castling)
   {
@@ -4484,6 +4511,10 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
   }
   else if (is_self_destruct(m))
       info.relocatedOccupancy = pieces() & ~square_bb(info.from);
+  else if (stackMove)
+      info.relocatedOccupancy = pieces() & ~square_bb(info.from);
+  else if (unstackMove)
+      info.relocatedOccupancy = pieces() | square_bb(info.to);
   else if (pureWallMove)
       info.relocatedOccupancy = pieces();
   else
@@ -4553,6 +4584,18 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
       remove_color_square(info.to);
       add_color_piece(us, type_of(moved_piece(m)), kto);
       add_color_piece(us, rook == NO_PIECE ? ROOK : type_of(rook), rto);
+  }
+  else if (stackMove)
+  {
+      remove_color_square(info.from);
+      remove_color_square(info.to);
+      add_color_piece(us, placedType, info.to);
+  }
+  else if (unstackMove)
+  {
+      remove_color_square(info.from);
+      add_color_piece(us, placedType, info.from);
+      add_color_piece(us, placedType, info.to);
   }
   else if (info.rifle)
   {
@@ -4626,6 +4669,16 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
           if (sq == info.from || sq == info.to)
               return NO_PIECE;
       }
+
+      if (stackMove)
+      {
+          if (sq == info.from)
+              return NO_PIECE;
+          if (sq == info.to)
+              return make_piece(us, placedType);
+      }
+      else if (unstackMove && (sq == info.from || sq == info.to))
+          return make_piece(us, placedType);
 
       const bool ordinaryGate = is_gating(m) && !laser_game()
                              && gating_type(m) != NO_PIECE_TYPE
@@ -4967,6 +5020,8 @@ bool Position::legal(Move m) const {
       && type_of(m) != PIECE_PROMOTION
       && type_of(m) != PIECE_DEMOTION
       && !is_self_destruct(m)
+      && !is_stack_move(m)
+      && !is_unstack_move(m)
       && !paired_drop(m)
       && !is_pull_move(m)
       && !is_swap_move(m))
@@ -5154,6 +5209,8 @@ bool Position::legal(Move m) const {
                            && !pullMove
                            && !swapMove
                            && !is_self_destruct(m)
+                           && !is_stack_move(m)
+                           && !is_unstack_move(m)
                            && !paired_drop(m)
                            && !is_promotion_move(m)
                            && type_of(m) != PIECE_PROMOTION
@@ -5449,13 +5506,16 @@ bool Position::legal(Move m) const {
           Direction step = kto > from ? EAST : WEST;
           // Pseudo-royal king
           if (st->pseudoRoyals & from)
+          {
+              SimulatedMoveGuard currentPosition(*this, MOVE_NONE);
               // Loop over squares between the king and its final position
               // Ensure to include the initial square if from == kto
               for (Square s = from; from != kto ? s != kto : s == from; s += step)
                   if (  !(blastOnCapture && (blast_pattern(s) & st->pseudoRoyals & pieces(~sideToMove) & ~blastImmune))
-                      && ((attackers_to(s, occupied, ~us, janggiCannonsAfter, &simulated)
+                      && ((attackers_to(s, occupied, ~us, janggiCannonsAfter)
                            & ~freeze_squares(~us) & occupied & ~removedAttackers)))
                       return false;
+          }
           // Move the rook
           occupied ^= to | castlingRto;
       }
