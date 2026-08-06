@@ -3144,6 +3144,10 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
 Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard janggiCannons,
                                 const SimulatedMoveInfo* simulated) const {
 
+  SimulatedMoveInfoGuard simulatedView(*this);
+  if (simulated)
+      simulatedView.set(*simulated);
+
   auto type_pieces = [&](Color color, PieceType pt) {
       return simulated && !simulated->typeOccupancy.empty() ? simulated->type_pieces(color, pt)
                                                             : pieces(color, pt);
@@ -3374,6 +3378,10 @@ Bitboard Position::attackers_to_king_without_freeze(Square s, Bitboard occupied,
 Bitboard Position::attackers_to_king_without_freeze(Square s, Bitboard occupied, Color c,
                                                     Bitboard janggiCannons, PieceType pt,
                                                     const SimulatedMoveInfo* simulated) const {
+
+  SimulatedMoveInfoGuard simulatedView(*this);
+  if (simulated)
+      simulatedView.set(*simulated);
 
   auto type_pieces = [&](PieceType type) {
       return simulated && !simulated->typeOccupancy.empty() ? simulated->type_pieces(c, type)
@@ -3885,6 +3893,8 @@ bool Position::placement_rules_legal(Move m, Color us) const {
 
   SimulatedMoveGuard guard(*this, m);
   SimulatedMoveInfo simulated = simulated_move_info(m, false);
+  SimulatedMoveInfoGuard simulatedView(*this);
+  simulatedView.set(simulated);
   Bitboard occupied = simulated.placementOccupancy;
 
   std::array<Square, 2> placementSquares = {SQ_NONE, SQ_NONE};
@@ -4433,6 +4443,7 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
                              && !blast_on_capture(m)
                              && !blast_on_move()
                              && !blast_on_self_destruct()
+                             && !extraCapture
                              && !info.rifle
                              && !info.clone
                              && !stackMove
@@ -4441,6 +4452,10 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
                              && !is_swap_move(m)
                              && !is_self_destruct(m)
                              && !info.paired
+                             && !capture_morph()
+                             && !var->hasMoveMorph
+                             && !var->deathOnCaptureTypes
+                             && !var->changingColorPieceTypes
                              && !var->freezePieceTypes;
 
   if (simpleSimulation)
@@ -4544,6 +4559,7 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
       info.effectOccupancy |= square_bb(info.secondarySquare);
 
   const Color us = sideToMove;
+  const Color them = ~us;
   const Color dropColor = dropMove ? drop_hand_color(us, in_hand_piece_type(m)) : us;
   auto add_color_piece = [&](Color color, PieceType pt, Square sq) {
       if (!is_ok(sq) || pt == NO_PIECE_TYPE)
@@ -4592,6 +4608,8 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
       Square kto, rto;
       castling_destinations(us, info.from, info.to, kto, rto);
       Piece rook = piece_on(info.to);
+      info.castlingKingPiece = make_piece(us, type_of(moved_piece(m)));
+      info.castlingRookPiece = make_piece(us, rook == NO_PIECE ? ROOK : type_of(rook));
       remove_color_square(info.from);
       remove_color_square(info.to);
       add_color_piece(us, type_of(moved_piece(m)), kto);
@@ -4602,18 +4620,22 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
       remove_color_square(info.from);
       remove_color_square(info.to);
       add_color_piece(us, placedType, info.to);
+      info.placedPiece = make_piece(us, placedType);
   }
   else if (unstackMove)
   {
       remove_color_square(info.from);
-      add_color_piece(us, var->unstackedPieceType[type_of(moved_piece(m))], info.from);
+      info.sourcePiece = make_piece(us, var->unstackedPieceType[type_of(moved_piece(m))]);
+      add_color_piece(us, type_of(info.sourcePiece), info.from);
       add_color_piece(us, placedType, info.to);
+      info.placedPiece = make_piece(us, placedType);
   }
   else if (info.rifle)
   {
       remove_color_square(info.captureSquare);
       remove_color_square(info.from);
       add_color_piece(us, placedType, info.from);
+      info.placedPiece = make_piece(us, placedType);
   }
   else if (is_self_destruct(m))
   {
@@ -4628,10 +4650,16 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
       if (type_of(m) == EN_PASSANT && potions_enabled() && (pieces(~us) & square_bb(info.to)))
           remove_color_square(info.to);
       if (is_ok(info.to))
+      {
           add_color_piece(dropColor, placedType, info.to);
+          info.placedPiece = make_piece(dropColor, placedType);
+      }
   }
   if (info.paired && is_ok(info.secondarySquare))
+  {
       add_color_piece(dropColor, dropped_piece_type(m), info.secondarySquare);
+      info.secondaryPiece = make_piece(dropColor, dropped_piece_type(m));
+  }
 
   Bitboard latePlacements = 0;
 
@@ -4650,8 +4678,12 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
           info.effectOccupancy |= gates;
           info.addedPlacements |= gates;
           add_color_piece(us, gating_type(m), info.gatingSquare);
+          info.gatingPiece = make_piece(us, gating_type(m));
           if (info.paired && is_ok(info.secondarySquare))
+          {
               add_color_piece(us, gating_type(m), info.secondarySquare);
+              info.secondaryPiece = make_piece(us, gating_type(m));
+          }
       }
 
       if (wallPlacement)
@@ -4735,6 +4767,7 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
 
   info.removedByEffects = 0;
   info.structuralRemoval = 0;
+  Bitboard trapRemoval = 0;
   const Piece mover = moved_piece(m);
   const PieceType movePt = mover == NO_PIECE ? NO_PIECE_TYPE : type_of(mover);
   const Square shotSq = isCapture ? info.captureSquare : info.to;
@@ -4944,15 +4977,57 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
       colorAfterEffects[BLACK] |= info.blastPromotionOccupancy & info.colorOccupancy[BLACK];
       Bitboard trapOccupied = occupiedAfterStructural & ~info.removedByEffects & ~info.removedWalls;
       trapOccupied |= info.blastPromotionOccupancy;
-      Bitboard trapMask = compute_trap_removal_mask(*this, var, colorAfterEffects,
-                                                     trapOccupied);
-      info.removedByEffects = (info.removedByEffects & ~info.blastPromotionOccupancy) | trapMask;
+      trapRemoval = compute_trap_removal_mask(*this, var, colorAfterEffects,
+                                              trapOccupied);
+      info.removedByEffects = (info.removedByEffects & ~info.blastPromotionOccupancy) | trapRemoval;
   }
   else
       info.removedByEffects &= ~info.blastPromotionOccupancy;
+
+  const Square moverSq = info.rifle ? info.from : info.to;
+  const PieceType movedType = moved_piece(m) == NO_PIECE ? NO_PIECE_TYPE : type_of(moved_piece(m));
+  const bool capturedDeadSquare = !dropMove && info.from != info.to
+                               && (st->deadSquares & square_bb(info.to));
+  const bool diesOnCapture = primaryPieceCapture
+                          && !capturedDeadSquare
+                          && !stackMove
+                          && !dropMove
+                          && movedType != NO_PIECE_TYPE
+                          && (death_on_capture_types() & piece_set(movedType));
+  if (diesOnCapture)
+      info.removedByEffects |= square_bb(moverSq);
+
   info.occupiedAfterEffects = (occupiedAfterStructural & ~info.removedByEffects & ~info.removedWalls)
                             | latePlacements
                             | (info.blastPromotionOccupancy & ~info.removedByEffects);
+
+  PieceType finalMoverType = info.placedPiece == NO_PIECE ? NO_PIECE_TYPE : type_of(info.placedPiece);
+  if (!info.typeOccupancy.empty() && (info.occupiedAfterEffects & square_bb(moverSq)))
+      for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
+          if (info.type_pieces(us, pt) & square_bb(moverSq))
+          {
+              finalMoverType = pt;
+              break;
+          }
+
+  const bool captureHappened = (primaryPieceCapture && !stackMove)
+                            || bool((info.removedByEffects & ~trapRemoval)
+                                  & (blast_pattern(moverSq) | square_bb(moverSq)));
+  const bool colorChange = var->changingColorTrigger == ColorChangeTrigger::ALWAYS
+                        || (var->changingColorTrigger == ColorChangeTrigger::ON_CAPTURE && captureHappened)
+                        || (var->changingColorTrigger == ColorChangeTrigger::ON_NON_CAPTURE && !captureHappened);
+  if (finalMoverType != NO_PIECE_TYPE
+      && (info.occupiedAfterEffects & square_bb(moverSq))
+      && colorChange
+      && !is_pass(m)
+      && (!dropMove || captureHappened)
+      && (var->changingColorPieceTypes & piece_set(finalMoverType)))
+  {
+      remove_color_square(moverSq);
+      add_color_piece(them, finalMoverType, moverSq);
+      info.placedPiece = make_piece(them, finalMoverType);
+  }
+
   info.colorOccupancy[WHITE] &= info.occupiedAfterEffects;
   info.colorOccupancy[BLACK] &= info.occupiedAfterEffects;
   if (!info.typeOccupancy.empty())
@@ -5261,10 +5336,12 @@ bool Position::legal(Move m) const {
 
   SimulatedMoveInfo simulated;
   bool simulatedReady = false;
+  SimulatedMoveInfoGuard simulatedView(*this);
   auto ensure_simulated = [&]() {
       if (!simulatedReady)
       {
           simulated = simulated_move_info(m);
+          simulatedView.set(simulated);
           simulatedReady = true;
       }
   };
@@ -6562,6 +6639,8 @@ bool Position::gives_check_impl(Move m) const {
 
   SimulatedMoveGuard guard(*this, m);
   SimulatedMoveInfo simulated = simulated_move_info(m);
+  SimulatedMoveInfoGuard simulatedView(*this);
+  simulatedView.set(simulated);
   // Blast promotion changes the movement type of a surviving bystander.  The
   // committed position is the authoritative attack map for that uncommon
   // case; the ordinary simulated path intentionally only models occupancy.

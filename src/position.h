@@ -98,6 +98,12 @@ struct SimulatedMoveInfo {
   Bitboard structuralRemoval = Bitboard(0);
   Bitboard addedPlacements = Bitboard(0);
   Bitboard removedWalls = Bitboard(0);
+  Piece placedPiece = NO_PIECE;
+  Piece sourcePiece = NO_PIECE;
+  Piece gatingPiece = NO_PIECE;
+  Piece secondaryPiece = NO_PIECE;
+  Piece castlingKingPiece = NO_PIECE;
+  Piece castlingRookPiece = NO_PIECE;
   Square from = SQ_NONE;
   Square to = SQ_NONE;
   Square effectiveTo = SQ_NONE;
@@ -473,6 +479,22 @@ public:
           pos.simulatedMove = previous;
           pos.simulatedFreezeCacheMove = MOVE_NONE;
           pos.simulatedFreezeCacheState = nullptr;
+      }
+  };
+
+  struct SimulatedMoveInfoGuard {
+      const Position& pos;
+      const SimulatedMoveInfo* previous;
+
+      explicit SimulatedMoveInfoGuard(const Position& p)
+          : pos(p), previous(p.simulatedInfo) {}
+
+      void set(const SimulatedMoveInfo& info) const {
+          pos.simulatedInfo = &info;
+      }
+
+      ~SimulatedMoveInfoGuard() {
+          pos.simulatedInfo = previous;
       }
   };
 
@@ -1199,6 +1221,7 @@ private:
   Color sideToMove;
   Score psq;
   mutable Move simulatedMove = MOVE_NONE;
+  mutable const SimulatedMoveInfo* simulatedInfo = nullptr;
   mutable Move simulatedFreezeCacheMove = MOVE_NONE;
   mutable const StateInfo* simulatedFreezeCacheState = nullptr;
   mutable std::array<Bitboard, COLOR_NB> simulatedFreezeCacheFreezers = {};
@@ -3923,6 +3946,48 @@ inline Piece Position::piece_at(Square sq, Bitboard occupied) const {
 
   if ((st->wallSquares | st->deadSquares) & sq)
       return NO_PIECE;
+
+  if (simulatedInfo)
+  {
+      const SimulatedMoveInfo& info = *simulatedInfo;
+      if (info.castling)
+      {
+          Square kto, rto;
+          castling_destinations(sideToMove, info.from, info.to, kto, rto);
+          if (sq == kto)
+              return info.castlingKingPiece;
+          if (sq == rto)
+              return info.castlingRookPiece;
+          if (sq == info.from || sq == info.to)
+              return NO_PIECE;
+      }
+
+      if (!info.typeOccupancy.empty())
+      {
+          Bitboard bit = square_bb(sq);
+          for (Color c : { WHITE, BLACK })
+              for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
+                  if (info.type_pieces(c, pt) & bit)
+                      return make_piece(c, pt);
+
+          if (sq == info.effectiveTo && info.placedPiece != NO_PIECE)
+              return info.placedPiece;
+          if (sq == info.gatingSquare && info.gatingPiece != NO_PIECE)
+              return info.gatingPiece;
+          if (sq == info.secondarySquare && info.secondaryPiece != NO_PIECE)
+              return info.secondaryPiece;
+          return NO_PIECE;
+      }
+
+      if (sq == info.from && info.sourcePiece != NO_PIECE)
+          return info.sourcePiece;
+      if (sq == info.effectiveTo && info.placedPiece != NO_PIECE)
+          return info.placedPiece;
+      if (sq == info.gatingSquare && info.gatingPiece != NO_PIECE)
+          return info.gatingPiece;
+      if (sq == info.secondarySquare && info.secondaryPiece != NO_PIECE)
+          return info.secondaryPiece;
+  }
 
   if (simulatedMove != MOVE_NONE)
   {

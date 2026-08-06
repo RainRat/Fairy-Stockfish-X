@@ -518,6 +518,7 @@ struct Variant {
   bool fastAttacks = true;
   bool fastAttacks2 = true;
   bool simpleLegality = false;
+  bool hasMoveMorph = false;
   std::string nnueAlias = "";
   PieceType nnueKing = KING;
   int nnueDimensions = 0;

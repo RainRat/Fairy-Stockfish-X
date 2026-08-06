@@ -226,6 +226,67 @@ void composable_rules() {
     check(pos.legal(unstackMorph),
           "unstack move was rejected without applying its move morph");
 
+    set_position(pos, states, "composable-death-freeze",
+                 "k7/8/8/8/8/4r3/3pQ3/4K3 w - - 0 1");
+    Move deathFreezeCapture = make_move(SQ_E2, SQ_D2);
+    simulated = pos.simulated_move_info(deathFreezeCapture);
+    check(!(simulated.occupiedAfterEffects & square_bb(SQ_E2))
+          && !(simulated.occupiedAfterEffects & square_bb(SQ_D2)),
+          "death-on-capture simulation retained a dead freezer or target");
+    {
+        Position::SimulatedMoveGuard guard(pos, deathFreezeCapture);
+        check(!(pos.freeze_squares(BLACK) & square_bb(SQ_E3)),
+              "dead freezer continued neutralizing a checker");
+    }
+    check(!pos.legal(deathFreezeCapture),
+          "move with a dead freezer incorrectly remained legal");
+
+    set_position(pos, states, "composable-color-freeze",
+                 "k7/8/8/8/8/4R3/2rpQ3/4K3 w - - 0 1");
+    Move colorFreezeCapture = make_move(SQ_E2, SQ_D2);
+    simulated = pos.simulated_move_info(colorFreezeCapture);
+    check(simulated.colorOccupancy[BLACK] & square_bb(SQ_D2),
+          "color-changing freezer remained on its original side in simulation");
+    {
+        Position::SimulatedMoveGuard guard(pos, colorFreezeCapture);
+        check(pos.freeze_squares(WHITE) & square_bb(SQ_E3),
+              "color-changing freezer did not freeze its former allies");
+        check(!(pos.freeze_squares(BLACK) & square_bb(SQ_C2)),
+              "color-changing freezer continued freezing its former allies");
+    }
+    states->emplace_back();
+    pos.do_move(colorFreezeCapture, states->back());
+    check(pos.piece_on(SQ_D2) == make_piece(BLACK, QUEEN),
+          "committed color-changing freezer disagreed with simulation");
+    pos.undo_move(colorFreezeCapture);
+    states->pop_back();
+
+    set_position(pos, states, "composable-hopper-morph",
+                 "k7/3q4/8/8/4B3/3D4/8/8 w - - 0 1");
+    Move hopperMorph = make_move(SQ_E4, SQ_D4);
+    simulated = pos.simulated_move_info(hopperMorph);
+    check(simulated.placedPiece == make_piece(WHITE, QUEEN),
+          "hopper simulation retained the pre-morph hurdle identity");
+    Bitboard simulatedHopperAttackers;
+    {
+        Position::SimulatedMoveGuard guard(pos, hopperMorph);
+        Position::SimulatedMoveInfoGuard view(pos);
+        view.set(simulated);
+        check(pos.piece_at(SQ_D4, simulated.occupiedAfterEffects) == make_piece(WHITE, QUEEN),
+              "simulated piece view lost the post-morph hurdle");
+        simulatedHopperAttackers = pos.attackers_to(
+            SQ_D6, simulated.occupiedAfterEffects, WHITE,
+            pos.pieces(JANGGI_CANNON), &simulated);
+    }
+    check(simulatedHopperAttackers & square_bb(SQ_D3),
+          "simulated hopper did not classify the post-morph hurdle");
+    states->emplace_back();
+    pos.do_move(hopperMorph, states->back());
+    check(pos.attackers_to(SQ_D6, pos.pieces(), WHITE) & square_bb(SQ_D3),
+          "hopper simulation disagreed with the committed attack map");
+    pos.undo_move(hopperMorph);
+    states->pop_back();
+
     set_position(pos, states, "composable-blast-janggi-screen",
                  "7k/8/4c3/3R4/4c3/8/8/4K3 w - - 0 1");
     Move blastCannonScreen = make_move(SQ_D5, SQ_D4);
@@ -1224,6 +1285,24 @@ customPiece2 = b:W
 stackedPieceType = a:b
 moveMorphPieceType = a:q
 freezePieceTypes = q
+castling = false
+
+[composable-death-freeze:chess]
+freezePieceTypes = q
+deathOnCaptureTypes = q
+castling = false
+
+[composable-color-freeze:chess]
+freezePieceTypes = q
+changingColorTrigger = capture
+changingColorPieceTypes = q
+castling = false
+
+[composable-hopper-morph:chess]
+pieceToCharTable = PNBRQKDB
+customPiece1 = d:c{hurdles: 1,1; pre: 1,1; post: 2,2; hurdle_types: wall; hurdle_piece_types: q; capture: dest}R
+customPiece2 = b:W
+moveMorphPieceType = b:q
 castling = false
 
 [composable-blast-janggi-screen:chess]

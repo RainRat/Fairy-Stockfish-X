@@ -2275,7 +2275,7 @@ Variant* Variant::conclude() {
                   && !cambodianMoves
                   && !diagonalLines;
 
-    bool hasMoveMorph = false;
+    hasMoveMorph = false;
     for (PieceType pt = PAWN; pt < PIECE_TYPE_NB && !hasMoveMorph; ++pt)
         hasMoveMorph = moveMorphPieceType[pt] != NO_PIECE_TYPE;
     simpleLegality = checking

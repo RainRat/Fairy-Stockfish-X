@@ -1567,10 +1567,12 @@ namespace {
       if constexpr (Type == EVASIONS)
       {
           Color us = pos.side_to_move();
-          Bitboard occupied = pos.simulated_move_info(m).occupiedAfterEffects;
+          SimulatedMoveInfo simulated = pos.simulated_move_info(m);
+          Bitboard occupied = simulated.occupiedAfterEffects;
 
           Position::SimulatedMoveGuard guard(pos, m);
-          if (pos.attackers_to(pos.royal_square(us), occupied, ~us))
+          if (pos.attackers_to(pos.royal_square(us), occupied, ~us,
+                               pos.pieces(JANGGI_CANNON), &simulated))
               return false;
           return true;
       }
