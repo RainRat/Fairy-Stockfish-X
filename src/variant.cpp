@@ -2275,6 +2275,63 @@ Variant* Variant::conclude() {
                   && !cambodianMoves
                   && !diagonalLines;
 
+    bool hasMoveMorph = false;
+    for (PieceType pt = PAWN; pt < PIECE_TYPE_NB && !hasMoveMorph; ++pt)
+        hasMoveMorph = moveMorphPieceType[pt] != NO_PIECE_TYPE;
+    simpleLegality = checking
+                  && fastAttacks
+                  && pieceTypes == CHESS_PIECES
+                  && pseudoRoyalTypes == NO_PIECE_SET
+                  && antiRoyalTypes == NO_PIECE_SET
+                  && !flyingGeneral
+                  && !diagonalGeneral
+                  && !makpongRule
+                  && !royalPieceNoThroughCheck
+                  && !trapRegion
+                  && !blastOnCapture
+                  && !blastOnMove
+                  && !blastOnSelfDestruct
+                  && !blastOnSameTypeCapture
+                  && !blastPassiveTypes
+                  && !blastPromotion
+                  && !surroundCaptureOpposite
+                  && !surroundCaptureIntervene
+                  && !surroundCaptureEdge
+                  && !removeConnectN
+                  && !petrifyOnCaptureTypes
+                  && !hasCaptureRestrictions
+                  && !piecePromotionOnCapture
+                  && !changingColorPieceTypes
+                  && changingColorTrigger == ColorChangeTrigger::NEVER
+                  && !deathOnCaptureTypes
+                  && !selfDestructTypes
+                  && !edgeInsertTypes
+                  && !cloneMoveTypes
+                  && !rifleCapture
+                  && !selfCapture
+                  && selfCaptureTypes.global == NO_PIECE_SET
+                  && selfCaptureTypes.byColor[WHITE] == NO_PIECE_SET
+                  && selfCaptureTypes.byColor[BLACK] == NO_PIECE_SET
+                  && captureType == MOVE_OUT
+                  && !immobilityIllegal
+                  && !forcedJumpContinuation
+                  && !multimoveOffset
+                  && !progressiveMultimove
+                  && libertyCapture == LibertyAction::NONE
+                  && libertySelfCapture == LibertyAction::NONE
+                  && !potions
+                  && wallingRule == NO_WALLING
+                  && !hasPushing
+                  && !adjacentSwapMoveTypes
+                  && !laserGame
+                  && !captureMorph
+                  && !hasMoveMorph
+                  && !freezePieceTypes
+                  && !flagMove
+                  && !flagRegion[WHITE]
+                  && !flagRegion[BLACK]
+                  && !pieceDrops;
+
     // Initialize calculated NNUE properties
     nnueKing =  pieceTypes & KING ? KING
               : extinctionPieceCount == 0 && (extinctionPieceTypes & COMMONER) ? COMMONER
