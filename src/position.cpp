@@ -3438,8 +3438,9 @@ Bitboard Position::attackers_to_king_without_freeze(Square s, Bitboard occupied,
               }
           }
       }
+  Piece royal = simulated && !capture_morph() ? piece_at(s, occupied) : piece_on(s);
   PieceType royalType = pt != NO_PIECE_TYPE ? pt :
-                        (piece_on(s) != NO_PIECE ? type_of(piece_on(s)) : king_type());
+                        (royal != NO_PIECE ? type_of(royal) : king_type());
 
   if (anti_royal_king_mutually_immune())
   {
@@ -6449,7 +6450,8 @@ bool Position::pseudo_legal(const Move m) const {
           const bool blastEvasion = ((capture(m) || rifle_capture(m)) && blast_on_capture(m)) ||
                                     (!capture(m) && !rifle_capture(m) && !is_self_destruct(m) && blast_on_move()) ||
                                     (is_self_destruct(m) && blast_on_self_destruct());
-          if (!blastEvasion)
+          const bool effectEvasion = blastEvasion || var->freezePieceTypes || var->trapRegion;
+          if (!effectEvasion)
           {
               Bitboard jumpHurdles = is_jump_capture(m) ? jump_capture_mask(from, to) : Bitboard(0);
               if (jumpHurdles & evasion_checkers())
@@ -6568,6 +6570,11 @@ bool Position::gives_check_impl(Move m) const {
 
   PotionContext potCtx = setup_potion_context(m, sideToMove);
   if (!potCtx.valid)
+      return false;
+
+  // No-check anti-royal capture-morph variants historically do not treat the
+  // newly acquired anti-royal identity as an ordinary check source.
+  if (capture_morph() && capture(m) && anti_royal_types() && !checking_permitted())
       return false;
 
   ScopedSpellContext spellScope(potCtx.freezeExtra, potCtx.jumpRemoved);
@@ -6716,7 +6723,8 @@ bool Position::gives_check_impl(Move m) const {
   if (!dropMove)
       discCheckSq = rifleShot ? square_bb(to) : square_bb(from);
 
-  if (  ((!dropMove && (blockers_for_king(~sideToMove) & discCheckSq)) || (non_sliding_riders() & pieces(sideToMove)))
+  if (  ((!dropMove && ((blockers_for_king(~sideToMove) & discCheckSq) || var->trapRegion))
+         || (non_sliding_riders() & pieces(sideToMove)))
       && (attackers_to_king(royalSq, occupied, sideToMove, janggiCannons,
                             NO_PIECE_TYPE, &simulated)
           & occupied & simulated.colorOccupancy[sideToMove]))

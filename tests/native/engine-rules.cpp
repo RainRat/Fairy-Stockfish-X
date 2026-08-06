@@ -208,8 +208,34 @@ void composable_rules() {
           "freeze-evasion test position was not in check");
     check(pos.legal(freezeEvasion),
           "freezer move next to a checker was rejected as illegal");
+    check(pos.pseudo_legal(freezeEvasion),
+          "freezer evasion was rejected as pseudo-illegal");
     check(MoveList<LEGAL>(pos).contains(freezeEvasion),
           "freezer move next to a checker was not generated as an evasion");
+
+    set_position(pos, states, "composable-trap-evasion",
+                 "k2pr3/2B5/8/8/8/8/8/4K3 w - - 0 1");
+    Move trapEvasion = make_move(SQ_C7, SQ_D8);
+    check(pos.evasion_checkers() & square_bb(SQ_E8),
+          "trap-evasion test position was not in check");
+    check(pos.legal(trapEvasion) && pos.pseudo_legal(trapEvasion),
+          "capturing a trap protector did not resolve check");
+    check(MoveList<LEGAL>(pos).contains(trapEvasion),
+          "trap-protector capture was not generated as an evasion");
+
+    set_position(pos, states, "composable-trap-quiet-check",
+                 "4k3/8/8/8/3RP3/8/8/K3R3 w - - 0 1");
+    Move trapQuietCheck = make_move(SQ_D4, SQ_D5);
+    check(pos.gives_check(trapQuietCheck),
+          "moving a trap protector did not expose a discovered check");
+    check(MoveList<QUIET_CHECKS>(pos).contains(trapQuietCheck),
+          "trap-induced discovered check was not generated");
+
+    set_position(pos, states, "composable-royal-capture-filter",
+                 "7k/8/8/8/8/8/r3p3/4K3 w - - 0 1");
+    Move royalCapture = make_move(SQ_E1, SQ_E2);
+    check(pos.legal(royalCapture),
+          "royal capture used the captured piece type for attack filtering");
 
     set_position(pos, states, "composable-freeze-double-evasion",
                  "1F5k/8/2n1n3/8/3K4/8/8/8 w - - 0 1");
@@ -1420,6 +1446,20 @@ castling = false
 [composable-freeze-evasion:chess]
 customPiece1 = f:W
 freezePieceTypes = f
+castling = false
+
+[composable-trap-evasion:chess]
+trapRegion = e8
+trapProtection = friendly-orthogonal
+castling = false
+
+[composable-trap-quiet-check:chess]
+trapRegion = e4
+trapProtection = friendly-orthogonal
+castling = false
+
+[composable-royal-capture-filter:chess]
+captureForbiddenBlack = r:k
 castling = false
 
 [composable-freeze-double-evasion:chess]

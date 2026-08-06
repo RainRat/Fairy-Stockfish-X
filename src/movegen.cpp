@@ -984,7 +984,8 @@ namespace {
         {
             // A move by an enemy-king blocker can give discovered check from
             // its new square without that square being a direct check square.
-            if (Pt == QUEEN || !(pos.blockers_for_king(~Us) & from))
+            if (Pt != QUEEN && !pos.variant()->trapRegion
+                && !(pos.blockers_for_king(~Us) & from))
             {
                 b1 &= pos.check_squares(Pt);
                 if (b2)
@@ -1144,14 +1145,15 @@ namespace {
 #endif
     const bool useFastStandardPawnGenerator = pos.variant()->useFastStandardPawnGenerator;
 
-    // A freezer can resolve a check without capturing or blocking its checker.
-    // Keep all candidates in this case, including double check, and let legal()
-    // determine whether the destination freezes enough checkers.
-    const bool freezeEvasions = Type == EVASIONS && pos.variant()->freezePieceTypes;
+    // Freeze and trap effects can resolve a check without capturing or blocking
+    // its checker. Keep all candidates in this case, including double check,
+    // and let legal() determine whether the effect neutralizes the checkers.
+    const bool effectEvasions = Type == EVASIONS
+                              && (pos.variant()->freezePieceTypes || pos.variant()->trapRegion);
 
-    // Skip generating non-king moves when in double check unless freezing can
+    // Skip generating non-king moves when in double check unless an effect can
     // change the activity of one or more checkers.
-    if (Type != EVASIONS || freezeEvasions || !more_than_one(checkers & ~pos.non_sliding_riders()))
+    if (Type != EVASIONS || effectEvasions || !more_than_one(checkers & ~pos.non_sliding_riders()))
     {
         if (restrictToForcedJumper)
         {
@@ -1167,7 +1169,7 @@ namespace {
 
             if (Type == EVASIONS)
             {
-                if (freezeEvasions)
+                if (effectEvasions)
                     target = AllSquares;
                 else if (more_than_one(checkers))
                 {
