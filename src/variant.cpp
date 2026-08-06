@@ -2327,6 +2327,7 @@ Variant* Variant::conclude() {
                   && !laserGame
                   && !captureMorph
                   && !hasMoveMorph
+                  && !prisonPawnPromotion
                   && !freezePieceTypes
                   && !flagMove
                   && !flagRegion[WHITE]

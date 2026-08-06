@@ -69,7 +69,7 @@ namespace {
           // Hex cells have six adjacent cells. In this rectangular encoding,
           // they are the three axial directions and their inverses.
           constexpr int hexSteps[6][2] = {
-              {-1, 0}, {1, 0}, {0, -1}, {1, -1}, {-1, 1}, {0, 1}
+              {-1, 0}, {1, 0}, {0, -1}, {0, 1}, {-1, -1}, {1, 1}
           };
           Bitboard adjacent = 0;
           for (const auto& step : hexSteps)
@@ -3449,7 +3449,7 @@ Bitboard Position::attackers_to_king_without_freeze(Square s, Bitboard occupied,
       {
           PieceType apt = pop_lsb(ps);
           if (var->captureForbiddenByColor[c][apt] & royalType)
-          attackers &= ~type_pieces(apt);
+              attackers &= ~type_pieces(apt);
       }
   return attackers;
 }

@@ -466,9 +466,13 @@ public:
       Move previous;
       SimulatedMoveGuard(const Position& p, Move m) : pos(p), previous(p.simulatedMove) {
           pos.simulatedMove = m;
+          pos.simulatedFreezeCacheMove = MOVE_NONE;
+          pos.simulatedFreezeCacheState = nullptr;
       }
       ~SimulatedMoveGuard() {
           pos.simulatedMove = previous;
+          pos.simulatedFreezeCacheMove = MOVE_NONE;
+          pos.simulatedFreezeCacheState = nullptr;
       }
   };
 
@@ -1196,7 +1200,7 @@ private:
   Score psq;
   mutable Move simulatedMove = MOVE_NONE;
   mutable Move simulatedFreezeCacheMove = MOVE_NONE;
-  mutable StateInfo* simulatedFreezeCacheState = nullptr;
+  mutable const StateInfo* simulatedFreezeCacheState = nullptr;
   mutable std::array<Bitboard, COLOR_NB> simulatedFreezeCacheFreezers = {};
   mutable std::array<Bitboard, COLOR_NB> simulatedFreezeCacheTargets = {};
 
