@@ -108,6 +108,14 @@ void composable_rules() {
     check(pos.legal(make_move(SQ_E4, SQ_E3)),
           "freeze-immune piece was frozen");
 
+    set_position(pos, states, "composable-pass-freeze",
+                 "8/8/8/8/8/8/8/Ff6 w - - 0 1");
+    Move frozenAnchorPass = make<SPECIAL>(SQ_A1, SQ_A1);
+    check(pos.legal(frozenAnchorPass),
+          "a frozen pass anchor incorrectly made passing illegal");
+    check(MoveList<LEGAL>(pos).contains(frozenAnchorPass),
+          "a frozen pass anchor was not generated");
+
     set_position(pos, states, "composable-freeze-traps",
                  "8/8/8/4m3/4M3/8/7r/8 w - - 0 1");
     Move nonFreezingPiece = parse_move(pos, "e4e3");
@@ -175,6 +183,24 @@ void composable_rules() {
     check(!pos.gives_check(frozenCheck),
           "a newly frozen direct checker still gave check");
 
+    set_position(pos, states, "composable-check-morph-in",
+                 "4k3/8/8/8/8/8/4B3/4K3 w - - 0 1");
+    Move checkMorphIn = make_move(SQ_E2, SQ_E3);
+    check(pos.gives_check(checkMorphIn),
+          "a move morph into a rook was omitted from direct check detection");
+
+    set_position(pos, states, "composable-check-morph-out",
+                 "4k3/8/8/8/8/8/4R3/4K3 w - - 0 1");
+    Move checkMorphOut = make_move(SQ_E2, SQ_E3);
+    check(!pos.gives_check(checkMorphOut),
+          "a move morph out of a rook retained a false direct check");
+
+    set_position(pos, states, "composable-color-attack",
+                 "4k3/8/8/8/8/4p3/4R3/4K3 w - - 0 1");
+    Move colorAttackCheck = make_move(SQ_E2, SQ_E3);
+    check(!pos.gives_check(colorAttackCheck),
+          "a color-changing mover was still reported as checking");
+
     set_position(pos, states, "composable-freeze-evasion",
                  "k3r3/8/3F4/8/8/8/8/4K3 w - - 0 1");
     Move freezeEvasion = make_move(SQ_D6, SQ_D7);
@@ -217,6 +243,25 @@ void composable_rules() {
     check(!pos.legal(stackMorph),
           "stack move was accepted using the pre-morph freezer type");
 
+    set_position(pos, states, "composable-stack-passive",
+                 "k7/8/3A4/3An3/8/8/8/4K3 w - - 0 1");
+    Move stackPassive = make<STACK>(SQ_D6, SQ_D5);
+    simulated = pos.simulated_move_info(stackPassive);
+    check(pos.variant()->blastPassiveTypes & piece_set(QUEEN),
+          "stacked passive regression did not configure its burner");
+    check(simulated.type_pieces(WHITE, QUEEN) & square_bb(SQ_D5),
+          "stacked passive regression did not produce its final type");
+    check(pos.blast_pattern(SQ_D5) & square_bb(SQ_E5),
+          "stacked passive regression did not configure an adjacent blast");
+    check(simulated.removedByEffects & square_bb(SQ_E5),
+          "stacked passive burner was omitted from move simulation");
+    states->emplace_back();
+    pos.do_move(stackPassive, states->back());
+    check(pos.piece_on(SQ_E5) == NO_PIECE,
+          "stacked passive burner disagreed with committed effects");
+    pos.undo_move(stackPassive);
+    states->pop_back();
+
     set_position(pos, states, "composable-unstack-morph",
                  "k3r3/8/3B4/8/8/8/8/4K3 w - - 0 1");
     Move unstackMorph = make<UNSTACK>(SQ_D6, SQ_D7);
@@ -225,6 +270,25 @@ void composable_rules() {
           "unstack simulation missed the post-morph freezer type");
     check(pos.legal(unstackMorph),
           "unstack move was rejected without applying its move morph");
+
+    set_position(pos, states, "composable-unstack-passive",
+                 "k7/8/2nB4/8/8/8/8/4K3 w - - 0 1");
+    Move unstackPassive = make<UNSTACK>(SQ_D6, SQ_D7);
+    simulated = pos.simulated_move_info(unstackPassive);
+    check(pos.variant()->blastPassiveTypes & piece_set(CUSTOM_PIECE_1),
+          "unstacked passive regression did not configure its burner");
+    check(simulated.type_pieces(WHITE, CUSTOM_PIECE_1) & square_bb(SQ_D6),
+          "unstacked passive regression did not retain its final source type");
+    check(pos.blast_pattern(SQ_D6) & square_bb(SQ_C6),
+          "unstacked passive regression did not configure an adjacent blast");
+    check(simulated.removedByEffects & square_bb(SQ_C6),
+          "unstacked passive burner was omitted from move simulation");
+    states->emplace_back();
+    pos.do_move(unstackPassive, states->back());
+    check(pos.piece_on(SQ_C6) == NO_PIECE,
+          "unstacked passive burner disagreed with committed effects");
+    pos.undo_move(unstackPassive);
+    states->pop_back();
 
     set_position(pos, states, "composable-death-freeze",
                  "k7/8/8/8/8/4r3/3pQ3/4K3 w - - 0 1");
@@ -363,6 +427,25 @@ void composable_rules() {
     pos.undo_move(blastCapture);
     states->pop_back();
 
+    set_position(pos, states, "composable-blast-promotion-color",
+                 "8/8/8/4e3/8/8/4E3/8 w - - 0 1");
+    Move blastPromotionColor = make_move(SQ_E2, SQ_E3);
+    simulated = pos.simulated_move_info(blastPromotionColor);
+    check(simulated.blastPromotionOccupancy & square_bb(SQ_E3),
+          "blast-promotion color regression did not promote its survivor");
+    check(!(simulated.removedByEffects & square_bb(SQ_E3)),
+          "blast-promotion color regression removed its survivor in simulation");
+    check(simulated.colorOccupancy[WHITE] & square_bb(SQ_E3),
+          "blast-promotion color simulation lost the mover color");
+    check(!(simulated.colorOccupancy[BLACK] & square_bb(SQ_E3)),
+          "blast-promotion survivor incorrectly triggered simulated color change");
+    states->emplace_back();
+    pos.do_move(blastPromotionColor, states->back());
+    check(pos.piece_on(SQ_E3) == make_piece(WHITE, QUEEN),
+          "blast-promotion survivor incorrectly triggered committed color change");
+    pos.undo_move(blastPromotionColor);
+    states->pop_back();
+
     set_position(pos, states, "composable-blast-immune",
                  "8/8/8/4e3/8/8/4R3/8 w - - 0 1");
     Move blastImmuneMove = make_move(SQ_E2, SQ_E3);
@@ -393,6 +476,20 @@ void composable_rules() {
     check(type_of(pos.piece_on(SQ_E2)) == QUEEN,
           "rifle shooter did not receive its configured morph");
     pos.undo_move(rifleMorph);
+    states->pop_back();
+
+    set_position(pos, states, "composable-rifle-morph-out",
+                 "4k3/8/8/8/8/4p3/4Q3/4K3 w - - 0 1");
+    Move rifleMorphOut = parse_move(pos, "e2e3");
+    simulated = pos.simulated_move_info(rifleMorphOut);
+    check(!(simulated.blastImmuneOccupancy & square_bb(SQ_E2))
+          && !(simulated.occupiedAfterEffects & square_bb(SQ_E2)),
+          "rifle morph out retained blast immunity in simulation");
+    states->emplace_back();
+    pos.do_move(rifleMorphOut, states->back());
+    check(pos.piece_on(SQ_E2) == NO_PIECE,
+          "rifle morph out retained blast immunity in committed effects");
+    pos.undo_move(rifleMorphOut);
     states->pop_back();
 
     set_position(pos, states, "composable-ep-ghost",
@@ -1178,6 +1275,23 @@ freezeDiagonals = false
 [composable-freeze-immune:composable-freeze-traps]
 freezeImmunePieceTypes = m
 
+[composable-pass-freeze:chess]
+king = -
+customPiece1 = f:W
+freezePieceTypes = f
+pass = true
+checking = false
+castling = false
+startFen = 8/8/8/8/8/8/8/8 w - - 0 1
+
+[composable-check-morph-in:chess]
+moveMorphPieceType = b:r
+castling = false
+
+[composable-check-morph-out:chess]
+moveMorphPieceType = r:b
+castling = false
+
 [composable-freeze-traps-blast:fairy]
 pieceToCharTable = -
 pawn = -
@@ -1201,6 +1315,19 @@ blastPromotion = true
 trapRegion = e4
 trapProtection = friendly-orthogonal
 startFen = 8/8/8/8/8/8/8/8 w - - 0 1
+
+[composable-blast-promotion-color:composable-freeze-traps-blast]
+changingColorTrigger = capture
+changingColorPieceTypes = q
+checking = false
+trapRegion = -
+
+[composable-rifle-morph-out:chess]
+rifleCapture = true
+moveMorphPieceType = q:r
+blastOnCapture = true
+blastImmuneTypes = q
+castling = false
 
 [composable-blast-immune:composable-freeze-traps-blast]
 blastImmuneTypes = r
@@ -1315,12 +1442,32 @@ moveMorphPieceType = b:q
 freezePieceTypes = b
 castling = false
 
+[composable-stack-passive:chess]
+customPiece1 = a:W
+customPiece2 = b:W
+stackedPieceType = a:b
+moveMorphPieceType = b:q
+blastPassiveTypes = q
+blastPattern = W
+checking = false
+castling = false
+
 [composable-unstack-morph:chess]
 customPiece1 = a:W
 customPiece2 = b:W
 stackedPieceType = a:b
 moveMorphPieceType = a:q
 freezePieceTypes = q
+castling = false
+
+[composable-unstack-passive:chess]
+customPiece1 = a:W
+customPiece2 = b:W
+stackedPieceType = a:b
+moveMorphPieceType = a:q
+blastPassiveTypes = a
+blastPattern = W
+checking = false
 castling = false
 
 [composable-death-freeze:chess]

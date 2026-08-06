@@ -4369,7 +4369,13 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
   SimulatedMoveInfo info;
   info.colorOccupancy[WHITE] = pieces(WHITE);
   info.colorOccupancy[BLACK] = pieces(BLACK);
-  if (blast_promotion() || var->changingColorPieceTypes)
+  if (blast_promotion()
+      || var->changingColorPieceTypes
+      || var->blastPassiveTypes
+      || var->captureMorph
+      || var->hasMoveMorph
+      || var->stackingPieceTypes
+      || var->stackedPieceTypes)
   {
       info.typeOccupancy.resize(COLOR_NB * PIECE_TYPE_NB);
       info.type_pieces(WHITE, ALL_PIECES) = pieces(WHITE);
@@ -4790,7 +4796,7 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
           blastMask |= center;
           info.removedByEffects |= center;
       }
-      if (blast_on_capture(m) && (blast_immune_types() & movePt))
+      if (blast_on_capture(m) && (blast_immune_types() & placedType))
       {
           blastMask &= ~square_bb(info.effectiveTo);
           info.removedByEffects &= ~square_bb(info.effectiveTo);
@@ -4808,53 +4814,27 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
   if (var->blastPassiveTypes)
   {
       Bitboard occupiedForPassive = info.effectOccupancy & ~info.removedByEffects;
-      std::array<Bitboard, COLOR_NB> passiveBurners = passive_blast_burners(occupiedForPassive);
-      if (is_ok(info.captureSquare))
+      std::array<Bitboard, COLOR_NB> passiveBurners = {};
+      if (!info.typeOccupancy.empty())
       {
-          passiveBurners[WHITE] &= ~square_bb(info.captureSquare);
-          passiveBurners[BLACK] &= ~square_bb(info.captureSquare);
-      }
-      if (!dropMove && !info.clone)
-          passiveBurners[us] &= ~square_bb(info.from);
-
-      if (info.castling)
-      {
-          Square kto, rto;
-          castling_destinations(us, info.from, info.to, kto, rto);
-          Piece rook = piece_on(info.to);
-          if (var->blastPassiveTypes & piece_set(type_of(moved_piece(m))))
-              passiveBurners[us] |= square_bb(kto);
-          if (rook != NO_PIECE && (var->blastPassiveTypes & piece_set(type_of(rook))))
-              passiveBurners[us] |= square_bb(rto);
-      }
-      else if (dropMove)
-      {
-          if (var->blastPassiveTypes & piece_set(type_of(moved_piece(m))))
+          for (PieceSet ps = var->blastPassiveTypes; ps; )
           {
-              passiveBurners[us] |= square_bb(info.to);
-              if (info.paired)
-                  passiveBurners[us] |= square_bb(info.secondarySquare);
+              PieceType pt = pop_lsb(ps);
+              passiveBurners[WHITE] |= info.type_pieces(WHITE, pt);
+              passiveBurners[BLACK] |= info.type_pieces(BLACK, pt);
           }
       }
-      else if (!info.rifle)
+      else
       {
-          PieceType finalPt = movePt;
-          if (is_promotion_move(m))
-              finalPt = promotion_type(m);
-          else if (type_of(m) == PIECE_PROMOTION)
-              finalPt = promoted_piece_type(movePt);
-          else if (type_of(m) == PIECE_DEMOTION)
-              finalPt = type_of(unpromoted_piece_on(info.from));
-          if (var->blastPassiveTypes & piece_set(finalPt))
-              passiveBurners[us] |= square_bb(info.effectiveTo);
+          passiveBurners = passive_blast_burners(occupiedForPassive);
+          if (is_ok(info.captureSquare))
+          {
+              passiveBurners[WHITE] &= ~square_bb(info.captureSquare);
+              passiveBurners[BLACK] &= ~square_bb(info.captureSquare);
+          }
+          if (!dropMove && !info.clone)
+              passiveBurners[us] &= ~square_bb(info.from);
       }
-      else if (var->blastPassiveTypes & piece_set(movePt))
-          passiveBurners[us] |= square_bb(info.from);
-
-      if (is_gating(m) && !laser_game() && gating_type(m) != NO_PIECE_TYPE
-          && gating_move_blocks_occupancy(m)
-          && (var->blastPassiveTypes & piece_set(gating_type(m))))
-          passiveBurners[us] |= square_bb(info.gatingSquare);
 
       passiveBurners[WHITE] &= occupiedForPassive;
       passiveBurners[BLACK] &= occupiedForPassive;
@@ -5151,7 +5131,7 @@ bool Position::legal(Move m) const {
 
   {
       SimulatedMoveGuard currentPosition(*this, MOVE_NONE);
-      if (!dropMove && (freeze_squares() & from))
+      if (!dropMove && !is_pass(m) && (freeze_squares() & from))
           return false;
       // Castling is also blocked if the participating rook is frozen.
       if (type_of(m) == CASTLING)
@@ -5635,7 +5615,7 @@ bool Position::legal(Move m) const {
       if (capture(m) && blastOnCapture)
       {
           occupied &= ~blast_squares(blastCenter);
-          if (blast_immune_types() & movePt)
+          if (blast_immune_types() & finalMovePt)
               occupied |= square_bb(kto);
       }
       occupied &= ~removedByEffects;
@@ -5740,7 +5720,7 @@ bool Position::legal(Move m) const {
       if (capture(m) && blastOnCapture)
       {
           occupied &= ~blast_squares(blastCenter);
-          if (blast_immune_types() & movePt)
+          if (blast_immune_types() & finalMovePt)
               occupied |= square_bb(kto);
       }
       occupied &= ~removedByEffects;
@@ -5785,7 +5765,11 @@ bool Position::legal(Move m) const {
       while (antiRoyals)
       {
           Square sr = pop_lsb(antiRoyals);
-          Bitboard attackers = attackers_to(sr, occupied, ~us, janggiCannonsAfter, &simulated)
+          // Capture morphs deliberately retain the established anti-royal
+          // attack semantics here; the captured piece is not an additional
+          // attacker merely because the mover acquired its type.
+          const SimulatedMoveInfo* antiRoyalSimulation = capture_morph() ? nullptr : &simulated;
+          Bitboard attackers = attackers_to(sr, occupied, ~us, janggiCannonsAfter, antiRoyalSimulation)
                               & ~freeze_squares(~us) & occupied;
           if (anti_royal_king_mutually_immune())
               attackers &= ~pieces(~us, king_type());
@@ -6663,25 +6647,37 @@ bool Position::gives_check_impl(Move m) const {
       occupied |= square_bb(gating_square(m));
 
   const bool attackFromSurvives = occupied & square_bb(attackFrom);
+  const Piece simulatedMover = simulated.placedPiece;
+  const bool simulatedMoverFriendly = simulatedMover != NO_PIECE
+                                    && color_of(simulatedMover) == sideToMove;
+  const PieceType pt = simulatedMoverFriendly ? type_of(simulatedMover) : NO_PIECE_TYPE;
 
-  Bitboard janggiCannons = pieces(JANGGI_CANNON);
-  if (type_of(mover) == JANGGI_CANNON)
-      janggiCannons = rifleShot ? (janggiCannons & ~square_bb(shotSq))
-                                : ((!dropMove && !cloneMove ? janggiCannons ^ from : janggiCannons) | to);
-  else if (janggiCannons & to)
-      janggiCannons ^= to;
+  Bitboard janggiCannons = simulated.typeOccupancy.empty()
+                         ? pieces(JANGGI_CANNON)
+                         : (simulated.type_pieces(WHITE, JANGGI_CANNON)
+                          | simulated.type_pieces(BLACK, JANGGI_CANNON));
+  if (simulated.typeOccupancy.empty())
+  {
+      if (type_of(mover) == JANGGI_CANNON)
+          janggiCannons = rifleShot ? (janggiCannons & ~square_bb(shotSq))
+                                    : ((!dropMove && !cloneMove ? janggiCannons ^ from : janggiCannons) | to);
+      else if (janggiCannons & to)
+          janggiCannons ^= to;
+  }
 
-  if (attackFromSurvives && !(frozenAttackers & square_bb(attackFrom)) && usingPhysicalKingTarget
-      && (attackers_to_king(royalSq, occupied, sideToMove, janggiCannons) & square_bb(attackFrom)))
-      return !(var->captureForbiddenByColor[color_of(mover)][type_of(mover)] & royalType);
+  if (attackFromSurvives && simulatedMoverFriendly
+      && !(frozenAttackers & square_bb(attackFrom)) && usingPhysicalKingTarget
+      && (attackers_to_king(royalSq, occupied, sideToMove, janggiCannons,
+                            NO_PIECE_TYPE, &simulated) & square_bb(attackFrom)))
+      return !(var->captureForbiddenByColor[sideToMove][pt] & royalType);
 
   // Is there a direct check?
   if (attackFromSurvives
+      && simulatedMoverFriendly
       && !(frozenAttackers & square_bb(attackFrom))
       && !is_promotion_move(m) && type_of(m) != PIECE_PROMOTION && type_of(m) != PIECE_DEMOTION && type_of(m) != CASTLING
-      && !((var->petrifyOnCaptureTypes & type_of(mover)) && capture(m)))
+      && !((var->petrifyOnCaptureTypes & pt) && capture(m)))
   {
-      PieceType pt = type_of(mover);
       if (!(var->captureForbiddenByColor[sideToMove][pt] & royalType))
       {
           if (pt == JANGGI_CANNON)
@@ -6721,13 +6717,16 @@ bool Position::gives_check_impl(Move m) const {
       discCheckSq = rifleShot ? square_bb(to) : square_bb(from);
 
   if (  ((!dropMove && (blockers_for_king(~sideToMove) & discCheckSq)) || (non_sliding_riders() & pieces(sideToMove)))
-      && attackers_to_king(royalSq, occupied, sideToMove, janggiCannons) & occupied)
+      && (attackers_to_king(royalSq, occupied, sideToMove, janggiCannons,
+                            NO_PIECE_TYPE, &simulated)
+          & occupied & simulated.colorOccupancy[sideToMove]))
       return true;
 
   if (is_jump_capture(m)
       && (jump_capture_mask(from, to) & ~square_bb(shotSq))
-      && (attackers_to_king(royalSq, occupied, sideToMove, janggiCannons)
-          & occupied & pieces(sideToMove)))
+      && (attackers_to_king(royalSq, occupied, sideToMove, janggiCannons,
+                            NO_PIECE_TYPE, &simulated)
+          & occupied & simulated.colorOccupancy[sideToMove]))
       return true;
 
   // Is there a check by gated pieces?
@@ -6744,15 +6743,14 @@ bool Position::gives_check_impl(Move m) const {
   }
 
   // Petrified piece can't give check
-  if ((var->petrifyOnCaptureTypes & type_of(mover)) && capture(m))
+  if (pt != NO_PIECE_TYPE && (var->petrifyOnCaptureTypes & pt) && capture(m))
       return false;
 
   // Is there a check by special diagonal moves?
   if (more_than_one(diagonal_lines() & (to | royalSq)))
   {
-      PieceType pt = type_of(mover);
       PieceType diagType = pt == WAZIR ? FERS : pt == SOLDIER ? PAWN : pt == ROOK ? BISHOP : NO_PIECE_TYPE;
-      if (attackFromSurvives && !(frozenAttackers & square_bb(attackFrom))
+      if (attackFromSurvives && simulatedMoverFriendly && !(frozenAttackers & square_bb(attackFrom))
           && diagType && (attacks_bb(sideToMove, diagType, attackFrom, occupied) & royalSq))
           return true;
       else if (attackFromSurvives && !(frozenAttackers & square_bb(attackFrom))
@@ -8387,7 +8385,9 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
 
           blast_mask = (blastOnCaptureMove || blast_on_move() || blast_on_self_destruct()) ? blast_squares(captured ? (blast_on_capture_mover_center() ? moverSq : st->captured.square) : to)
               : (var->petrifyOnCaptureTypes & type_of(pc) ? square_bb(moverSq) : Bitboard(0));
-          if (captured && blastOnCaptureMove && (blast_immune_types() & movedType))
+          if (captured && blastOnCaptureMove
+              && piece_on(moverSq) != NO_PIECE
+              && (blast_immune_types() & type_of(piece_on(moverSq))))
               blast_mask &= ~square_bb(moverSq);
           removal_mask |= blast_mask;
       };
@@ -8667,7 +8667,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       remove_destination_piece_no_capture_effects(moverSq, makeDeadSquare);
   }
 
-  Bitboard localBycatch = (st->bycatchSquares & ~st->libertySelfRemoved & ~st->trapRemoved)
+  Bitboard localBycatch = (st->bycatchSquares & ~st->libertySelfRemoved & ~st->trapRemoved
+                                             & ~st->blastPromotedSquares)
                         & (blast_pattern(moverSq) | square_bb(moverSq));
   bool captureHappened = (captured != NO_PIECE && !stackMove) || localBycatch;
   if (trigger_matches(var->changingColorTrigger, captureHappened)
