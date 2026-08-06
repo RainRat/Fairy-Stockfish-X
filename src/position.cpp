@@ -5039,8 +5039,7 @@ bool Position::legal(Move m) const {
       else
           occupied = (pieces() ^ from) | to;
 
-      Square kingSquareAfterMove = type_of(moved_piece(m)) == type_of(piece_on(royal_square(us)))
-                                 ? to : royal_square(us);
+      Square kingSquareAfterMove = from == royal_square(us) ? to : royal_square(us);
       if (!allow_checks() && kingSquareAfterMove == to
           && attackers_to_king(kingSquareAfterMove, occupied, ~us))
           return false;
@@ -5189,11 +5188,10 @@ bool Position::legal(Move m) const {
 
   const Square royalSquare = royal_square(us);
   const bool hasRoyal = royalSquare != SQ_NONE;
-  const PieceType royalType = hasRoyal ? type_of(piece_on(royalSquare)) : NO_PIECE_TYPE;
   if (!is_pass(m) && !hasRoyal && royal_piece_type(us) != NO_PIECE_TYPE && is_actual_runtime_royal(us, king_type()))
       return false;
 
-  const bool moverIsRoyal = hasRoyal && type_of(moved_piece(m)) == royalType;
+  const bool moverIsRoyal = hasRoyal && from == royalSquare;
 
   const bool simpleLegality = var->simpleLegality
                            && type_of(m) != CASTLING
