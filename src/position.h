@@ -83,6 +83,9 @@ struct SimulatedMoveInfo {
   Bitboard relocatedOccupancy = Bitboard(0);
   Bitboard effectOccupancy = Bitboard(0);
   std::array<Bitboard, COLOR_NB> colorOccupancy = {};
+  // Allocated only for variants whose blast effects can change a bystander's
+  // movement type; ordinary variants keep SimulatedMoveInfo compact.
+  std::vector<Bitboard> typeOccupancy;
   std::array<Bitboard, COLOR_NB> freezerOccupancy = {};
   std::array<Bitboard, COLOR_NB> freezeImmuneOccupancy = {};
   Bitboard pawnOccupancy = Bitboard(0);
@@ -107,6 +110,14 @@ struct SimulatedMoveInfo {
   bool clone = false;
   bool stationary = false;
   bool paired = false;
+
+  Bitboard& type_pieces(Color c, PieceType pt) {
+      return typeOccupancy[size_t(c) * PIECE_TYPE_NB + pt];
+  }
+  Bitboard type_pieces(Color c, PieceType pt) const {
+      return typeOccupancy.empty() ? Bitboard(0)
+                                   : typeOccupancy[size_t(c) * PIECE_TYPE_NB + pt];
+  }
 };
 
 const SpellContext* current_spell_context() noexcept;
@@ -872,13 +883,25 @@ public:
   Bitboard attackers_to(Square s, Bitboard occupied) const;
   Bitboard attackers_to(Square s, Bitboard occupied, Color c) const;
   Bitboard attackers_to(Square s, Bitboard occupied, Color c, Bitboard janggiCannons) const;
+  Bitboard attackers_to(Square s, Bitboard occupied, Color c, Bitboard janggiCannons,
+                        const SimulatedMoveInfo* simulated) const;
   Bitboard attackers_to_king_without_freeze(Square s, Bitboard occupied, Color c,
                                             Bitboard janggiCannons,
                                             PieceType pt = NO_PIECE_TYPE) const;
+  Bitboard attackers_to_king_without_freeze(Square s, Bitboard occupied, Color c,
+                                            Bitboard janggiCannons, PieceType pt,
+                                            const SimulatedMoveInfo* simulated) const;
   Bitboard attackers_to_king(Square s, Color c) const;
   Bitboard attackers_to_king(Square s, Bitboard occupied, Color c) const;
-  Bitboard attackers_to_king(Square s, Bitboard occupied, Color c, Bitboard janggiCannons, PieceType pt = NO_PIECE_TYPE) const;
-  Bitboard janggi_cannon_attackers_to_king(Square s, Bitboard occupied, Color c, Bitboard janggiCannons) const;
+  Bitboard attackers_to_king(Square s, Bitboard occupied, Color c, Bitboard janggiCannons,
+                             PieceType pt = NO_PIECE_TYPE) const;
+  Bitboard attackers_to_king(Square s, Bitboard occupied, Color c, Bitboard janggiCannons,
+                             PieceType pt, const SimulatedMoveInfo* simulated) const;
+  Bitboard janggi_cannon_attackers_to_king(Square s, Bitboard occupied, Color c,
+                                           Bitboard janggiCannons) const;
+  Bitboard janggi_cannon_attackers_to_king(Square s, Bitboard occupied, Color c,
+                                           Bitboard janggiCannons,
+                                           const SimulatedMoveInfo* simulated) const;
   template <bool Initial=false, bool FilterMobility=true>
   Bitboard attacks_from(Color c, PieceType pt, Square s) const;
   template <bool Initial=false, bool FilterMobility=true>
@@ -2441,6 +2464,8 @@ inline bool Position::can_cast_potion(Color c, Variant::PotionType type) const {
 }
 
 inline Bitboard Position::freeze_squares(Color c) const {
+  if (!potions_enabled() && !var->freezePieceTypes)
+      return Bitboard(0);
   Bitboard mask = freeze_squares_from_freezers(c);
   if (potions_enabled())
   {

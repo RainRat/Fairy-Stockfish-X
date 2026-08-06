@@ -246,6 +246,12 @@ void composable_rules() {
     check(!pos.legal(make<SWAP>(SQ_E1, SQ_F1)),
           "a swap accepted after a trap removed the moving royal");
 
+    set_position(pos, states, "composable-blast-promotion-check",
+                 "7k/8/8/8/4e2K/8/4E3/8 w - - 0 1");
+    Move blastPromotionCheck = make_move(SQ_E2, SQ_E3);
+    check(!pos.legal(blastPromotionCheck),
+          "a blast-promoted bystander was omitted from post-move king safety");
+
     set_position(pos, states, "composable-wrap-trap",
                  "1r1R4 w - - 0 1");
     Move wrappedProtection = make_move(SQ_D1, SQ_E1);
@@ -1085,6 +1091,12 @@ castling = false
 
 [composable-blast-surround:composable-freeze-traps-blast]
 surroundCaptureOpposite = true
+trapRegion = -
+
+[composable-blast-promotion-check:composable-freeze-traps-blast]
+checking = true
+allowChecks = false
+king = k
 trapRegion = -
 
 [composable-print-overlap:spell-chess]

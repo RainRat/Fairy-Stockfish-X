@@ -2238,6 +2238,14 @@ Variant* Variant::conclude() {
             if (captureForbiddenByColor[c][pt] & KING)
                 captureForbiddenToKingByColor[c] |= pt;
     }
+    hasCaptureRestrictions = false;
+    for (PieceSet ps = pieceTypes; ps && !hasCaptureRestrictions; )
+    {
+        PieceType pt = pop_lsb(ps);
+        hasCaptureRestrictions = captureForbidden[pt]
+                              || captureForbiddenByColor[WHITE][pt]
+                              || captureForbiddenByColor[BLACK][pt];
+    }
 
     // Enforce consistency to allow runtime optimizations
     if (!doubleStep)

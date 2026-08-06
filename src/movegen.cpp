@@ -101,9 +101,11 @@ namespace {
     bool captureIsRifle = from != to && pos.rifle_capture(m) && pos.capture(m);
     bool rifleShot = captureIsRifle && (T == NORMAL || T == PROMOTION);
     Square effectiveTo = (rifleShot || iguiShot) ? from : to;
-    Bitboard occupancyAfter = from == to && pos.laser_game()
-                            ? pos.pieces()
-                            : pos.simulated_move_info(m, false).placementOccupancy;
+    Bitboard occupancyAfter = Bitboard(0);
+    if (pos.gating() || pos.walling(us))
+        occupancyAfter = from == to && pos.laser_game()
+                       ? pos.pieces()
+                       : pos.simulated_move_info(m, false).placementOccupancy;
 
     // Wall placing moves
     //if it's "wall or move", and they chose non-null move, skip even generating wall move

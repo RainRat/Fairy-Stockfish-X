@@ -180,6 +180,7 @@ struct Variant {
   PieceSet mutuallyHopIllegalTypes = NO_PIECE_SET;
   PieceSet captureForbidden[PIECE_TYPE_NB] = {};
   PieceSet captureForbiddenByColor[COLOR_NB][PIECE_TYPE_NB] = {};
+  bool hasCaptureRestrictions = false;
   PieceSet captureForbiddenToKing = NO_PIECE_SET;
   PieceSet captureForbiddenToKingByColor[COLOR_NB] = {};
   PieceSet petrifyOnCaptureTypes = NO_PIECE_SET;

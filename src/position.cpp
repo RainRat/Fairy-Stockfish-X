@@ -3037,7 +3037,6 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
             | (attacks_bb<KING>(s)             & pieces(c, KING, COMMONER));
   }
 
-  // Use a faster version for selected fairy pieces
   if (!hasRuntimeSpecialAttackers && !hasSimpleHopperAttackers && fast_attacks2())
   {
       return  (pawn_attacks_bb(~c, s)             & pieces(c, PAWN, BREAKTHROUGH_PIECE, GOLD))
@@ -3085,7 +3084,9 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
               }
           }
           else if (pt == JANGGI_CANNON)
-              b |= attacks_from<false, false>(~c, move_pt, s, occupied) & attacks_from<false, false>(~c, move_pt, s, occupied & ~janggiCannons) & (janggiCannons & pieces(c));
+              b |= attacks_from<false, false>(~c, move_pt, s, occupied)
+                 & attacks_from<false, false>(~c, move_pt, s, occupied & ~janggiCannons)
+                 & (janggiCannons & pieces(c));
           else
               b |= attacks_from<false, false>(~c, move_pt, s, occupied) & pieces(c, pt);
       }
@@ -3111,15 +3112,167 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
   return b;
 }
 
+Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard janggiCannons,
+                                const SimulatedMoveInfo* simulated) const {
+
+  auto type_pieces = [&](Color color, PieceType pt) {
+      return simulated && !simulated->typeOccupancy.empty() ? simulated->type_pieces(color, pt)
+                                                            : pieces(color, pt);
+  };
+  auto color_pieces = [&](Color color) {
+      return simulated && !simulated->typeOccupancy.empty() ? simulated->type_pieces(color, ALL_PIECES)
+                                                            : pieces(color);
+  };
+  auto all_type_pieces = [&](PieceType pt) {
+      return simulated && !simulated->typeOccupancy.empty()
+           ? (simulated->type_pieces(WHITE, pt) | simulated->type_pieces(BLACK, pt))
+           : pieces(pt);
+  };
+
+  if (topology_wraps())
+  {
+      Bitboard b = 0;
+      for (PieceSet ps = piece_types(); ps;)
+      {
+          PieceType pt = pop_lsb(ps);
+          Bitboard ptPieces = type_pieces(c, pt);
+          if (!ptPieces)
+              continue;
+
+          PieceType move_pt = effective_piece_type(pt);
+          const PieceInfo* pi = pieceMap.get(move_pt);
+          if (pi->has_runtime_rider_augment()
+              || pi->has_universal_hopper()
+              || (pi->has_simple_hopper_capture() && !(AttackRiderTypes[move_pt] & HOPPING_RIDERS))
+              || (AttackRiderTypes[move_pt] & ASYMMETRICAL_RIDERS))
+          {
+              Bitboard candidates = ptPieces;
+              while (candidates)
+              {
+                  Square from = pop_lsb(candidates);
+                  if (attacks_from(c, pt, from, occupied) & s)
+                      b |= from;
+              }
+          }
+          else if (pt == JANGGI_CANNON)
+              b |= attacks_from<false, false>(~c, move_pt, s, occupied)
+                 & attacks_from<false, false>(~c, move_pt, s, occupied & ~janggiCannons)
+                 & ptPieces;
+          else
+              b |= attacks_from<false, false>(~c, move_pt, s, occupied) & ptPieces;
+      }
+      return b;
+  }
+
+  bool hasRuntimeSpecialAttackers = false;
+  for (PieceSet ps = pieceMap.runtime_rider_augment_types(); ps && !hasRuntimeSpecialAttackers;)
+  {
+      PieceType move_pt = pop_lsb(ps);
+      if (move_pt == king_type())
+          hasRuntimeSpecialAttackers = bool(type_pieces(c, KING));
+      else
+          hasRuntimeSpecialAttackers = bool(type_pieces(c, move_pt));
+  }
+
+  bool hasSimpleHopperAttackers = false;
+  for (PieceSet ps = pieceMap.simple_hopper_capture_types(); ps && !hasSimpleHopperAttackers;)
+  {
+      PieceType move_pt = pop_lsb(ps);
+      Bitboard candidates = type_pieces(c, move_pt);
+      if (move_pt == king_type())
+          candidates |= type_pieces(c, KING);
+      hasSimpleHopperAttackers = candidates && !(AttackRiderTypes[move_pt] & HOPPING_RIDERS);
+  }
+
+  // Use a faster version for variants with moderate rule variations
+  if (!hasRuntimeSpecialAttackers && !hasSimpleHopperAttackers && fast_attacks())
+  {
+      return  (pawn_attacks_bb(~c, s)          & type_pieces(c, PAWN))
+            | (attacks_bb<KNIGHT>(s)           & (type_pieces(c, KNIGHT) | type_pieces(c, ARCHBISHOP) | type_pieces(c, CHANCELLOR)))
+            | (attacks_bb<  ROOK>(s, occupied) & (type_pieces(c, ROOK) | type_pieces(c, QUEEN) | type_pieces(c, CHANCELLOR)))
+            | (attacks_bb<BISHOP>(s, occupied) & (type_pieces(c, BISHOP) | type_pieces(c, QUEEN) | type_pieces(c, ARCHBISHOP)))
+            | (attacks_bb<KING>(s)             & (type_pieces(c, KING) | type_pieces(c, COMMONER)));
+  }
+
+  // Use a faster version for selected fairy pieces
+  if (!hasRuntimeSpecialAttackers && !hasSimpleHopperAttackers && fast_attacks2())
+  {
+      return  (pawn_attacks_bb(~c, s)             & (type_pieces(c, PAWN) | type_pieces(c, BREAKTHROUGH_PIECE) | type_pieces(c, GOLD)))
+            | (attacks_bb<KNIGHT>(s)              & type_pieces(c, KNIGHT))
+            | (attacks_bb<  ROOK>(s, occupied)    & ((type_pieces(c, ROOK) | type_pieces(c, QUEEN) | type_pieces(c, DRAGON))
+                                                     | (type_pieces(c, LANCE) & PseudoAttacks[~c][LANCE][s])))
+            | (attacks_bb<BISHOP>(s, occupied)    & (type_pieces(c, BISHOP) | type_pieces(c, QUEEN) | type_pieces(c, DRAGON_HORSE)))
+            | (attacks_bb<KING>(s)                & (type_pieces(c, KING) | type_pieces(c, COMMONER)))
+            | (attacks_bb<FERS>(s)                & (type_pieces(c, FERS) | type_pieces(c, DRAGON) | type_pieces(c, SILVER)))
+            | (attacks_bb<WAZIR>(s)               & (type_pieces(c, WAZIR) | type_pieces(c, DRAGON_HORSE) | type_pieces(c, GOLD)))
+            | (LeaperAttacks[~c][SHOGI_KNIGHT][s] & type_pieces(c, SHOGI_KNIGHT))
+            | (LeaperAttacks[~c][SHOGI_PAWN][s]   & (type_pieces(c, SHOGI_PAWN) | type_pieces(c, SILVER)));
+  }
+
+  Bitboard b = 0;
+  for (PieceSet ps = piece_types(); ps;)
+  {
+      PieceType pt = pop_lsb(ps);
+      if (board_bb(c, pt) & s)
+      {
+          PieceType move_pt = effective_piece_type(pt);
+          const PieceInfo* pi = pieceMap.get(move_pt);
+          if (pi->has_runtime_rider_augment()
+              || pi->has_universal_hopper()
+              || (pi->has_simple_hopper_capture() && !(AttackRiderTypes[move_pt] & HOPPING_RIDERS)))
+          {
+              Bitboard candidates = type_pieces(c, pt);
+              while (candidates)
+              {
+                  Square from = pop_lsb(candidates);
+                  if (attacks_from(c, pt, from, occupied) & s)
+                      b |= from;
+              }
+              continue;
+          }
+          // Consider asymmetrical moves (e.g., horse)
+          if (AttackRiderTypes[move_pt] & ASYMMETRICAL_RIDERS)
+          {
+              Bitboard asymmetricals = PseudoAttacks[~c][move_pt][s] & type_pieces(c, pt);
+              while (asymmetricals)
+              {
+                  Square s2 = pop_lsb(asymmetricals);
+                  if (attacks_from(c, move_pt, s2, occupied) & s)
+                      b |= s2;
+              }
+          }
+          else if (pt == JANGGI_CANNON)
+              b |= attacks_from<false, false>(~c, move_pt, s, occupied) & attacks_from<false, false>(~c, move_pt, s, occupied & ~janggiCannons) & (janggiCannons & color_pieces(c));
+          else
+              b |= attacks_from<false, false>(~c, move_pt, s, occupied) & type_pieces(c, pt);
+      }
+  }
+
+  // Janggi palace moves
+  if (diagonal_lines() & s)
+  {
+      Bitboard diags = 0;
+      if (king_type() == WAZIR)
+          diags |= attacks_bb(~c, FERS, s, occupied) & type_pieces(c, KING);
+      diags |= attacks_bb(~c, FERS, s, occupied) & type_pieces(c, WAZIR);
+      diags |= attacks_bb(~c, PAWN, s, occupied) & type_pieces(c, SOLDIER);
+      diags |= rider_attacks_bb<RIDER_BISHOP>(s, occupied) & type_pieces(c, ROOK);
+      diags |= janggi_cannon_diagonal_targets(s, occupied, janggiCannons) & (janggiCannons & color_pieces(c));
+      b |= diags & diagonal_lines();
+  }
+
+  // Unpromoted soldiers
+  if (b & all_type_pieces(SOLDIER) && relative_rank(c, s, max_rank()) < var->soldierPromotionRank)
+      b ^= b & all_type_pieces(SOLDIER) & ~PseudoAttacks[~c][SHOGI_PAWN][s];
+
+  return b;
+}
+
 Bitboard Position::attackers_to_king_without_freeze(Square s, Bitboard occupied, Color c,
                                                     Bitboard janggiCannons, PieceType pt) const {
 
   Bitboard attackers = attackers_to(s, occupied, c, janggiCannons);
   attackers |= janggi_cannon_attackers_to_king(s, occupied, c, janggiCannons);
-  // Locust-style universal hoppers capture the hurdle square and land beyond it,
-  // so the hurdle square is not present in attacks_from() landing targets.
-  // When `occupied` is hypothetical and already includes s, we still need to
-  // consider locust attacks on that square even if it is empty on the board.
   if (pt != NO_PIECE_TYPE || piece_on(s) != NO_PIECE || (occupied & square_bb(s)))
       for (PieceSet ps = piece_types(); ps; )
       {
@@ -3167,10 +3320,8 @@ Bitboard Position::attackers_to_king_without_freeze(Square s, Bitboard occupied,
   if (anti_royal_king_mutually_immune())
   {
       if (royalType == king_type())
-      {
           for (PieceSet ps = anti_royal_types(); ps; )
               attackers &= ~pieces(c, pop_lsb(ps));
-      }
       else if (anti_royal_types() & royalType)
           attackers &= ~pieces(c, king_type());
   }
@@ -3181,6 +3332,89 @@ Bitboard Position::attackers_to_king_without_freeze(Square s, Bitboard occupied,
           PieceType apt = pop_lsb(ps);
           if (var->captureForbiddenByColor[c][apt] & royalType)
               attackers &= ~pieces(c, apt);
+      }
+  return attackers;
+}
+
+Bitboard Position::attackers_to_king_without_freeze(Square s, Bitboard occupied, Color c,
+                                                    Bitboard janggiCannons, PieceType pt,
+                                                    const SimulatedMoveInfo* simulated) const {
+
+  auto type_pieces = [&](PieceType type) {
+      return simulated && !simulated->typeOccupancy.empty() ? simulated->type_pieces(c, type)
+                                                            : pieces(c, type);
+  };
+  Bitboard attackers = simulated
+                     ? attackers_to(s, occupied, c, janggiCannons, simulated)
+                     : attackers_to(s, occupied, c, janggiCannons);
+  attackers |= janggi_cannon_attackers_to_king(s, occupied, c, janggiCannons, simulated);
+  // Locust-style universal hoppers capture the hurdle square and land beyond it,
+  // so the hurdle square is not present in attacks_from() landing targets.
+  // When `occupied` is hypothetical and already includes s, we still need to
+  // consider locust attacks on that square even if it is empty on the board.
+  if (pt != NO_PIECE_TYPE || piece_on(s) != NO_PIECE || (occupied & square_bb(s)))
+      for (PieceSet ps = piece_types(); ps; )
+      {
+          PieceType apt = pop_lsb(ps);
+          Bitboard candidates = type_pieces(apt) & occupied;
+          if (!candidates)
+              continue;
+
+          PieceType movePt = effective_piece_type(apt);
+          if (movePt == NO_PIECE_TYPE)
+              continue;
+          const PieceInfo* pi = pieceMap.get(movePt);
+          if (!pi->has_universal_hopper())
+              continue;
+
+          bool hasLocust = false;
+          for (int initial = 0; initial < 2 && !hasLocust; ++initial)
+              for (const auto& [_, profile] : pi->universalHopper[initial][MODALITY_CAPTURE])
+                  if (profile.captureMode != PieceInfo::CAPTURE_DEST)
+                  {
+                      hasLocust = true;
+                      break;
+                  }
+          if (!hasLocust)
+              continue;
+
+          while (candidates)
+          {
+              Square from = pop_lsb(candidates);
+              Bitboard landings = attacks_from(c, apt, from, occupied)
+                                & ~(simulated && !simulated->typeOccupancy.empty()
+                                  ? simulated->type_pieces(c, ALL_PIECES) : pieces(c));
+              while (landings)
+              {
+                  Square to = pop_lsb(landings);
+                  if (jump_capture_mask(from, to, occupied) & square_bb(s))
+                  {
+                      attackers |= square_bb(from);
+                      break;
+                  }
+              }
+          }
+      }
+  PieceType royalType = pt != NO_PIECE_TYPE ? pt :
+                        (piece_on(s) != NO_PIECE ? type_of(piece_on(s)) : king_type());
+
+  if (anti_royal_king_mutually_immune())
+  {
+      if (royalType == king_type())
+      {
+          for (PieceSet ps = anti_royal_types(); ps; )
+              attackers &= ~type_pieces(pop_lsb(ps));
+      }
+      else if (anti_royal_types() & royalType)
+          attackers &= ~type_pieces(king_type());
+  }
+
+  if (royalType != NO_PIECE_TYPE)
+      for (PieceSet ps = piece_types(); ps; )
+      {
+          PieceType apt = pop_lsb(ps);
+          if (var->captureForbiddenByColor[c][apt] & royalType)
+          attackers &= ~type_pieces(apt);
       }
   return attackers;
 }
@@ -3197,10 +3431,34 @@ Bitboard Position::attackers_to_king(Square s, Bitboard occupied, Color c,
   return attackers & ~restricted;
 }
 
-Bitboard Position::janggi_cannon_attackers_to_king(Square s, Bitboard occupied, Color c, Bitboard janggiCannons) const {
+Bitboard Position::attackers_to_king(Square s, Bitboard occupied, Color c,
+                                     Bitboard janggiCannons, PieceType pt,
+                                     const SimulatedMoveInfo* simulated) const {
+
+  Bitboard attackers = attackers_to_king_without_freeze(s, occupied, c, janggiCannons, pt, simulated);
+
+  // Frozen pieces cannot give check (relevant for spell-chess freeze effects).
+  Bitboard restricted = freeze_squares(c);
+  if (var->prisonPawnPromotion)
+      restricted |= (simulated && !simulated->typeOccupancy.empty()
+                   ? simulated->type_pieces(c, PAWN) : pieces(c, PAWN)) & pawnCannotCheckZone[c];
+  return attackers & ~restricted;
+}
+
+Bitboard Position::janggi_cannon_attackers_to_king(Square s, Bitboard occupied, Color c,
+                                                   Bitboard janggiCannons) const {
+  return janggi_cannon_attackers_to_king(s, occupied, c, janggiCannons,
+                                         static_cast<const SimulatedMoveInfo*>(nullptr));
+}
+
+Bitboard Position::janggi_cannon_attackers_to_king(Square s, Bitboard occupied, Color c,
+                                                   Bitboard janggiCannons,
+                                                   const SimulatedMoveInfo* simulated) const {
 
   Bitboard attackers = 0;
-  Bitboard cannons = pieces(c, JANGGI_CANNON) & occupied;
+  Bitboard cannons = (simulated && !simulated->typeOccupancy.empty()
+                    ? simulated->type_pieces(c, JANGGI_CANNON)
+                    : pieces(c, JANGGI_CANNON)) & occupied;
   Bitboard cannonPieces = janggiCannons;
 
   while (cannons)
@@ -4044,6 +4302,17 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
   SimulatedMoveInfo info;
   info.colorOccupancy[WHITE] = pieces(WHITE);
   info.colorOccupancy[BLACK] = pieces(BLACK);
+  if (blast_promotion())
+  {
+      info.typeOccupancy.resize(COLOR_NB * PIECE_TYPE_NB);
+      info.type_pieces(WHITE, ALL_PIECES) = pieces(WHITE);
+      info.type_pieces(BLACK, ALL_PIECES) = pieces(BLACK);
+      for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
+      {
+          info.type_pieces(WHITE, pt) = pieces(WHITE, pt);
+          info.type_pieces(BLACK, pt) = pieces(BLACK, pt);
+      }
+  }
   info.freezerOccupancy[WHITE] = pieces(WHITE, var->freezePieceTypes);
   info.freezerOccupancy[BLACK] = pieces(BLACK, var->freezePieceTypes);
   info.freezeImmuneOccupancy[WHITE] = pieces(WHITE, var->freezeImmunePieceTypes);
@@ -4079,6 +4348,63 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
   const bool wallPlacement = is_gating(m) && !laser_game() && is_ok(gating_square(m))
                           && walling(sideToMove) && (!wall_or_move() || info.from == info.to);
   const bool pureWallMove = wallPlacement && wall_or_move() && info.from == info.to;
+
+  // Keep ordinary chess-like moves on the compact occupancy path.  The full
+  // simulation is needed only when one of the composable effects can alter
+  // occupancy, protection, or piece classification.
+  const bool simpleSimulation = !var->trapRegion
+                             && var->pieceToCharTable == "-"
+                             && var->pieceTypes == CHESS_PIECES
+                             && !pieceMap.runtime_rider_augment_types()
+                             && !pieceMap.simple_hopper_capture_types()
+                             && !var->blastPassiveTypes
+                             && !var->blastPromotion
+                             && !var->surroundCaptureOpposite
+                             && !var->surroundCaptureIntervene
+                             && !var->surroundCaptureEdge
+                             && !var->removeConnectN
+                             && !var->petrifyOnCaptureTypes
+                             && var->libertyCapture == LibertyAction::NONE
+                             && var->libertySelfCapture == LibertyAction::NONE
+                             && !potions_enabled()
+                             && !gating()
+                             && !walling_rule()
+                             && !var->hasPushing
+                             && !has_adjacent_swapping()
+                             && !blast_on_capture(m)
+                             && !blast_on_move()
+                             && !blast_on_self_destruct()
+                             && !info.rifle
+                             && !info.clone
+                             && !is_pull_move(m)
+                             && !is_swap_move(m)
+                             && !is_self_destruct(m)
+                             && !info.paired
+                             && !var->freezePieceTypes;
+
+  if (simpleSimulation)
+  {
+      if (info.castling)
+      {
+          Square kto, rto;
+          castling_destinations(sideToMove, info.from, info.to, kto, rto);
+          info.relocatedOccupancy = (pieces() ^ square_bb(info.from) ^ square_bb(info.to))
+                                 | square_bb(kto) | square_bb(rto);
+      }
+      else
+      {
+          info.relocatedOccupancy = pieces();
+          if (!dropMove && is_ok(info.from))
+              info.relocatedOccupancy &= ~square_bb(info.from);
+          if (is_ok(info.captureSquare))
+              info.relocatedOccupancy &= ~square_bb(info.captureSquare);
+          if (is_ok(info.to))
+              info.relocatedOccupancy |= square_bb(info.to);
+      }
+      info.effectOccupancy = info.placementOccupancy = info.relocatedOccupancy;
+      info.occupiedAfterEffects = info.relocatedOccupancy;
+      return info;
+  }
 
   auto final_piece_type = [&]() {
       if (dropMove)
@@ -4146,6 +4472,11 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
           return;
       Bitboard bb = square_bb(sq);
       info.colorOccupancy[color] |= bb;
+      if (!info.typeOccupancy.empty())
+          info.type_pieces(color, ALL_PIECES) |= bb;
+      if (pt < PIECE_TYPE_NB)
+          if (!info.typeOccupancy.empty())
+              info.type_pieces(color, pt) |= bb;
       if (var->freezePieceTypes & piece_set(pt))
           info.freezerOccupancy[color] |= bb;
       if (var->freezeImmunePieceTypes & piece_set(pt))
@@ -4160,6 +4491,16 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
       {
           info.colorOccupancy[WHITE] &= ~square_bb(sq);
           info.colorOccupancy[BLACK] &= ~square_bb(sq);
+          if (!info.typeOccupancy.empty())
+          {
+              info.type_pieces(WHITE, ALL_PIECES) &= ~square_bb(sq);
+              info.type_pieces(BLACK, ALL_PIECES) &= ~square_bb(sq);
+              for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
+              {
+                  info.type_pieces(WHITE, pt) &= ~square_bb(sq);
+                  info.type_pieces(BLACK, pt) &= ~square_bb(sq);
+              }
+          }
           info.freezerOccupancy[WHITE] &= ~square_bb(sq);
           info.freezerOccupancy[BLACK] &= ~square_bb(sq);
           info.freezeImmuneOccupancy[WHITE] &= ~square_bb(sq);
@@ -4461,6 +4802,8 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
           Bitboard bit = square_bb(sq);
           Color color = color_of(victim);
           info.blastPromotionOccupancy |= bit;
+          info.type_pieces(color, type_of(victim)) &= ~bit;
+          info.type_pieces(color, promoted) |= bit;
           info.freezerOccupancy[color] &= ~bit;
           info.freezeImmuneOccupancy[color] &= ~bit;
           info.blastImmuneOccupancy &= ~bit;
@@ -4494,6 +4837,16 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
                             | (info.blastPromotionOccupancy & ~info.removedByEffects);
   info.colorOccupancy[WHITE] &= info.occupiedAfterEffects;
   info.colorOccupancy[BLACK] &= info.occupiedAfterEffects;
+  if (!info.typeOccupancy.empty())
+  {
+      info.type_pieces(WHITE, ALL_PIECES) &= info.occupiedAfterEffects;
+      info.type_pieces(BLACK, ALL_PIECES) &= info.occupiedAfterEffects;
+      for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
+      {
+          info.type_pieces(WHITE, pt) &= info.occupiedAfterEffects;
+          info.type_pieces(BLACK, pt) &= info.occupiedAfterEffects;
+      }
+  }
   info.freezerOccupancy[WHITE] &= info.occupiedAfterEffects;
   info.freezerOccupancy[BLACK] &= info.occupiedAfterEffects;
   info.freezeImmuneOccupancy[WHITE] &= info.occupiedAfterEffects;
@@ -4692,8 +5045,109 @@ bool Position::legal(Move m) const {
       return false;
 
   const bool moverIsRoyal = hasRoyal && type_of(moved_piece(m)) == royalType;
-  SimulatedMoveInfo simulated = simulated_move_info(m);
+
+  bool moveMorph = false;
+  for (PieceType pt = PAWN; pt < PIECE_TYPE_NB && !moveMorph; ++pt)
+      moveMorph = var->moveMorphPieceType[pt] != NO_PIECE_TYPE;
+  const bool simpleLegality = type_of(m) != CASTLING
+                           && !is_pass(m)
+                           && checking_permitted()
+                           && fast_attacks()
+                           && var->pieceToCharTable == "-"
+                           && var->pieceTypes == CHESS_PIECES
+                           && !pieceMap.runtime_rider_augment_types()
+                           && !pieceMap.simple_hopper_capture_types()
+                           && !pseudo_royal_types()
+                           && !anti_royal_types()
+                           && !is_gating(m)
+                           && !var->flyingGeneral
+                           && !var->diagonalGeneral
+                           && !var->makpongRule
+                           && !var->royalPieceNoThroughCheck
+                           && !var->trapRegion
+                           && !var->blastOnCapture
+                           && !var->blastOnMove
+                           && !var->blastOnSelfDestruct
+                           && !var->blastOnSameTypeCapture
+                           && !var->blastPassiveTypes
+                           && !var->blastPromotion
+                           && !var->surroundCaptureOpposite
+                           && !var->surroundCaptureIntervene
+                           && !var->surroundCaptureEdge
+                           && !var->removeConnectN
+                           && !var->petrifyOnCaptureTypes
+                           && !var->hasCaptureRestrictions
+                           && !var->piecePromotionOnCapture
+                           && !var->changingColorPieceTypes
+                           && var->changingColorTrigger == ColorChangeTrigger::NEVER
+                           && !var->deathOnCaptureTypes
+                           && !var->selfDestructTypes
+                           && !var->edgeInsertTypes
+                           && !var->cloneMoveTypes
+                           && !var->rifleCapture
+                           && !var->selfCapture
+                           && var->selfCaptureTypes.global == NO_PIECE_SET
+                           && var->selfCaptureTypes.byColor[WHITE] == NO_PIECE_SET
+                           && var->selfCaptureTypes.byColor[BLACK] == NO_PIECE_SET
+                           && var->captureType == MOVE_OUT
+                           && !var->immobilityIllegal
+                           && !var->forcedJumpContinuation
+                           && !var->multimoveOffset
+                           && !var->progressiveMultimove
+                           && var->libertyCapture == LibertyAction::NONE
+                           && var->libertySelfCapture == LibertyAction::NONE
+                           && !potions_enabled()
+                           && !walling_rule()
+                           && !var->hasPushing
+                           && !has_adjacent_swapping()
+                           && !topology_wraps()
+                           && !laser_game()
+                           && !rifleShot
+                           && !cloneMove
+                           && !pullMove
+                           && !swapMove
+                           && !is_self_destruct(m)
+                           && !paired_drop(m)
+                           && !capture_morph()
+                           && !moveMorph
+                           && !var->freezePieceTypes
+                           && !var->flagMove
+                           && !var->flagRegion[WHITE]
+                           && !var->flagRegion[BLACK]
+                           && !piece_drops();
+  if (simpleLegality)
+  {
+      Bitboard occupied = pieces();
+      if (type_of(m) == EN_PASSANT)
+          occupied = (pieces() ^ from ^ square_bb(capture_square(to))) | to;
+      else if (!dropMove)
+          occupied = (pieces() ^ from) | to;
+
+      if (!hasRoyal)
+          return !violates_same_player_board_repetition(m);
+
+      Square kingSquareAfterMove = moverIsRoyal ? to : royalSquare;
+      if (!allow_checks() && moverIsRoyal)
+          return !attackers_to_king(kingSquareAfterMove, occupied, ~us, janggiCannonsAfter)
+              && !violates_same_player_board_repetition(m);
+
+      Bitboard postMoveAttackers = attackers_to_king(kingSquareAfterMove, occupied,
+                                                     ~us, janggiCannonsAfter);
+      return (allow_checks() || !(postMoveAttackers & occupied & ~square_bb(to)))
+          && !violates_same_player_board_repetition(m);
+  }
+
+  SimulatedMoveInfo simulated;
+  bool simulatedReady = false;
+  auto ensure_simulated = [&]() {
+      if (!simulatedReady)
+      {
+          simulated = simulated_move_info(m);
+          simulatedReady = true;
+      }
+  };
   auto royal_survives = [&](Square sq) {
+      ensure_simulated();
       return !hasRoyal || bool(simulated.occupiedAfterEffects & square_bb(sq));
   };
 
@@ -4815,9 +5269,6 @@ bool Position::legal(Move m) const {
       if (violates_same_player_board_repetition(m))
           return false;
 
-      if (!royal_survives(moverIsRoyal ? to : royalSquare))
-          return false;
-
       StateInfo nextState;
       SimulatedMoveGuard clearSimulation(*this, MOVE_NONE);
       ScopedProbeMove probe(*this, m, nextState);
@@ -4909,6 +5360,7 @@ bool Position::legal(Move m) const {
           && !violates_same_player_board_repetition(m);
   }
 
+  ensure_simulated();
   Bitboard postMoveOccupied = simulated.effectOccupancy & ~simulated.structuralRemoval;
   Bitboard removedByEffects = simulated.removedByEffects;
 
@@ -4937,7 +5389,8 @@ bool Position::legal(Move m) const {
               // Ensure to include the initial square if from == kto
               for (Square s = from; from != kto ? s != kto : s == from; s += step)
                   if (  !(blastOnCapture && (blast_pattern(s) & st->pseudoRoyals & pieces(~sideToMove) & ~blastImmune))
-                      && (attackers_to(s, occupied, ~us, janggiCannonsAfter) & occupied & ~removedAttackers))
+                      && ((attackers_to(s, occupied, ~us, janggiCannonsAfter, &simulated)
+                           & ~freeze_squares(~us) & occupied & ~removedAttackers)))
                       return false;
           // Move the rook
           occupied ^= to | castlingRto;
@@ -4999,7 +5452,8 @@ bool Position::legal(Move m) const {
               PieceType pt = (sr == kto) ? finalMovePt : type_of(piece_on(sr));
               // Touching pseudo-royal pieces are immune
               if (  !(blastOnCapture && (pseudoRoyalsTheirs & blast_pattern(sr) & ~blastImmune))
-                  && (attackers_to_king(sr, occupied, ~us, janggiCannonsAfter, pt) & occupied & ~removedAttackers & attackerCandidatesTheirs))
+                  && (attackers_to_king(sr, occupied, ~us, janggiCannonsAfter, pt, &simulated)
+                      & occupied & ~removedAttackers & attackerCandidatesTheirs))
                   return false;
           }
       // Look for duple check
@@ -5019,7 +5473,8 @@ bool Position::legal(Move m) const {
               PieceType pt = (sr == kto) ? finalMovePt : type_of(piece_on(sr));
               // Touching pseudo-royal pieces are immune
               if (!(  !(blastOnCapture && (pseudoRoyalsTheirs & blast_pattern(sr) & ~blastImmune))
-                    && (attackers_to_king(sr, occupied, ~us, janggiCannonsAfter, pt) & occupied & ~removedAttackers & attackerCandidatesTheirs)))
+                    && (attackers_to_king(sr, occupied, ~us, janggiCannonsAfter, pt, &simulated)
+                        & occupied & ~removedAttackers & attackerCandidatesTheirs)))
                   allCheck = false;
           }
           if (allCheck)
@@ -5103,7 +5558,8 @@ bool Position::legal(Move m) const {
       while (antiRoyals)
       {
           Square sr = pop_lsb(antiRoyals);
-          Bitboard attackers = attackers_to(sr, occupied, ~us, janggiCannonsAfter) & occupied;
+          Bitboard attackers = attackers_to(sr, occupied, ~us, janggiCannonsAfter, &simulated)
+                              & ~freeze_squares(~us) & occupied;
           if (anti_royal_king_mutually_immune())
               attackers &= ~pieces(~us, king_type());
           if (!(occupied & sr)
@@ -5227,15 +5683,25 @@ bool Position::legal(Move m) const {
           || is_actual_runtime_royal(us, gateType)
           || (pseudo_royal_types() & piece_set(gateType)))
       {
-          Square gate = gating_square(m);
-          Bitboard occ = occupiedAfterEffects | gate;
+          auto gate_safe = [&](Square gate) {
+              if (!is_ok(gate) || !(occupiedAfterEffects & square_bb(gate)))
+                  return false;
+              Bitboard occ = occupiedAfterEffects | square_bb(gate);
+              const SimulatedMoveInfo* attackSimulation = simulated.blastPromotionOccupancy
+                                                         ? &simulated : nullptr;
+              Bitboard attackers = gateType == KING || is_actual_runtime_royal(us, gateType)
+                                 ? attackers_to_king(gate, occ, ~us, janggiCannonsAfter,
+                                                     NO_PIECE_TYPE, attackSimulation)
+                                 : attackers_to(gate, occ, ~us, janggiCannonsAfter,
+                                                attackSimulation);
+              if (gateType != KING && !is_actual_runtime_royal(us, gateType))
+                  attackers &= ~freeze_squares(~us);
+              attackers &= ~(removedAttackers | removedByEffects);
+              return !attackers;
+          };
 
-          Bitboard attackers = gateType == KING || is_actual_runtime_royal(us, gateType)
-                             ? attackers_to_king(gate, occ, ~us, janggiCannonsAfter)
-                             : attackers_to(gate, occ, ~us, janggiCannonsAfter);
-          attackers &= ~(removedAttackers | removedByEffects);
-
-          if (attackers)
+          if (!gate_safe(gating_square(m))
+              || (paired_drop(m) && !gate_safe(secondary_drop_square(m))))
               return false;
       }
   }
@@ -5269,7 +5735,9 @@ bool Position::legal(Move m) const {
       {
           Square s = pop_lsb(traversed);
           Bitboard pathOccupied = (pieces() ^ from) | s;
-          if (attackers_to_king(s, pathOccupied, ~us, janggiCannonsAfter) & ~(removedAttackers | removedByEffects))
+          if (attackers_to_king(s, pathOccupied, ~us, janggiCannonsAfter,
+                                NO_PIECE_TYPE, &simulated)
+              & ~(removedAttackers | removedByEffects))
               return false;
       }
   }
@@ -5285,7 +5753,9 @@ bool Position::legal(Move m) const {
   // If the moving piece is a king, check whether the destination square is
   // attacked by the opponent.
   if (!allow_checks() && moverIsRoyal)
-      return !(attackers_to_king(rifleShot ? from : to, occupiedAfterEffects, ~us, janggiCannonsAfter) & ~(removedAttackers | removedByEffects))
+      return !(attackers_to_king(rifleShot ? from : to, occupiedAfterEffects, ~us,
+                                 janggiCannonsAfter, NO_PIECE_TYPE, &simulated)
+               & ~(removedAttackers | removedByEffects))
           && !violates_same_player_board_repetition(m);
 
   // Return early when without king
@@ -5293,7 +5763,8 @@ bool Position::legal(Move m) const {
       return !violates_same_player_board_repetition(m);
 
   // A non-king move is legal if the king is not under attack after the move.
-  Bitboard postMoveAttackers = attackers_to_king(royalSquare, occupiedAfterEffects, ~us, janggiCannonsAfter);
+  Bitboard postMoveAttackers = attackers_to_king(royalSquare, occupiedAfterEffects, ~us,
+                                                 janggiCannonsAfter, NO_PIECE_TYPE, &simulated);
   bool blockedByPostMove = (postMoveAttackers
                          & postMoveOccupied
                          & ~(removedAttackers | removedByEffects)
@@ -5941,6 +6412,16 @@ bool Position::gives_check_impl(Move m) const {
 
   SimulatedMoveGuard guard(*this, m);
   SimulatedMoveInfo simulated = simulated_move_info(m);
+  // Blast promotion changes the movement type of a surviving bystander.  The
+  // committed position is the authoritative attack map for that uncommon
+  // case; the ordinary simulated path intentionally only models occupancy.
+  if (simulated.blastPromotionOccupancy)
+  {
+      StateInfo nextState;
+      SimulatedMoveGuard clearSimulation(*this, MOVE_NONE);
+      ScopedProbeMove probe(*this, m, nextState);
+      return bool(evasion_checkers()) || (laser_game() && piece_on(royalSq) == NO_PIECE);
+  }
   Bitboard occupied = simulated.occupiedAfterEffects;
   const Bitboard frozenAttackers = freeze_squares(sideToMove);
 
