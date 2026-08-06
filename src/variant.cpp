@@ -2330,6 +2330,8 @@ Variant* Variant::conclude() {
                   && !flagMove
                   && !flagRegion[WHITE]
                   && !flagRegion[BLACK]
+                  && !mandatoryPromotionRegion[WHITE]
+                  && !mandatoryPromotionRegion[BLACK]
                   && !pieceDrops;
 
     // Initialize calculated NNUE properties

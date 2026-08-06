@@ -2974,8 +2974,8 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
 
   if (var->simpleLegality
       && !topology_wraps()
-      && !pieceMap.runtime_rider_augment_types()
-      && !pieceMap.simple_hopper_capture_types())
+      && !(pieceMap.runtime_rider_augment_types() & var->pieceTypes)
+      && !(pieceMap.simple_hopper_capture_types() & var->pieceTypes))
       return  (pawn_attacks_bb(~c, s)          & pieces(c, PAWN))
             | (attacks_bb<KNIGHT>(s)           & pieces(c, KNIGHT))
             | (attacks_bb<ROOK>(s, occupied)   & (pieces(c, ROOK) | pieces(c, QUEEN)))
@@ -3283,8 +3283,8 @@ Bitboard Position::attackers_to_king_without_freeze(Square s, Bitboard occupied,
 
   if (var->simpleLegality && pt == NO_PIECE_TYPE
       && !topology_wraps()
-      && !pieceMap.runtime_rider_augment_types()
-      && !pieceMap.simple_hopper_capture_types())
+      && !(pieceMap.runtime_rider_augment_types() & var->pieceTypes)
+      && !(pieceMap.simple_hopper_capture_types() & var->pieceTypes))
       return attackers_to(s, occupied, c, janggiCannons);
 
   Bitboard attackers = attackers_to(s, occupied, c, janggiCannons);
@@ -3440,8 +3440,8 @@ Bitboard Position::attackers_to_king(Square s, Bitboard occupied, Color c,
 
   if (var->simpleLegality && pt == NO_PIECE_TYPE
       && !topology_wraps()
-      && !pieceMap.runtime_rider_augment_types()
-      && !pieceMap.simple_hopper_capture_types())
+      && !(pieceMap.runtime_rider_augment_types() & var->pieceTypes)
+      && !(pieceMap.simple_hopper_capture_types() & var->pieceTypes))
       return attackers_to(s, occupied, c, janggiCannons);
 
   Bitboard attackers = attackers_to_king_without_freeze(s, occupied, c, janggiCannons, pt);
@@ -4954,9 +4954,11 @@ bool Position::legal(Move m) const {
   // promotions, and variants with any non-orthodox rule enabled.
   if (var->simpleLegality
       && !dropMove
+      && !is_pass(m)
+      && !st->pendingClaimPass
       && type_of(m) != CASTLING
-      && !pieceMap.runtime_rider_augment_types()
-      && !pieceMap.simple_hopper_capture_types()
+      && !(pieceMap.runtime_rider_augment_types() & var->pieceTypes)
+      && !(pieceMap.simple_hopper_capture_types() & var->pieceTypes)
       && !is_gating(m)
       && !must_capture()
       && !must_capture_en_passant()
@@ -5141,8 +5143,8 @@ bool Position::legal(Move m) const {
   const bool simpleLegality = var->simpleLegality
                            && type_of(m) != CASTLING
                            && !is_pass(m)
-                           && !pieceMap.runtime_rider_augment_types()
-                           && !pieceMap.simple_hopper_capture_types()
+                           && !(pieceMap.runtime_rider_augment_types() & var->pieceTypes)
+                           && !(pieceMap.simple_hopper_capture_types() & var->pieceTypes)
                            && !is_gating(m)
                            && !must_capture()
                            && !must_capture_en_passant()
