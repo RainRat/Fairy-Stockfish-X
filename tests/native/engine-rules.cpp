@@ -175,6 +175,40 @@ void composable_rules() {
     check(!pos.gives_check(frozenCheck),
           "a newly frozen direct checker still gave check");
 
+    set_position(pos, states, "composable-freeze-evasion",
+                 "k3r3/8/3F4/8/8/8/8/4K3 w - - 0 1");
+    Move freezeEvasion = make_move(SQ_D6, SQ_D7);
+    check(pos.evasion_checkers() & square_bb(SQ_E8),
+          "freeze-evasion test position was not in check");
+    check(pos.legal(freezeEvasion),
+          "freezer move next to a checker was rejected as illegal");
+    check(MoveList<LEGAL>(pos).contains(freezeEvasion),
+          "freezer move next to a checker was not generated as an evasion");
+
+    set_position(pos, states, "composable-freeze-double-evasion",
+                 "1F5k/8/2n1n3/8/3K4/8/8/8 w - - 0 1");
+    Move doubleFreezeEvasion = make_move(SQ_B8, SQ_D7);
+    check(popcount(pos.evasion_checkers()) == 2,
+          "double-freeze-evasion test position did not have two checkers");
+    check(pos.legal(doubleFreezeEvasion),
+          "freezer move did not neutralize both checkers");
+    check(MoveList<LEGAL>(pos).contains(doubleFreezeEvasion),
+          "double-freeze evasion was not generated");
+
+    set_position(pos, states, "composable-blast-janggi-screen",
+                 "7k/8/4c3/3R4/4c3/8/8/4K3 w - - 0 1");
+    Move blastCannonScreen = make_move(SQ_D5, SQ_D4);
+    check(!pos.legal(blastCannonScreen),
+          "blast promotion left a newly non-cannon screen undetected");
+
+    set_position(pos, states, "composable-trap-ep-check",
+                 "8/8/8/RPp4k/8/8/8/4K3 w - c6 0 1");
+    Move trapEnPassant = parse_move(pos, "b5c6");
+    check(!pos.gives_check(trapEnPassant),
+          "en-passant check detection ignored the final trap removal");
+    check(pos.legal(trapEnPassant),
+          "en-passant was rejected after its discovered checker was trapped");
+
     set_position(pos, states, "composable-freeze-traps-blast",
                  "8/8/8/4e3/8/8/4E3/8 w - - 0 1");
     Move blastMoverMove = make_move(SQ_E2, SQ_E3);
@@ -1127,6 +1161,30 @@ startFen = 8/8/8/8/8/2*5/8/8 w - - 0 1
 customPiece1 = f:Q
 freezePieceTypes = f
 castling = false
+
+[composable-freeze-evasion:chess]
+customPiece1 = f:W
+freezePieceTypes = f
+castling = false
+
+[composable-freeze-double-evasion:chess]
+customPiece1 = f:N
+freezePieceTypes = f
+castling = false
+
+[composable-blast-janggi-screen:chess]
+castling = false
+janggiCannon = c
+immobile = i
+promotedPieceType = c:i r:q
+blastOnMove = true
+blastPromotion = true
+
+[composable-trap-ep-check:chess]
+castling = false
+checking = false
+trapRegion = a5
+trapProtection = friendly-orthogonal
 
 [composable-trap-royal:chess]
 castling = true

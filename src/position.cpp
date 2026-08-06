@@ -3500,7 +3500,10 @@ Bitboard Position::janggi_cannon_attackers_to_king(Square s, Bitboard occupied, 
   Bitboard cannons = (simulated && !simulated->typeOccupancy.empty()
                     ? simulated->type_pieces(c, JANGGI_CANNON)
                     : pieces(c, JANGGI_CANNON)) & occupied;
-  Bitboard cannonPieces = janggiCannons;
+  Bitboard cannonPieces = (simulated && !simulated->typeOccupancy.empty())
+                        ? (simulated->type_pieces(WHITE, JANGGI_CANNON)
+                         | simulated->type_pieces(BLACK, JANGGI_CANNON)) & occupied
+                        : janggiCannons;
 
   while (cannons)
   {
@@ -5482,6 +5485,10 @@ bool Position::legal(Move m) const {
   ensure_simulated();
   Bitboard postMoveOccupied = simulated.effectOccupancy & ~simulated.structuralRemoval;
   Bitboard removedByEffects = simulated.removedByEffects;
+  if (!simulated.typeOccupancy.empty())
+      janggiCannonsAfter = (simulated.type_pieces(WHITE, JANGGI_CANNON)
+                          | simulated.type_pieces(BLACK, JANGGI_CANNON))
+                          & simulated.occupiedAfterEffects;
 
   // Check for attacks to pseudo-royal pieces
   if (pseudo_royal_types())
@@ -6678,8 +6685,9 @@ bool Position::gives_check_impl(Move m) const {
   // the captured pawn.
   case EN_PASSANT:
   {
-      return attackers_to_king(royalSq, simulated.relocatedOccupancy, sideToMove)
-           & pieces(sideToMove) & simulated.relocatedOccupancy;
+      return attackers_to_king(royalSq, occupied, sideToMove, janggiCannons,
+                               NO_PIECE_TYPE, &simulated)
+           & occupied;
   }
   case CASTLING:
   {

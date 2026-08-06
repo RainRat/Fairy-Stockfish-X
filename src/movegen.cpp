@@ -1144,8 +1144,14 @@ namespace {
 #endif
     const bool useFastStandardPawnGenerator = pos.variant()->useFastStandardPawnGenerator;
 
-    // Skip generating non-king moves when in double check
-    if (Type != EVASIONS || !more_than_one(checkers & ~pos.non_sliding_riders()))
+    // A freezer can resolve a check without capturing or blocking its checker.
+    // Keep all candidates in this case, including double check, and let legal()
+    // determine whether the destination freezes enough checkers.
+    const bool freezeEvasions = Type == EVASIONS && pos.variant()->freezePieceTypes;
+
+    // Skip generating non-king moves when in double check unless freezing can
+    // change the activity of one or more checkers.
+    if (Type != EVASIONS || freezeEvasions || !more_than_one(checkers & ~pos.non_sliding_riders()))
     {
         if (restrictToForcedJumper)
         {
@@ -1161,8 +1167,9 @@ namespace {
 
             if (Type == EVASIONS)
             {
-                const bool multipleCheckers = more_than_one(checkers);
-                if (multipleCheckers)
+                if (freezeEvasions)
+                    target = AllSquares;
+                else if (more_than_one(checkers))
                 {
                     target = AllSquares;
                     Bitboard remaining = checkers;
