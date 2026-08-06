@@ -2316,6 +2316,7 @@ Variant* Variant::conclude() {
                   && !immobilityIllegal
                   && !forcedJumpContinuation
                   && !multimoveOffset
+                  && multimoves.empty()
                   && !progressiveMultimove
                   && libertyCapture == LibertyAction::NONE
                   && libertySelfCapture == LibertyAction::NONE
