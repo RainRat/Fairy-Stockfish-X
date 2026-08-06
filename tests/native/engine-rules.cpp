@@ -261,6 +261,21 @@ void composable_rules() {
     pos.undo_move(colorFreezeCapture);
     states->pop_back();
 
+    set_position(pos, states, "composable-color-attack",
+                 "7k/8/8/8/8/8/4R3/4K3 w - - 0 1");
+    Move colorAttack = make_move(SQ_E2, SQ_E3);
+    check(!pos.legal(colorAttack),
+          "color-changing mover left its own king attacked in simulation");
+
+    set_position(pos, states, "composable-potion-freeze",
+                 "4r2k/8/8/8/8/8/6N1/4K3[F] w - - 0 1");
+    Move potionFreezeEvasion = parse_move(pos, "f@e7,g2f4");
+    check(pos.evasion_checkers() & square_bb(SQ_E8),
+          "potion freeze evasion test position was not in check");
+    check(potionFreezeEvasion != MOVE_NONE
+          && MoveList<LEGAL>(pos).contains(potionFreezeEvasion),
+          "freeze potion did not admit a move that neutralized the checker");
+
     set_position(pos, states, "composable-hopper-morph",
                  "k7/3q4/8/8/4B3/3D4/8/8 w - - 0 1");
     Move hopperMorph = make_move(SQ_E4, SQ_D4);
@@ -1296,6 +1311,19 @@ castling = false
 freezePieceTypes = q
 changingColorTrigger = capture
 changingColorPieceTypes = q
+castling = false
+
+[composable-color-attack:chess]
+changingColorTrigger = always
+changingColorPieceTypes = r
+castling = false
+
+[composable-potion-freeze:chess]
+customPiece1 = f:W
+potions = true
+freezePotion = f
+freezeCooldown = 3
+potionDropOnOccupied = true
 castling = false
 
 [composable-hopper-morph:chess]

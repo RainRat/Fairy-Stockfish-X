@@ -1571,8 +1571,9 @@ namespace {
           Bitboard occupied = simulated.occupiedAfterEffects;
 
           Position::SimulatedMoveGuard guard(pos, m);
-          if (pos.attackers_to(pos.royal_square(us), occupied, ~us,
-                               pos.pieces(JANGGI_CANNON), &simulated))
+          if (pos.attackers_to_king(pos.royal_square(us), occupied, ~us,
+                                    pos.pieces(JANGGI_CANNON), NO_PIECE_TYPE,
+                                    &simulated))
               return false;
           return true;
       }
@@ -1747,6 +1748,35 @@ namespace {
                 PotionBaseInfo baseInfo;
                 if (prepare_potion_base(pos, it->move, baseInfo))
                     bases.push_back({it->move, it->value, baseInfo});
+            }
+
+            // A freeze potion can neutralize a checker even when the
+            // accompanying move does not block or capture it.  If the
+            // variant has no ordinary freeze rule, the EVASIONS buffer does
+            // not contain those otherwise pseudo-legal base moves.
+            if constexpr (Type == EVASIONS)
+            {
+                if (!pos.variant()->freezePieceTypes)
+                {
+                    ExtMove allMoves[MOVEGEN_OVERFLOW_CAPACITY];
+                    ExtMove* allEnd = generate_all_impl<Us, NON_EVASIONS>(pos, allMoves);
+                    assert(allEnd - allMoves <= MOVEGEN_OVERFLOW_CAPACITY);
+                    for (ExtMove* it = allMoves; it != allEnd; ++it)
+                    {
+                        PotionBaseInfo baseInfo;
+                        if (!prepare_potion_base(pos, it->move, baseInfo))
+                            continue;
+                        bool alreadyPrepared = false;
+                        for (const auto& prepared : bases)
+                            if (prepared.move == it->move)
+                            {
+                                alreadyPrepared = true;
+                                break;
+                            }
+                        if (!alreadyPrepared)
+                            bases.push_back({it->move, it->value, baseInfo});
+                    }
+                }
             }
 
             while (candidates)
@@ -1949,7 +1979,11 @@ namespace {
 
       ScopedSpellContext spellScope(potion.freezeExtra, potion.jumpRemoved);
       ExtMove baseMoves[MOVEGEN_OVERFLOW_CAPACITY];
-      ExtMove* baseEnd = pos.evasion_checkers() && !pos.topology_wraps()
+      const bool broadenFreezeEvasion = pos.evasion_checkers()
+                                     && !pos.topology_wraps()
+                                     && potion.potion == Variant::POTION_FREEZE
+                                     && !pos.variant()->freezePieceTypes;
+      ExtMove* baseEnd = pos.evasion_checkers() && !pos.topology_wraps() && !broadenFreezeEvasion
                        ? generate_without_potions<EVASIONS>(pos, baseMoves)
                        : generate_without_potions<NON_EVASIONS>(pos, baseMoves);
 

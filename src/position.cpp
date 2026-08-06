@@ -4369,7 +4369,7 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
   SimulatedMoveInfo info;
   info.colorOccupancy[WHITE] = pieces(WHITE);
   info.colorOccupancy[BLACK] = pieces(BLACK);
-  if (blast_promotion())
+  if (blast_promotion() || var->changingColorPieceTypes)
   {
       info.typeOccupancy.resize(COLOR_NB * PIECE_TYPE_NB);
       info.type_pieces(WHITE, ALL_PIECES) = pieces(WHITE);
@@ -5992,10 +5992,15 @@ bool Position::legal(Move m) const {
   // A non-king move is legal if the king is not under attack after the move.
   Bitboard postMoveAttackers = attackers_to_king(royalSquare, occupiedAfterEffects, ~us,
                                                  janggiCannonsAfter, NO_PIECE_TYPE, &simulated);
+  // The destination is normally occupied by the moving side's piece and is
+  // excluded from this safety test.  A color-changing move can instead leave
+  // an enemy piece there, which must remain a valid attacker of our royal.
+  Bitboard ownMoverSquare = (!rifleShot && (simulated.colorOccupancy[us] & square_bb(to)))
+                          ? square_bb(to) : Bitboard(0);
   bool blockedByPostMove = (postMoveAttackers
                          & postMoveOccupied
                          & ~(removedAttackers | removedByEffects)
-                         & ~(rifleShot ? Bitboard(0) : SquareBB[to])) != Bitboard(0);
+                         & ~ownMoverSquare) != Bitboard(0);
   return (allow_checks() || !blockedByPostMove)
       && !violates_same_player_board_repetition(m);
 }
