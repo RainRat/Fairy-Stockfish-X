@@ -1571,9 +1571,10 @@ namespace {
           Bitboard occupied = simulated.occupiedAfterEffects;
 
           Position::SimulatedMoveGuard guard(pos, m);
-          if (pos.attackers_to_king(pos.royal_square(us), occupied, ~us,
-                                    pos.pieces(JANGGI_CANNON), NO_PIECE_TYPE,
-                                    &simulated))
+          Bitboard attackers = pos.attackers_to_king(pos.royal_square(us), occupied, ~us,
+                                                     pos.pieces(JANGGI_CANNON), NO_PIECE_TYPE,
+                                                     &simulated);
+          if (attackers & simulated.colorOccupancy[~us])
               return false;
           return true;
       }

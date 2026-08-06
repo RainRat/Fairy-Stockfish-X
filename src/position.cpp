@@ -8524,6 +8524,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           Piece unpromotedCaptured = unpromoted_piece_on(bsq);
           st->bycatchPieces[bsq].set(bpc, capturedPromoted, unpromotedCaptured);
           st->bycatchSquares |= bsq;
+          if (gating())
+              st->gatesBB[bc] &= ~square_bb(bsq);
           remove_piece(bsq);
           board[bsq] = NO_PIECE;
 

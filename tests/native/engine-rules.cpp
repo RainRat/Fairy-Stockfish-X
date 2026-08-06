@@ -276,6 +276,27 @@ void composable_rules() {
           && MoveList<LEGAL>(pos).contains(potionFreezeEvasion),
           "freeze potion did not admit a move that neutralized the checker");
 
+    set_position(pos, states, "composable-potion-freeze",
+                 "4r2k/8/8/1B6/8/8/8/4K3[F] w - - 0 1");
+    Move potionCaptureEvasion = parse_move(pos, "f@a1,b5e8");
+    check(pos.evasion_checkers() & square_bb(SQ_E8),
+          "potion capture evasion test position was not in check");
+    check(MoveList<LEGAL>(pos).contains(potionCaptureEvasion),
+          "freeze potion omitted an evasion that captured the checker");
+
+    set_position(pos, states, "composable-gate-trap",
+                 "4k3/8/8/8/8/8/4R3/4K3 w - - 0 1");
+    pos.state()->gatesBB[WHITE] |= square_bb(SQ_E2);
+    Move trapMove = make_move(SQ_E1, SQ_F1);
+    check(pos.legal(trapMove), "trap gate cleanup test move was not legal");
+    states->emplace_back();
+    pos.do_move(trapMove, states->back());
+    check(pos.piece_on(SQ_E2) == NO_PIECE
+          && !(pos.gates(WHITE) & square_bb(SQ_E2)),
+          "trap removal left a stale gate square");
+    pos.undo_move(trapMove);
+    states->pop_back();
+
     set_position(pos, states, "composable-hopper-morph",
                  "k7/3q4/8/8/4B3/3D4/8/8 w - - 0 1");
     Move hopperMorph = make_move(SQ_E4, SQ_D4);
@@ -1324,6 +1345,12 @@ potions = true
 freezePotion = f
 freezeCooldown = 3
 potionDropOnOccupied = true
+castling = false
+
+[composable-gate-trap:chess]
+gating = true
+trapRegion = e2
+trapProtection = none
 castling = false
 
 [composable-hopper-morph:chess]
