@@ -285,6 +285,7 @@ namespace {
         && !pos.piece_drops()
         && !pos.captures_to_hand()
         && !pos.gating()
+        && !pos.potions_enabled()
         && !pos.must_capture()
         && !pos.check_counting()
         && !pos.points_counting()
@@ -631,13 +632,11 @@ namespace {
     Bitboard LowRanks = rank_bb(relative_rank(Us, RANK_2, pos.max_rank())) | rank_bb(relative_rank(Us, RANK_3, pos.max_rank()));
 
     const Square ksq = pos.count<KING>(Us) ? pos.square<KING>(Us) : SQ_NONE;
-    const Bitboard frozenUs = pos.variant()->freezePieceTypes
-                            ? pos.freeze_squares_from_freezers(Us) : Bitboard(0);
-    const Bitboard frozenThem = pos.variant()->freezePieceTypes
-                              ? pos.freeze_squares_from_freezers(Them) : Bitboard(0);
+    const Bitboard frozenUs = pos.freeze_squares(Us);
+    const Bitboard frozenThem = pos.freeze_squares(Them);
     const Bitboard activePawns = pos.pieces(Us, PAWN) & ~frozenUs;
     const Bitboard activeThemPawns = pos.pieces(Them, PAWN) & ~frozenThem;
-    const Bitboard theirPawnAttacks = pos.variant()->freezePieceTypes
+    const Bitboard theirPawnAttacks = pos.variant()->freezePieceTypes || pos.potions_enabled()
                                     ? pawn_attacks_bb<Them>(activeThemPawns)
                                     : pe->pawn_attacks(Them);
 
@@ -660,7 +659,7 @@ namespace {
     // Initialize attackedBy[] for king and pawns
     attackedBy[Us][KING] = pos.count<KING>(Us) && !(frozenUs & ksq)
                          ? pos.attacks_from(Us, KING, ksq) : Bitboard(0);
-    attackedBy[Us][PAWN] = pos.variant()->freezePieceTypes
+    attackedBy[Us][PAWN] = pos.variant()->freezePieceTypes || pos.potions_enabled()
                          ? pawn_attacks_bb<Us>(activePawns) : pe->pawn_attacks(Us);
     attackedBy[Us][SHOGI_PAWN] = shift<Up>(pos.pieces(Us, SHOGI_PAWN) & ~frozenUs);
     attackedBy[Us][ALL_PIECES] = attackedBy[Us][KING] | attackedBy[Us][PAWN] | attackedBy[Us][SHOGI_PAWN];
@@ -711,8 +710,7 @@ namespace {
     const Bitboard centerFiles = scaled_center_files(pos);
     const Bitboard queenFlank = scaled_flank(pos, false);
     const Bitboard kingFlank = scaled_flank(pos, true);
-    const Bitboard frozen = pos.variant()->freezePieceTypes
-                          ? pos.freeze_squares_from_freezers(Us) : Bitboard(0);
+    const Bitboard frozen = pos.freeze_squares(Us);
 
     attackedBy[Us][Pt] = 0;
 

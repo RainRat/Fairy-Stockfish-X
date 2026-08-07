@@ -4378,6 +4378,7 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
       || var->hasMoveMorph
       || var->stackingPieceTypes
       || var->stackedPieceTypes
+      || commit_gates()
       || flip_enclosed_pieces())
   {
       info.typeOccupancy.resize(COLOR_NB * PIECE_TYPE_NB);
@@ -4538,6 +4539,7 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
                              && var->libertySelfCapture == LibertyAction::NONE
                              && !potions_enabled()
                              && !gating()
+                             && !commit_gates()
                              && !walling_rule()
                              && !var->hasPushing
                              && !has_adjacent_swapping()
@@ -4794,6 +4796,29 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
       }
       if (walling_rule() == DUCK && wallPlacement)
           info.removedWalls = st->wallSquares;
+  }
+
+  // Musketeer committed gates are installed on the source square after the
+  // move relocates its piece, before any blast, structural, or trap effects.
+  // Castling can release both the king-source and rook-source commitments.
+  if (commit_gates() && !info.rifle)
+  {
+      auto add_committed_gate = [&](File file) {
+          if (!has_committed_piece(us, file))
+              return;
+          PieceType gateType = committed_piece_type(us, file);
+          Square gateSq = make_square(file, us == WHITE ? RANK_1 : max_rank());
+          Bitboard gate = square_bb(gateSq);
+          info.effectOccupancy |= gate;
+          info.addedPlacements |= gate;
+          add_color_piece(us, gateType, gateSq);
+      };
+
+      Rank homeRank = us == WHITE ? RANK_1 : max_rank();
+      if (is_ok(info.from) && rank_of(info.from) == homeRank)
+          add_committed_gate(file_of(info.from));
+      if (info.castling && is_ok(info.to) && rank_of(info.to) == homeRank)
+          add_committed_gate(file_of(info.to));
   }
 
   auto piece_after_move = [&](Square sq) {
