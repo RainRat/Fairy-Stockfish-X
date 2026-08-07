@@ -984,8 +984,8 @@ namespace {
         {
             // A move by an enemy-king blocker can give discovered check from
             // its new square without that square being a direct check square.
-            if (Pt != QUEEN && !pos.variant()->trapRegion
-                && !(pos.blockers_for_king(~Us) & from))
+            if (!pos.variant()->trapRegion
+                && (Pt == QUEEN || !(pos.blockers_for_king(~Us) & from)))
             {
                 b1 &= pos.check_squares(Pt);
                 if (b2)

@@ -470,15 +470,43 @@ public:
   struct SimulatedMoveGuard {
       const Position& pos;
       Move previous;
-      SimulatedMoveGuard(const Position& p, Move m) : pos(p), previous(p.simulatedMove) {
+      const SimulatedMoveInfo* previousInfo;
+      Move previousFreezeCacheMove;
+      const StateInfo* previousFreezeCacheState;
+      std::array<Bitboard, COLOR_NB> previousFreezeCacheFreezers;
+      std::array<Bitboard, COLOR_NB> previousFreezeCacheTargets;
+
+      SimulatedMoveGuard(const Position& p, Move m, const SimulatedMoveInfo* info = nullptr)
+          : pos(p),
+            previous(p.simulatedMove),
+            previousInfo(p.simulatedInfo),
+            previousFreezeCacheMove(p.simulatedFreezeCacheMove),
+            previousFreezeCacheState(p.simulatedFreezeCacheState),
+            previousFreezeCacheFreezers(p.simulatedFreezeCacheFreezers),
+            previousFreezeCacheTargets(p.simulatedFreezeCacheTargets) {
+          set(m, info);
+      }
+
+      void set(Move m, const SimulatedMoveInfo* info = nullptr) const {
           pos.simulatedMove = m;
+          pos.simulatedInfo = info;
           pos.simulatedFreezeCacheMove = MOVE_NONE;
           pos.simulatedFreezeCacheState = nullptr;
+          pos.simulatedFreezeCacheFreezers = {};
+          pos.simulatedFreezeCacheTargets = {};
       }
+
+      void clear() const {
+          set(MOVE_NONE);
+      }
+
       ~SimulatedMoveGuard() {
           pos.simulatedMove = previous;
-          pos.simulatedFreezeCacheMove = MOVE_NONE;
-          pos.simulatedFreezeCacheState = nullptr;
+          pos.simulatedInfo = previousInfo;
+          pos.simulatedFreezeCacheMove = previousFreezeCacheMove;
+          pos.simulatedFreezeCacheState = previousFreezeCacheState;
+          pos.simulatedFreezeCacheFreezers = previousFreezeCacheFreezers;
+          pos.simulatedFreezeCacheTargets = previousFreezeCacheTargets;
       }
   };
 
@@ -715,9 +743,11 @@ public:
   Bitboard potion_zone(Color c, Variant::PotionType type) const;
   int potion_cooldown(Color c, Variant::PotionType type) const;
   Bitboard freeze_squares_from_freezers(Color c) const;
+  Bitboard freeze_squares_from_freezers(Color c, const SimulatedMoveInfo* simulated) const;
   bool gating_move_blocks_occupancy(Move m) const;
   Bitboard freeze_squares() const;
   Bitboard freeze_squares(Color c) const;
+  Bitboard freeze_squares(Color c, const SimulatedMoveInfo* simulated) const;
   Bitboard jump_squares(Color c) const;
   Bitboard freeze_zone_from_square(Square s) const;
   bool gating() const;
@@ -2491,9 +2521,13 @@ inline bool Position::can_cast_potion(Color c, Variant::PotionType type) const {
 }
 
 inline Bitboard Position::freeze_squares(Color c) const {
+  return freeze_squares(c, nullptr);
+}
+
+inline Bitboard Position::freeze_squares(Color c, const SimulatedMoveInfo* simulated) const {
   if (!potions_enabled() && !var->freezePieceTypes)
       return Bitboard(0);
-  Bitboard mask = freeze_squares_from_freezers(c);
+  Bitboard mask = freeze_squares_from_freezers(c, simulated);
   if (potions_enabled())
   {
       mask |= st->potionZones[c][Variant::POTION_FREEZE];
@@ -2524,8 +2558,13 @@ inline Bitboard Position::freeze_squares(Color c) const {
           if (const SpellContext* spellCtx = current_spell_context();
               spellCtx && sideToMove == royalColor)
               frozenAttackers |= spellCtx->freezeExtra;
-          if (attackers_to_king_without_freeze(royalSquare, byTypeBB[ALL_PIECES], ~royalColor,
-                                               byTypeBB[JANGGI_CANNON], royalType)
+          Bitboard occupied = simulated ? simulated->occupiedAfterEffects : byTypeBB[ALL_PIECES];
+          Bitboard janggiCannons = simulated && !simulated->typeOccupancy.empty()
+                                 ? simulated->type_pieces(WHITE, JANGGI_CANNON)
+                                 | simulated->type_pieces(BLACK, JANGGI_CANNON)
+                                 : byTypeBB[JANGGI_CANNON];
+          if (attackers_to_king_without_freeze(royalSquare, occupied, ~royalColor,
+                                               janggiCannons, royalType, simulated)
               & ~frozenAttackers)
               mask &= ~square_bb(royalSquare);
       }
