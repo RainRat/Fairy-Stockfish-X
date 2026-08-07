@@ -11153,6 +11153,8 @@ bool Position::see_pruning_unreliable() const {
 
   return points_counting()
       || points_goal() > 0
+      || var->freezePieceTypes
+      || var->trapRegion
       || extinction_value(WHITE) != VALUE_NONE
       || extinction_value(BLACK) != VALUE_NONE
       || flag_region(WHITE) || flag_region(BLACK)

@@ -90,6 +90,8 @@ void composable_rules() {
     set_position(pos, states, "composable-freeze-traps",
                  "8/8/8/4e3/4M3/8/7r/8 w - - 0 1");
     check(pos.freeze_squares() & square_bb(SQ_E4), "adjacent freezer mask missed the mover");
+    check(pos.see_pruning_unreliable(),
+          "SEE pruning remained enabled with static freezing");
     Move frozen = make_move(SQ_E4, SQ_E3);
     check(!pos.legal(frozen), "adjacent freezer did not freeze the mover");
 
@@ -102,6 +104,11 @@ void composable_rules() {
                  "8/8/8/3e4/4M3/8/7r/8 w - - 0 1");
     check(pos.legal(make_move(SQ_E4, SQ_E3)),
           "orthogonal-only freezer unexpectedly froze diagonally");
+
+    set_position(pos, states, "composable-freeze-traps",
+                 "8/8/8/8/4e3/4M3/7r/8 w - - 0 1");
+    check(pos.see_pruning_unreliable(),
+          "SEE pruning remained enabled with trap effects");
 
     set_position(pos, states, "composable-freeze-immune",
                  "8/8/8/4e3/4M3/8/7r/8 w - - 0 1");

@@ -225,6 +225,21 @@ class TestPublicAPI(unittest.TestCase):
         king = next(piece for piece in custom_royal["pieces"] if piece["type"] == "king")
         self.assertEqual(king["customBetza"], "KN")
 
+        sf.load_variant_config(
+            "[variantinfocomposable:chess]\n"
+            "freezePieceTypes = b\n"
+            "freezeImmunePieceTypes = p\n"
+            "freezeDiagonals = false\n"
+            "trapRegion = d4\n"
+            "trapProtection = friendly-orthogonal\n"
+        )
+        composable = json.loads(sf.variant_info("variantinfocomposable"))
+        self.assertEqual(composable["movement"]["freezePieceTypes"], ["bishop"])
+        self.assertEqual(composable["movement"]["freezeImmunePieceTypes"], ["pawn"])
+        self.assertFalse(composable["movement"]["freezeDiagonals"])
+        self.assertEqual(composable["capture"]["trapRegion"], ["d4"])
+        self.assertEqual(composable["capture"]["trapProtection"], "friendly-orthogonal")
+
         with self.assertRaisesRegex(ValueError, "Unknown variant"):
             sf.variant_info("does-not-exist")
 
