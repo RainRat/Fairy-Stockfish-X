@@ -3638,7 +3638,7 @@ Bitboard Position::checked_pseudo_royals(Color c) const {
 
   auto is_checked = [&](Square sr) {
       return (!blastRelevant || !(vulnerablePseudoRoyalsTheirs & blast_pattern(sr)))
-          && attackers_to(sr, occupied, ~c);
+          && (attackers_to(sr, occupied, ~c) & ~freeze_squares(~c));
   };
 
   while (pseudoRoyals)
@@ -3689,7 +3689,8 @@ Bitboard Position::checked_anti_royals(Color c) const {
               while (antiRoyals)
               {
                   Square sr = pop_lsb(antiRoyals);
-                  Bitboard attackers = attackers_to(sr, occupied, ~c);
+                  Bitboard attackers = attackers_to(sr, occupied, ~c)
+                                     & ~freeze_squares(~c);
                   if (anti_royal_king_mutually_immune())
                       attackers &= ~pieces(~c, king_type());
                   if (!attackers
@@ -4376,7 +4377,8 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
       || var->captureMorph
       || var->hasMoveMorph
       || var->stackingPieceTypes
-      || var->stackedPieceTypes)
+      || var->stackedPieceTypes
+      || flip_enclosed_pieces())
   {
       info.typeOccupancy.resize(COLOR_NB * PIECE_TYPE_NB);
       info.type_pieces(WHITE, ALL_PIECES) = pieces(WHITE);
@@ -5911,7 +5913,7 @@ bool Position::legal(Move m) const {
           // attacker merely because the mover acquired its type.
           const SimulatedMoveInfo* antiRoyalSimulation = capture_morph() ? nullptr : &simulated;
           Bitboard attackers = attackers_to(sr, occupied, ~us, janggiCannonsAfter, antiRoyalSimulation)
-                              & ~freeze_squares(~us) & occupied;
+                              & ~freeze_squares(~us, &simulated) & occupied;
           if (anti_royal_king_mutually_immune())
               attackers &= ~pieces(~us, king_type());
           if (!(occupied & sr)
@@ -5995,7 +5997,7 @@ bool Position::legal(Move m) const {
                               : attackers_to_king(s, occ, ~us, janggiCannonsAfter));
               att &= occ & ~removedAttackers;
               if (spellLikeCastler)
-                  att &= ~freeze_squares(~us);
+                  att &= ~freeze_squares(~us, finalPosition ? &simulated : nullptr);
               return att;
           };
           if (finalPosition)
@@ -6050,15 +6052,14 @@ bool Position::legal(Move m) const {
               if (!is_ok(gate) || !(occupiedAfterEffects & square_bb(gate)))
                   return false;
               Bitboard occ = occupiedAfterEffects | square_bb(gate);
-              const SimulatedMoveInfo* attackSimulation = simulated.blastPromotionOccupancy
-                                                         ? &simulated : nullptr;
+              const SimulatedMoveInfo* attackSimulation = &simulated;
               Bitboard attackers = gateType == KING || is_actual_runtime_royal(us, gateType)
                                  ? attackers_to_king(gate, occ, ~us, janggiCannonsAfter,
                                                      NO_PIECE_TYPE, attackSimulation)
                                  : attackers_to(gate, occ, ~us, janggiCannonsAfter,
                                                 attackSimulation);
               if (gateType != KING && !is_actual_runtime_royal(us, gateType))
-                  attackers &= ~freeze_squares(~us);
+                  attackers &= ~freeze_squares(~us, &simulated);
               attackers &= ~(removedAttackers | removedByEffects);
               return !attackers;
           };

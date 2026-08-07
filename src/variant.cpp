@@ -2329,6 +2329,7 @@ Variant* Variant::conclude() {
                   && !hasMoveMorph
                   && !prisonPawnPromotion
                   && !freezePieceTypes
+                  && !flipEnclosedPieces
                   && !flagMove
                   && !flagRegion[WHITE]
                   && !flagRegion[BLACK]

@@ -2554,7 +2554,8 @@ inline Bitboard Position::freeze_squares(Color c, const SimulatedMoveInfo* simul
           // from the attack map.  During a compound move, include the
           // temporary zone only when that move is being cast by the royal's
           // owner as well.
-          Bitboard frozenAttackers = st->potionZones[royalColor][Variant::POTION_FREEZE];
+          Bitboard frozenAttackers = st->potionZones[royalColor][Variant::POTION_FREEZE]
+                                   | freeze_squares_from_freezers(~royalColor, simulated);
           if (const SpellContext* spellCtx = current_spell_context();
               spellCtx && sideToMove == royalColor)
               frozenAttackers |= spellCtx->freezeExtra;
