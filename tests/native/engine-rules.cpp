@@ -418,6 +418,60 @@ void composable_rules() {
     pos.undo_move(flipTrap);
     states->pop_back();
 
+    set_position(pos, states, "composable-blast-promotion-trap-color",
+                 "8/8/8/8/3er3/8/4E3/8 w - - 0 1");
+    Move blastPromotionTrapColor = make_move(SQ_E2, SQ_E3);
+    simulated = pos.simulated_move_info(blastPromotionTrapColor);
+    check(simulated.blastPromotionOccupancy & square_bb(SQ_D4),
+          "blast-promotion trap regression did not promote the bystander");
+    check(simulated.occupiedAfterEffects & square_bb(SQ_E4),
+          "simulation treated a blast-promoted bystander as a capture");
+    states->emplace_back();
+    pos.do_move(blastPromotionTrapColor, states->back());
+    check(pos.piece_on(SQ_E4) == make_piece(BLACK, CUSTOM_PIECE_2),
+          "committed blast-promotion trap ordering changed the mover color");
+    pos.undo_move(blastPromotionTrapColor);
+    states->pop_back();
+
+    set_position(pos, states, "composable-flip-blast",
+                 "8/8/8/8/3e4/8/4E3/8 w - - 0 1");
+    Move flipBlast = make_move(SQ_E2, SQ_E3);
+    simulated = pos.simulated_move_info(flipBlast);
+    check(simulated.type_pieces(WHITE, QUEEN) & square_bb(SQ_D4),
+          "flip/blast simulation retained the bystander's old color");
+    states->emplace_back();
+    pos.do_move(flipBlast, states->back());
+    check(pos.piece_on(SQ_D4) == make_piece(WHITE, QUEEN),
+          "committed flip/blast ordering disagreed with simulation");
+    pos.undo_move(flipBlast);
+    states->pop_back();
+
+    set_position(pos, states, "composable-flip-surround",
+                 "8/8/8/4E3/4e3/8/4E3/8 w - - 0 1");
+    Move flipSurround = make_move(SQ_E2, SQ_E3);
+    simulated = pos.simulated_move_info(flipSurround);
+    check(!(simulated.removedByEffects & square_bb(SQ_E4)),
+          "flip/surround simulation used the bystander's old color");
+    states->emplace_back();
+    pos.do_move(flipSurround, states->back());
+    check(pos.piece_on(SQ_E4) == make_piece(WHITE, CUSTOM_PIECE_1),
+          "committed flip/surround ordering disagreed with simulation");
+    pos.undo_move(flipSurround);
+    states->pop_back();
+
+    set_position(pos, states, "composable-liberty-trap",
+                 "9/9/9/9/3P5/2PpP4/9/p8 w - - 0 1");
+    Move libertyTrap = parse_move(pos, "P@d3");
+    simulated = pos.simulated_move_info(libertyTrap);
+    check(simulated.removedByEffects & square_bb(SQ_D4),
+          "liberty removal was omitted before simulated trap resolution");
+    states->emplace_back();
+    pos.do_move(libertyTrap, states->back());
+    check(pos.piece_on(SQ_D4) == NO_PIECE && pos.piece_on(SQ_A1) == NO_PIECE,
+          "committed liberty/trap ordering disagreed with simulation");
+    pos.undo_move(libertyTrap);
+    states->pop_back();
+
     set_position(pos, states, "composable-trap-final-death",
                  "7k/8/8/8/3RPp2/8/8/K7 w - - 0 1");
     Move trapDeathProtector = make_move(SQ_D4, SQ_F4);
@@ -1660,6 +1714,30 @@ castling = false
 flipEnclosedPieces = ataxx
 trapRegion = e4
 startFen = 8/8/8/2E1e3/8/8/8/8 w - - 0 1
+
+[composable-blast-promotion-trap-color:composable-freeze-traps-blast]
+blastOrthogonals = false
+blastDiagonals = true
+blastCenter = false
+changingColorTrigger = capture
+changingColorPieceTypes = e
+trapRegion = e4
+
+[composable-flip-blast:composable-freeze-traps-blast]
+flipEnclosedPieces = ataxx
+blastOrthogonals = false
+blastDiagonals = true
+blastCenter = false
+trapRegion = -
+
+[composable-flip-surround:composable-freeze-traps]
+flipEnclosedPieces = ataxx
+surroundCaptureOpposite = true
+trapRegion = -
+
+[composable-liberty-trap:go9]
+trapRegion = a1
+trapProtection = friendly-orthogonal
 
 [composable-trap-final-death:chess]
 trapRegion = e4

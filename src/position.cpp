@@ -4854,6 +4854,15 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
               return make_piece(dropColor, dropped_piece_type(m));
       }
 
+      if (!info.typeOccupancy.empty())
+      {
+          Bitboard bit = square_bb(sq);
+          for (Color c : {WHITE, BLACK})
+              if (info.colorOccupancy[c] & bit)
+                  for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
+                      if (info.type_pieces(c, pt) & bit)
+                          return make_piece(c, pt);
+      }
       return piece_on(sq);
   };
 
@@ -4936,15 +4945,52 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
 
   if (surround_capture_opposite() || surround_capture_intervene() || surround_capture_edge())
   {
-      Bitboard usPostMove = (dropMove || info.clone)
-                              ? (pieces(us) | square_bb(info.effectiveTo))
-                              : (pieces(us) ^ square_bb(info.from) ^ square_bb(info.effectiveTo));
-      usPostMove |= info.effectOccupancy & info.addedPlacements;
+      Bitboard usPostMove = info.colorOccupancy[us];
+      Bitboard themPostMove = info.colorOccupancy[~us] & ~square_bb(shotSq);
       Bitboard surroundMask = compute_surround_capture_mask(info.effectiveTo, usPostMove,
-                                                              pieces(~us) & ~square_bb(shotSq),
+                                                              themPostMove,
                                                               info.effectOccupancy);
       info.removedByEffects |= surroundMask;
       info.structuralRemoval |= surroundMask;
+  }
+
+  if (dropMove && (var->libertyCapture == LibertyAction::REMOVE
+                   || var->libertySelfCapture == LibertyAction::REMOVE))
+  {
+      Bitboard libertyCaptureRemoval = 0;
+      Bitboard occupied = info.effectOccupancy;
+      auto liberty_capture_mask = [&](Square placed) {
+          Bitboard mask = 0;
+          Bitboard candidates = attacks_bb<WAZIR>(placed, occupied) & board_bb()
+                              & info.colorOccupancy[~us];
+          while (candidates)
+          {
+              Square root = lsb(candidates);
+              bool hasLiberty;
+              Bitboard group = compute_liberty_group(root, info.colorOccupancy[~us],
+                                                     occupied, hasLiberty);
+              candidates &= ~group;
+              if (!hasLiberty)
+                  mask |= group;
+          }
+          return mask;
+      };
+
+      if (var->libertyCapture == LibertyAction::REMOVE)
+      {
+          libertyCaptureRemoval = liberty_capture_mask(info.effectiveTo);
+          info.removedByEffects |= libertyCaptureRemoval;
+      }
+
+      if (var->libertySelfCapture == LibertyAction::REMOVE)
+      {
+          Bitboard selfOccupied = occupied & ~libertyCaptureRemoval;
+          bool hasLiberty;
+          Bitboard group = compute_liberty_group(info.effectiveTo, info.colorOccupancy[us],
+                                                 selfOccupied, hasLiberty);
+          if (!hasLiberty)
+              info.removedByEffects |= group;
+      }
   }
 
   // locust_all bycatch is applied after passive and surround effects in do_move,
@@ -8611,8 +8657,22 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
               colorAfterEffects[BLACK] &= ~moverBit;
           }
 
+          Bitboard blastPromotionMask = 0;
+          if (blast_promotion())
+          {
+              Bitboard candidates = blast_mask & removal_mask & ~connect_mask;
+              while (candidates)
+              {
+                  Square sq = pop_lsb(candidates);
+                  Piece victim = piece_on(sq);
+                  if (victim != NO_PIECE && promoted_piece_type(type_of(victim)) != NO_PIECE_TYPE)
+                      blastPromotionMask |= square_bb(sq);
+              }
+          }
+
           const bool projectedCapture = (captured != NO_PIECE && !stackMove)
-                                      || bool(removal_mask & (blast_pattern(moverSq) | moverBit));
+                                      || bool((removal_mask & ~blastPromotionMask)
+                                              & (blast_pattern(moverSq) | moverBit));
           const bool projectedColorChange = trigger_matches(var->changingColorTrigger,
                                                              projectedCapture);
           Piece moverAfterEffects = piece_on(moverSq);
@@ -8627,18 +8687,6 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
               colorAfterEffects[them] |= moverBit;
           }
 
-          Bitboard blastPromotionMask = 0;
-          if (blast_promotion())
-          {
-              Bitboard candidates = blast_mask & removal_mask & ~connect_mask;
-              while (candidates)
-              {
-                  Square sq = pop_lsb(candidates);
-                  Piece victim = piece_on(sq);
-                  if (victim != NO_PIECE && promoted_piece_type(type_of(victim)) != NO_PIECE_TYPE)
-                      blastPromotionMask |= square_bb(sq);
-              }
-          }
           colorAfterEffects[WHITE] |= blastPromotionMask & pieces(WHITE);
           colorAfterEffects[BLACK] |= blastPromotionMask & pieces(BLACK);
           Bitboard trapOccupied = pieces() & ~removal_mask;
