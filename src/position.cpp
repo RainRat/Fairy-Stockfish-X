@@ -7060,13 +7060,13 @@ Bitboard Position::freeze_squares_from_freezers(Color c, const SimulatedMoveInfo
     {
         if (simulatedFreezeCacheMove != simulatedMove || simulatedFreezeCacheState != st)
         {
-            SimulatedMoveInfo simulatedInfo = simulated_move_info(simulatedMove);
+            SimulatedMoveInfo simulatedMoveInfo = simulated_move_info(simulatedMove);
             simulatedFreezeCacheMove = simulatedMove;
             simulatedFreezeCacheState = st;
-            simulatedFreezeCacheFreezers = simulatedInfo.freezerOccupancy;
+            simulatedFreezeCacheFreezers = simulatedMoveInfo.freezerOccupancy;
             for (Color color : {WHITE, BLACK})
-                simulatedFreezeCacheTargets[color] = simulatedInfo.colorOccupancy[color]
-                                                   & ~simulatedInfo.freezeImmuneOccupancy[color];
+                simulatedFreezeCacheTargets[color] = simulatedMoveInfo.colorOccupancy[color]
+                                                   & ~simulatedMoveInfo.freezeImmuneOccupancy[color];
         }
         freezers = simulatedFreezeCacheFreezers[~c];
         targets = simulatedFreezeCacheTargets[c];
