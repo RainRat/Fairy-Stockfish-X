@@ -7360,6 +7360,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   bool capturedDeadSquare = !dropMove && from != to && bool(st->deadSquares & to);
   PieceType exchanged = exchange_piece(m);
   Square jumpCapsq = SQ_NONE;
+  bool epSquaresAdded = false;
+  Piece epMover = NO_PIECE;
   Bitboard locust_all_mask = 0;
   if (!dropMove && pi && pi->has_universal_hopper())
   {
@@ -8224,6 +8226,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
                   && !(walling(us) && gating_square(m) == epSq))
               {
                   st->epSquares |= epSq;
+                  epSquaresAdded = true;
+                  epMover = pc;
                   k ^= Zobrist::enpassant[epSq];
               }
           };
@@ -8348,6 +8352,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
               st->epSquares = square_bb(us == WHITE ? msb(st->epSquares) : lsb(st->epSquares));
               break;
           }
+          epSquaresAdded = true;
+          epMover = pc;
       }
       for (Bitboard b = st->epSquares; b; )
           k ^= Zobrist::enpassant[pop_lsb(b)];
@@ -9027,6 +9033,15 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   if (var->laserGame && (var->laserAutoFire || is_laser_fire(m)))
       fire_laser(us, k, is_laser_fire(m) ? from_sq(m) : SQ_NONE);
 
+  // En passant rights describe the pawn-like mover that just completed the
+  // extended step.  Later effects may remove or replace that piece, so do not
+  // leave a right pointing at a square whose mover no longer exists.
+  if (epSquaresAdded && (piece_on(to) != epMover || (st->bycatchSquares & to)))
+  {
+      while (st->epSquares)
+          k ^= Zobrist::enpassant[pop_lsb(st->epSquares)];
+  }
+
   Key pieceStateKey = compute_piece_state_key();
   k ^= st->pieceStateKey ^ pieceStateKey;
   st->pieceStateKey = pieceStateKey;
@@ -9172,6 +9187,23 @@ void Position::undo_move(Move m) {
   byTypeBB[ALL_PIECES] ^= st->wallSquares ^ st->previous->wallSquares;
   byTypeBB[ALL_PIECES] ^= st->deadSquares ^ st->previous->deadSquares;
 
+  // Claims are placed after removal effects in do_move(), so remove them
+  // before restoring pieces removed by those effects.  Otherwise a claim can
+  // occupy a square whose original piece is about to be restored.
+  if (st->claimedSquares)
+  {
+      Bitboard claimed = st->claimedSquares;
+      while (claimed)
+      {
+          Square sq = pop_lsb(claimed);
+          if (piece_on(sq) != NO_PIECE)
+          {
+              remove_piece(sq);
+              board[sq] = NO_PIECE;
+          }
+      }
+  }
+
   // Add the blast pieces
   if (
        ( surround_capture_opposite() || surround_capture_intervene() || surround_capture_edge() ) ||
@@ -9278,20 +9310,6 @@ void Position::undo_move(Move m) {
       {
           Piece gating_piece = make_piece(us, potionPiece);
           add_to_hand(gating_piece);
-      }
-  }
-
-  if (st->claimedSquares)
-  {
-      Bitboard claimed = st->claimedSquares;
-      while (claimed)
-      {
-          Square sq = pop_lsb(claimed);
-          if (piece_on(sq) != NO_PIECE)
-          {
-              remove_piece(sq);
-              board[sq] = NO_PIECE;
-          }
       }
   }
 

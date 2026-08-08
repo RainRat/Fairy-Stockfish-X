@@ -150,6 +150,58 @@ void composable_rules() {
     check(pos.key() == beforeTrap && pos.fen() == beforeTrapFen,
           "trap removal did not restore state exactly on undo");
 
+    set_position(pos, states, "composable-trap-ep-stale",
+                 "4k3/p7/8/1P6/8/8/8/4K3 b - - 0 1");
+    Move trapDoubleStep = parse_move(pos, "a7a5");
+    const Key beforeTrapDoubleStep = pos.key();
+    const std::string beforeTrapDoubleStepFen = pos.fen();
+    states->emplace_back();
+    pos.do_move(trapDoubleStep, states->back());
+    check(!pos.ep_squares(),
+          "trap removal left an en-passant right for a removed pawn");
+    check(!MoveList<LEGAL>(pos).contains(make<EN_PASSANT>(SQ_B5, SQ_A6)),
+          "move generation exposed en passant for a trapped piece");
+    pos.undo_move(trapDoubleStep);
+    states->pop_back();
+    check(pos.key() == beforeTrapDoubleStep && pos.fen() == beforeTrapDoubleStepFen,
+          "trap en-passant cleanup did not restore state exactly on undo");
+
+    set_position(pos, states, "composable-trap-claim-undo",
+                 "4k3/8/8/4R3/3R1R2/2N1R3/8/4K3 w - - 0 1");
+    Move trapClaim = make<NORMAL>(SQ_C3, SQ_E4);
+    const Key beforeTrapClaim = pos.key();
+    const std::string beforeTrapClaimFen = pos.fen();
+    states->emplace_back();
+    pos.do_move(trapClaim, states->back());
+    check(pos.state()->trapRemoved & square_bb(SQ_E4),
+          "trap/claim test did not remove the trapped piece");
+    check(pos.state()->claimedSquares & square_bb(SQ_E4),
+          "trap/claim test did not create the surrounding claim");
+    pos.undo_move(trapClaim);
+    states->pop_back();
+    check(pos.key() == beforeTrapClaim && pos.fen() == beforeTrapClaimFen,
+          "trap and surround claim did not restore state exactly on undo");
+
+    set_position(pos, states, "composable-commitgate-castle",
+                 "n7/4k3/8/8/8/8/8/8/4K2R/4R2R w K - 0 1");
+    Move committedCastle = parse_move(pos, "e1g1");
+    SimulatedMoveInfo castlingInfo = pos.simulated_move_info(committedCastle);
+    check(castlingInfo.type_pieces(WHITE, ROOK) & square_bb(SQ_E1),
+          "castling simulation missed the king-source committed gate");
+    check(castlingInfo.type_pieces(WHITE, ROOK) & square_bb(SQ_H1),
+          "castling simulation missed the rook-source committed gate");
+    const Key beforeCommittedCastle = pos.key();
+    const std::string beforeCommittedCastleFen = pos.fen();
+    states->emplace_back();
+    pos.do_move(committedCastle, states->back());
+    check(pos.piece_on(SQ_E1) == make_piece(WHITE, ROOK)
+              && pos.piece_on(SQ_H1) == make_piece(WHITE, ROOK),
+          "castling move application disagreed with committed-gate simulation");
+    pos.undo_move(committedCastle);
+    states->pop_back();
+    check(pos.key() == beforeCommittedCastle && pos.fen() == beforeCommittedCastleFen,
+          "committed-gate castling did not restore state exactly on undo");
+
     set_position(pos, states, "composable-freeze-traps",
                  "8/8/8/8/8/1R6/2R4r/8 w - - 0 1");
     Move protectedTrap = parse_move(pos, "c2c3");
@@ -1810,6 +1862,24 @@ castling = false
 trapRegion = a5
 trapProtection = friendly-orthogonal
 castling = false
+
+[composable-trap-ep-stale:chess]
+checking = false
+castling = false
+trapRegion = a5
+trapProtection = none
+
+[composable-trap-claim-undo:chess]
+checking = false
+castling = false
+trapRegion = e4
+trapProtection = none
+surroundClaimRegion = e4
+surroundClaimPiece = p
+
+[composable-commitgate-castle:chess]
+commitGates = true
+startFen = n7/4k3/8/8/8/8/8/8/4K2R/4R2R w K - 0 1
 
 [composable-castle-freeze-destination:chess]
 freezePieceTypes = r
