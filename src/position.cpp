@@ -3161,6 +3161,9 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
            ? (simulated->type_pieces(WHITE, pt) | simulated->type_pieces(BLACK, pt))
            : pieces(pt);
   };
+  const Bitboard effectiveJanggiCannons = simulated && !simulated->typeOccupancy.empty()
+                                        ? all_type_pieces(JANGGI_CANNON)
+                                        : janggiCannons;
 
   if (topology_wraps())
   {
@@ -3189,7 +3192,7 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
           }
           else if (pt == JANGGI_CANNON)
               b |= attacks_from<false, false>(~c, move_pt, s, occupied)
-                 & attacks_from<false, false>(~c, move_pt, s, occupied & ~janggiCannons)
+                 & attacks_from<false, false>(~c, move_pt, s, occupied & ~effectiveJanggiCannons)
                  & ptPieces;
           else
               b |= attacks_from<false, false>(~c, move_pt, s, occupied) & ptPieces;
@@ -3275,7 +3278,9 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
               }
           }
           else if (pt == JANGGI_CANNON)
-              b |= attacks_from<false, false>(~c, move_pt, s, occupied) & attacks_from<false, false>(~c, move_pt, s, occupied & ~janggiCannons) & (janggiCannons & color_pieces(c));
+              b |= attacks_from<false, false>(~c, move_pt, s, occupied)
+                 & attacks_from<false, false>(~c, move_pt, s, occupied & ~effectiveJanggiCannons)
+                 & (effectiveJanggiCannons & color_pieces(c));
           else
               b |= attacks_from<false, false>(~c, move_pt, s, occupied) & type_pieces(c, pt);
       }
@@ -3290,7 +3295,8 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
       diags |= attacks_bb(~c, FERS, s, occupied) & type_pieces(c, WAZIR);
       diags |= attacks_bb(~c, PAWN, s, occupied) & type_pieces(c, SOLDIER);
       diags |= rider_attacks_bb<RIDER_BISHOP>(s, occupied) & type_pieces(c, ROOK);
-      diags |= janggi_cannon_diagonal_targets(s, occupied, janggiCannons) & (janggiCannons & color_pieces(c));
+      diags |= janggi_cannon_diagonal_targets(s, occupied, effectiveJanggiCannons)
+             & (effectiveJanggiCannons & color_pieces(c));
       b |= diags & diagonal_lines();
   }
 
@@ -8701,20 +8707,29 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
                                               & (blast_pattern(moverSq) | moverBit));
           const bool projectedColorChange = trigger_matches(var->changingColorTrigger,
                                                              projectedCapture);
+          colorAfterEffects[WHITE] |= blastPromotionMask & pieces(WHITE);
+          colorAfterEffects[BLACK] |= blastPromotionMask & pieces(BLACK);
           Piece moverAfterEffects = piece_on(moverSq);
+          PieceType moverAfterEffectsType = moverAfterEffects != NO_PIECE
+                                          ? type_of(moverAfterEffects)
+                                          : NO_PIECE_TYPE;
+          if ((blastPromotionMask & moverBit) && moverAfterEffects != NO_PIECE)
+          {
+              PieceType promoted = promoted_piece_type(moverAfterEffectsType);
+              if (promoted != NO_PIECE_TYPE)
+                  moverAfterEffectsType = promoted;
+          }
           if (!diesBeforeTrap
-              && !(removal_mask & moverBit)
+              && (!(removal_mask & moverBit) || (blastPromotionMask & moverBit))
               && projectedColorChange
               && moverAfterEffects != NO_PIECE
               && color_of(moverAfterEffects) == us
-              && (var->changingColorPieceTypes & type_of(moverAfterEffects)))
+              && (var->changingColorPieceTypes & piece_set(moverAfterEffectsType)))
           {
               colorAfterEffects[us] &= ~moverBit;
               colorAfterEffects[them] |= moverBit;
           }
 
-          colorAfterEffects[WHITE] |= blastPromotionMask & pieces(WHITE);
-          colorAfterEffects[BLACK] |= blastPromotionMask & pieces(BLACK);
           Bitboard trapOccupied = pieces() & ~removal_mask;
           if (diesBeforeTrap)
               trapOccupied &= ~moverBit;

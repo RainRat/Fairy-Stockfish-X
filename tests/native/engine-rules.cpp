@@ -642,6 +642,16 @@ void composable_rules() {
     set_position(pos, states, "composable-blast-janggi-screen",
                  "7k/8/4c3/3R4/4c3/8/8/4K3 w - - 0 1");
     Move blastCannonScreen = make_move(SQ_D5, SQ_D4);
+    simulated = pos.simulated_move_info(blastCannonScreen);
+    check(!(simulated.type_pieces(BLACK, JANGGI_CANNON) & square_bb(SQ_E4)),
+          "blast cannon simulation retained a promoted screen as a cannon");
+    Bitboard simulatedCannons = simulated.type_pieces(WHITE, JANGGI_CANNON)
+                              | simulated.type_pieces(BLACK, JANGGI_CANNON);
+    check(pos.attackers_to(SQ_E1, simulated.occupiedAfterEffects, BLACK,
+                           pos.pieces(JANGGI_CANNON), &simulated)
+              == pos.attackers_to(SQ_E1, simulated.occupiedAfterEffects, BLACK,
+                                  simulatedCannons, &simulated),
+          "simulated cannon attack ignored the final cannon classification");
     check(!pos.legal(blastCannonScreen),
           "blast promotion left a newly non-cannon screen undetected");
 
@@ -738,6 +748,21 @@ void composable_rules() {
     check(pos.piece_on(SQ_E3) == make_piece(WHITE, QUEEN),
           "blast-promotion survivor incorrectly triggered committed color change");
     pos.undo_move(blastPromotionColor);
+    states->pop_back();
+
+    set_position(pos, states, "composable-blast-promotion-trap-color-mismatch",
+                 "8/8/8/8/4E3/8/4E3/8 w - - 0 1");
+    Move blastPromotionTrapColorMismatch = make_move(SQ_E2, SQ_E3);
+    simulated = pos.simulated_move_info(blastPromotionTrapColorMismatch);
+    check(!(simulated.occupiedAfterEffects & square_bb(SQ_E4)),
+          "blast-promotion color simulation did not remove the unprotected trap piece");
+    states->emplace_back();
+    pos.do_move(blastPromotionTrapColorMismatch, states->back());
+    check(pos.piece_on(SQ_E3) == make_piece(BLACK, QUEEN),
+          "committed blast-promotion color ordering lost the promoted mover");
+    check(pos.piece_on(SQ_E4) == NO_PIECE,
+          "committed blast-promotion color ordering disagreed with trap simulation");
+    pos.undo_move(blastPromotionTrapColorMismatch);
     states->pop_back();
 
     set_position(pos, states, "composable-blast-immune",
@@ -1818,6 +1843,14 @@ blastDiagonals = true
 blastCenter = false
 changingColorTrigger = capture
 changingColorPieceTypes = e
+trapRegion = e4
+
+[composable-blast-promotion-trap-color-mismatch:composable-freeze-traps-blast]
+blastOrthogonals = false
+blastDiagonals = true
+blastCenter = true
+changingColorTrigger = always
+changingColorPieceTypes = q
 trapRegion = e4
 
 [composable-flip-blast:composable-freeze-traps-blast]
