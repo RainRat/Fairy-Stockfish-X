@@ -82,12 +82,29 @@ struct PushInfo {
 struct SimulatedMoveInfo {
   Bitboard relocatedOccupancy = Bitboard(0);
   Bitboard effectOccupancy = Bitboard(0);
+  std::array<Bitboard, COLOR_NB> colorOccupancy = {};
+  // Allocated only for variants whose blast effects can change a bystander's
+  // movement type; ordinary variants keep SimulatedMoveInfo compact.
+  std::vector<Bitboard> typeOccupancy;
+  std::array<Bitboard, COLOR_NB> freezerOccupancy = {};
+  std::array<Bitboard, COLOR_NB> freezeImmuneOccupancy = {};
+  Bitboard pawnOccupancy = Bitboard(0);
+  Bitboard blastImmuneOccupancy = Bitboard(0);
+  Bitboard blastPromotionOccupancy = Bitboard(0);
+  Bitboard blastPromotionExcluded = Bitboard(0);
   Bitboard placementOccupancy = Bitboard(0);
   Bitboard occupiedAfterEffects = Bitboard(0);
   Bitboard removedByEffects = Bitboard(0);
   Bitboard structuralRemoval = Bitboard(0);
   Bitboard addedPlacements = Bitboard(0);
+  Bitboard claimedSquares = Bitboard(0);
   Bitboard removedWalls = Bitboard(0);
+  Piece placedPiece = NO_PIECE;
+  Piece sourcePiece = NO_PIECE;
+  Piece gatingPiece = NO_PIECE;
+  Piece secondaryPiece = NO_PIECE;
+  Piece castlingKingPiece = NO_PIECE;
+  Piece castlingRookPiece = NO_PIECE;
   Square from = SQ_NONE;
   Square to = SQ_NONE;
   Square effectiveTo = SQ_NONE;
@@ -100,6 +117,14 @@ struct SimulatedMoveInfo {
   bool clone = false;
   bool stationary = false;
   bool paired = false;
+
+  Bitboard& type_pieces(Color c, PieceType pt) {
+      return typeOccupancy[size_t(c) * PIECE_TYPE_NB + pt];
+  }
+  Bitboard type_pieces(Color c, PieceType pt) const {
+      return typeOccupancy.empty() ? Bitboard(0)
+                                   : typeOccupancy[size_t(c) * PIECE_TYPE_NB + pt];
+  }
 };
 
 const SpellContext* current_spell_context() noexcept;
@@ -293,6 +318,7 @@ struct StateInfoDerived {
 
 struct MoveUndoInfo {
   Bitboard   bycatchSquares = Bitboard(0);
+  Bitboard   trapRemoved = Bitboard(0);
   Bitboard   libertySelfRemoved = Bitboard(0);
   PackedReversiblePiece bycatchPieces[SQUARE_NB];
   Bitboard   blastPromotedSquares = Bitboard(0);
@@ -325,6 +351,7 @@ struct MoveUndoInfo {
 
   void clear() {
     bycatchSquares = Bitboard(0);
+    trapRemoved = Bitboard(0);
     libertySelfRemoved = Bitboard(0);
     for (auto& saved : bycatchPieces)
         saved.clear();
@@ -360,6 +387,7 @@ struct MoveUndoInfo {
 #ifndef NDEBUG
   bool empty() const {
     return bycatchSquares == Bitboard(0)
+        && trapRemoved == Bitboard(0)
         && libertySelfRemoved == Bitboard(0)
         && blastPromotedSquares == Bitboard(0)
         && laserTransformedSquares == Bitboard(0)
@@ -443,11 +471,59 @@ public:
   struct SimulatedMoveGuard {
       const Position& pos;
       Move previous;
-      SimulatedMoveGuard(const Position& p, Move m) : pos(p), previous(p.simulatedMove) {
-          pos.simulatedMove = m;
+      const SimulatedMoveInfo* previousInfo;
+      Move previousFreezeCacheMove;
+      const StateInfo* previousFreezeCacheState;
+      std::array<Bitboard, COLOR_NB> previousFreezeCacheFreezers;
+      std::array<Bitboard, COLOR_NB> previousFreezeCacheTargets;
+
+      SimulatedMoveGuard(const Position& p, Move m, const SimulatedMoveInfo* info = nullptr)
+          : pos(p),
+            previous(p.simulatedMove),
+            previousInfo(p.simulatedInfo),
+            previousFreezeCacheMove(p.simulatedFreezeCacheMove),
+            previousFreezeCacheState(p.simulatedFreezeCacheState),
+            previousFreezeCacheFreezers(p.simulatedFreezeCacheFreezers),
+            previousFreezeCacheTargets(p.simulatedFreezeCacheTargets) {
+          set(m, info);
       }
+
+      void set(Move m, const SimulatedMoveInfo* info = nullptr) const {
+          pos.simulatedMove = m;
+          pos.simulatedInfo = info;
+          pos.simulatedFreezeCacheMove = MOVE_NONE;
+          pos.simulatedFreezeCacheState = nullptr;
+          pos.simulatedFreezeCacheFreezers = {};
+          pos.simulatedFreezeCacheTargets = {};
+      }
+
+      void clear() const {
+          set(MOVE_NONE);
+      }
+
       ~SimulatedMoveGuard() {
           pos.simulatedMove = previous;
+          pos.simulatedInfo = previousInfo;
+          pos.simulatedFreezeCacheMove = previousFreezeCacheMove;
+          pos.simulatedFreezeCacheState = previousFreezeCacheState;
+          pos.simulatedFreezeCacheFreezers = previousFreezeCacheFreezers;
+          pos.simulatedFreezeCacheTargets = previousFreezeCacheTargets;
+      }
+  };
+
+  struct SimulatedMoveInfoGuard {
+      const Position& pos;
+      const SimulatedMoveInfo* previous;
+
+      explicit SimulatedMoveInfoGuard(const Position& p)
+          : pos(p), previous(p.simulatedInfo) {}
+
+      void set(const SimulatedMoveInfo& info) const {
+          pos.simulatedInfo = &info;
+      }
+
+      ~SimulatedMoveInfoGuard() {
+          pos.simulatedInfo = previous;
       }
   };
 
@@ -536,7 +612,7 @@ public:
   Bitboard compute_liberty_group(Square root, Bitboard groupPieces, Bitboard occupied, bool& hasLiberty) const;
   bool liberty_drop_legal(Move m, Color us) const;
   bool placement_rules_legal(Move m, Color us) const;
-  Bitboard compute_remove_connect_n_mask(const std::vector<Bitboard>& baseLines, Bitboard alreadyRemoved, Bitboard blastMask, Bitboard& connectMask) const;
+  Bitboard compute_remove_connect_n_mask(const std::vector<Bitboard>& baseLines, Bitboard alreadyRemoved, Bitboard blastMask, Bitboard& connectMask, const SimulatedMoveInfo* simulated = nullptr) const;
   EndgameEval endgame_eval() const;
   Bitboard double_step_region(Color c) const;
   Bitboard double_step_region(Color c, PieceType pt) const;
@@ -667,9 +743,12 @@ public:
   bool can_cast_potion(Color c, Variant::PotionType type) const;
   Bitboard potion_zone(Color c, Variant::PotionType type) const;
   int potion_cooldown(Color c, Variant::PotionType type) const;
+  Bitboard freeze_squares_from_freezers(Color c) const;
+  Bitboard freeze_squares_from_freezers(Color c, const SimulatedMoveInfo* simulated) const;
   bool gating_move_blocks_occupancy(Move m) const;
   Bitboard freeze_squares() const;
   Bitboard freeze_squares(Color c) const;
+  Bitboard freeze_squares(Color c, const SimulatedMoveInfo* simulated) const;
   Bitboard jump_squares(Color c) const;
   Bitboard freeze_zone_from_square(Square s) const;
   bool gating() const;
@@ -861,13 +940,25 @@ public:
   Bitboard attackers_to(Square s, Bitboard occupied) const;
   Bitboard attackers_to(Square s, Bitboard occupied, Color c) const;
   Bitboard attackers_to(Square s, Bitboard occupied, Color c, Bitboard janggiCannons) const;
+  Bitboard attackers_to(Square s, Bitboard occupied, Color c, Bitboard janggiCannons,
+                        const SimulatedMoveInfo* simulated) const;
   Bitboard attackers_to_king_without_freeze(Square s, Bitboard occupied, Color c,
                                             Bitboard janggiCannons,
                                             PieceType pt = NO_PIECE_TYPE) const;
+  Bitboard attackers_to_king_without_freeze(Square s, Bitboard occupied, Color c,
+                                            Bitboard janggiCannons, PieceType pt,
+                                            const SimulatedMoveInfo* simulated) const;
   Bitboard attackers_to_king(Square s, Color c) const;
   Bitboard attackers_to_king(Square s, Bitboard occupied, Color c) const;
-  Bitboard attackers_to_king(Square s, Bitboard occupied, Color c, Bitboard janggiCannons, PieceType pt = NO_PIECE_TYPE) const;
-  Bitboard janggi_cannon_attackers_to_king(Square s, Bitboard occupied, Color c, Bitboard janggiCannons) const;
+  Bitboard attackers_to_king(Square s, Bitboard occupied, Color c, Bitboard janggiCannons,
+                             PieceType pt = NO_PIECE_TYPE) const;
+  Bitboard attackers_to_king(Square s, Bitboard occupied, Color c, Bitboard janggiCannons,
+                             PieceType pt, const SimulatedMoveInfo* simulated) const;
+  Bitboard janggi_cannon_attackers_to_king(Square s, Bitboard occupied, Color c,
+                                           Bitboard janggiCannons) const;
+  Bitboard janggi_cannon_attackers_to_king(Square s, Bitboard occupied, Color c,
+                                           Bitboard janggiCannons,
+                                           const SimulatedMoveInfo* simulated) const;
   template <bool Initial=false, bool FilterMobility=true>
   Bitboard attacks_from(Color c, PieceType pt, Square s) const;
   template <bool Initial=false, bool FilterMobility=true>
@@ -1161,6 +1252,11 @@ private:
   Color sideToMove;
   Score psq;
   mutable Move simulatedMove = MOVE_NONE;
+  mutable const SimulatedMoveInfo* simulatedInfo = nullptr;
+  mutable Move simulatedFreezeCacheMove = MOVE_NONE;
+  mutable const StateInfo* simulatedFreezeCacheState = nullptr;
+  mutable std::array<Bitboard, COLOR_NB> simulatedFreezeCacheFreezers = {};
+  mutable std::array<Bitboard, COLOR_NB> simulatedFreezeCacheTargets = {};
 
   // variant-specific
   const Variant* var;
@@ -2426,12 +2522,20 @@ inline bool Position::can_cast_potion(Color c, Variant::PotionType type) const {
 }
 
 inline Bitboard Position::freeze_squares(Color c) const {
-  if (!potions_enabled())
+  return freeze_squares(c, nullptr);
+}
+
+inline Bitboard Position::freeze_squares(Color c, const SimulatedMoveInfo* simulated) const {
+  if (!potions_enabled() && !var->freezePieceTypes)
       return Bitboard(0);
-  Bitboard mask = st->potionZones[c][Variant::POTION_FREEZE];
-  if (const SpellContext* spellCtx = current_spell_context(); spellCtx && c == ~sideToMove)
-      mask |= spellCtx->freezeExtra;
-  if (var->checkedRoyalsIgnoreFreeze)
+  Bitboard mask = freeze_squares_from_freezers(c, simulated);
+  if (potions_enabled())
+  {
+      mask |= st->potionZones[c][Variant::POTION_FREEZE];
+      if (const SpellContext* spellCtx = current_spell_context(); spellCtx && c == ~sideToMove)
+          mask |= spellCtx->freezeExtra;
+  }
+  if (potions_enabled() && var->checkedRoyalsIgnoreFreeze)
       for (Color royalColor : {WHITE, BLACK})
       {
           const PieceType royalType = castling_king_piece(royalColor);
@@ -2451,12 +2555,18 @@ inline Bitboard Position::freeze_squares(Color c) const {
           // from the attack map.  During a compound move, include the
           // temporary zone only when that move is being cast by the royal's
           // owner as well.
-          Bitboard frozenAttackers = st->potionZones[royalColor][Variant::POTION_FREEZE];
+          Bitboard frozenAttackers = st->potionZones[royalColor][Variant::POTION_FREEZE]
+                                   | freeze_squares_from_freezers(~royalColor, simulated);
           if (const SpellContext* spellCtx = current_spell_context();
               spellCtx && sideToMove == royalColor)
               frozenAttackers |= spellCtx->freezeExtra;
-          if (attackers_to_king_without_freeze(royalSquare, byTypeBB[ALL_PIECES], ~royalColor,
-                                               byTypeBB[JANGGI_CANNON], royalType)
+          Bitboard occupied = simulated ? simulated->occupiedAfterEffects : byTypeBB[ALL_PIECES];
+          Bitboard janggiCannons = simulated && !simulated->typeOccupancy.empty()
+                                 ? simulated->type_pieces(WHITE, JANGGI_CANNON)
+                                 | simulated->type_pieces(BLACK, JANGGI_CANNON)
+                                 : byTypeBB[JANGGI_CANNON];
+          if (attackers_to_king_without_freeze(royalSquare, occupied, ~royalColor,
+                                               janggiCannons, royalType, simulated)
               & ~frozenAttackers)
               mask &= ~square_bb(royalSquare);
       }
@@ -3878,6 +3988,48 @@ inline Piece Position::piece_at(Square sq, Bitboard occupied) const {
   if ((st->wallSquares | st->deadSquares) & sq)
       return NO_PIECE;
 
+  if (simulatedInfo)
+  {
+      const SimulatedMoveInfo& info = *simulatedInfo;
+      if (info.castling)
+      {
+          Square kto, rto;
+          castling_destinations(sideToMove, info.from, info.to, kto, rto);
+          if (sq == kto)
+              return info.castlingKingPiece;
+          if (sq == rto)
+              return info.castlingRookPiece;
+          if (sq == info.from || sq == info.to)
+              return NO_PIECE;
+      }
+
+      if (!info.typeOccupancy.empty())
+      {
+          Bitboard bit = square_bb(sq);
+          for (Color c : { WHITE, BLACK })
+              for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
+                  if (info.type_pieces(c, pt) & bit)
+                      return make_piece(c, pt);
+
+          if (sq == info.effectiveTo && info.placedPiece != NO_PIECE)
+              return info.placedPiece;
+          if (sq == info.gatingSquare && info.gatingPiece != NO_PIECE)
+              return info.gatingPiece;
+          if (sq == info.secondarySquare && info.secondaryPiece != NO_PIECE)
+              return info.secondaryPiece;
+          return NO_PIECE;
+      }
+
+      if (sq == info.from && info.sourcePiece != NO_PIECE)
+          return info.sourcePiece;
+      if (sq == info.effectiveTo && info.placedPiece != NO_PIECE)
+          return info.placedPiece;
+      if (sq == info.gatingSquare && info.gatingPiece != NO_PIECE)
+          return info.gatingPiece;
+      if (sq == info.secondarySquare && info.secondaryPiece != NO_PIECE)
+          return info.secondaryPiece;
+  }
+
   if (simulatedMove != MOVE_NONE)
   {
       Square from = from_sq(simulatedMove);
@@ -3889,9 +4041,12 @@ inline Piece Position::piece_at(Square sq, Bitboard occupied) const {
           Square kto, rto;
           castling_destinations(us, from, to, kto, rto);
           if (sq == kto)
-              return make_piece(us, KING);
+              return moved_piece(simulatedMove);
           if (sq == rto)
-              return make_piece(us, ROOK);
+          {
+              Piece rook = piece_on(to);
+              return rook == NO_PIECE ? make_piece(us, ROOK) : rook;
+          }
       }
 
       if (sq == to)
@@ -3924,9 +4079,9 @@ inline Piece Position::piece_at(Square sq, Bitboard occupied) const {
           Square toK, toR;
           castling_destinations(sideToMove, fromK, fromR, toK, toR);
           if (sq == toK)
-              return make_piece(sideToMove, KING);
+              return piece_on(fromK);
           if (sq == toR)
-              return make_piece(sideToMove, ROOK);
+              return piece_on(fromR);
       }
       return piece_on(sq);
   }

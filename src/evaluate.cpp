@@ -285,6 +285,7 @@ namespace {
         && !pos.piece_drops()
         && !pos.captures_to_hand()
         && !pos.gating()
+        && !pos.potions_enabled()
         && !pos.must_capture()
         && !pos.check_counting()
         && !pos.points_counting()
@@ -308,6 +309,8 @@ namespace {
         && !pos.topology_wraps()
         && !pos.is_hex_board()
         && !pos.immobility_illegal()
+        && !pos.variant()->freezePieceTypes
+        && !pos.variant()->trapRegion
         && !pos.flip_enclosed_pieces()
         && !pos.makpong();
   }
@@ -629,8 +632,15 @@ namespace {
     Bitboard LowRanks = rank_bb(relative_rank(Us, RANK_2, pos.max_rank())) | rank_bb(relative_rank(Us, RANK_3, pos.max_rank()));
 
     const Square ksq = pos.count<KING>(Us) ? pos.square<KING>(Us) : SQ_NONE;
+    const Bitboard frozenUs = pos.freeze_squares(Us);
+    const Bitboard frozenThem = pos.freeze_squares(Them);
+    const Bitboard activePawns = pos.pieces(Us, PAWN) & ~frozenUs;
+    const Bitboard activeThemPawns = pos.pieces(Them, PAWN) & ~frozenThem;
+    const Bitboard theirPawnAttacks = pos.variant()->freezePieceTypes || pos.potions_enabled()
+                                    ? pawn_attacks_bb<Them>(activeThemPawns)
+                                    : pe->pawn_attacks(Them);
 
-    Bitboard dblAttackByPawn = pawn_double_attacks_bb<Us>(pos.pieces(Us, PAWN));
+    Bitboard dblAttackByPawn = pawn_double_attacks_bb<Us>(activePawns);
 
     // Find our pawns that are blocked or on the first two ranks
     Bitboard b = pos.pieces(Us, PAWN) & (shift<Down>(pos.pieces()) | LowRanks);
@@ -640,16 +650,18 @@ namespace {
     if (pos.must_capture())
         mobilityArea[Us] = AllSquares;
     else
-        mobilityArea[Us] = ~(b | pos.pieces(Us, KING, QUEEN) | pos.blockers_for_king(Us) | pe->pawn_attacks(Them)
+        mobilityArea[Us] = ~(b | pos.pieces(Us, KING, QUEEN) | pos.blockers_for_king(Us) | theirPawnAttacks
                                | (pos.pieces(Us, SHOGI_PAWN) & shift<Down>(pos.pieces(Us)))
                                | shift<Down>(pos.pieces(Them, SHOGI_PAWN, SOLDIER))
                                | shift<EAST>(pos.promoted_soldiers(Them))
                                | shift<WEST>(pos.promoted_soldiers(Them)));
 
     // Initialize attackedBy[] for king and pawns
-    attackedBy[Us][KING] = pos.count<KING>(Us) ? pos.attacks_from(Us, KING, ksq) : Bitboard(0);
-    attackedBy[Us][PAWN] = pe->pawn_attacks(Us);
-    attackedBy[Us][SHOGI_PAWN] = shift<Up>(pos.pieces(Us, SHOGI_PAWN));
+    attackedBy[Us][KING] = pos.count<KING>(Us) && !(frozenUs & ksq)
+                         ? pos.attacks_from(Us, KING, ksq) : Bitboard(0);
+    attackedBy[Us][PAWN] = pos.variant()->freezePieceTypes || pos.potions_enabled()
+                         ? pawn_attacks_bb<Us>(activePawns) : pe->pawn_attacks(Us);
+    attackedBy[Us][SHOGI_PAWN] = shift<Up>(pos.pieces(Us, SHOGI_PAWN) & ~frozenUs);
     attackedBy[Us][ALL_PIECES] = attackedBy[Us][KING] | attackedBy[Us][PAWN] | attackedBy[Us][SHOGI_PAWN];
     attackedBy2[Us]            =  (attackedBy[Us][KING] & attackedBy[Us][PAWN])
                                 | (attackedBy[Us][KING] & attackedBy[Us][SHOGI_PAWN])
@@ -672,7 +684,8 @@ namespace {
         kingRing[Us] = pos.attacks_bb<KING>(s) | s;
     }
 
-    kingAttackersCount[Them] = popcount(kingRing[Us] & (pe->pawn_attacks(Them) | shift<Down>(pos.pieces(Them, SHOGI_PAWN))));
+    kingAttackersCount[Them] = popcount(kingRing[Us] & (theirPawnAttacks
+                                | shift<Down>(pos.pieces(Them, SHOGI_PAWN) & ~frozenThem)));
     kingAttacksCount[Them] = kingAttackersWeight[Them] = 0;
     kingAttackersCountInHand[Them] = kingAttackersWeightInHand[Them] = 0;
 
@@ -697,6 +710,7 @@ namespace {
     const Bitboard centerFiles = scaled_center_files(pos);
     const Bitboard queenFlank = scaled_flank(pos, false);
     const Bitboard kingFlank = scaled_flank(pos, true);
+    const Bitboard frozen = pos.freeze_squares(Us);
 
     attackedBy[Us][Pt] = 0;
 
@@ -712,6 +726,9 @@ namespace {
         // Restrict mobility to actual squares of board
         b &= pos.board_bb(Us, Pt);
 
+        if (frozen & s)
+            b = 0;
+
         if (pos.blockers_for_king(Us) & s)
             b &= line_bb(pos.square<KING>(Us), s);
 
@@ -726,13 +743,13 @@ namespace {
             kingAttacksCount[Us] += popcount(b & attackedBy[Them][KING]);
         }
 
-        else if (Pt == ROOK && (file_bb(s) & kingRing[Them]))
+        else if (!(frozen & s) && Pt == ROOK && (file_bb(s) & kingRing[Them]))
             score += RookOnKingRing;
 
-        else if (Pt == BISHOP && (pos.attacks_bb<BISHOP>(s, pos.pieces(PAWN)) & kingRing[Them]))
+        else if (!(frozen & s) && Pt == BISHOP && (pos.attacks_bb<BISHOP>(s, pos.pieces(PAWN)) & kingRing[Them]))
             score += BishopOnKingRing;
 
-        if (Pt > QUEEN)
+        if (Pt > QUEEN && !(frozen & s))
              b = (b & pos.pieces()) | (pos.moves_from(Us, Pt, s) & ~pos.pieces() & pos.board_bb());
 
         int mob = popcount(b & mobilityArea[Us]);

@@ -126,6 +126,9 @@ const char* enclosing_name(EnclosingRule v) {
     static const char* names[] = {"none", "reversi", "ataxx", "quadwrangle", "snort", "anySide", "top"};
     return names[int(v)];
 }
+const char* trap_protection_name(TrapProtection v) {
+    return v == TrapProtection::FRIENDLY_ORTHOGONAL ? "friendly-orthogonal" : "none";
+}
 const char* walling_name(WallingRule v) {
     static const char* names[] = {"none", "arrow", "duck", "edge", "past", "static"};
     return names[int(v)];
@@ -313,6 +316,9 @@ std::string variant_info_json(const std::string& name) {
     field(movement, b, "passOnStalemate", color_bools(v.passOnStalemate[WHITE], v.passOnStalemate[BLACK]));
     field(movement, b, "mustCapture", boolean(v.mustCapture));
     field(movement, b, "immobilityIllegal", boolean(v.immobilityIllegal));
+    field(movement, b, "freezePieceTypes", piece_set_json(v.freezePieceTypes));
+    field(movement, b, "freezeImmunePieceTypes", piece_set_json(v.freezeImmunePieceTypes));
+    field(movement, b, "freezeDiagonals", boolean(v.freezeDiagonals));
     field(movement, b, "cambodianMoves", boolean(v.cambodianMoves));
     field(movement, b, "makpongRule", boolean(v.makpongRule));
     field(movement, b, "flyingGeneral", boolean(v.flyingGeneral));
@@ -360,6 +366,8 @@ std::string variant_info_json(const std::string& name) {
     field(capture, b, "petrifyTypes", piece_set_json(v.petrifyOnCaptureTypes));
     field(capture, b, "petrifyBlastPieces", boolean(v.petrifyBlastPieces));
     field(capture, b, "petrifySuppressTransfer", boolean(v.petrifyOnCaptureSuppressTransfer));
+    field(capture, b, "trapRegion", region_json(v.trapRegion, v.maxFile, v.maxRank));
+    field(capture, b, "trapProtection", quote(trap_protection_name(v.trapProtection)));
     field(capture, b, "rifle", boolean(v.rifleCapture));
     field(capture, b, "selfCapture", color_bools(v.selfCapture[WHITE], v.selfCapture[BLACK]));
     field(capture, b, "selfCaptureTypes", color_piece_sets(v.selfCaptureTypes[WHITE], v.selfCaptureTypes[BLACK]));

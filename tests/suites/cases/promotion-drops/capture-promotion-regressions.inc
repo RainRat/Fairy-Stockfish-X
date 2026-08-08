@@ -52,6 +52,10 @@ test_must_capture_by_color() {
 mustCaptureWhite = true
 mustCaptureBlack = false
 startFen = 4k3/8/8/3p4/4P3/8/8/4K3 w - - 0 1
+
+[mustcaptureep:chess]
+mustCaptureEnPassant = true
+startFen = 4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1
 INI
 
   out_white=$(run_uci "$ENGINE" "$tmp_ini" asymmustcapture <<'UCI'
@@ -71,6 +75,14 @@ EOF
 )
   assert_contains "$out_black" "e5d4:"
   assert_contains "$out_black" "e5e4:"
+
+  out_ep=$(run_uci "$ENGINE" "$tmp_ini" mustcaptureep <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+  assert_contains "$out_ep" "e5d6:"
+  assert_not_contains "$out_ep" "e1e2:"
   rm -f "${tmp_ini}"
 }
 

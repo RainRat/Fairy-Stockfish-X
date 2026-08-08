@@ -2238,6 +2238,14 @@ Variant* Variant::conclude() {
             if (captureForbiddenByColor[c][pt] & KING)
                 captureForbiddenToKingByColor[c] |= pt;
     }
+    hasCaptureRestrictions = false;
+    for (PieceSet ps = pieceTypes; ps && !hasCaptureRestrictions; )
+    {
+        PieceType pt = pop_lsb(ps);
+        hasCaptureRestrictions = captureForbidden[pt]
+                              || captureForbiddenByColor[WHITE][pt]
+                              || captureForbiddenByColor[BLACK][pt];
+    }
 
     // Enforce consistency to allow runtime optimizations
     if (!doubleStep)
@@ -2266,6 +2274,70 @@ Variant* Variant::conclude() {
                   && !restrictedMobility
                   && !cambodianMoves
                   && !diagonalLines;
+
+    hasMoveMorph = false;
+    for (PieceType pt = PAWN; pt < PIECE_TYPE_NB && !hasMoveMorph; ++pt)
+        hasMoveMorph = moveMorphPieceType[pt] != NO_PIECE_TYPE;
+    simpleLegality = checking
+                  && fastAttacks
+                  && pieceTypes == CHESS_PIECES
+                  && pseudoRoyalTypes == NO_PIECE_SET
+                  && antiRoyalTypes == NO_PIECE_SET
+                  && !flyingGeneral
+                  && !diagonalGeneral
+                  && !makpongRule
+                  && !royalPieceNoThroughCheck
+                  && !trapRegion
+                  && !blastOnCapture
+                  && !blastOnMove
+                  && !blastOnSelfDestruct
+                  && !blastOnSameTypeCapture
+                  && !blastPassiveTypes
+                  && !blastPromotion
+                  && !surroundCaptureOpposite
+                  && !surroundCaptureIntervene
+                  && !surroundCaptureEdge
+                  && !removeConnectN
+                  && !petrifyOnCaptureTypes
+                  && !hasCaptureRestrictions
+                  && !piecePromotionOnCapture
+                  && !changingColorPieceTypes
+                  && changingColorTrigger == ColorChangeTrigger::NEVER
+                  && !deathOnCaptureTypes
+                  && !selfDestructTypes
+                  && !edgeInsertTypes
+                  && !cloneMoveTypes
+                  && !rifleCapture
+                  && !selfCapture
+                  && selfCaptureTypes.global == NO_PIECE_SET
+                  && selfCaptureTypes.byColor[WHITE] == NO_PIECE_SET
+                  && selfCaptureTypes.byColor[BLACK] == NO_PIECE_SET
+                  && captureType == MOVE_OUT
+                  && !immobilityIllegal
+                  && !forcedJumpContinuation
+                  && !multimoveOffset
+                  && multimoves.empty()
+                  && !progressiveMultimove
+                  && libertyCapture == LibertyAction::NONE
+                  && libertySelfCapture == LibertyAction::NONE
+                  && !potions
+                  && wallingRule == NO_WALLING
+                  && !hasPushing
+                  && !adjacentSwapMoveTypes
+                  && !laserGame
+                  && !captureMorph
+                  && !hasMoveMorph
+                  && !prisonPawnPromotion
+                  && !freezePieceTypes
+                  && !flipEnclosedPieces
+                  && !surroundClaimRegion
+                  && !commitGates
+                  && !flagMove
+                  && !flagRegion[WHITE]
+                  && !flagRegion[BLACK]
+                  && !mandatoryPromotionRegion[WHITE]
+                  && !mandatoryPromotionRegion[BLACK]
+                  && !pieceDrops;
 
     // Initialize calculated NNUE properties
     nnueKing =  pieceTypes & KING ? KING

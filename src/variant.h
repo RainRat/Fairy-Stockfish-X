@@ -58,6 +58,11 @@ enum class LibertyAction {
   FORBID
 };
 
+enum class TrapProtection {
+  NONE,
+  FRIENDLY_ORTHOGONAL
+};
+
 template <typename T>
 struct ColorSetting {
   T global;
@@ -175,6 +180,7 @@ struct Variant {
   PieceSet mutuallyHopIllegalTypes = NO_PIECE_SET;
   PieceSet captureForbidden[PIECE_TYPE_NB] = {};
   PieceSet captureForbiddenByColor[COLOR_NB][PIECE_TYPE_NB] = {};
+  bool hasCaptureRestrictions = false;
   PieceSet captureForbiddenToKing = NO_PIECE_SET;
   PieceSet captureForbiddenToKingByColor[COLOR_NB] = {};
   PieceSet petrifyOnCaptureTypes = NO_PIECE_SET;
@@ -189,6 +195,11 @@ struct Variant {
   Bitboard surroundCaptureHostileRegion = 0;
   LibertyAction libertyCapture = LibertyAction::NONE;
   LibertyAction libertySelfCapture = LibertyAction::NONE;
+  PieceSet freezePieceTypes = NO_PIECE_SET;
+  PieceSet freezeImmunePieceTypes = NO_PIECE_SET;
+  bool freezeDiagonals = true;
+  TrapProtection trapProtection = TrapProtection::NONE;
+  Bitboard trapRegion = 0;
   bool doubleStep = true;
   mutable bool useFastStandardPawnGenerator = true;
   ColorSetting<PieceTypeBitboardGroup> doubleStepRegion = ColorSetting<PieceTypeBitboardGroup>(Rank2BB, Rank7BB);
@@ -506,6 +517,8 @@ struct Variant {
   // Derived properties
   bool fastAttacks = true;
   bool fastAttacks2 = true;
+  bool simpleLegality = false;
+  bool hasMoveMorph = false;
   std::string nnueAlias = "";
   PieceType nnueKing = KING;
   int nnueDimensions = 0;
