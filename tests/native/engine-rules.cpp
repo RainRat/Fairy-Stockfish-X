@@ -600,6 +600,19 @@ void composable_rules() {
     check(!MoveList<QUIET_CHECKS>(pos).contains(trappedCheckDrop),
           "quiet-check generation retained a trapped checking drop");
 
+    set_position(pos, states, "composable-drop-trap-discovered-check",
+                 "k7/8/8/8/p7/8/7K/R7[R] w - - 0 1");
+    Move trapDiscoveredCheckDrop = make_drop(SQ_H1, ROOK, ROOK);
+    SimulatedMoveInfo trapDiscoveredCheckInfo = pos.simulated_move_info(trapDiscoveredCheckDrop);
+    check(!(trapDiscoveredCheckInfo.occupiedAfterEffects & square_bb(SQ_A4)),
+          "trap removal from a drop did not remove the line blocker in simulation");
+    check(MoveList<LEGAL>(pos).contains(trapDiscoveredCheckDrop),
+          "trap-discovered drop test move was not generated as legal");
+    check(pos.gives_check(trapDiscoveredCheckDrop),
+          "trap removal from a drop did not expose a discovered check");
+    check(MoveList<QUIET_CHECKS>(pos).contains(trapDiscoveredCheckDrop),
+          "quiet-check generation discarded a trap-discovered checking drop");
+
     set_position(pos, states, "composable-gate-trap",
                  "4k3/8/8/8/8/8/4R3/4K3 w - - 0 1");
     pos.state()->gatesBB[WHITE] |= square_bb(SQ_E2);
@@ -1905,6 +1918,13 @@ castling = false
 [composable-drop-trap-check:chess]
 trapRegion = e1
 trapProtection = none
+castling = false
+
+[composable-drop-trap-discovered-check:chess]
+trapRegion = a4
+trapProtection = none
+pieceDrops = true
+freeDrops = true
 castling = false
 
 [composable-gate-trap:chess]

@@ -6930,7 +6930,7 @@ bool Position::gives_check_impl(Move m) const {
   if (!dropMove)
       discCheckSq = rifleShot ? square_bb(to) : square_bb(from);
 
-  if (  ((!dropMove && ((blockers_for_king(~sideToMove) & discCheckSq) || var->trapRegion))
+  if (  (((!dropMove && (blockers_for_king(~sideToMove) & discCheckSq)) || var->trapRegion)
          || (non_sliding_riders() & pieces(sideToMove)))
       && (attackers_to_king(royalSq, occupied, sideToMove, janggiCannons,
                             NO_PIECE_TYPE, &simulated)

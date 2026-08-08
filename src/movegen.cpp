@@ -309,8 +309,10 @@ namespace {
           Bitboard b2 = baseTargets & pos.drop_region(Us, dropped);
           if (restrictToCheckSquares)
           {
-              b2 &= pos.check_squares(dropped);
-              if (pos.variant()->freezePieceTypes || pos.variant()->trapRegion)
+              const bool effectChecks = pos.variant()->freezePieceTypes || pos.variant()->trapRegion;
+              if (!effectChecks)
+                  b2 &= pos.check_squares(dropped);
+              else
               {
                   // Static check squares do not account for post-drop effects.
                   Bitboard checking = 0;
