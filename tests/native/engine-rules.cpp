@@ -47,6 +47,36 @@ Move parse_move(const Position& pos, const char* notation) {
     return move;
 }
 
+void check_simulation_matches_move(Position& pos, StateListPtr& states, Move move,
+                                   const std::string& context) {
+    SimulatedMoveInfo simulated = pos.simulated_move_info(move);
+    std::vector<std::pair<Square, Piece>> expectedPieces;
+    {
+        Position::SimulatedMoveInfoGuard guard(pos);
+        guard.set(simulated);
+        Bitboard occupied = simulated.occupiedAfterEffects;
+        while (occupied)
+        {
+            Square sq = pop_lsb(occupied);
+            expectedPieces.emplace_back(sq, pos.piece_at(sq, simulated.occupiedAfterEffects));
+        }
+    }
+
+    const Key beforeKey = pos.key();
+    const std::string beforeFen = pos.fen();
+    states->emplace_back();
+    pos.do_move(move, states->back());
+    check(pos.pieces() == simulated.occupiedAfterEffects,
+          context + " occupancy disagreed with move application");
+    for (const auto& [sq, piece] : expectedPieces)
+        check(pos.piece_on(sq) == piece,
+              context + " piece identity disagreed with move application");
+    pos.undo_move(move);
+    states->pop_back();
+    check(pos.key() == beforeKey && pos.fen() == beforeFen,
+          context + " did not restore state after parity check");
+}
+
 Value public_game_result(Position& pos) {
     Value result = VALUE_NONE;
     if (pos.is_immediate_game_end(result))
@@ -169,6 +199,7 @@ void composable_rules() {
     set_position(pos, states, "composable-trap-claim-undo",
                  "4k3/8/8/4R3/3R1R2/2N1R3/8/4K3 w - - 0 1");
     Move trapClaim = make<NORMAL>(SQ_C3, SQ_E4);
+    check_simulation_matches_move(pos, states, trapClaim, "trap/claim simulation");
     const Key beforeTrapClaim = pos.key();
     const std::string beforeTrapClaimFen = pos.fen();
     states->emplace_back();
@@ -201,6 +232,18 @@ void composable_rules() {
     states->pop_back();
     check(pos.key() == beforeCommittedCastle && pos.fen() == beforeCommittedCastleFen,
           "committed-gate castling did not restore state exactly on undo");
+
+    set_position(pos, states, "composable-commitgate-castle",
+                 "8/8/8/8/8/8/8/8/r3R2K/4R3 w - - 0 1");
+    Move committedBlock = make_move(SQ_E1, SQ_E2);
+    check(pos.legal(committedBlock),
+          "simple legality ignored a committed gate that still blocks check");
+    states->emplace_back();
+    pos.do_move(committedBlock, states->back());
+    check(pos.piece_on(SQ_E1) == make_piece(WHITE, ROOK),
+          "committed gate was not restored on the vacated source square");
+    pos.undo_move(committedBlock);
+    states->pop_back();
 
     set_position(pos, states, "composable-freeze-traps",
                  "8/8/8/8/8/1R6/2R4r/8 w - - 0 1");

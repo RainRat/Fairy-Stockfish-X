@@ -97,6 +97,7 @@ struct SimulatedMoveInfo {
   Bitboard removedByEffects = Bitboard(0);
   Bitboard structuralRemoval = Bitboard(0);
   Bitboard addedPlacements = Bitboard(0);
+  Bitboard claimedSquares = Bitboard(0);
   Bitboard removedWalls = Bitboard(0);
   Piece placedPiece = NO_PIECE;
   Piece sourcePiece = NO_PIECE;

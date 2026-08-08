@@ -4385,6 +4385,7 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
       || var->stackingPieceTypes
       || var->stackedPieceTypes
       || commit_gates()
+      || (var->surroundClaimPiece != NO_PIECE_TYPE && var->surroundClaimRegion)
       || flip_enclosed_pieces())
   {
       info.typeOccupancy.resize(COLOR_NB * PIECE_TYPE_NB);
@@ -5200,6 +5201,52 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
   info.freezeImmuneOccupancy[BLACK] &= info.occupiedAfterEffects;
   info.pawnOccupancy &= info.occupiedAfterEffects;
   info.blastImmuneOccupancy &= info.occupiedAfterEffects;
+
+  // Surround claims are committed after all removal effects.  Keep them in
+  // the projected board, including their piece identities, so simulation and
+  // do_move() agree when a claim fills a square cleared by a trap.
+  if (var->surroundClaimPiece != NO_PIECE_TYPE && var->surroundClaimRegion)
+  {
+      Bitboard occupied = info.occupiedAfterEffects;
+      Bitboard claimable = var->surroundClaimRegion & ~occupied;
+      while (claimable)
+      {
+          Square sq = pop_lsb(claimable);
+          if (file_of(sq) == FILE_A || file_of(sq) == max_file()
+              || rank_of(sq) == RANK_1 || rank_of(sq) == max_rank())
+              continue;
+
+          Square north = sq + NORTH;
+          Square south = sq + SOUTH;
+          Square east = sq + EAST;
+          Square west = sq + WEST;
+          if (!(occupied & north) || !(occupied & south)
+              || !(occupied & east) || !(occupied & west))
+              continue;
+
+          Bitboard bit = square_bb(sq);
+          info.claimedSquares |= bit;
+          info.effectOccupancy |= bit;
+          info.occupiedAfterEffects |= bit;
+          info.colorOccupancy[sideToMove] |= bit;
+          info.type_pieces(sideToMove, ALL_PIECES) |= bit;
+          info.type_pieces(sideToMove, var->surroundClaimPiece) |= bit;
+          if (var->freezePieceTypes & piece_set(var->surroundClaimPiece))
+              info.freezerOccupancy[sideToMove] |= bit;
+          if (var->freezeImmunePieceTypes & piece_set(var->surroundClaimPiece))
+              info.freezeImmuneOccupancy[sideToMove] |= bit;
+          if (var->surroundClaimPiece == PAWN)
+              info.pawnOccupancy |= bit;
+          if (blast_immune_types() & piece_set(var->surroundClaimPiece))
+              info.blastImmuneOccupancy |= bit;
+          occupied |= bit;
+          claimable &= ~bit;
+      }
+
+      // A claim replaces an effect-removed piece on the same square.  It is
+      // therefore not a removed square in the final projected position.
+      info.removedByEffects &= ~info.claimedSquares;
+  }
   return info;
 }
 
@@ -5249,53 +5296,6 @@ bool Position::legal(Move m) const {
       && has_setup_drop(them)
       && !is_pass(m))
       return false;
-
-  // Keep the orthodox hot path ahead of potion and freeze bookkeeping.  The
-  // remaining legality checks below are still needed for castling,
-  // promotions, and variants with any non-orthodox rule enabled.
-  if (var->simpleLegality
-      && !dropMove
-      && !is_pass(m)
-      && !st->pendingClaimPass
-      && type_of(m) != CASTLING
-      && !(pieceMap.runtime_rider_augment_types() & var->pieceTypes)
-      && !(pieceMap.simple_hopper_capture_types() & var->pieceTypes)
-      && !is_gating(m)
-      && !must_capture()
-      && !must_capture_en_passant()
-      && !topology_wraps()
-      && !is_promotion_move(m)
-      && type_of(m) != PIECE_PROMOTION
-      && type_of(m) != PIECE_DEMOTION
-      && !is_self_destruct(m)
-      && !is_stack_move(m)
-      && !is_unstack_move(m)
-      && !paired_drop(m)
-      && !is_pull_move(m)
-      && !is_swap_move(m))
-  {
-      if (!allow_checks() && (pieces(them) & to) && type_of(piece_on(to)) == KING)
-          return false;
-
-      const bool hasRoyal = royal_square(us) != SQ_NONE;
-      if (!hasRoyal)
-          return !violates_same_player_board_repetition(m);
-
-      Bitboard occupied = pieces();
-      if (type_of(m) == EN_PASSANT)
-          occupied = (pieces() ^ from ^ square_bb(capture_square(to))) | to;
-      else
-          occupied = (pieces() ^ from) | to;
-
-      Square kingSquareAfterMove = from == royal_square(us) ? to : royal_square(us);
-      if (!allow_checks() && kingSquareAfterMove == to
-          && attackers_to_king(kingSquareAfterMove, occupied, ~us))
-          return false;
-
-      Bitboard postMoveAttackers = attackers_to_king(kingSquareAfterMove, occupied, ~us);
-      return (allow_checks() || !(postMoveAttackers & occupied & ~square_bb(to)))
-          && !violates_same_player_board_repetition(m);
-  }
 
   PotionContext potCtx = setup_potion_context(m, us);
   if (!potCtx.valid)
@@ -5447,8 +5447,10 @@ bool Position::legal(Move m) const {
   const bool moverIsRoyal = hasRoyal && from == royalSquare;
 
   const bool simpleLegality = var->simpleLegality
+                           && !dropMove
                            && type_of(m) != CASTLING
                            && !is_pass(m)
+                           && !st->pendingClaimPass
                            && !(pieceMap.runtime_rider_augment_types() & var->pieceTypes)
                            && !(pieceMap.simple_hopper_capture_types() & var->pieceTypes)
                            && !is_gating(m)

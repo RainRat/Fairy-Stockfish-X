@@ -2330,6 +2330,8 @@ Variant* Variant::conclude() {
                   && !prisonPawnPromotion
                   && !freezePieceTypes
                   && !flipEnclosedPieces
+                  && !surroundClaimRegion
+                  && !commitGates
                   && !flagMove
                   && !flagRegion[WHITE]
                   && !flagRegion[BLACK]
