@@ -311,6 +311,14 @@ void composable_rules() {
     check(MoveList<QUIET_CHECKS>(pos).contains(trapQuietCheck),
           "trap-induced discovered check was not generated");
 
+    set_position(pos, states, "composable-trap-pawn-quiet-check",
+                 "4k3/8/8/8/3PB3/8/8/4R2K w - - 0 1");
+    Move trapPawnQuietCheck = make_move(SQ_D4, SQ_D5);
+    check(pos.gives_check(trapPawnQuietCheck),
+          "moving a pawn protector did not expose a discovered check");
+    check(MoveList<QUIET_CHECKS>(pos).contains(trapPawnQuietCheck),
+          "trap-induced pawn discovered check was not generated");
+
     set_position(pos, states, "composable-royal-capture-filter",
                  "7k/8/8/8/8/8/r3p3/4K3 w - - 0 1");
     Move royalCapture = make_move(SQ_E1, SQ_E2);
@@ -566,6 +574,31 @@ void composable_rules() {
           "potion capture evasion test position was not in check");
     check(MoveList<LEGAL>(pos).contains(potionCaptureEvasion),
           "freeze potion omitted an evasion that captured the checker");
+
+    set_position(pos, states, "composable-potion-freeze",
+                 "4r2k/8/8/8/8/8/8/4K3[F] w - - 0 1");
+    Move potionKingEvasion = parse_move(pos, "f@a1,e1f1");
+    check(pos.evasion_checkers() & square_bb(SQ_E8),
+          "potion king-evasion test position was not in check");
+    check(potionKingEvasion != MOVE_NONE
+          && MoveList<LEGAL>(pos).contains(potionKingEvasion),
+          "freeze potion rejected a safe king destination while checking the old square");
+
+    set_position(pos, states, "composable-drop-freeze-check",
+                 "4k3/8/8/8/8/8/8/3f3K[R] w - - 0 1");
+    Move frozenCheckDrop = make_drop(SQ_E1, ROOK, ROOK);
+    check(!pos.gives_check(frozenCheckDrop),
+          "a frozen checking drop was reported as checking");
+    check(!MoveList<QUIET_CHECKS>(pos).contains(frozenCheckDrop),
+          "quiet-check generation retained a frozen checking drop");
+
+    set_position(pos, states, "composable-drop-trap-check",
+                 "4k3/8/8/8/8/8/8/7K[R] w - - 0 1");
+    Move trappedCheckDrop = make_drop(SQ_E1, ROOK, ROOK);
+    check(!pos.gives_check(trappedCheckDrop),
+          "a trapped checking drop was reported as checking");
+    check(!MoveList<QUIET_CHECKS>(pos).contains(trappedCheckDrop),
+          "quiet-check generation retained a trapped checking drop");
 
     set_position(pos, states, "composable-gate-trap",
                  "4k3/8/8/8/8/8/4R3/4K3 w - - 0 1");
@@ -1693,6 +1726,11 @@ trapRegion = e4
 trapProtection = friendly-orthogonal
 castling = false
 
+[composable-trap-pawn-quiet-check:chess]
+trapRegion = e4
+trapProtection = friendly-orthogonal
+castling = false
+
 [composable-royal-capture-filter:chess]
 captureForbiddenBlack = r:k
 castling = false
@@ -1824,6 +1862,16 @@ potions = true
 freezePotion = f
 freezeCooldown = 3
 potionDropOnOccupied = true
+castling = false
+
+[composable-drop-freeze-check:chess]
+customPiece1 = f:W
+freezePieceTypes = f
+castling = false
+
+[composable-drop-trap-check:chess]
+trapRegion = e1
+trapProtection = none
 castling = false
 
 [composable-gate-trap:chess]

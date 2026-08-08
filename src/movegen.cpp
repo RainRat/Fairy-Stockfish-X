@@ -308,7 +308,21 @@ namespace {
           PieceType dropped = pop_lsb(dropForms);
           Bitboard b2 = baseTargets & pos.drop_region(Us, dropped);
           if (restrictToCheckSquares)
+          {
               b2 &= pos.check_squares(dropped);
+              if (pos.variant()->freezePieceTypes || pos.variant()->trapRegion)
+              {
+                  // Static check squares do not account for post-drop effects.
+                  Bitboard checking = 0;
+                  while (b2)
+                  {
+                      Square to = pop_lsb(b2);
+                      if (pos.gives_check(make_drop(to, pt, dropped)))
+                          checking |= square_bb(to);
+                  }
+                  b2 = checking;
+              }
+          }
           while (b2)
               *moveList++ = make_drop(pop_lsb(b2), pt, dropped);
       }
@@ -602,7 +616,7 @@ namespace {
                 attacks &= ~mandatoryPromotionZone;
             }
 
-            if (QuietChecks)
+            if (QuietChecks && !pos.variant()->trapRegion)
                 quiets &= pos.check_squares(PAWN);
 
             if (GeneratesQuiets)
@@ -697,7 +711,7 @@ namespace {
     }
 
     Square ksq = pos.royal_square(Them);
-    if (QuietChecks && ksq != SQ_NONE)
+    if (QuietChecks && !pos.variant()->trapRegion && ksq != SQ_NONE)
     {
         // To make a quiet check, you either make a direct check by pushing a pawn
         // or push a blocker pawn that is not on the same file as the enemy king.
@@ -1571,9 +1585,13 @@ namespace {
           Color us = pos.side_to_move();
           SimulatedMoveInfo simulated = pos.simulated_move_info(m);
           Bitboard occupied = simulated.occupiedAfterEffects;
+          Square royalSquare = pos.royal_square(us);
+          // Castling encodes the rook source in `to`; effectiveTo is the king destination.
+          if (royalSquare == simulated.from)
+              royalSquare = simulated.effectiveTo;
 
           Position::SimulatedMoveGuard guard(pos, m);
-          Bitboard attackers = pos.attackers_to_king(pos.royal_square(us), occupied, ~us,
+          Bitboard attackers = pos.attackers_to_king(royalSquare, occupied, ~us,
                                                      pos.pieces(JANGGI_CANNON), NO_PIECE_TYPE,
                                                      &simulated);
           if (attackers & simulated.colorOccupancy[~us])
