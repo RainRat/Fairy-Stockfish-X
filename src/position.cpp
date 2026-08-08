@@ -7360,8 +7360,6 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   bool capturedDeadSquare = !dropMove && from != to && bool(st->deadSquares & to);
   PieceType exchanged = exchange_piece(m);
   Square jumpCapsq = SQ_NONE;
-  bool epSquaresAdded = false;
-  Piece epMover = NO_PIECE;
   Bitboard locust_all_mask = 0;
   if (!dropMove && pi && pi->has_universal_hopper())
   {
@@ -8226,8 +8224,6 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
                   && !(walling(us) && gating_square(m) == epSq))
               {
                   st->epSquares |= epSq;
-                  epSquaresAdded = true;
-                  epMover = pc;
                   k ^= Zobrist::enpassant[epSq];
               }
           };
@@ -8352,8 +8348,6 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
               st->epSquares = square_bb(us == WHITE ? msb(st->epSquares) : lsb(st->epSquares));
               break;
           }
-          epSquaresAdded = true;
-          epMover = pc;
       }
       for (Bitboard b = st->epSquares; b; )
           k ^= Zobrist::enpassant[pop_lsb(b)];
@@ -9036,7 +9030,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   // En passant rights describe the pawn-like mover that just completed the
   // extended step.  Later effects may remove or replace that piece, so do not
   // leave a right pointing at a square whose mover no longer exists.
-  if (epSquaresAdded && (piece_on(to) != epMover || (st->bycatchSquares & to)))
+  // The reset above means any remaining rights were created by this move.
+  if (st->epSquares && (piece_on(to) != pc || (st->bycatchSquares & to)))
   {
       while (st->epSquares)
           k ^= Zobrist::enpassant[pop_lsb(st->epSquares)];
@@ -9197,10 +9192,7 @@ void Position::undo_move(Move m) {
       {
           Square sq = pop_lsb(claimed);
           if (piece_on(sq) != NO_PIECE)
-          {
               remove_piece(sq);
-              board[sq] = NO_PIECE;
-          }
       }
   }
 
