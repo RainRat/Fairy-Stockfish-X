@@ -5501,9 +5501,13 @@ bool Position::legal(Move m) const {
           simulatedReady = true;
       }
   };
-  auto royal_survives = [&](Square sq) {
+  auto projected_original_piece_survives = [&](Square sq) {
       ensure_simulated();
-      return !hasRoyal || bool(simulated.occupiedAfterEffects & square_bb(sq));
+      Bitboard bit = square_bb(sq);
+      return (simulated.occupiedAfterEffects & bit) && !(simulated.claimedSquares & bit);
+  };
+  auto royal_survives = [&](Square sq) {
+      return !hasRoyal || projected_original_piece_survives(sq);
   };
 
   if (pureWallMove)
@@ -6066,7 +6070,7 @@ bool Position::legal(Move m) const {
       if ((capture(m) || rifleShot) && (protectedPseudoRoyals & square_bb(shotSq)))
           return false;
 
-      if (removedByEffects & protectedPseudoRoyals)
+      if ((removedByEffects | simulated.claimedSquares) & protectedPseudoRoyals)
           return false;
   }
 
@@ -6082,7 +6086,8 @@ bool Position::legal(Move m) const {
           || (pseudo_royal_types() & piece_set(gateType)))
       {
           auto gate_safe = [&](Square gate) {
-              if (!is_ok(gate) || !(occupiedAfterEffects & square_bb(gate)))
+              if (!is_ok(gate)
+                  || !projected_original_piece_survives(gate))
                   return false;
               Bitboard occ = occupiedAfterEffects | square_bb(gate);
               const SimulatedMoveInfo* attackSimulation = &simulated;
@@ -6143,7 +6148,7 @@ bool Position::legal(Move m) const {
   {
       Square kingSquareAfterMove = moverIsRoyal ? (rifleShot ? from : to)
                                                 : royalSquare;
-      if (removedByEffects & square_bb(kingSquareAfterMove))
+      if (!projected_original_piece_survives(kingSquareAfterMove))
           return false;
   }
 

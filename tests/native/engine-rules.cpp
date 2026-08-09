@@ -213,6 +213,21 @@ void composable_rules() {
     check(pos.key() == beforeTrapClaim && pos.fen() == beforeTrapClaimFen,
           "trap and surround claim did not restore state exactly on undo");
 
+    set_position(pos, states, "composable-trap-claim-royal",
+                 "k7/8/8/4p3/3pKp2/4p3/8/R7 w - - 0 1");
+    Move trapRoyalClaim = make_move(SQ_A1, SQ_A2);
+    SimulatedMoveInfo trapRoyalInfo = pos.simulated_move_info(trapRoyalClaim);
+    {
+        Position::SimulatedMoveInfoGuard view(pos);
+        view.set(trapRoyalInfo);
+        check(pos.piece_at(SQ_E4, trapRoyalInfo.occupiedAfterEffects) == make_piece(WHITE, PAWN),
+              "trap/claim simulation did not replace the royal with the claim piece");
+    }
+    check(!pos.legal(trapRoyalClaim),
+          "trap/claim replacement allowed a trapped royal to survive as a pawn");
+    check(!MoveList<LEGAL>(pos).contains(trapRoyalClaim),
+          "move generation retained a trap/claim replacement of the royal");
+
     set_position(pos, states, "composable-commitgate-castle",
                  "n7/4k3/8/8/8/8/8/8/4K2R/4R2R w K - 0 1");
     Move committedCastle = parse_move(pos, "e1g1");
@@ -2015,6 +2030,13 @@ trapProtection = none
 
 [composable-trap-claim-undo:chess]
 checking = false
+castling = false
+trapRegion = e4
+trapProtection = none
+surroundClaimRegion = e4
+surroundClaimPiece = p
+
+[composable-trap-claim-royal:chess]
 castling = false
 trapRegion = e4
 trapProtection = none
