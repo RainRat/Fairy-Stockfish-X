@@ -4597,12 +4597,15 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
       {
           Square kto, rto;
           castling_destinations(sideToMove, info.from, info.to, kto, rto);
+          Piece rook = piece_on(info.to);
           info.relocatedOccupancy = (pieces() ^ square_bb(info.from) ^ square_bb(info.to))
                                  | square_bb(kto) | square_bb(rto);
+          info.effectiveTo = kto;
+          info.castlingKingPiece = make_piece(sideToMove, type_of(moved_piece(m)));
+          info.castlingRookPiece = make_piece(sideToMove, rook == NO_PIECE ? ROOK : type_of(rook));
           remove_color_square(info.from);
           remove_color_square(info.to);
           add_color_piece(sideToMove, type_of(moved_piece(m)), kto);
-          Piece rook = piece_on(info.to);
           add_color_piece(sideToMove, rook == NO_PIECE ? ROOK : type_of(rook), rto);
           info.placedPiece = make_piece(sideToMove, type_of(moved_piece(m)));
       }
@@ -5307,6 +5310,12 @@ bool Position::legal(Move m) const {
       SimulatedMoveGuard currentPosition(*this, MOVE_NONE);
       if (!dropMove && !is_pass(m) && (freeze_squares() & from))
           return false;
+      if (laser_game() && is_gating(m))
+      {
+          Square rotateSq = rotation_square(m);
+          if (rotateSq != from && rotateSq != to && (freeze_squares() & rotateSq))
+              return false;
+      }
       // Castling is also blocked if the participating rook is frozen.
       if (type_of(m) == CASTLING)
       {
@@ -6258,6 +6267,8 @@ bool Position::pseudo_legal(const Move m) const {
   if (laser_game() && is_gating(m))
   {
       Square rotateSq = rotation_square(m);
+      if (rotateSq != from && rotateSq != to && (freeze_squares() & rotateSq))
+          return false;
       Piece rotatePc = rotateSq == to ? piece_on(from) : piece_on(rotateSq);
       bool promotionMove = is_promotion_move(m) || type_of(m) == PIECE_PROMOTION;
       PieceType rotateType = promotionMove && rotateSq == to

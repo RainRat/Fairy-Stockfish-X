@@ -134,7 +134,8 @@ namespace {
             if (rotateAfter && ((T != PROMOTION && T != PIECE_PROMOTION)
                                 || pos.variant()->rotationDelta))
             {
-                Bitboard rotators = pos.pieces(us) & laser_rotation_candidates(pos, us);
+                Bitboard rotators = pos.pieces(us) & laser_rotation_candidates(pos, us)
+                                   & ~pos.freeze_squares();
                 while (rotators)
                 {
                     Square rotateFrom = pop_lsb(rotators);

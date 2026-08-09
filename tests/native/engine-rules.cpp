@@ -228,6 +228,18 @@ void composable_rules() {
     check(!MoveList<LEGAL>(pos).contains(trapRoyalClaim),
           "move generation retained a trap/claim replacement of the royal");
 
+    set_position(pos, states, "composable-laser-freeze",
+                 "8k/9/9/9/3rR(0)4/9/R8/K8 w - - 0 1");
+    Move frozenSecondaryRotation = make_rotation<NORMAL>(SQ_A2, SQ_A3, 1, SQ_E5);
+    check(pos.freeze_squares() & square_bb(SQ_E5),
+          "laser secondary-rotation test did not freeze the rotator");
+    check(!pos.pseudo_legal(frozenSecondaryRotation),
+          "pseudo-legal accepted a rotation of a frozen secondary piece");
+    check(!pos.legal(frozenSecondaryRotation),
+          "laser move rotated a frozen secondary piece");
+    check(!MoveList<LEGAL>(pos).contains(frozenSecondaryRotation),
+          "move generation retained a rotation of a frozen secondary piece");
+
     set_position(pos, states, "composable-commitgate-castle",
                  "n7/4k3/8/8/8/8/8/8/4K2R/4R2R w K - 0 1");
     Move committedCastle = parse_move(pos, "e1g1");
@@ -1124,6 +1136,7 @@ void occupancy() {
 
     set_position(pos, states, "chess", "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1");
     Move move = parse_move(pos, "e1g1");
+    check_simulation_matches_move(pos, states, move, "castling simulation");
     SimulatedMoveInfo info = pos.simulated_move_info(move);
     Bitboard castled = (pos.pieces() ^ square_bb(SQ_E1) ^ square_bb(SQ_H1))
                      | square_bb(SQ_G1) | square_bb(SQ_F1);
@@ -2046,6 +2059,9 @@ surroundClaimPiece = p
 [composable-commitgate-castle:chess]
 commitGates = true
 startFen = n7/4k3/8/8/8/8/8/8/4K2R/4R2R w K - 0 1
+
+[composable-laser-freeze:dos-laser-chess]
+freezePieceTypes = r
 
 [composable-castle-freeze-destination:chess]
 freezePieceTypes = r
