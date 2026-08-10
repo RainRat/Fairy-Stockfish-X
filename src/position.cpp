@@ -5125,14 +5125,19 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
                           && movedType != NO_PIECE_TYPE
                           && (death_on_capture_types() & piece_set(movedType));
   if (diesOnCapture)
+  {
       info.removedByEffects |= square_bb(moverSq);
+      info.addedDeadSquares |= square_bb(moverSq);
+  }
 
   info.occupiedAfterEffects = (occupiedAfterStructural & ~info.removedByEffects & ~info.removedWalls)
                             | latePlacements
-                            | (info.blastPromotionOccupancy & ~info.removedByEffects);
+                            | (info.blastPromotionOccupancy & ~info.removedByEffects)
+                            | info.addedDeadSquares;
+  const Bitboard pieceOccupancyBeforeTrap = info.occupiedAfterEffects & ~info.addedDeadSquares;
 
   PieceType finalMoverType = info.placedPiece == NO_PIECE ? NO_PIECE_TYPE : type_of(info.placedPiece);
-  if (!info.typeOccupancy.empty() && (info.occupiedAfterEffects & square_bb(moverSq)))
+  if (!info.typeOccupancy.empty() && (pieceOccupancyBeforeTrap & square_bb(moverSq)))
       for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
           if (info.type_pieces(us, pt) & square_bb(moverSq))
           {
@@ -5147,7 +5152,7 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
                         || (var->changingColorTrigger == ColorChangeTrigger::ON_CAPTURE && captureHappened)
                         || (var->changingColorTrigger == ColorChangeTrigger::ON_NON_CAPTURE && !captureHappened);
   if (finalMoverType != NO_PIECE_TYPE
-      && (info.occupiedAfterEffects & square_bb(moverSq))
+      && (pieceOccupancyBeforeTrap & square_bb(moverSq))
       && colorChange
       && !is_pass(m)
       && (!dropMove || captureHappened)
@@ -5163,35 +5168,36 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
   if (var->trapRegion)
   {
       std::array<Bitboard, COLOR_NB> colorAfterEffects = info.colorOccupancy;
-      colorAfterEffects[WHITE] &= info.occupiedAfterEffects;
-      colorAfterEffects[BLACK] &= info.occupiedAfterEffects;
+      colorAfterEffects[WHITE] &= pieceOccupancyBeforeTrap;
+      colorAfterEffects[BLACK] &= pieceOccupancyBeforeTrap;
       colorAfterEffects[WHITE] |= info.blastPromotionOccupancy & info.colorOccupancy[WHITE];
       colorAfterEffects[BLACK] |= info.blastPromotionOccupancy & info.colorOccupancy[BLACK];
-      Bitboard trapOccupied = info.occupiedAfterEffects | info.blastPromotionOccupancy;
+      Bitboard trapOccupied = pieceOccupancyBeforeTrap | info.blastPromotionOccupancy;
       trapRemoval = compute_trap_removal_mask(*this, var, colorAfterEffects,
                                               trapOccupied);
       info.removedByEffects |= trapRemoval;
       info.occupiedAfterEffects &= ~trapRemoval;
   }
 
-  info.colorOccupancy[WHITE] &= info.occupiedAfterEffects;
-  info.colorOccupancy[BLACK] &= info.occupiedAfterEffects;
+  const Bitboard pieceOccupancyAfterEffects = info.occupiedAfterEffects & ~info.addedDeadSquares;
+  info.colorOccupancy[WHITE] &= pieceOccupancyAfterEffects;
+  info.colorOccupancy[BLACK] &= pieceOccupancyAfterEffects;
   if (!info.typeOccupancy.empty())
   {
-      info.type_pieces(WHITE, ALL_PIECES) &= info.occupiedAfterEffects;
-      info.type_pieces(BLACK, ALL_PIECES) &= info.occupiedAfterEffects;
+      info.type_pieces(WHITE, ALL_PIECES) &= pieceOccupancyAfterEffects;
+      info.type_pieces(BLACK, ALL_PIECES) &= pieceOccupancyAfterEffects;
       for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
       {
-          info.type_pieces(WHITE, pt) &= info.occupiedAfterEffects;
-          info.type_pieces(BLACK, pt) &= info.occupiedAfterEffects;
+          info.type_pieces(WHITE, pt) &= pieceOccupancyAfterEffects;
+          info.type_pieces(BLACK, pt) &= pieceOccupancyAfterEffects;
       }
   }
-  info.freezerOccupancy[WHITE] &= info.occupiedAfterEffects;
-  info.freezerOccupancy[BLACK] &= info.occupiedAfterEffects;
-  info.freezeImmuneOccupancy[WHITE] &= info.occupiedAfterEffects;
-  info.freezeImmuneOccupancy[BLACK] &= info.occupiedAfterEffects;
-  info.pawnOccupancy &= info.occupiedAfterEffects;
-  info.blastImmuneOccupancy &= info.occupiedAfterEffects;
+  info.freezerOccupancy[WHITE] &= pieceOccupancyAfterEffects;
+  info.freezerOccupancy[BLACK] &= pieceOccupancyAfterEffects;
+  info.freezeImmuneOccupancy[WHITE] &= pieceOccupancyAfterEffects;
+  info.freezeImmuneOccupancy[BLACK] &= pieceOccupancyAfterEffects;
+  info.pawnOccupancy &= pieceOccupancyAfterEffects;
+  info.blastImmuneOccupancy &= pieceOccupancyAfterEffects;
 
   // Surround claims are committed after all removal effects.  Keep them in
   // the projected board, including their piece identities, so simulation and

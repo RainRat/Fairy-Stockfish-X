@@ -265,6 +265,13 @@ void composable_rules() {
     check(pos.legal(make_move(SQ_E1, SQ_F1)),
           "checked static royal remained immobilized by freeze");
 
+    set_position(pos, states, "composable-sacred-static-freeze",
+                 "k7/8/8/8/8/8/4q3/4K3 w - - 0 1");
+    Move movedSacredRoyal = make_move(SQ_E1, SQ_F1);
+    simulated = pos.simulated_move_info(movedSacredRoyal);
+    check(!(pos.freeze_squares(WHITE, &simulated) & square_bb(SQ_F1)),
+          "projected checked royal remained frozen at its destination");
+
     set_position(pos, states, "chess",
                  "R3k2K/8/8/8/8/8/8/8 w - - 0 1");
     Move captureEnemyKing = make_move(SQ_A8, SQ_E8);
@@ -532,8 +539,9 @@ void composable_rules() {
     Move deathFreezeCapture = make_move(SQ_E2, SQ_D2);
     simulated = pos.simulated_move_info(deathFreezeCapture);
     check(!(simulated.occupiedAfterEffects & square_bb(SQ_E2))
-          && !(simulated.occupiedAfterEffects & square_bb(SQ_D2)),
-          "death-on-capture simulation retained a dead freezer or target");
+          && (simulated.occupiedAfterEffects & square_bb(SQ_D2))
+          && (simulated.addedDeadSquares & square_bb(SQ_D2)),
+          "death-on-capture simulation omitted the dead-square blocker");
     {
         Position::SimulatedMoveGuard guard(pos, deathFreezeCapture);
         check(!(pos.freeze_squares(BLACK) & square_bb(SQ_E3)),
@@ -541,6 +549,23 @@ void composable_rules() {
     }
     check(!pos.legal(deathFreezeCapture),
           "move with a dead freezer incorrectly remained legal");
+
+    set_position(pos, states, "composable-death-freeze",
+                 "r7/8/8/8/8/p7/Q7/K7 w - - 0 1");
+    Move deathDeadBlock = make_move(SQ_A2, SQ_A3);
+    simulated = pos.simulated_move_info(deathDeadBlock);
+    check(simulated.addedDeadSquares & square_bb(SQ_A3),
+          "death-on-capture simulation omitted the new dead square");
+    check(simulated.occupiedAfterEffects & square_bb(SQ_A3),
+          "death-on-capture simulation omitted the dead-square blocker");
+    check(pos.legal(deathDeadBlock),
+          "death-on-capture dead square did not block the projected slider");
+    states->emplace_back();
+    pos.do_move(deathDeadBlock, states->back());
+    check(pos.state()->deadSquares & square_bb(SQ_A3),
+          "death-on-capture move did not install the dead square");
+    pos.undo_move(deathDeadBlock);
+    states->pop_back();
 
     set_position(pos, states, "composable-color-freeze",
                  "k7/8/8/8/8/4R3/2rpQ3/4K3 w - - 0 1");

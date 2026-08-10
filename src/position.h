@@ -94,6 +94,7 @@ struct SimulatedMoveInfo {
   Bitboard blastPromotionExcluded = Bitboard(0);
   Bitboard placementOccupancy = Bitboard(0);
   Bitboard occupiedAfterEffects = Bitboard(0);
+  Bitboard addedDeadSquares = Bitboard(0);
   Bitboard removedByEffects = Bitboard(0);
   Bitboard structuralRemoval = Bitboard(0);
   Bitboard addedPlacements = Bitboard(0);
@@ -2538,6 +2539,9 @@ inline Bitboard Position::freeze_squares(Color c) const {
 inline Bitboard Position::freeze_squares(Color c, const SimulatedMoveInfo* simulated) const {
   if (!potions_enabled() && !var->freezePieceTypes)
       return Bitboard(0);
+  SimulatedMoveInfoGuard simulatedView(*this);
+  if (simulated)
+      simulatedView.set(*simulated);
   Bitboard mask = freeze_squares_from_freezers(c, simulated);
   if (potions_enabled())
   {
@@ -2549,10 +2553,30 @@ inline Bitboard Position::freeze_squares(Color c, const SimulatedMoveInfo* simul
       for (Color royalColor : {WHITE, BLACK})
       {
           const PieceType royalType = castling_king_piece(royalColor);
-          if (royalType == NO_PIECE_TYPE || count(royalColor, royalType) != 1)
+          if (royalType == NO_PIECE_TYPE)
               continue;
 
-          const Square royalSquare = square(royalColor, royalType);
+          Bitboard royalPieces = pieces(royalColor, royalType);
+          if (simulated)
+          {
+              if (!simulated->typeOccupancy.empty())
+                  royalPieces = simulated->type_pieces(royalColor, royalType);
+              else
+              {
+                  royalPieces = 0;
+                  Bitboard occupied = simulated->occupiedAfterEffects;
+                  while (occupied)
+                  {
+                      Square sq = pop_lsb(occupied);
+                      if (piece_at(sq, simulated->occupiedAfterEffects)
+                          == make_piece(royalColor, royalType))
+                          royalPieces |= square_bb(sq);
+                  }
+              }
+          }
+          if (popcount(royalPieces) != 1)
+              continue;
+          const Square royalSquare = lsb(royalPieces);
           if (!(mask & royalSquare))
               continue;
 
@@ -4001,6 +4025,8 @@ inline Piece Position::piece_at(Square sq, Bitboard occupied) const {
   if (simulatedInfo)
   {
       const SimulatedMoveInfo& info = *simulatedInfo;
+      if (info.addedDeadSquares & sq)
+          return NO_PIECE;
       if (!info.typeOccupancy.empty())
           return info.piece_on(sq);
 
@@ -4096,7 +4122,8 @@ inline Position::HopperSquareProps Position::get_hopper_square_props(Square s, B
     Bitboard sBB = square_bb(s);
     props.isOccupied = (occupied & sBB);
     props.isWall = (st->wallSquares & sBB);
-    props.isDead = (st->deadSquares & sBB);
+    props.isDead = (st->deadSquares & sBB)
+                 || (simulatedInfo && (simulatedInfo->addedDeadSquares & sBB));
 
     PieceType pcPt = type_of(pc);
     props.pcSet = pcPt == NO_PIECE_TYPE ? NO_PIECE_SET : piece_set(pcPt);
@@ -5320,7 +5347,8 @@ inline Position::HopperMoveDetails Position::resolve_hopper_move_details(Square 
                       Bitboard sBB = square_bb(cur);
                       bool isOccupied = (occupied & sBB);
                       bool isWall = (st->wallSquares & sBB);
-                      bool isDead = (st->deadSquares & sBB);
+                      bool isDead = (st->deadSquares & sBB)
+                                  || (simulatedInfo && (simulatedInfo->addedDeadSquares & sBB));
                       if (!isOccupied && !isWall && !isDead) continue;
                       
                       Piece hurdlePc = cur == to ? mover : piece_at(cur, occupied);
@@ -5368,7 +5396,9 @@ inline Bitboard Position::capture_mask_from_hopper_details(const HopperMoveDetai
   if (details.primaryCaptureSq != SQ_NONE
       && (occupied & square_bb(details.primaryCaptureSq))
       && !(st->wallSquares & square_bb(details.primaryCaptureSq))
-      && !(st->deadSquares & square_bb(details.primaryCaptureSq)))
+      && !(st->deadSquares & square_bb(details.primaryCaptureSq))
+      && !(simulatedInfo && (simulatedInfo->addedDeadSquares
+                             & square_bb(details.primaryCaptureSq))))
       mask |= square_bb(details.primaryCaptureSq);
   return mask;
 }
