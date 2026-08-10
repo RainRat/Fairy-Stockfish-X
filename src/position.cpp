@@ -4229,13 +4229,7 @@ Bitboard Position::compute_remove_connect_n_mask(
     auto piece_at = [&](Square sq) {
         if (!simulated || simulated->typeOccupancy.empty())
             return piece_on(sq);
-
-        Bitboard bit = square_bb(sq);
-        for (Color c : { WHITE, BLACK })
-            for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
-                if (simulated->type_pieces(c, pt) & bit)
-                    return make_piece(c, pt);
-        return NO_PIECE;
+        return simulated->piece_on(sq);
     };
 
     if (blast_promotion() && blastMask)
@@ -4835,6 +4829,9 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
       if (!is_ok(sq))
           return NO_PIECE;
 
+      if (!info.typeOccupancy.empty())
+          return info.piece_on(sq);
+
       if (info.castling)
       {
           Square kto, rto;
@@ -4891,15 +4888,6 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
               return make_piece(dropColor, dropped_piece_type(m));
       }
 
-      if (!info.typeOccupancy.empty())
-      {
-          Bitboard bit = square_bb(sq);
-          for (Color c : {WHITE, BLACK})
-              if (info.colorOccupancy[c] & bit)
-                  for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
-                      if (info.type_pieces(c, pt) & bit)
-                          return make_piece(c, pt);
-      }
       return piece_on(sq);
   };
 

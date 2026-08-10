@@ -83,8 +83,8 @@ struct SimulatedMoveInfo {
   Bitboard relocatedOccupancy = Bitboard(0);
   Bitboard effectOccupancy = Bitboard(0);
   std::array<Bitboard, COLOR_NB> colorOccupancy = {};
-  // Allocated only for variants whose blast effects can change a bystander's
-  // movement type; ordinary variants keep SimulatedMoveInfo compact.
+  // Allocated only when effects or placements can change projected piece
+  // identities; ordinary variants keep SimulatedMoveInfo compact.
   std::vector<Bitboard> typeOccupancy;
   std::array<Bitboard, COLOR_NB> freezerOccupancy = {};
   std::array<Bitboard, COLOR_NB> freezeImmuneOccupancy = {};
@@ -124,6 +124,16 @@ struct SimulatedMoveInfo {
   Bitboard type_pieces(Color c, PieceType pt) const {
       return typeOccupancy.empty() ? Bitboard(0)
                                    : typeOccupancy[size_t(c) * PIECE_TYPE_NB + pt];
+  }
+  Piece piece_on(Square sq) const {
+      if (typeOccupancy.empty())
+          return NO_PIECE;
+      Bitboard bit = square_bb(sq);
+      for (Color c : { WHITE, BLACK })
+          for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
+              if (type_pieces(c, pt) & bit)
+                  return make_piece(c, pt);
+      return NO_PIECE;
   }
 };
 
@@ -3991,6 +4001,9 @@ inline Piece Position::piece_at(Square sq, Bitboard occupied) const {
   if (simulatedInfo)
   {
       const SimulatedMoveInfo& info = *simulatedInfo;
+      if (!info.typeOccupancy.empty())
+          return info.piece_on(sq);
+
       if (info.castling)
       {
           Square kto, rto;
@@ -4001,23 +4014,6 @@ inline Piece Position::piece_at(Square sq, Bitboard occupied) const {
               return info.castlingRookPiece;
           if (sq == info.from || sq == info.to)
               return NO_PIECE;
-      }
-
-      if (!info.typeOccupancy.empty())
-      {
-          Bitboard bit = square_bb(sq);
-          for (Color c : { WHITE, BLACK })
-              for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
-                  if (info.type_pieces(c, pt) & bit)
-                      return make_piece(c, pt);
-
-          if (sq == info.effectiveTo && info.placedPiece != NO_PIECE)
-              return info.placedPiece;
-          if (sq == info.gatingSquare && info.gatingPiece != NO_PIECE)
-              return info.gatingPiece;
-          if (sq == info.secondarySquare && info.secondaryPiece != NO_PIECE)
-              return info.secondaryPiece;
-          return NO_PIECE;
       }
 
       if (sq == info.from && info.sourcePiece != NO_PIECE)

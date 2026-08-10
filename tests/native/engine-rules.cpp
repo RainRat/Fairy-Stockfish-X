@@ -248,17 +248,25 @@ void composable_rules() {
           "castling simulation missed the king-source committed gate");
     check(castlingInfo.type_pieces(WHITE, ROOK) & square_bb(SQ_H1),
           "castling simulation missed the rook-source committed gate");
-    const Key beforeCommittedCastle = pos.key();
-    const std::string beforeCommittedCastleFen = pos.fen();
-    states->emplace_back();
-    pos.do_move(committedCastle, states->back());
-    check(pos.piece_on(SQ_E1) == make_piece(WHITE, ROOK)
-              && pos.piece_on(SQ_H1) == make_piece(WHITE, ROOK),
-          "castling move application disagreed with committed-gate simulation");
-    pos.undo_move(committedCastle);
-    states->pop_back();
-    check(pos.key() == beforeCommittedCastle && pos.fen() == beforeCommittedCastleFen,
-          "committed-gate castling did not restore state exactly on undo");
+    {
+        Position::SimulatedMoveInfoGuard view(pos);
+        view.set(castlingInfo);
+        check(pos.piece_at(SQ_E1, castlingInfo.occupiedAfterEffects) == make_piece(WHITE, ROOK),
+              "castling simulation hid the king-source committed gate identity");
+        check(pos.piece_at(SQ_H1, castlingInfo.occupiedAfterEffects) == make_piece(WHITE, ROOK),
+              "castling simulation hid the rook-source committed gate identity");
+    }
+    check_simulation_matches_move(pos, states, committedCastle,
+                                  "committed-gate castling simulation");
+
+    set_position(pos, states, "composable-commitgate-castle-blast",
+                 "n7/4k3/8/8/8/8/8/8/4K2R/4R2R w K - 0 1");
+    Move blastCastle = parse_move(pos, "e1g1");
+    SimulatedMoveInfo blastCastlingInfo = pos.simulated_move_info(blastCastle);
+    check(blastCastlingInfo.type_pieces(WHITE, QUEEN) & square_bb(SQ_H1),
+          "blast promotion missed the rook-source committed gate identity");
+    check_simulation_matches_move(pos, states, blastCastle,
+                                  "blast-promoted committed-gate castling simulation");
 
     set_position(pos, states, "composable-commitgate-castle",
                  "8/8/8/8/8/8/8/8/r3R2K/4R3 w - - 0 1");
@@ -2059,6 +2067,12 @@ surroundClaimPiece = p
 [composable-commitgate-castle:chess]
 commitGates = true
 startFen = n7/4k3/8/8/8/8/8/8/4K2R/4R2R w K - 0 1
+
+[composable-commitgate-castle-blast:composable-commitgate-castle]
+blastOnMove = true
+blastPromotion = true
+blastCenter = false
+promotedPieceType = r:q
 
 [composable-laser-freeze:dos-laser-chess]
 freezePieceTypes = r
