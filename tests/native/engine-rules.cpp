@@ -240,6 +240,27 @@ void composable_rules() {
     check(!MoveList<LEGAL>(pos).contains(frozenSecondaryRotation),
           "move generation retained a rotation of a frozen secondary piece");
 
+    set_position(pos, states, "composable-check-projected-freeze",
+                 "8/8/8/3q3k/8/8/8/4R2K w - - 0 1");
+    Move frozenCheckingRook = parse_move(pos, "e1e4");
+    check(!pos.gives_check(frozenCheckingRook),
+          "gives_check counted a checker frozen by a post-move freezer");
+    check(pos.legal(frozenCheckingRook),
+          "a post-move-frozen checker was incorrectly rejected as a check");
+
+    set_position(pos, states, "composable-sacred-static-freeze",
+                 "7k/8/8/8/8/8/3q4/4K3 w - - 0 1");
+    check(!(pos.freeze_squares() & square_bb(SQ_E1)),
+          "checked static royal did not ignore freeze");
+    check(pos.legal(make_move(SQ_E1, SQ_F1)),
+          "checked static royal remained immobilized by freeze");
+
+    set_position(pos, states, "chess",
+                 "R3k2K/8/8/8/8/8/8/8 w - - 0 1");
+    Move captureEnemyKing = make_move(SQ_A8, SQ_E8);
+    check(!pos.legal(captureEnemyKing),
+          "simple legality allowed capturing the opposing king");
+
     set_position(pos, states, "composable-commitgate-castle",
                  "n7/4k3/8/8/8/8/8/8/4K2R/4R2R w K - 0 1");
     Move committedCastle = parse_move(pos, "e1g1");
@@ -2076,6 +2097,14 @@ promotedPieceType = r:q
 
 [composable-laser-freeze:dos-laser-chess]
 freezePieceTypes = r
+
+[composable-check-projected-freeze:chess]
+checking = false
+freezePieceTypes = q
+
+[composable-sacred-static-freeze:chess]
+checkedRoyalsIgnoreFreeze = true
+freezePieceTypes = q
 
 [composable-castle-freeze-destination:chess]
 freezePieceTypes = r

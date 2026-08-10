@@ -5443,6 +5443,9 @@ bool Position::legal(Move m) const {
 
   const bool moverIsRoyal = hasRoyal && from == royalSquare;
 
+  if (!allow_checks() && checking_permitted() && (pieces(them) & to) && type_of(piece_on(to)) == KING)
+      return false;
+
   const bool simpleLegality = var->simpleLegality
                            && !dropMove
                            && type_of(m) != CASTLING
@@ -5542,8 +5545,6 @@ bool Position::legal(Move m) const {
   }
   // Universal-hopper semantics are fully encoded in attacks/moves generation and
   // jump_capture_square() capture-square resolution; avoid legacy pre-filters here.
-  if (!allow_checks() && checking_permitted() && (pieces(them) & to) && type_of(piece_on(to)) == KING)
-      return false;
   if ((pieces(us) & to) && !is_pass(m) && !is_self_destruct(m) && !is_stack_move(m)
       && is_uncapturable_royal_square(us, to))
       return false;
@@ -6861,7 +6862,7 @@ bool Position::gives_check_impl(Move m) const {
       return bool(evasion_checkers()) || (laser_game() && piece_on(royalSq) == NO_PIECE);
   }
   Bitboard occupied = simulated.occupiedAfterEffects;
-  const Bitboard frozenAttackers = freeze_squares(sideToMove);
+  const Bitboard frozenAttackers = freeze_squares(sideToMove, &simulated);
 
   if (gating_move_blocks_occupancy(m))
       occupied |= square_bb(gating_square(m));

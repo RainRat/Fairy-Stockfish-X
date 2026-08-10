@@ -2545,7 +2545,7 @@ inline Bitboard Position::freeze_squares(Color c, const SimulatedMoveInfo* simul
       if (const SpellContext* spellCtx = current_spell_context(); spellCtx && c == ~sideToMove)
           mask |= spellCtx->freezeExtra;
   }
-  if (potions_enabled() && var->checkedRoyalsIgnoreFreeze)
+  if (var->checkedRoyalsIgnoreFreeze)
       for (Color royalColor : {WHITE, BLACK})
       {
           const PieceType royalType = castling_king_piece(royalColor);
