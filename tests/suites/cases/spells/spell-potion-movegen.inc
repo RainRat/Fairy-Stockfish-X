@@ -72,6 +72,8 @@ static void load_test_variants() {
 [commitgate-test:chess]
 commitGates = true
 castling = false
+trapRegion = e1
+trapProtection = friendly-orthogonal
 startFen = n7/4k3/8/8/8/8/8/8/4K3/4R3 w - - 0 1
 
 [spell-sacred:spell-chess]
@@ -621,6 +623,30 @@ static void test_committed_piece_type_helpers() {
     expect(pos.committed_piece_type(make<NORMAL>(SQ_E2, SQ_E4), true) == NO_PIECE_TYPE, "non-castling lookup should be empty");
 }
 
+static void test_committed_gate_simulation() {
+    StateInfo st{};
+    const Variant* v = variants.get("commitgate-test");
+    expect(v != nullptr, "commitgate-test variant failed to load");
+
+    Position pos;
+    pos.set(v, "n7/4k3/8/8/8/8/8/8/4K3/4R3 w - - 0 1", false, &st, nullptr);
+    Move move = make<NORMAL>(SQ_E1, SQ_E2);
+    SimulatedMoveInfo placement = pos.simulated_move_info(move, false);
+    expect(placement.typeOccupancy.size() == COLOR_NB * PIECE_TYPE_NB,
+           "committed-gate simulation did not allocate typed occupancy");
+    expect(placement.type_pieces(WHITE, ROOK) & square_bb(SQ_E1),
+           "committed gate was missing from typed move simulation");
+    SimulatedMoveInfo simulated = pos.simulated_move_info(move);
+    expect(simulated.occupiedAfterEffects & square_bb(SQ_E1),
+           "friendly king did not protect committed gate on trap");
+
+    StateInfo next{};
+    pos.do_move(move, next);
+    expect(pos.piece_on(SQ_E1) == make_piece(WHITE, ROOK),
+           "committed gate was missing from committed move application");
+    pos.undo_move(move);
+}
+
 static void test_committed_gate_overflow_parse() {
     StateInfo st{};
     const Variant* v = variants.get("commitgate-test");
@@ -651,6 +677,7 @@ int main() {
     test_sacred_royal_compound_freeze();
     test_spell_potion_ownership_policy();
     test_committed_piece_type_helpers();
+    test_committed_gate_simulation();
     test_committed_gate_overflow_parse();
     return 0;
 }

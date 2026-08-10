@@ -47,7 +47,7 @@ castling = false
 surroundCaptureIntervene = true
 changingColorTrigger = capture
 changingColorPieceTypes = *
-startFen = 4k3/8/8/8/8/3p1p2/4R3/4K3 w - - 0 1
+startFen = 4k3/8/8/8/8/3p1p2/4R3/7K w - - 0 1
 
 [liberty-undo]
 maxRank = 5
@@ -72,7 +72,7 @@ int main() {
 
     StateInfo st{};
     Position pos;
-    pos.set(variants.get("surround-color"), "4k3/8/8/8/8/3p1p2/4R3/4K3 w - - 0 1", false, &st, nullptr);
+    pos.set(variants.get("surround-color"), "4k3/8/8/8/8/3p1p2/4R3/7K w - - 0 1", false, &st, nullptr);
 
     const Move m = make<NORMAL>(SQ_E2, SQ_E3);
     assert(pos.legal(m));

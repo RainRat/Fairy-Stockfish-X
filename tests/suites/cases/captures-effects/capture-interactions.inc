@@ -239,9 +239,9 @@ d")
 echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/R3K3 b"
 
 # 4. Test rifleCapture + changingColorTrigger
-out=$(run_cmds "rifle-color" "${TEMP_INI}" "position fen r3k3/8/8/8/8/8/8/R3K3 w - - 0 1 moves a1a8
+out=$(run_cmds "rifle-color" "${TEMP_INI}" "position fen r3k3/8/8/8/8/8/4K3/R7 w - - 0 1 moves a1a8
 d")
-echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/r3K3 b"
+echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/4K3/r7 b"
 
 # 5. Test rifleCapture + jump capture
 out=$(run_cmds "rifle-jump" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/p7/M3K3 w - - 0 1 moves a1a3

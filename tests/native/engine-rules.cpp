@@ -47,6 +47,36 @@ Move parse_move(const Position& pos, const char* notation) {
     return move;
 }
 
+void check_simulation_matches_move(Position& pos, StateListPtr& states, Move move,
+                                   const std::string& context) {
+    SimulatedMoveInfo simulated = pos.simulated_move_info(move);
+    std::vector<std::pair<Square, Piece>> expectedPieces;
+    {
+        Position::SimulatedMoveInfoGuard guard(pos);
+        guard.set(simulated);
+        Bitboard occupied = simulated.occupiedAfterEffects;
+        while (occupied)
+        {
+            Square sq = pop_lsb(occupied);
+            expectedPieces.emplace_back(sq, pos.piece_at(sq, simulated.occupiedAfterEffects));
+        }
+    }
+
+    const Key beforeKey = pos.key();
+    const std::string beforeFen = pos.fen();
+    states->emplace_back();
+    pos.do_move(move, states->back());
+    check(pos.pieces() == simulated.occupiedAfterEffects,
+          context + " occupancy disagreed with move application");
+    for (const auto& [sq, piece] : expectedPieces)
+        check(pos.piece_on(sq) == piece,
+              context + " piece identity disagreed with move application");
+    pos.undo_move(move);
+    states->pop_back();
+    check(pos.key() == beforeKey && pos.fen() == beforeFen,
+          context + " did not restore state after parity check");
+}
+
 Value public_game_result(Position& pos) {
     Value result = VALUE_NONE;
     if (pos.is_immediate_game_end(result))
@@ -81,6 +111,947 @@ void movement() {
                  "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
     check(!pos.clone_targets_from(WHITE, SQ_A3),
           "clone_targets_from returned targets for an empty square");
+}
+
+void composable_rules() {
+    Position pos;
+    StateListPtr states;
+
+    set_position(pos, states, "composable-freeze-traps",
+                 "8/8/8/4e3/4M3/8/7r/8 w - - 0 1");
+    check(pos.freeze_squares() & square_bb(SQ_E4), "adjacent freezer mask missed the mover");
+    check(pos.see_pruning_unreliable(),
+          "SEE pruning remained enabled with static freezing");
+    Move frozen = make_move(SQ_E4, SQ_E3);
+    check(!pos.legal(frozen), "adjacent freezer did not freeze the mover");
+
+    set_position(pos, states, "composable-freeze-traps",
+                 "8/8/8/3e4/4M3/8/7r/8 w - - 0 1");
+    check(!pos.legal(make_move(SQ_E4, SQ_E3)),
+          "diagonal freezer did not freeze the mover");
+
+    set_position(pos, states, "composable-freeze-orth-only",
+                 "8/8/8/3e4/4M3/8/7r/8 w - - 0 1");
+    check(pos.legal(make_move(SQ_E4, SQ_E3)),
+          "orthogonal-only freezer unexpectedly froze diagonally");
+
+    set_position(pos, states, "composable-freeze-traps",
+                 "8/8/8/8/4e3/4M3/7r/8 w - - 0 1");
+    check(pos.see_pruning_unreliable(),
+          "SEE pruning remained enabled with trap effects");
+
+    set_position(pos, states, "composable-freeze-immune",
+                 "8/8/8/4e3/4M3/8/7r/8 w - - 0 1");
+    check(pos.legal(make_move(SQ_E4, SQ_E3)),
+          "freeze-immune piece was frozen");
+
+    set_position(pos, states, "composable-pass-freeze",
+                 "8/8/8/8/8/8/8/Ff6 w - - 0 1");
+    Move frozenAnchorPass = make<SPECIAL>(SQ_A1, SQ_A1);
+    check(pos.legal(frozenAnchorPass),
+          "a frozen pass anchor incorrectly made passing illegal");
+    check(MoveList<LEGAL>(pos).contains(frozenAnchorPass),
+          "a frozen pass anchor was not generated");
+
+    set_position(pos, states, "composable-freeze-wall",
+                 "8/8/8/8/8/8/f7/F7 w - - 0 1");
+    Move frozenAnchorWall = make_gating<SPECIAL>(SQ_A1, SQ_A1, NO_PIECE_TYPE, SQ_H8);
+    check(pos.freeze_squares() & square_bb(SQ_A1),
+          "pure wall test did not freeze the generated anchor");
+    check(pos.pseudo_legal(frozenAnchorWall),
+          "a frozen anchor incorrectly made a pure wall move pseudo-illegal");
+    check(pos.legal(frozenAnchorWall),
+          "a frozen anchor incorrectly made a pure wall move illegal");
+    check(MoveList<LEGAL>(pos).contains(frozenAnchorWall),
+          "a pure wall move with a frozen generated anchor was not generated");
+
+    set_position(pos, states, "composable-freeze-traps",
+                 "8/8/8/4m3/4M3/8/7r/8 w - - 0 1");
+    Move nonFreezingPiece = parse_move(pos, "e4e3");
+    check(pos.legal(nonFreezingPiece), "a non-freezer incorrectly froze the mover");
+
+    set_position(pos, states, "composable-freeze-traps",
+                 "8/8/8/4e3/4E3/8/7r/8 w - - 0 1");
+    Move mutualFreeze = make_move(SQ_E4, SQ_E3);
+    check(!pos.legal(mutualFreeze), "adjacent freezers did not freeze each other");
+
+    set_position(pos, states, "composable-freeze-traps",
+                 "8/8/8/8/8/8/2R4r/8 w - - 0 1");
+    Move unprotectedTrap = parse_move(pos, "c2c3");
+    SimulatedMoveInfo simulated = pos.simulated_move_info(unprotectedTrap);
+    check(!(simulated.occupiedAfterEffects & square_bb(SQ_C3)),
+          "unprotected trap occupant survived move simulation");
+    const Key beforeTrap = pos.key();
+    const std::string beforeTrapFen = pos.fen();
+    states->emplace_back();
+    pos.do_move(unprotectedTrap, states->back());
+    check(pos.piece_on(SQ_C3) == NO_PIECE,
+          "unprotected trap occupant survived move application");
+    pos.undo_move(unprotectedTrap);
+    states->pop_back();
+    check(pos.key() == beforeTrap && pos.fen() == beforeTrapFen,
+          "trap removal did not restore state exactly on undo");
+
+    set_position(pos, states, "composable-freeze-traps",
+                 "8/8/8/8/8/8/2R4r/8 w - - 99 1");
+    Move trapRule50 = parse_move(pos, "c2c3");
+    states->emplace_back();
+    pos.do_move(trapRule50, states->back());
+    check(pos.state()->rule50 == 0,
+          "trap removal did not reset the halfmove clock");
+    pos.undo_move(trapRule50);
+    states->pop_back();
+
+    set_position(pos, states, "composable-trap-ep-stale",
+                 "4k3/p7/8/1P6/8/8/8/4K3 b - - 0 1");
+    Move trapDoubleStep = parse_move(pos, "a7a5");
+    const Key beforeTrapDoubleStep = pos.key();
+    const std::string beforeTrapDoubleStepFen = pos.fen();
+    states->emplace_back();
+    pos.do_move(trapDoubleStep, states->back());
+    check(!pos.ep_squares(),
+          "trap removal left an en-passant right for a removed pawn");
+    check(!MoveList<LEGAL>(pos).contains(make<EN_PASSANT>(SQ_B5, SQ_A6)),
+          "move generation exposed en passant for a trapped piece");
+    pos.undo_move(trapDoubleStep);
+    states->pop_back();
+    check(pos.key() == beforeTrapDoubleStep && pos.fen() == beforeTrapDoubleStepFen,
+          "trap en-passant cleanup did not restore state exactly on undo");
+
+    set_position(pos, states, "composable-trap-claim-undo",
+                 "4k3/8/8/4R3/3R1R2/2N1R3/8/4K3 w - - 0 1");
+    Move trapClaim = make<NORMAL>(SQ_C3, SQ_E4);
+    check_simulation_matches_move(pos, states, trapClaim, "trap/claim simulation");
+    const Key beforeTrapClaim = pos.key();
+    const std::string beforeTrapClaimFen = pos.fen();
+    states->emplace_back();
+    pos.do_move(trapClaim, states->back());
+    check(pos.state()->trapRemoved & square_bb(SQ_E4),
+          "trap/claim test did not remove the trapped piece");
+    check(pos.state()->claimedSquares & square_bb(SQ_E4),
+          "trap/claim test did not create the surrounding claim");
+    pos.undo_move(trapClaim);
+    states->pop_back();
+    check(pos.key() == beforeTrapClaim && pos.fen() == beforeTrapClaimFen,
+          "trap and surround claim did not restore state exactly on undo");
+
+    set_position(pos, states, "composable-trap-claim-royal",
+                 "k7/8/8/4p3/3pKp2/4p3/8/R7 w - - 0 1");
+    Move trapRoyalClaim = make_move(SQ_A1, SQ_A2);
+    SimulatedMoveInfo trapRoyalInfo = pos.simulated_move_info(trapRoyalClaim);
+    {
+        Position::SimulatedMoveInfoGuard view(pos);
+        view.set(trapRoyalInfo);
+        check(pos.piece_at(SQ_E4, trapRoyalInfo.occupiedAfterEffects) == make_piece(WHITE, PAWN),
+              "trap/claim simulation did not replace the royal with the claim piece");
+    }
+    check(!pos.legal(trapRoyalClaim),
+          "trap/claim replacement allowed a trapped royal to survive as a pawn");
+    check(!MoveList<LEGAL>(pos).contains(trapRoyalClaim),
+          "move generation retained a trap/claim replacement of the royal");
+
+    set_position(pos, states, "composable-laser-freeze",
+                 "8k/9/9/9/3rR(0)4/9/R8/K8 w - - 0 1");
+    Move frozenSecondaryRotation = make_rotation<NORMAL>(SQ_A2, SQ_A3, 1, SQ_E5);
+    check(pos.freeze_squares() & square_bb(SQ_E5),
+          "laser secondary-rotation test did not freeze the rotator");
+    check(!pos.pseudo_legal(frozenSecondaryRotation),
+          "pseudo-legal accepted a rotation of a frozen secondary piece");
+    check(!pos.legal(frozenSecondaryRotation),
+          "laser move rotated a frozen secondary piece");
+    check(!MoveList<LEGAL>(pos).contains(frozenSecondaryRotation),
+          "move generation retained a rotation of a frozen secondary piece");
+
+    set_position(pos, states, "composable-check-projected-freeze",
+                 "8/8/8/3q3k/8/8/8/4R2K w - - 0 1");
+    Move frozenCheckingRook = parse_move(pos, "e1e4");
+    check(!pos.gives_check(frozenCheckingRook),
+          "gives_check counted a checker frozen by a post-move freezer");
+    check(pos.legal(frozenCheckingRook),
+          "a post-move-frozen checker was incorrectly rejected as a check");
+
+    set_position(pos, states, "composable-sacred-static-freeze",
+                 "7k/8/8/8/8/8/3q4/4K3 w - - 0 1");
+    check(!(pos.freeze_squares() & square_bb(SQ_E1)),
+          "checked static royal did not ignore freeze");
+    check(pos.legal(make_move(SQ_E1, SQ_F1)),
+          "checked static royal remained immobilized by freeze");
+
+    set_position(pos, states, "composable-sacred-static-freeze",
+                 "k7/8/8/8/8/8/4q3/4K3 w - - 0 1");
+    Move movedSacredRoyal = make_move(SQ_E1, SQ_F1);
+    simulated = pos.simulated_move_info(movedSacredRoyal);
+    check(!(pos.freeze_squares(WHITE, &simulated) & square_bb(SQ_F1)),
+          "projected checked royal remained frozen at its destination");
+
+    set_position(pos, states, "chess",
+                 "R3k2K/8/8/8/8/8/8/8 w - - 0 1");
+    Move captureEnemyKing = make_move(SQ_A8, SQ_E8);
+    check(!pos.legal(captureEnemyKing),
+          "simple legality allowed capturing the opposing king");
+
+    set_position(pos, states, "composable-commitgate-castle",
+                 "n7/4k3/8/8/8/8/8/8/4K2R/4R2R w K - 0 1");
+    Move committedCastle = parse_move(pos, "e1g1");
+    SimulatedMoveInfo castlingInfo = pos.simulated_move_info(committedCastle);
+    check(castlingInfo.type_pieces(WHITE, ROOK) & square_bb(SQ_E1),
+          "castling simulation missed the king-source committed gate");
+    check(castlingInfo.type_pieces(WHITE, ROOK) & square_bb(SQ_H1),
+          "castling simulation missed the rook-source committed gate");
+    {
+        Position::SimulatedMoveInfoGuard view(pos);
+        view.set(castlingInfo);
+        check(pos.piece_at(SQ_E1, castlingInfo.occupiedAfterEffects) == make_piece(WHITE, ROOK),
+              "castling simulation hid the king-source committed gate identity");
+        check(pos.piece_at(SQ_H1, castlingInfo.occupiedAfterEffects) == make_piece(WHITE, ROOK),
+              "castling simulation hid the rook-source committed gate identity");
+    }
+    check_simulation_matches_move(pos, states, committedCastle,
+                                  "committed-gate castling simulation");
+
+    set_position(pos, states, "composable-commitgate-castle-blast",
+                 "n7/4k3/8/8/8/8/8/8/4K2R/4R2R w K - 0 1");
+    Move blastCastle = parse_move(pos, "e1g1");
+    SimulatedMoveInfo blastCastlingInfo = pos.simulated_move_info(blastCastle);
+    check(blastCastlingInfo.type_pieces(WHITE, QUEEN) & square_bb(SQ_H1),
+          "blast promotion missed the rook-source committed gate identity");
+    check_simulation_matches_move(pos, states, blastCastle,
+                                  "blast-promoted committed-gate castling simulation");
+
+    set_position(pos, states, "composable-commitgate-castle",
+                 "8/8/8/8/8/8/8/8/r3R2K/4R3 w - - 0 1");
+    Move committedBlock = make_move(SQ_E1, SQ_E2);
+    check(pos.legal(committedBlock),
+          "simple legality ignored a committed gate that still blocks check");
+    states->emplace_back();
+    pos.do_move(committedBlock, states->back());
+    check(pos.piece_on(SQ_E1) == make_piece(WHITE, ROOK),
+          "committed gate was not restored on the vacated source square");
+    pos.undo_move(committedBlock);
+    states->pop_back();
+
+    set_position(pos, states, "composable-freeze-traps",
+                 "8/8/8/8/8/1R6/2R4r/8 w - - 0 1");
+    Move protectedTrap = parse_move(pos, "c2c3");
+    simulated = pos.simulated_move_info(protectedTrap);
+    check(simulated.occupiedAfterEffects & square_bb(SQ_C3),
+          "friendly adjacent piece did not protect trap occupant");
+
+    set_position(pos, states, "composable-freeze-traps-blast",
+                 "8/8/8/4e3/8/8/4E3/8 w - - 0 1");
+    Move blastMove = make_move(SQ_E2, SQ_E3);
+    simulated = pos.simulated_move_info(blastMove);
+    check(!(simulated.occupiedAfterEffects & square_bb(SQ_E4)),
+          "blast-promoted trap occupant survived move simulation");
+    states->emplace_back();
+    pos.do_move(blastMove, states->back());
+    check(pos.piece_on(SQ_E4) == NO_PIECE,
+          "blast-promoted trap occupant survived move application");
+    pos.undo_move(blastMove);
+    states->pop_back();
+
+    set_position(pos, states, "composable-trap-blocker",
+                 "8/8/8/8/8/2*5/2R5/8 w - - 0 1");
+    SimulatedMoveInfo blockerInfo = pos.simulated_move_info(make_move(SQ_C2, SQ_C1));
+    check((blockerInfo.occupiedAfterEffects & square_bb(SQ_C3))
+          && !(blockerInfo.removedByEffects & square_bb(SQ_C3)),
+          "trap simulation treated a wall as a removable piece");
+
+    set_position(pos, states, "composable-freeze-check",
+                 "4k3/8/8/8/8/8/3Fr3/4K3 w - - 0 1");
+    check(!(pos.attackers_to_king(SQ_E1, BLACK) & square_bb(SQ_E2)),
+          "frozen enemy piece still counted as a checker");
+    check(!pos.legal(make_move(SQ_D2, SQ_C3)),
+          "moving a freezer away incorrectly left the king safe");
+
+    set_position(pos, states, "composable-freeze-check",
+                 "k7/4r3/8/8/8/8/3F4/4K3 b - - 0 1");
+    Move frozenCheck = make_move(SQ_E7, SQ_E2);
+    check(!pos.gives_check(frozenCheck),
+          "a newly frozen direct checker still gave check");
+
+    set_position(pos, states, "composable-check-morph-in",
+                 "5k2/8/8/8/8/8/4B3/K7 w - - 0 1");
+    Move checkMorphIn = make_move(SQ_E2, SQ_F3);
+    check(pos.gives_check(checkMorphIn),
+          "a move morph into a rook was omitted from direct check detection");
+    check(MoveList<QUIET_CHECKS>(pos).contains(checkMorphIn),
+          "quiet-check generation omitted a check created by move morph");
+
+    set_position(pos, states, "composable-check-morph-out",
+                 "4k3/8/8/8/8/8/4R3/4K3 w - - 0 1");
+    Move checkMorphOut = make_move(SQ_E2, SQ_E3);
+    check(!pos.gives_check(checkMorphOut),
+          "a move morph out of a rook retained a false direct check");
+
+    set_position(pos, states, "composable-pseudoroyal-morph-in",
+                 "5rk1/8/8/8/8/8/4B3/K7 w - - 0 1");
+    Move pseudoRoyalMorphIn = make_move(SQ_E2, SQ_F3);
+    check(!pos.legal(pseudoRoyalMorphIn),
+          "a move-morphed pseudo-royal was allowed to move into attack");
+
+    set_position(pos, states, "composable-color-attack",
+                 "4k3/8/8/8/8/4p3/4R3/4K3 w - - 0 1");
+    Move colorAttackCheck = make_move(SQ_E2, SQ_E3);
+    check(!pos.gives_check(colorAttackCheck),
+          "a color-changing mover was still reported as checking");
+
+    set_position(pos, states, "composable-compact-check",
+                 "4k3/8/8/8/8/8/4R3/4K3 w - - 0 1");
+    Move compactCheck = make_move(SQ_E2, SQ_E7);
+    simulated = pos.simulated_move_info(compactCheck);
+    check(!(simulated.colorOccupancy[WHITE] & square_bb(SQ_E2))
+              && (simulated.colorOccupancy[WHITE] & square_bb(SQ_E7)),
+          "compact simulation retained stale color occupancy");
+    check(pos.gives_check(compactCheck),
+          "a custom compact-simulation variant missed a direct check");
+    check(MoveList<QUIET_CHECKS>(pos).contains(compactCheck),
+          "a custom compact-simulation check was not generated");
+
+    set_position(pos, states, "composable-color-promotion",
+                 "7k/4P3/8/8/8/8/8/K7 w - - 0 1");
+    Move colorPromotion = make<PROMOTION>(SQ_E7, SQ_E8, QUEEN);
+    simulated = pos.simulated_move_info(colorPromotion);
+    check(simulated.placedPiece == make_piece(BLACK, QUEEN),
+          "promotion simulation did not apply the final color");
+    check(!pos.gives_check(colorPromotion),
+          "a color-changing promotion was still reported as checking");
+
+    set_position(pos, states, "composable-freeze-evasion",
+                 "k3r3/8/3F4/8/8/8/8/4K3 w - - 0 1");
+    Move freezeEvasion = make_move(SQ_D6, SQ_D7);
+    check(pos.evasion_checkers() & square_bb(SQ_E8),
+          "freeze-evasion test position was not in check");
+    check(pos.legal(freezeEvasion),
+          "freezer move next to a checker was rejected as illegal");
+    check(pos.pseudo_legal(freezeEvasion),
+          "freezer evasion was rejected as pseudo-illegal");
+    check(MoveList<LEGAL>(pos).contains(freezeEvasion),
+          "freezer move next to a checker was not generated as an evasion");
+
+    set_position(pos, states, "composable-trap-evasion",
+                 "k2pr3/2B5/8/8/8/8/8/4K3 w - - 0 1");
+    Move trapEvasion = make_move(SQ_C7, SQ_D8);
+    check(pos.evasion_checkers() & square_bb(SQ_E8),
+          "trap-evasion test position was not in check");
+    check(pos.legal(trapEvasion) && pos.pseudo_legal(trapEvasion),
+          "capturing a trap protector did not resolve check");
+    check(MoveList<LEGAL>(pos).contains(trapEvasion),
+          "trap-protector capture was not generated as an evasion");
+
+    set_position(pos, states, "composable-trap-quiet-check",
+                 "4k3/8/8/8/3RP3/8/8/K3R3 w - - 0 1");
+    Move trapQuietCheck = make_move(SQ_D4, SQ_D5);
+    check(pos.gives_check(trapQuietCheck),
+          "moving a trap protector did not expose a discovered check");
+    check(MoveList<QUIET_CHECKS>(pos).contains(trapQuietCheck),
+          "trap-induced discovered check was not generated");
+
+    set_position(pos, states, "composable-trap-pawn-quiet-check",
+                 "4k3/8/8/8/3PB3/8/8/4R2K w - - 0 1");
+    Move trapPawnQuietCheck = make_move(SQ_D4, SQ_D5);
+    check(pos.gives_check(trapPawnQuietCheck),
+          "moving a pawn protector did not expose a discovered check");
+    check(MoveList<QUIET_CHECKS>(pos).contains(trapPawnQuietCheck),
+          "trap-induced pawn discovered check was not generated");
+
+    set_position(pos, states, "composable-royal-capture-filter",
+                 "7k/8/8/8/8/8/r3p3/4K3 w - - 0 1");
+    Move royalCapture = make_move(SQ_E1, SQ_E2);
+    check(pos.legal(royalCapture),
+          "royal capture used the captured piece type for attack filtering");
+
+    set_position(pos, states, "composable-rex-royal-capture",
+                 "7k/8/8/8/8/8/4q2q/4K3 w - - 0 1");
+    Move rexRoyalCapture = make_move(SQ_E1, SQ_E2);
+    check(pos.legal(rexRoyalCapture),
+          "rex-exclusive royal capture used the captured type for attack filtering");
+
+    set_position(pos, states, "composable-freeze-double-evasion",
+                 "1F5k/8/2n1n3/8/3K4/8/8/8 w - - 0 1");
+    Move doubleFreezeEvasion = make_move(SQ_B8, SQ_D7);
+    check(popcount(pos.evasion_checkers()) == 2,
+          "double-freeze-evasion test position did not have two checkers");
+    check(pos.legal(doubleFreezeEvasion),
+          "freezer move did not neutralize both checkers");
+    check(MoveList<LEGAL>(pos).contains(doubleFreezeEvasion),
+          "double-freeze evasion was not generated");
+
+    set_position(pos, states, "composable-rex-blast",
+                 "7k/8/8/8/8/8/4q3/4K3 w - - 0 1");
+    Move rexCapture = make_move(SQ_E1, SQ_E2);
+    simulated = pos.simulated_move_info(rexCapture);
+    check(!(simulated.occupiedAfterEffects & square_bb(SQ_E2)),
+          "rex-exclusive king capture was incorrectly treated as blast-immune");
+    states->emplace_back();
+    pos.do_move(rexCapture, states->back());
+    check(pos.piece_on(SQ_E2) == NO_PIECE,
+          "rex-exclusive king capture disagreed with committed blast effects");
+    pos.undo_move(rexCapture);
+    states->pop_back();
+
+    set_position(pos, states, "composable-stack-morph",
+                 "k3r3/8/3A4/3A4/8/8/8/4K3 w - - 0 1");
+    Move stackMorph = make<STACK>(SQ_D6, SQ_D7);
+    simulated = pos.simulated_move_info(stackMorph);
+    check(!(simulated.freezerOccupancy[WHITE] & square_bb(SQ_D7)),
+          "stack simulation retained a freezer before applying move morph");
+    check(!pos.legal(stackMorph),
+          "stack move was accepted using the pre-morph freezer type");
+
+    set_position(pos, states, "composable-stack-passive",
+                 "k7/8/3A4/3An3/8/8/8/4K3 w - - 0 1");
+    Move stackPassive = make<STACK>(SQ_D6, SQ_D5);
+    simulated = pos.simulated_move_info(stackPassive);
+    check(pos.variant()->blastPassiveTypes & piece_set(QUEEN),
+          "stacked passive regression did not configure its burner");
+    check(simulated.type_pieces(WHITE, QUEEN) & square_bb(SQ_D5),
+          "stacked passive regression did not produce its final type");
+    check(pos.blast_pattern(SQ_D5) & square_bb(SQ_E5),
+          "stacked passive regression did not configure an adjacent blast");
+    check(simulated.removedByEffects & square_bb(SQ_E5),
+          "stacked passive burner was omitted from move simulation");
+    states->emplace_back();
+    pos.do_move(stackPassive, states->back());
+    check(pos.piece_on(SQ_E5) == NO_PIECE,
+          "stacked passive burner disagreed with committed effects");
+    pos.undo_move(stackPassive);
+    states->pop_back();
+
+    set_position(pos, states, "composable-unstack-morph",
+                 "k3r3/8/3B4/8/8/8/8/4K3 w - - 0 1");
+    Move unstackMorph = make<UNSTACK>(SQ_D6, SQ_D7);
+    simulated = pos.simulated_move_info(unstackMorph);
+    check(simulated.freezerOccupancy[WHITE] & square_bb(SQ_D7),
+          "unstack simulation missed the post-morph freezer type");
+    check(pos.legal(unstackMorph),
+          "unstack move was rejected without applying its move morph");
+
+    set_position(pos, states, "composable-unstack-passive",
+                 "k7/8/2nB4/8/8/8/8/4K3 w - - 0 1");
+    Move unstackPassive = make<UNSTACK>(SQ_D6, SQ_D7);
+    simulated = pos.simulated_move_info(unstackPassive);
+    check(pos.variant()->blastPassiveTypes & piece_set(CUSTOM_PIECE_1),
+          "unstacked passive regression did not configure its burner");
+    check(simulated.type_pieces(WHITE, CUSTOM_PIECE_1) & square_bb(SQ_D6),
+          "unstacked passive regression did not retain its final source type");
+    check(pos.blast_pattern(SQ_D6) & square_bb(SQ_C6),
+          "unstacked passive regression did not configure an adjacent blast");
+    check(simulated.removedByEffects & square_bb(SQ_C6),
+          "unstacked passive burner was omitted from move simulation");
+    states->emplace_back();
+    pos.do_move(unstackPassive, states->back());
+    check(pos.piece_on(SQ_C6) == NO_PIECE,
+          "unstacked passive burner disagreed with committed effects");
+    pos.undo_move(unstackPassive);
+    states->pop_back();
+
+    set_position(pos, states, "composable-death-freeze",
+                 "k7/8/8/8/8/4r3/3pQ3/4K3 w - - 0 1");
+    Move deathFreezeCapture = make_move(SQ_E2, SQ_D2);
+    simulated = pos.simulated_move_info(deathFreezeCapture);
+    check(!(simulated.occupiedAfterEffects & square_bb(SQ_E2))
+          && (simulated.occupiedAfterEffects & square_bb(SQ_D2))
+          && (simulated.addedDeadSquares & square_bb(SQ_D2)),
+          "death-on-capture simulation omitted the dead-square blocker");
+    {
+        Position::SimulatedMoveGuard guard(pos, deathFreezeCapture);
+        check(!(pos.freeze_squares(BLACK) & square_bb(SQ_E3)),
+              "dead freezer continued neutralizing a checker");
+    }
+    check(!pos.legal(deathFreezeCapture),
+          "move with a dead freezer incorrectly remained legal");
+
+    set_position(pos, states, "composable-death-freeze",
+                 "r7/8/8/8/8/p7/Q7/K7 w - - 0 1");
+    Move deathDeadBlock = make_move(SQ_A2, SQ_A3);
+    simulated = pos.simulated_move_info(deathDeadBlock);
+    check(simulated.addedDeadSquares & square_bb(SQ_A3),
+          "death-on-capture simulation omitted the new dead square");
+    check(simulated.occupiedAfterEffects & square_bb(SQ_A3),
+          "death-on-capture simulation omitted the dead-square blocker");
+    check(pos.legal(deathDeadBlock),
+          "death-on-capture dead square did not block the projected slider");
+    states->emplace_back();
+    pos.do_move(deathDeadBlock, states->back());
+    check(pos.state()->deadSquares & square_bb(SQ_A3),
+          "death-on-capture move did not install the dead square");
+    pos.undo_move(deathDeadBlock);
+    states->pop_back();
+
+    set_position(pos, states, "composable-color-freeze",
+                 "k7/8/8/8/8/4R3/2rpQ3/4K3 w - - 0 1");
+    Move colorFreezeCapture = make_move(SQ_E2, SQ_D2);
+    simulated = pos.simulated_move_info(colorFreezeCapture);
+    check(simulated.colorOccupancy[BLACK] & square_bb(SQ_D2),
+          "color-changing freezer remained on its original side in simulation");
+    {
+        Position::SimulatedMoveGuard guard(pos, colorFreezeCapture);
+        check(pos.freeze_squares(WHITE) & square_bb(SQ_E3),
+              "color-changing freezer did not freeze its former allies");
+        check(!(pos.freeze_squares(BLACK) & square_bb(SQ_C2)),
+              "color-changing freezer continued freezing its former allies");
+    }
+    states->emplace_back();
+    pos.do_move(colorFreezeCapture, states->back());
+    check(pos.piece_on(SQ_D2) == make_piece(BLACK, QUEEN),
+          "committed color-changing freezer disagreed with simulation");
+    pos.undo_move(colorFreezeCapture);
+    states->pop_back();
+
+    set_position(pos, states, "composable-trap-final-color",
+                 "7k/8/8/8/3RP3/8/8/K7 w - - 0 1");
+    Move trapColorProtector = make_move(SQ_D4, SQ_F4);
+    simulated = pos.simulated_move_info(trapColorProtector);
+    check(simulated.occupiedAfterEffects & square_bb(SQ_F4),
+          "trap color-order simulation removed the mover");
+    check(simulated.placedPiece == make_piece(BLACK, ROOK),
+          "trap color-order simulation did not finalize the mover color");
+    check(simulated.colorOccupancy[BLACK] & square_bb(SQ_F4),
+          "trap color-order simulation did not recolor the protector");
+    check(!(simulated.occupiedAfterEffects & square_bb(SQ_E4)),
+          "trap occupant survived after its recolored protector moved");
+    states->emplace_back();
+    pos.do_move(trapColorProtector, states->back());
+    check(pos.piece_on(SQ_F4) == make_piece(BLACK, ROOK)
+              && pos.piece_on(SQ_E4) == NO_PIECE,
+          "committed trap color ordering retained an unprotected occupant");
+    pos.undo_move(trapColorProtector);
+    states->pop_back();
+
+    set_position(pos, states, "composable-flip-trap",
+                 "8/8/8/8/2E1e3/8/8/8 w - - 0 1");
+    Move flipTrap = make_move(SQ_C4, SQ_D4);
+    simulated = pos.simulated_move_info(flipTrap, false);
+    check(simulated.colorOccupancy[WHITE] & square_bb(SQ_E4),
+          "flip simulation did not apply the pre-move color change before effects");
+    simulated = pos.simulated_move_info(flipTrap);
+    check(simulated.colorOccupancy[WHITE] & square_bb(SQ_E4),
+          "flip simulation did not apply the pre-move color change: white="
+              + std::to_string(bool(simulated.colorOccupancy[WHITE] & square_bb(SQ_E4)))
+              + " black=" + std::to_string(bool(simulated.colorOccupancy[BLACK] & square_bb(SQ_E4))));
+    check(simulated.occupiedAfterEffects & square_bb(SQ_E4),
+          "trap simulation ignored a pre-move color change");
+    states->emplace_back();
+    pos.do_move(flipTrap, states->back());
+    check(pos.piece_on(SQ_E4) == make_piece(WHITE, CUSTOM_PIECE_1),
+          "committed flip/trap ordering disagreed with simulation");
+    pos.undo_move(flipTrap);
+    states->pop_back();
+
+    set_position(pos, states, "composable-blast-promotion-trap-color",
+                 "8/8/8/8/3er3/8/4E3/8 w - - 0 1");
+    Move blastPromotionTrapColor = make_move(SQ_E2, SQ_E3);
+    simulated = pos.simulated_move_info(blastPromotionTrapColor);
+    check(simulated.blastPromotionOccupancy & square_bb(SQ_D4),
+          "blast-promotion trap regression did not promote the bystander");
+    check(simulated.occupiedAfterEffects & square_bb(SQ_E4),
+          "simulation treated a blast-promoted bystander as a capture");
+    states->emplace_back();
+    pos.do_move(blastPromotionTrapColor, states->back());
+    check(pos.piece_on(SQ_E4) == make_piece(BLACK, CUSTOM_PIECE_2),
+          "committed blast-promotion trap ordering changed the mover color");
+    pos.undo_move(blastPromotionTrapColor);
+    states->pop_back();
+
+    set_position(pos, states, "composable-flip-blast",
+                 "8/8/8/8/3e4/8/4E3/8 w - - 0 1");
+    Move flipBlast = make_move(SQ_E2, SQ_E3);
+    simulated = pos.simulated_move_info(flipBlast);
+    check(simulated.type_pieces(WHITE, QUEEN) & square_bb(SQ_D4),
+          "flip/blast simulation retained the bystander's old color");
+    states->emplace_back();
+    pos.do_move(flipBlast, states->back());
+    check(pos.piece_on(SQ_D4) == make_piece(WHITE, QUEEN),
+          "committed flip/blast ordering disagreed with simulation");
+    pos.undo_move(flipBlast);
+    states->pop_back();
+
+    set_position(pos, states, "composable-flip-surround",
+                 "8/8/8/4E3/4e3/8/4E3/8 w - - 0 1");
+    Move flipSurround = make_move(SQ_E2, SQ_E3);
+    simulated = pos.simulated_move_info(flipSurround);
+    check(!(simulated.removedByEffects & square_bb(SQ_E4)),
+          "flip/surround simulation used the bystander's old color");
+    states->emplace_back();
+    pos.do_move(flipSurround, states->back());
+    check(pos.piece_on(SQ_E4) == make_piece(WHITE, CUSTOM_PIECE_1),
+          "committed flip/surround ordering disagreed with simulation");
+    pos.undo_move(flipSurround);
+    states->pop_back();
+
+    set_position(pos, states, "composable-liberty-trap",
+                 "9/9/9/9/3P5/2PpP4/9/p8 w - - 0 1");
+    Move libertyTrap = parse_move(pos, "P@d3");
+    simulated = pos.simulated_move_info(libertyTrap);
+    check(simulated.removedByEffects & square_bb(SQ_D4),
+          "liberty removal was omitted before simulated trap resolution");
+    states->emplace_back();
+    pos.do_move(libertyTrap, states->back());
+    check(pos.piece_on(SQ_D4) == NO_PIECE && pos.piece_on(SQ_A1) == NO_PIECE,
+          "committed liberty/trap ordering disagreed with simulation");
+    pos.undo_move(libertyTrap);
+    states->pop_back();
+
+    set_position(pos, states, "composable-trap-final-death",
+                 "7k/8/8/8/3RPp2/8/8/K7 w - - 0 1");
+    Move trapDeathProtector = make_move(SQ_D4, SQ_F4);
+    simulated = pos.simulated_move_info(trapDeathProtector);
+    check(!(simulated.occupiedAfterEffects & square_bb(SQ_E4)),
+          "trap occupant survived after its capturer died");
+    states->emplace_back();
+    pos.do_move(trapDeathProtector, states->back());
+    check(pos.piece_on(SQ_E4) == NO_PIECE,
+          "committed trap death ordering retained an unprotected occupant");
+    pos.undo_move(trapDeathProtector);
+    states->pop_back();
+
+    set_position(pos, states, "composable-color-attack",
+                 "7k/8/8/8/8/8/4R3/4K3 w - - 0 1");
+    Move colorAttack = make_move(SQ_E2, SQ_E3);
+    check(!pos.legal(colorAttack),
+          "color-changing mover left its own king attacked in simulation");
+
+    set_position(pos, states, "composable-potion-freeze",
+                 "4r2k/8/8/8/8/8/6N1/4K3[F] w - - 0 1");
+    Move potionFreezeEvasion = parse_move(pos, "f@e7,g2f4");
+    check(pos.evasion_checkers() & square_bb(SQ_E8),
+          "potion freeze evasion test position was not in check");
+    check(potionFreezeEvasion != MOVE_NONE
+          && MoveList<LEGAL>(pos).contains(potionFreezeEvasion),
+          "freeze potion did not admit a move that neutralized the checker");
+
+    set_position(pos, states, "composable-potion-freeze",
+                 "4r2k/8/8/1B6/8/8/8/4K3[F] w - - 0 1");
+    Move potionCaptureEvasion = parse_move(pos, "f@a1,b5e8");
+    check(pos.evasion_checkers() & square_bb(SQ_E8),
+          "potion capture evasion test position was not in check");
+    check(MoveList<LEGAL>(pos).contains(potionCaptureEvasion),
+          "freeze potion omitted an evasion that captured the checker");
+
+    set_position(pos, states, "composable-potion-freeze",
+                 "4r2k/8/8/8/8/8/8/4K3[F] w - - 0 1");
+    Move potionKingEvasion = parse_move(pos, "f@a1,e1f1");
+    check(pos.evasion_checkers() & square_bb(SQ_E8),
+          "potion king-evasion test position was not in check");
+    check(potionKingEvasion != MOVE_NONE
+          && MoveList<LEGAL>(pos).contains(potionKingEvasion),
+          "freeze potion rejected a safe king destination while checking the old square");
+
+    set_position(pos, states, "composable-drop-freeze-check",
+                 "4k3/8/8/8/8/8/8/3f3K[R] w - - 0 1");
+    Move frozenCheckDrop = make_drop(SQ_E1, ROOK, ROOK);
+    check(!pos.gives_check(frozenCheckDrop),
+          "a frozen checking drop was reported as checking");
+    check(!MoveList<QUIET_CHECKS>(pos).contains(frozenCheckDrop),
+          "quiet-check generation retained a frozen checking drop");
+
+    set_position(pos, states, "composable-drop-trap-check",
+                 "4k3/8/8/8/8/8/8/7K[R] w - - 0 1");
+    Move trappedCheckDrop = make_drop(SQ_E1, ROOK, ROOK);
+    check(!pos.gives_check(trappedCheckDrop),
+          "a trapped checking drop was reported as checking");
+    check(!MoveList<QUIET_CHECKS>(pos).contains(trappedCheckDrop),
+          "quiet-check generation retained a trapped checking drop");
+
+    set_position(pos, states, "composable-drop-trap-discovered-check",
+                 "k7/8/8/8/p7/8/7K/R7[R] w - - 0 1");
+    Move trapDiscoveredCheckDrop = make_drop(SQ_H1, ROOK, ROOK);
+    SimulatedMoveInfo trapDiscoveredCheckInfo = pos.simulated_move_info(trapDiscoveredCheckDrop);
+    check(!(trapDiscoveredCheckInfo.occupiedAfterEffects & square_bb(SQ_A4)),
+          "trap removal from a drop did not remove the line blocker in simulation");
+    check(MoveList<LEGAL>(pos).contains(trapDiscoveredCheckDrop),
+          "trap-discovered drop test move was not generated as legal");
+    check(pos.gives_check(trapDiscoveredCheckDrop),
+          "trap removal from a drop did not expose a discovered check");
+    check(MoveList<QUIET_CHECKS>(pos).contains(trapDiscoveredCheckDrop),
+          "quiet-check generation discarded a trap-discovered checking drop");
+
+    set_position(pos, states, "composable-gate-trap",
+                 "4k3/8/8/8/8/8/4R3/4K3 w - - 0 1");
+    pos.state()->gatesBB[WHITE] |= square_bb(SQ_E2);
+    Move trapMove = make_move(SQ_E1, SQ_F1);
+    check(pos.legal(trapMove), "trap gate cleanup test move was not legal");
+    states->emplace_back();
+    pos.do_move(trapMove, states->back());
+    check(pos.piece_on(SQ_E2) == NO_PIECE
+          && !(pos.gates(WHITE) & square_bb(SQ_E2)),
+          "trap removal left a stale gate square");
+    pos.undo_move(trapMove);
+    states->pop_back();
+
+    set_position(pos, states, "composable-hopper-morph",
+                 "k7/3q4/8/8/4B3/3D4/8/8 w - - 0 1");
+    Move hopperMorph = make_move(SQ_E4, SQ_D4);
+    simulated = pos.simulated_move_info(hopperMorph);
+    check(simulated.placedPiece == make_piece(WHITE, QUEEN),
+          "hopper simulation retained the pre-morph hurdle identity");
+    Bitboard simulatedHopperAttackers;
+    {
+        Position::SimulatedMoveGuard guard(pos, hopperMorph);
+        Position::SimulatedMoveInfoGuard view(pos);
+        view.set(simulated);
+        check(pos.piece_at(SQ_D4, simulated.occupiedAfterEffects) == make_piece(WHITE, QUEEN),
+              "simulated piece view lost the post-morph hurdle");
+        simulatedHopperAttackers = pos.attackers_to(
+            SQ_D6, simulated.occupiedAfterEffects, WHITE,
+            pos.pieces(JANGGI_CANNON), &simulated);
+    }
+    check(simulatedHopperAttackers & square_bb(SQ_D3),
+          "simulated hopper did not classify the post-morph hurdle");
+    states->emplace_back();
+    pos.do_move(hopperMorph, states->back());
+    check(pos.attackers_to(SQ_D6, pos.pieces(), WHITE) & square_bb(SQ_D3),
+          "hopper simulation disagreed with the committed attack map");
+    pos.undo_move(hopperMorph);
+    states->pop_back();
+
+    set_position(pos, states, "composable-blast-janggi-screen",
+                 "7k/8/4c3/3R4/4c3/8/8/4K3 w - - 0 1");
+    Move blastCannonScreen = make_move(SQ_D5, SQ_D4);
+    simulated = pos.simulated_move_info(blastCannonScreen);
+    check(!(simulated.type_pieces(BLACK, JANGGI_CANNON) & square_bb(SQ_E4)),
+          "blast cannon simulation retained a promoted screen as a cannon");
+    Bitboard simulatedCannons = simulated.type_pieces(WHITE, JANGGI_CANNON)
+                              | simulated.type_pieces(BLACK, JANGGI_CANNON);
+    check(pos.attackers_to(SQ_E1, simulated.occupiedAfterEffects, BLACK,
+                           pos.pieces(JANGGI_CANNON), &simulated)
+              == pos.attackers_to(SQ_E1, simulated.occupiedAfterEffects, BLACK,
+                                  simulatedCannons, &simulated),
+          "simulated cannon attack ignored the final cannon classification");
+    check(!pos.legal(blastCannonScreen),
+          "blast promotion left a newly non-cannon screen undetected");
+
+    set_position(pos, states, "composable-trap-ep-check",
+                 "8/8/8/RPp4k/8/8/8/4K3 w - c6 0 1");
+    Move trapEnPassant = parse_move(pos, "b5c6");
+    check(!pos.gives_check(trapEnPassant),
+          "en-passant check detection ignored the final trap removal");
+    check(pos.legal(trapEnPassant),
+          "en-passant was rejected after its discovered checker was trapped");
+
+    set_position(pos, states, "composable-trap-ep-legality",
+                 "7k/8/8/1Ppr4/8/8/8/3K4 w - c6 0 1");
+    Move trapEvasionEnPassant = make<EN_PASSANT>(SQ_B5, SQ_C6);
+    check(pos.evasion_checkers() & square_bb(SQ_D5),
+          "trap en-passant evasion test position was not in check");
+    check(pos.legal(trapEvasionEnPassant),
+          "en-passant did not use trap removal when resolving check");
+
+    set_position(pos, states, "composable-trap-ep-blocker",
+                 "r6k/8/8/RPp5/8/8/8/K7 w - c6 0 1");
+    Move trapBlockerEnPassant = make<EN_PASSANT>(SQ_B5, SQ_C6);
+    check(!pos.legal(trapBlockerEnPassant),
+          "en-passant ignored trap removal of a king-line blocker");
+
+    set_position(pos, states, "composable-castle-freeze-destination",
+                 "k7/8/8/8/8/8/4n3/4K2R w K - 0 1");
+    check(pos.legal(make<CASTLING>(SQ_E1, SQ_H1)),
+          "castling destination was checked before its final freezer arrived");
+
+    set_position(pos, states, "composable-castle-effects",
+                 "7k/8/8/8/8/8/6r1/4K2R w K - 0 1");
+    Move trapCastle = make<CASTLING>(SQ_E1, SQ_H1);
+    simulated = pos.simulated_move_info(trapCastle);
+    check(!(simulated.occupiedAfterEffects & square_bb(SQ_G2)),
+          "castling simulation retained an unprotected trap attacker");
+    check(simulated.occupiedAfterEffects & square_bb(SQ_G1),
+          "castling simulation did not place the king on its destination");
+    check(!(pos.attackers_to_king(SQ_G1, simulated.occupiedAfterEffects, BLACK,
+                                  pos.pieces(JANGGI_CANNON), NO_PIECE_TYPE, &simulated)
+            & simulated.occupiedAfterEffects),
+          "post-effect castling attack map still sees an attacker");
+    check(pos.legal(trapCastle),
+          "castling destination retained an attacker removed by a trap");
+
+    set_position(pos, states, "composable-royal-path-freeze",
+                 "8/8/8/8/3q4/8/8/4K3 w - - 0 1");
+    check(pos.attackers_to(SQ_E3, pos.pieces(), BLACK,
+                           pos.pieces(JANGGI_CANNON)) & square_bb(SQ_D4),
+          "royal transit test position was not attacked on its intermediate square");
+    check(!pos.legal(make_move(SQ_E1, SQ_E4)),
+          "royal transit check incorrectly used the final freezer state");
+
+    set_position(pos, states, "composable-freeze-traps-blast",
+                 "8/8/8/4e3/8/8/4E3/8 w - - 0 1");
+    Move blastMoverMove = make_move(SQ_E2, SQ_E3);
+    simulated = pos.simulated_move_info(blastMoverMove);
+    check(simulated.occupiedAfterEffects & square_bb(SQ_E3),
+          "blast-promoted mover disappeared from move simulation");
+    states->emplace_back();
+    pos.do_move(blastMoverMove, states->back());
+    check(type_of(pos.piece_on(SQ_E3)) == QUEEN,
+          "blast-promoted mover had the wrong committed type");
+    pos.undo_move(blastMoverMove);
+    states->pop_back();
+
+    set_position(pos, states, "composable-freeze-traps-blast",
+                 "8/8/8/8/8/8/4E3/4e3 w - - 0 1");
+    Move blastCapture = make_move(SQ_E2, SQ_E3);
+    simulated = pos.simulated_move_info(blastCapture);
+    check(simulated.occupiedAfterEffects & square_bb(SQ_E3),
+          "blast-promoted capture destination disappeared from simulation");
+    states->emplace_back();
+    pos.do_move(blastCapture, states->back());
+    check(type_of(pos.piece_on(SQ_E3)) == QUEEN,
+          "blast-promoted capture destination had the wrong committed type");
+    pos.undo_move(blastCapture);
+    states->pop_back();
+
+    set_position(pos, states, "composable-blast-promotion-color",
+                 "8/8/8/4e3/8/8/4E3/8 w - - 0 1");
+    Move blastPromotionColor = make_move(SQ_E2, SQ_E3);
+    simulated = pos.simulated_move_info(blastPromotionColor);
+    check(simulated.blastPromotionOccupancy & square_bb(SQ_E3),
+          "blast-promotion color regression did not promote its survivor");
+    check(!(simulated.removedByEffects & square_bb(SQ_E3)),
+          "blast-promotion color regression removed its survivor in simulation");
+    check(simulated.colorOccupancy[WHITE] & square_bb(SQ_E3),
+          "blast-promotion color simulation lost the mover color");
+    check(!(simulated.colorOccupancy[BLACK] & square_bb(SQ_E3)),
+          "blast-promotion survivor incorrectly triggered simulated color change");
+    states->emplace_back();
+    pos.do_move(blastPromotionColor, states->back());
+    check(pos.piece_on(SQ_E3) == make_piece(WHITE, QUEEN),
+          "blast-promotion survivor incorrectly triggered committed color change");
+    pos.undo_move(blastPromotionColor);
+    states->pop_back();
+
+    set_position(pos, states, "composable-blast-promotion-trap-color-mismatch",
+                 "8/8/8/8/4E3/8/4E3/8 w - - 0 1");
+    Move blastPromotionTrapColorMismatch = make_move(SQ_E2, SQ_E3);
+    simulated = pos.simulated_move_info(blastPromotionTrapColorMismatch);
+    check(!(simulated.occupiedAfterEffects & square_bb(SQ_E4)),
+          "blast-promotion color simulation did not remove the unprotected trap piece");
+    states->emplace_back();
+    pos.do_move(blastPromotionTrapColorMismatch, states->back());
+    check(pos.piece_on(SQ_E3) == make_piece(BLACK, QUEEN),
+          "committed blast-promotion color ordering lost the promoted mover");
+    check(pos.piece_on(SQ_E4) == NO_PIECE,
+          "committed blast-promotion color ordering disagreed with trap simulation");
+    pos.undo_move(blastPromotionTrapColorMismatch);
+    states->pop_back();
+
+    set_position(pos, states, "composable-blast-immune",
+                 "8/8/8/4e3/8/8/4R3/8 w - - 0 1");
+    Move blastImmuneMove = make_move(SQ_E2, SQ_E3);
+    simulated = pos.simulated_move_info(blastImmuneMove);
+    check(simulated.blastImmuneOccupancy & square_bb(SQ_E3),
+          "moved blast-immune piece kept its immunity on the old square");
+    check(simulated.occupiedAfterEffects & square_bb(SQ_E3),
+          "moved blast-immune piece was removed from move simulation");
+    states->emplace_back();
+    pos.do_move(blastImmuneMove, states->back());
+    check(pos.piece_on(SQ_E3) != NO_PIECE,
+          "moved blast-immune piece was removed by committed effects");
+    pos.undo_move(blastImmuneMove);
+    states->pop_back();
+
+    set_position(pos, states, "composable-rifle-morph",
+                 "4k3/8/8/8/8/4p3/4R3/4K3 w - - 0 1");
+    Move rifleMorph = parse_move(pos, "e2e3");
+    check(pos.rifle_capture(rifleMorph) && pos.capture(rifleMorph),
+          "rifle morph regression did not create a rifle capture");
+    simulated = pos.simulated_move_info(rifleMorph);
+    check(simulated.blastImmuneOccupancy & square_bb(SQ_E2),
+          "rifle morph did not update the shooter's blast immunity");
+    check(simulated.occupiedAfterEffects & square_bb(SQ_E2),
+          "rifle morph shooter disappeared from move simulation");
+    states->emplace_back();
+    pos.do_move(rifleMorph, states->back());
+    check(type_of(pos.piece_on(SQ_E2)) == QUEEN,
+          "rifle shooter did not receive its configured morph");
+    pos.undo_move(rifleMorph);
+    states->pop_back();
+
+    set_position(pos, states, "composable-rifle-morph-out",
+                 "4k3/8/8/8/8/4p3/4Q3/4K3 w - - 0 1");
+    Move rifleMorphOut = parse_move(pos, "e2e3");
+    simulated = pos.simulated_move_info(rifleMorphOut);
+    check(!(simulated.blastImmuneOccupancy & square_bb(SQ_E2))
+          && !(simulated.occupiedAfterEffects & square_bb(SQ_E2)),
+          "rifle morph out retained blast immunity in simulation");
+    states->emplace_back();
+    pos.do_move(rifleMorphOut, states->back());
+    check(pos.piece_on(SQ_E2) == NO_PIECE,
+          "rifle morph out retained blast immunity in committed effects");
+    pos.undo_move(rifleMorphOut);
+    states->pop_back();
+
+    set_position(pos, states, "composable-ep-ghost",
+                 "4k3/8/3r4/3pP3/8/8/8/4K3[F] w - d6 0 1");
+    Move occupiedEp = make<EN_PASSANT>(SQ_E5, SQ_D6);
+    simulated = pos.simulated_move_info(occupiedEp);
+    check(!(simulated.colorOccupancy[BLACK] & square_bb(SQ_D6))
+          && (simulated.colorOccupancy[WHITE] & square_bb(SQ_D6)),
+          "occupied en-passant target left a ghost enemy in simulation");
+
+    set_position(pos, states, "composable-trap-swap",
+                 "4k3/8/8/8/8/8/8/4Kr2 w - - 0 1");
+    check(!pos.legal(make<SWAP>(SQ_E1, SQ_F1)),
+          "a swap accepted after a trap removed the moving royal");
+
+    set_position(pos, states, "composable-blast-promotion-check",
+                 "7k/8/8/8/4e2K/8/4E3/8 w - - 0 1");
+    Move blastPromotionCheck = make_move(SQ_E2, SQ_E3);
+    check(!pos.legal(blastPromotionCheck),
+          "a blast-promoted bystander was omitted from post-move king safety");
+
+    set_position(pos, states, "composable-wrap-trap",
+                 "1r1R4 w - - 0 1");
+    Move wrappedProtection = make_move(SQ_D1, SQ_E1);
+    simulated = pos.simulated_move_info(wrappedProtection);
+    check(simulated.removedByEffects & square_bb(SQ_B1),
+          "one-rank wrapping treated a trap occupant as its own protector");
+
+    set_position(pos, states, "composable-gated-pawn-blast",
+                 "7k/8/8/8/8/8/4R3/7K w - - 0 1");
+    Move gatedPawnBlast = make_gating<NORMAL>(SQ_E2, SQ_E3, PAWN, SQ_E4);
+    simulated = pos.simulated_move_info(gatedPawnBlast);
+    check(simulated.occupiedAfterEffects & square_bb(SQ_E4),
+          "gated pawn was removed using its pre-move classification");
+
+    set_position(pos, states, "composable-demotion-morph",
+                 "4k3/8/8/8/8/8/8/2B~:P1K3 w - - 0 1");
+    Move demotionMorph = make<PIECE_DEMOTION>(SQ_C1, SQ_D1);
+    simulated = pos.simulated_move_info(demotionMorph);
+    check(simulated.freezerOccupancy[WHITE] & square_bb(SQ_D1),
+          "demotion skipped the subsequent move morph in simulation");
+    states->emplace_back();
+    pos.do_move(demotionMorph, states->back());
+    check(type_of(pos.piece_on(SQ_D1)) == QUEEN,
+          "demotion did not receive its configured move morph");
+    pos.undo_move(demotionMorph);
+    states->pop_back();
+
+    set_position(pos, states, "composable-blast-surround",
+                 "8/8/8/4R3/4e3/8/4E3/8 w - - 0 1");
+    Move blastSurround = make_move(SQ_E2, SQ_E3);
+    simulated = pos.simulated_move_info(blastSurround);
+    check(simulated.blastPromotionOccupancy & square_bb(SQ_E4),
+          "blast promotion candidate was lost to surround removal");
+    check(!(simulated.removedByEffects & square_bb(SQ_E4)),
+          "blast promotion candidate was removed after promotion simulation");
+    check(simulated.occupiedAfterEffects & square_bb(SQ_E4),
+          "blast promotion disagreed with surround removal in simulation");
+    states->emplace_back();
+    pos.do_move(blastSurround, states->back());
+    check(type_of(pos.piece_on(SQ_E4)) == QUEEN,
+          "blast promotion disagreed with surround removal in do_move");
+    pos.undo_move(blastSurround);
+    states->pop_back();
+
+    set_position(pos, states, "composable-print-overlap",
+                 "4k3/8/8/3Rr3/8/8/8/4K3[JJFFFFjjffff] w - - 0 1 wj:e4");
+    std::ostringstream printed;
+    printed << pos;
+    check(!printed.str().empty(),
+          "printing an overlapping generic freeze and jump zone failed");
+
+    set_position(pos, states, "composable-trap-royal",
+                 "4k3/8/8/8/8/8/8/4K2R w K - 0 1");
+    check(!pos.legal(make<CASTLING>(SQ_E1, SQ_H1)),
+          "castling onto an unprotected trap square removed the royal");
 }
 
 void extinction_color_settings() {
@@ -249,6 +1220,7 @@ void occupancy() {
 
     set_position(pos, states, "chess", "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1");
     Move move = parse_move(pos, "e1g1");
+    check_simulation_matches_move(pos, states, move, "castling simulation");
     SimulatedMoveInfo info = pos.simulated_move_info(move);
     Bitboard castled = (pos.pieces() ^ square_bb(SQ_E1) ^ square_bb(SQ_H1))
                      | square_bb(SQ_G1) | square_bb(SQ_F1);
@@ -761,6 +1733,461 @@ surroundClaimPiece = b
 surroundClaimExtraTurn = true
 materialCounting = unweighted
 materialCountingPieceTypes = b
+
+[composable-freeze-traps:fairy]
+pieceToCharTable = -
+pawn = -
+knight = -
+bishop = -
+rook = -
+queen = -
+king = -
+fers = -
+silver = -
+aiwok = -
+archbishop = -
+customPiece1 = e:mW
+customPiece2 = m:mW
+customPiece3 = r:R
+castling = false
+checking = false
+freezePieceTypes = e
+trapRegion = c3 f3 c6 f6
+trapProtection = friendly-orthogonal
+startFen = 8/8/8/8/8/8/8/8 w - - 0 1
+
+[composable-freeze-orth-only:composable-freeze-traps]
+freezeDiagonals = false
+
+[composable-freeze-immune:composable-freeze-traps]
+freezeImmunePieceTypes = m
+
+[composable-pass-freeze:chess]
+king = -
+customPiece1 = f:W
+freezePieceTypes = f
+pass = true
+checking = false
+castling = false
+startFen = 8/8/8/8/8/8/8/8 w - - 0 1
+
+[composable-freeze-wall:composable-pass-freeze]
+pass = false
+wallingRule = edge
+wallOrMove = true
+wallingRegion = h8
+
+[composable-check-morph-in:chess]
+moveMorphPieceType = b:r
+castling = false
+
+[composable-check-morph-out:chess]
+moveMorphPieceType = r:b
+castling = false
+
+[composable-pseudoroyal-morph-in:chess]
+pseudoRoyalTypes = r
+pseudoRoyalCount = 1
+moveMorphPieceType = b:r
+castling = false
+
+[composable-freeze-traps-blast:fairy]
+pieceToCharTable = -
+pawn = -
+knight = -
+bishop = -
+rook = -
+queen = q
+king = -
+fers = -
+silver = -
+aiwok = -
+archbishop = -
+customPiece1 = e:mW
+customPiece2 = r:R
+castling = false
+checking = false
+promotedPieceType = e:q
+blastOnMove = true
+blastOnCapture = true
+blastPromotion = true
+trapRegion = e4
+trapProtection = friendly-orthogonal
+startFen = 8/8/8/8/8/8/8/8 w - - 0 1
+
+[composable-blast-promotion-color:composable-freeze-traps-blast]
+changingColorTrigger = capture
+changingColorPieceTypes = q
+checking = false
+trapRegion = -
+
+[composable-rifle-morph-out:chess]
+rifleCapture = true
+moveMorphPieceType = q:r
+blastOnCapture = true
+blastImmuneTypes = q
+castling = false
+
+[composable-blast-immune:composable-freeze-traps-blast]
+blastImmuneTypes = r
+
+[composable-rifle-morph:chess]
+rifleCapture = true
+moveMorphPieceType = r:q
+blastOnCapture = true
+blastImmuneTypes = q
+castling = false
+
+[composable-ep-ghost:spell-chess]
+freezePieceTypes = r
+
+[composable-trap-swap:chess]
+adjacentSwapMoveTypes = k
+checking = false
+trapRegion = f1
+trapProtection = none
+
+[composable-wrap-trap:fairy]
+maxRank = 1
+maxFile = h
+toroidal = true
+pieceToCharTable = -
+pawn = -
+knight = -
+bishop = -
+rook = -
+queen = -
+king = -
+customPiece1 = r:mW
+checking = false
+trapRegion = b1
+trapProtection = friendly-orthogonal
+startFen = 8 w - - 0 1
+
+[composable-gated-pawn-blast:chess]
+gating = true
+blastOnMove = true
+checking = false
+castling = false
+
+[composable-demotion-morph:chess]
+pieceDemotion = true
+moveMorphPieceType = p:q
+freezePieceTypes = q
+checking = false
+castling = false
+
+[composable-blast-surround:composable-freeze-traps-blast]
+surroundCaptureOpposite = true
+trapRegion = -
+
+[composable-blast-promotion-check:composable-freeze-traps-blast]
+checking = true
+allowChecks = false
+king = k
+trapRegion = -
+
+[composable-print-overlap:spell-chess]
+freezePieceTypes = r
+
+[composable-trap-blocker:fairy]
+pieceToCharTable = -
+pawn = -
+knight = -
+bishop = -
+rook = -
+queen = -
+king = -
+fers = -
+silver = -
+aiwok = -
+archbishop = -
+customPiece1 = r:R
+castling = false
+checking = false
+wallingRule = static
+wallingRegion = c3
+trapRegion = c3
+trapProtection = friendly-orthogonal
+startFen = 8/8/8/8/8/2*5/8/8 w - - 0 1
+
+[composable-freeze-check:chess]
+customPiece1 = f:Q
+freezePieceTypes = f
+castling = false
+
+[composable-freeze-evasion:chess]
+customPiece1 = f:W
+freezePieceTypes = f
+castling = false
+
+[composable-trap-evasion:chess]
+trapRegion = e8
+trapProtection = friendly-orthogonal
+castling = false
+
+[composable-trap-quiet-check:chess]
+trapRegion = e4
+trapProtection = friendly-orthogonal
+castling = false
+
+[composable-trap-pawn-quiet-check:chess]
+trapRegion = e4
+trapProtection = friendly-orthogonal
+castling = false
+
+[composable-royal-capture-filter:chess]
+captureForbiddenBlack = r:k
+castling = false
+
+[composable-rex-royal-capture:chess]
+captureMorph = true
+rexExclusiveMorph = true
+captureForbiddenBlack = q:k
+castling = false
+
+[composable-freeze-double-evasion:chess]
+customPiece1 = f:N
+freezePieceTypes = f
+castling = false
+
+[composable-rex-blast:chess]
+captureMorph = true
+rexExclusiveMorph = true
+blastOnCapture = true
+blastImmuneTypes = q
+castling = false
+
+[composable-stack-morph:chess]
+customPiece1 = a:W
+customPiece2 = b:W
+stackedPieceType = a:b
+moveMorphPieceType = b:q
+freezePieceTypes = b
+castling = false
+
+[composable-stack-passive:chess]
+customPiece1 = a:W
+customPiece2 = b:W
+stackedPieceType = a:b
+moveMorphPieceType = b:q
+blastPassiveTypes = q
+blastPattern = W
+checking = false
+castling = false
+
+[composable-unstack-morph:chess]
+customPiece1 = a:W
+customPiece2 = b:W
+stackedPieceType = a:b
+moveMorphPieceType = a:q
+freezePieceTypes = q
+castling = false
+
+[composable-unstack-passive:chess]
+customPiece1 = a:W
+customPiece2 = b:W
+stackedPieceType = a:b
+moveMorphPieceType = a:q
+blastPassiveTypes = a
+blastPattern = W
+checking = false
+castling = false
+
+[composable-death-freeze:chess]
+freezePieceTypes = q
+deathOnCaptureTypes = q
+castling = false
+
+[composable-color-freeze:chess]
+freezePieceTypes = q
+changingColorTrigger = capture
+changingColorPieceTypes = q
+castling = false
+
+[composable-trap-final-color:chess]
+trapRegion = e4
+trapProtection = friendly-orthogonal
+changingColorTrigger = always
+changingColorPieceTypes = r
+castling = false
+
+[composable-flip-trap:composable-freeze-traps]
+flipEnclosedPieces = ataxx
+trapRegion = e4
+startFen = 8/8/8/2E1e3/8/8/8/8 w - - 0 1
+
+[composable-blast-promotion-trap-color:composable-freeze-traps-blast]
+blastOrthogonals = false
+blastDiagonals = true
+blastCenter = false
+changingColorTrigger = capture
+changingColorPieceTypes = e
+trapRegion = e4
+
+[composable-blast-promotion-trap-color-mismatch:composable-freeze-traps-blast]
+blastOrthogonals = false
+blastDiagonals = true
+blastCenter = true
+changingColorTrigger = always
+changingColorPieceTypes = q
+trapRegion = e4
+
+[composable-flip-blast:composable-freeze-traps-blast]
+flipEnclosedPieces = ataxx
+blastOrthogonals = false
+blastDiagonals = true
+blastCenter = false
+trapRegion = -
+
+[composable-flip-surround:composable-freeze-traps]
+flipEnclosedPieces = ataxx
+surroundCaptureOpposite = true
+trapRegion = -
+
+[composable-liberty-trap:go9]
+trapRegion = a1
+trapProtection = friendly-orthogonal
+
+[composable-trap-final-death:chess]
+trapRegion = e4
+trapProtection = friendly-orthogonal
+deathOnCaptureTypes = r
+castling = false
+
+[composable-color-attack:chess]
+changingColorTrigger = always
+changingColorPieceTypes = r
+castling = false
+
+[composable-compact-check:chess]
+pieceToCharTable = -
+castling = false
+
+[composable-color-promotion:chess]
+changingColorTrigger = always
+changingColorPieceTypes = q
+castling = false
+
+[composable-potion-freeze:chess]
+customPiece1 = f:W
+potions = true
+freezePotion = f
+freezeCooldown = 3
+potionDropOnOccupied = true
+castling = false
+
+[composable-drop-freeze-check:chess]
+customPiece1 = f:W
+freezePieceTypes = f
+castling = false
+
+[composable-drop-trap-check:chess]
+trapRegion = e1
+trapProtection = none
+castling = false
+
+[composable-drop-trap-discovered-check:chess]
+trapRegion = a4
+trapProtection = none
+pieceDrops = true
+freeDrops = true
+castling = false
+
+[composable-gate-trap:chess]
+gating = true
+trapRegion = e2
+trapProtection = none
+castling = false
+
+[composable-hopper-morph:chess]
+pieceToCharTable = PNBRQKDB
+customPiece1 = d:c{hurdles: 1,1; pre: 1,1; post: 2,2; hurdle_types: wall; hurdle_piece_types: q; capture: dest}R
+customPiece2 = b:W
+moveMorphPieceType = b:q
+castling = false
+
+[composable-blast-janggi-screen:chess]
+castling = false
+janggiCannon = c
+immobile = i
+promotedPieceType = c:i r:q
+blastOnMove = true
+blastPromotion = true
+
+[composable-trap-ep-check:chess]
+castling = false
+checking = false
+trapRegion = a5
+trapProtection = friendly-orthogonal
+
+[composable-trap-ep-legality:chess]
+trapRegion = d5
+trapProtection = friendly-orthogonal
+castling = false
+
+[composable-trap-ep-blocker:chess]
+trapRegion = a5
+trapProtection = friendly-orthogonal
+castling = false
+
+[composable-trap-ep-stale:chess]
+checking = false
+castling = false
+trapRegion = a5
+trapProtection = none
+
+[composable-trap-claim-undo:chess]
+checking = false
+castling = false
+trapRegion = e4
+trapProtection = none
+surroundClaimRegion = e4
+surroundClaimPiece = p
+
+[composable-trap-claim-royal:chess]
+castling = false
+trapRegion = e4
+trapProtection = none
+surroundClaimRegion = e4
+surroundClaimPiece = p
+
+[composable-commitgate-castle:chess]
+commitGates = true
+startFen = n7/4k3/8/8/8/8/8/8/4K2R/4R2R w K - 0 1
+
+[composable-commitgate-castle-blast:composable-commitgate-castle]
+blastOnMove = true
+blastPromotion = true
+blastCenter = false
+promotedPieceType = r:q
+
+[composable-laser-freeze:dos-laser-chess]
+freezePieceTypes = r
+
+[composable-check-projected-freeze:chess]
+checking = false
+freezePieceTypes = q
+
+[composable-sacred-static-freeze:chess]
+checkedRoyalsIgnoreFreeze = true
+freezePieceTypes = q
+
+[composable-castle-freeze-destination:chess]
+freezePieceTypes = r
+
+[composable-castle-effects:chess]
+trapRegion = g2
+trapProtection = none
+
+[composable-royal-path-freeze:chess]
+freezePieceTypes = q
+royalPieceNoThroughCheck = true
+
+[composable-trap-royal:chess]
+castling = true
+trapRegion = g1
+trapProtection = none
 )INI");
     variants.parse_istream<false>(inline_config);
 }
@@ -773,7 +2200,7 @@ int main(int argc, char** argv) {
         auto is_group = [](const std::string& name) {
             return name == "all" || name == "promotion" || name == "movement"
                 || name == "locust-all" || name == "occupancy" || name == "state" || name == "royal"
-                || name == "adjudication" || name == "board-games";
+                || name == "adjudication" || name == "board-games" || name == "composable-rules";
         };
         bool first_is_group = argc > 1 && is_group(argv[1]);
         std::string config_path = first_is_group ? "src/variants.ini"
@@ -792,6 +2219,7 @@ int main(int argc, char** argv) {
           {"promotion", promotion}, {"movement", movement}, {"occupancy", occupancy},
           {"extinction-color", extinction_color_settings},
           {"locust-all", locust_all},
+          {"composable-rules", composable_rules},
           {"state", state}, {"royal", royal}, {"adjudication", adjudication},
           {"board-games", board_games}
         };

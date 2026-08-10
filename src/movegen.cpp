@@ -101,9 +101,11 @@ namespace {
     bool captureIsRifle = from != to && pos.rifle_capture(m) && pos.capture(m);
     bool rifleShot = captureIsRifle && (T == NORMAL || T == PROMOTION);
     Square effectiveTo = (rifleShot || iguiShot) ? from : to;
-    Bitboard occupancyAfter = from == to && pos.laser_game()
-                            ? pos.pieces()
-                            : pos.simulated_move_info(m, false).placementOccupancy;
+    Bitboard occupancyAfter = Bitboard(0);
+    if (pos.gating() || pos.walling(us))
+        occupancyAfter = from == to && pos.laser_game()
+                       ? pos.pieces()
+                       : pos.simulated_move_info(m, false).placementOccupancy;
 
     // Wall placing moves
     //if it's "wall or move", and they chose non-null move, skip even generating wall move
@@ -132,7 +134,8 @@ namespace {
             if (rotateAfter && ((T != PROMOTION && T != PIECE_PROMOTION)
                                 || pos.variant()->rotationDelta))
             {
-                Bitboard rotators = pos.pieces(us) & laser_rotation_candidates(pos, us);
+                Bitboard rotators = pos.pieces(us) & laser_rotation_candidates(pos, us)
+                                   & ~pos.freeze_squares();
                 while (rotators)
                 {
                     Square rotateFrom = pop_lsb(rotators);
@@ -306,7 +309,23 @@ namespace {
           PieceType dropped = pop_lsb(dropForms);
           Bitboard b2 = baseTargets & pos.drop_region(Us, dropped);
           if (restrictToCheckSquares)
-              b2 &= pos.check_squares(dropped);
+          {
+              const bool effectChecks = pos.variant()->freezePieceTypes || pos.variant()->trapRegion;
+              if (!effectChecks)
+                  b2 &= pos.check_squares(dropped);
+              else
+              {
+                  // Static check squares do not account for post-drop effects.
+                  Bitboard checking = 0;
+                  while (b2)
+                  {
+                      Square to = pop_lsb(b2);
+                      if (pos.gives_check(make_drop(to, pt, dropped)))
+                          checking |= square_bb(to);
+                  }
+                  b2 = checking;
+              }
+          }
           while (b2)
               *moveList++ = make_drop(pop_lsb(b2), pt, dropped);
       }
@@ -600,7 +619,7 @@ namespace {
                 attacks &= ~mandatoryPromotionZone;
             }
 
-            if (QuietChecks)
+            if (QuietChecks && !pos.variant()->trapRegion && !pos.variant()->hasMoveMorph)
                 quiets &= pos.check_squares(PAWN);
 
             if (GeneratesQuiets)
@@ -695,7 +714,7 @@ namespace {
     }
 
     Square ksq = pos.royal_square(Them);
-    if (QuietChecks && ksq != SQ_NONE)
+    if (QuietChecks && !pos.variant()->trapRegion && ksq != SQ_NONE)
     {
         // To make a quiet check, you either make a direct check by pushing a pawn
         // or push a blocker pawn that is not on the same file as the enemy king.
@@ -982,7 +1001,9 @@ namespace {
         {
             // A move by an enemy-king blocker can give discovered check from
             // its new square without that square being a direct check square.
-            if (Pt == QUEEN || !(pos.blockers_for_king(~Us) & from))
+            if (!pos.variant()->trapRegion
+                && !pos.variant()->hasMoveMorph
+                && (Pt == QUEEN || !(pos.blockers_for_king(~Us) & from)))
             {
                 b1 &= pos.check_squares(Pt);
                 if (b2)
@@ -1142,8 +1163,15 @@ namespace {
 #endif
     const bool useFastStandardPawnGenerator = pos.variant()->useFastStandardPawnGenerator;
 
-    // Skip generating non-king moves when in double check
-    if (Type != EVASIONS || !more_than_one(checkers & ~pos.non_sliding_riders()))
+    // Freeze and trap effects can resolve a check without capturing or blocking
+    // its checker. Keep all candidates in this case, including double check,
+    // and let legal() determine whether the effect neutralizes the checkers.
+    const bool effectEvasions = Type == EVASIONS
+                              && (pos.variant()->freezePieceTypes || pos.variant()->trapRegion);
+
+    // Skip generating non-king moves when in double check unless an effect can
+    // change the activity of one or more checkers.
+    if (Type != EVASIONS || effectEvasions || !more_than_one(checkers & ~pos.non_sliding_riders()))
     {
         if (restrictToForcedJumper)
         {
@@ -1159,8 +1187,9 @@ namespace {
 
             if (Type == EVASIONS)
             {
-                const bool multipleCheckers = more_than_one(checkers);
-                if (multipleCheckers)
+                if (effectEvasions)
+                    target = AllSquares;
+                else if (more_than_one(checkers))
                 {
                     target = AllSquares;
                     Bitboard remaining = checkers;
@@ -1558,10 +1587,18 @@ namespace {
       if constexpr (Type == EVASIONS)
       {
           Color us = pos.side_to_move();
-          Bitboard occupied = pos.simulated_move_info(m).occupiedAfterEffects;
+          SimulatedMoveInfo simulated = pos.simulated_move_info(m);
+          Bitboard occupied = simulated.occupiedAfterEffects;
+          Square royalSquare = pos.royal_square(us);
+          // Castling encodes the rook source in `to`; effectiveTo is the king destination.
+          if (royalSquare == simulated.from)
+              royalSquare = simulated.effectiveTo;
 
           Position::SimulatedMoveGuard guard(pos, m);
-          if (pos.attackers_to(pos.royal_square(us), occupied, ~us))
+          Bitboard attackers = pos.attackers_to_king(royalSquare, occupied, ~us,
+                                                     pos.pieces(JANGGI_CANNON), NO_PIECE_TYPE,
+                                                     &simulated);
+          if (attackers & simulated.colorOccupancy[~us])
               return false;
           return true;
       }
@@ -1736,6 +1773,35 @@ namespace {
                 PotionBaseInfo baseInfo;
                 if (prepare_potion_base(pos, it->move, baseInfo))
                     bases.push_back({it->move, it->value, baseInfo});
+            }
+
+            // A freeze potion can neutralize a checker even when the
+            // accompanying move does not block or capture it.  If the
+            // variant has no ordinary freeze rule, the EVASIONS buffer does
+            // not contain those otherwise pseudo-legal base moves.
+            if constexpr (Type == EVASIONS)
+            {
+                if (!pos.variant()->freezePieceTypes)
+                {
+                    ExtMove allMoves[MOVEGEN_OVERFLOW_CAPACITY];
+                    ExtMove* allEnd = generate_all_impl<Us, NON_EVASIONS>(pos, allMoves);
+                    assert(allEnd - allMoves <= MOVEGEN_OVERFLOW_CAPACITY);
+                    for (ExtMove* it = allMoves; it != allEnd; ++it)
+                    {
+                        PotionBaseInfo baseInfo;
+                        if (!prepare_potion_base(pos, it->move, baseInfo))
+                            continue;
+                        bool alreadyPrepared = false;
+                        for (const auto& prepared : bases)
+                            if (prepared.move == it->move)
+                            {
+                                alreadyPrepared = true;
+                                break;
+                            }
+                        if (!alreadyPrepared)
+                            bases.push_back({it->move, it->value, baseInfo});
+                    }
+                }
             }
 
             while (candidates)
@@ -1938,7 +2004,11 @@ namespace {
 
       ScopedSpellContext spellScope(potion.freezeExtra, potion.jumpRemoved);
       ExtMove baseMoves[MOVEGEN_OVERFLOW_CAPACITY];
-      ExtMove* baseEnd = pos.evasion_checkers() && !pos.topology_wraps()
+      const bool broadenFreezeEvasion = pos.evasion_checkers()
+                                     && !pos.topology_wraps()
+                                     && potion.potion == Variant::POTION_FREEZE
+                                     && !pos.variant()->freezePieceTypes;
+      ExtMove* baseEnd = pos.evasion_checkers() && !pos.topology_wraps() && !broadenFreezeEvasion
                        ? generate_without_potions<EVASIONS>(pos, baseMoves)
                        : generate_without_potions<NON_EVASIONS>(pos, baseMoves);
 

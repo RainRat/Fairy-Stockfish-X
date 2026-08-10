@@ -187,6 +187,7 @@ run_promotion_drops() {
 run_state_transitions() {
     native occupancy
     native state
+    native composable-rules
     legacy stateinfo-regressions.sh 5m "${ENGINE}"
     legacy state-sync-key.sh 5m "${ENGINE}"
     legacy in-place-transform-undo.sh 2m "${ENGINE}"
