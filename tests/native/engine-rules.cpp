@@ -153,6 +153,18 @@ void composable_rules() {
     check(MoveList<LEGAL>(pos).contains(frozenAnchorPass),
           "a frozen pass anchor was not generated");
 
+    set_position(pos, states, "composable-freeze-wall",
+                 "8/8/8/8/8/8/f7/F7 w - - 0 1");
+    Move frozenAnchorWall = make_gating<SPECIAL>(SQ_A1, SQ_A1, NO_PIECE_TYPE, SQ_H8);
+    check(pos.freeze_squares() & square_bb(SQ_A1),
+          "pure wall test did not freeze the generated anchor");
+    check(pos.pseudo_legal(frozenAnchorWall),
+          "a frozen anchor incorrectly made a pure wall move pseudo-illegal");
+    check(pos.legal(frozenAnchorWall),
+          "a frozen anchor incorrectly made a pure wall move illegal");
+    check(MoveList<LEGAL>(pos).contains(frozenAnchorWall),
+          "a pure wall move with a frozen generated anchor was not generated");
+
     set_position(pos, states, "composable-freeze-traps",
                  "8/8/8/4m3/4M3/8/7r/8 w - - 0 1");
     Move nonFreezingPiece = parse_move(pos, "e4e3");
@@ -1758,6 +1770,12 @@ pass = true
 checking = false
 castling = false
 startFen = 8/8/8/8/8/8/8/8 w - - 0 1
+
+[composable-freeze-wall:composable-pass-freeze]
+pass = false
+wallingRule = edge
+wallOrMove = true
+wallingRegion = h8
 
 [composable-check-morph-in:chess]
 moveMorphPieceType = b:r

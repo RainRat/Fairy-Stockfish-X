@@ -5298,11 +5298,13 @@ bool Position::legal(Move m) const {
   if (!potCtx.valid)
       return false;
 
+  const bool pureWallMove = is_gating(m) && potCtx.potion == Variant::POTION_TYPE_NB
+                         && walling(us) && wall_or_move() && from == to;
   ScopedSpellContext spellScope(potCtx.freezeExtra, potCtx.jumpRemoved);
 
   {
       SimulatedMoveGuard currentPosition(*this, MOVE_NONE);
-      if (!dropMove && !is_pass(m) && (freeze_squares() & from))
+      if (!dropMove && !is_pass(m) && !pureWallMove && (freeze_squares() & from))
           return false;
       if (laser_game() && is_gating(m))
       {
@@ -5327,8 +5329,6 @@ bool Position::legal(Move m) const {
 
   const bool isCapture = capture(m);
   const Square shotSq = isCapture ? capture_square(m) : to;
-  bool pureWallMove = is_gating(m) && potCtx.potion == Variant::POTION_TYPE_NB
-                   && walling(us) && wall_or_move() && from == to;
 
   if (type_of(m) == CASTLING && gamePly < var->castlingForbiddenPlies)
       return false;
