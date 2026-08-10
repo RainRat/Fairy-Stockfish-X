@@ -342,16 +342,24 @@ void composable_rules() {
           "a newly frozen direct checker still gave check");
 
     set_position(pos, states, "composable-check-morph-in",
-                 "4k3/8/8/8/8/8/4B3/4K3 w - - 0 1");
-    Move checkMorphIn = make_move(SQ_E2, SQ_E3);
+                 "5k2/8/8/8/8/8/4B3/K7 w - - 0 1");
+    Move checkMorphIn = make_move(SQ_E2, SQ_F3);
     check(pos.gives_check(checkMorphIn),
           "a move morph into a rook was omitted from direct check detection");
+    check(MoveList<QUIET_CHECKS>(pos).contains(checkMorphIn),
+          "quiet-check generation omitted a check created by move morph");
 
     set_position(pos, states, "composable-check-morph-out",
                  "4k3/8/8/8/8/8/4R3/4K3 w - - 0 1");
     Move checkMorphOut = make_move(SQ_E2, SQ_E3);
     check(!pos.gives_check(checkMorphOut),
           "a move morph out of a rook retained a false direct check");
+
+    set_position(pos, states, "composable-pseudoroyal-morph-in",
+                 "5rk1/8/8/8/8/8/4B3/K7 w - - 0 1");
+    Move pseudoRoyalMorphIn = make_move(SQ_E2, SQ_F3);
+    check(!pos.legal(pseudoRoyalMorphIn),
+          "a move-morphed pseudo-royal was allowed to move into attack");
 
     set_position(pos, states, "composable-color-attack",
                  "4k3/8/8/8/8/4p3/4R3/4K3 w - - 0 1");
@@ -1722,6 +1730,12 @@ castling = false
 
 [composable-check-morph-out:chess]
 moveMorphPieceType = r:b
+castling = false
+
+[composable-pseudoroyal-morph-in:chess]
+pseudoRoyalTypes = r
+pseudoRoyalCount = 1
+moveMorphPieceType = b:r
 castling = false
 
 [composable-freeze-traps-blast:fairy]

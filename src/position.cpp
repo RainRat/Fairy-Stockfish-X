@@ -5800,27 +5800,51 @@ bool Position::legal(Move m) const {
       // Petrifying a pseudo-royal piece is illegal
       if (capture(m) && (var->petrifyOnCaptureTypes & type_of(moved_piece(m))) && (st->pseudoRoyals & from))
           return false;
-      Bitboard pseudoRoyals = st->pseudoRoyals & pieces(sideToMove);
-      // Add dropped pseudo-royal
-      if (dropMove && (pseudo_royal_types() & piece_set(type_of(moved_piece(m)))))
+      Bitboard pseudoRoyals = 0;
+      Bitboard pseudoRoyalsTheirs = 0;
+      Bitboard pseudoRoyalCandidates = 0;
+      if (!simulated.typeOccupancy.empty())
       {
-          pseudoRoyals |= square_bb(to);
-          if (paired_drop(m))
-              pseudoRoyals |= square_bb(secondary_drop_square(m));
+          for (PieceSet ps = pseudo_royal_types(); ps; )
+          {
+              PieceType pt = pop_lsb(ps);
+              Bitboard white = simulated.type_pieces(WHITE, pt);
+              Bitboard black = simulated.type_pieces(BLACK, pt);
+              Bitboard ours = sideToMove == WHITE ? white : black;
+              Bitboard theirs = sideToMove == WHITE ? black : white;
+              pseudoRoyalCandidates |= ours;
+              if (popcount(ours) <= pseudo_royal_count())
+                  pseudoRoyals |= ours;
+              if (popcount(theirs) <= pseudo_royal_count())
+                  pseudoRoyalsTheirs |= theirs;
+          }
+          occupied = simulated.occupiedAfterEffects;
       }
-      Bitboard pseudoRoyalsTheirs = st->pseudoRoyals & pieces(~sideToMove);
-      if (cloneMove && (pseudo_royal_types() & piece_set(movePt)))
-          pseudoRoyals |= kto;
-      else if (!rifleShot && is_ok(from) && (pseudoRoyals & from))
-          pseudoRoyals ^= square_bb(from) ^ kto;
-      if (is_promotion_move(m) && (pseudo_royal_types() & promotion_type(m)))
+      else
       {
-          if (count(sideToMove, promotion_type(m)) >= pseudo_royal_count())
-              // increase in count leads to loss of pseudo-royalty
-              pseudoRoyals &= ~pieces(sideToMove, promotion_type(m));
-          else
-              // promoted piece is pseudo-royal
+          pseudoRoyals = st->pseudoRoyals & pieces(sideToMove);
+          pseudoRoyalCandidates = st->pseudoRoyalCandidates & pieces(sideToMove);
+          // Add dropped pseudo-royal
+          if (dropMove && (pseudo_royal_types() & piece_set(type_of(moved_piece(m)))))
+          {
+              pseudoRoyals |= square_bb(to);
+              if (paired_drop(m))
+                  pseudoRoyals |= square_bb(secondary_drop_square(m));
+          }
+          pseudoRoyalsTheirs = st->pseudoRoyals & pieces(~sideToMove);
+          if (cloneMove && (pseudo_royal_types() & piece_set(movePt)))
               pseudoRoyals |= kto;
+          else if (!rifleShot && is_ok(from) && (pseudoRoyals & from))
+              pseudoRoyals ^= square_bb(from) ^ kto;
+          if (is_promotion_move(m) && (pseudo_royal_types() & promotion_type(m)))
+          {
+              if (count(sideToMove, promotion_type(m)) >= pseudo_royal_count())
+                  // increase in count leads to loss of pseudo-royalty
+                  pseudoRoyals &= ~pieces(sideToMove, promotion_type(m));
+              else
+                  // promoted piece is pseudo-royal
+                  pseudoRoyals |= kto;
+          }
       }
       // Self-explosions are illegal
       if (pseudoRoyals & ~occupied)
@@ -5828,13 +5852,20 @@ bool Position::legal(Move m) const {
       // Petrifiable pseudo-royals can't capture
       Bitboard attackerCandidatesTheirs = occupied & ~square_bb(kto);
       for (PieceSet ps = var->petrifyOnCaptureTypes & pseudo_royal_types(); ps;)
-          attackerCandidatesTheirs &= ~pieces(~us, pop_lsb(ps));
+      {
+          PieceType pt = pop_lsb(ps);
+          attackerCandidatesTheirs &= ~(simulated.typeOccupancy.empty()
+                                       ? pieces(~us, pt)
+                                       : simulated.type_pieces(~us, pt));
+      }
       // Check for legality unless we capture a pseudo-royal piece
       if (!(pseudoRoyalsTheirs & ~occupied))
           while (pseudoRoyals)
           {
               Square sr = pop_lsb(pseudoRoyals);
-              PieceType pt = (sr == kto) ? finalMovePt : type_of(piece_on(sr));
+              PieceType pt = (sr == kto) ? finalMovePt
+                                         : type_of(simulated.typeOccupancy.empty()
+                                                   ? piece_on(sr) : simulated.piece_on(sr));
               // Touching pseudo-royal pieces are immune
               if (  !(blastOnCapture && (pseudoRoyalsTheirs & blast_pattern(sr) & ~blastImmune))
                   && (attackers_to_king(sr, occupied, ~us, janggiCannonsAfter, pt, &simulated)
@@ -5844,18 +5875,13 @@ bool Position::legal(Move m) const {
       // Look for duple check
       if (var->dupleCheck)
       {
-          Bitboard pseudoRoyalCandidates = st->pseudoRoyalCandidates & pieces(sideToMove);
-          if (cloneMove && (pseudo_royal_types() & piece_set(movePt)))
-              pseudoRoyalCandidates |= kto;
-          else if (!rifleShot && is_ok(from) && (pseudoRoyalCandidates & from))
-              pseudoRoyalCandidates ^= square_bb(from) ^ kto;
-          if (is_promotion_move(m) && (pseudo_royal_types() & promotion_type(m)))
-              pseudoRoyalCandidates |= kto;
           bool allCheck = bool(pseudoRoyalCandidates);
           while (allCheck && pseudoRoyalCandidates)
           {
               Square sr = pop_lsb(pseudoRoyalCandidates);
-              PieceType pt = (sr == kto) ? finalMovePt : type_of(piece_on(sr));
+              PieceType pt = (sr == kto) ? finalMovePt
+                                         : type_of(simulated.typeOccupancy.empty()
+                                                   ? piece_on(sr) : simulated.piece_on(sr));
               // Touching pseudo-royal pieces are immune
               if (!(  !(blastOnCapture && (pseudoRoyalsTheirs & blast_pattern(sr) & ~blastImmune))
                     && (attackers_to_king(sr, occupied, ~us, janggiCannonsAfter, pt, &simulated)

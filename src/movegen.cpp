@@ -619,7 +619,7 @@ namespace {
                 attacks &= ~mandatoryPromotionZone;
             }
 
-            if (QuietChecks && !pos.variant()->trapRegion)
+            if (QuietChecks && !pos.variant()->trapRegion && !pos.variant()->hasMoveMorph)
                 quiets &= pos.check_squares(PAWN);
 
             if (GeneratesQuiets)
@@ -1002,6 +1002,7 @@ namespace {
             // A move by an enemy-king blocker can give discovered check from
             // its new square without that square being a direct check square.
             if (!pos.variant()->trapRegion
+                && !pos.variant()->hasMoveMorph
                 && (Pt == QUEEN || !(pos.blockers_for_king(~Us) & from)))
             {
                 b1 &= pos.check_squares(Pt);
