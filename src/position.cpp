@@ -5836,6 +5836,10 @@ bool Position::legal(Move m) const {
               pseudoRoyals |= kto;
           else if (!rifleShot && is_ok(from) && (pseudoRoyals & from))
               pseudoRoyals ^= square_bb(from) ^ kto;
+          if (cloneMove && (pseudo_royal_types() & piece_set(movePt)))
+              pseudoRoyalCandidates |= kto;
+          else if (!rifleShot && is_ok(from) && (pseudoRoyalCandidates & from))
+              pseudoRoyalCandidates ^= square_bb(from) ^ kto;
           if (is_promotion_move(m) && (pseudo_royal_types() & promotion_type(m)))
           {
               if (count(sideToMove, promotion_type(m)) >= pseudo_royal_count())
@@ -5845,6 +5849,8 @@ bool Position::legal(Move m) const {
                   // promoted piece is pseudo-royal
                   pseudoRoyals |= kto;
           }
+          if (is_promotion_move(m) && (pseudo_royal_types() & promotion_type(m)))
+              pseudoRoyalCandidates |= kto;
       }
       // Self-explosions are illegal
       if (pseudoRoyals & ~occupied)
@@ -8780,6 +8786,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           if (bpc == NO_PIECE) continue;
           Color bc = color_of(bpc);
           bool trapRemoval = st->trapRemoved & bsq;
+          if (trapRemoval)
+              st->rule50 = 0;
 
           if (blast_promotion() && !trapRemoval && (blast_mask & bsq) && !(connect_mask & bsq)) {
               PieceType promoted = promoted_piece_type(type_of(bpc));

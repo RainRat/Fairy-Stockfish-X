@@ -180,6 +180,16 @@ void composable_rules() {
     check(pos.key() == beforeTrap && pos.fen() == beforeTrapFen,
           "trap removal did not restore state exactly on undo");
 
+    set_position(pos, states, "composable-freeze-traps",
+                 "8/8/8/8/8/8/2R4r/8 w - - 99 1");
+    Move trapRule50 = parse_move(pos, "c2c3");
+    states->emplace_back();
+    pos.do_move(trapRule50, states->back());
+    check(pos.state()->rule50 == 0,
+          "trap removal did not reset the halfmove clock");
+    pos.undo_move(trapRule50);
+    states->pop_back();
+
     set_position(pos, states, "composable-trap-ep-stale",
                  "4k3/p7/8/1P6/8/8/8/4K3 b - - 0 1");
     Move trapDoubleStep = parse_move(pos, "a7a5");
