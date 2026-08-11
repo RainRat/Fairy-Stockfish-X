@@ -2283,9 +2283,15 @@ Variant* Variant::conclude() {
     for (PieceSet ps = pieceTypes; ps && !hasPulling; )
         hasPulling = pullingStrength[pop_lsb(ps)] > 0;
 
+    bool hasActivePushing = false;
+    for (PieceSet ps = pieceTypes; ps && !hasActivePushing; )
+        hasActivePushing = pushingStrength[pop_lsb(ps)] > 0;
+
     auto hasSelfCapture = [this](Color c) {
         if (selfCaptureTypes.has_override(c))
             return selfCaptureTypes.get(c) != NO_PIECE_SET;
+        if (selfCapture.has_override(c))
+            return selfCapture.get(c);
         if (selfCaptureTypes != NO_PIECE_SET)
             return selfCaptureTypes.get(c) != NO_PIECE_SET;
         return selfCapture.get(c);
@@ -2301,6 +2307,7 @@ Variant* Variant::conclude() {
                          && !surroundCaptureEdge
                          && !removeConnectN
                          && !petrifyOnCaptureTypes
+                         && !(surroundClaimPiece != NO_PIECE_TYPE && surroundClaimRegion)
                          && libertyCapture == LibertyAction::NONE
                          && libertySelfCapture == LibertyAction::NONE
                          && !potions
@@ -2532,7 +2539,7 @@ Variant* Variant::conclude() {
                                  && !blastOnSelfDestruct
                                  && !hasSelfCapture(c)
                                  && !rifleCapture
-                                 && !hasPushing
+                                 && !hasActivePushing
                                  && !hasPulling
                                  && !adjacentSwapMoveTypes
                                  && !captureMorph

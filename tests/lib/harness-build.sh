@@ -117,8 +117,16 @@ fsx_harness_prepare_objects() {
     return 0
   fi
 
-  make -C "${FSX_HARNESS_ROOT_DIR}/src" "${FSX_HARNESS_BUILD_ARGS[@]}" objclean
+  # Keep the caller's engine available while refreshing the object family.
+  # objclean removes $(EXE), and the harness must not invalidate the engine it
+  # is about to test.
+  make -C "${FSX_HARNESS_ROOT_DIR}/src" EXE= objclean
   make -C "${FSX_HARNESS_ROOT_DIR}/src" -j"${jobs}" build "${FSX_HARNESS_BUILD_ARGS[@]}"
+
+  if [[ ! -x "${FSX_HARNESS_ROOT_DIR}/src/${FSX_HARNESS_BUILD_EXE}" ]]; then
+    echo "harness build did not produce ${FSX_HARNESS_BUILD_EXE}" >&2
+    return 1
+  fi
 }
 
 fsx_harness_prepare_objects_cached() {
@@ -149,7 +157,8 @@ fsx_harness_prepare_objects_cached() {
 
   if [[ -f "${cache_dir}/desired.sig" && -f "${cache_dir}/objects.sig" ]] \
       && [[ "$(<"${cache_dir}/desired.sig")" == "${desired_signature}" ]] \
-      && [[ "$(<"${cache_dir}/objects.sig")" == "${object_signature}" ]]; then
+      && [[ "$(<"${cache_dir}/objects.sig")" == "${object_signature}" ]] \
+      && [[ -x "${FSX_HARNESS_ROOT_DIR}/src/${FSX_HARNESS_BUILD_EXE}" ]]; then
     echo "ok: ${label} (cached)"
     return 0
   fi

@@ -267,6 +267,7 @@ using namespace Trace;
 
 namespace {
 
+#ifndef NDEBUG
   // Lazy evaluation is only a safe shortcut when no variant feature adds a
   // material, king-safety, goal, or mobility term that would be skipped along
   // with the expensive part of the evaluation. Keep this feature-based rather
@@ -314,6 +315,7 @@ namespace {
         && !pos.flip_enclosed_pieces()
         && !pos.makpong();
   }
+#endif
 
   // Threshold for lazy and space evaluation
   constexpr Value LazyThreshold1    =  Value(1565);
@@ -1986,9 +1988,10 @@ namespace {
 
     assert(!pos.evasion_checkers());
     assert(!pos.is_immediate_game_end());
+    const bool standardLazyEvaluation = pos.variant()->standardLazyEvaluation[pos.side_to_move()]
+                                      && pos.endgame_eval() == EG_EVAL_CHESS;
 #ifndef NDEBUG
-    assert(pos.variant()->standardLazyEvaluation[pos.side_to_move()]
-           == standard_lazy_evaluation_reference(pos));
+    assert(standardLazyEvaluation == standard_lazy_evaluation_reference(pos));
 #endif
 
     // Probe the material hash table
@@ -2072,7 +2075,7 @@ namespace {
         return abs(mg_value(score) + eg_value(score)) / 2 > lazyThreshold + pos.non_pawn_material() / 64;
     };
 
-    if (lazy_skip(LazyThreshold1) && pos.variant()->standardLazyEvaluation[pos.side_to_move()])
+    if (lazy_skip(LazyThreshold1) && standardLazyEvaluation)
         goto make_v;
 
     // Main evaluation begins here
@@ -2104,7 +2107,7 @@ namespace {
             + passed< WHITE>() - passed< BLACK>()
             + variant<WHITE>() - variant<BLACK>();
 
-    if (lazy_skip(LazyThreshold2) && pos.variant()->standardLazyEvaluation[pos.side_to_move()])
+    if (lazy_skip(LazyThreshold2) && standardLazyEvaluation)
         goto make_v;
 
     score +=  threats<WHITE>() - threats<BLACK>()

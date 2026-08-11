@@ -4551,6 +4551,7 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
                                       && !var->surroundCaptureEdge
                                       && !var->removeConnectN
                                       && !var->petrifyOnCaptureTypes
+                                      && !(var->surroundClaimPiece != NO_PIECE_TYPE && var->surroundClaimRegion)
                                       && var->libertyCapture == LibertyAction::NONE
                                       && var->libertySelfCapture == LibertyAction::NONE
                                       && !potions_enabled()
