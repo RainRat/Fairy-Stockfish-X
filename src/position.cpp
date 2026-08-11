@@ -4524,29 +4524,10 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
   // metadata maintained here is still complete for callers that inspect the
   // simulated mover or color occupancy; variants with additional piece
   // classification state use the full path below.
-  const bool simpleSimulation = !var->trapRegion
-                             && var->pieceToCharTable == "-"
-                             && var->pieceTypes == CHESS_PIECES
+  const bool simpleSimulation = var->simpleSimulationBase
                              && !pieceMap.runtime_rider_augment_types()
                              && !pieceMap.simple_hopper_capture_types()
-                             && !var->blastPassiveTypes
-                             && !var->blastPromotion
-                             && !var->surroundCaptureOpposite
-                             && !var->surroundCaptureIntervene
-                             && !var->surroundCaptureEdge
-                             && !var->removeConnectN
-                             && !var->petrifyOnCaptureTypes
-                             && var->libertyCapture == LibertyAction::NONE
-                             && var->libertySelfCapture == LibertyAction::NONE
-                             && !potions_enabled()
-                             && !gating()
-                             && !commit_gates()
-                             && !walling_rule()
-                             && !var->hasPushing
-                             && !has_adjacent_swapping()
                              && !blast_on_capture(m)
-                             && !blast_on_move()
-                             && !blast_on_self_destruct()
                              && !extraCapture
                              && !info.rifle
                              && !info.clone
@@ -4555,15 +4536,51 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
                              && !is_pull_move(m)
                              && !is_swap_move(m)
                              && !is_self_destruct(m)
-                             && !info.paired
-                             && !capture_morph()
-                             && !var->hasMoveMorph
-                             && !var->deathOnCaptureTypes
-                             && !var->changingColorPieceTypes
-                             && !var->freezePieceTypes
-                             && !var->freezeImmunePieceTypes
-                             && !flip_enclosed_pieces()
-                             && !blast_immune_types();
+                             && !info.paired;
+
+#ifndef NDEBUG
+  const bool referenceSimpleSimulation = !var->trapRegion
+                                      && var->pieceToCharTable == "-"
+                                      && var->pieceTypes == CHESS_PIECES
+                                      && !pieceMap.runtime_rider_augment_types()
+                                      && !pieceMap.simple_hopper_capture_types()
+                                      && !var->blastPassiveTypes
+                                      && !var->blastPromotion
+                                      && !var->surroundCaptureOpposite
+                                      && !var->surroundCaptureIntervene
+                                      && !var->surroundCaptureEdge
+                                      && !var->removeConnectN
+                                      && !var->petrifyOnCaptureTypes
+                                      && var->libertyCapture == LibertyAction::NONE
+                                      && var->libertySelfCapture == LibertyAction::NONE
+                                      && !potions_enabled()
+                                      && !gating()
+                                      && !commit_gates()
+                                      && !walling_rule()
+                                      && !var->hasPushing
+                                      && !has_adjacent_swapping()
+                                      && !blast_on_capture(m)
+                                      && !blast_on_move()
+                                      && !blast_on_self_destruct()
+                                      && !extraCapture
+                                      && !info.rifle
+                                      && !info.clone
+                                      && !stackMove
+                                      && !unstackMove
+                                      && !is_pull_move(m)
+                                      && !is_swap_move(m)
+                                      && !is_self_destruct(m)
+                                      && !info.paired
+                                      && !capture_morph()
+                                      && !var->hasMoveMorph
+                                      && !var->deathOnCaptureTypes
+                                      && !var->changingColorPieceTypes
+                                      && !var->freezePieceTypes
+                                      && !var->freezeImmunePieceTypes
+                                      && !flip_enclosed_pieces()
+                                      && !blast_immune_types();
+  assert(simpleSimulation == referenceSimpleSimulation);
+#endif
 
   if (simpleSimulation)
   {

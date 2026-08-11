@@ -272,7 +272,7 @@ namespace {
   // with the expensive part of the evaluation. Keep this feature-based rather
   // than identifying a named variant, so custom variants get the same behavior
   // when their rules really are equivalent.
-  bool standard_lazy_evaluation(const Position& pos) {
+  bool standard_lazy_evaluation_reference(const Position& pos) {
     return pos.files() == 8
         && pos.ranks() == 8
         && pos.piece_types() == CHESS_PIECES
@@ -583,6 +583,7 @@ namespace {
     const Position& pos;
     Material::Entry* me;
     Pawns::Entry* pe;
+    Bitboard freezeMasks[COLOR_NB] = {};
     Bitboard mobilityArea[COLOR_NB];
     Score mobility[COLOR_NB] = { SCORE_ZERO, SCORE_ZERO };
 
@@ -632,8 +633,12 @@ namespace {
     Bitboard LowRanks = rank_bb(relative_rank(Us, RANK_2, pos.max_rank())) | rank_bb(relative_rank(Us, RANK_3, pos.max_rank()));
 
     const Square ksq = pos.count<KING>(Us) ? pos.square<KING>(Us) : SQ_NONE;
-    const Bitboard frozenUs = pos.freeze_squares(Us);
-    const Bitboard frozenThem = pos.freeze_squares(Them);
+    const Bitboard frozenUs = freezeMasks[Us];
+    const Bitboard frozenThem = freezeMasks[Them];
+#ifndef NDEBUG
+    assert(frozenUs == pos.freeze_squares(Us));
+    assert(frozenThem == pos.freeze_squares(Them));
+#endif
     const Bitboard activePawns = pos.pieces(Us, PAWN) & ~frozenUs;
     const Bitboard activeThemPawns = pos.pieces(Them, PAWN) & ~frozenThem;
     const Bitboard theirPawnAttacks = pos.variant()->freezePieceTypes || pos.potions_enabled()
@@ -710,7 +715,10 @@ namespace {
     const Bitboard centerFiles = scaled_center_files(pos);
     const Bitboard queenFlank = scaled_flank(pos, false);
     const Bitboard kingFlank = scaled_flank(pos, true);
-    const Bitboard frozen = pos.freeze_squares(Us);
+    const Bitboard frozen = freezeMasks[Us];
+#ifndef NDEBUG
+    assert(frozen == pos.freeze_squares(Us));
+#endif
 
     attackedBy[Us][Pt] = 0;
 
@@ -1626,7 +1634,10 @@ namespace {
     {
         const Square royalSq = pos.square(Us, COMMONER);
         Bitboard attackers = attackedBy[Them][ALL_PIECES] & square_bb(royalSq);
-        attackers &= ~pos.freeze_squares(Them);
+#ifndef NDEBUG
+        assert(freezeMasks[Them] == pos.freeze_squares(Them));
+#endif
+        attackers &= ~freezeMasks[Them];
         if (attackers)
             score -= make_score(1200, 900) * popcount(attackers);
     }
@@ -1975,6 +1986,10 @@ namespace {
 
     assert(!pos.evasion_checkers());
     assert(!pos.is_immediate_game_end());
+#ifndef NDEBUG
+    assert(pos.variant()->standardLazyEvaluation[pos.side_to_move()]
+           == standard_lazy_evaluation_reference(pos));
+#endif
 
     // Probe the material hash table
     me = Material::probe(pos);
@@ -1983,6 +1998,15 @@ namespace {
     // configuration, call it and return.
     if (me->specialized_eval_exists())
         return me->evaluate(pos);
+
+    // Freeze masks describe the current position and remain unchanged for the
+    // duration of an evaluation. Potion contexts and simulated positions are
+    // not entered while evaluating a committed position.
+    if (pos.potions_enabled() || pos.variant()->freezePieceTypes)
+    {
+        freezeMasks[WHITE] = pos.freeze_squares(WHITE);
+        freezeMasks[BLACK] = pos.freeze_squares(BLACK);
+    }
 
     // Initialize score by reading the incrementally updated scores included in
     // the position object (material + piece square tables) and the material
@@ -2048,7 +2072,7 @@ namespace {
         return abs(mg_value(score) + eg_value(score)) / 2 > lazyThreshold + pos.non_pawn_material() / 64;
     };
 
-    if (lazy_skip(LazyThreshold1) && standard_lazy_evaluation(pos))
+    if (lazy_skip(LazyThreshold1) && pos.variant()->standardLazyEvaluation[pos.side_to_move()])
         goto make_v;
 
     // Main evaluation begins here
@@ -2080,7 +2104,7 @@ namespace {
             + passed< WHITE>() - passed< BLACK>()
             + variant<WHITE>() - variant<BLACK>();
 
-    if (lazy_skip(LazyThreshold2) && standard_lazy_evaluation(pos))
+    if (lazy_skip(LazyThreshold2) && pos.variant()->standardLazyEvaluation[pos.side_to_move()])
         goto make_v;
 
     score +=  threats<WHITE>() - threats<BLACK>()

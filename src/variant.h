@@ -518,6 +518,8 @@ struct Variant {
   bool fastAttacks = true;
   bool fastAttacks2 = true;
   bool simpleLegality = false;
+  bool simpleSimulationBase = false;
+  std::array<bool, COLOR_NB> standardLazyEvaluation = {false, false};
   bool hasMoveMorph = false;
   std::string nnueAlias = "";
   PieceType nnueKing = KING;

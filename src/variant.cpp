@@ -2278,6 +2278,48 @@ Variant* Variant::conclude() {
     hasMoveMorph = false;
     for (PieceType pt = PAWN; pt < PIECE_TYPE_NB && !hasMoveMorph; ++pt)
         hasMoveMorph = moveMorphPieceType[pt] != NO_PIECE_TYPE;
+
+    bool hasPulling = false;
+    for (PieceSet ps = pieceTypes; ps && !hasPulling; )
+        hasPulling = pullingStrength[pop_lsb(ps)] > 0;
+
+    auto hasSelfCapture = [this](Color c) {
+        if (selfCaptureTypes.has_override(c))
+            return selfCaptureTypes.get(c) != NO_PIECE_SET;
+        if (selfCaptureTypes != NO_PIECE_SET)
+            return selfCaptureTypes.get(c) != NO_PIECE_SET;
+        return selfCapture.get(c);
+    };
+
+    simpleSimulationBase = !trapRegion
+                         && pieceToCharTable == "-"
+                         && pieceTypes == CHESS_PIECES
+                         && !blastPassiveTypes
+                         && !blastPromotion
+                         && !surroundCaptureOpposite
+                         && !surroundCaptureIntervene
+                         && !surroundCaptureEdge
+                         && !removeConnectN
+                         && !petrifyOnCaptureTypes
+                         && libertyCapture == LibertyAction::NONE
+                         && libertySelfCapture == LibertyAction::NONE
+                         && !potions
+                         && !gating
+                         && !commitGates
+                         && wallingRule == NO_WALLING
+                         && !hasPushing
+                         && !adjacentSwapMoveTypes
+                         && !blastOnMove
+                         && !blastOnSelfDestruct
+                         && !captureMorph
+                         && !hasMoveMorph
+                         && !deathOnCaptureTypes
+                         && !changingColorPieceTypes
+                         && !freezePieceTypes
+                         && !freezeImmunePieceTypes
+                         && !flipEnclosedPieces
+                         && !blastImmuneTypes;
+
     simpleLegality = checking
                   && fastAttacks
                   && pieceTypes == CHESS_PIECES
@@ -2462,6 +2504,49 @@ Variant* Variant::conclude() {
                     && kingType == KING
                    )
                  ? endgameEval : NO_EG_EVAL;
+
+    for (Color c : {WHITE, BLACK})
+        standardLazyEvaluation[c] = maxFile == FILE_H
+                                 && maxRank == RANK_8
+                                 && pieceTypes == CHESS_PIECES
+                                 && endgameEval == EG_EVAL_CHESS
+                                 && extinctionValue[c] == VALUE_NONE
+                                 && extinctionValue[~c] == VALUE_NONE
+                                 && pseudoRoyalTypes == NO_PIECE_SET
+                                 && antiRoyalTypes == NO_PIECE_SET
+                                 && !twoBoards
+                                 && !pieceDrops
+                                 && captureType == MOVE_OUT
+                                 && !gating
+                                 && !potions
+                                 && !mustCapture[c]
+                                 && !checkCounting
+                                 && !pointsCounting
+                                 && !connectN
+                                 && !connectNxN
+                                 && !collinearN
+                                 && !connectGroup
+                                 && !flagMove
+                                 && !blastOnCapture
+                                 && !blastOnMove
+                                 && !blastOnSelfDestruct
+                                 && !hasSelfCapture(c)
+                                 && !rifleCapture
+                                 && !hasPushing
+                                 && !hasPulling
+                                 && !adjacentSwapMoveTypes
+                                 && !captureMorph
+                                 && !piecePromotionOnCapture
+                                 && !pieceDemotion
+                                 && !(wallingRule != NO_WALLING && (wallingSide[WHITE] || wallingSide[BLACK]))
+                                 && !cylindrical
+                                 && !toroidal
+                                 && !hexBoard
+                                 && !immobilityIllegal
+                                 && !freezePieceTypes
+                                 && !trapRegion
+                                 && !flipEnclosedPieces
+                                 && !makpongRule;
 
     shogiStylePromotions = false;
     for (PieceType current: promotedPieceType)
