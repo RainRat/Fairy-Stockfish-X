@@ -1521,21 +1521,35 @@ namespace {
         Bitboard onHold2[PIECE_TYPE_NB] = {};
         Bitboard processed[PIECE_TYPE_NB] = {};
         const bool allFlagTypes = bool(flagTypes & piece_set(ALL_PIECES));
+        PieceType activeFlagTypes[PIECE_TYPE_NB - 1];
+        int activeFlagTypeCount = 0;
         if (allFlagTypes)
             for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
+            {
                 ctfPieces[pt] = pos.pieces(Us, pt);
+                if (ctfPieces[pt])
+                    activeFlagTypes[activeFlagTypeCount++] = pt;
+            }
         else
-            for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
-                if (flagTypes & pt)
-                    ctfPieces[pt] = pos.pieces(Us, pt);
+        {
+            PieceSet activeTypes = flagTypes;
+            while (activeTypes)
+            {
+                PieceType pt = pop_lsb(activeTypes);
+                ctfPieces[pt] = pos.pieces(Us, pt);
+                if (ctfPieces[pt])
+                    activeFlagTypes[activeFlagTypeCount++] = pt;
+            }
+        }
 
         for (int dist = 0;; dist++)
         {
             Bitboard reachable = 0;
             Bitboard active = 0;
             Bitboard processedTargets = 0;
-            for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
+            for (int i = 0; i < activeFlagTypeCount; ++i)
             {
+                PieceType pt = activeFlagTypes[i];
                 reachable |= ctfPieces[pt];
                 active |= ctfPieces[pt] | onHold[pt] | onHold2[pt];
                 processedTargets |= processed[pt];
@@ -1550,8 +1564,9 @@ namespace {
                 int ctfBonus = (4000 * wins) / denom;
                 ctfAccum += ctfBonus;
             }
-            for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
+            for (int i = 0; i < activeFlagTypeCount; ++i)
             {
+                PieceType pt = activeFlagTypes[i];
                 Bitboard current = ctfPieces[pt] & ~ctfTargets;
                 processed[pt] |= ctfPieces[pt];
                 ctfPieces[pt] = onHold[pt] & ~processed[pt];
