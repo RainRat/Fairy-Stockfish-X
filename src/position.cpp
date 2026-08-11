@@ -11265,39 +11265,39 @@ bool Position::has_game_cycle(int ply) const {
 }
 
 bool Position::see_pruning_unreliable() const {
+#ifndef NDEBUG
+  const bool reference = points_counting()
+                      || points_goal() > 0
+                      || var->freezePieceTypes
+                      || var->trapRegion
+                      || extinction_value(WHITE) != VALUE_NONE
+                      || extinction_value(BLACK) != VALUE_NONE
+                      || flag_region(WHITE) || flag_region(BLACK)
+                      || var->castlingWins
+                      || connect_n() != 0
+                      || connect_nxn() != 0
+                      || collinear_n() != 0
+                      || var->connectRegion1[WHITE] || var->connectRegion2[WHITE] || var->connectRegion3[WHITE]
+                      || var->connectRegion1[BLACK] || var->connectRegion2[BLACK] || var->connectRegion3[BLACK]
+                      || !connect_piece_goal_types(WHITE).empty()
+                      || !connect_piece_goal_types(BLACK).empty()
+                      || connect_group() != 0;
+  assert(reference != (var->seePruningPolicy == SeePruningPolicy::RELIABLE));
+#endif
 
-  return points_counting()
-      || points_goal() > 0
-      || var->freezePieceTypes
-      || var->trapRegion
-      || extinction_value(WHITE) != VALUE_NONE
-      || extinction_value(BLACK) != VALUE_NONE
-      || flag_region(WHITE) || flag_region(BLACK)
-      || var->castlingWins
-      || connect_n() != 0
-      || connect_nxn() != 0
-      || collinear_n() != 0
-      || var->connectRegion1[WHITE] || var->connectRegion2[WHITE] || var->connectRegion3[WHITE]
-      || var->connectRegion1[BLACK] || var->connectRegion2[BLACK] || var->connectRegion3[BLACK]
-      || !connect_piece_goal_types(WHITE).empty()
-      || !connect_piece_goal_types(BLACK).empty()
-      || connect_group() != 0;
+  return var->seePruningPolicy != SeePruningPolicy::RELIABLE;
 }
 
 bool Position::see_pruning_unreliable(Move m) const {
-  if (!see_pruning_unreliable())
+#ifndef NDEBUG
+  assert(see_pruning_unreliable()
+         == (var->seePruningPolicy != SeePruningPolicy::RELIABLE));
+#endif
+
+  if (var->seePruningPolicy == SeePruningPolicy::RELIABLE)
       return false;
 
-  if (points_counting()
-      || points_goal() > 0
-      || connect_n() != 0
-      || connect_nxn() != 0
-      || collinear_n() != 0
-      || connect_group() != 0
-      || var->connectRegion1[WHITE] || var->connectRegion2[WHITE] || var->connectRegion3[WHITE]
-      || var->connectRegion1[BLACK] || var->connectRegion2[BLACK] || var->connectRegion3[BLACK]
-      || !connect_piece_goal_types(WHITE).empty()
-      || !connect_piece_goal_types(BLACK).empty())
+  if (var->seePruningPolicy == SeePruningPolicy::ALWAYS_UNRELIABLE)
       return true;
 
   if (type_of(piece_on(from_sq(m))) == KING)

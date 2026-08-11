@@ -63,6 +63,12 @@ enum class TrapProtection {
   FRIENDLY_ORTHOGONAL
 };
 
+enum class SeePruningPolicy : uint8_t {
+  RELIABLE,
+  MOVE_SENSITIVE,
+  ALWAYS_UNRELIABLE
+};
+
 template <typename T>
 struct ColorSetting {
   T global;
@@ -520,6 +526,7 @@ struct Variant {
   bool simpleLegality = false;
   bool simpleSimulationBase = false;
   std::array<bool, COLOR_NB> standardLazyEvaluation = {false, false};
+  SeePruningPolicy seePruningPolicy = SeePruningPolicy::RELIABLE;
   bool hasMoveMorph = false;
   std::string nnueAlias = "";
   PieceType nnueKing = KING;
