@@ -46,11 +46,16 @@ fsx_harness_helper_hash() {
 }
 
 fsx_harness_source_tree_signature() {
-  local path
+  local path root
   local sig=""
-  while IFS= read -r -d '' path; do
-    sig+="$(fsx_harness_hash_file "${path}") ${path}"$'\n'
-  done < <(find "${FSX_HARNESS_ROOT_DIR}/src" -type f \( -name '*.cpp' -o -name '*.h' \) -print0 | sort -z)
+  for root in "${FSX_HARNESS_ROOT_DIR}/src" \
+              "${FSX_HARNESS_ROOT_DIR}/tests/lib" \
+              "${FSX_HARNESS_ROOT_DIR}/tests/native"; do
+    [[ -d "${root}" ]] || continue
+    while IFS= read -r -d '' path; do
+      sig+="$(fsx_harness_hash_file "${path}") ${path}"$'\n'
+    done < <(find "${root}" -type f \( -name '*.cpp' -o -name '*.h' -o -name '*.hpp' \) -print0 | sort -z)
+  done
   fsx_harness_hash_text "${sig}"
 }
 

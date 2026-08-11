@@ -20,8 +20,8 @@ declare -A SUITE_FAMILY=(
 )
 declare -A SUITE_PREREQS=(
   [config]=engine,python [movement]=engine,objects [royal-legality]=engine,objects
-  [captures-effects]=engine [promotion-drops]=engine [state-transitions]=engine,objects
-  [notation-protocol]=engine,expect [variants-smoke]=engine,objects [search-evaluation]=engine
+  [captures-effects]=engine,objects,expect [promotion-drops]=engine [state-transitions]=engine,objects
+  [notation-protocol]=engine,expect [variants-smoke]=engine,objects [search-evaluation]=engine,expect
   [spells]=engine,objects
 )
 
@@ -140,15 +140,21 @@ prepare_python() {
     mkdir -p "${ROOT_DIR}/.local/build/pyffish" "${RUN_DIR}"
 
     local pyffish_so=""
+    local pyffish_ext_suffix=""
+    pyffish_ext_suffix=$(python3 -c 'import sysconfig; print(sysconfig.get_config_var("EXT_SUFFIX") or "")' 2>/dev/null || true)
     shopt -s nullglob
     local pyffish_candidates=("${ROOT_DIR}"/pyffish*.so)
     shopt -u nullglob
-    if (( ${#pyffish_candidates[@]} > 0 )); then
-        pyffish_so="${pyffish_candidates[0]}"
-    fi
+    local candidate
+    for candidate in "${pyffish_candidates[@]}"; do
+        if [[ -z "${pyffish_ext_suffix}" || "${candidate}" == *"${pyffish_ext_suffix}" ]]; then
+            pyffish_so="${candidate}"
+            break
+        fi
+    done
 
     if [[ -n "${pyffish_so}" ]] && [[ "${ROOT_DIR}/setup.py" -ot "${pyffish_so}" ]]; then
-        if ! find "${ROOT_DIR}/src" -type f \( -name '*.cpp' -o -name '*.h' \) -newer "${pyffish_so}" -print -quit | grep -q .; then
+        if ! find "${ROOT_DIR}/src" -type f \( -name '*.cpp' -o -name '*.h' -o -name '*.hpp' \) -newer "${pyffish_so}" -print -quit | grep -q .; then
             return 0
         fi
     fi

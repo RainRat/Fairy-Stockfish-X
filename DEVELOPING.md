@@ -4,13 +4,13 @@ This document contains instructions for building Fairy-Stockfish-X from source, 
 
 ## Building from Source
 
-From the repository root, change to `src/` and run:
+From the repository root, run:
 
 ```bash
-make -j build ARCH=x86-64-modern
+make -C src -j build ARCH=x86-64-modern
 ```
 
-Use `make help` to see the available architecture options.
+Use `make -C src help` to see the available architecture options.
 
 ### Build Options
 
@@ -23,7 +23,7 @@ Add these flags to the build command when needed:
 For example:
 
 ```bash
-make -j build ARCH=x86-64-modern largeboards=yes
+make -C src -j build ARCH=x86-64-modern largeboards=yes
 ```
 
 ### Required Checks
@@ -31,12 +31,16 @@ make -j build ARCH=x86-64-modern largeboards=yes
 The standard local checks are:
 
 ```bash
-src/stockfish check src/variants.ini
-bash tests/fast-regression.sh src/stockfish
-tests/protocol.sh
+tests/build.sh ARCH=x86-64-modern largeboards=yes all=yes EXE=stockfish-allvars
+src/stockfish-allvars check src/variants.ini
+bash tests/fast-regression.sh src/stockfish-allvars
+tests/protocol.sh src/stockfish-allvars
+tests/perft.sh all src/stockfish-allvars
 ```
 
-Use a `largeboards=yes` binary for large-board tests. See [AGENTS.md](AGENTS.md) for the full build and testing guidance.
+The search/evaluation suite also needs the pinned NNUE network; fetch it with
+`make -C src net` before running that suite. See [AGENTS.md](AGENTS.md) for the
+full build and testing guidance.
 
 ## CLI Usage
 

@@ -24,7 +24,10 @@ EOF
 
 current_run_dir() {
   [[ -f "${CURRENT_FILE}" ]] || return 1
-  cat "${CURRENT_FILE}"
+  local run_dir
+  run_dir=$(<"${CURRENT_FILE}")
+  [[ -d "${run_dir}" ]] || return 1
+  printf '%s\n' "${run_dir}"
 }
 
 run_is_alive() {
@@ -62,8 +65,8 @@ validate_engines() {
   if (( stale )); then
     echo "rebuild the named regression binaries before starting the suite:" >&2
     echo "  tests/build.sh ARCH=x86-64-modern largeboards=yes EXE=stockfish-large" >&2
-    echo "  tests/build.sh ARCH=x86-64-modern verylargeboards=yes EXE=stockfish-vlb" >&2
-    echo "  tests/build.sh ARCH=x86-64-modern all=yes EXE=stockfish-allvars" >&2
+    echo "  tests/build.sh ARCH=x86-64-modern largeboards=yes verylargeboards=yes all=yes EXE=stockfish-vlb" >&2
+    echo "  tests/build.sh ARCH=x86-64-modern largeboards=yes all=yes EXE=stockfish-allvars" >&2
     return 2
   fi
 }

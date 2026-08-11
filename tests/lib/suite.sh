@@ -129,6 +129,7 @@ UCI
 run_royal_legality() {
     native royal
     native adjudication
+    native extinction-color
     local no_kings_output
     load_inline_variants <<'INI'
 [noroyal-capture:chess]

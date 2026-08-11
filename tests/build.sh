@@ -9,13 +9,20 @@ source "${ROOT_DIR}/tests/lib/build-signature.sh"
 
 mkdir -p "${LOG_DIR}"
 
-# Extract EXE from args or default to stockfish
+# Extract EXE and compiler family from args. Make defaults to stockfish.exe for
+# MinGW, so keep the wrapper's artifact tracking aligned when EXE is omitted.
 EXE="stockfish"
+EXE_EXPLICIT=0
+COMPILER_KIND="${COMP:-}"
 for arg in "$@"; do
-    if [[ "$arg" =~ ^EXE=(.*) ]]; then
-        EXE="${BASH_REMATCH[1]}"
-    fi
+    case "$arg" in
+        EXE=*) EXE="${arg#EXE=}"; EXE_EXPLICIT=1 ;;
+        COMP=*) COMPILER_KIND="${arg#COMP=}" ;;
+    esac
 done
+if (( ! EXE_EXPLICIT )) && [[ "${COMPILER_KIND}" == mingw ]]; then
+    EXE="stockfish.exe"
+fi
 
 OUTPUT_FILE=$(fsx_build_output_path "$ROOT_DIR" "$EXE")
 BUILD_SIGNATURE=$(fsx_build_signature "$ROOT_DIR" "$OUTPUT_FILE" "$@")

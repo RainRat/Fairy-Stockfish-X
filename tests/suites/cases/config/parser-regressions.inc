@@ -16,7 +16,7 @@ ENGINE=$(default_engine "${1:-}")
 cd "${ROOT_DIR}"
 
 tmp_ini=$(mktemp)
-trap 'rm -f "${tmp_ini}"' EXIT
+fsx_add_exit_cleanup 'rm -f "${tmp_ini}"'
 
 spaces='   '
 cat > "${tmp_ini}" <<INI
@@ -397,7 +397,7 @@ bad_unmatched_closer_ini=$(mktemp)
 royal_blast_ini=$(mktemp)
 nonking_ini=$(mktemp)
 wrapped_support_ini=$(mktemp)
-trap 'rm -f "${tmp_ini}" "${bad_betza_ini}" "${bad_hopper_brace_ini}" "${bad_rider_range_ini}" "${bad_rank_wildcard_ini}" "${twochar_hint_ini}" "${bad_hopper_type_ini}" "${bad_hopper_numeric_ini}" "${capture_allowed_only_ini}" "${bad_rider_range_val_ini}" "${bad_tuple_atom_ini}" "${unsupported_bent_rose_modifier_ini}" "${bad_ini_syntax_option_ini}" "${bad_check_counting_ini}" "${bad_hopper_minmax_ini}" "${bad_hopper_entry_ini}" "${bad_piece_value_ini}" "${unknown_option_ini}" "${bad_royal_betza_ini}" "${bad_unmatched_closer_ini}" "${royal_blast_ini}" "${nonking_ini}" "${wrapped_support_ini}"' EXIT
+fsx_add_exit_cleanup 'rm -f "${tmp_ini}" "${bad_betza_ini}" "${bad_hopper_brace_ini}" "${bad_rider_range_ini}" "${bad_rank_wildcard_ini}" "${twochar_hint_ini}" "${bad_hopper_type_ini}" "${bad_hopper_numeric_ini}" "${capture_allowed_only_ini}" "${bad_rider_range_val_ini}" "${bad_tuple_atom_ini}" "${unsupported_bent_rose_modifier_ini}" "${bad_ini_syntax_option_ini}" "${bad_check_counting_ini}" "${bad_hopper_minmax_ini}" "${bad_hopper_entry_ini}" "${bad_piece_value_ini}" "${unknown_option_ini}" "${bad_royal_betza_ini}" "${bad_unmatched_closer_ini}" "${royal_blast_ini}" "${nonking_ini}" "${wrapped_support_ini}"'
 
 cat > "${bad_betza_ini}" <<'INI'
 [custom-piece-missing-betza:chess]

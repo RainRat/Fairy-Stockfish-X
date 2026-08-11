@@ -11,6 +11,11 @@ if [[ -z "${ENGINE}" ]]; then
   ENGINE="${REPO_ROOT}/src/stockfish"
 fi
 
+command -v expect >/dev/null || {
+  echo "perft testing requires expect" >&2
+  exit 1
+}
+
 error()
 {
   echo "perft testing failed on line $1"

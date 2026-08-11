@@ -83,7 +83,7 @@ help:
 	@echo ""
 
 objclean:
-	@rm -f $(EXE)
+	@rm -f $(EXE) $(basename $(EXE)).wasm
 
 clean: objclean
 

@@ -2200,7 +2200,8 @@ int main(int argc, char** argv) {
         auto is_group = [](const std::string& name) {
             return name == "all" || name == "promotion" || name == "movement"
                 || name == "locust-all" || name == "occupancy" || name == "state" || name == "royal"
-                || name == "adjudication" || name == "board-games" || name == "composable-rules";
+                || name == "adjudication" || name == "board-games" || name == "composable-rules"
+                || name == "extinction-color";
         };
         bool first_is_group = argc > 1 && is_group(argv[1]);
         std::string config_path = first_is_group ? "src/variants.ini"

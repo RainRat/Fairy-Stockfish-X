@@ -38,9 +38,21 @@ Use the smallest suite matching the changed engine area:
 | spell chess | `tests/run.sh suite spells src/stockfish-allvars` |
 | Python signatures and return values | `python3 setup.py build_ext --inplace && python3 tests/python/test_pyffish_api.py` |
 
+The search/evaluation suite includes an NNUE trace case and requires the pinned
+network file. Fetch it once with `make -C src net` before running that suite.
+
+The suite runner derives board-family requirements from the engine name. CI may
+set `FSX_ENGINE_FAMILY=large` when a custom executable name needs the large-board
+classification; `FSX_ALLOW_SMALL_BOARD=1` is reserved for the CI movement smoke
+run that intentionally exercises a small-board debug build.
+
 Specialized modes remain separate: `perft.sh`, `instrumented.sh`,
 `regression.sh`, `regression-runner.sh`, upstream comparison programs, and
 the JavaScript tests under `tests/js/`.
+
+The benchmark compatibility wrapper accepts either a reference signature
+(`tests/bench-regressions.sh [signature] [engine]`) or the stdin smoke mode
+(`tests/bench-regressions.sh --stdin [engine]`).
 
 Each semantic check is owned by one of the ten broad suites; failures identify
 the suite and print a focused rerun command. Python coverage is limited to the

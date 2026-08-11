@@ -8,7 +8,13 @@ error() {
 }
 trap 'error ${LINENO}' ERR
 
+ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)
 ENGINE=${1:-./stockfish}
+NNUE_FILE="${ROOT_DIR}/src/nn-3475407dc199.nnue"
+[[ -f "${NNUE_FILE}" ]] || {
+  echo "missing NNUE network: ${NNUE_FILE}; run 'make -C src net' first" >&2
+  exit 1
+}
 
 extract_eval() {
   sed -n 's/^Final evaluation[[:space:]]*//p' | tail -n1 | awk '{print $1}'
@@ -35,7 +41,7 @@ run_trace() {
   cat <<CMDS | "${ENGINE}"
 uci
 setoption name Use NNUE value true
-setoption name EvalFile value src/nn-3475407dc199.nnue
+setoption name EvalFile value ${NNUE_FILE}
 setoption name VariantPath value ${variant_path}
 setoption name UCI_Variant value ${variant}
 position fen ${fen}

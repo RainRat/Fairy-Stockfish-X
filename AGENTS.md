@@ -41,8 +41,8 @@ For named binaries used by regression scripts:
 
 ```sh
 tests/build.sh ARCH=x86-64-modern largeboards=yes EXE=stockfish-large
-tests/build.sh ARCH=x86-64-modern verylargeboards=yes EXE=stockfish-vlb
-tests/build.sh ARCH=x86-64-modern all=yes EXE=stockfish-allvars
+tests/build.sh ARCH=x86-64-modern largeboards=yes verylargeboards=yes all=yes EXE=stockfish-vlb
+tests/build.sh ARCH=x86-64-modern largeboards=yes all=yes EXE=stockfish-allvars
 ```
 
 If you prefer standard make, compile from `src/` using `make -j build ...`.
@@ -66,10 +66,11 @@ Drops use `@`, for example `P@b2`. Promotions use a trailing piece letter, not `
 From the repository root:
 
 ```sh
-src/stockfish check src/variants.ini
-bash tests/fast-regression.sh src/stockfish
-tests/protocol.sh
-tests/perft.sh all src/stockfish-large
+tests/build.sh ARCH=x86-64-modern largeboards=yes all=yes EXE=stockfish-allvars
+src/stockfish-allvars check src/variants.ini
+bash tests/fast-regression.sh src/stockfish-allvars
+tests/protocol.sh src/stockfish-allvars
+tests/perft.sh all src/stockfish-allvars
 ```
 
 Run large-board tests against a `largeboards=yes` binary. For Python-facing changes, run `python3 setup.py build_ext --inplace` and `python3 tests/python/test_pyffish_api.py`.

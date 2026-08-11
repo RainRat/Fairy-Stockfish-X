@@ -307,11 +307,20 @@ fsx_variant_skipped_by_build_output() {
     ((++depth))
   done
 
-  local candidate_name
+  local candidate_name summary_line names name
+  local -a parsed_names
   for candidate_name in "${candidates[@]}"; do
-    if grep -Fq "$candidate_name" <<<"$summary_lines"; then
-      return 0
-    fi
+    while IFS= read -r summary_line; do
+      [[ "${summary_line}" == *"("* ]] || continue
+      names="${summary_line#*\(}"
+      names="${names%%\)*}"
+      IFS=',' read -r -a parsed_names <<<"${names}"
+      for name in "${parsed_names[@]}"; do
+        name="${name#"${name%%[![:space:]]*}"}"
+        name="${name%"${name##*[![:space:]]}"}"
+        [[ "${name}" == "${candidate_name}" ]] && return 0
+      done
+    done <<<"${summary_lines}"
   done
 
   return 1
