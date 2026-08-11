@@ -20,7 +20,7 @@ declare -A SUITE_FAMILY=(
 )
 declare -A SUITE_PREREQS=(
   [config]=engine,python [movement]=engine,objects [royal-legality]=engine,objects
-  [captures-effects]=engine [promotion-drops]=engine [state-transitions]=engine,objects,python
+  [captures-effects]=engine [promotion-drops]=engine [state-transitions]=engine,objects
   [notation-protocol]=engine,expect [variants-smoke]=engine,objects [search-evaluation]=engine
   [spells]=engine,objects
 )
@@ -210,6 +210,7 @@ run_fast_parallel() {
     mkdir -p "$RUN_DIR"
     local log_dir
     log_dir=$(mktemp -d "${RUN_DIR}/fast-XXXXXX")
+    export FSX_CASE_LOG_ROOT="${log_dir}/cases"
     declare -A pids=()
     for suite in "${SUITES_TO_RUN[@]}"; do
         run_one "$suite" "$engine" "$variants" "$log_dir" &
@@ -273,6 +274,7 @@ case "$command" in
         else
             mkdir -p "$RUN_DIR"
             suite_log_dir=$(mktemp -d "${RUN_DIR}/suite-XXXXXX")
+            export FSX_CASE_LOG_ROOT="${suite_log_dir}/cases"
             run_suite_list "$engine" "$VARIANTS" "$suite_log_dir"
         fi
         ;;

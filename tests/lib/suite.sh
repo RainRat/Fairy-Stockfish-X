@@ -10,17 +10,23 @@ export ROOT_DIR="${SUITE_ROOT}" ENGINE VARIANTS VARIANT_PATH="${VARIANTS}"
 cd "${SUITE_ROOT}"
 source "${SUITE_ROOT}/tests/lib/uci.sh"
 
+if [[ "${VERBOSE:-0}" != 1 && -z "${FSX_CASE_LOG_ROOT:-}" ]]; then
+    mkdir -p "${SUITE_ROOT}/.local/build/test-run"
+    FSX_CASE_LOG_ROOT=$(mktemp -d "${SUITE_ROOT}/.local/build/test-run/direct-XXXXXX")/cases
+    export FSX_CASE_LOG_ROOT
+fi
+
 suite_case() {
-    local name="$1" timeout_value="$2" log_dir log
+    local name="$1" timeout_value="$2" log_dir="" log=""
     shift 2
-    log_dir="${SUITE_ROOT}/.local/build/test-run/cases/${SUITE_NAME}"
-    log="${log_dir}/${name//\//_}.log"
     if [[ "${VERBOSE:-0}" == 1 ]]; then
         echo "== ${SUITE_NAME}/${name} =="
         if timeout "${timeout_value}" "$@"; then
             return 0
         fi
     else
+        log_dir="${FSX_CASE_LOG_ROOT}/${SUITE_NAME}"
+        log="${log_dir}/${name//\//_}.log"
         mkdir -p "${log_dir}"
         if timeout "${timeout_value}" "$@" >"${log}" 2>&1; then
             echo "ok: ${SUITE_NAME}/${name}"
@@ -43,14 +49,8 @@ legacy() {
     if [[ ! -f "${case_path}" && -f "${fragment}" ]]; then
         case_path="${fragment}"
     fi
-    if [[ ! -f "${case_path}" ]]; then
-        case_path="${SUITE_ROOT}/tests/${script}"
-    fi
-    if [[ ! -f "${case_path}" ]]; then
-        case_path=$(find "${SUITE_ROOT}/tests/suites/cases" \( -type f -name "${script}" -o -type f -name "${script%.sh}.inc" \) -print -quit)
-    fi
     [[ -n "${case_path}" && -f "${case_path}" ]] || {
-        echo "missing suite case: ${script}" >&2
+        echo "missing suite case: ${SUITE_NAME}/${script}" >&2
         return 1
     }
     suite_case "${script%.sh}" "${timeout_value}" bash "${case_path}" "$@"
@@ -129,21 +129,20 @@ UCI
 run_royal_legality() {
     native royal
     native adjudication
-    local no_kings_ini no_kings_output
-    no_kings_ini=$(mktemp "${TMPDIR:-/tmp}/fsx-royal-capture-XXXXXX.ini")
-    cat >"${no_kings_ini}" <<'INI'
+    local no_kings_output
+    load_inline_variants <<'INI'
 [noroyal-capture:chess]
 king = k:K
 castling = false
 allowChecks = true
 INI
-    no_kings_output=$(run_uci "${ENGINE}" "${no_kings_ini}" noroyal-capture <<'UCI'
+    no_kings_output=$(run_uci "${ENGINE}" "${FSX_TMP_INI}" noroyal-capture <<'UCI'
 position fen 4k3/8/8/8/4R3/8/8/4K3 w - - 0 1
 go perft 1
 UCI
 )
     assert_contains_literal "${no_kings_output}" "e4e8: 1" "contains the royal capture"
-    rm -f "${no_kings_ini}"
+    cleanup_tmp_ini
     legacy royal-variant-regressions.sh 3m "${ENGINE}" "${VARIANTS}"
     legacy pseudoroyal-capture-illegal.sh 2m "${ENGINE}" "${VARIANTS}"
     legacy ep-pseudoroyal-regressions.sh 2m "${ENGINE}" "${VARIANTS}"

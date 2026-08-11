@@ -91,7 +91,9 @@ jobs:
           node-version: ${{ matrix.node-version }}
       - name: Build ffish.js ES6/ES2015 module
         working-directory: src
-        run: rm -f ../tests/js/ffish.js & rm -f ../tests/js/ffish.wasm & make -f Makefile_js build es6=yes
+        run: |
+          rm -f ../tests/js/ffish.js ../tests/js/ffish.wasm
+          make -f Makefile_js build es6=yes
       - name: Upload ffish.js ES6/ES2015 module ZIP archive
         uses: actions/upload-artifact@v7
         with:
@@ -101,7 +103,9 @@ jobs:
           compression-level: 9
       - name: Build ffish.js standard module
         working-directory: src
-        run: rm -f ../tests/js/ffish.js & rm -f ../tests/js/ffish.wasm & make -f Makefile_js build
+        run: |
+          rm -f ../tests/js/ffish.js ../tests/js/ffish.wasm
+          make -f Makefile_js build
       - name: Upload ffish.js standard module ZIP archive
         uses: actions/upload-artifact@v7
         with:

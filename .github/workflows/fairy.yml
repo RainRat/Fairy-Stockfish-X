@@ -80,6 +80,11 @@ jobs:
         run: |
           ../tests/run.sh fast ./stockfish-allvars
 
+      - name: Test search and evaluation regressions
+        if: ${{ matrix.config.run_expensive_tests }}
+        run: |
+          ../tests/run.sh suite search-evaluation ./stockfish-allvars
+
       - name: Test variant bench
         run: |
           ./stockfish-allvars bench minixiangqi
