@@ -108,7 +108,6 @@ MovePicker::MovePicker(const Position& p, Move ttm, Depth d, const ButterflyHist
              ttMove(ttm), refutations{{killers[0], 0}, {killers[1], 0}, {cm, 0}}, depth(d), ply(pl) {
 
   assert(d > 0);
-  init_move_list_storage();
 
   stage = (pos.evasion_checkers() ? EVASION_TT : MAIN_TT) +
           !(ttm && pos.pseudo_legal(ttm));
@@ -120,7 +119,6 @@ MovePicker::MovePicker(const Position& p, Move ttm, Depth d, const ButterflyHist
            : pos(p), mainHistory(mh), gateHistory(dh), captureHistory(cph), continuationHistory(ch), ttMove(ttm), recaptureSquare(rs), depth(d) {
 
   assert(d <= 0);
-  init_move_list_storage();
 
   stage = (pos.evasion_checkers() ? EVASION_TT : QSEARCH_TT) +
           !is_qsearch_tt_move(ttm);
@@ -132,7 +130,6 @@ MovePicker::MovePicker(const Position& p, Move ttm, Value th, const GateHistory*
            : pos(p), gateHistory(dh), captureHistory(cph), ttMove(ttm), threshold(th) {
 
   assert(!pos.evasion_checkers());
-  init_move_list_storage();
 
   stage = PROBCUT_TT + !(ttm && pos.capture_or_promotion(ttm)
                              && pos.pseudo_legal(ttm)
@@ -156,7 +153,10 @@ bool MovePicker::is_qsearch_tt_move(Move m) const {
       || (depth == DEPTH_QS_CHECKS && pos.gives_check(m));
 }
 
-void MovePicker::init_move_list_storage() {
+void MovePicker::ensure_move_list_storage() {
+    if (moveList)
+        return;
+
 #ifdef USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
   thread = pos.this_thread();
   if (thread)
@@ -174,7 +174,7 @@ void MovePicker::init_move_list_storage() {
 
 MovePicker::~MovePicker() {
 #ifdef USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
-    if (thread)
+    if (thread && baseMoveList)
         thread->release_buffer(baseMoveList);
 #endif
 }
@@ -386,6 +386,7 @@ top:
       goto top;
 
   case CAPTURE_INIT:
+      ensure_move_list_storage();
       cur = endBadCaptures = moveList;
       endMoves = generate_without_potions<CAPTURES>(pos, cur);
       captureBaseEnd = endMoves;
@@ -397,6 +398,7 @@ top:
       goto top;
 
   case PROBCUT_INIT:
+      ensure_move_list_storage();
       cur = endBadCaptures = moveList;
       endMoves = generate_without_potions<CAPTURES>(pos, cur);
       captureBaseEnd = endMoves;
@@ -408,6 +410,7 @@ top:
       goto top;
 
   case QCAPTURE_INIT:
+      ensure_move_list_storage();
       cur = endBadCaptures = moveList;
       endMoves = generate_without_potions<CAPTURES>(pos, cur);
       qcaptureBaseEnd = endMoves;
@@ -451,6 +454,7 @@ top:
   case QUIET_INIT:
       if (!skipQuiets && !(pos.must_capture() && pos.has_capture()))
       {
+          ensure_move_list_storage();
           quietListBegin = endBadCaptures;
           cur = quietListBegin;
           endMoves = generate_without_potions<QUIETS>(pos, cur);
@@ -489,6 +493,7 @@ top:
       return select<Next>([](){ return true; });
 
   case EVASION_INIT:
+      ensure_move_list_storage();
       cur = moveList;
       // On wrapped boards, between_bb / checker_evasion_targets are not
       // topology-aware and can miss interposition moves that cross the
@@ -543,6 +548,7 @@ top:
       [[fallthrough]];
 
   case QCHECK_INIT:
+      ensure_move_list_storage();
       cur = moveList;
       endMoves = generate_without_potions<QUIET_CHECKS>(pos, cur);
       qcheckBaseEnd = endMoves;

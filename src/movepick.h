@@ -163,7 +163,7 @@ private:
   template<GenType> void score();
   bool is_qsearch_tt_move(Move m) const;
   bool is_useless_potion(Move m) const;
-  void init_move_list_storage();
+  void ensure_move_list_storage();
   template<GenType Type>
   bool resume_deferred_potions(ExtMove* appendBegin, ExtMove* baseEnd, bool& deferred);
   ExtMove* prune_useless_potions(ExtMove* begin, ExtMove* end) const;
@@ -184,7 +184,7 @@ private:
   Value threshold;
   Depth depth;
   int ply;
-  ExtMove* moveList;
+  ExtMove* moveList = nullptr;
   ExtMove* quietListBegin = nullptr;
   ExtMove* captureBaseEnd = nullptr;
   ExtMove* quietBaseEnd = nullptr;
