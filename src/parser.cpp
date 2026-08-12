@@ -1823,6 +1823,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("swapForbiddenPlies", v->swapForbiddenPlies);
     if (!parse_edge_insert(v))
         return false;
+    parse_attribute("edgeInsertOpponentEjectionLock", v->edgeInsertOpponentEjectionLock);
     parse_attribute("changingColorTrigger", v->changingColorTrigger);
     parse_attribute("changingColorPieceTypes", v->changingColorPieceTypes, v);
     parse_color_setting("selfCapture", v->selfCapture);

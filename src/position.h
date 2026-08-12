@@ -290,6 +290,7 @@ struct StateInfoCopied {
   int    pointsCount[COLOR_NB];
   CheckCount checksRemaining[COLOR_NB];
   Bitboard epSquares;
+  Bitboard edgeInsertLocks[COLOR_NB];
   Square castlingKingSquare[COLOR_NB];
   Bitboard wallSquares;
   Bitboard deadSquares;
@@ -693,6 +694,9 @@ public:
   bool push_no_immediate_return() const;
   PieceSet edge_insert_types() const;
   bool edge_insert_only() const;
+  bool edge_insert_opponent_ejection_lock() const;
+  Bitboard edge_insert_locks(Color c) const;
+  Bitboard edge_insert_lock_entries(Color c, Square ejected) const;
   Bitboard edge_insert_region(Color c) const;
   bool edge_insert_from_top(Color c) const;
   bool edge_insert_from_bottom(Color c) const;
@@ -2062,6 +2066,29 @@ inline PieceSet Position::edge_insert_types() const {
 inline bool Position::edge_insert_only() const {
   assert(var != nullptr);
   return var->edgeInsertOnly;
+}
+
+inline bool Position::edge_insert_opponent_ejection_lock() const {
+  assert(var != nullptr);
+  return var->edgeInsertOpponentEjectionLock;
+}
+
+inline Bitboard Position::edge_insert_locks(Color c) const {
+  assert(var != nullptr);
+  return st->edgeInsertLocks[c];
+}
+
+inline Bitboard Position::edge_insert_lock_entries(Color c, Square ejected) const {
+  if (!is_ok(ejected))
+      return Bitboard(0);
+
+  Bitboard entries = edge_insert_region(c) & board_bb();
+  Bitboard locks = 0;
+  if (edge_insert_from_top(c) || edge_insert_from_bottom(c))
+      locks |= entries & file_bb(file_of(ejected));
+  if (edge_insert_from_left(c) || edge_insert_from_right(c))
+      locks |= entries & rank_bb(rank_of(ejected));
+  return locks;
 }
 
 inline Bitboard Position::edge_insert_region(Color c) const {

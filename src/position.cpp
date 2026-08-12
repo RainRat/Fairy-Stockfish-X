@@ -889,6 +889,7 @@ namespace Zobrist {
   Key promotionOrigin[PIECE_NB][SQUARE_NB];
   Key endgame[EG_EVAL_NB];
   Key points[COLOR_NB][MAX_ZOBRIST_POINTS];
+  Key edgeInsertLock[COLOR_NB][SQUARE_NB];
 }
 
 Square JumpMidpoint[SQUARE_NB][SQUARE_NB];
@@ -916,6 +917,11 @@ namespace {
       assert(pt >= NO_PIECE_TYPE && pt < PIECE_TYPE_NB);
       if (pt != NO_PIECE_TYPE)
           key ^= Zobrist::committed[c][f][pt];
+  }
+
+  inline void xor_edge_insert_locks(Key& key, Color c, Bitboard locks) {
+      while (locks)
+          key ^= Zobrist::edgeInsertLock[c][pop_lsb(locks)];
   }
 
   inline Square parse_fen_square(const Position& pos, const std::string& spec) {
@@ -1462,6 +1468,10 @@ void Position::init() {
   for (Color c : {WHITE, BLACK})
       for (int i = 0; i < Stockfish::Zobrist::MAX_ZOBRIST_POINTS; ++i)
           Zobrist::points[c][i] = rng.rand<Key>();
+
+  for (Color c : {WHITE, BLACK})
+      for (Square s = SQ_A1; s <= SQ_MAX; ++s)
+          Zobrist::edgeInsertLock[c][s] = rng.rand<Key>();
 
   // Keep new state keys after the established sequence so adding them does not
   // perturb orthodox position keys and search signatures.
@@ -2447,6 +2457,10 @@ void Position::recompute_state_hashes_and_material(StateInfo* si) const {
   if (var->pointsCounting)
       for (Color c : {WHITE, BLACK})
           xor_points_bucket(si->key, c, si->pointsCount[c]);
+
+  if (edge_insert_opponent_ejection_lock())
+      for (Color c : {WHITE, BLACK})
+          xor_edge_insert_locks(si->key, c, si->edgeInsertLocks[c]);
 
   si->pieceStateKey = compute_piece_state_key();
   si->key ^= si->pieceStateKey;
@@ -6494,6 +6508,7 @@ bool Position::pseudo_legal(const Move m) const {
                 && color_of(pc) == dropColor
                 && (edge_insert_types() & type_of(pc))
                 && (edge_insert_region(us) & to)
+                && (!edge_insert_opponent_ejection_lock() || !(edge_insert_locks(us) & to))
                 && edge_insert_direction_ok(us, from, to)
                 && (!pay_points_to_drop() || st->pointsCount[us] >= var->piecePoints[type_of(pc)])
                 && (can_drop(us, in_hand_piece_type(m))
@@ -7403,6 +7418,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   int pushLineCount = 0;
   int pushTransferCount = 0;
   bool recomputeDerivedState = false;
+  Bitboard opponentEjectionLocks = 0;
 
   if (var->hasPushing && stepwise_pushing() && type_of(m) == NORMAL)
   {
@@ -7412,6 +7428,31 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   else if (var->hasPushing)
   {
       pushMove = analyze_push(m, pushInfo);
+  }
+
+  if (edge_insert_opponent_ejection_lock() && is_insert_move(m) && pushMove && pushInfo.ejects)
+  {
+      if (stepwisePush)
+      {
+          for (int i = 0; i < pushTransferCount; ++i)
+              if (pushTransfers[i].piece != NO_PIECE && color_of(pushTransfers[i].piece) == them)
+                  opponentEjectionLocks |= edge_insert_lock_entries(them, pushTransfers[i].origin);
+      }
+      else
+      {
+          Piece ejected = piece_on(pushInfo.tail);
+          if (ejected != NO_PIECE && color_of(ejected) == them)
+              opponentEjectionLocks |= edge_insert_lock_entries(them, pushInfo.tail);
+      }
+  }
+
+  if (edge_insert_opponent_ejection_lock())
+  {
+      xor_edge_insert_locks(k, us, st->edgeInsertLocks[us]);
+      xor_edge_insert_locks(k, them, st->edgeInsertLocks[them]);
+      st->edgeInsertLocks[us] = Bitboard(0);
+      st->edgeInsertLocks[them] = opponentEjectionLocks;
+      xor_edge_insert_locks(k, them, st->edgeInsertLocks[them]);
   }
 
   if (pushMove)

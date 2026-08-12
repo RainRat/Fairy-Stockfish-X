@@ -256,6 +256,7 @@ struct Variant {
   PieceSet edgeInsertTypes = NO_PIECE_SET;
   ColorSetting<Bitboard> edgeInsertRegion = ColorSetting<Bitboard>(Bitboard(0));
   bool edgeInsertOnly = false;
+  bool edgeInsertOpponentEjectionLock = false;
   ColorSetting<bool> edgeInsertFromTop = ColorSetting<bool>(false);
   ColorSetting<bool> edgeInsertFromBottom = ColorSetting<bool>(false);
   ColorSetting<bool> edgeInsertFromLeft = ColorSetting<bool>(false);

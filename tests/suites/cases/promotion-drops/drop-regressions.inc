@@ -586,4 +586,22 @@ UCI
 )
 assert_contains "$out" '^Fen: 6/6/6/a1A3/a1A3/a1A3\[AAAAAAAAAAAAAAAAAAAAAAAAAAAaaaaaaaaaaaaaaaaaaaaaaaaaaa\] w - - 0 4$'
 
+out=$(run_uci "$ENGINE" "${ROOT_DIR}/src/variants.ini" tara <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_contains "$out" '^A@a5,a4: 1$'
+assert_contains "$out" '^A@e5,e4: 1$'
+assert_contains "$out" '^Nodes searched: 5$'
+
+out=$(run_uci "$ENGINE" "${ROOT_DIR}/src/variants.ini" tara <<'UCI'
+position fen a4/a4/a4/A4/A4[AAAAAAAAAAAAAAAAAAAAAAAAaaaaaaaaaaaaaaaaaaaaaaa] b - - 0 1 moves A@a5,a4
+go perft 1
+UCI
+)
+assert_not_contains "$out" '^A@a1,b1: 1$'
+assert_contains "$out" '^A@a2,b2: 1$'
+assert_contains "$out" '^Nodes searched: 4$'
+
 echo "drop regressions passed"

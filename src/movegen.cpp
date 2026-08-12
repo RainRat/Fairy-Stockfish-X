@@ -416,6 +416,8 @@ namespace {
         return moveList;
 
     Bitboard entries = pos.edge_insert_region(Us) & pos.board_bb();
+    if (pos.edge_insert_opponent_ejection_lock())
+        entries &= ~pos.edge_insert_locks(Us);
     if (!entries)
         return moveList;
 
