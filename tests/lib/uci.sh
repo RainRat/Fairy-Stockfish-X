@@ -198,7 +198,7 @@ probe_variant_available() {
       status=0
     fi
   else
-    out=$(run_uci "$engine" "$variant_path" "$variant" <<<'d' 2>&1)
+    out=$(FSX_SHOW_VARIANT_LOAD_SUMMARIES=1 run_uci "$engine" "$variant_path" "$variant" <<<'d' 2>&1)
     if grep -Fq "info string variant ${variant} " <<<"$out"; then
       status=0
     fi

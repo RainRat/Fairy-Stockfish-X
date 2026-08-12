@@ -5,6 +5,11 @@ set -euo pipefail
 source "$(cd "$(dirname "$0")/../../../.." && pwd)/tests/lib/uci.sh"
 setup_test_context "${1:-}" "${2:-}" "immobilizer variant"
 
+if ! variant_available "$ENGINE" immobilizer "$VARIANTS"; then
+  echo "immobilizer variant not available in this build; skipping Immobilizer regression"
+  exit 0
+fi
+
 out=$(run_uci "$ENGINE" "$VARIANTS" immobilizer <<'UCI'
 position startpos
 go perft 1
