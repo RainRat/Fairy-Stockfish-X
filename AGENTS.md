@@ -35,6 +35,12 @@ tests/build.sh ARCH=x86-64-modern debug=yes optimize=no
 tests/build.sh COMP=mingw
 ```
 
+`tests/build.sh` verifies that native builds produce a runnable, non-empty
+executable before accepting the build. The linker writes to a temporary path
+and renames it atomically; a failed rebuild leaves no executable at the
+canonical path. Validate `src/variants.ini` separately with the required
+config and variants-smoke checks below.
+
 Use `largeboards=yes` for normal large-board variants. Use `verylargeboards=yes` only beyond that matrix. When switching board macro families, run `make clean`.
 
 For named binaries used by regression scripts:

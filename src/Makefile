@@ -886,7 +886,9 @@ config-sanity: $(load_net)
 	|| test "$(comp)" = "aarch64-linux-android21-clang"
 
 $(EXE): $(OBJS)
-	+$(CXX) -o $@ $(OBJS) $(LDFLAGS)
+	+tmp="$@.tmp.$$$$"; rm -f "$@"; trap 'rm -f "$$tmp"' EXIT; \
+	$(CXX) -o "$$tmp" $(OBJS) $(LDFLAGS) && mv -f "$$tmp" "$@"; \
+	status=$$?; trap - EXIT; exit $$status
 
 clang-profile-make:
 	$(MAKE) ARCH=$(ARCH) COMP=$(COMP) \

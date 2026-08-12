@@ -1417,10 +1417,14 @@ inline PieceType Position::main_promotion_pawn_type(Color c) const {
 }
 
 inline PieceSet Position::promotion_piece_types(Color c) const {
+  if (var_ref().promotionPieceTypesByRank.get(c).configured)
+      return var_ref().promotionPieceTypesByRank.get(c).unionSet();
   return var_ref().promotionPieceTypes.get(c).unionSet();
 }
 
 inline PieceSet Position::promotion_piece_types(Color c, Square s) const {
+  if (s != SQ_NONE && var_ref().promotionPieceTypesByRank.get(c).configured)
+      return var_ref().promotionPieceTypesByRank.get(c).piecesOfRank(rank_of(s));
   if (s != SQ_NONE)
   {
       File f = file_of(s);

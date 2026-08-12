@@ -181,6 +181,7 @@ run_promotion_drops() {
     legacy shogi-pawn-drop-mate-split.sh 2m "${ENGINE}"
     legacy castling-promoted-piece.sh 2m "${ENGINE}"
     legacy wrapping-promotion-movegen.sh 2m "${ENGINE}"
+    legacy skica.sh 2m "${ENGINE}" "${VARIANTS}"
     legacy rule-matrix-drops.sh 3m "${ENGINE}"
 }
 

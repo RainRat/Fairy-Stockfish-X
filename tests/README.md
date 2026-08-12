@@ -16,6 +16,12 @@ tests/build.sh ARCH=x86-64-modern largeboards=yes all=yes EXE=stockfish-allvars
 tests/run.sh fast src/stockfish-allvars
 ```
 
+`tests/build.sh` verifies that native builds produce a runnable, non-empty
+executable before accepting the artifact. The linker writes to a temporary
+path and renames it atomically, and a failed rebuild leaves no executable at
+the canonical path. Variant configuration validation is handled separately by
+the config and variants-smoke suites.
+
 ```sh
 tests/run.sh list
 tests/run.sh full src/stockfish-allvars

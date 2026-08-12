@@ -1495,6 +1495,86 @@ private:
     bool isSet[FILE_NB] = {false};
 };
 
+struct RankPieceSetMap
+{
+    RankPieceSetMap() = default;
+    RankPieceSetMap(PieceSet ps) : fallback(ps), configured(true) {}
+    RankPieceSetMap(const RankPieceSetMap& other) = default;
+    RankPieceSetMap& operator=(const RankPieceSetMap& other) = default;
+
+    RankPieceSetMap& operator=(PieceSet ps) {
+        fallback = ps;
+        for (int r = RANK_1; r < RANK_NB; ++r) isSet[r] = false;
+        configured = true;
+        return *this;
+    }
+
+    RankPieceSetMap& operator&=(PieceSet ps) {
+        fallback &= ps;
+        for (int r = RANK_1; r < RANK_NB; ++r)
+            if (isSet[r]) ranklist[r] &= ps;
+        return *this;
+    }
+
+    RankPieceSetMap& operator|=(PieceSet ps) {
+        fallback |= ps;
+        for (int r = RANK_1; r < RANK_NB; ++r)
+            if (isSet[r]) ranklist[r] |= ps;
+        configured = true;
+        return *this;
+    }
+
+    RankPieceSetMap& operator|=(PieceType pt) {
+        return *this |= piece_set(pt);
+    }
+
+    PieceSet piecesOfRank(Rank r) const
+    {
+        if (r == RANK_NB) return fallback;
+        if (r < RANK_1 || r > RANK_MAX) return NO_PIECE_SET;
+        return isSet[r] ? ranklist[r] : fallback;
+    }
+
+    void set(Rank r, PieceSet ps)
+    {
+        if (r < RANK_1 || r >= RANK_NB) return;
+        ranklist[r] = ps;
+        isSet[r] = true;
+        configured = true;
+    }
+
+    void clear()
+    {
+        fallback = NO_PIECE_SET;
+        for (int r = RANK_1; r < RANK_NB; ++r) isSet[r] = false;
+        configured = false;
+    }
+
+    PieceSet unionSet() const
+    {
+        PieceSet ps = fallback;
+        for (int r = RANK_1; r < RANK_NB; ++r)
+            if (isSet[r]) ps |= ranklist[r];
+        return ps;
+    }
+
+    bool anySet() const
+    {
+        if (fallback) return true;
+        for (bool set : isSet)
+            if (set) return true;
+        return false;
+    }
+
+    operator PieceSet() const { return unionSet(); }
+
+    PieceSet fallback = NO_PIECE_SET;
+    bool configured = false;
+private:
+    PieceSet ranklist[RANK_NB] = {NO_PIECE_SET};
+    bool isSet[RANK_NB] = {false};
+};
+
 } // namespace Stockfish
 
 #endif // #ifndef TYPES_H_INCLUDED
