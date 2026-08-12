@@ -170,6 +170,7 @@ run_captures_effects() {
     legacy capture-effects-special.sh 5m "${ENGINE}" "${VARIANTS}"
     legacy capture-rule-definitions.sh 8m "${ENGINE}" "${VARIANTS}"
     legacy cross-feature-state.sh 8m "${ENGINE}" "${VARIANTS}"
+    legacy mortal-chessgi.sh 2m "${ENGINE}" "${VARIANTS}"
     legacy rule-matrix-captures.sh 5m "${ENGINE}"
 }
 

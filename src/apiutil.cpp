@@ -360,6 +360,10 @@ std::string variant_info_json(const std::string& name) {
     for (int i = 1; i < PIECE_TYPE_NB; ++i) if (v.promotedPieceType[i] != NO_PIECE_TYPE)
         field(promoted, prf, variant_piece_type_name(v, PieceType(i)).c_str(), variant_piece_type_json(v, v.promotedPieceType[i]));
     promoted << '}'; field(promotion, b, "promotedPieceTypes", promoted.str());
+    std::ostringstream captureDemoted; captureDemoted << '{'; bool cdrf = true;
+    for (int i = 1; i < PIECE_TYPE_NB; ++i) if (v.captureDemotedPieceType[i] != NO_PIECE_TYPE)
+        field(captureDemoted, cdrf, variant_piece_type_name(v, PieceType(i)).c_str(), variant_piece_type_json(v, v.captureDemotedPieceType[i]));
+    captureDemoted << '}'; field(promotion, b, "captureDemotedPieceTypes", captureDemoted.str());
     std::ostringstream limits; limits << '{'; bool lf = true;
     for (int i = 1; i < PIECE_TYPE_NB; ++i) if (v.promotionLimit[i])
         field(limits, lf, variant_piece_type_name(v, PieceType(i)).c_str(), std::to_string(v.promotionLimit[i]));
@@ -369,6 +373,7 @@ std::string variant_info_json(const std::string& name) {
     field(promotion, b, "mandatoryPawn", boolean(v.mandatoryPawnPromotion));
     field(promotion, b, "mandatoryPiece", boolean(v.mandatoryPiecePromotion));
     field(promotion, b, "demotion", boolean(v.pieceDemotion));
+    field(promotion, b, "captureDemotion", boolean(v.captureDemotion));
     field(promotion, b, "shogiStyle", boolean(v.shogiStylePromotions));
     field(promotion, b, "steal", boolean(v.promotionSteal));
     field(promotion, b, "requireInHand", boolean(v.promotionRequireInHand));

@@ -164,6 +164,8 @@ struct Variant {
   ColorSetting<bool> mandatoryPawnPromotion = ColorSetting<bool>(true);
   ColorSetting<bool> mandatoryPiecePromotion = ColorSetting<bool>(false);
   bool pieceDemotion = false;
+  PieceType captureDemotedPieceType[PIECE_TYPE_NB] = {};
+  bool captureDemotion = false;
   bool blastOnCapture = false;
   bool blastOnMove = false;
   bool blastOnSelfDestruct = false;

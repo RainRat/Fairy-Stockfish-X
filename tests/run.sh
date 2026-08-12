@@ -250,6 +250,11 @@ case "$command" in
         prepare_python
         export CXX
         prepare_shared_objects "$engine"
+        if [[ "${VERBOSE:-0}" == 1 ]]; then
+            unset FSX_QUIET_VARIANT_LOAD_SUMMARIES
+        else
+            export FSX_QUIET_VARIANT_LOAD_SUMMARIES=1
+        fi
         if [[ "$command" == full ]]; then
             run_fast_parallel "$engine" "$VARIANTS" "$command"
         else
@@ -276,7 +281,14 @@ case "$command" in
         prepare_shared_objects "$engine"
         engine=$(normalize_engine "$engine")
         if [[ "${VERBOSE:-0}" == 1 ]]; then
+            unset FSX_QUIET_VARIANT_LOAD_SUMMARIES
+        else
+            export FSX_QUIET_VARIANT_LOAD_SUMMARIES=1
+        fi
+        if [[ "${VERBOSE:-0}" == 1 ]]; then
             run_suite_list "$engine" "$VARIANTS"
+        elif (( ${#SUITES_TO_RUN[@]} > 1 )); then
+            run_fast_parallel "$engine" "$VARIANTS" "suite"
         else
             mkdir -p "$RUN_DIR"
             suite_log_dir=$(mktemp -d "${RUN_DIR}/suite-XXXXXX")

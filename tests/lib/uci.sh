@@ -134,7 +134,14 @@ run_uci() {
     printf 'setoption name UCI_Variant value %s\n' "$variant"
     cat
     printf 'quit\n'
-  } | uci_timeout "$engine"
+  } | if [[ "${FSX_SHOW_VARIANT_LOAD_SUMMARIES:-0}" == 1 \
+          || "${FSX_QUIET_VARIANT_LOAD_SUMMARIES:-0}" != 1 ]]; then
+    uci_timeout "$engine"
+  else
+    uci_timeout "$engine" 2> >(sed \
+      -e '/^\[[0-9][0-9]*\] variants skipped because of board size limits/d' \
+      -e '/^\[[0-9][0-9]*\] variant templates not found or skipped because of board size limits/d' >&2)
+  fi
 }
 
 run_uci_cmds() {
@@ -149,16 +156,56 @@ run_cmds() {
   run_uci_cmds "$@"
 }
 
+declare -A FSX_VARIANT_CATALOG_LOADED=()
+declare -A FSX_VARIANT_CATALOG_OUTPUT=()
+
+fsx_variant_catalog() {
+  local engine="$1"
+  local variant_path="${2:-${VARIANTS}}"
+  local cache_key="${engine}"$'\x1f'"${variant_path}"
+
+  if [[ -z "${FSX_VARIANT_CATALOG_LOADED["$cache_key"]:-}" ]]; then
+    FSX_VARIANT_CATALOG_OUTPUT["$cache_key"]=$( {
+      printf 'uci\n'
+      printf 'setoption name VariantPath value %s\n' "$variant_path"
+      printf 'uci\n'
+      printf 'quit\n'
+    } | uci_timeout "$engine" 2>&1 )
+    FSX_VARIANT_CATALOG_LOADED["$cache_key"]=1
+  fi
+
+  printf '%s' "${FSX_VARIANT_CATALOG_OUTPUT["$cache_key"]}"
+}
+
 probe_variant_available() {
   local engine="$1"
   local variant="$2"
   local variant_path="${3:-${VARIANTS}}"
-  local out
+  local out status=1
 
-  out=$(run_uci "$engine" "$variant_path" "$variant" <<<'d' 2>&1)
+  fsx_variant_load_metadata "$variant_path"
+  local metadata_key="${variant_path}::${variant}"
+  if [[ -n "${FSX_VARIANT_PARENT["$metadata_key"]+declared}" ]]; then
+    out=$(fsx_variant_catalog "$engine" "$variant_path")
+    if awk -v target="$variant" '
+      $1 == "option" {
+        for (i = 1; i < NF; ++i)
+          if ($i == "var" && $(i + 1) == target)
+            found = 1
+      }
+      END { exit !found }
+    ' <<<"$out"; then
+      status=0
+    fi
+  else
+    out=$(run_uci "$engine" "$variant_path" "$variant" <<<'d' 2>&1)
+    if grep -Fq "info string variant ${variant} " <<<"$out"; then
+      status=0
+    fi
+  fi
   FSX_VARIANT_PROBE_OUTPUT="$out"
   export FSX_VARIANT_PROBE_OUTPUT
-  grep -Fq "info string variant ${variant} " <<<"$out"
+  return "$status"
 }
 
 declare -A FSX_VARIANT_META_LOADED=()

@@ -597,6 +597,8 @@ public:
   bool mandatory_pawn_promotion() const;
   bool mandatory_piece_promotion() const;
   bool piece_demotion() const;
+  PieceType capture_demoted_piece_type(PieceType pt) const;
+  bool capture_demotion() const;
   bool blast_on_capture() const;
   bool blast_on_capture(Piece mover, Piece captured) const;
   bool blast_on_capture(Move m) const;
@@ -1492,6 +1494,15 @@ inline bool Position::mandatory_piece_promotion() const {
 inline bool Position::piece_demotion() const {
   assert(var != nullptr);
   return var->pieceDemotion;
+}
+
+inline PieceType Position::capture_demoted_piece_type(PieceType pt) const {
+  return var_ref().captureDemotedPieceType[pt];
+}
+
+inline bool Position::capture_demotion() const {
+  assert(var != nullptr);
+  return var->captureDemotion;
 }
 
 inline bool Position::blast_on_capture() const {

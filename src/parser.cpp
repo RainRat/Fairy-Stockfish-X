@@ -1751,6 +1751,16 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
             return false;
         }
     }
+    auto it_capture_demoted_pt = config.find("captureDemotedPieceType");
+    if (it_capture_demoted_pt != config.end())
+    {
+        if (!parse_piece_type_map(it_capture_demoted_pt->second, v, v->captureDemotedPieceType))
+        {
+            if (DoCheck)
+                std::cerr << "captureDemotedPieceType - Invalid syntax." << std::endl;
+            return false;
+        }
+    }
     auto it_move_morph_pt = config.find("moveMorphPieceType");
     if (it_move_morph_pt != config.end())
     {
@@ -1789,6 +1799,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_color_setting("mandatoryPawnPromotion", v->mandatoryPawnPromotion);
     parse_color_setting("mandatoryPiecePromotion", v->mandatoryPiecePromotion);
     parse_attribute("pieceDemotion", v->pieceDemotion);
+    parse_attribute("captureDemotion", v->captureDemotion);
     parse_attribute("blastOnCapture", v->blastOnCapture);
     parse_attribute("blastOnMove", v->blastOnMove);
     parse_attribute("blastOnSelfDestruct", v->blastOnSelfDestruct);

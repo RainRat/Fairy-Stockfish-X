@@ -17,7 +17,7 @@ fi
 
 test_vlb_gale_smoke() {
   local output
-  output=$(run_uci "$ENGINE" "$VARIANTS" gale <<'EOF' 2>&1
+  output=$(FSX_SHOW_VARIANT_LOAD_SUMMARIES=1 run_uci "$ENGINE" "$VARIANTS" gale <<'EOF' 2>&1
 position startpos
 go perft 1
 EOF
@@ -59,7 +59,7 @@ pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
 startFen = 12A2k/12p3/16/16/16/16/16/16/16/16/16/16/16/16/16/15K w - - 0 1
 VAR
 
-  out=$(run_uci "$ENGINE" "$variant_file" vlb-lame-clear <<'UCI' 2>&1
+  out=$(FSX_SHOW_VARIANT_LOAD_SUMMARIES=1 run_uci "$ENGINE" "$variant_file" vlb-lame-clear <<'UCI' 2>&1
 position startpos
 go perft 1
 UCI
@@ -79,7 +79,7 @@ UCI
   assert_contains "$out" "^m16o16: 1$"
   assert_nodes "$out" 6
 
-  out=$(run_uci "$ENGINE" "$variant_file" vlb-lame-blocked <<'UCI' 2>&1
+  out=$(FSX_SHOW_VARIANT_LOAD_SUMMARIES=1 run_uci "$ENGINE" "$variant_file" vlb-lame-blocked <<'UCI' 2>&1
 position startpos
 go perft 1
 UCI

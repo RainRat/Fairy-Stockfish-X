@@ -137,13 +137,18 @@ namespace {
     return static_cast<Variant::PotionType>(Variant::POTION_TYPE_NB);
   }
 
-  inline Piece reserve_transfer_piece(Color capturer, Piece captured, bool capturedPromoted,
+  inline Piece reserve_transfer_piece(const Position& pos, Color capturer, Piece captured, bool capturedPromoted,
                                       Piece unpromotedCaptured, bool dropLoop, TransferSide transferSide,
                                       PieceType mainPromotionPawnType) {
     Color receiver = transferSide == TRANSFER_US        ? capturer
                    : transferSide == TRANSFER_THEM      ? ~capturer
                    : transferSide == TRANSFER_OWNER     ? color_of(captured)
                                                         : ~color_of(captured);
+    if (pos.capture_demotion())
+    {
+        PieceType demoted = pos.capture_demoted_piece_type(type_of(captured));
+        return demoted == NO_PIECE_TYPE ? NO_PIECE : make_piece(receiver, demoted);
+    }
     if (!capturedPromoted || dropLoop)
         return make_piece(receiver, type_of(captured));
 
@@ -7668,7 +7673,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
 
       if (type_of(m) == EN_PASSANT)
           board[capsq] = NO_PIECE;
-      Piece transferPiece = reserve_transfer_piece(us, captured, capturedPromoted, unpromotedCaptured,
+      Piece transferPiece = reserve_transfer_piece(*this, us, captured, capturedPromoted, unpromotedCaptured,
                                                    drop_loop(), var->captureToHandSide,
                                                    main_promotion_pawn_type(color_of(captured)));
       bool transferred = !stackMove && add_capture_transfer(st, transferPiece, &k);
@@ -7717,7 +7722,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       remove_piece(jumpedSq);
       board[jumpedSq] = NO_PIECE;
 
-      Piece transferPiece = reserve_transfer_piece(us, jumped, st->jumpedEnPassantCaptured.piece.promoted,
+      Piece transferPiece = reserve_transfer_piece(*this, us, jumped, st->jumpedEnPassantCaptured.piece.promoted,
                                                     st->jumpedEnPassantCaptured.piece.unpromoted, drop_loop(),
                                                     var->captureToHandSide, main_promotion_pawn_type(color_of(jumped)));
       bool transferred = add_capture_transfer(st, transferPiece, &k);
@@ -7813,7 +7818,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           for (int i = 0; i < pushTransferCount; ++i)
           {
               Piece transferred = st->push.transfers[i].piece;
-              Piece transferPiece = reserve_transfer_piece(us, transferred,
+              Piece transferPiece = reserve_transfer_piece(*this, us, transferred,
                                                            st->push.transfers[i].promoted,
                                                            st->push.transfers[i].unpromoted,
                                                            drop_loop(), var->captureToHandSide,
@@ -8905,7 +8910,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           }
 
           bool petrifiedCenter = bsq == moverSq && (var->petrifyOnCaptureTypes & type_of(bpc));
-          Piece transferPiece = reserve_transfer_piece(us, bpc, capturedPromoted, unpromotedCaptured,
+          Piece transferPiece = reserve_transfer_piece(*this, us, bpc, capturedPromoted, unpromotedCaptured,
                                                        drop_loop(), var->captureToHandSide,
                                                        main_promotion_pawn_type(color_of(bpc)));
           if (!petrifiedCenter && !(liberty_self_removal & bsq) && !trapRemoval)
@@ -9348,7 +9353,7 @@ void Position::undo_move(Move m) {
               }
               put_piece(bpc, bsq, isPromoted, unpromotedBpc);
               bool petrifiedCenter = bsq == moverSq && (var->petrifyOnCaptureTypes & type_of(bpc));
-              Piece transferPiece = reserve_transfer_piece(us, bpc, isPromoted, originalBpc,
+              Piece transferPiece = reserve_transfer_piece(*this, us, bpc, isPromoted, originalBpc,
                                                            drop_loop(), var->captureToHandSide,
                                                            main_promotion_pawn_type(color_of(originalBpc)));
               if (   !wasBlastPromoted
@@ -9570,7 +9575,7 @@ void Position::undo_move(Move m) {
           for (int i = 0; i < st->push.transferCount; ++i)
           {
               Piece transferred = st->push.transfers[i].piece;
-              Piece transferPiece = reserve_transfer_piece(us, transferred,
+              Piece transferPiece = reserve_transfer_piece(*this, us, transferred,
                                                            st->push.transfers[i].promoted,
                                                            st->push.transfers[i].unpromoted,
                                                            drop_loop(), var->captureToHandSide,
@@ -9641,7 +9646,7 @@ void Position::undo_move(Move m) {
           put_piece(st->jumpedEnPassantCaptured.piece.piece, jumpedSq,
                     st->jumpedEnPassantCaptured.piece.promoted,
                     st->jumpedEnPassantCaptured.piece.unpromoted);
-          Piece transferPiece = reserve_transfer_piece(us, st->jumpedEnPassantCaptured.piece.piece,
+          Piece transferPiece = reserve_transfer_piece(*this, us, st->jumpedEnPassantCaptured.piece.piece,
                                                        st->jumpedEnPassantCaptured.piece.promoted,
                                                        st->jumpedEnPassantCaptured.piece.unpromoted,
                                                        drop_loop(), var->captureToHandSide,
@@ -9661,7 +9666,7 @@ void Position::undo_move(Move m) {
           }
 
           put_piece(st->captured.piece.piece, capsq, st->captured.piece.promoted, st->captured.piece.unpromoted); // Restore the captured piece
-          Piece transferPiece = reserve_transfer_piece(us, st->captured.piece.piece, st->captured.piece.promoted, st->captured.piece.unpromoted,
+          Piece transferPiece = reserve_transfer_piece(*this, us, st->captured.piece.piece, st->captured.piece.promoted, st->captured.piece.unpromoted,
                                                        drop_loop(), var->captureToHandSide,
                                                        main_promotion_pawn_type(color_of(st->captured.piece.piece)));
           if (!stackMove)
@@ -9852,7 +9857,7 @@ Key Position::key_after(Move m) const {
   if (captured)
   {
       k ^= Zobrist::psq[captured][to];
-      Piece removedPiece = reserve_transfer_piece(sideToMove, captured, is_promoted(to), unpromoted_piece_on(to),
+      Piece removedPiece = reserve_transfer_piece(*this, sideToMove, captured, is_promoted(to), unpromoted_piece_on(to),
                                                   drop_loop(), var->captureToHandSide,
                                                   main_promotion_pawn_type(color_of(captured)));
       simulate_capture_transfer(k, removedPiece, false);

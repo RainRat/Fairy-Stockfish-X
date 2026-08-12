@@ -66,5 +66,5 @@ binding contract in `tests/python/test_pyffish_api.py`; engine-rule matrices
 run through the native harness or UCI cases in the owning suite.
 
 Successful direct suite runs are quiet and retain their logs under
-`.local/build/test-run/`. Set `VERBOSE=1` when streaming successful harness
-output is useful for debugging.
+`.local/build/test-run/`. Non-verbose multi-suite runs execute suites concurrently.
+Set `VERBOSE=1` when streaming successful harness output is useful for debugging.
