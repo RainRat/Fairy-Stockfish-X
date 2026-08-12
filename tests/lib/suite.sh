@@ -96,6 +96,7 @@ run_movement() {
     legacy separate-realms.sh 2m "${ENGINE}"
     legacy ski-sliders.sh 2m "${ENGINE}"
     legacy gadsden-toroidal.sh 2m "${ENGINE}"
+    legacy immobilizer.sh 2m "${ENGINE}" "${VARIANTS}"
     legacy rule-matrix-movement.sh 5m "${ENGINE}"
 }
 
