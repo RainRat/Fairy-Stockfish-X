@@ -38,7 +38,7 @@ promotionLimit =
 priorityDropTypes =
 virtualDropLimit =
 
-[parse-error-empty-piece-map:chess]
+[parse-error-empty-piece-set:chess]
 promotionPieceTypes =
 
 [parse-error-empty-drop-map:chess]
@@ -99,18 +99,20 @@ castlingKingsideFile = e
 castlingQueensideFile = b
 startFen = rbnkbr/pppppp/6/6/PPPPPP/RBNKBR w KQkq - 0 1
 
-[promotion-by-file-inherit:chess]
-promotionPieceTypes = a:q b:r
-promotionPieceTypesWhite = a:n
-startFen = 8/1P6/8/8/8/8/8/4k2K w - - 0 1
+[promotion-by-result-piece:chess]
+promotionPieceTypes = q r n
+promotionRegionWhite = Q(a8);R(b8);*(*8)
+startFen = 4k3/PP6/8/8/8/8/8/7K w - - 0 1
 
-[promotion-by-file-spaces:chess]
-promotionPieceTypes = a:q b:r c:b d:n e:- f:-
-startFen = 8/1P6/8/8/8/8/8/4k2K w - - 0 1
+[promotion-by-result-piece-typed-only:chess]
+promotionPieceTypes = q r
+promotionRegionWhite = Q(a8)
+startFen = 4k3/P7/8/8/8/8/8/7K w - - 0 1
 
-[promotion-by-file-spaces-extended:chess]
-promotionPieceTypes = a:q r b:n
-startFen = 8/1P6/8/8/8/8/8/4k2K w - - 0 1
+[promotion-region-bare-bitboard:chess]
+promotionPieceTypes = q r
+promotionRegionWhite = *8
+startFen = 4k3/1P6/8/8/8/8/8/7K w - - 0 1
 
 [promotion-pawn-clear:chess]
 promotionPawnTypes = -
@@ -786,21 +788,33 @@ EOF
 )
 assert_not_contains "${tuple_output}" "No piece char found for custom piece"
 
-promotion_file_output=$(run_uci "$ENGINE" "$tmp_ini" "promotion-by-file-inherit" <<EOF
+promotion_result_output=$(run_uci "$ENGINE" "$tmp_ini" "promotion-by-result-piece" <<EOF
 position startpos
 go perft 1
 EOF
 )
-assert_contains "${promotion_file_output}" "b7b8r:"
-assert_not_contains "${promotion_file_output}" "b7b8q:"
-assert_not_contains "${promotion_file_output}" "b7b8n:"
+assert_contains "${promotion_result_output}" "a7a8q:"
+assert_not_contains "${promotion_result_output}" "a7a8r:"
+assert_contains "${promotion_result_output}" "a7a8n:"
+assert_contains "${promotion_result_output}" "b7b8r:"
+assert_not_contains "${promotion_result_output}" "b7b8q:"
+assert_contains "${promotion_result_output}" "b7b8n:"
 
-promotion_spaces_output=$(run_uci "$ENGINE" "$tmp_ini" "promotion-by-file-spaces" <<EOF
+promotion_typed_only_output=$(run_uci "$ENGINE" "$tmp_ini" "promotion-by-result-piece-typed-only" <<EOF
 position startpos
 go perft 1
 EOF
 )
-assert_contains "${promotion_spaces_output}" "b7b8r:"
+assert_contains "${promotion_typed_only_output}" "a7a8q:"
+assert_not_contains "${promotion_typed_only_output}" "a7a8r:"
+
+promotion_bare_output=$(run_uci "$ENGINE" "$tmp_ini" "promotion-region-bare-bitboard" <<EOF
+position startpos
+go perft 1
+EOF
+)
+assert_contains "${promotion_bare_output}" "b7b8q:"
+assert_contains "${promotion_bare_output}" "b7b8r:"
 
 terminal_output=$(run_uci "$ENGINE" "" "" <<EOF
 position fen 7k/5Q2/7K/8/8/8/8/8 b - - 0 1

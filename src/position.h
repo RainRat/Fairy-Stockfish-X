@@ -576,6 +576,7 @@ public:
   PieceType piece_type_from_symbol(const std::string& token) const;
   Bitboard promotion_zone(Color c) const;
   Bitboard promotion_zone(Color c, PieceType pt) const;
+  Bitboard promotion_result_zone(Color c, PieceType pt) const;
   Bitboard promotion_zone(Piece p) const;
   Bitboard mandatory_promotion_zone(Color c) const;
   Bitboard mandatory_promotion_zone(Color c, PieceType pt) const;
@@ -1378,17 +1379,44 @@ inline PieceType Position::piece_type_from_symbol(const std::string& token) cons
 }
 
 inline Bitboard Position::promotion_zone(Color c) const {
-  return var_ref().promotionRegion.get(c).fallback;
+  const auto& region = var_ref().promotionRegion.get(c);
+  if (!region.anySet())
+      return region.fallback;
+
+  Bitboard zone = 0;
+  for (PieceSet ps = promotion_piece_types(c); ps; )
+  {
+      PieceType pt = pop_lsb(ps);
+      zone |= promotion_result_zone(c, pt);
+  }
+  for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
+      if (PieceType promoted = promoted_piece_type(pt); promoted != NO_PIECE_TYPE)
+          zone |= promotion_result_zone(c, promoted);
+  return zone;
 }
 
 inline Bitboard Position::promotion_zone(Color c, PieceType pt) const {
-    assert(pt != NO_PIECE_TYPE);
-    return var_ref().promotionRegion.get(c).boardOfPiece(piece_to_char()[pt]);
+  assert(pt != NO_PIECE_TYPE);
+  if (promotion_pawn_types(c) & piece_set(pt))
+      return promotion_zone(c);
+  if (PieceType promoted = promoted_piece_type(pt); promoted != NO_PIECE_TYPE)
+      return promotion_result_zone(c, promoted);
+  return var_ref().promotionRegion.get(c).hasFallback()
+       ? var_ref().promotionRegion.get(c).fallback
+       : Bitboard(0);
+}
+
+inline Bitboard Position::promotion_result_zone(Color c, PieceType pt) const {
+  assert(pt != NO_PIECE_TYPE);
+  const auto& region = var_ref().promotionRegion.get(c);
+  const char pieceChar = piece_to_char()[pt];
+  return region.hasExplicitPiece(pieceChar) ? region.explicitBoardOfPiece(pieceChar)
+                                            : region.hasFallback() ? region.fallback : Bitboard(0);
 }
 
 inline Bitboard Position::promotion_zone(Piece p) const {
-    assert(p != NO_PIECE);
-    return promotion_zone(color_of(p), type_of(p));
+  assert(p != NO_PIECE);
+  return promotion_zone(color_of(p), type_of(p));
 }
 
 inline Bitboard Position::mandatory_promotion_zone(Color c) const {
@@ -1419,20 +1447,25 @@ inline PieceType Position::main_promotion_pawn_type(Color c) const {
 }
 
 inline PieceSet Position::promotion_piece_types(Color c) const {
-  if (var_ref().promotionPieceTypesByRank.get(c).configured)
-      return var_ref().promotionPieceTypesByRank.get(c).unionSet();
-  return var_ref().promotionPieceTypes.get(c).unionSet();
+  return var_ref().promotionPieceTypes.get(c);
 }
 
 inline PieceSet Position::promotion_piece_types(Color c, Square s) const {
-  if (s != SQ_NONE && var_ref().promotionPieceTypesByRank.get(c).configured)
-      return var_ref().promotionPieceTypesByRank.get(c).piecesOfRank(rank_of(s));
-  if (s != SQ_NONE)
+  if (s == SQ_NONE)
+      return promotion_piece_types(c);
+
+  PieceSet result = promotion_piece_types(c);
+  const auto& region = var_ref().promotionRegion.get(c);
+  if (!region.anySet())
+      return result;
+
+  for (PieceSet ps = result; ps; )
   {
-      File f = file_of(s);
-      return var_ref().promotionPieceTypes.get(c).piecesOfFile(f);
+      PieceType pt = pop_lsb(ps);
+      if (!(promotion_result_zone(c, pt) & s))
+          result &= ~piece_set(pt);
   }
-  return promotion_piece_types(c);
+  return result;
 }
 
 inline bool Position::sittuyin_promotion() const {

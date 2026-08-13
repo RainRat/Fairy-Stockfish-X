@@ -202,50 +202,6 @@ std::string color_piece_type_groups(const Variant& v,
          + ",\"black\":" + piece_type_group_json(groups[BLACK], v) + '}';
 }
 
-std::string file_piece_set_map_json(const FilePieceSetMap& map, File maxFile) {
-    std::ostringstream out;
-    out << "{\"default\":" << piece_set_json(map.piecesOfFile(FILE_NB));
-    out << ",\"byFile\":{";
-    bool first = true;
-    for (int f = FILE_A; f <= int(maxFile); ++f) {
-        File file = File(f);
-        if (map.piecesOfFile(file) == map.piecesOfFile(FILE_NB)) continue;
-        if (!first) out << ',';
-        first = false;
-        out << quote(std::string(1, char('a' + f))) << ':' << piece_set_json(map.piecesOfFile(file));
-    }
-    out << "}}";
-    return out.str();
-}
-
-std::string color_file_piece_set_maps(const Variant& v,
-                                      const ColorSetting<FilePieceSetMap>& maps) {
-    return std::string("{\"white\":") + file_piece_set_map_json(maps[WHITE], v.maxFile)
-         + ",\"black\":" + file_piece_set_map_json(maps[BLACK], v.maxFile) + '}';
-}
-
-std::string rank_piece_set_map_json(const RankPieceSetMap& map, Rank maxRank) {
-    std::ostringstream out;
-    out << "{\"default\":" << piece_set_json(map.piecesOfRank(RANK_NB));
-    out << ",\"byRank\":{";
-    bool first = true;
-    for (int r = RANK_1; r <= int(maxRank); ++r) {
-        Rank rank = Rank(r);
-        if (map.piecesOfRank(rank) == map.piecesOfRank(RANK_NB)) continue;
-        if (!first) out << ',';
-        first = false;
-        out << quote(std::to_string(r + 1)) << ':' << piece_set_json(map.piecesOfRank(rank));
-    }
-    out << "}}";
-    return out.str();
-}
-
-std::string color_rank_piece_set_maps(const Variant& v,
-                                      const ColorSetting<RankPieceSetMap>& maps) {
-    return std::string("{\"white\":") + rank_piece_set_map_json(maps[WHITE], v.maxRank)
-         + ",\"black\":" + rank_piece_set_map_json(maps[BLACK], v.maxRank) + '}';
-}
-
 std::string castling_rights_json(CastlingRights rights) {
     return std::string("{\"white\":{\"kingSide\":")
          + boolean(bool(rights & WHITE_OO))
@@ -354,8 +310,6 @@ std::string variant_info_json(const std::string& name) {
     field(promotion, b, "mainPawnTypes", color_piece_types(v.mainPromotionPawnType[WHITE], v.mainPromotionPawnType[BLACK]));
     field(promotion, b, "pawnTypes", color_piece_sets(v.promotionPawnTypes[WHITE], v.promotionPawnTypes[BLACK]));
     field(promotion, b, "pieceTypes", color_piece_sets(v.promotionPieceTypes[WHITE], v.promotionPieceTypes[BLACK]));
-    field(promotion, b, "pieceTypesByFile", color_file_piece_set_maps(v, v.promotionPieceTypes));
-    field(promotion, b, "pieceTypesByRank", color_rank_piece_set_maps(v, v.promotionPieceTypesByRank));
     std::ostringstream promoted; promoted << '{'; bool prf = true;
     for (int i = 1; i < PIECE_TYPE_NB; ++i) if (v.promotedPieceType[i] != NO_PIECE_TYPE)
         field(promoted, prf, variant_piece_type_name(v, PieceType(i)).c_str(), variant_piece_type_json(v, v.promotedPieceType[i]));

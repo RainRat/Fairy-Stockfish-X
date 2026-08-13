@@ -438,7 +438,7 @@ struct PieceTypeBitboardGroup
     static_assert(PIECE_TYPE_COUNT <= 32, "PieceTypeBitboardGroup presence mask is too small");
 
     PieceTypeBitboardGroup() = default;
-    PieceTypeBitboardGroup(Bitboard b) : fallback(b) {}
+    PieceTypeBitboardGroup(Bitboard b) : fallback(b), fallbackConfigured(true) {}
     PieceTypeBitboardGroup(const PieceTypeBitboardGroup& other) = default;
     PieceTypeBitboardGroup& operator=(const PieceTypeBitboardGroup& other) = default;
 
@@ -467,12 +467,17 @@ struct PieceTypeBitboardGroup
         return (setMask & (uint32_t(1) << (ptc - 'A'))) ? boardlist[ptc - 'A'] : Bitboard(0);
     }
 
+    bool hasExplicitPiece(const char ptc) const
+    {
+        return ptc >= 'A' && ptc <= 'Z' && (setMask & (uint32_t(1) << (ptc - 'A')));
+    }
+
     // Set the bitboard of a piece type.
     // ptc: Only accepts A-Z or * for fallback
     // board: The bitboard to set
     void set(const char ptc, Bitboard board)
     {
-        if (ptc == '*') { fallback = board; return; }
+        if (ptc == '*') { fallback = board; fallbackConfigured = true; return; }
         if (ptc < 'A' || ptc > 'Z') return;
         boardlist[ptc - 'A'] = board;
         setMask |= uint32_t(1) << (ptc - 'A');
@@ -480,6 +485,7 @@ struct PieceTypeBitboardGroup
 
     PieceTypeBitboardGroup& operator|=(Bitboard b) {
         fallback |= b;
+        fallbackConfigured = true;
         uint32_t mask = setMask;
         while (mask)
         {
@@ -499,8 +505,11 @@ struct PieceTypeBitboardGroup
     operator Bitboard() const { return fallback; }
 
     bool anySet() const { return setMask != 0; }
+    bool hasFallback() const { return fallbackConfigured; }
+    void clearFallback() { fallback = 0; fallbackConfigured = false; }
 
     Bitboard fallback = 0;
+    bool fallbackConfigured = false;
 private:
     Bitboard boardlist[PIECE_TYPE_COUNT] = {0};
     uint32_t setMask = 0;
@@ -1432,148 +1441,6 @@ inline int dist(Direction d) {
 constexpr Key make_key(uint64_t seed) {
   return seed * 6364136223846793005ULL + 1442695040888963407ULL;
 }
-
-struct FilePieceSetMap
-{
-    FilePieceSetMap() = default;
-    FilePieceSetMap(PieceSet ps) : fallback(ps) {}
-    FilePieceSetMap(const FilePieceSetMap& other) = default;
-    FilePieceSetMap& operator=(const FilePieceSetMap& other) = default;
-
-    FilePieceSetMap& operator=(PieceSet ps) {
-        fallback = ps;
-        for (int f = FILE_A; f < FILE_NB; ++f) isSet[f] = false;
-        return *this;
-    }
-
-    FilePieceSetMap& operator&=(PieceSet ps) {
-        fallback &= ps;
-        for (int f = FILE_A; f < FILE_NB; ++f)
-            if (isSet[f]) filelist[f] &= ps;
-        return *this;
-    }
-
-    FilePieceSetMap& operator|=(PieceSet ps) {
-        fallback |= ps;
-        for (int f = FILE_A; f < FILE_NB; ++f)
-            if (isSet[f]) filelist[f] |= ps;
-        return *this;
-    }
-
-    FilePieceSetMap& operator|=(PieceType pt) {
-        return *this |= piece_set(pt);
-    }
-
-    PieceSet piecesOfFile(File f) const
-    {
-        if (f == FILE_NB) return fallback;
-        if (f < FILE_A || f > FILE_MAX) return NO_PIECE_SET;
-        return isSet[f] ? filelist[f] : fallback;
-    }
-
-    void set(File f, PieceSet ps)
-    {
-        if (f == FILE_NB) { fallback = ps; return; }
-        if (f < FILE_A || f > FILE_MAX) return;
-        filelist[f] = ps;
-        isSet[f] = true;
-    }
-
-    PieceSet unionSet() const
-    {
-        PieceSet ps = fallback;
-        for (int f = FILE_A; f < FILE_NB; ++f)
-            if (isSet[f]) ps |= filelist[f];
-        return ps;
-    }
-
-    operator PieceSet() const { return unionSet(); }
-
-    PieceSet fallback = NO_PIECE_SET;
-private:
-    PieceSet filelist[FILE_NB] = {NO_PIECE_SET};
-    bool isSet[FILE_NB] = {false};
-};
-
-struct RankPieceSetMap
-{
-    RankPieceSetMap() = default;
-    RankPieceSetMap(PieceSet ps) : fallback(ps), configured(true) {}
-    RankPieceSetMap(const RankPieceSetMap& other) = default;
-    RankPieceSetMap& operator=(const RankPieceSetMap& other) = default;
-
-    RankPieceSetMap& operator=(PieceSet ps) {
-        fallback = ps;
-        for (int r = RANK_1; r < RANK_NB; ++r) isSet[r] = false;
-        configured = true;
-        return *this;
-    }
-
-    RankPieceSetMap& operator&=(PieceSet ps) {
-        fallback &= ps;
-        for (int r = RANK_1; r < RANK_NB; ++r)
-            if (isSet[r]) ranklist[r] &= ps;
-        return *this;
-    }
-
-    RankPieceSetMap& operator|=(PieceSet ps) {
-        fallback |= ps;
-        for (int r = RANK_1; r < RANK_NB; ++r)
-            if (isSet[r]) ranklist[r] |= ps;
-        configured = true;
-        return *this;
-    }
-
-    RankPieceSetMap& operator|=(PieceType pt) {
-        return *this |= piece_set(pt);
-    }
-
-    PieceSet piecesOfRank(Rank r) const
-    {
-        if (r == RANK_NB) return fallback;
-        if (r < RANK_1 || r > RANK_MAX) return NO_PIECE_SET;
-        return isSet[r] ? ranklist[r] : fallback;
-    }
-
-    void set(Rank r, PieceSet ps)
-    {
-        if (r < RANK_1 || r >= RANK_NB) return;
-        ranklist[r] = ps;
-        isSet[r] = true;
-        configured = true;
-    }
-
-    void clear()
-    {
-        fallback = NO_PIECE_SET;
-        for (int r = RANK_1; r < RANK_NB; ++r) isSet[r] = false;
-        configured = false;
-    }
-
-    PieceSet unionSet() const
-    {
-        PieceSet ps = fallback;
-        for (int r = RANK_1; r < RANK_NB; ++r)
-            if (isSet[r]) ps |= ranklist[r];
-        return ps;
-    }
-
-    bool anySet() const
-    {
-        if (fallback) return true;
-        for (bool set : isSet)
-            if (set) return true;
-        return false;
-    }
-
-    operator PieceSet() const { return unionSet(); }
-
-    PieceSet fallback = NO_PIECE_SET;
-    bool configured = false;
-private:
-    PieceSet ranklist[RANK_NB] = {NO_PIECE_SET};
-    bool isSet[RANK_NB] = {false};
-};
 
 } // namespace Stockfish
 

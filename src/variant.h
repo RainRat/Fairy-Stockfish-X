@@ -151,8 +151,7 @@ struct Variant {
   ColorSetting<Bitboard> mandatoryPromotionRegion = ColorSetting<Bitboard>(Bitboard(0));
   ColorSetting<PieceType> mainPromotionPawnType = ColorSetting<PieceType>(PAWN);
   ColorSetting<PieceSet> promotionPawnTypes = ColorSetting<PieceSet>(piece_set(PAWN));
-  ColorSetting<FilePieceSetMap> promotionPieceTypes = ColorSetting<FilePieceSetMap>(piece_set(QUEEN) | ROOK | BISHOP | KNIGHT);
-  ColorSetting<RankPieceSetMap> promotionPieceTypesByRank;
+  ColorSetting<PieceSet> promotionPieceTypes = ColorSetting<PieceSet>(piece_set(QUEEN) | ROOK | BISHOP | KNIGHT);
   bool sittuyinPromotion = false;
   int promotionLimit[PIECE_TYPE_NB] = {}; // 0 means unlimited
   bool promotionSteal = false;
@@ -697,8 +696,6 @@ struct Variant {
       // erase from promotion types to ensure consistency
       promotionPieceTypes[WHITE] &= ~piece_set(pt);
       promotionPieceTypes[BLACK] &= ~piece_set(pt);
-      promotionPieceTypesByRank[WHITE] &= ~piece_set(pt);
-      promotionPieceTypesByRank[BLACK] &= ~piece_set(pt);
   }
 
   void reset_pieces() {
@@ -712,8 +709,6 @@ struct Variant {
       // clear promotion types to ensure consistency
       promotionPieceTypes[WHITE] = NO_PIECE_SET;
       promotionPieceTypes[BLACK] = NO_PIECE_SET;
-      promotionPieceTypesByRank[WHITE].clear();
-      promotionPieceTypesByRank[BLACK].clear();
   }
 
   // Reset values that always need to be redefined

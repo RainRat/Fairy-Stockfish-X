@@ -29,8 +29,8 @@ echo "new variants smoke testing started"
 # 0) PieceTypeBitboardGroup repeated piece clauses are additive, not overwrite.
 load_inline_variants <<'INI'
 [ptgroup-merge:chess]
-promotionRegionWhite = P(a8);P(h8); *(*8)
-promotionRegionBlack = P(a1);P(h1); *(*1)
+promotionRegionWhite = Q(a8);Q(h8); *(*8)
+promotionRegionBlack = Q(a1);Q(h1); *(*1)
 promotionPieceTypes = q
 promotionPieceTypesWhite = q
 promotionPieceTypesBlack = q

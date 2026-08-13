@@ -822,7 +822,7 @@ namespace {
                     if (ch == ')')
                     {
                         // Repeated piece clauses (e.g. "P(a8);P(h8)") are additive.
-                        parsedTarget.set(PieceChar, parsedTarget.boardOfPiece(PieceChar) | board);
+                        parsedTarget.set(PieceChar, parsedTarget.explicitBoardOfPiece(PieceChar) | board);
                         ParserState = 4;
                     }
                     else
@@ -906,14 +906,6 @@ namespace {
         target |= pt;
     }
 
-    template <> void set(PieceType pt, FilePieceSetMap& target) {
-        target |= pt;
-    }
-
-    template <> void set(PieceType pt, RankPieceSetMap& target) {
-        target |= pt;
-    }
-
     bool parse_hostage_exchanges(Variant *v, const std::string &map, bool DoCheck) {
         std::stringstream groups(map);
         std::string group;
@@ -965,122 +957,6 @@ namespace {
         return true;
     }
 
-    bool parse_file_piece_set_map(const std::string& value,
-                                  const Variant* v,
-                                  File maxFile,
-                                  FilePieceSetMap& target,
-                                  bool doCheck,
-                                  const std::string& key) {
-        // Keep file-mapped piece-set syntax compact and unambiguous:
-        // "a:qr b:n" is supported, but spaced piece lists are rejected so
-        // file/value boundaries stay easy to read and parse.
-        std::stringstream ss(value);
-        std::string token;
-        FilePieceSetMap parsed = target;
-        bool sawToken = false;
-
-        while (ss >> token) {
-            sawToken = true;
-
-            std::string fileToken = token;
-            std::string pieceToken;
-            size_t colon = token.find(':');
-            if (colon != std::string::npos) {
-                fileToken = token.substr(0, colon);
-                pieceToken = token.substr(colon + 1);
-            }
-
-            int fileIdx = -1;
-            bool isFallback = (fileToken == "*");
-            if (!isFallback && (!parse_file_index(fileToken, fileIdx) || fileIdx < 0 || fileIdx > int(maxFile))) {
-                if (doCheck)
-                    std::cerr << key << " - Invalid file: " << fileToken << std::endl;
-                return false;
-            }
-
-            if (colon == std::string::npos || pieceToken.empty()) {
-                if (doCheck)
-                    std::cerr << key << " - Use compact file-map syntax like a:qr b:n" << std::endl;
-                return false;
-            }
-
-            PieceSet pieces = NO_PIECE_SET;
-            if (pieceToken != "-") {
-                if (!parse_piece_set_token_string(pieceToken, v, pieces))
-                    return false;
-            }
-
-            if (isFallback) parsed.fallback = pieces;
-            else parsed.set(File(fileIdx), pieces);
-        }
-
-        if (!sawToken) {
-            if (doCheck)
-                std::cerr << key << " - Invalid value " << value << std::endl;
-            return false;
-        }
-
-        target = parsed;
-        return true;
-    }
-
-    bool parse_rank_piece_set_map(const std::string& value,
-                                  const Variant* v,
-                                  Rank maxRank,
-                                  RankPieceSetMap& target,
-                                  bool doCheck,
-                                  const std::string& key) {
-        std::stringstream ss(value);
-        std::string token;
-        RankPieceSetMap parsed = target;
-        bool sawToken = false;
-
-        while (ss >> token) {
-            sawToken = true;
-
-            std::string rankToken = token;
-            std::string pieceToken;
-            size_t colon = token.find(':');
-            if (colon != std::string::npos) {
-                rankToken = token.substr(0, colon);
-                pieceToken = token.substr(colon + 1);
-            }
-
-            int rankIdx = -1;
-            bool isFallback = (rankToken == "*");
-            if (!isFallback && (!parse_rank_index(rankToken, rankIdx) || rankIdx < 0 || rankIdx > int(maxRank))) {
-                if (doCheck)
-                    std::cerr << key << " - Invalid rank: " << rankToken << std::endl;
-                return false;
-            }
-
-            if (colon == std::string::npos || pieceToken.empty()) {
-                if (doCheck)
-                    std::cerr << key << " - Use compact rank-map syntax like 8:w 9:v" << std::endl;
-                return false;
-            }
-
-            PieceSet pieces = NO_PIECE_SET;
-            if (pieceToken != "-") {
-                if (!parse_piece_set_token_string(pieceToken, v, pieces))
-                    return false;
-            }
-
-            if (isFallback) parsed.fallback = pieces;
-            else parsed.set(Rank(rankIdx), pieces);
-            parsed.configured = true;
-        }
-
-        if (!sawToken) {
-            if (doCheck)
-                std::cerr << key << " - Invalid value " << value << std::endl;
-            return false;
-        }
-
-        target = parsed;
-        return true;
-    }
-
 } // namespace
 
 template <bool DoCheck>
@@ -1105,7 +981,6 @@ template <bool Current, class T> bool VariantParser<DoCheck>::parse_attribute(co
                                   : std::is_same_v<T, EnclosingRule> ? "EnclosingRule"
                                   : std::is_same_v<T, Bitboard> ? "Bitboard"
                                   : std::is_same_v<T, PieceTypeBitboardGroup> ? "PieceTypeBitboardGroup"
-                                  : std::is_same_v<T, RankPieceSetMap> ? "RankPieceSetMap"
                                   : std::is_same_v<T, CastlingRights> ? "CastlingRights"
                                   : std::is_same_v<T, ColorChangeTrigger> ? "ColorChangeTrigger"
                                   : std::is_same_v<T, EnPassantPassedSquares> ? "EnPassantPassedSquares"
@@ -1155,60 +1030,6 @@ template <bool Current, class T> bool VariantParser<DoCheck>::parse_attribute(co
             {
                 target = NO_PIECE_TYPE;
                 return true;
-            }
-        }
-
-        if constexpr (std::is_same_v<T, FilePieceSetMap>)
-        {
-            if (it->second.find(':') == std::string::npos)
-            {
-                PieceSet globalSet = NO_PIECE_SET;
-                if (parse_piece_set_token_string(it->second, v, globalSet))
-                {
-                    target = FilePieceSetMap(globalSet);
-                    return true;
-                }
-            }
-            else
-            {
-                FilePieceSetMap parsedTarget = Current ? target : FilePieceSetMap();
-                if (parse_file_piece_set_map(it->second, v, v->maxFile, parsedTarget, DoCheck, key))
-                {
-                    target = parsedTarget;
-                    return true;
-                }
-                parseHadError = true;
-                return false;
-            }
-        }
-
-        if constexpr (std::is_same_v<T, RankPieceSetMap>)
-        {
-            if (trim(it->second) == "-")
-            {
-                target.clear();
-                target.configured = true;
-                return true;
-            }
-            if (it->second.find(':') == std::string::npos)
-            {
-                PieceSet globalSet = NO_PIECE_SET;
-                if (parse_piece_set_token_string(it->second, v, globalSet))
-                {
-                    target = RankPieceSetMap(globalSet);
-                    return true;
-                }
-            }
-            else
-            {
-                RankPieceSetMap parsedTarget = Current ? target : RankPieceSetMap();
-                if (parse_rank_piece_set_map(it->second, v, v->maxRank, parsedTarget, DoCheck, key))
-                {
-                    target = parsedTarget;
-                    return true;
-                }
-                parseHadError = true;
-                return false;
             }
         }
 
@@ -1267,6 +1088,10 @@ void VariantParser<DoCheck>::parse_color_setting(const std::string& key, ColorSe
         T parsed = color == WHITE ? target.byColor[WHITE] : color == BLACK ? target.byColor[BLACK] : target.global;
         if (parse_attribute(option, parsed))
         {
+            if constexpr (std::is_same_v<T, PieceTypeBitboardGroup>)
+                if (key == "promotionRegion" && config.find(option)->second.find('(') != std::string::npos
+                    && config.find(option)->second.find("*(") == std::string::npos)
+                    parsed.clearFallback();
             apply_color_setting(target, color, parsed);
         }
     });
@@ -1728,7 +1553,6 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     if (!parse_color_setting_first_piece("promotionPawnTypes", v->mainPromotionPawnType, v)) return false;
     if (!parse_color_setting_piece("promotionPawnTypes", v->promotionPawnTypes, v)) return false;
     if (!parse_color_setting_piece("promotionPieceTypes", v->promotionPieceTypes, v)) return false;
-    if (!parse_color_setting_piece("promotionPieceTypesByRank", v->promotionPieceTypesByRank, v)) return false;
     parse_attribute("sittuyinPromotion", v->sittuyinPromotion);
     parse_attribute("promotionSteal", v->promotionSteal);
     parse_attribute("promotionRequireInHand", v->promotionRequireInHand);
