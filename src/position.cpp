@@ -10548,16 +10548,15 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
   };
 
   auto has_connect_goal = [&](Color c) {
-      if (!connect_goal_by_type())
-          return false;
-
       const auto& goal = connect_piece_goal_types(c);
       if (goal.empty())
           return false;
 
-      // Type-goal games such as Toot-Otto match piece types only; colors
-      // are intentionally ignored so either player's drops can complete
-      // either configured word.
+      const bool matchColor = !connect_goal_by_type();
+
+      // By default, a side's typed goal uses that side's pieces.  With
+      // connectGoalByType, the goal is type-scoped instead, so pieces of
+      // either color may complete the configured sequence.
       const bool palindrome = std::equal(goal.begin(), goal.end(), goal.rbegin());
 
       if (!var->connectLines.empty())
@@ -10575,12 +10574,16 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
                       if (forward)
                       {
                           Piece forwardPc = piece_on(line[off + i]);
-                          forward = forwardPc != NO_PIECE && type_of(forwardPc) == goal[i];
+                          forward = forwardPc != NO_PIECE
+                                 && type_of(forwardPc) == goal[i]
+                                 && (!matchColor || color_of(forwardPc) == c);
                       }
                       if (reverse)
                       {
                           Piece reversePc = piece_on(line[off + goal.size() - 1 - i]);
-                          reverse = reversePc != NO_PIECE && type_of(reversePc) == goal[i];
+                          reverse = reversePc != NO_PIECE
+                                 && type_of(reversePc) == goal[i]
+                                 && (!matchColor || color_of(reversePc) == c);
                       }
                   }
                   if (forward || reverse)
@@ -10594,7 +10597,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
       {
           for (Direction d : var->connectDirections)
           {
-              Bitboard candidates = pieces(goal.front());
+              Bitboard candidates = matchColor ? pieces(c, goal.front()) : pieces(goal.front());
               while (candidates)
               {
                   Square s = pop_lsb(candidates);
@@ -10607,7 +10610,9 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
                           if (!wrapped_step(cur, dir, next) || next == s)
                               return false;
                           Piece nextPc = piece_on(next);
-                          if (nextPc == NO_PIECE || type_of(nextPc) != sequence[i])
+                          if (nextPc == NO_PIECE
+                              || type_of(nextPc) != sequence[i]
+                              || (matchColor && color_of(nextPc) != c))
                               return false;
                           cur = next;
                       }
@@ -10626,7 +10631,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
           for (int pass = 0; pass < (palindrome ? 1 : 2); ++pass)
           {
               Direction dir = pass ? -d : d;
-              Bitboard starts = pieces(goal.front());
+              Bitboard starts = matchColor ? pieces(c, goal.front()) : pieces(goal.front());
               while (starts)
               {
                   Square s = pop_lsb(starts);
@@ -10636,7 +10641,9 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
                   {
                       cur = shift(dir, cur);
                       Piece pc = cur ? piece_on(lsb(cur)) : NO_PIECE;
-                      if (pc == NO_PIECE || type_of(pc) != goal[i])
+                      if (pc == NO_PIECE
+                          || type_of(pc) != goal[i]
+                          || (matchColor && color_of(pc) != c))
                       {
                           matched = false;
                           break;
@@ -10653,7 +10660,10 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
   auto check_connection_adjudications = [&](Color c) {
       Bitboard eligible = 0;
       for (PieceSet ps = connect_piece_types(); ps;)
-          eligible |= pieces(c, pop_lsb(ps));
+      {
+          PieceType pt = pop_lsb(ps);
+          eligible |= connect_goal_by_type() ? pieces(pt) : pieces(c, pt);
+      }
 
       // Connect-n
       int targetN = connect_n() == -1 ? popcount(eligible) : connect_n();

@@ -546,6 +546,37 @@ connectDiagonal = false
 nMoveRule = 0
 startFen = CBA b - - 0 1
 
+[owner-goal-mixed:fairy]
+maxRank = 1
+maxFile = e
+pieceToCharTable = -
+king = -
+customPiece1 = a:m
+customPiece2 = s:m
+connectPieceGoalBlack = a a a
+connectHorizontal = true
+connectVertical = false
+connectDiagonal = false
+startFen = aAaS1 b - - 0 1
+
+[type-goal-mixed:owner-goal-mixed]
+connectGoalByType = true
+
+[connect-n-by-type:fairy]
+maxRank = 1
+maxFile = e
+pieceToCharTable = -
+king = -
+customPiece1 = a:m
+customPiece2 = s:m
+connectN = 3
+connectPieceTypes = a
+connectGoalByType = true
+connectHorizontal = true
+connectVertical = false
+connectDiagonal = false
+startFen = aAaS1 b - - 0 1
+
 [connect-region-seed-overlap:fairy]
 maxRank = 3
 maxFile = c
@@ -642,6 +673,62 @@ go perft 1
 EOF
 )
   assert_not_contains_literal "$out" "Nodes searched: 0"
+
+  out=$(run_uci "$ENGINE" "$tmp_ini" owner-goal-mixed <<'EOF'
+position startpos
+go perft 1
+EOF
+)
+  assert_not_contains "$out" "^Nodes searched: 0$"
+
+  for variant in type-goal-mixed connect-n-by-type; do
+    out=$(run_uci "$ENGINE" "$tmp_ini" "$variant" <<'EOF'
+position startpos
+go perft 1
+EOF
+)
+    assert_contains "$out" "^Nodes searched: 0$"
+  done
+}
+
+test_align4() {
+  echo "== align4 =="
+  local out
+  if ! variant_available "$ENGINE" align4 "$VARIANTS"; then
+    return 0
+  fi
+
+  out=$(run_uci "$ENGINE" "$VARIANTS" align4 <<'EOF'
+  position fen 4k3/8/8/8/8/8/PPPPPPPP/RNBQKBNR[p] b KQ - 0 1
+go perft 1
+EOF
+)
+  assert_contains "$out" "^P@a3: 1$"
+  assert_contains "$out" "^P@h7: 1$"
+  assert_not_contains "$out" "@a1"
+  assert_not_contains "$out" "@a8"
+  assert_not_contains "$out" "^[NBRQK]@"
+
+  out=$(run_uci "$ENGINE" "$VARIANTS" align4 <<'EOF'
+position fen 4k3/2pp1p2/4p3/7Q/2BPP3/8/PPP2PPP/RNB1K1NR[p] b - - 0 1
+go perft 1
+EOF
+)
+  assert_contains "$out" "P@e7: 1$"
+
+  out=$(run_uci "$ENGINE" "$VARIANTS" align4 <<'EOF'
+position fen 4k3/2pp1p2/4p3/7Q/2BPP3/8/PPP2PPP/RNB1K1NR[p] b - - 0 1 moves P@e7
+go perft 1
+EOF
+)
+  assert_contains "$out" "^Nodes searched: 0$"
+
+  out=$(run_uci "$ENGINE" "$VARIANTS" align4 <<'EOF'
+position fen 4k3/8/8/8/8/8/PPPP4/RNBQKBNR b - - 0 1
+go perft 1
+EOF
+)
+  assert_not_contains "$out" "Result: 1-0"
 }
 
 test_wrapped_connect_features() {
@@ -941,6 +1028,7 @@ test_konobi
 test_connect_region3
 test_hex_visual_connection_axes
 test_connect_adjudication_edges
+test_align4
 test_wrapped_connect_features
 test_flank_chess
 test_crazy_cavalier
