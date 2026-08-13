@@ -10542,6 +10542,8 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
       };
   };
 
+  if (var->hasConnectionAdjudication)
+  {
   auto wrapped_step = [&](Square cur, Direction d, Square& next) {
       auto [dr, df] = decode_direction(d);
       return wrapped_destination_square(cur, df, dr, max_file(), max_rank(), wraps_files(), wraps_ranks(), next);
@@ -11018,6 +11020,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
   {
       result = convert_mate_value(connect_value(), ply);
       return true;
+  }
   }
 
   // Check for bikjang rule (Janggi), double passing, or board running full

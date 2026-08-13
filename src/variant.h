@@ -541,6 +541,7 @@ struct Variant {
   int nnuePotionZoneIndexBase = -1;
   int nnuePotionCooldownIndexBase = -1;
   bool nnueUsePockets = false;
+  bool hasConnectionAdjudication = false;
   int pieceSquareIndex[COLOR_NB][PIECE_NB];
   int pieceHandIndex[COLOR_NB][PIECE_NB];
   int kingSquareIndex[SQUARE_NB];

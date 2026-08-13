@@ -2631,6 +2631,15 @@ Variant* Variant::conclude() {
         }
     }
 
+    hasConnectionAdjudication = connectN != 0
+                              || connectNxN != 0
+                              || collinearN != 0
+                              || connectGroup != 0
+                              || connectRegion1[WHITE] || connectRegion2[WHITE] || connectRegion3[WHITE]
+                              || connectRegion1[BLACK] || connectRegion2[BLACK] || connectRegion3[BLACK]
+                              || !connectPieceGoalTypes[WHITE].empty()
+                              || !connectPieceGoalTypes[BLACK].empty();
+
     const bool alwaysUnreliableSee = pointsCounting
                                   || pointsGoal > 0
                                   || connectN != 0
