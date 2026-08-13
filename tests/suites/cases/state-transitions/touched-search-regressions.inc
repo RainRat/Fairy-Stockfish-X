@@ -67,15 +67,20 @@ EOF
 )
   assert_contains "$out" "^b2c3: 1$"
 
-  out=$( (
-    echo 'uci'
-    echo "setoption name VariantPath value $VARIANTS"
-    echo 'setoption name UCI_Variant value minihexchess'
-    echo 'position startpos moves c2d3'
-    echo 'go depth 3'
-    sleep 1
-    echo 'quit'
-  ) | uci_timeout "$ENGINE" )
+  out=$(run_expect "$ENGINE" <<EOF
+$(expect_engine_setup)
+set timeout 30
+send "uci\r"
+expect "uciok"
+send "setoption name VariantPath value $VARIANTS\r"
+send "setoption name UCI_Variant value minihexchess\r"
+send "position startpos moves c2d3\r"
+send "go depth 3\r"
+expect -re {bestmove [a-g][1-7][a-g][1-7]}
+send "quit\r"
+expect eof
+EOF
+)
   assert_contains "$out" "^bestmove [a-g][1-7][a-g][1-7]"
   assert_contains "$out" "score cp"
   assert_not_contains "$out" "score mate"
