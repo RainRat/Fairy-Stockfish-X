@@ -44,6 +44,35 @@ engine_is_stale() {
     -newer "${engine}" -print -quit | grep -q .
 }
 
+expected_engine_profile() {
+  case "$(basename "$1")" in
+    stockfish-large)
+      printf 'arch=x86-64-modern;board=large;all=no;nnue=no;debug=no;optimize=yes'
+      ;;
+    stockfish-vlb)
+      printf 'arch=x86-64-modern;board=very-large;all=yes;nnue=yes;debug=no;optimize=yes'
+      ;;
+    stockfish-allvars)
+      printf 'arch=x86-64-modern;board=large;all=yes;nnue=no;debug=no;optimize=yes'
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+engine_profile_is_expected() {
+  local engine="$1" profile expected field
+  expected=$(expected_engine_profile "$engine") || return 0
+  profile=$(fsx_build_recorded_profile "$ROOT_DIR" "$engine")
+  [[ -n "$profile" ]] || return 1
+
+  IFS=';' read -ra fields <<< "$expected"
+  for field in "${fields[@]}"; do
+    [[ ";${profile};" == *";${field};"* ]] || return 1
+  done
+}
+
 validate_engines() {
   local primary="$1" candidate stale=0
   local candidates=(
@@ -58,6 +87,10 @@ validate_engines() {
     [[ -x "${candidate}" ]] || continue
     if engine_is_stale "${candidate}"; then
       echo "stale or unverified engine: ${candidate}" >&2
+      stale=1
+    elif ! engine_profile_is_expected "${candidate}"; then
+      echo "engine profile does not match its named role: ${candidate}" >&2
+      echo "rebuild it with the role-specific command below" >&2
       stale=1
     fi
   done

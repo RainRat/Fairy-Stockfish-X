@@ -21,6 +21,13 @@ $CXX "${COMMON[@]}" \
   "$ROOT/tests/nnue-affine-regression.cpp" -o "$TMPDIR/nnue-affine-ssse3"
 "$TMPDIR/nnue-affine-ssse3"
 
+"$CXX" "${COMMON[@]}" \
+  "$ROOT/tests/cpu-feature-check.cpp" -o "$TMPDIR/cpu-feature-check"
+if ! "$TMPDIR/cpu-feature-check"; then
+  echo "nnue-affine-regression AVX2 path skipped: CPU does not support AVX2"
+  exit 0
+fi
+
 $CXX "${COMMON[@]}" \
   -DUSE_SSE2 -DUSE_SSSE3 -DUSE_SSE41 -DUSE_AVX2 \
   -msse2 -mssse3 -msse4.1 -mavx2 \

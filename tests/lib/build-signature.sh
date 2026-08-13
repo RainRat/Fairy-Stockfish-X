@@ -61,15 +61,46 @@ fsx_build_signature() {
   } | fsx_build_hash_text
 }
 
+fsx_build_profile() {
+  local arch=x86-64-modern board=normal largeboards=no verylargeboards=no
+  local all=no nnue=no debug=no optimize=yes
+  local compiler="${CXX:-g++}" compiler_kind="${COMP:-native}" arg
+
+  for arg in "$@"; do
+    case "$arg" in
+      ARCH=*) arch="${arg#ARCH=}" ;;
+      largeboards=*) largeboards="${arg#largeboards=}" ;;
+      verylargeboards=*) verylargeboards="${arg#verylargeboards=}" ;;
+      all=*) all="${arg#all=}" ;;
+      nnue=*) nnue="${arg#nnue=}" ;;
+      debug=*) debug="${arg#debug=}" ;;
+      optimize=*) optimize="${arg#optimize=}" ;;
+      COMP=*) compiler_kind="${arg#COMP=}" ;;
+    esac
+  done
+
+  if [[ "$verylargeboards" == yes ]]; then
+    board=very-large
+  elif [[ "$largeboards" == yes ]]; then
+    board=large
+  fi
+
+  printf 'arch=%s;board=%s;all=%s;nnue=%s;debug=%s;optimize=%s;compiler=%s;comp=%s\n' \
+    "$arch" "$board" "$all" "$nnue" "$debug" "$optimize" "$compiler" "$compiler_kind"
+}
+
 fsx_build_signature_matches() {
   local root_dir="$1"
   local output_file="$2"
   local expected_signature="$3"
-  local signature_file recorded_engine_hash
+  local expected_profile="${4:-}" signature_file recorded_engine_hash
 
   signature_file=$(fsx_build_signature_file "$root_dir" "$output_file")
   [[ -x "$output_file" && -f "$signature_file" ]] || return 1
   [[ "$(sed -n '1p' "$signature_file")" == "$expected_signature" ]] || return 1
+  if [[ -n "$expected_profile" ]]; then
+    [[ "$(sed -n '3s/^profile=//p' "$signature_file")" == "$expected_profile" ]] || return 1
+  fi
   recorded_engine_hash=$(sed -n '2p' "$signature_file")
   [[ -n "$recorded_engine_hash" ]] || return 1
   [[ "$recorded_engine_hash" == "$(fsx_build_hash_file "$output_file")" ]]
@@ -79,13 +110,22 @@ fsx_build_write_signature() {
   local root_dir="$1"
   local output_file="$2"
   local build_signature="$3"
-  local signature_file temp_file
+  local build_profile="${4:-unknown}" signature_file temp_file
 
   signature_file=$(fsx_build_signature_file "$root_dir" "$output_file")
   mkdir -p "$(dirname "$signature_file")"
   temp_file="${signature_file}.tmp.$$"
-  printf '%s\n%s\n' "$build_signature" "$(fsx_build_hash_file "$output_file")" >"$temp_file"
+  printf '%s\n%s\nprofile=%s\n' "$build_signature" "$(fsx_build_hash_file "$output_file")" "$build_profile" >"$temp_file"
   mv -f "$temp_file" "$signature_file"
+}
+
+fsx_build_recorded_profile() {
+  local root_dir="$1"
+  local output_file="$2"
+  local signature_file
+
+  signature_file=$(fsx_build_signature_file "$root_dir" "$output_file")
+  sed -n '3s/^profile=//p' "$signature_file"
 }
 
 fsx_build_artifact_is_current() {
