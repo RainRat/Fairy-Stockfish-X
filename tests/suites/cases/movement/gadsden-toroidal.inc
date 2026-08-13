@@ -23,28 +23,28 @@ EOF
 out=$(run_cmds "setoption name UCI_Variant value gadsden-toroidal
 position startpos
 d")
-echo "${out}" | grep -q "Fen: pppppppp/rnbqkbnr/pppppppp/8/8/PPPPPPPP/RNBQKBNR/PPPPPPPP w - - 0 1"
+grep -q "Fen: pppppppp/rnbqkbnr/pppppppp/8/8/PPPPPPPP/RNBQKBNR/PPPPPPPP w - - 0 1" <<< "${out}"
 
 out=$(run_cmds "setoption name UCI_Variant value gadsden-toroidal
 position fen 2k5/8/p7/7P/8/4K3/8/8 w - - 0 1
 go perft 1")
-echo "${out}" | grep -q "^h5a6: 1$"
+grep -q "^h5a6: 1$" <<< "${out}"
 
 out=$(run_cmds "setoption name UCI_Variant value gadsden-toroidal
 position fen 8/P7/2k5/8/8/4K3/8/8 w - - 0 1
 go perft 1")
-echo "${out}" | grep -q "^a7a8q: 1$"
-! echo "${out}" | grep -q "^a7a8: 1$"
+grep -q "^a7a8q: 1$" <<< "${out}"
+! grep -q "^a7a8: 1$" <<< "${out}"
 
 out=$(run_cmds "setoption name UCI_Variant value gadsden-toroidal-wrap-pawns
 position fen 8/P7/2k5/8/8/4K3/8/8 w - - 0 1
 go perft 1")
-echo "${out}" | grep -q "^a7a8: 1$"
-! echo "${out}" | grep -q "^a7a8q: 1$"
+grep -q "^a7a8: 1$" <<< "${out}"
+! grep -q "^a7a8q: 1$" <<< "${out}"
 
 out=$(run_cmds "setoption name UCI_Variant value gadsden-toroidal-wrap-pawns
 position fen P7/8/2k5/8/8/4K3/8/8 w - - 0 1
 go perft 1")
-echo "${out}" | grep -q "^a8a1: 1$"
+grep -q "^a8a1: 1$" <<< "${out}"
 
 echo "gadsden-toroidal test OK"
