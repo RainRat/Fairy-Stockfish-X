@@ -1202,4 +1202,13 @@ go perft 1")
 assert_nodes "$out" "20"
 fi
 
+# 45) Shifted Chess: every documented fixed start position loads through inheritance.
+for v in shifted-chess-{1..15}; do
+  variant_available "$v"
+  out=$(run_cmds "setoption name UCI_Variant value $v
+position startpos
+d")
+  assert_contains "$out" "^Fen: .*\\*"
+done
+
 echo "new variants smoke testing OK"
