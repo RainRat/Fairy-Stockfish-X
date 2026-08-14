@@ -26,6 +26,9 @@
 #include <thread>
 
 #include "evaluate.h"
+#ifdef ENABLE_ARIMAA
+#include "arimaa.h"
+#endif
 #include "misc.h"
 #include "movegen.h"
 #include "movepick.h"
@@ -174,6 +177,11 @@ namespace {
   template<bool Root>
   uint64_t perft(Position& pos, Depth depth) {
 
+#ifdef ENABLE_ARIMAA
+    if (pos.variant()->arimaa && pos.compound_turn_active())
+        return arimaa_perft(pos, depth, Root);
+#endif
+
     StateInfo st;
     ASSERT_ALIGNED(&st, Eval::NNUE::CacheLineSize);
 
@@ -234,6 +242,26 @@ void MainThread::search() {
       sync_cout << "\nNodes searched: " << nodes << "\n" << sync_endl;
       return;
   }
+
+#ifdef ENABLE_ARIMAA
+  if (rootPos.variant()->arimaa && rootPos.compound_turn_active())
+  {
+      Time.init(rootPos, Limits, rootPos.side_to_move(), rootPos.game_ply());
+      callsCnt = 1;
+      TT.new_search();
+      Eval::NNUE::verify();
+      Threads.start_searching();
+      Thread::search();
+      Threads.stop = true;
+      Threads.wait_for_search_finished();
+
+      if (Threads.main()->arimaaBestTurn.length)
+          sync_cout << "bestmove " << arimaa_turn_to_string(rootPos, Threads.main()->arimaaBestTurn) << sync_endl;
+      else
+          sync_cout << "bestmove " << UCI::move(rootPos, MOVE_NONE) << sync_endl;
+      return;
+  }
+#endif
 
   Color us = rootPos.side_to_move();
   Time.init(rootPos, Limits, us, rootPos.game_ply());
@@ -391,6 +419,14 @@ void MainThread::search() {
 /// consumed, the user stops the search, or the maximum search depth is reached.
 
 void Thread::search() {
+#ifdef ENABLE_ARIMAA
+  if (rootPos.variant()->arimaa && rootPos.compound_turn_active())
+  {
+      search_arimaa(*this);
+      return;
+  }
+#endif
+
   // To allow access to (ss-7) up to (ss+2), the stack must be oversized.
   // The former is needed to allow update_continuation_histories(ss-1, ...),
   // which accesses its argument at ss-6, also near the root.
@@ -1049,6 +1085,7 @@ namespace {
         && (ss-1)->currentMove != MOVE_NULL
         && (ss-1)->statScore < 23767
         && !pos.multimove_pass(pos.game_ply())
+        && !pos.compound_turn_active()
         &&  eval >= beta
         &&  eval >= ss->staticEval
         &&  ss->staticEval >= beta - 20 * depth - 22 * improving + 168 * ss->ttPv + 159 + 200 * (((ss - 1)->currentMovePiece == NO_PIECE || !pos.double_step_region((ss - 1)->currentMovePiece)) && (pos.piece_types() & PAWN))

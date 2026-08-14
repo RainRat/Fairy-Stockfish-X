@@ -288,6 +288,12 @@ struct StateInfoCopied {
   int    countingPly;
   int    countingLimit;
   int    pointsCount[COLOR_NB];
+#ifdef ENABLE_ARIMAA
+  uint8_t compoundTurnStep = 0;
+  int    compoundTurnNumber = 0;
+  bool   compoundTurnReady = false;
+  bool   compoundTurnReset = false;
+#endif
   CheckCount checksRemaining[COLOR_NB];
   Bitboard epSquares;
   Bitboard edgeInsertLocks[COLOR_NB];
@@ -790,6 +796,9 @@ public:
   Bitboard diagonal_lines() const;
   Square pawn_step(Square s, Color us, int steps) const;
   bool pass(Color c) const;
+  bool compound_turn_active() const;
+  int compound_turn_steps() const;
+  int compound_turn_step() const;
   bool has_setup_drop(Color c) const;
   bool pass_until_setup() const;
   bool pass_on_stalemate(Color c) const;
@@ -1040,6 +1049,10 @@ public:
   // Doing and undoing moves
   void do_move(Move m, StateInfo& newSt, bool countNode = true);
   void undo_move(Move m);
+#ifdef ENABLE_ARIMAA
+  void end_compound_turn(StateInfo& newSt);
+  void undo_compound_turn();
+#endif
   void fire_laser(Color us, Key& k, Square selectedEmitter = SQ_NONE);
   Bitboard laser_rotation_candidates(Color us) const;
   bool laser_portal_exit(Square entrance, Square& exit, Direction& direction) const;
@@ -2834,8 +2847,43 @@ inline bool Position::pass(Color c) const {
       && !has_setup_drop(c)
       && has_setup_drop(~c))
       return true;
+#ifdef ENABLE_ARIMAA
+  if (var->arimaa && compound_turn_active())
+      return false;
+  if (compound_turn_active())
+      return c == sideToMove
+          && st->compoundTurnStep > 0
+          && st->compoundTurnStep < var->compoundTurnSteps;
+#endif
   return var->pass.get(c) || var->passOnStalemate.get(c)
       || ((var->multimoveOffset || var->progressiveMultimove) && multimove_pass(gamePly));
+}
+
+inline bool Position::compound_turn_active() const {
+  assert(var != nullptr);
+#ifdef ENABLE_ARIMAA
+  return var->compoundTurnSteps > 0 && st->compoundTurnReady;
+#else
+  return false;
+#endif
+}
+
+inline int Position::compound_turn_steps() const {
+  assert(var != nullptr);
+#ifdef ENABLE_ARIMAA
+  return compound_turn_active() ? var->compoundTurnSteps : 0;
+#else
+  return 0;
+#endif
+}
+
+inline int Position::compound_turn_step() const {
+  assert(var != nullptr);
+#ifdef ENABLE_ARIMAA
+  return compound_turn_active() ? st->compoundTurnStep : 0;
+#else
+  return 0;
+#endif
 }
 
 inline bool Position::has_setup_drop(Color c) const {

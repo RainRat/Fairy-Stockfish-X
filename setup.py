@@ -30,7 +30,7 @@ with io.open("README.md", "r", encoding="utf8") as fh:
 
 sources = glob("src/*.cpp") + glob("src/syzygy/*.cpp") + glob("src/nnue/*.cpp") + glob("src/nnue/features/*.cpp")
 headers = glob("src/*.h") + glob("src/syzygy/*.h") + glob("src/nnue/*.h") + glob("src/nnue/features/*.h")
-for f in ["src/ffishjs.cpp", "src/main.cpp", "src/ffishdll.cpp"]:
+for f in ["src/arimaa.cpp", "src/ffishjs.cpp", "src/main.cpp", "src/ffishdll.cpp"]:
     try:
         sources.remove(os.path.normcase(f))
     except ValueError:

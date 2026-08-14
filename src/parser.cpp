@@ -540,6 +540,14 @@ namespace {
         return parse_named_value(value, target, values);
     }
 
+    template <> bool set(const std::string& value, FreezeProtection& target) {
+        static constexpr auto values = std::array{
+            std::pair{"none", FreezeProtection::NONE},
+            std::pair{"friendly-orthogonal", FreezeProtection::FRIENDLY_ORTHOGONAL},
+        };
+        return parse_named_value(value, target, values);
+    }
+
     template <> bool set(const std::string& value, MaterialCounting& target) {
         static constexpr auto values = std::array{
             std::pair{"janggi", JANGGI_MATERIAL},
@@ -1539,6 +1547,8 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     }
 
     parse_attribute("variantTemplate", v->variantTemplate);
+    parse_attribute("arimaa", v->arimaa);
+    parse_attribute("nnueAlias", v->nnueAlias);
     parse_attribute("pieceToCharTable", v->pieceToCharTable);
     parse_attribute("pocketSize", v->pocketSize);
     parse_attribute("chess960", v->chess960);
@@ -1692,6 +1702,13 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("libertySelfCapture", v->libertySelfCapture);
     parse_attribute("freezePieceTypes", v->freezePieceTypes, v);
     parse_attribute("freezeImmunePieceTypes", v->freezeImmunePieceTypes, v);
+    auto it_freeze_strength = config.find("freezeStrength");
+    if (it_freeze_strength != config.end())
+    {
+        if (!parse_non_negative_piece_int_map<DoCheck>("freezeStrength", it_freeze_strength->second, v, v->freezeStrength))
+            return false;
+    }
+    parse_attribute("freezeProtection", v->freezeProtection);
     parse_attribute("freezeDiagonals", v->freezeDiagonals);
     parse_attribute("trapRegion", v->trapRegion);
     parse_attribute("trapProtection", v->trapProtection);
@@ -1865,6 +1882,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_color_setting("passOnStalemate", v->passOnStalemate);
     parse_attribute("doublePassEndsGame", v->doublePassEndsGame);
     parse_attribute("passUntilSetup", v->passUntilSetup);
+    parse_attribute("turnSteps", v->compoundTurnSteps);
     if (!parse_multimoves(v))
         return false;
     parse_attribute("progressiveMultimove", v->progressiveMultimove);
@@ -2206,6 +2224,10 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     for (int strength : v->pushingStrength)
         v->hasPushing |= strength > 0;
 
+    v->hasFreezeStrength = false;
+    for (int strength : v->freezeStrength)
+        v->hasFreezeStrength |= strength > 0;
+
     // Unknown options are diagnosed but ignored so newer configs remain usable.
     {
         const std::set<std::string>& parsedKeys = config.get_consumed_keys();
@@ -2224,6 +2246,36 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
 template <bool DoCheck>
 bool VariantParser<DoCheck>::check_consistency(Variant* v) {
     bool valid = true;
+
+    if (v->compoundTurnSteps < 0 || v->compoundTurnSteps > Variant::MAX_COMPOUND_TURN_STEPS)
+    {
+        if (DoCheck)
+            std::cerr << "turnSteps - Value must be in range [0, "
+                      << Variant::MAX_COMPOUND_TURN_STEPS << "]." << std::endl;
+        valid = false;
+    }
+
+    if (v->arimaa)
+    {
+        if (v->compoundTurnSteps < 1 || v->compoundTurnSteps > 4)
+        {
+            if (DoCheck)
+                std::cerr << "arimaa - turnSteps must be in range [1, 4]." << std::endl;
+            valid = false;
+        }
+        if (v->maxFile != FILE_H || v->maxRank != RANK_8)
+        {
+            if (DoCheck)
+                std::cerr << "arimaa - only the standard 8x8 board is supported." << std::endl;
+            valid = false;
+        }
+        if (v->multimoveOffset || v->progressiveMultimove || !v->multimoves.empty())
+        {
+            if (DoCheck)
+                std::cerr << "arimaa - generic multimove settings do not compose with turnSteps." << std::endl;
+            valid = false;
+        }
+    }
 
     const bool wrapsTopology = v->cylindrical || v->toroidal;
     v->rebuild_piece_symbol_maps();

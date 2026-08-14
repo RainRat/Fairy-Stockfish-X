@@ -26,6 +26,9 @@
 #include <string>
 
 #include "evaluate.h"
+#ifdef ENABLE_ARIMAA
+#include "arimaa.h"
+#endif
 #include "movegen.h"
 #include "position.h"
 #include "search.h"
@@ -86,10 +89,52 @@ namespace {
     pos.set(variants.get(Options["UCI_Variant"]), fen, Options["UCI_Chess960"], &states->back(), Threads.main(), sfen);
 
     // Parse move list (if any)
-    while (is >> token && (m = UCI::to_move(pos, token)) != MOVE_NONE)
+    while (is >> token)
     {
+#ifdef ENABLE_ARIMAA
+        if (pos.variant()->arimaa
+            && (token.find(',') != string::npos || token.find(';') != string::npos))
+        {
+            ArimaaTurn turn;
+            if (parse_arimaa_turn(pos, token, turn))
+            {
+                for (int i = 0; i < turn.length; ++i)
+                {
+                    states->emplace_back();
+                    pos.do_move(turn.steps[i], states->back());
+                }
+                if (turn.length < pos.compound_turn_steps())
+                {
+                    states->emplace_back();
+                    pos.end_compound_turn(states->back());
+                }
+                continue;
+            }
+        }
+#endif
+        m = UCI::to_move(pos, token);
+        if (m == MOVE_NONE)
+            break;
+
+#ifdef ENABLE_ARIMAA
+        // An active Arimaa position accepts one protocol token per complete
+        // turn.  A single step is therefore an early-completed turn; 0000 is
+        // not a step and is not used as a turn delimiter in this path.
+        if (pos.variant()->arimaa && pos.compound_turn_active() && is_pass(m))
+            break;
+        const bool arimaaStep = pos.variant()->arimaa && pos.compound_turn_active();
+#endif
+
         states->emplace_back();
         pos.do_move(m, states->back());
+
+#ifdef ENABLE_ARIMAA
+        if (arimaaStep && pos.compound_turn_active())
+        {
+            states->emplace_back();
+            pos.end_compound_turn(states->back());
+        }
+#endif
     }
   }
 
@@ -369,6 +414,12 @@ namespace {
         sync_cout << "Unknown notation '" << token << "'; defaulting to UCI." << sync_endl;
 
     std::vector<std::string> moves;
+#ifdef ENABLE_ARIMAA
+    if (pos.variant()->arimaa && pos.compound_turn_active())
+        for (const auto& turn : generate_arimaa_turns(pos))
+            moves.push_back(arimaa_turn_to_string(pos, turn));
+    else
+#endif
     for (const auto& m : MoveList<LEGAL>(pos))
         moves.push_back(n == NOTATION_DEFAULT ? UCI::move(pos, m) : SAN::move_to_san(pos, m, n));
 

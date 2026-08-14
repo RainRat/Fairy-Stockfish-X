@@ -902,6 +902,9 @@ namespace Zobrist {
   Key endgame[EG_EVAL_NB];
   Key points[COLOR_NB][MAX_ZOBRIST_POINTS];
   Key edgeInsertLock[COLOR_NB][SQUARE_NB];
+#ifdef ENABLE_ARIMAA
+  Key compoundTurn[Variant::MAX_COMPOUND_TURN_STEPS + 1];
+#endif
 }
 
 Square JumpMidpoint[SQUARE_NB][SQUARE_NB];
@@ -1443,6 +1446,11 @@ void Position::init() {
 
   Zobrist::side = rng.rand<Key>();
   Zobrist::noPawns = rng.rand<Key>();
+
+#ifdef ENABLE_ARIMAA
+  for (int step = 0; step <= Variant::MAX_COMPOUND_TURN_STEPS; ++step)
+      Zobrist::compoundTurn[step] = rng.rand<Key>();
+#endif
 
   for (Color c : {WHITE, BLACK})
       for (int n = 0; n < CHECKS_NB; ++n)
@@ -2092,12 +2100,43 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
   }
   else
   {
-      ss >> std::skipws >> st->rule50 >> gamePly;
+      int fullMoveNumber = 1;
+      ss >> std::skipws >> st->rule50 >> fullMoveNumber;
 
       // Convert from fullmove starting from 1 to gamePly starting from 0,
-      // handle also common incorrect FEN with fullmove = 0.
-      gamePly = std::max(2 * (gamePly - 1), 0) + (sideToMove == BLACK);
+      // handle also common incorrect FEN with fullmove = 0. Compound turns
+      // keep their own completed-turn counter because sideToMove can remain
+      // unchanged for several steps.
+      fullMoveNumber = std::max(fullMoveNumber, 1);
+#ifdef ENABLE_ARIMAA
+      if (var->compoundTurnSteps)
+      {
+          st->compoundTurnNumber = fullMoveNumber - 1;
+          gamePly = 2 * st->compoundTurnNumber + (sideToMove == BLACK);
+      }
+      else
+#endif
+          gamePly = 2 * (fullMoveNumber - 1) + (sideToMove == BLACK);
   }
+
+#ifdef ENABLE_ARIMAA
+  if (var->compoundTurnSteps && !var->arimaa)
+  {
+      ss >> std::ws;
+      if (ss.peek() == 't')
+      {
+          ss.get();
+          int step = 0;
+          if (!(ss >> step) || step < 0 || step >= var->compoundTurnSteps)
+              ss.setstate(std::ios::failbit);
+          else
+          {
+              st->compoundTurnStep = uint8_t(step);
+              gamePly += step;
+          }
+      }
+  }
+#endif
 
   // counting rules
   if (st->countingLimit && st->rule50)
@@ -2427,6 +2466,11 @@ void Position::recompute_state_hashes_and_material(StateInfo* si) const {
   if (sideToMove == BLACK)
       si->key ^= Zobrist::side;
 
+#ifdef ENABLE_ARIMAA
+  if (var->compoundTurnSteps)
+      si->key ^= Zobrist::compoundTurn[si->compoundTurnStep];
+#endif
+
   si->key ^= Zobrist::castling[si->castlingRights];
 
   for (Color c : {WHITE, BLACK})
@@ -2490,6 +2534,12 @@ void Position::recompute_state_hashes_and_material(StateInfo* si) const {
 void Position::set_state(StateInfo* si) const {
 
   si->evasionCheckersBB = compute_evasion_checkers_bb(sideToMove);
+#ifdef ENABLE_ARIMAA
+  si->compoundTurnReady = var->compoundTurnSteps > 0
+                       && !has_setup_drop(WHITE)
+                       && !has_setup_drop(BLACK);
+  si->compoundTurnReset = false;
+#endif
   si->move = MOVE_NONE;
   si->removedGatingType = NO_PIECE_TYPE;
   si->removedCastlingGatingType = NO_PIECE_TYPE;
@@ -2835,7 +2885,17 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
   else
       ss << st->rule50;
 
+#ifdef ENABLE_ARIMAA
+  ss << " " << (variant()->compoundTurnSteps ? st->compoundTurnNumber + 1
+                                               : 1 + (gamePly - (sideToMove == BLACK)) / 2);
+#else
   ss << " " << 1 + (gamePly - (sideToMove == BLACK)) / 2;
+#endif
+
+#ifdef ENABLE_ARIMAA
+  if (variant()->compoundTurnSteps && st->compoundTurnStep && !variant()->arimaa)
+      ss << " t" << int(st->compoundTurnStep);
+#endif
 
   if (variant()->pointsCounting)
   {
@@ -4407,6 +4467,9 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
       || var->blastPassiveTypes
       || var->captureMorph
       || var->hasMoveMorph
+#ifdef ENABLE_ARIMAA
+      || var->hasFreezeStrength
+#endif
       || var->stackingPieceTypes
       || var->stackedPieceTypes
       || commit_gates()
@@ -5777,6 +5840,20 @@ bool Position::legal(Move m) const {
   }
 
   // Multimoves
+#ifdef ENABLE_ARIMAA
+  if (compound_turn_active())
+  {
+      if (!is_pass(m) && st->compoundTurnStep >= var->compoundTurnSteps)
+          return false;
+  }
+  else if (var->multimoveOffset || var->progressiveMultimove)
+  {
+      if (is_pass(m) != multimove_pass(gamePly))
+          return false;
+      if (multimove_pass(gamePly + 1) && ((!var->multimoveCapture && capture(m)) || (!var->multimoveCheck && gives_check(m))))
+          return false;
+  }
+#else
   if (var->multimoveOffset || var->progressiveMultimove)
   {
       if (is_pass(m) != multimove_pass(gamePly))
@@ -5784,6 +5861,7 @@ bool Position::legal(Move m) const {
       if (multimove_pass(gamePly + 1) && ((!var->multimoveCapture && capture(m)) || (!var->multimoveCheck && gives_check(m))))
           return false;
   }
+#endif
 
   if (is_pass(m))
   {
@@ -6341,6 +6419,13 @@ bool Position::pseudo_legal(const Move m) const {
       && has_setup_drop(them)
       && !is_pass(m))
       return false;
+
+#ifdef ENABLE_ARIMAA
+  if (compound_turn_active()
+      && !is_pass(m)
+      && st->compoundTurnStep >= var->compoundTurnSteps)
+      return false;
+#endif
 
   if (laser_game() && is_gating(m))
   {
@@ -7178,6 +7263,58 @@ Bitboard Position::freeze_squares_from_freezers(Color c, const SimulatedMoveInfo
     if (!var->freezePieceTypes)
         return Bitboard(0);
 
+#ifdef ENABLE_ARIMAA
+    // Some variants, notably Arimaa, make freezing strength-sensitive: an
+    // adjacent enemy freezes a weaker piece, but not an equal or stronger
+    // one. Keep the long-standing adjacency-only behavior as the fast path
+    // when no strength table is configured.
+    if (var->hasFreezeStrength)
+    {
+        SimulatedMoveInfo simulatedMoveInfo;
+        const SimulatedMoveInfo* view = simulated;
+        if (!view && simulatedMove != MOVE_NONE)
+        {
+            simulatedMoveInfo = simulated_move_info(simulatedMove);
+            view = &simulatedMoveInfo;
+        }
+
+        auto type_pieces = [&](Color color, PieceType pt) {
+            return view ? view->type_pieces(color, pt) : pieces(color, pt);
+        };
+        auto immune_pieces = [&](Color color) {
+            return view ? view->freezeImmuneOccupancy[color]
+                        : pieces(color, var->freezeImmunePieceTypes);
+        };
+        Bitboard supported = 0;
+        if (var->freezeProtection == FreezeProtection::FRIENDLY_ORTHOGONAL)
+        {
+            Bitboard friendly = view ? view->colorOccupancy[c] : pieces(c);
+            while (friendly)
+                supported |= adjacent_squares(*this, pop_lsb(friendly), false);
+        }
+
+        Bitboard frozen = 0;
+        for (PieceSet targetSet = piece_types(); targetSet; )
+        {
+            PieceType targetType = pop_lsb(targetSet);
+            Bitboard targets = type_pieces(c, targetType) & ~immune_pieces(c) & ~supported;
+            if (!targets)
+                continue;
+
+            for (PieceSet freezerSet = var->freezePieceTypes; freezerSet; )
+            {
+                PieceType freezerType = pop_lsb(freezerSet);
+                if (var->freezeStrength[freezerType] <= var->freezeStrength[targetType])
+                    continue;
+                Bitboard freezers = type_pieces(~c, freezerType);
+                while (freezers)
+                    frozen |= adjacent_squares(*this, pop_lsb(freezers), var->freezeDiagonals) & targets;
+            }
+        }
+        return frozen;
+    }
+#endif
+
     Bitboard freezers;
     Bitboard targets;
     if (simulated)
@@ -7370,7 +7507,20 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   if (countNode && thisThread)
       thisThread->nodes.fetch_add(1, std::memory_order_relaxed);
 #endif
+#ifdef ENABLE_ARIMAA
+  const bool compoundTurn = compound_turn_active();
+  const bool compoundTurnEnds = !compoundTurn
+                              || is_pass(m)
+                              || st->compoundTurnStep + 1 >= var->compoundTurnSteps;
+  const uint8_t compoundTurnStep = compoundTurn && !compoundTurnEnds
+                                 ? uint8_t(st->compoundTurnStep + 1) : 0;
+  Key k = st->key ^ (compoundTurnEnds ? Zobrist::side : 0);
+  if (compoundTurn)
+      k ^= Zobrist::compoundTurn[st->compoundTurnStep]
+         ^ Zobrist::compoundTurn[compoundTurnStep];
+#else
   Key k = st->key ^ Zobrist::side;
+#endif
 
   // Copy some fields of the old state to our new StateInfo object except the
   // ones which are going to be recalculated from scratch anyway and then switch
@@ -7381,11 +7531,21 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   st = &newSt;
   st->extinctionSeen[WHITE] = newSt.previous->extinctionSeen[WHITE];
   st->extinctionSeen[BLACK] = newSt.previous->extinctionSeen[BLACK];
+#ifdef ENABLE_ARIMAA
+  st->compoundTurnStep = compoundTurnStep;
+#endif
   st->pendingClaimPass = false;
   st->move = m;
   clear_move_undo_state(st);
   // Mandatory multimove pass plies should not advance the halfmove clock.
+#ifdef ENABLE_ARIMAA
+  const bool currentMultimovePass = !compoundTurn
+                                 && is_pass(m)
+                                 && (var->multimoveOffset || var->progressiveMultimove)
+                                 && multimove_pass(gamePly);
+#else
   const bool currentMultimovePass = is_pass(m) && multimove_pass(gamePly);
+#endif
   const bool currentClaimPass = is_pass(m) && previousClaimPass;
 
   // Increment ply counters. In particular, rule50 will be reset to zero later on
@@ -7399,6 +7559,10 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
 
   Color us = sideToMove;
   Color them = ~us;
+#ifdef ENABLE_ARIMAA
+  if (compoundTurn && compoundTurnEnds && us == BLACK)
+      ++st->compoundTurnNumber;
+#endif
   bool dropMove = is_drop_move(m);
   Square from = from_sq(m);
   Square to = to_sq(m);
@@ -9192,7 +9356,35 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   st->boardKey = st->key ^ st->reserveKey;
   if (var->samePlayerBoardRepetitionIllegal)
       st->layoutKey = layout_key();
+#ifdef ENABLE_ARIMAA
+  if (compoundTurn && (st->rule50 == 0 || st->previous->compoundTurnReset))
+      st->compoundTurnReset = true;
+
+  if (compoundTurn && compoundTurnEnds)
+  {
+      const int turnLength = st->previous->compoundTurnStep + 1;
+      const int internalSteps = turnLength - 1;
+      if (internalSteps > 0)
+      {
+          gamePly -= internalSteps;
+          st->pliesFromNull -= internalSteps;
+          if (st->countingLimit)
+              st->countingPly -= internalSteps;
+          if (st->compoundTurnReset)
+              st->rule50 = 0;
+          else
+              st->rule50 -= internalSteps;
+      }
+      st->compoundTurnReset = false;
+  }
+
+  if (var->compoundTurnSteps && !st->compoundTurnReady
+      && !has_setup_drop(WHITE) && !has_setup_drop(BLACK))
+      st->compoundTurnReady = true;
+  sideToMove = compoundTurnEnds ? them : us;
+#else
   sideToMove = them;
+#endif
 
   st->evasionCheckersBB = compute_evasion_checkers_bb(sideToMove);
 
@@ -9289,7 +9481,12 @@ void Position::undo_move(Move m) {
 
   assert(is_ok(m));
 
+#ifdef ENABLE_ARIMAA
+  if (var->compoundTurnSteps == 0 || st->compoundTurnStep == 0)
+      sideToMove = ~sideToMove;
+#else
   sideToMove = ~sideToMove;
+#endif
 
   Color us = sideToMove;
   Square from = from_sq(m);
@@ -9708,11 +9905,18 @@ void Position::undo_move(Move m) {
   }
 
   // Finally point our state pointer back to the previous state
+  int compoundTurnStepsToRestore = 0;
+#ifdef ENABLE_ARIMAA
+  if (var->compoundTurnSteps && st->compoundTurnStep == 0 && st->previous
+      && st->previous->compoundTurnStep > 0)
+      compoundTurnStepsToRestore = st->previous->compoundTurnStep;
+#endif
   st = st->previous;
   std::copy(std::begin(st->castlingRightsMask), std::end(st->castlingRightsMask), std::begin(castlingRightsMask));
   std::copy(std::begin(st->castlingRookSquare), std::end(st->castlingRookSquare), std::begin(castlingRookSquare));
   std::copy(std::begin(st->castlingPath), std::end(st->castlingPath), std::begin(castlingPath));
   --gamePly;
+  gamePly += compoundTurnStepsToRestore;
   updatePawnCheckZone();
 
   assert(pos_is_ok());
@@ -9773,6 +9977,79 @@ void Position::do_castling(Color us, Square from, Square& to, Square& rfrom, Squ
 
 }
 
+
+#ifdef ENABLE_ARIMAA
+
+void Position::end_compound_turn(StateInfo& newSt) {
+
+  assert(var->arimaa);
+  assert(compound_turn_active());
+  assert(st->compoundTurnStep > 0);
+  assert(&newSt != st);
+
+  const Color us = sideToMove;
+  const uint8_t previousStep = st->compoundTurnStep;
+
+  static_cast<StateInfoCopied&>(newSt) = static_cast<const StateInfoCopied&>(*st);
+  newSt.previous = st;
+  st = &newSt;
+  st->extinctionSeen[WHITE] = newSt.previous->extinctionSeen[WHITE];
+  st->extinctionSeen[BLACK] = newSt.previous->extinctionSeen[BLACK];
+  const int internalSteps = previousStep - 1;
+  if (internalSteps > 0)
+  {
+      gamePly -= internalSteps;
+      st->pliesFromNull -= internalSteps;
+      if (st->countingLimit)
+          st->countingPly -= internalSteps;
+      if (st->compoundTurnReset)
+          st->rule50 = 0;
+      else
+          st->rule50 -= internalSteps;
+  }
+  st->move = MOVE_NONE;
+  st->pendingClaimPass = false;
+  st->compoundTurnStep = 0;
+  st->compoundTurnReset = false;
+  st->compoundTurnNumber += us == BLACK;
+  clear_move_undo_state(st);
+  clear_dirty_piece(st);
+  st->nnueRefreshNeeded = false;
+  st->shak = false;
+  st->bikjang = false;
+  st->legalCapture = NO_VALUE;
+  st->legalEnPassant = NO_VALUE;
+  st->chased = Bitboard(0);
+
+  st->key ^= Zobrist::side
+          ^ Zobrist::compoundTurn[previousStep]
+          ^ Zobrist::compoundTurn[0];
+  st->boardKey = st->key ^ st->reserveKey;
+  if (var->samePlayerBoardRepetitionIllegal)
+      st->layoutKey = layout_key();
+
+  sideToMove = ~us;
+  st->evasionCheckersBB = compute_evasion_checkers_bb(sideToMove);
+  set_check_info(st);
+  st->checkersBB = compute_checkers_bb(sideToMove);
+  st->repetition = 0;
+  st->boardRepetition = 0;
+
+  assert(pos_is_ok());
+}
+
+void Position::undo_compound_turn() {
+
+  assert(var->arimaa);
+  assert(st->compoundTurnStep == 0);
+  assert(st->previous != nullptr);
+
+  gamePly += st->previous->compoundTurnStep - 1;
+  sideToMove = ~sideToMove;
+  st = st->previous;
+}
+
+#endif // ENABLE_ARIMAA
 
 /// Position::do_null_move() is used to do a "null move": it flips
 /// the side to move without executing any move on the board.
@@ -9836,6 +10113,14 @@ void Position::do_null_move(StateInfo& newSt) {
       st->key ^= Zobrist::enpassant[pop_lsb(st->epSquares)];
 
   st->key ^= Zobrist::side;
+#ifdef ENABLE_ARIMAA
+  if (var->compoundTurnSteps && st->compoundTurnStep)
+  {
+      st->key ^= Zobrist::compoundTurn[st->compoundTurnStep]
+               ^ Zobrist::compoundTurn[0];
+      st->compoundTurnStep = 0;
+  }
+#endif
   st->boardKey = st->key ^ st->reserveKey;
   prefetch(TT.first_entry(key()));
 
@@ -9875,7 +10160,18 @@ Key Position::key_after(Move m) const {
   Square to = to_sq(m);
   Piece pc = moved_piece(m);
   Piece captured = piece_on(to);
+#ifdef ENABLE_ARIMAA
+  const bool compoundTurn = compound_turn_active();
+  const bool compoundTurnEnds = !compoundTurn
+                              || is_pass(m)
+                              || st->compoundTurnStep + 1 >= var->compoundTurnSteps;
+  Key k = st->key ^ (compoundTurnEnds ? Zobrist::side : 0);
+  if (compoundTurn)
+      k ^= Zobrist::compoundTurn[st->compoundTurnStep]
+         ^ Zobrist::compoundTurn[compoundTurnEnds ? 0 : st->compoundTurnStep + 1];
+#else
   Key k = st->key ^ Zobrist::side;
+#endif
 
   if (captured)
   {
