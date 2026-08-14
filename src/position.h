@@ -292,6 +292,9 @@ struct StateInfoCopied {
   Bitboard epSquares;
   Bitboard edgeInsertLocks[COLOR_NB];
   Square castlingKingSquare[COLOR_NB];
+  int castlingRightsMask[SQUARE_NB];
+  Square castlingRookSquare[CASTLING_RIGHT_NB];
+  Bitboard castlingPath[CASTLING_RIGHT_NB];
   Bitboard wallSquares;
   Bitboard deadSquares;
   Bitboard gatesBB[COLOR_NB];
@@ -5458,11 +5461,15 @@ inline Position::HopperMoveDetails Position::resolve_hopper_move_details(Square 
 }
 
 inline Square Position::jump_capture_square(Square from, Square to, Bitboard occupied) const {
-  return resolve_hopper_move_details(from, to, occupied).primaryCaptureSq;
+  HopperMoveDetails details = resolve_hopper_move_details(from, to, occupied);
+  Bitboard captureMask = capture_mask_from_hopper_details(details, occupied);
+  if (details.primaryCaptureSq != SQ_NONE && !(captureMask & details.primaryCaptureSq))
+      details.primaryCaptureSq = captureMask ? lsb(captureMask) : SQ_NONE;
+  return details.primaryCaptureSq;
 }
 
 inline Square Position::jump_capture_square(Square from, Square to) const {
-  return jump_capture_square(from, to, byTypeBB[ALL_PIECES]);
+  return jump_capture_info(from, to).primaryCaptureSq;
 }
 
 inline Bitboard Position::capture_mask_from_hopper_details(const HopperMoveDetails& details,
@@ -5484,13 +5491,20 @@ inline Bitboard Position::jump_capture_mask(Square from, Square to, Bitboard occ
 }
 
 inline Bitboard Position::jump_capture_mask(Square from, Square to) const {
-  return jump_capture_mask(from, to, byTypeBB[ALL_PIECES]);
+  return jump_capture_info(from, to).captureMask;
 }
 
 inline Position::JumpCaptureInfo Position::jump_capture_info(Square from, Square to) const {
-  HopperMoveDetails details = resolve_hopper_move_details(from, to, byTypeBB[ALL_PIECES]);
+  Bitboard occupied = byTypeBB[ALL_PIECES];
+  if (const SpellContext* spellCtx = current_spell_context();
+      spellCtx && color_of(piece_on(from)) == sideToMove)
+      occupied &= ~spellCtx->jumpRemoved;
+  HopperMoveDetails details = resolve_hopper_move_details(from, to, occupied);
+  Bitboard captureMask = capture_mask_from_hopper_details(details, occupied);
+  if (details.primaryCaptureSq != SQ_NONE && !(captureMask & details.primaryCaptureSq))
+      details.primaryCaptureSq = captureMask ? lsb(captureMask) : SQ_NONE;
   return {details.primaryCaptureSq,
-          capture_mask_from_hopper_details(details, byTypeBB[ALL_PIECES])};
+          captureMask};
 }
 
 inline Bitboard Position::universal_hopper_potential_bb(PieceType pt, Square s) const {

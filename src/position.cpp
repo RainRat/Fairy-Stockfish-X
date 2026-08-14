@@ -24,6 +24,7 @@
 #include <cstring> // For std::memset, std::memcmp
 #include <iomanip>
 #include <limits>
+#include <numeric>
 #include <sstream>
 #include <vector>
 #include <cstdlib>
@@ -221,6 +222,12 @@ namespace {
               df = adjusted_delta(pos, df, int(pos.max_file()) + 1);
           if (pos.wraps_ranks())
               dr = adjusted_delta(pos, dr, int(pos.max_rank()) + 1);
+      }
+      int divisor = std::gcd(std::abs(df), std::abs(dr));
+      if (divisor > 1)
+      {
+          df /= divisor;
+          dr /= divisor;
       }
       // Preserve coordinate direction across a topology seam; a linear
       // square-number delta turns h4->a4 into the opposite direction.
@@ -1600,7 +1607,7 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
       incremented after Black's move.
 */
 
-  unsigned char col, token;
+  unsigned char col, token = 'w';
   std::istringstream ss(fenStr);
 
   std::memset(static_cast<void*>(this), 0, sizeof(Position));
@@ -2250,6 +2257,11 @@ void Position::set_castling_right(Color c, Square rfrom) {
 
   castlingPath[cr] =   (between_bb(rfrom, rto) | between_bb(kfrom, kto))
                     & ~(kfrom | rfrom);
+
+  st->castlingRightsMask[kfrom] |= cr;
+  st->castlingRightsMask[rfrom] |= cr;
+  st->castlingRookSquare[cr] = rfrom;
+  st->castlingPath[cr] = castlingPath[cr];
 }
 
 
@@ -5315,6 +5327,8 @@ bool Position::legal(Move m) const {
           return false;
       if (!(edge_insert_region(us) & to))
           return false;
+      if (edge_insert_opponent_ejection_lock() && (edge_insert_locks(us) & to))
+          return false;
 
       if (!edge_insert_direction_ok(us, from, to))
           return false;
@@ -7416,6 +7430,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           castlingRook = piece_on(to);
       captured = NO_PIECE;
   }
+  const bool castlingKingSide = type_of(m) == CASTLING && to > from;
   const Piece capturedBeforeStepwisePush = captured;
   PushInfo pushInfo;
   bool pushMove = false;
@@ -7481,7 +7496,11 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   Bitboard locust_all_mask = 0;
   if (!dropMove && pi && pi->has_universal_hopper())
   {
-      HopperMoveDetails details = resolve_hopper_move_details(from, to, byTypeBB[ALL_PIECES]);
+      Bitboard occupied = byTypeBB[ALL_PIECES];
+      if (const SpellContext* spellCtx = current_spell_context();
+          spellCtx && color_of(piece_on(from)) == sideToMove)
+          occupied &= ~spellCtx->jumpRemoved;
+      HopperMoveDetails details = resolve_hopper_move_details(from, to, occupied);
       jumpCapsq = details.primaryCaptureSq;
       locust_all_mask = details.locustAllMask;
   }
@@ -7952,8 +7971,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       // Remove castling rights from opponent on the same side if oppositeCastling
       if ((var->oppositeCastling) && (type_of(m) == CASTLING))
       {
-        bool kingSide = to > from;
-        st->castlingRights &= ~(~us & (kingSide ? KING_SIDE : QUEEN_SIDE));
+        st->castlingRights &= ~(~us & (castlingKingSide ? KING_SIDE : QUEEN_SIDE));
       }
       k ^= Zobrist::castling[st->castlingRights];
   }
@@ -9691,6 +9709,9 @@ void Position::undo_move(Move m) {
 
   // Finally point our state pointer back to the previous state
   st = st->previous;
+  std::copy(std::begin(st->castlingRightsMask), std::end(st->castlingRightsMask), std::begin(castlingRightsMask));
+  std::copy(std::begin(st->castlingRookSquare), std::end(st->castlingRookSquare), std::begin(castlingRookSquare));
+  std::copy(std::begin(st->castlingPath), std::end(st->castlingPath), std::begin(castlingPath));
   --gamePly;
   updatePawnCheckZone();
 

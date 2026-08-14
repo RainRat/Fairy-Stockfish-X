@@ -2642,6 +2642,7 @@ Variant* Variant::conclude() {
 
     const bool alwaysUnreliableSee = pointsCounting
                                   || pointsGoal > 0
+                                  || captureDemotion
                                   || connectN != 0
                                   || connectNxN != 0
                                   || collinearN != 0

@@ -2341,6 +2341,14 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
             std::cerr << "connect3D and connect4D are mutually exclusive." << std::endl;
         valid = false;
     }
+    if (v->nMoveRule < 0
+        || v->nMoveRule > (std::numeric_limits<int>::max() + 1LL) / 2)
+    {
+        if (DoCheck)
+            std::cerr << "nMoveRule must be between 0 and "
+                      << (std::numeric_limits<int>::max() + 1LL) / 2 << "." << std::endl;
+        valid = false;
+    }
     if (v->nMoveRuleImmediate < 0
         || v->nMoveRuleImmediate > (std::numeric_limits<int>::max() + 1LL) / 2)
     {

@@ -29,7 +29,11 @@ if [ $# -eq 3 ]; then
     echo "Common variants found: $(echo "$variants" | wc -w)"
 
     # Convert to array for processing
-    read -r -a variant_array <<< "$variants"
+    if [[ -n "$variants" ]]; then
+        mapfile -t variant_array <<< "$variants"
+    else
+        variant_array=()
+    fi
 else
     # Use provided variants
     variant_array=("${@:4}")
