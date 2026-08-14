@@ -34,61 +34,61 @@ echo "spell freeze regression tests started"
 # Frozen castling rook cannot participate in castling.
 out=$(run_cmds "position fen 4k3/8/8/8/8/8/8/4K2R[f] b K - 0 1 moves f@h1 e8e7
 go perft 1")
-! echo "${out}" | grep -q "^e1g1:"
+! grep -q "^e1g1:" <<< "${out}"
 
 # Castling through attack remains illegal unless the checker is frozen first.
 out=$(run_cmds "position fen 4kr2/8/8/8/8/8/8/4K2R[F] w K - 0 1
 go perft 1")
-! echo "${out}" | grep -q "^e1g1:"
-echo "${out}" | grep -q "^f@f8,e1g1: 1$"
+! grep -q "^e1g1:" <<< "${out}"
+grep -q "^f@f8,e1g1: 1$" <<< "${out}"
 
 # Castling out of check remains illegal unless the checking rook is frozen first.
 out=$(run_cmds "position fen 4r1k1/8/8/8/8/8/8/4K2R[F] w K - 0 1
 go perft 1")
-! echo "${out}" | grep -q "^e1g1:"
-echo "${out}" | grep -q "^f@e8,e1g1: 1$"
+! grep -q "^e1g1:" <<< "${out}"
+grep -q "^f@e8,e1g1: 1$" <<< "${out}"
 
 # Jump potion does not make castling legal through occupied blocker squares.
 out=$(run_cmds "position fen 6k1/8/8/8/8/8/8/R2nK3[J] w Q - 0 1
 go perft 1")
-! echo "${out}" | grep -q "^e1c1:"
-! echo "${out}" | grep -q "^j@d1,e1c1:"
+! grep -q "^e1c1:" <<< "${out}"
+! grep -q "^j@d1,e1c1:" <<< "${out}"
 
 out=$(run_cmds "position fen 6k1/8/8/8/8/8/8/Rn2K3[J] w Q - 0 1
 go perft 1")
-! echo "${out}" | grep -q "^e1c1:"
-! echo "${out}" | grep -q "^j@b1,e1c1:"
+! grep -q "^e1c1:" <<< "${out}"
+! grep -q "^j@b1,e1c1:" <<< "${out}"
 
 # Frozen pawns cannot capture en passant.
 out=$(run_cmds "position fen 4k3/3p4/8/4P3/8/8/8/4K3[f] b - - 0 1 moves f@e5 d7d5
 go perft 1")
-! echo "${out}" | grep -q "^e5d6:"
+! grep -q "^e5d6:" <<< "${out}"
 
 # Same-turn cast Freeze on own piece prevents that piece from moving.
 out=$(run_cmds "position fen rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR[F] w KQkq - 0 1
 go perft 1")
-! echo "${out}" | grep -q "^f@g3,f2f3:"
-! echo "${out}" | grep -q "^f@g3,f2f4:"
+! grep -q "^f@g3,f2f3:" <<< "${out}"
+! grep -q "^f@g3,f2f4:" <<< "${out}"
 
 # Same-turn cast Freeze on own royal prevents royal moves and castling.
 out=$(run_cmds "position fen 4k3/8/8/8/8/8/8/4K2R[F] w K - 0 1
 go perft 1")
-! echo "${out}" | grep -q "^f@e1,e1"
+! grep -q "^f@e1,e1" <<< "${out}"
 
 # Blocked pawn on rank 2 can double-step to rank 4 if blocker is treated with Jump potion.
 out=$(run_cmds "position fen 4k3/8/8/8/8/4p3/4P3/4K3[J] w - - 0 1
 go perft 1")
-echo "${out}" | grep -q "^j@e3,e2e4: 1$"
+grep -q "^j@e3,e2e4: 1$" <<< "${out}"
 
 # Jump-assisted en passant captures both the double-stepped pawn and an
 # opposing piece on the jumped-over square. A friendly piece blocks it.
 out=$(run_cmds "position startpos moves j@g8,g1h3 f@a5,b7b5 d2d3 j@a2,g7g5 f@h8,a1a5 b8a6 j@c7,b1c3 f@g7,g5g4 a2a4 j@h3,a6b4 f@e8,h2h4
 go perft 1")
-echo "${out}" | grep -q "^g4h3: 1$"
+grep -q "^g4h3: 1$" <<< "${out}"
 
 out=$(run_cmds "position startpos moves j@g8,g1h3 f@a5,b7b5 d2d3 j@a2,g7g5 f@h8,a1a5 b8a6 j@c7,b1c3 f@g7,g5g4 a2a4 j@h3,a6b4 f@e8,h2h4 g4h3
 d")
-echo "${out}" | grep -q "^Fen: r1bqkbnr/p1pppp1p/8/Rp6/Pn6/2NP3p/1PP1PPP1/2BQKB1R\\[FFFfff\\] w Kkq - 0 7 - <2 0 0 1>$"
+grep -q "^Fen: r1bqkbnr/p1pppp1p/8/Rp6/Pn6/2NP3p/1PP1PPP1/2BQKB1R\\[FFFfff\\] w Kkq - 0 7 - <2 0 0 1>$" <<< "${out}"
 
 out=$(run_cmds "position fen 4k3/8/8/8/6pP/7n/8/4K3[] b - h3 0 1
 go perft 1")
