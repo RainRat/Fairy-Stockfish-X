@@ -167,6 +167,12 @@ nMoveRuleImmediate = -1
 [invalid-nmove-immediate-overflow:chess]
 nMoveRuleImmediate = 1073741825
 
+[invalid-nmove-negative:chess]
+nMoveRule = -1
+
+[invalid-nmove-overflow:chess]
+nMoveRule = 1073741825
+
 [invalid-connect-n-too-large:chess]
 connectN = 9
 
@@ -543,6 +549,7 @@ assert_contains_literal "${initial_capture_output}" "multimoves - Derived cycle 
 assert_contains_literal "${initial_capture_output}" "dropNoDoubledCount - Invalid negative value."
 assert_contains_literal "${initial_capture_output}" "Potion cooldown must be between 0 and 65536."
 assert_contains_literal "${initial_capture_output}" "removeConnectN - Value must be in range [0,"
+assert_contains_literal "${initial_capture_output}" "nMoveRule must be between 0 and 1073741824."
 assert_contains_literal "${initial_capture_output}" "nMoveRuleImmediate must be between 0 and 1073741824."
 assert_contains_literal "${initial_capture_output}" "connectN must be between 0 and the largest board dimension."
 assert_contains_literal "${initial_capture_output}" "connectNxN must be -1, 0, or no larger than the smallest board dimension."

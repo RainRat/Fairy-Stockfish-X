@@ -178,6 +178,22 @@ else
   echo "border-chess variant not available in this build; skipping Border Chess regressions"
 fi
 
+out=$(run_uci "$ENGINE" "$VARIANTS" opposite-castling <<'UCI'
+position fen r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1 moves e1g1
+go perft 1
+UCI
+)
+assert_contains_literal "$out" "e8c8: 1" "opposite castling preserves the opposite-side right"
+assert_not_contains_literal "$out" "e8g8: 1" "opposite castling removes the same-side right"
+
+out=$(run_uci "$ENGINE" "$VARIANTS" opposite-castling <<'UCI'
+position fen r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1 moves e1c1
+go perft 1
+UCI
+)
+assert_contains_literal "$out" "e8g8: 1" "opposite queenside castling preserves the opposite-side right"
+assert_not_contains_literal "$out" "e8c8: 1" "opposite queenside castling removes the same-side right"
+
 out=$(run_uci "$ENGINE" "$VARIANTS" checkers <<'UCI'
 position fen 8/8/5m2/4M3/8/2K5/8/7K b - - 0 1 moves f6d4 0000
 d

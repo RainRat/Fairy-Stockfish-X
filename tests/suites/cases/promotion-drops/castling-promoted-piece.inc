@@ -78,6 +78,22 @@ grep -F "e8c8: 1" <<<"$WITH_CASTLE" >/dev/null || {
     exit 1
 }
 
+AFTER_PROMOTION_SEARCH="$(
+cat <<EOF | "$ENGINE"
+setoption name VariantPath value $TMP_VARIANTS
+setoption name UCI_Variant value castle-promo-on
+position fen $PROMO_FEN moves a7a8r e1d1
+go perft 1
+quit
+EOF
+)"
+
+grep -F "e8c8: 1" <<<"$AFTER_PROMOTION_SEARCH" >/dev/null || {
+    echo "expected promoted-castling rights to survive do/undo after a reply"
+    echo "$AFTER_PROMOTION_SEARCH"
+    exit 1
+}
+
 WITHOUT_RIGHTS="$(
 cat <<EOF | "$ENGINE"
 setoption name VariantPath value $TMP_VARIANTS
