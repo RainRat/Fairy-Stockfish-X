@@ -1265,6 +1265,18 @@ moves_loop: // When in check, search starts from here
       // Calculate new depth for this move
       newDepth = depth - 1;
 
+      // A forced-jump continuation pass is bookkeeping between two captures,
+      // so it should not consume a search ply.
+      if (is_pass(move)
+          && pos.forced_jump_continuation()
+          && pos.has_forced_jump_followup())
+      {
+          Square forcedSquare = pos.forced_jump_square();
+          Piece forcedPiece = pos.piece_on(forcedSquare);
+          if (forcedPiece != NO_PIECE && color_of(forcedPiece) != us)
+              ++newDepth;
+      }
+
       // Step 13. Pruning at shallow depth (~200 Elo)
       if (  !rootNode
           && (pos.non_pawn_material(us) || pos.count<ALL_PIECES>(us) == pos.count<PAWN>(us))

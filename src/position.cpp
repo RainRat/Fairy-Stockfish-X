@@ -7349,6 +7349,9 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   assert(is_ok(m));
   assert(&newSt != st);
 
+  const bool openingSelfRemoval = in_opening_self_removal_phase()
+                               && is_opening_self_removal_move(m);
+
 #ifndef NO_THREADS
   if (countNode && thisThread)
       thisThread->nodes.fetch_add(1, std::memory_order_relaxed);
@@ -7484,7 +7487,6 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   }
 
   Square moverSq = rifleShot ? from : to;
-  bool openingSelfRemoval = in_opening_self_removal_phase() && is_opening_self_removal_move(m);
   auto set_castling_right_hashed = [&](Color c, Square sq) {
       int oldRights = st->castlingRights;
       set_castling_right(c, sq);

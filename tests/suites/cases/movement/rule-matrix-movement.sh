@@ -147,6 +147,13 @@ UCI
 assert_contains_literal "$out" "Nodes searched:" "Konane opening has removals"
 assert_not_contains_literal "$out" "0000: 1" "Konane removals are not rendered as passes"
 
+out=$(run_uci "$ENGINE" "$VARIANTS" konane <<'UCI'
+position fen MmMmMmMmMm/mMmMmMmMmM/MmMmMmMmMm/mMmMmMmMmM/MmMmMmMmMm/mMmMmMmMmM/MmMmMmMmMm/mMmMmMmMmM/MmMmMmMmMm/mMmMmMmMmM w - - 0 1 moves j1j1 i1i1
+go perft 1
+UCI
+)
+assert_contains_literal "$out" "j3j1: 1" "Konane opening removals leave a jump"
+
 out=$(run_uci "$ENGINE" "$VARIANTS" checkers <<'UCI'
 position fen 8/8/5m2/4M3/8/2K5/8/7K b - - 0 1 moves f6d4 0000
 d
