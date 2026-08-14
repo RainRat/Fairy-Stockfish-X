@@ -158,6 +158,26 @@ else
   echo "konane variant not available in this build; skipping Konane opening regressions"
 fi
 
+if variant_available "$ENGINE" border-chess "$VARIANTS"; then
+  out=$(run_uci "$ENGINE" "$VARIANTS" border-chess <<'UCI'
+position startpos
+go perft 1
+UCI
+  )
+  assert_contains_literal "$out" "b2a2: 1" "Border Chess allows a rook onto the border"
+  assert_contains_literal "$out" "f2f1: 1" "Border Chess allows a king onto the border"
+
+  out=$(run_uci "$ENGINE" "$VARIANTS" border-chess <<'UCI'
+position fen 10/1r3k2r1/10/10/10/10/10/10/1R3K2R1/10 w KQkq - 0 1
+go perft 1
+UCI
+  )
+  assert_contains_literal "$out" "f2h2: 1" "Border Chess preserves kingside castling"
+  assert_contains_literal "$out" "f2d2: 1" "Border Chess preserves queenside castling"
+else
+  echo "border-chess variant not available in this build; skipping Border Chess regressions"
+fi
+
 out=$(run_uci "$ENGINE" "$VARIANTS" checkers <<'UCI'
 position fen 8/8/5m2/4M3/8/2K5/8/7K b - - 0 1 moves f6d4 0000
 d
