@@ -35,6 +35,7 @@ TRAPS = frozenset(("c3", "f3", "c6", "f6"))
 STANDARD_SETUP_FEN = "cdhmehdc/rrrrrrrr/8/8/8/8/RRRRRRRR/CDHMEHDC w - - 0 1"
 
 AEI_STEP_RE = re.compile(r"^([RCDHMErcdhme])([a-h][1-8])([nesw])$")
+AEI_TRAP_RE = re.compile(r"^([RCDHMErcdhme])([a-h][1-8])x$")
 COORD_RE = re.compile(r"^[a-h][1-8]$")
 FSX_COORD_RE = re.compile(r"^([a-h][1-8])([a-h][1-8])$")
 
@@ -591,7 +592,18 @@ def parse_aei_move(payload: str) -> list[PhysicalStep]:
     payload = payload.strip()
     if not payload or payload in {"pass", "0000", "(none)"}:
         raise TournamentError(f"empty/pass AEI move is illegal: {payload!r}")
-    return [PhysicalStep.from_aei(token) for token in payload.split()]
+    steps = []
+    for token in payload.split():
+        # Akimot annotates a step that leaves an unsupported trap occupant as
+        # an additional `PieceSquarex` record.  Trap removal is already
+        # applied by the independent referee after each physical step, so the
+        # annotation is informational and consumes no step.
+        if AEI_TRAP_RE.fullmatch(token):
+            continue
+        steps.append(PhysicalStep.from_aei(token))
+    if not steps:
+        raise TournamentError(f"AEI move contains no physical steps: {payload!r}")
+    return steps
 
 
 def _fsx_coordinate(board: ArimaaBoard, text: str) -> tuple[str, str, PhysicalStep]:
@@ -775,11 +787,12 @@ class FSXAdapter(ProcessAdapter):
         self.send("isready")
         self.wait_for("readyok")
 
-    def bestmove(self, history: list[str]) -> str:
-        command = f"position fen {STANDARD_SETUP_FEN}"
-        if history:
-            command += " moves " + " ".join(history)
-        self.send(command)
+    def bestmove(self, state: ArimaaState) -> str:
+        # The referee owns the completed-turn boundary position.  Loading it
+        # directly avoids replaying compact push notation: a from-to push does
+        # not encode the enemy's sideways destination, while the boundary FEN
+        # does encode the authoritative result.
+        self.send(f"position fen {state.fen()}")
         self.send(f"go depth {self.depth}")
         line = self.wait_for("bestmove ")
         return line[len("bestmove "):].strip()
@@ -819,7 +832,6 @@ def run_game(game_number: int, gold_engine: str, args: argparse.Namespace, log) 
     akimot = AEIAdapter(args.akimot, "Akimot", args.timeout)
     adapters = {"fsx": fsx, "akimot": akimot}
     state = ArimaaState.standard_setup()
-    history: list[str] = []
     records: list[dict] = []
     try:
         fsx.start()
@@ -830,7 +842,7 @@ def run_game(game_number: int, gold_engine: str, args: argparse.Namespace, log) 
                 break
             engine_name = next(name for name, side in assignments.items() if side == state.board.side)
             adapter = adapters[engine_name]
-            raw = adapter.bestmove(history) if engine_name == "fsx" else adapter.bestmove(state)
+            raw = adapter.bestmove(state)
             if engine_name == "fsx":
                 physical = parse_fsx_move(state, raw)
             else:
@@ -854,7 +866,6 @@ def run_game(game_number: int, gold_engine: str, args: argparse.Namespace, log) 
                 log.write(json.dumps(record, sort_keys=True) + "\n")
                 log.flush()
             state = result.state
-            history.append(result.fsx())
         else:
             state.winner = None
             state.reason = "turn-limit"
