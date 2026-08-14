@@ -59,6 +59,11 @@ class ArimaaTournamentTests(unittest.TestCase):
         result = state.apply_turn(parse_aei_move("Rc2n"))
         self.assertNotIn("c3", result.state.board.board)
 
+    def test_akimot_trap_annotation_is_not_a_physical_step(self):
+        state = ArimaaState.from_fen("8/8/8/8/8/8/2R5/8 w - - 0 1")
+        result = state.apply_turn(parse_aei_move("Rc2n Rc3x"))
+        self.assertNotIn("c3", result.state.board.board)
+
     def test_friendly_support_preserves_trap_piece(self):
         state = ArimaaState.from_fen("8/8/8/8/8/1R6/2R5/8 w - - 0 1")
         result = state.apply_turn(parse_aei_move("Rc2n"))

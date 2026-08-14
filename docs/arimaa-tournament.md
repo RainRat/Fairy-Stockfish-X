@@ -9,6 +9,8 @@ turn representation, applies pushes and pulls atomically, enforces the official
 four-physical-step maximum, removes unsupported trap pieces, and performs
 goal, rabbit-loss, no-move, and repetition adjudication. A push may therefore
 occupy two physical steps even though FSX represents it as one compact move.
+It also accepts Akimot's `PieceSquarex` trap-removal annotations as
+non-physical records; the referee performs the removal itself.
 
 The initial version starts from the completed standard profile position used by
 the Arimaa smoke tests. It does not generate setup placements and does not
@@ -32,7 +34,7 @@ directly.
 ```sh
 python3 tools/arimaa_tournament.py \
   --fsx src/stockfish-arimaa-large \
-  --akimot '/path/to/akimot -e' \
+  --akimot "sh -c 'cd /path/to/akimot && exec ./akimot -e'" \
   --variant-path src/variants.ini \
   --depth 2 \
   --games 20 \
