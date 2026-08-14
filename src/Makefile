@@ -45,6 +45,10 @@ SRCS = benchmark.cpp bitbase.cpp bitboard.cpp endgame.cpp evaluate.cpp main.cpp 
 	partner.cpp parser.cpp piece.cpp variant.cpp apiutil.cpp xboard.cpp \
 	nnue/features/half_ka_v2_variants.cpp
 
+ifeq ($(arimaa),yes)
+SRCS += arimaa.cpp
+endif
+
 OBJS = $(notdir $(SRCS:.cpp=.o))
 
 VPATH = syzygy:nnue:nnue/features
@@ -61,6 +65,8 @@ endif
 #
 # flag                --- Comp switch      --- Description
 # ----------------------------------------------------------------------------
+#
+# arimaa = yes/no     --- -DENABLE_ARIMAA --- Enable the isolated complete-turn Arimaa path
 #
 # debug = yes/no      --- -DNDEBUG         --- Enable/Disable debug mode
 # sanitize = none/<sanitizer> ... (-fsanitize )
@@ -97,6 +103,7 @@ endif
 largeboards = no
 verylargeboards = no
 all = no
+arimaa = no
 precomputedmagics = yes
 nnue = no
 load_net = $(if $(filter $(nnue),yes),net)
@@ -320,6 +327,12 @@ endif
 # Enable all variants, even heavyweight ones like duck and amazons
 ifneq ($(all),no)
 	CXXFLAGS += -DALLVARS
+endif
+
+# Enable the isolated complete-turn Arimaa subsystem. Ordinary builds keep
+# this disabled so orthodox search paths do not carry Arimaa-specific logic.
+ifeq ($(arimaa),yes)
+	CXXFLAGS += -DENABLE_ARIMAA
 endif
 
 ifeq ($(COMP),)
@@ -731,6 +744,8 @@ else
 	@echo ""
 	@echo "make build ARCH=x86-64 largeboards=yes all=yes"
 	@echo "make build ARCH=x86-64 verylargeboards=yes all=yes"
+	@echo "Build the complete-turn Arimaa research path: "
+	@echo "make build ARCH=x86-64 largeboards=yes all=yes nnue=yes arimaa=yes"
 	@echo ""
 endif
 
@@ -853,6 +868,7 @@ config-sanity: $(load_net)
 	@echo "largeboards: '$(largeboards)'"
 	@echo "verylargeboards: '$(verylargeboards)'"
 	@echo "all: '$(all)'"
+	@echo "arimaa: '$(arimaa)'"
 	@echo "precomputedmagics: '$(precomputedmagics)'"
 	@echo "nnue: '$(nnue)'"
 	@echo ""
@@ -882,6 +898,7 @@ config-sanity: $(load_net)
 	@test "$(vnni256)" = "yes" || test "$(vnni256)" = "no"
 	@test "$(vnni512)" = "yes" || test "$(vnni512)" = "no"
 	@test "$(neon)" = "yes" || test "$(neon)" = "no"
+	@test "$(arimaa)" = "yes" || test "$(arimaa)" = "no"
 	@test "$(comp)" = "gcc" || test "$(comp)" = "icc" || test "$(comp)" = "mingw" || test "$(comp)" = "clang" \
 	|| test "$(comp)" = "aarch64-linux-android21-clang"
 

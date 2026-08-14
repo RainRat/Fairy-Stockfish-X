@@ -63,7 +63,7 @@ fsx_build_signature() {
 
 fsx_build_profile() {
   local arch=x86-64-modern board=normal largeboards=no verylargeboards=no
-  local all=no nnue=no debug=no optimize=yes
+  local all=no arimaa=no nnue=no debug=no optimize=yes
   local compiler="${CXX:-g++}" compiler_kind="${COMP:-native}" arg
 
   for arg in "$@"; do
@@ -72,6 +72,7 @@ fsx_build_profile() {
       largeboards=*) largeboards="${arg#largeboards=}" ;;
       verylargeboards=*) verylargeboards="${arg#verylargeboards=}" ;;
       all=*) all="${arg#all=}" ;;
+      arimaa=*) arimaa="${arg#arimaa=}" ;;
       nnue=*) nnue="${arg#nnue=}" ;;
       debug=*) debug="${arg#debug=}" ;;
       optimize=*) optimize="${arg#optimize=}" ;;
@@ -85,8 +86,8 @@ fsx_build_profile() {
     board=large
   fi
 
-  printf 'arch=%s;board=%s;all=%s;nnue=%s;debug=%s;optimize=%s;compiler=%s;comp=%s\n' \
-    "$arch" "$board" "$all" "$nnue" "$debug" "$optimize" "$compiler" "$compiler_kind"
+  printf 'arch=%s;board=%s;all=%s;arimaa=%s;nnue=%s;debug=%s;optimize=%s;compiler=%s;comp=%s\n' \
+    "$arch" "$board" "$all" "$arimaa" "$nnue" "$debug" "$optimize" "$compiler" "$compiler_kind"
 }
 
 fsx_build_signature_matches() {

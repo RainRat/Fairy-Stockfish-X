@@ -63,6 +63,11 @@ enum class TrapProtection {
   FRIENDLY_ORTHOGONAL
 };
 
+enum class FreezeProtection {
+  NONE,
+  FRIENDLY_ORTHOGONAL
+};
+
 enum class SeePruningPolicy : uint8_t {
   RELIABLE,
   MOVE_SENSITIVE,
@@ -124,8 +129,10 @@ struct ColorSetting {
 };
 
 struct Variant {
+  static constexpr int MAX_COMPOUND_TURN_STEPS = 16;
   std::string name = "";
   std::string variantTemplate = "fairy";
+  bool arimaa = false;
   std::string pieceToCharTable = "-";
   int pocketSize = 0;
   Rank maxRank = RANK_8;
@@ -207,6 +214,9 @@ struct Variant {
   LibertyAction libertySelfCapture = LibertyAction::NONE;
   PieceSet freezePieceTypes = NO_PIECE_SET;
   PieceSet freezeImmunePieceTypes = NO_PIECE_SET;
+  int freezeStrength[PIECE_TYPE_NB] = {};
+  bool hasFreezeStrength = false;
+  FreezeProtection freezeProtection = FreezeProtection::NONE;
   bool freezeDiagonals = true;
   TrapProtection trapProtection = TrapProtection::NONE;
   Bitboard trapRegion = 0;
@@ -425,6 +435,7 @@ struct Variant {
   bool freeDrops = false;
   bool payPointsToDrop = false;
   bool passUntilSetup = false;
+  int compoundTurnSteps = 0;
 
   enum PotionType : int {
       POTION_FREEZE,

@@ -93,6 +93,12 @@ void Thread::clear() {
   lowPlyHistory.fill(0);
   captureHistory.fill(0);
 
+#ifdef ENABLE_ARIMAA
+  arimaaBestTurn = ArimaaTurn{};
+  arimaaBestScore = -VALUE_INFINITE;
+  arimaaCompletedDepth = 0;
+#endif
+
   for (bool inCheck : { false, true })
       for (StatsType c : { NoCaptures, Captures })
       {

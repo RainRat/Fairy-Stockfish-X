@@ -27,6 +27,9 @@
 #include <vector>
 
 #include "material.h"
+#ifdef ENABLE_ARIMAA
+#include "arimaa.h"
+#endif
 #include "movepick.h"
 #include "pawns.h"
 #include "position.h"
@@ -78,6 +81,12 @@ public:
   CapturePieceToHistory captureHistory;
   ContinuationHistory continuationHistory[2][2];
   Score trend;
+
+#ifdef ENABLE_ARIMAA
+  ArimaaTurn arimaaBestTurn;
+  Value arimaaBestScore = -VALUE_INFINITE;
+  Depth arimaaCompletedDepth = 0;
+#endif
 
   ExtMove* acquire_buffer() {
     if (availableBuffers.empty()) {
