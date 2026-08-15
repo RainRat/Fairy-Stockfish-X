@@ -62,6 +62,22 @@ EOF
 )
 assert_contains "$out" "^bestmove a2a3$"
 
+# Active node and time limits must stop ordinary turn search, not just setup
+# parsing or invalid root restrictions.
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
+position fen cdhmehdc/rrrrrrrr/8/8/8/8/RRRRRRRR/CDHMEHDC w - - 0 1
+go nodes 1
+EOF
+)
+assert_contains "$out" "^bestmove [a-h][1-8]"
+
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
+position fen cdhmehdc/rrrrrrrr/8/8/8/8/RRRRRRRR/CDHMEHDC w - - 0 1
+go movetime 1
+EOF
+)
+assert_contains "$out" "^bestmove [a-h][1-8]"
+
 out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
 position fen cdhmehdc/rrrrrrrr/8/8/8/8/RRRRRRRR/CDHMEHDC w - - 0 1
 go depth 1 searchmoves invalid
@@ -76,15 +92,15 @@ EOF
 )
 assert_contains "$out" "^bestmove \\(none\\)$"
 
-# A depth-1 child can have physical pieces on the board but no legal complete
-# turn. The terminal probe must run before static evaluation at the cutoff.
+# A completed-turn boundary with a rabbit already extinct is terminal even
+# when the side to move still has an ordinary physical move available.
 out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
 setoption name Verbosity value 1
 position fen 8/8/8/3Dr3/8/8/R7/8 w - - 0 1
 go depth 1 searchmoves a2a3
 EOF
 )
-assert_contains "$out" "^bestmove a2a3$"
+assert_contains "$out" "^bestmove \\(none\\)$"
 
 out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
 position startpos

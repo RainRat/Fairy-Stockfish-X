@@ -4498,9 +4498,7 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
       || var->blastPassiveTypes
       || var->captureMorph
       || var->hasMoveMorph
-#ifdef ENABLE_ARIMAA
       || var->hasFreezeStrength
-#endif
       || var->stackingPieceTypes
       || var->stackedPieceTypes
       || commit_gates()

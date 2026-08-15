@@ -914,8 +914,8 @@ def run_game(game_number: int, gold_engine: str, args: argparse.Namespace, log) 
                 log.flush()
             state = result.state
         else:
-            state.winner = None
-            state.reason = "turn-limit"
+            if state.winner is None:
+                state.reason = "turn-limit"
     finally:
         fsx.close()
         akimot.close()
