@@ -5431,10 +5431,8 @@ bool Position::arimaa_push_legal(Move m) const {
           return false;
   }
 
-#ifdef ENABLE_ARIMAA
-  if (compound_turn_active() && compound_turn_step() + 2 > compound_turn_steps())
+  if (var->arimaa && compound_turn_active() && compound_turn_step() + 2 > compound_turn_steps())
       return false;
-#endif
 
   return !violates_same_player_board_repetition(m);
 }
@@ -5926,7 +5924,9 @@ bool Position::legal(Move m) const {
 #ifdef ENABLE_ARIMAA
   if (compound_turn_active())
   {
-      if (!is_pass(m) && st->compoundTurnStep >= var->compoundTurnSteps)
+      if (!is_pass(m)
+          && (st->compoundTurnStep >= var->compoundTurnSteps
+              || st->compoundTurnStep + (is_arimaa_two_step(m) ? 2 : 1) > var->compoundTurnSteps))
           return false;
   }
   else if (var->multimoveOffset || var->progressiveMultimove)
@@ -6509,7 +6509,8 @@ bool Position::pseudo_legal(const Move m) const {
 #ifdef ENABLE_ARIMAA
   if (compound_turn_active()
       && !is_pass(m)
-      && st->compoundTurnStep >= var->compoundTurnSteps)
+      && (st->compoundTurnStep >= var->compoundTurnSteps
+          || st->compoundTurnStep + (is_arimaa_two_step(m) ? 2 : 1) > var->compoundTurnSteps))
       return false;
 #endif
 
@@ -7349,7 +7350,6 @@ Bitboard Position::freeze_squares_from_freezers(Color c, const SimulatedMoveInfo
     if (!var->freezePieceTypes)
         return Bitboard(0);
 
-#ifdef ENABLE_ARIMAA
     // Some variants, notably Arimaa, make freezing strength-sensitive: an
     // adjacent enemy freezes a weaker piece, but not an equal or stronger
     // one. Keep the long-standing adjacency-only behavior as the fast path
@@ -7399,7 +7399,6 @@ Bitboard Position::freeze_squares_from_freezers(Color c, const SimulatedMoveInfo
         }
         return frozen;
     }
-#endif
 
     Bitboard freezers;
     Bitboard targets;
@@ -7596,7 +7595,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
 #ifdef ENABLE_ARIMAA
   const bool compoundTurn = compound_turn_active();
   const bool arimaaSetupDrop = var->arimaa && !st->compoundTurnReady && is_drop_move(m);
-  const bool arimaaSetupContinues = arimaaSetupDrop && has_setup_drop(sideToMove);
+  const bool arimaaSetupContinues = arimaaSetupDrop
+                                  && count_in_hand(sideToMove, ALL_PIECES) > 1;
   const int moveCost = var->arimaa && is_arimaa_two_step(m) ? 2 : 1;
   const bool compoundTurnEnds = (!compoundTurn && !arimaaSetupContinues)
                               || is_pass(m)
@@ -9502,8 +9502,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   if (var->compoundTurnSteps && !st->compoundTurnReady
       && !has_setup_drop(WHITE) && !has_setup_drop(BLACK))
       st->compoundTurnReady = true;
-  sideToMove = arimaaSetupDrop && has_setup_drop(us)
-             ? us : compoundTurnEnds ? them : us;
+  sideToMove = arimaaSetupContinues ? us : compoundTurnEnds ? them : us;
 #else
   sideToMove = them;
 #endif

@@ -2255,6 +2255,13 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
         valid = false;
     }
 
+    if (v->compoundTurnSteps && !v->arimaa)
+    {
+        if (DoCheck)
+            std::cerr << "turnSteps requires arimaa=true." << std::endl;
+        valid = false;
+    }
+
     if (v->arimaa)
     {
         if (v->compoundTurnSteps < 1 || v->compoundTurnSteps > 4)

@@ -175,7 +175,9 @@ namespace {
   // the thinking time and other parameters from the input string, then starts
   // the search.
 
-  void go(Position& pos, istringstream& is, StateListPtr& states, const std::vector<Move>& banmoves = {}) {
+  void go(Position& pos, istringstream& is, StateListPtr& states,
+           const std::vector<Move>& banmoves = {},
+           const std::vector<std::string>& arimaaBanMoves = {}) {
 
     Search::LimitsType limits;
     string token;
@@ -184,13 +186,17 @@ namespace {
     limits.startTime = now(); // As early as possible!
 
     limits.banmoves = banmoves;
+    limits.arimaaBanMoves = arimaaBanMoves;
     bool isUsi = CurrentProtocol == USI;
     int secResolution = Options["usemillisec"] ? 1 : 1000;
 
     while (is >> token)
         if (token == "searchmoves") // Needs to be the last command on the line
             while (is >> token)
-                limits.searchmoves.push_back(UCI::to_move(pos, token));
+                if (pos.variant()->arimaa)
+                    limits.arimaaSearchMoves.push_back(token);
+                else
+                    limits.searchmoves.push_back(UCI::to_move(pos, token));
 
         else if (token == "wtime")     is >> limits.time[isUsi ? BLACK : WHITE];
         else if (token == "btime")     is >> limits.time[isUsi ? WHITE : BLACK];
@@ -452,6 +458,7 @@ void UCI::loop(int argc, char* argv[]) {
   XBoard::stateMachine = new XBoard::StateMachine(pos, states);
   // UCCI banmoves state
   std::vector<Move> banmoves = {};
+  std::vector<std::string> arimaaBanMoves = {};
 
   if (argc > 1 && (std::strcmp(argv[1], "noautoload") == 0))
   {
@@ -520,9 +527,12 @@ void UCI::loop(int argc, char* argv[]) {
       // UCCI-specific banmoves command
       else if (token == "banmoves")
           while (is >> token)
-              banmoves.push_back(UCI::to_move(pos, token));
-      else if (token == "go")         go(pos, is, states, banmoves);
-      else if (token == "position")   position(pos, is, states), banmoves.clear();
+              if (pos.variant()->arimaa)
+                  arimaaBanMoves.push_back(token);
+              else
+                  banmoves.push_back(UCI::to_move(pos, token));
+      else if (token == "go")         go(pos, is, states, banmoves, arimaaBanMoves);
+      else if (token == "position")   position(pos, is, states), banmoves.clear(), arimaaBanMoves.clear();
       else if (token == "ucinewgame" || token == "usinewgame" || token == "uccinewgame") Search::clear();
       else if (token == "isready")    sync_cout << "readyok" << sync_endl;
       else if (token == "help")

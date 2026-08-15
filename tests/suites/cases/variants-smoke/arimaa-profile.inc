@@ -35,6 +35,38 @@ EOF
 )
 assert_contains "$out" "^bestmove [A-Z]@[a-h][1-8]$"
 
+# Completing both setup pockets changes the side to move and enters the first
+# ordinary complete turn. This exercises the final placement on each side.
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
+position startpos moves R@a1 R@b1 R@c1 R@d1 R@e1 R@f1 R@g1 R@h1 C@a2 C@b2 D@c2 D@d2 H@e2 H@f2 M@g2 E@h2 R@a8 R@b8 R@c8 R@d8 R@e8 R@f8 R@g8 R@h8 C@a7 C@b7 D@c7 D@d7 H@e7 H@f7 M@g7 E@h7
+d
+EOF
+)
+assert_contains "$out" "^Fen: rrrrrrrr/ccddhhme/8/8/8/8/CCDDHHME/RRRRRRRR\\[\\] w - - 0 1$"
+
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
+position startpos moves R@a1 R@b1 R@c1 R@d1 R@e1 R@f1 R@g1 R@h1 C@a2 C@b2 D@c2 D@d2 H@e2 H@f2 M@g2 E@h2 R@a8 R@b8 R@c8 R@d8 R@e8 R@f8 R@g8 R@h8 C@a7 C@b7 D@c7 D@d7 H@e7 H@f7 M@g7 E@h7
+go depth 1
+EOF
+)
+assert_contains "$out" "^bestmove [a-h][1-8]"
+
+# Whole-turn root restrictions are honored by the Arimaa search path.
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
+position fen cdhmehdc/rrrrrrrr/8/8/8/8/RRRRRRRR/CDHMEHDC w - - 0 1
+go depth 1 searchmoves a2a3
+EOF
+)
+assert_contains "$out" "^bestmove a2a3$"
+
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
+position fen cdhmehdc/rrrrrrrr/8/8/8/8/RRRRRRRR/CDHMEHDC w - - 0 1
+banmoves a2a3
+go depth 1
+EOF
+)
+assert_not_contains "$out" "^bestmove a2a3$"
+
 # Incremental setup keys agree with a freshly parsed position whose pocket has
 # already lost the placed rabbit, even though the side to move is unchanged.
 key_out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
