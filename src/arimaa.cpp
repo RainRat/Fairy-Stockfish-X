@@ -50,10 +50,6 @@ int arimaa_move_cost(Move move) {
     return is_arimaa_two_step(move) ? 2 : 1;
 }
 
-bool arimaa_goal_reached(const Position& pos) {
-    return pos.flag_reached(WHITE) || pos.flag_reached(BLACK);
-}
-
 std::string arimaa_step_to_string(Position& pos, Move move) {
     if (!is_arimaa_push(move))
         return UCI::move(pos, move);
@@ -86,14 +82,22 @@ void generate_turns(Position& pos,
         turn.length = uint8_t(depth + 1);
 
         pos.do_move(move, states[depth], false);
-        if (pos.board_layout_key() != startBoardKey)
+        bool repetitionIllegal = false;
+        if (usedSteps + moveCost < ArimaaTurn::MAX_STEPS)
+        {
+            StateInfo boundaryState;
+            pos.end_compound_turn(boundaryState);
+            repetitionIllegal = pos.arimaa_repetition_illegal();
+            pos.undo_compound_turn();
+        }
+        else
+            repetitionIllegal = pos.arimaa_repetition_illegal();
+
+        if (pos.board_layout_key() != startBoardKey && !repetitionIllegal)
             turns.push_back(turn);
 
-        Value result;
         if (usedSteps + moveCost < ArimaaTurn::MAX_STEPS
-            && pos.compound_turn_active()
-            && !arimaa_goal_reached(pos)
-            && !pos.is_game_end(result))
+            && pos.compound_turn_active())
             generate_turns(pos, turns, turn, states, depth + 1,
                            usedSteps + moveCost, startBoardKey);
 
@@ -109,7 +113,8 @@ std::vector<ArimaaTurn> generate_arimaa_turns(Position& pos) {
   if (!pos.variant()->arimaa || !pos.compound_turn_active())
       return turns;
 
-  if (arimaa_goal_reached(pos))
+  Value result;
+  if (pos.is_game_end(result))
       return turns;
 
   ArimaaTurn turn;
@@ -181,6 +186,31 @@ bool parse_arimaa_turn(Position& pos, const std::string& text, ArimaaTurn& turn)
   };
 
   if (!parse(0, 0))
+      return false;
+
+  int turnCost = 0;
+  for (int i = 0; i < parsed.length; ++i)
+  {
+      turnCost += arimaa_move_cost(parsed.steps[i]);
+      pos.do_move(parsed.steps[i], states[i], false);
+  }
+
+  const bool partialTurn = turnCost < pos.compound_turn_steps();
+  bool repetitionIllegal = false;
+  if (partialTurn)
+  {
+      StateInfo boundaryState;
+      pos.end_compound_turn(boundaryState);
+      repetitionIllegal = pos.arimaa_repetition_illegal();
+      pos.undo_compound_turn();
+  }
+  else
+      repetitionIllegal = pos.arimaa_repetition_illegal();
+
+  for (int i = parsed.length - 1; i >= 0; --i)
+      pos.undo_move(parsed.steps[i]);
+
+  if (repetitionIllegal)
       return false;
 
   turn = parsed;
@@ -352,8 +382,13 @@ void search_arimaa(Thread& thread) {
   const int maxDepth = Search::Limits.depth > 0 ? Search::Limits.depth : MAX_PLY;
   for (int depth = 1; depth <= maxDepth; ++depth)
   {
-      if (Threads.stop && thread.arimaaBestTurn.length)
-          break;
+      if (thread.arimaaBestTurn.length)
+      {
+          if (&thread == Threads.main())
+              Threads.main()->check_time();
+          if (arimaa_should_stop(thread))
+              break;
+      }
 
       std::vector<ArimaaTurn> turns = generate_arimaa_turns(pos);
       Value bestScore = -VALUE_INFINITE;
@@ -362,8 +397,13 @@ void search_arimaa(Thread& thread) {
       {
           // Always complete at least one root turn so a GUI receives a legal
           // bestmove even if stop/quit arrives while the search is starting.
-          if (Threads.stop && bestTurn.length)
-              break;
+          if (bestTurn.length)
+          {
+              if (&thread == Threads.main())
+                  Threads.main()->check_time();
+              if (arimaa_should_stop(thread))
+                  break;
+          }
 
           alignas(Eval::NNUE::CacheLineSize) StateInfo states[ArimaaTurn::MAX_STEPS + 1];
           do_arimaa_turn(pos, turn, states);
@@ -392,11 +432,10 @@ void search_arimaa(Thread& thread) {
                         << sync_endl;
       }
 
-      if (Search::Limits.depth > 0)
-          break;
   }
 
-  Threads.stop = true;
+  if (&thread == Threads.main())
+      Threads.stop = true;
 }
 
 } // namespace Stockfish

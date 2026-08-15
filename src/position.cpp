@@ -1420,6 +1420,27 @@ bool Position::violates_same_player_board_repetition(Move m) const {
   return repeated;
 }
 
+#ifdef ENABLE_ARIMAA
+
+bool Position::arimaa_repetition_illegal() const {
+
+  if (!var->arimaa || !compound_turn_active() || st->compoundTurnStep != 0
+      || !st->compoundTurnReady)
+      return false;
+
+  int occurrences = 1;
+  for (const StateInfo* previous = st->previous; previous; previous = previous->previous)
+      if (previous->compoundTurnReady
+          && previous->compoundTurnStep == 0
+          && previous->boardKey == st->boardKey
+          && ++occurrences >= 3)
+          return true;
+
+  return false;
+}
+
+#endif
+
 
 /// Position::init() initializes at startup the various arrays used to compute hash keys
 
