@@ -11,7 +11,7 @@ jobs:
     name: ${{ matrix.config.name }}
     runs-on: ${{ matrix.config.os }}
     env:
-      COMPILER: ${{ matrix.config.compiler }}
+      CXX: ${{ matrix.config.compiler }}
       COMP: ${{ matrix.config.comp }}
       CXXFLAGS: "-Werror"
       FSX_ENGINE_FAMILY: large
