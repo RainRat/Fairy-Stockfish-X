@@ -542,6 +542,9 @@ void search_arimaa(Thread& thread) {
       MoveList<LEGAL> moves(pos);
       for (const auto& move : moves)
       {
+          if (is_pass(move))
+              continue;
+
           ArimaaTurn turn;
           turn.steps[0] = move.move;
           turn.length = 1;
@@ -589,6 +592,9 @@ void search_arimaa(Thread& thread) {
           }
           break;
       }
+
+      if (!foundTurn)
+          break;
 
       if (bestTurn.length)
       {
