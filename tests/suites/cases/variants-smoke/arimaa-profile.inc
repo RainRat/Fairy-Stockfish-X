@@ -97,6 +97,30 @@ EOF
 )
 assert_contains "$out" "^d3d2,e3: 1$"
 
+# A temporary return to the starting layout may be followed by a real step,
+# but a completed turn may not be a whole-turn pass.
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
+position fen 8/8/8/8/8/8/R1R5/8 w - - 0 1 moves a2b2,b2a2,a2a3
+d
+EOF
+)
+assert_contains "$out" "^Fen: 8/8/8/8/8/R7/2R5/8\[\] b - - 1 1$"
+
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
+position fen 8/8/8/8/8/8/R1R5/8 w - - 0 1
+go perft 1
+EOF
+)
+assert_not_contains "$out" "^a2b2,b2a2: 1$"
+
+# Goal positions are terminal at the next turn boundary.
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
+position fen R7/8/8/8/8/8/8/8 b - - 0 1
+go perft 1
+EOF
+)
+assert_nodes "$out" "0"
+
 # Arimaa push adjacency is orthogonal; diagonal king-neighborhood squares are
 # not valid pusher or pushed-piece destinations.
 out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'

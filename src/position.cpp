@@ -1362,6 +1362,10 @@ Key Position::layout_key() const {
   return k;
 }
 
+Key Position::board_layout_key() const {
+  return layout_key();
+}
+
 Key Position::compute_piece_state_key() const {
   Key k = 0;
   for (PieceSet ps = var->orientedPieceTypes; ps; )

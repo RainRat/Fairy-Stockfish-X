@@ -50,6 +50,10 @@ int arimaa_move_cost(Move move) {
     return is_arimaa_two_step(move) ? 2 : 1;
 }
 
+bool arimaa_goal_reached(const Position& pos) {
+    return pos.flag_reached(WHITE) || pos.flag_reached(BLACK);
+}
+
 std::string arimaa_step_to_string(Position& pos, Move move) {
     if (!is_arimaa_push(move))
         return UCI::move(pos, move);
@@ -64,7 +68,8 @@ void generate_turns(Position& pos,
                     ArimaaTurn& turn,
                     StateInfo* states,
                     int depth,
-                    int usedSteps)
+                    int usedSteps,
+                    Key startBoardKey)
 {
     MoveList<LEGAL> moves(pos);
 
@@ -81,13 +86,16 @@ void generate_turns(Position& pos,
         turn.length = uint8_t(depth + 1);
 
         pos.do_move(move, states[depth], false);
-        turns.push_back(turn);
+        if (pos.board_layout_key() != startBoardKey)
+            turns.push_back(turn);
 
         Value result;
         if (usedSteps + moveCost < ArimaaTurn::MAX_STEPS
             && pos.compound_turn_active()
+            && !arimaa_goal_reached(pos)
             && !pos.is_game_end(result))
-            generate_turns(pos, turns, turn, states, depth + 1, usedSteps + moveCost);
+            generate_turns(pos, turns, turn, states, depth + 1,
+                           usedSteps + moveCost, startBoardKey);
 
         pos.undo_move(move);
     }
@@ -101,9 +109,12 @@ std::vector<ArimaaTurn> generate_arimaa_turns(Position& pos) {
   if (!pos.variant()->arimaa || !pos.compound_turn_active())
       return turns;
 
+  if (arimaa_goal_reached(pos))
+      return turns;
+
   ArimaaTurn turn;
   alignas(Eval::NNUE::CacheLineSize) StateInfo states[ArimaaTurn::MAX_STEPS];
-  generate_turns(pos, turns, turn, states, 0, 0);
+  generate_turns(pos, turns, turn, states, 0, 0, pos.board_layout_key());
   return turns;
 }
 
@@ -114,6 +125,7 @@ bool parse_arimaa_turn(Position& pos, const std::string& text, ArimaaTurn& turn)
 
   ArimaaTurn parsed;
   alignas(Eval::NNUE::CacheLineSize) StateInfo states[ArimaaTurn::MAX_STEPS];
+  const Key startBoardKey = pos.board_layout_key();
 
   // Commas are retained as the turn separator for the simple coordinate
   // notation requested by the GUI contract.  They are also part of FSX's
@@ -150,7 +162,8 @@ bool parse_arimaa_turn(Position& pos, const std::string& text, ArimaaTurn& turn)
           pos.do_move(move, states[index], false);
           const int nextUsedSteps = usedSteps + moveCost;
 
-          bool accepted = next == text.size();
+          bool accepted = next == text.size()
+                       && pos.board_layout_key() != startBoardKey;
           if (!accepted)
               accepted = parse(next + 1, nextUsedSteps);
 
