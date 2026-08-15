@@ -7595,6 +7595,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
 #endif
 #ifdef ENABLE_ARIMAA
   const bool compoundTurn = compound_turn_active();
+  const bool arimaaSetupDrop = var->arimaa && !st->compoundTurnReady && is_drop_move(m);
   const int moveCost = var->arimaa && is_arimaa_two_step(m) ? 2 : 1;
   const bool compoundTurnEnds = !compoundTurn
                               || is_pass(m)
@@ -9500,7 +9501,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   if (var->compoundTurnSteps && !st->compoundTurnReady
       && !has_setup_drop(WHITE) && !has_setup_drop(BLACK))
       st->compoundTurnReady = true;
-  sideToMove = compoundTurnEnds ? them : us;
+  sideToMove = arimaaSetupDrop && has_setup_drop(us)
+             ? us : compoundTurnEnds ? them : us;
 #else
   sideToMove = them;
 #endif
@@ -9601,7 +9603,10 @@ void Position::undo_move(Move m) {
   assert(is_ok(m));
 
 #ifdef ENABLE_ARIMAA
-  if (var->compoundTurnSteps == 0 || st->compoundTurnStep == 0)
+  const bool arimaaSetupDrop = var->arimaa && !st->previous->compoundTurnReady
+                             && is_drop_move(m)
+                             && st->dropHandColor == sideToMove;
+  if (!arimaaSetupDrop && (var->compoundTurnSteps == 0 || st->compoundTurnStep == 0))
       sideToMove = ~sideToMove;
 #else
   sideToMove = ~sideToMove;
@@ -10151,9 +10156,12 @@ void Position::end_compound_turn(StateInfo& newSt) {
   st->legalEnPassant = NO_VALUE;
   st->chased = Bitboard(0);
 
+  st->key = st->previous->key;
   st->key ^= Zobrist::side
           ^ Zobrist::compoundTurn[previousStep]
           ^ Zobrist::compoundTurn[0];
+  st->accumulator.computed[WHITE] = false;
+  st->accumulator.computed[BLACK] = false;
   st->boardKey = st->key ^ st->reserveKey;
   if (var->samePlayerBoardRepetitionIllegal)
       st->layoutKey = layout_key();
@@ -10849,6 +10857,19 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
   // because they cannot be captured directly.
   if (var->extinctionValue.get(WHITE) != VALUE_NONE || var->extinctionValue.get(BLACK) != VALUE_NONE)
   {
+#ifdef ENABLE_ARIMAA
+      // Arimaa awards simultaneous rabbit extinction to the player who just
+      // moved. At a completed-turn boundary that is the opponent of the side
+      // to move, so report a loss for the current side before generic
+      // per-color extinction ordering gets a chance to choose a winner.
+      if (var->arimaa && compound_turn_active() && st->compoundTurnStep == 0
+          && count_with_hand(WHITE, CUSTOM_PIECE_1) == 0
+          && count_with_hand(BLACK, CUSTOM_PIECE_1) == 0)
+      {
+          result = extinction_value(sideToMove, ply);
+          return true;
+      }
+#endif
       for (Color c : { ~sideToMove, sideToMove })
       {
           if (var->extinctionValue.get(c) == VALUE_NONE)

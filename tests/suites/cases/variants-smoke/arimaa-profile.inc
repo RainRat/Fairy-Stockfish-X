@@ -20,6 +20,14 @@ EOF
 assert_nodes "$out" "96"
 assert_contains "$out" "^R@a1: 1$"
 
+# Standard setup keeps the placer on move until that side's pocket is empty.
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
+position startpos moves R@a1
+d
+EOF
+)
+assert_contains "$out" "^Fen: 8/8/8/8/8/8/8/R7\\[.*\\] w - - 0 1$"
+
 # Once setup is supplied, the perft root is made of complete-turn candidates.
 # Prefixes are retained as legal early-ending turns, so this count includes
 # one-, two-, three-, and four-step turns.
@@ -134,6 +142,14 @@ assert_contains "$out" "^a2b2,b1,h7h6: 1$"
 # Rabbit elimination is also a completed-turn terminal condition.
 out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
 position fen 7r/8/8/8/8/8/8/E7 w - - 0 1
+go perft 1
+EOF
+)
+assert_nodes "$out" "0"
+
+# Simultaneous rabbit elimination is won by the player who completed the turn.
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
+position fen 8/8/8/8/8/2REr3/8/8 w - - 0 1 moves d3e3,f3
 go perft 1
 EOF
 )

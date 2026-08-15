@@ -307,7 +307,8 @@ Value search_arimaa_turns(Position& pos,
                           ArimaaTT& tt,
                           int depth,
                           Value alpha,
-                          Value beta) {
+                          Value beta,
+                          bool& aborted) {
 
   const Value originalAlpha = alpha;
 
@@ -316,6 +317,11 @@ Value search_arimaa_turns(Position& pos,
       return result;
   if (depth <= 0)
       return Eval::evaluate(pos);
+  if (arimaa_should_stop(thread))
+  {
+      aborted = true;
+      return VALUE_DRAW;
+  }
 
   auto ttIt = tt.find(pos.key());
   if (ttIt != tt.end() && ttIt->second.depth >= depth)
@@ -339,13 +345,19 @@ Value search_arimaa_turns(Position& pos,
   for (const ArimaaTurn& turn : turns)
   {
       if (arimaa_should_stop(thread))
+      {
+          aborted = true;
           break;
+      }
 
       alignas(Eval::NNUE::CacheLineSize) StateInfo states[ArimaaTurn::MAX_STEPS + 1];
       do_arimaa_turn(pos, turn, states);
       thread.nodes.fetch_add(1, std::memory_order_relaxed);
-      Value value = -search_arimaa_turns(pos, thread, tt, depth - 1, -beta, -alpha);
+      Value value = -search_arimaa_turns(pos, thread, tt, depth - 1, -beta, -alpha, aborted);
       undo_arimaa_turn(pos, turn);
+
+      if (aborted)
+          return VALUE_DRAW;
 
       if (value > best)
       {
@@ -360,7 +372,7 @@ Value search_arimaa_turns(Position& pos,
   if (best == -VALUE_INFINITE)
       return VALUE_DRAW;
 
-  if (tt.size() < (1u << 20) || tt.find(pos.key()) != tt.end())
+  if (!aborted && (tt.size() < (1u << 20) || tt.find(pos.key()) != tt.end()))
       tt[pos.key()] = {depth, best,
                        best >= beta ? BOUND_LOWER
                        : best <= originalAlpha ? BOUND_UPPER : BOUND_EXACT,
@@ -393,6 +405,7 @@ void search_arimaa(Thread& thread) {
       std::vector<ArimaaTurn> turns = generate_arimaa_turns(pos);
       Value bestScore = -VALUE_INFINITE;
       ArimaaTurn bestTurn;
+      bool aborted = false;
       for (const ArimaaTurn& turn : turns)
       {
           // Always complete at least one root turn so a GUI receives a legal
@@ -402,20 +415,39 @@ void search_arimaa(Thread& thread) {
               if (&thread == Threads.main())
                   Threads.main()->check_time();
               if (arimaa_should_stop(thread))
+              {
+                  aborted = true;
                   break;
+              }
           }
 
           alignas(Eval::NNUE::CacheLineSize) StateInfo states[ArimaaTurn::MAX_STEPS + 1];
           do_arimaa_turn(pos, turn, states);
           thread.nodes.fetch_add(1, std::memory_order_relaxed);
-          Value score = -search_arimaa_turns(pos, thread, tt, depth - 1, -VALUE_INFINITE, VALUE_INFINITE);
+          Value score = -search_arimaa_turns(pos, thread, tt, depth - 1,
+                                              -VALUE_INFINITE, VALUE_INFINITE, aborted);
           undo_arimaa_turn(pos, turn);
+
+          if (aborted)
+              break;
 
           if (score > bestScore)
           {
               bestScore = score;
               bestTurn = turn;
           }
+      }
+
+      if (aborted)
+      {
+          // Keep a legal fallback if the very first iteration is interrupted,
+          // but never present that partial iteration as completed.
+          if (!thread.arimaaBestTurn.length && bestTurn.length)
+          {
+              thread.arimaaBestTurn = bestTurn;
+              thread.arimaaBestScore = bestScore;
+          }
+          break;
       }
 
       if (bestTurn.length)
