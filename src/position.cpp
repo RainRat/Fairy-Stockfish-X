@@ -7598,6 +7598,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   const bool arimaaSetupContinues = arimaaSetupDrop
                                   && count_in_hand(sideToMove, ALL_PIECES) > 1;
   const int moveCost = var->arimaa && is_arimaa_two_step(m) ? 2 : 1;
+  const int plyCost = arimaaSetupDrop ? 0 : moveCost;
   const bool compoundTurnEnds = (!compoundTurn && !arimaaSetupContinues)
                               || is_pass(m)
                               || st->compoundTurnStep + moveCost >= var->compoundTurnSteps;
@@ -7609,6 +7610,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
          ^ Zobrist::compoundTurn[compoundTurnStep];
 #else
   const int moveCost = 1;
+  const int plyCost = moveCost;
   Key k = st->key ^ Zobrist::side;
 #endif
 
@@ -7640,12 +7642,12 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
 
   // Increment ply counters. In particular, rule50 will be reset to zero later on
   // in case of a capture or a pawn move.
-  gamePly += moveCost;
+  gamePly += plyCost;
   if (!currentMultimovePass && !currentClaimPass)
-      st->rule50 += moveCost;
-  st->pliesFromNull += moveCost;
+      st->rule50 += plyCost;
+  st->pliesFromNull += plyCost;
   if (st->countingLimit)
-      st->countingPly += moveCost;
+      st->countingPly += plyCost;
 
   Color us = sideToMove;
   Color them = ~us;
@@ -10040,7 +10042,9 @@ void Position::undo_move(Move m) {
 
   // Finally point our state pointer back to the previous state
   int compoundTurnStepsToRestore = 0;
+  bool arimaaSetupPlacement = false;
 #ifdef ENABLE_ARIMAA
+  arimaaSetupPlacement = var->arimaa && !st->previous->compoundTurnReady && is_drop_move(m);
   if (var->compoundTurnSteps && st->compoundTurnStep == 0 && st->previous
       && st->previous->compoundTurnStep > 0)
       compoundTurnStepsToRestore = st->previous->compoundTurnStep;
@@ -10049,7 +10053,9 @@ void Position::undo_move(Move m) {
   std::copy(std::begin(st->castlingRightsMask), std::end(st->castlingRightsMask), std::begin(castlingRightsMask));
   std::copy(std::begin(st->castlingRookSquare), std::end(st->castlingRookSquare), std::begin(castlingRookSquare));
   std::copy(std::begin(st->castlingPath), std::end(st->castlingPath), std::begin(castlingPath));
-  gamePly -= compoundTurnStepsToRestore
+  gamePly -= arimaaSetupPlacement
+           ? 0
+           : compoundTurnStepsToRestore
            ? 1 : (var->arimaa && is_arimaa_two_step(m) ? 2 : 1);
   gamePly += compoundTurnStepsToRestore;
   updatePawnCheckZone();
@@ -10298,7 +10304,6 @@ Key Position::key_after(Move m) const {
   Square to = to_sq(m);
   Piece pc = moved_piece(m);
 #ifdef ENABLE_ARIMAA
-  const bool arimaaPushMove = is_arimaa_push(m);
   const bool compoundTurn = compound_turn_active();
   const bool arimaaSetupDrop = var->arimaa && !st->compoundTurnReady && is_drop_move(m);
   const bool arimaaSetupContinues = arimaaSetupDrop

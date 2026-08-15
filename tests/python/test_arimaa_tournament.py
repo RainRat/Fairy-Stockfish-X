@@ -10,6 +10,7 @@ from arimaa_tournament import (  # noqa: E402
     ArimaaState,
     STANDARD_SETUP_FEN,
     TournamentError,
+    fsx_position_command,
     parse_aei_move,
     parse_fsx_move,
 )
@@ -98,6 +99,17 @@ class ArimaaTournamentTests(unittest.TestCase):
     def test_no_move_is_detected_for_a_frozen_side(self):
         state = ArimaaState.from_fen("8/8/8/8/8/3Re3/8/8 w - - 0 1")
         self.assertFalse(state.has_legal_turn())
+
+    def test_fsx_position_replays_history_for_repetition(self):
+        state = ArimaaState.from_fen("8/8/8/8/8/8/R6r/8 w - - 0 1")
+        for turn in ("Ra2e", "rh2w", "Rb2w", "rg2e",
+                     "Ra2e", "rh2w", "Rb2w"):
+            state = state.apply_turn(parse_aei_move(turn)).state
+
+        command = fsx_position_command(state)
+        self.assertIn("position fen 8/8/8/8/8/8/R6r/8 w - - 0 1 moves ", command)
+        self.assertEqual(command.count("a2b2"), 2)
+        self.assertEqual(command.count("h2g2"), 2)
 
 
 if __name__ == "__main__":

@@ -51,6 +51,9 @@ EOF
 )
 assert_contains "$out" "^bestmove [a-h][1-8]"
 
+# Native state coverage verifies setup does not advance gamePly or rule50.
+"${ROOT_DIR}/tests/native/engine-rules.sh" "$ENGINE" "$VARIANT_PATH" arimaa-setup
+
 # Whole-turn root restrictions are honored by the Arimaa search path.
 out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
 position fen cdhmehdc/rrrrrrrr/8/8/8/8/RRRRRRRR/CDHMEHDC w - - 0 1

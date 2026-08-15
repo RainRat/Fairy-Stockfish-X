@@ -1054,6 +1054,41 @@ void composable_rules() {
           "castling onto an unprotected trap square removed the royal");
 }
 
+#ifdef ENABLE_ARIMAA
+void arimaa_setup() {
+    Position pos;
+    StateListPtr states;
+    set_position(pos, states, "arimaa",
+                 "8/8/8/8/8/8/8/8[RRRRRRRRCCDDHHMErrrrrrrrccddhhme] w - - 0 1");
+
+    const std::vector<const char*> placements = {
+      "R@a1", "R@b1", "R@c1", "R@d1", "R@e1", "R@f1", "R@g1", "R@h1",
+      "C@a2", "C@b2", "D@c2", "D@d2", "H@e2", "H@f2", "M@g2", "E@h2",
+      "R@a8", "R@b8", "R@c8", "R@d8", "R@e8", "R@f8", "R@g8", "R@h8",
+      "C@a7", "C@b7", "D@c7", "D@d7", "H@e7", "H@f7", "M@g7", "E@h7"
+    };
+    std::vector<Move> moves;
+    for (const char* notation : placements)
+    {
+        Move move = parse_move(pos, notation);
+        moves.push_back(move);
+        states->emplace_back();
+        pos.do_move(move, states->back());
+    }
+
+    check(pos.game_ply() == 0, "Arimaa setup placements advanced gamePly");
+    check(pos.rule50_count() == 0, "Arimaa setup placements advanced rule50");
+    check(pos.side_to_move() == WHITE, "completed Arimaa setup did not start Gold");
+
+    for (auto it = moves.rbegin(); it != moves.rend(); ++it)
+    {
+        pos.undo_move(*it);
+        states->pop_back();
+    }
+    check(pos.game_ply() == 0, "undoing Arimaa setup changed gamePly");
+}
+#endif
+
 void extinction_color_settings() {
     Position pos;
     StateListPtr states;
@@ -2201,7 +2236,11 @@ int main(int argc, char** argv) {
             return name == "all" || name == "promotion" || name == "movement"
                 || name == "locust-all" || name == "occupancy" || name == "state" || name == "royal"
                 || name == "adjudication" || name == "board-games" || name == "composable-rules"
-                || name == "extinction-color";
+                || name == "extinction-color"
+#ifdef ENABLE_ARIMAA
+                || name == "arimaa-setup"
+#endif
+                ;
         };
         bool first_is_group = argc > 1 && is_group(argv[1]);
         std::string config_path = first_is_group ? "src/variants.ini"
@@ -2221,6 +2260,9 @@ int main(int argc, char** argv) {
           {"extinction-color", extinction_color_settings},
           {"locust-all", locust_all},
           {"composable-rules", composable_rules},
+#ifdef ENABLE_ARIMAA
+          {"arimaa-setup", arimaa_setup},
+#endif
           {"state", state}, {"royal", royal}, {"adjudication", adjudication},
           {"board-games", board_games}
         };
