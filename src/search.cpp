@@ -244,7 +244,7 @@ void MainThread::search() {
   }
 
 #ifdef ENABLE_ARIMAA
-  if (rootPos.variant()->arimaa && rootPos.compound_turn_active())
+  if (rootPos.variant()->arimaa)
   {
       Time.init(rootPos, Limits, rootPos.side_to_move(), rootPos.game_ply());
       callsCnt = 1;
@@ -419,7 +419,7 @@ void MainThread::search() {
 
 void Thread::search() {
 #ifdef ENABLE_ARIMAA
-  if (rootPos.variant()->arimaa && rootPos.compound_turn_active())
+  if (rootPos.variant()->arimaa)
   {
       search_arimaa(*this);
       return;

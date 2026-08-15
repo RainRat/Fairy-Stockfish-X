@@ -128,6 +128,10 @@ bool parse_arimaa_turn(Position& pos, const std::string& text, ArimaaTurn& turn)
   if (!pos.variant()->arimaa || !pos.compound_turn_active() || text.empty())
       return false;
 
+  Value result;
+  if (pos.is_game_end(result))
+      return false;
+
   ArimaaTurn parsed;
   alignas(Eval::NNUE::CacheLineSize) StateInfo states[ArimaaTurn::MAX_STEPS];
   const Key startBoardKey = pos.board_layout_key();
@@ -140,8 +144,8 @@ bool parse_arimaa_turn(Position& pos, const std::string& text, ArimaaTurn& turn)
   // "a2a3,b2b3" remains two ordinary steps.  A semicolon is accepted as an
   // unambiguous separator for clients that prefer one.
   std::function<bool(size_t, int)> parse = [&](size_t offset, int usedSteps) {
-      if (offset == text.size())
-          return parsed.length > 0;
+      if (offset >= text.size())
+          return false;
       if (parsed.length >= ArimaaTurn::MAX_STEPS)
           return false;
 
@@ -167,9 +171,10 @@ bool parse_arimaa_turn(Position& pos, const std::string& text, ArimaaTurn& turn)
           pos.do_move(move, states[index], false);
           const int nextUsedSteps = usedSteps + moveCost;
 
-          bool accepted = next == text.size()
-                       && pos.board_layout_key() != startBoardKey;
-          if (!accepted)
+          bool accepted = false;
+          if (next == text.size())
+              accepted = pos.board_layout_key() != startBoardKey;
+          else
               accepted = parse(next + 1, nextUsedSteps);
 
           if (accepted)
@@ -388,6 +393,22 @@ void search_arimaa(Thread& thread) {
   thread.arimaaBestTurn = ArimaaTurn{};
   thread.arimaaBestScore = -VALUE_INFINITE;
   thread.arimaaCompletedDepth = 0;
+
+  // Setup is not a compound turn: the placer may make many consecutive
+  // drops, while ordinary negamax would incorrectly negate after each one.
+  // Return a legal placement directly until both pockets are empty.
+  if (!pos.compound_turn_active())
+  {
+      MoveList<LEGAL> moves(pos);
+      if (moves.begin() != moves.end())
+      {
+          thread.arimaaBestTurn.steps[0] = moves.begin()->move;
+          thread.arimaaBestTurn.length = 1;
+          thread.arimaaBestScore = VALUE_DRAW;
+      }
+      return;
+  }
+
   ArimaaTT tt;
   tt.reserve(1u << 16);
 

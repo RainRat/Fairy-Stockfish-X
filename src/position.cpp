@@ -7596,8 +7596,9 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
 #ifdef ENABLE_ARIMAA
   const bool compoundTurn = compound_turn_active();
   const bool arimaaSetupDrop = var->arimaa && !st->compoundTurnReady && is_drop_move(m);
+  const bool arimaaSetupContinues = arimaaSetupDrop && has_setup_drop(sideToMove);
   const int moveCost = var->arimaa && is_arimaa_two_step(m) ? 2 : 1;
-  const bool compoundTurnEnds = !compoundTurn
+  const bool compoundTurnEnds = (!compoundTurn && !arimaaSetupContinues)
                               || is_pass(m)
                               || st->compoundTurnStep + moveCost >= var->compoundTurnSteps;
   const uint8_t compoundTurnStep = compoundTurn && !compoundTurnEnds
@@ -10300,8 +10301,11 @@ Key Position::key_after(Move m) const {
 #ifdef ENABLE_ARIMAA
   const bool arimaaPushMove = is_arimaa_push(m);
   const bool compoundTurn = compound_turn_active();
+  const bool arimaaSetupDrop = var->arimaa && !st->compoundTurnReady && is_drop_move(m);
+  const bool arimaaSetupContinues = arimaaSetupDrop
+                                  && count_in_hand(sideToMove, ALL_PIECES) > 1;
   const int moveCost = var->arimaa && is_arimaa_two_step(m) ? 2 : 1;
-  const bool compoundTurnEnds = !compoundTurn
+  const bool compoundTurnEnds = (!compoundTurn && !arimaaSetupContinues)
                               || is_pass(m)
                               || st->compoundTurnStep + moveCost >= var->compoundTurnSteps;
   Key k = st->key ^ (compoundTurnEnds ? Zobrist::side : 0);
@@ -10851,6 +10855,27 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
               result = c == sideToMove ? pseudo_royal_value(ply) : -pseudo_royal_value(ply);
               return true;
           }
+
+#ifdef ENABLE_ARIMAA
+  // Arimaa checks goals at the completed-turn boundary in mover-first order.
+  // The generic flag rule assumes that flagMove controls whether the side to
+  // move gets an extra chance, which misses an opponent rabbit pushed onto its
+  // goal row when flagMove is false.
+  if (var->arimaa && compound_turn_active() && st->compoundTurnStep == 0)
+  {
+      const Color mover = ~sideToMove;
+      if (flag_reached(mover))
+      {
+          result = mated_in(ply);
+          return true;
+      }
+      if (flag_reached(sideToMove))
+      {
+          result = mate_in(ply);
+          return true;
+      }
+  }
+#endif
 
   // Extinction
   // Extinction does not apply for pseudo-royal pieces in normal capture rules,

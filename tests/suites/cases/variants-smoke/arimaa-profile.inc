@@ -28,6 +28,28 @@ EOF
 )
 assert_contains "$out" "^Fen: 8/8/8/8/8/8/8/R7\\[.*\\] w - - 0 1$"
 
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
+position startpos
+go depth 8
+EOF
+)
+assert_contains "$out" "^bestmove [A-Z]@[a-h][1-8]$"
+
+# Incremental setup keys agree with a freshly parsed position whose pocket has
+# already lost the placed rabbit, even though the side to move is unchanged.
+key_out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
+position startpos moves R@a1
+d
+EOF
+)
+setup_key=$(sed -n 's/^Key: //p' <<<"$key_out")
+fresh_out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
+position fen 8/8/8/8/8/8/8/R7[EMHHDDCCRRRRRRRemhhddccrrrrrrrr] w - - 0 1
+d
+EOF
+)
+assert_contains "$fresh_out" "^Key: $setup_key$"
+
 # Once setup is supplied, the perft root is made of complete-turn candidates.
 # Prefixes are retained as legal early-ending turns, so this count includes
 # one-, two-, three-, and four-step turns.
@@ -121,9 +143,26 @@ EOF
 )
 assert_not_contains "$out" "^a2b2,b2a2: 1$"
 
+# The same whole-turn no-op is rejected by protocol replay without crashing.
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
+position fen 8/7r/8/8/8/8/R1R5/8 w - - 0 1 moves a2b2,b2a2
+d
+EOF
+)
+assert_contains "$out" "^Fen: 8/7r/8/8/8/8/R1R5/8\\[\\] w - - 0 1$"
+
 # Goal positions are terminal at the next turn boundary.
 out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
 position fen R7/8/8/8/8/8/8/8 b - - 0 1
+go perft 1
+EOF
+)
+assert_nodes "$out" "0"
+
+# A rabbit pushed onto the opponent's goal row wins for that opponent at the
+# completed boundary, even when the rabbit remains mobile after the push.
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
+position fen C7/eR6/7r/8/8/8/8/8 b - - 0 1 moves a7b7,b8
 go perft 1
 EOF
 )
@@ -163,6 +202,15 @@ go perft 1
 EOF
 )
 assert_not_contains "$out" "^f7g7: 1$"
+
+# A one-step protocol turn uses the same repetition validation as a compound
+# token, so an illegal third occurrence is rejected during position replay.
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
+position fen 8/6er/8/8/8/8/E7/R7 w - - 0 1 moves a2b2 g7f7 b2a2 f7g7 a2b2 g7f7 b2a2 f7g7
+d
+EOF
+)
+assert_contains "$out" "^Fen: 8/5e1r/8/8/8/8/E7/R7\\[\\] b - - 7 4$"
 
 # Arimaa push adjacency is orthogonal; diagonal king-neighborhood squares are
 # not valid pusher or pushed-piece destinations.
