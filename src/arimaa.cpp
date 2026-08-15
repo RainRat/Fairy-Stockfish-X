@@ -10,6 +10,7 @@
 #include "evaluate.h"
 #include "movegen.h"
 #include "position.h"
+#include "search.h"
 #include "thread.h"
 #include "uci.h"
 
@@ -375,6 +376,7 @@ bool search_arimaa_turn_candidates(Position& pos,
                                    Value& best,
                                    ArimaaTurn& bestTurn,
                                    bool& foundTurn,
+                                   uint64_t& visitedMoves,
                                    ArimaaTurn& turn,
                                    StateInfo* states,
                                    int stepDepth,
@@ -388,7 +390,9 @@ bool search_arimaa_turn_candidates(Position& pos,
 
   for (const auto& move : moves)
   {
-      if ((rootSearchMoves == nullptr || foundTurn) && arimaa_should_stop(thread))
+      ++visitedMoves;
+      if ((rootSearchMoves == nullptr || foundTurn || !(visitedMoves & 1023))
+          && arimaa_should_stop(thread))
       {
           aborted = true;
           return false;
@@ -460,8 +464,8 @@ bool search_arimaa_turn_candidates(Position& pos,
           && pos.compound_turn_active())
           keepSearching = search_arimaa_turn_candidates(
             pos, thread, depth, alpha, beta, aborted, best, bestTurn, foundTurn,
-            turn, states, stepDepth + 1, usedSteps + moveCost, startBoardKey,
-            rootSearchMoves, rootSearchMovesSpecified, rootBanMoves);
+            visitedMoves, turn, states, stepDepth + 1, usedSteps + moveCost,
+            startBoardKey, rootSearchMoves, rootSearchMovesSpecified, rootBanMoves);
 
       pos.undo_move(move);
       if (!keepSearching)
@@ -498,11 +502,13 @@ Value search_arimaa_turns(Position& pos,
   Value best = -VALUE_INFINITE;
   ArimaaTurn bestTurn;
   bool foundTurn = false;
+  uint64_t visitedMoves = 0;
   ArimaaTurn turn;
   alignas(Eval::NNUE::CacheLineSize) StateInfo states[ArimaaTurn::MAX_STEPS];
   search_arimaa_turn_candidates(pos, thread, depth, alpha, beta, aborted,
-                                best, bestTurn, foundTurn, turn, states, 0, 0,
-                                pos.board_layout_key(), nullptr, false, nullptr);
+                                best, bestTurn, foundTurn, visitedMoves, turn,
+                                states, 0, 0, pos.board_layout_key(), nullptr,
+                                false, nullptr);
 
   if (aborted)
       return VALUE_DRAW;
@@ -564,12 +570,13 @@ void search_arimaa(Thread& thread) {
       ArimaaTurn bestTurn;
       bool aborted = false;
       bool foundTurn = false;
+      uint64_t visitedMoves = 0;
       ArimaaTurn turn;
       alignas(Eval::NNUE::CacheLineSize) StateInfo states[ArimaaTurn::MAX_STEPS];
       search_arimaa_turn_candidates(
         pos, thread, depth, -VALUE_INFINITE, -bestScore, aborted, bestScore,
-        bestTurn, foundTurn, turn, states, 0, 0, pos.board_layout_key(),
-        &searchMoves, searchMovesSpecified, &banMoves);
+        bestTurn, foundTurn, visitedMoves, turn, states, 0, 0,
+        pos.board_layout_key(), &searchMoves, searchMovesSpecified, &banMoves);
 
       if (aborted)
       {
