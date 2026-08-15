@@ -314,7 +314,7 @@ void undo_arimaa_turn(Position& pos, const ArimaaTurn& turn) {
 std::string arimaa_turn_to_string(Position& pos, const ArimaaTurn& turn) {
 
   std::string result;
-  alignas(Eval::NNUE::CacheLineSize) StateInfo states[ArimaaTurn::MAX_STEPS + 1];
+  alignas(Eval::NNUE::CacheLineSize) StateInfo states[ArimaaTurn::MAX_STEPS];
   int turnCost = 0;
 
   for (int i = 0; i < turn.length; ++i)
@@ -339,6 +339,9 @@ std::string arimaa_turn_to_string(Position& pos, const ArimaaTurn& turn) {
 
 uint64_t arimaa_perft(Position& pos, int depth, bool root) {
 
+  if (depth <= 0)
+      return 1;
+
   uint64_t nodes = 0;
   for (const ArimaaTurn& turn : generate_arimaa_turns(pos))
   {
@@ -347,7 +350,7 @@ uint64_t arimaa_perft(Position& pos, int depth, bool root) {
           count = 1;
       else
       {
-          alignas(Eval::NNUE::CacheLineSize) StateInfo states[ArimaaTurn::MAX_STEPS + 1];
+          alignas(Eval::NNUE::CacheLineSize) StateInfo states[ArimaaTurn::MAX_STEPS];
           do_arimaa_turn(pos, turn, states);
           count = arimaa_perft(pos, depth - 1, false);
           undo_arimaa_turn(pos, turn);
@@ -429,6 +432,8 @@ bool search_arimaa_turn_candidates(Position& pos,
       if (allowed && pos.board_layout_key() != startBoardKey && !repetitionIllegal)
       {
           foundTurn = true;
+          if (!bestTurn.length)
+              bestTurn = turn;
           Value value;
           if (usedSteps + moveCost < pos.compound_turn_steps())
           {
@@ -463,10 +468,15 @@ bool search_arimaa_turn_candidates(Position& pos,
 
       if (keepSearching && usedSteps + moveCost < pos.compound_turn_steps()
           && pos.compound_turn_active())
+      {
           keepSearching = search_arimaa_turn_candidates(
             pos, thread, depth, alpha, beta, aborted, best, bestTurn, foundTurn,
             visitedMoves, turn, states, stepDepth + 1, usedSteps + moveCost,
             startBoardKey, rootSearchMoves, rootSearchMovesSpecified, rootBanMoves);
+
+          alpha = std::max(alpha, best);
+          keepSearching = keepSearching && alpha < beta;
+      }
 
       pos.undo_move(move);
       if (!keepSearching)
@@ -565,6 +575,17 @@ void search_arimaa(Thread& thread) {
       return;
   }
 
+  // A parsed root restriction is already a legal turn. Keep it as a fallback
+  // in case a strict limit fires before the filtered turn reaches evaluation.
+  if (searchMovesSpecified)
+      for (const ArimaaTurn& candidate : searchMoves)
+          if (root_turn_allowed(candidate, searchMoves, searchMovesSpecified, banMoves))
+          {
+              thread.arimaaBestTurn = candidate;
+              thread.arimaaBestScore = VALUE_DRAW;
+              break;
+          }
+
   const int maxDepth = Search::Limits.depth > 0 ? Search::Limits.depth : MAX_PLY;
   for (int depth = 1; depth <= maxDepth; ++depth)
   {
@@ -593,7 +614,7 @@ void search_arimaa(Thread& thread) {
           if (!thread.arimaaBestTurn.length && bestTurn.length)
           {
               thread.arimaaBestTurn = bestTurn;
-              thread.arimaaBestScore = bestScore;
+              thread.arimaaBestScore = bestScore == -VALUE_INFINITE ? VALUE_DRAW : bestScore;
           }
           break;
       }
