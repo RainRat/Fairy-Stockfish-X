@@ -64,6 +64,30 @@ assert_contains "$out" "^bestmove a2a3$"
 
 out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
 position fen cdhmehdc/rrrrrrrr/8/8/8/8/RRRRRRRR/CDHMEHDC w - - 0 1
+go depth 1 searchmoves invalid
+EOF
+)
+assert_contains "$out" "^bestmove \\(none\\)$"
+
+# A depth-1 child can have physical pieces on the board but no legal complete
+# turn. The terminal probe must run before static evaluation at the cutoff.
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
+setoption name Verbosity value 1
+position fen 8/8/8/3Dr3/8/8/R7/8 w - - 0 1
+go depth 1 searchmoves a2a3
+EOF
+)
+assert_contains "$out" "^bestmove a2a3$"
+
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
+position startpos
+go depth 1 searchmoves invalid
+EOF
+)
+assert_contains "$out" "^bestmove \\(none\\)$"
+
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
+position fen cdhmehdc/rrrrrrrr/8/8/8/8/RRRRRRRR/CDHMEHDC w - - 0 1
 banmoves a2a3
 go depth 1
 EOF
@@ -103,7 +127,7 @@ go depth 1
 EOF
 )
 assert_contains "$out" "^bestmove [a-h][1-8]"
-assert_not_contains "$out" "^bestmove (none)"
+assert_not_contains "$out" "^bestmove \\(none\\)"
 
 # A single protocol step is an early-completed turn. Arimaa FEN remains at a
 # turn boundary and never exposes the engine's internal continuation state.
