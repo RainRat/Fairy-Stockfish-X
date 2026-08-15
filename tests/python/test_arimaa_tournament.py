@@ -48,9 +48,9 @@ class ArimaaTournamentTests(unittest.TestCase):
     def test_push_is_atomic_and_round_trips_fsx_notation(self):
         state = ArimaaState.from_fen("8/8/8/8/8/8/8/3Er3 w - - 0 1")
         result = state.apply_turn(parse_aei_move("re1e Ed1e"))
-        self.assertEqual(result.fsx(), "d1e1")
+        self.assertEqual(result.fsx(), "d1e1,f1")
 
-        translated = parse_fsx_move(state, "d1e1")
+        translated = parse_fsx_move(state, "d1e1,f1")
         self.assertEqual([step.aei() for step in translated], ["re1e", "Ed1e"])
         self.assertEqual(state.apply_turn(translated).state.board.board, result.state.board.board)
 

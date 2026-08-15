@@ -150,7 +150,7 @@ class Action:
         if self.kind == "push":
             # Official push order is enemy first, then the stronger piece.
             enemy, pusher = self.steps
-            return pusher.src + pusher.dst
+            return f"{pusher.src}{pusher.dst},{enemy.dst}"
         if self.kind == "pull":
             pusher, enemy = self.steps
             return f"{pusher.src}{pusher.dst},{enemy.src}"
@@ -637,12 +637,20 @@ def parse_fsx_move(state: ArimaaState, payload: str) -> list[PhysicalStep]:
         # boundary after the secondary square to avoid reading the first two
         # characters of the next ordinary coordinate move.
         if len(prefix) >= 7 and prefix[4] == ",":
-            pull_text = prefix[:7]
+            compound_text = prefix[:7]
             if len(prefix) == 7 or prefix[7] in ",;":
                 try:
                     board = _cursor_from_physical(state, physical).board
-                    src, dst, first = _fsx_coordinate(board, pull_text[:4])
-                    secondary = pull_text[5:7]
+                    src, dst, first = _fsx_coordinate(board, compound_text[:4])
+                    secondary = compound_text[5:7]
+                    pushed = board.board.get(dst)
+                    if (side_of(first.piece) == board.side
+                            and pushed is not None
+                            and side_of(pushed) != board.side
+                            and board.board.get(secondary) is None
+                            and board.valid_push(PhysicalStep(pushed, dst, secondary), first)):
+                        candidates.append((7, [PhysicalStep(pushed, dst, secondary), first]))
+
                     enemy = board.board.get(secondary)
                     if (side_of(first.piece) == board.side
                             and board.board.get(dst) is None

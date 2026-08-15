@@ -342,6 +342,9 @@ namespace {
                              PushTempPiece* outLine = nullptr,
                              PushTempPiece* outTransfers = nullptr,
                              int* outTransferCount = nullptr) {
+    if (pos.variant()->arimaa)
+        return false;
+
     const MoveType mt = type_of(m);
     if (mt != NORMAL)
         return false;
@@ -526,6 +529,9 @@ namespace {
   }
 
   bool analyze_push_direct(const Position& pos, Move m, PushInfo& info) {
+    if (pos.variant()->arimaa)
+        return false;
+
     const MoveType mt = type_of(m);
     if ((mt != NORMAL && mt != INSERT))
         return false;
@@ -5359,9 +5365,61 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
   return info;
 }
 
+bool Position::arimaa_push_legal(Move m) const {
+
+  if (!is_arimaa_push(m) || !var->arimaa)
+      return false;
+
+  Square from = from_sq(m);
+  Square to = to_sq(m);
+  Square pushedTo = arimaa_push_square(m);
+  if (!is_ok(from) || !is_ok(to) || !is_ok(pushedTo)
+      || from == to || to == pushedTo || from == pushedTo)
+      return false;
+
+  Piece pusher = piece_on(from);
+  Piece pushed = piece_on(to);
+  if (pusher == NO_PIECE || pushed == NO_PIECE
+      || color_of(pusher) != sideToMove || color_of(pushed) == sideToMove
+      || !empty(pushedTo) || !(board_bb() & pushedTo)
+      || ((wall_squares() | dead_squares()) & pushedTo))
+      return false;
+
+  if (!(PseudoAttacks[WHITE][WAZIR][from] & to)
+      || !(PseudoAttacks[WHITE][WAZIR][to] & pushedTo))
+      return false;
+
+  if (freeze_squares() & from)
+      return false;
+
+  PieceType pusherType = type_of(pusher);
+  PieceType pushedType = type_of(pushed);
+  if (var->freezeStrength[pusherType] <= var->freezeStrength[pushedType])
+      return false;
+
+  // Arimaa rabbits may not step backwards, including when they are the
+  // pusher. All other standard Arimaa pieces move one orthogonal square.
+  if (pusherType == CUSTOM_PIECE_1)
+  {
+      int dr = int(rank_of(to)) - int(rank_of(from));
+      if ((sideToMove == WHITE && dr < 0) || (sideToMove == BLACK && dr > 0))
+          return false;
+  }
+
+#ifdef ENABLE_ARIMAA
+  if (compound_turn_active() && compound_turn_step() + 2 > compound_turn_steps())
+      return false;
+#endif
+
+  return !violates_same_player_board_repetition(m);
+}
+
 /// Position::legal() tests whether a pseudo-legal move is legal
 
 bool Position::legal(Move m) const {
+  if (is_arimaa_push(m))
+      return arimaa_push_legal(m);
+
   SimulatedMoveGuard guard(*this, m);
 
   assert(is_ok(m));
@@ -6387,6 +6445,9 @@ bool Position::has_legal_move_ignoring_immediate_end() const {
 /// due to SMP concurrent access or hash position key aliasing.
 
 bool Position::pseudo_legal(const Move m) const {
+
+  if (is_arimaa_push(m))
+      return arimaa_push_legal(m);
 
   Color us = sideToMove;
   Color them = ~us;
@@ -7509,16 +7570,18 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
 #endif
 #ifdef ENABLE_ARIMAA
   const bool compoundTurn = compound_turn_active();
+  const int moveCost = var->arimaa && is_arimaa_two_step(m) ? 2 : 1;
   const bool compoundTurnEnds = !compoundTurn
                               || is_pass(m)
-                              || st->compoundTurnStep + 1 >= var->compoundTurnSteps;
+                              || st->compoundTurnStep + moveCost >= var->compoundTurnSteps;
   const uint8_t compoundTurnStep = compoundTurn && !compoundTurnEnds
-                                 ? uint8_t(st->compoundTurnStep + 1) : 0;
+                                 ? uint8_t(st->compoundTurnStep + moveCost) : 0;
   Key k = st->key ^ (compoundTurnEnds ? Zobrist::side : 0);
   if (compoundTurn)
       k ^= Zobrist::compoundTurn[st->compoundTurnStep]
          ^ Zobrist::compoundTurn[compoundTurnStep];
 #else
+  const int moveCost = 1;
   Key k = st->key ^ Zobrist::side;
 #endif
 
@@ -7550,12 +7613,12 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
 
   // Increment ply counters. In particular, rule50 will be reset to zero later on
   // in case of a capture or a pawn move.
-  ++gamePly;
+  gamePly += moveCost;
   if (!currentMultimovePass && !currentClaimPass)
-      ++st->rule50;
-  ++st->pliesFromNull;
+      st->rule50 += moveCost;
+  st->pliesFromNull += moveCost;
   if (st->countingLimit)
-      ++st->countingPly;
+      st->countingPly += moveCost;
 
   Color us = sideToMove;
   Color them = ~us;
@@ -7564,6 +7627,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       ++st->compoundTurnNumber;
 #endif
   bool dropMove = is_drop_move(m);
+  bool arimaaPushMove = is_arimaa_push(m);
   Square from = from_sq(m);
   Square to = to_sq(m);
   Piece pc = moved_piece(m);
@@ -8088,7 +8152,20 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   }
   else
   {
-      if (!pureWallMove && !cloneMove && !pullMove)
+      if (arimaaPushMove)
+      {
+          Piece pushed = piece_on(to);
+          Square pushedTo = arimaa_push_square(m);
+          k ^= Zobrist::psq[pc][from] ^ Zobrist::psq[pc][to]
+             ^ Zobrist::psq[pushed][to] ^ Zobrist::psq[pushed][pushedTo];
+          if (type_of(pc) == PAWN)
+              st->pawnKey ^= Zobrist::psq[pc][from] ^ Zobrist::psq[pc][to];
+          if (type_of(pushed) == PAWN)
+              st->pawnKey ^= Zobrist::psq[pushed][to] ^ Zobrist::psq[pushed][pushedTo];
+          pullRightsMask = castlingRightsMask[from] | castlingRightsMask[to]
+                         | castlingRightsMask[pushedTo];
+      }
+      else if (!pureWallMove && !cloneMove && !pullMove)
           k ^= Zobrist::psq[pc][from] ^ Zobrist::psq[pc][to];
       else if (pullMove)
       {
@@ -8329,6 +8406,22 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
               st->pawnKey ^= Zobrist::psq[pc][to];
           else
               st->nonPawnMaterial[us] += PieceValue[MG][pc];
+      }
+      else if (arimaaPushMove)
+      {
+          Piece pushed = piece_on(to);
+          Square pushedTo = arimaa_push_square(m);
+
+          st->nnueRefreshNeeded = true;
+          if (Eval::useNNUE)
+          {
+              dp.dirty_num = 2;
+              init_dirty_piece_entry(dp, 0, pc, from, to, NO_PIECE, 0);
+              init_dirty_piece_entry(dp, 1, pushed, to, pushedTo, NO_PIECE, 0);
+          }
+
+          move_piece(to, pushedTo);
+          move_piece(from, to);
       }
       else if (pullMove)
       {
@@ -9362,7 +9455,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
 
   if (compoundTurn && compoundTurnEnds)
   {
-      const int turnLength = st->previous->compoundTurnStep + 1;
+      const int turnLength = st->previous->compoundTurnStep
+                           + (var->arimaa && is_arimaa_two_step(m) ? 2 : 1);
       const int internalSteps = turnLength - 1;
       if (internalSteps > 0)
       {
@@ -9491,6 +9585,7 @@ void Position::undo_move(Move m) {
   Color us = sideToMove;
   Square from = from_sq(m);
   Square to = to_sq(m);
+  bool arimaaPushMove = is_arimaa_push(m);
   bool rifleShot = rifle_capture(m) && st->captured.piece.piece != NO_PIECE && type_of(m) != CASTLING;
   bool cloneMove = is_clone_move(m);
   bool pullMove = is_pull_move(m);
@@ -9510,6 +9605,7 @@ void Position::undo_move(Move m) {
          || (is_promotion_move(m) && sittuyin_promotion())
          || is_pass(m)
          || is_laser_fire(m)
+         || arimaaPushMove
          || cloneMove
          || rifleShot
          || pullMove
@@ -9756,6 +9852,14 @@ void Position::undo_move(Move m) {
               remove_piece(to);
               board[to] = NO_PIECE;
           }
+          else if (arimaaPushMove)
+          {
+              Square pushedTo = arimaa_push_square(m);
+              if (piece_on(to) != NO_PIECE)
+                  move_piece(to, from);
+              if (piece_on(pushedTo) != NO_PIECE)
+                  move_piece(pushedTo, to);
+          }
           else if (pullMove)
           {
               if (piece_on(from) != NO_PIECE)
@@ -9915,7 +10019,8 @@ void Position::undo_move(Move m) {
   std::copy(std::begin(st->castlingRightsMask), std::end(st->castlingRightsMask), std::begin(castlingRightsMask));
   std::copy(std::begin(st->castlingRookSquare), std::end(st->castlingRookSquare), std::begin(castlingRookSquare));
   std::copy(std::begin(st->castlingPath), std::end(st->castlingPath), std::begin(castlingPath));
-  --gamePly;
+  gamePly -= compoundTurnStepsToRestore
+           ? 1 : (var->arimaa && is_arimaa_two_step(m) ? 2 : 1);
   gamePly += compoundTurnStepsToRestore;
   updatePawnCheckZone();
 
@@ -10159,20 +10264,37 @@ Key Position::key_after(Move m) const {
   Square from = from_sq(m);
   Square to = to_sq(m);
   Piece pc = moved_piece(m);
-  Piece captured = piece_on(to);
 #ifdef ENABLE_ARIMAA
+  const bool arimaaPushMove = is_arimaa_push(m);
   const bool compoundTurn = compound_turn_active();
+  const int moveCost = var->arimaa && is_arimaa_two_step(m) ? 2 : 1;
   const bool compoundTurnEnds = !compoundTurn
                               || is_pass(m)
-                              || st->compoundTurnStep + 1 >= var->compoundTurnSteps;
+                              || st->compoundTurnStep + moveCost >= var->compoundTurnSteps;
   Key k = st->key ^ (compoundTurnEnds ? Zobrist::side : 0);
   if (compoundTurn)
       k ^= Zobrist::compoundTurn[st->compoundTurnStep]
-         ^ Zobrist::compoundTurn[compoundTurnEnds ? 0 : st->compoundTurnStep + 1];
+         ^ Zobrist::compoundTurn[compoundTurnEnds ? 0 : st->compoundTurnStep + moveCost];
 #else
   Key k = st->key ^ Zobrist::side;
 #endif
 
+  if (is_arimaa_push(m))
+  {
+      Piece pushed = piece_on(to);
+      Square pushedTo = arimaa_push_square(m);
+      return k ^ Zobrist::psq[pc][from] ^ Zobrist::psq[pc][to]
+             ^ Zobrist::psq[pushed][to] ^ Zobrist::psq[pushed][pushedTo];
+  }
+
+  if (type_of(m) == PULL && pull_square(m) != SQ_NONE)
+  {
+      Piece pulled = piece_on(pull_square(m));
+      return k ^ Zobrist::psq[pc][from] ^ Zobrist::psq[pc][to]
+             ^ Zobrist::psq[pulled][pull_square(m)] ^ Zobrist::psq[pulled][from];
+  }
+
+  Piece captured = piece_on(to);
   if (captured)
   {
       k ^= Zobrist::psq[captured][to];

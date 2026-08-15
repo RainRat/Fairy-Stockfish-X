@@ -1267,6 +1267,26 @@ inline Square pull_square(Move m) {
   return sq ? Square(sq - 1) : SQ_NONE;
 }
 
+// Arimaa pushes reuse the existing PULL encoding so that the move layout and
+// MOVE_TYPE_BITS remain unchanged for orthodox variants. The otherwise-unused
+// piece-type field marks the record as an Arimaa push; from_sq() is the pusher
+// source, to_sq() is the pushed piece source, and pull_square() is its target.
+constexpr PieceType ARIMAA_PUSH_MARKER = KING;
+
+inline bool is_arimaa_push(Move m) {
+  return type_of(m) == PULL
+      && PieceType((static_cast<uint64_t>(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS))
+                   & (PIECE_TYPE_NB - 1)) == ARIMAA_PUSH_MARKER;
+}
+
+inline Square arimaa_push_square(Move m) {
+  return is_arimaa_push(m) ? pull_square(m) : SQ_NONE;
+}
+
+inline bool is_arimaa_two_step(Move m) {
+  return is_arimaa_push(m) || (type_of(m) == PULL && pull_square(m) != SQ_NONE);
+}
+
 inline Square swap_square(Move m) {
   return type_of(m) == SWAP ? to_sq(m) : SQ_NONE;
 }
@@ -1389,6 +1409,14 @@ constexpr Move make_rotation(Square from, Square to, int orientation, Square rot
 
 constexpr Move make_pull(Square from, Square to, Square pullFrom) {
   return Move((static_cast<uint64_t>(pullFrom + 1) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS))
+            + static_cast<uint64_t>(PULL)
+            + (static_cast<uint64_t>(from) << SQUARE_BITS)
+            + static_cast<uint64_t>(to));
+}
+
+constexpr Move make_arimaa_push(Square from, Square to, Square pushedTo) {
+  return Move((static_cast<uint64_t>(pushedTo + 1) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS))
+            + (static_cast<uint64_t>(ARIMAA_PUSH_MARKER) << (2 * SQUARE_BITS + MOVE_TYPE_BITS))
             + static_cast<uint64_t>(PULL)
             + (static_cast<uint64_t>(from) << SQUARE_BITS)
             + static_cast<uint64_t>(to));

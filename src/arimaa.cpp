@@ -46,17 +46,35 @@ void order_arimaa_turns(std::vector<ArimaaTurn>& turns, const ArimaaTurn& best) 
         std::iter_swap(turns.begin(), it);
 }
 
+int arimaa_move_cost(Move move) {
+    return is_arimaa_two_step(move) ? 2 : 1;
+}
+
+std::string arimaa_step_to_string(Position& pos, Move move) {
+    if (!is_arimaa_push(move))
+        return UCI::move(pos, move);
+
+    return UCI::square(pos, from_sq(move))
+         + UCI::square(pos, to_sq(move))
+         + "," + UCI::square(pos, arimaa_push_square(move));
+}
+
 void generate_turns(Position& pos,
                     std::vector<ArimaaTurn>& turns,
                     ArimaaTurn& turn,
                     StateInfo* states,
-                    int depth)
+                    int depth,
+                    int usedSteps)
 {
     MoveList<LEGAL> moves(pos);
 
     for (const auto& move : moves)
     {
         if (is_pass(move))
+            continue;
+
+        const int moveCost = arimaa_move_cost(move);
+        if (usedSteps + moveCost > ArimaaTurn::MAX_STEPS)
             continue;
 
         turn.steps[depth] = move;
@@ -66,10 +84,10 @@ void generate_turns(Position& pos,
         turns.push_back(turn);
 
         Value result;
-        if (turn.length < ArimaaTurn::MAX_STEPS
+        if (usedSteps + moveCost < ArimaaTurn::MAX_STEPS
             && pos.compound_turn_active()
             && !pos.is_game_end(result))
-            generate_turns(pos, turns, turn, states, depth + 1);
+            generate_turns(pos, turns, turn, states, depth + 1, usedSteps + moveCost);
 
         pos.undo_move(move);
     }
@@ -85,7 +103,7 @@ std::vector<ArimaaTurn> generate_arimaa_turns(Position& pos) {
 
   ArimaaTurn turn;
   alignas(Eval::NNUE::CacheLineSize) StateInfo states[ArimaaTurn::MAX_STEPS];
-  generate_turns(pos, turns, turn, states, 0);
+  generate_turns(pos, turns, turn, states, 0, 0);
   return turns;
 }
 
@@ -104,7 +122,7 @@ bool parse_arimaa_turn(Position& pos, const std::string& text, ArimaaTurn& turn)
   // "d3d2,e3,c2c3" resolve as a pull followed by a step, while
   // "a2a3,b2b3" remains two ordinary steps.  A semicolon is accepted as an
   // unambiguous separator for clients that prefer one.
-  std::function<bool(size_t)> parse = [&](size_t offset) {
+  std::function<bool(size_t, int)> parse = [&](size_t offset, int usedSteps) {
       if (offset == text.size())
           return parsed.length > 0;
       if (parsed.length >= ArimaaTurn::MAX_STEPS)
@@ -115,8 +133,12 @@ bool parse_arimaa_turn(Position& pos, const std::string& text, ArimaaTurn& turn)
           if (is_pass(move))
               continue;
 
-          const std::string moveText = UCI::move(pos, move);
+          const std::string moveText = arimaa_step_to_string(pos, move);
           if (text.compare(offset, moveText.size(), moveText) != 0)
+              continue;
+
+          const int moveCost = arimaa_move_cost(move);
+          if (usedSteps + moveCost > ArimaaTurn::MAX_STEPS)
               continue;
 
           const size_t next = offset + moveText.size();
@@ -126,10 +148,11 @@ bool parse_arimaa_turn(Position& pos, const std::string& text, ArimaaTurn& turn)
           const int index = parsed.length++;
           parsed.steps[index] = move;
           pos.do_move(move, states[index], false);
+          const int nextUsedSteps = usedSteps + moveCost;
 
           bool accepted = next == text.size();
           if (!accepted)
-              accepted = parse(next + 1);
+              accepted = parse(next + 1, nextUsedSteps);
 
           if (accepted)
           {
@@ -144,7 +167,7 @@ bool parse_arimaa_turn(Position& pos, const std::string& text, ArimaaTurn& turn)
       return false;
   };
 
-  if (!parse(0))
+  if (!parse(0, 0))
       return false;
 
   turn = parsed;
@@ -157,13 +180,16 @@ void do_arimaa_turn(Position& pos, const ArimaaTurn& turn, StateInfo* states) {
   assert(pos.compound_turn_active());
   assert(turn.length > 0 && turn.length <= ArimaaTurn::MAX_STEPS);
 
+  int turnCost = 0;
+
   for (int i = 0; i < turn.length; ++i)
   {
       assert(pos.legal(turn.steps[i]));
+      turnCost += arimaa_move_cost(turn.steps[i]);
       pos.do_move(turn.steps[i], states[i], false);
   }
 
-  if (turn.length < pos.compound_turn_steps())
+  if (turnCost < pos.compound_turn_steps())
       pos.end_compound_turn(states[turn.length]);
 }
 
@@ -172,7 +198,11 @@ void undo_arimaa_turn(Position& pos, const ArimaaTurn& turn) {
   assert(pos.variant()->arimaa);
   assert(turn.length > 0 && turn.length <= ArimaaTurn::MAX_STEPS);
 
-  if (turn.length < pos.compound_turn_steps())
+  int turnCost = 0;
+  for (int i = 0; i < turn.length; ++i)
+      turnCost += arimaa_move_cost(turn.steps[i]);
+
+  if (turnCost < pos.compound_turn_steps())
       pos.undo_compound_turn();
 
   for (int i = turn.length - 1; i >= 0; --i)
@@ -183,19 +213,21 @@ std::string arimaa_turn_to_string(Position& pos, const ArimaaTurn& turn) {
 
   std::string result;
   alignas(Eval::NNUE::CacheLineSize) StateInfo states[ArimaaTurn::MAX_STEPS + 1];
+  int turnCost = 0;
 
   for (int i = 0; i < turn.length; ++i)
   {
       if (i)
           result += ',';
-      result += UCI::move(pos, turn.steps[i]);
+      result += arimaa_step_to_string(pos, turn.steps[i]);
+      turnCost += arimaa_move_cost(turn.steps[i]);
       pos.do_move(turn.steps[i], states[i], false);
   }
 
-  if (turn.length < pos.compound_turn_steps())
+  if (turnCost < pos.compound_turn_steps())
       pos.end_compound_turn(states[turn.length]);
 
-  if (turn.length < pos.compound_turn_steps())
+  if (turnCost < pos.compound_turn_steps())
       pos.undo_compound_turn();
   for (int i = turn.length - 1; i >= 0; --i)
       pos.undo_move(turn.steps[i]);

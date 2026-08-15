@@ -89,13 +89,22 @@ EOF
 )
 assert_contains "$out" "^d3d2: 1$"
 
-# The generic push encoding exposes an elephant push of a rabbit.
+# The compound encoding exposes an elephant pull of a rabbit.
 out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
 position fen 8/8/8/8/8/3Er4/8/8 w - - 0 1
 go perft 1
 EOF
 )
 assert_contains "$out" "^d3d2,e3: 1$"
+
+# Arimaa push adjacency is orthogonal; diagonal king-neighborhood squares are
+# not valid pusher or pushed-piece destinations.
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
+position fen 8/8/8/4r3/3E4/8/8/8 w - - 0 1
+go perft 1
+EOF
+)
+assert_not_contains "$out" "^d4e5,f5: 1$"
 
 # A push's internal comma is not confused with the comma starting the next
 # Arimaa step.

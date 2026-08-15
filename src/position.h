@@ -1012,6 +1012,7 @@ public:
   // Properties of moves
   bool legal(Move m) const;
   bool pseudo_legal(const Move m) const;
+  bool arimaa_push_legal(Move m) const;
   SimulatedMoveInfo simulated_move_info(Move m, bool withEffects = true) const;
   bool virtual_drop(Move m) const;
   bool paired_drop(Move m) const;
@@ -3418,7 +3419,7 @@ inline bool Position::is_clone_move(Move m) const {
 }
 
 inline bool Position::is_pull_move(Move m) const {
-  return type_of(m) == PULL && pull_square(m) != SQ_NONE;
+  return type_of(m) == PULL && pull_square(m) != SQ_NONE && !is_arimaa_push(m);
 }
 
 inline bool Position::is_swap_move(Move m) const {
