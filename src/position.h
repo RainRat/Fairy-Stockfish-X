@@ -1098,6 +1098,7 @@ public:
   // Accessing hash keys
   Key key() const;
   Key key_after(Move m) const;
+  Key board_layout_key() const;
   Key material_key(EndgameEval e = EG_EVAL_CHESS) const;
   Key pawn_key() const;
 

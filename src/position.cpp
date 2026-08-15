@@ -1362,23 +1362,8 @@ Key Position::layout_key() const {
   return k;
 }
 
-Key Position::piece_state_key(Square s) const {
-  Piece pc = piece_on(s);
-  if (pc == NO_PIECE)
-      return 0;
-
-  Key k = var->is_oriented(type_of(pc)) ? Zobrist::orientation[orientation_on(s)][s] : 0;
-  if (promotedPieces & s)
-  {
-      Piece fallback = make_piece(color_of(pc), main_promotion_pawn_type(color_of(pc)));
-      Piece origin = unpromoted_piece_on(s);
-      if (origin == NO_PIECE)
-          origin = fallback;
-      if (origin != fallback || (var->shogiStylePromotions && unpromoted_piece_on(s) != NO_PIECE)
-          || (captures_to_hand() && !drop_loop()) || two_boards())
-          k ^= Zobrist::promotionOrigin[origin][s];
-  }
-  return k;
+Key Position::board_layout_key() const {
+  return layout_key();
 }
 
 Key Position::compute_piece_state_key() const {

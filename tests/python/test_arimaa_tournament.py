@@ -79,6 +79,17 @@ class ArimaaTournamentTests(unittest.TestCase):
         with self.assertRaises(TournamentError):
             state.apply_turn(parse_aei_move("Ra2n Ra3s"))
 
+    def test_intermediate_return_can_be_followed_by_real_step(self):
+        state = ArimaaState.from_fen("8/8/8/8/8/8/R1R5/8 w - - 0 1")
+        result = state.apply_turn(parse_aei_move("Ra2e Rb2w Ra2n"))
+        self.assertEqual(result.state.board.board.get("a3"), "R")
+        self.assertEqual(result.state.board.board.get("c2"), "R")
+
+    def test_intermediate_return_cannot_end_turn(self):
+        state = ArimaaState.from_fen("8/8/8/8/8/8/R1R5/8 w - - 0 1")
+        with self.assertRaises(TournamentError):
+            state.apply_turn(parse_aei_move("Ra2e Rb2w"))
+
     def test_frozen_piece_cannot_move(self):
         state = ArimaaState.from_fen("8/8/8/8/8/3Re3/8/8 w - - 0 1")
         with self.assertRaises(TournamentError):

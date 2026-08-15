@@ -507,10 +507,11 @@ class ArimaaState:
             return "g", "rabbit-loss"
         return None, None
 
-    def finish_turn(self, cursor: TurnCursor, adjudicate_no_move: bool = True) -> "ArimaaState":
+    def finish_turn(self, cursor: TurnCursor, adjudicate_no_move: bool = True,
+                    allow_unchanged: bool = False) -> "ArimaaState":
         if cursor.physical_steps < 1 or cursor.physical_steps > 4:
             raise TournamentError("Arimaa turn must contain one to four physical steps")
-        if cursor.board.board == self.board.board:
+        if cursor.board.board == self.board.board and not allow_unchanged:
             raise TournamentError("whole-turn pass is illegal")
 
         next_board = cursor.board.copy()
@@ -575,13 +576,14 @@ class ArimaaState:
                 child = cursor.clone()
                 child.add_steps(list(action.steps))
                 try:
-                    self.finish_turn(child, adjudicate_no_move=False)
+                    child_state = self.finish_turn(
+                        child, adjudicate_no_move=False, allow_unchanged=True
+                    )
                 except TournamentError:
                     continue
-                if child.board.board == start_board:
-                    continue
-                total += 1
-                if child.physical_steps < 4:
+                if child.board.board != start_board:
+                    total += 1
+                if child.physical_steps < 4 and child_state.winner is None:
                     total += count(child)
             return total
 
