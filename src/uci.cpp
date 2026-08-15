@@ -92,49 +92,30 @@ namespace {
     while (is >> token)
     {
 #ifdef ENABLE_ARIMAA
-        if (pos.variant()->arimaa
-            && (token.find(',') != string::npos || token.find(';') != string::npos))
+        if (pos.variant()->arimaa && pos.compound_turn_active())
         {
             ArimaaTurn turn;
-            if (parse_arimaa_turn(pos, token, turn))
+            if (!parse_arimaa_turn(pos, token, turn))
+                break;
+            for (int i = 0; i < turn.length; ++i)
             {
-                for (int i = 0; i < turn.length; ++i)
-                {
-                    states->emplace_back();
-                    pos.do_move(turn.steps[i], states->back());
-                }
-                if (pos.compound_turn_step() > 0)
-                {
-                    states->emplace_back();
-                    pos.end_compound_turn(states->back());
-                }
-                continue;
+                states->emplace_back();
+                pos.do_move(turn.steps[i], states->back());
             }
+            if (pos.compound_turn_step() > 0)
+            {
+                states->emplace_back();
+                pos.end_compound_turn(states->back());
+            }
+            continue;
         }
 #endif
         m = UCI::to_move(pos, token);
         if (m == MOVE_NONE)
             break;
 
-#ifdef ENABLE_ARIMAA
-        // An active Arimaa position accepts one protocol token per complete
-        // turn.  A single step is therefore an early-completed turn; 0000 is
-        // not a step and is not used as a turn delimiter in this path.
-        if (pos.variant()->arimaa && pos.compound_turn_active() && is_pass(m))
-            break;
-        const bool arimaaStep = pos.variant()->arimaa && pos.compound_turn_active();
-#endif
-
         states->emplace_back();
         pos.do_move(m, states->back());
-
-#ifdef ENABLE_ARIMAA
-        if (arimaaStep && pos.compound_turn_active())
-        {
-            states->emplace_back();
-            pos.end_compound_turn(states->back());
-        }
-#endif
     }
   }
 
