@@ -820,6 +820,7 @@ public:
   Square pawn_step(Square s, Color us, int steps) const;
   bool pass(Color c) const;
   bool compound_turn_active() const;
+  bool at_complete_turn_boundary() const;
   int compound_turn_steps() const;
   int compound_turn_step() const;
 #ifdef ENABLE_ARIMAA
@@ -865,6 +866,7 @@ public:
   bool extinction_pseudo_royal() const;
   PieceSet flag_piece_types(Color c) const;
   PieceType flag_piece(Color c) const;
+  PieceType arimaa_extinction_piece(Color c) const;
   Bitboard flag_region(Color c) const;
   bool flag_move() const;
   bool flag_reached(Color c) const;
@@ -1043,6 +1045,7 @@ public:
   bool virtual_drop(Move m) const;
   bool paired_drop(Move m) const;
   bool push_move(Move m) const;
+  PushPullRule push_pull_rule() const;
   bool stepwise_pushing() const;
   bool capture(Move m) const;
   bool capture_or_promotion(Move m) const;
@@ -1918,7 +1921,8 @@ inline bool Position::nnue_use_pockets() const {
 
 inline bool Position::nnue_applicable() const {
   // Do not use NNUE during setup phases (placement, sittuyin)
-  return (!count_in_hand(ALL_PIECES) || nnue_use_pockets() || !must_drop())
+  return at_complete_turn_boundary()
+      && (!count_in_hand(ALL_PIECES) || nnue_use_pockets() || !must_drop())
          && !virtualPieces
          && capture_type() != PRISON
          && (!nnue_king() || (count(WHITE, nnue_king()) == 1 && count(BLACK, nnue_king()) == 1));
@@ -2083,6 +2087,8 @@ inline int Position::pushing_strength(PieceType pt) const {
 
 inline bool Position::has_pushing() const {
   assert(var != nullptr);
+  if (push_pull_rule() == PushPullRule::NONE)
+      return false;
   for (PieceSet ps = piece_types(); ps; )
       if (pushing_strength(pop_lsb(ps)) > 0)
           return true;
@@ -2096,6 +2102,8 @@ inline int Position::pulling_strength(PieceType pt) const {
 
 inline bool Position::has_pulling() const {
   assert(var != nullptr);
+  if (push_pull_rule() == PushPullRule::NONE)
+      return false;
   for (PieceSet ps = piece_types(); ps; )
       if (pulling_strength(pop_lsb(ps)) > 0)
           return true;
@@ -2149,6 +2157,11 @@ inline bool Position::push_capture_against_friendly_blocker() const {
 inline bool Position::push_no_immediate_return() const {
   assert(var != nullptr);
   return var->pushNoImmediateReturn;
+}
+
+inline PushPullRule Position::push_pull_rule() const {
+  assert(var != nullptr);
+  return var->pushPullRule;
 }
 
 inline bool Position::stepwise_pushing() const {
@@ -2995,6 +3008,15 @@ inline bool Position::compound_turn_active() const {
 #endif
 }
 
+inline bool Position::at_complete_turn_boundary() const {
+  assert(var != nullptr);
+#ifdef ENABLE_ARIMAA
+  return !var->arimaa || st->compoundTurnStep == 0;
+#else
+  return true;
+#endif
+}
+
 inline int Position::compound_turn_steps() const {
   assert(var != nullptr);
 #ifdef ENABLE_ARIMAA
@@ -3314,6 +3336,16 @@ inline PieceType Position::flag_piece(Color c) const {
       return ALL_PIECES;
   for (PieceType pt = NO_PIECE_TYPE; pt < PIECE_TYPE_NB; ++pt)
       if (pts & pt)
+          return pt;
+  return NO_PIECE_TYPE;
+}
+
+inline PieceType Position::arimaa_extinction_piece(Color c) const {
+  PieceSet pts = extinction_piece_types(c);
+  if (pts & piece_set(ALL_PIECES))
+      return ALL_PIECES;
+  for (PieceType pt = NO_PIECE_TYPE; pt < PIECE_TYPE_NB; ++pt)
+      if (pts & piece_set(pt))
           return pt;
   return NO_PIECE_TYPE;
 }
