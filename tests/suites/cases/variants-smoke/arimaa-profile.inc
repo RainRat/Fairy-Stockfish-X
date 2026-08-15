@@ -69,6 +69,13 @@ EOF
 )
 assert_contains "$out" "^bestmove \\(none\\)$"
 
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
+position startpos
+go movetime 1 searchmoves invalid
+EOF
+)
+assert_contains "$out" "^bestmove \\(none\\)$"
+
 # A depth-1 child can have physical pieces on the board but no legal complete
 # turn. The terminal probe must run before static evaluation at the cutoff.
 out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
