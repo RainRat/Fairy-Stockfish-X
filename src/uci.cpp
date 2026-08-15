@@ -192,11 +192,15 @@ namespace {
 
     while (is >> token)
         if (token == "searchmoves") // Needs to be the last command on the line
+        {
+            if (pos.variant()->arimaa)
+                limits.arimaaSearchMovesSpecified = true;
             while (is >> token)
                 if (pos.variant()->arimaa)
                     limits.arimaaSearchMoves.push_back(token);
                 else
                     limits.searchmoves.push_back(UCI::to_move(pos, token));
+        }
 
         else if (token == "wtime")     is >> limits.time[isUsi ? BLACK : WHITE];
         else if (token == "btime")     is >> limits.time[isUsi ? WHITE : BLACK];
