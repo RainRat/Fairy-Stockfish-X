@@ -67,6 +67,11 @@ jobs:
           make clean
           make -j2 ARCH=x86-64 largeboards=yes all=yes debug=yes EXE=stockfish-allvars build
 
+      - name: Build Arimaa variant engine
+        run: |
+          make clean
+          make -j2 ARCH=x86-64 largeboards=yes all=yes nnue=yes arimaa=yes debug=yes EXE=stockfish-arimaa-allvars build
+
       - name: Test variants.ini
         run: |
           set +e
@@ -104,3 +109,9 @@ jobs:
             ./stockfish-allvars bench shogi
             ./stockfish-allvars bench capablanca
           fi
+
+      - name: Test Arimaa profile and referee
+        working-directory: .
+        run: |
+          bash tests/suites/cases/variants-smoke/arimaa-profile.inc src/stockfish-arimaa-allvars src/variants.ini
+          python3 -m unittest tests/python/test_arimaa_tournament.py

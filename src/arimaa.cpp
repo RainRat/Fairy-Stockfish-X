@@ -455,7 +455,7 @@ void search_arimaa(Thread& thread) {
           do_arimaa_turn(pos, turn, states);
           thread.nodes.fetch_add(1, std::memory_order_relaxed);
           Value score = -search_arimaa_turns(pos, thread, depth - 1,
-                                              -VALUE_INFINITE, VALUE_INFINITE, aborted);
+                                              -VALUE_INFINITE, -bestScore, aborted);
           undo_arimaa_turn(pos, turn);
 
           if (aborted)

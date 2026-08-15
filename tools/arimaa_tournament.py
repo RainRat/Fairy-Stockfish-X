@@ -460,11 +460,14 @@ class ArimaaState:
     repetitions: dict[tuple[str, str], int] = field(default_factory=dict)
     winner: Optional[str] = None
     reason: Optional[str] = None
+    history: tuple[str, ...] = ()
+    start_fen: str = ""
 
     @classmethod
     def from_fen(cls, fen: str) -> "ArimaaState":
         board = ArimaaBoard.from_fen(fen)
-        state = cls(board, fullmove=int(fen.split()[5]) if len(fen.split()) > 5 else 1)
+        fullmove = int(fen.split()[5]) if len(fen.split()) > 5 else 1
+        state = cls(board, fullmove=fullmove, start_fen=board.fen(fullmove))
         state.repetitions[board.key()] = 1
         return state
 
@@ -479,6 +482,8 @@ class ArimaaState:
             dict(self.repetitions),
             self.winner,
             self.reason,
+            self.history,
+            self.start_fen,
         )
 
     def fen(self) -> str:
@@ -526,7 +531,10 @@ class ArimaaState:
         if enforce_repetition and repetitions[key] >= 3:
             raise TournamentError("third occurrence of a position is illegal")
 
-        result = ArimaaState(next_board, next_fullmove, repetitions)
+        turn_text = ",".join(action.fsx() for action in cursor.actions)
+        result = ArimaaState(next_board, next_fullmove, repetitions,
+                             history=self.history + (turn_text,),
+                             start_fen=self.start_fen)
         if adjudicate_terminal:
             winner, reason = result.terminal_winner(mover)
             if winner is None and adjudicate_no_move and not result.has_legal_turn():
@@ -823,14 +831,18 @@ class FSXAdapter(ProcessAdapter):
         self.wait_for("readyok")
 
     def bestmove(self, state: ArimaaState) -> str:
-        # The referee owns the completed-turn boundary position.  Loading it
-        # directly avoids replaying compact push notation: a from-to push does
-        # not encode the enemy's sideways destination, while the boundary FEN
-        # does encode the authoritative result.
-        self.send(f"position fen {state.fen()}")
+        self.send(fsx_position_command(state))
         self.send(f"go depth {self.depth}")
         line = self.wait_for("bestmove ")
         return line[len("bestmove "):].strip()
+
+
+def fsx_position_command(state: ArimaaState) -> str:
+    """Load a boundary position without discarding its repetition history."""
+
+    if not state.history:
+        return f"position fen {state.fen()}"
+    return f"position fen {state.start_fen or STANDARD_SETUP_FEN} moves {' '.join(state.history)}"
 
 
 class AEIAdapter(ProcessAdapter):

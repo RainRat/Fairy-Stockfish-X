@@ -22,6 +22,7 @@ from arimaa_tournament import (  # noqa: E402
     ProcessAdapter,
     TournamentError,
     TurnCursor,
+    fsx_position_command,
 )
 
 
@@ -46,7 +47,7 @@ class FSXPerftAdapter(ProcessAdapter):
         self.wait_for("readyok")
 
     def perft(self, state: ArimaaState) -> tuple[int, collections.Counter[str]]:
-        self.send(f"position fen {state.fen()}")
+        self.send(fsx_position_command(state))
         self.send("go perft 1")
 
         root_moves: collections.Counter[str] = collections.Counter()
