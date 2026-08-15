@@ -68,6 +68,17 @@ enum class FreezeProtection {
   FRIENDLY_ORTHOGONAL
 };
 
+enum class TurnEndAdjudication : uint8_t {
+  NONE,
+  SIMULTANEOUS_FLAG_EXTINCTION
+};
+
+enum class PushPullRule : uint8_t {
+  GENERIC,
+  ARIMAA,
+  NONE
+};
+
 enum class SeePruningPolicy : uint8_t {
   RELIABLE,
   MOVE_SENSITIVE,
@@ -133,6 +144,7 @@ struct Variant {
   std::string name = "";
   std::string variantTemplate = "fairy";
   bool arimaa = false;
+  bool sequentialSetup = true;
   std::string pieceToCharTable = "-";
   int pocketSize = 0;
   Rank maxRank = RANK_8;
@@ -249,6 +261,7 @@ struct Variant {
   ColorSetting<bool> mustCapture = ColorSetting<bool>(false);
   ColorSetting<bool> mustCaptureEnPassant = ColorSetting<bool>(false);
   bool rifleCapture = false;
+  PushPullRule pushPullRule = PushPullRule::GENERIC;
   int pushingStrength[PIECE_TYPE_NB] = {};
   bool hasPushing = false;
   int pullingStrength[PIECE_TYPE_NB] = {};
@@ -434,6 +447,7 @@ struct Variant {
   bool payPointsToDrop = false;
   bool passUntilSetup = false;
   int compoundTurnSteps = 0;
+  TurnEndAdjudication turnEndAdjudication = TurnEndAdjudication::SIMULTANEOUS_FLAG_EXTINCTION;
 
   enum PotionType : int {
       POTION_FREEZE,

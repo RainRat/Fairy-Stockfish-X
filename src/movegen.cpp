@@ -944,15 +944,14 @@ namespace {
                 promotionTargets |= jumpCaptures;
             pawnPromotions = promotionTargets & promotion_zone;
         }
-        if (pos.variant()->arimaa && GeneratesQuiets && !QuietChecks)
+        if (pos.push_pull_rule() == PushPullRule::ARIMAA && GeneratesQuiets && !QuietChecks)
         {
             Bitboard enemySources = PseudoAttacks[WHITE][WAZIR][from] & pos.pieces(~Us);
             while (enemySources)
             {
                 Square enemyFrom = pop_lsb(enemySources);
-                int dr = int(rank_of(enemyFrom)) - int(rank_of(from));
-                if (Pt == CUSTOM_PIECE_1
-                    && ((Us == WHITE && dr < 0) || (Us == BLACK && dr > 0)))
+                if (Pt == pos.flag_piece(Us)
+                    && !(PseudoMoves[0][Us][Pt][from] & enemyFrom))
                     continue;
 
                 PieceType enemyType = type_of(pos.piece_on(enemyFrom));
@@ -970,7 +969,7 @@ namespace {
         }
 
         Bitboard pushMoves = 0;
-        if (!pos.variant()->arimaa && pos.pushing_strength(Pt) > 0)
+        if (pos.push_pull_rule() == PushPullRule::GENERIC && pos.pushing_strength(Pt) > 0)
         {
             Bitboard candidates = pos.push_targets_from(Us, Pt, from);
             if (!pos.stepwise_pushing())

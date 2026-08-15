@@ -1087,6 +1087,83 @@ void arimaa_setup() {
     }
     check(pos.game_ply() == 0, "undoing Arimaa setup changed gamePly");
 }
+
+void arimaa_architecture() {
+    Position pos;
+    StateListPtr states;
+
+    set_position(pos, states, "arimaa",
+                 "8/7r/8/8/8/8/R7/8 w - - 0 1");
+    check(pos.at_complete_turn_boundary(),
+          "a freshly loaded Arimaa position was not at a complete-turn boundary");
+    Move step = parse_move(pos, "a2a3");
+    states->emplace_back();
+    pos.do_move(step, states->back());
+    check(!pos.at_complete_turn_boundary(),
+          "an Arimaa partial step was exposed as a complete-turn boundary");
+    check(pos.fen().empty(),
+          "a partial Arimaa step was silently serialized as complete-turn FEN");
+    check(!pos.nnue_applicable(),
+          "NNUE remained applicable inside an Arimaa partial turn");
+    pos.undo_move(step);
+    states->pop_back();
+    check(pos.at_complete_turn_boundary(),
+          "undoing an Arimaa partial step did not restore the turn boundary");
+
+    set_position(pos, states, "arimaa-nonsequential-audit",
+                 "8/8/8/8/8/8/8/8[RRRRRRRRCCDDHHMErrrrrrrrccddhhme] w - - 0 1");
+    Move ordinaryDrop = parse_move(pos, "R@a1");
+    states->emplace_back();
+    pos.do_move(ordinaryDrop, states->back());
+    check(pos.side_to_move() == BLACK && pos.game_ply() == 1 && pos.rule50_count() == 0,
+          "sequentialSetup=false did not use ordinary drop-side transitions (side="
+          + std::to_string(int(pos.side_to_move()))
+          + ", ply=" + std::to_string(pos.game_ply())
+          + ", rule50=" + std::to_string(pos.rule50_count()) + ")");
+    pos.undo_move(ordinaryDrop);
+    states->pop_back();
+
+    set_position(pos, states, "arimaa-custom-role-audit",
+                 "8/8/8/8/8/8/8/8 w - - 0 1");
+    pos.put_piece(make_piece(WHITE, CUSTOM_PIECE_2), SQ_D4);
+    pos.put_piece(make_piece(BLACK, CUSTOM_PIECE_1), SQ_D5);
+    std::string forwardFen = pos.fen();
+    set_position(pos, states, "arimaa-custom-role-audit", forwardFen.c_str());
+    check(pos.flag_piece(WHITE) == CUSTOM_PIECE_2,
+          "Arimaa flag role did not use the configured piece type: got "
+          + std::to_string(int(pos.flag_piece(WHITE)))
+          + " expected " + std::to_string(int(CUSTOM_PIECE_2)));
+    Move forwardPush = make_arimaa_push(SQ_D4, SQ_D5, SQ_D6);
+    check(pos.arimaa_push_legal(forwardPush),
+          "configured rabbit Betza rejected a forward push (role="
+          + std::to_string(int(pos.flag_piece(WHITE)))
+          + ", source=" + std::to_string(int(type_of(pos.piece_on(SQ_D4))))
+          + ", moves=" + std::to_string(bool(PseudoMoves[0][WHITE][pos.flag_piece(WHITE)][SQ_D4] & SQ_D5))
+          + ")");
+    set_position(pos, states, "arimaa-custom-role-audit",
+                 "8/8/8/8/8/8/8/8 w - - 0 1");
+    pos.put_piece(make_piece(WHITE, CUSTOM_PIECE_2), SQ_D4);
+    pos.put_piece(make_piece(BLACK, CUSTOM_PIECE_1), SQ_D3);
+    std::string backwardFen = pos.fen();
+    set_position(pos, states, "arimaa-custom-role-audit", backwardFen.c_str());
+    Move backwardPush = make_arimaa_push(SQ_D4, SQ_D3, SQ_D2);
+    check(!pos.arimaa_push_legal(backwardPush),
+          "configured rabbit Betza allowed a backward push");
+
+    set_position(pos, states, "arimaa-push-rule-none-audit",
+                 "8/8/8/3r4/3R4/8/8/8 w - - 0 1");
+    check(!pos.has_pushing(),
+          "pushPullRule=none still exposed configured pushing capability");
+    check(!pos.arimaa_push_legal(forwardPush),
+          "pushPullRule=none accepted an Arimaa push encoding");
+
+    set_position(pos, states, "arimaa-push-rule-generic-audit",
+                 "8/8/8/3r4/3R4/8/8/8 w - - 0 1");
+    check(pos.has_pushing(),
+          "pushPullRule=generic hid configured pushing capability");
+    check(!pos.arimaa_push_legal(forwardPush),
+          "pushPullRule=generic accepted an Arimaa push encoding");
+}
 #endif
 
 void extinction_color_settings() {
@@ -2223,6 +2300,26 @@ royalPieceNoThroughCheck = true
 castling = true
 trapRegion = g1
 trapProtection = none
+
+[arimaa-custom-role-audit:arimaa]
+pieceToCharTable = RCDHMErcdhme
+startFen = 8/8/8/8/8/8/8/8 w - - 0 1
+customPiece1 = x:W
+customPiece2 = r:fsW
+flagPieceTypes = r
+extinctionPieceTypes = r
+freezeStrength = r:2 x:1 d:3 h:4 m:5 e:6
+pushingStrength = r:2 x:1 d:3 h:4 m:5 e:6
+pullingStrength = r:2 x:1 d:3 h:4 m:5 e:6
+
+[arimaa-nonsequential-audit:arimaa]
+sequentialSetup = false
+
+[arimaa-push-rule-none-audit:arimaa]
+pushPullRule = none
+
+[arimaa-push-rule-generic-audit:arimaa]
+pushPullRule = generic
 )INI");
     variants.parse_istream<false>(inline_config);
 }
@@ -2238,7 +2335,7 @@ int main(int argc, char** argv) {
                 || name == "adjudication" || name == "board-games" || name == "composable-rules"
                 || name == "extinction-color"
 #ifdef ENABLE_ARIMAA
-                || name == "arimaa-setup"
+                || name == "arimaa-setup" || name == "arimaa-architecture"
 #endif
                 ;
         };
@@ -2262,6 +2359,7 @@ int main(int argc, char** argv) {
           {"composable-rules", composable_rules},
 #ifdef ENABLE_ARIMAA
           {"arimaa-setup", arimaa_setup},
+          {"arimaa-architecture", arimaa_architecture},
 #endif
           {"state", state}, {"royal", royal}, {"adjudication", adjudication},
           {"board-games", board_games}

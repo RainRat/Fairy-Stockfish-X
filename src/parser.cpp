@@ -532,6 +532,23 @@ namespace {
         return parse_named_value(value, target, values);
     }
 
+    template <> bool set(const std::string& value, TurnEndAdjudication& target) {
+        static constexpr auto values = std::array{
+            std::pair{"none", TurnEndAdjudication::NONE},
+            std::pair{"simultaneous-flag-extinction", TurnEndAdjudication::SIMULTANEOUS_FLAG_EXTINCTION},
+        };
+        return parse_named_value(value, target, values);
+    }
+
+    template <> bool set(const std::string& value, PushPullRule& target) {
+        static constexpr auto values = std::array{
+            std::pair{"generic", PushPullRule::GENERIC},
+            std::pair{"arimaa", PushPullRule::ARIMAA},
+            std::pair{"none", PushPullRule::NONE},
+        };
+        return parse_named_value(value, target, values);
+    }
+
     template <> bool set(const std::string& value, TrapProtection& target) {
         static constexpr auto values = std::array{
             std::pair{"none", TrapProtection::NONE},
@@ -1548,6 +1565,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
 
     parse_attribute("variantTemplate", v->variantTemplate);
     parse_attribute("arimaa", v->arimaa);
+    parse_attribute("sequentialSetup", v->sequentialSetup);
     parse_attribute("nnueAlias", v->nnueAlias);
     parse_attribute("pieceToCharTable", v->pieceToCharTable);
     parse_attribute("pocketSize", v->pocketSize);
@@ -1741,6 +1759,9 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_color_setting("mustCapture", v->mustCapture);
     parse_color_setting("mustCaptureEnPassant", v->mustCaptureEnPassant);
     parse_attribute("rifleCapture", v->rifleCapture);
+    parse_attribute("pushPullRule", v->pushPullRule);
+    if (v->arimaa && config.find("pushPullRule") == config.end())
+        v->pushPullRule = PushPullRule::ARIMAA;
     auto it_push_strength = config.find("pushingStrength");
     if (it_push_strength != config.end())
     {
@@ -1883,6 +1904,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("doublePassEndsGame", v->doublePassEndsGame);
     parse_attribute("passUntilSetup", v->passUntilSetup);
     parse_attribute("turnSteps", v->compoundTurnSteps);
+    parse_attribute("turnEndAdjudication", v->turnEndAdjudication);
     if (!parse_multimoves(v))
         return false;
     parse_attribute("progressiveMultimove", v->progressiveMultimove);
@@ -2281,6 +2303,24 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
             if (DoCheck)
                 std::cerr << "arimaa - generic multimove settings do not compose with turnSteps." << std::endl;
             valid = false;
+        }
+
+        if (v->turnEndAdjudication != TurnEndAdjudication::NONE)
+        {
+            const auto is_single_piece = [](PieceSet ps) {
+                const uint64_t bits = uint64_t(ps);
+                return bits && !(bits & uint64_t(piece_set(ALL_PIECES)))
+                    && !(bits & (bits - 1));
+            };
+            if (!is_single_piece(v->flagPieceTypes.get(WHITE))
+                || !is_single_piece(v->flagPieceTypes.get(BLACK))
+                || !is_single_piece(v->extinctionPieceTypes.get(WHITE))
+                || !is_single_piece(v->extinctionPieceTypes.get(BLACK)))
+            {
+                if (DoCheck)
+                    std::cerr << "turnEndAdjudication - Arimaa simultaneous adjudication requires one flag and extinction piece type per color." << std::endl;
+                valid = false;
+            }
         }
     }
 
