@@ -944,8 +944,33 @@ namespace {
                 promotionTargets |= jumpCaptures;
             pawnPromotions = promotionTargets & promotion_zone;
         }
+        if (pos.variant()->arimaa && GeneratesQuiets && !QuietChecks)
+        {
+            Bitboard enemySources = PseudoAttacks[WHITE][WAZIR][from] & pos.pieces(~Us);
+            while (enemySources)
+            {
+                Square enemyFrom = pop_lsb(enemySources);
+                int dr = int(rank_of(enemyFrom)) - int(rank_of(from));
+                if (Pt == CUSTOM_PIECE_1
+                    && ((Us == WHITE && dr < 0) || (Us == BLACK && dr > 0)))
+                    continue;
+
+                PieceType enemyType = type_of(pos.piece_on(enemyFrom));
+                if (pos.variant()->freezeStrength[Pt] <= pos.variant()->freezeStrength[enemyType])
+                    continue;
+
+                Bitboard enemyTargets = PseudoAttacks[WHITE][WAZIR][enemyFrom]
+                                      & ~pos.pieces()
+                                      & pos.board_bb()
+                                      & ~pos.wall_squares()
+                                      & ~pos.dead_squares();
+                while (enemyTargets)
+                    *moveList++ = make_arimaa_push(from, enemyFrom, pop_lsb(enemyTargets));
+            }
+        }
+
         Bitboard pushMoves = 0;
-        if (pos.pushing_strength(Pt) > 0)
+        if (!pos.variant()->arimaa && pos.pushing_strength(Pt) > 0)
         {
             Bitboard candidates = pos.push_targets_from(Us, Pt, from);
             if (!pos.stepwise_pushing())

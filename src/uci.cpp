@@ -103,7 +103,7 @@ namespace {
                     states->emplace_back();
                     pos.do_move(turn.steps[i], states->back());
                 }
-                if (turn.length < pos.compound_turn_steps())
+                if (pos.compound_turn_step() > 0)
                 {
                     states->emplace_back();
                     pos.end_compound_turn(states->back());
