@@ -73,14 +73,19 @@ def reference_turns(state: ArimaaState) -> list[str]:
             try:
                 child.add_steps(list(action.steps))
                 child_state = state.finish_turn(
-                    child, adjudicate_no_move=False, allow_unchanged=True
+                    child,
+                    adjudicate_no_move=False,
+                    allow_unchanged=True,
+                    enforce_repetition=False,
+                    adjudicate_terminal=False,
                 )
             except TournamentError:
                 continue
 
-            if child.board.board != start_board:
+            boundary_legal = child_state.repetitions[child_state.board.key()] < 3
+            if boundary_legal and child.board.board != start_board:
                 result.append(",".join(item.fsx() for item in child.actions))
-            if child.physical_steps < 4 and child_state.winner is None:
+            if child.physical_steps < 4:
                 walk(child)
 
     walk(TurnCursor(state.board.copy()))
@@ -102,26 +107,28 @@ def random_turn(state: ArimaaState, rng: random.Random):
             try:
                 child.add_steps(list(action.steps))
                 child_state = state.finish_turn(
-                    child, adjudicate_no_move=True, allow_unchanged=True
+                    child,
+                    adjudicate_no_move=False,
+                    allow_unchanged=True,
+                    enforce_repetition=False,
+                    adjudicate_terminal=False,
                 )
             except TournamentError:
                 continue
-            if child.board.board != start_board:
-                choices.append((child, child_state))
-            elif child.physical_steps < 4 and child_state.winner is None:
-                choices.append((child, child_state))
+            boundary_legal = child_state.repetitions[child_state.board.key()] < 3
+            if boundary_legal and child.board.board != start_board:
+                choices.append((child, True))
+            elif child.physical_steps < 4:
+                choices.append((child, False))
 
         if not choices:
             raise StressError(f"referee found no legal turn at {state.fen()}")
 
-        cursor, child_state = rng.choice(choices)
-        if (cursor.board.board == start_board
-                or cursor.physical_steps == 4
-                or child_state.winner is not None
-                or rng.random() < 0.25):
-            if cursor.board.board == start_board and cursor.physical_steps < 4:
-                continue
-            return child_state
+        cursor, can_end = rng.choice(choices)
+        if can_end and (cursor.physical_steps == 4 or rng.random() < 0.25):
+            return state.finish_turn(cursor)
+        if cursor.physical_steps == 4:
+            return state.finish_turn(cursor)
 
 
 def audit_position(adapter: FSXPerftAdapter,

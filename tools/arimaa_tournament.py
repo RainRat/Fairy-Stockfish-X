@@ -508,7 +508,9 @@ class ArimaaState:
         return None, None
 
     def finish_turn(self, cursor: TurnCursor, adjudicate_no_move: bool = True,
-                    allow_unchanged: bool = False) -> "ArimaaState":
+                    allow_unchanged: bool = False,
+                    enforce_repetition: bool = True,
+                    adjudicate_terminal: bool = True) -> "ArimaaState":
         if cursor.physical_steps < 1 or cursor.physical_steps > 4:
             raise TournamentError("Arimaa turn must contain one to four physical steps")
         if cursor.board.board == self.board.board and not allow_unchanged:
@@ -521,15 +523,16 @@ class ArimaaState:
         key = next_board.key()
         repetitions = dict(self.repetitions)
         repetitions[key] = repetitions.get(key, 0) + 1
-        if repetitions[key] >= 3:
+        if enforce_repetition and repetitions[key] >= 3:
             raise TournamentError("third occurrence of a position is illegal")
 
         result = ArimaaState(next_board, next_fullmove, repetitions)
-        winner, reason = result.terminal_winner(mover)
-        if winner is None and adjudicate_no_move and not result.has_legal_turn():
-            winner, reason = mover, "no-legal-move"
-        result.winner = winner
-        result.reason = reason
+        if adjudicate_terminal:
+            winner, reason = result.terminal_winner(mover)
+            if winner is None and adjudicate_no_move and not result.has_legal_turn():
+                winner, reason = mover, "no-legal-move"
+            result.winner = winner
+            result.reason = reason
         return result
 
     def apply_turn(self, steps: list[PhysicalStep]) -> TurnResult:
@@ -547,15 +550,32 @@ class ArimaaState:
     def has_legal_turn(self) -> bool:
         if self.winner is not None:
             return False
-        for action in self.board.candidate_actions():
-            cursor = TurnCursor(self.board.copy())
-            cursor.add_steps(list(action.steps))
-            try:
-                self.finish_turn(cursor, adjudicate_no_move=False)
-            except TournamentError:
-                continue
-            return True
-        return False
+        start_board = dict(self.board.board)
+
+        def walk(cursor: TurnCursor) -> bool:
+            for action in cursor.board.candidate_actions():
+                if cursor.physical_steps + len(action.steps) > 4:
+                    continue
+                child = cursor.clone()
+                child.add_steps(list(action.steps))
+                try:
+                    child_state = self.finish_turn(
+                        child,
+                        adjudicate_no_move=False,
+                        allow_unchanged=True,
+                        enforce_repetition=False,
+                        adjudicate_terminal=False,
+                    )
+                except TournamentError:
+                    continue
+                boundary_legal = child_state.repetitions[child_state.board.key()] < 3
+                if boundary_legal and child.board.board != start_board:
+                    return True
+                if child.physical_steps < 4 and walk(child):
+                    return True
+            return False
+
+        return walk(TurnCursor(self.board.copy()))
 
     def legal_turn_count(self) -> int:
         """Count legal complete turns from this boundary position.
@@ -577,13 +597,18 @@ class ArimaaState:
                 child.add_steps(list(action.steps))
                 try:
                     child_state = self.finish_turn(
-                        child, adjudicate_no_move=False, allow_unchanged=True
+                        child,
+                        adjudicate_no_move=False,
+                        allow_unchanged=True,
+                        enforce_repetition=False,
+                        adjudicate_terminal=False,
                     )
                 except TournamentError:
                     continue
-                if child.board.board != start_board:
+                boundary_legal = child_state.repetitions[child_state.board.key()] < 3
+                if boundary_legal and child.board.board != start_board:
                     total += 1
-                if child.physical_steps < 4 and child_state.winner is None:
+                if child.physical_steps < 4:
                     total += count(child)
             return total
 
