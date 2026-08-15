@@ -67,7 +67,7 @@ assert_contains "$out" "^Fen: 8/7r/8/8/8/RR6/8/8\[\] b - - 1 1$"
 
 # A stronger adjacent enemy freezes an unsupported rabbit.
 out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
-position fen 8/8/8/8/8/3Re4/8/8 w - - 0 1
+position fen 8/7r/8/8/8/3Re4/8/8 w - - 0 1
 go perft 1
 EOF
 )
@@ -75,7 +75,7 @@ assert_nodes "$out" "0"
 
 # Friendly orthogonal support prevents freezing.
 out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
-position fen 8/8/8/8/8/2Re4/2R5/8 w - - 0 1
+position fen 8/7r/8/8/8/2Re4/2R5/8 w - - 0 1
 go perft 1
 EOF
 )
@@ -83,7 +83,7 @@ assert_contains "$out" "^c3b3: 1$"
 
 # Equal-strength pieces do not freeze each other.
 out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
-position fen 8/8/8/8/8/3Ee3/8/8 w - - 0 1
+position fen 8/7r/8/8/8/3Ee3/R7/8 w - - 0 1
 go perft 1
 EOF
 )
@@ -91,7 +91,7 @@ assert_contains "$out" "^d3d2: 1$"
 
 # The compound encoding exposes an elephant pull of a rabbit.
 out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
-position fen 8/8/8/8/8/3Er4/8/8 w - - 0 1
+position fen 8/7r/8/8/8/3Er4/R7/8 w - - 0 1
 go perft 1
 EOF
 )
@@ -100,14 +100,14 @@ assert_contains "$out" "^d3d2,e3: 1$"
 # A temporary return to the starting layout may be followed by a real step,
 # but a completed turn may not be a whole-turn pass.
 out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
-position fen 8/8/8/8/8/8/R1R5/8 w - - 0 1 moves a2b2,b2a2,a2a3
+position fen 8/7r/8/8/8/8/R1R5/8 w - - 0 1 moves a2b2,b2a2,a2a3
 d
 EOF
 )
-assert_contains "$out" "^Fen: 8/8/8/8/8/R7/2R5/8\[\] b - - 1 1$"
+assert_contains "$out" "^Fen: 8/7r/8/8/8/R7/2R5/8\[\] b - - 1 1$"
 
 out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
-position fen 8/8/8/8/8/8/R1R5/8 w - - 0 1
+position fen 8/7r/8/8/8/8/R1R5/8 w - - 0 1
 go perft 1
 EOF
 )
@@ -121,10 +121,37 @@ EOF
 )
 assert_nodes "$out" "0"
 
+# A rabbit goal is adjudicated only at the completed-turn boundary.  The
+# white rabbit reaches rank 1 in a push prefix, then another black step can
+# still complete the turn.
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
+position fen 8/7r/8/8/8/8/eR6/8 b - - 0 1
+go perft 1
+EOF
+)
+assert_contains "$out" "^a2b2,b1,h7h6: 1$"
+
+# Rabbit elimination is also a completed-turn terminal condition.
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
+position fen 7r/8/8/8/8/8/8/E7 w - - 0 1
+go perft 1
+EOF
+)
+assert_nodes "$out" "0"
+
+# The third occurrence of a boundary board for the same player is illegal as
+# an early-ending turn. Continuing the same turn remains available.
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
+position fen 8/6er/8/8/8/8/E7/R7 w - - 0 1 moves a2b2 g7f7 b2a2 f7g7 a2b2 g7f7 b2a2
+go perft 1
+EOF
+)
+assert_not_contains "$out" "^f7g7: 1$"
+
 # Arimaa push adjacency is orthogonal; diagonal king-neighborhood squares are
 # not valid pusher or pushed-piece destinations.
 out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
-position fen 8/8/8/4r3/3E4/8/8/8 w - - 0 1
+position fen 8/7r/8/4r3/3E4/8/R7/8 w - - 0 1
 go perft 1
 EOF
 )
@@ -133,16 +160,16 @@ assert_not_contains "$out" "^d4e5,f5: 1$"
 # A push's internal comma is not confused with the comma starting the next
 # Arimaa step.
 out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
-position fen 8/8/8/8/8/3Er3/2R5/8 w - - 0 1 moves d3d2,e3,c2b2
+position fen 8/7r/8/8/8/3Er3/2R5/8 w - - 0 1 moves d3d2,e3,c2b2
 d
 EOF
 )
-assert_contains "$out" "^Fen: 8/8/8/8/8/3r4/1R1E4/8\[\] b - - 1 1$"
+assert_contains "$out" "^Fen: 8/7r/8/8/8/3r4/1R1E4/8\[\] b - - 1 1$"
 
 # Unprotected trap squares remove a piece after the step.
 out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
-position fen 8/8/8/8/8/8/2R5/8 w - - 0 1 moves c2c3
+position fen 8/7r/8/8/8/8/2R5/8 w - - 0 1 moves c2c3
 d
 EOF
 )
-assert_contains "$out" "Fen: 8/8/8/8/8/8/8/8\[\] b - - 0 1"
+assert_contains "$out" "Fen: 8/7r/8/8/8/8/8/8\[\] b - - 0 1"

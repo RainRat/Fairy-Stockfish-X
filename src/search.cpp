@@ -250,7 +250,6 @@ void MainThread::search() {
       callsCnt = 1;
       TT.new_search();
       Eval::NNUE::verify();
-      Threads.start_searching();
       Thread::search();
       Threads.stop = true;
       Threads.wait_for_search_finished();

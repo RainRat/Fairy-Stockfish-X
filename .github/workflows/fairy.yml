@@ -77,7 +77,7 @@ jobs:
             printf '%s\\n' "$diagnostics"
             exit "$status"
           fi
-          if grep -Ev "Parsing variant|Variant template '.*' does not exist\\.|exceeds build board limits \\(maxFile=.*\\)\\. Skipping\\.|Castling destination is adjacent to castlingKingFile; some GUIs/protocols may not distinguish castling from a normal king move\\.|Can not use kings with blastOnCapture\\.|Can not use kings, pseudo-royal, or anti-royal with blastImmuneTypes\\.|Variant 'kamikaze' has invalid configuration\\. Skipping\\." <<< "$diagnostics"; then
+          if grep -Ev "Parsing variant|Variant template '.*' does not exist\\.|exceeds build board limits \\(maxFile=.*\\)\\. Skipping\\.|Castling destination is adjacent to castlingKingFile; some GUIs/protocols may not distinguish castling from a normal king move\\.|Can not use kings with blastOnCapture\\.|Can not use kings, pseudo-royal, or anti-royal with blastImmuneTypes\\.|Variant 'kamikaze' has invalid configuration\\. Skipping\\.|Variant 'arimaa' requires an arimaa=yes build\\. Skipping\\.|checking=false with allowChecks=true is unusual: king safety is disabled, so the no-check rule will not constrain legality\\." <<< "$diagnostics"; then
             exit 1
           fi
 

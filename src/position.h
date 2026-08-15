@@ -799,6 +799,9 @@ public:
   bool compound_turn_active() const;
   int compound_turn_steps() const;
   int compound_turn_step() const;
+#ifdef ENABLE_ARIMAA
+  bool arimaa_repetition_illegal() const;
+#endif
   bool has_setup_drop(Color c) const;
   bool pass_until_setup() const;
   bool pass_on_stalemate(Color c) const;
