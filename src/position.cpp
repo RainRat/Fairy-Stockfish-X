@@ -342,7 +342,7 @@ namespace {
                              PushTempPiece* outLine = nullptr,
                              PushTempPiece* outTransfers = nullptr,
                              int* outTransferCount = nullptr) {
-    if (pos.variant()->arimaa)
+    if (pos.push_pull_rule() == PushPullRule::TWO_STEP)
         return false;
 
     const MoveType mt = type_of(m);
@@ -529,7 +529,7 @@ namespace {
   }
 
   bool analyze_push_direct(const Position& pos, Move m, PushInfo& info) {
-    if (pos.variant()->arimaa)
+    if (pos.push_pull_rule() == PushPullRule::TWO_STEP)
         return false;
 
     const MoveType mt = type_of(m);
@@ -5392,14 +5392,14 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
   return info;
 }
 
-bool Position::arimaa_push_legal(Move m) const {
+bool Position::encoded_push_legal(Move m) const {
 
-  if (!is_arimaa_push(m) || var->pushPullRule != PushPullRule::ARIMAA)
+  if (!is_encoded_push(m) || var->pushPullRule != PushPullRule::TWO_STEP)
       return false;
 
   Square from = from_sq(m);
   Square to = to_sq(m);
-  Square pushedTo = arimaa_push_square(m);
+  Square pushedTo = encoded_push_square(m);
   if (!is_ok(from) || !is_ok(to) || !is_ok(pushedTo)
       || from == to || to == pushedTo || from == pushedTo)
       return false;
@@ -5430,7 +5430,8 @@ bool Position::arimaa_push_legal(Move m) const {
       && !(PseudoMoves[0][sideToMove][pusherType][from] & to))
       return false;
 
-  if (var->arimaa && compound_turn_active() && compound_turn_step() + 2 > compound_turn_steps())
+  if (push_pull_rule() == PushPullRule::TWO_STEP && compound_turn_active()
+      && compound_turn_step() + 2 > compound_turn_steps())
       return false;
 
   return !violates_same_player_board_repetition(m);
@@ -5439,8 +5440,8 @@ bool Position::arimaa_push_legal(Move m) const {
 /// Position::legal() tests whether a pseudo-legal move is legal
 
 bool Position::legal(Move m) const {
-  if (is_arimaa_push(m))
-      return arimaa_push_legal(m);
+  if (is_encoded_push(m))
+      return encoded_push_legal(m);
 
   SimulatedMoveGuard guard(*this, m);
 
@@ -5925,7 +5926,7 @@ bool Position::legal(Move m) const {
   {
       if (!is_pass(m)
           && (st->compoundTurnStep >= var->compoundTurnSteps
-              || st->compoundTurnStep + (is_arimaa_two_step(m) ? 2 : 1) > var->compoundTurnSteps))
+              || st->compoundTurnStep + (is_two_step_move(m) ? 2 : 1) > var->compoundTurnSteps))
           return false;
   }
   else if (var->multimoveOffset || var->progressiveMultimove)
@@ -6470,8 +6471,8 @@ bool Position::has_legal_move_ignoring_immediate_end() const {
 
 bool Position::pseudo_legal(const Move m) const {
 
-  if (is_arimaa_push(m))
-      return arimaa_push_legal(m);
+  if (is_encoded_push(m))
+      return encoded_push_legal(m);
 
   Color us = sideToMove;
   Color them = ~us;
@@ -6509,7 +6510,7 @@ bool Position::pseudo_legal(const Move m) const {
   if (compound_turn_active()
       && !is_pass(m)
       && (st->compoundTurnStep >= var->compoundTurnSteps
-          || st->compoundTurnStep + (is_arimaa_two_step(m) ? 2 : 1) > var->compoundTurnSteps))
+          || st->compoundTurnStep + (is_two_step_move(m) ? 2 : 1) > var->compoundTurnSteps))
       return false;
 #endif
 
@@ -7349,7 +7350,7 @@ Bitboard Position::freeze_squares_from_freezers(Color c, const SimulatedMoveInfo
     if (!var->freezePieceTypes)
         return Bitboard(0);
 
-    // Some variants, notably Arimaa, make freezing strength-sensitive: an
+    // A configured strength table makes freezing strength-sensitive: an
     // adjacent enemy freezes a weaker piece, but not an equal or stronger
     // one. Keep the long-standing adjacency-only behavior as the fast path
     // when no strength table is configured.
@@ -7597,7 +7598,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
                             && !st->compoundTurnReady && is_drop_move(m);
   const bool arimaaSetupContinues = arimaaSetupDrop
                                   && count_in_hand(sideToMove, ALL_PIECES) > 1;
-  const int moveCost = var->pushPullRule == PushPullRule::ARIMAA && is_arimaa_two_step(m) ? 2 : 1;
+  const int moveCost = var->pushPullRule == PushPullRule::TWO_STEP && is_two_step_move(m) ? 2 : 1;
   const int plyCost = arimaaSetupDrop ? 0 : moveCost;
   const bool compoundTurnEnds = (!compoundTurn && !arimaaSetupContinues)
                               || is_pass(m)
@@ -7656,7 +7657,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       ++st->compoundTurnNumber;
 #endif
   bool dropMove = is_drop_move(m);
-  bool arimaaPushMove = var->pushPullRule == PushPullRule::ARIMAA && is_arimaa_push(m);
+  bool encodedPushMove = var->pushPullRule == PushPullRule::TWO_STEP && is_encoded_push(m);
   Square from = from_sq(m);
   Square to = to_sq(m);
   Piece pc = moved_piece(m);
@@ -8182,10 +8183,10 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   }
   else
   {
-      if (arimaaPushMove)
+      if (encodedPushMove)
       {
           Piece pushed = piece_on(to);
-          Square pushedTo = arimaa_push_square(m);
+          Square pushedTo = encoded_push_square(m);
           k ^= Zobrist::psq[pc][from] ^ Zobrist::psq[pc][to]
              ^ Zobrist::psq[pushed][to] ^ Zobrist::psq[pushed][pushedTo];
           if (type_of(pc) == PAWN)
@@ -8437,10 +8438,10 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           else
               st->nonPawnMaterial[us] += PieceValue[MG][pc];
       }
-      else if (arimaaPushMove)
+      else if (encodedPushMove)
       {
           Piece pushed = piece_on(to);
-          Square pushedTo = arimaa_push_square(m);
+          Square pushedTo = encoded_push_square(m);
 
           st->nnueRefreshNeeded = true;
           if (Eval::useNNUE)
@@ -9486,7 +9487,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   if (compoundTurn && compoundTurnEnds)
   {
       const int turnLength = st->previous->compoundTurnStep
-                           + (var->pushPullRule == PushPullRule::ARIMAA && is_arimaa_two_step(m) ? 2 : 1);
+                           + (var->pushPullRule == PushPullRule::TWO_STEP && is_two_step_move(m) ? 2 : 1);
       const int internalSteps = turnLength - 1;
       if (internalSteps > 0)
       {
@@ -9619,7 +9620,7 @@ void Position::undo_move(Move m) {
   Color us = sideToMove;
   Square from = from_sq(m);
   Square to = to_sq(m);
-  bool arimaaPushMove = var->pushPullRule == PushPullRule::ARIMAA && is_arimaa_push(m);
+  bool encodedPushMove = var->pushPullRule == PushPullRule::TWO_STEP && is_encoded_push(m);
   bool rifleShot = rifle_capture(m) && st->captured.piece.piece != NO_PIECE && type_of(m) != CASTLING;
   bool cloneMove = is_clone_move(m);
   bool pullMove = is_pull_move(m);
@@ -9639,7 +9640,7 @@ void Position::undo_move(Move m) {
          || (is_promotion_move(m) && sittuyin_promotion())
          || is_pass(m)
          || is_laser_fire(m)
-         || arimaaPushMove
+         || encodedPushMove
          || cloneMove
          || rifleShot
          || pullMove
@@ -9886,9 +9887,9 @@ void Position::undo_move(Move m) {
               remove_piece(to);
               board[to] = NO_PIECE;
           }
-          else if (arimaaPushMove)
+          else if (encodedPushMove)
           {
-              Square pushedTo = arimaa_push_square(m);
+              Square pushedTo = encoded_push_square(m);
               if (piece_on(to) != NO_PIECE)
                   move_piece(to, from);
               if (piece_on(pushedTo) != NO_PIECE)
@@ -10059,7 +10060,7 @@ void Position::undo_move(Move m) {
   gamePly -= arimaaSetupPlacement
            ? 0
            : compoundTurnStepsToRestore
-           ? 1 : (var->pushPullRule == PushPullRule::ARIMAA && is_arimaa_two_step(m) ? 2 : 1);
+           ? 1 : (var->pushPullRule == PushPullRule::TWO_STEP && is_two_step_move(m) ? 2 : 1);
   gamePly += compoundTurnStepsToRestore;
   updatePawnCheckZone();
 
@@ -10312,7 +10313,7 @@ Key Position::key_after(Move m) const {
                             && !st->compoundTurnReady && is_drop_move(m);
   const bool arimaaSetupContinues = arimaaSetupDrop
                                   && count_in_hand(sideToMove, ALL_PIECES) > 1;
-  const int moveCost = var->pushPullRule == PushPullRule::ARIMAA && is_arimaa_two_step(m) ? 2 : 1;
+  const int moveCost = var->pushPullRule == PushPullRule::TWO_STEP && is_two_step_move(m) ? 2 : 1;
   const bool compoundTurnEnds = (!compoundTurn && !arimaaSetupContinues)
                               || is_pass(m)
                               || st->compoundTurnStep + moveCost >= var->compoundTurnSteps;
@@ -10324,10 +10325,10 @@ Key Position::key_after(Move m) const {
   Key k = st->key ^ Zobrist::side;
 #endif
 
-  if (var->pushPullRule == PushPullRule::ARIMAA && is_arimaa_push(m))
+  if (var->pushPullRule == PushPullRule::TWO_STEP && is_encoded_push(m))
   {
       Piece pushed = piece_on(to);
-      Square pushedTo = arimaa_push_square(m);
+      Square pushedTo = encoded_push_square(m);
       return k ^ Zobrist::psq[pc][from] ^ Zobrist::psq[pc][to]
              ^ Zobrist::psq[pushed][to] ^ Zobrist::psq[pushed][pushedTo];
   }
@@ -10864,13 +10865,11 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
               return true;
           }
 
-#ifdef ENABLE_ARIMAA
-  // Arimaa checks goals at the completed-turn boundary in mover-first order.
-  // The generic flag rule assumes that flagMove controls whether the side to
-  // move gets an extra chance, which misses an opponent rabbit pushed onto its
-  // goal row when flagMove is false.
-  if (var->turnEndAdjudication == TurnEndAdjudication::SIMULTANEOUS_FLAG_EXTINCTION
-      && compound_turn_active() && st->compoundTurnStep == 0)
+  // At a completed turn boundary, check flag goals in mover-first
+  // order before the ordinary flag rule. This lets a variant choose a
+  // deterministic winner when both sides satisfy a flag condition.
+  if (var->simulFlagExtinctionWinner == SimulFlagExtinctionWinner::FLAG_FIRST_ACTIVE_FIRST
+      && at_complete_turn_boundary())
   {
       const Color mover = ~sideToMove;
       if (flag_reached(mover))
@@ -10884,31 +10883,27 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
           return true;
       }
   }
-#endif
 
   // Extinction
   // Extinction does not apply for pseudo-royal pieces in normal capture rules,
   // because they cannot be captured directly.
   if (var->extinctionValue.get(WHITE) != VALUE_NONE || var->extinctionValue.get(BLACK) != VALUE_NONE)
   {
-#ifdef ENABLE_ARIMAA
-      // Arimaa awards simultaneous rabbit extinction to the player who just
-      // moved. At a completed-turn boundary that is the opponent of the side
-      // to move, so report a loss for the current side before generic
-      // per-color extinction ordering gets a chance to choose a winner.
-      if (var->turnEndAdjudication == TurnEndAdjudication::SIMULTANEOUS_FLAG_EXTINCTION
-          && compound_turn_active() && st->compoundTurnStep == 0
-          && arimaa_extinction_piece(WHITE) != NO_PIECE_TYPE
-          && arimaa_extinction_piece(WHITE) != ALL_PIECES
-          && arimaa_extinction_piece(BLACK) != NO_PIECE_TYPE
-          && arimaa_extinction_piece(BLACK) != ALL_PIECES
-          && count_with_hand(WHITE, arimaa_extinction_piece(WHITE)) == 0
-          && count_with_hand(BLACK, arimaa_extinction_piece(BLACK)) == 0)
+      // At a completed turn boundary, simultaneous extinction is
+      // awarded to the player who just moved before ordinary extinction
+      // ordering gets a chance to choose a winner.
+      if (var->simulFlagExtinctionWinner == SimulFlagExtinctionWinner::FLAG_FIRST_ACTIVE_FIRST
+          && at_complete_turn_boundary()
+          && extinction_piece_type(WHITE) != NO_PIECE_TYPE
+          && extinction_piece_type(WHITE) != ALL_PIECES
+          && extinction_piece_type(BLACK) != NO_PIECE_TYPE
+          && extinction_piece_type(BLACK) != ALL_PIECES
+          && count_with_hand(WHITE, extinction_piece_type(WHITE)) == 0
+          && count_with_hand(BLACK, extinction_piece_type(BLACK)) == 0)
       {
           result = extinction_value(sideToMove, ply);
           return true;
       }
-#endif
       for (Color c : { ~sideToMove, sideToMove })
       {
           if (var->extinctionValue.get(c) == VALUE_NONE)

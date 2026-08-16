@@ -246,13 +246,25 @@ void MainThread::search() {
 #ifdef ENABLE_ARIMAA
   if (rootPos.variant()->arimaa)
   {
+      Color us = rootPos.side_to_move();
       Time.init(rootPos, Limits, rootPos.side_to_move(), rootPos.game_ply());
       callsCnt = 1;
       TT.new_search();
       Eval::NNUE::verify();
+
+      if (Options["Threads"] > 1 && is_uci_dialect(CurrentProtocol))
+          sync_cout << "info string Arimaa search uses one thread; Threads is ignored" << sync_endl;
+
       Thread::search();
+
+      while (!Threads.stop && (ponder || Limits.infinite))
+          idle_wait();
+
       Threads.stop = true;
       Threads.wait_for_search_finished();
+
+      if (Limits.npmsec)
+          Time.availableNodes += Limits.inc[us] - Threads.nodes_searched();
 
       if (Threads.main()->arimaaBestTurn.length)
           sync_cout << "bestmove " << arimaa_turn_to_string(rootPos, Threads.main()->arimaaBestTurn) << sync_endl;

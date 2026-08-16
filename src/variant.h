@@ -68,14 +68,14 @@ enum class FreezeProtection {
   FRIENDLY_ORTHOGONAL
 };
 
-enum class TurnEndAdjudication : uint8_t {
+enum class SimulFlagExtinctionWinner : uint8_t {
   NONE,
-  SIMULTANEOUS_FLAG_EXTINCTION
+  FLAG_FIRST_ACTIVE_FIRST
 };
 
 enum class PushPullRule : uint8_t {
   GENERIC,
-  ARIMAA,
+  TWO_STEP,
   NONE
 };
 
@@ -447,7 +447,7 @@ struct Variant {
   bool payPointsToDrop = false;
   bool passUntilSetup = false;
   int compoundTurnSteps = 0;
-  TurnEndAdjudication turnEndAdjudication = TurnEndAdjudication::SIMULTANEOUS_FLAG_EXTINCTION;
+  SimulFlagExtinctionWinner simulFlagExtinctionWinner = SimulFlagExtinctionWinner::NONE;
 
   enum PotionType : int {
       POTION_FREEZE,

@@ -86,7 +86,7 @@ def reference_turns(state: ArimaaState) -> list[str]:
             boundary_legal = child_state.repetitions[child_state.board.key()] < 3
             if boundary_legal and child.board.board != start_board:
                 result.append(",".join(item.fsx() for item in child.actions))
-            if child.physical_steps < 4:
+            if child.physical_steps < 4 and child.terminal is None:
                 walk(child)
 
     walk(TurnCursor(state.board.copy()))
@@ -119,7 +119,7 @@ def random_turn(state: ArimaaState, rng: random.Random):
             boundary_legal = child_state.repetitions[child_state.board.key()] < 3
             if boundary_legal and child.board.board != start_board:
                 choices.append((child, True))
-            elif child.physical_steps < 4:
+            elif child.physical_steps < 4 and child.terminal is None:
                 choices.append((child, False))
 
         if not choices:

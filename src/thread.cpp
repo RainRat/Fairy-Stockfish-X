@@ -248,10 +248,10 @@ void ThreadPool::start_thinking(Position& pos, StateListPtr& states,
       }
   }
 
-  // Syzygy does not understand Arimaa's compound turns or setup pockets.
+  // Syzygy does not understand compound turns or setup pockets.
   // In particular, probing a setup child can feed ordinary board moves back
   // into Position::legal() while the side is still placing pieces.
-  if (!rootMoves.empty() && !pos.variant()->arimaa)
+  if (!rootMoves.empty() && !pos.compound_turn_active())
       Tablebases::rank_root_moves(pos, rootMoves);
 
   // Search code assumes a root move entry exists even for terminal positions.

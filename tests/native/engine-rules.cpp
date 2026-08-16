@@ -1133,8 +1133,8 @@ void arimaa_architecture() {
           "Arimaa flag role did not use the configured piece type: got "
           + std::to_string(int(pos.flag_piece(WHITE)))
           + " expected " + std::to_string(int(CUSTOM_PIECE_2)));
-    Move forwardPush = make_arimaa_push(SQ_D4, SQ_D5, SQ_D6);
-    check(pos.arimaa_push_legal(forwardPush),
+    Move forwardPush = make_encoded_push(SQ_D4, SQ_D5, SQ_D6);
+    check(pos.encoded_push_legal(forwardPush),
           "configured rabbit Betza rejected a forward push (role="
           + std::to_string(int(pos.flag_piece(WHITE)))
           + ", source=" + std::to_string(int(type_of(pos.piece_on(SQ_D4))))
@@ -1146,22 +1146,22 @@ void arimaa_architecture() {
     pos.put_piece(make_piece(BLACK, CUSTOM_PIECE_1), SQ_D3);
     std::string backwardFen = pos.fen();
     set_position(pos, states, "arimaa-custom-role-audit", backwardFen.c_str());
-    Move backwardPush = make_arimaa_push(SQ_D4, SQ_D3, SQ_D2);
-    check(!pos.arimaa_push_legal(backwardPush),
+    Move backwardPush = make_encoded_push(SQ_D4, SQ_D3, SQ_D2);
+    check(!pos.encoded_push_legal(backwardPush),
           "configured rabbit Betza allowed a backward push");
 
     set_position(pos, states, "arimaa-push-rule-none-audit",
                  "8/8/8/3r4/3R4/8/8/8 w - - 0 1");
     check(!pos.has_pushing(),
           "pushPullRule=none still exposed configured pushing capability");
-    check(!pos.arimaa_push_legal(forwardPush),
+    check(!pos.encoded_push_legal(forwardPush),
           "pushPullRule=none accepted an Arimaa push encoding");
 
     set_position(pos, states, "arimaa-push-rule-generic-audit",
                  "8/8/8/3r4/3R4/8/8/8 w - - 0 1");
     check(pos.has_pushing(),
           "pushPullRule=generic hid configured pushing capability");
-    check(!pos.arimaa_push_legal(forwardPush),
+    check(!pos.encoded_push_legal(forwardPush),
           "pushPullRule=generic accepted an Arimaa push encoding");
 }
 #endif
