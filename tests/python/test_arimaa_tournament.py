@@ -62,8 +62,13 @@ class ArimaaTournamentTests(unittest.TestCase):
 
     def test_akimot_trap_annotation_is_not_a_physical_step(self):
         state = ArimaaState.from_fen("8/8/8/8/8/8/2R5/8 w - - 0 1")
-        result = state.apply_turn(parse_aei_move("Rc2n Rc3x"))
+        result = state.apply_turn(parse_aei_move("Rc2n Rc3x", state))
         self.assertNotIn("c3", result.state.board.board)
+
+    def test_unmatched_akimot_trap_annotation_is_rejected(self):
+        state = ArimaaState.from_fen("8/8/8/8/8/8/R7/8 w - - 0 1")
+        with self.assertRaises(TournamentError):
+            parse_aei_move("Ra2n Rc3x", state)
 
     def test_friendly_support_preserves_trap_piece(self):
         state = ArimaaState.from_fen("8/8/8/8/8/1R6/2R5/8 w - - 0 1")
@@ -80,8 +85,24 @@ class ArimaaTournamentTests(unittest.TestCase):
         with self.assertRaises(TournamentError):
             state.apply_turn(parse_aei_move("Ra2n Ra3s"))
 
+    def test_goal_is_adjudicated_at_turn_boundary(self):
+        state = ArimaaState.from_fen("7r/R7/8/8/8/8/8/1C6 w - - 0 1")
+        result = state.apply_turn(parse_aei_move("Ra7n Cb1n"))
+        self.assertEqual(result.state.winner, "g")
+        self.assertEqual(result.state.reason, "goal")
+
+    def test_opponent_goal_stops_a_partial_turn(self):
+        state = ArimaaState.from_fen("e7/R7/8/8/8/8/8/2C5 s - - 0 1")
+        with self.assertRaises(TournamentError):
+            state.apply_turn(parse_aei_move("ea8e Ra7n Cc1n"))
+
+    def test_rabbit_loss_ends_turn_immediately(self):
+        state = ArimaaState.from_fen("7r/8/8/8/8/8/2R5/1C6 w - - 0 1")
+        with self.assertRaises(TournamentError):
+            state.apply_turn(parse_aei_move("Rc2n Cb1n"))
+
     def test_intermediate_return_can_be_followed_by_real_step(self):
-        state = ArimaaState.from_fen("8/8/8/8/8/8/R1R5/8 w - - 0 1")
+        state = ArimaaState.from_fen("7r/8/8/8/8/8/R1R5/8 w - - 0 1")
         result = state.apply_turn(parse_aei_move("Ra2e Rb2w Ra2n"))
         self.assertEqual(result.state.board.board.get("a3"), "R")
         self.assertEqual(result.state.board.board.get("c2"), "R")

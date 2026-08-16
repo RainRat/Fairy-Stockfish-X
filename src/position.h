@@ -866,7 +866,7 @@ public:
   bool extinction_pseudo_royal() const;
   PieceSet flag_piece_types(Color c) const;
   PieceType flag_piece(Color c) const;
-  PieceType arimaa_extinction_piece(Color c) const;
+  PieceType extinction_piece_type(Color c) const;
   Bitboard flag_region(Color c) const;
   bool flag_move() const;
   bool flag_reached(Color c) const;
@@ -1040,7 +1040,7 @@ public:
   // Properties of moves
   bool legal(Move m) const;
   bool pseudo_legal(const Move m) const;
-  bool arimaa_push_legal(Move m) const;
+  bool encoded_push_legal(Move m) const;
   SimulatedMoveInfo simulated_move_info(Move m, bool withEffects = true) const;
   bool virtual_drop(Move m) const;
   bool paired_drop(Move m) const;
@@ -3340,7 +3340,7 @@ inline PieceType Position::flag_piece(Color c) const {
   return NO_PIECE_TYPE;
 }
 
-inline PieceType Position::arimaa_extinction_piece(Color c) const {
+inline PieceType Position::extinction_piece_type(Color c) const {
   PieceSet pts = extinction_piece_types(c);
   if (pts & piece_set(ALL_PIECES))
       return ALL_PIECES;
@@ -3577,7 +3577,7 @@ inline bool Position::is_clone_move(Move m) const {
 }
 
 inline bool Position::is_pull_move(Move m) const {
-  return type_of(m) == PULL && pull_square(m) != SQ_NONE && !is_arimaa_push(m);
+  return type_of(m) == PULL && pull_square(m) != SQ_NONE && !is_encoded_push(m);
 }
 
 inline bool Position::is_swap_move(Move m) const {

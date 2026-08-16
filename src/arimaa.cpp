@@ -12,6 +12,7 @@
 #include "position.h"
 #include "search.h"
 #include "thread.h"
+#include "timeman.h"
 #include "uci.h"
 
 namespace Stockfish {
@@ -25,20 +26,31 @@ bool arimaa_should_stop(Thread& thread) {
     if (&thread == Threads.main())
         Threads.main()->check_time();
 
+    // MainThread::check_time() enforces the hard limit.  Arimaa's recursive
+    // turn search also needs the ordinary time-management target so that one
+    // very large turn cannot run all the way to Time.maximum().
+    // Match MainThread::check_time()'s normal sampling cadence rather than
+    // reading the clock for every recursive candidate.
+    const bool sampleTime = (thread.nodes.load(std::memory_order_relaxed) & 1023) == 0;
+    if (sampleTime && !Threads.main()->ponder.load(std::memory_order_relaxed)
+        && Search::Limits.use_time_management()
+        && Time.elapsed() >= Time.optimum())
+        Threads.stop = true;
+
     return Threads.stop.load(std::memory_order_relaxed);
 }
 
 int arimaa_move_cost(Move move) {
-    return is_arimaa_two_step(move) ? 2 : 1;
+    return is_two_step_move(move) ? 2 : 1;
 }
 
 std::string arimaa_step_to_string(Position& pos, Move move) {
-    if (!is_arimaa_push(move))
+    if (!is_encoded_push(move))
         return UCI::move(pos, move);
 
     return UCI::square(pos, from_sq(move))
          + UCI::square(pos, to_sq(move))
-         + "," + UCI::square(pos, arimaa_push_square(move));
+         + "," + UCI::square(pos, encoded_push_square(move));
 }
 
 using ArimaaTurnCallback = std::function<bool(const ArimaaTurn&)>;
@@ -630,16 +642,21 @@ void search_arimaa(Thread& thread) {
 
           if (&thread == Threads.main() && int(Options["Verbosity"]) >= 1)
               sync_cout << "info depth " << depth
-                        << " score cp " << int(bestScore)
+                        << " score " << UCI::value(bestScore)
                         << " nodes " << thread.nodes.load(std::memory_order_relaxed)
                         << " pv " << arimaa_turn_to_string(pos, bestTurn)
                         << sync_endl;
       }
 
+      if (Search::Limits.mate && !Threads.stop
+          && ((bestScore >= VALUE_MATE_IN_MAX_PLY
+               && VALUE_MATE - bestScore <= 2 * Search::Limits.mate)
+              || (bestScore <= VALUE_MATED_IN_MAX_PLY
+                  && VALUE_MATE + bestScore <= 2 * Search::Limits.mate)))
+          Threads.stop = true;
+
   }
 
-  if (&thread == Threads.main())
-      Threads.stop = true;
 }
 
 } // namespace Stockfish

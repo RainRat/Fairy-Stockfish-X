@@ -62,6 +62,49 @@ def opposite(side: str) -> str:
     return "s" if side == "g" else "g"
 
 
+def terminal_result(board: "ArimaaBoard", mover: str) -> tuple[Optional[str], Optional[str]]:
+    gold_goal = any(piece == "R" and square_parts(sq)[1] == 8
+                    for sq, piece in board.board.items())
+    silver_goal = any(piece == "r" and square_parts(sq)[1] == 1
+                      for sq, piece in board.board.items())
+    if (mover == "g" and gold_goal) or (mover == "s" and silver_goal):
+        return mover, "goal"
+    if (mover == "g" and silver_goal) or (mover == "s" and gold_goal):
+        return opposite(mover), "goal"
+
+    return rabbit_loss_result(board, mover)
+
+
+def rabbit_loss_result(board: "ArimaaBoard", mover: str) -> tuple[Optional[str], Optional[str]]:
+    gold_rabbits = any(piece == "R" for piece in board.board.values())
+    silver_rabbits = any(piece == "r" for piece in board.board.values())
+    if not gold_rabbits and not silver_rabbits:
+        return mover, "both-rabbit-loss"
+    if not gold_rabbits:
+        return "s", "rabbit-loss"
+    if not silver_rabbits:
+        return "g", "rabbit-loss"
+    return None, None
+
+
+def partial_turn_result(board: "ArimaaBoard", mover: str) -> tuple[Optional[str], Optional[str]]:
+    """Return results that stop a turn before its boundary.
+
+    A side reaching its own goal may finish the current turn.  A goal reached
+    by the opponent of the side currently constructing the turn is immediate,
+    matching the engine's direct flag-win rule.
+    """
+    gold_goal = any(piece == "R" and square_parts(sq)[1] == 8
+                    for sq, piece in board.board.items())
+    silver_goal = any(piece == "r" and square_parts(sq)[1] == 1
+                      for sq, piece in board.board.items())
+    if mover == "g" and silver_goal:
+        return "s", "goal"
+    if mover == "s" and gold_goal:
+        return "g", "goal"
+    return rabbit_loss_result(board, mover)
+
+
 def square(file_index: int, rank: int) -> str:
     if not (0 <= file_index < 8 and 1 <= rank <= 8):
         raise TournamentError(f"off-board square: {file_index},{rank}")
@@ -164,9 +207,11 @@ class TurnCursor:
     board: "ArimaaBoard"
     actions: list[Action] = field(default_factory=list)
     physical_steps: int = 0
+    terminal: Optional[tuple[str, str]] = None
 
     def clone(self) -> "TurnCursor":
-        return TurnCursor(self.board.copy(), list(self.actions), self.physical_steps)
+        return TurnCursor(self.board.copy(), list(self.actions), self.physical_steps,
+                          self.terminal)
 
     def add_steps(self, steps: list[PhysicalStep]) -> None:
         if self.physical_steps + len(steps) > 4:
@@ -174,6 +219,8 @@ class TurnCursor:
 
         index = 0
         while index < len(steps):
+            if self.terminal is not None:
+                raise TournamentError("turn continues after game end")
             current = steps[index]
             if side_of(current.piece) == self.board.side:
                 if index + 1 < len(steps):
@@ -182,11 +229,17 @@ class TurnCursor:
                         self.board.apply_pull(current, following)
                         self.actions.append(Action("pull", (current, following)))
                         index += 2
+                        self.terminal = partial_turn_result(self.board, self.board.side)
+                        if self.terminal == (None, None):
+                            self.terminal = None
                         continue
 
                 self.board.apply_normal(current)
                 self.actions.append(Action("normal", (current,)))
                 index += 1
+                self.terminal = partial_turn_result(self.board, self.board.side)
+                if self.terminal == (None, None):
+                    self.terminal = None
                 continue
 
             if index + 1 >= len(steps):
@@ -199,6 +252,9 @@ class TurnCursor:
             self.board.apply_push(current, following)
             self.actions.append(Action("push", (current, following)))
             index += 2
+            self.terminal = partial_turn_result(self.board, self.board.side)
+            if self.terminal == (None, None):
+                self.terminal = None
 
         self.physical_steps += len(steps)
 
@@ -493,24 +549,7 @@ class ArimaaState:
         return f"{self.board.side} [{self.board.aei_board()}]"
 
     def terminal_winner(self, mover: str) -> tuple[Optional[str], Optional[str]]:
-        gold_goal = any(piece == "R" and square_parts(sq)[1] == 8
-                        for sq, piece in self.board.board.items())
-        silver_goal = any(piece == "r" and square_parts(sq)[1] == 1
-                          for sq, piece in self.board.board.items())
-        if (mover == "g" and gold_goal) or (mover == "s" and silver_goal):
-            return mover, "goal"
-        if (mover == "g" and silver_goal) or (mover == "s" and gold_goal):
-            return opposite(mover), "goal"
-
-        gold_rabbits = any(piece == "R" for piece in self.board.board.values())
-        silver_rabbits = any(piece == "r" for piece in self.board.board.values())
-        if not gold_rabbits and not silver_rabbits:
-            return mover, "both-rabbit-loss"
-        if not gold_rabbits:
-            return "s", "rabbit-loss"
-        if not silver_rabbits:
-            return "g", "rabbit-loss"
-        return None, None
+        return terminal_result(self.board, mover)
 
     def finish_turn(self, cursor: TurnCursor, adjudicate_no_move: bool = True,
                     allow_unchanged: bool = False,
@@ -579,7 +618,7 @@ class ArimaaState:
                 boundary_legal = child_state.repetitions[child_state.board.key()] < 3
                 if boundary_legal and child.board.board != start_board:
                     return True
-                if child.physical_steps < 4 and walk(child):
+                if child.physical_steps < 4 and child.terminal is None and walk(child):
                     return True
             return False
 
@@ -616,26 +655,112 @@ class ArimaaState:
                 boundary_legal = child_state.repetitions[child_state.board.key()] < 3
                 if boundary_legal and child.board.board != start_board:
                     total += 1
-                if child.physical_steps < 4:
+                if child.physical_steps < 4 and child.terminal is None:
                     total += count(child)
             return total
 
         return count(TurnCursor(self.board.copy()))
 
 
-def parse_aei_move(payload: str) -> list[PhysicalStep]:
+def _validate_aei_trap_annotations(state: ArimaaState,
+                                   tokens: list[str]) -> None:
+    """Check Akimot trap records against the referee's physical replay."""
+
+    def removed_by(before: dict[str, str], after: ArimaaBoard,
+                   action: list[PhysicalStep]) -> set[tuple[str, str]]:
+        removed: set[tuple[str, str]] = set()
+        for square_name in TRAPS:
+            before_piece = before.get(square_name)
+            after_piece = after.board.get(square_name)
+            if before_piece is not None and after_piece != before_piece:
+                removed.add((before_piece, square_name))
+            if after_piece is None:
+                removed.update(
+                    (step.piece, square_name)
+                    for step in action
+                    if step.dst == square_name
+                )
+        return removed
+
+    cursor = TurnCursor(state.board.copy())
+    recently_removed: set[tuple[str, str]] = set()
+    index = 0
+    while index < len(tokens):
+        token = tokens[index]
+        trap = AEI_TRAP_RE.fullmatch(token)
+        if trap:
+            piece, square_name = trap.groups()
+            if (piece, square_name) not in recently_removed:
+                raise TournamentError(
+                    f"unmatched Akimot trap annotation: {token!r}"
+                )
+            index += 1
+            continue
+
+        first = PhysicalStep.from_aei(token)
+        second_index = index + 1
+        while (second_index < len(tokens)
+               and AEI_TRAP_RE.fullmatch(tokens[second_index])):
+            second_index += 1
+
+        action = [first]
+        if second_index < len(tokens):
+            following = PhysicalStep.from_aei(tokens[second_index])
+            if (side_of(first.piece) == cursor.board.side
+                    and cursor.board.valid_pull(first, following)):
+                action.append(following)
+            elif (side_of(first.piece) != cursor.board.side
+                  and cursor.board.valid_push(first, following)):
+                action.append(following)
+
+        if len(action) == 2:
+            intermediate_removed: set[tuple[str, str]] = set()
+            if second_index > index + 1:
+                before = dict(cursor.board.board)
+                intermediate = cursor.board.copy()
+                if side_of(first.piece) == cursor.board.side:
+                    intermediate.apply_normal(first)
+                else:
+                    del intermediate.board[first.src]
+                    intermediate.board[first.dst] = first.piece
+                    intermediate.stabilize_traps()
+                intermediate_removed = removed_by(before, intermediate, [first])
+                for annotation in tokens[index + 1:second_index]:
+                    piece, square_name = AEI_TRAP_RE.fullmatch(annotation).groups()
+                    if (piece, square_name) not in intermediate_removed:
+                        raise TournamentError(
+                            f"unmatched Akimot trap annotation: {annotation!r}"
+                        )
+
+            before = dict(cursor.board.board)
+            cursor.add_steps(action)
+            recently_removed = intermediate_removed | removed_by(
+                before, cursor.board, action
+            )
+            index = second_index + 1
+            continue
+
+        before = dict(cursor.board.board)
+        cursor.add_steps(action)
+        recently_removed = removed_by(before, cursor.board, action)
+        index += 1
+
+
+def parse_aei_move(payload: str, state: Optional[ArimaaState] = None) -> list[PhysicalStep]:
     payload = payload.strip()
     if not payload or payload in {"pass", "0000", "(none)"}:
         raise TournamentError(f"empty/pass AEI move is illegal: {payload!r}")
-    steps = []
-    for token in payload.split():
-        # Akimot annotates a step that leaves an unsupported trap occupant as
-        # an additional `PieceSquarex` record.  Trap removal is already
-        # applied by the independent referee after each physical step, so the
-        # annotation is informational and consumes no step.
-        if AEI_TRAP_RE.fullmatch(token):
-            continue
-        steps.append(PhysicalStep.from_aei(token))
+    tokens = payload.split()
+    if any(AEI_TRAP_RE.fullmatch(token) for token in tokens):
+        if state is None:
+            raise TournamentError(
+                "Akimot trap annotations require the current referee state"
+            )
+        _validate_aei_trap_annotations(state, tokens)
+
+    steps = [PhysicalStep.from_aei(token)
+             for token in tokens
+             if not AEI_TRAP_RE.fullmatch(token)]
     if not steps:
         raise TournamentError(f"AEI move contains no physical steps: {payload!r}")
     return steps
@@ -893,7 +1018,7 @@ def run_game(game_number: int, gold_engine: str, args: argparse.Namespace, log) 
             if engine_name == "fsx":
                 physical = parse_fsx_move(state, raw)
             else:
-                physical = parse_aei_move(raw)
+                physical = parse_aei_move(raw, state)
             result = state.apply_turn(physical)
             record = {
                 "game": game_number,

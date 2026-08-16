@@ -944,7 +944,7 @@ namespace {
                 promotionTargets |= jumpCaptures;
             pawnPromotions = promotionTargets & promotion_zone;
         }
-        if (pos.push_pull_rule() == PushPullRule::ARIMAA && GeneratesQuiets && !QuietChecks)
+        if (pos.push_pull_rule() == PushPullRule::TWO_STEP && GeneratesQuiets && !QuietChecks)
         {
             Bitboard enemySources = PseudoAttacks[WHITE][WAZIR][from] & pos.pieces(~Us);
             while (enemySources)
@@ -964,7 +964,7 @@ namespace {
                                       & ~pos.wall_squares()
                                       & ~pos.dead_squares();
                 while (enemyTargets)
-                    *moveList++ = make_arimaa_push(from, enemyFrom, pop_lsb(enemyTargets));
+                    *moveList++ = make_encoded_push(from, enemyFrom, pop_lsb(enemyTargets));
             }
         }
 
