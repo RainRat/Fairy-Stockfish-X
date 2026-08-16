@@ -379,6 +379,7 @@ namespace {
 Value search_arimaa_turns(Position& pos,
                           Thread& thread,
                           int depth,
+                          int ply,
                           Value alpha,
                           Value beta,
                           bool& aborted);
@@ -386,6 +387,7 @@ Value search_arimaa_turns(Position& pos,
 bool search_arimaa_turn_candidates(Position& pos,
                                    Thread& thread,
                                    int depth,
+                                   int ply,
                                    Value alpha,
                                    Value beta,
                                    bool& aborted,
@@ -452,14 +454,14 @@ bool search_arimaa_turn_candidates(Position& pos,
               StateInfo boundaryState;
               pos.end_compound_turn(boundaryState);
               thread.nodes.fetch_add(1, std::memory_order_relaxed);
-              value = -search_arimaa_turns(pos, thread, depth - 1,
+              value = -search_arimaa_turns(pos, thread, depth - 1, ply + 1,
                                             -beta, -alpha, aborted);
               pos.undo_compound_turn();
           }
           else
           {
               thread.nodes.fetch_add(1, std::memory_order_relaxed);
-              value = -search_arimaa_turns(pos, thread, depth - 1,
+              value = -search_arimaa_turns(pos, thread, depth - 1, ply + 1,
                                             -beta, -alpha, aborted);
           }
 
@@ -482,7 +484,7 @@ bool search_arimaa_turn_candidates(Position& pos,
           && pos.compound_turn_active())
       {
           keepSearching = search_arimaa_turn_candidates(
-            pos, thread, depth, alpha, beta, aborted, best, bestTurn, foundTurn,
+            pos, thread, depth, ply, alpha, beta, aborted, best, bestTurn, foundTurn,
             visitedMoves, turn, states, stepDepth + 1, usedSteps + moveCost,
             startBoardKey, rootSearchMoves, rootSearchMovesSpecified, rootBanMoves);
 
@@ -501,6 +503,7 @@ bool search_arimaa_turn_candidates(Position& pos,
 Value search_arimaa_turns(Position& pos,
                           Thread& thread,
                           int depth,
+                          int ply,
                           Value alpha,
                           Value beta,
                           bool& aborted) {
@@ -508,12 +511,12 @@ Value search_arimaa_turns(Position& pos,
   // Repetition legality depends on the completed-turn StateInfo history, not
   // only on the current board key. Do not reuse history-blind TT bounds here.
   Value result;
-  if (pos.is_game_end(result))
+  if (pos.is_game_end(result, ply))
       return result;
   if (depth <= 0)
   {
       if (!has_any_arimaa_turn(pos))
-          return pos.stalemate_value();
+          return pos.stalemate_value(ply);
       return Eval::evaluate(pos);
   }
   if (arimaa_should_stop(thread))
@@ -528,7 +531,7 @@ Value search_arimaa_turns(Position& pos,
   uint64_t visitedMoves = 0;
   ArimaaTurn turn;
   alignas(Eval::NNUE::CacheLineSize) StateInfo states[ArimaaTurn::MAX_STEPS];
-  search_arimaa_turn_candidates(pos, thread, depth, alpha, beta, aborted,
+  search_arimaa_turn_candidates(pos, thread, depth, ply, alpha, beta, aborted,
                                 best, bestTurn, foundTurn, visitedMoves, turn,
                                 states, 0, 0, pos.board_layout_key(), nullptr,
                                 false, nullptr);
@@ -537,7 +540,7 @@ Value search_arimaa_turns(Position& pos,
       return VALUE_DRAW;
 
   if (!foundTurn)
-      return pos.stalemate_value();
+      return pos.stalemate_value(ply);
 
   return best;
 }
@@ -615,7 +618,7 @@ void search_arimaa(Thread& thread) {
       ArimaaTurn turn;
       alignas(Eval::NNUE::CacheLineSize) StateInfo states[ArimaaTurn::MAX_STEPS];
       search_arimaa_turn_candidates(
-        pos, thread, depth, -VALUE_INFINITE, -bestScore, aborted, bestScore,
+        pos, thread, depth, 0, -VALUE_INFINITE, -bestScore, aborted, bestScore,
         bestTurn, foundTurn, visitedMoves, turn, states, 0, 0,
         pos.board_layout_key(), &searchMoves, searchMovesSpecified, &banMoves);
 

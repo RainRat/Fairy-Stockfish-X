@@ -1110,6 +1110,12 @@ void arimaa_architecture() {
     check(pos.at_complete_turn_boundary(),
           "undoing an Arimaa partial step did not restore the turn boundary");
 
+    set_position(pos, states, "arimaa",
+                 "R7/7r/8/8/8/8/8/8 b - - 0 1");
+    Value result;
+    check(pos.is_game_end(result, 3) && result == mated_in(3),
+          "Arimaa terminal adjudication did not preserve the supplied search ply");
+
     set_position(pos, states, "arimaa-nonsequential-audit",
                  "8/8/8/8/8/8/8/8[RRRRRRRRCCDDHHMErrrrrrrrccddhhme] w - - 0 1");
     Move ordinaryDrop = parse_move(pos, "R@a1");

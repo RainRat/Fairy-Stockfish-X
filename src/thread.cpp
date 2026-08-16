@@ -251,7 +251,8 @@ void ThreadPool::start_thinking(Position& pos, StateListPtr& states,
   // Syzygy does not understand compound turns or setup pockets.
   // In particular, probing a setup child can feed ordinary board moves back
   // into Position::legal() while the side is still placing pieces.
-  if (!rootMoves.empty() && !pos.compound_turn_active())
+  if (!rootMoves.empty() && !pos.compound_turn_active()
+      && !pos.count_in_hand(ALL_PIECES))
       Tablebases::rank_root_moves(pos, rootMoves);
 
   // Search code assumes a root move entry exists even for terminal positions.
