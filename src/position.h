@@ -3019,7 +3019,12 @@ inline bool Position::at_complete_turn_boundary() const {
 }
 
 inline int Position::compound_turn_step_cost(Move m) const {
+#ifdef ENABLE_ARIMAA
   return is_two_step_move(m) ? 2 : 1;
+#else
+  (void)m;
+  return 1;
+#endif
 }
 
 inline int Position::compound_turn_steps() const {
