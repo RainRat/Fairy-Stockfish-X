@@ -1091,6 +1091,7 @@ void arimaa_setup() {
 void arimaa_architecture() {
     Position pos;
     StateListPtr states;
+    Value result;
 
     set_position(pos, states, "arimaa",
                  "8/7r/8/8/8/8/R7/8 w - - 0 1");
@@ -1111,8 +1112,40 @@ void arimaa_architecture() {
           "undoing an Arimaa partial step did not restore the turn boundary");
 
     set_position(pos, states, "arimaa",
+                 "7r/R7/8/8/8/8/8/8 w - - 0 1");
+    Move goalStep = parse_move(pos, "a7a8");
+    states->emplace_back();
+    pos.do_move(goalStep, states->back());
+    check(!pos.is_game_end(result),
+          "an Arimaa rabbit goal was adjudicated before the turn boundary");
+    pos.undo_move(goalStep);
+    states->pop_back();
+
+    set_position(pos, states, "arimaa",
+                 "7r/8/8/8/8/8/2R5/8 w - - 0 1");
+    Move trapStep = parse_move(pos, "c2c3");
+    states->emplace_back();
+    pos.do_move(trapStep, states->back());
+    check(!pos.is_game_end(result),
+          "Arimaa rabbit extinction was adjudicated before the turn boundary");
+    pos.undo_move(trapStep);
+    states->pop_back();
+
+    set_position(pos, states, "arimaa",
+                 "7r/8/8/3r4/3E4/8/8/R7 w - - 0 1");
+    Move ordinaryCapture = make_move(SQ_D4, SQ_D5);
+    check(!pos.legal(ordinaryCapture),
+          "Arimaa move-only Betza allowed an ordinary occupied-destination capture");
+    check(pos.encoded_push_legal(make_encoded_push(SQ_D4, SQ_D5, SQ_D6)),
+          "Arimaa encoded push was rejected while ordinary captures were disabled");
+
+    set_position(pos, states, "arimaa-board-size-audit",
+                 "9r/10/10/10/10/10/10/10/10/R9 w - - 0 1");
+    check(pos.max_file() == FILE_J && pos.max_rank() == RANK_10,
+          "Arimaa rejected a configured board larger than 8x8");
+
+    set_position(pos, states, "arimaa",
                  "R7/7r/8/8/8/8/8/8 b - - 0 1");
-    Value result;
     check(pos.is_game_end(result, 3) && result == mated_in(3),
           "Arimaa terminal adjudication did not preserve the supplied search ply");
 
@@ -1156,6 +1189,16 @@ void arimaa_architecture() {
     check(!pos.encoded_push_legal(backwardPush),
           "configured rabbit Betza allowed a backward push");
 
+    set_position(pos, states, "arimaa-pusher-movement-audit",
+                 "8/8/8/8/8/8/8/8 w - - 0 1");
+    pos.put_piece(make_piece(WHITE, CUSTOM_PIECE_2), SQ_D4);
+    pos.put_piece(make_piece(BLACK, CUSTOM_PIECE_1), SQ_D3);
+    std::string pusherMovementFen = pos.fen();
+    set_position(pos, states, "arimaa-pusher-movement-audit", pusherMovementFen.c_str());
+    Move pusherBackward = make_encoded_push(SQ_D4, SQ_D3, SQ_D2);
+    check(!pos.encoded_push_legal(pusherBackward),
+          "encoded push legality depended on the configured flag piece instead of the pusher Betza");
+
     set_position(pos, states, "arimaa-push-rule-none-audit",
                  "8/8/8/3r4/3R4/8/8/8 w - - 0 1");
     check(!pos.has_pushing(),
@@ -1169,6 +1212,20 @@ void arimaa_architecture() {
           "pushPullRule=generic hid configured pushing capability");
     check(!pos.encoded_push_legal(forwardPush),
           "pushPullRule=generic accepted an Arimaa push encoding");
+
+    set_position(pos, states, "arimaa-push-rule-generic-audit",
+                 "7r/8/8/3r4/3E4/8/8/R7 w - - 0 1");
+    Move genericPull = parse_move(pos, "d4e4,d5");
+    check(is_two_step_move(genericPull),
+          "generic pull was not represented as a two-step move");
+    states->emplace_back();
+    pos.do_move(genericPull, states->back());
+    check(pos.compound_turn_step() == 2,
+          "generic pull advanced the compound turn by one step instead of two");
+    check(!pos.at_complete_turn_boundary(),
+          "generic pull incorrectly completed the compound turn");
+    pos.undo_move(genericPull);
+    states->pop_back();
 }
 #endif
 
@@ -2326,6 +2383,14 @@ pushPullRule = none
 
 [arimaa-push-rule-generic-audit:arimaa]
 pushPullRule = generic
+
+[arimaa-pusher-movement-audit:arimaa-custom-role-audit]
+flagPieceTypes = x
+
+[arimaa-board-size-audit:arimaa]
+maxFile = j
+maxRank = 10
+startFen = 9r/10/10/10/10/10/10/10/10/R9 w - - 0 1
 )INI");
     variants.parse_istream<false>(inline_config);
 }

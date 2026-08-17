@@ -800,6 +800,7 @@ public:
   bool at_complete_turn_boundary() const;
   int compound_turn_steps() const;
   int compound_turn_step() const;
+  int compound_turn_step_cost(Move m) const;
 #ifdef ENABLE_ARIMAA
   bool arimaa_repetition_illegal() const;
 #endif
@@ -2893,6 +2894,10 @@ inline bool Position::at_complete_turn_boundary() const {
 #else
   return true;
 #endif
+}
+
+inline int Position::compound_turn_step_cost(Move m) const {
+  return is_two_step_move(m) ? 2 : 1;
 }
 
 inline int Position::compound_turn_steps() const {

@@ -2292,12 +2292,6 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
                 std::cerr << "arimaa - turnSteps must be in range [1, 4]." << std::endl;
             valid = false;
         }
-        if (v->maxFile != FILE_H || v->maxRank != RANK_8)
-        {
-            if (DoCheck)
-                std::cerr << "arimaa - only the standard 8x8 board is supported." << std::endl;
-            valid = false;
-        }
         if (v->multimoveOffset || v->progressiveMultimove || !v->multimoves.empty())
         {
             if (DoCheck)

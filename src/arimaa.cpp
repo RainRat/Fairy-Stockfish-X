@@ -40,8 +40,8 @@ bool arimaa_should_stop(Thread& thread) {
     return Threads.stop.load(std::memory_order_relaxed);
 }
 
-int arimaa_move_cost(Move move) {
-    return is_two_step_move(move) ? 2 : 1;
+int arimaa_move_cost(const Position& pos, Move move) {
+    return pos.compound_turn_step_cost(move);
 }
 
 std::string arimaa_step_to_string(Position& pos, Move move) {
@@ -71,7 +71,7 @@ bool generate_turns(Position& pos,
         if (is_pass(move))
             continue;
 
-        const int moveCost = arimaa_move_cost(move);
+        const int moveCost = arimaa_move_cost(pos, move);
         if (usedSteps + moveCost > turnSteps)
             continue;
 
@@ -224,7 +224,7 @@ bool parse_arimaa_turn(Position& pos, const std::string& text, ArimaaTurn& turn)
           if (text.compare(offset, moveText.size(), moveText) != 0)
               continue;
 
-          const int moveCost = arimaa_move_cost(move);
+          const int moveCost = arimaa_move_cost(pos, move);
           if (usedSteps + moveCost > pos.compound_turn_steps())
               continue;
 
@@ -262,7 +262,7 @@ bool parse_arimaa_turn(Position& pos, const std::string& text, ArimaaTurn& turn)
   int turnCost = 0;
   for (int i = 0; i < parsed.length; ++i)
   {
-      turnCost += arimaa_move_cost(parsed.steps[i]);
+      turnCost += arimaa_move_cost(pos, parsed.steps[i]);
       pos.do_move(parsed.steps[i], states[i], false);
   }
 
@@ -299,7 +299,7 @@ void do_arimaa_turn(Position& pos, const ArimaaTurn& turn, StateInfo* states) {
   for (int i = 0; i < turn.length; ++i)
   {
       assert(pos.legal(turn.steps[i]));
-      turnCost += arimaa_move_cost(turn.steps[i]);
+      turnCost += arimaa_move_cost(pos, turn.steps[i]);
       pos.do_move(turn.steps[i], states[i], false);
   }
 
@@ -314,7 +314,7 @@ void undo_arimaa_turn(Position& pos, const ArimaaTurn& turn) {
 
   int turnCost = 0;
   for (int i = 0; i < turn.length; ++i)
-      turnCost += arimaa_move_cost(turn.steps[i]);
+      turnCost += arimaa_move_cost(pos, turn.steps[i]);
 
   if (turnCost < pos.compound_turn_steps())
       pos.undo_compound_turn();
@@ -334,7 +334,7 @@ std::string arimaa_turn_to_string(Position& pos, const ArimaaTurn& turn) {
       if (i)
           result += ',';
       result += arimaa_step_to_string(pos, turn.steps[i]);
-      turnCost += arimaa_move_cost(turn.steps[i]);
+      turnCost += arimaa_move_cost(pos, turn.steps[i]);
       pos.do_move(turn.steps[i], states[i], false);
   }
 
@@ -419,7 +419,7 @@ bool search_arimaa_turn_candidates(Position& pos,
       if (is_pass(move))
           continue;
 
-      const int moveCost = arimaa_move_cost(move);
+      const int moveCost = arimaa_move_cost(pos, move);
       if (usedSteps + moveCost > pos.compound_turn_steps())
           continue;
 

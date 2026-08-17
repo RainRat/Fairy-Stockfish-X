@@ -88,21 +88,13 @@ def rabbit_loss_result(board: "ArimaaBoard", mover: str) -> tuple[Optional[str],
 
 
 def partial_turn_result(board: "ArimaaBoard", mover: str) -> tuple[Optional[str], Optional[str]]:
-    """Return results that stop a turn before its boundary.
+    """Do not adjudicate game-ending rules before the turn boundary.
 
-    A side reaching its own goal may finish the current turn.  A goal reached
-    by the opponent of the side currently constructing the turn is immediate,
-    matching the engine's direct flag-win rule.
+    A rabbit can be pushed or pulled into its goal row and moved back out
+    before the turn ends. Rabbit extinction is likewise resolved after the
+    completed turn, including the simultaneous-loss ordering.
     """
-    gold_goal = any(piece == "R" and square_parts(sq)[1] == 8
-                    for sq, piece in board.board.items())
-    silver_goal = any(piece == "r" and square_parts(sq)[1] == 1
-                      for sq, piece in board.board.items())
-    if mover == "g" and silver_goal:
-        return "s", "goal"
-    if mover == "s" and gold_goal:
-        return "g", "goal"
-    return rabbit_loss_result(board, mover)
+    return None, None
 
 
 def square(file_index: int, rank: int) -> str:

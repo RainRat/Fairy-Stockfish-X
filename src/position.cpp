@@ -2697,7 +2697,6 @@ Position& Position::set(const string& code, Color c, StateInfo* si) {
 
 string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string holdings, Bitboard fogArea) const {
 
-  assert(at_complete_turn_boundary());
   if (!at_complete_turn_boundary())
       return {};
 
@@ -5424,10 +5423,9 @@ bool Position::encoded_push_legal(Move m) const {
   if (var->freezeStrength[pusherType] <= var->freezeStrength[pushedType])
       return false;
 
-  // The configured flag piece supplies the rabbit role. Its parsed movement
-  // also determines which push directions are legal.
-  if (pusherType == flag_piece(sideToMove)
-      && !(PseudoMoves[0][sideToMove][pusherType][from] & to))
+  // The pusher's configured movement determines which adjacent push
+  // directions are legal; the pushed piece's movement is irrelevant.
+  if (!(push_targets_from(sideToMove, pusherType, from) & to))
       return false;
 
   if (push_pull_rule() == PushPullRule::TWO_STEP && compound_turn_active()
@@ -5926,7 +5924,7 @@ bool Position::legal(Move m) const {
   {
       if (!is_pass(m)
           && (st->compoundTurnStep >= var->compoundTurnSteps
-              || st->compoundTurnStep + (is_two_step_move(m) ? 2 : 1) > var->compoundTurnSteps))
+              || st->compoundTurnStep + compound_turn_step_cost(m) > var->compoundTurnSteps))
           return false;
   }
   else if (var->multimoveOffset || var->progressiveMultimove)
@@ -6510,7 +6508,7 @@ bool Position::pseudo_legal(const Move m) const {
   if (compound_turn_active()
       && !is_pass(m)
       && (st->compoundTurnStep >= var->compoundTurnSteps
-          || st->compoundTurnStep + (is_two_step_move(m) ? 2 : 1) > var->compoundTurnSteps))
+          || st->compoundTurnStep + compound_turn_step_cost(m) > var->compoundTurnSteps))
       return false;
 #endif
 
@@ -7598,7 +7596,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
                             && !st->compoundTurnReady && is_drop_move(m);
   const bool arimaaSetupContinues = arimaaSetupDrop
                                   && count_in_hand(sideToMove, ALL_PIECES) > 1;
-  const int moveCost = var->pushPullRule == PushPullRule::TWO_STEP && is_two_step_move(m) ? 2 : 1;
+  const int moveCost = compound_turn_step_cost(m);
   const int plyCost = arimaaSetupDrop ? 0 : moveCost;
   const bool compoundTurnEnds = (!compoundTurn && !arimaaSetupContinues)
                               || is_pass(m)
@@ -9487,7 +9485,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   if (compoundTurn && compoundTurnEnds)
   {
       const int turnLength = st->previous->compoundTurnStep
-                           + (var->pushPullRule == PushPullRule::TWO_STEP && is_two_step_move(m) ? 2 : 1);
+                           + compound_turn_step_cost(m);
       const int internalSteps = turnLength - 1;
       if (internalSteps > 0)
       {
@@ -10060,7 +10058,7 @@ void Position::undo_move(Move m) {
   gamePly -= arimaaSetupPlacement
            ? 0
            : compoundTurnStepsToRestore
-           ? 1 : (var->pushPullRule == PushPullRule::TWO_STEP && is_two_step_move(m) ? 2 : 1);
+           ? 1 : compound_turn_step_cost(m);
   gamePly += compoundTurnStepsToRestore;
   updatePawnCheckZone();
 
@@ -10313,7 +10311,7 @@ Key Position::key_after(Move m) const {
                             && !st->compoundTurnReady && is_drop_move(m);
   const bool arimaaSetupContinues = arimaaSetupDrop
                                   && count_in_hand(sideToMove, ALL_PIECES) > 1;
-  const int moveCost = var->pushPullRule == PushPullRule::TWO_STEP && is_two_step_move(m) ? 2 : 1;
+  const int moveCost = compound_turn_step_cost(m);
   const bool compoundTurnEnds = (!compoundTurn && !arimaaSetupContinues)
                               || is_pass(m)
                               || st->compoundTurnStep + moveCost >= var->compoundTurnSteps;
@@ -10865,9 +10863,9 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
               return true;
           }
 
-  // At a completed turn boundary, check flag goals in mover-first
-  // order before the ordinary flag rule. This lets a variant choose a
-  // deterministic winner when both sides satisfy a flag condition.
+  // At an adjudication boundary, check flag goals in mover-first order before
+  // the ordinary flag rule. This lets a variant choose a deterministic winner
+  // when both sides satisfy a flag condition.
   if (var->simulFlagExtinctionWinner == SimulFlagExtinctionWinner::FLAG_FIRST_ACTIVE_FIRST
       && at_complete_turn_boundary())
   {
@@ -10887,11 +10885,12 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
   // Extinction
   // Extinction does not apply for pseudo-royal pieces in normal capture rules,
   // because they cannot be captured directly.
-  if (var->extinctionValue.get(WHITE) != VALUE_NONE || var->extinctionValue.get(BLACK) != VALUE_NONE)
+  if (at_complete_turn_boundary()
+      && (var->extinctionValue.get(WHITE) != VALUE_NONE || var->extinctionValue.get(BLACK) != VALUE_NONE))
   {
-      // At a completed turn boundary, simultaneous extinction is
-      // awarded to the player who just moved before ordinary extinction
-      // ordering gets a chance to choose a winner.
+      // At an adjudication boundary, simultaneous extinction is awarded to
+      // the player who just moved before ordinary extinction ordering gets a
+      // chance to choose a winner.
       if (var->simulFlagExtinctionWinner == SimulFlagExtinctionWinner::FLAG_FIRST_ACTIVE_FIRST
           && at_complete_turn_boundary()
           && extinction_piece_type(WHITE) != NO_PIECE_TYPE
@@ -10949,7 +10948,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
   // A flag win by the side to move is only possible if flagMove is enabled
   // and they already reached the flag region the move before.
   // In the case both colors reached it, it is a draw if white was first.
-  if (flag_move() && flag_reached(sideToMove))
+  if (at_complete_turn_boundary() && flag_move() && flag_reached(sideToMove))
   {
       result = sideToMove == WHITE && flag_reached(BLACK) ? VALUE_DRAW : mate_in(ply);
       return true;
@@ -10957,7 +10956,8 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
   // A direct flag win is possible if the opponent does not get an extra flag move
   // or we can detect early for kings that they won't be able to reach the flag region
   // Note: This condition has to be after the above, since both might be true e.g. in racing kings.
-  if (   (!flag_move() || (flag_piece_types(sideToMove) == piece_set(KING) && !allow_checks())) // king-only shortcut is invalid when kings are capturable
+  if (   at_complete_turn_boundary()
+      && (!flag_move() || (flag_piece_types(sideToMove) == piece_set(KING) && !allow_checks())) // king-only shortcut is invalid when kings are capturable
        && flag_reached(~sideToMove))
   {
       bool gameEnd = true;
