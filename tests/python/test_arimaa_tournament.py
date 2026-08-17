@@ -91,15 +91,18 @@ class ArimaaTournamentTests(unittest.TestCase):
         self.assertEqual(result.state.winner, "g")
         self.assertEqual(result.state.reason, "goal")
 
-    def test_opponent_goal_stops_a_partial_turn(self):
-        state = ArimaaState.from_fen("e7/R7/8/8/8/8/8/2C5 s - - 0 1")
-        with self.assertRaises(TournamentError):
-            state.apply_turn(parse_aei_move("ea8e Ra7n Cc1n"))
+    def test_opponent_goal_can_be_reversed_before_turn_end(self):
+        state = ArimaaState.from_fen("8/R7/e7/8/8/8/7r/2C5 s - - 0 1")
+        result = state.apply_turn(parse_aei_move("Ra7n ea6n ea7e Ra8s"))
+        self.assertIsNone(result.state.winner)
+        self.assertEqual(result.state.board.board.get("a7"), "R")
+        self.assertEqual(result.state.board.board.get("b7"), "e")
 
-    def test_rabbit_loss_ends_turn_immediately(self):
+    def test_rabbit_loss_is_adjudicated_at_turn_boundary(self):
         state = ArimaaState.from_fen("7r/8/8/8/8/8/2R5/1C6 w - - 0 1")
-        with self.assertRaises(TournamentError):
-            state.apply_turn(parse_aei_move("Rc2n Cb1n"))
+        result = state.apply_turn(parse_aei_move("Rc2n Cb1n"))
+        self.assertEqual(result.state.winner, "s")
+        self.assertEqual(result.state.reason, "rabbit-loss")
 
     def test_intermediate_return_can_be_followed_by_real_step(self):
         state = ArimaaState.from_fen("7r/8/8/8/8/8/R1R5/8 w - - 0 1")

@@ -946,14 +946,10 @@ namespace {
         }
         if (pos.push_pull_rule() == PushPullRule::TWO_STEP && GeneratesQuiets && !QuietChecks)
         {
-            Bitboard enemySources = PseudoAttacks[WHITE][WAZIR][from] & pos.pieces(~Us);
+            Bitboard enemySources = pos.push_targets_from(Us, Pt, from) & pos.pieces(~Us);
             while (enemySources)
             {
                 Square enemyFrom = pop_lsb(enemySources);
-                if (Pt == pos.flag_piece(Us)
-                    && !(PseudoMoves[0][Us][Pt][from] & enemyFrom))
-                    continue;
-
                 PieceType enemyType = type_of(pos.piece_on(enemyFrom));
                 if (pos.variant()->freezeStrength[Pt] <= pos.variant()->freezeStrength[enemyType])
                     continue;
