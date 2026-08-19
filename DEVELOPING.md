@@ -1,6 +1,6 @@
 # Developing Fairy-Stockfish-X
 
-This document contains instructions for building Fairy-Stockfish-X from source, using its CLI, and working with its bindings.
+Build instructions, command-line usage, and bindings for Fairy-Stockfish-X.
 
 ## Building from Source
 
@@ -10,15 +10,15 @@ From the repository root, run:
 make -C src -j build ARCH=x86-64-modern
 ```
 
-Use `make -C src help` to see the available architecture options.
+Run `make -C src help` to see all supported CPU architectures.
 
 ### Build Options
 
-Add these flags to the build command when needed:
+Add these flags when needed:
 
-- `largeboards=yes` for variants with boards up to 12x10, such as Shogi.
+- `largeboards=yes` for boards up to 12x10 (e.g. Shogi, Xiangqi).
 - `verylargeboards=yes` for boards up to 16x16.
-- `all=yes` to include unusual variants such as Game of the Amazons.
+- `all=yes` to include all remaining variants.
 
 For example:
 
@@ -38,9 +38,7 @@ tests/protocol.sh src/stockfish-allvars
 tests/perft.sh all src/stockfish-allvars
 ```
 
-The search/evaluation suite also needs the pinned NNUE network; fetch it with
-`make -C src net` before running that suite. See [AGENTS.md](AGENTS.md) for the
-full build and testing guidance.
+The search and evaluation test suite requires the NNUE evaluation file. Download it with `make -C src net` before running those tests. See [AGENTS.md](AGENTS.md) for full testing instructions.
 
 ## CLI Usage
 
@@ -50,7 +48,7 @@ After building, run the engine from the repository root:
 src/stockfish
 ```
 
-To load the custom variant definitions and select a variant:
+To load custom variant definitions and select a variant:
 
 ```uci
 setoption name VariantPath value src/variants.ini
@@ -61,17 +59,23 @@ d
 quit
 ```
 
-Useful commands include `position startpos`, `position ... moves ...`, `go depth N`, `go movetime MS`, `d` to display the position, and `help` for the complete command list.
+Common engine commands:
+- `position startpos` — set up the starting position
+- `position ... moves ...` — set up a position and play moves
+- `go depth N` — search to depth N
+- `go movetime MS` — search for MS milliseconds
+- `d` — print an ASCII board of the current position
+- `help` — show the full command list
 
 ## Python Bindings
 
-Fairy-Stockfish-X can be used from Python through the `pyffish` library.
+Fairy-Stockfish-X includes Python bindings through the `pyffish` library.
 
 ### Prerequisites
-
+ 
 - Python 3.x
 - `setuptools` (`pip install setuptools`)
-
+ 
 ### Building the Extension
 
 From the project root, run:

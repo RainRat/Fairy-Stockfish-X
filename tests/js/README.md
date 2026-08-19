@@ -13,9 +13,9 @@
 </p>
 
 
-The package **ffish.js** is a high performance WebAssembly chess variant library based on [_Fairy-Stockfish_](https://github.com/ianfab/Fairy-Stockfish).
+The **ffish.js** package is a WebAssembly chess variant library based on [_Fairy-Stockfish_](https://github.com/ianfab/Fairy-Stockfish).
 
-It is available as a [standard module](https://www.npmjs.com/package/ffish), as an [ES6 module](https://www.npmjs.com/package/ffish-es6) and aims to have a syntax similar to [python-chess](https://python-chess.readthedocs.io/en/latest/index.html).
+It is available as a [standard module](https://www.npmjs.com/package/ffish) and an [ES6 module](https://www.npmjs.com/package/ffish-es6), with an API modeled after [python-chess](https://python-chess.readthedocs.io/en/latest/index.html).
 
 ## Install instructions
 
@@ -85,14 +85,14 @@ ffish['onRuntimeInitialized'] = () => {
 }
 ```
 
-Set a custom fen position including fen validation:
+Set a custom FEN position with validation:
 ```javascript
 fen = "rnb1kbnr/ppp1pppp/8/3q4/8/8/PPPP1PPP/RNBQKBNR w KQkq - 0 3";
-if (ffish.validateFen(fen) == 1) {  // ffish.validateFen(fen) can return different error codes, it returns 1 for FEN_OK
+if (ffish.validateFen(fen) == 1) {  // returns 1 for FEN_OK
     board.setFen(fen);
 }
 else {
-    console.error(`Fen couldn't be parsed.`);
+    console.error(`Invalid FEN string.`);
 }
 ```
 
@@ -103,7 +103,7 @@ let board2 = new ffish.Board("chess", "rnb1kbnr/ppp1pppp/8/3q4/8/8/PPPP1PPP/RNBQ
 
 ### ASCII board
 
-You can show an ASCII representation of the board using the `toString()` method
+Print a simple text board using `toString()`:
 
 ```javascript
 let board = new ffish.Board("chess", "rnb1kbnr/ppp1pppp/8/3q4/8/8/PPPP1PPP/RNBQKBNR w KQkq - 0 3");
@@ -120,7 +120,7 @@ P P P P . P P P
 R N B Q K B N R
 ```
 
-or a more detailed representation using `.toVerboseString()`.
+or a detailed board with coordinates using `.toVerboseString()`:
 
 ```javascript
 let board = new ffish.Board("chess", "rnb1kbnr/ppp1pppp/8/3q4/8/8/PPPP1PPP/RNBQKBNR w KQkq - 0 3");
@@ -159,7 +159,7 @@ Add a new move:
 board.push("g2g4");
 ```
 
-Some fairy-special moves use suffixes in the same coordinate string:
+Special variant moves use suffix characters in the coordinate string:
 
 - clone moves: `e2e4c`
 - swap moves: `d4e4s`
@@ -178,17 +178,14 @@ for (var i = 0; i < legalMovesSan.length; i++) {
 
 ## Memory management
 
-Unfortunately, it is impossible for Emscripten to call the destructor on C++ objects.
-Therefore, you need to call `.delete()` to free the heap memory of an object.
+Emscripten does not automatically invoke destructors on C++ objects. Call `.delete()` to free heap memory when finished with an object.
 ```javascript
 board.delete();
 ```
 
 ## PGN parsing
 
-Read a string from a file and parse it as a single PGN game.
-The returned `Game` object is heap-allocated in WASM memory, so it must be
-released with `.delete()` when you are done with it.
+Parse a PGN game string from a file. Call `game.delete()` and `board.delete()` when done to free WebAssembly memory.
 
 ```javascript
 fs = require('fs');
@@ -233,23 +230,22 @@ let configFilePath = './variants.ini';
  });
 ```
 
-## Remaining features
+## Additional features
 
-For an example of each available function see [test.js](https://github.com/ianfab/Fairy-Stockfish/blob/master/tests/js/test.js).
+For examples of each available function, see [test.js](https://github.com/ianfab/Fairy-Stockfish/blob/master/tests/js/test.js).
 
 ## Build instructions
 
-It is built using emscripten/Embind from C++ source code.
+Built with Emscripten/Embind from C++ source code.
 
 * https://emscripten.org/docs/porting/connecting_cpp_and_javascript/embind.html
 
 
-If you want to disable variants with a board greater than 8x8,
- you can add the flag `largeboards=no`.
+To disable variants with boards larger than 8x8, add the flag `largeboards=no`.
 
 The pre-compiled wasm binary is built with `largeboards=yes`.
 
-It is recommended to set `debug=yes` before running tests.
+Set `debug=yes` when running tests.
 
 
 ### Compile as standard module
@@ -261,15 +257,14 @@ make -f Makefile_js build
 
 ### Compile as ES6/ES2015 module
 
-Some environments such as [vue-js](https://vuejs.org/) may require the library to be exported
-  as a ES6/ES2015 module.
+Environments such as [Vue.js](https://vuejs.org/) or modern bundlers require the ES6 module build:
 
 ```bash
 cd src
 make -f Makefile_js build es6=yes
 ```
 
-Make sure that the wasm file is in the `public` directory.
+Ensure the wasm file is in your `public` directory.
 
 Reference: [emscripten/#10114](https://github.com/emscripten-core/emscripten/issues/10114)
 

@@ -9,7 +9,7 @@ object clean before rebuilding. Direct `make` builds still require `make clean`
 when changing compiler, architecture, debug/sanitizer mode, or board-family
 settings.
 
-For the normal large-board/all-variant test binary, use one of these commands (tests/build.sh handles compilation output quietly):
+For the standard large-board and all-variant test binary:
 
 ```sh
 tests/build.sh ARCH=x86-64-modern largeboards=yes all=yes EXE=stockfish-allvars

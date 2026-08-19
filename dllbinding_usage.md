@@ -1,6 +1,6 @@
 # Fairy-Stockfish DLL / SO (C API)
 
-This describes the native shared library built from `src/ffishdll.cpp`. It exposes a C ABI, making it easy to consume from C, C++, Rust, Python (ctypes), C#, etc., on both Linux and Windows (MinGW).
+The native shared library built from `src/ffishdll.cpp` exposes a C ABI for C, C++, Rust, Python (`ctypes`), C#, and other environments on Linux, macOS, and Windows (MinGW).
 
 ## What it provides
 - Move generation and legality checking for all variants enabled by Fairy-Stockfish.
@@ -48,9 +48,9 @@ Key exported functions (see `src/ffishdll.cpp`):
 - Options/engine info: `fsf_info`, `fsf_set_option_str/int/bool`
 - Memory release for returned strings: `fsf_free`
 
-All returned `const char*` strings are heap-allocated; free them with `fsf_free`.
+All returned `const char*` strings are allocated on the heap; free them with `fsf_free()`.
 
-## Minimal usage (see `src/example_dll_usage.cpp`)
+## Minimal usage
 ```cpp
 fsf_init();
 fsf_board b = fsf_new_board("chess", nullptr, false);
@@ -69,12 +69,12 @@ Read your `variants.ini` content into a string and call:
 ```cpp
 fsf_load_variant_config(iniContent);
 ```
-This reconfigures the variant list (mirrors the behavior in `ffish.js`).
+This reconfigures the variant list (same as in `ffish.js`).
 
 ## Threading
-`fsf_init()` is protected with `std::call_once`, but board operations themselves are not internally synchronized. Use separate boards per thread or provide your own locking if sharing.
+`fsf_init()` is thread-safe, but board operations are not synchronized internally. Use a separate board object in each thread, or add your own locks if sharing a board.
 
-Variant initialization/configuration touches global engine state. In particular, board creation (`fsf_new_board`) and `fsf_load_variant_config` are serialized internally; do not assume independent per-thread variant state.
+Variant configuration modifies global engine state. Board creation (`fsf_new_board`) and `fsf_load_variant_config` use internal synchronization; do not assume independent per-thread variant state.
 
 ## Complete usage example
 ```cpp
