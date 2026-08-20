@@ -8737,6 +8737,10 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   }
   else if (type_of(m) == PIECE_DEMOTION)
   {
+      // Demotion can be followed by a move morph. Record the original
+      // promoted piece so the transform undo restores it before any generic
+      // morph is considered.
+      st->transforms.morphedFrom.set(pc, is_promoted(to), unpromoted_piece_on(to), to);
       Piece demotion = unpromoted_piece_on(to);
 
       remove_piece(to);
@@ -9858,7 +9862,7 @@ void Position::undo_move(Move m) {
       if (st->consumedPromotionHandPiece != NO_PIECE)
           add_to_hand(st->consumedPromotionHandPiece);
   }
-  else if (type_of(m) == PIECE_DEMOTION)
+  else if (type_of(m) == PIECE_DEMOTION && !st->transforms.morphedFrom)
   {
       remove_piece(moverSq);
       Piece unpromotedPc = pc;

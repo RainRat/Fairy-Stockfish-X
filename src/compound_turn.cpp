@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <functional>
+#include <unordered_map>
 
 #include "evaluate.h"
 #include "movegen.h"
@@ -383,7 +384,9 @@ Value search_compound_turns(Position& pos,
                             int ply,
                             Value alpha,
                             Value beta,
-                            bool& aborted);
+                            bool& aborted,
+                            std::unordered_map<Key, bool>* leafLegalCache,
+                            std::unordered_map<Key, Value>* leafEvalCache);
 
 bool search_compound_turn_candidates(Position& pos,
                                      Thread& thread,
@@ -403,7 +406,9 @@ bool search_compound_turn_candidates(Position& pos,
                                      Key startBoardKey,
                                      const std::vector<CompoundMove>* rootSearchMoves,
                                      bool rootSearchMovesSpecified,
-                                     const std::vector<CompoundMove>* rootBanMoves) {
+                                     const std::vector<CompoundMove>* rootBanMoves,
+                                     std::unordered_map<Key, bool>* leafLegalCache,
+                                     std::unordered_map<Key, Value>* leafEvalCache) {
 
   MoveList<LEGAL> moves(pos);
 
@@ -459,14 +464,16 @@ bool search_compound_turn_candidates(Position& pos,
               pos.end_compound_turn(boundaryState);
               thread.nodes.fetch_add(1, std::memory_order_relaxed);
               value = -search_compound_turns(pos, thread, depth - 1, ply + 1,
-                                             -beta, -alpha, aborted);
+                                             -beta, -alpha, aborted, leafLegalCache,
+                                             leafEvalCache);
               pos.undo_compound_turn();
           }
           else
           {
               thread.nodes.fetch_add(1, std::memory_order_relaxed);
               value = -search_compound_turns(pos, thread, depth - 1, ply + 1,
-                                             -beta, -alpha, aborted);
+                                             -beta, -alpha, aborted, leafLegalCache,
+                                             leafEvalCache);
           }
 
           if (aborted)
@@ -491,7 +498,8 @@ bool search_compound_turn_candidates(Position& pos,
           keepSearching = search_compound_turn_candidates(
             pos, thread, depth, ply, alpha, beta, aborted, best, bestTurn, foundTurn,
             visitedMoves, turn, states, stepDepth + 1, usedSteps + moveCost,
-            startBoardKey, rootSearchMoves, rootSearchMovesSpecified, rootBanMoves);
+            startBoardKey, rootSearchMoves, rootSearchMovesSpecified, rootBanMoves,
+            leafLegalCache, leafEvalCache);
 
           alpha = std::max(alpha, best);
           keepSearching = keepSearching && alpha < beta;
@@ -511,7 +519,9 @@ Value search_compound_turns(Position& pos,
                             int ply,
                             Value alpha,
                             Value beta,
-                            bool& aborted) {
+                            bool& aborted,
+                            std::unordered_map<Key, bool>* leafLegalCache,
+                            std::unordered_map<Key, Value>* leafEvalCache) {
 
   // Repetition legality depends on the completed-turn StateInfo history, not
   // only on the current board key. Do not reuse history-blind TT bounds here.
@@ -520,9 +530,33 @@ Value search_compound_turns(Position& pos,
       return result;
   if (depth <= 0)
   {
-      if (!has_any_compound_move(pos))
+      bool hasLegalTurn;
+      // At root depth one, all candidates share the same completed-turn
+      // history prefix, so the boundary key is sufficient for this probe.
+      // Deeper searches can reach the same key through different histories;
+      // leave those probes uncached.
+      if (leafLegalCache)
+      {
+          const Key key = pos.key();
+          auto [it, inserted] = leafLegalCache->emplace(key, false);
+          if (inserted)
+              it->second = has_any_compound_move(pos);
+          hasLegalTurn = it->second;
+      }
+      else
+          hasLegalTurn = has_any_compound_move(pos);
+
+      if (!hasLegalTurn)
           return pos.stalemate_value(ply);
-      return Eval::evaluate(pos);
+
+      if (!leafEvalCache)
+          return Eval::evaluate(pos);
+
+      const Key key = pos.key() ^ make_key(pos.rule50_count());
+      auto [it, inserted] = leafEvalCache->emplace(key, VALUE_NONE);
+      if (inserted)
+          it->second = Eval::evaluate(pos);
+      return it->second;
   }
   if (compound_should_stop(thread))
   {
@@ -539,7 +573,7 @@ Value search_compound_turns(Position& pos,
   search_compound_turn_candidates(pos, thread, depth, ply, alpha, beta, aborted,
                                   best, bestTurn, foundTurn, visitedMoves, turn,
                                   states, 0, 0, pos.board_layout_key(), nullptr,
-                                  false, nullptr);
+                                  false, nullptr, leafLegalCache, leafEvalCache);
 
   if (aborted)
       return VALUE_DRAW;
@@ -618,11 +652,18 @@ void search_compound(Thread& thread) {
       bool foundTurn = false;
       uint64_t visitedMoves = 0;
       CompoundMove turn;
+      std::unordered_map<Key, bool> leafLegalCache;
+      std::unordered_map<Key, Value> leafEvalCache;
+      // Only depth one is a flat scan of turns from one shared root history.
+      // Do not carry these history-sensitive caches into deeper iterations.
+      std::unordered_map<Key, bool>* leafLegalCachePtr = depth == 1 ? &leafLegalCache : nullptr;
+      std::unordered_map<Key, Value>* leafEvalCachePtr = depth == 1 ? &leafEvalCache : nullptr;
       alignas(Eval::NNUE::CacheLineSize) StateInfo states[CompoundMove::MAX_STEPS + 1];
       search_compound_turn_candidates(
         pos, thread, depth, 0, -VALUE_INFINITE, -bestScore, aborted, bestScore,
         bestTurn, foundTurn, visitedMoves, turn, states, 0, 0,
-        pos.board_layout_key(), &searchMoves, searchMovesSpecified, &banMoves);
+        pos.board_layout_key(), &searchMoves, searchMovesSpecified, &banMoves,
+        leafLegalCachePtr, leafEvalCachePtr);
 
       if (aborted)
       {
