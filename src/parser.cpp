@@ -2284,6 +2284,46 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
         }
     }
 
+    if (v->pushPullRule == PushPullRule::TWO_STEP
+        && v->compoundTurnSteps < 2)
+    {
+        if (DoCheck)
+            std::cerr << "pushPullRule=two-step requires turnSteps >= 2." << std::endl;
+        valid = false;
+    }
+
+    if (v->compoundTurnSteps > 0)
+    {
+        const auto any_color = [](const auto& setting) {
+            return setting.get(WHITE) || setting.get(BLACK);
+        };
+        const bool hasRoyalPieces = (v->kingType != NO_PIECE_TYPE
+                                     && (v->pieceTypes & piece_set(v->kingType)))
+                                 || (v->pieceTypes & piece_set(KING));
+        const bool hasRoyalState = hasRoyalPieces
+                                || v->pseudoRoyalTypes
+                                || v->antiRoyalTypes
+                                || v->bikjangRule
+                                || v->checkCounting
+                                || v->flagPieceSafe;
+        const bool hasMandatorySubmoveRule = any_color(v->mustCapture)
+                                           || any_color(v->mustCaptureEnPassant)
+                                           || (any_color(v->mustDrop)
+                                               && (!v->sequentialSetup || v->captureType == HAND));
+        if (hasRoyalState)
+        {
+            if (DoCheck)
+                std::cerr << "turnSteps - compound turns currently require variants without royal or check-state pieces." << std::endl;
+            valid = false;
+        }
+        if (hasMandatorySubmoveRule)
+        {
+            if (DoCheck)
+                std::cerr << "turnSteps - compound turns do not compose with mandatory per-step capture or drop rules." << std::endl;
+            valid = false;
+        }
+    }
+
     switch (v->simulFlagExtinctionWinner)
     {
     case SimulFlagExtinctionWinner::NONE:

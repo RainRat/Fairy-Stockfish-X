@@ -1065,10 +1065,14 @@ void arimaa_setup() {
                  "8/8/8/8/8/8/8/8[RRRRRRRRCCDDHHMErrrrrrrrccddhhme] w - - 0 1");
 
     const std::vector<const char*> placements = {
-      "R@a1", "R@b1", "R@c1", "R@d1", "R@e1", "R@f1", "R@g1", "R@h1",
-      "C@a2", "C@b2", "D@c2", "D@d2", "H@e2", "H@f2", "M@g2", "E@h2",
-      "R@a8", "R@b8", "R@c8", "R@d8", "R@e8", "R@f8", "R@g8", "R@h8",
-      "C@a7", "C@b7", "D@c7", "D@d7", "H@e7", "H@f7", "M@g7", "E@h7"
+      "R@a1", "0000", "R@b1", "0000", "R@c1", "0000", "R@d1", "0000",
+      "R@e1", "0000", "R@f1", "0000", "R@g1", "0000", "R@h1", "0000",
+      "C@a2", "0000", "C@b2", "0000", "D@c2", "0000", "D@d2", "0000",
+      "H@e2", "0000", "H@f2", "0000", "M@g2", "0000", "E@h2",
+      "R@a8", "0000", "R@b8", "0000", "R@c8", "0000", "R@d8", "0000",
+      "R@e8", "0000", "R@f8", "0000", "R@g8", "0000", "R@h8", "0000",
+      "C@a7", "0000", "C@b7", "0000", "D@c7", "0000", "D@d7", "0000",
+      "H@e7", "0000", "H@f7", "0000", "M@g7", "0000", "E@h7"
     };
     std::vector<Move> moves;
     for (const char* notation : placements)
@@ -1137,7 +1141,7 @@ void arimaa_architecture() {
     set_position(pos, states, "arimaa",
                  "7r/8/8/3r4/3E4/8/8/R7 w - - 0 1");
     Move ordinaryCapture = make_move(SQ_D4, SQ_D5);
-    check(!pos.legal(ordinaryCapture),
+    check(!pos.pseudo_legal(ordinaryCapture),
           "Arimaa move-only Betza allowed an ordinary occupied-destination capture");
     check(pos.encoded_push_legal(make_encoded_push(SQ_D4, SQ_D5, SQ_D6)),
           "Arimaa encoded push was rejected while ordinary captures were disabled");
@@ -1146,6 +1150,14 @@ void arimaa_architecture() {
                  "9r/10/10/10/10/10/10/10/10/R9 w - - 0 1");
     check(pos.max_file() == FILE_J && pos.max_rank() == RANK_10,
           "Arimaa rejected a configured board larger than 8x8");
+
+    set_position(pos, states, "arimaa-wrapped-push-audit",
+                 "8/8/8/r6E/8/8/8/8 w - - 0 1");
+    check(pos.topology_wraps(), "cylindrical Arimaa audit did not enable wrapping");
+    check(pos.attacks_from(WHITE, WAZIR, SQ_H4, Bitboard(0)) & SQ_A4,
+          "wrapped Wazir adjacency missed h4-a4");
+    check(pos.attacks_from(WHITE, WAZIR, SQ_A4, Bitboard(0)) & SQ_B4,
+          "wrapped Wazir adjacency missed a4-b4");
 
     set_position(pos, states, "arimaa",
                  "R7/7r/8/8/8/8/8/8 b - - 0 1");
@@ -1238,35 +1250,40 @@ void compound_turn_rules() {
     // 1. Generic sequential setup audit
     set_position(pos, states, "generic-sequential-setup-audit",
                  "8/8/8/8/8/8/8/8[RRRRrrrr] w - - 0 1");
-    Move drop1 = parse_move(pos, "R@a1");
-    states->emplace_back();
-    pos.do_move(drop1, states->back());
-    check(pos.side_to_move() == WHITE, "generic sequential setup did not keep turn with White");
+    std::vector<Move> setupMoves;
+    auto play_setup = [&](const char* notation) {
+        Move move = parse_move(pos, notation);
+        states->emplace_back();
+        pos.do_move(move, states->back());
+        setupMoves.push_back(move);
+    };
+    play_setup("R@a1");
+    check(pos.side_to_move() == BLACK, "generic sequential setup did not force a pass after White's drop");
+    play_setup("0000");
+    check(pos.side_to_move() == WHITE, "generic sequential setup pass did not return to White");
     check(pos.game_ply() == 0, "generic sequential setup drop advanced gamePly");
-    Move drop2 = parse_move(pos, "R@b1");
-    states->emplace_back();
-    pos.do_move(drop2, states->back());
-    check(pos.side_to_move() == WHITE, "generic sequential setup drop 2 did not keep turn with White");
-    Move drop3 = parse_move(pos, "R@c1");
-    states->emplace_back();
-    pos.do_move(drop3, states->back());
-    check(pos.side_to_move() == WHITE, "generic sequential setup drop 3 did not keep turn with White");
-    Move drop4 = parse_move(pos, "R@d1");
-    states->emplace_back();
-    pos.do_move(drop4, states->back());
+    play_setup("R@b1");
+    play_setup("0000");
+    play_setup("R@c1");
+    play_setup("0000");
+    play_setup("R@d1");
     check(pos.side_to_move() == BLACK, "emptying White pocket did not switch sideToMove to Black");
+    play_setup("R@e8");
+    play_setup("0000");
+    play_setup("R@f8");
+    play_setup("0000");
+    play_setup("R@g8");
+    play_setup("0000");
+    play_setup("R@h8");
+    check(pos.side_to_move() == WHITE, "emptying Black pocket did not restore sideToMove to White");
     check(pos.game_ply() == 0, "generic sequential setup drops advanced gamePly before all setup complete");
 
     // Undoing sequential drops
-    pos.undo_move(drop4);
-    states->pop_back();
-    check(pos.side_to_move() == WHITE, "undoing final drop did not restore sideToMove to White");
-    pos.undo_move(drop3);
-    states->pop_back();
-    pos.undo_move(drop2);
-    states->pop_back();
-    pos.undo_move(drop1);
-    states->pop_back();
+    for (auto it = setupMoves.rbegin(); it != setupMoves.rend(); ++it)
+    {
+        pos.undo_move(*it);
+        states->pop_back();
+    }
     check(pos.side_to_move() == WHITE && pos.game_ply() == 0, "undoing all sequential drops failed");
 
     // 2. Generic compound turn generation, step costs, and repetition
@@ -1317,6 +1334,7 @@ void compound_turn_rules() {
     uint64_t nodes = compound_perft(pos, 1, false);
     check(nodes > 0, "compound_perft returned 0 nodes");
 }
+
 #endif
 
 void extinction_color_settings() {
@@ -2467,6 +2485,8 @@ pullingStrength = r:2 x:1 d:3 h:4 m:5 e:6
 
 [arimaa-nonsequential-audit:arimaa]
 sequentialSetup = false
+turnSteps = 0
+pushPullRule = none
 
 [arimaa-push-rule-none-audit:arimaa]
 pushPullRule = none
@@ -2481,6 +2501,10 @@ flagPieceTypes = x
 maxFile = j
 maxRank = 10
 startFen = 9r/10/10/10/10/10/10/10/10/R9 w - - 0 1
+
+[arimaa-wrapped-push-audit:arimaa]
+cylindrical = true
+samePlayerBoardRepetitionIllegal = false
 
 [generic-compound-turn-audit:fairy]
 pieceToCharTable = RCDHMErcdhme

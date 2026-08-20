@@ -7,6 +7,8 @@ source "${SCRIPT_DIR}/../../../../tests/lib/uci.sh"
 
 init_test_env "${1:-}" "${2:-}" "Arimaa profile"
 
+SETUP_MOVES="R@a1 0000 R@b1 0000 R@c1 0000 R@d1 0000 R@e1 0000 R@f1 0000 R@g1 0000 R@h1 0000 C@a2 0000 C@b2 0000 D@c2 0000 D@d2 0000 H@e2 0000 H@f2 0000 M@g2 0000 E@h2 R@a8 0000 R@b8 0000 R@c8 0000 R@d8 0000 R@e8 0000 R@f8 0000 R@g8 0000 R@h8 0000 C@a7 0000 C@b7 0000 D@c7 0000 D@d7 0000 H@e7 0000 H@f7 0000 M@g7 0000 E@h7"
+
 if ! probe_variant_available "$ENGINE" arimaa "$VARIANT_PATH"; then
     echo "skip: Arimaa profile requires a compoundturns=yes build"
     exit 0
@@ -20,13 +22,21 @@ EOF
 assert_nodes "$out" "96"
 assert_contains "$out" "^R@a1: 1$"
 
-# Standard setup keeps the placer on move until that side's pocket is empty.
+# Standard setup uses forced passes to keep the placer on move until that
+# side's pocket is empty.
 out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
 position startpos moves R@a1
 d
 EOF
 )
-assert_contains "$out" "^Fen: 8/8/8/8/8/8/8/R7\\[.*\\] w - - 0 1$"
+assert_contains "$out" "^Fen: 8/8/8/8/8/8/8/R7\\[.*\\] b - - 0 1$"
+
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
+position startpos moves R@a1 0000 R@b1
+d
+EOF
+)
+assert_contains "$out" "^Fen: 8/8/8/8/8/8/8/RR6\\[.*\\] b - - 0 1$"
 
 out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
 position startpos
@@ -37,15 +47,15 @@ assert_contains "$out" "^bestmove [A-Z]@[a-h][1-8]$"
 
 # Completing both setup pockets changes the side to move and enters the first
 # ordinary complete turn. This exercises the final placement on each side.
-out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
-position startpos moves R@a1 R@b1 R@c1 R@d1 R@e1 R@f1 R@g1 R@h1 C@a2 C@b2 D@c2 D@d2 H@e2 H@f2 M@g2 E@h2 R@a8 R@b8 R@c8 R@d8 R@e8 R@f8 R@g8 R@h8 C@a7 C@b7 D@c7 D@d7 H@e7 H@f7 M@g7 E@h7
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<EOF
+position startpos moves $SETUP_MOVES
 d
 EOF
 )
 assert_contains "$out" "^Fen: rrrrrrrr/ccddhhme/8/8/8/8/CCDDHHME/RRRRRRRR\\[\\] w - - 0 1$"
 
-out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
-position startpos moves R@a1 R@b1 R@c1 R@d1 R@e1 R@f1 R@g1 R@h1 C@a2 C@b2 D@c2 D@d2 H@e2 H@f2 M@g2 E@h2 R@a8 R@b8 R@c8 R@d8 R@e8 R@f8 R@g8 R@h8 C@a7 C@b7 D@c7 D@d7 H@e7 H@f7 M@g7 E@h7
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<EOF
+position startpos moves $SETUP_MOVES
 go depth 1
 EOF
 )
@@ -136,7 +146,7 @@ EOF
 )
 setup_key=$(sed -n 's/^Key: //p' <<<"$key_out")
 fresh_out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
-position fen 8/8/8/8/8/8/8/R7[EMHHDDCCRRRRRRRemhhddccrrrrrrrr] w - - 0 1
+position fen 8/8/8/8/8/8/8/R7[EMHHDDCCRRRRRRRemhhddccrrrrrrrr] b - - 0 1
 d
 EOF
 )

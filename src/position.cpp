@@ -2552,6 +2552,8 @@ void Position::set_state(StateInfo* si) const {
                        && !has_setup_drop(BLACK);
   si->compoundTurnReset = false;
 #endif
+  si->sequentialSetupMove = false;
+  si->sequentialSetupSide = sideToMove;
   si->move = MOVE_NONE;
   si->removedGatingType = NO_PIECE_TYPE;
   si->removedCastlingGatingType = NO_PIECE_TYPE;
@@ -5387,8 +5389,8 @@ bool Position::encoded_push_legal(Move m) const {
       || ((wall_squares() | dead_squares()) & pushedTo))
       return false;
 
-  if (!(PseudoAttacks[WHITE][WAZIR][from] & to)
-      || !(PseudoAttacks[WHITE][WAZIR][to] & pushedTo))
+  if (!(attacks_from(WHITE, WAZIR, from, Bitboard(0)) & to)
+      || !(attacks_from(WHITE, WAZIR, to, Bitboard(0)) & pushedTo))
       return false;
 
   if (freeze_squares() & from)
@@ -5455,6 +5457,12 @@ bool Position::legal(Move m) const {
           return false;
   }
   else if (dropMove && edge_insert_only() && (edge_insert_types() & in_hand_piece_type(m)))
+      return false;
+
+  if (var->sequentialSetup
+      && (has_setup_drop(WHITE) || has_setup_drop(BLACK))
+      && us != st->sequentialSetupSide
+      && !is_pass(m))
       return false;
 
   if (pass_until_setup() && must_drop()
@@ -6472,6 +6480,12 @@ bool Position::pseudo_legal(const Move m) const {
       return is_opening_self_removal_move(m);
 
   if (is_pass(m) && !pass(us))
+      return false;
+
+  if (var->sequentialSetup
+      && (has_setup_drop(WHITE) || has_setup_drop(BLACK))
+      && us != st->sequentialSetupSide
+      && !is_pass(m))
       return false;
 
   if (pass_until_setup() && must_drop()
@@ -7568,14 +7582,11 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
 #endif
 #ifdef ENABLE_COMPOUND_TURNS
   const bool compoundTurn = compound_turn_active();
-  const bool setupDrop = var->sequentialSetup
-                      && (has_setup_drop(WHITE) || has_setup_drop(BLACK))
-                      && is_drop_move(m);
-  const bool setupContinues = setupDrop
-                            && count_in_hand(sideToMove, ALL_PIECES) > 1;
+  const bool setupPlacement = var->sequentialSetup
+                           && (has_setup_drop(WHITE) || has_setup_drop(BLACK));
   const int moveCost = compound_turn_step_cost(m);
-  const int plyCost = setupDrop ? 0 : moveCost;
-  const bool compoundTurnEnds = (!compoundTurn && !setupContinues)
+  const int plyCost = setupPlacement ? 0 : moveCost;
+  const bool compoundTurnEnds = (!compoundTurn)
                               || is_pass(m)
                               || st->compoundTurnStep + moveCost >= var->compoundTurnSteps;
   const uint8_t compoundTurnStep = compoundTurn && !compoundTurnEnds
@@ -7585,14 +7596,11 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       k ^= Zobrist::compoundTurn[st->compoundTurnStep]
          ^ Zobrist::compoundTurn[compoundTurnStep];
 #else
-  const bool setupDrop = var->sequentialSetup
-                      && (has_setup_drop(WHITE) || has_setup_drop(BLACK))
-                      && is_drop_move(m);
-  const bool setupContinues = setupDrop
-                            && count_in_hand(sideToMove, ALL_PIECES) > 1;
+  const bool setupPlacement = var->sequentialSetup
+                           && (has_setup_drop(WHITE) || has_setup_drop(BLACK));
   const int moveCost = 1;
-  const int plyCost = setupDrop ? 0 : moveCost;
-  Key k = st->key ^ (setupContinues ? 0 : Zobrist::side);
+  const int plyCost = setupPlacement ? 0 : moveCost;
+  Key k = st->key ^ Zobrist::side;
 #endif
 
   // Copy some fields of the old state to our new StateInfo object except the
@@ -7606,6 +7614,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   st->extinctionSeen[BLACK] = newSt.previous->extinctionSeen[BLACK];
 #ifdef ENABLE_COMPOUND_TURNS
   st->compoundTurnStep = compoundTurnStep;
+  st->sequentialSetupMove = setupPlacement;
 #endif
   st->pendingClaimPass = false;
   st->move = m;
@@ -9483,12 +9492,20 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       st->compoundTurnReset = false;
   }
 
+  if (setupPlacement
+      && var->sequentialSetup
+      && us == st->sequentialSetupSide
+      && !has_setup_drop(st->sequentialSetupSide)
+      && has_setup_drop(~st->sequentialSetupSide))
+      st->sequentialSetupSide = ~st->sequentialSetupSide;
+
   if (var->compoundTurnSteps && !st->compoundTurnReady
       && !has_setup_drop(WHITE) && !has_setup_drop(BLACK))
       st->compoundTurnReady = true;
-  sideToMove = setupContinues ? us : compoundTurnEnds ? them : us;
+  sideToMove = compoundTurnEnds ? them : us;
 #else
-  sideToMove = setupContinues ? us : them;
+  st->sequentialSetupMove = setupPlacement;
+  sideToMove = them;
 #endif
 
   st->evasionCheckersBB = compute_evasion_checkers_bb(sideToMove);
@@ -9587,19 +9604,10 @@ void Position::undo_move(Move m) {
   assert(is_ok(m));
 
 #ifdef ENABLE_COMPOUND_TURNS
-  const bool setupDrop = var->sequentialSetup
-                      && (has_setup_drop(WHITE) || has_setup_drop(BLACK))
-                      && is_drop_move(m)
-                      && st->dropHandColor == sideToMove;
-  if (!setupDrop && (var->compoundTurnSteps == 0 || st->compoundTurnStep == 0))
+  if (var->compoundTurnSteps == 0 || st->compoundTurnStep == 0)
       sideToMove = ~sideToMove;
 #else
-  const bool setupDrop = var->sequentialSetup
-                      && (has_setup_drop(WHITE) || has_setup_drop(BLACK))
-                      && is_drop_move(m)
-                      && st->dropHandColor == sideToMove;
-  if (!setupDrop)
-      sideToMove = ~sideToMove;
+  sideToMove = ~sideToMove;
 #endif
 
   Color us = sideToMove;
@@ -10030,16 +10038,11 @@ void Position::undo_move(Move m) {
 
   // Finally point our state pointer back to the previous state
   int compoundTurnStepsToRestore = 0;
-  bool setupPlacement = false;
+  bool setupPlacement = st->sequentialSetupMove;
 #ifdef ENABLE_COMPOUND_TURNS
-  setupPlacement = var->sequentialSetup
-                && !st->previous->compoundTurnReady && is_drop_move(m);
   if (var->compoundTurnSteps && st->compoundTurnStep == 0 && st->previous
       && st->previous->compoundTurnStep > 0)
       compoundTurnStepsToRestore = st->previous->compoundTurnStep;
-#else
-  setupPlacement = var->sequentialSetup
-                && (has_setup_drop(WHITE) || has_setup_drop(BLACK)) && is_drop_move(m);
 #endif
   st = st->previous;
   std::copy(std::begin(st->castlingRightsMask), std::end(st->castlingRightsMask), std::begin(castlingRightsMask));
@@ -10295,13 +10298,8 @@ Key Position::key_after(Move m) const {
   Piece pc = moved_piece(m);
 #ifdef ENABLE_COMPOUND_TURNS
   const bool compoundTurn = compound_turn_active();
-  const bool setupDrop = var->sequentialSetup
-                      && (has_setup_drop(WHITE) || has_setup_drop(BLACK))
-                      && is_drop_move(m);
-  const bool setupContinues = setupDrop
-                            && count_in_hand(sideToMove, ALL_PIECES) > 1;
   const int moveCost = compound_turn_step_cost(m);
-  const bool compoundTurnEnds = (!compoundTurn && !setupContinues)
+  const bool compoundTurnEnds = (!compoundTurn)
                               || is_pass(m)
                               || st->compoundTurnStep + moveCost >= var->compoundTurnSteps;
   Key k = st->key ^ (compoundTurnEnds ? Zobrist::side : 0);
@@ -10309,12 +10307,7 @@ Key Position::key_after(Move m) const {
       k ^= Zobrist::compoundTurn[st->compoundTurnStep]
          ^ Zobrist::compoundTurn[compoundTurnEnds ? 0 : st->compoundTurnStep + moveCost];
 #else
-  const bool setupDrop = var->sequentialSetup
-                      && (has_setup_drop(WHITE) || has_setup_drop(BLACK))
-                      && is_drop_move(m);
-  const bool setupContinues = setupDrop
-                            && count_in_hand(sideToMove, ALL_PIECES) > 1;
-  Key k = st->key ^ (setupContinues ? 0 : Zobrist::side);
+  Key k = st->key ^ Zobrist::side;
 #endif
 
   if (var->pushPullRule == PushPullRule::TWO_STEP && is_encoded_push(m))

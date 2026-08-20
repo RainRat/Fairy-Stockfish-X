@@ -954,7 +954,7 @@ namespace {
                 if (pos.variant()->freezeStrength[Pt] <= pos.variant()->freezeStrength[enemyType])
                     continue;
 
-                Bitboard enemyTargets = PseudoAttacks[WHITE][WAZIR][enemyFrom]
+                Bitboard enemyTargets = pos.attacks_from(Us, WAZIR, enemyFrom, Bitboard(0))
                                       & ~pos.pieces()
                                       & pos.board_bb()
                                       & ~pos.wall_squares()
