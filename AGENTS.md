@@ -35,13 +35,9 @@ tests/build.sh ARCH=x86-64-modern debug=yes optimize=no
 tests/build.sh COMP=mingw
 ```
 
-`tests/build.sh` verifies that native builds produce a runnable, non-empty
-executable before accepting the build. The linker writes to a temporary path
-and renames it atomically; a failed rebuild leaves no executable at the
-canonical path. Validate `src/variants.ini` separately with the required
-config and variants-smoke checks below.
+`tests/build.sh` verifies that native builds produce a working executable. The linker writes to a temporary file first and renames it on success, so a failed build never leaves a broken binary in place. Validate `src/variants.ini` separately with the config and variants-smoke checks below.
 
-Use `largeboards=yes` for normal large-board variants. Use `verylargeboards=yes` only beyond that matrix. When switching board macro families, run `make clean`.
+Use `largeboards=yes` for standard large-board variants. Use `verylargeboards=yes` for boards larger than 12x10. When switching board size options, run `make clean`.
 
 For named binaries used by regression scripts:
 
@@ -138,9 +134,7 @@ python3 tests/upstream_movecount_baseline.py src/stockfish "$UPSTREAM_ENGINE"
 Only regenerate upstream baselines intentionally. Do not refresh fixtures to hide regressions.
 
 ## Full local regression
-Build the named binaries first. Use the regression runner for long checks; it keeps
-the full output in one log while reporting concise status and an estimate based on
-recent successful runs:
+Build the named binaries first. Use the regression runner for long test runs; it keeps all output in a single log file and reports estimated time remaining:
 
 ```sh
 tests/regression-runner.sh start src/stockfish-large
@@ -148,19 +142,9 @@ tests/regression-runner.sh status
 tests/regression-runner.sh wait
 ```
 
-`status` reports a check-in interval and remaining-time estimate from recent runs.
-`wait` monitors the detached process and prints only the final result; use it instead
-of repeatedly polling a command session. On failure it also prints the relevant log
-tail. `tests/regression-runner.sh log` shows the latest log tail on demand. The runner
-rejects stale named binaries before launching; rebuild the reported binary rather
-than spending a full run testing old code.
+`status` reports test progress and estimated time remaining. `wait` monitors the background process and prints the final result. On failure, it prints the relevant log output. `tests/regression-runner.sh log` shows recent log output. The runner checks for up-to-date binaries before starting; rebuild the binary if prompted.
 
-The fast and full suites preserve signature-based artifacts under `.local/build`.
-Do not clear that directory for a normal rerun. Test setup and cases are quiet on
-success and print their captured output on failure. Use `VERBOSE=1` with
-`tests/run.sh` or a compatibility wrapper to stream successful output. Special C++
-harnesses rebuild their required object family when run directly, while the fast
-suite prepares that family once and shares it between harnesses.
+The test suites cache build artifacts under `.local/build`. Do not delete that folder for normal reruns. Tests run quietly on success and print captured output only on failure. Set `VERBOSE=1` with `tests/run.sh` to print full test output while tests run.
 
 ## CI Mapping
 * `Stockfish`: native engine build, perft, search, and sanitizer-style checks.

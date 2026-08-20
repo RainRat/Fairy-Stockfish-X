@@ -1,13 +1,8 @@
 # Test suites
+ 
+`tests/run.sh` defines and runs the test suites.
 
-`tests/run.sh` is the source of truth for semantic test-suite registration.
-
-Use `tests/build.sh` for named regression binaries. It fingerprints the build
-configuration and resulting executable under `.local/build/signatures/`; a
-configuration change or an unverified artifact automatically triggers an
-object clean before rebuilding. Direct `make` builds still require `make clean`
-when changing compiler, architecture, debug/sanitizer mode, or board-family
-settings.
+Use `tests/build.sh` to build test binaries. It tracks build options and binary signatures in `.local/build/signatures/`. If build flags change, it automatically cleans old build files before rebuilding. Direct `make` builds still require `make clean` when changing the compiler, CPU architecture, debug options, or board size settings.
 
 For the standard large-board and all-variant test binary:
 
@@ -16,11 +11,7 @@ tests/build.sh ARCH=x86-64-modern largeboards=yes all=yes EXE=stockfish-allvars
 tests/run.sh fast src/stockfish-allvars
 ```
 
-`tests/build.sh` verifies that native builds produce a runnable, non-empty
-executable before accepting the artifact. The linker writes to a temporary
-path and renames it atomically, and a failed rebuild leaves no executable at
-the canonical path. Variant configuration validation is handled separately by
-the config and variants-smoke suites.
+`tests/build.sh` verifies that the build produces a working executable. The linker writes to a temporary file first and renames it on success, so a failed build never leaves a broken binary in place. Variant rules are validated separately by the `config` and `variants-smoke` test suites.
 
 ```sh
 tests/run.sh list
@@ -44,27 +35,14 @@ Use the smallest suite matching the changed engine area:
 | spell chess | `tests/run.sh suite spells src/stockfish-allvars` |
 | Python signatures and return values | `python3 setup.py build_ext --inplace && python3 tests/python/test_pyffish_api.py` |
 
-The search/evaluation suite includes an NNUE trace case and requires the pinned
-network file. Fetch it once with `make -C src net` before running that suite.
+The search and evaluation suite requires the NNUE network evaluation file. Download it once with `make -C src net` before running that suite.
 
-The suite runner derives board-family requirements from the engine name. CI may
-set `FSX_ENGINE_FAMILY=large` when a custom executable name needs the large-board
-classification; `FSX_ALLOW_SMALL_BOARD=1` is reserved for the CI movement smoke
-run that intentionally exercises a small-board debug build.
+The test runner determines board-size requirements from the engine name. In CI, set `FSX_ENGINE_FAMILY=large` when testing a custom binary name that needs large-board support. Set `FSX_ALLOW_SMALL_BOARD=1` only when intentionally running movement smoke tests on a small-board build.
 
-Specialized modes remain separate: `perft.sh`, `instrumented.sh`,
-`regression.sh`, `regression-runner.sh`, upstream comparison programs, and
-the JavaScript tests under `tests/js/`.
+Other test scripts include: `perft.sh`, `instrumented.sh`, `regression.sh`, `regression-runner.sh`, upstream comparison scripts, and the JavaScript tests in `tests/js/`.
 
-The benchmark compatibility wrapper accepts either a reference signature
-(`tests/bench-regressions.sh [signature] [engine]`) or the stdin smoke mode
-(`tests/bench-regressions.sh --stdin [engine]`).
+The benchmark script accepts either a reference signature (`tests/bench-regressions.sh [signature] [engine]`) or standard input (`tests/bench-regressions.sh --stdin [engine]`).
 
-Each semantic check is owned by one of the ten broad suites; failures identify
-the suite and print a focused rerun command. Python coverage is limited to the
-binding contract in `tests/python/test_pyffish_api.py`; engine-rule matrices
-run through the native harness or UCI cases in the owning suite.
+Every test belongs to one of ten test suites. If a test fails, the runner shows the failed suite and the exact command to rerun it. Python tests in `tests/python/test_pyffish_api.py` verify the Python bindings directly, while chess variant rules run through native C++ test harnesses and UCI test cases.
 
-Successful direct suite runs are quiet and retain their logs under
-`.local/build/test-run/`. Non-verbose multi-suite runs execute suites concurrently.
-Set `VERBOSE=1` when streaming successful harness output is useful for debugging.
+Passing tests run quietly and save their logs in `.local/build/test-run/`. Running multiple suites runs them in parallel. Set `VERBOSE=1` to print full test output while tests run.

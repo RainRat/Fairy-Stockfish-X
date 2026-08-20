@@ -77,7 +77,7 @@ supply threekings tictactoe upsidedown weak xiangqi xiangqihouse
 ### Board object
 
 Create a new variant board from its default starting position.
-The event `onRuntimeInitialized` ensures that the wasm file was properly loaded.
+The `onRuntimeInitialized` callback runs once the WebAssembly module has finished loading:
 
 ```javascript
 ffish['onRuntimeInitialized'] = () => {
@@ -178,7 +178,7 @@ for (var i = 0; i < legalMovesSan.length; i++) {
 
 ## Memory management
 
-Emscripten does not automatically invoke destructors on C++ objects. Call `.delete()` to free heap memory when finished with an object.
+Emscripten does not automatically clean up C++ objects. Call `.delete()` on `Board` and `Game` objects when finished to free WebAssembly memory.
 ```javascript
 board.delete();
 ```
@@ -269,7 +269,7 @@ Ensure the wasm file is in your `public` directory.
 Reference: [emscripten/#10114](https://github.com/emscripten-core/emscripten/issues/10114)
 
 ### Compile in docker
-Instead of installing emscripten natively you can also run the compilation in docker from this directory using e.g.
+Instead of installing Emscripten on your machine, you can compile inside Docker from this directory:
 
 ```bash
 DOCKER_USER=$(id -u):$(id -g) docker compose run --rm emscripten make -f Makefile_js build es6=yes
@@ -293,7 +293,7 @@ node index.js
 
 ### ffish-test
 
-A simple toy website which demonstrates the core functionality of ffish.js and [chessgroundx](https://github.com/gbtami/chessgroundx).
+A demo website showing how to use ffish.js with [chessgroundx](https://github.com/gbtami/chessgroundx).
 
 Source code: https://github.com/thearst3rd/ffish-test
 

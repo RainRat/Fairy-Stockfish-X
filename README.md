@@ -18,14 +18,14 @@ Fairy-Stockfish-X requires two UCI options in GUI engine settings:
 - `VariantPath`: Set this to the path of the `variants.ini` file.
 - `UCI_Variant`: Set this to the name of the variant, such as `shogi`, `xiangqi`, or `antichess`.
 
-In most GUIs, these can be configured in the “Engine Settings” or “Edit Engine” dialog.
+In most GUIs, you can configure these options under “Engine Settings” or “Edit Engine”.
 
 ### Move Notation
 
 The engine uses standard coordinate notation for moves:
 
 - Normal moves: `e2e4`, `g1f3`
-- Promotions: trailing piece letter without equals, e.g. `e7e8q`
+- Promotions: add the piece letter at the end without an equals sign (e.g. `e7e8q` instead of `e7e8=q`)
 - Drops: piece letter, `@`, and destination square, e.g. `P@b2`
 
 ## Documentation
@@ -43,4 +43,4 @@ This project has three main goals:
 2. Provide a place to experiment with new ideas.
 3. Support chess variants not available in the standard engine.
 
-For standard functionality, see the [main Fairy-Stockfish repository](https://github.com/fairy-stockfish/Fairy-Stockfish).
+For the standard engine, see the [main Fairy-Stockfish repository](https://github.com/fairy-stockfish/Fairy-Stockfish).
