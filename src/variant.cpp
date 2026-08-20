@@ -2857,12 +2857,12 @@ void VariantMap::parse_istream(std::istream& file) {
                     std::cerr << "Variant '" << variant << "' has invalid configuration. Skipping." << std::endl;
                 continue;
             }
-#ifndef ENABLE_ARIMAA
-            if (v->arimaa)
+#ifndef ENABLE_COMPOUND_TURNS
+            if (v->compoundTurnSteps > 0 || v->pushPullRule == PushPullRule::TWO_STEP)
             {
                 if (DoCheck)
                     std::cerr << "Variant '" << variant
-                              << "' requires an arimaa=yes build. Skipping." << std::endl;
+                              << "' requires a compoundturns=yes build. Skipping." << std::endl;
                 delete v;
                 skippedVariants.insert(variant);
                 continue;

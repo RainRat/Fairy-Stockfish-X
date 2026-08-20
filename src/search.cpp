@@ -26,8 +26,8 @@
 #include <thread>
 
 #include "evaluate.h"
-#ifdef ENABLE_ARIMAA
-#include "arimaa.h"
+#ifdef ENABLE_COMPOUND_TURNS
+#include "compound_turn.h"
 #endif
 #include "misc.h"
 #include "movegen.h"
@@ -177,9 +177,9 @@ namespace {
   template<bool Root>
   uint64_t perft(Position& pos, Depth depth) {
 
-#ifdef ENABLE_ARIMAA
-    if (pos.variant()->arimaa && pos.compound_turn_active())
-        return arimaa_perft(pos, depth, Root);
+#ifdef ENABLE_COMPOUND_TURNS
+    if (pos.variant()->compoundTurnSteps && pos.compound_turn_active())
+        return compound_perft(pos, depth, Root);
 #endif
 
     StateInfo st;
@@ -243,8 +243,8 @@ void MainThread::search() {
       return;
   }
 
-#ifdef ENABLE_ARIMAA
-  if (rootPos.variant()->arimaa)
+#ifdef ENABLE_COMPOUND_TURNS
+  if (rootPos.variant()->compoundTurnSteps)
   {
       Color us = rootPos.side_to_move();
       Time.init(rootPos, Limits, rootPos.side_to_move(), rootPos.game_ply());
@@ -253,7 +253,7 @@ void MainThread::search() {
       Eval::NNUE::verify();
 
       if (Options["Threads"] > 1 && is_uci_dialect(CurrentProtocol))
-          sync_cout << "info string Arimaa search uses one thread; Threads is ignored" << sync_endl;
+          sync_cout << "info string Compound-turn search uses one thread; Threads is ignored" << sync_endl;
 
       Thread::search();
 
@@ -266,8 +266,8 @@ void MainThread::search() {
       if (Limits.npmsec)
           Time.availableNodes += Limits.inc[us] - Threads.nodes_searched();
 
-      if (Threads.main()->arimaaBestTurn.length)
-          sync_cout << "bestmove " << arimaa_turn_to_string(rootPos, Threads.main()->arimaaBestTurn) << sync_endl;
+      if (Threads.main()->compoundBestTurn.length)
+          sync_cout << "bestmove " << compound_move_to_string(rootPos, Threads.main()->compoundBestTurn) << sync_endl;
       else
           sync_cout << "bestmove " << UCI::move(rootPos, MOVE_NONE) << sync_endl;
       return;
@@ -430,10 +430,10 @@ void MainThread::search() {
 /// consumed, the user stops the search, or the maximum search depth is reached.
 
 void Thread::search() {
-#ifdef ENABLE_ARIMAA
-  if (rootPos.variant()->arimaa)
+#ifdef ENABLE_COMPOUND_TURNS
+  if (rootPos.variant()->compoundTurnSteps)
   {
-      search_arimaa(*this);
+      search_compound(*this);
       return;
   }
 #endif

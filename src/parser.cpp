@@ -543,7 +543,7 @@ namespace {
     template <> bool set(const std::string& value, PushPullRule& target) {
         static constexpr auto values = std::array{
             std::pair{"generic", PushPullRule::GENERIC},
-            std::pair{"arimaa", PushPullRule::TWO_STEP},
+            std::pair{"two-step", PushPullRule::TWO_STEP},
             std::pair{"none", PushPullRule::NONE},
         };
         return parse_named_value(value, target, values);
@@ -1564,7 +1564,6 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     }
 
     parse_attribute("variantTemplate", v->variantTemplate);
-    parse_attribute("arimaa", v->arimaa);
     parse_attribute("sequentialSetup", v->sequentialSetup);
     parse_attribute("nnueAlias", v->nnueAlias);
     parse_attribute("pieceToCharTable", v->pieceToCharTable);
@@ -1760,8 +1759,6 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_color_setting("mustCaptureEnPassant", v->mustCaptureEnPassant);
     parse_attribute("rifleCapture", v->rifleCapture);
     parse_attribute("pushPullRule", v->pushPullRule);
-    if (v->arimaa && config.find("pushPullRule") == config.end())
-        v->pushPullRule = PushPullRule::TWO_STEP;
     auto it_push_strength = config.find("pushingStrength");
     if (it_push_strength != config.end())
     {
@@ -2277,25 +2274,12 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
         valid = false;
     }
 
-    if (v->compoundTurnSteps && !v->arimaa)
+    if (v->compoundTurnSteps > 0)
     {
-        if (DoCheck)
-            std::cerr << "turnSteps requires arimaa=true." << std::endl;
-        valid = false;
-    }
-
-    if (v->arimaa)
-    {
-        if (v->compoundTurnSteps < 1 || v->compoundTurnSteps > 4)
-        {
-            if (DoCheck)
-                std::cerr << "arimaa - turnSteps must be in range [1, 4]." << std::endl;
-            valid = false;
-        }
         if (v->multimoveOffset || v->progressiveMultimove || !v->multimoves.empty())
         {
             if (DoCheck)
-                std::cerr << "arimaa - generic multimove settings do not compose with turnSteps." << std::endl;
+                std::cerr << "turnSteps - generic multimove settings do not compose with turnSteps." << std::endl;
             valid = false;
         }
     }

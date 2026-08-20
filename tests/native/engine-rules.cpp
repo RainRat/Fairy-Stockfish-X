@@ -11,6 +11,9 @@
 
 #include "apiutil.h"
 #include "test-support.hpp"
+#ifdef ENABLE_COMPOUND_TURNS
+#include "compound_turn.h"
+#endif
 
 using namespace Stockfish;
 
@@ -1054,7 +1057,7 @@ void composable_rules() {
           "castling onto an unprotected trap square removed the royal");
 }
 
-#ifdef ENABLE_ARIMAA
+#ifdef ENABLE_COMPOUND_TURNS
 void arimaa_setup() {
     Position pos;
     StateListPtr states;
@@ -1226,6 +1229,93 @@ void arimaa_architecture() {
           "generic pull incorrectly completed the compound turn");
     pos.undo_move(genericPull);
     states->pop_back();
+}
+
+void compound_turn_rules() {
+    Position pos;
+    StateListPtr states;
+
+    // 1. Generic sequential setup audit
+    set_position(pos, states, "generic-sequential-setup-audit",
+                 "8/8/8/8/8/8/8/8[RRRRrrrr] w - - 0 1");
+    Move drop1 = parse_move(pos, "R@a1");
+    states->emplace_back();
+    pos.do_move(drop1, states->back());
+    check(pos.side_to_move() == WHITE, "generic sequential setup did not keep turn with White");
+    check(pos.game_ply() == 0, "generic sequential setup drop advanced gamePly");
+    Move drop2 = parse_move(pos, "R@b1");
+    states->emplace_back();
+    pos.do_move(drop2, states->back());
+    check(pos.side_to_move() == WHITE, "generic sequential setup drop 2 did not keep turn with White");
+    Move drop3 = parse_move(pos, "R@c1");
+    states->emplace_back();
+    pos.do_move(drop3, states->back());
+    check(pos.side_to_move() == WHITE, "generic sequential setup drop 3 did not keep turn with White");
+    Move drop4 = parse_move(pos, "R@d1");
+    states->emplace_back();
+    pos.do_move(drop4, states->back());
+    check(pos.side_to_move() == BLACK, "emptying White pocket did not switch sideToMove to Black");
+    check(pos.game_ply() == 0, "generic sequential setup drops advanced gamePly before all setup complete");
+
+    // Undoing sequential drops
+    pos.undo_move(drop4);
+    states->pop_back();
+    check(pos.side_to_move() == WHITE, "undoing final drop did not restore sideToMove to White");
+    pos.undo_move(drop3);
+    states->pop_back();
+    pos.undo_move(drop2);
+    states->pop_back();
+    pos.undo_move(drop1);
+    states->pop_back();
+    check(pos.side_to_move() == WHITE && pos.game_ply() == 0, "undoing all sequential drops failed");
+
+    // 2. Generic compound turn generation, step costs, and repetition
+    set_position(pos, states, "generic-compound-turn-audit",
+                 "8/8/8/3r4/3C4/8/8/8 w - - 0 1");
+    check(pos.compound_turn_active(), "generic compound turn is not active");
+    check(pos.compound_turn_steps() == 3, "generic compound turn steps != 3");
+    check(pos.at_complete_turn_boundary(), "fresh position is not at complete turn boundary");
+
+    // Test compound moves generation
+    std::vector<CompoundMove> generated = generate_compound_moves(pos);
+    check(!generated.empty(), "generate_compound_moves returned empty list");
+
+    // Two-step action consumes 2 steps in budget of 3
+    Move twoStepPush = make_encoded_push(SQ_D4, SQ_D5, SQ_D6);
+    check(pos.encoded_push_legal(twoStepPush), "two-step push should be legal");
+    check(pos.compound_turn_step_cost(twoStepPush) == 2, "two-step push cost != 2");
+
+    // Parse compound move
+    CompoundMove parsedTurn;
+    bool ok = parse_compound_move(pos, "d4d5,d6", parsedTurn);
+    check(ok && parsedTurn.length == 1, "failed to parse 1-component two-step compound move");
+
+    // Test do/undo compound move
+    alignas(Eval::NNUE::CacheLineSize) StateInfo cstates[CompoundMove::MAX_STEPS + 1];
+    do_compound_move(pos, parsedTurn, cstates);
+    check(pos.side_to_move() == BLACK, "do_compound_move did not switch side to move to Black");
+    check(pos.at_complete_turn_boundary(), "after do_compound_move not at turn boundary");
+    undo_compound_move(pos, parsedTurn);
+    check(pos.side_to_move() == WHITE, "undo_compound_move did not restore side to move");
+    check(pos.at_complete_turn_boundary(), "after undo_compound_move not at turn boundary");
+
+    // Test formatting compound move
+    std::string formatted = compound_move_to_string(pos, parsedTurn);
+    check(formatted == "d4d5,d6", "formatted compound move mismatch: " + formatted);
+
+    // Test intermediate reversal followed by real component
+    CompoundMove reversalTurn;
+    ok = parse_compound_move(pos, "d4e4,e4d4,d4d3", reversalTurn);
+    check(ok && reversalTurn.length == 3, "failed to parse reversal followed by real component");
+
+    // A pure reversal d4e4, e4d4 is pass-equivalent and must be rejected
+    CompoundMove pureReversal;
+    ok = parse_compound_move(pos, "d4e4,e4d4", pureReversal);
+    check(!ok, "pure pass-equivalent reversal was incorrectly accepted as a legal turn");
+
+    // Check perft
+    uint64_t nodes = compound_perft(pos, 1, false);
+    check(nodes > 0, "compound_perft returned 0 nodes");
 }
 #endif
 
@@ -2391,6 +2481,51 @@ flagPieceTypes = x
 maxFile = j
 maxRank = 10
 startFen = 9r/10/10/10/10/10/10/10/10/R9 w - - 0 1
+
+[generic-compound-turn-audit:fairy]
+pieceToCharTable = RCDHMErcdhme
+pawn = -
+knight = -
+bishop = -
+rook = -
+queen = -
+king = -
+customPiece1 = r:mW
+customPiece2 = c:mW
+customPiece3 = d:mW
+customPiece4 = h:mW
+customPiece5 = m:mW
+customPiece6 = e:mW
+startFen = 8/8/8/8/8/8/8/8 w - - 0 1
+castling = false
+checking = false
+captureForbidden = *:*
+doubleStep = false
+promotionPieceTypes = -
+freezeStrength = r:1 c:2 d:3 h:4 m:5 e:6
+pushingStrength = r:1 c:2 d:3 h:4 m:5 e:6
+pullingStrength = r:1 c:2 d:3 h:4 m:5 e:6
+pushPullRule = two-step
+pushFirstColor = them
+stepwisePushing = true
+turnSteps = 3
+pass = false
+
+[generic-sequential-setup-audit:fairy]
+pawn = -
+knight = -
+bishop = -
+rook = -
+queen = -
+king = -
+customPiece1 = r:mW
+pieceToCharTable = RCDHMErcdhme
+pieceDrops = true
+mustDrop = true
+dropRegionWhite = *1
+dropRegionBlack = *8
+sequentialSetup = true
+startFen = 8/8/8/8/8/8/8/8[RRRRrrrr] w - - 0 1
 )INI");
     variants.parse_istream<false>(inline_config);
 }
@@ -2405,8 +2540,8 @@ int main(int argc, char** argv) {
                 || name == "locust-all" || name == "occupancy" || name == "state" || name == "royal"
                 || name == "adjudication" || name == "board-games" || name == "composable-rules"
                 || name == "extinction-color"
-#ifdef ENABLE_ARIMAA
-                || name == "arimaa-setup" || name == "arimaa-architecture"
+#ifdef ENABLE_COMPOUND_TURNS
+                || name == "compound-turns" || name == "arimaa-setup" || name == "arimaa-architecture"
 #endif
                 ;
         };
@@ -2428,7 +2563,8 @@ int main(int argc, char** argv) {
           {"extinction-color", extinction_color_settings},
           {"locust-all", locust_all},
           {"composable-rules", composable_rules},
-#ifdef ENABLE_ARIMAA
+#ifdef ENABLE_COMPOUND_TURNS
+          {"compound-turns", compound_turn_rules},
           {"arimaa-setup", arimaa_setup},
           {"arimaa-architecture", arimaa_architecture},
 #endif

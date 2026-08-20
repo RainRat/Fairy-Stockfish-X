@@ -908,7 +908,7 @@ namespace Zobrist {
   Key endgame[EG_EVAL_NB];
   Key points[COLOR_NB][MAX_ZOBRIST_POINTS];
   Key edgeInsertLock[COLOR_NB][SQUARE_NB];
-#ifdef ENABLE_ARIMAA
+#ifdef ENABLE_COMPOUND_TURNS
   Key compoundTurn[Variant::MAX_COMPOUND_TURN_STEPS + 1];
 #endif
 }
@@ -1420,11 +1420,11 @@ bool Position::violates_same_player_board_repetition(Move m) const {
   return repeated;
 }
 
-#ifdef ENABLE_ARIMAA
+#ifdef ENABLE_COMPOUND_TURNS
 
-bool Position::arimaa_repetition_illegal() const {
+bool Position::compound_repetition_illegal() const {
 
-  if (!var->arimaa || !compound_turn_active() || st->compoundTurnStep != 0
+  if (!compound_turn_active() || st->compoundTurnStep != 0
       || !st->compoundTurnReady)
       return false;
 
@@ -1478,7 +1478,7 @@ void Position::init() {
   Zobrist::side = rng.rand<Key>();
   Zobrist::noPawns = rng.rand<Key>();
 
-#ifdef ENABLE_ARIMAA
+#ifdef ENABLE_COMPOUND_TURNS
   for (int step = 0; step <= Variant::MAX_COMPOUND_TURN_STEPS; ++step)
       Zobrist::compoundTurn[step] = rng.rand<Key>();
 #endif
@@ -2139,7 +2139,7 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
       // keep their own completed-turn counter because sideToMove can remain
       // unchanged for several steps.
       fullMoveNumber = std::max(fullMoveNumber, 1);
-#ifdef ENABLE_ARIMAA
+#ifdef ENABLE_COMPOUND_TURNS
       if (var->compoundTurnSteps)
       {
           st->compoundTurnNumber = fullMoveNumber - 1;
@@ -2149,25 +2149,6 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
 #endif
           gamePly = 2 * (fullMoveNumber - 1) + (sideToMove == BLACK);
   }
-
-#ifdef ENABLE_ARIMAA
-  if (var->compoundTurnSteps && !var->arimaa)
-  {
-      ss >> std::ws;
-      if (ss.peek() == 't')
-      {
-          ss.get();
-          int step = 0;
-          if (!(ss >> step) || step < 0 || step >= var->compoundTurnSteps)
-              ss.setstate(std::ios::failbit);
-          else
-          {
-              st->compoundTurnStep = uint8_t(step);
-              gamePly += step;
-          }
-      }
-  }
-#endif
 
   // counting rules
   if (st->countingLimit && st->rule50)
@@ -2497,7 +2478,7 @@ void Position::recompute_state_hashes_and_material(StateInfo* si) const {
   if (sideToMove == BLACK)
       si->key ^= Zobrist::side;
 
-#ifdef ENABLE_ARIMAA
+#ifdef ENABLE_COMPOUND_TURNS
   if (var->compoundTurnSteps)
       si->key ^= Zobrist::compoundTurn[si->compoundTurnStep];
 #endif
@@ -2565,7 +2546,7 @@ void Position::recompute_state_hashes_and_material(StateInfo* si) const {
 void Position::set_state(StateInfo* si) const {
 
   si->evasionCheckersBB = compute_evasion_checkers_bb(sideToMove);
-#ifdef ENABLE_ARIMAA
+#ifdef ENABLE_COMPOUND_TURNS
   si->compoundTurnReady = var->compoundTurnSteps > 0
                        && !has_setup_drop(WHITE)
                        && !has_setup_drop(BLACK);
@@ -2919,16 +2900,11 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
   else
       ss << st->rule50;
 
-#ifdef ENABLE_ARIMAA
+#ifdef ENABLE_COMPOUND_TURNS
   ss << " " << (variant()->compoundTurnSteps ? st->compoundTurnNumber + 1
                                                : 1 + (gamePly - (sideToMove == BLACK)) / 2);
 #else
   ss << " " << 1 + (gamePly - (sideToMove == BLACK)) / 2;
-#endif
-
-#ifdef ENABLE_ARIMAA
-  if (variant()->compoundTurnSteps && st->compoundTurnStep && !variant()->arimaa)
-      ss << " t" << int(st->compoundTurnStep);
 #endif
 
   if (variant()->pointsCounting)
@@ -5919,7 +5895,7 @@ bool Position::legal(Move m) const {
   }
 
   // Multimoves
-#ifdef ENABLE_ARIMAA
+#ifdef ENABLE_COMPOUND_TURNS
   if (compound_turn_active())
   {
       if (!is_pass(m)
@@ -6504,7 +6480,7 @@ bool Position::pseudo_legal(const Move m) const {
       && !is_pass(m))
       return false;
 
-#ifdef ENABLE_ARIMAA
+#ifdef ENABLE_COMPOUND_TURNS
   if (compound_turn_active()
       && !is_pass(m)
       && (st->compoundTurnStep >= var->compoundTurnSteps
@@ -7590,15 +7566,16 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   if (countNode && thisThread)
       thisThread->nodes.fetch_add(1, std::memory_order_relaxed);
 #endif
-#ifdef ENABLE_ARIMAA
+#ifdef ENABLE_COMPOUND_TURNS
   const bool compoundTurn = compound_turn_active();
-  const bool arimaaSetupDrop = var->arimaa && var->sequentialSetup
-                            && !st->compoundTurnReady && is_drop_move(m);
-  const bool arimaaSetupContinues = arimaaSetupDrop
-                                  && count_in_hand(sideToMove, ALL_PIECES) > 1;
+  const bool setupDrop = var->sequentialSetup
+                      && (has_setup_drop(WHITE) || has_setup_drop(BLACK))
+                      && is_drop_move(m);
+  const bool setupContinues = setupDrop
+                            && count_in_hand(sideToMove, ALL_PIECES) > 1;
   const int moveCost = compound_turn_step_cost(m);
-  const int plyCost = arimaaSetupDrop ? 0 : moveCost;
-  const bool compoundTurnEnds = (!compoundTurn && !arimaaSetupContinues)
+  const int plyCost = setupDrop ? 0 : moveCost;
+  const bool compoundTurnEnds = (!compoundTurn && !setupContinues)
                               || is_pass(m)
                               || st->compoundTurnStep + moveCost >= var->compoundTurnSteps;
   const uint8_t compoundTurnStep = compoundTurn && !compoundTurnEnds
@@ -7608,9 +7585,14 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       k ^= Zobrist::compoundTurn[st->compoundTurnStep]
          ^ Zobrist::compoundTurn[compoundTurnStep];
 #else
+  const bool setupDrop = var->sequentialSetup
+                      && (has_setup_drop(WHITE) || has_setup_drop(BLACK))
+                      && is_drop_move(m);
+  const bool setupContinues = setupDrop
+                            && count_in_hand(sideToMove, ALL_PIECES) > 1;
   const int moveCost = 1;
-  const int plyCost = moveCost;
-  Key k = st->key ^ Zobrist::side;
+  const int plyCost = setupDrop ? 0 : moveCost;
+  Key k = st->key ^ (setupContinues ? 0 : Zobrist::side);
 #endif
 
   // Copy some fields of the old state to our new StateInfo object except the
@@ -7622,14 +7604,14 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   st = &newSt;
   st->extinctionSeen[WHITE] = newSt.previous->extinctionSeen[WHITE];
   st->extinctionSeen[BLACK] = newSt.previous->extinctionSeen[BLACK];
-#ifdef ENABLE_ARIMAA
+#ifdef ENABLE_COMPOUND_TURNS
   st->compoundTurnStep = compoundTurnStep;
 #endif
   st->pendingClaimPass = false;
   st->move = m;
   clear_move_undo_state(st);
   // Mandatory multimove pass plies should not advance the halfmove clock.
-#ifdef ENABLE_ARIMAA
+#ifdef ENABLE_COMPOUND_TURNS
   const bool currentMultimovePass = !compoundTurn
                                  && is_pass(m)
                                  && (var->multimoveOffset || var->progressiveMultimove)
@@ -7650,7 +7632,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
 
   Color us = sideToMove;
   Color them = ~us;
-#ifdef ENABLE_ARIMAA
+#ifdef ENABLE_COMPOUND_TURNS
   if (compoundTurn && compoundTurnEnds && us == BLACK)
       ++st->compoundTurnNumber;
 #endif
@@ -9478,7 +9460,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   st->boardKey = st->key ^ st->reserveKey;
   if (var->samePlayerBoardRepetitionIllegal)
       st->layoutKey = layout_key();
-#ifdef ENABLE_ARIMAA
+#ifdef ENABLE_COMPOUND_TURNS
   if (compoundTurn && (st->rule50 == 0 || st->previous->compoundTurnReset))
       st->compoundTurnReset = true;
 
@@ -9504,9 +9486,9 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   if (var->compoundTurnSteps && !st->compoundTurnReady
       && !has_setup_drop(WHITE) && !has_setup_drop(BLACK))
       st->compoundTurnReady = true;
-  sideToMove = arimaaSetupContinues ? us : compoundTurnEnds ? them : us;
+  sideToMove = setupContinues ? us : compoundTurnEnds ? them : us;
 #else
-  sideToMove = them;
+  sideToMove = setupContinues ? us : them;
 #endif
 
   st->evasionCheckersBB = compute_evasion_checkers_bb(sideToMove);
@@ -9604,15 +9586,20 @@ void Position::undo_move(Move m) {
 
   assert(is_ok(m));
 
-#ifdef ENABLE_ARIMAA
-  const bool arimaaSetupDrop = var->arimaa && var->sequentialSetup
-                             && !st->previous->compoundTurnReady
-                             && is_drop_move(m)
-                             && st->dropHandColor == sideToMove;
-  if (!arimaaSetupDrop && (var->compoundTurnSteps == 0 || st->compoundTurnStep == 0))
+#ifdef ENABLE_COMPOUND_TURNS
+  const bool setupDrop = var->sequentialSetup
+                      && (has_setup_drop(WHITE) || has_setup_drop(BLACK))
+                      && is_drop_move(m)
+                      && st->dropHandColor == sideToMove;
+  if (!setupDrop && (var->compoundTurnSteps == 0 || st->compoundTurnStep == 0))
       sideToMove = ~sideToMove;
 #else
-  sideToMove = ~sideToMove;
+  const bool setupDrop = var->sequentialSetup
+                      && (has_setup_drop(WHITE) || has_setup_drop(BLACK))
+                      && is_drop_move(m)
+                      && st->dropHandColor == sideToMove;
+  if (!setupDrop)
+      sideToMove = ~sideToMove;
 #endif
 
   Color us = sideToMove;
@@ -10043,19 +10030,22 @@ void Position::undo_move(Move m) {
 
   // Finally point our state pointer back to the previous state
   int compoundTurnStepsToRestore = 0;
-  bool arimaaSetupPlacement = false;
-#ifdef ENABLE_ARIMAA
-  arimaaSetupPlacement = var->arimaa && var->sequentialSetup
-                      && !st->previous->compoundTurnReady && is_drop_move(m);
+  bool setupPlacement = false;
+#ifdef ENABLE_COMPOUND_TURNS
+  setupPlacement = var->sequentialSetup
+                && !st->previous->compoundTurnReady && is_drop_move(m);
   if (var->compoundTurnSteps && st->compoundTurnStep == 0 && st->previous
       && st->previous->compoundTurnStep > 0)
       compoundTurnStepsToRestore = st->previous->compoundTurnStep;
+#else
+  setupPlacement = var->sequentialSetup
+                && (has_setup_drop(WHITE) || has_setup_drop(BLACK)) && is_drop_move(m);
 #endif
   st = st->previous;
   std::copy(std::begin(st->castlingRightsMask), std::end(st->castlingRightsMask), std::begin(castlingRightsMask));
   std::copy(std::begin(st->castlingRookSquare), std::end(st->castlingRookSquare), std::begin(castlingRookSquare));
   std::copy(std::begin(st->castlingPath), std::end(st->castlingPath), std::begin(castlingPath));
-  gamePly -= arimaaSetupPlacement
+  gamePly -= setupPlacement
            ? 0
            : compoundTurnStepsToRestore
            ? 1 : compound_turn_step_cost(m);
@@ -10121,11 +10111,10 @@ void Position::do_castling(Color us, Square from, Square& to, Square& rfrom, Squ
 }
 
 
-#ifdef ENABLE_ARIMAA
+#ifdef ENABLE_COMPOUND_TURNS
 
 void Position::end_compound_turn(StateInfo& newSt) {
 
-  assert(var->arimaa);
   assert(compound_turn_active());
   assert(st->compoundTurnStep > 0);
   assert(&newSt != st);
@@ -10186,7 +10175,6 @@ void Position::end_compound_turn(StateInfo& newSt) {
 
 void Position::undo_compound_turn() {
 
-  assert(var->arimaa);
   assert(st->compoundTurnStep == 0);
   assert(st->previous != nullptr);
 
@@ -10195,7 +10183,7 @@ void Position::undo_compound_turn() {
   st = st->previous;
 }
 
-#endif // ENABLE_ARIMAA
+#endif // ENABLE_COMPOUND_TURNS
 
 /// Position::do_null_move() is used to do a "null move": it flips
 /// the side to move without executing any move on the board.
@@ -10259,7 +10247,7 @@ void Position::do_null_move(StateInfo& newSt) {
       st->key ^= Zobrist::enpassant[pop_lsb(st->epSquares)];
 
   st->key ^= Zobrist::side;
-#ifdef ENABLE_ARIMAA
+#ifdef ENABLE_COMPOUND_TURNS
   if (var->compoundTurnSteps && st->compoundTurnStep)
   {
       st->key ^= Zobrist::compoundTurn[st->compoundTurnStep]
@@ -10305,14 +10293,15 @@ Key Position::key_after(Move m) const {
   Square from = from_sq(m);
   Square to = to_sq(m);
   Piece pc = moved_piece(m);
-#ifdef ENABLE_ARIMAA
+#ifdef ENABLE_COMPOUND_TURNS
   const bool compoundTurn = compound_turn_active();
-  const bool arimaaSetupDrop = var->arimaa && var->sequentialSetup
-                            && !st->compoundTurnReady && is_drop_move(m);
-  const bool arimaaSetupContinues = arimaaSetupDrop
-                                  && count_in_hand(sideToMove, ALL_PIECES) > 1;
+  const bool setupDrop = var->sequentialSetup
+                      && (has_setup_drop(WHITE) || has_setup_drop(BLACK))
+                      && is_drop_move(m);
+  const bool setupContinues = setupDrop
+                            && count_in_hand(sideToMove, ALL_PIECES) > 1;
   const int moveCost = compound_turn_step_cost(m);
-  const bool compoundTurnEnds = (!compoundTurn && !arimaaSetupContinues)
+  const bool compoundTurnEnds = (!compoundTurn && !setupContinues)
                               || is_pass(m)
                               || st->compoundTurnStep + moveCost >= var->compoundTurnSteps;
   Key k = st->key ^ (compoundTurnEnds ? Zobrist::side : 0);
@@ -10320,7 +10309,12 @@ Key Position::key_after(Move m) const {
       k ^= Zobrist::compoundTurn[st->compoundTurnStep]
          ^ Zobrist::compoundTurn[compoundTurnEnds ? 0 : st->compoundTurnStep + moveCost];
 #else
-  Key k = st->key ^ Zobrist::side;
+  const bool setupDrop = var->sequentialSetup
+                      && (has_setup_drop(WHITE) || has_setup_drop(BLACK))
+                      && is_drop_move(m);
+  const bool setupContinues = setupDrop
+                            && count_in_hand(sideToMove, ALL_PIECES) > 1;
+  Key k = st->key ^ (setupContinues ? 0 : Zobrist::side);
 #endif
 
   if (var->pushPullRule == PushPullRule::TWO_STEP && is_encoded_push(m))

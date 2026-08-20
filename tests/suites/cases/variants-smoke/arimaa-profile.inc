@@ -8,7 +8,7 @@ source "${SCRIPT_DIR}/../../../../tests/lib/uci.sh"
 init_test_env "${1:-}" "${2:-}" "Arimaa profile"
 
 if ! probe_variant_available "$ENGINE" arimaa "$VARIANT_PATH"; then
-    echo "skip: Arimaa profile requires an arimaa=yes build"
+    echo "skip: Arimaa profile requires a compoundturns=yes build"
     exit 0
 fi
 

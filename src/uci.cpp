@@ -24,10 +24,11 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <vector>
 
 #include "evaluate.h"
-#ifdef ENABLE_ARIMAA
-#include "arimaa.h"
+#ifdef ENABLE_COMPOUND_TURNS
+#include "compound_turn.h"
 #endif
 #include "movegen.h"
 #include "position.h"
@@ -91,11 +92,11 @@ namespace {
     // Parse move list (if any)
     while (is >> token)
     {
-#ifdef ENABLE_ARIMAA
-        if (pos.variant()->arimaa && pos.compound_turn_active())
+#ifdef ENABLE_COMPOUND_TURNS
+        if (pos.compound_turn_active())
         {
-            ArimaaTurn turn;
-            if (!parse_arimaa_turn(pos, token, turn))
+            CompoundMove turn;
+            if (!parse_compound_move(pos, token, turn))
                 break;
             for (int i = 0; i < turn.length; ++i)
             {
@@ -177,7 +178,7 @@ namespace {
 
   void go(Position& pos, istringstream& is, StateListPtr& states,
            const std::vector<Move>& banmoves = {},
-           const std::vector<std::string>& arimaaBanMoves = {}) {
+           const std::vector<std::string>& compoundBanMoves = {}) {
 
     Search::LimitsType limits;
     string token;
@@ -186,18 +187,18 @@ namespace {
     limits.startTime = now(); // As early as possible!
 
     limits.banmoves = banmoves;
-    limits.arimaaBanMoves = arimaaBanMoves;
+    limits.compoundBanMoves = compoundBanMoves;
     bool isUsi = CurrentProtocol == USI;
     int secResolution = Options["usemillisec"] ? 1 : 1000;
 
     while (is >> token)
         if (token == "searchmoves") // Needs to be the last command on the line
         {
-            if (pos.variant()->arimaa)
-                limits.arimaaSearchMovesSpecified = true;
+            if (pos.variant()->compoundTurnSteps)
+                limits.compoundSearchMovesSpecified = true;
             while (is >> token)
-                if (pos.variant()->arimaa)
-                    limits.arimaaSearchMoves.push_back(token);
+                if (pos.variant()->compoundTurnSteps)
+                    limits.compoundSearchMoves.push_back(token);
                 else
                     limits.searchmoves.push_back(UCI::to_move(pos, token));
         }
@@ -405,10 +406,10 @@ namespace {
         sync_cout << "Unknown notation '" << token << "'; defaulting to UCI." << sync_endl;
 
     std::vector<std::string> moves;
-#ifdef ENABLE_ARIMAA
-    if (pos.variant()->arimaa && pos.compound_turn_active())
-        for (const auto& turn : generate_arimaa_turns(pos))
-            moves.push_back(arimaa_turn_to_string(pos, turn));
+#ifdef ENABLE_COMPOUND_TURNS
+    if (pos.compound_turn_active())
+        for (const auto& turn : generate_compound_moves(pos))
+            moves.push_back(compound_move_to_string(pos, turn));
     else
 #endif
     for (const auto& m : MoveList<LEGAL>(pos))
@@ -462,7 +463,7 @@ void UCI::loop(int argc, char* argv[]) {
   XBoard::stateMachine = new XBoard::StateMachine(pos, states);
   // UCCI banmoves state
   std::vector<Move> banmoves = {};
-  std::vector<std::string> arimaaBanMoves = {};
+  std::vector<std::string> compoundBanMoves = {};
 
   if (argc > 1 && (std::strcmp(argv[1], "noautoload") == 0))
   {
@@ -531,12 +532,12 @@ void UCI::loop(int argc, char* argv[]) {
       // UCCI-specific banmoves command
       else if (token == "banmoves")
           while (is >> token)
-              if (pos.variant()->arimaa)
-                  arimaaBanMoves.push_back(token);
+              if (pos.variant()->compoundTurnSteps)
+                  compoundBanMoves.push_back(token);
               else
                   banmoves.push_back(UCI::to_move(pos, token));
-      else if (token == "go")         go(pos, is, states, banmoves, arimaaBanMoves);
-      else if (token == "position")   position(pos, is, states), banmoves.clear(), arimaaBanMoves.clear();
+      else if (token == "go")         go(pos, is, states, banmoves, compoundBanMoves);
+      else if (token == "position")   position(pos, is, states), banmoves.clear(), compoundBanMoves.clear();
       else if (token == "ucinewgame" || token == "usinewgame" || token == "uccinewgame") Search::clear();
       else if (token == "isready")    sync_cout << "readyok" << sync_endl;
       else if (token == "help")

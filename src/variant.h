@@ -140,11 +140,10 @@ struct ColorSetting {
 };
 
 struct Variant {
-  static constexpr int MAX_COMPOUND_TURN_STEPS = 16;
+  static constexpr int MAX_COMPOUND_TURN_STEPS = 4;
   std::string name = "";
   std::string variantTemplate = "fairy";
-  bool arimaa = false;
-  bool sequentialSetup = true;
+  bool sequentialSetup = false;
   std::string pieceToCharTable = "-";
   int pocketSize = 0;
   Rank maxRank = RANK_8;

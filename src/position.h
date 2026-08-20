@@ -288,7 +288,7 @@ struct StateInfoCopied {
   int    countingPly;
   int    countingLimit;
   int    pointsCount[COLOR_NB];
-#ifdef ENABLE_ARIMAA
+#ifdef ENABLE_COMPOUND_TURNS
   uint8_t compoundTurnStep = 0;
   int    compoundTurnNumber = 0;
   bool   compoundTurnReady = false;
@@ -801,8 +801,8 @@ public:
   int compound_turn_steps() const;
   int compound_turn_step() const;
   int compound_turn_step_cost(Move m) const;
-#ifdef ENABLE_ARIMAA
-  bool arimaa_repetition_illegal() const;
+#ifdef ENABLE_COMPOUND_TURNS
+  bool compound_repetition_illegal() const;
 #endif
   bool has_setup_drop(Color c) const;
   bool pass_until_setup() const;
@@ -1057,7 +1057,7 @@ public:
   // Doing and undoing moves
   void do_move(Move m, StateInfo& newSt, bool countNode = true);
   void undo_move(Move m);
-#ifdef ENABLE_ARIMAA
+#ifdef ENABLE_COMPOUND_TURNS
   void end_compound_turn(StateInfo& newSt);
   void undo_compound_turn();
 #endif
@@ -2866,13 +2866,9 @@ inline bool Position::pass(Color c) const {
       && !has_setup_drop(c)
       && has_setup_drop(~c))
       return true;
-#ifdef ENABLE_ARIMAA
-  if (var->arimaa && compound_turn_active())
+#ifdef ENABLE_COMPOUND_TURNS
+  if (compound_turn_active() && !var->pass.get(c))
       return false;
-  if (compound_turn_active())
-      return c == sideToMove
-          && st->compoundTurnStep > 0
-          && st->compoundTurnStep < var->compoundTurnSteps;
 #endif
   return var->pass.get(c) || var->passOnStalemate.get(c)
       || ((var->multimoveOffset || var->progressiveMultimove) && multimove_pass(gamePly));
@@ -2880,7 +2876,7 @@ inline bool Position::pass(Color c) const {
 
 inline bool Position::compound_turn_active() const {
   assert(var != nullptr);
-#ifdef ENABLE_ARIMAA
+#ifdef ENABLE_COMPOUND_TURNS
   return var->compoundTurnSteps > 0 && st->compoundTurnReady;
 #else
   return false;
@@ -2889,15 +2885,15 @@ inline bool Position::compound_turn_active() const {
 
 inline bool Position::at_complete_turn_boundary() const {
   assert(var != nullptr);
-#ifdef ENABLE_ARIMAA
-  return !var->arimaa || st->compoundTurnStep == 0;
+#ifdef ENABLE_COMPOUND_TURNS
+  return st->compoundTurnStep == 0;
 #else
   return true;
 #endif
 }
 
 inline int Position::compound_turn_step_cost(Move m) const {
-#ifdef ENABLE_ARIMAA
+#ifdef ENABLE_COMPOUND_TURNS
   return is_two_step_move(m) ? 2 : 1;
 #else
   (void)m;
@@ -2907,7 +2903,7 @@ inline int Position::compound_turn_step_cost(Move m) const {
 
 inline int Position::compound_turn_steps() const {
   assert(var != nullptr);
-#ifdef ENABLE_ARIMAA
+#ifdef ENABLE_COMPOUND_TURNS
   return compound_turn_active() ? var->compoundTurnSteps : 0;
 #else
   return 0;
@@ -2916,7 +2912,7 @@ inline int Position::compound_turn_steps() const {
 
 inline int Position::compound_turn_step() const {
   assert(var != nullptr);
-#ifdef ENABLE_ARIMAA
+#ifdef ENABLE_COMPOUND_TURNS
   return compound_turn_active() ? st->compoundTurnStep : 0;
 #else
   return 0;
