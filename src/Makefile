@@ -38,6 +38,10 @@ else
 endif
 
 ### Source and object files
+# These defaults are needed before selecting the optional compound-turn source.
+all ?= no
+compoundturns ?= no
+
 SRCS = benchmark.cpp bitbase.cpp bitboard.cpp endgame.cpp evaluate.cpp main.cpp \
 	material.cpp misc.cpp movegen.cpp movepick.cpp pawns.cpp position.cpp psqt.cpp \
 	search.cpp thread.cpp timeman.cpp tt.cpp uci.cpp ucioption.cpp tune.cpp syzygy/tbprobe.cpp \
@@ -45,7 +49,15 @@ SRCS = benchmark.cpp bitbase.cpp bitboard.cpp endgame.cpp evaluate.cpp main.cpp 
 	partner.cpp parser.cpp piece.cpp variant.cpp apiutil.cpp xboard.cpp \
 	nnue/features/half_ka_v2_variants.cpp
 
-ifeq ($(compoundturns),yes)
+ifneq ($(all),no)
+compoundturns_enabled = yes
+else ifeq ($(compoundturns),yes)
+compoundturns_enabled = yes
+else
+compoundturns_enabled = no
+endif
+
+ifeq ($(compoundturns_enabled),yes)
 SRCS += compound_turn.cpp
 endif
 
@@ -66,7 +78,8 @@ endif
 # flag                --- Comp switch      --- Description
 # ----------------------------------------------------------------------------
 #
-# compoundturns = yes/no --- -DENABLE_COMPOUND_TURNS --- Enable the generic compound-turn subsystem
+# all = yes             --- -DALLVARS and -DENABLE_COMPOUND_TURNS --- Enable all variants and mechanics
+# compoundturns = yes/no --- compatibility alias for all=yes
 #
 # debug = yes/no      --- -DNDEBUG         --- Enable/Disable debug mode
 # sanitize = none/<sanitizer> ... (-fsanitize )
@@ -102,8 +115,6 @@ endif
 ### 2.1. General and architecture defaults
 largeboards = no
 verylargeboards = no
-all = no
-compoundturns = no
 precomputedmagics = yes
 nnue = no
 load_net = $(if $(filter $(nnue),yes),net)
@@ -324,15 +335,18 @@ ifeq ($(nnue),no)
 	CXXFLAGS += -DNNUE_EMBEDDING_OFF
 endif
 
-# Enable all variants, even heavyweight ones like duck and amazons
+# Enable all variants and mechanics, even heavyweight ones like duck and amazons
 ifneq ($(all),no)
 	CXXFLAGS += -DALLVARS
+	CXXFLAGS += -DENABLE_COMPOUND_TURNS
 endif
 
-# Enable the generic compound-turn subsystem. Ordinary builds keep
-# this disabled so orthodox search paths do not carry compound-turn logic.
+# Keep the legacy standalone option working for focused compound builds. Ordinary
+# builds keep this disabled so orthodox search paths do not carry compound-turn logic.
 ifeq ($(compoundturns),yes)
-	CXXFLAGS += -DENABLE_COMPOUND_TURNS
+	ifeq ($(all),no)
+		CXXFLAGS += -DENABLE_COMPOUND_TURNS
+	endif
 endif
 
 ifeq ($(COMP),)
@@ -744,8 +758,8 @@ else
 	@echo ""
 	@echo "make build ARCH=x86-64 largeboards=yes all=yes"
 	@echo "make build ARCH=x86-64 verylargeboards=yes all=yes"
-	@echo "Build the generic compound-turn engine: "
-	@echo "make build ARCH=x86-64 largeboards=yes all=yes nnue=yes compoundturns=yes"
+	@echo "All-variant builds include the generic compound-turn engine: "
+	@echo "make build ARCH=x86-64 largeboards=yes all=yes nnue=yes"
 	@echo ""
 endif
 
@@ -868,7 +882,7 @@ config-sanity: $(load_net)
 	@echo "largeboards: '$(largeboards)'"
 	@echo "verylargeboards: '$(verylargeboards)'"
 	@echo "all: '$(all)'"
-	@echo "compoundturns: '$(compoundturns)'"
+	@echo "compoundturns: '$(compoundturns_enabled)'"
 	@echo "precomputedmagics: '$(precomputedmagics)'"
 	@echo "nnue: '$(nnue)'"
 	@echo ""

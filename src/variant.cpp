@@ -2862,7 +2862,7 @@ void VariantMap::parse_istream(std::istream& file) {
             {
                 if (DoCheck)
                     std::cerr << "Variant '" << variant
-                              << "' requires a compoundturns=yes build. Skipping." << std::endl;
+                              << "' requires an all=yes build. Skipping." << std::endl;
                 delete v;
                 skippedVariants.insert(variant);
                 continue;

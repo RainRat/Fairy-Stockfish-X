@@ -67,11 +67,6 @@ jobs:
           make clean
           make -j2 ARCH=x86-64 largeboards=yes all=yes debug=yes EXE=stockfish-allvars build
 
-      - name: Build compound-turns variant engine
-        run: |
-          make clean
-          make -j2 ARCH=x86-64 largeboards=yes all=yes nnue=yes compoundturns=yes debug=yes EXE=stockfish-arimaa-allvars build
-
       - name: Test variants.ini
         run: |
           set +e
@@ -82,7 +77,7 @@ jobs:
             printf '%s\n' "$diagnostics"
             exit "$status"
           fi
-          if grep -Ev "Parsing variant|Variant template '.*' does not exist\.|exceeds build board limits \(maxFile=.*\)\. Skipping\.|Castling destination is adjacent to castlingKingFile; some GUIs/protocols may not distinguish castling from a normal king move\.|Can not use kings with blastOnCapture\.|Can not use kings, pseudo-royal, or anti-royal with blastImmuneTypes\.|Variant 'kamikaze' has invalid configuration\. Skipping\.|Variant '.*' requires a compoundturns=yes build\. Skipping\.|checking=false with allowChecks=true is unusual: king safety is disabled, so the no-check rule will not constrain legality\." <<< "$diagnostics"; then
+          if grep -Ev "Parsing variant|Variant template '.*' does not exist\.|exceeds build board limits \(maxFile=.*\)\. Skipping\.|Castling destination is adjacent to castlingKingFile; some GUIs/protocols may not distinguish castling from a normal king move\.|Can not use kings with blastOnCapture\.|Can not use kings, pseudo-royal, or anti-royal with blastImmuneTypes\.|Variant 'kamikaze' has invalid configuration\. Skipping\.|Variant '.*' requires an all=yes build\. Skipping\.|checking=false with allowChecks=true is unusual: king safety is disabled, so the no-check rule will not constrain legality\." <<< "$diagnostics"; then
             exit 1
           fi
 
@@ -113,5 +108,5 @@ jobs:
       - name: Test Arimaa profile and referee
         working-directory: .
         run: |
-          bash tests/suites/cases/variants-smoke/arimaa-profile.inc src/stockfish-arimaa-allvars src/variants.ini
+          bash tests/suites/cases/variants-smoke/arimaa-profile.inc src/stockfish-allvars src/variants.ini
           python3 -m unittest tests/python/test_arimaa_tournament.py

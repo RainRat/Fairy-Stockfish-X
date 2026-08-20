@@ -81,6 +81,12 @@ fsx_build_profile() {
     esac
   done
 
+  # All-variant builds include the compound-turn subsystem. Keep the legacy
+  # compoundturns=yes alias reflected in the canonical build profile.
+  if [[ "$all" != no ]]; then
+    compoundturns=yes
+  fi
+
   if [[ "$verylargeboards" == yes ]]; then
     board=very-large
   elif [[ "$largeboards" == yes ]]; then
