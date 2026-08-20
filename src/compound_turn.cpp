@@ -70,9 +70,6 @@ bool generate_turns(Position& pos,
 
     for (const auto& move : moves)
     {
-        if (is_pass(move))
-            continue;
-
         const int moveCost = compound_move_cost(pos, move);
         if (usedSteps + moveCost > turnSteps)
             continue;
@@ -82,7 +79,7 @@ bool generate_turns(Position& pos,
 
         pos.do_move(move, states[depth], false);
         bool repetitionIllegal = false;
-        if (usedSteps + moveCost < turnSteps)
+        if (!is_pass(move) && usedSteps + moveCost < turnSteps)
         {
             StateInfo boundaryState;
             pos.end_compound_turn(boundaryState);
@@ -93,10 +90,12 @@ bool generate_turns(Position& pos,
             repetitionIllegal = pos.compound_repetition_illegal();
 
         bool keepGenerating = true;
-        if (pos.board_layout_key() != startBoardKey && !repetitionIllegal)
+        if ((is_pass(move) || pos.board_layout_key() != startBoardKey)
+            && !repetitionIllegal)
             keepGenerating = callback(turn);
 
-        if (keepGenerating && usedSteps + moveCost < turnSteps
+        if (keepGenerating && !is_pass(move)
+            && usedSteps + moveCost < turnSteps
             && pos.compound_turn_active())
             keepGenerating = generate_turns(pos, callback, turn, states, depth + 1,
                                             usedSteps + moveCost, startBoardKey);
@@ -212,7 +211,7 @@ bool parse_compound_move(Position& pos, const std::string& text, CompoundMove& t
 
       for (const auto& move : MoveList<LEGAL>(pos))
       {
-          if (is_pass(move))
+          if (is_pass(move) && parsed.length != 0)
               continue;
 
           const std::string moveText = compound_step_to_string(pos, move);
@@ -234,9 +233,9 @@ bool parse_compound_move(Position& pos, const std::string& text, CompoundMove& t
 
           bool accepted = false;
           if (next == text.size())
-              accepted = pos.board_layout_key() != startBoardKey;
+              accepted = is_pass(move) || pos.board_layout_key() != startBoardKey;
           else
-              accepted = parse(next + 1, nextUsedSteps);
+              accepted = !is_pass(move) && parse(next + 1, nextUsedSteps);
 
           if (accepted)
           {
@@ -261,7 +260,8 @@ bool parse_compound_move(Position& pos, const std::string& text, CompoundMove& t
       pos.do_move(parsed.steps[i], states[i], false);
   }
 
-  const bool partialTurn = turnCost < pos.compound_turn_steps();
+  const bool partialTurn = !is_pass(parsed.steps[parsed.length - 1])
+                         && turnCost < pos.compound_turn_steps();
   bool repetitionIllegal = false;
   if (partialTurn)
   {
@@ -297,7 +297,8 @@ void do_compound_move(Position& pos, const CompoundMove& turn, StateInfo* states
       pos.do_move(turn.steps[i], states[i], false);
   }
 
-  if (turnCost < pos.compound_turn_steps())
+  if (!is_pass(turn.steps[turn.length - 1])
+      && turnCost < pos.compound_turn_steps())
       pos.end_compound_turn(states[turn.length]);
 }
 
@@ -309,7 +310,8 @@ void undo_compound_move(Position& pos, const CompoundMove& turn) {
   for (int i = 0; i < turn.length; ++i)
       turnCost += compound_move_cost(pos, turn.steps[i]);
 
-  if (turnCost < pos.compound_turn_steps())
+  if (!is_pass(turn.steps[turn.length - 1])
+      && turnCost < pos.compound_turn_steps())
       pos.undo_compound_turn();
 
   for (int i = turn.length - 1; i >= 0; --i)
@@ -331,10 +333,12 @@ std::string compound_move_to_string(Position& pos, const CompoundMove& turn) {
       pos.do_move(turn.steps[i], states[i], false);
   }
 
-  if (turnCost < pos.compound_turn_steps())
+  if (!is_pass(turn.steps[turn.length - 1])
+      && turnCost < pos.compound_turn_steps())
       pos.end_compound_turn(states[turn.length]);
 
-  if (turnCost < pos.compound_turn_steps())
+  if (!is_pass(turn.steps[turn.length - 1])
+      && turnCost < pos.compound_turn_steps())
       pos.undo_compound_turn();
   for (int i = turn.length - 1; i >= 0; --i)
       pos.undo_move(turn.steps[i]);
@@ -409,9 +413,6 @@ bool search_compound_turn_candidates(Position& pos,
           return false;
       }
 
-      if (is_pass(move))
-          continue;
-
       const int moveCost = compound_move_cost(pos, move);
       if (usedSteps + moveCost > pos.compound_turn_steps())
           continue;
@@ -421,7 +422,7 @@ bool search_compound_turn_candidates(Position& pos,
       pos.do_move(move, states[stepDepth], false);
 
       bool repetitionIllegal = false;
-      if (usedSteps + moveCost < pos.compound_turn_steps())
+      if (!is_pass(move) && usedSteps + moveCost < pos.compound_turn_steps())
       {
           StateInfo boundaryState;
           pos.end_compound_turn(boundaryState);
@@ -436,13 +437,15 @@ bool search_compound_turn_candidates(Position& pos,
       const bool allowed = !rootTurn
                         || root_compound_move_allowed(turn, *rootSearchMoves,
                                                       rootSearchMovesSpecified, *rootBanMoves);
-      if (allowed && pos.board_layout_key() != startBoardKey && !repetitionIllegal)
+      if (allowed
+          && (is_pass(move) || pos.board_layout_key() != startBoardKey)
+          && !repetitionIllegal)
       {
           foundTurn = true;
           if (!bestTurn.length)
               bestTurn = turn;
           Value value;
-          if (usedSteps + moveCost < pos.compound_turn_steps())
+          if (!is_pass(move) && usedSteps + moveCost < pos.compound_turn_steps())
           {
               StateInfo boundaryState;
               pos.end_compound_turn(boundaryState);
@@ -473,7 +476,8 @@ bool search_compound_turn_candidates(Position& pos,
           keepSearching = alpha < beta;
       }
 
-      if (keepSearching && usedSteps + moveCost < pos.compound_turn_steps()
+      if (keepSearching && !is_pass(move)
+          && usedSteps + moveCost < pos.compound_turn_steps()
           && pos.compound_turn_active())
       {
           keepSearching = search_compound_turn_candidates(
@@ -567,9 +571,6 @@ void search_compound(Thread& thread) {
       MoveList<LEGAL> moves(pos);
       for (const auto& move : moves)
       {
-          if (is_pass(move))
-              continue;
-
           CompoundMove turn;
           turn.steps[0] = move.move;
           turn.length = 1;

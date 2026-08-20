@@ -1648,6 +1648,8 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
 
   unsigned char col, token = 'w';
   std::istringstream ss(fenStr);
+  bool hasSequentialSetupSide = false;
+  Color sequentialSetupSide = WHITE;
 
   std::memset(static_cast<void*>(this), 0, sizeof(Position));
   std::memset(static_cast<void*>(si), 0, sizeof(StateInfo));
@@ -2277,11 +2279,34 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
       }
   }
 
+  // Sequential setup uses an explicit forced pass between placements.  The
+  // side to move therefore does not identify the side that is placing; keep
+  // that state in the FSX FEN extension when a position is saved at the handoff.
+  ss >> std::ws;
+  std::string setupSpec;
+  if (var->sequentialSetup && ss >> setupSpec)
+  {
+      if (setupSpec == "setup=w")
+      {
+          hasSequentialSetupSide = true;
+          sequentialSetupSide = WHITE;
+      }
+      else if (setupSpec == "setup=b")
+      {
+          hasSequentialSetupSide = true;
+          sequentialSetupSide = BLACK;
+      }
+  }
+
   chess960 = isChess960 || v->chess960;
   tsumeMode = Options["TsumeMode"];
   thisThread = th;
   updatePawnCheckZone();
   set_state(st);
+  if (hasSequentialSetupSide)
+      st->sequentialSetupSide = sequentialSetupSide;
+  if (var->sequentialSetup && (has_setup_drop(WHITE) || has_setup_drop(BLACK)))
+      gamePly = 0;
 
   assert(pos_is_ok());
 
@@ -2965,6 +2990,11 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
           ss << " <" << wf << " " << wj << " " << bf << " " << bj << ">";
       }
   }
+
+  if (variant()->sequentialSetup
+      && (has_setup_drop(WHITE) || has_setup_drop(BLACK))
+      && st->sequentialSetupSide != sideToMove)
+      ss << " setup=" << (st->sequentialSetupSide == WHITE ? 'w' : 'b');
 
   return ss.str();
 }

@@ -1259,6 +1259,19 @@ void compound_turn_rules() {
     };
     play_setup("R@a1");
     check(pos.side_to_move() == BLACK, "generic sequential setup did not force a pass after White's drop");
+    const std::string setupHandoffFen = pos.fen();
+    check(setupHandoffFen.find(" setup=w") != std::string::npos,
+          "sequential setup handoff FEN did not preserve the placing side");
+    set_position(pos, states, "generic-sequential-setup-audit", setupHandoffFen.c_str());
+    check(pos.side_to_move() == BLACK,
+          "sequential setup handoff FEN did not restore the placing side");
+    MoveList<LEGAL> setupHandoffMoves(pos);
+    check(setupHandoffMoves.size() == 1 && is_pass(setupHandoffMoves.begin()->move),
+          "sequential setup handoff FEN did not restore the forced pass");
+    set_position(pos, states, "generic-sequential-setup-audit",
+                 "8/8/8/8/8/8/8/8[RRRRrrrr] w - - 0 1");
+    setupMoves.clear();
+    play_setup("R@a1");
     play_setup("0000");
     check(pos.side_to_move() == WHITE, "generic sequential setup pass did not return to White");
     check(pos.game_ply() == 0, "generic sequential setup drop advanced gamePly");
@@ -1319,6 +1332,26 @@ void compound_turn_rules() {
     // Test formatting compound move
     std::string formatted = compound_move_to_string(pos, parsedTurn);
     check(formatted == "d4d5,d6", "formatted compound move mismatch: " + formatted);
+
+    // A configured pass is a complete compound turn, not a no-op component.
+    set_position(pos, states, "generic-compound-pass-audit",
+                 "8/8/8/3r4/3C4/8/8/8 w - - 0 1");
+    std::vector<CompoundMove> passGenerated = generate_compound_moves(pos);
+    check(std::any_of(passGenerated.begin(), passGenerated.end(),
+                      [](const CompoundMove& move) {
+                          return move.length == 1 && is_pass(move.steps[0]);
+                      }),
+          "pass=true compound variant did not generate a pass turn");
+    CompoundMove parsedPass;
+    check(parse_compound_move(pos, "0000", parsedPass)
+          && parsedPass.length == 1 && is_pass(parsedPass.steps[0]),
+          "pass=true compound variant did not parse a pass turn");
+    do_compound_move(pos, parsedPass, cstates);
+    check(pos.side_to_move() == BLACK && pos.at_complete_turn_boundary(),
+          "compound pass did not complete the turn");
+    undo_compound_move(pos, parsedPass);
+    check(pos.side_to_move() == WHITE && pos.at_complete_turn_boundary(),
+          "compound pass undo did not restore the position");
 
     // Test intermediate reversal followed by real component
     CompoundMove reversalTurn;
@@ -2550,6 +2583,9 @@ dropRegionWhite = *1
 dropRegionBlack = *8
 sequentialSetup = true
 startFen = 8/8/8/8/8/8/8/8[RRRRrrrr] w - - 0 1
+
+[generic-compound-pass-audit:generic-compound-turn-audit]
+pass = true
 )INI");
     variants.parse_istream<false>(inline_config);
 }
