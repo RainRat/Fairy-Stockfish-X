@@ -1141,9 +1141,12 @@ void arimaa_architecture() {
     set_position(pos, states, "arimaa",
                  "7r/8/8/3r4/3E4/8/8/R7 w - - 0 1");
     Move ordinaryCapture = make_move(SQ_D4, SQ_D5);
+    Move encodedPush = make_encoded_push(SQ_D4, SQ_D5, SQ_D6);
     check(!pos.pseudo_legal(ordinaryCapture),
           "Arimaa move-only Betza allowed an ordinary occupied-destination capture");
-    check(pos.encoded_push_legal(make_encoded_push(SQ_D4, SQ_D5, SQ_D6)),
+    check(encoded_push_square(encodedPush) == SQ_D6,
+          "Arimaa encoded push did not round-trip its destination square");
+    check(pos.encoded_push_legal(encodedPush),
           "Arimaa encoded push was rejected while ordinary captures were disabled");
 
     set_position(pos, states, "arimaa-board-size-audit",

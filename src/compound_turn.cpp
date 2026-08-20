@@ -125,7 +125,7 @@ std::vector<CompoundMove> generate_compound_moves(Position& pos) {
       return turns;
 
   CompoundMove turn;
-  alignas(Eval::NNUE::CacheLineSize) StateInfo states[CompoundMove::MAX_STEPS];
+  alignas(Eval::NNUE::CacheLineSize) StateInfo states[CompoundMove::MAX_STEPS + 1];
   generate_turns(pos,
                  [&](const CompoundMove& candidate) {
                      turns.push_back(candidate);
@@ -145,7 +145,7 @@ bool has_any_compound_move(Position& pos) {
       return false;
 
   CompoundMove turn;
-  alignas(Eval::NNUE::CacheLineSize) StateInfo states[CompoundMove::MAX_STEPS];
+  alignas(Eval::NNUE::CacheLineSize) StateInfo states[CompoundMove::MAX_STEPS + 1];
   bool found = false;
   generate_turns(pos,
                  [&](const CompoundMove&) {
@@ -204,7 +204,7 @@ bool parse_compound_move(Position& pos, const std::string& text, CompoundMove& t
       return false;
 
   CompoundMove parsed;
-  alignas(Eval::NNUE::CacheLineSize) StateInfo states[CompoundMove::MAX_STEPS];
+  alignas(Eval::NNUE::CacheLineSize) StateInfo states[CompoundMove::MAX_STEPS + 1];
   const Key startBoardKey = pos.board_layout_key();
 
   std::function<bool(size_t, int)> parse = [&](size_t offset, int usedSteps) {
@@ -325,7 +325,7 @@ void undo_compound_move(Position& pos, const CompoundMove& turn) {
 std::string compound_move_to_string(Position& pos, const CompoundMove& turn) {
 
   std::string result;
-  alignas(Eval::NNUE::CacheLineSize) StateInfo states[CompoundMove::MAX_STEPS];
+  alignas(Eval::NNUE::CacheLineSize) StateInfo states[CompoundMove::MAX_STEPS + 1];
   int turnCost = 0;
 
   for (int i = 0; i < turn.length; ++i)
@@ -363,7 +363,7 @@ uint64_t compound_perft(Position& pos, int depth, bool root) {
           count = 1;
       else
       {
-          alignas(Eval::NNUE::CacheLineSize) StateInfo states[CompoundMove::MAX_STEPS];
+          alignas(Eval::NNUE::CacheLineSize) StateInfo states[CompoundMove::MAX_STEPS + 1];
           do_compound_move(pos, turn, states);
           count = compound_perft(pos, depth - 1, false);
           undo_compound_move(pos, turn);
@@ -535,7 +535,7 @@ Value search_compound_turns(Position& pos,
   bool foundTurn = false;
   uint64_t visitedMoves = 0;
   CompoundMove turn;
-  alignas(Eval::NNUE::CacheLineSize) StateInfo states[CompoundMove::MAX_STEPS];
+  alignas(Eval::NNUE::CacheLineSize) StateInfo states[CompoundMove::MAX_STEPS + 1];
   search_compound_turn_candidates(pos, thread, depth, ply, alpha, beta, aborted,
                                   best, bestTurn, foundTurn, visitedMoves, turn,
                                   states, 0, 0, pos.board_layout_key(), nullptr,
@@ -618,7 +618,7 @@ void search_compound(Thread& thread) {
       bool foundTurn = false;
       uint64_t visitedMoves = 0;
       CompoundMove turn;
-      alignas(Eval::NNUE::CacheLineSize) StateInfo states[CompoundMove::MAX_STEPS];
+      alignas(Eval::NNUE::CacheLineSize) StateInfo states[CompoundMove::MAX_STEPS + 1];
       search_compound_turn_candidates(
         pos, thread, depth, 0, -VALUE_INFINITE, -bestScore, aborted, bestScore,
         bestTurn, foundTurn, visitedMoves, turn, states, 0, 0,
