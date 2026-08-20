@@ -266,7 +266,21 @@ void MainThread::search() {
       if (Limits.npmsec)
           Time.availableNodes += Limits.inc[us] - Threads.nodes_searched();
 
-      if (Threads.main()->compoundBestTurn.length)
+      if (CurrentProtocol == XBOARD)
+      {
+          const CompoundMove& bestTurn = Threads.main()->compoundBestTurn;
+          if (bestTurn.length && !Limits.infinite && !ponder
+              && !Threads.abort.exchange(true))
+          {
+              sync_cout << "move " << compound_move_to_string(rootPos, bestTurn) << sync_endl;
+              if (XBoard::stateMachine->moveAfterSearch)
+              {
+                  XBoard::stateMachine->do_compound_move(bestTurn);
+                  XBoard::stateMachine->moveAfterSearch = false;
+              }
+          }
+      }
+      else if (Threads.main()->compoundBestTurn.length)
           sync_cout << "bestmove " << compound_move_to_string(rootPos, Threads.main()->compoundBestTurn) << sync_endl;
       else
           sync_cout << "bestmove " << UCI::move(rootPos, MOVE_NONE) << sync_endl;

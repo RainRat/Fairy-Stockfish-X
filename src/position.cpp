@@ -46,6 +46,13 @@ namespace {
   thread_local SpellContext g_spellContext;
   thread_local bool g_hasSpellContext = false;
   Bitboard LaserRay[2][4][SQUARE_NB];
+#ifdef ENABLE_COMPOUND_TURNS
+  const StateInfo* previous_complete_turn_state(const StateInfo* state) {
+      while (state && state->compoundTurnStep != 0)
+          state = state->previous;
+      return state;
+  }
+#endif
 }
 
 const SpellContext* current_spell_context() noexcept {
@@ -9522,13 +9529,6 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       st->compoundTurnReset = false;
   }
 
-  if (setupPlacement
-      && var->sequentialSetup
-      && us == st->sequentialSetupSide
-      && !has_setup_drop(st->sequentialSetupSide)
-      && has_setup_drop(~st->sequentialSetupSide))
-      st->sequentialSetupSide = ~st->sequentialSetupSide;
-
   if (var->compoundTurnSteps && !st->compoundTurnReady
       && !has_setup_drop(WHITE) && !has_setup_drop(BLACK))
       st->compoundTurnReady = true;
@@ -9537,6 +9537,13 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   st->sequentialSetupMove = setupPlacement;
   sideToMove = them;
 #endif
+
+  if (setupPlacement
+      && var->sequentialSetup
+      && us == st->sequentialSetupSide
+      && !has_setup_drop(st->sequentialSetupSide)
+      && has_setup_drop(~st->sequentialSetupSide))
+      st->sequentialSetupSide = ~st->sequentialSetupSide;
 
   st->evasionCheckersBB = compute_evasion_checkers_bb(sideToMove);
 
@@ -10697,6 +10704,39 @@ bool Position::n_fold_game_end(Value& result, int ply, int target) const {
 
   if (target <= 0)
       return false;
+
+#ifdef ENABLE_COMPOUND_TURNS
+  if (var->compoundTurnSteps)
+  {
+      // Component states are internal. Repetition distances and keys are
+      // defined over complete compound-turn boundaries only.
+      if (st->compoundTurnStep != 0)
+          return false;
+
+      int end = captures_to_hand() ? st->pliesFromNull : std::min(st->rule50, st->pliesFromNull);
+      if (end < 4)
+          return false;
+
+      const StateInfo* stp = st->previous;
+      int cnt = 0;
+      for (int i = 1; stp && i <= end; ++i)
+      {
+          stp = previous_complete_turn_state(stp);
+          if (!stp)
+              break;
+          if (i >= 4 && (i & 1) == 0 && stp->key == st->key
+              && ++cnt + 1 >= target)
+          {
+              result = convert_mate_value(var->nFoldValue.get(sideToMove), ply);
+              if (result == VALUE_DRAW && var->materialCounting)
+                  result = convert_mate_value(material_counting_result(), ply);
+              return true;
+          }
+          stp = stp->previous;
+      }
+      return false;
+  }
+#endif
 
   int end = captures_to_hand() ? st->pliesFromNull : std::min(st->rule50, st->pliesFromNull);
 

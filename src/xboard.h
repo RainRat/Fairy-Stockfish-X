@@ -21,11 +21,15 @@
 
 #include <algorithm>
 #include <atomic>
+#include <deque>
 #include <memory>
 #include <mutex>
 #include <sstream>
 #include <string>
 
+#ifdef ENABLE_COMPOUND_TURNS
+#include "compound_turn.h"
+#endif
 #include "thread_win32_osx.h"
 #include "types.h"
 
@@ -53,6 +57,9 @@ public:
   void shutdown_ponder_worker();
   void setboard(std::string fen = "");
   void do_move(Move m);
+#ifdef ENABLE_COMPOUND_TURNS
+  void do_compound_move(const CompoundMove& turn);
+#endif
   void undo_move();
   std::string highlight(std::string square);
   void process_command(std::string token, std::istringstream& is);
@@ -69,6 +76,10 @@ private:
   Search::LimitsType limits;
   Color playColor;
   std::string ponderHighlight;
+#ifdef ENABLE_COMPOUND_TURNS
+  std::deque<CompoundMove> compoundMoveList;
+  std::deque<uint8_t> compoundStateCounts;
+#endif
   std::mutex ponderMutex;
   std::unique_ptr<NativeThread> ponderWorker;
   std::atomic<bool> shuttingDown;
