@@ -10,7 +10,7 @@ init_test_env "${1:-}" "${2:-}" "Arimaa profile"
 SETUP_MOVES="R@a1 0000 R@b1 0000 R@c1 0000 R@d1 0000 R@e1 0000 R@f1 0000 R@g1 0000 R@h1 0000 C@a2 0000 C@b2 0000 D@c2 0000 D@d2 0000 H@e2 0000 H@f2 0000 M@g2 0000 E@h2 R@a8 0000 R@b8 0000 R@c8 0000 R@d8 0000 R@e8 0000 R@f8 0000 R@g8 0000 R@h8 0000 C@a7 0000 C@b7 0000 D@c7 0000 D@d7 0000 H@e7 0000 H@f7 0000 M@g7 0000 E@h7"
 
 if ! probe_variant_available "$ENGINE" arimaa "$VARIANT_PATH"; then
-    echo "skip: Arimaa profile requires a compoundturns=yes build"
+    echo "skip: Arimaa profile requires an all=yes build"
     exit 0
 fi
 
