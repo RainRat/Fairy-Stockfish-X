@@ -1,6 +1,6 @@
 # Fairy-Stockfish-X
 
-Fairy-Stockfish-X is an experimental version of [Fairy-Stockfish](https://github.com/fairy-stockfish/Fairy-Stockfish). It is used to test new features and support unique chess variants.
+Fairy-Stockfish-X is an experimental fork of [Fairy-Stockfish](https://github.com/fairy-stockfish/Fairy-Stockfish) for testing new engine features and custom chess variants.
 
 ## Usage in Chess GUIs
 
@@ -13,20 +13,20 @@ Fairy-Stockfish-X can be used in any UCI-compatible chess GUI, such as [Cute Che
 
 ### Loading Variants
 
-Fairy-Stockfish-X often requires two UCI options to be set in the GUI's engine configuration:
+Fairy-Stockfish-X requires two UCI options in GUI engine settings:
 
 - `VariantPath`: Set this to the path of the `variants.ini` file.
-- `UCI_Variant`: Set this to the name of the variant you want to play, such as `antichess`, `shogi`, or `atomic`.
+- `UCI_Variant`: Set this to the name of the variant, such as `shogi`, `xiangqi`, or `antichess`.
 
-In most GUIs, these can be configured in the “Engine Settings” or “Edit Engine” dialog.
+In most GUIs, you can configure these options under “Engine Settings” or “Edit Engine”.
 
 ### Move Notation
 
-The engine uses standard coordinate notation for moves.
+The engine uses standard coordinate notation for moves:
 
-- Normal moves use the source and destination squares, such as `e2e4` or `g1f3`.
-- Promotions use a trailing piece character without an equals sign, such as `e7e8q`.
-- Drops use the piece letter, an `@` symbol, and the destination square, such as `P@b2`.
+- Normal moves: `e2e4`, `g1f3`
+- Promotions: add the piece letter at the end without an equals sign (e.g. `e7e8q` instead of `e7e8=q`)
+- Drops: piece letter, `@`, and destination square, e.g. `P@b2`
 
 ## Documentation
 
@@ -41,6 +41,6 @@ This project has three main goals:
 
 1. Test new features before they move to the main project.
 2. Provide a place to experiment with new ideas.
-3. Support chess variants that are too unusual for the standard engine.
+3. Support chess variants not available in the standard engine.
 
-For standard functionality, please visit the [main Fairy-Stockfish repository](https://github.com/fairy-stockfish/Fairy-Stockfish).
+For the standard engine, see the [main Fairy-Stockfish repository](https://github.com/fairy-stockfish/Fairy-Stockfish).
