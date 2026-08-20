@@ -70,6 +70,10 @@ bool generate_turns(Position& pos,
 
     for (const auto& move : moves)
     {
+        // A pass completes the compound turn and cannot follow another step.
+        if (depth != 0 && is_pass(move))
+            continue;
+
         const int moveCost = compound_move_cost(pos, move);
         if (usedSteps + moveCost > turnSteps)
             continue;
@@ -405,6 +409,10 @@ bool search_compound_turn_candidates(Position& pos,
 
   for (const auto& move : moves)
   {
+      // A pass completes the compound turn and cannot follow another step.
+      if (stepDepth != 0 && is_pass(move))
+          continue;
+
       ++visitedMoves;
       if ((rootSearchMoves == nullptr || foundTurn || visitedMoves > 1)
           && compound_should_stop(thread))

@@ -2901,7 +2901,7 @@ inline bool Position::at_complete_turn_boundary() const {
 
 inline int Position::compound_turn_step_cost(Move m) const {
 #ifdef ENABLE_COMPOUND_TURNS
-  return is_two_step_move(m) ? 2 : 1;
+  return compound_turn_active() && is_two_step_move(m) ? 2 : 1;
 #else
   (void)m;
   return 1;

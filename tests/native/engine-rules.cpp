@@ -1342,6 +1342,17 @@ void compound_turn_rules() {
                           return move.length == 1 && is_pass(move.steps[0]);
                       }),
           "pass=true compound variant did not generate a pass turn");
+    for (const CompoundMove& generatedTurn : passGenerated)
+    {
+        for (int i = 1; i < generatedTurn.length; ++i)
+            check(!is_pass(generatedTurn.steps[i]),
+                  "compound generation appended a pass after an earlier step");
+
+        const std::string text = compound_move_to_string(pos, generatedTurn);
+        CompoundMove reparsed;
+        check(parse_compound_move(pos, text, reparsed) && reparsed == generatedTurn,
+              "generated pass-enabled compound turn did not round-trip: " + text);
+    }
     CompoundMove parsedPass;
     check(parse_compound_move(pos, "0000", parsedPass)
           && parsedPass.length == 1 && is_pass(parsedPass.steps[0]),
