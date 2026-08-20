@@ -80,10 +80,10 @@ fsx_harness_init() {
       FSX_HARNESS_BUILD_ARGS=(ARCH=x86-64 EXE=stockfish)
       FSX_HARNESS_BUILD_EXE=stockfish
       ;;
-    stockfish-arimaa*)
+    stockfish-compound*|stockfish-arimaa*)
       FSX_HARNESS_KNOWN_ENGINE_CONFIG=true
-      FSX_HARNESS_CXX_DEFS+=(-DLARGEBOARDS -DPRECOMPUTED_MAGICS -DALLVARS -DNNUE_EMBEDDING_OFF -DENABLE_ARIMAA)
-      FSX_HARNESS_BUILD_ARGS=(ARCH=x86-64 largeboards=yes all=yes nnue=yes arimaa=yes EXE="${FSX_HARNESS_ENGINE_BASENAME}")
+      FSX_HARNESS_CXX_DEFS+=(-DLARGEBOARDS -DPRECOMPUTED_MAGICS -DALLVARS -DNNUE_EMBEDDING_OFF -DENABLE_COMPOUND_TURNS)
+      FSX_HARNESS_BUILD_ARGS=(ARCH=x86-64 largeboards=yes all=yes nnue=yes compoundturns=yes EXE="${FSX_HARNESS_ENGINE_BASENAME}")
       FSX_HARNESS_BUILD_EXE="${FSX_HARNESS_ENGINE_BASENAME}"
       ;;
     stockfish-allvars*)

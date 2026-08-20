@@ -1,8 +1,10 @@
 /*
-  Fairy-Stockfish-X Arimaa turn support
+  Fairy-Stockfish-X compound turn support
 */
 
-#include "arimaa.h"
+#include "compound_turn.h"
+
+#ifdef ENABLE_COMPOUND_TURNS
 
 #include <algorithm>
 #include <functional>
@@ -19,15 +21,15 @@ namespace Stockfish {
 
 namespace {
 
-bool arimaa_should_stop(Thread& thread) {
+bool compound_should_stop(Thread& thread) {
     if (Threads.stop.load(std::memory_order_relaxed))
         return true;
 
     if (&thread == Threads.main())
         Threads.main()->check_time();
 
-    // MainThread::check_time() enforces the hard limit.  Arimaa's recursive
-    // turn search also needs the ordinary time-management target so that one
+    // MainThread::check_time() enforces the hard limit. Recursive turn
+    // search also needs the ordinary time-management target so that one
     // very large turn cannot run all the way to Time.maximum().
     // Match MainThread::check_time()'s normal sampling cadence rather than
     // reading the clock for every recursive candidate.
@@ -40,11 +42,11 @@ bool arimaa_should_stop(Thread& thread) {
     return Threads.stop.load(std::memory_order_relaxed);
 }
 
-int arimaa_move_cost(const Position& pos, Move move) {
+int compound_move_cost(const Position& pos, Move move) {
     return pos.compound_turn_step_cost(move);
 }
 
-std::string arimaa_step_to_string(Position& pos, Move move) {
+std::string compound_step_to_string(Position& pos, Move move) {
     if (!is_encoded_push(move))
         return UCI::move(pos, move);
 
@@ -53,11 +55,11 @@ std::string arimaa_step_to_string(Position& pos, Move move) {
          + "," + UCI::square(pos, encoded_push_square(move));
 }
 
-using ArimaaTurnCallback = std::function<bool(const ArimaaTurn&)>;
+using CompoundMoveCallback = std::function<bool(const CompoundMove&)>;
 
 bool generate_turns(Position& pos,
-                    const ArimaaTurnCallback& callback,
-                    ArimaaTurn& turn,
+                    const CompoundMoveCallback& callback,
+                    CompoundMove& turn,
                     StateInfo* states,
                     int depth,
                     int usedSteps,
@@ -71,7 +73,7 @@ bool generate_turns(Position& pos,
         if (is_pass(move))
             continue;
 
-        const int moveCost = arimaa_move_cost(pos, move);
+        const int moveCost = compound_move_cost(pos, move);
         if (usedSteps + moveCost > turnSteps)
             continue;
 
@@ -84,11 +86,11 @@ bool generate_turns(Position& pos,
         {
             StateInfo boundaryState;
             pos.end_compound_turn(boundaryState);
-            repetitionIllegal = pos.arimaa_repetition_illegal();
+            repetitionIllegal = pos.compound_repetition_illegal();
             pos.undo_compound_turn();
         }
         else
-            repetitionIllegal = pos.arimaa_repetition_illegal();
+            repetitionIllegal = pos.compound_repetition_illegal();
 
         bool keepGenerating = true;
         if (pos.board_layout_key() != startBoardKey && !repetitionIllegal)
@@ -109,20 +111,20 @@ bool generate_turns(Position& pos,
 
 } // namespace
 
-std::vector<ArimaaTurn> generate_arimaa_turns(Position& pos) {
+std::vector<CompoundMove> generate_compound_moves(Position& pos) {
 
-  std::vector<ArimaaTurn> turns;
-  if (!pos.variant()->arimaa || !pos.compound_turn_active())
+  std::vector<CompoundMove> turns;
+  if (!pos.compound_turn_active())
       return turns;
 
   Value result;
   if (pos.is_game_end(result))
       return turns;
 
-  ArimaaTurn turn;
-  alignas(Eval::NNUE::CacheLineSize) StateInfo states[ArimaaTurn::MAX_STEPS];
+  CompoundMove turn;
+  alignas(Eval::NNUE::CacheLineSize) StateInfo states[CompoundMove::MAX_STEPS];
   generate_turns(pos,
-                 [&](const ArimaaTurn& candidate) {
+                 [&](const CompoundMove& candidate) {
                      turns.push_back(candidate);
                      return true;
                  },
@@ -130,20 +132,20 @@ std::vector<ArimaaTurn> generate_arimaa_turns(Position& pos) {
   return turns;
 }
 
-bool has_any_arimaa_turn(Position& pos) {
+bool has_any_compound_move(Position& pos) {
 
-  if (!pos.variant()->arimaa || !pos.compound_turn_active())
+  if (!pos.compound_turn_active())
       return false;
 
   Value result;
   if (pos.is_game_end(result))
       return false;
 
-  ArimaaTurn turn;
-  alignas(Eval::NNUE::CacheLineSize) StateInfo states[ArimaaTurn::MAX_STEPS];
+  CompoundMove turn;
+  alignas(Eval::NNUE::CacheLineSize) StateInfo states[CompoundMove::MAX_STEPS];
   bool found = false;
   generate_turns(pos,
-                 [&](const ArimaaTurn&) {
+                 [&](const CompoundMove&) {
                      found = true;
                      return false;
                  },
@@ -151,15 +153,15 @@ bool has_any_arimaa_turn(Position& pos) {
   return found;
 }
 
-std::vector<ArimaaTurn> parse_root_turns(Position& pos, const std::vector<std::string>& texts) {
+std::vector<CompoundMove> parse_root_compound_moves(Position& pos, const std::vector<std::string>& texts) {
 
-  std::vector<ArimaaTurn> turns;
+  std::vector<CompoundMove> turns;
   for (const std::string& text : texts)
   {
-      ArimaaTurn turn;
+      CompoundMove turn;
       if (pos.compound_turn_active())
       {
-          if (parse_arimaa_turn(pos, text, turn))
+          if (parse_compound_move(pos, text, turn))
               turns.push_back(turn);
           continue;
       }
@@ -178,10 +180,10 @@ std::vector<ArimaaTurn> parse_root_turns(Position& pos, const std::vector<std::s
   return turns;
 }
 
-bool root_turn_allowed(const ArimaaTurn& turn,
-                       const std::vector<ArimaaTurn>& searchMoves,
-                       bool searchMovesSpecified,
-                       const std::vector<ArimaaTurn>& banMoves) {
+bool root_compound_move_allowed(const CompoundMove& turn,
+                                const std::vector<CompoundMove>& searchMoves,
+                                bool searchMovesSpecified,
+                                const std::vector<CompoundMove>& banMoves) {
 
   return (!searchMovesSpecified
           || (!searchMoves.empty()
@@ -189,30 +191,23 @@ bool root_turn_allowed(const ArimaaTurn& turn,
       && std::find(banMoves.begin(), banMoves.end(), turn) == banMoves.end();
 }
 
-bool parse_arimaa_turn(Position& pos, const std::string& text, ArimaaTurn& turn) {
+bool parse_compound_move(Position& pos, const std::string& text, CompoundMove& turn) {
 
-  if (!pos.variant()->arimaa || !pos.compound_turn_active() || text.empty())
+  if (!pos.compound_turn_active() || text.empty())
       return false;
 
   Value result;
   if (pos.is_game_end(result))
       return false;
 
-  ArimaaTurn parsed;
-  alignas(Eval::NNUE::CacheLineSize) StateInfo states[ArimaaTurn::MAX_STEPS];
+  CompoundMove parsed;
+  alignas(Eval::NNUE::CacheLineSize) StateInfo states[CompoundMove::MAX_STEPS];
   const Key startBoardKey = pos.board_layout_key();
 
-  // Commas are retained as the turn separator for the simple coordinate
-  // notation requested by the GUI contract.  They are also part of FSX's
-  // single-step pull/pair/drop notation, so parse by matching legal moves
-  // rather than splitting the string first.  Backtracking lets
-  // "d3d2,e3,c2c3" resolve as a pull followed by a step, while
-  // "a2a3,b2b3" remains two ordinary steps.  A semicolon is accepted as an
-  // unambiguous separator for clients that prefer one.
   std::function<bool(size_t, int)> parse = [&](size_t offset, int usedSteps) {
       if (offset >= text.size())
           return false;
-      if (parsed.length >= ArimaaTurn::MAX_STEPS)
+      if (parsed.length >= CompoundMove::MAX_STEPS)
           return false;
 
       for (const auto& move : MoveList<LEGAL>(pos))
@@ -220,11 +215,11 @@ bool parse_arimaa_turn(Position& pos, const std::string& text, ArimaaTurn& turn)
           if (is_pass(move))
               continue;
 
-          const std::string moveText = arimaa_step_to_string(pos, move);
+          const std::string moveText = compound_step_to_string(pos, move);
           if (text.compare(offset, moveText.size(), moveText) != 0)
               continue;
 
-          const int moveCost = arimaa_move_cost(pos, move);
+          const int moveCost = compound_move_cost(pos, move);
           if (usedSteps + moveCost > pos.compound_turn_steps())
               continue;
 
@@ -262,7 +257,7 @@ bool parse_arimaa_turn(Position& pos, const std::string& text, ArimaaTurn& turn)
   int turnCost = 0;
   for (int i = 0; i < parsed.length; ++i)
   {
-      turnCost += arimaa_move_cost(pos, parsed.steps[i]);
+      turnCost += compound_move_cost(pos, parsed.steps[i]);
       pos.do_move(parsed.steps[i], states[i], false);
   }
 
@@ -272,11 +267,11 @@ bool parse_arimaa_turn(Position& pos, const std::string& text, ArimaaTurn& turn)
   {
       StateInfo boundaryState;
       pos.end_compound_turn(boundaryState);
-      repetitionIllegal = pos.arimaa_repetition_illegal();
+      repetitionIllegal = pos.compound_repetition_illegal();
       pos.undo_compound_turn();
   }
   else
-      repetitionIllegal = pos.arimaa_repetition_illegal();
+      repetitionIllegal = pos.compound_repetition_illegal();
 
   for (int i = parsed.length - 1; i >= 0; --i)
       pos.undo_move(parsed.steps[i]);
@@ -288,18 +283,17 @@ bool parse_arimaa_turn(Position& pos, const std::string& text, ArimaaTurn& turn)
   return true;
 }
 
-void do_arimaa_turn(Position& pos, const ArimaaTurn& turn, StateInfo* states) {
+void do_compound_move(Position& pos, const CompoundMove& turn, StateInfo* states) {
 
-  assert(pos.variant()->arimaa);
   assert(pos.compound_turn_active());
-  assert(turn.length > 0 && turn.length <= ArimaaTurn::MAX_STEPS);
+  assert(turn.length > 0 && turn.length <= CompoundMove::MAX_STEPS);
 
   int turnCost = 0;
 
   for (int i = 0; i < turn.length; ++i)
   {
       assert(pos.legal(turn.steps[i]));
-      turnCost += arimaa_move_cost(pos, turn.steps[i]);
+      turnCost += compound_move_cost(pos, turn.steps[i]);
       pos.do_move(turn.steps[i], states[i], false);
   }
 
@@ -307,14 +301,13 @@ void do_arimaa_turn(Position& pos, const ArimaaTurn& turn, StateInfo* states) {
       pos.end_compound_turn(states[turn.length]);
 }
 
-void undo_arimaa_turn(Position& pos, const ArimaaTurn& turn) {
+void undo_compound_move(Position& pos, const CompoundMove& turn) {
 
-  assert(pos.variant()->arimaa);
-  assert(turn.length > 0 && turn.length <= ArimaaTurn::MAX_STEPS);
+  assert(turn.length > 0 && turn.length <= CompoundMove::MAX_STEPS);
 
   int turnCost = 0;
   for (int i = 0; i < turn.length; ++i)
-      turnCost += arimaa_move_cost(pos, turn.steps[i]);
+      turnCost += compound_move_cost(pos, turn.steps[i]);
 
   if (turnCost < pos.compound_turn_steps())
       pos.undo_compound_turn();
@@ -323,18 +316,18 @@ void undo_arimaa_turn(Position& pos, const ArimaaTurn& turn) {
       pos.undo_move(turn.steps[i]);
 }
 
-std::string arimaa_turn_to_string(Position& pos, const ArimaaTurn& turn) {
+std::string compound_move_to_string(Position& pos, const CompoundMove& turn) {
 
   std::string result;
-  alignas(Eval::NNUE::CacheLineSize) StateInfo states[ArimaaTurn::MAX_STEPS];
+  alignas(Eval::NNUE::CacheLineSize) StateInfo states[CompoundMove::MAX_STEPS];
   int turnCost = 0;
 
   for (int i = 0; i < turn.length; ++i)
   {
       if (i)
           result += ',';
-      result += arimaa_step_to_string(pos, turn.steps[i]);
-      turnCost += arimaa_move_cost(pos, turn.steps[i]);
+      result += compound_step_to_string(pos, turn.steps[i]);
+      turnCost += compound_move_cost(pos, turn.steps[i]);
       pos.do_move(turn.steps[i], states[i], false);
   }
 
@@ -349,60 +342,60 @@ std::string arimaa_turn_to_string(Position& pos, const ArimaaTurn& turn) {
   return result;
 }
 
-uint64_t arimaa_perft(Position& pos, int depth, bool root) {
+uint64_t compound_perft(Position& pos, int depth, bool root) {
 
   if (depth <= 0)
       return 1;
 
   uint64_t nodes = 0;
-  for (const ArimaaTurn& turn : generate_arimaa_turns(pos))
+  for (const CompoundMove& turn : generate_compound_moves(pos))
   {
       uint64_t count;
       if (depth <= 1)
           count = 1;
       else
       {
-          alignas(Eval::NNUE::CacheLineSize) StateInfo states[ArimaaTurn::MAX_STEPS];
-          do_arimaa_turn(pos, turn, states);
-          count = arimaa_perft(pos, depth - 1, false);
-          undo_arimaa_turn(pos, turn);
+          alignas(Eval::NNUE::CacheLineSize) StateInfo states[CompoundMove::MAX_STEPS];
+          do_compound_move(pos, turn, states);
+          count = compound_perft(pos, depth - 1, false);
+          undo_compound_move(pos, turn);
       }
       nodes += count;
       if (root)
-          sync_cout << arimaa_turn_to_string(pos, turn) << ": " << count << sync_endl;
+          sync_cout << compound_move_to_string(pos, turn) << ": " << count << sync_endl;
   }
   return nodes;
 }
 
 namespace {
 
-Value search_arimaa_turns(Position& pos,
-                          Thread& thread,
-                          int depth,
-                          int ply,
-                          Value alpha,
-                          Value beta,
-                          bool& aborted);
+Value search_compound_turns(Position& pos,
+                            Thread& thread,
+                            int depth,
+                            int ply,
+                            Value alpha,
+                            Value beta,
+                            bool& aborted);
 
-bool search_arimaa_turn_candidates(Position& pos,
-                                   Thread& thread,
-                                   int depth,
-                                   int ply,
-                                   Value alpha,
-                                   Value beta,
-                                   bool& aborted,
-                                   Value& best,
-                                   ArimaaTurn& bestTurn,
-                                   bool& foundTurn,
-                                   uint64_t& visitedMoves,
-                                   ArimaaTurn& turn,
-                                   StateInfo* states,
-                                   int stepDepth,
-                                   int usedSteps,
-                                   Key startBoardKey,
-                                   const std::vector<ArimaaTurn>* rootSearchMoves,
-                                   bool rootSearchMovesSpecified,
-                                   const std::vector<ArimaaTurn>* rootBanMoves) {
+bool search_compound_turn_candidates(Position& pos,
+                                     Thread& thread,
+                                     int depth,
+                                     int ply,
+                                     Value alpha,
+                                     Value beta,
+                                     bool& aborted,
+                                     Value& best,
+                                     CompoundMove& bestTurn,
+                                     bool& foundTurn,
+                                     uint64_t& visitedMoves,
+                                     CompoundMove& turn,
+                                     StateInfo* states,
+                                     int stepDepth,
+                                     int usedSteps,
+                                     Key startBoardKey,
+                                     const std::vector<CompoundMove>* rootSearchMoves,
+                                     bool rootSearchMovesSpecified,
+                                     const std::vector<CompoundMove>* rootBanMoves) {
 
   MoveList<LEGAL> moves(pos);
 
@@ -410,7 +403,7 @@ bool search_arimaa_turn_candidates(Position& pos,
   {
       ++visitedMoves;
       if ((rootSearchMoves == nullptr || foundTurn || visitedMoves > 1)
-          && arimaa_should_stop(thread))
+          && compound_should_stop(thread))
       {
           aborted = true;
           return false;
@@ -419,7 +412,7 @@ bool search_arimaa_turn_candidates(Position& pos,
       if (is_pass(move))
           continue;
 
-      const int moveCost = arimaa_move_cost(pos, move);
+      const int moveCost = compound_move_cost(pos, move);
       if (usedSteps + moveCost > pos.compound_turn_steps())
           continue;
 
@@ -432,17 +425,17 @@ bool search_arimaa_turn_candidates(Position& pos,
       {
           StateInfo boundaryState;
           pos.end_compound_turn(boundaryState);
-          repetitionIllegal = pos.arimaa_repetition_illegal();
+          repetitionIllegal = pos.compound_repetition_illegal();
           pos.undo_compound_turn();
       }
       else
-          repetitionIllegal = pos.arimaa_repetition_illegal();
+          repetitionIllegal = pos.compound_repetition_illegal();
 
       bool keepSearching = true;
       const bool rootTurn = rootSearchMoves != nullptr;
       const bool allowed = !rootTurn
-                        || root_turn_allowed(turn, *rootSearchMoves,
-                                             rootSearchMovesSpecified, *rootBanMoves);
+                        || root_compound_move_allowed(turn, *rootSearchMoves,
+                                                      rootSearchMovesSpecified, *rootBanMoves);
       if (allowed && pos.board_layout_key() != startBoardKey && !repetitionIllegal)
       {
           foundTurn = true;
@@ -454,15 +447,15 @@ bool search_arimaa_turn_candidates(Position& pos,
               StateInfo boundaryState;
               pos.end_compound_turn(boundaryState);
               thread.nodes.fetch_add(1, std::memory_order_relaxed);
-              value = -search_arimaa_turns(pos, thread, depth - 1, ply + 1,
-                                            -beta, -alpha, aborted);
+              value = -search_compound_turns(pos, thread, depth - 1, ply + 1,
+                                             -beta, -alpha, aborted);
               pos.undo_compound_turn();
           }
           else
           {
               thread.nodes.fetch_add(1, std::memory_order_relaxed);
-              value = -search_arimaa_turns(pos, thread, depth - 1, ply + 1,
-                                            -beta, -alpha, aborted);
+              value = -search_compound_turns(pos, thread, depth - 1, ply + 1,
+                                             -beta, -alpha, aborted);
           }
 
           if (aborted)
@@ -483,7 +476,7 @@ bool search_arimaa_turn_candidates(Position& pos,
       if (keepSearching && usedSteps + moveCost < pos.compound_turn_steps()
           && pos.compound_turn_active())
       {
-          keepSearching = search_arimaa_turn_candidates(
+          keepSearching = search_compound_turn_candidates(
             pos, thread, depth, ply, alpha, beta, aborted, best, bestTurn, foundTurn,
             visitedMoves, turn, states, stepDepth + 1, usedSteps + moveCost,
             startBoardKey, rootSearchMoves, rootSearchMovesSpecified, rootBanMoves);
@@ -500,13 +493,13 @@ bool search_arimaa_turn_candidates(Position& pos,
   return true;
 }
 
-Value search_arimaa_turns(Position& pos,
-                          Thread& thread,
-                          int depth,
-                          int ply,
-                          Value alpha,
-                          Value beta,
-                          bool& aborted) {
+Value search_compound_turns(Position& pos,
+                            Thread& thread,
+                            int depth,
+                            int ply,
+                            Value alpha,
+                            Value beta,
+                            bool& aborted) {
 
   // Repetition legality depends on the completed-turn StateInfo history, not
   // only on the current board key. Do not reuse history-blind TT bounds here.
@@ -515,26 +508,26 @@ Value search_arimaa_turns(Position& pos,
       return result;
   if (depth <= 0)
   {
-      if (!has_any_arimaa_turn(pos))
+      if (!has_any_compound_move(pos))
           return pos.stalemate_value(ply);
       return Eval::evaluate(pos);
   }
-  if (arimaa_should_stop(thread))
+  if (compound_should_stop(thread))
   {
       aborted = true;
       return VALUE_DRAW;
   }
 
   Value best = -VALUE_INFINITE;
-  ArimaaTurn bestTurn;
+  CompoundMove bestTurn;
   bool foundTurn = false;
   uint64_t visitedMoves = 0;
-  ArimaaTurn turn;
-  alignas(Eval::NNUE::CacheLineSize) StateInfo states[ArimaaTurn::MAX_STEPS];
-  search_arimaa_turn_candidates(pos, thread, depth, ply, alpha, beta, aborted,
-                                best, bestTurn, foundTurn, visitedMoves, turn,
-                                states, 0, 0, pos.board_layout_key(), nullptr,
-                                false, nullptr);
+  CompoundMove turn;
+  alignas(Eval::NNUE::CacheLineSize) StateInfo states[CompoundMove::MAX_STEPS];
+  search_compound_turn_candidates(pos, thread, depth, ply, alpha, beta, aborted,
+                                  best, bestTurn, foundTurn, visitedMoves, turn,
+                                  states, 0, 0, pos.board_layout_key(), nullptr,
+                                  false, nullptr);
 
   if (aborted)
       return VALUE_DRAW;
@@ -547,24 +540,24 @@ Value search_arimaa_turns(Position& pos,
 
 } // namespace
 
-void search_arimaa(Thread& thread) {
+void search_compound(Thread& thread) {
 
   Position& pos = thread.rootPos;
-  thread.arimaaBestTurn = ArimaaTurn{};
-  thread.arimaaBestScore = -VALUE_INFINITE;
-  thread.arimaaCompletedDepth = 0;
+  thread.compoundBestTurn = CompoundMove{};
+  thread.compoundBestScore = -VALUE_INFINITE;
+  thread.compoundCompletedDepth = 0;
 
   Value rootResult;
-  // Setup has no on-board rabbits yet, so generic extinction is not terminal.
+  // Setup has no on-board pieces yet in some variants, so generic extinction is not terminal.
   if (pos.compound_turn_active() && !pos.count_in_hand(ALL_PIECES)
       && pos.is_game_end(rootResult))
       return;
 
-  const std::vector<ArimaaTurn> searchMoves =
-      parse_root_turns(pos, Search::Limits.arimaaSearchMoves);
-  const bool searchMovesSpecified = Search::Limits.arimaaSearchMovesSpecified;
-  const std::vector<ArimaaTurn> banMoves =
-      parse_root_turns(pos, Search::Limits.arimaaBanMoves);
+  const std::vector<CompoundMove> searchMoves =
+      parse_root_compound_moves(pos, Search::Limits.compoundSearchMoves);
+  const bool searchMovesSpecified = Search::Limits.compoundSearchMovesSpecified;
+  const std::vector<CompoundMove> banMoves =
+      parse_root_compound_moves(pos, Search::Limits.compoundBanMoves);
 
   // Setup is not a compound turn: the placer may make many consecutive
   // drops, while ordinary negamax would incorrectly negate after each one.
@@ -577,13 +570,13 @@ void search_arimaa(Thread& thread) {
           if (is_pass(move))
               continue;
 
-          ArimaaTurn turn;
+          CompoundMove turn;
           turn.steps[0] = move.move;
           turn.length = 1;
-          if (root_turn_allowed(turn, searchMoves, searchMovesSpecified, banMoves))
+          if (root_compound_move_allowed(turn, searchMoves, searchMovesSpecified, banMoves))
           {
-              thread.arimaaBestTurn = turn;
-              thread.arimaaBestScore = VALUE_DRAW;
+              thread.compoundBestTurn = turn;
+              thread.compoundBestScore = VALUE_DRAW;
               break;
           }
       }
@@ -593,31 +586,31 @@ void search_arimaa(Thread& thread) {
   // A parsed root restriction is already a legal turn. Keep it as a fallback
   // in case a strict limit fires before the filtered turn reaches evaluation.
   if (searchMovesSpecified)
-      for (const ArimaaTurn& candidate : searchMoves)
-          if (root_turn_allowed(candidate, searchMoves, searchMovesSpecified, banMoves))
+      for (const CompoundMove& candidate : searchMoves)
+          if (root_compound_move_allowed(candidate, searchMoves, searchMovesSpecified, banMoves))
           {
-              thread.arimaaBestTurn = candidate;
-              thread.arimaaBestScore = VALUE_DRAW;
+              thread.compoundBestTurn = candidate;
+              thread.compoundBestScore = VALUE_DRAW;
               break;
           }
 
   const int maxDepth = Search::Limits.depth > 0 ? Search::Limits.depth : MAX_PLY;
   for (int depth = 1; depth <= maxDepth; ++depth)
   {
-      if (thread.arimaaBestTurn.length)
+      if (thread.compoundBestTurn.length)
       {
-          if (arimaa_should_stop(thread))
+          if (compound_should_stop(thread))
               break;
       }
 
       Value bestScore = -VALUE_INFINITE;
-      ArimaaTurn bestTurn;
+      CompoundMove bestTurn;
       bool aborted = false;
       bool foundTurn = false;
       uint64_t visitedMoves = 0;
-      ArimaaTurn turn;
-      alignas(Eval::NNUE::CacheLineSize) StateInfo states[ArimaaTurn::MAX_STEPS];
-      search_arimaa_turn_candidates(
+      CompoundMove turn;
+      alignas(Eval::NNUE::CacheLineSize) StateInfo states[CompoundMove::MAX_STEPS];
+      search_compound_turn_candidates(
         pos, thread, depth, 0, -VALUE_INFINITE, -bestScore, aborted, bestScore,
         bestTurn, foundTurn, visitedMoves, turn, states, 0, 0,
         pos.board_layout_key(), &searchMoves, searchMovesSpecified, &banMoves);
@@ -626,10 +619,10 @@ void search_arimaa(Thread& thread) {
       {
           // Keep a legal fallback if the very first iteration is interrupted,
           // but never present that partial iteration as completed.
-          if (!thread.arimaaBestTurn.length && bestTurn.length)
+          if (!thread.compoundBestTurn.length && bestTurn.length)
           {
-              thread.arimaaBestTurn = bestTurn;
-              thread.arimaaBestScore = bestScore == -VALUE_INFINITE ? VALUE_DRAW : bestScore;
+              thread.compoundBestTurn = bestTurn;
+              thread.compoundBestScore = bestScore == -VALUE_INFINITE ? VALUE_DRAW : bestScore;
           }
           break;
       }
@@ -639,15 +632,15 @@ void search_arimaa(Thread& thread) {
 
       if (bestTurn.length)
       {
-          thread.arimaaBestTurn = bestTurn;
-          thread.arimaaBestScore = bestScore;
-          thread.arimaaCompletedDepth = depth;
+          thread.compoundBestTurn = bestTurn;
+          thread.compoundBestScore = bestScore;
+          thread.compoundCompletedDepth = depth;
 
           if (&thread == Threads.main() && int(Options["Verbosity"]) >= 1)
               sync_cout << "info depth " << depth
                         << " score " << UCI::value(bestScore)
                         << " nodes " << thread.nodes.load(std::memory_order_relaxed)
-                        << " pv " << arimaa_turn_to_string(pos, bestTurn)
+                        << " pv " << compound_move_to_string(pos, bestTurn)
                         << sync_endl;
       }
 
@@ -663,3 +656,5 @@ void search_arimaa(Thread& thread) {
 }
 
 } // namespace Stockfish
+
+#endif // ENABLE_COMPOUND_TURNS
