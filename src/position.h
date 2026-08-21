@@ -869,7 +869,6 @@ public:
   bool extinction_pseudo_royal() const;
   PieceSet flag_piece_types(Color c) const;
   PieceType flag_piece(Color c) const;
-  PieceType extinction_piece_type(Color c) const;
   Bitboard flag_region(Color c) const;
   bool flag_move() const;
   bool flag_reached(Color c) const;
@@ -3355,16 +3354,6 @@ inline PieceType Position::flag_piece(Color c) const {
       return ALL_PIECES;
   for (PieceType pt = NO_PIECE_TYPE; pt < PIECE_TYPE_NB; ++pt)
       if (pts & pt)
-          return pt;
-  return NO_PIECE_TYPE;
-}
-
-inline PieceType Position::extinction_piece_type(Color c) const {
-  PieceSet pts = extinction_piece_types(c);
-  if (pts & piece_set(ALL_PIECES))
-      return ALL_PIECES;
-  for (PieceType pt = NO_PIECE_TYPE; pt < PIECE_TYPE_NB; ++pt)
-      if (pts & piece_set(pt))
           return pt;
   return NO_PIECE_TYPE;
 }
