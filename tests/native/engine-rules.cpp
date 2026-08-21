@@ -1011,7 +1011,7 @@ void composable_rules() {
     set_position(riflePawnReloaded, riflePawnStates, "rifle-key-audit", pos.fen().c_str());
     check(pos.pawn_key() == riflePawnReloaded.pawn_key()
           && pos.key() == riflePawnReloaded.key(),
-          "rifle pawn capture produced inconsistent keys");
+          "rifle pawn capture produced a key that did not match its FEN");
     pos.undo_move(riflePawn);
     states->pop_back();
 
@@ -1431,6 +1431,17 @@ void compound_turn_rules() {
         pos.undo_move(fillerMovesParsed[2 - i]);
         states->pop_back();
     }
+
+    set_position(pos, states, "generic-compound-optional-boundary-audit",
+                 "8/8/8/3r4/3C4/8/8/8 w - - 1 1");
+    Move optionalBoundaryStep = parse_move(pos, "d4d3");
+    states->emplace_back();
+    pos.do_move(optionalBoundaryStep, states->back());
+    Value optionalResult = VALUE_NONE;
+    check(pos.compound_turn_step() != 0 && !pos.is_optional_game_end(optionalResult),
+          "optional game-end rule fired inside a compound turn");
+    pos.undo_move(optionalBoundaryStep);
+    states->pop_back();
 
     // Test formatting compound move
     std::string formatted = compound_move_to_string(pos, parsedTurn);
@@ -2763,6 +2774,9 @@ customPiece1 = r:-
 pass = false
 passOnStalemate = true
 startFen = 8/8/8/3r4/8/8/8/8 w - - 0 1
+
+[generic-compound-optional-boundary-audit:generic-compound-turn-audit]
+nMoveRule = 1
 
 [generic-sequential-setup-audit:fairy]
 pawn = -
