@@ -2332,13 +2332,6 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
         }
     }
 
-    switch (v->simulFlagExtinctionPriority)
-    {
-    case SimulFlagExtinctionPriority::FLAG:
-    case SimulFlagExtinctionPriority::EXTINCTION:
-        break;
-    }
-
     const bool wrapsTopology = v->cylindrical || v->toroidal;
     v->rebuild_piece_symbol_maps();
     const bool hasRoyalKing = v->checking

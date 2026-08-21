@@ -660,7 +660,7 @@ void search_compound(Thread& thread) {
       std::unordered_map<Key, Value>* leafEvalCachePtr = depth == 1 ? &leafEvalCache : nullptr;
       alignas(Eval::NNUE::CacheLineSize) StateInfo states[CompoundMove::MAX_STEPS + 1];
       search_compound_turn_candidates(
-        pos, thread, depth, 0, -VALUE_INFINITE, -bestScore, aborted, bestScore,
+        pos, thread, depth, 0, -VALUE_INFINITE, VALUE_INFINITE, aborted, bestScore,
         bestTurn, foundTurn, visitedMoves, turn, states, 0, 0,
         pos.board_layout_key(), &searchMoves, searchMovesSpecified, &banMoves,
         leafLegalCachePtr, leafEvalCachePtr);

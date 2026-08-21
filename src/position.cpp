@@ -5380,6 +5380,9 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
 
 bool Position::encoded_push_legal(Move m) const {
 
+  // VariantParser::check_consistency rejects royal/check-state pieces
+  // with compound turns, so this fast path does not need a simulated
+  // king-safety probe. Keep that parser invariant in sync with this path.
   if (!is_encoded_push(m) || var->pushPullRule != PushPullRule::TWO_STEP)
       return false;
 
