@@ -8202,7 +8202,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           pullRightsMask = castlingRightsMask[from] | castlingRightsMask[to]
                          | castlingRightsMask[pushedTo];
       }
-      else if (!pureWallMove && !cloneMove && !pullMove)
+      else if (!pureWallMove && !cloneMove && !pullMove && !rifleShot)
           k ^= Zobrist::psq[pc][from] ^ Zobrist::psq[pc][to];
       else if (pullMove)
       {
@@ -8236,13 +8236,15 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       k ^= Zobrist::enpassant[pop_lsb(st->epSquares)];
 
   // Update castling rights if needed
+  const int moveRightsMask = rifleShot ? castlingRightsMask[to]
+                                       : castlingRightsMask[from] | castlingRightsMask[to];
   if (!dropMove && !is_pass(m) && !pureWallMove && st->castlingRights
-      && (castlingRightsMask[from] | castlingRightsMask[to]
+      && (moveRightsMask
           | (jumpCapsq != SQ_NONE ? castlingRightsMask[jumpCapsq] : 0)
           | pushRightsMask | pullRightsMask))
   {
       k ^= Zobrist::castling[st->castlingRights];
-      st->castlingRights &= ~(castlingRightsMask[from] | castlingRightsMask[to]
+      st->castlingRights &= ~(moveRightsMask
                               | (jumpCapsq != SQ_NONE ? castlingRightsMask[jumpCapsq] : 0)
                               | pushRightsMask | pullRightsMask);
 
@@ -8575,7 +8577,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   }
 
   // If the moving piece is a pawn do some special extra work
-  if (type_of(pc) == PAWN && !stackMove && !unstackMove)
+  if (type_of(pc) == PAWN && !stackMove && !unstackMove && !rifleShot)
   {
       st->rule50 = 0;
       if (is_promotion_move(m) || type_of(m) == PIECE_PROMOTION)
@@ -10215,6 +10217,9 @@ void Position::do_null_move(StateInfo& newSt) {
 
   assert(!evasion_checkers());
   assert(&newSt != st);
+#ifdef ENABLE_COMPOUND_TURNS
+  assert(!var->compoundTurnSteps || st->compoundTurnStep == 0);
+#endif
 
   static_cast<StateInfoCopied&>(newSt) = static_cast<const StateInfoCopied&>(*st);
 
@@ -10796,6 +10801,11 @@ bool Position::n_fold_game_end(Value& result, int ply, int target) const {
 }
 
 bool Position::is_optional_game_end(Value& result, int ply, int countStarted) const {
+
+#ifdef ENABLE_COMPOUND_TURNS
+  if (var->compoundTurnSteps && !at_complete_turn_boundary())
+      return false;
+#endif
 
   // n-move rule
   if (n_move_rule() && st->rule50 > (2 * n_move_rule() - 1) && (!evasion_checkers() || has_legal_move_ignoring_immediate_end()))

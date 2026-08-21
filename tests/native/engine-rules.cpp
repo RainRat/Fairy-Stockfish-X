@@ -981,6 +981,38 @@ void composable_rules() {
     pos.undo_move(rifleMorphOut);
     states->pop_back();
 
+    set_position(pos, states, "rifle-key-audit",
+                 "4k2r/8/8/8/8/8/8/4K2R w KQkq - 0 1");
+    Move rifleRook = parse_move(pos, "h1h8");
+    states->emplace_back();
+    pos.do_move(rifleRook, states->back());
+    check(pos.piece_on(SQ_H1) == make_piece(WHITE, ROOK)
+          && pos.piece_on(SQ_H8) == NO_PIECE
+          && pos.can_castle(WHITE_OO)
+          && !pos.can_castle(BLACK_OO),
+          "rifle capture changed castling rights for the stationary shooter");
+    Position rifleRookReloaded;
+    StateListPtr rifleRookStates;
+    set_position(rifleRookReloaded, rifleRookStates, "rifle-key-audit", pos.fen().c_str());
+    check(pos.key() == rifleRookReloaded.key(),
+          "rifle capture produced a key that did not match its FEN");
+    pos.undo_move(rifleRook);
+    states->pop_back();
+
+    set_position(pos, states, "rifle-key-audit",
+                 "4k3/8/8/8/8/3p4/4P3/4K3 w - - 0 1");
+    Move riflePawn = parse_move(pos, "e2d3");
+    states->emplace_back();
+    pos.do_move(riflePawn, states->back());
+    Position riflePawnReloaded;
+    StateListPtr riflePawnStates;
+    set_position(riflePawnReloaded, riflePawnStates, "rifle-key-audit", pos.fen().c_str());
+    check(pos.pawn_key() == riflePawnReloaded.pawn_key()
+          && pos.key() == riflePawnReloaded.key(),
+          "rifle pawn capture produced a key that did not match its FEN");
+    pos.undo_move(riflePawn);
+    states->pop_back();
+
     set_position(pos, states, "composable-ep-ghost",
                  "4k3/8/3r4/3pP3/8/8/8/4K3[F] w - d6 0 1");
     Move occupiedEp = make<EN_PASSANT>(SQ_E5, SQ_D6);
@@ -1389,6 +1421,17 @@ void compound_turn_rules() {
         pos.undo_move(fillerMovesParsed[2 - i]);
         states->pop_back();
     }
+
+    set_position(pos, states, "generic-compound-optional-boundary-audit",
+                 "8/8/8/3r4/3C4/8/8/8 w - - 1 1");
+    Move optionalBoundaryStep = parse_move(pos, "d4d3");
+    states->emplace_back();
+    pos.do_move(optionalBoundaryStep, states->back());
+    Value optionalResult = VALUE_NONE;
+    check(pos.compound_turn_step() != 0 && !pos.is_optional_game_end(optionalResult),
+          "optional game-end rule fired inside a compound turn");
+    pos.undo_move(optionalBoundaryStep);
+    states->pop_back();
 
     // Test formatting compound move
     std::string formatted = compound_move_to_string(pos, parsedTurn);
@@ -2018,6 +2061,9 @@ pieceDrops = true
 symmetricDropTypes = p
 
 [occupancy-rifle:chess]
+rifleCapture = true
+
+[rifle-key-audit:chess]
 rifleCapture = true
 
 [asym-extinction-audit:chess]
@@ -2714,6 +2760,9 @@ customPiece1 = r:-
 pass = false
 passOnStalemate = true
 startFen = 8/8/8/3r4/8/8/8/8 w - - 0 1
+
+[generic-compound-optional-boundary-audit:generic-compound-turn-audit]
+nMoveRule = 1
 
 [generic-sequential-setup-audit:fairy]
 pawn = -

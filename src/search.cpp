@@ -282,6 +282,12 @@ void MainThread::search() {
                   XBoard::stateMachine->moveAfterSearch = false;
               }
           }
+          else if (!bestTurn.length && !Limits.infinite && !ponder)
+          {
+              Value result;
+              if (rootPos.is_game_end(result))
+                  sync_cout << xboard_result(rootPos, result) << sync_endl;
+          }
       }
       else if (Threads.main()->compoundBestTurn.length)
           sync_cout << "bestmove " << compound_move_to_string(rootPos, Threads.main()->compoundBestTurn) << sync_endl;
