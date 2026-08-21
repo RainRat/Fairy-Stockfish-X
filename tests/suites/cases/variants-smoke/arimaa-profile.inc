@@ -29,14 +29,14 @@ position startpos moves R@a1
 d
 EOF
 )
-assert_contains "$out" "^Fen: 8/8/8/8/8/8/8/R7\\[.*\\] b - - 0 1 setup=w$"
+assert_contains "$out" "^Fen: 8/8/8/8/8/8/8/R7\\[.*\\] b - - 0 1$"
 
 out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
 position startpos moves R@a1 0000 R@b1
 d
 EOF
 )
-assert_contains "$out" "^Fen: 8/8/8/8/8/8/8/RR6\\[.*\\] b - - 0 1 setup=w$"
+assert_contains "$out" "^Fen: 8/8/8/8/8/8/8/RR6\\[.*\\] b - - 0 1$"
 
 out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
 position startpos

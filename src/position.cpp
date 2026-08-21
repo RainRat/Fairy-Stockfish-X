@@ -1655,8 +1655,6 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
 
   unsigned char col, token = 'w';
   std::istringstream ss(fenStr);
-  bool hasSequentialSetupSide = false;
-  Color sequentialSetupSide = WHITE;
 
   std::memset(static_cast<void*>(this), 0, sizeof(Position));
   std::memset(static_cast<void*>(si), 0, sizeof(StateInfo));
@@ -2286,32 +2284,11 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
       }
   }
 
-  // Sequential setup uses an explicit forced pass between placements.  The
-  // side to move therefore does not identify the side that is placing; keep
-  // that state in the FSX FEN extension when a position is saved at the handoff.
-  ss >> std::ws;
-  std::string setupSpec;
-  if (var->sequentialSetup && ss >> setupSpec)
-  {
-      if (setupSpec == "setup=w")
-      {
-          hasSequentialSetupSide = true;
-          sequentialSetupSide = WHITE;
-      }
-      else if (setupSpec == "setup=b")
-      {
-          hasSequentialSetupSide = true;
-          sequentialSetupSide = BLACK;
-      }
-  }
-
   chess960 = isChess960 || v->chess960;
   tsumeMode = Options["TsumeMode"];
   thisThread = th;
   updatePawnCheckZone();
   set_state(st);
-  if (hasSequentialSetupSide)
-      st->sequentialSetupSide = sequentialSetupSide;
   if (var->sequentialSetup && (has_setup_drop(WHITE) || has_setup_drop(BLACK)))
       gamePly = 0;
 
@@ -2585,7 +2562,6 @@ void Position::set_state(StateInfo* si) const {
   si->compoundTurnReset = false;
 #endif
   si->sequentialSetupMove = false;
-  si->sequentialSetupSide = sideToMove;
   si->move = MOVE_NONE;
   si->removedGatingType = NO_PIECE_TYPE;
   si->removedCastlingGatingType = NO_PIECE_TYPE;
@@ -2997,11 +2973,6 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
           ss << " <" << wf << " " << wj << " " << bf << " " << bj << ">";
       }
   }
-
-  if (variant()->sequentialSetup
-      && (has_setup_drop(WHITE) || has_setup_drop(BLACK))
-      && st->sequentialSetupSide != sideToMove)
-      ss << " setup=" << (st->sequentialSetupSide == WHITE ? 'w' : 'b');
 
   return ss.str();
 }
@@ -5498,7 +5469,7 @@ bool Position::legal(Move m) const {
 
   if (var->sequentialSetup
       && (has_setup_drop(WHITE) || has_setup_drop(BLACK))
-      && us != st->sequentialSetupSide
+      && us != sequential_setup_side()
       && !is_pass(m))
       return false;
 
@@ -6521,7 +6492,7 @@ bool Position::pseudo_legal(const Move m) const {
 
   if (var->sequentialSetup
       && (has_setup_drop(WHITE) || has_setup_drop(BLACK))
-      && us != st->sequentialSetupSide
+      && us != sequential_setup_side()
       && !is_pass(m))
       return false;
 
@@ -9542,13 +9513,6 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   sideToMove = them;
 #endif
 
-  if (setupPlacement
-      && var->sequentialSetup
-      && us == st->sequentialSetupSide
-      && !has_setup_drop(st->sequentialSetupSide)
-      && has_setup_drop(~st->sequentialSetupSide))
-      st->sequentialSetupSide = ~st->sequentialSetupSide;
-
   st->evasionCheckersBB = compute_evasion_checkers_bb(sideToMove);
 
   // Rebuild the derived check info before broad royal-danger checks.  The
@@ -10924,121 +10888,151 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
               return true;
           }
 
-  // At an adjudication boundary, check flag goals in mover-first order before
-  // the ordinary flag rule. This lets a variant choose a deterministic winner
-  // when both sides satisfy a flag condition.
-  if (var->simulFlagExtinctionWinner == SimulFlagExtinctionWinner::FLAG_FIRST_ACTIVE_FIRST
-      && at_complete_turn_boundary())
-  {
-      const Color mover = ~sideToMove;
-      if (flag_reached(mover))
-      {
-          result = mated_in(ply);
-          return true;
-      }
-      if (flag_reached(sideToMove))
-      {
-          result = mate_in(ply);
-          return true;
-      }
-  }
+  const bool adjudicationBoundary = at_complete_turn_boundary();
+  const Color mover = ~sideToMove;
 
-  // Extinction
-  // Extinction does not apply for pseudo-royal pieces in normal capture rules,
-  // because they cannot be captured directly.
-  if (at_complete_turn_boundary()
-      && (var->extinctionValue.get(WHITE) != VALUE_NONE || var->extinctionValue.get(BLACK) != VALUE_NONE))
-  {
-      // At an adjudication boundary, simultaneous extinction is awarded to
-      // the player who just moved before ordinary extinction ordering gets a
-      // chance to choose a winner.
-      if (var->simulFlagExtinctionWinner == SimulFlagExtinctionWinner::FLAG_FIRST_ACTIVE_FIRST
-          && at_complete_turn_boundary()
-          && extinction_piece_type(WHITE) != NO_PIECE_TYPE
-          && extinction_piece_type(WHITE) != ALL_PIECES
-          && extinction_piece_type(BLACK) != NO_PIECE_TYPE
-          && extinction_piece_type(BLACK) != ALL_PIECES
-          && count_with_hand(WHITE, extinction_piece_type(WHITE)) == 0
-          && count_with_hand(BLACK, extinction_piece_type(BLACK)) == 0)
+  auto value_by_mover = [&](Value value) {
+      return convert_mate_value(-value, ply);
+  };
+
+  auto flag_game_end = [&](Value& flagResult) {
+      // A configured simultaneous policy evaluates either side's goal at the
+      // boundary. This preserves the complete-turn goal behavior used by
+      // Arimaa even when flagMove is disabled; the ordinary flag path below
+      // retains the established flagMove semantics for other variants.
+      if (var->simulFlagExtinctionPriority == SimulFlagExtinctionPriority::FLAG)
       {
-          result = extinction_value(sideToMove, ply);
-          return true;
-      }
-      for (Color c : { ~sideToMove, sideToMove })
-      {
-          if (var->extinctionValue.get(c) == VALUE_NONE)
-              continue;
-
-          PieceSet extinctTargets = extinction_piece_types(c);
-          PieceSet mustAppear = extinction_must_appear();
-          if (!blast_on_capture())
-              extinctTargets &= ~pseudo_royal_types();
-
-          // An aggregate appearance requirement activates extinction for the
-          // side after any piece of theirs has appeared on the board.
-          if ((mustAppear & piece_set(ALL_PIECES)) && !(st->extinctionSeen[c] & piece_set(ALL_PIECES)))
-              continue;
-
-          bool allTypesExtinct = true;
-          bool anyTypeExtinct = false;
-          bool sawEligibleType = false;
-          for (PieceSet ps = extinctTargets; ps;)
+          if (flag_reached(mover))
           {
-              PieceType pt = pop_lsb(ps);
-              if (!(mustAppear & piece_set(ALL_PIECES))
-                  && (mustAppear & piece_set(pt)) && !(st->extinctionSeen[c] & piece_set(pt)))
-              {
-                  allTypesExtinct = false;
-                  continue;
-              }
-              sawEligibleType = true;
-              bool extinct = count_with_hand(c, pt) <= extinction_piece_count(c)
-                          && count_with_hand(~c, pt) >= extinction_opponent_piece_count(c) + (extinction_claim() && c == sideToMove);
-              anyTypeExtinct |= extinct;
-              allTypesExtinct &= extinct;
+              flagResult = mated_in(ply);
+              return true;
           }
-
-          if (sawEligibleType && (extinction_all_piece_types(c) ? allTypesExtinct : anyTypeExtinct))
+          if (flag_reached(sideToMove))
           {
-              result = c == sideToMove ? extinction_value(c, ply) : -extinction_value(c, ply);
+              flagResult = mate_in(ply);
               return true;
           }
       }
-  }
-  // capture the flag
-  // A flag win by the side to move is only possible if flagMove is enabled
-  // and they already reached the flag region the move before.
-  // In the case both colors reached it, it is a draw if white was first.
-  if (at_complete_turn_boundary() && flag_move() && flag_reached(sideToMove))
-  {
-      result = sideToMove == WHITE && flag_reached(BLACK) ? VALUE_DRAW : mate_in(ply);
-      return true;
-  }
-  // A direct flag win is possible if the opponent does not get an extra flag move
-  // or we can detect early for kings that they won't be able to reach the flag region
-  // Note: This condition has to be after the above, since both might be true e.g. in racing kings.
-  if (   at_complete_turn_boundary()
-      && (!flag_move() || (flag_piece_types(sideToMove) == piece_set(KING) && !allow_checks())) // king-only shortcut is invalid when kings are capturable
-       && flag_reached(~sideToMove))
-  {
-      bool gameEnd = true;
-      // Check whether king can move to CTF zone (racing kings) to draw
-      if (   flag_move() && sideToMove == BLACK && !evasion_checkers() && count<KING>(sideToMove)
-          && (flag_region(sideToMove) & attacks_from(sideToMove, KING, square<KING>(sideToMove))))
+
+      // A flag win by the side to move is only possible if flagMove is enabled
+      // and they already reached the flag region the move before.
+      if (flag_move() && flag_reached(sideToMove))
       {
-          assert(flag_piece_types(sideToMove) == piece_set(KING));
-          for (const auto& m : MoveList<NON_EVASIONS>(*this))
-              if (type_of(moved_piece(m)) == KING && (flag_region(sideToMove) & to_sq(m)) && legal(m))
-              {
-                  gameEnd = false;
-                  break;
-              }
-      }
-      if (gameEnd)
-      {
-          result = mated_in(ply);
+          flagResult = sideToMove == WHITE && flag_reached(BLACK) ? VALUE_DRAW : mate_in(ply);
           return true;
       }
+
+      // A direct flag win is possible if the opponent does not get an extra
+      // flag move, or we can detect early for kings that they cannot reach the
+      // flag region. This check remains an immediate rule at the turn boundary.
+      if ((!flag_move() || (flag_piece_types(sideToMove) == piece_set(KING) && !allow_checks()))
+          && flag_reached(mover))
+      {
+          bool gameEnd = true;
+          if (flag_move() && sideToMove == BLACK && !evasion_checkers() && count<KING>(sideToMove)
+              && (flag_region(sideToMove) & attacks_from(sideToMove, KING, square<KING>(sideToMove))))
+          {
+              assert(flag_piece_types(sideToMove) == piece_set(KING));
+              for (const auto& m : MoveList<NON_EVASIONS>(*this))
+                  if (type_of(moved_piece(m)) == KING && (flag_region(sideToMove) & to_sq(m)) && legal(m))
+                  {
+                      gameEnd = false;
+                      break;
+                  }
+          }
+          if (gameEnd)
+          {
+              flagResult = mated_in(ply);
+              return true;
+          }
+      }
+      return false;
+  };
+
+  auto extinction_reached = [&](Color c) {
+      if (var->extinctionValue.get(c) == VALUE_NONE)
+          return false;
+
+      PieceSet extinctTargets = extinction_piece_types(c);
+      PieceSet mustAppear = extinction_must_appear();
+      if (!blast_on_capture())
+          extinctTargets &= ~pseudo_royal_types();
+
+      if ((mustAppear & piece_set(ALL_PIECES)) && !(st->extinctionSeen[c] & piece_set(ALL_PIECES)))
+          return false;
+
+      bool allTypesExtinct = true;
+      bool anyTypeExtinct = false;
+      bool sawEligibleType = false;
+      for (PieceSet ps = extinctTargets; ps;)
+      {
+          PieceType pt = pop_lsb(ps);
+          if (!(mustAppear & piece_set(ALL_PIECES))
+              && (mustAppear & piece_set(pt)) && !(st->extinctionSeen[c] & piece_set(pt)))
+          {
+              allTypesExtinct = false;
+              continue;
+          }
+          sawEligibleType = true;
+          bool extinct = count_with_hand(c, pt) <= extinction_piece_count(c)
+                      && count_with_hand(~c, pt) >= extinction_opponent_piece_count(c)
+                                                       + (extinction_claim() && c == sideToMove);
+          anyTypeExtinct |= extinct;
+          allTypesExtinct &= extinct;
+      }
+
+      return sawEligibleType && (extinction_all_piece_types(c) ? allTypesExtinct : anyTypeExtinct);
+  };
+
+  Value flagResult = VALUE_NONE;
+  Value extinctionResult = VALUE_NONE;
+  const bool flagEnd = adjudicationBoundary && flag_game_end(flagResult);
+  const bool extinctionEnd = adjudicationBoundary
+                          && (extinction_reached(WHITE) || extinction_reached(BLACK));
+
+  if (extinctionEnd)
+  {
+      Color c = extinction_reached(mover) ? mover : sideToMove;
+      extinctionResult = c == sideToMove ? extinction_value(c, ply) : -extinction_value(c, ply);
+  }
+
+  const bool bothFlags = flag_reached(WHITE) && flag_reached(BLACK);
+  const bool bothExtinct = adjudicationBoundary
+                        && extinction_reached(WHITE) && extinction_reached(BLACK);
+  const bool bothGoals = flagEnd && extinctionEnd;
+  if (bothGoals)
+  {
+      if (var->simulFlagExtinctionPriority == SimulFlagExtinctionPriority::EXTINCTION)
+      {
+          result = bothExtinct && var->simulExtinctionValueByMover != VALUE_NONE
+                 ? value_by_mover(var->simulExtinctionValueByMover) : extinctionResult;
+          return true;
+      }
+      if (var->simulFlagExtinctionPriority == SimulFlagExtinctionPriority::FLAG)
+      {
+          result = bothFlags && var->simulFlagValueByMover != VALUE_NONE
+                 ? value_by_mover(var->simulFlagValueByMover) : flagResult;
+          return true;
+      }
+
+      // Extinction is the default priority, preserving the established
+      // extinction-before-flag order for existing variants.
+      result = extinctionResult;
+      return true;
+  }
+
+  if (flagEnd)
+  {
+      result = bothFlags && var->simulFlagValueByMover != VALUE_NONE
+             ? value_by_mover(var->simulFlagValueByMover) : flagResult;
+      return true;
+  }
+
+  if (extinctionEnd)
+  {
+      result = bothExtinct && var->simulExtinctionValueByMover != VALUE_NONE
+             ? value_by_mover(var->simulExtinctionValueByMover) : extinctionResult;
+      return true;
   }
 
   // Castle chess

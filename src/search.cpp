@@ -252,6 +252,9 @@ void MainThread::search() {
       TT.new_search();
       Eval::NNUE::verify();
 
+      // Compound-turn search currently scans one complete-turn tree from the
+      // main thread. Keep this limitation explicit until the component state
+      // and root result ownership can be shared safely across helpers.
       if (Options["Threads"] > 1 && is_uci_dialect(CurrentProtocol))
           sync_cout << "info string Compound-turn search uses one thread; Threads is ignored" << sync_endl;
 

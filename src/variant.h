@@ -68,9 +68,9 @@ enum class FreezeProtection {
   FRIENDLY_ORTHOGONAL
 };
 
-enum class SimulFlagExtinctionWinner : uint8_t {
-  NONE,
-  FLAG_FIRST_ACTIVE_FIRST
+enum class SimulFlagExtinctionPriority : uint8_t {
+  FLAG,
+  EXTINCTION
 };
 
 enum class PushPullRule : uint8_t {
@@ -446,7 +446,9 @@ struct Variant {
   bool payPointsToDrop = false;
   bool passUntilSetup = false;
   int compoundTurnSteps = 0;
-  SimulFlagExtinctionWinner simulFlagExtinctionWinner = SimulFlagExtinctionWinner::NONE;
+  SimulFlagExtinctionPriority simulFlagExtinctionPriority = SimulFlagExtinctionPriority::EXTINCTION;
+  Value simulFlagValueByMover = VALUE_NONE;
+  Value simulExtinctionValueByMover = VALUE_NONE;
 
   enum PotionType : int {
       POTION_FREEZE,

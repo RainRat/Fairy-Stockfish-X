@@ -532,10 +532,10 @@ namespace {
         return parse_named_value(value, target, values);
     }
 
-    template <> bool set(const std::string& value, SimulFlagExtinctionWinner& target) {
+    template <> bool set(const std::string& value, SimulFlagExtinctionPriority& target) {
         static constexpr auto values = std::array{
-            std::pair{"none", SimulFlagExtinctionWinner::NONE},
-            std::pair{"flag-first-active-first", SimulFlagExtinctionWinner::FLAG_FIRST_ACTIVE_FIRST},
+            std::pair{"flag", SimulFlagExtinctionPriority::FLAG},
+            std::pair{"extinction", SimulFlagExtinctionPriority::EXTINCTION},
         };
         return parse_named_value(value, target, values);
     }
@@ -1901,7 +1901,9 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("doublePassEndsGame", v->doublePassEndsGame);
     parse_attribute("passUntilSetup", v->passUntilSetup);
     parse_attribute("turnSteps", v->compoundTurnSteps);
-    parse_attribute("simulFlagExtinctionWinner", v->simulFlagExtinctionWinner);
+    parse_attribute("simulFlagExtinctionPriority", v->simulFlagExtinctionPriority);
+    parse_attribute("simulFlagValueByMover", v->simulFlagValueByMover);
+    parse_attribute("simulExtinctionValueByMover", v->simulExtinctionValueByMover);
     if (!parse_multimoves(v))
         return false;
     parse_attribute("progressiveMultimove", v->progressiveMultimove);
@@ -2294,6 +2296,11 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
 
     if (v->compoundTurnSteps > 0)
     {
+        // Compound turns expose one complete move to the outside world, so
+        // rules that require a decision after every component are rejected
+        // until they have an explicit component-level policy. Royal/check
+        // state is likewise rejected because it can otherwise make an
+        // internal component look like a complete move.
         const auto any_color = [](const auto& setting) {
             return setting.get(WHITE) || setting.get(BLACK);
         };
@@ -2324,27 +2331,10 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
         }
     }
 
-    switch (v->simulFlagExtinctionWinner)
+    switch (v->simulFlagExtinctionPriority)
     {
-    case SimulFlagExtinctionWinner::NONE:
-        break;
-    case SimulFlagExtinctionWinner::FLAG_FIRST_ACTIVE_FIRST:
-        {
-            const auto is_single_piece = [](PieceSet ps) {
-                const uint64_t bits = uint64_t(ps);
-                return bits && !(bits & uint64_t(piece_set(ALL_PIECES)))
-                    && !(bits & (bits - 1));
-            };
-            if (!is_single_piece(v->flagPieceTypes.get(WHITE))
-                || !is_single_piece(v->flagPieceTypes.get(BLACK))
-                || !is_single_piece(v->extinctionPieceTypes.get(WHITE))
-                || !is_single_piece(v->extinctionPieceTypes.get(BLACK)))
-            {
-                if (DoCheck)
-                    std::cerr << "simulFlagExtinctionWinner - flag-first-active-first requires one flag and extinction piece type per color." << std::endl;
-                valid = false;
-            }
-        }
+    case SimulFlagExtinctionPriority::FLAG:
+    case SimulFlagExtinctionPriority::EXTINCTION:
         break;
     }
 

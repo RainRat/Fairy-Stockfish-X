@@ -1263,11 +1263,11 @@ void compound_turn_rules() {
     play_setup("R@a1");
     check(pos.side_to_move() == BLACK, "generic sequential setup did not force a pass after White's drop");
     const std::string setupHandoffFen = pos.fen();
-    check(setupHandoffFen.find(" setup=w") != std::string::npos,
-          "sequential setup handoff FEN did not preserve the placing side");
+    check(setupHandoffFen.find(" setup=") == std::string::npos,
+          "sequential setup handoff FEN exposed internal placement state");
     set_position(pos, states, "generic-sequential-setup-audit", setupHandoffFen.c_str());
     check(pos.side_to_move() == BLACK,
-          "sequential setup handoff FEN did not restore the placing side");
+          "sequential setup FEN did not preserve the side to move");
     MoveList<LEGAL> setupHandoffMoves(pos);
     check(setupHandoffMoves.size() == 1 && is_pass(setupHandoffMoves.begin()->move),
           "sequential setup handoff FEN did not restore the forced pass");
@@ -1827,6 +1827,29 @@ void adjudication() {
     check(pos.is_immediate_game_end(result) && result == VALUE_DRAW,
           "simultaneous connection goal did not return a draw");
 
+    set_position(pos, states, "simul-flag-extinction-audit",
+                 "7f/8/8/8/8/8/8/F7 w - - 0 1");
+    check(pos.is_immediate_game_end(result) && result == mate_in(0),
+          "default flag/extinction priority did not preserve extinction-first ordering");
+
+    set_position(pos, states, "simul-flag-extinction-flag",
+                 "7f/8/8/8/8/8/8/F7 w - - 0 1");
+    check(pos.is_immediate_game_end(result) && result == VALUE_DRAW,
+          "flag-priority simultaneous adjudication ignored the mover-value policy");
+
+    set_position(pos, states, "simul-flag-extinction-extinction",
+                 "7f/8/8/8/8/8/8/F7 w - - 0 1");
+    check(pos.is_immediate_game_end(result) && result == mate_in(0),
+          "extinction-priority simultaneous adjudication ignored the mover-value policy");
+
+    set_position(pos, states, "seega", "5/5/5/5/1D3[] b - - 0 1");
+    check(pos.count_with_hand(WHITE, CUSTOM_PIECE_1) == 1
+              && pos.count_with_hand(BLACK, CUSTOM_PIECE_1) == 0,
+          "seega extinction audit position did not load the expected pieces");
+    const bool seegaEnded = pos.is_immediate_game_end(result);
+    check(seegaEnded, "seega extinction audit position was not adjudicated immediately");
+    check(result == mate_in(0), "seega extinction audit position had the wrong result");
+
     set_position(pos, states, "chess",
                  "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
     check(!pos.see_pruning_unreliable()
@@ -2042,6 +2065,35 @@ connectRegion1Black = a1
 connectRegion2Black = b1
 connectGoalSimulValueByMover = draw
 startFen = ssAB b - - 0 1
+
+[simul-flag-extinction-audit:fairy]
+pieceToCharTable = RF rf
+pawn = -
+knight = -
+bishop = -
+rook = -
+queen = -
+king = -
+customPiece1 = r:mW
+customPiece2 = f:mW
+castling = false
+checking = false
+flagPieceTypes = f
+flagRegionWhite = a1
+flagRegionBlack = h8
+extinctionPieceTypes = r
+extinctionValue = loss
+startFen = 7f/8/8/8/8/8/8/F7 w - - 0 1
+
+[simul-flag-extinction-flag:simul-flag-extinction-audit]
+simulFlagExtinctionPriority = flag
+simulFlagValueByMover = draw
+simulExtinctionValueByMover = win
+
+[simul-flag-extinction-extinction:simul-flag-extinction-audit]
+simulFlagExtinctionPriority = extinction
+simulFlagValueByMover = win
+simulExtinctionValueByMover = loss
 
 [prison-no-king:fairy]
 king = -

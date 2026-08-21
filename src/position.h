@@ -295,7 +295,6 @@ struct StateInfoCopied {
   bool   compoundTurnReset = false;
 #endif
   bool   sequentialSetupMove = false;
-  Color  sequentialSetupSide = WHITE;
   CheckCount checksRemaining[COLOR_NB];
   Bitboard epSquares;
   Bitboard edgeInsertLocks[COLOR_NB];
@@ -807,6 +806,7 @@ public:
   bool compound_repetition_illegal() const;
 #endif
   bool has_setup_drop(Color c) const;
+  Color sequential_setup_side() const;
   bool pass_until_setup() const;
   bool pass_on_stalemate(Color c) const;
   bool multimove_pass(int ply) const;
@@ -2870,8 +2870,7 @@ inline bool Position::pass(Color c) const {
       return true;
   if (var->sequentialSetup
       && (has_setup_drop(WHITE) || has_setup_drop(BLACK))
-      && c != st->sequentialSetupSide
-      && has_setup_drop(st->sequentialSetupSide))
+      && c != sequential_setup_side())
       return true;
 #ifdef ENABLE_COMPOUND_TURNS
   if (compound_turn_active() && !var->pass.get(c))
@@ -2944,6 +2943,13 @@ inline bool Position::has_setup_drop(Color c) const {
           return true;
 
   return false;
+}
+
+inline Color Position::sequential_setup_side() const {
+  // White places while both sides still have legal setup drops. Once White
+  // is exhausted, Black places; the other side's forced pass is inferred
+  // from the current pockets and side to move rather than serialized in FEN.
+  return has_setup_drop(WHITE) ? WHITE : BLACK;
 }
 
 inline bool Position::pass_until_setup() const {
