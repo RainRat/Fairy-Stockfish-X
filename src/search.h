@@ -19,6 +19,7 @@
 #ifndef SEARCH_H_INCLUDED
 #define SEARCH_H_INCLUDED
 
+#include <string>
 #include <vector>
 
 #include "misc.h"
@@ -98,6 +99,8 @@ struct LimitsType {
   }
 
   std::vector<Move> searchmoves, banmoves;
+  std::vector<std::string> compoundSearchMoves, compoundBanMoves;
+  bool compoundSearchMovesSpecified = false;
   TimePoint time[COLOR_NB], inc[COLOR_NB], npmsec, movetime, startTime;
   int movestogo, depth, mate, perft, infinite;
   int64_t nodes;

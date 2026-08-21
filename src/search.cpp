@@ -26,6 +26,9 @@
 #include <thread>
 
 #include "evaluate.h"
+#ifdef ENABLE_COMPOUND_TURNS
+#include "compound_turn.h"
+#endif
 #include "misc.h"
 #include "movegen.h"
 #include "movepick.h"
@@ -174,6 +177,11 @@ namespace {
   template<bool Root>
   uint64_t perft(Position& pos, Depth depth) {
 
+#ifdef ENABLE_COMPOUND_TURNS
+    if (pos.variant()->compoundTurnSteps && pos.compound_turn_active())
+        return compound_perft(pos, depth, Root);
+#endif
+
     StateInfo st;
     ASSERT_ALIGNED(&st, Eval::NNUE::CacheLineSize);
 
@@ -234,6 +242,60 @@ void MainThread::search() {
       sync_cout << "\nNodes searched: " << nodes << "\n" << sync_endl;
       return;
   }
+
+#ifdef ENABLE_COMPOUND_TURNS
+  if (rootPos.variant()->compoundTurnSteps)
+  {
+      Color us = rootPos.side_to_move();
+      Time.init(rootPos, Limits, rootPos.side_to_move(), rootPos.game_ply());
+      callsCnt = 1;
+      TT.new_search();
+      Eval::NNUE::verify();
+
+      // Compound-turn search currently scans one complete-turn tree from the
+      // main thread. Keep this limitation explicit until the component state
+      // and root result ownership can be shared safely across helpers.
+      if (Options["Threads"] > 1 && is_uci_dialect(CurrentProtocol))
+          sync_cout << "info string Compound-turn search uses one thread; Threads is ignored" << sync_endl;
+
+      Thread::search();
+
+      while (!Threads.stop && (ponder || Limits.infinite))
+          idle_wait();
+
+      Threads.stop = true;
+      Threads.wait_for_search_finished();
+
+      if (Limits.npmsec)
+          Time.availableNodes += Limits.inc[us] - Threads.nodes_searched();
+
+      if (CurrentProtocol == XBOARD)
+      {
+          const CompoundMove& bestTurn = Threads.main()->compoundBestTurn;
+          if (bestTurn.length && !Limits.infinite && !ponder
+              && !Threads.abort.exchange(true))
+          {
+              sync_cout << "move " << compound_move_to_string(rootPos, bestTurn) << sync_endl;
+              if (XBoard::stateMachine->moveAfterSearch)
+              {
+                  XBoard::stateMachine->do_compound_move(bestTurn);
+                  XBoard::stateMachine->moveAfterSearch = false;
+              }
+          }
+          else if (!bestTurn.length && !Limits.infinite && !ponder)
+          {
+              Value result;
+              if (rootPos.is_game_end(result))
+                  sync_cout << xboard_result(rootPos, result) << sync_endl;
+          }
+      }
+      else if (Threads.main()->compoundBestTurn.length)
+          sync_cout << "bestmove " << compound_move_to_string(rootPos, Threads.main()->compoundBestTurn) << sync_endl;
+      else
+          sync_cout << "bestmove " << UCI::move(rootPos, MOVE_NONE) << sync_endl;
+      return;
+  }
+#endif
 
   Color us = rootPos.side_to_move();
   Time.init(rootPos, Limits, us, rootPos.game_ply());
@@ -391,6 +453,14 @@ void MainThread::search() {
 /// consumed, the user stops the search, or the maximum search depth is reached.
 
 void Thread::search() {
+#ifdef ENABLE_COMPOUND_TURNS
+  if (rootPos.variant()->compoundTurnSteps)
+  {
+      search_compound(*this);
+      return;
+  }
+#endif
+
   // To allow access to (ss-7) up to (ss+2), the stack must be oversized.
   // The former is needed to allow update_continuation_histories(ss-1, ...),
   // which accesses its argument at ss-6, also near the root.
@@ -1049,6 +1119,7 @@ namespace {
         && (ss-1)->currentMove != MOVE_NULL
         && (ss-1)->statScore < 23767
         && !pos.multimove_pass(pos.game_ply())
+        && !pos.compound_turn_active()
         &&  eval >= beta
         &&  eval >= ss->staticEval
         &&  ss->staticEval >= beta - 20 * depth - 22 * improving + 168 * ss->ttPv + 159 + 200 * (((ss - 1)->currentMovePiece == NO_PIECE || !pos.double_step_region((ss - 1)->currentMovePiece)) && (pos.piece_types() & PAWN))

@@ -63,6 +63,22 @@ enum class TrapProtection {
   FRIENDLY_ORTHOGONAL
 };
 
+enum class FreezeProtection {
+  NONE,
+  FRIENDLY_ORTHOGONAL
+};
+
+enum class SimulFlagExtinctionPriority : uint8_t {
+  FLAG,
+  EXTINCTION
+};
+
+enum class PushPullRule : uint8_t {
+  GENERIC,
+  TWO_STEP,
+  NONE
+};
+
 enum class SeePruningPolicy : uint8_t {
   RELIABLE,
   MOVE_SENSITIVE,
@@ -124,8 +140,10 @@ struct ColorSetting {
 };
 
 struct Variant {
+  static constexpr int MAX_COMPOUND_TURN_STEPS = 4;
   std::string name = "";
   std::string variantTemplate = "fairy";
+  bool sequentialSetup = false;
   std::string pieceToCharTable = "-";
   int pocketSize = 0;
   Rank maxRank = RANK_8;
@@ -205,6 +223,9 @@ struct Variant {
   LibertyAction libertySelfCapture = LibertyAction::NONE;
   PieceSet freezePieceTypes = NO_PIECE_SET;
   PieceSet freezeImmunePieceTypes = NO_PIECE_SET;
+  int freezeStrength[PIECE_TYPE_NB] = {};
+  bool hasFreezeStrength = false;
+  FreezeProtection freezeProtection = FreezeProtection::NONE;
   bool freezeDiagonals = true;
   TrapProtection trapProtection = TrapProtection::NONE;
   Bitboard trapRegion = 0;
@@ -239,6 +260,7 @@ struct Variant {
   ColorSetting<bool> mustCapture = ColorSetting<bool>(false);
   ColorSetting<bool> mustCaptureEnPassant = ColorSetting<bool>(false);
   bool rifleCapture = false;
+  PushPullRule pushPullRule = PushPullRule::GENERIC;
   int pushingStrength[PIECE_TYPE_NB] = {};
   bool hasPushing = false;
   int pullingStrength[PIECE_TYPE_NB] = {};
@@ -423,6 +445,11 @@ struct Variant {
   bool freeDrops = false;
   bool payPointsToDrop = false;
   bool passUntilSetup = false;
+  int compoundTurnSteps = 0;
+  bool completeTurnRepetitionIllegal = false;
+  SimulFlagExtinctionPriority simulFlagExtinctionPriority = SimulFlagExtinctionPriority::EXTINCTION;
+  Value simulFlagValueByMover = VALUE_NONE;
+  Value simulExtinctionValueByMover = VALUE_NONE;
 
   enum PotionType : int {
       POTION_FREEZE,

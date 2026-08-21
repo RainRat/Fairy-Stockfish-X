@@ -288,6 +288,13 @@ struct StateInfoCopied {
   int    countingPly;
   int    countingLimit;
   int    pointsCount[COLOR_NB];
+#ifdef ENABLE_COMPOUND_TURNS
+  uint8_t compoundTurnStep = 0;
+  int    compoundTurnNumber = 0;
+  bool   compoundTurnReady = false;
+  bool   compoundTurnReset = false;
+#endif
+  bool   sequentialSetupMove = false;
   CheckCount checksRemaining[COLOR_NB];
   Bitboard epSquares;
   Bitboard edgeInsertLocks[COLOR_NB];
@@ -790,7 +797,16 @@ public:
   Bitboard diagonal_lines() const;
   Square pawn_step(Square s, Color us, int steps) const;
   bool pass(Color c) const;
+  bool compound_turn_active() const;
+  bool at_complete_turn_boundary() const;
+  int compound_turn_steps() const;
+  int compound_turn_step() const;
+  int compound_turn_step_cost(Move m) const;
+#ifdef ENABLE_COMPOUND_TURNS
+  bool compound_repetition_illegal() const;
+#endif
   bool has_setup_drop(Color c) const;
+  Color sequential_setup_side() const;
   bool pass_until_setup() const;
   bool pass_on_stalemate(Color c) const;
   bool multimove_pass(int ply) const;
@@ -1003,10 +1019,12 @@ public:
   // Properties of moves
   bool legal(Move m) const;
   bool pseudo_legal(const Move m) const;
+  bool encoded_push_legal(Move m) const;
   SimulatedMoveInfo simulated_move_info(Move m, bool withEffects = true) const;
   bool virtual_drop(Move m) const;
   bool paired_drop(Move m) const;
   bool push_move(Move m) const;
+  PushPullRule push_pull_rule() const;
   bool stepwise_pushing() const;
   bool capture(Move m) const;
   bool capture_or_promotion(Move m) const;
@@ -1040,6 +1058,10 @@ public:
   // Doing and undoing moves
   void do_move(Move m, StateInfo& newSt, bool countNode = true);
   void undo_move(Move m);
+#ifdef ENABLE_COMPOUND_TURNS
+  void end_compound_turn(StateInfo& newSt);
+  void undo_compound_turn();
+#endif
   void fire_laser(Color us, Key& k, Square selectedEmitter = SQ_NONE);
   Bitboard laser_rotation_candidates(Color us) const;
   bool laser_portal_exit(Square entrance, Square& exit, Direction& direction) const;
@@ -1061,6 +1083,7 @@ public:
   // Accessing hash keys
   Key key() const;
   Key key_after(Move m) const;
+  Key board_layout_key() const;
   Key material_key(EndgameEval e = EG_EVAL_CHESS) const;
   Key pawn_key() const;
 
@@ -1871,7 +1894,8 @@ inline bool Position::nnue_use_pockets() const {
 
 inline bool Position::nnue_applicable() const {
   // Do not use NNUE during setup phases (placement, sittuyin)
-  return (!count_in_hand(ALL_PIECES) || nnue_use_pockets() || !must_drop())
+  return at_complete_turn_boundary()
+      && (!count_in_hand(ALL_PIECES) || nnue_use_pockets() || !must_drop())
          && !virtualPieces
          && capture_type() != PRISON
          && (!nnue_king() || (count(WHITE, nnue_king()) == 1 && count(BLACK, nnue_king()) == 1));
@@ -2036,6 +2060,8 @@ inline int Position::pushing_strength(PieceType pt) const {
 
 inline bool Position::has_pushing() const {
   assert(var != nullptr);
+  if (push_pull_rule() == PushPullRule::NONE)
+      return false;
   for (PieceSet ps = piece_types(); ps; )
       if (pushing_strength(pop_lsb(ps)) > 0)
           return true;
@@ -2049,6 +2075,8 @@ inline int Position::pulling_strength(PieceType pt) const {
 
 inline bool Position::has_pulling() const {
   assert(var != nullptr);
+  if (push_pull_rule() == PushPullRule::NONE)
+      return false;
   for (PieceSet ps = piece_types(); ps; )
       if (pulling_strength(pop_lsb(ps)) > 0)
           return true;
@@ -2102,6 +2130,11 @@ inline bool Position::push_capture_against_friendly_blocker() const {
 inline bool Position::push_no_immediate_return() const {
   assert(var != nullptr);
   return var->pushNoImmediateReturn;
+}
+
+inline PushPullRule Position::push_pull_rule() const {
+  assert(var != nullptr);
+  return var->pushPullRule;
 }
 
 inline bool Position::stepwise_pushing() const {
@@ -2834,8 +2867,61 @@ inline bool Position::pass(Color c) const {
       && !has_setup_drop(c)
       && has_setup_drop(~c))
       return true;
+  if (var->sequentialSetup
+      && (has_setup_drop(WHITE) || has_setup_drop(BLACK))
+      && c != sequential_setup_side())
+      return true;
+#ifdef ENABLE_COMPOUND_TURNS
+  if (compound_turn_active() && !var->pass.get(c) && !var->passOnStalemate.get(c))
+      return false;
+#endif
   return var->pass.get(c) || var->passOnStalemate.get(c)
       || ((var->multimoveOffset || var->progressiveMultimove) && multimove_pass(gamePly));
+}
+
+inline bool Position::compound_turn_active() const {
+  assert(var != nullptr);
+#ifdef ENABLE_COMPOUND_TURNS
+  return var->compoundTurnSteps > 0 && st->compoundTurnReady;
+#else
+  return false;
+#endif
+}
+
+inline bool Position::at_complete_turn_boundary() const {
+  assert(var != nullptr);
+#ifdef ENABLE_COMPOUND_TURNS
+  return st->compoundTurnStep == 0;
+#else
+  return true;
+#endif
+}
+
+inline int Position::compound_turn_step_cost(Move m) const {
+#ifdef ENABLE_COMPOUND_TURNS
+  return compound_turn_active() && is_two_step_move(m) ? 2 : 1;
+#else
+  (void)m;
+  return 1;
+#endif
+}
+
+inline int Position::compound_turn_steps() const {
+  assert(var != nullptr);
+#ifdef ENABLE_COMPOUND_TURNS
+  return compound_turn_active() ? var->compoundTurnSteps : 0;
+#else
+  return 0;
+#endif
+}
+
+inline int Position::compound_turn_step() const {
+  assert(var != nullptr);
+#ifdef ENABLE_COMPOUND_TURNS
+  return compound_turn_active() ? st->compoundTurnStep : 0;
+#else
+  return 0;
+#endif
 }
 
 inline bool Position::has_setup_drop(Color c) const {
@@ -2856,6 +2942,13 @@ inline bool Position::has_setup_drop(Color c) const {
           return true;
 
   return false;
+}
+
+inline Color Position::sequential_setup_side() const {
+  // White places while both sides still have legal setup drops. Once White
+  // is exhausted, Black places; the other side's forced pass is inferred
+  // from the current pockets and side to move rather than serialized in FEN.
+  return has_setup_drop(WHITE) ? WHITE : BLACK;
 }
 
 inline bool Position::pass_until_setup() const {
@@ -3370,7 +3463,7 @@ inline bool Position::is_clone_move(Move m) const {
 }
 
 inline bool Position::is_pull_move(Move m) const {
-  return type_of(m) == PULL && pull_square(m) != SQ_NONE;
+  return type_of(m) == PULL && pull_square(m) != SQ_NONE && !is_encoded_push(m);
 }
 
 inline bool Position::is_swap_move(Move m) const {

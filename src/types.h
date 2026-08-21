@@ -1267,6 +1267,26 @@ inline Square pull_square(Move m) {
   return sq ? Square(sq - 1) : SQ_NONE;
 }
 
+// Encoded two-piece pushes reuse the existing PULL encoding so that the move layout and
+// MOVE_TYPE_BITS remain unchanged for orthodox variants. The otherwise-unused
+// piece-type field marks the record as an encoded push; from_sq() is the pusher
+// source, to_sq() is the pushed piece source, and pull_square() is its target.
+constexpr PieceType ENCODED_PUSH_MARKER = KING;
+
+inline bool is_encoded_push(Move m) {
+  return type_of(m) == PULL
+      && PieceType((static_cast<uint64_t>(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS))
+                   & (PIECE_TYPE_NB - 1)) == ENCODED_PUSH_MARKER;
+}
+
+inline Square encoded_push_square(Move m) {
+  return is_encoded_push(m) ? pull_square(m) : SQ_NONE;
+}
+
+inline bool is_two_step_move(Move m) {
+  return is_encoded_push(m) || (type_of(m) == PULL && pull_square(m) != SQ_NONE);
+}
+
 inline Square swap_square(Move m) {
   return type_of(m) == SWAP ? to_sq(m) : SQ_NONE;
 }
@@ -1389,6 +1409,14 @@ constexpr Move make_rotation(Square from, Square to, int orientation, Square rot
 
 constexpr Move make_pull(Square from, Square to, Square pullFrom) {
   return Move((static_cast<uint64_t>(pullFrom + 1) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS))
+            + static_cast<uint64_t>(PULL)
+            + (static_cast<uint64_t>(from) << SQUARE_BITS)
+            + static_cast<uint64_t>(to));
+}
+
+constexpr Move make_encoded_push(Square from, Square to, Square pushedTo) {
+  return Move((static_cast<uint64_t>(pushedTo + 1) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS))
+            + (static_cast<uint64_t>(ENCODED_PUSH_MARKER) << (2 * SQUARE_BITS + MOVE_TYPE_BITS))
             + static_cast<uint64_t>(PULL)
             + (static_cast<uint64_t>(from) << SQUARE_BITS)
             + static_cast<uint64_t>(to));

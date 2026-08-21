@@ -2857,6 +2857,17 @@ void VariantMap::parse_istream(std::istream& file) {
                     std::cerr << "Variant '" << variant << "' has invalid configuration. Skipping." << std::endl;
                 continue;
             }
+#ifndef ENABLE_COMPOUND_TURNS
+            if (v->compoundTurnSteps > 0 || v->pushPullRule == PushPullRule::TWO_STEP)
+            {
+                if (DoCheck)
+                    std::cerr << "Variant '" << variant
+                              << "' requires an all=yes build. Skipping." << std::endl;
+                delete v;
+                skippedVariants.insert(variant);
+                continue;
+            }
+#endif
             if (v->maxFile <= FILE_MAX && v->maxRank <= RANK_MAX)
             {
                 add(variant, v);

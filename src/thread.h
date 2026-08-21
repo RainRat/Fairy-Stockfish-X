@@ -27,6 +27,9 @@
 #include <vector>
 
 #include "material.h"
+#ifdef ENABLE_COMPOUND_TURNS
+#include "compound_turn.h"
+#endif
 #include "movepick.h"
 #include "pawns.h"
 #include "position.h"
@@ -78,6 +81,12 @@ public:
   CapturePieceToHistory captureHistory;
   ContinuationHistory continuationHistory[2][2];
   Score trend;
+
+#ifdef ENABLE_COMPOUND_TURNS
+  CompoundMove compoundBestTurn;
+  Value compoundBestScore = -VALUE_INFINITE;
+  Depth compoundCompletedDepth = 0;
+#endif
 
   ExtMove* acquire_buffer() {
     if (availableBuffers.empty()) {
