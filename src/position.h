@@ -2873,7 +2873,7 @@ inline bool Position::pass(Color c) const {
       && c != sequential_setup_side())
       return true;
 #ifdef ENABLE_COMPOUND_TURNS
-  if (compound_turn_active() && !var->pass.get(c))
+  if (compound_turn_active() && !var->pass.get(c) && !var->passOnStalemate.get(c))
       return false;
 #endif
   return var->pass.get(c) || var->passOnStalemate.get(c)

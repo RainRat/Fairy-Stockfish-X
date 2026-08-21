@@ -1901,6 +1901,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("doublePassEndsGame", v->doublePassEndsGame);
     parse_attribute("passUntilSetup", v->passUntilSetup);
     parse_attribute("turnSteps", v->compoundTurnSteps);
+    parse_attribute("completeTurnRepetitionIllegal", v->completeTurnRepetitionIllegal);
     parse_attribute("simulFlagExtinctionPriority", v->simulFlagExtinctionPriority);
     parse_attribute("simulFlagValueByMover", v->simulFlagValueByMover);
     parse_attribute("simulExtinctionValueByMover", v->simulExtinctionValueByMover);

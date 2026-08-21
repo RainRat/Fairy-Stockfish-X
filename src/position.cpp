@@ -1431,7 +1431,8 @@ bool Position::violates_same_player_board_repetition(Move m) const {
 
 bool Position::compound_repetition_illegal() const {
 
-  if (!compound_turn_active() || st->compoundTurnStep != 0
+  if (!var->completeTurnRepetitionIllegal
+      || !compound_turn_active() || st->compoundTurnStep != 0
       || !st->compoundTurnReady)
       return false;
 
@@ -5479,6 +5480,17 @@ bool Position::legal(Move m) const {
       && !is_pass(m))
       return false;
 
+#ifdef ENABLE_COMPOUND_TURNS
+  // Check the cost before special move paths such as pull and swap, which
+  // probe the resulting position and return without reaching the ordinary
+  // multimove checks below.
+  if (compound_turn_active()
+      && !is_pass(m)
+      && (st->compoundTurnStep >= var->compoundTurnSteps
+          || st->compoundTurnStep + compound_turn_step_cost(m) > var->compoundTurnSteps))
+      return false;
+#endif
+
   PotionContext potCtx = setup_potion_context(m, us);
   if (!potCtx.valid)
       return false;
@@ -5912,14 +5924,8 @@ bool Position::legal(Move m) const {
 
   // Multimoves
 #ifdef ENABLE_COMPOUND_TURNS
-  if (compound_turn_active())
-  {
-      if (!is_pass(m)
-          && (st->compoundTurnStep >= var->compoundTurnSteps
-              || st->compoundTurnStep + compound_turn_step_cost(m) > var->compoundTurnSteps))
-          return false;
-  }
-  else if (var->multimoveOffset || var->progressiveMultimove)
+  if (!compound_turn_active()
+      && (var->multimoveOffset || var->progressiveMultimove))
   {
       if (is_pass(m) != multimove_pass(gamePly))
           return false;
@@ -10043,11 +10049,15 @@ void Position::undo_move(Move m) {
 
   // Finally point our state pointer back to the previous state
   int compoundTurnStepsToRestore = 0;
+  bool completedCompoundTurnFromBoundary = false;
   bool setupPlacement = st->sequentialSetupMove;
 #ifdef ENABLE_COMPOUND_TURNS
   if (var->compoundTurnSteps && st->compoundTurnStep == 0 && st->previous
       && st->previous->compoundTurnStep > 0)
       compoundTurnStepsToRestore = st->previous->compoundTurnStep;
+  else if (var->compoundTurnSteps && st->compoundTurnStep == 0 && st->previous
+           && compound_turn_step_cost(m) > 1)
+      completedCompoundTurnFromBoundary = true;
 #endif
   st = st->previous;
   std::copy(std::begin(st->castlingRightsMask), std::end(st->castlingRightsMask), std::begin(castlingRightsMask));
@@ -10057,6 +10067,8 @@ void Position::undo_move(Move m) {
            ? 0
            : compoundTurnStepsToRestore
            ? 1 : compound_turn_step_cost(m);
+  if (completedCompoundTurnFromBoundary)
+      gamePly += compound_turn_step_cost(m) - 1;
   gamePly += compoundTurnStepsToRestore;
   updatePawnCheckZone();
 

@@ -1305,6 +1305,10 @@ void compound_turn_rules() {
     // 2. Generic compound turn generation, step costs, and repetition
     set_position(pos, states, "generic-compound-turn-audit",
                  "8/8/8/3r4/3C4/8/8/8 w - - 0 1");
+    check(!variants.get("generic-compound-turn-audit")->completeTurnRepetitionIllegal,
+          "generic compound turns inherited Arimaa repetition policy");
+    check(variants.get("arimaa")->completeTurnRepetitionIllegal,
+          "Arimaa did not enable complete-turn repetition illegality");
     check(pos.compound_turn_active(), "generic compound turn is not active");
     check(pos.compound_turn_steps() == 3, "generic compound turn steps != 3");
     check(pos.at_complete_turn_boundary(), "fresh position is not at complete turn boundary");
@@ -1331,6 +1335,60 @@ void compound_turn_rules() {
     undo_compound_move(pos, parsedTurn);
     check(pos.side_to_move() == WHITE, "undo_compound_move did not restore side to move");
     check(pos.at_complete_turn_boundary(), "after undo_compound_move not at turn boundary");
+
+    // A two-step action that exactly fills a two-step turn still advances and
+    // undoes one logical game ply, not two internal cost units.
+    set_position(pos, states, "generic-compound-turn-two-audit",
+                 "8/8/8/3r4/3C4/8/8/8 w - - 0 1");
+    Move exactTwoStepPush = make_encoded_push(SQ_D4, SQ_D5, SQ_D6);
+    const Key exactPushKey = pos.key();
+    const std::string exactPushFen = pos.fen();
+    states->emplace_back();
+    pos.do_move(exactTwoStepPush, states->back());
+    check(pos.game_ply() == 1 && pos.side_to_move() == BLACK,
+          "turnSteps=2 two-step push did not advance one logical ply");
+    pos.undo_move(exactTwoStepPush);
+    states->pop_back();
+    check(pos.game_ply() == 0 && pos.key() == exactPushKey && pos.fen() == exactPushFen,
+          "turnSteps=2 two-step push undo corrupted the logical position");
+
+    set_position(pos, states, "arimaa-pull-turn-two-audit",
+                 "7r/8/8/3r4/3E4/8/8/R7 w - - 0 1");
+    Move exactTwoStepPull = make_pull(SQ_D4, SQ_E4, SQ_D5);
+    check(pos.legal(exactTwoStepPull),
+          "turnSteps=2 two-step pull was not legal at the turn boundary");
+    const Key exactPullKey = pos.key();
+    const std::string exactPullFen = pos.fen();
+    states->emplace_back();
+    pos.do_move(exactTwoStepPull, states->back());
+    check(pos.game_ply() == 1 && pos.side_to_move() == BLACK,
+          "turnSteps=2 two-step pull did not advance one logical ply");
+    pos.undo_move(exactTwoStepPull);
+    states->pop_back();
+    check(pos.game_ply() == 0 && pos.key() == exactPullKey && pos.fen() == exactPullFen,
+          "turnSteps=2 two-step pull undo corrupted the logical position");
+
+    // A two-step pull must not fit after three ordinary component steps of a
+    // four-cost turn, even through Position::legal().
+    set_position(pos, states, "arimaa-push-rule-generic-audit",
+                 "7r/8/8/3r4/3E4/8/8/R7 w - - 0 1");
+    const char* fillerMoves[] = {"a1a2", "a2a3", "a3a4"};
+    Move fillerMovesParsed[3];
+    for (int i = 0; i < 3; ++i)
+    {
+        Move filler = parse_move(pos, fillerMoves[i]);
+        fillerMovesParsed[i] = filler;
+        states->emplace_back();
+        pos.do_move(filler, states->back());
+    }
+    Move latePull = make_pull(SQ_D4, SQ_E4, SQ_D5);
+    check(pos.compound_turn_step() == 3 && !pos.legal(latePull),
+          "Position::legal accepted a two-step pull over the remaining turn budget");
+    for (int i = 0; i < 3; ++i)
+    {
+        pos.undo_move(fillerMovesParsed[2 - i]);
+        states->pop_back();
+    }
 
     // Test formatting compound move
     std::string formatted = compound_move_to_string(pos, parsedTurn);
@@ -1367,12 +1425,23 @@ void compound_turn_rules() {
     check(pos.side_to_move() == WHITE && pos.at_complete_turn_boundary(),
           "compound pass undo did not restore the position");
 
+    set_position(pos, states, "generic-compound-stalemate-pass-audit",
+                 "8/8/8/3r4/8/8/8/8 w - - 0 1");
+    check(pos.pass(WHITE),
+          "compound passOnStalemate was suppressed when ordinary passing was disabled");
+    MoveList<LEGAL> stalemateMoves(pos);
+    check(stalemateMoves.size() == 1 && is_pass(stalemateMoves.begin()->move),
+          "compound passOnStalemate did not generate the stalemate pass");
+
     // Test intermediate reversal followed by real component
+    set_position(pos, states, "generic-compound-pass-audit",
+                 "8/8/8/3r4/3C4/8/8/8 w - - 0 1");
     CompoundMove reversalTurn;
     ok = parse_compound_move(pos, "d4e4,e4d4,d4d3", reversalTurn);
     check(ok && reversalTurn.length == 3, "failed to parse reversal followed by real component");
 
-    // A pure reversal d4e4, e4d4 is pass-equivalent and must be rejected
+    // A pure reversal d4e4, e4d4 is pass-equivalent and remains filtered even
+    // in the pass-enabled profile; the explicit 0000 move is canonical.
     CompoundMove pureReversal;
     ok = parse_compound_move(pos, "d4e4,e4d4", pureReversal);
     check(!ok, "pure pass-equivalent reversal was incorrectly accepted as a legal turn");
@@ -2633,6 +2702,18 @@ pushFirstColor = them
 stepwisePushing = true
 turnSteps = 3
 pass = false
+
+[generic-compound-turn-two-audit:generic-compound-turn-audit]
+turnSteps = 2
+
+[arimaa-pull-turn-two-audit:arimaa-push-rule-generic-audit]
+turnSteps = 2
+
+[generic-compound-stalemate-pass-audit:generic-compound-turn-audit]
+customPiece1 = r:-
+pass = false
+passOnStalemate = true
+startFen = 8/8/8/3r4/8/8/8/8 w - - 0 1
 
 [generic-sequential-setup-audit:fairy]
 pawn = -

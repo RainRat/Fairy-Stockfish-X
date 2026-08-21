@@ -446,6 +446,7 @@ struct Variant {
   bool payPointsToDrop = false;
   bool passUntilSetup = false;
   int compoundTurnSteps = 0;
+  bool completeTurnRepetitionIllegal = false;
   SimulFlagExtinctionPriority simulFlagExtinctionPriority = SimulFlagExtinctionPriority::EXTINCTION;
   Value simulFlagValueByMover = VALUE_NONE;
   Value simulExtinctionValueByMover = VALUE_NONE;
