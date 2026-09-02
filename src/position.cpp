@@ -5318,6 +5318,9 @@ bool Position::legal(Move m) const {
   if (in_opening_self_removal_phase())
       return is_opening_self_removal_move(m);
 
+  if (type_of(m) == SPECIAL && from == to && popout())
+      return is_popout_move(m);
+
   if (is_pass(m) && !pass(us))
       return false;
 
@@ -6332,6 +6335,9 @@ bool Position::pseudo_legal(const Move m) const {
 
   if (in_opening_self_removal_phase())
       return is_opening_self_removal_move(m);
+
+  if (type_of(m) == SPECIAL && from == to && popout())
+      return is_popout_move(m);
 
   if (is_pass(m) && !pass(us))
       return false;
@@ -7365,6 +7371,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
 
   const bool openingSelfRemoval = in_opening_self_removal_phase()
                                && is_opening_self_removal_move(m);
+  const bool popoutMove = is_popout_move(m);
 
 #ifndef NO_THREADS
   if (countNode && thisThread)
@@ -7561,7 +7568,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   st->push.count = pushMove ? pushInfo.count : 0;
   st->push.ejected = pushMove && pushInfo.ejects;
   st->push.blockedCapture = pushMove && pushInfo.captures && !pushInfo.ejects;
-  st->pass = is_pass(m) && !openingSelfRemoval;
+  st->pass = is_pass(m) && !openingSelfRemoval && !popoutMove;
   st->claimedSquares = 0;
   st->dropHandColor = COLOR_NB;
   st->suppressedCaptureTransfer = false;
@@ -7582,7 +7589,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
 
   if (to == from)
   {
-      assert((is_promotion_move(m) && sittuyin_promotion()) || is_pass(m) || is_laser_fire(m) || is_self_destruct(m) || openingSelfRemoval || pureWallMove || is_gating(m));
+      assert((is_promotion_move(m) && sittuyin_promotion()) || is_pass(m) || is_laser_fire(m) || is_self_destruct(m) || openingSelfRemoval || popoutMove || pureWallMove || is_gating(m));
       captured = NO_PIECE;
   }
 
@@ -8091,6 +8098,39 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
               }
           }
       }
+  }
+  else if (popoutMove)
+  {
+      recomputeDerivedState = true;
+      st->push.didPush = true;
+      st->push.stepwise = true;
+      st->push.snapshotCount = int(max_rank()) + 1;
+      st->push.transferCount = 0;
+
+      File f = file_of(from);
+      for (int r = 0; r <= int(max_rank()); ++r)
+      {
+          Square sq = make_square(f, Rank(r));
+          Piece original = piece_on(sq);
+          st->push.snapshots[r].sq = sq;
+          st->push.snapshots[r].piece = original;
+          st->push.snapshots[r].promoted = original != NO_PIECE && is_promoted(sq);
+          st->push.snapshots[r].unpromoted = st->push.snapshots[r].promoted ? unpromoted_piece_on(sq) : NO_PIECE;
+      }
+
+      for (int r = 0; r <= int(max_rank()); ++r)
+      {
+          Square sq = make_square(f, Rank(r));
+          if (piece_on(sq) != NO_PIECE)
+              remove_piece(sq);
+      }
+      for (int r = 1; r <= int(max_rank()); ++r)
+      {
+          const PushSnapshot& saved = st->push.snapshots[r];
+          if (saved.piece != NO_PIECE)
+              put_piece(saved.piece, make_square(f, Rank(r - 1)), saved.promoted, saved.unpromoted);
+      }
+      st->rule50 = 0;
   }
   else if (openingSelfRemoval)
   {
@@ -9308,6 +9348,11 @@ void Position::undo_move(Move m) {
                             && type_of(m) == SPECIAL
                             && from == to
                             && !st->pass;
+  bool wasPopout = popout()
+                && type_of(m) == SPECIAL
+                && from == to
+                && st->push.didPush
+                && st->push.stepwise;
 
   assert(is_drop_move(m) || empty(from) || type_of(m) == CASTLING || is_gating(m)
          || (is_promotion_move(m) && sittuyin_promotion())
@@ -9524,7 +9569,7 @@ void Position::undo_move(Move m) {
       }
       else if (wasOpeningSelfRemoval)
           put_piece(st->dead.piece, from, st->dead.promoted, st->dead.unpromoted);
-      else
+      else if (!wasPopout)
       {
           if (is_self_destruct(m))
           {

@@ -718,6 +718,8 @@ public:
   bool must_drop() const;
   PieceType must_drop_type() const;
   bool opening_self_removal() const;
+  bool popout() const;
+  bool is_popout_move(Move m) const;
   bool in_opening_self_removal_phase() const;
   Bitboard opening_self_removal_targets(Color c) const;
   bool opening_swap_drop() const;
@@ -2271,6 +2273,21 @@ inline PieceType Position::must_drop_type() const {
 inline bool Position::opening_self_removal() const {
   assert(var != nullptr);
   return var->openingSelfRemoval;
+}
+
+inline bool Position::popout() const {
+  assert(var != nullptr);
+  return var->popout;
+}
+
+inline bool Position::is_popout_move(Move m) const {
+  Square sq = from_sq(m);
+  return popout()
+      && type_of(m) == SPECIAL
+      && sq == to_sq(m)
+      && rank_of(sq) == RANK_1
+      && piece_on(sq) != NO_PIECE
+      && color_of(piece_on(sq)) == side_to_move();
 }
 
 inline bool Position::in_opening_self_removal_phase() const {

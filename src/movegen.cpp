@@ -1123,6 +1123,17 @@ namespace {
         return moveList;
     }
 
+    if constexpr (Type != CAPTURES && Type != QUIET_CHECKS)
+        if (pos.popout())
+        {
+            Bitboard removals = pos.pieces(Us) & rank_bb(RANK_1);
+            while (removals)
+            {
+                Square sq = pop_lsb(removals);
+                *moveList++ = make<SPECIAL>(sq, sq);
+            }
+        }
+
     Square forcedSquare = pos.forced_jump_square();
     if (forcedSquare != SQ_NONE && pos.has_forced_jump_followup())
     {

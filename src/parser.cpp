@@ -1955,6 +1955,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("connectSouthEast", v->connectSouthEast);
     parse_attribute("connect3D", v->connect3D);
     parse_attribute("connect4D", v->connect4D);
+    parse_attribute("popout", v->popout);
     parse_color_setting("connectRegion1", v->connectRegion1);
     parse_color_setting("connectRegion2", v->connectRegion2);
     parse_color_setting("connectRegion3", v->connectRegion3);
