@@ -419,8 +419,10 @@ std::string info() { return engine_info(); }
 
 template <typename T>
 void set_option(std::string name, T value) {
-  Options[name] = value;
-  Board::sfInitialized.store(false, std::memory_order_relaxed);
+  if (Options.count(name)) {
+    Options[name] = value;
+    Board::sfInitialized.store(false, std::memory_order_relaxed);
+  }
 }
 
 std::string available_variants() {

@@ -153,7 +153,13 @@ dropNoDoubledCount = -1
 freezeCooldown = -1
 
 [overflow-potion-cooldown:chess]
-jumpCooldown = 65537
+jumpCooldown = 65536
+
+[invalid-nfold-negative:chess]
+nFoldRule = -1
+
+[invalid-nfold-immediate-negative:chess]
+nFoldRuleImmediate = -1
 
 [invalid-remove-connect-n:chess]
 removeConnectN = -1
@@ -459,6 +465,9 @@ customPiece2 = b:R[-3]
 
 [rider-range-val-3:chess]
 customPiece3 = c:R[5-3]
+
+[rider-range-val-4:chess]
+customPiece4 = d:R[300-]
 INI
 
 cat > "${bad_tuple_atom_ini}" <<'INI'
@@ -547,7 +556,9 @@ assert_contains "${initial_capture_output}" "Initial capture Betza moves are not
 assert_contains_literal "${initial_capture_output}" "connectGroup must be -1, 0, or a positive group size."
 assert_contains_literal "${initial_capture_output}" "multimoves - Derived cycle exceeds the supported int range."
 assert_contains_literal "${initial_capture_output}" "dropNoDoubledCount - Invalid negative value."
-assert_contains_literal "${initial_capture_output}" "Potion cooldown must be between 0 and 65536."
+assert_contains_literal "${initial_capture_output}" "Potion cooldown must be between 0 and 65535."
+assert_contains_literal "${initial_capture_output}" "nFoldRule cannot be negative."
+assert_contains_literal "${initial_capture_output}" "nFoldRuleImmediate cannot be negative."
 assert_contains_literal "${initial_capture_output}" "removeConnectN - Value must be in range [0,"
 assert_contains_literal "${initial_capture_output}" "nMoveRule must be between 0 and 1073741824."
 assert_contains_literal "${initial_capture_output}" "nMoveRuleImmediate must be between 0 and 1073741824."
@@ -641,6 +652,9 @@ assert_contains "${bad_rider_range_val_output2}" "unknown variant 'rider-range-v
 
 bad_rider_range_val_output3=$(run_uci "$ENGINE" "$bad_rider_range_val_ini" "rider-range-val-3" </dev/null 2>&1 || true)
 assert_contains "${bad_rider_range_val_output3}" "unknown variant 'rider-range-val-3'; keeping 'chess'"
+
+bad_rider_range_val_output4=$(run_uci "$ENGINE" "$bad_rider_range_val_ini" "rider-range-val-4" </dev/null 2>&1 || true)
+assert_contains "${bad_rider_range_val_output4}" "unknown variant 'rider-range-val-4'; keeping 'chess'"
 
 bad_tuple_atom_output1=$(run_uci "$ENGINE" "$bad_tuple_atom_ini" "tuple-atom-1" </dev/null 2>&1 || true)
 assert_contains "${bad_tuple_atom_output1}" "unknown variant 'tuple-atom-1'; keeping 'chess'"

@@ -11,6 +11,7 @@
 
 #include "apiutil.h"
 #include "test-support.hpp"
+#include "uci.h"
 
 using namespace Stockfish;
 
@@ -1441,6 +1442,10 @@ void state() {
                   std::string("compound move undo mismatch: ") + test.move);
         }
     }
+
+    Options["UCI_Variant"] = std::string("CHESS");
+    check(std::string(Options["UCI_Variant"]) == "chess",
+          "case-insensitive combo option assignment did not normalize to canonical value");
 }
 
 void royal() {
