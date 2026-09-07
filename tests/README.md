@@ -7,7 +7,7 @@ Use `tests/build.sh` to build test binaries. It tracks build options and binary 
 For the standard large-board and all-variant test binary:
 
 ```sh
-tests/build.sh ARCH=x86-64-modern largeboards=yes all=yes EXE=stockfish-allvars
+tests/build.sh ARCH=x86-64-modern largeboards=yes all=yes compoundturns=yes EXE=stockfish-allvars
 tests/run.sh fast src/stockfish-allvars
 ```
 

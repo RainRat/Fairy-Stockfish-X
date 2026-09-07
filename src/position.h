@@ -312,7 +312,6 @@ struct StateInfoCopied {
   bool   compoundTurnReady = false;
   bool   compoundTurnReset = false;
 #endif
-  bool   sequentialSetupMove = false;
   CheckCount checksRemaining[COLOR_NB];
   Bitboard epSquares;
   Bitboard edgeInsertLocks[COLOR_NB];
@@ -2989,7 +2988,7 @@ inline bool Position::pass(Color c) const {
       && !has_setup_drop(c)
       && has_setup_drop(~c))
       return true;
-  if (var->sequentialSetup
+  if (var->sequentialSetup && !compound_turn_active()
       && (has_setup_drop(WHITE) || has_setup_drop(BLACK))
       && c != sequential_setup_side())
       return true;

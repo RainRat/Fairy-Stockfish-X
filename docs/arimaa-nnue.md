@@ -8,7 +8,7 @@ supervised training while keeping the ordinary variant engine unchanged.
 
 ```sh
 tests/build.sh ARCH=x86-64-modern largeboards=yes all=yes nnue=yes \
-  arimaa=yes \
+  compoundturns=yes \
   EXE=stockfish-arimaa
 src/stockfish-arimaa
 ```
