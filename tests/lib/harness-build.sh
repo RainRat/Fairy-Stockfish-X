@@ -169,9 +169,12 @@ fsx_harness_prepare_objects_cached() {
   fi
 
   fsx_harness_prepare_objects "${jobs}"
-  object_signature=$(fsx_harness_object_signature)
-  printf '%s\n' "${desired_signature}" > "${cache_dir}/desired.sig"
-  printf '%s\n' "${object_signature}" > "${cache_dir}/objects.sig"
+  local tmp_desired="${cache_dir}/desired.sig.tmp.$$"
+  local tmp_objects="${cache_dir}/objects.sig.tmp.$$"
+  printf '%s\n' "${desired_signature}" > "${tmp_desired}"
+  printf '%s\n' "${object_signature}" > "${tmp_objects}"
+  mv -f "${tmp_desired}" "${cache_dir}/desired.sig"
+  mv -f "${tmp_objects}" "${cache_dir}/objects.sig"
 }
 
 fsx_harness_collect_objects() {

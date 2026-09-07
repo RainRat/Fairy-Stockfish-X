@@ -1274,10 +1274,14 @@ namespace {
             if (pos.pieces(Us, KING) & pos.gates(Us))
             {
                 Square from = pos.square<KING>(Us);
-                Bitboard b = PseudoAttacks[WHITE][KNIGHT][from] & rank_bb(rank_of(from + (Us == WHITE ? NORTH : SOUTH)))
-                    & target & ~pos.pieces();
-                while (b)
-                    moveList = make_move_and_gating<SPECIAL, Type>(pos, moveList, Us, from, pop_lsb(b));
+                Square oneStep = from + (Us == WHITE ? NORTH : SOUTH);
+                if (is_ok(oneStep))
+                {
+                    Bitboard b = PseudoAttacks[WHITE][KNIGHT][from] & rank_bb(rank_of(oneStep))
+                        & target & ~pos.pieces();
+                    while (b)
+                        moveList = make_move_and_gating<SPECIAL, Type>(pos, moveList, Us, from, pop_lsb(b));
+                }
             }
 
             Bitboard b = pos.pieces(Us, FERS) & pos.gates(Us);

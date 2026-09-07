@@ -2400,6 +2400,54 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
             std::cerr << "connectGroup must be -1, 0, or a positive group size." << std::endl;
         valid = false;
     }
+    if (v->pocketSize < 0)
+    {
+        if (DoCheck)
+            std::cerr << "pocketSize must be non-negative." << std::endl;
+        valid = false;
+    }
+    if (v->pointsGoal < 0)
+    {
+        if (DoCheck)
+            std::cerr << "pointsGoal must be non-negative." << std::endl;
+        valid = false;
+    }
+    if (v->collinearN < 0)
+    {
+        if (DoCheck)
+            std::cerr << "collinearN must be non-negative." << std::endl;
+        valid = false;
+    }
+    if (v->flagPieceCount < 0)
+    {
+        if (DoCheck)
+            std::cerr << "flagPieceCount must be non-negative." << std::endl;
+        valid = false;
+    }
+    if (v->antiRoyalCount < 0)
+    {
+        if (DoCheck)
+            std::cerr << "antiRoyalCount must be non-negative." << std::endl;
+        valid = false;
+    }
+    if (v->pseudoRoyalCount < 0)
+    {
+        if (DoCheck)
+            std::cerr << "pseudoRoyalCount must be non-negative." << std::endl;
+        valid = false;
+    }
+    if (v->extinctionPieceCount[WHITE] < 0 || v->extinctionPieceCount[BLACK] < 0)
+    {
+        if (DoCheck)
+            std::cerr << "extinctionPieceCount must be non-negative." << std::endl;
+        valid = false;
+    }
+    if (v->extinctionOpponentPieceCount[WHITE] < 0 || v->extinctionOpponentPieceCount[BLACK] < 0)
+    {
+        if (DoCheck)
+            std::cerr << "extinctionOpponentPieceCount must be non-negative." << std::endl;
+        valid = false;
+    }
     // Check for limitations
     if ((v->pieceDrops || v->freeDrops) && v->wallingRule != NO_WALLING)
     {
@@ -2883,7 +2931,7 @@ bool VariantParser<DoCheck>::parse_priority_drops(Variant* v) {
     auto it_pr_drop = config.find("priorityDropTypes");
     if (it_pr_drop != config.end())
     {
-        PieceSet parsedPriorityDrops = v->isPriorityDrop;
+        PieceSet parsedPriorityDrops = NO_PIECE_SET;
         bool sawToken = false;
         std::stringstream ss(it_pr_drop->second);
         std::string token;
