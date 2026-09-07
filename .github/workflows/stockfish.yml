@@ -79,7 +79,7 @@ jobs:
         run: |
           export CXXFLAGS=""
           make clean
-          make -j2 ARCH=x86-64-modern optimize=yes all=yes largeboards=yes debug=yes profile-build
+          make -j2 ARCH=x86-64-modern optimize=yes all=yes compoundturns=yes largeboards=yes debug=yes profile-build
 
       - name: Test x86-64-modern build
         run: |

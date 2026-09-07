@@ -446,7 +446,6 @@ struct Variant {
   bool payPointsToDrop = false;
   bool passUntilSetup = false;
   int compoundTurnSteps = 0;
-  bool completeTurnRepetitionIllegal = false;
   SimulFlagExtinctionPriority simulFlagExtinctionPriority = SimulFlagExtinctionPriority::EXTINCTION;
   Value simulFlagValueByMover = VALUE_NONE;
   Value simulExtinctionValueByMover = VALUE_NONE;
@@ -477,6 +476,8 @@ struct Variant {
   bool nFoldValueAbsolute = false;
   bool perpetualCheckIllegal = false;
   bool moveRepetitionIllegal = false;
+  int samePlayerBoardRepetitionIllegalAtN = 0;
+  // Deprecated legacy switch kept for compatibility with existing configs.
   bool samePlayerBoardRepetitionIllegal = false;
   bool alternating2x2DropIllegal = false;
   bool pathwayDropRule = false;

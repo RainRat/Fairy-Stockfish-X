@@ -194,10 +194,10 @@ namespace {
     while (is >> token)
         if (token == "searchmoves") // Needs to be the last command on the line
         {
-            if (pos.variant()->compoundTurnSteps)
+            if (pos.compound_turn_active())
                 limits.compoundSearchMovesSpecified = true;
             while (is >> token)
-                if (pos.variant()->compoundTurnSteps)
+                if (pos.compound_turn_active())
                     limits.compoundSearchMoves.push_back(token);
                 else
                     limits.searchmoves.push_back(UCI::to_move(pos, token));
@@ -532,7 +532,7 @@ void UCI::loop(int argc, char* argv[]) {
       // UCCI-specific banmoves command
       else if (token == "banmoves")
           while (is >> token)
-              if (pos.variant()->compoundTurnSteps)
+              if (pos.compound_turn_active())
                   compoundBanMoves.push_back(token);
               else
                   banmoves.push_back(UCI::to_move(pos, token));

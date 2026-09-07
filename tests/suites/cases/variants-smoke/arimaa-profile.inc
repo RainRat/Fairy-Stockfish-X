@@ -10,7 +10,7 @@ init_test_env "${1:-}" "${2:-}" "Arimaa profile"
 SETUP_MOVES="R@a1 0000 R@b1 0000 R@c1 0000 R@d1 0000 R@e1 0000 R@f1 0000 R@g1 0000 R@h1 0000 C@a2 0000 C@b2 0000 D@c2 0000 D@d2 0000 H@e2 0000 H@f2 0000 M@g2 0000 E@h2 R@a8 0000 R@b8 0000 R@c8 0000 R@d8 0000 R@e8 0000 R@f8 0000 R@g8 0000 R@h8 0000 C@a7 0000 C@b7 0000 D@c7 0000 D@d7 0000 H@e7 0000 H@f7 0000 M@g7 0000 E@h7"
 
 if ! probe_variant_available "$ENGINE" arimaa "$VARIANT_PATH"; then
-    echo "skip: Arimaa profile requires an all=yes build"
+    echo "skip: Arimaa profile requires a compoundturns=yes build"
     exit 0
 fi
 
@@ -36,7 +36,7 @@ position startpos moves R@a1 0000 R@b1
 d
 EOF
 )
-assert_contains "$out" "^Fen: 8/8/8/8/8/8/8/RR6\\[.*\\] b - - 0 1$"
+assert_contains "$out" "^Fen: 8/8/8/8/8/8/8/RR6\\[.*\\] b - - 0 2$"
 
 out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
 position startpos
@@ -52,7 +52,7 @@ position startpos moves $SETUP_MOVES
 d
 EOF
 )
-assert_contains "$out" "^Fen: rrrrrrrr/ccddhhme/8/8/8/8/CCDDHHME/RRRRRRRR\\[\\] w - - 0 1$"
+assert_contains "$out" "^Fen: rrrrrrrr/ccddhhme/8/8/8/8/CCDDHHME/RRRRRRRR\\[\\] w - - 0 32$"
 
 out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<EOF
 position startpos moves $SETUP_MOVES
@@ -61,7 +61,7 @@ EOF
 )
 assert_contains "$out" "^bestmove [a-h][1-8]"
 
-# Native state coverage verifies setup does not advance gamePly or rule50.
+# Native state coverage verifies setup uses ordinary ply and rule50 accounting.
 "${ROOT_DIR}/tests/native/engine-rules.sh" "$ENGINE" "$VARIANT_PATH" arimaa-setup
 "${ROOT_DIR}/tests/native/engine-rules.sh" "$ENGINE" "$VARIANT_PATH" arimaa-architecture
 

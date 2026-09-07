@@ -244,7 +244,7 @@ void MainThread::search() {
   }
 
 #ifdef ENABLE_COMPOUND_TURNS
-  if (rootPos.variant()->compoundTurnSteps)
+  if (rootPos.variant()->compoundTurnSteps && rootPos.compound_turn_active())
   {
       Color us = rootPos.side_to_move();
       Time.init(rootPos, Limits, rootPos.side_to_move(), rootPos.game_ply());
@@ -454,7 +454,7 @@ void MainThread::search() {
 
 void Thread::search() {
 #ifdef ENABLE_COMPOUND_TURNS
-  if (rootPos.variant()->compoundTurnSteps)
+  if (rootPos.variant()->compoundTurnSteps && rootPos.compound_turn_active())
   {
       search_compound(*this);
       return;

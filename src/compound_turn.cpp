@@ -605,27 +605,6 @@ void search_compound(Thread& thread) {
   const std::vector<CompoundMove> banMoves =
       parse_root_compound_moves(pos, Search::Limits.compoundBanMoves);
 
-  // Setup is not a compound turn: the placer may make many consecutive
-  // drops, while ordinary negamax would incorrectly negate after each one.
-  // Return a legal placement directly until both pockets are empty.
-  if (!pos.compound_turn_active())
-  {
-      MoveList<LEGAL> moves(pos);
-      for (const auto& move : moves)
-      {
-          CompoundMove turn;
-          turn.steps[0] = move.move;
-          turn.length = 1;
-          if (root_compound_move_allowed(turn, searchMoves, searchMovesSpecified, banMoves))
-          {
-              thread.compoundBestTurn = turn;
-              thread.compoundBestScore = VALUE_DRAW;
-              break;
-          }
-      }
-      return;
-  }
-
   // A parsed root restriction is already a legal turn. Keep it as a fallback
   // in case a strict limit fires before the filtered turn reaches evaluation.
   if (searchMovesSpecified)

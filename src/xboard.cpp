@@ -709,17 +709,22 @@ void StateMachine::process_command(std::string token, std::istringstream& is) {
               do_compound_move(turn);
               moveApplied = true;
           }
-      }
-#endif
-      if (!moveApplied)
-      {
-          if ((m = UCI::to_move(pos, token)) != MOVE_NONE)
-          {
-              do_move(m);
-              moveApplied = true;
-          }
-          else
+          if (!moveApplied)
               sync_cout << (isMove ? "Illegal move: " : "Error (unknown command): ") << token << sync_endl;
+      }
+      else
+#endif
+      {
+          if (!moveApplied)
+          {
+              if ((m = UCI::to_move(pos, token)) != MOVE_NONE)
+              {
+                  do_move(m);
+                  moveApplied = true;
+              }
+              else
+                  sync_cout << (isMove ? "Illegal move: " : "Error (unknown command): ") << token << sync_endl;
+          }
       }
 
       // Restart search if applicable

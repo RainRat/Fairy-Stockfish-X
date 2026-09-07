@@ -1901,7 +1901,6 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("doublePassEndsGame", v->doublePassEndsGame);
     parse_attribute("passUntilSetup", v->passUntilSetup);
     parse_attribute("turnSteps", v->compoundTurnSteps);
-    parse_attribute("completeTurnRepetitionIllegal", v->completeTurnRepetitionIllegal);
     parse_attribute("simulFlagExtinctionPriority", v->simulFlagExtinctionPriority);
     parse_attribute("simulFlagValueByMover", v->simulFlagValueByMover);
     parse_attribute("simulExtinctionValueByMover", v->simulExtinctionValueByMover);
@@ -1937,7 +1936,12 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     }
     parse_attribute("perpetualCheckIllegal", v->perpetualCheckIllegal);
     parse_attribute("moveRepetitionIllegal", v->moveRepetitionIllegal);
-    parse_attribute("samePlayerBoardRepetitionIllegal", v->samePlayerBoardRepetitionIllegal);
+    parse_attribute("samePlayerBoardRepetitionIllegalAtN", v->samePlayerBoardRepetitionIllegalAtN);
+    bool legacySamePlayerBoardRepetitionIllegal = false;
+    if (parse_attribute("samePlayerBoardRepetitionIllegal", legacySamePlayerBoardRepetitionIllegal)
+        && !config.count("samePlayerBoardRepetitionIllegalAtN"))
+        v->samePlayerBoardRepetitionIllegalAtN = legacySamePlayerBoardRepetitionIllegal ? 1 : 0;
+    v->samePlayerBoardRepetitionIllegal = v->samePlayerBoardRepetitionIllegalAtN > 0;
     parse_attribute("alternating2x2DropIllegal", v->alternating2x2DropIllegal);
     parse_attribute("pathwayDropRule", v->pathwayDropRule);
     parse_attribute("weakDiagonalConnect", v->weakDiagonalConnect);
@@ -2268,6 +2272,13 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
 template <bool DoCheck>
 bool VariantParser<DoCheck>::check_consistency(Variant* v) {
     bool valid = true;
+
+    if (v->samePlayerBoardRepetitionIllegalAtN < 0)
+    {
+        if (DoCheck)
+            std::cerr << "samePlayerBoardRepetitionIllegalAtN - Value must be non-negative." << std::endl;
+        valid = false;
+    }
 
     if (v->compoundTurnSteps < 0 || v->compoundTurnSteps > Variant::MAX_COMPOUND_TURN_STEPS)
     {

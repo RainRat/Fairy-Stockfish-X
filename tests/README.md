@@ -12,7 +12,7 @@ settings.
 For the normal large-board/all-variant test binary, use one of these commands (tests/build.sh handles compilation output quietly):
 
 ```sh
-tests/build.sh ARCH=x86-64-modern largeboards=yes all=yes EXE=stockfish-allvars
+tests/build.sh ARCH=x86-64-modern largeboards=yes all=yes compoundturns=yes EXE=stockfish-allvars
 tests/run.sh fast src/stockfish-allvars
 ```
 

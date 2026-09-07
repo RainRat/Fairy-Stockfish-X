@@ -1400,14 +1400,14 @@ Key Position::compute_piece_state_key() const {
 
 bool Position::violates_same_player_board_repetition(Move m) const {
 
-  if (!var->samePlayerBoardRepetitionIllegal)
+  if (var->samePlayerBoardRepetitionIllegalAtN <= 0)
       return false;
 
   StateInfo nextState;
   SimulatedMoveGuard clearSimulation(*this, MOVE_NONE);
   ScopedProbeMove probe(*this, m, nextState);
 
-  bool repeated = false;
+  int repetitions = 0;
   int end = captures_to_hand() ? st->pliesFromNull
                                : std::min(st->rule50, st->pliesFromNull);
   if (end >= 4)
@@ -1416,32 +1416,32 @@ bool Position::violates_same_player_board_repetition(Move m) const {
       for (int i = 4; i <= end; i += 2)
       {
           stp = stp->previous->previous;
-          if (stp->move != MOVE_NONE && stp->layoutKey == st->layoutKey)
+          if (stp->move != MOVE_NONE && stp->layoutKey == st->layoutKey
+              && ++repetitions >= var->samePlayerBoardRepetitionIllegalAtN)
           {
-              repeated = true;
-              break;
+              return true;
           }
       }
   }
 
-  return repeated;
+  return false;
 }
 
 #ifdef ENABLE_COMPOUND_TURNS
 
 bool Position::compound_repetition_illegal() const {
 
-  if (!var->completeTurnRepetitionIllegal
+  if (var->samePlayerBoardRepetitionIllegalAtN <= 0
       || !compound_turn_active() || st->compoundTurnStep != 0
       || !st->compoundTurnReady)
       return false;
 
-  int occurrences = 1;
+  int repetitions = 0;
   for (const StateInfo* previous = st->previous; previous; previous = previous->previous)
       if (previous->compoundTurnReady
           && previous->compoundTurnStep == 0
           && previous->boardKey == st->boardKey
-          && ++occurrences >= 3)
+          && ++repetitions >= var->samePlayerBoardRepetitionIllegalAtN)
           return true;
 
   return false;
@@ -2290,8 +2290,6 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
   thisThread = th;
   updatePawnCheckZone();
   set_state(st);
-  if (var->sequentialSetup && (has_setup_drop(WHITE) || has_setup_drop(BLACK)))
-      gamePly = 0;
 
   assert(pos_is_ok());
 
@@ -2562,7 +2560,6 @@ void Position::set_state(StateInfo* si) const {
                        && !has_setup_drop(BLACK);
   si->compoundTurnReset = false;
 #endif
-  si->sequentialSetupMove = false;
   si->move = MOVE_NONE;
   si->removedGatingType = NO_PIECE_TYPE;
   si->removedCastlingGatingType = NO_PIECE_TYPE;
@@ -2912,7 +2909,7 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
       ss << st->rule50;
 
 #ifdef ENABLE_COMPOUND_TURNS
-  ss << " " << (variant()->compoundTurnSteps ? st->compoundTurnNumber + 1
+  ss << " " << (compound_turn_active() ? st->compoundTurnNumber + 1
                                                : 1 + (gamePly - (sideToMove == BLACK)) / 2);
 #else
   ss << " " << 1 + (gamePly - (sideToMove == BLACK)) / 2;
@@ -5471,7 +5468,7 @@ bool Position::legal(Move m) const {
   else if (dropMove && edge_insert_only() && (edge_insert_types() & in_hand_piece_type(m)))
       return false;
 
-  if (var->sequentialSetup
+  if (var->sequentialSetup && !compound_turn_active()
       && (has_setup_drop(WHITE) || has_setup_drop(BLACK))
       && us != sequential_setup_side()
       && !is_pass(m))
@@ -6499,7 +6496,7 @@ bool Position::pseudo_legal(const Move m) const {
   if (is_pass(m) && !pass(us))
       return false;
 
-  if (var->sequentialSetup
+  if (var->sequentialSetup && !compound_turn_active()
       && (has_setup_drop(WHITE) || has_setup_drop(BLACK))
       && us != sequential_setup_side()
       && !is_pass(m))
@@ -7599,10 +7596,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
 #endif
 #ifdef ENABLE_COMPOUND_TURNS
   const bool compoundTurn = compound_turn_active();
-  const bool setupPlacement = var->sequentialSetup
-                           && (has_setup_drop(WHITE) || has_setup_drop(BLACK));
   const int moveCost = compound_turn_step_cost(m);
-  const int plyCost = setupPlacement ? 0 : moveCost;
   const bool compoundTurnEnds = (!compoundTurn)
                               || is_pass(m)
                               || st->compoundTurnStep + moveCost >= var->compoundTurnSteps;
@@ -7613,10 +7607,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       k ^= Zobrist::compoundTurn[st->compoundTurnStep]
          ^ Zobrist::compoundTurn[compoundTurnStep];
 #else
-  const bool setupPlacement = var->sequentialSetup
-                           && (has_setup_drop(WHITE) || has_setup_drop(BLACK));
   const int moveCost = 1;
-  const int plyCost = setupPlacement ? 0 : moveCost;
   Key k = st->key ^ Zobrist::side;
 #endif
 
@@ -7631,7 +7622,6 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   st->extinctionSeen[BLACK] = newSt.previous->extinctionSeen[BLACK];
 #ifdef ENABLE_COMPOUND_TURNS
   st->compoundTurnStep = compoundTurnStep;
-  st->sequentialSetupMove = setupPlacement;
 #endif
   st->pendingClaimPass = false;
   st->move = m;
@@ -7649,12 +7639,12 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
 
   // Increment ply counters. In particular, rule50 will be reset to zero later on
   // in case of a capture or a pawn move.
-  gamePly += plyCost;
+  gamePly += moveCost;
   if (!currentMultimovePass && !currentClaimPass)
-      st->rule50 += plyCost;
-  st->pliesFromNull += plyCost;
+      st->rule50 += moveCost;
+  st->pliesFromNull += moveCost;
   if (st->countingLimit)
-      st->countingPly += plyCost;
+      st->countingPly += moveCost;
 
   Color us = sideToMove;
   Color them = ~us;
@@ -9490,7 +9480,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   // Update the key with the final value
   st->key = k;
   st->boardKey = st->key ^ st->reserveKey;
-  if (var->samePlayerBoardRepetitionIllegal)
+  if (var->samePlayerBoardRepetitionIllegalAtN > 0)
       st->layoutKey = layout_key();
 #ifdef ENABLE_COMPOUND_TURNS
   if (compoundTurn && (st->rule50 == 0 || st->previous->compoundTurnReset))
@@ -9515,12 +9505,15 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       st->compoundTurnReset = false;
   }
 
-  if (var->compoundTurnSteps && !st->compoundTurnReady
-      && !has_setup_drop(WHITE) && !has_setup_drop(BLACK))
-      st->compoundTurnReady = true;
+  if (var->compoundTurnSteps && compoundTurnEnds)
+  {
+      const bool wasCompoundTurnReady = st->compoundTurnReady;
+      st->compoundTurnReady = !has_setup_drop(WHITE) && !has_setup_drop(BLACK);
+      if (!wasCompoundTurnReady && st->compoundTurnReady)
+          st->compoundTurnNumber = std::max((gamePly - (them == BLACK)) / 2, 0);
+  }
   sideToMove = compoundTurnEnds ? them : us;
 #else
-  st->sequentialSetupMove = setupPlacement;
   sideToMove = them;
 #endif
 
@@ -10055,7 +10048,6 @@ void Position::undo_move(Move m) {
   // Finally point our state pointer back to the previous state
   int compoundTurnStepsToRestore = 0;
   bool completedCompoundTurnFromBoundary = false;
-  bool setupPlacement = st->sequentialSetupMove;
 #ifdef ENABLE_COMPOUND_TURNS
   if (var->compoundTurnSteps && st->compoundTurnStep == 0 && st->previous
       && st->previous->compoundTurnStep > 0)
@@ -10068,9 +10060,7 @@ void Position::undo_move(Move m) {
   std::copy(std::begin(st->castlingRightsMask), std::end(st->castlingRightsMask), std::begin(castlingRightsMask));
   std::copy(std::begin(st->castlingRookSquare), std::end(st->castlingRookSquare), std::begin(castlingRookSquare));
   std::copy(std::begin(st->castlingPath), std::end(st->castlingPath), std::begin(castlingPath));
-  gamePly -= setupPlacement
-           ? 0
-           : compoundTurnStepsToRestore
+  gamePly -= compoundTurnStepsToRestore
            ? 1 : compound_turn_step_cost(m);
   if (completedCompoundTurnFromBoundary)
       gamePly += compound_turn_step_cost(m) - 1;
@@ -10167,6 +10157,7 @@ void Position::end_compound_turn(StateInfo& newSt) {
   st->move = MOVE_NONE;
   st->pendingClaimPass = false;
   st->compoundTurnStep = 0;
+  st->compoundTurnReady = !has_setup_drop(WHITE) && !has_setup_drop(BLACK);
   st->compoundTurnReset = false;
   st->compoundTurnNumber += us == BLACK;
   clear_move_undo_state(st);
@@ -10185,7 +10176,7 @@ void Position::end_compound_turn(StateInfo& newSt) {
   st->accumulator.computed[WHITE] = false;
   st->accumulator.computed[BLACK] = false;
   st->boardKey = st->key ^ st->reserveKey;
-  if (var->samePlayerBoardRepetitionIllegal)
+  if (var->samePlayerBoardRepetitionIllegalAtN > 0)
       st->layoutKey = layout_key();
 
   sideToMove = ~us;
@@ -12199,7 +12190,7 @@ bool Position::pos_is_ok() const {
       && si.boardKey == st->boardKey
       && si.reserveKey == st->reserveKey
       && st->reserveKey == reserve_key()
-      && (!var->samePlayerBoardRepetitionIllegal || si.layoutKey == st->layoutKey)
+      && (var->samePlayerBoardRepetitionIllegalAtN <= 0 || si.layoutKey == st->layoutKey)
       && si.pawnKey == st->pawnKey
       && si.materialKey == st->materialKey
       && same_array(si.nonPawnMaterial, st->nonPawnMaterial)

@@ -49,12 +49,10 @@ SRCS = benchmark.cpp bitbase.cpp bitboard.cpp endgame.cpp evaluate.cpp main.cpp 
 	partner.cpp parser.cpp piece.cpp variant.cpp apiutil.cpp xboard.cpp \
 	nnue/features/half_ka_v2_variants.cpp
 
-ifneq ($(all),no)
-compoundturns_enabled = yes
-else ifeq ($(compoundturns),yes)
-compoundturns_enabled = yes
+ifeq ($(compoundturns),yes)
+ compoundturns_enabled = yes
 else
-compoundturns_enabled = no
+ compoundturns_enabled = no
 endif
 
 ifeq ($(compoundturns_enabled),yes)
@@ -78,8 +76,8 @@ endif
 # flag                --- Comp switch      --- Description
 # ----------------------------------------------------------------------------
 #
-# all = yes             --- -DALLVARS and -DENABLE_COMPOUND_TURNS --- Enable all variants and mechanics
-# compoundturns = yes/no --- compatibility alias for all=yes
+# all = yes             --- -DALLVARS --- Enable all variants
+# compoundturns = yes/no --- -DENABLE_COMPOUND_TURNS --- Enable compound turns
 #
 # debug = yes/no      --- -DNDEBUG         --- Enable/Disable debug mode
 # sanitize = none/<sanitizer> ... (-fsanitize )
@@ -338,15 +336,12 @@ endif
 # Enable all variants and mechanics, even heavyweight ones like duck and amazons
 ifneq ($(all),no)
 	CXXFLAGS += -DALLVARS
-	CXXFLAGS += -DENABLE_COMPOUND_TURNS
 endif
 
-# Keep the legacy standalone option working for focused compound builds. Ordinary
-# builds keep this disabled so orthodox search paths do not carry compound-turn logic.
+# Compound turns are intentionally independent from all=yes while the subsystem
+# is being benchmarked. This keeps an all-variant build available as a control.
 ifeq ($(compoundturns),yes)
-	ifeq ($(all),no)
-		CXXFLAGS += -DENABLE_COMPOUND_TURNS
-	endif
+	CXXFLAGS += -DENABLE_COMPOUND_TURNS
 endif
 
 ifeq ($(COMP),)
@@ -758,8 +753,8 @@ else
 	@echo ""
 	@echo "make build ARCH=x86-64 largeboards=yes all=yes"
 	@echo "make build ARCH=x86-64 verylargeboards=yes all=yes"
-	@echo "All-variant builds include the generic compound-turn engine: "
-	@echo "make build ARCH=x86-64 largeboards=yes all=yes nnue=yes"
+	@echo "Enable generic compound turns in an all-variant build: "
+	@echo "make build ARCH=x86-64 largeboards=yes all=yes compoundturns=yes nnue=yes"
 	@echo ""
 endif
 

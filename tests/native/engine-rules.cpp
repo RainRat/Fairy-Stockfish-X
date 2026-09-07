@@ -1115,8 +1115,8 @@ void arimaa_setup() {
         pos.do_move(move, states->back());
     }
 
-    check(pos.game_ply() == 0, "Arimaa setup placements advanced gamePly");
-    check(pos.rule50_count() == 0, "Arimaa setup placements advanced rule50");
+    check(pos.game_ply() == int(placements.size()), "Arimaa setup placements did not advance gamePly normally");
+    check(pos.rule50_count() == 0, "Arimaa setup placements did not preserve expected rule50 state");
     check(pos.side_to_move() == WHITE, "completed Arimaa setup did not start Gold");
 
     for (auto it = moves.rbegin(); it != moves.rend(); ++it)
@@ -1124,7 +1124,7 @@ void arimaa_setup() {
         pos.undo_move(*it);
         states->pop_back();
     }
-    check(pos.game_ply() == 0, "undoing Arimaa setup changed gamePly");
+    check(pos.game_ply() == 0, "undoing Arimaa setup did not restore gamePly");
 }
 
 void arimaa_architecture() {
@@ -1293,7 +1293,8 @@ void compound_turn_rules() {
         setupMoves.push_back(move);
     };
     play_setup("R@a1");
-    check(pos.side_to_move() == BLACK, "generic sequential setup did not force a pass after White's drop");
+    check(pos.side_to_move() == BLACK && pos.game_ply() == 1,
+          "generic sequential setup did not advance after White's drop");
     const std::string setupHandoffFen = pos.fen();
     check(setupHandoffFen.find(" setup=") == std::string::npos,
           "sequential setup handoff FEN exposed internal placement state");
@@ -1308,8 +1309,8 @@ void compound_turn_rules() {
     setupMoves.clear();
     play_setup("R@a1");
     play_setup("0000");
-    check(pos.side_to_move() == WHITE, "generic sequential setup pass did not return to White");
-    check(pos.game_ply() == 0, "generic sequential setup drop advanced gamePly");
+    check(pos.side_to_move() == WHITE && pos.game_ply() == 2,
+          "generic sequential setup pass did not return to White with normal ply accounting");
     play_setup("R@b1");
     play_setup("0000");
     play_setup("R@c1");
@@ -1324,7 +1325,8 @@ void compound_turn_rules() {
     play_setup("0000");
     play_setup("R@h8");
     check(pos.side_to_move() == WHITE, "emptying Black pocket did not restore sideToMove to White");
-    check(pos.game_ply() == 0, "generic sequential setup drops advanced gamePly before all setup complete");
+    check(pos.game_ply() == int(setupMoves.size()),
+          "generic sequential setup did not use normal ply accounting");
 
     // Undoing sequential drops
     for (auto it = setupMoves.rbegin(); it != setupMoves.rend(); ++it)
@@ -1337,13 +1339,38 @@ void compound_turn_rules() {
     // 2. Generic compound turn generation, step costs, and repetition
     set_position(pos, states, "generic-compound-turn-audit",
                  "8/8/8/3r4/3C4/8/8/8 w - - 0 1");
-    check(!variants.get("generic-compound-turn-audit")->completeTurnRepetitionIllegal,
+    check(variants.get("generic-compound-turn-audit")->samePlayerBoardRepetitionIllegalAtN == 0,
           "generic compound turns inherited Arimaa repetition policy");
-    check(variants.get("arimaa")->completeTurnRepetitionIllegal,
+    check(variants.get("arimaa")->samePlayerBoardRepetitionIllegalAtN == 2,
           "Arimaa did not enable complete-turn repetition illegality");
+    check(variants.get("generic-legacy-repetition-audit")->samePlayerBoardRepetitionIllegalAtN == 1,
+          "legacy same-player repetition setting did not map to threshold one");
     check(pos.compound_turn_active(), "generic compound turn is not active");
     check(pos.compound_turn_steps() == 3, "generic compound turn steps != 3");
     check(pos.at_complete_turn_boundary(), "fresh position is not at complete turn boundary");
+
+    set_position(pos, states, "generic-compound-repetition-audit",
+                 "8/8/8/8/8/8/8/R7 w - - 0 1");
+    alignas(Eval::NNUE::CacheLineSize)
+    StateInfo repetitionStates[6][CompoundMove::MAX_STEPS + 1];
+    auto play_repetition_turn = [&](const char* text, int stateIndex) {
+        CompoundMove turn;
+        check(parse_compound_move(pos, text, turn),
+              std::string("failed to parse repetition test turn: ") + text);
+        do_compound_move(pos, turn, repetitionStates[stateIndex]);
+    };
+    play_repetition_turn("a1b1", 0);
+    play_repetition_turn("0000", 1);
+    play_repetition_turn("b1a1", 2);
+    play_repetition_turn("0000", 3);
+    play_repetition_turn("a1b1", 4);
+    play_repetition_turn("0000", 5);
+    CompoundMove forbiddenRepetition;
+    check(!parse_compound_move(pos, "b1a1", forbiddenRepetition),
+          "same-player repetition threshold did not reject the third occurrence");
+
+    set_position(pos, states, "generic-compound-turn-audit",
+                 "8/8/8/3r4/3C4/8/8/8 w - - 0 1");
 
     // Test compound moves generation
     std::vector<CompoundMove> generated = generate_compound_moves(pos);
@@ -2782,6 +2809,12 @@ startFen = 8/8/8/8/8/8/8/8[RRRRrrrr] w - - 0 1
 
 [generic-compound-pass-audit:generic-compound-turn-audit]
 pass = true
+
+[generic-compound-repetition-audit:generic-compound-pass-audit]
+samePlayerBoardRepetitionIllegalAtN = 2
+
+[generic-legacy-repetition-audit:generic-compound-turn-audit]
+samePlayerBoardRepetitionIllegal = true
 )INI");
     variants.parse_istream<false>(inline_config);
 }

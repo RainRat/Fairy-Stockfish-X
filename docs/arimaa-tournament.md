@@ -1,7 +1,7 @@
 # Arimaa protocol tournament runner
 
 `tools/arimaa_tournament.py` runs fixed-setup complete-turn games between an
-AEI engine such as Akimot and an `arimaa=yes` FSX binary.
+AEI engine such as Akimot and an FSX binary built with `compoundturns=yes`.
 
 The runner is deliberately the referee at the protocol boundary. It translates
 Akimot's physical AEI steps and FSX's coordinate notation into one canonical
@@ -22,7 +22,7 @@ Build an FSX binary with the Arimaa path enabled:
 
 ```sh
 tests/build.sh ARCH=x86-64-modern largeboards=yes all=yes \
-  arimaa=yes nnue=yes EXE=stockfish-arimaa-large
+  compoundturns=yes nnue=yes EXE=stockfish-arimaa-large
 ```
 
 Build Akimot separately using its own source instructions. The runner accepts
