@@ -1122,7 +1122,9 @@ public:
   bool is_immediate_game_end(Value& result, int ply = 0) const;
   bool has_legal_move() const;
   bool has_legal_move_ignoring_immediate_end() const;
+  bool logical_moves_active() const;
   bool has_legal_logical_move() const;
+  LogicalMoveCapabilities logical_move_capabilities() const;
   bool is_optional_game_end() const;
   bool is_optional_game_end(Value& result, int ply = 0, int countStarted = 0) const;
   bool is_game_end(Value& result, int ply = 0) const;
@@ -2914,6 +2916,21 @@ inline bool Position::compound_turn_active() const {
 #else
   return false;
 #endif
+}
+
+inline bool Position::logical_moves_active() const {
+  return compound_turn_active();
+}
+
+inline LogicalMoveCapabilities Position::logical_move_capabilities() const {
+#ifdef ENABLE_COMPOUND_TURNS
+  // The current logical provider does not expose the complete tactical move
+  // set or prove the null-move assumptions required by these heuristics. This
+  // is a provider capability boundary; search need not inspect components.
+  if (var->compoundTurnSteps)
+      return {false, false, false};
+#endif
+  return {};
 }
 
 inline bool Position::at_complete_turn_boundary() const {

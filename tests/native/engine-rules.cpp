@@ -1349,6 +1349,9 @@ void compound_turn_rules() {
           "legacy same-player repetition setting did not map to threshold one");
     check(pos.compound_turn_active(), "generic compound turn is not active");
     check(pos.compound_turn_steps() == 3, "generic compound turn steps != 3");
+    const LogicalMoveCapabilities capabilities = pos.logical_move_capabilities();
+    check(!capabilities.futilityPruning && !capabilities.nullMovePruning && !capabilities.probCut,
+          "compound provider exposed unsupported standard pruning capabilities");
     check(variants.get("generic-compound-turn-audit")->quiescencePolicy == QuiescencePolicy::STATIC_EVAL,
           "compound variant did not select static-eval qsearch policy");
     check(pos.at_complete_turn_boundary(), "fresh position is not at complete turn boundary");

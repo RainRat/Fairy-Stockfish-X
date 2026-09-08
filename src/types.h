@@ -888,6 +888,15 @@ struct LogicalMoveInfo {
   bool seeReliable = false;
 };
 
+/// Search capabilities supplied by the logical-move provider. These describe
+/// the assumptions of a search heuristic, rather than how many components a
+/// logical move happens to contain.
+struct LogicalMoveCapabilities {
+  bool futilityPruning = true;
+  bool nullMovePruning = true;
+  bool probCut = true;
+};
+
 enum PieceSet : uint64_t {
   NO_PIECE_SET = 0,
   CHESS_PIECES = (1ULL << PAWN) | (1ULL << KNIGHT) | (1ULL << BISHOP) | (1ULL << ROOK) | (1ULL << QUEEN) | (1ULL << KING),

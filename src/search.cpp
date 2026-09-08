@@ -845,6 +845,7 @@ namespace {
     TTEntry* tte;
     Key posKey;
     Move ttMove, move, excludedMove, bestMove;
+    LogicalMove bestLogicalMove;
     Depth extension, newDepth;
     Value bestValue, value, ttValue, eval, maxValue, probCutBeta;
     bool givesCheck, improving, didLMR, priorCapture;
@@ -855,7 +856,10 @@ namespace {
 
     // Step 1. Initialize node
     Thread* thisThread = pos.this_thread();
-    const bool logicalPosition = pos.compound_turn_active();
+    const LogicalMoveCapabilities moveCapabilities = pos.logical_move_capabilities();
+    // This only selects the move interface. Search-policy assumptions are
+    // expressed by moveCapabilities and LogicalMoveInfo below.
+    const bool logicalMovePosition = pos.logical_moves_active();
     ss->inCheck        = pos.evasion_checkers();
     priorCapture       = pos.captured_piece();
     Color us           = pos.side_to_move();
@@ -917,7 +921,7 @@ namespace {
     posKey = excludedMove == MOVE_NONE ? pos.key() : pos.key() ^ make_key(excludedMove);
     tte = TT.probe(posKey, ss->ttHit);
     ttValue = ss->ttHit ? value_from_tt(tte->value(), ss->ply, pos.rule50_count()) : VALUE_NONE;
-    ttMove =  logicalPosition ? MOVE_NONE
+    ttMove =  logicalMovePosition ? MOVE_NONE
             : rootNode ? thisThread->rootMoves[thisThread->pvIdx].pv[0].first()
             : ss->ttHit    ? tte->move() : MOVE_NONE;
     if (!excludedMove)
@@ -1087,7 +1091,7 @@ namespace {
 
     // Step 7. Futility pruning: child node (~50 Elo)
     if (   !PvNode
-        && !logicalPosition
+        && moveCapabilities.futilityPruning
         &&  depth < 9 - 3 * pos.blast_on_capture()
         &&  eval - futility_margin(depth, improving) * (1 + pos.check_counting() + 2 * pos.must_capture() + pos.extinction_single_piece() + !pos.checking_permitted()) >= beta
         &&  eval < VALUE_KNOWN_WIN) // Do not return unproven wins
@@ -1095,7 +1099,7 @@ namespace {
 
     // Step 8. Null move search with verification search (~40 Elo)
     if (   !PvNode
-        && !logicalPosition
+        && moveCapabilities.nullMovePruning
         && (ss-1)->currentMove != MOVE_NULL
         && (ss-1)->statScore < 23767
         && !pos.multimove_pass(pos.game_ply())
@@ -1163,7 +1167,7 @@ namespace {
     // If we have a good enough capture and a reduced search returns a value
     // much above beta, we can (almost) safely prune the previous move.
     if (   !PvNode
-        && !logicalPosition
+        && moveCapabilities.probCut
         &&  depth > 4
         && !pos.see_pruning_unreliable()
         &&  abs(beta) < VALUE_TB_WIN_IN_MAX_PLY
@@ -1280,7 +1284,7 @@ moves_loop: // When in check, search starts from here
 
 #ifdef ENABLE_COMPOUND_TURNS
     std::optional<LogicalMoveSource> logicalSource;
-    if (logicalPosition && !rootNode)
+    if (logicalMovePosition && !rootNode)
         logicalSource.emplace(pos, thisThread, thisThread->logical_move_state(ss->ply));
 #endif
 
@@ -1293,7 +1297,7 @@ moves_loop: // When in check, search starts from here
       LogicalMove logicalMove;
       LogicalMoveInfo moveInfo;
 #ifdef ENABLE_COMPOUND_TURNS
-      if (logicalPosition)
+      if (logicalMovePosition)
       {
           if (rootNode)
           {
@@ -1338,10 +1342,10 @@ moves_loop: // When in check, search starts from here
           continue;
 
       // Check for legality
-      if (!logicalPosition && !rootNode && !pos.legal(move))
+      if (!logicalMovePosition && !rootNode && !pos.legal(move))
           continue;
 
-      if (!logicalPosition)
+      if (!logicalMovePosition)
       {
           moveInfo.movedPiece = pos.moved_piece(move);
           moveInfo.captureLike = pos.capture(move);
@@ -1356,7 +1360,7 @@ moves_loop: // When in check, search starts from here
           sync_cout << "info depth " << depth
                     << " currmove "
 #ifdef ENABLE_COMPOUND_TURNS
-                    << (logicalPosition ? compound_move_to_string(pos, logicalMove)
+                    << (logicalMovePosition ? compound_move_to_string(pos, logicalMove)
                                         : UCI::move(pos, move))
 #else
                     << UCI::move(pos, move)
@@ -1375,7 +1379,7 @@ moves_loop: // When in check, search starts from here
 
       // A forced-jump continuation pass is bookkeeping between two captures,
       // so it should not consume a search ply.
-      if (!logicalPosition && is_pass(move)
+      if (!logicalMovePosition && is_pass(move)
           && pos.forced_jump_continuation()
           && pos.has_forced_jump_followup())
       {
@@ -1531,7 +1535,7 @@ moves_loop: // When in check, search starts from here
       // Step 15. Make the move
 #ifdef ENABLE_COMPOUND_TURNS
       LogicalMoveState* transaction = nullptr;
-      if (logicalPosition)
+      if (logicalMovePosition)
       {
           transaction = &thisThread->logical_move_state(ss->ply);
           pos.do_move(logicalMove, st, *transaction);
@@ -1650,7 +1654,7 @@ moves_loop: // When in check, search starts from here
 
       // Step 18. Undo move
 #ifdef ENABLE_COMPOUND_TURNS
-      if (logicalPosition)
+      if (logicalMovePosition)
           pos.undo_move(logicalMove, *transaction);
       else
 #endif
@@ -1701,6 +1705,7 @@ moves_loop: // When in check, search starts from here
           if (value > alpha)
           {
               bestMove = move;
+              bestLogicalMove = logicalMove;
 
               if (PvNode && !rootNode) // Update pv even in fail-high case
                   update_pv(ss->pv, logicalMove, (ss+1)->pv);
@@ -1716,7 +1721,7 @@ moves_loop: // When in check, search starts from here
       }
 
       // If the move is worse than some previously searched move, remember it to update its stats later
-      if (move != bestMove)
+      if (logicalMove != bestLogicalMove)
       {
           if (captureOrPromotion && captureCount < 32)
               capturesSearched[captureCount++] = move;
@@ -1740,11 +1745,11 @@ moves_loop: // When in check, search starts from here
     // return a fail low score.
 
     assert(moveCount || !ss->inCheck || excludedMove
-           || logicalPosition || !MoveList<LEGAL>(pos).size());
+           || logicalMovePosition || !MoveList<LEGAL>(pos).size());
 
     if (!moveCount)
     {
-        if (!excludedMove && !logicalPosition && pos.has_legal_move())
+        if (!excludedMove && !logicalMovePosition && pos.has_legal_move())
         {
             assert(false && "MovePicker missed a legal move");
             return ss->inCheck ? value_draw(pos.this_thread()) : evaluate(pos);
@@ -1783,7 +1788,7 @@ moves_loop: // When in check, search starts from here
         tte->save(posKey, value_to_tt(bestValue, ss->ply), ss->ttPv,
                   bestValue >= beta ? BOUND_LOWER :
                   PvNode && bestMove ? BOUND_EXACT : BOUND_UPPER,
-                  depth, logicalPosition ? MOVE_NONE : bestMove, ss->staticEval);
+                  depth, logicalMovePosition ? MOVE_NONE : bestMove, ss->staticEval);
 
     assert(bestValue > -VALUE_INFINITE && bestValue < VALUE_INFINITE);
 
