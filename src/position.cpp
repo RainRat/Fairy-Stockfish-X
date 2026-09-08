@@ -11055,14 +11055,12 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
   {
       if (var->simulFlagExtinctionPriority == SimulFlagExtinctionPriority::EXTINCTION)
       {
-          result = bothExtinct && var->simulExtinctionValueByMover != VALUE_NONE
-                 ? value_by_mover(var->simulExtinctionValueByMover) : extinctionResult;
+          result = bothExtinct ? value_by_mover(var->simulExtinctionValueByMover) : extinctionResult;
           return true;
       }
       if (var->simulFlagExtinctionPriority == SimulFlagExtinctionPriority::FLAG)
       {
-          result = bothFlags && var->simulFlagValueByMover != VALUE_NONE
-                 ? value_by_mover(var->simulFlagValueByMover) : flagResult;
+          result = bothFlags ? value_by_mover(var->simulFlagValueByMover) : flagResult;
           return true;
       }
 
@@ -11074,15 +11072,13 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
 
   if (flagEnd)
   {
-      result = bothFlags && var->simulFlagValueByMover != VALUE_NONE
-             ? value_by_mover(var->simulFlagValueByMover) : flagResult;
+      result = bothFlags ? value_by_mover(var->simulFlagValueByMover) : flagResult;
       return true;
   }
 
   if (extinctionEnd)
   {
-      result = bothExtinct && var->simulExtinctionValueByMover != VALUE_NONE
-             ? value_by_mover(var->simulExtinctionValueByMover) : extinctionResult;
+      result = bothExtinct ? value_by_mover(var->simulExtinctionValueByMover) : extinctionResult;
       return true;
   }
 

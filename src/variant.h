@@ -447,8 +447,8 @@ struct Variant {
   bool passUntilSetup = false;
   int compoundTurnSteps = 0;
   SimulFlagExtinctionPriority simulFlagExtinctionPriority = SimulFlagExtinctionPriority::EXTINCTION;
-  Value simulFlagValueByMover = VALUE_NONE;
-  Value simulExtinctionValueByMover = VALUE_NONE;
+  Value simulFlagValueByMover = VALUE_MATE;
+  Value simulExtinctionValueByMover = -VALUE_MATE;
 
   enum PotionType : int {
       POTION_FREEZE,

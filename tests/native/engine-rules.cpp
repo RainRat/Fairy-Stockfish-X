@@ -1980,6 +1980,10 @@ void adjudication() {
 
     set_position(pos, states, "simul-flag-extinction-audit",
                  "7f/8/8/8/8/8/8/F7 w - - 0 1");
+    const Variant* defaultSimul = variants.get("simul-flag-extinction-audit");
+    check(defaultSimul->simulFlagValueByMover == VALUE_MATE
+              && defaultSimul->simulExtinctionValueByMover == -VALUE_MATE,
+          "simultaneous flag/extinction defaults changed");
     check(pos.is_immediate_game_end(result) && result == mate_in(0),
           "default flag/extinction priority did not preserve extinction-first ordering");
 

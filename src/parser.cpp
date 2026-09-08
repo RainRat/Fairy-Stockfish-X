@@ -1096,6 +1096,26 @@ template <bool Current, class T> bool VariantParser<DoCheck>::parse_attribute(co
 }
 
 template <bool DoCheck>
+bool VariantParser<DoCheck>::parse_simul_value_by_mover(const std::string& key, Value& target) {
+    auto it = config.find(key);
+    if (it == config.end())
+        return false;
+
+    static constexpr auto values = std::array{
+        std::pair{"win", VALUE_MATE},
+        std::pair{"loss", -VALUE_MATE},
+        std::pair{"draw", VALUE_DRAW},
+    };
+    const bool valid = parse_named_value(it->second, target, values);
+    if (DoCheck && !valid)
+        std::cerr << key << " - Invalid value " << it->second
+                  << " (expected win, loss, or draw)." << std::endl;
+    if (!valid)
+        parseHadError = true;
+    return valid;
+}
+
+template <bool DoCheck>
 template <typename T>
 void VariantParser<DoCheck>::apply_color_setting(ColorSetting<T>& target, Color color, const T& parsed) {
     if (color == WHITE)
@@ -1902,8 +1922,8 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("passUntilSetup", v->passUntilSetup);
     parse_attribute("turnSteps", v->compoundTurnSteps);
     parse_attribute("simulFlagExtinctionPriority", v->simulFlagExtinctionPriority);
-    parse_attribute("simulFlagValueByMover", v->simulFlagValueByMover);
-    parse_attribute("simulExtinctionValueByMover", v->simulExtinctionValueByMover);
+    parse_simul_value_by_mover("simulFlagValueByMover", v->simulFlagValueByMover);
+    parse_simul_value_by_mover("simulExtinctionValueByMover", v->simulExtinctionValueByMover);
     if (!parse_multimoves(v))
         return false;
     parse_attribute("progressiveMultimove", v->progressiveMultimove);
