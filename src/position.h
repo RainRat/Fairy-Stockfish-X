@@ -474,7 +474,7 @@ static_assert(std::is_standard_layout_v<NnueStateInfo>, "NnueStateInfo must rema
 /// separate from the persistent StateInfo chain.
 struct LogicalMoveState {
   alignas(Eval::NNUE::CacheLineSize)
-  std::array<StateInfo, LogicalMove::MAX_COMPONENTS + 1> components;
+  std::array<StateInfo, LogicalMove::MAX_COMPONENTS> components;
   StateInfo* previous = nullptr;
   int usedCost = 0;
   bool syntheticBoundary = false;
