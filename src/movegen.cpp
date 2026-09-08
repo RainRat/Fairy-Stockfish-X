@@ -952,7 +952,7 @@ namespace {
             {
                 Square enemyFrom = pop_lsb(enemySources);
                 PieceType enemyType = type_of(pos.piece_on(enemyFrom));
-                if (pos.variant()->freezeStrength[Pt] <= pos.variant()->freezeStrength[enemyType])
+                if (pos.variant()->pieceHierarchy[Pt] <= pos.variant()->pieceHierarchy[enemyType])
                     continue;
 
                 Bitboard enemyTargets = pos.attacks_from(Us, WAZIR, enemyFrom, Bitboard(0))
