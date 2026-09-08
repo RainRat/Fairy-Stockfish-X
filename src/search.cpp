@@ -1329,7 +1329,13 @@ moves_loop: // When in check, search starts from here
 
       if (rootNode && thisThread == Threads.main() && Time.elapsed() > 3000 && is_uci_dialect(CurrentProtocol) && int(Options["Verbosity"]) >= 1)
           sync_cout << "info depth " << depth
-                    << " currmove " << UCI::move(pos, move)
+                    << " currmove "
+#ifdef ENABLE_COMPOUND_TURNS
+                    << (logicalPosition ? compound_move_to_string(pos, logicalMove)
+                                        : UCI::move(pos, move))
+#else
+                    << UCI::move(pos, move)
+#endif
                     << " currmovenumber " << moveCount + thisThread->pvIdx << sync_endl;
       if (PvNode)
           (ss+1)->pv = nullptr;
