@@ -84,9 +84,10 @@ public:
 
 #ifdef ENABLE_COMPOUND_TURNS
   LogicalMoveState& logical_move_state(int ply) {
-      if (!logicalMoveStates)
-          logicalMoveStates = std::make_unique<LogicalMoveState[]>(MAX_PLY);
-      return logicalMoveStates[ply];
+      assert(0 <= ply && ply < MAX_PLY);
+      if (!logicalMoveStates[ply])
+          logicalMoveStates[ply] = std::make_unique<LogicalMoveState>();
+      return *logicalMoveStates[ply];
   }
 #endif
 
@@ -107,7 +108,7 @@ public:
 
 private:
 #ifdef ENABLE_COMPOUND_TURNS
-  std::unique_ptr<LogicalMoveState[]> logicalMoveStates;
+  std::array<std::unique_ptr<LogicalMoveState>, MAX_PLY> logicalMoveStates;
 #endif
   std::vector<std::unique_ptr<ExtMove[]>> bufferPool;
   std::vector<ExtMove*> availableBuffers;
