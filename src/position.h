@@ -1122,6 +1122,7 @@ public:
   bool is_immediate_game_end(Value& result, int ply = 0) const;
   bool has_legal_move() const;
   bool has_legal_move_ignoring_immediate_end() const;
+  bool has_legal_logical_move() const;
   bool is_optional_game_end() const;
   bool is_optional_game_end(Value& result, int ply = 0, int countStarted = 0) const;
   bool is_game_end(Value& result, int ply = 0) const;

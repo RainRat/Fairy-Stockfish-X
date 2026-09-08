@@ -1343,10 +1343,14 @@ void compound_turn_rules() {
           "generic compound turns inherited Arimaa repetition policy");
     check(variants.get("arimaa")->samePlayerBoardRepetitionIllegalAtN == 2,
           "Arimaa did not enable complete-turn repetition illegality");
+    check(variants.get("arimaa")->quiescencePolicy == QuiescencePolicy::STATIC_EVAL,
+          "Arimaa did not declare its static-eval qsearch policy");
     check(variants.get("generic-legacy-repetition-audit")->samePlayerBoardRepetitionIllegalAtN == 1,
           "legacy same-player repetition setting did not map to threshold one");
     check(pos.compound_turn_active(), "generic compound turn is not active");
     check(pos.compound_turn_steps() == 3, "generic compound turn steps != 3");
+    check(variants.get("generic-compound-turn-audit")->quiescencePolicy == QuiescencePolicy::STATIC_EVAL,
+          "compound variant did not select static-eval qsearch policy");
     check(pos.at_complete_turn_boundary(), "fresh position is not at complete turn boundary");
 
     set_position(pos, states, "generic-compound-repetition-audit",
@@ -1390,6 +1394,7 @@ void compound_turn_rules() {
     // Test compound moves generation
     std::vector<LogicalMove> generated = generate_compound_moves(pos);
     check(!generated.empty(), "generate_compound_moves returned empty list");
+    check(pos.has_legal_logical_move(), "logical legal-move query disagreed with compound generation");
     std::vector<LogicalMove> lazyGenerated;
     {
         LogicalMoveState sourceTransaction;
@@ -2884,6 +2889,7 @@ pushPullRule = two-step
 pushFirstColor = them
 stepwisePushing = true
 turnSteps = 3
+quiescencePolicy = static-eval
 pass = false
 
 [generic-compound-turn-two-audit:generic-compound-turn-audit]

@@ -30,6 +30,9 @@
 #include <cstdlib>
 
 #include "bitboard.h"
+#ifdef ENABLE_COMPOUND_TURNS
+#include "compound_turn.h"
+#endif
 #include "misc.h"
 #include "movegen.h"
 #include "position.h"
@@ -6476,6 +6479,14 @@ bool Position::has_legal_move() const {
       return false;
 
   return has_legal_move_ignoring_immediate_end();
+}
+
+bool Position::has_legal_logical_move() const {
+#ifdef ENABLE_COMPOUND_TURNS
+  if (compound_turn_active())
+      return has_any_compound_move(const_cast<Position&>(*this));
+#endif
+  return has_legal_move();
 }
 
 bool Position::has_legal_move_ignoring_immediate_end() const {

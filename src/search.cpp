@@ -1800,15 +1800,14 @@ moves_loop: // When in check, search starts from here
     constexpr bool PvNode = nodeType == PV;
 
 #ifdef ENABLE_COMPOUND_TURNS
-    // Quiescence has no component-level contract. A compound position is
-    // already at a complete logical boundary, so use its ordinary evaluator
-    // after checking whole-move terminal and stalemate conditions.
-    if (pos.compound_turn_active())
+    // Compound variants currently declare static evaluation because the
+    // tactical provider does not yet expose a bounded complete-turn move set.
+    if (pos.variant()->quiescencePolicy == QuiescencePolicy::STATIC_EVAL)
     {
         Value result;
         if (pos.is_game_end(result, ss->ply))
             return result;
-        if (!has_any_compound_move(pos))
+        if (!pos.has_legal_logical_move())
             return pos.stalemate_value(ss->ply);
         return Eval::evaluate(pos);
     }

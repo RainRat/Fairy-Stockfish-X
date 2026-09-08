@@ -549,6 +549,14 @@ namespace {
         return parse_named_value(value, target, values);
     }
 
+    template <> bool set(const std::string& value, QuiescencePolicy& target) {
+        static constexpr auto values = std::array{
+            std::pair{"standard", QuiescencePolicy::STANDARD},
+            std::pair{"static-eval", QuiescencePolicy::STATIC_EVAL},
+        };
+        return parse_named_value(value, target, values);
+    }
+
     template <> bool set(const std::string& value, TrapProtection& target) {
         static constexpr auto values = std::array{
             std::pair{"none", TrapProtection::NONE},
@@ -1010,6 +1018,7 @@ template <bool Current, class T> bool VariantParser<DoCheck>::parse_attribute(co
                                   : std::is_same_v<T, ColorChangeTrigger> ? "ColorChangeTrigger"
                                   : std::is_same_v<T, EnPassantPassedSquares> ? "EnPassantPassedSquares"
                                   : std::is_same_v<T, LibertyAction> ? "LibertyAction"
+                                  : std::is_same_v<T, QuiescencePolicy> ? "QuiescencePolicy"
                                   : std::is_same_v<T, WallingRule> ? "WallingRule"
                                   : std::is_same_v<T, std::vector<int>> ? "vector<int>"
                                   : typeid(T).name();
@@ -1921,6 +1930,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("doublePassEndsGame", v->doublePassEndsGame);
     parse_attribute("passUntilSetup", v->passUntilSetup);
     parse_attribute("turnSteps", v->compoundTurnSteps);
+    parse_attribute("quiescencePolicy", v->quiescencePolicy);
     parse_attribute("simulFlagExtinctionPriority", v->simulFlagExtinctionPriority);
     parse_simul_value_by_mover("simulFlagValueByMover", v->simulFlagValueByMover);
     parse_simul_value_by_mover("simulExtinctionValueByMover", v->simulExtinctionValueByMover);
@@ -2328,6 +2338,13 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
 
     if (v->compoundTurnSteps > 0)
     {
+        if (v->quiescencePolicy != QuiescencePolicy::STATIC_EVAL)
+        {
+            if (DoCheck)
+                std::cerr << "turnSteps - compound turns require quiescencePolicy=static-eval until complete-turn tactical qsearch is supported." << std::endl;
+            valid = false;
+        }
+
         // Compound turns expose one complete move to the outside world, so
         // rules that require a decision after every component are rejected
         // until they have an explicit component-level policy. Royal/check
