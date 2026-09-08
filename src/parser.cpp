@@ -1739,10 +1739,10 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("libertySelfCapture", v->libertySelfCapture);
     parse_attribute("freezePieceTypes", v->freezePieceTypes, v);
     parse_attribute("freezeImmunePieceTypes", v->freezeImmunePieceTypes, v);
-    auto it_freeze_strength = config.find("freezeStrength");
-    if (it_freeze_strength != config.end())
+    auto it_piece_hierarchy = config.find("pieceHierarchy");
+    if (it_piece_hierarchy != config.end())
     {
-        if (!parse_non_negative_piece_int_map<DoCheck>("freezeStrength", it_freeze_strength->second, v, v->freezeStrength))
+        if (!parse_non_negative_piece_int_map<DoCheck>("pieceHierarchy", it_piece_hierarchy->second, v, v->pieceHierarchy))
             return false;
     }
     parse_attribute("freezeProtection", v->freezeProtection);
@@ -2270,9 +2270,9 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     for (int strength : v->pushingStrength)
         v->hasPushing |= strength > 0;
 
-    v->hasFreezeStrength = false;
-    for (int strength : v->freezeStrength)
-        v->hasFreezeStrength |= strength > 0;
+    v->hasPieceHierarchy = false;
+    for (int strength : v->pieceHierarchy)
+        v->hasPieceHierarchy |= strength > 0;
 
     // Unknown options are diagnosed but ignored so newer configs remain usable.
     {

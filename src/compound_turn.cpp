@@ -88,11 +88,11 @@ bool generate_turns(Position& pos,
         {
             StateInfo boundaryState;
             pos.end_compound_turn(boundaryState);
-            repetitionIllegal = pos.compound_repetition_illegal();
+            repetitionIllegal = pos.same_player_board_repetition_illegal_at_turn_boundary();
             pos.undo_compound_turn();
         }
         else
-            repetitionIllegal = pos.compound_repetition_illegal();
+            repetitionIllegal = pos.same_player_board_repetition_illegal_at_turn_boundary();
 
         bool keepGenerating = true;
         if ((is_pass(move) || pos.board_layout_key() != startBoardKey)
@@ -272,11 +272,11 @@ bool parse_compound_move(Position& pos, const std::string& text, CompoundMove& t
   {
       StateInfo boundaryState;
       pos.end_compound_turn(boundaryState);
-      repetitionIllegal = pos.compound_repetition_illegal();
+      repetitionIllegal = pos.same_player_board_repetition_illegal_at_turn_boundary();
       pos.undo_compound_turn();
   }
   else
-      repetitionIllegal = pos.compound_repetition_illegal();
+      repetitionIllegal = pos.same_player_board_repetition_illegal_at_turn_boundary();
 
   for (int i = parsed.length - 1; i >= 0; --i)
       pos.undo_move(parsed.steps[i]);
@@ -430,11 +430,11 @@ bool search_compound_turn_candidates(Position& pos,
       {
           StateInfo boundaryState;
           pos.end_compound_turn(boundaryState);
-          repetitionIllegal = pos.compound_repetition_illegal();
+          repetitionIllegal = pos.same_player_board_repetition_illegal_at_turn_boundary();
           pos.undo_compound_turn();
       }
       else
-          repetitionIllegal = pos.compound_repetition_illegal();
+          repetitionIllegal = pos.same_player_board_repetition_illegal_at_turn_boundary();
 
       bool keepSearching = true;
       const bool rootTurn = rootSearchMoves != nullptr;

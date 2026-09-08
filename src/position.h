@@ -802,7 +802,7 @@ public:
   int compound_turn_step() const;
   int compound_turn_step_cost(Move m) const;
 #ifdef ENABLE_COMPOUND_TURNS
-  bool compound_repetition_illegal() const;
+  bool same_player_board_repetition_illegal_at_turn_boundary() const;
 #endif
   bool has_setup_drop(Color c) const;
   Color sequential_setup_side() const;

@@ -1408,7 +1408,7 @@ bool Position::violates_same_player_board_repetition(Move m) const {
       return false;
 
 #ifdef ENABLE_COMPOUND_TURNS
-  // Compound repetition is checked after the complete turn has been
+  // Same-player board repetition is checked after the complete turn has been
   // materialized. Intermediate component states are not game positions for
   // this rule and must not be compared by the ordinary move legality path.
   if (compound_turn_active())
@@ -1441,7 +1441,7 @@ bool Position::violates_same_player_board_repetition(Move m) const {
 
 #ifdef ENABLE_COMPOUND_TURNS
 
-bool Position::compound_repetition_illegal() const {
+bool Position::same_player_board_repetition_illegal_at_turn_boundary() const {
 
   if (var->samePlayerBoardRepetitionIllegalAtN <= 0
       || !compound_turn_active() || st->compoundTurnStep != 0
@@ -4497,7 +4497,7 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
       || var->blastPassiveTypes
       || var->captureMorph
       || var->hasMoveMorph
-      || var->hasFreezeStrength
+      || var->hasPieceHierarchy
       || var->stackingPieceTypes
       || var->stackedPieceTypes
       || commit_gates()
@@ -5420,7 +5420,7 @@ bool Position::encoded_push_legal(Move m) const {
 
   PieceType pusherType = type_of(pusher);
   PieceType pushedType = type_of(pushed);
-  if (var->freezeStrength[pusherType] <= var->freezeStrength[pushedType])
+  if (var->pieceHierarchy[pusherType] <= var->pieceHierarchy[pushedType])
       return false;
 
   // The pusher's configured movement determines which adjacent push
@@ -7372,9 +7372,9 @@ Bitboard Position::freeze_squares_from_freezers(Color c, const SimulatedMoveInfo
 
     // A configured strength table makes freezing strength-sensitive: an
     // adjacent enemy freezes a weaker piece, but not an equal or stronger
-    // one. Keep the long-standing adjacency-only behavior as the fast path
+    // one. Keep the existing adjacency-only behavior as the fast path
     // when no strength table is configured.
-    if (var->hasFreezeStrength)
+    if (var->hasPieceHierarchy)
     {
         SimulatedMoveInfo simulatedMoveInfo;
         const SimulatedMoveInfo* view = simulated;
@@ -7410,7 +7410,7 @@ Bitboard Position::freeze_squares_from_freezers(Color c, const SimulatedMoveInfo
             for (PieceSet freezerSet = var->freezePieceTypes; freezerSet; )
             {
                 PieceType freezerType = pop_lsb(freezerSet);
-                if (var->freezeStrength[freezerType] <= var->freezeStrength[targetType])
+                if (var->pieceHierarchy[freezerType] <= var->pieceHierarchy[targetType])
                     continue;
                 Bitboard freezers = type_pieces(~c, freezerType);
                 while (freezers)

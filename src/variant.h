@@ -223,8 +223,8 @@ struct Variant {
   LibertyAction libertySelfCapture = LibertyAction::NONE;
   PieceSet freezePieceTypes = NO_PIECE_SET;
   PieceSet freezeImmunePieceTypes = NO_PIECE_SET;
-  int freezeStrength[PIECE_TYPE_NB] = {};
-  bool hasFreezeStrength = false;
+  int pieceHierarchy[PIECE_TYPE_NB] = {};
+  bool hasPieceHierarchy = false;
   FreezeProtection freezeProtection = FreezeProtection::NONE;
   bool freezeDiagonals = true;
   TrapProtection trapProtection = TrapProtection::NONE;

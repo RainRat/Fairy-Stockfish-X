@@ -2736,7 +2736,7 @@ customPiece1 = x:W
 customPiece2 = r:fsW
 flagPieceTypes = r
 extinctionPieceTypes = r
-freezeStrength = r:2 x:1 d:3 h:4 m:5 e:6
+pieceHierarchy = r:2 x:1 d:3 h:4 m:5 e:6
 pushingStrength = r:2 x:1 d:3 h:4 m:5 e:6
 pullingStrength = r:2 x:1 d:3 h:4 m:5 e:6
 
@@ -2783,7 +2783,7 @@ checking = false
 captureForbidden = *:*
 doubleStep = false
 promotionPieceTypes = -
-freezeStrength = r:1 c:2 d:3 h:4 m:5 e:6
+pieceHierarchy = r:1 c:2 d:3 h:4 m:5 e:6
 pushingStrength = r:1 c:2 d:3 h:4 m:5 e:6
 pullingStrength = r:1 c:2 d:3 h:4 m:5 e:6
 pushPullRule = two-step
