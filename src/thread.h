@@ -82,12 +82,6 @@ public:
   ContinuationHistory continuationHistory[2][2];
   Score trend;
 
-#ifdef ENABLE_COMPOUND_TURNS
-  CompoundMove compoundBestTurn;
-  Value compoundBestScore = -VALUE_INFINITE;
-  Depth compoundCompletedDepth = 0;
-#endif
-
   ExtMove* acquire_buffer() {
     if (availableBuffers.empty()) {
       bufferPool.push_back(std::make_unique<ExtMove[]>(MOVEGEN_OVERFLOW_CAPACITY));

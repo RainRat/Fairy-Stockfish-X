@@ -210,7 +210,7 @@ namespace XBoard {
     moveList.clear();
 #ifdef ENABLE_COMPOUND_TURNS
     compoundMoveList.clear();
-    compoundStateCounts.clear();
+    compoundTransactions.clear();
 #endif
     pos.set(variants.get(Options["UCI_Variant"]), fen, Options["UCI_Chess960"], &states->back(), Threads.main());
   }
@@ -225,46 +225,46 @@ namespace XBoard {
 
     if (m == MOVE_NONE)
         return;
+
+#ifdef ENABLE_COMPOUND_TURNS
+    if (pos.compound_turn_active())
+    {
+        LogicalMove logical(m);
+        states->emplace_back();
+        compoundTransactions.emplace_back();
+        pos.do_move(logical, states->back(), compoundTransactions.back());
+        moveList.push_back(m);
+        compoundMoveList.push_back(logical);
+        return;
+    }
+#endif
+
     moveList.push_back(m);
     states->emplace_back();
     pos.do_move(m, states->back());
 #ifdef ENABLE_COMPOUND_TURNS
     compoundMoveList.emplace_back();
-    compoundStateCounts.push_back(1);
+    compoundTransactions.emplace_back();
 #endif
   }
 
 #ifdef ENABLE_COMPOUND_TURNS
   // Apply one complete compound turn while keeping it as one XBoard history
   // entry. Intermediate states remain internal to this operation.
-  void StateMachine::do_compound_move(const CompoundMove& turn) {
+  void StateMachine::do_compound_move(const LogicalMove& turn) {
 
     if (Threads.setupStates.get())
         states = std::move(Threads.setupStates);
 
     assert(pos.compound_turn_active());
-    assert(turn.length > 0 && turn.length <= CompoundMove::MAX_STEPS);
+    assert(turn.length > 0 && turn.length <= LogicalMove::MAX_COMPONENTS);
 
-    const int turnSteps = pos.compound_turn_steps();
-    int turnCost = 0;
-    for (int i = 0; i < turn.length; ++i)
-    {
-        turnCost += pos.compound_turn_step_cost(turn.steps[i]);
-        states->emplace_back();
-        pos.do_move(turn.steps[i], states->back());
-    }
+    states->emplace_back();
+    compoundTransactions.emplace_back();
+    pos.do_move(turn, states->back(), compoundTransactions.back());
 
-    uint8_t stateCount = turn.length;
-    if (!is_pass(turn.steps[turn.length - 1]) && turnCost < turnSteps)
-    {
-        states->emplace_back();
-        pos.end_compound_turn(states->back());
-        ++stateCount;
-    }
-
-    moveList.push_back(turn.steps[0]);
+    moveList.push_back(turn.components[0]);
     compoundMoveList.push_back(turn);
-    compoundStateCounts.push_back(stateCount);
   }
 #endif
 
@@ -277,15 +277,11 @@ namespace XBoard {
         states = std::move(Threads.setupStates);
 
 #ifdef ENABLE_COMPOUND_TURNS
-    const CompoundMove& turn = compoundMoveList.back();
+    const LogicalMove& turn = compoundMoveList.back();
     if (turn.length)
     {
-        if (compoundStateCounts.back() > turn.length)
-            pos.undo_compound_turn();
-        for (int i = turn.length - 1; i >= 0; --i)
-            pos.undo_move(turn.steps[i]);
-        for (uint8_t i = 0; i < compoundStateCounts.back(); ++i)
-            states->pop_back();
+        pos.undo_move(turn, compoundTransactions.back());
+        states->pop_back();
     }
     else
     {
@@ -293,7 +289,7 @@ namespace XBoard {
         states->pop_back();
     }
     compoundMoveList.pop_back();
-    compoundStateCounts.pop_back();
+    compoundTransactions.pop_back();
 #else
     pos.undo_move(moveList.back());
     states->pop_back();
@@ -703,7 +699,7 @@ void StateMachine::process_command(std::string token, std::istringstream& is) {
 #ifdef ENABLE_COMPOUND_TURNS
       if (pos.compound_turn_active())
       {
-          CompoundMove turn;
+          LogicalMove turn;
           if (parse_compound_move(pos, token, turn))
           {
               do_compound_move(turn);

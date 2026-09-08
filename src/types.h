@@ -41,6 +41,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <algorithm>
+#include <array>
 #include <utility>
 
 #if defined(_MSC_VER)
@@ -589,6 +590,36 @@ enum MoveModality {MODALITY_QUIET, MODALITY_CAPTURE, MOVE_MODALITY_NB};
 constexpr int MOVE_TYPE_BITS = 4;
 static_assert((LASER_FIRE >> (2 * SQUARE_BITS)) < (1 << MOVE_TYPE_BITS),
               "MoveType exceeds its encoded field");
+
+/// A logical engine move may contain several internal components. Ordinary
+/// moves use one slot; compound-turn code fills the remaining slots.
+struct LogicalMove {
+  static constexpr int MAX_COMPONENTS = 4;
+
+  std::array<Move, MAX_COMPONENTS> components{};
+  uint8_t length = 0;
+
+  LogicalMove() = default;
+  LogicalMove(Move move) : components{move}, length(1) {}
+
+  bool empty() const { return length == 0; }
+  Move first() const { return length ? components[0] : MOVE_NONE; }
+
+  bool operator==(const LogicalMove& other) const {
+      return length == other.length
+          && std::equal(components.begin(), components.begin() + length, other.components.begin());
+  }
+
+  bool operator!=(const LogicalMove& other) const { return !(*this == other); }
+  bool operator==(Move move) const { return length == 1 && components[0] == move; }
+  bool operator!=(Move move) const { return !(*this == move); }
+  bool operator<(const LogicalMove& other) const {
+      if (length != other.length)
+          return length < other.length;
+      return std::lexicographical_compare(components.begin(), components.begin() + length,
+                                           other.components.begin(), other.components.begin() + other.length);
+  }
+};
 
 enum Color {
   WHITE, BLACK, COLOR_NB = 2

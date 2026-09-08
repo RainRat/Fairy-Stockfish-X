@@ -1568,7 +1568,7 @@ bool Tablebases::root_probe(Position& pos, Search::RootMoves& rootMoves) {
     for (auto& m : rootMoves)
     {
         ProbeState result = OK;
-        pos.do_move(m.pv[0], st);
+        pos.do_move(m.pv[0].first(), st);
 
         // Calculate dtz for the current move counting from the root position
         if (pos.rule50_count() == 0)
@@ -1599,7 +1599,7 @@ bool Tablebases::root_probe(Position& pos, Search::RootMoves& rootMoves) {
             && MoveList<LEGAL>(pos).size() == 0)
             dtz = 1;
 
-        pos.undo_move(m.pv[0]);
+        pos.undo_move(m.pv[0].first());
 
         if (result == FAIL)
             return false;
@@ -1642,14 +1642,14 @@ bool Tablebases::root_probe_wdl(Position& pos, Search::RootMoves& rootMoves) {
     for (auto& m : rootMoves)
     {
         ProbeState result = OK;
-        pos.do_move(m.pv[0], st);
+        pos.do_move(m.pv[0].first(), st);
 
         if (pos.is_draw(1))
             wdl = WDLDraw;
         else
             wdl = -probe_wdl(pos, &result);
 
-        pos.undo_move(m.pv[0]);
+        pos.undo_move(m.pv[0].first());
 
         if (result == FAIL)
             return false;

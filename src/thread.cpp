@@ -93,12 +93,6 @@ void Thread::clear() {
   lowPlyHistory.fill(0);
   captureHistory.fill(0);
 
-#ifdef ENABLE_COMPOUND_TURNS
-  compoundBestTurn = CompoundMove{};
-  compoundBestScore = -VALUE_INFINITE;
-  compoundCompletedDepth = 0;
-#endif
-
   for (bool inCheck : { false, true })
       for (StatsType c : { NoCaptures, Captures })
       {
@@ -225,14 +219,28 @@ void ThreadPool::start_thinking(Position& pos, StateListPtr& states,
 
   const bool filterLaserRotations = limits.perft == 0;
   pos.set_search_laser_rotation_filter(filterLaserRotations);
+#ifdef ENABLE_COMPOUND_TURNS
+  if (pos.compound_turn_active())
+  {
+      for (const LogicalMove& m : generate_compound_moves(pos))
+          if (   (!limits.searchMovesSpecified
+                  || std::count(limits.searchmoves.begin(), limits.searchmoves.end(), m))
+              && (limits.banmoves.empty()
+                  || !std::count(limits.banmoves.begin(), limits.banmoves.end(), m)))
+              rootMoves.emplace_back(m);
+  }
+  else
+#endif
   for (const auto& m : MoveList<LEGAL>(pos))
-      if (   (limits.searchmoves.empty() || std::count(limits.searchmoves.begin(), limits.searchmoves.end(), m))
+      if (   (!limits.searchMovesSpecified || std::count(limits.searchmoves.begin(), limits.searchmoves.end(), m))
           && (limits.banmoves.empty() || !std::count(limits.banmoves.begin(), limits.banmoves.end(), m)))
           rootMoves.emplace_back(m);
   pos.set_search_laser_rotation_filter(false);
 
   // Add virtual drops
-  if (pos.two_boards() && pos.virtual_drops() && Partner.opptime && limits.time[pos.side_to_move()] > Partner.opptime + 1000)
+  if (!pos.compound_turn_active()
+      && pos.two_boards() && pos.virtual_drops() && Partner.opptime
+      && limits.time[pos.side_to_move()] > Partner.opptime + 1000)
   {
       if (pos.evasion_checkers())
       {
@@ -318,7 +326,7 @@ Thread* ThreadPool::get_best_thread() const {
     if (bestThread->rootMoves.empty())
         return bestThread;
 
-    std::map<Move, int64_t> votes;
+    std::map<LogicalMove, int64_t> votes;
     Value minScore = VALUE_NONE; // Seed with maximum value (VALUE_NONE is larger than any valid score)
     auto incomplete_iteration = [](const Thread* th) {
         return th->completedDepth != th->rootDepth;

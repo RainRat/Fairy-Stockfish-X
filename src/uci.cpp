@@ -95,19 +95,12 @@ namespace {
 #ifdef ENABLE_COMPOUND_TURNS
         if (pos.compound_turn_active())
         {
-            CompoundMove turn;
+            LogicalMove turn;
             if (!parse_compound_move(pos, token, turn))
                 break;
-            for (int i = 0; i < turn.length; ++i)
-            {
-                states->emplace_back();
-                pos.do_move(turn.steps[i], states->back());
-            }
-            if (pos.compound_turn_step() > 0)
-            {
-                states->emplace_back();
-                pos.end_compound_turn(states->back());
-            }
+            states->emplace_back();
+            LogicalMoveState transaction;
+            pos.do_move(turn, states->back(), transaction);
             continue;
         }
 #endif
@@ -177,10 +170,7 @@ namespace {
   // the search.
 
   void go(Position& pos, istringstream& is, StateListPtr& states,
-           const std::vector<Move>& banmoves = {}
-#ifdef ENABLE_COMPOUND_TURNS
-           , const std::vector<std::string>& compoundBanMoves = {}
-#endif
+           const std::vector<LogicalMove>& banmoves = {}
            ) {
 
     Search::LimitsType limits;
@@ -190,26 +180,27 @@ namespace {
     limits.startTime = now(); // As early as possible!
 
     limits.banmoves = banmoves;
-#ifdef ENABLE_COMPOUND_TURNS
-    limits.compoundBanMoves = compoundBanMoves;
-#endif
     bool isUsi = CurrentProtocol == USI;
     int secResolution = Options["usemillisec"] ? 1 : 1000;
 
     while (is >> token)
         if (token == "searchmoves") // Needs to be the last command on the line
         {
+            limits.searchMovesSpecified = true;
 #ifdef ENABLE_COMPOUND_TURNS
             if (pos.compound_turn_active())
-                limits.compoundSearchMovesSpecified = true;
+            {
+                while (is >> token)
+                {
+                    LogicalMove move;
+                    if (parse_compound_move(pos, token, move))
+                        limits.searchmoves.push_back(move);
+                }
+                continue;
+            }
 #endif
             while (is >> token)
-#ifdef ENABLE_COMPOUND_TURNS
-                if (pos.compound_turn_active())
-                    limits.compoundSearchMoves.push_back(token);
-                else
-#endif
-                    limits.searchmoves.push_back(UCI::to_move(pos, token));
+                limits.searchmoves.emplace_back(UCI::to_move(pos, token));
         }
 
         else if (token == "wtime")     is >> limits.time[isUsi ? BLACK : WHITE];
@@ -471,10 +462,7 @@ void UCI::loop(int argc, char* argv[]) {
   // XBoard state machine
   XBoard::stateMachine = new XBoard::StateMachine(pos, states);
   // UCCI banmoves state
-  std::vector<Move> banmoves = {};
-#ifdef ENABLE_COMPOUND_TURNS
-  std::vector<std::string> compoundBanMoves = {};
-#endif
+  std::vector<LogicalMove> banmoves = {};
 
   if (argc > 1 && (std::strcmp(argv[1], "noautoload") == 0))
   {
@@ -545,23 +533,20 @@ void UCI::loop(int argc, char* argv[]) {
           while (is >> token)
 #ifdef ENABLE_COMPOUND_TURNS
               if (pos.compound_turn_active())
-                  compoundBanMoves.push_back(token);
+              {
+                  LogicalMove move;
+                  if (parse_compound_move(pos, token, move))
+                      banmoves.push_back(move);
+              }
               else
 #endif
-                  banmoves.push_back(UCI::to_move(pos, token));
+                  banmoves.emplace_back(UCI::to_move(pos, token));
       else if (token == "go")
-#ifdef ENABLE_COMPOUND_TURNS
-          go(pos, is, states, banmoves, compoundBanMoves);
-#else
           go(pos, is, states, banmoves);
-#endif
       else if (token == "position")
       {
           position(pos, is, states);
           banmoves.clear();
-#ifdef ENABLE_COMPOUND_TURNS
-          compoundBanMoves.clear();
-#endif
       }
       else if (token == "ucinewgame" || token == "usinewgame" || token == "uccinewgame") Search::clear();
       else if (token == "isready")    sync_cout << "readyok" << sync_endl;
