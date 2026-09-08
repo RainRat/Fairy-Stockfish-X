@@ -1303,7 +1303,7 @@ moves_loop: // When in check, search starts from here
       {
           if ((move = mp.next_move(moveCountPruning)) == MOVE_NONE)
               break;
-          logicalMove = LogicalMove(move);
+          logicalMove.set(move);
       }
       singleMove = logicalMove.is_single();
       allMovesSingle = allMovesSingle && singleMove;

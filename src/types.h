@@ -606,10 +606,19 @@ struct LogicalMove {
   LogicalMove() = default;
   LogicalMove(Move move)
 #ifdef ENABLE_COMPOUND_TURNS
-      : components{move}, length(1) {}
+      : length(1) { components[0] = move; }
 #else
       : move(move) {}
 #endif
+
+  void set(Move move) {
+#ifdef ENABLE_COMPOUND_TURNS
+      components[0] = move;
+      length = 1;
+#else
+      this->move = move;
+#endif
+  }
 
   bool empty() const {
 #ifdef ENABLE_COMPOUND_TURNS
