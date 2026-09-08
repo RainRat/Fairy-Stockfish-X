@@ -82,6 +82,14 @@ public:
   ContinuationHistory continuationHistory[2][2];
   Score trend;
 
+#ifdef ENABLE_COMPOUND_TURNS
+  LogicalMoveState& logical_move_state(int ply) {
+      if (!logicalMoveStates)
+          logicalMoveStates = std::make_unique<LogicalMoveState[]>(MAX_PLY);
+      return logicalMoveStates[ply];
+  }
+#endif
+
   ExtMove* acquire_buffer() {
     if (availableBuffers.empty()) {
       bufferPool.push_back(std::make_unique<ExtMove[]>(MOVEGEN_OVERFLOW_CAPACITY));
@@ -98,6 +106,9 @@ public:
   }
 
 private:
+#ifdef ENABLE_COMPOUND_TURNS
+  std::unique_ptr<LogicalMoveState[]> logicalMoveStates;
+#endif
   std::vector<std::unique_ptr<ExtMove[]>> bufferPool;
   std::vector<ExtMove*> availableBuffers;
 };

@@ -11,6 +11,7 @@
 
 #include "movegen.h"
 #include "position.h"
+#include "thread.h"
 #include "uci.h"
 
 namespace Stockfish {
@@ -88,6 +89,139 @@ bool generate_turns(Position& pos,
 }
 
 } // namespace
+
+LogicalMoveSource::LogicalMoveSource(Position& pos_, Thread* thread_,
+                                     LogicalMoveState& transaction_)
+    : pos(pos_), thread(thread_), transaction(transaction_) {
+
+  if (!pos.compound_turn_active())
+  {
+      finished = true;
+      return;
+  }
+
+  Value result;
+  if (pos.is_game_end(result))
+  {
+      finished = true;
+      return;
+  }
+
+  if (thread)
+      for (auto& buffer : buffers)
+          buffer = thread->acquire_buffer();
+  else
+  {
+      ownedBuffers = std::make_unique<ExtMove[]>(LogicalMove::MAX_COMPONENTS
+                                                  * MOVEGEN_OVERFLOW_CAPACITY);
+      for (int i = 0; i < LogicalMove::MAX_COMPONENTS; ++i)
+          buffers[i] = ownedBuffers.get() + i * MOVEGEN_OVERFLOW_CAPACITY;
+  }
+}
+
+LogicalMoveSource::~LogicalMoveSource() {
+  if (thread)
+      for (auto buffer : buffers)
+          thread->release_buffer(buffer);
+}
+
+void LogicalMoveSource::initialize_frame(int frameDepth) {
+  Frame& frame = frames[frameDepth];
+  frame.current = buffers[frameDepth];
+  frame.end = generate<LEGAL>(pos, frame.current);
+  assert(frame.end - frame.current <= MOVEGEN_OVERFLOW_CAPACITY);
+}
+
+void LogicalMoveSource::apply_path(int length) {
+  for (int i = 0; i < length; ++i)
+      pos.do_component(turn.components[i], transaction.components[i], false);
+}
+
+void LogicalMoveSource::undo_path(int length) {
+  for (int i = length - 1; i >= 0; --i)
+      pos.undo_component(turn.components[i]);
+}
+
+bool LogicalMoveSource::next(LogicalMove& move) {
+
+  if (finished)
+      return false;
+
+  if (!initialized)
+  {
+      startBoardKey = pos.board_layout_key();
+      initialize_frame(0);
+      initialized = true;
+  }
+
+  for (;;)
+  {
+      if (descend)
+      {
+          ++depth;
+          apply_path(depth);
+          initialize_frame(depth);
+          undo_path(depth);
+          descend = false;
+      }
+
+      Frame& frame = frames[depth];
+      if (frame.current == frame.end)
+      {
+          if (depth == 0)
+          {
+              finished = true;
+              return false;
+          }
+          --depth;
+          continue;
+      }
+
+      const Move component = *frame.current++;
+      if (depth != 0 && is_pass(component))
+          continue;
+
+      const int usedSteps = [&] {
+          int result = 0;
+          for (int i = 0; i < depth; ++i)
+              result += compound_move_cost(pos, turn.components[i]);
+          return result;
+      }();
+      const int moveCost = compound_move_cost(pos, component);
+      if (usedSteps + moveCost > pos.compound_turn_steps())
+          continue;
+
+      turn.components[depth] = component;
+      turn.length = uint8_t(depth + 1);
+      apply_path(depth + 1);
+
+      bool repetitionIllegal = false;
+      if (!is_pass(component) && usedSteps + moveCost < pos.compound_turn_steps())
+      {
+          StateInfo boundaryState;
+          pos.end_compound_turn(boundaryState);
+          repetitionIllegal = pos.same_player_board_repetition_illegal_at_turn_boundary();
+          pos.undo_compound_turn();
+      }
+      else
+          repetitionIllegal = pos.same_player_board_repetition_illegal_at_turn_boundary();
+
+      const bool accepted = (is_pass(component) || pos.board_layout_key() != startBoardKey)
+                         && !repetitionIllegal;
+      const bool canDescend = !is_pass(component)
+                           && usedSteps + moveCost < pos.compound_turn_steps()
+                           && pos.compound_turn_active();
+
+      undo_path(depth + 1);
+      descend = canDescend;
+
+      if (accepted)
+      {
+          move = turn;
+          return true;
+      }
+  }
+}
 
 std::vector<LogicalMove> generate_compound_moves(Position& pos) {
 
@@ -253,6 +387,30 @@ std::string compound_move_to_string(Position& pos, const LogicalMove& turn) {
 
   for (int i = turn.length - 1; i >= 0; --i)
       pos.undo_component(turn.components[i]);
+
+  return result;
+}
+
+std::vector<std::string> compound_pv_to_strings(const Position& pos,
+                                                const std::vector<LogicalMove>& pv) {
+
+  std::vector<std::string> result;
+  result.reserve(pv.size());
+
+  Position replay;
+  StateListPtr states(new std::deque<StateInfo>(1));
+  replay.set(pos.variant(), pos.fen(), pos.is_chess960(), &states->back(), pos.this_thread());
+
+  LogicalMoveState transaction;
+  for (const LogicalMove& move : pv)
+  {
+      if (move.empty())
+          break;
+
+      result.push_back(compound_move_to_string(replay, move));
+      states->emplace_back();
+      replay.do_move(move, states->back(), transaction, false);
+  }
 
   return result;
 }
