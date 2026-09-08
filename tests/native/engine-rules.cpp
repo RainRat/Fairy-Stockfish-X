@@ -1395,8 +1395,15 @@ void compound_turn_rules() {
         LogicalMoveState sourceTransaction;
         LogicalMoveSource source(pos, nullptr, sourceTransaction);
         LogicalMove candidate;
-        while (source.next(candidate))
+        LogicalMoveInfo info;
+        while (source.next(candidate, info))
+        {
+            check(info.representative == candidate.first(),
+                  "lazy logical move info lost the representative move");
+            check(info.historyCompatible == candidate.is_single(),
+                  "lazy logical move info misclassified physical history compatibility");
             lazyGenerated.push_back(candidate);
+        }
     }
     check(lazyGenerated == generated,
           "lazy logical move source disagreed with materialized compound generation");

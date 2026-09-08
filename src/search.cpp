@@ -1280,23 +1280,39 @@ moves_loop: // When in check, search starts from here
 
 #ifdef ENABLE_COMPOUND_TURNS
     std::optional<LogicalMoveSource> logicalSource;
-    if (logicalPosition)
+    if (logicalPosition && !rootNode)
         logicalSource.emplace(pos, thisThread, thisThread->logical_move_state(ss->ply));
 #endif
 
     // Step 12. Loop through all pseudo-legal moves until no moves remain
     // or a beta cutoff occurs.
-    bool allMovesSingle = true;
+    bool allMovesHistoryCompatible = true;
+    size_t rootMoveIndex = thisThread->pvIdx;
     while (true)
     {
       LogicalMove logicalMove;
-      bool singleMove;
+      LogicalMoveInfo moveInfo;
 #ifdef ENABLE_COMPOUND_TURNS
       if (logicalPosition)
       {
-          if (!logicalSource->next(logicalMove))
+          if (rootNode)
+          {
+              if (rootMoveIndex >= thisThread->pvLast)
+                  break;
+              logicalMove = thisThread->rootMoves[rootMoveIndex++].pv[0];
+              move = logicalMove.first();
+              moveInfo.representative = move;
+              moveInfo.movedPiece = pos.moved_piece(move);
+              moveInfo.captureLike = pos.capture(move);
+              moveInfo.promotionLike = is_promotion_move(move);
+              moveInfo.historyCompatible = logicalMove.is_single();
+              moveInfo.seeReliable = moveInfo.historyCompatible;
+              moveInfo.givesCheck = moveInfo.historyCompatible && pos.gives_check(move);
+          }
+          else if (!logicalSource->next(logicalMove, moveInfo))
               break;
-          move = logicalMove.first();
+          else
+              move = moveInfo.representative;
       }
       else
 #endif
@@ -1304,9 +1320,10 @@ moves_loop: // When in check, search starts from here
           if ((move = mp.next_move(moveCountPruning)) == MOVE_NONE)
               break;
           logicalMove.set(move);
+          moveInfo.representative = move;
+          moveInfo.historyCompatible = true;
       }
-      singleMove = logicalMove.is_single();
-      allMovesSingle = allMovesSingle && singleMove;
+      allMovesHistoryCompatible = allMovesHistoryCompatible && moveInfo.historyCompatible;
       assert(is_ok(move));
 
       if (move == excludedMove)
@@ -1324,6 +1341,15 @@ moves_loop: // When in check, search starts from here
       if (!logicalPosition && !rootNode && !pos.legal(move))
           continue;
 
+      if (!logicalPosition)
+      {
+          moveInfo.movedPiece = pos.moved_piece(move);
+          moveInfo.captureLike = pos.capture(move);
+          moveInfo.promotionLike = is_promotion_move(move);
+          moveInfo.givesCheck = pos.gives_check(move);
+          moveInfo.seeReliable = true;
+      }
+
       ss->moveCount = ++moveCount;
 
       if (rootNode && thisThread == Threads.main() && Time.elapsed() > 3000 && is_uci_dialect(CurrentProtocol) && int(Options["Verbosity"]) >= 1)
@@ -1340,9 +1366,9 @@ moves_loop: // When in check, search starts from here
           (ss+1)->pv = nullptr;
 
       extension = 0;
-      captureOrPromotion = singleMove && pos.capture_or_promotion(move);
-      movedPiece = pos.moved_piece(move);
-      givesCheck = singleMove && pos.gives_check(move);
+      captureOrPromotion = moveInfo.captureLike || moveInfo.promotionLike;
+      movedPiece = moveInfo.movedPiece;
+      givesCheck = moveInfo.givesCheck;
 
       // Calculate new depth for this move
       newDepth = depth - 1;
@@ -1360,7 +1386,7 @@ moves_loop: // When in check, search starts from here
       }
 
       // Step 13. Pruning at shallow depth (~200 Elo)
-      if (  singleMove
+      if (  moveInfo.historyCompatible
           && !rootNode
           && (pos.non_pawn_material(us) || pos.count<ALL_PIECES>(us) == pos.count<PAWN>(us))
           && bestValue > VALUE_TB_LOSS_IN_MAX_PLY)
@@ -1385,7 +1411,8 @@ moves_loop: // When in check, search starts from here
                   continue;
 
               // SEE based pruning
-              if (!pos.see_pruning_unreliable(move)
+              if (moveInfo.seeReliable
+                  && !pos.see_pruning_unreliable(move)
                   && !pos.see_ge(move, Value(-218 - 120 * pos.captures_to_hand()) * depth)) // (~25 Elo)
                   continue;
           }
@@ -1410,6 +1437,7 @@ moves_loop: // When in check, search starts from here
 
               // Prune moves with negative SEE (~20 Elo)
               if (!(pos.walling_rule() == DUCK)
+                  && moveInfo.seeReliable
                   && !pos.see_pruning_unreliable(move)
                   && !pos.see_ge(move, Value(-(30 - std::min(lmrDepth, 18) + 10 * !!pos.flag_region(pos.side_to_move())) * lmrDepth * lmrDepth)))
                   continue;
@@ -1423,7 +1451,7 @@ moves_loop: // When in check, search starts from here
       // then that move is singular and should be extended. To verify this we do
       // a reduced search on all the other moves but the ttMove and if the
       // result is lower than ttValue minus a margin, then we will extend the ttMove.
-      if (   singleMove
+      if (   moveInfo.historyCompatible
           && !rootNode
           &&  depth >= 7 - 2 * (pos.count<KING>() == 1)
           &&  move == ttMove
@@ -1482,7 +1510,7 @@ moves_loop: // When in check, search starts from here
 
       // Losing chess capture extension
       else if (   pos.must_capture()
-               && singleMove
+               && moveInfo.historyCompatible
                && pos.capture(move)
                && (ss->inCheck || MoveList<CAPTURES>(pos).size() == 1))
           extension = 1;
@@ -1517,7 +1545,7 @@ moves_loop: // When in check, search starts from here
       // been searched. In general we would like to reduce them, but there are many
       // cases where we extend a son if it has good chances to be "interesting".
       if (    depth >= 3
-          && singleMove
+          && moveInfo.historyCompatible
           &&  moveCount > 1 + 2 * rootNode
           && !(pos.must_capture() && pos.has_capture())
           && (  !captureOrPromotion
@@ -1728,12 +1756,12 @@ moves_loop: // When in check, search starts from here
     }
 
     // If there is a move which produces search value greater than alpha we update stats of searched moves
-    else if (bestMove && allMovesSingle)
+    else if (bestMove && allMovesHistoryCompatible)
         update_all_stats(pos, ss, bestMove, bestValue, beta, prevSq,
                          quietsSearched, quietCount, capturesSearched, captureCount, depth);
 
     // Bonus for prior countermove that caused the fail low
-    else if (   allMovesSingle
+    else if (   allMovesHistoryCompatible
              && (depth >= 3 || PvNode)
              && !priorCapture)
         update_continuation_histories(ss-1, pos.piece_on(prevSq), prevSq, stat_bonus(depth));

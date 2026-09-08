@@ -144,6 +144,12 @@ void LogicalMoveSource::undo_path(int length) {
 
 bool LogicalMoveSource::next(LogicalMove& move) {
 
+  LogicalMoveInfo info;
+  return next(move, info);
+}
+
+bool LogicalMoveSource::next(LogicalMove& move, LogicalMoveInfo& info) {
+
   if (finished)
       return false;
 
@@ -193,7 +199,29 @@ bool LogicalMoveSource::next(LogicalMove& move) {
 
       turn.components[depth] = component;
       turn.length = uint8_t(depth + 1);
+      LogicalMoveInfo candidateInfo;
+      candidateInfo.representative = turn.first();
+      candidateInfo.movedPiece = pos.moved_piece(turn.components[0]);
+      candidateInfo.historyCompatible = turn.is_single();
+      candidateInfo.seeReliable = turn.is_single()
+                               && !pos.see_pruning_unreliable(turn.components[0]);
+      candidateInfo.givesCheck = turn.is_single() && pos.gives_check(turn.components[0]);
       apply_path(depth + 1);
+
+      for (int i = 0; i <= depth; ++i)
+      {
+          const StateInfo& componentState = transaction.components[i];
+          candidateInfo.captureLike = candidateInfo.captureLike
+                                    || bool(componentState.captured)
+                                    || bool(componentState.jumpedEnPassantCaptured)
+                                    || bool(componentState.trapRemoved)
+                                    || bool(componentState.bycatchSquares)
+                                    || bool(componentState.dead);
+          candidateInfo.promotionLike = candidateInfo.promotionLike
+                                      || is_promotion_move(turn.components[i])
+                                      || componentState.promotionPawn != NO_PIECE
+                                      || componentState.consumedPromotionHandPiece != NO_PIECE;
+      }
 
       bool repetitionIllegal = false;
       if (!is_pass(component) && usedSteps + moveCost < pos.compound_turn_steps())
@@ -218,6 +246,7 @@ bool LogicalMoveSource::next(LogicalMove& move) {
       if (accepted)
       {
           move = turn;
+          info = candidateInfo;
           return true;
       }
   }

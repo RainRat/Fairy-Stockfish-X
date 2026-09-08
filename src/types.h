@@ -875,6 +875,19 @@ enum Piece {
   PIECE_NB = 2 * PIECE_TYPE_NB
 };
 
+/// Properties of a completed logical move used by generic search heuristics.
+/// A property is false when the provider cannot establish its physical-move
+/// semantics for the complete transition.
+struct LogicalMoveInfo {
+  Move representative = MOVE_NONE;
+  Piece movedPiece = NO_PIECE;
+  bool captureLike = false;
+  bool promotionLike = false;
+  bool givesCheck = false;
+  bool historyCompatible = false;
+  bool seeReliable = false;
+};
+
 enum PieceSet : uint64_t {
   NO_PIECE_SET = 0,
   CHESS_PIECES = (1ULL << PAWN) | (1ULL << KNIGHT) | (1ULL << BISHOP) | (1ULL << ROOK) | (1ULL << QUEEN) | (1ULL << KING),

@@ -36,6 +36,7 @@ class LogicalMoveSource {
   LogicalMoveSource& operator=(const LogicalMoveSource&) = delete;
 
   bool next(LogicalMove& move);
+  bool next(LogicalMove& move, LogicalMoveInfo& info);
 
  private:
   struct Frame {
