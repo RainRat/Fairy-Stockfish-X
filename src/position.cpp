@@ -349,8 +349,10 @@ namespace {
                              PushTempPiece* outLine = nullptr,
                              PushTempPiece* outTransfers = nullptr,
                              int* outTransferCount = nullptr) {
+#ifdef ENABLE_COMPOUND_TURNS
     if (pos.push_pull_rule() == PushPullRule::TWO_STEP)
         return false;
+#endif
 
     const MoveType mt = type_of(m);
     if (mt != NORMAL)
@@ -536,8 +538,10 @@ namespace {
   }
 
   bool analyze_push_direct(const Position& pos, Move m, PushInfo& info) {
+#ifdef ENABLE_COMPOUND_TURNS
     if (pos.push_pull_rule() == PushPullRule::TWO_STEP)
         return false;
+#endif
 
     const MoveType mt = type_of(m);
     if ((mt != NORMAL && mt != INSERT))
@@ -1402,6 +1406,14 @@ bool Position::violates_same_player_board_repetition(Move m) const {
 
   if (var->samePlayerBoardRepetitionIllegalAtN <= 0)
       return false;
+
+#ifdef ENABLE_COMPOUND_TURNS
+  // Compound repetition is checked after the complete turn has been
+  // materialized. Intermediate component states are not game positions for
+  // this rule and must not be compared by the ordinary move legality path.
+  if (compound_turn_active())
+      return false;
+#endif
 
   StateInfo nextState;
   SimulatedMoveGuard clearSimulation(*this, MOVE_NONE);
@@ -5375,6 +5387,7 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
   return info;
 }
 
+#ifdef ENABLE_COMPOUND_TURNS
 bool Position::encoded_push_legal(Move m) const {
 
   // VariantParser::check_consistency rejects royal/check-state pieces
@@ -5421,12 +5434,15 @@ bool Position::encoded_push_legal(Move m) const {
 
   return !violates_same_player_board_repetition(m);
 }
+#endif
 
 /// Position::legal() tests whether a pseudo-legal move is legal
 
 bool Position::legal(Move m) const {
+#ifdef ENABLE_COMPOUND_TURNS
   if (is_encoded_push(m))
       return encoded_push_legal(m);
+#endif
 
   SimulatedMoveGuard guard(*this, m);
 
@@ -6467,8 +6483,10 @@ bool Position::has_legal_move_ignoring_immediate_end() const {
 
 bool Position::pseudo_legal(const Move m) const {
 
+#ifdef ENABLE_COMPOUND_TURNS
   if (is_encoded_push(m))
       return encoded_push_legal(m);
+#endif
 
   Color us = sideToMove;
   Color them = ~us;
@@ -7653,7 +7671,9 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       ++st->compoundTurnNumber;
 #endif
   bool dropMove = is_drop_move(m);
+#ifdef ENABLE_COMPOUND_TURNS
   bool encodedPushMove = var->pushPullRule == PushPullRule::TWO_STEP && is_encoded_push(m);
+#endif
   Square from = from_sq(m);
   Square to = to_sq(m);
   Piece pc = moved_piece(m);
@@ -8179,6 +8199,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   }
   else
   {
+#ifdef ENABLE_COMPOUND_TURNS
       if (encodedPushMove)
       {
           Piece pushed = piece_on(to);
@@ -8192,7 +8213,9 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           pullRightsMask = castlingRightsMask[from] | castlingRightsMask[to]
                          | castlingRightsMask[pushedTo];
       }
-      else if (!pureWallMove && !cloneMove && !pullMove && !rifleShot)
+      else
+#endif
+      if (!pureWallMove && !cloneMove && !pullMove && !rifleShot)
           k ^= Zobrist::psq[pc][from] ^ Zobrist::psq[pc][to];
       else if (pullMove)
       {
@@ -8436,6 +8459,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           else
               st->nonPawnMaterial[us] += PieceValue[MG][pc];
       }
+#ifdef ENABLE_COMPOUND_TURNS
       else if (encodedPushMove)
       {
           Piece pushed = piece_on(to);
@@ -8452,7 +8476,9 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           move_piece(to, pushedTo);
           move_piece(from, to);
       }
-      else if (pullMove)
+      else
+#endif
+      if (pullMove)
       {
           Piece pulled = st->pulled.piece.piece;
           Square pullFrom = st->pulled.square;
@@ -9622,7 +9648,9 @@ void Position::undo_move(Move m) {
   Color us = sideToMove;
   Square from = from_sq(m);
   Square to = to_sq(m);
+#ifdef ENABLE_COMPOUND_TURNS
   bool encodedPushMove = var->pushPullRule == PushPullRule::TWO_STEP && is_encoded_push(m);
+#endif
   bool rifleShot = rifle_capture(m) && st->captured.piece.piece != NO_PIECE && type_of(m) != CASTLING;
   bool cloneMove = is_clone_move(m);
   bool pullMove = is_pull_move(m);
@@ -9642,7 +9670,9 @@ void Position::undo_move(Move m) {
          || (is_promotion_move(m) && sittuyin_promotion())
          || is_pass(m)
          || is_laser_fire(m)
+#ifdef ENABLE_COMPOUND_TURNS
          || encodedPushMove
+#endif
          || cloneMove
          || rifleShot
          || pullMove
@@ -9889,6 +9919,7 @@ void Position::undo_move(Move m) {
               remove_piece(to);
               board[to] = NO_PIECE;
           }
+#ifdef ENABLE_COMPOUND_TURNS
           else if (encodedPushMove)
           {
               Square pushedTo = encoded_push_square(m);
@@ -9897,7 +9928,9 @@ void Position::undo_move(Move m) {
               if (piece_on(pushedTo) != NO_PIECE)
                   move_piece(pushedTo, to);
           }
-          else if (pullMove)
+          else
+#endif
+          if (pullMove)
           {
               if (piece_on(from) != NO_PIECE)
                   move_piece(from, st->pulled.square);
@@ -10326,6 +10359,7 @@ Key Position::key_after(Move m) const {
   Key k = st->key ^ Zobrist::side;
 #endif
 
+#ifdef ENABLE_COMPOUND_TURNS
   if (var->pushPullRule == PushPullRule::TWO_STEP && is_encoded_push(m))
   {
       Piece pushed = piece_on(to);
@@ -10333,6 +10367,7 @@ Key Position::key_after(Move m) const {
       return k ^ Zobrist::psq[pc][from] ^ Zobrist::psq[pc][to]
              ^ Zobrist::psq[pushed][to] ^ Zobrist::psq[pushed][pushedTo];
   }
+#endif
 
   if (type_of(m) == PULL && pull_square(m) != SQ_NONE)
   {

@@ -1365,9 +1365,21 @@ void compound_turn_rules() {
     play_repetition_turn("0000", 3);
     play_repetition_turn("a1b1", 4);
     play_repetition_turn("0000", 5);
-    CompoundMove forbiddenRepetition;
-    check(!parse_compound_move(pos, "b1a1", forbiddenRepetition),
-          "same-player repetition threshold did not reject the third occurrence");
+    CompoundMove allowedRepetition;
+    check(parse_compound_move(pos, "b1a1", allowedRepetition),
+          "intermediate component repetition incorrectly rejected a legal turn");
+
+    set_position(pos, states, "generic-compound-boundary-repetition-audit",
+                 "8/8/8/8/8/8/8/8 w - - 0 1");
+    CompoundMove firstPass;
+    check(parse_compound_move(pos, "0000", firstPass),
+          "failed to parse the first boundary repetition pass");
+    alignas(Eval::NNUE::CacheLineSize) StateInfo boundaryRepetitionStates[CompoundMove::MAX_STEPS + 1];
+    do_compound_move(pos, firstPass, boundaryRepetitionStates);
+    CompoundMove repeatedPass;
+    check(!parse_compound_move(pos, "0000", repeatedPass),
+          "completed-turn repetition threshold did not reject a repeated boundary");
+    undo_compound_move(pos, firstPass);
 
     set_position(pos, states, "generic-compound-turn-audit",
                  "8/8/8/3r4/3C4/8/8/8 w - - 0 1");
@@ -2812,6 +2824,9 @@ pass = true
 
 [generic-compound-repetition-audit:generic-compound-pass-audit]
 samePlayerBoardRepetitionIllegalAtN = 2
+
+[generic-compound-boundary-repetition-audit:generic-compound-pass-audit]
+samePlayerBoardRepetitionIllegalAtN = 1
 
 [generic-legacy-repetition-audit:generic-compound-turn-audit]
 samePlayerBoardRepetitionIllegal = true

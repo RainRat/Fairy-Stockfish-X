@@ -1267,6 +1267,7 @@ inline Square pull_square(Move m) {
   return sq ? Square(sq - 1) : SQ_NONE;
 }
 
+#ifdef ENABLE_COMPOUND_TURNS
 // Encoded two-piece pushes reuse the existing PULL encoding so that the move layout and
 // MOVE_TYPE_BITS remain unchanged for orthodox variants. The otherwise-unused
 // piece-type field marks the record as an encoded push; from_sq() is the pusher
@@ -1286,6 +1287,7 @@ inline Square encoded_push_square(Move m) {
 inline bool is_two_step_move(Move m) {
   return is_encoded_push(m) || (type_of(m) == PULL && pull_square(m) != SQ_NONE);
 }
+#endif
 
 inline Square swap_square(Move m) {
   return type_of(m) == SWAP ? to_sq(m) : SQ_NONE;
@@ -1414,6 +1416,7 @@ constexpr Move make_pull(Square from, Square to, Square pullFrom) {
             + static_cast<uint64_t>(to));
 }
 
+#ifdef ENABLE_COMPOUND_TURNS
 constexpr Move make_encoded_push(Square from, Square to, Square pushedTo) {
   return Move((static_cast<uint64_t>(pushedTo + 1) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS))
             + (static_cast<uint64_t>(ENCODED_PUSH_MARKER) << (2 * SQUARE_BITS + MOVE_TYPE_BITS))
@@ -1421,6 +1424,7 @@ constexpr Move make_encoded_push(Square from, Square to, Square pushedTo) {
             + (static_cast<uint64_t>(from) << SQUARE_BITS)
             + static_cast<uint64_t>(to));
 }
+#endif
 
 constexpr Move make_promotion_potion(Square from, Square to, PieceType prom_pt, int potion, Square target) {
   assert(prom_pt == KNIGHT || prom_pt == BISHOP || prom_pt == ROOK || prom_pt == QUEEN);

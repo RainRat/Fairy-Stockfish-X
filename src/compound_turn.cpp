@@ -327,24 +327,15 @@ std::string compound_move_to_string(Position& pos, const CompoundMove& turn) {
 
   std::string result;
   alignas(Eval::NNUE::CacheLineSize) StateInfo states[CompoundMove::MAX_STEPS + 1];
-  int turnCost = 0;
 
   for (int i = 0; i < turn.length; ++i)
   {
       if (i)
           result += ',';
       result += compound_step_to_string(pos, turn.steps[i]);
-      turnCost += compound_move_cost(pos, turn.steps[i]);
       pos.do_move(turn.steps[i], states[i], false);
   }
 
-  if (!is_pass(turn.steps[turn.length - 1])
-      && turnCost < pos.compound_turn_steps())
-      pos.end_compound_turn(states[turn.length]);
-
-  if (!is_pass(turn.steps[turn.length - 1])
-      && turnCost < pos.compound_turn_steps())
-      pos.undo_compound_turn();
   for (int i = turn.length - 1; i >= 0; --i)
       pos.undo_move(turn.steps[i]);
 
@@ -609,7 +600,7 @@ void search_compound(Thread& thread) {
   // in case a strict limit fires before the filtered turn reaches evaluation.
   if (searchMovesSpecified)
       for (const CompoundMove& candidate : searchMoves)
-          if (root_compound_move_allowed(candidate, searchMoves, searchMovesSpecified, banMoves))
+          if (std::find(banMoves.begin(), banMoves.end(), candidate) == banMoves.end())
           {
               thread.compoundBestTurn = candidate;
               thread.compoundBestScore = VALUE_DRAW;

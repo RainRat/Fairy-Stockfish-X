@@ -944,6 +944,7 @@ namespace {
                 promotionTargets |= jumpCaptures;
             pawnPromotions = promotionTargets & promotion_zone;
         }
+#ifdef ENABLE_COMPOUND_TURNS
         if (pos.push_pull_rule() == PushPullRule::TWO_STEP && GeneratesQuiets && !QuietChecks)
         {
             Bitboard enemySources = pos.push_targets_from(Us, Pt, from) & pos.pieces(~Us);
@@ -963,6 +964,7 @@ namespace {
                     *moveList++ = make_encoded_push(from, enemyFrom, pop_lsb(enemyTargets));
             }
         }
+#endif
 
         Bitboard pushMoves = 0;
         if (pos.push_pull_rule() == PushPullRule::GENERIC && pos.pushing_strength(Pt) > 0)
