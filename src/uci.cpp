@@ -177,8 +177,11 @@ namespace {
   // the search.
 
   void go(Position& pos, istringstream& is, StateListPtr& states,
-           const std::vector<Move>& banmoves = {},
-           const std::vector<std::string>& compoundBanMoves = {}) {
+           const std::vector<Move>& banmoves = {}
+#ifdef ENABLE_COMPOUND_TURNS
+           , const std::vector<std::string>& compoundBanMoves = {}
+#endif
+           ) {
 
     Search::LimitsType limits;
     string token;
@@ -187,19 +190,25 @@ namespace {
     limits.startTime = now(); // As early as possible!
 
     limits.banmoves = banmoves;
+#ifdef ENABLE_COMPOUND_TURNS
     limits.compoundBanMoves = compoundBanMoves;
+#endif
     bool isUsi = CurrentProtocol == USI;
     int secResolution = Options["usemillisec"] ? 1 : 1000;
 
     while (is >> token)
         if (token == "searchmoves") // Needs to be the last command on the line
         {
+#ifdef ENABLE_COMPOUND_TURNS
             if (pos.compound_turn_active())
                 limits.compoundSearchMovesSpecified = true;
+#endif
             while (is >> token)
+#ifdef ENABLE_COMPOUND_TURNS
                 if (pos.compound_turn_active())
                     limits.compoundSearchMoves.push_back(token);
                 else
+#endif
                     limits.searchmoves.push_back(UCI::to_move(pos, token));
         }
 
@@ -463,7 +472,9 @@ void UCI::loop(int argc, char* argv[]) {
   XBoard::stateMachine = new XBoard::StateMachine(pos, states);
   // UCCI banmoves state
   std::vector<Move> banmoves = {};
+#ifdef ENABLE_COMPOUND_TURNS
   std::vector<std::string> compoundBanMoves = {};
+#endif
 
   if (argc > 1 && (std::strcmp(argv[1], "noautoload") == 0))
   {
@@ -532,12 +543,26 @@ void UCI::loop(int argc, char* argv[]) {
       // UCCI-specific banmoves command
       else if (token == "banmoves")
           while (is >> token)
+#ifdef ENABLE_COMPOUND_TURNS
               if (pos.compound_turn_active())
                   compoundBanMoves.push_back(token);
               else
+#endif
                   banmoves.push_back(UCI::to_move(pos, token));
-      else if (token == "go")         go(pos, is, states, banmoves, compoundBanMoves);
-      else if (token == "position")   position(pos, is, states), banmoves.clear(), compoundBanMoves.clear();
+      else if (token == "go")
+#ifdef ENABLE_COMPOUND_TURNS
+          go(pos, is, states, banmoves, compoundBanMoves);
+#else
+          go(pos, is, states, banmoves);
+#endif
+      else if (token == "position")
+      {
+          position(pos, is, states);
+          banmoves.clear();
+#ifdef ENABLE_COMPOUND_TURNS
+          compoundBanMoves.clear();
+#endif
+      }
       else if (token == "ucinewgame" || token == "usinewgame" || token == "uccinewgame") Search::clear();
       else if (token == "isready")    sync_cout << "readyok" << sync_endl;
       else if (token == "help")

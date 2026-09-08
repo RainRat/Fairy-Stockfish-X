@@ -1041,7 +1041,9 @@ public:
   // Properties of moves
   bool legal(Move m) const;
   bool pseudo_legal(const Move m) const;
+#ifdef ENABLE_COMPOUND_TURNS
   bool encoded_push_legal(Move m) const;
+#endif
   SimulatedMoveInfo simulated_move_info(Move m, bool withEffects = true) const;
   bool virtual_drop(Move m) const;
   bool paired_drop(Move m) const;
@@ -3584,7 +3586,11 @@ inline bool Position::is_clone_move(Move m) const {
 }
 
 inline bool Position::is_pull_move(Move m) const {
+#ifdef ENABLE_COMPOUND_TURNS
   return type_of(m) == PULL && pull_square(m) != SQ_NONE && !is_encoded_push(m);
+#else
+  return type_of(m) == PULL && pull_square(m) != SQ_NONE;
+#endif
 }
 
 inline bool Position::is_swap_move(Move m) const {

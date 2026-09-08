@@ -19,8 +19,11 @@
 #ifndef SEARCH_H_INCLUDED
 #define SEARCH_H_INCLUDED
 
-#include <string>
 #include <vector>
+
+#ifdef ENABLE_COMPOUND_TURNS
+#include <string>
+#endif
 
 #include "misc.h"
 #include "movepick.h"
@@ -99,8 +102,10 @@ struct LimitsType {
   }
 
   std::vector<Move> searchmoves, banmoves;
+#ifdef ENABLE_COMPOUND_TURNS
   std::vector<std::string> compoundSearchMoves, compoundBanMoves;
   bool compoundSearchMovesSpecified = false;
+#endif
   TimePoint time[COLOR_NB], inc[COLOR_NB], npmsec, movetime, startTime;
   int movestogo, depth, mate, perft, infinite;
   int64_t nodes;
