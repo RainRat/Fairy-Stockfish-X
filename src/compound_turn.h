@@ -10,16 +10,56 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
+#include "movegen.h"
 #include "types.h"
 
 namespace Stockfish {
 
 class Position;
+class Thread;
 struct StateInfo;
 struct LogicalMoveState;
+
+/// Lazily yield complete legal logical moves without materializing the turn tree.
+/// The component recursion and its temporary position changes stay private to
+/// this provider; callers always observe the position at a turn boundary.
+class LogicalMoveSource {
+ public:
+  LogicalMoveSource(Position& pos, Thread* thread, LogicalMoveState& transaction);
+  ~LogicalMoveSource();
+
+  LogicalMoveSource(const LogicalMoveSource&) = delete;
+  LogicalMoveSource& operator=(const LogicalMoveSource&) = delete;
+
+  bool next(LogicalMove& move);
+
+ private:
+  struct Frame {
+      ExtMove* current = nullptr;
+      ExtMove* end = nullptr;
+  };
+
+  void initialize_frame(int depth);
+  void apply_path(int length);
+  void undo_path(int length);
+
+  Position& pos;
+  Thread* thread;
+  LogicalMoveState& transaction;
+  std::unique_ptr<ExtMove[]> ownedBuffers;
+  std::array<ExtMove*, LogicalMove::MAX_COMPONENTS> buffers{};
+  std::array<Frame, LogicalMove::MAX_COMPONENTS> frames{};
+  LogicalMove turn;
+  Key startBoardKey = 0;
+  int depth = 0;
+  bool initialized = false;
+  bool descend = false;
+  bool finished = false;
+};
 
 /// Materialize complete compound moves from a turn-boundary position.
 /// Intermediate positions are used only while traversing the legal tree.
@@ -36,6 +76,8 @@ void undo_compound_move(Position& pos, const LogicalMove& turn,
 
 uint64_t compound_perft(Position& pos, int depth, bool root);
 std::string compound_move_to_string(Position& pos, const LogicalMove& turn);
+std::vector<std::string> compound_pv_to_strings(const Position& pos,
+                                                const std::vector<LogicalMove>& pv);
 
 } // namespace Stockfish
 

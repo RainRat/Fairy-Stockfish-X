@@ -222,7 +222,10 @@ void ThreadPool::start_thinking(Position& pos, StateListPtr& states,
 #ifdef ENABLE_COMPOUND_TURNS
   if (pos.compound_turn_active())
   {
-      for (const LogicalMove& m : generate_compound_moves(pos))
+      LogicalMoveState transaction;
+      LogicalMoveSource source(pos, pos.this_thread(), transaction);
+      LogicalMove m;
+      while (source.next(m))
           if (   (!limits.searchMovesSpecified
                   || std::count(limits.searchmoves.begin(), limits.searchmoves.end(), m))
               && (limits.banmoves.empty()

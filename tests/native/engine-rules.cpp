@@ -1390,6 +1390,81 @@ void compound_turn_rules() {
     // Test compound moves generation
     std::vector<LogicalMove> generated = generate_compound_moves(pos);
     check(!generated.empty(), "generate_compound_moves returned empty list");
+    std::vector<LogicalMove> lazyGenerated;
+    {
+        LogicalMoveState sourceTransaction;
+        LogicalMoveSource source(pos, nullptr, sourceTransaction);
+        LogicalMove candidate;
+        while (source.next(candidate))
+            lazyGenerated.push_back(candidate);
+    }
+    check(lazyGenerated == generated,
+          "lazy logical move source disagreed with materialized compound generation");
+
+    // Every committed logical length, including early termination and the
+    // full budget, must leave a self-contained NNUE boundary state.
+    for (int length = 1; length <= LogicalMove::MAX_COMPONENTS; ++length)
+    {
+        auto candidate = std::find_if(generated.begin(), generated.end(),
+                                      [length](const LogicalMove& move) {
+                                          return move.length == length;
+                                      });
+        if (candidate == generated.end())
+            continue;
+
+        StateInfo logicalState;
+        LogicalMoveState logicalTransaction;
+        do_compound_move(pos, *candidate, logicalState, logicalTransaction);
+        check(pos.state()->logicalMove == *candidate
+              && pos.state()->move == MOVE_NONE
+              && pos.state()->dirtyPiece.dirty_num == 0
+              && pos.state()->nnueRefreshNeeded
+              && !pos.state()->accumulator.computed[WHITE]
+              && !pos.state()->accumulator.computed[BLACK],
+              "logical commit retained component state instead of a refresh boundary");
+        if (Eval::useNNUE && pos.nnue_applicable())
+        {
+            const Value normal = Eval::NNUE::evaluate(pos);
+            pos.state()->nnueRefreshNeeded = true;
+            pos.state()->accumulator.computed[WHITE] = false;
+            pos.state()->accumulator.computed[BLACK] = false;
+            check(normal == Eval::NNUE::evaluate(pos),
+                  "forced NNUE refresh disagreed with normal logical evaluation");
+        }
+        undo_compound_move(pos, *candidate, logicalTransaction);
+    }
+
+    // PV formatting must evaluate each logical move in the position left by
+    // the preceding one, rather than formatting every move against the root.
+    if (!generated.empty())
+    {
+        StateInfo pvState;
+        LogicalMoveState pvTransaction;
+        do_compound_move(pos, generated.front(), pvState, pvTransaction);
+        std::vector<LogicalMove> childGenerated = generate_compound_moves(pos);
+        undo_compound_move(pos, generated.front(), pvTransaction);
+        if (!childGenerated.empty())
+        {
+            std::vector<LogicalMove> logicalPv = {generated.front(), childGenerated.front()};
+            const std::vector<std::string> formattedPv = compound_pv_to_strings(pos, logicalPv);
+            check(formattedPv.size() == logicalPv.size(),
+                  "logical PV formatter did not replay the complete PV");
+
+            Position replay;
+            StateListPtr replayStates;
+            set_position(replay, replayStates, "generic-compound-turn-audit", pos.fen().c_str());
+            LogicalMoveState replayTransactions[2];
+            for (size_t i = 0; i < formattedPv.size(); ++i)
+            {
+                LogicalMove reparsed;
+                check(parse_compound_move(replay, formattedPv[i], reparsed)
+                      && reparsed == logicalPv[i],
+                      "formatted logical PV move was not legal at its replay position");
+                replayStates->emplace_back();
+                do_compound_move(replay, reparsed, replayStates->back(), replayTransactions[i]);
+            }
+        }
+    }
 
     // Two-step action consumes 2 steps in budget of 3
     Move twoStepPush = make_encoded_push(SQ_D4, SQ_D5, SQ_D6);

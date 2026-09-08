@@ -10225,7 +10225,7 @@ void Position::end_compound_turn(StateInfo& newSt) {
   st->compoundTurnNumber += us == BLACK;
   clear_move_undo_state(st);
   clear_dirty_piece(st);
-  st->nnueRefreshNeeded = false;
+  st->nnueRefreshNeeded = true;
   st->shak = false;
   st->bikjang = false;
   st->legalCapture = NO_VALUE;
@@ -10297,6 +10297,12 @@ void Position::do_logical_move(const LogicalMove& move, StateInfo& newSt,
 
   newSt.logicalMove = move;
   newSt.previous = transaction.previous;
+  newSt.move = MOVE_NONE;
+  clear_move_undo_state(&newSt);
+  clear_dirty_piece(&newSt);
+  newSt.nnueRefreshNeeded = true;
+  newSt.accumulator.computed[WHITE] = false;
+  newSt.accumulator.computed[BLACK] = false;
   update_repetition_info();
 }
 

@@ -596,30 +596,76 @@ static_assert((LASER_FIRE >> (2 * SQUARE_BITS)) < (1 << MOVE_TYPE_BITS),
 struct LogicalMove {
   static constexpr int MAX_COMPONENTS = 4;
 
+#ifdef ENABLE_COMPOUND_TURNS
   std::array<Move, MAX_COMPONENTS> components{};
   uint8_t length = 0;
+#else
+  Move move = MOVE_NONE;
+#endif
 
   LogicalMove() = default;
-  LogicalMove(Move move) : components{move}, length(1) {}
+  LogicalMove(Move move)
+#ifdef ENABLE_COMPOUND_TURNS
+      : components{move}, length(1) {}
+#else
+      : move(move) {}
+#endif
 
-  bool empty() const { return length == 0; }
-  Move first() const { return length ? components[0] : MOVE_NONE; }
+  bool empty() const {
+#ifdef ENABLE_COMPOUND_TURNS
+      return length == 0;
+#else
+      return move == MOVE_NONE;
+#endif
+  }
+  bool is_single() const {
+#ifdef ENABLE_COMPOUND_TURNS
+      return length == 1;
+#else
+      return move != MOVE_NONE;
+#endif
+  }
+  Move first() const {
+#ifdef ENABLE_COMPOUND_TURNS
+      return length ? components[0] : MOVE_NONE;
+#else
+      return move;
+#endif
+  }
 
   bool operator==(const LogicalMove& other) const {
+#ifdef ENABLE_COMPOUND_TURNS
       return length == other.length
           && std::equal(components.begin(), components.begin() + length, other.components.begin());
+#else
+      return move == other.move;
+#endif
   }
 
   bool operator!=(const LogicalMove& other) const { return !(*this == other); }
-  bool operator==(Move move) const { return length == 1 && components[0] == move; }
+  bool operator==(Move move) const {
+#ifdef ENABLE_COMPOUND_TURNS
+      return length == 1 && components[0] == move;
+#else
+      return this->move == move;
+#endif
+  }
   bool operator!=(Move move) const { return !(*this == move); }
   bool operator<(const LogicalMove& other) const {
+#ifdef ENABLE_COMPOUND_TURNS
       if (length != other.length)
           return length < other.length;
       return std::lexicographical_compare(components.begin(), components.begin() + length,
                                            other.components.begin(), other.components.begin() + other.length);
+#else
+      return this->move < other.move;
+#endif
   }
 };
+
+#ifndef ENABLE_COMPOUND_TURNS
+static_assert(sizeof(LogicalMove) == sizeof(Move), "LogicalMove must stay compact without compound turns");
+#endif
 
 enum Color {
   WHITE, BLACK, COLOR_NB = 2

@@ -22,6 +22,7 @@
 #include <cmath>
 #include <cstring>   // For std::memset
 #include <iostream>
+#include <optional>
 #include <sstream>
 #include <thread>
 
@@ -349,10 +350,12 @@ void MainThread::search() {
       if (rootPos.compound_turn_active())
       {
           const LogicalMove& bestTurn = bestThread->rootMoves[0].pv[0];
+          const std::vector<std::string> compoundPv =
+              compound_pv_to_strings(rootPos, bestThread->rootMoves[0].pv);
           if (!Limits.infinite && !ponder && bestTurn.first() != MOVE_NONE
               && !Threads.abort.exchange(true))
           {
-              sync_cout << "move " << compound_move_to_string(rootPos, bestTurn) << sync_endl;
+              sync_cout << "move " << compoundPv.front() << sync_endl;
               if (XBoard::stateMachine->moveAfterSearch)
               {
                   XBoard::stateMachine->do_compound_move(bestTurn);
@@ -403,10 +406,13 @@ void MainThread::search() {
 
   SyncCout out;
 #ifdef ENABLE_COMPOUND_TURNS
+  const std::vector<std::string> compoundPv = rootPos.compound_turn_active()
+                                            ? compound_pv_to_strings(rootPos, bestThread->rootMoves[0].pv)
+                                            : std::vector<std::string>();
   if (rootPos.compound_turn_active()
       && !bestThread->rootMoves.empty()
       && bestThread->rootMoves[0].pv[0].first() != MOVE_NONE)
-      out << "bestmove " << compound_move_to_string(rootPos, bestThread->rootMoves[0].pv[0]);
+      out << "bestmove " << compoundPv.front();
   else
 #endif
       out << "bestmove " << UCI::move(rootPos, bestThread->rootMoves[0].pv[0].first());
@@ -415,7 +421,7 @@ void MainThread::search() {
   {
 #ifdef ENABLE_COMPOUND_TURNS
       if (rootPos.compound_turn_active())
-          out << " ponder " << compound_move_to_string(rootPos, bestThread->rootMoves[0].pv[1]);
+          out << " ponder " << compoundPv[1];
       else
 #endif
           out << " ponder " << UCI::move(rootPos, bestThread->rootMoves[0].pv[1].first());
@@ -1274,23 +1280,23 @@ moves_loop: // When in check, search starts from here
                          && tte->depth() >= depth;
 
 #ifdef ENABLE_COMPOUND_TURNS
-    std::vector<LogicalMove> logicalMoves;
-    size_t logicalMoveIndex = 0;
+    std::optional<LogicalMoveSource> logicalSource;
     if (logicalPosition)
-        logicalMoves = generate_compound_moves(pos);
+        logicalSource.emplace(pos, thisThread, thisThread->logical_move_state(ss->ply));
 #endif
 
     // Step 12. Loop through all pseudo-legal moves until no moves remain
     // or a beta cutoff occurs.
+    bool allMovesSingle = true;
     while (true)
     {
       LogicalMove logicalMove;
+      bool singleMove;
 #ifdef ENABLE_COMPOUND_TURNS
       if (logicalPosition)
       {
-          if (logicalMoveIndex == logicalMoves.size())
+          if (!logicalSource->next(logicalMove))
               break;
-          logicalMove = logicalMoves[logicalMoveIndex++];
           move = logicalMove.first();
       }
       else
@@ -1300,6 +1306,8 @@ moves_loop: // When in check, search starts from here
               break;
           logicalMove = LogicalMove(move);
       }
+      singleMove = logicalMove.is_single();
+      allMovesSingle = allMovesSingle && singleMove;
       assert(is_ok(move));
 
       if (move == excludedMove)
@@ -1327,9 +1335,9 @@ moves_loop: // When in check, search starts from here
           (ss+1)->pv = nullptr;
 
       extension = 0;
-      captureOrPromotion = !logicalPosition && pos.capture_or_promotion(move);
+      captureOrPromotion = singleMove && pos.capture_or_promotion(move);
       movedPiece = pos.moved_piece(move);
-      givesCheck = !logicalPosition && pos.gives_check(move);
+      givesCheck = singleMove && pos.gives_check(move);
 
       // Calculate new depth for this move
       newDepth = depth - 1;
@@ -1347,7 +1355,7 @@ moves_loop: // When in check, search starts from here
       }
 
       // Step 13. Pruning at shallow depth (~200 Elo)
-      if (  !logicalPosition
+      if (  singleMove
           && !rootNode
           && (pos.non_pawn_material(us) || pos.count<ALL_PIECES>(us) == pos.count<PAWN>(us))
           && bestValue > VALUE_TB_LOSS_IN_MAX_PLY)
@@ -1410,7 +1418,7 @@ moves_loop: // When in check, search starts from here
       // then that move is singular and should be extended. To verify this we do
       // a reduced search on all the other moves but the ttMove and if the
       // result is lower than ttValue minus a margin, then we will extend the ttMove.
-      if (   !logicalPosition
+      if (   singleMove
           && !rootNode
           &&  depth >= 7 - 2 * (pos.count<KING>() == 1)
           &&  move == ttMove
@@ -1469,7 +1477,7 @@ moves_loop: // When in check, search starts from here
 
       // Losing chess capture extension
       else if (   pos.must_capture()
-               && !logicalPosition
+               && singleMove
                && pos.capture(move)
                && (ss->inCheck || MoveList<CAPTURES>(pos).size() == 1))
           extension = 1;
@@ -1489,9 +1497,12 @@ moves_loop: // When in check, search starts from here
 
       // Step 15. Make the move
 #ifdef ENABLE_COMPOUND_TURNS
-      LogicalMoveState transaction;
+      LogicalMoveState* transaction = nullptr;
       if (logicalPosition)
-          pos.do_move(logicalMove, st, transaction);
+      {
+          transaction = &thisThread->logical_move_state(ss->ply);
+          pos.do_move(logicalMove, st, *transaction);
+      }
       else
 #endif
           pos.do_move(move, st);
@@ -1501,7 +1512,7 @@ moves_loop: // When in check, search starts from here
       // been searched. In general we would like to reduce them, but there are many
       // cases where we extend a son if it has good chances to be "interesting".
       if (    depth >= 3
-          && !logicalPosition
+          && singleMove
           &&  moveCount > 1 + 2 * rootNode
           && !(pos.must_capture() && pos.has_capture())
           && (  !captureOrPromotion
@@ -1607,7 +1618,7 @@ moves_loop: // When in check, search starts from here
       // Step 18. Undo move
 #ifdef ENABLE_COMPOUND_TURNS
       if (logicalPosition)
-          pos.undo_move(logicalMove, transaction);
+          pos.undo_move(logicalMove, *transaction);
       else
 #endif
           pos.undo_move(move);
@@ -1712,12 +1723,12 @@ moves_loop: // When in check, search starts from here
     }
 
     // If there is a move which produces search value greater than alpha we update stats of searched moves
-    else if (bestMove && !logicalPosition)
+    else if (bestMove && allMovesSingle)
         update_all_stats(pos, ss, bestMove, bestValue, beta, prevSq,
                          quietsSearched, quietCount, capturesSearched, captureCount, depth);
 
     // Bonus for prior countermove that caused the fail low
-    else if (   !logicalPosition
+    else if (   allMovesSingle
              && (depth >= 3 || PvNode)
              && !priorCapture)
         update_continuation_histories(ss-1, pos.piece_on(prevSq), prevSq, stat_bonus(depth));
@@ -2267,13 +2278,6 @@ string UCI::pv(const Position& pos, Depth depth, Value alpha, Value beta) {
   size_t multiPV = std::min((size_t)Options["MultiPV"], rootMoves.size());
   uint64_t nodesSearched = Threads.nodes_searched();
   uint64_t tbHits = Threads.tb_hits() + (TB::RootInTB ? rootMoves.size() : 0);
-  auto logical_move_string = [&](const LogicalMove& move) {
-#ifdef ENABLE_COMPOUND_TURNS
-      if (pos.compound_turn_active() && !move.empty())
-          return compound_move_to_string(const_cast<Position&>(pos), move);
-#endif
-      return UCI::move(pos, move.first());
-  };
 
   for (size_t i = 0; i < multiPV; ++i)
   {
@@ -2284,6 +2288,12 @@ string UCI::pv(const Position& pos, Depth depth, Value alpha, Value beta) {
 
       Depth d = updated ? depth : std::max(1, depth - 1);
       Value v = updated ? rootMoves[i].score : rootMoves[i].previousScore;
+
+#ifdef ENABLE_COMPOUND_TURNS
+      const std::vector<std::string> compoundPv = pos.compound_turn_active()
+                                                ? compound_pv_to_strings(pos, rootMoves[i].pv)
+                                                : std::vector<std::string>();
+#endif
 
       if (v == -VALUE_INFINITE)
           v = VALUE_ZERO;
@@ -2306,8 +2316,15 @@ string UCI::pv(const Position& pos, Depth depth, Value alpha, Value beta) {
 
           // Do not print PVs with virtual drops in bughouse variants
           if (!pos.two_boards())
-              for (const LogicalMove& m : rootMoves[i].pv)
-                  ss << " " << logical_move_string(m);
+          {
+              for (size_t j = 0; j < rootMoves[i].pv.size(); ++j)
+#ifdef ENABLE_COMPOUND_TURNS
+                  if (pos.compound_turn_active())
+                      ss << " " << compoundPv[j];
+                  else
+#endif
+                      ss << " " << UCI::move(pos, rootMoves[i].pv[j].first());
+          }
       }
       else
       {
@@ -2333,8 +2350,13 @@ string UCI::pv(const Position& pos, Depth depth, Value alpha, Value beta) {
          << " time "     << elapsed
          << " pv";
 
-      for (const LogicalMove& m : rootMoves[i].pv)
-          ss << " " << logical_move_string(m);
+      for (size_t j = 0; j < rootMoves[i].pv.size(); ++j)
+#ifdef ENABLE_COMPOUND_TURNS
+          if (pos.compound_turn_active())
+              ss << " " << compoundPv[j];
+          else
+#endif
+              ss << " " << UCI::move(pos, rootMoves[i].pv[j].first());
       }
   }
 
