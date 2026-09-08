@@ -107,16 +107,6 @@ LogicalMoveSource::LogicalMoveSource(Position& pos_, Thread* thread_,
       return;
   }
 
-  if (thread)
-      for (auto& buffer : buffers)
-          buffer = thread->acquire_buffer();
-  else
-  {
-      ownedBuffers = std::make_unique<ExtMove[]>(LogicalMove::MAX_COMPONENTS
-                                                  * MOVEGEN_OVERFLOW_CAPACITY);
-      for (int i = 0; i < LogicalMove::MAX_COMPONENTS; ++i)
-          buffers[i] = ownedBuffers.get() + i * MOVEGEN_OVERFLOW_CAPACITY;
-  }
 }
 
 LogicalMoveSource::~LogicalMoveSource() {
@@ -126,6 +116,16 @@ LogicalMoveSource::~LogicalMoveSource() {
 }
 
 void LogicalMoveSource::initialize_frame(int frameDepth) {
+  if (!buffers[frameDepth])
+  {
+      if (thread)
+          buffers[frameDepth] = thread->acquire_buffer();
+      else
+      {
+          ownedBuffers[frameDepth] = std::make_unique<ExtMove[]>(MOVEGEN_OVERFLOW_CAPACITY);
+          buffers[frameDepth] = ownedBuffers[frameDepth].get();
+      }
+  }
   Frame& frame = frames[frameDepth];
   frame.current = buffers[frameDepth];
   frame.end = generate<LEGAL>(pos, frame.current);
