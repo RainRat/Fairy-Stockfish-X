@@ -58,7 +58,7 @@ public:
   void setboard(std::string fen = "");
   void do_move(Move m);
 #ifdef ENABLE_COMPOUND_TURNS
-  void do_compound_move(const CompoundMove& turn);
+  void do_compound_move(const LogicalMove& turn);
 #endif
   void undo_move();
   std::string highlight(std::string square);
@@ -77,8 +77,8 @@ private:
   Color playColor;
   std::string ponderHighlight;
 #ifdef ENABLE_COMPOUND_TURNS
-  std::deque<CompoundMove> compoundMoveList;
-  std::deque<uint8_t> compoundStateCounts;
+  std::deque<LogicalMove> compoundMoveList;
+  std::deque<LogicalMoveState> compoundTransactions;
 #endif
   std::mutex ponderMutex;
   std::unique_ptr<NativeThread> ponderWorker;

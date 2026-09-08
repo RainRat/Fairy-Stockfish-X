@@ -331,6 +331,9 @@ struct StateInfoDerived {
   bool       shak;
   bool       bikjang;
   Move       move = MOVE_NONE;
+#ifdef ENABLE_COMPOUND_TURNS
+  LogicalMove logicalMove;
+#endif
   bool       pendingClaimPass = false;
   OptBool    legalCapture = NO_VALUE;
   OptBool    legalEnPassant = NO_VALUE;
@@ -465,6 +468,18 @@ static_assert(std::is_standard_layout_v<StateInfoCopied>, "StateInfoCopied must 
 static_assert(std::is_standard_layout_v<StateInfoDerived>, "StateInfoDerived must remain standard layout");
 static_assert(std::is_standard_layout_v<MoveUndoInfo>, "MoveUndoInfo must remain standard layout");
 static_assert(std::is_standard_layout_v<NnueStateInfo>, "NnueStateInfo must remain standard layout");
+
+#ifdef ENABLE_COMPOUND_TURNS
+/// Scratch states used while applying one logical move. They are deliberately
+/// separate from the persistent StateInfo chain.
+struct LogicalMoveState {
+  alignas(Eval::NNUE::CacheLineSize)
+  std::array<StateInfo, LogicalMove::MAX_COMPONENTS + 1> components;
+  StateInfo* previous = nullptr;
+  int usedCost = 0;
+  bool syntheticBoundary = false;
+};
+#endif
 
 struct CaptureTransferTarget {
   Piece hashedPiece = NO_PIECE;
@@ -1057,9 +1072,19 @@ public:
   int  pawns_on_same_color_squares(Color c, Square s) const;
 
   // Doing and undoing moves
+  // do_component() is the internal physical-step operation used by the
+  // logical-move executor. Ordinary callers must use do_move().
+  void do_component(Move m, StateInfo& newSt, bool countNode = true);
+  void undo_component(Move m);
   void do_move(Move m, StateInfo& newSt, bool countNode = true);
   void undo_move(Move m);
 #ifdef ENABLE_COMPOUND_TURNS
+  void do_move(const LogicalMove& move, StateInfo& newSt,
+               LogicalMoveState& transaction, bool countNode = true);
+  void undo_move(const LogicalMove& move, LogicalMoveState& transaction);
+  void do_logical_move(const LogicalMove& move, StateInfo& newSt,
+                       LogicalMoveState& transaction, bool countNode = true);
+  void undo_logical_move(const LogicalMove& move, LogicalMoveState& transaction);
   void end_compound_turn(StateInfo& newSt);
   void undo_compound_turn();
 #endif
@@ -1138,6 +1163,7 @@ private:
   void set_castling_right(Color c, Square rfrom);
   void set_state(StateInfo* si) const;
   void recompute_state_hashes_and_material(StateInfo* si) const;
+  void update_repetition_info();
   Key compute_material_key() const;
   Key compute_piece_state_key() const;
   Bitboard compute_checkers_bb(Color side) const;

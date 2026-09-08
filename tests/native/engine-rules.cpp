@@ -1138,14 +1138,14 @@ void arimaa_architecture() {
           "a freshly loaded Arimaa position was not at a complete-turn boundary");
     Move step = parse_move(pos, "a2a3");
     states->emplace_back();
-    pos.do_move(step, states->back());
+    pos.do_component(step, states->back());
     check(!pos.at_complete_turn_boundary(),
           "an Arimaa partial step was exposed as a complete-turn boundary");
     check(pos.fen().empty(),
           "a partial Arimaa step was silently serialized as complete-turn FEN");
     check(!pos.nnue_applicable(),
           "NNUE remained applicable inside an Arimaa partial turn");
-    pos.undo_move(step);
+    pos.undo_component(step);
     states->pop_back();
     check(pos.at_complete_turn_boundary(),
           "undoing an Arimaa partial step did not restore the turn boundary");
@@ -1154,20 +1154,20 @@ void arimaa_architecture() {
                  "7r/R7/8/8/8/8/8/8 w - - 0 1");
     Move goalStep = parse_move(pos, "a7a8");
     states->emplace_back();
-    pos.do_move(goalStep, states->back());
+    pos.do_component(goalStep, states->back());
     check(!pos.is_game_end(result),
           "an Arimaa rabbit goal was adjudicated before the turn boundary");
-    pos.undo_move(goalStep);
+    pos.undo_component(goalStep);
     states->pop_back();
 
     set_position(pos, states, "arimaa",
                  "7r/8/8/8/8/8/2R5/8 w - - 0 1");
     Move trapStep = parse_move(pos, "c2c3");
     states->emplace_back();
-    pos.do_move(trapStep, states->back());
+    pos.do_component(trapStep, states->back());
     check(!pos.is_game_end(result),
           "Arimaa rabbit extinction was adjudicated before the turn boundary");
-    pos.undo_move(trapStep);
+    pos.undo_component(trapStep);
     states->pop_back();
 
     set_position(pos, states, "arimaa",
@@ -1269,12 +1269,12 @@ void arimaa_architecture() {
     check(is_two_step_move(genericPull),
           "generic pull was not represented as a two-step move");
     states->emplace_back();
-    pos.do_move(genericPull, states->back());
+    pos.do_component(genericPull, states->back());
     check(pos.compound_turn_step() == 2,
           "generic pull advanced the compound turn by one step instead of two");
     check(!pos.at_complete_turn_boundary(),
           "generic pull incorrectly completed the compound turn");
-    pos.undo_move(genericPull);
+    pos.undo_component(genericPull);
     states->pop_back();
 }
 
@@ -1351,13 +1351,14 @@ void compound_turn_rules() {
 
     set_position(pos, states, "generic-compound-repetition-audit",
                  "8/8/8/8/8/8/8/R7 w - - 0 1");
-    alignas(Eval::NNUE::CacheLineSize)
-    StateInfo repetitionStates[6][CompoundMove::MAX_STEPS + 1];
+    StateInfo repetitionStates[6];
+    LogicalMoveState repetitionTransactions[6];
     auto play_repetition_turn = [&](const char* text, int stateIndex) {
-        CompoundMove turn;
+        LogicalMove turn;
         check(parse_compound_move(pos, text, turn),
               std::string("failed to parse repetition test turn: ") + text);
-        do_compound_move(pos, turn, repetitionStates[stateIndex]);
+        do_compound_move(pos, turn, repetitionStates[stateIndex],
+                         repetitionTransactions[stateIndex]);
     };
     play_repetition_turn("a1b1", 0);
     play_repetition_turn("0000", 1);
@@ -1365,27 +1366,29 @@ void compound_turn_rules() {
     play_repetition_turn("0000", 3);
     play_repetition_turn("a1b1", 4);
     play_repetition_turn("0000", 5);
-    CompoundMove allowedRepetition;
+    LogicalMove allowedRepetition;
     check(parse_compound_move(pos, "b1a1", allowedRepetition),
           "intermediate component repetition incorrectly rejected a legal turn");
 
     set_position(pos, states, "generic-compound-boundary-repetition-audit",
                  "8/8/8/8/8/8/8/8 w - - 0 1");
-    CompoundMove firstPass;
+    LogicalMove firstPass;
     check(parse_compound_move(pos, "0000", firstPass),
           "failed to parse the first boundary repetition pass");
-    alignas(Eval::NNUE::CacheLineSize) StateInfo boundaryRepetitionStates[CompoundMove::MAX_STEPS + 1];
-    do_compound_move(pos, firstPass, boundaryRepetitionStates);
-    CompoundMove repeatedPass;
+    StateInfo boundaryRepetitionState;
+    LogicalMoveState boundaryRepetitionTransaction;
+    do_compound_move(pos, firstPass, boundaryRepetitionState,
+                     boundaryRepetitionTransaction);
+    LogicalMove repeatedPass;
     check(!parse_compound_move(pos, "0000", repeatedPass),
           "completed-turn repetition threshold did not reject a repeated boundary");
-    undo_compound_move(pos, firstPass);
+    undo_compound_move(pos, firstPass, boundaryRepetitionTransaction);
 
     set_position(pos, states, "generic-compound-turn-audit",
                  "8/8/8/3r4/3C4/8/8/8 w - - 0 1");
 
     // Test compound moves generation
-    std::vector<CompoundMove> generated = generate_compound_moves(pos);
+    std::vector<LogicalMove> generated = generate_compound_moves(pos);
     check(!generated.empty(), "generate_compound_moves returned empty list");
 
     // Two-step action consumes 2 steps in budget of 3
@@ -1394,16 +1397,25 @@ void compound_turn_rules() {
     check(pos.compound_turn_step_cost(twoStepPush) == 2, "two-step push cost != 2");
 
     // Parse compound move
-    CompoundMove parsedTurn;
+    LogicalMove parsedTurn;
     bool ok = parse_compound_move(pos, "d4d5,d6", parsedTurn);
     check(ok && parsedTurn.length == 1, "failed to parse 1-component two-step compound move");
 
     // Test do/undo compound move
-    alignas(Eval::NNUE::CacheLineSize) StateInfo cstates[CompoundMove::MAX_STEPS + 1];
-    do_compound_move(pos, parsedTurn, cstates);
+    StateInfo cstate;
+    LogicalMoveState ctransaction;
+    const int logicalPly = pos.game_ply();
+    const int logicalRule50 = pos.rule50_count();
+    do_compound_move(pos, parsedTurn, cstate, ctransaction);
     check(pos.side_to_move() == BLACK, "do_compound_move did not switch side to move to Black");
     check(pos.at_complete_turn_boundary(), "after do_compound_move not at turn boundary");
-    undo_compound_move(pos, parsedTurn);
+    check(pos.game_ply() == logicalPly + 1 && pos.rule50_count() == logicalRule50 + 1,
+          "compound components changed logical counters by their physical cost");
+    check(pos.state()->previous == &states->back(),
+          "logical move inserted component states into persistent history");
+    check(pos.state()->logicalMove == parsedTurn,
+          "persistent state did not retain the complete logical move");
+    undo_compound_move(pos, parsedTurn, ctransaction);
     check(pos.side_to_move() == WHITE, "undo_compound_move did not restore side to move");
     check(pos.at_complete_turn_boundary(), "after undo_compound_move not at turn boundary");
 
@@ -1415,10 +1427,10 @@ void compound_turn_rules() {
     const Key exactPushKey = pos.key();
     const std::string exactPushFen = pos.fen();
     states->emplace_back();
-    pos.do_move(exactTwoStepPush, states->back());
+    pos.do_component(exactTwoStepPush, states->back());
     check(pos.game_ply() == 1 && pos.side_to_move() == BLACK,
           "turnSteps=2 two-step push did not advance one logical ply");
-    pos.undo_move(exactTwoStepPush);
+    pos.undo_component(exactTwoStepPush);
     states->pop_back();
     check(pos.game_ply() == 0 && pos.key() == exactPushKey && pos.fen() == exactPushFen,
           "turnSteps=2 two-step push undo corrupted the logical position");
@@ -1431,10 +1443,10 @@ void compound_turn_rules() {
     const Key exactPullKey = pos.key();
     const std::string exactPullFen = pos.fen();
     states->emplace_back();
-    pos.do_move(exactTwoStepPull, states->back());
+    pos.do_component(exactTwoStepPull, states->back());
     check(pos.game_ply() == 1 && pos.side_to_move() == BLACK,
           "turnSteps=2 two-step pull did not advance one logical ply");
-    pos.undo_move(exactTwoStepPull);
+    pos.undo_component(exactTwoStepPull);
     states->pop_back();
     check(pos.game_ply() == 0 && pos.key() == exactPullKey && pos.fen() == exactPullFen,
           "turnSteps=2 two-step pull undo corrupted the logical position");
@@ -1450,14 +1462,14 @@ void compound_turn_rules() {
         Move filler = parse_move(pos, fillerMoves[i]);
         fillerMovesParsed[i] = filler;
         states->emplace_back();
-        pos.do_move(filler, states->back());
+        pos.do_component(filler, states->back());
     }
     Move latePull = make_pull(SQ_D4, SQ_E4, SQ_D5);
     check(pos.compound_turn_step() == 3 && !pos.legal(latePull),
           "Position::legal accepted a two-step pull over the remaining turn budget");
     for (int i = 0; i < 3; ++i)
     {
-        pos.undo_move(fillerMovesParsed[2 - i]);
+        pos.undo_component(fillerMovesParsed[2 - i]);
         states->pop_back();
     }
 
@@ -1465,11 +1477,11 @@ void compound_turn_rules() {
                  "8/8/8/3r4/3C4/8/8/8 w - - 1 1");
     Move optionalBoundaryStep = parse_move(pos, "d4d3");
     states->emplace_back();
-    pos.do_move(optionalBoundaryStep, states->back());
+    pos.do_component(optionalBoundaryStep, states->back());
     Value optionalResult = VALUE_NONE;
     check(pos.compound_turn_step() != 0 && !pos.is_optional_game_end(optionalResult),
           "optional game-end rule fired inside a compound turn");
-    pos.undo_move(optionalBoundaryStep);
+    pos.undo_component(optionalBoundaryStep);
     states->pop_back();
 
     // Test formatting compound move
@@ -1479,31 +1491,31 @@ void compound_turn_rules() {
     // A configured pass is a complete compound turn, not a no-op component.
     set_position(pos, states, "generic-compound-pass-audit",
                  "8/8/8/3r4/3C4/8/8/8 w - - 0 1");
-    std::vector<CompoundMove> passGenerated = generate_compound_moves(pos);
+    std::vector<LogicalMove> passGenerated = generate_compound_moves(pos);
     check(std::any_of(passGenerated.begin(), passGenerated.end(),
-                      [](const CompoundMove& move) {
-                          return move.length == 1 && is_pass(move.steps[0]);
+                      [](const LogicalMove& move) {
+                          return move.length == 1 && is_pass(move.components[0]);
                       }),
           "pass=true compound variant did not generate a pass turn");
-    for (const CompoundMove& generatedTurn : passGenerated)
+    for (const LogicalMove& generatedTurn : passGenerated)
     {
         for (int i = 1; i < generatedTurn.length; ++i)
-            check(!is_pass(generatedTurn.steps[i]),
+            check(!is_pass(generatedTurn.components[i]),
                   "compound generation appended a pass after an earlier step");
 
         const std::string text = compound_move_to_string(pos, generatedTurn);
-        CompoundMove reparsed;
+        LogicalMove reparsed;
         check(parse_compound_move(pos, text, reparsed) && reparsed == generatedTurn,
               "generated pass-enabled compound turn did not round-trip: " + text);
     }
-    CompoundMove parsedPass;
+    LogicalMove parsedPass;
     check(parse_compound_move(pos, "0000", parsedPass)
-          && parsedPass.length == 1 && is_pass(parsedPass.steps[0]),
+          && parsedPass.length == 1 && is_pass(parsedPass.components[0]),
           "pass=true compound variant did not parse a pass turn");
-    do_compound_move(pos, parsedPass, cstates);
+    do_compound_move(pos, parsedPass, cstate, ctransaction);
     check(pos.side_to_move() == BLACK && pos.at_complete_turn_boundary(),
           "compound pass did not complete the turn");
-    undo_compound_move(pos, parsedPass);
+    undo_compound_move(pos, parsedPass, ctransaction);
     check(pos.side_to_move() == WHITE && pos.at_complete_turn_boundary(),
           "compound pass undo did not restore the position");
 
@@ -1518,13 +1530,13 @@ void compound_turn_rules() {
     // Test intermediate reversal followed by real component
     set_position(pos, states, "generic-compound-pass-audit",
                  "8/8/8/3r4/3C4/8/8/8 w - - 0 1");
-    CompoundMove reversalTurn;
+    LogicalMove reversalTurn;
     ok = parse_compound_move(pos, "d4e4,e4d4,d4d3", reversalTurn);
     check(ok && reversalTurn.length == 3, "failed to parse reversal followed by real component");
 
     // A pure reversal d4e4, e4d4 is pass-equivalent and remains filtered even
     // in the pass-enabled profile; the explicit 0000 move is canonical.
-    CompoundMove pureReversal;
+    LogicalMove pureReversal;
     ok = parse_compound_move(pos, "d4e4,e4d4", pureReversal);
     check(!ok, "pure pass-equivalent reversal was incorrectly accepted as a legal turn");
 

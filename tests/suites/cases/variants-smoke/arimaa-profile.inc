@@ -82,6 +82,16 @@ EOF
 )
 assert_contains "$out" "^bestmove a2a3,a3a4$"
 
+# Strength handicapping must select a complete logical turn, not only its
+# first component.
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
+setoption name Skill Level value 1
+position fen cdhmehdc/rrrrrrrr/8/8/8/8/RRRRRRRR/CDHMEHDC w - - 0 1
+go depth 1 searchmoves a2a3,a3a4
+EOF
+)
+assert_contains "$out" "^bestmove a2a3,a3a4$"
+
 # Active node and time limits must stop ordinary turn search, not just setup
 # parsing or invalid root restrictions.
 out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
