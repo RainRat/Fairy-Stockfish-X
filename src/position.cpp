@@ -9671,7 +9671,12 @@ void Position::do_component(Move m, StateInfo& newSt, bool countNode) {
 void Position::undo_move(Move m) {
 
 #ifdef ENABLE_COMPOUND_TURNS
-  assert(!compound_turn_active());
+  // The final sequential-setup drop activates compound turns in the new
+  // state, although that physical move was made through the ordinary move
+  // API. Allow undoing precisely that setup handoff; compound components and
+  // completed logical moves still require their matching logical undo path.
+  assert(!compound_turn_active()
+         || (st->previous != nullptr && !st->previous->compoundTurnReady));
 #endif
   undo_component(m);
 }
