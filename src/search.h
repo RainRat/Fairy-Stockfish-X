@@ -45,6 +45,7 @@ struct Stack {
   int ply;
   Move currentMove;
   Piece currentMovePiece;
+  bool currentMoveHistoryCompatible;
   Move excludedMove;
   Move killers[2];
   Value staticEval;
@@ -63,7 +64,7 @@ struct Stack {
 
 struct RootMove {
 
-  explicit RootMove(LogicalMove m) : pv(1, m) {}
+  explicit RootMove(LogicalMove m, LogicalMoveInfo i = {}) : info(i), pv(1, m) {}
   explicit RootMove(Move m) : RootMove(LogicalMove(m)) {}
   bool extract_ponder_from_tt(Position& pos);
   bool operator==(const LogicalMove& m) const { return pv[0] == m; }
@@ -78,6 +79,7 @@ struct RootMove {
   int selDepth = 0;
   int tbRank = 0;
   Value tbScore = VALUE_ZERO;
+  LogicalMoveInfo info;
   std::vector<LogicalMove> pv;
 };
 

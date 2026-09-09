@@ -879,6 +879,7 @@ namespace {
 
     // Step 1. Initialize node
     Thread* thisThread = pos.this_thread();
+    PieceToHistory* neutralContinuationHistory = &thisThread->continuationHistory[0][0][NO_PIECE][0];
     const LogicalMoveCapabilities moveCapabilities = pos.logical_move_capabilities();
     // This only selects the move interface. Search-policy assumptions are
     // expressed by moveCapabilities and LogicalMoveInfo below.
@@ -927,7 +928,8 @@ namespace {
     (ss+1)->excludedMove = bestMove = MOVE_NONE;
     (ss+2)->killers[0]   = (ss+2)->killers[1] = MOVE_NONE;
     ss->doubleExtensions = (ss-1)->doubleExtensions;
-    Square prevSq        = to_sq((ss-1)->currentMove);
+    const bool previousMoveHistoryCompatible = (ss-1)->currentMoveHistoryCompatible;
+    Square prevSq = previousMoveHistoryCompatible ? to_sq((ss-1)->currentMove) : SQ_NONE;
 
     // Initialize statScore to zero for the grandchildren of the current position.
     // So statScore is shared between all grandchildren and only the first grandchild
@@ -955,6 +957,7 @@ namespace {
         && depth > 12
         && ss->ply - 1 < MAX_LPH
         && !priorCapture
+        && previousMoveHistoryCompatible
         && is_ok((ss-1)->currentMove))
         thisThread->lowPlyHistory[ss->ply - 1][from_to((ss-1)->currentMove)] << stat_bonus(depth - 5);
 
@@ -980,7 +983,9 @@ namespace {
                     update_quiet_stats(pos, ss, ttMove, stat_bonus(depth), depth);
 
                 // Extra penalty for early quiet moves of the previous ply
-                if ((ss-1)->moveCount <= 2 && !priorCapture)
+                if (   previousMoveHistoryCompatible
+                    && (ss-1)->moveCount <= 2
+                    && !priorCapture)
                     update_continuation_histories(ss-1, pos.piece_on(prevSq), prevSq, -stat_bonus(depth + 1));
             }
             // Penalty for a quiet ttMove that fails low
@@ -1094,7 +1099,10 @@ namespace {
     }
 
     // Use static evaluation difference to improve quiet move ordering
-    if (is_ok((ss-1)->currentMove) && !(ss-1)->inCheck && !priorCapture)
+    if (   previousMoveHistoryCompatible
+        && is_ok((ss-1)->currentMove)
+        && !(ss-1)->inCheck
+        && !priorCapture)
     {
         int bonus = std::clamp(-depth * 4 * int((ss-1)->staticEval + ss->staticEval), -1000, 1000);
         thisThread->mainHistory[~us][from_to((ss-1)->currentMove)] << bonus;
@@ -1142,7 +1150,8 @@ namespace {
 
         ss->currentMove = MOVE_NULL;
         ss->currentMovePiece = NO_PIECE;
-        ss->continuationHistory = &thisThread->continuationHistory[0][0][NO_PIECE][0];
+        ss->currentMoveHistoryCompatible = false;
+        ss->continuationHistory = neutralContinuationHistory;
 
         pos.do_null_move(st);
 
@@ -1222,6 +1231,7 @@ namespace {
                 probCutCount++;
 
                 ss->currentMove = move;
+                ss->currentMoveHistoryCompatible = true;
                 ss->currentMovePiece = pos.moved_piece(move);
                 ss->continuationHistory = &thisThread->continuationHistory[ss->inCheck]
                                                                           [captureOrPromotion]
@@ -1279,11 +1289,15 @@ moves_loop: // When in check, search starts from here
         return probCutBeta;
 
 
-    const PieceToHistory* contHist[] = { (ss-1)->continuationHistory, (ss-2)->continuationHistory,
+    const PieceToHistory* contHist[] = { previousMoveHistoryCompatible ? (ss-1)->continuationHistory
+                                                                       : neutralContinuationHistory,
+                                          (ss-2)->continuationHistory,
                                           nullptr                   , (ss-4)->continuationHistory,
                                           nullptr                   , (ss-6)->continuationHistory };
 
-    Move countermove = thisThread->counterMoves[pos.piece_on(prevSq)][prevSq];
+    Move countermove = previousMoveHistoryCompatible
+                     ? thisThread->counterMoves[pos.piece_on(prevSq)][prevSq]
+                     : MOVE_NONE;
 
     MovePicker mp(pos, ttMove, depth, &thisThread->mainHistory,
                                       &thisThread->gateHistory,
@@ -1315,7 +1329,9 @@ moves_loop: // When in check, search starts from here
     // Step 12. Loop through all pseudo-legal moves until no moves remain
     // or a beta cutoff occurs.
     bool allMovesHistoryCompatible = true;
+#ifdef ENABLE_COMPOUND_TURNS
     size_t rootMoveIndex = thisThread->pvIdx;
+#endif
     while (true)
     {
       LogicalMove logicalMove;
@@ -1327,15 +1343,10 @@ moves_loop: // When in check, search starts from here
           {
               if (rootMoveIndex >= thisThread->pvLast)
                   break;
-              logicalMove = thisThread->rootMoves[rootMoveIndex++].pv[0];
+              RootMove& rootMove = thisThread->rootMoves[rootMoveIndex++];
+              logicalMove = rootMove.pv[0];
               move = logicalMove.first();
-              moveInfo.representative = move;
-              moveInfo.movedPiece = pos.moved_piece(move);
-              moveInfo.captureLike = pos.capture(move);
-              moveInfo.promotionLike = is_promotion_move(move);
-              moveInfo.historyCompatible = logicalMove.is_single();
-              moveInfo.seeReliable = moveInfo.historyCompatible;
-              moveInfo.givesCheck = moveInfo.historyCompatible && pos.gives_check(move);
+              moveInfo = rootMove.info;
           }
           else if (!logicalSource->next(logicalMove, moveInfo))
               break;
@@ -1372,7 +1383,10 @@ moves_loop: // When in check, search starts from here
       if (!logicalMovePosition)
       {
           moveInfo.movedPiece = pos.moved_piece(move);
-          moveInfo.captureLike = pos.capture(move);
+          moveInfo.removesMaterial = pos.capture(move);
+          Piece captured = captured_piece_or_on(pos, move);
+          moveInfo.capturesOpponent = captured != NO_PIECE && color_of(captured) != us;
+          moveInfo.losesOwnMaterial = captured != NO_PIECE && color_of(captured) == us;
           moveInfo.promotionLike = is_promotion_move(move);
           moveInfo.givesCheck = pos.gives_check(move);
           moveInfo.seeReliable = true;
@@ -1394,7 +1408,7 @@ moves_loop: // When in check, search starts from here
           (ss+1)->pv = nullptr;
 
       extension = 0;
-      captureOrPromotion = moveInfo.captureLike || moveInfo.promotionLike;
+      captureOrPromotion = moveInfo.removesMaterial || moveInfo.promotionLike;
       movedPiece = moveInfo.movedPiece;
       givesCheck = moveInfo.givesCheck;
 
@@ -1549,12 +1563,15 @@ moves_loop: // When in check, search starts from here
 
       // Speculative prefetch as early as possible
       // Update the current move (this must be done after singular extension search)
-      ss->currentMove = move;
-      ss->currentMovePiece = pos.moved_piece(move);
-      ss->continuationHistory = &thisThread->continuationHistory[ss->inCheck]
-                                                                [captureOrPromotion]
-                                                                [history_slot(movedPiece)]
-                                                                [to_sq(move)];
+      ss->currentMoveHistoryCompatible = moveInfo.historyCompatible;
+      ss->currentMove = moveInfo.historyCompatible ? move : MOVE_NONE;
+      ss->currentMovePiece = moveInfo.historyCompatible ? movedPiece : NO_PIECE;
+      ss->continuationHistory = moveInfo.historyCompatible
+                              ? &thisThread->continuationHistory[ss->inCheck]
+                                                                     [captureOrPromotion]
+                                                                     [history_slot(movedPiece)]
+                                                                     [to_sq(move)]
+                              : neutralContinuationHistory;
 
       // Step 15. Make the move
 #ifdef ENABLE_COMPOUND_TURNS
@@ -1791,6 +1808,7 @@ moves_loop: // When in check, search starts from here
 
     // Bonus for prior countermove that caused the fail low
     else if (   allMovesHistoryCompatible
+             && previousMoveHistoryCompatible
              && (depth >= 3 || PvNode)
              && !priorCapture)
         update_continuation_histories(ss-1, pos.piece_on(prevSq), prevSq, stat_bonus(depth));
@@ -1828,9 +1846,9 @@ moves_loop: // When in check, search starts from here
     static_assert(nodeType != Root);
     constexpr bool PvNode = nodeType == PV;
 
-#ifdef ENABLE_COMPOUND_TURNS
-    // Compound variants currently declare static evaluation because the
-    // tactical provider does not yet expose a bounded complete-turn move set.
+    // Variants that do not provide a bounded tactical move set can request a
+    // static-evaluation quiescence search. The ordinary move provider remains
+    // available for variants without compound turns.
     if (pos.variant()->quiescencePolicy == QuiescencePolicy::STATIC_EVAL)
     {
         Value result;
@@ -1840,7 +1858,6 @@ moves_loop: // When in check, search starts from here
             return pos.stalemate_value(ss->ply);
         return Eval::evaluate(pos);
     }
-#endif
 
     assert(alpha >= -VALUE_INFINITE && alpha < beta && beta <= VALUE_INFINITE);
     assert(PvNode || (alpha == beta - 1));
@@ -1950,7 +1967,9 @@ moves_loop: // When in check, search starts from here
         futilityBase = bestValue + 155;
     }
 
-    const PieceToHistory* contHist[] = { (ss-1)->continuationHistory, (ss-2)->continuationHistory,
+    const PieceToHistory* contHist[] = { (ss-1)->currentMoveHistoryCompatible ? (ss-1)->continuationHistory
+                                                                             : &thisThread->continuationHistory[0][0][NO_PIECE][0],
+                                          (ss-2)->continuationHistory,
                                           nullptr                   , (ss-4)->continuationHistory,
                                           nullptr                   , (ss-6)->continuationHistory };
 
@@ -1962,7 +1981,7 @@ moves_loop: // When in check, search starts from here
                                       &thisThread->gateHistory,
                                       &thisThread->captureHistory,
                                       contHist,
-                                      to_sq((ss-1)->currentMove));
+                                      (ss-1)->currentMoveHistoryCompatible ? to_sq((ss-1)->currentMove) : SQ_NONE);
 
     // Loop through the moves until no moves remain or a beta cutoff occurs
     while ((move = mp.next_move()) != MOVE_NONE)
@@ -2019,6 +2038,7 @@ moves_loop: // When in check, search starts from here
           continue;
 
       ss->currentMove = move;
+      ss->currentMoveHistoryCompatible = true;
       ss->currentMovePiece = pos.moved_piece(move);
       ss->continuationHistory = &thisThread->continuationHistory[ss->inCheck]
                                                                 [captureOrPromotion]
@@ -2184,7 +2204,8 @@ moves_loop: // When in check, search starts from here
 
     // Extra penalty for a quiet early move that was not a TT move or
     // main killer move in previous ply when it gets refuted.
-    if (   ((ss-1)->moveCount == 1 + (ss-1)->ttHit || ((ss-1)->currentMove == (ss-1)->killers[0]))
+    if (   (ss-1)->currentMoveHistoryCompatible
+        && ((ss-1)->moveCount == 1 + (ss-1)->ttHit || ((ss-1)->currentMove == (ss-1)->killers[0]))
         && !pos.captured_piece())
             update_continuation_histories(ss-1, pos.piece_on(prevSq), prevSq, -bonus1);
 
@@ -2212,7 +2233,7 @@ moves_loop: // When in check, search starts from here
         // Only update first 2 continuation histories if we are in check
         if (ss->inCheck && i > 2)
             break;
-        if (is_ok((ss-i)->currentMove))
+        if ((ss-i)->currentMoveHistoryCompatible && is_ok((ss-i)->currentMove))
             (*(ss-i)->continuationHistory)[history_slot(pc)][to] << bonus;
     }
   }
@@ -2242,7 +2263,7 @@ moves_loop: // When in check, search starts from here
         thisThread->mainHistory[us][from_to(reverse_move(move))] << -bonus;
 
     // Update countermove history
-    if (is_ok((ss-1)->currentMove))
+    if ((ss-1)->currentMoveHistoryCompatible && is_ok((ss-1)->currentMove))
     {
         Square prevSq = to_sq((ss-1)->currentMove);
         thisThread->counterMoves[pos.piece_on(prevSq)][prevSq] = move;

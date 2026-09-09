@@ -22,6 +22,17 @@ int compound_move_cost(const Position& pos, Move move) {
     return pos.compound_turn_step_cost(move);
 }
 
+void record_removed_piece(LogicalMoveInfo& info, Piece piece, Color mover) {
+    if (piece == NO_PIECE)
+        return;
+
+    info.removesMaterial = true;
+    if (color_of(piece) == mover)
+        info.losesOwnMaterial = true;
+    else
+        info.capturesOpponent = true;
+}
+
 std::string compound_step_to_string(Position& pos, Move move) {
     if (!is_encoded_push(move))
         return UCI::move(pos, move);
@@ -109,27 +120,28 @@ LogicalMoveSource::LogicalMoveSource(Position& pos_, Thread* thread_,
 
 }
 
-LogicalMoveSource::~LogicalMoveSource() {
-  if (thread)
-      for (auto buffer : buffers)
-          thread->release_buffer(buffer);
-}
+LogicalMoveSource::~LogicalMoveSource() = default;
 
 void LogicalMoveSource::initialize_frame(int frameDepth) {
-  if (!buffers[frameDepth])
+  ExtMove* scratch = nullptr;
+  std::unique_ptr<ExtMove[]> ownedScratch;
+  if (thread)
+      scratch = thread->acquire_buffer();
+  else
   {
-      if (thread)
-          buffers[frameDepth] = thread->acquire_buffer();
-      else
-      {
-          ownedBuffers[frameDepth] = std::make_unique<ExtMove[]>(MOVEGEN_OVERFLOW_CAPACITY);
-          buffers[frameDepth] = ownedBuffers[frameDepth].get();
-      }
+      ownedScratch = std::make_unique<ExtMove[]>(MOVEGEN_OVERFLOW_CAPACITY);
+      scratch = ownedScratch.get();
   }
+
   Frame& frame = frames[frameDepth];
-  frame.current = buffers[frameDepth];
-  frame.end = generate<LEGAL>(pos, frame.current);
-  assert(frame.end - frame.current <= MOVEGEN_OVERFLOW_CAPACITY);
+  ExtMove* end = generate<LEGAL>(pos, scratch);
+  assert(end - scratch <= MOVEGEN_OVERFLOW_CAPACITY);
+  frame.moves.assign(scratch, end);
+  frame.current = frame.moves.data();
+  frame.end = frame.current + frame.moves.size();
+
+  if (thread)
+      thread->release_buffer(scratch);
 }
 
 void LogicalMoveSource::apply_path(int length) {
@@ -206,17 +218,28 @@ bool LogicalMoveSource::next(LogicalMove& move, LogicalMoveInfo& info) {
       candidateInfo.seeReliable = turn.is_single()
                                && !pos.see_pruning_unreliable(turn.components[0]);
       candidateInfo.givesCheck = turn.is_single() && pos.gives_check(turn.components[0]);
+      const Color mover = pos.side_to_move();
       apply_path(depth + 1);
 
       for (int i = 0; i <= depth; ++i)
       {
           const StateInfo& componentState = transaction.components[i];
-          candidateInfo.captureLike = candidateInfo.captureLike
-                                    || bool(componentState.captured)
-                                    || bool(componentState.jumpedEnPassantCaptured)
-                                    || bool(componentState.trapRemoved)
-                                    || bool(componentState.bycatchSquares)
-                                    || bool(componentState.dead);
+          record_removed_piece(candidateInfo, componentState.captured.piece.piece, mover);
+          record_removed_piece(candidateInfo, componentState.jumpedEnPassantCaptured.piece.piece, mover);
+          record_removed_piece(candidateInfo, componentState.dead.piece, mover);
+
+          Bitboard removed = componentState.bycatchSquares
+                           & ~componentState.blastPromotedSquares
+                           & ~componentState.laserTransformedSquares;
+          while (removed)
+          {
+              Square square = pop_lsb(removed);
+              record_removed_piece(candidateInfo, componentState.bycatchPieces[square].piece(), mover);
+          }
+
+          for (int transfer = 0; transfer < componentState.push.transferCount; ++transfer)
+              record_removed_piece(candidateInfo, componentState.push.transfers[transfer].piece, mover);
+
           candidateInfo.promotionLike = candidateInfo.promotionLike
                                       || is_promotion_move(turn.components[i])
                                       || componentState.promotionPawn != NO_PIECE
