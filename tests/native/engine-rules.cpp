@@ -1445,6 +1445,32 @@ void compound_turn_rules() {
           && !ownRemovalInfo.capturesOpponent,
           "compound own-material removal metadata was classified incorrectly");
 
+    set_position(pos, states, "generic-compound-capture-audit",
+                 "8/8/8/3c4/3C4/8/8/8 w - - 0 1");
+    const Move directCapture = make_move(SQ_D4, SQ_D5);
+    check(pos.pseudo_legal(directCapture) && pos.legal(directCapture),
+          "compound direct-capture audit position did not allow its capture");
+    LogicalMove directCaptureTurn;
+    LogicalMoveInfo directCaptureInfo;
+    {
+        LogicalMoveState captureTransaction;
+        LogicalMoveSource captureSource(pos, nullptr, captureTransaction);
+        LogicalMove candidate;
+        LogicalMoveInfo candidateInfo;
+        while (captureSource.next(candidate, candidateInfo))
+            if (candidate.length == 1 && candidate.components[0] == directCapture)
+            {
+                directCaptureTurn = candidate;
+                directCaptureInfo = candidateInfo;
+                break;
+            }
+    }
+    check(directCaptureTurn.length == 1,
+          "compound source did not expose the direct capture component");
+    check(directCaptureInfo.capturesOpponent && directCaptureInfo.removesMaterial
+          && !directCaptureInfo.losesOwnMaterial,
+          "compound direct-capture metadata was classified incorrectly");
+
     set_position(pos, states, "generic-compound-turn-audit",
                  "8/8/8/3r4/3C4/8/8/8 w - - 0 1");
 
@@ -2938,6 +2964,11 @@ trapRegion = d6
 trapProtection = none
 pushPullRule = none
 startFen = 8/8/8/8/3C4/8/8/8 w - - 0 1
+
+[generic-compound-capture-audit:generic-compound-turn-audit]
+customPiece2 = c:W
+captureAllowed = c:c
+startFen = 8/8/8/3c4/3C4/8/8/8 w - - 0 1
 
 [arimaa-pull-turn-two-audit:arimaa-push-rule-generic-audit]
 turnSteps = 2
