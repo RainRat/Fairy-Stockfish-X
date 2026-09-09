@@ -46,6 +46,8 @@ struct Stack {
   Move currentMove;
   Piece currentMovePiece;
   bool currentMoveHistoryCompatible;
+  bool currentMoveCapturedOpponent;
+  bool currentMoveRemovedMaterial;
   Move excludedMove;
   Move killers[2];
   Value staticEval;

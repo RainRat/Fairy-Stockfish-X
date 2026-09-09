@@ -1967,11 +1967,6 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("perpetualCheckIllegal", v->perpetualCheckIllegal);
     parse_attribute("moveRepetitionIllegal", v->moveRepetitionIllegal);
     parse_attribute("samePlayerBoardRepetitionIllegalAtN", v->samePlayerBoardRepetitionIllegalAtN);
-    bool legacySamePlayerBoardRepetitionIllegal = false;
-    if (parse_attribute("samePlayerBoardRepetitionIllegal", legacySamePlayerBoardRepetitionIllegal)
-        && !config.count("samePlayerBoardRepetitionIllegalAtN"))
-        v->samePlayerBoardRepetitionIllegalAtN = legacySamePlayerBoardRepetitionIllegal ? 1 : 0;
-    v->samePlayerBoardRepetitionIllegal = v->samePlayerBoardRepetitionIllegalAtN > 0;
     parse_attribute("alternating2x2DropIllegal", v->alternating2x2DropIllegal);
     parse_attribute("pathwayDropRule", v->pathwayDropRule);
     parse_attribute("weakDiagonalConnect", v->weakDiagonalConnect);
@@ -2338,13 +2333,6 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
 
     if (v->compoundTurnSteps > 0)
     {
-        if (v->quiescencePolicy != QuiescencePolicy::STATIC_EVAL)
-        {
-            if (DoCheck)
-                std::cerr << "turnSteps - compound turns require quiescencePolicy=static-eval until complete-turn tactical qsearch is supported." << std::endl;
-            valid = false;
-        }
-
         // Compound turns expose one complete move to the outside world, so
         // rules that require a decision after every component are rejected
         // until they have an explicit component-level policy. Royal/check

@@ -79,7 +79,7 @@ startFen = 8/8/8/8/8/8/8/4K3[M]
 startFen = 4k3/8/8/8/8/8/R7/4K3 w - - 0 1
 
 [same-player-repeat-illegal:same-player-repeat-control]
-samePlayerBoardRepetitionIllegal = true
+samePlayerBoardRepetitionIllegalAtN = 1
 
 [flip5:chess]
 maxRank = 5

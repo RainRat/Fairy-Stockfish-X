@@ -1345,17 +1345,15 @@ void compound_turn_rules() {
           "generic compound turns inherited Arimaa repetition policy");
     check(variants.get("arimaa")->samePlayerBoardRepetitionIllegalAtN == 2,
           "Arimaa did not enable complete-turn repetition illegality");
-    check(variants.get("arimaa")->quiescencePolicy == QuiescencePolicy::STATIC_EVAL,
-          "Arimaa did not declare its static-eval qsearch policy");
-    check(variants.get("generic-legacy-repetition-audit")->samePlayerBoardRepetitionIllegalAtN == 1,
-          "legacy same-player repetition setting did not map to threshold one");
+    check(variants.get("arimaa")->quiescencePolicy == QuiescencePolicy::STANDARD,
+          "Arimaa unexpectedly overrides the logical-provider qsearch policy");
     check(pos.compound_turn_active(), "generic compound turn is not active");
     check(pos.compound_turn_steps() == 3, "generic compound turn steps != 3");
     const LogicalMoveCapabilities capabilities = pos.logical_move_capabilities();
     check(!capabilities.futilityPruning && !capabilities.nullMovePruning && !capabilities.probCut,
           "compound provider exposed unsupported standard pruning capabilities");
-    check(variants.get("generic-compound-turn-audit")->quiescencePolicy == QuiescencePolicy::STATIC_EVAL,
-          "compound variant did not select static-eval qsearch policy");
+    check(capabilities.quiescence == QuiescenceSupport::STATIC_ONLY,
+          "compound provider did not select static-eval qsearch capability");
     check(pos.at_complete_turn_boundary(), "fresh position is not at complete turn boundary");
 
     set_position(pos, states, "generic-compound-repetition-audit",
@@ -2924,7 +2922,7 @@ startFen = 9r/10/10/10/10/10/10/10/10/R9 w - - 0 1
 
 [arimaa-wrapped-push-audit:arimaa]
 cylindrical = true
-samePlayerBoardRepetitionIllegal = false
+samePlayerBoardRepetitionIllegalAtN = 0
 
 [generic-compound-turn-audit:fairy]
 pieceToCharTable = RCDHMErcdhme
@@ -2953,7 +2951,6 @@ pushPullRule = two-step
 pushFirstColor = them
 stepwisePushing = true
 turnSteps = 3
-quiescencePolicy = static-eval
 pass = false
 
 [generic-compound-turn-two-audit:generic-compound-turn-audit]
@@ -3007,8 +3004,8 @@ samePlayerBoardRepetitionIllegalAtN = 2
 [generic-compound-boundary-repetition-audit:generic-compound-pass-audit]
 samePlayerBoardRepetitionIllegalAtN = 1
 
-[generic-legacy-repetition-audit:generic-compound-turn-audit]
-samePlayerBoardRepetitionIllegal = true
+[generic-repetition-audit:generic-compound-turn-audit]
+samePlayerBoardRepetitionIllegalAtN = 1
 )INI");
     variants.parse_istream<false>(inline_config);
 }

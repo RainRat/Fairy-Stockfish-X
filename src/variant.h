@@ -483,8 +483,6 @@ struct Variant {
   bool perpetualCheckIllegal = false;
   bool moveRepetitionIllegal = false;
   int samePlayerBoardRepetitionIllegalAtN = 0;
-  // Deprecated legacy switch kept for compatibility with existing configs.
-  bool samePlayerBoardRepetitionIllegal = false;
   bool alternating2x2DropIllegal = false;
   bool pathwayDropRule = false;
   bool weakDiagonalConnect = false;

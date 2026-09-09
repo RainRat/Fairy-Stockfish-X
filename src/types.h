@@ -890,6 +890,11 @@ struct LogicalMoveInfo {
   bool seeReliable = false;
 };
 
+enum class QuiescenceSupport : uint8_t {
+  STANDARD,
+  STATIC_ONLY
+};
+
 /// Search capabilities supplied by the logical-move provider. These describe
 /// the assumptions of a search heuristic, rather than how many components a
 /// logical move happens to contain.
@@ -897,6 +902,7 @@ struct LogicalMoveCapabilities {
   bool futilityPruning = true;
   bool nullMovePruning = true;
   bool probCut = true;
+  QuiescenceSupport quiescence = QuiescenceSupport::STANDARD;
 };
 
 enum PieceSet : uint64_t {

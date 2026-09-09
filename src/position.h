@@ -816,9 +816,7 @@ public:
   int compound_turn_steps() const;
   int compound_turn_step() const;
   int compound_turn_step_cost(Move m) const;
-#ifdef ENABLE_COMPOUND_TURNS
-  bool same_player_board_repetition_illegal_at_turn_boundary() const;
-#endif
+  bool same_player_board_repetition_illegal(const StateInfo* history = nullptr) const;
   bool has_setup_drop(Color c) const;
   Color sequential_setup_side() const;
   bool pass_until_setup() const;
@@ -2927,8 +2925,8 @@ inline LogicalMoveCapabilities Position::logical_move_capabilities() const {
   // The current logical provider does not expose the complete tactical move
   // set or prove the null-move assumptions required by these heuristics. This
   // is a provider capability boundary; search need not inspect components.
-  if (var->compoundTurnSteps)
-      return {false, false, false};
+  if (logical_moves_active())
+      return {false, false, false, QuiescenceSupport::STATIC_ONLY};
 #endif
   return {};
 }

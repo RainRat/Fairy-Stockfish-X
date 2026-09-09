@@ -74,11 +74,11 @@ bool generate_turns(Position& pos,
         {
             StateInfo boundaryState;
             pos.end_compound_turn(boundaryState);
-            repetitionIllegal = pos.same_player_board_repetition_illegal_at_turn_boundary();
+            repetitionIllegal = pos.same_player_board_repetition_illegal(pos.state()->previous->previous);
             pos.undo_compound_turn();
         }
         else
-            repetitionIllegal = pos.same_player_board_repetition_illegal_at_turn_boundary();
+            repetitionIllegal = pos.same_player_board_repetition_illegal(pos.state()->previous->previous);
 
         bool keepGenerating = true;
         if ((is_pass(move) || pos.board_layout_key() != startBoardKey)
@@ -251,11 +251,11 @@ bool LogicalMoveSource::next(LogicalMove& move, LogicalMoveInfo& info) {
       {
           StateInfo boundaryState;
           pos.end_compound_turn(boundaryState);
-          repetitionIllegal = pos.same_player_board_repetition_illegal_at_turn_boundary();
+          repetitionIllegal = pos.same_player_board_repetition_illegal(pos.state()->previous->previous);
           pos.undo_compound_turn();
       }
       else
-          repetitionIllegal = pos.same_player_board_repetition_illegal_at_turn_boundary();
+          repetitionIllegal = pos.same_player_board_repetition_illegal(pos.state()->previous->previous);
 
       const bool accepted = (is_pass(component) || pos.board_layout_key() != startBoardKey)
                          && !repetitionIllegal;
@@ -394,11 +394,11 @@ bool parse_compound_move(Position& pos, const std::string& text, LogicalMove& tu
   {
       StateInfo boundaryState;
       pos.end_compound_turn(boundaryState);
-      repetitionIllegal = pos.same_player_board_repetition_illegal_at_turn_boundary();
+      repetitionIllegal = pos.same_player_board_repetition_illegal(pos.state()->previous->previous);
       pos.undo_compound_turn();
   }
   else
-      repetitionIllegal = pos.same_player_board_repetition_illegal_at_turn_boundary();
+      repetitionIllegal = pos.same_player_board_repetition_illegal(pos.state()->previous->previous);
 
   for (int i = parsed.length - 1; i >= 0; --i)
       pos.undo_component(parsed.components[i]);

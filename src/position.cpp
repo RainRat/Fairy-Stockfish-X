@@ -1438,9 +1438,8 @@ bool Position::violates_same_player_board_repetition(Move m) const {
       return false;
 
 #ifdef ENABLE_COMPOUND_TURNS
-  // Same-player board repetition is checked after the complete turn has been
-  // materialized. Intermediate component states are not game positions for
-  // this rule and must not be compared by the ordinary move legality path.
+  // Component legality is not a completed-position repetition query. The
+  // compound provider checks the rule after it materializes a boundary.
   if (compound_turn_active())
       return false;
 #endif
@@ -1449,47 +1448,44 @@ bool Position::violates_same_player_board_repetition(Move m) const {
   SimulatedMoveGuard clearSimulation(*this, MOVE_NONE);
   ScopedProbeMove probe(*this, m, nextState);
 
-  int repetitions = 0;
-  int end = captures_to_hand() ? st->pliesFromNull
-                               : std::min(st->rule50, st->pliesFromNull);
-  if (end >= 4)
-  {
-      StateInfo* stp = st->previous->previous;
-      for (int i = 4; i <= end; i += 2)
-      {
-          stp = stp->previous->previous;
-          if (stp->move != MOVE_NONE && stp->layoutKey == st->layoutKey
-              && ++repetitions >= var->samePlayerBoardRepetitionIllegalAtN)
-          {
-              return true;
-          }
-      }
-  }
-
-  return false;
+  return same_player_board_repetition_illegal();
 }
 
-#ifdef ENABLE_COMPOUND_TURNS
+bool Position::same_player_board_repetition_illegal(const StateInfo* history) const {
 
-bool Position::same_player_board_repetition_illegal_at_turn_boundary() const {
-
-  if (var->samePlayerBoardRepetitionIllegalAtN <= 0
-      || !compound_turn_active() || st->compoundTurnStep != 0
-      || !st->compoundTurnReady)
+  if (var->samePlayerBoardRepetitionIllegalAtN <= 0)
       return false;
 
+  const bool includeInitialPosition = history != nullptr;
+  if (!history)
+  {
+      int end = captures_to_hand() ? st->pliesFromNull : std::min(st->rule50, st->pliesFromNull);
+      if (end < 4 || !st->previous || !st->previous->previous)
+          return false;
+
+      history = st->previous->previous;
+      int repetitions = 0;
+      for (int i = 4; i <= end && history; i += 2)
+      {
+          history = history->previous && history->previous->previous
+                  ? history->previous->previous : nullptr;
+          if (history && (includeInitialPosition || history->move != MOVE_NONE)
+              && history->layoutKey == st->layoutKey
+              && ++repetitions >= var->samePlayerBoardRepetitionIllegalAtN)
+              return true;
+      }
+      return false;
+  }
+
   int repetitions = 0;
-  for (const StateInfo* previous = st->previous; previous; previous = previous->previous)
-      if (previous->compoundTurnReady
-          && previous->compoundTurnStep == 0
-          && previous->boardKey == st->boardKey
+  for (const StateInfo* previous = history; previous; previous = previous->previous)
+      if ((includeInitialPosition || previous->move != MOVE_NONE)
+          && previous->layoutKey == st->layoutKey
           && ++repetitions >= var->samePlayerBoardRepetitionIllegalAtN)
           return true;
 
   return false;
 }
-
-#endif
 
 
 /// Position::init() initializes at startup the various arrays used to compute hash keys
