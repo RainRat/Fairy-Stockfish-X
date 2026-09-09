@@ -55,7 +55,7 @@ class LogicalMoveSource {
   const StateInfo* logicalRoot = nullptr;
   std::array<Frame, LogicalMove::MAX_COMPONENTS> frames{};
   LogicalMove turn;
-  Key startBoardKey = 0;
+  Key startBoundaryKey = 0;
   int depth = 0;
   bool initialized = false;
   bool descend = false;

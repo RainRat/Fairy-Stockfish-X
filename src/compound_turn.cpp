@@ -22,6 +22,25 @@ int compound_move_cost(const Position& pos, Move move) {
     return pos.compound_turn_step_cost(move);
 }
 
+bool compound_turn_candidate_accepted(Position& pos, Move move, int usedSteps,
+                                      Key startBoundaryKey,
+                                      const StateInfo* logicalRoot) {
+    const int moveCost = compound_move_cost(pos, move);
+    bool repetitionIllegal = false;
+    if (!is_pass(move) && usedSteps + moveCost < pos.compound_turn_steps())
+    {
+        StateInfo boundaryState;
+        pos.end_compound_turn(boundaryState);
+        repetitionIllegal = pos.same_player_board_repetition_illegal(logicalRoot->previous);
+        pos.undo_compound_turn();
+    }
+    else
+        repetitionIllegal = pos.same_player_board_repetition_illegal(logicalRoot->previous);
+
+    return (is_pass(move) || pos.compound_turn_boundary_key() != startBoundaryKey)
+        && !repetitionIllegal;
+}
+
 void record_removed_piece(LogicalMoveInfo& info, Piece piece, Color mover) {
     if (piece == NO_PIECE)
         return;
@@ -40,64 +59,6 @@ std::string compound_step_to_string(Position& pos, Move move) {
     return UCI::square(pos, from_sq(move))
          + UCI::square(pos, to_sq(move))
          + "," + UCI::square(pos, encoded_push_square(move));
-}
-
-using LogicalMoveCallback = std::function<bool(const LogicalMove&)>;
-
-bool generate_turns(Position& pos,
-                    const LogicalMoveCallback& callback,
-                    LogicalMove& turn,
-                    StateInfo* states,
-                    int depth,
-                    int usedSteps,
-                    Key startBoardKey,
-                    const StateInfo* logicalRoot)
-{
-    MoveList<LEGAL> moves(pos);
-    const int turnSteps = pos.compound_turn_steps();
-
-    for (const auto& move : moves)
-    {
-        // A pass completes the compound turn and cannot follow another step.
-        if (depth != 0 && is_pass(move))
-            continue;
-
-        const int moveCost = compound_move_cost(pos, move);
-        if (usedSteps + moveCost > turnSteps)
-            continue;
-
-        turn.components[depth] = move;
-        turn.length = uint8_t(depth + 1);
-
-        pos.do_component(move, states[depth], false);
-        bool repetitionIllegal = false;
-        if (!is_pass(move) && usedSteps + moveCost < turnSteps)
-        {
-            StateInfo boundaryState;
-            pos.end_compound_turn(boundaryState);
-            repetitionIllegal = pos.same_player_board_repetition_illegal(logicalRoot->previous);
-            pos.undo_compound_turn();
-        }
-        else
-            repetitionIllegal = pos.same_player_board_repetition_illegal(logicalRoot->previous);
-
-        bool keepGenerating = true;
-        if ((is_pass(move) || pos.board_layout_key() != startBoardKey)
-            && !repetitionIllegal)
-            keepGenerating = callback(turn);
-
-        if (keepGenerating && !is_pass(move)
-            && usedSteps + moveCost < turnSteps
-            && pos.compound_turn_active())
-            keepGenerating = generate_turns(pos, callback, turn, states, depth + 1,
-                                            usedSteps + moveCost, startBoardKey, logicalRoot);
-
-        pos.undo_component(move);
-        if (!keepGenerating)
-            return false;
-    }
-
-    return true;
 }
 
 } // namespace
@@ -168,7 +129,7 @@ bool LogicalMoveSource::next(LogicalMove& move, LogicalMoveInfo& info) {
 
   if (!initialized)
   {
-      startBoardKey = pos.board_layout_key();
+      startBoundaryKey = pos.compound_turn_boundary_key();
       logicalRoot = pos.state();
       initialize_frame(0);
       initialized = true;
@@ -248,19 +209,8 @@ bool LogicalMoveSource::next(LogicalMove& move, LogicalMoveInfo& info) {
                                       || componentState.consumedPromotionHandPiece != NO_PIECE;
       }
 
-      bool repetitionIllegal = false;
-      if (!is_pass(component) && usedSteps + moveCost < pos.compound_turn_steps())
-      {
-          StateInfo boundaryState;
-          pos.end_compound_turn(boundaryState);
-          repetitionIllegal = pos.same_player_board_repetition_illegal(logicalRoot->previous);
-          pos.undo_compound_turn();
-      }
-      else
-          repetitionIllegal = pos.same_player_board_repetition_illegal(logicalRoot->previous);
-
-      const bool accepted = (is_pass(component) || pos.board_layout_key() != startBoardKey)
-                         && !repetitionIllegal;
+      const bool accepted = compound_turn_candidate_accepted(pos, component, usedSteps,
+                                                              startBoundaryKey, logicalRoot);
       const bool canDescend = !is_pass(component)
                            && usedSteps + moveCost < pos.compound_turn_steps()
                            && pos.compound_turn_active();
@@ -287,14 +237,11 @@ std::vector<LogicalMove> generate_compound_moves(Position& pos) {
   if (pos.is_game_end(result))
       return turns;
 
+  LogicalMoveState transaction;
+  LogicalMoveSource source(pos, pos.this_thread(), transaction);
   LogicalMove turn;
-  alignas(Eval::NNUE::CacheLineSize) StateInfo states[LogicalMove::MAX_COMPONENTS + 1];
-  generate_turns(pos,
-                 [&](const LogicalMove& candidate) {
-                     turns.push_back(candidate);
-                     return true;
-                 },
-                 turn, states, 0, 0, pos.board_layout_key(), pos.state());
+  while (source.next(turn))
+      turns.push_back(turn);
   return turns;
 }
 
@@ -307,16 +254,10 @@ bool has_any_compound_move(Position& pos) {
   if (pos.is_game_end(result))
       return false;
 
+  LogicalMoveState transaction;
+  LogicalMoveSource source(pos, pos.this_thread(), transaction);
   LogicalMove turn;
-  alignas(Eval::NNUE::CacheLineSize) StateInfo states[LogicalMove::MAX_COMPONENTS + 1];
-  bool found = false;
-  generate_turns(pos,
-                 [&](const LogicalMove&) {
-                     found = true;
-                     return false;
-                 },
-                 turn, states, 0, 0, pos.board_layout_key(), pos.state());
-  return found;
+  return source.next(turn);
 }
 
 bool parse_compound_move(Position& pos, const std::string& text, LogicalMove& turn) {
@@ -330,7 +271,7 @@ bool parse_compound_move(Position& pos, const std::string& text, LogicalMove& tu
 
   LogicalMove parsed;
   alignas(Eval::NNUE::CacheLineSize) StateInfo states[LogicalMove::MAX_COMPONENTS + 1];
-  const Key startBoardKey = pos.board_layout_key();
+  const Key startBoundaryKey = pos.compound_turn_boundary_key();
   const StateInfo* logicalRoot = pos.state();
 
   std::function<bool(size_t, int)> parse = [&](size_t offset, int usedSteps) {
@@ -363,7 +304,8 @@ bool parse_compound_move(Position& pos, const std::string& text, LogicalMove& tu
 
           bool accepted = false;
           if (next == text.size())
-              accepted = is_pass(move) || pos.board_layout_key() != startBoardKey;
+              accepted = compound_turn_candidate_accepted(pos, move, usedSteps,
+                                                          startBoundaryKey, logicalRoot);
           else
               accepted = !is_pass(move) && parse(next + 1, nextUsedSteps);
 
@@ -381,32 +323,6 @@ bool parse_compound_move(Position& pos, const std::string& text, LogicalMove& tu
   };
 
   if (!parse(0, 0))
-      return false;
-
-  int turnCost = 0;
-  for (int i = 0; i < parsed.length; ++i)
-  {
-      turnCost += compound_move_cost(pos, parsed.components[i]);
-      pos.do_component(parsed.components[i], states[i], false);
-  }
-
-  const bool partialTurn = !is_pass(parsed.components[parsed.length - 1])
-                         && turnCost < pos.compound_turn_steps();
-  bool repetitionIllegal = false;
-  if (partialTurn)
-  {
-      StateInfo boundaryState;
-      pos.end_compound_turn(boundaryState);
-      repetitionIllegal = pos.same_player_board_repetition_illegal(logicalRoot->previous);
-      pos.undo_compound_turn();
-  }
-  else
-      repetitionIllegal = pos.same_player_board_repetition_illegal(logicalRoot->previous);
-
-  for (int i = parsed.length - 1; i >= 0; --i)
-      pos.undo_component(parsed.components[i]);
-
-  if (repetitionIllegal)
       return false;
 
   turn = parsed;
