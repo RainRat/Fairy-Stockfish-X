@@ -1275,8 +1275,8 @@ void arimaa_architecture() {
           "generic pull was not represented as a two-step move");
     states->emplace_back();
     pos.do_component(genericPull, states->back());
-    check(pos.compound_turn_step() == 2,
-          "generic pull advanced the compound turn by one step instead of two");
+    check(pos.compound_turn_step() == 1,
+          "generic pull advanced the compound turn by more than one step");
     check(!pos.at_complete_turn_boundary(),
           "generic pull incorrectly completed the compound turn");
     pos.undo_component(genericPull);
@@ -1359,6 +1359,20 @@ void compound_turn_rules() {
     check(capabilities.quiescence == QuiescenceSupport::STATIC_ONLY,
           "compound provider did not select static-eval qsearch capability");
     check(pos.at_complete_turn_boundary(), "fresh position is not at complete turn boundary");
+
+    set_position(pos, states, "generic-compound-pocket-audit",
+                 "R7/8/8/8/8/8/8/8[Rr] w - - 0 1");
+    check(pos.compound_turn_active(),
+          "generic compound turns were disabled by unrelated pocket contents");
+    LogicalMove pocketMove(make_move(SQ_A1, SQ_A2));
+    check(pos.legal(pocketMove.first()),
+          "generic compound move with unrelated pocket contents was not legal");
+    StateInfo pocketState;
+    LogicalMoveState pocketTransaction;
+    do_compound_move(pos, pocketMove, pocketState, pocketTransaction);
+    check(pos.compound_turn_active(),
+          "generic compound turns were disabled after a turn with pocket contents");
+    undo_compound_move(pos, pocketMove, pocketTransaction);
 
     set_position(pos, states, "generic-compound-repetition-audit",
                  "8/8/8/8/8/8/8/R7 w - - 0 1");
@@ -1641,6 +1655,8 @@ void compound_turn_rules() {
     Move exactTwoStepPull = make_pull(SQ_D4, SQ_E4, SQ_D5);
     check(pos.legal(exactTwoStepPull),
           "turnSteps=2 two-step pull was not legal at the turn boundary");
+    check(pos.compound_turn_step_cost(exactTwoStepPull) == 2,
+          "two-step pull did not use the two-step cost");
     const Key exactPullKey = pos.key();
     const std::string exactPullFen = pos.fen();
     states->emplace_back();
@@ -1652,9 +1668,15 @@ void compound_turn_rules() {
     check(pos.game_ply() == 0 && pos.key() == exactPullKey && pos.fen() == exactPullFen,
           "turnSteps=2 two-step pull undo corrupted the logical position");
 
+    set_position(pos, states, "generic-compound-pull-cost-audit",
+                 "7r/8/8/3r4/3E4/8/8/R7 w - - 0 1");
+    Move genericPull = make_pull(SQ_D4, SQ_E4, SQ_D5);
+    check(pos.legal(genericPull) && pos.compound_turn_step_cost(genericPull) == 1,
+          "generic pull used the two-step compound cost");
+
     // A two-step pull must not fit after three ordinary component steps of a
     // four-cost turn, even through Position::legal().
-    set_position(pos, states, "arimaa-push-rule-generic-audit",
+    set_position(pos, states, "arimaa",
                  "7r/8/8/3r4/3E4/8/8/R7 w - - 0 1");
     const char* fillerMoves[] = {"a1a2", "a2a3", "a3a4"};
     Move fillerMovesParsed[3];
@@ -3052,6 +3074,13 @@ pass = false
 [generic-compound-turn-two-audit:generic-compound-turn-audit]
 turnSteps = 2
 
+[generic-compound-pocket-audit:generic-compound-turn-audit]
+pieceDrops = true
+captureType = hand
+freeDrops = true
+symmetricDropTypes = r
+startFen = 8/8/8/8/8/8/8/8[Rr] w - - 0 1
+
 [generic-compound-own-removal-audit:generic-compound-turn-audit]
 trapRegion = d6
 trapProtection = none
@@ -3063,8 +3092,13 @@ customPiece2 = c:W
 captureAllowed = c:c
 startFen = 8/8/8/3c4/3C4/8/8/8 w - - 0 1
 
-[arimaa-pull-turn-two-audit:arimaa-push-rule-generic-audit]
+[arimaa-pull-turn-two-audit:arimaa]
 turnSteps = 2
+pullingStrength = r:6 c:0 d:0 h:0 m:0 e:0
+
+[generic-compound-pull-cost-audit:generic-compound-turn-two-audit]
+pushPullRule = generic
+startFen = 7r/8/8/3r4/3E4/8/8/R7 w - - 0 1
 
 [generic-compound-stalemate-pass-audit:generic-compound-turn-audit]
 customPiece1 = r:-

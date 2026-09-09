@@ -1384,6 +1384,16 @@ Key Position::board_layout_key() const {
   return layout_key();
 }
 
+#ifdef ENABLE_COMPOUND_TURNS
+Key Position::compound_turn_boundary_key() const {
+  Key key = st->key ^ (sideToMove == BLACK ? Zobrist::side : 0);
+  if (var->compoundTurnSteps)
+      key ^= Zobrist::compoundTurn[st->compoundTurnStep]
+           ^ Zobrist::compoundTurn[0];
+  return key;
+}
+#endif
+
 Key Position::compute_piece_state_key() const {
   Key k = 0;
   for (PieceSet ps = var->orientedPieceTypes; ps; )
@@ -2577,8 +2587,7 @@ void Position::set_state(StateInfo* si) const {
   si->evasionCheckersBB = compute_evasion_checkers_bb(sideToMove);
 #ifdef ENABLE_COMPOUND_TURNS
   si->compoundTurnReady = var->compoundTurnSteps > 0
-                       && !has_setup_drop(WHITE)
-                       && !has_setup_drop(BLACK);
+                       && !sequential_setup_active();
   si->compoundTurnReset = false;
 #endif
   si->move = MOVE_NONE;
@@ -9566,7 +9575,7 @@ void Position::do_component(Move m, StateInfo& newSt, bool countNode) {
   if (var->compoundTurnSteps && compoundTurnEnds)
   {
       const bool wasCompoundTurnReady = st->compoundTurnReady;
-      st->compoundTurnReady = !has_setup_drop(WHITE) && !has_setup_drop(BLACK);
+      st->compoundTurnReady = !sequential_setup_active();
       if (!wasCompoundTurnReady && st->compoundTurnReady)
           st->compoundTurnNumber = std::max((gamePly - (them == BLACK)) / 2, 0);
   }
@@ -10214,7 +10223,7 @@ void Position::end_compound_turn(StateInfo& newSt) {
   st->move = MOVE_NONE;
   st->pendingClaimPass = false;
   st->compoundTurnStep = 0;
-  st->compoundTurnReady = !has_setup_drop(WHITE) && !has_setup_drop(BLACK);
+  st->compoundTurnReady = !sequential_setup_active();
   st->compoundTurnReset = false;
   st->compoundTurnNumber += us == BLACK;
   clear_move_undo_state(st);

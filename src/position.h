@@ -820,6 +820,7 @@ public:
   // same side to move; earlier same-player positions are linked at stride two.
   bool same_player_board_repetition_illegal(const StateInfo* previousSamePlayerPosition) const;
   bool has_setup_drop(Color c) const;
+  bool sequential_setup_active() const;
   Color sequential_setup_side() const;
   bool pass_until_setup() const;
   bool pass_on_stalemate(Color c) const;
@@ -1110,6 +1111,11 @@ public:
   Key key() const;
   Key key_after(Move m) const;
   Key board_layout_key() const;
+#ifdef ENABLE_COMPOUND_TURNS
+  // Position identity with the side-to-move bit normalized for turn-boundary
+  // comparisons. Boundary checks still include reserves and other hashed rule state.
+  Key compound_turn_boundary_key() const;
+#endif
   Key material_key(EndgameEval e = EG_EVAL_CHESS) const;
   Key pawn_key() const;
 
@@ -2085,7 +2091,9 @@ inline bool Position::rifle_capture(Move m) const {
 
 inline int Position::pushing_strength(PieceType pt) const {
   assert(var != nullptr);
-  return var->pushingStrength[pt];
+  return push_pull_rule() == PushPullRule::TWO_STEP
+       ? var->pieceHierarchy[pt]
+       : var->pushingStrength[pt];
 }
 
 inline bool Position::has_pushing() const {
@@ -2100,7 +2108,9 @@ inline bool Position::has_pushing() const {
 
 inline int Position::pulling_strength(PieceType pt) const {
   assert(var != nullptr);
-  return var->pullingStrength[pt];
+  return push_pull_rule() == PushPullRule::TWO_STEP
+       ? var->pieceHierarchy[pt]
+       : var->pullingStrength[pt];
 }
 
 inline bool Position::has_pulling() const {
@@ -2944,7 +2954,11 @@ inline bool Position::at_complete_turn_boundary() const {
 
 inline int Position::compound_turn_step_cost(Move m) const {
 #ifdef ENABLE_COMPOUND_TURNS
-  return compound_turn_active() && is_two_step_move(m) ? 2 : 1;
+  return compound_turn_active()
+              && push_pull_rule() == PushPullRule::TWO_STEP
+              && is_two_step_move(m)
+       ? 2
+       : 1;
 #else
   (void)m;
   return 1;
@@ -2987,6 +3001,13 @@ inline bool Position::has_setup_drop(Color c) const {
           return true;
 
   return false;
+}
+
+inline bool Position::sequential_setup_active() const {
+  assert(var != nullptr);
+  // Ordinary pocket contents do not suppress compound turns; only the
+  // explicit sequential-setup rule does.
+  return var->sequentialSetup && (has_setup_drop(WHITE) || has_setup_drop(BLACK));
 }
 
 inline Color Position::sequential_setup_side() const {
