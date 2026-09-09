@@ -1934,6 +1934,8 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("simulFlagExtinctionPriority", v->simulFlagExtinctionPriority);
     parse_simul_value_by_mover("simulFlagValueByMover", v->simulFlagValueByMover);
     parse_simul_value_by_mover("simulExtinctionValueByMover", v->simulExtinctionValueByMover);
+    v->simulFlagValueByMoverConfigured |= config.find("simulFlagValueByMover") != config.end();
+    v->simulExtinctionValueByMoverConfigured |= config.find("simulExtinctionValueByMover") != config.end();
     if (!parse_multimoves(v))
         return false;
     parse_attribute("progressiveMultimove", v->progressiveMultimove);
@@ -2373,6 +2375,13 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
     const bool hasRoyalKing = v->checking
                            && v->kingType != NO_PIECE_TYPE
                            && bool(v->pieceTypes & piece_set(v->kingType));
+
+    if (v->quiescencePolicy == QuiescencePolicy::STATIC_EVAL && hasRoyalKing)
+    {
+        if (DoCheck)
+            std::cerr << "quiescencePolicy=static-eval requires a variant without royal pieces." << std::endl;
+        valid = false;
+    }
 
     // pieces
     if (DoCheck)

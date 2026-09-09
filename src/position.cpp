@@ -10294,6 +10294,7 @@ void Position::do_logical_move(const LogicalMove& move, StateInfo& newSt,
   newSt.move = MOVE_NONE;
   clear_move_undo_state(&newSt);
   clear_dirty_piece(&newSt);
+  newSt.pass = is_pass(move.components[move.length - 1]);
   newSt.nnueRefreshNeeded = true;
   newSt.accumulator.computed[WHITE] = false;
   newSt.accumulator.computed[BLACK] = false;
@@ -11119,12 +11120,16 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
   {
       if (var->simulFlagExtinctionPriority == SimulFlagExtinctionPriority::EXTINCTION)
       {
-          result = bothExtinct ? value_by_mover(var->simulExtinctionValueByMover) : extinctionResult;
+          result = bothExtinct && var->simulExtinctionValueByMoverConfigured
+                 ? value_by_mover(var->simulExtinctionValueByMover)
+                 : extinctionResult;
           return true;
       }
       if (var->simulFlagExtinctionPriority == SimulFlagExtinctionPriority::FLAG)
       {
-          result = bothFlags ? value_by_mover(var->simulFlagValueByMover) : flagResult;
+          result = bothFlags && var->simulFlagValueByMoverConfigured
+                 ? value_by_mover(var->simulFlagValueByMover)
+                 : flagResult;
           return true;
       }
 
@@ -11136,13 +11141,17 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
 
   if (flagEnd)
   {
-      result = bothFlags ? value_by_mover(var->simulFlagValueByMover) : flagResult;
+      result = bothFlags && var->simulFlagValueByMoverConfigured
+             ? value_by_mover(var->simulFlagValueByMover)
+             : flagResult;
       return true;
   }
 
   if (extinctionEnd)
   {
-      result = bothExtinct ? value_by_mover(var->simulExtinctionValueByMover) : extinctionResult;
+      result = bothExtinct && var->simulExtinctionValueByMoverConfigured
+             ? value_by_mover(var->simulExtinctionValueByMover)
+             : extinctionResult;
       return true;
   }
 

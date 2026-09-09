@@ -455,6 +455,8 @@ struct Variant {
   SimulFlagExtinctionPriority simulFlagExtinctionPriority = SimulFlagExtinctionPriority::EXTINCTION;
   Value simulFlagValueByMover = VALUE_MATE;
   Value simulExtinctionValueByMover = -VALUE_MATE;
+  bool simulFlagValueByMoverConfigured = false;
+  bool simulExtinctionValueByMoverConfigured = false;
 
   enum PotionType : int {
       POTION_FREEZE,

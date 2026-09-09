@@ -352,7 +352,8 @@ void MainThread::search() {
           const LogicalMove& bestTurn = bestThread->rootMoves[0].pv[0];
           const std::vector<std::string> compoundPv =
               compound_pv_to_strings(rootPos, bestThread->rootMoves[0].pv);
-          if (!Limits.infinite && !ponder && bestTurn.first() != MOVE_NONE
+          if (!Limits.infinite && !ponder && !compoundPv.empty()
+              && bestTurn.first() != MOVE_NONE
               && !Threads.abort.exchange(true))
           {
               sync_cout << "move " << compoundPv.front() << sync_endl;
@@ -406,11 +407,12 @@ void MainThread::search() {
 
   SyncCout out;
 #ifdef ENABLE_COMPOUND_TURNS
-  const std::vector<std::string> compoundPv = rootPos.compound_turn_active()
+  const std::vector<std::string> compoundPv = rootPos.variant()->compoundTurnSteps > 0
                                             ? compound_pv_to_strings(rootPos, bestThread->rootMoves[0].pv)
                                             : std::vector<std::string>();
   if (rootPos.compound_turn_active()
       && !bestThread->rootMoves.empty()
+      && !compoundPv.empty()
       && bestThread->rootMoves[0].pv[0].first() != MOVE_NONE)
       out << "bestmove " << compoundPv.front();
   else
@@ -420,7 +422,7 @@ void MainThread::search() {
   if (bestThread->rootMoves[0].pv.size() > 1)
   {
 #ifdef ENABLE_COMPOUND_TURNS
-      if (rootPos.compound_turn_active())
+      if (compoundPv.size() > 1)
           out << " ponder " << compoundPv[1];
       else
 #endif
@@ -2357,7 +2359,7 @@ string UCI::pv(const Position& pos, Depth depth, Value alpha, Value beta) {
       Value v = updated ? rootMoves[i].score : rootMoves[i].previousScore;
 
 #ifdef ENABLE_COMPOUND_TURNS
-      const std::vector<std::string> compoundPv = pos.compound_turn_active()
+      const std::vector<std::string> compoundPv = pos.variant()->compoundTurnSteps > 0
                                                 ? compound_pv_to_strings(pos, rootMoves[i].pv)
                                                 : std::vector<std::string>();
 #endif
@@ -2384,13 +2386,13 @@ string UCI::pv(const Position& pos, Depth depth, Value alpha, Value beta) {
           // Do not print PVs with virtual drops in bughouse variants
           if (!pos.two_boards())
           {
-              for (size_t j = 0; j < rootMoves[i].pv.size(); ++j)
 #ifdef ENABLE_COMPOUND_TURNS
-                  if (pos.compound_turn_active())
-                      ss << " " << compoundPv[j];
-                  else
+              for (const std::string& move : compoundPv)
+                  ss << " " << move;
+#else
+              for (size_t j = 0; j < rootMoves[i].pv.size(); ++j)
+                  ss << " " << UCI::move(pos, rootMoves[i].pv[j].first());
 #endif
-                      ss << " " << UCI::move(pos, rootMoves[i].pv[j].first());
           }
       }
       else
@@ -2417,13 +2419,13 @@ string UCI::pv(const Position& pos, Depth depth, Value alpha, Value beta) {
          << " time "     << elapsed
          << " pv";
 
-      for (size_t j = 0; j < rootMoves[i].pv.size(); ++j)
 #ifdef ENABLE_COMPOUND_TURNS
-          if (pos.compound_turn_active())
-              ss << " " << compoundPv[j];
-          else
+      for (const std::string& move : compoundPv)
+          ss << " " << move;
+#else
+      for (size_t j = 0; j < rootMoves[i].pv.size(); ++j)
+          ss << " " << UCI::move(pos, rootMoves[i].pv[j].first());
 #endif
-              ss << " " << UCI::move(pos, rootMoves[i].pv[j].first());
       }
   }
 

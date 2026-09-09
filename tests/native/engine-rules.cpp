@@ -1283,6 +1283,7 @@ void arimaa_architecture() {
 void compound_turn_rules() {
     Position pos;
     StateListPtr states;
+    Value result = VALUE_NONE;
 
     // 1. Generic sequential setup audit
     set_position(pos, states, "generic-sequential-setup-audit",
@@ -1712,6 +1713,16 @@ void compound_turn_rules() {
     do_compound_move(pos, parsedPass, cstate, ctransaction);
     check(pos.side_to_move() == BLACK && pos.at_complete_turn_boundary(),
           "compound pass did not complete the turn");
+    check(pos.state()->pass, "compound pass metadata was lost at the turn boundary");
+    LogicalMove secondPass;
+    check(parse_compound_move(pos, "0000", secondPass),
+          "second configured compound pass was not legal");
+    StateInfo secondPassState;
+    LogicalMoveState secondPassTransaction;
+    do_compound_move(pos, secondPass, secondPassState, secondPassTransaction);
+    check(pos.is_immediate_game_end(result) && result == VALUE_DRAW,
+          "double compound pass did not end the game as a draw");
+    undo_compound_move(pos, secondPass, secondPassTransaction);
     undo_compound_move(pos, parsedPass, ctransaction);
     check(pos.side_to_move() == WHITE && pos.at_complete_turn_boundary(),
           "compound pass undo did not restore the position");
@@ -2205,8 +2216,20 @@ void adjudication() {
     check(defaultSimul->simulFlagValueByMover == VALUE_MATE
               && defaultSimul->simulExtinctionValueByMover == -VALUE_MATE,
           "simultaneous flag/extinction defaults changed");
+    check(!defaultSimul->simulFlagValueByMoverConfigured
+              && !defaultSimul->simulExtinctionValueByMoverConfigured,
+          "simultaneous flag/extinction defaults were marked as explicit");
     check(pos.is_immediate_game_end(result) && result == mate_in(0),
           "default flag/extinction priority did not preserve extinction-first ordering");
+
+    set_position(pos, states, "racingkings", "K6k/8/8/8/8/8/8/8 w - - 0 2");
+    check(pos.is_immediate_game_end(result) && result == VALUE_DRAW,
+          "Racing Kings simultaneous flag result changed without an explicit override");
+
+    set_position(pos, states, "generic-extinction-draw-audit",
+                 "7k/8/8/8/8/8/8/K7 w - - 0 1");
+    check(pos.is_immediate_game_end(result) && result == VALUE_DRAW,
+          "configured extinction draw changed without an explicit simultaneous override");
 
     set_position(pos, states, "simul-flag-extinction-flag",
                  "7f/8/8/8/8/8/8/F7 w - - 0 1");
@@ -2324,8 +2347,14 @@ startFen = 8/8/8/8/8/8/8/8[PPpp] w - - 0 1
 pieceDrops = true
 symmetricDropTypes = p
 
-[generic-static-qsearch-audit:chess]
+[generic-static-qsearch-audit:fairy]
+king = -
+checking = false
 quiescencePolicy = static-eval
+
+[generic-extinction-draw-audit:chess]
+extinctionPieceTypes = q
+extinctionValue = draw
 
 [occupancy-rifle:chess]
 rifleCapture = true

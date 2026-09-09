@@ -459,12 +459,20 @@ std::vector<std::string> compound_pv_to_strings(const Position& pos,
   LogicalMoveState transaction;
   for (const LogicalMove& move : pv)
   {
-      if (move.empty())
+      if (move.first() == MOVE_NONE)
           break;
 
-      result.push_back(compound_move_to_string(replay, move));
       states->emplace_back();
-      replay.do_move(move, states->back(), transaction, false);
+      if (replay.compound_turn_active())
+      {
+          result.push_back(compound_move_to_string(replay, move));
+          replay.do_move(move, states->back(), transaction, false);
+      }
+      else
+      {
+          result.push_back(UCI::move(replay, move.first()));
+          replay.do_move(move.first(), states->back(), false);
+      }
   }
 
   return result;
