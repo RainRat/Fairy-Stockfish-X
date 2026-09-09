@@ -1457,10 +1457,12 @@ bool Position::same_player_board_repetition_illegal(const StateInfo* previousSam
       return false;
 
   int repetitions = 0;
+  int distance = 2;
   for (const StateInfo* previous = previousSamePlayerPosition;
-       previous;
+       previous && distance <= st->pliesFromNull;
        previous = previous->previous && previous->previous->previous
-                ? previous->previous->previous : nullptr)
+                ? previous->previous->previous : nullptr,
+       distance += 2)
       if (previous->layoutKey == st->layoutKey
           && ++repetitions >= var->samePlayerBoardRepetitionIllegalAtN)
           return true;

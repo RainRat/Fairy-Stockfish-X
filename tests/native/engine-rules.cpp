@@ -1393,12 +1393,11 @@ void compound_turn_rules() {
 
     // A completed logical position is compared with the persistent history
     // regardless of how many components produced that position. Exercise
-    // both exact and early-completed turns; the boundary repetition checks
-    // above cover the rejecting case.
+    // both exact and early-completed turns with actual repeated targets.
     for (int componentCount = 1; componentCount <= 4; ++componentCount)
     {
         set_position(pos, states, "generic-compound-four-repetition-audit",
-                     "8/8/8/8/8/8/8/RRRR4 w - - 0 1");
+                     "8/8/8/8/8/8/8/RRRR4 b - - 0 1");
         const char* origins[] = {"a1", "b1", "c1", "d1"};
         const char* intermediate[] = {"a2", "b2", "c2", "d2"};
         std::string forward;
@@ -1414,26 +1413,33 @@ void compound_turn_rules() {
             reverse += std::string(intermediate[i]) + origins[i];
         }
 
+        LogicalMove firstPass;
         LogicalMove priorTurn;
-        LogicalMove reverseTurn;
-        LogicalMove passTurn;
+        LogicalMove secondPass;
+        StateInfo firstPassState;
+        LogicalMoveState firstPassTransaction;
+        check(parse_compound_move(pos, "0000", firstPass),
+              "failed to parse first multi-component repetition handoff pass");
+        do_compound_move(pos, firstPass, firstPassState, firstPassTransaction);
         check(parse_compound_move(pos, forward, priorTurn),
               "failed to parse multi-component repetition setup: " + forward);
         StateInfo priorState;
         LogicalMoveState priorTransaction;
         do_compound_move(pos, priorTurn, priorState, priorTransaction);
-        check(parse_compound_move(pos, "0000", passTurn),
-              "failed to parse multi-component repetition handoff pass");
-        StateInfo passState;
-        LogicalMoveState passTransaction;
-        do_compound_move(pos, passTurn, passState, passTransaction);
+        check(parse_compound_move(pos, "0000", secondPass),
+              "failed to parse second multi-component repetition handoff pass");
+        StateInfo secondPassState;
+        LogicalMoveState secondPassTransaction;
+        do_compound_move(pos, secondPass, secondPassState, secondPassTransaction);
 
-        check(parse_compound_move(pos, reverse, reverseTurn),
-              "non-repeating multi-component turn was rejected for component count: "
+        LogicalMove repeatedTurn;
+        check(!parse_compound_move(pos, reverse, repeatedTurn),
+              "repetition was accepted for component count: "
                   + std::to_string(componentCount));
 
-        undo_compound_move(pos, passTurn, passTransaction);
+        undo_compound_move(pos, secondPass, secondPassTransaction);
         undo_compound_move(pos, priorTurn, priorTransaction);
+        undo_compound_move(pos, firstPass, firstPassTransaction);
     }
 
     set_position(pos, states, "generic-compound-turn-audit",
@@ -2003,6 +2009,18 @@ void occupancy() {
 void state() {
     Position pos;
     StateListPtr states;
+
+    // A search null move is not part of the legal repetition history. The
+    // repetition scan must stop there even when the board is unchanged.
+    set_position(pos, states, "generic-null-repetition-audit",
+                 "4k3/8/8/8/8/8/R7/4K3 w - - 0 1");
+    StateInfo nullState;
+    pos.do_null_move(nullState);
+    Move nullHistoryPass = make<SPECIAL>(SQ_A1, SQ_A1);
+    check(pos.pass(pos.side_to_move())
+              && pos.legal(nullHistoryPass),
+          "same-player repetition crossed a search null-move boundary");
+    pos.undo_null_move();
 
     set_position(pos, states, "atomic",
                  "4k3/8/8/8/8/8/1p6/R3K3 b - - 0 1");
@@ -3053,10 +3071,14 @@ samePlayerBoardRepetitionIllegalAtN = 1
 turnSteps = 4
 pass = true
 samePlayerBoardRepetitionIllegalAtN = 1
-startFen = 8/8/8/8/8/8/8/RRRR4 w - - 0 1
+startFen = 8/8/8/8/8/8/8/RRRR4 b - - 0 1
 
 [generic-repetition-audit:generic-compound-turn-audit]
 samePlayerBoardRepetitionIllegalAtN = 1
+
+[generic-null-repetition-audit:chess]
+samePlayerBoardRepetitionIllegalAtN = 1
+pass = true
 )INI");
     variants.parse_istream<false>(inline_config);
 }
