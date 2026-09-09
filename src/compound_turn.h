@@ -40,6 +40,7 @@ class LogicalMoveSource {
 
  private:
   struct Frame {
+      std::vector<ExtMove> moves;
       ExtMove* current = nullptr;
       ExtMove* end = nullptr;
   };
@@ -51,8 +52,6 @@ class LogicalMoveSource {
   Position& pos;
   Thread* thread;
   LogicalMoveState& transaction;
-  std::array<std::unique_ptr<ExtMove[]>, LogicalMove::MAX_COMPONENTS> ownedBuffers;
-  std::array<ExtMove*, LogicalMove::MAX_COMPONENTS> buffers{};
   std::array<Frame, LogicalMove::MAX_COMPONENTS> frames{};
   LogicalMove turn;
   Key startBoardKey = 0;

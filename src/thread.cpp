@@ -225,12 +225,13 @@ void ThreadPool::start_thinking(Position& pos, StateListPtr& states,
       LogicalMoveState transaction;
       LogicalMoveSource source(pos, pos.this_thread(), transaction);
       LogicalMove m;
-      while (source.next(m))
+      LogicalMoveInfo info;
+      while (source.next(m, info))
           if (   (!limits.searchMovesSpecified
                   || std::count(limits.searchmoves.begin(), limits.searchmoves.end(), m))
               && (limits.banmoves.empty()
                   || !std::count(limits.banmoves.begin(), limits.banmoves.end(), m)))
-              rootMoves.emplace_back(m);
+              rootMoves.emplace_back(m, info);
   }
   else
 #endif

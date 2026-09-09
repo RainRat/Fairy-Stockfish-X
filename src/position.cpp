@@ -9706,8 +9706,9 @@ void Position::undo_component(Move m) {
   Color us = sideToMove;
   Square from = from_sq(m);
   Square to = to_sq(m);
+  [[maybe_unused]] bool encodedPushMove = false;
 #ifdef ENABLE_COMPOUND_TURNS
-  bool encodedPushMove = var->pushPullRule == PushPullRule::TWO_STEP && is_encoded_push(m);
+  encodedPushMove = var->pushPullRule == PushPullRule::TWO_STEP && is_encoded_push(m);
 #endif
   bool rifleShot = rifle_capture(m) && st->captured.piece.piece != NO_PIECE && type_of(m) != CASTLING;
   bool cloneMove = is_clone_move(m);
@@ -9728,9 +9729,7 @@ void Position::undo_component(Move m) {
          || (is_promotion_move(m) && sittuyin_promotion())
          || is_pass(m)
          || is_laser_fire(m)
-#ifdef ENABLE_COMPOUND_TURNS
          || encodedPushMove
-#endif
          || cloneMove
          || rifleShot
          || pullMove

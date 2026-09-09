@@ -604,19 +604,19 @@ struct LogicalMove {
 #endif
 
   LogicalMove() = default;
-  LogicalMove(Move move)
+  LogicalMove(Move m)
 #ifdef ENABLE_COMPOUND_TURNS
-      : length(1) { components[0] = move; }
+      : length(1) { components[0] = m; }
 #else
-      : move(move) {}
+      : move(m) {}
 #endif
 
-  void set(Move move) {
+  void set(Move m) {
 #ifdef ENABLE_COMPOUND_TURNS
-      components[0] = move;
+      components[0] = m;
       length = 1;
 #else
-      this->move = move;
+      this->move = m;
 #endif
   }
 
@@ -652,14 +652,14 @@ struct LogicalMove {
   }
 
   bool operator!=(const LogicalMove& other) const { return !(*this == other); }
-  bool operator==(Move move) const {
+  bool operator==(Move m) const {
 #ifdef ENABLE_COMPOUND_TURNS
-      return length == 1 && components[0] == move;
+      return length == 1 && components[0] == m;
 #else
-      return this->move == move;
+      return this->move == m;
 #endif
   }
-  bool operator!=(Move move) const { return !(*this == move); }
+  bool operator!=(Move m) const { return !(*this == m); }
   bool operator<(const LogicalMove& other) const {
 #ifdef ENABLE_COMPOUND_TURNS
       if (length != other.length)
@@ -881,7 +881,9 @@ enum Piece {
 struct LogicalMoveInfo {
   Move representative = MOVE_NONE;
   Piece movedPiece = NO_PIECE;
-  bool captureLike = false;
+  bool capturesOpponent = false;
+  bool losesOwnMaterial = false;
+  bool removesMaterial = false;
   bool promotionLike = false;
   bool givesCheck = false;
   bool historyCompatible = false;

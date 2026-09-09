@@ -114,6 +114,8 @@ void movement() {
                  "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
     check(!pos.clone_targets_from(WHITE, SQ_A3),
           "clone_targets_from returned targets for an empty square");
+    check(variants.get("generic-static-qsearch-audit")->quiescencePolicy == QuiescencePolicy::STATIC_EVAL,
+          "generic static-evaluation quiescence policy was not parsed");
 }
 
 void composable_rules() {
@@ -1416,6 +1418,36 @@ void compound_turn_rules() {
     check(lazyGenerated == generated,
           "lazy logical move source disagreed with materialized compound generation");
 
+    // Logical move metadata must distinguish material removed by an effect,
+    // including an effect in a later component.
+    set_position(pos, states, "generic-compound-own-removal-audit",
+                 "8/8/8/8/3C4/8/8/8 w - - 0 1");
+    LogicalMove ownRemovalTurn;
+    LogicalMoveInfo ownRemovalInfo;
+    {
+        LogicalMoveState removalTransaction;
+        LogicalMoveSource removalSource(pos, nullptr, removalTransaction);
+        LogicalMove candidate;
+        LogicalMoveInfo candidateInfo;
+        while (removalSource.next(candidate, candidateInfo))
+            if (candidate.length == 2
+                && candidate.components[0] == make_move(SQ_D4, SQ_D5)
+                && candidate.components[1] == make_move(SQ_D5, SQ_D6))
+            {
+                ownRemovalTurn = candidate;
+                ownRemovalInfo = candidateInfo;
+                break;
+            }
+    }
+    check(ownRemovalTurn.length == 2,
+          "compound source did not expose the later trap-removal component");
+    check(ownRemovalInfo.losesOwnMaterial && ownRemovalInfo.removesMaterial
+          && !ownRemovalInfo.capturesOpponent,
+          "compound own-material removal metadata was classified incorrectly");
+
+    set_position(pos, states, "generic-compound-turn-audit",
+                 "8/8/8/3r4/3C4/8/8/8 w - - 0 1");
+
     // Every committed logical length, including early termination and the
     // full budget, must leave a self-contained NNUE boundary state.
     for (int length = 1; length <= LogicalMove::MAX_COMPONENTS; ++length)
@@ -2205,6 +2237,9 @@ startFen = 8/8/8/8/8/8/8/8[PPpp] w - - 0 1
 pieceDrops = true
 symmetricDropTypes = p
 
+[generic-static-qsearch-audit:chess]
+quiescencePolicy = static-eval
+
 [occupancy-rifle:chess]
 rifleCapture = true
 
@@ -2897,6 +2932,12 @@ pass = false
 
 [generic-compound-turn-two-audit:generic-compound-turn-audit]
 turnSteps = 2
+
+[generic-compound-own-removal-audit:generic-compound-turn-audit]
+trapRegion = d6
+trapProtection = none
+pushPullRule = none
+startFen = 8/8/8/8/3C4/8/8/8 w - - 0 1
 
 [arimaa-pull-turn-two-audit:arimaa-push-rule-generic-audit]
 turnSteps = 2
