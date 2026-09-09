@@ -1129,7 +1129,6 @@ namespace {
         ss->currentMovePiece = NO_PIECE;
         ss->currentMoveHistoryCompatible = false;
         ss->currentMoveCapturedOpponent = false;
-        ss->currentMoveRemovedMaterial = false;
         ss->continuationHistory = neutralContinuationHistory;
 
         pos.do_null_move(st);
@@ -1214,7 +1213,6 @@ namespace {
                 Piece victim = captured_piece_or_on(pos, move);
                 ss->currentMoveCapturedOpponent = victim != NO_PIECE
                                                 && color_of(victim) != pos.side_to_move();
-                ss->currentMoveRemovedMaterial = pos.capture(move);
                 ss->currentMovePiece = pos.moved_piece(move);
                 ss->continuationHistory = &thisThread->continuationHistory[ss->inCheck]
                                                                           [captureOrPromotion]
@@ -1547,7 +1545,6 @@ moves_loop: // When in check, search starts from here
       // Update the current move (this must be done after singular extension search)
       ss->currentMoveHistoryCompatible = moveInfo.historyCompatible;
       ss->currentMoveCapturedOpponent = moveInfo.capturesOpponent;
-      ss->currentMoveRemovedMaterial = moveInfo.removesMaterial;
       ss->currentMove = moveInfo.historyCompatible ? move : MOVE_NONE;
       ss->currentMovePiece = moveInfo.historyCompatible ? movedPiece : NO_PIECE;
       ss->continuationHistory = moveInfo.historyCompatible
@@ -1792,8 +1789,7 @@ moves_loop: // When in check, search starts from here
                          quietsSearched, quietCount, capturesSearched, captureCount, depth);
 
     // Bonus for prior countermove that caused the fail low
-    else if (   bestMoveHistoryCompatible
-             && previousMoveHistoryCompatible
+    else if (   previousMoveHistoryCompatible
              && (depth >= 3 || PvNode)
              && !priorCapture)
         update_continuation_histories(ss-1, pos.piece_on(prevSq), prevSq, stat_bonus(depth));
@@ -2028,7 +2024,6 @@ moves_loop: // When in check, search starts from here
       ss->currentMoveHistoryCompatible = true;
       ss->currentMoveCapturedOpponent = victim != NO_PIECE
                                       && color_of(victim) != pos.side_to_move();
-      ss->currentMoveRemovedMaterial = pos.capture(move);
       ss->currentMovePiece = pos.moved_piece(move);
       ss->continuationHistory = &thisThread->continuationHistory[ss->inCheck]
                                                                 [captureOrPromotion]

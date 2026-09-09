@@ -1448,39 +1448,20 @@ bool Position::violates_same_player_board_repetition(Move m) const {
   SimulatedMoveGuard clearSimulation(*this, MOVE_NONE);
   ScopedProbeMove probe(*this, m, nextState);
 
-  return same_player_board_repetition_illegal();
+  return same_player_board_repetition_illegal(st->previous->previous);
 }
 
-bool Position::same_player_board_repetition_illegal(const StateInfo* history) const {
+bool Position::same_player_board_repetition_illegal(const StateInfo* previousSamePlayerPosition) const {
 
   if (var->samePlayerBoardRepetitionIllegalAtN <= 0)
       return false;
 
-  const bool includeInitialPosition = history != nullptr;
-  if (!history)
-  {
-      int end = captures_to_hand() ? st->pliesFromNull : std::min(st->rule50, st->pliesFromNull);
-      if (end < 4 || !st->previous || !st->previous->previous)
-          return false;
-
-      history = st->previous->previous;
-      int repetitions = 0;
-      for (int i = 4; i <= end && history; i += 2)
-      {
-          history = history->previous && history->previous->previous
-                  ? history->previous->previous : nullptr;
-          if (history && (includeInitialPosition || history->move != MOVE_NONE)
-              && history->layoutKey == st->layoutKey
-              && ++repetitions >= var->samePlayerBoardRepetitionIllegalAtN)
-              return true;
-      }
-      return false;
-  }
-
   int repetitions = 0;
-  for (const StateInfo* previous = history; previous; previous = previous->previous)
-      if ((includeInitialPosition || previous->move != MOVE_NONE)
-          && previous->layoutKey == st->layoutKey
+  for (const StateInfo* previous = previousSamePlayerPosition;
+       previous;
+       previous = previous->previous && previous->previous->previous
+                ? previous->previous->previous : nullptr)
+      if (previous->layoutKey == st->layoutKey
           && ++repetitions >= var->samePlayerBoardRepetitionIllegalAtN)
           return true;
 

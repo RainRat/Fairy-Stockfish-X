@@ -198,7 +198,9 @@ position startpos moves a2a3 e8e7 a3a2 e7e8
 go perft 1
 CMDS
 )
-assert_contains "$out" "^e1d1: 1$"
+# Recreating the initial board for the same side to move is an immediate
+# same-player repetition, so the restoring move itself is rejected.
+assert_not_contains "$out" "^e7e8: 1$"
 
 if variant_available "$ENGINE" janggi "$VARIANTS"; then
   out=$(run_uci "$ENGINE" "$VARIANTS" janggi <<'EOF'

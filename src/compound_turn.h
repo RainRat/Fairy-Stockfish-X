@@ -52,6 +52,7 @@ class LogicalMoveSource {
   Position& pos;
   Thread* thread;
   LogicalMoveState& transaction;
+  const StateInfo* logicalRoot = nullptr;
   std::array<Frame, LogicalMove::MAX_COMPONENTS> frames{};
   LogicalMove turn;
   Key startBoardKey = 0;

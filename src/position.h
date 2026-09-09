@@ -816,7 +816,9 @@ public:
   int compound_turn_steps() const;
   int compound_turn_step() const;
   int compound_turn_step_cost(Move m) const;
-  bool same_player_board_repetition_illegal(const StateInfo* history = nullptr) const;
+  // previousSamePlayerPosition is the nearest persistent position with the
+  // same side to move; earlier same-player positions are linked at stride two.
+  bool same_player_board_repetition_illegal(const StateInfo* previousSamePlayerPosition) const;
   bool has_setup_drop(Color c) const;
   Color sequential_setup_side() const;
   bool pass_until_setup() const;

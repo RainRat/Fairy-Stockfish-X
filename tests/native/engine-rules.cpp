@@ -1391,6 +1391,51 @@ void compound_turn_rules() {
           "completed-turn repetition threshold did not reject a repeated boundary");
     undo_compound_move(pos, firstPass, boundaryRepetitionTransaction);
 
+    // A completed logical position is compared with the persistent history
+    // regardless of how many components produced that position. Exercise
+    // both exact and early-completed turns; the boundary repetition checks
+    // above cover the rejecting case.
+    for (int componentCount = 1; componentCount <= 4; ++componentCount)
+    {
+        set_position(pos, states, "generic-compound-four-repetition-audit",
+                     "8/8/8/8/8/8/8/RRRR4 w - - 0 1");
+        const char* origins[] = {"a1", "b1", "c1", "d1"};
+        const char* intermediate[] = {"a2", "b2", "c2", "d2"};
+        std::string forward;
+        std::string reverse;
+        for (int i = 0; i < componentCount; ++i)
+        {
+            if (!forward.empty())
+            {
+                forward += ',';
+                reverse += ',';
+            }
+            forward += std::string(origins[i]) + intermediate[i];
+            reverse += std::string(intermediate[i]) + origins[i];
+        }
+
+        LogicalMove priorTurn;
+        LogicalMove reverseTurn;
+        LogicalMove passTurn;
+        check(parse_compound_move(pos, forward, priorTurn),
+              "failed to parse multi-component repetition setup: " + forward);
+        StateInfo priorState;
+        LogicalMoveState priorTransaction;
+        do_compound_move(pos, priorTurn, priorState, priorTransaction);
+        check(parse_compound_move(pos, "0000", passTurn),
+              "failed to parse multi-component repetition handoff pass");
+        StateInfo passState;
+        LogicalMoveState passTransaction;
+        do_compound_move(pos, passTurn, passState, passTransaction);
+
+        check(parse_compound_move(pos, reverse, reverseTurn),
+              "non-repeating multi-component turn was rejected for component count: "
+                  + std::to_string(componentCount));
+
+        undo_compound_move(pos, passTurn, passTransaction);
+        undo_compound_move(pos, priorTurn, priorTransaction);
+    }
+
     set_position(pos, states, "generic-compound-turn-audit",
                  "8/8/8/3r4/3C4/8/8/8 w - - 0 1");
 
@@ -3003,6 +3048,12 @@ samePlayerBoardRepetitionIllegalAtN = 2
 
 [generic-compound-boundary-repetition-audit:generic-compound-pass-audit]
 samePlayerBoardRepetitionIllegalAtN = 1
+
+[generic-compound-four-repetition-audit:generic-compound-turn-audit]
+turnSteps = 4
+pass = true
+samePlayerBoardRepetitionIllegalAtN = 1
+startFen = 8/8/8/8/8/8/8/RRRR4 w - - 0 1
 
 [generic-repetition-audit:generic-compound-turn-audit]
 samePlayerBoardRepetitionIllegalAtN = 1
