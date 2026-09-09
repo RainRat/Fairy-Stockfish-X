@@ -43,7 +43,9 @@ position startpos
 go depth 8
 EOF
 )
-assert_contains "$out" "^bestmove [A-Z]@[a-h][1-8]$"
+# UCI may append a legal ponder move to bestmove.  The profile only needs to
+# validate the setup drop itself.
+assert_contains "$out" "^bestmove [A-Z]@[a-h][1-8]( ponder .*)?$"
 
 # Completing both setup pockets changes the side to move and enters the first
 # ordinary complete turn. This exercises the final placement on each side.
