@@ -273,6 +273,29 @@ EOF
 )
 assert_nodes "$out" "0"
 
+# A terminal compound root must still produce the ordinary no-move response;
+# formatting the sentinel must not execute it as a component.
+out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
+position fen R7/7r/8/8/8/8/8/8 b - - 0 1
+go depth 1
+EOF
+)
+assert_contains "$out" "^bestmove \\(none\\)$"
+
+# PV formatting must switch from ordinary setup notation to compound notation
+# after the final setup drop changes the replay position.
+out=$({
+  printf 'uci\n'
+  printf 'setoption name VariantPath value %s\n' "$VARIANT_PATH"
+  printf 'setoption name UCI_Variant value arimaa\n'
+  cat <<'EOF'
+position fen 8/7r/R7/8/8/8/8/8[e] b - - 0 1
+go depth 2 searchmoves E@h8
+EOF
+  sleep 1
+} | uci_timeout "$ENGINE")
+assert_contains "$out" "^bestmove E@h8 ponder a6b6,b6a6,a6a7,a7a8$"
+
 # A rabbit pushed onto the opponent's goal row wins for that opponent at the
 # completed boundary, even when the rabbit remains mobile after the push.
 out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
