@@ -114,7 +114,10 @@ void movement() {
                  "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
     check(!pos.clone_targets_from(WHITE, SQ_A3),
           "clone_targets_from returned targets for an empty square");
-    check(variants.get("generic-static-qsearch-audit")->quiescencePolicy == QuiescencePolicy::STATIC_EVAL,
+    const Variant* staticQsearch = variants.get("generic-static-qsearch-audit");
+    check(staticQsearch != nullptr,
+          "generic static-evaluation qsearch audit variant failed to load");
+    check(staticQsearch->quiescencePolicy == QuiescencePolicy::STATIC_EVAL,
           "generic static-evaluation quiescence policy was not parsed");
 }
 
@@ -2350,6 +2353,7 @@ symmetricDropTypes = p
 [generic-static-qsearch-audit:fairy]
 king = -
 checking = false
+startFen = 8/8/8/8/8/8/8/8 w - - 0 1
 quiescencePolicy = static-eval
 
 [generic-extinction-draw-audit:chess]

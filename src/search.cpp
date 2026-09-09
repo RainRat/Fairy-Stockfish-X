@@ -2387,12 +2387,13 @@ string UCI::pv(const Position& pos, Depth depth, Value alpha, Value beta) {
           if (!pos.two_boards())
           {
 #ifdef ENABLE_COMPOUND_TURNS
-              for (const std::string& move : compoundPv)
-                  ss << " " << move;
-#else
-              for (size_t j = 0; j < rootMoves[i].pv.size(); ++j)
-                  ss << " " << UCI::move(pos, rootMoves[i].pv[j].first());
+              if (pos.variant()->compoundTurnSteps > 0)
+                  for (const std::string& move : compoundPv)
+                      ss << " " << move;
+              else
 #endif
+                  for (size_t j = 0; j < rootMoves[i].pv.size(); ++j)
+                      ss << " " << UCI::move(pos, rootMoves[i].pv[j].first());
           }
       }
       else
@@ -2420,12 +2421,13 @@ string UCI::pv(const Position& pos, Depth depth, Value alpha, Value beta) {
          << " pv";
 
 #ifdef ENABLE_COMPOUND_TURNS
-      for (const std::string& move : compoundPv)
-          ss << " " << move;
-#else
-      for (size_t j = 0; j < rootMoves[i].pv.size(); ++j)
-          ss << " " << UCI::move(pos, rootMoves[i].pv[j].first());
+      if (pos.variant()->compoundTurnSteps > 0)
+          for (const std::string& move : compoundPv)
+              ss << " " << move;
+      else
 #endif
+          for (size_t j = 0; j < rootMoves[i].pv.size(); ++j)
+              ss << " " << UCI::move(pos, rootMoves[i].pv[j].first());
       }
   }
 

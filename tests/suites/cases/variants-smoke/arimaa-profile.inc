@@ -296,6 +296,19 @@ EOF
 } | uci_timeout "$ENGINE")
 assert_contains "$out" "^bestmove E@h8 ponder a6b6,b6a6,a6a7,a7a8$"
 
+# Enabling the compound-turn subsystem must not suppress ordinary PV moves.
+out=$({
+  printf 'uci\n'
+  printf 'setoption name VariantPath value %s\n' "$VARIANT_PATH"
+  printf 'setoption name UCI_Variant value chess\n'
+  cat <<'EOF'
+position startpos
+go depth 1
+EOF
+  sleep 1
+} | uci_timeout "$ENGINE")
+assert_contains "$out" "^info depth [1-9][0-9]* .* pv [a-h][1-8][a-h][1-8]"
+
 # A rabbit pushed onto the opponent's goal row wins for that opponent at the
 # completed boundary, even when the rabbit remains mobile after the push.
 out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
