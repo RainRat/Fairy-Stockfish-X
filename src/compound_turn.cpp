@@ -50,7 +50,8 @@ bool generate_turns(Position& pos,
                     StateInfo* states,
                     int depth,
                     int usedSteps,
-                    Key startBoardKey)
+                    Key startBoardKey,
+                    const StateInfo* logicalRoot)
 {
     MoveList<LEGAL> moves(pos);
     const int turnSteps = pos.compound_turn_steps();
@@ -74,11 +75,11 @@ bool generate_turns(Position& pos,
         {
             StateInfo boundaryState;
             pos.end_compound_turn(boundaryState);
-            repetitionIllegal = pos.same_player_board_repetition_illegal(pos.state()->previous->previous);
+            repetitionIllegal = pos.same_player_board_repetition_illegal(logicalRoot->previous);
             pos.undo_compound_turn();
         }
         else
-            repetitionIllegal = pos.same_player_board_repetition_illegal(pos.state()->previous->previous);
+            repetitionIllegal = pos.same_player_board_repetition_illegal(logicalRoot->previous);
 
         bool keepGenerating = true;
         if ((is_pass(move) || pos.board_layout_key() != startBoardKey)
@@ -89,7 +90,7 @@ bool generate_turns(Position& pos,
             && usedSteps + moveCost < turnSteps
             && pos.compound_turn_active())
             keepGenerating = generate_turns(pos, callback, turn, states, depth + 1,
-                                            usedSteps + moveCost, startBoardKey);
+                                            usedSteps + moveCost, startBoardKey, logicalRoot);
 
         pos.undo_component(move);
         if (!keepGenerating)
@@ -168,6 +169,7 @@ bool LogicalMoveSource::next(LogicalMove& move, LogicalMoveInfo& info) {
   if (!initialized)
   {
       startBoardKey = pos.board_layout_key();
+      logicalRoot = pos.state();
       initialize_frame(0);
       initialized = true;
   }
@@ -251,11 +253,11 @@ bool LogicalMoveSource::next(LogicalMove& move, LogicalMoveInfo& info) {
       {
           StateInfo boundaryState;
           pos.end_compound_turn(boundaryState);
-          repetitionIllegal = pos.same_player_board_repetition_illegal(pos.state()->previous->previous);
+          repetitionIllegal = pos.same_player_board_repetition_illegal(logicalRoot->previous);
           pos.undo_compound_turn();
       }
       else
-          repetitionIllegal = pos.same_player_board_repetition_illegal(pos.state()->previous->previous);
+          repetitionIllegal = pos.same_player_board_repetition_illegal(logicalRoot->previous);
 
       const bool accepted = (is_pass(component) || pos.board_layout_key() != startBoardKey)
                          && !repetitionIllegal;
@@ -292,7 +294,7 @@ std::vector<LogicalMove> generate_compound_moves(Position& pos) {
                      turns.push_back(candidate);
                      return true;
                  },
-                 turn, states, 0, 0, pos.board_layout_key());
+                 turn, states, 0, 0, pos.board_layout_key(), pos.state());
   return turns;
 }
 
@@ -313,7 +315,7 @@ bool has_any_compound_move(Position& pos) {
                      found = true;
                      return false;
                  },
-                 turn, states, 0, 0, pos.board_layout_key());
+                 turn, states, 0, 0, pos.board_layout_key(), pos.state());
   return found;
 }
 
@@ -329,6 +331,7 @@ bool parse_compound_move(Position& pos, const std::string& text, LogicalMove& tu
   LogicalMove parsed;
   alignas(Eval::NNUE::CacheLineSize) StateInfo states[LogicalMove::MAX_COMPONENTS + 1];
   const Key startBoardKey = pos.board_layout_key();
+  const StateInfo* logicalRoot = pos.state();
 
   std::function<bool(size_t, int)> parse = [&](size_t offset, int usedSteps) {
       if (offset >= text.size())
@@ -394,11 +397,11 @@ bool parse_compound_move(Position& pos, const std::string& text, LogicalMove& tu
   {
       StateInfo boundaryState;
       pos.end_compound_turn(boundaryState);
-      repetitionIllegal = pos.same_player_board_repetition_illegal(pos.state()->previous->previous);
+      repetitionIllegal = pos.same_player_board_repetition_illegal(logicalRoot->previous);
       pos.undo_compound_turn();
   }
   else
-      repetitionIllegal = pos.same_player_board_repetition_illegal(pos.state()->previous->previous);
+      repetitionIllegal = pos.same_player_board_repetition_illegal(logicalRoot->previous);
 
   for (int i = parsed.length - 1; i >= 0; --i)
       pos.undo_component(parsed.components[i]);
