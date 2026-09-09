@@ -885,7 +885,7 @@ namespace {
     // expressed by moveCapabilities and LogicalMoveInfo below.
     const bool logicalMovePosition = pos.logical_moves_active();
     ss->inCheck        = pos.evasion_checkers();
-    priorCapture       = pos.captured_piece();
+    priorCapture       = (ss-1)->currentMoveCapturedOpponent;
     Color us           = pos.side_to_move();
     moveCount          = captureCount = quietCount = ss->moveCount = 0;
     bestValue          = -VALUE_INFINITE;
@@ -1151,6 +1151,8 @@ namespace {
         ss->currentMove = MOVE_NULL;
         ss->currentMovePiece = NO_PIECE;
         ss->currentMoveHistoryCompatible = false;
+        ss->currentMoveCapturedOpponent = false;
+        ss->currentMoveRemovedMaterial = false;
         ss->continuationHistory = neutralContinuationHistory;
 
         pos.do_null_move(st);
@@ -1232,6 +1234,10 @@ namespace {
 
                 ss->currentMove = move;
                 ss->currentMoveHistoryCompatible = true;
+                Piece victim = captured_piece_or_on(pos, move);
+                ss->currentMoveCapturedOpponent = victim != NO_PIECE
+                                                && color_of(victim) != pos.side_to_move();
+                ss->currentMoveRemovedMaterial = pos.capture(move);
                 ss->currentMovePiece = pos.moved_piece(move);
                 ss->continuationHistory = &thisThread->continuationHistory[ss->inCheck]
                                                                           [captureOrPromotion]
@@ -1328,7 +1334,7 @@ moves_loop: // When in check, search starts from here
 
     // Step 12. Loop through all pseudo-legal moves until no moves remain
     // or a beta cutoff occurs.
-    bool allMovesHistoryCompatible = true;
+    bool bestMoveHistoryCompatible = false;
 #ifdef ENABLE_COMPOUND_TURNS
     size_t rootMoveIndex = thisThread->pvIdx;
 #endif
@@ -1362,7 +1368,6 @@ moves_loop: // When in check, search starts from here
           moveInfo.representative = move;
           moveInfo.historyCompatible = true;
       }
-      allMovesHistoryCompatible = allMovesHistoryCompatible && moveInfo.historyCompatible;
       assert(is_ok(move));
 
       if (move == excludedMove)
@@ -1408,7 +1413,8 @@ moves_loop: // When in check, search starts from here
           (ss+1)->pv = nullptr;
 
       extension = 0;
-      captureOrPromotion = moveInfo.removesMaterial || moveInfo.promotionLike;
+      captureOrPromotion = moveInfo.capturesOpponent || moveInfo.promotionLike;
+      const bool materialChange = moveInfo.removesMaterial || moveInfo.promotionLike;
       movedPiece = moveInfo.movedPiece;
       givesCheck = moveInfo.givesCheck;
 
@@ -1443,7 +1449,7 @@ moves_loop: // When in check, search starts from here
           {}
           else
 
-          if (   captureOrPromotion
+          if (   materialChange
               || givesCheck)
           {
               // Capture history based pruning when the move doesn't give check
@@ -1564,6 +1570,8 @@ moves_loop: // When in check, search starts from here
       // Speculative prefetch as early as possible
       // Update the current move (this must be done after singular extension search)
       ss->currentMoveHistoryCompatible = moveInfo.historyCompatible;
+      ss->currentMoveCapturedOpponent = moveInfo.capturesOpponent;
+      ss->currentMoveRemovedMaterial = moveInfo.removesMaterial;
       ss->currentMove = moveInfo.historyCompatible ? move : MOVE_NONE;
       ss->currentMovePiece = moveInfo.historyCompatible ? movedPiece : NO_PIECE;
       ss->continuationHistory = moveInfo.historyCompatible
@@ -1593,7 +1601,7 @@ moves_loop: // When in check, search starts from here
           && moveInfo.historyCompatible
           &&  moveCount > 1 + 2 * rootNode
           && !(pos.must_capture() && pos.has_capture())
-          && (  !captureOrPromotion
+          && (  !materialChange
               || (cutNode && (ss-1)->moveCount > 1)
               || !ss->ttPv)
           && (!PvNode || ss->ply > 1 || thisThread->id() % 4 != 3))
@@ -1628,7 +1636,7 @@ moves_loop: // When in check, search starts from here
 
           // Increase reduction for cut nodes (~3 Elo)
           if (cutNode)
-              r += 1 + !captureOrPromotion;
+              r += 1 + !materialChange;
 
           if (!captureOrPromotion)
           {
@@ -1747,6 +1755,7 @@ moves_loop: // When in check, search starts from here
           {
               bestMove = move;
               bestLogicalMove = logicalMove;
+              bestMoveHistoryCompatible = moveInfo.historyCompatible;
 
               if (PvNode && !rootNode) // Update pv even in fail-high case
                   update_pv(ss->pv, logicalMove, (ss+1)->pv);
@@ -1764,10 +1773,10 @@ moves_loop: // When in check, search starts from here
       // If the move is worse than some previously searched move, remember it to update its stats later
       if (logicalMove != bestLogicalMove)
       {
-          if (captureOrPromotion && captureCount < 32)
+          if (moveInfo.historyCompatible && captureOrPromotion && captureCount < 32)
               capturesSearched[captureCount++] = move;
 
-          else if (!captureOrPromotion && quietCount < 64)
+          else if (moveInfo.historyCompatible && !captureOrPromotion && quietCount < 64)
               quietsSearched[quietCount++] = move;
       }
     }
@@ -1802,12 +1811,12 @@ moves_loop: // When in check, search starts from here
     }
 
     // If there is a move which produces search value greater than alpha we update stats of searched moves
-    else if (bestMove && allMovesHistoryCompatible)
+    else if (bestMove && bestMoveHistoryCompatible)
         update_all_stats(pos, ss, bestMove, bestValue, beta, prevSq,
                          quietsSearched, quietCount, capturesSearched, captureCount, depth);
 
     // Bonus for prior countermove that caused the fail low
-    else if (   allMovesHistoryCompatible
+    else if (   bestMoveHistoryCompatible
              && previousMoveHistoryCompatible
              && (depth >= 3 || PvNode)
              && !priorCapture)
@@ -1846,10 +1855,12 @@ moves_loop: // When in check, search starts from here
     static_assert(nodeType != Root);
     constexpr bool PvNode = nodeType == PV;
 
-    // Variants that do not provide a bounded tactical move set can request a
-    // static-evaluation quiescence search. The ordinary move provider remains
-    // available for variants without compound turns.
-    if (pos.variant()->quiescencePolicy == QuiescencePolicy::STATIC_EVAL)
+    // A logical provider may expose only a static-evaluation qsearch. The
+    // variant setting remains an explicit override for providers that support
+    // both modes.
+    const LogicalMoveCapabilities moveCapabilities = pos.logical_move_capabilities();
+    if (moveCapabilities.quiescence == QuiescenceSupport::STATIC_ONLY
+        || pos.variant()->quiescencePolicy == QuiescencePolicy::STATIC_EVAL)
     {
         Value result;
         if (pos.is_game_end(result, ss->ply))
@@ -2039,6 +2050,9 @@ moves_loop: // When in check, search starts from here
 
       ss->currentMove = move;
       ss->currentMoveHistoryCompatible = true;
+      ss->currentMoveCapturedOpponent = victim != NO_PIECE
+                                      && color_of(victim) != pos.side_to_move();
+      ss->currentMoveRemovedMaterial = pos.capture(move);
       ss->currentMovePiece = pos.moved_piece(move);
       ss->continuationHistory = &thisThread->continuationHistory[ss->inCheck]
                                                                 [captureOrPromotion]
@@ -2206,7 +2220,7 @@ moves_loop: // When in check, search starts from here
     // main killer move in previous ply when it gets refuted.
     if (   (ss-1)->currentMoveHistoryCompatible
         && ((ss-1)->moveCount == 1 + (ss-1)->ttHit || ((ss-1)->currentMove == (ss-1)->killers[0]))
-        && !pos.captured_piece())
+        && !(ss-1)->currentMoveCapturedOpponent)
             update_continuation_histories(ss-1, pos.piece_on(prevSq), prevSq, -bonus1);
 
     // Decrease stats for all non-best capture moves
