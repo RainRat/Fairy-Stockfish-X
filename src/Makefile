@@ -38,12 +38,26 @@ else
 endif
 
 ### Source and object files
+# These defaults are needed before selecting the optional compound-turn source.
+all ?= no
+compoundturns ?= no
+
 SRCS = benchmark.cpp bitbase.cpp bitboard.cpp endgame.cpp evaluate.cpp main.cpp \
 	material.cpp misc.cpp movegen.cpp movepick.cpp pawns.cpp position.cpp psqt.cpp \
 	search.cpp thread.cpp timeman.cpp tt.cpp uci.cpp ucioption.cpp tune.cpp syzygy/tbprobe.cpp \
 	nnue/evaluate_nnue.cpp \
 	partner.cpp parser.cpp piece.cpp variant.cpp apiutil.cpp xboard.cpp \
 	nnue/features/half_ka_v2_variants.cpp
+
+ifeq ($(compoundturns),yes)
+ compoundturns_enabled = yes
+else
+ compoundturns_enabled = no
+endif
+
+ifeq ($(compoundturns_enabled),yes)
+SRCS += compound_turn.cpp
+endif
 
 OBJS = $(notdir $(SRCS:.cpp=.o))
 
@@ -61,6 +75,9 @@ endif
 #
 # flag                --- Comp switch      --- Description
 # ----------------------------------------------------------------------------
+#
+# all = yes             --- -DALLVARS --- Enable all variants
+# compoundturns = yes/no --- -DENABLE_COMPOUND_TURNS --- Enable compound turns
 #
 # debug = yes/no      --- -DNDEBUG         --- Enable/Disable debug mode
 # sanitize = none/<sanitizer> ... (-fsanitize )
@@ -96,7 +113,6 @@ endif
 ### 2.1. General and architecture defaults
 largeboards = no
 verylargeboards = no
-all = no
 precomputedmagics = yes
 nnue = no
 load_net = $(if $(filter $(nnue),yes),net)
@@ -317,9 +333,15 @@ ifeq ($(nnue),no)
 	CXXFLAGS += -DNNUE_EMBEDDING_OFF
 endif
 
-# Enable all variants, even heavyweight ones like duck and amazons
+# Enable all variants and mechanics, even heavyweight ones like duck and amazons
 ifneq ($(all),no)
 	CXXFLAGS += -DALLVARS
+endif
+
+# Compound turns are intentionally independent from all=yes while the subsystem
+# is being benchmarked. This keeps an all-variant build available as a control.
+ifeq ($(compoundturns),yes)
+	CXXFLAGS += -DENABLE_COMPOUND_TURNS
 endif
 
 ifeq ($(COMP),)
@@ -731,6 +753,8 @@ else
 	@echo ""
 	@echo "make build ARCH=x86-64 largeboards=yes all=yes"
 	@echo "make build ARCH=x86-64 verylargeboards=yes all=yes"
+	@echo "Enable generic compound turns in an all-variant build: "
+	@echo "make build ARCH=x86-64 largeboards=yes all=yes compoundturns=yes nnue=yes"
 	@echo ""
 endif
 
@@ -853,6 +877,7 @@ config-sanity: $(load_net)
 	@echo "largeboards: '$(largeboards)'"
 	@echo "verylargeboards: '$(verylargeboards)'"
 	@echo "all: '$(all)'"
+	@echo "compoundturns: '$(compoundturns_enabled)'"
 	@echo "precomputedmagics: '$(precomputedmagics)'"
 	@echo "nnue: '$(nnue)'"
 	@echo ""
@@ -882,6 +907,7 @@ config-sanity: $(load_net)
 	@test "$(vnni256)" = "yes" || test "$(vnni256)" = "no"
 	@test "$(vnni512)" = "yes" || test "$(vnni512)" = "no"
 	@test "$(neon)" = "yes" || test "$(neon)" = "no"
+	@test "$(compoundturns)" = "yes" || test "$(compoundturns)" = "no"
 	@test "$(comp)" = "gcc" || test "$(comp)" = "icc" || test "$(comp)" = "mingw" || test "$(comp)" = "clang" \
 	|| test "$(comp)" = "aarch64-linux-android21-clang"
 

@@ -41,6 +41,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <algorithm>
+#include <array>
 #include <utility>
 
 #if defined(_MSC_VER)
@@ -590,6 +591,91 @@ constexpr int MOVE_TYPE_BITS = 4;
 static_assert((LASER_FIRE >> (2 * SQUARE_BITS)) < (1 << MOVE_TYPE_BITS),
               "MoveType exceeds its encoded field");
 
+/// A logical engine move may contain several internal components. Ordinary
+/// moves use one slot; compound-turn code fills the remaining slots.
+struct LogicalMove {
+  static constexpr int MAX_COMPONENTS = 4;
+
+#ifdef ENABLE_COMPOUND_TURNS
+  std::array<Move, MAX_COMPONENTS> components{};
+  uint8_t length = 0;
+#else
+  Move move = MOVE_NONE;
+#endif
+
+  LogicalMove() = default;
+  LogicalMove(Move m)
+#ifdef ENABLE_COMPOUND_TURNS
+      : length(1) { components[0] = m; }
+#else
+      : move(m) {}
+#endif
+
+  void set(Move m) {
+#ifdef ENABLE_COMPOUND_TURNS
+      components[0] = m;
+      length = 1;
+#else
+      this->move = m;
+#endif
+  }
+
+  bool empty() const {
+#ifdef ENABLE_COMPOUND_TURNS
+      return length == 0;
+#else
+      return move == MOVE_NONE;
+#endif
+  }
+  bool is_single() const {
+#ifdef ENABLE_COMPOUND_TURNS
+      return length == 1;
+#else
+      return move != MOVE_NONE;
+#endif
+  }
+  Move first() const {
+#ifdef ENABLE_COMPOUND_TURNS
+      return length ? components[0] : MOVE_NONE;
+#else
+      return move;
+#endif
+  }
+
+  bool operator==(const LogicalMove& other) const {
+#ifdef ENABLE_COMPOUND_TURNS
+      return length == other.length
+          && std::equal(components.begin(), components.begin() + length, other.components.begin());
+#else
+      return move == other.move;
+#endif
+  }
+
+  bool operator!=(const LogicalMove& other) const { return !(*this == other); }
+  bool operator==(Move m) const {
+#ifdef ENABLE_COMPOUND_TURNS
+      return length == 1 && components[0] == m;
+#else
+      return this->move == m;
+#endif
+  }
+  bool operator!=(Move m) const { return !(*this == m); }
+  bool operator<(const LogicalMove& other) const {
+#ifdef ENABLE_COMPOUND_TURNS
+      if (length != other.length)
+          return length < other.length;
+      return std::lexicographical_compare(components.begin(), components.begin() + length,
+                                           other.components.begin(), other.components.begin() + other.length);
+#else
+      return this->move < other.move;
+#endif
+  }
+};
+
+#ifndef ENABLE_COMPOUND_TURNS
+static_assert(sizeof(LogicalMove) == sizeof(Move), "LogicalMove must stay compact without compound turns");
+#endif
+
 enum Color {
   WHITE, BLACK, COLOR_NB = 2
 };
@@ -787,6 +873,36 @@ enum Piece {
   W_PAWN = PAWN,                 W_KNIGHT, W_BISHOP, W_ROOK, W_QUEEN, W_KING = KING,
   B_PAWN = PAWN + PIECE_TYPE_NB, B_KNIGHT, B_BISHOP, B_ROOK, B_QUEEN, B_KING = KING + PIECE_TYPE_NB,
   PIECE_NB = 2 * PIECE_TYPE_NB
+};
+
+/// Properties of a completed logical move used by generic search heuristics.
+/// A property is false when the provider cannot establish its physical-move
+/// semantics for the complete transition.
+struct LogicalMoveInfo {
+  Move representative = MOVE_NONE;
+  Piece movedPiece = NO_PIECE;
+  bool capturesOpponent = false;
+  bool losesOwnMaterial = false;
+  bool removesMaterial = false;
+  bool promotionLike = false;
+  bool givesCheck = false;
+  bool historyCompatible = false;
+  bool seeReliable = false;
+};
+
+enum class QuiescenceSupport : uint8_t {
+  STANDARD,
+  STATIC_ONLY
+};
+
+/// Search capabilities supplied by the logical-move provider. These describe
+/// the assumptions of a search heuristic, rather than how many components a
+/// logical move happens to contain.
+struct LogicalMoveCapabilities {
+  bool futilityPruning = true;
+  bool nullMovePruning = true;
+  bool probCut = true;
+  QuiescenceSupport quiescence = QuiescenceSupport::STANDARD;
 };
 
 enum PieceSet : uint64_t {
@@ -1267,6 +1383,28 @@ inline Square pull_square(Move m) {
   return sq ? Square(sq - 1) : SQ_NONE;
 }
 
+#ifdef ENABLE_COMPOUND_TURNS
+// Encoded two-piece pushes reuse the existing PULL encoding so that the move layout and
+// MOVE_TYPE_BITS remain unchanged for orthodox variants. The otherwise-unused
+// piece-type field marks the record as an encoded push; from_sq() is the pusher
+// source, to_sq() is the pushed piece source, and pull_square() is its target.
+constexpr PieceType ENCODED_PUSH_MARKER = KING;
+
+inline bool is_encoded_push(Move m) {
+  return type_of(m) == PULL
+      && PieceType((static_cast<uint64_t>(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS))
+                   & (PIECE_TYPE_NB - 1)) == ENCODED_PUSH_MARKER;
+}
+
+inline Square encoded_push_square(Move m) {
+  return is_encoded_push(m) ? pull_square(m) : SQ_NONE;
+}
+
+inline bool is_two_step_move(Move m) {
+  return is_encoded_push(m) || (type_of(m) == PULL && pull_square(m) != SQ_NONE);
+}
+#endif
+
 inline Square swap_square(Move m) {
   return type_of(m) == SWAP ? to_sq(m) : SQ_NONE;
 }
@@ -1393,6 +1531,16 @@ constexpr Move make_pull(Square from, Square to, Square pullFrom) {
             + (static_cast<uint64_t>(from) << SQUARE_BITS)
             + static_cast<uint64_t>(to));
 }
+
+#ifdef ENABLE_COMPOUND_TURNS
+constexpr Move make_encoded_push(Square from, Square to, Square pushedTo) {
+  return Move((static_cast<uint64_t>(pushedTo + 1) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS))
+            + (static_cast<uint64_t>(ENCODED_PUSH_MARKER) << (2 * SQUARE_BITS + MOVE_TYPE_BITS))
+            + static_cast<uint64_t>(PULL)
+            + (static_cast<uint64_t>(from) << SQUARE_BITS)
+            + static_cast<uint64_t>(to));
+}
+#endif
 
 constexpr Move make_promotion_potion(Square from, Square to, PieceType prom_pt, int potion, Square target) {
   assert(prom_pt == KNIGHT || prom_pt == BISHOP || prom_pt == ROOK || prom_pt == QUEEN);

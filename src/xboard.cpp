@@ -23,6 +23,7 @@
 #include <limits>
 
 #include "evaluate.h"
+#include "compound_turn.h"
 #include "misc.h"
 #include "partner.h"
 #include "search.h"
@@ -207,6 +208,10 @@ namespace XBoard {
 
     states = StateListPtr(new std::deque<StateInfo>(1)); // Drop old and create a new one
     moveList.clear();
+#ifdef ENABLE_COMPOUND_TURNS
+    compoundMoveList.clear();
+    compoundTransactions.clear();
+#endif
     pos.set(variants.get(Options["UCI_Variant"]), fen, Options["UCI_Chess960"], &states->back(), Threads.main());
   }
 
@@ -220,10 +225,48 @@ namespace XBoard {
 
     if (m == MOVE_NONE)
         return;
+
+#ifdef ENABLE_COMPOUND_TURNS
+    if (pos.compound_turn_active())
+    {
+        LogicalMove logical(m);
+        states->emplace_back();
+        compoundTransactions.emplace_back();
+        pos.do_move(logical, states->back(), compoundTransactions.back());
+        moveList.push_back(m);
+        compoundMoveList.push_back(logical);
+        return;
+    }
+#endif
+
     moveList.push_back(m);
     states->emplace_back();
     pos.do_move(m, states->back());
+#ifdef ENABLE_COMPOUND_TURNS
+    compoundMoveList.emplace_back();
+    compoundTransactions.emplace_back();
+#endif
   }
+
+#ifdef ENABLE_COMPOUND_TURNS
+  // Apply one complete compound turn while keeping it as one XBoard history
+  // entry. Intermediate states remain internal to this operation.
+  void StateMachine::do_compound_move(const LogicalMove& turn) {
+
+    if (Threads.setupStates.get())
+        states = std::move(Threads.setupStates);
+
+    assert(pos.compound_turn_active());
+    assert(turn.length > 0 && turn.length <= LogicalMove::MAX_COMPONENTS);
+
+    states->emplace_back();
+    compoundTransactions.emplace_back();
+    pos.do_move(turn, states->back(), compoundTransactions.back());
+
+    moveList.push_back(turn.components[0]);
+    compoundMoveList.push_back(turn);
+  }
+#endif
 
   // undo_move() is called when the engine receives the undo command in XBoard protocol.
 
@@ -233,8 +276,24 @@ namespace XBoard {
     if (Threads.setupStates.get())
         states = std::move(Threads.setupStates);
 
+#ifdef ENABLE_COMPOUND_TURNS
+    const LogicalMove& turn = compoundMoveList.back();
+    if (turn.length)
+    {
+        pos.undo_move(turn, compoundTransactions.back());
+        states->pop_back();
+    }
+    else
+    {
+        pos.undo_move(moveList.back());
+        states->pop_back();
+    }
+    compoundMoveList.pop_back();
+    compoundTransactions.pop_back();
+#else
     pos.undo_move(moveList.back());
     states->pop_back();
+#endif
     moveList.pop_back();
   }
 
@@ -636,15 +695,38 @@ void StateMachine::process_command(std::string token, std::istringstream& is) {
 
       // Apply move
       Move m;
-      if ((m = UCI::to_move(pos, token)) != MOVE_NONE)
-          do_move(m);
+      bool moveApplied = false;
+#ifdef ENABLE_COMPOUND_TURNS
+      if (pos.compound_turn_active())
+      {
+          LogicalMove turn;
+          if (parse_compound_move(pos, token, turn))
+          {
+              do_compound_move(turn);
+              moveApplied = true;
+          }
+          if (!moveApplied)
+              sync_cout << (isMove ? "Illegal move: " : "Error (unknown command): ") << token << sync_endl;
+      }
       else
-          sync_cout << (isMove ? "Illegal move: " : "Error (unknown command): ") << token << sync_endl;
+#endif
+      {
+          if (!moveApplied)
+          {
+              if ((m = UCI::to_move(pos, token)) != MOVE_NONE)
+              {
+                  do_move(m);
+                  moveApplied = true;
+              }
+              else
+                  sync_cout << (isMove ? "Illegal move: " : "Error (unknown command): ") << token << sync_endl;
+          }
+      }
 
       // Restart search if applicable
-      if (Options["UCI_AnalyseMode"])
+      if (moveApplied && Options["UCI_AnalyseMode"])
           go(analysisLimits);
-      else if (pos.side_to_move() == playColor)
+      else if (moveApplied && pos.side_to_move() == playColor)
       {
           moveAfterSearch = true;
           go(limits);

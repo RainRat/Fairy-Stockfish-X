@@ -40,11 +40,13 @@ constexpr int CounterMovePruneThreshold = 0;
 /// its own array of Stack objects, indexed by the current ply.
 
 struct Stack {
-  Move* pv;
+  void* pv;
   PieceToHistory* continuationHistory;
   int ply;
   Move currentMove;
   Piece currentMovePiece;
+  bool currentMoveHistoryCompatible;
+  bool currentMoveCapturedOpponent;
   Move excludedMove;
   Move killers[2];
   Value staticEval;
@@ -63,8 +65,10 @@ struct Stack {
 
 struct RootMove {
 
-  explicit RootMove(Move m) : pv(1, m) {}
+  explicit RootMove(LogicalMove m, LogicalMoveInfo i = {}) : info(i), pv(1, m) {}
+  explicit RootMove(Move m) : RootMove(LogicalMove(m)) {}
   bool extract_ponder_from_tt(Position& pos);
+  bool operator==(const LogicalMove& m) const { return pv[0] == m; }
   bool operator==(const Move& m) const { return pv[0] == m; }
   bool operator<(const RootMove& m) const { // Sort in descending order
     return m.score != score ? m.score < score
@@ -76,7 +80,8 @@ struct RootMove {
   int selDepth = 0;
   int tbRank = 0;
   Value tbScore = VALUE_ZERO;
-  std::vector<Move> pv;
+  LogicalMoveInfo info;
+  std::vector<LogicalMove> pv;
 };
 
 typedef std::vector<RootMove> RootMoves;
@@ -97,7 +102,8 @@ struct LimitsType {
     return time[WHITE] || time[BLACK];
   }
 
-  std::vector<Move> searchmoves, banmoves;
+  std::vector<LogicalMove> searchmoves, banmoves;
+  bool searchMovesSpecified = false;
   TimePoint time[COLOR_NB], inc[COLOR_NB], npmsec, movetime, startTime;
   int movestogo, depth, mate, perft, infinite;
   int64_t nodes;

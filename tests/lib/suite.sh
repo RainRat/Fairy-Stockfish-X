@@ -211,6 +211,7 @@ run_notation_protocol() {
 
 run_variants_smoke() {
     native board-games
+    legacy arimaa-profile.sh 2m "${ENGINE}" "${VARIANTS}"
     legacy variant-load-all.sh 10m "${ENGINE}" "${VARIANTS}"
     legacy variant-load-matrix.sh 30m "${ENGINE}" "${VARIANTS}"
     legacy variant-rules-matrix.sh 8m "${ENGINE}" "${VARIANTS}"

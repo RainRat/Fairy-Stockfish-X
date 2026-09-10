@@ -11,6 +11,9 @@
 
 #include "apiutil.h"
 #include "test-support.hpp"
+#ifdef ENABLE_COMPOUND_TURNS
+#include "compound_turn.h"
+#endif
 
 using namespace Stockfish;
 
@@ -111,6 +114,11 @@ void movement() {
                  "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
     check(!pos.clone_targets_from(WHITE, SQ_A3),
           "clone_targets_from returned targets for an empty square");
+    const Variant* staticQsearch = variants.get("generic-static-qsearch-audit");
+    check(staticQsearch != nullptr,
+          "generic static-evaluation qsearch audit variant failed to load");
+    check(staticQsearch->quiescencePolicy == QuiescencePolicy::STATIC_EVAL,
+          "generic static-evaluation quiescence policy was not parsed");
 }
 
 void composable_rules() {
@@ -978,6 +986,38 @@ void composable_rules() {
     pos.undo_move(rifleMorphOut);
     states->pop_back();
 
+    set_position(pos, states, "rifle-key-audit",
+                 "4k2r/8/8/8/8/8/8/4K2R w KQkq - 0 1");
+    Move rifleRook = parse_move(pos, "h1h8");
+    states->emplace_back();
+    pos.do_move(rifleRook, states->back());
+    check(pos.piece_on(SQ_H1) == make_piece(WHITE, ROOK)
+          && pos.piece_on(SQ_H8) == NO_PIECE
+          && pos.can_castle(WHITE_OO)
+          && !pos.can_castle(BLACK_OO),
+          "rifle capture changed castling rights for the stationary shooter");
+    Position rifleRookReloaded;
+    StateListPtr rifleRookStates;
+    set_position(rifleRookReloaded, rifleRookStates, "rifle-key-audit", pos.fen().c_str());
+    check(pos.key() == rifleRookReloaded.key(),
+          "rifle capture produced a key that did not match its FEN");
+    pos.undo_move(rifleRook);
+    states->pop_back();
+
+    set_position(pos, states, "rifle-key-audit",
+                 "4k3/8/8/8/8/3p4/4P3/4K3 w - - 0 1");
+    Move riflePawn = parse_move(pos, "e2d3");
+    states->emplace_back();
+    pos.do_move(riflePawn, states->back());
+    Position riflePawnReloaded;
+    StateListPtr riflePawnStates;
+    set_position(riflePawnReloaded, riflePawnStates, "rifle-key-audit", pos.fen().c_str());
+    check(pos.pawn_key() == riflePawnReloaded.pawn_key()
+          && pos.key() == riflePawnReloaded.key(),
+          "rifle pawn capture produced a key that did not match its FEN");
+    pos.undo_move(riflePawn);
+    states->pop_back();
+
     set_position(pos, states, "composable-ep-ghost",
                  "4k3/8/3r4/3pP3/8/8/8/4K3[F] w - d6 0 1");
     Move occupiedEp = make<EN_PASSANT>(SQ_E5, SQ_D6);
@@ -1053,6 +1093,692 @@ void composable_rules() {
     check(!pos.legal(make<CASTLING>(SQ_E1, SQ_H1)),
           "castling onto an unprotected trap square removed the royal");
 }
+
+#ifdef ENABLE_COMPOUND_TURNS
+void arimaa_setup() {
+    Position pos;
+    StateListPtr states;
+    set_position(pos, states, "arimaa",
+                 "8/8/8/8/8/8/8/8[RRRRRRRRCCDDHHMErrrrrrrrccddhhme] w - - 0 1");
+
+    const std::vector<const char*> placements = {
+      "R@a1", "0000", "R@b1", "0000", "R@c1", "0000", "R@d1", "0000",
+      "R@e1", "0000", "R@f1", "0000", "R@g1", "0000", "R@h1", "0000",
+      "C@a2", "0000", "C@b2", "0000", "D@c2", "0000", "D@d2", "0000",
+      "H@e2", "0000", "H@f2", "0000", "M@g2", "0000", "E@h2",
+      "R@a8", "0000", "R@b8", "0000", "R@c8", "0000", "R@d8", "0000",
+      "R@e8", "0000", "R@f8", "0000", "R@g8", "0000", "R@h8", "0000",
+      "C@a7", "0000", "C@b7", "0000", "D@c7", "0000", "D@d7", "0000",
+      "H@e7", "0000", "H@f7", "0000", "M@g7", "0000", "E@h7"
+    };
+    std::vector<Move> moves;
+    for (const char* notation : placements)
+    {
+        Move move = parse_move(pos, notation);
+        moves.push_back(move);
+        states->emplace_back();
+        pos.do_move(move, states->back());
+    }
+
+    check(pos.game_ply() == int(placements.size()), "Arimaa setup placements did not advance gamePly normally");
+    check(pos.rule50_count() == 0, "Arimaa setup placements did not preserve expected rule50 state");
+    check(pos.side_to_move() == WHITE, "completed Arimaa setup did not start Gold");
+
+    for (auto it = moves.rbegin(); it != moves.rend(); ++it)
+    {
+        pos.undo_move(*it);
+        states->pop_back();
+    }
+    check(pos.game_ply() == 0, "undoing Arimaa setup did not restore gamePly");
+}
+
+void arimaa_architecture() {
+    Position pos;
+    StateListPtr states;
+    Value result;
+
+    set_position(pos, states, "arimaa",
+                 "8/7r/8/8/8/8/R7/8 w - - 0 1");
+    check(pos.at_complete_turn_boundary(),
+          "a freshly loaded Arimaa position was not at a complete-turn boundary");
+    Move step = parse_move(pos, "a2a3");
+    states->emplace_back();
+    pos.do_component(step, states->back());
+    check(!pos.at_complete_turn_boundary(),
+          "an Arimaa partial step was exposed as a complete-turn boundary");
+    check(pos.fen().empty(),
+          "a partial Arimaa step was silently serialized as complete-turn FEN");
+    check(!pos.nnue_applicable(),
+          "NNUE remained applicable inside an Arimaa partial turn");
+    pos.undo_component(step);
+    states->pop_back();
+    check(pos.at_complete_turn_boundary(),
+          "undoing an Arimaa partial step did not restore the turn boundary");
+
+    set_position(pos, states, "arimaa",
+                 "7r/R7/8/8/8/8/8/8 w - - 0 1");
+    Move goalStep = parse_move(pos, "a7a8");
+    states->emplace_back();
+    pos.do_component(goalStep, states->back());
+    check(!pos.is_game_end(result),
+          "an Arimaa rabbit goal was adjudicated before the turn boundary");
+    pos.undo_component(goalStep);
+    states->pop_back();
+
+    set_position(pos, states, "arimaa",
+                 "7r/8/8/8/8/8/2R5/8 w - - 0 1");
+    Move trapStep = parse_move(pos, "c2c3");
+    states->emplace_back();
+    pos.do_component(trapStep, states->back());
+    check(!pos.is_game_end(result),
+          "Arimaa rabbit extinction was adjudicated before the turn boundary");
+    pos.undo_component(trapStep);
+    states->pop_back();
+
+    set_position(pos, states, "arimaa",
+                 "7r/8/8/3r4/3E4/8/8/R7 w - - 0 1");
+    Move ordinaryCapture = make_move(SQ_D4, SQ_D5);
+    Move encodedPush = make_encoded_push(SQ_D4, SQ_D5, SQ_D6);
+    check(!pos.pseudo_legal(ordinaryCapture),
+          "Arimaa move-only Betza allowed an ordinary occupied-destination capture");
+    check(encoded_push_square(encodedPush) == SQ_D6,
+          "Arimaa encoded push did not round-trip its destination square");
+    check(pos.encoded_push_legal(encodedPush),
+          "Arimaa encoded push was rejected while ordinary captures were disabled");
+
+    set_position(pos, states, "arimaa-board-size-audit",
+                 "9r/10/10/10/10/10/10/10/10/R9 w - - 0 1");
+    check(pos.max_file() == FILE_J && pos.max_rank() == RANK_10,
+          "Arimaa rejected a configured board larger than 8x8");
+
+    set_position(pos, states, "arimaa-wrapped-push-audit",
+                 "8/8/8/r6E/8/8/8/8 w - - 0 1");
+    check(pos.topology_wraps(), "cylindrical Arimaa audit did not enable wrapping");
+    check(pos.attacks_from(WHITE, WAZIR, SQ_H4, Bitboard(0)) & SQ_A4,
+          "wrapped Wazir adjacency missed h4-a4");
+    check(pos.attacks_from(WHITE, WAZIR, SQ_A4, Bitboard(0)) & SQ_B4,
+          "wrapped Wazir adjacency missed a4-b4");
+
+    set_position(pos, states, "arimaa",
+                 "R7/7r/8/8/8/8/8/8 b - - 0 1");
+    check(pos.is_game_end(result, 3) && result == mated_in(3),
+          "Arimaa terminal adjudication did not preserve the supplied search ply");
+
+    set_position(pos, states, "arimaa-nonsequential-audit",
+                 "8/8/8/8/8/8/8/8[RRRRRRRRCCDDHHMErrrrrrrrccddhhme] w - - 0 1");
+    Move ordinaryDrop = parse_move(pos, "R@a1");
+    states->emplace_back();
+    pos.do_move(ordinaryDrop, states->back());
+    check(pos.side_to_move() == BLACK && pos.game_ply() == 1 && pos.rule50_count() == 0,
+          "sequentialSetup=false did not use ordinary drop-side transitions (side="
+          + std::to_string(int(pos.side_to_move()))
+          + ", ply=" + std::to_string(pos.game_ply())
+          + ", rule50=" + std::to_string(pos.rule50_count()) + ")");
+    pos.undo_move(ordinaryDrop);
+    states->pop_back();
+
+    set_position(pos, states, "arimaa-custom-role-audit",
+                 "8/8/8/8/8/8/8/8 w - - 0 1");
+    pos.put_piece(make_piece(WHITE, CUSTOM_PIECE_2), SQ_D4);
+    pos.put_piece(make_piece(BLACK, CUSTOM_PIECE_1), SQ_D5);
+    std::string forwardFen = pos.fen();
+    set_position(pos, states, "arimaa-custom-role-audit", forwardFen.c_str());
+    check(pos.flag_piece(WHITE) == CUSTOM_PIECE_2,
+          "Arimaa flag role did not use the configured piece type: got "
+          + std::to_string(int(pos.flag_piece(WHITE)))
+          + " expected " + std::to_string(int(CUSTOM_PIECE_2)));
+    Move forwardPush = make_encoded_push(SQ_D4, SQ_D5, SQ_D6);
+    check(pos.encoded_push_legal(forwardPush),
+          "configured rabbit Betza rejected a forward push (role="
+          + std::to_string(int(pos.flag_piece(WHITE)))
+          + ", source=" + std::to_string(int(type_of(pos.piece_on(SQ_D4))))
+          + ", moves=" + std::to_string(bool(PseudoMoves[0][WHITE][pos.flag_piece(WHITE)][SQ_D4] & SQ_D5))
+          + ")");
+    set_position(pos, states, "arimaa-custom-role-audit",
+                 "8/8/8/8/8/8/8/8 w - - 0 1");
+    pos.put_piece(make_piece(WHITE, CUSTOM_PIECE_2), SQ_D4);
+    pos.put_piece(make_piece(BLACK, CUSTOM_PIECE_1), SQ_D3);
+    std::string backwardFen = pos.fen();
+    set_position(pos, states, "arimaa-custom-role-audit", backwardFen.c_str());
+    Move backwardPush = make_encoded_push(SQ_D4, SQ_D3, SQ_D2);
+    check(!pos.encoded_push_legal(backwardPush),
+          "configured rabbit Betza allowed a backward push");
+
+    set_position(pos, states, "arimaa-pusher-movement-audit",
+                 "8/8/8/8/8/8/8/8 w - - 0 1");
+    pos.put_piece(make_piece(WHITE, CUSTOM_PIECE_2), SQ_D4);
+    pos.put_piece(make_piece(BLACK, CUSTOM_PIECE_1), SQ_D3);
+    std::string pusherMovementFen = pos.fen();
+    set_position(pos, states, "arimaa-pusher-movement-audit", pusherMovementFen.c_str());
+    Move pusherBackward = make_encoded_push(SQ_D4, SQ_D3, SQ_D2);
+    check(!pos.encoded_push_legal(pusherBackward),
+          "encoded push legality depended on the configured flag piece instead of the pusher Betza");
+
+    set_position(pos, states, "arimaa-push-rule-none-audit",
+                 "8/8/8/3r4/3R4/8/8/8 w - - 0 1");
+    check(!pos.has_pushing(),
+          "pushPullRule=none still exposed configured pushing capability");
+    check(!pos.encoded_push_legal(forwardPush),
+          "pushPullRule=none accepted an Arimaa push encoding");
+
+    set_position(pos, states, "arimaa-push-rule-generic-audit",
+                 "8/8/8/3r4/3R4/8/8/8 w - - 0 1");
+    check(pos.has_pushing(),
+          "pushPullRule=generic hid configured pushing capability");
+    check(!pos.encoded_push_legal(forwardPush),
+          "pushPullRule=generic accepted an Arimaa push encoding");
+
+    set_position(pos, states, "arimaa-push-rule-generic-audit",
+                 "7r/8/8/3r4/3E4/8/8/R7 w - - 0 1");
+    Move genericPull = parse_move(pos, "d4e4,d5");
+    check(is_two_step_move(genericPull),
+          "generic pull was not represented as a two-step move");
+    states->emplace_back();
+    pos.do_component(genericPull, states->back());
+    check(pos.compound_turn_step() == 1,
+          "generic pull advanced the compound turn by more than one step");
+    check(!pos.at_complete_turn_boundary(),
+          "generic pull incorrectly completed the compound turn");
+    pos.undo_component(genericPull);
+    states->pop_back();
+}
+
+void compound_turn_rules() {
+    Position pos;
+    StateListPtr states;
+    Value result = VALUE_NONE;
+
+    // 1. Generic sequential setup audit
+    set_position(pos, states, "generic-sequential-setup-audit",
+                 "8/8/8/8/8/8/8/8[RRRRrrrr] w - - 0 1");
+    std::vector<Move> setupMoves;
+    auto play_setup = [&](const char* notation) {
+        Move move = parse_move(pos, notation);
+        states->emplace_back();
+        pos.do_move(move, states->back());
+        setupMoves.push_back(move);
+    };
+    play_setup("R@a1");
+    check(pos.side_to_move() == BLACK && pos.game_ply() == 1,
+          "generic sequential setup did not advance after White's drop");
+    const std::string setupHandoffFen = pos.fen();
+    check(setupHandoffFen.find(" setup=") == std::string::npos,
+          "sequential setup handoff FEN exposed internal placement state");
+    set_position(pos, states, "generic-sequential-setup-audit", setupHandoffFen.c_str());
+    check(pos.side_to_move() == BLACK,
+          "sequential setup FEN did not preserve the side to move");
+    MoveList<LEGAL> setupHandoffMoves(pos);
+    check(setupHandoffMoves.size() == 1 && is_pass(setupHandoffMoves.begin()->move),
+          "sequential setup handoff FEN did not restore the forced pass");
+    set_position(pos, states, "generic-sequential-setup-audit",
+                 "8/8/8/8/8/8/8/8[RRRRrrrr] w - - 0 1");
+    setupMoves.clear();
+    play_setup("R@a1");
+    play_setup("0000");
+    check(pos.side_to_move() == WHITE && pos.game_ply() == 2,
+          "generic sequential setup pass did not return to White with normal ply accounting");
+    play_setup("R@b1");
+    play_setup("0000");
+    play_setup("R@c1");
+    play_setup("0000");
+    play_setup("R@d1");
+    check(pos.side_to_move() == BLACK, "emptying White pocket did not switch sideToMove to Black");
+    play_setup("R@e8");
+    play_setup("0000");
+    play_setup("R@f8");
+    play_setup("0000");
+    play_setup("R@g8");
+    play_setup("0000");
+    play_setup("R@h8");
+    check(pos.side_to_move() == WHITE, "emptying Black pocket did not restore sideToMove to White");
+    check(pos.game_ply() == int(setupMoves.size()),
+          "generic sequential setup did not use normal ply accounting");
+
+    // Undoing sequential drops
+    for (auto it = setupMoves.rbegin(); it != setupMoves.rend(); ++it)
+    {
+        pos.undo_move(*it);
+        states->pop_back();
+    }
+    check(pos.side_to_move() == WHITE && pos.game_ply() == 0, "undoing all sequential drops failed");
+
+    // 2. Generic compound turn generation, step costs, and repetition
+    set_position(pos, states, "generic-compound-turn-audit",
+                 "8/8/8/3r4/3C4/8/8/8 w - - 0 1");
+    check(variants.get("generic-compound-turn-audit")->samePlayerBoardRepetitionIllegalAtN == 0,
+          "generic compound turns inherited Arimaa repetition policy");
+    check(variants.get("arimaa")->samePlayerBoardRepetitionIllegalAtN == 2,
+          "Arimaa did not enable complete-turn repetition illegality");
+    check(variants.get("arimaa")->quiescencePolicy == QuiescencePolicy::STANDARD,
+          "Arimaa unexpectedly overrides the logical-provider qsearch policy");
+    check(pos.compound_turn_active(), "generic compound turn is not active");
+    check(pos.compound_turn_steps() == 3, "generic compound turn steps != 3");
+    const LogicalMoveCapabilities capabilities = pos.logical_move_capabilities();
+    check(!capabilities.futilityPruning && !capabilities.nullMovePruning && !capabilities.probCut,
+          "compound provider exposed unsupported standard pruning capabilities");
+    check(capabilities.quiescence == QuiescenceSupport::STATIC_ONLY,
+          "compound provider did not select static-eval qsearch capability");
+    check(pos.at_complete_turn_boundary(), "fresh position is not at complete turn boundary");
+
+    set_position(pos, states, "generic-compound-pocket-audit",
+                 "R7/8/8/8/8/8/8/8[Rr] w - - 0 1");
+    check(pos.compound_turn_active(),
+          "generic compound turns were disabled by unrelated pocket contents");
+    LogicalMove pocketMove(make_move(SQ_A1, SQ_A2));
+    check(pos.legal(pocketMove.first()),
+          "generic compound move with unrelated pocket contents was not legal");
+    StateInfo pocketState;
+    LogicalMoveState pocketTransaction;
+    do_compound_move(pos, pocketMove, pocketState, pocketTransaction);
+    check(pos.compound_turn_active(),
+          "generic compound turns were disabled after a turn with pocket contents");
+    undo_compound_move(pos, pocketMove, pocketTransaction);
+
+    set_position(pos, states, "generic-compound-repetition-audit",
+                 "8/8/8/8/8/8/8/R7 w - - 0 1");
+    StateInfo repetitionStates[6];
+    LogicalMoveState repetitionTransactions[6];
+    auto play_repetition_turn = [&](const char* text, int stateIndex) {
+        LogicalMove turn;
+        check(parse_compound_move(pos, text, turn),
+              std::string("failed to parse repetition test turn: ") + text);
+        do_compound_move(pos, turn, repetitionStates[stateIndex],
+                         repetitionTransactions[stateIndex]);
+    };
+    play_repetition_turn("a1b1", 0);
+    play_repetition_turn("0000", 1);
+    play_repetition_turn("b1a1", 2);
+    play_repetition_turn("0000", 3);
+    play_repetition_turn("a1b1", 4);
+    play_repetition_turn("0000", 5);
+    LogicalMove allowedRepetition;
+    check(parse_compound_move(pos, "b1a1", allowedRepetition),
+          "intermediate component repetition incorrectly rejected a legal turn");
+
+    set_position(pos, states, "generic-compound-boundary-repetition-audit",
+                 "8/8/8/8/8/8/8/8 w - - 0 1");
+    LogicalMove firstPass;
+    check(parse_compound_move(pos, "0000", firstPass),
+          "failed to parse the first boundary repetition pass");
+    StateInfo boundaryRepetitionState;
+    LogicalMoveState boundaryRepetitionTransaction;
+    do_compound_move(pos, firstPass, boundaryRepetitionState,
+                     boundaryRepetitionTransaction);
+    LogicalMove repeatedPass;
+    check(!parse_compound_move(pos, "0000", repeatedPass),
+          "completed-turn repetition threshold did not reject a repeated boundary");
+    undo_compound_move(pos, firstPass, boundaryRepetitionTransaction);
+
+    // A completed logical position is compared with the persistent history
+    // regardless of how many components produced that position. Exercise
+    // both exact and early-completed turns with actual repeated targets.
+    for (int componentCount = 1; componentCount <= 4; ++componentCount)
+    {
+        set_position(pos, states, "generic-compound-four-repetition-audit",
+                     "8/8/8/8/8/8/8/RRRR4 b - - 0 1");
+        const char* origins[] = {"a1", "b1", "c1", "d1"};
+        const char* intermediate[] = {"a2", "b2", "c2", "d2"};
+        std::string forward;
+        std::string reverse;
+        for (int i = 0; i < componentCount; ++i)
+        {
+            if (!forward.empty())
+            {
+                forward += ',';
+                reverse += ',';
+            }
+            forward += std::string(origins[i]) + intermediate[i];
+            reverse += std::string(intermediate[i]) + origins[i];
+        }
+
+        LogicalMove firstPass;
+        LogicalMove priorTurn;
+        LogicalMove secondPass;
+        StateInfo firstPassState;
+        LogicalMoveState firstPassTransaction;
+        check(parse_compound_move(pos, "0000", firstPass),
+              "failed to parse first multi-component repetition handoff pass");
+        do_compound_move(pos, firstPass, firstPassState, firstPassTransaction);
+        check(parse_compound_move(pos, forward, priorTurn),
+              "failed to parse multi-component repetition setup: " + forward);
+        StateInfo priorState;
+        LogicalMoveState priorTransaction;
+        do_compound_move(pos, priorTurn, priorState, priorTransaction);
+        check(parse_compound_move(pos, "0000", secondPass),
+              "failed to parse second multi-component repetition handoff pass");
+        StateInfo secondPassState;
+        LogicalMoveState secondPassTransaction;
+        do_compound_move(pos, secondPass, secondPassState, secondPassTransaction);
+
+        LogicalMove repeatedTurn;
+        check(!parse_compound_move(pos, reverse, repeatedTurn),
+              "repetition was accepted for component count: "
+                  + std::to_string(componentCount));
+
+        undo_compound_move(pos, secondPass, secondPassTransaction);
+        undo_compound_move(pos, priorTurn, priorTransaction);
+        undo_compound_move(pos, firstPass, firstPassTransaction);
+    }
+
+    set_position(pos, states, "generic-compound-turn-audit",
+                 "8/8/8/3r4/3C4/8/8/8 w - - 0 1");
+
+    // Test compound moves generation
+    std::vector<LogicalMove> generated = generate_compound_moves(pos);
+    check(!generated.empty(), "generate_compound_moves returned empty list");
+    check(pos.has_legal_logical_move(), "logical legal-move query disagreed with compound generation");
+    std::vector<LogicalMove> lazyGenerated;
+    {
+        LogicalMoveState sourceTransaction;
+        LogicalMoveSource source(pos, nullptr, sourceTransaction);
+        LogicalMove candidate;
+        LogicalMoveInfo info;
+        while (source.next(candidate, info))
+        {
+            check(info.representative == candidate.first(),
+                  "lazy logical move info lost the representative move");
+            check(info.historyCompatible == candidate.is_single(),
+                  "lazy logical move info misclassified physical history compatibility");
+            lazyGenerated.push_back(candidate);
+        }
+    }
+    check(lazyGenerated == generated,
+          "lazy logical move source disagreed with materialized compound generation");
+
+    // Logical move metadata must distinguish material removed by an effect,
+    // including an effect in a later component.
+    set_position(pos, states, "generic-compound-own-removal-audit",
+                 "8/8/8/8/3C4/8/8/8 w - - 0 1");
+    LogicalMove ownRemovalTurn;
+    LogicalMoveInfo ownRemovalInfo;
+    {
+        LogicalMoveState removalTransaction;
+        LogicalMoveSource removalSource(pos, nullptr, removalTransaction);
+        LogicalMove candidate;
+        LogicalMoveInfo candidateInfo;
+        while (removalSource.next(candidate, candidateInfo))
+            if (candidate.length == 2
+                && candidate.components[0] == make_move(SQ_D4, SQ_D5)
+                && candidate.components[1] == make_move(SQ_D5, SQ_D6))
+            {
+                ownRemovalTurn = candidate;
+                ownRemovalInfo = candidateInfo;
+                break;
+            }
+    }
+    check(ownRemovalTurn.length == 2,
+          "compound source did not expose the later trap-removal component");
+    check(ownRemovalInfo.losesOwnMaterial && ownRemovalInfo.removesMaterial
+          && !ownRemovalInfo.capturesOpponent,
+          "compound own-material removal metadata was classified incorrectly");
+
+    set_position(pos, states, "generic-compound-capture-audit",
+                 "8/8/8/3c4/3C4/8/8/8 w - - 0 1");
+    const Move directCapture = make_move(SQ_D4, SQ_D5);
+    check(pos.pseudo_legal(directCapture) && pos.legal(directCapture),
+          "compound direct-capture audit position did not allow its capture");
+    LogicalMove directCaptureTurn;
+    LogicalMoveInfo directCaptureInfo;
+    {
+        LogicalMoveState captureTransaction;
+        LogicalMoveSource captureSource(pos, nullptr, captureTransaction);
+        LogicalMove candidate;
+        LogicalMoveInfo candidateInfo;
+        while (captureSource.next(candidate, candidateInfo))
+            if (candidate.length == 1 && candidate.components[0] == directCapture)
+            {
+                directCaptureTurn = candidate;
+                directCaptureInfo = candidateInfo;
+                break;
+            }
+    }
+    check(directCaptureTurn.length == 1,
+          "compound source did not expose the direct capture component");
+    check(directCaptureInfo.capturesOpponent && directCaptureInfo.removesMaterial
+          && !directCaptureInfo.losesOwnMaterial,
+          "compound direct-capture metadata was classified incorrectly");
+
+    set_position(pos, states, "generic-compound-turn-audit",
+                 "8/8/8/3r4/3C4/8/8/8 w - - 0 1");
+
+    // Every committed logical length, including early termination and the
+    // full budget, must leave a self-contained NNUE boundary state.
+    for (int length = 1; length <= LogicalMove::MAX_COMPONENTS; ++length)
+    {
+        auto candidate = std::find_if(generated.begin(), generated.end(),
+                                      [length](const LogicalMove& move) {
+                                          return move.length == length;
+                                      });
+        if (candidate == generated.end())
+            continue;
+
+        StateInfo logicalState;
+        LogicalMoveState logicalTransaction;
+        do_compound_move(pos, *candidate, logicalState, logicalTransaction);
+        check(pos.state()->logicalMove == *candidate
+              && pos.state()->move == MOVE_NONE
+              && pos.state()->dirtyPiece.dirty_num == 0
+              && pos.state()->nnueRefreshNeeded
+              && !pos.state()->accumulator.computed[WHITE]
+              && !pos.state()->accumulator.computed[BLACK],
+              "logical commit retained component state instead of a refresh boundary");
+        if (Eval::useNNUE && pos.nnue_applicable())
+        {
+            const Value normal = Eval::NNUE::evaluate(pos);
+            pos.state()->nnueRefreshNeeded = true;
+            pos.state()->accumulator.computed[WHITE] = false;
+            pos.state()->accumulator.computed[BLACK] = false;
+            check(normal == Eval::NNUE::evaluate(pos),
+                  "forced NNUE refresh disagreed with normal logical evaluation");
+        }
+        undo_compound_move(pos, *candidate, logicalTransaction);
+    }
+
+    // PV formatting must evaluate each logical move in the position left by
+    // the preceding one, rather than formatting every move against the root.
+    if (!generated.empty())
+    {
+        StateInfo pvState;
+        LogicalMoveState pvTransaction;
+        do_compound_move(pos, generated.front(), pvState, pvTransaction);
+        std::vector<LogicalMove> childGenerated = generate_compound_moves(pos);
+        undo_compound_move(pos, generated.front(), pvTransaction);
+        if (!childGenerated.empty())
+        {
+            std::vector<LogicalMove> logicalPv = {generated.front(), childGenerated.front()};
+            const std::vector<std::string> formattedPv = compound_pv_to_strings(pos, logicalPv);
+            check(formattedPv.size() == logicalPv.size(),
+                  "logical PV formatter did not replay the complete PV");
+
+            Position replay;
+            StateListPtr replayStates;
+            set_position(replay, replayStates, "generic-compound-turn-audit", pos.fen().c_str());
+            LogicalMoveState replayTransactions[2];
+            for (size_t i = 0; i < formattedPv.size(); ++i)
+            {
+                LogicalMove reparsed;
+                check(parse_compound_move(replay, formattedPv[i], reparsed)
+                      && reparsed == logicalPv[i],
+                      "formatted logical PV move was not legal at its replay position");
+                replayStates->emplace_back();
+                do_compound_move(replay, reparsed, replayStates->back(), replayTransactions[i]);
+            }
+        }
+    }
+
+    // Two-step action consumes 2 steps in budget of 3
+    Move twoStepPush = make_encoded_push(SQ_D4, SQ_D5, SQ_D6);
+    check(pos.encoded_push_legal(twoStepPush), "two-step push should be legal");
+    check(pos.compound_turn_step_cost(twoStepPush) == 2, "two-step push cost != 2");
+
+    // Parse compound move
+    LogicalMove parsedTurn;
+    bool ok = parse_compound_move(pos, "d4d5,d6", parsedTurn);
+    check(ok && parsedTurn.length == 1, "failed to parse 1-component two-step compound move");
+
+    // Test do/undo compound move
+    StateInfo cstate;
+    LogicalMoveState ctransaction;
+    const int logicalPly = pos.game_ply();
+    const int logicalRule50 = pos.rule50_count();
+    do_compound_move(pos, parsedTurn, cstate, ctransaction);
+    check(pos.side_to_move() == BLACK, "do_compound_move did not switch side to move to Black");
+    check(pos.at_complete_turn_boundary(), "after do_compound_move not at turn boundary");
+    check(pos.game_ply() == logicalPly + 1 && pos.rule50_count() == logicalRule50 + 1,
+          "compound components changed logical counters by their physical cost");
+    check(pos.state()->previous == &states->back(),
+          "logical move inserted component states into persistent history");
+    check(pos.state()->logicalMove == parsedTurn,
+          "persistent state did not retain the complete logical move");
+    undo_compound_move(pos, parsedTurn, ctransaction);
+    check(pos.side_to_move() == WHITE, "undo_compound_move did not restore side to move");
+    check(pos.at_complete_turn_boundary(), "after undo_compound_move not at turn boundary");
+
+    // A two-step action that exactly fills a two-step turn still advances and
+    // undoes one logical game ply, not two internal cost units.
+    set_position(pos, states, "generic-compound-turn-two-audit",
+                 "8/8/8/3r4/3C4/8/8/8 w - - 0 1");
+    Move exactTwoStepPush = make_encoded_push(SQ_D4, SQ_D5, SQ_D6);
+    const Key exactPushKey = pos.key();
+    const std::string exactPushFen = pos.fen();
+    states->emplace_back();
+    pos.do_component(exactTwoStepPush, states->back());
+    check(pos.game_ply() == 1 && pos.side_to_move() == BLACK,
+          "turnSteps=2 two-step push did not advance one logical ply");
+    pos.undo_component(exactTwoStepPush);
+    states->pop_back();
+    check(pos.game_ply() == 0 && pos.key() == exactPushKey && pos.fen() == exactPushFen,
+          "turnSteps=2 two-step push undo corrupted the logical position");
+
+    set_position(pos, states, "arimaa-pull-turn-two-audit",
+                 "7r/8/8/3r4/3E4/8/8/R7 w - - 0 1");
+    Move exactTwoStepPull = make_pull(SQ_D4, SQ_E4, SQ_D5);
+    check(pos.legal(exactTwoStepPull),
+          "turnSteps=2 two-step pull was not legal at the turn boundary");
+    check(pos.compound_turn_step_cost(exactTwoStepPull) == 2,
+          "two-step pull did not use the two-step cost");
+    const Key exactPullKey = pos.key();
+    const std::string exactPullFen = pos.fen();
+    states->emplace_back();
+    pos.do_component(exactTwoStepPull, states->back());
+    check(pos.game_ply() == 1 && pos.side_to_move() == BLACK,
+          "turnSteps=2 two-step pull did not advance one logical ply");
+    pos.undo_component(exactTwoStepPull);
+    states->pop_back();
+    check(pos.game_ply() == 0 && pos.key() == exactPullKey && pos.fen() == exactPullFen,
+          "turnSteps=2 two-step pull undo corrupted the logical position");
+
+    set_position(pos, states, "generic-compound-pull-cost-audit",
+                 "7r/8/8/3r4/3E4/8/8/R7 w - - 0 1");
+    Move genericPull = make_pull(SQ_D4, SQ_E4, SQ_D5);
+    check(pos.legal(genericPull) && pos.compound_turn_step_cost(genericPull) == 1,
+          "generic pull used the two-step compound cost");
+
+    // A two-step pull must not fit after three ordinary component steps of a
+    // four-cost turn, even through Position::legal().
+    set_position(pos, states, "arimaa",
+                 "7r/8/8/3r4/3E4/8/8/R7 w - - 0 1");
+    const char* fillerMoves[] = {"a1a2", "a2a3", "a3a4"};
+    Move fillerMovesParsed[3];
+    for (int i = 0; i < 3; ++i)
+    {
+        Move filler = parse_move(pos, fillerMoves[i]);
+        fillerMovesParsed[i] = filler;
+        states->emplace_back();
+        pos.do_component(filler, states->back());
+    }
+    Move latePull = make_pull(SQ_D4, SQ_E4, SQ_D5);
+    check(pos.compound_turn_step() == 3 && !pos.legal(latePull),
+          "Position::legal accepted a two-step pull over the remaining turn budget");
+    for (int i = 0; i < 3; ++i)
+    {
+        pos.undo_component(fillerMovesParsed[2 - i]);
+        states->pop_back();
+    }
+
+    set_position(pos, states, "generic-compound-optional-boundary-audit",
+                 "8/8/8/3r4/3C4/8/8/8 w - - 1 1");
+    Move optionalBoundaryStep = parse_move(pos, "d4d3");
+    states->emplace_back();
+    pos.do_component(optionalBoundaryStep, states->back());
+    Value optionalResult = VALUE_NONE;
+    check(pos.compound_turn_step() != 0 && !pos.is_optional_game_end(optionalResult),
+          "optional game-end rule fired inside a compound turn");
+    pos.undo_component(optionalBoundaryStep);
+    states->pop_back();
+
+    // Test formatting compound move
+    std::string formatted = compound_move_to_string(pos, parsedTurn);
+    check(formatted == "d4d5,d6", "formatted compound move mismatch: " + formatted);
+
+    // A configured pass is a complete compound turn, not a no-op component.
+    set_position(pos, states, "generic-compound-pass-audit",
+                 "8/8/8/3r4/3C4/8/8/8 w - - 0 1");
+    std::vector<LogicalMove> passGenerated = generate_compound_moves(pos);
+    check(std::any_of(passGenerated.begin(), passGenerated.end(),
+                      [](const LogicalMove& move) {
+                          return move.length == 1 && is_pass(move.components[0]);
+                      }),
+          "pass=true compound variant did not generate a pass turn");
+    for (const LogicalMove& generatedTurn : passGenerated)
+    {
+        for (int i = 1; i < generatedTurn.length; ++i)
+            check(!is_pass(generatedTurn.components[i]),
+                  "compound generation appended a pass after an earlier step");
+
+        const std::string text = compound_move_to_string(pos, generatedTurn);
+        LogicalMove reparsed;
+        check(parse_compound_move(pos, text, reparsed) && reparsed == generatedTurn,
+              "generated pass-enabled compound turn did not round-trip: " + text);
+    }
+    LogicalMove parsedPass;
+    check(parse_compound_move(pos, "0000", parsedPass)
+          && parsedPass.length == 1 && is_pass(parsedPass.components[0]),
+          "pass=true compound variant did not parse a pass turn");
+    do_compound_move(pos, parsedPass, cstate, ctransaction);
+    check(pos.side_to_move() == BLACK && pos.at_complete_turn_boundary(),
+          "compound pass did not complete the turn");
+    check(pos.state()->pass, "compound pass metadata was lost at the turn boundary");
+    LogicalMove secondPass;
+    check(parse_compound_move(pos, "0000", secondPass),
+          "second configured compound pass was not legal");
+    StateInfo secondPassState;
+    LogicalMoveState secondPassTransaction;
+    do_compound_move(pos, secondPass, secondPassState, secondPassTransaction);
+    check(pos.is_immediate_game_end(result) && result == VALUE_DRAW,
+          "double compound pass did not end the game as a draw");
+    undo_compound_move(pos, secondPass, secondPassTransaction);
+    undo_compound_move(pos, parsedPass, ctransaction);
+    check(pos.side_to_move() == WHITE && pos.at_complete_turn_boundary(),
+          "compound pass undo did not restore the position");
+
+    set_position(pos, states, "generic-compound-stalemate-pass-audit",
+                 "8/8/8/3r4/8/8/8/8 w - - 0 1");
+    check(pos.pass(WHITE),
+          "compound passOnStalemate was suppressed when ordinary passing was disabled");
+    MoveList<LEGAL> stalemateMoves(pos);
+    check(stalemateMoves.size() == 1 && is_pass(stalemateMoves.begin()->move),
+          "compound passOnStalemate did not generate the stalemate pass");
+
+    // Test intermediate reversal followed by real component
+    set_position(pos, states, "generic-compound-pass-audit",
+                 "8/8/8/3r4/3C4/8/8/8 w - - 0 1");
+    LogicalMove reversalTurn;
+    ok = parse_compound_move(pos, "d4e4,e4d4,d4d3", reversalTurn);
+    check(ok && reversalTurn.length == 3, "failed to parse reversal followed by real component");
+
+    // A pure reversal d4e4, e4d4 is pass-equivalent and remains filtered even
+    // in the pass-enabled profile; the explicit 0000 move is canonical.
+    LogicalMove pureReversal;
+    ok = parse_compound_move(pos, "d4e4,e4d4", pureReversal);
+    check(!ok, "pure pass-equivalent reversal was incorrectly accepted as a legal turn");
+
+    // Check perft
+    uint64_t nodes = compound_perft(pos, 1, false);
+    check(nodes > 0, "compound_perft returned 0 nodes");
+}
+
+#endif
 
 void extinction_color_settings() {
     Position pos;
@@ -1320,6 +2046,18 @@ void state() {
     Position pos;
     StateListPtr states;
 
+    // A search null move is not part of the legal repetition history. The
+    // repetition scan must stop there even when the board is unchanged.
+    set_position(pos, states, "generic-null-repetition-audit",
+                 "4k3/8/8/8/8/8/R7/4K3 w - - 0 1");
+    StateInfo nullState;
+    pos.do_null_move(nullState);
+    Move nullHistoryPass = make<SPECIAL>(SQ_A1, SQ_A1);
+    check(pos.pass(pos.side_to_move())
+              && pos.legal(nullHistoryPass),
+          "same-player repetition crossed a search null-move boundary");
+    pos.undo_null_move();
+
     set_position(pos, states, "atomic",
                  "4k3/8/8/8/8/8/1p6/R3K3 b - - 0 1");
     Move move = parse_move(pos, "b2a1q");
@@ -1497,6 +2235,45 @@ void adjudication() {
     check(pos.is_immediate_game_end(result) && result == VALUE_DRAW,
           "simultaneous connection goal did not return a draw");
 
+    set_position(pos, states, "simul-flag-extinction-audit",
+                 "7f/8/8/8/8/8/8/F7 w - - 0 1");
+    const Variant* defaultSimul = variants.get("simul-flag-extinction-audit");
+    check(defaultSimul->simulFlagValueByMover == VALUE_MATE
+              && defaultSimul->simulExtinctionValueByMover == -VALUE_MATE,
+          "simultaneous flag/extinction defaults changed");
+    check(!defaultSimul->simulFlagValueByMoverConfigured
+              && !defaultSimul->simulExtinctionValueByMoverConfigured,
+          "simultaneous flag/extinction defaults were marked as explicit");
+    check(pos.is_immediate_game_end(result) && result == mate_in(0),
+          "default flag/extinction priority did not preserve extinction-first ordering");
+
+    set_position(pos, states, "racingkings", "K6k/8/8/8/8/8/8/8 w - - 0 2");
+    check(pos.is_immediate_game_end(result) && result == VALUE_DRAW,
+          "Racing Kings simultaneous flag result changed without an explicit override");
+
+    set_position(pos, states, "generic-extinction-draw-audit",
+                 "7k/8/8/8/8/8/8/K7 w - - 0 1");
+    check(pos.is_immediate_game_end(result) && result == VALUE_DRAW,
+          "configured extinction draw changed without an explicit simultaneous override");
+
+    set_position(pos, states, "simul-flag-extinction-flag",
+                 "7f/8/8/8/8/8/8/F7 w - - 0 1");
+    check(pos.is_immediate_game_end(result) && result == VALUE_DRAW,
+          "flag-priority simultaneous adjudication ignored the mover-value policy");
+
+    set_position(pos, states, "simul-flag-extinction-extinction",
+                 "7f/8/8/8/8/8/8/F7 w - - 0 1");
+    check(pos.is_immediate_game_end(result) && result == mate_in(0),
+          "extinction-priority simultaneous adjudication ignored the mover-value policy");
+
+    set_position(pos, states, "seega", "5/5/5/5/1D3[] b - - 0 1");
+    check(pos.count_with_hand(WHITE, CUSTOM_PIECE_1) == 1
+              && pos.count_with_hand(BLACK, CUSTOM_PIECE_1) == 0,
+          "seega extinction audit position did not load the expected pieces");
+    const bool seegaEnded = pos.is_immediate_game_end(result);
+    check(seegaEnded, "seega extinction audit position was not adjudicated immediately");
+    check(result == mate_in(0), "seega extinction audit position had the wrong result");
+
     set_position(pos, states, "chess",
                  "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
     check(!pos.see_pruning_unreliable()
@@ -1595,7 +2372,20 @@ startFen = 8/8/8/8/8/8/8/8[PPpp] w - - 0 1
 pieceDrops = true
 symmetricDropTypes = p
 
+[generic-static-qsearch-audit:fairy]
+king = -
+checking = false
+startFen = 8/8/8/8/8/8/8/8 w - - 0 1
+quiescencePolicy = static-eval
+
+[generic-extinction-draw-audit:chess]
+extinctionPieceTypes = q
+extinctionValue = draw
+
 [occupancy-rifle:chess]
+rifleCapture = true
+
+[rifle-key-audit:chess]
 rifleCapture = true
 
 [asym-extinction-audit:chess]
@@ -1712,6 +2502,35 @@ connectRegion1Black = a1
 connectRegion2Black = b1
 connectGoalSimulValueByMover = draw
 startFen = ssAB b - - 0 1
+
+[simul-flag-extinction-audit:fairy]
+pieceToCharTable = RF rf
+pawn = -
+knight = -
+bishop = -
+rook = -
+queen = -
+king = -
+customPiece1 = r:mW
+customPiece2 = f:mW
+castling = false
+checking = false
+flagPieceTypes = f
+flagRegionWhite = a1
+flagRegionBlack = h8
+extinctionPieceTypes = r
+extinctionValue = loss
+startFen = 7f/8/8/8/8/8/8/F7 w - - 0 1
+
+[simul-flag-extinction-flag:simul-flag-extinction-audit]
+simulFlagExtinctionPriority = flag
+simulFlagValueByMover = draw
+simulExtinctionValueByMover = win
+
+[simul-flag-extinction-extinction:simul-flag-extinction-audit]
+simulFlagExtinctionPriority = extinction
+simulFlagValueByMover = win
+simulExtinctionValueByMover = loss
 
 [prison-no-king:fairy]
 king = -
@@ -2188,6 +3007,145 @@ royalPieceNoThroughCheck = true
 castling = true
 trapRegion = g1
 trapProtection = none
+
+[arimaa-custom-role-audit:arimaa]
+pieceToCharTable = RCDHMErcdhme
+startFen = 8/8/8/8/8/8/8/8 w - - 0 1
+customPiece1 = x:W
+customPiece2 = r:fsW
+flagPieceTypes = r
+extinctionPieceTypes = r
+pieceHierarchy = r:2 x:1 d:3 h:4 m:5 e:6
+pushingStrength = r:2 x:1 d:3 h:4 m:5 e:6
+pullingStrength = r:2 x:1 d:3 h:4 m:5 e:6
+
+[arimaa-nonsequential-audit:arimaa]
+sequentialSetup = false
+turnSteps = 0
+pushPullRule = none
+
+[arimaa-push-rule-none-audit:arimaa]
+pushPullRule = none
+
+[arimaa-push-rule-generic-audit:arimaa]
+pushPullRule = generic
+
+[arimaa-pusher-movement-audit:arimaa-custom-role-audit]
+flagPieceTypes = x
+
+[arimaa-board-size-audit:arimaa]
+maxFile = j
+maxRank = 10
+startFen = 9r/10/10/10/10/10/10/10/10/R9 w - - 0 1
+
+[arimaa-wrapped-push-audit:arimaa]
+cylindrical = true
+samePlayerBoardRepetitionIllegalAtN = 0
+
+[generic-compound-turn-audit:fairy]
+pieceToCharTable = RCDHMErcdhme
+pawn = -
+knight = -
+bishop = -
+rook = -
+queen = -
+king = -
+customPiece1 = r:mW
+customPiece2 = c:mW
+customPiece3 = d:mW
+customPiece4 = h:mW
+customPiece5 = m:mW
+customPiece6 = e:mW
+startFen = 8/8/8/8/8/8/8/8 w - - 0 1
+castling = false
+checking = false
+captureForbidden = *:*
+doubleStep = false
+promotionPieceTypes = -
+pieceHierarchy = r:1 c:2 d:3 h:4 m:5 e:6
+pushingStrength = r:1 c:2 d:3 h:4 m:5 e:6
+pullingStrength = r:1 c:2 d:3 h:4 m:5 e:6
+pushPullRule = two-step
+pushFirstColor = them
+stepwisePushing = true
+turnSteps = 3
+pass = false
+
+[generic-compound-turn-two-audit:generic-compound-turn-audit]
+turnSteps = 2
+
+[generic-compound-pocket-audit:generic-compound-turn-audit]
+pieceDrops = true
+captureType = hand
+freeDrops = true
+symmetricDropTypes = r
+startFen = 8/8/8/8/8/8/8/8[Rr] w - - 0 1
+
+[generic-compound-own-removal-audit:generic-compound-turn-audit]
+trapRegion = d6
+trapProtection = none
+pushPullRule = none
+startFen = 8/8/8/8/3C4/8/8/8 w - - 0 1
+
+[generic-compound-capture-audit:generic-compound-turn-audit]
+customPiece2 = c:W
+captureAllowed = c:c
+startFen = 8/8/8/3c4/3C4/8/8/8 w - - 0 1
+
+[arimaa-pull-turn-two-audit:arimaa]
+turnSteps = 2
+pullingStrength = r:6 c:0 d:0 h:0 m:0 e:0
+
+[generic-compound-pull-cost-audit:generic-compound-turn-two-audit]
+pushPullRule = generic
+startFen = 7r/8/8/3r4/3E4/8/8/R7 w - - 0 1
+
+[generic-compound-stalemate-pass-audit:generic-compound-turn-audit]
+customPiece1 = r:-
+pass = false
+passOnStalemate = true
+startFen = 8/8/8/3r4/8/8/8/8 w - - 0 1
+
+[generic-compound-optional-boundary-audit:generic-compound-turn-audit]
+nMoveRule = 1
+
+[generic-sequential-setup-audit:fairy]
+pawn = -
+knight = -
+bishop = -
+rook = -
+queen = -
+king = -
+customPiece1 = r:mW
+pieceToCharTable = RCDHMErcdhme
+pieceDrops = true
+mustDrop = true
+dropRegionWhite = *1
+dropRegionBlack = *8
+sequentialSetup = true
+startFen = 8/8/8/8/8/8/8/8[RRRRrrrr] w - - 0 1
+
+[generic-compound-pass-audit:generic-compound-turn-audit]
+pass = true
+
+[generic-compound-repetition-audit:generic-compound-pass-audit]
+samePlayerBoardRepetitionIllegalAtN = 2
+
+[generic-compound-boundary-repetition-audit:generic-compound-pass-audit]
+samePlayerBoardRepetitionIllegalAtN = 1
+
+[generic-compound-four-repetition-audit:generic-compound-turn-audit]
+turnSteps = 4
+pass = true
+samePlayerBoardRepetitionIllegalAtN = 1
+startFen = 8/8/8/8/8/8/8/RRRR4 b - - 0 1
+
+[generic-repetition-audit:generic-compound-turn-audit]
+samePlayerBoardRepetitionIllegalAtN = 1
+
+[generic-null-repetition-audit:chess]
+samePlayerBoardRepetitionIllegalAtN = 1
+pass = true
 )INI");
     variants.parse_istream<false>(inline_config);
 }
@@ -2201,7 +3159,11 @@ int main(int argc, char** argv) {
             return name == "all" || name == "promotion" || name == "movement"
                 || name == "locust-all" || name == "occupancy" || name == "state" || name == "royal"
                 || name == "adjudication" || name == "board-games" || name == "composable-rules"
-                || name == "extinction-color";
+                || name == "extinction-color"
+#ifdef ENABLE_COMPOUND_TURNS
+                || name == "compound-turns" || name == "arimaa-setup" || name == "arimaa-architecture"
+#endif
+                ;
         };
         bool first_is_group = argc > 1 && is_group(argv[1]);
         std::string config_path = first_is_group ? "src/variants.ini"
@@ -2221,6 +3183,11 @@ int main(int argc, char** argv) {
           {"extinction-color", extinction_color_settings},
           {"locust-all", locust_all},
           {"composable-rules", composable_rules},
+#ifdef ENABLE_COMPOUND_TURNS
+          {"compound-turns", compound_turn_rules},
+          {"arimaa-setup", arimaa_setup},
+          {"arimaa-architecture", arimaa_architecture},
+#endif
           {"state", state}, {"royal", royal}, {"adjudication", adjudication},
           {"board-games", board_games}
         };

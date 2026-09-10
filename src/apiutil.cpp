@@ -416,6 +416,7 @@ std::string variant_info_json(const std::string& name) {
     field(end, b, "nFoldValueAbsolute", boolean(v.nFoldValueAbsolute));
     field(end, b, "perpetualCheckIllegal", boolean(v.perpetualCheckIllegal));
     field(end, b, "moveRepetitionIllegal", boolean(v.moveRepetitionIllegal));
+    field(end, b, "samePlayerBoardRepetitionIllegalAtN", std::to_string(v.samePlayerBoardRepetitionIllegalAtN));
     field(end, b, "chasingRule", quote(chasing_name(v.chasingRule)));
     field(end, b, "stalemateValue", quote(value_name(v.stalemateValue)));
     field(end, b, "stalematePieceCount", boolean(v.stalematePieceCount));

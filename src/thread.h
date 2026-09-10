@@ -27,6 +27,9 @@
 #include <vector>
 
 #include "material.h"
+#ifdef ENABLE_COMPOUND_TURNS
+#include "compound_turn.h"
+#endif
 #include "movepick.h"
 #include "pawns.h"
 #include "position.h"
@@ -79,6 +82,15 @@ public:
   ContinuationHistory continuationHistory[2][2];
   Score trend;
 
+#ifdef ENABLE_COMPOUND_TURNS
+  LogicalMoveState& logical_move_state(int ply) {
+      assert(0 <= ply && ply < MAX_PLY);
+      if (!logicalMoveStates[ply])
+          logicalMoveStates[ply] = std::make_unique<LogicalMoveState>();
+      return *logicalMoveStates[ply];
+  }
+#endif
+
   ExtMove* acquire_buffer() {
     if (availableBuffers.empty()) {
       bufferPool.push_back(std::make_unique<ExtMove[]>(MOVEGEN_OVERFLOW_CAPACITY));
@@ -95,6 +107,9 @@ public:
   }
 
 private:
+#ifdef ENABLE_COMPOUND_TURNS
+  std::array<std::unique_ptr<LogicalMoveState>, MAX_PLY> logicalMoveStates;
+#endif
   std::vector<std::unique_ptr<ExtMove[]>> bufferPool;
   std::vector<ExtMove*> availableBuffers;
 };

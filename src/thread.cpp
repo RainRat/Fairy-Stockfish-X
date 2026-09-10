@@ -219,14 +219,44 @@ void ThreadPool::start_thinking(Position& pos, StateListPtr& states,
 
   const bool filterLaserRotations = limits.perft == 0;
   pos.set_search_laser_rotation_filter(filterLaserRotations);
+#ifdef ENABLE_COMPOUND_TURNS
+  if (pos.compound_turn_active())
+  {
+      LogicalMoveState transaction;
+      LogicalMoveSource source(pos, pos.this_thread(), transaction);
+      LogicalMove m;
+      LogicalMoveInfo info;
+      while (source.next(m, info))
+          if (   (!limits.searchMovesSpecified
+                  || std::count(limits.searchmoves.begin(), limits.searchmoves.end(), m))
+              && (limits.banmoves.empty()
+                  || !std::count(limits.banmoves.begin(), limits.banmoves.end(), m)))
+              rootMoves.emplace_back(m, info);
+
+      // The logical provider deliberately does not use component moves as
+      // ordinary history keys. Give the first search iteration a conservative
+      // tactical order from facts established for the complete turn.
+      std::stable_sort(rootMoves.begin(), rootMoves.end(), [](const Search::RootMove& a, const Search::RootMove& b) {
+          const auto priority = [](const Search::RootMove& move) {
+              return 4 * move.info.capturesOpponent
+                   + 2 * move.info.promotionLike
+                   + move.info.removesMaterial;
+          };
+          return priority(a) > priority(b);
+      });
+  }
+  else
+#endif
   for (const auto& m : MoveList<LEGAL>(pos))
-      if (   (limits.searchmoves.empty() || std::count(limits.searchmoves.begin(), limits.searchmoves.end(), m))
+      if (   (!limits.searchMovesSpecified || std::count(limits.searchmoves.begin(), limits.searchmoves.end(), m))
           && (limits.banmoves.empty() || !std::count(limits.banmoves.begin(), limits.banmoves.end(), m)))
           rootMoves.emplace_back(m);
   pos.set_search_laser_rotation_filter(false);
 
   // Add virtual drops
-  if (pos.two_boards() && pos.virtual_drops() && Partner.opptime && limits.time[pos.side_to_move()] > Partner.opptime + 1000)
+  if (!pos.compound_turn_active()
+      && pos.two_boards() && pos.virtual_drops() && Partner.opptime
+      && limits.time[pos.side_to_move()] > Partner.opptime + 1000)
   {
       if (pos.evasion_checkers())
       {
@@ -242,7 +272,11 @@ void ThreadPool::start_thinking(Position& pos, StateListPtr& states,
       }
   }
 
-  if (!rootMoves.empty())
+  // Syzygy does not understand compound turns or setup pockets.
+  // In particular, probing a setup child can feed ordinary board moves back
+  // into Position::legal() while the side is still placing pieces.
+  if (!rootMoves.empty() && !pos.compound_turn_active()
+      && !pos.count_in_hand(ALL_PIECES))
       Tablebases::rank_root_moves(pos, rootMoves);
 
   // Search code assumes a root move entry exists even for terminal positions.
@@ -308,7 +342,7 @@ Thread* ThreadPool::get_best_thread() const {
     if (bestThread->rootMoves.empty())
         return bestThread;
 
-    std::map<Move, int64_t> votes;
+    std::map<LogicalMove, int64_t> votes;
     Value minScore = VALUE_NONE; // Seed with maximum value (VALUE_NONE is larger than any valid score)
     auto incomplete_iteration = [](const Thread* th) {
         return th->completedDepth != th->rootDepth;

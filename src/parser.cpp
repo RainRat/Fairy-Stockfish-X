@@ -532,10 +532,43 @@ namespace {
         return parse_named_value(value, target, values);
     }
 
+    template <> bool set(const std::string& value, SimulFlagExtinctionPriority& target) {
+        static constexpr auto values = std::array{
+            std::pair{"flag", SimulFlagExtinctionPriority::FLAG},
+            std::pair{"extinction", SimulFlagExtinctionPriority::EXTINCTION},
+        };
+        return parse_named_value(value, target, values);
+    }
+
+    template <> bool set(const std::string& value, PushPullRule& target) {
+        static constexpr auto values = std::array{
+            std::pair{"generic", PushPullRule::GENERIC},
+            std::pair{"two-step", PushPullRule::TWO_STEP},
+            std::pair{"none", PushPullRule::NONE},
+        };
+        return parse_named_value(value, target, values);
+    }
+
+    template <> bool set(const std::string& value, QuiescencePolicy& target) {
+        static constexpr auto values = std::array{
+            std::pair{"standard", QuiescencePolicy::STANDARD},
+            std::pair{"static-eval", QuiescencePolicy::STATIC_EVAL},
+        };
+        return parse_named_value(value, target, values);
+    }
+
     template <> bool set(const std::string& value, TrapProtection& target) {
         static constexpr auto values = std::array{
             std::pair{"none", TrapProtection::NONE},
             std::pair{"friendly-orthogonal", TrapProtection::FRIENDLY_ORTHOGONAL},
+        };
+        return parse_named_value(value, target, values);
+    }
+
+    template <> bool set(const std::string& value, FreezeProtection& target) {
+        static constexpr auto values = std::array{
+            std::pair{"none", FreezeProtection::NONE},
+            std::pair{"friendly-orthogonal", FreezeProtection::FRIENDLY_ORTHOGONAL},
         };
         return parse_named_value(value, target, values);
     }
@@ -985,6 +1018,7 @@ template <bool Current, class T> bool VariantParser<DoCheck>::parse_attribute(co
                                   : std::is_same_v<T, ColorChangeTrigger> ? "ColorChangeTrigger"
                                   : std::is_same_v<T, EnPassantPassedSquares> ? "EnPassantPassedSquares"
                                   : std::is_same_v<T, LibertyAction> ? "LibertyAction"
+                                  : std::is_same_v<T, QuiescencePolicy> ? "QuiescencePolicy"
                                   : std::is_same_v<T, WallingRule> ? "WallingRule"
                                   : std::is_same_v<T, std::vector<int>> ? "vector<int>"
                                   : typeid(T).name();
@@ -1068,6 +1102,26 @@ template <bool Current, class T> bool VariantParser<DoCheck>::parse_attribute(co
         return false;
     }
     return false;
+}
+
+template <bool DoCheck>
+bool VariantParser<DoCheck>::parse_simul_value_by_mover(const std::string& key, Value& target) {
+    auto it = config.find(key);
+    if (it == config.end())
+        return false;
+
+    static constexpr auto values = std::array{
+        std::pair{"win", VALUE_MATE},
+        std::pair{"loss", -VALUE_MATE},
+        std::pair{"draw", VALUE_DRAW},
+    };
+    const bool valid = parse_named_value(it->second, target, values);
+    if (DoCheck && !valid)
+        std::cerr << key << " - Invalid value " << it->second
+                  << " (expected win, loss, or draw)." << std::endl;
+    if (!valid)
+        parseHadError = true;
+    return valid;
 }
 
 template <bool DoCheck>
@@ -1539,6 +1593,8 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     }
 
     parse_attribute("variantTemplate", v->variantTemplate);
+    parse_attribute("sequentialSetup", v->sequentialSetup);
+    parse_attribute("nnueAlias", v->nnueAlias);
     parse_attribute("pieceToCharTable", v->pieceToCharTable);
     parse_attribute("pocketSize", v->pocketSize);
     parse_attribute("chess960", v->chess960);
@@ -1692,6 +1748,13 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("libertySelfCapture", v->libertySelfCapture);
     parse_attribute("freezePieceTypes", v->freezePieceTypes, v);
     parse_attribute("freezeImmunePieceTypes", v->freezeImmunePieceTypes, v);
+    auto it_piece_hierarchy = config.find("pieceHierarchy");
+    if (it_piece_hierarchy != config.end())
+    {
+        if (!parse_non_negative_piece_int_map<DoCheck>("pieceHierarchy", it_piece_hierarchy->second, v, v->pieceHierarchy))
+            return false;
+    }
+    parse_attribute("freezeProtection", v->freezeProtection);
     parse_attribute("freezeDiagonals", v->freezeDiagonals);
     parse_attribute("trapRegion", v->trapRegion);
     parse_attribute("trapProtection", v->trapProtection);
@@ -1724,6 +1787,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_color_setting("mustCapture", v->mustCapture);
     parse_color_setting("mustCaptureEnPassant", v->mustCaptureEnPassant);
     parse_attribute("rifleCapture", v->rifleCapture);
+    parse_attribute("pushPullRule", v->pushPullRule);
     auto it_push_strength = config.find("pushingStrength");
     if (it_push_strength != config.end())
     {
@@ -1865,6 +1929,13 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_color_setting("passOnStalemate", v->passOnStalemate);
     parse_attribute("doublePassEndsGame", v->doublePassEndsGame);
     parse_attribute("passUntilSetup", v->passUntilSetup);
+    parse_attribute("turnSteps", v->compoundTurnSteps);
+    parse_attribute("quiescencePolicy", v->quiescencePolicy);
+    parse_attribute("simulFlagExtinctionPriority", v->simulFlagExtinctionPriority);
+    parse_simul_value_by_mover("simulFlagValueByMover", v->simulFlagValueByMover);
+    parse_simul_value_by_mover("simulExtinctionValueByMover", v->simulExtinctionValueByMover);
+    v->simulFlagValueByMoverConfigured |= config.find("simulFlagValueByMover") != config.end();
+    v->simulExtinctionValueByMoverConfigured |= config.find("simulExtinctionValueByMover") != config.end();
     if (!parse_multimoves(v))
         return false;
     parse_attribute("progressiveMultimove", v->progressiveMultimove);
@@ -1897,7 +1968,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     }
     parse_attribute("perpetualCheckIllegal", v->perpetualCheckIllegal);
     parse_attribute("moveRepetitionIllegal", v->moveRepetitionIllegal);
-    parse_attribute("samePlayerBoardRepetitionIllegal", v->samePlayerBoardRepetitionIllegal);
+    parse_attribute("samePlayerBoardRepetitionIllegalAtN", v->samePlayerBoardRepetitionIllegalAtN);
     parse_attribute("alternating2x2DropIllegal", v->alternating2x2DropIllegal);
     parse_attribute("pathwayDropRule", v->pathwayDropRule);
     parse_attribute("weakDiagonalConnect", v->weakDiagonalConnect);
@@ -2206,6 +2277,10 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     for (int strength : v->pushingStrength)
         v->hasPushing |= strength > 0;
 
+    v->hasPieceHierarchy = false;
+    for (int strength : v->pieceHierarchy)
+        v->hasPieceHierarchy |= strength > 0;
+
     // Unknown options are diagnosed but ignored so newer configs remain usable.
     {
         const std::set<std::string>& parsedKeys = config.get_consumed_keys();
@@ -2225,11 +2300,88 @@ template <bool DoCheck>
 bool VariantParser<DoCheck>::check_consistency(Variant* v) {
     bool valid = true;
 
+    if (v->samePlayerBoardRepetitionIllegalAtN < 0)
+    {
+        if (DoCheck)
+            std::cerr << "samePlayerBoardRepetitionIllegalAtN - Value must be non-negative." << std::endl;
+        valid = false;
+    }
+
+    if (v->compoundTurnSteps < 0 || v->compoundTurnSteps > Variant::MAX_COMPOUND_TURN_STEPS)
+    {
+        if (DoCheck)
+            std::cerr << "turnSteps - Value must be in range [0, "
+                      << Variant::MAX_COMPOUND_TURN_STEPS << "]." << std::endl;
+        valid = false;
+    }
+
+    if (v->compoundTurnSteps > 0)
+    {
+        if (v->multimoveOffset || v->progressiveMultimove || !v->multimoves.empty())
+        {
+            if (DoCheck)
+                std::cerr << "turnSteps - generic multimove settings do not compose with turnSteps." << std::endl;
+            valid = false;
+        }
+    }
+
+    if (v->pushPullRule == PushPullRule::TWO_STEP
+        && v->compoundTurnSteps < 2)
+    {
+        if (DoCheck)
+            std::cerr << "pushPullRule=two-step requires turnSteps >= 2." << std::endl;
+        valid = false;
+    }
+
+    if (v->compoundTurnSteps > 0)
+    {
+        // Compound turns expose one complete move to the outside world, so
+        // rules that require a decision after every component are rejected
+        // until they have an explicit component-level policy. Royal/check
+        // state is likewise rejected because it can otherwise make an
+        // internal component look like a complete move.
+        const auto any_color = [](const auto& setting) {
+            return setting.get(WHITE) || setting.get(BLACK);
+        };
+        const bool hasRoyalPieces = (v->kingType != NO_PIECE_TYPE
+                                     && (v->pieceTypes & piece_set(v->kingType)))
+                                 || (v->pieceTypes & piece_set(KING));
+        const bool hasRoyalState = hasRoyalPieces
+                                || v->pseudoRoyalTypes
+                                || v->antiRoyalTypes
+                                || v->bikjangRule
+                                || v->checkCounting
+                                || v->flagPieceSafe;
+        const bool hasMandatorySubmoveRule = any_color(v->mustCapture)
+                                           || any_color(v->mustCaptureEnPassant)
+                                           || (any_color(v->mustDrop)
+                                               && (!v->sequentialSetup || v->captureType == HAND));
+        if (hasRoyalState)
+        {
+            if (DoCheck)
+                std::cerr << "turnSteps - compound turns currently require variants without royal or check-state pieces." << std::endl;
+            valid = false;
+        }
+        if (hasMandatorySubmoveRule)
+        {
+            if (DoCheck)
+                std::cerr << "turnSteps - compound turns do not compose with mandatory per-step capture or drop rules." << std::endl;
+            valid = false;
+        }
+    }
+
     const bool wrapsTopology = v->cylindrical || v->toroidal;
     v->rebuild_piece_symbol_maps();
     const bool hasRoyalKing = v->checking
                            && v->kingType != NO_PIECE_TYPE
                            && bool(v->pieceTypes & piece_set(v->kingType));
+
+    if (v->quiescencePolicy == QuiescencePolicy::STATIC_EVAL && hasRoyalKing)
+    {
+        if (DoCheck)
+            std::cerr << "quiescencePolicy=static-eval requires a variant without royal pieces." << std::endl;
+        valid = false;
+    }
 
     // pieces
     if (DoCheck)

@@ -10,7 +10,9 @@ import os
 if platform.python_compiler().startswith("MSC"):
     args = ["/std:c++17"]
 else:
-    args = ["-std=c++17", "-flto", "-Wno-date-time"]
+    args = ["-std=c++17", "-Wno-date-time"]
+    if "clang" not in os.environ.get("CXX", "").lower():
+        args.append("-flto")
 
 args.extend(["-DLARGEBOARDS", "-DALLVARS", "-DPRECOMPUTED_MAGICS", "-DNNUE_EMBEDDING_OFF"])
 
@@ -30,7 +32,9 @@ with io.open("README.md", "r", encoding="utf8") as fh:
 
 sources = glob("src/*.cpp") + glob("src/syzygy/*.cpp") + glob("src/nnue/*.cpp") + glob("src/nnue/features/*.cpp")
 headers = glob("src/*.h") + glob("src/syzygy/*.h") + glob("src/nnue/*.h") + glob("src/nnue/features/*.h")
-for f in ["src/ffishjs.cpp", "src/main.cpp", "src/ffishdll.cpp"]:
+# Compound turns are a native compile-gated engine path; pyffish builds do not define
+# ENABLE_COMPOUND_TURNS and therefore intentionally do not expose compound-turn variants.
+for f in ["src/compound_turn.cpp", "src/ffishjs.cpp", "src/main.cpp", "src/ffishdll.cpp"]:
     try:
         sources.remove(os.path.normcase(f))
     except ValueError:
