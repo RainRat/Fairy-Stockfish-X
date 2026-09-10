@@ -22,6 +22,7 @@
 #include <cmath>
 #include <cstring>   // For std::memset
 #include <iostream>
+#include <memory>
 #include <optional>
 #include <sstream>
 #include <thread>
@@ -472,7 +473,12 @@ void Thread::search() {
   Stack stack[MAX_PLY+10], *ss = stack+7;
   Move ordinaryPv[MAX_PLY+1];
 #ifdef ENABLE_COMPOUND_TURNS
-  LogicalMove logicalPv[MAX_PLY+1];
+  const bool logicalPvRequired = rootPos.logical_moves_active()
+                              || (rootPos.variant()->compoundTurnSteps
+                                  && rootPos.sequential_setup_active());
+  std::unique_ptr<LogicalMove[]> logicalPv;
+  if (logicalPvRequired)
+      logicalPv = std::make_unique<LogicalMove[]>(MAX_PLY + 1);
 #endif
   Value bestValue, alpha, beta, delta;
   LogicalMove lastBestMove(MOVE_NONE);
@@ -495,9 +501,8 @@ void Thread::search() {
       (ss+i)->ply = i;
 
 #ifdef ENABLE_COMPOUND_TURNS
-  if (rootPos.logical_moves_active()
-      || (rootPos.variant()->compoundTurnSteps && rootPos.sequential_setup_active()))
-      ss->set_pv<true>(logicalPv);
+  if (logicalPvRequired)
+      ss->set_pv<true>(logicalPv.get());
   else
 #endif
       ss->set_pv<false>(ordinaryPv);
