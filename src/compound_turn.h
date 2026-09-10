@@ -37,7 +37,7 @@ class LogicalMoveSource {
  public:
   LogicalMoveSource(Position& pos, Thread* thread, LogicalMoveState& transaction,
                     bool checkGameEnd = true, Move preferredMove = MOVE_NONE);
-  ~LogicalMoveSource() = default;
+  ~LogicalMoveSource();
 
   LogicalMoveSource(const LogicalMoveSource&) = delete;
   LogicalMoveSource& operator=(const LogicalMoveSource&) = delete;
@@ -62,7 +62,7 @@ class LogicalMoveSource {
 
   void initialize_frame(int depth);
   void apply_path(int length);
-  void undo_path(int length);
+  void unwind_prefix();
 
   Position& pos;
   Thread* thread;
@@ -76,7 +76,11 @@ class LogicalMoveSource {
   bool initialized = false;
   bool descend = false;
   bool applied = false;
+  bool prefixApplied = false;
   bool finished = false;
+  Piece firstMovedPiece = NO_PIECE;
+  bool firstSeeReliable = false;
+  bool firstGivesCheck = false;
 };
 
 /// Materialize complete compound moves from a turn-boundary position.

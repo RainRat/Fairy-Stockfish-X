@@ -90,14 +90,43 @@ struct Stack {
 
 struct RootMove {
 
-  explicit RootMove(LogicalMove m, LogicalMoveInfo i = {}) : info(i), pv(1, m) {}
+  explicit RootMove(LogicalMove m, LogicalMoveInfo i = {}) : rootMove(m), info(i) {}
   explicit RootMove(Move m) : RootMove(LogicalMove(m)) {}
   bool extract_ponder_from_tt(Position& pos);
-  bool operator==(const LogicalMove& m) const { return pv[0] == m; }
-  bool operator==(const Move& m) const { return pv[0] == m; }
+  bool operator==(const LogicalMove& m) const { return rootMove == m; }
+  bool operator==(const Move& m) const { return rootMove == m; }
   bool operator<(const RootMove& m) const { // Sort in descending order
     return m.score != score ? m.score < score
                             : m.previousScore < previousScore;
+  }
+
+  const LogicalMove& first() const { return rootMove; }
+  LogicalMove& first() { return rootMove; }
+  size_t pv_size() const { return pv.size() + 1; }
+  const LogicalMove& pv_at(size_t index) const {
+    return index ? pv[index - 1] : rootMove;
+  }
+  LogicalMove& pv_at(size_t index) {
+    return index ? pv[index - 1] : rootMove;
+  }
+  void clear_pv() { pv.clear(); }
+  void append_pv(LogicalMove m) { pv.push_back(m); }
+  std::vector<LogicalMove> full_pv() const {
+    std::vector<LogicalMove> result;
+    result.reserve(pv_size());
+    result.push_back(rootMove);
+    result.insert(result.end(), pv.begin(), pv.end());
+    return result;
+  }
+  void set_pv(const std::vector<LogicalMove>& line) {
+    if (line.empty())
+    {
+        rootMove = LogicalMove();
+        pv.clear();
+        return;
+    }
+    rootMove = line.front();
+    pv.assign(line.begin() + 1, line.end());
   }
 
   Value score = -VALUE_INFINITE;
@@ -105,8 +134,9 @@ struct RootMove {
   int selDepth = 0;
   int tbRank = 0;
   Value tbScore = VALUE_ZERO;
+  LogicalMove rootMove;
   LogicalMoveInfo info;
-  std::vector<LogicalMove> pv;
+  std::vector<LogicalMove> pv; // Continuation after rootMove
 };
 
 typedef std::vector<RootMove> RootMoves;

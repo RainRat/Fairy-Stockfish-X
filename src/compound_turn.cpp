@@ -96,6 +96,14 @@ LogicalMoveSource::LogicalMoveSource(Position& pos_, Thread* thread_,
 
 }
 
+LogicalMoveSource::~LogicalMoveSource() {
+
+  if (applied)
+      undo_applied();
+  if (prefixApplied)
+      unwind_prefix();
+}
+
 void LogicalMoveSource::initialize_frame(int frameDepth) {
   Frame& frame = frames[frameDepth];
   frame.usedCost = frameDepth == 0
@@ -142,9 +150,10 @@ void LogicalMoveSource::apply_path(int length) {
       CompoundTurn::do_component(pos, turn.components[i], transaction.components[i], false, false);
 }
 
-void LogicalMoveSource::undo_path(int length) {
-  for (int i = length - 1; i >= 0; --i)
+void LogicalMoveSource::unwind_prefix() {
+  for (int i = depth - 1; i >= 0; --i)
       CompoundTurn::undo_component(pos, turn.components[i]);
+  prefixApplied = false;
 }
 
 bool LogicalMoveSource::next(LogicalMove& move) {
@@ -171,7 +180,7 @@ void LogicalMoveSource::commit_applied(StateInfo& state) {
 void LogicalMoveSource::undo_applied() {
 
   assert(applied);
-  pos.undo_move(turn, transaction);
+  pos.undo_move(turn, transaction, true);
   applied = false;
 }
 
@@ -188,6 +197,12 @@ bool LogicalMoveSource::next_impl(LogicalMove& move, LogicalMoveInfo* info,
       logicalRoot = pos.state();
       initialize_frame(0);
       initialized = true;
+      prefixApplied = true;
+  }
+  else if (!prefixApplied)
+  {
+      apply_path(depth);
+      prefixApplied = true;
   }
 
   for (;;)
@@ -195,9 +210,9 @@ bool LogicalMoveSource::next_impl(LogicalMove& move, LogicalMoveInfo* info,
       if (descend)
       {
           ++depth;
-          apply_path(depth);
+          CompoundTurn::do_component(pos, turn.components[depth - 1],
+                                     transaction.components[depth - 1], false, false);
           initialize_frame(depth);
-          undo_path(depth);
           descend = false;
       }
 
@@ -209,6 +224,7 @@ bool LogicalMoveSource::next_impl(LogicalMove& move, LogicalMoveInfo* info,
               finished = true;
               return false;
           }
+          CompoundTurn::undo_component(pos, turn.components[depth - 1]);
           --depth;
           continue;
       }
@@ -226,16 +242,21 @@ bool LogicalMoveSource::next_impl(LogicalMove& move, LogicalMoveInfo* info,
       turn.length = uint8_t(depth + 1);
       LogicalMoveInfo candidateInfo;
       const Color mover = pos.side_to_move();
+      if (depth == 0)
+      {
+          firstMovedPiece = pos.moved_piece(component);
+          firstSeeReliable = !pos.see_pruning_unreliable(component);
+          firstGivesCheck = pos.gives_check(component);
+      }
       if (info)
       {
           candidateInfo.representative = turn.first();
-          candidateInfo.movedPiece = pos.moved_piece(turn.components[0]);
+          candidateInfo.movedPiece = firstMovedPiece;
           candidateInfo.historyCompatible = turn.is_single();
-          candidateInfo.seeReliable = turn.is_single()
-                                   && !pos.see_pruning_unreliable(turn.components[0]);
-          candidateInfo.givesCheck = turn.is_single() && pos.gives_check(turn.components[0]);
+          candidateInfo.seeReliable = turn.is_single() && firstSeeReliable;
+          candidateInfo.givesCheck = turn.is_single() && firstGivesCheck;
       }
-      apply_path(depth + 1);
+      CompoundTurn::do_component(pos, component, transaction.components[depth], false, false);
 
       if (info)
       {
@@ -274,8 +295,6 @@ bool LogicalMoveSource::next_impl(LogicalMove& move, LogicalMoveInfo* info,
                            && usedSteps + moveCost < pos.compound_turn_steps()
                            && pos.compound_turn_active();
 
-      if (!leaveApplied || !accepted)
-          undo_path(depth + 1);
       descend = canDescend;
 
       if (accepted)
@@ -283,9 +302,17 @@ bool LogicalMoveSource::next_impl(LogicalMove& move, LogicalMoveInfo* info,
           move = turn;
           if (info)
               *info = candidateInfo;
-          applied = leaveApplied;
+          if (leaveApplied)
+              applied = true;
+          else
+          {
+              pos.undo_move(turn, transaction, true);
+              unwind_prefix();
+          }
           return true;
       }
+
+      pos.undo_move(turn, transaction, true);
   }
 }
 
