@@ -67,7 +67,7 @@ class LogicalMoveSource {
   Position& pos;
   Thread* thread;
   LogicalMoveState& transaction;
-  const StateInfo* logicalRoot = nullptr;
+  StateInfo* logicalRoot = nullptr;
   Move preferredMove = MOVE_NONE;
   std::array<Frame, LogicalMove::MAX_COMPONENTS> frames{};
   LogicalMove turn;

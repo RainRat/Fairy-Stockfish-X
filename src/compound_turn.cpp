@@ -265,6 +265,9 @@ bool LogicalMoveSource::next_impl(LogicalMove& move, LogicalMoveInfo* info,
           }
       }
 
+      transaction.previous = logicalRoot;
+      transaction.usedCost = usedSteps + moveCost;
+      transaction.syntheticBoundary = false;
       const bool accepted = compound_turn_candidate_accepted(pos, component, usedSteps,
                                                               startBoundaryKey, logicalRoot);
       const bool canDescend = !is_pass(component)
