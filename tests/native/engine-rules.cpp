@@ -978,6 +978,38 @@ void composable_rules() {
     pos.undo_move(rifleMorphOut);
     states->pop_back();
 
+    set_position(pos, states, "rifle-key-audit",
+                 "4k2r/8/8/8/8/8/8/4K2R w KQkq - 0 1");
+    Move rifleRook = parse_move(pos, "h1h8");
+    states->emplace_back();
+    pos.do_move(rifleRook, states->back());
+    check(pos.piece_on(SQ_H1) == make_piece(WHITE, ROOK)
+          && pos.piece_on(SQ_H8) == NO_PIECE
+          && pos.can_castle(WHITE_OO)
+          && !pos.can_castle(BLACK_OO),
+          "rifle capture changed castling rights for the stationary shooter");
+    Position rifleRookReloaded;
+    StateListPtr rifleRookStates;
+    set_position(rifleRookReloaded, rifleRookStates, "rifle-key-audit", pos.fen().c_str());
+    check(pos.key() == rifleRookReloaded.key(),
+          "rifle capture produced a key that did not match its FEN");
+    pos.undo_move(rifleRook);
+    states->pop_back();
+
+    set_position(pos, states, "rifle-key-audit",
+                 "4k3/8/8/8/8/3p4/4P3/4K3 w - - 0 1");
+    Move riflePawn = parse_move(pos, "e2d3");
+    states->emplace_back();
+    pos.do_move(riflePawn, states->back());
+    Position riflePawnReloaded;
+    StateListPtr riflePawnStates;
+    set_position(riflePawnReloaded, riflePawnStates, "rifle-key-audit", pos.fen().c_str());
+    check(pos.pawn_key() == riflePawnReloaded.pawn_key()
+          && pos.key() == riflePawnReloaded.key(),
+          "rifle pawn capture produced inconsistent keys");
+    pos.undo_move(riflePawn);
+    states->pop_back();
+
     set_position(pos, states, "composable-ep-ghost",
                  "4k3/8/3r4/3pP3/8/8/8/4K3[F] w - d6 0 1");
     Move occupiedEp = make<EN_PASSANT>(SQ_E5, SQ_D6);
@@ -1017,12 +1049,20 @@ void composable_rules() {
     simulated = pos.simulated_move_info(demotionMorph);
     check(simulated.freezerOccupancy[WHITE] & square_bb(SQ_D1),
           "demotion skipped the subsequent move morph in simulation");
+    const std::string demotionMorphFen = pos.fen();
+    const Key demotionMorphKey = pos.key();
     states->emplace_back();
     pos.do_move(demotionMorph, states->back());
     check(type_of(pos.piece_on(SQ_D1)) == QUEEN,
           "demotion did not receive its configured move morph");
     pos.undo_move(demotionMorph);
     states->pop_back();
+    check(pos.fen() == demotionMorphFen
+          && pos.key() == demotionMorphKey
+          && pos.piece_on(SQ_C1) == make_piece(WHITE, BISHOP)
+          && pos.is_promoted(SQ_C1)
+          && pos.unpromoted_piece_on(SQ_C1) == make_piece(WHITE, PAWN),
+          "demotion-morph undo did not restore the promoted piece");
 
     set_position(pos, states, "composable-blast-surround",
                  "8/8/8/4R3/4e3/8/4E3/8 w - - 0 1");
@@ -1596,6 +1636,9 @@ pieceDrops = true
 symmetricDropTypes = p
 
 [occupancy-rifle:chess]
+rifleCapture = true
+
+[rifle-key-audit:chess]
 rifleCapture = true
 
 [asym-extinction-audit:chess]

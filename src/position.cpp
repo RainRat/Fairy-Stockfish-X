@@ -7924,7 +7924,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   }
   else
   {
-      if (!pureWallMove && !cloneMove && !pullMove)
+      if (!pureWallMove && !cloneMove && !pullMove && !rifleShot)
           k ^= Zobrist::psq[pc][from] ^ Zobrist::psq[pc][to];
       else if (pullMove)
       {
@@ -7958,13 +7958,15 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       k ^= Zobrist::enpassant[pop_lsb(st->epSquares)];
 
   // Update castling rights if needed
+  const int moveRightsMask = rifleShot ? castlingRightsMask[to]
+                                       : castlingRightsMask[from] | castlingRightsMask[to];
   if (!dropMove && !is_pass(m) && !pureWallMove && st->castlingRights
-      && (castlingRightsMask[from] | castlingRightsMask[to]
+      && (moveRightsMask
           | (jumpCapsq != SQ_NONE ? castlingRightsMask[jumpCapsq] : 0)
           | pushRightsMask | pullRightsMask))
   {
       k ^= Zobrist::castling[st->castlingRights];
-      st->castlingRights &= ~(castlingRightsMask[from] | castlingRightsMask[to]
+      st->castlingRights &= ~(moveRightsMask
                               | (jumpCapsq != SQ_NONE ? castlingRightsMask[jumpCapsq] : 0)
                               | pushRightsMask | pullRightsMask);
 
@@ -8281,7 +8283,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   }
 
   // If the moving piece is a pawn do some special extra work
-  if (type_of(pc) == PAWN && !stackMove && !unstackMove)
+  if (type_of(pc) == PAWN && !stackMove && !unstackMove && !rifleShot)
   {
       st->rule50 = 0;
       if (is_promotion_move(m) || type_of(m) == PIECE_PROMOTION)
@@ -8423,6 +8425,9 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   }
   else if (type_of(m) == PIECE_DEMOTION)
   {
+      // Demotion can be followed by a move morph. Preserve the original
+      // promoted piece so undo restores it before reversing the morph.
+      st->transforms.morphedFrom.set(pc, is_promoted(to), unpromoted_piece_on(to), to);
       Piece demotion = unpromoted_piece_on(to);
 
       remove_piece(to);
@@ -9500,7 +9505,7 @@ void Position::undo_move(Move m) {
       if (st->consumedPromotionHandPiece != NO_PIECE)
           add_to_hand(st->consumedPromotionHandPiece);
   }
-  else if (type_of(m) == PIECE_DEMOTION)
+  else if (type_of(m) == PIECE_DEMOTION && !st->transforms.morphedFrom)
   {
       remove_piece(moverSq);
       Piece unpromotedPc = pc;
