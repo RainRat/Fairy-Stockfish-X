@@ -176,7 +176,7 @@ namespace {
       : pos_(const_cast<Position&>(pos)), move_(m), component_(pos_.compound_turn_active()) {
 #ifdef ENABLE_COMPOUND_TURNS
       if (component_)
-          pos_.do_component(move_, newSt, false);
+          CompoundTurn::do_component(pos_, move_, newSt, false);
       else
 #endif
           pos_.do_move(move_, newSt, false);
@@ -185,7 +185,7 @@ namespace {
     ~ScopedProbeMove() {
 #ifdef ENABLE_COMPOUND_TURNS
       if (component_)
-          pos_.undo_component(move_);
+          CompoundTurn::undo_component(pos_, move_);
       else
 #endif
           pos_.undo_move(move_);
@@ -7795,6 +7795,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   do_component_impl<false>(m, newSt, countNode, true);
 }
 
+#ifdef ENABLE_COMPOUND_TURNS
 void Position::do_component(Move m, StateInfo& newSt, bool countNode, bool updateLayoutKey) {
   do_component_impl<
 #ifdef ENABLE_COMPOUND_TURNS
@@ -7804,6 +7805,7 @@ void Position::do_component(Move m, StateInfo& newSt, bool countNode, bool updat
 #endif
   >(m, newSt, countNode, updateLayoutKey);
 }
+#endif
 
 template<bool Compound>
 void Position::do_component_impl(Move m, StateInfo& newSt, bool countNode, bool updateLayoutKey) {
@@ -9899,6 +9901,7 @@ void Position::undo_move(Move m) {
   undo_component_impl<false>(m);
 }
 
+#ifdef ENABLE_COMPOUND_TURNS
 void Position::undo_component(Move m) {
   undo_component_impl<
 #ifdef ENABLE_COMPOUND_TURNS
@@ -9908,6 +9911,7 @@ void Position::undo_component(Move m) {
 #endif
   >(m);
 }
+#endif
 
 template<bool Compound>
 void Position::undo_component_impl(Move m) {
@@ -10560,7 +10564,6 @@ void Position::do_move(const LogicalMove& move, StateInfo& newSt,
       st = &newSt;
   }
 
-  newSt.logicalMove = move;
   newSt.previous = transaction.previous;
   newSt.move = MOVE_NONE;
   clear_move_undo_state(&newSt);

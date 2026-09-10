@@ -40,7 +40,10 @@ constexpr int CounterMovePruneThreshold = 0;
 /// its own array of Stack objects, indexed by the current ply.
 
 struct Stack {
-  void* pv;
+  Move* pv;
+#ifdef ENABLE_COMPOUND_TURNS
+  LogicalMove* logicalPv;
+#endif
   PieceToHistory* continuationHistory;
   int ply;
   Move currentMove;
@@ -56,6 +59,26 @@ struct Stack {
   bool ttPv;
   bool ttHit;
   int doubleExtensions;
+
+  template<bool Logical>
+  auto pv_ptr() const {
+#ifdef ENABLE_COMPOUND_TURNS
+    if constexpr (Logical)
+        return logicalPv;
+    else
+#endif
+        return pv;
+  }
+
+  template<bool Logical>
+  void set_pv(std::conditional_t<Logical, LogicalMove*, Move*> value) {
+#ifdef ENABLE_COMPOUND_TURNS
+    if constexpr (Logical)
+        logicalPv = value;
+    else
+#endif
+        pv = value;
+  }
 };
 
 

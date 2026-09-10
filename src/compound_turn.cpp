@@ -16,6 +16,19 @@
 
 namespace Stockfish {
 
+namespace CompoundTurn {
+
+void do_component(Position& pos, Move move, StateInfo& state,
+                  bool countNode, bool updateLayoutKey) {
+    pos.do_component(move, state, countNode, updateLayoutKey);
+}
+
+void undo_component(Position& pos, Move move) {
+    pos.undo_component(move);
+}
+
+} // namespace CompoundTurn
+
 namespace {
 
 int compound_move_cost(const Position& pos, Move move) {
@@ -59,8 +72,9 @@ std::string compound_step_to_string(Position& pos, Move move) {
 } // namespace
 
 LogicalMoveSource::LogicalMoveSource(Position& pos_, Thread* thread_,
-                                     LogicalMoveState& transaction_, bool checkGameEnd)
-    : pos(pos_), thread(thread_), transaction(transaction_) {
+                                     LogicalMoveState& transaction_, bool checkGameEnd,
+                                     Move preferredMove_)
+    : pos(pos_), thread(thread_), transaction(transaction_), preferredMove(preferredMove_) {
 
   if (!pos.compound_turn_active())
   {
@@ -77,45 +91,55 @@ LogicalMoveSource::LogicalMoveSource(Position& pos_, Thread* thread_,
 
 }
 
-LogicalMoveSource::~LogicalMoveSource() {
-  if (thread)
-      thread->release_buffer(moveBuffer);
-}
-
 void LogicalMoveSource::initialize_frame(int frameDepth) {
   Frame& frame = frames[frameDepth];
   frame.usedCost = frameDepth == 0
                  ? 0
                  : frames[frameDepth - 1].usedCost
                  + compound_move_cost(pos, turn.components[frameDepth - 1]);
+  ExtMove* moveBuffer;
+  std::unique_ptr<ExtMove[]> ownedMoves;
+  if (thread)
+      moveBuffer = thread->acquire_buffer();
+  else
   {
-      if (!moveBuffer)
-      {
-          if (thread)
-              moveBuffer = thread->acquire_buffer();
-          else
-          {
-              ownedMoves = std::make_unique<ExtMove[]>(MOVEGEN_OVERFLOW_CAPACITY);
-              moveBuffer = ownedMoves.get();
-          }
-      }
-
-      ExtMove* begin = moveBuffer;
-      ExtMove* end = generate<LEGAL>(pos, begin);
-      assert(end - begin <= MOVEGEN_OVERFLOW_CAPACITY);
-      frame.moves.assign(begin, end);
+      ownedMoves = std::make_unique<ExtMove[]>(MOVEGEN_OVERFLOW_CAPACITY);
+      moveBuffer = ownedMoves.get();
   }
+
+  ExtMove* end = generate<LEGAL>(pos, moveBuffer);
+  assert(end - moveBuffer <= MOVEGEN_OVERFLOW_CAPACITY);
+  frame.moves.assign(moveBuffer, end);
+
+  if (thread)
+      thread->release_buffer(moveBuffer);
+
+  // The provider does not have a Stack/MovePicker, but a small amount of
+  // complete-turn ordering is still useful. Prioritize the TT's representative
+  // at the root and tactical physical steps at every DFS frame.
+  auto tacticalBegin = frame.moves.begin();
+  if (frameDepth == 0 && preferredMove != MOVE_NONE)
+  {
+      auto preferred = std::find(frame.moves.begin(), frame.moves.end(), preferredMove);
+      if (preferred != frame.moves.end())
+      {
+          std::rotate(frame.moves.begin(), preferred, preferred + 1);
+          tacticalBegin = frame.moves.begin() + 1;
+      }
+  }
+  std::stable_partition(tacticalBegin, frame.moves.end(),
+                        [&](Move move) { return pos.capture_or_promotion(move); });
   frame.current = 0;
 }
 
 void LogicalMoveSource::apply_path(int length) {
   for (int i = 0; i < length; ++i)
-      pos.do_component(turn.components[i], transaction.components[i], false, false);
+      CompoundTurn::do_component(pos, turn.components[i], transaction.components[i], false, false);
 }
 
 void LogicalMoveSource::undo_path(int length) {
   for (int i = length - 1; i >= 0; --i)
-      pos.undo_component(turn.components[i]);
+      CompoundTurn::undo_component(pos, turn.components[i]);
 }
 
 bool LogicalMoveSource::next(LogicalMove& move) {
@@ -307,7 +331,7 @@ bool parse_compound_move(Position& pos, const std::string& text, LogicalMove& tu
 
           const int index = parsed.length++;
           parsed.components[index] = move;
-          pos.do_component(move, states[index], false);
+          CompoundTurn::do_component(pos, move, states[index], false);
           const int nextUsedSteps = usedSteps + moveCost;
 
           bool accepted = false;
@@ -319,11 +343,11 @@ bool parse_compound_move(Position& pos, const std::string& text, LogicalMove& tu
 
           if (accepted)
           {
-              pos.undo_component(move);
+              CompoundTurn::undo_component(pos, move);
               return true;
           }
 
-          pos.undo_component(move);
+          CompoundTurn::undo_component(pos, move);
           --parsed.length;
       }
 
@@ -361,11 +385,11 @@ std::string compound_move_to_string(Position& pos, const LogicalMove& turn) {
       result += compound_step_to_string(pos, turn.components[i]);
       // Formatting is a read-only operation. The component executor still
       // supplies scratch state so that effects are formatted in context.
-      pos.do_component(turn.components[i], transaction.components[i], false);
+      CompoundTurn::do_component(pos, turn.components[i], transaction.components[i], false);
   }
 
   for (int i = turn.length - 1; i >= 0; --i)
-      pos.undo_component(turn.components[i]);
+      CompoundTurn::undo_component(pos, turn.components[i]);
 
   return result;
 }
