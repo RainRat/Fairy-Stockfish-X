@@ -47,6 +47,7 @@ class LogicalMoveSource {
       ExtMove* moves = nullptr;
       ExtMove* current = nullptr;
       ExtMove* end = nullptr;
+      int usedCost = 0;
   };
 
   void initialize_frame(int depth);

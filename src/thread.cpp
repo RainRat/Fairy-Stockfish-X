@@ -232,6 +232,18 @@ void ThreadPool::start_thinking(Position& pos, StateListPtr& states,
               && (limits.banmoves.empty()
                   || !std::count(limits.banmoves.begin(), limits.banmoves.end(), m)))
               rootMoves.emplace_back(m, info);
+
+      // The logical provider deliberately does not use component moves as
+      // ordinary history keys. Give the first search iteration a conservative
+      // tactical order from facts established for the complete turn.
+      std::stable_sort(rootMoves.begin(), rootMoves.end(), [](const Search::RootMove& a, const Search::RootMove& b) {
+          const auto priority = [](const Search::RootMove& move) {
+              return 4 * move.info.capturesOpponent
+                   + 2 * move.info.promotionLike
+                   + move.info.removesMaterial;
+          };
+          return priority(a) > priority(b);
+      });
   }
   else
 #endif
