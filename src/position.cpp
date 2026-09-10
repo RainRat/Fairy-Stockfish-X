@@ -10390,10 +10390,28 @@ void Position::commit_compound_move(const LogicalMove& move, StateInfo& newSt,
   update_repetition_info();
 }
 
-void Position::undo_move(const LogicalMove& move, LogicalMoveState& transaction) {
+void Position::undo_move(const LogicalMove& move, LogicalMoveState& transaction,
+                         bool preservePrefix) {
 
   assert(transaction.previous != nullptr);
   assert(move.length > 0 && move.length <= LogicalMove::MAX_COMPONENTS);
+
+  if (preservePrefix)
+  {
+      const int last = move.length - 1;
+      if (transaction.syntheticBoundary)
+      {
+          StateInfo* completeState = st;
+          completeState->previous = &transaction.components[last];
+          undo_compound_turn();
+          transaction.syntheticBoundary = false;
+      }
+      else
+          st = &transaction.components[last];
+
+      undo_component(move.components[last]);
+      return;
+  }
 
   if (transaction.syntheticBoundary)
   {

@@ -1089,7 +1089,8 @@ public:
 #ifdef ENABLE_COMPOUND_TURNS
   void do_move(const LogicalMove& move, StateInfo& newSt,
                LogicalMoveState& transaction, bool countNode = true);
-  void undo_move(const LogicalMove& move, LogicalMoveState& transaction);
+  void undo_move(const LogicalMove& move, LogicalMoveState& transaction,
+                 bool preservePrefix = false);
 #endif
   void fire_laser(Color us, Key& k, Square selectedEmitter = SQ_NONE);
   Bitboard laser_rotation_candidates(Color us) const;

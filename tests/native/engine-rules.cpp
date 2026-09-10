@@ -1485,6 +1485,22 @@ void compound_turn_rules() {
     check(lazyGenerated == generated,
           "lazy logical move source disagreed with materialized compound generation");
 
+    const Key generatedKey = pos.key();
+    std::vector<LogicalMove> appliedGenerated;
+    {
+        LogicalMoveState sourceTransaction;
+        LogicalMoveSource source(pos, nullptr, sourceTransaction);
+        LogicalMove candidate;
+        LogicalMoveInfo info;
+        while (source.next_applied(candidate, info))
+        {
+            appliedGenerated.push_back(candidate);
+            source.undo_applied();
+        }
+    }
+    check(appliedGenerated == generated && pos.key() == generatedKey,
+          "applied logical move source did not preserve traversal and root state");
+
     // Logical move metadata must distinguish material removed by an effect,
     // including an effect in a later component.
     set_position(pos, states, "generic-compound-own-removal-audit",

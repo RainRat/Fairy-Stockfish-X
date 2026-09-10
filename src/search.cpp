@@ -297,7 +297,7 @@ void MainThread::search() {
   Eval::NNUE::verify();
 
   const bool noRootMove = rootMoves.empty()
-                       || (rootMoves.size() == 1 && rootMoves[0].pv[0] == MOVE_NONE);
+                       || (rootMoves.size() == 1 && rootMoves[0].first() == MOVE_NONE);
   const bool optionalRootEnd = CurrentProtocol == XBOARD && rootPos.is_optional_game_end();
 
   if (noRootMove)
@@ -360,12 +360,12 @@ void MainThread::search() {
       && !Limits.depth
       && !Limits.mate
       && !(Skill(Options["Skill Level"]).enabled() || int(Options["UCI_LimitStrength"]))
-      && rootMoves[0].pv[0] != MOVE_NONE)
+      && rootMoves[0].first() != MOVE_NONE)
       bestThread = Threads.get_best_thread();
 
   bestPreviousScore = bestThread->rootMoves[0].score;
 
-  if (bestThread->rootMoves[0].pv[0] == MOVE_NONE)
+  if (bestThread->rootMoves[0].first() == MOVE_NONE)
   {
       RootTerminal terminal = compute_root_terminal(rootPos);
       print_root_adjudication(rootPos, terminal.value, terminal.reason);
@@ -373,7 +373,7 @@ void MainThread::search() {
 
   bool extractedPonder = false;
 
-  if (!rootPos.compound_turn_active() && bestThread->rootMoves[0].pv.size() == 1)
+  if (!rootPos.compound_turn_active() && bestThread->rootMoves[0].pv_size() == 1)
       extractedPonder = bestThread->rootMoves[0].extract_ponder_from_tt(rootPos);
 
   // Send again PV info if we have a new best thread or extracted a ponder move.
@@ -395,9 +395,9 @@ void MainThread::search() {
 #ifdef ENABLE_COMPOUND_TURNS
       if (rootPos.compound_turn_active())
       {
-          const LogicalMove& bestTurn = bestThread->rootMoves[0].pv[0];
+          const LogicalMove& bestTurn = bestThread->rootMoves[0].first();
           const std::vector<std::string> compoundPv =
-              compound_pv_to_strings(rootPos, bestThread->rootMoves[0].pv);
+              compound_pv_to_strings(rootPos, bestThread->rootMoves[0].full_pv());
           if (!Limits.infinite && !ponder && !compoundPv.empty()
               && bestTurn.first() != MOVE_NONE
               && !Threads.abort.exchange(true))
@@ -412,7 +412,7 @@ void MainThread::search() {
           return;
       }
 #endif
-      Move bestMove = bestThread->rootMoves[0].pv[0].first();
+      Move bestMove = bestThread->rootMoves[0].first().first();
       // Wait for virtual drop to become real
       if (rootPos.two_boards() && rootPos.virtual_drop(bestMove))
       {
@@ -422,14 +422,14 @@ void MainThread::search() {
           Partner.ptell("x");
           // Find best real move
           for (const auto& m : bestThread->rootMoves)
-              if (!rootPos.virtual_drop(m.pv[0].first()))
+              if (!rootPos.virtual_drop(m.first().first()))
               {
-                  bestMove = m.pv[0].first();
+                  bestMove = m.first().first();
                   break;
               }
       }
       // Send move only when not in analyze mode and not at game end
-      if (!Limits.infinite && !ponder && rootMoves[0].pv[0] != MOVE_NONE && !Threads.abort.exchange(true))
+      if (!Limits.infinite && !ponder && rootMoves[0].first() != MOVE_NONE && !Threads.abort.exchange(true))
       {
           std::string move = UCI::move(rootPos, bestMove);
           if (rootPos.walling() && move.find(",") != std::string::npos)
@@ -444,8 +444,8 @@ void MainThread::search() {
           {
               XBoard::stateMachine->do_move(bestMove);
               XBoard::stateMachine->moveAfterSearch = false;
-              if (Options["Ponder"] && bestThread->rootMoves[0].pv.size() > 1)
-                  XBoard::stateMachine->ponderMove = bestThread->rootMoves[0].pv[1].first();
+              if (Options["Ponder"] && bestThread->rootMoves[0].pv_size() > 1)
+                  XBoard::stateMachine->ponderMove = bestThread->rootMoves[0].pv_at(1).first();
           }
       }
       return;
@@ -454,25 +454,25 @@ void MainThread::search() {
   SyncCout out;
 #ifdef ENABLE_COMPOUND_TURNS
   const std::vector<std::string> compoundPv = rootPos.variant()->compoundTurnSteps > 0
-                                            ? compound_pv_to_strings(rootPos, bestThread->rootMoves[0].pv)
+                                            ? compound_pv_to_strings(rootPos, bestThread->rootMoves[0].full_pv())
                                             : std::vector<std::string>();
   if (rootPos.compound_turn_active()
       && !bestThread->rootMoves.empty()
       && !compoundPv.empty()
-      && bestThread->rootMoves[0].pv[0].first() != MOVE_NONE)
+      && bestThread->rootMoves[0].first().first() != MOVE_NONE)
       out << "bestmove " << compoundPv.front();
   else
 #endif
-      out << "bestmove " << UCI::move(rootPos, bestThread->rootMoves[0].pv[0].first());
+      out << "bestmove " << UCI::move(rootPos, bestThread->rootMoves[0].first().first());
 
-  if (bestThread->rootMoves[0].pv.size() > 1)
+  if (bestThread->rootMoves[0].pv_size() > 1)
   {
 #ifdef ENABLE_COMPOUND_TURNS
       if (compoundPv.size() > 1)
           out << " ponder " << compoundPv[1];
       else
 #endif
-          out << " ponder " << UCI::move(rootPos, bestThread->rootMoves[0].pv[1].first());
+          out << " ponder " << UCI::move(rootPos, bestThread->rootMoves[0].pv_at(1).first());
   }
 
   out << sync_endl;
@@ -704,7 +704,7 @@ void Thread::search() {
               });
               if (it != rootMoves.end())
                   std::rotate(rootMoves.begin(), it, it + 1);
-              rootMoves[0].pv = lastBestPV;
+              rootMoves[0].set_pv(lastBestPV);
               rootMoves[0].score = lastBestScore;
           }
           else
@@ -714,10 +714,10 @@ void Thread::search() {
       if (!Threads.stop)
           completedDepth = rootDepth;
 
-      if (rootMoves[0].pv[0] != lastBestMove) {
-         lastBestMove = rootMoves[0].pv[0];
+      if (rootMoves[0].first() != lastBestMove) {
+         lastBestMove = rootMoves[0].first();
          lastBestScore = rootMoves[0].score;
-         lastBestPV = rootMoves[0].pv;
+         lastBestPV = rootMoves[0].full_pv();
          lastBestMoveDepth = rootDepth;
       }
 
@@ -999,10 +999,10 @@ namespace {
     tte = TT.probe(posKey, ss->ttHit);
     ttValue = ss->ttHit ? value_from_tt(tte->value(), ss->ply, pos.rule50_count()) : VALUE_NONE;
     if constexpr (Logical)
-        ttMove = rootNode ? thisThread->rootMoves[thisThread->pvIdx].pv[0].first()
+        ttMove = rootNode ? thisThread->rootMoves[thisThread->pvIdx].first().first()
                           : ss->ttHit ? tte->move() : MOVE_NONE;
     else
-        ttMove = rootNode ? thisThread->rootMoves[thisThread->pvIdx].pv[0].first()
+        ttMove = rootNode ? thisThread->rootMoves[thisThread->pvIdx].first().first()
                           : ss->ttHit ? tte->move() : MOVE_NONE;
     if (!excludedMove)
         ss->ttPv = PvNode || (ss->ttHit && tte->is_pv());
@@ -1422,7 +1422,7 @@ moves_loop: // When in check, search starts from here
               if (rootMoveIndex >= thisThread->pvLast)
                   break;
               RootMove& rootMove = thisThread->rootMoves[rootMoveIndex++];
-              logicalMove = rootMove.pv[0];
+              logicalMove = rootMove.first();
               move = logicalMove.first();
               moveInfo = rootMove.info;
           }
@@ -1884,13 +1884,13 @@ moves_loop: // When in check, search starts from here
           {
               rm.score = value;
               rm.selDepth = thisThread->selDepth;
-              rm.pv.resize(1);
+              rm.clear_pv();
 
               assert((ss+1)->pv_ptr<Logical>());
 
               for (SearchMove* m = (ss+1)->pv_ptr<Logical>();
                    *m != MOVE_NONE; ++m)
-                  rm.pv.push_back(*m);
+                  rm.append_pv(*m);
 
               // We record how often the best move has been changed in each
               // iteration. This information is used for time management and LMR
@@ -2510,7 +2510,7 @@ moves_loop: // When in check, search starts from here
         if (rootMoves[i].score + push >= maxScore)
         {
             maxScore = rootMoves[i].score + push;
-            best = rootMoves[i].pv[0];
+            best = rootMoves[i].first();
         }
     }
 
@@ -2583,7 +2583,7 @@ string UCI::pv(const Position& pos, Depth depth, Value alpha, Value beta) {
 
 #ifdef ENABLE_COMPOUND_TURNS
       const std::vector<std::string> compoundPv = pos.variant()->compoundTurnSteps > 0
-                                                ? compound_pv_to_strings(pos, rootMoves[i].pv)
+                                                ? compound_pv_to_strings(pos, rootMoves[i].full_pv())
                                                 : std::vector<std::string>();
 #endif
 
@@ -2615,8 +2615,8 @@ string UCI::pv(const Position& pos, Depth depth, Value alpha, Value beta) {
                       ss << " " << move;
               else
 #endif
-                  for (size_t j = 0; j < rootMoves[i].pv.size(); ++j)
-                      ss << " " << UCI::move(pos, rootMoves[i].pv[j].first());
+                  for (size_t j = 0; j < rootMoves[i].pv_size(); ++j)
+                      ss << " " << UCI::move(pos, rootMoves[i].pv_at(j).first());
           }
       }
       else
@@ -2649,8 +2649,8 @@ string UCI::pv(const Position& pos, Depth depth, Value alpha, Value beta) {
               ss << " " << move;
       else
 #endif
-          for (size_t j = 0; j < rootMoves[i].pv.size(); ++j)
-              ss << " " << UCI::move(pos, rootMoves[i].pv[j].first());
+          for (size_t j = 0; j < rootMoves[i].pv_size(); ++j)
+              ss << " " << UCI::move(pos, rootMoves[i].pv_at(j).first());
       }
   }
 
@@ -2670,12 +2670,12 @@ bool RootMove::extract_ponder_from_tt(Position& pos) {
 
     bool ttHit;
 
-    assert(pv.size() == 1);
+    assert(pv_size() == 1);
 
-    if (pv[0] == MOVE_NONE)
+    if (first() == MOVE_NONE)
         return false;
 
-    pos.do_move(pv[0].first(), st);
+    pos.do_move(first().first(), st);
 
     if (!pos.is_draw(1))
     {
@@ -2685,12 +2685,12 @@ bool RootMove::extract_ponder_from_tt(Position& pos) {
         {
             Move m = tte->move(); // Local copy to be SMP safe
             if (MoveList<LEGAL>(pos).contains(m))
-                pv.push_back(LogicalMove(m));
+                append_pv(LogicalMove(m));
         }
     }
 
-    pos.undo_move(pv[0].first());
-    return pv.size() > 1;
+    pos.undo_move(first().first());
+    return pv_size() > 1;
 }
 
 void Tablebases::rank_root_moves(Position& pos, Search::RootMoves& rootMoves) {
