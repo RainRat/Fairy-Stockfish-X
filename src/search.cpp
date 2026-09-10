@@ -296,8 +296,10 @@ void MainThread::search() {
 
   Eval::NNUE::verify();
 
-  const bool noRootMove = rootMoves.empty()
-                       || (rootMoves.size() == 1 && rootMoves[0].first() == MOVE_NONE);
+  const bool lazyRoot = rootPos.logical_moves_active() && rootMoves.empty();
+  const bool noRootMove = !lazyRoot
+                       && (rootMoves.empty()
+                           || (rootMoves.size() == 1 && rootMoves[0].first() == MOVE_NONE));
   const bool optionalRootEnd = CurrentProtocol == XBOARD && rootPos.is_optional_game_end();
 
   if (noRootMove)
@@ -559,12 +561,20 @@ void Thread::search() {
                  ((floatLevel - int(floatLevel)) * 1024 > rng.rand<unsigned>() % 1024  ? 1 : 0);
   Skill skill(intLevel);
 
+  const bool lazyRoot = rootMoves.empty()
+                     && rootPos.logical_moves_active()
+                     && multiPV == 1
+                     && !skill.enabled()
+                     && !Limits.searchMovesSpecified
+                     && Limits.banmoves.empty();
+
   // When playing with strength handicap enable MultiPV search that we will
   // use behind the scenes to retrieve a set of possible moves.
   if (skill.enabled())
       multiPV = std::max(multiPV, (size_t)4);
 
-  multiPV = std::min(multiPV, rootMoves.size());
+  if (!lazyRoot)
+      multiPV = std::min(multiPV, rootMoves.size());
   ttHitAverage = TtHitAverageWindow * TtHitAverageResolution / 2;
 
   trend = SCORE_ZERO;
@@ -854,6 +864,9 @@ void Thread::search() {
       iterIdx = (iterIdx + 1) & 3;
   }
 
+  if (rootMoves.empty())
+      rootMoves.emplace_back(MOVE_NONE);
+
   if (!mainThread)
       return;
 
@@ -932,6 +945,8 @@ namespace {
             return pos.logical_moves_active();
         return false;
     }();
+    const bool lazyRoot = rootNode && logicalMovePosition
+                       && thisThread->rootMoves.empty();
     ss->inCheck        = pos.evasion_checkers();
     priorCapture       = [&] {
         if constexpr (Logical)
@@ -999,7 +1014,8 @@ namespace {
     tte = TT.probe(posKey, ss->ttHit);
     ttValue = ss->ttHit ? value_from_tt(tte->value(), ss->ply, pos.rule50_count()) : VALUE_NONE;
     if constexpr (Logical)
-        ttMove = rootNode ? thisThread->rootMoves[thisThread->pvIdx].first().first()
+        ttMove = rootNode ? (lazyRoot ? MOVE_NONE
+                                      : thisThread->rootMoves[thisThread->pvIdx].first().first())
                           : ss->ttHit ? tte->move() : MOVE_NONE;
     else
         ttMove = rootNode ? thisThread->rootMoves[thisThread->pvIdx].first().first()
@@ -1385,7 +1401,7 @@ moves_loop: // When in check, search starts from here
 #ifdef ENABLE_COMPOUND_TURNS
     std::optional<LogicalMoveSource> logicalSource;
     if constexpr (Logical)
-        if (logicalMovePosition && !rootNode)
+        if (logicalMovePosition && (!rootNode || lazyRoot))
             logicalSource.emplace(pos, thisThread, thisThread->logical_move_state(ss->ply),
                                   true, ttMove);
 #endif
@@ -1419,12 +1435,27 @@ moves_loop: // When in check, search starts from here
       {
           if (logicalMovePosition && rootNode)
           {
-              if (rootMoveIndex >= thisThread->pvLast)
-                  break;
-              RootMove& rootMove = thisThread->rootMoves[rootMoveIndex++];
-              logicalMove = rootMove.first();
-              move = logicalMove.first();
-              moveInfo = rootMove.info;
+              if (lazyRoot)
+              {
+                  if (!logicalSource->next_applied(logicalMove, moveInfo))
+                      break;
+                  appliedSource = &*logicalSource;
+                  move = moveInfo.representative;
+                  thisThread->rootMoves.emplace_back(logicalMove, moveInfo);
+                  // The source has already applied the turn, so do not use
+                  // Position::do_move()'s normal root-node accounting path.
+                  thisThread->nodes.fetch_add(1, std::memory_order_relaxed);
+                  rootMoveIndex = thisThread->rootMoves.size();
+              }
+              else
+              {
+                  if (rootMoveIndex >= thisThread->pvLast)
+                      break;
+                  RootMove& rootMove = thisThread->rootMoves[rootMoveIndex++];
+                  logicalMove = rootMove.first();
+                  move = logicalMove.first();
+                  moveInfo = rootMove.info;
+              }
           }
           else if (logicalMovePosition)
           {
@@ -1715,7 +1746,7 @@ moves_loop: // When in check, search starts from here
           if (logicalMovePosition)
           {
               transaction = &thisThread->logical_move_state(ss->ply);
-              if (rootNode)
+              if (rootNode && !lazyRoot)
                   pos.do_move(logicalMove, st, *transaction);
               else
                   logicalSource->commit_applied(st);
@@ -1844,7 +1875,7 @@ moves_loop: // When in check, search starts from here
       {
           if (logicalMovePosition)
           {
-              if (rootNode)
+              if (rootNode && !lazyRoot)
                   pos.undo_move(logicalMove, *transaction);
               else
                   logicalSource->undo_applied();
@@ -1937,6 +1968,13 @@ moves_loop: // When in check, search starts from here
           else if (moveInfo.historyCompatible && !captureOrPromotion && quietCount < 64)
               quietsSearched[quietCount++] = move;
       }
+    }
+
+    if (lazyRoot)
+    {
+        if (thisThread->rootMoves.empty())
+            thisThread->rootMoves.emplace_back(MOVE_NONE);
+        thisThread->pvLast = thisThread->rootMoves.size();
     }
 
     // The following condition would detect a stop only after move loop has been
