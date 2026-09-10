@@ -45,9 +45,11 @@ namespace Stockfish {
 #ifdef ENABLE_COMPOUND_TURNS
 class Position;
 struct StateInfo;
+struct LogicalMoveState;
 namespace CompoundTurn {
 void do_component(Position&, Move, StateInfo&, bool, bool);
 void undo_component(Position&, Move);
+void commit_applied(Position&, const LogicalMove&, StateInfo&, LogicalMoveState&);
 }
 #endif
 
@@ -1175,11 +1177,14 @@ private:
 #ifdef ENABLE_COMPOUND_TURNS
   friend void CompoundTurn::do_component(Position&, Move, StateInfo&, bool, bool);
   friend void CompoundTurn::undo_component(Position&, Move);
+  friend void CompoundTurn::commit_applied(Position&, const LogicalMove&, StateInfo&, LogicalMoveState&);
   void do_component(Move m, StateInfo& newSt, bool countNode = true,
                     bool updateLayoutKey = true);
   void undo_component(Move m);
   void end_compound_turn(StateInfo& newSt);
   void undo_compound_turn();
+  void commit_compound_move(const LogicalMove& move, StateInfo& newSt,
+                            LogicalMoveState& transaction);
 #endif
 
   // Initialization helpers (used while setting up a position)

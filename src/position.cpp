@@ -10353,6 +10353,17 @@ void Position::do_move(const LogicalMove& move, StateInfo& newSt,
       do_component(move.components[i], transaction.components[i], countNode && i == 0);
   }
 
+  commit_compound_move(move, newSt, transaction);
+}
+
+void Position::commit_compound_move(const LogicalMove& move, StateInfo& newSt,
+                                    LogicalMoveState& transaction) {
+
+  assert(compound_turn_active());
+  assert(at_complete_turn_boundary() || transaction.previous != st);
+  assert(move.length > 0 && move.length <= LogicalMove::MAX_COMPONENTS);
+  assert(&newSt != st);
+
   const bool needsBoundaryState = !is_pass(move.components[move.length - 1])
                                && transaction.usedCost < compound_turn_steps();
   if (needsBoundaryState)

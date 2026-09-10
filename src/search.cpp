@@ -66,6 +66,21 @@ using namespace Search;
 
 namespace {
 
+#ifdef ENABLE_COMPOUND_TURNS
+  class AppliedLogicalMoveGuard {
+   public:
+    explicit AppliedLogicalMoveGuard(LogicalMoveSource* source_)
+        : source(source_) {}
+    ~AppliedLogicalMoveGuard() {
+        if (source && source->has_applied_move())
+            source->undo_applied();
+    }
+
+   private:
+    LogicalMoveSource* source;
+  };
+#endif
+
   // Different node types, used as a template parameter
   enum NodeType { NonPV, PV, Root };
 
@@ -1358,6 +1373,9 @@ moves_loop: // When in check, search starts from here
     {
       SearchMove logicalMove;
       SearchMoveInfo moveInfo;
+#ifdef ENABLE_COMPOUND_TURNS
+      LogicalMoveSource* appliedSource = nullptr;
+#endif
       auto next_ordinary_move = [&] {
           if ((move = mp.next_move(moveCountPruning)) == MOVE_NONE)
               return false;
@@ -1381,10 +1399,13 @@ moves_loop: // When in check, search starts from here
               move = logicalMove.first();
               moveInfo = rootMove.info;
           }
-          else if (logicalMovePosition && !logicalSource->next(logicalMove, moveInfo))
-              break;
           else if (logicalMovePosition)
+          {
+              if (!logicalSource->next_applied(logicalMove, moveInfo))
+                  break;
+              appliedSource = &*logicalSource;
               move = moveInfo.representative;
+          }
           else if (!next_ordinary_move())
               break;
       }
@@ -1392,6 +1413,9 @@ moves_loop: // When in check, search starts from here
 #endif
           if (!next_ordinary_move())
               break;
+#ifdef ENABLE_COMPOUND_TURNS
+      AppliedLogicalMoveGuard appliedMoveGuard(appliedSource);
+#endif
       assert(is_ok(move));
 
       if (move == excludedMove)
@@ -1662,7 +1686,10 @@ moves_loop: // When in check, search starts from here
           if (logicalMovePosition)
           {
               transaction = &thisThread->logical_move_state(ss->ply);
-              pos.do_move(logicalMove, st, *transaction);
+              if (rootNode)
+                  pos.do_move(logicalMove, st, *transaction);
+              else
+                  logicalSource->commit_applied(st);
           }
           else
               pos.do_move(move, st);
@@ -1787,7 +1814,12 @@ moves_loop: // When in check, search starts from here
       if constexpr (Logical)
       {
           if (logicalMovePosition)
-              pos.undo_move(logicalMove, *transaction);
+          {
+              if (rootNode)
+                  pos.undo_move(logicalMove, *transaction);
+              else
+                  logicalSource->undo_applied();
+          }
           else
               pos.undo_move(move);
       }

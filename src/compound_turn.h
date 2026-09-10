@@ -44,9 +44,15 @@ class LogicalMoveSource {
 
   bool next(LogicalMove& move);
   bool next(LogicalMove& move, LogicalMoveInfo& info);
+  // Yield a move with its component effects applied. The caller must either
+  // commit or undo it before requesting another move.
+  bool next_applied(LogicalMove& move, LogicalMoveInfo& info);
+  void commit_applied(StateInfo& state);
+  void undo_applied();
+  bool has_applied_move() const { return applied; }
 
  private:
-  bool next_impl(LogicalMove& move, LogicalMoveInfo* info);
+  bool next_impl(LogicalMove& move, LogicalMoveInfo* info, bool leaveApplied);
 
   struct Frame {
       std::vector<Move> moves;
@@ -69,6 +75,7 @@ class LogicalMoveSource {
   int depth = 0;
   bool initialized = false;
   bool descend = false;
+  bool applied = false;
   bool finished = false;
 };
 
