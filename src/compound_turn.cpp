@@ -27,6 +27,11 @@ void undo_component(Position& pos, Move move) {
     pos.undo_component(move);
 }
 
+void commit_applied(Position& pos, const LogicalMove& move, StateInfo& state,
+                    LogicalMoveState& transaction) {
+    pos.commit_compound_move(move, state, transaction);
+}
+
 } // namespace CompoundTurn
 
 namespace {
@@ -144,16 +149,36 @@ void LogicalMoveSource::undo_path(int length) {
 
 bool LogicalMoveSource::next(LogicalMove& move) {
 
-  return next_impl(move, nullptr);
+  return next_impl(move, nullptr, false);
 }
 
 bool LogicalMoveSource::next(LogicalMove& move, LogicalMoveInfo& info) {
 
-  return next_impl(move, &info);
+  return next_impl(move, &info, false);
 }
 
-bool LogicalMoveSource::next_impl(LogicalMove& move, LogicalMoveInfo* info) {
+bool LogicalMoveSource::next_applied(LogicalMove& move, LogicalMoveInfo& info) {
 
+  return next_impl(move, &info, true);
+}
+
+void LogicalMoveSource::commit_applied(StateInfo& state) {
+
+  assert(applied);
+  CompoundTurn::commit_applied(pos, turn, state, transaction);
+}
+
+void LogicalMoveSource::undo_applied() {
+
+  assert(applied);
+  pos.undo_move(turn, transaction);
+  applied = false;
+}
+
+bool LogicalMoveSource::next_impl(LogicalMove& move, LogicalMoveInfo* info,
+                                  bool leaveApplied) {
+
+  assert(!applied);
   if (finished)
       return false;
 
@@ -246,7 +271,8 @@ bool LogicalMoveSource::next_impl(LogicalMove& move, LogicalMoveInfo* info) {
                            && usedSteps + moveCost < pos.compound_turn_steps()
                            && pos.compound_turn_active();
 
-      undo_path(depth + 1);
+      if (!leaveApplied || !accepted)
+          undo_path(depth + 1);
       descend = canDescend;
 
       if (accepted)
@@ -254,6 +280,7 @@ bool LogicalMoveSource::next_impl(LogicalMove& move, LogicalMoveInfo* info) {
           move = turn;
           if (info)
               *info = candidateInfo;
+          applied = leaveApplied;
           return true;
       }
   }
