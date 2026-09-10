@@ -29,7 +29,8 @@ struct LogicalMoveState;
 /// this provider; callers always observe the position at a turn boundary.
 class LogicalMoveSource {
  public:
-  LogicalMoveSource(Position& pos, Thread* thread, LogicalMoveState& transaction);
+  LogicalMoveSource(Position& pos, Thread* thread, LogicalMoveState& transaction,
+                    bool checkGameEnd = true);
   ~LogicalMoveSource();
 
   LogicalMoveSource(const LogicalMoveSource&) = delete;
@@ -39,8 +40,10 @@ class LogicalMoveSource {
   bool next(LogicalMove& move, LogicalMoveInfo& info);
 
  private:
+  bool next_impl(LogicalMove& move, LogicalMoveInfo* info);
+
   struct Frame {
-      std::vector<ExtMove> moves;
+      std::unique_ptr<ExtMove[]> moves;
       ExtMove* current = nullptr;
       ExtMove* end = nullptr;
   };
@@ -50,7 +53,6 @@ class LogicalMoveSource {
   void undo_path(int length);
 
   Position& pos;
-  Thread* thread;
   LogicalMoveState& transaction;
   const StateInfo* logicalRoot = nullptr;
   std::array<Frame, LogicalMove::MAX_COMPONENTS> frames{};
