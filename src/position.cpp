@@ -10362,7 +10362,8 @@ void Position::do_logical_move(const LogicalMove& move, StateInfo& newSt,
   }
   else
   {
-      newSt = *st;
+      static_cast<StateInfoCopied&>(newSt) = static_cast<const StateInfoCopied&>(*st);
+      static_cast<StateInfoDerived&>(newSt) = static_cast<const StateInfoDerived&>(*st);
       newSt.previous = transaction.previous;
       st = &newSt;
   }

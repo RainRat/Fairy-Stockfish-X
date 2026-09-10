@@ -161,11 +161,10 @@ namespace {
 
   template<bool Logical, NodeType nodeType>
   Value search_impl(Position& pos, Stack* ss, Value alpha, Value beta, Depth depth, bool cutNode);
+  template<bool Logical, NodeType nodeType>
+  Value qsearch_impl(Position& pos, Stack* ss, Value alpha, Value beta, Depth depth = 0);
   template<NodeType nodeType>
   Value search(Position& pos, Stack* ss, Value alpha, Value beta, Depth depth, bool cutNode);
-
-  template <NodeType nodeType>
-  Value qsearch(Position& pos, Stack* ss, Value alpha, Value beta, Depth depth = 0);
 
   Value value_to_tt(Value v, int ply);
   Value value_from_tt(Value v, int ply, int r50c);
@@ -853,7 +852,7 @@ namespace {
 
     // Dive into quiescence search when the depth reaches zero
     if (depth <= 0)
-        return qsearch<PvNode ? PV : NonPV>(pos, ss, alpha, beta);
+        return qsearch_impl<Logical, PvNode ? PV : NonPV>(pos, ss, alpha, beta);
 
     assert(-VALUE_INFINITE <= alpha && alpha < beta && beta <= VALUE_INFINITE);
     assert(PvNode || (alpha == beta - 1));
@@ -955,7 +954,7 @@ namespace {
     if constexpr (Logical)
         ttMove = logicalMovePosition ? MOVE_NONE
                 : rootNode ? thisThread->rootMoves[thisThread->pvIdx].pv[0].first()
-                : ss->ttHit ? tte->move() : MOVE_NONE;
+            : ss->ttHit ? tte->move() : MOVE_NONE;
     else
         ttMove = rootNode ? thisThread->rootMoves[thisThread->pvIdx].pv[0].first()
                           : ss->ttHit ? tte->move() : MOVE_NONE;
@@ -1174,7 +1173,7 @@ namespace {
             pos.undo_null_move();
         else
         {
-            Value nullValue = -search<NonPV>(pos, ss+1, -beta, -beta+1, depth-R, !cutNode);
+            Value nullValue = -search_impl<Logical, NonPV>(pos, ss+1, -beta, -beta+1, depth-R, !cutNode);
 
             pos.undo_null_move();
 
@@ -1194,7 +1193,7 @@ namespace {
                 thisThread->nmpMinPly = ss->ply + 3 * (depth-R) / 4;
                 thisThread->nmpColor = us;
 
-                Value v = search<NonPV>(pos, ss, beta-1, beta, depth-R, false);
+                Value v = search_impl<Logical, NonPV>(pos, ss, beta-1, beta, depth-R, false);
 
                 thisThread->nmpMinPly = 0;
 
@@ -1255,11 +1254,11 @@ namespace {
                 pos.do_move(move, st);
 
                 // Perform a preliminary qsearch to verify that the move holds
-                value = -qsearch<NonPV>(pos, ss+1, -probCutBeta, -probCutBeta+1);
+                value = -qsearch_impl<Logical, NonPV>(pos, ss+1, -probCutBeta, -probCutBeta+1);
 
                 // If the qsearch held, perform the regular search
                 if (value >= probCutBeta)
-                    value = -search<NonPV>(pos, ss+1, -probCutBeta, -probCutBeta+1, depth - 4, !cutNode);
+                    value = -search_impl<Logical, NonPV>(pos, ss+1, -probCutBeta, -probCutBeta+1, depth - 4, !cutNode);
 
                 pos.undo_move(move);
 
@@ -1578,7 +1577,7 @@ moves_loop: // When in check, search starts from here
           Depth singularDepth = (depth - 1) / 2;
 
           ss->excludedMove = move;
-          value = search<NonPV>(pos, ss, singularBeta - 1, singularBeta, singularDepth, cutNode);
+          value = search_impl<Logical, NonPV>(pos, ss, singularBeta - 1, singularBeta, singularDepth, cutNode);
           ss->excludedMove = MOVE_NONE;
 
           if (value < singularBeta)
@@ -1609,7 +1608,7 @@ moves_loop: // When in check, search starts from here
           else if (ttValue >= beta)
           {
               ss->excludedMove = move;
-              value = search<NonPV>(pos, ss, beta - 1, beta, (depth + 3) / 2, cutNode);
+              value = search_impl<Logical, NonPV>(pos, ss, beta - 1, beta, (depth + 3) / 2, cutNode);
               ss->excludedMove = MOVE_NONE;
 
               if (value >= beta)
@@ -1734,7 +1733,7 @@ moves_loop: // When in check, search starts from here
           // to be searched deeper than the first move, unless ttMove was extended by 2.
           Depth d = std::clamp(newDepth - r, 1, newDepth + (r < -1 && moveCount <= 5 && !doubleExtension));
 
-          value = -search<NonPV>(pos, ss+1, -(alpha+1), -alpha, d, true);
+          value = -search_impl<Logical, NonPV>(pos, ss+1, -(alpha+1), -alpha, d, true);
 
           // If the son is reduced and fails high it will be re-searched at full depth
           doFullDepthSearch = value > alpha && d < newDepth;
@@ -1749,7 +1748,7 @@ moves_loop: // When in check, search starts from here
       // Step 17. Full depth search when LMR is skipped or fails high
       if (doFullDepthSearch)
       {
-          value = -search<NonPV>(pos, ss+1, -(alpha+1), -alpha, newDepth, !cutNode);
+          value = -search_impl<Logical, NonPV>(pos, ss+1, -(alpha+1), -alpha, newDepth, !cutNode);
 
           // If the move passed LMR update its stats
           if (didLMR && !captureOrPromotion)
@@ -1769,8 +1768,8 @@ moves_loop: // When in check, search starts from here
           (ss+1)->pv = pv;
           pv[0] = SearchMove(MOVE_NONE);
 
-          value = -search<PV>(pos, ss+1, -beta, -alpha,
-                              std::min(maxNextDepth, newDepth), false);
+          value = -search_impl<Logical, PV>(pos, ss+1, -beta, -alpha,
+                                            std::min(maxNextDepth, newDepth), false);
       }
 
       // Step 18. Undo move
@@ -1944,20 +1943,24 @@ moves_loop: // When in check, search starts from here
     return search_impl<false, nodeType>(pos, ss, alpha, beta, depth, cutNode);
   }
 
-  // qsearch() is the quiescence search function, which is called by the main search
-  // function with zero depth, or recursively with further decreasing depth per call.
-  template <NodeType nodeType>
-  Value qsearch(Position& pos, Stack* ss, Value alpha, Value beta, Depth depth) {
+  // qsearch_impl() is the quiescence search function, which is called by the
+  // main search function with zero depth, or recursively with further
+  // decreasing depth per call.
+  template <bool Logical, NodeType nodeType>
+  Value qsearch_impl(Position& pos, Stack* ss, Value alpha, Value beta, Depth depth) {
 
     static_assert(nodeType != Root);
     constexpr bool PvNode = nodeType == PV;
 
-    // A logical provider may expose only a static-evaluation qsearch. The
-    // variant setting remains an explicit override for providers that support
-    // both modes.
-    const LogicalMoveCapabilities moveCapabilities = pos.logical_move_capabilities();
-    if (moveCapabilities.quiescence == QuiescenceSupport::STATIC_ONLY
-        || pos.variant()->quiescencePolicy == QuiescencePolicy::STATIC_EVAL)
+    // A compound position exposes only static-evaluation qsearch. The variant
+    // setting remains an explicit override for providers that support both
+    // modes.
+    const bool logicalStaticOnly = [&] {
+        if constexpr (Logical)
+            return pos.logical_moves_active();
+        return false;
+    }();
+    if (logicalStaticOnly || pos.variant()->quiescencePolicy == QuiescencePolicy::STATIC_EVAL)
     {
         Value result;
         if (pos.is_game_end(result, ss->ply))
@@ -2164,7 +2167,7 @@ moves_loop: // When in check, search starts from here
 
       // Make and search the move
       pos.do_move(move, st);
-      value = -qsearch<nodeType>(pos, ss+1, -beta, -alpha, depth - 1);
+      value = -qsearch_impl<Logical, nodeType>(pos, ss+1, -beta, -alpha, depth - 1);
       pos.undo_move(move);
 
       assert(value > -VALUE_INFINITE && value < VALUE_INFINITE);

@@ -3019,7 +3019,12 @@ inline bool Position::sequential_setup_active() const {
   assert(var != nullptr);
   // Ordinary pocket contents do not suppress compound turns; only the
   // explicit sequential-setup rule does.
-  return var->sequentialSetup && (has_setup_drop(WHITE) || has_setup_drop(BLACK));
+  if (!var->sequentialSetup)
+      return false;
+  if (!var->freeDrops && !var->borrowOpponentDropsWhenEmpty
+      && count_in_hand(ALL_PIECES) == 0)
+      return false;
+  return has_setup_drop(WHITE) || has_setup_drop(BLACK);
 }
 
 inline Color Position::sequential_setup_side() const {

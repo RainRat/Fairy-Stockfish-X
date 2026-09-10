@@ -148,6 +148,10 @@ LogicalMoveSource::~LogicalMoveSource() {
 
 void LogicalMoveSource::initialize_frame(int frameDepth) {
   Frame& frame = frames[frameDepth];
+  frame.usedCost = frameDepth == 0
+                 ? 0
+                 : frames[frameDepth - 1].usedCost
+                 + compound_move_cost(pos, turn.components[frameDepth - 1]);
   if (!frame.moves)
   {
       if (thread)
@@ -226,12 +230,7 @@ bool LogicalMoveSource::next_impl(LogicalMove& move, LogicalMoveInfo* info) {
       if (depth != 0 && is_pass(component))
           continue;
 
-      const int usedSteps = [&] {
-          int result = 0;
-          for (int i = 0; i < depth; ++i)
-              result += compound_move_cost(pos, turn.components[i]);
-          return result;
-      }();
+      const int usedSteps = frame.usedCost;
       const int moveCost = compound_move_cost(pos, component);
       if (usedSteps + moveCost > pos.compound_turn_steps())
           continue;
