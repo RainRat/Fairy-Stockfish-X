@@ -1463,22 +1463,44 @@ bool Position::violates_same_player_board_repetition(Move m) const {
 
 bool Position::same_player_board_repetition_illegal(const StateInfo* previousSamePlayerPosition) const {
 
+  return same_player_board_repetition_illegal(st->layoutKey, st->pliesFromNull,
+                                              previousSamePlayerPosition);
+}
+
+bool Position::same_player_board_repetition_illegal(Key layoutKey, int pliesFromNull,
+                                                    const StateInfo* previousSamePlayerPosition) const {
+
   if (var->samePlayerBoardRepetitionIllegalAtN <= 0)
       return false;
 
   int repetitions = 0;
   int distance = 2;
   for (const StateInfo* previous = previousSamePlayerPosition;
-       previous && distance <= st->pliesFromNull;
+       previous && distance <= pliesFromNull;
        previous = previous->previous && previous->previous->previous
                 ? previous->previous->previous : nullptr,
        distance += 2)
-      if (previous->layoutKey == st->layoutKey
+      if (previous->layoutKey == layoutKey
           && ++repetitions >= var->samePlayerBoardRepetitionIllegalAtN)
           return true;
 
   return false;
 }
+
+#ifdef ENABLE_COMPOUND_TURNS
+bool Position::compound_turn_repetition_illegal(const StateInfo* previousSamePlayerPosition,
+                                                int additionalBoundaryPlies) const {
+
+  if (var->samePlayerBoardRepetitionIllegalAtN <= 0)
+      return false;
+
+  // Temporary components defer their layout key. The boundary probe only needs
+  // the current board layout and the completed-boundary ply count.
+  return same_player_board_repetition_illegal(layout_key(),
+                                              st->pliesFromNull + additionalBoundaryPlies,
+                                              previousSamePlayerPosition);
+}
+#endif
 
 
 /// Position::init() initializes at startup the various arrays used to compute hash keys
@@ -7634,7 +7656,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   do_component(m, newSt, countNode);
 }
 
-void Position::do_component(Move m, StateInfo& newSt, bool countNode) {
+void Position::do_component(Move m, StateInfo& newSt, bool countNode, bool updateLayoutKey) {
 
   assert(is_ok(m));
   assert(&newSt != st);
@@ -7658,6 +7680,18 @@ void Position::do_component(Move m, StateInfo& newSt, bool countNode) {
   if (compoundTurn)
       k ^= Zobrist::compoundTurn[st->compoundTurnStep]
          ^ Zobrist::compoundTurn[compoundTurnStep];
+
+  const bool skipCompoundCheckState = compoundTurn
+                                    && !var->checking
+                                    && var->kingType == NO_PIECE_TYPE
+                                    && !(var->pieceTypes & piece_set(KING))
+                                    && !var->pseudoRoyalTypes
+                                    && !var->antiRoyalTypes
+                                    && !var->bikjangRule
+                                    && !var->checkCounting
+                                    && !var->flagPieceSafe
+                                    && !var->chasingRule
+                                    && !var->blastPassiveTypes;
 #else
   Key k = st->key ^ Zobrist::side;
 #endif
@@ -9553,7 +9587,7 @@ void Position::do_component(Move m, StateInfo& newSt, bool countNode) {
   // Update the key with the final value
   st->key = k;
   st->boardKey = st->key ^ st->reserveKey;
-  if (var->samePlayerBoardRepetitionIllegalAtN > 0)
+  if (var->samePlayerBoardRepetitionIllegalAtN > 0 && updateLayoutKey)
       st->layoutKey = layout_key();
 #ifdef ENABLE_COMPOUND_TURNS
   if (compoundTurn && (componentRule50Reset || st->previous->compoundTurnReset))
@@ -9584,13 +9618,34 @@ void Position::do_component(Move m, StateInfo& newSt, bool countNode) {
   sideToMove = them;
 #endif
 
-  st->evasionCheckersBB = compute_evasion_checkers_bb(sideToMove);
+#ifdef ENABLE_COMPOUND_TURNS
+  if (skipCompoundCheckState)
+  {
+      st->evasionCheckersBB = 0;
+      st->checkersBB = 0;
+      st->blockersForKing[WHITE] = st->blockersForKing[BLACK] = 0;
+      st->pinners[WHITE] = st->pinners[BLACK] = 0;
+      std::fill_n(st->checkSquares, PIECE_TYPE_NB, Bitboard(0));
+      st->nonSlidingRiders = 0;
+      st->pseudoRoyalCandidates = 0;
+      st->pseudoRoyals = 0;
+      st->shak = false;
+      st->bikjang = false;
+      st->chased = 0;
+      st->legalCapture = NO_VALUE;
+      st->legalEnPassant = NO_VALUE;
+  }
+  else
+#endif
+  {
+      st->evasionCheckersBB = compute_evasion_checkers_bb(sideToMove);
 
-  // Rebuild the derived check info before broad royal-danger checks.  The
-  // latter includes pseudo-/anti-royals, whose status can change when a move
-  // adds, removes, or transforms a piece (notably on clone moves).
-  set_check_info(st);
-  st->checkersBB = compute_checkers_bb(sideToMove);
+      // Rebuild the derived check info before broad royal-danger checks.  The
+      // latter includes pseudo-/anti-royals, whose status can change when a move
+      // adds, removes, or transforms a piece (notably on clone moves).
+      set_check_info(st);
+      st->checkersBB = compute_checkers_bb(sideToMove);
+  }
 
   if (first_move_lose_on_check() && st->checkersBB)
       for (PieceSet ps = piece_types(); ps;)

@@ -819,6 +819,10 @@ public:
   // previousSamePlayerPosition is the nearest persistent position with the
   // same side to move; earlier same-player positions are linked at stride two.
   bool same_player_board_repetition_illegal(const StateInfo* previousSamePlayerPosition) const;
+#ifdef ENABLE_COMPOUND_TURNS
+  bool compound_turn_repetition_illegal(const StateInfo* previousSamePlayerPosition,
+                                        int additionalBoundaryPlies) const;
+#endif
   bool has_setup_drop(Color c) const;
   bool sequential_setup_active() const;
   Color sequential_setup_side() const;
@@ -1074,8 +1078,10 @@ public:
 
   // Doing and undoing moves
   // do_component() is the internal physical-step operation used by the
-  // logical-move executor. Ordinary callers must use do_move().
-  void do_component(Move m, StateInfo& newSt, bool countNode = true);
+  // logical-move executor. Ordinary callers must use do_move(). Temporary
+  // compound components may defer layout-key calculation until acceptance.
+  void do_component(Move m, StateInfo& newSt, bool countNode = true,
+                    bool updateLayoutKey = true);
   void undo_component(Move m);
   void do_move(Move m, StateInfo& newSt, bool countNode = true);
   void undo_move(Move m);
@@ -1181,6 +1187,8 @@ private:
   bool compute_forced_jump_followup(Square s, int step = 0) const;
   Key layout_key() const;
   bool violates_same_player_board_repetition(Move m) const;
+  bool same_player_board_repetition_illegal(Key layoutKey, int pliesFromNull,
+                                            const StateInfo* previousSamePlayerPosition) const;
   Key reserve_key() const;
   std::array<Bitboard, COLOR_NB> passive_blast_burners(Bitboard occupied) const;
   Bitboard passive_blast_removal_mask(const std::array<Bitboard, COLOR_NB>& burners, Bitboard occupied) const;

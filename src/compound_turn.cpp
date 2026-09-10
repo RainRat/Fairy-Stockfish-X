@@ -28,17 +28,75 @@ bool compound_turn_candidate_accepted(Position& pos, Move move, int usedSteps,
     const int moveCost = compound_move_cost(pos, move);
     bool repetitionIllegal = false;
     if (!is_pass(move) && usedSteps + moveCost < pos.compound_turn_steps())
-    {
-        StateInfo boundaryState;
-        pos.end_compound_turn(boundaryState);
-        repetitionIllegal = pos.same_player_board_repetition_illegal(logicalRoot->previous);
-        pos.undo_compound_turn();
-    }
+        repetitionIllegal = pos.compound_turn_repetition_illegal(logicalRoot->previous, 1);
     else
-        repetitionIllegal = pos.same_player_board_repetition_illegal(logicalRoot->previous);
+        repetitionIllegal = pos.compound_turn_repetition_illegal(logicalRoot->previous, 0);
 
     return (is_pass(move) || pos.compound_turn_boundary_key() != startBoundaryKey)
         && !repetitionIllegal;
+}
+
+template<GenType Type>
+bool has_accepted_compound_move(Position& pos, LogicalMoveState& transaction,
+                                Key startBoundaryKey, const StateInfo* logicalRoot) {
+
+    for (const auto& move : MoveList<Type>(pos))
+    {
+        if (!pos.legal(move) || pos.virtual_drop(move))
+            continue;
+
+        if (is_pass(move))
+            return true;
+
+        pos.do_component(move, transaction.components[0], false, false);
+        const bool accepted = compound_turn_candidate_accepted(pos, move, 0,
+                                                                startBoundaryKey,
+                                                                logicalRoot);
+        pos.undo_component(move);
+        if (accepted)
+            return true;
+    }
+
+    return false;
+}
+
+bool has_accepted_normal_compound_move(Position& pos, LogicalMoveState& transaction,
+                                       Key startBoundaryKey, const StateInfo* logicalRoot) {
+
+    if (pos.in_opening_self_removal_phase())
+        return false;
+
+    const Color us = pos.side_to_move();
+    const Bitboard occupied = pos.pieces();
+    const Bitboard board = pos.board_bb();
+    const Bitboard frozen = pos.freeze_squares();
+
+    for (PieceSet ps = pos.piece_types(); ps; )
+    {
+        const PieceType pt = pop_lsb(ps);
+        Bitboard pieces = pos.pieces(us, pt) & ~frozen;
+        while (pieces)
+        {
+            const Square from = pop_lsb(pieces);
+            Bitboard targets = pos.moves_from(us, pt, from) & board & ~occupied;
+            while (targets)
+            {
+                const Move move = make<NORMAL>(from, pop_lsb(targets));
+                if (!pos.legal(move) || pos.virtual_drop(move))
+                    continue;
+
+                pos.do_component(move, transaction.components[0], false, false);
+                const bool accepted = compound_turn_candidate_accepted(pos, move, 0,
+                                                                        startBoundaryKey,
+                                                                        logicalRoot);
+                pos.undo_component(move);
+                if (accepted)
+                    return true;
+            }
+        }
+    }
+
+    return false;
 }
 
 void record_removed_piece(LogicalMoveInfo& info, Piece piece, Color mover) {
@@ -63,9 +121,9 @@ std::string compound_step_to_string(Position& pos, Move move) {
 
 } // namespace
 
-LogicalMoveSource::LogicalMoveSource(Position& pos_, Thread* thread_,
-                                     LogicalMoveState& transaction_)
-    : pos(pos_), thread(thread_), transaction(transaction_) {
+LogicalMoveSource::LogicalMoveSource(Position& pos_, Thread* /*thread*/,
+                                     LogicalMoveState& transaction_, bool checkGameEnd)
+    : pos(pos_), transaction(transaction_) {
 
   if (!pos.compound_turn_active())
   {
@@ -74,7 +132,7 @@ LogicalMoveSource::LogicalMoveSource(Position& pos_, Thread* thread_,
   }
 
   Value result;
-  if (pos.is_game_end(result))
+  if (checkGameEnd && pos.is_game_end(result))
   {
       finished = true;
       return;
@@ -85,30 +143,20 @@ LogicalMoveSource::LogicalMoveSource(Position& pos_, Thread* thread_,
 LogicalMoveSource::~LogicalMoveSource() = default;
 
 void LogicalMoveSource::initialize_frame(int frameDepth) {
-  ExtMove* scratch = nullptr;
-  std::unique_ptr<ExtMove[]> ownedScratch;
-  if (thread)
-      scratch = thread->acquire_buffer();
-  else
-  {
-      ownedScratch = std::make_unique<ExtMove[]>(MOVEGEN_OVERFLOW_CAPACITY);
-      scratch = ownedScratch.get();
-  }
-
   Frame& frame = frames[frameDepth];
-  ExtMove* end = generate<LEGAL>(pos, scratch);
-  assert(end - scratch <= MOVEGEN_OVERFLOW_CAPACITY);
-  frame.moves.assign(scratch, end);
-  frame.current = frame.moves.data();
-  frame.end = frame.current + frame.moves.size();
+  if (!frame.moves)
+      frame.moves = std::make_unique<ExtMove[]>(MOVEGEN_OVERFLOW_CAPACITY);
 
-  if (thread)
-      thread->release_buffer(scratch);
+  ExtMove* begin = frame.moves.get();
+  ExtMove* end = generate<LEGAL>(pos, begin);
+  assert(end - begin <= MOVEGEN_OVERFLOW_CAPACITY);
+  frame.current = begin;
+  frame.end = end;
 }
 
 void LogicalMoveSource::apply_path(int length) {
   for (int i = 0; i < length; ++i)
-      pos.do_component(turn.components[i], transaction.components[i], false);
+      pos.do_component(turn.components[i], transaction.components[i], false, false);
 }
 
 void LogicalMoveSource::undo_path(int length) {
@@ -118,11 +166,15 @@ void LogicalMoveSource::undo_path(int length) {
 
 bool LogicalMoveSource::next(LogicalMove& move) {
 
-  LogicalMoveInfo info;
-  return next(move, info);
+  return next_impl(move, nullptr);
 }
 
 bool LogicalMoveSource::next(LogicalMove& move, LogicalMoveInfo& info) {
+
+  return next_impl(move, &info);
+}
+
+bool LogicalMoveSource::next_impl(LogicalMove& move, LogicalMoveInfo* info) {
 
   if (finished)
       return false;
@@ -175,38 +227,42 @@ bool LogicalMoveSource::next(LogicalMove& move, LogicalMoveInfo& info) {
       turn.components[depth] = component;
       turn.length = uint8_t(depth + 1);
       LogicalMoveInfo candidateInfo;
-      candidateInfo.representative = turn.first();
-      candidateInfo.movedPiece = pos.moved_piece(turn.components[0]);
-      candidateInfo.historyCompatible = turn.is_single();
-      candidateInfo.seeReliable = turn.is_single()
-                               && !pos.see_pruning_unreliable(turn.components[0]);
-      candidateInfo.givesCheck = turn.is_single() && pos.gives_check(turn.components[0]);
       const Color mover = pos.side_to_move();
       apply_path(depth + 1);
 
-      for (int i = 0; i <= depth; ++i)
+      if (info)
       {
-          const StateInfo& componentState = transaction.components[i];
-          record_removed_piece(candidateInfo, componentState.captured.piece.piece, mover);
-          record_removed_piece(candidateInfo, componentState.jumpedEnPassantCaptured.piece.piece, mover);
-          record_removed_piece(candidateInfo, componentState.dead.piece, mover);
+          candidateInfo.representative = turn.first();
+          candidateInfo.movedPiece = pos.moved_piece(turn.components[0]);
+          candidateInfo.historyCompatible = turn.is_single();
+          candidateInfo.seeReliable = turn.is_single()
+                                   && !pos.see_pruning_unreliable(turn.components[0]);
+          candidateInfo.givesCheck = turn.is_single() && pos.gives_check(turn.components[0]);
 
-          Bitboard removed = componentState.bycatchSquares
-                           & ~componentState.blastPromotedSquares
-                           & ~componentState.laserTransformedSquares;
-          while (removed)
+          for (int i = 0; i <= depth; ++i)
           {
-              Square square = pop_lsb(removed);
-              record_removed_piece(candidateInfo, componentState.bycatchPieces[square].piece(), mover);
+              const StateInfo& componentState = transaction.components[i];
+              record_removed_piece(candidateInfo, componentState.captured.piece.piece, mover);
+              record_removed_piece(candidateInfo, componentState.jumpedEnPassantCaptured.piece.piece, mover);
+              record_removed_piece(candidateInfo, componentState.dead.piece, mover);
+
+              Bitboard removed = componentState.bycatchSquares
+                               & ~componentState.blastPromotedSquares
+                               & ~componentState.laserTransformedSquares;
+              while (removed)
+              {
+                  Square square = pop_lsb(removed);
+                  record_removed_piece(candidateInfo, componentState.bycatchPieces[square].piece(), mover);
+              }
+
+              for (int transfer = 0; transfer < componentState.push.transferCount; ++transfer)
+                  record_removed_piece(candidateInfo, componentState.push.transfers[transfer].piece, mover);
+
+              candidateInfo.promotionLike = candidateInfo.promotionLike
+                                          || is_promotion_move(turn.components[i])
+                                          || componentState.promotionPawn != NO_PIECE
+                                          || componentState.consumedPromotionHandPiece != NO_PIECE;
           }
-
-          for (int transfer = 0; transfer < componentState.push.transferCount; ++transfer)
-              record_removed_piece(candidateInfo, componentState.push.transfers[transfer].piece, mover);
-
-          candidateInfo.promotionLike = candidateInfo.promotionLike
-                                      || is_promotion_move(turn.components[i])
-                                      || componentState.promotionPawn != NO_PIECE
-                                      || componentState.consumedPromotionHandPiece != NO_PIECE;
       }
 
       const bool accepted = compound_turn_candidate_accepted(pos, component, usedSteps,
@@ -221,7 +277,8 @@ bool LogicalMoveSource::next(LogicalMove& move, LogicalMoveInfo& info) {
       if (accepted)
       {
           move = turn;
-          info = candidateInfo;
+          if (info)
+              *info = candidateInfo;
           return true;
       }
   }
@@ -238,7 +295,7 @@ std::vector<LogicalMove> generate_compound_moves(Position& pos) {
       return turns;
 
   LogicalMoveState transaction;
-  LogicalMoveSource source(pos, pos.this_thread(), transaction);
+  LogicalMoveSource source(pos, pos.this_thread(), transaction, false);
   LogicalMove turn;
   while (source.next(turn))
       turns.push_back(turn);
@@ -255,9 +312,20 @@ bool has_any_compound_move(Position& pos) {
       return false;
 
   LogicalMoveState transaction;
-  LogicalMoveSource source(pos, pos.this_thread(), transaction);
-  LogicalMove turn;
-  return source.next(turn);
+  const Key startBoundaryKey = pos.compound_turn_boundary_key();
+  const StateInfo* logicalRoot = pos.state();
+
+  if (has_accepted_normal_compound_move(pos, transaction, startBoundaryKey, logicalRoot))
+      return true;
+
+  const bool useWrappedFallback = pos.topology_wraps() && pos.evasion_checkers();
+  const bool useNonEvasions = pos.anti_royal_types() || useWrappedFallback;
+  if (pos.evasion_checkers() && !useNonEvasions)
+      return has_accepted_compound_move<EVASIONS>(pos, transaction,
+                                                  startBoundaryKey, logicalRoot);
+
+  return has_accepted_compound_move<CAPTURES>(pos, transaction, startBoundaryKey, logicalRoot)
+      || has_accepted_compound_move<QUIETS>(pos, transaction, startBoundaryKey, logicalRoot);
 }
 
 bool parse_compound_move(Position& pos, const std::string& text, LogicalMove& turn) {

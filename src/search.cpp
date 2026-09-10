@@ -1353,8 +1353,11 @@ moves_loop: // When in check, search starts from here
       // Move List. As a consequence any illegal move is also skipped. In MultiPV
       // mode we also skip PV moves which have been already searched and those
       // of lower "TB rank" if we are in a TB root position.
-      if (rootNode && !std::count(thisThread->rootMoves.begin() + thisThread->pvIdx,
-                                  thisThread->rootMoves.begin() + thisThread->pvLast, logicalMove))
+      // Logical root moves are selected directly from rootMoves, so this
+      // membership check is only needed for the ordinary MovePicker path.
+      if (rootNode && !logicalMovePosition
+          && !std::count(thisThread->rootMoves.begin() + thisThread->pvIdx,
+                         thisThread->rootMoves.begin() + thisThread->pvLast, logicalMove))
           continue;
 
       // Check for legality
@@ -1695,8 +1698,12 @@ moves_loop: // When in check, search starts from here
 
       if (rootNode)
       {
-          RootMove& rm = *std::find(thisThread->rootMoves.begin(),
-                                    thisThread->rootMoves.end(), logicalMove);
+          RootMove& rm =
+#ifdef ENABLE_COMPOUND_TURNS
+              logicalMovePosition ? thisThread->rootMoves[rootMoveIndex - 1] :
+#endif
+              *std::find(thisThread->rootMoves.begin(),
+                         thisThread->rootMoves.end(), logicalMove);
 
           // PV move or new best move?
           if (moveCount == 1 || value > alpha)
