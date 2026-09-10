@@ -43,12 +43,13 @@ class LogicalMoveSource {
   bool next_impl(LogicalMove& move, LogicalMoveInfo* info);
 
   struct Frame {
-      std::unique_ptr<ExtMove[]> ownedMoves;
-      ExtMove* moves = nullptr;
-      ExtMove* current = nullptr;
-      ExtMove* end = nullptr;
+      std::vector<Move> moves;
+      size_t current = 0;
       int usedCost = 0;
   };
+
+  std::unique_ptr<ExtMove[]> ownedMoves;
+  ExtMove* moveBuffer = nullptr;
 
   void initialize_frame(int depth);
   void apply_path(int length);

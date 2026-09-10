@@ -36,69 +36,6 @@ bool compound_turn_candidate_accepted(Position& pos, Move move, int usedSteps,
         && !repetitionIllegal;
 }
 
-template<GenType Type>
-bool has_accepted_compound_move(Position& pos, LogicalMoveState& transaction,
-                                Key startBoundaryKey, const StateInfo* logicalRoot) {
-
-    for (const auto& move : MoveList<Type>(pos))
-    {
-        if (!pos.legal(move) || pos.virtual_drop(move))
-            continue;
-
-        if (is_pass(move))
-            return true;
-
-        pos.do_component(move, transaction.components[0], false, false);
-        const bool accepted = compound_turn_candidate_accepted(pos, move, 0,
-                                                                startBoundaryKey,
-                                                                logicalRoot);
-        pos.undo_component(move);
-        if (accepted)
-            return true;
-    }
-
-    return false;
-}
-
-bool has_accepted_normal_compound_move(Position& pos, LogicalMoveState& transaction,
-                                       Key startBoundaryKey, const StateInfo* logicalRoot) {
-
-    if (pos.in_opening_self_removal_phase())
-        return false;
-
-    const Color us = pos.side_to_move();
-    const Bitboard occupied = pos.pieces();
-    const Bitboard board = pos.board_bb();
-    const Bitboard frozen = pos.freeze_squares();
-
-    for (PieceSet ps = pos.piece_types(); ps; )
-    {
-        const PieceType pt = pop_lsb(ps);
-        Bitboard pieces = pos.pieces(us, pt) & ~frozen;
-        while (pieces)
-        {
-            const Square from = pop_lsb(pieces);
-            Bitboard targets = pos.moves_from(us, pt, from) & board & ~occupied;
-            while (targets)
-            {
-                const Move move = make<NORMAL>(from, pop_lsb(targets));
-                if (!pos.legal(move) || pos.virtual_drop(move))
-                    continue;
-
-                pos.do_component(move, transaction.components[0], false, false);
-                const bool accepted = compound_turn_candidate_accepted(pos, move, 0,
-                                                                        startBoundaryKey,
-                                                                        logicalRoot);
-                pos.undo_component(move);
-                if (accepted)
-                    return true;
-            }
-        }
-    }
-
-    return false;
-}
-
 void record_removed_piece(LogicalMoveInfo& info, Piece piece, Color mover) {
     if (piece == NO_PIECE)
         return;
@@ -142,8 +79,7 @@ LogicalMoveSource::LogicalMoveSource(Position& pos_, Thread* thread_,
 
 LogicalMoveSource::~LogicalMoveSource() {
   if (thread)
-      for (Frame& frame : frames)
-          thread->release_buffer(frame.moves);
+      thread->release_buffer(moveBuffer);
 }
 
 void LogicalMoveSource::initialize_frame(int frameDepth) {
@@ -152,22 +88,24 @@ void LogicalMoveSource::initialize_frame(int frameDepth) {
                  ? 0
                  : frames[frameDepth - 1].usedCost
                  + compound_move_cost(pos, turn.components[frameDepth - 1]);
-  if (!frame.moves)
   {
-      if (thread)
-          frame.moves = thread->acquire_buffer();
-      else
+      if (!moveBuffer)
       {
-          frame.ownedMoves = std::make_unique<ExtMove[]>(MOVEGEN_OVERFLOW_CAPACITY);
-          frame.moves = frame.ownedMoves.get();
+          if (thread)
+              moveBuffer = thread->acquire_buffer();
+          else
+          {
+              ownedMoves = std::make_unique<ExtMove[]>(MOVEGEN_OVERFLOW_CAPACITY);
+              moveBuffer = ownedMoves.get();
+          }
       }
-  }
 
-  ExtMove* begin = frame.moves;
-  ExtMove* end = generate<LEGAL>(pos, begin);
-  assert(end - begin <= MOVEGEN_OVERFLOW_CAPACITY);
-  frame.current = begin;
-  frame.end = end;
+      ExtMove* begin = moveBuffer;
+      ExtMove* end = generate<LEGAL>(pos, begin);
+      assert(end - begin <= MOVEGEN_OVERFLOW_CAPACITY);
+      frame.moves.assign(begin, end);
+  }
+  frame.current = 0;
 }
 
 void LogicalMoveSource::apply_path(int length) {
@@ -215,7 +153,7 @@ bool LogicalMoveSource::next_impl(LogicalMove& move, LogicalMoveInfo* info) {
       }
 
       Frame& frame = frames[depth];
-      if (frame.current == frame.end)
+      if (frame.current == frame.moves.size())
       {
           if (depth == 0)
           {
@@ -226,7 +164,7 @@ bool LogicalMoveSource::next_impl(LogicalMove& move, LogicalMoveInfo* info) {
           continue;
       }
 
-      const Move component = *frame.current++;
+      const Move component = frame.moves[frame.current++];
       if (depth != 0 && is_pass(component))
           continue;
 
@@ -325,20 +263,9 @@ bool has_any_compound_move(Position& pos) {
       return false;
 
   LogicalMoveState transaction;
-  const Key startBoundaryKey = pos.compound_turn_boundary_key();
-  const StateInfo* logicalRoot = pos.state();
-
-  if (has_accepted_normal_compound_move(pos, transaction, startBoundaryKey, logicalRoot))
-      return true;
-
-  const bool useWrappedFallback = pos.topology_wraps() && pos.evasion_checkers();
-  const bool useNonEvasions = pos.anti_royal_types() || useWrappedFallback;
-  if (pos.evasion_checkers() && !useNonEvasions)
-      return has_accepted_compound_move<EVASIONS>(pos, transaction,
-                                                  startBoundaryKey, logicalRoot);
-
-  return has_accepted_compound_move<CAPTURES>(pos, transaction, startBoundaryKey, logicalRoot)
-      || has_accepted_compound_move<QUIETS>(pos, transaction, startBoundaryKey, logicalRoot);
+  LogicalMoveSource source(pos, pos.this_thread(), transaction, false);
+  LogicalMove move;
+  return source.next(move);
 }
 
 bool parse_compound_move(Position& pos, const std::string& text, LogicalMove& turn) {

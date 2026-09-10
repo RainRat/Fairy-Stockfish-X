@@ -890,7 +890,11 @@ namespace {
         return false;
     }();
     ss->inCheck        = pos.evasion_checkers();
-    priorCapture       = (ss-1)->currentMoveCapturedOpponent;
+    priorCapture       = [&] {
+        if constexpr (Logical)
+            return (ss-1)->currentMoveCapturedOpponent;
+        return bool(pos.captured_piece());
+    }();
     Color us           = pos.side_to_move();
     moveCount          = captureCount = quietCount = ss->moveCount = 0;
     bestValue          = -VALUE_INFINITE;
@@ -1634,7 +1638,8 @@ moves_loop: // When in check, search starts from here
       // Speculative prefetch as early as possible
       // Update the current move (this must be done after singular extension search)
       ss->currentMoveHistoryCompatible = moveInfo.historyCompatible;
-      ss->currentMoveCapturedOpponent = moveInfo.capturesOpponent;
+      ss->currentMoveCapturedOpponent = Logical ? moveInfo.capturesOpponent
+                                                : moveInfo.removesMaterial;
       ss->currentMove = moveInfo.historyCompatible ? move : MOVE_NONE;
       ss->currentMovePiece = moveInfo.historyCompatible ? movedPiece : NO_PIECE;
       ss->continuationHistory = moveInfo.historyCompatible
@@ -1952,15 +1957,12 @@ moves_loop: // When in check, search starts from here
     static_assert(nodeType != Root);
     constexpr bool PvNode = nodeType == PV;
 
-    // A compound position exposes only static-evaluation qsearch. The variant
-    // setting remains an explicit override for providers that support both
-    // modes.
-    const bool logicalStaticOnly = [&] {
+    const bool providerStaticOnly = [&] {
         if constexpr (Logical)
-            return pos.logical_moves_active();
+            return pos.logical_move_capabilities().quiescence == QuiescenceSupport::STATIC_ONLY;
         return false;
     }();
-    if (logicalStaticOnly || pos.variant()->quiescencePolicy == QuiescencePolicy::STATIC_EVAL)
+    if (providerStaticOnly || pos.variant()->quiescencePolicy == QuiescencePolicy::STATIC_EVAL)
     {
         Value result;
         if (pos.is_game_end(result, ss->ply))

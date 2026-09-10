@@ -1380,10 +1380,6 @@ Key Position::layout_key() const {
   return k;
 }
 
-Key Position::board_layout_key() const {
-  return layout_key();
-}
-
 #ifdef ENABLE_COMPOUND_TURNS
 Key Position::compound_turn_boundary_key() const {
   Key key = st->key ^ (sideToMove == BLACK ? Zobrist::side : 0);
@@ -10334,8 +10330,8 @@ void Position::undo_compound_turn() {
   st = st->previous;
 }
 
-void Position::do_logical_move(const LogicalMove& move, StateInfo& newSt,
-                               LogicalMoveState& transaction, bool countNode) {
+void Position::do_move(const LogicalMove& move, StateInfo& newSt,
+                       LogicalMoveState& transaction, bool countNode) {
 
   assert(compound_turn_active());
   assert(at_complete_turn_boundary());
@@ -10380,12 +10376,7 @@ void Position::do_logical_move(const LogicalMove& move, StateInfo& newSt,
   update_repetition_info();
 }
 
-void Position::do_move(const LogicalMove& move, StateInfo& newSt,
-                       LogicalMoveState& transaction, bool countNode) {
-  do_logical_move(move, newSt, transaction, countNode);
-}
-
-void Position::undo_logical_move(const LogicalMove& move, LogicalMoveState& transaction) {
+void Position::undo_move(const LogicalMove& move, LogicalMoveState& transaction) {
 
   assert(transaction.previous != nullptr);
   assert(move.length > 0 && move.length <= LogicalMove::MAX_COMPONENTS);
@@ -10403,10 +10394,6 @@ void Position::undo_logical_move(const LogicalMove& move, LogicalMoveState& tran
       undo_component(move.components[i]);
 
   assert(st == transaction.previous);
-}
-
-void Position::undo_move(const LogicalMove& move, LogicalMoveState& transaction) {
-  undo_logical_move(move, transaction);
 }
 
 #endif // ENABLE_COMPOUND_TURNS
