@@ -220,7 +220,13 @@ void ThreadPool::start_thinking(Position& pos, StateListPtr& states,
   const bool filterLaserRotations = limits.perft == 0;
   pos.set_search_laser_rotation_filter(filterLaserRotations);
 #ifdef ENABLE_COMPOUND_TURNS
-  if (pos.compound_turn_active())
+  const bool streamCompoundRoot = pos.compound_turn_active()
+                               && int(Options["MultiPV"]) == 1
+                               && int(Options["Skill Level"]) >= 20
+                               && !bool(Options["UCI_LimitStrength"])
+                               && !limits.searchMovesSpecified
+                               && limits.banmoves.empty();
+  if (pos.compound_turn_active() && !streamCompoundRoot)
   {
       LogicalMoveState transaction;
       LogicalMoveSource source(pos, pos.this_thread(), transaction);
@@ -235,14 +241,16 @@ void ThreadPool::start_thinking(Position& pos, StateListPtr& states,
               rootMoves.emplace_back(m, info);
           source.undo_applied();
       }
-
   }
-  else
 #endif
-  for (const auto& m : MoveList<LEGAL>(pos))
-      if (   (!limits.searchMovesSpecified || std::count(limits.searchmoves.begin(), limits.searchmoves.end(), m))
-          && (limits.banmoves.empty() || !std::count(limits.banmoves.begin(), limits.banmoves.end(), m)))
-          rootMoves.emplace_back(m);
+  if (!pos.compound_turn_active())
+      for (const auto& m : MoveList<LEGAL>(pos))
+          if (   (!limits.searchMovesSpecified || std::count(limits.searchmoves.begin(), limits.searchmoves.end(), m))
+              && (limits.banmoves.empty() || !std::count(limits.banmoves.begin(), limits.banmoves.end(), m)))
+              rootMoves.emplace_back(m);
+#ifndef ENABLE_COMPOUND_TURNS
+  const bool streamCompoundRoot = false;
+#endif
   pos.set_search_laser_rotation_filter(false);
 
   // Add virtual drops
@@ -272,7 +280,7 @@ void ThreadPool::start_thinking(Position& pos, StateListPtr& states,
       Tablebases::rank_root_moves(pos, rootMoves);
 
   // Search code assumes a root move entry exists even for terminal positions.
-  if (rootMoves.empty())
+  if (rootMoves.empty() && !streamCompoundRoot)
       rootMoves.emplace_back(MOVE_NONE);
 
   const std::string rootFen = pos.fen();
