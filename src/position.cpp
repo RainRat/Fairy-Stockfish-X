@@ -11086,6 +11086,11 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
 
   const bool adjudicationBoundary = at_complete_turn_boundary();
   const Color mover = ~sideToMove;
+  const bool whiteFlagReached = adjudicationBoundary && flag_reached(WHITE);
+  const bool blackFlagReached = adjudicationBoundary && flag_reached(BLACK);
+  const auto flag_reached_at_boundary = [&](Color c) {
+      return c == WHITE ? whiteFlagReached : blackFlagReached;
+  };
 
   auto value_by_mover = [&](Value value) {
       return convert_mate_value(-value, ply);
@@ -11098,12 +11103,12 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
       // retains the established flagMove semantics for other variants.
       if (var->simulFlagExtinctionPriority == SimulFlagExtinctionPriority::FLAG)
       {
-          if (flag_reached(mover))
+          if (flag_reached_at_boundary(mover))
           {
               flagResult = mated_in(ply);
               return true;
           }
-          if (flag_reached(sideToMove))
+          if (flag_reached_at_boundary(sideToMove))
           {
               flagResult = mate_in(ply);
               return true;
@@ -11112,9 +11117,9 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
 
       // A flag win by the side to move is only possible if flagMove is enabled
       // and they already reached the flag region the move before.
-      if (flag_move() && flag_reached(sideToMove))
+      if (flag_move() && flag_reached_at_boundary(sideToMove))
       {
-          flagResult = sideToMove == WHITE && flag_reached(BLACK) ? VALUE_DRAW : mate_in(ply);
+          flagResult = sideToMove == WHITE && blackFlagReached ? VALUE_DRAW : mate_in(ply);
           return true;
       }
 
@@ -11122,7 +11127,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
       // flag move, or we can detect early for kings that they cannot reach the
       // flag region. This check remains an immediate rule at the turn boundary.
       if ((!flag_move() || (flag_piece_types(sideToMove) == piece_set(KING) && !allow_checks()))
-          && flag_reached(mover))
+          && flag_reached_at_boundary(mover))
       {
           bool gameEnd = true;
           if (flag_move() && sideToMove == BLACK && !evasion_checkers() && count<KING>(sideToMove)
@@ -11183,18 +11188,19 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
   Value flagResult = VALUE_NONE;
   Value extinctionResult = VALUE_NONE;
   const bool flagEnd = adjudicationBoundary && flag_game_end(flagResult);
-  const bool extinctionEnd = adjudicationBoundary
-                          && (extinction_reached(WHITE) || extinction_reached(BLACK));
+  const bool whiteExtinct = adjudicationBoundary && extinction_reached(WHITE);
+  const bool blackExtinct = adjudicationBoundary && extinction_reached(BLACK);
+  const bool extinctionEnd = whiteExtinct || blackExtinct;
 
   if (extinctionEnd)
   {
-      Color c = extinction_reached(mover) ? mover : sideToMove;
+      Color c = mover == WHITE ? whiteExtinct ? WHITE : BLACK
+                               : blackExtinct ? BLACK : WHITE;
       extinctionResult = c == sideToMove ? extinction_value(c, ply) : -extinction_value(c, ply);
   }
 
-  const bool bothFlags = flag_reached(WHITE) && flag_reached(BLACK);
-  const bool bothExtinct = adjudicationBoundary
-                        && extinction_reached(WHITE) && extinction_reached(BLACK);
+  const bool bothFlags = whiteFlagReached && blackFlagReached;
+  const bool bothExtinct = whiteExtinct && blackExtinct;
   const bool bothGoals = flagEnd && extinctionEnd;
   if (bothGoals)
   {
