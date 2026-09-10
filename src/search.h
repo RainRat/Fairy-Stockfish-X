@@ -48,8 +48,10 @@ struct Stack {
   int ply;
   Move currentMove;
   Piece currentMovePiece;
+#ifdef ENABLE_COMPOUND_TURNS
   bool currentMoveHistoryCompatible;
   bool currentMoveCapturedOpponent;
+#endif
   Move excludedMove;
   Move killers[2];
   Value staticEval;
