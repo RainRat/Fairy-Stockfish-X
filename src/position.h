@@ -1116,9 +1116,6 @@ public:
   void do_move(const LogicalMove& move, StateInfo& newSt,
                LogicalMoveState& transaction, bool countNode = true);
   void undo_move(const LogicalMove& move, LogicalMoveState& transaction);
-  void do_logical_move(const LogicalMove& move, StateInfo& newSt,
-                       LogicalMoveState& transaction, bool countNode = true);
-  void undo_logical_move(const LogicalMove& move, LogicalMoveState& transaction);
   void end_compound_turn(StateInfo& newSt);
   void undo_compound_turn();
 #endif
@@ -1143,7 +1140,6 @@ public:
   // Accessing hash keys
   Key key() const;
   Key key_after(Move m) const;
-  Key board_layout_key() const;
 #ifdef ENABLE_COMPOUND_TURNS
   // Position identity with the side-to-move bit normalized for turn-boundary
   // comparisons. Boundary checks still include reserves and other hashed rule state.
