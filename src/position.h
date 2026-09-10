@@ -42,6 +42,15 @@
 
 namespace Stockfish {
 
+#ifdef ENABLE_COMPOUND_TURNS
+class Position;
+struct StateInfo;
+namespace CompoundTurn {
+void do_component(Position&, Move, StateInfo&, bool, bool);
+void undo_component(Position&, Move);
+}
+#endif
+
 constexpr int MAX_PUSH_SNAPSHOT = 32;
 
 extern Square JumpMidpoint[SQUARE_NB][SQUARE_NB];
@@ -330,9 +339,6 @@ struct StateInfoDerived {
   bool       shak;
   bool       bikjang;
   Move       move = MOVE_NONE;
-#ifdef ENABLE_COMPOUND_TURNS
-  LogicalMove logicalMove;
-#endif
   bool       pendingClaimPass = false;
   OptBool    legalCapture = NO_VALUE;
   OptBool    legalEnPassant = NO_VALUE;
@@ -1076,25 +1082,12 @@ public:
   int  pawns_on_same_color_squares(Color c, Square s) const;
 
   // Doing and undoing moves
-  // do_component() is the internal physical-step operation used by the
-  // logical-move executor. Ordinary callers must use do_move(). Temporary
-  // compound components may defer layout-key calculation until acceptance.
-  template<bool Compound>
-  void do_component_impl(Move m, StateInfo& newSt, bool countNode,
-                         bool updateLayoutKey);
-  void do_component(Move m, StateInfo& newSt, bool countNode = true,
-                    bool updateLayoutKey = true);
-  template<bool Compound>
-  void undo_component_impl(Move m);
-  void undo_component(Move m);
   void do_move(Move m, StateInfo& newSt, bool countNode = true);
   void undo_move(Move m);
 #ifdef ENABLE_COMPOUND_TURNS
   void do_move(const LogicalMove& move, StateInfo& newSt,
                LogicalMoveState& transaction, bool countNode = true);
   void undo_move(const LogicalMove& move, LogicalMoveState& transaction);
-  void end_compound_turn(StateInfo& newSt);
-  void undo_compound_turn();
 #endif
   void fire_laser(Color us, Key& k, Square selectedEmitter = SQ_NONE);
   Bitboard laser_rotation_candidates(Color us) const;
@@ -1174,6 +1167,21 @@ public:
   void remove_piece(Square s);
 
 private:
+  template<bool Compound>
+  void do_component_impl(Move m, StateInfo& newSt, bool countNode,
+                         bool updateLayoutKey);
+  template<bool Compound>
+  void undo_component_impl(Move m);
+#ifdef ENABLE_COMPOUND_TURNS
+  friend void CompoundTurn::do_component(Position&, Move, StateInfo&, bool, bool);
+  friend void CompoundTurn::undo_component(Position&, Move);
+  void do_component(Move m, StateInfo& newSt, bool countNode = true,
+                    bool updateLayoutKey = true);
+  void undo_component(Move m);
+  void end_compound_turn(StateInfo& newSt);
+  void undo_compound_turn();
+#endif
+
   // Initialization helpers (used while setting up a position)
   void set_castling_right(Color c, Square rfrom);
   void set_state(StateInfo* si) const;

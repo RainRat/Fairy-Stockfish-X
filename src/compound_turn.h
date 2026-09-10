@@ -24,14 +24,20 @@ class Thread;
 struct StateInfo;
 struct LogicalMoveState;
 
+namespace CompoundTurn {
+void do_component(Position& pos, Move move, StateInfo& state,
+                  bool countNode = true, bool updateLayoutKey = true);
+void undo_component(Position& pos, Move move);
+}
+
 /// Lazily yield complete legal logical moves without materializing the turn tree.
 /// The component recursion and its temporary position changes stay private to
 /// this provider; callers always observe the position at a turn boundary.
 class LogicalMoveSource {
  public:
   LogicalMoveSource(Position& pos, Thread* thread, LogicalMoveState& transaction,
-                    bool checkGameEnd = true);
-  ~LogicalMoveSource();
+                    bool checkGameEnd = true, Move preferredMove = MOVE_NONE);
+  ~LogicalMoveSource() = default;
 
   LogicalMoveSource(const LogicalMoveSource&) = delete;
   LogicalMoveSource& operator=(const LogicalMoveSource&) = delete;
@@ -48,9 +54,6 @@ class LogicalMoveSource {
       int usedCost = 0;
   };
 
-  std::unique_ptr<ExtMove[]> ownedMoves;
-  ExtMove* moveBuffer = nullptr;
-
   void initialize_frame(int depth);
   void apply_path(int length);
   void undo_path(int length);
@@ -59,6 +62,7 @@ class LogicalMoveSource {
   Thread* thread;
   LogicalMoveState& transaction;
   const StateInfo* logicalRoot = nullptr;
+  Move preferredMove = MOVE_NONE;
   std::array<Frame, LogicalMove::MAX_COMPONENTS> frames{};
   LogicalMove turn;
   Key startBoundaryKey = 0;

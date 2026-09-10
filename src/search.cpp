@@ -456,7 +456,9 @@ void Thread::search() {
   // The latter is needed for statScore and killer initialization.
   Stack stack[MAX_PLY+10], *ss = stack+7;
   Move ordinaryPv[MAX_PLY+1];
+#ifdef ENABLE_COMPOUND_TURNS
   LogicalMove logicalPv[MAX_PLY+1];
+#endif
   Value bestValue, alpha, beta, delta;
   LogicalMove lastBestMove(MOVE_NONE);
   Value lastBestScore = -VALUE_INFINITE;
@@ -477,10 +479,13 @@ void Thread::search() {
   for (int i = 0; i <= MAX_PLY + 2; ++i)
       (ss+i)->ply = i;
 
-  ss->pv = rootPos.logical_moves_active()
-         || (rootPos.variant()->compoundTurnSteps && rootPos.sequential_setup_active())
-       ? static_cast<void*>(logicalPv)
-       : static_cast<void*>(ordinaryPv);
+#ifdef ENABLE_COMPOUND_TURNS
+  if (rootPos.logical_moves_active()
+      || (rootPos.variant()->compoundTurnSteps && rootPos.sequential_setup_active()))
+      ss->set_pv<true>(logicalPv);
+  else
+#endif
+      ss->set_pv<false>(ordinaryPv);
 
   bestValue = delta = alpha = -VALUE_INFINITE;
   beta = VALUE_INFINITE;
@@ -956,9 +961,8 @@ namespace {
     tte = TT.probe(posKey, ss->ttHit);
     ttValue = ss->ttHit ? value_from_tt(tte->value(), ss->ply, pos.rule50_count()) : VALUE_NONE;
     if constexpr (Logical)
-        ttMove = logicalMovePosition ? MOVE_NONE
-                : rootNode ? thisThread->rootMoves[thisThread->pvIdx].pv[0].first()
-            : ss->ttHit ? tte->move() : MOVE_NONE;
+        ttMove = rootNode ? thisThread->rootMoves[thisThread->pvIdx].pv[0].first()
+                          : ss->ttHit ? tte->move() : MOVE_NONE;
     else
         ttMove = rootNode ? thisThread->rootMoves[thisThread->pvIdx].pv[0].first()
                           : ss->ttHit ? tte->move() : MOVE_NONE;
@@ -1340,7 +1344,8 @@ moves_loop: // When in check, search starts from here
     std::optional<LogicalMoveSource> logicalSource;
     if constexpr (Logical)
         if (logicalMovePosition && !rootNode)
-            logicalSource.emplace(pos, thisThread, thisThread->logical_move_state(ss->ply));
+            logicalSource.emplace(pos, thisThread, thisThread->logical_move_state(ss->ply),
+                                  true, ttMove);
 #endif
 
     // Step 12. Loop through all pseudo-legal moves until no moves remain
@@ -1463,7 +1468,7 @@ moves_loop: // When in check, search starts from here
           sync_cout << " currmovenumber " << moveCount + thisThread->pvIdx << sync_endl;
       }
       if (PvNode)
-          (ss+1)->pv = nullptr;
+          (ss+1)->set_pv<Logical>(nullptr);
 
       extension = 0;
       if constexpr (Logical)
@@ -1770,7 +1775,7 @@ moves_loop: // When in check, search starts from here
       // parent node fail low with value <= alpha and try another move.
       if (PvNode && (moveCount == 1 || (value > alpha && (rootNode || value < beta))))
       {
-          (ss+1)->pv = pv;
+          (ss+1)->set_pv<Logical>(pv);
           pv[0] = SearchMove(MOVE_NONE);
 
           value = -search_impl<Logical, PV>(pos, ss+1, -beta, -alpha,
@@ -1820,9 +1825,9 @@ moves_loop: // When in check, search starts from here
               rm.selDepth = thisThread->selDepth;
               rm.pv.resize(1);
 
-              assert((ss+1)->pv);
+              assert((ss+1)->pv_ptr<Logical>());
 
-              for (SearchMove* m = static_cast<SearchMove*>((ss+1)->pv);
+              for (SearchMove* m = (ss+1)->pv_ptr<Logical>();
                    *m != MOVE_NONE; ++m)
                   rm.pv.push_back(*m);
 
@@ -1849,8 +1854,8 @@ moves_loop: // When in check, search starts from here
               bestMoveHistoryCompatible = moveInfo.historyCompatible;
 
               if (PvNode && !rootNode) // Update pv even in fail-high case
-                  update_pv(static_cast<SearchMove*>(ss->pv), logicalMove,
-                            static_cast<SearchMove*>((ss+1)->pv));
+                  update_pv(ss->pv_ptr<Logical>(), logicalMove,
+                            (ss+1)->pv_ptr<Logical>());
 
               if (PvNode && value < beta) // Update alpha! Always alpha < beta
                   alpha = value;
@@ -1926,11 +1931,16 @@ moves_loop: // When in check, search starts from here
         ss->ttPv = ss->ttPv && (ss+1)->ttPv;
 
     // Write gathered information in transposition table
+    const Move ttStoredMove = [&] {
+        if constexpr (Logical)
+            return logicalMovePosition ? bestSearchMove.first() : bestMove;
+        return bestMove;
+    }();
     if (!excludedMove && !(rootNode && thisThread->pvIdx))
         tte->save(posKey, value_to_tt(bestValue, ss->ply), ss->ttPv,
                   bestValue >= beta ? BOUND_LOWER :
                   PvNode && bestMove ? BOUND_EXACT : BOUND_UPPER,
-                  depth, logicalMovePosition ? MOVE_NONE : bestMove, ss->staticEval);
+                  depth, ttStoredMove, ss->staticEval);
 
     assert(bestValue > -VALUE_INFINITE && bestValue < VALUE_INFINITE);
 
@@ -1976,7 +1986,8 @@ moves_loop: // When in check, search starts from here
     assert(PvNode || (alpha == beta - 1));
     assert(depth <= 0);
 
-    Move pv[MAX_PLY+1];
+    using SearchMove = std::conditional_t<Logical, LogicalMove, Move>;
+    SearchMove pv[MAX_PLY+1];
     StateInfo st;
     ASSERT_ALIGNED(&st, Eval::NNUE::CacheLineSize);
 
@@ -1991,8 +2002,8 @@ moves_loop: // When in check, search starts from here
     if (PvNode)
     {
         oldAlpha = alpha; // To flag BOUND_EXACT when eval above alpha and no available moves
-        (ss+1)->pv = pv;
-        static_cast<Move*>(ss->pv)[0] = MOVE_NONE;
+        (ss+1)->set_pv<Logical>(pv);
+        ss->pv_ptr<Logical>()[0] = MOVE_NONE;
     }
 
     Thread* thisThread = pos.this_thread();
@@ -2184,8 +2195,14 @@ moves_loop: // When in check, search starts from here
               bestMove = move;
 
               if (PvNode) // Update pv even in fail-high case
-                  update_pv(static_cast<Move*>(ss->pv), move,
-                            static_cast<Move*>((ss+1)->pv));
+              {
+                  if constexpr (Logical)
+                      update_pv(ss->pv_ptr<Logical>(), LogicalMove(move),
+                                (ss+1)->pv_ptr<Logical>());
+                  else
+                      update_pv(ss->pv_ptr<Logical>(), move,
+                                (ss+1)->pv_ptr<Logical>());
+              }
 
               if (PvNode && value < beta) // Update alpha here!
                   alpha = value;
