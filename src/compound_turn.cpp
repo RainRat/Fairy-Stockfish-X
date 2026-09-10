@@ -121,9 +121,9 @@ std::string compound_step_to_string(Position& pos, Move move) {
 
 } // namespace
 
-LogicalMoveSource::LogicalMoveSource(Position& pos_, Thread* /*thread*/,
+LogicalMoveSource::LogicalMoveSource(Position& pos_, Thread* thread_,
                                      LogicalMoveState& transaction_, bool checkGameEnd)
-    : pos(pos_), transaction(transaction_) {
+    : pos(pos_), thread(thread_), transaction(transaction_) {
 
   if (!pos.compound_turn_active())
   {
@@ -140,14 +140,26 @@ LogicalMoveSource::LogicalMoveSource(Position& pos_, Thread* /*thread*/,
 
 }
 
-LogicalMoveSource::~LogicalMoveSource() = default;
+LogicalMoveSource::~LogicalMoveSource() {
+  if (thread)
+      for (Frame& frame : frames)
+          thread->release_buffer(frame.moves);
+}
 
 void LogicalMoveSource::initialize_frame(int frameDepth) {
   Frame& frame = frames[frameDepth];
   if (!frame.moves)
-      frame.moves = std::make_unique<ExtMove[]>(MOVEGEN_OVERFLOW_CAPACITY);
+  {
+      if (thread)
+          frame.moves = thread->acquire_buffer();
+      else
+      {
+          frame.ownedMoves = std::make_unique<ExtMove[]>(MOVEGEN_OVERFLOW_CAPACITY);
+          frame.moves = frame.ownedMoves.get();
+      }
+  }
 
-  ExtMove* begin = frame.moves.get();
+  ExtMove* begin = frame.moves;
   ExtMove* end = generate<LEGAL>(pos, begin);
   assert(end - begin <= MOVEGEN_OVERFLOW_CAPACITY);
   frame.current = begin;
@@ -228,8 +240,6 @@ bool LogicalMoveSource::next_impl(LogicalMove& move, LogicalMoveInfo* info) {
       turn.length = uint8_t(depth + 1);
       LogicalMoveInfo candidateInfo;
       const Color mover = pos.side_to_move();
-      apply_path(depth + 1);
-
       if (info)
       {
           candidateInfo.representative = turn.first();
@@ -238,7 +248,11 @@ bool LogicalMoveSource::next_impl(LogicalMove& move, LogicalMoveInfo* info) {
           candidateInfo.seeReliable = turn.is_single()
                                    && !pos.see_pruning_unreliable(turn.components[0]);
           candidateInfo.givesCheck = turn.is_single() && pos.gives_check(turn.components[0]);
+      }
+      apply_path(depth + 1);
 
+      if (info)
+      {
           for (int i = 0; i <= depth; ++i)
           {
               const StateInfo& componentState = transaction.components[i];

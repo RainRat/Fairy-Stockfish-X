@@ -2608,8 +2608,6 @@ void Position::set_state(StateInfo* si) const {
 
   si->evasionCheckersBB = compute_evasion_checkers_bb(sideToMove);
 #ifdef ENABLE_COMPOUND_TURNS
-  si->compoundTurnReady = var->compoundTurnSteps > 0
-                       && !sequential_setup_active();
   si->compoundTurnReset = false;
 #endif
   si->move = MOVE_NONE;
@@ -7653,10 +7651,21 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
 #ifdef ENABLE_COMPOUND_TURNS
   assert(!compound_turn_active());
 #endif
-  do_component(m, newSt, countNode);
+  do_component_impl<false>(m, newSt, countNode, true);
 }
 
 void Position::do_component(Move m, StateInfo& newSt, bool countNode, bool updateLayoutKey) {
+  do_component_impl<
+#ifdef ENABLE_COMPOUND_TURNS
+      true
+#else
+      false
+#endif
+  >(m, newSt, countNode, updateLayoutKey);
+}
+
+template<bool Compound>
+void Position::do_component_impl(Move m, StateInfo& newSt, bool countNode, bool updateLayoutKey) {
 
   assert(is_ok(m));
   assert(&newSt != st);
@@ -7669,8 +7678,8 @@ void Position::do_component(Move m, StateInfo& newSt, bool countNode, bool updat
       thisThread->nodes.fetch_add(1, std::memory_order_relaxed);
 #endif
 #ifdef ENABLE_COMPOUND_TURNS
-  const bool compoundTurn = compound_turn_active();
-  const int moveCost = compound_turn_step_cost(m);
+  const bool compoundTurn = Compound && compound_turn_active();
+  const int moveCost = Compound ? compound_turn_step_cost(m) : 1;
   const bool compoundTurnEnds = (!compoundTurn)
                               || is_pass(m)
                               || st->compoundTurnStep + moveCost >= var->compoundTurnSteps;
@@ -7715,7 +7724,8 @@ void Position::do_component(Move m, StateInfo& newSt, bool countNode, bool updat
 #endif
   };
 #ifdef ENABLE_COMPOUND_TURNS
-  st->compoundTurnStep = compoundTurnStep;
+  if constexpr (Compound)
+      st->compoundTurnStep = compoundTurnStep;
 #endif
   st->pendingClaimPass = false;
   st->move = m;
@@ -7753,7 +7763,7 @@ void Position::do_component(Move m, StateInfo& newSt, bool countNode, bool updat
 #endif
   bool dropMove = is_drop_move(m);
 #ifdef ENABLE_COMPOUND_TURNS
-  bool encodedPushMove = var->pushPullRule == PushPullRule::TWO_STEP && is_encoded_push(m);
+  bool encodedPushMove = Compound && var->pushPullRule == PushPullRule::TWO_STEP && is_encoded_push(m);
 #endif
   Square from = from_sq(m);
   Square to = to_sq(m);
@@ -9606,13 +9616,9 @@ void Position::do_component(Move m, StateInfo& newSt, bool countNode, bool updat
       st->compoundTurnReset = false;
   }
 
-  if (var->compoundTurnSteps && compoundTurnEnds)
-  {
-      const bool wasCompoundTurnReady = st->compoundTurnReady;
-      st->compoundTurnReady = !sequential_setup_active();
-      if (!wasCompoundTurnReady && st->compoundTurnReady)
-          st->compoundTurnNumber = std::max((gamePly - (them == BLACK)) / 2, 0);
-  }
+  if (var->compoundTurnSteps && compoundTurnEnds && !compoundTurn
+      && !sequential_setup_active())
+      st->compoundTurnNumber = std::max((gamePly - (them == BLACK)) / 2, 0);
   sideToMove = compoundTurnEnds ? them : us;
 #else
   sideToMove = them;
@@ -9724,23 +9730,31 @@ void Position::do_component(Move m, StateInfo& newSt, bool countNode, bool updat
 
 void Position::undo_move(Move m) {
 
-#ifdef ENABLE_COMPOUND_TURNS
-  // The final sequential-setup drop activates compound turns in the new
-  // state, although that physical move was made through the ordinary move
-  // API. Allow undoing precisely that setup handoff; compound components and
-  // completed logical moves still require their matching logical undo path.
-  assert(!compound_turn_active()
-         || (st->previous != nullptr && !st->previous->compoundTurnReady));
-#endif
-  undo_component(m);
+  undo_component_impl<false>(m);
 }
 
 void Position::undo_component(Move m) {
+  undo_component_impl<
+#ifdef ENABLE_COMPOUND_TURNS
+      true
+#else
+      false
+#endif
+  >(m);
+}
+
+template<bool Compound>
+void Position::undo_component_impl(Move m) {
 
   assert(is_ok(m));
 
 #ifdef ENABLE_COMPOUND_TURNS
-  if (var->compoundTurnSteps == 0 || st->compoundTurnStep == 0)
+  if constexpr (Compound)
+  {
+      if (var->compoundTurnSteps == 0 || st->compoundTurnStep == 0)
+          sideToMove = ~sideToMove;
+  }
+  else
       sideToMove = ~sideToMove;
 #else
   sideToMove = ~sideToMove;
@@ -9751,7 +9765,7 @@ void Position::undo_component(Move m) {
   Square to = to_sq(m);
   [[maybe_unused]] bool encodedPushMove = false;
 #ifdef ENABLE_COMPOUND_TURNS
-  encodedPushMove = var->pushPullRule == PushPullRule::TWO_STEP && is_encoded_push(m);
+  encodedPushMove = Compound && var->pushPullRule == PushPullRule::TWO_STEP && is_encoded_push(m);
 #endif
   bool rifleShot = rifle_capture(m) && st->captured.piece.piece != NO_PIECE && type_of(m) != CASTLING;
   bool cloneMove = is_clone_move(m);
@@ -10181,7 +10195,8 @@ void Position::undo_component(Move m) {
   // Finally point our state pointer back to the previous state
   bool completedLogicalMove = true;
 #ifdef ENABLE_COMPOUND_TURNS
-  completedLogicalMove = !var->compoundTurnSteps || st->compoundTurnStep == 0;
+  if constexpr (Compound)
+      completedLogicalMove = !var->compoundTurnSteps || st->compoundTurnStep == 0;
 #endif
   st = st->previous;
   std::copy(std::begin(st->castlingRightsMask), std::end(st->castlingRightsMask), std::begin(castlingRightsMask));
@@ -10278,7 +10293,6 @@ void Position::end_compound_turn(StateInfo& newSt) {
   st->move = MOVE_NONE;
   st->pendingClaimPass = false;
   st->compoundTurnStep = 0;
-  st->compoundTurnReady = !sequential_setup_active();
   st->compoundTurnReset = false;
   st->compoundTurnNumber += us == BLACK;
   clear_move_undo_state(st);

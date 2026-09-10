@@ -43,7 +43,8 @@ class LogicalMoveSource {
   bool next_impl(LogicalMove& move, LogicalMoveInfo* info);
 
   struct Frame {
-      std::unique_ptr<ExtMove[]> moves;
+      std::unique_ptr<ExtMove[]> ownedMoves;
+      ExtMove* moves = nullptr;
       ExtMove* current = nullptr;
       ExtMove* end = nullptr;
   };
@@ -53,6 +54,7 @@ class LogicalMoveSource {
   void undo_path(int length);
 
   Position& pos;
+  Thread* thread;
   LogicalMoveState& transaction;
   const StateInfo* logicalRoot = nullptr;
   std::array<Frame, LogicalMove::MAX_COMPONENTS> frames{};

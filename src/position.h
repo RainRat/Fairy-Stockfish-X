@@ -291,7 +291,6 @@ struct StateInfoCopied {
 #ifdef ENABLE_COMPOUND_TURNS
   uint8_t compoundTurnStep = 0;
   int    compoundTurnNumber = 0;
-  bool   compoundTurnReady = false;
   bool   compoundTurnReset = false;
 #endif
   CheckCount checksRemaining[COLOR_NB];
@@ -1080,8 +1079,13 @@ public:
   // do_component() is the internal physical-step operation used by the
   // logical-move executor. Ordinary callers must use do_move(). Temporary
   // compound components may defer layout-key calculation until acceptance.
+  template<bool Compound>
+  void do_component_impl(Move m, StateInfo& newSt, bool countNode,
+                         bool updateLayoutKey);
   void do_component(Move m, StateInfo& newSt, bool countNode = true,
                     bool updateLayoutKey = true);
+  template<bool Compound>
+  void undo_component_impl(Move m);
   void undo_component(Move m);
   void do_move(Move m, StateInfo& newSt, bool countNode = true);
   void undo_move(Move m);
@@ -2930,7 +2934,7 @@ inline bool Position::pass(Color c) const {
 inline bool Position::compound_turn_active() const {
   assert(var != nullptr);
 #ifdef ENABLE_COMPOUND_TURNS
-  return var->compoundTurnSteps > 0 && st->compoundTurnReady;
+  return var->compoundTurnSteps > 0 && !sequential_setup_active();
 #else
   return false;
 #endif
