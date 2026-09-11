@@ -10533,15 +10533,23 @@ Key Position::key_after(Move m) const {
   Square to = to_sq(m);
   Piece pc = moved_piece(m);
 #ifdef ENABLE_COMPOUND_TURNS
-  const bool compoundTurn = compound_turn_active();
-  const int moveCost = compound_turn_step_cost(m);
-  const bool compoundTurnEnds = (!compoundTurn)
-                              || is_pass(m)
-                              || st->compoundTurnStep + moveCost >= var->compoundTurnSteps;
-  Key k = st->key ^ (compoundTurnEnds ? Zobrist::side : 0);
-  if (compoundTurn)
-      k ^= Zobrist::compoundTurn[st->compoundTurnStep]
-         ^ Zobrist::compoundTurn[compoundTurnEnds ? 0 : st->compoundTurnStep + moveCost];
+  // Fast path for ordinary variants: avoid compound_turn_active()'s setup scan
+  // and the per-move cost lookup entirely.
+  Key k;
+  if (!var->compoundTurnSteps)
+      k = st->key ^ Zobrist::side;
+  else
+  {
+      const bool compoundTurn = compound_turn_active();
+      const int moveCost = compound_turn_step_cost(m);
+      const bool compoundTurnEnds = (!compoundTurn)
+                                  || is_pass(m)
+                                  || st->compoundTurnStep + moveCost >= var->compoundTurnSteps;
+      k = st->key ^ (compoundTurnEnds ? Zobrist::side : 0);
+      if (compoundTurn)
+          k ^= Zobrist::compoundTurn[st->compoundTurnStep]
+             ^ Zobrist::compoundTurn[compoundTurnEnds ? 0 : st->compoundTurnStep + moveCost];
+  }
 #else
   Key k = st->key ^ Zobrist::side;
 #endif

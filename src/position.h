@@ -1964,8 +1964,11 @@ inline bool Position::nnue_use_pockets() const {
 
 inline bool Position::nnue_applicable() const {
   // Do not use NNUE during setup phases (placement, sittuyin)
-  return at_complete_turn_boundary()
-      && (!count_in_hand(ALL_PIECES) || nnue_use_pockets() || !must_drop())
+#ifdef ENABLE_COMPOUND_TURNS
+  if (!at_complete_turn_boundary())
+      return false;
+#endif
+  return (!count_in_hand(ALL_PIECES) || nnue_use_pockets() || !must_drop())
          && !virtualPieces
          && capture_type() != PRISON
          && (!nnue_king() || (count(WHITE, nnue_king()) == 1 && count(BLACK, nnue_king()) == 1));
@@ -2125,9 +2128,7 @@ inline bool Position::rifle_capture(Move m) const {
 
 inline int Position::pushing_strength(PieceType pt) const {
   assert(var != nullptr);
-  return push_pull_rule() == PushPullRule::TWO_STEP
-       ? var->pieceHierarchy[pt]
-       : var->pushingStrength[pt];
+  return var->pushingStrength[pt];
 }
 
 inline bool Position::has_pushing() const {
@@ -2142,9 +2143,7 @@ inline bool Position::has_pushing() const {
 
 inline int Position::pulling_strength(PieceType pt) const {
   assert(var != nullptr);
-  return push_pull_rule() == PushPullRule::TWO_STEP
-       ? var->pieceHierarchy[pt]
-       : var->pullingStrength[pt];
+  return var->pullingStrength[pt];
 }
 
 inline bool Position::has_pulling() const {
@@ -2956,7 +2955,11 @@ inline bool Position::pass(Color c) const {
 inline bool Position::compound_turn_active() const {
   assert(var != nullptr);
 #ifdef ENABLE_COMPOUND_TURNS
-  return var->compoundTurnSteps > 0 && !sequential_setup_active();
+  if (!var->compoundTurnSteps)
+      return false;
+  if (!var->sequentialSetup)
+      return true;
+  return !sequential_setup_active();
 #else
   return false;
 #endif
@@ -2996,11 +2999,11 @@ inline bool Position::at_complete_turn_boundary() const {
 
 inline int Position::compound_turn_step_cost(Move m) const {
 #ifdef ENABLE_COMPOUND_TURNS
-  return compound_turn_active()
-              && push_pull_rule() == PushPullRule::TWO_STEP
-              && is_two_step_move(m)
-       ? 2
-       : 1;
+  // Cheap rule gates first so ordinary moves avoid the setup scan inside
+  // compound_turn_active().
+  if (var->pushPullRule != PushPullRule::TWO_STEP || !var->compoundTurnSteps)
+      return 1;
+  return compound_turn_active() && is_two_step_move(m) ? 2 : 1;
 #else
   (void)m;
   return 1;

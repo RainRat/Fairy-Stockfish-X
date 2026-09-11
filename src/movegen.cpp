@@ -948,6 +948,10 @@ namespace {
         if (pos.push_pull_rule() == PushPullRule::TWO_STEP && GeneratesQuiets && !QuietChecks)
         {
             Bitboard enemySources = pos.push_targets_from(Us, Pt, from) & pos.pieces(~Us);
+            const Bitboard pushDestMask = ~pos.pieces()
+                                        & pos.board_bb()
+                                        & ~pos.wall_squares()
+                                        & ~pos.dead_squares();
             while (enemySources)
             {
                 Square enemyFrom = pop_lsb(enemySources);
@@ -956,10 +960,7 @@ namespace {
                     continue;
 
                 Bitboard enemyTargets = pos.attacks_from(Us, WAZIR, enemyFrom, Bitboard(0))
-                                      & ~pos.pieces()
-                                      & pos.board_bb()
-                                      & ~pos.wall_squares()
-                                      & ~pos.dead_squares();
+                                      & pushDestMask;
                 while (enemyTargets)
                     *moveList++ = make_encoded_push(from, enemyFrom, pop_lsb(enemyTargets));
             }
