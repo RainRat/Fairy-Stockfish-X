@@ -2301,6 +2301,23 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
         valid = false;
     }
 
+    // Simultaneous-result overrides are dead config without their rule.
+    if (v->simulFlagValueByMover != VALUE_NONE
+        && !v->flagRegion[WHITE] && !v->flagRegion[BLACK])
+    {
+        if (DoCheck)
+            std::cerr << "simulFlagValueByMover - requires a flag rule (flagRegion)." << std::endl;
+        valid = false;
+    }
+    if (v->simulExtinctionValueByMover != VALUE_NONE
+        && v->extinctionValue[WHITE] == VALUE_NONE
+        && v->extinctionValue[BLACK] == VALUE_NONE)
+    {
+        if (DoCheck)
+            std::cerr << "simulExtinctionValueByMover - requires an extinction rule (extinctionValue)." << std::endl;
+        valid = false;
+    }
+
     if (v->compoundTurnSteps > 0)
     {
         // Compound turns expose one complete move to the outside world, so

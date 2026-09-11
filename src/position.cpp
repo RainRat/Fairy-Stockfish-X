@@ -11110,6 +11110,10 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
   };
 
   auto value_by_mover = [&](Value value) {
+      // Simul values are configured from the mover's perspective (the side
+      // that just moved, i.e. ~sideToMove), while search results are from
+      // sideToMove's perspective. Negate, so a mover win (VALUE_MATE)
+      // becomes mated_in for the side to move.
       return convert_mate_value(-value, ply);
   };
   const bool simultaneousFlagConfigured = var->simulFlagValueByMover != VALUE_NONE;
@@ -11213,16 +11217,53 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
   const bool bothFlags = whiteFlagReached && blackFlagReached;
   const bool bothExtinct = whiteExtinct && blackExtinct;
   const bool bothGoals = flagEnd && extinctionEnd;
-  if (bothGoals)
+  // Fast path: without any simultaneous-result override the per-rule results
+  // apply directly; only a cross-rule tie still honors the priority setting.
+  if (!simultaneousFlagConfigured && !simultaneousExtinctionConfigured)
   {
-      if (var->simulFlagExtinctionPriority == SimulFlagExtinctionPriority::EXTINCTION)
+      if (bothGoals
+          && var->simulFlagExtinctionPriority == SimulFlagExtinctionPriority::FLAG)
       {
-          result = bothExtinct && simultaneousExtinctionConfigured
-                 ? value_by_mover(var->simulExtinctionValueByMover)
-                 : extinctionResult;
+          result = flagResult;
           return true;
       }
-      if (var->simulFlagExtinctionPriority == SimulFlagExtinctionPriority::FLAG)
+      if (extinctionEnd)
+      {
+          result = extinctionResult;
+          return true;
+      }
+      if (flagEnd)
+      {
+          result = flagResult;
+          return true;
+      }
+  }
+  else
+  {
+      if (bothGoals)
+      {
+          if (var->simulFlagExtinctionPriority == SimulFlagExtinctionPriority::EXTINCTION)
+          {
+              result = bothExtinct && simultaneousExtinctionConfigured
+                     ? value_by_mover(var->simulExtinctionValueByMover)
+                     : extinctionResult;
+              return true;
+          }
+          if (var->simulFlagExtinctionPriority == SimulFlagExtinctionPriority::FLAG)
+          {
+              result = bothFlags && simultaneousFlagConfigured
+                     ? value_by_mover(var->simulFlagValueByMover)
+                     : flagResult;
+              return true;
+          }
+
+          // Extinction is the default priority, preserving the established
+          // extinction-before-flag order for existing variants.
+          result = extinctionResult;
+          return true;
+      }
+
+      if (flagEnd)
       {
           result = bothFlags && simultaneousFlagConfigured
                  ? value_by_mover(var->simulFlagValueByMover)
@@ -11230,27 +11271,14 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
           return true;
       }
 
-      // Extinction is the default priority, preserving the established
-      // extinction-before-flag order for existing variants.
-      result = extinctionResult;
-      return true;
-  }
-
-  if (flagEnd)
-  {
-      result = bothFlags && simultaneousFlagConfigured
-             ? value_by_mover(var->simulFlagValueByMover)
-             : flagResult;
-      return true;
-  }
-
-  if (extinctionEnd)
-  {
-      result = bothExtinct && simultaneousExtinctionConfigured
-             ? value_by_mover(var->simulExtinctionValueByMover)
-             : extinctionResult;
-      return true;
-  }
+      if (extinctionEnd)
+      {
+          result = bothExtinct && simultaneousExtinctionConfigured
+                 ? value_by_mover(var->simulExtinctionValueByMover)
+                 : extinctionResult;
+          return true;
+      }
+  } // else: at least one simultaneous-result override is configured
 
   // Castle chess
   if (var->castlingWins)
