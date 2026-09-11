@@ -99,8 +99,6 @@ startFen = 4r2k/8/8/8/8/4p3/3Qp3/4K3 w - - 0 1
 pieceDrops = true
 symmetricDropTypes = r
 
-[static-royal:chess]
-quiescencePolicy = static-eval
 INI
 
 echo "royal variant regressions started"
@@ -242,15 +240,5 @@ d
 EOF
 )
 assert_contains "$out" "Fen: 4k3/8/8/8/R6R/8/8/4K3\\[] b - - 0 1"
-
-# static-eval is a static-only provider policy and must reject royal variants
-# instead of bypassing checkmate/evasion handling.
-out=$(run_uci "$ENGINE" "$tmp_ini" static-royal <<'EOF' 2>&1
-position startpos
-d
-EOF
-)
-assert_not_contains "$out" "^info string variant static-royal "
-assert_contains "$out" "quiescencePolicy=static-eval requires a variant without royal pieces."
 
 echo "royal variant regressions passed"

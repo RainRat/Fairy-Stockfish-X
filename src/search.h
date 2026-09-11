@@ -90,7 +90,11 @@ struct Stack {
 
 struct RootMove {
 
+#ifdef ENABLE_COMPOUND_TURNS
   explicit RootMove(LogicalMove m, LogicalMoveInfo i = {}) : rootMove(m), info(i) {}
+#else
+  explicit RootMove(LogicalMove m) : rootMove(m) {}
+#endif
   explicit RootMove(Move m) : RootMove(LogicalMove(m)) {}
   bool extract_ponder_from_tt(Position& pos);
   bool operator==(const LogicalMove& m) const { return rootMove == m; }
@@ -111,13 +115,10 @@ struct RootMove {
   }
   void clear_pv() { pv.clear(); }
   void append_pv(LogicalMove m) { pv.push_back(m); }
-  std::vector<LogicalMove> full_pv() const {
-    std::vector<LogicalMove> result;
-    result.reserve(pv_size());
-    result.push_back(rootMove);
-    result.insert(result.end(), pv.begin(), pv.end());
-    return result;
-  }
+  const std::vector<LogicalMove>& continuation() const { return pv; }
+#ifdef ENABLE_COMPOUND_TURNS
+  const LogicalMoveInfo& move_info() const { return info; }
+#endif
   void set_pv(const std::vector<LogicalMove>& line) {
     if (line.empty())
     {
@@ -135,7 +136,9 @@ struct RootMove {
   int tbRank = 0;
   Value tbScore = VALUE_ZERO;
   LogicalMove rootMove;
+#ifdef ENABLE_COMPOUND_TURNS
   LogicalMoveInfo info;
+#endif
   std::vector<LogicalMove> pv; // Continuation after rootMove
 };
 

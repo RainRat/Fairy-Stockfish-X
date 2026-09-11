@@ -83,11 +83,22 @@ public:
   Score trend;
 
 #ifdef ENABLE_COMPOUND_TURNS
+  static constexpr size_t LogicalMoveHintCount = 1024;
+
   LogicalMoveState& logical_move_state(int ply) {
       assert(0 <= ply && ply < MAX_PLY);
       if (!logicalMoveStates[ply])
           logicalMoveStates[ply] = std::make_unique<LogicalMoveState>();
       return *logicalMoveStates[ply];
+  }
+
+  const LogicalMove* logical_move_hint(Key key) const {
+      const LogicalMoveHint& hint = logicalMoveHints[key % LogicalMoveHintCount];
+      return hint.key == key ? &hint.move : nullptr;
+  }
+
+  void store_logical_move_hint(Key key, const LogicalMove& move) {
+      logicalMoveHints[key % LogicalMoveHintCount] = {key, move};
   }
 #endif
 
@@ -108,7 +119,13 @@ public:
 
 private:
 #ifdef ENABLE_COMPOUND_TURNS
+  struct LogicalMoveHint {
+      Key key = 0;
+      LogicalMove move;
+  };
+
   std::array<std::unique_ptr<LogicalMoveState>, MAX_PLY> logicalMoveStates;
+  std::array<LogicalMoveHint, LogicalMoveHintCount> logicalMoveHints{};
 #endif
   std::vector<std::unique_ptr<ExtMove[]>> bufferPool;
   std::vector<ExtMove*> availableBuffers;

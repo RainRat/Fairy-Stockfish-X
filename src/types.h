@@ -892,6 +892,7 @@ struct LogicalMoveInfo {
   bool promotionLike = false;
   bool givesCheck = false;
   bool historyCompatible = false;
+  bool reductionEligible = true;
   bool seeReliable = false;
 };
 
