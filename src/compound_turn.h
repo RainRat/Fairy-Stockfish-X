@@ -74,9 +74,14 @@ class LogicalMoveSource {
 
   bool next(LogicalMove& move);
   bool next(LogicalMove& move, LogicalMoveInfo& info);
+  bool next_applied(LogicalMove& move, LogicalMoveInfo& info, StateInfo& committedState);
+  void undo_yielded();
+  const std::string& yielded_string() const { return yieldedString; }
 
  private:
-  bool next_impl(LogicalMove& move, LogicalMoveInfo* info);
+  bool next_impl(LogicalMove& move, LogicalMoveInfo* info,
+                 StateInfo* committedState);
+  bool repetition_illegal(Key layoutKey, int pliesFromNull) const;
 
   struct Frame {
       size_t current = 0;
@@ -103,15 +108,20 @@ class LogicalMoveSource {
   bool descend = false;
   bool prefixApplied = false;
   bool finished = false;
+  bool yielded = false;
   Piece firstMovedPiece = NO_PIECE;
   bool firstSeeReliable = false;
   bool firstGivesCheck = false;
+  std::vector<Key> previousBoundaryLayoutKeys;
+  int repetitionLimit = 0;
+  std::array<std::string, LogicalMove::MAX_COMPONENTS> componentStrings;
+  std::string yieldedString;
 };
 
 /// Materialize complete compound moves from a turn-boundary position.
 /// Intermediate positions are used only while traversing the legal tree.
 std::vector<LogicalMove> generate_compound_moves(Position& pos);
-bool has_any_compound_move(Position& pos);
+bool has_any_compound_move(Position& pos, bool checkGameEnd = true);
 bool parse_compound_move(Position& pos, const std::string& text, LogicalMove& turn);
 
 /// Apply and undo one complete logical move. Component state is transaction
