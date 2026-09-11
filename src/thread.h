@@ -85,19 +85,22 @@ public:
 #ifdef ENABLE_COMPOUND_TURNS
   static constexpr size_t LogicalMoveHintCount = 1024;
 
-  LogicalMoveUndo& logical_move_state(int ply) {
+  LogicalMoveWorkspace& logical_move_workspace(int ply) {
       assert(0 <= ply && ply < MAX_PLY);
-      if (!logicalMoveStates[ply])
-          logicalMoveStates[ply] = std::make_unique<LogicalMoveUndo>();
-      return *logicalMoveStates[ply];
+      if (!logicalMoveWorkspaces[ply])
+          logicalMoveWorkspaces[ply] = std::make_unique<LogicalMoveWorkspace>();
+      return *logicalMoveWorkspaces[ply];
   }
 
   LogicalMove* logical_pv(int ply) {
-      assert(0 <= ply && ply < MAX_PLY);
-      auto& pv = logicalPvs[ply];
-      if (pv.empty())
-          pv.resize(MAX_PLY + 1);
-      return pv.data();
+      assert(0 <= ply && ply <= MAX_PLY);
+      constexpr size_t rowCount = MAX_PLY + 1;
+      constexpr size_t storageSize = rowCount * (rowCount + 1) / 2;
+      if (logicalPvStorage.empty())
+          logicalPvStorage.resize(storageSize);
+      const size_t offset = size_t(ply) * rowCount
+                          - size_t(ply) * size_t(ply > 0 ? ply - 1 : 0) / 2;
+      return logicalPvStorage.data() + offset;
   }
 
   const LogicalMove* logical_move_hint(Key key) const {
@@ -132,8 +135,8 @@ private:
       LogicalMove move;
   };
 
-  std::array<std::unique_ptr<LogicalMoveUndo>, MAX_PLY> logicalMoveStates;
-  std::array<std::vector<LogicalMove>, MAX_PLY> logicalPvs;
+  std::array<std::unique_ptr<LogicalMoveWorkspace>, MAX_PLY> logicalMoveWorkspaces;
+  std::vector<LogicalMove> logicalPvStorage;
   std::array<LogicalMoveHint, LogicalMoveHintCount> logicalMoveHints{};
 #endif
   std::vector<std::unique_ptr<ExtMove[]>> bufferPool;

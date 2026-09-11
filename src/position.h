@@ -34,6 +34,9 @@
 #include "evaluate.h"
 #include "psqt.h"
 #include "types.h"
+#ifdef ENABLE_COMPOUND_TURNS
+#include "compound_turn.h"
+#endif
 #include "variant.h"
 #include "movegen.h"
 #include "piece.h"
@@ -507,6 +510,14 @@ struct LogicalMoveUndo {
   StateInfo* previous = nullptr;
   int usedCost = 0;
   bool syntheticBoundary = false;
+};
+
+/// Reusable scratch for one logical move provider. Move-list capacities live
+/// here rather than in the undo record so search can reuse them by ply.
+struct LogicalMoveWorkspace {
+  std::array<std::vector<Move>, LogicalMove::MAX_COMPONENTS> moveLists;
+  LogicalMoveUndo undo;
+  bool inUse = false;
 };
 #endif
 
@@ -1157,10 +1168,12 @@ public:
   bool is_immediate_game_end(Value& result, int ply = 0) const;
   bool has_legal_move() const;
   bool has_legal_move_ignoring_immediate_end() const;
+#ifdef ENABLE_COMPOUND_TURNS
   bool logical_moves_active() const;
   bool may_enter_logical_moves() const;
   bool has_legal_logical_move() const;
   LogicalMoveCapabilities logical_move_capabilities() const;
+#endif
   bool is_optional_game_end() const;
   bool is_optional_game_end(Value& result, int ply = 0, int countStarted = 0) const;
   bool is_game_end(Value& result, int ply = 0) const;
@@ -3071,6 +3084,7 @@ inline bool Position::compound_turn_active() const {
 #endif
 }
 
+#ifdef ENABLE_COMPOUND_TURNS
 inline bool Position::logical_moves_active() const {
   return compound_turn_active();
 }
@@ -3084,15 +3098,14 @@ inline bool Position::may_enter_logical_moves() const {
 }
 
 inline LogicalMoveCapabilities Position::logical_move_capabilities() const {
-#ifdef ENABLE_COMPOUND_TURNS
   // The current logical provider does not expose the complete tactical move
   // set or prove the null-move assumptions required by these heuristics. This
   // is a provider capability boundary; search need not inspect components.
   if (logical_moves_active())
       return {false, false, false, QuiescenceSupport::STATIC_ONLY};
-#endif
   return {};
 }
+#endif
 
 inline bool Position::at_complete_turn_boundary() const {
   assert(var != nullptr);

@@ -229,8 +229,8 @@ void ThreadPool::start_thinking(Position& pos, StateListPtr& states,
                                && limits.banmoves.empty();
   if (pos.compound_turn_active() && !streamCompoundRoot)
   {
-      LogicalMoveUndo transaction;
-      LogicalMoveSource source(pos, pos.this_thread(), transaction);
+      LogicalMoveWorkspace workspace;
+      LogicalMoveSource source(pos, workspace);
       LogicalMove m;
       LogicalMoveInfo info;
       while (source.next(m, info))

@@ -11,7 +11,6 @@
 
 #include "movegen.h"
 #include "position.h"
-#include "thread.h"
 #include "uci.h"
 
 namespace Stockfish {
@@ -58,11 +57,22 @@ std::string compound_step_to_string(Position& pos, Move move) {
 
 } // namespace
 
-LogicalMoveSource::LogicalMoveSource(Position& pos_, Thread* thread_,
-                                     LogicalMoveUndo& transaction_, bool checkGameEnd,
-                                     Move preferredMove_, const LogicalMove* preferredTurn_)
-    : pos(pos_), thread(thread_), transaction(transaction_), preferredMove(preferredMove_),
-      preferredTurn(preferredTurn_ ? *preferredTurn_ : LogicalMove()) {
+LogicalMoveSource::LogicalMoveSource(Position& pos_, LogicalMoveWorkspace& workspace_,
+                                     LogicalMoveOrder order_, bool checkGameEnd)
+    : pos(pos_), order(order_) {
+
+  if (workspace_.inUse)
+  {
+      nestedWorkspace = std::make_unique<LogicalMoveWorkspace>();
+      workspace = nestedWorkspace.get();
+  }
+  else
+  {
+      workspace = &workspace_;
+      workspace->inUse = true;
+      ownsWorkspace = true;
+  }
+  transaction = &workspace->undo;
 
   if (!pos.compound_turn_active())
   {
@@ -82,43 +92,33 @@ LogicalMoveSource::~LogicalMoveSource() {
 
   if (prefixApplied)
       unwind_prefix();
+  if (ownsWorkspace)
+      workspace->inUse = false;
 }
 
 void LogicalMoveSource::initialize_frame(int frameDepth) {
   Frame& frame = frames[frameDepth];
-  auto& moves = moveLists[frameDepth];
+  auto& moves = workspace->moveLists[frameDepth];
   frame.usedCost = frameDepth == 0
                  ? 0
                  : frames[frameDepth - 1].usedCost
                  + compound_move_cost(pos, turn.components[frameDepth - 1]);
-  ExtMove* moveBuffer;
-  std::unique_ptr<ExtMove[]> ownedMoves;
-  if (thread)
-      moveBuffer = thread->acquire_buffer();
-  else
-  {
-      ownedMoves = std::make_unique<ExtMove[]>(MOVEGEN_OVERFLOW_CAPACITY);
-      moveBuffer = ownedMoves.get();
-  }
-
-  ExtMove* end = generate<LEGAL>(pos, moveBuffer);
-  assert(end - moveBuffer <= MOVEGEN_OVERFLOW_CAPACITY);
-  moves.assign(moveBuffer, end);
-
-  if (thread)
-      thread->release_buffer(moveBuffer);
+  moves.clear();
+  for (const auto& move : MoveList<LEGAL>(pos))
+      moves.push_back(move);
 
   // The provider does not have a Stack/MovePicker, but a small amount of
   // complete-turn ordering is still useful. Follow a remembered logical turn,
   // fall back to the TT's first-component hint, and prioritize tactical steps.
   auto tacticalBegin = moves.begin();
   Move preferred = MOVE_NONE;
-  if (!preferredTurn.empty() && frameDepth < preferredTurn.length
+  if (order.preferredTurn && !order.preferredTurn->empty()
+      && frameDepth < order.preferredTurn->length
       && std::equal(turn.components.begin(), turn.components.begin() + frameDepth,
-                    preferredTurn.components.begin()))
-      preferred = preferredTurn.components[frameDepth];
+                    order.preferredTurn->components.begin()))
+      preferred = order.preferredTurn->components[frameDepth];
   else if (frameDepth == 0)
-      preferred = preferredMove;
+      preferred = order.preferredFirst;
 
   if (preferred != MOVE_NONE)
   {
@@ -136,7 +136,7 @@ void LogicalMoveSource::initialize_frame(int frameDepth) {
 
 void LogicalMoveSource::apply_path(int length) {
   for (int i = 0; i < length; ++i)
-      pos.do_component(turn.components[i], transaction.components[i], false, false);
+      pos.do_component(turn.components[i], transaction->components[i], false, false);
 }
 
 void LogicalMoveSource::unwind_prefix() {
@@ -180,13 +180,13 @@ bool LogicalMoveSource::next_impl(LogicalMove& move, LogicalMoveInfo* info) {
       {
           ++depth;
           pos.do_component(turn.components[depth - 1],
-                           transaction.components[depth - 1], false, false);
+                           transaction->components[depth - 1], false, false);
           initialize_frame(depth);
           descend = false;
       }
 
       Frame& frame = frames[depth];
-      auto& moves = moveLists[depth];
+      auto& moves = workspace->moveLists[depth];
       if (frame.current == moves.size())
       {
           if (depth == 0)
@@ -210,7 +210,6 @@ bool LogicalMoveSource::next_impl(LogicalMove& move, LogicalMoveInfo* info) {
 
       turn.components[depth] = component;
       turn.length = uint8_t(depth + 1);
-      LogicalMoveInfo candidateInfo;
       const Color mover = pos.side_to_move();
       if (depth == 0)
       {
@@ -218,47 +217,44 @@ bool LogicalMoveSource::next_impl(LogicalMove& move, LogicalMoveInfo* info) {
           firstSeeReliable = !pos.see_pruning_unreliable(component);
           firstGivesCheck = pos.gives_check(component);
       }
-      if (info)
-      {
-          candidateInfo.representative = turn.first();
-          candidateInfo.movedPiece = firstMovedPiece;
-          candidateInfo.historyCompatible = turn.is_single();
-          candidateInfo.seeReliable = turn.is_single() && firstSeeReliable;
-          candidateInfo.givesCheck = turn.is_single() && firstGivesCheck;
-      }
-      pos.do_component(component, transaction.components[depth], false, false);
+      pos.do_component(component, transaction->components[depth], false, false);
 
       if (info)
       {
-          for (int i = 0; i <= depth; ++i)
+          Frame& componentFrame = frames[depth];
+          componentFrame.info = depth ? frames[depth - 1].info : LogicalMoveInfo();
+          componentFrame.info.representative = turn.first();
+          componentFrame.info.movedPiece = firstMovedPiece;
+          componentFrame.info.historyCompatible = turn.is_single();
+          componentFrame.info.seeReliable = turn.is_single() && firstSeeReliable;
+          componentFrame.info.givesCheck = turn.is_single() && firstGivesCheck;
+
+          const StateInfo& componentState = transaction->components[depth];
+          record_removed_piece(componentFrame.info, componentState.captured.piece.piece, mover);
+          record_removed_piece(componentFrame.info, componentState.jumpedEnPassantCaptured.piece.piece, mover);
+          record_removed_piece(componentFrame.info, componentState.dead.piece, mover);
+
+          Bitboard removed = componentState.bycatchSquares
+                           & ~componentState.blastPromotedSquares
+                           & ~componentState.laserTransformedSquares;
+          while (removed)
           {
-              const StateInfo& componentState = transaction.components[i];
-              record_removed_piece(candidateInfo, componentState.captured.piece.piece, mover);
-              record_removed_piece(candidateInfo, componentState.jumpedEnPassantCaptured.piece.piece, mover);
-              record_removed_piece(candidateInfo, componentState.dead.piece, mover);
+              Square square = pop_lsb(removed);
+              record_removed_piece(componentFrame.info, componentState.bycatchPieces[square].piece(), mover);
+          }
 
-              Bitboard removed = componentState.bycatchSquares
-                               & ~componentState.blastPromotedSquares
-                               & ~componentState.laserTransformedSquares;
-              while (removed)
-              {
-                  Square square = pop_lsb(removed);
-                  record_removed_piece(candidateInfo, componentState.bycatchPieces[square].piece(), mover);
-              }
+          for (int transfer = 0; transfer < componentState.push.transferCount; ++transfer)
+              record_removed_piece(componentFrame.info, componentState.push.transfers[transfer].piece, mover);
 
-              for (int transfer = 0; transfer < componentState.push.transferCount; ++transfer)
-                  record_removed_piece(candidateInfo, componentState.push.transfers[transfer].piece, mover);
-
-              candidateInfo.promotionLike = candidateInfo.promotionLike
-                                          || is_promotion_move(turn.components[i])
+          componentFrame.info.promotionLike = componentFrame.info.promotionLike
+                                          || is_promotion_move(component)
                                           || componentState.promotionPawn != NO_PIECE
                                           || componentState.consumedPromotionHandPiece != NO_PIECE;
-          }
       }
 
-      transaction.previous = logicalRoot;
-      transaction.usedCost = usedSteps + moveCost;
-      transaction.syntheticBoundary = false;
+      transaction->previous = logicalRoot;
+      transaction->usedCost = usedSteps + moveCost;
+      transaction->syntheticBoundary = false;
       const bool accepted = compound_turn_candidate_accepted(pos, component, usedSteps,
                                                               startBoundaryKey, logicalRoot);
       const bool canDescend = !is_pass(component)
@@ -271,13 +267,13 @@ bool LogicalMoveSource::next_impl(LogicalMove& move, LogicalMoveInfo* info) {
       {
           move = turn;
           if (info)
-              *info = candidateInfo;
-          pos.undo_move(turn, transaction, true);
+              *info = frames[depth].info;
+          pos.undo_move(turn, *transaction, true);
           unwind_prefix();
           return true;
       }
 
-      pos.undo_move(turn, transaction, true);
+      pos.undo_move(turn, *transaction, true);
   }
 }
 
@@ -291,8 +287,8 @@ std::vector<LogicalMove> generate_compound_moves(Position& pos) {
   if (pos.is_game_end(result))
       return turns;
 
-  LogicalMoveUndo transaction;
-  LogicalMoveSource source(pos, pos.this_thread(), transaction, false);
+  LogicalMoveWorkspace workspace;
+  LogicalMoveSource source(pos, workspace, {}, false);
   LogicalMove turn;
   while (source.next(turn))
       turns.push_back(turn);
@@ -308,8 +304,8 @@ bool has_any_compound_move(Position& pos) {
   if (pos.is_game_end(result))
       return false;
 
-  LogicalMoveUndo transaction;
-  LogicalMoveSource source(pos, pos.this_thread(), transaction, false);
+  LogicalMoveWorkspace workspace;
+  LogicalMoveSource source(pos, workspace, {}, false);
   LogicalMove move;
   return source.next(move);
 }
