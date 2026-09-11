@@ -99,7 +99,7 @@ namespace {
             if (!parse_compound_move(pos, token, turn))
                 break;
             states->emplace_back();
-            LogicalMoveState transaction;
+            LogicalMoveUndo transaction;
             pos.do_move(turn, states->back(), transaction);
             continue;
         }

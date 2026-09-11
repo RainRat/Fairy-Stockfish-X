@@ -78,7 +78,7 @@ private:
   std::string ponderHighlight;
 #ifdef ENABLE_COMPOUND_TURNS
   std::deque<LogicalMove> compoundMoveList;
-  std::deque<LogicalMoveState> compoundTransactions;
+  std::deque<LogicalMoveUndo> compoundTransactions;
 #endif
   std::mutex ponderMutex;
   std::unique_ptr<NativeThread> ponderWorker;
