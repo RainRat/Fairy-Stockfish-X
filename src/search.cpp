@@ -67,23 +67,18 @@ using namespace Search;
 
 namespace {
 
-#ifdef ENABLE_COMPOUND_TURNS
-  class AppliedLogicalMoveGuard {
-   public:
-    explicit AppliedLogicalMoveGuard(LogicalMoveSource* source_)
-        : source(source_) {}
-    ~AppliedLogicalMoveGuard() {
-        if (source && source->has_applied_move())
-            source->undo_applied();
-    }
-
-   private:
-    LogicalMoveSource* source;
-  };
-#endif
-
   // Different node types, used as a template parameter
   enum NodeType { NonPV, PV, Root };
+
+#ifdef ENABLE_COMPOUND_TURNS
+  template <bool Logical>
+  struct LogicalMoveSourceStorage {};
+
+  template <>
+  struct LogicalMoveSourceStorage<true> {
+      std::optional<LogicalMoveSource> source;
+  };
+#endif
 
   constexpr uint64_t TtHitAverageWindow     = 4096;
   constexpr uint64_t TtHitAverageResolution = 1024;
@@ -226,7 +221,7 @@ namespace {
   uint64_t perft(Position& pos, Depth depth) {
 
 #ifdef ENABLE_COMPOUND_TURNS
-    if (pos.variant()->compoundTurnSteps && pos.compound_turn_active())
+    if (pos.logical_moves_active())
         return compound_perft(pos, depth, Root);
 #endif
 
@@ -457,7 +452,8 @@ void MainThread::search() {
 
   SyncCout out;
 #ifdef ENABLE_COMPOUND_TURNS
-  const std::vector<std::string> compoundPv = rootPos.variant()->compoundTurnSteps > 0
+  const bool logicalPv = rootPos.logical_moves_active() || rootPos.may_enter_logical_moves();
+  const std::vector<std::string> compoundPv = logicalPv
                                             ? compound_pv_to_strings(rootPos, bestThread->rootMoves[0].first(),
                                                                      bestThread->rootMoves[0].continuation())
                                             : std::vector<std::string>();
@@ -497,8 +493,7 @@ void Thread::search() {
   Move ordinaryPv[MAX_PLY+1];
 #ifdef ENABLE_COMPOUND_TURNS
   const bool logicalPvRequired = rootPos.logical_moves_active()
-                              || (rootPos.variant()->compoundTurnSteps
-                                  && rootPos.sequential_setup_active());
+                              || rootPos.may_enter_logical_moves();
   std::unique_ptr<LogicalMove[]> logicalPv;
   if (logicalPvRequired)
       logicalPv = std::make_unique<LogicalMove[]>(MAX_PLY + 1);
@@ -570,6 +565,7 @@ void Thread::search() {
                      && !skill.enabled()
                      && !Limits.searchMovesSpecified
                      && Limits.banmoves.empty();
+
 
   // When playing with strength handicap enable MultiPV search that we will
   // use behind the scenes to retrieve a set of possible moves.
@@ -1406,15 +1402,15 @@ moves_loop: // When in check, search starts from here
                          && tte->depth() >= depth;
 
 #ifdef ENABLE_COMPOUND_TURNS
-    std::optional<LogicalMoveSource> logicalSource;
+    LogicalMoveSourceStorage<Logical> logicalSource;
     if constexpr (Logical)
         if (logicalMovePosition && (!rootNode || lazyRoot))
         {
             const LogicalMove* preferredTurn = thisThread->logical_move_hint(pos.key());
             if (preferredTurn && ttMove && preferredTurn->first() != ttMove)
                 preferredTurn = nullptr;
-            logicalSource.emplace(pos, thisThread, thisThread->logical_move_state(ss->ply),
-                                  true, ttMove, preferredTurn);
+            logicalSource.source.emplace(pos, thisThread, thisThread->logical_move_state(ss->ply),
+                                         true, ttMove, preferredTurn);
         }
 #endif
 
@@ -1428,9 +1424,6 @@ moves_loop: // When in check, search starts from here
     {
       SearchMove logicalMove;
       SearchMoveInfo moveInfo;
-#ifdef ENABLE_COMPOUND_TURNS
-      LogicalMoveSource* appliedSource = nullptr;
-#endif
       auto next_ordinary_move = [&] {
           if ((move = mp.next_move(moveCountPruning)) == MOVE_NONE)
               return false;
@@ -1449,14 +1442,10 @@ moves_loop: // When in check, search starts from here
           {
               if (lazyRoot)
               {
-                  if (!logicalSource->next_applied(logicalMove, moveInfo))
+                  if (!logicalSource.source->next(logicalMove, moveInfo))
                       break;
-                  appliedSource = &*logicalSource;
                   move = moveInfo.representative;
                   thisThread->rootMoves.emplace_back(logicalMove, moveInfo);
-                  // The source has already applied the turn, so do not use
-                  // Position::do_move()'s normal root-node accounting path.
-                  thisThread->nodes.fetch_add(1, std::memory_order_relaxed);
                   rootMoveIndex = thisThread->rootMoves.size();
               }
               else
@@ -1471,9 +1460,8 @@ moves_loop: // When in check, search starts from here
           }
           else if (logicalMovePosition)
           {
-              if (!logicalSource->next_applied(logicalMove, moveInfo))
+              if (!logicalSource.source->next(logicalMove, moveInfo))
                   break;
-              appliedSource = &*logicalSource;
               move = moveInfo.representative;
           }
           else if (!next_ordinary_move())
@@ -1483,9 +1471,6 @@ moves_loop: // When in check, search starts from here
 #endif
           if (!next_ordinary_move())
               break;
-#ifdef ENABLE_COMPOUND_TURNS
-      AppliedLogicalMoveGuard appliedMoveGuard(appliedSource);
-#endif
       assert(is_ok(move));
 
       if (move == excludedMove)
@@ -1546,11 +1531,7 @@ moves_loop: // When in check, search starts from here
       ss->moveCount = ++moveCount;
 
       if (rootNode && thisThread == Threads.main() && Time.elapsed() > 3000
-          && is_uci_dialect(CurrentProtocol) && int(Options["Verbosity"]) >= 1
-#ifdef ENABLE_COMPOUND_TURNS
-          && !appliedSource
-#endif
-         )
+          && is_uci_dialect(CurrentProtocol) && int(Options["Verbosity"]) >= 1)
       {
           sync_cout << "info depth " << depth << " currmove ";
 #ifdef ENABLE_COMPOUND_TURNS
@@ -1764,10 +1745,7 @@ moves_loop: // When in check, search starts from here
           if (logicalMovePosition)
           {
               transaction = &thisThread->logical_move_state(ss->ply);
-              if (rootNode && !lazyRoot)
-                  pos.do_move(logicalMove, st, *transaction);
-              else
-                  logicalSource->commit_applied(st);
+              pos.do_move(logicalMove, st, *transaction);
           }
           else
               pos.do_move(move, st);
@@ -1896,10 +1874,7 @@ moves_loop: // When in check, search starts from here
       {
           if (logicalMovePosition)
           {
-              if (rootNode && !lazyRoot)
-                  pos.undo_move(logicalMove, *transaction);
-              else
-                  logicalSource->undo_applied();
+              pos.undo_move(logicalMove, *transaction);
           }
           else
               pos.undo_move(move);
@@ -2076,8 +2051,7 @@ moves_loop: // When in check, search starts from here
   template <NodeType nodeType>
   Value search(Position& pos, Stack* ss, Value alpha, Value beta, Depth depth, bool cutNode) {
 #ifdef ENABLE_COMPOUND_TURNS
-    if (pos.logical_moves_active()
-        || (pos.variant()->compoundTurnSteps && pos.sequential_setup_active()))
+    if (pos.logical_moves_active() || pos.may_enter_logical_moves())
         return search_impl<true, nodeType>(pos, ss, alpha, beta, depth, cutNode);
 #endif
     return search_impl<false, nodeType>(pos, ss, alpha, beta, depth, cutNode);
@@ -2646,7 +2620,8 @@ string UCI::pv(const Position& pos, Depth depth, Value alpha, Value beta) {
       Value v = updated ? rootMoves[i].score : rootMoves[i].previousScore;
 
 #ifdef ENABLE_COMPOUND_TURNS
-      const std::vector<std::string> compoundPv = pos.variant()->compoundTurnSteps > 0
+      const bool logicalPv = pos.logical_moves_active() || pos.may_enter_logical_moves();
+      const std::vector<std::string> compoundPv = logicalPv
                                                 ? compound_pv_to_strings(pos, rootMoves[i].first(),
                                                                          rootMoves[i].continuation())
                                                 : std::vector<std::string>();
@@ -2675,7 +2650,7 @@ string UCI::pv(const Position& pos, Depth depth, Value alpha, Value beta) {
           if (!pos.two_boards())
           {
 #ifdef ENABLE_COMPOUND_TURNS
-              if (pos.variant()->compoundTurnSteps > 0)
+              if (logicalPv)
                   for (const std::string& move : compoundPv)
                       ss << " " << move;
               else
@@ -2709,7 +2684,7 @@ string UCI::pv(const Position& pos, Depth depth, Value alpha, Value beta) {
          << " pv";
 
 #ifdef ENABLE_COMPOUND_TURNS
-      if (pos.variant()->compoundTurnSteps > 0)
+      if (logicalPv)
           for (const std::string& move : compoundPv)
               ss << " " << move;
       else

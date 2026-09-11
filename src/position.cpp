@@ -176,7 +176,7 @@ namespace {
       : pos_(const_cast<Position&>(pos)), move_(m), component_(pos_.compound_turn_active()) {
 #ifdef ENABLE_COMPOUND_TURNS
       if (component_)
-          CompoundTurn::do_component(pos_, move_, newSt, false);
+          pos_.do_component(move_, newSt, false);
       else
 #endif
           pos_.do_move(move_, newSt, false);
@@ -185,7 +185,7 @@ namespace {
     ~ScopedProbeMove() {
 #ifdef ENABLE_COMPOUND_TURNS
       if (component_)
-          CompoundTurn::undo_component(pos_, move_);
+          pos_.undo_component(move_);
       else
 #endif
           pos_.undo_move(move_);
@@ -7426,8 +7426,8 @@ Bitboard Position::freeze_squares_from_freezers(Color c, const SimulatedMoveInfo
             view = &simulatedMoveInfo;
         }
 
-        auto type_pieces = [&](Color color, PieceType pt) {
-            return view ? view->type_pieces(color, pt) : pieces(color, pt);
+        auto type_pieces = [&](Color color, PieceSet pts) {
+            return view ? view->type_pieces(color, pts) : pieces(color, pts);
         };
         auto immune_pieces = [&](Color color) {
             return view ? view->freezeImmuneOccupancy[color]
@@ -7442,22 +7442,14 @@ Bitboard Position::freeze_squares_from_freezers(Color c, const SimulatedMoveInfo
         }
 
         Bitboard frozen = 0;
-        for (PieceSet targetSet = piece_types(); targetSet; )
+        for (PieceSet freezerSet = var->freezePieceTypes; freezerSet; )
         {
-            PieceType targetType = pop_lsb(targetSet);
-            Bitboard targets = type_pieces(c, targetType) & ~immune_pieces(c) & ~supported;
-            if (!targets)
-                continue;
-
-            for (PieceSet freezerSet = var->freezePieceTypes; freezerSet; )
-            {
-                PieceType freezerType = pop_lsb(freezerSet);
-                if (var->pieceHierarchy[freezerType] <= var->pieceHierarchy[targetType])
-                    continue;
-                Bitboard freezers = type_pieces(~c, freezerType);
-                while (freezers)
-                    frozen |= adjacent_squares(*this, pop_lsb(freezers), var->freezeDiagonals) & targets;
-            }
+            PieceType freezerType = pop_lsb(freezerSet);
+            Bitboard targets = type_pieces(c, var->weakerPieceTypes[freezerType])
+                             & ~immune_pieces(c) & ~supported;
+            Bitboard freezers = type_pieces(~c, piece_set(freezerType));
+            while (freezers)
+                frozen |= adjacent_squares(*this, pop_lsb(freezers), var->freezeDiagonals) & targets;
         }
         return frozen;
     }
@@ -11110,16 +11102,21 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
       return c == WHITE ? whiteFlagReached : blackFlagReached;
   };
 
-  auto value_by_mover = [&](Value value) {
+  auto value_by_mover = [&](SimultaneousResult policy) {
+      const Value value = policy == SimultaneousResult::MOVER_WINS ? VALUE_MATE
+                        : policy == SimultaneousResult::MOVER_LOSES ? -VALUE_MATE
+                        : VALUE_DRAW;
       return convert_mate_value(-value, ply);
   };
+  const bool simultaneousFlagConfigured = var->simulFlagValueByMover != SimultaneousResult::LEGACY;
+  const bool simultaneousExtinctionConfigured = var->simulExtinctionValueByMover != SimultaneousResult::LEGACY;
 
   auto flag_game_end = [&](Value& flagResult) {
       // A configured simultaneous policy evaluates either side's goal at the
       // boundary. This preserves the complete-turn goal behavior used by
       // Arimaa even when flagMove is disabled; the ordinary flag path below
       // retains the established flagMove semantics for other variants.
-      if (var->simulFlagExtinctionPriority == SimulFlagExtinctionPriority::FLAG)
+      if (simultaneousFlagConfigured)
       {
           if (flag_reached_at_boundary(mover))
           {
@@ -11224,14 +11221,14 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
   {
       if (var->simulFlagExtinctionPriority == SimulFlagExtinctionPriority::EXTINCTION)
       {
-          result = bothExtinct && var->simulExtinctionValueByMoverConfigured
+          result = bothExtinct && simultaneousExtinctionConfigured
                  ? value_by_mover(var->simulExtinctionValueByMover)
                  : extinctionResult;
           return true;
       }
       if (var->simulFlagExtinctionPriority == SimulFlagExtinctionPriority::FLAG)
       {
-          result = bothFlags && var->simulFlagValueByMoverConfigured
+          result = bothFlags && simultaneousFlagConfigured
                  ? value_by_mover(var->simulFlagValueByMover)
                  : flagResult;
           return true;
@@ -11245,7 +11242,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
 
   if (flagEnd)
   {
-      result = bothFlags && var->simulFlagValueByMoverConfigured
+      result = bothFlags && simultaneousFlagConfigured
              ? value_by_mover(var->simulFlagValueByMover)
              : flagResult;
       return true;
@@ -11253,7 +11250,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
 
   if (extinctionEnd)
   {
-      result = bothExtinct && var->simulExtinctionValueByMoverConfigured
+      result = bothExtinct && simultaneousExtinctionConfigured
              ? value_by_mover(var->simulExtinctionValueByMover)
              : extinctionResult;
       return true;

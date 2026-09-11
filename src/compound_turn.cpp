@@ -16,24 +16,6 @@
 
 namespace Stockfish {
 
-namespace CompoundTurn {
-
-void do_component(Position& pos, Move move, StateInfo& state,
-                  bool countNode, bool updateLayoutKey) {
-    pos.do_component(move, state, countNode, updateLayoutKey);
-}
-
-void undo_component(Position& pos, Move move) {
-    pos.undo_component(move);
-}
-
-void commit_applied(Position& pos, const LogicalMove& move, StateInfo& state,
-                    LogicalMoveState& transaction) {
-    pos.commit_compound_move(move, state, transaction);
-}
-
-} // namespace CompoundTurn
-
 namespace {
 
 int compound_move_cost(const Position& pos, Move move) {
@@ -94,19 +76,17 @@ LogicalMoveSource::LogicalMoveSource(Position& pos_, Thread* thread_,
       finished = true;
       return;
   }
-
 }
 
 LogicalMoveSource::~LogicalMoveSource() {
 
-  if (applied)
-      undo_applied();
   if (prefixApplied)
       unwind_prefix();
 }
 
 void LogicalMoveSource::initialize_frame(int frameDepth) {
   Frame& frame = frames[frameDepth];
+  auto& moves = transaction.moveLists[frameDepth];
   frame.usedCost = frameDepth == 0
                  ? 0
                  : frames[frameDepth - 1].usedCost
@@ -123,7 +103,7 @@ void LogicalMoveSource::initialize_frame(int frameDepth) {
 
   ExtMove* end = generate<LEGAL>(pos, moveBuffer);
   assert(end - moveBuffer <= MOVEGEN_OVERFLOW_CAPACITY);
-  frame.moves.assign(moveBuffer, end);
+  moves.assign(moveBuffer, end);
 
   if (thread)
       thread->release_buffer(moveBuffer);
@@ -131,7 +111,7 @@ void LogicalMoveSource::initialize_frame(int frameDepth) {
   // The provider does not have a Stack/MovePicker, but a small amount of
   // complete-turn ordering is still useful. Follow a remembered logical turn,
   // fall back to the TT's first-component hint, and prioritize tactical steps.
-  auto tacticalBegin = frame.moves.begin();
+  auto tacticalBegin = moves.begin();
   Move preferred = MOVE_NONE;
   if (!preferredTurn.empty() && frameDepth < preferredTurn.length
       && std::equal(turn.components.begin(), turn.components.begin() + frameDepth,
@@ -142,61 +122,41 @@ void LogicalMoveSource::initialize_frame(int frameDepth) {
 
   if (preferred != MOVE_NONE)
   {
-      auto preferredIt = std::find(frame.moves.begin(), frame.moves.end(), preferred);
-      if (preferredIt != frame.moves.end())
+      auto preferredIt = std::find(moves.begin(), moves.end(), preferred);
+      if (preferredIt != moves.end())
       {
-          std::rotate(frame.moves.begin(), preferredIt, preferredIt + 1);
-          tacticalBegin = frame.moves.begin() + 1;
+          std::rotate(moves.begin(), preferredIt, preferredIt + 1);
+          tacticalBegin = moves.begin() + 1;
       }
   }
-  std::stable_partition(tacticalBegin, frame.moves.end(),
-                        [&](Move move) { return pos.capture_or_promotion(move); });
+  std::partition(tacticalBegin, moves.end(),
+                 [&](Move move) { return pos.capture_or_promotion(move); });
   frame.current = 0;
 }
 
 void LogicalMoveSource::apply_path(int length) {
   for (int i = 0; i < length; ++i)
-      CompoundTurn::do_component(pos, turn.components[i], transaction.components[i], false, false);
+      pos.do_component(turn.components[i], transaction.components[i], false, false);
 }
 
 void LogicalMoveSource::unwind_prefix() {
   for (int i = depth - 1; i >= 0; --i)
-      CompoundTurn::undo_component(pos, turn.components[i]);
+      pos.undo_component(turn.components[i]);
   prefixApplied = false;
 }
 
 bool LogicalMoveSource::next(LogicalMove& move) {
 
-  return next_impl(move, nullptr, false);
+  return next_impl(move, nullptr);
 }
 
 bool LogicalMoveSource::next(LogicalMove& move, LogicalMoveInfo& info) {
 
-  return next_impl(move, &info, false);
+  return next_impl(move, &info);
 }
 
-bool LogicalMoveSource::next_applied(LogicalMove& move, LogicalMoveInfo& info) {
+bool LogicalMoveSource::next_impl(LogicalMove& move, LogicalMoveInfo* info) {
 
-  return next_impl(move, &info, true);
-}
-
-void LogicalMoveSource::commit_applied(StateInfo& state) {
-
-  assert(applied);
-  CompoundTurn::commit_applied(pos, turn, state, transaction);
-}
-
-void LogicalMoveSource::undo_applied() {
-
-  assert(applied);
-  pos.undo_move(turn, transaction, true);
-  applied = false;
-}
-
-bool LogicalMoveSource::next_impl(LogicalMove& move, LogicalMoveInfo* info,
-                                  bool leaveApplied) {
-
-  assert(!applied);
   if (finished)
       return false;
 
@@ -219,26 +179,27 @@ bool LogicalMoveSource::next_impl(LogicalMove& move, LogicalMoveInfo* info,
       if (descend)
       {
           ++depth;
-          CompoundTurn::do_component(pos, turn.components[depth - 1],
-                                     transaction.components[depth - 1], false, false);
+          pos.do_component(turn.components[depth - 1],
+                           transaction.components[depth - 1], false, false);
           initialize_frame(depth);
           descend = false;
       }
 
       Frame& frame = frames[depth];
-      if (frame.current == frame.moves.size())
+      auto& moves = transaction.moveLists[depth];
+      if (frame.current == moves.size())
       {
           if (depth == 0)
           {
               finished = true;
               return false;
           }
-          CompoundTurn::undo_component(pos, turn.components[depth - 1]);
+          pos.undo_component(turn.components[depth - 1]);
           --depth;
           continue;
       }
 
-      const Move component = frame.moves[frame.current++];
+      const Move component = moves[frame.current++];
       if (depth != 0 && is_pass(component))
           continue;
 
@@ -265,7 +226,7 @@ bool LogicalMoveSource::next_impl(LogicalMove& move, LogicalMoveInfo* info,
           candidateInfo.seeReliable = turn.is_single() && firstSeeReliable;
           candidateInfo.givesCheck = turn.is_single() && firstGivesCheck;
       }
-      CompoundTurn::do_component(pos, component, transaction.components[depth], false, false);
+      pos.do_component(component, transaction.components[depth], false, false);
 
       if (info)
       {
@@ -311,13 +272,8 @@ bool LogicalMoveSource::next_impl(LogicalMove& move, LogicalMoveInfo* info,
           move = turn;
           if (info)
               *info = candidateInfo;
-          if (leaveApplied)
-              applied = true;
-          else
-          {
-              pos.undo_move(turn, transaction, true);
-              unwind_prefix();
-          }
+          pos.undo_move(turn, transaction, true);
+          unwind_prefix();
           return true;
       }
 
@@ -397,7 +353,7 @@ bool parse_compound_move(Position& pos, const std::string& text, LogicalMove& tu
 
           const int index = parsed.length++;
           parsed.components[index] = move;
-          CompoundTurn::do_component(pos, move, states[index], false);
+          pos.do_component(move, states[index], false);
           const int nextUsedSteps = usedSteps + moveCost;
 
           bool accepted = false;
@@ -409,11 +365,11 @@ bool parse_compound_move(Position& pos, const std::string& text, LogicalMove& tu
 
           if (accepted)
           {
-              CompoundTurn::undo_component(pos, move);
+              pos.undo_component(move);
               return true;
           }
 
-          CompoundTurn::undo_component(pos, move);
+          pos.undo_component(move);
           --parsed.length;
       }
 
@@ -451,11 +407,11 @@ std::string compound_move_to_string(Position& pos, const LogicalMove& turn) {
       result += compound_step_to_string(pos, turn.components[i]);
       // Formatting is a read-only operation. The component executor still
       // supplies scratch state so that effects are formatted in context.
-      CompoundTurn::do_component(pos, turn.components[i], transaction.components[i], false);
+      pos.do_component(turn.components[i], transaction.components[i], false);
   }
 
   for (int i = turn.length - 1; i >= 0; --i)
-      CompoundTurn::undo_component(pos, turn.components[i]);
+      pos.undo_component(turn.components[i]);
 
   return result;
 }

@@ -2279,6 +2279,16 @@ Variant* Variant::conclude() {
     for (PieceType pt = PAWN; pt < PIECE_TYPE_NB && !hasMoveMorph; ++pt)
         hasMoveMorph = moveMorphPieceType[pt] != NO_PIECE_TYPE;
 
+    std::fill(std::begin(weakerPieceTypes), std::end(weakerPieceTypes), NO_PIECE_SET);
+    if (hasPieceHierarchy)
+        for (PieceType freezer = PAWN; freezer < PIECE_TYPE_NB; ++freezer)
+            for (PieceSet targets = pieceTypes; targets; )
+            {
+                PieceType target = pop_lsb(targets);
+                if (pieceHierarchy[freezer] > pieceHierarchy[target])
+                    weakerPieceTypes[freezer] |= piece_set(target);
+            }
+
     bool hasPulling = false;
     for (PieceSet ps = pieceTypes; ps && !hasPulling; )
         hasPulling = pullingStrength[pop_lsb(ps)] > 0;

@@ -73,6 +73,13 @@ enum class SimulFlagExtinctionPriority : uint8_t {
   EXTINCTION
 };
 
+enum class SimultaneousResult : uint8_t {
+  LEGACY,
+  MOVER_WINS,
+  MOVER_LOSES,
+  DRAW
+};
+
 enum class PushPullRule : uint8_t {
   GENERIC,
   TWO_STEP,
@@ -224,6 +231,7 @@ struct Variant {
   PieceSet freezePieceTypes = NO_PIECE_SET;
   PieceSet freezeImmunePieceTypes = NO_PIECE_SET;
   int pieceHierarchy[PIECE_TYPE_NB] = {};
+  PieceSet weakerPieceTypes[PIECE_TYPE_NB] = {};
   bool hasPieceHierarchy = false;
   FreezeProtection freezeProtection = FreezeProtection::NONE;
   bool freezeDiagonals = true;
@@ -447,10 +455,8 @@ struct Variant {
   bool passUntilSetup = false;
   int compoundTurnSteps = 0;
   SimulFlagExtinctionPriority simulFlagExtinctionPriority = SimulFlagExtinctionPriority::EXTINCTION;
-  Value simulFlagValueByMover = VALUE_MATE;
-  Value simulExtinctionValueByMover = -VALUE_MATE;
-  bool simulFlagValueByMoverConfigured = false;
-  bool simulExtinctionValueByMoverConfigured = false;
+  SimultaneousResult simulFlagValueByMover = SimultaneousResult::LEGACY;
+  SimultaneousResult simulExtinctionValueByMover = SimultaneousResult::LEGACY;
 
   enum PotionType : int {
       POTION_FREEZE,

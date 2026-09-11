@@ -46,11 +46,6 @@ namespace Stockfish {
 class Position;
 struct StateInfo;
 struct LogicalMoveState;
-namespace CompoundTurn {
-void do_component(Position&, Move, StateInfo&, bool, bool);
-void undo_component(Position&, Move);
-void commit_applied(Position&, const LogicalMove&, StateInfo&, LogicalMoveState&);
-}
 #endif
 
 constexpr int MAX_PUSH_SNAPSHOT = 32;
@@ -136,6 +131,12 @@ struct SimulatedMoveInfo {
   Bitboard type_pieces(Color c, PieceType pt) const {
       return typeOccupancy.empty() ? Bitboard(0)
                                    : typeOccupancy[size_t(c) * PIECE_TYPE_NB + pt];
+  }
+  Bitboard type_pieces(Color c, PieceSet pts) const {
+      Bitboard result = 0;
+      while (pts)
+          result |= type_pieces(c, pop_lsb(pts));
+      return result;
   }
   Piece piece_on(Square sq) const {
       if (typeOccupancy.empty())
@@ -482,6 +483,7 @@ static_assert(std::is_standard_layout_v<NnueStateInfo>, "NnueStateInfo must rema
 struct LogicalMoveState {
   alignas(Eval::NNUE::CacheLineSize)
   std::array<StateInfo, LogicalMove::MAX_COMPONENTS> components;
+  std::array<std::vector<Move>, LogicalMove::MAX_COMPONENTS> moveLists;
   StateInfo* previous = nullptr;
   int usedCost = 0;
   bool syntheticBoundary = false;
@@ -1087,6 +1089,9 @@ public:
   void do_move(Move m, StateInfo& newSt, bool countNode = true);
   void undo_move(Move m);
 #ifdef ENABLE_COMPOUND_TURNS
+  void do_component(Move m, StateInfo& newSt, bool countNode = true,
+                    bool updateLayoutKey = true);
+  void undo_component(Move m);
   void do_move(const LogicalMove& move, StateInfo& newSt,
                LogicalMoveState& transaction, bool countNode = true);
   void undo_move(const LogicalMove& move, LogicalMoveState& transaction,
@@ -1131,6 +1136,7 @@ public:
   bool has_legal_move() const;
   bool has_legal_move_ignoring_immediate_end() const;
   bool logical_moves_active() const;
+  bool may_enter_logical_moves() const;
   bool has_legal_logical_move() const;
   LogicalMoveCapabilities logical_move_capabilities() const;
   bool is_optional_game_end() const;
@@ -1176,12 +1182,6 @@ private:
   template<bool Compound>
   void undo_component_impl(Move m);
 #ifdef ENABLE_COMPOUND_TURNS
-  friend void CompoundTurn::do_component(Position&, Move, StateInfo&, bool, bool);
-  friend void CompoundTurn::undo_component(Position&, Move);
-  friend void CompoundTurn::commit_applied(Position&, const LogicalMove&, StateInfo&, LogicalMoveState&);
-  void do_component(Move m, StateInfo& newSt, bool countNode = true,
-                    bool updateLayoutKey = true);
-  void undo_component(Move m);
   void end_compound_turn(StateInfo& newSt);
   void undo_compound_turn();
   void commit_compound_move(const LogicalMove& move, StateInfo& newSt,
@@ -2952,6 +2952,14 @@ inline bool Position::compound_turn_active() const {
 
 inline bool Position::logical_moves_active() const {
   return compound_turn_active();
+}
+
+inline bool Position::may_enter_logical_moves() const {
+#ifdef ENABLE_COMPOUND_TURNS
+  return !logical_moves_active() && var->compoundTurnSteps > 0;
+#else
+  return false;
+#endif
 }
 
 inline LogicalMoveCapabilities Position::logical_move_capabilities() const {

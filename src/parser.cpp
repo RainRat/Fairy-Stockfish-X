@@ -1096,15 +1096,15 @@ template <bool Current, class T> bool VariantParser<DoCheck>::parse_attribute(co
 }
 
 template <bool DoCheck>
-bool VariantParser<DoCheck>::parse_simul_value_by_mover(const std::string& key, Value& target) {
+bool VariantParser<DoCheck>::parse_simul_value_by_mover(const std::string& key, SimultaneousResult& target) {
     auto it = config.find(key);
     if (it == config.end())
         return false;
 
     static constexpr auto values = std::array{
-        std::pair{"win", VALUE_MATE},
-        std::pair{"loss", -VALUE_MATE},
-        std::pair{"draw", VALUE_DRAW},
+        std::pair{"win", SimultaneousResult::MOVER_WINS},
+        std::pair{"loss", SimultaneousResult::MOVER_LOSES},
+        std::pair{"draw", SimultaneousResult::DRAW},
     };
     const bool valid = parse_named_value(it->second, target, values);
     if (DoCheck && !valid)
@@ -1924,8 +1924,6 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("simulFlagExtinctionPriority", v->simulFlagExtinctionPriority);
     parse_simul_value_by_mover("simulFlagValueByMover", v->simulFlagValueByMover);
     parse_simul_value_by_mover("simulExtinctionValueByMover", v->simulExtinctionValueByMover);
-    v->simulFlagValueByMoverConfigured |= config.find("simulFlagValueByMover") != config.end();
-    v->simulExtinctionValueByMoverConfigured |= config.find("simulExtinctionValueByMover") != config.end();
     if (!parse_multimoves(v))
         return false;
     parse_attribute("progressiveMultimove", v->progressiveMultimove);
