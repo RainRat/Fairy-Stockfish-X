@@ -2289,6 +2289,17 @@ Variant* Variant::conclude() {
                     weakerPieceTypes[freezer] |= piece_set(target);
             }
 
+    // Two-step push/pull authorizes by pieceHierarchy, not by the generic
+    // pushing/pulling tables. Copy the hierarchy into those tables at conclude
+    // time so hot accessors stay direct array loads without a per-call rule branch.
+    if (pushPullRule == PushPullRule::TWO_STEP)
+        for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
+        {
+            pushingStrength[pt] = pieceHierarchy[pt];
+            pullingStrength[pt] = pieceHierarchy[pt];
+            hasPushing |= pieceHierarchy[pt] > 0;
+        }
+
     bool hasPulling = false;
     for (PieceSet ps = pieceTypes; ps && !hasPulling; )
         hasPulling = pullingStrength[pop_lsb(ps)] > 0;
