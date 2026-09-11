@@ -24,12 +24,6 @@ class Thread;
 struct StateInfo;
 struct LogicalMoveState;
 
-namespace CompoundTurn {
-void do_component(Position& pos, Move move, StateInfo& state,
-                  bool countNode = true, bool updateLayoutKey = true);
-void undo_component(Position& pos, Move move);
-}
-
 /// Lazily yield complete legal logical moves without materializing the turn tree.
 /// The component recursion and its temporary position changes stay private to
 /// this provider; callers always observe the position at a turn boundary.
@@ -45,18 +39,11 @@ class LogicalMoveSource {
 
   bool next(LogicalMove& move);
   bool next(LogicalMove& move, LogicalMoveInfo& info);
-  // Yield a move with its component effects applied. The caller must either
-  // commit or undo it before requesting another move.
-  bool next_applied(LogicalMove& move, LogicalMoveInfo& info);
-  void commit_applied(StateInfo& state);
-  void undo_applied();
-  bool has_applied_move() const { return applied; }
 
  private:
-  bool next_impl(LogicalMove& move, LogicalMoveInfo* info, bool leaveApplied);
+  bool next_impl(LogicalMove& move, LogicalMoveInfo* info);
 
   struct Frame {
-      std::vector<Move> moves;
       size_t current = 0;
       int usedCost = 0;
   };
@@ -77,7 +64,6 @@ class LogicalMoveSource {
   int depth = 0;
   bool initialized = false;
   bool descend = false;
-  bool applied = false;
   bool prefixApplied = false;
   bool finished = false;
   Piece firstMovedPiece = NO_PIECE;

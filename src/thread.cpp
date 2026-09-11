@@ -217,6 +217,7 @@ void ThreadPool::start_thinking(Position& pos, StateListPtr& states,
   Search::Limits = limits;
   Search::RootMoves rootMoves;
 
+
   const bool filterLaserRotations = limits.perft == 0;
   pos.set_search_laser_rotation_filter(filterLaserRotations);
 #ifdef ENABLE_COMPOUND_TURNS
@@ -232,14 +233,13 @@ void ThreadPool::start_thinking(Position& pos, StateListPtr& states,
       LogicalMoveSource source(pos, pos.this_thread(), transaction);
       LogicalMove m;
       LogicalMoveInfo info;
-      while (source.next_applied(m, info))
+      while (source.next(m, info))
       {
           if (   (!limits.searchMovesSpecified
                   || std::count(limits.searchmoves.begin(), limits.searchmoves.end(), m))
               && (limits.banmoves.empty()
                   || !std::count(limits.banmoves.begin(), limits.banmoves.end(), m)))
               rootMoves.emplace_back(m, info);
-          source.undo_applied();
       }
   }
 #endif
