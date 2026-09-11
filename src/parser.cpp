@@ -1981,6 +1981,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("flagPieceCount", v->flagPieceCount);
     parse_attribute("flagPieceBlockedWin", v->flagPieceBlockedWin);
     parse_attribute("flagMove", v->flagMove);
+    parse_attribute("flagOpponentRelocation", v->flagOpponentRelocation);
     parse_attribute("flagPieceSafe", v->flagPieceSafe);
     parse_attribute("checkCounting", v->checkCounting);
     parse_attribute("connectN", v->connectN);
@@ -2241,9 +2242,14 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
         }
     }
 
-    v->hasPushing = false;
+    v->hasGenericPushing = false;
     for (int strength : v->pushingStrength)
-        v->hasPushing |= strength > 0;
+        v->hasGenericPushing |= strength > 0;
+
+    v->hasGenericPulling = false;
+    for (int strength : v->pullingStrength)
+        v->hasGenericPulling |= strength > 0;
+    v->hasTwoStepPushPull = v->pushPullRule == PushPullRule::TWO_STEP;
 
     v->hasPieceHierarchy = false;
     for (int strength : v->pieceHierarchy)

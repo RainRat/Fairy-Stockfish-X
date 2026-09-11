@@ -24,14 +24,16 @@ bool compound_turn_candidate_accepted(Position& pos, Move move, int usedSteps,
                                       Key startBoundaryKey,
                                       const StateInfo* logicalRoot) {
     const int moveCost = compound_move_cost(pos, move);
+    if (!is_pass(move) && pos.compound_turn_boundary_key() == startBoundaryKey)
+        return false;
+
     bool repetitionIllegal = false;
     if (!is_pass(move) && usedSteps + moveCost < pos.compound_turn_steps())
         repetitionIllegal = pos.compound_turn_repetition_illegal(logicalRoot->previous, 1);
     else
         repetitionIllegal = pos.compound_turn_repetition_illegal(logicalRoot->previous, 0);
 
-    return (is_pass(move) || pos.compound_turn_boundary_key() != startBoundaryKey)
-        && !repetitionIllegal;
+    return !repetitionIllegal;
 }
 
 void record_removed_piece(LogicalMoveInfo& info, Piece piece, Color mover) {
@@ -141,14 +143,42 @@ LogicalMoveSource::LogicalMoveSource(Position& pos_, LogicalMoveWorkspace& works
       finished = true;
       return;
   }
+
+  logicalRoot = pos.state();
+  startBoundaryKey = pos.compound_turn_boundary_key();
+  repetitionLimit = pos.variant()->samePlayerBoardRepetitionIllegalAtN;
+  if (repetitionLimit <= 0)
+      return;
+  for (const StateInfo* previous = logicalRoot->previous;
+       previous && 2 + int(previousBoundaryLayoutKeys.size()) * 2 <= logicalRoot->pliesFromNull + 1;
+       previous = previous->previous && previous->previous->previous
+                ? previous->previous->previous : nullptr)
+      previousBoundaryLayoutKeys.push_back(previous->layoutKey);
 }
 
 LogicalMoveSource::~LogicalMoveSource() {
 
-  if (prefixApplied)
+  if (yielded)
+      undo_yielded();
+  else if (prefixApplied)
       unwind_prefix();
   if (ownsWorkspace)
       workspace->inUse = false;
+}
+
+bool LogicalMoveSource::repetition_illegal(Key layoutKey, int pliesFromNull) const {
+
+  if (repetitionLimit <= 0 || pliesFromNull < 2)
+      return false;
+
+  const size_t count = std::min(previousBoundaryLayoutKeys.size(),
+                                size_t((pliesFromNull - 2) / 2 + 1));
+  int repetitions = 0;
+  for (size_t i = 0; i < count; ++i)
+      if (previousBoundaryLayoutKeys[i] == layoutKey
+          && ++repetitions >= repetitionLimit)
+          return true;
+  return false;
 }
 
 void LogicalMoveSource::initialize_frame(int frameDepth) {
@@ -202,23 +232,38 @@ void LogicalMoveSource::unwind_prefix() {
 
 bool LogicalMoveSource::next(LogicalMove& move) {
 
-  return next_impl(move, nullptr);
+  return next_impl(move, nullptr, nullptr);
 }
 
 bool LogicalMoveSource::next(LogicalMove& move, LogicalMoveInfo& info) {
 
-  return next_impl(move, &info);
+  return next_impl(move, &info, nullptr);
 }
 
-bool LogicalMoveSource::next_impl(LogicalMove& move, LogicalMoveInfo* info) {
+bool LogicalMoveSource::next_applied(LogicalMove& move, LogicalMoveInfo& info,
+                                     StateInfo& committedState) {
+
+  return next_impl(move, &info, &committedState);
+}
+
+void LogicalMoveSource::undo_yielded() {
+
+  assert(yielded);
+  pos.undo_move(turn, *transaction, true);
+  unwind_prefix();
+  yielded = false;
+  yieldedString.clear();
+}
+
+bool LogicalMoveSource::next_impl(LogicalMove& move, LogicalMoveInfo* info,
+                                  StateInfo* committedState) {
 
   if (finished)
       return false;
+  assert(!yielded);
 
   if (!initialized)
   {
-      startBoundaryKey = pos.compound_turn_boundary_key();
-      logicalRoot = pos.state();
       initialize_frame(0);
       initialized = true;
       prefixApplied = true;
@@ -265,6 +310,8 @@ bool LogicalMoveSource::next_impl(LogicalMove& move, LogicalMoveInfo* info) {
 
       turn.components[depth] = component;
       turn.length = uint8_t(depth + 1);
+      if (committedState)
+          componentStrings[depth] = compound_step_to_string(pos, component);
       const Color mover = pos.side_to_move();
       if (depth == 0)
       {
@@ -280,8 +327,10 @@ bool LogicalMoveSource::next_impl(LogicalMove& move, LogicalMoveInfo* info) {
           componentFrame.info = depth ? frames[depth - 1].info : LogicalMoveInfo();
           componentFrame.info.representative = turn.first();
           componentFrame.info.movedPiece = firstMovedPiece;
-          componentFrame.info.historyCompatible = turn.is_single();
-          componentFrame.info.seeReliable = turn.is_single() && firstSeeReliable;
+          const bool ordinaryHeuristicCompatible = turn.is_single()
+                                                  && !is_two_step_move(turn.first());
+          componentFrame.info.historyCompatible = ordinaryHeuristicCompatible;
+          componentFrame.info.seeReliable = ordinaryHeuristicCompatible && firstSeeReliable;
           componentFrame.info.givesCheck = turn.is_single() && firstGivesCheck;
 
           const StateInfo& componentState = transaction->components[depth];
@@ -310,8 +359,13 @@ bool LogicalMoveSource::next_impl(LogicalMove& move, LogicalMoveInfo* info) {
       transaction->previous = logicalRoot;
       transaction->usedCost = usedSteps + moveCost;
       transaction->syntheticBoundary = false;
-      const bool accepted = compound_turn_candidate_accepted(pos, component, usedSteps,
-                                                              startBoundaryKey, logicalRoot);
+      const bool boundaryChanged = is_pass(component)
+                                 || pos.compound_turn_boundary_key() != startBoundaryKey;
+      const int boundaryPlies = pos.state()->pliesFromNull
+                              + (!is_pass(component)
+                                 && usedSteps + moveCost < pos.compound_turn_steps());
+      const bool accepted = boundaryChanged
+                         && !repetition_illegal(pos.state()->layoutKey, boundaryPlies);
       const bool canDescend = !is_pass(component)
                            && usedSteps + moveCost < pos.compound_turn_steps()
                            && pos.compound_turn_active();
@@ -323,8 +377,23 @@ bool LogicalMoveSource::next_impl(LogicalMove& move, LogicalMoveInfo* info) {
           move = turn;
           if (info)
               *info = frames[depth].info;
-          pos.undo_move(turn, *transaction, true);
-          unwind_prefix();
+          if (committedState)
+          {
+              yieldedString.clear();
+              for (int i = 0; i < turn.length; ++i)
+              {
+                  if (i)
+                      yieldedString += ',';
+                  yieldedString += componentStrings[i];
+              }
+              pos.commit_compound_move(turn, *committedState, *transaction);
+              yielded = true;
+          }
+          else
+          {
+              pos.undo_move(turn, *transaction, true);
+              unwind_prefix();
+          }
           return true;
       }
 
@@ -350,19 +419,53 @@ std::vector<LogicalMove> generate_compound_moves(Position& pos) {
   return turns;
 }
 
-bool has_any_compound_move(Position& pos) {
+namespace {
+
+bool has_any_compound_move_impl(Position& pos, int depth, int usedSteps,
+                                Key startBoundaryKey, const StateInfo* logicalRoot,
+                                StateInfo* states) {
+
+    for (const auto& move : MoveList<LEGAL>(pos))
+    {
+        if (depth != 0 && is_pass(move))
+            continue;
+
+        const int moveCost = compound_move_cost(pos, move);
+        if (usedSteps + moveCost > pos.compound_turn_steps())
+            continue;
+
+        pos.do_component(move, states[depth], false, false);
+        const int nextUsedSteps = usedSteps + moveCost;
+        const bool accepted = compound_turn_candidate_accepted(pos, move, usedSteps,
+                                                                startBoundaryKey, logicalRoot);
+        const bool canDescend = !is_pass(move)
+                             && nextUsedSteps < pos.compound_turn_steps()
+                             && pos.compound_turn_active();
+        const bool found = accepted
+                        || (canDescend && depth + 1 < LogicalMove::MAX_COMPONENTS
+                            && has_any_compound_move_impl(pos, depth + 1, nextUsedSteps,
+                                                          startBoundaryKey, logicalRoot, states));
+        pos.undo_component(move);
+        if (found)
+            return true;
+    }
+    return false;
+}
+
+} // namespace
+
+bool has_any_compound_move(Position& pos, bool checkGameEnd) {
 
   if (!pos.compound_turn_active())
       return false;
 
   Value result;
-  if (pos.is_game_end(result))
+  if (checkGameEnd && pos.is_game_end(result))
       return false;
 
-  LogicalMoveWorkspace workspace;
-  LogicalMoveSource source(pos, workspace, {}, false);
-  LogicalMove move;
-  return source.next(move);
+  alignas(Eval::NNUE::CacheLineSize) StateInfo states[LogicalMove::MAX_COMPONENTS];
+  return has_any_compound_move_impl(pos, 0, 0, pos.compound_turn_boundary_key(),
+                                    pos.state(), states);
 }
 
 bool parse_compound_move(Position& pos, const std::string& text, LogicalMove& turn) {

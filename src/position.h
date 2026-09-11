@@ -47,6 +47,7 @@ namespace Stockfish {
 
 #ifdef ENABLE_COMPOUND_TURNS
 class Position;
+class LogicalMoveSource;
 struct StateInfo;
 struct LogicalMoveUndo;
 #endif
@@ -1150,7 +1151,7 @@ public:
 #ifdef ENABLE_COMPOUND_TURNS
   bool logical_moves_active() const;
   bool may_enter_logical_moves() const;
-  bool has_legal_logical_move() const;
+  bool has_legal_logical_move(bool checkGameEnd = true) const;
   LogicalMoveCapabilities logical_move_capabilities() const;
 #endif
   bool is_optional_game_end() const;
@@ -1190,6 +1191,7 @@ public:
   void remove_piece(Square s);
 
 private:
+  friend class LogicalMoveSource;
   template<bool Compound>
   void do_component_impl(Move m, StateInfo& newSt, bool countNode,
                          bool updateLayoutKey);
@@ -1209,6 +1211,7 @@ private:
   void update_repetition_info();
   Key compute_material_key() const;
   Key compute_piece_state_key() const;
+  void xor_layout_piece(Piece pc, Square s);
   Bitboard compute_checkers_bb(Color side) const;
   Bitboard compute_evasion_checkers_bb(Color side) const;
   void set_check_info(StateInfo* si) const;
@@ -2131,32 +2134,28 @@ inline bool Position::rifle_capture(Move m) const {
 
 inline int Position::pushing_strength(PieceType pt) const {
   assert(var != nullptr);
-  return var->pushingStrength[pt];
+  return var->pushPullRule == PushPullRule::TWO_STEP ? var->pieceHierarchy[pt]
+                                                     : var->pushingStrength[pt];
 }
 
 inline bool Position::has_pushing() const {
   assert(var != nullptr);
   if (push_pull_rule() == PushPullRule::NONE)
       return false;
-  for (PieceSet ps = piece_types(); ps; )
-      if (pushing_strength(pop_lsb(ps)) > 0)
-          return true;
-  return false;
+  return var->hasGenericPushing || var->hasTwoStepPushPull;
 }
 
 inline int Position::pulling_strength(PieceType pt) const {
   assert(var != nullptr);
-  return var->pullingStrength[pt];
+  return var->pushPullRule == PushPullRule::TWO_STEP ? var->pieceHierarchy[pt]
+                                                     : var->pullingStrength[pt];
 }
 
 inline bool Position::has_pulling() const {
   assert(var != nullptr);
   if (push_pull_rule() == PushPullRule::NONE)
       return false;
-  for (PieceSet ps = piece_types(); ps; )
-      if (pulling_strength(pop_lsb(ps)) > 0)
-          return true;
-  return false;
+  return var->hasGenericPulling || var->hasTwoStepPushPull;
 }
 
 inline PieceSet Position::adjacent_swap_move_types() const {
@@ -5946,6 +5945,7 @@ inline void Position::put_piece(Piece pc, Square s, bool isPromoted, Piece unpro
   pieceCount[pc]++;
   pieceCount[make_piece(color_of(pc), ALL_PIECES)]++;
   psq += PSQT::psq[pc][s];
+  xor_layout_piece(pc, s);
   if (isPromoted)
       promotedPieces |= s;
   unpromotedBoard[s] = unpromotedPc;
@@ -5969,6 +5969,7 @@ inline void Position::remove_piece(Square s) {
   pieceCount[pc]--;
   pieceCount[make_piece(color_of(pc), ALL_PIECES)]--;
   psq -= PSQT::psq[pc][s];
+  xor_layout_piece(pc, s);
   promotedPieces -= s;
   unpromotedBoard[s] = NO_PIECE;
 
@@ -5988,6 +5989,8 @@ inline void Position::move_piece(Square from, Square to) {
   Piece pc = board[from];
   int orientation = orientation_on(from);
   Bitboard fromTo = square_bb(from) ^ to; // from == to needs to cancel out
+  xor_layout_piece(pc, from);
+  xor_layout_piece(pc, to);
   byTypeBB[ALL_PIECES] ^= fromTo;
   byTypeBB[type_of(pc)] ^= fromTo;
   byColorBB[color_of(pc)] ^= fromTo;

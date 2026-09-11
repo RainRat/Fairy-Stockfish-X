@@ -1470,7 +1470,8 @@ void compound_turn_rules() {
         {
             check(info.representative == candidate.first(),
                   "lazy logical move info lost the representative move");
-            check(info.historyCompatible == candidate.is_single(),
+            check(info.historyCompatible == (candidate.is_single()
+                                              && !is_two_step_move(candidate.first())),
                   "lazy logical move info misclassified physical history compatibility");
             lazyGenerated.push_back(candidate);
         }
@@ -1520,6 +1521,24 @@ void compound_turn_rules() {
     }
     check(detachedGenerated == generated && pos.key() == generatedKey,
           "detached logical move source did not preserve traversal and root state");
+
+    std::vector<LogicalMove> appliedGenerated;
+    {
+        LogicalMoveWorkspace sourceWorkspace;
+        LogicalMoveSource source(pos, sourceWorkspace);
+        alignas(Eval::NNUE::CacheLineSize) StateInfo committedState;
+        LogicalMove candidate;
+        LogicalMoveInfo info;
+        while (source.next_applied(candidate, info, committedState))
+        {
+            appliedGenerated.push_back(candidate);
+            source.undo_yielded();
+            check(pos.key() == generatedKey,
+                  "applied logical move source did not restore the root state");
+        }
+    }
+    check(appliedGenerated == generated,
+          "applied logical move source disagreed with materialized compound generation");
 
     // Logical move metadata must distinguish material removed by an effect,
     // including an effect in a later component.

@@ -1380,6 +1380,12 @@ Key Position::layout_key() const {
   return k;
 }
 
+void Position::xor_layout_piece(Piece pc, Square s) {
+
+  if (var->samePlayerBoardRepetitionIllegalAtN > 0)
+      st->layoutKey ^= Zobrist::psq[pc][s];
+}
+
 #ifdef ENABLE_COMPOUND_TURNS
 Key Position::compound_turn_boundary_key() const {
   Key key = st->key ^ (sideToMove == BLACK ? Zobrist::side : 0);
@@ -1490,9 +1496,7 @@ bool Position::compound_turn_repetition_illegal(const StateInfo* previousSamePla
   if (var->samePlayerBoardRepetitionIllegalAtN <= 0)
       return false;
 
-  // Temporary components defer their layout key. The boundary probe only needs
-  // the current board layout and the completed-boundary ply count.
-  return same_player_board_repetition_illegal(layout_key(),
+  return same_player_board_repetition_illegal(st->layoutKey,
                                               st->pliesFromNull + additionalBoundaryPlies,
                                               previousSamePlayerPosition);
 }
@@ -5838,7 +5842,7 @@ bool Position::legal(Move m) const {
   // Pushes relocate a chain of pieces, so the ordinary simulated occupancy
   // path is not authoritative for their king-safety consequences.  Probe the
   // committed move after the push analyzer has accepted it.
-  if (var->hasPushing && push_pull_rule() == PushPullRule::GENERIC && push_move(m))
+  if (var->hasGenericPushing && push_pull_rule() == PushPullRule::GENERIC && push_move(m))
   {
       if (violates_same_player_board_repetition(m))
           return false;
@@ -6477,9 +6481,9 @@ bool Position::has_legal_move() const {
 }
 
 #ifdef ENABLE_COMPOUND_TURNS
-bool Position::has_legal_logical_move() const {
+bool Position::has_legal_logical_move(bool checkGameEnd) const {
   if (compound_turn_active())
-      return has_any_compound_move(const_cast<Position&>(*this));
+      return has_any_compound_move(const_cast<Position&>(*this), checkGameEnd);
   return has_legal_move();
 }
 #endif
@@ -7382,7 +7386,7 @@ PotionContext Position::setup_potion_context(Move m, Color us) const {
 
 bool Position::analyze_push(Move m, PushInfo& info) const {
     info = PushInfo{};
-    if (!var->hasPushing || push_pull_rule() != PushPullRule::GENERIC)
+    if (!var->hasGenericPushing || push_pull_rule() != PushPullRule::GENERIC)
         return false;
     return type_of(m) == INSERT || !stepwise_pushing()
                ? analyze_push_direct(*this, m, info)
@@ -7785,13 +7789,13 @@ void Position::do_component_impl(Move m, StateInfo& newSt, bool countNode, bool 
   bool recomputeDerivedState = false;
   Bitboard opponentEjectionLocks = 0;
 
-  if (var->hasPushing && push_pull_rule() == PushPullRule::GENERIC
+  if (var->hasGenericPushing && push_pull_rule() == PushPullRule::GENERIC
       && stepwise_pushing() && type_of(m) == NORMAL)
   {
       pushMove = analyze_push_stepwise(*this, m, pushInfo, pushSquares, &pushLineCount, pushFinalLine, pushTransfers, &pushTransferCount);
       stepwisePush = pushMove && pushInfo.distance > 1;
   }
-  else if (var->hasPushing && push_pull_rule() == PushPullRule::GENERIC)
+  else if (var->hasGenericPushing && push_pull_rule() == PushPullRule::GENERIC)
   {
       pushMove = analyze_push(m, pushInfo);
   }
@@ -8110,6 +8114,7 @@ void Position::do_component_impl(Move m, StateInfo& newSt, bool countNode, bool 
       st->deadSquares ^= to;
       byTypeBB[ALL_PIECES] ^= to;
       k ^= Zobrist::dead[to];
+      st->layoutKey ^= Zobrist::dead[to];
       reset_rule50();
   }
 
@@ -9348,6 +9353,7 @@ void Position::do_component_impl(Move m, StateInfo& newSt, bool countNode, bool 
               st->wallSquares |= bsq;
               byTypeBB[ALL_PIECES] |= bsq;
               k ^= Zobrist::wall[bsq];
+              st->layoutKey ^= Zobrist::wall[bsq];
           }
       };
   };
@@ -9362,12 +9368,17 @@ void Position::do_component_impl(Move m, StateInfo& newSt, bool countNode, bool 
           Bitboard b = st->previous->wallSquares;
           byTypeBB[ALL_PIECES] ^= b;
           while (b)
-              k ^= Zobrist::wall[pop_lsb(b)];
+          {
+              Square square = pop_lsb(b);
+              k ^= Zobrist::wall[square];
+              st->layoutKey ^= Zobrist::wall[square];
+          }
           st->wallSquares = 0;
       }
       st->wallSquares |= gating_square(m);
       byTypeBB[ALL_PIECES] |= gating_square(m);
       k ^= Zobrist::wall[gating_square(m)];
+      st->layoutKey ^= Zobrist::wall[gating_square(m)];
   }
 
   if (var->surroundClaimPiece != NO_PIECE_TYPE && var->surroundClaimRegion)
@@ -9435,6 +9446,7 @@ void Position::do_component_impl(Move m, StateInfo& newSt, bool countNode, bool 
           st->deadSquares |= sq;
           byTypeBB[ALL_PIECES] |= sq;
           k ^= Zobrist::dead[sq];
+          st->layoutKey ^= Zobrist::dead[sq];
       }
   };
 
@@ -9574,8 +9586,13 @@ void Position::do_component_impl(Move m, StateInfo& newSt, bool countNode, bool 
   // Update the key with the final value
   st->key = k;
   st->boardKey = st->key ^ st->reserveKey;
-  if (var->samePlayerBoardRepetitionIllegalAtN > 0 && updateLayoutKey)
-      st->layoutKey = layout_key();
+  if (var->samePlayerBoardRepetitionIllegalAtN > 0)
+  {
+      if (updateLayoutKey)
+          st->layoutKey = layout_key();
+      else
+          st->layoutKey ^= st->previous->pieceStateKey ^ pieceStateKey;
+  }
 #ifdef ENABLE_COMPOUND_TURNS
   if (compoundTurn && (componentRule50Reset || st->previous->compoundTurnReset))
       st->compoundTurnReset = true;
@@ -10363,8 +10380,6 @@ void Position::commit_compound_move(const LogicalMove& move, StateInfo& newSt,
   newSt.nnueRefreshNeeded = true;
   newSt.accumulator.computed[WHITE] = false;
   newSt.accumulator.computed[BLACK] = false;
-  if (var->samePlayerBoardRepetitionIllegalAtN > 0)
-      newSt.layoutKey = layout_key();
   update_repetition_info();
 }
 
@@ -11105,8 +11120,15 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
   };
   const bool simultaneousFlagConfigured = var->simulFlagValueByMover != VALUE_NONE;
   const bool simultaneousExtinctionConfigured = var->simulExtinctionValueByMover != VALUE_NONE;
+  const bool bothFlags = whiteFlagReached && blackFlagReached;
 
   auto flag_game_end = [&](Value& flagResult) {
+      if (bothFlags && simultaneousFlagConfigured)
+      {
+          flagResult = value_by_mover(var->simulFlagValueByMover);
+          return true;
+      }
+
       // A flag win by the side to move is only possible if flagMove is enabled
       // and they already reached the flag region the move before.
       if (flag_move() && flag_reached_at_boundary(sideToMove))
@@ -11140,10 +11162,9 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
           }
       }
 
-      // Compound push turns may move the opponent's flag piece. Keep this
-      // exception scoped to that ruleset; ordinary flag variants retain the
-      // established mover-only adjudication above.
-      if (compound_turn_active() && !flag_move()
+      // Some movement rules can relocate the opponent's flag piece. This is
+      // explicit flag-rule capability, not an implication of compound turns.
+      if (var->flagOpponentRelocation && !flag_move()
           && flag_reached_at_boundary(sideToMove))
       {
           flagResult = mate_in(ply);
@@ -11201,7 +11222,6 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
       extinctionResult = c == sideToMove ? extinction_value(c, ply) : -extinction_value(c, ply);
   }
 
-  const bool bothFlags = whiteFlagReached && blackFlagReached;
   const bool bothExtinct = whiteExtinct && blackExtinct;
   const bool bothGoals = flagEnd && extinctionEnd;
   // Fast path: without any simultaneous-result override the per-rule results

@@ -263,8 +263,10 @@ struct Variant {
   bool rifleCapture = false;
   PushPullRule pushPullRule = PushPullRule::GENERIC;
   int pushingStrength[PIECE_TYPE_NB] = {};
-  bool hasPushing = false;
+  bool hasGenericPushing = false;
   int pullingStrength[PIECE_TYPE_NB] = {};
+  bool hasGenericPulling = false;
+  bool hasTwoStepPushPull = false;
   PieceSet adjacentSwapMoveTypes = NO_PIECE_SET;
   PieceSet adjacentSwapTargetTypes = ~NO_PIECE_SET;
   bool adjacentSwapFriendly = false;
@@ -516,6 +518,7 @@ struct Variant {
   int flagPieceCount = 1;
   bool flagPieceBlockedWin = false;
   bool flagMove = false;
+  bool flagOpponentRelocation = false;
   bool flagPieceSafe = false;
   bool checkCounting = false;
   int connectN = 0;

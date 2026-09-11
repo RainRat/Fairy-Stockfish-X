@@ -2289,25 +2289,6 @@ Variant* Variant::conclude() {
                     weakerPieceTypes[freezer] |= piece_set(target);
             }
 
-    // Two-step push/pull authorizes by pieceHierarchy, not by the generic
-    // pushing/pulling tables. Copy the hierarchy into those tables at conclude
-    // time so hot accessors stay direct array loads without a per-call rule branch.
-    if (pushPullRule == PushPullRule::TWO_STEP)
-        for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
-        {
-            pushingStrength[pt] = pieceHierarchy[pt];
-            pullingStrength[pt] = pieceHierarchy[pt];
-            hasPushing |= pieceHierarchy[pt] > 0;
-        }
-
-    bool hasPulling = false;
-    for (PieceSet ps = pieceTypes; ps && !hasPulling; )
-        hasPulling = pullingStrength[pop_lsb(ps)] > 0;
-
-    bool hasActivePushing = false;
-    for (PieceSet ps = pieceTypes; ps && !hasActivePushing; )
-        hasActivePushing = pushingStrength[pop_lsb(ps)] > 0;
-
     auto hasSelfCapture = [this](Color c) {
         if (selfCaptureTypes.has_override(c))
             return selfCaptureTypes.get(c) != NO_PIECE_SET;
@@ -2335,7 +2316,7 @@ Variant* Variant::conclude() {
                          && !gating
                          && !commitGates
                          && wallingRule == NO_WALLING
-                         && !hasPushing
+                         && !(hasGenericPushing || hasTwoStepPushPull)
                          && !adjacentSwapMoveTypes
                          && !blastOnMove
                          && !blastOnSelfDestruct
@@ -2392,7 +2373,7 @@ Variant* Variant::conclude() {
                   && libertySelfCapture == LibertyAction::NONE
                   && !potions
                   && wallingRule == NO_WALLING
-                  && !hasPushing
+                  && !(hasGenericPushing || hasTwoStepPushPull)
                   && !adjacentSwapMoveTypes
                   && !laserGame
                   && !captureMorph
@@ -2560,8 +2541,8 @@ Variant* Variant::conclude() {
                                  && !blastOnSelfDestruct
                                  && !hasSelfCapture(c)
                                  && !rifleCapture
-                                 && !hasActivePushing
-                                 && !hasPulling
+                                 && !(hasGenericPushing || hasTwoStepPushPull)
+                                 && !(hasGenericPulling || hasTwoStepPushPull)
                                  && !adjacentSwapMoveTypes
                                  && !captureMorph
                                  && !piecePromotionOnCapture
