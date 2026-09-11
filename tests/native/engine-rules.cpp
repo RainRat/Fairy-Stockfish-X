@@ -1462,8 +1462,8 @@ void compound_turn_rules() {
     check(pos.has_legal_logical_move(), "logical legal-move query disagreed with compound generation");
     std::vector<LogicalMove> lazyGenerated;
     {
-        LogicalMoveUndo sourceTransaction;
-        LogicalMoveSource source(pos, nullptr, sourceTransaction);
+        LogicalMoveWorkspace sourceWorkspace;
+        LogicalMoveSource source(pos, sourceWorkspace);
         LogicalMove candidate;
         LogicalMoveInfo info;
         while (source.next(candidate, info))
@@ -1484,9 +1484,9 @@ void compound_turn_rules() {
           "compound ordering audit did not find a multi-component turn");
     if (preferred != generated.end())
     {
-        LogicalMoveUndo preferredTransaction;
-        LogicalMoveSource preferredSource(pos, nullptr, preferredTransaction,
-                                          true, MOVE_NONE, &*preferred);
+        LogicalMoveWorkspace preferredWorkspace;
+        LogicalMoveSource preferredSource(pos, preferredWorkspace,
+                                          {MOVE_NONE, &*preferred});
         LogicalMove candidate;
         bool reachedPreferred = false;
         while (preferredSource.next(candidate))
@@ -1509,8 +1509,8 @@ void compound_turn_rules() {
     const Key generatedKey = pos.key();
     std::vector<LogicalMove> detachedGenerated;
     {
-        LogicalMoveUndo sourceTransaction;
-        LogicalMoveSource source(pos, nullptr, sourceTransaction);
+        LogicalMoveWorkspace sourceWorkspace;
+        LogicalMoveSource source(pos, sourceWorkspace);
         LogicalMove candidate;
         LogicalMoveInfo info;
         while (source.next(candidate, info))
@@ -1528,8 +1528,8 @@ void compound_turn_rules() {
     LogicalMove ownRemovalTurn;
     LogicalMoveInfo ownRemovalInfo;
     {
-        LogicalMoveUndo removalTransaction;
-        LogicalMoveSource removalSource(pos, nullptr, removalTransaction);
+        LogicalMoveWorkspace removalWorkspace;
+        LogicalMoveSource removalSource(pos, removalWorkspace);
         LogicalMove candidate;
         LogicalMoveInfo candidateInfo;
         while (removalSource.next(candidate, candidateInfo))
@@ -1556,8 +1556,8 @@ void compound_turn_rules() {
     LogicalMove directCaptureTurn;
     LogicalMoveInfo directCaptureInfo;
     {
-        LogicalMoveUndo captureTransaction;
-        LogicalMoveSource captureSource(pos, nullptr, captureTransaction);
+        LogicalMoveWorkspace captureWorkspace;
+        LogicalMoveSource captureSource(pos, captureWorkspace);
         LogicalMove candidate;
         LogicalMoveInfo candidateInfo;
         while (captureSource.next(candidate, candidateInfo))

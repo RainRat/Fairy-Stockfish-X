@@ -21,6 +21,9 @@
 
 #include <vector>
 
+#ifdef ENABLE_COMPOUND_TURNS
+#include "compound_turn.h"
+#endif
 #include "misc.h"
 #include "movepick.h"
 #include "types.h"
@@ -43,6 +46,7 @@ struct Stack {
   Move* pv;
 #ifdef ENABLE_COMPOUND_TURNS
   LogicalMove* logicalPv;
+  bool pvIsLogical;
 #endif
   PieceToHistory* continuationHistory;
   int ply;

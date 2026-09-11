@@ -96,6 +96,38 @@ namespace {
       T* data() { return nullptr; }
   };
 
+  template<bool Logical>
+  void set_child_pv(Position& pos, Thread* thread, Stack* child,
+                    std::conditional_t<Logical, LogicalMove*, Move*> pv) {
+#ifdef ENABLE_COMPOUND_TURNS
+      if constexpr (Logical)
+      {
+          child->set_pv<true>(pv);
+          pv[0] = LogicalMove(MOVE_NONE);
+      }
+      else if (pos.logical_moves_active())
+      {
+          LogicalMove* logicalPv = thread->logical_pv(child->ply);
+          logicalPv[0] = LogicalMove(MOVE_NONE);
+          child->set_pv<true>(logicalPv);
+      }
+      else
+          child->set_pv<false>(pv);
+#else
+      (void)pos;
+      (void)thread;
+      child->set_pv<Logical>(pv);
+#endif
+  }
+
+#ifdef ENABLE_COMPOUND_TURNS
+  LogicalMove* logical_pv_output(Thread* thread, Stack* ss) {
+      if (!ss->logicalPv)
+          ss->logicalPv = thread->logical_pv(ss->ply);
+      return ss->logicalPv;
+  }
+#endif
+
   constexpr uint64_t TtHitAverageWindow     = 4096;
   constexpr uint64_t TtHitAverageResolution = 1024;
   constexpr int MaxReductionIndex = MAX_MOVES - 1;
@@ -177,8 +209,10 @@ namespace {
   };
 
   struct OrdinaryMoveInfo {
+    Move representative = MOVE_NONE;
     Piece movedPiece = NO_PIECE;
     bool capturesOpponent = false;
+    bool losesOwnMaterial = false;
     bool removesMaterial = false;
     bool promotionLike = false;
     bool givesCheck = false;
@@ -187,12 +221,22 @@ namespace {
     bool seeReliable = true;
   };
 
+  struct SearchCapabilities {
+    bool futilityPruning = true;
+    bool nullMovePruning = true;
+    bool probCut = true;
+  };
+
   template<bool Logical, NodeType nodeType>
   Value search_impl(Position& pos, Stack* ss, Value alpha, Value beta, Depth depth, bool cutNode);
   template<bool Logical, NodeType nodeType>
   Value qsearch_impl(Position& pos, Stack* ss, Value alpha, Value beta, Depth depth = 0);
   template<NodeType nodeType>
   Value search(Position& pos, Stack* ss, Value alpha, Value beta, Depth depth, bool cutNode);
+  template<NodeType nodeType>
+  Value search_child(Position& pos, Stack* ss, Value alpha, Value beta, Depth depth, bool cutNode);
+  template<NodeType nodeType>
+  Value qsearch_child(Position& pos, Stack* ss, Value alpha, Value beta, Depth depth = 0);
 
   Value value_to_tt(Value v, int ply);
   Value value_from_tt(Value v, int ply, int r50c);
@@ -308,7 +352,11 @@ void MainThread::search() {
 
   Eval::NNUE::verify();
 
+#ifdef ENABLE_COMPOUND_TURNS
   const bool lazyRoot = rootPos.logical_moves_active() && rootMoves.empty();
+#else
+  const bool lazyRoot = false;
+#endif
   const bool noRootMove = !lazyRoot
                        && (rootMoves.empty()
                            || (rootMoves.size() == 1 && rootMoves[0].first() == MOVE_NONE));
@@ -507,13 +555,6 @@ void Thread::search() {
   // The latter is needed for statScore and killer initialization.
   Stack stack[MAX_PLY+10], *ss = stack+7;
   Move ordinaryPv[MAX_PLY+1];
-#ifdef ENABLE_COMPOUND_TURNS
-  const bool logicalPvRequired = rootPos.logical_moves_active()
-                              || rootPos.may_enter_logical_moves();
-  std::unique_ptr<LogicalMove[]> logicalPv;
-  if (logicalPvRequired)
-      logicalPv = std::make_unique<LogicalMove[]>(MAX_PLY + 1);
-#endif
   Value bestValue, alpha, beta, delta;
   LogicalMove lastBestMove(MOVE_NONE);
   Value lastBestScore = -VALUE_INFINITE;
@@ -535,11 +576,20 @@ void Thread::search() {
       (ss+i)->ply = i;
 
 #ifdef ENABLE_COMPOUND_TURNS
-  if (logicalPvRequired)
-      ss->set_pv<true>(logicalPv.get());
+  if (rootPos.logical_moves_active())
+  {
+      ss->set_pv<true>(logical_pv(0));
+      ss->logicalPv[0] = LogicalMove(MOVE_NONE);
+      ss->pvIsLogical = true;
+  }
   else
 #endif
+  {
       ss->set_pv<false>(ordinaryPv);
+#ifdef ENABLE_COMPOUND_TURNS
+      ss->pvIsLogical = false;
+#endif
+  }
 
   bestValue = delta = alpha = -VALUE_INFINITE;
   beta = VALUE_INFINITE;
@@ -575,12 +625,16 @@ void Thread::search() {
                  ((floatLevel - int(floatLevel)) * 1024 > rng.rand<unsigned>() % 1024  ? 1 : 0);
   Skill skill(intLevel);
 
+#ifdef ENABLE_COMPOUND_TURNS
   const bool lazyRoot = rootMoves.empty()
                      && rootPos.logical_moves_active()
                      && multiPV == 1
                      && !skill.enabled()
                      && !Limits.searchMovesSpecified
                      && Limits.banmoves.empty();
+#else
+  const bool lazyRoot = false;
+#endif
 
 
   // When playing with strength handicap enable MultiPV search that we will
@@ -909,8 +963,15 @@ namespace {
     constexpr bool PvNode = nodeType != NonPV;
     constexpr bool rootNode = nodeType == Root;
     using SearchMove = std::conditional_t<Logical, LogicalMove, Move>;
+#ifdef ENABLE_COMPOUND_TURNS
     using SearchMoveInfo = std::conditional_t<Logical, LogicalMoveInfo, OrdinaryMoveInfo>;
+#else
+    using SearchMoveInfo = OrdinaryMoveInfo;
+#endif
     const Depth maxNextDepth = rootNode ? depth : depth + 1;
+#ifdef ENABLE_COMPOUND_TURNS
+    ss->pvIsLogical = Logical;
+#endif
 
     // Check if we have an upcoming move which draws by repetition, or
     // if the opponent had an alternative move earlier to this position.
@@ -926,7 +987,7 @@ namespace {
 
     // Dive into quiescence search when the depth reaches zero
     if (depth <= 0)
-        return qsearch_impl<Logical, PvNode ? PV : NonPV>(pos, ss, alpha, beta);
+        return qsearch_child<PvNode ? PV : NonPV>(pos, ss, alpha, beta);
 
     assert(-VALUE_INFINITE <= alpha && alpha < beta && beta <= VALUE_INFINITE);
     assert(PvNode || (alpha == beta - 1));
@@ -941,7 +1002,7 @@ namespace {
     {
 #ifdef ENABLE_COMPOUND_TURNS
         if constexpr (Logical)
-            pv = thisThread->logical_pv(ss->ply);
+            pv = thisThread->logical_pv(std::min(ss->ply + 1, MAX_PLY));
         else
 #endif
             pv = localPv.data();
@@ -964,14 +1025,20 @@ namespace {
 
     // Step 1. Initialize node
     PieceToHistory* neutralContinuationHistory = &thisThread->continuationHistory[0][0][NO_PIECE][0];
+#ifdef ENABLE_COMPOUND_TURNS
     const LogicalMoveCapabilities moveCapabilities = [&] {
         if constexpr (Logical)
             return pos.logical_move_capabilities();
         return LogicalMoveCapabilities{};
     }();
+#else
+    const SearchCapabilities moveCapabilities;
+#endif
     const bool logicalMovePosition = [&] {
+#ifdef ENABLE_COMPOUND_TURNS
         if constexpr (Logical)
             return pos.logical_moves_active();
+#endif
         return false;
     }();
     const bool exactTtMoveIdentity = !logicalMovePosition;
@@ -1267,7 +1334,7 @@ namespace {
             pos.undo_null_move();
         else
         {
-            Value nullValue = -search_impl<Logical, NonPV>(pos, ss+1, -beta, -beta+1, depth-R, !cutNode);
+            Value nullValue = -search_child<NonPV>(pos, ss+1, -beta, -beta+1, depth-R, !cutNode);
 
             pos.undo_null_move();
 
@@ -1287,7 +1354,7 @@ namespace {
                 thisThread->nmpMinPly = ss->ply + 3 * (depth-R) / 4;
                 thisThread->nmpColor = us;
 
-                Value v = search_impl<Logical, NonPV>(pos, ss, beta-1, beta, depth-R, false);
+                Value v = search_child<NonPV>(pos, ss, beta-1, beta, depth-R, false);
 
                 thisThread->nmpMinPly = 0;
 
@@ -1350,11 +1417,11 @@ namespace {
                 pos.do_move(move, st);
 
                 // Perform a preliminary qsearch to verify that the move holds
-                value = -qsearch_impl<Logical, NonPV>(pos, ss+1, -probCutBeta, -probCutBeta+1);
+                value = -qsearch_child<NonPV>(pos, ss+1, -probCutBeta, -probCutBeta+1);
 
                 // If the qsearch held, perform the regular search
                 if (value >= probCutBeta)
-                    value = -search_impl<Logical, NonPV>(pos, ss+1, -probCutBeta, -probCutBeta+1, depth - 4, !cutNode);
+                    value = -search_child<NonPV>(pos, ss+1, -probCutBeta, -probCutBeta+1, depth - 4, !cutNode);
 
                 pos.undo_move(move);
 
@@ -1436,8 +1503,8 @@ moves_loop: // When in check, search starts from here
             const LogicalMove* preferredTurn = thisThread->logical_move_hint(pos.key());
             if (preferredTurn && ttMove && preferredTurn->first() != ttMove)
                 preferredTurn = nullptr;
-            logicalSource.source.emplace(pos, thisThread, thisThread->logical_move_state(ss->ply),
-                                         true, ttMove, preferredTurn);
+            logicalSource.source.emplace(pos, thisThread->logical_move_workspace(ss->ply),
+                                         LogicalMoveOrder{ttMove, preferredTurn});
         }
 #endif
 
@@ -1575,7 +1642,13 @@ moves_loop: // When in check, search starts from here
           sync_cout << " currmovenumber " << moveCount + thisThread->pvIdx << sync_endl;
       }
       if (PvNode)
-          (ss+1)->set_pv<Logical>(nullptr);
+      {
+          (ss+1)->set_pv<false>(nullptr);
+#ifdef ENABLE_COMPOUND_TURNS
+          (ss+1)->set_pv<true>(nullptr);
+          (ss+1)->pvIsLogical = false;
+#endif
+      }
 
       extension = 0;
       if constexpr (Logical)
@@ -1694,7 +1767,7 @@ moves_loop: // When in check, search starts from here
           Depth singularDepth = (depth - 1) / 2;
 
           ss->excludedMove = move;
-          value = search_impl<Logical, NonPV>(pos, ss, singularBeta - 1, singularBeta, singularDepth, cutNode);
+          value = search_child<NonPV>(pos, ss, singularBeta - 1, singularBeta, singularDepth, cutNode);
           ss->excludedMove = MOVE_NONE;
 
           if (value < singularBeta)
@@ -1725,7 +1798,7 @@ moves_loop: // When in check, search starts from here
           else if (ttValue >= beta)
           {
               ss->excludedMove = move;
-              value = search_impl<Logical, NonPV>(pos, ss, beta - 1, beta, (depth + 3) / 2, cutNode);
+              value = search_child<NonPV>(pos, ss, beta - 1, beta, (depth + 3) / 2, cutNode);
               ss->excludedMove = MOVE_NONE;
 
               if (value >= beta)
@@ -1771,7 +1844,7 @@ moves_loop: // When in check, search starts from here
       {
           if (logicalMovePosition)
           {
-              transaction = &thisThread->logical_move_state(ss->ply);
+              transaction = &thisThread->logical_move_workspace(ss->ply).undo;
               pos.do_move(logicalMove, st, *transaction);
           }
           else
@@ -1856,7 +1929,7 @@ moves_loop: // When in check, search starts from here
           // to be searched deeper than the first move, unless ttMove was extended by 2.
           Depth d = std::clamp(newDepth - r, 1, newDepth + (r < -1 && moveCount <= 5 && !doubleExtension));
 
-          value = -search_impl<Logical, NonPV>(pos, ss+1, -(alpha+1), -alpha, d, true);
+          value = -search_child<NonPV>(pos, ss+1, -(alpha+1), -alpha, d, true);
 
           // If the son is reduced and fails high it will be re-searched at full depth
           doFullDepthSearch = value > alpha && d < newDepth;
@@ -1871,7 +1944,7 @@ moves_loop: // When in check, search starts from here
       // Step 17. Full depth search when LMR is skipped or fails high
       if (doFullDepthSearch)
       {
-          value = -search_impl<Logical, NonPV>(pos, ss+1, -(alpha+1), -alpha, newDepth, !cutNode);
+          value = -search_child<NonPV>(pos, ss+1, -(alpha+1), -alpha, newDepth, !cutNode);
 
           // If the move passed LMR update its stats
           if (didLMR && moveInfo.historyCompatible && !captureOrPromotion)
@@ -1888,11 +1961,11 @@ moves_loop: // When in check, search starts from here
       // parent node fail low with value <= alpha and try another move.
       if (PvNode && (moveCount == 1 || (value > alpha && (rootNode || value < beta))))
       {
-          (ss+1)->set_pv<Logical>(pv);
+          set_child_pv<Logical>(pos, thisThread, ss+1, pv);
           pv[0] = SearchMove(MOVE_NONE);
 
-          value = -search_impl<Logical, PV>(pos, ss+1, -beta, -alpha,
-                                            std::min(maxNextDepth, newDepth), false);
+          value = -search_child<PV>(pos, ss+1, -beta, -alpha,
+                                    std::min(maxNextDepth, newDepth), false);
       }
 
       // Step 18. Undo move
@@ -1940,11 +2013,22 @@ moves_loop: // When in check, search starts from here
               rm.selDepth = thisThread->selDepth;
               rm.clear_pv();
 
-              assert((ss+1)->pv_ptr<Logical>());
-
-              for (SearchMove* m = (ss+1)->pv_ptr<Logical>();
-                   *m != MOVE_NONE; ++m)
-                  rm.append_pv(*m);
+#ifdef ENABLE_COMPOUND_TURNS
+              if ((ss+1)->pvIsLogical)
+              {
+                  assert((ss+1)->pv_ptr<true>());
+                  for (LogicalMove* m = (ss+1)->pv_ptr<true>();
+                       *m != MOVE_NONE; ++m)
+                      rm.append_pv(*m);
+              }
+              else
+#endif
+              {
+                  assert((ss+1)->pv_ptr<false>());
+                  for (Move* m = (ss+1)->pv_ptr<false>();
+                       *m != MOVE_NONE; ++m)
+                      rm.append_pv(*m);
+              }
 
               // We record how often the best move has been changed in each
               // iteration. This information is used for time management and LMR
@@ -1969,8 +2053,28 @@ moves_loop: // When in check, search starts from here
               bestMoveHistoryCompatible = moveInfo.historyCompatible;
 
               if (PvNode && !rootNode) // Update pv even in fail-high case
-                  update_pv(ss->pv_ptr<Logical>(), logicalMove,
-                            (ss+1)->pv_ptr<Logical>());
+              {
+#ifdef ENABLE_COMPOUND_TURNS
+                  if constexpr (!Logical)
+                  {
+                      if ((ss+1)->pvIsLogical)
+                      {
+                          update_pv(logical_pv_output(thisThread, ss), LogicalMove(logicalMove),
+                                    (ss+1)->pv_ptr<true>());
+                          ss->pvIsLogical = true;
+                      }
+                      else
+                      {
+                          ss->pvIsLogical = false;
+                          update_pv(ss->pv_ptr<Logical>(), logicalMove,
+                                    (ss+1)->pv_ptr<Logical>());
+                      }
+                  }
+                  else
+#endif
+                      update_pv(ss->pv_ptr<Logical>(), logicalMove,
+                                (ss+1)->pv_ptr<Logical>());
+              }
 
               if (PvNode && value < beta) // Update alpha! Always alpha < beta
                   alpha = value;
@@ -2074,11 +2178,21 @@ moves_loop: // When in check, search starts from here
     return bestValue;
   }
 
+  template<NodeType nodeType>
+  Value search_child(Position& pos, Stack* ss, Value alpha, Value beta,
+                     Depth depth, bool cutNode) {
+#ifdef ENABLE_COMPOUND_TURNS
+    if (pos.logical_moves_active())
+        return search_impl<true, nodeType>(pos, ss, alpha, beta, depth, cutNode);
+#endif
+    return search_impl<false, nodeType>(pos, ss, alpha, beta, depth, cutNode);
+  }
+
 
   template <NodeType nodeType>
   Value search(Position& pos, Stack* ss, Value alpha, Value beta, Depth depth, bool cutNode) {
 #ifdef ENABLE_COMPOUND_TURNS
-    if (pos.logical_moves_active() || pos.may_enter_logical_moves())
+    if (pos.logical_moves_active())
         return search_impl<true, nodeType>(pos, ss, alpha, beta, depth, cutNode);
 #endif
     return search_impl<false, nodeType>(pos, ss, alpha, beta, depth, cutNode);
@@ -2092,7 +2206,11 @@ moves_loop: // When in check, search starts from here
 
     static_assert(nodeType != Root);
     constexpr bool PvNode = nodeType == PV;
+#ifdef ENABLE_COMPOUND_TURNS
+    ss->pvIsLogical = Logical;
+#endif
 
+#ifdef ENABLE_COMPOUND_TURNS
     const bool providerStaticOnly = [&] {
         if constexpr (Logical)
             return pos.logical_move_capabilities().quiescence == QuiescenceSupport::STATIC_ONLY;
@@ -2107,6 +2225,7 @@ moves_loop: // When in check, search starts from here
             return pos.stalemate_value(ss->ply);
         return Eval::evaluate(pos);
     }
+#endif
 
     assert(alpha >= -VALUE_INFINITE && alpha < beta && beta <= VALUE_INFINITE);
     assert(PvNode || (alpha == beta - 1));
@@ -2121,7 +2240,7 @@ moves_loop: // When in check, search starts from here
     {
 #ifdef ENABLE_COMPOUND_TURNS
         if constexpr (Logical)
-            pv = thisThread->logical_pv(ss->ply);
+            pv = thisThread->logical_pv(std::min(ss->ply + 1, MAX_PLY));
         else
 #endif
             pv = localPv.data();
@@ -2140,7 +2259,7 @@ moves_loop: // When in check, search starts from here
     if (PvNode)
     {
         oldAlpha = alpha; // To flag BOUND_EXACT when eval above alpha and no available moves
-        (ss+1)->set_pv<Logical>(pv);
+        set_child_pv<Logical>(pos, thisThread, ss+1, pv);
         ss->pv_ptr<Logical>()[0] = MOVE_NONE;
     }
 
@@ -2319,7 +2438,9 @@ moves_loop: // When in check, search starts from here
 
       // Make and search the move
       pos.do_move(move, st);
-      value = -qsearch_impl<Logical, nodeType>(pos, ss+1, -beta, -alpha, depth - 1);
+      if (PvNode)
+          set_child_pv<Logical>(pos, thisThread, ss+1, pv);
+      value = -qsearch_child<nodeType>(pos, ss+1, -beta, -alpha, depth - 1);
       pos.undo_move(move);
 
       assert(value > -VALUE_INFINITE && value < VALUE_INFINITE);
@@ -2338,9 +2459,22 @@ moves_loop: // When in check, search starts from here
                   if constexpr (Logical)
                       update_pv(ss->pv_ptr<Logical>(), LogicalMove(move),
                                 (ss+1)->pv_ptr<Logical>());
+#ifdef ENABLE_COMPOUND_TURNS
+                  else if ((ss+1)->pvIsLogical)
+                  {
+                      update_pv(logical_pv_output(thisThread, ss), LogicalMove(move),
+                                (ss+1)->pv_ptr<true>());
+                      ss->pvIsLogical = true;
+                  }
+#endif
                   else
+                  {
+#ifdef ENABLE_COMPOUND_TURNS
+                      ss->pvIsLogical = false;
+#endif
                       update_pv(ss->pv_ptr<Logical>(), move,
                                 (ss+1)->pv_ptr<Logical>());
+                  }
               }
 
               if (PvNode && value < beta) // Update alpha here!
@@ -2376,6 +2510,15 @@ moves_loop: // When in check, search starts from here
     assert(bestValue > -VALUE_INFINITE && bestValue < VALUE_INFINITE);
 
     return bestValue;
+  }
+
+  template<NodeType nodeType>
+  Value qsearch_child(Position& pos, Stack* ss, Value alpha, Value beta, Depth depth) {
+#ifdef ENABLE_COMPOUND_TURNS
+    if (pos.logical_moves_active())
+        return qsearch_impl<true, nodeType>(pos, ss, alpha, beta, depth);
+#endif
+    return qsearch_impl<false, nodeType>(pos, ss, alpha, beta, depth);
   }
 
 

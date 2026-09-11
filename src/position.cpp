@@ -6485,13 +6485,13 @@ bool Position::has_legal_move() const {
   return has_legal_move_ignoring_immediate_end();
 }
 
-bool Position::has_legal_logical_move() const {
 #ifdef ENABLE_COMPOUND_TURNS
+bool Position::has_legal_logical_move() const {
   if (compound_turn_active())
       return has_any_compound_move(const_cast<Position&>(*this));
-#endif
   return has_legal_move();
 }
+#endif
 
 bool Position::has_legal_move_ignoring_immediate_end() const {
 
@@ -11108,15 +11108,6 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
   const bool simultaneousExtinctionConfigured = var->simulExtinctionValueByMover != VALUE_NONE;
 
   auto flag_game_end = [&](Value& flagResult) {
-      // A configured simultaneous policy applies only when both sides satisfy
-      // the flag condition. The ordinary flag path handles a single side.
-      if (simultaneousFlagConfigured
-          && whiteFlagReached && blackFlagReached)
-      {
-          flagResult = value_by_mover(var->simulFlagValueByMover);
-          return true;
-      }
-
       // A flag win by the side to move is only possible if flagMove is enabled
       // and they already reached the flag region the move before.
       if (flag_move() && flag_reached_at_boundary(sideToMove))
@@ -11150,9 +11141,11 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
           }
       }
 
-      // A non-racing flag goal is adjudicated for either side at the completed
-      // boundary. This also covers a push that moves the opponent's flag piece.
-      if (!flag_move() && flag_reached_at_boundary(sideToMove))
+      // Compound push turns may move the opponent's flag piece. Keep this
+      // exception scoped to that ruleset; ordinary flag variants retain the
+      // established mover-only adjudication above.
+      if (compound_turn_active() && !flag_move()
+          && flag_reached_at_boundary(sideToMove))
       {
           flagResult = mate_in(ply);
           return true;

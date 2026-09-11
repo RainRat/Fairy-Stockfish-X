@@ -20,18 +20,53 @@
 namespace Stockfish {
 
 class Position;
-class Thread;
 struct StateInfo;
 struct LogicalMoveUndo;
+struct LogicalMoveWorkspace;
+
+/// Properties of a completed logical move used by generic search heuristics.
+/// A property is false when the provider cannot establish its physical-move
+/// semantics for the complete transition.
+struct LogicalMoveInfo {
+  Move representative = MOVE_NONE;
+  Piece movedPiece = NO_PIECE;
+  bool capturesOpponent = false;
+  bool losesOwnMaterial = false;
+  bool removesMaterial = false;
+  bool promotionLike = false;
+  bool givesCheck = false;
+  bool historyCompatible = false;
+  bool reductionEligible = true;
+  bool seeReliable = false;
+};
+
+enum class QuiescenceSupport : uint8_t {
+  STANDARD,
+  STATIC_ONLY
+};
+
+/// Search capabilities supplied by the logical-move provider. These describe
+/// the assumptions of a search heuristic, rather than how many components a
+/// logical move happens to contain.
+struct LogicalMoveCapabilities {
+  bool futilityPruning = true;
+  bool nullMovePruning = true;
+  bool probCut = true;
+  QuiescenceSupport quiescence = QuiescenceSupport::STANDARD;
+};
+
+struct LogicalMoveOrder {
+  Move preferredFirst = MOVE_NONE;
+  const LogicalMove* preferredTurn = nullptr;
+};
 
 /// Lazily yield complete legal logical moves without materializing the turn tree.
 /// The component recursion and its temporary position changes stay private to
 /// this provider; callers always observe the position at a turn boundary.
 class LogicalMoveSource {
  public:
-  LogicalMoveSource(Position& pos, Thread* thread, LogicalMoveUndo& transaction,
-                    bool checkGameEnd = true, Move preferredMove = MOVE_NONE,
-                    const LogicalMove* preferredTurn = nullptr);
+  LogicalMoveSource(Position& pos, LogicalMoveWorkspace& workspace,
+                    LogicalMoveOrder order = {}, bool checkGameEnd = true);
   ~LogicalMoveSource();
 
   LogicalMoveSource(const LogicalMoveSource&) = delete;
@@ -46,6 +81,7 @@ class LogicalMoveSource {
   struct Frame {
       size_t current = 0;
       int usedCost = 0;
+      LogicalMoveInfo info;
   };
 
   void initialize_frame(int depth);
@@ -53,12 +89,12 @@ class LogicalMoveSource {
   void unwind_prefix();
 
   Position& pos;
-  Thread* thread;
-  LogicalMoveUndo& transaction;
-  std::array<std::vector<Move>, LogicalMove::MAX_COMPONENTS> moveLists;
+  LogicalMoveWorkspace* workspace;
+  LogicalMoveUndo* transaction;
+  std::unique_ptr<LogicalMoveWorkspace> nestedWorkspace;
+  bool ownsWorkspace = false;
   StateInfo* logicalRoot = nullptr;
-  Move preferredMove = MOVE_NONE;
-  LogicalMove preferredTurn;
+  LogicalMoveOrder order;
   std::array<Frame, LogicalMove::MAX_COMPONENTS> frames{};
   LogicalMove turn;
   Key startBoundaryKey = 0;
