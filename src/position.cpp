@@ -5518,16 +5518,7 @@ bool Position::legal(Move m) const {
   else if (dropMove && edge_insert_only() && (edge_insert_types() & in_hand_piece_type(m)))
       return false;
 
-  if (var->sequentialSetup
-      && (has_setup_drop(WHITE) || has_setup_drop(BLACK))
-      && us != sequential_setup_side()
-      && !is_pass(m))
-      return false;
-
-  if (pass_until_setup() && must_drop()
-      && !has_setup_drop(us)
-      && has_setup_drop(them)
-      && !is_pass(m))
+  if (violates_setup_move_order(us, m))
       return false;
 
 #ifdef ENABLE_COMPOUND_TURNS
@@ -6556,19 +6547,13 @@ bool Position::pseudo_legal(const Move m) const {
   if (is_pass(m) && !pass(us))
       return false;
 
-  if (var->sequentialSetup
-      && (has_setup_drop(WHITE) || has_setup_drop(BLACK))
-      && us != sequential_setup_side()
-      && !is_pass(m))
-      return false;
-
-  if (pass_until_setup() && must_drop()
-      && !has_setup_drop(us)
-      && has_setup_drop(them)
-      && !is_pass(m))
+  if (violates_setup_move_order(us, m))
       return false;
 
 #ifdef ENABLE_COMPOUND_TURNS
+  // Check the cost before special move paths such as pull and swap, which
+  // probe the resulting position and return without reaching the ordinary
+  // multimove checks below.
   if (compound_turn_active()
       && !is_pass(m)
       && (st->compoundTurnStep >= var->compoundTurnSteps
@@ -7404,6 +7389,43 @@ bool Position::analyze_push(Move m, PushInfo& info) const {
                : analyze_push_stepwise(*this, m, info);
 }
 
+Bitboard Position::freeze_squares_hierarchy(Color c, const SimulatedMoveInfo* simulated) const {
+    SimulatedMoveInfo simulatedMoveInfo;
+    const SimulatedMoveInfo* view = simulated;
+    if (!view && simulatedMove != MOVE_NONE)
+    {
+        simulatedMoveInfo = simulated_move_info(simulatedMove);
+        view = &simulatedMoveInfo;
+    }
+
+    auto type_pieces = [&](Color color, PieceSet pts) {
+        return view ? view->type_pieces(color, pts) : pieces(color, pts);
+    };
+    auto immune_pieces = [&](Color color) {
+        return view ? view->freezeImmuneOccupancy[color]
+                    : pieces(color, var->freezeImmunePieceTypes);
+    };
+    Bitboard supported = 0;
+    if (var->freezeProtection == FreezeProtection::FRIENDLY_ORTHOGONAL)
+    {
+        Bitboard friendly = view ? view->colorOccupancy[c] : pieces(c);
+        while (friendly)
+            supported |= adjacent_squares(*this, pop_lsb(friendly), false);
+    }
+
+    Bitboard frozen = 0;
+    for (PieceSet freezerSet = var->freezePieceTypes; freezerSet; )
+    {
+        PieceType freezerType = pop_lsb(freezerSet);
+        Bitboard targets = type_pieces(c, var->weakerPieceTypes[freezerType])
+                         & ~immune_pieces(c) & ~supported;
+        Bitboard freezers = type_pieces(~c, piece_set(freezerType));
+        while (freezers)
+            frozen |= adjacent_squares(*this, pop_lsb(freezers), var->freezeDiagonals) & targets;
+    }
+    return frozen;
+}
+
 Bitboard Position::freeze_squares_from_freezers(Color c) const {
     return freeze_squares_from_freezers(c, nullptr);
 }
@@ -7417,42 +7439,7 @@ Bitboard Position::freeze_squares_from_freezers(Color c, const SimulatedMoveInfo
     // one. Keep the existing adjacency-only behavior as the fast path
     // when no strength table is configured.
     if (var->hasPieceHierarchy)
-    {
-        SimulatedMoveInfo simulatedMoveInfo;
-        const SimulatedMoveInfo* view = simulated;
-        if (!view && simulatedMove != MOVE_NONE)
-        {
-            simulatedMoveInfo = simulated_move_info(simulatedMove);
-            view = &simulatedMoveInfo;
-        }
-
-        auto type_pieces = [&](Color color, PieceSet pts) {
-            return view ? view->type_pieces(color, pts) : pieces(color, pts);
-        };
-        auto immune_pieces = [&](Color color) {
-            return view ? view->freezeImmuneOccupancy[color]
-                        : pieces(color, var->freezeImmunePieceTypes);
-        };
-        Bitboard supported = 0;
-        if (var->freezeProtection == FreezeProtection::FRIENDLY_ORTHOGONAL)
-        {
-            Bitboard friendly = view ? view->colorOccupancy[c] : pieces(c);
-            while (friendly)
-                supported |= adjacent_squares(*this, pop_lsb(friendly), false);
-        }
-
-        Bitboard frozen = 0;
-        for (PieceSet freezerSet = var->freezePieceTypes; freezerSet; )
-        {
-            PieceType freezerType = pop_lsb(freezerSet);
-            Bitboard targets = type_pieces(c, var->weakerPieceTypes[freezerType])
-                             & ~immune_pieces(c) & ~supported;
-            Bitboard freezers = type_pieces(~c, piece_set(freezerType));
-            while (freezers)
-                frozen |= adjacent_squares(*this, pop_lsb(freezers), var->freezeDiagonals) & targets;
-        }
-        return frozen;
-    }
+        return freeze_squares_hierarchy(c, simulated);
 
     Bitboard freezers;
     Bitboard targets;

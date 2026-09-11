@@ -845,6 +845,8 @@ public:
   bool has_setup_drop(Color c) const;
   bool sequential_setup_active() const;
   Color sequential_setup_side() const;
+  bool sequential_setup_move_restricted(Color c) const;
+  bool violates_setup_move_order(Color c, Move m) const;
   bool pass_until_setup() const;
   bool pass_on_stalemate(Color c) const;
   bool multimove_pass(int ply) const;
@@ -1212,6 +1214,7 @@ private:
   void set_check_info(StateInfo* si) const;
   bool compute_forced_jump_followup(Square s, int step = 0) const;
   Key layout_key() const;
+  Bitboard freeze_squares_hierarchy(Color c, const SimulatedMoveInfo* simulated) const;
   bool violates_same_player_board_repetition(Move m) const;
   bool same_player_board_repetition_illegal(Key layoutKey, int pliesFromNull,
                                             const StateInfo* previousSamePlayerPosition) const;
@@ -2940,9 +2943,7 @@ inline bool Position::pass(Color c) const {
       && !has_setup_drop(c)
       && has_setup_drop(~c))
       return true;
-  if (var->sequentialSetup
-      && (has_setup_drop(WHITE) || has_setup_drop(BLACK))
-      && c != sequential_setup_side())
+  if (sequential_setup_move_restricted(c))
       return true;
 #ifdef ENABLE_COMPOUND_TURNS
   if (compound_turn_active() && !var->pass.get(c) && !var->passOnStalemate.get(c))
@@ -3065,6 +3066,25 @@ inline Color Position::sequential_setup_side() const {
   // is exhausted, Black places; the other side's forced pass is inferred
   // from the current pockets and side to move rather than serialized in FEN.
   return has_setup_drop(WHITE) ? WHITE : BLACK;
+}
+
+inline bool Position::sequential_setup_move_restricted(Color c) const {
+  assert(var != nullptr);
+  // During sequential setup only the placing side may move; the other side's
+  // only legal move is a pass.
+  return var->sequentialSetup
+      && (has_setup_drop(WHITE) || has_setup_drop(BLACK))
+      && c != sequential_setup_side();
+}
+
+inline bool Position::violates_setup_move_order(Color c, Move m) const {
+  assert(var != nullptr);
+  if (is_pass(m))
+      return false;
+  if (sequential_setup_move_restricted(c))
+      return true;
+  return pass_until_setup() && must_drop()
+      && !has_setup_drop(c) && has_setup_drop(~c);
 }
 
 inline bool Position::pass_until_setup() const {
