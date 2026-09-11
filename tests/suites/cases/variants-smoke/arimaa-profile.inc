@@ -9,6 +9,16 @@ init_test_env "${1:-}" "${2:-}" "Arimaa profile"
 
 SETUP_MOVES="R@a1 0000 R@b1 0000 R@c1 0000 R@d1 0000 R@e1 0000 R@f1 0000 R@g1 0000 R@h1 0000 C@a2 0000 C@b2 0000 D@c2 0000 D@d2 0000 H@e2 0000 H@f2 0000 M@g2 0000 E@h2 R@a8 0000 R@b8 0000 R@c8 0000 R@d8 0000 R@e8 0000 R@f8 0000 R@g8 0000 R@h8 0000 C@a7 0000 C@b7 0000 D@c7 0000 D@d7 0000 H@e7 0000 H@f7 0000 M@g7 0000 E@h7"
 
+run_arimaa_search() {
+  {
+    printf 'uci\n'
+    printf 'setoption name VariantPath value %s\n' "$VARIANT_PATH"
+    printf 'setoption name UCI_Variant value arimaa\n'
+    cat
+    sleep 1
+  } | uci_timeout "$ENGINE"
+}
+
 if ! probe_variant_available "$ENGINE" arimaa "$VARIANT_PATH"; then
     echo "skip: Arimaa profile requires a compoundturns=yes build"
     exit 0
@@ -56,7 +66,7 @@ EOF
 )
 assert_contains "$out" "^Fen: rrrrrrrr/ccddhhme/8/8/8/8/CCDDHHME/RRRRRRRR\\[\\] w - - 0 32$"
 
-out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<EOF
+out=$(run_arimaa_search <<EOF
 position startpos moves $SETUP_MOVES
 go depth 1
 EOF
@@ -96,14 +106,14 @@ assert_contains "$out" "^bestmove a2a3,a3a4$"
 
 # Active node and time limits must stop ordinary turn search, not just setup
 # parsing or invalid root restrictions.
-out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
+out=$(run_arimaa_search <<'EOF'
 position fen cdhmehdc/rrrrrrrr/8/8/8/8/RRRRRRRR/CDHMEHDC w - - 0 1
 go nodes 1
 EOF
 )
 assert_contains "$out" "^bestmove [a-h][1-8]"
 
-out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
+out=$(run_arimaa_search <<'EOF'
 position fen cdhmehdc/rrrrrrrr/8/8/8/8/RRRRRRRR/CDHMEHDC w - - 0 1
 go movetime 1
 EOF
@@ -141,12 +151,13 @@ EOF
 )
 assert_contains "$out" "^bestmove \\(none\\)$"
 
-out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
+out=$(run_arimaa_search <<'EOF'
 position fen cdhmehdc/rrrrrrrr/8/8/8/8/RRRRRRRR/CDHMEHDC w - - 0 1
 banmoves a2a3
 go depth 1
 EOF
 )
+assert_contains "$out" "^bestmove [a-h][1-8]"
 assert_not_contains "$out" "^bestmove a2a3$"
 
 # Incremental setup keys agree with a freshly parsed position whose pocket has
@@ -176,7 +187,7 @@ assert_nodes "$out" "20652"
 assert_contains "$out" "^a2a3: 1$"
 assert_not_contains "$out" "^0000:"
 
-out=$(run_uci "$ENGINE" "$VARIANT_PATH" arimaa <<'EOF'
+out=$(run_arimaa_search <<'EOF'
 position fen cdhmehdc/rrrrrrrr/8/8/8/8/RRRRRRRR/CDHMEHDC w - - 0 1
 go depth 1
 EOF

@@ -36,7 +36,8 @@ void undo_component(Position& pos, Move move);
 class LogicalMoveSource {
  public:
   LogicalMoveSource(Position& pos, Thread* thread, LogicalMoveState& transaction,
-                    bool checkGameEnd = true, Move preferredMove = MOVE_NONE);
+                    bool checkGameEnd = true, Move preferredMove = MOVE_NONE,
+                    const LogicalMove* preferredTurn = nullptr);
   ~LogicalMoveSource();
 
   LogicalMoveSource(const LogicalMoveSource&) = delete;
@@ -69,6 +70,7 @@ class LogicalMoveSource {
   LogicalMoveState& transaction;
   StateInfo* logicalRoot = nullptr;
   Move preferredMove = MOVE_NONE;
+  LogicalMove preferredTurn;
   std::array<Frame, LogicalMove::MAX_COMPONENTS> frames{};
   LogicalMove turn;
   Key startBoundaryKey = 0;
@@ -99,7 +101,8 @@ void undo_compound_move(Position& pos, const LogicalMove& turn,
 uint64_t compound_perft(Position& pos, int depth, bool root);
 std::string compound_move_to_string(Position& pos, const LogicalMove& turn);
 std::vector<std::string> compound_pv_to_strings(const Position& pos,
-                                                const std::vector<LogicalMove>& pv);
+                                                const LogicalMove& first,
+                                                const std::vector<LogicalMove>& continuation);
 
 } // namespace Stockfish
 

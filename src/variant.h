@@ -85,11 +85,6 @@ enum class SeePruningPolicy : uint8_t {
   ALWAYS_UNRELIABLE
 };
 
-enum class QuiescencePolicy : uint8_t {
-  STANDARD,
-  STATIC_EVAL
-};
-
 template <typename T>
 struct ColorSetting {
   T global;
@@ -451,7 +446,6 @@ struct Variant {
   bool payPointsToDrop = false;
   bool passUntilSetup = false;
   int compoundTurnSteps = 0;
-  QuiescencePolicy quiescencePolicy = QuiescencePolicy::STANDARD;
   SimulFlagExtinctionPriority simulFlagExtinctionPriority = SimulFlagExtinctionPriority::EXTINCTION;
   Value simulFlagValueByMover = VALUE_MATE;
   Value simulExtinctionValueByMover = -VALUE_MATE;

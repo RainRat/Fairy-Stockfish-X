@@ -78,8 +78,9 @@ std::string compound_step_to_string(Position& pos, Move move) {
 
 LogicalMoveSource::LogicalMoveSource(Position& pos_, Thread* thread_,
                                      LogicalMoveState& transaction_, bool checkGameEnd,
-                                     Move preferredMove_)
-    : pos(pos_), thread(thread_), transaction(transaction_), preferredMove(preferredMove_) {
+                                     Move preferredMove_, const LogicalMove* preferredTurn_)
+    : pos(pos_), thread(thread_), transaction(transaction_), preferredMove(preferredMove_),
+      preferredTurn(preferredTurn_ ? *preferredTurn_ : LogicalMove()) {
 
   if (!pos.compound_turn_active())
   {
@@ -128,15 +129,23 @@ void LogicalMoveSource::initialize_frame(int frameDepth) {
       thread->release_buffer(moveBuffer);
 
   // The provider does not have a Stack/MovePicker, but a small amount of
-  // complete-turn ordering is still useful. Prioritize the TT's representative
-  // at the root and tactical physical steps at every DFS frame.
+  // complete-turn ordering is still useful. Follow a remembered logical turn,
+  // fall back to the TT's first-component hint, and prioritize tactical steps.
   auto tacticalBegin = frame.moves.begin();
-  if (frameDepth == 0 && preferredMove != MOVE_NONE)
+  Move preferred = MOVE_NONE;
+  if (!preferredTurn.empty() && frameDepth < preferredTurn.length
+      && std::equal(turn.components.begin(), turn.components.begin() + frameDepth,
+                    preferredTurn.components.begin()))
+      preferred = preferredTurn.components[frameDepth];
+  else if (frameDepth == 0)
+      preferred = preferredMove;
+
+  if (preferred != MOVE_NONE)
   {
-      auto preferred = std::find(frame.moves.begin(), frame.moves.end(), preferredMove);
-      if (preferred != frame.moves.end())
+      auto preferredIt = std::find(frame.moves.begin(), frame.moves.end(), preferred);
+      if (preferredIt != frame.moves.end())
       {
-          std::rotate(frame.moves.begin(), preferred, preferred + 1);
+          std::rotate(frame.moves.begin(), preferredIt, preferredIt + 1);
           tacticalBegin = frame.moves.begin() + 1;
       }
   }
@@ -452,20 +461,20 @@ std::string compound_move_to_string(Position& pos, const LogicalMove& turn) {
 }
 
 std::vector<std::string> compound_pv_to_strings(const Position& pos,
-                                                const std::vector<LogicalMove>& pv) {
+                                                const LogicalMove& first,
+                                                const std::vector<LogicalMove>& continuation) {
 
   std::vector<std::string> result;
-  result.reserve(pv.size());
+  result.reserve(continuation.size() + 1);
 
   Position replay;
   StateListPtr states(new std::deque<StateInfo>(1));
   replay.set(pos.variant(), pos.fen(), pos.is_chess960(), &states->back(), pos.this_thread());
 
   LogicalMoveState transaction;
-  for (const LogicalMove& move : pv)
-  {
+  auto append = [&](const LogicalMove& move) {
       if (move.first() == MOVE_NONE)
-          break;
+          return false;
 
       states->emplace_back();
       if (replay.compound_turn_active())
@@ -478,6 +487,15 @@ std::vector<std::string> compound_pv_to_strings(const Position& pos,
           result.push_back(UCI::move(replay, move.first()));
           replay.do_move(move.first(), states->back(), false);
       }
+      return true;
+  };
+
+  if (!append(first))
+      return result;
+  for (const LogicalMove& move : continuation)
+  {
+      if (!append(move))
+          break;
   }
 
   return result;

@@ -114,11 +114,6 @@ void movement() {
                  "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
     check(!pos.clone_targets_from(WHITE, SQ_A3),
           "clone_targets_from returned targets for an empty square");
-    const Variant* staticQsearch = variants.get("generic-static-qsearch-audit");
-    check(staticQsearch != nullptr,
-          "generic static-evaluation qsearch audit variant failed to load");
-    check(staticQsearch->quiescencePolicy == QuiescencePolicy::STATIC_EVAL,
-          "generic static-evaluation quiescence policy was not parsed");
 }
 
 void composable_rules() {
@@ -1349,8 +1344,6 @@ void compound_turn_rules() {
           "generic compound turns inherited Arimaa repetition policy");
     check(variants.get("arimaa")->samePlayerBoardRepetitionIllegalAtN == 2,
           "Arimaa did not enable complete-turn repetition illegality");
-    check(variants.get("arimaa")->quiescencePolicy == QuiescencePolicy::STANDARD,
-          "Arimaa unexpectedly overrides the logical-provider qsearch policy");
     check(pos.compound_turn_active(), "generic compound turn is not active");
     check(pos.compound_turn_steps() == 3, "generic compound turn steps != 3");
     const LogicalMoveCapabilities capabilities = pos.logical_move_capabilities();
@@ -1485,6 +1478,34 @@ void compound_turn_rules() {
     check(lazyGenerated == generated,
           "lazy logical move source disagreed with materialized compound generation");
 
+    auto preferred = std::find_if(generated.begin(), generated.end(),
+                                  [](const LogicalMove& move) { return move.length >= 3; });
+    check(preferred != generated.end(),
+          "compound ordering audit did not find a multi-component turn");
+    if (preferred != generated.end())
+    {
+        LogicalMoveState preferredTransaction;
+        LogicalMoveSource preferredSource(pos, nullptr, preferredTransaction,
+                                          true, MOVE_NONE, &*preferred);
+        LogicalMove candidate;
+        bool reachedPreferred = false;
+        while (preferredSource.next(candidate))
+        {
+            if (candidate == *preferred)
+            {
+                reachedPreferred = true;
+                break;
+            }
+            check(candidate.length < preferred->length
+                  && std::equal(candidate.components.begin(),
+                                candidate.components.begin() + candidate.length,
+                                preferred->components.begin()),
+                  "logical turn hint did not prioritize the preferred DFS prefix");
+        }
+        check(reachedPreferred,
+              "logical turn hint did not prioritize the complete preferred turn");
+    }
+
     const Key generatedKey = pos.key();
     std::vector<LogicalMove> appliedGenerated;
     {
@@ -1601,7 +1622,9 @@ void compound_turn_rules() {
         if (!childGenerated.empty())
         {
             std::vector<LogicalMove> logicalPv = {generated.front(), childGenerated.front()};
-            const std::vector<std::string> formattedPv = compound_pv_to_strings(pos, logicalPv);
+            const std::vector<LogicalMove> continuation = {logicalPv[1]};
+            const std::vector<std::string> formattedPv =
+                compound_pv_to_strings(pos, logicalPv[0], continuation);
             check(formattedPv.size() == logicalPv.size(),
                   "logical PV formatter did not replay the complete PV");
 
@@ -2384,12 +2407,6 @@ void load_config(const std::string& path) {
 startFen = 8/8/8/8/8/8/8/8[PPpp] w - - 0 1
 pieceDrops = true
 symmetricDropTypes = p
-
-[generic-static-qsearch-audit:fairy]
-king = -
-checking = false
-startFen = 8/8/8/8/8/8/8/8 w - - 0 1
-quiescencePolicy = static-eval
 
 [generic-extinction-draw-audit:chess]
 extinctionPieceTypes = q

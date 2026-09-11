@@ -172,6 +172,7 @@ namespace {
     bool promotionLike = false;
     bool givesCheck = false;
     bool historyCompatible = true;
+    bool reductionEligible = true;
     bool seeReliable = true;
   };
 
@@ -399,7 +400,8 @@ void MainThread::search() {
       {
           const LogicalMove& bestTurn = bestThread->rootMoves[0].first();
           const std::vector<std::string> compoundPv =
-              compound_pv_to_strings(rootPos, bestThread->rootMoves[0].full_pv());
+              compound_pv_to_strings(rootPos, bestThread->rootMoves[0].first(),
+                                     bestThread->rootMoves[0].continuation());
           if (!Limits.infinite && !ponder && !compoundPv.empty()
               && bestTurn.first() != MOVE_NONE
               && !Threads.abort.exchange(true))
@@ -456,7 +458,8 @@ void MainThread::search() {
   SyncCout out;
 #ifdef ENABLE_COMPOUND_TURNS
   const std::vector<std::string> compoundPv = rootPos.variant()->compoundTurnSteps > 0
-                                            ? compound_pv_to_strings(rootPos, bestThread->rootMoves[0].full_pv())
+                                            ? compound_pv_to_strings(rootPos, bestThread->rootMoves[0].first(),
+                                                                     bestThread->rootMoves[0].continuation())
                                             : std::vector<std::string>();
   if (rootPos.compound_turn_active()
       && !bestThread->rootMoves.empty()
@@ -727,7 +730,10 @@ void Thread::search() {
       if (rootMoves[0].first() != lastBestMove) {
          lastBestMove = rootMoves[0].first();
          lastBestScore = rootMoves[0].score;
-         lastBestPV = rootMoves[0].full_pv();
+         lastBestPV.clear();
+         lastBestPV.reserve(rootMoves[0].pv_size());
+         for (size_t i = 0; i < rootMoves[0].pv_size(); ++i)
+             lastBestPV.push_back(rootMoves[0].pv_at(i));
          lastBestMoveDepth = rootDepth;
       }
 
@@ -945,6 +951,7 @@ namespace {
             return pos.logical_moves_active();
         return false;
     }();
+    const bool exactTtMoveIdentity = !logicalMovePosition;
     const bool lazyRoot = rootNode && logicalMovePosition
                        && thisThread->rootMoves.empty();
     ss->inCheck        = pos.evasion_checkers();
@@ -1045,7 +1052,7 @@ namespace {
                             : (tte->bound() & BOUND_UPPER)))
     {
         // If ttMove is quiet, update move sorting heuristics on TT hit
-        if (ttMove)
+        if (ttMove && exactTtMoveIdentity)
         {
             if (ttValue >= beta)
             {
@@ -1402,8 +1409,13 @@ moves_loop: // When in check, search starts from here
     std::optional<LogicalMoveSource> logicalSource;
     if constexpr (Logical)
         if (logicalMovePosition && (!rootNode || lazyRoot))
+        {
+            const LogicalMove* preferredTurn = thisThread->logical_move_hint(pos.key());
+            if (preferredTurn && ttMove && preferredTurn->first() != ttMove)
+                preferredTurn = nullptr;
             logicalSource.emplace(pos, thisThread, thisThread->logical_move_state(ss->ply),
-                                  true, ttMove);
+                                  true, ttMove, preferredTurn);
+        }
 #endif
 
     // Step 12. Loop through all pseudo-legal moves until no moves remain
@@ -1454,7 +1466,7 @@ moves_loop: // When in check, search starts from here
                   RootMove& rootMove = thisThread->rootMoves[rootMoveIndex++];
                   logicalMove = rootMove.first();
                   move = logicalMove.first();
-                  moveInfo = rootMove.info;
+                  moveInfo = rootMove.move_info();
               }
           }
           else if (logicalMovePosition)
@@ -1533,7 +1545,12 @@ moves_loop: // When in check, search starts from here
 
       ss->moveCount = ++moveCount;
 
-      if (rootNode && thisThread == Threads.main() && Time.elapsed() > 3000 && is_uci_dialect(CurrentProtocol) && int(Options["Verbosity"]) >= 1)
+      if (rootNode && thisThread == Threads.main() && Time.elapsed() > 3000
+          && is_uci_dialect(CurrentProtocol) && int(Options["Verbosity"]) >= 1
+#ifdef ENABLE_COMPOUND_TURNS
+          && !appliedSource
+#endif
+         )
       {
           sync_cout << "info depth " << depth << " currmove ";
 #ifdef ENABLE_COMPOUND_TURNS
@@ -1654,7 +1671,8 @@ moves_loop: // When in check, search starts from here
       // then that move is singular and should be extended. To verify this we do
       // a reduced search on all the other moves but the ttMove and if the
       // result is lower than ttValue minus a margin, then we will extend the ttMove.
-      if (   moveInfo.historyCompatible
+      if (   exactTtMoveIdentity
+          && moveInfo.historyCompatible
           && !rootNode
           &&  depth >= 7 - 2 * (pos.count<KING>() == 1)
           &&  move == ttMove
@@ -1766,7 +1784,7 @@ moves_loop: // When in check, search starts from here
       // been searched. In general we would like to reduce them, but there are many
       // cases where we extend a son if it has good chances to be "interesting".
       if (    depth >= 3
-          && moveInfo.historyCompatible
+          && moveInfo.reductionEligible
           &&  moveCount > 1 + 2 * rootNode
           && !(pos.must_capture() && pos.has_capture())
           && (  !materialChange
@@ -1806,7 +1824,7 @@ moves_loop: // When in check, search starts from here
           if (cutNode)
               r += 1 + !materialChange;
 
-          if (!captureOrPromotion)
+          if (!captureOrPromotion && moveInfo.historyCompatible)
           {
               // Increase reduction if ttMove is a capture (~3 Elo)
               if (ttCapture)
@@ -1824,6 +1842,9 @@ moves_loop: // When in check, search starts from here
               if (!ss->inCheck)
                   r -= ss->statScore / (14721 - 4434 * pos.captures_to_hand());
           }
+
+          if (!moveInfo.historyCompatible)
+              r = 1;
 
           // In general we want to cap the LMR depth search at newDepth. But if
           // reductions are really negative and movecount is low, we allow this move
@@ -1848,7 +1869,7 @@ moves_loop: // When in check, search starts from here
           value = -search_impl<Logical, NonPV>(pos, ss+1, -(alpha+1), -alpha, newDepth, !cutNode);
 
           // If the move passed LMR update its stats
-          if (didLMR && !captureOrPromotion)
+          if (didLMR && moveInfo.historyCompatible && !captureOrPromotion)
           {
               int bonus = value > alpha ?  stat_bonus(newDepth)
                                         : -stat_bonus(newDepth);
@@ -2035,6 +2056,11 @@ moves_loop: // When in check, search starts from here
             return logicalMovePosition ? bestSearchMove.first() : bestMove;
         return bestMove;
     }();
+#ifdef ENABLE_COMPOUND_TURNS
+    if constexpr (Logical)
+        if (logicalMovePosition && !bestSearchMove.empty())
+            thisThread->store_logical_move_hint(pos.key(), bestSearchMove);
+#endif
     if (!excludedMove && !(rootNode && thisThread->pvIdx))
         tte->save(posKey, value_to_tt(bestValue, ss->ply), ss->ttPv,
                   bestValue >= beta ? BOUND_LOWER :
@@ -2071,7 +2097,7 @@ moves_loop: // When in check, search starts from here
             return pos.logical_move_capabilities().quiescence == QuiescenceSupport::STATIC_ONLY;
         return false;
     }();
-    if (providerStaticOnly || pos.variant()->quiescencePolicy == QuiescencePolicy::STATIC_EVAL)
+    if (providerStaticOnly)
     {
         Value result;
         if (pos.is_game_end(result, ss->ply))
@@ -2621,7 +2647,8 @@ string UCI::pv(const Position& pos, Depth depth, Value alpha, Value beta) {
 
 #ifdef ENABLE_COMPOUND_TURNS
       const std::vector<std::string> compoundPv = pos.variant()->compoundTurnSteps > 0
-                                                ? compound_pv_to_strings(pos, rootMoves[i].full_pv())
+                                                ? compound_pv_to_strings(pos, rootMoves[i].first(),
+                                                                         rootMoves[i].continuation())
                                                 : std::vector<std::string>();
 #endif
 
