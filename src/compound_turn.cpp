@@ -7,7 +7,6 @@
 #ifdef ENABLE_COMPOUND_TURNS
 
 #include <algorithm>
-#include <functional>
 
 #include "movegen.h"
 #include "position.h"
@@ -54,6 +53,62 @@ std::string compound_step_to_string(Position& pos, Move move) {
          + UCI::square(pos, to_sq(move))
          + "," + UCI::square(pos, encoded_push_square(move));
 }
+
+// Recursive-descent parser for one compound turn token ("step[,step...]",
+// ';' separators are also accepted). Depth is bounded by
+// LogicalMove::MAX_COMPONENTS, so plain member recursion needs no
+// type-erased std::function wrapper.
+struct CompoundMoveParser {
+    Position& pos;
+    const std::string& text;
+    Key startBoundaryKey;
+    const StateInfo* logicalRoot;
+    StateInfo* states;
+    LogicalMove parsed{};
+
+    bool parse_level(size_t offset, int usedSteps) {
+        if (offset >= text.size() || parsed.length >= LogicalMove::MAX_COMPONENTS)
+            return false;
+
+        for (const auto& move : MoveList<LEGAL>(pos))
+        {
+            if (is_pass(move) && parsed.length != 0)
+                continue;
+
+            const std::string moveText = compound_step_to_string(pos, move);
+            if (text.compare(offset, moveText.size(), moveText) != 0)
+                continue;
+
+            const int moveCost = compound_move_cost(pos, move);
+            if (usedSteps + moveCost > pos.compound_turn_steps())
+                continue;
+
+            const size_t next = offset + moveText.size();
+            if (next != text.size() && text[next] != ',' && text[next] != ';')
+                continue;
+
+            const int index = parsed.length++;
+            parsed.components[index] = move;
+            pos.do_component(move, states[index], false, false);
+            const int nextUsedSteps = usedSteps + moveCost;
+
+            bool accepted = false;
+            if (next == text.size())
+                accepted = compound_turn_candidate_accepted(pos, move, usedSteps,
+                                                            startBoundaryKey, logicalRoot);
+            else
+                accepted = !is_pass(move) && parse_level(next + 1, nextUsedSteps);
+
+            pos.undo_component(move);
+            if (accepted)
+                return true;
+
+            --parsed.length;
+        }
+
+        return false;
+    }
+};
 
 } // namespace
 
@@ -319,63 +374,15 @@ bool parse_compound_move(Position& pos, const std::string& text, LogicalMove& tu
   if (pos.is_game_end(result))
       return false;
 
-  LogicalMove parsed;
   alignas(Eval::NNUE::CacheLineSize) StateInfo states[LogicalMove::MAX_COMPONENTS + 1];
   const Key startBoundaryKey = pos.compound_turn_boundary_key();
   const StateInfo* logicalRoot = pos.state();
 
-  std::function<bool(size_t, int)> parse = [&](size_t offset, int usedSteps) {
-      if (offset >= text.size())
-          return false;
-      if (parsed.length >= LogicalMove::MAX_COMPONENTS)
-          return false;
-
-      for (const auto& move : MoveList<LEGAL>(pos))
-      {
-          if (is_pass(move) && parsed.length != 0)
-              continue;
-
-          const std::string moveText = compound_step_to_string(pos, move);
-          if (text.compare(offset, moveText.size(), moveText) != 0)
-              continue;
-
-          const int moveCost = compound_move_cost(pos, move);
-          if (usedSteps + moveCost > pos.compound_turn_steps())
-              continue;
-
-          const size_t next = offset + moveText.size();
-          if (next != text.size() && text[next] != ',' && text[next] != ';')
-              continue;
-
-          const int index = parsed.length++;
-          parsed.components[index] = move;
-          pos.do_component(move, states[index], false, false);
-          const int nextUsedSteps = usedSteps + moveCost;
-
-          bool accepted = false;
-          if (next == text.size())
-              accepted = compound_turn_candidate_accepted(pos, move, usedSteps,
-                                                          startBoundaryKey, logicalRoot);
-          else
-              accepted = !is_pass(move) && parse(next + 1, nextUsedSteps);
-
-          if (accepted)
-          {
-              pos.undo_component(move);
-              return true;
-          }
-
-          pos.undo_component(move);
-          --parsed.length;
-      }
-
-      return false;
-  };
-
-  if (!parse(0, 0))
+  CompoundMoveParser parser{pos, text, startBoundaryKey, logicalRoot, states};
+  if (!parser.parse_level(0, 0))
       return false;
 
-  turn = parsed;
+  turn = parser.parsed;
   return true;
 }
 
