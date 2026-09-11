@@ -59,7 +59,7 @@ std::string compound_step_to_string(Position& pos, Move move) {
 } // namespace
 
 LogicalMoveSource::LogicalMoveSource(Position& pos_, Thread* thread_,
-                                     LogicalMoveState& transaction_, bool checkGameEnd,
+                                     LogicalMoveUndo& transaction_, bool checkGameEnd,
                                      Move preferredMove_, const LogicalMove* preferredTurn_)
     : pos(pos_), thread(thread_), transaction(transaction_), preferredMove(preferredMove_),
       preferredTurn(preferredTurn_ ? *preferredTurn_ : LogicalMove()) {
@@ -86,7 +86,7 @@ LogicalMoveSource::~LogicalMoveSource() {
 
 void LogicalMoveSource::initialize_frame(int frameDepth) {
   Frame& frame = frames[frameDepth];
-  auto& moves = transaction.moveLists[frameDepth];
+  auto& moves = moveLists[frameDepth];
   frame.usedCost = frameDepth == 0
                  ? 0
                  : frames[frameDepth - 1].usedCost
@@ -186,7 +186,7 @@ bool LogicalMoveSource::next_impl(LogicalMove& move, LogicalMoveInfo* info) {
       }
 
       Frame& frame = frames[depth];
-      auto& moves = transaction.moveLists[depth];
+      auto& moves = moveLists[depth];
       if (frame.current == moves.size())
       {
           if (depth == 0)
@@ -291,7 +291,7 @@ std::vector<LogicalMove> generate_compound_moves(Position& pos) {
   if (pos.is_game_end(result))
       return turns;
 
-  LogicalMoveState transaction;
+  LogicalMoveUndo transaction;
   LogicalMoveSource source(pos, pos.this_thread(), transaction, false);
   LogicalMove turn;
   while (source.next(turn))
@@ -308,7 +308,7 @@ bool has_any_compound_move(Position& pos) {
   if (pos.is_game_end(result))
       return false;
 
-  LogicalMoveState transaction;
+  LogicalMoveUndo transaction;
   LogicalMoveSource source(pos, pos.this_thread(), transaction, false);
   LogicalMove move;
   return source.next(move);
@@ -353,7 +353,7 @@ bool parse_compound_move(Position& pos, const std::string& text, LogicalMove& tu
 
           const int index = parsed.length++;
           parsed.components[index] = move;
-          pos.do_component(move, states[index], false);
+          pos.do_component(move, states[index], false, false);
           const int nextUsedSteps = usedSteps + moveCost;
 
           bool accepted = false;
@@ -384,13 +384,13 @@ bool parse_compound_move(Position& pos, const std::string& text, LogicalMove& tu
 }
 
 void do_compound_move(Position& pos, const LogicalMove& turn, StateInfo& state,
-                      LogicalMoveState& transaction) {
+                      LogicalMoveUndo& transaction) {
 
   pos.do_move(turn, state, transaction, false);
 }
 
 void undo_compound_move(Position& pos, const LogicalMove& turn,
-                        LogicalMoveState& transaction) {
+                        LogicalMoveUndo& transaction) {
 
   pos.undo_move(turn, transaction);
 }
@@ -398,7 +398,7 @@ void undo_compound_move(Position& pos, const LogicalMove& turn,
 std::string compound_move_to_string(Position& pos, const LogicalMove& turn) {
 
   std::string result;
-  LogicalMoveState transaction;
+  LogicalMoveUndo transaction;
 
   for (int i = 0; i < turn.length; ++i)
   {
@@ -407,7 +407,7 @@ std::string compound_move_to_string(Position& pos, const LogicalMove& turn) {
       result += compound_step_to_string(pos, turn.components[i]);
       // Formatting is a read-only operation. The component executor still
       // supplies scratch state so that effects are formatted in context.
-      pos.do_component(turn.components[i], transaction.components[i], false);
+      pos.do_component(turn.components[i], transaction.components[i], false, false);
   }
 
   for (int i = turn.length - 1; i >= 0; --i)
@@ -427,7 +427,7 @@ std::vector<std::string> compound_pv_to_strings(const Position& pos,
   StateListPtr states(new std::deque<StateInfo>(1));
   replay.set(pos.variant(), pos.fen(), pos.is_chess960(), &states->back(), pos.this_thread());
 
-  LogicalMoveState transaction;
+  LogicalMoveUndo transaction;
   auto append = [&](const LogicalMove& move) {
       if (move.first() == MOVE_NONE)
           return false;
@@ -471,7 +471,7 @@ uint64_t compound_perft(Position& pos, int depth, bool root) {
       else
       {
           StateInfo state;
-          LogicalMoveState transaction;
+          LogicalMoveUndo transaction;
           do_compound_move(pos, turn, state, transaction);
           count = compound_perft(pos, depth - 1, false);
           undo_compound_move(pos, turn, transaction);

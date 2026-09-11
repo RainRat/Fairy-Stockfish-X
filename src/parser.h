@@ -134,8 +134,6 @@ private:
     bool parse_edge_insert(Variant* v);
     bool parse_priority_drops(Variant* v);
     bool parse_multimoves(Variant* v);
-    bool parse_simul_value_by_mover(const std::string& key, SimultaneousResult& target);
-
     template <typename T> void apply_color_setting(ColorSetting<T>& target, Color color, const T& parsed);
     template <typename T> void parse_color_setting(const std::string& key, ColorSetting<T>& target);
     bool parse_color_setting_first_piece(const std::string& key, ColorSetting<PieceType>& target, const Variant* v);

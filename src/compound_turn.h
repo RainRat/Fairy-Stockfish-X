@@ -22,14 +22,14 @@ namespace Stockfish {
 class Position;
 class Thread;
 struct StateInfo;
-struct LogicalMoveState;
+struct LogicalMoveUndo;
 
 /// Lazily yield complete legal logical moves without materializing the turn tree.
 /// The component recursion and its temporary position changes stay private to
 /// this provider; callers always observe the position at a turn boundary.
 class LogicalMoveSource {
  public:
-  LogicalMoveSource(Position& pos, Thread* thread, LogicalMoveState& transaction,
+  LogicalMoveSource(Position& pos, Thread* thread, LogicalMoveUndo& transaction,
                     bool checkGameEnd = true, Move preferredMove = MOVE_NONE,
                     const LogicalMove* preferredTurn = nullptr);
   ~LogicalMoveSource();
@@ -54,7 +54,8 @@ class LogicalMoveSource {
 
   Position& pos;
   Thread* thread;
-  LogicalMoveState& transaction;
+  LogicalMoveUndo& transaction;
+  std::array<std::vector<Move>, LogicalMove::MAX_COMPONENTS> moveLists;
   StateInfo* logicalRoot = nullptr;
   Move preferredMove = MOVE_NONE;
   LogicalMove preferredTurn;
@@ -80,9 +81,9 @@ bool parse_compound_move(Position& pos, const std::string& text, LogicalMove& tu
 /// Apply and undo one complete logical move. Component state is transaction
 /// scratch; only the supplied StateInfo enters the persistent history chain.
 void do_compound_move(Position& pos, const LogicalMove& turn, StateInfo& state,
-                      LogicalMoveState& transaction);
+                      LogicalMoveUndo& transaction);
 void undo_compound_move(Position& pos, const LogicalMove& turn,
-                        LogicalMoveState& transaction);
+                        LogicalMoveUndo& transaction);
 
 uint64_t compound_perft(Position& pos, int depth, bool root);
 std::string compound_move_to_string(Position& pos, const LogicalMove& turn);

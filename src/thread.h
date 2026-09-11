@@ -85,11 +85,19 @@ public:
 #ifdef ENABLE_COMPOUND_TURNS
   static constexpr size_t LogicalMoveHintCount = 1024;
 
-  LogicalMoveState& logical_move_state(int ply) {
+  LogicalMoveUndo& logical_move_state(int ply) {
       assert(0 <= ply && ply < MAX_PLY);
       if (!logicalMoveStates[ply])
-          logicalMoveStates[ply] = std::make_unique<LogicalMoveState>();
+          logicalMoveStates[ply] = std::make_unique<LogicalMoveUndo>();
       return *logicalMoveStates[ply];
+  }
+
+  LogicalMove* logical_pv(int ply) {
+      assert(0 <= ply && ply < MAX_PLY);
+      auto& pv = logicalPvs[ply];
+      if (pv.empty())
+          pv.resize(MAX_PLY + 1);
+      return pv.data();
   }
 
   const LogicalMove* logical_move_hint(Key key) const {
@@ -124,7 +132,8 @@ private:
       LogicalMove move;
   };
 
-  std::array<std::unique_ptr<LogicalMoveState>, MAX_PLY> logicalMoveStates;
+  std::array<std::unique_ptr<LogicalMoveUndo>, MAX_PLY> logicalMoveStates;
+  std::array<std::vector<LogicalMove>, MAX_PLY> logicalPvs;
   std::array<LogicalMoveHint, LogicalMoveHintCount> logicalMoveHints{};
 #endif
   std::vector<std::unique_ptr<ExtMove[]>> bufferPool;

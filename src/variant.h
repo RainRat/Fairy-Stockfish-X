@@ -73,13 +73,6 @@ enum class SimulFlagExtinctionPriority : uint8_t {
   EXTINCTION
 };
 
-enum class SimultaneousResult : uint8_t {
-  LEGACY,
-  MOVER_WINS,
-  MOVER_LOSES,
-  DRAW
-};
-
 enum class PushPullRule : uint8_t {
   GENERIC,
   TWO_STEP,
@@ -455,8 +448,8 @@ struct Variant {
   bool passUntilSetup = false;
   int compoundTurnSteps = 0;
   SimulFlagExtinctionPriority simulFlagExtinctionPriority = SimulFlagExtinctionPriority::EXTINCTION;
-  SimultaneousResult simulFlagValueByMover = SimultaneousResult::LEGACY;
-  SimultaneousResult simulExtinctionValueByMover = SimultaneousResult::LEGACY;
+  Value simulFlagValueByMover = VALUE_NONE;
+  Value simulExtinctionValueByMover = VALUE_NONE;
 
   enum PotionType : int {
       POTION_FREEZE,

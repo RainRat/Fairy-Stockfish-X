@@ -17,6 +17,7 @@
 */
 
 #include <algorithm>
+#include <array>
 #include <cassert>
 #include <chrono>
 #include <cmath>
@@ -78,7 +79,22 @@ namespace {
   struct LogicalMoveSourceStorage<true> {
       std::optional<LogicalMoveSource> source;
   };
+
 #endif
+
+  template <typename T, bool Enabled>
+  struct PvBuffer;
+
+  template <typename T>
+  struct PvBuffer<T, true> {
+      std::array<T, MAX_PLY + 1> moves;
+      T* data() { return moves.data(); }
+  };
+
+  template <typename T>
+  struct PvBuffer<T, false> {
+      T* data() { return nullptr; }
+  };
 
   constexpr uint64_t TtHitAverageWindow     = 4096;
   constexpr uint64_t TtHitAverageResolution = 1024;
@@ -917,7 +933,19 @@ namespace {
     assert(0 < depth && depth < MAX_PLY);
     assert(!(PvNode && cutNode));
 
-    SearchMove pv[MAX_PLY+1];
+    Thread* thisThread = pos.this_thread();
+    using LocalPv = PvBuffer<SearchMove, PvNode && !Logical>;
+    LocalPv localPv{};
+    SearchMove* pv = nullptr;
+    if constexpr (PvNode)
+    {
+#ifdef ENABLE_COMPOUND_TURNS
+        if constexpr (Logical)
+            pv = thisThread->logical_pv(ss->ply);
+        else
+#endif
+            pv = localPv.data();
+    }
     Move capturesSearched[32], quietsSearched[64];
     StateInfo st;
     ASSERT_ALIGNED(&st, Eval::NNUE::CacheLineSize);
@@ -935,7 +963,6 @@ namespace {
     int moveCount, captureCount, quietCount;
 
     // Step 1. Initialize node
-    Thread* thisThread = pos.this_thread();
     PieceToHistory* neutralContinuationHistory = &thisThread->continuationHistory[0][0][NO_PIECE][0];
     const LogicalMoveCapabilities moveCapabilities = [&] {
         if constexpr (Logical)
@@ -1739,7 +1766,7 @@ moves_loop: // When in check, search starts from here
 
       // Step 15. Make the move
 #ifdef ENABLE_COMPOUND_TURNS
-      LogicalMoveState* transaction = nullptr;
+      LogicalMoveUndo* transaction = nullptr;
       if constexpr (Logical)
       {
           if (logicalMovePosition)
@@ -2086,7 +2113,19 @@ moves_loop: // When in check, search starts from here
     assert(depth <= 0);
 
     using SearchMove = std::conditional_t<Logical, LogicalMove, Move>;
-    SearchMove pv[MAX_PLY+1];
+    Thread* thisThread = pos.this_thread();
+    using LocalPv = PvBuffer<SearchMove, PvNode && !Logical>;
+    LocalPv localPv{};
+    SearchMove* pv = nullptr;
+    if constexpr (PvNode)
+    {
+#ifdef ENABLE_COMPOUND_TURNS
+        if constexpr (Logical)
+            pv = thisThread->logical_pv(ss->ply);
+        else
+#endif
+            pv = localPv.data();
+    }
     StateInfo st;
     ASSERT_ALIGNED(&st, Eval::NNUE::CacheLineSize);
 
@@ -2105,7 +2144,6 @@ moves_loop: // When in check, search starts from here
         ss->pv_ptr<Logical>()[0] = MOVE_NONE;
     }
 
-    Thread* thisThread = pos.this_thread();
     bestMove = MOVE_NONE;
     ss->inCheck = pos.evasion_checkers();
     legalMoveFound = false;

@@ -45,7 +45,7 @@ namespace Stockfish {
 #ifdef ENABLE_COMPOUND_TURNS
 class Position;
 struct StateInfo;
-struct LogicalMoveState;
+struct LogicalMoveUndo;
 #endif
 
 constexpr int MAX_PUSH_SNAPSHOT = 32;
@@ -478,12 +478,11 @@ static_assert(std::is_standard_layout_v<MoveUndoInfo>, "MoveUndoInfo must remain
 static_assert(std::is_standard_layout_v<NnueStateInfo>, "NnueStateInfo must remain standard layout");
 
 #ifdef ENABLE_COMPOUND_TURNS
-/// Scratch states used while applying one logical move. They are deliberately
-/// separate from the persistent StateInfo chain.
-struct LogicalMoveState {
+/// State needed to undo one logical move. It is deliberately separate from the
+/// persistent StateInfo chain.
+struct LogicalMoveUndo {
   alignas(Eval::NNUE::CacheLineSize)
   std::array<StateInfo, LogicalMove::MAX_COMPONENTS> components;
-  std::array<std::vector<Move>, LogicalMove::MAX_COMPONENTS> moveLists;
   StateInfo* previous = nullptr;
   int usedCost = 0;
   bool syntheticBoundary = false;
@@ -1093,8 +1092,8 @@ public:
                     bool updateLayoutKey = true);
   void undo_component(Move m);
   void do_move(const LogicalMove& move, StateInfo& newSt,
-               LogicalMoveState& transaction, bool countNode = true);
-  void undo_move(const LogicalMove& move, LogicalMoveState& transaction,
+               LogicalMoveUndo& transaction, bool countNode = true);
+  void undo_move(const LogicalMove& move, LogicalMoveUndo& transaction,
                  bool preservePrefix = false);
 #endif
   void fire_laser(Color us, Key& k, Square selectedEmitter = SQ_NONE);
@@ -1185,7 +1184,7 @@ private:
   void end_compound_turn(StateInfo& newSt);
   void undo_compound_turn();
   void commit_compound_move(const LogicalMove& move, StateInfo& newSt,
-                            LogicalMoveState& transaction);
+                            LogicalMoveUndo& transaction);
 #endif
 
   // Initialization helpers (used while setting up a position)
@@ -2929,7 +2928,7 @@ inline bool Position::pass(Color c) const {
       && !has_setup_drop(c)
       && has_setup_drop(~c))
       return true;
-  if (var->sequentialSetup && !compound_turn_active()
+  if (var->sequentialSetup
       && (has_setup_drop(WHITE) || has_setup_drop(BLACK))
       && c != sequential_setup_side())
       return true;

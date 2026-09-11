@@ -5518,7 +5518,7 @@ bool Position::legal(Move m) const {
   else if (dropMove && edge_insert_only() && (edge_insert_types() & in_hand_piece_type(m)))
       return false;
 
-  if (var->sequentialSetup && !compound_turn_active()
+  if (var->sequentialSetup
       && (has_setup_drop(WHITE) || has_setup_drop(BLACK))
       && us != sequential_setup_side()
       && !is_pass(m))
@@ -6556,7 +6556,7 @@ bool Position::pseudo_legal(const Move m) const {
   if (is_pass(m) && !pass(us))
       return false;
 
-  if (var->sequentialSetup && !compound_turn_active()
+  if (var->sequentialSetup
       && (has_setup_drop(WHITE) || has_setup_drop(BLACK))
       && us != sequential_setup_side()
       && !is_pass(m))
@@ -10303,9 +10303,6 @@ void Position::end_compound_turn(StateInfo& newSt) {
   st->accumulator.computed[WHITE] = false;
   st->accumulator.computed[BLACK] = false;
   st->boardKey = st->key ^ st->reserveKey;
-  if (var->samePlayerBoardRepetitionIllegalAtN > 0)
-      st->layoutKey = layout_key();
-
   sideToMove = ~us;
   st->evasionCheckersBB = compute_evasion_checkers_bb(sideToMove);
   set_check_info(st);
@@ -10327,7 +10324,7 @@ void Position::undo_compound_turn() {
 }
 
 void Position::do_move(const LogicalMove& move, StateInfo& newSt,
-                       LogicalMoveState& transaction, bool countNode) {
+                       LogicalMoveUndo& transaction, bool countNode) {
 
   assert(compound_turn_active());
   assert(at_complete_turn_boundary());
@@ -10342,14 +10339,14 @@ void Position::do_move(const LogicalMove& move, StateInfo& newSt,
   {
       assert(legal(move.components[i]));
       transaction.usedCost += compound_turn_step_cost(move.components[i]);
-      do_component(move.components[i], transaction.components[i], countNode && i == 0);
+      do_component(move.components[i], transaction.components[i], countNode && i == 0, false);
   }
 
   commit_compound_move(move, newSt, transaction);
 }
 
 void Position::commit_compound_move(const LogicalMove& move, StateInfo& newSt,
-                                    LogicalMoveState& transaction) {
+                                    LogicalMoveUndo& transaction) {
 
   assert(compound_turn_active());
   assert(at_complete_turn_boundary() || transaction.previous != st);
@@ -10379,10 +10376,12 @@ void Position::commit_compound_move(const LogicalMove& move, StateInfo& newSt,
   newSt.nnueRefreshNeeded = true;
   newSt.accumulator.computed[WHITE] = false;
   newSt.accumulator.computed[BLACK] = false;
+  if (var->samePlayerBoardRepetitionIllegalAtN > 0)
+      newSt.layoutKey = layout_key();
   update_repetition_info();
 }
 
-void Position::undo_move(const LogicalMove& move, LogicalMoveState& transaction,
+void Position::undo_move(const LogicalMove& move, LogicalMoveUndo& transaction,
                          bool preservePrefix) {
 
   assert(transaction.previous != nullptr);
@@ -11102,32 +11101,20 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
       return c == WHITE ? whiteFlagReached : blackFlagReached;
   };
 
-  auto value_by_mover = [&](SimultaneousResult policy) {
-      const Value value = policy == SimultaneousResult::MOVER_WINS ? VALUE_MATE
-                        : policy == SimultaneousResult::MOVER_LOSES ? -VALUE_MATE
-                        : VALUE_DRAW;
+  auto value_by_mover = [&](Value value) {
       return convert_mate_value(-value, ply);
   };
-  const bool simultaneousFlagConfigured = var->simulFlagValueByMover != SimultaneousResult::LEGACY;
-  const bool simultaneousExtinctionConfigured = var->simulExtinctionValueByMover != SimultaneousResult::LEGACY;
+  const bool simultaneousFlagConfigured = var->simulFlagValueByMover != VALUE_NONE;
+  const bool simultaneousExtinctionConfigured = var->simulExtinctionValueByMover != VALUE_NONE;
 
   auto flag_game_end = [&](Value& flagResult) {
-      // A configured simultaneous policy evaluates either side's goal at the
-      // boundary. This preserves the complete-turn goal behavior used by
-      // Arimaa even when flagMove is disabled; the ordinary flag path below
-      // retains the established flagMove semantics for other variants.
-      if (simultaneousFlagConfigured)
+      // A configured simultaneous policy applies only when both sides satisfy
+      // the flag condition. The ordinary flag path handles a single side.
+      if (simultaneousFlagConfigured
+          && whiteFlagReached && blackFlagReached)
       {
-          if (flag_reached_at_boundary(mover))
-          {
-              flagResult = mated_in(ply);
-              return true;
-          }
-          if (flag_reached_at_boundary(sideToMove))
-          {
-              flagResult = mate_in(ply);
-              return true;
-          }
+          flagResult = value_by_mover(var->simulFlagValueByMover);
+          return true;
       }
 
       // A flag win by the side to move is only possible if flagMove is enabled
@@ -11161,6 +11148,14 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
               flagResult = mated_in(ply);
               return true;
           }
+      }
+
+      // A non-racing flag goal is adjudicated for either side at the completed
+      // boundary. This also covers a push that moves the opponent's flag piece.
+      if (!flag_move() && flag_reached_at_boundary(sideToMove))
+      {
+          flagResult = mate_in(ply);
+          return true;
       }
       return false;
   };

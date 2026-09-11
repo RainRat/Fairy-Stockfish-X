@@ -1361,7 +1361,7 @@ void compound_turn_rules() {
     check(pos.legal(pocketMove.first()),
           "generic compound move with unrelated pocket contents was not legal");
     StateInfo pocketState;
-    LogicalMoveState pocketTransaction;
+    LogicalMoveUndo pocketTransaction;
     do_compound_move(pos, pocketMove, pocketState, pocketTransaction);
     check(pos.compound_turn_active(),
           "generic compound turns were disabled after a turn with pocket contents");
@@ -1370,7 +1370,7 @@ void compound_turn_rules() {
     set_position(pos, states, "generic-compound-repetition-audit",
                  "8/8/8/8/8/8/8/R7 w - - 0 1");
     StateInfo repetitionStates[6];
-    LogicalMoveState repetitionTransactions[6];
+    LogicalMoveUndo repetitionTransactions[6];
     auto play_repetition_turn = [&](const char* text, int stateIndex) {
         LogicalMove turn;
         check(parse_compound_move(pos, text, turn),
@@ -1394,7 +1394,7 @@ void compound_turn_rules() {
     check(parse_compound_move(pos, "0000", firstPass),
           "failed to parse the first boundary repetition pass");
     StateInfo boundaryRepetitionState;
-    LogicalMoveState boundaryRepetitionTransaction;
+    LogicalMoveUndo boundaryRepetitionTransaction;
     do_compound_move(pos, firstPass, boundaryRepetitionState,
                      boundaryRepetitionTransaction);
     LogicalMove repeatedPass;
@@ -1428,19 +1428,19 @@ void compound_turn_rules() {
         LogicalMove priorTurn;
         LogicalMove secondPass;
         StateInfo firstPassState;
-        LogicalMoveState firstPassTransaction;
+        LogicalMoveUndo firstPassTransaction;
         check(parse_compound_move(pos, "0000", firstPass),
               "failed to parse first multi-component repetition handoff pass");
         do_compound_move(pos, firstPass, firstPassState, firstPassTransaction);
         check(parse_compound_move(pos, forward, priorTurn),
               "failed to parse multi-component repetition setup: " + forward);
         StateInfo priorState;
-        LogicalMoveState priorTransaction;
+        LogicalMoveUndo priorTransaction;
         do_compound_move(pos, priorTurn, priorState, priorTransaction);
         check(parse_compound_move(pos, "0000", secondPass),
               "failed to parse second multi-component repetition handoff pass");
         StateInfo secondPassState;
-        LogicalMoveState secondPassTransaction;
+        LogicalMoveUndo secondPassTransaction;
         do_compound_move(pos, secondPass, secondPassState, secondPassTransaction);
 
         LogicalMove repeatedTurn;
@@ -1462,7 +1462,7 @@ void compound_turn_rules() {
     check(pos.has_legal_logical_move(), "logical legal-move query disagreed with compound generation");
     std::vector<LogicalMove> lazyGenerated;
     {
-        LogicalMoveState sourceTransaction;
+        LogicalMoveUndo sourceTransaction;
         LogicalMoveSource source(pos, nullptr, sourceTransaction);
         LogicalMove candidate;
         LogicalMoveInfo info;
@@ -1484,7 +1484,7 @@ void compound_turn_rules() {
           "compound ordering audit did not find a multi-component turn");
     if (preferred != generated.end())
     {
-        LogicalMoveState preferredTransaction;
+        LogicalMoveUndo preferredTransaction;
         LogicalMoveSource preferredSource(pos, nullptr, preferredTransaction,
                                           true, MOVE_NONE, &*preferred);
         LogicalMove candidate;
@@ -1509,7 +1509,7 @@ void compound_turn_rules() {
     const Key generatedKey = pos.key();
     std::vector<LogicalMove> detachedGenerated;
     {
-        LogicalMoveState sourceTransaction;
+        LogicalMoveUndo sourceTransaction;
         LogicalMoveSource source(pos, nullptr, sourceTransaction);
         LogicalMove candidate;
         LogicalMoveInfo info;
@@ -1528,7 +1528,7 @@ void compound_turn_rules() {
     LogicalMove ownRemovalTurn;
     LogicalMoveInfo ownRemovalInfo;
     {
-        LogicalMoveState removalTransaction;
+        LogicalMoveUndo removalTransaction;
         LogicalMoveSource removalSource(pos, nullptr, removalTransaction);
         LogicalMove candidate;
         LogicalMoveInfo candidateInfo;
@@ -1556,7 +1556,7 @@ void compound_turn_rules() {
     LogicalMove directCaptureTurn;
     LogicalMoveInfo directCaptureInfo;
     {
-        LogicalMoveState captureTransaction;
+        LogicalMoveUndo captureTransaction;
         LogicalMoveSource captureSource(pos, nullptr, captureTransaction);
         LogicalMove candidate;
         LogicalMoveInfo candidateInfo;
@@ -1589,7 +1589,7 @@ void compound_turn_rules() {
             continue;
 
         StateInfo logicalState;
-        LogicalMoveState logicalTransaction;
+        LogicalMoveUndo logicalTransaction;
         do_compound_move(pos, *candidate, logicalState, logicalTransaction);
         check(pos.state()->move == MOVE_NONE
               && pos.state()->dirtyPiece.dirty_num == 0
@@ -1614,7 +1614,7 @@ void compound_turn_rules() {
     if (!generated.empty())
     {
         StateInfo pvState;
-        LogicalMoveState pvTransaction;
+        LogicalMoveUndo pvTransaction;
         do_compound_move(pos, generated.front(), pvState, pvTransaction);
         std::vector<LogicalMove> childGenerated = generate_compound_moves(pos);
         undo_compound_move(pos, generated.front(), pvTransaction);
@@ -1630,7 +1630,7 @@ void compound_turn_rules() {
             Position replay;
             StateListPtr replayStates;
             set_position(replay, replayStates, "generic-compound-turn-audit", pos.fen().c_str());
-            LogicalMoveState replayTransactions[2];
+            LogicalMoveUndo replayTransactions[2];
             for (size_t i = 0; i < formattedPv.size(); ++i)
             {
                 LogicalMove reparsed;
@@ -1655,7 +1655,7 @@ void compound_turn_rules() {
 
     // Test do/undo compound move
     StateInfo cstate;
-    LogicalMoveState ctransaction;
+    LogicalMoveUndo ctransaction;
     const int logicalPly = pos.game_ply();
     const int logicalRule50 = pos.rule50_count();
     do_compound_move(pos, parsedTurn, cstate, ctransaction);
@@ -1778,7 +1778,7 @@ void compound_turn_rules() {
     check(parse_compound_move(pos, "0000", secondPass),
           "second configured compound pass was not legal");
     StateInfo secondPassState;
-    LogicalMoveState secondPassTransaction;
+    LogicalMoveUndo secondPassTransaction;
     do_compound_move(pos, secondPass, secondPassState, secondPassTransaction);
     check(pos.is_immediate_game_end(result) && result == VALUE_DRAW,
           "double compound pass did not end the game as a draw");
@@ -2273,8 +2273,8 @@ void adjudication() {
     set_position(pos, states, "simul-flag-extinction-audit",
                  "7f/8/8/8/8/8/8/F7 w - - 0 1");
     const Variant* defaultSimul = variants.get("simul-flag-extinction-audit");
-    check(defaultSimul->simulFlagValueByMover == SimultaneousResult::LEGACY
-              && defaultSimul->simulExtinctionValueByMover == SimultaneousResult::LEGACY,
+    check(defaultSimul->simulFlagValueByMover == VALUE_NONE
+              && defaultSimul->simulExtinctionValueByMover == VALUE_NONE,
           "simultaneous flag/extinction defaults changed");
     check(pos.is_immediate_game_end(result) && result == mate_in(0),
           "default flag/extinction priority did not preserve extinction-first ordering");
@@ -3042,8 +3042,6 @@ customPiece2 = r:fsW
 flagPieceTypes = r
 extinctionPieceTypes = r
 pieceHierarchy = r:2 x:1 d:3 h:4 m:5 e:6
-pushingStrength = r:2 x:1 d:3 h:4 m:5 e:6
-pullingStrength = r:2 x:1 d:3 h:4 m:5 e:6
 
 [arimaa-nonsequential-audit:arimaa]
 sequentialSetup = false
@@ -3055,6 +3053,8 @@ pushPullRule = none
 
 [arimaa-push-rule-generic-audit:arimaa]
 pushPullRule = generic
+pushingStrength = r:1 c:2 d:3 h:4 m:5 e:6
+pullingStrength = r:1 c:2 d:3 h:4 m:5 e:6
 
 [arimaa-pusher-movement-audit:arimaa-custom-role-audit]
 flagPieceTypes = x
@@ -3089,11 +3089,7 @@ captureForbidden = *:*
 doubleStep = false
 promotionPieceTypes = -
 pieceHierarchy = r:1 c:2 d:3 h:4 m:5 e:6
-pushingStrength = r:1 c:2 d:3 h:4 m:5 e:6
-pullingStrength = r:1 c:2 d:3 h:4 m:5 e:6
 pushPullRule = two-step
-pushFirstColor = them
-stepwisePushing = true
 turnSteps = 3
 pass = false
 
@@ -3120,10 +3116,11 @@ startFen = 8/8/8/3c4/3C4/8/8/8 w - - 0 1
 
 [arimaa-pull-turn-two-audit:arimaa]
 turnSteps = 2
-pullingStrength = r:6 c:0 d:0 h:0 m:0 e:0
 
 [generic-compound-pull-cost-audit:generic-compound-turn-two-audit]
 pushPullRule = generic
+pushingStrength = r:1 c:2 d:3 h:4 m:5 e:6
+pullingStrength = r:1 c:2 d:3 h:4 m:5 e:6
 startFen = 7r/8/8/3r4/3E4/8/8/R7 w - - 0 1
 
 [generic-compound-stalemate-pass-audit:generic-compound-turn-audit]
