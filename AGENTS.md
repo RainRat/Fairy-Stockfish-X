@@ -35,7 +35,7 @@ tests/build.sh ARCH=x86-64-modern debug=yes optimize=no
 tests/build.sh COMP=mingw
 ```
 
-`tests/build.sh` verifies that native builds produce a working executable. The linker writes to a temporary file first and renames it on success, so a failed build never leaves a broken binary in place. Validate `src/variants.ini` separately with the config and variants-smoke checks below.
+`tests/build.sh` verifies that native builds produce a runnable, non-empty executable. The linker writes to a temporary file first and renames it on success, so a failed build never leaves a broken binary in place. Validate `src/variants.ini` separately with the config and variants-smoke checks below.
 
 Use `largeboards=yes` for standard large-board variants. Use `verylargeboards=yes` for boards larger than 12x10. When switching board size options, run `make clean`.
 
@@ -144,7 +144,7 @@ tests/regression-runner.sh wait
 
 `status` reports test progress and estimated time remaining. `wait` monitors the background process and prints the final result. On failure, it prints the relevant log output. `tests/regression-runner.sh log` shows recent log output. The runner checks for up-to-date binaries before starting; rebuild the binary if prompted.
 
-The test suites cache build artifacts under `.local/build`. Do not delete that folder for normal reruns. Tests run quietly on success and print captured output only on failure. Set `VERBOSE=1` with `tests/run.sh` to print full test output while tests run.
+The fast and full suites preserve signature-based artifacts under `.local/build`. Do not delete that folder for normal reruns. Tests run quietly on success and print captured output only on failure. Specialized C++ harnesses rebuild their required objects when run directly. The fast suite prepares those objects once and shares them between harnesses. Set `VERBOSE=1` with `tests/run.sh` to print full test output while tests run.
 
 ## CI Mapping
 * `Stockfish`: native engine build, perft, search, and sanitizer-style checks.

@@ -257,7 +257,7 @@ make -f Makefile_js build
 
 ### Compile as ES6/ES2015 module
 
-Environments such as [Vue.js](https://vuejs.org/) or modern bundlers require the ES6 module build:
+For environments such as [Vue.js](https://vuejs.org/) or modern bundlers, use the ES6 module build:
 
 ```bash
 cd src

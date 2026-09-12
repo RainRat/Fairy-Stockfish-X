@@ -72,10 +72,10 @@ Common engine commands:
 Fairy-Stockfish-X includes Python bindings through the `pyffish` library.
 
 ### Prerequisites
- 
+
 - Python 3.x
 - `setuptools` (`pip install setuptools`)
- 
+
 ### Building the Extension
 
 From the project root, run:

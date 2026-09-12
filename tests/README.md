@@ -1,6 +1,6 @@
 # Test suites
- 
-`tests/run.sh` defines and runs the test suites.
+
+`tests/run.sh` is the source of truth for test-suite registration and runs the suites.
 
 Use `tests/build.sh` to build test binaries. It tracks build options and binary signatures in `.local/build/signatures/`. If build flags change, it automatically cleans old build files before rebuilding. Direct `make` builds still require `make clean` when changing the compiler, CPU architecture, debug options, or board size settings.
 
@@ -43,6 +43,6 @@ Other test scripts include: `perft.sh`, `instrumented.sh`, `regression.sh`, `reg
 
 The benchmark script accepts either a reference signature (`tests/bench-regressions.sh [signature] [engine]`) or standard input (`tests/bench-regressions.sh --stdin [engine]`).
 
-Every test belongs to one of ten test suites. If a test fails, the runner shows the failed suite and the exact command to rerun it. Python tests in `tests/python/test_pyffish_api.py` verify the Python bindings directly, while chess variant rules run through native C++ test harnesses and UCI test cases.
+The semantic checks are grouped into ten test suites. If a test fails, the runner shows the failed suite and the exact command to rerun it. Python tests in `tests/python/test_pyffish_api.py` verify the Python bindings directly, while chess variant rules run through native C++ test harnesses and UCI test cases.
 
-Passing tests run quietly and save their logs in `.local/build/test-run/`. Running multiple suites runs them in parallel. Set `VERBOSE=1` to print full test output while tests run.
+Passing tests run quietly and save their logs in `.local/build/test-run/`. Without verbose output, multiple suites run in parallel. With `VERBOSE=1`, the runner runs suites one at a time and prints full output.

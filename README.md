@@ -13,7 +13,7 @@ Fairy-Stockfish-X can be used in any UCI-compatible chess GUI, such as [Cute Che
 
 ### Loading Variants
 
-Fairy-Stockfish-X requires two UCI options in GUI engine settings:
+To load custom variants, set these two UCI options in GUI engine settings:
 
 - `VariantPath`: Set this to the path of the `variants.ini` file.
 - `UCI_Variant`: Set this to the name of the variant, such as `shogi`, `xiangqi`, or `antichess`.
