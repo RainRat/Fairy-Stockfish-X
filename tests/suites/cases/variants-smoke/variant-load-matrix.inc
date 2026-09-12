@@ -135,6 +135,25 @@ position startpos
 go perft 1")
 assert_contains "$out" "^e1d2: 1$"
 
+# 5ba1) Georgian chess uses an Amazon queen and disables castling and en passant.
+variant_available "georgian"
+out=$(run_cmds "setoption name UCI_Variant value georgian
+position startpos
+go perft 1")
+assert_nodes "$out" "22"
+out=$(run_cmds "setoption name UCI_Variant value georgian
+position fen 4k3/8/8/8/8/8/8/A3K3 w - - 0 1
+go perft 1")
+assert_contains "$out" "^a1b3: 1$"
+out=$(run_cmds "setoption name UCI_Variant value georgian
+position fen r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1
+go perft 1")
+assert_not_contains "$out" "^e1g1: 1$"
+out=$(run_cmds "setoption name UCI_Variant value georgian
+position fen 4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1
+go perft 1")
+assert_not_contains "$out" "^e5d6: 1$"
+
 if variant_available "lewthwaite-swap"; then
 out=$(run_cmds "setoption name UCI_Variant value lewthwaite-swap
 position startpos
