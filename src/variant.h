@@ -542,10 +542,10 @@ struct Variant {
   int nnuePotionCooldownIndexBase = -1;
   bool nnueUsePockets = false;
   bool hasConnectionAdjudication = false;
-  int pieceSquareIndex[COLOR_NB][PIECE_NB];
-  int pieceHandIndex[COLOR_NB][PIECE_NB];
-  int kingSquareIndex[SQUARE_NB];
-  int nnueMaxPieces;
+  int pieceSquareIndex[COLOR_NB][PIECE_NB]{};
+  int pieceHandIndex[COLOR_NB][PIECE_NB]{};
+  int kingSquareIndex[SQUARE_NB]{};
+  int nnueMaxPieces = 0;
   EndgameEval endgameEval = EG_EVAL_CHESS;
   bool shogiStylePromotions = false;
   std::vector<Direction> connectDirections;
@@ -554,9 +554,9 @@ struct Variant {
   PieceSet connectPieceTypesTrimmed = ~NO_PIECE_SET;
   std::vector<PieceType> connectPieceGoalTypes[COLOR_NB];
   std::bitset<START_MULTIMOVES> multimovePass; // irregular pattern of multimove passes at game start
-  int multimoveOffset; // end of multimoveStart sequence
-  int multimoveCycle; // length in ply of both players once playing a multimove
-  int multimoveCycleShift; // phase shift in multimove cycle when switching color
+  int multimoveOffset = 0; // end of multimoveStart sequence
+  int multimoveCycle = 0; // length in ply of both players once playing a multimove
+  int multimoveCycleShift = 0; // phase shift in multimove cycle when switching color
   static bool is_piece_id_suffix(char c) {
       return c == '\'' || c == '"' || c == '!';
   }

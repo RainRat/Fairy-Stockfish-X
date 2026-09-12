@@ -809,7 +809,7 @@ namespace {
                   for (int df = 0; df <= int(FILE_MAX); ++df)
                       if (dr != 0 || df != 0)
                           universalAtoms.emplace_back(dr, df);
-              commit_atom(universalAtoms, false, i, c, !lame);
+              commit_atom(universalAtoms, false, i, c, true);
           }
           // Griffon bent slider (one diagonal step, then outward rook slide)
           else if (c == 'O')

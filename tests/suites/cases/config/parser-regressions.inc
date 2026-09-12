@@ -857,4 +857,41 @@ if [[ "${variants_lower}" != "${variants_upper}" ]]; then
     exit 1
 fi
 
+# Verify rejection of lame universal leaper nU
+cat > "$FSX_TMP_INI" <<'INI'
+[test-lame-u:chess]
+customPiece1 = u:nU
+INI
+lame_u_output=$(run_uci "$ENGINE" "$FSX_TMP_INI" test-lame-u </dev/null 2>&1 || true)
+assert_contains "${lame_u_output}" "Unsupported Betza tuple modifier combination"
+
+# Verify priorityDropTypes overrides parent variant instead of accumulating
+cat > "$FSX_TMP_INI" <<'INI'
+[priority-override-parent:chess]
+pieceDrops = true
+priorityDropTypes = p
+startFen = 8/8/8/8/8/8/8/4K2k[PN] w - - 0 1
+
+[priority-override-child:priority-override-parent]
+priorityDropTypes = n
+INI
+priority_override_output=$(run_uci "$ENGINE" "$FSX_TMP_INI" priority-override-child <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_contains_literal "${priority_override_output}" "N@d4: 1" "overridden priority drop allows N drop"
+assert_not_contains "${priority_override_output}" "P@d4: 1"
+
+# Verify non-negative bounds validation for counts and goals
+for opt in pocketSize pointsGoal collinearN flagPieceCount antiRoyalCount pseudoRoyalCount; do
+    cat > "$FSX_TMP_INI" <<INI
+[test-neg-${opt}:chess]
+${opt} = -1
+INI
+    neg_count_output=$("${ENGINE}" check "$FSX_TMP_INI" 2>&1 || true)
+    assert_contains "${neg_count_output}" "${opt} must be non-negative"
+done
+
 echo "parser regression tests passed"
+
