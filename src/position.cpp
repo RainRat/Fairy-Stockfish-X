@@ -2304,7 +2304,15 @@ void Position::set_check_info(StateInfo* si) const {
 
           if (ksq != SQ_NONE)
           {
-              Bitboard candidates = board_bb();
+              const bool reverseCandidates = pt <= KING
+                  && !(pieceMap.generic_attack_assembly_types() & piece_set(movePt))
+                  && !(AttackRiderTypes[movePt] & ASYMMETRICAL_RIDERS)
+                  && !pi->has_lame_capture()
+                  && !pi->has_hopper_like_capture()
+                  && !pi->has_nonstandard_pawn_movement();
+              Bitboard candidates = reverseCandidates
+                                  ? attacks_from<false, false>(~sideToMove, pt, ksq, Bitboard(0)) & board_bb()
+                                  : board_bb();
               while (candidates)
               {
                   Square s = pop_lsb(candidates);

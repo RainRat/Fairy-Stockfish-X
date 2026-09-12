@@ -24,6 +24,7 @@
 #include <iostream>
 #include <sstream>
 #include <thread>
+#include <unordered_map>
 
 #include "evaluate.h"
 #include "misc.h"
@@ -68,6 +69,7 @@ namespace {
   constexpr uint64_t TtHitAverageWindow     = 4096;
   constexpr uint64_t TtHitAverageResolution = 1024;
   constexpr int MaxReductionIndex = MAX_MOVES - 1;
+  using RootMoveIndex = std::unordered_map<Move, size_t>;
 
   // Futility margin
   Value futility_margin(Depth d, bool improving) {
@@ -146,7 +148,8 @@ namespace {
   };
 
   template <NodeType nodeType>
-  Value search(Position& pos, Stack* ss, Value alpha, Value beta, Depth depth, bool cutNode);
+  Value search(Position& pos, Stack* ss, Value alpha, Value beta, Depth depth, bool cutNode,
+               const RootMoveIndex* rootMoveIndex = nullptr);
 
   template <NodeType nodeType>
   Value qsearch(Position& pos, Stack* ss, Value alpha, Value beta, Depth depth = 0);
@@ -459,6 +462,18 @@ void Thread::search() {
       multiPV = std::max(multiPV, (size_t)4);
 
   multiPV = std::min(multiPV, rootMoves.size());
+
+  RootMoveIndex rootMoveIndex;
+  const bool useRootMoveIndex = rootMoves.size() > 32;
+  auto rebuildRootMoveIndex = [&]() {
+      rootMoveIndex.clear();
+      rootMoveIndex.reserve(rootMoves.size());
+      for (size_t i = 0; i < rootMoves.size(); ++i)
+          rootMoveIndex.emplace(rootMoves[i].pv[0], i);
+  };
+  if (useRootMoveIndex)
+      rebuildRootMoveIndex();
+
   ttHitAverage = TtHitAverageWindow * TtHitAverageResolution / 2;
 
   trend = SCORE_ZERO;
@@ -521,7 +536,8 @@ void Thread::search() {
           while (true)
           {
               Depth adjustedDepth = std::max(1, rootDepth - failedHighCnt - searchAgainCounter);
-              bestValue = Stockfish::search<Root>(rootPos, ss, alpha, beta, adjustedDepth, false);
+              bestValue = Stockfish::search<Root>(rootPos, ss, alpha, beta, adjustedDepth, false,
+                                                  useRootMoveIndex ? &rootMoveIndex : nullptr);
 
               // Bring the best move to the front. It is critical that sorting
               // is done with a stable algorithm because all the values but the
@@ -530,6 +546,8 @@ void Thread::search() {
               // new PV that goes to the front. Note that in case of MultiPV
               // search the already searched PV lines are preserved.
               std::stable_sort(rootMoves.begin() + pvIdx, rootMoves.begin() + pvLast);
+              if (useRootMoveIndex)
+                  rebuildRootMoveIndex();
 
               // If search has been stopped, we break immediately. Sorting is
               // safe because RootMoves is still valid, although it refers to
@@ -572,6 +590,8 @@ void Thread::search() {
 
           // Sort the PV lines searched so far and update the GUI
           std::stable_sort(rootMoves.begin() + pvFirst, rootMoves.begin() + pvIdx + 1);
+          if (useRootMoveIndex)
+              rebuildRootMoveIndex();
 
           if (    mainThread
               && (Threads.stop || pvIdx + 1 == multiPV || Time.elapsed() > 3000))
@@ -765,7 +785,8 @@ namespace {
   // search<>() is the main search function for both PV and non-PV nodes
 
   template <NodeType nodeType>
-  Value search(Position& pos, Stack* ss, Value alpha, Value beta, Depth depth, bool cutNode) {
+  Value search(Position& pos, Stack* ss, Value alpha, Value beta, Depth depth, bool cutNode,
+               const RootMoveIndex* rootMoveIndex) {
 
     constexpr bool PvNode = nodeType != NonPV;
     constexpr bool rootNode = nodeType == Root;
@@ -1240,9 +1261,20 @@ moves_loop: // When in check, search starts from here
       // Move List. As a consequence any illegal move is also skipped. In MultiPV
       // mode we also skip PV moves which have been already searched and those
       // of lower "TB rank" if we are in a TB root position.
-      if (rootNode && !std::count(thisThread->rootMoves.begin() + thisThread->pvIdx,
-                                  thisThread->rootMoves.begin() + thisThread->pvLast, move))
-          continue;
+      if (rootNode)
+      {
+          if (rootMoveIndex)
+          {
+              auto it = rootMoveIndex->find(move);
+              if (it == rootMoveIndex->end()
+                  || it->second < thisThread->pvIdx
+                  || it->second >= thisThread->pvLast)
+                  continue;
+          }
+          else if (!std::count(thisThread->rootMoves.begin() + thisThread->pvIdx,
+                               thisThread->rootMoves.begin() + thisThread->pvLast, move))
+              continue;
+      }
 
       // Check for legality
       if (!rootNode && !pos.legal(move))
@@ -1539,8 +1571,17 @@ moves_loop: // When in check, search starts from here
 
       if (rootNode)
       {
-          RootMove& rm = *std::find(thisThread->rootMoves.begin(),
-                                    thisThread->rootMoves.end(), move);
+          RootMove* rmPtr;
+          if (rootMoveIndex)
+          {
+              auto it = rootMoveIndex->find(move);
+              assert(it != rootMoveIndex->end());
+              rmPtr = &thisThread->rootMoves[it->second];
+          }
+          else
+              rmPtr = &*std::find(thisThread->rootMoves.begin(),
+                                  thisThread->rootMoves.end(), move);
+          RootMove& rm = *rmPtr;
 
           // PV move or new best move?
           if (moveCount == 1 || value > alpha)
