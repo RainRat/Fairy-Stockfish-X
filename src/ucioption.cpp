@@ -375,20 +375,20 @@ Option& Option::operator=(const string& v) {
 
   if (   (type != "button" && v.empty())
       || (type == "check" && v != "true" && v != "false")
-      || (type == "combo" && (std::find(comboValues.begin(), comboValues.end(), v) == comboValues.end()))
       || invalidSpin)
       return *this;
 
   if (type == "combo")
   {
       OptionsMap comboMap; // To have case insensitive compare
-      for (string token : comboValues)
+      for (const string& token : comboValues)
           comboMap[token] << Option();
-      if (!comboMap.count(v) || v == "var")
+      auto it = comboMap.find(v);
+      if (it == comboMap.end() || v == "var")
           return *this;
+      currentValue = it->first;
   }
-
-  if (type != "button")
+  else if (type != "button")
       currentValue = v;
 
   if (on_change)

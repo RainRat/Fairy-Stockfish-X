@@ -539,7 +539,8 @@ namespace {
                   std::string maxPart = rangeSpec.substr(dash + 1);
                   if (!parse_positive_int(minPart, minDistance)
                       || minDistance <= 0
-                      || (!maxPart.empty() && (!parse_positive_int(maxPart, parsedMaxDistance) || parsedMaxDistance < minDistance))
+                      || minDistance > 255
+                      || (!maxPart.empty() && (!parse_positive_int(maxPart, parsedMaxDistance) || parsedMaxDistance < minDistance || parsedMaxDistance > 255))
                       || (maxPart.empty() && rangeSpec.back() != '-'))
                   {
                       report_invalid_range();

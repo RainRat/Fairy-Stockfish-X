@@ -566,8 +566,12 @@ void UCI::loop(int argc, char* argv[]) {
 
   } while (token != "quit" && argc == 1); // Command line args are one-shot
 
-  if (CurrentProtocol == XBOARD && XBoard::stateMachine)
+  if (XBoard::stateMachine)
+  {
       XBoard::stateMachine->shutdown_ponder_worker();
+      delete XBoard::stateMachine;
+      XBoard::stateMachine = nullptr;
+  }
 }
 
 

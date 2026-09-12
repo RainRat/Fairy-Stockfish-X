@@ -1822,11 +1822,11 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("freezeCooldown", v->potionCooldown[Variant::POTION_FREEZE]);
     parse_attribute("jumpCooldown", v->potionCooldown[Variant::POTION_JUMP]);
     for (int cooldown : v->potionCooldown)
-        if (cooldown < 0 || cooldown > (1 << POTION_COOLDOWN_BITS))
+        if (cooldown < 0 || cooldown >= (1 << POTION_COOLDOWN_BITS))
         {
             if (DoCheck)
                 std::cerr << "Potion cooldown must be between 0 and "
-                          << (1 << POTION_COOLDOWN_BITS) << "." << std::endl;
+                          << ((1 << POTION_COOLDOWN_BITS) - 1) << "." << std::endl;
             return false;
         }
     if (v->potionPiece[Variant::POTION_FREEZE] != NO_PIECE_TYPE
@@ -2355,6 +2355,18 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
         if (DoCheck)
             std::cerr << "nMoveRuleImmediate must be between 0 and "
                       << (std::numeric_limits<int>::max() + 1LL) / 2 << "." << std::endl;
+        valid = false;
+    }
+    if (v->nFoldRule < 0)
+    {
+        if (DoCheck)
+            std::cerr << "nFoldRule cannot be negative." << std::endl;
+        valid = false;
+    }
+    if (v->nFoldRuleImmediate < 0)
+    {
+        if (DoCheck)
+            std::cerr << "nFoldRuleImmediate cannot be negative." << std::endl;
         valid = false;
     }
     const int boardFiles = int(v->maxFile) + 1;
