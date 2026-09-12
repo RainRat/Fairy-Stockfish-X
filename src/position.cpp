@@ -4400,9 +4400,11 @@ Bitboard Position::compute_remove_connect_n_mask(
 
 SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const {
   SimulatedMoveInfo info;
+  const bool popoutMove = is_popout_move(m);
   info.colorOccupancy[WHITE] = pieces(WHITE);
   info.colorOccupancy[BLACK] = pieces(BLACK);
-  if (blast_promotion()
+  if (popoutMove
+      || blast_promotion()
       || var->changingColorPieceTypes
       || var->blastPassiveTypes
       || var->captureMorph
@@ -4436,7 +4438,7 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
   info.clone = is_clone_move(m);
   info.paired = paired_drop(m);
 
-  if (is_pass(m))
+  if (is_pass(m) && !popoutMove)
   {
       info.relocatedOccupancy = info.effectOccupancy = info.placementOccupancy = pieces();
       info.occupiedAfterEffects = pieces();
@@ -4556,6 +4558,7 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
   // simulated mover or color occupancy; variants with additional piece
   // classification state use the full path below.
   const bool simpleSimulation = var->simpleSimulationBase
+                             && !popoutMove
                              && !pieceMap.runtime_rider_augment_types()
                              && !pieceMap.simple_hopper_capture_types()
                              && !blast_on_capture(m)
@@ -4570,7 +4573,8 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
                              && !info.paired;
 
 #ifndef NDEBUG
-  const bool referenceSimpleSimulation = !var->trapRegion
+  const bool referenceSimpleSimulation = !popoutMove
+                                      && !var->trapRegion
                                       && var->pieceToCharTable == "-"
                                       && var->pieceTypes == CHESS_PIECES
                                       && !pieceMap.runtime_rider_augment_types()
@@ -4692,6 +4696,17 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
       if (is_ok(info.captureSquare) && (!is_jump_capture(m) || primaryPieceCapture))
           info.relocatedOccupancy ^= square_bb(info.captureSquare);
   }
+  else if (popoutMove)
+  {
+      info.relocatedOccupancy = pieces();
+      const File file = file_of(info.from);
+      const int popoutRank = int(rank_of(info.from));
+      for (int rank = popoutRank; rank <= int(max_rank()); ++rank)
+          info.relocatedOccupancy &= ~square_bb(make_square(file, Rank(rank)));
+      for (int rank = popoutRank + 1; rank <= int(max_rank()); ++rank)
+          if (piece_on(make_square(file, Rank(rank))) != NO_PIECE)
+              info.relocatedOccupancy |= square_bb(make_square(file, Rank(rank - 1)));
+  }
   else if (is_self_destruct(m))
       info.relocatedOccupancy = pieces() & ~square_bb(info.from);
   else if (stackMove)
@@ -4792,6 +4807,19 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
       remove_color_square(info.from);
       add_color_piece(us, placedType, info.from);
       info.placedPiece = make_piece(us, placedType);
+  }
+  else if (popoutMove)
+  {
+      const File file = file_of(info.from);
+      const int popoutRank = int(rank_of(info.from));
+      for (int rank = popoutRank; rank <= int(max_rank()); ++rank)
+          remove_color_square(make_square(file, Rank(rank)));
+      for (int rank = popoutRank + 1; rank <= int(max_rank()); ++rank)
+      {
+          Piece shifted = info.piece_on(make_square(file, Rank(rank)));
+          if (shifted != NO_PIECE)
+              add_color_piece(color_of(shifted), type_of(shifted), make_square(file, Rank(rank - 1)));
+      }
   }
   else if (is_self_destruct(m))
   {
@@ -5311,6 +5339,8 @@ bool Position::legal(Move m) const {
   bool unstackMove = is_unstack_move(m);
   bool swapMove = is_swap_move(m);
   bool insertMove = is_insert_move(m);
+  bool popoutMove = is_popout_move(m);
+  bool passMove = is_pass(m) && !popoutMove;
   Square from = from_sq(m);
   Square to = to_sq(m);
   Square pullFrom = pull_square(m);
@@ -5318,7 +5348,7 @@ bool Position::legal(Move m) const {
   if (in_opening_self_removal_phase())
       return is_opening_self_removal_move(m);
 
-  if (is_pass(m) && !pass(us))
+  if (passMove && !pass(us))
       return false;
 
   if (insertMove)
@@ -5342,7 +5372,7 @@ bool Position::legal(Move m) const {
   if (pass_until_setup() && must_drop()
       && !has_setup_drop(us)
       && has_setup_drop(them)
-      && !is_pass(m))
+      && !passMove)
       return false;
 
   PotionContext potCtx = setup_potion_context(m, us);
@@ -5355,7 +5385,7 @@ bool Position::legal(Move m) const {
 
   {
       SimulatedMoveGuard currentPosition(*this, MOVE_NONE);
-      if (!dropMove && !is_pass(m) && !pureWallMove && (freeze_squares() & from))
+      if (!dropMove && !passMove && !pureWallMove && (freeze_squares() & from))
           return false;
       if (laser_game() && is_gating(m))
       {
@@ -5384,11 +5414,11 @@ bool Position::legal(Move m) const {
   if (type_of(m) == CASTLING && gamePly < var->castlingForbiddenPlies)
       return false;
 
-  if (from == to && !(is_pass(m) || is_laser_fire(m) || is_self_destruct(m) || (is_promotion_move(m) && sittuyin_promotion()) || pureWallMove || (laser_game() && is_gating(m))))
+  if (from == to && !(passMove || popoutMove || is_laser_fire(m) || is_self_destruct(m) || (is_promotion_move(m) && sittuyin_promotion()) || pureWallMove || (laser_game() && is_gating(m))))
       return false;
 
   if (st->pendingClaimPass)
-      return is_pass(m);
+      return passMove;
 
   if (is_self_destruct(m))
   {
@@ -5429,7 +5459,7 @@ bool Position::legal(Move m) const {
   PieceType finalMovePt = movePt;
 
   Bitboard janggiCannons = pieces(JANGGI_CANNON);
-  if (!is_pass(m))
+  if (!passMove)
   {
       if (type_of(moverPiece) == JANGGI_CANNON)
           janggiCannons = rifleShot ? (janggiCannons & ~square_bb(shotSq))
@@ -5459,7 +5489,7 @@ bool Position::legal(Move m) const {
       && type_of(m) != CASTLING
       && !is_promotion_move(m)
       && type_of(m) != PIECE_PROMOTION
-      && !is_pass(m))
+      && !passMove)
   {
       if (capture_morph() && isCapture)
       {
@@ -5489,13 +5519,13 @@ bool Position::legal(Move m) const {
   }
 
   [[maybe_unused]] Color movedPieceColor = dropMove ? drop_hand_color(us, in_hand_piece_type(m)) : us;
-  assert(is_pass(m) || pureWallMove || color_of(moved_piece(m)) == movedPieceColor);
+  assert(passMove || pureWallMove || popoutMove || color_of(moved_piece(m)) == movedPieceColor);
   assert(royal_square(us) == SQ_NONE || piece_on(royal_square(us)) == make_piece(us, royal_piece_type(us)));
-  assert(is_pass(m) || pureWallMove || (board_bb() & to));
+  assert(passMove || pureWallMove || popoutMove || (board_bb() & to));
 
   const Square royalSquare = royal_square(us);
   const bool hasRoyal = royalSquare != SQ_NONE;
-  if (!is_pass(m) && !hasRoyal && royal_piece_type(us) != NO_PIECE_TYPE && is_actual_runtime_royal(us, king_type()))
+  if (!passMove && !hasRoyal && royal_piece_type(us) != NO_PIECE_TYPE && is_actual_runtime_royal(us, king_type()))
       return false;
 
   const bool moverIsRoyal = hasRoyal && from == royalSquare;
@@ -5506,7 +5536,8 @@ bool Position::legal(Move m) const {
   const bool simpleLegality = var->simpleLegality
                            && !dropMove
                            && type_of(m) != CASTLING
-                           && !is_pass(m)
+                           && !passMove
+                           && !popoutMove
                            && !st->pendingClaimPass
                            && !(pieceMap.runtime_rider_augment_types() & var->pieceTypes)
                            && !(pieceMap.simple_hopper_capture_types() & var->pieceTypes)
@@ -5591,9 +5622,9 @@ bool Position::legal(Move m) const {
           if (color_of(forcedPiece) != us)
           {
               Piece passPiece = moved_piece(m);
-              return is_pass(m) && passPiece != NO_PIECE && color_of(passPiece) == us;
+              return passMove && passPiece != NO_PIECE && color_of(passPiece) == us;
           }
-          if (is_pass(m) || from != st->forcedJumpSquare || !is_jump_capture(m))
+          if (passMove || popoutMove || from != st->forcedJumpSquare || !is_jump_capture(m))
               return false;
           if (forced_jump_same_direction() && st->forcedJumpStep
               && forced_jump_step(*this, from, to) != st->forcedJumpStep)
@@ -5602,7 +5633,7 @@ bool Position::legal(Move m) const {
   }
   // Universal-hopper semantics are fully encoded in attacks/moves generation and
   // jump_capture_square() capture-square resolution; avoid legacy pre-filters here.
-  if ((pieces(us) & to) && !is_pass(m) && !is_self_destruct(m) && !is_stack_move(m)
+  if ((pieces(us) & to) && !passMove && !popoutMove && !is_self_destruct(m) && !is_stack_move(m)
       && is_uncapturable_royal_square(us, to))
       return false;
   if (!dropMove && violates_mutual_hop_restriction(from, to, movePt))
@@ -5699,6 +5730,32 @@ bool Position::legal(Move m) const {
       }
   }
 
+  // PopOut removes a piece and shifts a file, so validate its final position
+  // through the committed move path after compulsory-move rules have run.
+  if (popoutMove)
+  {
+      if (var->multimoveOffset || var->progressiveMultimove)
+      {
+          if (multimove_pass(gamePly))
+              return false;
+          if (multimove_pass(gamePly + 1) && !var->multimoveCapture && capture(m))
+              return false;
+      }
+      if (violates_same_player_board_repetition(m))
+          return false;
+
+      StateInfo nextState;
+      SimulatedMoveGuard clearSimulation(*this, MOVE_NONE);
+      ScopedProbeMove probe(*this, m, nextState);
+      if (hasRoyal && royal_square(us) == SQ_NONE)
+          return false;
+      if (!allow_checks() && hasRoyal
+          && attackers_to_king(royal_square(us), pieces(), them))
+          return false;
+      return (!pseudo_royal_types() || !checked_pseudo_royals(us))
+          && (!anti_royal_types() || !checked_anti_royals(us));
+  }
+
   if (swapMove || pullMove)
   {
       if (violates_same_player_board_repetition(m))
@@ -5768,24 +5825,24 @@ bool Position::legal(Move m) const {
   }
 
   // Illegal king passing move
-  if (pass_on_stalemate(us) && is_pass(m) && !evasion_checkers())
+  if (pass_on_stalemate(us) && passMove && !evasion_checkers())
   {
       SimulatedMoveGuard currentPosition(*this, MOVE_NONE);
       for (const auto& move : MoveList<NON_EVASIONS>(*this))
-          if (!is_pass(move) && legal(move))
+          if ((!is_pass(move) || is_popout_move(move)) && legal(move))
               return false;
   }
 
   // Multimoves
   if (var->multimoveOffset || var->progressiveMultimove)
   {
-      if (is_pass(m) != multimove_pass(gamePly))
+      if (passMove != multimove_pass(gamePly))
           return false;
       if (multimove_pass(gamePly + 1) && ((!var->multimoveCapture && capture(m)) || (!var->multimoveCheck && gives_check(m))))
           return false;
   }
 
-  if (is_pass(m))
+  if (passMove)
   {
       Bitboard occupied = pieces();
       return (st->bikjang
@@ -6197,7 +6254,7 @@ bool Position::legal(Move m) const {
 
   // Flying general rule and bikjang
   // In case of bikjang passing is always allowed, even when in check
-  if (st->bikjang && is_pass(m))
+  if (st->bikjang && passMove)
       return !violates_same_player_board_repetition(m);
   if ((var->flyingGeneral && hasRoyal) || st->bikjang)
   {
@@ -6314,6 +6371,8 @@ bool Position::pseudo_legal(const Move m) const {
   Color them = ~us;
   bool dropMove = is_drop_move(m);
   bool insertMove = is_insert_move(m);
+  bool popoutMove = is_popout_move(m);
+  bool passMove = is_pass(m) && !popoutMove;
   Square from = from_sq(m);
   Square to = to_sq(m);
   Square pullFrom = pull_square(m);
@@ -6333,13 +6392,13 @@ bool Position::pseudo_legal(const Move m) const {
   if (in_opening_self_removal_phase())
       return is_opening_self_removal_move(m);
 
-  if (is_pass(m) && !pass(us))
+  if (passMove && !pass(us))
       return false;
 
   if (pass_until_setup() && must_drop()
       && !has_setup_drop(us)
       && has_setup_drop(them)
-      && !is_pass(m))
+      && !passMove)
       return false;
 
   if (laser_game() && is_gating(m))
@@ -6405,13 +6464,13 @@ bool Position::pseudo_legal(const Move m) const {
       }
   }
 
-  if (from == to && !(is_pass(m) || is_laser_fire(m) || is_self_destruct(m) || (is_promotion_move(m) && sittuyin_promotion()) || pureWallMove || (laser_game() && is_gating(m))))
+  if (from == to && !(passMove || popoutMove || is_laser_fire(m) || is_self_destruct(m) || (is_promotion_move(m) && sittuyin_promotion()) || pureWallMove || (laser_game() && is_gating(m))))
       return false;
 
   if (st->pendingClaimPass)
-      return is_pass(m);
+      return passMove;
 
-  if (!dropMove && !is_pass(m) && !pureWallMove && (freeze_squares() & from))
+  if (!dropMove && !passMove && !pureWallMove && (freeze_squares() & from))
       return false;
 
   if (is_self_destruct(m))
@@ -6441,9 +6500,9 @@ bool Position::pseudo_legal(const Move m) const {
           if (color_of(forcedPiece) != us)
           {
               Piece passPiece = moved_piece(m);
-              return is_pass(m) && passPiece != NO_PIECE && color_of(passPiece) == us;
+              return passMove && passPiece != NO_PIECE && color_of(passPiece) == us;
           }
-          if (is_pass(m))
+          if (passMove || popoutMove)
               return false;
           if (from != st->forcedJumpSquare || !is_jump_capture(m))
               return false;
@@ -6451,6 +6510,14 @@ bool Position::pseudo_legal(const Move m) const {
               && forced_jump_step(*this, from, to) != st->forcedJumpStep)
               return false;
       }
+  }
+
+  if (popoutMove)
+  {
+      const bool useWrappedFallback = topology_wraps() && evasion_checkers();
+      return ((evasion_checkers() && !useWrappedFallback) ? MoveList<EVASIONS>(*this).contains(m)
+                                                          : MoveList<NON_EVASIONS>(*this).contains(m))
+          && !violates_same_player_board_repetition(m);
   }
 
   if (is_laser_fire(m))
@@ -6808,6 +6875,7 @@ bool Position::gives_check(Move m) const {
                          || var->changingColorPieceTypes
                          || var->blastPassiveTypes
                          || var->blastPromotion
+                         || is_popout_move(m)
                          || var->removeConnectN
                          || var->surroundCaptureOpposite
                          || var->surroundCaptureIntervene
@@ -6860,6 +6928,13 @@ bool Position::gives_check(Move m) const {
 bool Position::gives_check_impl(Move m) const {
 
   assert(is_ok(m));
+  if (is_popout_move(m))
+  {
+      StateInfo nextState;
+      SimulatedMoveGuard clearSimulation(*this, MOVE_NONE);
+      ScopedProbeMove probe(*this, m, nextState);
+      return bool(evasion_checkers()) || bool(checkers());
+  }
   if (is_pass(m))
       return false;
   Piece mover = moved_piece(m);
@@ -7365,6 +7440,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
 
   const bool openingSelfRemoval = in_opening_self_removal_phase()
                                && is_opening_self_removal_move(m);
+  const bool popoutMove = is_popout_move(m);
+  const bool passMove = is_pass(m) && !popoutMove;
 
 #ifndef NO_THREADS
   if (countNode && thisThread)
@@ -7385,8 +7462,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   st->move = m;
   clear_move_undo_state(st);
   // Mandatory multimove pass plies should not advance the halfmove clock.
-  const bool currentMultimovePass = is_pass(m) && multimove_pass(gamePly);
-  const bool currentClaimPass = is_pass(m) && previousClaimPass;
+  const bool currentMultimovePass = passMove && multimove_pass(gamePly);
+  const bool currentClaimPass = passMove && previousClaimPass;
 
   // Increment ply counters. In particular, rule50 will be reset to zero later on
   // in case of a capture or a pawn move.
@@ -7484,6 +7561,9 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   const bool blastOnCaptureMove = !is_stack_move(m) && blast_on_capture(pc, captured);
   int pushRightsMask = 0;
   int pullRightsMask = 0;
+  if (popoutMove)
+      for (int rank = int(rank_of(from)); rank <= int(max_rank()); ++rank)
+          pushRightsMask |= castlingRightsMask[make_square(file_of(from), Rank(rank))];
   bool rifleShot = rifle_capture(m) && captured != NO_PIECE && type_of(m) != CASTLING;
   bool cloneMove = is_clone_move(m);
   bool pullMove = is_pull_move(m);
@@ -7561,7 +7641,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   st->push.count = pushMove ? pushInfo.count : 0;
   st->push.ejected = pushMove && pushInfo.ejects;
   st->push.blockedCapture = pushMove && pushInfo.captures && !pushInfo.ejects;
-  st->pass = is_pass(m) && !openingSelfRemoval;
+  st->pass = passMove && !openingSelfRemoval;
   st->claimedSquares = 0;
   st->dropHandColor = COLOR_NB;
   st->suppressedCaptureTransfer = false;
@@ -7582,13 +7662,13 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
 
   if (to == from)
   {
-      assert((is_promotion_move(m) && sittuyin_promotion()) || is_pass(m) || is_laser_fire(m) || is_self_destruct(m) || openingSelfRemoval || pureWallMove || is_gating(m));
+      assert((is_promotion_move(m) && sittuyin_promotion()) || passMove || is_laser_fire(m) || is_self_destruct(m) || openingSelfRemoval || popoutMove || pureWallMove || is_gating(m));
       captured = NO_PIECE;
   }
 
   ScopedSpellContext spellScope(potCtx.freezeExtra, potCtx.jumpRemoved);
 
-  assert(pureWallMove || is_pass(m) || color_of(pc) == dropColor);
+  assert(pureWallMove || passMove || popoutMove || color_of(pc) == dropColor);
   assert(captured == NO_PIECE
          || (type_of(m) == CASTLING
                  ? color_of(captured) == us
@@ -7791,6 +7871,9 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
               st->push.snapshots[i].piece = piece_on(sq);
               st->push.snapshots[i].promoted = (st->push.snapshots[i].piece != NO_PIECE && is_promoted(sq));
               st->push.snapshots[i].unpromoted = st->push.snapshots[i].promoted ? unpromoted_piece_on(sq) : NO_PIECE;
+              st->push.snapshots[i].orientation = st->push.snapshots[i].piece != NO_PIECE
+                                                && is_oriented(type_of(st->push.snapshots[i].piece))
+                                                  ? orientation_on(sq) : 0;
               pushRightsMask |= castlingRightsMask[sq];
           }
           for (int i = 0; i < pushTransferCount; ++i)
@@ -7960,7 +8043,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   // Update castling rights if needed
   const int moveRightsMask = rifleShot ? castlingRightsMask[to]
                                        : castlingRightsMask[from] | castlingRightsMask[to];
-  if (!dropMove && !is_pass(m) && !pureWallMove && st->castlingRights
+  if (!dropMove && !passMove && !pureWallMove && st->castlingRights
       && (moveRightsMask
           | (jumpCapsq != SQ_NONE ? castlingRightsMask[jumpCapsq] : 0)
           | pushRightsMask | pullRightsMask))
@@ -7980,7 +8063,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
 
   // Flip enclosed pieces
   st->flippedPieces = 0;
-  if (flip_enclosed_pieces() && !is_pass(m))
+  if (flip_enclosed_pieces() && !passMove)
   {
       // Find end of rows to be flipped
       if (flip_enclosed_pieces() == REVERSI)
@@ -8093,6 +8176,50 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
               }
           }
       }
+  }
+  else if (popoutMove)
+  {
+      recomputeDerivedState = true;
+      st->nnueRefreshNeeded = true;
+      dp.dirty_num = 0;
+      st->push.didPush = true;
+      st->push.stepwise = true;
+      st->push.snapshotCount = int(max_rank()) + 1;
+      st->push.transferCount = 0;
+
+      File f = file_of(from);
+      for (int r = 0; r <= int(max_rank()); ++r)
+      {
+          Square sq = make_square(f, Rank(r));
+          Piece original = piece_on(sq);
+          st->push.snapshots[r].sq = sq;
+          st->push.snapshots[r].piece = original;
+          st->push.snapshots[r].promoted = original != NO_PIECE && is_promoted(sq);
+          st->push.snapshots[r].unpromoted = st->push.snapshots[r].promoted ? unpromoted_piece_on(sq) : NO_PIECE;
+          st->push.snapshots[r].orientation = original != NO_PIECE
+                                            && is_oriented(type_of(original))
+                                              ? orientation_on(sq) : 0;
+      }
+
+      const int popoutRank = int(rank_of(from));
+      for (int r = popoutRank; r <= int(max_rank()); ++r)
+      {
+          Square sq = make_square(f, Rank(r));
+          if (piece_on(sq) != NO_PIECE)
+              remove_piece(sq);
+      }
+      for (int r = popoutRank + 1; r <= int(max_rank()); ++r)
+      {
+          const PushSnapshot& saved = st->push.snapshots[r];
+          if (saved.piece != NO_PIECE)
+          {
+              Square dest = make_square(f, Rank(r - 1));
+              put_piece(saved.piece, dest, saved.promoted, saved.unpromoted);
+              if (is_oriented(type_of(saved.piece)))
+                  set_orientation(dest, saved.orientation);
+          }
+      }
+      st->rule50 = 0;
   }
   else if (openingSelfRemoval)
   {
@@ -8535,7 +8662,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       && type_of(m) != CASTLING
       && !is_promotion_move(m)
       && type_of(m) != PIECE_PROMOTION
-      && !is_pass(m))
+      && !passMove)
   {
       Piece cur = piece_on(moverSq);
       if (cur != NO_PIECE && !(rex_exclusive_morph() && type_of(cur) == KING))
@@ -8548,7 +8675,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       && type_of(m) != CASTLING
       && !is_promotion_move(m)
       && type_of(m) != PIECE_PROMOTION
-      && !is_pass(m))
+      && !passMove)
   {
       Piece cur = piece_on(moverSq);
       PieceType moveMorphType = cur == NO_PIECE ? NO_PIECE_TYPE : var->moveMorphPieceType[type_of(cur)];
@@ -8720,7 +8847,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
                      || var->libertySelfCapture == LibertyAction::REMOVE) ) ||
          ( pi && pi->has_universal_hopper() && jumpCapsq != SQ_NONE )
        )
-       && !is_pass(m)
+       && !passMove
      )
 
   {
@@ -9072,7 +9199,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
                         & (blast_pattern(moverSq) | square_bb(moverSq));
   bool captureHappened = (captured != NO_PIECE && !stackMove) || localBycatch;
   if (trigger_matches(var->changingColorTrigger, captureHappened)
-      && !is_pass(m)
+      && !passMove
       && (!dropMove || captureHappened)
       && piece_on(moverSq) != NO_PIECE
       && color_of(piece_on(moverSq)) == us
@@ -9105,7 +9232,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
 
   if (forced_jump_continuation())
   {
-      if (is_pass(m))
+      if (passMove)
       {
           // Keep pending continuation across the forced opponent pass.
           st->forcedJumpSquare = st->previous->forcedJumpSquare;
@@ -9313,6 +9440,9 @@ void Position::undo_move(Move m) {
                             && type_of(m) == SPECIAL
                             && from == to
                             && !st->pass;
+  bool wasPopout = is_popout_move(m)
+                && st->push.didPush
+                && st->push.stepwise;
 
   assert(is_drop_move(m) || empty(from) || type_of(m) == CASTLING || is_gating(m)
          || (is_promotion_move(m) && sittuyin_promotion())
@@ -9529,7 +9659,7 @@ void Position::undo_move(Move m) {
       }
       else if (wasOpeningSelfRemoval)
           put_piece(st->dead.piece, from, st->dead.promoted, st->dead.unpromoted);
-      else
+      else if (!wasPopout)
       {
           if (is_self_destruct(m))
           {
@@ -9621,6 +9751,8 @@ void Position::undo_move(Move m) {
               }
               put_piece(st->push.snapshots[i].piece, st->push.snapshots[i].sq,
                         st->push.snapshots[i].promoted, st->push.snapshots[i].unpromoted);
+              if (is_oriented(type_of(st->push.snapshots[i].piece)))
+                  set_orientation(st->push.snapshots[i].sq, st->push.snapshots[i].orientation);
           }
       }
       else if (st->push.didPush)

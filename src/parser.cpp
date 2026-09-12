@@ -1956,6 +1956,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("connectSouthEast", v->connectSouthEast);
     parse_attribute("connect3D", v->connect3D);
     parse_attribute("connect4D", v->connect4D);
+    parse_color_setting("popoutRegion", v->popoutRegion);
     parse_color_setting("connectRegion1", v->connectRegion1);
     parse_color_setting("connectRegion2", v->connectRegion2);
     parse_color_setting("connectRegion3", v->connectRegion3);
@@ -2645,6 +2646,14 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
                 std::cerr << "removeConnectN is incompatible with connection win conditions." << std::endl;
             valid = false;
         }
+    }
+
+    if ((v->popoutRegion[WHITE] || v->popoutRegion[BLACK])
+        && (v->pass[WHITE] || v->pass[BLACK]))
+    {
+        if (DoCheck)
+            std::cerr << "popoutRegion is incompatible with pass: both use same-square SPECIAL moves." << std::endl;
+        valid = false;
     }
 
     if (v->hexBoard && (v->reciprocalWeakConnectionDrop || v->weakCrosscutDropIllegal || v->weakConnectionNobiImpossible))

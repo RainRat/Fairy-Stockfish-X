@@ -237,6 +237,7 @@ struct PushSnapshot {
   Square sq = SQ_NONE;
   Piece piece = NO_PIECE;
   Piece unpromoted = NO_PIECE;
+  int orientation = 0;
   bool promoted = false;
 };
 
@@ -718,6 +719,9 @@ public:
   bool must_drop() const;
   PieceType must_drop_type() const;
   bool opening_self_removal() const;
+  bool popout() const;
+  Bitboard popout_region(Color c) const;
+  bool is_popout_move(Move m) const;
   bool in_opening_self_removal_phase() const;
   Bitboard opening_self_removal_targets(Color c) const;
   bool opening_swap_drop() const;
@@ -2271,6 +2275,28 @@ inline PieceType Position::must_drop_type() const {
 inline bool Position::opening_self_removal() const {
   assert(var != nullptr);
   return var->openingSelfRemoval;
+}
+
+inline bool Position::popout() const {
+  assert(var != nullptr);
+  return var->popoutRegion[WHITE] || var->popoutRegion[BLACK];
+}
+
+inline Bitboard Position::popout_region(Color c) const {
+  assert(var != nullptr);
+  return var->popoutRegion.get(c);
+}
+
+inline bool Position::is_popout_move(Move m) const {
+  Square sq = from_sq(m);
+  return !in_opening_self_removal_phase()
+      && popout_region(side_to_move())
+      && type_of(m) == SPECIAL
+      && sq == to_sq(m)
+      && is_ok(sq)
+      && (popout_region(side_to_move()) & square_bb(sq))
+      && piece_on(sq) != NO_PIECE
+      && color_of(piece_on(sq)) == side_to_move();
 }
 
 inline bool Position::in_opening_self_removal_phase() const {

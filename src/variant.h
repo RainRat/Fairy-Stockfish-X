@@ -502,6 +502,7 @@ struct Variant {
   bool connectSouthEast = true;
   bool connect3D = false;
   bool connect4D = false;
+  ColorSetting<Bitboard> popoutRegion = ColorSetting<Bitboard>(Bitboard(0));
   ColorSetting<Bitboard> connectRegion1 = ColorSetting<Bitboard>(Bitboard(0));
   ColorSetting<Bitboard> connectRegion2 = ColorSetting<Bitboard>(Bitboard(0));
   ColorSetting<Bitboard> connectRegion3 = ColorSetting<Bitboard>(Bitboard(0));

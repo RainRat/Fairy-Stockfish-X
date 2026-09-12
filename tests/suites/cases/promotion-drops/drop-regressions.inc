@@ -604,4 +604,27 @@ assert_not_contains "$out" '^A@a1,b1: 1$'
 assert_contains "$out" '^A@a2,b2: 1$'
 assert_contains "$out" '^Nodes searched: 4$'
 
+# PopOut removes only the mover's checker in the configured region and drops
+# the rest of the column above it by one rank. The same move must remain
+# available after do/undo in perft.
+out=$(run_uci "$ENGINE" "${ROOT_DIR}/src/variants.ini" cfour-popout <<'UCI'
+position fen 7/7/7/P6/p6/P6[] w - - 0 1
+go perft 2
+position fen 7/7/7/P6/p6/P6[] w - - 0 1 moves a1a1
+d
+go perft 1
+UCI
+)
+assert_contains "$out" '^a1a1: 8$'
+assert_contains "$out" '^Fen: 7/7/7/7/P6/p6 b - - 0 1$'
+assert_contains "$out" '^a1a1: 1$'
+
+# A PopOut region may contain squares away from the bottom rank.
+out=$(run_uci "$ENGINE" "${ROOT_DIR}/src/variants.ini" cfour-popout-middle <<'UCI'
+position fen 7/7/p6/P6/7/7[] w - - 0 1 moves a3a3
+d
+UCI
+)
+assert_contains "$out" '^Fen: 7/7/7/p6/7/7 b - - 0 1$'
+
 echo "drop regressions passed"
