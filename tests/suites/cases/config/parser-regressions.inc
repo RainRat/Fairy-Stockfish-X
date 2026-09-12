@@ -50,6 +50,9 @@ hostageExchange =
 [named-custom-piece-hint:chess]
 falcon = a:W
 
+[nnue-alias:chess]
+nnueAlias = nn-
+
 [walling-seirawan:chess]
 wallingRule = duck
 seirawanGating = true
@@ -583,6 +586,7 @@ assert_contains_literal "${initial_capture_output}" "laserEmitters - Piece emitt
 assert_contains_literal "${initial_capture_output}" "laserGame is not supported on wrapped or hexagonal boards."
 assert_contains_literal "${initial_capture_output}" "customPiece1 - Invalid syntax."
 assert_contains_literal "${initial_capture_output}" "king - Invalid syntax."
+assert_not_contains_literal "${initial_capture_output}" "Unknown option ignored: nnueAlias"
 
 laser_rank10_output=$(run_uci "$ENGINE" "$tmp_ini" "laser-rank10" </dev/null 2>&1 || true)
 assert_contains "${laser_rank10_output}" "^info string variant laser-rank10 "

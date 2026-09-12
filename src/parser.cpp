@@ -1539,6 +1539,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     }
 
     parse_attribute("variantTemplate", v->variantTemplate);
+    parse_attribute("nnueAlias", v->nnueAlias);
     parse_attribute("pieceToCharTable", v->pieceToCharTable);
     parse_attribute("pocketSize", v->pocketSize);
     parse_attribute("chess960", v->chess960);
