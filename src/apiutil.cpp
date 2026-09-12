@@ -221,7 +221,7 @@ std::string variant_info_json(const std::string& name) {
     std::ostringstream out;
     out << '{';
     bool first = true;
-    field(out, first, "schemaVersion", "1");
+    field(out, first, "schemaVersion", "2");
     field(out, first, "name", quote(name));
     field(out, first, "template", quote(v.variantTemplate));
 

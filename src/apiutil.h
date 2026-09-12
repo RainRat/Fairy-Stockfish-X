@@ -35,8 +35,8 @@
 
 namespace Stockfish {
 
-// Return a versioned JSON description of the resolved variant configuration.
-// An empty string denotes an unknown variant.
+// Return the current FSX schema-2 JSON description of the resolved variant
+// configuration. An empty string denotes an unknown variant.
 std::string variant_info_json(const std::string& name);
 
 enum Notation {

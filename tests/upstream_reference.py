@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 
+import argparse
 import re
 import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
 
 
 MOVE_RE = re.compile(r"^([^:\s]+):\s+(\d+)\s*$")
@@ -33,9 +35,13 @@ CASES = [
 ]
 
 
-def run_perft(engine: Path, case: Case) -> dict[str, int]:
+def run_perft(
+    engine: Path, case: Case, variant_path: Optional[Path] = None
+) -> dict[str, int]:
+    setup = [] if variant_path is None else [f"setoption name VariantPath value {variant_path}"]
     script = "\n".join(
-        [
+        setup
+        + [
             "uci",
             f"setoption name UCI_Variant value {case.variant}",
             case.position_cmd,
@@ -72,10 +78,11 @@ def run_perft(engine: Path, case: Case) -> dict[str, int]:
     return moves
 
 
-def available_variants(engine: Path) -> set[str]:
+def available_variants(engine: Path, variant_path: Optional[Path] = None) -> set[str]:
+    setup = [] if variant_path is None else [f"setoption name VariantPath value {variant_path}"]
     proc = subprocess.run(
         [str(engine)],
-        input="uci\nquit\n",
+        input="\n".join(setup + ["uci", "quit", ""]),
         text=True,
         capture_output=True,
         check=False,
@@ -94,14 +101,47 @@ def available_variants(engine: Path) -> set[str]:
     return variants
 
 
+def allowed_missing_variants(values: list[str], smoke_only: bool) -> set[str]:
+    known = {case.variant for case in CASES}
+    unknown = set(values) - known
+    if unknown:
+        raise ValueError(
+            "unknown variant in missing-variant allowlist: "
+            + ", ".join(sorted(unknown))
+        )
+    return known if smoke_only else set(values)
+
+
 def main() -> int:
     root = Path(__file__).resolve().parent.parent
-    local_engine = Path(sys.argv[1]) if len(sys.argv) > 1 else root / "src" / "stockfish"
-    if len(sys.argv) <= 2:
-        print("usage: upstream_reference.py LOCAL_ENGINE UPSTREAM_ENGINE", file=sys.stderr)
-        return 2
+    parser = argparse.ArgumentParser()
+    parser.add_argument("local_engine", nargs="?", default=str(root / "src" / "stockfish"))
+    parser.add_argument("upstream_engine", nargs="?")
+    parser.add_argument(
+        "--allow-missing-variant",
+        action="append",
+        default=[],
+        metavar="NAME",
+        help="allow NAME to be absent from either engine (repeatable)",
+    )
+    parser.add_argument(
+        "--smoke-only",
+        action="store_true",
+        help="allow declared comparison variants to be absent, but require one comparison",
+    )
+    args = parser.parse_args()
+    if args.upstream_engine is None:
+        parser.error("UPSTREAM_ENGINE is required")
 
-    upstream_engine = Path(sys.argv[2])
+    try:
+        allowed_missing = allowed_missing_variants(
+            args.allow_missing_variant, args.smoke_only
+        )
+    except ValueError as error:
+        parser.error(str(error))
+
+    local_engine = Path(args.local_engine)
+    upstream_engine = Path(args.upstream_engine)
 
     if not local_engine.exists():
         print(f"local engine not found: {local_engine}", file=sys.stderr)
@@ -111,13 +151,31 @@ def main() -> int:
         return 2
 
     failed = False
-    local_variants = available_variants(local_engine)
+    compared = 0
+    local_variant_path = root / "src" / "variants.ini"
+    local_variants = available_variants(local_engine, local_variant_path)
     upstream_variants = available_variants(upstream_engine)
     for case in CASES:
-        if case.variant not in local_variants or case.variant not in upstream_variants:
-            print(f"[SKIP] {case.name} variant={case.variant} not exposed by both engines")
+        missing = []
+        if case.variant not in local_variants:
+            missing.append("local")
+        if case.variant not in upstream_variants:
+            missing.append("upstream")
+        if missing:
+            if case.variant in allowed_missing:
+                print(
+                    f"[SKIP] {case.name} variant={case.variant} "
+                    f"missing from {', '.join(missing)} (allowlisted)"
+                )
+            else:
+                failed = True
+                print(
+                    f"[FAIL] {case.name} variant={case.variant} "
+                    f"missing from {', '.join(missing)}"
+                )
             continue
-        local_moves = run_perft(local_engine, case)
+        compared += 1
+        local_moves = run_perft(local_engine, case, local_variant_path)
         upstream_moves = run_perft(upstream_engine, case)
         if local_moves != upstream_moves:
             failed = True
@@ -143,6 +201,10 @@ def main() -> int:
                 )
         else:
             print(f"[OK] {case.name} ({len(local_moves)} moves)")
+
+    if compared == 0:
+        failed = True
+        print("[FAIL] no comparable upstream-reference cases ran")
 
     return 1 if failed else 0
 

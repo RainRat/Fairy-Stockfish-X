@@ -7,6 +7,7 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
 
 
 MOVE_RE = re.compile(r"^bestmove\s+(\S+)")
@@ -36,8 +37,8 @@ SPECS = [
 ]
 
 
-def available_variants(engine: Path) -> set[str]:
-    out = run_uci(engine, ["uci"])
+def available_variants(engine: Path, variant_path: Optional[Path] = None) -> set[str]:
+    out = run_uci(engine, ["uci"], variant_path=variant_path)
     variants = set()
     for line in out.splitlines():
         m = VARIANT_RE.match(line.strip())
@@ -47,10 +48,27 @@ def available_variants(engine: Path) -> set[str]:
     return variants
 
 
-def run_uci(engine: Path, lines: list[str], timeout: int = 60) -> str:
+def allowed_missing_variants(values: list[str], smoke_only: bool) -> set[str]:
+    known = {spec.variant for spec in SPECS}
+    unknown = set(values) - known
+    if unknown:
+        raise ValueError(
+            "unknown variant in missing-variant allowlist: "
+            + ", ".join(sorted(unknown))
+        )
+    return known if smoke_only else set(values)
+
+
+def run_uci(
+    engine: Path,
+    lines: list[str],
+    timeout: int = 60,
+    variant_path: Optional[Path] = None,
+) -> str:
+    setup = [] if variant_path is None else [f"setoption name VariantPath value {variant_path}"]
     proc = subprocess.run(
         [str(engine)],
-        input="\n".join(lines + ["quit", ""]),
+        input="\n".join(setup + lines + ["quit", ""]),
         text=True,
         capture_output=True,
         check=False,
@@ -98,7 +116,12 @@ def query_fen(engine: Path, variant: str, moves: list[str]) -> str:
     raise RuntimeError(f"missing Fen line for {variant}\n{out}")
 
 
-def query_move_count(engine: Path, variant: str, fen: str) -> int:
+def query_move_count(
+    engine: Path,
+    variant: str,
+    fen: str,
+    variant_path: Optional[Path] = None,
+) -> int:
     out = run_uci(
         engine,
         [
@@ -107,6 +130,7 @@ def query_move_count(engine: Path, variant: str, fen: str) -> int:
             f"position fen {fen}",
             "go perft 1",
         ],
+        variant_path=variant_path,
     )
     for line in out.splitlines():
         m = PERFT_RE.match(line.strip())
@@ -115,12 +139,21 @@ def query_move_count(engine: Path, variant: str, fen: str) -> int:
     raise RuntimeError(f"missing perft node count for {variant}\n{out}")
 
 
-def generate_baseline(upstream_engine: Path) -> dict:
+def generate_baseline(upstream_engine: Path, allowed_missing: set[str]) -> dict:
     variants = available_variants(upstream_engine)
     records = []
     for spec in SPECS:
         if spec.variant not in variants:
-            print(f"[SKIP] {spec.name} variant={spec.variant} not exposed by {upstream_engine}")
+            if spec.variant in allowed_missing:
+                print(
+                    f"[SKIP] {spec.name} variant={spec.variant} not exposed by "
+                    f"{upstream_engine} (allowlisted)"
+                )
+            else:
+                raise RuntimeError(
+                    f"required baseline variant missing from {upstream_engine}: "
+                    f"{spec.variant}"
+                )
             continue
         moves: list[str] = []
         for _ in range(spec.plies):
@@ -140,18 +173,39 @@ def generate_baseline(upstream_engine: Path) -> dict:
                 "move_count": move_count,
             }
         )
+    if not records:
+        raise RuntimeError("no upstream baseline cases ran")
     return {"source": str(upstream_engine.resolve()), "records": records}
 
 
-def verify(local_engine: Path, fixture_path: Path) -> int:
-    variants = available_variants(local_engine)
+def verify(
+    local_engine: Path,
+    fixture_path: Path,
+    allowed_missing: set[str],
+    variant_path: Path,
+) -> int:
+    variants = available_variants(local_engine, variant_path)
     fixture = json.loads(fixture_path.read_text())
     failed = False
+    compared = 0
     for record in fixture["records"]:
         if record["variant"] not in variants:
-            print(f"[SKIP] {record['name']} variant={record['variant']} not exposed by local engine")
+            if record["variant"] in allowed_missing:
+                print(
+                    f"[SKIP] {record['name']} variant={record['variant']} "
+                    "not exposed by local engine (allowlisted)"
+                )
+            else:
+                failed = True
+                print(
+                    f"[FAIL] {record['name']} variant={record['variant']} "
+                    "not exposed by local engine"
+                )
             continue
-        actual = query_move_count(local_engine, record["variant"], record["fen"])
+        compared += 1
+        actual = query_move_count(
+            local_engine, record["variant"], record["fen"], variant_path
+        )
         expected = record["move_count"]
         if actual != expected:
             failed = True
@@ -160,6 +214,9 @@ def verify(local_engine: Path, fixture_path: Path) -> int:
             )
         else:
             print(f"[OK] {record['name']} ({actual} moves)")
+    if compared == 0:
+        failed = True
+        print("[FAIL] no upstream movecount baseline cases ran")
     return 1 if failed else 0
 
 
@@ -177,10 +234,30 @@ def main() -> int:
         default=str(root / "tests" / "pgn" / "upstream_movecount_baseline.json"),
     )
     parser.add_argument("--regenerate", action="store_true")
+    parser.add_argument(
+        "--allow-missing-variant",
+        action="append",
+        default=[],
+        metavar="NAME",
+        help="allow NAME to be absent from the selected engine (repeatable)",
+    )
+    parser.add_argument(
+        "--smoke-only",
+        action="store_true",
+        help="allow declared baseline variants to be absent, but require one case",
+    )
     args = parser.parse_args()
+
+    try:
+        allowed_missing = allowed_missing_variants(
+            args.allow_missing_variant, args.smoke_only
+        )
+    except ValueError as error:
+        parser.error(str(error))
 
     local_engine = Path(args.local_engine)
     fixture_path = Path(args.fixture)
+    local_variant_path = root / "src" / "variants.ini"
 
     if args.regenerate:
         if args.upstream_engine is None:
@@ -190,7 +267,11 @@ def main() -> int:
         if not upstream_engine.exists():
             print(f"upstream engine not found: {upstream_engine}", file=sys.stderr)
             return 2
-        fixture = generate_baseline(upstream_engine)
+        try:
+            fixture = generate_baseline(upstream_engine, allowed_missing)
+        except RuntimeError as error:
+            print(f"error: {error}", file=sys.stderr)
+            return 1
         fixture_path.write_text(json.dumps(fixture, indent=2) + "\n")
         print(f"wrote {fixture_path}")
         return 0
@@ -201,7 +282,7 @@ def main() -> int:
     if not fixture_path.exists():
         print(f"fixture not found: {fixture_path}", file=sys.stderr)
         return 2
-    return verify(local_engine, fixture_path)
+    return verify(local_engine, fixture_path, allowed_missing, local_variant_path)
 
 
 if __name__ == "__main__":

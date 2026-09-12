@@ -205,7 +205,7 @@ class TestPublicAPI(unittest.TestCase):
 
     def test_variant_info(self):
         info = json.loads(sf.variant_info("chess"))
-        self.assertEqual(info["schemaVersion"], 1)
+        self.assertEqual(info["schemaVersion"], 2)
         self.assertEqual(info["name"], "chess")
         self.assertEqual(info["board"]["width"], 8)
         self.assertEqual(info["board"]["height"], 8)
@@ -215,6 +215,10 @@ class TestPublicAPI(unittest.TestCase):
         self.assertEqual(info["royalPieceTypes"], ["king"])
         self.assertFalse(info["castling"]["wins"]["white"]["kingSide"])
         self.assertIsInstance(info["protocol"]["pieceToCharTable"], str)
+        self.assertNotIn("pieceTypesByFile", info["promotion"])
+        self.assertNotIn("pieceTypesByRank", info["promotion"])
+        self.assertEqual(info["promotion"]["promotedPieceTypes"], {})
+        self.assertEqual(info["promotion"]["captureDemotedPieceTypes"], {})
 
         janggi_info = json.loads(sf.variant_info("janggi"))
         self.assertIn("e2", janggi_info["board"]["diagonalLines"])

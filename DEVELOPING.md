@@ -98,6 +98,32 @@ new_fen = sf.get_fen(variant, fen, ["e2e4"])
 print(f"New FEN: {new_fen}")
 ```
 
+### Binding and metadata compatibility
+
+The Python binding follows upstream pyffish's move-list contract: an invalid
+move raises `ValueError`. The JavaScript `Board.push()` contract follows
+upstream ffish.js: it returns `false` and leaves the board unchanged. These
+are separate from the native UCI contract, where `position ... moves` applies
+the valid prefix and stops at the first invalid move; callers should validate
+input before sending malformed UCI commands. The native `go searchmoves` path
+also expects valid move strings.
+
+`pyffish.game_result()` is an FSX extension of upstream's older terminal
+position helper. In addition to variant endings and checkmate/stalemate, FSX
+considers mutual insufficient material and optional draw conditions, and
+normalizes public mate scores. The JavaScript `Board.result()` API keeps the
+upstream default: `result()` and `result(false)` do not claim optional draws;
+`result(true)` does. `variantInfo()` is FSX-only: Python raises `ValueError`
+for an unknown variant, while JavaScript returns an empty string.
+
+`variantInfo()` returns resolved configuration JSON with `schemaVersion: 2`.
+This is a pre-release FSX format, not an upstream pyffish/ffish.js contract.
+Schema 2 removes the obsolete `promotion.pieceTypesByFile` and
+`promotion.pieceTypesByRank` fields after promotion regions were generalized;
+consumers must use the current `promotion.pieceTypes` and
+`promotion.regionsByPiece` fields instead. No compatibility alias for the
+removed fields is provided.
+
 ## C API
 
 Fairy-Stockfish-X can be built as a shared library with a C API. See [dllbinding_usage.md](dllbinding_usage.md) for details.

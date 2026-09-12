@@ -41,7 +41,7 @@ before(async () => {
 describe('ffish.variantInfo(uciVariant)', function () {
   it('returns resolved variant rules as versioned JSON', () => {
     const info = JSON.parse(ffish.variantInfo('chess'));
-    chai.expect(info.schemaVersion).to.equal(1);
+    chai.expect(info.schemaVersion).to.equal(2);
     chai.expect(info.name).to.equal('chess');
     chai.expect(info.board.width).to.equal(8);
     chai.expect(info.board.height).to.equal(8);
@@ -51,6 +51,10 @@ describe('ffish.variantInfo(uciVariant)', function () {
     chai.expect(info.royalPieceTypes).to.deep.equal(['king']);
     chai.expect(info.castling.wins.white.kingSide).to.equal(false);
     chai.expect(info.protocol.pieceToCharTable).to.be.a('string');
+    chai.expect(info.promotion).to.not.have.property('pieceTypesByFile');
+    chai.expect(info.promotion).to.not.have.property('pieceTypesByRank');
+    chai.expect(info.promotion.promotedPieceTypes).to.deep.equal({});
+    chai.expect(info.promotion.captureDemotedPieceTypes).to.deep.equal({});
 
     const janggiInfo = JSON.parse(ffish.variantInfo('janggi'));
     chai.expect(janggiInfo.board.diagonalLines).to.include('e2');
