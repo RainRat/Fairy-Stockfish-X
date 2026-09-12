@@ -173,6 +173,8 @@ struct Variant {
   ColorChangeTrigger changingColorTrigger = ColorChangeTrigger::NEVER;
   PieceSet changingColorPieceTypes = NO_PIECE_SET;
   PieceSet selfDestructTypes = NO_PIECE_SET;
+  ColorSetting<Bitboard> selfDestructRegion = ColorSetting<Bitboard>(AllSquares);
+  GravityRule gravity = NO_GRAVITY;
   bool blastPromotion = false;
   std::string blastPattern = "";
   Bitboard blastPatternMask[SQUARE_NB] = {};
@@ -502,7 +504,6 @@ struct Variant {
   bool connectSouthEast = true;
   bool connect3D = false;
   bool connect4D = false;
-  ColorSetting<Bitboard> popoutRegion = ColorSetting<Bitboard>(Bitboard(0));
   ColorSetting<Bitboard> connectRegion1 = ColorSetting<Bitboard>(Bitboard(0));
   ColorSetting<Bitboard> connectRegion2 = ColorSetting<Bitboard>(Bitboard(0));
   ColorSetting<Bitboard> connectRegion3 = ColorSetting<Bitboard>(Bitboard(0));

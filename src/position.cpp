@@ -4400,10 +4400,9 @@ Bitboard Position::compute_remove_connect_n_mask(
 
 SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const {
   SimulatedMoveInfo info;
-  const bool popoutMove = is_popout_move(m);
   info.colorOccupancy[WHITE] = pieces(WHITE);
   info.colorOccupancy[BLACK] = pieces(BLACK);
-  if (popoutMove
+  if (gravity() != NO_GRAVITY
       || blast_promotion()
       || var->changingColorPieceTypes
       || var->blastPassiveTypes
@@ -4438,7 +4437,7 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
   info.clone = is_clone_move(m);
   info.paired = paired_drop(m);
 
-  if (is_pass(m) && !popoutMove)
+  if (is_pass(m))
   {
       info.relocatedOccupancy = info.effectOccupancy = info.placementOccupancy = pieces();
       info.occupiedAfterEffects = pieces();
@@ -4558,7 +4557,7 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
   // simulated mover or color occupancy; variants with additional piece
   // classification state use the full path below.
   const bool simpleSimulation = var->simpleSimulationBase
-                             && !popoutMove
+                             && gravity() == NO_GRAVITY
                              && !pieceMap.runtime_rider_augment_types()
                              && !pieceMap.simple_hopper_capture_types()
                              && !blast_on_capture(m)
@@ -4573,7 +4572,7 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
                              && !info.paired;
 
 #ifndef NDEBUG
-  const bool referenceSimpleSimulation = !popoutMove
+  const bool referenceSimpleSimulation = gravity() == NO_GRAVITY
                                       && !var->trapRegion
                                       && var->pieceToCharTable == "-"
                                       && var->pieceTypes == CHESS_PIECES
@@ -4696,17 +4695,6 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
       if (is_ok(info.captureSquare) && (!is_jump_capture(m) || primaryPieceCapture))
           info.relocatedOccupancy ^= square_bb(info.captureSquare);
   }
-  else if (popoutMove)
-  {
-      info.relocatedOccupancy = pieces();
-      const File file = file_of(info.from);
-      const int popoutRank = int(rank_of(info.from));
-      for (int rank = popoutRank; rank <= int(max_rank()); ++rank)
-          info.relocatedOccupancy &= ~square_bb(make_square(file, Rank(rank)));
-      for (int rank = popoutRank + 1; rank <= int(max_rank()); ++rank)
-          if (piece_on(make_square(file, Rank(rank))) != NO_PIECE)
-              info.relocatedOccupancy |= square_bb(make_square(file, Rank(rank - 1)));
-  }
   else if (is_self_destruct(m))
       info.relocatedOccupancy = pieces() & ~square_bb(info.from);
   else if (stackMove)
@@ -4807,19 +4795,6 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
       remove_color_square(info.from);
       add_color_piece(us, placedType, info.from);
       info.placedPiece = make_piece(us, placedType);
-  }
-  else if (popoutMove)
-  {
-      const File file = file_of(info.from);
-      const int popoutRank = int(rank_of(info.from));
-      for (int rank = popoutRank; rank <= int(max_rank()); ++rank)
-          remove_color_square(make_square(file, Rank(rank)));
-      for (int rank = popoutRank + 1; rank <= int(max_rank()); ++rank)
-      {
-          Piece shifted = info.piece_on(make_square(file, Rank(rank)));
-          if (shifted != NO_PIECE)
-              add_color_piece(color_of(shifted), type_of(shifted), make_square(file, Rank(rank - 1)));
-      }
   }
   else if (is_self_destruct(m))
   {
@@ -5339,8 +5314,7 @@ bool Position::legal(Move m) const {
   bool unstackMove = is_unstack_move(m);
   bool swapMove = is_swap_move(m);
   bool insertMove = is_insert_move(m);
-  bool popoutMove = is_popout_move(m);
-  bool passMove = is_pass(m) && !popoutMove;
+  bool passMove = is_pass(m);
   Square from = from_sq(m);
   Square to = to_sq(m);
   Square pullFrom = pull_square(m);
@@ -5414,7 +5388,7 @@ bool Position::legal(Move m) const {
   if (type_of(m) == CASTLING && gamePly < var->castlingForbiddenPlies)
       return false;
 
-  if (from == to && !(passMove || popoutMove || is_laser_fire(m) || is_self_destruct(m) || (is_promotion_move(m) && sittuyin_promotion()) || pureWallMove || (laser_game() && is_gating(m))))
+  if (from == to && !(passMove || is_laser_fire(m) || is_self_destruct(m) || (is_promotion_move(m) && sittuyin_promotion()) || pureWallMove || (laser_game() && is_gating(m))))
       return false;
 
   if (st->pendingClaimPass)
@@ -5426,6 +5400,8 @@ bool Position::legal(Move m) const {
       if (dropMove || mover == NO_PIECE || color_of(mover) != us)
           return false;
       if (!(self_destruct_types() & piece_set(type_of(mover))))
+          return false;
+      if (!(self_destruct_region(us) & from))
           return false;
   }
 
@@ -5519,9 +5495,9 @@ bool Position::legal(Move m) const {
   }
 
   [[maybe_unused]] Color movedPieceColor = dropMove ? drop_hand_color(us, in_hand_piece_type(m)) : us;
-  assert(passMove || pureWallMove || popoutMove || color_of(moved_piece(m)) == movedPieceColor);
+  assert(passMove || pureWallMove || color_of(moved_piece(m)) == movedPieceColor);
   assert(royal_square(us) == SQ_NONE || piece_on(royal_square(us)) == make_piece(us, royal_piece_type(us)));
-  assert(passMove || pureWallMove || popoutMove || (board_bb() & to));
+  assert(passMove || pureWallMove || (board_bb() & to));
 
   const Square royalSquare = royal_square(us);
   const bool hasRoyal = royalSquare != SQ_NONE;
@@ -5537,7 +5513,7 @@ bool Position::legal(Move m) const {
                            && !dropMove
                            && type_of(m) != CASTLING
                            && !passMove
-                           && !popoutMove
+                           && gravity() == NO_GRAVITY
                            && !st->pendingClaimPass
                            && !(pieceMap.runtime_rider_augment_types() & var->pieceTypes)
                            && !(pieceMap.simple_hopper_capture_types() & var->pieceTypes)
@@ -5624,7 +5600,7 @@ bool Position::legal(Move m) const {
               Piece passPiece = moved_piece(m);
               return passMove && passPiece != NO_PIECE && color_of(passPiece) == us;
           }
-          if (passMove || popoutMove || from != st->forcedJumpSquare || !is_jump_capture(m))
+          if (passMove || from != st->forcedJumpSquare || !is_jump_capture(m))
               return false;
           if (forced_jump_same_direction() && st->forcedJumpStep
               && forced_jump_step(*this, from, to) != st->forcedJumpStep)
@@ -5633,7 +5609,7 @@ bool Position::legal(Move m) const {
   }
   // Universal-hopper semantics are fully encoded in attacks/moves generation and
   // jump_capture_square() capture-square resolution; avoid legacy pre-filters here.
-  if ((pieces(us) & to) && !passMove && !popoutMove && !is_self_destruct(m) && !is_stack_move(m)
+  if ((pieces(us) & to) && !passMove && !is_self_destruct(m) && !is_stack_move(m)
       && is_uncapturable_royal_square(us, to))
       return false;
   if (!dropMove && violates_mutual_hop_restriction(from, to, movePt))
@@ -5730,32 +5706,6 @@ bool Position::legal(Move m) const {
       }
   }
 
-  // PopOut removes a piece and shifts a file, so validate its final position
-  // through the committed move path after compulsory-move rules have run.
-  if (popoutMove)
-  {
-      if (var->multimoveOffset || var->progressiveMultimove)
-      {
-          if (multimove_pass(gamePly))
-              return false;
-          if (multimove_pass(gamePly + 1) && !var->multimoveCapture && capture(m))
-              return false;
-      }
-      if (violates_same_player_board_repetition(m))
-          return false;
-
-      StateInfo nextState;
-      SimulatedMoveGuard clearSimulation(*this, MOVE_NONE);
-      ScopedProbeMove probe(*this, m, nextState);
-      if (hasRoyal && royal_square(us) == SQ_NONE)
-          return false;
-      if (!allow_checks() && hasRoyal
-          && attackers_to_king(royal_square(us), pieces(), them))
-          return false;
-      return (!pseudo_royal_types() || !checked_pseudo_royals(us))
-          && (!anti_royal_types() || !checked_anti_royals(us));
-  }
-
   if (swapMove || pullMove)
   {
       if (violates_same_player_board_repetition(m))
@@ -5824,12 +5774,37 @@ bool Position::legal(Move m) const {
           return false;
   }
 
+  if (gravity() != NO_GRAVITY && !passMove)
+  {
+      if (var->multimoveOffset || var->progressiveMultimove)
+      {
+          if (multimove_pass(gamePly))
+              return false;
+          if (multimove_pass(gamePly + 1) && !var->multimoveCapture && capture(m))
+              return false;
+      }
+      if (violates_same_player_board_repetition(m))
+          return false;
+
+      StateInfo nextState;
+      SimulatedMoveGuard clearSimulation(*this, MOVE_NONE);
+      ScopedProbeMove probe(*this, m, nextState);
+      Square probeRoyal = royal_square(us);
+      if (hasRoyal && probeRoyal == SQ_NONE)
+          return false;
+      if (!allow_checks() && probeRoyal != SQ_NONE
+          && attackers_to_king(probeRoyal, pieces(), them))
+          return false;
+      return (!pseudo_royal_types() || !checked_pseudo_royals(us))
+          && (!anti_royal_types() || !checked_anti_royals(us));
+  }
+
   // Illegal king passing move
   if (pass_on_stalemate(us) && passMove && !evasion_checkers())
   {
       SimulatedMoveGuard currentPosition(*this, MOVE_NONE);
       for (const auto& move : MoveList<NON_EVASIONS>(*this))
-          if ((!is_pass(move) || is_popout_move(move)) && legal(move))
+          if (!is_pass(move) && legal(move))
               return false;
   }
 
@@ -6371,8 +6346,7 @@ bool Position::pseudo_legal(const Move m) const {
   Color them = ~us;
   bool dropMove = is_drop_move(m);
   bool insertMove = is_insert_move(m);
-  bool popoutMove = is_popout_move(m);
-  bool passMove = is_pass(m) && !popoutMove;
+  bool passMove = is_pass(m);
   Square from = from_sq(m);
   Square to = to_sq(m);
   Square pullFrom = pull_square(m);
@@ -6464,7 +6438,7 @@ bool Position::pseudo_legal(const Move m) const {
       }
   }
 
-  if (from == to && !(passMove || popoutMove || is_laser_fire(m) || is_self_destruct(m) || (is_promotion_move(m) && sittuyin_promotion()) || pureWallMove || (laser_game() && is_gating(m))))
+  if (from == to && !(passMove || is_laser_fire(m) || is_self_destruct(m) || (is_promotion_move(m) && sittuyin_promotion()) || pureWallMove || (laser_game() && is_gating(m))))
       return false;
 
   if (st->pendingClaimPass)
@@ -6478,6 +6452,8 @@ bool Position::pseudo_legal(const Move m) const {
       if (dropMove || pc == NO_PIECE || color_of(pc) != us)
           return false;
       if (!(self_destruct_types() & piece_set(type_of(pc))))
+          return false;
+      if (!(self_destruct_region(us) & from))
           return false;
   }
 
@@ -6502,7 +6478,7 @@ bool Position::pseudo_legal(const Move m) const {
               Piece passPiece = moved_piece(m);
               return passMove && passPiece != NO_PIECE && color_of(passPiece) == us;
           }
-          if (passMove || popoutMove)
+          if (passMove)
               return false;
           if (from != st->forcedJumpSquare || !is_jump_capture(m))
               return false;
@@ -6510,14 +6486,6 @@ bool Position::pseudo_legal(const Move m) const {
               && forced_jump_step(*this, from, to) != st->forcedJumpStep)
               return false;
       }
-  }
-
-  if (popoutMove)
-  {
-      const bool useWrappedFallback = topology_wraps() && evasion_checkers();
-      return ((evasion_checkers() && !useWrappedFallback) ? MoveList<EVASIONS>(*this).contains(m)
-                                                          : MoveList<NON_EVASIONS>(*this).contains(m))
-          && !violates_same_player_board_repetition(m);
   }
 
   if (is_laser_fire(m))
@@ -6875,7 +6843,7 @@ bool Position::gives_check(Move m) const {
                          || var->changingColorPieceTypes
                          || var->blastPassiveTypes
                          || var->blastPromotion
-                         || is_popout_move(m)
+                         || gravity() != NO_GRAVITY
                          || var->removeConnectN
                          || var->surroundCaptureOpposite
                          || var->surroundCaptureIntervene
@@ -6928,7 +6896,7 @@ bool Position::gives_check(Move m) const {
 bool Position::gives_check_impl(Move m) const {
 
   assert(is_ok(m));
-  if (is_popout_move(m))
+  if (gravity() != NO_GRAVITY && !is_pass(m))
   {
       StateInfo nextState;
       SimulatedMoveGuard clearSimulation(*this, MOVE_NONE);
@@ -7308,6 +7276,100 @@ inline void assert_no_move_undo_payload(const StateInfo* st) {
 }
 #endif
 
+void Position::apply_gravity(Key& k) {
+  st->gravity.squares = board_size_bb(max_file(), max_rank());
+  st->gravity.occupied = st->gravity.squares & pieces();
+  st->gravity.orientationBB[0] = st->orientationBB[0];
+  st->gravity.orientationBB[1] = st->orientationBB[1];
+
+  Bitboard snapshotSquares = st->gravity.occupied;
+  while (snapshotSquares)
+  {
+      Square sq = pop_lsb(snapshotSquares);
+      Piece pc = piece_on(sq);
+      if (pc != NO_PIECE)
+          st->gravity.pieces[sq].set(pc, is_promoted(sq),
+                                     is_promoted(sq) ? unpromoted_piece_on(sq) : NO_PIECE);
+  }
+
+  const Bitboard boardMask = board_bb();
+  auto compact_segment = [&](const std::vector<Square>& segment, bool towardLow) {
+      std::vector<Square> sources;
+      for (Square sq : segment)
+          if (piece_on(sq) != NO_PIECE)
+              sources.push_back(sq);
+      if (sources.empty())
+          return;
+
+      const int firstDestination = towardLow ? 0 : int(segment.size() - sources.size());
+      for (int i = 0; i < int(sources.size()); ++i)
+      {
+          Square source = sources[i];
+          Square destination = segment[firstDestination + i];
+          if (source != destination)
+          {
+              Piece pc = piece_on(source);
+              k ^= Zobrist::psq[pc][source] ^ Zobrist::psq[pc][destination];
+              if (type_of(pc) == PAWN)
+                  st->pawnKey ^= Zobrist::psq[pc][source] ^ Zobrist::psq[pc][destination];
+
+              int oldRights = st->castlingRights;
+              st->castlingRights &= ~(castlingRightsMask[source] | castlingRightsMask[destination]);
+              if (st->castlingRights != oldRights)
+                  k ^= Zobrist::castling[oldRights] ^ Zobrist::castling[st->castlingRights];
+          }
+      }
+
+      for (Square source : sources)
+          remove_piece(source);
+      for (int i = 0; i < int(sources.size()); ++i)
+      {
+          Square source = sources[i];
+          Square destination = segment[firstDestination + i];
+          const PackedReversiblePiece& saved = st->gravity.pieces[source];
+          put_piece(saved.piece(), destination, saved.promoted(), saved.unpromoted());
+          if (is_oriented(type_of(saved.piece())))
+          {
+              int orientation = int(bool(st->gravity.orientationBB[0] & source))
+                              | (int(bool(st->gravity.orientationBB[1] & source)) << 1);
+              set_orientation(destination, orientation);
+          }
+      }
+  };
+
+  auto compact_lines = [&](bool vertical, bool towardLow) {
+      int lineCount = vertical ? int(max_file()) + 1 : int(max_rank()) + 1;
+      int lineLength = vertical ? int(max_rank()) + 1 : int(max_file()) + 1;
+      for (int line = 0; line < lineCount; ++line)
+      {
+          std::vector<Square> segment;
+          auto flush = [&]() {
+              compact_segment(segment, towardLow);
+              segment.clear();
+          };
+          for (int index = 0; index < lineLength; ++index)
+          {
+              Square sq = vertical ? make_square(File(line), Rank(index))
+                                   : make_square(File(index), Rank(line));
+              if (boardMask & sq)
+                  segment.push_back(sq);
+              else
+                  flush();
+          }
+          flush();
+      }
+  };
+
+  switch (gravity())
+  {
+  case GRAVITY_SOUTH: compact_lines(true, true); break;
+  case GRAVITY_NORTH: compact_lines(true, false); break;
+  case GRAVITY_WEST:  compact_lines(false, true); break;
+  case GRAVITY_EAST:  compact_lines(false, false); break;
+  case NO_GRAVITY: break;
+  }
+}
+
 CaptureTransferTarget Position::capture_transfer_target(Piece transferPiece, bool suppressedCaptureTransfer) const {
     if (suppressedCaptureTransfer || !captures_to_hand())
         return {};
@@ -7440,8 +7502,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
 
   const bool openingSelfRemoval = in_opening_self_removal_phase()
                                && is_opening_self_removal_move(m);
-  const bool popoutMove = is_popout_move(m);
-  const bool passMove = is_pass(m) && !popoutMove;
+  const bool passMove = is_pass(m);
 
 #ifndef NO_THREADS
   if (countNode && thisThread)
@@ -7561,9 +7622,6 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   const bool blastOnCaptureMove = !is_stack_move(m) && blast_on_capture(pc, captured);
   int pushRightsMask = 0;
   int pullRightsMask = 0;
-  if (popoutMove)
-      for (int rank = int(rank_of(from)); rank <= int(max_rank()); ++rank)
-          pushRightsMask |= castlingRightsMask[make_square(file_of(from), Rank(rank))];
   bool rifleShot = rifle_capture(m) && captured != NO_PIECE && type_of(m) != CASTLING;
   bool cloneMove = is_clone_move(m);
   bool pullMove = is_pull_move(m);
@@ -7662,13 +7720,13 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
 
   if (to == from)
   {
-      assert((is_promotion_move(m) && sittuyin_promotion()) || passMove || is_laser_fire(m) || is_self_destruct(m) || openingSelfRemoval || popoutMove || pureWallMove || is_gating(m));
+      assert((is_promotion_move(m) && sittuyin_promotion()) || passMove || is_laser_fire(m) || is_self_destruct(m) || openingSelfRemoval || pureWallMove || is_gating(m));
       captured = NO_PIECE;
   }
 
   ScopedSpellContext spellScope(potCtx.freezeExtra, potCtx.jumpRemoved);
 
-  assert(pureWallMove || passMove || popoutMove || color_of(pc) == dropColor);
+  assert(pureWallMove || passMove || color_of(pc) == dropColor);
   assert(captured == NO_PIECE
          || (type_of(m) == CASTLING
                  ? color_of(captured) == us
@@ -8176,50 +8234,6 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
               }
           }
       }
-  }
-  else if (popoutMove)
-  {
-      recomputeDerivedState = true;
-      st->nnueRefreshNeeded = true;
-      dp.dirty_num = 0;
-      st->push.didPush = true;
-      st->push.stepwise = true;
-      st->push.snapshotCount = int(max_rank()) + 1;
-      st->push.transferCount = 0;
-
-      File f = file_of(from);
-      for (int r = 0; r <= int(max_rank()); ++r)
-      {
-          Square sq = make_square(f, Rank(r));
-          Piece original = piece_on(sq);
-          st->push.snapshots[r].sq = sq;
-          st->push.snapshots[r].piece = original;
-          st->push.snapshots[r].promoted = original != NO_PIECE && is_promoted(sq);
-          st->push.snapshots[r].unpromoted = st->push.snapshots[r].promoted ? unpromoted_piece_on(sq) : NO_PIECE;
-          st->push.snapshots[r].orientation = original != NO_PIECE
-                                            && is_oriented(type_of(original))
-                                              ? orientation_on(sq) : 0;
-      }
-
-      const int popoutRank = int(rank_of(from));
-      for (int r = popoutRank; r <= int(max_rank()); ++r)
-      {
-          Square sq = make_square(f, Rank(r));
-          if (piece_on(sq) != NO_PIECE)
-              remove_piece(sq);
-      }
-      for (int r = popoutRank + 1; r <= int(max_rank()); ++r)
-      {
-          const PushSnapshot& saved = st->push.snapshots[r];
-          if (saved.piece != NO_PIECE)
-          {
-              Square dest = make_square(f, Rank(r - 1));
-              put_piece(saved.piece, dest, saved.promoted, saved.unpromoted);
-              if (is_oriented(type_of(saved.piece)))
-                  set_orientation(dest, saved.orientation);
-          }
-      }
-      st->rule50 = 0;
   }
   else if (openingSelfRemoval)
   {
@@ -9305,6 +9319,17 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   if (var->laserGame && (var->laserAutoFire || is_laser_fire(m)))
       fire_laser(us, k, is_laser_fire(m) ? from_sq(m) : SQ_NONE);
 
+  if (gravity() != NO_GRAVITY && !passMove)
+  {
+      apply_gravity(k);
+      recomputeDerivedState = true;
+      st->nnueRefreshNeeded = true;
+      dp.dirty_num = 0;
+      if (is_self_destruct(m))
+          st->rule50 = 0;
+      updatePawnCheckZone();
+  }
+
   // En passant rights describe the pawn-like mover that just completed the
   // extended step.  Later effects may remove or replace that piece, so do not
   // leave a right pointing at a square whose mover no longer exists.
@@ -9440,9 +9465,6 @@ void Position::undo_move(Move m) {
                             && type_of(m) == SPECIAL
                             && from == to
                             && !st->pass;
-  bool wasPopout = is_popout_move(m)
-                && st->push.didPush
-                && st->push.stepwise;
 
   assert(is_drop_move(m) || empty(from) || type_of(m) == CASTLING || is_gating(m)
          || (is_promotion_move(m) && sittuyin_promotion())
@@ -9455,6 +9477,7 @@ void Position::undo_move(Move m) {
          || stackMove
          || unstackMove
          || wasOpeningSelfRemoval
+         || st->gravity.active()
          || (commit_gates() && st->removedGatingType > NO_PIECE_TYPE)
   );
   assert(type_of(st->captured.piece.piece) != KING || allow_checks() || !checking_permitted());
@@ -9462,6 +9485,29 @@ void Position::undo_move(Move m) {
   // Reset wall squares
   byTypeBB[ALL_PIECES] ^= st->wallSquares ^ st->previous->wallSquares;
   byTypeBB[ALL_PIECES] ^= st->deadSquares ^ st->previous->deadSquares;
+
+  if (st->gravity.active())
+  {
+      Bitboard restoreMask = st->gravity.squares;
+      while (restoreMask)
+      {
+          Square sq = pop_lsb(restoreMask);
+          if (piece_on(sq) != NO_PIECE)
+              remove_piece(sq);
+      }
+
+      restoreMask = st->gravity.occupied;
+      while (restoreMask)
+      {
+          Square sq = pop_lsb(restoreMask);
+          const PackedReversiblePiece& saved = st->gravity.pieces[sq];
+          if (saved)
+              put_piece(saved.piece(), sq, saved.promoted(), saved.unpromoted());
+      }
+      st->orientationBB[0] = st->gravity.orientationBB[0];
+      st->orientationBB[1] = st->gravity.orientationBB[1];
+      pc = piece_on(moverSq);
+  }
 
   // Claims are placed after removal effects in do_move(), so remove them
   // before restoring pieces removed by those effects.  Otherwise a claim can
@@ -9659,7 +9705,7 @@ void Position::undo_move(Move m) {
       }
       else if (wasOpeningSelfRemoval)
           put_piece(st->dead.piece, from, st->dead.promoted, st->dead.unpromoted);
-      else if (!wasPopout)
+      else
       {
           if (is_self_destruct(m))
           {

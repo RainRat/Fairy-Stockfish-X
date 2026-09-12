@@ -1144,19 +1144,6 @@ namespace {
         }
     }
 
-    // A PopOut is a quiet same-square move.  It is emitted only after the
-    // forced-jump gate, so it cannot bypass a required continuation.
-    if constexpr (Type != CAPTURES && Type != QUIET_CHECKS)
-        if (!restrictToForcedJumper)
-        {
-            Bitboard removals = pos.pieces(Us) & pos.popout_region(Us);
-            while (removals)
-            {
-                Square sq = pop_lsb(removals);
-                *moveList++ = make<SPECIAL>(sq, sq);
-            }
-        }
-
 #ifndef NDEBUG
     const PieceInfo* pawnInfo = pieceMap.get(PAWN);
     const bool pawnHasCustomNonStepMovement = pawnInfo->has_nonstandard_pawn_movement();
@@ -1509,7 +1496,7 @@ namespace {
 
         if (!restrictToForcedJumper && Type != CAPTURES && pos.self_destruct_types())
         {
-            Bitboard b = pos.pieces(Us);
+            Bitboard b = pos.pieces(Us) & pos.self_destruct_region(Us);
             while (b)
             {
                 Square sq = pop_lsb(b);

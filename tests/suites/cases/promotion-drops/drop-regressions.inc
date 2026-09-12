@@ -280,6 +280,25 @@ dropPieceTypes = a:abcd;
 dropRegionWhite = a1 b1 c1 a2 c2 a3 b3 c3
 dropRegionBlack = a1 b1 c1 a2 c2 a3 b3 c3
 startFen = 3/3/3[KkA] w - - 0 1
+
+[gravity-north:fairy]
+maxRank = 4
+maxFile = 4
+pieceDrops = true
+freeDrops = true
+checking = false
+castling = false
+gravity = north
+startFen = 4/4/4/4[] w - - 0 1
+
+[gravity-south:gravity-north]
+gravity = south
+
+[gravity-east:gravity-north]
+gravity = east
+
+[gravity-west:gravity-north]
+gravity = west
 INI
 tmp_ini="${FSX_TMP_INI}"
 
@@ -604,27 +623,75 @@ assert_not_contains "$out" '^A@a1,b1: 1$'
 assert_contains "$out" '^A@a2,b2: 1$'
 assert_contains "$out" '^Nodes searched: 4$'
 
-# PopOut removes only the mover's checker in the configured region and drops
-# the rest of the column above it by one rank. The same move must remain
-# available after do/undo in perft.
+# PopOut is a self-destruct region composed with south gravity. The same move
+# must remain available after do/undo in perft.
 out=$(run_uci "$ENGINE" "${ROOT_DIR}/src/variants.ini" cfour-popout <<'UCI'
 position fen 7/7/7/P6/p6/P6[] w - - 0 1
 go perft 2
-position fen 7/7/7/P6/p6/P6[] w - - 0 1 moves a1a1
+position fen 7/7/7/P6/p6/P6[] w - - 0 1 moves a1a1x
 d
 go perft 1
 UCI
 )
-assert_contains "$out" '^a1a1: 8$'
+assert_contains "$out" '^a1a1x: 8$'
 assert_contains "$out" '^Fen: 7/7/7/7/P6/p6 b - - 0 1$'
-assert_contains "$out" '^a1a1: 1$'
+assert_contains "$out" '^a1a1x: 1$'
 
 # A PopOut region may contain squares away from the bottom rank.
 out=$(run_uci "$ENGINE" "${ROOT_DIR}/src/variants.ini" cfour-popout-middle <<'UCI'
-position fen 7/7/p6/P6/7/7[] w - - 0 1 moves a3a3
+position fen 7/7/p6/P6/7/7[] w - - 0 1 moves a3a3x
 d
 UCI
 )
-assert_contains "$out" '^Fen: 7/7/7/p6/7/7 b - - 0 1$'
+assert_contains "$out" '^Fen: 7/7/7/7/7/p6 b - - 0 1$'
+
+# Interior-gravity-4 resolves a drop to the nearest edge or corner.
+out=$(run_uci "$ENGINE" "${ROOT_DIR}/src/variants.ini" interior-gravity-4 <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_contains "$out" '^P@a1: 1$'
+assert_contains "$out" '^P@d8: 1$'
+assert_contains "$out" '^Nodes searched: 28$'
+
+# Gravity 4 resolves a drop to one of the two central horizontal ranks.
+out=$(run_uci "$ENGINE" "${ROOT_DIR}/src/variants.ini" gravity-4 <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_contains "$out" '^P@a4: 1$'
+assert_contains "$out" '^P@h5: 1$'
+assert_contains "$out" '^Nodes searched: 16$'
+
+# Cardinal gravity settles every piece along its configured axis.
+out=$(run_uci "$ENGINE" "$TMP_VARIANTS" gravity-north <<'UCI'
+position startpos moves R@a1
+d
+UCI
+)
+assert_contains "$out" '^Fen: R3/4/4/4 b - - 0 1$'
+
+out=$(run_uci "$ENGINE" "$TMP_VARIANTS" gravity-south <<'UCI'
+position startpos moves R@a4
+d
+UCI
+)
+assert_contains "$out" '^Fen: 4/4/4/R3 b - - 0 1$'
+
+out=$(run_uci "$ENGINE" "$TMP_VARIANTS" gravity-east <<'UCI'
+position startpos moves R@a1
+d
+UCI
+)
+assert_contains "$out" '^Fen: 4/4/4/3R b - - 0 1$'
+
+out=$(run_uci "$ENGINE" "$TMP_VARIANTS" gravity-west <<'UCI'
+position startpos moves R@d1
+d
+UCI
+)
+assert_contains "$out" '^Fen: 4/4/4/R3 b - - 0 1$'
 
 echo "drop regressions passed"

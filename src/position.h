@@ -277,6 +277,23 @@ struct PushUndo {
   bool active() const { return didPush; }
 };
 
+struct GravityUndo {
+  Bitboard squares = Bitboard(0);
+  Bitboard occupied = Bitboard(0);
+  // Only entries in occupied are read during undo; stale empty-square entries
+  // therefore do not need to be cleared for every gravity move.
+  PackedReversiblePiece pieces[SQUARE_NB];
+  Bitboard orientationBB[2] = {};
+
+  void clear() {
+    squares = Bitboard(0);
+    occupied = Bitboard(0);
+    orientationBB[0] = orientationBB[1] = Bitboard(0);
+  }
+
+  bool active() const { return squares != Bitboard(0); }
+};
+
 struct StateInfo;
 
 struct StateInfoCopied {
@@ -354,6 +371,7 @@ struct MoveUndoInfo {
   PieceType  capturedGatingType = NO_PIECE_TYPE;
   InPlaceTransformState transforms;
   PushUndo   push;
+  GravityUndo gravity;
   ReversiblePieceOnSquare pulled;
   bool       suppressedCaptureTransfer = false;
   bool       pass = false;
@@ -393,6 +411,7 @@ struct MoveUndoInfo {
     capturedGatingType = NO_PIECE_TYPE;
     transforms.clear();
     push.clear();
+    gravity.clear();
     pulled.clear();
     suppressedCaptureTransfer = false;
     pass = false;
@@ -423,6 +442,7 @@ struct MoveUndoInfo {
         && !transforms.morphedFrom
         && !transforms.colorChanged
         && !push.active()
+        && !gravity.active()
         && !pulled
         && !suppressedCaptureTransfer
         && !pass
@@ -719,9 +739,6 @@ public:
   bool must_drop() const;
   PieceType must_drop_type() const;
   bool opening_self_removal() const;
-  bool popout() const;
-  Bitboard popout_region(Color c) const;
-  bool is_popout_move(Move m) const;
   bool in_opening_self_removal_phase() const;
   Bitboard opening_self_removal_targets(Color c) const;
   bool opening_swap_drop() const;
@@ -733,6 +750,8 @@ public:
   bool captures_to_hand() const;
   PieceSet capture_to_hand_types() const;
   PieceSet self_destruct_types() const;
+  Bitboard self_destruct_region(Color c) const;
+  GravityRule gravity() const;
   PieceSet clone_move_types() const;
   bool can_clone(Piece p) const;
   Bitboard clone_targets_from(Color c, Square from) const;
@@ -1137,6 +1156,7 @@ private:
   // Other helpers
   void move_piece(Square from, Square to);
   void set_orientation(Square s, int orientation);
+  void apply_gravity(Key& k);
   template<bool Do>
   void do_castling(Color us, Square from, Square& to, Square& rfrom, Square& rto);
   static Bitboard dynamic_slider_bb(const std::map<Direction,int>& directions,
@@ -2277,28 +2297,6 @@ inline bool Position::opening_self_removal() const {
   return var->openingSelfRemoval;
 }
 
-inline bool Position::popout() const {
-  assert(var != nullptr);
-  return var->popoutRegion[WHITE] || var->popoutRegion[BLACK];
-}
-
-inline Bitboard Position::popout_region(Color c) const {
-  assert(var != nullptr);
-  return var->popoutRegion.get(c);
-}
-
-inline bool Position::is_popout_move(Move m) const {
-  Square sq = from_sq(m);
-  return !in_opening_self_removal_phase()
-      && popout_region(side_to_move())
-      && type_of(m) == SPECIAL
-      && sq == to_sq(m)
-      && is_ok(sq)
-      && (popout_region(side_to_move()) & square_bb(sq))
-      && piece_on(sq) != NO_PIECE
-      && color_of(piece_on(sq)) == side_to_move();
-}
-
 inline bool Position::in_opening_self_removal_phase() const {
   return opening_self_removal() && gamePly < 2;
 }
@@ -2418,6 +2416,16 @@ inline PieceSet Position::self_destruct_types() const {
   return var->selfDestructTypes;
 }
 
+inline Bitboard Position::self_destruct_region(Color c) const {
+  assert(var != nullptr);
+  return var->selfDestructRegion.get(c);
+}
+
+inline GravityRule Position::gravity() const {
+  assert(var != nullptr);
+  return var->gravity;
+}
+
 inline PieceSet Position::clone_move_types() const {
   assert(var != nullptr);
   return var->cloneMoveTypes;
@@ -2527,6 +2535,89 @@ inline Bitboard Position::drop_region(Color c, PieceType pt) const {
           else if (enclosing_drop() == TOP)
           {
               b &= shift<NORTH>(pieces()) | Rank1BB;
+          }
+          else if (enclosing_drop() == NEAREST_EDGE)
+          {
+              Bitboard candidates = b;
+              b = Bitboard(0);
+              auto settle = [&](Square start, int df, int dr) {
+                  Square dest = start;
+                  while (true)
+                  {
+                      int f = int(file_of(dest)) + df;
+                      int r = int(rank_of(dest)) + dr;
+                      if (f < int(FILE_A) || f > int(max_file())
+                          || r < int(RANK_1) || r > int(max_rank()))
+                          break;
+                      Square next = make_square(File(f), Rank(r));
+                      if (!(board_bb() & next) || (pieces() & next))
+                          break;
+                      dest = next;
+                  }
+                  b |= square_bb(dest);
+              };
+
+              while (candidates)
+              {
+                  Square start = pop_lsb(candidates);
+                  int south = int(rank_of(start));
+                  int north = int(max_rank()) - int(rank_of(start));
+                  int west = int(file_of(start));
+                  int east = int(max_file()) - int(file_of(start));
+                  int nearest = std::min({south, north, west, east});
+                  bool vertical = south == nearest || north == nearest;
+                  bool horizontal = west == nearest || east == nearest;
+
+                  if (vertical && horizontal)
+                  {
+                      if (south == nearest && west == nearest) settle(start, -1, -1);
+                      if (south == nearest && east == nearest) settle(start, 1, -1);
+                      if (north == nearest && west == nearest) settle(start, -1, 1);
+                      if (north == nearest && east == nearest) settle(start, 1, 1);
+                  }
+                  else if (vertical)
+                  {
+                      if (south == nearest) settle(start, 0, -1);
+                      if (north == nearest) settle(start, 0, 1);
+                  }
+                  else
+                  {
+                      if (west == nearest) settle(start, -1, 0);
+                      if (east == nearest) settle(start, 1, 0);
+                  }
+              }
+          }
+          else if (enclosing_drop() == HORIZONTAL_CENTER)
+          {
+              Bitboard candidates = b;
+              b = Bitboard(0);
+              const int lowerCenter = int(max_rank()) / 2;
+              const int upperCenter = (int(max_rank()) + 1) / 2;
+              while (candidates)
+              {
+                  Square start = pop_lsb(candidates);
+                  int r = int(rank_of(start));
+                  int dr = r <= lowerCenter ? 1 : -1;
+                  int stop = dr > 0 ? lowerCenter : upperCenter;
+                  if (lowerCenter == upperCenter && r == lowerCenter)
+                  {
+                      b |= square_bb(start);
+                      continue;
+                  }
+
+                  Square dest = start;
+                  while (true)
+                  {
+                      int nextRank = int(rank_of(dest)) + dr;
+                      if ((dr > 0 && nextRank > stop) || (dr < 0 && nextRank < stop))
+                          break;
+                      Square next = make_square(file_of(dest), Rank(nextRank));
+                      if (!(board_bb() & next) || (pieces() & next))
+                          break;
+                      dest = next;
+                  }
+                  b |= square_bb(dest);
+              }
           }
           else
           {

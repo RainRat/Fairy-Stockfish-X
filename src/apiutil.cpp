@@ -123,7 +123,11 @@ std::string value_name(Value value) {
 }
 
 const char* enclosing_name(EnclosingRule v) {
-    static const char* names[] = {"none", "reversi", "ataxx", "quadwrangle", "snort", "anySide", "top"};
+    static const char* names[] = {"none", "reversi", "ataxx", "quadwrangle", "snort", "anySide", "top", "edge", "horizontal-center"};
+    return names[int(v)];
+}
+const char* gravity_name(GravityRule v) {
+    static const char* names[] = {"none", "north", "south", "east", "west"};
     return names[int(v)];
 }
 const char* trap_protection_name(TrapProtection v) {
@@ -292,6 +296,7 @@ std::string variant_info_json(const std::string& name) {
     field(movement, b, "enPassantTypes", color_piece_sets(v.enPassantTypes[WHITE], v.enPassantTypes[BLACK]));
     field(movement, b, "pass", color_bools(v.pass[WHITE], v.pass[BLACK]));
     field(movement, b, "passOnStalemate", color_bools(v.passOnStalemate[WHITE], v.passOnStalemate[BLACK]));
+    field(movement, b, "gravity", quote(gravity_name(v.gravity)));
     field(movement, b, "mustCapture", boolean(v.mustCapture));
     field(movement, b, "immobilityIllegal", boolean(v.immobilityIllegal));
     field(movement, b, "freezePieceTypes", piece_set_json(v.freezePieceTypes));
@@ -343,6 +348,7 @@ std::string variant_info_json(const std::string& name) {
     field(capture, b, "blastDiagonals", boolean(v.blastDiagonals));
     field(capture, b, "captureMorph", boolean(v.captureMorph));
     field(capture, b, "selfDestructTypes", piece_set_json(v.selfDestructTypes));
+    field(capture, b, "selfDestructRegions", color_regions(v.selfDestructRegion[WHITE], v.selfDestructRegion[BLACK], v.maxFile, v.maxRank));
     field(capture, b, "blastImmuneTypes", piece_set_json(v.blastImmuneTypes));
     field(capture, b, "mutuallyImmuneTypes", piece_set_json(v.mutuallyImmuneTypes));
     field(capture, b, "petrifyTypes", piece_set_json(v.petrifyOnCaptureTypes));

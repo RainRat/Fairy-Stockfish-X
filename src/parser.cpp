@@ -578,7 +578,20 @@ namespace {
             std::pair{"snort", SNORT},
             std::pair{"anyside", ANYSIDE},
             std::pair{"top", TOP},
+            std::pair{"edge", NEAREST_EDGE},
+            std::pair{"horizontal-center", HORIZONTAL_CENTER},
             std::pair{"none", NO_ENCLOSING},
+        };
+        return parse_named_value(value, target, values);
+    }
+
+    template <> bool set(const std::string& value, GravityRule& target) {
+        static constexpr auto values = std::array{
+            std::pair{"north", GRAVITY_NORTH},
+            std::pair{"south", GRAVITY_SOUTH},
+            std::pair{"east", GRAVITY_EAST},
+            std::pair{"west", GRAVITY_WEST},
+            std::pair{"none", NO_GRAVITY},
         };
         return parse_named_value(value, target, values);
     }
@@ -979,6 +992,7 @@ template <bool Current, class T> bool VariantParser<DoCheck>::parse_attribute(co
                                   : std::is_same_v<T, ChasingRule> ? "ChasingRule"
                                   : std::is_same_v<T, CapturingRule> ? "CapturingRule"
                                   : std::is_same_v<T, EnclosingRule> ? "EnclosingRule"
+                                  : std::is_same_v<T, GravityRule> ? "GravityRule"
                                   : std::is_same_v<T, Bitboard> ? "Bitboard"
                                   : std::is_same_v<T, PieceTypeBitboardGroup> ? "PieceTypeBitboardGroup"
                                   : std::is_same_v<T, CastlingRights> ? "CastlingRights"
@@ -1629,6 +1643,8 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("blastOnMove", v->blastOnMove);
     parse_attribute("blastOnSelfDestruct", v->blastOnSelfDestruct);
     parse_attribute("selfDestructTypes", v->selfDestructTypes, v);
+    parse_color_setting("selfDestructRegion", v->selfDestructRegion);
+    parse_attribute("gravity", v->gravity);
     parse_attribute("blastPromotion", v->blastPromotion);
     const bool hasLegacyBlastShape = config.count("blastDiagonals")
                                   || config.count("blastOrthogonals")
@@ -1956,7 +1972,6 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("connectSouthEast", v->connectSouthEast);
     parse_attribute("connect3D", v->connect3D);
     parse_attribute("connect4D", v->connect4D);
-    parse_color_setting("popoutRegion", v->popoutRegion);
     parse_color_setting("connectRegion1", v->connectRegion1);
     parse_color_setting("connectRegion2", v->connectRegion2);
     parse_color_setting("connectRegion3", v->connectRegion3);
@@ -2646,14 +2661,6 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
                 std::cerr << "removeConnectN is incompatible with connection win conditions." << std::endl;
             valid = false;
         }
-    }
-
-    if ((v->popoutRegion[WHITE] || v->popoutRegion[BLACK])
-        && (v->pass[WHITE] || v->pass[BLACK]))
-    {
-        if (DoCheck)
-            std::cerr << "popoutRegion is incompatible with pass: both use same-square SPECIAL moves." << std::endl;
-        valid = false;
     }
 
     if (v->hexBoard && (v->reciprocalWeakConnectionDrop || v->weakCrosscutDropIllegal || v->weakConnectionNobiImpossible))

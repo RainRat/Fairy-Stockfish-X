@@ -2325,6 +2325,7 @@ Variant* Variant::conclude() {
                          && !freezePieceTypes
                          && !freezeImmunePieceTypes
                          && !flipEnclosedPieces
+                         && gravity == NO_GRAVITY
                          && !blastImmuneTypes;
 
     simpleLegality = checking
@@ -2354,6 +2355,7 @@ Variant* Variant::conclude() {
                   && changingColorTrigger == ColorChangeTrigger::NEVER
                   && !deathOnCaptureTypes
                   && !selfDestructTypes
+                  && gravity == NO_GRAVITY
                   && !edgeInsertTypes
                   && !cloneMoveTypes
                   && !rifleCapture
