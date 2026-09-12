@@ -23,8 +23,6 @@ error()
 }
 trap 'error ${LINENO}' ERR
 
-echo "perft testing started"
-
 perft_exp=$(mktemp)
 trap 'rm -f "$perft_exp"' EXIT
 cat << EOF > "$perft_exp"
@@ -45,6 +43,23 @@ cat << EOF > "$perft_exp"
    set status [wait]
    if {[lindex \$status 3] != 0} {exit 1}
 EOF
+
+# Keep successful cases quiet even when callers redirect stdout, but make a
+# failed Expect invocation retain its complete transcript on stderr.
+expect() {
+  local output_file status
+  output_file=$(mktemp)
+  if command expect "$@" >"${output_file}" 2>&1; then
+    status=0
+  else
+    status=$?
+    printf 'perft case failed: variant=%s depth=%s expected=%s position=%s\n' \
+      "${2:-unknown}" "${4:-unknown}" "${5:-unknown}" "${3:-unknown}" >&2
+    cat "${output_file}" >&2
+  fi
+  rm -f "${output_file}"
+  return "${status}"
+}
 
 variant_list="$(printf 'uci\nquit\n' | "$ENGINE" | sed -n 's/^option name UCI_Variant type combo default [^ ]* //p' | tr ' ' '\n' | awk '/^var$/ {getline; print}')"
 has_variant() {
@@ -267,4 +282,4 @@ if [[ $VARIANT == "all" ]]; then
   fi
 fi
 
-echo "perft testing OK"
+echo "ok: perft ${VARIANT:-chess}"

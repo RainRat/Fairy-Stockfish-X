@@ -5,7 +5,7 @@
   "main": "ffish.js",
   "types": "ffish.d.ts",
   "scripts": {
-    "test": "mocha --timeout 80000",
+    "test": "mocha --timeout 80000 --reporter dot",
     "dev": "node index"
   },
   "author": [

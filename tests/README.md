@@ -46,3 +46,8 @@ The benchmark script accepts either a reference signature (`tests/bench-regressi
 The semantic checks are grouped into ten test suites. If a test fails, the runner shows the failed suite and the exact command to rerun it. Python tests in `tests/python/test_pyffish_api.py` verify the Python bindings directly, while chess variant rules run through native C++ test harnesses and UCI test cases.
 
 Passing tests run quietly and save their logs in `.local/build/test-run/`. Without verbose output, multiple suites run in parallel. With `VERBOSE=1`, the runner runs suites one at a time and prints full output.
+
+The JavaScript Makefile follows the same convention: successful builds print
+only a short status, while compiler diagnostics remain visible if the build
+fails. Expect-based protocol and perft checks likewise keep successful
+transcripts quiet and replay failure output.

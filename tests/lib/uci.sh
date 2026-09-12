@@ -493,19 +493,23 @@ expect_engine_setup() {
 
 run_expect() {
   local timeout_seconds="${EXPECT_TIMEOUT:-20}"
-  local exp_file
-  local status
+  local exp_file output_file status
 
   exp_file=$(mktemp "${TMPDIR:-/tmp}/fsx-expect-XXXXXX.exp")
+  output_file=$(mktemp "${TMPDIR:-/tmp}/fsx-expect-XXXXXX.out")
   cat >"${exp_file}"
 
-  if timeout "${timeout_seconds}" expect "${exp_file}" "$@"; then
+  if timeout "${timeout_seconds}" expect "${exp_file}" "$@" >"${output_file}" 2>&1; then
     status=0
   else
     status=$?
+    cat "${output_file}" >&2
   fi
 
-  rm -f "${exp_file}"
+  if (( status == 0 )); then
+    cat "${output_file}"
+  fi
+  rm -f "${exp_file}" "${output_file}"
   return "${status}"
 }
 

@@ -40,7 +40,11 @@ echo "Building ${EXE}..."
 if ! fsx_build_signature_matches "$ROOT_DIR" "$OUTPUT_FILE" "$BUILD_SIGNATURE" "$BUILD_PROFILE"; then
     echo "Build configuration changed or artifact is unverified; cleaning objects..."
     rm -f "${OUTPUT_FILE}"
-    make -C "${ROOT_DIR}/src" EXE="${EXE}" objclean
+    if ! make -C "${ROOT_DIR}/src" EXE="${EXE}" objclean >"${LOG_FILE}" 2>&1; then
+        echo "FAILED: ${EXE} cleanup failed" >&2
+        cat "${LOG_FILE}" >&2
+        exit 1
+    fi
 fi
 
 if [[ "${VERBOSE:-0}" == 1 ]]; then

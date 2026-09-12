@@ -88,7 +88,9 @@ objclean:
 clean: objclean
 
 build:
-	$(CXX) $(CXXFLAGS) $(SRCS) -o $(EXE)
+	@echo "Building $(EXE)..."
+	@$(CXX) $(CXXFLAGS) $(SRCS) -o $(EXE)
+	@echo "ok: $(EXE) built successfully"
 
 deps:
 	cd ../tests/js && npm install
