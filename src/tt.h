@@ -56,12 +56,21 @@ struct TTEntry {
 private:
   friend class TranspositionTable;
 
+#if defined(VERY_LARGE_BOARDS)
   TTMove storedMove;
   int16_t  value16;
   int16_t  eval16;
   TTKey    keyTag;
   uint8_t  depth8;
   uint8_t  genBound8;
+#else
+  TTKey    keyTag;
+  uint8_t  depth8;
+  uint8_t  genBound8;
+  TTMove   storedMove;
+  int16_t  value16;
+  int16_t  eval16;
+#endif
 };
 
 
