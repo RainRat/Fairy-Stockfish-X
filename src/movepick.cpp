@@ -210,10 +210,9 @@ void MovePicker::score() {
       int delta = distance_to_goal(from) - distance_to_goal(to);
       return delta > 0 ? 900 * delta : 0;
   };
-  auto points_capture_bonus = [&](Move mv) {
+  auto points_capture_bonus = [&](Piece captured) {
       if (!pos.points_counting())
           return 0;
-      Piece captured = pos.captured_piece(mv);
       if (captured == NO_PIECE)
           return 0;
       int pts = pos.variant()->piecePoints[type_of(captured)];
@@ -234,9 +233,6 @@ void MovePicker::score() {
               signedPts = 0;
       }
       return 20 * signedPts;
-  };
-  auto capture_victim_value = [&](Move mv) {
-      return int(PieceValue[MG][captured_piece_or_on(pos, mv)]);
   };
   auto gate_history_bonus = [&](Move mv) {
       const Square gate = gate_history_square(mv);
@@ -264,13 +260,15 @@ void MovePicker::score() {
   for (auto& m : *this)
       if constexpr (Type == CAPTURES)
       {
-          m.value =  capture_victim_value(m) * 6
-                   + points_capture_bonus(m)
+          Piece captured = pos.captured_piece(m);
+          Piece victim = captured != NO_PIECE ? captured : pos.piece_on(to_sq(m));
+          m.value =  int(PieceValue[MG][victim]) * 6
+                   + points_capture_bonus(captured)
                    + flag_goal_bonus(m)
                    + king_goal_progress_bonus(m)
                    + gate_history_bonus(m)
                    + freeze_target_bonus(m)
-                   + (*captureHistory)[pos.moved_piece(m)][to_sq(m)][captured_type(pos, m)];
+                   + (*captureHistory)[pos.moved_piece(m)][to_sq(m)][type_of(victim)];
       }
 
       else if constexpr (Type == QUIETS)
@@ -294,13 +292,17 @@ void MovePicker::score() {
       else // Type == EVASIONS
       {
           if (pos.capture(m))
-              m.value =  capture_victim_value(m)
-                       + points_capture_bonus(m)
+          {
+              Piece captured = pos.captured_piece(m);
+              Piece victim = captured != NO_PIECE ? captured : pos.piece_on(to_sq(m));
+              m.value =  int(PieceValue[MG][victim])
+                       + points_capture_bonus(captured)
                        + flag_goal_bonus(m)
                        + king_goal_progress_bonus(m)
                        + gate_history_bonus(m)
                        + freeze_target_bonus(m)
                        - Value(type_of(pos.moved_piece(m)));
+          }
           else
               m.value =      (*mainHistory)[pos.side_to_move()][from_to(m)]
                        +     flag_goal_bonus(m)
