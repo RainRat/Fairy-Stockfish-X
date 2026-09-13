@@ -518,7 +518,9 @@ void Thread::search() {
           if (rootDepth >= 4)
           {
               Value prev = rootMoves[pvIdx].previousScore;
-              delta = Value(17 * (1 + rootPos.captures_to_hand()));
+              delta = Value(17 * (1 + rootPos.captures_to_hand()
+                                   + 2 * rootPos.blast_on_capture()
+                                   + rootPos.potions_enabled()));
               alpha = std::max(prev - delta,-VALUE_INFINITE);
               beta  = std::min(prev + delta, VALUE_INFINITE);
 
