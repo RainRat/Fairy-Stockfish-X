@@ -1156,6 +1156,11 @@ private:
   // Other helpers
   void move_piece(Square from, Square to);
   void set_orientation(Square s, int orientation);
+  Key piece_state_key(Square s) const;
+  inline void update_piece_state_key(Square s) {
+      if (st->move != MOVE_NONE && var->orientedPieceTypes)
+          st->pieceStateKey ^= piece_state_key(s);
+  }
   void apply_gravity(Key& k);
   template<bool Do>
   void do_castling(Color us, Square from, Square& to, Square& rfrom, Square& rto);
@@ -5824,6 +5829,7 @@ inline Thread* Position::this_thread() const {
 inline void Position::put_piece(Piece pc, Square s, bool isPromoted, Piece unpromotedPc, bool markNotMoved) {
 
   set_orientation(s, 0);
+  update_piece_state_key(s);
   board[s] = pc;
   byTypeBB[ALL_PIECES] |= byTypeBB[type_of(pc)] |= s;
   byColorBB[color_of(pc)] |= s;
@@ -5840,12 +5846,14 @@ inline void Position::put_piece(Piece pc, Square s, bool isPromoted, Piece unpro
 
   if (markNotMoved)
       this->st->not_moved_pieces[color_of(pc)] |= square_bb(s);
+  update_piece_state_key(s);
 }
 
 inline void Position::remove_piece(Square s) {
 
   Piece pc = board[s];
   set_orientation(s, 0);
+  update_piece_state_key(s);
   byTypeBB[ALL_PIECES] ^= s;
   byTypeBB[type_of(pc)] ^= s;
   byColorBB[color_of(pc)] ^= s;
@@ -5871,6 +5879,8 @@ inline void Position::move_piece(Square from, Square to) {
 
   Piece pc = board[from];
   int orientation = orientation_on(from);
+  update_piece_state_key(from);
+  update_piece_state_key(to);
   Bitboard fromTo = square_bb(from) ^ to; // from == to needs to cancel out
   byTypeBB[ALL_PIECES] ^= fromTo;
   byTypeBB[type_of(pc)] ^= fromTo;
@@ -5882,6 +5892,7 @@ inline void Position::move_piece(Square from, Square to) {
       promotedPieces ^= fromTo;
   unpromotedBoard[to] = unpromotedBoard[from];
   unpromotedBoard[from] = NO_PIECE;
+  update_piece_state_key(to);
   set_orientation(from, 0);
   set_orientation(to, orientation);
 
@@ -5910,10 +5921,12 @@ inline void Position::swap_piece(Square from, Square to) {
 
 inline void Position::set_orientation(Square s, int orientation) {
   assert(is_ok(s) && orientation >= 0 && orientation < 4);
+  update_piece_state_key(s);
   st->orientationBB[0] = orientation & 1 ? st->orientationBB[0] | s
                                          : st->orientationBB[0] - s;
   st->orientationBB[1] = orientation & 2 ? st->orientationBB[1] | s
                                          : st->orientationBB[1] - s;
+  update_piece_state_key(s);
 }
 
 inline StateInfo* Position::state() const {
