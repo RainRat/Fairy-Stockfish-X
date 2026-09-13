@@ -9900,9 +9900,12 @@ void Position::undo_move(Move m) {
 
   // Finally point our state pointer back to the previous state
   st = st->previous;
-  std::copy(std::begin(st->castlingRightsMask), std::end(st->castlingRightsMask), std::begin(castlingRightsMask));
-  std::copy(std::begin(st->castlingRookSquare), std::end(st->castlingRookSquare), std::begin(castlingRookSquare));
-  std::copy(std::begin(st->castlingPath), std::end(st->castlingPath), std::begin(castlingPath));
+  if (castling_dropped_piece() || var->castlingPromotedPiece)
+  {
+      std::copy(std::begin(st->castlingRightsMask), std::end(st->castlingRightsMask), std::begin(castlingRightsMask));
+      std::copy(std::begin(st->castlingRookSquare), std::end(st->castlingRookSquare), std::begin(castlingRookSquare));
+      std::copy(std::begin(st->castlingPath), std::end(st->castlingPath), std::begin(castlingPath));
+  }
   --gamePly;
   updatePawnCheckZone();
 
