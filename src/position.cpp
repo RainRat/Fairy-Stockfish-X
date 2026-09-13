@@ -10332,18 +10332,18 @@ void Position::do_move(const LogicalMove& move, StateInfo& newSt,
 
   assert(compound_turn_active());
   assert(at_complete_turn_boundary());
-  assert(move.length > 0 && move.length <= LogicalMove::MAX_COMPONENTS);
+  assert(move.size() > 0 && move.size() <= LogicalMove::MAX_COMPONENTS);
   assert(&newSt != st);
 
   transaction.previous = st;
   transaction.usedCost = 0;
   transaction.syntheticBoundary = false;
 
-  for (int i = 0; i < move.length; ++i)
+  for (int i = 0; i < move.size(); ++i)
   {
-      assert(legal(move.components[i]));
-      transaction.usedCost += compound_turn_step_cost(move.components[i]);
-      do_component(move.components[i], transaction.components[i], countNode && i == 0, false);
+      assert(legal(move[i]));
+      transaction.usedCost += compound_turn_step_cost(move[i]);
+      do_component(move[i], transaction.components[i], countNode && i == 0, false);
   }
 
   commit_compound_move(move, newSt, transaction);
@@ -10354,10 +10354,15 @@ void Position::commit_compound_move(const LogicalMove& move, StateInfo& newSt,
 
   assert(compound_turn_active());
   assert(at_complete_turn_boundary() || transaction.previous != st);
-  assert(move.length > 0 && move.length <= LogicalMove::MAX_COMPONENTS);
+  assert(move.size() > 0 && move.size() <= LogicalMove::MAX_COMPONENTS);
   assert(&newSt != st);
 
-  const bool needsBoundaryState = !is_pass(move.components[move.length - 1])
+  // Exact-budget turns were already closed by the component executor (side
+  // change, counters, boundary key); early-ending turns still need the
+  // synthetic boundary below. Both paths then share one committed tail, so
+  // predecessor linking, pass metadata, NNUE invalidation, and repetition
+  // have a single author.
+  const bool needsBoundaryState = !is_pass(move.back())
                                && transaction.usedCost < compound_turn_steps();
   if (needsBoundaryState)
   {
@@ -10368,15 +10373,26 @@ void Position::commit_compound_move(const LogicalMove& move, StateInfo& newSt,
   {
       static_cast<StateInfoCopied&>(newSt) = static_cast<const StateInfoCopied&>(*st);
       static_cast<StateInfoDerived&>(newSt) = static_cast<const StateInfoDerived&>(*st);
-      newSt.previous = transaction.previous;
       st = &newSt;
   }
 
-  newSt.previous = transaction.previous;
+  finalize_committed_turn(newSt, transaction.previous,
+                          is_pass(move.back()));
+}
+
+// finalize_committed_turn() writes the persistent fields shared by every
+// committed complete turn. It runs after the turn boundary exists, whether
+// the component executor closed it (exact budget) or end_compound_turn()
+// synthesized it (early ending).
+
+void Position::finalize_committed_turn(StateInfo& newSt, StateInfo* logicalRoot,
+                                       bool isPass) {
+
+  newSt.previous = logicalRoot;
   newSt.move = MOVE_NONE;
   clear_move_undo_state(&newSt);
   clear_dirty_piece(&newSt);
-  newSt.pass = is_pass(move.components[move.length - 1]);
+  newSt.pass = isPass;
   newSt.nnueRefreshNeeded = true;
   newSt.accumulator.computed[WHITE] = false;
   newSt.accumulator.computed[BLACK] = false;
@@ -10387,11 +10403,11 @@ void Position::undo_move(const LogicalMove& move, LogicalMoveUndo& transaction,
                          bool preservePrefix) {
 
   assert(transaction.previous != nullptr);
-  assert(move.length > 0 && move.length <= LogicalMove::MAX_COMPONENTS);
+  assert(move.size() > 0 && move.size() <= LogicalMove::MAX_COMPONENTS);
 
   if (preservePrefix)
   {
-      const int last = move.length - 1;
+      const int last = move.size() - 1;
       if (transaction.syntheticBoundary)
       {
           StateInfo* completeState = st;
@@ -10402,21 +10418,21 @@ void Position::undo_move(const LogicalMove& move, LogicalMoveUndo& transaction,
       else
           st = &transaction.components[last];
 
-      undo_component(move.components[last]);
+      undo_component(move[last]);
       return;
   }
 
   if (transaction.syntheticBoundary)
   {
       StateInfo* completeState = st;
-      completeState->previous = &transaction.components[move.length - 1];
+      completeState->previous = &transaction.components[move.size() - 1];
       undo_compound_turn();
   }
   else
-      st = &transaction.components[move.length - 1];
+      st = &transaction.components[move.size() - 1];
 
-  for (int i = move.length - 1; i >= 0; --i)
-      undo_component(move.components[i]);
+  for (int i = move.size() - 1; i >= 0; --i)
+      undo_component(move[i]);
 
   assert(st == transaction.previous);
 }
@@ -12187,7 +12203,10 @@ bool Position::see_pruning_unreliable(Move m) const {
   if (var->seePruningPolicy == SeePruningPolicy::ALWAYS_UNRELIABLE)
       return true;
 
-  if (type_of(piece_on(from_sq(m))) == KING)
+  // NB: from_sq() is SQ_NONE for drops, so read the moved piece through
+  // moved_piece(), which resolves hand pieces. Behavior for ordinary moves
+  // is unchanged.
+  if (type_of(moved_piece(m)) == KING)
       return true;
 
   if (gives_check(m))

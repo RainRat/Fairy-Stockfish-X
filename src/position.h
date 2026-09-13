@@ -1098,7 +1098,10 @@ public:
   bool is_promoted(Square s) const;
   int  pawns_on_same_color_squares(Color c, Square s) const;
 
-  // Doing and undoing moves
+  // Doing and undoing moves. Complete moves (including compound turns)
+  // go through do_move()/undo_move(); the component executor below is
+  // provider-internal (compound_turn.*) plus white-box rule tests, and must
+  // not be used to apply externally visible moves.
   void do_move(Move m, StateInfo& newSt, bool countNode = true);
   void undo_move(Move m);
 #ifdef ENABLE_COMPOUND_TURNS
@@ -1150,7 +1153,7 @@ public:
   bool has_legal_move_ignoring_immediate_end() const;
 #ifdef ENABLE_COMPOUND_TURNS
   bool logical_moves_active() const;
-  bool may_enter_logical_moves() const;
+  bool compound_search_enabled() const;
   bool has_legal_logical_move(bool checkGameEnd = true) const;
   LogicalMoveCapabilities logical_move_capabilities() const;
 #endif
@@ -1202,6 +1205,8 @@ private:
   void undo_compound_turn();
   void commit_compound_move(const LogicalMove& move, StateInfo& newSt,
                             LogicalMoveUndo& transaction);
+  void finalize_committed_turn(StateInfo& newSt, StateInfo* logicalRoot,
+                               bool isPass);
 #endif
 
   // Initialization helpers (used while setting up a position)
@@ -2970,12 +2975,9 @@ inline bool Position::logical_moves_active() const {
   return compound_turn_active();
 }
 
-inline bool Position::may_enter_logical_moves() const {
-#ifdef ENABLE_COMPOUND_TURNS
-  return !logical_moves_active() && var->compoundTurnSteps > 0;
-#else
-  return false;
-#endif
+inline bool Position::compound_search_enabled() const {
+  assert(var != nullptr);
+  return var->compoundTurnSteps > 0;
 }
 
 inline LogicalMoveCapabilities Position::logical_move_capabilities() const {

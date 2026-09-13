@@ -193,7 +193,7 @@ namespace XBoard {
     // Ensure that current position does not get out of sync with GUI
     if (Threads.main()->ponder)
     {
-        assert(moveList.size());
+        assert(!history.empty());
         undo_move();
         Threads.main()->ponder = false;
     }
@@ -207,11 +207,7 @@ namespace XBoard {
         fen = variants.get(Options["UCI_Variant"])->startFen;
 
     states = StateListPtr(new std::deque<StateInfo>(1)); // Drop old and create a new one
-    moveList.clear();
-#ifdef ENABLE_COMPOUND_TURNS
-    compoundMoveList.clear();
-    compoundTransactions.clear();
-#endif
+    history.clear();
     pos.set(variants.get(Options["UCI_Variant"]), fen, Options["UCI_Chess960"], &states->back(), Threads.main());
   }
 
@@ -226,45 +222,42 @@ namespace XBoard {
     if (m == MOVE_NONE)
         return;
 
+    HistoryEntry entry;
+    entry.complete = LogicalMove(m);
+    entry.display = m;
+    states->emplace_back();
 #ifdef ENABLE_COMPOUND_TURNS
     if (pos.compound_turn_active())
     {
-        LogicalMove logical(m);
-        states->emplace_back();
-        compoundTransactions.emplace_back();
-        pos.do_move(logical, states->back(), compoundTransactions.back());
-        moveList.push_back(m);
-        compoundMoveList.push_back(logical);
-        return;
+        // A single physical move arriving here (e.g. ponder play) is a
+        // complete turn by itself in compound play.
+        entry.undo = std::make_unique<LogicalMoveUndo>();
+        pos.do_move(entry.complete, states->back(), *entry.undo);
     }
+    else
 #endif
-
-    moveList.push_back(m);
-    states->emplace_back();
-    pos.do_move(m, states->back());
-#ifdef ENABLE_COMPOUND_TURNS
-    compoundMoveList.emplace_back();
-    compoundTransactions.emplace_back();
-#endif
+        pos.do_move(m, states->back());
+    history.push_back(std::move(entry));
   }
 
 #ifdef ENABLE_COMPOUND_TURNS
-  // Apply one complete compound turn while keeping it as one XBoard history
-  // entry. Intermediate states remain internal to this operation.
+  // Apply one complete compound turn as one XBoard history entry.
+  // Intermediate states remain internal to this operation.
   void StateMachine::do_compound_move(const LogicalMove& turn) {
 
     if (Threads.setupStates.get())
         states = std::move(Threads.setupStates);
 
     assert(pos.compound_turn_active());
-    assert(turn.length > 0 && turn.length <= LogicalMove::MAX_COMPONENTS);
+    assert(!turn.empty());
 
+    HistoryEntry entry;
+    entry.complete = turn;
+    entry.display = turn.first();
+    entry.undo = std::make_unique<LogicalMoveUndo>();
     states->emplace_back();
-    compoundTransactions.emplace_back();
-    pos.do_move(turn, states->back(), compoundTransactions.back());
-
-    moveList.push_back(turn.components[0]);
-    compoundMoveList.push_back(turn);
+    pos.do_move(turn, states->back(), *entry.undo);
+    history.push_back(std::move(entry));
   }
 #endif
 
@@ -276,25 +269,16 @@ namespace XBoard {
     if (Threads.setupStates.get())
         states = std::move(Threads.setupStates);
 
+    assert(!history.empty());
+    HistoryEntry entry = std::move(history.back());
+    history.pop_back();
 #ifdef ENABLE_COMPOUND_TURNS
-    const LogicalMove& turn = compoundMoveList.back();
-    if (turn.length)
-    {
-        pos.undo_move(turn, compoundTransactions.back());
-        states->pop_back();
-    }
+    if (entry.undo)
+        pos.undo_move(entry.complete, *entry.undo);
     else
-    {
-        pos.undo_move(moveList.back());
-        states->pop_back();
-    }
-    compoundMoveList.pop_back();
-    compoundTransactions.pop_back();
-#else
-    pos.undo_move(moveList.back());
-    states->pop_back();
 #endif
-    moveList.pop_back();
+        pos.undo_move(entry.display);
+    states->pop_back();
   }
 
   std::string StateMachine::highlight(std::string square) {
@@ -370,7 +354,7 @@ void StateMachine::process_command(std::string token, std::istringstream& is) {
       {
           if (Threads.main()->ponder)
           {
-              if (token == UCI::square(pos, from_sq(moveList.back())))
+              if (token == UCI::square(pos, from_sq(history.back().display)))
               {
                   std::string highlightText;
                   std::lock_guard<std::mutex> lk(ponderMutex);
@@ -379,7 +363,7 @@ void StateMachine::process_command(std::string token, std::istringstream& is) {
               }
               else
               {
-                  Move currentPonderMove = moveList.back();
+                  Move currentPonderMove = history.back().display;
                   stop();
                   sync_cout << "highlight " << highlight(token) << sync_endl;
                   // Restart ponder search with random guess
@@ -576,7 +560,7 @@ void StateMachine::process_command(std::string token, std::istringstream& is) {
   else if (token == "undo")
   {
       stop();
-      if (moveList.size())
+      if (!history.empty())
       {
           undo_move();
           if (Options["UCI_AnalyseMode"])
@@ -586,7 +570,7 @@ void StateMachine::process_command(std::string token, std::istringstream& is) {
   else if (token == "remove")
   {
       stop();
-      if (moveList.size() >= 2)
+      if (history.size() >= 2)
       {
           undo_move();
           undo_move();
@@ -682,8 +666,8 @@ void StateMachine::process_command(std::string token, std::istringstream& is) {
       // Handle pondering
       if (Threads.main()->ponder)
       {
-          assert(moveList.size());
-          if (token == UCI::move(pos, moveList.back()))
+          assert(!history.empty());
+          if (token == UCI::move(pos, history.back().display))
           {
               // ponderhit
               moveAfterSearch = true;
@@ -693,35 +677,23 @@ void StateMachine::process_command(std::string token, std::istringstream& is) {
       }
       stop(false);
 
-      // Apply move
-      Move m;
+      // Apply move. The token is decoded as one complete move, so setup
+      // drops and compound turns share this path without the handler
+      // choosing an executor.
       bool moveApplied = false;
+      LogicalMove turn = UCI::to_logical_move(pos, token);
+      if (!turn.empty())
+      {
 #ifdef ENABLE_COMPOUND_TURNS
-      if (pos.compound_turn_active())
-      {
-          LogicalMove turn;
-          if (parse_compound_move(pos, token, turn))
-          {
+          if (pos.compound_turn_active())
               do_compound_move(turn);
-              moveApplied = true;
-          }
-          if (!moveApplied)
-              sync_cout << (isMove ? "Illegal move: " : "Error (unknown command): ") << token << sync_endl;
-      }
-      else
+          else
 #endif
-      {
-          if (!moveApplied)
-          {
-              if ((m = UCI::to_move(pos, token)) != MOVE_NONE)
-              {
-                  do_move(m);
-                  moveApplied = true;
-              }
-              else
-                  sync_cout << (isMove ? "Illegal move: " : "Error (unknown command): ") << token << sync_endl;
-          }
+              do_move(turn.first());
+          moveApplied = true;
       }
+      if (!moveApplied)
+          sync_cout << (isMove ? "Illegal move: " : "Error (unknown command): ") << token << sync_endl;
 
       // Restart search if applicable
       if (moveApplied && Options["UCI_AnalyseMode"])

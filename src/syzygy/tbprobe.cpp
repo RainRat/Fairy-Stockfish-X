@@ -1568,6 +1568,9 @@ bool Tablebases::root_probe(Position& pos, Search::RootMoves& rootMoves) {
     for (auto& m : rootMoves)
     {
         ProbeState result = OK;
+        // Tablebases only see ordinary single moves; compound profiles are
+        // excluded at the rank_root_moves boundary.
+        assert(m.first().is_single());
         pos.do_move(m.first().first(), st);
 
         // Calculate dtz for the current move counting from the root position
@@ -1642,6 +1645,9 @@ bool Tablebases::root_probe_wdl(Position& pos, Search::RootMoves& rootMoves) {
     for (auto& m : rootMoves)
     {
         ProbeState result = OK;
+        // Tablebases only see ordinary single moves; compound profiles are
+        // excluded at the rank_root_moves boundary.
+        assert(m.first().is_single());
         pos.do_move(m.first().first(), st);
 
         if (pos.is_draw(1))

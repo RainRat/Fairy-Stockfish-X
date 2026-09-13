@@ -37,7 +37,13 @@ enum GenType {
   QUIET_CHECKS,
   EVASIONS,
   NON_EVASIONS,
-  LEGAL
+  LEGAL,
+  // Legal component candidates for compound-turn assembly. Same move set as
+  // LEGAL minus the completed-game adjudication early-out: the provider
+  // enumerates components from mid-turn partial states, where completed-game
+  // adjudication does not apply, while component legality (including check
+  // evasion) is fully retained.
+  LEGAL_COMPONENTS
 };
 
 struct ExtMove {

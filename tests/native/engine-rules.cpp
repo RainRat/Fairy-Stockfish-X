@@ -1480,7 +1480,7 @@ void compound_turn_rules() {
           "lazy logical move source disagreed with materialized compound generation");
 
     auto preferred = std::find_if(generated.begin(), generated.end(),
-                                  [](const LogicalMove& move) { return move.length >= 3; });
+                                  [](const LogicalMove& move) { return move.size() >= 3; });
     check(preferred != generated.end(),
           "compound ordering audit did not find a multi-component turn");
     if (preferred != generated.end())
@@ -1497,10 +1497,10 @@ void compound_turn_rules() {
                 reachedPreferred = true;
                 break;
             }
-            check(candidate.length < preferred->length
-                  && std::equal(candidate.components.begin(),
-                                candidate.components.begin() + candidate.length,
-                                preferred->components.begin()),
+            check(candidate.size() < preferred->size()
+                  && std::equal(candidate.begin(),
+                                candidate.begin() + candidate.size(),
+                                preferred->begin()),
                   "logical turn hint did not prioritize the preferred DFS prefix");
         }
         check(reachedPreferred,
@@ -1552,16 +1552,16 @@ void compound_turn_rules() {
         LogicalMove candidate;
         LogicalMoveInfo candidateInfo;
         while (removalSource.next(candidate, candidateInfo))
-            if (candidate.length == 2
-                && candidate.components[0] == make_move(SQ_D4, SQ_D5)
-                && candidate.components[1] == make_move(SQ_D5, SQ_D6))
+            if (candidate.size() == 2
+                && candidate[0] == make_move(SQ_D4, SQ_D5)
+                && candidate[1] == make_move(SQ_D5, SQ_D6))
             {
                 ownRemovalTurn = candidate;
                 ownRemovalInfo = candidateInfo;
                 break;
             }
     }
-    check(ownRemovalTurn.length == 2,
+    check(ownRemovalTurn.size() == 2,
           "compound source did not expose the later trap-removal component");
     check(ownRemovalInfo.losesOwnMaterial && ownRemovalInfo.removesMaterial
           && !ownRemovalInfo.capturesOpponent,
@@ -1580,14 +1580,14 @@ void compound_turn_rules() {
         LogicalMove candidate;
         LogicalMoveInfo candidateInfo;
         while (captureSource.next(candidate, candidateInfo))
-            if (candidate.length == 1 && candidate.components[0] == directCapture)
+            if (candidate.size() == 1 && candidate[0] == directCapture)
             {
                 directCaptureTurn = candidate;
                 directCaptureInfo = candidateInfo;
                 break;
             }
     }
-    check(directCaptureTurn.length == 1,
+    check(directCaptureTurn.size() == 1,
           "compound source did not expose the direct capture component");
     check(directCaptureInfo.capturesOpponent && directCaptureInfo.removesMaterial
           && !directCaptureInfo.losesOwnMaterial,
@@ -1602,7 +1602,7 @@ void compound_turn_rules() {
     {
         auto candidate = std::find_if(generated.begin(), generated.end(),
                                       [length](const LogicalMove& move) {
-                                          return move.length == length;
+                                          return move.size() == length;
                                       });
         if (candidate == generated.end())
             continue;
@@ -1670,7 +1670,7 @@ void compound_turn_rules() {
     // Parse compound move
     LogicalMove parsedTurn;
     bool ok = parse_compound_move(pos, "d4d5,d6", parsedTurn);
-    check(ok && parsedTurn.length == 1, "failed to parse 1-component two-step compound move");
+    check(ok && parsedTurn.size() == 1, "failed to parse 1-component two-step compound move");
 
     // Test do/undo compound move
     StateInfo cstate;
@@ -1771,13 +1771,13 @@ void compound_turn_rules() {
     std::vector<LogicalMove> passGenerated = generate_compound_moves(pos);
     check(std::any_of(passGenerated.begin(), passGenerated.end(),
                       [](const LogicalMove& move) {
-                          return move.length == 1 && is_pass(move.components[0]);
+                          return move.size() == 1 && is_pass(move[0]);
                       }),
           "pass=true compound variant did not generate a pass turn");
     for (const LogicalMove& generatedTurn : passGenerated)
     {
-        for (int i = 1; i < generatedTurn.length; ++i)
-            check(!is_pass(generatedTurn.components[i]),
+        for (int i = 1; i < generatedTurn.size(); ++i)
+            check(!is_pass(generatedTurn[i]),
                   "compound generation appended a pass after an earlier step");
 
         const std::string text = compound_move_to_string(pos, generatedTurn);
@@ -1787,7 +1787,7 @@ void compound_turn_rules() {
     }
     LogicalMove parsedPass;
     check(parse_compound_move(pos, "0000", parsedPass)
-          && parsedPass.length == 1 && is_pass(parsedPass.components[0]),
+          && parsedPass.size() == 1 && is_pass(parsedPass[0]),
           "pass=true compound variant did not parse a pass turn");
     do_compound_move(pos, parsedPass, cstate, ctransaction);
     check(pos.side_to_move() == BLACK && pos.at_complete_turn_boundary(),
@@ -1819,7 +1819,7 @@ void compound_turn_rules() {
                  "8/8/8/3r4/3C4/8/8/8 w - - 0 1");
     LogicalMove reversalTurn;
     ok = parse_compound_move(pos, "d4e4,e4d4,d4d3", reversalTurn);
-    check(ok && reversalTurn.length == 3, "failed to parse reversal followed by real component");
+    check(ok && reversalTurn.size() == 3, "failed to parse reversal followed by real component");
 
     // A pure reversal d4e4, e4d4 is pass-equivalent and remains filtered even
     // in the pass-enabled profile; the explicit 0000 move is canonical.

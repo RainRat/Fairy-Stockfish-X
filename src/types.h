@@ -593,32 +593,26 @@ static_assert((LASER_FIRE >> (2 * SQUARE_BITS)) < (1 << MOVE_TYPE_BITS),
 
 /// A logical engine move may contain several internal components. Ordinary
 /// moves use one slot; compound-turn code fills the remaining slots.
+///
+/// Absence of a move has one representation in every build: a default
+/// constructed LogicalMove. Constructing or assigning from MOVE_NONE
+/// normalizes to that same empty value, so transport, PV, and history code
+/// can test `m == MOVE_NONE` (or `m.empty()`) without knowing whether the
+/// executable enables compound turns. A legal pass and search's null move
+/// (MOVE_NULL) remain distinct non-empty values.
+///
+/// Component storage is private: generic code carries a complete move as a
+/// value and inspects it through size()/iteration/first(), while assembly
+/// stays with the compound provider (compound_turn.*) via push_back(),
+/// pop_back(), and set_component(). Focused white-box tests use the same
+/// read API.
 struct LogicalMove {
   static constexpr int MAX_COMPONENTS = 4;
 
-#ifdef ENABLE_COMPOUND_TURNS
-  std::array<Move, MAX_COMPONENTS> components{};
-  uint8_t length = 0;
-#else
-  Move move = MOVE_NONE;
-#endif
-
   LogicalMove() = default;
-  LogicalMove(Move m)
-#ifdef ENABLE_COMPOUND_TURNS
-      : length(1) { components[0] = m; }
-#else
-      : move(m) {}
-#endif
+  LogicalMove(Move m) { assign_single(m); }
 
-  void set(Move m) {
-#ifdef ENABLE_COMPOUND_TURNS
-      components[0] = m;
-      length = 1;
-#else
-      this->move = m;
-#endif
-  }
+  void set(Move m) { assign_single(m); }
 
   bool empty() const {
 #ifdef ENABLE_COMPOUND_TURNS
@@ -634,11 +628,82 @@ struct LogicalMove {
       return move != MOVE_NONE;
 #endif
   }
+  int size() const {
+#ifdef ENABLE_COMPOUND_TURNS
+      return length;
+#else
+      return move == MOVE_NONE ? 0 : 1;
+#endif
+  }
   Move first() const {
 #ifdef ENABLE_COMPOUND_TURNS
       return length ? components[0] : MOVE_NONE;
 #else
       return move;
+#endif
+  }
+  Move back() const {
+      assert(!empty());
+#ifdef ENABLE_COMPOUND_TURNS
+      return components[length - 1];
+#else
+      return move;
+#endif
+  }
+  Move operator[](int i) const {
+      assert(i >= 0 && i < size());
+#ifdef ENABLE_COMPOUND_TURNS
+      return components[i];
+#else
+      (void)i;
+      return move;
+#endif
+  }
+  const Move* begin() const {
+#ifdef ENABLE_COMPOUND_TURNS
+      return components.data();
+#else
+      return &move;
+#endif
+  }
+  const Move* end() const {
+#ifdef ENABLE_COMPOUND_TURNS
+      return components.data() + length;
+#else
+      return &move + (move == MOVE_NONE ? 0 : 1);
+#endif
+  }
+
+  // Assembly for the compound provider: append a component, remove the last
+  // one while backtracking, or overwrite slot i (extending the turn to i+1
+  // for continued descent at the same depth).
+  void push_back(Move m) {
+      assert(m != MOVE_NONE);
+#ifdef ENABLE_COMPOUND_TURNS
+      assert(length < MAX_COMPONENTS);
+      components[length++] = m;
+#else
+      assert(empty());
+      move = m;
+#endif
+  }
+  void pop_back() {
+      assert(!empty());
+#ifdef ENABLE_COMPOUND_TURNS
+      --length;
+#else
+      move = MOVE_NONE;
+#endif
+  }
+  void set_component(int i, Move m) {
+      assert(m != MOVE_NONE);
+#ifdef ENABLE_COMPOUND_TURNS
+      assert(i >= 0 && i <= length && i < MAX_COMPONENTS);
+      components[i] = m;
+      length = uint8_t(i + 1);
+#else
+      assert(i == 0);
+      move = m;
 #endif
   }
 
@@ -654,6 +719,8 @@ struct LogicalMove {
   bool operator!=(const LogicalMove& other) const { return !(*this == other); }
   bool operator==(Move m) const {
 #ifdef ENABLE_COMPOUND_TURNS
+      if (length == 0)
+          return m == MOVE_NONE;
       return length == 1 && components[0] == m;
 #else
       return this->move == m;
@@ -670,6 +737,23 @@ struct LogicalMove {
       return this->move < other.move;
 #endif
   }
+
+ private:
+  void assign_single(Move m) {
+#ifdef ENABLE_COMPOUND_TURNS
+      length = m == MOVE_NONE ? uint8_t(0) : uint8_t(1);
+      components[0] = m;
+#else
+      move = m;
+#endif
+  }
+
+#ifdef ENABLE_COMPOUND_TURNS
+  std::array<Move, MAX_COMPONENTS> components{};
+  uint8_t length = 0;
+#else
+  Move move = MOVE_NONE;
+#endif
 };
 
 #ifndef ENABLE_COMPOUND_TURNS

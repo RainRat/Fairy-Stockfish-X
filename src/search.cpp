@@ -99,34 +99,11 @@ namespace {
   template<bool Logical>
   void set_child_pv(Position& pos, Thread* thread, Stack* child,
                     std::conditional_t<Logical, LogicalMove*, Move*> pv) {
-#ifdef ENABLE_COMPOUND_TURNS
-      if constexpr (Logical)
-      {
-          child->set_pv<true>(pv);
-          pv[0] = LogicalMove(MOVE_NONE);
-      }
-      else if (pos.logical_moves_active())
-      {
-          LogicalMove* logicalPv = thread->logical_pv(child->ply);
-          logicalPv[0] = LogicalMove(MOVE_NONE);
-          child->set_pv<true>(logicalPv);
-      }
-      else
-          child->set_pv<false>(pv);
-#else
       (void)pos;
       (void)thread;
       child->set_pv<Logical>(pv);
-#endif
+      pv[0] = typename std::conditional<Logical, LogicalMove, Move>::type(MOVE_NONE);
   }
-
-#ifdef ENABLE_COMPOUND_TURNS
-  LogicalMove* logical_pv_output(Thread* thread, Stack* ss) {
-      if (!ss->logicalPv)
-          ss->logicalPv = thread->logical_pv(ss->ply);
-      return ss->logicalPv;
-  }
-#endif
 
   constexpr uint64_t TtHitAverageWindow     = 4096;
   constexpr uint64_t TtHitAverageResolution = 1024;
@@ -227,16 +204,149 @@ namespace {
     bool probCut = true;
   };
 
-  template<bool Logical, bool CanEnterLogical, NodeType nodeType>
+#ifdef ENABLE_COMPOUND_TURNS
+  // Scoped ownership of one search child position.
+  //
+  // Enumeration stays in the search body (MovePicker, root-list traversal,
+  // and the skip/filter policy). This scope owns only application and
+  // restoration, so recursive search observes one contract: a selected
+  // candidate becomes a scoped, committed child, gets searched and
+  // re-searched, and the parent boundary is restored on every exit path
+  // (continue, cutoff, stop, return) via release() or the destructor.
+  //
+  // Compound candidates are adopted already applied from next_applied();
+  // materialized root turns are replayed here with complete-move do_move().
+  // Exactly one searched complete compound transition counts one node,
+  // whether replayed or adopted; pruned or skipped candidates count none.
+  // Ordinary moves keep today's direct do_move()/undo_move() accounting.
+  template<bool Logical>
+  struct SearchChildScope {
+      using SearchMove = std::conditional_t<Logical, LogicalMove, Move>;
+      using SearchMoveInfo = std::conditional_t<Logical, LogicalMoveInfo, OrdinaryMoveInfo>;
+
+      SearchChildScope(Position& pos_, Thread* thread_, int ply_)
+          : pos(pos_), thisThread(thread_), ply(ply_) {}
+
+      SearchChildScope(const SearchChildScope&) = delete;
+      SearchChildScope& operator=(const SearchChildScope&) = delete;
+
+      ~SearchChildScope() { release(); }
+
+      // Begin compound enumeration for streaming root moves and interior
+      // nodes. The caller decides enumeration versus root-list replay.
+      void begin_compound_enumeration(LogicalMoveOrder order, bool checkGameEnd) {
+          if constexpr (Logical)
+              compound.source.emplace(pos, thisThread->logical_move_workspace(ply),
+                                      order, checkGameEnd);
+          else
+          {
+              (void)order;
+              (void)checkGameEnd;
+          }
+      }
+
+      // Adopt the next already-applied compound child. While adopted, the
+      // caller observes the child; release() restores the parent.
+      bool next_compound(SearchMove& logicalMove, SearchMoveInfo& moveInfo, StateInfo& st) {
+          if constexpr (Logical)
+          {
+              assert(mode == Mode::None);
+              if (!compound.source->next_applied(logicalMove, moveInfo, st))
+                  return false;
+              mode = Mode::Adopted;
+              uncounted = true;
+              return true;
+          }
+          else
+          {
+              (void)logicalMove;
+              (void)moveInfo;
+              (void)st;
+              return false;
+          }
+      }
+
+      // Replay one materialized complete turn (root list) as the child.
+      void apply_complete(const LogicalMove& turn, StateInfo& st) {
+          if constexpr (Logical)
+          {
+              assert(mode == Mode::None);
+              transaction = &thisThread->logical_move_workspace(ply).undo;
+              pos.do_move(turn, st, *transaction, false);
+              replayed = turn;
+              mode = Mode::Replayed;
+              uncounted = true;
+          }
+          else
+          {
+              (void)turn;
+              (void)st;
+          }
+      }
+
+      // The child survived pruning and is about to be searched.
+      void begin_search() {
+          if constexpr (Logical)
+              if (uncounted)
+              {
+#ifndef NO_THREADS
+                  thisThread->nodes.fetch_add(1, std::memory_order_relaxed);
+#endif
+                  uncounted = false;
+              }
+      }
+
+      bool adopted() const { return mode == Mode::Adopted; }
+
+      const std::string& yielded_string() const {
+          assert(adopted());
+          return compound.source->yielded_string();
+      }
+
+      void release() {
+          if constexpr (Logical)
+          {
+              if (mode == Mode::Adopted)
+                  compound.source->undo_yielded();
+              else if (mode == Mode::Replayed)
+              {
+                  assert(transaction != nullptr);
+                  pos.undo_move(replayed, *transaction);
+              }
+              mode = Mode::None;
+              uncounted = false;
+          }
+      }
+
+   private:
+      enum class Mode { None, Adopted, Replayed };
+      Mode mode = Mode::None;
+      LogicalMoveSourceStorage<Logical> compound;
+      LogicalMoveUndo* transaction = nullptr;
+      LogicalMove replayed;
+      bool uncounted = false;
+      Position& pos;
+      Thread* thisThread;
+      int ply;
+  };
+#else
+  // Without compound turns the child scope is only a uniform call surface;
+  // ordinary make/undo stay inline in the search body.
+  template<bool Logical>
+  struct SearchChildScope {
+      SearchChildScope(Position&, Thread*, int) {}
+      void begin_search() {}
+      bool adopted() const { return false; }
+      void release() {}
+  };
+#endif
+
+  template<bool Logical, NodeType nodeType>
   Value search_impl(Position& pos, Stack* ss, Value alpha, Value beta, Depth depth, bool cutNode);
-  template<bool Logical, bool CanEnterLogical, NodeType nodeType>
+  template<bool Logical, NodeType nodeType>
   Value qsearch_impl(Position& pos, Stack* ss, Value alpha, Value beta, Depth depth = 0);
   template<NodeType nodeType>
   Value search(Position& pos, Stack* ss, Value alpha, Value beta, Depth depth, bool cutNode);
-  template<bool Logical, bool CanEnterLogical, NodeType nodeType>
-  Value search_child(Position& pos, Stack* ss, Value alpha, Value beta, Depth depth, bool cutNode);
-  template<bool Logical, bool CanEnterLogical, NodeType nodeType>
-  Value qsearch_child(Position& pos, Stack* ss, Value alpha, Value beta, Depth depth = 0);
 
   Value value_to_tt(Value v, int ply);
   Value value_from_tt(Value v, int ply, int r50c);
@@ -516,7 +626,7 @@ void MainThread::search() {
 
   SyncCout out;
 #ifdef ENABLE_COMPOUND_TURNS
-  const bool logicalPv = rootPos.logical_moves_active() || rootPos.may_enter_logical_moves();
+  const bool logicalPv = rootPos.compound_search_enabled();
   const std::vector<std::string> compoundPv = logicalPv
                                             ? compound_pv_to_strings(rootPos, bestThread->rootMoves[0].first(),
                                                                      bestThread->rootMoves[0].continuation())
@@ -576,19 +686,15 @@ void Thread::search() {
       (ss+i)->ply = i;
 
 #ifdef ENABLE_COMPOUND_TURNS
-  if (rootPos.logical_moves_active())
+  if (rootPos.compound_search_enabled())
   {
       ss->set_pv<true>(logical_pv(0));
       ss->logicalPv[0] = LogicalMove(MOVE_NONE);
-      ss->pvIsLogical = true;
   }
   else
 #endif
   {
       ss->set_pv<false>(ordinaryPv);
-#ifdef ENABLE_COMPOUND_TURNS
-      ss->pvIsLogical = false;
-#endif
   }
 
   bestValue = delta = alpha = -VALUE_INFINITE;
@@ -957,7 +1063,7 @@ namespace {
   // The ordinary instantiation keeps a compact Move PV even in a compound
   // enabled binary.
 
-  template <bool Logical, bool CanEnterLogical, NodeType nodeType>
+  template <bool Logical, NodeType nodeType>
   Value search_impl(Position& pos, Stack* ss, Value alpha, Value beta, Depth depth, bool cutNode) {
 
     constexpr bool PvNode = nodeType != NonPV;
@@ -969,9 +1075,6 @@ namespace {
     using SearchMoveInfo = OrdinaryMoveInfo;
 #endif
     const Depth maxNextDepth = rootNode ? depth : depth + 1;
-#ifdef ENABLE_COMPOUND_TURNS
-    ss->pvIsLogical = Logical;
-#endif
 
     // Check if we have an upcoming move which draws by repetition, or
     // if the opponent had an alternative move earlier to this position.
@@ -987,7 +1090,7 @@ namespace {
 
     // Dive into quiescence search when the depth reaches zero
     if (depth <= 0)
-        return qsearch_child<Logical, CanEnterLogical, PvNode ? PV : NonPV>(pos, ss, alpha, beta);
+        return qsearch_impl<Logical, PvNode ? PV : NonPV>(pos, ss, alpha, beta);
 
     assert(-VALUE_INFINITE <= alpha && alpha < beta && beta <= VALUE_INFINITE);
     assert(PvNode || (alpha == beta - 1));
@@ -1334,7 +1437,7 @@ namespace {
             pos.undo_null_move();
         else
         {
-            Value nullValue = -search_child<Logical, CanEnterLogical, NonPV>(pos, ss+1, -beta, -beta+1, depth-R, !cutNode);
+            Value nullValue = -search_impl<Logical, NonPV>(pos, ss+1, -beta, -beta+1, depth-R, !cutNode);
 
             pos.undo_null_move();
 
@@ -1354,7 +1457,7 @@ namespace {
                 thisThread->nmpMinPly = ss->ply + 3 * (depth-R) / 4;
                 thisThread->nmpColor = us;
 
-                Value v = search_child<Logical, CanEnterLogical, NonPV>(pos, ss, beta-1, beta, depth-R, false);
+                Value v = search_impl<Logical, NonPV>(pos, ss, beta-1, beta, depth-R, false);
 
                 thisThread->nmpMinPly = 0;
 
@@ -1417,11 +1520,11 @@ namespace {
                 pos.do_move(move, st);
 
                 // Perform a preliminary qsearch to verify that the move holds
-                value = -qsearch_child<Logical, CanEnterLogical, NonPV>(pos, ss+1, -probCutBeta, -probCutBeta+1);
+                value = -qsearch_impl<Logical, NonPV>(pos, ss+1, -probCutBeta, -probCutBeta+1);
 
                 // If the qsearch held, perform the regular search
                 if (value >= probCutBeta)
-                    value = -search_child<Logical, CanEnterLogical, NonPV>(pos, ss+1, -probCutBeta, -probCutBeta+1, depth - 4, !cutNode);
+                    value = -search_impl<Logical, NonPV>(pos, ss+1, -probCutBeta, -probCutBeta+1, depth - 4, !cutNode);
 
                 pos.undo_move(move);
 
@@ -1495,37 +1598,27 @@ moves_loop: // When in check, search starts from here
                          && (tte->bound() & BOUND_UPPER)
                          && tte->depth() >= depth;
 
+    SearchChildScope<Logical> child(pos, thisThread, ss->ply);
 #ifdef ENABLE_COMPOUND_TURNS
-    LogicalMoveSourceStorage<Logical> logicalSource;
     if constexpr (Logical)
         if (logicalMovePosition && (!rootNode || lazyRoot))
         {
             const LogicalMove* preferredTurn = thisThread->logical_move_hint(pos.key());
             if (preferredTurn && ttMove && preferredTurn->first() != ttMove)
                 preferredTurn = nullptr;
-            logicalSource.source.emplace(pos, thisThread->logical_move_workspace(ss->ply),
-                                         LogicalMoveOrder{ttMove, preferredTurn}, rootNode);
+            child.begin_compound_enumeration(LogicalMoveOrder{ttMove, preferredTurn}, rootNode);
         }
+#else
+    (void)child;
 #endif
 
     // Step 12. Loop through all pseudo-legal moves until no moves remain
     // or a beta cutoff occurs.
     bool bestMoveHistoryCompatible = false;
 #ifdef ENABLE_COMPOUND_TURNS
-    bool logicalMoveApplied = false;
     size_t rootMoveIndex = thisThread->pvIdx;
-    auto undo_logical_move = [&] {
-        if constexpr (Logical)
-        {
-            if (logicalMoveApplied)
-            {
-                logicalSource.source->undo_yielded();
-                logicalMoveApplied = false;
-            }
-        }
-    };
 #else
-    auto undo_logical_move = [] {};
+    (void)child;
 #endif
     while (true)
     {
@@ -1549,9 +1642,8 @@ moves_loop: // When in check, search starts from here
           {
               if (lazyRoot)
               {
-                  if (!logicalSource.source->next_applied(logicalMove, moveInfo, st))
+                  if (!child.next_compound(logicalMove, moveInfo, st))
                       break;
-                  logicalMoveApplied = true;
                   move = moveInfo.representative;
                   thisThread->rootMoves.emplace_back(logicalMove, moveInfo);
                   rootMoveIndex = thisThread->rootMoves.size();
@@ -1568,9 +1660,8 @@ moves_loop: // When in check, search starts from here
           }
           else if (logicalMovePosition)
           {
-              if (!logicalSource.source->next_applied(logicalMove, moveInfo, st))
+              if (!child.next_compound(logicalMove, moveInfo, st))
                   break;
-              logicalMoveApplied = true;
               move = moveInfo.representative;
           }
           else if (!next_ordinary_move())
@@ -1584,7 +1675,7 @@ moves_loop: // When in check, search starts from here
 
       if (move == excludedMove)
       {
-          undo_logical_move();
+          child.release();
           continue;
       }
 
@@ -1650,8 +1741,8 @@ moves_loop: // When in check, search starts from here
           if (logicalMovePosition)
           {
               if constexpr (Logical)
-                  sync_cout << (logicalMoveApplied
-                              ? logicalSource.source->yielded_string()
+                  sync_cout << (child.adopted()
+                              ? child.yielded_string()
                               : compound_move_to_string(pos, logicalMove));
           }
           else
@@ -1663,11 +1754,7 @@ moves_loop: // When in check, search starts from here
       }
       if (PvNode)
       {
-          (ss+1)->set_pv<false>(nullptr);
-#ifdef ENABLE_COMPOUND_TURNS
-          (ss+1)->set_pv<true>(nullptr);
-          (ss+1)->pvIsLogical = false;
-#endif
+          (ss+1)->set_pv<Logical>(nullptr);
       }
 
       extension = 0;
@@ -1730,7 +1817,7 @@ moves_loop: // When in check, search starts from here
                   && lmrDepth < 1
                   && captureHistory[movedPiece][to_sq(move)][captured_type(pos, move)] < 0)
               {
-                  undo_logical_move();
+                  child.release();
                   continue;
               }
 
@@ -1739,7 +1826,7 @@ moves_loop: // When in check, search starts from here
                   && !pos.see_pruning_unreliable(move)
                   && !pos.see_ge(move, Value(-218 - 120 * pos.captures_to_hand()) * depth)) // (~25 Elo)
               {
-                  undo_logical_move();
+                  child.release();
                   continue;
               }
           }
@@ -1750,7 +1837,7 @@ moves_loop: // When in check, search starts from here
                   && (*contHist[0])[history_slot(movedPiece)][to_sq(move)] < CounterMovePruneThreshold
                   && (*contHist[1])[history_slot(movedPiece)][to_sq(move)] < CounterMovePruneThreshold)
               {
-                  undo_logical_move();
+                  child.release();
                   continue;
               }
 
@@ -1764,7 +1851,7 @@ moves_loop: // When in check, search starts from here
                     + (*contHist[3])[history_slot(movedPiece)][to_sq(move)]
                     + (*contHist[5])[history_slot(movedPiece)][to_sq(move)] / 3 < 28255)
               {
-                  undo_logical_move();
+                  child.release();
                   continue;
               }
 
@@ -1774,7 +1861,7 @@ moves_loop: // When in check, search starts from here
                   && !pos.see_pruning_unreliable(move)
                   && !pos.see_ge(move, Value(-(30 - std::min(lmrDepth, 18) + 10 * !!pos.flag_region(pos.side_to_move())) * lmrDepth * lmrDepth)))
               {
-                  undo_logical_move();
+                  child.release();
                   continue;
               }
           }
@@ -1802,7 +1889,7 @@ moves_loop: // When in check, search starts from here
           Depth singularDepth = (depth - 1) / 2;
 
           ss->excludedMove = move;
-          value = search_child<Logical, CanEnterLogical, NonPV>(pos, ss, singularBeta - 1, singularBeta, singularDepth, cutNode);
+          value = search_impl<Logical, NonPV>(pos, ss, singularBeta - 1, singularBeta, singularDepth, cutNode);
           ss->excludedMove = MOVE_NONE;
 
           if (value < singularBeta)
@@ -1833,7 +1920,7 @@ moves_loop: // When in check, search starts from here
           else if (ttValue >= beta)
           {
               ss->excludedMove = move;
-              value = search_child<Logical, CanEnterLogical, NonPV>(pos, ss, beta - 1, beta, (depth + 3) / 2, cutNode);
+              value = search_impl<Logical, NonPV>(pos, ss, beta - 1, beta, (depth + 3) / 2, cutNode);
               ss->excludedMove = MOVE_NONE;
 
               if (value >= beta)
@@ -1872,22 +1959,24 @@ moves_loop: // When in check, search starts from here
                                                                      [to_sq(move)]
                               : neutralContinuationHistory;
 
-      // Step 15. Make the move
+      // Step 15. Make the move: the candidate becomes the scoped, committed
+      // child. Compound candidates were either adopted already applied from
+      // the provider or are replayed here; either way begin_search() records
+      // exactly one searched complete transition.
 #ifdef ENABLE_COMPOUND_TURNS
-      LogicalMoveUndo* transaction = nullptr;
       if constexpr (Logical)
       {
           if (logicalMovePosition)
           {
-              transaction = &thisThread->logical_move_workspace(ss->ply).undo;
-              if (!logicalMoveApplied)
-                  pos.do_move(logicalMove, st, *transaction);
+              if (!child.adopted())
+                  child.apply_complete(logicalMove, st);
           }
           else
               pos.do_move(move, st);
       }
       else
           pos.do_move(move, st);
+      child.begin_search();
 #endif
 #ifndef ENABLE_COMPOUND_TURNS
       pos.do_move(move, st);
@@ -1965,7 +2054,7 @@ moves_loop: // When in check, search starts from here
           // to be searched deeper than the first move, unless ttMove was extended by 2.
           Depth d = std::clamp(newDepth - r, 1, newDepth + (r < -1 && moveCount <= 5 && !doubleExtension));
 
-          value = -search_child<Logical, CanEnterLogical, NonPV>(pos, ss+1, -(alpha+1), -alpha, d, true);
+          value = -search_impl<Logical, NonPV>(pos, ss+1, -(alpha+1), -alpha, d, true);
 
           // If the son is reduced and fails high it will be re-searched at full depth
           doFullDepthSearch = value > alpha && d < newDepth;
@@ -1980,7 +2069,7 @@ moves_loop: // When in check, search starts from here
       // Step 17. Full depth search when LMR is skipped or fails high
       if (doFullDepthSearch)
       {
-          value = -search_child<Logical, CanEnterLogical, NonPV>(pos, ss+1, -(alpha+1), -alpha, newDepth, !cutNode);
+          value = -search_impl<Logical, NonPV>(pos, ss+1, -(alpha+1), -alpha, newDepth, !cutNode);
 
           // If the move passed LMR update its stats
           if (didLMR && moveInfo.historyCompatible && !captureOrPromotion)
@@ -2000,21 +2089,17 @@ moves_loop: // When in check, search starts from here
           set_child_pv<Logical>(pos, thisThread, ss+1, pv);
           pv[0] = SearchMove(MOVE_NONE);
 
-          value = -search_child<Logical, CanEnterLogical, PV>(pos, ss+1, -beta, -alpha,
+          value = -search_impl<Logical, PV>(pos, ss+1, -beta, -alpha,
                                     std::min(maxNextDepth, newDepth), false);
       }
 
-      // Step 18. Undo move
+      // Step 18. Undo move: restore the parent boundary. The scope knows
+      // whether the child was adopted or replayed.
 #ifdef ENABLE_COMPOUND_TURNS
       if constexpr (Logical)
       {
           if (logicalMovePosition)
-          {
-              if (logicalMoveApplied)
-                  undo_logical_move();
-              else
-                  pos.undo_move(logicalMove, *transaction);
-          }
+              child.release();
           else
               pos.undo_move(move);
       }
@@ -2052,20 +2137,10 @@ moves_loop: // When in check, search starts from here
               rm.selDepth = thisThread->selDepth;
               rm.clear_pv();
 
-#ifdef ENABLE_COMPOUND_TURNS
-              if ((ss+1)->pvIsLogical)
               {
-                  assert((ss+1)->pv_ptr<true>());
-                  for (LogicalMove* m = (ss+1)->pv_ptr<true>();
-                       *m != MOVE_NONE; ++m)
-                      rm.append_pv(*m);
-              }
-              else
-#endif
-              {
-                  assert((ss+1)->pv_ptr<false>());
-                  for (Move* m = (ss+1)->pv_ptr<false>();
-                       *m != MOVE_NONE; ++m)
+                  assert((ss+1)->pv_ptr<Logical>());
+                  for (auto* m = (ss+1)->pv_ptr<Logical>();
+                       *m != SearchMove(MOVE_NONE); ++m)
                       rm.append_pv(*m);
               }
 
@@ -2093,24 +2168,6 @@ moves_loop: // When in check, search starts from here
 
               if (PvNode && !rootNode) // Update pv even in fail-high case
               {
-#ifdef ENABLE_COMPOUND_TURNS
-                  if constexpr (!Logical)
-                  {
-                      if ((ss+1)->pvIsLogical)
-                      {
-                          update_pv(logical_pv_output(thisThread, ss), LogicalMove(logicalMove),
-                                    (ss+1)->pv_ptr<true>());
-                          ss->pvIsLogical = true;
-                      }
-                      else
-                      {
-                          ss->pvIsLogical = false;
-                          update_pv(ss->pv_ptr<Logical>(), logicalMove,
-                                    (ss+1)->pv_ptr<Logical>());
-                      }
-                  }
-                  else
-#endif
                       update_pv(ss->pv_ptr<Logical>(), logicalMove,
                                 (ss+1)->pv_ptr<Logical>());
               }
@@ -2217,40 +2274,23 @@ moves_loop: // When in check, search starts from here
     return bestValue;
   }
 
-  template<bool Logical, bool CanEnterLogical, NodeType nodeType>
-  Value search_child(Position& pos, Stack* ss, Value alpha, Value beta,
-                     Depth depth, bool cutNode) {
-#ifdef ENABLE_COMPOUND_TURNS
-    if constexpr (!Logical && CanEnterLogical)
-        if (pos.logical_moves_active())
-            return search_impl<true, false, nodeType>(pos, ss, alpha, beta, depth, cutNode);
-#endif
-    return search_impl<Logical, CanEnterLogical, nodeType>(pos, ss, alpha, beta, depth, cutNode);
-  }
-
-
   template <NodeType nodeType>
   Value search(Position& pos, Stack* ss, Value alpha, Value beta, Depth depth, bool cutNode) {
 #ifdef ENABLE_COMPOUND_TURNS
-    if (pos.logical_moves_active())
-        return search_impl<true, false, nodeType>(pos, ss, alpha, beta, depth, cutNode);
-    if (pos.may_enter_logical_moves())
-        return search_impl<false, true, nodeType>(pos, ss, alpha, beta, depth, cutNode);
+    if (pos.compound_search_enabled())
+        return search_impl<true, nodeType>(pos, ss, alpha, beta, depth, cutNode);
 #endif
-    return search_impl<false, false, nodeType>(pos, ss, alpha, beta, depth, cutNode);
+    return search_impl<false, nodeType>(pos, ss, alpha, beta, depth, cutNode);
   }
 
   // qsearch_impl() is the quiescence search function, which is called by the
   // main search function with zero depth, or recursively with further
   // decreasing depth per call.
-  template <bool Logical, bool CanEnterLogical, NodeType nodeType>
+  template <bool Logical, NodeType nodeType>
   Value qsearch_impl(Position& pos, Stack* ss, Value alpha, Value beta, Depth depth) {
 
     static_assert(nodeType != Root);
     constexpr bool PvNode = nodeType == PV;
-#ifdef ENABLE_COMPOUND_TURNS
-    ss->pvIsLogical = Logical;
-#endif
 
 #ifdef ENABLE_COMPOUND_TURNS
     const bool providerStaticOnly = [&] {
@@ -2482,7 +2522,7 @@ moves_loop: // When in check, search starts from here
       pos.do_move(move, st);
       if (PvNode)
           set_child_pv<Logical>(pos, thisThread, ss+1, pv);
-      value = -qsearch_child<Logical, CanEnterLogical, nodeType>(pos, ss+1, -beta, -alpha, depth - 1);
+      value = -qsearch_impl<Logical, nodeType>(pos, ss+1, -beta, -alpha, depth - 1);
       pos.undo_move(move);
 
       assert(value > -VALUE_INFINITE && value < VALUE_INFINITE);
@@ -2498,25 +2538,8 @@ moves_loop: // When in check, search starts from here
 
               if (PvNode) // Update pv even in fail-high case
               {
-                  if constexpr (Logical)
-                      update_pv(ss->pv_ptr<Logical>(), LogicalMove(move),
+                      update_pv(ss->pv_ptr<Logical>(), SearchMove(move),
                                 (ss+1)->pv_ptr<Logical>());
-#ifdef ENABLE_COMPOUND_TURNS
-                  else if ((ss+1)->pvIsLogical)
-                  {
-                      update_pv(logical_pv_output(thisThread, ss), LogicalMove(move),
-                                (ss+1)->pv_ptr<true>());
-                      ss->pvIsLogical = true;
-                  }
-#endif
-                  else
-                  {
-#ifdef ENABLE_COMPOUND_TURNS
-                      ss->pvIsLogical = false;
-#endif
-                      update_pv(ss->pv_ptr<Logical>(), move,
-                                (ss+1)->pv_ptr<Logical>());
-                  }
               }
 
               if (PvNode && value < beta) // Update alpha here!
@@ -2552,16 +2575,6 @@ moves_loop: // When in check, search starts from here
     assert(bestValue > -VALUE_INFINITE && bestValue < VALUE_INFINITE);
 
     return bestValue;
-  }
-
-  template<bool Logical, bool CanEnterLogical, NodeType nodeType>
-  Value qsearch_child(Position& pos, Stack* ss, Value alpha, Value beta, Depth depth) {
-#ifdef ENABLE_COMPOUND_TURNS
-    if constexpr (!Logical && CanEnterLogical)
-        if (pos.logical_moves_active())
-            return qsearch_impl<true, false, nodeType>(pos, ss, alpha, beta, depth);
-#endif
-    return qsearch_impl<Logical, CanEnterLogical, nodeType>(pos, ss, alpha, beta, depth);
   }
 
 
@@ -2844,7 +2857,7 @@ string UCI::pv(const Position& pos, Depth depth, Value alpha, Value beta) {
       Value v = updated ? rootMoves[i].score : rootMoves[i].previousScore;
 
 #ifdef ENABLE_COMPOUND_TURNS
-      const bool logicalPv = pos.logical_moves_active() || pos.may_enter_logical_moves();
+      const bool logicalPv = pos.compound_search_enabled();
       const std::vector<std::string> compoundPv = logicalPv
                                                 ? compound_pv_to_strings(pos, rootMoves[i].first(),
                                                                          rootMoves[i].continuation())
@@ -2939,6 +2952,10 @@ bool RootMove::extract_ponder_from_tt(Position& pos) {
     if (first() == MOVE_NONE)
         return false;
 
+    // Only reached with an ordinary single move: compound play takes the
+    // compound ponder path, and setup moves are single drops.
+    assert(first().is_single());
+
     pos.do_move(first().first(), st);
 
     if (!pos.is_draw(1))
@@ -2960,11 +2977,19 @@ bool RootMove::extract_ponder_from_tt(Position& pos) {
 void Tablebases::rank_root_moves(Position& pos, Search::RootMoves& rootMoves) {
 
     RootInTB = false;
+#ifdef ENABLE_COMPOUND_TURNS
+    // Tablebase eligibility is decided at this boundary: tablebases only
+    // understand ordinary single moves, so compound search profiles are
+    // excluded here (including setup, whose pockets they also don't model).
+    // The caller already skips compound play; this keeps the probe loops
+    // below from ever seeing a multi-component turn.
+    if (pos.compound_search_enabled())
+        return;
+#endif
     UseRule50 = bool(Options["Syzygy50MoveRule"]);
     ProbeDepth = int(Options["SyzygyProbeDepth"]);
     Cardinality = int(Options["SyzygyProbeLimit"]);
     bool dtz_available = true;
-
     // Tables with fewer pieces than SyzygyProbeLimit are searched with
     // ProbeDepth == DEPTH_ZERO
     if (Cardinality > MaxCardinality)

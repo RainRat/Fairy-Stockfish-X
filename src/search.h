@@ -46,7 +46,6 @@ struct Stack {
   Move* pv;
 #ifdef ENABLE_COMPOUND_TURNS
   LogicalMove* logicalPv;
-  bool pvIsLogical;
 #endif
   PieceToHistory* continuationHistory;
   int ply;
