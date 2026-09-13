@@ -68,7 +68,6 @@ namespace {
 
   void position(Position& pos, istringstream& is, StateListPtr& states) {
 
-    Move m;
     string token, fen;
 
     is >> token;
@@ -89,27 +88,27 @@ namespace {
     states = StateListPtr(new std::deque<StateInfo>(1)); // Drop old and create a new one
     pos.set(variants.get(Options["UCI_Variant"]), fen, Options["UCI_Chess960"], &states->back(), Threads.main(), sfen);
 
-    // Parse move list (if any)
+    // Parse move list (if any). Each token is decoded as one complete move,
+    // so setup drops and compound turns share this loop across the
+    // setup-to-play transition without the handler choosing an executor.
     while (is >> token)
     {
+        LogicalMove turn = UCI::to_logical_move(pos, token);
+        if (turn.empty())
+            break;
+
+        states->emplace_back();
 #ifdef ENABLE_COMPOUND_TURNS
         if (pos.compound_turn_active())
         {
-            LogicalMove turn;
-            if (!parse_compound_move(pos, token, turn))
-                break;
-            states->emplace_back();
+            // Forward-only replay: the persistent state is safely committed
+            // below, so transaction scratch can be discarded with the call.
             LogicalMoveUndo transaction;
             pos.do_move(turn, states->back(), transaction);
             continue;
         }
 #endif
-        m = UCI::to_move(pos, token);
-        if (m == MOVE_NONE)
-            break;
-
-        states->emplace_back();
-        pos.do_move(m, states->back());
+        pos.do_move(turn.first(), states->back());
     }
   }
 
@@ -187,20 +186,13 @@ namespace {
         if (token == "searchmoves") // Needs to be the last command on the line
         {
             limits.searchMovesSpecified = true;
-#ifdef ENABLE_COMPOUND_TURNS
-            if (pos.compound_turn_active())
-            {
-                while (is >> token)
-                {
-                    LogicalMove move;
-                    if (parse_compound_move(pos, token, move))
-                        limits.searchmoves.push_back(move);
-                }
-                continue;
-            }
-#endif
             while (is >> token)
-                limits.searchmoves.emplace_back(UCI::to_move(pos, token));
+            {
+                LogicalMove move = UCI::to_logical_move(pos, token);
+                if (!move.empty())
+                    limits.searchmoves.push_back(move);
+            }
+            continue;
         }
 
         else if (token == "wtime")     is >> limits.time[isUsi ? BLACK : WHITE];
@@ -531,16 +523,11 @@ void UCI::loop(int argc, char* argv[]) {
       // UCCI-specific banmoves command
       else if (token == "banmoves")
           while (is >> token)
-#ifdef ENABLE_COMPOUND_TURNS
-              if (pos.compound_turn_active())
-              {
-                  LogicalMove move;
-                  if (parse_compound_move(pos, token, move))
-                      banmoves.push_back(move);
-              }
-              else
-#endif
-                  banmoves.emplace_back(UCI::to_move(pos, token));
+          {
+              LogicalMove move = UCI::to_logical_move(pos, token);
+              if (!move.empty())
+                  banmoves.push_back(move);
+          }
       else if (token == "go")
           go(pos, is, states, banmoves);
       else if (token == "position")
@@ -989,6 +976,31 @@ Move UCI::to_move(const Position& pos, string& str) {
   }
 
   return MOVE_NONE;
+}
+
+
+/// UCI::to_logical_move() parses one token as a complete engine move: a
+/// compound turn while the position is in compound play, otherwise an
+/// ordinary move wrapped as a single complete move. A failed compound parse
+/// never falls through to accepting a physical component; an empty
+/// LogicalMove is returned instead.
+
+LogicalMove UCI::to_logical_move(Position& pos, const std::string& str) {
+
+#ifdef ENABLE_COMPOUND_TURNS
+  if (pos.compound_turn_active())
+  {
+      LogicalMove turn;
+      if (parse_compound_move(pos, str, turn))
+          return turn;
+      return LogicalMove();
+  }
+#endif
+  std::string token = str;
+  Move m = to_move(pos, token);
+  if (m == MOVE_NONE)
+      return LogicalMove();
+  return LogicalMove(m);
 }
 
 std::string UCI::option_name(std::string name) {

@@ -69,12 +69,12 @@ struct CompoundMoveParser {
     LogicalMove parsed{};
 
     bool parse_level(size_t offset, int usedSteps) {
-        if (offset >= text.size() || parsed.length >= LogicalMove::MAX_COMPONENTS)
+        if (offset >= text.size() || parsed.size() >= LogicalMove::MAX_COMPONENTS)
             return false;
 
-        for (const auto& move : MoveList<LEGAL>(pos))
+        for (const auto& move : MoveList<LEGAL_COMPONENTS>(pos))
         {
-            if (is_pass(move) && parsed.length != 0)
+            if (is_pass(move) && !parsed.empty())
                 continue;
 
             const std::string moveText = compound_step_to_string(pos, move);
@@ -89,8 +89,8 @@ struct CompoundMoveParser {
             if (next != text.size() && text[next] != ',' && text[next] != ';')
                 continue;
 
-            const int index = parsed.length++;
-            parsed.components[index] = move;
+            const int index = parsed.size();
+            parsed.push_back(move);
             pos.do_component(move, states[index], false, false);
             const int nextUsedSteps = usedSteps + moveCost;
 
@@ -105,7 +105,7 @@ struct CompoundMoveParser {
             if (accepted)
                 return true;
 
-            --parsed.length;
+            parsed.pop_back();
         }
 
         return false;
@@ -187,9 +187,9 @@ void LogicalMoveSource::initialize_frame(int frameDepth) {
   frame.usedCost = frameDepth == 0
                  ? 0
                  : frames[frameDepth - 1].usedCost
-                 + compound_move_cost(pos, turn.components[frameDepth - 1]);
+                 + compound_move_cost(pos, turn[frameDepth - 1]);
   moves.clear();
-  for (const auto& move : MoveList<LEGAL>(pos))
+  for (const auto& move : MoveList<LEGAL_COMPONENTS>(pos))
       moves.push_back(move);
 
   // The provider does not have a Stack/MovePicker, but a small amount of
@@ -198,10 +198,10 @@ void LogicalMoveSource::initialize_frame(int frameDepth) {
   auto tacticalBegin = moves.begin();
   Move preferred = MOVE_NONE;
   if (order.preferredTurn && !order.preferredTurn->empty()
-      && frameDepth < order.preferredTurn->length
-      && std::equal(turn.components.begin(), turn.components.begin() + frameDepth,
-                    order.preferredTurn->components.begin()))
-      preferred = order.preferredTurn->components[frameDepth];
+      && frameDepth < order.preferredTurn->size()
+      && std::equal(turn.begin(), turn.begin() + frameDepth,
+                    order.preferredTurn->begin()))
+      preferred = (*order.preferredTurn)[frameDepth];
   else if (frameDepth == 0)
       preferred = order.preferredFirst;
 
@@ -221,12 +221,12 @@ void LogicalMoveSource::initialize_frame(int frameDepth) {
 
 void LogicalMoveSource::apply_path(int length) {
   for (int i = 0; i < length; ++i)
-      pos.do_component(turn.components[i], transaction->components[i], false, false);
+      pos.do_component(turn[i], transaction->components[i], false, false);
 }
 
 void LogicalMoveSource::unwind_prefix() {
   for (int i = depth - 1; i >= 0; --i)
-      pos.undo_component(turn.components[i]);
+      pos.undo_component(turn[i]);
   prefixApplied = false;
 }
 
@@ -279,7 +279,7 @@ bool LogicalMoveSource::next_impl(LogicalMove& move, LogicalMoveInfo* info,
       if (descend)
       {
           ++depth;
-          pos.do_component(turn.components[depth - 1],
+          pos.do_component(turn[depth - 1],
                            transaction->components[depth - 1], false, false);
           initialize_frame(depth);
           descend = false;
@@ -294,7 +294,7 @@ bool LogicalMoveSource::next_impl(LogicalMove& move, LogicalMoveInfo* info,
               finished = true;
               return false;
           }
-          pos.undo_component(turn.components[depth - 1]);
+          pos.undo_component(turn[depth - 1]);
           --depth;
           continue;
       }
@@ -308,8 +308,7 @@ bool LogicalMoveSource::next_impl(LogicalMove& move, LogicalMoveInfo* info,
       if (usedSteps + moveCost > pos.compound_turn_steps())
           continue;
 
-      turn.components[depth] = component;
-      turn.length = uint8_t(depth + 1);
+      turn.set_component(depth, component);
       if (committedState)
           componentStrings[depth] = compound_step_to_string(pos, component);
       const Color mover = pos.side_to_move();
@@ -380,7 +379,7 @@ bool LogicalMoveSource::next_impl(LogicalMove& move, LogicalMoveInfo* info,
           if (committedState)
           {
               yieldedString.clear();
-              for (int i = 0; i < turn.length; ++i)
+              for (int i = 0; i < turn.size(); ++i)
               {
                   if (i)
                       yieldedString += ',';
@@ -425,7 +424,7 @@ bool has_any_compound_move_impl(Position& pos, int depth, int usedSteps,
                                 Key startBoundaryKey, const StateInfo* logicalRoot,
                                 StateInfo* states) {
 
-    for (const auto& move : MoveList<LEGAL>(pos))
+    for (const auto& move : MoveList<LEGAL_COMPONENTS>(pos))
     {
         if (depth != 0 && is_pass(move))
             continue;
@@ -506,18 +505,18 @@ std::string compound_move_to_string(Position& pos, const LogicalMove& turn) {
   std::string result;
   LogicalMoveUndo transaction;
 
-  for (int i = 0; i < turn.length; ++i)
+  for (int i = 0; i < turn.size(); ++i)
   {
       if (i)
           result += ',';
-      result += compound_step_to_string(pos, turn.components[i]);
+      result += compound_step_to_string(pos, turn[i]);
       // Formatting is a read-only operation. The component executor still
       // supplies scratch state so that effects are formatted in context.
-      pos.do_component(turn.components[i], transaction.components[i], false, false);
+      pos.do_component(turn[i], transaction.components[i], false, false);
   }
 
-  for (int i = turn.length - 1; i >= 0; --i)
-      pos.undo_component(turn.components[i]);
+  for (int i = turn.size() - 1; i >= 0; --i)
+      pos.undo_component(turn[i]);
 
   return result;
 }

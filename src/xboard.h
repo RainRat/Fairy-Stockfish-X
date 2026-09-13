@@ -44,7 +44,7 @@ namespace XBoard {
 class StateMachine {
 public:
   StateMachine(Position& uciPos, StateListPtr& uciPosStates) : pos(uciPos), states(uciPosStates) {
-    moveList = std::deque<Move>();
+    history = std::deque<HistoryEntry>();
     moveAfterSearch = false;
     playColor = COLOR_NB;
     ponderHighlight = "";
@@ -72,14 +72,22 @@ public:
 private:
   Position& pos;
   StateListPtr& states;
-  std::deque<Move> moveList;
+  // One entry per externally applied move. Compound turns own their undo
+  // payload for as long as the move remains undoable; ordinary moves carry
+  // no payload. `display` is the physical move shown to the GUI (the first
+  // component of a compound turn), recorded at apply time so readers never
+  // inspect components.
+  struct HistoryEntry {
+    LogicalMove complete;
+    Move display = MOVE_NONE;
+#ifdef ENABLE_COMPOUND_TURNS
+    std::unique_ptr<LogicalMoveUndo> undo;
+#endif
+  };
+  std::deque<HistoryEntry> history;
   Search::LimitsType limits;
   Color playColor;
   std::string ponderHighlight;
-#ifdef ENABLE_COMPOUND_TURNS
-  std::deque<LogicalMove> compoundMoveList;
-  std::deque<LogicalMoveUndo> compoundTransactions;
-#endif
   std::mutex ponderMutex;
   std::unique_ptr<NativeThread> ponderWorker;
   std::atomic<bool> shuttingDown;
