@@ -19,6 +19,7 @@
 #ifndef SEARCH_H_INCLUDED
 #define SEARCH_H_INCLUDED
 
+#include <memory>
 #include <vector>
 
 #ifdef ENABLE_COMPOUND_TURNS
@@ -44,17 +45,10 @@ constexpr int CounterMovePruneThreshold = 0;
 
 struct Stack {
   Move* pv;
-#ifdef ENABLE_COMPOUND_TURNS
-  LogicalMove* logicalPv;
-#endif
   PieceToHistory* continuationHistory;
   int ply;
   Move currentMove;
   Piece currentMovePiece;
-#ifdef ENABLE_COMPOUND_TURNS
-  bool currentMoveHistoryCompatible;
-  bool currentMoveCapturedOpponent;
-#endif
   Move excludedMove;
   Move killers[2];
   Value staticEval;
@@ -65,25 +59,7 @@ struct Stack {
   bool ttHit;
   int doubleExtensions;
 
-  template<bool Logical>
-  auto pv_ptr() const {
-#ifdef ENABLE_COMPOUND_TURNS
-    if constexpr (Logical)
-        return logicalPv;
-    else
-#endif
-        return pv;
-  }
-
-  template<bool Logical>
-  void set_pv(std::conditional_t<Logical, LogicalMove*, Move*> value) {
-#ifdef ENABLE_COMPOUND_TURNS
-    if constexpr (Logical)
-        logicalPv = value;
-    else
-#endif
-        pv = value;
-  }
+  void set_pv(Move* value) { pv = value; }
 };
 
 
@@ -94,43 +70,172 @@ struct Stack {
 struct RootMove {
 
 #ifdef ENABLE_COMPOUND_TURNS
-  explicit RootMove(LogicalMove m, LogicalMoveInfo i = {}) : rootMove(m), info(i) {}
+  struct LogicalRootData {
+      LogicalMove move;
+      LogicalMoveInfo info;
+      std::vector<LogicalMove> pv;
+  };
+
+  explicit RootMove(LogicalMove m, LogicalMoveInfo i = {})
+      : rootMove(m.first()), logical(std::make_unique<LogicalRootData>(LogicalRootData{m, i, {}})) {}
 #else
-  explicit RootMove(LogicalMove m) : rootMove(m) {}
+  explicit RootMove(LogicalMove m) : rootMove(m.first()) {}
 #endif
-  explicit RootMove(Move m) : RootMove(LogicalMove(m)) {}
+  explicit RootMove(Move m) : rootMove(m) {}
+
+#ifdef ENABLE_COMPOUND_TURNS
+  RootMove(const RootMove& other)
+      : score(other.score), previousScore(other.previousScore), selDepth(other.selDepth),
+        tbRank(other.tbRank), tbScore(other.tbScore), rootMove(other.rootMove), pv(other.pv) {
+      if (other.logical)
+          logical = std::make_unique<LogicalRootData>(*other.logical);
+  }
+
+  RootMove& operator=(const RootMove& other) {
+      if (this == &other)
+          return *this;
+      score = other.score;
+      previousScore = other.previousScore;
+      selDepth = other.selDepth;
+      tbRank = other.tbRank;
+      tbScore = other.tbScore;
+      rootMove = other.rootMove;
+      pv = other.pv;
+      logical = other.logical ? std::make_unique<LogicalRootData>(*other.logical) : nullptr;
+      return *this;
+  }
+
+  RootMove(RootMove&&) noexcept = default;
+  RootMove& operator=(RootMove&&) noexcept = default;
+#endif
+
   bool extract_ponder_from_tt(Position& pos);
-  bool operator==(const LogicalMove& m) const { return rootMove == m; }
+#ifdef ENABLE_COMPOUND_TURNS
+  bool is_logical() const { return bool(logical); }
+#endif
+  bool operator==(const LogicalMove& m) const {
+#ifdef ENABLE_COMPOUND_TURNS
+      return logical ? logical->move == m : LogicalMove(rootMove) == m;
+#else
+      return LogicalMove(rootMove) == m;
+#endif
+  }
   bool operator==(const Move& m) const { return rootMove == m; }
   bool operator<(const RootMove& m) const { // Sort in descending order
     return m.score != score ? m.score < score
                             : m.previousScore < previousScore;
   }
 
-  const LogicalMove& first() const { return rootMove; }
-  LogicalMove& first() { return rootMove; }
-  size_t pv_size() const { return pv.size() + 1; }
-  const LogicalMove& pv_at(size_t index) const {
-    return index ? pv[index - 1] : rootMove;
-  }
-  LogicalMove& pv_at(size_t index) {
-    return index ? pv[index - 1] : rootMove;
-  }
-  void clear_pv() { pv.clear(); }
-  void append_pv(LogicalMove m) { pv.push_back(m); }
-  const std::vector<LogicalMove>& continuation() const { return pv; }
+  LogicalMove first() const {
 #ifdef ENABLE_COMPOUND_TURNS
-  const LogicalMoveInfo& move_info() const { return info; }
+      return logical ? logical->move : LogicalMove(rootMove);
+#else
+      return LogicalMove(rootMove);
+#endif
+  }
+  size_t pv_size() const {
+#ifdef ENABLE_COMPOUND_TURNS
+      return (logical ? logical->pv.size() : pv.size()) + 1;
+#else
+      return pv.size() + 1;
+#endif
+  }
+  LogicalMove pv_at(size_t index) const {
+#ifdef ENABLE_COMPOUND_TURNS
+      if (logical)
+          return index ? logical->pv[index - 1] : logical->move;
+#endif
+      return LogicalMove(index ? pv[index - 1] : rootMove);
+  }
+  void clear_pv() {
+#ifdef ENABLE_COMPOUND_TURNS
+      if (logical)
+          logical->pv.clear();
+      else
+#endif
+          pv.clear();
+  }
+  void append_pv(Move m) {
+#ifdef ENABLE_COMPOUND_TURNS
+      assert(!logical);
+#endif
+      pv.push_back(m);
+  }
+#ifdef ENABLE_COMPOUND_TURNS
+  void append_pv(LogicalMove m) {
+      if (logical)
+          logical->pv.push_back(m);
+      else
+          pv.push_back(m.first());
+  }
+  const std::vector<LogicalMove>& continuation() const {
+      assert(logical);
+      return logical->pv;
+  }
+  const LogicalMoveInfo& move_info() const {
+      assert(logical);
+      return logical->info;
+  }
 #endif
   void set_pv(const std::vector<LogicalMove>& line) {
     if (line.empty())
     {
-        rootMove = LogicalMove();
-        pv.clear();
+        rootMove = MOVE_NONE;
+#ifdef ENABLE_COMPOUND_TURNS
+        if (logical)
+        {
+            logical->move = LogicalMove(MOVE_NONE);
+            logical->pv.clear();
+        }
+        else
+#endif
+        clear_pv();
         return;
     }
-    rootMove = line.front();
-    pv.assign(line.begin() + 1, line.end());
+    rootMove = line.front().first();
+#ifdef ENABLE_COMPOUND_TURNS
+    if (logical)
+    {
+        logical->move = line.front();
+        logical->pv.assign(line.begin() + 1, line.end());
+    }
+    else
+#endif
+    {
+        pv.clear();
+        for (auto it = line.begin() + 1; it != line.end(); ++it)
+            pv.push_back(it->first());
+    }
+  }
+  void set_pv(const std::vector<Move>& line) {
+      if (line.empty())
+      {
+          rootMove = MOVE_NONE;
+#ifdef ENABLE_COMPOUND_TURNS
+          if (logical)
+          {
+              logical->move = LogicalMove(MOVE_NONE);
+              logical->pv.clear();
+          }
+          else
+#endif
+          clear_pv();
+          return;
+      }
+      rootMove = line.front();
+#ifdef ENABLE_COMPOUND_TURNS
+      if (logical)
+      {
+          logical->move = LogicalMove(rootMove);
+          logical->pv.clear();
+          for (auto it = line.begin() + 1; it != line.end(); ++it)
+              logical->pv.emplace_back(*it);
+      }
+      else
+#endif
+      {
+          pv.assign(line.begin() + 1, line.end());
+      }
   }
 
   Value score = -VALUE_INFINITE;
@@ -138,11 +243,11 @@ struct RootMove {
   int selDepth = 0;
   int tbRank = 0;
   Value tbScore = VALUE_ZERO;
-  LogicalMove rootMove;
+  Move rootMove = MOVE_NONE;
 #ifdef ENABLE_COMPOUND_TURNS
-  LogicalMoveInfo info;
+  std::unique_ptr<LogicalRootData> logical;
 #endif
-  std::vector<LogicalMove> pv; // Continuation after rootMove
+  std::vector<Move> pv; // Ordinary continuation after rootMove
 };
 
 typedef std::vector<RootMove> RootMoves;

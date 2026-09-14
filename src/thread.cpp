@@ -247,7 +247,14 @@ void ThreadPool::start_thinking(Position& pos, StateListPtr& states,
       for (const auto& m : MoveList<LEGAL>(pos))
           if (   (!limits.searchMovesSpecified || std::count(limits.searchmoves.begin(), limits.searchmoves.end(), m))
               && (limits.banmoves.empty() || !std::count(limits.banmoves.begin(), limits.banmoves.end(), m)))
+          {
+#ifdef ENABLE_COMPOUND_TURNS
+              if (pos.compound_search_enabled())
+                  rootMoves.emplace_back(LogicalMove(m));
+              else
+#endif
               rootMoves.emplace_back(m);
+          }
 #ifndef ENABLE_COMPOUND_TURNS
   const bool streamCompoundRoot = false;
 #endif
