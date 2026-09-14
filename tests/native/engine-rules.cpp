@@ -744,6 +744,8 @@ void composable_rules() {
     Move frozenCheckDrop = make_drop(SQ_E1, ROOK, ROOK);
     check(!pos.gives_check(frozenCheckDrop),
           "a frozen checking drop was reported as checking");
+    check(!pos.see_pruning_unreliable(frozenCheckDrop),
+          "a non-king drop was misclassified as a king move for SEE pruning");
     check(!MoveList<QUIET_CHECKS>(pos).contains(frozenCheckDrop),
           "quiet-check generation retained a frozen checking drop");
 

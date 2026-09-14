@@ -11605,7 +11605,7 @@ bool Position::see_pruning_unreliable(Move m) const {
   if (var->seePruningPolicy == SeePruningPolicy::ALWAYS_UNRELIABLE)
       return true;
 
-  if (type_of(piece_on(from_sq(m))) == KING)
+  if (type_of(moved_piece(m)) == KING)
       return true;
 
   if (gives_check(m))
