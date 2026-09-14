@@ -101,9 +101,34 @@ namespace {
   void set_child_pv(Position& pos, Thread* thread, Stack* child,
                     std::conditional_t<Logical, LogicalMove*, Move*> pv) {
       (void)pos;
-      (void)thread;
-      child->set_pv<Logical>(pv);
-      pv[0] = typename std::conditional<Logical, LogicalMove, Move>::type(MOVE_NONE);
+#ifdef ENABLE_COMPOUND_TURNS
+      if constexpr (Logical)
+      {
+          (void)pv;
+          child->pv = nullptr;
+          LogicalMove* childPv = thread->logical_pv(child->ply);
+          childPv[0] = LogicalMove(MOVE_NONE);
+      }
+      else
+#endif
+      {
+          child->set_pv(pv);
+          if (pv)
+              pv[0] = Move(MOVE_NONE);
+      }
+  }
+
+  template<bool Logical>
+  auto pv_ptr(Thread* thread, Stack* ss) {
+#ifdef ENABLE_COMPOUND_TURNS
+      if constexpr (Logical)
+          return thread->logical_pv(ss->ply);
+      else
+#endif
+      {
+          (void)thread;
+          return ss->pv;
+      }
   }
 
   constexpr uint64_t TtHitAverageWindow     = 4096;
@@ -249,11 +274,12 @@ namespace {
 
       // Adopt the next already-applied compound child. While adopted, the
       // caller observes the child; release() restores the parent.
-      bool next_compound(SearchMove& logicalMove, SearchMoveInfo& moveInfo, StateInfo& st) {
+      bool next_compound(SearchMove& logicalMove, SearchMoveInfo& moveInfo, StateInfo& st,
+                         bool captureNotation = false) {
           if constexpr (Logical)
           {
               assert(mode == Mode::None);
-              if (!compound.source->next_applied(logicalMove, moveInfo, st))
+              if (!compound.source->next_applied(logicalMove, moveInfo, st, captureNotation))
                   return false;
               mode = Mode::Adopted;
               uncounted = true;
@@ -264,6 +290,7 @@ namespace {
               (void)logicalMove;
               (void)moveInfo;
               (void)st;
+              (void)captureNotation;
               return false;
           }
       }
@@ -354,7 +381,7 @@ namespace {
   Value value_from_tt(Value v, int ply, int r50c);
   template<typename SearchMove>
   void update_pv(SearchMove* pv, SearchMove move, SearchMove* childPv);
-  void update_continuation_histories(Stack* ss, Piece pc, Square to, int bonus);
+  void update_continuation_histories(Thread* thisThread, Stack* ss, Piece pc, Square to, int bonus);
   void update_quiet_stats(const Position& pos, Stack* ss, Move move, int bonus, int depth);
   void update_all_stats(const Position& pos, Stack* ss, Move bestMove, Value bestValue, Value beta, Square prevSq,
                         Move* quietsSearched, int quietCount, Move* capturesSearched, int captureCount, Depth depth);
@@ -370,19 +397,19 @@ namespace {
   }
 
   template<bool Logical>
-  bool history_compatible(const Stack* ss) {
+  bool history_compatible(const Thread* thread, const Stack* ss) {
 #ifdef ENABLE_COMPOUND_TURNS
     if constexpr (Logical)
-        return ss->currentMoveHistoryCompatible;
+        return thread->logical_stack_state(ss->ply).currentMoveHistoryCompatible;
 #endif
     return true;
   }
 
   template<bool Logical>
-  bool captured_opponent(const Stack* ss) {
+  bool captured_opponent(const Thread* thread, const Stack* ss) {
 #ifdef ENABLE_COMPOUND_TURNS
     if constexpr (Logical)
-        return ss->currentMoveCapturedOpponent;
+        return thread->logical_stack_state(ss->ply).currentMoveCapturedOpponent;
 #endif
     return false;
   }
@@ -567,7 +594,8 @@ void MainThread::search() {
   if (CurrentProtocol == XBOARD)
   {
 #ifdef ENABLE_COMPOUND_TURNS
-      if (rootPos.compound_turn_active())
+      if (rootPos.compound_turn_active() && !bestThread->rootMoves.empty()
+          && bestThread->rootMoves[0].is_logical())
       {
           const LogicalMove& bestTurn = bestThread->rootMoves[0].first();
           const std::vector<std::string> compoundPv =
@@ -628,7 +656,9 @@ void MainThread::search() {
 
   SyncCout out;
 #ifdef ENABLE_COMPOUND_TURNS
-  const bool logicalPv = rootPos.compound_search_enabled();
+  const bool logicalPv = rootPos.compound_search_enabled()
+                      && !bestThread->rootMoves.empty()
+                      && bestThread->rootMoves[0].is_logical();
   const std::vector<std::string> compoundPv = logicalPv
                                             ? compound_pv_to_strings(rootPos, bestThread->rootMoves[0].first(),
                                                                      bestThread->rootMoves[0].continuation())
@@ -678,26 +708,23 @@ void Thread::search() {
   int iterIdx = 0;
 
   std::memset(ss-7, 0, 10 * sizeof(Stack));
+#ifdef ENABLE_COMPOUND_TURNS
+  clear_logical_stack();
+#endif
   for (int i = -7; i <= 2; ++i)
       (ss+i)->currentMovePiece = NO_PIECE;
 
   for (int i = 7; i > 0; i--)
       (ss-i)->continuationHistory = &this->continuationHistory[0][0][NO_PIECE][0]; // Use as a sentinel
 
-  for (int i = 0; i <= MAX_PLY + 2; ++i)
+  for (int i = -7; i <= MAX_PLY + 2; ++i)
       (ss+i)->ply = i;
 
+  ss->set_pv(ordinaryPv);
 #ifdef ENABLE_COMPOUND_TURNS
   if (rootPos.compound_search_enabled())
-  {
-      ss->set_pv<true>(logical_pv(0));
-      ss->logicalPv[0] = LogicalMove(MOVE_NONE);
-  }
-  else
+      logical_pv(0)[0] = LogicalMove(MOVE_NONE);
 #endif
-  {
-      ss->set_pv<false>(ordinaryPv);
-  }
 
   bestValue = delta = alpha = -VALUE_INFINITE;
   beta = VALUE_INFINITE;
@@ -1138,20 +1165,21 @@ namespace {
     // Step 1. Initialize node
     PieceToHistory* neutralContinuationHistory = &thisThread->continuationHistory[0][0][NO_PIECE][0];
 #ifdef ENABLE_COMPOUND_TURNS
-    const LogicalMoveCapabilities moveCapabilities = [&] {
-        if constexpr (Logical)
-            return pos.logical_move_capabilities();
-        return LogicalMoveCapabilities{};
-    }();
-#else
-    const SearchCapabilities moveCapabilities;
-#endif
     const bool logicalMovePosition = [&] {
-#ifdef ENABLE_COMPOUND_TURNS
         if constexpr (Logical)
             return pos.logical_moves_active();
-#endif
         return false;
+    }();
+#else
+    constexpr bool logicalMovePosition = false;
+#endif
+    const SearchCapabilities moveCapabilities = [&] {
+#ifdef ENABLE_COMPOUND_TURNS
+        if constexpr (Logical)
+            if (logicalMovePosition)
+                return SearchCapabilities{false, false, false};
+#endif
+        return SearchCapabilities{};
     }();
     const bool exactTtMoveIdentity = !logicalMovePosition;
     const bool lazyRoot = rootNode && logicalMovePosition
@@ -1159,7 +1187,7 @@ namespace {
     ss->inCheck        = pos.evasion_checkers();
     priorCapture       = [&] {
         if constexpr (Logical)
-            return captured_opponent<Logical>(ss-1);
+            return captured_opponent<Logical>(thisThread, ss-1);
         return bool(pos.captured_piece());
     }();
     Color us           = pos.side_to_move();
@@ -1204,7 +1232,7 @@ namespace {
     (ss+1)->excludedMove = bestMove = MOVE_NONE;
     (ss+2)->killers[0]   = (ss+2)->killers[1] = MOVE_NONE;
     ss->doubleExtensions = (ss-1)->doubleExtensions;
-    const bool previousMoveHistoryCompatible = history_compatible<Logical>(ss-1);
+    const bool previousMoveHistoryCompatible = history_compatible<Logical>(thisThread, ss-1);
     Square prevSq = previousMoveHistoryCompatible ? to_sq((ss-1)->currentMove) : SQ_NONE;
 
     // Initialize statScore to zero for the grandchildren of the current position.
@@ -1266,7 +1294,7 @@ namespace {
                 if (   previousMoveHistoryCompatible
                     && (ss-1)->moveCount <= 2
                     && !priorCapture)
-                    update_continuation_histories(ss-1, pos.piece_on(prevSq), prevSq, -stat_bonus(depth + 1));
+                    update_continuation_histories(thisThread, ss-1, pos.piece_on(prevSq), prevSq, -stat_bonus(depth + 1));
             }
             // Penalty for a quiet ttMove that fails low
             else if (!pos.capture_or_promotion(ttMove))
@@ -1276,7 +1304,7 @@ namespace {
                 const Square gate = gate_history_square(ttMove);
                 if (pos.walling() && gate != SQ_NONE)
                     thisThread->gateHistory[us][gate] << penalty;
-                update_continuation_histories(ss, pos.moved_piece(ttMove), to_sq(ttMove), penalty);
+                update_continuation_histories(thisThread, ss, pos.moved_piece(ttMove), to_sq(ttMove), penalty);
             }
         }
 
@@ -1431,8 +1459,8 @@ namespace {
         ss->currentMove = MOVE_NULL;
         ss->currentMovePiece = NO_PIECE;
 #ifdef ENABLE_COMPOUND_TURNS
-        ss->currentMoveHistoryCompatible = false;
-        ss->currentMoveCapturedOpponent = false;
+        thisThread->logical_stack_state(ss->ply).currentMoveHistoryCompatible = false;
+        thisThread->logical_stack_state(ss->ply).currentMoveCapturedOpponent = false;
 #endif
         ss->continuationHistory = neutralContinuationHistory;
 
@@ -1515,10 +1543,10 @@ namespace {
 
                 ss->currentMove = move;
 #ifdef ENABLE_COMPOUND_TURNS
-                ss->currentMoveHistoryCompatible = true;
+                thisThread->logical_stack_state(ss->ply).currentMoveHistoryCompatible = true;
                 Piece victim = captured_piece_or_on(pos, move);
-                ss->currentMoveCapturedOpponent = victim != NO_PIECE
-                                                && color_of(victim) != pos.side_to_move();
+                thisThread->logical_stack_state(ss->ply).currentMoveCapturedOpponent = victim != NO_PIECE
+                                                                                      && color_of(victim) != pos.side_to_move();
 #endif
                 ss->currentMovePiece = pos.moved_piece(move);
                 ss->continuationHistory = &thisThread->continuationHistory[ss->inCheck]
@@ -1609,6 +1637,11 @@ moves_loop: // When in check, search starts from here
                          && tte->depth() >= depth;
 
     SearchChildScope<Logical> child(pos, thisThread, ss->ply);
+    const bool reportCurrentMove = rootNode
+                                && thisThread == Threads.main()
+                                && Time.elapsed() > 3000
+                                && is_uci_dialect(CurrentProtocol)
+                                && int(Options["Verbosity"]) >= 1;
 #ifdef ENABLE_COMPOUND_TURNS
     if constexpr (Logical)
         if (logicalMovePosition && (!rootNode || lazyRoot))
@@ -1652,7 +1685,7 @@ moves_loop: // When in check, search starts from here
           {
               if (lazyRoot)
               {
-                  if (!child.next_compound(logicalMove, moveInfo, st))
+                  if (!child.next_compound(logicalMove, moveInfo, st, reportCurrentMove))
                       break;
                   move = moveInfo.representative;
                   thisThread->rootMoves.emplace_back(logicalMove, moveInfo);
@@ -1670,7 +1703,7 @@ moves_loop: // When in check, search starts from here
           }
           else if (logicalMovePosition)
           {
-              if (!child.next_compound(logicalMove, moveInfo, st))
+              if (!child.next_compound(logicalMove, moveInfo, st, false))
                   break;
               move = moveInfo.representative;
           }
@@ -1743,8 +1776,7 @@ moves_loop: // When in check, search starts from here
 
       ss->moveCount = ++moveCount;
 
-      if (rootNode && thisThread == Threads.main() && Time.elapsed() > 3000
-          && is_uci_dialect(CurrentProtocol) && int(Options["Verbosity"]) >= 1)
+      if (reportCurrentMove)
       {
           sync_cout << "info depth " << depth << " currmove ";
 #ifdef ENABLE_COMPOUND_TURNS
@@ -1764,7 +1796,7 @@ moves_loop: // When in check, search starts from here
       }
       if (PvNode)
       {
-          (ss+1)->set_pv<Logical>(nullptr);
+          set_child_pv<Logical>(pos, thisThread, ss+1, nullptr);
       }
 
       extension = 0;
@@ -1956,9 +1988,9 @@ moves_loop: // When in check, search starts from here
       // Speculative prefetch as early as possible
       // Update the current move (this must be done after singular extension search)
 #ifdef ENABLE_COMPOUND_TURNS
-      ss->currentMoveHistoryCompatible = moveInfo.historyCompatible;
-      ss->currentMoveCapturedOpponent = Logical ? moveInfo.capturesOpponent
-                                                : false;
+      thisThread->logical_stack_state(ss->ply).currentMoveHistoryCompatible = moveInfo.historyCompatible;
+      thisThread->logical_stack_state(ss->ply).currentMoveCapturedOpponent = Logical ? moveInfo.capturesOpponent
+                                                                                       : false;
 #endif
       ss->currentMove = moveInfo.historyCompatible ? move : MOVE_NONE;
       ss->currentMovePiece = moveInfo.historyCompatible ? movedPiece : NO_PIECE;
@@ -2087,7 +2119,7 @@ moves_loop: // When in check, search starts from here
               int bonus = value > alpha ?  stat_bonus(newDepth)
                                         : -stat_bonus(newDepth);
 
-              update_continuation_histories(ss, movedPiece, to_sq(move), bonus);
+              update_continuation_histories(thisThread, ss, movedPiece, to_sq(move), bonus);
           }
       }
 
@@ -2148,8 +2180,8 @@ moves_loop: // When in check, search starts from here
               rm.clear_pv();
 
               {
-                  assert((ss+1)->pv_ptr<Logical>());
-                  for (auto* m = (ss+1)->pv_ptr<Logical>();
+                  assert(pv_ptr<Logical>(thisThread, ss+1));
+                  for (auto* m = pv_ptr<Logical>(thisThread, ss+1);
                        *m != SearchMove(MOVE_NONE); ++m)
                       rm.append_pv(*m);
               }
@@ -2178,8 +2210,8 @@ moves_loop: // When in check, search starts from here
 
               if (PvNode && !rootNode) // Update pv even in fail-high case
               {
-                      update_pv(ss->pv_ptr<Logical>(), logicalMove,
-                                (ss+1)->pv_ptr<Logical>());
+                      update_pv(pv_ptr<Logical>(thisThread, ss), logicalMove,
+                                pv_ptr<Logical>(thisThread, ss+1));
               }
 
               if (PvNode && value < beta) // Update alpha! Always alpha < beta
@@ -2248,7 +2280,7 @@ moves_loop: // When in check, search starts from here
     else if (   previousMoveHistoryCompatible
              && (depth >= 3 || PvNode)
              && !priorCapture)
-        update_continuation_histories(ss-1, pos.piece_on(prevSq), prevSq, stat_bonus(depth));
+        update_continuation_histories(thisThread, ss-1, pos.piece_on(prevSq), prevSq, stat_bonus(depth));
 
     if (PvNode)
         bestValue = std::min(bestValue, maxValue);
@@ -2305,7 +2337,7 @@ moves_loop: // When in check, search starts from here
 #ifdef ENABLE_COMPOUND_TURNS
     const bool providerStaticOnly = [&] {
         if constexpr (Logical)
-            return pos.logical_move_capabilities().quiescence == QuiescenceSupport::STATIC_ONLY;
+            return pos.logical_moves_active();
         return false;
     }();
     if (providerStaticOnly)
@@ -2352,7 +2384,7 @@ moves_loop: // When in check, search starts from here
     {
         oldAlpha = alpha; // To flag BOUND_EXACT when eval above alpha and no available moves
         set_child_pv<Logical>(pos, thisThread, ss+1, pv);
-        ss->pv_ptr<Logical>()[0] = MOVE_NONE;
+        pv_ptr<Logical>(thisThread, ss)[0] = SearchMove(MOVE_NONE);
     }
 
     bestMove = MOVE_NONE;
@@ -2439,7 +2471,7 @@ moves_loop: // When in check, search starts from here
         futilityBase = bestValue + 155;
     }
 
-    const PieceToHistory* contHist[] = { history_compatible<Logical>(ss-1) ? (ss-1)->continuationHistory
+    const PieceToHistory* contHist[] = { history_compatible<Logical>(thisThread, ss-1) ? (ss-1)->continuationHistory
                                                                              : &thisThread->continuationHistory[0][0][NO_PIECE][0],
                                           (ss-2)->continuationHistory,
                                           nullptr                   , (ss-4)->continuationHistory,
@@ -2453,7 +2485,7 @@ moves_loop: // When in check, search starts from here
                                       &thisThread->gateHistory,
                                       &thisThread->captureHistory,
                                       contHist,
-                                      history_compatible<Logical>(ss-1) ? to_sq((ss-1)->currentMove) : SQ_NONE);
+                                      history_compatible<Logical>(thisThread, ss-1) ? to_sq((ss-1)->currentMove) : SQ_NONE);
 
     // Loop through the moves until no moves remain or a beta cutoff occurs
     while ((move = mp.next_move()) != MOVE_NONE)
@@ -2511,9 +2543,9 @@ moves_loop: // When in check, search starts from here
 
       ss->currentMove = move;
 #ifdef ENABLE_COMPOUND_TURNS
-      ss->currentMoveHistoryCompatible = true;
-      ss->currentMoveCapturedOpponent = victim != NO_PIECE
-                                      && color_of(victim) != pos.side_to_move();
+                thisThread->logical_stack_state(ss->ply).currentMoveHistoryCompatible = true;
+                thisThread->logical_stack_state(ss->ply).currentMoveCapturedOpponent = victim != NO_PIECE
+                                                                                      && color_of(victim) != pos.side_to_move();
 #endif
       ss->currentMovePiece = pos.moved_piece(move);
       ss->continuationHistory = &thisThread->continuationHistory[ss->inCheck]
@@ -2548,8 +2580,8 @@ moves_loop: // When in check, search starts from here
 
               if (PvNode) // Update pv even in fail-high case
               {
-                      update_pv(ss->pv_ptr<Logical>(), SearchMove(move),
-                                (ss+1)->pv_ptr<Logical>());
+                      update_pv(pv_ptr<Logical>(thisThread, ss), SearchMove(move),
+                                pv_ptr<Logical>(thisThread, ss+1));
               }
 
               if (PvNode && value < beta) // Update alpha here!
@@ -2672,7 +2704,7 @@ moves_loop: // When in check, search starts from here
             const Square gate = gate_history_square(quietsSearched[i]);
             if (pos.walling() && gate != SQ_NONE)
                 thisThread->gateHistory[us][gate] << -bonus2;
-            update_continuation_histories(ss, pos.moved_piece(quietsSearched[i]), to_sq(quietsSearched[i]), -bonus2);
+            update_continuation_histories(thisThread, ss, pos.moved_piece(quietsSearched[i]), to_sq(quietsSearched[i]), -bonus2);
         }
     }
     else
@@ -2687,14 +2719,14 @@ moves_loop: // When in check, search starts from here
     // Extra penalty for a quiet early move that was not a TT move or
     // main killer move in previous ply when it gets refuted.
 #ifdef ENABLE_COMPOUND_TURNS
-    if (   (ss-1)->currentMoveHistoryCompatible
+    if (   history_compatible<true>(thisThread, ss-1)
         && ((ss-1)->moveCount == 1 + (ss-1)->ttHit || ((ss-1)->currentMove == (ss-1)->killers[0]))
-        && !(ss-1)->currentMoveCapturedOpponent)
+        && !captured_opponent<true>(thisThread, ss-1))
 #else
     if (   ((ss-1)->moveCount == 1 + (ss-1)->ttHit || ((ss-1)->currentMove == (ss-1)->killers[0]))
         )
 #endif
-            update_continuation_histories(ss-1, pos.piece_on(prevSq), prevSq, -bonus1);
+            update_continuation_histories(thisThread, ss-1, pos.piece_on(prevSq), prevSq, -bonus1);
 
     // Decrease stats for all non-best capture moves
     for (int i = 0; i < captureCount; ++i)
@@ -2713,7 +2745,7 @@ moves_loop: // When in check, search starts from here
   // update_continuation_histories() updates histories of the move pairs formed
   // by moves at ply -1, -2, -4, and -6 with current move.
 
-  void update_continuation_histories(Stack* ss, Piece pc, Square to, int bonus) {
+  void update_continuation_histories(Thread* thisThread, Stack* ss, Piece pc, Square to, int bonus) {
 
     for (int i : {1, 2, 4, 6})
     {
@@ -2722,7 +2754,7 @@ moves_loop: // When in check, search starts from here
             break;
         if (
 #ifdef ENABLE_COMPOUND_TURNS
-            (ss-i)->currentMoveHistoryCompatible &&
+            history_compatible<true>(thisThread, ss-i) &&
 #endif
             is_ok((ss-i)->currentMove))
             (*(ss-i)->continuationHistory)[history_slot(pc)][to] << bonus;
@@ -2747,7 +2779,7 @@ moves_loop: // When in check, search starts from here
     const Square gate = gate_history_square(move);
     if (pos.walling() && gate != SQ_NONE)
         thisThread->gateHistory[us][gate] << bonus;
-    update_continuation_histories(ss, pos.moved_piece(move), to_sq(move), bonus);
+    update_continuation_histories(thisThread, ss, pos.moved_piece(move), to_sq(move), bonus);
 
     // Penalty for reversed move in case of moved piece not being a pawn
     if (type_of(pos.moved_piece(move)) != PAWN && !is_drop_move(move))
@@ -2756,7 +2788,7 @@ moves_loop: // When in check, search starts from here
     // Update countermove history
     if (
 #ifdef ENABLE_COMPOUND_TURNS
-        (ss-1)->currentMoveHistoryCompatible &&
+        history_compatible<true>(thisThread, ss-1) &&
 #endif
         is_ok((ss-1)->currentMove))
     {
@@ -2867,7 +2899,7 @@ string UCI::pv(const Position& pos, Depth depth, Value alpha, Value beta) {
       Value v = updated ? rootMoves[i].score : rootMoves[i].previousScore;
 
 #ifdef ENABLE_COMPOUND_TURNS
-      const bool logicalPv = pos.compound_search_enabled();
+      const bool logicalPv = pos.compound_search_enabled() && rootMoves[i].is_logical();
       const std::vector<std::string> compoundPv = logicalPv
                                                 ? compound_pv_to_strings(pos, rootMoves[i].first(),
                                                                          rootMoves[i].continuation())
@@ -2976,7 +3008,14 @@ bool RootMove::extract_ponder_from_tt(Position& pos) {
         {
             Move m = tte->move(); // Local copy to be SMP safe
             if (MoveList<LEGAL>(pos).contains(m))
-                append_pv(LogicalMove(m));
+            {
+#ifdef ENABLE_COMPOUND_TURNS
+                if (logical)
+                    append_pv(LogicalMove(m));
+                else
+#endif
+                    append_pv(m);
+            }
         }
     }
 

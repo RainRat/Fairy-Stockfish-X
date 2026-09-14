@@ -40,21 +40,6 @@ struct LogicalMoveInfo {
   bool seeReliable = false;
 };
 
-enum class QuiescenceSupport : uint8_t {
-  STANDARD,
-  STATIC_ONLY
-};
-
-/// Search capabilities supplied by the logical-move provider. These describe
-/// the assumptions of a search heuristic, rather than how many components a
-/// logical move happens to contain.
-struct LogicalMoveCapabilities {
-  bool futilityPruning = true;
-  bool nullMovePruning = true;
-  bool probCut = true;
-  QuiescenceSupport quiescence = QuiescenceSupport::STANDARD;
-};
-
 struct LogicalMoveOrder {
   Move preferredFirst = MOVE_NONE;
   const LogicalMove* preferredTurn = nullptr;
@@ -74,19 +59,27 @@ class LogicalMoveSource {
 
   bool next(LogicalMove& move);
   bool next(LogicalMove& move, LogicalMoveInfo& info);
-  bool next_applied(LogicalMove& move, LogicalMoveInfo& info, StateInfo& committedState);
+  bool next_applied(LogicalMove& move, LogicalMoveInfo& info, StateInfo& committedState,
+                    bool captureNotation = false);
   void undo_yielded();
-  const std::string& yielded_string() const { return yieldedString; }
+  const std::string& yielded_string() const {
+      assert(notation);
+      return notation->yielded;
+  }
 
  private:
   bool next_impl(LogicalMove& move, LogicalMoveInfo* info,
-                 StateInfo* committedState);
-  bool repetition_illegal(Key layoutKey, int pliesFromNull) const;
+                 StateInfo* committedState, bool captureNotation = false);
 
   struct Frame {
       size_t current = 0;
       int usedCost = 0;
       LogicalMoveInfo info;
+  };
+
+  struct Notation {
+      std::array<std::string, LogicalMove::MAX_COMPONENTS> components;
+      std::string yielded;
   };
 
   void initialize_frame(int depth);
@@ -112,10 +105,7 @@ class LogicalMoveSource {
   Piece firstMovedPiece = NO_PIECE;
   bool firstSeeReliable = false;
   bool firstGivesCheck = false;
-  std::vector<Key> previousBoundaryLayoutKeys;
-  int repetitionLimit = 0;
-  std::array<std::string, LogicalMove::MAX_COMPONENTS> componentStrings;
-  std::string yieldedString;
+  std::unique_ptr<Notation> notation;
 };
 
 /// Materialize complete compound moves from a turn-boundary position.

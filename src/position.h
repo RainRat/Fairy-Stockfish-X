@@ -322,11 +322,6 @@ struct StateInfoCopied {
   int    countingPly;
   int    countingLimit;
   int    pointsCount[COLOR_NB];
-#ifdef ENABLE_COMPOUND_TURNS
-  uint8_t compoundTurnStep = 0;
-  int    compoundTurnNumber = 0;
-  bool   compoundTurnReset = false;
-#endif
   CheckCount checksRemaining[COLOR_NB];
   Bitboard epSquares;
   Bitboard edgeInsertLocks[COLOR_NB];
@@ -501,26 +496,6 @@ static_assert(std::is_standard_layout_v<StateInfoCopied>, "StateInfoCopied must 
 static_assert(std::is_standard_layout_v<StateInfoDerived>, "StateInfoDerived must remain standard layout");
 static_assert(std::is_standard_layout_v<MoveUndoInfo>, "MoveUndoInfo must remain standard layout");
 static_assert(std::is_standard_layout_v<NnueStateInfo>, "NnueStateInfo must remain standard layout");
-
-#ifdef ENABLE_COMPOUND_TURNS
-/// State needed to undo one logical move. It is deliberately separate from the
-/// persistent StateInfo chain.
-struct LogicalMoveUndo {
-  alignas(Eval::NNUE::CacheLineSize)
-  std::array<StateInfo, LogicalMove::MAX_COMPONENTS> components;
-  StateInfo* previous = nullptr;
-  int usedCost = 0;
-  bool syntheticBoundary = false;
-};
-
-/// Reusable scratch for one logical move provider. Move-list capacities live
-/// here rather than in the undo record so search can reuse them by ply.
-struct LogicalMoveWorkspace {
-  std::array<std::vector<Move>, LogicalMove::MAX_COMPONENTS> moveLists;
-  LogicalMoveUndo undo;
-  bool inUse = false;
-};
-#endif
 
 struct CaptureTransferTarget {
   Piece hashedPiece = NO_PIECE;
@@ -861,11 +836,8 @@ public:
   int compound_turn_step_cost(Move m) const;
   // previousSamePlayerPosition is the nearest persistent position with the
   // same side to move; earlier same-player positions are linked at stride two.
-  bool same_player_board_repetition_illegal(const StateInfo* previousSamePlayerPosition) const;
-#ifdef ENABLE_COMPOUND_TURNS
-  bool compound_turn_repetition_illegal(const StateInfo* previousSamePlayerPosition,
-                                        int additionalBoundaryPlies) const;
-#endif
+  bool same_player_board_repetition_illegal(const StateInfo* previousSamePlayerPosition,
+                                            int additionalBoundaryPlies = 0) const;
   bool has_setup_drop(Color c) const;
   bool sequential_setup_active() const;
   Color sequential_setup_side() const;
@@ -1121,16 +1093,11 @@ public:
   bool is_promoted(Square s) const;
   int  pawns_on_same_color_squares(Color c, Square s) const;
 
-  // Doing and undoing moves. Complete moves (including compound turns)
-  // go through do_move()/undo_move(); the component executor below is
-  // provider-internal (compound_turn.*) plus white-box rule tests, and must
-  // not be used to apply externally visible moves.
+  // Doing and undoing moves. Complete moves (including compound turns) go
+  // through do_move()/undo_move(); component execution is provider-internal.
   void do_move(Move m, StateInfo& newSt, bool countNode = true);
   void undo_move(Move m);
 #ifdef ENABLE_COMPOUND_TURNS
-  void do_component(Move m, StateInfo& newSt, bool countNode = true,
-                    bool updateLayoutKey = true);
-  void undo_component(Move m);
   void do_move(const LogicalMove& move, StateInfo& newSt,
                LogicalMoveUndo& transaction, bool countNode = true);
   void undo_move(const LogicalMove& move, LogicalMoveUndo& transaction,
@@ -1178,7 +1145,6 @@ public:
   bool logical_moves_active() const;
   bool compound_search_enabled() const;
   bool has_legal_logical_move(bool checkGameEnd = true) const;
-  LogicalMoveCapabilities logical_move_capabilities() const;
 #endif
   bool is_optional_game_end() const;
   bool is_optional_game_end(Value& result, int ply = 0, int countStarted = 0) const;
@@ -1218,14 +1184,17 @@ public:
 
 private:
   friend class LogicalMoveSource;
+  friend struct CompoundTurnAdapter;
+#ifdef ENABLE_COMPOUND_TURNS
+  int compound_turn_number() const;
+#endif
   template<bool Compound>
-  void do_component_impl(Move m, StateInfo& newSt, bool countNode,
-                         bool updateLayoutKey);
+  void do_component_impl(Move m, StateInfo& newSt, bool countNode);
   template<bool Compound>
   void undo_component_impl(Move m);
 #ifdef ENABLE_COMPOUND_TURNS
   void end_compound_turn(StateInfo& newSt);
-  void undo_compound_turn();
+  void undo_compound_turn(uint8_t previousStep);
   void commit_compound_move(const LogicalMove& move, StateInfo& newSt,
                             LogicalMoveUndo& transaction);
   void finalize_committed_turn(StateInfo& newSt, StateInfo* logicalRoot,
@@ -1239,7 +1208,6 @@ private:
   void update_repetition_info();
   Key compute_material_key() const;
   Key compute_piece_state_key() const;
-  void xor_layout_piece(Piece pc, Square s);
   Bitboard compute_checkers_bb(Color side) const;
   Bitboard compute_evasion_checkers_bb(Color side) const;
   void set_check_info(StateInfo* si) const;
@@ -1248,7 +1216,8 @@ private:
   Bitboard freeze_squares_hierarchy(Color c, const SimulatedMoveInfo* simulated) const;
   bool violates_same_player_board_repetition(Move m) const;
   bool same_player_board_repetition_illegal(Key layoutKey, int pliesFromNull,
-                                            const StateInfo* previousSamePlayerPosition) const;
+                                            const StateInfo* previousSamePlayerPosition,
+                                            int additionalBoundaryPlies = 0) const;
   Key reserve_key() const;
   std::array<Bitboard, COLOR_NB> passive_blast_burners(Bitboard occupied) const;
   Bitboard passive_blast_removal_mask(const std::array<Bitboard, COLOR_NB>& burners, Bitboard occupied) const;
@@ -1404,6 +1373,12 @@ private:
   StateInfo* st;
   int gamePly;
   Color sideToMove;
+#ifdef ENABLE_COMPOUND_TURNS
+  uint8_t compoundTurnStep = 0;
+  bool compoundTurnReset = false;
+  std::array<bool, LogicalMove::MAX_COMPONENTS + 1> compoundTurnResetStack{};
+  uint8_t compoundTurnResetDepth = 0;
+#endif
   Score psq;
   mutable Move simulatedMove = MOVE_NONE;
   mutable const SimulatedMoveInfo* simulatedInfo = nullptr;
@@ -3093,6 +3068,10 @@ inline bool Position::compound_turn_active() const {
 }
 
 #ifdef ENABLE_COMPOUND_TURNS
+inline int Position::compound_turn_number() const {
+  return std::max((gamePly - (sideToMove == BLACK)) / 2, 0);
+}
+
 inline bool Position::logical_moves_active() const {
   return compound_turn_active();
 }
@@ -3102,20 +3081,12 @@ inline bool Position::compound_search_enabled() const {
   return var->compoundTurnSteps > 0;
 }
 
-inline LogicalMoveCapabilities Position::logical_move_capabilities() const {
-  // The current logical provider does not expose the complete tactical move
-  // set or prove the null-move assumptions required by these heuristics. This
-  // is a provider capability boundary; search need not inspect components.
-  if (logical_moves_active())
-      return {false, false, false, QuiescenceSupport::STATIC_ONLY};
-  return {};
-}
 #endif
 
 inline bool Position::at_complete_turn_boundary() const {
   assert(var != nullptr);
 #ifdef ENABLE_COMPOUND_TURNS
-  return st->compoundTurnStep == 0;
+  return compoundTurnStep == 0;
 #else
   return true;
 #endif
@@ -3146,7 +3117,7 @@ inline int Position::compound_turn_steps() const {
 inline int Position::compound_turn_step() const {
   assert(var != nullptr);
 #ifdef ENABLE_COMPOUND_TURNS
-  return compound_turn_active() ? st->compoundTurnStep : 0;
+  return compound_turn_active() ? compoundTurnStep : 0;
 #else
   return 0;
 #endif
@@ -6070,7 +6041,6 @@ inline void Position::put_piece(Piece pc, Square s, bool isPromoted, Piece unpro
   pieceCount[pc]++;
   pieceCount[make_piece(color_of(pc), ALL_PIECES)]++;
   psq += PSQT::psq[pc][s];
-  xor_layout_piece(pc, s);
   if (isPromoted)
       promotedPieces |= s;
   unpromotedBoard[s] = unpromotedPc;
@@ -6096,7 +6066,6 @@ inline void Position::remove_piece(Square s) {
   pieceCount[pc]--;
   pieceCount[make_piece(color_of(pc), ALL_PIECES)]--;
   psq -= PSQT::psq[pc][s];
-  xor_layout_piece(pc, s);
   promotedPieces -= s;
   unpromotedBoard[s] = NO_PIECE;
 
@@ -6118,8 +6087,6 @@ inline void Position::move_piece(Square from, Square to) {
   update_piece_state_key(from);
   update_piece_state_key(to);
   Bitboard fromTo = square_bb(from) ^ to; // from == to needs to cancel out
-  xor_layout_piece(pc, from);
-  xor_layout_piece(pc, to);
   byTypeBB[ALL_PIECES] ^= fromTo;
   byTypeBB[type_of(pc)] ^= fromTo;
   byColorBB[color_of(pc)] ^= fromTo;
@@ -6550,5 +6517,9 @@ inline bool Position::gating_move_blocks_occupancy(Move m) const {
 }
 
 } // namespace Stockfish
+
+#ifdef ENABLE_COMPOUND_TURNS
+#include "compound_turn_internal.h"
+#endif
 
 #endif // #ifndef POSITION_H_INCLUDED

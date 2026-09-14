@@ -19,6 +19,7 @@
 #ifndef THREAD_H_INCLUDED
 #define THREAD_H_INCLUDED
 
+#include <algorithm>
 #include <atomic>
 #include <condition_variable>
 #include <memory>
@@ -83,6 +84,25 @@ public:
   Score trend;
 
 #ifdef ENABLE_COMPOUND_TURNS
+  struct LogicalStackState {
+      bool currentMoveHistoryCompatible = false;
+      bool currentMoveCapturedOpponent = false;
+  };
+
+  LogicalStackState& logical_stack_state(int ply) {
+      assert(-7 <= ply && ply <= MAX_PLY + 2);
+      return logicalStack[ply + 7];
+  }
+
+  const LogicalStackState& logical_stack_state(int ply) const {
+      assert(-7 <= ply && ply <= MAX_PLY + 2);
+      return logicalStack[ply + 7];
+  }
+
+  void clear_logical_stack() {
+      std::fill(logicalStack.begin(), logicalStack.end(), LogicalStackState{});
+  }
+
   static constexpr size_t LogicalMoveHintCount = 1024;
 
   LogicalMoveWorkspace& logical_move_workspace(int ply) {
@@ -136,6 +156,7 @@ private:
   };
 
   std::array<std::unique_ptr<LogicalMoveWorkspace>, MAX_PLY> logicalMoveWorkspaces;
+  std::array<LogicalStackState, MAX_PLY + 10> logicalStack{};
   std::vector<LogicalMove> logicalPvStorage;
   std::array<LogicalMoveHint, LogicalMoveHintCount> logicalMoveHints{};
 #endif
