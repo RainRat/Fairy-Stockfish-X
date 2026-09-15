@@ -3171,11 +3171,11 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
               }
           }
           else if (pt == JANGGI_CANNON)
-              b |= attacks_from<false, false>(~c, move_pt, s, occupied)
-                 & attacks_from<false, false>(~c, move_pt, s, occupied & ~janggiCannons)
+              b |= attacks_bb(~c, move_pt, s, occupied)
+                 & attacks_bb(~c, move_pt, s, occupied & ~janggiCannons)
                  & (janggiCannons & pieces(c));
           else
-              b |= attacks_from<false, false>(~c, move_pt, s, occupied) & pieces(c, pt);
+              b |= attacks_bb(~c, move_pt, s, occupied) & pieces(c, pt);
       }
   }
 
@@ -3336,11 +3336,11 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
               }
           }
           else if (pt == JANGGI_CANNON)
-              b |= attacks_from<false, false>(~c, move_pt, s, occupied)
-                 & attacks_from<false, false>(~c, move_pt, s, occupied & ~effectiveJanggiCannons)
+              b |= attacks_bb(~c, move_pt, s, occupied)
+                 & attacks_bb(~c, move_pt, s, occupied & ~effectiveJanggiCannons)
                  & (effectiveJanggiCannons & color_pieces(c));
           else
-              b |= attacks_from<false, false>(~c, move_pt, s, occupied) & type_pieces(c, pt);
+              b |= attacks_bb(~c, move_pt, s, occupied) & type_pieces(c, pt);
       }
   }
 

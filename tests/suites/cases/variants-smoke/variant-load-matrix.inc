@@ -108,6 +108,18 @@ go perft 1")
 assert_contains "$out" "^f1f6: 1$"
 fi
 
+# 5c) Xiangqi: a king may not move into an opposing cannon line.
+out=$(run_cmds "setoption name UCI_Variant value xiangqi
+position fen 1rbaka2R/5r3/6n2/2p1p1p2/4P1bP1/PpC3Bc1/1nPR2P2/2N2AN2/1c2K1p2/2BAC4 w - - 0 1
+go perft 1")
+assert_not_contains "$out" "^e2f2: 1$"
+
+# 5d) Xiangqi: a soldier that crossed the river attacks sideways.
+out=$(run_cmds "setoption name UCI_Variant value xiangqi
+position fen 4kcP1N/8n/3rb4/9/9/9/9/3p1A3/4K4/5CB2 w - - 0 1
+go perft 1")
+assert_not_contains "$out" "^e2e3: 1$"
+
 # 5ba) Former built-ins moved to variants.ini still load and preserve core behavior.
 for v in balancedalternation2 raazuvaa paradigm joust fox-and-hounds; do
   variant_available "${v}"
