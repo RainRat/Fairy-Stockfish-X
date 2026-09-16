@@ -1140,6 +1140,7 @@ private:
   Key compute_material_key() const;
   Key compute_piece_state_key() const;
   Bitboard compute_checkers_bb(Color side) const;
+  Bitboard compute_checkers_bb(Color side, Bitboard evasionCheckers) const;
   Bitboard compute_evasion_checkers_bb(Color side) const;
   void set_check_info(StateInfo* si) const;
   bool compute_forced_jump_followup(Square s, int step = 0) const;
@@ -3595,9 +3596,8 @@ inline Bitboard Position::pieces(Color c, PieceSet pts) const {
   if (pts & ALL_PIECES)
       return pieces(c);
   Bitboard b = 0;
-  for (PieceType pt = NO_PIECE_TYPE; pt < PIECE_TYPE_NB; ++pt)
-      if (pts & pt)
-          b |= pieces(c, pt);
+  for (PieceSet ps = pts; ps;)
+      b |= pieces(c, pop_lsb(ps));
   return b;
 }
 

@@ -2542,12 +2542,17 @@ void Position::refresh_state_derived(StateInfo* si) const {
 
   si->evasionCheckersBB = compute_evasion_checkers_bb(sideToMove);
   recompute_state_hashes_and_material(si);
-  si->checkersBB = compute_checkers_bb(sideToMove);
+  si->checkersBB = compute_checkers_bb(sideToMove, si->evasionCheckersBB);
 }
 
 Bitboard Position::compute_checkers_bb(Color side) const {
 
-  Bitboard checkers = compute_evasion_checkers_bb(side);
+  return compute_checkers_bb(side, compute_evasion_checkers_bb(side));
+}
+
+Bitboard Position::compute_checkers_bb(Color side, Bitboard evasionCheckers) const {
+
+  Bitboard checkers = evasionCheckers;
 
   if (!allow_checks())
   {
@@ -9394,7 +9399,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   // latter includes pseudo-/anti-royals, whose status can change when a move
   // adds, removes, or transforms a piece (notably on clone moves).
   set_check_info(st);
-  st->checkersBB = compute_checkers_bb(sideToMove);
+  st->checkersBB = compute_checkers_bb(sideToMove, st->evasionCheckersBB);
 
   if (first_move_lose_on_check() && st->checkersBB)
       for (PieceSet ps = piece_types(); ps;)
@@ -10068,7 +10073,7 @@ void Position::do_null_move(StateInfo& newSt) {
   sideToMove = ~sideToMove;
   st->evasionCheckersBB = compute_evasion_checkers_bb(sideToMove);
   set_check_info(st);
-  st->checkersBB = compute_checkers_bb(sideToMove);
+  st->checkersBB = compute_checkers_bb(sideToMove, st->evasionCheckersBB);
 
   st->repetition = 0;
   st->boardRepetition = 0;
