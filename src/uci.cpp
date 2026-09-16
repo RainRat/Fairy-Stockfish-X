@@ -103,8 +103,7 @@ namespace {
         {
             // Forward-only replay: the persistent state is safely committed
             // below, so transaction scratch can be discarded with the call.
-            LogicalMoveUndo transaction;
-            pos.do_move(turn, states->back(), transaction);
+            do_compound_move(pos, turn, states->back());
             continue;
         }
 #endif

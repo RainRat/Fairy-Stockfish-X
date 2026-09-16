@@ -13,6 +13,8 @@
 #include "test-support.hpp"
 #ifdef ENABLE_COMPOUND_TURNS
 #include "compound_turn.h"
+#include "compound_turn_search.h"
+#include "compound_turn_internal.h"
 #endif
 
 using namespace Stockfish;

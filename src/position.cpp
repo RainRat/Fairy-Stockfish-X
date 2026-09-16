@@ -31,7 +31,7 @@
 
 #include "bitboard.h"
 #ifdef ENABLE_COMPOUND_TURNS
-#include "compound_turn.h"
+#include "compound_turn_internal.h"
 #endif
 #include "misc.h"
 #include "movegen.h"
@@ -1377,6 +1377,25 @@ Key Position::layout_key() const {
 
   k ^= st->pieceStateKey;
 
+  return k;
+}
+
+Key Position::piece_state_key(Square s) const {
+  Piece pc = piece_on(s);
+  if (pc == NO_PIECE)
+      return 0;
+
+  Key k = var->is_oriented(type_of(pc)) ? Zobrist::orientation[orientation_on(s)][s] : 0;
+  if (promotedPieces & s)
+  {
+      Piece fallback = make_piece(color_of(pc), main_promotion_pawn_type(color_of(pc)));
+      Piece origin = unpromoted_piece_on(s);
+      if (origin == NO_PIECE)
+          origin = fallback;
+      if (origin != fallback || (var->shogiStylePromotions && unpromoted_piece_on(s) != NO_PIECE)
+          || (captures_to_hand() && !drop_loop()) || two_boards())
+          k ^= Zobrist::promotionOrigin[origin][s];
+  }
   return k;
 }
 

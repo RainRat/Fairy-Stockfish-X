@@ -34,9 +34,6 @@
 #include "evaluate.h"
 #include "psqt.h"
 #include "types.h"
-#ifdef ENABLE_COMPOUND_TURNS
-#include "compound_turn.h"
-#endif
 #include "variant.h"
 #include "movegen.h"
 #include "piece.h"
@@ -45,11 +42,13 @@
 
 namespace Stockfish {
 
-#ifdef ENABLE_COMPOUND_TURNS
 class Position;
 class LogicalMoveSource;
 struct StateInfo;
 struct LogicalMoveUndo;
+struct CompoundTurnAdapter;
+#ifdef ENABLE_COMPOUND_TURNS
+bool has_any_compound_move(Position& pos, bool checkGameEnd);
 #endif
 
 constexpr int MAX_PUSH_SNAPSHOT = 32;
@@ -6517,9 +6516,5 @@ inline bool Position::gating_move_blocks_occupancy(Move m) const {
 }
 
 } // namespace Stockfish
-
-#ifdef ENABLE_COMPOUND_TURNS
-#include "compound_turn_internal.h"
-#endif
 
 #endif // #ifndef POSITION_H_INCLUDED

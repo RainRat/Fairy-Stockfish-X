@@ -2,14 +2,14 @@
   Fairy-Stockfish-X compound turn support
 */
 
-#include "compound_turn.h"
+#include "compound_turn_search.h"
+#include "compound_turn_internal.h"
 
 #ifdef ENABLE_COMPOUND_TURNS
 
 #include <algorithm>
 
 #include "movegen.h"
-#include "position.h"
 #include "uci.h"
 
 namespace Stockfish {
@@ -99,7 +99,7 @@ struct CompoundMoveParser {
                 continue;
 
             const int index = parsed.size();
-            parsed.push_back(move);
+            CompoundTurnBuilder::push_back(parsed, move);
             CompoundTurnAdapter::do_component(pos, move, states[index], false);
             const int nextUsedSteps = usedSteps + moveCost;
 
@@ -114,7 +114,7 @@ struct CompoundMoveParser {
             if (accepted)
                 return true;
 
-            parsed.pop_back();
+            CompoundTurnBuilder::pop_back(parsed);
         }
 
         return false;
@@ -295,7 +295,7 @@ bool LogicalMoveSource::next_impl(LogicalMove& move, LogicalMoveInfo* info,
       if (usedSteps + moveCost > pos.compound_turn_steps())
           continue;
 
-      turn.set_component(depth, component);
+      CompoundTurnBuilder::set_component(turn, depth, component);
       const Color mover = pos.side_to_move();
       if (depth == 0)
       {
@@ -487,6 +487,68 @@ bool parse_compound_move(Position& pos, const std::string& text, LogicalMove& tu
 
   turn = parser.parsed;
   return true;
+}
+
+bool compound_move_info(Position& pos, const LogicalMove& turn, LogicalMoveInfo& info) {
+
+  if (!pos.compound_turn_active() || turn.empty())
+      return false;
+
+  LogicalMoveUndo transaction;
+  Piece firstMovedPiece = NO_PIECE;
+  bool firstSeeReliable = false;
+  bool firstGivesCheck = false;
+  info = {};
+
+  for (int i = 0; i < turn.size(); ++i)
+  {
+      const Move component = turn[i];
+      const Color mover = pos.side_to_move();
+      if (i == 0)
+      {
+          firstMovedPiece = pos.moved_piece(component);
+          firstSeeReliable = !pos.see_pruning_unreliable(component);
+          firstGivesCheck = pos.gives_check(component);
+      }
+      CompoundTurnAdapter::do_component(pos, component, transaction.components[i], false);
+
+      const StateInfo& componentState = transaction.components[i];
+      record_removed_piece(info, componentState.captured.piece.piece, mover);
+      record_removed_piece(info, componentState.jumpedEnPassantCaptured.piece.piece, mover);
+      record_removed_piece(info, componentState.dead.piece, mover);
+      Bitboard removed = componentState.bycatchSquares
+                       & ~componentState.blastPromotedSquares
+                       & ~componentState.laserTransformedSquares;
+      while (removed)
+      {
+          Square square = pop_lsb(removed);
+          record_removed_piece(info, componentState.bycatchPieces[square].piece(), mover);
+      }
+      for (int transfer = 0; transfer < componentState.push.transferCount; ++transfer)
+          record_removed_piece(info, componentState.push.transfers[transfer].piece, mover);
+      info.promotionLike = info.promotionLike
+                         || is_promotion_move(component)
+                         || componentState.promotionPawn != NO_PIECE
+                         || componentState.consumedPromotionHandPiece != NO_PIECE;
+  }
+
+  for (int i = turn.size() - 1; i >= 0; --i)
+      CompoundTurnAdapter::undo_component(pos, turn[i]);
+
+  info.representative = turn.first();
+  info.movedPiece = firstMovedPiece;
+  const bool ordinaryHeuristicCompatible = turn.is_single()
+                                          && !is_two_step_move(turn.first());
+  info.historyCompatible = ordinaryHeuristicCompatible;
+  info.seeReliable = ordinaryHeuristicCompatible && firstSeeReliable;
+  info.givesCheck = turn.is_single() && firstGivesCheck;
+  return true;
+}
+
+void do_compound_move(Position& pos, const LogicalMove& turn, StateInfo& state) {
+
+  LogicalMoveUndo transaction;
+  do_compound_move(pos, turn, state, transaction);
 }
 
 void do_compound_move(Position& pos, const LogicalMove& turn, StateInfo& state,

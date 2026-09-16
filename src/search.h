@@ -19,11 +19,12 @@
 #ifndef SEARCH_H_INCLUDED
 #define SEARCH_H_INCLUDED
 
+#include <optional>
 #include <memory>
 #include <vector>
 
 #ifdef ENABLE_COMPOUND_TURNS
-#include "compound_turn.h"
+#include "compound_turn_search.h"
 #endif
 #include "misc.h"
 #include "movepick.h"
@@ -77,36 +78,13 @@ struct RootMove {
   };
 
   explicit RootMove(LogicalMove m, LogicalMoveInfo i = {})
-      : rootMove(m.first()), logical(std::make_unique<LogicalRootData>(LogicalRootData{m, i, {}})) {}
+      : rootMove(m.first()), logical(std::in_place, LogicalRootData{m, i, {}}) {}
 #else
   explicit RootMove(LogicalMove m) : rootMove(m.first()) {}
 #endif
   explicit RootMove(Move m) : rootMove(m) {}
 
 #ifdef ENABLE_COMPOUND_TURNS
-  RootMove(const RootMove& other)
-      : score(other.score), previousScore(other.previousScore), selDepth(other.selDepth),
-        tbRank(other.tbRank), tbScore(other.tbScore), rootMove(other.rootMove), pv(other.pv) {
-      if (other.logical)
-          logical = std::make_unique<LogicalRootData>(*other.logical);
-  }
-
-  RootMove& operator=(const RootMove& other) {
-      if (this == &other)
-          return *this;
-      score = other.score;
-      previousScore = other.previousScore;
-      selDepth = other.selDepth;
-      tbRank = other.tbRank;
-      tbScore = other.tbScore;
-      rootMove = other.rootMove;
-      pv = other.pv;
-      logical = other.logical ? std::make_unique<LogicalRootData>(*other.logical) : nullptr;
-      return *this;
-  }
-
-  RootMove(RootMove&&) noexcept = default;
-  RootMove& operator=(RootMove&&) noexcept = default;
 #endif
 
   bool extract_ponder_from_tt(Position& pos);
@@ -245,7 +223,7 @@ struct RootMove {
   Value tbScore = VALUE_ZERO;
   Move rootMove = MOVE_NONE;
 #ifdef ENABLE_COMPOUND_TURNS
-  std::unique_ptr<LogicalRootData> logical;
+  std::optional<LogicalRootData> logical;
 #endif
   std::vector<Move> pv; // Ordinary continuation after rootMove
 };

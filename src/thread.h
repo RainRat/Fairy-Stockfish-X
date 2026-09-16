@@ -28,12 +28,13 @@
 #include <vector>
 
 #include "material.h"
-#ifdef ENABLE_COMPOUND_TURNS
-#include "compound_turn.h"
-#endif
 #include "movepick.h"
 #include "pawns.h"
 #include "position.h"
+#ifdef ENABLE_COMPOUND_TURNS
+#include "compound_turn_search.h"
+#include "compound_turn_internal.h"
+#endif
 #include "search.h"
 #include "thread_win32_osx.h"
 
@@ -85,7 +86,6 @@ public:
 
 #ifdef ENABLE_COMPOUND_TURNS
   struct LogicalStackState {
-      bool currentMoveHistoryCompatible = false;
       bool currentMoveCapturedOpponent = false;
   };
 
@@ -114,13 +114,10 @@ public:
 
   LogicalMove* logical_pv(int ply) {
       assert(0 <= ply && ply <= MAX_PLY);
-      constexpr size_t rowCount = MAX_PLY + 1;
-      constexpr size_t storageSize = rowCount * (rowCount + 1) / 2;
-      if (logicalPvStorage.empty())
-          logicalPvStorage.resize(storageSize);
-      const size_t offset = size_t(ply) * rowCount
-                          - size_t(ply) * size_t(ply > 0 ? ply - 1 : 0) / 2;
-      return logicalPvStorage.data() + offset;
+      auto& row = logicalPvStorage[ply];
+      if (row.empty())
+          row.resize(MAX_PLY - ply + 1);
+      return row.data();
   }
 
   const LogicalMove* logical_move_hint(Key key) const {
@@ -157,7 +154,7 @@ private:
 
   std::array<std::unique_ptr<LogicalMoveWorkspace>, MAX_PLY> logicalMoveWorkspaces;
   std::array<LogicalStackState, MAX_PLY + 10> logicalStack{};
-  std::vector<LogicalMove> logicalPvStorage;
+  std::array<std::vector<LogicalMove>, MAX_PLY + 1> logicalPvStorage;
   std::array<LogicalMoveHint, LogicalMoveHintCount> logicalMoveHints{};
 #endif
   std::vector<std::unique_ptr<ExtMove[]>> bufferPool;

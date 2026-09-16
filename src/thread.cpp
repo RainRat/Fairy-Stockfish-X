@@ -225,21 +225,30 @@ void ThreadPool::start_thinking(Position& pos, StateListPtr& states,
                                && int(Options["MultiPV"]) == 1
                                && int(Options["Skill Level"]) >= 20
                                && !bool(Options["UCI_LimitStrength"])
-                               && !limits.searchMovesSpecified
-                               && limits.banmoves.empty();
+                               && !limits.searchMovesSpecified;
   if (pos.compound_turn_active() && !streamCompoundRoot)
   {
-      LogicalMoveWorkspace workspace;
-      LogicalMoveSource source(pos, workspace);
-      LogicalMove m;
-      LogicalMoveInfo info;
-      while (source.next(m, info))
+      if (limits.searchMovesSpecified)
       {
-          if (   (!limits.searchMovesSpecified
-                  || std::count(limits.searchmoves.begin(), limits.searchmoves.end(), m))
-              && (limits.banmoves.empty()
-                  || !std::count(limits.banmoves.begin(), limits.banmoves.end(), m)))
-              rootMoves.emplace_back(m, info);
+          for (const LogicalMove& m : limits.searchmoves)
+          {
+              if (std::count(limits.banmoves.begin(), limits.banmoves.end(), m))
+                  continue;
+              LogicalMoveInfo info;
+              if (compound_move_info(pos, m, info)
+                  && std::find(rootMoves.begin(), rootMoves.end(), m) == rootMoves.end())
+                  rootMoves.emplace_back(m, info);
+          }
+      }
+      else
+      {
+          LogicalMoveWorkspace workspace;
+          LogicalMoveSource source(pos, workspace);
+          LogicalMove m;
+          LogicalMoveInfo info;
+          while (source.next(m, info))
+              if (!std::count(limits.banmoves.begin(), limits.banmoves.end(), m))
+                  rootMoves.emplace_back(m, info);
       }
   }
 #endif

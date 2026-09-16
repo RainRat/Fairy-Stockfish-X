@@ -11,7 +11,19 @@
 #include <memory>
 #include <vector>
 
+#include "compound_turn.h"
+#include "position.h"
+
 namespace Stockfish {
+
+class CompoundTurnBuilder {
+ public:
+  static void push_back(LogicalMove& move, Move component) { move.push_back(component); }
+  static void pop_back(LogicalMove& move) { move.pop_back(); }
+  static void set_component(LogicalMove& move, int index, Move component) {
+      move.set_component(index, component);
+  }
+};
 
 /// Scratch owned by the compound-turn provider, not by Position's state API.
 struct LogicalMoveUndo {

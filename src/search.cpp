@@ -27,11 +27,11 @@
 #include <optional>
 #include <sstream>
 #include <thread>
-#include <unordered_map>
 
 #include "evaluate.h"
 #ifdef ENABLE_COMPOUND_TURNS
-#include "compound_turn.h"
+#include "compound_turn_search.h"
+#include "compound_turn_internal.h"
 #endif
 #include "misc.h"
 #include "movegen.h"
@@ -134,7 +134,6 @@ namespace {
   constexpr uint64_t TtHitAverageWindow     = 4096;
   constexpr uint64_t TtHitAverageResolution = 1024;
   constexpr int MaxReductionIndex = MAX_MOVES - 1;
-  using RootMoveIndex = std::unordered_map<Move, size_t>;
 
   // Futility margin
   Value futility_margin(Depth d, bool improving) {
@@ -383,6 +382,7 @@ namespace {
   void update_pv(SearchMove* pv, SearchMove move, SearchMove* childPv);
   void update_continuation_histories(Thread* thisThread, Stack* ss, Piece pc, Square to, int bonus);
   void update_quiet_stats(const Position& pos, Stack* ss, Move move, int bonus, int depth);
+  template<bool Logical>
   void update_all_stats(const Position& pos, Stack* ss, Move bestMove, Value bestValue, Value beta, Square prevSq,
                         Move* quietsSearched, int quietCount, Move* capturesSearched, int captureCount, Depth depth);
   void idle_wait() {
@@ -394,15 +394,6 @@ namespace {
         return;
 
     static_cast<MainThread*>(thisThread)->check_time();
-  }
-
-  template<bool Logical>
-  bool history_compatible(const Thread* thread, const Stack* ss) {
-#ifdef ENABLE_COMPOUND_TURNS
-    if constexpr (Logical)
-        return thread->logical_stack_state(ss->ply).currentMoveHistoryCompatible;
-#endif
-    return true;
   }
 
   template<bool Logical>
@@ -765,8 +756,7 @@ void Thread::search() {
                      && rootPos.logical_moves_active()
                      && multiPV == 1
                      && !skill.enabled()
-                     && !Limits.searchMovesSpecified
-                     && Limits.banmoves.empty();
+                     && !Limits.searchMovesSpecified;
 #else
   const bool lazyRoot = false;
 #endif
@@ -843,8 +833,7 @@ void Thread::search() {
           while (true)
           {
               Depth adjustedDepth = std::max(1, rootDepth - failedHighCnt - searchAgainCounter);
-              bestValue = Stockfish::search<Root>(rootPos, ss, alpha, beta, adjustedDepth, false,
-                                                  useRootMoveIndex ? &rootMoveIndex : nullptr);
+              bestValue = Stockfish::search<Root>(rootPos, ss, alpha, beta, adjustedDepth, false);
 
               // Bring the best move to the front. It is critical that sorting
               // is done with a stable algorithm because all the values but the
@@ -853,9 +842,6 @@ void Thread::search() {
               // new PV that goes to the front. Note that in case of MultiPV
               // search the already searched PV lines are preserved.
               std::stable_sort(rootMoves.begin() + pvIdx, rootMoves.begin() + pvLast);
-              if (useRootMoveIndex)
-                  rebuildRootMoveIndex();
-
               // If search has been stopped, we break immediately. Sorting is
               // safe because RootMoves is still valid, although it refers to
               // the previous iteration.
@@ -897,9 +883,6 @@ void Thread::search() {
 
           // Sort the PV lines searched so far and update the GUI
           std::stable_sort(rootMoves.begin() + pvFirst, rootMoves.begin() + pvIdx + 1);
-          if (useRootMoveIndex)
-              rebuildRootMoveIndex();
-
           if (    mainThread
               && (Threads.stop || pvIdx + 1 == multiPV || Time.elapsed() > 3000))
               // If search stopped mid-iteration, an exact mate / TB-loss score
@@ -1232,7 +1215,7 @@ namespace {
     (ss+1)->excludedMove = bestMove = MOVE_NONE;
     (ss+2)->killers[0]   = (ss+2)->killers[1] = MOVE_NONE;
     ss->doubleExtensions = (ss-1)->doubleExtensions;
-    const bool previousMoveHistoryCompatible = history_compatible<Logical>(thisThread, ss-1);
+    const bool previousMoveHistoryCompatible = is_ok((ss-1)->currentMove);
     Square prevSq = previousMoveHistoryCompatible ? to_sq((ss-1)->currentMove) : SQ_NONE;
 
     // Initialize statScore to zero for the grandchildren of the current position.
@@ -1459,8 +1442,8 @@ namespace {
         ss->currentMove = MOVE_NULL;
         ss->currentMovePiece = NO_PIECE;
 #ifdef ENABLE_COMPOUND_TURNS
-        thisThread->logical_stack_state(ss->ply).currentMoveHistoryCompatible = false;
-        thisThread->logical_stack_state(ss->ply).currentMoveCapturedOpponent = false;
+        if constexpr (Logical)
+            thisThread->logical_stack_state(ss->ply).currentMoveCapturedOpponent = false;
 #endif
         ss->continuationHistory = neutralContinuationHistory;
 
@@ -1543,10 +1526,12 @@ namespace {
 
                 ss->currentMove = move;
 #ifdef ENABLE_COMPOUND_TURNS
-                thisThread->logical_stack_state(ss->ply).currentMoveHistoryCompatible = true;
-                Piece victim = captured_piece_or_on(pos, move);
-                thisThread->logical_stack_state(ss->ply).currentMoveCapturedOpponent = victim != NO_PIECE
-                                                                                      && color_of(victim) != pos.side_to_move();
+                if constexpr (Logical)
+                {
+                    Piece victim = captured_piece_or_on(pos, move);
+                    thisThread->logical_stack_state(ss->ply).currentMoveCapturedOpponent = victim != NO_PIECE
+                                                                                          && color_of(victim) != pos.side_to_move();
+                }
 #endif
                 ss->currentMovePiece = pos.moved_piece(move);
                 ss->continuationHistory = &thisThread->continuationHistory[ss->inCheck]
@@ -1688,6 +1673,11 @@ moves_loop: // When in check, search starts from here
                   if (!child.next_compound(logicalMove, moveInfo, st, reportCurrentMove))
                       break;
                   move = moveInfo.representative;
+                  if (std::count(Limits.banmoves.begin(), Limits.banmoves.end(), logicalMove))
+                  {
+                      child.release();
+                      continue;
+                  }
                   thisThread->rootMoves.emplace_back(logicalMove, moveInfo);
                   rootMoveIndex = thisThread->rootMoves.size();
               }
@@ -1988,9 +1978,8 @@ moves_loop: // When in check, search starts from here
       // Speculative prefetch as early as possible
       // Update the current move (this must be done after singular extension search)
 #ifdef ENABLE_COMPOUND_TURNS
-      thisThread->logical_stack_state(ss->ply).currentMoveHistoryCompatible = moveInfo.historyCompatible;
-      thisThread->logical_stack_state(ss->ply).currentMoveCapturedOpponent = Logical ? moveInfo.capturesOpponent
-                                                                                       : false;
+      if constexpr (Logical)
+          thisThread->logical_stack_state(ss->ply).currentMoveCapturedOpponent = moveInfo.capturesOpponent;
 #endif
       ss->currentMove = moveInfo.historyCompatible ? move : MOVE_NONE;
       ss->currentMovePiece = moveInfo.historyCompatible ? movedPiece : NO_PIECE;
@@ -2273,8 +2262,8 @@ moves_loop: // When in check, search starts from here
 
     // If there is a move which produces search value greater than alpha we update stats of searched moves
     else if (bestMove && bestMoveHistoryCompatible)
-        update_all_stats(pos, ss, bestMove, bestValue, beta, prevSq,
-                         quietsSearched, quietCount, capturesSearched, captureCount, depth);
+        update_all_stats<Logical>(pos, ss, bestMove, bestValue, beta, prevSq,
+                                  quietsSearched, quietCount, capturesSearched, captureCount, depth);
 
     // Bonus for prior countermove that caused the fail low
     else if (   previousMoveHistoryCompatible
@@ -2471,7 +2460,7 @@ moves_loop: // When in check, search starts from here
         futilityBase = bestValue + 155;
     }
 
-    const PieceToHistory* contHist[] = { history_compatible<Logical>(thisThread, ss-1) ? (ss-1)->continuationHistory
+    const PieceToHistory* contHist[] = { is_ok((ss-1)->currentMove) ? (ss-1)->continuationHistory
                                                                              : &thisThread->continuationHistory[0][0][NO_PIECE][0],
                                           (ss-2)->continuationHistory,
                                           nullptr                   , (ss-4)->continuationHistory,
@@ -2485,7 +2474,7 @@ moves_loop: // When in check, search starts from here
                                       &thisThread->gateHistory,
                                       &thisThread->captureHistory,
                                       contHist,
-                                      history_compatible<Logical>(thisThread, ss-1) ? to_sq((ss-1)->currentMove) : SQ_NONE);
+                                      is_ok((ss-1)->currentMove) ? to_sq((ss-1)->currentMove) : SQ_NONE);
 
     // Loop through the moves until no moves remain or a beta cutoff occurs
     while ((move = mp.next_move()) != MOVE_NONE)
@@ -2543,9 +2532,9 @@ moves_loop: // When in check, search starts from here
 
       ss->currentMove = move;
 #ifdef ENABLE_COMPOUND_TURNS
-                thisThread->logical_stack_state(ss->ply).currentMoveHistoryCompatible = true;
-                thisThread->logical_stack_state(ss->ply).currentMoveCapturedOpponent = victim != NO_PIECE
-                                                                                      && color_of(victim) != pos.side_to_move();
+                if constexpr (Logical)
+                    thisThread->logical_stack_state(ss->ply).currentMoveCapturedOpponent = victim != NO_PIECE
+                                                                                          && color_of(victim) != pos.side_to_move();
 #endif
       ss->currentMovePiece = pos.moved_piece(move);
       ss->continuationHistory = &thisThread->continuationHistory[ss->inCheck]
@@ -2677,6 +2666,7 @@ moves_loop: // When in check, search starts from here
 
   // update_all_stats() updates stats at the end of search() when a bestMove is found
 
+  template<bool Logical>
   void update_all_stats(const Position& pos, Stack* ss, Move bestMove, Value bestValue, Value beta, Square prevSq,
                         Move* quietsSearched, int quietCount, Move* capturesSearched, int captureCount, Depth depth) {
 
@@ -2718,14 +2708,9 @@ moves_loop: // When in check, search starts from here
 
     // Extra penalty for a quiet early move that was not a TT move or
     // main killer move in previous ply when it gets refuted.
-#ifdef ENABLE_COMPOUND_TURNS
-    if (   history_compatible<true>(thisThread, ss-1)
+    if (   is_ok((ss-1)->currentMove)
         && ((ss-1)->moveCount == 1 + (ss-1)->ttHit || ((ss-1)->currentMove == (ss-1)->killers[0]))
-        && !captured_opponent<true>(thisThread, ss-1))
-#else
-    if (   ((ss-1)->moveCount == 1 + (ss-1)->ttHit || ((ss-1)->currentMove == (ss-1)->killers[0]))
-        )
-#endif
+        && (!Logical || !captured_opponent<Logical>(thisThread, ss-1)))
             update_continuation_histories(thisThread, ss-1, pos.piece_on(prevSq), prevSq, -bonus1);
 
     // Decrease stats for all non-best capture moves
@@ -2747,16 +2732,13 @@ moves_loop: // When in check, search starts from here
 
   void update_continuation_histories(Thread* thisThread, Stack* ss, Piece pc, Square to, int bonus) {
 
+    (void)thisThread;
     for (int i : {1, 2, 4, 6})
     {
         // Only update first 2 continuation histories if we are in check
         if (ss->inCheck && i > 2)
             break;
-        if (
-#ifdef ENABLE_COMPOUND_TURNS
-            history_compatible<true>(thisThread, ss-i) &&
-#endif
-            is_ok((ss-i)->currentMove))
+        if (is_ok((ss-i)->currentMove))
             (*(ss-i)->continuationHistory)[history_slot(pc)][to] << bonus;
     }
   }
@@ -2786,11 +2768,7 @@ moves_loop: // When in check, search starts from here
         thisThread->mainHistory[us][from_to(reverse_move(move))] << -bonus;
 
     // Update countermove history
-    if (
-#ifdef ENABLE_COMPOUND_TURNS
-        history_compatible<true>(thisThread, ss-1) &&
-#endif
-        is_ok((ss-1)->currentMove))
+    if (is_ok((ss-1)->currentMove))
     {
         Square prevSq = to_sq((ss-1)->currentMove);
         thisThread->counterMoves[pos.piece_on(prevSq)][prevSq] = move;

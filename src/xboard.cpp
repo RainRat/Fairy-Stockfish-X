@@ -24,6 +24,7 @@
 
 #include "evaluate.h"
 #include "compound_turn.h"
+#include "compound_turn_internal.h"
 #include "misc.h"
 #include "partner.h"
 #include "search.h"

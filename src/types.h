@@ -603,9 +603,10 @@ static_assert((LASER_FIRE >> (2 * SQUARE_BITS)) < (1 << MOVE_TYPE_BITS),
 ///
 /// Component storage is private: generic code carries a complete move as a
 /// value and inspects it through size()/iteration/first(), while assembly
-/// stays with the compound provider (compound_turn.*) via push_back(),
-/// pop_back(), and set_component(). Focused white-box tests use the same
-/// read API.
+/// stays with the compound provider through CompoundTurnBuilder. Focused
+/// white-box tests use the same read API.
+class CompoundTurnBuilder;
+
 struct LogicalMove {
   static constexpr int MAX_COMPONENTS = 4;
 
@@ -674,9 +675,9 @@ struct LogicalMove {
 #endif
   }
 
-  // Assembly for the compound provider: append a component, remove the last
-  // one while backtracking, or overwrite slot i (extending the turn to i+1
-  // for continued descent at the same depth).
+ private:
+  friend class CompoundTurnBuilder;
+
   void push_back(Move m) {
       assert(m != MOVE_NONE);
 #ifdef ENABLE_COMPOUND_TURNS
@@ -702,11 +703,13 @@ struct LogicalMove {
       components[i] = m;
       length = uint8_t(i + 1);
 #else
+      (void)i;
       assert(i == 0);
       move = m;
 #endif
   }
 
+ public:
   bool operator==(const LogicalMove& other) const {
 #ifdef ENABLE_COMPOUND_TURNS
       return length == other.length
