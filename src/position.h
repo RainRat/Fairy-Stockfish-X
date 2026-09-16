@@ -1190,7 +1190,7 @@ private:
   template<bool Compound>
   void do_component_impl(Move m, StateInfo& newSt, bool countNode);
   template<bool Compound>
-  void undo_component_impl(Move m);
+  void undo_component_impl(Move m, bool previousCompoundTurnReset = false);
 #ifdef ENABLE_COMPOUND_TURNS
   void end_compound_turn(StateInfo& newSt);
   void undo_compound_turn(uint8_t previousStep);
@@ -1375,8 +1375,6 @@ private:
 #ifdef ENABLE_COMPOUND_TURNS
   uint8_t compoundTurnStep = 0;
   bool compoundTurnReset = false;
-  std::array<bool, LogicalMove::MAX_COMPONENTS + 1> compoundTurnResetStack{};
-  uint8_t compoundTurnResetDepth = 0;
 #endif
   Score psq;
   mutable Move simulatedMove = MOVE_NONE;

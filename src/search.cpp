@@ -27,6 +27,7 @@
 #include <optional>
 #include <sstream>
 #include <thread>
+#include <unordered_map>
 
 #include "evaluate.h"
 #ifdef ENABLE_COMPOUND_TURNS
@@ -134,6 +135,7 @@ namespace {
   constexpr uint64_t TtHitAverageWindow     = 4096;
   constexpr uint64_t TtHitAverageResolution = 1024;
   constexpr int MaxReductionIndex = MAX_MOVES - 1;
+  using RootMoveIndex = std::unordered_map<Move, size_t>;
 
   // Futility margin
   Value futility_margin(Depth d, bool improving) {
@@ -700,7 +702,8 @@ void Thread::search() {
 
   std::memset(ss-7, 0, 10 * sizeof(Stack));
 #ifdef ENABLE_COMPOUND_TURNS
-  clear_logical_stack();
+  if (rootPos.compound_search_enabled())
+      clear_logical_stack();
 #endif
   for (int i = -7; i <= 2; ++i)
       (ss+i)->currentMovePiece = NO_PIECE;
@@ -1167,6 +1170,14 @@ namespace {
     const bool exactTtMoveIdentity = !logicalMovePosition;
     const bool lazyRoot = rootNode && logicalMovePosition
                        && thisThread->rootMoves.empty();
+    std::optional<RootMoveIndex> rootMoveIndex;
+    if (rootNode && !logicalMovePosition && thisThread->rootMoves.size() > 32)
+    {
+        rootMoveIndex.emplace();
+        rootMoveIndex->reserve(thisThread->rootMoves.size());
+        for (size_t i = 0; i < thisThread->rootMoves.size(); ++i)
+            rootMoveIndex->emplace(thisThread->rootMoves[i].first().first(), i);
+    }
     ss->inCheck        = pos.evasion_checkers();
     priorCapture       = [&] {
         if constexpr (Logical)
@@ -1644,7 +1655,7 @@ moves_loop: // When in check, search starts from here
     // or a beta cutoff occurs.
     bool bestMoveHistoryCompatible = false;
 #ifdef ENABLE_COMPOUND_TURNS
-    size_t rootMoveIndex = thisThread->pvIdx;
+    size_t logicalRootMoveIndex = thisThread->pvIdx;
 #else
     (void)child;
 #endif
@@ -1679,13 +1690,13 @@ moves_loop: // When in check, search starts from here
                       continue;
                   }
                   thisThread->rootMoves.emplace_back(logicalMove, moveInfo);
-                  rootMoveIndex = thisThread->rootMoves.size();
+                  logicalRootMoveIndex = thisThread->rootMoves.size();
               }
               else
               {
-                  if (rootMoveIndex >= thisThread->pvLast)
+                  if (logicalRootMoveIndex >= thisThread->pvLast)
                       break;
-                  RootMove& rootMove = thisThread->rootMoves[rootMoveIndex++];
+                  RootMove& rootMove = thisThread->rootMoves[logicalRootMoveIndex++];
                   logicalMove = rootMove.first();
                   move = logicalMove.first();
                   moveInfo = rootMove.move_info();
@@ -1720,15 +1731,37 @@ moves_loop: // When in check, search starts from here
       // membership check is only needed for the ordinary MovePicker path.
       if constexpr (Logical)
       {
-          if (!logicalMovePosition && rootNode
-              && !std::count(thisThread->rootMoves.begin() + thisThread->pvIdx,
-                             thisThread->rootMoves.begin() + thisThread->pvLast, logicalMove))
+          if (!logicalMovePosition && rootNode)
+          {
+              if (rootMoveIndex)
+              {
+                  auto it = rootMoveIndex->find(move);
+                  if (it == rootMoveIndex->end()
+                      || it->second < thisThread->pvIdx
+                      || it->second >= thisThread->pvLast)
+                      continue;
+              }
+              else if (!std::count(thisThread->rootMoves.begin() + thisThread->pvIdx,
+                                   thisThread->rootMoves.begin() + thisThread->pvLast,
+                                   logicalMove))
+                  continue;
+          }
+      }
+      else if (rootNode)
+      {
+          if (rootMoveIndex)
+          {
+              auto it = rootMoveIndex->find(move);
+              if (it == rootMoveIndex->end()
+                  || it->second < thisThread->pvIdx
+                  || it->second >= thisThread->pvLast)
+                  continue;
+          }
+          else if (!std::count(thisThread->rootMoves.begin() + thisThread->pvIdx,
+                               thisThread->rootMoves.begin() + thisThread->pvLast,
+                               logicalMove))
               continue;
       }
-      else if (rootNode
-               && !std::count(thisThread->rootMoves.begin() + thisThread->pvIdx,
-                              thisThread->rootMoves.begin() + thisThread->pvLast, logicalMove))
-          continue;
 
       // Check for legality
       if constexpr (Logical)
@@ -1968,7 +2001,10 @@ moves_loop: // When in check, search starts from here
       else if (   pos.must_capture()
                && moveInfo.historyCompatible
                && pos.capture(move)
-               && (ss->inCheck || MoveList<CAPTURES>(pos).size() == 1))
+               && (ss->inCheck
+                   || (losingCaptureCount < 0
+                       ? (losingCaptureCount = MoveList<CAPTURES>(pos).size()) == 1
+                       : losingCaptureCount == 1)))
           extension = 1;
 
       // Add extension to new depth
@@ -2155,8 +2191,10 @@ moves_loop: // When in check, search starts from here
           RootMove& rm = [&]() -> RootMove& {
 #ifdef ENABLE_COMPOUND_TURNS
               if (logicalMovePosition)
-                  return thisThread->rootMoves[rootMoveIndex - 1];
+                  return thisThread->rootMoves[logicalRootMoveIndex - 1];
 #endif
+              if (rootMoveIndex)
+                  return thisThread->rootMoves[rootMoveIndex->find(move)->second];
               return *std::find(thisThread->rootMoves.begin(),
                                 thisThread->rootMoves.end(), logicalMove);
           }();

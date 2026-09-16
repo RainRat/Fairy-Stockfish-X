@@ -15,12 +15,14 @@
 namespace Stockfish {
 
 void CompoundTurnAdapter::do_component(Position& pos, Move move, StateInfo& state,
-                                       bool countNode) {
+                                       bool& previousTurnReset, bool countNode) {
+    previousTurnReset = pos.compoundTurnReset;
     pos.do_component_impl<true>(move, state, countNode);
 }
 
-void CompoundTurnAdapter::undo_component(Position& pos, Move move) {
-    pos.undo_component_impl<true>(move);
+void CompoundTurnAdapter::undo_component(Position& pos, Move move,
+                                         bool previousTurnReset) {
+    pos.undo_component_impl<true>(move, previousTurnReset);
 }
 
 namespace {
@@ -29,20 +31,25 @@ int compound_move_cost(const Position& pos, Move move) {
     return pos.compound_turn_step_cost(move);
 }
 
-bool compound_turn_candidate_accepted(Position& pos, Move move, int usedSteps,
-                                      Key startBoundaryKey,
-                                      const StateInfo* logicalRoot) {
-    const int moveCost = compound_move_cost(pos, move);
-    if (!is_pass(move) && pos.compound_turn_boundary_key() == startBoundaryKey)
-        return false;
+struct CompoundStepInfo {
+    int nextUsedSteps;
+    bool accepted;
+    bool canDescend;
+};
 
-    bool repetitionIllegal = false;
-    if (!is_pass(move) && usedSteps + moveCost < pos.compound_turn_steps())
-        repetitionIllegal = pos.same_player_board_repetition_illegal(logicalRoot->previous, 1);
-    else
-        repetitionIllegal = pos.same_player_board_repetition_illegal(logicalRoot->previous, 0);
-
-    return !repetitionIllegal;
+CompoundStepInfo classify_compound_step(Position& pos, Move move, int usedSteps,
+                                        Key startBoundaryKey,
+                                        const StateInfo* logicalRoot) {
+    const int nextUsedSteps = usedSteps + compound_move_cost(pos, move);
+    const bool boundaryChanged = is_pass(move)
+                               || pos.compound_turn_boundary_key() != startBoundaryKey;
+    const bool additionalBoundaryPly = !is_pass(move)
+                                    && nextUsedSteps < pos.compound_turn_steps();
+    const bool accepted = boundaryChanged
+                       && !pos.same_player_board_repetition_illegal(
+                              logicalRoot->previous, additionalBoundaryPly);
+    return {nextUsedSteps, accepted,
+            !is_pass(move) && additionalBoundaryPly && pos.compound_turn_active()};
 }
 
 void record_removed_piece(LogicalMoveInfo& info, Piece piece, Color mover) {
@@ -54,6 +61,30 @@ void record_removed_piece(LogicalMoveInfo& info, Piece piece, Color mover) {
         info.losesOwnMaterial = true;
     else
         info.capturesOpponent = true;
+}
+
+void accumulate_component_info(LogicalMoveInfo& info, const StateInfo& state,
+                               Move component, Color mover) {
+    record_removed_piece(info, state.captured.piece.piece, mover);
+    record_removed_piece(info, state.jumpedEnPassantCaptured.piece.piece, mover);
+    record_removed_piece(info, state.dead.piece, mover);
+
+    Bitboard removed = state.bycatchSquares
+                     & ~state.blastPromotedSquares
+                     & ~state.laserTransformedSquares;
+    while (removed)
+    {
+        Square square = pop_lsb(removed);
+        record_removed_piece(info, state.bycatchPieces[square].piece(), mover);
+    }
+
+    for (int transfer = 0; transfer < state.push.transferCount; ++transfer)
+        record_removed_piece(info, state.push.transfers[transfer].piece, mover);
+
+    info.promotionLike = info.promotionLike
+                       || is_promotion_move(component)
+                       || state.promotionPawn != NO_PIECE
+                       || state.consumedPromotionHandPiece != NO_PIECE;
 }
 
 std::string compound_step_to_string(Position& pos, Move move) {
@@ -74,7 +105,7 @@ struct CompoundMoveParser {
     const std::string& text;
     Key startBoundaryKey;
     const StateInfo* logicalRoot;
-    StateInfo* states;
+    LogicalMoveUndo transaction;
     LogicalMove parsed{};
 
     bool parse_level(size_t offset, int usedSteps) {
@@ -100,17 +131,17 @@ struct CompoundMoveParser {
 
             const int index = parsed.size();
             CompoundTurnBuilder::push_back(parsed, move);
-            CompoundTurnAdapter::do_component(pos, move, states[index], false);
-            const int nextUsedSteps = usedSteps + moveCost;
+            CompoundTurnAdapter::do_component(pos, move, transaction, index, false);
 
             bool accepted = false;
+            const CompoundStepInfo step = classify_compound_step(
+                pos, move, usedSteps, startBoundaryKey, logicalRoot);
             if (next == text.size())
-                accepted = compound_turn_candidate_accepted(pos, move, usedSteps,
-                                                            startBoundaryKey, logicalRoot);
+                accepted = step.accepted;
             else
-                accepted = !is_pass(move) && parse_level(next + 1, nextUsedSteps);
+                accepted = step.canDescend && parse_level(next + 1, step.nextUsedSteps);
 
-            CompoundTurnAdapter::undo_component(pos, move);
+            CompoundTurnAdapter::undo_component(pos, move, transaction, index);
             if (accepted)
                 return true;
 
@@ -207,12 +238,12 @@ void LogicalMoveSource::initialize_frame(int frameDepth) {
 
 void LogicalMoveSource::apply_path(int length) {
   for (int i = 0; i < length; ++i)
-      CompoundTurnAdapter::do_component(pos, turn[i], transaction->components[i], false);
+      CompoundTurnAdapter::do_component(pos, turn[i], *transaction, i, false);
 }
 
 void LogicalMoveSource::unwind_prefix() {
   for (int i = depth - 1; i >= 0; --i)
-      CompoundTurnAdapter::undo_component(pos, turn[i]);
+      CompoundTurnAdapter::undo_component(pos, turn[i], *transaction, i);
   prefixApplied = false;
 }
 
@@ -267,7 +298,7 @@ bool LogicalMoveSource::next_impl(LogicalMove& move, LogicalMoveInfo* info,
       {
           ++depth;
           CompoundTurnAdapter::do_component(pos, turn[depth - 1],
-                                             transaction->components[depth - 1], false);
+                                             *transaction, depth - 1, false);
           initialize_frame(depth);
           descend = false;
       }
@@ -281,7 +312,8 @@ bool LogicalMoveSource::next_impl(LogicalMove& move, LogicalMoveInfo* info,
               finished = true;
               return false;
           }
-          CompoundTurnAdapter::undo_component(pos, turn[depth - 1]);
+          CompoundTurnAdapter::undo_component(pos, turn[depth - 1], *transaction,
+                                              depth - 1);
           --depth;
           continue;
       }
@@ -304,7 +336,7 @@ bool LogicalMoveSource::next_impl(LogicalMove& move, LogicalMoveInfo* info,
           firstGivesCheck = pos.gives_check(component);
       }
       CompoundTurnAdapter::do_component(pos, component,
-                                         transaction->components[depth], false);
+                                         *transaction, depth, false);
 
       if (info)
       {
@@ -318,48 +350,18 @@ bool LogicalMoveSource::next_impl(LogicalMove& move, LogicalMoveInfo* info,
           componentFrame.info.seeReliable = ordinaryHeuristicCompatible && firstSeeReliable;
           componentFrame.info.givesCheck = turn.is_single() && firstGivesCheck;
 
-          const StateInfo& componentState = transaction->components[depth];
-          record_removed_piece(componentFrame.info, componentState.captured.piece.piece, mover);
-          record_removed_piece(componentFrame.info, componentState.jumpedEnPassantCaptured.piece.piece, mover);
-          record_removed_piece(componentFrame.info, componentState.dead.piece, mover);
-
-          Bitboard removed = componentState.bycatchSquares
-                           & ~componentState.blastPromotedSquares
-                           & ~componentState.laserTransformedSquares;
-          while (removed)
-          {
-              Square square = pop_lsb(removed);
-              record_removed_piece(componentFrame.info, componentState.bycatchPieces[square].piece(), mover);
-          }
-
-          for (int transfer = 0; transfer < componentState.push.transferCount; ++transfer)
-              record_removed_piece(componentFrame.info, componentState.push.transfers[transfer].piece, mover);
-
-          componentFrame.info.promotionLike = componentFrame.info.promotionLike
-                                          || is_promotion_move(component)
-                                          || componentState.promotionPawn != NO_PIECE
-                                          || componentState.consumedPromotionHandPiece != NO_PIECE;
+          accumulate_component_info(componentFrame.info,
+                                    transaction->components[depth], component, mover);
       }
 
       transaction->previous = logicalRoot;
-      transaction->usedCost = usedSteps + moveCost;
+      const CompoundStepInfo step = classify_compound_step(
+          pos, component, usedSteps, startBoundaryKey, logicalRoot);
+      transaction->usedCost = step.nextUsedSteps;
       transaction->syntheticBoundary = false;
-      const bool boundaryChanged = is_pass(component)
-                                 || pos.compound_turn_boundary_key() != startBoundaryKey;
-      const int boundaryPlies = pos.state()->pliesFromNull
-                              + (!is_pass(component)
-                                 && usedSteps + moveCost < pos.compound_turn_steps());
-      const bool accepted = boundaryChanged
-                         && !pos.same_player_board_repetition_illegal(
-                                logicalRoot->previous,
-                                boundaryPlies - pos.state()->pliesFromNull);
-      const bool canDescend = !is_pass(component)
-                           && usedSteps + moveCost < pos.compound_turn_steps()
-                           && pos.compound_turn_active();
+      descend = step.canDescend;
 
-      descend = canDescend;
-
-      if (accepted)
+      if (step.accepted)
       {
           move = turn;
           if (info)
@@ -371,12 +373,12 @@ bool LogicalMoveSource::next_impl(LogicalMove& move, LogicalMoveInfo* info,
                   if (!notation)
                       notation = std::make_unique<Notation>();
                   for (int i = depth; i >= 0; --i)
-                      CompoundTurnAdapter::undo_component(pos, turn[i]);
+                      CompoundTurnAdapter::undo_component(pos, turn[i], *transaction, i);
                   for (int i = 0; i <= depth; ++i)
                   {
                       notation->components[i] = compound_step_to_string(pos, turn[i]);
                       CompoundTurnAdapter::do_component(pos, turn[i],
-                                                         transaction->components[i], false);
+                                                         *transaction, i, false);
                   }
                   notation->yielded.clear();
                   for (int i = 0; i < turn.size(); ++i)
@@ -423,7 +425,7 @@ namespace {
 
 bool has_any_compound_move_impl(Position& pos, int depth, int usedSteps,
                                 Key startBoundaryKey, const StateInfo* logicalRoot,
-                                StateInfo* states) {
+                                LogicalMoveUndo& transaction) {
 
     for (const auto& move : MoveList<LEGAL_COMPONENTS>(pos))
     {
@@ -434,18 +436,14 @@ bool has_any_compound_move_impl(Position& pos, int depth, int usedSteps,
         if (usedSteps + moveCost > pos.compound_turn_steps())
             continue;
 
-        CompoundTurnAdapter::do_component(pos, move, states[depth], false);
-        const int nextUsedSteps = usedSteps + moveCost;
-        const bool accepted = compound_turn_candidate_accepted(pos, move, usedSteps,
-                                                                startBoundaryKey, logicalRoot);
-        const bool canDescend = !is_pass(move)
-                             && nextUsedSteps < pos.compound_turn_steps()
-                             && pos.compound_turn_active();
-        const bool found = accepted
-                        || (canDescend && depth + 1 < LogicalMove::MAX_COMPONENTS
-                            && has_any_compound_move_impl(pos, depth + 1, nextUsedSteps,
-                                                          startBoundaryKey, logicalRoot, states));
-        CompoundTurnAdapter::undo_component(pos, move);
+        CompoundTurnAdapter::do_component(pos, move, transaction, depth, false);
+        const CompoundStepInfo step = classify_compound_step(
+            pos, move, usedSteps, startBoundaryKey, logicalRoot);
+        const bool found = step.accepted
+                        || (step.canDescend && depth + 1 < LogicalMove::MAX_COMPONENTS
+                            && has_any_compound_move_impl(pos, depth + 1, step.nextUsedSteps,
+                                                          startBoundaryKey, logicalRoot, transaction));
+        CompoundTurnAdapter::undo_component(pos, move, transaction, depth);
         if (found)
             return true;
     }
@@ -463,9 +461,9 @@ bool has_any_compound_move(Position& pos, bool checkGameEnd) {
   if (checkGameEnd && pos.is_game_end(result))
       return false;
 
-  alignas(Eval::NNUE::CacheLineSize) StateInfo states[LogicalMove::MAX_COMPONENTS];
+  LogicalMoveUndo transaction;
   return has_any_compound_move_impl(pos, 0, 0, pos.compound_turn_boundary_key(),
-                                    pos.state(), states);
+                                    pos.state(), transaction);
 }
 
 bool parse_compound_move(Position& pos, const std::string& text, LogicalMove& turn) {
@@ -477,11 +475,10 @@ bool parse_compound_move(Position& pos, const std::string& text, LogicalMove& tu
   if (pos.is_game_end(result))
       return false;
 
-  alignas(Eval::NNUE::CacheLineSize) StateInfo states[LogicalMove::MAX_COMPONENTS + 1];
   const Key startBoundaryKey = pos.compound_turn_boundary_key();
   const StateInfo* logicalRoot = pos.state();
 
-  CompoundMoveParser parser{pos, text, startBoundaryKey, logicalRoot, states};
+  CompoundMoveParser parser{pos, text, startBoundaryKey, logicalRoot, {}, {}};
   if (!parser.parse_level(0, 0))
       return false;
 
@@ -510,30 +507,13 @@ bool compound_move_info(Position& pos, const LogicalMove& turn, LogicalMoveInfo&
           firstSeeReliable = !pos.see_pruning_unreliable(component);
           firstGivesCheck = pos.gives_check(component);
       }
-      CompoundTurnAdapter::do_component(pos, component, transaction.components[i], false);
+      CompoundTurnAdapter::do_component(pos, component, transaction, i, false);
 
-      const StateInfo& componentState = transaction.components[i];
-      record_removed_piece(info, componentState.captured.piece.piece, mover);
-      record_removed_piece(info, componentState.jumpedEnPassantCaptured.piece.piece, mover);
-      record_removed_piece(info, componentState.dead.piece, mover);
-      Bitboard removed = componentState.bycatchSquares
-                       & ~componentState.blastPromotedSquares
-                       & ~componentState.laserTransformedSquares;
-      while (removed)
-      {
-          Square square = pop_lsb(removed);
-          record_removed_piece(info, componentState.bycatchPieces[square].piece(), mover);
-      }
-      for (int transfer = 0; transfer < componentState.push.transferCount; ++transfer)
-          record_removed_piece(info, componentState.push.transfers[transfer].piece, mover);
-      info.promotionLike = info.promotionLike
-                         || is_promotion_move(component)
-                         || componentState.promotionPawn != NO_PIECE
-                         || componentState.consumedPromotionHandPiece != NO_PIECE;
+      accumulate_component_info(info, transaction.components[i], component, mover);
   }
 
   for (int i = turn.size() - 1; i >= 0; --i)
-      CompoundTurnAdapter::undo_component(pos, turn[i]);
+      CompoundTurnAdapter::undo_component(pos, turn[i], transaction, i);
 
   info.representative = turn.first();
   info.movedPiece = firstMovedPiece;
@@ -575,11 +555,11 @@ std::string compound_move_to_string(Position& pos, const LogicalMove& turn) {
       result += compound_step_to_string(pos, turn[i]);
       // Formatting is a read-only operation. The component executor still
       // supplies scratch state so that effects are formatted in context.
-      CompoundTurnAdapter::do_component(pos, turn[i], transaction.components[i], false);
+      CompoundTurnAdapter::do_component(pos, turn[i], transaction, i, false);
   }
 
   for (int i = turn.size() - 1; i >= 0; --i)
-      CompoundTurnAdapter::undo_component(pos, turn[i]);
+      CompoundTurnAdapter::undo_component(pos, turn[i], transaction, i);
 
   return result;
 }

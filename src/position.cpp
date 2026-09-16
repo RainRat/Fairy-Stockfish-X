@@ -176,7 +176,8 @@ namespace {
       : pos_(const_cast<Position&>(pos)), move_(m), component_(pos_.compound_turn_active()) {
 #ifdef ENABLE_COMPOUND_TURNS
       if (component_)
-          CompoundTurnAdapter::do_component(pos_, move_, newSt, false);
+          CompoundTurnAdapter::do_component(pos_, move_, newSt,
+                                             previousCompoundTurnReset_, false);
       else
 #endif
           pos_.do_move(move_, newSt, false);
@@ -185,7 +186,7 @@ namespace {
     ~ScopedProbeMove() {
 #ifdef ENABLE_COMPOUND_TURNS
       if (component_)
-          CompoundTurnAdapter::undo_component(pos_, move_);
+          CompoundTurnAdapter::undo_component(pos_, move_, previousCompoundTurnReset_);
       else
 #endif
           pos_.undo_move(move_);
@@ -198,6 +199,9 @@ namespace {
     Position& pos_;
     Move move_;
     bool component_ = false;
+#ifdef ENABLE_COMPOUND_TURNS
+    bool previousCompoundTurnReset_ = false;
+#endif
   };
 
   static_assert(MAX_PUSH_SNAPSHOT <= 32, "push snapshot promotion bitmask must fit in uint32_t");
@@ -845,6 +849,103 @@ namespace {
 
     return expanded;
   }
+
+} // namespace
+
+namespace {
+
+bool legacy_flag_extinction_game_end(const Position& pos, Value& result, int ply) {
+
+  if (!pos.at_complete_turn_boundary())
+      return false;
+
+  const Variant* var = pos.variant();
+  if (var->extinctionValue.get(WHITE) != VALUE_NONE
+      || var->extinctionValue.get(BLACK) != VALUE_NONE)
+  {
+      for (Color c : {~pos.side_to_move(), pos.side_to_move()})
+      {
+          if (var->extinctionValue.get(c) == VALUE_NONE)
+              continue;
+
+          PieceSet extinctTargets = pos.extinction_piece_types(c);
+          const PieceSet mustAppear = pos.extinction_must_appear();
+          if (!pos.blast_on_capture())
+              extinctTargets &= ~pos.pseudo_royal_types();
+
+          if ((mustAppear & piece_set(ALL_PIECES))
+              && !(pos.state()->extinctionSeen[c] & piece_set(ALL_PIECES)))
+              continue;
+
+          bool allTypesExtinct = true;
+          bool anyTypeExtinct = false;
+          bool sawEligibleType = false;
+          for (PieceSet ps = extinctTargets; ps;)
+          {
+              PieceType pt = pop_lsb(ps);
+              if (!(mustAppear & piece_set(ALL_PIECES))
+                  && (mustAppear & piece_set(pt))
+                  && !(pos.state()->extinctionSeen[c] & piece_set(pt)))
+              {
+                  allTypesExtinct = false;
+                  continue;
+              }
+              sawEligibleType = true;
+              bool extinct = pos.count_with_hand(c, pt) <= pos.extinction_piece_count(c)
+                          && pos.count_with_hand(~c, pt) >= pos.extinction_opponent_piece_count(c)
+                                                       + (pos.extinction_claim() && c == pos.side_to_move());
+              anyTypeExtinct |= extinct;
+              allTypesExtinct &= extinct;
+          }
+
+          if (sawEligibleType
+              && (pos.extinction_all_piece_types(c) ? allTypesExtinct : anyTypeExtinct))
+          {
+              result = c == pos.side_to_move() ? pos.extinction_value(c, ply)
+                                               : -pos.extinction_value(c, ply);
+              return true;
+          }
+      }
+  }
+
+  if (pos.flag_move() && pos.flag_reached(pos.side_to_move()))
+  {
+      result = pos.side_to_move() == WHITE && pos.flag_reached(BLACK)
+             ? VALUE_DRAW : mate_in(ply);
+      return true;
+  }
+
+  if ((!pos.flag_move()
+       || (pos.flag_piece_types(pos.side_to_move()) == piece_set(KING)
+           && !pos.allow_checks()))
+      && pos.flag_reached(~pos.side_to_move()))
+  {
+      bool gameEnd = true;
+      if (pos.flag_move() && pos.side_to_move() == BLACK
+          && !pos.evasion_checkers() && pos.count<KING>(pos.side_to_move())
+          && (pos.flag_region(pos.side_to_move())
+              & pos.attacks_from(pos.side_to_move(), KING,
+                                 pos.square<KING>(pos.side_to_move()))))
+      {
+          assert(pos.flag_piece_types(pos.side_to_move()) == piece_set(KING));
+          for (const auto& m : MoveList<NON_EVASIONS>(pos))
+              if (type_of(pos.moved_piece(m)) == KING
+                  && (pos.flag_region(pos.side_to_move()) & to_sq(m))
+                  && pos.legal(m))
+              {
+                  gameEnd = false;
+                  break;
+              }
+      }
+      if (gameEnd)
+      {
+          result = mated_in(ply);
+          return true;
+      }
+  }
+
+  return false;
+}
 
 } // namespace
 
@@ -7820,8 +7921,7 @@ void Position::do_component_impl(Move m, StateInfo& newSt, bool countNode) {
                                     && !var->blastPassiveTypes;
   if constexpr (Compound)
   {
-      assert(compoundTurn && compoundTurnResetDepth < compoundTurnResetStack.size());
-      compoundTurnResetStack[compoundTurnResetDepth++] = compoundTurnReset;
+      assert(compoundTurn);
   }
 #else
   Key k = st->key ^ Zobrist::side;
@@ -9885,18 +9985,16 @@ void Position::undo_move(Move m) {
 }
 
 template<bool Compound>
-void Position::undo_component_impl(Move m) {
+void Position::undo_component_impl(Move m, bool previousCompoundTurnReset) {
 
   assert(is_ok(m));
 
+#ifndef ENABLE_COMPOUND_TURNS
+  (void)previousCompoundTurnReset;
+#endif
+
 #ifdef ENABLE_COMPOUND_TURNS
   const uint8_t currentCompoundTurnStep = compoundTurnStep;
-  bool previousCompoundTurnReset = false;
-  if constexpr (Compound)
-  {
-      assert(compoundTurnResetDepth > 0);
-      previousCompoundTurnReset = compoundTurnResetStack[compoundTurnResetDepth - 1];
-  }
   if constexpr (Compound)
   {
       if (var->compoundTurnSteps == 0 || compoundTurnStep == 0)
@@ -10376,7 +10474,6 @@ void Position::undo_component_impl(Move m) {
 #ifdef ENABLE_COMPOUND_TURNS
   if constexpr (Compound)
   {
-      --compoundTurnResetDepth;
       compoundTurnStep = currentCompoundTurnStep
                        ? uint8_t(currentCompoundTurnStep - compound_turn_step_cost(m))
                        : (is_pass(m) ? 0
@@ -10526,11 +10623,6 @@ void Position::do_move(const LogicalMove& move, StateInfo& newSt,
   assert(move.size() > 0 && move.size() <= LogicalMove::MAX_COMPONENTS);
   assert(&newSt != st);
 
-#ifdef ENABLE_COMPOUND_TURNS
-  // A previous forward-applied logical move no longer has an undo transaction
-  // attached to it. Reuse the component-reset scratch for this transaction.
-  compoundTurnResetDepth = 0;
-#endif
   transaction.previous = st;
   transaction.usedCost = 0;
   transaction.syntheticBoundary = false;
@@ -10539,6 +10631,7 @@ void Position::do_move(const LogicalMove& move, StateInfo& newSt,
   {
       assert(legal(move[i]));
       transaction.usedCost += compound_turn_step_cost(move[i]);
+      transaction.previousTurnReset[i] = compoundTurnReset;
       do_component_impl<true>(move[i], transaction.components[i], countNode && i == 0);
   }
 
@@ -10614,7 +10707,7 @@ void Position::undo_move(const LogicalMove& move, LogicalMoveUndo& transaction,
       else
           st = &transaction.components[last];
 
-      undo_component_impl<true>(move[last]);
+      undo_component_impl<true>(move[last], transaction.previousTurnReset[last]);
       return;
   }
 
@@ -10628,7 +10721,7 @@ void Position::undo_move(const LogicalMove& move, LogicalMoveUndo& transaction,
       st = &transaction.components[move.size() - 1];
 
   for (int i = move.size() - 1; i >= 0; --i)
-      undo_component_impl<true>(move[i]);
+      undo_component_impl<true>(move[i], transaction.previousTurnReset[i]);
 
   assert(st == transaction.previous);
 }
@@ -11315,6 +11408,17 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
               return true;
           }
 
+  const bool simultaneousResolutionConfigured =
+      var->simulFlagExtinctionPriority == SimulFlagExtinctionPriority::FLAG
+      || var->simulFlagValueByMover != VALUE_NONE
+      || var->simulExtinctionValueByMover != VALUE_NONE
+      || var->flagOpponentRelocation;
+  if (!simultaneousResolutionConfigured
+      && legacy_flag_extinction_game_end(*this, result, ply))
+      return true;
+
+  if (simultaneousResolutionConfigured)
+  {
   const bool adjudicationBoundary = at_complete_turn_boundary();
   const Color mover = ~sideToMove;
   const bool whiteFlagReached = adjudicationBoundary && flag_reached(WHITE);
@@ -11498,6 +11602,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
           return true;
       }
   } // else: at least one simultaneous-result override is configured
+  }
 
   // Castle chess
   if (var->castlingWins)
