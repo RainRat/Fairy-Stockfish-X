@@ -42,6 +42,15 @@
 
 namespace Stockfish {
 
+class Position;
+class LogicalMoveSource;
+struct StateInfo;
+struct LogicalMoveUndo;
+struct CompoundTurnAdapter;
+#ifdef ENABLE_COMPOUND_TURNS
+bool has_any_compound_move(Position& pos, bool checkGameEnd);
+#endif
+
 constexpr int MAX_PUSH_SNAPSHOT = 32;
 
 extern Square JumpMidpoint[SQUARE_NB][SQUARE_NB];
@@ -125,6 +134,12 @@ struct SimulatedMoveInfo {
   Bitboard type_pieces(Color c, PieceType pt) const {
       return typeOccupancy.empty() ? Bitboard(0)
                                    : typeOccupancy[size_t(c) * PIECE_TYPE_NB + pt];
+  }
+  Bitboard type_pieces(Color c, PieceSet pts) const {
+      Bitboard result = 0;
+      while (pts)
+          result |= type_pieces(c, pop_lsb(pts));
+      return result;
   }
   Piece piece_on(Square sq) const {
       if (typeOccupancy.empty())
@@ -813,7 +828,20 @@ public:
   Bitboard diagonal_lines() const;
   Square pawn_step(Square s, Color us, int steps) const;
   bool pass(Color c) const;
+  bool compound_turn_active() const;
+  bool at_complete_turn_boundary() const;
+  int compound_turn_steps() const;
+  int compound_turn_step() const;
+  int compound_turn_step_cost(Move m) const;
+  // previousSamePlayerPosition is the nearest persistent position with the
+  // same side to move; earlier same-player positions are linked at stride two.
+  bool same_player_board_repetition_illegal(const StateInfo* previousSamePlayerPosition,
+                                            int additionalBoundaryPlies = 0) const;
   bool has_setup_drop(Color c) const;
+  bool sequential_setup_active() const;
+  Color sequential_setup_side() const;
+  bool sequential_setup_move_restricted(Color c) const;
+  bool violates_setup_move_order(Color c, Move m) const;
   bool pass_until_setup() const;
   bool pass_on_stalemate(Color c) const;
   bool multimove_pass(int ply) const;
@@ -1026,10 +1054,14 @@ public:
   // Properties of moves
   bool legal(Move m) const;
   bool pseudo_legal(const Move m) const;
+#ifdef ENABLE_COMPOUND_TURNS
+  bool encoded_push_legal(Move m) const;
+#endif
   SimulatedMoveInfo simulated_move_info(Move m, bool withEffects = true) const;
   bool virtual_drop(Move m) const;
   bool paired_drop(Move m) const;
   bool push_move(Move m) const;
+  PushPullRule push_pull_rule() const;
   bool stepwise_pushing() const;
   bool capture(Move m) const;
   bool capture_or_promotion(Move m) const;
@@ -1060,9 +1092,16 @@ public:
   bool is_promoted(Square s) const;
   int  pawns_on_same_color_squares(Color c, Square s) const;
 
-  // Doing and undoing moves
+  // Doing and undoing moves. Complete moves (including compound turns) go
+  // through do_move()/undo_move(); component execution is provider-internal.
   void do_move(Move m, StateInfo& newSt, bool countNode = true);
   void undo_move(Move m);
+#ifdef ENABLE_COMPOUND_TURNS
+  void do_move(const LogicalMove& move, StateInfo& newSt,
+               LogicalMoveUndo& transaction, bool countNode = true);
+  void undo_move(const LogicalMove& move, LogicalMoveUndo& transaction,
+                 bool preservePrefix = false);
+#endif
   void fire_laser(Color us, Key& k, Square selectedEmitter = SQ_NONE);
   Bitboard laser_rotation_candidates(Color us) const;
   bool laser_portal_exit(Square entrance, Square& exit, Direction& direction) const;
@@ -1084,6 +1123,11 @@ public:
   // Accessing hash keys
   Key key() const;
   Key key_after(Move m) const;
+#ifdef ENABLE_COMPOUND_TURNS
+  // Position identity with the side-to-move bit normalized for turn-boundary
+  // comparisons. Boundary checks still include reserves and other hashed rule state.
+  Key compound_turn_boundary_key() const;
+#endif
   Key material_key(EndgameEval e = EG_EVAL_CHESS) const;
   Key pawn_key() const;
 
@@ -1096,6 +1140,11 @@ public:
   bool is_immediate_game_end(Value& result, int ply = 0) const;
   bool has_legal_move() const;
   bool has_legal_move_ignoring_immediate_end() const;
+#ifdef ENABLE_COMPOUND_TURNS
+  bool logical_moves_active() const;
+  bool compound_search_enabled() const;
+  bool has_legal_logical_move(bool checkGameEnd = true) const;
+#endif
   bool is_optional_game_end() const;
   bool is_optional_game_end(Value& result, int ply = 0, int countStarted = 0) const;
   bool is_game_end(Value& result, int ply = 0) const;
@@ -1133,10 +1182,29 @@ public:
   void remove_piece(Square s);
 
 private:
+  friend class LogicalMoveSource;
+  friend struct CompoundTurnAdapter;
+#ifdef ENABLE_COMPOUND_TURNS
+  int compound_turn_number() const;
+#endif
+  template<bool Compound>
+  void do_component_impl(Move m, StateInfo& newSt, bool countNode);
+  template<bool Compound>
+  void undo_component_impl(Move m, bool previousCompoundTurnReset = false);
+#ifdef ENABLE_COMPOUND_TURNS
+  void end_compound_turn(StateInfo& newSt);
+  void undo_compound_turn(uint8_t previousStep);
+  void commit_compound_move(const LogicalMove& move, StateInfo& newSt,
+                            LogicalMoveUndo& transaction);
+  void finalize_committed_turn(StateInfo& newSt, StateInfo* logicalRoot,
+                               bool isPass);
+#endif
+
   // Initialization helpers (used while setting up a position)
   void set_castling_right(Color c, Square rfrom);
   void set_state(StateInfo* si) const;
   void recompute_state_hashes_and_material(StateInfo* si) const;
+  void update_repetition_info();
   Key compute_material_key() const;
   Key compute_piece_state_key() const;
   Bitboard compute_checkers_bb(Color side) const;
@@ -1144,7 +1212,11 @@ private:
   void set_check_info(StateInfo* si) const;
   bool compute_forced_jump_followup(Square s, int step = 0) const;
   Key layout_key() const;
+  Bitboard freeze_squares_hierarchy(Color c, const SimulatedMoveInfo* simulated) const;
   bool violates_same_player_board_repetition(Move m) const;
+  bool same_player_board_repetition_illegal(Key layoutKey, int pliesFromNull,
+                                            const StateInfo* previousSamePlayerPosition,
+                                            int additionalBoundaryPlies = 0) const;
   Key reserve_key() const;
   std::array<Bitboard, COLOR_NB> passive_blast_burners(Bitboard occupied) const;
   Bitboard passive_blast_removal_mask(const std::array<Bitboard, COLOR_NB>& burners, Bitboard occupied) const;
@@ -1300,6 +1372,10 @@ private:
   StateInfo* st;
   int gamePly;
   Color sideToMove;
+#ifdef ENABLE_COMPOUND_TURNS
+  uint8_t compoundTurnStep = 0;
+  bool compoundTurnReset = false;
+#endif
   Score psq;
   mutable Move simulatedMove = MOVE_NONE;
   mutable const SimulatedMoveInfo* simulatedInfo = nullptr;
@@ -1900,6 +1976,10 @@ inline bool Position::nnue_use_pockets() const {
 
 inline bool Position::nnue_applicable() const {
   // Do not use NNUE during setup phases (placement, sittuyin)
+#ifdef ENABLE_COMPOUND_TURNS
+  if (!at_complete_turn_boundary())
+      return false;
+#endif
   return (!count_in_hand(ALL_PIECES) || nnue_use_pockets() || !must_drop())
          && !virtualPieces
          && capture_type() != PRISON
@@ -2060,28 +2140,28 @@ inline bool Position::rifle_capture(Move m) const {
 
 inline int Position::pushing_strength(PieceType pt) const {
   assert(var != nullptr);
-  return var->pushingStrength[pt];
+  return var->pushPullRule == PushPullRule::TWO_STEP ? var->pieceHierarchy[pt]
+                                                     : var->pushingStrength[pt];
 }
 
 inline bool Position::has_pushing() const {
   assert(var != nullptr);
-  for (PieceSet ps = piece_types(); ps; )
-      if (pushing_strength(pop_lsb(ps)) > 0)
-          return true;
-  return false;
+  if (push_pull_rule() == PushPullRule::NONE)
+      return false;
+  return var->hasGenericPushing || var->hasTwoStepPushPull;
 }
 
 inline int Position::pulling_strength(PieceType pt) const {
   assert(var != nullptr);
-  return var->pullingStrength[pt];
+  return var->pushPullRule == PushPullRule::TWO_STEP ? var->pieceHierarchy[pt]
+                                                     : var->pullingStrength[pt];
 }
 
 inline bool Position::has_pulling() const {
   assert(var != nullptr);
-  for (PieceSet ps = piece_types(); ps; )
-      if (pulling_strength(pop_lsb(ps)) > 0)
-          return true;
-  return false;
+  if (push_pull_rule() == PushPullRule::NONE)
+      return false;
+  return var->hasGenericPulling || var->hasTwoStepPushPull;
 }
 
 inline PieceSet Position::adjacent_swap_move_types() const {
@@ -2131,6 +2211,11 @@ inline bool Position::push_capture_against_friendly_blocker() const {
 inline bool Position::push_no_immediate_return() const {
   assert(var != nullptr);
   return var->pushNoImmediateReturn;
+}
+
+inline PushPullRule Position::push_pull_rule() const {
+  assert(var != nullptr);
+  return var->pushPullRule;
 }
 
 inline bool Position::stepwise_pushing() const {
@@ -2956,8 +3041,83 @@ inline bool Position::pass(Color c) const {
       && !has_setup_drop(c)
       && has_setup_drop(~c))
       return true;
+  if (sequential_setup_move_restricted(c))
+      return true;
+#ifdef ENABLE_COMPOUND_TURNS
+  if (compound_turn_active() && !var->pass.get(c) && !var->passOnStalemate.get(c))
+      return false;
+#endif
   return var->pass.get(c) || var->passOnStalemate.get(c)
       || ((var->multimoveOffset || var->progressiveMultimove) && multimove_pass(gamePly));
+}
+
+inline bool Position::compound_turn_active() const {
+  assert(var != nullptr);
+#ifdef ENABLE_COMPOUND_TURNS
+  if (!var->compoundTurnSteps)
+      return false;
+  if (!var->sequentialSetup)
+      return true;
+  return !sequential_setup_active();
+#else
+  return false;
+#endif
+}
+
+#ifdef ENABLE_COMPOUND_TURNS
+inline int Position::compound_turn_number() const {
+  return std::max((gamePly - (sideToMove == BLACK)) / 2, 0);
+}
+
+inline bool Position::logical_moves_active() const {
+  return compound_turn_active();
+}
+
+inline bool Position::compound_search_enabled() const {
+  assert(var != nullptr);
+  return var->compoundTurnSteps > 0;
+}
+
+#endif
+
+inline bool Position::at_complete_turn_boundary() const {
+  assert(var != nullptr);
+#ifdef ENABLE_COMPOUND_TURNS
+  return compoundTurnStep == 0;
+#else
+  return true;
+#endif
+}
+
+inline int Position::compound_turn_step_cost(Move m) const {
+#ifdef ENABLE_COMPOUND_TURNS
+  // Cheap rule gates first so ordinary moves avoid the setup scan inside
+  // compound_turn_active().
+  if (var->pushPullRule != PushPullRule::TWO_STEP || !var->compoundTurnSteps)
+      return 1;
+  return compound_turn_active() && is_two_step_move(m) ? 2 : 1;
+#else
+  (void)m;
+  return 1;
+#endif
+}
+
+inline int Position::compound_turn_steps() const {
+  assert(var != nullptr);
+#ifdef ENABLE_COMPOUND_TURNS
+  return compound_turn_active() ? var->compoundTurnSteps : 0;
+#else
+  return 0;
+#endif
+}
+
+inline int Position::compound_turn_step() const {
+  assert(var != nullptr);
+#ifdef ENABLE_COMPOUND_TURNS
+  return compound_turn_active() ? compoundTurnStep : 0;
+#else
+  return 0;
+#endif
 }
 
 inline bool Position::has_setup_drop(Color c) const {
@@ -2978,6 +3138,44 @@ inline bool Position::has_setup_drop(Color c) const {
           return true;
 
   return false;
+}
+
+inline bool Position::sequential_setup_active() const {
+  assert(var != nullptr);
+  // Ordinary pocket contents do not suppress compound turns; only the
+  // explicit sequential-setup rule does.
+  if (!var->sequentialSetup)
+      return false;
+  if (!var->freeDrops && !var->borrowOpponentDropsWhenEmpty
+      && count_in_hand(ALL_PIECES) == 0)
+      return false;
+  return has_setup_drop(WHITE) || has_setup_drop(BLACK);
+}
+
+inline Color Position::sequential_setup_side() const {
+  // White places while both sides still have legal setup drops. Once White
+  // is exhausted, Black places; the other side's forced pass is inferred
+  // from the current pockets and side to move rather than serialized in FEN.
+  return has_setup_drop(WHITE) ? WHITE : BLACK;
+}
+
+inline bool Position::sequential_setup_move_restricted(Color c) const {
+  assert(var != nullptr);
+  // During sequential setup only the placing side may move; the other side's
+  // only legal move is a pass.
+  return var->sequentialSetup
+      && (has_setup_drop(WHITE) || has_setup_drop(BLACK))
+      && c != sequential_setup_side();
+}
+
+inline bool Position::violates_setup_move_order(Color c, Move m) const {
+  assert(var != nullptr);
+  if (is_pass(m))
+      return false;
+  if (sequential_setup_move_restricted(c))
+      return true;
+  return pass_until_setup() && must_drop()
+      && !has_setup_drop(c) && has_setup_drop(~c);
 }
 
 inline bool Position::pass_until_setup() const {
@@ -3492,7 +3690,11 @@ inline bool Position::is_clone_move(Move m) const {
 }
 
 inline bool Position::is_pull_move(Move m) const {
+#ifdef ENABLE_COMPOUND_TURNS
+  return type_of(m) == PULL && pull_square(m) != SQ_NONE && !is_encoded_push(m);
+#else
   return type_of(m) == PULL && pull_square(m) != SQ_NONE;
+#endif
 }
 
 inline bool Position::is_swap_move(Move m) const {

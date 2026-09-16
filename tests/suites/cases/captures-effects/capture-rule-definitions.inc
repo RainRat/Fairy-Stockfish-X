@@ -189,6 +189,28 @@ EOF
   rm -f "${tmp_ini}"
 }
 
+test_go_immediate_ko() {
+  local out
+  local variants_path="${ROOT_DIR}/src/variants.ini"
+  if ! probe_variant_available "$ENGINE" go9 "$variants_path"; then
+    return 0
+  fi
+
+  out=$(run_uci "$ENGINE" "$variants_path" go9 <<'UCI'
+position fen 9/9/9/9/9/1p7/pPp6/p1p6 b - - 0 1
+go perft 1
+UCI
+)
+  assert_contains_literal "$out" "P@b1: 1"
+
+  out=$(run_uci "$ENGINE" "$variants_path" go9 <<'UCI'
+position fen 9/9/9/9/9/1p7/pPp6/p1p6 b - - 0 1 moves P@b1
+go perft 1
+UCI
+)
+  assert_not_contains "$out" "^P@b2:"
+}
+
 test_custom_en_passant_passed_squares() {
   load_inline_variants <<'INI'
 [custom-ep-all:chess]
@@ -816,6 +838,7 @@ test_flip_regressions
 test_potion_check_regressions
 test_multiple_flag_pieces
 test_repetition_loss_search
+test_go_immediate_ko
 test_custom_en_passant_passed_squares
 test_two_custom_pawn_en_passant
 test_rule_definition_color_overrides

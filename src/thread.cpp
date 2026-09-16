@@ -217,16 +217,62 @@ void ThreadPool::start_thinking(Position& pos, StateListPtr& states,
   Search::Limits = limits;
   Search::RootMoves rootMoves;
 
+
   const bool filterLaserRotations = limits.perft == 0;
   pos.set_search_laser_rotation_filter(filterLaserRotations);
-  for (const auto& m : MoveList<LEGAL>(pos))
-      if (   (limits.searchmoves.empty() || std::count(limits.searchmoves.begin(), limits.searchmoves.end(), m))
-          && (limits.banmoves.empty() || !std::count(limits.banmoves.begin(), limits.banmoves.end(), m)))
-          rootMoves.emplace_back(m);
+#ifdef ENABLE_COMPOUND_TURNS
+  const bool streamCompoundRoot = pos.compound_turn_active()
+                               && int(Options["MultiPV"]) == 1
+                               && int(Options["Skill Level"]) >= 20
+                               && !bool(Options["UCI_LimitStrength"])
+                               && !limits.searchMovesSpecified;
+  if (pos.compound_turn_active() && !streamCompoundRoot)
+  {
+      if (limits.searchMovesSpecified)
+      {
+          for (const LogicalMove& m : limits.searchmoves)
+          {
+              if (std::count(limits.banmoves.begin(), limits.banmoves.end(), m))
+                  continue;
+              LogicalMoveInfo info;
+              if (compound_move_info(pos, m, info)
+                  && std::find(rootMoves.begin(), rootMoves.end(), m) == rootMoves.end())
+                  rootMoves.emplace_back(m, info);
+          }
+      }
+      else
+      {
+          LogicalMoveWorkspace workspace;
+          LogicalMoveSource source(pos, workspace);
+          LogicalMove m;
+          LogicalMoveInfo info;
+          while (source.next(m, info))
+              if (!std::count(limits.banmoves.begin(), limits.banmoves.end(), m))
+                  rootMoves.emplace_back(m, info);
+      }
+  }
+#endif
+  if (!pos.compound_turn_active())
+      for (const auto& m : MoveList<LEGAL>(pos))
+          if (   (!limits.searchMovesSpecified || std::count(limits.searchmoves.begin(), limits.searchmoves.end(), m))
+              && (limits.banmoves.empty() || !std::count(limits.banmoves.begin(), limits.banmoves.end(), m)))
+          {
+#ifdef ENABLE_COMPOUND_TURNS
+              if (pos.compound_search_enabled())
+                  rootMoves.emplace_back(LogicalMove(m));
+              else
+#endif
+              rootMoves.emplace_back(m);
+          }
+#ifndef ENABLE_COMPOUND_TURNS
+  const bool streamCompoundRoot = false;
+#endif
   pos.set_search_laser_rotation_filter(false);
 
   // Add virtual drops
-  if (pos.two_boards() && pos.virtual_drops() && Partner.opptime && limits.time[pos.side_to_move()] > Partner.opptime + 1000)
+  if (!pos.compound_turn_active()
+      && pos.two_boards() && pos.virtual_drops() && Partner.opptime
+      && limits.time[pos.side_to_move()] > Partner.opptime + 1000)
   {
       if (pos.evasion_checkers())
       {
@@ -242,11 +288,15 @@ void ThreadPool::start_thinking(Position& pos, StateListPtr& states,
       }
   }
 
-  if (!rootMoves.empty())
+  // Syzygy does not understand compound turns or setup pockets.
+  // In particular, probing a setup child can feed ordinary board moves back
+  // into Position::legal() while the side is still placing pieces.
+  if (!rootMoves.empty() && !pos.compound_turn_active()
+      && !pos.count_in_hand(ALL_PIECES))
       Tablebases::rank_root_moves(pos, rootMoves);
 
   // Search code assumes a root move entry exists even for terminal positions.
-  if (rootMoves.empty())
+  if (rootMoves.empty() && !streamCompoundRoot)
       rootMoves.emplace_back(MOVE_NONE);
 
   const std::string rootFen = pos.fen();
@@ -308,7 +358,7 @@ Thread* ThreadPool::get_best_thread() const {
     if (bestThread->rootMoves.empty())
         return bestThread;
 
-    std::map<Move, int64_t> votes;
+    std::map<LogicalMove, int64_t> votes;
     Value minScore = VALUE_NONE; // Seed with maximum value (VALUE_NONE is larger than any valid score)
     auto incomplete_iteration = [](const Thread* th) {
         return th->completedDepth != th->rootDepth;
@@ -327,7 +377,7 @@ Thread* ThreadPool::get_best_thread() const {
     {
         if (th->rootMoves.empty())
             continue;
-        votes[th->rootMoves[0].pv[0]] +=
+        votes[th->rootMoves[0].first()] +=
             (th->rootMoves[0].score - minScore + 14) * int(th->completedDepth);
 
         const auto bestThreadScore = bestThread->rootMoves[0].score;
@@ -359,7 +409,7 @@ Thread* ThreadPool::get_best_thread() const {
         else if (   newThreadInProvenWin
                  || newThreadInProvenLoss
                  || (   newThreadScore > VALUE_TB_LOSS_IN_MAX_PLY
-                     && votes[th->rootMoves[0].pv[0]] > votes[bestThread->rootMoves[0].pv[0]]))
+                     && votes[th->rootMoves[0].first()] > votes[bestThread->rootMoves[0].first()]))
             bestThread = th;
     }
 

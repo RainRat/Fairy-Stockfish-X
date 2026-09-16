@@ -2208,6 +2208,13 @@ Value Eval::evaluate(const Position& pos) {
 
   Value v;
 
+#ifdef ENABLE_COMPOUND_TURNS
+  // Static evaluation is only defined at complete-turn boundaries. Partial
+  // turn states must never reach the evaluator; the compound provider keeps
+  // them internal, and serialized FEN likewise refuses them.
+  assert(pos.at_complete_turn_boundary());
+#endif
+
   if (!Eval::useNNUE || !pos.nnue_applicable() || pos.topology_wraps())
       v = Evaluation<NO_TRACE>(pos).value();
   else

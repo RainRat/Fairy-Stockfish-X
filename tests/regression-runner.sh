@@ -50,10 +50,10 @@ expected_engine_profile() {
       printf 'arch=x86-64-modern;board=large;all=no;nnue=no;debug=no;optimize=yes'
       ;;
     stockfish-vlb)
-      printf 'arch=x86-64-modern;board=very-large;all=yes;nnue=yes;debug=no;optimize=yes'
+      printf 'arch=x86-64-modern;board=very-large;all=yes;compoundturns=yes;nnue=yes;debug=no;optimize=yes'
       ;;
     stockfish-allvars)
-      printf 'arch=x86-64-modern;board=large;all=yes;nnue=no;debug=no;optimize=yes'
+      printf 'arch=x86-64-modern;board=large;all=yes;compoundturns=yes;nnue=no;debug=no;optimize=yes'
       ;;
     *)
       return 1
@@ -98,8 +98,8 @@ validate_engines() {
   if (( stale )); then
     echo "rebuild the named regression binaries before starting the suite:" >&2
     echo "  tests/build.sh ARCH=x86-64-modern largeboards=yes EXE=stockfish-large" >&2
-    echo "  tests/build.sh ARCH=x86-64-modern largeboards=yes verylargeboards=yes all=yes EXE=stockfish-vlb" >&2
-    echo "  tests/build.sh ARCH=x86-64-modern largeboards=yes all=yes EXE=stockfish-allvars" >&2
+    echo "  tests/build.sh ARCH=x86-64-modern largeboards=yes verylargeboards=yes all=yes compoundturns=yes EXE=stockfish-vlb" >&2
+    echo "  tests/build.sh ARCH=x86-64-modern largeboards=yes all=yes compoundturns=yes EXE=stockfish-allvars" >&2
     return 2
   fi
 }

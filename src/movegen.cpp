@@ -944,8 +944,31 @@ namespace {
                 promotionTargets |= jumpCaptures;
             pawnPromotions = promotionTargets & promotion_zone;
         }
+#ifdef ENABLE_COMPOUND_TURNS
+        if (pos.push_pull_rule() == PushPullRule::TWO_STEP && GeneratesQuiets && !QuietChecks)
+        {
+            Bitboard enemySources = pos.push_targets_from(Us, Pt, from) & pos.pieces(~Us);
+            const Bitboard pushDestMask = ~pos.pieces()
+                                        & pos.board_bb()
+                                        & ~pos.wall_squares()
+                                        & ~pos.dead_squares();
+            while (enemySources)
+            {
+                Square enemyFrom = pop_lsb(enemySources);
+                PieceType enemyType = type_of(pos.piece_on(enemyFrom));
+                if (pos.variant()->pieceHierarchy[Pt] <= pos.variant()->pieceHierarchy[enemyType])
+                    continue;
+
+                Bitboard enemyTargets = pos.attacks_from(Us, WAZIR, enemyFrom, Bitboard(0))
+                                      & pushDestMask;
+                while (enemyTargets)
+                    *moveList++ = make_encoded_push(from, enemyFrom, pop_lsb(enemyTargets));
+            }
+        }
+#endif
+
         Bitboard pushMoves = 0;
-        if (pos.pushing_strength(Pt) > 0)
+        if (pos.push_pull_rule() == PushPullRule::GENERIC && pos.pushing_strength(Pt) > 0)
         {
             Bitboard candidates = pos.push_targets_from(Us, Pt, from);
             if (!pos.stepwise_pushing())
@@ -2111,13 +2134,12 @@ template ExtMove* append_potions<QUIET_CHECKS>(const Position&, ExtMove*, ExtMov
 template ExtMove* append_potions<NON_EVASIONS>(const Position&, ExtMove*, ExtMove*, bool);
 
 
-/// generate<LEGAL> generates all the legal moves in the given position
+/// generate_legal_body() generates all the legal moves in the given position
+/// without completed-game adjudication. generate<LEGAL> applies the
+/// adjudication early-out on top; generate<LEGAL_COMPONENTS> uses the body
+/// directly for mid-turn partial states.
 
-template<>
-ExtMove* generate<LEGAL>(const Position& pos, ExtMove* moveList) {
-
-  if (pos.is_immediate_game_end())
-      return moveList;
+static ExtMove* generate_legal_body(const Position& pos, ExtMove* moveList) {
 
   ExtMove* cur = moveList;
 
@@ -2134,8 +2156,33 @@ ExtMove* generate<LEGAL>(const Position& pos, ExtMove* moveList) {
   return moveList;
 }
 
+
+/// generate<LEGAL> generates all the legal moves in the given position
+
+template<>
+ExtMove* generate<LEGAL>(const Position& pos, ExtMove* moveList) {
+
+  if (pos.is_immediate_game_end())
+      return moveList;
+
+  return generate_legal_body(pos, moveList);
+}
+
+
+/// generate<LEGAL_COMPONENTS> generates component candidates for
+/// compound-turn assembly: fully legal moves, but without the
+/// completed-game adjudication early-out, which does not apply to mid-turn
+/// partial states.
+
+template<>
+ExtMove* generate<LEGAL_COMPONENTS>(const Position& pos, ExtMove* moveList) {
+
+  return generate_legal_body(pos, moveList);
+}
+
 #ifdef USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
 template struct MoveList<LEGAL>;
+template struct MoveList<LEGAL_COMPONENTS>;
 #endif
 
 } // namespace Stockfish

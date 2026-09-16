@@ -21,11 +21,15 @@
 
 #include <algorithm>
 #include <atomic>
+#include <deque>
 #include <memory>
 #include <mutex>
 #include <sstream>
 #include <string>
 
+#ifdef ENABLE_COMPOUND_TURNS
+#include "compound_turn.h"
+#endif
 #include "thread_win32_osx.h"
 #include "types.h"
 
@@ -40,7 +44,7 @@ namespace XBoard {
 class StateMachine {
 public:
   StateMachine(Position& uciPos, StateListPtr& uciPosStates) : pos(uciPos), states(uciPosStates) {
-    moveList = std::deque<Move>();
+    history = std::deque<HistoryEntry>();
     moveAfterSearch = false;
     playColor = COLOR_NB;
     ponderHighlight = "";
@@ -53,6 +57,9 @@ public:
   void shutdown_ponder_worker();
   void setboard(std::string fen = "");
   void do_move(Move m);
+#ifdef ENABLE_COMPOUND_TURNS
+  void do_compound_move(const LogicalMove& turn);
+#endif
   void undo_move();
   std::string highlight(std::string square);
   void process_command(std::string token, std::istringstream& is);
@@ -65,7 +72,19 @@ public:
 private:
   Position& pos;
   StateListPtr& states;
-  std::deque<Move> moveList;
+  // One entry per externally applied move. Compound turns own their undo
+  // payload for as long as the move remains undoable; ordinary moves carry
+  // no payload. `display` is the physical move shown to the GUI (the first
+  // component of a compound turn), recorded at apply time so readers never
+  // inspect components.
+  struct HistoryEntry {
+    LogicalMove complete;
+    Move display = MOVE_NONE;
+#ifdef ENABLE_COMPOUND_TURNS
+    std::unique_ptr<LogicalMoveUndo> undo;
+#endif
+  };
+  std::deque<HistoryEntry> history;
   Search::LimitsType limits;
   Color playColor;
   std::string ponderHighlight;

@@ -98,6 +98,7 @@ startFen = 4r2k/8/8/8/8/4p3/3Qp3/4K3 w - - 0 1
 [pairdrop:fairy]
 pieceDrops = true
 symmetricDropTypes = r
+
 INI
 
 echo "royal variant regressions started"

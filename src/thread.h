@@ -19,6 +19,7 @@
 #ifndef THREAD_H_INCLUDED
 #define THREAD_H_INCLUDED
 
+#include <algorithm>
 #include <atomic>
 #include <condition_variable>
 #include <memory>
@@ -30,6 +31,10 @@
 #include "movepick.h"
 #include "pawns.h"
 #include "position.h"
+#ifdef ENABLE_COMPOUND_TURNS
+#include "compound_turn_search.h"
+#include "compound_turn_internal.h"
+#endif
 #include "search.h"
 #include "thread_win32_osx.h"
 
@@ -79,6 +84,56 @@ public:
   ContinuationHistory continuationHistory[2][2];
   Score trend;
 
+#ifdef ENABLE_COMPOUND_TURNS
+  struct LogicalStackState {
+      bool currentMoveCapturedOpponent = false;
+  };
+
+  LogicalStackState& logical_stack_state(int ply) {
+      assert(-7 <= ply && ply <= MAX_PLY + 2);
+      return compound_state().logicalStack[ply + 7];
+  }
+
+  const LogicalStackState& logical_stack_state(int ply) const {
+      assert(-7 <= ply && ply <= MAX_PLY + 2);
+      return compound_state().logicalStack[ply + 7];
+  }
+
+  void clear_logical_stack() {
+      auto& stack = compound_state().logicalStack;
+      std::fill(stack.begin(), stack.end(), LogicalStackState{});
+  }
+
+  static constexpr size_t LogicalMoveHintCount = 1024;
+
+  LogicalMoveWorkspace& logical_move_workspace(int ply) {
+      assert(0 <= ply && ply < MAX_PLY);
+      auto& workspace = compound_state().workspaces[ply];
+      if (!workspace)
+          workspace = std::make_unique<LogicalMoveWorkspace>();
+      return *workspace;
+  }
+
+  LogicalMove* logical_pv(int ply) {
+      assert(0 <= ply && ply <= MAX_PLY);
+      auto& row = compound_state().logicalPvStorage[ply];
+      if (row.empty())
+          row.resize(MAX_PLY - ply + 1);
+      return row.data();
+  }
+
+  const LogicalMove* logical_move_hint(Key key) const {
+      if (!compoundState)
+          return nullptr;
+      const LogicalMoveHint& hint = compoundState->logicalMoveHints[key % LogicalMoveHintCount];
+      return hint.key == key ? &hint.move : nullptr;
+  }
+
+  void store_logical_move_hint(Key key, const LogicalMove& move) {
+      compound_state().logicalMoveHints[key % LogicalMoveHintCount] = {key, move};
+  }
+#endif
+
   ExtMove* acquire_buffer() {
     if (availableBuffers.empty()) {
       bufferPool.push_back(std::make_unique<ExtMove[]>(MOVEGEN_OVERFLOW_CAPACITY));
@@ -95,6 +150,32 @@ public:
   }
 
 private:
+#ifdef ENABLE_COMPOUND_TURNS
+  struct LogicalMoveHint {
+      Key key = 0;
+      LogicalMove move;
+  };
+
+  struct CompoundThreadState {
+      std::array<std::unique_ptr<LogicalMoveWorkspace>, MAX_PLY> workspaces;
+      std::array<LogicalStackState, MAX_PLY + 10> logicalStack{};
+      std::array<std::vector<LogicalMove>, MAX_PLY + 1> logicalPvStorage;
+      std::array<LogicalMoveHint, LogicalMoveHintCount> logicalMoveHints{};
+  };
+
+  CompoundThreadState& compound_state() {
+      if (!compoundState)
+          compoundState = std::make_unique<CompoundThreadState>();
+      return *compoundState;
+  }
+
+  const CompoundThreadState& compound_state() const {
+      assert(compoundState);
+      return *compoundState;
+  }
+
+  std::unique_ptr<CompoundThreadState> compoundState;
+#endif
   std::vector<std::unique_ptr<ExtMove[]>> bufferPool;
   std::vector<ExtMove*> availableBuffers;
 };

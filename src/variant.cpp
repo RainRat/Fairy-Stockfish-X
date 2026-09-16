@@ -2279,13 +2279,15 @@ Variant* Variant::conclude() {
     for (PieceType pt = PAWN; pt < PIECE_TYPE_NB && !hasMoveMorph; ++pt)
         hasMoveMorph = moveMorphPieceType[pt] != NO_PIECE_TYPE;
 
-    bool hasPulling = false;
-    for (PieceSet ps = pieceTypes; ps && !hasPulling; )
-        hasPulling = pullingStrength[pop_lsb(ps)] > 0;
-
-    bool hasActivePushing = false;
-    for (PieceSet ps = pieceTypes; ps && !hasActivePushing; )
-        hasActivePushing = pushingStrength[pop_lsb(ps)] > 0;
+    std::fill(std::begin(weakerPieceTypes), std::end(weakerPieceTypes), NO_PIECE_SET);
+    if (hasPieceHierarchy)
+        for (PieceType freezer = PAWN; freezer < PIECE_TYPE_NB; ++freezer)
+            for (PieceSet targets = pieceTypes; targets; )
+            {
+                PieceType target = pop_lsb(targets);
+                if (pieceHierarchy[freezer] > pieceHierarchy[target])
+                    weakerPieceTypes[freezer] |= piece_set(target);
+            }
 
     auto hasSelfCapture = [this](Color c) {
         if (selfCaptureTypes.has_override(c))
@@ -2314,7 +2316,7 @@ Variant* Variant::conclude() {
                          && !gating
                          && !commitGates
                          && wallingRule == NO_WALLING
-                         && !hasPushing
+                         && !(hasGenericPushing || hasTwoStepPushPull)
                          && !adjacentSwapMoveTypes
                          && !blastOnMove
                          && !blastOnSelfDestruct
@@ -2373,7 +2375,7 @@ Variant* Variant::conclude() {
                   && libertySelfCapture == LibertyAction::NONE
                   && !potions
                   && wallingRule == NO_WALLING
-                  && !hasPushing
+                  && !(hasGenericPushing || hasTwoStepPushPull)
                   && !adjacentSwapMoveTypes
                   && !laserGame
                   && !captureMorph
@@ -2541,8 +2543,8 @@ Variant* Variant::conclude() {
                                  && !blastOnSelfDestruct
                                  && !hasSelfCapture(c)
                                  && !rifleCapture
-                                 && !hasActivePushing
-                                 && !hasPulling
+                                 && !(hasGenericPushing || hasTwoStepPushPull)
+                                 && !(hasGenericPulling || hasTwoStepPushPull)
                                  && !adjacentSwapMoveTypes
                                  && !captureMorph
                                  && !piecePromotionOnCapture
@@ -2859,6 +2861,17 @@ void VariantMap::parse_istream(std::istream& file) {
                     std::cerr << "Variant '" << variant << "' has invalid configuration. Skipping." << std::endl;
                 continue;
             }
+#ifndef ENABLE_COMPOUND_TURNS
+            if (v->compoundTurnSteps > 0 || v->pushPullRule == PushPullRule::TWO_STEP)
+            {
+                if (DoCheck)
+                    std::cerr << "Variant '" << variant
+                              << "' requires a compoundturns=yes build. Skipping." << std::endl;
+                delete v;
+                skippedVariants.insert(variant);
+                continue;
+            }
+#endif
             if (v->maxFile <= FILE_MAX && v->maxRank <= RANK_MAX)
             {
                 add(variant, v);
