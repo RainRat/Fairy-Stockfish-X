@@ -2947,6 +2947,10 @@ void VariantMap::add(std::string s, Variant* v) {
   const Variant* concluded = v->conclude();
   auto it = find(s);
   if (it != end() && it->second != concluded) {
+      // Unreachable through parse_istream (existing names are skipped before
+      // add, so config reload is add-only and never redefines live boards).
+      // Keep the delete: enabling redefinition later must first solve the
+      // board-lifetime contract for the raw Variant* held by live boards.
       delete it->second;
   }
   (*this)[s] = concluded;
