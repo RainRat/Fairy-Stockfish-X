@@ -1900,6 +1900,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("nMoveHardLimitRuleValue", v->nMoveHardLimitRuleValue);
     parse_attribute("nFoldRule", v->nFoldRule);
     parse_attribute("nFoldRuleImmediate", v->nFoldRuleImmediate);
+    parse_attribute("nonRoyalDrawThreshold", v->nonRoyalDrawThreshold);
     parse_color_setting("nFoldValue", v->nFoldValue);
     parse_attribute("nFoldValueAbsolute", v->nFoldValueAbsolute);
     if (v->nFoldValueAbsolute) {
@@ -2384,6 +2385,12 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
     {
         if (DoCheck)
             std::cerr << "nFoldRuleImmediate cannot be negative." << std::endl;
+        valid = false;
+    }
+    if (v->nonRoyalDrawThreshold < 0)
+    {
+        if (DoCheck)
+            std::cerr << "nonRoyalDrawThreshold must be non-negative." << std::endl;
         valid = false;
     }
     if (v->nMoveHardLimitRule < 0)

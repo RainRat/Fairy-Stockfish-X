@@ -152,6 +152,7 @@ UCI
     legacy gating-check-regression.sh 5m "${ENGINE}"
     legacy blast-legal-regressions.sh 2m "${ENGINE}" "${VARIANTS}"
     legacy test_extinction.sh 2m "${ENGINE}"
+    legacy nonroyal-draw-threshold.sh 2m "${ENGINE}"
     legacy kings-or-lemmings.sh 2m "${ENGINE}" "${VARIANTS}"
     legacy stationary-castling.sh 2m "${ENGINE}" "${VARIANTS}"
 }

@@ -37,6 +37,21 @@ class TestBindings(unittest.TestCase):
                 ["e2e4", "bogus", "g1f3"],
             )
 
+    def test_game_result_nonroyal_draw_threshold(self):
+        sf.load_variant_config(
+            "[api-nonroyal-draw:chess]\nnonRoyalDrawThreshold = 2\n"
+        )
+        # Quiet 1-vs-1 endgame is drawn ...
+        res = sf.game_result(
+            "api-nonroyal-draw", "4k3/8/8/8/8/8/8/R3K3 w - - 0 1", []
+        )
+        self.assertEqual(res, 0)
+        # ... while 2-vs-1 plays on.
+        res = sf.game_result(
+            "api-nonroyal-draw", "4k3/8/8/8/8/8/8/RR2K3 w - - 0 1", []
+        )
+        self.assertEqual(res, sf.VALUE_NONE)
+
     def test_load_variant_config_reports_added_count(self):
         # Loading is add-only: redefinitions are skipped, never replaced.
         added = sf.load_variant_config(

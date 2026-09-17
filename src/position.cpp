@@ -11330,6 +11330,36 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
       }
   }
 
+  // Non-royal material threshold draw: when both sides have fewer than N
+  // non-royal pieces the game is drawn. Delivered mates take precedence,
+  // so the rule is only assessed when the side to move is not in check.
+  // (A simultaneous non-draw stalemate is drawn by this rule instead.)
+  if (var->nonRoyalDrawThreshold > 0 && !evasion_checkers())
+  {
+      bool thresholdMet = true;
+      for (Color c : {WHITE, BLACK})
+      {
+          int nonRoyal = 0;
+          PieceType royal = royal_piece_type(c);
+          for (PieceSet ps = piece_types(); ps;)
+          {
+              PieceType pt = pop_lsb(ps);
+              if (pt != royal)
+                  nonRoyal += count_with_hand(c, pt);
+          }
+          if (nonRoyal >= var->nonRoyalDrawThreshold)
+          {
+              thresholdMet = false;
+              break;
+          }
+      }
+      if (thresholdMet)
+      {
+          result = VALUE_DRAW;
+          return true;
+      }
+  }
+
   return false;
 }
 
