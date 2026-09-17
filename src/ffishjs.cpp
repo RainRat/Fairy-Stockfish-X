@@ -562,13 +562,16 @@ namespace ffish {
     return variant_info_json(uciVariant);
   }
 
-  void load_variant_config(std::string variantInitContent) {
+  int load_variant_config(std::string variantInitContent) {
     std::stringstream ss(variantInitContent);
     ensure_stockfish_initialized();
     std::lock_guard<std::mutex> lock(variant_state_mutex);
+    const size_t before = variants.size();
     variants.parse_istream<false>(ss);
     Options["UCI_Variant"].set_combo(variants.get_keys());
     Board::sfInitialized.store(true, std::memory_order_relaxed);
+    // Existing variant names are skipped, never replaced.
+    return int(variants.size() - before);
   }
 
   bool captures_to_hand(std::string uciVariant) {

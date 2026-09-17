@@ -71,6 +71,15 @@ fsf_load_variant_config(iniContent);
 ```
 This reconfigures the variant list (same as in `ffish.js`).
 
+Loading is add-only: sections naming an already existing variant are skipped,
+never replaced. To observe what a load did, use the counting form, which
+returns the number of newly added variants:
+```cpp
+int added = fsf_try_load_variant_config(iniContent);
+```
+A return of `0` means nothing was added (duplicates, oversized boards, or
+invalid sections). Confirm critical names with `fsf_available_variants().`
+
 ## Unknown variant names
 Empty names as well as `"Standard"`/`"standard"` resolve to `chess`, matching
 `ffish.js`. Any other unknown name is an error, never a silent chess board:

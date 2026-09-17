@@ -27,6 +27,20 @@ class TestBindings(unittest.TestCase):
         res = sf.game_result("chess", "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", [])
         self.assertEqual(res, sf.VALUE_NONE)
 
+    def test_load_variant_config_reports_added_count(self):
+        # Loading is add-only: redefinitions are skipped, never replaced.
+        added = sf.load_variant_config(
+            "[api-load-count:chess]\n"
+            "startFen = 8/8/8/8/8/8/8/4K2k w - - 0 1\n"
+        )
+        self.assertEqual(added, 1)
+        reloaded = sf.load_variant_config(
+            "[api-load-count:chess]\n"
+            "startFen = 8/8/8/8/8/8/8/4K2k w - - 0 1\n"
+        )
+        self.assertEqual(reloaded, 0)
+        self.assertEqual(sf.load_variant_config(""), 0)
+
     def test_game_result_material_counting_armageddon(self):
         # The armageddon stalemate resolves decisively through engine-level
         # material counting, identically in every binding (not via the

@@ -166,9 +166,11 @@ extern "C" PyObject* pyffish_loadVariantConfig(PyObject* self, PyObject *args) {
     if (!PyArg_ParseTuple(args, "s", &config))
         return NULL;
     std::stringstream ss(config);
+    const size_t before = variants.size();
     variants.parse_istream<false>(ss);
     Options["UCI_Variant"].set_combo(variants.get_keys());
-    Py_RETURN_NONE;
+    // Existing variant names are skipped, never replaced.
+    return PyLong_FromLong((long)(variants.size() - before));
 }
 
 // INPUT variant
@@ -679,7 +681,7 @@ static PyMethodDef PyFFishMethods[] = {
     {"info", (PyCFunction)pyffish_info, METH_NOARGS, "Get Stockfish version info."},
     {"variants", (PyCFunction)pyffish_variants, METH_NOARGS, "Get supported variants."},
     {"set_option", (PyCFunction)pyffish_setOption, METH_VARARGS, "Set UCI option."},
-    {"load_variant_config", (PyCFunction)pyffish_loadVariantConfig, METH_VARARGS, "Load variant configuration."},
+    {"load_variant_config", (PyCFunction)pyffish_loadVariantConfig, METH_VARARGS, "Load variant configuration. Returns the number of newly added variants (existing names are skipped, never replaced)."},
     {"variant_info", (PyCFunction)pyffish_variantInfo, METH_VARARGS, "Get resolved variant information as JSON."},
     {"start_fen", (PyCFunction)pyffish_startFen, METH_VARARGS, "Get starting position FEN."},
     {"two_boards", (PyCFunction)pyffish_twoBoards, METH_VARARGS, "Check if the variant is played on two boards."},

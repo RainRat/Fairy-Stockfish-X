@@ -230,6 +230,9 @@ let configFilePath = './variants.ini';
  });
 ```
 
+Loading is add-only: sections naming an already existing variant are skipped,
+never replaced. `loadVariantConfig` returns the number of newly added variants.
+
 ## Additional features
 
 For examples of each available function, see [test.js](https://github.com/ianfab/Fairy-Stockfish/blob/master/tests/js/test.js).

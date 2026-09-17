@@ -35,7 +35,11 @@ export interface FairyStockfish {
      */
     readGamePGN(pgn: string): Game;
     variants(): string;
-    loadVariantConfig(variantInitContent: string): void;
+    /**
+     * Load variant definitions. Returns the number of newly added variants.
+     * Sections naming an already existing variant are skipped, never replaced.
+     */
+    loadVariantConfig(variantInitContent: string): number;
     variantInfo(uciVariant: string): string;
     capturesToHand(uciVariant: string): boolean;
     startingFen(uciVariant: string): string;

@@ -79,6 +79,15 @@ describe('ffish.loadVariantConfig(config)', function () {
     chai.expect(board.fen()).to.equal("3/3/3 w - - 0 1");
     board.delete();
   });
+  it("it reports how many variants were added; redefinitions are skipped", () => {
+    const added = ffish.loadVariantConfig("[js-load-count:chess]\nstartFen = 8/8/8/8/8/8/8/4K2k w - - 0 1\n");
+    chai.expect(added).to.equal(1);
+    const reloaded = ffish.loadVariantConfig("[js-load-count:chess]\nstartFen = 8/8/8/8/8/8/8/4K2k w - - 0 1\n");
+    chai.expect(reloaded).to.equal(0);
+    const board = new ffish.Board("js-load-count");
+    chai.expect(board.fen()).to.equal("8/8/8/8/8/8/8/4K2k w - - 0 1");
+    board.delete();
+  });
 });
 
 describe('Board()', function () {

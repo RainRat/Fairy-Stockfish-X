@@ -445,13 +445,20 @@ std::string available_variants() {
   return available;
 }
 
-void load_variant_config(std::string variantInitContent) {
+int try_load_variant_config(std::string variantInitContent) {
   std::stringstream ss(variantInitContent);
   ensure_stockfish_initialized();
   std::lock_guard<std::mutex> lock(variant_state_mutex);
+  const size_t before = variants.size();
   variants.parse_istream<false>(ss);
   Options["UCI_Variant"].set_combo(variants.get_keys());
   Board::sfInitialized.store(true, std::memory_order_relaxed);
+  // Existing variant names are skipped, never replaced.
+  return int(variants.size() - before);
+}
+
+void load_variant_config(std::string variantInitContent) {
+  (void)try_load_variant_config(std::move(variantInitContent));
 }
 
 bool captures_to_hand(std::string uciVariant) {
@@ -582,6 +589,9 @@ FSF_API const char* fsf_board_variant(fsf_board b) { return to_cstr(static_cast<
 FSF_API const char* fsf_available_variants() { return to_cstr(ffish::available_variants()); }
 FSF_API void fsf_load_variant_config(const char* content) {
   ffish::load_variant_config(content ? content : "");
+}
+FSF_API int fsf_try_load_variant_config(const char* content) {
+  return ffish::try_load_variant_config(content ? content : "");
 }
 FSF_API int fsf_validate_fen(const char* fen, const char* variant, bool is960) {
   return ffish::validate_fen(fen ? fen : "", variant ? variant : "chess", is960);
