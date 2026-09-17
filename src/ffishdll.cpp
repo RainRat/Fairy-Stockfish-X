@@ -59,9 +59,9 @@ inline void save_pop_back(std::string& s) {
 const Variant* get_variant(const std::string& uciVariant) {
   if (uciVariant.empty() || uciVariant == "Standard" || uciVariant == "standard")
     return variants.get("chess");
-  if (const Variant* v = variants.get(uciVariant))
-    return v;
-  return variants.get("chess");
+  // Unknown names resolve to nullptr so callers must diagnose them instead
+  // of silently substituting another variant.
+  return variants.get(uciVariant);
 }
 
 template <bool isUCI>
@@ -410,6 +410,7 @@ private:
     Board::sfInitialized.store(true, std::memory_order_relaxed);
     std::lock_guard<std::mutex> lock(variant_state_mutex);
     v = get_variant(uciVariant);
+    assert(v);
     UCI::init_variant(v);
     resetStates();
     if (fen.empty())
@@ -456,24 +457,28 @@ void load_variant_config(std::string variantInitContent) {
 bool captures_to_hand(std::string uciVariant) {
   std::lock_guard<std::mutex> lock(variant_state_mutex);
   const Variant* v = get_variant(uciVariant);
-  return v->captureType != MOVE_OUT;
+  return v && v->captureType != MOVE_OUT;
 }
 
 std::string starting_fen(std::string uciVariant) {
   std::lock_guard<std::mutex> lock(variant_state_mutex);
   const Variant* v = get_variant(uciVariant);
-  return v->startFen;
+  return v ? v->startFen : "";
 }
 
 int validate_fen(std::string fen, std::string uciVariant, bool chess960) {
   std::lock_guard<std::mutex> lock(variant_state_mutex);
   const Variant* v = get_variant(uciVariant);
+  if (!v)
+      return FEN::FEN_INVALID_VARIANT;
   return FEN::validate_fen(fen, v, chess960);
 }
 
 int validate_position(std::string fen, std::string uciVariant, std::string uciMoves, bool chess960) {
   std::lock_guard<std::mutex> lock(variant_state_mutex);
   const Variant* v = get_variant(uciVariant);
+  if (!v)
+      return FEN::FEN_INVALID_VARIANT;
   std::stringstream ss(uciMoves);
   std::string token;
   std::vector<std::string> moves;
@@ -503,7 +508,13 @@ FSF_API void fsf_init() {
 
 FSF_API fsf_board fsf_new_board(const char* variant, const char* fen, bool is960) {
   fsf_init();
-  return new Board(variant ? std::string(variant) : std::string("chess"),
+  std::string uciVariant = variant ? std::string(variant) : std::string("chess");
+  {
+      std::lock_guard<std::mutex> lock(variant_state_mutex);
+      if (!get_variant(uciVariant))
+          return nullptr;
+  }
+  return new Board(uciVariant,
                    fen ? std::string(fen) : std::string(""),
                    is960);
 }

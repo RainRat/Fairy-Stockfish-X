@@ -567,6 +567,7 @@ inline Bitboard evasion_checked(const Position& pos) {
 namespace FEN {
 
 enum FenValidation : int {
+    FEN_INVALID_VARIANT = -17,
     FEN_INVALID_MOVE = -16,
     FEN_INVALID_POINTS_INFO = -15,
     FEN_INVALID_COUNTING_RULE = -14,

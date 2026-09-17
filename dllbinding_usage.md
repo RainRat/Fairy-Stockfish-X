@@ -71,6 +71,16 @@ fsf_load_variant_config(iniContent);
 ```
 This reconfigures the variant list (same as in `ffish.js`).
 
+## Unknown variant names
+Empty names as well as `"Standard"`/`"standard"` resolve to `chess`, matching
+`ffish.js`. Any other unknown name is an error, never a silent chess board:
+- `fsf_new_board` returns `nullptr`; check it before use.
+- `fsf_starting_fen` returns an empty string.
+- `fsf_captures_to_hand` returns `false`.
+- `fsf_validate_fen` / `fsf_validate_position` return `-17`
+  (`FEN_INVALID_VARIANT`).
+Use `fsf_available_variants()` to list the names this build accepts.
+
 ## Threading
 `fsf_init()` is thread-safe. However, board operations are not synchronized. Use a separate board instance per thread, or use locks when accessing the same board across multiple threads.
 
