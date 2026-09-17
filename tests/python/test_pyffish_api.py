@@ -27,6 +27,62 @@ class TestBindings(unittest.TestCase):
         res = sf.game_result("chess", "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", [])
         self.assertEqual(res, sf.VALUE_NONE)
 
+    def test_game_result_material_counting_armageddon(self):
+        # The armageddon stalemate resolves decisively through engine-level
+        # material counting, identically in every binding (not via the
+        # binding-layer counting fallback).
+        res = sf.game_result(
+            "armageddon",
+            "2Q2bnr/4p1pq/5pkr/7p/7P/4P3/PPPP1PP1/RNB1KBNR w KQ - 1 10",
+            ["c8e6"],
+        )
+        self.assertEqual(res, sf.VALUE_MATE)
+
+    def test_game_result_checkmate_is_draw(self):
+        # Variants where checkmate itself is a draw must report a draw, not a
+        # loss: there is no mate score to normalize to.
+        sf.load_variant_config(
+            "[api-matedraw-only:chess]\ncheckmateValue = draw\n"
+        )
+        res = sf.game_result(
+            "api-matedraw-only",
+            "rnb1kbnr/pppp1ppp/8/4p3/5PPq/8/PPPPP2P/RNBQKBNR w KQkq - 0 1",
+            [],
+        )
+        self.assertEqual(res, 0)
+
+    def test_game_result_material_counting_overrides_draw(self):
+        # A drawn terminal (here checkmate-is-a-draw) still resolves through
+        # material counting when the variant enables it, matching the
+        # ffish.js/DLL result() fallback. Black draw odds decide for Black.
+        sf.load_variant_config(
+            "[api-matedraw-count:chess]\n"
+            "checkmateValue = draw\n"
+            "materialCounting = blackdrawodds\n"
+        )
+        res = sf.game_result(
+            "api-matedraw-count",
+            "rnb1kbnr/pppp1ppp/8/4p3/5PPq/8/PPPPP2P/RNBQKBNR w KQkq - 0 1",
+            [],
+        )
+        self.assertEqual(res, -sf.VALUE_MATE)
+
+    def test_validate_fen_gating_mask_suffix(self):
+        good = (
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR[HEhe]"
+            " w KQkq|11111111/11111111 - 0 1"
+        )
+        self.assertEqual(sf.validate_fen(good, "seirawan", False), 1)
+        for bad in (
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR[HEhe]"
+            " w KQkq|garbage - 0 1",
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR[HEhe]"
+            " w KQkq|1111111/11111111 - 0 1",
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR[HEhe]"
+            " w KQkq|11111111 - 0 1",
+        ):
+            self.assertEqual(sf.validate_fen(bad, "seirawan", False), -5)
+
     def test_parser_whitespace_and_inheritance_contract(self):
         sf.load_variant_config(
             "[api-two-boards:chess]\n"

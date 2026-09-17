@@ -254,6 +254,9 @@ public:
   }
 
   bool is_game_over(bool claim_draw) const {
+    Value result;
+    if (pos.is_immediate_game_end(result))
+      return true;
     if (is_insufficient_material())
       return true;
     if (claim_draw && pos.is_optional_game_end())
@@ -315,7 +318,12 @@ public:
   bool is_check() const { return Stockfish::checked(pos); }
   bool is_real_check() const { return pos.evasion_checkers(); }
   bool is_bikjang() const { return pos.bikjang(); }
-  bool is_capture(std::string uciMove) const { return pos.capture(UCI::to_move(pos, uciMove)); }
+  bool is_capture(std::string uciMove) const {
+    const Move move = UCI::to_move(pos, uciMove);
+    if (is_move_none<true>(move, uciMove, pos))
+      return false;
+    return pos.capture(move);
+  }
 
   std::string move_stack() const {
     std::string moves;

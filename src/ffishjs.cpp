@@ -323,6 +323,9 @@ public:
   }
 
   bool is_game_over(bool claim_draw) const {
+    Value result;
+    if (pos.is_immediate_game_end(result))
+      return true;
     if (is_insufficient_material())
       return true;
     if (claim_draw && pos.is_optional_game_end())
@@ -924,6 +927,4 @@ EMSCRIPTEN_BINDINGS(ffish_js) {
   function("validateFen", select_overload<int(std::string, std::string)>(&ffish::validate_fen));
   function("validateFen", select_overload<int(std::string, std::string, bool)>(&ffish::validate_fen));
   function("validatePosition", select_overload<int(std::string, std::string, std::string, bool)>(&ffish::validate_position));
-  // TODO: enable to string conversion method
-  // .class_function("getStringFromInstance", &Board::get_string_from_instance);
 }

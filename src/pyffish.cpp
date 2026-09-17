@@ -31,7 +31,9 @@ inline Value normalize_public_mate_score(const Position& pos, Value result) {
     Value internalMate = pos.checkmate_value();
     if (std::abs(result) == 30000)
         return result > VALUE_ZERO ? VALUE_MATE : -VALUE_MATE;
-    return std::abs(result) == std::abs(internalMate)
+    // When checkmate itself is a draw there is no mate score to normalize;
+    // without the guard every draw would degenerate to a loss here.
+    return internalMate != VALUE_DRAW && std::abs(result) == std::abs(internalMate)
            ? (result > VALUE_ZERO ? VALUE_MATE : -VALUE_MATE)
            : result;
 }
@@ -529,6 +531,10 @@ extern "C" PyObject* pyffish_gameResult(PyObject* self, PyObject *args) {
         gameEnd = true;
         result = pos.evasion_checkers() ? pos.checkmate_value() : pos.stalemate_value();
     }
+    // Match the ffish.js/DLL result(): a drawn terminal with material
+    // counting resolves via counting rules.
+    if (gameEnd && result == VALUE_DRAW && pos.material_counting())
+        result = pos.material_counting_result();
 
     if (gameEnd)
         result = normalize_public_mate_score(pos, result);

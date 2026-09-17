@@ -480,6 +480,15 @@ describe('board.isGameOver()', function () {
     board.pushSan("Nb8");
     chai.expect(board.isGameOver(false)).to.equal(false);
     chai.expect(board.isGameOver(true)).to.equal(true);
+
+    // Immediate variant endings count even when moves remain
+    board.delete();
+    board = new ffish.Board("atomic");
+    board.pushMoves("e2e4 e7e5 d1h5 a7a6");
+    chai.expect(board.isGameOver()).to.equal(false);
+    board.push("h5f7");
+    chai.expect(board.result()).to.equal("1-0");
+    chai.expect(board.isGameOver()).to.equal(true);
     board.delete();
   });
 });

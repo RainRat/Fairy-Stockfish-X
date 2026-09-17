@@ -1034,15 +1034,34 @@ inline Validation check_touching_kings(const CharBoard& board, const std::array<
     return OK;
 }
 
-inline Validation fill_castling_info_splitted(const std::string& castlingInfo, std::array<std::string, 2>& castlingInfoSplitted) {
+inline Validation fill_castling_info_splitted(const std::string& castlingInfo, std::array<std::string, 2>& castlingInfoSplitted, int boardFiles = -1) {
     // Optional extended syntax:
     //   <legacy-castling-and-gating>|<white-gating-mask>/<black-gating-mask>
-    // Validation keeps backward compatibility by parsing legacy flags exactly as before
-    // and ignoring the optional mask suffix here.
+    // Validation keeps backward compatibility by parsing legacy flags exactly as before.
+    // A present mask suffix must be well-formed (0/1 runs separated by a single '/')
+    // and match the board width, mirroring Position::set, which otherwise ignores it.
     std::string legacyCastlingInfo = castlingInfo;
     std::size_t sep = castlingInfo.find('|');
     if (sep != std::string::npos)
+    {
         legacyCastlingInfo = castlingInfo.substr(0, sep);
+        std::string maskSpec = castlingInfo.substr(sep + 1);
+        std::size_t slash = maskSpec.find('/');
+        bool wellFormed = slash != std::string::npos
+                       && maskSpec.find('/', slash + 1) == std::string::npos;
+        std::string whiteMask = wellFormed ? maskSpec.substr(0, slash) : "";
+        std::string blackMask = wellFormed ? maskSpec.substr(slash + 1) : "";
+        auto isMask = [](const std::string& s) {
+            return !s.empty() && s.find_first_not_of("01") == std::string::npos;
+        };
+        if (!wellFormed || !isMask(whiteMask) || !isMask(blackMask)
+            || whiteMask.size() != blackMask.size()
+            || (boardFiles > 0 && int(whiteMask.size()) != boardFiles))
+        {
+            std::cerr << "Invalid gating mask specification: '" << maskSpec << "'." << std::endl;
+            return NOK;
+        }
+    }
 
     for (char c : legacyCastlingInfo)
     {
@@ -1591,7 +1610,7 @@ inline FenValidation validate_fen(const std::string& fen, const Variant* v, bool
     if (fenParts.size() >= 3 && !skipCastlingAndEp && v->castling)
     {
         std::array<std::string, 2> castlingInfoSplitted;
-        if (fill_castling_info_splitted(fenParts[2], castlingInfoSplitted) == NOK)
+        if (fill_castling_info_splitted(fenParts[2], castlingInfoSplitted, int(v->maxFile) + 1) == NOK)
             return FEN_INVALID_CASTLING_INFO;
 
         if (castlingInfoSplitted[WHITE].size() != 0 || castlingInfoSplitted[BLACK].size() != 0)

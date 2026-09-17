@@ -281,6 +281,13 @@ dropRegionWhite = a1 b1 c1 a2 c2 a3 b3 c3
 dropRegionBlack = a1 b1 c1 a2 c2 a3 b3 c3
 startFen = 3/3/3[KkA] w - - 0 1
 
+[mustdrop-captureonly:chess]
+pieceDrops = true
+mustDrop = true
+captureDrops = n
+dropRegionWhite = e5
+startFen = 4k3/8/8/4p3/8/8/8/4K3[N] w - - 0 1
+
 [gravity-north:fairy]
 maxRank = 4
 maxFile = 4
@@ -693,5 +700,15 @@ d
 UCI
 )
 assert_contains "$out" '^Fen: 4/4/4/R3 b - - 0 1$'
+
+# Mandatory drops must consider capture drops: the only legal drop here is
+# the N@e5 capture drop, so all non-drop king moves are illegal.
+out=$(run_uci "$ENGINE" "$TMP_VARIANTS" mustdrop-captureonly <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_contains "$out" '^N@e5: 1$'
+assert_contains "$out" '^Nodes searched: 1$'
 
 echo "drop regressions passed"

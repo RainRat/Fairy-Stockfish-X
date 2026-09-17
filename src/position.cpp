@@ -5732,7 +5732,9 @@ bool Position::legal(Move m) const {
       else
       {
           SimulatedMoveGuard currentPosition(*this, MOVE_NONE);
-          for (const auto& mquiet : MoveList<QUIETS>(*this))
+          // Capture drops are generated only outside QUIETS, so scan all
+          // non-evasion moves to find an available drop.
+          for (const auto& mquiet : MoveList<NON_EVASIONS>(*this))
               if (is_drop_move(mquiet) && legal(mquiet))
                   return false;
       }

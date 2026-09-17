@@ -902,7 +902,7 @@ assert_contains_literal "${priority_override_output}" "N@d4: 1" "overridden prio
 assert_not_contains "${priority_override_output}" "P@d4: 1"
 
 # Verify non-negative bounds validation for counts and goals
-for opt in pocketSize pointsGoal collinearN flagPieceCount antiRoyalCount pseudoRoyalCount; do
+for opt in pocketSize pointsGoal collinearN flagPieceCount antiRoyalCount pseudoRoyalCount nMoveHardLimitRule castlingForbiddenPlies swapForbiddenPlies; do
     cat > "$FSX_TMP_INI" <<INI
 [test-neg-${opt}:chess]
 ${opt} = -1

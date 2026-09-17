@@ -2386,6 +2386,24 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
             std::cerr << "nFoldRuleImmediate cannot be negative." << std::endl;
         valid = false;
     }
+    if (v->nMoveHardLimitRule < 0)
+    {
+        if (DoCheck)
+            std::cerr << "nMoveHardLimitRule must be non-negative." << std::endl;
+        valid = false;
+    }
+    if (v->castlingForbiddenPlies < 0)
+    {
+        if (DoCheck)
+            std::cerr << "castlingForbiddenPlies must be non-negative." << std::endl;
+        valid = false;
+    }
+    if (v->swapForbiddenPlies < 0)
+    {
+        if (DoCheck)
+            std::cerr << "swapForbiddenPlies must be non-negative." << std::endl;
+        valid = false;
+    }
     const int boardFiles = int(v->maxFile) + 1;
     const int boardRanks = int(v->maxRank) + 1;
     if (v->connectN < 0 || v->connectN > std::max(boardFiles, boardRanks))
