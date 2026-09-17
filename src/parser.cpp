@@ -2808,7 +2808,6 @@ bool VariantParser<DoCheck>::parse_gating_piece_after(Variant* v) {
 
 template <bool DoCheck>
 bool VariantParser<DoCheck>::parse_capture_maps(Variant* v) {
-    const bool hasCaptureForbidden = config.find("captureForbidden") != config.end();
     auto sync_color_maps = [&]() {
         for (Color c : { WHITE, BLACK })
             std::copy(v->captureForbidden, v->captureForbidden + PIECE_TYPE_NB, v->captureForbiddenByColor[c]);
@@ -2823,7 +2822,15 @@ bool VariantParser<DoCheck>::parse_capture_maps(Variant* v) {
         std::stringstream ss(it->second);
         PieceSet parsed[PIECE_TYPE_NB];
         bool sawEntry = false;
-        if (allow && !hasCaptureForbidden)
+        // Both directions start from the current (possibly inherited) maps,
+        // so a child specifying only captureAllowed narrows the parent's
+        // forbiddens instead of discarding them. An empty inherited map
+        // still means "allow all", so lone captureAllowed keeps its
+        // allowlist meaning by starting from forbid-all in that case.
+        bool inheritedEmpty = true;
+        for (int i = 0; i < PIECE_TYPE_NB && inheritedEmpty; ++i)
+            inheritedEmpty = v->captureForbidden[i] == NO_PIECE_SET;
+        if (allow && inheritedEmpty)
             std::fill(std::begin(parsed), std::end(parsed), v->pieceTypes);
         else
             std::copy(v->captureForbidden, v->captureForbidden + PIECE_TYPE_NB, parsed);

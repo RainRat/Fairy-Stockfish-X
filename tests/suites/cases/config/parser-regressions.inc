@@ -457,6 +457,12 @@ king = -
 checking = false
 captureAllowed = *:p
 startFen = 8/3p4/8/8/3Q2n1/8/8/8 w - - 0 1
+
+[capture-merge-parent:chess]
+captureForbidden = p:q p:r
+
+[capture-merge-child:capture-merge-parent]
+captureAllowed = p:q
 INI
 
 cat > "${bad_rider_range_val_ini}" <<'INI'
@@ -647,6 +653,27 @@ EOF
 )
 assert_contains "${capture_allowed_only_output}" "d4d7:"
 assert_not_contains "${capture_allowed_only_output}" "d4g4:"
+
+# A child specifying only captureAllowed narrows the parent's forbiddens
+# instead of discarding them: e4d5 is re-allowed, e4f5 stays banned, and the
+# unrelated c4b6 knight capture (banned under replace semantics) stays legal.
+capture_merge_parent_output=$(run_uci "$ENGINE" "$capture_allowed_only_ini" "capture-merge-parent" <<EOF
+position fen 4k3/8/1p6/3q1r2/2N1P3/8/8/4K3 w - - 0 1
+go perft 1
+EOF
+)
+assert_not_contains "${capture_merge_parent_output}" "e4d5:"
+assert_not_contains "${capture_merge_parent_output}" "e4f5:"
+assert_contains "${capture_merge_parent_output}" "c4b6:"
+
+capture_merge_child_output=$(run_uci "$ENGINE" "$capture_allowed_only_ini" "capture-merge-child" <<EOF
+position fen 4k3/8/1p6/3q1r2/2N1P3/8/8/4K3 w - - 0 1
+go perft 1
+EOF
+)
+assert_contains "${capture_merge_child_output}" "e4d5:"
+assert_not_contains "${capture_merge_child_output}" "e4f5:"
+assert_contains "${capture_merge_child_output}" "c4b6:"
 
 bad_rider_range_val_output1=$(run_uci "$ENGINE" "$bad_rider_range_val_ini" "rider-range-val-1" </dev/null 2>&1 || true)
 assert_contains "${bad_rider_range_val_output1}" "unknown variant 'rider-range-val-1'; keeping 'chess'"
