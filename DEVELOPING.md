@@ -67,6 +67,32 @@ Common engine commands:
 - `d` — print an ASCII board of the current position
 - `help` — show the full command list
 
+## Invalid input handling
+
+Each interface has its own contract for malformed FEN and move lists. This is
+deliberate — match the surface you are calling, and do not "unify" them
+without a GUI-compatibility review:
+
+- **Native UCI `position ... moves`**: fail-open truncation. The valid prefix
+  is applied; the first unparsable token and everything after it are silently
+  ignored. This matches upstream Fairy-Stockfish and keeps games going when a
+  GUI sends a notation the engine does not understand (e.g. a 960-unaware
+  `e1h1`). There is no error channel on the `position` command.
+- **Native XBoard**: per-move `Illegal move: <token>` diagnostics; the bad
+  move is skipped.
+- **`go searchmoves`**: tokens that match no legal move select nothing. A
+  list with no legal match searches no moves (`bestmove (none)`).
+- **Python (`pyffish`)**: whole-request rejection. A bad move in the list
+  raises `ValueError` and applies nothing.
+- **JS (`ffish.js`)**: per-call choice. `push` returns `false` per move,
+  `pushMoves` stops at the first failure keeping the prefix, and
+  `variationSan` rolls everything back and returns `""`.
+- **FEN loading** (`position fen`, `set_fen`, board constructors) is
+  best-effort everywhere: unknown pieces, off-board squares, and bad flags
+  are skipped, not rejected. Use the opt-in `validate_fen` /
+  `validate_position` APIs (all three bindings) before loading untrusted
+  input, and note that gating-mask suffixes are strictly validated there.
+
 ## Python Bindings
 
 Fairy-Stockfish-X includes Python bindings through the `pyffish` library.

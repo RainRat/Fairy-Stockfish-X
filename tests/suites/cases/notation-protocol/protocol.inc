@@ -60,6 +60,21 @@ $(expect_engine_setup ucicyclone)
    expect eof
 EOF
 
+# Invalid UCI move tokens truncate the move list (pinned contract):
+# the valid prefix is applied, the bad token and everything after it are
+# ignored. Fail-open for notation mismatches; do not turn this into
+# whole-request rejection without a GUI-compat review (see DEVELOPING.md).
+run_expect "$ENGINE" > /dev/null <<EOF
+$(expect_engine_setup)
+   send "uci\n"
+   expect "uciok"
+   send "position startpos moves e2e4 bogus g1f3\n"
+   send "d\n"
+   expect -re "Fen: rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1"
+   send "quit\n"
+   expect eof
+EOF
+
 run_expect "$ENGINE" "${VARIANTS}" > /dev/null <<EOF
 $(expect_engine_setup 'load [lindex $argv 1]')
    send "xboard\n"

@@ -27,6 +27,16 @@ class TestBindings(unittest.TestCase):
         res = sf.game_result("chess", "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", [])
         self.assertEqual(res, sf.VALUE_NONE)
 
+    def test_move_list_rejects_invalid_move(self):
+        # Whole-request contract: one bad token fails the call (contrast the
+        # native UCI truncation documented in DEVELOPING.md).
+        with self.assertRaisesRegex(ValueError, "Invalid move 'bogus'"):
+            sf.game_result(
+                "chess",
+                "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+                ["e2e4", "bogus", "g1f3"],
+            )
+
     def test_load_variant_config_reports_added_count(self):
         # Loading is add-only: redefinitions are skipped, never replaced.
         added = sf.load_variant_config(

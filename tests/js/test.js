@@ -189,6 +189,12 @@ describe('board.push(uciMove)', function () {
     chai.expect(board.fen()).to.equal("rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2");
     board.delete();
   });
+  it("pushMoves stops at the first invalid move keeping the prefix", () => {
+    let board = new ffish.Board();
+    board.pushMoves("e2e4 bogus g1f3");
+    chai.expect(board.fen()).to.equal("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1");
+    board.delete();
+  });
 });
 
 describe('board.pushSan(sanMove)', function () {
