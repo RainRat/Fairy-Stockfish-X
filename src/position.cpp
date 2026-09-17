@@ -10270,7 +10270,8 @@ bool Position::see_ge(Move m, Value threshold) const {
   }
 
   // Do not evaluate SEE if value would be unreliable
-  if (must_capture() || !checking_permitted() || is_gating(m) || count<CLOBBER_PIECE>() == count<ALL_PIECES>())
+  if (   endgame_eval() == EG_EVAL_MISERE
+      || must_capture() || !checking_permitted() || is_gating(m) || count<CLOBBER_PIECE>() == count<ALL_PIECES>())
       return VALUE_ZERO >= threshold;
 
   // Wrapped topology invalidates the ordinary ray/pin exchange model.
