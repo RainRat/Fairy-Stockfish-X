@@ -608,7 +608,7 @@ public:
   Bitboard mandatory_promotion_zone(Color c) const;
   Bitboard mandatory_promotion_zone(Color c, PieceType pt) const;
   Bitboard mandatory_promotion_zone(Piece p) const;
-  bool two_step_promotion_zone(Color c, Square from, Square to) const;
+  bool two_step_promotion_zone(Color c, PieceType pt, Square from, Square to) const;
   PieceType effective_piece_type(PieceType pt) const { return pt == KING ? king_type() : pt; }
   Square promotion_square(Color c, Square s) const;
   PieceType main_promotion_pawn_type(Color c) const;
@@ -756,7 +756,6 @@ public:
   bool has_two_step_moves() const;
   uint64_t two_step_moves_mask(Color c, PieceType pt) const;
   PieceSet two_step_piece_types(Color c) const;
-  Square first_leg_capture_square(Move m) const;
   PieceSet self_destruct_types() const;
   Bitboard self_destruct_region(Color c) const;
   GravityRule gravity() const;
@@ -2441,15 +2440,6 @@ inline uint64_t Position::two_step_moves_mask(Color c, PieceType pt) const {
 inline PieceSet Position::two_step_piece_types(Color c) const {
   assert(var != nullptr);
   return var->twoStepPieceTypes[c];
-}
-
-inline Square Position::first_leg_capture_square(Move m) const {
-  if (is_two_step(m)) {
-      Square via = via_sq(m);
-      if (!empty(via) && color_of(piece_on(via)) == ~sideToMove)
-          return via;
-  }
-  return SQ_NONE;
 }
 
 inline PieceSet Position::self_destruct_types() const {
@@ -5852,8 +5842,8 @@ inline bool Position::step_destination(Square from, Direction d, Square& to) con
   return wrapped_destination_square(from, df, dr, max_file(), max_rank(), wraps_files(), wraps_ranks(), to);
 }
 
-inline bool Position::two_step_promotion_zone(Color c, Square from, Square to) const {
-  Bitboard pz = promotion_zone(c);
+inline bool Position::two_step_promotion_zone(Color c, PieceType pt, Square from, Square to) const {
+  Bitboard pz = promotion_zone(c, pt);
   return (pz & from) || (pz & to);
 }
 

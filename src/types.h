@@ -980,25 +980,8 @@ constexpr Direction KingDirections[8] = {
     NORTH, NORTH_EAST, EAST, SOUTH_EAST, SOUTH, SOUTH_WEST, WEST, NORTH_WEST
 };
 
-inline constexpr Direction king_direction_from_index(int idx) {
-    return KingDirections[idx & 7];
-}
-
-inline int king_direction_index(Direction d) {
-    for (int i = 0; i < 8; ++i)
-        if (KingDirections[i] == d)
-            return i;
-    return -1;
-}
-
-inline int king_direction_index(int dr, int df) {
-    for (int i = 0; i < 8; ++i) {
-        auto [r, f] = decode_direction(KingDirections[i]);
-        if (r == dr && f == df)
-            return i;
-    }
-    return -1;
-}
+// KingDirections index 0..7 matches the two-step direction-pair encoding
+// (pair bit d1 * 8 + d2); movegen and pseudo_legal decode pairs through it.
 
 // Keep track of what a move changes on the board (used by NNUE)
 constexpr int DIRTY_PIECE_MAX = 12;
@@ -1350,6 +1333,24 @@ inline Square via_sq(Move m) {
   constexpr uint64_t SquareFieldMask = (uint64_t(1) << SQUARE_BITS) - 1;
   return Square((static_cast<uint64_t>(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & SquareFieldMask);
 }
+
+// The two-step payload (subtype + via square) shares the SPECIAL upper bits
+// with gating data. The flag must sit above every valid payload value on all
+// three board-size configurations; otherwise SPECIAL gating moves decode as
+// two-step moves (or vice versa). Fail compilation instead of colliding.
+// Valid gating payloads top out at gate+1 == SQUARE_NB, valid via payloads at
+// SQUARE_NB - 1; both must leave the flag bit clear.
+static_assert((TwoStepFlag & ((uint64_t(1) << (2 * SQUARE_BITS + MOVE_TYPE_BITS)) - 1)) == 0,
+              "TwoStepFlag overlaps from/to/type bits");
+static_assert(((uint64_t(SQUARE_NB) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & TwoStepFlag) == 0,
+              "TwoStepFlag collides with a valid gating payload");
+static_assert(((uint64_t(SQUARE_NB - 1) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & TwoStepFlag) == 0,
+              "TwoStepFlag collides with a valid via payload");
+#if defined(VERY_LARGE_BOARDS)
+static_assert(TwoStepFlag < (uint64_t(1) << 63), "TwoStepFlag exceeds 64-bit Move storage");
+#else
+static_assert(TwoStepFlag < (uint64_t(1) << 32), "TwoStepFlag exceeds 32-bit Move storage");
+#endif
 
 inline bool is_gating(Move m) {
   if (is_two_step(m))

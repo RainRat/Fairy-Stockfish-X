@@ -1182,7 +1182,7 @@ namespace {
                     }
                 }
 
-                bool allowsPromo = canPromote && pos.two_step_promotion_zone(Us, from, to)
+                bool allowsPromo = canPromote && pos.two_step_promotion_zone(Us, pt, from, to)
                                 && pos.promotion_allowed(Us, pos.promoted_piece_type(pt));
                 if (allowsPromo && pos.piece_promotion_on_capture() && !isCapture)
                     allowsPromo = false;

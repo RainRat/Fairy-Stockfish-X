@@ -348,6 +348,15 @@ class TestPublicAPI(unittest.TestCase):
         self.assertEqual(drops["gameEnd"]["noCheckmateTypes"], {"white": ["knight"], "black": ["knight"]})
         self.assertEqual(drops["drops"]["oppositeColorTypes"], {"white": ["bishop"], "black": ["bishop"]})
 
+        sf.load_variant_config(
+            "[variantinfotwostep:chess]\n"
+            "customPiece1 = l:ADNWK\n"
+            "twoStepMoves = l:*\n"
+        )
+        twostep = json.loads(sf.variant_info("variantinfotwostep"))
+        self.assertEqual(twostep["movement"]["twoStepMoves"], {"custom1": "*"})
+        self.assertEqual(json.loads(sf.variant_info("chess"))["movement"]["twoStepMoves"], {})
+
         with self.assertRaisesRegex(ValueError, "Unknown variant"):
             sf.variant_info("does-not-exist")
 

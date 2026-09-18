@@ -214,6 +214,41 @@ std::string castling_rights_json(CastlingRights rights) {
          + ",\"queenSide\":" + boolean(bool(rights & BLACK_OOO)) + "}}";
 }
 
+// Canonical White-relative direction-pair list for a two-step mask.
+// Index order matches KingDirections (N, NE, E, SE, S, SW, W, NW); Black
+// masks are the same pairs point-reflected 180 degrees.
+const char* king_step_pair_name(int d) {
+    static const char* names[8] = {"N", "NE", "E", "SE", "S", "SW", "W", "NW"};
+    return names[d & 7];
+}
+
+std::string two_step_mask_json(uint64_t mask) {
+    if (mask == ~0ULL)
+        return quote("*");
+    std::ostringstream pairs;
+    bool first = true;
+    for (int d1 = 0; d1 < 8; ++d1)
+        for (int d2 = 0; d2 < 8; ++d2)
+            if (mask & (1ULL << (d1 * 8 + d2))) {
+                if (!first) pairs << ',';
+                first = false;
+                pairs << king_step_pair_name(d1) << '>' << king_step_pair_name(d2);
+            }
+    return quote(pairs.str());
+}
+
+std::string two_step_moves_json(const Variant& v) {
+    std::ostringstream out;
+    out << '{';
+    bool first = true;
+    for (int i = 1; i < PIECE_TYPE_NB; ++i)
+        if (v.twoStepMoves[i])
+            field(out, first, variant_piece_type_name(v, PieceType(i)).c_str(),
+                  two_step_mask_json(v.twoStepMoves[i]));
+    out << '}';
+    return out.str();
+}
+
 } // namespace
 
 std::string variant_info_json(const std::string& name) {
@@ -306,6 +341,7 @@ std::string variant_info_json(const std::string& name) {
     field(movement, b, "makpongRule", boolean(v.makpongRule));
     field(movement, b, "flyingGeneral", boolean(v.flyingGeneral));
     field(movement, b, "soldierPromotionRank", std::to_string(int(v.soldierPromotionRank) + 1));
+    field(movement, b, "twoStepMoves", two_step_moves_json(v));
     movement << '}'; field(out, first, "movement", movement.str());
 
     std::ostringstream promotion; promotion << '{'; b = true;

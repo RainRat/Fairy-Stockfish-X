@@ -81,6 +81,21 @@ promotedPieceType = l:q
 mandatoryPromotionRegionWhite = *8
 mandatoryPromotionRegionBlack = *1
 
+[test-morph-lion:chess]
+customPiece1 = l:ADNWK
+twoStepMoves = l:*
+captureMorph = true
+promotedPieceType = l:q
+castling = true
+
+[test-piece-zone-lion:chess]
+customPiece1 = l:ADNWK
+twoStepMoves = l:*
+promotedPieceType = l:q p:r
+promotionRegionWhite = Q(*7);R(*8)
+promotionRegionBlack = Q(*2);R(*1)
+castling = false
+
 [test-horned-falcon:chess]
 customPiece1 = h:BsRbRfDfW
 twoStepMoves = h:N>N,N>S
@@ -401,6 +416,86 @@ static void test_capture_squares_and_recapture() {
     assert(!(caps & square_bb(SQ_E4)));
 }
 
+static void test_two_step_promotion_ignores_morph() {
+    StateInfo st{};
+    Position pos;
+    // captureMorph must not apply on top of a two-step promotion: a promoting
+    // capture ends as the promoted piece, like ordinary PIECE_PROMOTION.
+    pos.set(variants.get("test-morph-lion"),
+            "6r1/6L1/8/8/8/8/8/4K2k w - - 0 1", false, &st, nullptr);
+
+    Move m_promo = make_two_step(SQ_G7, SQ_F8, SQ_G8, true);
+    assert(pos.legal(m_promo));
+    const Key origKey = pos.key();
+    StateInfo next{};
+    pos.do_move(m_promo, next);
+    assert(pos.piece_on(SQ_G8) == W_QUEEN);
+    pos.undo_move(m_promo);
+    assert(pos.key() == origKey);
+
+    // A non-promoting single capture still morphs into the victim type.
+    Move m_plain = make_two_step(SQ_G7, SQ_F8, SQ_G8, false);
+    assert(pos.legal(m_plain));
+    StateInfo next2{};
+    pos.do_move(m_plain, next2);
+    assert(pos.piece_on(SQ_G8) == W_ROOK);
+    pos.undo_move(m_plain);
+    assert(pos.key() == origKey);
+}
+
+static void test_two_step_double_capture_rejects_ambiguous_effects() {
+    StateInfo st{};
+    Position pos;
+    // With captureMorph active, a double capture has two victims but morph is
+    // defined for one: reject instead of morphing into an arbitrary victim.
+    // Single-leg captures remain well-defined and legal.
+    pos.set(variants.get("test-morph-lion"),
+            "r3k2r/8/2r5/3r4/4L3/8/8/R3K2R w KQkq - 0 1", false, &st, nullptr);
+
+    Move m_double = make_two_step(SQ_E4, SQ_D5, SQ_C6);
+    assert(!pos.legal(m_double));
+
+    Move m_igui = make_two_step(SQ_E4, SQ_D5, SQ_E4);
+    assert(pos.legal(m_igui));
+
+    Move m_to_only = make_two_step(SQ_E4, SQ_E5, SQ_D5, false);
+    assert(pos.legal(m_to_only));
+    const Key origKey = pos.key();
+    StateInfo next{};
+    pos.do_move(m_to_only, next);
+    assert(pos.piece_on(SQ_D5) == W_ROOK);
+    pos.undo_move(m_to_only);
+    assert(pos.key() == origKey);
+}
+
+static void test_two_step_piece_specific_promotion_zone() {
+    StateInfo st{};
+    Position pos;
+    // test-piece-zone-lion promotes the lion to Q on *7 but pawns to R on *8,
+    // so the global zone (*7|*8) is wider than the lion's own zone (*7).
+    // From d6, landing on f8 is outside the lion zone: promotion is illegal
+    // even though the landing square is inside the global zone.
+    pos.set(variants.get("test-piece-zone-lion"),
+            "8/8/3L4/8/8/8/8/4K2k w - - 0 1", false, &st, nullptr);
+
+    Move m_promo = make_two_step(SQ_D6, SQ_E7, SQ_F8, true);
+    Move m_plain = make_two_step(SQ_D6, SQ_E7, SQ_F8, false);
+    assert(!pos.legal(m_promo));
+    assert(pos.legal(m_plain));
+
+    // From e7 the origin square is inside the lion zone, so promotion is fine.
+    pos.set(variants.get("test-piece-zone-lion"),
+            "8/4L3/8/8/8/8/8/4K2k w - - 0 1", false, &st, nullptr);
+    Move m_promo2 = make_two_step(SQ_E7, SQ_F8, SQ_F7, true);
+    assert(pos.legal(m_promo2));
+    const Key origKey = pos.key();
+    StateInfo next{};
+    pos.do_move(m_promo2, next);
+    assert(pos.piece_on(SQ_F7) == W_QUEEN);
+    pos.undo_move(m_promo2);
+    assert(pos.key() == origKey);
+}
+
 static void test_two_step_vs_jump() {
     StateInfo st{};
     Position pos;
@@ -431,6 +526,9 @@ int main() {
     test_gating_special_collision();
     test_two_step_state_transitions();
     test_two_step_promotions();
+    test_two_step_promotion_ignores_morph();
+    test_two_step_double_capture_rejects_ambiguous_effects();
+    test_two_step_piece_specific_promotion_zone();
     test_capture_squares_and_recapture();
     test_two_step_vs_jump();
     return 0;

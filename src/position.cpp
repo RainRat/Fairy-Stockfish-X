@@ -5508,7 +5508,7 @@ bool Position::legal(Move m) const {
 
   if (is_promotion_move(m))
       finalMovePt = promotion_type(m);
-  else if (type_of(m) == PIECE_PROMOTION)
+  else if (type_of(m) == PIECE_PROMOTION || (is_two_step(m) && two_step_promotes(m)))
       finalMovePt = promoted_piece_type(movePt);
   else if (type_of(m) == PIECE_DEMOTION)
   {
@@ -5521,10 +5521,10 @@ bool Position::legal(Move m) const {
   else if (unstackMove)
       finalMovePt = var->unstackedPieceType[type_of(moverPiece)];
 
+  // Promotions determine the resulting piece; morphs must not apply on top.
   if (   !dropMove
       && type_of(m) != CASTLING
-      && !is_promotion_move(m)
-      && type_of(m) != PIECE_PROMOTION
+      && !is_any_promotion(m)
       && !passMove)
   {
       if (capture_morph() && isCapture)
@@ -5550,8 +5550,21 @@ bool Position::legal(Move m) const {
       Square via = via_sq(m);
       if ((pieces(us) & via) || (to != from && (pieces(us) & to)))
           return false;
-      if (two_step_promotes(m) && !two_step_promotion_zone(us, from, to))
+      if (two_step_promotes(m) && !two_step_promotion_zone(us, movePt, from, to))
           return false;
+      if (isCapture)
+      {
+          bool viaCapture = !empty(via) && color_of(piece_on(via)) == them;
+          bool toCapture = to != from && !empty(to) && color_of(piece_on(to)) == them;
+          // A double capture removes two victims, but blast, petrification
+          // and capture-morph effects are defined for a single capture
+          // square. Reject such combinations instead of silently applying
+          // the effect to one victim and dropping the other.
+          if (viaCapture && toCapture
+              && (blast_on_capture(m) || capture_morph()
+                  || (var->petrifyOnCaptureTypes & movePt)))
+              return false;
+      }
   }
   if (rifleShot && is_any_promotion(m))
       return false;
@@ -6661,7 +6674,7 @@ bool Position::pseudo_legal(const Move m) const {
       {
           if (promoted_piece_type(pt) == NO_PIECE_TYPE)
               return false;
-          if (!two_step_promotion_zone(us, from, to))
+          if (!two_step_promotion_zone(us, pt, from, to))
               return false;
       }
       return !violates_same_player_board_repetition(m);
@@ -8868,8 +8881,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       && !stackMove
       && !dropMove
       && type_of(m) != CASTLING
-      && !is_promotion_move(m)
-      && type_of(m) != PIECE_PROMOTION
+      && !is_any_promotion(m)
       && !passMove)
   {
       Piece cur = piece_on(moverSq);
@@ -8881,8 +8893,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
 
   if (   !dropMove
       && type_of(m) != CASTLING
-      && !is_promotion_move(m)
-      && type_of(m) != PIECE_PROMOTION
+      && !is_any_promotion(m)
       && !passMove)
   {
       Piece cur = piece_on(moverSq);
@@ -11823,6 +11834,9 @@ bool Position::see_pruning_unreliable(Move m) const {
   if (var->seePruningPolicy == SeePruningPolicy::ALWAYS_UNRELIABLE)
       return true;
 
+  // Two-step moves capture on up to two squares; SEE only models a single
+  // victim, so conservatively treat them as unreliable. This is a safe
+  // fallback, not a full multi-victim exchange evaluation.
   if (is_two_step(m))
       return true;
 

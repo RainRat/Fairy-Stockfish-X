@@ -257,30 +257,54 @@ void MovePicker::score() {
       // values while still preferring zones containing valuable targets.
       return value / 2;
   };
+  // Sum every victim on the move's capture squares so multi-capture moves
+  // (two-step double captures, jump locust captures) order by total material
+  // without teaching move ordering about any specific move encoding.
+  auto capture_victims = [&](Move mv, int& total, PieceType& topType, int& points) {
+      total = 0;
+      topType = NO_PIECE_TYPE;
+      points = 0;
+      int topVal = -1;
+      Bitboard caps = pos.capture_squares(mv);
+      while (caps)
+      {
+          Piece p = pos.piece_on(pop_lsb(caps));
+          if (p == NO_PIECE)
+              continue;
+          int v = int(PieceValue[MG][p]);
+          total += v;
+          if (v > topVal)
+          {
+              topVal = v;
+              topType = type_of(p);
+          }
+          points += points_capture_bonus(p);
+      }
+      if (topType == NO_PIECE_TYPE)
+      {
+          // Fallback for captures without a board victim: preserve the
+          // previous single-victim behavior.
+          Piece captured = pos.captured_piece(mv);
+          Piece victim = captured != NO_PIECE ? captured : pos.piece_on(to_sq(mv));
+          total = int(PieceValue[MG][victim]);
+          topType = type_of(victim);
+          points = points_capture_bonus(captured);
+      }
+  };
   for (auto& m : *this)
       if constexpr (Type == CAPTURES)
       {
-          Piece captured = pos.captured_piece(m);
-          Piece victim = captured != NO_PIECE ? captured : pos.piece_on(to_sq(m));
-          int victimVal = int(PieceValue[MG][victim]);
-          if (is_two_step(m))
-          {
-              Square via = via_sq(m);
-              Color them = ~pos.side_to_move();
-              if (via != to_sq(m) && !pos.empty(via) && color_of(pos.piece_on(via)) == them)
-              {
-                  Piece capVia = pos.piece_on(via);
-                  if (to_sq(m) != from_sq(m) && !pos.empty(to_sq(m)) && color_of(pos.piece_on(to_sq(m))) == them)
-                      victimVal += int(PieceValue[MG][capVia]);
-              }
-          }
+          int victimVal;
+          PieceType victimType;
+          int pointsBonus;
+          capture_victims(m, victimVal, victimType, pointsBonus);
           m.value =  victimVal * 6
-                   + points_capture_bonus(captured)
+                   + pointsBonus
                    + flag_goal_bonus(m)
                    + king_goal_progress_bonus(m)
                    + gate_history_bonus(m)
                    + freeze_target_bonus(m)
-                   + (*captureHistory)[pos.moved_piece(m)][to_sq(m)][type_of(victim)];
+                   + (*captureHistory)[pos.moved_piece(m)][to_sq(m)][victimType];
       }
 
       else if constexpr (Type == QUIETS)
@@ -305,10 +329,12 @@ void MovePicker::score() {
       {
           if (pos.capture(m))
           {
-              Piece captured = pos.captured_piece(m);
-              Piece victim = captured != NO_PIECE ? captured : pos.piece_on(to_sq(m));
-              m.value =  int(PieceValue[MG][victim])
-                       + points_capture_bonus(captured)
+              int victimVal;
+              PieceType victimType;
+              int pointsBonus;
+              capture_victims(m, victimVal, victimType, pointsBonus);
+              m.value =  victimVal
+                       + pointsBonus
                        + flag_goal_bonus(m)
                        + king_goal_progress_bonus(m)
                        + gate_history_bonus(m)
