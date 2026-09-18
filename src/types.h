@@ -1308,8 +1308,14 @@ inline bool is_laser_fire(Move m) { return type_of(m) == LASER_FIRE; }
 
 #if defined(VERY_LARGE_BOARDS)
 constexpr uint64_t TwoStepFlag = uint64_t(1) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS + SQUARE_BITS + 1);
-#else
+#elif defined(LARGEBOARDS)
+// LARGEBOARDS (7 square bits): valid gating gate+1 values never reach the top
+// mask bit, so the flag can sit at bit 31 within the 32-bit Move.
 constexpr uint64_t TwoStepFlag = uint64_t(1) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS + SQUARE_BITS);
+#else
+// 8x8 (6 square bits): gating gate+1 reaches bit 28 (gate SQ_H8), so the flag
+// must sit above it at bit 29 to stay disjoint from SPECIAL gating moves.
+constexpr uint64_t TwoStepFlag = uint64_t(1) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS + SQUARE_BITS + 1);
 #endif
 
 inline SpecialSubtype special_subtype(Move m) {
