@@ -146,7 +146,7 @@ bool MovePicker::is_qsearch_tt_move(Move m) const {
   if (pos.evasion_checkers())
       return true;
 
-  if (depth <= DEPTH_QS_RECAPTURES && to_sq(m) != recaptureSquare)
+  if (depth <= DEPTH_QS_RECAPTURES && to_sq(m) != recaptureSquare && pos.capture_square(m) != recaptureSquare)
       return false;
 
   return pos.capture_or_promotion(m)
@@ -262,7 +262,19 @@ void MovePicker::score() {
       {
           Piece captured = pos.captured_piece(m);
           Piece victim = captured != NO_PIECE ? captured : pos.piece_on(to_sq(m));
-          m.value =  int(PieceValue[MG][victim]) * 6
+          int victimVal = int(PieceValue[MG][victim]);
+          if (is_two_step(m))
+          {
+              Square via = via_sq(m);
+              Color them = ~pos.side_to_move();
+              if (via != to_sq(m) && !pos.empty(via) && color_of(pos.piece_on(via)) == them)
+              {
+                  Piece capVia = pos.piece_on(via);
+                  if (to_sq(m) != from_sq(m) && !pos.empty(to_sq(m)) && color_of(pos.piece_on(to_sq(m))) == them)
+                      victimVal += int(PieceValue[MG][capVia]);
+              }
+          }
+          m.value =  victimVal * 6
                    + points_capture_bonus(captured)
                    + flag_goal_bonus(m)
                    + king_goal_progress_bonus(m)
@@ -536,7 +548,8 @@ top:
 
   case QCAPTURE:
       if (select<Best>([&](){ return   depth > DEPTH_QS_RECAPTURES
-                                    || to_sq(*cur) == recaptureSquare; }))
+                                    || to_sq(*cur) == recaptureSquare
+                                    || pos.capture_square(*cur) == recaptureSquare; }))
           return *(cur - 1);
 
       if (resume_deferred_potions<CAPTURES>(moveList, qcaptureBaseEnd, qcapturePotionsDeferred))

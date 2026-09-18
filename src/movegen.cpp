@@ -1139,8 +1139,9 @@ namespace {
                 int d1 = pair_idx / 8;
                 int d2 = pair_idx % 8;
 
-                int r1 = int(rank_of(from)) + KingStepDeltas[d1].first;
-                int f1 = int(file_of(from)) + KingStepDeltas[d1].second;
+                auto [dr1, df1] = decode_direction(KingDirections[d1]);
+                int r1 = int(rank_of(from)) + dr1;
+                int f1 = int(file_of(from)) + df1;
                 if (r1 < 0 || r1 > pos.max_rank() || f1 < 0 || f1 > pos.max_file())
                     continue;
                 Square via = make_square(File(f1), Rank(r1));
@@ -1149,8 +1150,9 @@ namespace {
                 if (pos.pieces(Us) & via)
                     continue;
 
-                int r2 = r1 + KingStepDeltas[d2].first;
-                int f2 = f1 + KingStepDeltas[d2].second;
+                auto [dr2, df2] = decode_direction(KingDirections[d2]);
+                int r2 = r1 + dr2;
+                int f2 = f1 + df2;
                 if (r2 < 0 || r2 > pos.max_rank() || f2 < 0 || f2 > pos.max_file())
                     continue;
                 Square to = make_square(File(f2), Rank(r2));
@@ -1190,7 +1192,8 @@ namespace {
                     }
                 }
 
-                bool allowsPromo = canPromote && promoZone && ((promoZone & from) || (promoZone & via) || (promoZone & to));
+                bool allowsPromo = canPromote && promoZone && ((promoZone & from) || (promoZone & to))
+                                && pos.promotion_allowed(Us, pos.promoted_piece_type(pt));
                 if (allowsPromo && pos.piece_promotion_on_capture() && !isCapture)
                     allowsPromo = false;
 

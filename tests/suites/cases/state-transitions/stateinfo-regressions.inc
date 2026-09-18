@@ -66,6 +66,20 @@ laserEmitters = white@a1:0, black@h8:2
 laser_r = D/D/D/D
 laser_k = D/D/D/D
 castling = true
+
+[test-lion-state:chess]
+customPiece1 = l:ADNWK
+twoStepMoves = l:*
+castling = true
+promotedPieceType = l:q
+promotionLimit = q:1
+
+[test-mandatory-lion:chess]
+customPiece1 = l:ADNWK
+twoStepMoves = l:*
+promotedPieceType = l:q
+mandatoryPromotionRegionWhite = *8
+mandatoryPromotionRegionBlack = *1
 )ini");
     variants.parse_istream<false>(ss);
 }
@@ -258,6 +272,111 @@ static void test_castling_preserves_piece_state() {
     assert(pos.orientation_on(SQ_H1) == 2);
 }
 
+static void test_gating_special_collision() {
+    for (int gate = 0; gate < 64; ++gate) {
+        for (PieceType pt = PieceType(1); pt < PIECE_TYPE_NB; ++pt) {
+            Move m = make_gating<SPECIAL>(SQ_E2, SQ_E4, pt, Square(gate));
+            assert(!is_two_step(m));
+            assert(is_gating(m));
+            assert(special_subtype(m) == SPECIAL_SUBTYPE_NONE);
+        }
+    }
+}
+
+static void test_two_step_state_transitions() {
+    StateInfo st{};
+    Position pos;
+    // Lion on e4, black rooks on d5 and c6 with black castling rights
+    pos.set(variants.get("test-lion-state"),
+            "r3k2r/8/2r5/3r4/4L3/8/8/R3K2R w KQkq - 0 1", false, &st, nullptr);
+
+    const Key origKey = pos.key();
+    const Key origMatKey = pos.state()->materialKey;
+
+    // 1. First-leg-only capture (igui): e4 -> d5 (captures r) -> e4
+    Move m_igui = make_two_step(SQ_E4, SQ_D5, SQ_E4);
+    assert(pos.legal(m_igui));
+    StateInfo next1{};
+    pos.do_move(m_igui, next1);
+    assert(pos.piece_on(SQ_D5) == NO_PIECE);
+    assert(pos.piece_on(SQ_E4) == make_piece(WHITE, CUSTOM_PIECE_1));
+    assert(pos.count<ROOK>(BLACK) == 3);
+    pos.undo_move(m_igui);
+    assert(pos.key() == origKey);
+    assert(pos.state()->materialKey == origMatKey);
+    assert(pos.piece_on(SQ_D5) == B_ROOK);
+    assert(pos.count<ROOK>(BLACK) == 4);
+
+    // 2. Double capture: e4 -> d5 (captures r) -> c6 (captures r)
+    Move m_double = make_two_step(SQ_E4, SQ_D5, SQ_C6);
+    assert(pos.legal(m_double));
+    StateInfo next2{};
+    pos.do_move(m_double, next2);
+    assert(pos.piece_on(SQ_D5) == NO_PIECE);
+    assert(pos.piece_on(SQ_C6) == make_piece(WHITE, CUSTOM_PIECE_1));
+    assert(pos.count<ROOK>(BLACK) == 2);
+    pos.undo_move(m_double);
+    assert(pos.key() == origKey);
+    assert(pos.state()->materialKey == origMatKey);
+    assert(pos.piece_on(SQ_D5) == B_ROOK);
+    assert(pos.piece_on(SQ_C6) == B_ROOK);
+    assert(pos.count<ROOK>(BLACK) == 4);
+
+    // 3. First-leg capture of a piece with castling rights revokes those rights
+    pos.set(variants.get("test-lion-state"),
+            "r3k2r/6L1/8/8/8/8/8/R3K2R w KQkq - 0 1", false, &st, nullptr);
+    const Key rookOrigKey = pos.key();
+    const Key rookOrigMatKey = pos.state()->materialKey;
+    const int rookOrigCastling = pos.state()->castlingRights;
+    assert(rookOrigCastling & (1 << (BLACK * 2))); // Black has kingside castling rights
+
+    Move m_cap_rook = make_two_step(SQ_G7, SQ_H8, SQ_G7);
+    assert(pos.legal(m_cap_rook));
+    StateInfo next3{};
+    pos.do_move(m_cap_rook, next3);
+    assert(!(pos.state()->castlingRights & (1 << (BLACK * 2)))); // Black kingside castling revoked!
+    pos.undo_move(m_cap_rook);
+    assert(pos.state()->castlingRights == rookOrigCastling);
+    assert(pos.key() == rookOrigKey);
+    assert(pos.state()->materialKey == rookOrigMatKey);
+}
+
+static void test_two_step_promotions() {
+    StateInfo st{};
+    Position pos;
+    // In test-lion-state (chess baseline, rank 8 promoZone, promotionLimit q:1)
+    // Board has no queen yet:
+    pos.set(variants.get("test-lion-state"),
+            "8/6L1/8/8/8/8/8/4K2k w - - 0 1", false, &st, nullptr);
+
+    Move m_promo = make_two_step(SQ_G7, SQ_F8, SQ_G8, true);
+    Move m_nonpromo = make_two_step(SQ_G7, SQ_F8, SQ_G8, false);
+    assert(pos.legal(m_promo));
+    assert(pos.legal(m_nonpromo));
+
+    const Key origKey = pos.key();
+    const Key origMatKey = pos.state()->materialKey;
+    StateInfo next{};
+    pos.do_move(m_promo, next);
+    assert(pos.piece_on(SQ_G8) == W_QUEEN);
+    pos.undo_move(m_promo);
+    assert(pos.piece_on(SQ_G7) == make_piece(WHITE, CUSTOM_PIECE_1));
+    assert(pos.key() == origKey);
+    assert(pos.state()->materialKey == origMatKey);
+
+    // Promotion limit test: if White already has a Queen, promoting to Queen is disallowed by promotionLimit = q:1
+    pos.set(variants.get("test-lion-state"),
+            "8/6L1/8/8/8/8/8/Q3K2k w - - 0 1", false, &st, nullptr);
+    assert(!pos.legal(m_promo)); // Disallowed by promotionLimit!
+    assert(pos.legal(m_nonpromo));
+
+    // Mandatory promotion test
+    pos.set(variants.get("test-mandatory-lion"),
+            "8/6L1/8/8/8/8/8/4K2k w - - 0 1", false, &st, nullptr);
+    assert(pos.legal(m_promo));
+    assert(!pos.legal(m_nonpromo)); // Disallowed because entering rank 8 without promoting
+}
+
 int main() {
     init_test_engine();
     load_variants();
@@ -268,6 +387,9 @@ int main() {
     test_spell_chess_null_move_decays();
     test_stack_piece_transforms_and_undo();
     test_castling_preserves_piece_state();
+    test_gating_special_collision();
+    test_two_step_state_transitions();
+    test_two_step_promotions();
     return 0;
 }
 EOF

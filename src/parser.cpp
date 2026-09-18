@@ -298,15 +298,35 @@ namespace {
                             std::cerr << optionName << " - Malformed direction pair: " << pairToken << std::endl;
                         return false;
                     }
-                    int d1 = parse_king_step_direction(pairToken.substr(0, sep));
-                    int d2 = parse_king_step_direction(pairToken.substr(sep + 1));
-                    if (d1 < 0 || d2 < 0)
+                    std::string s1 = pairToken.substr(0, sep);
+                    std::string s2 = pairToken.substr(sep + 1);
+                    int d1_start = 0, d1_end = 7;
+                    if (s1 != "*")
                     {
-                        if (DoCheck)
-                            std::cerr << optionName << " - Invalid direction in pair: " << pairToken << std::endl;
-                        return false;
+                        int d1 = parse_king_step_direction(s1);
+                        if (d1 < 0)
+                        {
+                            if (DoCheck)
+                                std::cerr << optionName << " - Invalid direction in pair: " << pairToken << std::endl;
+                            return false;
+                        }
+                        d1_start = d1_end = d1;
                     }
-                    mask |= (1ULL << (d1 * 8 + d2));
+                    int d2_start = 0, d2_end = 7;
+                    if (s2 != "*")
+                    {
+                        int d2 = parse_king_step_direction(s2);
+                        if (d2 < 0)
+                        {
+                            if (DoCheck)
+                                std::cerr << optionName << " - Invalid direction in pair: " << pairToken << std::endl;
+                            return false;
+                        }
+                        d2_start = d2_end = d2;
+                    }
+                    for (int d1 = d1_start; d1 <= d1_end; ++d1)
+                        for (int d2 = d2_start; d2 <= d2_end; ++d2)
+                            mask |= (1ULL << (d1 * 8 + d2));
                 }
                 parsed[pt] = mask;
             }
