@@ -1128,7 +1128,7 @@ namespace {
                 continue;
 
             Piece mover = pos.piece_on(from);
-            Bitboard promoZone = pos.promotion_zone(mover);
+            Bitboard mandatoryZone = pos.mandatory_promotion_zone(mover);
             bool canPromote = (pos.promoted_piece_type(pt) != NO_PIECE_TYPE) && !pos.is_promoted(from);
 
             uint64_t remaining_mask = mask;
@@ -1187,7 +1187,10 @@ namespace {
                 if (allowsPromo && pos.piece_promotion_on_capture() && !isCapture)
                     allowsPromo = false;
 
-                bool mandatoryPromo = allowsPromo && pos.mandatory_piece_promotion() && (promoZone & to);
+                // Mirror Position::legal() mandatory handling: a non-promoting
+                // entry into the mandatory zone from outside is illegal, so
+                // suppress the non-promo move only in that case.
+                bool mandatoryPromo = allowsPromo && (mandatoryZone & to) && !(mandatoryZone & from);
 
                 if (allowsPromo)
                 {

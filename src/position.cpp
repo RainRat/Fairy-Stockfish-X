@@ -7198,6 +7198,10 @@ bool Position::gives_check_impl(Move m) const {
   Bitboard discCheckSq = 0;
   if (!dropMove)
       discCheckSq = rifleShot ? square_bb(to) : square_bb(from);
+  // A two-step via capture can unblock a line through the intermediate
+  // square, so include it as a potential discovered-check source.
+  if (is_two_step(m) && capture(m))
+      discCheckSq |= square_bb(via_sq(m));
 
   if (  (((!dropMove && (blockers_for_king(~sideToMove) & discCheckSq)) || var->trapRegion)
          || (non_sliding_riders() & pieces(sideToMove)))
@@ -8445,7 +8449,10 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   {
       if (Eval::useNNUE)
       {
-          if (pureWallMove || (twoStep && from == to && !two_step_promotes(m)))
+          // Quiet igui (return-to-origin) without a via capture leaves the
+          // board unchanged, so no NNUE refresh is needed. Capturing igui
+          // must preserve the via-capture dirty entries appended above.
+          if (pureWallMove || (twoStep && from == to && !two_step_promotes(m) && !st->twoStepFirstCaptured))
           {
               dp.dirty_num = 0;
               init_dirty_piece_entry(dp, 0, NO_PIECE, SQ_NONE, SQ_NONE, NO_PIECE, 0);

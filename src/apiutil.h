@@ -320,7 +320,21 @@ inline const std::string move_to_san(Position& pos, Move m, Notation n) {
     {
         san = square(pos, from, n) + square(pos, via_sq(m), n) + square(pos, to, n);
         if (two_step_promotes(m))
-            san += "+";
+        {
+            Piece mover = pos.moved_piece(m);
+            PieceType promotedTo = mover != NO_PIECE ? pos.promoted_piece_type(type_of(mover)) : NO_PIECE_TYPE;
+            if (promotedTo != NO_PIECE_TYPE && !is_shogi(n))
+                san += std::string("=") + display_symbol(pos.piece_symbol(make_piece(us, promotedTo)));
+            else
+                san += "+";
+        }
+        if (pos.gives_check(m) && !is_shogi(n) && n != NOTATION_XIANGQI_WXF)
+        {
+            StateInfo st;
+            pos.do_move(m, st);
+            san += MoveList<LEGAL>(pos).size() ? "+" : "#";
+            pos.undo_move(m);
+        }
         return san;
     }
 
