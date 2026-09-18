@@ -80,6 +80,11 @@ twoStepMoves = l:*
 promotedPieceType = l:q
 mandatoryPromotionRegionWhite = *8
 mandatoryPromotionRegionBlack = *1
+
+[test-horned-falcon:chess]
+customPiece1 = h:BsRbRfDfW
+twoStepMoves = h:N>N,N>S
+castling = false
 )ini");
     variants.parse_istream<false>(ss);
 }
@@ -273,13 +278,19 @@ static void test_castling_preserves_piece_state() {
 }
 
 static void test_gating_special_collision() {
-    for (int gate = 0; gate < 64; ++gate) {
+    for (int gate = 0; gate <= int(SQ_MAX); ++gate) {
         for (PieceType pt = PieceType(1); pt < PIECE_TYPE_NB; ++pt) {
             Move m = make_gating<SPECIAL>(SQ_E2, SQ_E4, pt, Square(gate));
             assert(!is_two_step(m));
             assert(is_gating(m));
             assert(special_subtype(m) == SPECIAL_SUBTYPE_NONE);
         }
+    }
+    for (int via = 0; via <= int(SQ_MAX); ++via) {
+        Move m = make_two_step(SQ_E2, Square(via), SQ_E4);
+        assert(is_two_step(m));
+        assert(!is_gating(m));
+        assert(via_sq(m) == Square(via));
     }
 }
 
@@ -377,6 +388,36 @@ static void test_two_step_promotions() {
     assert(!pos.legal(m_nonpromo)); // Disallowed because entering rank 8 without promoting
 }
 
+static void test_capture_squares_and_recapture() {
+    StateInfo st{};
+    Position pos;
+    pos.set(variants.get("test-lion-state"),
+            "r3k2r/8/2r5/3r4/4L3/8/8/R3K2R w KQkq - 0 1", false, &st, nullptr);
+
+    Move m_double = make_two_step(SQ_E4, SQ_D5, SQ_C6);
+    Bitboard caps = pos.capture_squares(m_double);
+    assert(caps & square_bb(SQ_D5));
+    assert(caps & square_bb(SQ_C6));
+    assert(!(caps & square_bb(SQ_E4)));
+}
+
+static void test_two_step_vs_jump() {
+    StateInfo st{};
+    Position pos;
+    // Horned Falcon: fD jumps over transit square, while two-step visits it
+    pos.set(variants.get("test-horned-falcon"),
+            "8/8/8/8/4P3/8/4H3/8 w - - 0 1", false, &st, nullptr);
+    // e2e4 is a forward Dabbaba jump (fD) over friendly e3:
+    Move m_jump = make<NORMAL>(SQ_E2, SQ_E4);
+    assert(pos.legal(m_jump));
+    // e2e3e4 is a two-step move visiting e3, which is empty here, but if e3 is blocked:
+    pos.set(variants.get("test-horned-falcon"),
+            "8/8/8/8/4p3/4P3/4H3/8 w - - 0 1", false, &st, nullptr);
+    assert(pos.legal(m_jump)); // fD jumps over friendly e3!
+    Move m_two_step = make_two_step(SQ_E2, SQ_E3, SQ_E4);
+    assert(!pos.legal(m_two_step)); // two-step blocked by friendly e3!
+}
+
 int main() {
     init_test_engine();
     load_variants();
@@ -390,6 +431,8 @@ int main() {
     test_gating_special_collision();
     test_two_step_state_transitions();
     test_two_step_promotions();
+    test_capture_squares_and_recapture();
+    test_two_step_vs_jump();
     return 0;
 }
 EOF

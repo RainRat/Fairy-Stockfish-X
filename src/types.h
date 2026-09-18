@@ -1306,7 +1306,11 @@ inline bool is_stack_move(Move m) { return type_of(m) == STACK; }
 inline bool is_unstack_move(Move m) { return type_of(m) == UNSTACK; }
 inline bool is_laser_fire(Move m) { return type_of(m) == LASER_FIRE; }
 
+#if defined(VERY_LARGE_BOARDS)
+constexpr uint64_t TwoStepFlag = uint64_t(1) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS + SQUARE_BITS + 1);
+#else
 constexpr uint64_t TwoStepFlag = uint64_t(1) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS + SQUARE_BITS);
+#endif
 
 inline SpecialSubtype special_subtype(Move m) {
   if (type_of(m) != SPECIAL)
@@ -1338,8 +1342,7 @@ inline bool is_any_promotion(Move m) {
 inline Square via_sq(Move m) {
   assert(is_two_step(m));
   constexpr uint64_t SquareFieldMask = (uint64_t(1) << SQUARE_BITS) - 1;
-  const uint64_t gateField = (static_cast<uint64_t>(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & SquareFieldMask;
-  return Square(gateField - 1);
+  return Square((static_cast<uint64_t>(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & SquareFieldMask);
 }
 
 inline bool is_gating(Move m) {
@@ -1486,7 +1489,7 @@ constexpr Move make_promotion_potion(Square from, Square to, PieceType prom_pt, 
 constexpr Move make_two_step(Square from, Square via, Square to, bool promotes = false) {
   return Move(
       TwoStepFlag
-    + (static_cast<uint64_t>(via + 1) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS))
+    + (static_cast<uint64_t>(via) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS))
     + (static_cast<uint64_t>(promotes ? SPECIAL_SUBTYPE_TWO_STEP_PROMOTION : SPECIAL_SUBTYPE_TWO_STEP) << (2 * SQUARE_BITS + MOVE_TYPE_BITS))
     + static_cast<uint64_t>(SPECIAL)
     + (static_cast<uint64_t>(from) << SQUARE_BITS)

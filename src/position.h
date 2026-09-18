@@ -608,6 +608,7 @@ public:
   Bitboard mandatory_promotion_zone(Color c) const;
   Bitboard mandatory_promotion_zone(Color c, PieceType pt) const;
   Bitboard mandatory_promotion_zone(Piece p) const;
+  bool two_step_promotion_zone(Color c, Square from, Square to) const;
   PieceType effective_piece_type(PieceType pt) const { return pt == KING ? king_type() : pt; }
   Square promotion_square(Color c, Square s) const;
   PieceType main_promotion_pawn_type(Color c) const;
@@ -1044,6 +1045,8 @@ public:
   bool is_jump_capture(Move m) const;
   Square capture_square(Square to) const;
   Square capture_square(Move m) const;
+  Bitboard capture_squares(Move m) const;
+  bool step_destination(Square from, Direction d, Square& to) const;
   Square secondary_drop_square(Move m) const;
   Square mirrored_pair_drop_square(Square s) const;
   Bitboard jump_capture_mask(Square from, Square to, Bitboard occupied) const;
@@ -5820,6 +5823,38 @@ inline Square Position::capture_square(Move m) const {
       return pushInfo.captures ? pushInfo.tail : SQ_NONE;
 
   return to;
+}
+
+inline Bitboard Position::capture_squares(Move m) const {
+  if (!capture(m))
+      return Bitboard(0);
+  if (is_two_step(m))
+  {
+      Bitboard b = 0;
+      Square via = via_sq(m);
+      Square to = to_sq(m);
+      Square from = from_sq(m);
+      Color them = ~sideToMove;
+      if (via != to && !empty(via) && color_of(piece_on(via)) == them)
+          b |= square_bb(via);
+      if (to != from && !empty(to) && color_of(piece_on(to)) == them)
+          b |= square_bb(to);
+      return b;
+  }
+  if (is_jump_capture(m))
+      return jump_capture_mask(from_sq(m), to_sq(m)) | (is_ok(capture_square(m)) ? square_bb(capture_square(m)) : Bitboard(0));
+  Square cs = capture_square(m);
+  return is_ok(cs) ? square_bb(cs) : Bitboard(0);
+}
+
+inline bool Position::step_destination(Square from, Direction d, Square& to) const {
+  auto [dr, df] = decode_direction(d);
+  return wrapped_destination_square(from, df, dr, max_file(), max_rank(), wraps_files(), wraps_ranks(), to);
+}
+
+inline bool Position::two_step_promotion_zone(Color c, Square from, Square to) const {
+  Bitboard pz = promotion_zone(c);
+  return (pz & from) || (pz & to);
 }
 
 inline bool Position::paired_drop(Move m) const {
