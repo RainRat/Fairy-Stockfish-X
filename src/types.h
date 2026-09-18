@@ -976,40 +976,27 @@ inline constexpr std::pair<int, int> decode_direction(Direction d) {
     return {dr, df};
 }
 
-constexpr std::pair<int, int> KingStepDeltas[8] = {
-    { 1,  0}, // 0: NORTH
-    { 1,  1}, // 1: NORTH_EAST
-    { 0,  1}, // 2: EAST
-    {-1,  1}, // 3: SOUTH_EAST
-    {-1,  0}, // 4: SOUTH
-    {-1, -1}, // 5: SOUTH_WEST
-    { 0, -1}, // 6: WEST
-    { 1, -1}  // 7: NORTH_WEST
+constexpr Direction KingDirections[8] = {
+    NORTH, NORTH_EAST, EAST, SOUTH_EAST, SOUTH, SOUTH_WEST, WEST, NORTH_WEST
 };
 
 inline constexpr Direction king_direction_from_index(int idx) {
-    switch (idx & 7) {
-    case 0: return NORTH;
-    case 1: return NORTH_EAST;
-    case 2: return EAST;
-    case 3: return SOUTH_EAST;
-    case 4: return SOUTH;
-    case 5: return SOUTH_WEST;
-    case 6: return WEST;
-    case 7: return NORTH_WEST;
-    default: return NORTH;
-    }
+    return KingDirections[idx & 7];
+}
+
+inline int king_direction_index(Direction d) {
+    for (int i = 0; i < 8; ++i)
+        if (KingDirections[i] == d)
+            return i;
+    return -1;
 }
 
 inline int king_direction_index(int dr, int df) {
-    if (dr ==  1 && df ==  0) return 0;
-    if (dr ==  1 && df ==  1) return 1;
-    if (dr ==  0 && df ==  1) return 2;
-    if (dr == -1 && df ==  1) return 3;
-    if (dr == -1 && df ==  0) return 4;
-    if (dr == -1 && df == -1) return 5;
-    if (dr ==  0 && df == -1) return 6;
-    if (dr ==  1 && df == -1) return 7;
+    for (int i = 0; i < 8; ++i) {
+        auto [r, f] = decode_direction(KingDirections[i]);
+        if (r == dr && f == df)
+            return i;
+    }
     return -1;
 }
 
@@ -1267,10 +1254,6 @@ inline PieceType promotion_type(Move m) {
   return NO_PIECE_TYPE;
 }
 
-inline bool is_promotion_move(Move m) {
-  return type_of(m) == PROMOTION || type_of(m) == PROMOTION_POTION;
-}
-
 inline Square potion_target_square(Move m) {
   return Square((m >> (2 * SQUARE_BITS + MOVE_TYPE_BITS)) & SQUARE_BIT_MASK);
 }
@@ -1323,12 +1306,12 @@ inline bool is_stack_move(Move m) { return type_of(m) == STACK; }
 inline bool is_unstack_move(Move m) { return type_of(m) == UNSTACK; }
 inline bool is_laser_fire(Move m) { return type_of(m) == LASER_FIRE; }
 
+constexpr uint64_t TwoStepFlag = uint64_t(1) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS + SQUARE_BITS);
+
 inline SpecialSubtype special_subtype(Move m) {
   if (type_of(m) != SPECIAL)
       return SPECIAL_SUBTYPE_NONE;
-  constexpr uint64_t SquareFieldMask = (uint64_t(SQUARE_BIT_MASK) << 1) | 1;
-  const uint64_t gateField = (static_cast<uint64_t>(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & SquareFieldMask;
-  if (!gateField)
+  if (!(static_cast<uint64_t>(m) & TwoStepFlag))
       return SPECIAL_SUBTYPE_NONE;
   int sub = (static_cast<uint64_t>(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS)) & (PIECE_TYPE_NB - 1);
   if (sub == SPECIAL_SUBTYPE_TWO_STEP || sub == SPECIAL_SUBTYPE_TWO_STEP_PROMOTION)
@@ -1344,9 +1327,17 @@ inline bool two_step_promotes(Move m) {
   return special_subtype(m) == SPECIAL_SUBTYPE_TWO_STEP_PROMOTION;
 }
 
+inline bool is_promotion_move(Move m) {
+  return type_of(m) == PROMOTION || type_of(m) == PROMOTION_POTION;
+}
+
+inline bool is_any_promotion(Move m) {
+  return is_promotion_move(m) || type_of(m) == PIECE_PROMOTION || (is_two_step(m) && two_step_promotes(m));
+}
+
 inline Square via_sq(Move m) {
   assert(is_two_step(m));
-  constexpr uint64_t SquareFieldMask = (uint64_t(SQUARE_BIT_MASK) << 1) | 1;
+  constexpr uint64_t SquareFieldMask = (uint64_t(1) << SQUARE_BITS) - 1;
   const uint64_t gateField = (static_cast<uint64_t>(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & SquareFieldMask;
   return Square(gateField - 1);
 }
@@ -1494,7 +1485,8 @@ constexpr Move make_promotion_potion(Square from, Square to, PieceType prom_pt, 
 
 constexpr Move make_two_step(Square from, Square via, Square to, bool promotes = false) {
   return Move(
-      (static_cast<uint64_t>(via + 1) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS))
+      TwoStepFlag
+    + (static_cast<uint64_t>(via + 1) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS))
     + (static_cast<uint64_t>(promotes ? SPECIAL_SUBTYPE_TWO_STEP_PROMOTION : SPECIAL_SUBTYPE_TWO_STEP) << (2 * SQUARE_BITS + MOVE_TYPE_BITS))
     + static_cast<uint64_t>(SPECIAL)
     + (static_cast<uint64_t>(from) << SQUARE_BITS)

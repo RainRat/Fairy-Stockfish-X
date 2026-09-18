@@ -4475,78 +4475,6 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
       info.occupiedAfterEffects = pieces();
       return info;
   }
-
-  if (is_two_step(m))
-  {
-      Square via = via_sq(m);
-      Square to = to_sq(m);
-      Square from = from_sq(m);
-      Piece mover = piece_on(from);
-      Color us = sideToMove;
-      Color them = ~us;
-      PieceType placedType = two_step_promotes(m) ? promoted_piece_type(type_of(mover)) : type_of(mover);
-      info.effectiveTo = to;
-      info.placedPiece = make_piece(us, placedType);
-
-      auto remove_color_sq = [&](Square sq) {
-          if (is_ok(sq))
-          {
-              Bitboard bb = square_bb(sq);
-              info.colorOccupancy[WHITE] &= ~bb;
-              info.colorOccupancy[BLACK] &= ~bb;
-              if (!info.typeOccupancy.empty())
-              {
-                  info.type_pieces(WHITE, ALL_PIECES) &= ~bb;
-                  info.type_pieces(BLACK, ALL_PIECES) &= ~bb;
-                  for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
-                  {
-                      info.type_pieces(WHITE, pt) &= ~bb;
-                      info.type_pieces(BLACK, pt) &= ~bb;
-                  }
-              }
-              info.freezerOccupancy[WHITE] &= ~bb;
-              info.freezerOccupancy[BLACK] &= ~bb;
-              info.freezeImmuneOccupancy[WHITE] &= ~bb;
-              info.freezeImmuneOccupancy[BLACK] &= ~bb;
-              info.blastImmuneOccupancy &= ~bb;
-              if (piece_on(sq) != NO_PIECE && type_of(piece_on(sq)) == PAWN)
-                  info.pawnOccupancy &= ~bb;
-          }
-      };
-      auto add_color_sq = [&](Color c, PieceType pt, Square sq) {
-          if (is_ok(sq) && pt != NO_PIECE_TYPE)
-          {
-              Bitboard bb = square_bb(sq);
-              info.colorOccupancy[c] |= bb;
-              if (!info.typeOccupancy.empty())
-              {
-                  info.type_pieces(c, ALL_PIECES) |= bb;
-                  info.type_pieces(c, pt) |= bb;
-              }
-              if (var->freezePieceTypes & piece_set(pt))
-                  info.freezerOccupancy[c] |= bb;
-              if (var->freezeImmunePieceTypes & piece_set(pt))
-                  info.freezeImmuneOccupancy[c] |= bb;
-              if (blast_immune_types() & piece_set(pt))
-                  info.blastImmuneOccupancy |= bb;
-              if (pt == PAWN)
-                  info.pawnOccupancy |= bb;
-          }
-      };
-
-      remove_color_sq(from);
-      if (via != to && !empty(via) && color_of(piece_on(via)) == them)
-          remove_color_sq(via);
-      if (to != from && !empty(to) && color_of(piece_on(to)) == them)
-          remove_color_sq(to);
-      add_color_sq(us, placedType, to);
-
-      info.relocatedOccupancy = info.colorOccupancy[WHITE] | info.colorOccupancy[BLACK];
-      info.effectOccupancy = info.placementOccupancy = info.relocatedOccupancy;
-      info.occupiedAfterEffects = info.relocatedOccupancy;
-      return info;
-  }
-
   const bool dropMove = is_drop_move(m);
   const bool stackMove = is_stack_move(m);
   const bool unstackMove = is_unstack_move(m);
@@ -4556,6 +4484,12 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
   Bitboard extraCapture = 0;
   if (isCapture && is_jump_capture(m))
       extraCapture = jump_capture_mask(info.from, info.to) & ~square_bb(info.captureSquare);
+  else if (is_two_step(m))
+  {
+      Square via = via_sq(m);
+      if (via != info.to && !empty(via) && color_of(piece_on(via)) == ~sideToMove)
+          extraCapture |= square_bb(via);
+  }
   info.rifle = rifle_capture(m) && isCapture && !info.castling;
   info.stationary = info.rifle;
   info.effectiveTo = info.rifle ? info.from : info.to;
@@ -4622,7 +4556,7 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
       PieceType pt = type_of(moved_piece(m));
       if (is_promotion_move(m))
           return promotion_type(m);
-      if (type_of(m) == PIECE_PROMOTION)
+      if (type_of(m) == PIECE_PROMOTION || (is_two_step(m) && two_step_promotes(m)))
           return promoted_piece_type(pt);
       if (type_of(m) == PIECE_DEMOTION)
       {
@@ -4806,6 +4740,18 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
       info.relocatedOccupancy = pieces() | square_bb(info.to);
   else if (pureWallMove)
       info.relocatedOccupancy = pieces();
+  else if (is_two_step(m))
+  {
+      info.relocatedOccupancy = pieces();
+      if (is_ok(info.from))
+          info.relocatedOccupancy &= ~square_bb(info.from);
+      if (is_ok(info.captureSquare))
+          info.relocatedOccupancy &= ~square_bb(info.captureSquare);
+      if (extraCapture)
+          info.relocatedOccupancy &= ~extraCapture;
+      if (is_ok(info.to))
+          info.relocatedOccupancy |= square_bb(info.to);
+  }
   else
   {
       info.relocatedOccupancy = pieces();
@@ -4902,6 +4848,17 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
   else if (is_self_destruct(m))
   {
       remove_color_square(info.from);
+  }
+  else if (is_two_step(m))
+  {
+      remove_color_square(info.from);
+      if (is_ok(info.captureSquare))
+          remove_color_square(info.captureSquare);
+      if (extraCapture)
+          remove_color_square(lsb(extraCapture));
+      PieceType twoStepPlaced = two_step_promotes(m) ? promoted_piece_type(type_of(moved_piece(m))) : type_of(moved_piece(m));
+      add_color_piece(us, twoStepPlaced, info.to);
+      info.placedPiece = make_piece(us, twoStepPlaced);
   }
   else if (!pureWallMove)
   {
@@ -5585,11 +5542,12 @@ bool Position::legal(Move m) const {
 
   if (is_promotion_move(m) && !promotion_allowed(us, promotion_type(m), to))
       return false;
-  if (type_of(m) == PIECE_PROMOTION && (is_promoted(from) || !promotion_allowed(us, promoted_piece_type(type_of(moved_piece(m))))))
+  if ((type_of(m) == PIECE_PROMOTION || (is_two_step(m) && two_step_promotes(m)))
+      && (is_promoted(from) || !promotion_allowed(us, promoted_piece_type(type_of(moved_piece(m))))))
       return false;
-  if (rifleShot && (is_promotion_move(m) || type_of(m) == PIECE_PROMOTION))
+  if (rifleShot && is_any_promotion(m))
       return false;
-  if (!dropMove && !is_promotion_move(m) && type_of(m) != PIECE_PROMOTION)
+  if (!dropMove && !is_any_promotion(m))
   {
       Piece mover = moved_piece(m);
       Bitboard mandatoryZone = mover == NO_PIECE ? Bitboard(0) : mandatory_promotion_zone(mover);
@@ -6570,9 +6528,10 @@ bool Position::pseudo_legal(const Move m) const {
 
   if (is_promotion_move(m) && !promotion_allowed(us, promotion_type(m), to))
       return false;
-  if (type_of(m) == PIECE_PROMOTION && (is_promoted(from) || !promotion_allowed(us, promoted_piece_type(type_of(pc)))))
+  if ((type_of(m) == PIECE_PROMOTION || (is_two_step(m) && two_step_promotes(m)))
+      && (is_promoted(from) || !promotion_allowed(us, promoted_piece_type(type_of(pc)))))
       return false;
-  if (!dropMove && !is_promotion_move(m) && type_of(m) != PIECE_PROMOTION)
+  if (!dropMove && !is_any_promotion(m))
   {
       Bitboard mandatoryZone = pc == NO_PIECE ? Bitboard(0) : mandatory_promotion_zone(pc);
       if ((mandatoryZone & effectiveTo) && !(mandatoryZone & from))
@@ -7836,28 +7795,6 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           bool viaPromoted = is_promoted(via);
           Piece viaUnpromoted = unpromoted_piece_on(via);
           st->twoStepFirstCaptured.set(capVia, viaPromoted, viaUnpromoted, via);
-
-          if (type_of(capVia) == PAWN)
-              st->pawnKey ^= Zobrist::psq[capVia][via];
-          else
-              st->nonPawnMaterial[them] -= PieceValue[MG][capVia];
-
-          if (Eval::useNNUE)
-              append_dirty(st, capVia, via, SQ_NONE);
-
-          remove_piece(via);
-
-          Piece transferPiece = reserve_transfer_piece(*this, us, capVia, viaPromoted, viaUnpromoted,
-                                                       drop_loop(), var->captureToHandSide,
-                                                       main_promotion_pawn_type(them));
-          add_capture_transfer(st, transferPiece, &k);
-
-          if (points_counting())
-              add_capture_points(st, us, capVia);
-
-          k ^= Zobrist::psq[capVia][via];
-          st->materialKey ^= Zobrist::psq[capVia][pieceCount[capVia]];
-          st->rule50 = 0;
       }
       else
       {
@@ -8093,6 +8030,39 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       st->rule50 = 0;
   }
 
+  if (st->twoStepFirstCaptured)
+  {
+      Piece capVia = st->twoStepFirstCaptured.piece.piece;
+      Square viaSq = st->twoStepFirstCaptured.square;
+
+      if (type_of(capVia) == PAWN)
+          st->pawnKey ^= Zobrist::psq[capVia][viaSq];
+      else
+          st->nonPawnMaterial[color_of(capVia)] -= PieceValue[MG][capVia];
+
+      int dirtyIdx = Eval::useNNUE ? append_dirty(st, capVia, viaSq, SQ_NONE) : -1;
+      remove_piece(viaSq);
+      board[viaSq] = NO_PIECE;
+
+      Piece transferPiece = reserve_transfer_piece(*this, us, capVia, st->twoStepFirstCaptured.piece.promoted,
+                                                   st->twoStepFirstCaptured.piece.unpromoted, drop_loop(),
+                                                   var->captureToHandSide, main_promotion_pawn_type(color_of(capVia)));
+      bool transferred = add_capture_transfer(st, transferPiece, &k);
+      if (Eval::useNNUE && dirtyIdx >= 0 && transferred)
+      {
+          Piece pieceToHand = capture_type() == PRISON ? ~transferPiece : transferPiece;
+          dp.handPiece[dirtyIdx] = pieceToHand;
+          dp.handCount[dirtyIdx] = pieceCountInHand[color_of(pieceToHand)][type_of(pieceToHand)];
+      }
+
+      if (points_counting())
+          add_capture_points(st, us, capVia);
+
+      k ^= Zobrist::psq[capVia][viaSq];
+      st->materialKey ^= Zobrist::psq[capVia][pieceCount[capVia]];
+      st->rule50 = 0;
+  }
+
   if (capturedDeadSquare)
   {
       st->deadSquares ^= to;
@@ -8294,13 +8264,16 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   // Update castling rights if needed
   const int moveRightsMask = rifleShot ? castlingRightsMask[to]
                                        : castlingRightsMask[from] | castlingRightsMask[to];
+  const int twoStepRightsMask = twoStep && st->twoStepFirstCaptured ? castlingRightsMask[st->twoStepFirstCaptured.square] : 0;
   if (!dropMove && !passMove && !pureWallMove && st->castlingRights
       && (moveRightsMask
+          | twoStepRightsMask
           | (jumpCapsq != SQ_NONE ? castlingRightsMask[jumpCapsq] : 0)
           | pushRightsMask | pullRightsMask))
   {
       k ^= Zobrist::castling[st->castlingRights];
       st->castlingRights &= ~(moveRightsMask
+                              | twoStepRightsMask
                               | (jumpCapsq != SQ_NONE ? castlingRightsMask[jumpCapsq] : 0)
                               | pushRightsMask | pullRightsMask);
 
@@ -8713,7 +8686,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       if (dropMove && paired_drop(m))
           st->pawnKey ^= Zobrist::psq[pc][secondary_drop_square(m)];
   }
-  else if (is_promotion_move(m) || type_of(m) == PIECE_PROMOTION || (twoStep && two_step_promotes(m)))
+  else if (is_any_promotion(m))
   {
       Piece promotion = make_piece(us, is_promotion_move(m) ? promotion_type(m) : promoted_piece_type(type_of(pc)));
       Piece promotedHandPiece = make_piece(us, type_of(promotion));
