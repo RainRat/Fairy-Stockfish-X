@@ -1098,6 +1098,139 @@ namespace {
 
 
   template<Color Us, GenType Type>
+  ExtMove* generate_two_step_moves(const Position& pos, ExtMove* moveList, Bitboard target, Bitboard forcedFromMask, bool restrictToForcedJumper) {
+    if (!pos.has_two_step_moves())
+        return moveList;
+
+    PieceSet twoStepPts = pos.two_step_piece_types(Us);
+    if (!twoStepPts)
+        return moveList;
+
+    const Color them = ~Us;
+    const Bitboard checkers = pos.evasion_checkers();
+    const PieceType royalPt = pos.royal_piece_type(Us);
+
+    while (twoStepPts)
+    {
+        PieceType pt = pop_lsb(twoStepPts);
+        uint64_t mask = pos.two_step_moves_mask(Us, pt);
+        if (!mask)
+            continue;
+
+        Bitboard piecesBb = pos.pieces(Us, pt);
+        if (restrictToForcedJumper)
+            piecesBb &= forcedFromMask;
+
+        while (piecesBb)
+        {
+            Square from = pop_lsb(piecesBb);
+            if (pos.freeze_squares() & from)
+                continue;
+
+            Piece mover = pos.piece_on(from);
+            Bitboard promoZone = pos.promotion_zone(mover);
+            bool canPromote = (pos.promoted_piece_type(pt) != NO_PIECE_TYPE) && !pos.is_promoted(from);
+
+            uint64_t remaining_mask = mask;
+            while (remaining_mask)
+            {
+                int pair_idx = __builtin_ctzll(remaining_mask);
+                remaining_mask &= remaining_mask - 1;
+                int d1 = pair_idx / 8;
+                int d2 = pair_idx % 8;
+
+                int r1 = int(rank_of(from)) + KingStepDeltas[d1].first;
+                int f1 = int(file_of(from)) + KingStepDeltas[d1].second;
+                if (r1 < 0 || r1 > pos.max_rank() || f1 < 0 || f1 > pos.max_file())
+                    continue;
+                Square via = make_square(File(f1), Rank(r1));
+                if (!(pos.board_bb() & via))
+                    continue;
+                if (pos.pieces(Us) & via)
+                    continue;
+
+                int r2 = r1 + KingStepDeltas[d2].first;
+                int f2 = f1 + KingStepDeltas[d2].second;
+                if (r2 < 0 || r2 > pos.max_rank() || f2 < 0 || f2 > pos.max_file())
+                    continue;
+                Square to = make_square(File(f2), Rank(r2));
+                if (!(pos.board_bb() & to))
+                    continue;
+                if (to != from && (pos.pieces(Us) & to))
+                    continue;
+
+                bool cap1 = (!pos.empty(via) && color_of(pos.piece_on(via)) == them);
+                bool cap2 = (to != from && !pos.empty(to) && color_of(pos.piece_on(to)) == them);
+                bool isCapture = cap1 || cap2;
+
+                if constexpr (Type == CAPTURES)
+                {
+                    if (!isCapture)
+                        continue;
+                }
+                else if constexpr (Type == QUIETS || Type == QUIET_CHECKS)
+                {
+                    if (isCapture)
+                        continue;
+                }
+                else if constexpr (Type == EVASIONS)
+                {
+                    if (pt != royalPt)
+                    {
+                        if (more_than_one(checkers))
+                        {
+                            if (!((cap1 && (checkers & via)) || (cap2 && (checkers & to))))
+                                continue;
+                        }
+                        else
+                        {
+                            if (!((cap1 && (checkers & via)) || (cap2 && (checkers & to)) || (target & to)))
+                                continue;
+                        }
+                    }
+                }
+
+                bool allowsPromo = canPromote && promoZone && ((promoZone & from) || (promoZone & via) || (promoZone & to));
+                if (allowsPromo && pos.piece_promotion_on_capture() && !isCapture)
+                    allowsPromo = false;
+
+                bool mandatoryPromo = allowsPromo && pos.mandatory_piece_promotion() && (promoZone & to);
+
+                if (allowsPromo)
+                {
+                    Move mPromo = make_two_step(from, via, to, true);
+                    if constexpr (Type == QUIET_CHECKS)
+                    {
+                        if (pos.gives_check(mPromo))
+                            *moveList++ = mPromo;
+                    }
+                    else
+                    {
+                        *moveList++ = mPromo;
+                    }
+                }
+
+                if (!mandatoryPromo)
+                {
+                    Move m = make_two_step(from, via, to, false);
+                    if constexpr (Type == QUIET_CHECKS)
+                    {
+                        if (pos.gives_check(m))
+                            *moveList++ = m;
+                    }
+                    else
+                    {
+                        *moveList++ = m;
+                    }
+                }
+            }
+        }
+    }
+
+    return moveList;
+  }
+
+  template<Color Us, GenType Type>
   ExtMove* generate_all_impl(const Position& pos, ExtMove* moveList) {
 
     static_assert(Type != LEGAL, "Unsupported type in generate_all()");
@@ -1106,7 +1239,7 @@ namespace {
     const PieceType royalPt = pos.royal_piece_type(Us);
     const Square royalSq = pos.royal_square(Us);
     const Bitboard checkers = pos.evasion_checkers();
-    Bitboard target;
+    Bitboard target = Bitboard(0);
     Bitboard captureTarget = Bitboard(0);
     Bitboard forcedFromMask = AllSquares;
     bool restrictToForcedJumper = false;
@@ -1519,6 +1652,8 @@ namespace {
         }
 
     }
+
+    moveList = generate_two_step_moves<Us, Type>(pos, moveList, target, forcedFromMask, restrictToForcedJumper);
 
     // Royal moves must not be restricted to checker capture/interposition targets.
     if (royalPt != NO_PIECE_TYPE && royalSq != SQ_NONE

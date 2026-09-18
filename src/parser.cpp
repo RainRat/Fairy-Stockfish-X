@@ -236,6 +236,87 @@ namespace {
         return true;
     }
 
+    int parse_king_step_direction(const std::string& token) {
+        std::string s;
+        for (char c : token)
+            s += char(std::tolower(static_cast<unsigned char>(c)));
+        if (s == "n") return 0;
+        if (s == "ne") return 1;
+        if (s == "e") return 2;
+        if (s == "se") return 3;
+        if (s == "s") return 4;
+        if (s == "sw") return 5;
+        if (s == "w") return 6;
+        if (s == "nw") return 7;
+        return -1;
+    }
+
+    template <bool DoCheck>
+    bool parse_two_step_moves(const std::string& optionName,
+                              const std::string& value,
+                              const Variant* v,
+                              uint64_t target[PIECE_TYPE_NB]) {
+        std::string entry;
+        std::stringstream ss(value);
+        uint64_t parsed[PIECE_TYPE_NB];
+        std::copy(target, target + PIECE_TYPE_NB, std::begin(parsed));
+        bool sawEntry = false;
+        while (ss >> entry)
+        {
+            sawEntry = true;
+            auto [pieceToken, rawPairs] = split_piece_entry(entry);
+            PieceType pt = parse_piece_type_token(v, pieceToken);
+            if (pt == NO_PIECE_TYPE || rawPairs.empty())
+            {
+                if (DoCheck)
+                    std::cerr << optionName << " - Invalid piece token: " << pieceToken << std::endl;
+                return false;
+            }
+
+            if (rawPairs == "-")
+            {
+                parsed[pt] = 0ULL;
+            }
+            else if (rawPairs == "*")
+            {
+                parsed[pt] = ~0ULL;
+            }
+            else
+            {
+                uint64_t mask = 0;
+                std::stringstream pss(rawPairs);
+                std::string pairToken;
+                while (std::getline(pss, pairToken, ','))
+                {
+                    pairToken = trim(pairToken);
+                    if (pairToken.empty())
+                        continue;
+                    size_t sep = pairToken.find('>');
+                    if (sep == std::string::npos)
+                    {
+                        if (DoCheck)
+                            std::cerr << optionName << " - Malformed direction pair: " << pairToken << std::endl;
+                        return false;
+                    }
+                    int d1 = parse_king_step_direction(pairToken.substr(0, sep));
+                    int d2 = parse_king_step_direction(pairToken.substr(sep + 1));
+                    if (d1 < 0 || d2 < 0)
+                    {
+                        if (DoCheck)
+                            std::cerr << optionName << " - Invalid direction in pair: " << pairToken << std::endl;
+                        return false;
+                    }
+                    mask |= (1ULL << (d1 * 8 + d2));
+                }
+                parsed[pt] = mask;
+            }
+        }
+        if (!sawEntry || !only_trailing_space(ss))
+            return false;
+        std::copy(std::begin(parsed), std::end(parsed), target);
+        return true;
+    }
+
     bool parse_piece_set_token_string(const std::string& text, const Variant* v, PieceSet& target, bool allowAll = true, bool allowNone = true);
 
     bool parse_drop_piece_type_map(const std::string& value, const Variant* v, PieceSet target[PIECE_TYPE_NB]) {
@@ -1751,6 +1832,12 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     if (it_pull_strength != config.end())
     {
         if (!parse_non_negative_piece_int_map<DoCheck>("pullingStrength", it_pull_strength->second, v, v->pullingStrength))
+            return false;
+    }
+    auto it_two_step = config.find("twoStepMoves");
+    if (it_two_step != config.end())
+    {
+        if (!parse_two_step_moves<DoCheck>("twoStepMoves", it_two_step->second, v, v->twoStepMoves))
             return false;
     }
     parse_attribute("pushFirstColor", v->pushFirstColor);

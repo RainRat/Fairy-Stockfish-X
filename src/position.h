@@ -358,6 +358,7 @@ struct MoveUndoInfo {
   Bitboard   laserTransformedSquares = Bitboard(0);
   ReversiblePieceOnSquare captured;
   ReversiblePieceOnSquare jumpedEnPassantCaptured;
+  ReversiblePieceOnSquare twoStepFirstCaptured;
   ReversiblePieceState dead;
   Piece      promotionPawn = NO_PIECE;
   Piece      consumedPromotionHandPiece = NO_PIECE;
@@ -393,6 +394,7 @@ struct MoveUndoInfo {
     laserTransformedSquares = Bitboard(0);
     captured.clear();
     jumpedEnPassantCaptured.clear();
+    twoStepFirstCaptured.clear();
     dead.clear();
     promotionPawn = NO_PIECE;
     consumedPromotionHandPiece = NO_PIECE;
@@ -428,6 +430,7 @@ struct MoveUndoInfo {
         && laserTransformedSquares == Bitboard(0)
         && !captured
         && !jumpedEnPassantCaptured
+        && !twoStepFirstCaptured
         && !dead
         && promotionPawn == NO_PIECE
         && consumedPromotionHandPiece == NO_PIECE
@@ -749,6 +752,10 @@ public:
   bool drop_loop() const;
   bool captures_to_hand() const;
   PieceSet capture_to_hand_types() const;
+  bool has_two_step_moves() const;
+  uint64_t two_step_moves_mask(Color c, PieceType pt) const;
+  PieceSet two_step_piece_types(Color c) const;
+  Square first_leg_capture_square(Move m) const;
   PieceSet self_destruct_types() const;
   Bitboard self_destruct_region(Color c) const;
   GravityRule gravity() const;
@@ -2416,6 +2423,30 @@ inline bool Position::captures_to_hand() const {
 inline PieceSet Position::capture_to_hand_types() const {
   assert(var != nullptr);
   return var->captureToHandTypes;
+}
+
+inline bool Position::has_two_step_moves() const {
+  assert(var != nullptr);
+  return var->hasTwoStepMoves;
+}
+
+inline uint64_t Position::two_step_moves_mask(Color c, PieceType pt) const {
+  assert(var != nullptr);
+  return var->twoStepMovesColor[c][pt];
+}
+
+inline PieceSet Position::two_step_piece_types(Color c) const {
+  assert(var != nullptr);
+  return var->twoStepPieceTypes[c];
+}
+
+inline Square Position::first_leg_capture_square(Move m) const {
+  if (is_two_step(m)) {
+      Square via = via_sq(m);
+      if (!empty(via) && color_of(piece_on(via)) == ~sideToMove)
+          return via;
+  }
+  return SQ_NONE;
 }
 
 inline PieceSet Position::self_destruct_types() const {
@@ -5695,6 +5726,16 @@ inline bool Position::capture(Move m) const {
   assert(is_ok(m));
   if (type_of(m) == EN_PASSANT)
       return true;
+  if (is_two_step(m))
+  {
+      Square via = via_sq(m);
+      Square to = to_sq(m);
+      if (via != to && !empty(via) && color_of(piece_on(via)) == ~sideToMove)
+          return true;
+      if (to != from_sq(m) && !empty(to) && color_of(piece_on(to)) == ~sideToMove)
+          return true;
+      return false;
+  }
   if (type_of(m) == PULL || type_of(m) == SWAP || is_stack_move(m)
       || is_unstack_move(m) || is_laser_fire(m))
       return false;
@@ -5762,6 +5803,15 @@ inline Square Position::capture_square(Move m) const {
   Square to = to_sq(m);
   if (type_of(m) == EN_PASSANT)
       return capture_square(to);
+  if (is_two_step(m))
+  {
+      if (to != from_sq(m) && !empty(to) && color_of(piece_on(to)) == ~sideToMove)
+          return to;
+      Square via = via_sq(m);
+      if (via != to && !empty(via) && color_of(piece_on(via)) == ~sideToMove)
+          return via;
+      return SQ_NONE;
+  }
   if (is_jump_capture(m))
       return jump_capture_square(from_sq(m), to);
 
@@ -5800,7 +5850,9 @@ inline bool Position::virtual_drop(Move m) const {
 }
 
 inline Piece Position::captured_piece() const {
-  return st->captured.piece.piece;
+  if (st->captured.piece.piece != NO_PIECE)
+      return st->captured.piece.piece;
+  return st->twoStepFirstCaptured.piece.piece;
 }
 
 inline Bitboard Position::fog_area() const {
