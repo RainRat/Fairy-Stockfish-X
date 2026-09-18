@@ -263,7 +263,7 @@ assert_contains_literal "$out" "Fen: 8/8/8/3l4/4L3/8/8/8 b - - 1 1"
 out=$(run_uci_cmds "$ENGINE" "$VARIANTS" test-horned-falcon \
   "position startpos
 go perft 1")
-assert_nodes "$out" "22"
+assert_nodes "$out" "24"
 assert_contains "$out" "^e4e5e6: 1$"
 assert_contains "$out" "^e4e5e4: 1$"
 assert_not_contains "$out" "^e4e3e2:"
@@ -272,7 +272,7 @@ assert_not_contains "$out" "^e4e3e4:"
 out=$(run_uci_cmds "$ENGINE" "$VARIANTS" test-soaring-eagle \
   "position startpos
 go perft 1")
-assert_nodes "$out" "24"
+assert_nodes "$out" "28"
 assert_contains "$out" "^e4d5e4: 1$"
 assert_contains "$out" "^e4d5c6: 1$"
 assert_contains "$out" "^e4f5g6: 1$"
@@ -281,7 +281,7 @@ assert_not_contains "$out" "^e4e5e6:"
 out=$(run_uci_cmds "$ENGINE" "$VARIANTS" test-free-eagle \
   "position startpos
 go perft 1")
-assert_nodes "$out" "56"
+assert_nodes "$out" "41"
 assert_contains "$out" "^e4d5e4: 1$"
 assert_contains "$out" "^e4d5c6: 1$"
 assert_contains "$out" "^e4f5g6: 1$"
@@ -292,7 +292,7 @@ assert_not_contains "$out" "^e4e5e4:"
 out=$(run_uci_cmds "$ENGINE" "$VARIANTS" test-lion-hawk \
   "position startpos
 go perft 1")
-assert_nodes "$out" "78"
+assert_nodes "$out" "91"
 assert_contains "$out" "^e4d5e4: 1$"
 assert_contains "$out" "^e4e5e6: 1$"
 assert_contains "$out" "^e4e5e4: 1$"

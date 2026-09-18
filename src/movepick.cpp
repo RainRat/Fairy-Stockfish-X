@@ -146,7 +146,7 @@ bool MovePicker::is_qsearch_tt_move(Move m) const {
   if (pos.evasion_checkers())
       return true;
 
-  if (depth <= DEPTH_QS_RECAPTURES && to_sq(m) != recaptureSquare && pos.capture_square(m) != recaptureSquare)
+  if (depth <= DEPTH_QS_RECAPTURES && to_sq(m) != recaptureSquare && !(pos.capture_squares(m) & recaptureSquare))
       return false;
 
   return pos.capture_or_promotion(m)
@@ -549,7 +549,7 @@ top:
   case QCAPTURE:
       if (select<Best>([&](){ return   depth > DEPTH_QS_RECAPTURES
                                     || to_sq(*cur) == recaptureSquare
-                                    || pos.capture_square(*cur) == recaptureSquare; }))
+                                    || (pos.capture_squares(*cur) & recaptureSquare); }))
           return *(cur - 1);
 
       if (resume_deferred_potions<CAPTURES>(moveList, qcaptureBaseEnd, qcapturePotionsDeferred))

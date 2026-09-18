@@ -1139,26 +1139,16 @@ namespace {
                 int d1 = pair_idx / 8;
                 int d2 = pair_idx % 8;
 
-                auto [dr1, df1] = decode_direction(KingDirections[d1]);
-                int r1 = int(rank_of(from)) + dr1;
-                int f1 = int(file_of(from)) + df1;
-                if (r1 < 0 || r1 > pos.max_rank() || f1 < 0 || f1 > pos.max_file())
+                Square via;
+                if (!pos.step_destination(from, KingDirections[d1], via))
                     continue;
-                Square via = make_square(File(f1), Rank(r1));
-                if (!(pos.board_bb() & via))
-                    continue;
-                if (pos.pieces(Us) & via)
+                if (!(pos.board_bb() & via) || (pos.pieces(Us) & via))
                     continue;
 
-                auto [dr2, df2] = decode_direction(KingDirections[d2]);
-                int r2 = r1 + dr2;
-                int f2 = f1 + df2;
-                if (r2 < 0 || r2 > pos.max_rank() || f2 < 0 || f2 > pos.max_file())
+                Square to;
+                if (!pos.step_destination(via, KingDirections[d2], to))
                     continue;
-                Square to = make_square(File(f2), Rank(r2));
-                if (!(pos.board_bb() & to))
-                    continue;
-                if (to != from && (pos.pieces(Us) & to))
+                if (!(pos.board_bb() & to) || (to != from && (pos.pieces(Us) & to)))
                     continue;
 
                 bool cap1 = (!pos.empty(via) && color_of(pos.piece_on(via)) == them);
@@ -1192,7 +1182,7 @@ namespace {
                     }
                 }
 
-                bool allowsPromo = canPromote && promoZone && ((promoZone & from) || (promoZone & to))
+                bool allowsPromo = canPromote && pos.two_step_promotion_zone(Us, from, to)
                                 && pos.promotion_allowed(Us, pos.promoted_piece_type(pt));
                 if (allowsPromo && pos.piece_promotion_on_capture() && !isCapture)
                     allowsPromo = false;

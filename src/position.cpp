@@ -5545,6 +5545,14 @@ bool Position::legal(Move m) const {
   if ((type_of(m) == PIECE_PROMOTION || (is_two_step(m) && two_step_promotes(m)))
       && (is_promoted(from) || !promotion_allowed(us, promoted_piece_type(type_of(moved_piece(m))))))
       return false;
+  if (is_two_step(m))
+  {
+      Square via = via_sq(m);
+      if ((pieces(us) & via) || (to != from && (pieces(us) & to)))
+          return false;
+      if (two_step_promotes(m) && !two_step_promotion_zone(us, from, to))
+          return false;
+  }
   if (rifleShot && is_any_promotion(m))
       return false;
   if (!dropMove && !is_any_promotion(m))
@@ -6619,14 +6627,28 @@ bool Position::pseudo_legal(const Move m) const {
       Square via = via_sq(m);
       if (!(board_bb() & via) || !(board_bb() & to))
           return false;
-      int dr1 = int(rank_of(via)) - int(rank_of(from));
-      int df1 = int(file_of(via)) - int(file_of(from));
-      int d1 = king_direction_index(dr1, df1);
+      int d1 = -1;
+      for (int i = 0; i < 8; ++i)
+      {
+          Square testVia;
+          if (step_destination(from, KingDirections[i], testVia) && testVia == via)
+          {
+              d1 = i;
+              break;
+          }
+      }
       if (d1 < 0)
           return false;
-      int dr2 = int(rank_of(to)) - int(rank_of(via));
-      int df2 = int(file_of(to)) - int(file_of(via));
-      int d2 = king_direction_index(dr2, df2);
+      int d2 = -1;
+      for (int i = 0; i < 8; ++i)
+      {
+          Square testTo;
+          if (step_destination(via, KingDirections[i], testTo) && testTo == to)
+          {
+              d2 = i;
+              break;
+          }
+      }
       if (d2 < 0)
           return false;
       if (!((mask >> (d1 * 8 + d2)) & 1ULL))
@@ -6639,8 +6661,7 @@ bool Position::pseudo_legal(const Move m) const {
       {
           if (promoted_piece_type(pt) == NO_PIECE_TYPE)
               return false;
-          Bitboard promoZone = promotion_zone(pc);
-          if (!((promoZone & from) || (promoZone & via) || (promoZone & to)))
+          if (!two_step_promotion_zone(us, from, to))
               return false;
       }
       return !violates_same_player_board_repetition(m);
@@ -8593,13 +8614,13 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   if (type_of(pc) == PAWN && !stackMove && !unstackMove && !rifleShot)
   {
       st->rule50 = 0;
-      if (is_promotion_move(m) || type_of(m) == PIECE_PROMOTION)
+      if (is_any_promotion(m))
       {
           Piece promotion = make_piece(us, is_promotion_move(m) ? promotion_type(m) : promoted_piece_type(PAWN));
           Piece promotedHandPiece = make_piece(us, type_of(promotion));
 
-          assert((promotion_zone(pc) & to) || sittuyin_promotion());
-          assert(type_of(promotion) >= KNIGHT && type_of(promotion) < KING);
+          assert((promotion_zone(pc) & to) || sittuyin_promotion() || is_two_step(m));
+          assert(is_two_step(m) || (type_of(promotion) >= KNIGHT && type_of(promotion) < KING));
 
           st->promotionPawn = piece_on(to);
           remove_piece(to);
