@@ -1131,11 +1131,10 @@ namespace {
             Bitboard mandatoryZone = pos.mandatory_promotion_zone(mover);
             bool canPromote = (pos.promoted_piece_type(pt) != NO_PIECE_TYPE) && !pos.is_promoted(from);
 
-            uint64_t remaining_mask = mask;
+            Bitboard remaining_mask = Bitboard(mask);
             while (remaining_mask)
             {
-                int pair_idx = __builtin_ctzll(remaining_mask);
-                remaining_mask &= remaining_mask - 1;
+                int pair_idx = int(pop_lsb(remaining_mask));
                 int d1 = pair_idx / 8;
                 int d2 = pair_idx % 8;
 
