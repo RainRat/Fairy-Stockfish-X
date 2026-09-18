@@ -11254,7 +11254,11 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
   }
 
   bool prevMoverConnected = connection_met(~sideToMove);
-  bool stmConnected = connection_met(sideToMove);
+  // Without mechanics that complete the opponent's connection (see
+  // Variant::connectionMoverOnly), only the mover's side can have changed,
+  // except at the initial position, which has no mover.
+  bool stmConnected = (!var->connectionMoverOnly || st->pliesFromNull == 0)
+                      && connection_met(sideToMove);
   if (prevMoverConnected && stmConnected)
   {
       if (var->connectGoalSimulValueByMover != VALUE_NONE)

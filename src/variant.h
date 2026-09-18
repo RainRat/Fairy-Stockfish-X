@@ -545,6 +545,10 @@ struct Variant {
   int nnuePotionCooldownIndexBase = -1;
   bool nnueUsePockets = false;
   bool hasConnectionAdjudication = false;
+  // True when no rule can complete the opponent's connection on our move, so
+  // only the mover's side is adjudicated. Both sides are still checked at the
+  // initial position, which has no mover.
+  bool connectionMoverOnly = false;
   int pieceSquareIndex[COLOR_NB][PIECE_NB]{};
   int pieceHandIndex[COLOR_NB][PIECE_NB]{};
   int kingSquareIndex[SQUARE_NB]{};

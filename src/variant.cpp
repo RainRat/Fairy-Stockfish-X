@@ -2642,6 +2642,31 @@ Variant* Variant::conclude() {
                               || !connectPieceGoalTypes[WHITE].empty()
                               || !connectPieceGoalTypes[BLACK].empty();
 
+    // The opponent's connection can only change on our move by adding, moving,
+    // or converting opponent pieces (push/pull/swap/gravity, borrowed drops,
+    // blast promotion, type-shared goals, color changes), or via
+    // count-derived goals, where even removals complete. Otherwise only the
+    // mover's side is adjudicated.
+    // Deliberately excluded, verified safe for fixed goals: flipping converts
+    // opponent pieces to our color only (never the reverse); clone and
+    // stack/unstack place own-colored pieces; potions affect zones, cooldowns,
+    // and own-colored gating pieces; gating, inserts, and paired drops use the
+    // mover's drop color; castling moves own pieces; captures, blasts, traps,
+    // and walling only remove or neutralize pieces, which cannot complete a
+    // fixed-size line.
+    bool opponentConnectionMovable = hasPushing;
+    for (PieceSet ps = pieceTypes; ps && !opponentConnectionMovable; )
+        opponentConnectionMovable = pullingStrength[pop_lsb(ps)] > 0;
+    connectionMoverOnly = connectN != -1 && connectNxN != -1
+                       && collinearN != -1 && connectGroup != -1
+                       && !opponentConnectionMovable
+                       && adjacentSwapMoveTypes == NO_PIECE_SET
+                       && gravity == NO_GRAVITY
+                       && !borrowOpponentDropsWhenEmpty
+                       && !blastPromotion
+                       && !connectGoalByType
+                       && changingColorTrigger == ColorChangeTrigger::NEVER;
+
     const bool alwaysUnreliableSee = pointsCounting
                                   || pointsGoal > 0
                                   || captureDemotion

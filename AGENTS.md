@@ -171,6 +171,7 @@ The fast and full suites preserve signature-based artifacts under `.local/build`
 * Reserve-aware keys must keep hand and prison buckets as separate XOR terms.
 * Tuple Betza atoms use `PieceInfo::tupleSteps`; do not route long tuple leapers through `Direction` decoding.
 * Betza `U` is the unrestricted universal leaper. Braced `{...}` parameters configure universal hoppers; keep the two concepts and their storage paths distinct.
+* Connection adjudication is mover-only unless the variant can complete the opponent's connection (push/pull/swap/gravity, borrowed drops, blast promotion, type-shared goals, color changes) or uses count-derived goals: a new mechanic that adds, moves, or converts opponent pieces must update `connectionMoverOnly` in `Variant::conclude()`, or opponent wins will be silently missed.
 
 ## Performance and pitfalls
 * Benchmark affected non-chess variants when relevant; prefer `checkers` and `janggi`.
