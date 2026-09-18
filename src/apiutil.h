@@ -316,6 +316,14 @@ inline const std::string move_to_san(Position& pos, Move m, Notation n) {
     Square from = from_sq(m);
     Square to = to_sq(m);
 
+    if (is_two_step(m))
+    {
+        san = square(pos, from, n) + square(pos, via_sq(m), n) + square(pos, to, n);
+        if (two_step_promotes(m))
+            san += "+";
+        return san;
+    }
+
     if (type_of(m) == CASTLING)
     {
         san = to > from ? "O-O" : "O-O-O";

@@ -247,6 +247,10 @@ struct Variant {
   int pushingStrength[PIECE_TYPE_NB] = {};
   bool hasPushing = false;
   int pullingStrength[PIECE_TYPE_NB] = {};
+  bool hasTwoStepMoves = false;
+  uint64_t twoStepMoves[PIECE_TYPE_NB] = {};
+  uint64_t twoStepMovesColor[COLOR_NB][PIECE_TYPE_NB] = {};
+  PieceSet twoStepPieceTypes[COLOR_NB] = {};
   PieceSet adjacentSwapMoveTypes = NO_PIECE_SET;
   PieceSet adjacentSwapTargetTypes = ~NO_PIECE_SET;
   bool adjacentSwapFriendly = false;

@@ -240,4 +240,40 @@ out=$(run_uci_cmds "$ENGINE" "$VARIANTS" oshi \
 go depth 8")
 assert_not_contains "$out" "^bestmove d4a4"
 
+# Lion family two-step move regressions: igui, quiet pass, forward/diagonal gating.
+out=$(run_uci_cmds "$ENGINE" "$VARIANTS" test-lion \
+  "position startpos
+go perft 1")
+assert_nodes "$out" "88"
+assert_contains "$out" "^e4d5e4: 1$"
+assert_contains "$out" "^e4e5e4: 1$"
+assert_contains "$out" "^e4e5e6: 1$"
+assert_contains "$out" "^e4d5c6: 1$"
+
+out=$(run_uci_cmds "$ENGINE" "$VARIANTS" test-lion \
+  "position startpos moves e4d5e4
+d")
+assert_contains_literal "$out" "Fen: 8/8/8/8/4L3/8/8/8 b - - 0 1"
+
+out=$(run_uci_cmds "$ENGINE" "$VARIANTS" test-lion \
+  "position startpos moves e4e5e4
+d")
+assert_contains_literal "$out" "Fen: 8/8/8/3l4/4L3/8/8/8 b - - 1 1"
+
+out=$(run_uci_cmds "$ENGINE" "$VARIANTS" test-horned-falcon \
+  "position startpos
+go perft 1")
+assert_contains "$out" "^e4e5e6: 1$"
+assert_contains "$out" "^e4e5e4: 1$"
+assert_not_contains "$out" "^e4e3e2:"
+assert_not_contains "$out" "^e4e3e4:"
+
+out=$(run_uci_cmds "$ENGINE" "$VARIANTS" test-soaring-eagle \
+  "position startpos
+go perft 1")
+assert_contains "$out" "^e4d5e4: 1$"
+assert_contains "$out" "^e4d5c6: 1$"
+assert_contains "$out" "^e4f5g6: 1$"
+assert_not_contains "$out" "^e4e5e6:"
+
 echo "movegen regressions passed"
