@@ -2815,32 +2815,28 @@ bool VariantParser<DoCheck>::parse_gating_piece_after(Variant* v) {
 
 template <bool DoCheck>
 bool VariantParser<DoCheck>::parse_capture_maps(Variant* v) {
-    auto sync_color_maps = [&]() {
-        for (Color c : { WHITE, BLACK })
-            std::copy(v->captureForbidden, v->captureForbidden + PIECE_TYPE_NB, v->captureForbiddenByColor[c]);
-    };
-    sync_color_maps();
-    auto parse_capture_map = [&](const std::string& key, bool allow) {
-        auto it = config.find(key);
-        if (it == config.end())
+    // Apply one key's attacker:target entries to a single map, starting from
+    // its current (possibly inherited) content. Global edits compose onto the
+    // global map and both color maps the same way, so inherited color
+    // customizations survive child global keys; color edits compose onto
+    // their own map only. An empty map still means "allow all", so a lone
+    // Allowed key keeps its allowlist meaning by starting from forbid-all.
+    auto apply_capture_entries = [&](const std::string& key, const std::string& value,
+                                     PieceSet (&target)[PIECE_TYPE_NB], bool allow) {
+        auto map_empty = [&]() {
+            for (int i = 0; i < PIECE_TYPE_NB; ++i)
+                if (target[i] != NO_PIECE_SET)
+                    return false;
             return true;
-
-        std::string entry;
-        std::stringstream ss(it->second);
+        };
         PieceSet parsed[PIECE_TYPE_NB];
         bool sawEntry = false;
-        // Both directions start from the current (possibly inherited) maps,
-        // so a child specifying only captureAllowed narrows the parent's
-        // forbiddens instead of discarding them. An empty inherited map
-        // still means "allow all", so lone captureAllowed keeps its
-        // allowlist meaning by starting from forbid-all in that case.
-        bool inheritedEmpty = true;
-        for (int i = 0; i < PIECE_TYPE_NB && inheritedEmpty; ++i)
-            inheritedEmpty = v->captureForbidden[i] == NO_PIECE_SET;
-        if (allow && inheritedEmpty)
+        if (allow && map_empty())
             std::fill(std::begin(parsed), std::end(parsed), v->pieceTypes);
         else
-            std::copy(v->captureForbidden, v->captureForbidden + PIECE_TYPE_NB, parsed);
+            std::copy(target, target + PIECE_TYPE_NB, parsed);
+        std::string entry;
+        std::stringstream ss(value);
         while (ss >> entry) {
             sawEntry = true;
             size_t sep = entry.find(':');
@@ -2850,22 +2846,19 @@ bool VariantParser<DoCheck>::parse_capture_maps(Variant* v) {
                 return false;
             }
 
-            std::string attackers = entry.substr(0, sep);
-            std::string targets = entry.substr(sep + 1);
-
             PieceSet attackerSet = NO_PIECE_SET;
-            if (!parse_piece_set_token_string(attackers, v, attackerSet, true, false))
+            if (!parse_piece_set_token_string(entry.substr(0, sep), v, attackerSet, true, false))
             {
                 if (DoCheck)
-                    std::cerr << key << " - Invalid attacker piece type list: " << attackers << std::endl;
+                    std::cerr << key << " - Invalid attacker piece type list: " << entry.substr(0, sep) << std::endl;
                 return false;
             }
 
             PieceSet targetSet = NO_PIECE_SET;
-            if (!parse_piece_set_token_string(targets, v, targetSet, true, true))
+            if (!parse_piece_set_token_string(entry.substr(sep + 1), v, targetSet, true, true))
             {
                 if (DoCheck)
-                    std::cerr << key << " - Invalid target piece type list: " << targets << std::endl;
+                    std::cerr << key << " - Invalid target piece type list: " << entry.substr(sep + 1) << std::endl;
                 return false;
             }
 
@@ -2886,63 +2879,34 @@ bool VariantParser<DoCheck>::parse_capture_maps(Variant* v) {
                 std::cerr << key << " - Empty value." << std::endl;
             return false;
         }
-        std::copy(parsed, parsed + PIECE_TYPE_NB, v->captureForbidden);
-        sync_color_maps();
+        std::copy(parsed, parsed + PIECE_TYPE_NB, target);
         return true;
     };
-    if (!parse_capture_map("captureForbidden", false))
-        return false;
-    if (!parse_capture_map("captureAllowed", true))
-        return false;
-
-    auto parse_color_capture_map = [&](const std::string& key, Color c, bool allow) {
+    auto parse_global = [&](const std::string& key, bool allow) {
         auto it = config.find(key);
         if (it == config.end())
             return true;
-
-        bool sawEntry = false;
-        std::string entry;
-        std::stringstream ss(it->second);
-        PieceSet parsed[PIECE_TYPE_NB];
-        std::copy(v->captureForbiddenByColor[c], v->captureForbiddenByColor[c] + PIECE_TYPE_NB, parsed);
-        while (ss >> entry) {
-            sawEntry = true;
-            size_t sep = entry.find(':');
-            if (sep == std::string::npos || sep == 0 || sep + 1 >= entry.size()) {
-                if (DoCheck)
-                    std::cerr << key << " - Invalid mapping token: " << entry << std::endl;
-                return false;
-            }
-            PieceSet attackerSet = NO_PIECE_SET, targetSet = NO_PIECE_SET;
-            if (!parse_piece_set_token_string(entry.substr(0, sep), v, attackerSet, true, false)
-                || !parse_piece_set_token_string(entry.substr(sep + 1), v, targetSet, true, true)
-                || !attackerSet || !targetSet)
-            {
-                if (DoCheck)
-                    std::cerr << key << " - Invalid capture mapping: " << entry << std::endl;
-                return false;
-            }
-            for (PieceSet ps = attackerSet; ps; ) {
-                PieceType attacker = pop_lsb(ps);
-                if (allow)
-                    parsed[attacker] &= ~targetSet;
-                else
-                    parsed[attacker] |= targetSet;
-            }
-        }
-        if (!sawEntry)
-        {
-            if (DoCheck)
-                std::cerr << key << " - Empty value." << std::endl;
+        if (!apply_capture_entries(key, it->second, v->captureForbidden, allow))
             return false;
-        }
-        std::copy(parsed, parsed + PIECE_TYPE_NB, v->captureForbiddenByColor[c]);
+        for (Color c : { WHITE, BLACK })
+            if (!apply_capture_entries(key, it->second, v->captureForbiddenByColor[c], allow))
+                return false;
         return true;
     };
-    return parse_color_capture_map("captureForbiddenWhite", WHITE, false)
-        && parse_color_capture_map("captureForbiddenBlack", BLACK, false)
-        && parse_color_capture_map("captureAllowedWhite", WHITE, true)
-        && parse_color_capture_map("captureAllowedBlack", BLACK, true);
+    if (!parse_global("captureForbidden", false))
+        return false;
+    if (!parse_global("captureAllowed", true))
+        return false;
+
+    auto parse_color = [&](const std::string& key, Color c, bool allow) {
+        auto it = config.find(key);
+        return it == config.end()
+            || apply_capture_entries(key, it->second, v->captureForbiddenByColor[c], allow);
+    };
+    return parse_color("captureForbiddenWhite", WHITE, false)
+        && parse_color("captureForbiddenBlack", BLACK, false)
+        && parse_color("captureAllowedWhite", WHITE, true)
+        && parse_color("captureAllowedBlack", BLACK, true);
 }
 
 template <bool DoCheck>

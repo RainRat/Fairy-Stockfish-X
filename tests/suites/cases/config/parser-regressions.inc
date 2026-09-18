@@ -463,6 +463,20 @@ captureForbidden = p:q p:r
 
 [capture-merge-child:capture-merge-parent]
 captureAllowed = p:q
+
+[capcolor-parent:chess]
+captureForbiddenWhite = r:n
+
+[capcolor-child:capcolor-parent]
+
+[capallow-white-only:chess]
+captureAllowedWhite = r:n
+
+[capcolor-merge-parent:chess]
+captureForbiddenWhite = r:n
+
+[capcolor-merge-child:capcolor-merge-parent]
+captureForbidden = p:q
 INI
 
 cat > "${bad_rider_range_val_ini}" <<'INI'
@@ -674,6 +688,49 @@ EOF
 assert_contains "${capture_merge_child_output}" "e4d5:"
 assert_not_contains "${capture_merge_child_output}" "e4f5:"
 assert_contains "${capture_merge_child_output}" "c4b6:"
+
+# A lone captureAllowedWhite on an empty color map is an allowlist for white:
+# rooks take knights but nothing else.
+capallow_white_output=$(run_uci "$ENGINE" "$capture_allowed_only_ini" "capallow-white-only" <<EOF
+position fen 4k3/8/8/8/8/8/b7/Rn2K3 w - - 0 1
+go perft 1
+EOF
+)
+assert_contains "${capallow_white_output}" "a1b1:"
+assert_not_contains "${capallow_white_output}" "a1a2:"
+
+# A keyless child inherits the parent's color-specific map: the white
+# rook-knight ban holds in both parent and child.
+for variant in capcolor-parent capcolor-child; do
+  capcolor_output=$(run_uci "$ENGINE" "$capture_allowed_only_ini" "$variant" <<EOF
+position fen 4k3/8/8/8/8/8/8/Rn2K3 w - - 0 1
+go perft 1
+EOF
+)
+  assert_not_contains "${capcolor_output}" "a1b1:"
+  assert_contains "${capcolor_output}" "a1a2:"
+done
+
+# A child global key composes onto the inherited color map instead of
+# replacing it: the child bans pawn-takes-queen globally while keeping the
+# inherited rook-takes-knight ban for white (which the parent lacks).
+capcolor_merge_parent_output=$(run_uci "$ENGINE" "$capture_allowed_only_ini" "capcolor-merge-parent" <<EOF
+position fen 4k3/8/8/3q4/4P3/8/8/Rn2K3 w - - 0 1
+go perft 1
+EOF
+)
+assert_not_contains "${capcolor_merge_parent_output}" "a1b1:"
+assert_contains "${capcolor_merge_parent_output}" "e4d5:"
+assert_contains "${capcolor_merge_parent_output}" "e4e5:"
+
+capcolor_merge_child_output=$(run_uci "$ENGINE" "$capture_allowed_only_ini" "capcolor-merge-child" <<EOF
+position fen 4k3/8/8/3q4/4P3/8/8/Rn2K3 w - - 0 1
+go perft 1
+EOF
+)
+assert_not_contains "${capcolor_merge_child_output}" "a1b1:"
+assert_not_contains "${capcolor_merge_child_output}" "e4d5:"
+assert_contains "${capcolor_merge_child_output}" "e4e5:"
 
 bad_rider_range_val_output1=$(run_uci "$ENGINE" "$bad_rider_range_val_ini" "rider-range-val-1" </dev/null 2>&1 || true)
 assert_contains "${bad_rider_range_val_output1}" "unknown variant 'rider-range-val-1'; keeping 'chess'"
