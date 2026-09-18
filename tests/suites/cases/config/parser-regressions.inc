@@ -400,6 +400,7 @@ twochar_hint_ini=$(mktemp)
 bad_hopper_type_ini=$(mktemp)
 bad_hopper_numeric_ini=$(mktemp)
 capture_allowed_only_ini=$(mktemp)
+dropnomate_alias_ini=$(mktemp)
 bad_rider_range_val_ini=$(mktemp)
 bad_tuple_atom_ini=$(mktemp)
 unsupported_bent_rose_modifier_ini=$(mktemp)
@@ -414,7 +415,7 @@ bad_unmatched_closer_ini=$(mktemp)
 royal_blast_ini=$(mktemp)
 nonking_ini=$(mktemp)
 wrapped_support_ini=$(mktemp)
-fsx_add_exit_cleanup 'rm -f "${tmp_ini}" "${bad_betza_ini}" "${bad_hopper_brace_ini}" "${bad_rider_range_ini}" "${bad_rank_wildcard_ini}" "${twochar_hint_ini}" "${bad_hopper_type_ini}" "${bad_hopper_numeric_ini}" "${capture_allowed_only_ini}" "${bad_rider_range_val_ini}" "${bad_tuple_atom_ini}" "${unsupported_bent_rose_modifier_ini}" "${bad_ini_syntax_option_ini}" "${bad_check_counting_ini}" "${bad_hopper_minmax_ini}" "${bad_hopper_entry_ini}" "${bad_piece_value_ini}" "${unknown_option_ini}" "${bad_royal_betza_ini}" "${bad_unmatched_closer_ini}" "${royal_blast_ini}" "${nonking_ini}" "${wrapped_support_ini}"'
+fsx_add_exit_cleanup 'rm -f "${tmp_ini}" "${bad_betza_ini}" "${bad_hopper_brace_ini}" "${bad_rider_range_ini}" "${bad_rank_wildcard_ini}" "${twochar_hint_ini}" "${bad_hopper_type_ini}" "${bad_hopper_numeric_ini}" "${capture_allowed_only_ini}" "${dropnomate_alias_ini}" "${bad_rider_range_val_ini}" "${bad_tuple_atom_ini}" "${unsupported_bent_rose_modifier_ini}" "${bad_ini_syntax_option_ini}" "${bad_check_counting_ini}" "${bad_hopper_minmax_ini}" "${bad_hopper_entry_ini}" "${bad_piece_value_ini}" "${unknown_option_ini}" "${bad_royal_betza_ini}" "${bad_unmatched_closer_ini}" "${royal_blast_ini}" "${nonking_ini}" "${wrapped_support_ini}"'
 
 cat > "${bad_betza_ini}" <<'INI'
 [custom-piece-missing-betza:chess]
@@ -563,8 +564,23 @@ customPiece1 = a:}
 customPiece1 = a:]
 INI
 
-cat > "${royal_blast_ini}" <<'INI'
-[royal-blast-allowed:chess]
+cat > "${dropnomate_alias_ini}" <<'INI'
+[nc-alias-legacy:minishogi]
+shogiPawnDropMateIllegal = true
+startFen = 2k2/5/2K2/5/1R1R1[P] w - - 0 1
+
+[nc-alias-newkey:minishogi]
+dropNoCheckmate = p
+startFen = 2k2/5/2K2/5/1R1R1[P] w - - 0 1
+
+[nc-alias-optout:nc-alias-legacy]
+shogiPawnDropMateIllegal = false
+
+[nc-alias-newoptout:nc-alias-newkey]
+shogiPawnDropMateIllegal = false
+INI
+
+cat > "${royal_blast_ini}" <<'INI'[royal-blast-allowed:chess]
 checking = true
 blastOnCapture = true
 castling = false
@@ -731,6 +747,28 @@ EOF
 assert_not_contains "${capcolor_merge_child_output}" "a1b1:"
 assert_not_contains "${capcolor_merge_child_output}" "e4d5:"
 assert_contains "${capcolor_merge_child_output}" "e4e5:"
+
+# Legacy shogiPawnDropMateIllegal and dropNoCheckmate = p agree exactly:
+# the mating pawn drop is banned in both.
+for variant in nc-alias-legacy nc-alias-newkey; do
+  nc_alias_output=$(run_uci "$ENGINE" "$dropnomate_alias_ini" "$variant" <<EOF
+position startpos
+go perft 1
+EOF
+)
+  assert_not_contains "${nc_alias_output}" "P@c4:"
+done
+
+# Opt-outs clear the ban whether the parent used the legacy key or the new
+# key: the mating pawn drop returns in both children.
+for variant in nc-alias-optout nc-alias-newoptout; do
+  nc_optout_output=$(run_uci "$ENGINE" "$dropnomate_alias_ini" "$variant" <<EOF
+position startpos
+go perft 1
+EOF
+)
+  assert_contains "${nc_optout_output}" "P@c4:"
+done
 
 bad_rider_range_val_output1=$(run_uci "$ENGINE" "$bad_rider_range_val_ini" "rider-range-val-1" </dev/null 2>&1 || true)
 assert_contains "${bad_rider_range_val_output1}" "unknown variant 'rider-range-val-1'; keeping 'chess'"

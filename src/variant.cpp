@@ -813,7 +813,7 @@ namespace {
         v->captureType = MOVE_OUT;
         v->dropRegion[WHITE] = Rank1BB;
         v->dropRegion[BLACK] = Rank8BB;
-        v->dropOppositeColoredBishop = true;
+        v->dropOnOppositeColors = piece_set(BISHOP);
         v->castlingDroppedPiece = true;
         v->nnueAlias = "nn-";
         return v;
@@ -916,7 +916,7 @@ namespace {
         v->promotedPieceType[ROOK]       = DRAGON;
         v->dropNoDoubled = piece_set(SHOGI_PAWN);
         v->immobilityIllegal = true;
-        v->shogiPawnDropMateIllegal = true;
+        v->dropNoCheckmate = piece_set(SHOGI_PAWN);
         v->stalemateValue = -VALUE_MATE;
         v->nFoldRule = 4;
         v->nMoveRule = 0;
@@ -956,7 +956,7 @@ namespace {
         v->promotedPieceType[BISHOP]       = NO_PIECE_TYPE;
         v->promotedPieceType[ROOK]         = NO_PIECE_TYPE;
         v->immobilityIllegal = false;
-        v->shogiPawnDropMateIllegal = false;
+        v->dropNoCheckmate = NO_PIECE_SET;
         v->dropNoDoubled = NO_PIECE_SET;
         return v;
     }
@@ -999,7 +999,7 @@ namespace {
         v->promotionRegion[BLACK] = Rank1BB;
         v->mandatoryPiecePromotion = true;
         v->immobilityIllegal = false;
-        v->shogiPawnDropMateIllegal = false;
+        v->dropNoCheckmate = NO_PIECE_SET;
         v->extinctionValue = -VALUE_MATE;
         v->extinctionPieceTypes = piece_set(COMMONER);
         v->flagPieceTypes = piece_set(COMMONER);
@@ -1069,7 +1069,7 @@ namespace {
         v->dropNoDoubled = piece_set(SHOGI_PAWN);
         v->dropNoDoubledCount = 2;
         v->immobilityIllegal = true;
-        v->shogiPawnDropMateIllegal = true;
+        v->dropNoCheckmate = piece_set(SHOGI_PAWN);
         v->stalemateValue = -VALUE_MATE;
         v->nFoldValue = VALUE_MATE;
         v->nFoldRule = 4;
@@ -1486,7 +1486,7 @@ namespace {
         v->castling = false;
         v->dropNoDoubled = piece_set(SHOGI_PAWN);
         v->immobilityIllegal = true;
-        v->shogiPawnDropMateIllegal = false;
+        v->dropNoCheckmate = NO_PIECE_SET;
         v->stalemateValue = -VALUE_MATE;
         v->nFoldRule = 3;
         v->nMoveRule = 0;

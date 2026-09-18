@@ -389,7 +389,7 @@ std::string variant_info_json(const std::string& name) {
     field(drops, b, "enclosingRule", quote(enclosing_name(v.enclosingDrop)));
     field(drops, b, "enclosingStart", region_json(v.enclosingDropStart, v.maxFile, v.maxRank));
     field(drops, b, "sittuyinRook", boolean(v.sittuyinRookDrop));
-    field(drops, b, "oppositeColoredBishop", boolean(v.dropOppositeColoredBishop));
+    field(drops, b, "oppositeColorTypes", color_piece_sets(v.dropOnOppositeColors[WHITE], v.dropOnOppositeColors[BLACK]));
     field(drops, b, "promoted", boolean(v.dropPromoted));
     field(drops, b, "noDoubledTypes", color_piece_sets(v.dropNoDoubled[WHITE], v.dropNoDoubled[BLACK]));
     field(drops, b, "noDoubledCount", color_ints(v.dropNoDoubledCount[WHITE], v.dropNoDoubledCount[BLACK]));
@@ -426,7 +426,7 @@ std::string variant_info_json(const std::string& name) {
     field(end, b, "stalemateValue", quote(value_name(v.stalemateValue)));
     field(end, b, "stalematePieceCount", boolean(v.stalematePieceCount));
     field(end, b, "checkmateValue", quote(value_name(v.checkmateValue)));
-    field(end, b, "shogiPawnDropMateIllegal", boolean(v.shogiPawnDropMateIllegal));
+    field(end, b, "noCheckmateTypes", color_piece_sets(v.dropNoCheckmate[WHITE], v.dropNoCheckmate[BLACK]));
     field(end, b, "shatarMateRule", boolean(v.shatarMateRule));
     field(end, b, "bikjangRule", boolean(v.bikjangRule));
     field(end, b, "dupleCheck", boolean(v.dupleCheck));

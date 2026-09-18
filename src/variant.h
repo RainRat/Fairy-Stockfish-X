@@ -238,6 +238,9 @@ struct Variant {
   bool checkedRoyalsIgnoreFreeze = false;
   ColorSetting<bool> dropChecks = ColorSetting<bool>(true);
   ColorSetting<bool> dropMates = ColorSetting<bool>(true);
+  // Piece types that may not deliver checkmate by drop (generalizes the
+  // legacy shogiPawnDropMateIllegal flag, folded into this set at parse).
+  ColorSetting<PieceSet> dropNoCheckmate = ColorSetting<PieceSet>(NO_PIECE_SET);
   ColorSetting<bool> mustCapture = ColorSetting<bool>(false);
   ColorSetting<bool> mustCaptureEnPassant = ColorSetting<bool>(false);
   bool rifleCapture = false;
@@ -293,7 +296,9 @@ struct Variant {
   Bitboard enclosingDropStart = 0;
   ColorSetting<PieceTypeBitboardGroup> dropRegion = ColorSetting<PieceTypeBitboardGroup>(AllSquares, AllSquares);
   bool sittuyinRookDrop = false;
-  bool dropOppositeColoredBishop = false;
+  // Piece types restricted to opposite-color-square drops (generalizes the
+  // legacy dropOppositeColoredBishop flag, folded into this set at parse).
+  ColorSetting<PieceSet> dropOnOppositeColors = ColorSetting<PieceSet>(NO_PIECE_SET);
   bool dropPromoted = false;
   PieceSet dropPieceTypes[PIECE_TYPE_NB] = {};
   PieceSet symmetricDropTypes = NO_PIECE_SET;
@@ -463,7 +468,6 @@ struct Variant {
   ColorSetting<Value> stalemateValue = ColorSetting<Value>(VALUE_DRAW);
   bool stalematePieceCount = false; // multiply stalemate value by sign(count(~stm) - count(stm))
   ColorSetting<Value> checkmateValue = ColorSetting<Value>(-VALUE_MATE);
-  ColorSetting<bool> shogiPawnDropMateIllegal = ColorSetting<bool>(false);
   bool shatarMateRule = false;
   bool bikjangRule = false;
   ColorSetting<Value> extinctionValue = ColorSetting<Value>(VALUE_NONE);

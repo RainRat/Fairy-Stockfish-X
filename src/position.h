@@ -698,8 +698,8 @@ public:
   bool castling_ignore_check() const;
   bool drop_checks() const;
   bool drop_mates() const;
-  bool shogi_pawn_drop_mate_illegal() const;
-  bool shogi_pawn_drop_mate_illegal(Color c) const;
+  PieceSet drop_no_checkmate_types() const;
+  PieceSet drop_no_checkmate_types(Color c) const;
   bool self_capture() const;
   bool self_capture(PieceType pt) const;
   bool rifle_capture() const;
@@ -771,7 +771,8 @@ public:
   Bitboard drop_region(Color c) const;
   Bitboard drop_region(Color c, PieceType pt) const;
   bool sittuyin_rook_drop() const;
-  bool drop_opposite_colored_bishop() const;
+  PieceSet drop_opposite_color_types() const;
+  PieceSet drop_opposite_color_types(Color c) const;
   bool drop_promoted() const;
   PieceSet drop_piece_types(PieceType pt) const;
   PieceSet symmetric_drop_types() const;
@@ -2011,13 +2012,13 @@ inline bool Position::drop_mates() const {
   return var->dropMates.get(side_to_move());
 }
 
-inline bool Position::shogi_pawn_drop_mate_illegal() const {
-  return shogi_pawn_drop_mate_illegal(side_to_move());
+inline PieceSet Position::drop_no_checkmate_types() const {
+  return drop_no_checkmate_types(side_to_move());
 }
 
-inline bool Position::shogi_pawn_drop_mate_illegal(Color c) const {
+inline PieceSet Position::drop_no_checkmate_types(Color c) const {
   assert(var != nullptr);
-  return var->shogiPawnDropMateIllegal.get(c);
+  return var->dropNoCheckmate.get(c);
 }
 
 inline bool Position::self_capture() const {
@@ -2645,9 +2646,14 @@ inline bool Position::sittuyin_rook_drop() const {
   return var->sittuyinRookDrop;
 }
 
-inline bool Position::drop_opposite_colored_bishop() const {
+inline PieceSet Position::drop_opposite_color_types() const {
   assert(var != nullptr);
-  return var->dropOppositeColoredBishop;
+  return var->dropOnOppositeColors.get(side_to_move());
+}
+
+inline PieceSet Position::drop_opposite_color_types(Color c) const {
+  assert(var != nullptr);
+  return var->dropOnOppositeColors.get(c);
 }
 
 inline bool Position::drop_promoted() const {
@@ -3104,9 +3110,14 @@ inline Value Position::stalemate_value(int ply) const {
 
 inline Value Position::checkmate_value(int ply) const {
   assert(var != nullptr);
-  // Check for illegal mate by shogi pawn drop
-  if (    shogi_pawn_drop_mate_illegal(~side_to_move())
-      && !(evasion_checkers() & ~pieces(SHOGI_PAWN))
+  // Check for illegal mate by a banned drop type (e.g. shogi pawn-drop mate):
+  // the delivering side fouls, so the mated side wins.
+  PieceSet noMateDrops = drop_no_checkmate_types(~side_to_move());
+  Bitboard bannedCheckers = 0;
+  for (PieceSet ps = noMateDrops; ps; )
+      bannedCheckers |= pieces(pop_lsb(ps));
+  if (    noMateDrops != NO_PIECE_SET
+      && !(evasion_checkers() & ~bannedCheckers)
       && !st->captured.piece
       &&  st->pliesFromNull > 0
       && (st->materialKey != st->previous->materialKey))

@@ -232,6 +232,36 @@ dropMatesWhite = false
 dropMatesBlack = true
 startFen = 8/8/8/8/8/4k3/8/4K3[q] b - - 0 1
 
+[dropnocheckmate-split-white:chess]
+pieceDrops = true
+dropChecks = true
+dropNoCheckmateWhite = q
+startFen = 4k3/8/4K3/8/8/8/8/8[Q] w - - 0 1
+
+[dropnocheckmate-split-black:chess]
+pieceDrops = true
+dropChecks = true
+dropNoCheckmateBlack = q
+startFen = 8/8/8/8/8/4k3/8/4K3[q] b - - 0 1
+
+[dropnocheckmate-unrelated:chess]
+pieceDrops = true
+dropChecks = true
+dropNoCheckmateWhite = r
+startFen = 4k3/8/4K3/8/8/8/8/8[Q] w - - 0 1
+
+[dropoppcolor:crazyhouse]
+dropOnOppositeColors = b
+startFen = 4k3/8/8/8/3B4/8/8/4K3[B] w - - 0 1
+
+[dropoppcolor-white:crazyhouse]
+dropOnOppositeColorsWhite = b
+startFen = 4k3/8/8/8/3B4/8/8/4K3[B] w - - 0 1
+
+[dropoppcolor-blackfree:crazyhouse]
+dropOnOppositeColorsWhite = b
+startFen = 4k3/8/8/8/3b4/8/8/4K3[b] b - - 0 1
+
 [dropnodoubled-split-white:chess]
 pieceDrops = true
 dropNoDoubledWhite = p
@@ -540,6 +570,53 @@ go perft 1
 UCI
 )
 assert_contains "$out" "^Q@e2: 1$"
+
+out=$(run_uci "$ENGINE" "$tmp_ini" dropnocheckmate-split-white <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_not_contains "$out" "^Q@e7: 1$"
+assert_contains "$out" "^Q@e2: 1$"
+
+out=$(run_uci "$ENGINE" "$tmp_ini" dropnocheckmate-split-black <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_not_contains "$out" "^Q@e2: 1$"
+assert_contains "$out" "^Q@e7: 1$"
+
+out=$(run_uci "$ENGINE" "$tmp_ini" dropnocheckmate-unrelated <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_contains "$out" "^Q@e7: 1$"
+
+out=$(run_uci "$ENGINE" "$tmp_ini" dropoppcolor <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_contains "$out" "^B@e4: 1$"
+assert_not_contains "$out" "^B@e5: 1$"
+
+out=$(run_uci "$ENGINE" "$tmp_ini" dropoppcolor-white <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_contains "$out" "^B@e4: 1$"
+assert_not_contains "$out" "^B@e5: 1$"
+
+out=$(run_uci "$ENGINE" "$tmp_ini" dropoppcolor-blackfree <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_contains "$out" "^B@e4: 1$"
+assert_contains "$out" "^B@e5: 1$"
 
 out=$(run_uci "$ENGINE" "$tmp_ini" dropnodoubled-split-white <<'UCI'
 position startpos

@@ -172,7 +172,7 @@ void on_variant_change(const Option &o) {
                     suffix += "j";
                 else if (piece_set(pt) & v->dropNoDoubled.get(WHITE))
                     suffix += std::string(v->dropNoDoubledCount.get(WHITE), 'f');
-                else if (pt == BISHOP && v->dropOppositeColoredBishop)
+                else if ((v->dropOnOppositeColors.get(WHITE) & piece_set(pt)))
                     suffix += "s";
                 suffix += "@" + std::to_string(pt == PAWN && !v->promotionZonePawnDrops && bool(v->promotionRegion[WHITE]) ? rank_of(lsb(static_cast<Bitboard>(v->promotionRegion[WHITE]))) : v->maxRank + 1);
             }

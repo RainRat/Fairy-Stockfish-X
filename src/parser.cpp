@@ -1818,7 +1818,30 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("enclosingDropStart", v->enclosingDropStart);
     parse_color_setting("dropRegion", v->dropRegion);
     parse_attribute("sittuyinRookDrop", v->sittuyinRookDrop);
-    parse_attribute("dropOppositeColoredBishop", v->dropOppositeColoredBishop);
+    // Legacy boolean drop aliases fold tri-state into the piece-set rules:
+    // present-true adds the piece, present-false removes it, absent inherits.
+    auto fold_legacy_drop_bool = [&](const std::string& boolKey, PieceType pt,
+                                     ColorSetting<PieceSet>& target) {
+        auto applySide = [&](Color c, bool value) {
+            if (value)
+                target[c] |= piece_set(pt);
+            else
+                target[c] &= ~piece_set(pt);
+        };
+        ColorSetting<bool> legacy;
+        parse_color_setting(boolKey, legacy);
+        if (config.find(boolKey) != config.end())
+        {
+            applySide(WHITE, legacy.global);
+            applySide(BLACK, legacy.global);
+        }
+        if (config.find(boolKey + "White") != config.end())
+            applySide(WHITE, legacy.byColor[WHITE]);
+        if (config.find(boolKey + "Black") != config.end())
+            applySide(BLACK, legacy.byColor[BLACK]);
+    };
+    if (!parse_color_setting_piece("dropOnOppositeColors", v->dropOnOppositeColors, v)) return false;
+    fold_legacy_drop_bool("dropOppositeColoredBishop", BISHOP, v->dropOnOppositeColors);
     parse_attribute("dropPromoted", v->dropPromoted);
     parse_attribute("symmetricDropTypes", v->symmetricDropTypes, v);
     parse_attribute("captureDrops", v->captureDrops, v);
@@ -1926,7 +1949,8 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_color_setting("stalemateValue", v->stalemateValue);
     parse_attribute("stalematePieceCount", v->stalematePieceCount);
     parse_color_setting("checkmateValue", v->checkmateValue);
-    parse_color_setting("shogiPawnDropMateIllegal", v->shogiPawnDropMateIllegal);
+    if (!parse_color_setting_piece("dropNoCheckmate", v->dropNoCheckmate, v)) return false;
+    fold_legacy_drop_bool("shogiPawnDropMateIllegal", SHOGI_PAWN, v->dropNoCheckmate);
     parse_attribute("shatarMateRule", v->shatarMateRule);
     parse_attribute("bikjangRule", v->bikjangRule);
     parse_attribute("pseudoRoyalTypes", v->pseudoRoyalTypes, v);

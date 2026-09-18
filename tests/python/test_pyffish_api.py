@@ -339,6 +339,15 @@ class TestPublicAPI(unittest.TestCase):
         self.assertEqual(composable["capture"]["trapRegion"], ["d4"])
         self.assertEqual(composable["capture"]["trapProtection"], "friendly-orthogonal")
 
+        sf.load_variant_config(
+            "[variantinfodrops:chess]\n"
+            "dropNoCheckmate = n\n"
+            "dropOppositeColoredBishop = true\n"
+        )
+        drops = json.loads(sf.variant_info("variantinfodrops"))
+        self.assertEqual(drops["gameEnd"]["noCheckmateTypes"], {"white": ["knight"], "black": ["knight"]})
+        self.assertEqual(drops["drops"]["oppositeColorTypes"], {"white": ["bishop"], "black": ["bishop"]})
+
         with self.assertRaisesRegex(ValueError, "Unknown variant"):
             sf.variant_info("does-not-exist")
 

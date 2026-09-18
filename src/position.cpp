@@ -5659,11 +5659,11 @@ bool Position::legal(Move m) const {
       return false;
 
   // Optional rule: disallow checkmate by drops.
-  // Shogi pawn-drop mate rule is a stricter piece-specific version.
+  // The piece-specific drop-mate ban is a stricter version of the blanket rule.
   if (   dropMove
       && move_gives_check()
       && (   !drop_mates()
-          || (shogi_pawn_drop_mate_illegal() && type_of(moved_piece(m)) == SHOGI_PAWN)))
+          || (drop_no_checkmate_types() & piece_set(type_of(moved_piece(m))))))
   {
       StateInfo nextState;
       SimulatedMoveGuard clearSimulation(*this, MOVE_NONE);
@@ -5778,27 +5778,32 @@ bool Position::legal(Move m) const {
   if (!placement_rules_legal(m, us))
       return false;
 
-  if (drop_opposite_colored_bishop() && dropMove)
+  PieceSet oppositeColorDrops = drop_opposite_color_types(us);
+  if (oppositeColorDrops != NO_PIECE_SET && dropMove)
   {
-      if (type_of(moved_piece(m)) != BISHOP)
+      for (PieceSet ps = oppositeColorDrops; ps; )
       {
-          Bitboard remaining = drop_region(us, BISHOP) & ~pieces() & ~square_bb(to);
-          if (paired_drop(m))
-              remaining &= ~square_bb(secondary_drop_square(m));
-          // Are enough squares available to drop bishops on opposite colors?
-          if (   popcount( DarkSquares & (pieces(us, BISHOP) | remaining)) < count_with_hand(us, BISHOP) / 2
-              || popcount(~DarkSquares & (pieces(us, BISHOP) | remaining)) < count_with_hand(us, BISHOP) / 2)
-              return false;
-      }
-      else
-      {
-          // Drop resulting in same-colored bishops
-          Bitboard bishopsAfter = pieces(us, BISHOP) | square_bb(to);
-          if (paired_drop(m))
-              bishopsAfter |= square_bb(secondary_drop_square(m));
-          if (   popcount( DarkSquares & bishopsAfter) > (count_with_hand(us, BISHOP) + 1) / 2
-              || popcount(~DarkSquares & bishopsAfter) > (count_with_hand(us, BISHOP) + 1) / 2)
-              return false;
+          PieceType constrained = pop_lsb(ps);
+          if (type_of(moved_piece(m)) != constrained)
+          {
+              Bitboard remaining = drop_region(us, constrained) & ~pieces() & ~square_bb(to);
+              if (paired_drop(m))
+                  remaining &= ~square_bb(secondary_drop_square(m));
+              // Are enough squares available to drop constrained pieces on opposite colors?
+              if (   popcount( DarkSquares & (pieces(us, constrained) | remaining)) < count_with_hand(us, constrained) / 2
+                  || popcount(~DarkSquares & (pieces(us, constrained) | remaining)) < count_with_hand(us, constrained) / 2)
+                  return false;
+          }
+          else
+          {
+              // Drop resulting in same-colored constrained pieces
+              Bitboard constrainedAfter = pieces(us, constrained) | square_bb(to);
+              if (paired_drop(m))
+                  constrainedAfter |= square_bb(secondary_drop_square(m));
+              if (   popcount( DarkSquares & constrainedAfter) > (count_with_hand(us, constrained) + 1) / 2
+                  || popcount(~DarkSquares & constrainedAfter) > (count_with_hand(us, constrained) + 1) / 2)
+                  return false;
+          }
       }
   }
   if (dropMove && pay_points_to_drop())
