@@ -96,6 +96,12 @@ promotionRegionWhite = Q(*7);R(*8)
 promotionRegionBlack = Q(*2);R(*1)
 castling = false
 
+[test-forbidden-lion:chess]
+customPiece1 = l:ADNWK
+twoStepMoves = l:*
+mutuallyImmuneTypes = l
+castling = true
+
 [test-horned-falcon:chess]
 customPiece1 = h:BsRbRfDfW
 twoStepMoves = h:N>N,N>S
@@ -496,6 +502,37 @@ static void test_two_step_piece_specific_promotion_zone() {
     assert(pos.key() == origKey);
 }
 
+static void test_two_step_via_capture_restrictions() {
+    StateInfo st{};
+    Position pos;
+    // mutuallyImmuneTypes = l forbids lion-on-lion captures. captured_piece()
+    // only sees the primary (to) victim, so a double capture whose forbidden
+    // victim is on the via leg must be rejected explicitly.
+    // White lion e4, black lion d5, black rook c6/d4.
+    pos.set(variants.get("test-forbidden-lion"),
+            "r3k2r/8/2r5/3l4/3rL3/8/8/R3K2R w KQkq - 0 1", false, &st, nullptr);
+
+    // Double capture e4->d5(lion)->c6(rook): forbidden via victim.
+    Move m_double = make_two_step(SQ_E4, SQ_D5, SQ_C6);
+    assert(!pos.legal(m_double));
+
+    // Igui via-capture of the lion is caught by the primary-victim check.
+    Move m_igui = make_two_step(SQ_E4, SQ_D5, SQ_E4);
+    assert(!pos.legal(m_igui));
+
+    // Single via-capture of an allowed victim stays legal.
+    Move m_single = make_two_step(SQ_E4, SQ_D4, SQ_C4, false);
+    assert(pos.legal(m_single));
+    const Key origKey = pos.key();
+    StateInfo next{};
+    pos.do_move(m_single, next);
+    assert(pos.piece_on(SQ_D4) == NO_PIECE);
+    assert(pos.piece_on(SQ_C4) == make_piece(WHITE, CUSTOM_PIECE_1));
+    pos.undo_move(m_single);
+    assert(pos.key() == origKey);
+    assert(pos.piece_on(SQ_D4) == B_ROOK);
+}
+
 static void test_two_step_vs_jump() {
     StateInfo st{};
     Position pos;
@@ -529,6 +566,7 @@ int main() {
     test_two_step_promotion_ignores_morph();
     test_two_step_double_capture_rejects_ambiguous_effects();
     test_two_step_piece_specific_promotion_zone();
+    test_two_step_via_capture_restrictions();
     test_capture_squares_and_recapture();
     test_two_step_vs_jump();
     return 0;
