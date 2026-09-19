@@ -214,15 +214,10 @@ std::string castling_rights_json(CastlingRights rights) {
          + ",\"queenSide\":" + boolean(bool(rights & BLACK_OOO)) + "}}";
 }
 
-// Canonical White-relative direction-pair list for a two-step mask.
-// Index order matches KingDirections (N, NE, E, SE, S, SW, W, NW); Black
+// Canonical White-relative direction-pair list for a direction-pair mask.
+// Index order matches KingDirections (see king_step_name); Black
 // masks are the same pairs point-reflected 180 degrees.
-const char* king_step_pair_name(int d) {
-    static const char* names[8] = {"N", "NE", "E", "SE", "S", "SW", "W", "NW"};
-    return names[d & 7];
-}
-
-std::string two_step_mask_json(uint64_t mask) {
+std::string direction_pair_mask_json(uint64_t mask) {
     if (mask == ~0ULL)
         return quote("*");
     std::ostringstream pairs;
@@ -232,7 +227,7 @@ std::string two_step_mask_json(uint64_t mask) {
             if (mask & (1ULL << (d1 * 8 + d2))) {
                 if (!first) pairs << ',';
                 first = false;
-                pairs << king_step_pair_name(d1) << '>' << king_step_pair_name(d2);
+                pairs << king_step_name(d1) << '>' << king_step_name(d2);
             }
     return quote(pairs.str());
 }
@@ -244,7 +239,7 @@ std::string two_step_moves_json(const Variant& v) {
     for (int i = 1; i < PIECE_TYPE_NB; ++i)
         if (v.twoStepMoves[i])
             field(out, first, variant_piece_type_name(v, PieceType(i)).c_str(),
-                  two_step_mask_json(v.twoStepMoves[i]));
+                  direction_pair_mask_json(v.twoStepMoves[i]));
     out << '}';
     return out.str();
 }
@@ -256,7 +251,7 @@ std::string hook_moves_json(const Variant& v) {
     for (int i = 1; i < PIECE_TYPE_NB; ++i)
         if (v.hookMoveMasks[i]) {
             std::ostringstream spec;
-            spec << "{\"pairs\":" << two_step_mask_json(v.hookMoveMasks[i])
+            spec << "{\"pairs\":" << direction_pair_mask_json(v.hookMoveMasks[i])
                  << ",\"firstRange\":" << v.hookFirstRange[i]
                  << ",\"secondRange\":" << v.hookSecondRange[i]
                  << ",\"captureLimit\":" << v.hookCaptureLimit[i] << '}';

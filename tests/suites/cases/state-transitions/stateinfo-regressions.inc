@@ -584,13 +584,14 @@ static void test_hook_state_transitions() {
     pos.undo_move(m_igui);
     assert(pos.key() == origKey);
 
-    // Cannot jump over the e6 rook: e4->e5->e7 is illegal.
+    // Cannot jump over the e6 rook: e4->e5->e7 is not pseudo-legal.
+    // (Path geometry is validated in pseudo_legal(), not legal().)
     Move m_jump = make_hook(SQ_E4, SQ_E5, SQ_E7, false);
-    assert(!pos.legal(m_jump));
+    assert(!pos.pseudo_legal(m_jump));
 
-    // Diagonal bend is outside the R-R mask: e4->e5->f6 is illegal.
+    // Diagonal bend is outside the R-R mask.
     Move m_diag = make_hook(SQ_E4, SQ_E5, SQ_F6, false);
-    assert(!pos.legal(m_diag));
+    assert(!pos.pseudo_legal(m_diag));
 }
 
 static void test_hook_capture_limits() {

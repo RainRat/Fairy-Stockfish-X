@@ -2229,16 +2229,7 @@ Variant* Variant::conclude() {
         {
             hasTwoStepMoves = true;
             twoStepPieceTypes[WHITE] |= piece_set(pt);
-            uint64_t bmask = 0;
-            for (int d1 = 0; d1 < 8; ++d1)
-                for (int d2 = 0; d2 < 8; ++d2)
-                    if (mask & (1ULL << (d1 * 8 + d2)))
-                    {
-                        int bd1 = (d1 + 4) % 8;
-                        int bd2 = (d2 + 4) % 8;
-                        bmask |= (1ULL << (bd1 * 8 + bd2));
-                    }
-            twoStepMovesColor[BLACK][pt] = bmask;
+            twoStepMovesColor[BLACK][pt] = reflect_direction_pairs(mask);
             twoStepPieceTypes[BLACK] |= piece_set(pt);
         }
         else
@@ -2261,16 +2252,7 @@ Variant* Variant::conclude() {
         {
             hasHookMoves = true;
             hookPieceTypes[WHITE] |= piece_set(pt);
-            uint64_t bmask = 0;
-            for (int d1 = 0; d1 < 8; ++d1)
-                for (int d2 = 0; d2 < 8; ++d2)
-                    if (mask & (1ULL << (d1 * 8 + d2)))
-                    {
-                        int bd1 = (d1 + 4) % 8;
-                        int bd2 = (d2 + 4) % 8;
-                        bmask |= (1ULL << (bd1 * 8 + bd2));
-                    }
-            hookMoveMasksColor[BLACK][pt] = bmask;
+            hookMoveMasksColor[BLACK][pt] = reflect_direction_pairs(mask);
             hookPieceTypes[BLACK] |= piece_set(pt);
         }
         else

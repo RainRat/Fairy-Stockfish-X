@@ -1097,6 +1097,87 @@ namespace {
   }
 
 
+  template<Color Us, GenType Type, typename MakeMove>
+  ExtMove* emit_multileg_candidate(const Position& pos, ExtMove* moveList, PieceType pt,
+                                  Square from, Square via, Square to, bool capVia, bool capTo,
+                                  Bitboard target, Bitboard checkers, MakeMove makeMove) {
+    // Shared capture/evasion/promotion policy for multi-leg moves; only the
+    // geometry enumeration (two king steps vs sliding hook legs) and the move
+    // constructor differ between generators.
+    bool isCapture = capVia || capTo;
+    if constexpr (Type == CAPTURES)
+    {
+        if (!isCapture)
+            return moveList;
+    }
+    else if constexpr (Type == QUIETS || Type == QUIET_CHECKS)
+    {
+        if (isCapture)
+            return moveList;
+    }
+    else if constexpr (Type == EVASIONS)
+    {
+        const PieceType royal = pos.royal_piece_type(Us);
+        if (pt != royal)
+        {
+            if (more_than_one(checkers))
+            {
+                if (!((capVia && (checkers & via)) || (capTo && (checkers & to))))
+                    return moveList;
+            }
+            else
+            {
+                if (!((capVia && (checkers & via)) || (capTo && (checkers & to)) || (target & to)))
+                    return moveList;
+            }
+        }
+    }
+
+    Piece mover = pos.piece_on(from);
+    Bitboard mandatoryZone = pos.mandatory_promotion_zone(mover);
+    bool canPromote = (pos.promoted_piece_type(pt) != NO_PIECE_TYPE) && !pos.is_promoted(from);
+
+    bool allowsPromo = canPromote && pos.multileg_promotion_zone(Us, pt, from, to)
+                    && pos.promotion_allowed(Us, pos.promoted_piece_type(pt));
+    if (allowsPromo && pos.piece_promotion_on_capture() && !isCapture)
+        allowsPromo = false;
+
+    // Mirror Position::legal() mandatory handling: a non-promoting
+    // entry into the mandatory zone from outside is illegal, so
+    // suppress the non-promo move only in that case.
+    bool mandatoryPromo = allowsPromo && (mandatoryZone & to) && !(mandatoryZone & from);
+
+    if (allowsPromo)
+    {
+        Move mPromo = makeMove(from, via, to, true);
+        if constexpr (Type == QUIET_CHECKS)
+        {
+            if (pos.gives_check(mPromo))
+                *moveList++ = mPromo;
+        }
+        else
+        {
+            *moveList++ = mPromo;
+        }
+    }
+
+    if (!mandatoryPromo)
+    {
+        Move m = makeMove(from, via, to, false);
+        if constexpr (Type == QUIET_CHECKS)
+        {
+            if (pos.gives_check(m))
+                *moveList++ = m;
+        }
+        else
+        {
+            *moveList++ = m;
+        }
+    }
+
+    return moveList;
+  }
+
   template<Color Us, GenType Type>
   ExtMove* generate_two_step_moves(const Position& pos, ExtMove* moveList, Bitboard target, Bitboard forcedFromMask, bool restrictToForcedJumper) {
     if (!pos.has_two_step_moves())
@@ -1108,7 +1189,10 @@ namespace {
 
     const Color them = ~Us;
     const Bitboard checkers = pos.evasion_checkers();
-    const PieceType royalPt = pos.royal_piece_type(Us);
+
+    auto makeTwoStep = [](Square from, Square via, Square to, bool promotes) {
+        return make_two_step(from, via, to, promotes);
+    };
 
     while (twoStepPts)
     {
@@ -1126,10 +1210,6 @@ namespace {
             Square from = pop_lsb(piecesBb);
             if (pos.freeze_squares() & from)
                 continue;
-
-            Piece mover = pos.piece_on(from);
-            Bitboard mandatoryZone = pos.mandatory_promotion_zone(mover);
-            bool canPromote = (pos.promoted_piece_type(pt) != NO_PIECE_TYPE) && !pos.is_promoted(from);
 
             Bitboard remaining_mask = Bitboard(mask);
             while (remaining_mask)
@@ -1152,72 +1232,9 @@ namespace {
 
                 bool cap1 = (!pos.empty(via) && color_of(pos.piece_on(via)) == them);
                 bool cap2 = (to != from && !pos.empty(to) && color_of(pos.piece_on(to)) == them);
-                bool isCapture = cap1 || cap2;
 
-                if constexpr (Type == CAPTURES)
-                {
-                    if (!isCapture)
-                        continue;
-                }
-                else if constexpr (Type == QUIETS || Type == QUIET_CHECKS)
-                {
-                    if (isCapture)
-                        continue;
-                }
-                else if constexpr (Type == EVASIONS)
-                {
-                    if (pt != royalPt)
-                    {
-                        if (more_than_one(checkers))
-                        {
-                            if (!((cap1 && (checkers & via)) || (cap2 && (checkers & to))))
-                                continue;
-                        }
-                        else
-                        {
-                            if (!((cap1 && (checkers & via)) || (cap2 && (checkers & to)) || (target & to)))
-                                continue;
-                        }
-                    }
-                }
-
-                bool allowsPromo = canPromote && pos.two_step_promotion_zone(Us, pt, from, to)
-                                && pos.promotion_allowed(Us, pos.promoted_piece_type(pt));
-                if (allowsPromo && pos.piece_promotion_on_capture() && !isCapture)
-                    allowsPromo = false;
-
-                // Mirror Position::legal() mandatory handling: a non-promoting
-                // entry into the mandatory zone from outside is illegal, so
-                // suppress the non-promo move only in that case.
-                bool mandatoryPromo = allowsPromo && (mandatoryZone & to) && !(mandatoryZone & from);
-
-                if (allowsPromo)
-                {
-                    Move mPromo = make_two_step(from, via, to, true);
-                    if constexpr (Type == QUIET_CHECKS)
-                    {
-                        if (pos.gives_check(mPromo))
-                            *moveList++ = mPromo;
-                    }
-                    else
-                    {
-                        *moveList++ = mPromo;
-                    }
-                }
-
-                if (!mandatoryPromo)
-                {
-                    Move m = make_two_step(from, via, to, false);
-                    if constexpr (Type == QUIET_CHECKS)
-                    {
-                        if (pos.gives_check(m))
-                            *moveList++ = m;
-                    }
-                    else
-                    {
-                        *moveList++ = m;
-                    }
-                }
+                moveList = emit_multileg_candidate<Us, Type>(pos, moveList, pt, from, via, to,
+                                                             cap1, cap2, target, checkers, makeTwoStep);
             }
         }
     }
@@ -1235,8 +1252,10 @@ namespace {
         return moveList;
 
     const Color them = ~Us;
-    const Bitboard checkers = pos.evasion_checkers();
-    const PieceType royalPt = pos.royal_piece_type(Us);
+
+    auto makeHook = [](Square from, Square via, Square to, bool promotes) {
+        return make_hook(from, via, to, promotes);
+    };
 
     while (hookPts)
     {
@@ -1260,9 +1279,17 @@ namespace {
             if (pos.freeze_squares() & from)
                 continue;
 
-            Piece mover = pos.piece_on(from);
-            Bitboard mandatoryZone = pos.mandatory_promotion_zone(mover);
-            bool canPromote = (pos.promoted_piece_type(pt) != NO_PIECE_TYPE) && !pos.is_promoted(from);
+            // Hook rays stop at board edges like their Betza slider
+            // counterparts: a step jumping more than one file/rank has
+            // wrapped around the board and must terminate the leg.
+            auto hook_step = [&](Square cur, Direction dir, Square& nxt) -> bool {
+                if (!pos.step_destination(cur, dir, nxt))
+                    return false;
+                if (std::abs(int(file_of(nxt)) - int(file_of(cur))) > 1
+                    || std::abs(int(rank_of(nxt)) - int(rank_of(cur))) > 1)
+                    return false;
+                return true;
+            };
 
             Bitboard remaining_mask = Bitboard(mask);
             while (remaining_mask)
@@ -1276,7 +1303,7 @@ namespace {
                 for (int k1 = 1; k1 <= cap1steps; ++k1)
                 {
                     Square step1;
-                    if (!pos.step_destination(bend, KingDirections[d1], step1))
+                    if (!hook_step(bend, KingDirections[d1], step1))
                         break;
                     if (!(pos.board_bb() & step1) || (pos.pieces(Us) & step1))
                         break;
@@ -1288,76 +1315,25 @@ namespace {
                     for (int k2 = 1; k2 <= cap2steps; ++k2)
                     {
                         Square step2;
-                        if (!pos.step_destination(to, KingDirections[d2], step2))
+                        if (!hook_step(to, KingDirections[d2], step2))
                             break;
                         if (!(pos.board_bb() & step2))
                             break;
-                        if (step2 != from && (pos.pieces(Us) & step2))
+                        // The origin is a landing square (igui) but never
+                        // transit: the walk must not continue past it.
+                        bool atOrigin = (step2 == from);
+                        if (!atOrigin && (pos.pieces(Us) & step2))
                             break;
                         to = step2;
-                        bool cap2 = to != from && !pos.empty(to) && color_of(pos.piece_on(to)) == them;
-                        bool isCapture = cap1 || cap2;
+                        bool cap2 = !atOrigin && !pos.empty(to) && color_of(pos.piece_on(to)) == them;
 
                         // Hook sliders stop at captures; a :1 hook may not
                         // capture on both legs.
-                        bool emit = !(cap1 && cap2 && limit < 2);
-                        if (emit)
-                        {
-                            if constexpr (Type == CAPTURES)
-                                emit = isCapture;
-                            else if constexpr (Type == QUIETS || Type == QUIET_CHECKS)
-                                emit = !isCapture;
-                            else if constexpr (Type == EVASIONS)
-                            {
-                                if (pt != royalPt)
-                                {
-                                    if (more_than_one(checkers))
-                                        emit = (cap1 && (checkers & bend)) || (cap2 && (checkers & to));
-                                    else
-                                        emit = (cap1 && (checkers & bend)) || (cap2 && (checkers & to)) || (target & to);
-                                }
-                            }
-                        }
-
-                        if (emit)
-                        {
-                            bool allowsPromo = canPromote && pos.two_step_promotion_zone(Us, pt, from, to)
-                                            && pos.promotion_allowed(Us, pos.promoted_piece_type(pt));
-                            if (allowsPromo && pos.piece_promotion_on_capture() && !isCapture)
-                                allowsPromo = false;
-
-                            // Mirror Position::legal() mandatory handling.
-                            bool mandatoryPromo = allowsPromo && (mandatoryZone & to) && !(mandatoryZone & from);
-
-                            if (allowsPromo)
-                            {
-                                Move mPromo = make_hook(from, bend, to, true);
-                                if constexpr (Type == QUIET_CHECKS)
-                                {
-                                    if (pos.gives_check(mPromo))
-                                        *moveList++ = mPromo;
-                                }
-                                else
-                                {
-                                    *moveList++ = mPromo;
-                                }
-                            }
-
-                            if (!mandatoryPromo)
-                            {
-                                Move m = make_hook(from, bend, to, false);
-                                if constexpr (Type == QUIET_CHECKS)
-                                {
-                                    if (pos.gives_check(m))
-                                        *moveList++ = m;
-                                }
-                                else
-                                {
-                                    *moveList++ = m;
-                                }
-                            }
-                        }
-                        if (cap2)
+                        if (!(cap1 && cap2 && limit < 2))
+                            moveList = emit_multileg_candidate<Us, Type>(pos, moveList, pt, from, bend, to,
+                                                                        cap1, cap2, target,
+                                                                        pos.evasion_checkers(), makeHook);
+                        if (cap2 || atOrigin)
                             break;
                     }
 

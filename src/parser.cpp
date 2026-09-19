@@ -240,14 +240,15 @@ namespace {
         std::string s;
         for (char c : token)
             s += char(std::tolower(static_cast<unsigned char>(c)));
-        if (s == "n") return 0;
-        if (s == "ne") return 1;
-        if (s == "e") return 2;
-        if (s == "se") return 3;
-        if (s == "s") return 4;
-        if (s == "sw") return 5;
-        if (s == "w") return 6;
-        if (s == "nw") return 7;
+        // Index order matches KingDirections; see king_step_name.
+        for (int i = 0; i < 8; ++i)
+        {
+            std::string name = king_step_name(i);
+            for (char& c : name)
+                c = char(std::tolower(static_cast<unsigned char>(c)));
+            if (s == name)
+                return i;
+        }
         return -1;
     }
 

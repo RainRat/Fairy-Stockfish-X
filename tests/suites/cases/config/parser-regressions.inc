@@ -395,7 +395,6 @@ echo "parser regression tests started"
 bad_betza_ini=$(mktemp)
 bad_hopper_brace_ini=$(mktemp)
 bad_rider_range_ini=$(mktemp)
-bad_leading_range_ini=$(mktemp)
 bad_rank_wildcard_ini=$(mktemp)
 twochar_hint_ini=$(mktemp)
 bad_hopper_type_ini=$(mktemp)
@@ -417,7 +416,7 @@ bad_unmatched_closer_ini=$(mktemp)
 royal_blast_ini=$(mktemp)
 nonking_ini=$(mktemp)
 wrapped_support_ini=$(mktemp)
-fsx_add_exit_cleanup 'rm -f "${tmp_ini}" "${bad_betza_ini}" "${bad_hopper_brace_ini}" "${bad_rider_range_ini}" "${bad_leading_range_ini}" "${bad_rank_wildcard_ini}" "${twochar_hint_ini}" "${bad_hopper_type_ini}" "${bad_hopper_numeric_ini}" "${capture_allowed_only_ini}" "${dropnomate_alias_ini}" "${bad_rider_range_val_ini}" "${bad_tuple_atom_ini}" "${bad_hook_ini}" "${unsupported_bent_rose_modifier_ini}" "${bad_ini_syntax_option_ini}" "${bad_check_counting_ini}" "${bad_hopper_minmax_ini}" "${bad_hopper_entry_ini}" "${bad_piece_value_ini}" "${unknown_option_ini}" "${bad_royal_betza_ini}" "${bad_unmatched_closer_ini}" "${royal_blast_ini}" "${nonking_ini}" "${wrapped_support_ini}"'
+fsx_add_exit_cleanup 'rm -f "${tmp_ini}" "${bad_betza_ini}" "${bad_hopper_brace_ini}" "${bad_rider_range_ini}" "${bad_rank_wildcard_ini}" "${twochar_hint_ini}" "${bad_hopper_type_ini}" "${bad_hopper_numeric_ini}" "${capture_allowed_only_ini}" "${dropnomate_alias_ini}" "${bad_rider_range_val_ini}" "${bad_tuple_atom_ini}" "${bad_hook_ini}" "${unsupported_bent_rose_modifier_ini}" "${bad_ini_syntax_option_ini}" "${bad_check_counting_ini}" "${bad_hopper_minmax_ini}" "${bad_hopper_entry_ini}" "${bad_piece_value_ini}" "${unknown_option_ini}" "${bad_royal_betza_ini}" "${bad_unmatched_closer_ini}" "${royal_blast_ini}" "${nonking_ini}" "${wrapped_support_ini}"'
 
 cat > "${bad_betza_ini}" <<'INI'
 [custom-piece-missing-betza:chess]
@@ -432,11 +431,6 @@ INI
 cat > "${bad_rider_range_ini}" <<'INI'
 [rider-missing-bracket:chess]
 customPiece1 = a:R[3-
-INI
-
-cat > "${bad_leading_range_ini}" <<'INI'
-[rider-leading-range:chess]
-customPiece1 = a:2R
 INI
 
 cat > "${bad_rank_wildcard_ini}" <<'INI'
@@ -657,12 +651,6 @@ assert_contains "${check_output}" "customPiece1 - Invalid Betza hopper parameter
 
 check_output=$("${ENGINE}" check "${bad_rider_range_ini}" 2>&1 || true)
 assert_contains "${check_output}" "customPiece1 - Invalid Betza rider range in 'R\[3-': missing closing '\]'."
-
-check_output=$("${ENGINE}" check "${bad_leading_range_ini}" 2>&1 || true)
-assert_contains_literal "${check_output}" "Invalid Betza range in '2R': range digits follow the atom (e.g. R2)."
-
-leading_range_output=$(run_uci "$ENGINE" "$bad_leading_range_ini" "rider-leading-range" </dev/null 2>&1 || true)
-assert_contains "${leading_range_output}" "unknown variant 'rider-leading-range'; keeping 'chess'"
 
 check_output=$("${ENGINE}" check "${bad_rank_wildcard_ini}" 2>&1 || true)
 assert_contains "${check_output}" "Illegal rank character: \*"

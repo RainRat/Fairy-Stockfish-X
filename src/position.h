@@ -358,7 +358,7 @@ struct MoveUndoInfo {
   Bitboard   laserTransformedSquares = Bitboard(0);
   ReversiblePieceOnSquare captured;
   ReversiblePieceOnSquare jumpedEnPassantCaptured;
-  ReversiblePieceOnSquare twoStepFirstCaptured;
+  ReversiblePieceOnSquare secondaryCaptured;
   ReversiblePieceState dead;
   Piece      promotionPawn = NO_PIECE;
   Piece      consumedPromotionHandPiece = NO_PIECE;
@@ -394,7 +394,7 @@ struct MoveUndoInfo {
     laserTransformedSquares = Bitboard(0);
     captured.clear();
     jumpedEnPassantCaptured.clear();
-    twoStepFirstCaptured.clear();
+    secondaryCaptured.clear();
     dead.clear();
     promotionPawn = NO_PIECE;
     consumedPromotionHandPiece = NO_PIECE;
@@ -430,7 +430,7 @@ struct MoveUndoInfo {
         && laserTransformedSquares == Bitboard(0)
         && !captured
         && !jumpedEnPassantCaptured
-        && !twoStepFirstCaptured
+        && !secondaryCaptured
         && !dead
         && promotionPawn == NO_PIECE
         && consumedPromotionHandPiece == NO_PIECE
@@ -608,7 +608,7 @@ public:
   Bitboard mandatory_promotion_zone(Color c) const;
   Bitboard mandatory_promotion_zone(Color c, PieceType pt) const;
   Bitboard mandatory_promotion_zone(Piece p) const;
-  bool two_step_promotion_zone(Color c, PieceType pt, Square from, Square to) const;
+  bool multileg_promotion_zone(Color c, PieceType pt, Square from, Square to) const;
   PieceType effective_piece_type(PieceType pt) const { return pt == KING ? king_type() : pt; }
   Square promotion_square(Color c, Square s) const;
   PieceType main_promotion_pawn_type(Color c) const;
@@ -5882,7 +5882,7 @@ inline bool Position::step_destination(Square from, Direction d, Square& to) con
   return wrapped_destination_square(from, df, dr, max_file(), max_rank(), wraps_files(), wraps_ranks(), to);
 }
 
-inline bool Position::two_step_promotion_zone(Color c, PieceType pt, Square from, Square to) const {
+inline bool Position::multileg_promotion_zone(Color c, PieceType pt, Square from, Square to) const {
   Bitboard pz = promotion_zone(c, pt);
   return (pz & from) || (pz & to);
 }
@@ -5891,6 +5891,9 @@ inline bool Position::hook_path_valid(Color us, PieceType pt, Square from, Squar
   uint64_t mask = hook_move_mask(us, pt);
   if (!mask)
       return false;
+  // Degenerate paths (zero-length legs) are never generated.
+  if (via == from || to == via)
+      return false;
   // Walk each leg from its origin along every king direction (topology-safe,
   // so wrapping boards work); transit squares must be empty, which also
   // establishes the leg direction and length.
@@ -5898,6 +5901,16 @@ inline bool Position::hook_path_valid(Color us, PieceType pt, Square from, Squar
   int range[2] = {hook_first_range(pt), hook_second_range(pt)};
   Square legFrom[2] = {from, via};
   Square legTo[2] = {via, to};
+  // Hook rays stop at board edges like their Betza slider counterparts;
+  // a step jumping more than one file/rank has wrapped and ends the leg.
+  auto hook_step = [&](Square cur, Direction dir, Square& nxt) -> bool {
+      if (!step_destination(cur, dir, nxt))
+          return false;
+      if (std::abs(int(file_of(nxt)) - int(file_of(cur))) > 1
+          || std::abs(int(rank_of(nxt)) - int(rank_of(cur))) > 1)
+          return false;
+      return true;
+  };
   for (int leg = 0; leg < 2; ++leg)
   {
       int cap = range[leg] ? range[leg] : SQUARE_NB;
@@ -5908,7 +5921,7 @@ inline bool Position::hook_path_valid(Color us, PieceType pt, Square from, Squar
           for (int k = 1; k <= cap; ++k)
           {
               Square nxt;
-              if (!step_destination(cur, KingDirections[i], nxt))
+              if (!hook_step(cur, KingDirections[i], nxt))
                   break;
               if (nxt == legTo[leg])
               {
@@ -5967,7 +5980,7 @@ inline bool Position::virtual_drop(Move m) const {
 inline Piece Position::captured_piece() const {
   if (st->captured.piece.piece != NO_PIECE)
       return st->captured.piece.piece;
-  return st->twoStepFirstCaptured.piece.piece;
+  return st->secondaryCaptured.piece.piece;
 }
 
 inline Bitboard Position::fog_area() const {
