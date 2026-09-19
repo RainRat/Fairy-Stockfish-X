@@ -5550,14 +5550,22 @@ bool Position::legal(Move m) const {
       Square via = via_sq(m);
       if ((pieces(us) & via) || (to != from && (pieces(us) & to)))
           return false;
-      if (two_step_promotes(m) && !two_step_promotion_zone(us, movePt, from, to))
+      if (two_step_promotes(m) && !multileg_promotion_zone(us, movePt, from, to))
           return false;
   }
+  // Hook path geometry (mask, ranges, transit occupancy, capture limits)
+  // is validated in pseudo_legal()/move generation; legal() only enforces
+  // promotion restrictions and interaction rules below.
+  if (is_hook(m) && hook_promotes(m) && !multileg_promotion_zone(us, movePt, from, to))
+      return false;
   if (is_hook(m))
   {
-      if (!hook_path_valid(us, movePt, from, via_sq(m), to))
-          return false;
-      if (hook_promotes(m) && !two_step_promotion_zone(us, movePt, from, to))
+      // Capture-count limits are interaction rules, not geometry: a :1 hook
+      // may not capture on both legs even if the path itself is valid.
+      Square via = via_sq(m);
+      if (via != to && !empty(via) && color_of(piece_on(via)) == them
+          && to != from && !empty(to) && color_of(piece_on(to)) == them
+          && hook_capture_limit(movePt) < 2)
           return false;
   }
   if (is_multileg(m) && isCapture)
@@ -6694,7 +6702,7 @@ bool Position::pseudo_legal(const Move m) const {
       {
           if (promoted_piece_type(pt) == NO_PIECE_TYPE)
               return false;
-          if (!two_step_promotion_zone(us, pt, from, to))
+          if (!multileg_promotion_zone(us, pt, from, to))
               return false;
       }
       return !violates_same_player_board_repetition(m);
@@ -6714,7 +6722,7 @@ bool Position::pseudo_legal(const Move m) const {
       {
           if (promoted_piece_type(pt) == NO_PIECE_TYPE)
               return false;
-          if (!two_step_promotion_zone(us, pt, from, to))
+          if (!multileg_promotion_zone(us, pt, from, to))
               return false;
       }
       return !violates_same_player_board_repetition(m);
@@ -7872,11 +7880,11 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           Piece capVia = piece_on(via);
           bool viaPromoted = is_promoted(via);
           Piece viaUnpromoted = unpromoted_piece_on(via);
-          st->twoStepFirstCaptured.set(capVia, viaPromoted, viaUnpromoted, via);
+          st->secondaryCaptured.set(capVia, viaPromoted, viaUnpromoted, via);
       }
       else
       {
-          st->twoStepFirstCaptured.clear();
+          st->secondaryCaptured.clear();
       }
 
       if (to == from)
@@ -8108,10 +8116,10 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       st->rule50 = 0;
   }
 
-  if (st->twoStepFirstCaptured)
+  if (st->secondaryCaptured)
   {
-      Piece capVia = st->twoStepFirstCaptured.piece.piece;
-      Square viaSq = st->twoStepFirstCaptured.square;
+      Piece capVia = st->secondaryCaptured.piece.piece;
+      Square viaSq = st->secondaryCaptured.square;
 
       if (type_of(capVia) == PAWN)
           st->pawnKey ^= Zobrist::psq[capVia][viaSq];
@@ -8122,8 +8130,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       remove_piece(viaSq);
       board[viaSq] = NO_PIECE;
 
-      Piece transferPiece = reserve_transfer_piece(*this, us, capVia, st->twoStepFirstCaptured.piece.promoted,
-                                                   st->twoStepFirstCaptured.piece.unpromoted, drop_loop(),
+      Piece transferPiece = reserve_transfer_piece(*this, us, capVia, st->secondaryCaptured.piece.promoted,
+                                                   st->secondaryCaptured.piece.unpromoted, drop_loop(),
                                                    var->captureToHandSide, main_promotion_pawn_type(color_of(capVia)));
       bool transferred = add_capture_transfer(st, transferPiece, &k);
       if (Eval::useNNUE && dirtyIdx >= 0 && transferred)
@@ -8342,7 +8350,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   // Update castling rights if needed
   const int moveRightsMask = rifleShot ? castlingRightsMask[to]
                                        : castlingRightsMask[from] | castlingRightsMask[to];
-  const int multiLegRightsMask = multiLeg && st->twoStepFirstCaptured ? castlingRightsMask[st->twoStepFirstCaptured.square] : 0;
+  const int multiLegRightsMask = multiLeg && st->secondaryCaptured ? castlingRightsMask[st->secondaryCaptured.square] : 0;
   if (!dropMove && !passMove && !pureWallMove && st->castlingRights
       && (moveRightsMask
           | multiLegRightsMask
@@ -8505,7 +8513,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           // Quiet igui (return-to-origin) without a via capture leaves the
           // board unchanged, so no NNUE refresh is needed. Capturing igui
           // must preserve the via-capture dirty entries appended above.
-          if (pureWallMove || (multiLeg && from == to && !is_multileg_promotion(m) && !st->twoStepFirstCaptured))
+          if (pureWallMove || (multiLeg && from == to && !is_multileg_promotion(m) && !st->secondaryCaptured))
           {
               dp.dirty_num = 0;
               init_dirty_piece_entry(dp, 0, NO_PIECE, SQ_NONE, SQ_NONE, NO_PIECE, 0);
@@ -10132,17 +10140,17 @@ void Position::undo_move(Move m) {
               undo_capture_transfer(st, transferPiece);
       }
 
-      if (st->twoStepFirstCaptured)
+      if (st->secondaryCaptured)
       {
-          Square capsq = st->twoStepFirstCaptured.square;
-          put_piece(st->twoStepFirstCaptured.piece.piece, capsq,
-                    st->twoStepFirstCaptured.piece.promoted,
-                    st->twoStepFirstCaptured.piece.unpromoted);
-          Piece transferPiece = reserve_transfer_piece(*this, us, st->twoStepFirstCaptured.piece.piece,
-                                                       st->twoStepFirstCaptured.piece.promoted,
-                                                       st->twoStepFirstCaptured.piece.unpromoted,
+          Square capsq = st->secondaryCaptured.square;
+          put_piece(st->secondaryCaptured.piece.piece, capsq,
+                    st->secondaryCaptured.piece.promoted,
+                    st->secondaryCaptured.piece.unpromoted);
+          Piece transferPiece = reserve_transfer_piece(*this, us, st->secondaryCaptured.piece.piece,
+                                                       st->secondaryCaptured.piece.promoted,
+                                                       st->secondaryCaptured.piece.unpromoted,
                                                        drop_loop(), var->captureToHandSide,
-                                                       main_promotion_pawn_type(color_of(st->twoStepFirstCaptured.piece.piece)));
+                                                       main_promotion_pawn_type(color_of(st->secondaryCaptured.piece.piece)));
           if (!stackMove)
               undo_capture_transfer(st, transferPiece);
       }

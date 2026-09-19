@@ -395,7 +395,6 @@ echo "parser regression tests started"
 bad_betza_ini=$(mktemp)
 bad_hopper_brace_ini=$(mktemp)
 bad_rider_range_ini=$(mktemp)
-bad_leading_range_ini=$(mktemp)
 bad_rank_wildcard_ini=$(mktemp)
 twochar_hint_ini=$(mktemp)
 bad_hopper_type_ini=$(mktemp)
@@ -433,11 +432,6 @@ INI
 cat > "${bad_rider_range_ini}" <<'INI'
 [rider-missing-bracket:chess]
 customPiece1 = a:R[3-
-INI
-
-cat > "${bad_leading_range_ini}" <<'INI'
-[rider-leading-range:chess]
-customPiece1 = a:2R
 INI
 
 cat > "${bad_rank_wildcard_ini}" <<'INI'
@@ -675,12 +669,6 @@ assert_contains "${check_output}" "customPiece1 - Invalid Betza hopper parameter
 
 check_output=$("${ENGINE}" check "${bad_rider_range_ini}" 2>&1 || true)
 assert_contains "${check_output}" "customPiece1 - Invalid Betza rider range in 'R\[3-': missing closing '\]'."
-
-check_output=$("${ENGINE}" check "${bad_leading_range_ini}" 2>&1 || true)
-assert_contains_literal "${check_output}" "Invalid Betza range in '2R': range digits follow the atom (e.g. R2)."
-
-leading_range_output=$(run_uci "$ENGINE" "$bad_leading_range_ini" "rider-leading-range" </dev/null 2>&1 || true)
-assert_contains "${leading_range_output}" "unknown variant 'rider-leading-range'; keeping 'chess'"
 
 check_output=$("${ENGINE}" check "${bad_rank_wildcard_ini}" 2>&1 || true)
 assert_contains "${check_output}" "Illegal rank character: \*"

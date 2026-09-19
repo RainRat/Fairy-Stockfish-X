@@ -982,8 +982,26 @@ constexpr Direction KingDirections[8] = {
     NORTH, NORTH_EAST, EAST, SOUTH_EAST, SOUTH, SOUTH_WEST, WEST, NORTH_WEST
 };
 
-// KingDirections index 0..7 matches the two-step direction-pair encoding
-// (pair bit d1 * 8 + d2); movegen and pseudo_legal decode pairs through it.
+// Direction-pair masks (two-step moves, hook moves) index king steps
+// N=0 NE=1 E=2 SE=3 S=4 SW=5 W=6 NW=7, matching KingDirections order
+// (pair bit d1 * 8 + d2). Black masks are the 180-degree point reflection.
+inline const char* king_step_name(int idx) {
+    static const char* names[8] = {"N", "NE", "E", "SE", "S", "SW", "W", "NW"};
+    return names[idx & 7];
+}
+
+constexpr int reflect_king_direction(int d) {
+    return (d + 4) & 7;
+}
+
+inline uint64_t reflect_direction_pairs(uint64_t mask) {
+    uint64_t result = 0;
+    for (int d1 = 0; d1 < 8; ++d1)
+        for (int d2 = 0; d2 < 8; ++d2)
+            if (mask & (1ULL << (d1 * 8 + d2)))
+                result |= (1ULL << (reflect_king_direction(d1) * 8 + reflect_king_direction(d2)));
+    return result;
+}
 
 // Keep track of what a move changes on the board (used by NNUE)
 constexpr int DIRTY_PIECE_MAX = 12;
@@ -1292,21 +1310,21 @@ inline bool is_unstack_move(Move m) { return type_of(m) == UNSTACK; }
 inline bool is_laser_fire(Move m) { return type_of(m) == LASER_FIRE; }
 
 #if defined(VERY_LARGE_BOARDS)
-constexpr uint64_t TwoStepFlag = uint64_t(1) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS + SQUARE_BITS + 1);
+constexpr uint64_t MultiLegFlag = uint64_t(1) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS + SQUARE_BITS + 1);
 #elif defined(LARGEBOARDS)
 // LARGEBOARDS (7 square bits): valid gating gate+1 values never reach the top
 // mask bit, so the flag can sit at bit 31 within the 32-bit Move.
-constexpr uint64_t TwoStepFlag = uint64_t(1) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS + SQUARE_BITS);
+constexpr uint64_t MultiLegFlag = uint64_t(1) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS + SQUARE_BITS);
 #else
 // 8x8 (6 square bits): gating gate+1 reaches bit 28 (gate SQ_H8), so the flag
 // must sit above it at bit 29 to stay disjoint from SPECIAL gating moves.
-constexpr uint64_t TwoStepFlag = uint64_t(1) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS + SQUARE_BITS + 1);
+constexpr uint64_t MultiLegFlag = uint64_t(1) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS + SQUARE_BITS + 1);
 #endif
 
 inline SpecialSubtype special_subtype(Move m) {
   if (type_of(m) != SPECIAL)
       return SPECIAL_SUBTYPE_NONE;
-  if (!(static_cast<uint64_t>(m) & TwoStepFlag))
+  if (!(static_cast<uint64_t>(m) & MultiLegFlag))
       return SPECIAL_SUBTYPE_NONE;
   int sub = (static_cast<uint64_t>(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS)) & (PIECE_TYPE_NB - 1);
   if (sub >= SPECIAL_SUBTYPE_TWO_STEP && sub <= SPECIAL_SUBTYPE_HOOK_PROMOTION)
@@ -1357,22 +1375,23 @@ inline Square via_sq(Move m) {
   return Square((static_cast<uint64_t>(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & SquareFieldMask);
 }
 
-// The two-step payload (subtype + via square) shares the SPECIAL upper bits
-// with gating data. The flag must sit above every valid payload value on all
-// three board-size configurations; otherwise SPECIAL gating moves decode as
-// two-step moves (or vice versa). Fail compilation instead of colliding.
+// The multi-leg payload (flag + subtype + via square) shares the SPECIAL
+// upper bits with gating data. The flag must sit above every valid payload
+// value on all three board-size configurations; otherwise SPECIAL gating
+// moves decode as multi-leg moves (or vice versa). Fail compilation instead
+// of colliding.
 // Valid gating payloads top out at gate+1 == SQUARE_NB, valid via payloads at
 // SQUARE_NB - 1; both must leave the flag bit clear.
-static_assert((TwoStepFlag & ((uint64_t(1) << (2 * SQUARE_BITS + MOVE_TYPE_BITS)) - 1)) == 0,
-              "TwoStepFlag overlaps from/to/type bits");
-static_assert(((uint64_t(SQUARE_NB) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & TwoStepFlag) == 0,
-              "TwoStepFlag collides with a valid gating payload");
-static_assert(((uint64_t(SQUARE_NB - 1) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & TwoStepFlag) == 0,
-              "TwoStepFlag collides with a valid via payload");
+static_assert((MultiLegFlag & ((uint64_t(1) << (2 * SQUARE_BITS + MOVE_TYPE_BITS)) - 1)) == 0,
+              "MultiLegFlag overlaps from/to/type bits");
+static_assert(((uint64_t(SQUARE_NB) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & MultiLegFlag) == 0,
+              "MultiLegFlag collides with a valid gating payload");
+static_assert(((uint64_t(SQUARE_NB - 1) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & MultiLegFlag) == 0,
+              "MultiLegFlag collides with a valid via payload");
 #if defined(VERY_LARGE_BOARDS)
-static_assert(TwoStepFlag < (uint64_t(1) << 63), "TwoStepFlag exceeds 64-bit Move storage");
+static_assert(MultiLegFlag < (uint64_t(1) << 63), "MultiLegFlag exceeds 64-bit Move storage");
 #else
-static_assert(TwoStepFlag < (uint64_t(1) << 32), "TwoStepFlag exceeds 32-bit Move storage");
+static_assert(MultiLegFlag < (uint64_t(1) << 32), "MultiLegFlag exceeds 32-bit Move storage");
 #endif
 
 inline bool is_gating(Move m) {
@@ -1518,7 +1537,7 @@ constexpr Move make_promotion_potion(Square from, Square to, PieceType prom_pt, 
 
 constexpr Move make_two_step(Square from, Square via, Square to, bool promotes = false) {
   return Move(
-      TwoStepFlag
+      MultiLegFlag
     + (static_cast<uint64_t>(via) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS))
     + (static_cast<uint64_t>(promotes ? SPECIAL_SUBTYPE_TWO_STEP_PROMOTION : SPECIAL_SUBTYPE_TWO_STEP) << (2 * SQUARE_BITS + MOVE_TYPE_BITS))
     + static_cast<uint64_t>(SPECIAL)
@@ -1532,7 +1551,7 @@ constexpr Move make_two_step(Square from, Square via, Square to, bool promotes =
 // two-step moves. Provenance matters for capture limits, hence the subtype.
 constexpr Move make_hook(Square from, Square via, Square to, bool promotes = false) {
   return Move(
-      TwoStepFlag
+      MultiLegFlag
     + (static_cast<uint64_t>(via) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS))
     + (static_cast<uint64_t>(promotes ? SPECIAL_SUBTYPE_HOOK_PROMOTION : SPECIAL_SUBTYPE_HOOK) << (2 * SQUARE_BITS + MOVE_TYPE_BITS))
     + static_cast<uint64_t>(SPECIAL)
