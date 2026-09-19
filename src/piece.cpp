@@ -870,6 +870,18 @@ namespace {
               i = repeatedTupleRider ? next + tupleText.size() - 1 : close;
               commit_atom(tupleAtom, repeatedTupleRider, i, ')', true);
           }
+          // Range digits follow the atom (e.g. R2, R[3-5]). A digit anywhere
+          // else is a malformed leading range: reject it instead of silently
+          // dropping it and widening the atom into an unlimited slider.
+          // The sole exception is the exact string "0", the immobile-piece
+          // shorthand (e.g. khet laser mirrors).
+          else if (std::isdigit(static_cast<unsigned char>(c))
+                   && !(expandedBetza.size() == 1 && c == '0'))
+          {
+              std::cerr << "Invalid Betza range in '" << betza
+                        << "': range digits follow the atom (e.g. R2)." << std::endl;
+              fail_piece();
+          }
       }
       if (invalidPiece)
           return nullptr;
