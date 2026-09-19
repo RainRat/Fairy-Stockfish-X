@@ -1056,6 +1056,10 @@ public:
   Square capture_square(Move m) const;
   Bitboard capture_squares(Move m) const;
   bool step_destination(Square from, Direction d, Square& to) const;
+  // Single king step that never wraps: like step_destination, but a step
+  // jumping more than one file/rank (i.e. around a wrapped edge) fails.
+  // Hook rays use this so they stop at board edges; ordinary sliders wrap.
+  bool hook_step(Square cur, Direction dir, Square& nxt) const;
   Square secondary_drop_square(Move m) const;
   Square mirrored_pair_drop_square(Square s) const;
   Bitboard jump_capture_mask(Square from, Square to, Bitboard occupied) const;
@@ -5390,7 +5394,9 @@ inline bool Position::is_chess960() const {
 
 inline bool Position::capture_or_promotion(Move m) const {
   assert(is_ok(m));
-  return is_promotion_move(m) || capture(m);
+  // Multi-leg promotions are tactical like pawn promotions. PIECE_PROMOTION
+  // deliberately stays non-tactical, as before.
+  return is_promotion_move(m) || is_multileg_promotion(m) || capture(m);
 }
 inline Position::HopperMoveDetails Position::resolve_hopper_move_details(Square from, Square to, Bitboard occupied) const {
   assert(is_ok(from));
@@ -5871,8 +5877,8 @@ inline Bitboard Position::capture_squares(Move m) const {
           b |= square_bb(to);
       return b;
   }
-  if (is_jump_capture(m))
-      return jump_capture_mask(from_sq(m), to_sq(m)) | (is_ok(capture_square(m)) ? square_bb(capture_square(m)) : Bitboard(0));
+  // Multi-victim locust ordering is out of scope for the multi-leg change;
+  // keep pre-existing single-victim search semantics for jump captures.
   Square cs = capture_square(m);
   return is_ok(cs) ? square_bb(cs) : Bitboard(0);
 }
@@ -5880,6 +5886,15 @@ inline Bitboard Position::capture_squares(Move m) const {
 inline bool Position::step_destination(Square from, Direction d, Square& to) const {
   auto [dr, df] = decode_direction(d);
   return wrapped_destination_square(from, df, dr, max_file(), max_rank(), wraps_files(), wraps_ranks(), to);
+}
+
+inline bool Position::hook_step(Square cur, Direction dir, Square& nxt) const {
+  if (!step_destination(cur, dir, nxt))
+      return false;
+  if (std::abs(int(file_of(nxt)) - int(file_of(cur))) > 1
+      || std::abs(int(rank_of(nxt)) - int(rank_of(cur))) > 1)
+      return false;
+  return true;
 }
 
 inline bool Position::multileg_promotion_zone(Color c, PieceType pt, Square from, Square to) const {
@@ -5894,24 +5909,12 @@ inline bool Position::hook_path_valid(Color us, PieceType pt, Square from, Squar
   // Degenerate paths (zero-length legs) are never generated.
   if (via == from || to == via)
       return false;
-  // Walk each leg from its origin along every king direction (topology-safe,
-  // so wrapping boards work); transit squares must be empty, which also
-  // establishes the leg direction and length.
+  // Walk each leg from its origin along every king direction; transit
+  // squares must be empty, which also establishes the leg direction.
   int legDir[2] = {-1, -1};
   int range[2] = {hook_first_range(pt), hook_second_range(pt)};
   Square legFrom[2] = {from, via};
   Square legTo[2] = {via, to};
-  // Hook rays stop at board edges; a step jumping more than one file/rank
-  // has wrapped and ends the leg. (Wrapped topologies reject hookMoves at
-  // parse time; this keeps validation well-defined regardless.)
-  auto hook_step = [&](Square cur, Direction dir, Square& nxt) -> bool {
-      if (!step_destination(cur, dir, nxt))
-          return false;
-      if (std::abs(int(file_of(nxt)) - int(file_of(cur))) > 1
-          || std::abs(int(rank_of(nxt)) - int(rank_of(cur))) > 1)
-          return false;
-      return true;
-  };
   for (int leg = 0; leg < 2; ++leg)
   {
       int cap = range[leg] ? range[leg] : SQUARE_NB;
@@ -5942,12 +5945,8 @@ inline bool Position::hook_path_valid(Color us, PieceType pt, Square from, Squar
       return false;
   if ((pieces(us) & via) || (to != from && (pieces(us) & to)))
       return false;
-  // A double capture needs a :2 spec.
-  Color them = ~us;
-  bool cap1 = !empty(via) && color_of(piece_on(via)) == them;
-  bool cap2 = to != from && !empty(to) && color_of(piece_on(to)) == them;
-  if (cap1 && cap2 && hook_capture_limit(pt) < 2)
-      return false;
+  // Pure geometry: capture-count limits are interaction rules enforced by
+  // callers (pseudo_legal/legal), not by the ray walk.
   return true;
 }
 
@@ -6006,11 +6005,15 @@ inline Piece Position::captured_piece(Move m) const {
 }
 
 inline std::string Position::piece_to_partner() const {
-  if (!st->captured.piece) return std::string();
-  Color color = color_of(st->captured.piece.piece);
-  Piece piece = st->captured.piece.promoted ?
-      (st->captured.piece.unpromoted ? st->captured.piece.unpromoted : make_piece(color, main_promotion_pawn_type(color))) :
-      st->captured.piece.piece;
+  // A via-only multi-leg capture leaves st->captured empty; report the
+  // secondary victim so partner material is not silently dropped. (Doubles
+  // report the primary victim, matching locust multi-captures.)
+  const ReversiblePieceOnSquare& cap = st->captured.piece ? st->captured : st->secondaryCaptured;
+  if (!cap.piece) return std::string();
+  Color color = color_of(cap.piece.piece);
+  Piece piece = cap.piece.promoted ?
+      (cap.piece.unpromoted ? cap.piece.unpromoted : make_piece(color, main_promotion_pawn_type(color))) :
+      cap.piece.piece;
   return piece_symbol(piece);
 }
 

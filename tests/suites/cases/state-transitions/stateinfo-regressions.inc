@@ -29,6 +29,7 @@ cat > "${HARNESS_CPP}" <<'EOF'
 #include "piece.h"
 #include "position.h"
 #undef private
+#include "movegen.h"
 #include "psqt.h"
 #include "types.h"
 #include "uci.h"
@@ -101,6 +102,20 @@ customPiece1 = l:ADNWK
 twoStepMoves = l:*
 mutuallyImmuneTypes = l
 castling = true
+
+[test-narrow-lion:chess]
+customPiece1 = h:0
+twoStepMoves = h:W>W
+cylindrical = true
+maxFile = b
+castling = false
+startFen = 1k/2/2/2/2/2/K1/H1 w - - 0 1
+
+[test-blast-lion:chess]
+customPiece1 = l:ADNWK
+twoStepMoves = l:*
+blastOnCapture = true
+castling = false
 
 [test-hook-state:chess]
 customPiece1 = h:0
@@ -638,6 +653,103 @@ static void test_hook_promotions() {
     assert(pos.piece_on(SQ_G7) == make_piece(WHITE, CUSTOM_PIECE_1));
 }
 
+static void test_quiet_multileg_promotion_is_tactical() {
+    StateInfo st{};
+    Position pos;
+    // A quiet (victimless) two-step promotion must appear in the CAPTURES
+    // generation bucket, exactly like an ordinary quiet pawn promotion.
+    pos.set(variants.get("test-lion-state"),
+            "8/6L1/8/8/8/8/8/4K2k w - - 0 1", false, &st, nullptr);
+    Move m_quiet_promo = make_two_step(SQ_G7, SQ_F8, SQ_G8, true);
+    assert(pos.legal(m_quiet_promo));
+    assert(!pos.capture(m_quiet_promo));
+    assert(MoveList<CAPTURES>(pos).contains(m_quiet_promo));
+    assert(pos.capture_or_promotion(m_quiet_promo));
+    Move m_quiet = make_two_step(SQ_G7, SQ_F8, SQ_G8, false);
+    assert(!MoveList<CAPTURES>(pos).contains(m_quiet));
+
+    pos.set(variants.get("chess"),
+            "8/6P1/8/8/8/8/8/4K2k w - - 0 1", false, &st, nullptr);
+    Move m_pawn_promo = make<PROMOTION>(SQ_G7, SQ_G8, QUEEN);
+    // Ordinary pawn quiet promotions are tactical for search ordering even
+    // though the fairy pawn generator currently keeps them out of CAPTURES.
+    assert(pos.capture_or_promotion(m_pawn_promo));
+
+    // Hook quiet promotions follow the same policy.
+    pos.set(variants.get("test-hook-promo-state"),
+            "8/6H1/8/8/8/8/8/4K2k w - - 0 1", false, &st, nullptr);
+    Move m_hook_quiet_promo = make_hook(SQ_G7, SQ_G8, SQ_H8, true);
+    assert(pos.legal(m_hook_quiet_promo));
+    assert(!pos.capture(m_hook_quiet_promo));
+    assert(MoveList<CAPTURES>(pos).contains(m_hook_quiet_promo));
+    assert(pos.capture_or_promotion(m_hook_quiet_promo));
+    // Quiet non-promotions stay out of CAPTURES.
+    Move m_hook_quiet = make_hook(SQ_G7, SQ_G8, SQ_H8, false);
+    assert(!MoveList<CAPTURES>(pos).contains(m_hook_quiet));
+}
+
+static void test_igui_clears_not_moved() {
+    StateInfo st{};
+    Position pos;
+    pos.set(variants.get("test-lion-state"),
+            "r3k2r/8/2r5/3r4/4L3/8/8/R3K2R w KQkq - 0 1", false, &st, nullptr);
+    assert(pos.not_moved_pieces(WHITE) & SQ_E4);
+
+    // Quiet igui: the board is unchanged but the piece has moved.
+    Move m_igui = make_two_step(SQ_E4, SQ_E5, SQ_E4);
+    assert(pos.legal(m_igui));
+    StateInfo n1{};
+    pos.do_move(m_igui, n1);
+    assert(!(pos.not_moved_pieces(WHITE) & SQ_E4));
+    pos.undo_move(m_igui);
+    assert(pos.not_moved_pieces(WHITE) & SQ_E4);
+
+    // Capturing igui.
+    Move m_cap = make_two_step(SQ_E4, SQ_D5, SQ_E4);
+    StateInfo n2{};
+    pos.do_move(m_cap, n2);
+    assert(!(pos.not_moved_pieces(WHITE) & SQ_E4));
+    pos.undo_move(m_cap);
+    assert(pos.not_moved_pieces(WHITE) & SQ_E4);
+    assert(pos.piece_on(SQ_D5) == B_ROOK);
+}
+
+static void test_narrow_board_direction_alias() {
+    StateInfo st{};
+    Position pos;
+    // 2-file cylinder: E and W both step A1->B1. The encoded move stores
+    // squares, not provenance, so pseudo-legality must accept ANY mask pair
+    // explaining the geometry, not just the first alias found.
+    pos.set(variants.get("test-narrow-lion"),
+            "1k/2/2/2/2/2/K1/H1 w - - 0 1", false, &st, nullptr);
+    Move m = make_two_step(SQ_A1, SQ_B1, SQ_A1);
+    assert(pos.pseudo_legal(m));
+    assert(pos.legal(m));
+    assert(MoveList<LEGAL>(pos).contains(m));
+}
+
+static void test_blast_via_capture() {
+    StateInfo st{};
+    Position pos;
+    // Via-only capture under blastOnCapture: the blast is centered on the
+    // via square, removing the victim, the adjacent bystander, and the mover.
+    pos.set(variants.get("test-blast-lion"),
+            "7k/8/3b4/3r4/4L3/8/8/K7 w - - 0 1", false, &st, nullptr);
+    Move m = make_two_step(SQ_E4, SQ_D5, SQ_E4);
+    assert(pos.legal(m));
+    const Key origKey = pos.key();
+    StateInfo next{};
+    pos.do_move(m, next);
+    assert(pos.piece_on(SQ_D5) == NO_PIECE);
+    assert(pos.piece_on(SQ_D6) == NO_PIECE);
+    assert(pos.piece_on(SQ_E4) == NO_PIECE);
+    pos.undo_move(m);
+    assert(pos.key() == origKey);
+    assert(pos.piece_on(SQ_D5) == B_ROOK);
+    assert(pos.piece_on(SQ_D6) == B_BISHOP);
+    assert(pos.piece_on(SQ_E4) == make_piece(WHITE, CUSTOM_PIECE_1));
+}
+
 static void test_two_step_vs_jump() {
     StateInfo st{};
     Position pos;
@@ -672,6 +784,10 @@ int main() {
     test_two_step_double_capture_rejects_ambiguous_effects();
     test_two_step_piece_specific_promotion_zone();
     test_two_step_via_capture_restrictions();
+    test_quiet_multileg_promotion_is_tactical();
+    test_igui_clears_not_moved();
+    test_narrow_board_direction_alias();
+    test_blast_via_capture();
     test_hook_state_transitions();
     test_hook_capture_limits();
     test_hook_promotions();

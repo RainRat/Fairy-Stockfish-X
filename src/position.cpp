@@ -6668,31 +6668,27 @@ bool Position::pseudo_legal(const Move m) const {
       Square via = via_sq(m);
       if (!(board_bb() & via) || !(board_bb() & to))
           return false;
-      int d1 = -1;
-      for (int i = 0; i < 8; ++i)
+      // The encoded move stores squares, not direction provenance: on narrow
+      // wrapping boards several compass directions can alias the same square,
+      // so accept if ANY pair in the mask explains the geometry.
+      bool pairAllowed = false;
+      for (int d1 = 0; d1 < 8 && !pairAllowed; ++d1)
       {
-          Square testVia;
-          if (step_destination(from, KingDirections[i], testVia) && testVia == via)
+          Square probeVia;
+          if (!step_destination(from, KingDirections[d1], probeVia) || probeVia != via)
+              continue;
+          for (int d2 = 0; d2 < 8; ++d2)
           {
-              d1 = i;
-              break;
+              Square probeTo;
+              if (step_destination(via, KingDirections[d2], probeTo) && probeTo == to
+                  && ((mask >> (d1 * 8 + d2)) & 1ULL))
+              {
+                  pairAllowed = true;
+                  break;
+              }
           }
       }
-      if (d1 < 0)
-          return false;
-      int d2 = -1;
-      for (int i = 0; i < 8; ++i)
-      {
-          Square testTo;
-          if (step_destination(via, KingDirections[i], testTo) && testTo == to)
-          {
-              d2 = i;
-              break;
-          }
-      }
-      if (d2 < 0)
-          return false;
-      if (!((mask >> (d1 * 8 + d2)) & 1ULL))
+      if (!pairAllowed)
           return false;
       if (pieces(us) & via)
           return false;
@@ -6717,6 +6713,12 @@ bool Position::pseudo_legal(const Move m) const {
       if (!(board_bb() & via) || !(board_bb() & to))
           return false;
       if (!hook_path_valid(us, pt, from, via, to))
+          return false;
+      // Capture-count limits are interaction rules, not geometry: a :1 hook
+      // may not capture on both legs even if the path itself is valid.
+      if (via != to && !empty(via) && color_of(piece_on(via)) == them
+          && to != from && !empty(to) && color_of(piece_on(to)) == them
+          && hook_capture_limit(pt) < 2)
           return false;
       if (hook_promotes(m))
       {
@@ -8083,23 +8085,30 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       st->rule50 = 0;
   }
 
-  if (st->jumpedEnPassantCaptured)
-  {
-      Piece jumped = st->jumpedEnPassantCaptured.piece.piece;
-      Square jumpedSq = st->jumpedEnPassantCaptured.square;
+  // Extra victims beyond the primary capture (jumped en passant pawns,
+  // multi-leg via victims) share one removal pipeline: material and pawn
+  // keys, NNUE dirties, board removal, hand/prison transfer, points,
+  // position/material keys, and rule50. Capture-transfer suppression and
+  // hand mapping flow through the same target computation as primaries.
+  auto remove_extra_capture = [&](ReversiblePieceOnSquare& saved) {
+      if (!saved)
+          return;
 
-      if (type_of(jumped) == PAWN)
-          st->pawnKey ^= Zobrist::psq[jumped][jumpedSq];
+      Piece victim = saved.piece.piece;
+      Square sq = saved.square;
+
+      if (type_of(victim) == PAWN)
+          st->pawnKey ^= Zobrist::psq[victim][sq];
       else
-          st->nonPawnMaterial[color_of(jumped)] -= PieceValue[MG][jumped];
+          st->nonPawnMaterial[color_of(victim)] -= PieceValue[MG][victim];
 
-      int dirtyIdx = Eval::useNNUE ? append_dirty(st, jumped, jumpedSq, SQ_NONE) : -1;
-      remove_piece(jumpedSq);
-      board[jumpedSq] = NO_PIECE;
+      int dirtyIdx = Eval::useNNUE ? append_dirty(st, victim, sq, SQ_NONE) : -1;
+      remove_piece(sq);
+      board[sq] = NO_PIECE;
 
-      Piece transferPiece = reserve_transfer_piece(*this, us, jumped, st->jumpedEnPassantCaptured.piece.promoted,
-                                                    st->jumpedEnPassantCaptured.piece.unpromoted, drop_loop(),
-                                                    var->captureToHandSide, main_promotion_pawn_type(color_of(jumped)));
+      Piece transferPiece = reserve_transfer_piece(*this, us, victim, saved.piece.promoted,
+                                                   saved.piece.unpromoted, drop_loop(),
+                                                   var->captureToHandSide, main_promotion_pawn_type(color_of(victim)));
       bool transferred = add_capture_transfer(st, transferPiece, &k);
       if (Eval::useNNUE && dirtyIdx >= 0 && transferred)
       {
@@ -8109,45 +8118,15 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       }
 
       if (points_counting())
-          add_capture_points(st, us, jumped);
+          add_capture_points(st, us, victim);
 
-      k ^= Zobrist::psq[jumped][jumpedSq];
-      st->materialKey ^= Zobrist::psq[jumped][pieceCount[jumped]];
+      k ^= Zobrist::psq[victim][sq];
+      st->materialKey ^= Zobrist::psq[victim][pieceCount[victim]];
       st->rule50 = 0;
-  }
+  };
 
-  if (st->secondaryCaptured)
-  {
-      Piece capVia = st->secondaryCaptured.piece.piece;
-      Square viaSq = st->secondaryCaptured.square;
-
-      if (type_of(capVia) == PAWN)
-          st->pawnKey ^= Zobrist::psq[capVia][viaSq];
-      else
-          st->nonPawnMaterial[color_of(capVia)] -= PieceValue[MG][capVia];
-
-      int dirtyIdx = Eval::useNNUE ? append_dirty(st, capVia, viaSq, SQ_NONE) : -1;
-      remove_piece(viaSq);
-      board[viaSq] = NO_PIECE;
-
-      Piece transferPiece = reserve_transfer_piece(*this, us, capVia, st->secondaryCaptured.piece.promoted,
-                                                   st->secondaryCaptured.piece.unpromoted, drop_loop(),
-                                                   var->captureToHandSide, main_promotion_pawn_type(color_of(capVia)));
-      bool transferred = add_capture_transfer(st, transferPiece, &k);
-      if (Eval::useNNUE && dirtyIdx >= 0 && transferred)
-      {
-          Piece pieceToHand = capture_type() == PRISON ? ~transferPiece : transferPiece;
-          dp.handPiece[dirtyIdx] = pieceToHand;
-          dp.handCount[dirtyIdx] = pieceCountInHand[color_of(pieceToHand)][type_of(pieceToHand)];
-      }
-
-      if (points_counting())
-          add_capture_points(st, us, capVia);
-
-      k ^= Zobrist::psq[capVia][viaSq];
-      st->materialKey ^= Zobrist::psq[capVia][pieceCount[capVia]];
-      st->rule50 = 0;
-  }
+  remove_extra_capture(st->jumpedEnPassantCaptured);
+  remove_extra_capture(st->secondaryCaptured);
 
   if (capturedDeadSquare)
   {
@@ -8674,7 +8653,9 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           pc = base;
           st->rule50 = 0;
       }
-      else if (!rifleShot && (!multiLeg || from != to))
+      else if (!rifleShot)
+          // move_piece(from, from) is intentional for igui: the board is
+          // unchanged, but the piece loses its not-moved state.
           move_piece(from, to);
   }
 
@@ -9101,11 +9082,19 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       st->gatesBB[them] ^= square<KING>(them);
 
   //resolve blast and custodial capture. custodial capture is essentially blast with extra restrictions
+  // A via-only multi-leg capture leaves captured empty; fold the secondary
+  // victim in so blast/petrify resolution is not silently skipped for it.
+  // (Doubles combined with these effects are rejected in legal().)
+  const bool secondaryCapture = bool(st->secondaryCaptured);
+  const bool blastCapture = captured || secondaryCapture;
+  const bool blastOnCapture = blastOnCaptureMove
+                           || (secondaryCapture && !is_stack_move(m)
+                               && blast_on_capture(pc, st->secondaryCaptured.piece.piece));
   if (
        (
          ( surround_capture_opposite() || surround_capture_intervene() || surround_capture_edge() ) ||
-         ( captured && (blastOnCaptureMove || var->petrifyOnCaptureTypes) ) ||
-         ( blast_on_move() && !captured && !is_self_destruct(m) ) ||
+         ( blastCapture && (blastOnCapture || var->petrifyOnCaptureTypes) ) ||
+         ( blast_on_move() && !blastCapture && !is_self_destruct(m) ) ||
          ( blast_on_self_destruct() && is_self_destruct(m) ) ||
          var->blastPassiveTypes ||
          ( remove_connect_n() > 0 ) ||
@@ -9128,13 +9117,19 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       st->bycatchSquares = 0;
       st->blastPromotedSquares = 0;
 
-      if ( ( captured && (blastOnCaptureMove || var->petrifyOnCaptureTypes) ) ||
-           ( blast_on_move() && !captured && !is_self_destruct(m) ) ||
+      if ( ( blastCapture && (blastOnCapture || var->petrifyOnCaptureTypes) ) ||
+           ( blast_on_move() && !blastCapture && !is_self_destruct(m) ) ||
            ( blast_on_self_destruct() && is_self_destruct(m) ) ) {
 
-          blast_mask = (blastOnCaptureMove || blast_on_move() || blast_on_self_destruct()) ? blast_squares(captured ? (blast_on_capture_mover_center() ? moverSq : st->captured.square) : to)
+          // capture_square(m) is empty-aware and goes stale once the via
+          // victim is removed above; prefer the stored squares instead.
+          Square blastCenterSq = blast_on_capture_mover_center() ? moverSq
+                               : captured ? st->captured.square
+                               : secondaryCapture ? st->secondaryCaptured.square
+                               : capture_square(m);
+          blast_mask = (blastOnCapture || blast_on_move() || blast_on_self_destruct()) ? blast_squares(blastCapture ? blastCenterSq : to)
               : (var->petrifyOnCaptureTypes & type_of(pc) ? square_bb(moverSq) : Bitboard(0));
-          if (captured && blastOnCaptureMove
+          if (blastCapture && blastOnCapture
               && piece_on(moverSq) != NO_PIECE
               && (blast_immune_types() & type_of(piece_on(moverSq))))
               blast_mask &= ~square_bb(moverSq);
@@ -10107,19 +10102,24 @@ void Position::undo_move(Move m) {
           }
       }
 
-      if (st->jumpedEnPassantCaptured)
-      {
-          Square jumpedSq = st->jumpedEnPassantCaptured.square;
-          put_piece(st->jumpedEnPassantCaptured.piece.piece, jumpedSq,
-                    st->jumpedEnPassantCaptured.piece.promoted,
-                    st->jumpedEnPassantCaptured.piece.unpromoted);
-          Piece transferPiece = reserve_transfer_piece(*this, us, st->jumpedEnPassantCaptured.piece.piece,
-                                                       st->jumpedEnPassantCaptured.piece.promoted,
-                                                       st->jumpedEnPassantCaptured.piece.unpromoted,
+      // Extra victims are restored through the same pipeline (neither can
+      // coincide with a stack move, whose type is disjoint).
+      auto restore_extra_capture = [&](ReversiblePieceOnSquare& saved) {
+          if (!saved)
+              return;
+          Square sq = saved.square;
+          put_piece(saved.piece.piece, sq,
+                    saved.piece.promoted,
+                    saved.piece.unpromoted);
+          Piece transferPiece = reserve_transfer_piece(*this, us, saved.piece.piece,
+                                                       saved.piece.promoted,
+                                                       saved.piece.unpromoted,
                                                        drop_loop(), var->captureToHandSide,
-                                                       main_promotion_pawn_type(color_of(st->jumpedEnPassantCaptured.piece.piece)));
+                                                       main_promotion_pawn_type(color_of(saved.piece.piece)));
           undo_capture_transfer(st, transferPiece);
-      }
+      };
+
+      restore_extra_capture(st->jumpedEnPassantCaptured);
 
       if (st->captured)
       {
@@ -10142,17 +10142,7 @@ void Position::undo_move(Move m) {
 
       if (st->secondaryCaptured)
       {
-          Square capsq = st->secondaryCaptured.square;
-          put_piece(st->secondaryCaptured.piece.piece, capsq,
-                    st->secondaryCaptured.piece.promoted,
-                    st->secondaryCaptured.piece.unpromoted);
-          Piece transferPiece = reserve_transfer_piece(*this, us, st->secondaryCaptured.piece.piece,
-                                                       st->secondaryCaptured.piece.promoted,
-                                                       st->secondaryCaptured.piece.unpromoted,
-                                                       drop_loop(), var->captureToHandSide,
-                                                       main_promotion_pawn_type(color_of(st->secondaryCaptured.piece.piece)));
-          if (!stackMove)
-              undo_capture_transfer(st, transferPiece);
+          restore_extra_capture(st->secondaryCaptured);
       }
   }
 
