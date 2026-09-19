@@ -5901,8 +5901,9 @@ inline bool Position::hook_path_valid(Color us, PieceType pt, Square from, Squar
   int range[2] = {hook_first_range(pt), hook_second_range(pt)};
   Square legFrom[2] = {from, via};
   Square legTo[2] = {via, to};
-  // Hook rays stop at board edges like their Betza slider counterparts;
-  // a step jumping more than one file/rank has wrapped and ends the leg.
+  // Hook rays stop at board edges; a step jumping more than one file/rank
+  // has wrapped and ends the leg. (Wrapped topologies reject hookMoves at
+  // parse time; this keeps validation well-defined regardless.)
   auto hook_step = [&](Square cur, Direction dir, Square& nxt) -> bool {
       if (!step_destination(cur, dir, nxt))
           return false;

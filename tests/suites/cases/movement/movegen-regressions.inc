@@ -149,17 +149,6 @@ startFen = 8/8/4h3/4h3/4H3/8/8/8 w - - 0 1
 immobile = -
 castling = false
 doubleStep = false
-
-# Hook mover on a cylinder: rays stop at edges like Betza sliders (no wrap).
-[test-hook-wrap]
-king = -
-customPiece1 = h:0
-hookMoves = h:R-R:2
-cylindrical = true
-startFen = 8/8/8/8/4H3/8/8/8 w - - 0 1
-immobile = -
-castling = false
-doubleStep = false
 EOF
 
 variant_available() {
@@ -412,15 +401,5 @@ assert_nodes "$out" "113"
 assert_contains "$out" "^e4e5e6: 1$"
 assert_contains "$out" "^e4e5e4: 1$"
 assert_not_contains "$out" "^e4e5e7:"
-
-# Hook rays on a cylinder stop at edges like Betza sliders: no wrapping,
-# hence no duplicate or cycled paths. A lone hook matches its flat twin,
-# and wrap-only landings (E past h-file) never appear.
-out=$(run_uci_cmds "$ENGINE" "$TMP_INI" test-hook-wrap \
-  "position startpos
-go perft 1")
-assert_nodes "$out" "148"
-assert_not_contains "$out" "^e4h4a4:"
-assert_not_contains "$out" "^e4f4a4:"
 
 echo "movegen regressions passed"

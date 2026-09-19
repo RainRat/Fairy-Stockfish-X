@@ -2854,6 +2854,15 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
         valid = false;
     }
 
+    // Hook rays stop at board edges; wrapping topologies would need
+    // wrap-around rays with triple-level dedup, which is not implemented.
+    if (v->hasHookMoves && (v->cylindrical || v->toroidal))
+    {
+        if (DoCheck)
+            std::cerr << "hookMoves is not supported on wrapped boards." << std::endl;
+        valid = false;
+    }
+
     if (v->wallingRule != NO_WALLING && (v->seirawanGating || v->potions || v->gating || hasGatingPieceAfter))
     {
         if (DoCheck)

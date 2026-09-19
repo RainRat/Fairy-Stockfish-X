@@ -1279,9 +1279,10 @@ namespace {
             if (pos.freeze_squares() & from)
                 continue;
 
-            // Hook rays stop at board edges like their Betza slider
-            // counterparts: a step jumping more than one file/rank has
-            // wrapped around the board and must terminate the leg.
+            // Hook rays stop at board edges: a step jumping more than one
+            // file/rank has wrapped around the board and must terminate the
+            // leg. (Wrapped topologies reject hookMoves at parse time; this
+            // is a backstop keeping ray walks well-defined regardless.)
             auto hook_step = [&](Square cur, Direction dir, Square& nxt) -> bool {
                 if (!pos.step_destination(cur, dir, nxt))
                     return false;
