@@ -1097,6 +1097,254 @@ namespace {
   }
 
 
+  template<Color Us, GenType Type, typename MakeMove>
+  ExtMove* emit_multileg_candidate(const Position& pos, ExtMove* moveList, PieceType pt,
+                                  Square from, Square via, Square to, bool capVia, bool capTo,
+                                  Bitboard target, Bitboard checkers, MakeMove makeMove) {
+    // Shared capture/evasion/promotion policy for multi-leg moves; only the
+    // geometry enumeration (two king steps vs sliding hook legs) and the move
+    // constructor differ between generators.
+    bool isCapture = capVia || capTo;
+
+    Piece mover = pos.piece_on(from);
+    Bitboard mandatoryZone = pos.mandatory_promotion_zone(mover);
+    bool canPromote = (pos.promoted_piece_type(pt) != NO_PIECE_TYPE) && !pos.is_promoted(from);
+
+    bool allowsPromo = canPromote && pos.multileg_promotion_zone(Us, pt, from, to)
+                    && pos.promotion_allowed(Us, pos.promoted_piece_type(pt));
+    if (allowsPromo && pos.piece_promotion_on_capture() && !isCapture)
+        allowsPromo = false;
+
+    // Mirror Position::legal() mandatory handling: a non-promoting
+    // entry into the mandatory zone from outside is illegal, so
+    // suppress the non-promo move only in that case.
+    bool mandatoryPromo = allowsPromo && (mandatoryZone & to) && !(mandatoryZone & from);
+
+    // Like ordinary pawn pushes, quiet promotions belong in CAPTURES even
+    // though they capture nothing; quiet non-promotions do not.
+    if constexpr (Type == CAPTURES)
+    {
+        if (!isCapture && !allowsPromo)
+            return moveList;
+    }
+    else if constexpr (Type == QUIETS || Type == QUIET_CHECKS)
+    {
+        if (isCapture)
+            return moveList;
+    }
+    else if constexpr (Type == EVASIONS)
+    {
+        const PieceType royal = pos.royal_piece_type(Us);
+        if (pt != royal)
+        {
+            if (more_than_one(checkers))
+            {
+                if (!((capVia && (checkers & via)) || (capTo && (checkers & to))))
+                    return moveList;
+            }
+            else
+            {
+                if (!((capVia && (checkers & via)) || (capTo && (checkers & to)) || (target & to)))
+                    return moveList;
+            }
+        }
+    }
+
+    if (allowsPromo)
+    {
+        Move mPromo = makeMove(from, via, to, true);
+        if constexpr (Type == QUIET_CHECKS)
+        {
+            if (pos.gives_check(mPromo))
+                *moveList++ = mPromo;
+        }
+        else
+        {
+            *moveList++ = mPromo;
+        }
+    }
+
+    if (!mandatoryPromo)
+    {
+        // CAPTURES keeps quiet promotions but not quiet non-promotions.
+        if constexpr (Type == CAPTURES)
+        {
+            if (!isCapture)
+                return moveList;
+        }
+        Move m = makeMove(from, via, to, false);
+        if constexpr (Type == QUIET_CHECKS)
+        {
+            if (pos.gives_check(m))
+                *moveList++ = m;
+        }
+        else
+        {
+            *moveList++ = m;
+        }
+    }
+
+    return moveList;
+  }
+
+  template<Color Us, GenType Type>
+  ExtMove* generate_two_step_moves(const Position& pos, ExtMove* moveList, Bitboard target, Bitboard forcedFromMask, bool restrictToForcedJumper) {
+    if (!pos.has_two_step_moves())
+        return moveList;
+
+    PieceSet twoStepPts = pos.two_step_piece_types(Us);
+    if (!twoStepPts)
+        return moveList;
+
+    const Color them = ~Us;
+    const Bitboard checkers = pos.evasion_checkers();
+
+    auto makeTwoStep = [](Square from, Square via, Square to, bool promotes) {
+        return make_two_step(from, via, to, promotes);
+    };
+
+    while (twoStepPts)
+    {
+        PieceType pt = pop_lsb(twoStepPts);
+        uint64_t mask = pos.two_step_moves_mask(Us, pt);
+        if (!mask)
+            continue;
+
+        Bitboard piecesBb = pos.pieces(Us, pt);
+        if (restrictToForcedJumper)
+            piecesBb &= forcedFromMask;
+
+        while (piecesBb)
+        {
+            Square from = pop_lsb(piecesBb);
+            if (pos.freeze_squares() & from)
+                continue;
+
+            Bitboard remaining_mask = Bitboard(mask);
+            while (remaining_mask)
+            {
+                int pair_idx = int(pop_lsb(remaining_mask));
+                int d1 = pair_idx / 8;
+                int d2 = pair_idx % 8;
+
+                Square via;
+                if (!pos.step_destination(from, KingDirections[d1], via))
+                    continue;
+                if (!(pos.board_bb() & via) || (pos.pieces(Us) & via))
+                    continue;
+
+                Square to;
+                if (!pos.step_destination(via, KingDirections[d2], to))
+                    continue;
+                if (!(pos.board_bb() & to) || (to != from && (pos.pieces(Us) & to)))
+                    continue;
+
+                bool cap1 = (!pos.empty(via) && color_of(pos.piece_on(via)) == them);
+                bool cap2 = (to != from && !pos.empty(to) && color_of(pos.piece_on(to)) == them);
+
+                moveList = emit_multileg_candidate<Us, Type>(pos, moveList, pt, from, via, to,
+                                                             cap1, cap2, target, checkers, makeTwoStep);
+            }
+        }
+    }
+
+    return moveList;
+  }
+
+  template<Color Us, GenType Type>
+  ExtMove* generate_hook_moves(const Position& pos, ExtMove* moveList, Bitboard target, Bitboard forcedFromMask, bool restrictToForcedJumper) {
+    if (!pos.has_hook_moves())
+        return moveList;
+
+    PieceSet hookPts = pos.hook_piece_types(Us);
+    if (!hookPts)
+        return moveList;
+
+    const Color them = ~Us;
+
+    auto makeHook = [](Square from, Square via, Square to, bool promotes) {
+        return make_hook(from, via, to, promotes);
+    };
+
+    while (hookPts)
+    {
+        PieceType pt = pop_lsb(hookPts);
+        uint64_t mask = pos.hook_move_mask(Us, pt);
+        if (!mask)
+            continue;
+        int range1 = pos.hook_first_range(pt);
+        int range2 = pos.hook_second_range(pt);
+        int limit = pos.hook_capture_limit(pt);
+        if (limit < 1)
+            continue;
+
+        Bitboard piecesBb = pos.pieces(Us, pt);
+        if (restrictToForcedJumper)
+            piecesBb &= forcedFromMask;
+
+        while (piecesBb)
+        {
+            Square from = pop_lsb(piecesBb);
+            if (pos.freeze_squares() & from)
+                continue;
+
+            // Hook rays stop at board edges (see Position::hook_step).
+            Bitboard remaining_mask = Bitboard(mask);
+            while (remaining_mask)
+            {
+                int pair_idx = int(pop_lsb(remaining_mask));
+                int d1 = pair_idx / 8;
+                int d2 = pair_idx % 8;
+
+                int cap1steps = range1 ? range1 : SQUARE_NB;
+                Square bend = from;
+                for (int k1 = 1; k1 <= cap1steps; ++k1)
+                {
+                    Square step1;
+                    if (!pos.hook_step(bend, KingDirections[d1], step1))
+                        break;
+                    if (!(pos.board_bb() & step1) || (pos.pieces(Us) & step1))
+                        break;
+                    bend = step1;
+                    bool cap1 = !pos.empty(bend) && color_of(pos.piece_on(bend)) == them;
+
+                    int cap2steps = range2 ? range2 : SQUARE_NB;
+                    Square to = bend;
+                    for (int k2 = 1; k2 <= cap2steps; ++k2)
+                    {
+                        Square step2;
+                        if (!pos.hook_step(to, KingDirections[d2], step2))
+                            break;
+                        if (!(pos.board_bb() & step2))
+                            break;
+                        // The origin is a landing square (igui) but never
+                        // transit: the walk must not continue past it.
+                        bool atOrigin = (step2 == from);
+                        if (!atOrigin && (pos.pieces(Us) & step2))
+                            break;
+                        to = step2;
+                        bool cap2 = !atOrigin && !pos.empty(to) && color_of(pos.piece_on(to)) == them;
+
+                        // Hook sliders stop at captures; a :1 hook may not
+                        // capture on both legs.
+                        if (!(cap1 && cap2 && limit < 2))
+                            moveList = emit_multileg_candidate<Us, Type>(pos, moveList, pt, from, bend, to,
+                                                                        cap1, cap2, target,
+                                                                        pos.evasion_checkers(), makeHook);
+                        if (cap2 || atOrigin)
+                            break;
+                    }
+
+                    if (cap1)
+                        break;
+                }
+            }
+        }
+    }
+
+    return moveList;
+  }
+
   template<Color Us, GenType Type>
   ExtMove* generate_all_impl(const Position& pos, ExtMove* moveList) {
 
@@ -1106,7 +1354,7 @@ namespace {
     const PieceType royalPt = pos.royal_piece_type(Us);
     const Square royalSq = pos.royal_square(Us);
     const Bitboard checkers = pos.evasion_checkers();
-    Bitboard target;
+    Bitboard target = Bitboard(0);
     Bitboard captureTarget = Bitboard(0);
     Bitboard forcedFromMask = AllSquares;
     bool restrictToForcedJumper = false;
@@ -1519,6 +1767,9 @@ namespace {
         }
 
     }
+
+    moveList = generate_two_step_moves<Us, Type>(pos, moveList, target, forcedFromMask, restrictToForcedJumper);
+    moveList = generate_hook_moves<Us, Type>(pos, moveList, target, forcedFromMask, restrictToForcedJumper);
 
     // Royal moves must not be restricted to checker capture/interposition targets.
     if (royalPt != NO_PIECE_TYPE && royalSq != SQ_NONE

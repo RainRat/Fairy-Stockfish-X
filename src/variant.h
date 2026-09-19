@@ -247,6 +247,20 @@ struct Variant {
   int pushingStrength[PIECE_TYPE_NB] = {};
   bool hasPushing = false;
   int pullingStrength[PIECE_TYPE_NB] = {};
+  bool hasTwoStepMoves = false;
+  uint64_t twoStepMoves[PIECE_TYPE_NB] = {};
+  uint64_t twoStepMovesColor[COLOR_NB][PIECE_TYPE_NB] = {};
+  PieceSet twoStepPieceTypes[COLOR_NB] = {};
+  // Hook movers: two sliding legs with a bend (from -> bend -> to), at most
+  // hookCaptureLimit captures per move. One spec per piece type: a
+  // White-relative direction-pair mask plus per-leg ranges (0 = unlimited).
+  bool hasHookMoves = false;
+  uint64_t hookMoveMasks[PIECE_TYPE_NB] = {};
+  uint64_t hookMoveMasksColor[COLOR_NB][PIECE_TYPE_NB] = {};
+  int hookFirstRange[PIECE_TYPE_NB] = {};
+  int hookSecondRange[PIECE_TYPE_NB] = {};
+  int hookCaptureLimit[PIECE_TYPE_NB] = {};
+  PieceSet hookPieceTypes[COLOR_NB] = {};
   PieceSet adjacentSwapMoveTypes = NO_PIECE_SET;
   PieceSet adjacentSwapTargetTypes = ~NO_PIECE_SET;
   bool adjacentSwapFriendly = false;

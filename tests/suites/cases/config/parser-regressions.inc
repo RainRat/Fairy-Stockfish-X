@@ -403,6 +403,7 @@ capture_allowed_only_ini=$(mktemp)
 dropnomate_alias_ini=$(mktemp)
 bad_rider_range_val_ini=$(mktemp)
 bad_tuple_atom_ini=$(mktemp)
+bad_hook_ini=$(mktemp)
 unsupported_bent_rose_modifier_ini=$(mktemp)
 bad_ini_syntax_option_ini=$(mktemp)
 bad_check_counting_ini=$(mktemp)
@@ -415,7 +416,7 @@ bad_unmatched_closer_ini=$(mktemp)
 royal_blast_ini=$(mktemp)
 nonking_ini=$(mktemp)
 wrapped_support_ini=$(mktemp)
-fsx_add_exit_cleanup 'rm -f "${tmp_ini}" "${bad_betza_ini}" "${bad_hopper_brace_ini}" "${bad_rider_range_ini}" "${bad_rank_wildcard_ini}" "${twochar_hint_ini}" "${bad_hopper_type_ini}" "${bad_hopper_numeric_ini}" "${capture_allowed_only_ini}" "${dropnomate_alias_ini}" "${bad_rider_range_val_ini}" "${bad_tuple_atom_ini}" "${unsupported_bent_rose_modifier_ini}" "${bad_ini_syntax_option_ini}" "${bad_check_counting_ini}" "${bad_hopper_minmax_ini}" "${bad_hopper_entry_ini}" "${bad_piece_value_ini}" "${unknown_option_ini}" "${bad_royal_betza_ini}" "${bad_unmatched_closer_ini}" "${royal_blast_ini}" "${nonking_ini}" "${wrapped_support_ini}"'
+fsx_add_exit_cleanup 'rm -f "${tmp_ini}" "${bad_betza_ini}" "${bad_hopper_brace_ini}" "${bad_rider_range_ini}" "${bad_rank_wildcard_ini}" "${twochar_hint_ini}" "${bad_hopper_type_ini}" "${bad_hopper_numeric_ini}" "${capture_allowed_only_ini}" "${dropnomate_alias_ini}" "${bad_rider_range_val_ini}" "${bad_tuple_atom_ini}" "${bad_hook_ini}" "${unsupported_bent_rose_modifier_ini}" "${bad_ini_syntax_option_ini}" "${bad_check_counting_ini}" "${bad_hopper_minmax_ini}" "${bad_hopper_entry_ini}" "${bad_piece_value_ini}" "${unknown_option_ini}" "${bad_royal_betza_ini}" "${bad_unmatched_closer_ini}" "${royal_blast_ini}" "${nonking_ini}" "${wrapped_support_ini}"'
 
 cat > "${bad_betza_ini}" <<'INI'
 [custom-piece-missing-betza:chess]
@@ -508,6 +509,40 @@ customPiece3 = c:(0,0)
 customPiece4 = d:(999,1)
 INI
 
+cat > "${bad_hook_ini}" <<'INI'
+[bad-hook-leg:chess]
+customPiece1 = h:0
+hookMoves = h:X
+
+[bad-hook-geometry:chess]
+customPiece1 = h:0
+hookMoves = h:sB-R
+
+[bad-hook-limit:chess]
+customPiece1 = h:0
+hookMoves = h:R-R:3
+
+[bad-hook-wrapped:chess]
+king = -
+customPiece1 = h:0
+hookMoves = h:R-R:2
+cylindrical = true
+startFen = 8/8/8/8/4H3/8/8/8 w - - 0 1
+immobile = -
+castling = false
+doubleStep = false
+
+[bad-hook-twoboards:chess]
+customPiece1 = h:0
+hookMoves = h:R-R:2
+twoBoards = true
+
+[bad-twostep-twoboards:chess]
+customPiece1 = l:0
+twoStepMoves = l:N>N
+twoBoards = true
+INI
+
 cat > "${unsupported_bent_rose_modifier_ini}" <<'INI'
 [unsupported-bent-1:chess]
 customPiece1 = a:jO
@@ -580,7 +615,8 @@ shogiPawnDropMateIllegal = false
 shogiPawnDropMateIllegal = false
 INI
 
-cat > "${royal_blast_ini}" <<'INI'[royal-blast-allowed:chess]
+cat > "${royal_blast_ini}" <<'INI'
+[royal-blast-allowed:chess]
 checking = true
 blastOnCapture = true
 castling = false
@@ -793,6 +829,31 @@ assert_contains "${bad_tuple_atom_output3}" "unknown variant 'tuple-atom-3'; kee
 
 bad_tuple_atom_output4=$(run_uci "$ENGINE" "$bad_tuple_atom_ini" "tuple-atom-4" </dev/null 2>&1 || true)
 assert_contains "${bad_tuple_atom_output4}" "unknown variant 'tuple-atom-4'; keeping 'chess'"
+
+bad_hook_output1=$(run_uci "$ENGINE" "$bad_hook_ini" "bad-hook-leg" </dev/null 2>&1 || true)
+assert_contains "${bad_hook_output1}" "unknown variant 'bad-hook-leg'; keeping 'chess'"
+
+bad_hook_output2=$(run_uci "$ENGINE" "$bad_hook_ini" "bad-hook-geometry" </dev/null 2>&1 || true)
+assert_contains "${bad_hook_output2}" "unknown variant 'bad-hook-geometry'; keeping 'chess'"
+
+bad_hook_output3=$(run_uci "$ENGINE" "$bad_hook_ini" "bad-hook-limit" </dev/null 2>&1 || true)
+assert_contains "${bad_hook_output3}" "unknown variant 'bad-hook-limit'; keeping 'chess'"
+
+bad_hook_output4=$(run_uci "$ENGINE" "$bad_hook_ini" "bad-hook-wrapped" </dev/null 2>&1 || true)
+assert_contains "${bad_hook_output4}" "unknown variant 'bad-hook-wrapped'; keeping 'chess'"
+
+bad_hook_output5=$(run_uci "$ENGINE" "$bad_hook_ini" "bad-hook-twoboards" </dev/null 2>&1 || true)
+assert_contains "${bad_hook_output5}" "unknown variant 'bad-hook-twoboards'; keeping 'chess'"
+
+bad_twostep_twoboards_output=$(run_uci "$ENGINE" "$bad_hook_ini" "bad-twostep-twoboards" </dev/null 2>&1 || true)
+assert_contains "${bad_twostep_twoboards_output}" "unknown variant 'bad-twostep-twoboards'; keeping 'chess'"
+
+bad_hook_check_output=$("${ENGINE}" check "${bad_hook_ini}" 2>&1 || true)
+assert_contains "${bad_hook_check_output}" "hookMoves - Malformed hook legs"
+assert_contains "${bad_hook_check_output}" "hookMoves - Invalid hook leg"
+assert_contains "${bad_hook_check_output}" "hookMoves - Invalid hook capture limit"
+assert_contains "${bad_hook_check_output}" "hookMoves is not supported on wrapped boards."
+assert_contains "${bad_hook_check_output}" "twoBoards is not supported with twoStepMoves or hookMoves."
 
 unsupported_bent_rose_output1=$(run_uci "$ENGINE" "$unsupported_bent_rose_modifier_ini" "unsupported-bent-1" </dev/null 2>&1 || true)
 assert_contains "${unsupported_bent_rose_output1}" "unknown variant 'unsupported-bent-1'; keeping 'chess'"

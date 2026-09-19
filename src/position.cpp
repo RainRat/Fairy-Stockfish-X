@@ -4475,7 +4475,6 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
       info.occupiedAfterEffects = pieces();
       return info;
   }
-
   const bool dropMove = is_drop_move(m);
   const bool stackMove = is_stack_move(m);
   const bool unstackMove = is_unstack_move(m);
@@ -4485,6 +4484,12 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
   Bitboard extraCapture = 0;
   if (isCapture && is_jump_capture(m))
       extraCapture = jump_capture_mask(info.from, info.to) & ~square_bb(info.captureSquare);
+  else if (is_multileg(m))
+  {
+      Square via = via_sq(m);
+      if (via != info.to && !empty(via) && color_of(piece_on(via)) == ~sideToMove)
+          extraCapture |= square_bb(via);
+  }
   info.rifle = rifle_capture(m) && isCapture && !info.castling;
   info.stationary = info.rifle;
   info.effectiveTo = info.rifle ? info.from : info.to;
@@ -4551,7 +4556,7 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
       PieceType pt = type_of(moved_piece(m));
       if (is_promotion_move(m))
           return promotion_type(m);
-      if (type_of(m) == PIECE_PROMOTION)
+      if (type_of(m) == PIECE_PROMOTION || is_multileg_promotion(m))
           return promoted_piece_type(pt);
       if (type_of(m) == PIECE_DEMOTION)
       {
@@ -4735,6 +4740,18 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
       info.relocatedOccupancy = pieces() | square_bb(info.to);
   else if (pureWallMove)
       info.relocatedOccupancy = pieces();
+  else if (is_multileg(m))
+  {
+      info.relocatedOccupancy = pieces();
+      if (is_ok(info.from))
+          info.relocatedOccupancy &= ~square_bb(info.from);
+      if (is_ok(info.captureSquare))
+          info.relocatedOccupancy &= ~square_bb(info.captureSquare);
+      if (extraCapture)
+          info.relocatedOccupancy &= ~extraCapture;
+      if (is_ok(info.to))
+          info.relocatedOccupancy |= square_bb(info.to);
+  }
   else
   {
       info.relocatedOccupancy = pieces();
@@ -4831,6 +4848,17 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
   else if (is_self_destruct(m))
   {
       remove_color_square(info.from);
+  }
+  else if (is_multileg(m))
+  {
+      remove_color_square(info.from);
+      if (is_ok(info.captureSquare))
+          remove_color_square(info.captureSquare);
+      if (extraCapture)
+          remove_color_square(lsb(extraCapture));
+      PieceType multiLegPlaced = is_multileg_promotion(m) ? promoted_piece_type(type_of(moved_piece(m))) : type_of(moved_piece(m));
+      add_color_piece(us, multiLegPlaced, info.to);
+      info.placedPiece = make_piece(us, multiLegPlaced);
   }
   else if (!pureWallMove)
   {
@@ -5420,7 +5448,7 @@ bool Position::legal(Move m) const {
   if (type_of(m) == CASTLING && gamePly < var->castlingForbiddenPlies)
       return false;
 
-  if (from == to && !(passMove || is_laser_fire(m) || is_self_destruct(m) || (is_promotion_move(m) && sittuyin_promotion()) || pureWallMove || (laser_game() && is_gating(m))))
+  if (from == to && !(passMove || is_laser_fire(m) || is_self_destruct(m) || is_multileg(m) || (is_promotion_move(m) && sittuyin_promotion()) || pureWallMove || (laser_game() && is_gating(m))))
       return false;
 
   if (st->pendingClaimPass)
@@ -5480,7 +5508,7 @@ bool Position::legal(Move m) const {
 
   if (is_promotion_move(m))
       finalMovePt = promotion_type(m);
-  else if (type_of(m) == PIECE_PROMOTION)
+  else if (type_of(m) == PIECE_PROMOTION || is_multileg_promotion(m))
       finalMovePt = promoted_piece_type(movePt);
   else if (type_of(m) == PIECE_DEMOTION)
   {
@@ -5493,10 +5521,10 @@ bool Position::legal(Move m) const {
   else if (unstackMove)
       finalMovePt = var->unstackedPieceType[type_of(moverPiece)];
 
+  // Promotions determine the resulting piece; morphs must not apply on top.
   if (   !dropMove
       && type_of(m) != CASTLING
-      && !is_promotion_move(m)
-      && type_of(m) != PIECE_PROMOTION
+      && !is_any_promotion(m)
       && !passMove)
   {
       if (capture_morph() && isCapture)
@@ -5514,11 +5542,49 @@ bool Position::legal(Move m) const {
 
   if (is_promotion_move(m) && !promotion_allowed(us, promotion_type(m), to))
       return false;
-  if (type_of(m) == PIECE_PROMOTION && (is_promoted(from) || !promotion_allowed(us, promoted_piece_type(type_of(moved_piece(m))))))
+  if ((type_of(m) == PIECE_PROMOTION || is_multileg_promotion(m))
+      && (is_promoted(from) || !promotion_allowed(us, promoted_piece_type(type_of(moved_piece(m))))))
       return false;
-  if (rifleShot && (is_promotion_move(m) || type_of(m) == PIECE_PROMOTION))
+  if (is_two_step(m))
+  {
+      Square via = via_sq(m);
+      if ((pieces(us) & via) || (to != from && (pieces(us) & to)))
+          return false;
+      if (two_step_promotes(m) && !multileg_promotion_zone(us, movePt, from, to))
+          return false;
+  }
+  // Hook path geometry (mask, ranges, transit occupancy, capture limits)
+  // is validated in pseudo_legal()/move generation; legal() only enforces
+  // promotion restrictions and interaction rules below.
+  if (is_hook(m) && hook_promotes(m) && !multileg_promotion_zone(us, movePt, from, to))
       return false;
-  if (!dropMove && !is_promotion_move(m) && type_of(m) != PIECE_PROMOTION)
+  if (is_hook(m))
+  {
+      // Capture-count limits are interaction rules, not geometry: a :1 hook
+      // may not capture on both legs even if the path itself is valid.
+      Square via = via_sq(m);
+      if (via != to && !empty(via) && color_of(piece_on(via)) == them
+          && to != from && !empty(to) && color_of(piece_on(to)) == them
+          && hook_capture_limit(movePt) < 2)
+          return false;
+  }
+  if (is_multileg(m) && isCapture)
+  {
+      Square via = via_sq(m);
+      bool viaCapture = !empty(via) && color_of(piece_on(via)) == them;
+      bool toCapture = to != from && !empty(to) && color_of(piece_on(to)) == them;
+      // A double capture removes two victims, but blast, petrification
+      // and capture-morph effects are defined for a single capture
+      // square. Reject such combinations instead of silently applying
+      // the effect to one victim and dropping the other.
+      if (viaCapture && toCapture
+          && (blast_on_capture(m) || capture_morph()
+              || (var->petrifyOnCaptureTypes & movePt)))
+          return false;
+  }
+  if (rifleShot && is_any_promotion(m))
+      return false;
+  if (!dropMove && !is_any_promotion(m))
   {
       Piece mover = moved_piece(m);
       Bitboard mandatoryZone = mover == NO_PIECE ? Bitboard(0) : mandatory_promotion_zone(mover);
@@ -5562,6 +5628,7 @@ bool Position::legal(Move m) const {
                            && !is_unstack_move(m)
                            && !paired_drop(m)
                            && !is_promotion_move(m)
+                           && !is_multileg(m)
                            && type_of(m) != PIECE_PROMOTION
                            && type_of(m) != PIECE_DEMOTION;
   if (simpleLegality)
@@ -5641,7 +5708,7 @@ bool Position::legal(Move m) const {
   }
   // Universal-hopper semantics are fully encoded in attacks/moves generation and
   // jump_capture_square() capture-square resolution; avoid legacy pre-filters here.
-  if ((pieces(us) & to) && !passMove && !is_self_destruct(m) && !is_stack_move(m)
+  if ((pieces(us) & to) && !passMove && !is_self_destruct(m) && !is_stack_move(m) && !is_multileg(m)
       && is_uncapturable_royal_square(us, to))
       return false;
   if (!dropMove && violates_mutual_hop_restriction(from, to, movePt))
@@ -6124,6 +6191,18 @@ bool Position::legal(Move m) const {
       PieceType target = type_of(captured_piece(m));
       if (attacker < PIECE_TYPE_NB && target < PIECE_TYPE_NB && (var->captureForbiddenByColor[us][attacker] & target))
           return false;
+      if (is_multileg(m))
+      {
+          // captured_piece() only sees the primary (to) victim; a double
+          // capture must also respect restrictions on the via victim.
+          Square via = via_sq(m);
+          if (via != to && !empty(via) && color_of(piece_on(via)) == them)
+          {
+              PieceType viaTarget = type_of(piece_on(via));
+              if (attacker < PIECE_TYPE_NB && viaTarget < PIECE_TYPE_NB && (var->captureForbiddenByColor[us][attacker] & viaTarget))
+                  return false;
+          }
+      }
   }
 
   // En passant captures are a tricky special case. Because they are rather
@@ -6477,7 +6556,7 @@ bool Position::pseudo_legal(const Move m) const {
       }
   }
 
-  if (from == to && !(passMove || is_laser_fire(m) || is_self_destruct(m) || (is_promotion_move(m) && sittuyin_promotion()) || pureWallMove || (laser_game() && is_gating(m))))
+  if (from == to && !(passMove || is_laser_fire(m) || is_self_destruct(m) || is_multileg(m) || (is_promotion_move(m) && sittuyin_promotion()) || pureWallMove || (laser_game() && is_gating(m))))
       return false;
 
   if (st->pendingClaimPass)
@@ -6498,9 +6577,10 @@ bool Position::pseudo_legal(const Move m) const {
 
   if (is_promotion_move(m) && !promotion_allowed(us, promotion_type(m), to))
       return false;
-  if (type_of(m) == PIECE_PROMOTION && (is_promoted(from) || !promotion_allowed(us, promoted_piece_type(type_of(pc)))))
+  if ((type_of(m) == PIECE_PROMOTION || is_multileg_promotion(m))
+      && (is_promoted(from) || !promotion_allowed(us, promoted_piece_type(type_of(pc)))))
       return false;
-  if (!dropMove && !is_promotion_move(m) && type_of(m) != PIECE_PROMOTION)
+  if (!dropMove && !is_any_promotion(m))
   {
       Bitboard mandatoryZone = pc == NO_PIECE ? Bitboard(0) : mandatory_promotion_zone(pc);
       if ((mandatoryZone & effectiveTo) && !(mandatoryZone & from))
@@ -6576,6 +6656,79 @@ bool Position::pseudo_legal(const Move m) const {
       return pc != NO_PIECE && color_of(pc) == us && empty(to)
           && var->can_unstack(type_of(pc))
           && bool(PseudoAttacks[WHITE][KING][from] & to);
+
+  if (is_two_step(m))
+  {
+      if (pc == NO_PIECE || color_of(pc) != us)
+          return false;
+      PieceType pt = type_of(pc);
+      uint64_t mask = two_step_moves_mask(us, pt);
+      if (!mask)
+          return false;
+      Square via = via_sq(m);
+      if (!(board_bb() & via) || !(board_bb() & to))
+          return false;
+      // The encoded move stores squares, not direction provenance: on narrow
+      // wrapping boards several compass directions can alias the same square,
+      // so accept if ANY pair in the mask explains the geometry.
+      bool pairAllowed = false;
+      for (int d1 = 0; d1 < 8 && !pairAllowed; ++d1)
+      {
+          Square probeVia;
+          if (!step_destination(from, KingDirections[d1], probeVia) || probeVia != via)
+              continue;
+          for (int d2 = 0; d2 < 8; ++d2)
+          {
+              Square probeTo;
+              if (step_destination(via, KingDirections[d2], probeTo) && probeTo == to
+                  && ((mask >> (d1 * 8 + d2)) & 1ULL))
+              {
+                  pairAllowed = true;
+                  break;
+              }
+          }
+      }
+      if (!pairAllowed)
+          return false;
+      if (pieces(us) & via)
+          return false;
+      if (to != from && (pieces(us) & to))
+          return false;
+      if (two_step_promotes(m))
+      {
+          if (promoted_piece_type(pt) == NO_PIECE_TYPE)
+              return false;
+          if (!multileg_promotion_zone(us, pt, from, to))
+              return false;
+      }
+      return !violates_same_player_board_repetition(m);
+  }
+
+  if (is_hook(m))
+  {
+      if (pc == NO_PIECE || color_of(pc) != us)
+          return false;
+      PieceType pt = type_of(pc);
+      Square via = via_sq(m);
+      if (!(board_bb() & via) || !(board_bb() & to))
+          return false;
+      if (!hook_path_valid(us, pt, from, via, to))
+          return false;
+      // Capture-count limits are interaction rules, not geometry: a :1 hook
+      // may not capture on both legs even if the path itself is valid.
+      if (via != to && !empty(via) && color_of(piece_on(via)) == them
+          && to != from && !empty(to) && color_of(piece_on(to)) == them
+          && hook_capture_limit(pt) < 2)
+          return false;
+      if (hook_promotes(m))
+      {
+          if (promoted_piece_type(pt) == NO_PIECE_TYPE)
+              return false;
+          if (!multileg_promotion_zone(us, pt, from, to))
+              return false;
+      }
+      return !violates_same_player_board_repetition(m);
+  }
 
   // Universal-hopper semantics are handled by pseudo-move generation and
   // jump_capture_square() capture-square resolution.
@@ -7108,6 +7261,10 @@ bool Position::gives_check_impl(Move m) const {
   Bitboard discCheckSq = 0;
   if (!dropMove)
       discCheckSq = rifleShot ? square_bb(to) : square_bb(from);
+  // A two-step via capture can unblock a line through the intermediate
+  // square, so include it as a potential discovered-check source.
+  if (is_multileg(m) && capture(m))
+      discCheckSq |= square_bb(via_sq(m));
 
   if (  (((!dropMove && (blockers_for_king(~sideToMove) & discCheckSq)) || var->trapRegion)
          || (non_sliding_riders() & pieces(sideToMove)))
@@ -7716,6 +7873,28 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           }
       }
   };
+  bool multiLeg = is_multileg(m);
+  if (multiLeg)
+  {
+      Square via = via_sq(m);
+      if (!empty(via) && color_of(piece_on(via)) == them)
+      {
+          Piece capVia = piece_on(via);
+          bool viaPromoted = is_promoted(via);
+          Piece viaUnpromoted = unpromoted_piece_on(via);
+          st->secondaryCaptured.set(capVia, viaPromoted, viaUnpromoted, via);
+      }
+      else
+      {
+          st->secondaryCaptured.clear();
+      }
+
+      if (to == from)
+          captured = NO_PIECE;
+      else
+          captured = (!empty(to) && color_of(piece_on(to)) == them) ? piece_on(to) : NO_PIECE;
+  }
+
   Square capturedSq = captured ? (pushMove && !stepwisePush ? pushInfo.tail : capture_square(m)) : SQ_NONE;
   if (captured)
   {
@@ -7759,7 +7938,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
 
   if (to == from)
   {
-      assert((is_promotion_move(m) && sittuyin_promotion()) || passMove || is_laser_fire(m) || is_self_destruct(m) || openingSelfRemoval || pureWallMove || is_gating(m));
+      assert((is_promotion_move(m) && sittuyin_promotion()) || passMove || is_laser_fire(m) || is_self_destruct(m) || is_multileg(m) || openingSelfRemoval || pureWallMove || is_gating(m));
       captured = NO_PIECE;
   }
 
@@ -7906,23 +8085,30 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       st->rule50 = 0;
   }
 
-  if (st->jumpedEnPassantCaptured)
-  {
-      Piece jumped = st->jumpedEnPassantCaptured.piece.piece;
-      Square jumpedSq = st->jumpedEnPassantCaptured.square;
+  // Extra victims beyond the primary capture (jumped en passant pawns,
+  // multi-leg via victims) share one removal pipeline: material and pawn
+  // keys, NNUE dirties, board removal, hand/prison transfer, points,
+  // position/material keys, and rule50. Capture-transfer suppression and
+  // hand mapping flow through the same target computation as primaries.
+  auto remove_extra_capture = [&](ReversiblePieceOnSquare& saved) {
+      if (!saved)
+          return;
 
-      if (type_of(jumped) == PAWN)
-          st->pawnKey ^= Zobrist::psq[jumped][jumpedSq];
+      Piece victim = saved.piece.piece;
+      Square sq = saved.square;
+
+      if (type_of(victim) == PAWN)
+          st->pawnKey ^= Zobrist::psq[victim][sq];
       else
-          st->nonPawnMaterial[color_of(jumped)] -= PieceValue[MG][jumped];
+          st->nonPawnMaterial[color_of(victim)] -= PieceValue[MG][victim];
 
-      int dirtyIdx = Eval::useNNUE ? append_dirty(st, jumped, jumpedSq, SQ_NONE) : -1;
-      remove_piece(jumpedSq);
-      board[jumpedSq] = NO_PIECE;
+      int dirtyIdx = Eval::useNNUE ? append_dirty(st, victim, sq, SQ_NONE) : -1;
+      remove_piece(sq);
+      board[sq] = NO_PIECE;
 
-      Piece transferPiece = reserve_transfer_piece(*this, us, jumped, st->jumpedEnPassantCaptured.piece.promoted,
-                                                    st->jumpedEnPassantCaptured.piece.unpromoted, drop_loop(),
-                                                    var->captureToHandSide, main_promotion_pawn_type(color_of(jumped)));
+      Piece transferPiece = reserve_transfer_piece(*this, us, victim, saved.piece.promoted,
+                                                   saved.piece.unpromoted, drop_loop(),
+                                                   var->captureToHandSide, main_promotion_pawn_type(color_of(victim)));
       bool transferred = add_capture_transfer(st, transferPiece, &k);
       if (Eval::useNNUE && dirtyIdx >= 0 && transferred)
       {
@@ -7932,12 +8118,15 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       }
 
       if (points_counting())
-          add_capture_points(st, us, jumped);
+          add_capture_points(st, us, victim);
 
-      k ^= Zobrist::psq[jumped][jumpedSq];
-      st->materialKey ^= Zobrist::psq[jumped][pieceCount[jumped]];
+      k ^= Zobrist::psq[victim][sq];
+      st->materialKey ^= Zobrist::psq[victim][pieceCount[victim]];
       st->rule50 = 0;
-  }
+  };
+
+  remove_extra_capture(st->jumpedEnPassantCaptured);
+  remove_extra_capture(st->secondaryCaptured);
 
   if (capturedDeadSquare)
   {
@@ -8140,13 +8329,16 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   // Update castling rights if needed
   const int moveRightsMask = rifleShot ? castlingRightsMask[to]
                                        : castlingRightsMask[from] | castlingRightsMask[to];
+  const int multiLegRightsMask = multiLeg && st->secondaryCaptured ? castlingRightsMask[st->secondaryCaptured.square] : 0;
   if (!dropMove && !passMove && !pureWallMove && st->castlingRights
       && (moveRightsMask
+          | multiLegRightsMask
           | (jumpCapsq != SQ_NONE ? castlingRightsMask[jumpCapsq] : 0)
           | pushRightsMask | pullRightsMask))
   {
       k ^= Zobrist::castling[st->castlingRights];
       st->castlingRights &= ~(moveRightsMask
+                              | multiLegRightsMask
                               | (jumpCapsq != SQ_NONE ? castlingRightsMask[jumpCapsq] : 0)
                               | pushRightsMask | pullRightsMask);
 
@@ -8297,7 +8489,10 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   {
       if (Eval::useNNUE)
       {
-          if (pureWallMove)
+          // Quiet igui (return-to-origin) without a via capture leaves the
+          // board unchanged, so no NNUE refresh is needed. Capturing igui
+          // must preserve the via-capture dirty entries appended above.
+          if (pureWallMove || (multiLeg && from == to && !is_multileg_promotion(m) && !st->secondaryCaptured))
           {
               dp.dirty_num = 0;
               init_dirty_piece_entry(dp, 0, NO_PIECE, SQ_NONE, SQ_NONE, NO_PIECE, 0);
@@ -8459,6 +8654,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           st->rule50 = 0;
       }
       else if (!rifleShot)
+          // move_piece(from, from) is intentional for igui: the board is
+          // unchanged, but the piece loses its not-moved state.
           move_piece(from, to);
   }
 
@@ -8466,13 +8663,13 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   if (type_of(pc) == PAWN && !stackMove && !unstackMove && !rifleShot)
   {
       st->rule50 = 0;
-      if (is_promotion_move(m) || type_of(m) == PIECE_PROMOTION)
+      if (is_any_promotion(m))
       {
           Piece promotion = make_piece(us, is_promotion_move(m) ? promotion_type(m) : promoted_piece_type(PAWN));
           Piece promotedHandPiece = make_piece(us, type_of(promotion));
 
-          assert((promotion_zone(pc) & to) || sittuyin_promotion());
-          assert(type_of(promotion) >= KNIGHT && type_of(promotion) < KING);
+          assert((promotion_zone(pc) & to) || sittuyin_promotion() || is_multileg(m));
+          assert(is_multileg(m) || (type_of(promotion) >= KNIGHT && type_of(promotion) < KING));
 
           st->promotionPawn = piece_on(to);
           remove_piece(to);
@@ -8559,7 +8756,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       if (dropMove && paired_drop(m))
           st->pawnKey ^= Zobrist::psq[pc][secondary_drop_square(m)];
   }
-  else if (is_promotion_move(m) || type_of(m) == PIECE_PROMOTION)
+  else if (is_any_promotion(m))
   {
       Piece promotion = make_piece(us, is_promotion_move(m) ? promotion_type(m) : promoted_piece_type(type_of(pc)));
       Piece promotedHandPiece = make_piece(us, type_of(promotion));
@@ -8713,8 +8910,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       && !stackMove
       && !dropMove
       && type_of(m) != CASTLING
-      && !is_promotion_move(m)
-      && type_of(m) != PIECE_PROMOTION
+      && !is_any_promotion(m)
       && !passMove)
   {
       Piece cur = piece_on(moverSq);
@@ -8726,8 +8922,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
 
   if (   !dropMove
       && type_of(m) != CASTLING
-      && !is_promotion_move(m)
-      && type_of(m) != PIECE_PROMOTION
+      && !is_any_promotion(m)
       && !passMove)
   {
       Piece cur = piece_on(moverSq);
@@ -8887,11 +9082,19 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       st->gatesBB[them] ^= square<KING>(them);
 
   //resolve blast and custodial capture. custodial capture is essentially blast with extra restrictions
+  // A via-only multi-leg capture leaves captured empty; fold the secondary
+  // victim in so blast/petrify resolution is not silently skipped for it.
+  // (Doubles combined with these effects are rejected in legal().)
+  const bool secondaryCapture = bool(st->secondaryCaptured);
+  const bool blastCapture = captured || secondaryCapture;
+  const bool blastOnCapture = blastOnCaptureMove
+                           || (secondaryCapture && !is_stack_move(m)
+                               && blast_on_capture(pc, st->secondaryCaptured.piece.piece));
   if (
        (
          ( surround_capture_opposite() || surround_capture_intervene() || surround_capture_edge() ) ||
-         ( captured && (blastOnCaptureMove || var->petrifyOnCaptureTypes) ) ||
-         ( blast_on_move() && !captured && !is_self_destruct(m) ) ||
+         ( blastCapture && (blastOnCapture || var->petrifyOnCaptureTypes) ) ||
+         ( blast_on_move() && !blastCapture && !is_self_destruct(m) ) ||
          ( blast_on_self_destruct() && is_self_destruct(m) ) ||
          var->blastPassiveTypes ||
          ( remove_connect_n() > 0 ) ||
@@ -8914,13 +9117,19 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       st->bycatchSquares = 0;
       st->blastPromotedSquares = 0;
 
-      if ( ( captured && (blastOnCaptureMove || var->petrifyOnCaptureTypes) ) ||
-           ( blast_on_move() && !captured && !is_self_destruct(m) ) ||
+      if ( ( blastCapture && (blastOnCapture || var->petrifyOnCaptureTypes) ) ||
+           ( blast_on_move() && !blastCapture && !is_self_destruct(m) ) ||
            ( blast_on_self_destruct() && is_self_destruct(m) ) ) {
 
-          blast_mask = (blastOnCaptureMove || blast_on_move() || blast_on_self_destruct()) ? blast_squares(captured ? (blast_on_capture_mover_center() ? moverSq : st->captured.square) : to)
+          // capture_square(m) is empty-aware and goes stale once the via
+          // victim is removed above; prefer the stored squares instead.
+          Square blastCenterSq = blast_on_capture_mover_center() ? moverSq
+                               : captured ? st->captured.square
+                               : secondaryCapture ? st->secondaryCaptured.square
+                               : capture_square(m);
+          blast_mask = (blastOnCapture || blast_on_move() || blast_on_self_destruct()) ? blast_squares(blastCapture ? blastCenterSq : to)
               : (var->petrifyOnCaptureTypes & type_of(pc) ? square_bb(moverSq) : Bitboard(0));
-          if (captured && blastOnCaptureMove
+          if (blastCapture && blastOnCapture
               && piece_on(moverSq) != NO_PIECE
               && (blast_immune_types() & type_of(piece_on(moverSq))))
               blast_mask &= ~square_bb(moverSq);
@@ -9525,6 +9734,7 @@ void Position::undo_move(Move m) {
          || swapMove
          || stackMove
          || unstackMove
+         || is_multileg(m)
          || wasOpeningSelfRemoval
          || st->gravity.active()
          || (commit_gates() && st->removedGatingType > NO_PIECE_TYPE)
@@ -9696,15 +9906,15 @@ void Position::undo_move(Move m) {
       commit_piece(make_piece(color_of(st->captured.piece.piece), st->capturedGatingType), file_of(to));
   }
 
-  if (is_promotion_move(m))
+  if (is_promotion_move(m) || is_multileg_promotion(m))
   {
-      assert((promotion_zone(st->promotionPawn) & to) || sittuyin_promotion());
+      assert((promotion_zone(st->promotionPawn) & to) || sittuyin_promotion() || is_multileg(m));
       Piece promotedPiece = piece_on(moverSq);
       if (promotedPiece == NO_PIECE)
-          promotedPiece = make_piece(us, promotion_type(m));
-      assert(type_of(promotedPiece) == promotion_type(m));
-      assert(type_of(promotedPiece) >= KNIGHT && type_of(promotedPiece) < KING);
-      assert(type_of(st->promotionPawn) == main_promotion_pawn_type(us) || !captures_to_hand());
+          promotedPiece = make_piece(us, is_multileg(m) ? promoted_piece_type(type_of(st->promotionPawn)) : promotion_type(m));
+      assert(is_multileg(m) || type_of(promotedPiece) == promotion_type(m));
+      assert(is_multileg(m) || (type_of(promotedPiece) >= KNIGHT && type_of(promotedPiece) < KING));
+      assert(type_of(st->promotionPawn) == main_promotion_pawn_type(us) || !captures_to_hand() || is_multileg(m));
 
       if (prison_pawn_promotion() && type_of(st->promotionPawn) == PAWN) {
           remove_from_prison(st->promotionPawn);
@@ -9816,7 +10026,7 @@ void Position::undo_move(Move m) {
                   remove_piece(to);
               put_piece(st->stackResultPiece, from);
           }
-          else if (!rifleShot && piece_on(to) != NO_PIECE)
+          else if (!rifleShot && piece_on(to) != NO_PIECE && (!is_multileg(m) || from != to))
               move_piece(to, from); // Put the piece back at the source square when the mover survived on 'to'
       }
 
@@ -9892,19 +10102,24 @@ void Position::undo_move(Move m) {
           }
       }
 
-      if (st->jumpedEnPassantCaptured)
-      {
-          Square jumpedSq = st->jumpedEnPassantCaptured.square;
-          put_piece(st->jumpedEnPassantCaptured.piece.piece, jumpedSq,
-                    st->jumpedEnPassantCaptured.piece.promoted,
-                    st->jumpedEnPassantCaptured.piece.unpromoted);
-          Piece transferPiece = reserve_transfer_piece(*this, us, st->jumpedEnPassantCaptured.piece.piece,
-                                                       st->jumpedEnPassantCaptured.piece.promoted,
-                                                       st->jumpedEnPassantCaptured.piece.unpromoted,
+      // Extra victims are restored through the same pipeline (neither can
+      // coincide with a stack move, whose type is disjoint).
+      auto restore_extra_capture = [&](ReversiblePieceOnSquare& saved) {
+          if (!saved)
+              return;
+          Square sq = saved.square;
+          put_piece(saved.piece.piece, sq,
+                    saved.piece.promoted,
+                    saved.piece.unpromoted);
+          Piece transferPiece = reserve_transfer_piece(*this, us, saved.piece.piece,
+                                                       saved.piece.promoted,
+                                                       saved.piece.unpromoted,
                                                        drop_loop(), var->captureToHandSide,
-                                                       main_promotion_pawn_type(color_of(st->jumpedEnPassantCaptured.piece.piece)));
+                                                       main_promotion_pawn_type(color_of(saved.piece.piece)));
           undo_capture_transfer(st, transferPiece);
-      }
+      };
+
+      restore_extra_capture(st->jumpedEnPassantCaptured);
 
       if (st->captured)
       {
@@ -9923,6 +10138,11 @@ void Position::undo_move(Move m) {
                                                        main_promotion_pawn_type(color_of(st->captured.piece.piece)));
           if (!stackMove)
               undo_capture_transfer(st, transferPiece);
+      }
+
+      if (st->secondaryCaptured)
+      {
+          restore_extra_capture(st->secondaryCaptured);
       }
   }
 
@@ -11650,6 +11870,12 @@ bool Position::see_pruning_unreliable(Move m) const {
       return false;
 
   if (var->seePruningPolicy == SeePruningPolicy::ALWAYS_UNRELIABLE)
+      return true;
+
+  // Two-step moves capture on up to two squares; SEE only models a single
+  // victim, so conservatively treat them as unreliable. This is a safe
+  // fallback, not a full multi-victim exchange evaluation.
+  if (is_multileg(m))
       return true;
 
   if (type_of(moved_piece(m)) == KING)

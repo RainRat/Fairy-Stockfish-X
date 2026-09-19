@@ -73,6 +73,82 @@ startFen = W6w/QQ6/8/8/8/8/8/8 w
 customPiece1 = p:iW
 pawnTypes = p
 startFen = 4k3/8/8/8/8/8/4P3/4K3 w - - 0 1
+
+# Lion-family and hook-mover regression fixtures. These live here (not in
+# src/variants.ini) so the production variant list stays free of test-only
+# entries; run_uci_cmds addresses them through this file.
+
+# Lion: two king steps in any direction (*), direct jumps (ADNW), step 1 (K).
+[test-lion]
+king = -
+customPiece1 = l:ADNWK
+twoStepMoves = l:*
+startFen = 8/8/8/3l4/4L3/8/8/8 w - - 0 1
+immobile = -
+castling = false
+doubleStep = false
+
+# Horned Falcon: Bishop (B), sideways/backward slides (sRbR), forward jump 2
+# (fD), forward step 1 (fW), forward two-step (N>N,N>S).
+[test-horned-falcon]
+king = -
+customPiece1 = h:BsRbRfDfW
+twoStepMoves = h:N>N,N>S
+startFen = 8/8/8/3h4/4H3/8/8/8 w - - 0 1
+immobile = -
+castling = false
+doubleStep = false
+
+# Soaring Eagle: Rook (R), backward-diagonal slides (bB), forward diagonal
+# jump 2 (fA) and step 1 (fF), forward-diagonal two-step.
+[test-soaring-eagle]
+king = -
+customPiece1 = e:RbBfAfF
+twoStepMoves = e:NE>NE,NE>SW,NW>NW,NW>SE
+startFen = 8/8/8/3e4/4E3/8/8/8 w - - 0 1
+immobile = -
+castling = false
+doubleStep = false
+
+# Free Eagle: Queen (Q), diagonal jump 2 (A), diagonal cat-sword two-step.
+[test-free-eagle]
+king = -
+customPiece1 = f:QA
+twoStepMoves = f:NE>NE,NE>NW,NE>SE,NE>SW,NW>NE,NW>NW,NW>SE,NW>SW,SE>NE,SE>NW,SE>SE,SE>SW,SW>NE,SW>NW,SW>SE,SW>SW
+startFen = 8/8/8/3f4/4F3/8/8/8 w - - 0 1
+immobile = -
+castling = false
+doubleStep = false
+
+# Lion Hawk: Bishop (B) with full Lion jumps (ADNWK) and two-step (*).
+[test-lion-hawk]
+king = -
+customPiece1 = y:BADNWK
+twoStepMoves = y:*
+startFen = 8/8/8/3y4/4Y3/8/8/8 w - - 0 1
+immobile = -
+castling = false
+doubleStep = false
+
+# Hook mover (single capture): rook legs with a bend, at most one capture.
+[test-hook]
+king = -
+customPiece1 = h:0
+hookMoves = h:R-R
+startFen = 8/8/8/3h4/4H3/8/8/8 w - - 0 1
+immobile = -
+castling = false
+doubleStep = false
+
+# Hook mover (double capture): same legs, both-leg captures allowed.
+[test-hook-double]
+king = -
+customPiece1 = h:0
+hookMoves = h:R-R:2
+startFen = 8/8/4h3/4h3/4H3/8/8/8 w - - 0 1
+immobile = -
+castling = false
+doubleStep = false
 EOF
 
 variant_available() {
@@ -239,5 +315,91 @@ out=$(run_uci_cmds "$ENGINE" "$VARIANTS" oshi \
   "position fen ca2a4/b4ab1c/4a4/9/5A3/2AC5/9/2BAA1B2/C8 w - - 10 6 {0 0}
 go depth 8")
 assert_not_contains "$out" "^bestmove d4a4"
+
+# Lion family two-step move regressions: igui, quiet pass, forward/diagonal gating.
+out=$(run_uci_cmds "$ENGINE" "$TMP_INI" test-lion \
+  "position startpos
+go perft 1")
+assert_nodes "$out" "88"
+assert_contains "$out" "^e4d5e4: 1$"
+assert_contains "$out" "^e4e5e4: 1$"
+assert_contains "$out" "^e4e5e6: 1$"
+assert_contains "$out" "^e4d5c6: 1$"
+
+out=$(run_uci_cmds "$ENGINE" "$TMP_INI" test-lion \
+  "position startpos moves e4d5e4
+d")
+assert_contains_literal "$out" "Fen: 8/8/8/8/4L3/8/8/8 b - - 0 1"
+
+out=$(run_uci_cmds "$ENGINE" "$TMP_INI" test-lion \
+  "position startpos moves e4e5e4
+d")
+assert_contains_literal "$out" "Fen: 8/8/8/3l4/4L3/8/8/8 b - - 1 1"
+
+out=$(run_uci_cmds "$ENGINE" "$TMP_INI" test-horned-falcon \
+  "position startpos
+go perft 1")
+assert_nodes "$out" "24"
+assert_contains "$out" "^e4e5e6: 1$"
+assert_contains "$out" "^e4e5e4: 1$"
+assert_not_contains "$out" "^e4e3e2:"
+assert_not_contains "$out" "^e4e3e4:"
+
+out=$(run_uci_cmds "$ENGINE" "$TMP_INI" test-soaring-eagle \
+  "position startpos
+go perft 1")
+assert_nodes "$out" "28"
+assert_contains "$out" "^e4d5e4: 1$"
+assert_contains "$out" "^e4d5c6: 1$"
+assert_contains "$out" "^e4f5g6: 1$"
+assert_not_contains "$out" "^e4e5e6:"
+
+out=$(run_uci_cmds "$ENGINE" "$TMP_INI" test-free-eagle \
+  "position startpos
+go perft 1")
+assert_nodes "$out" "41"
+assert_contains "$out" "^e4d5e4: 1$"
+assert_contains "$out" "^e4d5c6: 1$"
+assert_contains "$out" "^e4f5g6: 1$"
+assert_contains "$out" "^e4f5e4: 1$"
+assert_not_contains "$out" "^e4e5e6:"
+assert_not_contains "$out" "^e4e5e4:"
+
+out=$(run_uci_cmds "$ENGINE" "$TMP_INI" test-lion-hawk \
+  "position startpos
+go perft 1")
+assert_nodes "$out" "91"
+assert_contains "$out" "^e4d5e4: 1$"
+assert_contains "$out" "^e4e5e6: 1$"
+assert_contains "$out" "^e4e5e4: 1$"
+
+# Hook movers share the two-step move encoding (from+bend+to) with sliding legs.
+out=$(run_uci_cmds "$ENGINE" "$TMP_INI" test-hook \
+  "position startpos
+go perft 1")
+assert_nodes "$out" "142"
+assert_contains "$out" "^e4d4d5: 1$"
+assert_contains "$out" "^e4d4e4: 1$"
+assert_contains "$out" "^e4f4f8: 1$"
+assert_not_contains "$out" "^e4d5e4:"
+assert_not_contains "$out" "^e4d4d8:"
+
+out=$(run_uci_cmds "$ENGINE" "$TMP_INI" test-hook \
+  "position startpos moves e4d4d5
+d")
+assert_contains_literal "$out" "Fen: 8/8/8/3H4/8/8/8/8 b - - 0 1"
+
+out=$(run_uci_cmds "$ENGINE" "$TMP_INI" test-hook \
+  "position startpos moves e4d4e4
+d")
+assert_contains_literal "$out" "Fen: 8/8/8/3h4/4H3/8/8/8 b - - 1 1"
+
+out=$(run_uci_cmds "$ENGINE" "$TMP_INI" test-hook-double \
+  "position startpos
+go perft 1")
+assert_nodes "$out" "113"
+assert_contains "$out" "^e4e5e6: 1$"
+assert_contains "$out" "^e4e5e4: 1$"
+assert_not_contains "$out" "^e4e5e7:"
 
 echo "movegen regressions passed"

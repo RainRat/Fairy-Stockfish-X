@@ -236,6 +236,230 @@ namespace {
         return true;
     }
 
+    int parse_king_step_direction(const std::string& token) {
+        std::string s;
+        for (char c : token)
+            s += char(std::tolower(static_cast<unsigned char>(c)));
+        // Index order matches KingDirections; see king_step_name.
+        for (int i = 0; i < 8; ++i)
+        {
+            std::string name = king_step_name(i);
+            for (char& c : name)
+                c = char(std::tolower(static_cast<unsigned char>(c)));
+            if (s == name)
+                return i;
+        }
+        return -1;
+    }
+
+    template <bool DoCheck>
+    bool parse_two_step_moves(const std::string& optionName,
+                              const std::string& value,
+                              const Variant* v,
+                              uint64_t target[PIECE_TYPE_NB]) {
+        std::string entry;
+        std::stringstream ss(value);
+        uint64_t parsed[PIECE_TYPE_NB];
+        std::copy(target, target + PIECE_TYPE_NB, std::begin(parsed));
+        bool sawEntry = false;
+        while (ss >> entry)
+        {
+            sawEntry = true;
+            auto [pieceToken, rawPairs] = split_piece_entry(entry);
+            PieceType pt = parse_piece_type_token(v, pieceToken);
+            if (pt == NO_PIECE_TYPE || rawPairs.empty())
+            {
+                if (DoCheck)
+                    std::cerr << optionName << " - Invalid piece token: " << pieceToken << std::endl;
+                return false;
+            }
+
+            if (rawPairs == "-")
+            {
+                parsed[pt] = 0ULL;
+            }
+            else if (rawPairs == "*")
+            {
+                parsed[pt] = ~0ULL;
+            }
+            else
+            {
+                uint64_t mask = 0;
+                std::stringstream pss(rawPairs);
+                std::string pairToken;
+                while (std::getline(pss, pairToken, ','))
+                {
+                    pairToken = trim(pairToken);
+                    if (pairToken.empty())
+                        continue;
+                    size_t sep = pairToken.find('>');
+                    if (sep == std::string::npos)
+                    {
+                        if (DoCheck)
+                            std::cerr << optionName << " - Malformed direction pair: " << pairToken << std::endl;
+                        return false;
+                    }
+                    std::string s1 = pairToken.substr(0, sep);
+                    std::string s2 = pairToken.substr(sep + 1);
+                    int d1_start = 0, d1_end = 7;
+                    if (s1 != "*")
+                    {
+                        int d1 = parse_king_step_direction(s1);
+                        if (d1 < 0)
+                        {
+                            if (DoCheck)
+                                std::cerr << optionName << " - Invalid direction in pair: " << pairToken << std::endl;
+                            return false;
+                        }
+                        d1_start = d1_end = d1;
+                    }
+                    int d2_start = 0, d2_end = 7;
+                    if (s2 != "*")
+                    {
+                        int d2 = parse_king_step_direction(s2);
+                        if (d2 < 0)
+                        {
+                            if (DoCheck)
+                                std::cerr << optionName << " - Invalid direction in pair: " << pairToken << std::endl;
+                            return false;
+                        }
+                        d2_start = d2_end = d2;
+                    }
+                    for (int d1 = d1_start; d1 <= d1_end; ++d1)
+                        for (int d2 = d2_start; d2 <= d2_end; ++d2)
+                            mask |= (1ULL << (d1 * 8 + d2));
+                }
+                parsed[pt] = mask;
+            }
+        }
+        if (!sawEntry || !only_trailing_space(ss))
+            return false;
+        std::copy(std::begin(parsed), std::end(parsed), target);
+        return true;
+    }
+
+    // Hook leg: [f|b|s](R|B)[range], White-relative absolute directions.
+    // f = forward (N,NE,NW), b = backward (S,SE,SW), s = sideways (E,W);
+    // bare R/B allows all 8. Range is a trailing max leg length (absent =
+    // unlimited). The leg type restricts geometry (R orthogonal, B diagonal).
+    bool parse_hook_leg(const std::string& token, int& dirBits, int& range) {
+        std::string s;
+        for (char c : token)
+            s += char(std::tolower(static_cast<unsigned char>(c)));
+        size_t i = 0;
+        int filter = 0xFF;
+        if (i < s.size() && (s[i] == 'f' || s[i] == 'b' || s[i] == 's'))
+        {
+            // N=0 NE=1 E=2 SE=3 S=4 SW=5 W=6 NW=7
+            filter = s[i] == 'f' ? ((1 << 0) | (1 << 1) | (1 << 7))
+                   : s[i] == 'b' ? ((1 << 4) | (1 << 3) | (1 << 5))
+                                 : ((1 << 2) | (1 << 6));
+            ++i;
+        }
+        if (i >= s.size() || (s[i] != 'r' && s[i] != 'b'))
+            return false;
+        int geom = s[i] == 'r' ? ((1 << 0) | (1 << 2) | (1 << 4) | (1 << 6))
+                               : ((1 << 1) | (1 << 3) | (1 << 5) | (1 << 7));
+        ++i;
+        int parsedRange = 0;
+        size_t digits = 0;
+        while (i < s.size() && std::isdigit(static_cast<unsigned char>(s[i])))
+        {
+            parsedRange = std::min(parsedRange * 10 + (s[i] - '0'), 255);
+            ++i;
+            ++digits;
+        }
+        if (i != s.size())
+            return false;
+        dirBits = filter & geom;
+        if (dirBits == 0)
+            return false;
+        if (digits > 0 && parsedRange <= 0)
+            return false;
+        range = parsedRange;
+        return true;
+    }
+
+    template <bool DoCheck>
+    bool parse_hook_moves(const std::string& optionName,
+                          const std::string& value,
+                          const Variant* v,
+                          uint64_t masks[PIECE_TYPE_NB],
+                          int firstRange[PIECE_TYPE_NB],
+                          int secondRange[PIECE_TYPE_NB],
+                          int limits[PIECE_TYPE_NB]) {
+        std::string entry;
+        std::stringstream ss(value);
+        uint64_t parsedMasks[PIECE_TYPE_NB];
+        int parsedFirst[PIECE_TYPE_NB];
+        int parsedSecond[PIECE_TYPE_NB];
+        int parsedLimits[PIECE_TYPE_NB];
+        std::copy(masks, masks + PIECE_TYPE_NB, std::begin(parsedMasks));
+        std::copy(firstRange, firstRange + PIECE_TYPE_NB, std::begin(parsedFirst));
+        std::copy(secondRange, secondRange + PIECE_TYPE_NB, std::begin(parsedSecond));
+        std::copy(limits, limits + PIECE_TYPE_NB, std::begin(parsedLimits));
+        auto fail = [&](const std::string& msg, const std::string& detail) {
+            if (DoCheck)
+                std::cerr << optionName << " - " << msg << ": " << detail << std::endl;
+            return false;
+        };
+        bool sawEntry = false;
+        while (ss >> entry)
+        {
+            sawEntry = true;
+            auto [pieceToken, rawSpec] = split_piece_entry(entry);
+            PieceType pt = parse_piece_type_token(v, pieceToken);
+            if (pt == NO_PIECE_TYPE || rawSpec.empty())
+                return fail("Invalid piece token", pieceToken);
+
+            if (rawSpec == "-")
+            {
+                parsedMasks[pt] = 0ULL;
+                parsedFirst[pt] = 0;
+                parsedSecond[pt] = 0;
+                parsedLimits[pt] = 0;
+                continue;
+            }
+
+            // Optional :1|:2 capture-limit suffix (default: 1).
+            std::string legsPart = rawSpec;
+            int limit = 1;
+            size_t colon = rawSpec.rfind(':');
+            if (colon != std::string::npos)
+            {
+                std::string tail = trim(rawSpec.substr(colon + 1));
+                if (tail != "1" && tail != "2")
+                    return fail("Invalid hook capture limit (expected :1 or :2)", rawSpec);
+                limit = tail[0] - '0';
+                legsPart = trim(rawSpec.substr(0, colon));
+            }
+            size_t dash = legsPart.find('-');
+            if (dash == std::string::npos || legsPart.find('-', dash + 1) != std::string::npos)
+                return fail("Malformed hook legs (expected <leg1>-<leg2>)", rawSpec);
+            int bits1 = 0, range1 = 0, bits2 = 0, range2 = 0;
+            if (!parse_hook_leg(trim(legsPart.substr(0, dash)), bits1, range1)
+                || !parse_hook_leg(trim(legsPart.substr(dash + 1)), bits2, range2))
+                return fail("Invalid hook leg (expected [f|b|s](R|B)[range])", rawSpec);
+            uint64_t mask = 0;
+            for (int d1 = 0; d1 < 8; ++d1)
+                if (bits1 & (1 << d1))
+                    for (int d2 = 0; d2 < 8; ++d2)
+                        if (bits2 & (1 << d2))
+                            mask |= (1ULL << (d1 * 8 + d2));
+            parsedMasks[pt] = mask;
+            parsedFirst[pt] = range1;
+            parsedSecond[pt] = range2;
+            parsedLimits[pt] = limit;
+        }
+        if (!sawEntry || !only_trailing_space(ss))
+            return false;
+        std::copy(std::begin(parsedMasks), std::end(parsedMasks), masks);
+        std::copy(std::begin(parsedFirst), std::end(parsedFirst), firstRange);
+        std::copy(std::begin(parsedSecond), std::end(parsedSecond), secondRange);
+        std::copy(std::begin(parsedLimits), std::end(parsedLimits), limits);
+        return true;
+    }
+
     bool parse_piece_set_token_string(const std::string& text, const Variant* v, PieceSet& target, bool allowAll = true, bool allowNone = true);
 
     bool parse_drop_piece_type_map(const std::string& value, const Variant* v, PieceSet target[PIECE_TYPE_NB]) {
@@ -1753,6 +1977,19 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
         if (!parse_non_negative_piece_int_map<DoCheck>("pullingStrength", it_pull_strength->second, v, v->pullingStrength))
             return false;
     }
+    auto it_two_step = config.find("twoStepMoves");
+    if (it_two_step != config.end())
+    {
+        if (!parse_two_step_moves<DoCheck>("twoStepMoves", it_two_step->second, v, v->twoStepMoves))
+            return false;
+    }
+    auto it_hook = config.find("hookMoves");
+    if (it_hook != config.end())
+    {
+        if (!parse_hook_moves<DoCheck>("hookMoves", it_hook->second, v, v->hookMoveMasks,
+                                       v->hookFirstRange, v->hookSecondRange, v->hookCaptureLimit))
+            return false;
+    }
     parse_attribute("pushFirstColor", v->pushFirstColor);
     parse_attribute("pushingRemoves", v->pushingRemoves);
     parse_attribute("pushChainEnemyOnly", v->pushChainEnemyOnly);
@@ -2614,6 +2851,25 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
     {
         if (DoCheck)
             std::cerr << "laserGame is not supported on wrapped or hexagonal boards." << std::endl;
+        valid = false;
+    }
+
+    // Hook rays stop at board edges; wrapping topologies would need
+    // wrap-around rays with triple-level dedup, which is not implemented.
+    if (v->hasHookMoves && (v->cylindrical || v->toroidal))
+    {
+        if (DoCheck)
+            std::cerr << "hookMoves is not supported on wrapped boards." << std::endl;
+        valid = false;
+    }
+
+    // Multi-leg captures can remove two victims, but the two-board partner
+    // API reports a single piece; reject the combination rather than
+    // silently dropping partner material.
+    if (v->twoBoards && (v->hasTwoStepMoves || v->hasHookMoves))
+    {
+        if (DoCheck)
+            std::cerr << "twoBoards is not supported with twoStepMoves or hookMoves." << std::endl;
         valid = false;
     }
 

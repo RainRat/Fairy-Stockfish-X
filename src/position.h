@@ -358,6 +358,7 @@ struct MoveUndoInfo {
   Bitboard   laserTransformedSquares = Bitboard(0);
   ReversiblePieceOnSquare captured;
   ReversiblePieceOnSquare jumpedEnPassantCaptured;
+  ReversiblePieceOnSquare secondaryCaptured;
   ReversiblePieceState dead;
   Piece      promotionPawn = NO_PIECE;
   Piece      consumedPromotionHandPiece = NO_PIECE;
@@ -393,6 +394,7 @@ struct MoveUndoInfo {
     laserTransformedSquares = Bitboard(0);
     captured.clear();
     jumpedEnPassantCaptured.clear();
+    secondaryCaptured.clear();
     dead.clear();
     promotionPawn = NO_PIECE;
     consumedPromotionHandPiece = NO_PIECE;
@@ -428,6 +430,7 @@ struct MoveUndoInfo {
         && laserTransformedSquares == Bitboard(0)
         && !captured
         && !jumpedEnPassantCaptured
+        && !secondaryCaptured
         && !dead
         && promotionPawn == NO_PIECE
         && consumedPromotionHandPiece == NO_PIECE
@@ -605,6 +608,7 @@ public:
   Bitboard mandatory_promotion_zone(Color c) const;
   Bitboard mandatory_promotion_zone(Color c, PieceType pt) const;
   Bitboard mandatory_promotion_zone(Piece p) const;
+  bool multileg_promotion_zone(Color c, PieceType pt, Square from, Square to) const;
   PieceType effective_piece_type(PieceType pt) const { return pt == KING ? king_type() : pt; }
   Square promotion_square(Color c, Square s) const;
   PieceType main_promotion_pawn_type(Color c) const;
@@ -749,6 +753,19 @@ public:
   bool drop_loop() const;
   bool captures_to_hand() const;
   PieceSet capture_to_hand_types() const;
+  bool has_two_step_moves() const;
+  uint64_t two_step_moves_mask(Color c, PieceType pt) const;
+  PieceSet two_step_piece_types(Color c) const;
+  bool has_hook_moves() const;
+  uint64_t hook_move_mask(Color c, PieceType pt) const;
+  int hook_first_range(PieceType pt) const;
+  int hook_second_range(PieceType pt) const;
+  int hook_capture_limit(PieceType pt) const;
+  PieceSet hook_piece_types(Color c) const;
+  // Validates hook path geometry and occupancy (not king safety): pair/range
+  // coverage, empty transit rays, no friendly on bend/to, capture-limit
+  // compliance for doubles.
+  bool hook_path_valid(Color us, PieceType pt, Square from, Square via, Square to) const;
   PieceSet self_destruct_types() const;
   Bitboard self_destruct_region(Color c) const;
   GravityRule gravity() const;
@@ -1037,6 +1054,12 @@ public:
   bool is_jump_capture(Move m) const;
   Square capture_square(Square to) const;
   Square capture_square(Move m) const;
+  Bitboard capture_squares(Move m) const;
+  bool step_destination(Square from, Direction d, Square& to) const;
+  // Single king step that never wraps: like step_destination, but a step
+  // jumping more than one file/rank (i.e. around a wrapped edge) fails.
+  // Hook rays use this so they stop at board edges; ordinary sliders wrap.
+  bool hook_step(Square cur, Direction dir, Square& nxt) const;
   Square secondary_drop_square(Move m) const;
   Square mirrored_pair_drop_square(Square s) const;
   Bitboard jump_capture_mask(Square from, Square to, Bitboard occupied) const;
@@ -2416,6 +2439,51 @@ inline bool Position::captures_to_hand() const {
 inline PieceSet Position::capture_to_hand_types() const {
   assert(var != nullptr);
   return var->captureToHandTypes;
+}
+
+inline bool Position::has_two_step_moves() const {
+  assert(var != nullptr);
+  return var->hasTwoStepMoves;
+}
+
+inline uint64_t Position::two_step_moves_mask(Color c, PieceType pt) const {
+  assert(var != nullptr);
+  return var->twoStepMovesColor[c][pt];
+}
+
+inline PieceSet Position::two_step_piece_types(Color c) const {
+  assert(var != nullptr);
+  return var->twoStepPieceTypes[c];
+}
+
+inline bool Position::has_hook_moves() const {
+  assert(var != nullptr);
+  return var->hasHookMoves;
+}
+
+inline uint64_t Position::hook_move_mask(Color c, PieceType pt) const {
+  assert(var != nullptr);
+  return var->hookMoveMasksColor[c][pt];
+}
+
+inline int Position::hook_first_range(PieceType pt) const {
+  assert(var != nullptr);
+  return var->hookFirstRange[pt];
+}
+
+inline int Position::hook_second_range(PieceType pt) const {
+  assert(var != nullptr);
+  return var->hookSecondRange[pt];
+}
+
+inline int Position::hook_capture_limit(PieceType pt) const {
+  assert(var != nullptr);
+  return var->hookCaptureLimit[pt];
+}
+
+inline PieceSet Position::hook_piece_types(Color c) const {
+  assert(var != nullptr);
+  return var->hookPieceTypes[c];
 }
 
 inline PieceSet Position::self_destruct_types() const {
@@ -5326,7 +5394,9 @@ inline bool Position::is_chess960() const {
 
 inline bool Position::capture_or_promotion(Move m) const {
   assert(is_ok(m));
-  return is_promotion_move(m) || capture(m);
+  // Multi-leg promotions are tactical like pawn promotions. PIECE_PROMOTION
+  // deliberately stays non-tactical, as before.
+  return is_promotion_move(m) || is_multileg_promotion(m) || capture(m);
 }
 inline Position::HopperMoveDetails Position::resolve_hopper_move_details(Square from, Square to, Bitboard occupied) const {
   assert(is_ok(from));
@@ -5695,6 +5765,16 @@ inline bool Position::capture(Move m) const {
   assert(is_ok(m));
   if (type_of(m) == EN_PASSANT)
       return true;
+  if (is_multileg(m))
+  {
+      Square via = via_sq(m);
+      Square to = to_sq(m);
+      if (via != to && !empty(via) && color_of(piece_on(via)) == ~sideToMove)
+          return true;
+      if (to != from_sq(m) && !empty(to) && color_of(piece_on(to)) == ~sideToMove)
+          return true;
+      return false;
+  }
   if (type_of(m) == PULL || type_of(m) == SWAP || is_stack_move(m)
       || is_unstack_move(m) || is_laser_fire(m))
       return false;
@@ -5762,6 +5842,15 @@ inline Square Position::capture_square(Move m) const {
   Square to = to_sq(m);
   if (type_of(m) == EN_PASSANT)
       return capture_square(to);
+  if (is_multileg(m))
+  {
+      if (to != from_sq(m) && !empty(to) && color_of(piece_on(to)) == ~sideToMove)
+          return to;
+      Square via = via_sq(m);
+      if (via != to && !empty(via) && color_of(piece_on(via)) == ~sideToMove)
+          return via;
+      return SQ_NONE;
+  }
   if (is_jump_capture(m))
       return jump_capture_square(from_sq(m), to);
 
@@ -5770,6 +5859,95 @@ inline Square Position::capture_square(Move m) const {
       return pushInfo.captures ? pushInfo.tail : SQ_NONE;
 
   return to;
+}
+
+inline Bitboard Position::capture_squares(Move m) const {
+  if (!capture(m))
+      return Bitboard(0);
+  if (is_multileg(m))
+  {
+      Bitboard b = 0;
+      Square via = via_sq(m);
+      Square to = to_sq(m);
+      Square from = from_sq(m);
+      Color them = ~sideToMove;
+      if (via != to && !empty(via) && color_of(piece_on(via)) == them)
+          b |= square_bb(via);
+      if (to != from && !empty(to) && color_of(piece_on(to)) == them)
+          b |= square_bb(to);
+      return b;
+  }
+  // Multi-victim locust ordering is out of scope for the multi-leg change;
+  // keep pre-existing single-victim search semantics for jump captures.
+  Square cs = capture_square(m);
+  return is_ok(cs) ? square_bb(cs) : Bitboard(0);
+}
+
+inline bool Position::step_destination(Square from, Direction d, Square& to) const {
+  auto [dr, df] = decode_direction(d);
+  return wrapped_destination_square(from, df, dr, max_file(), max_rank(), wraps_files(), wraps_ranks(), to);
+}
+
+inline bool Position::hook_step(Square cur, Direction dir, Square& nxt) const {
+  if (!step_destination(cur, dir, nxt))
+      return false;
+  if (std::abs(int(file_of(nxt)) - int(file_of(cur))) > 1
+      || std::abs(int(rank_of(nxt)) - int(rank_of(cur))) > 1)
+      return false;
+  return true;
+}
+
+inline bool Position::multileg_promotion_zone(Color c, PieceType pt, Square from, Square to) const {
+  Bitboard pz = promotion_zone(c, pt);
+  return (pz & from) || (pz & to);
+}
+
+inline bool Position::hook_path_valid(Color us, PieceType pt, Square from, Square via, Square to) const {
+  uint64_t mask = hook_move_mask(us, pt);
+  if (!mask)
+      return false;
+  // Degenerate paths (zero-length legs) are never generated.
+  if (via == from || to == via)
+      return false;
+  // Walk each leg from its origin along every king direction; transit
+  // squares must be empty, which also establishes the leg direction.
+  int legDir[2] = {-1, -1};
+  int range[2] = {hook_first_range(pt), hook_second_range(pt)};
+  Square legFrom[2] = {from, via};
+  Square legTo[2] = {via, to};
+  for (int leg = 0; leg < 2; ++leg)
+  {
+      int cap = range[leg] ? range[leg] : SQUARE_NB;
+      bool found = false;
+      for (int i = 0; i < 8 && !found; ++i)
+      {
+          Square cur = legFrom[leg];
+          for (int k = 1; k <= cap; ++k)
+          {
+              Square nxt;
+              if (!hook_step(cur, KingDirections[i], nxt))
+                  break;
+              if (nxt == legTo[leg])
+              {
+                  legDir[leg] = i;
+                  found = true;
+                  break;
+              }
+              if (!empty(nxt))
+                  break;
+              cur = nxt;
+          }
+      }
+      if (!found)
+          return false;
+  }
+  if (!((mask >> (legDir[0] * 8 + legDir[1])) & 1ULL))
+      return false;
+  if ((pieces(us) & via) || (to != from && (pieces(us) & to)))
+      return false;
+  // Pure geometry: capture-count limits are interaction rules enforced by
+  // callers (pseudo_legal/legal), not by the ray walk.
+  return true;
 }
 
 inline bool Position::paired_drop(Move m) const {
@@ -5800,7 +5978,9 @@ inline bool Position::virtual_drop(Move m) const {
 }
 
 inline Piece Position::captured_piece() const {
-  return st->captured.piece.piece;
+  if (st->captured.piece.piece != NO_PIECE)
+      return st->captured.piece.piece;
+  return st->secondaryCaptured.piece.piece;
 }
 
 inline Bitboard Position::fog_area() const {
@@ -5825,11 +6005,15 @@ inline Piece Position::captured_piece(Move m) const {
 }
 
 inline std::string Position::piece_to_partner() const {
-  if (!st->captured.piece) return std::string();
-  Color color = color_of(st->captured.piece.piece);
-  Piece piece = st->captured.piece.promoted ?
-      (st->captured.piece.unpromoted ? st->captured.piece.unpromoted : make_piece(color, main_promotion_pawn_type(color))) :
-      st->captured.piece.piece;
+  // A via-only multi-leg capture leaves st->captured empty; report the
+  // secondary victim so partner material is not silently dropped. (Doubles
+  // report the primary victim, matching locust multi-captures.)
+  const ReversiblePieceOnSquare& cap = st->captured.piece ? st->captured : st->secondaryCaptured;
+  if (!cap.piece) return std::string();
+  Color color = color_of(cap.piece.piece);
+  Piece piece = cap.piece.promoted ?
+      (cap.piece.unpromoted ? cap.piece.unpromoted : make_piece(color, main_promotion_pawn_type(color))) :
+      cap.piece.piece;
   return piece_symbol(piece);
 }
 

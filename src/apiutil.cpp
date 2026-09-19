@@ -214,6 +214,53 @@ std::string castling_rights_json(CastlingRights rights) {
          + ",\"queenSide\":" + boolean(bool(rights & BLACK_OOO)) + "}}";
 }
 
+// Canonical White-relative direction-pair list for a direction-pair mask.
+// Index order matches KingDirections (see king_step_name); Black
+// masks are the same pairs point-reflected 180 degrees.
+std::string direction_pair_mask_json(uint64_t mask) {
+    if (mask == ~0ULL)
+        return quote("*");
+    std::ostringstream pairs;
+    bool first = true;
+    for (int d1 = 0; d1 < 8; ++d1)
+        for (int d2 = 0; d2 < 8; ++d2)
+            if (mask & (1ULL << (d1 * 8 + d2))) {
+                if (!first) pairs << ',';
+                first = false;
+                pairs << king_step_name(d1) << '>' << king_step_name(d2);
+            }
+    return quote(pairs.str());
+}
+
+std::string two_step_moves_json(const Variant& v) {
+    std::ostringstream out;
+    out << '{';
+    bool first = true;
+    for (int i = 1; i < PIECE_TYPE_NB; ++i)
+        if (v.twoStepMoves[i])
+            field(out, first, variant_piece_type_name(v, PieceType(i)).c_str(),
+                  direction_pair_mask_json(v.twoStepMoves[i]));
+    out << '}';
+    return out.str();
+}
+
+std::string hook_moves_json(const Variant& v) {
+    std::ostringstream out;
+    out << '{';
+    bool first = true;
+    for (int i = 1; i < PIECE_TYPE_NB; ++i)
+        if (v.hookMoveMasks[i]) {
+            std::ostringstream spec;
+            spec << "{\"pairs\":" << direction_pair_mask_json(v.hookMoveMasks[i])
+                 << ",\"firstRange\":" << v.hookFirstRange[i]
+                 << ",\"secondRange\":" << v.hookSecondRange[i]
+                 << ",\"captureLimit\":" << v.hookCaptureLimit[i] << '}';
+            field(out, first, variant_piece_type_name(v, PieceType(i)).c_str(), spec.str());
+        }
+    out << '}';
+    return out.str();
+}
+
 } // namespace
 
 std::string variant_info_json(const std::string& name) {
@@ -306,6 +353,8 @@ std::string variant_info_json(const std::string& name) {
     field(movement, b, "makpongRule", boolean(v.makpongRule));
     field(movement, b, "flyingGeneral", boolean(v.flyingGeneral));
     field(movement, b, "soldierPromotionRank", std::to_string(int(v.soldierPromotionRank) + 1));
+    field(movement, b, "twoStepMoves", two_step_moves_json(v));
+    field(movement, b, "hookMoves", hook_moves_json(v));
     movement << '}'; field(out, first, "movement", movement.str());
 
     std::ostringstream promotion; promotion << '{'; b = true;
