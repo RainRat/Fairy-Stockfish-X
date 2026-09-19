@@ -357,6 +357,17 @@ class TestPublicAPI(unittest.TestCase):
         self.assertEqual(twostep["movement"]["twoStepMoves"], {"custom1": "*"})
         self.assertEqual(json.loads(sf.variant_info("chess"))["movement"]["twoStepMoves"], {})
 
+        sf.load_variant_config(
+            "[variantinfohook:chess]\n"
+            "customPiece1 = h:0\n"
+            "hookMoves = h:R-sR:2\n"
+        )
+        hook = json.loads(sf.variant_info("variantinfohook"))
+        self.assertEqual(hook["movement"]["hookMoves"],
+                         {"custom1": {"pairs": "N>E,N>W,E>E,E>W,S>E,S>W,W>E,W>W",
+                                      "firstRange": 0, "secondRange": 0, "captureLimit": 2}})
+        self.assertEqual(json.loads(sf.variant_info("chess"))["movement"]["hookMoves"], {})
+
         with self.assertRaisesRegex(ValueError, "Unknown variant"):
             sf.variant_info("does-not-exist")
 

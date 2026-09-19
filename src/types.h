@@ -588,6 +588,8 @@ enum SpecialSubtype : int {
   SPECIAL_SUBTYPE_NONE = 0,
   SPECIAL_SUBTYPE_TWO_STEP = 1,
   SPECIAL_SUBTYPE_TWO_STEP_PROMOTION = 2,
+  SPECIAL_SUBTYPE_HOOK = 3,
+  SPECIAL_SUBTYPE_HOOK_PROMOTION = 4,
 };
 
 enum MoveModality {MODALITY_QUIET, MODALITY_CAPTURE, MOVE_MODALITY_NB};
@@ -1307,17 +1309,38 @@ inline SpecialSubtype special_subtype(Move m) {
   if (!(static_cast<uint64_t>(m) & TwoStepFlag))
       return SPECIAL_SUBTYPE_NONE;
   int sub = (static_cast<uint64_t>(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS)) & (PIECE_TYPE_NB - 1);
-  if (sub == SPECIAL_SUBTYPE_TWO_STEP || sub == SPECIAL_SUBTYPE_TWO_STEP_PROMOTION)
+  if (sub >= SPECIAL_SUBTYPE_TWO_STEP && sub <= SPECIAL_SUBTYPE_HOOK_PROMOTION)
       return SpecialSubtype(sub);
   return SPECIAL_SUBTYPE_NONE;
 }
 
 inline bool is_two_step(Move m) {
-  return special_subtype(m) != SPECIAL_SUBTYPE_NONE;
+  SpecialSubtype sub = special_subtype(m);
+  return sub == SPECIAL_SUBTYPE_TWO_STEP || sub == SPECIAL_SUBTYPE_TWO_STEP_PROMOTION;
 }
 
 inline bool two_step_promotes(Move m) {
   return special_subtype(m) == SPECIAL_SUBTYPE_TWO_STEP_PROMOTION;
+}
+
+inline bool is_hook(Move m) {
+  SpecialSubtype sub = special_subtype(m);
+  return sub == SPECIAL_SUBTYPE_HOOK || sub == SPECIAL_SUBTYPE_HOOK_PROMOTION;
+}
+
+inline bool hook_promotes(Move m) {
+  return special_subtype(m) == SPECIAL_SUBTYPE_HOOK_PROMOTION;
+}
+
+// Multi-leg moves (two-step lion family and hook movers) share the SPECIAL
+// payload layout (flag + subtype + via square). Predicates below must treat
+// them uniformly; only generation and per-rule validation distinguish them.
+inline bool is_multileg(Move m) {
+  return is_two_step(m) || is_hook(m);
+}
+
+inline bool is_multileg_promotion(Move m) {
+  return two_step_promotes(m) || hook_promotes(m);
 }
 
 inline bool is_promotion_move(Move m) {
@@ -1325,11 +1348,11 @@ inline bool is_promotion_move(Move m) {
 }
 
 inline bool is_any_promotion(Move m) {
-  return is_promotion_move(m) || type_of(m) == PIECE_PROMOTION || (is_two_step(m) && two_step_promotes(m));
+  return is_promotion_move(m) || type_of(m) == PIECE_PROMOTION || is_multileg_promotion(m);
 }
 
 inline Square via_sq(Move m) {
-  assert(is_two_step(m));
+  assert(is_multileg(m));
   constexpr uint64_t SquareFieldMask = (uint64_t(1) << SQUARE_BITS) - 1;
   return Square((static_cast<uint64_t>(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & SquareFieldMask);
 }
@@ -1353,7 +1376,7 @@ static_assert(TwoStepFlag < (uint64_t(1) << 32), "TwoStepFlag exceeds 32-bit Mov
 #endif
 
 inline bool is_gating(Move m) {
-  if (is_two_step(m))
+  if (is_multileg(m))
       return false;
 
   if ((static_cast<uint64_t>(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS)) == 0)
@@ -1381,7 +1404,7 @@ inline bool is_insert_move(Move m) {
 
 inline bool is_pass(Move m) {
   return type_of(m) == SPECIAL
-      && !is_two_step(m)
+      && !is_multileg(m)
       && from_sq(m) == to_sq(m)
       && !is_gating(m)
       && gating_type(m) == NO_PIECE_TYPE;
@@ -1389,7 +1412,7 @@ inline bool is_pass(Move m) {
 
 inline bool is_self_destruct(Move m) {
   return type_of(m) == SPECIAL
-      && !is_two_step(m)
+      && !is_multileg(m)
       && from_sq(m) == to_sq(m)
       && !is_gating(m)
       && gating_type(m) != NO_PIECE_TYPE;
@@ -1397,7 +1420,7 @@ inline bool is_self_destruct(Move m) {
 
 inline bool is_first_move_special(Move m) {
   return type_of(m) == SPECIAL
-      && !is_two_step(m)
+      && !is_multileg(m)
       && from_sq(m) != to_sq(m)
       && !is_gating(m)
       && gating_type(m) != NO_PIECE_TYPE;
@@ -1504,6 +1527,22 @@ constexpr Move make_two_step(Square from, Square via, Square to, bool promotes =
   );
 }
 
+// Hook moves share the multi-leg payload layout (flag + subtype + bend
+// square); only generation and per-rule validation distinguish them from
+// two-step moves. Provenance matters for capture limits, hence the subtype.
+constexpr Move make_hook(Square from, Square via, Square to, bool promotes = false) {
+  return Move(
+      TwoStepFlag
+    + (static_cast<uint64_t>(via) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS))
+    + (static_cast<uint64_t>(promotes ? SPECIAL_SUBTYPE_HOOK_PROMOTION : SPECIAL_SUBTYPE_HOOK) << (2 * SQUARE_BITS + MOVE_TYPE_BITS))
+    + static_cast<uint64_t>(SPECIAL)
+    + (static_cast<uint64_t>(from) << SQUARE_BITS)
+    + static_cast<uint64_t>(to)
+  );
+}
+static_assert(int(SPECIAL_SUBTYPE_HOOK_PROMOTION) < int(PIECE_TYPE_NB),
+              "Hook subtypes must fit the SPECIAL subtype field");
+
 constexpr PieceType dropped_piece_type(Move m) {
   return PieceType((m >> (2 * SQUARE_BITS + MOVE_TYPE_BITS)) & (PIECE_TYPE_NB - 1));
 }
@@ -1517,7 +1556,7 @@ inline bool is_custom(PieceType pt) {
 }
 
 inline bool is_ok(Move m) {
-  if (is_two_step(m))
+  if (is_multileg(m))
       return is_ok(from_sq(m)) && is_ok(to_sq(m)) && is_ok(via_sq(m));
   return from_sq(m) != to_sq(m)
       || is_gating(m)

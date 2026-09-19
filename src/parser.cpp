@@ -337,6 +337,128 @@ namespace {
         return true;
     }
 
+    // Hook leg: [f|b|s](R|B)[range], White-relative absolute directions.
+    // f = forward (N,NE,NW), b = backward (S,SE,SW), s = sideways (E,W);
+    // bare R/B allows all 8. Range is a trailing max leg length (absent =
+    // unlimited). The leg type restricts geometry (R orthogonal, B diagonal).
+    bool parse_hook_leg(const std::string& token, int& dirBits, int& range) {
+        std::string s;
+        for (char c : token)
+            s += char(std::tolower(static_cast<unsigned char>(c)));
+        size_t i = 0;
+        int filter = 0xFF;
+        if (i < s.size() && (s[i] == 'f' || s[i] == 'b' || s[i] == 's'))
+        {
+            // N=0 NE=1 E=2 SE=3 S=4 SW=5 W=6 NW=7
+            filter = s[i] == 'f' ? ((1 << 0) | (1 << 1) | (1 << 7))
+                   : s[i] == 'b' ? ((1 << 4) | (1 << 3) | (1 << 5))
+                                 : ((1 << 2) | (1 << 6));
+            ++i;
+        }
+        if (i >= s.size() || (s[i] != 'r' && s[i] != 'b'))
+            return false;
+        int geom = s[i] == 'r' ? ((1 << 0) | (1 << 2) | (1 << 4) | (1 << 6))
+                               : ((1 << 1) | (1 << 3) | (1 << 5) | (1 << 7));
+        ++i;
+        int parsedRange = 0;
+        size_t digits = 0;
+        while (i < s.size() && std::isdigit(static_cast<unsigned char>(s[i])))
+        {
+            parsedRange = std::min(parsedRange * 10 + (s[i] - '0'), 255);
+            ++i;
+            ++digits;
+        }
+        if (i != s.size())
+            return false;
+        dirBits = filter & geom;
+        if (dirBits == 0)
+            return false;
+        if (digits > 0 && parsedRange <= 0)
+            return false;
+        range = parsedRange;
+        return true;
+    }
+
+    template <bool DoCheck>
+    bool parse_hook_moves(const std::string& optionName,
+                          const std::string& value,
+                          const Variant* v,
+                          uint64_t masks[PIECE_TYPE_NB],
+                          int firstRange[PIECE_TYPE_NB],
+                          int secondRange[PIECE_TYPE_NB],
+                          int limits[PIECE_TYPE_NB]) {
+        std::string entry;
+        std::stringstream ss(value);
+        uint64_t parsedMasks[PIECE_TYPE_NB];
+        int parsedFirst[PIECE_TYPE_NB];
+        int parsedSecond[PIECE_TYPE_NB];
+        int parsedLimits[PIECE_TYPE_NB];
+        std::copy(masks, masks + PIECE_TYPE_NB, std::begin(parsedMasks));
+        std::copy(firstRange, firstRange + PIECE_TYPE_NB, std::begin(parsedFirst));
+        std::copy(secondRange, secondRange + PIECE_TYPE_NB, std::begin(parsedSecond));
+        std::copy(limits, limits + PIECE_TYPE_NB, std::begin(parsedLimits));
+        auto fail = [&](const std::string& msg, const std::string& detail) {
+            if (DoCheck)
+                std::cerr << optionName << " - " << msg << ": " << detail << std::endl;
+            return false;
+        };
+        bool sawEntry = false;
+        while (ss >> entry)
+        {
+            sawEntry = true;
+            auto [pieceToken, rawSpec] = split_piece_entry(entry);
+            PieceType pt = parse_piece_type_token(v, pieceToken);
+            if (pt == NO_PIECE_TYPE || rawSpec.empty())
+                return fail("Invalid piece token", pieceToken);
+
+            if (rawSpec == "-")
+            {
+                parsedMasks[pt] = 0ULL;
+                parsedFirst[pt] = 0;
+                parsedSecond[pt] = 0;
+                parsedLimits[pt] = 0;
+                continue;
+            }
+
+            // Optional :1|:2 capture-limit suffix (default: 1).
+            std::string legsPart = rawSpec;
+            int limit = 1;
+            size_t colon = rawSpec.rfind(':');
+            if (colon != std::string::npos)
+            {
+                std::string tail = trim(rawSpec.substr(colon + 1));
+                if (tail != "1" && tail != "2")
+                    return fail("Invalid hook capture limit (expected :1 or :2)", rawSpec);
+                limit = tail[0] - '0';
+                legsPart = trim(rawSpec.substr(0, colon));
+            }
+            size_t dash = legsPart.find('-');
+            if (dash == std::string::npos || legsPart.find('-', dash + 1) != std::string::npos)
+                return fail("Malformed hook legs (expected <leg1>-<leg2>)", rawSpec);
+            int bits1 = 0, range1 = 0, bits2 = 0, range2 = 0;
+            if (!parse_hook_leg(trim(legsPart.substr(0, dash)), bits1, range1)
+                || !parse_hook_leg(trim(legsPart.substr(dash + 1)), bits2, range2))
+                return fail("Invalid hook leg (expected [f|b|s](R|B)[range])", rawSpec);
+            uint64_t mask = 0;
+            for (int d1 = 0; d1 < 8; ++d1)
+                if (bits1 & (1 << d1))
+                    for (int d2 = 0; d2 < 8; ++d2)
+                        if (bits2 & (1 << d2))
+                            mask |= (1ULL << (d1 * 8 + d2));
+            parsedMasks[pt] = mask;
+            parsedFirst[pt] = range1;
+            parsedSecond[pt] = range2;
+            parsedLimits[pt] = limit;
+        }
+        if (!sawEntry || !only_trailing_space(ss))
+            return false;
+        std::copy(std::begin(parsedMasks), std::end(parsedMasks), masks);
+        std::copy(std::begin(parsedFirst), std::end(parsedFirst), firstRange);
+        std::copy(std::begin(parsedSecond), std::end(parsedSecond), secondRange);
+        std::copy(std::begin(parsedLimits), std::end(parsedLimits), limits);
+        return true;
+    }
+
     bool parse_piece_set_token_string(const std::string& text, const Variant* v, PieceSet& target, bool allowAll = true, bool allowNone = true);
 
     bool parse_drop_piece_type_map(const std::string& value, const Variant* v, PieceSet target[PIECE_TYPE_NB]) {
@@ -1858,6 +1980,13 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     if (it_two_step != config.end())
     {
         if (!parse_two_step_moves<DoCheck>("twoStepMoves", it_two_step->second, v, v->twoStepMoves))
+            return false;
+    }
+    auto it_hook = config.find("hookMoves");
+    if (it_hook != config.end())
+    {
+        if (!parse_hook_moves<DoCheck>("hookMoves", it_hook->second, v, v->hookMoveMasks,
+                                       v->hookFirstRange, v->hookSecondRange, v->hookCaptureLimit))
             return false;
     }
     parse_attribute("pushFirstColor", v->pushFirstColor);

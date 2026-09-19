@@ -1226,6 +1226,152 @@ namespace {
   }
 
   template<Color Us, GenType Type>
+  ExtMove* generate_hook_moves(const Position& pos, ExtMove* moveList, Bitboard target, Bitboard forcedFromMask, bool restrictToForcedJumper) {
+    if (!pos.has_hook_moves())
+        return moveList;
+
+    PieceSet hookPts = pos.hook_piece_types(Us);
+    if (!hookPts)
+        return moveList;
+
+    const Color them = ~Us;
+    const Bitboard checkers = pos.evasion_checkers();
+    const PieceType royalPt = pos.royal_piece_type(Us);
+
+    while (hookPts)
+    {
+        PieceType pt = pop_lsb(hookPts);
+        uint64_t mask = pos.hook_move_mask(Us, pt);
+        if (!mask)
+            continue;
+        int range1 = pos.hook_first_range(pt);
+        int range2 = pos.hook_second_range(pt);
+        int limit = pos.hook_capture_limit(pt);
+        if (limit < 1)
+            continue;
+
+        Bitboard piecesBb = pos.pieces(Us, pt);
+        if (restrictToForcedJumper)
+            piecesBb &= forcedFromMask;
+
+        while (piecesBb)
+        {
+            Square from = pop_lsb(piecesBb);
+            if (pos.freeze_squares() & from)
+                continue;
+
+            Piece mover = pos.piece_on(from);
+            Bitboard mandatoryZone = pos.mandatory_promotion_zone(mover);
+            bool canPromote = (pos.promoted_piece_type(pt) != NO_PIECE_TYPE) && !pos.is_promoted(from);
+
+            Bitboard remaining_mask = Bitboard(mask);
+            while (remaining_mask)
+            {
+                int pair_idx = int(pop_lsb(remaining_mask));
+                int d1 = pair_idx / 8;
+                int d2 = pair_idx % 8;
+
+                int cap1steps = range1 ? range1 : SQUARE_NB;
+                Square bend = from;
+                for (int k1 = 1; k1 <= cap1steps; ++k1)
+                {
+                    Square step1;
+                    if (!pos.step_destination(bend, KingDirections[d1], step1))
+                        break;
+                    if (!(pos.board_bb() & step1) || (pos.pieces(Us) & step1))
+                        break;
+                    bend = step1;
+                    bool cap1 = !pos.empty(bend) && color_of(pos.piece_on(bend)) == them;
+
+                    int cap2steps = range2 ? range2 : SQUARE_NB;
+                    Square to = bend;
+                    for (int k2 = 1; k2 <= cap2steps; ++k2)
+                    {
+                        Square step2;
+                        if (!pos.step_destination(to, KingDirections[d2], step2))
+                            break;
+                        if (!(pos.board_bb() & step2))
+                            break;
+                        if (step2 != from && (pos.pieces(Us) & step2))
+                            break;
+                        to = step2;
+                        bool cap2 = to != from && !pos.empty(to) && color_of(pos.piece_on(to)) == them;
+                        bool isCapture = cap1 || cap2;
+
+                        // Hook sliders stop at captures; a :1 hook may not
+                        // capture on both legs.
+                        bool emit = !(cap1 && cap2 && limit < 2);
+                        if (emit)
+                        {
+                            if constexpr (Type == CAPTURES)
+                                emit = isCapture;
+                            else if constexpr (Type == QUIETS || Type == QUIET_CHECKS)
+                                emit = !isCapture;
+                            else if constexpr (Type == EVASIONS)
+                            {
+                                if (pt != royalPt)
+                                {
+                                    if (more_than_one(checkers))
+                                        emit = (cap1 && (checkers & bend)) || (cap2 && (checkers & to));
+                                    else
+                                        emit = (cap1 && (checkers & bend)) || (cap2 && (checkers & to)) || (target & to);
+                                }
+                            }
+                        }
+
+                        if (emit)
+                        {
+                            bool allowsPromo = canPromote && pos.two_step_promotion_zone(Us, pt, from, to)
+                                            && pos.promotion_allowed(Us, pos.promoted_piece_type(pt));
+                            if (allowsPromo && pos.piece_promotion_on_capture() && !isCapture)
+                                allowsPromo = false;
+
+                            // Mirror Position::legal() mandatory handling.
+                            bool mandatoryPromo = allowsPromo && (mandatoryZone & to) && !(mandatoryZone & from);
+
+                            if (allowsPromo)
+                            {
+                                Move mPromo = make_hook(from, bend, to, true);
+                                if constexpr (Type == QUIET_CHECKS)
+                                {
+                                    if (pos.gives_check(mPromo))
+                                        *moveList++ = mPromo;
+                                }
+                                else
+                                {
+                                    *moveList++ = mPromo;
+                                }
+                            }
+
+                            if (!mandatoryPromo)
+                            {
+                                Move m = make_hook(from, bend, to, false);
+                                if constexpr (Type == QUIET_CHECKS)
+                                {
+                                    if (pos.gives_check(m))
+                                        *moveList++ = m;
+                                }
+                                else
+                                {
+                                    *moveList++ = m;
+                                }
+                            }
+                        }
+                        if (cap2)
+                            break;
+                    }
+
+                    if (cap1)
+                        break;
+                }
+            }
+        }
+    }
+
+    return moveList;
+  }
+
+  template<Color Us, GenType Type>
   ExtMove* generate_all_impl(const Position& pos, ExtMove* moveList) {
 
     static_assert(Type != LEGAL, "Unsupported type in generate_all()");
@@ -1649,6 +1795,7 @@ namespace {
     }
 
     moveList = generate_two_step_moves<Us, Type>(pos, moveList, target, forcedFromMask, restrictToForcedJumper);
+    moveList = generate_hook_moves<Us, Type>(pos, moveList, target, forcedFromMask, restrictToForcedJumper);
 
     // Royal moves must not be restricted to checker capture/interposition targets.
     if (royalPt != NO_PIECE_TYPE && royalSq != SQ_NONE
