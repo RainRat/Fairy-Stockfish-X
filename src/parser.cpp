@@ -2863,6 +2863,16 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
         valid = false;
     }
 
+    // Multi-leg captures can remove two victims, but the two-board partner
+    // API reports a single piece; reject the combination rather than
+    // silently dropping partner material.
+    if (v->twoBoards && (v->hasTwoStepMoves || v->hasHookMoves))
+    {
+        if (DoCheck)
+            std::cerr << "twoBoards is not supported with twoStepMoves or hookMoves." << std::endl;
+        valid = false;
+    }
+
     if (v->wallingRule != NO_WALLING && (v->seirawanGating || v->potions || v->gating || hasGatingPieceAfter))
     {
         if (DoCheck)

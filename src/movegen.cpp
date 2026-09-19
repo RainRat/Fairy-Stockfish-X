@@ -1105,9 +1105,26 @@ namespace {
     // geometry enumeration (two king steps vs sliding hook legs) and the move
     // constructor differ between generators.
     bool isCapture = capVia || capTo;
+
+    Piece mover = pos.piece_on(from);
+    Bitboard mandatoryZone = pos.mandatory_promotion_zone(mover);
+    bool canPromote = (pos.promoted_piece_type(pt) != NO_PIECE_TYPE) && !pos.is_promoted(from);
+
+    bool allowsPromo = canPromote && pos.multileg_promotion_zone(Us, pt, from, to)
+                    && pos.promotion_allowed(Us, pos.promoted_piece_type(pt));
+    if (allowsPromo && pos.piece_promotion_on_capture() && !isCapture)
+        allowsPromo = false;
+
+    // Mirror Position::legal() mandatory handling: a non-promoting
+    // entry into the mandatory zone from outside is illegal, so
+    // suppress the non-promo move only in that case.
+    bool mandatoryPromo = allowsPromo && (mandatoryZone & to) && !(mandatoryZone & from);
+
+    // Like ordinary pawn pushes, quiet promotions belong in CAPTURES even
+    // though they capture nothing; quiet non-promotions do not.
     if constexpr (Type == CAPTURES)
     {
-        if (!isCapture)
+        if (!isCapture && !allowsPromo)
             return moveList;
     }
     else if constexpr (Type == QUIETS || Type == QUIET_CHECKS)
@@ -1133,20 +1150,6 @@ namespace {
         }
     }
 
-    Piece mover = pos.piece_on(from);
-    Bitboard mandatoryZone = pos.mandatory_promotion_zone(mover);
-    bool canPromote = (pos.promoted_piece_type(pt) != NO_PIECE_TYPE) && !pos.is_promoted(from);
-
-    bool allowsPromo = canPromote && pos.multileg_promotion_zone(Us, pt, from, to)
-                    && pos.promotion_allowed(Us, pos.promoted_piece_type(pt));
-    if (allowsPromo && pos.piece_promotion_on_capture() && !isCapture)
-        allowsPromo = false;
-
-    // Mirror Position::legal() mandatory handling: a non-promoting
-    // entry into the mandatory zone from outside is illegal, so
-    // suppress the non-promo move only in that case.
-    bool mandatoryPromo = allowsPromo && (mandatoryZone & to) && !(mandatoryZone & from);
-
     if (allowsPromo)
     {
         Move mPromo = makeMove(from, via, to, true);
@@ -1163,6 +1166,12 @@ namespace {
 
     if (!mandatoryPromo)
     {
+        // CAPTURES keeps quiet promotions but not quiet non-promotions.
+        if constexpr (Type == CAPTURES)
+        {
+            if (!isCapture)
+                return moveList;
+        }
         Move m = makeMove(from, via, to, false);
         if constexpr (Type == QUIET_CHECKS)
         {
@@ -1279,19 +1288,7 @@ namespace {
             if (pos.freeze_squares() & from)
                 continue;
 
-            // Hook rays stop at board edges: a step jumping more than one
-            // file/rank has wrapped around the board and must terminate the
-            // leg. (Wrapped topologies reject hookMoves at parse time; this
-            // is a backstop keeping ray walks well-defined regardless.)
-            auto hook_step = [&](Square cur, Direction dir, Square& nxt) -> bool {
-                if (!pos.step_destination(cur, dir, nxt))
-                    return false;
-                if (std::abs(int(file_of(nxt)) - int(file_of(cur))) > 1
-                    || std::abs(int(rank_of(nxt)) - int(rank_of(cur))) > 1)
-                    return false;
-                return true;
-            };
-
+            // Hook rays stop at board edges (see Position::hook_step).
             Bitboard remaining_mask = Bitboard(mask);
             while (remaining_mask)
             {
@@ -1304,7 +1301,7 @@ namespace {
                 for (int k1 = 1; k1 <= cap1steps; ++k1)
                 {
                     Square step1;
-                    if (!hook_step(bend, KingDirections[d1], step1))
+                    if (!pos.hook_step(bend, KingDirections[d1], step1))
                         break;
                     if (!(pos.board_bb() & step1) || (pos.pieces(Us) & step1))
                         break;
@@ -1316,7 +1313,7 @@ namespace {
                     for (int k2 = 1; k2 <= cap2steps; ++k2)
                     {
                         Square step2;
-                        if (!hook_step(to, KingDirections[d2], step2))
+                        if (!pos.hook_step(to, KingDirections[d2], step2))
                             break;
                         if (!(pos.board_bb() & step2))
                             break;

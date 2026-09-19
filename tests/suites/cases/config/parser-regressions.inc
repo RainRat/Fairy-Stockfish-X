@@ -531,6 +531,16 @@ startFen = 8/8/8/8/4H3/8/8/8 w - - 0 1
 immobile = -
 castling = false
 doubleStep = false
+
+[bad-hook-twoboards:chess]
+customPiece1 = h:0
+hookMoves = h:R-R:2
+twoBoards = true
+
+[bad-twostep-twoboards:chess]
+customPiece1 = l:0
+twoStepMoves = l:N>N
+twoBoards = true
 INI
 
 cat > "${unsupported_bent_rose_modifier_ini}" <<'INI'
@@ -832,11 +842,18 @@ assert_contains "${bad_hook_output3}" "unknown variant 'bad-hook-limit'; keeping
 bad_hook_output4=$(run_uci "$ENGINE" "$bad_hook_ini" "bad-hook-wrapped" </dev/null 2>&1 || true)
 assert_contains "${bad_hook_output4}" "unknown variant 'bad-hook-wrapped'; keeping 'chess'"
 
+bad_hook_output5=$(run_uci "$ENGINE" "$bad_hook_ini" "bad-hook-twoboards" </dev/null 2>&1 || true)
+assert_contains "${bad_hook_output5}" "unknown variant 'bad-hook-twoboards'; keeping 'chess'"
+
+bad_twostep_twoboards_output=$(run_uci "$ENGINE" "$bad_hook_ini" "bad-twostep-twoboards" </dev/null 2>&1 || true)
+assert_contains "${bad_twostep_twoboards_output}" "unknown variant 'bad-twostep-twoboards'; keeping 'chess'"
+
 bad_hook_check_output=$("${ENGINE}" check "${bad_hook_ini}" 2>&1 || true)
 assert_contains "${bad_hook_check_output}" "hookMoves - Malformed hook legs"
 assert_contains "${bad_hook_check_output}" "hookMoves - Invalid hook leg"
 assert_contains "${bad_hook_check_output}" "hookMoves - Invalid hook capture limit"
 assert_contains "${bad_hook_check_output}" "hookMoves is not supported on wrapped boards."
+assert_contains "${bad_hook_check_output}" "twoBoards is not supported with twoStepMoves or hookMoves."
 
 unsupported_bent_rose_output1=$(run_uci "$ENGINE" "$unsupported_bent_rose_modifier_ini" "unsupported-bent-1" </dev/null 2>&1 || true)
 assert_contains "${unsupported_bent_rose_output1}" "unknown variant 'unsupported-bent-1'; keeping 'chess'"
