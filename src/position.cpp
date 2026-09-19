@@ -6175,6 +6175,18 @@ bool Position::legal(Move m) const {
       PieceType target = type_of(captured_piece(m));
       if (attacker < PIECE_TYPE_NB && target < PIECE_TYPE_NB && (var->captureForbiddenByColor[us][attacker] & target))
           return false;
+      if (is_two_step(m))
+      {
+          // captured_piece() only sees the primary (to) victim; a double
+          // capture must also respect restrictions on the via victim.
+          Square via = via_sq(m);
+          if (via != to && !empty(via) && color_of(piece_on(via)) == them)
+          {
+              PieceType viaTarget = type_of(piece_on(via));
+              if (attacker < PIECE_TYPE_NB && viaTarget < PIECE_TYPE_NB && (var->captureForbiddenByColor[us][attacker] & viaTarget))
+                  return false;
+          }
+      }
   }
 
   // En passant captures are a tricky special case. Because they are rather
