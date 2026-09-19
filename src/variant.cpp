@@ -2247,6 +2247,38 @@ Variant* Variant::conclude() {
         }
     }
 
+    // Hook direction pairs are White-relative like two-step pairs; Black
+    // gets the 180-degree point reflection. Ranges and capture limits are
+    // direction-independent and shared by both colors.
+    hasHookMoves = false;
+    hookPieceTypes[WHITE] = NO_PIECE_SET;
+    hookPieceTypes[BLACK] = NO_PIECE_SET;
+    for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
+    {
+        uint64_t mask = hookMoveMasks[pt];
+        hookMoveMasksColor[WHITE][pt] = mask;
+        if (mask && hookCaptureLimit[pt] >= 1)
+        {
+            hasHookMoves = true;
+            hookPieceTypes[WHITE] |= piece_set(pt);
+            uint64_t bmask = 0;
+            for (int d1 = 0; d1 < 8; ++d1)
+                for (int d2 = 0; d2 < 8; ++d2)
+                    if (mask & (1ULL << (d1 * 8 + d2)))
+                    {
+                        int bd1 = (d1 + 4) % 8;
+                        int bd2 = (d2 + 4) % 8;
+                        bmask |= (1ULL << (bd1 * 8 + bd2));
+                    }
+            hookMoveMasksColor[BLACK][pt] = bmask;
+            hookPieceTypes[BLACK] |= piece_set(pt);
+        }
+        else
+        {
+            hookMoveMasksColor[BLACK][pt] = 0;
+        }
+    }
+
     // Compatibility shim: legacy mutuallyImmuneTypes means same-type captures are forbidden.
     for (PieceSet ps = mutuallyImmuneTypes; ps; )
     {

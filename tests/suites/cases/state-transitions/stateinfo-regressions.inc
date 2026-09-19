@@ -102,6 +102,22 @@ twoStepMoves = l:*
 mutuallyImmuneTypes = l
 castling = true
 
+[test-hook-state:chess]
+customPiece1 = h:0
+hookMoves = h:R-R
+castling = false
+
+[test-hook-double-state:chess]
+customPiece1 = h:0
+hookMoves = h:R-R:2
+castling = false
+
+[test-hook-promo-state:chess]
+customPiece1 = h:0
+hookMoves = h:R-R
+promotedPieceType = h:q
+castling = false
+
 [test-horned-falcon:chess]
 customPiece1 = h:BsRbRfDfW
 twoStepMoves = h:N>N,N>S
@@ -533,6 +549,94 @@ static void test_two_step_via_capture_restrictions() {
     assert(pos.piece_on(SQ_D4) == B_ROOK);
 }
 
+static void test_hook_state_transitions() {
+    StateInfo st{};
+    Position pos;
+    // Hook rook legs (R-R): bend must be on a rook ray, transit rays empty,
+    // sliders cannot jump over pieces.
+    // White hook e4, black rooks e5/e6.
+    pos.set(variants.get("test-hook-double-state"),
+            "4k3/8/4r3/4r3/4H3/8/8/4K3 w - - 0 1", false, &st, nullptr);
+
+    // Double capture e4->e5->e6 with :2 allowed.
+    Move m_double = make_hook(SQ_E4, SQ_E5, SQ_E6, false);
+    assert(pos.legal(m_double));
+    const Key origKey = pos.key();
+    const Key origMatKey = pos.state()->materialKey;
+    StateInfo next{};
+    pos.do_move(m_double, next);
+    assert(pos.piece_on(SQ_E5) == NO_PIECE);
+    assert(pos.piece_on(SQ_E6) == make_piece(WHITE, CUSTOM_PIECE_1));
+    assert(pos.count<ROOK>(BLACK) == 0);
+    pos.undo_move(m_double);
+    assert(pos.key() == origKey);
+    assert(pos.state()->materialKey == origMatKey);
+    assert(pos.piece_on(SQ_E5) == B_ROOK);
+    assert(pos.piece_on(SQ_E6) == B_ROOK);
+
+    // Igui single capture e4->e5->e4.
+    Move m_igui = make_hook(SQ_E4, SQ_E5, SQ_E4, false);
+    assert(pos.legal(m_igui));
+    StateInfo next2{};
+    pos.do_move(m_igui, next2);
+    assert(pos.piece_on(SQ_E5) == NO_PIECE);
+    assert(pos.piece_on(SQ_E4) == make_piece(WHITE, CUSTOM_PIECE_1));
+    pos.undo_move(m_igui);
+    assert(pos.key() == origKey);
+
+    // Cannot jump over the e6 rook: e4->e5->e7 is illegal.
+    Move m_jump = make_hook(SQ_E4, SQ_E5, SQ_E7, false);
+    assert(!pos.legal(m_jump));
+
+    // Diagonal bend is outside the R-R mask: e4->e5->f6 is illegal.
+    Move m_diag = make_hook(SQ_E4, SQ_E5, SQ_F6, false);
+    assert(!pos.legal(m_diag));
+}
+
+static void test_hook_capture_limits() {
+    StateInfo st{};
+    Position pos;
+    // Same geometry under :1: the double is illegal, singles stay legal.
+    // Kings stand off the e-file so captures are judged on limits alone.
+    pos.set(variants.get("test-hook-state"),
+            "7k/8/4r3/4r3/4H3/8/8/K7 w - - 0 1", false, &st, nullptr);
+
+    Move m_double = make_hook(SQ_E4, SQ_E5, SQ_E6, false);
+    assert(!pos.legal(m_double));
+
+    Move m_single = make_hook(SQ_E4, SQ_E5, SQ_F5, false);
+    assert(pos.legal(m_single));
+    const Key origKey = pos.key();
+    StateInfo next{};
+    pos.do_move(m_single, next);
+    assert(pos.piece_on(SQ_E5) == NO_PIECE);
+    assert(pos.piece_on(SQ_F5) == make_piece(WHITE, CUSTOM_PIECE_1));
+    assert(pos.count<ROOK>(BLACK) == 1);
+    pos.undo_move(m_single);
+    assert(pos.key() == origKey);
+    assert(pos.piece_on(SQ_E5) == B_ROOK);
+}
+
+static void test_hook_promotions() {
+    StateInfo st{};
+    Position pos;
+    // Hook promotions use the from|to squares like two-step promotions.
+    pos.set(variants.get("test-hook-promo-state"),
+            "8/6H1/8/8/8/8/8/4K2k w - - 0 1", false, &st, nullptr);
+
+    Move m_promo = make_hook(SQ_G7, SQ_G8, SQ_H8, true);
+    Move m_plain = make_hook(SQ_G7, SQ_G8, SQ_H8, false);
+    assert(pos.legal(m_promo));
+    assert(pos.legal(m_plain));
+    const Key origKey = pos.key();
+    StateInfo next{};
+    pos.do_move(m_promo, next);
+    assert(pos.piece_on(SQ_H8) == W_QUEEN);
+    pos.undo_move(m_promo);
+    assert(pos.key() == origKey);
+    assert(pos.piece_on(SQ_G7) == make_piece(WHITE, CUSTOM_PIECE_1));
+}
+
 static void test_two_step_vs_jump() {
     StateInfo st{};
     Position pos;
@@ -567,6 +671,9 @@ int main() {
     test_two_step_double_capture_rejects_ambiguous_effects();
     test_two_step_piece_specific_promotion_zone();
     test_two_step_via_capture_restrictions();
+    test_hook_state_transitions();
+    test_hook_capture_limits();
+    test_hook_promotions();
     test_capture_squares_and_recapture();
     test_two_step_vs_jump();
     return 0;

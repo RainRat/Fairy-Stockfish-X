@@ -756,6 +756,16 @@ public:
   bool has_two_step_moves() const;
   uint64_t two_step_moves_mask(Color c, PieceType pt) const;
   PieceSet two_step_piece_types(Color c) const;
+  bool has_hook_moves() const;
+  uint64_t hook_move_mask(Color c, PieceType pt) const;
+  int hook_first_range(PieceType pt) const;
+  int hook_second_range(PieceType pt) const;
+  int hook_capture_limit(PieceType pt) const;
+  PieceSet hook_piece_types(Color c) const;
+  // Validates hook path geometry and occupancy (not king safety): pair/range
+  // coverage, empty transit rays, no friendly on bend/to, capture-limit
+  // compliance for doubles.
+  bool hook_path_valid(Color us, PieceType pt, Square from, Square via, Square to) const;
   PieceSet self_destruct_types() const;
   Bitboard self_destruct_region(Color c) const;
   GravityRule gravity() const;
@@ -2440,6 +2450,36 @@ inline uint64_t Position::two_step_moves_mask(Color c, PieceType pt) const {
 inline PieceSet Position::two_step_piece_types(Color c) const {
   assert(var != nullptr);
   return var->twoStepPieceTypes[c];
+}
+
+inline bool Position::has_hook_moves() const {
+  assert(var != nullptr);
+  return var->hasHookMoves;
+}
+
+inline uint64_t Position::hook_move_mask(Color c, PieceType pt) const {
+  assert(var != nullptr);
+  return var->hookMoveMasksColor[c][pt];
+}
+
+inline int Position::hook_first_range(PieceType pt) const {
+  assert(var != nullptr);
+  return var->hookFirstRange[pt];
+}
+
+inline int Position::hook_second_range(PieceType pt) const {
+  assert(var != nullptr);
+  return var->hookSecondRange[pt];
+}
+
+inline int Position::hook_capture_limit(PieceType pt) const {
+  assert(var != nullptr);
+  return var->hookCaptureLimit[pt];
+}
+
+inline PieceSet Position::hook_piece_types(Color c) const {
+  assert(var != nullptr);
+  return var->hookPieceTypes[c];
 }
 
 inline PieceSet Position::self_destruct_types() const {
@@ -5719,7 +5759,7 @@ inline bool Position::capture(Move m) const {
   assert(is_ok(m));
   if (type_of(m) == EN_PASSANT)
       return true;
-  if (is_two_step(m))
+  if (is_multileg(m))
   {
       Square via = via_sq(m);
       Square to = to_sq(m);
@@ -5796,7 +5836,7 @@ inline Square Position::capture_square(Move m) const {
   Square to = to_sq(m);
   if (type_of(m) == EN_PASSANT)
       return capture_square(to);
-  if (is_two_step(m))
+  if (is_multileg(m))
   {
       if (to != from_sq(m) && !empty(to) && color_of(piece_on(to)) == ~sideToMove)
           return to;
@@ -5818,7 +5858,7 @@ inline Square Position::capture_square(Move m) const {
 inline Bitboard Position::capture_squares(Move m) const {
   if (!capture(m))
       return Bitboard(0);
-  if (is_two_step(m))
+  if (is_multileg(m))
   {
       Bitboard b = 0;
       Square via = via_sq(m);
@@ -5845,6 +5885,56 @@ inline bool Position::step_destination(Square from, Direction d, Square& to) con
 inline bool Position::two_step_promotion_zone(Color c, PieceType pt, Square from, Square to) const {
   Bitboard pz = promotion_zone(c, pt);
   return (pz & from) || (pz & to);
+}
+
+inline bool Position::hook_path_valid(Color us, PieceType pt, Square from, Square via, Square to) const {
+  uint64_t mask = hook_move_mask(us, pt);
+  if (!mask)
+      return false;
+  // Walk each leg from its origin along every king direction (topology-safe,
+  // so wrapping boards work); transit squares must be empty, which also
+  // establishes the leg direction and length.
+  int legDir[2] = {-1, -1};
+  int range[2] = {hook_first_range(pt), hook_second_range(pt)};
+  Square legFrom[2] = {from, via};
+  Square legTo[2] = {via, to};
+  for (int leg = 0; leg < 2; ++leg)
+  {
+      int cap = range[leg] ? range[leg] : SQUARE_NB;
+      bool found = false;
+      for (int i = 0; i < 8 && !found; ++i)
+      {
+          Square cur = legFrom[leg];
+          for (int k = 1; k <= cap; ++k)
+          {
+              Square nxt;
+              if (!step_destination(cur, KingDirections[i], nxt))
+                  break;
+              if (nxt == legTo[leg])
+              {
+                  legDir[leg] = i;
+                  found = true;
+                  break;
+              }
+              if (!empty(nxt))
+                  break;
+              cur = nxt;
+          }
+      }
+      if (!found)
+          return false;
+  }
+  if (!((mask >> (legDir[0] * 8 + legDir[1])) & 1ULL))
+      return false;
+  if ((pieces(us) & via) || (to != from && (pieces(us) & to)))
+      return false;
+  // A double capture needs a :2 spec.
+  Color them = ~us;
+  bool cap1 = !empty(via) && color_of(piece_on(via)) == them;
+  bool cap2 = to != from && !empty(to) && color_of(piece_on(to)) == them;
+  if (cap1 && cap2 && hook_capture_limit(pt) < 2)
+      return false;
+  return true;
 }
 
 inline bool Position::paired_drop(Move m) const {

@@ -249,6 +249,23 @@ std::string two_step_moves_json(const Variant& v) {
     return out.str();
 }
 
+std::string hook_moves_json(const Variant& v) {
+    std::ostringstream out;
+    out << '{';
+    bool first = true;
+    for (int i = 1; i < PIECE_TYPE_NB; ++i)
+        if (v.hookMoveMasks[i]) {
+            std::ostringstream spec;
+            spec << "{\"pairs\":" << two_step_mask_json(v.hookMoveMasks[i])
+                 << ",\"firstRange\":" << v.hookFirstRange[i]
+                 << ",\"secondRange\":" << v.hookSecondRange[i]
+                 << ",\"captureLimit\":" << v.hookCaptureLimit[i] << '}';
+            field(out, first, variant_piece_type_name(v, PieceType(i)).c_str(), spec.str());
+        }
+    out << '}';
+    return out.str();
+}
+
 } // namespace
 
 std::string variant_info_json(const std::string& name) {
@@ -342,6 +359,7 @@ std::string variant_info_json(const std::string& name) {
     field(movement, b, "flyingGeneral", boolean(v.flyingGeneral));
     field(movement, b, "soldierPromotionRank", std::to_string(int(v.soldierPromotionRank) + 1));
     field(movement, b, "twoStepMoves", two_step_moves_json(v));
+    field(movement, b, "hookMoves", hook_moves_json(v));
     movement << '}'; field(out, first, "movement", movement.str());
 
     std::ostringstream promotion; promotion << '{'; b = true;

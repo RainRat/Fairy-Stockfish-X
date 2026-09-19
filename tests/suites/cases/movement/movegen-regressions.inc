@@ -297,4 +297,33 @@ assert_contains "$out" "^e4d5e4: 1$"
 assert_contains "$out" "^e4e5e6: 1$"
 assert_contains "$out" "^e4e5e4: 1$"
 
+# Hook movers share the two-step move encoding (from+bend+to) with sliding legs.
+out=$(run_uci_cmds "$ENGINE" "$VARIANTS" test-hook \
+  "position startpos
+go perft 1")
+assert_nodes "$out" "142"
+assert_contains "$out" "^e4d4d5: 1$"
+assert_contains "$out" "^e4d4e4: 1$"
+assert_contains "$out" "^e4f4f8: 1$"
+assert_not_contains "$out" "^e4d5e4:"
+assert_not_contains "$out" "^e4d4d8:"
+
+out=$(run_uci_cmds "$ENGINE" "$VARIANTS" test-hook \
+  "position startpos moves e4d4d5
+d")
+assert_contains_literal "$out" "Fen: 8/8/8/3H4/8/8/8/8 b - - 0 1"
+
+out=$(run_uci_cmds "$ENGINE" "$VARIANTS" test-hook \
+  "position startpos moves e4d4e4
+d")
+assert_contains_literal "$out" "Fen: 8/8/8/3h4/4H3/8/8/8 b - - 1 1"
+
+out=$(run_uci_cmds "$ENGINE" "$VARIANTS" test-hook-double \
+  "position startpos
+go perft 1")
+assert_nodes "$out" "113"
+assert_contains "$out" "^e4e5e6: 1$"
+assert_contains "$out" "^e4e5e4: 1$"
+assert_not_contains "$out" "^e4e5e7:"
+
 echo "movegen regressions passed"

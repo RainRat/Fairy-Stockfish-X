@@ -316,10 +316,10 @@ inline const std::string move_to_san(Position& pos, Move m, Notation n) {
     Square from = from_sq(m);
     Square to = to_sq(m);
 
-    if (is_two_step(m))
+    if (is_multileg(m))
     {
         san = square(pos, from, n) + square(pos, via_sq(m), n) + square(pos, to, n);
-        if (two_step_promotes(m))
+        if (is_multileg_promotion(m))
         {
             Piece mover = pos.moved_piece(m);
             PieceType promotedTo = mover != NO_PIECE ? pos.promoted_piece_type(type_of(mover)) : NO_PIECE_TYPE;

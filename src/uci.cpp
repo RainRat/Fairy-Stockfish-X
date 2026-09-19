@@ -713,10 +713,10 @@ string UCI::move(const Position& pos, Move m) {
   if (is_self_destruct(m))
       return UCI::square(pos, from) + UCI::square(pos, to) + "x";
 
-  if (is_two_step(m))
+  if (is_multileg(m))
   {
       std::string s = UCI::square(pos, from) + UCI::square(pos, via_sq(m)) + UCI::square(pos, to);
-      if (two_step_promotes(m))
+      if (is_multileg_promotion(m))
           s += "+";
       return s;
   }
