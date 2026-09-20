@@ -224,7 +224,7 @@ std::string direction_pair_mask_json(uint64_t mask) {
     bool first = true;
     for (int d1 = 0; d1 < 8; ++d1)
         for (int d2 = 0; d2 < 8; ++d2)
-            if (mask & (1ULL << (d1 * 8 + d2))) {
+            if (mask & multileg_direction_pair_bit(d1, d2)) {
                 if (!first) pairs << ',';
                 first = false;
                 pairs << king_step_name(d1) << '>' << king_step_name(d2);

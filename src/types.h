@@ -993,6 +993,15 @@ constexpr int reflect_king_direction(int d) {
     return (d + 4) & 7;
 }
 
+// Direction-pair bit layout shared by two-step/hook configuration (parser),
+// mask reflection (variant.h), JSON (apiutil), and geometry enumeration
+// (Position iterators): pair bit d1 * 8 + d2.
+constexpr uint64_t multileg_direction_pair_bit(int d1, int d2) {
+    return uint64_t(1) << (d1 * 8 + d2);
+}
+constexpr int multileg_pair_first(int pair) { return pair / 8; }
+constexpr int multileg_pair_second(int pair) { return pair % 8; }
+
 // Keep track of what a move changes on the board (used by NNUE)
 constexpr int DIRTY_PIECE_MAX = 12;
 struct DirtyPiece {
@@ -1323,15 +1332,6 @@ inline MultiLegSubtype multileg_subtype(Move m) {
       return MultiLegSubtype(sub);
   return MULTILEG_SUBTYPE_NONE;
 }
-
-// Deprecated aliases for the pre-rename SpecialSubtype vocabulary.
-using SpecialSubtype = MultiLegSubtype;
-constexpr MultiLegSubtype SPECIAL_SUBTYPE_NONE = MULTILEG_SUBTYPE_NONE;
-constexpr MultiLegSubtype SPECIAL_SUBTYPE_TWO_STEP = MULTILEG_SUBTYPE_TWO_STEP;
-constexpr MultiLegSubtype SPECIAL_SUBTYPE_TWO_STEP_PROMOTION = MULTILEG_SUBTYPE_TWO_STEP_PROMOTION;
-constexpr MultiLegSubtype SPECIAL_SUBTYPE_HOOK = MULTILEG_SUBTYPE_HOOK;
-constexpr MultiLegSubtype SPECIAL_SUBTYPE_HOOK_PROMOTION = MULTILEG_SUBTYPE_HOOK_PROMOTION;
-inline MultiLegSubtype special_subtype(Move m) { return multileg_subtype(m); }
 
 inline bool is_two_step(Move m) {
   MultiLegSubtype sub = multileg_subtype(m);

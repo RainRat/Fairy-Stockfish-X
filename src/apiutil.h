@@ -328,17 +328,8 @@ inline const std::string move_to_san(Position& pos, Move m, Notation n) {
             else
                 san += "+";
         }
-        if (pos.gives_check(m) && !is_shogi(n) && n != NOTATION_XIANGQI_WXF)
-        {
-            StateInfo st;
-            pos.do_move(m, st);
-            san += MoveList<LEGAL>(pos).size() ? "+" : "#";
-            pos.undo_move(m);
-        }
-        return san;
     }
-
-    if (type_of(m) == CASTLING)
+    else if (type_of(m) == CASTLING)
     {
         san = to > from ? "O-O" : "O-O-O";
 

@@ -52,8 +52,8 @@ inline uint64_t reflect_direction_pairs(uint64_t mask) {
     uint64_t result = 0;
     for (int d1 = 0; d1 < 8; ++d1)
         for (int d2 = 0; d2 < 8; ++d2)
-            if (mask & (1ULL << (d1 * 8 + d2)))
-                result |= (1ULL << (reflect_king_direction(d1) * 8 + reflect_king_direction(d2)));
+            if (mask & multileg_direction_pair_bit(d1, d2))
+                result |= multileg_direction_pair_bit(reflect_king_direction(d1), reflect_king_direction(d2));
     return result;
 }
 

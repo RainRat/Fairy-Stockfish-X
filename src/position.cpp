@@ -3377,9 +3377,6 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
 
 bool Position::two_step_attacks_square(Color us, PieceType pt, Square from, Square target,
                                          Bitboard occupied, Bitboard friendly) const {
-  uint64_t mask = two_step_moves_mask(us, pt);
-  if (!mask)
-      return false;
   if (from == target || !(board_bb() & from) || !(board_bb() & target))
       return false;
   // `target` is treated as a hypothetical victim: callers pass
@@ -3391,7 +3388,7 @@ bool Position::two_step_attacks_square(Color us, PieceType pt, Square from, Squa
   // Any emitted completion containing the target (as bend with a legal
   // landing, or as the final square via a non-friendly bend) is an attack.
   bool hit = false;
-  for_each_two_step_path(from, mask, friendly, [&](const TwoStepPath& path) {
+  for_each_two_step_path(us, pt, from, friendly, [&](const TwoStepPath& path) {
       if (path.via == target || path.to == target)
           hit = true;
   });
@@ -3400,27 +3397,17 @@ bool Position::two_step_attacks_square(Color us, PieceType pt, Square from, Squa
 
 bool Position::hook_attacks_square(Color us, PieceType pt, Square from, Square target,
                                    Bitboard occupied, Bitboard friendly) const {
-  uint64_t mask = hook_move_mask(us, pt);
-  if (!mask)
-      return false;
   if (from == target || !(board_bb() & from) || !(board_bb() & target))
       return false;
   // Same hypothetical-victim contract as two_step_attacks_square: target is
   // already folded into `occupied` by the caller and excluded from `friendly`.
   if (!(occupied & from))
       return false;
-  int limit = hook_capture_limit(pt);
-  if (limit < 1)
-      return false;
-  int range1 = hook_first_range(pt) ? hook_first_range(pt) : SQUARE_NB;
-  int range2 = hook_second_range(pt) ? hook_second_range(pt) : SQUARE_NB;
-  // A :1 hook may not capture on both legs; only paths with a legal capture
-  // count attack the target.
+  // The hook capture limit is enforced by the iterator; only emitted paths
+  // with a legal capture count attack the target.
   bool hit = false;
-  for_each_hook_path(from, mask, range1, range2, occupied, friendly,
+  for_each_hook_path(us, pt, from, occupied, friendly,
       [&](const HookPath& path) {
-          if (path.captureVia && path.captureTo && limit < 2)
-              return;
           if (path.via == target || path.to == target)
               hit = true;
       });
@@ -3512,45 +3499,30 @@ bool Position::requires_full_evasion_generation() const {
 }
 
 bool Position::hook_path_valid(Color us, PieceType pt, Square from, Square via, Square to) const {
-  uint64_t mask = hook_move_mask(us, pt);
-  if (!mask)
-      return false;
   // Degenerate paths (zero-length legs) are never generated.
   if (via == from || to == via)
       return false;
-  // Geometry (rays, blocking, origin landing, direction pairs) is owned by
-  // for_each_hook_path; only the capture-limit rule stays here.
-  bool geometryOk = false;
-  int range1 = hook_first_range(pt) ? hook_first_range(pt) : SQUARE_NB;
-  int range2 = hook_second_range(pt) ? hook_second_range(pt) : SQUARE_NB;
-  for_each_hook_path(from, mask, range1, range2, pieces(), pieces(us),
+  // Single owner for completed-path validation: geometry (rays, blocking,
+  // origin landing, direction pairs) and the capture limit are both enforced
+  // by for_each_hook_path, so a stored (via, to) pair is valid exactly when
+  // the iterator emits it for the real position occupancy.
+  bool ok = false;
+  for_each_hook_path(us, pt, from, pieces(), pieces(us),
       [&](const HookPath& path) {
           if (path.via == via && path.to == to)
-              geometryOk = true;
+              ok = true;
       });
-  if (!geometryOk)
-      return false;
-  // Single owner for completed-path validation: a :1 hook may not capture
-  // on both legs even if the geometry itself is valid.
-  Color them = ~us;
-  bool viaCapture = via != to && !empty(via) && color_of(piece_on(via)) == them;
-  bool toCapture = to != from && !empty(to) && color_of(piece_on(to)) == them;
-  if (viaCapture && toCapture && hook_capture_limit(pt) < 2)
-      return false;
-  return true;
+  return ok;
 }
 
 bool Position::two_step_path_valid(Color us, PieceType pt, Square from, Square via, Square to) const {
-  uint64_t mask = two_step_moves_mask(us, pt);
-  if (!mask)
-      return false;
   if (!(board_bb() & from) || !(board_bb() & via) || !(board_bb() & to))
       return false;
   // The encoded move stores squares, not direction provenance: on narrow
   // wrapping boards several compass directions can alias the same square,
   // so accept if ANY pair in the mask explains the geometry.
   bool pairAllowed = false;
-  for_each_two_step_path(from, mask, pieces(us), [&](const TwoStepPath& path) {
+  for_each_two_step_path(us, pt, from, pieces(us), [&](const TwoStepPath& path) {
       if (path.via == via && path.to == to)
           pairAllowed = true;
   });
@@ -5741,13 +5713,13 @@ bool Position::legal(Move m) const {
       Square via = via_sq(m);
       if (!two_step_path_valid(us, movePt, from, via, to))
           return false;
-      if (two_step_promotes(m) && !multileg_promotion_zone(us, movePt, from, to))
+      if (two_step_promotes(m) && !multileg_promotion_status(moverPiece, from, to, isCapture).allowed)
           return false;
   }
   // Hook path validation (geometry, occupancy, capture limit) has a single
   // owner: hook_path_valid. legal() enforces promotion restrictions; the
   // path itself is validated here so direct legal() calls cannot bypass it.
-  if (is_hook(m) && hook_promotes(m) && !multileg_promotion_zone(us, movePt, from, to))
+  if (is_hook(m) && hook_promotes(m) && !multileg_promotion_status(moverPiece, from, to, isCapture).allowed)
       return false;
   if (is_hook(m) && !hook_path_valid(us, movePt, from, via_sq(m), to))
       return false;
@@ -6858,9 +6830,7 @@ bool Position::pseudo_legal(const Move m) const {
           return false;
       if (two_step_promotes(m))
       {
-          if (promoted_piece_type(pt) == NO_PIECE_TYPE)
-              return false;
-          if (!multileg_promotion_zone(us, pt, from, to))
+          if (!multileg_promotion_status(pc, from, to, capture(m)).allowed)
               return false;
       }
       return !violates_same_player_board_repetition(m);
@@ -6878,9 +6848,7 @@ bool Position::pseudo_legal(const Move m) const {
           return false;
       if (hook_promotes(m))
       {
-          if (promoted_piece_type(pt) == NO_PIECE_TYPE)
-              return false;
-          if (!multileg_promotion_zone(us, pt, from, to))
+          if (!multileg_promotion_status(pc, from, to, capture(m)).allowed)
               return false;
       }
       return !violates_same_player_board_repetition(m);
