@@ -1421,8 +1421,12 @@ inline bool is_insert_move(Move m) {
   return type_of(m) == INSERT;
 }
 
+inline bool is_plain_special(Move m) {
+  return type_of(m) == SPECIAL && special_subtype(m) == SPECIAL_SUBTYPE_NONE;
+}
+
 inline bool is_pass(Move m) {
-  return type_of(m) == SPECIAL
+  return is_plain_special(m)
       && !is_multileg(m)
       && from_sq(m) == to_sq(m)
       && !is_gating(m)
@@ -1430,7 +1434,7 @@ inline bool is_pass(Move m) {
 }
 
 inline bool is_self_destruct(Move m) {
-  return type_of(m) == SPECIAL
+  return is_plain_special(m)
       && !is_multileg(m)
       && from_sq(m) == to_sq(m)
       && !is_gating(m)
@@ -1438,7 +1442,7 @@ inline bool is_self_destruct(Move m) {
 }
 
 inline bool is_first_move_special(Move m) {
-  return type_of(m) == SPECIAL
+  return is_plain_special(m)
       && !is_multileg(m)
       && from_sq(m) != to_sq(m)
       && !is_gating(m)

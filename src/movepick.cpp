@@ -257,39 +257,43 @@ void MovePicker::score() {
       // values while still preferring zones containing valuable targets.
       return value / 2;
   };
-  // Sum every victim on the move's capture squares so multi-capture moves
-  // (two-step double captures, jump locust captures) order by total material
-  // without teaching move ordering about any specific move encoding.
+  // Multi-leg doubles capture on two squares; order them by total material.
+  // All other moves keep legacy single-victim ordering (capture_squares is
+  // deliberately single-victim for jump locusts), so the generalization is
+  // explicitly multileg-only.
   auto capture_victims = [&](Move mv, int& total, PieceType& topType, int& points) {
       total = 0;
       topType = NO_PIECE_TYPE;
       points = 0;
-      int topVal = -1;
-      Bitboard caps = pos.capture_squares(mv);
-      while (caps)
+      if (is_multileg(mv))
       {
-          Piece p = pos.piece_on(pop_lsb(caps));
-          if (p == NO_PIECE)
-              continue;
-          int v = int(PieceValue[MG][p]);
-          total += v;
-          if (v > topVal)
+          int topVal = -1;
+          Bitboard caps = pos.capture_squares(mv);
+          while (caps)
           {
-              topVal = v;
-              topType = type_of(p);
+              Piece p = pos.piece_on(pop_lsb(caps));
+              if (p == NO_PIECE)
+                  continue;
+              int v = int(PieceValue[MG][p]);
+              total += v;
+              if (v > topVal)
+              {
+                  topVal = v;
+                  topType = type_of(p);
+              }
+              points += points_capture_bonus(p);
           }
-          points += points_capture_bonus(p);
+          if (topType != NO_PIECE_TYPE)
+              return;
+          // Fall through to single-victim behavior when neither victim is
+          // still on the board (e.g. scoring after the move was made).
       }
-      if (topType == NO_PIECE_TYPE)
-      {
-          // Fallback for captures without a board victim: preserve the
-          // previous single-victim behavior.
-          Piece captured = pos.captured_piece(mv);
-          Piece victim = captured != NO_PIECE ? captured : pos.piece_on(to_sq(mv));
-          total = int(PieceValue[MG][victim]);
-          topType = type_of(victim);
-          points = points_capture_bonus(captured);
-      }
+      // Legacy single-victim behavior for ordinary moves.
+      Piece captured = pos.captured_piece(mv);
+      Piece victim = captured != NO_PIECE ? captured : pos.piece_on(to_sq(mv));
+      total = int(PieceValue[MG][victim]);
+      topType = type_of(victim);
+      points = points_capture_bonus(captured);
   };
   for (auto& m : *this)
       if constexpr (Type == CAPTURES)
@@ -537,9 +541,10 @@ top:
       cur = moveList;
       // On wrapped boards, between_bb / checker_evasion_targets are not
       // topology-aware and can miss interposition moves that cross the
-      // seam. Use NON_EVASIONS and rely on the search's legal() filter,
-      // matching the fallback already used by generate<LEGAL>.
-      endMoves = pos.topology_wraps()
+      // seam. Bent multi-leg checks cannot be blocked geometrically either.
+      // Use NON_EVASIONS and rely on the search's legal() filter, matching
+      // the fallback already used by generate<LEGAL>.
+      endMoves = (pos.topology_wraps() || pos.requires_full_evasion_filter())
                ? generate_without_potions<NON_EVASIONS>(pos, cur)
                : generate_without_potions<EVASIONS>(pos, cur);
       evasionBaseEnd = endMoves;

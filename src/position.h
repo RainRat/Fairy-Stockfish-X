@@ -762,10 +762,26 @@ public:
   int hook_second_range(PieceType pt) const;
   int hook_capture_limit(PieceType pt) const;
   PieceSet hook_piece_types(Color c) const;
-  // Validates hook path geometry and occupancy (not king safety): pair/range
-  // coverage, empty transit rays, no friendly on bend/to, capture-limit
-  // compliance for doubles.
+  // Validates a completed hook path (geometry, occupancy, capture-count
+  // limit), not king safety. Movegen enumerates rays through hook_step;
+  // pseudo_legal/legal validate completed paths through here.
   bool hook_path_valid(Color us, PieceType pt, Square from, Square via, Square to) const;
+  // Shared multi-leg attack model (two-step + hook): can a piece of type pt
+  // on `from` capture `target` given `occupied`? Transit must be empty in
+  // `occupied`; `friendly` marks the attacker's own pieces in that occupancy.
+  // Used by royal checking so movegen, legality and gives_check share one
+  // geometry instead of each reinventing hook/two-step rays.
+  bool two_step_attacks_square(Color us, PieceType pt, Square from, Square target,
+                               Bitboard occupied, Bitboard friendly) const;
+  bool hook_attacks_square(Color us, PieceType pt, Square from, Square target,
+                           Bitboard occupied, Bitboard friendly) const;
+  Bitboard multileg_attackers_to(Square s, Bitboard occupied, Color c) const;
+  Bitboard multileg_attackers_to(Square s, Bitboard occupied, Color c,
+                                 const SimulatedMoveInfo* simulated) const;
+  // Bent hook/two-step checks cannot be blocked geometrically like riders;
+  // callers must generate NON_EVASIONS and let legal() filter them (same
+  // conservative pattern as wrapped boards).
+  bool requires_full_evasion_filter() const;
   PieceSet self_destruct_types() const;
   Bitboard self_destruct_region(Color c) const;
   GravityRule gravity() const;
@@ -2386,7 +2402,7 @@ inline Bitboard Position::opening_swap_drop_targets(Color c, PieceType pt) const
 }
 
 inline bool Position::is_opening_self_removal_move(Move m) const {
-  return type_of(m) == SPECIAL
+  return is_plain_special(m)
       && from_sq(m) == to_sq(m)
       && (opening_self_removal_targets(side_to_move()) & from_sq(m));
 }
@@ -3565,7 +3581,7 @@ inline Piece Position::moved_piece(Move m) const {
 }
 
 inline bool Position::is_clone_move(Move m) const {
-  if (type_of(m) != SPECIAL || is_gating(m) || from_sq(m) == to_sq(m) || is_first_move_special(m))
+  if (!is_plain_special(m) || is_gating(m) || from_sq(m) == to_sq(m) || is_first_move_special(m))
       return false;
 
   return can_clone(moved_piece(m));
@@ -5945,8 +5961,15 @@ inline bool Position::hook_path_valid(Color us, PieceType pt, Square from, Squar
       return false;
   if ((pieces(us) & via) || (to != from && (pieces(us) & to)))
       return false;
-  // Pure geometry: capture-count limits are interaction rules enforced by
-  // callers (pseudo_legal/legal), not by the ray walk.
+  // Single owner for completed-path validation: a :1 hook may not capture
+  // on both legs even if the geometry itself is valid. (Generation has its
+  // own ray-stopping enumeration, but pseudo_legal/legal must not duplicate
+  // this rule.)
+  Color them = ~us;
+  bool viaCapture = via != to && !empty(via) && color_of(piece_on(via)) == them;
+  bool toCapture = to != from && !empty(to) && color_of(piece_on(to)) == them;
+  if (viaCapture && toCapture && hook_capture_limit(pt) < 2)
+      return false;
   return true;
 }
 
@@ -6005,10 +6028,10 @@ inline Piece Position::captured_piece(Move m) const {
 }
 
 inline std::string Position::piece_to_partner() const {
-  // A via-only multi-leg capture leaves st->captured empty; report the
-  // secondary victim so partner material is not silently dropped. (Doubles
-  // report the primary victim, matching locust multi-captures.)
-  const ReversiblePieceOnSquare& cap = st->captured.piece ? st->captured : st->secondaryCaptured;
+  // Multi-leg movement is rejected with twoBoards at parse time, so only the
+  // primary victim is reported here. A future two-board/multi-leg design
+  // would need a plural API rather than an arbitrary primary/secondary pick.
+  const ReversiblePieceOnSquare& cap = st->captured;
   if (!cap.piece) return std::string();
   Color color = color_of(cap.piece.piece);
   Piece piece = cap.piece.promoted ?

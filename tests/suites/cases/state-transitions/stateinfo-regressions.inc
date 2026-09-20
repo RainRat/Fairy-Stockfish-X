@@ -137,6 +137,18 @@ castling = false
 customPiece1 = h:BsRbRfDfW
 twoStepMoves = h:N>N,N>S
 castling = false
+
+[test-clone-lion:chess]
+customPiece1 = l:R
+twoStepMoves = l:*
+cloneMoveTypes = l
+castling = false
+
+[test-opening-lion:chess]
+customPiece1 = l:0
+twoStepMoves = l:*
+openingSelfRemoval = true
+castling = false
 )ini");
     variants.parse_istream<false>(ss);
 }
@@ -665,8 +677,11 @@ static void test_quiet_multileg_promotion_is_tactical() {
     assert(!pos.capture(m_quiet_promo));
     assert(MoveList<CAPTURES>(pos).contains(m_quiet_promo));
     assert(pos.capture_or_promotion(m_quiet_promo));
+    // A quiet promotion searched in CAPTURES must not be duplicated in QUIETS.
+    assert(!MoveList<QUIETS>(pos).contains(m_quiet_promo));
     Move m_quiet = make_two_step(SQ_G7, SQ_F8, SQ_G8, false);
     assert(!MoveList<CAPTURES>(pos).contains(m_quiet));
+    assert(MoveList<QUIETS>(pos).contains(m_quiet));
 
     pos.set(variants.get("chess"),
             "8/6P1/8/8/8/8/8/4K2k w - - 0 1", false, &st, nullptr);
@@ -683,9 +698,11 @@ static void test_quiet_multileg_promotion_is_tactical() {
     assert(!pos.capture(m_hook_quiet_promo));
     assert(MoveList<CAPTURES>(pos).contains(m_hook_quiet_promo));
     assert(pos.capture_or_promotion(m_hook_quiet_promo));
+    assert(!MoveList<QUIETS>(pos).contains(m_hook_quiet_promo));
     // Quiet non-promotions stay out of CAPTURES.
     Move m_hook_quiet = make_hook(SQ_G7, SQ_G8, SQ_H8, false);
     assert(!MoveList<CAPTURES>(pos).contains(m_hook_quiet));
+    assert(MoveList<QUIETS>(pos).contains(m_hook_quiet));
 }
 
 static void test_igui_clears_not_moved() {
@@ -750,6 +767,77 @@ static void test_blast_via_capture() {
     assert(pos.piece_on(SQ_E4) == make_piece(WHITE, CUSTOM_PIECE_1));
 }
 
+static void test_multileg_special_subtype_isolation() {
+    StateInfo st{};
+    Position pos;
+    // A clone-capable piece using two-step movement must not decode as a
+    // clone: multi-leg moves reuse SPECIAL with a subtype, while clones are
+    // plain SPECIAL moves.
+    pos.set(variants.get("test-clone-lion"),
+            "4k3/8/8/8/4L3/8/8/4K3 w - - 0 1", false, &st, nullptr);
+    Move m_multi = make_two_step(SQ_E4, SQ_E5, SQ_E6, false);
+    assert(pos.pseudo_legal(m_multi));
+    assert(!pos.is_clone_move(m_multi));
+
+    // An igui multi-leg move (from == to) must not decode as opening
+    // self-removal, which is also a plain SPECIAL from == to move.
+    pos.set(variants.get("test-opening-lion"),
+            "4k3/8/8/8/4L3/8/8/4K3 w - - 0 1", false, &st, nullptr);
+    assert(pos.in_opening_self_removal_phase());
+    Move m_igui = make_two_step(SQ_E4, SQ_D5, SQ_E4, false);
+    assert(!pos.is_opening_self_removal_move(m_igui));
+    assert(!pos.legal(m_igui));
+}
+
+static void test_hook_royal_attacks() {
+    StateInfo st{};
+    Position pos;
+    // The h:0 hook piece has no Betza movement, so every attack below must
+    // come from the shared multi-leg attack model, not ordinary rays.
+
+    // Bend capture: white hook e4 attacks black king on e5 (bend).
+    pos.set(variants.get("test-hook-state"),
+            "8/8/8/4k3/4H3/8/8/4K3 b - - 0 1", false, &st, nullptr);
+    assert(pos.evasion_checkers());
+    assert(pos.requires_full_evasion_filter());
+    // King takes the checker.
+    assert(pos.legal(make<NORMAL>(SQ_E5, SQ_E4)));
+
+    // Final-leg capture: white hook e4 attacks black king on e6 via e5.
+    pos.set(variants.get("test-hook-state"),
+            "8/8/4k3/8/4H3/8/8/4K3 b - - 0 1", false, &st, nullptr);
+    assert(pos.evasion_checkers());
+    assert(pos.requires_full_evasion_filter());
+
+    // King movement into a hook attack is illegal: d5 is checked via e5 and
+    // d6 is attacked via e6, so the king cannot flee there.
+    pos.set(variants.get("test-hook-state"),
+            "8/8/8/3k4/4H3/8/8/4K3 b - - 0 1", false, &st, nullptr);
+    assert(pos.evasion_checkers());
+    assert(pos.requires_full_evasion_filter());
+    assert(!pos.legal(make<NORMAL>(SQ_D5, SQ_D6)));
+
+    // Via royal capture is rejected like a final-square king capture.
+    pos.set(variants.get("test-hook-state"),
+            "8/8/8/4k3/4H3/8/8/4K3 w - - 0 1", false, &st, nullptr);
+    assert(!pos.legal(make_hook(SQ_E4, SQ_E5, SQ_E6, false)));
+
+    // gives_check: quiet hook entry gives check down the file.
+    pos.set(variants.get("test-hook-state"),
+            "4k3/8/8/8/4H3/8/8/4K3 w - - 0 1", false, &st, nullptr);
+    Move m_check = make_hook(SQ_E4, SQ_E5, SQ_E6, false);
+    assert(pos.legal(m_check));
+    assert(pos.gives_check(m_check));
+
+    // Non-king move exposing the king to a hook attack is illegal: Be2f3
+    // vacates e2, opening e4-e3-e1 onto the white king.
+    pos.set(variants.get("test-hook-state"),
+            "4k3/8/8/8/4h3/8/P3B3/4K3 w - - 0 1", false, &st, nullptr);
+    assert(!pos.evasion_checkers());
+    assert(!pos.legal(make<NORMAL>(SQ_E2, SQ_F3)));
+    assert(pos.legal(make<NORMAL>(SQ_A2, SQ_A3)));
+}
+
 static void test_two_step_vs_jump() {
     StateInfo st{};
     Position pos;
@@ -793,6 +881,8 @@ int main() {
     test_hook_promotions();
     test_capture_squares_and_recapture();
     test_two_step_vs_jump();
+    test_multileg_special_subtype_isolation();
+    test_hook_royal_attacks();
     return 0;
 }
 EOF
