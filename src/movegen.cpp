@@ -1223,31 +1223,13 @@ namespace {
             if (pos.freeze_squares() & from)
                 continue;
 
-            Bitboard remaining_mask = Bitboard(mask);
-            while (remaining_mask)
-            {
-                int pair_idx = int(pop_lsb(remaining_mask));
-                int d1 = pair_idx / 8;
-                int d2 = pair_idx % 8;
-
-                Square via;
-                if (!pos.step_destination(from, KingDirections[d1], via))
-                    continue;
-                if (!(pos.board_bb() & via) || (pos.pieces(Us) & via))
-                    continue;
-
-                Square to;
-                if (!pos.step_destination(via, KingDirections[d2], to))
-                    continue;
-                if (!(pos.board_bb() & to) || (to != from && (pos.pieces(Us) & to)))
-                    continue;
-
-                bool cap1 = (!pos.empty(via) && color_of(pos.piece_on(via)) == them);
-                bool cap2 = (to != from && !pos.empty(to) && color_of(pos.piece_on(to)) == them);
-
-                moveList = emit_multileg_candidate<Us, Type>(pos, moveList, pt, from, via, to,
-                                                             cap1, cap2, target, checkers, makeTwoStep);
-            }
+            pos.for_each_two_step_path(from, mask, pos.pieces(Us),
+                [&](const Position::TwoStepPath& path) {
+                    bool cap1 = (!pos.empty(path.via) && color_of(pos.piece_on(path.via)) == them);
+                    bool cap2 = (path.to != from && !pos.empty(path.to) && color_of(pos.piece_on(path.to)) == them);
+                    moveList = emit_multileg_candidate<Us, Type>(pos, moveList, pt, from, path.via, path.to,
+                                                                 cap1, cap2, target, checkers, makeTwoStep);
+                });
         }
     }
 
@@ -1262,8 +1244,6 @@ namespace {
     PieceSet hookPts = pos.hook_piece_types(Us);
     if (!hookPts)
         return moveList;
-
-    const Color them = ~Us;
 
     auto makeHook = [](Square from, Square via, Square to, bool promotes) {
         return make_hook(from, via, to, promotes);
@@ -1292,56 +1272,18 @@ namespace {
                 continue;
 
             // Hook rays stop at board edges (see Position::hook_step).
-            Bitboard remaining_mask = Bitboard(mask);
-            while (remaining_mask)
-            {
-                int pair_idx = int(pop_lsb(remaining_mask));
-                int d1 = pair_idx / 8;
-                int d2 = pair_idx % 8;
-
-                int cap1steps = range1 ? range1 : SQUARE_NB;
-                Square bend = from;
-                for (int k1 = 1; k1 <= cap1steps; ++k1)
-                {
-                    Square step1;
-                    if (!pos.hook_step(bend, KingDirections[d1], step1))
-                        break;
-                    if (!(pos.board_bb() & step1) || (pos.pieces(Us) & step1))
-                        break;
-                    bend = step1;
-                    bool cap1 = !pos.empty(bend) && color_of(pos.piece_on(bend)) == them;
-
-                    int cap2steps = range2 ? range2 : SQUARE_NB;
-                    Square to = bend;
-                    for (int k2 = 1; k2 <= cap2steps; ++k2)
-                    {
-                        Square step2;
-                        if (!pos.hook_step(to, KingDirections[d2], step2))
-                            break;
-                        if (!(pos.board_bb() & step2))
-                            break;
-                        // The origin is a landing square (igui) but never
-                        // transit: the walk must not continue past it.
-                        bool atOrigin = (step2 == from);
-                        if (!atOrigin && (pos.pieces(Us) & step2))
-                            break;
-                        to = step2;
-                        bool cap2 = !atOrigin && !pos.empty(to) && color_of(pos.piece_on(to)) == them;
-
-                        // Hook sliders stop at captures; a :1 hook may not
-                        // capture on both legs.
-                        if (!(cap1 && cap2 && limit < 2))
-                            moveList = emit_multileg_candidate<Us, Type>(pos, moveList, pt, from, bend, to,
-                                                                        cap1, cap2, target,
-                                                                        pos.evasion_checkers(), makeHook);
-                        if (cap2 || atOrigin)
-                            break;
-                    }
-
-                    if (cap1)
-                        break;
-                }
-            }
+            // Geometry (rays, blocking, origin landing) is owned by
+            // Position::for_each_hook_path; only the capture-limit rule and
+            // candidate emission stay here.
+            pos.for_each_hook_path(from, mask, range1, range2, pos.pieces(), pos.pieces(Us),
+                [&](const Position::HookPath& path) {
+                    // Hook sliders stop at captures; a :1 hook may not
+                    // capture on both legs.
+                    if (!(path.captureVia && path.captureTo && limit < 2))
+                        moveList = emit_multileg_candidate<Us, Type>(pos, moveList, pt, from, path.via, path.to,
+                                                                    path.captureVia, path.captureTo, target,
+                                                                    pos.evasion_checkers(), makeHook);
+                });
         }
     }
 

@@ -3388,42 +3388,14 @@ bool Position::two_step_attacks_square(Color us, PieceType pt, Square from, Squa
   // The attacker itself must exist in the hypothetical occupancy.
   if (!(occupied & from))
       return false;
-  // Target as the bend: need a completing second step to a legal landing.
-  for (int d1 = 0; d1 < 8; ++d1)
-  {
-      Square probeVia;
-      if (!step_destination(from, KingDirections[d1], probeVia) || probeVia != target)
-          continue;
-      for (int d2 = 0; d2 < 8; ++d2)
-      {
-          if (!((mask >> (d1 * 8 + d2)) & 1ULL))
-              continue;
-          Square to;
-          if (!step_destination(target, KingDirections[d2], to) || !(board_bb() & to))
-              continue;
-          if (to != from && (friendly & to))
-              continue;
-          return true;
-      }
-  }
-  // Target as the final square: need a bend that is not friendly.
-  for (int d1 = 0; d1 < 8; ++d1)
-  {
-      Square via;
-      if (!step_destination(from, KingDirections[d1], via) || !(board_bb() & via))
-          continue;
-      if (via == from || (friendly & via))
-          continue;
-      for (int d2 = 0; d2 < 8; ++d2)
-      {
-          if (!((mask >> (d1 * 8 + d2)) & 1ULL))
-              continue;
-          Square to;
-          if (step_destination(via, KingDirections[d2], to) && to == target)
-              return true;
-      }
-  }
-  return false;
+  // Any emitted completion containing the target (as bend with a legal
+  // landing, or as the final square via a non-friendly bend) is an attack.
+  bool hit = false;
+  for_each_two_step_path(from, mask, friendly, [&](const TwoStepPath& path) {
+      if (path.via == target || path.to == target)
+          hit = true;
+  });
+  return hit;
 }
 
 bool Position::hook_attacks_square(Color us, PieceType pt, Square from, Square target,
@@ -3440,116 +3412,23 @@ bool Position::hook_attacks_square(Color us, PieceType pt, Square from, Square t
   int limit = hook_capture_limit(pt);
   if (limit < 1)
       return false;
-  int cap1 = hook_first_range(pt) ? hook_first_range(pt) : SQUARE_NB;
-  int cap2 = hook_second_range(pt) ? hook_second_range(pt) : SQUARE_NB;
-  // Target as the bend: need one legal completing landing along a paired ray.
-  for (int d1 = 0; d1 < 8; ++d1)
-  {
-      bool rowLive = false;
-      for (int d2 = 0; d2 < 8; ++d2)
-          if ((mask >> (d1 * 8 + d2)) & 1ULL)
-          {
-              rowLive = true;
-              break;
-          }
-      if (!rowLive)
-          continue;
-      Square cur = from;
-      bool reaches = false;
-      for (int k = 1; k <= cap1; ++k)
-      {
-          Square nxt;
-          if (!hook_step(cur, KingDirections[d1], nxt) || !(board_bb() & nxt))
-              break;
-          if (nxt == target)
-          {
-              reaches = true;
-              break;
-          }
-          if (occupied & nxt)
-              break;
-          cur = nxt;
-      }
-      if (!reaches)
-          continue;
-      for (int d2 = 0; d2 < 8; ++d2)
-      {
-          if (!((mask >> (d1 * 8 + d2)) & 1ULL))
-              continue;
-          Square cur2 = target;
-          for (int k2 = 1; k2 <= cap2; ++k2)
-          {
-              Square nxt;
-              if (!hook_step(cur2, KingDirections[d2], nxt) || !(board_bb() & nxt))
-                  break;
-              bool atOrigin = (nxt == from);
-              if (!atOrigin && (friendly & nxt))
-                  break;
-              bool landingEnemy = !atOrigin && (occupied & nxt);
-              if (landingEnemy && limit < 2)
-                  break;
-              return true;
-          }
-      }
-  }
-  // Target as the final square: enumerate bends, then check the second ray.
-  for (int d1 = 0; d1 < 8; ++d1)
-  {
-      bool rowLive = false;
-      for (int d2 = 0; d2 < 8; ++d2)
-          if ((mask >> (d1 * 8 + d2)) & 1ULL)
-          {
-              rowLive = true;
-              break;
-          }
-      if (!rowLive)
-          continue;
-      Square bend = from;
-      for (int k1 = 1; k1 <= cap1; ++k1)
-      {
-          Square nxt;
-          if (!hook_step(bend, KingDirections[d1], nxt) || !(board_bb() & nxt))
-              break;
-          if (friendly & nxt)
-              break;
-          bend = nxt;
-          if (bend == target)
-              continue;
-          bool bendEnemy = bool(occupied & bend);
-          for (int d2 = 0; d2 < 8; ++d2)
-          {
-              if (!((mask >> (d1 * 8 + d2)) & 1ULL))
-                  continue;
-              Square cur = bend;
-              bool reaches = false;
-              for (int k2 = 1; k2 <= cap2; ++k2)
-              {
-                  Square nxt2;
-                  if (!hook_step(cur, KingDirections[d2], nxt2) || !(board_bb() & nxt2))
-                      break;
-                  if (nxt2 == target)
-                  {
-                      reaches = true;
-                      break;
-                  }
-                  if (occupied & nxt2)
-                      break;
-                  cur = nxt2;
-              }
-              if (!reaches)
-                  continue;
-              if (bendEnemy && limit < 2)
-                  continue;
-              return true;
-          }
-          if (bendEnemy)
-              break;
-      }
-  }
-  return false;
+  int range1 = hook_first_range(pt) ? hook_first_range(pt) : SQUARE_NB;
+  int range2 = hook_second_range(pt) ? hook_second_range(pt) : SQUARE_NB;
+  // A :1 hook may not capture on both legs; only paths with a legal capture
+  // count attack the target.
+  bool hit = false;
+  for_each_hook_path(from, mask, range1, range2, occupied, friendly,
+      [&](const HookPath& path) {
+          if (path.captureVia && path.captureTo && limit < 2)
+              return;
+          if (path.via == target || path.to == target)
+              hit = true;
+      });
+  return hit;
 }
 
-Bitboard Position::multileg_attackers_to(Square s, Bitboard occupied, Color c) const {
+Bitboard Position::multileg_attackers_to(Square s, Bitboard occupied, Color c,
+                                         const SimulatedMoveInfo* simulated) const {
   if (!has_two_step_moves() && !has_hook_moves())
       return Bitboard(0);
   if (s == SQ_NONE || !(board_bb() & s))
@@ -3560,44 +3439,10 @@ Bitboard Position::multileg_attackers_to(Square s, Bitboard occupied, Color c) c
   // This matches the generic attackers_to() contract, which answers whether
   // `s` would be attacked even if empty or (stale-)friendly-occupied.
   Bitboard attackOccupied = occupied | s;
-  Bitboard friendly = (pieces(c) & occupied) & ~s;
-  Bitboard attackers = Bitboard(0);
-  for (PieceSet ps = two_step_piece_types(c); ps; )
-  {
-      PieceType pt = pop_lsb(ps);
-      Bitboard candidates = pieces(c, pt) & occupied;
-      while (candidates)
-      {
-          Square from = pop_lsb(candidates);
-          if (two_step_attacks_square(c, pt, from, s, attackOccupied, friendly))
-              attackers |= square_bb(from);
-      }
-  }
-  for (PieceSet ps = hook_piece_types(c); ps; )
-  {
-      PieceType pt = pop_lsb(ps);
-      Bitboard candidates = pieces(c, pt) & occupied;
-      while (candidates)
-      {
-          Square from = pop_lsb(candidates);
-          if (hook_attacks_square(c, pt, from, s, attackOccupied, friendly))
-              attackers |= square_bb(from);
-      }
-  }
-  return attackers;
-}
-
-Bitboard Position::multileg_attackers_to(Square s, Bitboard occupied, Color c,
-                                         const SimulatedMoveInfo* simulated) const {
-  if (!has_two_step_moves() && !has_hook_moves())
-      return Bitboard(0);
-  if (s == SQ_NONE || !(board_bb() & s))
-      return Bitboard(0);
-  Bitboard attackOccupied = occupied | s;
   Bitboard baseFriendly = (simulated && !simulated->typeOccupancy.empty())
                         ? simulated->type_pieces(c, ALL_PIECES)
                         : (simulated ? simulated->colorOccupancy[c] : pieces(c));
-  Bitboard friendly = baseFriendly & ~s;
+  Bitboard friendly = baseFriendly & ~square_bb(s);
   auto candidates_for = [&](PieceType pt) {
       Bitboard b = (simulated && !simulated->typeOccupancy.empty())
                      ? (simulated->type_pieces(c, pt) & occupied)
@@ -3641,10 +3486,23 @@ bool Position::requires_full_evasion_filter() const {
   Bitboard checkers = evasion_checkers();
   if (!checkers)
       return false;
-  Square royalSq = royal_square(sideToMove);
-  if (royalSq == SQ_NONE)
+  // Conservative piece-type test: any checker whose type is configured for
+  // multi-leg movement forces NON_EVASIONS + legal() filtering. This may
+  // choose NON_EVASIONS more often than the exact geometry walk (the same
+  // piece type can also give ordinary check), but it stays correct and avoids
+  // re-walking hook geometry on every legal-generation/MovePicker call.
+  Color attacker = ~sideToMove;
+  PieceSet multi = two_step_piece_types(attacker) | hook_piece_types(attacker);
+  if (!multi)
       return false;
-  return bool(multileg_attackers_to(royalSq, pieces(), ~sideToMove) & checkers);
+  while (checkers)
+  {
+      Square sq = pop_lsb(checkers);
+      Piece pc = piece_on(sq);
+      if (pc != NO_PIECE && (multi & piece_set(type_of(pc))))
+          return true;
+  }
+  return false;
 }
 
 bool Position::requires_full_evasion_generation() const {
@@ -3660,46 +3518,20 @@ bool Position::hook_path_valid(Color us, PieceType pt, Square from, Square via, 
   // Degenerate paths (zero-length legs) are never generated.
   if (via == from || to == via)
       return false;
-  // Walk each leg from its origin along every king direction; transit
-  // squares must be empty, which also establishes the leg direction.
-  int legDir[2] = {-1, -1};
-  int range[2] = {hook_first_range(pt), hook_second_range(pt)};
-  Square legFrom[2] = {from, via};
-  Square legTo[2] = {via, to};
-  for (int leg = 0; leg < 2; ++leg)
-  {
-      int cap = range[leg] ? range[leg] : SQUARE_NB;
-      bool found = false;
-      for (int i = 0; i < 8 && !found; ++i)
-      {
-          Square cur = legFrom[leg];
-          for (int k = 1; k <= cap; ++k)
-          {
-              Square nxt;
-              if (!hook_step(cur, KingDirections[i], nxt))
-                  break;
-              if (nxt == legTo[leg])
-              {
-                  legDir[leg] = i;
-                  found = true;
-                  break;
-              }
-              if (!empty(nxt))
-                  break;
-              cur = nxt;
-          }
-      }
-      if (!found)
-          return false;
-  }
-  if (!((mask >> (legDir[0] * 8 + legDir[1])) & 1ULL))
-      return false;
-  if ((pieces(us) & via) || (to != from && (pieces(us) & to)))
+  // Geometry (rays, blocking, origin landing, direction pairs) is owned by
+  // for_each_hook_path; only the capture-limit rule stays here.
+  bool geometryOk = false;
+  int range1 = hook_first_range(pt) ? hook_first_range(pt) : SQUARE_NB;
+  int range2 = hook_second_range(pt) ? hook_second_range(pt) : SQUARE_NB;
+  for_each_hook_path(from, mask, range1, range2, pieces(), pieces(us),
+      [&](const HookPath& path) {
+          if (path.via == via && path.to == to)
+              geometryOk = true;
+      });
+  if (!geometryOk)
       return false;
   // Single owner for completed-path validation: a :1 hook may not capture
-  // on both legs even if the geometry itself is valid. (Generation has its
-  // own ray-stopping enumeration, but pseudo_legal/legal must not duplicate
-  // this rule.)
+  // on both legs even if the geometry itself is valid.
   Color them = ~us;
   bool viaCapture = via != to && !empty(via) && color_of(piece_on(via)) == them;
   bool toCapture = to != from && !empty(to) && color_of(piece_on(to)) == them;
@@ -3718,29 +3550,11 @@ bool Position::two_step_path_valid(Color us, PieceType pt, Square from, Square v
   // wrapping boards several compass directions can alias the same square,
   // so accept if ANY pair in the mask explains the geometry.
   bool pairAllowed = false;
-  for (int d1 = 0; d1 < 8 && !pairAllowed; ++d1)
-  {
-      Square probeVia;
-      if (!step_destination(from, KingDirections[d1], probeVia) || probeVia != via)
-          continue;
-      for (int d2 = 0; d2 < 8; ++d2)
-      {
-          Square probeTo;
-          if (step_destination(via, KingDirections[d2], probeTo) && probeTo == to
-              && ((mask >> (d1 * 8 + d2)) & 1ULL))
-          {
-              pairAllowed = true;
-              break;
-          }
-      }
-  }
-  if (!pairAllowed)
-      return false;
-  if (pieces(us) & via)
-      return false;
-  if (to != from && (pieces(us) & to))
-      return false;
-  return true;
+  for_each_two_step_path(from, mask, pieces(us), [&](const TwoStepPath& path) {
+      if (path.via == via && path.to == to)
+          pairAllowed = true;
+  });
+  return pairAllowed;
 }
 
 Bitboard Position::attackers_to_king_without_freeze(Square s, Bitboard occupied, Color c,

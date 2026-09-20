@@ -347,7 +347,7 @@ static void test_gating_special_collision() {
             Move m = make_gating<SPECIAL>(SQ_E2, SQ_E4, pt, Square(gate));
             assert(!is_two_step(m));
             assert(is_gating(m));
-            assert(special_subtype(m) == SPECIAL_SUBTYPE_NONE);
+            assert(multileg_subtype(m) == MULTILEG_SUBTYPE_NONE);
         }
     }
     for (int via = 0; via <= int(SQ_MAX); ++via) {

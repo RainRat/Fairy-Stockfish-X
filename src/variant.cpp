@@ -2219,8 +2219,7 @@ Variant* Variant::conclude() {
     }
 
     hasTwoStepMoves = false;
-    twoStepPieceTypes[WHITE] = NO_PIECE_SET;
-    twoStepPieceTypes[BLACK] = NO_PIECE_SET;
+    twoStepPieceTypes = NO_PIECE_SET;
     for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
     {
         uint64_t mask = twoStepMoves[pt];
@@ -2228,9 +2227,8 @@ Variant* Variant::conclude() {
         if (mask)
         {
             hasTwoStepMoves = true;
-            twoStepPieceTypes[WHITE] |= piece_set(pt);
+            twoStepPieceTypes |= piece_set(pt);
             twoStepMovesColor[BLACK][pt] = reflect_direction_pairs(mask);
-            twoStepPieceTypes[BLACK] |= piece_set(pt);
         }
         else
         {
@@ -2242,8 +2240,7 @@ Variant* Variant::conclude() {
     // gets the 180-degree point reflection. Ranges and capture limits are
     // direction-independent and shared by both colors.
     hasHookMoves = false;
-    hookPieceTypes[WHITE] = NO_PIECE_SET;
-    hookPieceTypes[BLACK] = NO_PIECE_SET;
+    hookPieceTypes = NO_PIECE_SET;
     for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
     {
         uint64_t mask = hookMoveMasks[pt];
@@ -2251,9 +2248,8 @@ Variant* Variant::conclude() {
         if (mask && hookCaptureLimit[pt] >= 1)
         {
             hasHookMoves = true;
-            hookPieceTypes[WHITE] |= piece_set(pt);
+            hookPieceTypes |= piece_set(pt);
             hookMoveMasksColor[BLACK][pt] = reflect_direction_pairs(mask);
-            hookPieceTypes[BLACK] |= piece_set(pt);
         }
         else
         {

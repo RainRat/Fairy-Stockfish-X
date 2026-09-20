@@ -584,12 +584,15 @@ enum MoveType : int {
   LASER_FIRE         = 15 << (2 * SQUARE_BITS),
 };
 
-enum SpecialSubtype : int {
-  SPECIAL_SUBTYPE_NONE = 0,
-  SPECIAL_SUBTYPE_TWO_STEP = 1,
-  SPECIAL_SUBTYPE_TWO_STEP_PROMOTION = 2,
-  SPECIAL_SUBTYPE_HOOK = 3,
-  SPECIAL_SUBTYPE_HOOK_PROMOTION = 4,
+// Multi-leg payload subtypes packed into SPECIAL moves (flag + subtype +
+// via square). This does NOT describe other SPECIAL meanings (pass,
+// self-destruct, clone, gating, etc.); those are plain SPECIAL moves.
+enum MultiLegSubtype : int {
+  MULTILEG_SUBTYPE_NONE = 0,
+  MULTILEG_SUBTYPE_TWO_STEP = 1,
+  MULTILEG_SUBTYPE_TWO_STEP_PROMOTION = 2,
+  MULTILEG_SUBTYPE_HOOK = 3,
+  MULTILEG_SUBTYPE_HOOK_PROMOTION = 4,
 };
 
 enum MoveModality {MODALITY_QUIET, MODALITY_CAPTURE, MOVE_MODALITY_NB};
@@ -982,25 +985,12 @@ constexpr Direction KingDirections[8] = {
     NORTH, NORTH_EAST, EAST, SOUTH_EAST, SOUTH, SOUTH_WEST, WEST, NORTH_WEST
 };
 
-// Direction-pair masks (two-step moves, hook moves) index king steps
-// N=0 NE=1 E=2 SE=3 S=4 SW=5 W=6 NW=7, matching KingDirections order
-// (pair bit d1 * 8 + d2). Black masks are the 180-degree point reflection.
-inline const char* king_step_name(int idx) {
-    static const char* names[8] = {"N", "NE", "E", "SE", "S", "SW", "W", "NW"};
-    return names[idx & 7];
-}
-
+// King-step geometry shared by move encoding. Direction-pair masks
+// (two-step moves, hook moves) index these steps N=0 NE=1 E=2 SE=3 S=4 SW=5
+// W=6 NW=7 (pair bit d1 * 8 + d2). Configuration names and mask reflection
+// live in variant.h; only the raw geometry stays here.
 constexpr int reflect_king_direction(int d) {
     return (d + 4) & 7;
-}
-
-inline uint64_t reflect_direction_pairs(uint64_t mask) {
-    uint64_t result = 0;
-    for (int d1 = 0; d1 < 8; ++d1)
-        for (int d2 = 0; d2 < 8; ++d2)
-            if (mask & (1ULL << (d1 * 8 + d2)))
-                result |= (1ULL << (reflect_king_direction(d1) * 8 + reflect_king_direction(d2)));
-    return result;
 }
 
 // Keep track of what a move changes on the board (used by NNUE)
@@ -1239,7 +1229,9 @@ constexpr Square to_sq(Move m) {
 }
 
 constexpr Square from_sq(Move m) {
-  Square raw_from = Square((m >> SQUARE_BITS) & SQUARE_BIT_MASK);
+  // Multi-leg moves are negative on 32-bit int Move storage (flag is the
+  // sign bit); decode via uint64_t so no signed shift is involved.
+  Square raw_from = Square((static_cast<uint64_t>(m) >> SQUARE_BITS) & SQUARE_BIT_MASK);
   return type_of(m) == DROP ? SQ_NONE : raw_from;
 }
 
@@ -1249,25 +1241,25 @@ inline int from_to(Move m) {
 
 inline PieceType promotion_type(Move m) {
   if (type_of(m) == PROMOTION)
-    return PieceType((m >> (2 * SQUARE_BITS + MOVE_TYPE_BITS)) & (PIECE_TYPE_NB - 1));
+    return PieceType((static_cast<uint64_t>(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS)) & (PIECE_TYPE_NB - 1));
   if (type_of(m) == PROMOTION_POTION) {
-    int choice = (m >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + SQUARE_BITS)) & 3;
+    int choice = (static_cast<uint64_t>(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + SQUARE_BITS)) & 3;
     return choice == 0 ? KNIGHT : (choice == 1 ? BISHOP : (choice == 2 ? ROOK : QUEEN));
   }
   return NO_PIECE_TYPE;
 }
 
 inline Square potion_target_square(Move m) {
-  return Square((m >> (2 * SQUARE_BITS + MOVE_TYPE_BITS)) & SQUARE_BIT_MASK);
+  return Square((static_cast<uint64_t>(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS)) & SQUARE_BIT_MASK);
 }
 
 inline int potion_type(Move m) {
   assert(type_of(m) == PROMOTION_POTION);
-  return (m >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + SQUARE_BITS + 2)) & 1;
+  return (static_cast<uint64_t>(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + SQUARE_BITS + 2)) & 1;
 }
 
 inline PieceType gating_type(Move m) {
-  return PieceType((m >> (2 * SQUARE_BITS + MOVE_TYPE_BITS)) & (PIECE_TYPE_NB - 1));
+  return PieceType((static_cast<uint64_t>(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS)) & (PIECE_TYPE_NB - 1));
 }
 
 inline Square gating_square(Move m) {
@@ -1321,33 +1313,42 @@ constexpr uint64_t MultiLegFlag = uint64_t(1) << (2 * SQUARE_BITS + MOVE_TYPE_BI
 constexpr uint64_t MultiLegFlag = uint64_t(1) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS + SQUARE_BITS + 1);
 #endif
 
-inline SpecialSubtype special_subtype(Move m) {
+inline MultiLegSubtype multileg_subtype(Move m) {
   if (type_of(m) != SPECIAL)
-      return SPECIAL_SUBTYPE_NONE;
+      return MULTILEG_SUBTYPE_NONE;
   if (!(static_cast<uint64_t>(m) & MultiLegFlag))
-      return SPECIAL_SUBTYPE_NONE;
+      return MULTILEG_SUBTYPE_NONE;
   int sub = (static_cast<uint64_t>(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS)) & (PIECE_TYPE_NB - 1);
-  if (sub >= SPECIAL_SUBTYPE_TWO_STEP && sub <= SPECIAL_SUBTYPE_HOOK_PROMOTION)
-      return SpecialSubtype(sub);
-  return SPECIAL_SUBTYPE_NONE;
+  if (sub >= MULTILEG_SUBTYPE_TWO_STEP && sub <= MULTILEG_SUBTYPE_HOOK_PROMOTION)
+      return MultiLegSubtype(sub);
+  return MULTILEG_SUBTYPE_NONE;
 }
 
+// Deprecated aliases for the pre-rename SpecialSubtype vocabulary.
+using SpecialSubtype = MultiLegSubtype;
+constexpr MultiLegSubtype SPECIAL_SUBTYPE_NONE = MULTILEG_SUBTYPE_NONE;
+constexpr MultiLegSubtype SPECIAL_SUBTYPE_TWO_STEP = MULTILEG_SUBTYPE_TWO_STEP;
+constexpr MultiLegSubtype SPECIAL_SUBTYPE_TWO_STEP_PROMOTION = MULTILEG_SUBTYPE_TWO_STEP_PROMOTION;
+constexpr MultiLegSubtype SPECIAL_SUBTYPE_HOOK = MULTILEG_SUBTYPE_HOOK;
+constexpr MultiLegSubtype SPECIAL_SUBTYPE_HOOK_PROMOTION = MULTILEG_SUBTYPE_HOOK_PROMOTION;
+inline MultiLegSubtype special_subtype(Move m) { return multileg_subtype(m); }
+
 inline bool is_two_step(Move m) {
-  SpecialSubtype sub = special_subtype(m);
-  return sub == SPECIAL_SUBTYPE_TWO_STEP || sub == SPECIAL_SUBTYPE_TWO_STEP_PROMOTION;
+  MultiLegSubtype sub = multileg_subtype(m);
+  return sub == MULTILEG_SUBTYPE_TWO_STEP || sub == MULTILEG_SUBTYPE_TWO_STEP_PROMOTION;
 }
 
 inline bool two_step_promotes(Move m) {
-  return special_subtype(m) == SPECIAL_SUBTYPE_TWO_STEP_PROMOTION;
+  return multileg_subtype(m) == MULTILEG_SUBTYPE_TWO_STEP_PROMOTION;
 }
 
 inline bool is_hook(Move m) {
-  SpecialSubtype sub = special_subtype(m);
-  return sub == SPECIAL_SUBTYPE_HOOK || sub == SPECIAL_SUBTYPE_HOOK_PROMOTION;
+  MultiLegSubtype sub = multileg_subtype(m);
+  return sub == MULTILEG_SUBTYPE_HOOK || sub == MULTILEG_SUBTYPE_HOOK_PROMOTION;
 }
 
 inline bool hook_promotes(Move m) {
-  return special_subtype(m) == SPECIAL_SUBTYPE_HOOK_PROMOTION;
+  return multileg_subtype(m) == MULTILEG_SUBTYPE_HOOK_PROMOTION;
 }
 
 // Multi-leg moves (two-step lion family and hook movers) share the SPECIAL
@@ -1391,7 +1392,20 @@ static_assert(((uint64_t(SQUARE_NB - 1) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + P
 #if defined(VERY_LARGE_BOARDS)
 static_assert(MultiLegFlag < (uint64_t(1) << 63), "MultiLegFlag exceeds 64-bit Move storage");
 #else
+// Audit: on 32-bit int Move storage the LARGEBOARDS flag is bit 31 (the sign
+// bit) and the 8x8 flag is bit 29, so multi-leg moves compare negative. This
+// is benign: TT stores moves as uint32_t bit patterns (TTMove(m) round-trips
+// exactly), UCI/serialization never uses raw ints, ordering in maps is only a
+// total order, and every decoder above masks after a uint64_t shift, so no
+// signed shift or sign extension leaks into a field. Do NOT change Move's
+// underlying type without re-auditing TT/storage/serialization on all three
+// board-size builds.
 static_assert(MultiLegFlag < (uint64_t(1) << 32), "MultiLegFlag exceeds 32-bit Move storage");
+#if defined(LARGEBOARDS)
+static_assert(MultiLegFlag == (uint64_t(1) << 31), "LARGEBOARDS MultiLegFlag must be the sign bit to stay disjoint from gating");
+#else
+static_assert(MultiLegFlag == (uint64_t(1) << 29), "8x8 MultiLegFlag must sit above the gating field");
+#endif
 #endif
 
 inline bool is_gating(Move m) {
@@ -1403,13 +1417,14 @@ inline bool is_gating(Move m) {
 
   const MoveType mt = type_of(m);
   constexpr uint64_t SquareFieldMask = (uint64_t(SQUARE_BIT_MASK) << 1) | 1;
+  const uint64_t upper = static_cast<uint64_t>(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS);
   if (mt == SPECIAL || mt == LASER_FIRE)
-      return ((m >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & SquareFieldMask) != 0;
+      return (upper & SquareFieldMask) != 0;
   if (mt == NORMAL || mt == CASTLING || mt == EN_PASSANT)
       return gating_type(m) != NO_PIECE_TYPE
-          || ((m >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & SquareFieldMask);
+          || (upper & SquareFieldMask);
   return (mt == PROMOTION || mt == PIECE_PROMOTION || mt == PIECE_DEMOTION)
-      && ((m >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & SquareFieldMask) != 0;
+      && (upper & SquareFieldMask) != 0;
 }
 
 inline bool is_drop_move(Move m) {
@@ -1422,12 +1437,11 @@ inline bool is_insert_move(Move m) {
 }
 
 inline bool is_plain_special(Move m) {
-  return type_of(m) == SPECIAL && special_subtype(m) == SPECIAL_SUBTYPE_NONE;
+  return type_of(m) == SPECIAL && multileg_subtype(m) == MULTILEG_SUBTYPE_NONE;
 }
 
 inline bool is_pass(Move m) {
   return is_plain_special(m)
-      && !is_multileg(m)
       && from_sq(m) == to_sq(m)
       && !is_gating(m)
       && gating_type(m) == NO_PIECE_TYPE;
@@ -1435,7 +1449,6 @@ inline bool is_pass(Move m) {
 
 inline bool is_self_destruct(Move m) {
   return is_plain_special(m)
-      && !is_multileg(m)
       && from_sq(m) == to_sq(m)
       && !is_gating(m)
       && gating_type(m) != NO_PIECE_TYPE;
@@ -1443,7 +1456,6 @@ inline bool is_self_destruct(Move m) {
 
 inline bool is_first_move_special(Move m) {
   return is_plain_special(m)
-      && !is_multileg(m)
       && from_sq(m) != to_sq(m)
       && !is_gating(m)
       && gating_type(m) != NO_PIECE_TYPE;
@@ -1485,7 +1497,7 @@ constexpr Move make_insert(Square marker, Square to, PieceType pt_in_hand, Piece
 }
 
 constexpr PieceType exchange_piece(Move m) {
-  return type_of(m) != DROP ? NO_PIECE_TYPE : PieceType((m >> SQUARE_BITS) & SQUARE_BIT_MASK);
+  return type_of(m) != DROP ? NO_PIECE_TYPE : PieceType((static_cast<uint64_t>(m) >> SQUARE_BITS) & SQUARE_BIT_MASK);
 }
 
 constexpr Move make_exchange(Square to, PieceType pt_exchange, PieceType pt_in_hand, PieceType pt_dropped) {
@@ -1543,7 +1555,7 @@ constexpr Move make_two_step(Square from, Square via, Square to, bool promotes =
   return Move(
       MultiLegFlag
     + (static_cast<uint64_t>(via) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS))
-    + (static_cast<uint64_t>(promotes ? SPECIAL_SUBTYPE_TWO_STEP_PROMOTION : SPECIAL_SUBTYPE_TWO_STEP) << (2 * SQUARE_BITS + MOVE_TYPE_BITS))
+    + (static_cast<uint64_t>(promotes ? MULTILEG_SUBTYPE_TWO_STEP_PROMOTION : MULTILEG_SUBTYPE_TWO_STEP) << (2 * SQUARE_BITS + MOVE_TYPE_BITS))
     + static_cast<uint64_t>(SPECIAL)
     + (static_cast<uint64_t>(from) << SQUARE_BITS)
     + static_cast<uint64_t>(to)
@@ -1557,21 +1569,21 @@ constexpr Move make_hook(Square from, Square via, Square to, bool promotes = fal
   return Move(
       MultiLegFlag
     + (static_cast<uint64_t>(via) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS))
-    + (static_cast<uint64_t>(promotes ? SPECIAL_SUBTYPE_HOOK_PROMOTION : SPECIAL_SUBTYPE_HOOK) << (2 * SQUARE_BITS + MOVE_TYPE_BITS))
+    + (static_cast<uint64_t>(promotes ? MULTILEG_SUBTYPE_HOOK_PROMOTION : MULTILEG_SUBTYPE_HOOK) << (2 * SQUARE_BITS + MOVE_TYPE_BITS))
     + static_cast<uint64_t>(SPECIAL)
     + (static_cast<uint64_t>(from) << SQUARE_BITS)
     + static_cast<uint64_t>(to)
   );
 }
-static_assert(int(SPECIAL_SUBTYPE_HOOK_PROMOTION) < int(PIECE_TYPE_NB),
+static_assert(int(MULTILEG_SUBTYPE_HOOK_PROMOTION) < int(PIECE_TYPE_NB),
               "Hook subtypes must fit the SPECIAL subtype field");
 
 constexpr PieceType dropped_piece_type(Move m) {
-  return PieceType((m >> (2 * SQUARE_BITS + MOVE_TYPE_BITS)) & (PIECE_TYPE_NB - 1));
+  return PieceType((static_cast<uint64_t>(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS)) & (PIECE_TYPE_NB - 1));
 }
 
 constexpr PieceType in_hand_piece_type(Move m) {
-  return PieceType((m >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & (PIECE_TYPE_NB - 1));
+  return PieceType((static_cast<uint64_t>(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & (PIECE_TYPE_NB - 1));
 }
 
 inline bool is_custom(PieceType pt) {

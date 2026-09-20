@@ -762,6 +762,33 @@ public:
   int hook_second_range(PieceType pt) const;
   int hook_capture_limit(PieceType pt) const;
   PieceSet hook_piece_types(Color c) const;
+  // Single owner for multi-leg movement geometry. Generation, completed-path
+  // validation, and attack detection all enumerate through these iterators so
+  // range caps, hook_step edge-stops, bend occupancy, igui/origin handling,
+  // and direction-pair matching cannot drift apart. Occupancy rules differ by
+  // caller (real position vs hypothetical attack occupancy), so callers pass
+  // occupied/friendly explicitly; capture-limit and promotion policy stay
+  // with the callers.
+  struct TwoStepPath {
+      Square via = SQ_NONE;
+      Square to = SQ_NONE;
+      int d1 = -1;
+      int d2 = -1;
+  };
+  struct HookPath {
+      Square via = SQ_NONE;
+      Square to = SQ_NONE;
+      int d1 = -1;
+      int d2 = -1;
+      bool captureVia = false;
+      bool captureTo = false;
+      bool atOrigin = false;
+  };
+  template<typename Emit>
+  void for_each_two_step_path(Square from, uint64_t mask, Bitboard friendly, Emit&& emit) const;
+  template<typename Emit>
+  void for_each_hook_path(Square from, uint64_t mask, int range1, int range2,
+                          Bitboard occupied, Bitboard friendly, Emit&& emit) const;
   // Bent hook/two-step checks cannot be blocked geometrically like riders;
   // callers must generate NON_EVASIONS and let legal() filter them (same
   // conservative pattern as wrapped boards).
@@ -1059,6 +1086,17 @@ public:
   Square capture_square(Square to) const;
   Square capture_square(Move m) const;
   Bitboard capture_squares(Move m) const;
+  // Generic search helpers so MovePicker/search see recapture and victim
+  // value semantics without knowing about multi-leg encodings. Jump/locust
+  // captures keep legacy single-victim semantics; only multi-leg doubles
+  // sum both victims.
+  struct CaptureOrderInfo {
+      int total = 0;
+      PieceType topType = NO_PIECE_TYPE;
+      int pointsBonus = 0;
+  };
+  CaptureOrderInfo capture_order_info(Move m) const;
+  bool matches_recapture_square(Move m, Square s) const;
   bool step_destination(Square from, Direction d, Square& to) const;
   // Single king step that never wraps: like step_destination, but a step
   // jumping more than one file/rank (i.e. around a wrapped edge) fails.
@@ -1162,8 +1200,10 @@ public:
 
 private:
   // Multi-leg internals: completed-path validation and shared attack geometry.
-  // Only requires_full_evasion_generation() and capture_squares() are needed
-  // outside Position (movegen/MovePicker); the rest stays private so generic
+  // Outside Position, movegen consumes the for_each_*_path geometry plus
+  // config masks/ranges, MovePicker/search see only requires_full_evasion_
+  // generation(), capture_squares(), matches_recapture_square(), and
+  // capture_order_info(). Everything else stays private so generic
   // attack/evasion/search paths do not accumulate multi-leg knowledge.
   bool requires_full_evasion_filter() const;
   bool hook_path_valid(Color us, PieceType pt, Square from, Square via, Square to) const;
@@ -1172,9 +1212,8 @@ private:
                                Bitboard occupied, Bitboard friendly) const;
   bool hook_attacks_square(Color us, PieceType pt, Square from, Square target,
                            Bitboard occupied, Bitboard friendly) const;
-  Bitboard multileg_attackers_to(Square s, Bitboard occupied, Color c) const;
   Bitboard multileg_attackers_to(Square s, Bitboard occupied, Color c,
-                                 const SimulatedMoveInfo* simulated) const;
+                                 const SimulatedMoveInfo* simulated = nullptr) const;
   // Initialization helpers (used while setting up a position)
   void set_castling_right(Color c, Square rfrom);
   void set_state(StateInfo* si) const;
@@ -2471,7 +2510,8 @@ inline uint64_t Position::two_step_moves_mask(Color c, PieceType pt) const {
 
 inline PieceSet Position::two_step_piece_types(Color c) const {
   assert(var != nullptr);
-  return var->twoStepPieceTypes[c];
+  (void)c; // membership is color-independent; only the masks differ by color
+  return var->twoStepPieceTypes;
 }
 
 inline bool Position::has_hook_moves() const {
@@ -2501,7 +2541,8 @@ inline int Position::hook_capture_limit(PieceType pt) const {
 
 inline PieceSet Position::hook_piece_types(Color c) const {
   assert(var != nullptr);
-  return var->hookPieceTypes[c];
+  (void)c; // membership is color-independent; only the masks differ by color
+  return var->hookPieceTypes;
 }
 
 inline PieceSet Position::self_destruct_types() const {
@@ -5901,6 +5942,73 @@ inline Bitboard Position::capture_squares(Move m) const {
   return is_ok(cs) ? square_bb(cs) : Bitboard(0);
 }
 
+inline bool Position::matches_recapture_square(Move m, Square s) const {
+  if (to_sq(m) == s)
+      return true;
+  // capture_squares() also reports the hurdle square for legacy jump
+  // captures; keep qsearch recapture semantics narrow to multi-leg doubles
+  // so pre-existing jump-capture behavior is unchanged.
+  return is_multileg(m) && bool(capture_squares(m) & s);
+}
+
+inline Position::CaptureOrderInfo Position::capture_order_info(Move m) const {
+  CaptureOrderInfo info;
+  auto points_for = [&](Piece captured) {
+      if (!points_counting() || captured == NO_PIECE)
+          return 0;
+      int pts = variant()->piecePoints[type_of(captured)];
+      int signedPts = 0;
+      switch (points_rule_captures())
+      {
+          case POINTS_US:        signedPts =  pts; break;
+          case POINTS_THEM:      signedPts = -pts; break;
+          case POINTS_OWNER:     signedPts =  color_of(captured) == side_to_move() ? pts : -pts; break;
+          case POINTS_NON_OWNER: signedPts =  color_of(captured) == side_to_move() ? -pts : pts; break;
+          case POINTS_NONE:      signedPts = 0; break;
+      }
+      if (points_goal() > 0)
+      {
+          if (points_goal_value() < VALUE_ZERO)
+              signedPts = -signedPts;
+          else if (points_goal_value() == VALUE_ZERO)
+              signedPts = 0;
+      }
+      return 20 * signedPts;
+  };
+  if (is_multileg(m))
+  {
+      int topVal = -1;
+      Bitboard caps = capture_squares(m);
+      while (caps)
+      {
+          Piece p = piece_on(pop_lsb(caps));
+          if (p == NO_PIECE)
+              continue;
+          int v = int(PieceValue[MG][p]);
+          info.total += v;
+          if (v > topVal)
+          {
+              topVal = v;
+              info.topType = type_of(p);
+          }
+          info.pointsBonus += points_for(p);
+      }
+      if (info.topType != NO_PIECE_TYPE)
+          return info;
+      // Fall through to single-victim behavior when neither victim is
+      // still on the board (e.g. scoring after the move was made).
+      info.total = 0;
+      info.pointsBonus = 0;
+  }
+  // Legacy single-victim behavior for ordinary moves.
+  Piece captured = captured_piece(m);
+  Piece victim = captured != NO_PIECE ? captured : piece_on(to_sq(m));
+  info.total = int(PieceValue[MG][victim]);
+  info.topType = type_of(victim);
+  info.pointsBonus = points_for(captured);
+  return info;
+}
+
 inline bool Position::step_destination(Square from, Direction d, Square& to) const {
   auto [dr, df] = decode_direction(d);
   return wrapped_destination_square(from, df, dr, max_file(), max_rank(), wraps_files(), wraps_ranks(), to);
@@ -5918,6 +6026,80 @@ inline bool Position::hook_step(Square cur, Direction dir, Square& nxt) const {
 inline bool Position::multileg_promotion_zone(Color c, PieceType pt, Square from, Square to) const {
   Bitboard pz = promotion_zone(c, pt);
   return (pz & from) || (pz & to);
+}
+
+template<typename Emit>
+void Position::for_each_two_step_path(Square from, uint64_t mask, Bitboard friendly, Emit&& emit) const {
+  if (!mask || !(board_bb() & from))
+      return;
+  Bitboard remaining = Bitboard(mask);
+  while (remaining)
+  {
+      int pair_idx = int(pop_lsb(remaining));
+      int d1 = pair_idx / 8;
+      int d2 = pair_idx % 8;
+      Square via;
+      if (!step_destination(from, KingDirections[d1], via))
+          continue;
+      if (!(board_bb() & via) || (friendly & via))
+          continue;
+      Square to;
+      if (!step_destination(via, KingDirections[d2], to))
+          continue;
+      if (!(board_bb() & to) || (to != from && (friendly & to)))
+          continue;
+      TwoStepPath path{via, to, d1, d2};
+      emit(path);
+  }
+}
+
+template<typename Emit>
+void Position::for_each_hook_path(Square from, uint64_t mask, int range1, int range2,
+                                  Bitboard occupied, Bitboard friendly, Emit&& emit) const {
+  if (!mask || !(board_bb() & from))
+      return;
+  Bitboard remaining = Bitboard(mask);
+  while (remaining)
+  {
+      int pair_idx = int(pop_lsb(remaining));
+      int d1 = pair_idx / 8;
+      int d2 = pair_idx % 8;
+      int cap1steps = range1 ? range1 : SQUARE_NB;
+      Square bend = from;
+      for (int k1 = 1; k1 <= cap1steps; ++k1)
+      {
+          Square step1;
+          if (!hook_step(bend, KingDirections[d1], step1))
+              break;
+          if (!(board_bb() & step1) || (friendly & step1))
+              break;
+          bend = step1;
+          bool cap1 = bool(occupied & bend);
+          int cap2steps = range2 ? range2 : SQUARE_NB;
+          Square to = bend;
+          for (int k2 = 1; k2 <= cap2steps; ++k2)
+          {
+              Square step2;
+              if (!hook_step(to, KingDirections[d2], step2))
+                  break;
+              if (!(board_bb() & step2))
+                  break;
+              // The origin is a landing square (igui) but never
+              // transit: the walk must not continue past it.
+              bool atOrigin = (step2 == from);
+              if (!atOrigin && (friendly & step2))
+                  break;
+              to = step2;
+              bool cap2 = !atOrigin && bool(occupied & to);
+              HookPath path{bend, to, d1, d2, cap1, cap2, atOrigin};
+              emit(path);
+              if (cap2 || atOrigin)
+                  break;
+          }
+          if (cap1)
+              break;
+      }
+  }
 }
 
 inline bool Position::paired_drop(Move m) const {
