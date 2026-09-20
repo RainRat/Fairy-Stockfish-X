@@ -146,8 +146,7 @@ bool MovePicker::is_qsearch_tt_move(Move m) const {
   if (pos.evasion_checkers())
       return true;
 
-  if (depth <= DEPTH_QS_RECAPTURES && to_sq(m) != recaptureSquare
-      && !(is_multileg(m) && (pos.capture_squares(m) & recaptureSquare)))
+  if (depth <= DEPTH_QS_RECAPTURES && !pos.matches_recapture_square(m, recaptureSquare))
       return false;
 
   return pos.capture_or_promotion(m)
@@ -211,30 +210,6 @@ void MovePicker::score() {
       int delta = distance_to_goal(from) - distance_to_goal(to);
       return delta > 0 ? 900 * delta : 0;
   };
-  auto points_capture_bonus = [&](Piece captured) {
-      if (!pos.points_counting())
-          return 0;
-      if (captured == NO_PIECE)
-          return 0;
-      int pts = pos.variant()->piecePoints[type_of(captured)];
-      int signedPts = 0;
-      switch (pos.points_rule_captures())
-      {
-          case POINTS_US:        signedPts =  pts; break;
-          case POINTS_THEM:      signedPts = -pts; break;
-          case POINTS_OWNER:     signedPts =  color_of(captured) == pos.side_to_move() ? pts : -pts; break;
-          case POINTS_NON_OWNER: signedPts =  color_of(captured) == pos.side_to_move() ? -pts : pts; break;
-          case POINTS_NONE:      signedPts = 0; break;
-      }
-      if (pos.points_goal() > 0)
-      {
-          if (pos.points_goal_value() < VALUE_ZERO)
-              signedPts = -signedPts;
-          else if (pos.points_goal_value() == VALUE_ZERO)
-              signedPts = 0;
-      }
-      return 20 * signedPts;
-  };
   auto gate_history_bonus = [&](Move mv) {
       const Square gate = gate_history_square(mv);
       return gate != SQ_NONE ? (*gateHistory)[pos.side_to_move()][gate] : 0;
@@ -258,51 +233,13 @@ void MovePicker::score() {
       // values while still preferring zones containing valuable targets.
       return value / 2;
   };
-  // Multi-leg doubles capture on two squares; order them by total material.
-  // All other moves keep legacy single-victim ordering (capture_squares is
-  // deliberately single-victim for jump locusts), so the generalization is
-  // explicitly multileg-only.
-  auto capture_victims = [&](Move mv, int& total, PieceType& topType, int& points) {
-      total = 0;
-      topType = NO_PIECE_TYPE;
-      points = 0;
-      if (is_multileg(mv))
-      {
-          int topVal = -1;
-          Bitboard caps = pos.capture_squares(mv);
-          while (caps)
-          {
-              Piece p = pos.piece_on(pop_lsb(caps));
-              if (p == NO_PIECE)
-                  continue;
-              int v = int(PieceValue[MG][p]);
-              total += v;
-              if (v > topVal)
-              {
-                  topVal = v;
-                  topType = type_of(p);
-              }
-              points += points_capture_bonus(p);
-          }
-          if (topType != NO_PIECE_TYPE)
-              return;
-          // Fall through to single-victim behavior when neither victim is
-          // still on the board (e.g. scoring after the move was made).
-      }
-      // Legacy single-victim behavior for ordinary moves.
-      Piece captured = pos.captured_piece(mv);
-      Piece victim = captured != NO_PIECE ? captured : pos.piece_on(to_sq(mv));
-      total = int(PieceValue[MG][victim]);
-      topType = type_of(victim);
-      points = points_capture_bonus(captured);
-  };
   for (auto& m : *this)
       if constexpr (Type == CAPTURES)
       {
-          int victimVal;
-          PieceType victimType;
-          int pointsBonus;
-          capture_victims(m, victimVal, victimType, pointsBonus);
+          Position::CaptureOrderInfo victims = pos.capture_order_info(m);
+          int victimVal = victims.total;
+          PieceType victimType = victims.topType;
+          int pointsBonus = victims.pointsBonus;
           m.value =  victimVal * 6
                    + pointsBonus
                    + flag_goal_bonus(m)
@@ -334,10 +271,9 @@ void MovePicker::score() {
       {
           if (pos.capture(m))
           {
-              int victimVal;
-              PieceType victimType;
-              int pointsBonus;
-              capture_victims(m, victimVal, victimType, pointsBonus);
+              Position::CaptureOrderInfo victims = pos.capture_order_info(m);
+              int victimVal = victims.total;
+              int pointsBonus = victims.pointsBonus;
               m.value =  victimVal
                        + pointsBonus
                        + flag_goal_bonus(m)
@@ -577,12 +513,8 @@ top:
       return MOVE_NONE;
 
   case QCAPTURE:
-      // capture_squares() also reports the hurdle square for legacy jump
-      // captures; keep qsearch recapture semantics narrow to multi-leg doubles
-      // so pre-existing jump-capture behavior is unchanged.
       if (select<Best>([&](){ return   depth > DEPTH_QS_RECAPTURES
-                                    || to_sq(*cur) == recaptureSquare
-                                    || (is_multileg(*cur) && (pos.capture_squares(*cur) & recaptureSquare)); }))
+                                    || pos.matches_recapture_square(*cur, recaptureSquare); }))
           return *(cur - 1);
 
       if (resume_deferred_potions<CAPTURES>(moveList, qcaptureBaseEnd, qcapturePotionsDeferred))

@@ -240,7 +240,7 @@ namespace {
         std::string s;
         for (char c : token)
             s += char(std::tolower(static_cast<unsigned char>(c)));
-        // Index order matches KingDirections; see king_step_name.
+        // Index order matches KingDirections; see king_step_name in variant.h.
         for (int i = 0; i < 8; ++i)
         {
             std::string name = king_step_name(i);

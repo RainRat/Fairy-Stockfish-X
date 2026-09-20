@@ -39,6 +39,24 @@ namespace Stockfish {
 
 constexpr int START_MULTIMOVES = 128;
 
+// Direction-pair configuration vocabulary (two-step / hook moves). King-step
+// indices follow KingDirections order in types.h (N=0 NE=1 E=2 SE=3 S=4 SW=5
+// W=6 NW=7; pair bit d1 * 8 + d2). Black masks are the 180-degree point
+// reflection of the configured White-relative mask.
+inline const char* king_step_name(int idx) {
+    static const char* names[8] = {"N", "NE", "E", "SE", "S", "SW", "W", "NW"};
+    return names[idx & 7];
+}
+
+inline uint64_t reflect_direction_pairs(uint64_t mask) {
+    uint64_t result = 0;
+    for (int d1 = 0; d1 < 8; ++d1)
+        for (int d2 = 0; d2 < 8; ++d2)
+            if (mask & (1ULL << (d1 * 8 + d2)))
+                result |= (1ULL << (reflect_king_direction(d1) * 8 + reflect_king_direction(d2)));
+    return result;
+}
+
 enum class ColorChangeTrigger {
   NEVER,
   ON_CAPTURE,
@@ -250,7 +268,9 @@ struct Variant {
   bool hasTwoStepMoves = false;
   uint64_t twoStepMoves[PIECE_TYPE_NB] = {};
   uint64_t twoStepMovesColor[COLOR_NB][PIECE_TYPE_NB] = {};
-  PieceSet twoStepPieceTypes[COLOR_NB] = {};
+  // Color-independent: Black masks are the point reflection of White masks,
+  // and reflection preserves membership, so both colors share one set.
+  PieceSet twoStepPieceTypes = {};
   // Hook movers: two sliding legs with a bend (from -> bend -> to), at most
   // hookCaptureLimit captures per move. One spec per piece type: a
   // White-relative direction-pair mask plus per-leg ranges (0 = unlimited).
@@ -260,7 +280,7 @@ struct Variant {
   int hookFirstRange[PIECE_TYPE_NB] = {};
   int hookSecondRange[PIECE_TYPE_NB] = {};
   int hookCaptureLimit[PIECE_TYPE_NB] = {};
-  PieceSet hookPieceTypes[COLOR_NB] = {};
+  PieceSet hookPieceTypes = {};
   PieceSet adjacentSwapMoveTypes = NO_PIECE_SET;
   PieceSet adjacentSwapTargetTypes = ~NO_PIECE_SET;
   bool adjacentSwapFriendly = false;
