@@ -2375,11 +2375,10 @@ ExtMove* generate<LEGAL>(const Position& pos, ExtMove* moveList) {
 
   ExtMove* cur = moveList;
 
-  const bool useWrappedFallback = pos.topology_wraps() && pos.evasion_checkers();
-  // Bent multi-leg checks cannot be blocked geometrically like riders; use
-  // NON_EVASIONS and let legal() filter, matching the wrapped-board fallback.
-  const bool useNonEvasions = pos.anti_royal_types() || useWrappedFallback
-                           || pos.requires_full_evasion_filter();
+  // Wrapped boards and bent multi-leg checks cannot be blocked geometrically;
+  // use NON_EVASIONS and let legal() filter (single predicate owner).
+  const bool useNonEvasions = pos.anti_royal_types()
+                           || pos.requires_full_evasion_generation();
   moveList = (pos.evasion_checkers() && !useNonEvasions) ? generate<EVASIONS    >(pos, moveList)
                                                          : generate<NON_EVASIONS>(pos, moveList);
   while (cur != moveList)

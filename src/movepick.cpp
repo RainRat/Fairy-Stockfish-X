@@ -146,7 +146,8 @@ bool MovePicker::is_qsearch_tt_move(Move m) const {
   if (pos.evasion_checkers())
       return true;
 
-  if (depth <= DEPTH_QS_RECAPTURES && to_sq(m) != recaptureSquare && !(pos.capture_squares(m) & recaptureSquare))
+  if (depth <= DEPTH_QS_RECAPTURES && to_sq(m) != recaptureSquare
+      && !(is_multileg(m) && (pos.capture_squares(m) & recaptureSquare)))
       return false;
 
   return pos.capture_or_promotion(m)
@@ -539,12 +540,10 @@ top:
   case EVASION_INIT:
       ensure_move_list_storage();
       cur = moveList;
-      // On wrapped boards, between_bb / checker_evasion_targets are not
-      // topology-aware and can miss interposition moves that cross the
-      // seam. Bent multi-leg checks cannot be blocked geometrically either.
-      // Use NON_EVASIONS and rely on the search's legal() filter, matching
-      // the fallback already used by generate<LEGAL>.
-      endMoves = (pos.topology_wraps() || pos.requires_full_evasion_filter())
+      // Wrapped boards and bent multi-leg checks cannot be blocked
+      // geometrically; use NON_EVASIONS and rely on the search's legal()
+      // filter (single predicate owner with generate<LEGAL>).
+      endMoves = pos.requires_full_evasion_generation()
                ? generate_without_potions<NON_EVASIONS>(pos, cur)
                : generate_without_potions<EVASIONS>(pos, cur);
       evasionBaseEnd = endMoves;
@@ -578,9 +577,12 @@ top:
       return MOVE_NONE;
 
   case QCAPTURE:
+      // capture_squares() also reports the hurdle square for legacy jump
+      // captures; keep qsearch recapture semantics narrow to multi-leg doubles
+      // so pre-existing jump-capture behavior is unchanged.
       if (select<Best>([&](){ return   depth > DEPTH_QS_RECAPTURES
                                     || to_sq(*cur) == recaptureSquare
-                                    || (pos.capture_squares(*cur) & recaptureSquare); }))
+                                    || (is_multileg(*cur) && (pos.capture_squares(*cur) & recaptureSquare)); }))
           return *(cur - 1);
 
       if (resume_deferred_potions<CAPTURES>(moveList, qcaptureBaseEnd, qcapturePotionsDeferred))
