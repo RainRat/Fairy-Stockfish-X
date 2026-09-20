@@ -1107,18 +1107,13 @@ namespace {
     bool isCapture = capVia || capTo;
 
     Piece mover = pos.piece_on(from);
-    Bitboard mandatoryZone = pos.mandatory_promotion_zone(mover);
-    bool canPromote = (pos.promoted_piece_type(pt) != NO_PIECE_TYPE) && !pos.is_promoted(from);
-
-    bool allowsPromo = canPromote && pos.multileg_promotion_zone(Us, pt, from, to)
-                    && pos.promotion_allowed(Us, pos.promoted_piece_type(pt));
-    if (allowsPromo && pos.piece_promotion_on_capture() && !isCapture)
-        allowsPromo = false;
+    Position::PromotionStatus promoStatus = pos.multileg_promotion_status(mover, from, to, isCapture);
+    bool allowsPromo = promoStatus.allowed;
 
     // Mirror Position::legal() mandatory handling: a non-promoting
     // entry into the mandatory zone from outside is illegal, so
     // suppress the non-promo move only in that case.
-    bool mandatoryPromo = allowsPromo && (mandatoryZone & to) && !(mandatoryZone & from);
+    bool mandatoryPromo = promoStatus.mandatory;
 
     // Like ordinary pawn pushes, quiet promotions belong in CAPTURES even
     // though they capture nothing; quiet non-promotions do not. QUIETS keeps
@@ -1209,10 +1204,6 @@ namespace {
     while (twoStepPts)
     {
         PieceType pt = pop_lsb(twoStepPts);
-        uint64_t mask = pos.two_step_moves_mask(Us, pt);
-        if (!mask)
-            continue;
-
         Bitboard piecesBb = pos.pieces(Us, pt);
         if (restrictToForcedJumper)
             piecesBb &= forcedFromMask;
@@ -1223,7 +1214,7 @@ namespace {
             if (pos.freeze_squares() & from)
                 continue;
 
-            pos.for_each_two_step_path(from, mask, pos.pieces(Us),
+            pos.for_each_two_step_path(Us, pt, from, pos.pieces(Us),
                 [&](const Position::TwoStepPath& path) {
                     bool cap1 = (!pos.empty(path.via) && color_of(pos.piece_on(path.via)) == them);
                     bool cap2 = (path.to != from && !pos.empty(path.to) && color_of(pos.piece_on(path.to)) == them);
@@ -1252,15 +1243,6 @@ namespace {
     while (hookPts)
     {
         PieceType pt = pop_lsb(hookPts);
-        uint64_t mask = pos.hook_move_mask(Us, pt);
-        if (!mask)
-            continue;
-        int range1 = pos.hook_first_range(pt);
-        int range2 = pos.hook_second_range(pt);
-        int limit = pos.hook_capture_limit(pt);
-        if (limit < 1)
-            continue;
-
         Bitboard piecesBb = pos.pieces(Us, pt);
         if (restrictToForcedJumper)
             piecesBb &= forcedFromMask;
@@ -1272,17 +1254,14 @@ namespace {
                 continue;
 
             // Hook rays stop at board edges (see Position::hook_step).
-            // Geometry (rays, blocking, origin landing) is owned by
-            // Position::for_each_hook_path; only the capture-limit rule and
-            // candidate emission stay here.
-            pos.for_each_hook_path(from, mask, range1, range2, pos.pieces(), pos.pieces(Us),
+            // Geometry (rays, blocking, origin landing) and the capture
+            // limit are owned by Position::for_each_hook_path; only
+            // candidate emission stays here.
+            pos.for_each_hook_path(Us, pt, from, pos.pieces(), pos.pieces(Us),
                 [&](const Position::HookPath& path) {
-                    // Hook sliders stop at captures; a :1 hook may not
-                    // capture on both legs.
-                    if (!(path.captureVia && path.captureTo && limit < 2))
-                        moveList = emit_multileg_candidate<Us, Type>(pos, moveList, pt, from, path.via, path.to,
-                                                                    path.captureVia, path.captureTo, target,
-                                                                    pos.evasion_checkers(), makeHook);
+                    moveList = emit_multileg_candidate<Us, Type>(pos, moveList, pt, from, path.via, path.to,
+                                                                 path.captureVia, path.captureTo, target,
+                                                                 pos.evasion_checkers(), makeHook);
                 });
         }
     }

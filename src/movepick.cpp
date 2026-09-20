@@ -214,6 +214,70 @@ void MovePicker::score() {
       const Square gate = gate_history_square(mv);
       return gate != SQ_NONE ? (*gateHistory)[pos.side_to_move()][gate] : 0;
   };
+  auto points_capture_bonus = [&](Piece captured) {
+      if (!pos.points_counting())
+          return 0;
+      if (captured == NO_PIECE)
+          return 0;
+      int pts = pos.variant()->piecePoints[type_of(captured)];
+      int signedPts = 0;
+      switch (pos.points_rule_captures())
+      {
+          case POINTS_US:        signedPts =  pts; break;
+          case POINTS_THEM:      signedPts = -pts; break;
+          case POINTS_OWNER:     signedPts =  color_of(captured) == pos.side_to_move() ? pts : -pts; break;
+          case POINTS_NON_OWNER: signedPts =  color_of(captured) == pos.side_to_move() ? -pts : pts; break;
+          case POINTS_NONE:      signedPts = 0; break;
+      }
+      if (pos.points_goal() > 0)
+      {
+          if (pos.points_goal_value() < VALUE_ZERO)
+              signedPts = -signedPts;
+          else if (pos.points_goal_value() == VALUE_ZERO)
+              signedPts = 0;
+      }
+      return 20 * signedPts;
+  };
+  // Order captures by every victim square the move removes. Ordinary moves
+  // (including jump captures) report a single square, so this generalizes to
+  // multi-leg doubles without move-shape branching here; victim values and
+  // points weighting stay on the search side of the Position boundary.
+  auto capture_victims = [&](Move mv, int& total, PieceType& topType, int& points) {
+      total = 0;
+      topType = NO_PIECE_TYPE;
+      points = 0;
+      Bitboard caps = pos.capture_squares(mv);
+      if (caps)
+      {
+          int topVal = -1;
+          while (caps)
+          {
+              Piece p = pos.piece_on(pop_lsb(caps));
+              if (p == NO_PIECE)
+                  continue;
+              int v = int(PieceValue[MG][p]);
+              total += v;
+              if (v > topVal)
+              {
+                  topVal = v;
+                  topType = type_of(p);
+              }
+              points += points_capture_bonus(p);
+          }
+          if (topType != NO_PIECE_TYPE)
+              return;
+          // Fall through to single-victim behavior when no victim is still
+          // on the board (e.g. scoring after the move was made).
+          total = 0;
+          points = 0;
+      }
+      // Legacy single-victim behavior for ordinary moves.
+      Piece captured = pos.captured_piece(mv);
+      Piece victim = captured != NO_PIECE ? captured : pos.piece_on(to_sq(mv));
+      total = int(PieceValue[MG][victim]);
+      topType = type_of(victim);
+      points = points_capture_bonus(captured);
+  };
   auto freeze_target_bonus = [&](Move mv) {
       if (!pos.potions_enabled() || !is_gating(mv))
           return 0;
@@ -236,10 +300,10 @@ void MovePicker::score() {
   for (auto& m : *this)
       if constexpr (Type == CAPTURES)
       {
-          Position::CaptureOrderInfo victims = pos.capture_order_info(m);
-          int victimVal = victims.total;
-          PieceType victimType = victims.topType;
-          int pointsBonus = victims.pointsBonus;
+          int victimVal;
+          PieceType victimType;
+          int pointsBonus;
+          capture_victims(m, victimVal, victimType, pointsBonus);
           m.value =  victimVal * 6
                    + pointsBonus
                    + flag_goal_bonus(m)
@@ -271,9 +335,10 @@ void MovePicker::score() {
       {
           if (pos.capture(m))
           {
-              Position::CaptureOrderInfo victims = pos.capture_order_info(m);
-              int victimVal = victims.total;
-              int pointsBonus = victims.pointsBonus;
+              int victimVal;
+              PieceType victimType;
+              int pointsBonus;
+              capture_victims(m, victimVal, victimType, pointsBonus);
               m.value =  victimVal
                        + pointsBonus
                        + flag_goal_bonus(m)

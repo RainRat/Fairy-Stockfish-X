@@ -327,7 +327,7 @@ namespace {
                     }
                     for (int d1 = d1_start; d1 <= d1_end; ++d1)
                         for (int d2 = d2_start; d2 <= d2_end; ++d2)
-                            mask |= (1ULL << (d1 * 8 + d2));
+                            mask |= multileg_direction_pair_bit(d1, d2);
                 }
                 parsed[pt] = mask;
             }
@@ -445,7 +445,7 @@ namespace {
                 if (bits1 & (1 << d1))
                     for (int d2 = 0; d2 < 8; ++d2)
                         if (bits2 & (1 << d2))
-                            mask |= (1ULL << (d1 * 8 + d2));
+                            mask |= multileg_direction_pair_bit(d1, d2);
             parsedMasks[pt] = mask;
             parsedFirst[pt] = range1;
             parsedSecond[pt] = range2;
