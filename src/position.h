@@ -762,26 +762,14 @@ public:
   int hook_second_range(PieceType pt) const;
   int hook_capture_limit(PieceType pt) const;
   PieceSet hook_piece_types(Color c) const;
-  // Validates a completed hook path (geometry, occupancy, capture-count
-  // limit), not king safety. Movegen enumerates rays through hook_step;
-  // pseudo_legal/legal validate completed paths through here.
-  bool hook_path_valid(Color us, PieceType pt, Square from, Square via, Square to) const;
-  // Shared multi-leg attack model (two-step + hook): can a piece of type pt
-  // on `from` capture `target` given `occupied`? Transit must be empty in
-  // `occupied`; `friendly` marks the attacker's own pieces in that occupancy.
-  // Used by royal checking so movegen, legality and gives_check share one
-  // geometry instead of each reinventing hook/two-step rays.
-  bool two_step_attacks_square(Color us, PieceType pt, Square from, Square target,
-                               Bitboard occupied, Bitboard friendly) const;
-  bool hook_attacks_square(Color us, PieceType pt, Square from, Square target,
-                           Bitboard occupied, Bitboard friendly) const;
-  Bitboard multileg_attackers_to(Square s, Bitboard occupied, Color c) const;
-  Bitboard multileg_attackers_to(Square s, Bitboard occupied, Color c,
-                                 const SimulatedMoveInfo* simulated) const;
   // Bent hook/two-step checks cannot be blocked geometrically like riders;
   // callers must generate NON_EVASIONS and let legal() filter them (same
   // conservative pattern as wrapped boards).
-  bool requires_full_evasion_filter() const;
+  // Single owner for the "generate NON_EVASIONS and filter with legal()"
+  // fallback: wrapped boards and bent multi-leg checks. Used by
+  // generate<LEGAL>, MovePicker evasion staging, and pseudo_legal special-move
+  // validation so the three paths cannot disagree.
+  bool requires_full_evasion_generation() const;
   PieceSet self_destruct_types() const;
   Bitboard self_destruct_region(Color c) const;
   GravityRule gravity() const;
@@ -1173,6 +1161,20 @@ public:
   void remove_piece(Square s);
 
 private:
+  // Multi-leg internals: completed-path validation and shared attack geometry.
+  // Only requires_full_evasion_generation() and capture_squares() are needed
+  // outside Position (movegen/MovePicker); the rest stays private so generic
+  // attack/evasion/search paths do not accumulate multi-leg knowledge.
+  bool requires_full_evasion_filter() const;
+  bool hook_path_valid(Color us, PieceType pt, Square from, Square via, Square to) const;
+  bool two_step_path_valid(Color us, PieceType pt, Square from, Square via, Square to) const;
+  bool two_step_attacks_square(Color us, PieceType pt, Square from, Square target,
+                               Bitboard occupied, Bitboard friendly) const;
+  bool hook_attacks_square(Color us, PieceType pt, Square from, Square target,
+                           Bitboard occupied, Bitboard friendly) const;
+  Bitboard multileg_attackers_to(Square s, Bitboard occupied, Color c) const;
+  Bitboard multileg_attackers_to(Square s, Bitboard occupied, Color c,
+                                 const SimulatedMoveInfo* simulated) const;
   // Initialization helpers (used while setting up a position)
   void set_castling_right(Color c, Square rfrom);
   void set_state(StateInfo* si) const;
@@ -5916,61 +5918,6 @@ inline bool Position::hook_step(Square cur, Direction dir, Square& nxt) const {
 inline bool Position::multileg_promotion_zone(Color c, PieceType pt, Square from, Square to) const {
   Bitboard pz = promotion_zone(c, pt);
   return (pz & from) || (pz & to);
-}
-
-inline bool Position::hook_path_valid(Color us, PieceType pt, Square from, Square via, Square to) const {
-  uint64_t mask = hook_move_mask(us, pt);
-  if (!mask)
-      return false;
-  // Degenerate paths (zero-length legs) are never generated.
-  if (via == from || to == via)
-      return false;
-  // Walk each leg from its origin along every king direction; transit
-  // squares must be empty, which also establishes the leg direction.
-  int legDir[2] = {-1, -1};
-  int range[2] = {hook_first_range(pt), hook_second_range(pt)};
-  Square legFrom[2] = {from, via};
-  Square legTo[2] = {via, to};
-  for (int leg = 0; leg < 2; ++leg)
-  {
-      int cap = range[leg] ? range[leg] : SQUARE_NB;
-      bool found = false;
-      for (int i = 0; i < 8 && !found; ++i)
-      {
-          Square cur = legFrom[leg];
-          for (int k = 1; k <= cap; ++k)
-          {
-              Square nxt;
-              if (!hook_step(cur, KingDirections[i], nxt))
-                  break;
-              if (nxt == legTo[leg])
-              {
-                  legDir[leg] = i;
-                  found = true;
-                  break;
-              }
-              if (!empty(nxt))
-                  break;
-              cur = nxt;
-          }
-      }
-      if (!found)
-          return false;
-  }
-  if (!((mask >> (legDir[0] * 8 + legDir[1])) & 1ULL))
-      return false;
-  if ((pieces(us) & via) || (to != from && (pieces(us) & to)))
-      return false;
-  // Single owner for completed-path validation: a :1 hook may not capture
-  // on both legs even if the geometry itself is valid. (Generation has its
-  // own ray-stopping enumeration, but pseudo_legal/legal must not duplicate
-  // this rule.)
-  Color them = ~us;
-  bool viaCapture = via != to && !empty(via) && color_of(piece_on(via)) == them;
-  bool toCapture = to != from && !empty(to) && color_of(piece_on(to)) == them;
-  if (viaCapture && toCapture && hook_capture_limit(pt) < 2)
-      return false;
-  return true;
 }
 
 inline bool Position::paired_drop(Move m) const {

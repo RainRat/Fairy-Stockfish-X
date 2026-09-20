@@ -3382,9 +3382,11 @@ bool Position::two_step_attacks_square(Color us, PieceType pt, Square from, Squa
       return false;
   if (from == target || !(board_bb() & from) || !(board_bb() & target))
       return false;
-  if (friendly & target)
-      return false;
-  if (!(occupied & target) || !(occupied & from))
+  // `target` is treated as a hypothetical victim: callers pass
+  // attackOccupied = occupied | target and friendly without target, so do not
+  // require target occupancy or reject friendly-occupied targets here.
+  // The attacker itself must exist in the hypothetical occupancy.
+  if (!(occupied & from))
       return false;
   // Target as the bend: need a completing second step to a legal landing.
   for (int d1 = 0; d1 < 8; ++d1)
@@ -3431,9 +3433,9 @@ bool Position::hook_attacks_square(Color us, PieceType pt, Square from, Square t
       return false;
   if (from == target || !(board_bb() & from) || !(board_bb() & target))
       return false;
-  if (friendly & target)
-      return false;
-  if (!(occupied & target) || !(occupied & from))
+  // Same hypothetical-victim contract as two_step_attacks_square: target is
+  // already folded into `occupied` by the caller and excluded from `friendly`.
+  if (!(occupied & from))
       return false;
   int limit = hook_capture_limit(pt);
   if (limit < 1)
@@ -3550,11 +3552,15 @@ bool Position::hook_attacks_square(Color us, PieceType pt, Square from, Square t
 Bitboard Position::multileg_attackers_to(Square s, Bitboard occupied, Color c) const {
   if (!has_two_step_moves() && !has_hook_moves())
       return Bitboard(0);
-  if (s == SQ_NONE || !(board_bb() & s) || !(occupied & s))
+  if (s == SQ_NONE || !(board_bb() & s))
       return Bitboard(0);
-  Bitboard friendly = pieces(c);
-  if (friendly & s)
-      return Bitboard(0);
+  // Treat `s` as a hypothetical victim so empty destinations (e.g. a king's
+  // destination tested with occupied = pieces() ^ from) and stale captures
+  // ((pieces() ^ from) | to still containing the victim) report attacks.
+  // This matches the generic attackers_to() contract, which answers whether
+  // `s` would be attacked even if empty or (stale-)friendly-occupied.
+  Bitboard attackOccupied = occupied | s;
+  Bitboard friendly = (pieces(c) & occupied) & ~s;
   Bitboard attackers = Bitboard(0);
   for (PieceSet ps = two_step_piece_types(c); ps; )
   {
@@ -3563,7 +3569,7 @@ Bitboard Position::multileg_attackers_to(Square s, Bitboard occupied, Color c) c
       while (candidates)
       {
           Square from = pop_lsb(candidates);
-          if (two_step_attacks_square(c, pt, from, s, occupied, friendly))
+          if (two_step_attacks_square(c, pt, from, s, attackOccupied, friendly))
               attackers |= square_bb(from);
       }
   }
@@ -3574,7 +3580,7 @@ Bitboard Position::multileg_attackers_to(Square s, Bitboard occupied, Color c) c
       while (candidates)
       {
           Square from = pop_lsb(candidates);
-          if (hook_attacks_square(c, pt, from, s, occupied, friendly))
+          if (hook_attacks_square(c, pt, from, s, attackOccupied, friendly))
               attackers |= square_bb(from);
       }
   }
@@ -3585,13 +3591,13 @@ Bitboard Position::multileg_attackers_to(Square s, Bitboard occupied, Color c,
                                          const SimulatedMoveInfo* simulated) const {
   if (!has_two_step_moves() && !has_hook_moves())
       return Bitboard(0);
-  if (s == SQ_NONE || !(board_bb() & s) || !(occupied & s))
+  if (s == SQ_NONE || !(board_bb() & s))
       return Bitboard(0);
-  Bitboard friendly = (simulated && !simulated->typeOccupancy.empty())
+  Bitboard attackOccupied = occupied | s;
+  Bitboard baseFriendly = (simulated && !simulated->typeOccupancy.empty())
                         ? simulated->type_pieces(c, ALL_PIECES)
                         : (simulated ? simulated->colorOccupancy[c] : pieces(c));
-  if (friendly & s)
-      return Bitboard(0);
+  Bitboard friendly = baseFriendly & ~s;
   auto candidates_for = [&](PieceType pt) {
       Bitboard b = (simulated && !simulated->typeOccupancy.empty())
                      ? (simulated->type_pieces(c, pt) & occupied)
@@ -3611,7 +3617,7 @@ Bitboard Position::multileg_attackers_to(Square s, Bitboard occupied, Color c,
       while (candidates)
       {
           Square from = pop_lsb(candidates);
-          if (two_step_attacks_square(c, pt, from, s, occupied, friendly))
+          if (two_step_attacks_square(c, pt, from, s, attackOccupied, friendly))
               attackers |= square_bb(from);
       }
   }
@@ -3622,7 +3628,7 @@ Bitboard Position::multileg_attackers_to(Square s, Bitboard occupied, Color c,
       while (candidates)
       {
           Square from = pop_lsb(candidates);
-          if (hook_attacks_square(c, pt, from, s, occupied, friendly))
+          if (hook_attacks_square(c, pt, from, s, attackOccupied, friendly))
               attackers |= square_bb(from);
       }
   }
@@ -3639,6 +3645,102 @@ bool Position::requires_full_evasion_filter() const {
   if (royalSq == SQ_NONE)
       return false;
   return bool(multileg_attackers_to(royalSq, pieces(), ~sideToMove) & checkers);
+}
+
+bool Position::requires_full_evasion_generation() const {
+  if (!evasion_checkers())
+      return false;
+  return topology_wraps() || requires_full_evasion_filter();
+}
+
+bool Position::hook_path_valid(Color us, PieceType pt, Square from, Square via, Square to) const {
+  uint64_t mask = hook_move_mask(us, pt);
+  if (!mask)
+      return false;
+  // Degenerate paths (zero-length legs) are never generated.
+  if (via == from || to == via)
+      return false;
+  // Walk each leg from its origin along every king direction; transit
+  // squares must be empty, which also establishes the leg direction.
+  int legDir[2] = {-1, -1};
+  int range[2] = {hook_first_range(pt), hook_second_range(pt)};
+  Square legFrom[2] = {from, via};
+  Square legTo[2] = {via, to};
+  for (int leg = 0; leg < 2; ++leg)
+  {
+      int cap = range[leg] ? range[leg] : SQUARE_NB;
+      bool found = false;
+      for (int i = 0; i < 8 && !found; ++i)
+      {
+          Square cur = legFrom[leg];
+          for (int k = 1; k <= cap; ++k)
+          {
+              Square nxt;
+              if (!hook_step(cur, KingDirections[i], nxt))
+                  break;
+              if (nxt == legTo[leg])
+              {
+                  legDir[leg] = i;
+                  found = true;
+                  break;
+              }
+              if (!empty(nxt))
+                  break;
+              cur = nxt;
+          }
+      }
+      if (!found)
+          return false;
+  }
+  if (!((mask >> (legDir[0] * 8 + legDir[1])) & 1ULL))
+      return false;
+  if ((pieces(us) & via) || (to != from && (pieces(us) & to)))
+      return false;
+  // Single owner for completed-path validation: a :1 hook may not capture
+  // on both legs even if the geometry itself is valid. (Generation has its
+  // own ray-stopping enumeration, but pseudo_legal/legal must not duplicate
+  // this rule.)
+  Color them = ~us;
+  bool viaCapture = via != to && !empty(via) && color_of(piece_on(via)) == them;
+  bool toCapture = to != from && !empty(to) && color_of(piece_on(to)) == them;
+  if (viaCapture && toCapture && hook_capture_limit(pt) < 2)
+      return false;
+  return true;
+}
+
+bool Position::two_step_path_valid(Color us, PieceType pt, Square from, Square via, Square to) const {
+  uint64_t mask = two_step_moves_mask(us, pt);
+  if (!mask)
+      return false;
+  if (!(board_bb() & from) || !(board_bb() & via) || !(board_bb() & to))
+      return false;
+  // The encoded move stores squares, not direction provenance: on narrow
+  // wrapping boards several compass directions can alias the same square,
+  // so accept if ANY pair in the mask explains the geometry.
+  bool pairAllowed = false;
+  for (int d1 = 0; d1 < 8 && !pairAllowed; ++d1)
+  {
+      Square probeVia;
+      if (!step_destination(from, KingDirections[d1], probeVia) || probeVia != via)
+          continue;
+      for (int d2 = 0; d2 < 8; ++d2)
+      {
+          Square probeTo;
+          if (step_destination(via, KingDirections[d2], probeTo) && probeTo == to
+              && ((mask >> (d1 * 8 + d2)) & 1ULL))
+          {
+              pairAllowed = true;
+              break;
+          }
+      }
+  }
+  if (!pairAllowed)
+      return false;
+  if (pieces(us) & via)
+      return false;
+  if (to != from && (pieces(us) & to))
+      return false;
+  return true;
 }
 
 Bitboard Position::attackers_to_king_without_freeze(Square s, Bitboard occupied, Color c,
@@ -5823,7 +5925,7 @@ bool Position::legal(Move m) const {
   if (is_two_step(m))
   {
       Square via = via_sq(m);
-      if ((pieces(us) & via) || (to != from && (pieces(us) & to)))
+      if (!two_step_path_valid(us, movePt, from, via, to))
           return false;
       if (two_step_promotes(m) && !multileg_promotion_zone(us, movePt, from, to))
           return false;
@@ -6937,37 +7039,8 @@ bool Position::pseudo_legal(const Move m) const {
       if (pc == NO_PIECE || color_of(pc) != us)
           return false;
       PieceType pt = type_of(pc);
-      uint64_t mask = two_step_moves_mask(us, pt);
-      if (!mask)
-          return false;
       Square via = via_sq(m);
-      if (!(board_bb() & via) || !(board_bb() & to))
-          return false;
-      // The encoded move stores squares, not direction provenance: on narrow
-      // wrapping boards several compass directions can alias the same square,
-      // so accept if ANY pair in the mask explains the geometry.
-      bool pairAllowed = false;
-      for (int d1 = 0; d1 < 8 && !pairAllowed; ++d1)
-      {
-          Square probeVia;
-          if (!step_destination(from, KingDirections[d1], probeVia) || probeVia != via)
-              continue;
-          for (int d2 = 0; d2 < 8; ++d2)
-          {
-              Square probeTo;
-              if (step_destination(via, KingDirections[d2], probeTo) && probeTo == to
-                  && ((mask >> (d1 * 8 + d2)) & 1ULL))
-              {
-                  pairAllowed = true;
-                  break;
-              }
-          }
-      }
-      if (!pairAllowed)
-          return false;
-      if (pieces(us) & via)
-          return false;
-      if (to != from && (pieces(us) & to))
+      if (!two_step_path_valid(us, pt, from, via, to))
           return false;
       if (two_step_promotes(m))
       {
@@ -7096,9 +7169,10 @@ bool Position::pseudo_legal(const Move m) const {
           return potion_move_pseudo_legal(*this, m)
               && !violates_same_player_board_repetition(m);
 
-      const bool useWrappedFallback = topology_wraps() && evasion_checkers();
-      return ((evasion_checkers() && !useWrappedFallback) ? MoveList<    EVASIONS>(*this).contains(m)
-                                                          : MoveList<NON_EVASIONS>(*this).contains(m))
+      // Same fallback owner as generate<LEGAL>/MovePicker: wrapped boards and
+      // bent multi-leg checks use NON_EVASIONS + legal() filtering.
+      return ((evasion_checkers() && !requires_full_evasion_generation()) ? MoveList<    EVASIONS>(*this).contains(m)
+                                                                          : MoveList<NON_EVASIONS>(*this).contains(m))
           && !violates_same_player_board_repetition(m);
   }
 
