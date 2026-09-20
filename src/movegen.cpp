@@ -1121,7 +1121,10 @@ namespace {
     bool mandatoryPromo = allowsPromo && (mandatoryZone & to) && !(mandatoryZone & from);
 
     // Like ordinary pawn pushes, quiet promotions belong in CAPTURES even
-    // though they capture nothing; quiet non-promotions do not.
+    // though they capture nothing; quiet non-promotions do not. QUIETS keeps
+    // the non-promoting version but must not duplicate the promotion
+    // (MovePicker searches both stages). QUIET_CHECKS keeps checking
+    // promotions and non-promotions; the gives_check filter below applies.
     if constexpr (Type == CAPTURES)
     {
         if (!isCapture && !allowsPromo)
@@ -1150,7 +1153,7 @@ namespace {
         }
     }
 
-    if (allowsPromo)
+    if (allowsPromo && Type != QUIETS)
     {
         Move mPromo = makeMove(from, via, to, true);
         if constexpr (Type == QUIET_CHECKS)
@@ -2373,7 +2376,10 @@ ExtMove* generate<LEGAL>(const Position& pos, ExtMove* moveList) {
   ExtMove* cur = moveList;
 
   const bool useWrappedFallback = pos.topology_wraps() && pos.evasion_checkers();
-  const bool useNonEvasions = pos.anti_royal_types() || useWrappedFallback;
+  // Bent multi-leg checks cannot be blocked geometrically like riders; use
+  // NON_EVASIONS and let legal() filter, matching the wrapped-board fallback.
+  const bool useNonEvasions = pos.anti_royal_types() || useWrappedFallback
+                           || pos.requires_full_evasion_filter();
   moveList = (pos.evasion_checkers() && !useNonEvasions) ? generate<EVASIONS    >(pos, moveList)
                                                          : generate<NON_EVASIONS>(pos, moveList);
   while (cur != moveList)

@@ -3062,7 +3062,8 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
             | (attacks_bb<KNIGHT>(s)           & pieces(c, KNIGHT))
             | (attacks_bb<ROOK>(s, occupied)   & (pieces(c, ROOK) | pieces(c, QUEEN)))
             | (attacks_bb<BISHOP>(s, occupied) & (pieces(c, BISHOP) | pieces(c, QUEEN)))
-            | (attacks_bb<KING>(s)             & pieces(c, KING));
+            | (attacks_bb<KING>(s)             & pieces(c, KING))
+            | multileg_attackers_to(s, occupied, c);
 
   if (topology_wraps())
   {
@@ -3096,7 +3097,7 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
           else
               b |= attacks_from<false, false>(~c, move_pt, s, occupied) & ptPieces;
       }
-      return b;
+      return b | multileg_attackers_to(s, occupied, c);
   }
 
   bool hasRuntimeSpecialAttackers = false;
@@ -3126,7 +3127,8 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
             | (attacks_bb<KNIGHT>(s)           & pieces(c, KNIGHT, ARCHBISHOP, CHANCELLOR))
             | (attacks_bb<  ROOK>(s, occupied) & pieces(c, ROOK, QUEEN, CHANCELLOR))
             | (attacks_bb<BISHOP>(s, occupied) & pieces(c, BISHOP, QUEEN, ARCHBISHOP))
-            | (attacks_bb<KING>(s)             & pieces(c, KING, COMMONER));
+            | (attacks_bb<KING>(s)             & pieces(c, KING, COMMONER))
+            | multileg_attackers_to(s, occupied, c);
   }
 
   if (!hasRuntimeSpecialAttackers && !hasSimpleHopperAttackers && fast_attacks2())
@@ -3140,7 +3142,8 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
             | (attacks_bb<FERS>(s)                & pieces(c, FERS, DRAGON, SILVER))
             | (attacks_bb<WAZIR>(s)               & pieces(c, WAZIR, DRAGON_HORSE, GOLD))
             | (LeaperAttacks[~c][SHOGI_KNIGHT][s] & pieces(c, SHOGI_KNIGHT))
-            | (LeaperAttacks[~c][SHOGI_PAWN][s]   & pieces(c, SHOGI_PAWN, SILVER));
+            | (LeaperAttacks[~c][SHOGI_PAWN][s]   & pieces(c, SHOGI_PAWN, SILVER))
+            | multileg_attackers_to(s, occupied, c);
   }
 
   Bitboard b = 0;
@@ -3201,7 +3204,7 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
   if (b & pieces(SOLDIER) && relative_rank(c, s, max_rank()) < var->soldierPromotionRank)
       b ^= b & pieces(SOLDIER) & ~PseudoAttacks[~c][SHOGI_PAWN][s];
 
-  return b;
+  return b | multileg_attackers_to(s, occupied, c);
 }
 
 Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard janggiCannons,
@@ -3260,7 +3263,7 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
           else
               b |= attacks_from<false, false>(~c, move_pt, s, occupied) & ptPieces;
       }
-      return b;
+      return b | multileg_attackers_to(s, occupied, c, simulated);
   }
 
   bool hasRuntimeSpecialAttackers = false;
@@ -3290,7 +3293,8 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
             | (attacks_bb<KNIGHT>(s)           & (type_pieces(c, KNIGHT) | type_pieces(c, ARCHBISHOP) | type_pieces(c, CHANCELLOR)))
             | (attacks_bb<  ROOK>(s, occupied) & (type_pieces(c, ROOK) | type_pieces(c, QUEEN) | type_pieces(c, CHANCELLOR)))
             | (attacks_bb<BISHOP>(s, occupied) & (type_pieces(c, BISHOP) | type_pieces(c, QUEEN) | type_pieces(c, ARCHBISHOP)))
-            | (attacks_bb<KING>(s)             & (type_pieces(c, KING) | type_pieces(c, COMMONER)));
+            | (attacks_bb<KING>(s)             & (type_pieces(c, KING) | type_pieces(c, COMMONER)))
+            | multileg_attackers_to(s, occupied, c, simulated);
   }
 
   // Use a faster version for selected fairy pieces
@@ -3305,7 +3309,8 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
             | (attacks_bb<FERS>(s)                & (type_pieces(c, FERS) | type_pieces(c, DRAGON) | type_pieces(c, SILVER)))
             | (attacks_bb<WAZIR>(s)               & (type_pieces(c, WAZIR) | type_pieces(c, DRAGON_HORSE) | type_pieces(c, GOLD)))
             | (LeaperAttacks[~c][SHOGI_KNIGHT][s] & type_pieces(c, SHOGI_KNIGHT))
-            | (LeaperAttacks[~c][SHOGI_PAWN][s]   & (type_pieces(c, SHOGI_PAWN) | type_pieces(c, SILVER)));
+            | (LeaperAttacks[~c][SHOGI_PAWN][s]   & (type_pieces(c, SHOGI_PAWN) | type_pieces(c, SILVER)))
+            | multileg_attackers_to(s, occupied, c, simulated);
   }
 
   Bitboard b = 0;
@@ -3367,7 +3372,273 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
   if (b & all_type_pieces(SOLDIER) && relative_rank(c, s, max_rank()) < var->soldierPromotionRank)
       b ^= b & all_type_pieces(SOLDIER) & ~PseudoAttacks[~c][SHOGI_PAWN][s];
 
-  return b;
+  return b | multileg_attackers_to(s, occupied, c, simulated);
+}
+
+bool Position::two_step_attacks_square(Color us, PieceType pt, Square from, Square target,
+                                         Bitboard occupied, Bitboard friendly) const {
+  uint64_t mask = two_step_moves_mask(us, pt);
+  if (!mask)
+      return false;
+  if (from == target || !(board_bb() & from) || !(board_bb() & target))
+      return false;
+  if (friendly & target)
+      return false;
+  if (!(occupied & target) || !(occupied & from))
+      return false;
+  // Target as the bend: need a completing second step to a legal landing.
+  for (int d1 = 0; d1 < 8; ++d1)
+  {
+      Square probeVia;
+      if (!step_destination(from, KingDirections[d1], probeVia) || probeVia != target)
+          continue;
+      for (int d2 = 0; d2 < 8; ++d2)
+      {
+          if (!((mask >> (d1 * 8 + d2)) & 1ULL))
+              continue;
+          Square to;
+          if (!step_destination(target, KingDirections[d2], to) || !(board_bb() & to))
+              continue;
+          if (to != from && (friendly & to))
+              continue;
+          return true;
+      }
+  }
+  // Target as the final square: need a bend that is not friendly.
+  for (int d1 = 0; d1 < 8; ++d1)
+  {
+      Square via;
+      if (!step_destination(from, KingDirections[d1], via) || !(board_bb() & via))
+          continue;
+      if (via == from || (friendly & via))
+          continue;
+      for (int d2 = 0; d2 < 8; ++d2)
+      {
+          if (!((mask >> (d1 * 8 + d2)) & 1ULL))
+              continue;
+          Square to;
+          if (step_destination(via, KingDirections[d2], to) && to == target)
+              return true;
+      }
+  }
+  return false;
+}
+
+bool Position::hook_attacks_square(Color us, PieceType pt, Square from, Square target,
+                                   Bitboard occupied, Bitboard friendly) const {
+  uint64_t mask = hook_move_mask(us, pt);
+  if (!mask)
+      return false;
+  if (from == target || !(board_bb() & from) || !(board_bb() & target))
+      return false;
+  if (friendly & target)
+      return false;
+  if (!(occupied & target) || !(occupied & from))
+      return false;
+  int limit = hook_capture_limit(pt);
+  if (limit < 1)
+      return false;
+  int cap1 = hook_first_range(pt) ? hook_first_range(pt) : SQUARE_NB;
+  int cap2 = hook_second_range(pt) ? hook_second_range(pt) : SQUARE_NB;
+  // Target as the bend: need one legal completing landing along a paired ray.
+  for (int d1 = 0; d1 < 8; ++d1)
+  {
+      bool rowLive = false;
+      for (int d2 = 0; d2 < 8; ++d2)
+          if ((mask >> (d1 * 8 + d2)) & 1ULL)
+          {
+              rowLive = true;
+              break;
+          }
+      if (!rowLive)
+          continue;
+      Square cur = from;
+      bool reaches = false;
+      for (int k = 1; k <= cap1; ++k)
+      {
+          Square nxt;
+          if (!hook_step(cur, KingDirections[d1], nxt) || !(board_bb() & nxt))
+              break;
+          if (nxt == target)
+          {
+              reaches = true;
+              break;
+          }
+          if (occupied & nxt)
+              break;
+          cur = nxt;
+      }
+      if (!reaches)
+          continue;
+      for (int d2 = 0; d2 < 8; ++d2)
+      {
+          if (!((mask >> (d1 * 8 + d2)) & 1ULL))
+              continue;
+          Square cur2 = target;
+          for (int k2 = 1; k2 <= cap2; ++k2)
+          {
+              Square nxt;
+              if (!hook_step(cur2, KingDirections[d2], nxt) || !(board_bb() & nxt))
+                  break;
+              bool atOrigin = (nxt == from);
+              if (!atOrigin && (friendly & nxt))
+                  break;
+              bool landingEnemy = !atOrigin && (occupied & nxt);
+              if (landingEnemy && limit < 2)
+                  break;
+              return true;
+          }
+      }
+  }
+  // Target as the final square: enumerate bends, then check the second ray.
+  for (int d1 = 0; d1 < 8; ++d1)
+  {
+      bool rowLive = false;
+      for (int d2 = 0; d2 < 8; ++d2)
+          if ((mask >> (d1 * 8 + d2)) & 1ULL)
+          {
+              rowLive = true;
+              break;
+          }
+      if (!rowLive)
+          continue;
+      Square bend = from;
+      for (int k1 = 1; k1 <= cap1; ++k1)
+      {
+          Square nxt;
+          if (!hook_step(bend, KingDirections[d1], nxt) || !(board_bb() & nxt))
+              break;
+          if (friendly & nxt)
+              break;
+          bend = nxt;
+          if (bend == target)
+              continue;
+          bool bendEnemy = bool(occupied & bend);
+          for (int d2 = 0; d2 < 8; ++d2)
+          {
+              if (!((mask >> (d1 * 8 + d2)) & 1ULL))
+                  continue;
+              Square cur = bend;
+              bool reaches = false;
+              for (int k2 = 1; k2 <= cap2; ++k2)
+              {
+                  Square nxt2;
+                  if (!hook_step(cur, KingDirections[d2], nxt2) || !(board_bb() & nxt2))
+                      break;
+                  if (nxt2 == target)
+                  {
+                      reaches = true;
+                      break;
+                  }
+                  if (occupied & nxt2)
+                      break;
+                  cur = nxt2;
+              }
+              if (!reaches)
+                  continue;
+              if (bendEnemy && limit < 2)
+                  continue;
+              return true;
+          }
+          if (bendEnemy)
+              break;
+      }
+  }
+  return false;
+}
+
+Bitboard Position::multileg_attackers_to(Square s, Bitboard occupied, Color c) const {
+  if (!has_two_step_moves() && !has_hook_moves())
+      return Bitboard(0);
+  if (s == SQ_NONE || !(board_bb() & s) || !(occupied & s))
+      return Bitboard(0);
+  Bitboard friendly = pieces(c);
+  if (friendly & s)
+      return Bitboard(0);
+  Bitboard attackers = Bitboard(0);
+  for (PieceSet ps = two_step_piece_types(c); ps; )
+  {
+      PieceType pt = pop_lsb(ps);
+      Bitboard candidates = pieces(c, pt) & occupied;
+      while (candidates)
+      {
+          Square from = pop_lsb(candidates);
+          if (two_step_attacks_square(c, pt, from, s, occupied, friendly))
+              attackers |= square_bb(from);
+      }
+  }
+  for (PieceSet ps = hook_piece_types(c); ps; )
+  {
+      PieceType pt = pop_lsb(ps);
+      Bitboard candidates = pieces(c, pt) & occupied;
+      while (candidates)
+      {
+          Square from = pop_lsb(candidates);
+          if (hook_attacks_square(c, pt, from, s, occupied, friendly))
+              attackers |= square_bb(from);
+      }
+  }
+  return attackers;
+}
+
+Bitboard Position::multileg_attackers_to(Square s, Bitboard occupied, Color c,
+                                         const SimulatedMoveInfo* simulated) const {
+  if (!has_two_step_moves() && !has_hook_moves())
+      return Bitboard(0);
+  if (s == SQ_NONE || !(board_bb() & s) || !(occupied & s))
+      return Bitboard(0);
+  Bitboard friendly = (simulated && !simulated->typeOccupancy.empty())
+                        ? simulated->type_pieces(c, ALL_PIECES)
+                        : (simulated ? simulated->colorOccupancy[c] : pieces(c));
+  if (friendly & s)
+      return Bitboard(0);
+  auto candidates_for = [&](PieceType pt) {
+      Bitboard b = (simulated && !simulated->typeOccupancy.empty())
+                     ? (simulated->type_pieces(c, pt) & occupied)
+                     : (pieces(c, pt) & occupied);
+      // Compact simulations do not track per-type moves; ensure a promoted
+      // or relocated placed piece is still considered for its result type.
+      if (simulated && simulated->placedPiece != NO_PIECE && color_of(simulated->placedPiece) == c
+          && type_of(simulated->placedPiece) == pt && is_ok(simulated->to) && (occupied & simulated->to))
+          b |= square_bb(simulated->to);
+      return b & occupied;
+  };
+  Bitboard attackers = Bitboard(0);
+  for (PieceSet ps = two_step_piece_types(c); ps; )
+  {
+      PieceType pt = pop_lsb(ps);
+      Bitboard candidates = candidates_for(pt);
+      while (candidates)
+      {
+          Square from = pop_lsb(candidates);
+          if (two_step_attacks_square(c, pt, from, s, occupied, friendly))
+              attackers |= square_bb(from);
+      }
+  }
+  for (PieceSet ps = hook_piece_types(c); ps; )
+  {
+      PieceType pt = pop_lsb(ps);
+      Bitboard candidates = candidates_for(pt);
+      while (candidates)
+      {
+          Square from = pop_lsb(candidates);
+          if (hook_attacks_square(c, pt, from, s, occupied, friendly))
+              attackers |= square_bb(from);
+      }
+  }
+  return attackers;
+}
+
+bool Position::requires_full_evasion_filter() const {
+  if (!has_two_step_moves() && !has_hook_moves())
+      return false;
+  Bitboard checkers = evasion_checkers();
+  if (!checkers)
+      return false;
+  Square royalSq = royal_square(sideToMove);
+  if (royalSq == SQ_NONE)
+      return false;
+  return bool(multileg_attackers_to(royalSq, pieces(), ~sideToMove) & checkers);
 }
 
 Bitboard Position::attackers_to_king_without_freeze(Square s, Bitboard occupied, Color c,
@@ -3424,6 +3695,8 @@ Bitboard Position::attackers_to_king_without_freeze(Square s, Bitboard occupied,
       }
   PieceType royalType = pt != NO_PIECE_TYPE ? pt :
                         (piece_on(s) != NO_PIECE ? type_of(piece_on(s)) : king_type());
+
+  attackers |= multileg_attackers_to(s, occupied, c);
 
   if (anti_royal_king_mutually_immune())
   {
@@ -3510,6 +3783,8 @@ Bitboard Position::attackers_to_king_without_freeze(Square s, Bitboard occupied,
   Piece royal = simulated && !capture_morph() ? piece_at(s, occupied) : piece_on(s);
   PieceType royalType = pt != NO_PIECE_TYPE ? pt :
                         (royal != NO_PIECE ? type_of(royal) : king_type());
+
+  attackers |= multileg_attackers_to(s, occupied, c, simulated);
 
   if (anti_royal_king_mutually_immune())
   {
@@ -5553,21 +5828,13 @@ bool Position::legal(Move m) const {
       if (two_step_promotes(m) && !multileg_promotion_zone(us, movePt, from, to))
           return false;
   }
-  // Hook path geometry (mask, ranges, transit occupancy, capture limits)
-  // is validated in pseudo_legal()/move generation; legal() only enforces
-  // promotion restrictions and interaction rules below.
+  // Hook path validation (geometry, occupancy, capture limit) has a single
+  // owner: hook_path_valid. legal() enforces promotion restrictions; the
+  // path itself is validated here so direct legal() calls cannot bypass it.
   if (is_hook(m) && hook_promotes(m) && !multileg_promotion_zone(us, movePt, from, to))
       return false;
-  if (is_hook(m))
-  {
-      // Capture-count limits are interaction rules, not geometry: a :1 hook
-      // may not capture on both legs even if the path itself is valid.
-      Square via = via_sq(m);
-      if (via != to && !empty(via) && color_of(piece_on(via)) == them
-          && to != from && !empty(to) && color_of(piece_on(to)) == them
-          && hook_capture_limit(movePt) < 2)
-          return false;
-  }
+  if (is_hook(m) && !hook_path_valid(us, movePt, from, via_sq(m), to))
+      return false;
   if (is_multileg(m) && isCapture)
   {
       Square via = via_sq(m);
@@ -5606,6 +5873,14 @@ bool Position::legal(Move m) const {
 
   if (!allow_checks() && checking_permitted() && (pieces(them) & to) && type_of(piece_on(to)) == KING)
       return false;
+  // A multi-leg move can capture a royal on the bend: apply the same
+  // uncapturable-king rule to the intermediate victim.
+  if (is_multileg(m) && !allow_checks() && checking_permitted())
+  {
+      Square viaForKing = via_sq(m);
+      if (viaForKing != to && (pieces(them) & viaForKing) && type_of(piece_on(viaForKing)) == KING)
+          return false;
+  }
 
   const bool simpleLegality = var->simpleLegality
                            && !dropMove
@@ -6714,12 +6989,6 @@ bool Position::pseudo_legal(const Move m) const {
           return false;
       if (!hook_path_valid(us, pt, from, via, to))
           return false;
-      // Capture-count limits are interaction rules, not geometry: a :1 hook
-      // may not capture on both legs even if the path itself is valid.
-      if (via != to && !empty(via) && color_of(piece_on(via)) == them
-          && to != from && !empty(to) && color_of(piece_on(to)) == them
-          && hook_capture_limit(pt) < 2)
-          return false;
       if (hook_promotes(m))
       {
           if (promoted_piece_type(pt) == NO_PIECE_TYPE)
@@ -6869,6 +7138,12 @@ bool Position::pseudo_legal(const Move m) const {
 
   if (!allow_checks() && checking_permitted() && (pieces(them) & to) && type_of(piece_on(to)) == KING)
       return false;
+  if (is_multileg(m) && !allow_checks() && checking_permitted())
+  {
+      Square viaForKing = via_sq(m);
+      if (viaForKing != to && (pieces(them) & viaForKing) && type_of(piece_on(viaForKing)) == KING)
+          return false;
+  }
 
   // Handle the special case of a pawn move
   if (type_of(pc) == PAWN && !topology_wraps())
@@ -9719,10 +9994,10 @@ void Position::undo_move(Move m) {
   Piece pc = piece_on(moverSq);
   PieceType exchange = exchange_piece(m);
   bool wasOpeningSelfRemoval = opening_self_removal()
-                            && gamePly <= 2
-                            && type_of(m) == SPECIAL
-                            && from == to
-                            && !st->pass;
+                             && gamePly <= 2
+                             && is_plain_special(m)
+                             && from == to
+                             && !st->pass;
 
   assert(is_drop_move(m) || empty(from) || type_of(m) == CASTLING || is_gating(m)
          || (is_promotion_move(m) && sittuyin_promotion())
