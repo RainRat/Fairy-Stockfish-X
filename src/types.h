@@ -565,6 +565,16 @@ enum Move :
   MOVE_NULL = 1 + (1 << SQUARE_BITS)
 };
 
+// Keep packed-move decoding independent of the signed representation used by
+// 32-bit Move builds, where LARGEBOARDS multi-leg moves use the sign bit.
+constexpr uint64_t move_bits(Move m) {
+#if defined(VERY_LARGE_BOARDS)
+  return static_cast<uint64_t>(m);
+#else
+  return static_cast<uint32_t>(m);
+#endif
+}
+
 enum MoveType : int {
   NORMAL,
   EN_PASSANT          = 1 << (2 * SQUARE_BITS),
@@ -981,27 +991,6 @@ inline constexpr std::pair<int, int> decode_direction(Direction d) {
     return {dr, df};
 }
 
-constexpr Direction KingDirections[8] = {
-    NORTH, NORTH_EAST, EAST, SOUTH_EAST, SOUTH, SOUTH_WEST, WEST, NORTH_WEST
-};
-
-// King-step geometry shared by move encoding. Direction-pair masks
-// (two-step moves, hook moves) index these steps N=0 NE=1 E=2 SE=3 S=4 SW=5
-// W=6 NW=7 (pair bit d1 * 8 + d2). Configuration names and mask reflection
-// live in variant.h; only the raw geometry stays here.
-constexpr int reflect_king_direction(int d) {
-    return (d + 4) & 7;
-}
-
-// Direction-pair bit layout shared by two-step/hook configuration (parser),
-// mask reflection (variant.h), JSON (apiutil), and geometry enumeration
-// (Position iterators): pair bit d1 * 8 + d2.
-constexpr uint64_t multileg_direction_pair_bit(int d1, int d2) {
-    return uint64_t(1) << (d1 * 8 + d2);
-}
-constexpr int multileg_pair_first(int pair) { return pair / 8; }
-constexpr int multileg_pair_second(int pair) { return pair % 8; }
-
 // Keep track of what a move changes on the board (used by NNUE)
 constexpr int DIRTY_PIECE_MAX = 12;
 struct DirtyPiece {
@@ -1238,9 +1227,7 @@ constexpr Square to_sq(Move m) {
 }
 
 constexpr Square from_sq(Move m) {
-  // Multi-leg moves are negative on 32-bit int Move storage (flag is the
-  // sign bit); decode via uint64_t so no signed shift is involved.
-  Square raw_from = Square((static_cast<uint64_t>(m) >> SQUARE_BITS) & SQUARE_BIT_MASK);
+  Square raw_from = Square((move_bits(m) >> SQUARE_BITS) & SQUARE_BIT_MASK);
   return type_of(m) == DROP ? SQ_NONE : raw_from;
 }
 
@@ -1250,29 +1237,29 @@ inline int from_to(Move m) {
 
 inline PieceType promotion_type(Move m) {
   if (type_of(m) == PROMOTION)
-    return PieceType((static_cast<uint64_t>(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS)) & (PIECE_TYPE_NB - 1));
+    return PieceType((move_bits(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS)) & (PIECE_TYPE_NB - 1));
   if (type_of(m) == PROMOTION_POTION) {
-    int choice = (static_cast<uint64_t>(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + SQUARE_BITS)) & 3;
+    int choice = (move_bits(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + SQUARE_BITS)) & 3;
     return choice == 0 ? KNIGHT : (choice == 1 ? BISHOP : (choice == 2 ? ROOK : QUEEN));
   }
   return NO_PIECE_TYPE;
 }
 
 inline Square potion_target_square(Move m) {
-  return Square((static_cast<uint64_t>(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS)) & SQUARE_BIT_MASK);
+  return Square((move_bits(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS)) & SQUARE_BIT_MASK);
 }
 
 inline int potion_type(Move m) {
   assert(type_of(m) == PROMOTION_POTION);
-  return (static_cast<uint64_t>(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + SQUARE_BITS + 2)) & 1;
+  return (move_bits(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + SQUARE_BITS + 2)) & 1;
 }
 
 inline PieceType gating_type(Move m) {
-  return PieceType((static_cast<uint64_t>(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS)) & (PIECE_TYPE_NB - 1));
+  return PieceType((move_bits(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS)) & (PIECE_TYPE_NB - 1));
 }
 
 inline Square gating_square(Move m) {
-  const uint64_t raw = static_cast<uint64_t>(m);
+  const uint64_t raw = move_bits(m);
   constexpr uint64_t SquareFieldMask = (uint64_t(SQUARE_BIT_MASK) << 1) | 1;
   const uint64_t gate = (raw >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & SquareFieldMask;
   if (gate)
@@ -1296,7 +1283,7 @@ inline int rotation_value(Move m) {
 inline Square pull_square(Move m) {
   if (type_of(m) != PULL)
       return SQ_NONE;
-  const uint64_t raw = static_cast<uint64_t>(m);
+  const uint64_t raw = move_bits(m);
   constexpr uint64_t SquareFieldMask = (uint64_t(SQUARE_BIT_MASK) << 1) | 1;
   const uint64_t sq = (raw >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & SquareFieldMask;
   return sq ? Square(sq - 1) : SQ_NONE;
@@ -1325,9 +1312,9 @@ constexpr uint64_t MultiLegFlag = uint64_t(1) << (2 * SQUARE_BITS + MOVE_TYPE_BI
 inline MultiLegSubtype multileg_subtype(Move m) {
   if (type_of(m) != SPECIAL)
       return MULTILEG_SUBTYPE_NONE;
-  if (!(static_cast<uint64_t>(m) & MultiLegFlag))
+  if (!(move_bits(m) & MultiLegFlag))
       return MULTILEG_SUBTYPE_NONE;
-  int sub = (static_cast<uint64_t>(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS)) & (PIECE_TYPE_NB - 1);
+  int sub = (move_bits(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS)) & (PIECE_TYPE_NB - 1);
   if (sub >= MULTILEG_SUBTYPE_TWO_STEP && sub <= MULTILEG_SUBTYPE_HOOK_PROMOTION)
       return MultiLegSubtype(sub);
   return MULTILEG_SUBTYPE_NONE;
@@ -1373,7 +1360,7 @@ inline bool is_any_promotion(Move m) {
 inline Square via_sq(Move m) {
   assert(is_multileg(m));
   constexpr uint64_t SquareFieldMask = (uint64_t(1) << SQUARE_BITS) - 1;
-  return Square((static_cast<uint64_t>(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & SquareFieldMask);
+  return Square((move_bits(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & SquareFieldMask);
 }
 
 // The multi-leg payload (flag + subtype + via square) shares the SPECIAL
@@ -1394,12 +1381,10 @@ static_assert(MultiLegFlag < (uint64_t(1) << 63), "MultiLegFlag exceeds 64-bit M
 #else
 // Audit: on 32-bit int Move storage the LARGEBOARDS flag is bit 31 (the sign
 // bit) and the 8x8 flag is bit 29, so multi-leg moves compare negative. This
-// is benign: TT stores moves as uint32_t bit patterns (TTMove(m) round-trips
-// exactly), UCI/serialization never uses raw ints, ordering in maps is only a
-// total order, and every decoder above masks after a uint64_t shift, so no
-// signed shift or sign extension leaks into a field. Do NOT change Move's
-// underlying type without re-auditing TT/storage/serialization on all three
-// board-size builds.
+// TT stores moves as uint32_t bit patterns and round-trips them; move_bits()
+// is the unsigned representation boundary used by packed-field decoders.
+// Do NOT change Move's underlying type without re-auditing TT/storage/
+// serialization on all three board-size builds.
 static_assert(MultiLegFlag < (uint64_t(1) << 32), "MultiLegFlag exceeds 32-bit Move storage");
 #if defined(LARGEBOARDS)
 static_assert(MultiLegFlag == (uint64_t(1) << 31), "LARGEBOARDS MultiLegFlag must be the sign bit to stay disjoint from gating");
@@ -1412,12 +1397,12 @@ inline bool is_gating(Move m) {
   if (is_multileg(m))
       return false;
 
-  if ((static_cast<uint64_t>(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS)) == 0)
+  if ((move_bits(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS)) == 0)
       return false;
 
   const MoveType mt = type_of(m);
   constexpr uint64_t SquareFieldMask = (uint64_t(SQUARE_BIT_MASK) << 1) | 1;
-  const uint64_t upper = static_cast<uint64_t>(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS);
+  const uint64_t upper = move_bits(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS);
   if (mt == SPECIAL || mt == LASER_FIRE)
       return (upper & SquareFieldMask) != 0;
   if (mt == NORMAL || mt == CASTLING || mt == EN_PASSANT)
@@ -1497,7 +1482,7 @@ constexpr Move make_insert(Square marker, Square to, PieceType pt_in_hand, Piece
 }
 
 constexpr PieceType exchange_piece(Move m) {
-  return type_of(m) != DROP ? NO_PIECE_TYPE : PieceType((static_cast<uint64_t>(m) >> SQUARE_BITS) & SQUARE_BIT_MASK);
+  return type_of(m) != DROP ? NO_PIECE_TYPE : PieceType((move_bits(m) >> SQUARE_BITS) & SQUARE_BIT_MASK);
 }
 
 constexpr Move make_exchange(Square to, PieceType pt_exchange, PieceType pt_in_hand, PieceType pt_dropped) {
@@ -1579,11 +1564,11 @@ static_assert(int(MULTILEG_SUBTYPE_HOOK_PROMOTION) < int(PIECE_TYPE_NB),
               "Hook subtypes must fit the SPECIAL subtype field");
 
 constexpr PieceType dropped_piece_type(Move m) {
-  return PieceType((static_cast<uint64_t>(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS)) & (PIECE_TYPE_NB - 1));
+  return PieceType((move_bits(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS)) & (PIECE_TYPE_NB - 1));
 }
 
 constexpr PieceType in_hand_piece_type(Move m) {
-  return PieceType((static_cast<uint64_t>(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & (PIECE_TYPE_NB - 1));
+  return PieceType((move_bits(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & (PIECE_TYPE_NB - 1));
 }
 
 inline bool is_custom(PieceType pt) {

@@ -3499,34 +3499,68 @@ bool Position::requires_full_evasion_generation() const {
 }
 
 bool Position::hook_path_valid(Color us, PieceType pt, Square from, Square via, Square to) const {
-  // Degenerate paths (zero-length legs) are never generated.
-  if (via == from || to == via)
+  if (!(board_bb() & from) || !(board_bb() & via) || !(board_bb() & to)
+      || via == from || to == via)
       return false;
-  // Single owner for completed-path validation: geometry (rays, blocking,
-  // origin landing, direction pairs) and the capture limit are both enforced
-  // by for_each_hook_path, so a stored (via, to) pair is valid exactly when
-  // the iterator emits it for the real position occupancy.
-  bool ok = false;
-  for_each_hook_path(us, pt, from, pieces(), pieces(us),
-      [&](const HookPath& path) {
-          if (path.via == via && path.to == to)
-              ok = true;
-      });
-  return ok;
+  uint64_t mask = hook_move_mask(us, pt);
+  if (!mask || hook_capture_limit(pt) < 1)
+      return false;
+
+  Bitboard occupied = pieces();
+  Bitboard friendly = pieces(us);
+  bool captureVia = bool(occupied & via);
+  bool captureTo = to != from && bool(occupied & to);
+  if (captureVia && captureTo && hook_capture_limit(pt) < 2)
+      return false;
+
+  auto reaches = [&](Square start, Square target, int dir, int range, bool secondLeg) {
+      Square cur = start;
+      for (int step = 1, limit = range ? range : SQUARE_NB; step <= limit; ++step)
+      {
+          Square next;
+          if (!hook_step(cur, KingDirections[dir], next) || !(board_bb() & next))
+              return false;
+          if (next == target)
+              return target == from && secondLeg ? true : !(friendly & target);
+          if (next == from || (friendly & next) || (occupied & next))
+              return false;
+          cur = next;
+      }
+      return false;
+  };
+
+  Bitboard remaining = Bitboard(mask);
+  while (remaining)
+  {
+      int pair = int(pop_lsb(remaining));
+      int d1 = multileg_pair_first(pair);
+      int d2 = multileg_pair_second(pair);
+      if (reaches(from, via, d1, hook_first_range(pt), false)
+          && reaches(via, to, d2, hook_second_range(pt), true))
+          return true;
+  }
+  return false;
 }
 
 bool Position::two_step_path_valid(Color us, PieceType pt, Square from, Square via, Square to) const {
   if (!(board_bb() & from) || !(board_bb() & via) || !(board_bb() & to))
       return false;
-  // The encoded move stores squares, not direction provenance: on narrow
-  // wrapping boards several compass directions can alias the same square,
-  // so accept if ANY pair in the mask explains the geometry.
-  bool pairAllowed = false;
-  for_each_two_step_path(us, pt, from, pieces(us), [&](const TwoStepPath& path) {
-      if (path.via == via && path.to == to)
-          pairAllowed = true;
-  });
-  return pairAllowed;
+  if (pieces(us) & via || (to != from && (pieces(us) & to)))
+      return false;
+  // Encoded squares do not retain direction provenance; narrow wrapping
+  // boards can alias several direction pairs to the same path.
+  Bitboard remaining = Bitboard(two_step_moves_mask(us, pt));
+  while (remaining)
+  {
+      int pair = int(pop_lsb(remaining));
+      Square step1, step2;
+      if (step_destination(from, KingDirections[multileg_pair_first(pair)], step1)
+          && step1 == via
+          && step_destination(via, KingDirections[multileg_pair_second(pair)], step2)
+          && step2 == to)
+          return true;
+  }
+  return false;
 }
 
 Bitboard Position::attackers_to_king_without_freeze(Square s, Bitboard occupied, Color c,
@@ -8013,11 +8047,11 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           Piece capVia = piece_on(via);
           bool viaPromoted = is_promoted(via);
           Piece viaUnpromoted = unpromoted_piece_on(via);
-          st->secondaryCaptured.set(capVia, viaPromoted, viaUnpromoted, via);
+          st->extraCaptured.set(capVia, viaPromoted, viaUnpromoted, via);
       }
       else
       {
-          st->secondaryCaptured.clear();
+          st->extraCaptured.clear();
       }
 
       if (to == from)
@@ -8036,9 +8070,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       st->captured.clear();
   }
   if (type_of(m) == EN_PASSANT && potions_enabled() && (pieces(them) & to))
-      st->jumpedEnPassantCaptured.set(piece_on(to), is_promoted(to), unpromoted_piece_on(to), to);
-  else
-      st->jumpedEnPassantCaptured.clear();
+      st->extraCaptured.set(piece_on(to), is_promoted(to), unpromoted_piece_on(to), to);
   st->push.didPush = pushMove;
   st->didPull = pullMove;
   st->push.stepwise = stepwisePush;
@@ -8072,6 +8104,12 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       assert((is_promotion_move(m) && sittuyin_promotion()) || passMove || is_laser_fire(m) || is_self_destruct(m) || is_multileg(m) || openingSelfRemoval || pureWallMove || is_gating(m));
       captured = NO_PIECE;
   }
+
+  const Piece secondaryCaptured = is_multileg(m) ? st->extraCaptured.piece.piece : NO_PIECE;
+  const bool directCapture = captured != NO_PIECE || secondaryCaptured != NO_PIECE;
+  // Effects defined for one captured piece use the destination victim when
+  // present, otherwise the multi-leg via victim.
+  const Piece effectCaptured = captured != NO_PIECE ? captured : secondaryCaptured;
 
   ScopedSpellContext spellScope(potCtx.freezeExtra, potCtx.jumpRemoved);
 
@@ -8132,11 +8170,11 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       }
   }
 
+  st->suppressedCaptureTransfer = directCapture && !stepwisePush
+                               && var->petrifyOnCaptureSuppressTransfer
+                               && bool(var->petrifyOnCaptureTypes & type_of(pc));
   if (captured && !stepwisePush)
   {
-      st->suppressedCaptureTransfer = var->petrifyOnCaptureSuppressTransfer
-                                   && bool(var->petrifyOnCaptureTypes & type_of(pc));
-
       Square capsq = st->captured.square != SQ_NONE ? st->captured.square : to;
       if (jumpCapsq != SQ_NONE)
       {
@@ -8256,8 +8294,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       st->rule50 = 0;
   };
 
-  remove_extra_capture(st->jumpedEnPassantCaptured);
-  remove_extra_capture(st->secondaryCaptured);
+  remove_extra_capture(st->extraCaptured);
 
   if (capturedDeadSquare)
   {
@@ -8460,7 +8497,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   // Update castling rights if needed
   const int moveRightsMask = rifleShot ? castlingRightsMask[to]
                                        : castlingRightsMask[from] | castlingRightsMask[to];
-  const int multiLegRightsMask = multiLeg && st->secondaryCaptured ? castlingRightsMask[st->secondaryCaptured.square] : 0;
+  const int multiLegRightsMask = multiLeg && st->extraCaptured ? castlingRightsMask[st->extraCaptured.square] : 0;
   if (!dropMove && !passMove && !pureWallMove && st->castlingRights
       && (moveRightsMask
           | multiLegRightsMask
@@ -8623,7 +8660,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           // Quiet igui (return-to-origin) without a via capture leaves the
           // board unchanged, so no NNUE refresh is needed. Capturing igui
           // must preserve the via-capture dirty entries appended above.
-          if (pureWallMove || (multiLeg && from == to && !is_multileg_promotion(m) && !st->secondaryCaptured))
+          if (pureWallMove || (multiLeg && from == to && !is_multileg_promotion(m) && !st->extraCaptured))
           {
               dp.dirty_num = 0;
               init_dirty_piece_entry(dp, 0, NO_PIECE, SQ_NONE, SQ_NONE, NO_PIECE, 0);
@@ -9037,7 +9074,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   };
 
   if (   capture_morph()
-      && captured != NO_PIECE
+      && directCapture
       && !stackMove
       && !dropMove
       && type_of(m) != CASTLING
@@ -9047,7 +9084,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       Piece cur = piece_on(moverSq);
       if (cur != NO_PIECE && !(rex_exclusive_morph() && type_of(cur) == KING))
       {
-          apply_morph(moverSq, type_of(captured));
+          apply_morph(moverSq, type_of(effectCaptured));
       }
   }
 
@@ -9216,11 +9253,11 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   // A via-only multi-leg capture leaves captured empty; fold the secondary
   // victim in so blast/petrify resolution is not silently skipped for it.
   // (Doubles combined with these effects are rejected in legal().)
-  const bool secondaryCapture = bool(st->secondaryCaptured);
+  const bool secondaryCapture = multiLeg && bool(st->extraCaptured);
   const bool blastCapture = captured || secondaryCapture;
   const bool blastOnCapture = blastOnCaptureMove
                            || (secondaryCapture && !is_stack_move(m)
-                               && blast_on_capture(pc, st->secondaryCaptured.piece.piece));
+                               && blast_on_capture(pc, st->extraCaptured.piece.piece));
   if (
        (
          ( surround_capture_opposite() || surround_capture_intervene() || surround_capture_edge() ) ||
@@ -9256,7 +9293,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           // victim is removed above; prefer the stored squares instead.
           Square blastCenterSq = blast_on_capture_mover_center() ? moverSq
                                : captured ? st->captured.square
-                               : secondaryCapture ? st->secondaryCaptured.square
+                               : secondaryCapture ? st->extraCaptured.square
                                : capture_square(m);
           blast_mask = (blastOnCapture || blast_on_move() || blast_on_self_destruct()) ? blast_squares(blastCapture ? blastCenterSq : to)
               : (var->petrifyOnCaptureTypes & type_of(pc) ? square_bb(moverSq) : Bitboard(0));
@@ -9332,7 +9369,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           };
           const Bitboard moverBit = square_bb(moverSq);
           const bool diesBeforeTrap = !capturedDeadSquare
-                                    && captured != NO_PIECE
+                                    && directCapture
                                     && !stepwisePush
                                     && !stackMove
                                     && !dropMove
@@ -9356,7 +9393,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
               }
           }
 
-          const bool projectedCapture = (captured != NO_PIECE && !stackMove)
+          const bool projectedCapture = (directCapture && !stackMove)
                                       || bool((removal_mask & ~blastPromotionMask)
                                               & (blast_pattern(moverSq) | moverBit));
           const bool projectedColorChange = trigger_matches(var->changingColorTrigger,
@@ -9580,7 +9617,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   };
 
   bool diesOnCapture = (death_on_capture_types() & piece_set(movedType));
-  if (!capturedDeadSquare && captured != NO_PIECE && !stackMove && !dropMove && diesOnCapture
+  if (!capturedDeadSquare && directCapture && !stackMove && !dropMove && diesOnCapture
       && piece_on(moverSq) != NO_PIECE)
   {
       bool makeDeadSquare = bool(death_on_capture_types() & piece_set(movedType));
@@ -9590,7 +9627,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   Bitboard localBycatch = (st->bycatchSquares & ~st->libertySelfRemoved & ~st->trapRemoved
                                              & ~st->blastPromotedSquares)
                         & (blast_pattern(moverSq) | square_bb(moverSq));
-  bool captureHappened = (captured != NO_PIECE && !stackMove) || localBycatch;
+  bool captureHappened = (directCapture && !stackMove) || localBycatch;
   if (trigger_matches(var->changingColorTrigger, captureHappened)
       && !passMove
       && (!dropMove || captureHappened)
@@ -9758,13 +9795,15 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
 
   if (counting_rule())
   {
-      if (counting_rule() != ASEAN_COUNTING && type_of(captured) == PAWN && count<ALL_PIECES>(~sideToMove) == 1 && !count<PAWN>() && count_limit(~sideToMove))
+      if (counting_rule() != ASEAN_COUNTING
+          && (type_of(captured) == PAWN || type_of(secondaryCaptured) == PAWN)
+          && count<ALL_PIECES>(~sideToMove) == 1 && !count<PAWN>() && count_limit(~sideToMove))
       {
           st->countingLimit = 2 * count_limit(~sideToMove);
           st->countingPly = 2 * count<ALL_PIECES>() - 1;
       }
 
-      if ((!st->countingLimit || ((captured || is_promotion_move(m)) && count<ALL_PIECES>(sideToMove) == 1)) && count_limit(sideToMove))
+      if ((!st->countingLimit || ((directCapture || is_promotion_move(m)) && count<ALL_PIECES>(sideToMove) == 1)) && count_limit(sideToMove))
       {
           st->countingLimit = 2 * count_limit(sideToMove);
           st->countingPly = counting_rule() == ASEAN_COUNTING || count<ALL_PIECES>(sideToMove) > 1 ? 0 : 2 * count<ALL_PIECES>();
@@ -10250,7 +10289,8 @@ void Position::undo_move(Move m) {
           undo_capture_transfer(st, transferPiece);
       };
 
-      restore_extra_capture(st->jumpedEnPassantCaptured);
+      if (!is_multileg(m))
+          restore_extra_capture(st->extraCaptured);
 
       if (st->captured)
       {
@@ -10271,9 +10311,9 @@ void Position::undo_move(Move m) {
               undo_capture_transfer(st, transferPiece);
       }
 
-      if (st->secondaryCaptured)
+      if (is_multileg(m) && st->extraCaptured)
       {
-          restore_extra_capture(st->secondaryCaptured);
+          restore_extra_capture(st->extraCaptured);
       }
   }
 

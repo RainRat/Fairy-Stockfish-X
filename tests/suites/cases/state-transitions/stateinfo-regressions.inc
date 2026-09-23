@@ -31,6 +31,7 @@ cat > "${HARNESS_CPP}" <<'EOF'
 #undef private
 #include "movegen.h"
 #include "psqt.h"
+#include "tt.h"
 #include "types.h"
 #include "uci.h"
 #include "variant.h"
@@ -88,6 +89,20 @@ twoStepMoves = l:*
 captureMorph = true
 promotedPieceType = l:q
 castling = true
+
+[test-death-lion:test-lion-state]
+deathOnCaptureTypes = l
+
+[test-color-lion:test-lion-state]
+changingColorTrigger = capture
+changingColorPieceTypes = l
+
+[test-petrify-transfer-lion:test-lion-state]
+captureType = hand
+pieceDrops = true
+pocketSize = 6
+petrifyOnCaptureTypes = l
+petrifyOnCaptureSuppressTransfer = true
 
 [test-piece-zone-lion:chess]
 customPiece1 = l:ADNWK
@@ -358,6 +373,16 @@ static void test_gating_special_collision() {
     }
 }
 
+static void test_multileg_tt_move_roundtrip() {
+#if defined(LARGEBOARDS)
+    Move move = make_two_step(SQ_E4, SQ_E5, SQ_E6);
+    assert(move_bits(move) & MultiLegFlag);
+    TTEntry entry{};
+    entry.save(0, VALUE_ZERO, false, BOUND_EXACT, DEPTH_OFFSET + 1, move, VALUE_ZERO);
+    assert(entry.move() == move);
+#endif
+}
+
 static void test_two_step_state_transitions() {
     StateInfo st{};
     Position pos;
@@ -416,6 +441,52 @@ static void test_two_step_state_transitions() {
     assert(pos.state()->materialKey == rookOrigMatKey);
 }
 
+static void test_via_only_capture_effects() {
+    StateInfo st{};
+    Position pos;
+    const char* fen = "7k/8/8/3r4/4L3/8/8/K7 w - - 0 1";
+    Move m = make_two_step(SQ_E4, SQ_D5, SQ_E4);
+
+    pos.set(variants.get("test-death-lion"), fen, false, &st, nullptr);
+    assert(pos.legal(m));
+    const Key deathKey = pos.key();
+    const Key deathMaterialKey = pos.material_key();
+    StateInfo death{};
+    pos.do_move(m, death);
+    assert(pos.piece_on(SQ_E4) == NO_PIECE);
+    pos.undo_move(m);
+    assert(pos.key() == deathKey);
+    assert(pos.material_key() == deathMaterialKey);
+    assert(pos.piece_on(SQ_E4) == make_piece(WHITE, CUSTOM_PIECE_1));
+    assert(pos.piece_on(SQ_D5) == B_ROOK);
+
+    pos.set(variants.get("test-color-lion"), fen, false, &st, nullptr);
+    assert(pos.legal(m));
+    const Key colorKey = pos.key();
+    const Key colorMaterialKey = pos.material_key();
+    StateInfo color{};
+    pos.do_move(m, color);
+    assert(pos.piece_on(SQ_E4) == make_piece(BLACK, CUSTOM_PIECE_1));
+    pos.undo_move(m);
+    assert(pos.key() == colorKey);
+    assert(pos.material_key() == colorMaterialKey);
+    assert(pos.piece_on(SQ_E4) == make_piece(WHITE, CUSTOM_PIECE_1));
+
+    pos.set(variants.get("test-petrify-transfer-lion"),
+            "7k/8/8/3r4/4L3/8/8/K7[] w - - 0 1", false, &st, nullptr);
+    assert(pos.legal(m));
+    const Key petrifyKey = pos.key();
+    const Key petrifyMaterialKey = pos.material_key();
+    StateInfo petrify{};
+    pos.do_move(m, petrify);
+    assert(pos.count_in_hand(WHITE, ROOK) == 0);
+    pos.undo_move(m);
+    assert(pos.key() == petrifyKey);
+    assert(pos.material_key() == petrifyMaterialKey);
+    assert(pos.count_in_hand(WHITE, ROOK) == 0);
+    assert(pos.piece_on(SQ_D5) == B_ROOK);
+}
+
 static void test_two_step_promotions() {
     StateInfo st{};
     Position pos;
@@ -452,14 +523,14 @@ static void test_two_step_promotions() {
     assert(!pos.legal(m_nonpromo)); // Disallowed because entering rank 8 without promoting
 }
 
-static void test_capture_squares_and_recapture() {
+static void test_capture_ordering_squares_and_recapture() {
     StateInfo st{};
     Position pos;
     pos.set(variants.get("test-lion-state"),
             "r3k2r/8/2r5/3r4/4L3/8/8/R3K2R w KQkq - 0 1", false, &st, nullptr);
 
     Move m_double = make_two_step(SQ_E4, SQ_D5, SQ_C6);
-    Bitboard caps = pos.capture_squares(m_double);
+    Bitboard caps = pos.capture_ordering_squares(m_double);
     assert(caps & square_bb(SQ_D5));
     assert(caps & square_bb(SQ_C6));
     assert(!(caps & square_bb(SQ_E4)));
@@ -506,6 +577,15 @@ static void test_two_step_double_capture_rejects_ambiguous_effects() {
 
     Move m_igui = make_two_step(SQ_E4, SQ_D5, SQ_E4);
     assert(pos.legal(m_igui));
+    const Key morphOrigKey = pos.key();
+    const Key morphOrigMaterialKey = pos.material_key();
+    StateInfo morphNext{};
+    pos.do_move(m_igui, morphNext);
+    assert(pos.piece_on(SQ_E4) == W_ROOK);
+    pos.undo_move(m_igui);
+    assert(pos.key() == morphOrigKey);
+    assert(pos.material_key() == morphOrigMaterialKey);
+    assert(pos.piece_on(SQ_D5) == B_ROOK);
 
     Move m_to_only = make_two_step(SQ_E4, SQ_E5, SQ_D5, false);
     assert(pos.legal(m_to_only));
@@ -866,6 +946,7 @@ int main() {
     test_stack_piece_transforms_and_undo();
     test_castling_preserves_piece_state();
     test_gating_special_collision();
+    test_multileg_tt_move_roundtrip();
     test_two_step_state_transitions();
     test_two_step_promotions();
     test_two_step_promotion_ignores_morph();
@@ -879,10 +960,11 @@ int main() {
     test_hook_state_transitions();
     test_hook_capture_limits();
     test_hook_promotions();
-    test_capture_squares_and_recapture();
+    test_capture_ordering_squares_and_recapture();
     test_two_step_vs_jump();
     test_multileg_special_subtype_isolation();
     test_hook_royal_attacks();
+    test_via_only_capture_effects();
     return 0;
 }
 EOF
