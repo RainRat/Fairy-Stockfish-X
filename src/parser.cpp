@@ -365,7 +365,10 @@ namespace {
         size_t digits = 0;
         while (i < s.size() && std::isdigit(static_cast<unsigned char>(s[i])))
         {
-            parsedRange = std::min(parsedRange * 10 + (s[i] - '0'), 255);
+            const int digit = s[i] - '0';
+            if (parsedRange > (255 - digit) / 10)
+                return false;
+            parsedRange = parsedRange * 10 + digit;
             ++i;
             ++digits;
         }

@@ -1422,7 +1422,7 @@ inline bool is_insert_move(Move m) {
 }
 
 inline bool is_plain_special(Move m) {
-  return type_of(m) == SPECIAL && multileg_subtype(m) == MULTILEG_SUBTYPE_NONE;
+  return type_of(m) == SPECIAL && !(move_bits(m) & MultiLegFlag);
 }
 
 inline bool is_pass(Move m) {

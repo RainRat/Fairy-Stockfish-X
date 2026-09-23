@@ -6787,38 +6787,27 @@ bool Position::pseudo_legal(const Move m) const {
           && var->can_unstack(type_of(pc))
           && bool(PseudoAttacks[WHITE][KING][from] & to);
 
-  if (is_two_step(m))
+  if (is_multileg(m))
   {
       if (pc == NO_PIECE || color_of(pc) != us)
           return false;
       PieceType pt = type_of(pc);
       Square via = via_sq(m);
-      if (!two_step_path_valid(us, pt, from, via, to))
+      const bool validPath = is_two_step(m)
+                           ? two_step_path_valid(us, pt, from, via, to)
+                           : hook_path_valid(us, pt, from, via, to);
+      if (!validPath)
           return false;
-      if (two_step_promotes(m))
+      if (is_multileg_promotion(m)
+          && !multileg_promotion_status(pc, from, to, capture(m)).allowed)
+          return false;
+      if (!allow_checks() && checking_permitted())
       {
-          if (!multileg_promotion_status(pc, from, to, capture(m)).allowed)
+          if ((pieces(them) & to) && type_of(piece_on(to)) == KING)
+              return false;
+          if (via != to && (pieces(them) & via) && type_of(piece_on(via)) == KING)
               return false;
       }
-      return !violates_same_player_board_repetition(m);
-  }
-
-  if (is_hook(m))
-  {
-      if (pc == NO_PIECE || color_of(pc) != us)
-          return false;
-      PieceType pt = type_of(pc);
-      Square via = via_sq(m);
-      if (!(board_bb() & via) || !(board_bb() & to))
-          return false;
-      if (!hook_path_valid(us, pt, from, via, to))
-          return false;
-      if (hook_promotes(m))
-      {
-          if (!multileg_promotion_status(pc, from, to, capture(m)).allowed)
-              return false;
-      }
-      return !violates_same_player_board_repetition(m);
   }
 
   // Universal-hopper semantics are handled by pseudo-move generation and
