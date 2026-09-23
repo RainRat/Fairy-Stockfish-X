@@ -786,11 +786,11 @@ public:
       bool captureTo = false;
       bool atOrigin = false;
   };
-  template<typename Emit>
-  void for_each_two_step_path(Color us, PieceType pt, Square from, Bitboard friendly, Emit&& emit) const;
-  template<typename Emit>
-  void for_each_hook_path(Color us, PieceType pt, Square from,
-                          Bitboard occupied, Bitboard friendly, Emit&& emit) const;
+  template<typename Visit>
+  bool for_each_two_step_path(Color us, PieceType pt, Square from, Bitboard friendly, Visit&& visit) const;
+  template<typename Visit>
+  bool for_each_hook_path(Color us, PieceType pt, Square from,
+                          Bitboard occupied, Bitboard friendly, Visit&& visit) const;
   // Bent hook/two-step checks cannot be blocked geometrically like riders;
   // callers must generate NON_EVASIONS and let legal() filter them (same
   // conservative pattern as wrapped boards).
@@ -5991,11 +5991,11 @@ inline bool Position::multileg_promotion_zone(Color c, PieceType pt, Square from
   return (pz & from) || (pz & to);
 }
 
-template<typename Emit>
-void Position::for_each_two_step_path(Color us, PieceType pt, Square from, Bitboard friendly, Emit&& emit) const {
+template<typename Visit>
+bool Position::for_each_two_step_path(Color us, PieceType pt, Square from, Bitboard friendly, Visit&& visit) const {
   uint64_t mask = two_step_moves_mask(us, pt);
   if (!mask || !(board_bb() & from))
-      return;
+      return false;
   Bitboard remaining = Bitboard(mask);
   while (remaining)
   {
@@ -6013,19 +6013,21 @@ void Position::for_each_two_step_path(Color us, PieceType pt, Square from, Bitbo
       if (!(board_bb() & to) || (to != from && (friendly & to)))
           continue;
       TwoStepPath path{via, to, d1, d2};
-      emit(path);
+      if (visit(path))
+          return true;
   }
+  return false;
 }
 
-template<typename Emit>
-void Position::for_each_hook_path(Color us, PieceType pt, Square from,
-                                  Bitboard occupied, Bitboard friendly, Emit&& emit) const {
+template<typename Visit>
+bool Position::for_each_hook_path(Color us, PieceType pt, Square from,
+                                  Bitboard occupied, Bitboard friendly, Visit&& visit) const {
   uint64_t mask = hook_move_mask(us, pt);
   if (!mask || !(board_bb() & from))
-      return;
+      return false;
   int captureLimit = hook_capture_limit(pt);
   if (captureLimit < 1)
-      return;
+      return false;
   int range1 = hook_first_range(pt);
   int range2 = hook_second_range(pt);
   Bitboard remaining = Bitboard(mask);
@@ -6068,7 +6070,8 @@ void Position::for_each_hook_path(Color us, PieceType pt, Square from,
               if (cap1 && cap2 && captureLimit < 2)
                   break;
               HookPath path{bend, to, d1, d2, cap1, cap2, atOrigin};
-              emit(path);
+              if (visit(path))
+                  return true;
               if (cap2 || atOrigin)
                   break;
           }
@@ -6076,6 +6079,7 @@ void Position::for_each_hook_path(Color us, PieceType pt, Square from,
               break;
       }
   }
+  return false;
 }
 
 inline bool Position::paired_drop(Move m) const {

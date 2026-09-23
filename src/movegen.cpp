@@ -1220,6 +1220,7 @@ namespace {
                     bool cap2 = (path.to != from && !pos.empty(path.to) && color_of(pos.piece_on(path.to)) == them);
                     moveList = emit_multileg_candidate<Us, Type>(pos, moveList, pt, from, path.via, path.to,
                                                                  cap1, cap2, target, checkers, makeTwoStep);
+                    return false;
                 });
         }
     }
@@ -1262,6 +1263,7 @@ namespace {
                     moveList = emit_multileg_candidate<Us, Type>(pos, moveList, pt, from, path.via, path.to,
                                                                  path.captureVia, path.captureTo, target,
                                                                  pos.evasion_checkers(), makeHook);
+                    return false;
                 });
         }
     }
