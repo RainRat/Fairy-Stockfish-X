@@ -22,13 +22,17 @@
 
 #include "movegen.h"
 #include "position.h"
+#include "multileg_impl.h"
 #include "thread.h"
 
 namespace Stockfish {
 
 #ifdef USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
 template<GenType T>
-MoveList<T>::MoveList(const Position& pos) {
+MoveList<T>::MoveList(const Position& pos) : MoveList(pos, generate<T>) {}
+
+template<GenType T>
+MoveList<T>::MoveList(const Position& pos, MoveGenerator generator) {
     thread = pos.this_thread();
     if (thread)
         moveList = thread->acquire_buffer();
@@ -36,7 +40,7 @@ MoveList<T>::MoveList(const Position& pos) {
         moveListPtr = std::make_unique<ExtMove[]>(MOVEGEN_OVERFLOW_CAPACITY);
         moveList = moveListPtr.get();
     }
-    last = generate<T>(pos, moveList);
+    last = generator(pos, moveList);
     assert(last - moveList <= MOVEGEN_OVERFLOW_CAPACITY);
 }
 
@@ -1190,7 +1194,7 @@ namespace {
     if (!pos.has_two_step_moves())
         return moveList;
 
-    PieceSet twoStepPts = pos.two_step_piece_types(Us);
+    PieceSet twoStepPts = pos.two_step_piece_types();
     if (!twoStepPts)
         return moveList;
 
@@ -1215,7 +1219,7 @@ namespace {
                 continue;
 
             pos.for_each_two_step_path(Us, pt, from, pos.pieces(Us),
-                [&](const Position::TwoStepPath& path) {
+                [&](const MultiLegPath& path) {
                     bool cap1 = (!pos.empty(path.via) && color_of(pos.piece_on(path.via)) == them);
                     bool cap2 = (path.to != from && !pos.empty(path.to) && color_of(pos.piece_on(path.to)) == them);
                     moveList = emit_multileg_candidate<Us, Type>(pos, moveList, pt, from, path.via, path.to,
@@ -1233,7 +1237,7 @@ namespace {
     if (!pos.has_hook_moves())
         return moveList;
 
-    PieceSet hookPts = pos.hook_piece_types(Us);
+    PieceSet hookPts = pos.hook_piece_types();
     if (!hookPts)
         return moveList;
 
@@ -1259,7 +1263,7 @@ namespace {
             // limit are owned by Position::for_each_hook_path; only
             // candidate emission stays here.
             pos.for_each_hook_path(Us, pt, from, pos.pieces(), pos.pieces(Us),
-                [&](const Position::HookPath& path) {
+                [&](const MultiLegPath& path) {
                     moveList = emit_multileg_candidate<Us, Type>(pos, moveList, pt, from, path.via, path.to,
                                                                  path.captureVia, path.captureTo, target,
                                                                  pos.evasion_checkers(), makeHook);
@@ -2191,13 +2195,13 @@ namespace {
                                      && !pos.topology_wraps()
                                      && potion.potion == Variant::POTION_FREEZE
                                      && !pos.variant()->freezePieceTypes;
-      ExtMove* baseEnd = pos.evasion_checkers() && !pos.topology_wraps() && !broadenFreezeEvasion
-                       ? generate_without_potions<EVASIONS>(pos, baseMoves)
+      ExtMove* baseEnd = pos.evasion_checkers() && !broadenFreezeEvasion
+                       ? generate_evasions_without_potions(pos, baseMoves)
                        : generate_without_potions<NON_EVASIONS>(pos, baseMoves);
 
       for (ExtMove* it = baseMoves; it != baseEnd; ++it)
           if (it->move == base)
-              return !pos.evasion_checkers() || pos.topology_wraps()
+              return !pos.evasion_checkers() || pos.requires_full_evasion_generation()
                   || potion_move_matches<EVASIONS>(pos, base, m);
 
       return false;

@@ -558,15 +558,14 @@ enum Move :
 #if defined(VERY_LARGE_BOARDS)
   uint64_t
 #else
-  int
+  uint32_t
 #endif
 {
   MOVE_NONE,
   MOVE_NULL = 1 + (1 << SQUARE_BITS)
 };
 
-// Keep packed-move decoding independent of the signed representation used by
-// 32-bit Move builds, where LARGEBOARDS multi-leg moves use the sign bit.
+// Keep packed-move decoding independent of the enum's underlying storage type.
 constexpr uint64_t move_bits(Move m) {
 #if defined(VERY_LARGE_BOARDS)
   return static_cast<uint64_t>(m);
@@ -1378,16 +1377,14 @@ static_assert(((uint64_t(SQUARE_NB - 1) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + P
               "MultiLegFlag collides with a valid via payload");
 #if defined(VERY_LARGE_BOARDS)
 static_assert(MultiLegFlag < (uint64_t(1) << 63), "MultiLegFlag exceeds 64-bit Move storage");
+static_assert(sizeof(Move) == sizeof(uint64_t), "very-large-board Move must remain 64-bit");
 #else
-// Audit: on 32-bit int Move storage the LARGEBOARDS flag is bit 31 (the sign
-// bit) and the 8x8 flag is bit 29, so multi-leg moves compare negative. This
-// TT stores moves as uint32_t bit patterns and round-trips them; move_bits()
-// is the unsigned representation boundary used by packed-field decoders.
-// Do NOT change Move's underlying type without re-auditing TT/storage/
-// serialization on all three board-size builds.
+// TT stores ordinary-board moves as uint32_t bit patterns. Keeping Move
+// unsigned makes the LARGEBOARDS bit-31 multi-leg flag an ordinary payload bit.
 static_assert(MultiLegFlag < (uint64_t(1) << 32), "MultiLegFlag exceeds 32-bit Move storage");
+static_assert(sizeof(Move) == sizeof(uint32_t), "ordinary-board Move must remain 32-bit");
 #if defined(LARGEBOARDS)
-static_assert(MultiLegFlag == (uint64_t(1) << 31), "LARGEBOARDS MultiLegFlag must be the sign bit to stay disjoint from gating");
+static_assert(MultiLegFlag == (uint64_t(1) << 31), "LARGEBOARDS MultiLegFlag must stay above gating payloads");
 #else
 static_assert(MultiLegFlag == (uint64_t(1) << 29), "8x8 MultiLegFlag must sit above the gating field");
 #endif

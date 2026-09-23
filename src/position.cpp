@@ -33,6 +33,7 @@
 #include "misc.h"
 #include "movegen.h"
 #include "position.h"
+#include "multileg_impl.h"
 #include "thread.h"
 #include "tt.h"
 #include "uci.h"
@@ -3387,7 +3388,7 @@ bool Position::two_step_attacks_square(Color us, PieceType pt, Square from, Squa
       return false;
   // Any emitted completion containing the target (as bend with a legal
   // landing, or as the final square via a non-friendly bend) is an attack.
-  return for_each_two_step_path(us, pt, from, friendly, [&](const TwoStepPath& path) {
+  return for_each_two_step_path(us, pt, from, friendly, [&](const MultiLegPath& path) {
       return path.via == target || path.to == target;
   });
 }
@@ -3403,7 +3404,7 @@ bool Position::hook_attacks_square(Color us, PieceType pt, Square from, Square t
   // The hook capture limit is enforced by the iterator; only emitted paths
   // with a legal capture count attack the target.
   return for_each_hook_path(us, pt, from, occupied, friendly,
-      [&](const HookPath& path) {
+      [&](const MultiLegPath& path) {
           return path.via == target || path.to == target;
       });
 }
@@ -3436,7 +3437,7 @@ Bitboard Position::multileg_attackers_to(Square s, Bitboard occupied, Color c,
       return b & occupied;
   };
   Bitboard attackers = Bitboard(0);
-  for (PieceSet ps = two_step_piece_types(c); ps; )
+  for (PieceSet ps = two_step_piece_types(); ps; )
   {
       PieceType pt = pop_lsb(ps);
       Bitboard candidates = candidates_for(pt);
@@ -3447,7 +3448,7 @@ Bitboard Position::multileg_attackers_to(Square s, Bitboard occupied, Color c,
               attackers |= square_bb(from);
       }
   }
-  for (PieceSet ps = hook_piece_types(c); ps; )
+  for (PieceSet ps = hook_piece_types(); ps; )
   {
       PieceType pt = pop_lsb(ps);
       Bitboard candidates = candidates_for(pt);
@@ -3467,7 +3468,7 @@ bool Position::requires_full_evasion_filter() const {
   Bitboard checkers = evasion_checkers();
   if (!checkers)
       return false;
-  return bool(multileg_attackers_to(royal_square(sideToMove), pieces(), ~sideToMove) & checkers);
+  return bool(checkers & pieces(~sideToMove, two_step_piece_types() | hook_piece_types()));
 }
 
 bool Position::requires_full_evasion_generation() const {
@@ -3477,13 +3478,13 @@ bool Position::requires_full_evasion_generation() const {
 }
 
 bool Position::hook_path_valid(Color us, PieceType pt, Square from, Square via, Square to) const {
-  return for_each_hook_path(us, pt, from, pieces(), pieces(us), [&](const HookPath& path) {
+  return for_each_hook_path(us, pt, from, pieces(), pieces(us), [&](const MultiLegPath& path) {
       return path.via == via && path.to == to;
   });
 }
 
 bool Position::two_step_path_valid(Color us, PieceType pt, Square from, Square via, Square to) const {
-  return for_each_two_step_path(us, pt, from, pieces(us), [&](const TwoStepPath& path) {
+  return for_each_two_step_path(us, pt, from, pieces(us), [&](const MultiLegPath& path) {
       return path.via == via && path.to == to;
   });
 }
@@ -3497,14 +3498,14 @@ Bitboard Position::multileg_transit_squares(Move m) const {
   Bitboard transit = 0;
   if (is_two_step(m))
       for_each_two_step_path(sideToMove, type_of(mover), from, pieces(sideToMove),
-          [&](const TwoStepPath& path) {
+          [&](const MultiLegPath& path) {
               if (path.via == via && path.to == to)
                   transit |= path.transit;
               return false;
           });
   else if (is_hook(m))
       for_each_hook_path(sideToMove, type_of(mover), from, pieces(), pieces(sideToMove),
-          [&](const HookPath& path) {
+          [&](const MultiLegPath& path) {
               if (path.via == via && path.to == to)
                   transit |= path.transit;
               return false;
@@ -5933,8 +5934,9 @@ bool Position::legal(Move m) const {
       else if (evasion_checkers())
       {
           SimulatedMoveGuard currentPosition(*this, MOVE_NONE);
-          for (const auto& mevasion : MoveList<EVASIONS>(*this))
-              if (is_drop_move(mevasion) && legal(mevasion))
+          MoveList<EVASIONS> evasions(*this, generate_evasions);
+          for (const auto& evasion : evasions)
+              if (is_drop_move(evasion) && legal(evasion))
                   return false;
       }
       else
@@ -6572,12 +6574,11 @@ bool Position::has_legal_move() const {
 
 bool Position::has_legal_move_ignoring_immediate_end() const {
 
-  const bool useNonEvasions = anti_royal_types() || requires_full_evasion_generation();
-
-  if (evasion_checkers() && !useNonEvasions)
+  if (evasion_checkers())
   {
-      for (const auto& move : MoveList<EVASIONS>(*this))
-          if (legal(move) && !virtual_drop(move))
+      MoveList<EVASIONS> evasions(*this, generate_evasions);
+      for (const auto& evasion : evasions)
+          if (legal(evasion) && !virtual_drop(evasion))
               return true;
   }
   else

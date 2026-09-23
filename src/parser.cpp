@@ -348,18 +348,16 @@ namespace {
             s += char(std::tolower(static_cast<unsigned char>(c)));
         size_t i = 0;
         int filter = 0xFF;
-        if (i < s.size() && (s[i] == 'f' || s[i] == 'b' || s[i] == 's'))
+        if (i < s.size() && (s[i] == 'f' || s[i] == 's' || (s[i] == 'b' && s.size() > 1)))
         {
-            // N=0 NE=1 E=2 SE=3 S=4 SW=5 W=6 NW=7
-            filter = s[i] == 'f' ? ((1 << 0) | (1 << 1) | (1 << 7))
-                   : s[i] == 'b' ? ((1 << 4) | (1 << 3) | (1 << 5))
-                                 : ((1 << 2) | (1 << 6));
+            filter = s[i] == 'f' ? KingForwardDirections
+                   : s[i] == 'b' ? KingBackwardDirections
+                                 : KingSidewaysDirections;
             ++i;
         }
         if (i >= s.size() || (s[i] != 'r' && s[i] != 'b'))
             return false;
-        int geom = s[i] == 'r' ? ((1 << 0) | (1 << 2) | (1 << 4) | (1 << 6))
-                               : ((1 << 1) | (1 << 3) | (1 << 5) | (1 << 7));
+        int geom = s[i] == 'r' ? KingOrthogonalDirections : KingDiagonalDirections;
         ++i;
         int parsedRange = 0;
         size_t digits = 0;
@@ -387,20 +385,11 @@ namespace {
     bool parse_hook_moves(const std::string& optionName,
                           const std::string& value,
                           const Variant* v,
-                          uint64_t masks[PIECE_TYPE_NB],
-                          int firstRange[PIECE_TYPE_NB],
-                          int secondRange[PIECE_TYPE_NB],
-                          int limits[PIECE_TYPE_NB]) {
+                          HookMoveSpec target[PIECE_TYPE_NB]) {
         std::string entry;
         std::stringstream ss(value);
-        uint64_t parsedMasks[PIECE_TYPE_NB];
-        int parsedFirst[PIECE_TYPE_NB];
-        int parsedSecond[PIECE_TYPE_NB];
-        int parsedLimits[PIECE_TYPE_NB];
-        std::copy(masks, masks + PIECE_TYPE_NB, std::begin(parsedMasks));
-        std::copy(firstRange, firstRange + PIECE_TYPE_NB, std::begin(parsedFirst));
-        std::copy(secondRange, secondRange + PIECE_TYPE_NB, std::begin(parsedSecond));
-        std::copy(limits, limits + PIECE_TYPE_NB, std::begin(parsedLimits));
+        HookMoveSpec parsed[PIECE_TYPE_NB];
+        std::copy(target, target + PIECE_TYPE_NB, std::begin(parsed));
         auto fail = [&](const std::string& msg, const std::string& detail) {
             if (DoCheck)
                 std::cerr << optionName << " - " << msg << ": " << detail << std::endl;
@@ -417,10 +406,7 @@ namespace {
 
             if (rawSpec == "-")
             {
-                parsedMasks[pt] = 0ULL;
-                parsedFirst[pt] = 0;
-                parsedSecond[pt] = 0;
-                parsedLimits[pt] = 0;
+                parsed[pt] = {};
                 continue;
             }
 
@@ -449,17 +435,14 @@ namespace {
                     for (int d2 = 0; d2 < 8; ++d2)
                         if (bits2 & (1 << d2))
                             mask |= multileg_direction_pair_bit(d1, d2);
-            parsedMasks[pt] = mask;
-            parsedFirst[pt] = range1;
-            parsedSecond[pt] = range2;
-            parsedLimits[pt] = limit;
+            parsed[pt].directions[WHITE] = mask;
+            parsed[pt].firstRange = range1;
+            parsed[pt].secondRange = range2;
+            parsed[pt].captureLimit = limit;
         }
         if (!sawEntry || !only_trailing_space(ss))
             return false;
-        std::copy(std::begin(parsedMasks), std::end(parsedMasks), masks);
-        std::copy(std::begin(parsedFirst), std::end(parsedFirst), firstRange);
-        std::copy(std::begin(parsedSecond), std::end(parsedSecond), secondRange);
-        std::copy(std::begin(parsedLimits), std::end(parsedLimits), limits);
+        std::copy(std::begin(parsed), std::end(parsed), target);
         return true;
     }
 
@@ -1989,8 +1972,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     auto it_hook = config.find("hookMoves");
     if (it_hook != config.end())
     {
-        if (!parse_hook_moves<DoCheck>("hookMoves", it_hook->second, v, v->hookMoveMasks,
-                                       v->hookFirstRange, v->hookSecondRange, v->hookCaptureLimit))
+        if (!parse_hook_moves<DoCheck>("hookMoves", it_hook->second, v, v->hookMoves))
             return false;
     }
     parse_attribute("pushFirstColor", v->pushFirstColor);
@@ -2861,8 +2843,8 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
     // wrap-around rays with triple-level dedup, which is not implemented.
     const bool hasTwoStepMoves = std::any_of(std::begin(v->twoStepMoves), std::end(v->twoStepMoves),
                                              [](uint64_t mask) { return mask != 0; });
-    const bool hasHookMoves = std::any_of(std::begin(v->hookMoveMasks), std::end(v->hookMoveMasks),
-                                          [](uint64_t mask) { return mask != 0; });
+    const bool hasHookMoves = std::any_of(std::begin(v->hookMoves), std::end(v->hookMoves),
+                                          [](const HookMoveSpec& spec) { return spec.directions[WHITE] != 0; });
 
     if (hasHookMoves && (v->cylindrical || v->toroidal))
     {

@@ -86,6 +86,16 @@ mandatoryPromotionRegionWhite = *8
 mandatoryPromotionRegionBlack = *1
 promotionLimit = q:1
 
+[test-must-drop-lion:chess]
+customPiece1 = h:0
+hookMoves = h:R-B
+captureType = hand
+pieceDrops = true
+pocketSize = 4
+mustDrop = true
+blastOnMove = true
+castling = false
+
 [test-morph-lion:chess]
 customPiece1 = l:ADNWK
 twoStepMoves = l:*
@@ -389,6 +399,20 @@ static void test_multileg_tt_move_roundtrip() {
 #endif
 }
 
+static void test_must_drop_evasion_to_multileg_check() {
+    StateInfo st{};
+    Position pos;
+    // The hook on d4 checks the king on g6 along a bent ray. A blast drop
+    // near the hook removes it and must make every non-drop move illegal.
+    pos.set(variants.get("test-must-drop-lion"),
+            "k7/8/6K1/8/3h4/8/8/8[P] w - - 0 1", false, &st, nullptr);
+
+    Move drop = make_drop(SQ_E5, PAWN, PAWN);
+    assert(pos.evasion_checkers());
+    assert(pos.legal(drop));
+    assert(!pos.legal(make<NORMAL>(SQ_G6, SQ_G5)));
+}
+
 static void test_two_step_state_transitions() {
     StateInfo st{};
     Position pos;
@@ -542,7 +566,7 @@ static void test_capture_ordering_squares_and_recapture() {
             "r3k2r/8/2r5/3r4/4L3/8/8/R3K2R w KQkq - 0 1", false, &st, nullptr);
 
     Move m_double = make_two_step(SQ_E4, SQ_D5, SQ_C6);
-    Bitboard caps = pos.capture_ordering_squares(m_double);
+    Bitboard caps = pos.capture_squares(m_double);
     assert(caps & square_bb(SQ_D5));
     assert(caps & square_bb(SQ_C6));
     assert(!(caps & square_bb(SQ_E4)));
@@ -981,6 +1005,7 @@ int main() {
     test_castling_preserves_piece_state();
     test_gating_special_collision();
     test_multileg_tt_move_roundtrip();
+    test_must_drop_evasion_to_multileg_check();
     test_two_step_state_transitions();
     test_two_step_promotions();
     test_two_step_promotion_ignores_morph();
