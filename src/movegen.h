@@ -36,6 +36,7 @@ enum GenType {
   QUIETS,
   QUIET_CHECKS,
   EVASIONS,
+  EVASION_CANDIDATES,
   NON_EVASIONS,
   LEGAL
 };
@@ -69,7 +70,7 @@ ExtMove* generate_without_potions(const Position& pos, ExtMove* moveList);
 // need all pseudo-legal moves so legal() can filter them correctly.
 ExtMove* generate_evasions(const Position& pos, ExtMove* moveList);
 ExtMove* generate_evasions_without_potions(const Position& pos, ExtMove* moveList);
-using MoveGenerator = ExtMove* (*)(const Position&, ExtMove*);
+template<> ExtMove* generate<EVASION_CANDIDATES>(const Position&, ExtMove*);
 
 template<GenType>
 ExtMove* append_potions(const Position& pos, ExtMove* listBegin, ExtMove* baseEnd,
@@ -95,14 +96,9 @@ struct MoveList {
 
 #ifdef USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
     explicit MoveList(const Position& pos);
-    MoveList(const Position& pos, MoveGenerator generator);
     ~MoveList();
 #else
     explicit MoveList(const Position& pos) : last(generate<T>(pos, moveList))
-    {
-        assert(last - moveList <= MOVEGEN_OVERFLOW_CAPACITY);
-    }
-    MoveList(const Position& pos, MoveGenerator generator) : last(generator(pos, moveList))
     {
         assert(last - moveList <= MOVEGEN_OVERFLOW_CAPACITY);
     }

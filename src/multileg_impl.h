@@ -2,12 +2,13 @@
 #ifndef MULTILEG_IMPL_H_INCLUDED
 #define MULTILEG_IMPL_H_INCLUDED
 
-namespace Stockfish {
+namespace Stockfish::detail {
 
 template<typename Visit>
-bool Position::for_each_two_step_path(Color us, PieceType pt, Square from, Bitboard friendly, Visit&& visit) const {
-  uint64_t mask = two_step_moves_mask(us, pt);
-  if (!mask || !(board_bb() & from))
+bool for_each_two_step_path(const Position& pos, Color us, PieceType pt, Square from,
+                            Bitboard friendly, Visit&& visit) {
+  uint64_t mask = pos.two_step_moves_mask(us, pt);
+  if (!mask || !(pos.board_bb() & from))
       return false;
   std::array<std::pair<Square, Square>, 64> seen{};
   int seenCount = 0;
@@ -18,14 +19,14 @@ bool Position::for_each_two_step_path(Color us, PieceType pt, Square from, Bitbo
       int d1 = multileg_pair_first(pair_idx);
       int d2 = multileg_pair_second(pair_idx);
       Square via;
-      if (!step_destination(from, KingDirections[d1], via))
+      if (!pos.step_destination(from, KingDirections[d1], via))
           continue;
-      if (!(board_bb() & via) || (friendly & via))
+      if (!(pos.board_bb() & via) || (friendly & via))
           continue;
       Square to;
-      if (!step_destination(via, KingDirections[d2], to))
+      if (!pos.step_destination(via, KingDirections[d2], to))
           continue;
-      if (!(board_bb() & to) || (to != from && (friendly & to)))
+      if (!(pos.board_bb() & to) || (to != from && (friendly & to)))
           continue;
       const auto key = std::pair{via, to};
       if (std::find(seen.begin(), seen.begin() + seenCount, key) != seen.begin() + seenCount)
@@ -42,16 +43,16 @@ bool Position::for_each_two_step_path(Color us, PieceType pt, Square from, Bitbo
 }
 
 template<typename Visit>
-bool Position::for_each_hook_path(Color us, PieceType pt, Square from,
-                                  Bitboard occupied, Bitboard friendly, Visit&& visit) const {
-  uint64_t mask = hook_move_mask(us, pt);
-  if (!mask || !(board_bb() & from))
+bool for_each_hook_path(const Position& pos, Color us, PieceType pt, Square from,
+                        Bitboard occupied, Bitboard friendly, Visit&& visit, Square target) {
+  uint64_t mask = pos.hook_move_mask(us, pt);
+  if (!mask || !(pos.board_bb() & from))
       return false;
-  int captureLimit = hook_capture_limit(pt);
+  int captureLimit = pos.hook_capture_limit(pt);
   if (captureLimit < 1)
       return false;
-  int range1 = hook_first_range(pt);
-  int range2 = hook_second_range(pt);
+  int range1 = pos.hook_first_range(pt);
+  int range2 = pos.hook_second_range(pt);
   Bitboard remaining = Bitboard(mask);
   while (remaining)
   {
@@ -64,22 +65,53 @@ bool Position::for_each_hook_path(Color us, PieceType pt, Square from,
       for (int k1 = 1; k1 <= cap1steps; ++k1)
       {
           Square step1;
-          if (!hook_step(bend, KingDirections[d1], step1))
+          if (!pos.hook_step(bend, KingDirections[d1], step1))
               break;
-          if (!(board_bb() & step1) || (friendly & step1))
+          if (!(pos.board_bb() & step1) || (friendly & step1))
               break;
           bend = step1;
           firstTransit |= square_bb(bend);
           bool cap1 = bool(occupied & bend);
           int cap2steps = range2 ? range2 : SQUARE_NB;
+          if (target != SQ_NONE && bend != target)
+          {
+              Square probe = bend;
+              bool reachesTarget = false;
+              for (int k2 = 1; k2 <= cap2steps; ++k2)
+              {
+                  Square step2;
+                  if (!pos.hook_step(probe, KingDirections[d2], step2) || !(pos.board_bb() & step2))
+                      break;
+                  bool atOrigin = step2 == from;
+                  if (!atOrigin && (friendly & step2))
+                      break;
+                  probe = step2;
+                  bool cap2 = !atOrigin && bool(occupied & probe);
+                  if (cap1 && cap2 && captureLimit < 2)
+                      break;
+                  if (probe == target)
+                  {
+                      reachesTarget = true;
+                      break;
+                  }
+                  if (cap2 || atOrigin)
+                      break;
+              }
+              if (!reachesTarget)
+              {
+                  if (cap1)
+                      break;
+                  continue;
+              }
+          }
           Square to = bend;
           Bitboard secondTransit = 0;
           for (int k2 = 1; k2 <= cap2steps; ++k2)
           {
               Square step2;
-              if (!hook_step(to, KingDirections[d2], step2))
+              if (!pos.hook_step(to, KingDirections[d2], step2))
                   break;
-              if (!(board_bb() & step2))
+              if (!(pos.board_bb() & step2))
                   break;
               // The origin is a landing square (igui) but never
               // transit: the walk must not continue past it.
@@ -115,6 +147,6 @@ bool Position::for_each_hook_path(Color us, PieceType pt, Square from,
 }
 
 
-} // namespace Stockfish
+} // namespace Stockfish::detail
 
 #endif // MULTILEG_IMPL_H_INCLUDED

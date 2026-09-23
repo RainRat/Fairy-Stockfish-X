@@ -44,6 +44,15 @@
 
 namespace Stockfish {
 
+class Position;
+namespace detail {
+template<typename Visit>
+bool for_each_two_step_path(const Position&, Color, PieceType, Square, Bitboard, Visit&&);
+template<typename Visit>
+bool for_each_hook_path(const Position&, Color, PieceType, Square, Bitboard, Bitboard, Visit&&,
+                        Square target = SQ_NONE);
+}
+
 constexpr int MAX_PUSH_SNAPSHOT = 32;
 
 extern Square JumpMidpoint[SQUARE_NB][SQUARE_NB];
@@ -765,19 +774,6 @@ public:
   PieceSet two_step_piece_types() const;
   bool has_hook_moves() const;
   PieceSet hook_piece_types() const;
-  // Single owner for multi-leg movement geometry. Generation, completed-path
-  // validation, and attack detection all enumerate through these iterators so
-  // masks, range caps, the hook capture limit, hook_step edge-stops, bend
-  // occupancy, igui/origin handling, and direction-pair matching cannot drift
-  // apart. Callers say "enumerate paths for this piece": the iterators fetch
-  // their own masks/ranges/limits from the Variant. Occupancy rules differ by
-  // caller (real position vs hypothetical attack occupancy), so callers pass
-  // occupied/friendly explicitly; promotion policy stays with the callers.
-  template<typename Visit>
-  bool for_each_two_step_path(Color us, PieceType pt, Square from, Bitboard friendly, Visit&& visit) const;
-  template<typename Visit>
-  bool for_each_hook_path(Color us, PieceType pt, Square from,
-                          Bitboard occupied, Bitboard friendly, Visit&& visit) const;
   // Bent hook/two-step checks cannot be blocked geometrically like riders;
   // callers must generate NON_EVASIONS and let legal() filter them (same
   // conservative pattern as wrapped boards).
@@ -1174,6 +1170,14 @@ public:
   void remove_piece(Square s);
 
 private:
+  template<typename Visit>
+  friend bool detail::for_each_two_step_path(const Position&, Color, PieceType, Square, Bitboard, Visit&&);
+  template<typename Visit>
+  friend bool detail::for_each_hook_path(const Position&, Color, PieceType, Square,
+                                         Bitboard, Bitboard, Visit&&, Square);
+  Bitboard attackers_to_base(Square s, Bitboard occupied, Color c, Bitboard janggiCannons) const;
+  Bitboard attackers_to_base(Square s, Bitboard occupied, Color c, Bitboard janggiCannons,
+                             const SimulatedMoveInfo* simulated) const;
   // Multi-leg internals: completed-path validation and shared attack geometry.
   // Outside Position, movegen consumes the for_each_*_path iterators,
   // MovePicker/search see only requires_full_evasion_generation() and
@@ -2508,7 +2512,7 @@ inline bool Position::has_two_step_moves() const {
 
 inline uint64_t Position::two_step_moves_mask(Color c, PieceType pt) const {
   assert(var != nullptr);
-  return var->twoStepMovesColor[c][pt];
+  return var->twoStepMoves[pt].byColor[c];
 }
 
 inline PieceSet Position::two_step_piece_types() const {
@@ -2523,7 +2527,7 @@ inline bool Position::has_hook_moves() const {
 
 inline uint64_t Position::hook_move_mask(Color c, PieceType pt) const {
   assert(var != nullptr);
-  return var->hookMoves[pt].directions[c];
+  return var->hookMoves[pt].directions.byColor[c];
 }
 
 inline int Position::hook_first_range(PieceType pt) const {

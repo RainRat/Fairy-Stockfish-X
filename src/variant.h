@@ -40,8 +40,18 @@ namespace Stockfish {
 
 constexpr int START_MULTIMOVES = 128;
 
+struct DirectionPairSpec {
+  uint64_t relative = 0;
+  uint64_t byColor[COLOR_NB] = {};
+
+  void conclude() {
+    byColor[WHITE] = relative;
+    byColor[BLACK] = reflect_direction_pairs(relative);
+  }
+};
+
 struct HookMoveSpec {
-  uint64_t directions[COLOR_NB] = {};
+  DirectionPairSpec directions;
   int firstRange = 0;
   int secondRange = 0;
   int captureLimit = 0;
@@ -255,8 +265,7 @@ struct Variant {
   int pushingStrength[PIECE_TYPE_NB] = {};
   bool hasPushing = false;
   int pullingStrength[PIECE_TYPE_NB] = {};
-  uint64_t twoStepMoves[PIECE_TYPE_NB] = {};
-  uint64_t twoStepMovesColor[COLOR_NB][PIECE_TYPE_NB] = {};
+  DirectionPairSpec twoStepMoves[PIECE_TYPE_NB] = {};
   // Color-independent: Black masks are the point reflection of White masks,
   // and reflection preserves membership, so both colors share one set.
   PieceSet twoStepPieceTypes = {};

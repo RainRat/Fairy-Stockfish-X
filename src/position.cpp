@@ -3054,6 +3054,20 @@ Bitboard Position::slider_blockers(Bitboard sliders, Square s, Bitboard& pinners
 /// given square. Slider attacks use the occupied bitboard to indicate occupancy.
 
 Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard janggiCannons) const {
+  return attackers_to_base(s, occupied, c, janggiCannons)
+       | multileg_attackers_to(s, occupied, c);
+}
+
+Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard janggiCannons,
+                                const SimulatedMoveInfo* simulated) const {
+  SimulatedMoveInfoGuard simulatedView(*this);
+  if (simulated)
+      simulatedView.set(*simulated);
+  return attackers_to_base(s, occupied, c, janggiCannons, simulated)
+       | multileg_attackers_to(s, occupied, c, simulated);
+}
+
+Bitboard Position::attackers_to_base(Square s, Bitboard occupied, Color c, Bitboard janggiCannons) const {
 
   if (var->simpleLegality
       && !topology_wraps()
@@ -3063,8 +3077,7 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
             | (attacks_bb<KNIGHT>(s)           & pieces(c, KNIGHT))
             | (attacks_bb<ROOK>(s, occupied)   & (pieces(c, ROOK) | pieces(c, QUEEN)))
             | (attacks_bb<BISHOP>(s, occupied) & (pieces(c, BISHOP) | pieces(c, QUEEN)))
-            | (attacks_bb<KING>(s)             & pieces(c, KING))
-            | multileg_attackers_to(s, occupied, c);
+            | (attacks_bb<KING>(s)             & pieces(c, KING));
 
   if (topology_wraps())
   {
@@ -3098,7 +3111,7 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
           else
               b |= attacks_from<false, false>(~c, move_pt, s, occupied) & ptPieces;
       }
-      return b | multileg_attackers_to(s, occupied, c);
+      return b;
   }
 
   bool hasRuntimeSpecialAttackers = false;
@@ -3128,8 +3141,7 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
             | (attacks_bb<KNIGHT>(s)           & pieces(c, KNIGHT, ARCHBISHOP, CHANCELLOR))
             | (attacks_bb<  ROOK>(s, occupied) & pieces(c, ROOK, QUEEN, CHANCELLOR))
             | (attacks_bb<BISHOP>(s, occupied) & pieces(c, BISHOP, QUEEN, ARCHBISHOP))
-            | (attacks_bb<KING>(s)             & pieces(c, KING, COMMONER))
-            | multileg_attackers_to(s, occupied, c);
+            | (attacks_bb<KING>(s)             & pieces(c, KING, COMMONER));
   }
 
   if (!hasRuntimeSpecialAttackers && !hasSimpleHopperAttackers && fast_attacks2())
@@ -3143,8 +3155,7 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
             | (attacks_bb<FERS>(s)                & pieces(c, FERS, DRAGON, SILVER))
             | (attacks_bb<WAZIR>(s)               & pieces(c, WAZIR, DRAGON_HORSE, GOLD))
             | (LeaperAttacks[~c][SHOGI_KNIGHT][s] & pieces(c, SHOGI_KNIGHT))
-            | (LeaperAttacks[~c][SHOGI_PAWN][s]   & pieces(c, SHOGI_PAWN, SILVER))
-            | multileg_attackers_to(s, occupied, c);
+            | (LeaperAttacks[~c][SHOGI_PAWN][s]   & pieces(c, SHOGI_PAWN, SILVER));
   }
 
   Bitboard b = 0;
@@ -3205,11 +3216,11 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
   if (b & pieces(SOLDIER) && relative_rank(c, s, max_rank()) < var->soldierPromotionRank)
       b ^= b & pieces(SOLDIER) & ~PseudoAttacks[~c][SHOGI_PAWN][s];
 
-  return b | multileg_attackers_to(s, occupied, c);
+  return b;
 }
 
-Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard janggiCannons,
-                                const SimulatedMoveInfo* simulated) const {
+Bitboard Position::attackers_to_base(Square s, Bitboard occupied, Color c, Bitboard janggiCannons,
+                                     const SimulatedMoveInfo* simulated) const {
 
   SimulatedMoveInfoGuard simulatedView(*this);
   if (simulated)
@@ -3264,7 +3275,7 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
           else
               b |= attacks_from<false, false>(~c, move_pt, s, occupied) & ptPieces;
       }
-      return b | multileg_attackers_to(s, occupied, c, simulated);
+      return b;
   }
 
   bool hasRuntimeSpecialAttackers = false;
@@ -3294,8 +3305,7 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
             | (attacks_bb<KNIGHT>(s)           & (type_pieces(c, KNIGHT) | type_pieces(c, ARCHBISHOP) | type_pieces(c, CHANCELLOR)))
             | (attacks_bb<  ROOK>(s, occupied) & (type_pieces(c, ROOK) | type_pieces(c, QUEEN) | type_pieces(c, CHANCELLOR)))
             | (attacks_bb<BISHOP>(s, occupied) & (type_pieces(c, BISHOP) | type_pieces(c, QUEEN) | type_pieces(c, ARCHBISHOP)))
-            | (attacks_bb<KING>(s)             & (type_pieces(c, KING) | type_pieces(c, COMMONER)))
-            | multileg_attackers_to(s, occupied, c, simulated);
+            | (attacks_bb<KING>(s)             & (type_pieces(c, KING) | type_pieces(c, COMMONER)));
   }
 
   // Use a faster version for selected fairy pieces
@@ -3310,8 +3320,7 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
             | (attacks_bb<FERS>(s)                & (type_pieces(c, FERS) | type_pieces(c, DRAGON) | type_pieces(c, SILVER)))
             | (attacks_bb<WAZIR>(s)               & (type_pieces(c, WAZIR) | type_pieces(c, DRAGON_HORSE) | type_pieces(c, GOLD)))
             | (LeaperAttacks[~c][SHOGI_KNIGHT][s] & type_pieces(c, SHOGI_KNIGHT))
-            | (LeaperAttacks[~c][SHOGI_PAWN][s]   & (type_pieces(c, SHOGI_PAWN) | type_pieces(c, SILVER)))
-            | multileg_attackers_to(s, occupied, c, simulated);
+            | (LeaperAttacks[~c][SHOGI_PAWN][s]   & (type_pieces(c, SHOGI_PAWN) | type_pieces(c, SILVER)));
   }
 
   Bitboard b = 0;
@@ -3373,7 +3382,7 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
   if (b & all_type_pieces(SOLDIER) && relative_rank(c, s, max_rank()) < var->soldierPromotionRank)
       b ^= b & all_type_pieces(SOLDIER) & ~PseudoAttacks[~c][SHOGI_PAWN][s];
 
-  return b | multileg_attackers_to(s, occupied, c, simulated);
+  return b;
 }
 
 bool Position::two_step_attacks_square(Color us, PieceType pt, Square from, Square target,
@@ -3388,7 +3397,7 @@ bool Position::two_step_attacks_square(Color us, PieceType pt, Square from, Squa
       return false;
   // Any emitted completion containing the target (as bend with a legal
   // landing, or as the final square via a non-friendly bend) is an attack.
-  return for_each_two_step_path(us, pt, from, friendly, [&](const MultiLegPath& path) {
+  return detail::for_each_two_step_path(*this, us, pt, from, friendly, [&](const MultiLegPath& path) {
       return path.via == target || path.to == target;
   });
 }
@@ -3403,10 +3412,10 @@ bool Position::hook_attacks_square(Color us, PieceType pt, Square from, Square t
       return false;
   // The hook capture limit is enforced by the iterator; only emitted paths
   // with a legal capture count attack the target.
-  return for_each_hook_path(us, pt, from, occupied, friendly,
+  return detail::for_each_hook_path(*this, us, pt, from, occupied, friendly,
       [&](const MultiLegPath& path) {
           return path.via == target || path.to == target;
-      });
+      }, target);
 }
 
 Bitboard Position::multileg_attackers_to(Square s, Bitboard occupied, Color c,
@@ -3478,13 +3487,13 @@ bool Position::requires_full_evasion_generation() const {
 }
 
 bool Position::hook_path_valid(Color us, PieceType pt, Square from, Square via, Square to) const {
-  return for_each_hook_path(us, pt, from, pieces(), pieces(us), [&](const MultiLegPath& path) {
+  return detail::for_each_hook_path(*this, us, pt, from, pieces(), pieces(us), [&](const MultiLegPath& path) {
       return path.via == via && path.to == to;
   });
 }
 
 bool Position::two_step_path_valid(Color us, PieceType pt, Square from, Square via, Square to) const {
-  return for_each_two_step_path(us, pt, from, pieces(us), [&](const MultiLegPath& path) {
+  return detail::for_each_two_step_path(*this, us, pt, from, pieces(us), [&](const MultiLegPath& path) {
       return path.via == via && path.to == to;
   });
 }
@@ -3497,14 +3506,14 @@ Bitboard Position::multileg_transit_squares(Move m) const {
 
   Bitboard transit = 0;
   if (is_two_step(m))
-      for_each_two_step_path(sideToMove, type_of(mover), from, pieces(sideToMove),
+      detail::for_each_two_step_path(*this, sideToMove, type_of(mover), from, pieces(sideToMove),
           [&](const MultiLegPath& path) {
               if (path.via == via && path.to == to)
                   transit |= path.transit;
               return false;
           });
   else if (is_hook(m))
-      for_each_hook_path(sideToMove, type_of(mover), from, pieces(), pieces(sideToMove),
+      detail::for_each_hook_path(*this, sideToMove, type_of(mover), from, pieces(), pieces(sideToMove),
           [&](const MultiLegPath& path) {
               if (path.via == via && path.to == to)
                   transit |= path.transit;
@@ -5934,7 +5943,7 @@ bool Position::legal(Move m) const {
       else if (evasion_checkers())
       {
           SimulatedMoveGuard currentPosition(*this, MOVE_NONE);
-          MoveList<EVASIONS> evasions(*this, generate_evasions);
+          MoveList<EVASION_CANDIDATES> evasions(*this);
           for (const auto& evasion : evasions)
               if (is_drop_move(evasion) && legal(evasion))
                   return false;
@@ -6576,7 +6585,7 @@ bool Position::has_legal_move_ignoring_immediate_end() const {
 
   if (evasion_checkers())
   {
-      MoveList<EVASIONS> evasions(*this, generate_evasions);
+      MoveList<EVASION_CANDIDATES> evasions(*this);
       for (const auto& evasion : evasions)
           if (legal(evasion) && !virtual_drop(evasion))
               return true;
