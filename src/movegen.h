@@ -65,6 +65,11 @@ ExtMove* generate(const Position& pos, ExtMove* moveList);
 template<GenType>
 ExtMove* generate_without_potions(const Position& pos, ExtMove* moveList);
 
+// Select the candidate generator for a checked position. Unusual royal rules
+// need all pseudo-legal moves so legal() can filter them correctly.
+ExtMove* generate_evasions(const Position& pos, ExtMove* moveList);
+ExtMove* generate_evasions_without_potions(const Position& pos, ExtMove* moveList);
+
 template<GenType>
 ExtMove* append_potions(const Position& pos, ExtMove* listBegin, ExtMove* baseEnd,
                         bool pruneUseless = false);

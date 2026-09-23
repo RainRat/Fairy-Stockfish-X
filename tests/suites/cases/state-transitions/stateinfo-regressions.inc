@@ -20,8 +20,10 @@ HARNESS_BIN="${BUILD_DIR}/stateinfo-regressions.bin"
 
 cat > "${HARNESS_CPP}" <<'EOF'
 #include <cassert>
+#include <algorithm>
 #include <cstring>
 #include <sstream>
+#include <vector>
 
 #include "bitboard.h"
 #define private public
@@ -82,6 +84,7 @@ twoStepMoves = l:*
 promotedPieceType = l:q
 mandatoryPromotionRegionWhite = *8
 mandatoryPromotionRegionBlack = *1
+promotionLimit = q:1
 
 [test-morph-lion:chess]
 customPiece1 = l:ADNWK
@@ -120,7 +123,7 @@ castling = true
 
 [test-narrow-lion:chess]
 customPiece1 = h:0
-twoStepMoves = h:W>W
+twoStepMoves = h:*
 cylindrical = true
 maxFile = b
 castling = false
@@ -136,6 +139,9 @@ castling = false
 customPiece1 = h:0
 hookMoves = h:R-R
 castling = false
+
+[test-hook-blast-state:test-hook-state]
+blastOnCapture = true
 
 [test-hook-double-state:chess]
 customPiece1 = h:0
@@ -521,6 +527,12 @@ static void test_two_step_promotions() {
             "8/6L1/8/8/8/8/8/4K2k w - - 0 1", false, &st, nullptr);
     assert(pos.legal(m_promo));
     assert(!pos.legal(m_nonpromo)); // Disallowed because entering rank 8 without promoting
+
+    // Promotion is mandatory even when the promotion limit makes it unavailable.
+    pos.set(variants.get("test-mandatory-lion"),
+            "8/6L1/8/8/8/8/8/Q3K2k w - - 0 1", false, &st, nullptr);
+    assert(!pos.legal(m_promo));
+    assert(!MoveList<QUIETS>(pos).contains(m_nonpromo));
 }
 
 static void test_capture_ordering_squares_and_recapture() {
@@ -823,6 +835,13 @@ static void test_narrow_board_direction_alias() {
     assert(pos.pseudo_legal(m));
     assert(pos.legal(m));
     assert(MoveList<LEGAL>(pos).contains(m));
+
+    std::vector<Move> moves;
+    for (Move move : MoveList<LEGAL>(pos))
+    {
+        assert(std::find(moves.begin(), moves.end(), move) == moves.end());
+        moves.push_back(move);
+    }
 }
 
 static void test_blast_via_capture() {
@@ -918,6 +937,21 @@ static void test_hook_royal_attacks() {
     assert(pos.legal(make<NORMAL>(SQ_A2, SQ_A3)));
 }
 
+static void test_blast_capture_evasion_to_multileg_check() {
+    StateInfo st{};
+    Position pos;
+    // Capturing d4's pawn blasts the hook checking e6's king from e4.
+    // This capture neither takes the checker nor lands on a conventional
+    // interposition square, so checked-position capture queries need full
+    // legal move generation.
+    pos.set(variants.get("test-hook-blast-state"),
+            "k7/8/4K3/8/3ph3/3R4/8/8 w - - 0 1", false, &st, nullptr);
+    Move m = make<NORMAL>(SQ_D3, SQ_D4);
+    assert(pos.evasion_checkers());
+    assert(pos.legal(m));
+    assert(pos.has_capture());
+}
+
 static void test_two_step_vs_jump() {
     StateInfo st{};
     Position pos;
@@ -964,6 +998,7 @@ int main() {
     test_two_step_vs_jump();
     test_multileg_special_subtype_isolation();
     test_hook_royal_attacks();
+    test_blast_capture_evasion_to_multileg_check();
     test_via_only_capture_effects();
     return 0;
 }

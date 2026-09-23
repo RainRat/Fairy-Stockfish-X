@@ -2287,6 +2287,17 @@ template ExtMove* append_potions<EVASIONS>(const Position&, ExtMove*, ExtMove*, 
 template ExtMove* append_potions<QUIET_CHECKS>(const Position&, ExtMove*, ExtMove*, bool);
 template ExtMove* append_potions<NON_EVASIONS>(const Position&, ExtMove*, ExtMove*, bool);
 
+ExtMove* generate_evasions(const Position& pos, ExtMove* moveList) {
+  return (pos.anti_royal_types() || pos.requires_full_evasion_generation())
+       ? generate<NON_EVASIONS>(pos, moveList)
+       : generate<EVASIONS>(pos, moveList);
+}
+
+ExtMove* generate_evasions_without_potions(const Position& pos, ExtMove* moveList) {
+  return (pos.anti_royal_types() || pos.requires_full_evasion_generation())
+       ? generate_without_potions<NON_EVASIONS>(pos, moveList)
+       : generate_without_potions<EVASIONS>(pos, moveList);
+}
 
 /// generate<LEGAL> generates all the legal moves in the given position
 
@@ -2298,12 +2309,8 @@ ExtMove* generate<LEGAL>(const Position& pos, ExtMove* moveList) {
 
   ExtMove* cur = moveList;
 
-  // Wrapped boards and bent multi-leg checks cannot be blocked geometrically;
-  // use NON_EVASIONS and let legal() filter (single predicate owner).
-  const bool useNonEvasions = pos.anti_royal_types()
-                           || pos.requires_full_evasion_generation();
-  moveList = (pos.evasion_checkers() && !useNonEvasions) ? generate<EVASIONS    >(pos, moveList)
-                                                         : generate<NON_EVASIONS>(pos, moveList);
+  moveList = pos.evasion_checkers() ? generate_evasions(pos, moveList)
+                                    : generate<NON_EVASIONS>(pos, moveList);
   while (cur != moveList)
       if (!pos.legal(*cur) || pos.virtual_drop(*cur))
           *cur = *--moveList;
