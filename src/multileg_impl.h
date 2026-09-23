@@ -72,6 +72,17 @@ bool for_each_hook_path(const Position& pos, Color us, PieceType pt, Square from
           bend = step1;
           firstTransit |= square_bb(bend);
           bool cap1 = bool(occupied & bend);
+          if (cap1 && captureLimit == 1)
+          {
+              MultiLegPath path;
+              path.via = bend;
+              path.to = bend;
+              path.captureVia = true;
+              path.transit = firstTransit & ~square_bb(bend);
+              if (visit(path))
+                  return true;
+              break;
+          }
           int cap2steps = range2 ? range2 : SQUARE_NB;
           if (target != SQ_NONE && bend != target)
           {

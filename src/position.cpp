@@ -3483,7 +3483,10 @@ bool Position::requires_full_evasion_filter() const {
 bool Position::requires_full_evasion_generation() const {
   if (!evasion_checkers())
       return false;
-  return topology_wraps() || requires_full_evasion_filter();
+  if (topology_wraps() || requires_full_evasion_filter())
+      return true;
+  return (has_two_step_moves() || has_hook_moves())
+      && (blast_on_capture() || blast_on_move() || var->freezePieceTypes || var->trapRegion);
 }
 
 bool Position::hook_path_valid(Color us, PieceType pt, Square from, Square via, Square to) const {
@@ -5707,14 +5710,15 @@ bool Position::legal(Move m) const {
   // Hook path validation (geometry, occupancy, capture limit) has a single
   // owner: hook_path_valid. legal() enforces promotion restrictions; the
   // path itself is validated here so direct legal() calls cannot bypass it.
-  if (is_hook(m) && hook_promotes(m) && !multileg_promotion_status(moverPiece, from, to, isCapture).allowed)
+  if (is_hook(m) && hook_promotes(m)
+      && !multileg_promotion_status(moverPiece, from, to, isCapture, multileg_transit_squares(m)).allowed)
       return false;
   if (is_hook(m) && !hook_path_valid(us, movePt, from, via_sq(m), to))
       return false;
   if (is_multileg(m) && isCapture)
   {
       Square via = via_sq(m);
-      bool viaCapture = !empty(via) && color_of(piece_on(via)) == them;
+      bool viaCapture = via != to && !empty(via) && color_of(piece_on(via)) == them;
       bool toCapture = to != from && !empty(to) && color_of(piece_on(to)) == them;
       // A double capture removes two victims, but blast, petrification
       // and capture-morph effects are defined for a single capture
@@ -6820,7 +6824,8 @@ bool Position::pseudo_legal(const Move m) const {
       if (!validPath)
           return false;
       if (is_multileg_promotion(m)
-          && !multileg_promotion_status(pc, from, to, capture(m)).allowed)
+          && !multileg_promotion_status(pc, from, to, capture(m),
+                                        is_hook(m) ? multileg_transit_squares(m) : Bitboard(0)).allowed)
           return false;
       if (!allow_checks() && checking_permitted())
       {
@@ -7985,7 +7990,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   if (multiLeg)
   {
       Square via = via_sq(m);
-      if (!empty(via) && color_of(piece_on(via)) == them)
+      if (via != to && !empty(via) && color_of(piece_on(via)) == them)
       {
           Piece capVia = piece_on(via);
           bool viaPromoted = is_promoted(via);

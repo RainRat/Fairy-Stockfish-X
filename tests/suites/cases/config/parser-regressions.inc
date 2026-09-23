@@ -542,6 +542,11 @@ customPiece1 = h:0
 hookMoves = h:R-R:2
 twoBoards = true
 
+[hook-twoboards-single:chess]
+customPiece1 = h:0
+hookMoves = h:R-R
+twoBoards = true
+
 [bad-twostep-twoboards:chess]
 customPiece1 = l:0
 twoStepMoves = l:N>N
@@ -903,7 +908,9 @@ assert_contains "${bad_hook_check_output}" "hookMoves - Malformed hook legs"
 assert_contains "${bad_hook_check_output}" "hookMoves - Invalid hook leg"
 assert_contains "${bad_hook_check_output}" "hookMoves - Invalid hook capture limit"
 assert_contains "${bad_hook_check_output}" "hookMoves is not supported on wrapped boards."
-assert_contains "${bad_hook_check_output}" "twoBoards is not supported with twoStepMoves or hookMoves."
+assert_contains "${bad_hook_check_output}" "twoBoards is not supported with multi-capture twoStepMoves or :2 hookMoves."
+
+run_uci "$ENGINE" "$bad_hook_ini" "hook-twoboards-single" </dev/null >/dev/null
 
 unsupported_bent_rose_output1=$(run_uci "$ENGINE" "$unsupported_bent_rose_modifier_ini" "unsupported-bent-1" </dev/null 2>&1 || true)
 assert_contains "${unsupported_bent_rose_output1}" "unknown variant 'unsupported-bent-1'; keeping 'chess'"

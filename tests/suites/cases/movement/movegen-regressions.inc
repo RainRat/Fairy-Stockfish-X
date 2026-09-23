@@ -8,10 +8,37 @@ ENGINE=$(default_engine "${1:-}")
 VARIANTS=$(default_variants "${2:-}")
 
 TMP_INI="$(mktemp)"
+HOOK_INI="$(mktemp)"
 cleanup() {
-  rm -f "$TMP_INI"
+  rm -f "$TMP_INI" "$HOOK_INI"
 }
 trap cleanup EXIT
+
+cat >"$HOOK_INI" <<'EOF'
+[test-hook]
+king = -
+customPiece1 = h:0
+hookMoves = h:R-R
+startFen = 8/8/8/3h4/4H3/8/8/8 w - - 0 1
+immobile = -
+castling = false
+
+[test-hook-double]
+king = -
+customPiece1 = h:0
+hookMoves = h:R-R:2
+startFen = 8/8/8/4hh2/4H3/8/8/8 w - - 0 1
+immobile = -
+castling = false
+
+[test-hook-capture]
+king = -
+customPiece1 = h:0
+hookMoves = h:R-R
+startFen = 8/8/8/8/3hH3/8/8/8 w - - 0 1
+immobile = -
+castling = false
+EOF
 
 cat >"$TMP_INI" <<'EOF'
 [wallpass:chess]
@@ -145,7 +172,7 @@ doubleStep = false
 king = -
 customPiece1 = h:0
 hookMoves = h:R-R:2
-startFen = 8/8/4h3/4h3/4H3/8/8/8 w - - 0 1
+startFen = 8/8/8/4hh2/4H3/8/8/8 w - - 0 1
 immobile = -
 castling = false
 doubleStep = false
@@ -373,33 +400,34 @@ assert_contains "$out" "^e4d5e4: 1$"
 assert_contains "$out" "^e4e5e6: 1$"
 assert_contains "$out" "^e4e5e4: 1$"
 
-# Hook movers share the two-step move encoding (from+bend+to) with sliding legs.
-out=$(run_uci_cmds "$ENGINE" "$TMP_INI" test-hook \
+# Hook movers turn at right angles when both legs use the same geometry.
+out=$(run_uci_cmds "$ENGINE" "$HOOK_INI" test-hook \
   "position startpos
 go perft 1")
-assert_nodes "$out" "142"
 assert_contains "$out" "^e4d4d5: 1$"
-assert_contains "$out" "^e4d4e4: 1$"
 assert_contains "$out" "^e4f4f8: 1$"
 assert_not_contains "$out" "^e4d5e4:"
+assert_not_contains "$out" "^e4d4c4:"
+assert_not_contains "$out" "^e4d4e4:"
 assert_not_contains "$out" "^e4d4d8:"
 
-out=$(run_uci_cmds "$ENGINE" "$TMP_INI" test-hook \
+# A default single-capture hook ends immediately when its bend captures.
+out=$(run_uci_cmds "$ENGINE" "$HOOK_INI" test-hook-capture \
+  "position startpos
+go perft 1")
+assert_contains "$out" "^e4d4d4: 1$"
+assert_not_contains "$out" "^e4d4d5:"
+
+out=$(run_uci_cmds "$ENGINE" "$HOOK_INI" test-hook \
   "position startpos moves e4d4d5
 d")
 assert_contains_literal "$out" "Fen: 8/8/8/3H4/8/8/8/8 b - - 0 1"
 
-out=$(run_uci_cmds "$ENGINE" "$TMP_INI" test-hook \
-  "position startpos moves e4d4e4
-d")
-assert_contains_literal "$out" "Fen: 8/8/8/3h4/4H3/8/8/8 b - - 1 1"
-
-out=$(run_uci_cmds "$ENGINE" "$TMP_INI" test-hook-double \
+out=$(run_uci_cmds "$ENGINE" "$HOOK_INI" test-hook-double \
   "position startpos
 go perft 1")
-assert_nodes "$out" "113"
-assert_contains "$out" "^e4e5e6: 1$"
-assert_contains "$out" "^e4e5e4: 1$"
+assert_contains "$out" "^e4e5f5: 1$"
+assert_not_contains "$out" "^e4e5e4:"
 assert_not_contains "$out" "^e4e5e7:"
 
 echo "movegen regressions passed"

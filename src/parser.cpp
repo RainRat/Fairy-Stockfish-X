@@ -429,11 +429,13 @@ namespace {
             if (!parse_hook_leg(trim(legsPart.substr(0, dash)), bits1, range1)
                 || !parse_hook_leg(trim(legsPart.substr(dash + 1)), bits2, range2))
                 return fail("Invalid hook leg (expected [f|b|s](R|B)[range])", rawSpec);
+            const bool sameGeometry = bool(bits1 & bits2);
             uint64_t mask = 0;
             for (int d1 = 0; d1 < 8; ++d1)
                 if (bits1 & (1 << d1))
                     for (int d2 = 0; d2 < 8; ++d2)
-                        if (bits2 & (1 << d2))
+                        if ((bits2 & (1 << d2))
+                            && (!sameGeometry || (d2 - d1 + 8) % 8 == 2 || (d2 - d1 + 8) % 8 == 6))
                             mask |= multileg_direction_pair_bit(d1, d2);
             parsed[pt].directions.relative = mask;
             parsed[pt].firstRange = range1;
@@ -2853,13 +2855,14 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
         valid = false;
     }
 
-    // Multi-leg captures can remove two victims, but the two-board partner
-    // API reports a single piece; reject the combination rather than
-    // silently dropping partner material.
-    if (v->twoBoards && (hasTwoStepMoves || hasHookMoves))
+    const bool hasMultiCaptureHook = std::any_of(std::begin(v->hookMoves), std::end(v->hookMoves),
+        [](const HookMoveSpec& spec) { return spec.directions.relative && spec.captureLimit > 1; });
+    // Two-step moves and :2 hooks can capture two pieces, while twoBoards
+    // transfers only one captured piece to the partner board.
+    if (v->twoBoards && (hasTwoStepMoves || hasMultiCaptureHook))
     {
         if (DoCheck)
-            std::cerr << "twoBoards is not supported with twoStepMoves or hookMoves." << std::endl;
+            std::cerr << "twoBoards is not supported with multi-capture twoStepMoves or :2 hookMoves." << std::endl;
         valid = false;
     }
 

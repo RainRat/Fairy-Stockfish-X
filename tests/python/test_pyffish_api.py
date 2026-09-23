@@ -364,7 +364,7 @@ class TestPublicAPI(unittest.TestCase):
         )
         hook = json.loads(sf.variant_info("variantinfohook"))
         self.assertEqual(hook["movement"]["hookMoves"],
-                         {"custom1": {"pairs": "N>E,N>W,E>E,E>W,S>E,S>W,W>E,W>W",
+                         {"custom1": {"pairs": "N>E,N>W,S>E,S>W",
                                       "firstRange": 0, "secondRange": 0, "captureLimit": 2}})
         self.assertEqual(json.loads(sf.variant_info("chess"))["movement"]["hookMoves"], {})
 
