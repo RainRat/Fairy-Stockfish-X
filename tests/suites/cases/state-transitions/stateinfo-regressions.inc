@@ -158,10 +158,23 @@ customPiece1 = h:0
 hookMoves = h:R-R:2
 castling = false
 
+[test-hook-two-boards:chess]
+customPiece1 = h:0
+hookMoves = h:R-R
+twoBoards = true
+castling = false
+
 [test-hook-promo-state:chess]
 customPiece1 = h:0
 hookMoves = h:R-R
 promotedPieceType = h:q
+castling = false
+
+[test-hook-path-promo:chess]
+customPiece1 = h:0
+hookMoves = h:R-R
+promotedPieceType = h:q
+promotionRegionWhite = e5
 castling = false
 
 [test-horned-falcon:chess]
@@ -697,40 +710,31 @@ static void test_hook_state_transitions() {
     Position pos;
     // Hook rook legs (R-R): bend must be on a rook ray, transit rays empty,
     // sliders cannot jump over pieces.
-    // White hook e4, black rooks e5/e6.
+    // White hook e4, black rooks e5/f5.
     pos.set(variants.get("test-hook-double-state"),
-            "4k3/8/4r3/4r3/4H3/8/8/4K3 w - - 0 1", false, &st, nullptr);
+            "4k3/8/8/4rr2/4H3/8/8/4K3 w - - 0 1", false, &st, nullptr);
 
-    // Double capture e4->e5->e6 with :2 allowed.
-    Move m_double = make_hook(SQ_E4, SQ_E5, SQ_E6, false);
+    // Double capture around a 90-degree turn with :2 allowed.
+    Move m_double = make_hook(SQ_E4, SQ_E5, SQ_F5, false);
     assert(pos.legal(m_double));
     const Key origKey = pos.key();
     const Key origMatKey = pos.state()->materialKey;
     StateInfo next{};
     pos.do_move(m_double, next);
     assert(pos.piece_on(SQ_E5) == NO_PIECE);
-    assert(pos.piece_on(SQ_E6) == make_piece(WHITE, CUSTOM_PIECE_1));
+    assert(pos.piece_on(SQ_F5) == make_piece(WHITE, CUSTOM_PIECE_1));
     assert(pos.count<ROOK>(BLACK) == 0);
     pos.undo_move(m_double);
     assert(pos.key() == origKey);
     assert(pos.state()->materialKey == origMatKey);
     assert(pos.piece_on(SQ_E5) == B_ROOK);
-    assert(pos.piece_on(SQ_E6) == B_ROOK);
-
-    // Igui single capture e4->e5->e4.
-    Move m_igui = make_hook(SQ_E4, SQ_E5, SQ_E4, false);
-    assert(pos.legal(m_igui));
-    StateInfo next2{};
-    pos.do_move(m_igui, next2);
-    assert(pos.piece_on(SQ_E5) == NO_PIECE);
-    assert(pos.piece_on(SQ_E4) == make_piece(WHITE, CUSTOM_PIECE_1));
-    pos.undo_move(m_igui);
-    assert(pos.key() == origKey);
+    assert(pos.piece_on(SQ_F5) == B_ROOK);
 
     // Cannot jump over the e6 rook: e4->e5->e7 is not pseudo-legal.
     // (Path geometry is validated in pseudo_legal(), not legal().)
     Move m_jump = make_hook(SQ_E4, SQ_E5, SQ_E7, false);
     assert(!pos.pseudo_legal(m_jump));
+    assert(!pos.pseudo_legal(make_hook(SQ_E4, SQ_D4, SQ_E4, false)));
 
     // Diagonal bend is outside the R-R mask.
     Move m_diag = make_hook(SQ_E4, SQ_E5, SQ_F6, false);
@@ -743,22 +747,34 @@ static void test_hook_capture_limits() {
     // Same geometry under :1: the double is illegal, singles stay legal.
     // Kings stand off the e-file so captures are judged on limits alone.
     pos.set(variants.get("test-hook-state"),
-            "7k/8/4r3/4r3/4H3/8/8/K7 w - - 0 1", false, &st, nullptr);
+            "7k/8/8/4rr2/4H3/8/8/K7 w - - 0 1", false, &st, nullptr);
 
-    Move m_double = make_hook(SQ_E4, SQ_E5, SQ_E6, false);
+    Move m_double = make_hook(SQ_E4, SQ_E5, SQ_F5, false);
     assert(!pos.legal(m_double));
 
-    Move m_single = make_hook(SQ_E4, SQ_E5, SQ_F5, false);
+    Move m_single = make_hook(SQ_E4, SQ_F4, SQ_F5, false);
     assert(pos.legal(m_single));
     const Key origKey = pos.key();
     StateInfo next{};
     pos.do_move(m_single, next);
-    assert(pos.piece_on(SQ_E5) == NO_PIECE);
+    assert(pos.piece_on(SQ_E5) == B_ROOK);
     assert(pos.piece_on(SQ_F5) == make_piece(WHITE, CUSTOM_PIECE_1));
     assert(pos.count<ROOK>(BLACK) == 1);
     pos.undo_move(m_single);
     assert(pos.key() == origKey);
     assert(pos.piece_on(SQ_E5) == B_ROOK);
+    assert(pos.piece_on(SQ_F5) == B_ROOK);
+}
+
+static void test_single_hook_capture_transfer() {
+    StateInfo st{};
+    Position pos;
+    pos.set(variants.get("test-hook-two-boards"), "7k/8/8/4p3/4H3/8/8/K7 w - - 0 1", false, &st, nullptr);
+    Move capture = make_hook(SQ_E4, SQ_E5, SQ_E5, false);
+    assert(pos.legal(capture));
+    StateInfo next{};
+    pos.do_move(capture, next);
+    assert(pos.piece_to_partner() == "p");
 }
 
 static void test_hook_promotions() {
@@ -779,6 +795,18 @@ static void test_hook_promotions() {
     pos.undo_move(m_promo);
     assert(pos.key() == origKey);
     assert(pos.piece_on(SQ_G7) == make_piece(WHITE, CUSTOM_PIECE_1));
+}
+
+static void test_hook_path_promotion() {
+    StateInfo st{};
+    Position pos;
+    pos.set(variants.get("test-hook-path-promo"), "k7/8/8/8/4H3/8/8/7K w - - 0 1", false, &st, nullptr);
+    Move crossing = make_hook(SQ_E4, SQ_E5, SQ_F5, true);
+    Move notCrossing = make_hook(SQ_E4, SQ_F4, SQ_F5, true);
+    assert(pos.legal(crossing));
+    assert(!pos.legal(notCrossing));
+    assert(MoveList<LEGAL>(pos).contains(crossing));
+    assert(!MoveList<LEGAL>(pos).contains(notCrossing));
 }
 
 static void test_quiet_multileg_promotion_is_tactical() {
@@ -926,9 +954,9 @@ static void test_hook_royal_attacks() {
     // King takes the checker.
     assert(pos.legal(make<NORMAL>(SQ_E5, SQ_E4)));
 
-    // Final-leg capture: white hook e4 attacks black king on e6 via e5.
+    // Final-leg capture: white hook e4 turns at e5 and attacks f5.
     pos.set(variants.get("test-hook-state"),
-            "8/8/4k3/8/4H3/8/8/4K3 b - - 0 1", false, &st, nullptr);
+            "8/8/8/8/4Hk2/8/8/4K3 b - - 0 1", false, &st, nullptr);
     assert(pos.evasion_checkers());
     assert(pos.requires_full_evasion_filter());
 
@@ -943,12 +971,12 @@ static void test_hook_royal_attacks() {
     // Via royal capture is rejected like a final-square king capture.
     pos.set(variants.get("test-hook-state"),
             "8/8/8/4k3/4H3/8/8/4K3 w - - 0 1", false, &st, nullptr);
-    assert(!pos.legal(make_hook(SQ_E4, SQ_E5, SQ_E6, false)));
+    assert(!pos.legal(make_hook(SQ_E4, SQ_E5, SQ_F5, false)));
 
-    // gives_check: quiet hook entry gives check down the file.
+    // gives_check: a turned hook move checks the king on f5.
     pos.set(variants.get("test-hook-state"),
-            "4k3/8/8/8/4H3/8/8/4K3 w - - 0 1", false, &st, nullptr);
-    Move m_check = make_hook(SQ_E4, SQ_E5, SQ_E6, false);
+            "8/8/8/8/4Hk2/8/8/4K3 w - - 0 1", false, &st, nullptr);
+    Move m_check = make_hook(SQ_E4, SQ_E5, SQ_F5, false);
     assert(pos.legal(m_check));
     assert(pos.gives_check(m_check));
 
@@ -974,6 +1002,15 @@ static void test_blast_capture_evasion_to_multileg_check() {
     assert(pos.evasion_checkers());
     assert(pos.legal(m));
     assert(pos.has_capture());
+
+    // A hook captures beside an ordinary rook checker; the blast removes the
+    // checker even though the move neither captures it nor interposes.
+    pos.set(variants.get("test-hook-blast-state"),
+            "7k/8/8/8/8/8/pH6/r6K w - - 0 1", false, &st, nullptr);
+    Move hookCapture = make_hook(SQ_B2, SQ_A2, SQ_A2, false);
+    assert(pos.evasion_checkers());
+    assert(pos.legal(hookCapture));
+    assert(MoveList<LEGAL>(pos).contains(hookCapture));
 }
 
 static void test_two_step_vs_jump() {
@@ -1018,7 +1055,9 @@ int main() {
     test_blast_via_capture();
     test_hook_state_transitions();
     test_hook_capture_limits();
+    test_single_hook_capture_transfer();
     test_hook_promotions();
+    test_hook_path_promotion();
     test_capture_ordering_squares_and_recapture();
     test_two_step_vs_jump();
     test_multileg_special_subtype_isolation();

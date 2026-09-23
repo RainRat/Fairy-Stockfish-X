@@ -226,7 +226,7 @@ fi
 # 1. Test rifleCapture + deathOnCaptureTypes
 out=$(run_cmds "rifle-death" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/4q3/3QK3 w - - 0 1 moves d1e2
 d")
-echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/3\^K3 b"
+grep -q "Fen: 4k3/8/8/8/8/8/8/3\^K3 b" <<<"${out}"
 
 # 2. Test rifleCapture + captureMorph
 out=$(run_cmds "rifle-morph" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/4r3/3QK3 w - - 0 1 moves d1e2

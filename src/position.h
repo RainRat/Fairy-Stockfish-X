@@ -625,7 +625,8 @@ public:
       bool allowed = false;
       bool mandatory = false;
   };
-  PromotionStatus multileg_promotion_status(Piece mover, Square from, Square to, bool isCapture) const;
+  PromotionStatus multileg_promotion_status(Piece mover, Square from, Square to, bool isCapture,
+                                           Bitboard traversed = 0) const;
   PieceType effective_piece_type(PieceType pt) const { return pt == KING ? king_type() : pt; }
   Square promotion_square(Color c, Square s) const;
   PieceType main_promotion_pawn_type(Color c) const;
@@ -1196,7 +1197,7 @@ private:
   int hook_capture_limit(PieceType pt) const;
   bool hook_path_valid(Color us, PieceType pt, Square from, Square via, Square to) const;
   bool two_step_path_valid(Color us, PieceType pt, Square from, Square via, Square to) const;
-  bool multileg_promotion_zone(Color c, PieceType pt, Square from, Square to) const;
+  bool multileg_promotion_zone(Color c, PieceType pt, Square from, Square to, Bitboard traversed) const;
   bool two_step_attacks_square(Color us, PieceType pt, Square from, Square target,
                                Bitboard occupied, Bitboard friendly) const;
   bool hook_attacks_square(Color us, PieceType pt, Square from, Square target,
@@ -5961,7 +5962,8 @@ inline bool Position::hook_step(Square cur, Direction dir, Square& nxt) const {
   return true;
 }
 
-inline Position::PromotionStatus Position::multileg_promotion_status(Piece mover, Square from, Square to, bool isCapture) const {
+inline Position::PromotionStatus Position::multileg_promotion_status(Piece mover, Square from, Square to,
+                                                                      bool isCapture, Bitboard traversed) const {
   PromotionStatus status;
   if (mover == NO_PIECE)
       return status;
@@ -5972,7 +5974,7 @@ inline Position::PromotionStatus Position::multileg_promotion_status(Piece mover
   PieceType promoTo = promoted_piece_type(pt);
   if (promoTo == NO_PIECE_TYPE || is_promoted(from))
       return status;
-  if (!multileg_promotion_zone(us, pt, from, to) || !promotion_allowed(us, promoTo))
+  if (!multileg_promotion_zone(us, pt, from, to, traversed) || !promotion_allowed(us, promoTo))
       return status;
   if (piece_promotion_on_capture() && !isCapture)
       return status;
@@ -5980,9 +5982,10 @@ inline Position::PromotionStatus Position::multileg_promotion_status(Piece mover
   return status;
 }
 
-inline bool Position::multileg_promotion_zone(Color c, PieceType pt, Square from, Square to) const {
+inline bool Position::multileg_promotion_zone(Color c, PieceType pt, Square from, Square to,
+                                               Bitboard traversed) const {
   Bitboard pz = promotion_zone(c, pt);
-  return (pz & from) || (pz & to);
+  return pz & (from | to | traversed);
 }
 
 inline bool Position::paired_drop(Move m) const {
@@ -6040,10 +6043,7 @@ inline Piece Position::captured_piece(Move m) const {
 }
 
 inline std::string Position::piece_to_partner() const {
-  // Multi-leg movement is rejected with twoBoards at parse time, so only the
-  // primary victim is reported here. A future two-board/multi-leg design
-  // would need a plural API rather than an arbitrary primary/secondary pick.
-  const ReversiblePieceOnSquare& cap = st->captured;
+  const ReversiblePieceOnSquare& cap = st->captured ? st->captured : st->extraCaptured;
   if (!cap.piece) return std::string();
   Color color = color_of(cap.piece.piece);
   Piece piece = cap.piece.promoted ?

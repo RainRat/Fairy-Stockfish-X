@@ -1102,14 +1102,14 @@ namespace {
   template<Color Us, GenType Type, typename MakeMove>
   ExtMove* emit_multileg_candidate(const Position& pos, ExtMove* moveList, PieceType pt,
                                   Square from, Square via, Square to, bool capVia, bool capTo,
-                                  Bitboard target, Bitboard checkers, MakeMove makeMove) {
+                                  Bitboard traversed, Bitboard target, Bitboard checkers, MakeMove makeMove) {
     // Shared capture/evasion/promotion policy for multi-leg moves; only the
     // geometry enumeration (two king steps vs sliding hook legs) and the move
     // constructor differ between generators.
     bool isCapture = capVia || capTo;
 
     Piece mover = pos.piece_on(from);
-    Position::PromotionStatus promoStatus = pos.multileg_promotion_status(mover, from, to, isCapture);
+    Position::PromotionStatus promoStatus = pos.multileg_promotion_status(mover, from, to, isCapture, traversed);
     bool allowsPromo = promoStatus.allowed;
 
     // Mirror Position::legal() mandatory handling: a non-promoting
@@ -1221,7 +1221,7 @@ namespace {
                     bool cap1 = (!pos.empty(path.via) && color_of(pos.piece_on(path.via)) == them);
                     bool cap2 = (path.to != from && !pos.empty(path.to) && color_of(pos.piece_on(path.to)) == them);
                     moveList = emit_multileg_candidate<Us, Type>(pos, moveList, pt, from, path.via, path.to,
-                                                                 cap1, cap2, target, checkers, makeTwoStep);
+                                                                 cap1, cap2, 0, target, checkers, makeTwoStep);
                     return false;
                 });
         }
@@ -1263,7 +1263,7 @@ namespace {
             detail::for_each_hook_path(pos, Us, pt, from, pos.pieces(), pos.pieces(Us),
                 [&](const MultiLegPath& path) {
                     moveList = emit_multileg_candidate<Us, Type>(pos, moveList, pt, from, path.via, path.to,
-                                                                 path.captureVia, path.captureTo, target,
+                                                                 path.captureVia, path.captureTo, path.transit, target,
                                                                  pos.evasion_checkers(), makeHook);
                     return false;
                 });
