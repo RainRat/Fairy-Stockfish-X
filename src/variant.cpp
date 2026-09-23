@@ -2549,6 +2549,8 @@ Variant* Variant::conclude() {
                     && !twoBoards
                     && !restrictedMobility
                     && !stackingPieceTypes
+                    && !hasTwoStepMoves
+                    && !hasHookMoves
                     && kingType == KING
                    )
                  ? endgameEval : NO_EG_EVAL;
@@ -2594,7 +2596,9 @@ Variant* Variant::conclude() {
                                  && !freezePieceTypes
                                  && !trapRegion
                                  && !flipEnclosedPieces
-                                 && !makpongRule;
+                                 && !makpongRule
+                                 && !hasTwoStepMoves
+                                 && !hasHookMoves;
 
     shogiStylePromotions = false;
     for (PieceType current: promotedPieceType)
@@ -2707,6 +2711,8 @@ Variant* Variant::conclude() {
                        && changingColorTrigger == ColorChangeTrigger::NEVER;
 
     const bool alwaysUnreliableSee = pointsCounting
+                                  || hasTwoStepMoves
+                                  || hasHookMoves
                                   || pointsGoal > 0
                                   || captureDemotion
                                   || connectN != 0

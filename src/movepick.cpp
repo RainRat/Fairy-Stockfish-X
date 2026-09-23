@@ -244,27 +244,23 @@ void MovePicker::score() {
   // points weighting stay on the search side of the Position boundary.
   auto capture_victims = [&](Move mv, int& total, PieceType& topType, int& points) {
       total = 0;
-      topType = NO_PIECE_TYPE;
+      topType = captured_type(pos, mv);
       points = 0;
       Bitboard caps = pos.capture_ordering_squares(mv);
       if (caps)
       {
-          int topVal = -1;
+          bool foundVictim = false;
           while (caps)
           {
               Piece p = pos.piece_on(pop_lsb(caps));
               if (p == NO_PIECE)
                   continue;
+              foundVictim = true;
               int v = int(PieceValue[MG][p]);
               total += v;
-              if (v > topVal)
-              {
-                  topVal = v;
-                  topType = type_of(p);
-              }
               points += points_capture_bonus(p);
           }
-          if (topType != NO_PIECE_TYPE)
+          if (foundVictim)
               return;
           // Fall through to single-victim behavior when no victim is still
           // on the board (e.g. scoring after the move was made).
@@ -541,12 +537,7 @@ top:
   case EVASION_INIT:
       ensure_move_list_storage();
       cur = moveList;
-      // Wrapped boards and bent multi-leg checks cannot be blocked
-      // geometrically; use NON_EVASIONS and rely on the search's legal()
-      // filter (single predicate owner with generate<LEGAL>).
-      endMoves = pos.requires_full_evasion_generation()
-               ? generate_without_potions<NON_EVASIONS>(pos, cur)
-               : generate_without_potions<EVASIONS>(pos, cur);
+      endMoves = generate_evasions_without_potions(pos, cur);
       evasionBaseEnd = endMoves;
       evasionPotionsDeferred = potions_pending();
       assert_move_list_bounds();

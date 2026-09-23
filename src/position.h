@@ -20,6 +20,7 @@
 #define POSITION_H_INCLUDED
 
 #include <array>
+#include <algorithm>
 #include <cassert>
 #include <cmath>
 #include <cstdint>
@@ -28,6 +29,7 @@
 #include <string>
 #include <functional>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 #include "bitboard.h"
@@ -776,6 +778,7 @@ public:
       Square to = SQ_NONE;
       int d1 = -1;
       int d2 = -1;
+      Bitboard transit = 0;
   };
   struct HookPath {
       Square via = SQ_NONE;
@@ -785,6 +788,7 @@ public:
       bool captureVia = false;
       bool captureTo = false;
       bool atOrigin = false;
+      Bitboard transit = 0;
   };
   template<typename Visit>
   bool for_each_two_step_path(Color us, PieceType pt, Square from, Bitboard friendly, Visit&& visit) const;
@@ -1201,6 +1205,7 @@ private:
   // A hook step never wraps around the board edge; ordinary sliders may.
   bool hook_step(Square cur, Direction dir, Square& nxt) const;
   bool step_destination(Square from, Direction d, Square& to) const;
+  Bitboard multileg_transit_squares(Move m) const;
   bool requires_full_evasion_filter() const;
   uint64_t two_step_moves_mask(Color c, PieceType pt) const;
   uint64_t hook_move_mask(Color c, PieceType pt) const;
@@ -2324,10 +2329,19 @@ inline bool Position::has_capture() const {
   // Check for cached value
   if (st->legalCapture != NO_VALUE)
       return st->legalCapture == VALUE_TRUE;
-  if (evasion_checkers())
+  if (evasion_checkers() && !anti_royal_types() && !requires_full_evasion_generation())
   {
       for (const auto& mevasion : MoveList<EVASIONS>(*this))
           if (capture(mevasion) && legal(mevasion))
+          {
+              st->legalCapture = VALUE_TRUE;
+              return true;
+          }
+  }
+  else if (evasion_checkers())
+  {
+      for (const auto& m : MoveList<LEGAL>(*this))
+          if (capture(m))
           {
               st->legalCapture = VALUE_TRUE;
               return true;
@@ -2349,10 +2363,19 @@ inline bool Position::has_capture() const {
 inline bool Position::has_en_passant_capture() const {
   if (st->legalEnPassant != NO_VALUE)
       return st->legalEnPassant == VALUE_TRUE;
-  if (evasion_checkers())
+  if (evasion_checkers() && !anti_royal_types() && !requires_full_evasion_generation())
   {
       for (const auto& mevasion : MoveList<EVASIONS>(*this))
           if (type_of(mevasion) == EN_PASSANT && legal(mevasion))
+          {
+              st->legalEnPassant = VALUE_TRUE;
+              return true;
+          }
+  }
+  else if (evasion_checkers())
+  {
+      for (const auto& m : MoveList<LEGAL>(*this))
+          if (type_of(m) == EN_PASSANT)
           {
               st->legalEnPassant = VALUE_TRUE;
               return true;
@@ -5973,6 +5996,8 @@ inline Position::PromotionStatus Position::multileg_promotion_status(Piece mover
       return status;
   Color us = color_of(mover);
   PieceType pt = type_of(mover);
+  Bitboard mandatoryZone = mandatory_promotion_zone(mover);
+  status.mandatory = bool((mandatoryZone & to) && !(mandatoryZone & from));
   PieceType promoTo = promoted_piece_type(pt);
   if (promoTo == NO_PIECE_TYPE || is_promoted(from))
       return status;
@@ -5981,8 +6006,6 @@ inline Position::PromotionStatus Position::multileg_promotion_status(Piece mover
   if (piece_promotion_on_capture() && !isCapture)
       return status;
   status.allowed = true;
-  Bitboard mandatoryZone = mandatory_promotion_zone(mover);
-  status.mandatory = bool((mandatoryZone & to) && !(mandatoryZone & from));
   return status;
 }
 
@@ -5996,6 +6019,8 @@ bool Position::for_each_two_step_path(Color us, PieceType pt, Square from, Bitbo
   uint64_t mask = two_step_moves_mask(us, pt);
   if (!mask || !(board_bb() & from))
       return false;
+  std::array<std::pair<Square, Square>, 64> seen{};
+  int seenCount = 0;
   Bitboard remaining = Bitboard(mask);
   while (remaining)
   {
@@ -6012,7 +6037,11 @@ bool Position::for_each_two_step_path(Color us, PieceType pt, Square from, Bitbo
           continue;
       if (!(board_bb() & to) || (to != from && (friendly & to)))
           continue;
-      TwoStepPath path{via, to, d1, d2};
+      const auto key = std::pair{via, to};
+      if (std::find(seen.begin(), seen.begin() + seenCount, key) != seen.begin() + seenCount)
+          continue;
+      seen[seenCount++] = key;
+      TwoStepPath path{via, to, d1, d2, square_bb(via) & ~square_bb(to)};
       if (visit(path))
           return true;
   }
@@ -6038,6 +6067,7 @@ bool Position::for_each_hook_path(Color us, PieceType pt, Square from,
       int d2 = multileg_pair_second(pair_idx);
       int cap1steps = range1 ? range1 : SQUARE_NB;
       Square bend = from;
+      Bitboard firstTransit = 0;
       for (int k1 = 1; k1 <= cap1steps; ++k1)
       {
           Square step1;
@@ -6046,9 +6076,11 @@ bool Position::for_each_hook_path(Color us, PieceType pt, Square from,
           if (!(board_bb() & step1) || (friendly & step1))
               break;
           bend = step1;
+          firstTransit |= square_bb(bend);
           bool cap1 = bool(occupied & bend);
           int cap2steps = range2 ? range2 : SQUARE_NB;
           Square to = bend;
+          Bitboard secondTransit = 0;
           for (int k2 = 1; k2 <= cap2steps; ++k2)
           {
               Square step2;
@@ -6062,6 +6094,7 @@ bool Position::for_each_hook_path(Color us, PieceType pt, Square from,
               if (!atOrigin && (friendly & step2))
                   break;
               to = step2;
+              secondTransit |= square_bb(to);
               bool cap2 = !atOrigin && bool(occupied & to);
               // A :1 hook may not capture on both legs; the limit lives here
               // so generation, validation, and attack detection share it.
@@ -6069,7 +6102,8 @@ bool Position::for_each_hook_path(Color us, PieceType pt, Square from,
               // the walk identical.)
               if (cap1 && cap2 && captureLimit < 2)
                   break;
-              HookPath path{bend, to, d1, d2, cap1, cap2, atOrigin};
+              HookPath path{bend, to, d1, d2, cap1, cap2, atOrigin,
+                            (firstTransit | secondTransit) & ~square_bb(to)};
               if (visit(path))
                   return true;
               if (cap2 || atOrigin)

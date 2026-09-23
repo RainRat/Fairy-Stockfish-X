@@ -3488,6 +3488,30 @@ bool Position::two_step_path_valid(Color us, PieceType pt, Square from, Square v
   });
 }
 
+Bitboard Position::multileg_transit_squares(Move m) const {
+  Square from = from_sq(m), via = via_sq(m), to = to_sq(m);
+  Piece mover = piece_on(from);
+  if (mover == NO_PIECE)
+      return Bitboard(0);
+
+  Bitboard transit = 0;
+  if (is_two_step(m))
+      for_each_two_step_path(sideToMove, type_of(mover), from, pieces(sideToMove),
+          [&](const TwoStepPath& path) {
+              if (path.via == via && path.to == to)
+                  transit |= path.transit;
+              return false;
+          });
+  else if (is_hook(m))
+      for_each_hook_path(sideToMove, type_of(mover), from, pieces(), pieces(sideToMove),
+          [&](const HookPath& path) {
+              if (path.via == via && path.to == to)
+                  transit |= path.transit;
+              return false;
+          });
+  return transit;
+}
+
 Bitboard Position::attackers_to_king_without_freeze(Square s, Bitboard occupied, Color c,
                                                     Bitboard janggiCannons, PieceType pt) const {
 
@@ -6486,7 +6510,8 @@ bool Position::legal(Move m) const {
 
   if (var->royalPieceNoThroughCheck && moverIsRoyal)
   {
-      Bitboard traversed = between_bb(from, to) & ~square_bb(to);
+      Bitboard traversed = is_multileg(m) ? multileg_transit_squares(m)
+                                         : between_bb(from, to) & ~square_bb(to);
       Bitboard currentJanggiCannons = pieces(JANGGI_CANNON) & ~square_bb(from);
       while (traversed)
       {
@@ -11918,6 +11943,8 @@ bool Position::has_game_cycle(int ply) const {
 bool Position::see_pruning_unreliable() const {
 #ifndef NDEBUG
   const bool reference = points_counting()
+                      || has_two_step_moves()
+                      || has_hook_moves()
                       || points_goal() > 0
                       || var->freezePieceTypes
                       || var->trapRegion
