@@ -3387,12 +3387,9 @@ bool Position::two_step_attacks_square(Color us, PieceType pt, Square from, Squa
       return false;
   // Any emitted completion containing the target (as bend with a legal
   // landing, or as the final square via a non-friendly bend) is an attack.
-  bool hit = false;
-  for_each_two_step_path(us, pt, from, friendly, [&](const TwoStepPath& path) {
-      if (path.via == target || path.to == target)
-          hit = true;
+  return for_each_two_step_path(us, pt, from, friendly, [&](const TwoStepPath& path) {
+      return path.via == target || path.to == target;
   });
-  return hit;
 }
 
 bool Position::hook_attacks_square(Color us, PieceType pt, Square from, Square target,
@@ -3405,13 +3402,10 @@ bool Position::hook_attacks_square(Color us, PieceType pt, Square from, Square t
       return false;
   // The hook capture limit is enforced by the iterator; only emitted paths
   // with a legal capture count attack the target.
-  bool hit = false;
-  for_each_hook_path(us, pt, from, occupied, friendly,
+  return for_each_hook_path(us, pt, from, occupied, friendly,
       [&](const HookPath& path) {
-          if (path.via == target || path.to == target)
-              hit = true;
+          return path.via == target || path.to == target;
       });
-  return hit;
 }
 
 Bitboard Position::multileg_attackers_to(Square s, Bitboard occupied, Color c,
@@ -3483,19 +3477,15 @@ bool Position::requires_full_evasion_generation() const {
 }
 
 bool Position::hook_path_valid(Color us, PieceType pt, Square from, Square via, Square to) const {
-  bool found = false;
-  for_each_hook_path(us, pt, from, pieces(), pieces(us), [&](const HookPath& path) {
-      found |= path.via == via && path.to == to;
+  return for_each_hook_path(us, pt, from, pieces(), pieces(us), [&](const HookPath& path) {
+      return path.via == via && path.to == to;
   });
-  return found;
 }
 
 bool Position::two_step_path_valid(Color us, PieceType pt, Square from, Square via, Square to) const {
-  bool found = false;
-  for_each_two_step_path(us, pt, from, pieces(us), [&](const TwoStepPath& path) {
-      found |= path.via == via && path.to == to;
+  return for_each_two_step_path(us, pt, from, pieces(us), [&](const TwoStepPath& path) {
+      return path.via == via && path.to == to;
   });
-  return found;
 }
 
 Bitboard Position::attackers_to_king_without_freeze(Square s, Bitboard occupied, Color c,
@@ -3552,8 +3542,6 @@ Bitboard Position::attackers_to_king_without_freeze(Square s, Bitboard occupied,
       }
   PieceType royalType = pt != NO_PIECE_TYPE ? pt :
                         (piece_on(s) != NO_PIECE ? type_of(piece_on(s)) : king_type());
-
-  attackers |= multileg_attackers_to(s, occupied, c);
 
   if (anti_royal_king_mutually_immune())
   {
@@ -3640,8 +3628,6 @@ Bitboard Position::attackers_to_king_without_freeze(Square s, Bitboard occupied,
   Piece royal = simulated && !capture_morph() ? piece_at(s, occupied) : piece_on(s);
   PieceType royalType = pt != NO_PIECE_TYPE ? pt :
                         (royal != NO_PIECE ? type_of(royal) : king_type());
-
-  attackers |= multileg_attackers_to(s, occupied, c, simulated);
 
   if (anti_royal_king_mutually_immune())
   {
