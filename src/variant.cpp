@@ -2221,16 +2221,11 @@ Variant* Variant::conclude() {
     twoStepPieceTypes = NO_PIECE_SET;
     for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
     {
-        uint64_t mask = twoStepMoves[pt];
-        twoStepMovesColor[WHITE][pt] = mask;
+        uint64_t mask = twoStepMoves[pt].relative;
+        twoStepMoves[pt].conclude();
         if (mask)
         {
             twoStepPieceTypes |= piece_set(pt);
-            twoStepMovesColor[BLACK][pt] = reflect_direction_pairs(mask);
-        }
-        else
-        {
-            twoStepMovesColor[BLACK][pt] = 0;
         }
     }
 
@@ -2240,16 +2235,12 @@ Variant* Variant::conclude() {
     hookPieceTypes = NO_PIECE_SET;
     for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
     {
-        uint64_t mask = hookMoves[pt].directions[WHITE];
+        uint64_t mask = hookMoves[pt].directions.relative;
         if (mask && hookMoves[pt].captureLimit >= 1)
         {
             hookPieceTypes |= piece_set(pt);
-            hookMoves[pt].directions[BLACK] = reflect_direction_pairs(mask);
         }
-        else
-        {
-            hookMoves[pt].directions[BLACK] = 0;
-        }
+        hookMoves[pt].directions.conclude();
     }
 
     // Compatibility shim: legacy mutuallyImmuneTypes means same-type captures are forbidden.

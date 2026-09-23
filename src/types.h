@@ -593,17 +593,6 @@ enum MoveType : int {
   LASER_FIRE         = 15 << (2 * SQUARE_BITS),
 };
 
-// Multi-leg payload subtypes packed into SPECIAL moves (flag + subtype +
-// via square). This does NOT describe other SPECIAL meanings (pass,
-// self-destruct, clone, gating, etc.); those are plain SPECIAL moves.
-enum MultiLegSubtype : int {
-  MULTILEG_SUBTYPE_NONE = 0,
-  MULTILEG_SUBTYPE_TWO_STEP = 1,
-  MULTILEG_SUBTYPE_TWO_STEP_PROMOTION = 2,
-  MULTILEG_SUBTYPE_HOOK = 3,
-  MULTILEG_SUBTYPE_HOOK_PROMOTION = 4,
-};
-
 enum MoveModality {MODALITY_QUIET, MODALITY_CAPTURE, MOVE_MODALITY_NB};
 
 constexpr int MOVE_TYPE_BITS = 4;
@@ -1297,101 +1286,57 @@ inline bool is_unstack_move(Move m) { return type_of(m) == UNSTACK; }
 inline bool is_laser_fire(Move m) { return type_of(m) == LASER_FIRE; }
 
 #if defined(VERY_LARGE_BOARDS)
-constexpr uint64_t MultiLegFlag = uint64_t(1) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS + SQUARE_BITS + 1);
+constexpr uint64_t ExtendedSpecialFlag = uint64_t(1) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS + SQUARE_BITS + 1);
 #elif defined(LARGEBOARDS)
 // LARGEBOARDS (7 square bits): valid gating gate+1 values never reach the top
-// mask bit, so the flag can sit at bit 31 within the 32-bit Move.
-constexpr uint64_t MultiLegFlag = uint64_t(1) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS + SQUARE_BITS);
+// mask bit, so the flag can sit at bit 31 within the unsigned 32-bit Move.
+constexpr uint64_t ExtendedSpecialFlag = uint64_t(1) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS + SQUARE_BITS);
 #else
 // 8x8 (6 square bits): gating gate+1 reaches bit 28 (gate SQ_H8), so the flag
 // must sit above it at bit 29 to stay disjoint from SPECIAL gating moves.
-constexpr uint64_t MultiLegFlag = uint64_t(1) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS + SQUARE_BITS + 1);
+constexpr uint64_t ExtendedSpecialFlag = uint64_t(1) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS + SQUARE_BITS + 1);
 #endif
 
-inline MultiLegSubtype multileg_subtype(Move m) {
-  if (type_of(m) != SPECIAL)
-      return MULTILEG_SUBTYPE_NONE;
-  if (!(move_bits(m) & MultiLegFlag))
-      return MULTILEG_SUBTYPE_NONE;
-  int sub = (move_bits(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS)) & (PIECE_TYPE_NB - 1);
-  if (sub >= MULTILEG_SUBTYPE_TWO_STEP && sub <= MULTILEG_SUBTYPE_HOOK_PROMOTION)
-      return MultiLegSubtype(sub);
-  return MULTILEG_SUBTYPE_NONE;
+inline bool has_extended_special_payload(Move m) {
+  return type_of(m) == SPECIAL && bool(move_bits(m) & ExtendedSpecialFlag);
 }
 
-inline bool is_two_step(Move m) {
-  MultiLegSubtype sub = multileg_subtype(m);
-  return sub == MULTILEG_SUBTYPE_TWO_STEP || sub == MULTILEG_SUBTYPE_TWO_STEP_PROMOTION;
-}
+inline bool is_plain_special(Move m) { return type_of(m) == SPECIAL && !has_extended_special_payload(m); }
 
-inline bool two_step_promotes(Move m) {
-  return multileg_subtype(m) == MULTILEG_SUBTYPE_TWO_STEP_PROMOTION;
-}
-
-inline bool is_hook(Move m) {
-  MultiLegSubtype sub = multileg_subtype(m);
-  return sub == MULTILEG_SUBTYPE_HOOK || sub == MULTILEG_SUBTYPE_HOOK_PROMOTION;
-}
-
-inline bool hook_promotes(Move m) {
-  return multileg_subtype(m) == MULTILEG_SUBTYPE_HOOK_PROMOTION;
-}
-
-// Multi-leg moves (two-step lion family and hook movers) share the SPECIAL
-// payload layout (flag + subtype + via square). Predicates below must treat
-// them uniformly; only generation and per-rule validation distinguish them.
-inline bool is_multileg(Move m) {
-  return is_two_step(m) || is_hook(m);
-}
-
-inline bool is_multileg_promotion(Move m) {
-  return two_step_promotes(m) || hook_promotes(m);
+inline Square special_payload_square(Move m) {
+  constexpr uint64_t SquareFieldMask = (uint64_t(1) << SQUARE_BITS) - 1;
+  return Square((move_bits(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & SquareFieldMask);
 }
 
 inline bool is_promotion_move(Move m) {
   return type_of(m) == PROMOTION || type_of(m) == PROMOTION_POTION;
 }
 
-inline bool is_any_promotion(Move m) {
-  return is_promotion_move(m) || type_of(m) == PIECE_PROMOTION || is_multileg_promotion(m);
-}
-
-inline Square via_sq(Move m) {
-  assert(is_multileg(m));
-  constexpr uint64_t SquareFieldMask = (uint64_t(1) << SQUARE_BITS) - 1;
-  return Square((move_bits(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & SquareFieldMask);
-}
-
-// The multi-leg payload (flag + subtype + via square) shares the SPECIAL
-// upper bits with gating data. The flag must sit above every valid payload
-// value on all three board-size configurations; otherwise SPECIAL gating
-// moves decode as multi-leg moves (or vice versa). Fail compilation instead
-// of colliding.
-// Valid gating payloads top out at gate+1 == SQUARE_NB, valid via payloads at
-// SQUARE_NB - 1; both must leave the flag bit clear.
-static_assert((MultiLegFlag & ((uint64_t(1) << (2 * SQUARE_BITS + MOVE_TYPE_BITS)) - 1)) == 0,
-              "MultiLegFlag overlaps from/to/type bits");
-static_assert(((uint64_t(SQUARE_NB) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & MultiLegFlag) == 0,
-              "MultiLegFlag collides with a valid gating payload");
-static_assert(((uint64_t(SQUARE_NB - 1) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & MultiLegFlag) == 0,
-              "MultiLegFlag collides with a valid via payload");
+// Extended SPECIAL payloads share upper bits with gating; keep the generic
+// marker above both valid gating values and the payload square.
+static_assert((ExtendedSpecialFlag & ((uint64_t(1) << (2 * SQUARE_BITS + MOVE_TYPE_BITS)) - 1)) == 0,
+              "ExtendedSpecialFlag overlaps from/to/type bits");
+static_assert(((uint64_t(SQUARE_NB) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & ExtendedSpecialFlag) == 0,
+              "ExtendedSpecialFlag collides with a valid gating payload");
+static_assert(((uint64_t(SQUARE_NB - 1) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & ExtendedSpecialFlag) == 0,
+              "ExtendedSpecialFlag collides with a valid special payload");
 #if defined(VERY_LARGE_BOARDS)
-static_assert(MultiLegFlag < (uint64_t(1) << 63), "MultiLegFlag exceeds 64-bit Move storage");
+static_assert(ExtendedSpecialFlag < (uint64_t(1) << 63), "ExtendedSpecialFlag exceeds 64-bit Move storage");
 static_assert(sizeof(Move) == sizeof(uint64_t), "very-large-board Move must remain 64-bit");
 #else
 // TT stores ordinary-board moves as uint32_t bit patterns. Keeping Move
-// unsigned makes the LARGEBOARDS bit-31 multi-leg flag an ordinary payload bit.
-static_assert(MultiLegFlag < (uint64_t(1) << 32), "MultiLegFlag exceeds 32-bit Move storage");
+// unsigned makes the LARGEBOARDS bit-31 extended payload marker an ordinary bit.
+static_assert(ExtendedSpecialFlag < (uint64_t(1) << 32), "ExtendedSpecialFlag exceeds 32-bit Move storage");
 static_assert(sizeof(Move) == sizeof(uint32_t), "ordinary-board Move must remain 32-bit");
 #if defined(LARGEBOARDS)
-static_assert(MultiLegFlag == (uint64_t(1) << 31), "LARGEBOARDS MultiLegFlag must stay above gating payloads");
+static_assert(ExtendedSpecialFlag == (uint64_t(1) << 31), "LARGEBOARDS ExtendedSpecialFlag must stay above gating payloads");
 #else
-static_assert(MultiLegFlag == (uint64_t(1) << 29), "8x8 MultiLegFlag must sit above the gating field");
+static_assert(ExtendedSpecialFlag == (uint64_t(1) << 29), "8x8 ExtendedSpecialFlag must sit above the gating field");
 #endif
 #endif
 
 inline bool is_gating(Move m) {
-  if (is_multileg(m))
+  if (has_extended_special_payload(m))
       return false;
 
   if ((move_bits(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS)) == 0)
@@ -1416,10 +1361,6 @@ inline bool is_drop_move(Move m) {
 
 inline bool is_insert_move(Move m) {
   return type_of(m) == INSERT;
-}
-
-inline bool is_plain_special(Move m) {
-  return type_of(m) == SPECIAL && !(move_bits(m) & MultiLegFlag);
 }
 
 inline bool is_pass(Move m) {
@@ -1533,33 +1474,6 @@ constexpr Move make_promotion_potion(Square from, Square to, PieceType prom_pt, 
   );
 }
 
-constexpr Move make_two_step(Square from, Square via, Square to, bool promotes = false) {
-  return Move(
-      MultiLegFlag
-    + (static_cast<uint64_t>(via) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS))
-    + (static_cast<uint64_t>(promotes ? MULTILEG_SUBTYPE_TWO_STEP_PROMOTION : MULTILEG_SUBTYPE_TWO_STEP) << (2 * SQUARE_BITS + MOVE_TYPE_BITS))
-    + static_cast<uint64_t>(SPECIAL)
-    + (static_cast<uint64_t>(from) << SQUARE_BITS)
-    + static_cast<uint64_t>(to)
-  );
-}
-
-// Hook moves share the multi-leg payload layout (flag + subtype + bend
-// square); only generation and per-rule validation distinguish them from
-// two-step moves. Provenance matters for capture limits, hence the subtype.
-constexpr Move make_hook(Square from, Square via, Square to, bool promotes = false) {
-  return Move(
-      MultiLegFlag
-    + (static_cast<uint64_t>(via) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS))
-    + (static_cast<uint64_t>(promotes ? MULTILEG_SUBTYPE_HOOK_PROMOTION : MULTILEG_SUBTYPE_HOOK) << (2 * SQUARE_BITS + MOVE_TYPE_BITS))
-    + static_cast<uint64_t>(SPECIAL)
-    + (static_cast<uint64_t>(from) << SQUARE_BITS)
-    + static_cast<uint64_t>(to)
-  );
-}
-static_assert(int(MULTILEG_SUBTYPE_HOOK_PROMOTION) < int(PIECE_TYPE_NB),
-              "Hook subtypes must fit the SPECIAL subtype field");
-
 constexpr PieceType dropped_piece_type(Move m) {
   return PieceType((move_bits(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS)) & (PIECE_TYPE_NB - 1));
 }
@@ -1573,8 +1487,8 @@ inline bool is_custom(PieceType pt) {
 }
 
 inline bool is_ok(Move m) {
-  if (is_multileg(m))
-      return is_ok(from_sq(m)) && is_ok(to_sq(m)) && is_ok(via_sq(m));
+  if (has_extended_special_payload(m))
+      return is_ok(from_sq(m)) && is_ok(to_sq(m)) && is_ok(special_payload_square(m));
   return from_sq(m) != to_sq(m)
       || is_gating(m)
       || is_laser_fire(m)

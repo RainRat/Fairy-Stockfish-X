@@ -29,10 +29,7 @@ namespace Stockfish {
 
 #ifdef USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
 template<GenType T>
-MoveList<T>::MoveList(const Position& pos) : MoveList(pos, generate<T>) {}
-
-template<GenType T>
-MoveList<T>::MoveList(const Position& pos, MoveGenerator generator) {
+MoveList<T>::MoveList(const Position& pos) {
     thread = pos.this_thread();
     if (thread)
         moveList = thread->acquire_buffer();
@@ -40,7 +37,7 @@ MoveList<T>::MoveList(const Position& pos, MoveGenerator generator) {
         moveListPtr = std::make_unique<ExtMove[]>(MOVEGEN_OVERFLOW_CAPACITY);
         moveList = moveListPtr.get();
     }
-    last = generator(pos, moveList);
+    last = generate<T>(pos, moveList);
     assert(last - moveList <= MOVEGEN_OVERFLOW_CAPACITY);
 }
 
@@ -55,6 +52,7 @@ template struct MoveList<CAPTURES>;
 template struct MoveList<QUIETS>;
 template struct MoveList<QUIET_CHECKS>;
 template struct MoveList<EVASIONS>;
+template struct MoveList<EVASION_CANDIDATES>;
 template struct MoveList<NON_EVASIONS>;
 #endif
 
@@ -1218,7 +1216,7 @@ namespace {
             if (pos.freeze_squares() & from)
                 continue;
 
-            pos.for_each_two_step_path(Us, pt, from, pos.pieces(Us),
+            detail::for_each_two_step_path(pos, Us, pt, from, pos.pieces(Us),
                 [&](const MultiLegPath& path) {
                     bool cap1 = (!pos.empty(path.via) && color_of(pos.piece_on(path.via)) == them);
                     bool cap2 = (path.to != from && !pos.empty(path.to) && color_of(pos.piece_on(path.to)) == them);
@@ -1260,9 +1258,9 @@ namespace {
 
             // Hook rays stop at board edges (see Position::hook_step).
             // Geometry (rays, blocking, origin landing) and the capture
-            // limit are owned by Position::for_each_hook_path; only
+            // limit are owned by the shared hook path walker; only
             // candidate emission stays here.
-            pos.for_each_hook_path(Us, pt, from, pos.pieces(), pos.pieces(Us),
+            detail::for_each_hook_path(pos, Us, pt, from, pos.pieces(), pos.pieces(Us),
                 [&](const MultiLegPath& path) {
                     moveList = emit_multileg_candidate<Us, Type>(pos, moveList, pt, from, path.via, path.to,
                                                                  path.captureVia, path.captureTo, target,
@@ -2295,6 +2293,11 @@ ExtMove* generate_evasions(const Position& pos, ExtMove* moveList) {
   return (pos.anti_royal_types() || pos.requires_full_evasion_generation())
        ? generate<NON_EVASIONS>(pos, moveList)
        : generate<EVASIONS>(pos, moveList);
+}
+
+template<>
+ExtMove* generate<EVASION_CANDIDATES>(const Position& pos, ExtMove* moveList) {
+  return generate_evasions(pos, moveList);
 }
 
 ExtMove* generate_evasions_without_potions(const Position& pos, ExtMove* moveList) {

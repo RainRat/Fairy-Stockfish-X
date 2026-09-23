@@ -256,10 +256,10 @@ namespace {
     bool parse_two_step_moves(const std::string& optionName,
                               const std::string& value,
                               const Variant* v,
-                              uint64_t target[PIECE_TYPE_NB]) {
+                              DirectionPairSpec target[PIECE_TYPE_NB]) {
         std::string entry;
         std::stringstream ss(value);
-        uint64_t parsed[PIECE_TYPE_NB];
+        DirectionPairSpec parsed[PIECE_TYPE_NB];
         std::copy(target, target + PIECE_TYPE_NB, std::begin(parsed));
         bool sawEntry = false;
         while (ss >> entry)
@@ -276,11 +276,11 @@ namespace {
 
             if (rawPairs == "-")
             {
-                parsed[pt] = 0ULL;
+                parsed[pt] = {};
             }
             else if (rawPairs == "*")
             {
-                parsed[pt] = ~0ULL;
+                parsed[pt].relative = ~0ULL;
             }
             else
             {
@@ -329,7 +329,7 @@ namespace {
                         for (int d2 = d2_start; d2 <= d2_end; ++d2)
                             mask |= multileg_direction_pair_bit(d1, d2);
                 }
-                parsed[pt] = mask;
+                parsed[pt].relative = mask;
             }
         }
         if (!sawEntry || !only_trailing_space(ss))
@@ -435,7 +435,7 @@ namespace {
                     for (int d2 = 0; d2 < 8; ++d2)
                         if (bits2 & (1 << d2))
                             mask |= multileg_direction_pair_bit(d1, d2);
-            parsed[pt].directions[WHITE] = mask;
+            parsed[pt].directions.relative = mask;
             parsed[pt].firstRange = range1;
             parsed[pt].secondRange = range2;
             parsed[pt].captureLimit = limit;
@@ -2842,9 +2842,9 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
     // Hook rays stop at board edges; wrapping topologies would need
     // wrap-around rays with triple-level dedup, which is not implemented.
     const bool hasTwoStepMoves = std::any_of(std::begin(v->twoStepMoves), std::end(v->twoStepMoves),
-                                             [](uint64_t mask) { return mask != 0; });
+                                             [](const DirectionPairSpec& spec) { return spec.relative != 0; });
     const bool hasHookMoves = std::any_of(std::begin(v->hookMoves), std::end(v->hookMoves),
-                                          [](const HookMoveSpec& spec) { return spec.directions[WHITE] != 0; });
+                                          [](const HookMoveSpec& spec) { return spec.directions.relative != 0; });
 
     if (hasHookMoves && (v->cylindrical || v->toroidal))
     {

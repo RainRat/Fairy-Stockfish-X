@@ -237,9 +237,9 @@ std::string two_step_moves_json(const Variant& v) {
     out << '{';
     bool first = true;
     for (int i = 1; i < PIECE_TYPE_NB; ++i)
-        if (v.twoStepMoves[i])
+        if (v.twoStepMoves[i].relative)
             field(out, first, variant_piece_type_name(v, PieceType(i)).c_str(),
-                  direction_pair_mask_json(v.twoStepMoves[i]));
+                  direction_pair_mask_json(v.twoStepMoves[i].relative));
     out << '}';
     return out.str();
 }
@@ -249,9 +249,9 @@ std::string hook_moves_json(const Variant& v) {
     out << '{';
     bool first = true;
     for (int i = 1; i < PIECE_TYPE_NB; ++i)
-        if (v.hookMoves[i].directions[WHITE]) {
+        if (v.hookMoves[i].directions.relative) {
             std::ostringstream spec;
-            spec << "{\"pairs\":" << direction_pair_mask_json(v.hookMoves[i].directions[WHITE])
+            spec << "{\"pairs\":" << direction_pair_mask_json(v.hookMoves[i].directions.relative)
                  << ",\"firstRange\":" << v.hookMoves[i].firstRange
                  << ",\"secondRange\":" << v.hookMoves[i].secondRange
                  << ",\"captureLimit\":" << v.hookMoves[i].captureLimit << '}';

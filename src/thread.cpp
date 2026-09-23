@@ -230,7 +230,7 @@ void ThreadPool::start_thinking(Position& pos, StateListPtr& states,
   {
       if (pos.evasion_checkers())
       {
-          MoveList<EVASIONS> evasions(pos, generate_evasions);
+          MoveList<EVASION_CANDIDATES> evasions(pos);
           for (const auto& evasion : evasions)
               if (pos.virtual_drop(evasion) && pos.legal(evasion))
                   rootMoves.emplace_back(evasion);

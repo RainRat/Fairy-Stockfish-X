@@ -29,6 +29,7 @@
 
 #include "types.h"
 #include "position.h"
+#include "multileg.h"
 #include "thread.h"
 #include "uci.h"
 #include "variant.h"
