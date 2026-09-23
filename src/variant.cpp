@@ -2218,7 +2218,6 @@ Variant* Variant::conclude() {
         pseudoRoyalCount = extinctionPieceCount + 1;
     }
 
-    hasTwoStepMoves = false;
     twoStepPieceTypes = NO_PIECE_SET;
     for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
     {
@@ -2226,7 +2225,6 @@ Variant* Variant::conclude() {
         twoStepMovesColor[WHITE][pt] = mask;
         if (mask)
         {
-            hasTwoStepMoves = true;
             twoStepPieceTypes |= piece_set(pt);
             twoStepMovesColor[BLACK][pt] = reflect_direction_pairs(mask);
         }
@@ -2239,21 +2237,18 @@ Variant* Variant::conclude() {
     // Hook direction pairs are White-relative like two-step pairs; Black
     // gets the 180-degree point reflection. Ranges and capture limits are
     // direction-independent and shared by both colors.
-    hasHookMoves = false;
     hookPieceTypes = NO_PIECE_SET;
     for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
     {
-        uint64_t mask = hookMoveMasks[pt];
-        hookMoveMasksColor[WHITE][pt] = mask;
-        if (mask && hookCaptureLimit[pt] >= 1)
+        uint64_t mask = hookMoves[pt].directions[WHITE];
+        if (mask && hookMoves[pt].captureLimit >= 1)
         {
-            hasHookMoves = true;
             hookPieceTypes |= piece_set(pt);
-            hookMoveMasksColor[BLACK][pt] = reflect_direction_pairs(mask);
+            hookMoves[pt].directions[BLACK] = reflect_direction_pairs(mask);
         }
         else
         {
-            hookMoveMasksColor[BLACK][pt] = 0;
+            hookMoves[pt].directions[BLACK] = 0;
         }
     }
 
@@ -2549,8 +2544,8 @@ Variant* Variant::conclude() {
                     && !twoBoards
                     && !restrictedMobility
                     && !stackingPieceTypes
-                    && !hasTwoStepMoves
-                    && !hasHookMoves
+                    && twoStepPieceTypes == NO_PIECE_SET
+                    && hookPieceTypes == NO_PIECE_SET
                     && kingType == KING
                    )
                  ? endgameEval : NO_EG_EVAL;
@@ -2597,8 +2592,8 @@ Variant* Variant::conclude() {
                                  && !trapRegion
                                  && !flipEnclosedPieces
                                  && !makpongRule
-                                 && !hasTwoStepMoves
-                                 && !hasHookMoves;
+                                 && twoStepPieceTypes == NO_PIECE_SET
+                                 && hookPieceTypes == NO_PIECE_SET;
 
     shogiStylePromotions = false;
     for (PieceType current: promotedPieceType)
@@ -2711,8 +2706,8 @@ Variant* Variant::conclude() {
                        && changingColorTrigger == ColorChangeTrigger::NEVER;
 
     const bool alwaysUnreliableSee = pointsCounting
-                                  || hasTwoStepMoves
-                                  || hasHookMoves
+                                  || twoStepPieceTypes != NO_PIECE_SET
+                                  || hookPieceTypes != NO_PIECE_SET
                                   || pointsGoal > 0
                                   || captureDemotion
                                   || connectN != 0

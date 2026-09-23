@@ -146,7 +146,9 @@ bool MovePicker::is_qsearch_tt_move(Move m) const {
   if (pos.evasion_checkers())
       return true;
 
-  if (depth <= DEPTH_QS_RECAPTURES && !pos.matches_recapture_square(m, recaptureSquare))
+  if (depth <= DEPTH_QS_RECAPTURES
+      && to_sq(m) != recaptureSquare
+      && !(is_multileg(m) && (pos.capture_squares(m) & recaptureSquare)))
       return false;
 
   return pos.capture_or_promotion(m)
@@ -246,7 +248,7 @@ void MovePicker::score() {
       total = 0;
       topType = captured_type(pos, mv);
       points = 0;
-      Bitboard caps = pos.capture_ordering_squares(mv);
+      Bitboard caps = pos.capture_squares(mv);
       if (caps)
       {
           bool foundVictim = false;
@@ -570,7 +572,9 @@ top:
 
   case QCAPTURE:
       if (select<Best>([&](){ return   depth > DEPTH_QS_RECAPTURES
-                                    || pos.matches_recapture_square(*cur, recaptureSquare); }))
+                                    || to_sq(*cur) == recaptureSquare
+                                    || (is_multileg(*cur)
+                                        && (pos.capture_squares(*cur) & recaptureSquare)); }))
           return *(cur - 1);
 
       if (resume_deferred_potions<CAPTURES>(moveList, qcaptureBaseEnd, qcapturePotionsDeferred))

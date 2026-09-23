@@ -249,12 +249,12 @@ std::string hook_moves_json(const Variant& v) {
     out << '{';
     bool first = true;
     for (int i = 1; i < PIECE_TYPE_NB; ++i)
-        if (v.hookMoveMasks[i]) {
+        if (v.hookMoves[i].directions[WHITE]) {
             std::ostringstream spec;
-            spec << "{\"pairs\":" << direction_pair_mask_json(v.hookMoveMasks[i])
-                 << ",\"firstRange\":" << v.hookFirstRange[i]
-                 << ",\"secondRange\":" << v.hookSecondRange[i]
-                 << ",\"captureLimit\":" << v.hookCaptureLimit[i] << '}';
+            spec << "{\"pairs\":" << direction_pair_mask_json(v.hookMoves[i].directions[WHITE])
+                 << ",\"firstRange\":" << v.hookMoves[i].firstRange
+                 << ",\"secondRange\":" << v.hookMoves[i].secondRange
+                 << ",\"captureLimit\":" << v.hookMoves[i].captureLimit << '}';
             field(out, first, variant_piece_type_name(v, PieceType(i)).c_str(), spec.str());
         }
     out << '}';

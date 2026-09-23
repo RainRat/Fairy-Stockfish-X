@@ -762,9 +762,9 @@ public:
   bool captures_to_hand() const;
   PieceSet capture_to_hand_types() const;
   bool has_two_step_moves() const;
-  PieceSet two_step_piece_types(Color c) const;
+  PieceSet two_step_piece_types() const;
   bool has_hook_moves() const;
-  PieceSet hook_piece_types(Color c) const;
+  PieceSet hook_piece_types() const;
   // Single owner for multi-leg movement geometry. Generation, completed-path
   // validation, and attack detection all enumerate through these iterators so
   // masks, range caps, the hook capture limit, hook_step edge-stops, bend
@@ -773,23 +773,6 @@ public:
   // their own masks/ranges/limits from the Variant. Occupancy rules differ by
   // caller (real position vs hypothetical attack occupancy), so callers pass
   // occupied/friendly explicitly; promotion policy stays with the callers.
-  struct TwoStepPath {
-      Square via = SQ_NONE;
-      Square to = SQ_NONE;
-      int d1 = -1;
-      int d2 = -1;
-      Bitboard transit = 0;
-  };
-  struct HookPath {
-      Square via = SQ_NONE;
-      Square to = SQ_NONE;
-      int d1 = -1;
-      int d2 = -1;
-      bool captureVia = false;
-      bool captureTo = false;
-      bool atOrigin = false;
-      Bitboard transit = 0;
-  };
   template<typename Visit>
   bool for_each_two_step_path(Color us, PieceType pt, Square from, Bitboard friendly, Visit&& visit) const;
   template<typename Visit>
@@ -1091,14 +1074,9 @@ public:
   bool is_jump_capture(Move m) const;
   Square capture_square(Square to) const;
   Square capture_square(Move m) const;
-  Bitboard capture_ordering_squares(Move m) const;
-  // Victim squares used by MovePicker ordering: ordinary and jump captures
-  // keep their legacy capture_square() behavior; multi-leg moves report both
-  // direct victims. MovePicker applies victim values and points weighting.
-  // matches_recapture_square() is the qsearch recapture predicate. It stays
-  // narrow (destination square, plus multi-leg victim squares) so legacy
-  // jump-capture recapture behavior is unchanged.
-  bool matches_recapture_square(Move m, Square s) const;
+  Bitboard capture_squares(Move m) const;
+  // Direct victim squares: ordinary and jump captures follow capture_square(),
+  // while multi-leg moves may report both the bend and destination victims.
   Square secondary_drop_square(Move m) const;
   Square mirrored_pair_drop_square(Square s) const;
   Bitboard jump_capture_mask(Square from, Square to, Bitboard occupied) const;
@@ -1198,9 +1176,9 @@ public:
 private:
   // Multi-leg internals: completed-path validation and shared attack geometry.
   // Outside Position, movegen consumes the for_each_*_path iterators,
-  // MovePicker/search see only requires_full_evasion_generation(),
-  // capture_ordering_squares(), and matches_recapture_square(). Everything
-  // else stays private so generic attack/evasion/search paths do
+  // MovePicker/search see only requires_full_evasion_generation() and
+  // capture_squares(). Everything else stays private so generic
+  // attack/evasion/search paths do
   // not accumulate multi-leg knowledge.
   // A hook step never wraps around the board edge; ordinary sliders may.
   bool hook_step(Square cur, Direction dir, Square& nxt) const;
@@ -2525,7 +2503,7 @@ inline PieceSet Position::capture_to_hand_types() const {
 
 inline bool Position::has_two_step_moves() const {
   assert(var != nullptr);
-  return var->hasTwoStepMoves;
+  return var->twoStepPieceTypes != NO_PIECE_SET;
 }
 
 inline uint64_t Position::two_step_moves_mask(Color c, PieceType pt) const {
@@ -2533,40 +2511,38 @@ inline uint64_t Position::two_step_moves_mask(Color c, PieceType pt) const {
   return var->twoStepMovesColor[c][pt];
 }
 
-inline PieceSet Position::two_step_piece_types(Color c) const {
+inline PieceSet Position::two_step_piece_types() const {
   assert(var != nullptr);
-  (void)c; // membership is color-independent; only the masks differ by color
   return var->twoStepPieceTypes;
 }
 
 inline bool Position::has_hook_moves() const {
   assert(var != nullptr);
-  return var->hasHookMoves;
+  return var->hookPieceTypes != NO_PIECE_SET;
 }
 
 inline uint64_t Position::hook_move_mask(Color c, PieceType pt) const {
   assert(var != nullptr);
-  return var->hookMoveMasksColor[c][pt];
+  return var->hookMoves[pt].directions[c];
 }
 
 inline int Position::hook_first_range(PieceType pt) const {
   assert(var != nullptr);
-  return var->hookFirstRange[pt];
+  return var->hookMoves[pt].firstRange;
 }
 
 inline int Position::hook_second_range(PieceType pt) const {
   assert(var != nullptr);
-  return var->hookSecondRange[pt];
+  return var->hookMoves[pt].secondRange;
 }
 
 inline int Position::hook_capture_limit(PieceType pt) const {
   assert(var != nullptr);
-  return var->hookCaptureLimit[pt];
+  return var->hookMoves[pt].captureLimit;
 }
 
-inline PieceSet Position::hook_piece_types(Color c) const {
+inline PieceSet Position::hook_piece_types() const {
   assert(var != nullptr);
-  (void)c; // membership is color-independent; only the masks differ by color
   return var->hookPieceTypes;
 }
 
@@ -5945,7 +5921,7 @@ inline Square Position::capture_square(Move m) const {
   return to;
 }
 
-inline Bitboard Position::capture_ordering_squares(Move m) const {
+inline Bitboard Position::capture_squares(Move m) const {
   if (!capture(m))
       return Bitboard(0);
   if (is_multileg(m))
@@ -5965,15 +5941,6 @@ inline Bitboard Position::capture_ordering_squares(Move m) const {
   // keep pre-existing single-victim search semantics for jump captures.
   Square cs = capture_square(m);
   return is_ok(cs) ? square_bb(cs) : Bitboard(0);
-}
-
-inline bool Position::matches_recapture_square(Move m, Square s) const {
-  if (to_sq(m) == s)
-      return true;
-  // capture_ordering_squares() also reports the hurdle square for legacy jump
-  // captures; keep qsearch recapture semantics narrow to multi-leg doubles
-  // so pre-existing jump-capture behavior is unchanged.
-  return is_multileg(m) && bool(capture_ordering_squares(m) & s);
 }
 
 inline bool Position::step_destination(Square from, Direction d, Square& to) const {
@@ -6012,108 +5979,6 @@ inline Position::PromotionStatus Position::multileg_promotion_status(Piece mover
 inline bool Position::multileg_promotion_zone(Color c, PieceType pt, Square from, Square to) const {
   Bitboard pz = promotion_zone(c, pt);
   return (pz & from) || (pz & to);
-}
-
-template<typename Visit>
-bool Position::for_each_two_step_path(Color us, PieceType pt, Square from, Bitboard friendly, Visit&& visit) const {
-  uint64_t mask = two_step_moves_mask(us, pt);
-  if (!mask || !(board_bb() & from))
-      return false;
-  std::array<std::pair<Square, Square>, 64> seen{};
-  int seenCount = 0;
-  Bitboard remaining = Bitboard(mask);
-  while (remaining)
-  {
-      int pair_idx = int(pop_lsb(remaining));
-      int d1 = multileg_pair_first(pair_idx);
-      int d2 = multileg_pair_second(pair_idx);
-      Square via;
-      if (!step_destination(from, KingDirections[d1], via))
-          continue;
-      if (!(board_bb() & via) || (friendly & via))
-          continue;
-      Square to;
-      if (!step_destination(via, KingDirections[d2], to))
-          continue;
-      if (!(board_bb() & to) || (to != from && (friendly & to)))
-          continue;
-      const auto key = std::pair{via, to};
-      if (std::find(seen.begin(), seen.begin() + seenCount, key) != seen.begin() + seenCount)
-          continue;
-      seen[seenCount++] = key;
-      TwoStepPath path{via, to, d1, d2, square_bb(via) & ~square_bb(to)};
-      if (visit(path))
-          return true;
-  }
-  return false;
-}
-
-template<typename Visit>
-bool Position::for_each_hook_path(Color us, PieceType pt, Square from,
-                                  Bitboard occupied, Bitboard friendly, Visit&& visit) const {
-  uint64_t mask = hook_move_mask(us, pt);
-  if (!mask || !(board_bb() & from))
-      return false;
-  int captureLimit = hook_capture_limit(pt);
-  if (captureLimit < 1)
-      return false;
-  int range1 = hook_first_range(pt);
-  int range2 = hook_second_range(pt);
-  Bitboard remaining = Bitboard(mask);
-  while (remaining)
-  {
-      int pair_idx = int(pop_lsb(remaining));
-      int d1 = multileg_pair_first(pair_idx);
-      int d2 = multileg_pair_second(pair_idx);
-      int cap1steps = range1 ? range1 : SQUARE_NB;
-      Square bend = from;
-      Bitboard firstTransit = 0;
-      for (int k1 = 1; k1 <= cap1steps; ++k1)
-      {
-          Square step1;
-          if (!hook_step(bend, KingDirections[d1], step1))
-              break;
-          if (!(board_bb() & step1) || (friendly & step1))
-              break;
-          bend = step1;
-          firstTransit |= square_bb(bend);
-          bool cap1 = bool(occupied & bend);
-          int cap2steps = range2 ? range2 : SQUARE_NB;
-          Square to = bend;
-          Bitboard secondTransit = 0;
-          for (int k2 = 1; k2 <= cap2steps; ++k2)
-          {
-              Square step2;
-              if (!hook_step(to, KingDirections[d2], step2))
-                  break;
-              if (!(board_bb() & step2))
-                  break;
-              // The origin is a landing square (igui) but never
-              // transit: the walk must not continue past it.
-              bool atOrigin = (step2 == from);
-              if (!atOrigin && (friendly & step2))
-                  break;
-              to = step2;
-              secondTransit |= square_bb(to);
-              bool cap2 = !atOrigin && bool(occupied & to);
-              // A :1 hook may not capture on both legs; the limit lives here
-              // so generation, validation, and attack detection share it.
-              // (cap2 ends the ray either way, so skipping the emit keeps
-              // the walk identical.)
-              if (cap1 && cap2 && captureLimit < 2)
-                  break;
-              HookPath path{bend, to, d1, d2, cap1, cap2, atOrigin,
-                            (firstTransit | secondTransit) & ~square_bb(to)};
-              if (visit(path))
-                  return true;
-              if (cap2 || atOrigin)
-                  break;
-          }
-          if (cap1)
-              break;
-      }
-  }
-  return false;
 }
 
 inline bool Position::paired_drop(Move m) const {
