@@ -532,6 +532,11 @@ immobile = -
 castling = false
 doubleStep = false
 
+[bad-hook-toroidal:chess]
+customPiece1 = h:0
+hookMoves = h:R-R
+toroidal = true
+
 [bad-hook-twoboards:chess]
 customPiece1 = h:0
 hookMoves = h:R-R:2
@@ -541,6 +546,36 @@ twoBoards = true
 customPiece1 = l:0
 twoStepMoves = l:N>N
 twoBoards = true
+
+[hook-parent:chess]
+customPiece1 = h:0
+castling = false
+
+[bad-inherited-hook-wrapped:hook-parent]
+hookMoves = h:R-R
+cylindrical = true
+
+[bad-inherited-lion-twoboards:hook-parent]
+twoStepMoves = h:N>N
+twoBoards = true
+
+[hook-clear-parent:chess]
+customPiece1 = h:0
+hookMoves = h:R-R
+
+[inherited-hook-cleared:hook-clear-parent]
+hookMoves = h:-
+twoBoards = true
+castling = false
+
+[lion-clear-parent:chess]
+customPiece1 = l:0
+twoStepMoves = l:N>N
+
+[inherited-lion-cleared:lion-clear-parent]
+twoStepMoves = l:-
+twoBoards = true
+castling = false
 INI
 
 cat > "${unsupported_bent_rose_modifier_ini}" <<'INI'
@@ -842,11 +877,26 @@ assert_contains "${bad_hook_output3}" "unknown variant 'bad-hook-limit'; keeping
 bad_hook_output4=$(run_uci "$ENGINE" "$bad_hook_ini" "bad-hook-wrapped" </dev/null 2>&1 || true)
 assert_contains "${bad_hook_output4}" "unknown variant 'bad-hook-wrapped'; keeping 'chess'"
 
+bad_hook_toroidal_output=$(run_uci "$ENGINE" "$bad_hook_ini" "bad-hook-toroidal" </dev/null 2>&1 || true)
+assert_contains "${bad_hook_toroidal_output}" "unknown variant 'bad-hook-toroidal'; keeping 'chess'"
+
 bad_hook_output5=$(run_uci "$ENGINE" "$bad_hook_ini" "bad-hook-twoboards" </dev/null 2>&1 || true)
 assert_contains "${bad_hook_output5}" "unknown variant 'bad-hook-twoboards'; keeping 'chess'"
 
 bad_twostep_twoboards_output=$(run_uci "$ENGINE" "$bad_hook_ini" "bad-twostep-twoboards" </dev/null 2>&1 || true)
 assert_contains "${bad_twostep_twoboards_output}" "unknown variant 'bad-twostep-twoboards'; keeping 'chess'"
+
+bad_inherited_hook_output=$(run_uci "$ENGINE" "$bad_hook_ini" "bad-inherited-hook-wrapped" </dev/null 2>&1 || true)
+assert_contains "${bad_inherited_hook_output}" "unknown variant 'bad-inherited-hook-wrapped'; keeping 'chess'"
+
+bad_inherited_lion_output=$(run_uci "$ENGINE" "$bad_hook_ini" "bad-inherited-lion-twoboards" </dev/null 2>&1 || true)
+assert_contains "${bad_inherited_lion_output}" "unknown variant 'bad-inherited-lion-twoboards'; keeping 'chess'"
+
+inherited_hook_cleared_output=$(run_uci "$ENGINE" "$bad_hook_ini" "inherited-hook-cleared" </dev/null 2>&1 || true)
+assert_not_contains "${inherited_hook_cleared_output}" "unknown variant 'inherited-hook-cleared'"
+
+inherited_lion_cleared_output=$(run_uci "$ENGINE" "$bad_hook_ini" "inherited-lion-cleared" </dev/null 2>&1 || true)
+assert_not_contains "${inherited_lion_cleared_output}" "unknown variant 'inherited-lion-cleared'"
 
 bad_hook_check_output=$("${ENGINE}" check "${bad_hook_ini}" 2>&1 || true)
 assert_contains "${bad_hook_check_output}" "hookMoves - Malformed hook legs"
@@ -1095,4 +1145,3 @@ INI
 done
 
 echo "parser regression tests passed"
-

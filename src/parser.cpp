@@ -2856,7 +2856,12 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
 
     // Hook rays stop at board edges; wrapping topologies would need
     // wrap-around rays with triple-level dedup, which is not implemented.
-    if (v->hasHookMoves && (v->cylindrical || v->toroidal))
+    const bool hasTwoStepMoves = std::any_of(std::begin(v->twoStepMoves), std::end(v->twoStepMoves),
+                                             [](uint64_t mask) { return mask != 0; });
+    const bool hasHookMoves = std::any_of(std::begin(v->hookMoveMasks), std::end(v->hookMoveMasks),
+                                          [](uint64_t mask) { return mask != 0; });
+
+    if (hasHookMoves && (v->cylindrical || v->toroidal))
     {
         if (DoCheck)
             std::cerr << "hookMoves is not supported on wrapped boards." << std::endl;
@@ -2866,7 +2871,7 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
     // Multi-leg captures can remove two victims, but the two-board partner
     // API reports a single piece; reject the combination rather than
     // silently dropping partner material.
-    if (v->twoBoards && (v->hasTwoStepMoves || v->hasHookMoves))
+    if (v->twoBoards && (hasTwoStepMoves || hasHookMoves))
     {
         if (DoCheck)
             std::cerr << "twoBoards is not supported with twoStepMoves or hookMoves." << std::endl;

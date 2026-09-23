@@ -1095,7 +1095,6 @@ public:
   // narrow (destination square, plus multi-leg victim squares) so legacy
   // jump-capture recapture behavior is unchanged.
   bool matches_recapture_square(Move m, Square s) const;
-  bool step_destination(Square from, Direction d, Square& to) const;
   Square secondary_drop_square(Move m) const;
   Square mirrored_pair_drop_square(Square s) const;
   Bitboard jump_capture_mask(Square from, Square to, Bitboard occupied) const;
@@ -1201,6 +1200,7 @@ private:
   // not accumulate multi-leg knowledge.
   // A hook step never wraps around the board edge; ordinary sliders may.
   bool hook_step(Square cur, Direction dir, Square& nxt) const;
+  bool step_destination(Square from, Direction d, Square& to) const;
   bool requires_full_evasion_filter() const;
   uint64_t two_step_moves_mask(Color c, PieceType pt) const;
   uint64_t hook_move_mask(Color c, PieceType pt) const;

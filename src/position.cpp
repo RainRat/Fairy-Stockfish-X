@@ -3473,23 +3473,7 @@ bool Position::requires_full_evasion_filter() const {
   Bitboard checkers = evasion_checkers();
   if (!checkers)
       return false;
-  // Conservative piece-type test: any checker whose type is configured for
-  // multi-leg movement forces NON_EVASIONS + legal() filtering. This may
-  // choose NON_EVASIONS more often than the exact geometry walk (the same
-  // piece type can also give ordinary check), but it stays correct and avoids
-  // re-walking hook geometry on every legal-generation/MovePicker call.
-  Color attacker = ~sideToMove;
-  PieceSet multi = two_step_piece_types(attacker) | hook_piece_types(attacker);
-  if (!multi)
-      return false;
-  while (checkers)
-  {
-      Square sq = pop_lsb(checkers);
-      Piece pc = piece_on(sq);
-      if (pc != NO_PIECE && (multi & piece_set(type_of(pc))))
-          return true;
-  }
-  return false;
+  return bool(multileg_attackers_to(royal_square(sideToMove), pieces(), ~sideToMove) & checkers);
 }
 
 bool Position::requires_full_evasion_generation() const {
@@ -3499,68 +3483,19 @@ bool Position::requires_full_evasion_generation() const {
 }
 
 bool Position::hook_path_valid(Color us, PieceType pt, Square from, Square via, Square to) const {
-  if (!(board_bb() & from) || !(board_bb() & via) || !(board_bb() & to)
-      || via == from || to == via)
-      return false;
-  uint64_t mask = hook_move_mask(us, pt);
-  if (!mask || hook_capture_limit(pt) < 1)
-      return false;
-
-  Bitboard occupied = pieces();
-  Bitboard friendly = pieces(us);
-  bool captureVia = bool(occupied & via);
-  bool captureTo = to != from && bool(occupied & to);
-  if (captureVia && captureTo && hook_capture_limit(pt) < 2)
-      return false;
-
-  auto reaches = [&](Square start, Square target, int dir, int range, bool secondLeg) {
-      Square cur = start;
-      for (int step = 1, limit = range ? range : SQUARE_NB; step <= limit; ++step)
-      {
-          Square next;
-          if (!hook_step(cur, KingDirections[dir], next) || !(board_bb() & next))
-              return false;
-          if (next == target)
-              return target == from && secondLeg ? true : !(friendly & target);
-          if (next == from || (friendly & next) || (occupied & next))
-              return false;
-          cur = next;
-      }
-      return false;
-  };
-
-  Bitboard remaining = Bitboard(mask);
-  while (remaining)
-  {
-      int pair = int(pop_lsb(remaining));
-      int d1 = multileg_pair_first(pair);
-      int d2 = multileg_pair_second(pair);
-      if (reaches(from, via, d1, hook_first_range(pt), false)
-          && reaches(via, to, d2, hook_second_range(pt), true))
-          return true;
-  }
-  return false;
+  bool found = false;
+  for_each_hook_path(us, pt, from, pieces(), pieces(us), [&](const HookPath& path) {
+      found |= path.via == via && path.to == to;
+  });
+  return found;
 }
 
 bool Position::two_step_path_valid(Color us, PieceType pt, Square from, Square via, Square to) const {
-  if (!(board_bb() & from) || !(board_bb() & via) || !(board_bb() & to))
-      return false;
-  if (pieces(us) & via || (to != from && (pieces(us) & to)))
-      return false;
-  // Encoded squares do not retain direction provenance; narrow wrapping
-  // boards can alias several direction pairs to the same path.
-  Bitboard remaining = Bitboard(two_step_moves_mask(us, pt));
-  while (remaining)
-  {
-      int pair = int(pop_lsb(remaining));
-      Square step1, step2;
-      if (step_destination(from, KingDirections[multileg_pair_first(pair)], step1)
-          && step1 == via
-          && step_destination(via, KingDirections[multileg_pair_second(pair)], step2)
-          && step2 == to)
-          return true;
-  }
-  return false;
+  bool found = false;
+  for_each_two_step_path(us, pt, from, pieces(us), [&](const TwoStepPath& path) {
+      found |= path.via == via && path.to == to;
+  });
+  return found;
 }
 
 Bitboard Position::attackers_to_king_without_freeze(Square s, Bitboard occupied, Color c,
@@ -4700,12 +4635,11 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
   if (flip_enclosed_pieces())
   {
       std::array<Bitboard, COLOR_NB> beforeMove = info.colorOccupancy;
+      Bitboard removed = extraCapture;
       if (is_ok(info.captureSquare))
-      {
-          Bitboard captured = square_bb(info.captureSquare);
-          beforeMove[WHITE] &= ~captured;
-          beforeMove[BLACK] &= ~captured;
-      }
+          removed |= square_bb(info.captureSquare);
+      beforeMove[WHITE] &= ~removed;
+      beforeMove[BLACK] &= ~removed;
 
       Bitboard flipped = 0;
       if (flip_enclosed_pieces() == REVERSI)
@@ -6627,8 +6561,7 @@ bool Position::has_legal_move() const {
 
 bool Position::has_legal_move_ignoring_immediate_end() const {
 
-  const bool useWrappedFallback = topology_wraps() && evasion_checkers();
-  const bool useNonEvasions = anti_royal_types() || useWrappedFallback;
+  const bool useNonEvasions = anti_royal_types() || requires_full_evasion_generation();
 
   if (evasion_checkers() && !useNonEvasions)
   {
@@ -8482,7 +8415,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       // - irreversible pawn moves
       if (   !pureWallMove
           && (   is_promotion_move(m)
-          || (type_of(m) == PIECE_PROMOTION && !piece_demotion())
+          || ((type_of(m) == PIECE_PROMOTION || is_multileg_promotion(m)) && !piece_demotion())
           || (    (var->nMoveRuleTypes.get(us) & piece_set(type_of(pc)))
               && !(PseudoMoves[0][us][type_of(pc)][to] & from))))
           st->rule50 = 0;
