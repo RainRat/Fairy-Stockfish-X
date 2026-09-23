@@ -31,6 +31,7 @@
 #include <iostream>
 
 #include "types.h"
+#include "multileg.h"
 #include "bitboard.h"
 
 namespace Stockfish {
@@ -40,7 +41,7 @@ namespace Stockfish {
 constexpr int START_MULTIMOVES = 128;
 
 // Direction-pair configuration vocabulary (two-step / hook moves). King-step
-// indices follow KingDirections order in types.h (N=0 NE=1 E=2 SE=3 S=4 SW=5
+// indices follow KingDirections order in multileg.h (N=0 NE=1 E=2 SE=3 S=4 SW=5
 // W=6 NW=7; pair bit d1 * 8 + d2). Black masks are the 180-degree point
 // reflection of the configured White-relative mask.
 inline const char* king_step_name(int idx) {

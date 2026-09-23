@@ -246,7 +246,7 @@ void MovePicker::score() {
       total = 0;
       topType = NO_PIECE_TYPE;
       points = 0;
-      Bitboard caps = pos.capture_squares(mv);
+      Bitboard caps = pos.capture_ordering_squares(mv);
       if (caps)
       {
           int topVal = -1;

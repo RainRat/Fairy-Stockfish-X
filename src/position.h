@@ -357,12 +357,8 @@ struct MoveUndoInfo {
   Bitboard   blastPromotedSquares = Bitboard(0);
   Bitboard   laserTransformedSquares = Bitboard(0);
   ReversiblePieceOnSquare captured;
-  // Extra victims beyond st->captured. The two slots are storage-exclusive
-  // (EN_PASSANT vs SPECIAL encodings never coincide on one move), but reads
-  // stay separate on purpose: blast/petrify folding and the captured_piece()
-  // fallback intentionally see only the multi-leg via victim.
-  ReversiblePieceOnSquare jumpedEnPassantCaptured;
-  ReversiblePieceOnSquare secondaryCaptured;
+  // Extra victim beyond st->captured (en-passant potion or multi-leg via).
+  ReversiblePieceOnSquare extraCaptured;
   ReversiblePieceState dead;
   Piece      promotionPawn = NO_PIECE;
   Piece      consumedPromotionHandPiece = NO_PIECE;
@@ -397,8 +393,7 @@ struct MoveUndoInfo {
     blastPromotedSquares = Bitboard(0);
     laserTransformedSquares = Bitboard(0);
     captured.clear();
-    jumpedEnPassantCaptured.clear();
-    secondaryCaptured.clear();
+    extraCaptured.clear();
     dead.clear();
     promotionPawn = NO_PIECE;
     consumedPromotionHandPiece = NO_PIECE;
@@ -433,8 +428,7 @@ struct MoveUndoInfo {
         && blastPromotedSquares == Bitboard(0)
         && laserTransformedSquares == Bitboard(0)
         && !captured
-        && !jumpedEnPassantCaptured
-        && !secondaryCaptured
+        && !extraCaptured
         && !dead
         && promotionPawn == NO_PIECE
         && consumedPromotionHandPiece == NO_PIECE
@@ -1093,20 +1087,15 @@ public:
   bool is_jump_capture(Move m) const;
   Square capture_square(Square to) const;
   Square capture_square(Move m) const;
-  Bitboard capture_squares(Move m) const;
-  // Neutral victim-square query for search ordering: every square whose
-  // occupant this move removes (one square for ordinary and jump captures,
-  // up to two for multi-leg doubles). MovePicker sums victim values itself
-  // so PieceValue/points weighting stays out of Position.
+  Bitboard capture_ordering_squares(Move m) const;
+  // Victim squares used by MovePicker ordering: ordinary and jump captures
+  // keep their legacy capture_square() behavior; multi-leg moves report both
+  // direct victims. MovePicker applies victim values and points weighting.
   // matches_recapture_square() is the qsearch recapture predicate. It stays
   // narrow (destination square, plus multi-leg victim squares) so legacy
   // jump-capture recapture behavior is unchanged.
   bool matches_recapture_square(Move m, Square s) const;
   bool step_destination(Square from, Direction d, Square& to) const;
-  // Single king step that never wraps: like step_destination, but a step
-  // jumping more than one file/rank (i.e. around a wrapped edge) fails.
-  // Hook rays use this so they stop at board edges; ordinary sliders wrap.
-  bool hook_step(Square cur, Direction dir, Square& nxt) const;
   Square secondary_drop_square(Move m) const;
   Square mirrored_pair_drop_square(Square s) const;
   Bitboard jump_capture_mask(Square from, Square to, Bitboard occupied) const;
@@ -1207,9 +1196,11 @@ private:
   // Multi-leg internals: completed-path validation and shared attack geometry.
   // Outside Position, movegen consumes the for_each_*_path iterators,
   // MovePicker/search see only requires_full_evasion_generation(),
-  // capture_squares(), and matches_recapture_square(). Everything else stays
-  // Everything else stays private so generic attack/evasion/search paths do
+  // capture_ordering_squares(), and matches_recapture_square(). Everything
+  // else stays private so generic attack/evasion/search paths do
   // not accumulate multi-leg knowledge.
+  // A hook step never wraps around the board edge; ordinary sliders may.
+  bool hook_step(Square cur, Direction dir, Square& nxt) const;
   bool requires_full_evasion_filter() const;
   uint64_t two_step_moves_mask(Color c, PieceType pt) const;
   uint64_t hook_move_mask(Color c, PieceType pt) const;
@@ -5931,7 +5922,7 @@ inline Square Position::capture_square(Move m) const {
   return to;
 }
 
-inline Bitboard Position::capture_squares(Move m) const {
+inline Bitboard Position::capture_ordering_squares(Move m) const {
   if (!capture(m))
       return Bitboard(0);
   if (is_multileg(m))
@@ -5956,10 +5947,10 @@ inline Bitboard Position::capture_squares(Move m) const {
 inline bool Position::matches_recapture_square(Move m, Square s) const {
   if (to_sq(m) == s)
       return true;
-  // capture_squares() also reports the hurdle square for legacy jump
+  // capture_ordering_squares() also reports the hurdle square for legacy jump
   // captures; keep qsearch recapture semantics narrow to multi-leg doubles
   // so pre-existing jump-capture behavior is unchanged.
-  return is_multileg(m) && bool(capture_squares(m) & s);
+  return is_multileg(m) && bool(capture_ordering_squares(m) & s);
 }
 
 inline bool Position::step_destination(Square from, Direction d, Square& to) const {
@@ -6117,7 +6108,7 @@ inline bool Position::virtual_drop(Move m) const {
 inline Piece Position::captured_piece() const {
   if (st->captured.piece.piece != NO_PIECE)
       return st->captured.piece.piece;
-  return st->secondaryCaptured.piece.piece;
+  return is_multileg(st->move) ? st->extraCaptured.piece.piece : NO_PIECE;
 }
 
 inline Bitboard Position::fog_area() const {
