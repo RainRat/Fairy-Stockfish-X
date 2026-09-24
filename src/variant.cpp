@@ -26,10 +26,16 @@
 #include "parser.h"
 #include "piece.h"
 #include "variant.h"
+#include "multileg.h"
 
 using std::string;
 
 namespace Stockfish {
+
+void DirectionPairSpec::conclude() {
+  byColor[WHITE] = relative;
+  byColor[BLACK] = reflect_direction_pairs(relative);
+}
 
 VariantMap variants; // Global object
 
@@ -2697,8 +2703,6 @@ Variant* Variant::conclude() {
                        && changingColorTrigger == ColorChangeTrigger::NEVER;
 
     const bool alwaysUnreliableSee = pointsCounting
-                                  || twoStepPieceTypes != NO_PIECE_SET
-                                  || hookPieceTypes != NO_PIECE_SET
                                   || pointsGoal > 0
                                   || captureDemotion
                                   || connectN != 0

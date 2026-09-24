@@ -1226,10 +1226,10 @@ namespace {
                 directTargets = 0;
             const bool routeSensitive = pos.variant()->royalPieceNoThroughCheck
                                      && pt == pos.royal_piece_type(Us);
-            detail::for_each_two_step_path(pos, Us, pt, from, pos.pieces(Us),
-                [&](const MultiLegPath& path) {
-                    bool cap1 = (!pos.empty(path.via) && color_of(pos.piece_on(path.via)) == them);
-                    bool cap2 = (path.to != from && !pos.empty(path.to) && color_of(pos.piece_on(path.to)) == them);
+            detail::MultiLegWalker::for_each_two_step_path(pos, Us, pt, from, pos.pieces(), pos.pieces(Us),
+                [&](const detail::MultiLegPath& path) {
+                    bool cap1 = bool(path.captures & path.via);
+                    bool cap2 = path.to != from && bool(path.captures & path.to);
                     bool direct = (!cap1 || path.via == path.to)
                                && path.to != from && (directTargets & path.to);
                     if (direct && !routeSensitive)
@@ -1289,18 +1289,20 @@ namespace {
             // Geometry (rays, blocking, origin landing) and the capture
             // limit are owned by the shared hook path walker; only
             // candidate emission stays here.
-            detail::for_each_hook_path(pos, Us, pt, from, pos.pieces(), pos.pieces(Us),
-                [&](const MultiLegPath& path) {
-                    bool direct = (!path.captureVia || path.via == path.to)
+            detail::MultiLegWalker::for_each_hook_path(pos, Us, pt, from, pos.pieces(), pos.pieces(Us),
+                [&](const detail::MultiLegPath& path) {
+                    bool cap1 = bool(path.captures & path.via);
+                    bool cap2 = path.to != from && bool(path.captures & path.to);
+                    bool direct = (!cap1 || path.via == path.to)
                                && path.to != from && (directTargets & path.to);
                     if (direct && !routeSensitive)
                         return false;
-                    int captureVia = path.captureVia ? int(path.via) : SQUARE_NB;
+                    int captureVia = cap1 ? int(path.via) : SQUARE_NB;
                     if ((seen[captureVia] & path.to) && !routeSensitive)
                         return false;
                     seen[captureVia] |= square_bb(path.to);
                     moveList = emit_multileg_candidate<Us, Type>(pos, moveList, pt, from, path.via, path.to,
-                                                                 path.captureVia, path.captureTo, target,
+                                                                 cap1, cap2, target,
                                                                  pos.evasion_checkers(), makeHook);
                     return false;
                 });
@@ -2245,7 +2247,7 @@ namespace {
                                      && potion.potion == Variant::POTION_FREEZE
                                      && !pos.variant()->freezePieceTypes;
       ExtMove* baseEnd = pos.evasion_checkers() && !broadenFreezeEvasion
-                       ? generate_evasions_without_potions(pos, baseMoves)
+                       ? generate_without_potions<EVASION_CANDIDATES>(pos, baseMoves)
                        : generate_without_potions<NON_EVASIONS>(pos, baseMoves);
 
       for (ExtMove* it = baseMoves; it != baseEnd; ++it)
@@ -2343,21 +2345,23 @@ template ExtMove* append_potions<EVASIONS>(const Position&, ExtMove*, ExtMove*, 
 template ExtMove* append_potions<QUIET_CHECKS>(const Position&, ExtMove*, ExtMove*, bool);
 template ExtMove* append_potions<NON_EVASIONS>(const Position&, ExtMove*, ExtMove*, bool);
 
-ExtMove* generate_evasions(const Position& pos, ExtMove* moveList) {
+template<bool WithPotions>
+static ExtMove* generate_evasion_candidates(const Position& pos, ExtMove* moveList) {
   return (pos.anti_royal_types() || pos.requires_full_evasion_generation())
-       ? generate<NON_EVASIONS>(pos, moveList)
-       : generate<EVASIONS>(pos, moveList);
+       ? (WithPotions ? generate<NON_EVASIONS>(pos, moveList)
+                      : generate_without_potions<NON_EVASIONS>(pos, moveList))
+       : (WithPotions ? generate<EVASIONS>(pos, moveList)
+                      : generate_without_potions<EVASIONS>(pos, moveList));
 }
 
 template<>
 ExtMove* generate<EVASION_CANDIDATES>(const Position& pos, ExtMove* moveList) {
-  return generate_evasions(pos, moveList);
+  return generate_evasion_candidates<true>(pos, moveList);
 }
 
-ExtMove* generate_evasions_without_potions(const Position& pos, ExtMove* moveList) {
-  return (pos.anti_royal_types() || pos.requires_full_evasion_generation())
-       ? generate_without_potions<NON_EVASIONS>(pos, moveList)
-       : generate_without_potions<EVASIONS>(pos, moveList);
+template<>
+ExtMove* generate_without_potions<EVASION_CANDIDATES>(const Position& pos, ExtMove* moveList) {
+  return generate_evasion_candidates<false>(pos, moveList);
 }
 
 /// generate<LEGAL> generates all the legal moves in the given position
@@ -2370,7 +2374,7 @@ ExtMove* generate<LEGAL>(const Position& pos, ExtMove* moveList) {
 
   ExtMove* cur = moveList;
 
-  moveList = pos.evasion_checkers() ? generate_evasions(pos, moveList)
+  moveList = pos.evasion_checkers() ? generate<EVASION_CANDIDATES>(pos, moveList)
                                     : generate<NON_EVASIONS>(pos, moveList);
   while (cur != moveList)
       if (!pos.legal(*cur) || pos.virtual_drop(*cur))

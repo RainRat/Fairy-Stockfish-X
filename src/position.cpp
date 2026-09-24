@@ -3397,7 +3397,7 @@ bool Position::two_step_attacks_square(Color us, PieceType pt, Square from, Squa
       return false;
   // Any emitted completion containing the target (as bend with a legal
   // landing, or as the final square via a non-friendly bend) is an attack.
-  return detail::for_each_two_step_path(*this, us, pt, from, friendly, [&](const MultiLegPath& path) {
+  return detail::MultiLegWalker::for_each_two_step_path(*this, us, pt, from, occupied, friendly, [&](const detail::MultiLegPath& path) {
       return path.via == target || path.to == target;
   });
 }
@@ -3412,8 +3412,8 @@ bool Position::hook_attacks_square(Color us, PieceType pt, Square from, Square t
       return false;
   // The hook capture limit is enforced by the iterator; only emitted paths
   // with a legal capture count attack the target.
-  return detail::for_each_hook_path(*this, us, pt, from, occupied, friendly,
-      [&](const MultiLegPath& path) {
+  return detail::MultiLegWalker::for_each_hook_path(*this, us, pt, from, occupied, friendly,
+      [&](const detail::MultiLegPath& path) {
           return path.via == target || path.to == target;
       }, target);
 }
@@ -3484,32 +3484,26 @@ Bitboard Position::multileg_attackers_to(Square s, Bitboard occupied, Color c,
   return attackers;
 }
 
-bool Position::requires_full_evasion_filter() const {
-  if (!has_two_step_moves() && !has_hook_moves())
-      return false;
-  Bitboard checkers = evasion_checkers();
-  if (!checkers)
-      return false;
-  return bool(checkers & pieces(~sideToMove, two_step_piece_types() | hook_piece_types()));
-}
-
 bool Position::requires_full_evasion_generation() const {
   if (!evasion_checkers())
       return false;
-  if (topology_wraps() || requires_full_evasion_filter())
+  if (topology_wraps())
+      return true;
+  if ((has_two_step_moves() || has_hook_moves())
+      && (evasion_checkers() & pieces(~sideToMove, two_step_piece_types() | hook_piece_types())))
       return true;
   return (has_two_step_moves() || has_hook_moves())
       && (blast_on_capture() || blast_on_move() || var->freezePieceTypes || var->trapRegion);
 }
 
 bool Position::hook_path_valid(Color us, PieceType pt, Square from, Square via, Square to) const {
-  return detail::for_each_hook_path(*this, us, pt, from, pieces(), pieces(us), [&](const MultiLegPath& path) {
+  return detail::MultiLegWalker::for_each_hook_path(*this, us, pt, from, pieces(), pieces(us), [&](const detail::MultiLegPath& path) {
       return path.via == via && path.to == to;
   });
 }
 
 bool Position::two_step_path_valid(Color us, PieceType pt, Square from, Square via, Square to) const {
-  return detail::for_each_two_step_path(*this, us, pt, from, pieces(us), [&](const MultiLegPath& path) {
+  return detail::MultiLegWalker::for_each_two_step_path(*this, us, pt, from, pieces(), pieces(us), [&](const detail::MultiLegPath& path) {
       return path.via == via && path.to == to;
   });
 }
@@ -3522,8 +3516,8 @@ Bitboard Position::multileg_transit_squares(Move m) const {
 
   Bitboard transit = 0;
   if (is_two_step(m))
-      detail::for_each_two_step_path(*this, color_of(mover), type_of(mover), from, pieces(color_of(mover)),
-          [&](const MultiLegPath& path) {
+      detail::MultiLegWalker::for_each_two_step_path(*this, color_of(mover), type_of(mover), from, pieces(), pieces(color_of(mover)),
+          [&](const detail::MultiLegPath& path) {
               if (path.via == via && path.to == to)
               {
                   transit |= path.transit;
@@ -3532,8 +3526,8 @@ Bitboard Position::multileg_transit_squares(Move m) const {
               return false;
           });
   else if (is_hook(m))
-      detail::for_each_hook_path(*this, color_of(mover), type_of(mover), from, pieces(), pieces(color_of(mover)),
-          [&](const MultiLegPath& path) {
+      detail::MultiLegWalker::for_each_hook_path(*this, color_of(mover), type_of(mover), from, pieces(), pieces(color_of(mover)),
+          [&](const detail::MultiLegPath& path) {
               if (path.via == via && path.to == to)
               {
                   transit |= path.transit;
@@ -11999,8 +11993,6 @@ bool Position::has_game_cycle(int ply) const {
 bool Position::see_pruning_unreliable() const {
 #ifndef NDEBUG
   const bool reference = points_counting()
-                      || has_two_step_moves()
-                      || has_hook_moves()
                       || points_goal() > 0
                       || var->freezePieceTypes
                       || var->trapRegion
@@ -12028,16 +12020,14 @@ bool Position::see_pruning_unreliable(Move m) const {
          == (var->seePruningPolicy != SeePruningPolicy::RELIABLE));
 #endif
 
+  // SEE cannot model both victims of a multi-leg capture.
+  if (is_multileg(m))
+      return true;
+
   if (var->seePruningPolicy == SeePruningPolicy::RELIABLE)
       return false;
 
   if (var->seePruningPolicy == SeePruningPolicy::ALWAYS_UNRELIABLE)
-      return true;
-
-  // Two-step moves capture on up to two squares; SEE only models a single
-  // victim, so conservatively treat them as unreliable. This is a safe
-  // fallback, not a full multi-victim exchange evaluation.
-  if (is_multileg(m))
       return true;
 
   if (type_of(moved_piece(m)) == KING)
