@@ -1224,15 +1224,18 @@ namespace {
             directTargets |= pos.attacks_from(Us, pt, from, pos.pieces()) & pos.pieces(them);
             if ((pos.clone_move_types() & pt) || pos.gating() || pos.walling(Us))
                 directTargets = 0;
+            const bool routeSensitive = pos.variant()->royalPieceNoThroughCheck
+                                     && pt == pos.royal_piece_type(Us);
             detail::for_each_two_step_path(pos, Us, pt, from, pos.pieces(Us),
                 [&](const MultiLegPath& path) {
                     bool cap1 = (!pos.empty(path.via) && color_of(pos.piece_on(path.via)) == them);
                     bool cap2 = (path.to != from && !pos.empty(path.to) && color_of(pos.piece_on(path.to)) == them);
-                    bool direct = !cap1 && path.to != from && (directTargets & path.to);
-                    if (direct)
+                    bool direct = (!cap1 || path.via == path.to)
+                               && path.to != from && (directTargets & path.to);
+                    if (direct && !routeSensitive)
                         return false;
                     int captureVia = cap1 ? int(path.via) : SQUARE_NB;
-                    if ((seen[captureVia] & path.to) && !pos.variant()->royalPieceNoThroughCheck)
+                    if ((seen[captureVia] & path.to) && !routeSensitive)
                         return false;
                     seen[captureVia] |= square_bb(path.to);
                     moveList = emit_multileg_candidate<Us, Type>(pos, moveList, pt, from, path.via, path.to,
@@ -1280,17 +1283,20 @@ namespace {
             directTargets |= pos.attacks_from(Us, pt, from, pos.pieces()) & pos.pieces(them);
             if ((pos.clone_move_types() & pt) || pos.gating() || pos.walling(Us))
                 directTargets = 0;
+            const bool routeSensitive = pos.variant()->royalPieceNoThroughCheck
+                                     && pt == pos.royal_piece_type(Us);
             // Hook rays stop at board edges (see Position::hook_step).
             // Geometry (rays, blocking, origin landing) and the capture
             // limit are owned by the shared hook path walker; only
             // candidate emission stays here.
             detail::for_each_hook_path(pos, Us, pt, from, pos.pieces(), pos.pieces(Us),
                 [&](const MultiLegPath& path) {
-                    bool direct = !path.captureVia && path.to != from && (directTargets & path.to);
-                    if (direct)
+                    bool direct = (!path.captureVia || path.via == path.to)
+                               && path.to != from && (directTargets & path.to);
+                    if (direct && !routeSensitive)
                         return false;
                     int captureVia = path.captureVia ? int(path.via) : SQUARE_NB;
-                    if ((seen[captureVia] & path.to) && !pos.variant()->royalPieceNoThroughCheck)
+                    if ((seen[captureVia] & path.to) && !routeSensitive)
                         return false;
                     seen[captureVia] |= square_bb(path.to);
                     moveList = emit_multileg_candidate<Us, Type>(pos, moveList, pt, from, path.via, path.to,

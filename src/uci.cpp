@@ -28,7 +28,7 @@
 #include "evaluate.h"
 #include "movegen.h"
 #include "position.h"
-#include "multileg.h"
+#include "multileg_move.h"
 #include "search.h"
 #include "thread.h"
 #include "timeman.h"

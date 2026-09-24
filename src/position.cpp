@@ -3414,7 +3414,7 @@ bool Position::hook_attacks_square(Color us, PieceType pt, Square from, Square t
   // with a legal capture count attack the target.
   return detail::for_each_hook_path(*this, us, pt, from, occupied, friendly,
       [&](const MultiLegPath& path) {
-          return (path.via == target && (board_bb(us, pt) & target)) || path.to == target;
+          return path.via == target || path.to == target;
       }, target);
 }
 
@@ -4660,9 +4660,9 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
       extraCapture = jump_capture_mask(info.from, info.to) & ~square_bb(info.captureSquare);
   else if (is_multileg(m))
   {
-      Square via = via_sq(m);
-      if (via != info.to && !empty(via) && color_of(piece_on(via)) == ~sideToMove)
-          extraCapture |= square_bb(via);
+      DirectCaptureInfo captures = direct_capture_info(m);
+      if (is_ok(captures.extra))
+          extraCapture |= square_bb(captures.extra);
   }
   info.rifle = rifle_capture(m) && isCapture && !info.castling;
   info.stationary = info.rifle;
@@ -5745,14 +5745,12 @@ bool Position::legal(Move m) const {
       return false;
   if (is_multileg(m) && isCapture)
   {
-      Square via = via_sq(m);
-      bool viaCapture = via != to && !empty(via) && color_of(piece_on(via)) == them;
-      bool toCapture = to != from && !empty(to) && color_of(piece_on(to)) == them;
+      DirectCaptureInfo captures = direct_capture_info(m);
       // A double capture removes two victims, but blast, petrification
       // and capture-morph effects are defined for a single capture
       // square. Reject such combinations instead of silently applying
       // the effect to one victim and dropping the other.
-      if (viaCapture && toCapture
+      if (captures.capturesVia && captures.capturesTo
           && (blast_on_capture(m) || capture_morph()
               || (var->petrifyOnCaptureTypes & movePt)))
           return false;
@@ -6379,10 +6377,10 @@ bool Position::legal(Move m) const {
       {
           // captured_piece() only sees the primary (to) victim; a double
           // capture must also respect restrictions on the via victim.
-          Square via = via_sq(m);
-          if (via != to && !empty(via) && color_of(piece_on(via)) == them)
+          DirectCaptureInfo captures = direct_capture_info(m);
+          if (is_ok(captures.extra))
           {
-              PieceType viaTarget = type_of(piece_on(via));
+              PieceType viaTarget = type_of(piece_on(captures.extra));
               if (attacker < PIECE_TYPE_NB && viaTarget < PIECE_TYPE_NB && (var->captureForbiddenByColor[us][attacker] & viaTarget))
                   return false;
           }
@@ -8034,8 +8032,9 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   bool multiLeg = is_multileg(m);
   if (multiLeg)
   {
+      DirectCaptureInfo captures = direct_capture_info(m);
       Square via = via_sq(m);
-      if (via != to && !empty(via) && color_of(piece_on(via)) == them)
+      if (captures.capturesVia)
       {
           Piece capVia = piece_on(via);
           bool viaPromoted = is_promoted(via);
@@ -8047,10 +8046,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           st->extraCaptured.clear();
       }
 
-      if (to == from)
-          captured = NO_PIECE;
-      else
-          captured = (!empty(to) && color_of(piece_on(to)) == them) ? piece_on(to) : NO_PIECE;
+      captured = captures.capturesTo ? piece_on(to) : NO_PIECE;
   }
 
   Square capturedSq = captured ? (pushMove && !stepwisePush ? pushInfo.tail : capture_square(m)) : SQ_NONE;
