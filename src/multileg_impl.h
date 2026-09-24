@@ -7,11 +7,13 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdlib>
 #include <utility>
 
 namespace Stockfish::detail {
 
 struct MultiLegPath {
+  MultiLegKind kind = MultiLegKind::TWO_STEP;
   Square via = SQ_NONE;
   Square to = SQ_NONE;
   Bitboard captures = 0;
@@ -20,10 +22,23 @@ struct MultiLegPath {
 
 struct MultiLegWalker {
 
+  static bool step_destination(const Position& pos, Square from, Direction d, Square& to) {
+      auto [dr, df] = decode_direction(d);
+      return wrapped_destination_square(from, df, dr, pos.max_file(), pos.max_rank(),
+                                        pos.wraps_files(), pos.wraps_ranks(), to);
+  }
+
+  static bool hook_step(const Position& pos, Square cur, Direction dir, Square& nxt) {
+      if (!step_destination(pos, cur, dir, nxt))
+          return false;
+      return std::abs(int(file_of(nxt)) - int(file_of(cur))) <= 1
+          && std::abs(int(rank_of(nxt)) - int(rank_of(cur))) <= 1;
+  }
+
   template<typename Visit>
   static bool for_each_two_step_path(const Position& pos, Color us, PieceType pt, Square from,
                                      Bitboard occupied, Bitboard friendly, Visit&& visit) {
-  uint64_t mask = pos.two_step_moves_mask(us, pt);
+  uint64_t mask = pos.variant()->twoStepMoves[pt].byColor[us];
   if (!mask || !(pos.board_bb() & from))
       return false;
   std::array<std::pair<Square, Square>, 64> seen{};
@@ -35,12 +50,12 @@ struct MultiLegWalker {
       int d1 = multileg_pair_first(pair_idx);
       int d2 = multileg_pair_second(pair_idx);
       Square via;
-      if (!pos.step_destination(from, KingDirections[d1], via))
+      if (!step_destination(pos, from, KingDirections[d1], via))
           continue;
       if (!(pos.board_bb() & via) || (friendly & via))
           continue;
       Square to;
-      if (!pos.step_destination(via, KingDirections[d2], to))
+      if (!step_destination(pos, via, KingDirections[d2], to))
           continue;
       // Piece mobility constrains the completed move's endpoint; the via
       // square remains a transit/capture square.
@@ -52,6 +67,7 @@ struct MultiLegWalker {
           continue;
       seen[seenCount++] = key;
       MultiLegPath path;
+      path.kind = MultiLegKind::TWO_STEP;
       path.via = via;
       path.to = to;
       path.captures = (square_bb(via) | square_bb(to)) & occupied & ~square_bb(from);
@@ -66,14 +82,14 @@ struct MultiLegWalker {
   static bool for_each_hook_path(const Position& pos, Color us, PieceType pt, Square from,
                                  Bitboard occupied, Bitboard friendly, Visit&& visit,
                                  Square target = SQ_NONE) {
-  uint64_t mask = pos.hook_move_mask(us, pt);
+  uint64_t mask = pos.variant()->hookMoves[pt].directions.byColor[us];
   if (!mask || !(pos.board_bb() & from))
       return false;
-  int captureLimit = pos.hook_capture_limit(pt);
+  int captureLimit = pos.variant()->hookMoves[pt].captureLimit;
   if (captureLimit < 1)
       return false;
-  int range1 = pos.hook_first_range(pt);
-  int range2 = pos.hook_second_range(pt);
+  int range1 = pos.variant()->hookMoves[pt].firstRange;
+  int range2 = pos.variant()->hookMoves[pt].secondRange;
   Bitboard remaining = Bitboard(mask);
   while (remaining)
   {
@@ -86,7 +102,7 @@ struct MultiLegWalker {
       for (int k1 = 1; k1 <= cap1steps; ++k1)
       {
           Square step1;
-          if (!pos.hook_step(bend, KingDirections[d1], step1))
+          if (!hook_step(pos, bend, KingDirections[d1], step1))
               break;
           if (!(pos.board_bb() & step1) || (friendly & step1))
               break;
@@ -96,6 +112,7 @@ struct MultiLegWalker {
           if (cap1)
           {
               MultiLegPath path;
+              path.kind = MultiLegKind::HOOK;
               path.via = bend;
               path.to = bend;
               path.captures = square_bb(bend);
@@ -113,7 +130,7 @@ struct MultiLegWalker {
               for (int k2 = 1; k2 <= cap2steps; ++k2)
               {
                   Square step2;
-                  if (!pos.hook_step(probe, KingDirections[d2], step2) || !(pos.board_bb() & step2))
+                  if (!hook_step(pos, probe, KingDirections[d2], step2) || !(pos.board_bb() & step2))
                       break;
                   bool atOrigin = step2 == from;
                   if (!atOrigin && (friendly & step2))
@@ -142,7 +159,7 @@ struct MultiLegWalker {
           for (int k2 = 1; k2 <= cap2steps; ++k2)
           {
               Square step2;
-              if (!pos.hook_step(to, KingDirections[d2], step2))
+              if (!hook_step(pos, to, KingDirections[d2], step2))
                   break;
               if (!(pos.board_bb() & step2))
                   break;
@@ -161,6 +178,7 @@ struct MultiLegWalker {
               if (cap1 && cap2 && captureLimit < 2)
                   break;
               MultiLegPath path;
+              path.kind = MultiLegKind::HOOK;
               path.via = bend;
               path.to = to;
               path.captures = (cap1 ? square_bb(bend) : Bitboard(0))
@@ -177,6 +195,18 @@ struct MultiLegWalker {
   }
   return false;
 }
+
+  template<typename Visit>
+  static bool for_each_multileg_path(const Position& pos, Color us, PieceType pt, Square from,
+                                     Bitboard occupied, Bitboard friendly, Visit&& visit,
+                                     Square target = SQ_NONE) {
+      const Variant* rules = pos.variant();
+      if ((rules->twoStepPieceTypes & piece_set(pt))
+          && for_each_two_step_path(pos, us, pt, from, occupied, friendly, visit))
+          return true;
+      return (rules->hookPieceTypes & piece_set(pt))
+          && for_each_hook_path(pos, us, pt, from, occupied, friendly, visit, target);
+  }
 
 };
 

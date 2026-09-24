@@ -3385,34 +3385,15 @@ Bitboard Position::attackers_to_base(Square s, Bitboard occupied, Color c, Bitbo
   return b;
 }
 
-bool Position::two_step_attacks_square(Color us, PieceType pt, Square from, Square target,
-                                         Bitboard occupied, Bitboard friendly) const {
+bool Position::multileg_attacks_square(Color us, PieceType pt, Square from, Square target,
+                                       Bitboard occupied, Bitboard friendly) const {
   if (from == target || !(board_bb() & from) || !(board_bb() & target))
       return false;
-  // `target` is treated as a hypothetical victim: callers pass
-  // attackOccupied = occupied | target and friendly without target, so do not
-  // require target occupancy or reject friendly-occupied targets here.
-  // The attacker itself must exist in the hypothetical occupancy.
+  // The hypothetical victim is included in `occupied` and excluded from
+  // `friendly`, matching the generic attackers_to() contract.
   if (!(occupied & from))
       return false;
-  // Any emitted completion containing the target (as bend with a legal
-  // landing, or as the final square via a non-friendly bend) is an attack.
-  return detail::MultiLegWalker::for_each_two_step_path(*this, us, pt, from, occupied, friendly, [&](const detail::MultiLegPath& path) {
-      return path.via == target || path.to == target;
-  });
-}
-
-bool Position::hook_attacks_square(Color us, PieceType pt, Square from, Square target,
-                                   Bitboard occupied, Bitboard friendly) const {
-  if (from == target || !(board_bb() & from) || !(board_bb() & target))
-      return false;
-  // Same hypothetical-victim contract as two_step_attacks_square: target is
-  // already folded into `occupied` by the caller and excluded from `friendly`.
-  if (!(occupied & from))
-      return false;
-  // The hook capture limit is enforced by the iterator; only emitted paths
-  // with a legal capture count attack the target.
-  return detail::MultiLegWalker::for_each_hook_path(*this, us, pt, from, occupied, friendly,
+  return detail::MultiLegWalker::for_each_multileg_path(*this, us, pt, from, occupied, friendly,
       [&](const detail::MultiLegPath& path) {
           return path.via == target || path.to == target;
       }, target);
@@ -3420,7 +3401,7 @@ bool Position::hook_attacks_square(Color us, PieceType pt, Square from, Square t
 
 Bitboard Position::multileg_attackers_to(Square s, Bitboard occupied, Color c,
                                          const SimulatedMoveInfo* simulated) const {
-  if (!has_two_step_moves() && !has_hook_moves())
+  if (!has_multileg_moves())
       return Bitboard(0);
   if (s == SQ_NONE || !(board_bb() & s))
       return Bitboard(0);
@@ -3459,25 +3440,14 @@ Bitboard Position::multileg_attackers_to(Square s, Bitboard occupied, Color c,
       return b & occupied;
   };
   Bitboard attackers = Bitboard(0);
-  for (PieceSet ps = two_step_piece_types(); ps; )
+  for (PieceSet ps = multileg_piece_types(); ps; )
   {
       PieceType pt = pop_lsb(ps);
       Bitboard candidates = candidates_for(pt);
       while (candidates)
       {
           Square from = pop_lsb(candidates);
-          if (two_step_attacks_square(c, pt, from, s, attackOccupied, friendly))
-              attackers |= square_bb(from);
-      }
-  }
-  for (PieceSet ps = hook_piece_types(); ps; )
-  {
-      PieceType pt = pop_lsb(ps);
-      Bitboard candidates = candidates_for(pt);
-      while (candidates)
-      {
-          Square from = pop_lsb(candidates);
-          if (hook_attacks_square(c, pt, from, s, attackOccupied, friendly))
+          if (multileg_attacks_square(c, pt, from, s, attackOccupied, friendly))
               attackers |= square_bb(from);
       }
   }
@@ -3489,53 +3459,32 @@ bool Position::requires_full_evasion_generation() const {
       return false;
   if (topology_wraps())
       return true;
-  if ((has_two_step_moves() || has_hook_moves())
-      && (evasion_checkers() & pieces(~sideToMove, two_step_piece_types() | hook_piece_types())))
+  if (has_multileg_moves()
+      && (evasion_checkers() & pieces(~sideToMove, multileg_piece_types())))
       return true;
-  return (has_two_step_moves() || has_hook_moves())
+  return has_multileg_moves()
       && (blast_on_capture() || blast_on_move() || var->freezePieceTypes || var->trapRegion);
 }
 
-bool Position::hook_path_valid(Color us, PieceType pt, Square from, Square via, Square to) const {
-  return detail::MultiLegWalker::for_each_hook_path(*this, us, pt, from, pieces(), pieces(us), [&](const detail::MultiLegPath& path) {
-      return path.via == via && path.to == to;
-  });
-}
-
-bool Position::two_step_path_valid(Color us, PieceType pt, Square from, Square via, Square to) const {
-  return detail::MultiLegWalker::for_each_two_step_path(*this, us, pt, from, pieces(), pieces(us), [&](const detail::MultiLegPath& path) {
-      return path.via == via && path.to == to;
-  });
-}
-
-Bitboard Position::multileg_transit_squares(Move m) const {
+Position::MultiLegMoveInfo Position::resolve_multileg_move(Move m) const {
+  MultiLegMoveInfo info;
+  if (!is_multileg(m))
+      return info;
   Square from = from_sq(m), via = via_sq(m), to = to_sq(m);
   Piece mover = piece_on(from);
   if (mover == NO_PIECE)
-      return Bitboard(0);
+      return info;
 
-  Bitboard transit = 0;
-  if (is_two_step(m))
-      detail::MultiLegWalker::for_each_two_step_path(*this, color_of(mover), type_of(mover), from, pieces(), pieces(color_of(mover)),
-          [&](const detail::MultiLegPath& path) {
-              if (path.via == via && path.to == to)
-              {
-                  transit |= path.transit;
-                  return true;
-              }
-              return false;
-          });
-  else if (is_hook(m))
-      detail::MultiLegWalker::for_each_hook_path(*this, color_of(mover), type_of(mover), from, pieces(), pieces(color_of(mover)),
-          [&](const detail::MultiLegPath& path) {
-              if (path.via == via && path.to == to)
-              {
-                  transit |= path.transit;
-                  return true;
-              }
-              return false;
-          });
-  return transit;
+  MultiLegKind wanted = is_two_step(m) ? MultiLegKind::TWO_STEP : MultiLegKind::HOOK;
+  auto visit = [&](const detail::MultiLegPath& path) {
+      if (path.kind != wanted || path.via != via || path.to != to)
+          return false;
+      info = {true, path.via, path.to, path.captures, path.transit};
+      return true;
+  };
+  detail::MultiLegWalker::for_each_multileg_path(*this, color_of(mover), type_of(mover), from,
+                                                 pieces(), pieces(color_of(mover)), visit);
+  return info;
 }
 
 Bitboard Position::attackers_to_king_without_freeze(Square s, Bitboard occupied, Color c,
@@ -4654,9 +4603,8 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
       extraCapture = jump_capture_mask(info.from, info.to) & ~square_bb(info.captureSquare);
   else if (is_multileg(m))
   {
-      DirectCaptureInfo captures = direct_capture_info(m);
-      if (is_ok(captures.extra))
-          extraCapture |= square_bb(captures.extra);
+      MultiLegMoveInfo captures = resolve_multileg_move(m);
+      extraCapture = captures.captures & ~square_bb(info.captureSquare);
   }
   info.rifle = rifle_capture(m) && isCapture && !info.castling;
   info.stationary = info.rifle;
@@ -5547,6 +5495,17 @@ bool Position::legal(Move m) const {
   Square from = from_sq(m);
   Square to = to_sq(m);
   Square pullFrom = pull_square(m);
+  MultiLegMoveInfo multilegInfo;
+  if (is_multileg(m))
+  {
+      multilegInfo = resolve_multileg_move(m);
+      if (!multilegInfo.valid)
+          return false;
+  }
+  const bool isCapture = is_multileg(m) ? bool(multilegInfo.captures) : capture(m);
+  const Square captureSq = isCapture
+                         ? (is_multileg(m) ? multilegInfo.primary_capture(from) : capture_square(m))
+                         : SQ_NONE;
 
   if (in_opening_self_removal_phase())
       return is_opening_self_removal_move(m);
@@ -5556,7 +5515,7 @@ bool Position::legal(Move m) const {
 
   if (is_multileg(m))
   {
-      PromotionStatus promo = multileg_promotion_status(moved_piece(m), from, to, capture(m));
+      PromotionStatus promo = move_promotion_status(moved_piece(m), from, to, isCapture);
       if ((is_multileg_promotion(m) && !promo.allowed)
           || (!is_multileg_promotion(m) && promo.mandatory))
           return false;
@@ -5619,8 +5578,7 @@ bool Position::legal(Move m) const {
   if (potCtx.jumpRemoved && (square_bb(to) & potCtx.jumpRemoved))
       return false;
 
-  const bool isCapture = capture(m);
-  const Square shotSq = isCapture ? capture_square(m) : to;
+  const Square shotSq = isCapture ? captureSq : to;
 
   if (type_of(m) == CASTLING && gamePly < var->castlingForbiddenPlies)
       return false;
@@ -5722,29 +5680,16 @@ bool Position::legal(Move m) const {
   if ((type_of(m) == PIECE_PROMOTION || is_multileg_promotion(m))
       && (is_promoted(from) || !promotion_allowed(us, promoted_piece_type(type_of(moved_piece(m))))))
       return false;
-  if (is_two_step(m))
-  {
-      Square via = via_sq(m);
-      if (!two_step_path_valid(us, movePt, from, via, to))
-          return false;
-      if (two_step_promotes(m) && !multileg_promotion_status(moverPiece, from, to, isCapture).allowed)
-          return false;
-  }
-  // Hook path validation (geometry, occupancy, capture limit) has a single
-  // owner: hook_path_valid. Promotions use only the move's start and end.
-  if (is_hook(m) && !hook_path_valid(us, movePt, from, via_sq(m), to))
-      return false;
-  if (is_hook(m) && hook_promotes(m)
-      && !multileg_promotion_status(moverPiece, from, to, isCapture).allowed)
+  if (is_multileg_promotion(m)
+      && !move_promotion_status(moverPiece, from, to, isCapture).allowed)
       return false;
   if (is_multileg(m) && isCapture)
   {
-      DirectCaptureInfo captures = direct_capture_info(m);
       // A double capture removes two victims, but blast, petrification
       // and capture-morph effects are defined for a single capture
       // square. Reject such combinations instead of silently applying
       // the effect to one victim and dropping the other.
-      if (captures.capturesVia && captures.capturesTo
+      if (multilegInfo.captures_via() && multilegInfo.captures_to(from)
           && (blast_on_capture(m) || capture_morph()
               || (var->petrifyOnCaptureTypes & movePt)))
           return false;
@@ -6062,7 +6007,7 @@ bool Position::legal(Move m) const {
       {
           if (multimove_pass(gamePly))
               return false;
-          if (multimove_pass(gamePly + 1) && !var->multimoveCapture && capture(m))
+          if (multimove_pass(gamePly + 1) && !var->multimoveCapture && isCapture)
               return false;
       }
       if (violates_same_player_board_repetition(m))
@@ -6095,7 +6040,7 @@ bool Position::legal(Move m) const {
   {
       if (passMove != multimove_pass(gamePly))
           return false;
-      if (multimove_pass(gamePly + 1) && ((!var->multimoveCapture && capture(m)) || (!var->multimoveCheck && gives_check(m))))
+      if (multimove_pass(gamePly + 1) && ((!var->multimoveCapture && isCapture) || (!var->multimoveCheck && gives_check(m))))
           return false;
   }
 
@@ -6122,7 +6067,7 @@ bool Position::legal(Move m) const {
   {
       const bool blastOnCapture = blast_on_capture(m);
       Square kto = rifleShot ? from : to;
-      Square blastCenter = (capture(m) || rifleShot) ? captureBlastCenter : kto;
+      Square blastCenter = (isCapture || rifleShot) ? captureBlastCenter : kto;
       Bitboard occupied = rifleShot ? pieces() : (!dropMove && !cloneMove ? pieces() ^ from : pieces());
       Bitboard blastImmune = blastOnCapture ? blast_immune_bb() : Bitboard(0);
       if (walling_rule() == DUCK)
@@ -6161,7 +6106,7 @@ bool Position::legal(Move m) const {
       }
       else if (rifleShot)
           occupied &= ~square_bb(shotSq);
-      if (capture(m) && blastOnCapture)
+      if (isCapture && blastOnCapture)
       {
           occupied &= ~blast_squares(blastCenter);
           if (blast_immune_types() & finalMovePt)
@@ -6169,7 +6114,7 @@ bool Position::legal(Move m) const {
       }
       occupied &= ~removedByEffects;
       // Petrifying a pseudo-royal piece is illegal
-      if (capture(m) && (var->petrifyOnCaptureTypes & type_of(moved_piece(m))) && (st->pseudoRoyals & from))
+      if (isCapture && (var->petrifyOnCaptureTypes & type_of(moved_piece(m))) && (st->pseudoRoyals & from))
           return false;
       Bitboard pseudoRoyals = 0;
       Bitboard pseudoRoyalsTheirs = 0;
@@ -6275,7 +6220,7 @@ bool Position::legal(Move m) const {
       {
           const bool blastOnCapture = blast_on_capture(m);
           Square kto = rifleShot ? from : to;
-          Square blastCenter = (capture(m) || rifleShot) ? captureBlastCenter : kto;
+      Square blastCenter = (isCapture || rifleShot) ? captureBlastCenter : kto;
           Square rfrom = SQ_NONE, rto = SQ_NONE;
           Bitboard occupied = rifleShot ? pieces() : (!dropMove && !cloneMove ? pieces() ^ from : pieces());
           Bitboard blastImmune = blastOnCapture ? blast_immune_bb() : Bitboard(0);
@@ -6298,7 +6243,7 @@ bool Position::legal(Move m) const {
           if (potions_enabled() && (pieces(~us) & to))
               occupied = (occupied & ~square_bb(to)) | kto;
       }
-      if (capture(m) && blastOnCapture)
+      if (isCapture && blastOnCapture)
       {
           occupied &= ~blast_squares(blastCenter);
           if (blast_immune_types() & finalMovePt)
@@ -6361,20 +6306,23 @@ bool Position::legal(Move m) const {
       }
   }
 
-  if (capture(m) && type_of(m) != CASTLING && !is_stack_move(m))
+  if (isCapture && type_of(m) != CASTLING && !is_stack_move(m))
   {
       PieceType attacker = type_of(moved_piece(m));
-      PieceType target = type_of(captured_piece(m));
+      PieceType target = type_of(is_multileg(m) ? piece_on(captureSq) : captured_piece(m));
       if (attacker < PIECE_TYPE_NB && target < PIECE_TYPE_NB && (var->captureForbiddenByColor[us][attacker] & target))
           return false;
       if (is_multileg(m))
       {
           // captured_piece() only sees the primary (to) victim; a double
           // capture must also respect restrictions on the via victim.
-          DirectCaptureInfo captures = direct_capture_info(m);
-          if (is_ok(captures.extra))
+          MultiLegMoveInfo captures = resolve_multileg_move(m);
+          Square extra = captures.primary_capture(from);
+          if (captures.captures && captures.captures != square_bb(extra))
           {
-              PieceType viaTarget = type_of(piece_on(captures.extra));
+              Bitboard extraCapture = captures.captures & ~square_bb(extra);
+              Square extraSquare = pop_lsb(extraCapture);
+              PieceType viaTarget = type_of(piece_on(extraSquare));
               if (attacker < PIECE_TYPE_NB && viaTarget < PIECE_TYPE_NB && (var->captureForbiddenByColor[us][attacker] & viaTarget))
                   return false;
           }
@@ -6480,7 +6428,7 @@ bool Position::legal(Move m) const {
   {
       Bitboard protectedPseudoRoyals = st->pseudoRoyals;
 
-      if ((capture(m) || rifleShot) && (protectedPseudoRoyals & square_bb(shotSq)))
+      if ((isCapture || rifleShot) && (protectedPseudoRoyals & square_bb(shotSq)))
           return false;
 
       if ((removedByEffects | simulated.claimedSquares) & protectedPseudoRoyals)
@@ -6545,7 +6493,7 @@ bool Position::legal(Move m) const {
 
   if (var->royalPieceNoThroughCheck && moverIsRoyal)
   {
-      Bitboard traversed = is_multileg(m) ? multileg_transit_squares(m)
+      Bitboard traversed = is_multileg(m) ? multilegInfo.transit
                                          : between_bb(from, to) & ~square_bb(to);
       Bitboard currentJanggiCannons = pieces(JANGGI_CANNON) & ~square_bb(from);
       while (traversed)
@@ -6644,11 +6592,22 @@ bool Position::pseudo_legal(const Move m) const {
   Square to = to_sq(m);
   Square pullFrom = pull_square(m);
   Piece pc = moved_piece(m);
+  MultiLegMoveInfo multilegInfo;
+  if (is_multileg(m))
+  {
+      multilegInfo = resolve_multileg_move(m);
+      if (!multilegInfo.valid)
+          return false;
+  }
+  const bool isCapture = is_multileg(m) ? bool(multilegInfo.captures) : capture(m);
+  const Square captureSq = isCapture
+                         ? (is_multileg(m) ? multilegInfo.primary_capture(from) : capture_square(m))
+                         : SQ_NONE;
   Color dropColor = dropMove ? drop_hand_color(us, in_hand_piece_type(m)) : us;
-  bool rifleShot = rifle_capture(m) && capture(m) && type_of(m) != CASTLING;
+  bool rifleShot = rifle_capture(m) && isCapture && type_of(m) != CASTLING;
   Square effectiveTo = rifleShot ? from : to;
-  Bitboard removedAttackers = capture(m) ? square_bb(capture_square(m)) : Bitboard(0);
-  if (capture(m) && is_jump_capture(m))
+  Bitboard removedAttackers = isCapture ? square_bb(captureSq) : Bitboard(0);
+  if (isCapture && is_jump_capture(m))
       removedAttackers |= jump_capture_mask(from, to);
   Variant::PotionType pseudoPotion = Variant::POTION_TYPE_NB;
   if (is_gating(m) && !laser_game())
@@ -6836,14 +6795,8 @@ bool Position::pseudo_legal(const Move m) const {
   {
       if (pc == NO_PIECE || color_of(pc) != us)
           return false;
-      PieceType pt = type_of(pc);
       Square via = via_sq(m);
-      const bool validPath = is_two_step(m)
-                           ? two_step_path_valid(us, pt, from, via, to)
-                           : hook_path_valid(us, pt, from, via, to);
-      if (!validPath)
-          return false;
-      PromotionStatus promo = multileg_promotion_status(pc, from, to, capture(m));
+      PromotionStatus promo = move_promotion_status(pc, from, to, isCapture);
       if (is_multileg_promotion(m)
           && !promo.allowed)
           return false;
@@ -6974,7 +6927,7 @@ bool Position::pseudo_legal(const Move m) const {
   if (    mandatory_piece_promotion()
       && (is_promoted(from) ? piece_demotion() : promoted_piece_type(type_of(pc)) != NO_PIECE_TYPE)
       && (promotion_zone(pc) & (SquareBB[from] | effectiveTo))
-      && (!piece_promotion_on_capture() || capture(m)))
+      && (!piece_promotion_on_capture() || isCapture))
       return false;
 
   // Is not a promotion, so promotion piece must be empty
@@ -6993,7 +6946,7 @@ bool Position::pseudo_legal(const Move m) const {
   if ((pieces(us) & to) && !is_pass(m) && !is_self_destruct(m))
   {
       bool antiRoyalSelfCapture = anti_royal_self_capture_only() && (anti_royal_types() & piece_set(type_of(pc)));
-      if (!pushMove && !((self_capture(type_of(pc)) || antiRoyalSelfCapture) && capture(m)))
+      if (!pushMove && !((self_capture(type_of(pc)) || antiRoyalSelfCapture) && isCapture))
           return false;
       if (is_uncapturable_royal_square(us, to))
           return false;
@@ -7036,13 +6989,13 @@ bool Position::pseudo_legal(const Move m) const {
       if (!isStandardPawnMove
           && !is_self_destruct(m)
           && !(pushMove ? (push_targets_from(us, type_of(pc), from) & to)
-                        : ((capture(m) ? attacks_from(us, type_of(pc), from)
+                        : ((isCapture ? attacks_from(us, type_of(pc), from)
                                        : moves_from(us, type_of(pc), from)) & to)))
           return false;
   }
   else if (!is_self_destruct(m)
         && !(pushMove ? (push_targets_from(us, type_of(pc), from) & to)
-                      : ((capture(m) ? attacks_from(us, type_of(pc), from) : moves_from(us, type_of(pc), from)) & to)))
+                      : ((isCapture ? attacks_from(us, type_of(pc), from) : moves_from(us, type_of(pc), from)) & to)))
       return false;
 
   // Hopper-type pieces can optionally be configured to avoid hopping over
@@ -7095,8 +7048,8 @@ bool Position::pseudo_legal(const Move m) const {
           while (remaining)
               evasionTargets &= checker_evasion_targets(us, royalSq, pop_lsb(remaining));
 
-          const bool blastEvasion = ((capture(m) || rifle_capture(m)) && blast_on_capture(m)) ||
-                                    (!capture(m) && !rifle_capture(m) && !is_self_destruct(m) && blast_on_move()) ||
+          const bool blastEvasion = ((isCapture || rifle_capture(m)) && blast_on_capture(m)) ||
+                                    (!isCapture && !rifle_capture(m) && !is_self_destruct(m) && blast_on_move()) ||
                                     (is_self_destruct(m) && blast_on_self_destruct());
           const bool effectEvasion = blastEvasion || var->freezePieceTypes || var->trapRegion;
           if (!effectEvasion)
@@ -7171,7 +7124,7 @@ bool Position::gives_check(Move m) const {
                          // ordinary check source, unlike the committed
                          // position's physical-king attack map.
                          || (capture_morph()
-                             && !(capture(m) && anti_royal_types() && !checking_permitted()))
+                             && !(isCapture && anti_royal_types() && !checking_permitted()))
                          || var->hasMoveMorph
                          || var->changingColorPieceTypes
                          || var->blastPassiveTypes
@@ -7190,8 +7143,7 @@ bool Position::gives_check(Move m) const {
                           || laser_game()
                          || has_adjacent_swapping()
                          || is_swap_move(m)
-                         || has_two_step_moves()
-                         || has_hook_moves()
+                         || has_multileg_moves()
                          || type_of(m) == DROP2
                          || type_of(m) == INSERT;
 
@@ -7362,7 +7314,7 @@ bool Position::gives_check_impl(Move m) const {
 
   if (attackFromSurvives && simulatedMoverFriendly
       && !(frozenAttackers & square_bb(attackFrom))
-      && (is_two_step(m) || is_hook(m))
+      && is_multileg(m)
       && (multileg_attackers_to(royalSq, occupied, sideToMove, &simulated) & square_bb(attackFrom)))
       return !(var->captureForbiddenByColor[sideToMove][pt] & royalType);
 
@@ -7416,7 +7368,7 @@ bool Position::gives_check_impl(Move m) const {
       discCheckSq |= square_bb(via_sq(m));
 
   if (  (((!dropMove && (blockers_for_king(~sideToMove) & discCheckSq)) || var->trapRegion
-          || has_two_step_moves() || has_hook_moves())
+          || has_multileg_moves())
          || (non_sliding_riders() & pieces(sideToMove)))
       && (attackers_to_king(royalSq, occupied, sideToMove, janggiCannons,
                             NO_PIECE_TYPE, &simulated)
@@ -7887,6 +7839,12 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   Square from = from_sq(m);
   Square to = to_sq(m);
   Piece pc = moved_piece(m);
+  MultiLegMoveInfo multilegInfo;
+  if (is_multileg(m))
+  {
+      multilegInfo = resolve_multileg_move(m);
+      assert(multilegInfo.valid);
+  }
 
   // Used by NNUE
   st->accumulator.computed[WHITE] = false;
@@ -7901,7 +7859,10 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   PieceType movedType = type_of(pc);
   PieceType movedMoveType = effective_piece_type(movedType);
   const PieceInfo* pi = movedMoveType != NO_PIECE_TYPE ? pieceMap.get(movedMoveType) : nullptr;
-  Piece captured = captured_piece(m);
+  Piece captured = is_multileg(m)
+                 ? (multilegInfo.captures_to(from) ? piece_on(to)
+                    : multilegInfo.captures_via() ? piece_on(multilegInfo.via) : NO_PIECE)
+                 : captured_piece(m);
   if (is_stack_move(m))
       captured = NO_PIECE;
   if (var->laserGame && from == to)
@@ -8026,9 +7987,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   bool multiLeg = is_multileg(m);
   if (multiLeg)
   {
-      DirectCaptureInfo captures = direct_capture_info(m);
-      Square via = via_sq(m);
-      if (captures.capturesVia)
+      Square via = multilegInfo.via;
+      if (multilegInfo.captures_via())
       {
           Piece capVia = piece_on(via);
           bool viaPromoted = is_promoted(via);
@@ -8040,10 +8000,12 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           st->extraCaptured.clear();
       }
 
-      captured = captures.capturesTo ? piece_on(to) : NO_PIECE;
+      captured = multilegInfo.captures_to(from) ? piece_on(to) : NO_PIECE;
   }
 
-  Square capturedSq = captured ? (pushMove && !stepwisePush ? pushInfo.tail : capture_square(m)) : SQ_NONE;
+  Square capturedSq = captured ? (pushMove && !stepwisePush ? pushInfo.tail
+                                  : multiLeg ? multilegInfo.primary_capture(from) : capture_square(m))
+                               : SQ_NONE;
   if (captured)
   {
       st->captured.set(captured, is_promoted(capturedSq), unpromoted_piece_on(capturedSq), capturedSq);

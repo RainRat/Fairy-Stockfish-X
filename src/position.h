@@ -36,7 +36,6 @@
 #include "evaluate.h"
 #include "psqt.h"
 #include "types.h"
-#include "multileg.h"
 #include "variant.h"
 #include "movegen.h"
 #include "piece.h"
@@ -46,9 +45,6 @@
 namespace Stockfish {
 
 class Position;
-namespace detail {
-struct MultiLegWalker;
-}
 
 constexpr int MAX_PUSH_SNAPSHOT = 32;
 
@@ -614,15 +610,12 @@ public:
   Bitboard mandatory_promotion_zone(Color c) const;
   Bitboard mandatory_promotion_zone(Color c, PieceType pt) const;
   Bitboard mandatory_promotion_zone(Piece p) const;
-  // Shared multi-leg promotion eligibility: availability, piece-specific
-  // zones, promotion limits, the on-capture rule, and mandatory zones.
-  // Generation (movegen emit) and validation (legal/pseudo_legal) share this
-  // so promotion rules cannot drift apart between the two paths.
+  // Shared move promotion eligibility for generation and legality checks.
   struct PromotionStatus {
       bool allowed = false;
       bool mandatory = false;
   };
-  PromotionStatus multileg_promotion_status(Piece mover, Square from, Square to, bool isCapture) const;
+  PromotionStatus move_promotion_status(Piece mover, Square from, Square to, bool isCapture) const;
   PieceType effective_piece_type(PieceType pt) const { return pt == KING ? king_type() : pt; }
   Square promotion_square(Color c, Square s) const;
   PieceType main_promotion_pawn_type(Color c) const;
@@ -767,10 +760,8 @@ public:
   bool drop_loop() const;
   bool captures_to_hand() const;
   PieceSet capture_to_hand_types() const;
-  bool has_two_step_moves() const;
-  PieceSet two_step_piece_types() const;
-  bool has_hook_moves() const;
-  PieceSet hook_piece_types() const;
+  bool has_multileg_moves() const;
+  PieceSet multileg_piece_types() const;
   // Bent hook/two-step checks cannot be blocked geometrically like riders;
   // callers must generate NON_EVASIONS and let legal() filter them (same
   // conservative pattern as wrapped boards).
@@ -1167,39 +1158,26 @@ public:
   void remove_piece(Square s);
 
 private:
-  struct DirectCaptureInfo {
-    Square primary = SQ_NONE;
-    Square extra = SQ_NONE;
-    bool capturesVia = false;
-    bool capturesTo = false;
+  struct MultiLegMoveInfo {
+    bool valid = false;
+    Square via = SQ_NONE;
+    Square to = SQ_NONE;
+    Bitboard captures = 0;
+    Bitboard transit = 0;
+
+    bool captures_via() const { return is_ok(via) && via != to && bool(captures & square_bb(via)); }
+    bool captures_to(Square from) const { return is_ok(to) && to != from && bool(captures & square_bb(to)); }
+    Square primary_capture(Square from) const {
+        return captures_to(from) ? to : captures_via() ? via : SQ_NONE;
+    }
   };
-  DirectCaptureInfo direct_capture_info(Move m) const;
-  friend struct detail::MultiLegWalker;
+  MultiLegMoveInfo resolve_multileg_move(Move m) const;
   Bitboard attackers_to_base(Square s, Bitboard occupied, Color c, Bitboard janggiCannons) const;
   Bitboard attackers_to_base(Square s, Bitboard occupied, Color c, Bitboard janggiCannons,
                              const SimulatedMoveInfo* simulated) const;
-  // Multi-leg internals: completed-path validation and shared attack geometry.
-  // Outside Position, movegen consumes the for_each_*_path iterators,
-  // MovePicker/search see only requires_full_evasion_generation() and
-  // capture_squares(). Everything else stays private so generic
-  // attack/evasion/search paths do
-  // not accumulate multi-leg knowledge.
-  // A hook step never wraps around the board edge; ordinary sliders may.
-  bool hook_step(Square cur, Direction dir, Square& nxt) const;
-  bool step_destination(Square from, Direction d, Square& to) const;
-  Bitboard multileg_transit_squares(Move m) const;
-  uint64_t two_step_moves_mask(Color c, PieceType pt) const;
-  uint64_t hook_move_mask(Color c, PieceType pt) const;
-  int hook_first_range(PieceType pt) const;
-  int hook_second_range(PieceType pt) const;
-  int hook_capture_limit(PieceType pt) const;
-  bool hook_path_valid(Color us, PieceType pt, Square from, Square via, Square to) const;
-  bool two_step_path_valid(Color us, PieceType pt, Square from, Square via, Square to) const;
   bool multileg_promotion_zone(Color c, PieceType pt, Square from, Square to) const;
-  bool two_step_attacks_square(Color us, PieceType pt, Square from, Square target,
+  bool multileg_attacks_square(Color us, PieceType pt, Square from, Square target,
                                Bitboard occupied, Bitboard friendly) const;
-  bool hook_attacks_square(Color us, PieceType pt, Square from, Square target,
-                           Bitboard occupied, Bitboard friendly) const;
   Bitboard multileg_attackers_to(Square s, Bitboard occupied, Color c,
                                  const SimulatedMoveInfo* simulated = nullptr) const;
   // Initialization helpers (used while setting up a position)
@@ -2496,49 +2474,14 @@ inline PieceSet Position::capture_to_hand_types() const {
   return var->captureToHandTypes;
 }
 
-inline bool Position::has_two_step_moves() const {
+inline bool Position::has_multileg_moves() const {
   assert(var != nullptr);
-  return var->twoStepPieceTypes != NO_PIECE_SET;
+  return var->twoStepPieceTypes || var->hookPieceTypes;
 }
 
-inline uint64_t Position::two_step_moves_mask(Color c, PieceType pt) const {
+inline PieceSet Position::multileg_piece_types() const {
   assert(var != nullptr);
-  return var->twoStepMoves[pt].byColor[c];
-}
-
-inline PieceSet Position::two_step_piece_types() const {
-  assert(var != nullptr);
-  return var->twoStepPieceTypes;
-}
-
-inline bool Position::has_hook_moves() const {
-  assert(var != nullptr);
-  return var->hookPieceTypes != NO_PIECE_SET;
-}
-
-inline uint64_t Position::hook_move_mask(Color c, PieceType pt) const {
-  assert(var != nullptr);
-  return var->hookMoves[pt].directions.byColor[c];
-}
-
-inline int Position::hook_first_range(PieceType pt) const {
-  assert(var != nullptr);
-  return var->hookMoves[pt].firstRange;
-}
-
-inline int Position::hook_second_range(PieceType pt) const {
-  assert(var != nullptr);
-  return var->hookMoves[pt].secondRange;
-}
-
-inline int Position::hook_capture_limit(PieceType pt) const {
-  assert(var != nullptr);
-  return var->hookMoves[pt].captureLimit;
-}
-
-inline PieceSet Position::hook_piece_types() const {
-  assert(var != nullptr);
-  return var->hookPieceTypes;
+  return var->twoStepPieceTypes | var->hookPieceTypes;
 }
 
 inline PieceSet Position::self_destruct_types() const {
@@ -5816,24 +5759,12 @@ inline bool Position::is_jump_capture(Move m) const {
   return (type_of(m) == NORMAL || is_promotion_move(m)) && jump_capture_square(from_sq(m), to_sq(m)) != SQ_NONE;
 }
 
-inline Position::DirectCaptureInfo Position::direct_capture_info(Move m) const {
-  assert(is_multileg(m));
-  Square from = from_sq(m), via = via_sq(m), to = to_sq(m);
-  Color them = ~sideToMove;
-  DirectCaptureInfo info;
-  info.capturesVia = via != to && !empty(via) && color_of(piece_on(via)) == them;
-  info.capturesTo = to != from && !empty(to) && color_of(piece_on(to)) == them;
-  info.primary = info.capturesTo ? to : info.capturesVia ? via : SQ_NONE;
-  info.extra = info.capturesTo && info.capturesVia ? via : SQ_NONE;
-  return info;
-}
-
 inline bool Position::capture(Move m) const {
   assert(is_ok(m));
   if (type_of(m) == EN_PASSANT)
       return true;
   if (is_multileg(m))
-      return is_ok(direct_capture_info(m).primary);
+      return bool(resolve_multileg_move(m).captures);
   if (type_of(m) == PULL || type_of(m) == SWAP || is_stack_move(m)
       || is_unstack_move(m) || is_laser_fire(m))
       return false;
@@ -5902,7 +5833,10 @@ inline Square Position::capture_square(Move m) const {
   if (type_of(m) == EN_PASSANT)
       return capture_square(to);
   if (is_multileg(m))
-      return direct_capture_info(m).primary;
+  {
+      MultiLegMoveInfo info = resolve_multileg_move(m);
+      return info.primary_capture(from_sq(m));
+  }
   if (is_jump_capture(m))
       return jump_capture_square(from_sq(m), to);
 
@@ -5914,36 +5848,18 @@ inline Square Position::capture_square(Move m) const {
 }
 
 inline Bitboard Position::capture_squares(Move m) const {
+  if (is_multileg(m))
+      return resolve_multileg_move(m).captures;
   if (!capture(m))
       return Bitboard(0);
-  if (is_multileg(m))
-  {
-      DirectCaptureInfo info = direct_capture_info(m);
-      return (is_ok(info.primary) ? square_bb(info.primary) : Bitboard(0))
-           | (is_ok(info.extra) ? square_bb(info.extra) : Bitboard(0));
-  }
   // Multi-victim locust ordering is out of scope for the multi-leg change;
   // keep pre-existing single-victim search semantics for jump captures.
   Square cs = capture_square(m);
   return is_ok(cs) ? square_bb(cs) : Bitboard(0);
 }
 
-inline bool Position::step_destination(Square from, Direction d, Square& to) const {
-  auto [dr, df] = decode_direction(d);
-  return wrapped_destination_square(from, df, dr, max_file(), max_rank(), wraps_files(), wraps_ranks(), to);
-}
-
-inline bool Position::hook_step(Square cur, Direction dir, Square& nxt) const {
-  if (!step_destination(cur, dir, nxt))
-      return false;
-  if (std::abs(int(file_of(nxt)) - int(file_of(cur))) > 1
-      || std::abs(int(rank_of(nxt)) - int(rank_of(cur))) > 1)
-      return false;
-  return true;
-}
-
-inline Position::PromotionStatus Position::multileg_promotion_status(Piece mover, Square from, Square to,
-                                                                      bool isCapture) const {
+inline Position::PromotionStatus Position::move_promotion_status(Piece mover, Square from, Square to,
+                                                                  bool isCapture) const {
   PromotionStatus status;
   if (mover == NO_PIECE)
       return status;
