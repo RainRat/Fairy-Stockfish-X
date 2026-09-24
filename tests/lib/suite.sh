@@ -146,6 +146,7 @@ UCI
     assert_contains_literal "${no_kings_output}" "e4e8: 1" "contains the royal capture"
     cleanup_tmp_ini
     legacy royal-variant-regressions.sh 3m "${ENGINE}" "${VARIANTS}"
+    legacy chu-lion-rules.sh 2m "${ENGINE}" "${VARIANTS}"
     legacy pseudoroyal-capture-illegal.sh 2m "${ENGINE}" "${VARIANTS}"
     legacy ep-pseudoroyal-regressions.sh 2m "${ENGINE}" "${VARIANTS}"
     legacy quiet-check-special-moves.sh 5m "${ENGINE}"

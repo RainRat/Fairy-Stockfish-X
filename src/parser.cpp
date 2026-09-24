@@ -1986,6 +1986,9 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
         if (!parse_two_step_moves<DoCheck>("twoStepMoves", it_two_step->second, v, v->twoStepMoves))
             return false;
     }
+    parse_attribute("lionMoveTypes", v->lionMoveTypes, v);
+    parse_attribute("insignificantPieces", v->insignificantPieces, v);
+    parse_attribute("lionCapturingRule", v->lionCapturingRule);
     auto it_hook = config.find("hookMoves");
     if (it_hook != config.end())
     {

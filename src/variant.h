@@ -265,6 +265,9 @@ struct Variant {
   // Color-independent: Black masks are the point reflection of White masks,
   // and reflection preserves membership, so both colors share one set.
   PieceSet twoStepPieceTypes = {};
+  PieceSet lionMoveTypes = NO_PIECE_SET;
+  PieceSet insignificantPieces = NO_PIECE_SET;
+  bool lionCapturingRule = false;
   // Hook movers: two sliding legs with a bend (from -> bend -> to), at most
   // One coherent geometry/range/capture-limit specification per piece type.
   HookMoveSpec hookMoves[PIECE_TYPE_NB] = {};
