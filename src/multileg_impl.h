@@ -2,6 +2,10 @@
 #ifndef MULTILEG_IMPL_H_INCLUDED
 #define MULTILEG_IMPL_H_INCLUDED
 
+#include <algorithm>
+#include <array>
+#include <utility>
+
 namespace Stockfish::detail {
 
 template<typename Visit>
@@ -77,19 +81,13 @@ bool for_each_hook_path(const Position& pos, Color us, PieceType pt, Square from
           bool cap1 = bool(occupied & bend);
           if (cap1)
           {
-              // If the first-leg capture is already an ordinary move of the
-              // piece, emit that move only; hook-only movers still need this
-              // endpoint to stop on the capture.
-              if (!(pos.attacks_from(us, pt, from, occupied) & square_bb(bend)))
-              {
-                  MultiLegPath path;
-                  path.via = bend;
-                  path.to = bend;
-                  path.captureVia = true;
-                  path.transit = firstTransit & ~square_bb(bend);
-                  if ((pos.board_bb(us, pt) & bend) && visit(path))
-                      return true;
-              }
+              MultiLegPath path;
+              path.via = bend;
+              path.to = bend;
+              path.captureVia = true;
+              path.transit = firstTransit & ~square_bb(bend);
+              if ((pos.board_bb(us, pt) & bend) && visit(path))
+                  return true;
               if (captureLimit == 1)
                   break;
           }

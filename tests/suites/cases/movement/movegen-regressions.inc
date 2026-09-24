@@ -54,6 +54,20 @@ hookMoves = h:R-R
 startFen = 8/8/8/8/3hH3/8/8/8 w - - 0 1
 immobile = -
 castling = false
+
+[test-hook-bend-mobility:chess]
+customPiece1 = h:0
+hookMoves = h:R-R:2
+mobilityRegionWhiteCustomPiece1 = d5
+startFen = 8/8/8/8/2Hk4/8/8/7K b - - 0 1
+castling = false
+
+[test-royal-route:chess]
+king = k:R
+twoStepMoves = k:NW>NE
+royalPieceNoThroughCheck = true
+startFen = k7/8/3b4/8/4K3/8/8/8 w - - 0 1
+castling = false
 EOF
 
 cat >"$TMP_INI" <<'EOF'
@@ -458,5 +472,19 @@ go perft 1")
 assert_contains "$out" "^e4d4: 1$"
 assert_not_contains "$out" "^e4d4d4:"
 assert_not_contains "$out" "^e4e5e7:"
+
+# A captured royal on a hook bend is attacked when a legal continuation ends
+# inside the mover's mobility region, even if the bend itself is outside it.
+out=$(run_uci_cmds "$ENGINE" "$HOOK_INI" test-hook-bend-mobility \
+  "position startpos
+d")
+assert_contains "$out" "^Checkers: c4"
+
+# The direct rook route e4-e6 crosses an attacked square, while the two-step
+# royal route e4-d5-e6 reaches the same endpoint without crossing it.
+out=$(run_uci_cmds "$ENGINE" "$HOOK_INI" test-royal-route \
+  "position startpos
+go perft 1")
+assert_contains "$out" "^e4d5e6: 1$"
 
 echo "movegen regressions passed"

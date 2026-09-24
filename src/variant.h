@@ -31,7 +31,7 @@
 #include <iostream>
 
 #include "types.h"
-#include "multileg.h"
+#include "multileg_geometry.h"
 #include "bitboard.h"
 
 namespace Stockfish {

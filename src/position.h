@@ -36,6 +36,7 @@
 #include "evaluate.h"
 #include "psqt.h"
 #include "types.h"
+#include "multileg_move.h"
 #include "variant.h"
 #include "movegen.h"
 #include "piece.h"
@@ -1170,6 +1171,13 @@ public:
   void remove_piece(Square s);
 
 private:
+  struct DirectCaptureInfo {
+    Square primary = SQ_NONE;
+    Square extra = SQ_NONE;
+    bool capturesVia = false;
+    bool capturesTo = false;
+  };
+  DirectCaptureInfo direct_capture_info(Move m) const;
   template<typename Visit>
   friend bool detail::for_each_two_step_path(const Position&, Color, PieceType, Square, Bitboard, Visit&&);
   template<typename Visit>
@@ -5817,20 +5825,24 @@ inline bool Position::is_jump_capture(Move m) const {
   return (type_of(m) == NORMAL || is_promotion_move(m)) && jump_capture_square(from_sq(m), to_sq(m)) != SQ_NONE;
 }
 
+inline Position::DirectCaptureInfo Position::direct_capture_info(Move m) const {
+  assert(is_multileg(m));
+  Square from = from_sq(m), via = via_sq(m), to = to_sq(m);
+  Color them = ~sideToMove;
+  DirectCaptureInfo info;
+  info.capturesVia = via != to && !empty(via) && color_of(piece_on(via)) == them;
+  info.capturesTo = to != from && !empty(to) && color_of(piece_on(to)) == them;
+  info.primary = info.capturesTo ? to : info.capturesVia ? via : SQ_NONE;
+  info.extra = info.capturesTo && info.capturesVia ? via : SQ_NONE;
+  return info;
+}
+
 inline bool Position::capture(Move m) const {
   assert(is_ok(m));
   if (type_of(m) == EN_PASSANT)
       return true;
   if (is_multileg(m))
-  {
-      Square via = via_sq(m);
-      Square to = to_sq(m);
-      if (via != to && !empty(via) && color_of(piece_on(via)) == ~sideToMove)
-          return true;
-      if (to != from_sq(m) && !empty(to) && color_of(piece_on(to)) == ~sideToMove)
-          return true;
-      return false;
-  }
+      return is_ok(direct_capture_info(m).primary);
   if (type_of(m) == PULL || type_of(m) == SWAP || is_stack_move(m)
       || is_unstack_move(m) || is_laser_fire(m))
       return false;
@@ -5899,14 +5911,7 @@ inline Square Position::capture_square(Move m) const {
   if (type_of(m) == EN_PASSANT)
       return capture_square(to);
   if (is_multileg(m))
-  {
-      if (to != from_sq(m) && !empty(to) && color_of(piece_on(to)) == ~sideToMove)
-          return to;
-      Square via = via_sq(m);
-      if (via != to && !empty(via) && color_of(piece_on(via)) == ~sideToMove)
-          return via;
-      return SQ_NONE;
-  }
+      return direct_capture_info(m).primary;
   if (is_jump_capture(m))
       return jump_capture_square(from_sq(m), to);
 
@@ -5922,16 +5927,9 @@ inline Bitboard Position::capture_squares(Move m) const {
       return Bitboard(0);
   if (is_multileg(m))
   {
-      Bitboard b = 0;
-      Square via = via_sq(m);
-      Square to = to_sq(m);
-      Square from = from_sq(m);
-      Color them = ~sideToMove;
-      if (via != to && !empty(via) && color_of(piece_on(via)) == them)
-          b |= square_bb(via);
-      if (to != from && !empty(to) && color_of(piece_on(to)) == them)
-          b |= square_bb(to);
-      return b;
+      DirectCaptureInfo info = direct_capture_info(m);
+      return (is_ok(info.primary) ? square_bb(info.primary) : Bitboard(0))
+           | (is_ok(info.extra) ? square_bb(info.extra) : Bitboard(0));
   }
   // Multi-victim locust ordering is out of scope for the multi-leg change;
   // keep pre-existing single-victim search semantics for jump captures.

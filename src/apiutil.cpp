@@ -17,6 +17,7 @@
 */
 
 #include "apiutil.h"
+#include "multileg_geometry.h"
 
 #include <iomanip>
 

@@ -557,8 +557,10 @@ constexpr int MAX_PLY = 246;
 enum Move :
 #if defined(VERY_LARGE_BOARDS)
   uint64_t
-#else
+#elif defined(LARGEBOARDS)
   uint32_t
+#else
+  int
 #endif
 {
   MOVE_NONE,
