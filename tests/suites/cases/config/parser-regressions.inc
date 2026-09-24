@@ -522,6 +522,10 @@ hookMoves = h:sB-R
 customPiece1 = h:0
 hookMoves = h:R-R:3
 
+[bad-hook-no-turn:chess]
+customPiece1 = h:0
+hookMoves = h:fR-bR
+
 [bad-hook-wrapped:chess]
 king = -
 customPiece1 = h:0
@@ -879,6 +883,9 @@ assert_contains "${bad_hook_output2}" "unknown variant 'bad-hook-geometry'; keep
 bad_hook_output3=$(run_uci "$ENGINE" "$bad_hook_ini" "bad-hook-limit" </dev/null 2>&1 || true)
 assert_contains "${bad_hook_output3}" "unknown variant 'bad-hook-limit'; keeping 'chess'"
 
+bad_hook_no_turn_output=$(run_uci "$ENGINE" "$bad_hook_ini" "bad-hook-no-turn" </dev/null 2>&1 || true)
+assert_contains "${bad_hook_no_turn_output}" "unknown variant 'bad-hook-no-turn'; keeping 'chess'"
+
 bad_hook_output4=$(run_uci "$ENGINE" "$bad_hook_ini" "bad-hook-wrapped" </dev/null 2>&1 || true)
 assert_contains "${bad_hook_output4}" "unknown variant 'bad-hook-wrapped'; keeping 'chess'"
 
@@ -907,6 +914,7 @@ bad_hook_check_output=$("${ENGINE}" check "${bad_hook_ini}" 2>&1 || true)
 assert_contains "${bad_hook_check_output}" "hookMoves - Malformed hook legs"
 assert_contains "${bad_hook_check_output}" "hookMoves - Invalid hook leg"
 assert_contains "${bad_hook_check_output}" "hookMoves - Invalid hook capture limit"
+assert_contains "${bad_hook_check_output}" "hookMoves - Hook legs have no valid direction pairs"
 assert_contains "${bad_hook_check_output}" "hookMoves is not supported on wrapped boards."
 assert_contains "${bad_hook_check_output}" "twoBoards is not supported with multi-capture twoStepMoves or :2 hookMoves."
 

@@ -429,7 +429,8 @@ namespace {
             if (!parse_hook_leg(trim(legsPart.substr(0, dash)), bits1, range1)
                 || !parse_hook_leg(trim(legsPart.substr(dash + 1)), bits2, range2))
                 return fail("Invalid hook leg (expected [f|b|s](R|B)[range])", rawSpec);
-            const bool sameGeometry = bool(bits1 & bits2);
+            const bool sameGeometry = bool(bits1 & KingOrthogonalDirections)
+                                   == bool(bits2 & KingOrthogonalDirections);
             uint64_t mask = 0;
             for (int d1 = 0; d1 < 8; ++d1)
                 if (bits1 & (1 << d1))
@@ -437,6 +438,8 @@ namespace {
                         if ((bits2 & (1 << d2))
                             && (!sameGeometry || (d2 - d1 + 8) % 8 == 2 || (d2 - d1 + 8) % 8 == 6))
                             mask |= multileg_direction_pair_bit(d1, d2);
+            if (!mask)
+                return fail("Hook legs have no valid direction pairs", rawSpec);
             parsed[pt].directions.relative = mask;
             parsed[pt].firstRange = range1;
             parsed[pt].secondRange = range2;

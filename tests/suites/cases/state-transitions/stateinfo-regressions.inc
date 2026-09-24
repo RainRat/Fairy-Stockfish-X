@@ -78,6 +78,9 @@ castling = true
 promotedPieceType = l:q
 promotionLimit = q:1
 
+[test-lion-promo-only:test-lion-state]
+customPiece1 = l:-
+
 [test-mandatory-lion:chess]
 customPiece1 = l:ADNWK
 twoStepMoves = l:*
@@ -146,6 +149,14 @@ blastOnCapture = true
 castling = false
 
 [test-hook-state:chess]
+customPiece1 = h:0
+hookMoves = h:R-R
+castling = false
+
+[test-hook-nonking-state:chess]
+king = q:Q
+pieceToCharTable = -
+startFen = 8/8/6q1/8/4H3/8/8/4Q3 w - - 0 1
 customPiece1 = h:0
 hookMoves = h:R-R
 castling = false
@@ -797,15 +808,15 @@ static void test_hook_promotions() {
     assert(pos.piece_on(SQ_G7) == make_piece(WHITE, CUSTOM_PIECE_1));
 }
 
-static void test_hook_path_promotion() {
+static void test_hook_transit_does_not_promote() {
     StateInfo st{};
     Position pos;
     pos.set(variants.get("test-hook-path-promo"), "k7/8/8/8/4H3/8/8/7K w - - 0 1", false, &st, nullptr);
     Move crossing = make_hook(SQ_E4, SQ_E5, SQ_F5, true);
     Move notCrossing = make_hook(SQ_E4, SQ_F4, SQ_F5, true);
-    assert(pos.legal(crossing));
+    assert(!pos.legal(crossing));
     assert(!pos.legal(notCrossing));
-    assert(MoveList<LEGAL>(pos).contains(crossing));
+    assert(!MoveList<LEGAL>(pos).contains(crossing));
     assert(!MoveList<LEGAL>(pos).contains(notCrossing));
 }
 
@@ -814,16 +825,16 @@ static void test_quiet_multileg_promotion_is_tactical() {
     Position pos;
     // A quiet (victimless) two-step promotion must appear in the CAPTURES
     // generation bucket, exactly like an ordinary quiet pawn promotion.
-    pos.set(variants.get("test-lion-state"),
-            "8/6L1/8/8/8/8/8/4K2k w - - 0 1", false, &st, nullptr);
-    Move m_quiet_promo = make_two_step(SQ_G7, SQ_F8, SQ_G8, true);
+    pos.set(variants.get("test-lion-promo-only"),
+            "8/8/6L1/8/8/8/8/4K2k w - - 0 1", false, &st, nullptr);
+    Move m_quiet_promo = make_two_step(SQ_G6, SQ_G7, SQ_G8, true);
     assert(pos.legal(m_quiet_promo));
     assert(!pos.capture(m_quiet_promo));
     assert(MoveList<CAPTURES>(pos).contains(m_quiet_promo));
     assert(pos.capture_or_promotion(m_quiet_promo));
     // A quiet promotion searched in CAPTURES must not be duplicated in QUIETS.
     assert(!MoveList<QUIETS>(pos).contains(m_quiet_promo));
-    Move m_quiet = make_two_step(SQ_G7, SQ_F8, SQ_G8, false);
+    Move m_quiet = make_two_step(SQ_G6, SQ_G7, SQ_G8, false);
     assert(!MoveList<CAPTURES>(pos).contains(m_quiet));
     assert(MoveList<QUIETS>(pos).contains(m_quiet));
 
@@ -878,15 +889,13 @@ static void test_igui_clears_not_moved() {
 static void test_narrow_board_direction_alias() {
     StateInfo st{};
     Position pos;
-    // 2-file cylinder: E and W both step A1->B1. The encoded move stores
-    // squares, not provenance, so pseudo-legality must accept ANY mask pair
-    // explaining the geometry, not just the first alias found.
+    // 2-file cylinder: E and W both step A1->B1. Pseudo-legality accepts
+    // either valid route even though move generation emits one canonical path.
     pos.set(variants.get("test-narrow-lion"),
             "1k/2/2/2/2/2/K1/H1 w - - 0 1", false, &st, nullptr);
     Move m = make_two_step(SQ_A1, SQ_B1, SQ_A1);
     assert(pos.pseudo_legal(m));
     assert(pos.legal(m));
-    assert(MoveList<LEGAL>(pos).contains(m));
 
     std::vector<Move> moves;
     for (Move move : MoveList<LEGAL>(pos))
@@ -956,7 +965,7 @@ static void test_hook_royal_attacks() {
 
     // Final-leg capture: white hook e4 turns at e5 and attacks f5.
     pos.set(variants.get("test-hook-state"),
-            "8/8/8/8/4Hk2/8/8/4K3 b - - 0 1", false, &st, nullptr);
+            "8/8/8/5k2/4H3/8/8/4K3 b - - 0 1", false, &st, nullptr);
     assert(pos.evasion_checkers());
     assert(pos.requires_full_evasion_filter());
 
@@ -973,12 +982,19 @@ static void test_hook_royal_attacks() {
             "8/8/8/4k3/4H3/8/8/4K3 w - - 0 1", false, &st, nullptr);
     assert(!pos.legal(make_hook(SQ_E4, SQ_E5, SQ_F5, false)));
 
-    // gives_check: a turned hook move checks the king on f5.
+    // gives_check: after turning at e5 to f5, the hook attacks g6.
     pos.set(variants.get("test-hook-state"),
-            "8/8/8/8/4Hk2/8/8/4K3 w - - 0 1", false, &st, nullptr);
+            "8/8/6k1/8/4H3/8/8/4K3 w - - 0 1", false, &st, nullptr);
     Move m_check = make_hook(SQ_E4, SQ_E5, SQ_F5, false);
     assert(pos.legal(m_check));
     assert(pos.gives_check(m_check));
+
+    // Direct hook checks also work when the royal is a non-king piece.
+    pos.set(variants.get("test-hook-nonking-state"),
+            "8/8/6q1/8/4H3/8/8/4Q3 w - - 0 1", false, &st, nullptr);
+    Move m_nonking_check = make_hook(SQ_E4, SQ_E5, SQ_F5, false);
+    assert(pos.legal(m_nonking_check));
+    assert(pos.gives_check(m_nonking_check));
 
     // Non-king move exposing the king to a hook attack is illegal: Be2f3
     // vacates e2, opening e4-e3-e1 onto the white king.
@@ -1057,7 +1073,7 @@ int main() {
     test_hook_capture_limits();
     test_single_hook_capture_transfer();
     test_hook_promotions();
-    test_hook_path_promotion();
+    test_hook_transit_does_not_promote();
     test_capture_ordering_squares_and_recapture();
     test_two_step_vs_jump();
     test_multileg_special_subtype_isolation();

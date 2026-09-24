@@ -3509,17 +3509,23 @@ Bitboard Position::multileg_transit_squares(Move m) const {
 
   Bitboard transit = 0;
   if (is_two_step(m))
-      detail::for_each_two_step_path(*this, sideToMove, type_of(mover), from, pieces(sideToMove),
+      detail::for_each_two_step_path(*this, color_of(mover), type_of(mover), from, pieces(color_of(mover)),
           [&](const MultiLegPath& path) {
               if (path.via == via && path.to == to)
+              {
                   transit |= path.transit;
+                  return true;
+              }
               return false;
           });
   else if (is_hook(m))
-      detail::for_each_hook_path(*this, sideToMove, type_of(mover), from, pieces(), pieces(sideToMove),
+      detail::for_each_hook_path(*this, color_of(mover), type_of(mover), from, pieces(), pieces(color_of(mover)),
           [&](const MultiLegPath& path) {
               if (path.via == via && path.to == to)
+              {
                   transit |= path.transit;
+                  return true;
+              }
               return false;
           });
   return transit;
@@ -5708,12 +5714,11 @@ bool Position::legal(Move m) const {
           return false;
   }
   // Hook path validation (geometry, occupancy, capture limit) has a single
-  // owner: hook_path_valid. legal() enforces promotion restrictions; the
-  // path itself is validated here so direct legal() calls cannot bypass it.
-  if (is_hook(m) && hook_promotes(m)
-      && !multileg_promotion_status(moverPiece, from, to, isCapture, multileg_transit_squares(m)).allowed)
-      return false;
+  // owner: hook_path_valid. Promotions use only the move's start and end.
   if (is_hook(m) && !hook_path_valid(us, movePt, from, via_sq(m), to))
+      return false;
+  if (is_hook(m) && hook_promotes(m)
+      && !multileg_promotion_status(moverPiece, from, to, isCapture).allowed)
       return false;
   if (is_multileg(m) && isCapture)
   {
@@ -6824,8 +6829,7 @@ bool Position::pseudo_legal(const Move m) const {
       if (!validPath)
           return false;
       if (is_multileg_promotion(m)
-          && !multileg_promotion_status(pc, from, to, capture(m),
-                                        is_hook(m) ? multileg_transit_squares(m) : Bitboard(0)).allowed)
+          && !multileg_promotion_status(pc, from, to, capture(m)).allowed)
           return false;
       if (!allow_checks() && checking_permitted())
       {
@@ -6932,6 +6936,12 @@ bool Position::pseudo_legal(const Move m) const {
       if (potCtx.potion != Variant::POTION_TYPE_NB)
           return potion_move_pseudo_legal(*this, m)
               && !violates_same_player_board_repetition(m);
+
+      // Multiple encodings can describe the same multi-leg transition. The
+      // path was validated above; accept valid aliases even when generation
+      // chose a different canonical route.
+      if (is_multileg(m))
+          return !violates_same_player_board_repetition(m);
 
       // Same fallback owner as generate<LEGAL>/MovePicker: wrapped boards and
       // bent multi-leg checks use NON_EVASIONS + legal() filtering.
@@ -7162,6 +7172,8 @@ bool Position::gives_check(Move m) const {
                           || laser_game()
                          || has_adjacent_swapping()
                          || is_swap_move(m)
+                         || has_two_step_moves()
+                         || has_hook_moves()
                          || type_of(m) == DROP2
                          || type_of(m) == INSERT;
 
@@ -7328,6 +7340,12 @@ bool Position::gives_check_impl(Move m) const {
       && !(frozenAttackers & square_bb(attackFrom)) && usingPhysicalKingTarget
       && (attackers_to_king(royalSq, occupied, sideToMove, janggiCannons,
                             NO_PIECE_TYPE, &simulated) & square_bb(attackFrom)))
+      return !(var->captureForbiddenByColor[sideToMove][pt] & royalType);
+
+  if (attackFromSurvives && simulatedMoverFriendly
+      && !(frozenAttackers & square_bb(attackFrom))
+      && (is_two_step(m) || is_hook(m))
+      && (multileg_attackers_to(royalSq, occupied, sideToMove, &simulated) & square_bb(attackFrom)))
       return !(var->captureForbiddenByColor[sideToMove][pt] & royalType);
 
   // Is there a direct check?

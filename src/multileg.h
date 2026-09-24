@@ -104,7 +104,6 @@ struct MultiLegPath {
     Square to = SQ_NONE;
     bool captureVia = false;
     bool captureTo = false;
-    bool atOrigin = false;
     Bitboard transit = 0;
 };
 
