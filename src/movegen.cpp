@@ -1216,12 +1216,26 @@ namespace {
             if (pos.freeze_squares() & from)
                 continue;
 
+            // Keep one encoding per resulting transition. The via square is
+            // observable only when it is a captured square; direct Betza
+            // moves already represent the same transition more compactly.
+            std::array<Bitboard, SQUARE_NB + 1> seen{};
+            Bitboard directTargets = pos.moves_from(Us, pt, from, pos.pieces())
+                                  | pos.attacks_from(Us, pt, from, pos.pieces());
             detail::for_each_two_step_path(pos, Us, pt, from, pos.pieces(Us),
                 [&](const MultiLegPath& path) {
                     bool cap1 = (!pos.empty(path.via) && color_of(pos.piece_on(path.via)) == them);
                     bool cap2 = (path.to != from && !pos.empty(path.to) && color_of(pos.piece_on(path.to)) == them);
+                    bool direct = !cap1 && path.to != from && (directTargets & path.to);
+                    if (direct)
+                        return false;
+                    int captureVia = cap1 ? int(path.via) : SQUARE_NB;
+                    if (seen[captureVia] & path.to)
+                        return false;
+                    seen[captureVia] |= square_bb(path.to);
                     moveList = emit_multileg_candidate<Us, Type>(pos, moveList, pt, from, path.via, path.to,
-                                                                 cap1, cap2, 0, target, checkers, makeTwoStep);
+                                                                 cap1, cap2, 0, target, checkers,
+                                                                 makeTwoStep);
                     return false;
                 });
         }
@@ -1256,14 +1270,26 @@ namespace {
             if (pos.freeze_squares() & from)
                 continue;
 
+            // Different clear bends to the same endpoint have identical
+            // effects unless a piece is captured on the bend.
+            std::array<Bitboard, SQUARE_NB + 1> seen{};
+            Bitboard directTargets = pos.moves_from(Us, pt, from, pos.pieces())
+                                  | pos.attacks_from(Us, pt, from, pos.pieces());
             // Hook rays stop at board edges (see Position::hook_step).
             // Geometry (rays, blocking, origin landing) and the capture
             // limit are owned by the shared hook path walker; only
             // candidate emission stays here.
             detail::for_each_hook_path(pos, Us, pt, from, pos.pieces(), pos.pieces(Us),
                 [&](const MultiLegPath& path) {
+                    bool direct = !path.captureVia && path.to != from && (directTargets & path.to);
+                    if (direct)
+                        return false;
+                    int captureVia = path.captureVia ? int(path.via) : SQUARE_NB;
+                    if (seen[captureVia] & path.to)
+                        return false;
+                    seen[captureVia] |= square_bb(path.to);
                     moveList = emit_multileg_candidate<Us, Type>(pos, moveList, pt, from, path.via, path.to,
-                                                                 path.captureVia, path.captureTo, path.transit, target,
+                                                                 path.captureVia, path.captureTo, 0, target,
                                                                  pos.evasion_checkers(), makeHook);
                     return false;
                 });

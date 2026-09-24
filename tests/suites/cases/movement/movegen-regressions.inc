@@ -38,6 +38,22 @@ hookMoves = h:R-R
 startFen = 8/8/8/8/3hH3/8/8/8 w - - 0 1
 immobile = -
 castling = false
+
+[test-hook-double-first-capture]
+king = -
+customPiece1 = h:0
+hookMoves = h:R-R:2
+startFen = 8/8/8/3H4/3hH3/8/8/8 w - - 0 1
+immobile = -
+castling = false
+
+[test-hook-overlap]
+king = -
+customPiece1 = h:R
+hookMoves = h:R-R
+startFen = 8/8/8/8/3hH3/8/8/8 w - - 0 1
+immobile = -
+castling = false
 EOF
 
 cat >"$TMP_INI" <<'EOF'
@@ -343,15 +359,17 @@ out=$(run_uci_cmds "$ENGINE" "$VARIANTS" oshi \
 go depth 8")
 assert_not_contains "$out" "^bestmove d4a4"
 
-# Lion family two-step move regressions: igui, quiet pass, forward/diagonal gating.
+# Lion family two-step move regressions: unique outcomes, igui, quiet pass, and gating.
 out=$(run_uci_cmds "$ENGINE" "$TMP_INI" test-lion \
   "position startpos
 go perft 1")
-assert_nodes "$out" "88"
+assert_nodes "$out" "33"
 assert_contains "$out" "^e4d5e4: 1$"
 assert_contains "$out" "^e4e5e4: 1$"
-assert_contains "$out" "^e4e5e6: 1$"
+assert_contains "$out" "^e4e6: 1$"
 assert_contains "$out" "^e4d5c6: 1$"
+assert_not_contains "$out" "^e4f4f5:"
+assert_not_contains "$out" "^e4e5f5:"
 
 out=$(run_uci_cmds "$ENGINE" "$TMP_INI" test-lion \
   "position startpos moves e4d5e4
@@ -366,8 +384,8 @@ assert_contains_literal "$out" "Fen: 8/8/8/3l4/4L3/8/8/8 b - - 1 1"
 out=$(run_uci_cmds "$ENGINE" "$TMP_INI" test-horned-falcon \
   "position startpos
 go perft 1")
-assert_nodes "$out" "24"
-assert_contains "$out" "^e4e5e6: 1$"
+assert_nodes "$out" "23"
+assert_contains "$out" "^e4e6: 1$"
 assert_contains "$out" "^e4e5e4: 1$"
 assert_not_contains "$out" "^e4e3e2:"
 assert_not_contains "$out" "^e4e3e4:"
@@ -375,19 +393,19 @@ assert_not_contains "$out" "^e4e3e4:"
 out=$(run_uci_cmds "$ENGINE" "$TMP_INI" test-soaring-eagle \
   "position startpos
 go perft 1")
-assert_nodes "$out" "28"
+assert_nodes "$out" "27"
 assert_contains "$out" "^e4d5e4: 1$"
 assert_contains "$out" "^e4d5c6: 1$"
-assert_contains "$out" "^e4f5g6: 1$"
+assert_contains "$out" "^e4g6: 1$"
 assert_not_contains "$out" "^e4e5e6:"
 
 out=$(run_uci_cmds "$ENGINE" "$TMP_INI" test-free-eagle \
   "position startpos
 go perft 1")
-assert_nodes "$out" "41"
+assert_nodes "$out" "30"
 assert_contains "$out" "^e4d5e4: 1$"
 assert_contains "$out" "^e4d5c6: 1$"
-assert_contains "$out" "^e4f5g6: 1$"
+assert_contains "$out" "^e4g6: 1$"
 assert_contains "$out" "^e4f5e4: 1$"
 assert_not_contains "$out" "^e4e5e6:"
 assert_not_contains "$out" "^e4e5e4:"
@@ -395,17 +413,17 @@ assert_not_contains "$out" "^e4e5e4:"
 out=$(run_uci_cmds "$ENGINE" "$TMP_INI" test-lion-hawk \
   "position startpos
 go perft 1")
-assert_nodes "$out" "91"
+assert_nodes "$out" "36"
 assert_contains "$out" "^e4d5e4: 1$"
-assert_contains "$out" "^e4e5e6: 1$"
+assert_contains "$out" "^e4e6: 1$"
 assert_contains "$out" "^e4e5e4: 1$"
 
 # Hook movers turn at right angles when both legs use the same geometry.
 out=$(run_uci_cmds "$ENGINE" "$HOOK_INI" test-hook \
   "position startpos
 go perft 1")
-assert_contains "$out" "^e4d4d5: 1$"
-assert_contains "$out" "^e4f4f8: 1$"
+assert_contains "$out" "^e4e5d5: 1$"
+assert_contains "$out" "^e4e8f8: 1$"
 assert_not_contains "$out" "^e4d5e4:"
 assert_not_contains "$out" "^e4d4c4:"
 assert_not_contains "$out" "^e4d4e4:"
@@ -419,7 +437,7 @@ assert_contains "$out" "^e4d4d4: 1$"
 assert_not_contains "$out" "^e4d4d5:"
 
 out=$(run_uci_cmds "$ENGINE" "$HOOK_INI" test-hook \
-  "position startpos moves e4d4d5
+  "position startpos moves e4e5d5
 d")
 assert_contains_literal "$out" "Fen: 8/8/8/3H4/8/8/8/8 b - - 0 1"
 
@@ -428,6 +446,17 @@ out=$(run_uci_cmds "$ENGINE" "$HOOK_INI" test-hook-double \
 go perft 1")
 assert_contains "$out" "^e4e5f5: 1$"
 assert_not_contains "$out" "^e4e5e4:"
+
+out=$(run_uci_cmds "$ENGINE" "$HOOK_INI" test-hook-double-first-capture \
+  "position startpos
+go perft 1")
+assert_contains "$out" "^e4d4d4: 1$"
+
+out=$(run_uci_cmds "$ENGINE" "$HOOK_INI" test-hook-overlap \
+  "position startpos
+go perft 1")
+assert_contains "$out" "^e4d4: 1$"
+assert_not_contains "$out" "^e4d4d4:"
 assert_not_contains "$out" "^e4e5e7:"
 
 echo "movegen regressions passed"

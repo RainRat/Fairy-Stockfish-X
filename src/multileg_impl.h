@@ -72,16 +72,23 @@ bool for_each_hook_path(const Position& pos, Color us, PieceType pt, Square from
           bend = step1;
           firstTransit |= square_bb(bend);
           bool cap1 = bool(occupied & bend);
-          if (cap1 && captureLimit == 1)
+          if (cap1)
           {
-              MultiLegPath path;
-              path.via = bend;
-              path.to = bend;
-              path.captureVia = true;
-              path.transit = firstTransit & ~square_bb(bend);
-              if (visit(path))
-                  return true;
-              break;
+              // If the first-leg capture is already an ordinary move of the
+              // piece, emit that move only; hook-only movers still need this
+              // endpoint to stop on the capture.
+              if (!(pos.attacks_bb(us, pt, from, occupied) & square_bb(bend)))
+              {
+                  MultiLegPath path;
+                  path.via = bend;
+                  path.to = bend;
+                  path.captureVia = true;
+                  path.transit = firstTransit & ~square_bb(bend);
+                  if (visit(path))
+                      return true;
+              }
+              if (captureLimit == 1)
+                  break;
           }
           int cap2steps = range2 ? range2 : SQUARE_NB;
           if (target != SQ_NONE && bend != target)
@@ -143,7 +150,6 @@ bool for_each_hook_path(const Position& pos, Color us, PieceType pt, Square from
               path.to = to;
               path.captureVia = cap1;
               path.captureTo = cap2;
-              path.atOrigin = atOrigin;
               path.transit = (firstTransit | secondTransit) & ~square_bb(to);
               if (visit(path))
                   return true;

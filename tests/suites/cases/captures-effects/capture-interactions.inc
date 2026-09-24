@@ -210,14 +210,14 @@ echo "unorthodox interactions tests started"
 # 0. Test triple-step for pieces in enPassantTypes
 out=$(run_cmds "torpedo-triple" "${TEMP_INI}" "position fen 8/8/8/8/8/8/P7/K1k5 w - - 0 1
 go perft 1")
-echo "${out}" | grep -q "a2a3: 1"
-echo "${out}" | grep -q "a2a4: 1"
-echo "${out}" | grep -q "a2a5: 1"
+grep -q "a2a3: 1" <<<"${out}"
+grep -q "a2a4: 1" <<<"${out}"
+grep -q "a2a5: 1" <<<"${out}"
 
 # 0b. Test triple-step for custom pieces in enPassantTypes (demonstrates pseudo_legal bug)
 out=$(run_cmds "custom-pawn-triple" "${TEMP_INI}" "position fen 8/8/8/8/8/8/D7/K1k5 w - - 0 1 moves a2a5
 d")
-if ! echo "${out}" | grep -q "Fen: 8/8/8/D7/8/8/8/K1k5 b"; then
+if ! grep -q "Fen: 8/8/8/D7/8/8/8/K1k5 b" <<<"${out}"; then
   echo "Test 0b failed: move a2a5 was rejected or resulted in wrong FEN"
   echo "${out}" | grep "Fen:"
   exit 1
@@ -231,52 +231,52 @@ grep -q "Fen: 4k3/8/8/8/8/8/8/3\^K3 b" <<<"${out}"
 # 2. Test rifleCapture + captureMorph
 out=$(run_cmds "rifle-morph" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/4r3/3QK3 w - - 0 1 moves d1e2
 d")
-echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/3RK3 b"
+grep -q "Fen: 4k3/8/8/8/8/8/8/3RK3 b" <<<"${out}"
 
 # 3. Test rifleCapture + zero-range blast-on-capture (shooter survives)
 out=$(run_cmds "rifle-atomic" "${TEMP_INI}" "position fen r3k3/8/8/8/8/8/8/R3K3 w - - 0 1 moves a1a8
 d")
-echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/R3K3 b"
+grep -q "Fen: 4k3/8/8/8/8/8/8/R3K3 b" <<<"${out}"
 
 # 4. Test rifleCapture + changingColorTrigger
 out=$(run_cmds "rifle-color" "${TEMP_INI}" "position fen r3k3/8/8/8/8/8/4K3/R7 w - - 0 1 moves a1a8
 d")
-echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/4K3/r7 b"
+grep -q "Fen: 4k3/8/8/8/8/8/4K3/r7 b" <<<"${out}"
 
 # 5. Test rifleCapture + jump capture
 out=$(run_cmds "rifle-jump" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/p7/M3K3 w - - 0 1 moves a1a3
 d")
-echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/M3K3 b"
+grep -q "Fen: 4k3/8/8/8/8/8/8/M3K3 b" <<<"${out}"
 
 # 5b. Test jumpCapture + zero-range blast-on-capture (mover survives)
 out=$(run_cmds "jump-blast" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/m7/M3K3 w - - 0 1 moves a1a3
 d")
-echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/M7/8/4K3 b"
+grep -q "Fen: 4k3/8/8/8/8/M7/8/4K3 b" <<<"${out}"
 
 # 5c. Test mover-centered jump blast (mover is removed by the blast)
 out=$(run_cmds "jump-blast-mover" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/m7/M3K3 w - - 0 1 moves a1a3
 d")
-echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/4K3 b"
+grep -q "Fen: 4k3/8/8/8/8/8/8/4K3 b" <<<"${out}"
 
 # 5c. Test jumpCapture + blast + changingColor (mover changes color)
 out=$(run_cmds "jump-blast-color" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/m7/M3K3 w - - 0 1 moves a1a3
 d")
-echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/m7/8/4K3 b"
+grep -q "Fen: 4k3/8/8/8/8/m7/8/4K3 b" <<<"${out}"
 
 # 6. Test rifleCapture + duck
 out=$(run_cmds "rifle-duck" "${TEMP_INI}" "position fen p3k3/8/8/8/8/8/8/R3K3 w - - 0 1 moves a1a8,h1
 d")
-echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/R3K2\* b"
+grep -q "Fen: 4k3/8/8/8/8/8/8/R3K2\* b" <<<"${out}"
 
 # 7. Test color-change
 out=$(run_cmds "color-change" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/8/4R3 w - - 0 1 moves e1e2
 d")
-echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/4r3/8 b"
+grep -q "Fen: 4k3/8/8/8/8/8/4r3/8 b" <<<"${out}"
 
 # 7b. Test captureMorph + changingColor undo order.
 out=$(run_cmds "morph-color" "${TEMP_INI}" "position fen 4k3/8/8/3n4/4B3/8/8/4K3 w - - 0 1 moves e4d5
 d")
-echo "${out}" | grep -q "Fen: 4k3/8/8/3n4/8/8/8/4K3 b"
+grep -q "Fen: 4k3/8/8/3n4/8/8/8/4K3 b" <<<"${out}"
 out=$(run_cmds "morph-color" "${TEMP_INI}" "position fen 4k3/8/8/3n4/4B3/8/8/4K3 w - - 0 1
 go perft 2")
 grep -q "Nodes searched:" <<<"$out"
@@ -284,12 +284,12 @@ grep -q "Nodes searched:" <<<"$out"
 # 8. Test rifleCapture + captureForbidden
 out=$(run_cmds "rifle-forbidden" "${TEMP_INI}" "position fen p3k3/8/8/8/8/8/8/R3K3 w - - 0 1 moves a1a8
 d")
-echo "${out}" | grep -q "Fen: p3k3/8/8/8/8/8/8/R3K3 w"
+grep -q "Fen: p3k3/8/8/8/8/8/8/R3K3 w" <<<"${out}"
 
 # 9. Test captureForbidden to king suppresses checks
 out=$(run_cmds "forbidden-king-check" "${TEMP_INI}" "position startpos
 d")
-if echo "${out}" | grep -q "^Checkers: [^ ]"; then
+if grep -q "^Checkers: [^ ]" <<<"${out}"; then
   echo "captureForbidden king-check suppression failed"
   exit 1
 fi
@@ -297,7 +297,7 @@ fi
 # 10. Test captureForbidden to king suppresses king captures in no-check variants
 out=$(run_cmds "forbidden-king-capture" "${TEMP_INI}" "position startpos
 go perft 1")
-if echo "${out}" | grep -q "^a1a8: 1$"; then
+if grep -q "^a1a8: 1$" <<<"${out}"; then
   echo "captureForbidden king-capture suppression failed"
   exit 1
 fi
@@ -305,21 +305,21 @@ fi
 # 11. Test ^ dead squares round-trip through FEN input/display
 out=$(run_cmds "dead-fen" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/8/3^K3 w - - 0 1
 d")
-echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/3\^K3 w"
+grep -q "Fen: 4k3/8/8/8/8/8/8/3\^K3 w" <<<"${out}"
 
 # 12. Test dead squares are capturable by either side
 out=$(run_cmds "dead-fen" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/8/3^R2K w - - 0 1
 go perft 1")
-echo "${out}" | grep -q "^e1d1: 1$"
+grep -q "^e1d1: 1$" <<<"${out}"
 out=$(run_cmds "dead-fen" "${TEMP_INI}" "position fen r3k3/8/8/8/8/8/8/3^3K b - - 0 1
 go perft 1")
-echo "${out}" | grep -q "^a8d8: 1$"
+grep -q "^a8d8: 1$" <<<"${out}"
 
 # 13. Test iron-like uncapturable pieces via captureForbidden alongside extinction targets
 out=$(run_cmds "iron-extinction" "${TEMP_INI}" "position startpos
 go perft 1")
-echo "${out}" | grep -q "^e1e2: 1$"
-if echo "${out}" | grep -q "^e2e1:"; then
+grep -q "^e1e2: 1$" <<<"${out}"
+if grep -q "^e2e1:" <<<"${out}"; then
   echo "captureForbidden iron-piece suppression failed"
   exit 1
 fi
@@ -327,7 +327,7 @@ fi
 # 14. Test the same setup from black's side: enemy queen still cannot capture the iron piece
 out=$(run_cmds "iron-extinction" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/3Qq3/4S2K b - - 0 1
 go perft 1")
-if echo "${out}" | grep -q "^e2e1:"; then
+if grep -q "^e2e1:" <<<"${out}"; then
   echo "captureForbidden iron-piece suppression for black failed"
   exit 1
 fi
@@ -336,7 +336,7 @@ fi
 # Move White King from e1 to e2 (rifle capture). It should NOT gate on e1.
 out=$(run_cmds "rifle-gating" "${TEMP_INI}" "position fen r3k2r/8/8/8/8/8/4q3/4K3[B] w KQkq - 0 1
 go perft 1")
-if echo "${out}" | grep -q "e1e2b:"; then
+if grep -q "e1e2b:" <<<"${out}"; then
   echo "rifleCapture + gating bug: gating move was generated"
   exit 1
 fi
@@ -344,7 +344,7 @@ fi
 # 15b. Test rifleCapture + symmetric gating still allows quiet gating moves
 out=$(run_cmds "rifle-symgating" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/8/4K3[RR] w ABCDEFGH - 0 1
 go perft 1")
-if ! echo "${out}" | grep -q "^e1e2r,d1: 1$"; then
+if ! grep -q "^e1e2r,d1: 1$" <<<"${out}"; then
   echo "rifleCapture + symmetric gating bug: quiet gating move was suppressed"
   exit 1
 fi
@@ -357,7 +357,7 @@ fi
 # White Rook moves from e2 to e3, between black pawns on d3 and f3.
 out=$(run_cmds "surround-color" "${TEMP_INI}" "position fen 4k3/8/8/8/8/3p1p2/4R3/8 w - - 0 1 moves e2e3
 d")
-if ! echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/4r3/8/8 b"; then
+if ! grep -q "Fen: 4k3/8/8/8/8/4r3/8/8 b" <<<"${out}"; then
   echo "surroundCapture + changingColor bug: color change did not trigger"
   exit 1
 fi
@@ -368,40 +368,40 @@ fi
 # e1-h5: 7 files, 4 ranks (NO). e2-h5: 3 files, 3 ranks (YES).
 out=$(run_cmds "rifle-amazon" "${TEMP_INI}" "position fen 4k3/8/8/7p/8/8/4p3/4Q1K1 w - - 0 1
 go perft 1")
-if echo "${out}" | grep -q "e1e2,h5"; then
+if grep -q "e1e2,h5" <<<"${out}"; then
   echo "rifleCapture + arrow walling bug: arrow shot from victim square"
   exit 1
 fi
 
 # 18. Test blastPassiveTypes + royal kings remains loadable and behaves as a passive check rule.
 out=$(run_cmds "passive-king-repro" "${TEMP_INI}" "d")
-if ! echo "${out}" | grep -q "info string variant passive-king-repro"; then
+if ! grep -q "info string variant passive-king-repro" <<<"${out}"; then
   echo "blastPassiveTypes + royal kings variant should remain loadable"
   exit 1
 fi
 
 # 19. Test removeConnectN + royal kings rejects the variant
 out=$(run_cmds "remove-king-repro" "${TEMP_INI}" "d")
-echo "${out}" | grep -q "info string unknown variant 'remove-king-repro'"
-if echo "${out}" | grep -q "info string variant remove-king-repro"; then
+grep -q "info string unknown variant 'remove-king-repro'" <<<"${out}"
+if grep -q "info string variant remove-king-repro" <<<"${out}"; then
   echo "removeConnectN + royal kings variant should have been rejected"
   exit 1
 fi
 
 # 20. Test non-royal custom extinction setup still loads with blastPassiveTypes
 out=$(run_cmds "passive-nonroyal-repro" "${TEMP_INI}" "d")
-if ! echo "${out}" | grep -q "info string variant passive-nonroyal-repro"; then
+if ! grep -q "info string variant passive-nonroyal-repro" <<<"${out}"; then
   echo "non-royal blastPassiveTypes setup should remain loadable"
   exit 1
 fi
 
 # 21. Test deathOnCaptureTypes + petrifyOnCaptureTypes rejects the variant
 out=$(run_cmds "death-petrify-repro" "${TEMP_INI}" "d")
-if ! echo "${out}" | grep -q "info string unknown variant 'death-petrify-repro'"; then
+if ! grep -q "info string unknown variant 'death-petrify-repro'" <<<"${out}"; then
   echo "deathOnCaptureTypes + petrifyOnCaptureTypes variant should have been rejected"
   exit 1
 fi
-if echo "${out}" | grep -q "info string variant death-petrify-repro"; then
+if grep -q "info string variant death-petrify-repro" <<<"${out}"; then
   echo "deathOnCaptureTypes + petrifyOnCaptureTypes variant should have been rejected"
   exit 1
 fi
@@ -410,7 +410,7 @@ fi
 # The rook pushes the pawn from d1 to f1, and the gated knight lands on a1.
 out=$(run_cmds "push-gating" "${TEMP_INI}" "position fen n3k2n/8/8/8/8/8/8/R2p3K[N] w Qkq - 0 1 moves a1e1n
 d")
-if ! echo "${out}" | grep -q "Fen: n3k2n/8/8/8/8/8/8/N3Rp1K\\[\\] b  - 1 1"; then
+if ! grep -q "Fen: n3k2n/8/8/8/8/8/8/N3Rp1K\\[\\] b  - 1 1" <<<"${out}"; then
   echo "pushingStrength + gating bug: piece was not correctly pushed"
   exit 1
 fi
@@ -418,7 +418,7 @@ fi
 # 23. Test pushingStrength + petrifyOnCaptureTypes
 out=$(run_cmds "petrify-push" "${TEMP_INI}" "position fen K3k3/8/8/8/8/8/8/R6p w - - 0 1 moves a1h1
 d")
-if ! echo "${out}" | grep -q "Fen: K3k3/8/8/8/8/8/8/7\\* b"; then
+if ! grep -q "Fen: K3k3/8/8/8/8/8/8/7\\* b" <<<"${out}"; then
   echo "pushingStrength + petrifyOnCapture bug: pushed offboard piece did not petrify"
   exit 1
 fi
@@ -426,40 +426,40 @@ fi
 # 24. Test cylindrical + max distance accepts the variant and reaches the wrapped ray endpoint.
 out=$(run_cmds "cylindrical-max-distance" "${TEMP_INI}" "position fen 8/8/8/8/8/8/8/A7 w - - 0 1
 go perft 1")
-echo "${out}" | grep -q "^a1b1: 1$"
-echo "${out}" | grep -q "^a1h1: 1$"
-! echo "${out}" | grep -q "^a1c1:"
+grep -q "^a1b1: 1$" <<<"${out}"
+grep -q "^a1h1: 1$" <<<"${out}"
+! grep -q "^a1c1:" <<<"${out}"
 
 # 25. Test cylindrical push across the file edge with both direct and stepwise analyzers.
 out=$(run_cmds "cylindrical-push-direct" "${TEMP_INI}" "position startpos
 go perft 1")
-echo "${out}" | grep -q "^e1a1: 1$"
-! echo "${out}" | grep -q "^e1a1: 2$"
+grep -q "^e1a1: 1$" <<<"${out}"
+! grep -q "^e1a1: 2$" <<<"${out}"
 
 out=$(run_cmds "cylindrical-push-direct" "${TEMP_INI}" "position fen 5/5/5/5/rrrrR w - - 0 1
 go perft 1")
-! echo "${out}" | grep -q "^e1a1:"
+! grep -q "^e1a1:" <<<"${out}"
 
 out=$(run_cmds "cylindrical-push-stepwise" "${TEMP_INI}" "position startpos
 go perft 1")
-echo "${out}" | grep -q "^e1a1: 1$"
+grep -q "^e1a1: 1$" <<<"${out}"
 
 out=$(run_cmds "cylindrical-push-stepwise" "${TEMP_INI}" "position fen 5/5/5/5/rrrrR w - - 0 1
 go perft 1")
-! echo "${out}" | grep -q "^e1a1:"
+! grep -q "^e1a1:" <<<"${out}"
 
 # 26. Test cylindrical + ski-slip skips the first square (and is blocked by it)
 out=$(run_cmds "cylindrical-ski-slip" "${TEMP_INI}" "position startpos
 go perft 1")
-if echo "${out}" | grep -q "a1b1:"; then
+if grep -q "a1b1:" <<<"${out}"; then
   echo "cylindrical + ski-slip bug: captured adjacent blocked square"
   exit 1
 fi
-if echo "${out}" | grep -q "a1h1:"; then
+if grep -q "a1h1:" <<<"${out}"; then
   echo "cylindrical + ski-slip bug: captured adjacent blocked square (wrap)"
   exit 1
 fi
-if echo "${out}" | grep -q "a1c1:"; then
+if grep -q "a1c1:" <<<"${out}"; then
   echo "cylindrical + ski-slip bug: leaped over blocked square"
   exit 1
 fi
