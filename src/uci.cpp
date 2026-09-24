@@ -28,7 +28,6 @@
 #include "evaluate.h"
 #include "movegen.h"
 #include "position.h"
-#include "multileg.h"
 #include "search.h"
 #include "thread.h"
 #include "timeman.h"
@@ -717,7 +716,7 @@ string UCI::move(const Position& pos, Move m) {
   if (is_multileg(m))
   {
       std::string s = UCI::square(pos, from) + UCI::square(pos, via_sq(m)) + UCI::square(pos, to);
-      if (is_multileg_promotion(m))
+      if (is_any_promotion(m))
           s += "+";
       return s;
   }

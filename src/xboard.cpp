@@ -28,7 +28,6 @@
 #include "search.h"
 #include "thread.h"
 #include "types.h"
-#include "multileg.h"
 #include "uci.h"
 #include "xboard.h"
 
@@ -247,7 +246,7 @@ namespace XBoard {
         Square from = from_sq(m), to = to_sq(m);
         if (is_ok(from) && UCI::square(pos, from) == square && !is_pass(m))
         {
-            if (is_promotion_move(m) || is_multileg_promotion(m))
+            if (is_any_promotion(m))
                 promotions |= to;
             else if (pos.capture(m))
                 captures |= to;

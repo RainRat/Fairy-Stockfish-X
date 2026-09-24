@@ -1099,17 +1099,14 @@ namespace {
   }
 
 
-  template<Color Us, GenType Type, typename MakeMove>
+  template<Color Us, GenType Type>
   ExtMove* emit_multileg_candidate(const Position& pos, ExtMove* moveList, PieceType pt,
-                                  Square from, Square via, Square to, bool capVia, bool capTo,
-                                  Bitboard target, Bitboard checkers, MakeMove makeMove) {
-    // Shared capture/evasion/promotion policy for multi-leg moves; only the
-    // geometry enumeration (two king steps vs sliding hook legs) and the move
-    // constructor differ between generators.
+                                  MultiLegKind kind, Square from, Square via, Square to,
+                                  bool capVia, bool capTo, Bitboard target, Bitboard checkers) {
     bool isCapture = capVia || capTo;
 
     Piece mover = pos.piece_on(from);
-    Position::PromotionStatus promoStatus = pos.multileg_promotion_status(mover, from, to, isCapture);
+    Position::PromotionStatus promoStatus = pos.move_promotion_status(mover, from, to, isCapture);
     bool allowsPromo = promoStatus.allowed;
 
     // Mirror Position::legal() mandatory handling: a non-promoting
@@ -1152,7 +1149,9 @@ namespace {
 
     if (allowsPromo && Type != QUIETS)
     {
-        Move mPromo = makeMove(from, via, to, true);
+        Move mPromo = kind == MultiLegKind::TWO_STEP
+                    ? make_two_step(from, via, to, true)
+                    : make_hook(from, via, to, true);
         if constexpr (Type == QUIET_CHECKS)
         {
             if (pos.gives_check(mPromo))
@@ -1172,7 +1171,9 @@ namespace {
             if (!isCapture)
                 return moveList;
         }
-        Move m = makeMove(from, via, to, false);
+        Move m = kind == MultiLegKind::TWO_STEP
+               ? make_two_step(from, via, to)
+               : make_hook(from, via, to);
         if constexpr (Type == QUIET_CHECKS)
         {
             if (pos.gives_check(m))
@@ -1188,24 +1189,15 @@ namespace {
   }
 
   template<Color Us, GenType Type>
-  ExtMove* generate_two_step_moves(const Position& pos, ExtMove* moveList, Bitboard target, Bitboard forcedFromMask, bool restrictToForcedJumper) {
-    if (!pos.has_two_step_moves())
-        return moveList;
-
-    PieceSet twoStepPts = pos.two_step_piece_types();
-    if (!twoStepPts)
-        return moveList;
-
+  ExtMove* generate_multileg_moves(const Position& pos, ExtMove* moveList, Bitboard target,
+                                   Bitboard forcedFromMask, bool restrictToForcedJumper) {
+    PieceSet pieceTypes = pos.multileg_piece_types();
     const Color them = ~Us;
     const Bitboard checkers = pos.evasion_checkers();
 
-    auto makeTwoStep = [](Square from, Square via, Square to, bool promotes) {
-        return make_two_step(from, via, to, promotes);
-    };
-
-    while (twoStepPts)
+    while (pieceTypes)
     {
-        PieceType pt = pop_lsb(twoStepPts);
+        PieceType pt = pop_lsb(pieceTypes);
         Bitboard piecesBb = pos.pieces(Us, pt);
         if (restrictToForcedJumper)
             piecesBb &= forcedFromMask;
@@ -1216,94 +1208,30 @@ namespace {
             if (pos.freeze_squares() & from)
                 continue;
 
-            // Keep one encoding per resulting transition. The via square is
-            // observable only when it is a captured square; direct Betza
-            // moves already represent the same transition more compactly.
-            std::array<Bitboard, SQUARE_NB + 1> seen{};
+            // Deduplicate equivalent routes within each movement subtype.
+            std::array<std::array<Bitboard, SQUARE_NB + 1>, 2> seen{};
             Bitboard directTargets = pos.moves_from(Us, pt, from, pos.pieces()) & ~pos.pieces();
             directTargets |= pos.attacks_from(Us, pt, from, pos.pieces()) & pos.pieces(them);
             if ((pos.clone_move_types() & pt) || pos.gating() || pos.walling(Us))
                 directTargets = 0;
             const bool routeSensitive = pos.variant()->royalPieceNoThroughCheck
                                      && pt == pos.royal_piece_type(Us);
-            detail::MultiLegWalker::for_each_two_step_path(pos, Us, pt, from, pos.pieces(), pos.pieces(Us),
+            detail::MultiLegWalker::for_each_multileg_path(pos, Us, pt, from, pos.pieces(), pos.pieces(Us),
                 [&](const detail::MultiLegPath& path) {
-                    bool cap1 = bool(path.captures & path.via);
-                    bool cap2 = path.to != from && bool(path.captures & path.to);
-                    bool direct = (!cap1 || path.via == path.to)
+                    bool capVia = bool(path.captures & path.via);
+                    bool capTo = path.to != from && bool(path.captures & path.to);
+                    bool direct = (!capVia || path.via == path.to)
                                && path.to != from && (directTargets & path.to);
                     if (direct && !routeSensitive)
                         return false;
-                    int captureVia = cap1 ? int(path.via) : SQUARE_NB;
-                    if ((seen[captureVia] & path.to) && !routeSensitive)
+                    auto& seenForKind = seen[path.kind == MultiLegKind::TWO_STEP ? 0 : 1];
+                    int captureVia = capVia ? int(path.via) : SQUARE_NB;
+                    if ((seenForKind[captureVia] & path.to) && !routeSensitive)
                         return false;
-                    seen[captureVia] |= square_bb(path.to);
-                    moveList = emit_multileg_candidate<Us, Type>(pos, moveList, pt, from, path.via, path.to,
-                                                                 cap1, cap2, target, checkers,
-                                                                 makeTwoStep);
-                    return false;
-                });
-        }
-    }
-
-    return moveList;
-  }
-
-  template<Color Us, GenType Type>
-  ExtMove* generate_hook_moves(const Position& pos, ExtMove* moveList, Bitboard target, Bitboard forcedFromMask, bool restrictToForcedJumper) {
-    if (!pos.has_hook_moves())
-        return moveList;
-
-    PieceSet hookPts = pos.hook_piece_types();
-    if (!hookPts)
-        return moveList;
-    const Color them = ~Us;
-
-    auto makeHook = [](Square from, Square via, Square to, bool promotes) {
-        return make_hook(from, via, to, promotes);
-    };
-
-    while (hookPts)
-    {
-        PieceType pt = pop_lsb(hookPts);
-        Bitboard piecesBb = pos.pieces(Us, pt);
-        if (restrictToForcedJumper)
-            piecesBb &= forcedFromMask;
-
-        while (piecesBb)
-        {
-            Square from = pop_lsb(piecesBb);
-            if (pos.freeze_squares() & from)
-                continue;
-
-            // Different clear bends to the same endpoint have identical
-            // effects unless a piece is captured on the bend.
-            std::array<Bitboard, SQUARE_NB + 1> seen{};
-            Bitboard directTargets = pos.moves_from(Us, pt, from, pos.pieces()) & ~pos.pieces();
-            directTargets |= pos.attacks_from(Us, pt, from, pos.pieces()) & pos.pieces(them);
-            if ((pos.clone_move_types() & pt) || pos.gating() || pos.walling(Us))
-                directTargets = 0;
-            const bool routeSensitive = pos.variant()->royalPieceNoThroughCheck
-                                     && pt == pos.royal_piece_type(Us);
-            // Hook rays stop at board edges (see Position::hook_step).
-            // Geometry (rays, blocking, origin landing) and the capture
-            // limit are owned by the shared hook path walker; only
-            // candidate emission stays here.
-            detail::MultiLegWalker::for_each_hook_path(pos, Us, pt, from, pos.pieces(), pos.pieces(Us),
-                [&](const detail::MultiLegPath& path) {
-                    bool cap1 = bool(path.captures & path.via);
-                    bool cap2 = path.to != from && bool(path.captures & path.to);
-                    bool direct = (!cap1 || path.via == path.to)
-                               && path.to != from && (directTargets & path.to);
-                    if (direct && !routeSensitive)
-                        return false;
-                    int captureVia = cap1 ? int(path.via) : SQUARE_NB;
-                    if ((seen[captureVia] & path.to) && !routeSensitive)
-                        return false;
-                    seen[captureVia] |= square_bb(path.to);
-                    moveList = emit_multileg_candidate<Us, Type>(pos, moveList, pt, from, path.via, path.to,
-                                                                 cap1, cap2, target,
-                                                                 pos.evasion_checkers(), makeHook);
+                    seenForKind[captureVia] |= square_bb(path.to);
+                    moveList = emit_multileg_candidate<Us, Type>(pos, moveList, pt, path.kind, from,
+                                                                 path.via, path.to, capVia, capTo,
+                                                                 target, checkers);
                     return false;
                 });
         }
@@ -1318,7 +1246,7 @@ namespace {
     static_assert(Type != LEGAL, "Unsupported type in generate_all()");
 
     if constexpr (Type == QUIET_CHECKS)
-        if (pos.has_two_step_moves() || pos.has_hook_moves())
+        if (pos.has_multileg_moves())
         {
             ExtMove candidates[MOVEGEN_OVERFLOW_CAPACITY];
             ExtMove* end = generate_all_impl<Us, NON_EVASIONS>(pos, candidates);
@@ -1749,8 +1677,7 @@ namespace {
 
     }
 
-    moveList = generate_two_step_moves<Us, Type>(pos, moveList, target, forcedFromMask, restrictToForcedJumper);
-    moveList = generate_hook_moves<Us, Type>(pos, moveList, target, forcedFromMask, restrictToForcedJumper);
+    moveList = generate_multileg_moves<Us, Type>(pos, moveList, target, forcedFromMask, restrictToForcedJumper);
 
     // Royal moves must not be restricted to checker capture/interposition targets.
     if (royalPt != NO_PIECE_TYPE && royalSq != SQ_NONE

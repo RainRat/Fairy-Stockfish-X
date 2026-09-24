@@ -29,7 +29,6 @@
 
 #include "types.h"
 #include "position.h"
-#include "multileg.h"
 #include "thread.h"
 #include "uci.h"
 #include "variant.h"
@@ -320,7 +319,7 @@ inline const std::string move_to_san(Position& pos, Move m, Notation n) {
     if (is_multileg(m))
     {
         san = square(pos, from, n) + square(pos, via_sq(m), n) + square(pos, to, n);
-        if (is_multileg_promotion(m))
+        if (is_any_promotion(m))
         {
             Piece mover = pos.moved_piece(m);
             PieceType promotedTo = mover != NO_PIECE ? pos.promoted_piece_type(type_of(mover)) : NO_PIECE_TYPE;
@@ -451,8 +450,7 @@ inline bool has_insufficient_material(Color c, const Position& pos) {
         || pos.variant()->connectRegion1[c]
         || pos.variant()->connectRegion2[c]
         || pos.variant()->connectRegion3[c]
-        || pos.two_step_piece_types()
-        || pos.hook_piece_types())
+        || pos.has_multileg_moves())
         return false;
 
     // Precalculate if any promotion pawn types have pieces
