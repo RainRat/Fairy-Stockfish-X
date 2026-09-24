@@ -284,6 +284,12 @@ namespace {
             }
             else
             {
+                if (rawPairs.front() == ',' || rawPairs.back() == ',')
+                {
+                    if (DoCheck)
+                        std::cerr << optionName << " - Empty direction pair in list" << std::endl;
+                    return false;
+                }
                 uint64_t mask = 0;
                 std::stringstream pss(rawPairs);
                 std::string pairToken;
@@ -291,7 +297,11 @@ namespace {
                 {
                     pairToken = trim(pairToken);
                     if (pairToken.empty())
-                        continue;
+                    {
+                        if (DoCheck)
+                            std::cerr << optionName << " - Empty direction pair in list" << std::endl;
+                        return false;
+                    }
                     size_t sep = pairToken.find('>');
                     if (sep == std::string::npos)
                     {
@@ -348,7 +358,8 @@ namespace {
             s += char(std::tolower(static_cast<unsigned char>(c)));
         size_t i = 0;
         int filter = 0xFF;
-        if (i < s.size() && (s[i] == 'f' || s[i] == 's' || (s[i] == 'b' && s.size() > 1)))
+        if (i < s.size() && (s[i] == 'f' || s[i] == 's'
+            || (s[i] == 'b' && i + 1 < s.size() && (s[i + 1] == 'r' || s[i + 1] == 'b'))))
         {
             filter = s[i] == 'f' ? KingForwardDirections
                    : s[i] == 'b' ? KingBackwardDirections
@@ -2850,6 +2861,24 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
                                              [](const DirectionPairSpec& spec) { return spec.relative != 0; });
     const bool hasHookMoves = std::any_of(std::begin(v->hookMoves), std::end(v->hookMoves),
                                           [](const HookMoveSpec& spec) { return spec.directions.relative != 0; });
+
+    PieceSet multilegPieceTypes = NO_PIECE_SET;
+    for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
+        if (v->twoStepMoves[pt].relative || v->hookMoves[pt].directions.relative)
+            multilegPieceTypes |= piece_set(pt);
+    bool hasDemotingMultiLegPiece = false;
+    for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
+        if (v->promotedPieceType[pt] != NO_PIECE_TYPE
+            && (multilegPieceTypes & v->promotedPieceType[pt]))
+            hasDemotingMultiLegPiece = true;
+
+    if (hasDemotingMultiLegPiece && v->pieceDemotion
+        && (v->mandatoryPiecePromotion.get(WHITE) || v->mandatoryPiecePromotion.get(BLACK)))
+    {
+        if (DoCheck)
+            std::cerr << "mandatoryPiecePromotion with pieceDemotion is not supported with twoStepMoves or hookMoves." << std::endl;
+        valid = false;
+    }
 
     if (hasHookMoves && (v->cylindrical || v->toroidal))
     {

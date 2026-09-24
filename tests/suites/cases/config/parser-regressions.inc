@@ -526,6 +526,26 @@ hookMoves = h:R-R:3
 customPiece1 = h:0
 hookMoves = h:fR-bR
 
+[bad-twostep-empty-list:chess]
+customPiece1 = l:0
+twoStepMoves = l:,
+
+[bad-twostep-repeated-comma:chess]
+customPiece1 = l:0
+twoStepMoves = l:N>N,,E>E
+
+[hook-bounded-diagonal-legs:chess]
+customPiece1 = h:0
+hookMoves = h:B2-R
+castling = false
+
+[bad-multileg-mandatory-demotion:chess]
+customPiece1 = h:0
+hookMoves = h:R-R
+mandatoryPiecePromotion = true
+pieceDemotion = true
+promotedPieceType = p:h
+
 [bad-hook-wrapped:chess]
 king = -
 customPiece1 = h:0
@@ -915,10 +935,13 @@ assert_contains "${bad_hook_check_output}" "hookMoves - Malformed hook legs"
 assert_contains "${bad_hook_check_output}" "hookMoves - Invalid hook leg"
 assert_contains "${bad_hook_check_output}" "hookMoves - Invalid hook capture limit"
 assert_contains "${bad_hook_check_output}" "hookMoves - Hook legs have no valid direction pairs"
+assert_contains "${bad_hook_check_output}" "twoStepMoves - Empty direction pair in list"
 assert_contains "${bad_hook_check_output}" "hookMoves is not supported on wrapped boards."
 assert_contains "${bad_hook_check_output}" "twoBoards is not supported with multi-capture twoStepMoves or :2 hookMoves."
+assert_contains "${bad_hook_check_output}" "mandatoryPiecePromotion with pieceDemotion is not supported with twoStepMoves or hookMoves."
 
 run_uci "$ENGINE" "$bad_hook_ini" "hook-twoboards-single" </dev/null >/dev/null
+run_uci "$ENGINE" "$bad_hook_ini" "hook-bounded-diagonal-legs" </dev/null >/dev/null
 
 unsupported_bent_rose_output1=$(run_uci "$ENGINE" "$unsupported_bent_rose_modifier_ini" "unsupported-bent-1" </dev/null 2>&1 || true)
 assert_contains "${unsupported_bent_rose_output1}" "unknown variant 'unsupported-bent-1'; keeping 'chess'"

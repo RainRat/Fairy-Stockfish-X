@@ -1102,14 +1102,14 @@ namespace {
   template<Color Us, GenType Type, typename MakeMove>
   ExtMove* emit_multileg_candidate(const Position& pos, ExtMove* moveList, PieceType pt,
                                   Square from, Square via, Square to, bool capVia, bool capTo,
-                                  Bitboard traversed, Bitboard target, Bitboard checkers, MakeMove makeMove) {
+                                  Bitboard target, Bitboard checkers, MakeMove makeMove) {
     // Shared capture/evasion/promotion policy for multi-leg moves; only the
     // geometry enumeration (two king steps vs sliding hook legs) and the move
     // constructor differ between generators.
     bool isCapture = capVia || capTo;
 
     Piece mover = pos.piece_on(from);
-    Position::PromotionStatus promoStatus = pos.multileg_promotion_status(mover, from, to, isCapture, traversed);
+    Position::PromotionStatus promoStatus = pos.multileg_promotion_status(mover, from, to, isCapture);
     bool allowsPromo = promoStatus.allowed;
 
     // Mirror Position::legal() mandatory handling: a non-promoting
@@ -1220,8 +1220,10 @@ namespace {
             // observable only when it is a captured square; direct Betza
             // moves already represent the same transition more compactly.
             std::array<Bitboard, SQUARE_NB + 1> seen{};
-            Bitboard directTargets = pos.moves_from(Us, pt, from, pos.pieces())
-                                  | pos.attacks_from(Us, pt, from, pos.pieces());
+            Bitboard directTargets = pos.moves_from(Us, pt, from, pos.pieces()) & ~pos.pieces();
+            directTargets |= pos.attacks_from(Us, pt, from, pos.pieces()) & pos.pieces(them);
+            if ((pos.clone_move_types() & pt) || pos.gating() || pos.walling(Us))
+                directTargets = 0;
             detail::for_each_two_step_path(pos, Us, pt, from, pos.pieces(Us),
                 [&](const MultiLegPath& path) {
                     bool cap1 = (!pos.empty(path.via) && color_of(pos.piece_on(path.via)) == them);
@@ -1230,11 +1232,11 @@ namespace {
                     if (direct)
                         return false;
                     int captureVia = cap1 ? int(path.via) : SQUARE_NB;
-                    if (seen[captureVia] & path.to)
+                    if ((seen[captureVia] & path.to) && !pos.variant()->royalPieceNoThroughCheck)
                         return false;
                     seen[captureVia] |= square_bb(path.to);
                     moveList = emit_multileg_candidate<Us, Type>(pos, moveList, pt, from, path.via, path.to,
-                                                                 cap1, cap2, 0, target, checkers,
+                                                                 cap1, cap2, target, checkers,
                                                                  makeTwoStep);
                     return false;
                 });
@@ -1252,6 +1254,7 @@ namespace {
     PieceSet hookPts = pos.hook_piece_types();
     if (!hookPts)
         return moveList;
+    const Color them = ~Us;
 
     auto makeHook = [](Square from, Square via, Square to, bool promotes) {
         return make_hook(from, via, to, promotes);
@@ -1273,8 +1276,10 @@ namespace {
             // Different clear bends to the same endpoint have identical
             // effects unless a piece is captured on the bend.
             std::array<Bitboard, SQUARE_NB + 1> seen{};
-            Bitboard directTargets = pos.moves_from(Us, pt, from, pos.pieces())
-                                  | pos.attacks_from(Us, pt, from, pos.pieces());
+            Bitboard directTargets = pos.moves_from(Us, pt, from, pos.pieces()) & ~pos.pieces();
+            directTargets |= pos.attacks_from(Us, pt, from, pos.pieces()) & pos.pieces(them);
+            if ((pos.clone_move_types() & pt) || pos.gating() || pos.walling(Us))
+                directTargets = 0;
             // Hook rays stop at board edges (see Position::hook_step).
             // Geometry (rays, blocking, origin landing) and the capture
             // limit are owned by the shared hook path walker; only
@@ -1285,11 +1290,11 @@ namespace {
                     if (direct)
                         return false;
                     int captureVia = path.captureVia ? int(path.via) : SQUARE_NB;
-                    if (seen[captureVia] & path.to)
+                    if ((seen[captureVia] & path.to) && !pos.variant()->royalPieceNoThroughCheck)
                         return false;
                     seen[captureVia] |= square_bb(path.to);
                     moveList = emit_multileg_candidate<Us, Type>(pos, moveList, pt, from, path.via, path.to,
-                                                                 path.captureVia, path.captureTo, 0, target,
+                                                                 path.captureVia, path.captureTo, target,
                                                                  pos.evasion_checkers(), makeHook);
                     return false;
                 });
@@ -1303,6 +1308,20 @@ namespace {
   ExtMove* generate_all_impl(const Position& pos, ExtMove* moveList) {
 
     static_assert(Type != LEGAL, "Unsupported type in generate_all()");
+
+    if constexpr (Type == QUIET_CHECKS)
+        if (pos.has_two_step_moves() || pos.has_hook_moves())
+        {
+            ExtMove candidates[MOVEGEN_OVERFLOW_CAPACITY];
+            ExtMove* end = generate_all_impl<Us, NON_EVASIONS>(pos, candidates);
+            for (ExtMove* it = candidates; it != end; ++it)
+                if (!pos.capture(*it)
+                    && type_of(*it) != CASTLING
+                    && (is_multileg(*it) || (!is_promotion_move(*it) && type_of(*it) != PIECE_PROMOTION))
+                    && pos.gives_check(*it))
+                    *moveList++ = *it;
+            return moveList;
+        }
 
     constexpr bool Checks = Type == QUIET_CHECKS; // Reduce template instantiations
     const PieceType royalPt = pos.royal_piece_type(Us);
@@ -2251,7 +2270,8 @@ ExtMove* generate(const Position& pos, ExtMove* moveList) {
 
   static_assert(Type != LEGAL, "Unsupported type in generate()");
   assert((Type == EVASIONS) == (bool)pos.evasion_checkers()
-         || (pos.topology_wraps() && Type == NON_EVASIONS && pos.evasion_checkers()));
+         || (Type == NON_EVASIONS && pos.evasion_checkers()
+             && (pos.anti_royal_types() || pos.requires_full_evasion_generation())));
   Color us = pos.side_to_move();
   const SpellContext* current = current_spell_context();
   ScopedSpellContext jumpScope(
@@ -2268,7 +2288,8 @@ ExtMove* generate_without_potions(const Position& pos, ExtMove* moveList) {
 
   static_assert(Type != LEGAL, "Unsupported type in generate_without_potions()");
   assert((Type == EVASIONS) == (bool)pos.evasion_checkers()
-         || (pos.topology_wraps() && Type == NON_EVASIONS && pos.evasion_checkers()));
+         || (Type == NON_EVASIONS && pos.evasion_checkers()
+             && (pos.anti_royal_types() || pos.requires_full_evasion_generation())));
   Color us = pos.side_to_move();
   const SpellContext* current = current_spell_context();
   ScopedSpellContext jumpScope(
@@ -2287,7 +2308,8 @@ ExtMove* append_potions(const Position& pos, ExtMove* listBegin, ExtMove* baseEn
   if (!pos.potions_enabled())
       return baseEnd;
   assert((Type == EVASIONS) == (bool)pos.evasion_checkers()
-         || (pos.topology_wraps() && Type == NON_EVASIONS && pos.evasion_checkers()));
+         || (Type == NON_EVASIONS && pos.evasion_checkers()
+             && (pos.anti_royal_types() || pos.requires_full_evasion_generation())));
   Color us = pos.side_to_move();
   const SpellContext* current = current_spell_context();
   ScopedSpellContext jumpScope(

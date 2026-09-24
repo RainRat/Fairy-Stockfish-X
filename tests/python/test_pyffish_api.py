@@ -391,6 +391,21 @@ class TestPublicAPI(unittest.TestCase):
         self.assertIsInstance(optional[1], int)
         self.assertIsInstance(sf.has_insufficient_material("chess", fen, []), tuple)
 
+    def test_multileg_pieces_disable_insufficient_material_shortcut(self):
+        sf.load_variant_config(
+            "[lion-api-adjudication:chess]\n"
+            "customPiece1 = h:0\n"
+            "hookMoves = h:R-R\n"
+            "castling = false\n"
+        )
+        fen = "7k/8/8/8/8/8/H7/K7 w - - 0 1"
+        self.assertIn("a2a3b3", sf.legal_moves("lion-api-adjudication", fen, []))
+        self.assertEqual(sf.has_insufficient_material("lion-api-adjudication", fen, []),
+                         (False, False))
+        self.assertEqual(sf.game_result("lion-api-adjudication", fen, []), sf.VALUE_NONE)
+        self.assertEqual(sf.has_insufficient_material("chess", "7k/8/8/8/8/8/8/K7 w - - 0 1", []),
+                         (True, True))
+
     def test_validation_and_fog_are_binding_values(self):
         fen = sf.start_fen("chess")
         self.assertEqual(sf.validate_fen(fen, "chess"), 1)
