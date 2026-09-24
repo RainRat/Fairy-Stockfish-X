@@ -204,26 +204,26 @@ struct ReversiblePieceOnSquare {
 };
 
 struct PackedReversiblePiece {
-  static_assert(PIECE_NB <= 128, "Packed reversible piece needs wider fields");
+  static_assert(PIECE_NB <= 256, "Packed reversible piece needs wider fields");
 
-  uint16_t value = 0;
+  uint32_t value = 0;
 
   void clear() { value = 0; }
 
   void set(Piece pc, bool isPromoted, Piece unpromotedPc = NO_PIECE) {
     assert(pc > NO_PIECE && pc < PIECE_NB);
     assert(unpromotedPc >= NO_PIECE && unpromotedPc < PIECE_NB);
-    value = uint16_t(pc)
-          | (uint16_t(unpromotedPc) << 7)
-          | (uint16_t(isPromoted) << 14);
+    value = uint32_t(pc)
+          | (uint32_t(unpromotedPc) << 8)
+          | (uint32_t(isPromoted) << 16);
   }
 
-  Piece piece() const { return Piece(value & 0x7f); }
-  Piece unpromoted() const { return Piece((value >> 7) & 0x7f); }
-  bool promoted() const { return bool(value & (1 << 14)); }
+  Piece piece() const { return Piece(value & 0xff); }
+  Piece unpromoted() const { return Piece((value >> 8) & 0xff); }
+  bool promoted() const { return bool(value & (1U << 16)); }
   explicit operator bool() const { return value != 0; }
 };
-static_assert(sizeof(PackedReversiblePiece) == sizeof(uint16_t));
+static_assert(sizeof(PackedReversiblePiece) == sizeof(uint32_t));
 
 struct InPlaceTransformState {
   ReversiblePieceOnSquare morphedFrom;
@@ -4404,8 +4404,6 @@ inline Position::HopperSquareProps Position::get_hopper_square_props(Square s, B
 
     PieceType pcPt = type_of(pc);
     props.pcSet = pcPt == NO_PIECE_TYPE ? NO_PIECE_SET : piece_set(pcPt);
-    if (props.isWall) props.pcSet |= PieceSet(1ULL << 62);
-    if (props.isDead) props.pcSet |= PieceSet(1ULL << 61);
 
     props.isFriendly = props.isOccupied && pc != NO_PIECE && color_of(pc) == friendlyColor;
     props.isEnemy = props.isOccupied && pc != NO_PIECE && !props.isFriendly;
@@ -4456,7 +4454,7 @@ inline Bitboard Position::special_rider_bb(const PieceInfo* pi, MoveModality mod
               {
                   Square s = pop_lsb(occ);
                   HopperSquareProps props = get_hopper_square_props(s, occupied, c, piece_at(s, occupied));
-                  if (((hopIt->second.transparentSpecialTypes & props.special) != 0) || (uint64_t(hopIt->second.transparentPieceTypes & props.pcSet) != 0))
+                  if (((hopIt->second.transparentSpecialTypes & props.special) != 0) || bool(hopIt->second.transparentPieceTypes & props.pcSet))
                       transparentPieces |= square_bb(s);
               }
 
@@ -4561,12 +4559,12 @@ inline Bitboard Position::universal_hopper_targets_impl(const std::map<Direction
             }
 
             if (props.isOccupied || props.isWall || props.isDead) {
-                if (((profile.transparentSpecialTypes & props.special) != 0) || (uint64_t(profile.transparentPieceTypes & props.pcSet) != 0)) {
+                if (((profile.transparentSpecialTypes & props.special) != 0) || bool(profile.transparentPieceTypes & props.pcSet)) {
                     distFromLastHurdle++;
                     continue;
                 }
 
-                if (((profile.hurdleSpecialTypes & props.special) != 0) || (uint64_t(profile.hurdlePieceTypes & props.pcSet) != 0)) {
+                if (((profile.hurdleSpecialTypes & props.special) != 0) || bool(profile.hurdlePieceTypes & props.pcSet)) {
                     hurdlesHit++;
                     if (hurdlesHit == 1) distToFirstHurdle = dist;
 
@@ -5014,7 +5012,7 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
       return b & (FilterMobility ? board_bb(c, pt) : board_bb());
   }
 
-  const bool needsGenericAttackAssembly = pieceMap.generic_attack_assembly_types() & piece_set(movePt);
+  const bool needsGenericAttackAssembly = bool(pieceMap.generic_attack_assembly_types() & piece_set(movePt));
 
   if (!needsGenericAttackAssembly && fast_attacks() && (pt != KING || king_type() == KING))
   {
@@ -5476,11 +5474,11 @@ inline Position::HopperMoveDetails Position::resolve_hopper_move_details(Square 
 
                   if (props.isOccupied || props.isWall || props.isDead)
                   {
-                      if (((profile.transparentSpecialTypes & props.special) != 0) || (uint64_t(profile.transparentPieceTypes & props.pcSet) != 0))
+                      if (((profile.transparentSpecialTypes & props.special) != 0) || bool(profile.transparentPieceTypes & props.pcSet))
                       {
                           distFromLastHurdle++;
                       }
-                      else if (((profile.hurdleSpecialTypes & props.special) != 0) || (uint64_t(profile.hurdlePieceTypes & props.pcSet) != 0))
+                      else if (((profile.hurdleSpecialTypes & props.special) != 0) || bool(profile.hurdlePieceTypes & props.pcSet))
                       {
                               if (profile.captureMode == PieceInfo::CAPTURE_LOCUST_ALL
                                   && props.isFriendly
@@ -5535,12 +5533,12 @@ inline Position::HopperMoveDetails Position::resolve_hopper_move_details(Square 
 
                               if (hprops.isOccupied || hprops.isWall || hprops.isDead)
                               {
-                                  if (((profile.transparentSpecialTypes & hprops.special) != 0) || (uint64_t(profile.transparentPieceTypes & hprops.pcSet) != 0))
+                                  if (((profile.transparentSpecialTypes & hprops.special) != 0) || bool(profile.transparentPieceTypes & hprops.pcSet))
                                   {
                                       distFromLastHurdle++;
                                       continue;
                                   }
-                                  if (((profile.hurdleSpecialTypes & hprops.special) != 0) || (uint64_t(profile.hurdlePieceTypes & hprops.pcSet) != 0))
+                                  if (((profile.hurdleSpecialTypes & hprops.special) != 0) || bool(profile.hurdlePieceTypes & hprops.pcSet))
                                   {
                                       if (profile.captureMode == PieceInfo::CAPTURE_LOCUST_ALL
                                           && hprops.isFriendly
@@ -5633,8 +5631,6 @@ inline Position::HopperMoveDetails Position::resolve_hopper_move_details(Square 
                       Piece hurdlePc = cur == to ? mover : piece_at(cur, occupied);
                       PieceType hurdlePt = type_of(hurdlePc);
                       PieceSet pcSet = (hurdlePt == NO_PIECE_TYPE || !isOccupied) ? NO_PIECE_SET : piece_set(hurdlePt);
-                      if (isWall) pcSet |= PieceSet(1ULL << 62);
-                      if (isDead) pcSet |= PieceSet(1ULL << 61);
                       
                       bool isFriendly = isOccupied && hurdlePc != NO_PIECE && (color_of(hurdlePc) == us);
                       bool isEnemy = isOccupied && hurdlePc != NO_PIECE && !isFriendly;
@@ -5644,10 +5640,10 @@ inline Position::HopperMoveDetails Position::resolve_hopper_move_details(Square 
                                       | (isWall ? PieceInfo::HopperProfile::WALL : 0)
                                       | (isDead ? PieceInfo::HopperProfile::DEAD : 0);
                       
-                      if (((profile.transparentSpecialTypes & special) != 0) || (uint64_t(profile.transparentPieceTypes & pcSet) != 0))
+                      if (((profile.transparentSpecialTypes & special) != 0) || bool(profile.transparentPieceTypes & pcSet))
                           continue;
                       
-                      if (((profile.hurdleSpecialTypes & special) != 0) || (uint64_t(profile.hurdlePieceTypes & pcSet) != 0))
+                      if (((profile.hurdleSpecialTypes & special) != 0) || bool(profile.hurdlePieceTypes & pcSet))
                       {
                           if (isOccupied && !isWall && !isDead && hurdlePc != NO_PIECE)
                               details.locustAllMask |= cur;

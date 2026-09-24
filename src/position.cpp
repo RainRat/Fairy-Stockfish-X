@@ -1210,8 +1210,9 @@ std::ostream& operator<<(std::ostream& os, const Position& pos) {
 
 // First and second hash functions for indexing the cuckoo tables
 #if defined(VERY_LARGE_BOARDS)
-inline int H1(Key h) { return h & 0xffff; }
-inline int H2(Key h) { return (h >> 16) & 0xffff; }
+// Leave room for the larger reversible-move set on 16x16 boards.
+inline int H1(Key h) { return h & 0x1ffff; }
+inline int H2(Key h) { return (h >> 17) & 0x1ffff; }
 #elif defined(LARGEBOARDS)
 inline int H1(Key h) { return h & 0x7fff; }
 inline int H2(Key h) { return (h >> 16) & 0x7fff; }
@@ -1221,7 +1222,11 @@ inline int H2(Key h) { return (h >> 16) & 0x1fff; }
 #endif
 
 // Cuckoo tables with Zobrist hashes of valid reversible moves, and the moves themselves
-#ifdef LARGEBOARDS
+#if defined(VERY_LARGE_BOARDS)
+// The 17-bit hashes above need a correspondingly larger table.
+Key cuckoo[131072];
+Move cuckooMove[131072];
+#elif defined(LARGEBOARDS)
 Key cuckoo[65536];
 Move cuckooMove[65536];
 #else
@@ -9561,7 +9566,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       }
   };
 
-  bool diesOnCapture = (death_on_capture_types() & piece_set(movedType));
+  bool diesOnCapture = bool(death_on_capture_types() & piece_set(movedType));
   if (!capturedDeadSquare && directCapture && !stackMove && !dropMove && diesOnCapture
       && piece_on(moverSq) != NO_PIECE)
   {
