@@ -762,7 +762,11 @@ enum Value : int {
   MidgameLimit  = 15258, EndgameLimit  = 3915
 };
 
-constexpr int PIECE_TYPE_BITS = 6; // PIECE_TYPE_NB = pow(2, PIECE_TYPE_BITS)
+#if defined(VERY_LARGE_BOARDS)
+constexpr int PIECE_TYPE_BITS = 7; // VLB variants such as Dai Shogi need more than 26 custom types.
+#else
+constexpr int PIECE_TYPE_BITS = 6;
+#endif
 
 enum PieceType {
   NO_PIECE_TYPE, PAWN, KNIGHT, BISHOP, ROOK, QUEEN,
@@ -789,7 +793,7 @@ enum PieceType {
   ALL_PIECES = 0,
 };
 static_assert(KING < PIECE_TYPE_NB, "KING exceeds PIECE_TYPE_NB.");
-static_assert(PIECE_TYPE_BITS <= 6, "PIECE_TYPE uses more than 6 bit");
+static_assert(PIECE_TYPE_BITS <= 7, "PIECE_TYPE uses more than 7 bit");
 static_assert(!(PIECE_TYPE_NB & (PIECE_TYPE_NB - 1)), "PIECE_TYPE_NB is not a power of 2");
 
 #if defined(VERY_LARGE_BOARDS)
@@ -805,13 +809,21 @@ enum Piece {
   PIECE_NB = 2 * PIECE_TYPE_NB
 };
 
-enum PieceSet : uint64_t {
-  NO_PIECE_SET = 0,
-  CHESS_PIECES = (1ULL << PAWN) | (1ULL << KNIGHT) | (1ULL << BISHOP) | (1ULL << ROOK) | (1ULL << QUEEN) | (1ULL << KING),
-  COMMON_FAIRY_PIECES = (1ULL << IMMOBILE_PIECE) | (1ULL << COMMONER) | (1ULL << ARCHBISHOP) | (1ULL << CHANCELLOR),
-  SHOGI_PIECES = (1ULL << SHOGI_PAWN) | (1ULL << GOLD) | (1ULL << SILVER) | (1ULL << SHOGI_KNIGHT) | (1ULL << LANCE)
-                | (1ULL << DRAGON)| (1ULL << DRAGON_HORSE) | (1ULL << KING),
-  COMMON_STEP_PIECES = (1ULL << COMMONER) | (1ULL << FERS) | (1ULL << WAZIR) | (1ULL << BREAKTHROUGH_PIECE),
+struct PieceSet {
+  // VLB needs more than 64 piece-type bits; keep the representation portable.
+  uint64_t low = 0;
+  uint64_t high = 0;
+
+  constexpr PieceSet() = default;
+  constexpr explicit PieceSet(uint64_t bits) : low(bits) {}
+  constexpr PieceSet(uint64_t lowBits, uint64_t highBits) : low(lowBits), high(highBits) {}
+  constexpr operator bool() const { return low || high; }
+  constexpr int count() const {
+      int n = 0;
+      for (uint64_t bits = low; bits; bits &= bits - 1) ++n;
+      for (uint64_t bits = high; bits; bits &= bits - 1) ++n;
+      return n;
+  }
 };
 
 enum RiderType : int {
@@ -1073,24 +1085,39 @@ ENABLE_BASE_OPERATORS_ON(RiderType)
 #undef ENABLE_BIT_OPERATORS_ON
 
 constexpr PieceSet piece_set(PieceType pt) {
-  return PieceSet(1ULL << pt);
+  return pt < 64 ? PieceSet(1ULL << pt) : PieceSet(0, 1ULL << (pt - 64));
 }
 
-constexpr PieceSet operator~ (PieceSet ps) { return (PieceSet)~(uint64_t)ps; }
-constexpr PieceSet operator| (PieceSet ps1, PieceSet ps2) { return (PieceSet)((uint64_t)ps1 | (uint64_t)ps2); }
-constexpr PieceSet operator| (PieceSet ps, PieceType pt) { return ps | piece_set(pt); }
-constexpr PieceSet operator& (PieceSet ps1, PieceSet ps2) { return (PieceSet)((uint64_t)ps1 & (uint64_t)ps2); }
-constexpr PieceSet operator& (PieceSet ps, PieceType pt) {
-  return (uint64_t(ps) & (1ULL << ALL_PIECES)) ? piece_set(pt) : PieceSet(uint64_t(ps) & (1ULL << pt));
+constexpr PieceSet operator~(PieceSet ps) {
+  return PieceSet(~ps.low, PIECE_TYPE_BITS == 7 ? ~ps.high : 0);
 }
-constexpr PieceSet operator^ (PieceSet ps1, PieceSet ps2) { return (PieceSet)((uint64_t)ps1 ^ (uint64_t)ps2); }
+constexpr PieceSet operator|(PieceSet ps1, PieceSet ps2) { return PieceSet(ps1.low | ps2.low, ps1.high | ps2.high); }
+constexpr PieceSet operator| (PieceSet ps, PieceType pt) { return ps | piece_set(pt); }
+constexpr PieceSet operator&(PieceSet ps1, PieceSet ps2) { return PieceSet(ps1.low & ps2.low, ps1.high & ps2.high); }
+constexpr PieceSet operator& (PieceSet ps, PieceType pt) {
+  return (ps.low & 1ULL) ? piece_set(pt) : ps & piece_set(pt);
+}
+constexpr PieceSet operator^(PieceSet ps1, PieceSet ps2) { return PieceSet(ps1.low ^ ps2.low, ps1.high ^ ps2.high); }
 constexpr PieceSet operator^ (PieceSet ps, PieceType pt) { return ps ^ piece_set(pt); }
-inline PieceSet& operator|= (PieceSet& ps1, PieceSet ps2) { ps1 = PieceSet(uint64_t(ps1) | uint64_t(ps2)); return ps1; }
+constexpr bool operator==(PieceSet ps1, PieceSet ps2) { return ps1.low == ps2.low && ps1.high == ps2.high; }
+constexpr bool operator!=(PieceSet ps1, PieceSet ps2) { return !(ps1 == ps2); }
+inline PieceSet& operator|=(PieceSet& ps1, PieceSet ps2) { ps1 = ps1 | ps2; return ps1; }
 inline PieceSet& operator|= (PieceSet& ps, PieceType pt) { return ps |= piece_set(pt); }
-inline PieceSet& operator&= (PieceSet& ps1, PieceSet ps2) { ps1 = PieceSet(uint64_t(ps1) & uint64_t(ps2)); return ps1; }
+inline PieceSet& operator&=(PieceSet& ps1, PieceSet ps2) { ps1 = ps1 & ps2; return ps1; }
 //inline PieceSet& operator&= (PieceSet& ps, PieceType pt) does not make sense
-inline PieceSet& operator^= (PieceSet& ps1, PieceSet ps2) { ps1 = PieceSet(uint64_t(ps1) ^ uint64_t(ps2)); return ps1; }
+inline PieceSet& operator^=(PieceSet& ps1, PieceSet ps2) { ps1 = ps1 ^ ps2; return ps1; }
 inline PieceSet& operator^= (PieceSet& ps, PieceType pt) { return ps ^= piece_set(pt); }
+
+constexpr PieceSet NO_PIECE_SET{};
+constexpr PieceSet CHESS_PIECES = piece_set(PAWN) | piece_set(KNIGHT) | piece_set(BISHOP)
+                                | piece_set(ROOK) | piece_set(QUEEN) | piece_set(KING);
+constexpr PieceSet COMMON_FAIRY_PIECES = piece_set(IMMOBILE_PIECE) | piece_set(COMMONER)
+                                       | piece_set(ARCHBISHOP) | piece_set(CHANCELLOR);
+constexpr PieceSet SHOGI_PIECES = piece_set(SHOGI_PAWN) | piece_set(GOLD) | piece_set(SILVER)
+                                | piece_set(SHOGI_KNIGHT) | piece_set(LANCE) | piece_set(DRAGON)
+                                | piece_set(DRAGON_HORSE) | piece_set(KING);
+constexpr PieceSet COMMON_STEP_PIECES = piece_set(COMMONER) | piece_set(FERS)
+                                      | piece_set(WAZIR) | piece_set(BREAKTHROUGH_PIECE);
 
 static_assert(piece_set(PAWN) & PAWN);
 static_assert(piece_set(KING) & KING);

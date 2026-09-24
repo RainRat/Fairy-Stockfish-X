@@ -2442,12 +2442,11 @@ Variant* Variant::conclude() {
             || std::count(fenBoard.begin(), fenBoard.end(), pieceToChar[make_piece(BLACK, nnueKing)]) != 1)
             nnueKing = NO_PIECE_TYPE;
     }
-    // We can not use popcount here yet, as the lookup tables are initialized after the variants
     int nnueSquares = (maxRank + 1) * (maxFile + 1);
-    nnueUsePockets = (pieceDrops && (captureType == HAND || (!(mustDrop[WHITE] || mustDrop[BLACK]) && std::bitset<64>(pieceTypes).count() != 1))) || seirawanGating;
+    nnueUsePockets = (pieceDrops && (captureType == HAND || (!(mustDrop[WHITE] || mustDrop[BLACK]) && pieceTypes.count() != 1))) || seirawanGating;
     int nnuePockets = nnueUsePockets ? 2 * int(maxFile + 1) : 0;
-    int nnueNonDropPieceIndices = (2 * std::bitset<64>(pieceTypes).count() - (nnueKing != NO_PIECE_TYPE)) * nnueSquares;
-    int nnuePieceIndices = nnueNonDropPieceIndices + 2 * (std::bitset<64>(pieceTypes).count() - (nnueKing != NO_PIECE_TYPE)) * nnuePockets;
+    int nnueNonDropPieceIndices = (2 * pieceTypes.count() - (nnueKing != NO_PIECE_TYPE)) * nnueSquares;
+    int nnuePieceIndices = nnueNonDropPieceIndices + 2 * (pieceTypes.count() - (nnueKing != NO_PIECE_TYPE)) * nnuePockets;
     bool nnueHasWalls = wallingRule != NO_WALLING
                      || petrifyOnCaptureTypes != NO_PIECE_SET
                      || startFen.find('*') != std::string::npos;
