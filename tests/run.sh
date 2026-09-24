@@ -217,12 +217,21 @@ run_fast_parallel() {
     local log_dir
     log_dir=$(mktemp -d "${RUN_DIR}/fast-XXXXXX")
     export FSX_CASE_LOG_ROOT="${log_dir}/cases"
+    # Config runs Python and many engine processes; avoid competing suites.
+    if [[ " ${SUITES_TO_RUN[*]} " == *" config "* ]]; then
+        if ! run_one config "$engine" "$variants" "$log_dir"; then
+            echo "${profile} profile failed; logs: ${log_dir}" >&2
+            return 1
+        fi
+    fi
     declare -A pids=()
     for suite in "${SUITES_TO_RUN[@]}"; do
+        [[ "$suite" == config ]] && continue
         run_one "$suite" "$engine" "$variants" "$log_dir" &
         pids[$suite]=$!
     done
     for suite in "${SUITES_TO_RUN[@]}"; do
+        [[ "$suite" == config ]] && continue
         pid=${pids[$suite]}
         if ! wait "$pid"; then status=1; fi
     done
