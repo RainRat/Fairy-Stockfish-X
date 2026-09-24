@@ -3414,7 +3414,7 @@ bool Position::hook_attacks_square(Color us, PieceType pt, Square from, Square t
   // with a legal capture count attack the target.
   return detail::for_each_hook_path(*this, us, pt, from, occupied, friendly,
       [&](const MultiLegPath& path) {
-          return path.via == target || path.to == target;
+          return (path.via == target && (board_bb(us, pt) & target)) || path.to == target;
       }, target);
 }
 
@@ -3433,16 +3433,29 @@ Bitboard Position::multileg_attackers_to(Square s, Bitboard occupied, Color c,
   Bitboard baseFriendly = (simulated && !simulated->typeOccupancy.empty())
                         ? simulated->type_pieces(c, ALL_PIECES)
                         : (simulated ? simulated->colorOccupancy[c] : pieces(c));
-  Bitboard friendly = baseFriendly & ~square_bb(s);
+  Bitboard friendly = baseFriendly & occupied & ~square_bb(s);
   auto candidates_for = [&](PieceType pt) {
       Bitboard b = (simulated && !simulated->typeOccupancy.empty())
                      ? (simulated->type_pieces(c, pt) & occupied)
                      : (pieces(c, pt) & occupied);
-      // Compact simulations do not track per-type moves; ensure a promoted
-      // or relocated placed piece is still considered for its result type.
+      // Compact simulations do not track per-type moves; remove changed
+      // squares from the old identity map before adding the resulting mover.
+      if (simulated && simulated->typeOccupancy.empty())
+      {
+          Bitboard changed = simulated->removedByEffects;
+          if (is_ok(simulated->from))
+              changed |= square_bb(simulated->from);
+          if (is_ok(simulated->to))
+              changed |= square_bb(simulated->to);
+          if (is_ok(simulated->captureSquare))
+              changed |= square_bb(simulated->captureSquare);
+          b &= ~changed;
+      }
       if (simulated && simulated->placedPiece != NO_PIECE && color_of(simulated->placedPiece) == c
-          && type_of(simulated->placedPiece) == pt && is_ok(simulated->to) && (occupied & simulated->to))
-          b |= square_bb(simulated->to);
+          && type_of(simulated->placedPiece) == pt && is_ok(simulated->effectiveTo)
+          && (occupied & simulated->effectiveTo)
+          && (simulated->colorOccupancy[c] & simulated->effectiveTo))
+          b |= square_bb(simulated->effectiveTo);
       return b & occupied;
   };
   Bitboard attackers = Bitboard(0);
@@ -4891,6 +4904,7 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
       info.relocatedOccupancy = pieces();
       if (is_ok(info.captureSquare) && (!is_jump_capture(m) || primaryPieceCapture))
           info.relocatedOccupancy ^= square_bb(info.captureSquare);
+      info.relocatedOccupancy &= ~extraCapture;
   }
   else if (is_self_destruct(m))
       info.relocatedOccupancy = pieces() & ~square_bb(info.from);
@@ -5001,6 +5015,8 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
   else if (info.rifle)
   {
       remove_color_square(info.captureSquare);
+      if (extraCapture)
+          remove_color_square(lsb(extraCapture));
       remove_color_square(info.from);
       add_color_piece(us, placedType, info.from);
       info.placedPiece = make_piece(us, placedType);
@@ -5016,9 +5032,8 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
           remove_color_square(info.captureSquare);
       if (extraCapture)
           remove_color_square(lsb(extraCapture));
-      PieceType multiLegPlaced = is_multileg_promotion(m) ? promoted_piece_type(type_of(moved_piece(m))) : type_of(moved_piece(m));
-      add_color_piece(us, multiLegPlaced, info.to);
-      info.placedPiece = make_piece(us, multiLegPlaced);
+      add_color_piece(us, placedType, info.to);
+      info.placedPiece = make_piece(us, placedType);
   }
   else if (!pureWallMove)
   {
@@ -5544,6 +5559,14 @@ bool Position::legal(Move m) const {
 
   if (passMove && !pass(us))
       return false;
+
+  if (is_multileg(m))
+  {
+      PromotionStatus promo = multileg_promotion_status(moved_piece(m), from, to, capture(m));
+      if ((is_multileg_promotion(m) && !promo.allowed)
+          || (!is_multileg_promotion(m) && promo.mandatory))
+          return false;
+  }
 
   if (insertMove)
   {
@@ -6828,8 +6851,11 @@ bool Position::pseudo_legal(const Move m) const {
                            : hook_path_valid(us, pt, from, via, to);
       if (!validPath)
           return false;
+      PromotionStatus promo = multileg_promotion_status(pc, from, to, capture(m));
       if (is_multileg_promotion(m)
-          && !multileg_promotion_status(pc, from, to, capture(m)).allowed)
+          && !promo.allowed)
+          return false;
+      if (!is_multileg_promotion(m) && promo.mandatory)
           return false;
       if (!allow_checks() && checking_permitted())
       {
@@ -6945,8 +6971,8 @@ bool Position::pseudo_legal(const Move m) const {
 
       // Same fallback owner as generate<LEGAL>/MovePicker: wrapped boards and
       // bent multi-leg checks use NON_EVASIONS + legal() filtering.
-      return ((evasion_checkers() && !requires_full_evasion_generation()) ? MoveList<    EVASIONS>(*this).contains(m)
-                                                                          : MoveList<NON_EVASIONS>(*this).contains(m))
+      return (evasion_checkers() ? MoveList<EVASION_CANDIDATES>(*this).contains(m)
+                                 : MoveList<NON_EVASIONS>(*this).contains(m))
           && !violates_same_player_board_repetition(m);
   }
 
@@ -7397,7 +7423,8 @@ bool Position::gives_check_impl(Move m) const {
   if (is_multileg(m) && capture(m))
       discCheckSq |= square_bb(via_sq(m));
 
-  if (  (((!dropMove && (blockers_for_king(~sideToMove) & discCheckSq)) || var->trapRegion)
+  if (  (((!dropMove && (blockers_for_king(~sideToMove) & discCheckSq)) || var->trapRegion
+          || has_two_step_moves() || has_hook_moves())
          || (non_sliding_riders() & pieces(sideToMove)))
       && (attackers_to_king(royalSq, occupied, sideToMove, janggiCannons,
                             NO_PIECE_TYPE, &simulated)

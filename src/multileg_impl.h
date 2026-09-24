@@ -26,7 +26,10 @@ bool for_each_two_step_path(const Position& pos, Color us, PieceType pt, Square 
       Square to;
       if (!pos.step_destination(via, KingDirections[d2], to))
           continue;
-      if (!(pos.board_bb() & to) || (to != from && (friendly & to)))
+      // Piece mobility constrains the completed move's endpoint; the via
+      // square remains a transit/capture square.
+      if (!(pos.board_bb() & to) || (to != from && (friendly & to))
+          || !(pos.board_bb(us, pt) & to))
           continue;
       const auto key = std::pair{via, to};
       if (std::find(seen.begin(), seen.begin() + seenCount, key) != seen.begin() + seenCount)
@@ -77,14 +80,14 @@ bool for_each_hook_path(const Position& pos, Color us, PieceType pt, Square from
               // If the first-leg capture is already an ordinary move of the
               // piece, emit that move only; hook-only movers still need this
               // endpoint to stop on the capture.
-              if (!(pos.attacks_bb(us, pt, from, occupied) & square_bb(bend)))
+              if (!(pos.attacks_from(us, pt, from, occupied) & square_bb(bend)))
               {
                   MultiLegPath path;
                   path.via = bend;
                   path.to = bend;
                   path.captureVia = true;
                   path.transit = firstTransit & ~square_bb(bend);
-                  if (visit(path))
+                  if ((pos.board_bb(us, pt) & bend) && visit(path))
                       return true;
               }
               if (captureLimit == 1)
@@ -151,7 +154,7 @@ bool for_each_hook_path(const Position& pos, Color us, PieceType pt, Square from
               path.captureVia = cap1;
               path.captureTo = cap2;
               path.transit = (firstTransit | secondTransit) & ~square_bb(to);
-              if (visit(path))
+              if ((pos.board_bb(us, pt) & to) && visit(path))
                   return true;
               if (cap2 || atOrigin)
                   break;

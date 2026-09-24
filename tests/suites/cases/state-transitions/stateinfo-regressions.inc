@@ -621,6 +621,22 @@ static void test_two_step_promotion_ignores_morph() {
     assert(pos.piece_on(SQ_G8) == W_ROOK);
     pos.undo_move(m_plain);
     assert(pos.key() == origKey);
+
+    pos.set(variants.get("test-morph-lion"),
+            "5r2/6L1/8/8/8/8/8/K3k3 w - - 0 1", false, &st, nullptr);
+    Move m_check = make_two_step(SQ_G7, SQ_F8, SQ_E7);
+    assert(pos.legal(m_check));
+    SimulatedMoveInfo simulated = pos.simulated_move_info(m_check);
+    assert(simulated.placedPiece == W_ROOK);
+    assert(simulated.colorOccupancy[WHITE] & square_bb(SQ_E7));
+    assert(simulated.type_pieces(WHITE, ROOK) & square_bb(SQ_E7));
+    assert(!(simulated.occupiedAfterEffects & square_bb(SQ_F8)));
+    assert(pos.gives_check(m_check));
+    StateInfo checkNext{};
+    pos.do_move(m_check, checkNext);
+    assert(pos.piece_on(SQ_E7) == W_ROOK);
+    assert(pos.checkers() & square_bb(SQ_E7));
+    pos.undo_move(m_check);
 }
 
 static void test_two_step_double_capture_rejects_ambiguous_effects() {

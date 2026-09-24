@@ -625,8 +625,7 @@ public:
       bool allowed = false;
       bool mandatory = false;
   };
-  PromotionStatus multileg_promotion_status(Piece mover, Square from, Square to, bool isCapture,
-                                           Bitboard traversed = 0) const;
+  PromotionStatus multileg_promotion_status(Piece mover, Square from, Square to, bool isCapture) const;
   PieceType effective_piece_type(PieceType pt) const { return pt == KING ? king_type() : pt; }
   Square promotion_square(Color c, Square s) const;
   PieceType main_promotion_pawn_type(Color c) const;
@@ -1197,7 +1196,7 @@ private:
   int hook_capture_limit(PieceType pt) const;
   bool hook_path_valid(Color us, PieceType pt, Square from, Square via, Square to) const;
   bool two_step_path_valid(Color us, PieceType pt, Square from, Square via, Square to) const;
-  bool multileg_promotion_zone(Color c, PieceType pt, Square from, Square to, Bitboard traversed) const;
+  bool multileg_promotion_zone(Color c, PieceType pt, Square from, Square to) const;
   bool two_step_attacks_square(Color us, PieceType pt, Square from, Square target,
                                Bitboard occupied, Bitboard friendly) const;
   bool hook_attacks_square(Color us, PieceType pt, Square from, Square target,
@@ -2312,19 +2311,15 @@ inline bool Position::has_capture() const {
   // Check for cached value
   if (st->legalCapture != NO_VALUE)
       return st->legalCapture == VALUE_TRUE;
-  if (evasion_checkers() && !anti_royal_types() && !requires_full_evasion_generation())
+  if (is_immediate_game_end())
   {
-      for (const auto& mevasion : MoveList<EVASIONS>(*this))
-          if (capture(mevasion) && legal(mevasion))
-          {
-              st->legalCapture = VALUE_TRUE;
-              return true;
-          }
+      st->legalCapture = VALUE_FALSE;
+      return false;
   }
-  else if (evasion_checkers())
+  if (evasion_checkers())
   {
-      for (const auto& m : MoveList<LEGAL>(*this))
-          if (capture(m))
+      for (const auto& m : MoveList<EVASION_CANDIDATES>(*this))
+          if (capture(m) && legal(m) && !virtual_drop(m))
           {
               st->legalCapture = VALUE_TRUE;
               return true;
@@ -2346,19 +2341,15 @@ inline bool Position::has_capture() const {
 inline bool Position::has_en_passant_capture() const {
   if (st->legalEnPassant != NO_VALUE)
       return st->legalEnPassant == VALUE_TRUE;
-  if (evasion_checkers() && !anti_royal_types() && !requires_full_evasion_generation())
+  if (is_immediate_game_end())
   {
-      for (const auto& mevasion : MoveList<EVASIONS>(*this))
-          if (type_of(mevasion) == EN_PASSANT && legal(mevasion))
-          {
-              st->legalEnPassant = VALUE_TRUE;
-              return true;
-          }
+      st->legalEnPassant = VALUE_FALSE;
+      return false;
   }
-  else if (evasion_checkers())
+  if (evasion_checkers())
   {
-      for (const auto& m : MoveList<LEGAL>(*this))
-          if (type_of(m) == EN_PASSANT)
+      for (const auto& m : MoveList<EVASION_CANDIDATES>(*this))
+          if (type_of(m) == EN_PASSANT && legal(m) && !virtual_drop(m))
           {
               st->legalEnPassant = VALUE_TRUE;
               return true;
@@ -5963,7 +5954,7 @@ inline bool Position::hook_step(Square cur, Direction dir, Square& nxt) const {
 }
 
 inline Position::PromotionStatus Position::multileg_promotion_status(Piece mover, Square from, Square to,
-                                                                      bool isCapture, Bitboard traversed) const {
+                                                                      bool isCapture) const {
   PromotionStatus status;
   if (mover == NO_PIECE)
       return status;
@@ -5974,18 +5965,18 @@ inline Position::PromotionStatus Position::multileg_promotion_status(Piece mover
   PieceType promoTo = promoted_piece_type(pt);
   if (promoTo == NO_PIECE_TYPE || is_promoted(from))
       return status;
-  if (!multileg_promotion_zone(us, pt, from, to, traversed) || !promotion_allowed(us, promoTo))
+  if (!multileg_promotion_zone(us, pt, from, to) || !promotion_allowed(us, promoTo))
       return status;
   if (piece_promotion_on_capture() && !isCapture)
       return status;
   status.allowed = true;
+  status.mandatory |= mandatory_piece_promotion();
   return status;
 }
 
-inline bool Position::multileg_promotion_zone(Color c, PieceType pt, Square from, Square to,
-                                               Bitboard traversed) const {
+inline bool Position::multileg_promotion_zone(Color c, PieceType pt, Square from, Square to) const {
   Bitboard pz = promotion_zone(c, pt);
-  return pz & (from | to | traversed);
+  return pz & (from | to);
 }
 
 inline bool Position::paired_drop(Move m) const {

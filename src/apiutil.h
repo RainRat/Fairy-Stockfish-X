@@ -450,7 +450,9 @@ inline bool has_insufficient_material(Color c, const Position& pos) {
         || pos.variant()->castlingWins
         || pos.variant()->connectRegion1[c]
         || pos.variant()->connectRegion2[c]
-        || pos.variant()->connectRegion3[c])
+        || pos.variant()->connectRegion3[c]
+        || pos.two_step_piece_types()
+        || pos.hook_piece_types())
         return false;
 
     // Precalculate if any promotion pawn types have pieces
