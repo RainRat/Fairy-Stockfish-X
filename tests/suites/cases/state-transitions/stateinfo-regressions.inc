@@ -975,7 +975,7 @@ static void test_hook_royal_attacks() {
     pos.set(variants.get("test-hook-state"),
             "8/8/8/4k3/4H3/8/8/4K3 b - - 0 1", false, &st, nullptr);
     assert(pos.evasion_checkers());
-    assert(pos.requires_full_evasion_filter());
+    assert(pos.requires_full_evasion_generation());
     // King takes the checker.
     assert(pos.legal(make<NORMAL>(SQ_E5, SQ_E4)));
 
@@ -983,14 +983,14 @@ static void test_hook_royal_attacks() {
     pos.set(variants.get("test-hook-state"),
             "8/8/8/5k2/4H3/8/8/4K3 b - - 0 1", false, &st, nullptr);
     assert(pos.evasion_checkers());
-    assert(pos.requires_full_evasion_filter());
+    assert(pos.requires_full_evasion_generation());
 
     // King movement into a hook attack is illegal: d5 is checked via e5 and
     // d6 is attacked via e6, so the king cannot flee there.
     pos.set(variants.get("test-hook-state"),
             "8/8/8/3k4/4H3/8/8/4K3 b - - 0 1", false, &st, nullptr);
     assert(pos.evasion_checkers());
-    assert(pos.requires_full_evasion_filter());
+    assert(pos.requires_full_evasion_generation());
     assert(!pos.legal(make<NORMAL>(SQ_D5, SQ_D6)));
 
     // Via royal capture is rejected like a final-square king capture.

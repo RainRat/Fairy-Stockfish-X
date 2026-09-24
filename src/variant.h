@@ -31,7 +31,6 @@
 #include <iostream>
 
 #include "types.h"
-#include "multileg_geometry.h"
 #include "bitboard.h"
 
 namespace Stockfish {
@@ -44,10 +43,7 @@ struct DirectionPairSpec {
   uint64_t relative = 0;
   uint64_t byColor[COLOR_NB] = {};
 
-  void conclude() {
-    byColor[WHITE] = relative;
-    byColor[BLACK] = reflect_direction_pairs(relative);
-  }
+  void conclude();
 };
 
 struct HookMoveSpec {

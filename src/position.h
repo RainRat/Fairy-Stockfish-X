@@ -36,7 +36,7 @@
 #include "evaluate.h"
 #include "psqt.h"
 #include "types.h"
-#include "multileg_move.h"
+#include "multileg.h"
 #include "variant.h"
 #include "movegen.h"
 #include "piece.h"
@@ -47,11 +47,7 @@ namespace Stockfish {
 
 class Position;
 namespace detail {
-template<typename Visit>
-bool for_each_two_step_path(const Position&, Color, PieceType, Square, Bitboard, Visit&&);
-template<typename Visit>
-bool for_each_hook_path(const Position&, Color, PieceType, Square, Bitboard, Bitboard, Visit&&,
-                        Square target = SQ_NONE);
+struct MultiLegWalker;
 }
 
 constexpr int MAX_PUSH_SNAPSHOT = 32;
@@ -1178,11 +1174,7 @@ private:
     bool capturesTo = false;
   };
   DirectCaptureInfo direct_capture_info(Move m) const;
-  template<typename Visit>
-  friend bool detail::for_each_two_step_path(const Position&, Color, PieceType, Square, Bitboard, Visit&&);
-  template<typename Visit>
-  friend bool detail::for_each_hook_path(const Position&, Color, PieceType, Square,
-                                         Bitboard, Bitboard, Visit&&, Square);
+  friend struct detail::MultiLegWalker;
   Bitboard attackers_to_base(Square s, Bitboard occupied, Color c, Bitboard janggiCannons) const;
   Bitboard attackers_to_base(Square s, Bitboard occupied, Color c, Bitboard janggiCannons,
                              const SimulatedMoveInfo* simulated) const;
@@ -1196,7 +1188,6 @@ private:
   bool hook_step(Square cur, Direction dir, Square& nxt) const;
   bool step_destination(Square from, Direction d, Square& to) const;
   Bitboard multileg_transit_squares(Move m) const;
-  bool requires_full_evasion_filter() const;
   uint64_t two_step_moves_mask(Color c, PieceType pt) const;
   uint64_t hook_move_mask(Color c, PieceType pt) const;
   int hook_first_range(PieceType pt) const;

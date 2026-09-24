@@ -1,6 +1,9 @@
-/* Internal multi-leg path enumeration, included only by position.cpp and movegen.cpp. */
+/* Internal multi-leg path enumeration. */
 #ifndef MULTILEG_IMPL_H_INCLUDED
 #define MULTILEG_IMPL_H_INCLUDED
+
+#include "position.h"
+#include "multileg.h"
 
 #include <algorithm>
 #include <array>
@@ -8,9 +11,18 @@
 
 namespace Stockfish::detail {
 
-template<typename Visit>
-bool for_each_two_step_path(const Position& pos, Color us, PieceType pt, Square from,
-                            Bitboard friendly, Visit&& visit) {
+struct MultiLegPath {
+  Square via = SQ_NONE;
+  Square to = SQ_NONE;
+  Bitboard captures = 0;
+  Bitboard transit = 0;
+};
+
+struct MultiLegWalker {
+
+  template<typename Visit>
+  static bool for_each_two_step_path(const Position& pos, Color us, PieceType pt, Square from,
+                                     Bitboard occupied, Bitboard friendly, Visit&& visit) {
   uint64_t mask = pos.two_step_moves_mask(us, pt);
   if (!mask || !(pos.board_bb() & from))
       return false;
@@ -42,6 +54,7 @@ bool for_each_two_step_path(const Position& pos, Color us, PieceType pt, Square 
       MultiLegPath path;
       path.via = via;
       path.to = to;
+      path.captures = (square_bb(via) | square_bb(to)) & occupied & ~square_bb(from);
       path.transit = square_bb(via) & ~square_bb(to);
       if (visit(path))
           return true;
@@ -49,9 +62,10 @@ bool for_each_two_step_path(const Position& pos, Color us, PieceType pt, Square 
   return false;
 }
 
-template<typename Visit>
-bool for_each_hook_path(const Position& pos, Color us, PieceType pt, Square from,
-                        Bitboard occupied, Bitboard friendly, Visit&& visit, Square target) {
+  template<typename Visit>
+  static bool for_each_hook_path(const Position& pos, Color us, PieceType pt, Square from,
+                                 Bitboard occupied, Bitboard friendly, Visit&& visit,
+                                 Square target = SQ_NONE) {
   uint64_t mask = pos.hook_move_mask(us, pt);
   if (!mask || !(pos.board_bb() & from))
       return false;
@@ -84,7 +98,7 @@ bool for_each_hook_path(const Position& pos, Color us, PieceType pt, Square from
               MultiLegPath path;
               path.via = bend;
               path.to = bend;
-              path.captureVia = true;
+              path.captures = square_bb(bend);
               path.transit = firstTransit & ~square_bb(bend);
               if ((pos.board_bb(us, pt) & bend) && visit(path))
                   return true;
@@ -149,8 +163,8 @@ bool for_each_hook_path(const Position& pos, Color us, PieceType pt, Square from
               MultiLegPath path;
               path.via = bend;
               path.to = to;
-              path.captureVia = cap1;
-              path.captureTo = cap2;
+              path.captures = (cap1 ? square_bb(bend) : Bitboard(0))
+                            | (cap2 ? square_bb(to) : Bitboard(0));
               path.transit = (firstTransit | secondTransit) & ~square_bb(to);
               if ((pos.board_bb(us, pt) & to) && visit(path))
                   return true;
@@ -164,6 +178,7 @@ bool for_each_hook_path(const Position& pos, Color us, PieceType pt, Square from
   return false;
 }
 
+};
 
 } // namespace Stockfish::detail
 

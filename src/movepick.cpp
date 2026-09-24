@@ -539,7 +539,7 @@ top:
   case EVASION_INIT:
       ensure_move_list_storage();
       cur = moveList;
-      endMoves = generate_evasions_without_potions(pos, cur);
+      endMoves = generate_without_potions<EVASION_CANDIDATES>(pos, cur);
       evasionBaseEnd = endMoves;
       evasionPotionsDeferred = potions_pending();
       assert_move_list_bounds();

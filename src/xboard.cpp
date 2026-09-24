@@ -28,7 +28,7 @@
 #include "search.h"
 #include "thread.h"
 #include "types.h"
-#include "multileg_move.h"
+#include "multileg.h"
 #include "uci.h"
 #include "xboard.h"
 
