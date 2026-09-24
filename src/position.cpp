@@ -5512,6 +5512,50 @@ bool Position::legal(Move m) const {
                          ? (is_multileg(m) ? multilegInfo.primary_capture(from) : capture_square(m))
                          : SQ_NONE;
 
+  if (var->lionCapturingRule && !dropMove && !passMove && isCapture
+      && (pieces(them) & to))
+  {
+      Piece mover = piece_on(from), victim = piece_on(to);
+      const bool movingIsLion = mover != NO_PIECE
+                             && (var->lionMoveTypes & piece_set(type_of(mover)));
+      const bool victimIsLion = victim != NO_PIECE
+                             && (var->lionMoveTypes & piece_set(type_of(victim)));
+      const int distance = std::max(std::abs(int(file_of(from)) - int(file_of(to))),
+                                    std::abs(int(rank_of(from)) - int(rank_of(to))));
+
+      if (victimIsLion)
+      {
+          if (movingIsLion && distance > 1)
+          {
+              Bitboard occupiedWithoutLion = pieces() ^ square_bb(to);
+              bool significantMidCapture = is_multileg(m) && multilegInfo.captures_via()
+                                        && !(var->insignificantPieces
+                                             & piece_set(type_of(piece_on(multilegInfo.via))));
+              if (attackers_to(to, occupiedWithoutLion, them) && !significantMidCapture)
+                  return false;
+          }
+
+          if (!movingIsLion && st->previous)
+          {
+              Piece previousCapture = st->captured.piece.piece;
+              if (previousCapture == NO_PIECE)
+                  previousCapture = st->extraCaptured.piece.piece;
+              Move previousMove = st->move;
+              if (previousCapture != NO_PIECE && color_of(previousCapture) == us
+                  && (var->lionMoveTypes & piece_set(type_of(previousCapture))))
+              {
+                  Piece previousMover = is_ok(previousMove)
+                                      ? piece_on(to_sq(previousMove)) : NO_PIECE;
+                  bool previousMoverWasLion = previousMover != NO_PIECE
+                                            && (var->lionMoveTypes
+                                                & piece_set(type_of(previousMover)));
+                  if (!previousMoverWasLion)
+                      return false;
+              }
+          }
+      }
+  }
+
   if (in_opening_self_removal_phase())
       return is_opening_self_removal_move(m);
 
