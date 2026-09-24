@@ -7,6 +7,7 @@ CXX=${CXX:-${COMPILER:-g++}}
 SUITE_DIR="${ROOT_DIR}/tests/suites"
 VARIANTS=${VARIANTS:-${ROOT_DIR}/src/variants.ini}
 RUN_DIR="${ROOT_DIR}/.local/build/test-run"
+source "${ROOT_DIR}/tests/lib/build-signature.sh"
 
 declare -A SUITE_TIMEOUT=(
   [config]=300 [movement]=900 [royal-legality]=900 [captures-effects]=600
@@ -35,6 +36,37 @@ default_engine() {
         echo "${ROOT_DIR}/src/stockfish-large"
     else
         echo "${ROOT_DIR}/src/stockfish"
+    fi
+}
+
+check_named_engine_artifact() {
+    local engine="$1" profile expected_board expected_all
+    case "$engine" in
+        "${ROOT_DIR}/src/stockfish-large") expected_board=large; expected_all="" ;;
+        "${ROOT_DIR}/src/stockfish-allvars") expected_board=large; expected_all=yes ;;
+        "${ROOT_DIR}/src/stockfish-vlb") expected_board=very-large; expected_all=yes ;;
+        *) return 0 ;;
+    esac
+    [[ -x "$engine" ]] || return 0
+    if ! fsx_build_artifact_is_current "$ROOT_DIR" "$engine" \
+        || find "${ROOT_DIR}/src" -type f \( -name '*.cpp' -o -name '*.h' -o -name 'Makefile' \) \
+            -newer "$engine" -print -quit | grep -q .; then
+        echo "stale or unverified engine: $engine; rebuild it with tests/build.sh" >&2
+        return 1
+    fi
+    profile=$(fsx_build_recorded_profile "$ROOT_DIR" "$engine")
+    if [[ ";${profile};" != *";board=${expected_board};"* ]] \
+        || { [[ -n "$expected_all" ]] && [[ ";${profile};" != *";all=${expected_all};"* ]]; }; then
+        echo "engine profile does not match its named role: $engine; rebuild it with tests/build.sh" >&2
+        return 1
+    fi
+}
+
+check_named_engines() {
+    check_named_engine_artifact "$1"
+    if [[ " ${SUITES_TO_RUN[*]} " == *" movement "* \
+        || " ${SUITES_TO_RUN[*]} " == *" variants-smoke "* ]]; then
+        check_named_engine_artifact "${ROOT_DIR}/src/stockfish-vlb"
     fi
 }
 
@@ -256,6 +288,7 @@ case "$command" in
         engine=$(normalize_engine "${2:-$(default_engine)}")
         [[ -x "$engine" ]] || { echo "missing executable: $engine" >&2; exit 1; }
         [[ "$command" == fast ]] && SUITES_TO_RUN=("${FAST_SUITES[@]}") || SUITES_TO_RUN=("${ALL_SUITES[@]}")
+        check_named_engines "$engine"
         prepare_python
         export CXX
         prepare_shared_objects "$engine"
@@ -285,10 +318,11 @@ case "$command" in
         for suite in "${SUITES_TO_RUN[@]}"; do
             [[ -n "${SUITE_TIMEOUT[$suite]:-}" ]] || { echo "unknown suite: $suite" >&2; exit 2; }
         done
+        engine=$(normalize_engine "$engine")
+        check_named_engines "$engine"
         prepare_python
         export CXX
         prepare_shared_objects "$engine"
-        engine=$(normalize_engine "$engine")
         if [[ "${VERBOSE:-0}" == 1 ]]; then
             unset FSX_QUIET_VARIANT_LOAD_SUMMARIES
         else
