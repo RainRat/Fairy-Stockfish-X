@@ -5512,44 +5512,66 @@ bool Position::legal(Move m) const {
                          ? (is_multileg(m) ? multilegInfo.primary_capture(from) : capture_square(m))
                          : SQ_NONE;
 
-  if (var->lionCapturingRule && !dropMove && !passMove && isCapture
-      && (pieces(them) & to))
+  if (var->lionCapturingRule && !dropMove && !passMove && isCapture)
   {
-      Piece mover = piece_on(from), victim = piece_on(to);
+      Piece mover = piece_on(from);
       const bool movingIsLion = mover != NO_PIECE
                              && (var->lionMoveTypes & piece_set(type_of(mover)));
-      const bool victimIsLion = victim != NO_PIECE
-                             && (var->lionMoveTypes & piece_set(type_of(victim)));
-      const int distance = std::max(std::abs(int(file_of(from)) - int(file_of(to))),
-                                    std::abs(int(rank_of(from)) - int(rank_of(to))));
-
-      if (victimIsLion)
+      Bitboard lionCaptures = 0;
+      Bitboard captures = is_multileg(m) ? multilegInfo.captures : capture_squares(m);
+      Bitboard captureTargets = captures;
+      while (captureTargets)
       {
-          if (movingIsLion && distance > 1)
+          Square victimSq = pop_lsb(captureTargets);
+          Piece victim = piece_on(victimSq);
+          if (victim != NO_PIECE && color_of(victim) == them
+              && (var->lionMoveTypes & piece_set(type_of(victim))))
+              lionCaptures |= square_bb(victimSq);
+      }
+
+      if (lionCaptures)
+      {
+          if (movingIsLion)
           {
-              Bitboard occupiedWithoutLion = pieces() ^ square_bb(to);
-              bool significantMidCapture = is_multileg(m) && multilegInfo.captures_via()
-                                        && !(var->insignificantPieces
-                                             & piece_set(type_of(piece_on(multilegInfo.via))));
-              if (attackers_to(to, occupiedWithoutLion, them) && !significantMidCapture)
-                  return false;
+              Bitboard targets = lionCaptures;
+              while (targets)
+              {
+                  Square victimSq = pop_lsb(targets);
+                  int distance = std::max(std::abs(int(file_of(from)) - int(file_of(victimSq))),
+                                          std::abs(int(rank_of(from)) - int(rank_of(victimSq))));
+                  if (distance <= 1)
+                      continue;
+
+                  Bitboard occupiedWithoutLion = pieces() ^ square_bb(victimSq);
+                  bool significantOtherCapture = is_multileg(m)
+                                              && victimSq == multilegInfo.to
+                                              && multilegInfo.captures_via()
+                                              && !(var->insignificantPieces
+                                                   & piece_set(type_of(piece_on(multilegInfo.via))));
+                  if (attackers_to(victimSq, occupiedWithoutLion, them) && !significantOtherCapture)
+                      return false;
+              }
           }
 
           if (!movingIsLion && st->previous)
           {
-              Piece previousCapture = st->captured.piece.piece;
-              if (previousCapture == NO_PIECE)
-                  previousCapture = st->extraCaptured.piece.piece;
+              Bitboard previousLionCaptures = 0;
+              auto addPreviousLionCapture = [&](const ReversiblePieceOnSquare& captured) {
+                  if (captured && color_of(captured.piece.piece) == us
+                      && (var->lionMoveTypes & piece_set(type_of(captured.piece.piece))))
+                      previousLionCaptures |= square_bb(captured.square);
+              };
+              addPreviousLionCapture(st->captured);
+              addPreviousLionCapture(st->extraCaptured);
               Move previousMove = st->move;
-              if (previousCapture != NO_PIECE && color_of(previousCapture) == us
-                  && (var->lionMoveTypes & piece_set(type_of(previousCapture))))
+              if (previousLionCaptures && is_ok(previousMove))
               {
-                  Piece previousMover = is_ok(previousMove)
-                                      ? piece_on(to_sq(previousMove)) : NO_PIECE;
+                  Piece previousMover = st->promotionPawn != NO_PIECE
+                                      ? st->promotionPawn : piece_on(to_sq(previousMove));
                   bool previousMoverWasLion = previousMover != NO_PIECE
                                             && (var->lionMoveTypes
                                                 & piece_set(type_of(previousMover)));
-                  if (!previousMoverWasLion)
+                  if (!previousMoverWasLion && (lionCaptures & ~previousLionCaptures))
                       return false;
               }
           }
@@ -7173,7 +7195,7 @@ bool Position::gives_check(Move m) const {
                          // ordinary check source, unlike the committed
                          // position's physical-king attack map.
                          || (capture_morph()
-                             && !(isCapture && anti_royal_types() && !checking_permitted()))
+                             && !(capture(m) && anti_royal_types() && !checking_permitted()))
                          || var->hasMoveMorph
                          || var->changingColorPieceTypes
                          || var->blastPassiveTypes
