@@ -387,6 +387,7 @@ std::string variant_info_json(const std::string& name) {
     field(promotion, b, "steal", boolean(v.promotionSteal));
     field(promotion, b, "requireInHand", boolean(v.promotionRequireInHand));
     field(promotion, b, "consumeInHand", boolean(v.promotionConsumeInHand));
+    field(promotion, b, "declineRule", boolean(v.promotionDeclineRule));
     promotion << '}'; field(out, first, "promotion", promotion.str());
 
     std::ostringstream capture; capture << '{'; b = true;

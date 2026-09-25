@@ -12,7 +12,7 @@
 
 namespace Stockfish::detail {
 
-struct MultiLegPath {
+struct TwoLegPath {
   MultiLegKind kind = MultiLegKind::TWO_STEP;
   Square via = SQ_NONE;
   Square to = SQ_NONE;
@@ -20,7 +20,7 @@ struct MultiLegPath {
   Bitboard transit = 0;
 };
 
-struct MultiLegWalker {
+struct TwoLegWalker {
 
   static bool step_destination(const Position& pos, Square from, Direction d, Square& to) {
       auto [dr, df] = decode_direction(d);
@@ -37,7 +37,8 @@ struct MultiLegWalker {
 
   template<typename Visit>
   static bool for_each_two_step_path(const Position& pos, Color us, PieceType pt, Square from,
-                                     Bitboard occupied, Bitboard friendly, Visit&& visit) {
+                                     Bitboard occupied, Bitboard friendly, Visit&& visit,
+                                     Square target = SQ_NONE, Square viaTarget = SQ_NONE) {
   uint64_t mask = pos.variant()->twoStepMoves[pt].byColor[us];
   if (!mask || !(pos.board_bb() & from))
       return false;
@@ -52,10 +53,14 @@ struct MultiLegWalker {
       Square via;
       if (!step_destination(pos, from, KingDirections[d1], via))
           continue;
+      if (viaTarget != SQ_NONE && via != viaTarget)
+          continue;
       if (!(pos.board_bb() & via) || (friendly & via))
           continue;
       Square to;
       if (!step_destination(pos, via, KingDirections[d2], to))
+          continue;
+      if (viaTarget != SQ_NONE && to != target)
           continue;
       // Piece mobility constrains the completed move's endpoint; the via
       // square remains a transit/capture square.
@@ -66,7 +71,7 @@ struct MultiLegWalker {
       if (std::find(seen.begin(), seen.begin() + seenCount, key) != seen.begin() + seenCount)
           continue;
       seen[seenCount++] = key;
-      MultiLegPath path;
+      TwoLegPath path;
       path.kind = MultiLegKind::TWO_STEP;
       path.via = via;
       path.to = to;
@@ -81,7 +86,7 @@ struct MultiLegWalker {
   template<typename Visit>
   static bool for_each_hook_path(const Position& pos, Color us, PieceType pt, Square from,
                                  Bitboard occupied, Bitboard friendly, Visit&& visit,
-                                 Square target = SQ_NONE) {
+                                 Square target = SQ_NONE, Square viaTarget = SQ_NONE) {
   uint64_t mask = pos.variant()->hookMoves[pt].directions.byColor[us];
   if (!mask || !(pos.board_bb() & from))
       return false;
@@ -109,9 +114,15 @@ struct MultiLegWalker {
           bend = step1;
           firstTransit |= square_bb(bend);
           bool cap1 = bool(occupied & bend);
+          if (viaTarget != SQ_NONE && bend != viaTarget)
+          {
+              if (cap1)
+                  break;
+              continue;
+          }
           if (cap1)
           {
-              MultiLegPath path;
+              TwoLegPath path;
               path.kind = MultiLegKind::HOOK;
               path.via = bend;
               path.to = bend;
@@ -177,7 +188,7 @@ struct MultiLegWalker {
               // the walk identical.)
               if (cap1 && cap2 && captureLimit < 2)
                   break;
-              MultiLegPath path;
+              TwoLegPath path;
               path.kind = MultiLegKind::HOOK;
               path.via = bend;
               path.to = to;
@@ -199,13 +210,13 @@ struct MultiLegWalker {
   template<typename Visit>
   static bool for_each_multileg_path(const Position& pos, Color us, PieceType pt, Square from,
                                      Bitboard occupied, Bitboard friendly, Visit&& visit,
-                                     Square target = SQ_NONE) {
+                                     Square target = SQ_NONE, Square viaTarget = SQ_NONE) {
       const Variant* rules = pos.variant();
       if ((rules->twoStepPieceTypes & piece_set(pt))
-          && for_each_two_step_path(pos, us, pt, from, occupied, friendly, visit))
+          && for_each_two_step_path(pos, us, pt, from, occupied, friendly, visit, target, viaTarget))
           return true;
       return (rules->hookPieceTypes & piece_set(pt))
-          && for_each_hook_path(pos, us, pt, from, occupied, friendly, visit, target);
+          && for_each_hook_path(pos, us, pt, from, occupied, friendly, visit, target, viaTarget);
   }
 
 };
