@@ -5505,7 +5505,6 @@ bool Position::lion_capture_legal(Move m, const MultiLegMoveInfo& multilegInfo,
   Color us = sideToMove;
   Color them = ~us;
   Square from = from_sq(m);
-  Square to = to_sq(m);
   Piece mover = piece_on(from);
   const bool movingIsLion = mover != NO_PIECE
                          && (var->lionMoveTypes & piece_set(type_of(mover)));
