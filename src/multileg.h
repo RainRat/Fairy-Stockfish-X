@@ -46,12 +46,6 @@ inline uint64_t reflect_direction_pairs(uint64_t mask) {
     return result;
 }
 
-
-} // namespace Stockfish
-
-
-namespace Stockfish {
-
 } // namespace Stockfish
 
 

@@ -1191,6 +1191,9 @@ namespace {
   template<Color Us, GenType Type>
   ExtMove* generate_multileg_moves(const Position& pos, ExtMove* moveList, Bitboard target,
                                    Bitboard forcedFromMask, bool restrictToForcedJumper) {
+    // Variants without multi-leg moves skip generation entirely.
+    if (!pos.has_multileg_moves())
+        return moveList;
     PieceSet pieceTypes = pos.multileg_piece_types();
     const Color them = ~Us;
     const Bitboard checkers = pos.evasion_checkers();

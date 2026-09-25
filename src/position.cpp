@@ -3059,8 +3059,12 @@ Bitboard Position::slider_blockers(Bitboard sliders, Square s, Bitboard& pinners
 /// given square. Slider attacks use the occupied bitboard to indicate occupancy.
 
 Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard janggiCannons) const {
-  return attackers_to_base(s, occupied, c, janggiCannons)
-       | multileg_attackers_to(s, occupied, c);
+  Bitboard b = attackers_to_base(s, occupied, c, janggiCannons);
+  // Guard the extra walk so variants without multi-leg moves pay only one
+  // inlined PieceSet check on this hot path.
+  if (has_multileg_moves())
+      b |= multileg_attackers_to(s, occupied, c);
+  return b;
 }
 
 Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard janggiCannons,
@@ -3068,8 +3072,10 @@ Bitboard Position::attackers_to(Square s, Bitboard occupied, Color c, Bitboard j
   SimulatedMoveInfoGuard simulatedView(*this);
   if (simulated)
       simulatedView.set(*simulated);
-  return attackers_to_base(s, occupied, c, janggiCannons, simulated)
-       | multileg_attackers_to(s, occupied, c, simulated);
+  Bitboard b = attackers_to_base(s, occupied, c, janggiCannons, simulated);
+  if (has_multileg_moves())
+      b |= multileg_attackers_to(s, occupied, c, simulated);
+  return b;
 }
 
 Bitboard Position::attackers_to_base(Square s, Bitboard occupied, Color c, Bitboard janggiCannons) const {
@@ -4597,6 +4603,7 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
       info.occupiedAfterEffects = pieces();
       return info;
   }
+
   const bool dropMove = is_drop_move(m);
   const bool stackMove = is_stack_move(m);
   const bool unstackMove = is_unstack_move(m);
