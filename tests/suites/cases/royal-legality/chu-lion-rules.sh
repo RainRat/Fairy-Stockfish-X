@@ -93,7 +93,7 @@ UCI
 )
 assert_not_contains "${out}" '^c1d2e3: 1$'
 
-# The previous multileg capture records a Lion on its via square as well as its final victim.
+# The previous two-leg capture records a Lion on its via square as well as its final victim.
 out=$(run_uci "${ENGINE}" "${FSX_TMP_INI}" chu-multi-test <<'UCI'
 position fen 8/8/8/8/8/r1L1p3/3l4/2H5 w - - 0 1 moves c1d2e3
 go perft 1

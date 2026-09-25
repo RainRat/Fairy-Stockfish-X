@@ -26,7 +26,7 @@
 #include "parser.h"
 #include "piece.h"
 #include "variant.h"
-#include "multileg.h"
+#include "two_leg.h"
 
 using std::string;
 

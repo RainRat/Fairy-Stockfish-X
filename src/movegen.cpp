@@ -22,7 +22,7 @@
 
 #include "movegen.h"
 #include "position.h"
-#include "multileg_impl.h"
+#include "two_leg_impl.h"
 #include "thread.h"
 
 namespace Stockfish {
@@ -1112,8 +1112,8 @@ namespace {
 
 
   template<Color Us, GenType Type>
-  ExtMove* emit_multileg_candidate(const Position& pos, ExtMove* moveList, PieceType pt,
-                                  MultiLegKind kind, Square from, Square via, Square to,
+  ExtMove* emit_two_leg_candidate(const Position& pos, ExtMove* moveList, PieceType pt,
+                                  TwoLegKind kind, Square from, Square via, Square to,
                                   bool capVia, bool capTo, Bitboard target, Bitboard checkers) {
     bool isCapture = capVia || capTo;
 
@@ -1161,7 +1161,7 @@ namespace {
 
     if (allowsPromo && Type != QUIETS)
     {
-        Move mPromo = kind == MultiLegKind::TWO_STEP
+        Move mPromo = kind == TwoLegKind::TWO_STEP
                     ? make_two_step(from, via, to, true)
                     : make_hook(from, via, to, true);
         if constexpr (Type == QUIET_CHECKS)
@@ -1183,7 +1183,7 @@ namespace {
             if (!isCapture)
                 return moveList;
         }
-        Move m = kind == MultiLegKind::TWO_STEP
+        Move m = kind == TwoLegKind::TWO_STEP
                ? make_two_step(from, via, to)
                : make_hook(from, via, to);
         if constexpr (Type == QUIET_CHECKS)
@@ -1201,12 +1201,12 @@ namespace {
   }
 
   template<Color Us, GenType Type>
-  ExtMove* generate_multileg_moves(const Position& pos, ExtMove* moveList, Bitboard target,
+  ExtMove* generate_two_leg_moves(const Position& pos, ExtMove* moveList, Bitboard target,
                                    Bitboard forcedFromMask, bool restrictToForcedJumper) {
-    // Variants without multi-leg moves skip generation entirely.
-    if (!pos.has_multileg_moves())
+    // Variants without two-leg moves skip generation entirely.
+    if (!pos.has_two_leg_moves())
         return moveList;
-    PieceSet pieceTypes = pos.multileg_piece_types();
+    PieceSet pieceTypes = pos.two_leg_piece_types();
     const Color them = ~Us;
     const Bitboard checkers = pos.evasion_checkers();
 
@@ -1231,7 +1231,7 @@ namespace {
                 directTargets = 0;
             const bool routeSensitive = pos.variant()->royalPieceNoThroughCheck
                                      && pt == pos.royal_piece_type(Us);
-            detail::TwoLegWalker::for_each_multileg_path(pos, Us, pt, from, pos.pieces(), pos.pieces(Us),
+            detail::TwoLegWalker::for_each_two_leg_path(pos, Us, pt, from, pos.pieces(), pos.pieces(Us),
                 [&](const detail::TwoLegPath& path) {
                     bool capVia = bool(path.captures & path.via);
                     bool capTo = path.to != from && bool(path.captures & path.to);
@@ -1239,12 +1239,12 @@ namespace {
                                && path.to != from && (directTargets & path.to);
                     if (direct && !routeSensitive)
                         return false;
-                    auto& seenForKind = seen[path.kind == MultiLegKind::TWO_STEP ? 0 : 1];
+                    auto& seenForKind = seen[path.kind == TwoLegKind::TWO_STEP ? 0 : 1];
                     int captureVia = capVia ? int(path.via) : SQUARE_NB;
                     if ((seenForKind[captureVia] & path.to) && !routeSensitive)
                         return false;
                     seenForKind[captureVia] |= square_bb(path.to);
-                    moveList = emit_multileg_candidate<Us, Type>(pos, moveList, pt, path.kind, from,
+                    moveList = emit_two_leg_candidate<Us, Type>(pos, moveList, pt, path.kind, from,
                                                                  path.via, path.to, capVia, capTo,
                                                                  target, checkers);
                     return false;
@@ -1678,7 +1678,7 @@ namespace {
 
     }
 
-    moveList = generate_multileg_moves<Us, Type>(pos, moveList, target, forcedFromMask, restrictToForcedJumper);
+    moveList = generate_two_leg_moves<Us, Type>(pos, moveList, target, forcedFromMask, restrictToForcedJumper);
 
     // Royal moves must not be restricted to checker capture/interposition targets.
     if (royalPt != NO_PIECE_TYPE && royalSq != SQ_NONE

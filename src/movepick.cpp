@@ -147,8 +147,7 @@ bool MovePicker::is_qsearch_tt_move(Move m) const {
       return true;
 
   if (depth <= DEPTH_QS_RECAPTURES
-      && to_sq(m) != recaptureSquare
-      && !(pos.capture_squares_unchecked(m) & recaptureSquare))
+      && !pos.matches_recapture_square(m, recaptureSquare))
       return false;
 
   return pos.capture_or_promotion(m)
@@ -240,11 +239,17 @@ void MovePicker::score() {
       }
       return 20 * signedPts;
   };
-  // Order captures by every victim square the move removes. Ordinary moves
-  // (including jump captures) report a single square, so this generalizes to
-  // multi-leg doubles without move-shape branching here; victim values and
-  // points weighting stay on the search side of the Position boundary.
   auto capture_victims = [&](Move mv, int& total, PieceType& topType, int& points) {
+      if (!is_two_leg(mv))
+      {
+          Piece captured = pos.captured_piece(mv);
+          Piece victim = captured != NO_PIECE ? captured : pos.piece_on(to_sq(mv));
+          total = int(PieceValue[MG][victim]);
+          topType = type_of(victim);
+          points = points_capture_bonus(captured);
+          return;
+      }
+
       total = 0;
       topType = captured_type(pos, mv);
       points = 0;
@@ -264,17 +269,7 @@ void MovePicker::score() {
           }
           if (foundVictim)
               return;
-          // Fall through to single-victim behavior when no victim is still
-          // on the board (e.g. scoring after the move was made).
-          total = 0;
-          points = 0;
       }
-      // Legacy single-victim behavior for ordinary moves.
-      Piece captured = pos.captured_piece(mv);
-      Piece victim = captured != NO_PIECE ? captured : pos.piece_on(to_sq(mv));
-      total = int(PieceValue[MG][victim]);
-      topType = type_of(victim);
-      points = points_capture_bonus(captured);
   };
   auto freeze_target_bonus = [&](Move mv) {
       if (!pos.potions_enabled() || !is_gating(mv))
@@ -572,8 +567,7 @@ top:
 
   case QCAPTURE:
       if (select<Best>([&](){ return   depth > DEPTH_QS_RECAPTURES
-                                    || to_sq(*cur) == recaptureSquare
-                                    || (pos.capture_squares_unchecked(*cur) & recaptureSquare); }))
+                                    || pos.matches_recapture_square(*cur, recaptureSquare); }))
           return *(cur - 1);
 
       if (resume_deferred_potions<CAPTURES>(moveList, qcaptureBaseEnd, qcapturePotionsDeferred))

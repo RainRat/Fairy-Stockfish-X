@@ -392,7 +392,7 @@ class TestPublicAPI(unittest.TestCase):
         self.assertIsInstance(optional[1], int)
         self.assertIsInstance(sf.has_insufficient_material("chess", fen, []), tuple)
 
-    def test_multileg_pieces_disable_insufficient_material_shortcut(self):
+    def test_two_leg_pieces_disable_insufficient_material_shortcut(self):
         sf.load_variant_config(
             "[lion-api-adjudication:chess]\n"
             "customPiece1 = h:0\n"
