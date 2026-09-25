@@ -44,8 +44,6 @@
 
 namespace Stockfish {
 
-class Position;
-
 constexpr int MAX_PUSH_SNAPSHOT = 32;
 
 extern Square JumpMidpoint[SQUARE_NB][SQUARE_NB];
