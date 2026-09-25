@@ -594,6 +594,7 @@ static void test_capture_ordering_squares_and_recapture() {
     assert(caps & square_bb(SQ_D5));
     assert(caps & square_bb(SQ_C6));
     assert(!(caps & square_bb(SQ_E4)));
+    assert(pos.capture_squares_unchecked(m_double) == caps);
 }
 
 static void test_two_step_promotion_ignores_morph() {

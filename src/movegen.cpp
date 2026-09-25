@@ -1245,20 +1245,6 @@ namespace {
 
     static_assert(Type != LEGAL, "Unsupported type in generate_all()");
 
-    if constexpr (Type == QUIET_CHECKS)
-        if (pos.has_multileg_moves())
-        {
-            ExtMove candidates[MOVEGEN_OVERFLOW_CAPACITY];
-            ExtMove* end = generate_all_impl<Us, NON_EVASIONS>(pos, candidates);
-            for (ExtMove* it = candidates; it != end; ++it)
-                if (!pos.capture(*it)
-                    && type_of(*it) != CASTLING
-                    && (is_multileg(*it) || (!is_promotion_move(*it) && type_of(*it) != PIECE_PROMOTION))
-                    && pos.gives_check(*it))
-                    *moveList++ = *it;
-            return moveList;
-        }
-
     constexpr bool Checks = Type == QUIET_CHECKS; // Reduce template instantiations
     const PieceType royalPt = pos.royal_piece_type(Us);
     const Square royalSq = pos.royal_square(Us);

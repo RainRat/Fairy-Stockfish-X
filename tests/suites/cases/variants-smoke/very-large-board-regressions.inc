@@ -37,6 +37,49 @@ EOF
   assert_contains_literal "$output" "Nodes searched: 41"
 }
 
+test_vlb_chu_dai_lion_moves() {
+  local output
+
+  output=$(run_uci "$ENGINE" "$VARIANTS" chu_shogi <<'EOF' 2>&1
+position fen K10k/12/12/12/12/5p6/5p6/5W'6/12/12/12/12 w - - 0 1
+go perft 1
+EOF
+)
+  if [[ "$output" == *"unknown variant 'chu_shogi'"* || "$output" == *"No such variant: chu_shogi"* ]]; then
+    echo "skip: Chu and Dai lion moves require VERY_LARGE_BOARDS"
+    return 0
+  fi
+  assert_contains_literal "$output" "f5f6f7: 1"
+
+  output=$(run_uci "$ENGINE" "$VARIANTS" chu_shogi <<'EOF' 2>&1
+position fen K10k/12/12/12/12/12/12/5W'6/12/12/12/12 w - - 0 1
+go perft 1
+EOF
+)
+  assert_contains_literal "$output" "f5f6f5: 1"
+
+  output=$(run_uci "$ENGINE" "$VARIANTS" chu_shogi <<'EOF' 2>&1
+position fen K10k/12/12/12/12/7p4/6p5/5X'6/12/12/12/12 w - - 0 1
+go perft 1
+EOF
+)
+  assert_contains_literal "$output" "f5g6h7: 1"
+
+  output=$(run_uci "$ENGINE" "$VARIANTS" dai_shogi <<'EOF' 2>&1
+position fen K13k/15/15/15/15/15/15/15/5p9/5p9/5D"9/15/15/15/15 w - - 0 1
+go perft 1
+EOF
+)
+  assert_contains_literal "$output" "f5f6f7: 1"
+
+  output=$(run_uci "$ENGINE" "$VARIANTS" dai_shogi <<'EOF' 2>&1
+position fen K13k/15/15/15/15/15/15/15/7p8/6p9/5E"9/15/15/15/15 w - - 0 1
+go perft 1
+EOF
+)
+  assert_contains_literal "$output" "f5g6h7: 1"
+}
+
 test_vlb_lame_riders() {
   local tmpdir variant_file out
   tmpdir=$(mktemp -d)
@@ -271,6 +314,7 @@ UCI
 }
 
 test_vlb_gale_smoke
+test_vlb_chu_dai_lion_moves
 test_vlb_lame_riders
 test_vlb_symbol_check
 test_vlb_symbol_fen

@@ -1059,6 +1059,8 @@ public:
   Square capture_square(Square to) const;
   Square capture_square(Move m) const;
   Bitboard capture_squares(Move m) const;
+  // For generated or otherwise validated moves; multileg paths need no re-walk.
+  Bitboard capture_squares_unchecked(Move m) const;
   // Direct victim squares: ordinary and jump captures follow capture_square(),
   // while multi-leg moves may report both the bend and destination victims.
   Square secondary_drop_square(Move m) const;
@@ -5852,6 +5854,24 @@ inline Bitboard Position::capture_squares(Move m) const {
   // keep pre-existing single-victim search semantics for jump captures.
   Square cs = capture_square(m);
   return is_ok(cs) ? square_bb(cs) : Bitboard(0);
+}
+
+inline Bitboard Position::capture_squares_unchecked(Move m) const {
+  if (!is_multileg(m))
+      return capture_squares(m);
+
+  const Square from = from_sq(m);
+  const Square via = via_sq(m);
+  const Square to = to_sq(m);
+  const Bitboard enemy = pieces(~sideToMove);
+  Bitboard captures = 0;
+
+  if (via != from && (enemy & via))
+      captures |= square_bb(via);
+  if (to != from && to != via && (enemy & to))
+      captures |= square_bb(to);
+
+  return captures;
 }
 
 inline Position::PromotionStatus Position::move_promotion_status(Piece mover, Square from, Square to,
